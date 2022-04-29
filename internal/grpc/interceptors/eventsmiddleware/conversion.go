@@ -165,13 +165,13 @@ func FileDownloaded(r *provider.InitiateFileDownloadResponse, req *provider.Init
 
 // ItemTrashed converts the response to an event
 func ItemTrashed(r *provider.DeleteResponse, req *provider.DeleteRequest, executant *user.UserId) events.ItemTrashed {
-	opaqueId := utils.ReadPlainFromOpaque(r.Opaque, "opaque_id")
+	opaqueID := utils.ReadPlainFromOpaque(r.Opaque, "opaque_id")
 	return events.ItemTrashed{
 		Executant: executant,
 		Ref:       req.Ref,
-		Id: &provider.ResourceId{
+		ID: &provider.ResourceId{
 			StorageId: req.Ref.GetResourceId().GetOpaqueId(),
-			OpaqueId:  opaqueId,
+			OpaqueId:  opaqueID,
 		},
 	}
 }

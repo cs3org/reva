@@ -55,7 +55,7 @@ func (FileDownloaded) Unmarshal(v []byte) (interface{}, error) {
 // ItemTrashed is emitted when a file or folder is trashed
 type ItemTrashed struct {
 	Executant *user.UserId
-	Id        *provider.ResourceId
+	ID        *provider.ResourceId
 	Ref       *provider.Reference
 	Owner     *user.UserId
 }
@@ -85,7 +85,7 @@ func (ItemMoved) Unmarshal(v []byte) (interface{}, error) {
 // ItemPurged is emitted when a file or folder is removed from trashbin
 type ItemPurged struct {
 	Executant *user.UserId
-	Id        *provider.ResourceId
+	ID        *provider.ResourceId
 	Ref       *provider.Reference
 	Owner     *user.UserId
 }
@@ -100,6 +100,7 @@ func (ItemPurged) Unmarshal(v []byte) (interface{}, error) {
 // ItemRestored is emitted when a file or folder is restored from trashbin
 type ItemRestored struct {
 	Executant    *user.UserId
+	ID           *provider.ResourceId
 	Ref          *provider.Reference
 	Owner        *user.UserId
 	OldReference *provider.Reference
