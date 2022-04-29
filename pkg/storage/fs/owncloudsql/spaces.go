@@ -34,7 +34,7 @@ import (
 )
 
 // ListStorageSpaces lists storage spaces according to the provided filters
-func (fs *owncloudsqlfs) ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter) ([]*provider.StorageSpace, error) {
+func (fs *owncloudsqlfs) ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter, unrestricted bool) ([]*provider.StorageSpace, error) {
 	var (
 		spaceID = "*"
 	)

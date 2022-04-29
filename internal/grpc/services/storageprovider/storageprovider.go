@@ -520,7 +520,15 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 
 	log := appctx.GetLogger(ctx)
 
-	spaces, err := s.storage.ListStorageSpaces(ctx, req.Filters)
+	// TODO this is just temporary. Update the API to include this flag.
+	unrestricted := false
+	if req.Opaque != nil {
+		if entry, ok := req.Opaque.Map["unrestricted"]; ok {
+			unrestricted, _ = strconv.ParseBool(string(entry.Value))
+		}
+	}
+
+	spaces, err := s.storage.ListStorageSpaces(ctx, req.Filters, unrestricted)
 	if err != nil {
 		var st *rpc.Status
 		switch err.(type) {

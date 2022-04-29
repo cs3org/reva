@@ -48,7 +48,7 @@ var _ = Describe("Create Spaces", func() {
 
 	Context("during login", func() {
 		It("space is created", func() {
-			resp, err := env.Fs.ListStorageSpaces(env.Ctx, nil)
+			resp, err := env.Fs.ListStorageSpaces(env.Ctx, nil, false)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(len(resp)).To(Equal(1))
 			Expect(string(resp[0].Opaque.GetMap()["spaceAlias"].Value)).To(Equal("personal/username"))
@@ -89,7 +89,7 @@ var _ = Describe("Create Spaces", func() {
 		})
 		Context("during login", func() {
 			It("personal space is created with custom alias", func() {
-				resp, err := env.Fs.ListStorageSpaces(env.Ctx, nil)
+				resp, err := env.Fs.ListStorageSpaces(env.Ctx, nil, false)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(resp)).To(Equal(1))
 				Expect(string(resp[0].Opaque.GetMap()["spaceAlias"].Value)).To(Equal("personal/username@_unknown"))

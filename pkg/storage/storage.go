@@ -62,7 +62,10 @@ type FS interface {
 	GetLock(ctx context.Context, ref *provider.Reference) (*provider.Lock, error)
 	RefreshLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error
 	Unlock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error
-	ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter) ([]*provider.StorageSpace, error)
+	// ListStorageSpaces lists the spaces in the storage.
+	// The unrestricted parameter can be used to list other user's spaces when
+	// the user has the necessary permissions.
+	ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter, unrestricted bool) ([]*provider.StorageSpace, error)
 	CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error)
 	UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error)
 	DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorageSpaceRequest) error
