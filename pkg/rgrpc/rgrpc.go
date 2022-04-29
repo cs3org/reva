@@ -39,7 +39,6 @@ import (
 	"github.com/cs3org/reva/internal/grpc/interceptors/recovery"
 	"github.com/cs3org/reva/internal/grpc/interceptors/token"
 	"github.com/cs3org/reva/internal/grpc/interceptors/useragent"
-	"github.com/cs3org/reva/pkg/rgrpc/todo/utils"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	rtrace "github.com/cs3org/reva/pkg/trace"
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
@@ -139,7 +138,7 @@ type vaultConfig struct {
 	VaultCertFile string `mapstructure:"vault_certfile"`
 }
 
-func (c *config) init(projectRoot string) {
+func (c *config) init() {
 
 	if c.Network == "" {
 		c.Network = "tcp"
@@ -168,12 +167,7 @@ func NewServer(m interface{}, log zerolog.Logger) (*Server, error) {
 		return nil, err
 	}
 
-	projectRoot, err := utils.RootPath()
-	if err != nil {
-		return nil, err
-	}
-
-	conf.init(projectRoot)
+	conf.init()
 
 	server := &Server{conf: conf, log: log, services: map[string]Service{}}
 

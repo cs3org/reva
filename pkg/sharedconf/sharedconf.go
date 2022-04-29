@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/cs3org/reva/pkg/rgrpc/todo/utils"
 	"github.com/mitchellh/mapstructure"
 )
 
@@ -125,8 +124,7 @@ func SetCAFilePath(CAFile string) {
 // GetCAFilePath sets the file path for the CA file
 func GetCAFilePath() string {
 	if sharedConf.CAFile == "" {
-		projectRoot, _ := utils.RootPath()
-		sharedConf.CAFile = projectRoot + "/cert/ca.cert"
+		sharedConf.CAFile = "/cert/ca.cert"
 	}
 	return sharedConf.CAFile
 }
