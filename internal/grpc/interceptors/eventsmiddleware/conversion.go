@@ -24,6 +24,7 @@ import (
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v2/pkg/events"
+	"github.com/cs3org/reva/v2/pkg/utils"
 )
 
 // ShareCreated converts the response to an event
@@ -148,30 +149,38 @@ func LinkRemoved(r *link.RemovePublicShareResponse, req *link.RemovePublicShareR
 }
 
 // FileUploaded converts the response to an event
-func FileUploaded(r *provider.InitiateFileUploadResponse, req *provider.InitiateFileUploadRequest) events.FileUploaded {
+func FileUploaded(r *provider.InitiateFileUploadResponse, req *provider.InitiateFileUploadRequest, executant *user.UserId) events.FileUploaded {
 	return events.FileUploaded{
-		FileID: req.Ref,
+		Executant: executant,
+		Ref:       req.Ref,
 	}
 }
 
 // FileDownloaded converts the response to an event
 func FileDownloaded(r *provider.InitiateFileDownloadResponse, req *provider.InitiateFileDownloadRequest) events.FileDownloaded {
 	return events.FileDownloaded{
-		FileID: req.Ref,
+		Ref: req.Ref,
 	}
 }
 
 // ItemTrashed converts the response to an event
-func ItemTrashed(r *provider.DeleteResponse, req *provider.DeleteRequest) events.ItemTrashed {
+func ItemTrashed(r *provider.DeleteResponse, req *provider.DeleteRequest, executant *user.UserId) events.ItemTrashed {
+	opaqueID := utils.ReadPlainFromOpaque(r.Opaque, "opaque_id")
 	return events.ItemTrashed{
-		FileID: req.Ref,
+		Executant: executant,
+		Ref:       req.Ref,
+		ID: &provider.ResourceId{
+			StorageId: req.Ref.GetResourceId().GetOpaqueId(),
+			OpaqueId:  opaqueID,
+		},
 	}
 }
 
 // ItemMoved converts the response to an event
-func ItemMoved(r *provider.MoveResponse, req *provider.MoveRequest) events.ItemMoved {
+func ItemMoved(r *provider.MoveResponse, req *provider.MoveRequest, executant *user.UserId) events.ItemMoved {
 	return events.ItemMoved{
-		FileID:       req.Destination,
+		Executant:    executant,
+		Ref:          req.Destination,
 		OldReference: req.Source,
 	}
 }
@@ -179,28 +188,30 @@ func ItemMoved(r *provider.MoveResponse, req *provider.MoveRequest) events.ItemM
 // ItemPurged converts the response to an event
 func ItemPurged(r *provider.PurgeRecycleResponse, req *provider.PurgeRecycleRequest) events.ItemPurged {
 	return events.ItemPurged{
-		FileID: req.Ref,
+		Ref: req.Ref,
 	}
 }
 
 // ItemRestored converts the response to an event
-func ItemRestored(r *provider.RestoreRecycleItemResponse, req *provider.RestoreRecycleItemRequest) events.ItemRestored {
+func ItemRestored(r *provider.RestoreRecycleItemResponse, req *provider.RestoreRecycleItemRequest, executant *user.UserId) events.ItemRestored {
 	ref := req.Ref
 	if req.RestoreRef != nil {
 		ref = req.RestoreRef
 	}
 	return events.ItemRestored{
-		FileID:       ref,
+		Executant:    executant,
+		Ref:          ref,
 		OldReference: req.Ref,
 		Key:          req.Key,
 	}
 }
 
 // FileVersionRestored converts the response to an event
-func FileVersionRestored(r *provider.RestoreFileVersionResponse, req *provider.RestoreFileVersionRequest) events.FileVersionRestored {
+func FileVersionRestored(r *provider.RestoreFileVersionResponse, req *provider.RestoreFileVersionRequest, executant *user.UserId) events.FileVersionRestored {
 	return events.FileVersionRestored{
-		FileID: req.Ref,
-		Key:    req.Key,
+		Executant: executant,
+		Ref:       req.Ref,
+		Key:       req.Key,
 	}
 }
 

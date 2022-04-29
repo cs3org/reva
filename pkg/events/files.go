@@ -27,8 +27,9 @@ import (
 
 // FileUploaded is emitted when a file is uploaded
 type FileUploaded struct {
-	FileID *provider.Reference
-	Owner  *user.UserId
+	Executant *user.UserId
+	Ref       *provider.Reference
+	Owner     *user.UserId
 }
 
 // Unmarshal to fulfill umarshaller interface
@@ -40,8 +41,8 @@ func (FileUploaded) Unmarshal(v []byte) (interface{}, error) {
 
 // FileDownloaded is emitted when a file is downloaded
 type FileDownloaded struct {
-	FileID *provider.Reference
-	Owner  *user.UserId
+	Ref   *provider.Reference
+	Owner *user.UserId
 }
 
 // Unmarshal to fulfill umarshaller interface
@@ -53,8 +54,10 @@ func (FileDownloaded) Unmarshal(v []byte) (interface{}, error) {
 
 // ItemTrashed is emitted when a file or folder is trashed
 type ItemTrashed struct {
-	FileID *provider.Reference
-	Owner  *user.UserId
+	Executant *user.UserId
+	ID        *provider.ResourceId
+	Ref       *provider.Reference
+	Owner     *user.UserId
 }
 
 // Unmarshal to fulfill umarshaller interface
@@ -66,7 +69,8 @@ func (ItemTrashed) Unmarshal(v []byte) (interface{}, error) {
 
 // ItemMoved is emitted when a file or folder is moved
 type ItemMoved struct {
-	FileID       *provider.Reference
+	Executant    *user.UserId
+	Ref          *provider.Reference
 	Owner        *user.UserId
 	OldReference *provider.Reference
 }
@@ -80,8 +84,10 @@ func (ItemMoved) Unmarshal(v []byte) (interface{}, error) {
 
 // ItemPurged is emitted when a file or folder is removed from trashbin
 type ItemPurged struct {
-	FileID *provider.Reference
-	Owner  *user.UserId
+	Executant *user.UserId
+	ID        *provider.ResourceId
+	Ref       *provider.Reference
+	Owner     *user.UserId
 }
 
 // Unmarshal to fulfill umarshaller interface
@@ -93,7 +99,9 @@ func (ItemPurged) Unmarshal(v []byte) (interface{}, error) {
 
 // ItemRestored is emitted when a file or folder is restored from trashbin
 type ItemRestored struct {
-	FileID       *provider.Reference
+	Executant    *user.UserId
+	ID           *provider.ResourceId
+	Ref          *provider.Reference
 	Owner        *user.UserId
 	OldReference *provider.Reference
 	Key          string
@@ -108,9 +116,10 @@ func (ItemRestored) Unmarshal(v []byte) (interface{}, error) {
 
 // FileVersionRestored is emitted when a file version is restored
 type FileVersionRestored struct {
-	FileID *provider.Reference
-	Owner  *user.UserId
-	Key    string
+	Executant *user.UserId
+	Ref       *provider.Reference
+	Owner     *user.UserId
+	Key       string
 }
 
 // Unmarshal to fulfill umarshaller interface
