@@ -267,18 +267,19 @@ func (r *registry) GetProvider(ctx context.Context, space *providerpb.StorageSpa
 // below   = /foo/bar/bif   <=> /foo/bar        -> list(spaceid, ./bif)
 func (r *registry) ListProviders(ctx context.Context, filters map[string]string) ([]*registrypb.ProviderInfo, error) {
 	b, _ := strconv.ParseBool(filters["unique"])
+	unrestricted, _ := strconv.ParseBool(filters["unrestricted"])
 	switch {
 	case filters["storage_id"] != "" && filters["opaque_id"] != "":
 		findMountpoint := filters["type"] == "mountpoint"
 		findGrant := !findMountpoint && filters["path"] == "" // relvative references, by definition, occur in the correct storage, so do not look for grants
-		return r.findProvidersForResource(ctx, filters["storage_id"]+"!"+filters["opaque_id"], findMountpoint, findGrant), nil
+		return r.findProvidersForResource(ctx, filters["storage_id"]+"!"+filters["opaque_id"], findMountpoint, findGrant, unrestricted), nil
 	case filters["path"] != "":
-		return r.findProvidersForAbsolutePathReference(ctx, filters["path"], b), nil
+		return r.findProvidersForAbsolutePathReference(ctx, filters["path"], b, unrestricted), nil
 	case len(filters) == 0:
 		// return all providers
 		return r.findAllProviders(ctx), nil
 	default:
-		return r.findProvidersForFilter(ctx, r.buildFilters(filters)), nil
+		return r.findProvidersForFilter(ctx, r.buildFilters(filters), unrestricted), nil
 	}
 }
 
@@ -318,7 +319,7 @@ func (r *registry) buildFilters(filterMap map[string]string) []*providerpb.ListS
 	return filters
 }
 
-func (r *registry) findProvidersForFilter(ctx context.Context, filters []*providerpb.ListStorageSpacesRequest_Filter) []*registrypb.ProviderInfo {
+func (r *registry) findProvidersForFilter(ctx context.Context, filters []*providerpb.ListStorageSpacesRequest_Filter, unrestricted bool) []*registrypb.ProviderInfo {
 
 	currentUser := ctxpkg.ContextMustGetUser(ctx)
 	providerInfos := []*registrypb.ProviderInfo{}
@@ -326,7 +327,7 @@ func (r *registry) findProvidersForFilter(ctx context.Context, filters []*provid
 		p := &registrypb.ProviderInfo{
 			Address: address,
 		}
-		spaces, err := r.findStorageSpaceOnProvider(ctx, address, filters)
+		spaces, err := r.findStorageSpaceOnProvider(ctx, address, filters, unrestricted)
 		if err != nil {
 			appctx.GetLogger(ctx).Debug().Err(err).Interface("provider", provider).Msg("findStorageSpaceOnProvider by id failed, continuing")
 			continue
@@ -364,7 +365,7 @@ func (r *registry) findProvidersForFilter(ctx context.Context, filters []*provid
 // findProvidersForResource looks up storage providers based on a resource id
 // for the root of a space the res.StorageId is the same as the res.OpaqueId
 // for share spaces the res.StorageId tells the registry the spaceid and res.OpaqueId is a node in that space
-func (r *registry) findProvidersForResource(ctx context.Context, id string, findMoundpoint, findGrant bool) []*registrypb.ProviderInfo {
+func (r *registry) findProvidersForResource(ctx context.Context, id string, findMoundpoint, findGrant, unrestricted bool) []*registrypb.ProviderInfo {
 	currentUser := ctxpkg.ContextMustGetUser(ctx)
 	providerInfos := []*registrypb.ProviderInfo{}
 	for address, provider := range r.c.Providers {
@@ -398,7 +399,7 @@ func (r *registry) findProvidersForResource(ctx context.Context, id string, find
 				},
 			})
 		}
-		spaces, err := r.findStorageSpaceOnProvider(ctx, address, filters)
+		spaces, err := r.findStorageSpaceOnProvider(ctx, address, filters, false)
 		if err != nil {
 			appctx.GetLogger(ctx).Debug().Err(err).Interface("provider", provider).Msg("findStorageSpaceOnProvider by id failed, continuing")
 			continue
@@ -451,7 +452,7 @@ func (r *registry) findProvidersForResource(ctx context.Context, id string, find
 
 // findProvidersForAbsolutePathReference takes a path and returns the storage provider with the longest matching path prefix
 // FIXME use regex to return the correct provider when multiple are configured
-func (r *registry) findProvidersForAbsolutePathReference(ctx context.Context, path string, unique bool) []*registrypb.ProviderInfo {
+func (r *registry) findProvidersForAbsolutePathReference(ctx context.Context, path string, unique, unrestricted bool) []*registrypb.ProviderInfo {
 	currentUser := ctxpkg.ContextMustGetUser(ctx)
 
 	deepestMountPath := ""
@@ -474,7 +475,7 @@ func (r *registry) findProvidersForAbsolutePathReference(ctx context.Context, pa
 			},
 		})
 
-		spaces, err = r.findStorageSpaceOnProvider(ctx, p.Address, filters)
+		spaces, err = r.findStorageSpaceOnProvider(ctx, p.Address, filters, unrestricted)
 		if err != nil {
 			appctx.GetLogger(ctx).Debug().Err(err).Interface("provider", provider).Msg("findStorageSpaceOnProvider failed, continuing")
 			continue
@@ -598,12 +599,20 @@ func setSpaces(providerInfo *registrypb.ProviderInfo, spaces []*providerpb.Stora
 	return nil
 }
 
-func (r *registry) findStorageSpaceOnProvider(ctx context.Context, addr string, filters []*providerpb.ListStorageSpacesRequest_Filter) ([]*providerpb.StorageSpace, error) {
+func (r *registry) findStorageSpaceOnProvider(ctx context.Context, addr string, filters []*providerpb.ListStorageSpacesRequest_Filter, unrestricted bool) ([]*providerpb.StorageSpace, error) {
 	c, err := r.getStorageProviderServiceClient(addr)
 	if err != nil {
 		return nil, err
 	}
 	req := &providerpb.ListStorageSpacesRequest{
+		Opaque: &typesv1beta1.Opaque{
+			Map: map[string]*typesv1beta1.OpaqueEntry{
+				"unrestricted": {
+					Decoder: "plain",
+					Value:   []byte(strconv.FormatBool(unrestricted)),
+				},
+			},
+		},
 		Filters: filters,
 	}
 

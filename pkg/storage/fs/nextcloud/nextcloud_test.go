@@ -982,7 +982,7 @@ var _ = Describe("Nextcloud", func() {
 				},
 			}
 			filters := []*provider.ListStorageSpacesRequest_Filter{filter1, filter2, filter3}
-			spaces, err := nc.ListStorageSpaces(ctx, filters)
+			spaces, err := nc.ListStorageSpaces(ctx, filters, false)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(len(spaces)).To(Equal(1))
 			// https://github.com/cs3org/go-cs3apis/blob/970eec3/cs3/storage/provider/v1beta1/resources.pb.go#L1341-L1366

@@ -373,7 +373,7 @@ var _ = Describe("gateway", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(r.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 
-			spaces, err := fs.ListStorageSpaces(ctx, []*storagep.ListStorageSpacesRequest_Filter{})
+			spaces, err := fs.ListStorageSpaces(ctx, []*storagep.ListStorageSpacesRequest_Filter{}, false)
 			Expect(err).ToNot(HaveOccurred())
 			homeSpace = spaces[0]
 

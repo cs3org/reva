@@ -160,7 +160,7 @@ func (fs *Decomposedfs) CreateStorageSpace(ctx context.Context, req *provider.Cr
 		}
 	}
 
-	space, err := fs.storageSpaceFromNode(ctx, root, root.InternalPath(), false)
+	space, err := fs.storageSpaceFromNode(ctx, root, root.InternalPath(), false, false)
 	if err != nil {
 		return nil, err
 	}
@@ -235,7 +235,7 @@ func readSpaceAndNodeFromSpaceTypeLink(path string) (string, string, error) {
 // The list can be filtered by space type or space id.
 // Spaces are persisted with symlinks in /spaces/<type>/<spaceid> pointing to ../../nodes/<nodeid>, the root node of the space
 // The spaceid is a concatenation of storageid + "!" + nodeid
-func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter) ([]*provider.StorageSpace, error) {
+func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter, unrestricted bool) ([]*provider.StorageSpace, error) {
 	// TODO check filters
 
 	// TODO when a space symlink is broken delete the space for cleanup
@@ -294,7 +294,7 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 			// return empty list
 			return spaces, nil
 		}
-		space, err := fs.storageSpaceFromNode(ctx, n, n.InternalPath(), canListAllSpaces)
+		space, err := fs.storageSpaceFromNode(ctx, n, n.InternalPath(), canListAllSpaces, unrestricted)
 		if err != nil {
 			return nil, err
 		}
@@ -364,7 +364,7 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 		}
 
 		// TODO apply more filters
-		space, err := fs.storageSpaceFromNode(ctx, n, matches[i], canListAllSpaces)
+		space, err := fs.storageSpaceFromNode(ctx, n, matches[i], canListAllSpaces, unrestricted)
 		if err != nil {
 			if _, ok := err.(errtypes.IsPermissionDenied); !ok {
 				appctx.GetLogger(ctx).Error().Err(err).Interface("node", n).Msg("could not convert to storage space")
@@ -382,7 +382,7 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 			return nil, err
 		}
 		if n.Exists {
-			space, err := fs.storageSpaceFromNode(ctx, n, n.InternalPath(), canListAllSpaces)
+			space, err := fs.storageSpaceFromNode(ctx, n, n.InternalPath(), canListAllSpaces, unrestricted)
 			if err != nil {
 				return nil, err
 			}
@@ -484,7 +484,7 @@ func (fs *Decomposedfs) UpdateStorageSpace(ctx context.Context, req *provider.Up
 	}
 
 	// send back the updated data from the storage
-	updatedSpace, err := fs.storageSpaceFromNode(ctx, node, node.InternalPath(), false)
+	updatedSpace, err := fs.storageSpaceFromNode(ctx, node, node.InternalPath(), false, false)
 	if err != nil {
 		return nil, err
 	}
@@ -562,9 +562,9 @@ func (fs *Decomposedfs) linkStorageSpaceType(ctx context.Context, spaceType stri
 	return err
 }
 
-func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, nodePath string, canListAllSpaces bool) (*provider.StorageSpace, error) {
+func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, nodePath string, canListAllSpaces bool, unrestricted bool) (*provider.StorageSpace, error) {
 	user := ctxpkg.ContextMustGetUser(ctx)
-	if !canListAllSpaces {
+	if !canListAllSpaces || !unrestricted {
 		ok, err := node.NewPermissions(fs.lu).HasPermission(ctx, n, func(p *provider.ResourcePermissions) bool {
 			return p.Stat
 		})
