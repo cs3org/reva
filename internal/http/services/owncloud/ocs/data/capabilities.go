@@ -62,8 +62,10 @@ type Capabilities struct {
 
 // Spaces lets a service configure its advertised options related to Storage Spaces.
 type Spaces struct {
-	Version string `json:"version" xml:"version" mapstructure:"version"`
-	Enabled bool   `json:"enabled" xml:"enabled" mapstructure:"enabled"`
+	Version   string `json:"version" xml:"version" mapstructure:"version"`
+	Enabled   bool   `json:"enabled" xml:"enabled" mapstructure:"enabled"`
+	Projects  bool   `json:"projects" xml:"projects" mapstructure:"projects"`
+	ShareJail bool   `json:"share_jail" xml:"share_jail" mapstructure:"share_jail"`
 }
 
 // CapabilitiesCore holds webdav config
