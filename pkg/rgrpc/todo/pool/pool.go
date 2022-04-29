@@ -86,7 +86,6 @@ var (
 	userProviders          = newProvider()
 	groupProviders         = newProvider()
 	dataTxs                = newProvider()
-	maxCallRecvMsgSize     = 10240000
 )
 
 // NewConn creates a new connection to a grpc server
@@ -159,7 +158,6 @@ func getCredentials(options Options) (credentials.TransportCredentials, error) {
 		creds = credentials.NewTLS(tlsconf)
 
 	}
-
 	return creds, nil
 }
 

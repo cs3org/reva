@@ -127,15 +127,13 @@ type config struct {
 }
 
 type certConfig struct {
-	CertFile  string `mapstructure:"certfile"`
-	KeyFile   string `mapstructure:"keyfile"`
-	CAFile    string `mapstructure:"ca_certfile"`
-	CertifyCA bool   `mapstructure:"certifyca"`
+	CertFile string `mapstructure:"certfile"`
+	KeyFile  string `mapstructure:"keyfile"`
+	CAFile   string `mapstructure:"ca_certfile"`
 }
 
 type vaultConfig struct {
-	VaultScheme   string `mapstructure:"vault_scheme"`
-	VaultHost     string `mapstructure:"vault_host"`
+	VaultURL      string `mapstructure:"vault_url"`
 	VaultToken    string `mapstructure:"vault_token"`
 	VaultRole     string `mapstructure:"vault_role"`
 	VaultCertFile string `mapstructure:"vault_certfile"`
@@ -148,27 +146,6 @@ func (c *config) init(projectRoot string) {
 	}
 	if c.Address == "" {
 		c.Address = sharedconf.GetGatewaySVC("0.0.0.0:19000")
-	}
-	if c.CertFile == "" {
-		c.CertFile = projectRoot + "/cert/vault.pem"
-	}
-	if c.KeyFile == "" {
-		c.KeyFile = projectRoot + "/cert/vault.key"
-	}
-	if c.CAFile == "" {
-		c.CAFile = projectRoot + "/cert/ca.cert"
-	}
-	if c.VaultHost == "" {
-		c.VaultHost = "localhost:8200"
-	}
-	if c.VaultRole == "" {
-		c.VaultRole = "my-role"
-	}
-	if c.VaultScheme == "" {
-		c.VaultScheme = "https"
-	}
-	if c.VaultCertFile == "" {
-		c.VaultCertFile = projectRoot + "/cert/ca-vault.cert"
 	}
 	sharedconf.SetInsecure(c.Insecure)
 	sharedconf.SetSkipVerify(c.SkipVerify)
@@ -421,34 +398,30 @@ func (s *Server) getInterceptors(unprotected []string) ([]grpc.ServerOption, err
 	return opts, nil
 }
 
-func certFilesExist(conf *config) (bool, error) {
-	if _, err := os.Stat(conf.CertFile); errors.Is(err, os.ErrNotExist) {
-		return false, errors.New("certificate file doesn't exist at specified path")
-	}
-	if _, err := os.Stat(conf.KeyFile); errors.Is(err, os.ErrNotExist) {
-		return false, errors.New("key file doesn't exist at specified path")
-	}
-	return true, nil
-}
-
 func getCredentials(s *Server) (credentials.TransportCredentials, error) {
-	selfSignedCert, err := certFilesExist(s.conf)
+	selfSignedCert, certErr := certFilesExist(s.conf)
+	certifyCA, vaultErr := vaultConfigExists(s.conf)
 
 	switch {
-	case selfSignedCert && s.conf.CertifyCA:
-		return nil, errors.New("can't choose self-signed files and Certify at the same time")
+	case selfSignedCert && certifyCA:
+		return nil, errors.New("can't choose self-signed files and vault at the same time")
 	// Certificates signed by Vault via Certify
-	case s.conf.CertifyCA:
+	case certifyCA:
+		s.log.Info().Msg("setting up secure connection with vault")
+		if vaultErr != nil {
+			return nil, vaultErr
+		}
 		creds, err := getVaultCredentials(s.conf)
 		if err != nil {
-			return nil, fmt.Errorf("failed to setup TLS with Certify: %s", err)
+			return nil, fmt.Errorf("failed to setup TLS with vault: %s", err)
 		}
 		return creds, nil
 	// Self-signed cetificates
 	case selfSignedCert:
+		s.log.Info().Msg("setting up secure connection with local certificates")
 		// cert files not found at path
-		if err != nil {
-			return nil, err
+		if certErr != nil {
+			return nil, certErr
 		}
 		creds, err := credentials.NewServerTLSFromFile(s.conf.CertFile, s.conf.KeyFile)
 		if err != nil {
@@ -462,6 +435,51 @@ func getCredentials(s *Server) (credentials.TransportCredentials, error) {
 		return creds, nil
 	}
 	return nil, errors.New("wrong grpc security configurations")
+}
+
+func certFilesExist(conf *config) (bool, error) {
+	if conf.CertFile == "" && conf.KeyFile == "" {
+		return false, nil
+	}
+	err := fileExists(conf.CertFile)
+	if err != nil {
+		return true, err
+	}
+	err = fileExists(conf.KeyFile)
+	if fileExists(conf.KeyFile) != nil {
+		return true, err
+	}
+	return true, nil
+}
+
+func vaultConfigExists(conf *config) (bool, error) {
+	if conf.VaultCertFile == "" && conf.CAFile == "" {
+		return false, nil
+	}
+	if !isUrl(conf.VaultURL) {
+		return true, errors.New("could not parse vault_url")
+	}
+	err := fileExists(conf.VaultCertFile)
+	if err != nil {
+		return true, err
+	}
+	err = fileExists(conf.CAFile)
+	if err != nil {
+		return true, err
+	}
+	return true, nil
+}
+
+func fileExists(file string) error {
+	if _, err := os.Stat(file); errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("%s doesn't exist at specified path", file)
+	}
+	return nil
+}
+
+func isUrl(str string) bool {
+	u, err := url.Parse(str)
+	return err == nil && u.Scheme != "" && u.Host != ""
 }
 
 // Generate generates an RSA keypair of the given bit size using the random source random (for example, crypto/rand.Reader).
@@ -478,10 +496,14 @@ func getVaultCredentials(conf *config) (credentials.TransportCredentials, error)
 	if !cp.AppendCertsFromPEM(b) {
 		return nil, errors.New("failed to append vault certificates")
 	}
+	parsedUrl, err := url.Parse(conf.VaultURL)
+	if err != nil {
+		return nil, fmt.Errorf("could not parse vault_url: %s", conf.VaultURL)
+	}
 	issuer := &vault.Issuer{
 		URL: &url.URL{
-			Scheme: conf.VaultScheme,
-			Host:   conf.VaultHost,
+			Scheme: parsedUrl.Scheme,
+			Host:   parsedUrl.Host,
 		},
 		TLSConfig: &tls.Config{
 			RootCAs: cp,
