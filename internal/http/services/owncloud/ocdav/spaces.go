@@ -23,7 +23,6 @@ import (
 	"path"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
-	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/errors"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/net"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/propfind"
@@ -158,11 +157,10 @@ func (h *SpacesHandler) handleSpacesTrashbin(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	ref := &provider.Reference{
-		ResourceId: &provider.ResourceId{
-			StorageId: spaceID,
-			OpaqueId:  spaceID,
-		},
+	ref, err := utils.ParseStorageSpaceReference(spaceID)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
 	}
 
 	var key string
@@ -170,7 +168,7 @@ func (h *SpacesHandler) handleSpacesTrashbin(w http.ResponseWriter, r *http.Requ
 
 	switch r.Method {
 	case MethodPropfind:
-		trashbinHandler.listTrashbin(w, r, s, ref, path.Join(_trashbinPath, spaceID), key, r.URL.Path)
+		trashbinHandler.listTrashbin(w, r, s, &ref, path.Join(_trashbinPath, spaceID), key, r.URL.Path)
 	case MethodMove:
 		if key == "" {
 			http.Error(w, "501 Not implemented", http.StatusNotImplemented)
@@ -191,9 +189,9 @@ func (h *SpacesHandler) handleSpacesTrashbin(w http.ResponseWriter, r *http.Requ
 		dstRef := ref
 		dstRef.Path = utils.MakeRelativePath(dst)
 
-		trashbinHandler.restore(w, r, s, ref, dstRef, key, r.URL.Path)
+		trashbinHandler.restore(w, r, s, &ref, &dstRef, key, r.URL.Path)
 	case http.MethodDelete:
-		trashbinHandler.delete(w, r, s, ref, key, r.URL.Path)
+		trashbinHandler.delete(w, r, s, &ref, key, r.URL.Path)
 	default:
 		http.Error(w, "501 Not implemented", http.StatusNotImplemented)
 	}
