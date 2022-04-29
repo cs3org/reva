@@ -603,7 +603,7 @@ func (s *service) Delete(ctx context.Context, req *provider.DeleteRequest) (*pro
 	md, err := s.storage.GetMD(ctx, req.Ref, []string{})
 	if err != nil {
 		return &provider.DeleteResponse{
-			Status: status.NewInternal(ctx, "can't stat resource to delete"),
+			Status: status.NewStatusFromErrType(ctx, "can't stat resource to delete", err),
 		}, nil
 	}
 
