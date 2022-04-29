@@ -84,8 +84,10 @@ func (ItemMoved) Unmarshal(v []byte) (interface{}, error) {
 
 // ItemPurged is emitted when a file or folder is removed from trashbin
 type ItemPurged struct {
-	Ref   *provider.Reference
-	Owner *user.UserId
+	Executant *user.UserId
+	Id        *provider.ResourceId
+	Ref       *provider.Reference
+	Owner     *user.UserId
 }
 
 // Unmarshal to fulfill umarshaller interface
