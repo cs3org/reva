@@ -1,4 +1,5 @@
 [grpc]
+insecure = true
 address = "0.0.0.0:18000"
 
 [grpc.services.storageprovider]

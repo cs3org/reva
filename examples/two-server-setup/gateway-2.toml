@@ -3,6 +3,7 @@ gatewaysvc = "localhost:29000"
 datagateway = "http://localhost:29001/datagateway"
 
 [grpc]
+insecure = true
 address = "0.0.0.0:29000"
 
 # services to enable

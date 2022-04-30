@@ -138,9 +138,6 @@ func (c *config) init() {
 	if c.Address == "" {
 		c.Address = sharedconf.GetGatewaySVC("0.0.0.0:19000")
 	}
-	sharedconf.SetInsecure(c.Insecure)
-	sharedconf.SetSkipVerify(c.SkipVerify)
-	sharedconf.SetCAFilePath(c.CAFile)
 }
 
 // Server is a gRPC server.

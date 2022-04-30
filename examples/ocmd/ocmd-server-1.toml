@@ -13,6 +13,7 @@ gatewaysvc = "localhost:19000"
 # publiclink = ["localhost:9876"]
 
 [grpc]
+insecure = true
 address = "0.0.0.0:19000"
 
 [grpc.services.gateway]

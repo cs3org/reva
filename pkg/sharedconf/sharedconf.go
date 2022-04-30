@@ -32,8 +32,8 @@ type conf struct {
 	GatewaySVC            string `mapstructure:"gatewaysvc"`
 	DataGateway           string `mapstructure:"datagateway"`
 	SkipUserGroupsInToken bool   `mapstructure:"skip_user_groups_in_token"`
-	Insecure              bool   `mapstructure:"insecure"`
-	SkipVerify            bool   `mapstructure:"skip_verify"`
+	GrpcInsecure          bool   `mapstructure:"grpc_insecure"`
+	GrpcSkipVerify        bool   `mapstructure:"grpc_skip_verify"`
 	CAFile                string `mapstructure:"ca_file"`
 }
 
@@ -96,29 +96,14 @@ func SkipUserGroupsInToken() bool {
 	return sharedConf.SkipUserGroupsInToken
 }
 
-// SkipVerify return whether a client verifies the server's certificate chain and host name.
-func SkipVerify() bool {
-	return sharedConf.SkipVerify
+// GrpcSkipVerify return whether a client verifies the server's certificate chain and host name.
+func GrpcSkipVerify() bool {
+	return sharedConf.GrpcSkipVerify
 }
 
-// Insecure returns whether to disable transport security for new GRPC connections.
-func Insecure() bool {
-	return sharedConf.Insecure
-}
-
-// SetInsecure which determines whether to disable transport security for new GRPC connections.
-func SetInsecure(insecure bool) {
-	sharedConf.Insecure = insecure
-}
-
-// SetSkipVerify return whether a client verifies the server's certificate chain and host name.
-func SetSkipVerify(skipVerify bool) {
-	sharedConf.SkipVerify = skipVerify
-}
-
-// SetCAFilePath sets the file path for the CA file
-func SetCAFilePath(CAFile string) {
-	sharedConf.CAFile = CAFile
+// GrpcInsecure returns whether to disable transport security for new GRPC connections.
+func GrpcInsecure() bool {
+	return sharedConf.GrpcInsecure
 }
 
 // GetCAFilePath sets the file path for the CA file

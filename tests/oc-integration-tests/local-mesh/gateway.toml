@@ -11,6 +11,7 @@ jwt_secret = "Pive-Fumkiu4"
 gatewaysvc = "localhost:39000"
 
 [grpc]
+insecure = true
 address = "0.0.0.0:39000"
 
 [grpc.services.gateway]
