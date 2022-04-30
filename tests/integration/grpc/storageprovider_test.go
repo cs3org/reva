@@ -91,7 +91,7 @@ var _ = Describe("storage providers", func() {
 
 		revads, err = startRevads(dependencies, variables)
 		Expect(err).ToNot(HaveOccurred())
-		serviceClient, err = pool.GetStorageProviderServiceClient(revads["storage"].GrpcAddress)
+		serviceClient, err = pool.GetStorageProviderServiceClient(pool.Endpoint(revads["storage"].GrpcAddress))
 		Expect(err).ToNot(HaveOccurred())
 	})
 
