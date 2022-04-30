@@ -207,7 +207,7 @@ func (s *svc) WhoAmI(ctx context.Context, req *gateway.WhoAmIRequest) (*gateway.
 }
 
 func (s *svc) findAuthProvider(ctx context.Context, authType string) (authpb.ProviderAPIClient, error) {
-	c, err := pool.GetAuthRegistryServiceClient(s.c.AuthRegistryEndpoint)
+	c, err := pool.GetAuthRegistryServiceClient(pool.Endpoint(s.c.AuthRegistryEndpoint))
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error getting auth registry client")
 		return nil, err
@@ -224,7 +224,7 @@ func (s *svc) findAuthProvider(ctx context.Context, authType string) (authpb.Pro
 
 	if res.Status.Code == rpc.Code_CODE_OK && res.Providers != nil && len(res.Providers) > 0 {
 		// TODO(labkode): check for capabilities here
-		c, err := pool.GetAuthProviderServiceClient(res.Providers[0].Address)
+		c, err := pool.GetAuthProviderServiceClient(pool.Endpoint(res.Providers[0].Address))
 		if err != nil {
 			err = errors.Wrap(err, "gateway: error getting an auth provider client")
 			return nil, err
