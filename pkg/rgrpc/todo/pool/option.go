@@ -19,7 +19,7 @@
 package pool
 
 const (
-	DefaultMaxCallRecvMsgSize = 10240000
+	defaultMaxCallRecvMsgSize = 10240000
 )
 
 // Option defines a single option function.
@@ -34,7 +34,7 @@ type Options struct {
 // newOptions initializes the available default options.
 func newOptions(opts ...Option) Options {
 	opt := Options{
-		MaxCallRecvMsgSize: DefaultMaxCallRecvMsgSize,
+		MaxCallRecvMsgSize: defaultMaxCallRecvMsgSize,
 	}
 
 	for _, o := range opts {
@@ -51,7 +51,7 @@ func Endpoint(val string) Option {
 	}
 }
 
-//  MaxCallMsgRecvSizeprovides a function to set the MaxCallRecvMsgSize option.
+// MaxCallRecvMsgSize provides a function to set the MaxCallRecvMsgSize option.
 func MaxCallRecvMsgSize(size int) Option {
 	return func(o *Options) {
 		o.MaxCallRecvMsgSize = size
