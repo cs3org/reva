@@ -439,7 +439,7 @@ func vaultConfigExists(conf *config) (bool, error) {
 	if conf.VaultCertFile == "" && conf.VaultURL == "" {
 		return false, nil
 	}
-	if !isUrl(conf.VaultURL) {
+	if !isURL(conf.VaultURL) {
 		return true, errors.New("could not parse vault_url")
 	}
 	err := fileExists(conf.VaultCertFile)
@@ -460,7 +460,7 @@ func fileExists(file string) error {
 	return nil
 }
 
-func isUrl(str string) bool {
+func isURL(str string) bool {
 	u, err := url.Parse(str)
 	return err == nil && u.Scheme != "" && u.Host != ""
 }
@@ -479,14 +479,14 @@ func getVaultCredentials(conf *config) (credentials.TransportCredentials, error)
 	if !cp.AppendCertsFromPEM(b) {
 		return nil, errors.New("failed to append vault certificates")
 	}
-	parsedUrl, err := url.Parse(conf.VaultURL)
+	parsedURL, err := url.Parse(conf.VaultURL)
 	if err != nil {
 		return nil, fmt.Errorf("could not parse vault_url: %s", conf.VaultURL)
 	}
 	issuer := &vault.Issuer{
 		URL: &url.URL{
-			Scheme: parsedUrl.Scheme,
-			Host:   parsedUrl.Host,
+			Scheme: parsedURL.Scheme,
+			Host:   parsedURL.Host,
 		},
 		TLSConfig: &tls.Config{
 			RootCAs: cp,
