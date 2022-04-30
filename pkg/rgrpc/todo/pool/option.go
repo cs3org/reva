@@ -28,8 +28,6 @@ type Option func(o *Options)
 // Options defines the available options for this package.
 type Options struct {
 	Endpoint           string
-	Insecure           bool
-	SkipVerify         bool
 	MaxCallRecvMsgSize int
 }
 
@@ -50,20 +48,6 @@ func newOptions(opts ...Option) Options {
 func Endpoint(val string) Option {
 	return func(o *Options) {
 		o.Endpoint = val
-	}
-}
-
-// Insecure provides a function to set the insecure option.
-func Insecure(insecure bool) Option {
-	return func(o *Options) {
-		o.Insecure = insecure
-	}
-}
-
-// SkipVerify provides a function to set the skip verify option.
-func SkipVerify(skipVerify bool) Option {
-	return func(o *Options) {
-		o.SkipVerify = skipVerify
 	}
 }
 
