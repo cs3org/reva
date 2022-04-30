@@ -189,7 +189,7 @@ func (s *svc) openLocalResources(ctx context.Context, ri *storageprovider.Resour
 		return nil, err
 	}
 
-	appProviderClient, err := pool.GetAppProviderClient(provider.Address)
+	appProviderClient, err := pool.GetAppProviderClient(pool.Endpoint(provider.Address))
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error calling GetAppProviderClient")
 	}
