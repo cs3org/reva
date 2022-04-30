@@ -121,21 +121,13 @@ type config struct {
 	EnableReflection bool                              `mapstructure:"enable_reflection"`
 	Insecure         bool                              `mapstructure:"insecure"`
 	SkipVerify       bool                              `mapstructure:"SkipVerify"`
-	certConfig
-	vaultConfig
-}
-
-type certConfig struct {
-	CertFile string `mapstructure:"certfile"`
-	KeyFile  string `mapstructure:"keyfile"`
-	CAFile   string `mapstructure:"ca_certfile"`
-}
-
-type vaultConfig struct {
-	VaultURL      string `mapstructure:"vault_url"`
-	VaultToken    string `mapstructure:"vault_token"`
-	VaultRole     string `mapstructure:"vault_role"`
-	VaultCertFile string `mapstructure:"vault_certfile"`
+	CertFile         string                            `mapstructure:"certfile"`
+	KeyFile          string                            `mapstructure:"keyfile"`
+	CAFile           string                            `mapstructure:"ca_certfile"`
+	VaultURL         string                            `mapstructure:"vault_url"`
+	VaultToken       string                            `mapstructure:"vault_token"`
+	VaultRole        string                            `mapstructure:"vault_role"`
+	VaultCertFile    string                            `mapstructure:"vault_certfile"`
 }
 
 func (c *config) init() {
@@ -447,7 +439,7 @@ func certFilesExist(conf *config) (bool, error) {
 }
 
 func vaultConfigExists(conf *config) (bool, error) {
-	if conf.VaultCertFile == "" && conf.CAFile == "" {
+	if conf.VaultCertFile == "" && conf.VaultURL == "" {
 		return false, nil
 	}
 	if !isUrl(conf.VaultURL) {
