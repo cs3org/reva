@@ -35,6 +35,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/share"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/grants"
 	rtrace "github.com/cs3org/reva/v2/pkg/trace"
+	"github.com/cs3org/reva/v2/pkg/utils/resourceid"
 	"github.com/pkg/errors"
 )
 
@@ -778,7 +779,8 @@ func refIsSpaceRoot(ref *provider.ResourceId) bool {
 	if ref.StorageId == "" || ref.OpaqueId == "" {
 		return false
 	}
-	if ref.StorageId != ref.OpaqueId {
+	sid, _ := resourceid.StorageIDUnwrap(ref.GetStorageId())
+	if sid != ref.OpaqueId {
 		return false
 	}
 	return true
