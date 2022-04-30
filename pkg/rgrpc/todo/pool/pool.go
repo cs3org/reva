@@ -44,7 +44,6 @@ import (
 	storageprovider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	storageregistry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 	datatx "github.com/cs3org/go-cs3apis/cs3/tx/v1beta1"
-	"github.com/cs3org/reva/pkg/sharedconf"
 	rtrace "github.com/cs3org/reva/pkg/trace"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"google.golang.org/grpc"
@@ -139,10 +138,10 @@ func getConnectionOptions(options Options) ([]grpc.DialOption, error) {
 
 func getCredentials(options Options) (credentials.TransportCredentials, error) {
 	var creds credentials.TransportCredentials
-	if sharedconf.Insecure() {
+	if options.Insecure {
 		creds = insecure.NewCredentials()
 	} else {
-		caCertFile, err := ioutil.ReadFile(sharedconf.GetCAFilePath())
+		caCertFile, err := ioutil.ReadFile(options.CACertFile)
 		if err != nil {
 			return nil, err
 		}

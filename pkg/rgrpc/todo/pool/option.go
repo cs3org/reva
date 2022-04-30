@@ -29,6 +29,9 @@ type Option func(o *Options)
 type Options struct {
 	Endpoint           string
 	MaxCallRecvMsgSize int
+	Insecure           bool
+	SkipVerify         bool
+	CACertFile         string
 }
 
 // newOptions initializes the available default options.
