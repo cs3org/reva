@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -86,13 +86,13 @@ var (
 // NewConn creates a new connection to a grpc server
 // with open census tracing support.
 // TODO(labkode): make grpc tls configurable.
-// TODO make maxCallRecvMsgSize configurable, raised from the default 4MB to be able to list 10k files
-func NewConn(endpoint string) (*grpc.ClientConn, error) {
+func NewConn(opts ...Option) (*grpc.ClientConn, error) {
+	options := newOptions(opts...)
 	conn, err := grpc.Dial(
-		endpoint,
+		options.Endpoint,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithDefaultCallOptions(
-			grpc.MaxCallRecvMsgSize(maxCallRecvMsgSize),
+			grpc.MaxCallRecvMsgSize(options.MaxCallRecvMsgSize),
 		),
 		grpc.WithStreamInterceptor(otelgrpc.StreamClientInterceptor(
 			otelgrpc.WithTracerProvider(
