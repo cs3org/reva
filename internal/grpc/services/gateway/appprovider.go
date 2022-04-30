@@ -209,7 +209,7 @@ func (s *svc) openLocalResources(ctx context.Context, ri *storageprovider.Resour
 }
 
 func (s *svc) findAppProvider(ctx context.Context, ri *storageprovider.ResourceInfo, app string) (*registry.ProviderInfo, error) {
-	c, err := pool.GetAppRegistryClient(s.c.AppRegistryEndpoint)
+	c, err := pool.GetAppRegistryClient(pool.Endpoint(s.c.AppRegistryEndpoint))
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error getting appregistry client")
 		return nil, err
