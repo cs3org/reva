@@ -54,7 +54,7 @@ func (h *Handler) FindSharees(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	gwc, err := pool.GetGatewayServiceClient(h.gatewayAddr)
+	gwc, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting gateway grpc client", err)
 		return

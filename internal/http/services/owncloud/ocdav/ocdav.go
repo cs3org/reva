@@ -255,7 +255,7 @@ func (s *svc) Handler() http.Handler {
 }
 
 func (s *svc) getClient() (gateway.GatewayAPIClient, error) {
-	return pool.GetGatewayServiceClient(s.c.GatewaySvc)
+	return pool.GetGatewayServiceClient(pool.Endpoint(s.c.GatewaySvc))
 }
 
 func applyLayout(ctx context.Context, ns string, useLoggedInUserNS bool, requestPath string) string {

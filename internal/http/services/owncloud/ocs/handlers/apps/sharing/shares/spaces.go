@@ -40,7 +40,7 @@ import (
 
 func (h *Handler) getGrantee(ctx context.Context, name string) (provider.Grantee, error) {
 	log := appctx.GetLogger(ctx)
-	client, err := pool.GetGatewayServiceClient(h.gatewayAddr)
+	client, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
 	if err != nil {
 		return provider.Grantee{}, err
 	}

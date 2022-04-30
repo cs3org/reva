@@ -85,8 +85,7 @@ var (
 // NewConn creates a new connection to a grpc server
 // with open census tracing support.
 // TODO(labkode): make grpc tls configurable.
-func NewConn(opts ...Option) (*grpc.ClientConn, error) {
-	options := newOptions(opts...)
+func NewConn(options Options) (*grpc.ClientConn, error) {
 	conn, err := grpc.Dial(
 		options.Endpoint,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
@@ -120,21 +119,22 @@ func NewConn(opts ...Option) (*grpc.ClientConn, error) {
 }
 
 // GetGatewayServiceClient returns a GatewayServiceClient.
-func GetGatewayServiceClient(endpoint string) (gateway.GatewayAPIClient, error) {
+func GetGatewayServiceClient(opts ...Option) (gateway.GatewayAPIClient, error) {
 	gatewayProviders.m.Lock()
 	defer gatewayProviders.m.Unlock()
 
-	if val, ok := gatewayProviders.conn[endpoint]; ok {
+	options := newOptions(opts...)
+	if val, ok := gatewayProviders.conn[options.Endpoint]; ok {
 		return val.(gateway.GatewayAPIClient), nil
 	}
 
-	conn, err := NewConn(Endpoint(endpoint))
+	conn, err := NewConn(options)
 	if err != nil {
 		return nil, err
 	}
 
 	v := gateway.NewGatewayAPIClient(conn)
-	gatewayProviders.conn[endpoint] = v
+	gatewayProviders.conn[options.Endpoint] = v
 
 	return v, nil
 }

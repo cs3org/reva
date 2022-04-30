@@ -75,7 +75,7 @@ func (m *manager) Authenticate(ctx context.Context, user, secret string) (*userp
 		return nil, nil, errtypes.InvalidCredentials("")
 	}
 
-	gtw, err := pool.GetGatewayServiceClient(m.GatewayAddr)
+	gtw, err := pool.GetGatewayServiceClient(pool.Endpoint(m.GatewayAddr))
 	if err != nil {
 		return nil, nil, err
 	}

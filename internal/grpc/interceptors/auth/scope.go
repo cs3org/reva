@@ -52,7 +52,7 @@ const (
 
 func expandAndVerifyScope(ctx context.Context, req interface{}, tokenScope map[string]*authpb.Scope, user *userpb.User, gatewayAddr string, mgr token.Manager) error {
 	log := appctx.GetLogger(ctx)
-	client, err := pool.GetGatewayServiceClient(gatewayAddr)
+	client, err := pool.GetGatewayServiceClient(pool.Endpoint(gatewayAddr))
 	if err != nil {
 		return err
 	}

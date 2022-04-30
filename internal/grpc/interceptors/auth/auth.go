@@ -218,7 +218,7 @@ func dismantleToken(ctx context.Context, tkn string, req interface{}, mgr token.
 	}
 
 	if sharedconf.SkipUserGroupsInToken() {
-		client, err := pool.GetGatewayServiceClient(gatewayAddr)
+		client, err := pool.GetGatewayServiceClient(pool.Endpoint(gatewayAddr))
 		if err != nil {
 			return nil, err
 		}

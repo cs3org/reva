@@ -100,7 +100,7 @@ func (s *svc) Close() error {
 }
 
 func (s *svc) getClient() (gateway.GatewayAPIClient, error) {
-	return pool.GetGatewayServiceClient(s.conf.GatewaySvc)
+	return pool.GetGatewayServiceClient(pool.Endpoint(s.conf.GatewaySvc))
 }
 
 func (s *svc) serveJSON(w http.ResponseWriter, r *http.Request) {
