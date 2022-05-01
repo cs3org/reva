@@ -780,10 +780,7 @@ func refIsSpaceRoot(ref *provider.ResourceId) bool {
 		return false
 	}
 	sid, _ := resourceid.StorageIDUnwrap(ref.GetStorageId())
-	if sid != ref.OpaqueId {
-		return false
-	}
-	return true
+	return sid == ref.OpaqueId
 }
 
 func shareIsSpaceRoot(key *collaboration.ShareKey) bool {
