@@ -20,9 +20,6 @@ package pool
 
 import (
 	"crypto/tls"
-	"crypto/x509"
-	"errors"
-	"io/ioutil"
 	"sync"
 
 	appprovider "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
@@ -128,36 +125,23 @@ func getConnectionOptions(options Options) ([]grpc.DialOption, error) {
 			),
 		),
 	}
-	creds, err := getCredentials(options)
-	if err != nil {
-		return nil, err
-	}
+	creds := getCredentials(options)
 	opts = append(opts, grpc.WithTransportCredentials(creds))
 	return opts, nil
 }
 
-func getCredentials(options Options) (credentials.TransportCredentials, error) {
+func getCredentials(options Options) credentials.TransportCredentials {
 	var creds credentials.TransportCredentials
 	if options.Insecure {
 		creds = insecure.NewCredentials()
 	} else {
-		caCertFile, err := ioutil.ReadFile(options.CACertFile)
-		if err != nil {
-			return nil, err
-		}
-
-		cp := x509.NewCertPool()
-		if !cp.AppendCertsFromPEM(caCertFile) {
-			return nil, errors.New("credentials: failed to append certificates")
-		}
 		tlsconf := &tls.Config{
-			InsecureSkipVerify: false,
-			// RootCAs:            cp,
+			InsecureSkipVerify: options.SkipVerify,
 		}
 		creds = credentials.NewTLS(tlsconf)
 
 	}
-	return creds, nil
+	return creds
 }
 
 // GetGatewayServiceClient returns a GatewayServiceClient.
