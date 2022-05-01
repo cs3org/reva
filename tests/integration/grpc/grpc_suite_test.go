@@ -38,8 +38,10 @@ import (
 
 const timeoutMs = 30000
 
-var mutex = sync.Mutex{}
-var port = 19000
+var (
+	mutex = sync.Mutex{}
+	port  = 19000
+)
 
 func TestGrpc(t *testing.T) {
 	RegisterFailHandler(Fail)

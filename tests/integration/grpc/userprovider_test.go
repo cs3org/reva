@@ -68,7 +68,9 @@ var _ = Describe("user providers", func() {
 
 		revads, err = startRevads(dependencies, map[string]string{})
 		Expect(err).ToNot(HaveOccurred())
-		serviceClient, err = pool.GetUserProviderServiceClient(pool.Endpoint(revads["users"].GrpcAddress))
+		serviceClient, err = pool.GetUserProviderServiceClient(
+			pool.Endpoint(revads["users"].GrpcAddress),
+		)
 		Expect(err).ToNot(HaveOccurred())
 	})
 
@@ -78,7 +80,7 @@ var _ = Describe("user providers", func() {
 		}
 	})
 
-	var assertGetUserByClaimResponses = func() {
+	assertGetUserByClaimResponses := func() {
 		It("gets users as expected", func() {
 			tests := map[string]string{
 				"mail":     "einstein@example.org",
@@ -87,7 +89,10 @@ var _ = Describe("user providers", func() {
 			}
 
 			for claim, value := range tests {
-				user, err := serviceClient.GetUserByClaim(ctx, &userpb.GetUserByClaimRequest{Claim: claim, Value: value})
+				user, err := serviceClient.GetUserByClaim(
+					ctx,
+					&userpb.GetUserByClaimRequest{Claim: claim, Value: value},
+				)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(user.User).ToNot(BeNil())
 				Expect(user.User.Mail).To(Equal("einstein@example.org"))
@@ -95,7 +100,7 @@ var _ = Describe("user providers", func() {
 		})
 	}
 
-	var assertGetUserResponses = func() {
+	assertGetUserResponses := func() {
 		It("gets users as expected", func() {
 			tests := []struct {
 				name   string
@@ -207,7 +212,7 @@ var _ = Describe("user providers", func() {
 		})
 	}
 
-	var assertFindUsersResponses = func() {
+	assertFindUsersResponses := func() {
 		It("finds users by email", func() {
 			res, err := serviceClient.FindUsers(ctx, &userpb.FindUsersRequest{Filter: "marie@example.org"})
 			Expect(err).ToNot(HaveOccurred())
@@ -233,7 +238,10 @@ var _ = Describe("user providers", func() {
 		})
 
 		It("finds users by id", func() {
-			res, err := serviceClient.FindUsers(ctx, &userpb.FindUsersRequest{Filter: "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c"})
+			res, err := serviceClient.FindUsers(
+				ctx,
+				&userpb.FindUsersRequest{Filter: "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c"},
+			)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(len(res.Users)).To(Equal(1))
 			user := res.Users[0]

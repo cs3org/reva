@@ -337,7 +337,11 @@ func (am *mgr) resolveUser(ctx context.Context, claims map[string]interface{}) e
 			username = am.oidcUsersMapping[m.(string)].Username
 		}
 
-		upsc, err := pool.GetUserProviderServiceClient(pool.Endpoint(am.c.GatewaySvc))
+		upsc, err := pool.GetUserProviderServiceClient(
+			pool.Endpoint(am.c.GatewaySvc),
+			pool.Insecure(am.c.Insecure),
+			pool.SkipVerify(am.c.SkipVerify),
+		)
 		if err != nil {
 			return errors.Wrap(err, "error getting user provider grpc client")
 		}

@@ -78,6 +78,7 @@ const (
 var defaultPermissions *provider.ResourcePermissions = &provider.ResourcePermissions{
 	// no permissions
 }
+
 var ownerPermissions *provider.ResourcePermissions = &provider.ResourcePermissions{
 	// all permissions
 	AddGrant:             true,
@@ -118,6 +119,8 @@ type config struct {
 	DbHost                   string `mapstructure:"dbhost"`
 	DbPort                   int    `mapstructure:"dbport"`
 	DbName                   string `mapstructure:"dbname"`
+	Insecure                 bool   `mapstructure:"insecure"`
+	SkipVerify               bool   `mapstructure:"skip_verify"`
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -273,7 +276,6 @@ func (fs *owncloudsqlfs) getVersionsPath(ctx context.Context, ip string) string 
 	default:
 		return "" // TODO Must not happen?
 	}
-
 }
 
 // owncloudsql stores trashed items in the files_trashbin subfolder of a users home
@@ -370,7 +372,11 @@ func (fs *owncloudsqlfs) getUser(ctx context.Context, usernameOrID string) (id *
 	// look up at the userprovider
 
 	// parts[0] contains the username or userid. use  user service to look up id
-	c, err := pool.GetUserProviderServiceClient(pool.Endpoint(fs.c.UserProviderEndpoint))
+	c, err := pool.GetUserProviderServiceClient(
+		pool.Endpoint(fs.c.UserProviderEndpoint),
+		pool.Insecure(fs.c.Insecure),
+		pool.SkipVerify(fs.c.SkipVerify),
+	)
 	if err != nil {
 		appctx.GetLogger(ctx).
 			Error().Err(err).
@@ -490,11 +496,19 @@ func (fs *owncloudsqlfs) getUserStorage(user string) (int, error) {
 }
 
 // CreateStorageSpace creates a storage space
-func (fs *owncloudsqlfs) CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error) {
+func (fs *owncloudsqlfs) CreateStorageSpace(
+	ctx context.Context,
+	req *provider.CreateStorageSpaceRequest,
+) (*provider.CreateStorageSpaceResponse, error) {
 	return nil, fmt.Errorf("unimplemented: CreateStorageSpace")
 }
 
-func (fs *owncloudsqlfs) convertToResourceInfo(ctx context.Context, entry *filecache.File, ip string, mdKeys []string) (*provider.ResourceInfo, error) {
+func (fs *owncloudsqlfs) convertToResourceInfo(
+	ctx context.Context,
+	entry *filecache.File,
+	ip string,
+	mdKeys []string,
+) (*provider.ResourceInfo, error) {
 	mdKeysMap := make(map[string]struct{})
 	for _, k := range mdKeys {
 		mdKeysMap[k] = struct{}{}
@@ -566,7 +580,6 @@ func (fs *owncloudsqlfs) GetPathByID(ctx context.Context, id *provider.ResourceI
 
 // resolve takes in a request path or request id and converts it to an internal path.
 func (fs *owncloudsqlfs) resolve(ctx context.Context, ref *provider.Reference) (string, error) {
-
 	if ref.GetResourceId() != nil {
 		p, err := fs.filecache.Path(ref.GetResourceId().OpaqueId)
 		if err != nil {
@@ -639,7 +652,10 @@ func isNotFound(err error) bool {
 	return false
 }
 
-func (fs *owncloudsqlfs) ListGrants(ctx context.Context, ref *provider.Reference) (grants []*provider.Grant, err error) {
+func (fs *owncloudsqlfs) ListGrants(
+	ctx context.Context,
+	ref *provider.Reference,
+) (grants []*provider.Grant, err error) {
 	return []*provider.Grant{}, nil // nop
 }
 
@@ -708,7 +724,6 @@ func (fs *owncloudsqlfs) GetHome(ctx context.Context) (string, error) {
 }
 
 func (fs *owncloudsqlfs) CreateDir(ctx context.Context, ref *provider.Reference) (err error) {
-
 	ip, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return err
@@ -742,7 +757,9 @@ func (fs *owncloudsqlfs) CreateDir(ctx context.Context, ref *provider.Reference)
 
 	permissions := 31 // 1: READ, 2: UPDATE, 4: CREATE, 8: DELETE, 16: SHARE
 	if perm, err := fs.readPermissions(ctx, filepath.Dir(ip)); err == nil {
-		permissions = int(conversions.RoleFromResourcePermissions(perm).OCSPermissions()) // inherit permissions of parent
+		permissions = int(
+			conversions.RoleFromResourcePermissions(perm).OCSPermissions(),
+		) // inherit permissions of parent
 	}
 	data := map[string]interface{}{
 		"path":          fs.toDatabasePath(ip),
@@ -795,7 +812,12 @@ func (fs *owncloudsqlfs) setMtime(ctx context.Context, ip string, mtime string) 
 	}
 	return nil
 }
-func (fs *owncloudsqlfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Reference, md *provider.ArbitraryMetadata) (err error) {
+
+func (fs *owncloudsqlfs) SetArbitraryMetadata(
+	ctx context.Context,
+	ref *provider.Reference,
+	md *provider.ArbitraryMetadata,
+) (err error) {
 	log := appctx.GetLogger(ctx)
 
 	var ip string
@@ -938,7 +960,11 @@ func parseMTime(v string) (t time.Time, err error) {
 	return time.Unix(sec, nsec), err
 }
 
-func (fs *owncloudsqlfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Reference, keys []string) (err error) {
+func (fs *owncloudsqlfs) UnsetArbitraryMetadata(
+	ctx context.Context,
+	ref *provider.Reference,
+	keys []string,
+) (err error) {
 	log := appctx.GetLogger(ctx)
 
 	var ip string
@@ -1124,7 +1150,10 @@ func (fs *owncloudsqlfs) trash(ctx context.Context, ip string, rp string, origin
 	}
 	err = tryDelete()
 	if err != nil {
-		err = fs.createHomeForUser(ctx, fs.getOwner(ip)) // Try setting up the owner's home (incl. trash) to fix the problem
+		err = fs.createHomeForUser(
+			ctx,
+			fs.getOwner(ip),
+		) // Try setting up the owner's home (incl. trash) to fix the problem
 		if err != nil {
 			return err
 		}
@@ -1229,7 +1258,11 @@ func (fs *owncloudsqlfs) Move(ctx context.Context, oldRef, newRef *provider.Refe
 	return nil
 }
 
-func (fs *owncloudsqlfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []string) (*provider.ResourceInfo, error) {
+func (fs *owncloudsqlfs) GetMD(
+	ctx context.Context,
+	ref *provider.Reference,
+	mdKeys []string,
+) (*provider.ResourceInfo, error) {
 	ip, err := fs.resolve(ctx, ref)
 	if err != nil {
 		// TODO return correct errtype
@@ -1273,7 +1306,11 @@ func (fs *owncloudsqlfs) GetMD(ctx context.Context, ref *provider.Reference, mdK
 	return fs.convertToResourceInfo(ctx, entry, ip, mdKeys)
 }
 
-func (fs *owncloudsqlfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys []string) ([]*provider.ResourceInfo, error) {
+func (fs *owncloudsqlfs) ListFolder(
+	ctx context.Context,
+	ref *provider.Reference,
+	mdKeys []string,
+) ([]*provider.ResourceInfo, error) {
 	log := appctx.GetLogger(ctx)
 
 	ip, err := fs.resolve(ctx, ref)
@@ -1295,8 +1332,11 @@ func (fs *owncloudsqlfs) ListFolder(ctx context.Context, ref *provider.Reference
 	return fs.listWithNominalHome(ctx, sp, mdKeys)
 }
 
-func (fs *owncloudsqlfs) listWithNominalHome(ctx context.Context, ip string, mdKeys []string) ([]*provider.ResourceInfo, error) {
-
+func (fs *owncloudsqlfs) listWithNominalHome(
+	ctx context.Context,
+	ip string,
+	mdKeys []string,
+) ([]*provider.ResourceInfo, error) {
 	// If a user wants to list a folder shared with him the path will already
 	// be wrapped with the files directory path of the share owner.
 	// In that case we don't want to wrap the path again.
@@ -1340,7 +1380,11 @@ func (fs *owncloudsqlfs) listWithNominalHome(ctx context.Context, ip string, mdK
 	return finfos, nil
 }
 
-func (fs *owncloudsqlfs) listWithHome(ctx context.Context, home, p string, mdKeys []string) ([]*provider.ResourceInfo, error) {
+func (fs *owncloudsqlfs) listWithHome(
+	ctx context.Context,
+	home, p string,
+	mdKeys []string,
+) ([]*provider.ResourceInfo, error) {
 	log := appctx.GetLogger(ctx)
 	if p == home {
 		log.Debug().Msg("listing home")
@@ -1515,7 +1559,11 @@ func (fs *owncloudsqlfs) ListRevisions(ctx context.Context, ref *provider.Refere
 	return revisions, nil
 }
 
-func (fs *owncloudsqlfs) DownloadRevision(ctx context.Context, ref *provider.Reference, revisionKey string) (io.ReadCloser, error) {
+func (fs *owncloudsqlfs) DownloadRevision(
+	ctx context.Context,
+	ref *provider.Reference,
+	revisionKey string,
+) (io.ReadCloser, error) {
 	return nil, errtypes.NotSupported("download revision")
 }
 
@@ -1736,7 +1784,10 @@ func (fs *owncloudsqlfs) convertToRecycleItem(ctx context.Context, md os.FileInf
 	}
 }
 
-func (fs *owncloudsqlfs) ListRecycle(ctx context.Context, basePath, key, relativePath string) ([]*provider.RecycleItem, error) {
+func (fs *owncloudsqlfs) ListRecycle(
+	ctx context.Context,
+	basePath, key, relativePath string,
+) ([]*provider.RecycleItem, error) {
 	// TODO check permission? on what? user must be the owner?
 	rp, err := fs.getRecyclePath(ctx)
 	if err != nil {
@@ -1763,7 +1814,11 @@ func (fs *owncloudsqlfs) ListRecycle(ctx context.Context, basePath, key, relativ
 	return items, nil
 }
 
-func (fs *owncloudsqlfs) RestoreRecycleItem(ctx context.Context, basePath, key, relativePath string, restoreRef *provider.Reference) error {
+func (fs *owncloudsqlfs) RestoreRecycleItem(
+	ctx context.Context,
+	basePath, key, relativePath string,
+	restoreRef *provider.Reference,
+) error {
 	log := appctx.GetLogger(ctx)
 
 	base, ttime, err := splitTrashKey(key)
@@ -1792,7 +1847,13 @@ func (fs *owncloudsqlfs) RestoreRecycleItem(ctx context.Context, basePath, key, 
 	tgt := fs.toInternalPath(ctx, restoreRef.Path)
 	// move back to original location
 	if err := os.Rename(src, tgt); err != nil {
-		log.Error().Err(err).Str("key", key).Str("restorePath", restoreRef.Path).Str("src", src).Str("tgt", tgt).Msg("could not restore item")
+		log.Error().
+			Err(err).
+			Str("key", key).
+			Str("restorePath", restoreRef.Path).
+			Str("src", src).
+			Str("tgt", tgt).
+			Msg("could not restore item")
 		return errors.Wrap(err, "owncloudsql: could not restore item")
 	}
 
@@ -1950,13 +2011,19 @@ func (fs *owncloudsqlfs) HashFile(path string) (string, string, string, error) {
 	}
 }
 
-func (fs *owncloudsqlfs) ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter) ([]*provider.StorageSpace, error) {
+func (fs *owncloudsqlfs) ListStorageSpaces(
+	ctx context.Context,
+	filter []*provider.ListStorageSpacesRequest_Filter,
+) ([]*provider.StorageSpace, error) {
 	// TODO(corby): Implement
 	return nil, errtypes.NotSupported("list storage spaces")
 }
 
 // UpdateStorageSpace updates a storage space
-func (fs *owncloudsqlfs) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
+func (fs *owncloudsqlfs) UpdateStorageSpace(
+	ctx context.Context,
+	req *provider.UpdateStorageSpaceRequest,
+) (*provider.UpdateStorageSpaceResponse, error) {
 	return nil, errtypes.NotSupported("update storage space")
 }
 

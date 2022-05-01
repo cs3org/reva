@@ -82,6 +82,7 @@ const (
 var defaultPermissions *provider.ResourcePermissions = &provider.ResourcePermissions{
 	// no permissions
 }
+
 var ownerPermissions *provider.ResourcePermissions = &provider.ResourcePermissions{
 	// all permissions
 	AddGrant:             true,
@@ -118,6 +119,8 @@ type config struct {
 	EnableHome               bool   `mapstructure:"enable_home"`
 	Scan                     bool   `mapstructure:"scan"`
 	UserProviderEndpoint     string `mapstructure:"userprovidersvc"`
+	Insecure                 bool   `mapstructure:"insecure"`
+	SkipVerify               bool   `mapstructure:"skip_verify"`
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -184,7 +187,6 @@ func New(m map[string]interface{}) (storage.FS, error) {
 	}
 
 	pool := &redis.Pool{
-
 		MaxIdle:     3,
 		IdleTimeout: 240 * time.Second,
 
@@ -368,7 +370,6 @@ func (fs *ocfs) getVersionsPath(ctx context.Context, ip string) string {
 	default:
 		return "" // TODO Must not happen?
 	}
-
 }
 
 // owncloud stores trashed items in the files_trashbin subfolder of a users home
@@ -485,7 +486,11 @@ func (fs *ocfs) getUser(ctx context.Context, usernameOrID string) (id *userpb.Us
 	// look up at the userprovider
 
 	// parts[0] contains the username or userid. use  user service to look up id
-	c, err := pool.GetUserProviderServiceClient(pool.Endpoint(fs.c.UserProviderEndpoint))
+	c, err := pool.GetUserProviderServiceClient(
+		pool.Endpoint(fs.c.UserProviderEndpoint),
+		pool.Insecure(fs.c.Insecure),
+		pool.SkipVerify(fs.c.SkipVerify),
+	)
 	if err != nil {
 		appctx.GetLogger(ctx).
 			Error().Err(err).
@@ -591,7 +596,15 @@ func (fs *ocfs) permissionSet(ctx context.Context, owner *userpb.UserId) *provid
 		UpdateGrant:          true,
 	}
 }
-func (fs *ocfs) convertToResourceInfo(ctx context.Context, fi os.FileInfo, ip string, sp string, c redis.Conn, mdKeys []string) *provider.ResourceInfo {
+
+func (fs *ocfs) convertToResourceInfo(
+	ctx context.Context,
+	fi os.FileInfo,
+	ip string,
+	sp string,
+	c redis.Conn,
+	mdKeys []string,
+) *provider.ResourceInfo {
 	id := readOrCreateID(ctx, ip, c)
 
 	etag := calcEtag(ctx, fi)
@@ -698,6 +711,7 @@ func (fs *ocfs) convertToResourceInfo(ctx context.Context, fi os.FileInfo, ip st
 
 	return ri
 }
+
 func getResourceType(isDir bool) provider.ResourceType {
 	if isDir {
 		return provider.ResourceType_RESOURCE_TYPE_CONTAINER
@@ -706,7 +720,10 @@ func getResourceType(isDir bool) provider.ResourceType {
 }
 
 // CreateStorageSpace creates a storage space
-func (fs *ocfs) CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error) {
+func (fs *ocfs) CreateStorageSpace(
+	ctx context.Context,
+	req *provider.CreateStorageSpaceRequest,
+) (*provider.CreateStorageSpaceResponse, error) {
 	return nil, fmt.Errorf("unimplemented: CreateStorageSpace")
 }
 
@@ -799,7 +816,6 @@ func (fs *ocfs) GetPathByID(ctx context.Context, id *provider.ResourceId) (strin
 
 // resolve takes in a request path or request id and converts it to an internal path.
 func (fs *ocfs) resolve(ctx context.Context, ref *provider.Reference) (string, error) {
-
 	// if storage id is set look up that
 	if ref.ResourceId != nil {
 		ip, err := fs.getPath(ctx, ref.ResourceId)
@@ -811,7 +827,6 @@ func (fs *ocfs) resolve(ctx context.Context, ref *provider.Reference) (string, e
 
 	// use a path
 	return fs.toInternalPath(ctx, ref.Path), nil
-
 }
 
 func (fs *ocfs) DenyGrant(ctx context.Context, ref *provider.Reference, g *provider.Grantee) error {
@@ -876,7 +891,6 @@ func extractACEsFromAttrs(ctx context.Context, ip string, attrs []string) (entri
 // We need the storage relative path so we can calculate the permissions
 // for the node based on all acls in the tree up to the root
 func (fs *ocfs) readPermissions(ctx context.Context, ip string) (p *provider.ResourcePermissions, err error) {
-
 	u, ok := ctxpkg.ContextGetUser(ctx)
 	if !ok {
 		appctx.GetLogger(ctx).Debug().Str("ipath", ip).Msg("no user in context, returning default permissions")
@@ -938,12 +952,27 @@ func (fs *ocfs) readPermissions(ctx context.Context, ip string) (p *provider.Res
 			switch {
 			case err == nil:
 				addPermissions(aggregatedPermissions, e.Grant().GetPermissions())
-				appctx.GetLogger(ctx).Debug().Str("ipath", np).Str("principal", strings.TrimPrefix(attrs[i], sharePrefix)).Interface("permissions", aggregatedPermissions).Msg("adding permissions")
+				appctx.GetLogger(ctx).
+					Debug().
+					Str("ipath", np).
+					Str("principal", strings.TrimPrefix(attrs[i], sharePrefix)).
+					Interface("permissions", aggregatedPermissions).
+					Msg("adding permissions")
 			case isNoData(err):
 				err = nil
-				appctx.GetLogger(ctx).Error().Str("ipath", np).Str("principal", strings.TrimPrefix(attrs[i], sharePrefix)).Interface("attrs", attrs).Msg("no permissions found on node, but they were listed")
+				appctx.GetLogger(ctx).
+					Error().
+					Str("ipath", np).
+					Str("principal", strings.TrimPrefix(attrs[i], sharePrefix)).
+					Interface("attrs", attrs).
+					Msg("no permissions found on node, but they were listed")
 			default:
-				appctx.GetLogger(ctx).Error().Err(err).Str("ipath", np).Str("principal", strings.TrimPrefix(attrs[i], sharePrefix)).Msg("error reading permissions")
+				appctx.GetLogger(ctx).
+					Error().
+					Err(err).
+					Str("ipath", np).
+					Str("principal", strings.TrimPrefix(attrs[i], sharePrefix)).
+					Msg("error reading permissions")
 				return nil, err
 			}
 		}
@@ -970,7 +999,11 @@ func (fs *ocfs) readPermissions(ctx context.Context, ip string) (p *provider.Res
 	//       it makes more sense to have explicit negative permissions
 
 	// TODO we need to read all parents ... until we find a matching ace?
-	appctx.GetLogger(ctx).Debug().Interface("permissions", aggregatedPermissions).Str("ipath", ip).Msg("returning aggregated permissions")
+	appctx.GetLogger(ctx).
+		Debug().
+		Interface("permissions", aggregatedPermissions).
+		Str("ipath", ip).
+		Msg("returning aggregated permissions")
 	return aggregatedPermissions, nil
 }
 
@@ -1066,7 +1099,6 @@ func (fs *ocfs) ListGrants(ctx context.Context, ref *provider.Reference) (grants
 }
 
 func (fs *ocfs) RemoveGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) (err error) {
-
 	var ip string
 	if ip, err = fs.resolve(ctx, ref); err != nil {
 		return errors.Wrap(err, "ocfs: error resolving reference")
@@ -1158,7 +1190,6 @@ func (fs *ocfs) GetHome(ctx context.Context) (string, error) {
 }
 
 func (fs *ocfs) CreateDir(ctx context.Context, ref *provider.Reference) (err error) {
-
 	ip, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return err
@@ -1201,7 +1232,9 @@ func (fs *ocfs) isShareFolderRoot(sp string) bool {
 
 func (fs *ocfs) CreateReference(ctx context.Context, sp string, targetURI *url.URL) error {
 	if !fs.isShareFolderChild(sp) {
-		return errtypes.PermissionDenied("ocfs: cannot create references outside the share folder: share_folder=" + "/Shares" + " path=" + sp)
+		return errtypes.PermissionDenied(
+			"ocfs: cannot create references outside the share folder: share_folder=" + "/Shares" + " path=" + sp,
+		)
 	}
 
 	ip := fs.toInternalShadowPath(ctx, sp)
@@ -1244,7 +1277,12 @@ func (fs *ocfs) setMtime(ctx context.Context, ip string, mtime string) error {
 	}
 	return nil
 }
-func (fs *ocfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Reference, md *provider.ArbitraryMetadata) (err error) {
+
+func (fs *ocfs) SetArbitraryMetadata(
+	ctx context.Context,
+	ref *provider.Reference,
+	md *provider.ArbitraryMetadata,
+) (err error) {
 	log := appctx.GetLogger(ctx)
 
 	var ip string
@@ -1746,7 +1784,11 @@ func (fs *ocfs) getMDShareFolder(ctx context.Context, sp string, mdKeys []string
 	return m, nil
 }
 
-func (fs *ocfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys []string) ([]*provider.ResourceInfo, error) {
+func (fs *ocfs) ListFolder(
+	ctx context.Context,
+	ref *provider.Reference,
+	mdKeys []string,
+) ([]*provider.ResourceInfo, error) {
 	log := appctx.GetLogger(ctx)
 
 	ip, err := fs.resolve(ctx, ref)
@@ -1769,7 +1811,6 @@ func (fs *ocfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys 
 }
 
 func (fs *ocfs) listWithNominalHome(ctx context.Context, ip string, mdKeys []string) ([]*provider.ResourceInfo, error) {
-
 	// If a user wants to list a folder shared with him the path will already
 	// be wrapped with the files directory path of the share owner.
 	// In that case we don't want to wrap the path again.
@@ -1817,7 +1858,9 @@ func (fs *ocfs) listWithHome(ctx context.Context, home, p string, mdKeys []strin
 	}
 
 	if fs.isShareFolderChild(p) {
-		return nil, errtypes.PermissionDenied("ocfs: error listing folders inside the shared folder, only file references are stored inside")
+		return nil, errtypes.PermissionDenied(
+			"ocfs: error listing folders inside the shared folder, only file references are stored inside",
+		)
 	}
 
 	log.Debug().Msg("listing nominal home")
@@ -2031,7 +2074,11 @@ func (fs *ocfs) filterAsRevision(ctx context.Context, bn string, md os.FileInfo)
 	return nil
 }
 
-func (fs *ocfs) DownloadRevision(ctx context.Context, ref *provider.Reference, revisionKey string) (io.ReadCloser, error) {
+func (fs *ocfs) DownloadRevision(
+	ctx context.Context,
+	ref *provider.Reference,
+	revisionKey string,
+) (io.ReadCloser, error) {
 	return nil, errtypes.NotSupported("download revision")
 }
 
@@ -2214,7 +2261,11 @@ func (fs *ocfs) ListRecycle(ctx context.Context, basePath, key, relativePath str
 	return items, nil
 }
 
-func (fs *ocfs) RestoreRecycleItem(ctx context.Context, basePath, key, relativePath string, restoreRef *provider.Reference) error {
+func (fs *ocfs) RestoreRecycleItem(
+	ctx context.Context,
+	basePath, key, relativePath string,
+	restoreRef *provider.Reference,
+) error {
 	// TODO check permission? on what? user must be the owner?
 	log := appctx.GetLogger(ctx)
 	rp, err := fs.getRecyclePath(ctx)
@@ -2242,7 +2293,13 @@ func (fs *ocfs) RestoreRecycleItem(ctx context.Context, basePath, key, relativeP
 	tgt := fs.toInternalPath(ctx, restoreRef.Path)
 	// move back to original location
 	if err := os.Rename(src, tgt); err != nil {
-		log.Error().Err(err).Str("key", key).Str("restorePath", restoreRef.Path).Str("src", src).Str("tgt", tgt).Msg("could not restore item")
+		log.Error().
+			Err(err).
+			Str("key", key).
+			Str("restorePath", restoreRef.Path).
+			Str("src", src).
+			Str("tgt", tgt).
+			Msg("could not restore item")
 		return errors.Wrap(err, "ocfs: could not restore item")
 	}
 	// unset trash origin location in metadata
@@ -2255,12 +2312,18 @@ func (fs *ocfs) RestoreRecycleItem(ctx context.Context, basePath, key, relativeP
 	return fs.propagate(ctx, tgt)
 }
 
-func (fs *ocfs) ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter) ([]*provider.StorageSpace, error) {
+func (fs *ocfs) ListStorageSpaces(
+	ctx context.Context,
+	filter []*provider.ListStorageSpacesRequest_Filter,
+) ([]*provider.StorageSpace, error) {
 	return nil, errtypes.NotSupported("list storage spaces")
 }
 
 // UpdateStorageSpace updates a storage space
-func (fs *ocfs) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
+func (fs *ocfs) UpdateStorageSpace(
+	ctx context.Context,
+	req *provider.UpdateStorageSpaceRequest,
+) (*provider.UpdateStorageSpaceResponse, error) {
 	return nil, errtypes.NotSupported("update storage space")
 }
 
