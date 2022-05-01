@@ -38,6 +38,7 @@ type Options struct {
 func newOptions(opts ...Option) Options {
 	opt := Options{
 		MaxCallRecvMsgSize: defaultMaxCallRecvMsgSize,
+		Insecure:           true,
 	}
 
 	for _, o := range opts {
