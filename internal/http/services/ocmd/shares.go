@@ -42,20 +42,23 @@ import (
 )
 
 type sharesHandler struct {
-	gatewayAddr string
-	insecure    bool
-	skipVerify  bool
+	gatewayAddr        string
+	insecure           bool
+	skipVerify         bool
+	maxCallRecvMsgSize int
+	caCertFile         string
 }
 
 func (h *sharesHandler) init(c *Config) {
 	h.gatewayAddr = c.GatewaySvc
 	h.insecure = c.Insecure
 	h.skipVerify = c.SkipVerify
+	h.maxCallRecvMsgSize = c.MaxCallRecvMsgSize
+	h.caCertFile = c.CACertFile
 }
 
 func (h *sharesHandler) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-
 		switch r.Method {
 		case http.MethodPost:
 			h.createShare(w, r)
@@ -117,6 +120,8 @@ func (h *sharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 		pool.Endpoint(h.gatewayAddr),
 		pool.Insecure(h.insecure),
 		pool.SkipVerify(h.skipVerify),
+		pool.CACertFile(h.caCertFile),
+		pool.MaxCallRecvMsgSize(h.maxCallRecvMsgSize),
 	)
 	if err != nil {
 		WriteError(w, r, APIErrorServerError, "error getting storage grpc client", err)
@@ -125,7 +130,13 @@ func (h *sharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 
 	clientIP, err := utils.GetClientIP(r)
 	if err != nil {
-		WriteError(w, r, APIErrorServerError, fmt.Sprintf("error retrieving client IP from request: %s", r.RemoteAddr), err)
+		WriteError(
+			w,
+			r,
+			APIErrorServerError,
+			fmt.Sprintf("error retrieving client IP from request: %s", r.RemoteAddr),
+			err,
+		)
 		return
 	}
 	providerInfo := ocmprovider.ProviderInfo{
@@ -145,7 +156,13 @@ func (h *sharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if providerAllowedResp.Status.Code != rpc.Code_CODE_OK {
-		WriteError(w, r, APIErrorUnauthenticated, "provider not authorized", errors.New(providerAllowedResp.Status.Message))
+		WriteError(
+			w,
+			r,
+			APIErrorUnauthenticated,
+			"provider not authorized",
+			errors.New(providerAllowedResp.Status.Message),
+		)
 		return
 	}
 
@@ -233,7 +250,13 @@ func (h *sharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 			WriteError(w, r, APIErrorNotFound, "not found", nil)
 			return
 		}
-		WriteError(w, r, APIErrorServerError, "grpc create ocm core share request failed", errors.New(createShareResponse.Status.Message))
+		WriteError(
+			w,
+			r,
+			APIErrorServerError,
+			"grpc create ocm core share request failed",
+			errors.New(createShareResponse.Status.Message),
+		)
 		return
 	}
 

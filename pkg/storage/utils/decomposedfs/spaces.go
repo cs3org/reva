@@ -212,6 +212,8 @@ func (fs *Decomposedfs) ListStorageSpaces(
 		pool.Endpoint(fs.o.GatewayAddr),
 		pool.Insecure(fs.o.Insecure),
 		pool.SkipVerify(fs.o.SkipVerify),
+		pool.CACertFile(fs.o.CACertFile),
+		pool.MaxCallRecvMsgSize(fs.o.MaxCallRecvMsgSize),
 	)
 	if err != nil {
 		return nil, err

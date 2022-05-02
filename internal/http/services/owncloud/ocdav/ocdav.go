@@ -104,6 +104,8 @@ type Config struct {
 	PublicURL              string                            `mapstructure:"public_url"`
 	FavoriteStorageDriver  string                            `mapstructure:"favorite_storage_driver"`
 	FavoriteStorageDrivers map[string]map[string]interface{} `mapstructure:"favorite_storage_drivers"`
+	CACertFile             string                            `mapstructure:"ca_certfile"`
+	MaxCallRecvMsgSize     int                               `mapstructure:"client_recv_msg_size"`
 	Insecure               bool                              `mapstructure:"insecure"`
 	SkipVerify             bool                              `mapstructure:"skip_verify"`
 }
@@ -260,8 +262,9 @@ func (s *svc) getClient() (gateway.GatewayAPIClient, error) {
 		pool.Endpoint(s.c.GatewaySvc),
 		pool.Insecure(s.c.Insecure),
 		pool.SkipVerify(s.c.SkipVerify),
+		pool.CACertFile(s.c.CACertFile),
+		pool.MaxCallRecvMsgSize(s.c.MaxCallRecvMsgSize),
 	)
-
 }
 
 func applyLayout(ctx context.Context, ns string, useLoggedInUserNS bool, requestPath string) string {

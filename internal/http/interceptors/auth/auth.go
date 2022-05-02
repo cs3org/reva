@@ -66,6 +66,8 @@ type config struct {
 	TokenManagers          map[string]map[string]interface{} `mapstructure:"token_managers"`
 	TokenWriter            string                            `mapstructure:"token_writer"`
 	TokenWriters           map[string]map[string]interface{} `mapstructure:"token_writers"`
+	CACertFile             string                            `mapstructure:"ca_certfile"`
+	MaxCallRecvMsgSize     int                               `mapstructure:"client_recv_msg_size"`
 	Insecure               bool                              `mapstructure:"insecure"`
 	SkipVerify             bool                              `mapstructure:"skip_verify"`
 }
@@ -175,7 +177,16 @@ func New(m map[string]interface{}, unprotected []string) (global.Middleware, err
 				isUnprotectedEndpoint = true
 			}
 
-			ctx, err := authenticateUser(w, r, conf, tokenStrategy, tokenManager, tokenWriter, credChain, isUnprotectedEndpoint)
+			ctx, err := authenticateUser(
+				w,
+				r,
+				conf,
+				tokenStrategy,
+				tokenManager,
+				tokenWriter,
+				credChain,
+				isUnprotectedEndpoint,
+			)
 			if err != nil {
 				if !isUnprotectedEndpoint {
 					return
@@ -189,7 +200,16 @@ func New(m map[string]interface{}, unprotected []string) (global.Middleware, err
 	return chain, nil
 }
 
-func authenticateUser(w http.ResponseWriter, r *http.Request, conf *config, tokenStrategy auth.TokenStrategy, tokenManager token.Manager, tokenWriter auth.TokenWriter, credChain map[string]auth.CredentialStrategy, isUnprotectedEndpoint bool) (context.Context, error) {
+func authenticateUser(
+	w http.ResponseWriter,
+	r *http.Request,
+	conf *config,
+	tokenStrategy auth.TokenStrategy,
+	tokenManager token.Manager,
+	tokenWriter auth.TokenWriter,
+	credChain map[string]auth.CredentialStrategy,
+	isUnprotectedEndpoint bool,
+) (context.Context, error) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
@@ -200,6 +220,8 @@ func authenticateUser(w http.ResponseWriter, r *http.Request, conf *config, toke
 		pool.Endpoint(conf.GatewaySvc),
 		pool.Insecure(conf.Insecure),
 		pool.SkipVerify(conf.SkipVerify),
+		pool.MaxCallRecvMsgSize(conf.MaxCallRecvMsgSize),
+		pool.CACertFile(conf.CACertFile),
 	)
 	if err != nil {
 		logError(isUnprotectedEndpoint, log, err, "error getting the authsvc client", http.StatusUnauthorized, w)
@@ -221,7 +243,8 @@ func authenticateUser(w http.ResponseWriter, r *http.Request, conf *config, toke
 			}
 
 			if creds != nil {
-				log.Debug().Msgf("credentials obtained from credential strategy: type: %s, client_id: %s", creds.Type, creds.ClientID)
+				log.Debug().
+					Msgf("credentials obtained from credential strategy: type: %s, client_id: %s", creds.Type, creds.ClientID)
 				break
 			}
 		}
@@ -247,7 +270,8 @@ func authenticateUser(w http.ResponseWriter, r *http.Request, conf *config, toke
 			ClientSecret: creds.ClientSecret,
 		}
 
-		log.Debug().Msgf("AuthenticateRequest: type: %s, client_id: %s against %s", req.Type, req.ClientId, conf.GatewaySvc)
+		log.Debug().
+			Msgf("AuthenticateRequest: type: %s, client_id: %s against %s", req.Type, req.ClientId, conf.GatewaySvc)
 
 		res, err := client.Authenticate(ctx, req)
 		if err != nil {
@@ -257,7 +281,14 @@ func authenticateUser(w http.ResponseWriter, r *http.Request, conf *config, toke
 
 		if res.Status.Code != rpc.Code_CODE_OK {
 			err := status.NewErrorFromCode(res.Status.Code, "auth")
-			logError(isUnprotectedEndpoint, log, err, "error generating access token from credentials", http.StatusUnauthorized, w)
+			logError(
+				isUnprotectedEndpoint,
+				log,
+				err,
+				"error generating access token from credentials",
+				http.StatusUnauthorized,
+				w,
+			)
 			return nil, err
 		}
 
@@ -295,7 +326,14 @@ func authenticateUser(w http.ResponseWriter, r *http.Request, conf *config, toke
 	// ensure access to the resource is allowed
 	ok, err := scope.VerifyScope(ctx, tokenScope, r.URL.Path)
 	if err != nil {
-		logError(isUnprotectedEndpoint, log, err, "error verifying scope of access token", http.StatusInternalServerError, w)
+		logError(
+			isUnprotectedEndpoint,
+			log,
+			err,
+			"error verifying scope of access token",
+			http.StatusInternalServerError,
+			w,
+		)
 		return nil, err
 	}
 	if !ok {
@@ -307,14 +345,25 @@ func authenticateUser(w http.ResponseWriter, r *http.Request, conf *config, toke
 	// store user and core access token in context.
 	ctx = ctxpkg.ContextSetUser(ctx, u)
 	ctx = ctxpkg.ContextSetToken(ctx, tkn)
-	ctx = metadata.AppendToOutgoingContext(ctx, ctxpkg.TokenHeader, tkn) // TODO(jfd): hardcoded metadata key. use  PerRPCCredentials?
+	ctx = metadata.AppendToOutgoingContext(
+		ctx,
+		ctxpkg.TokenHeader,
+		tkn,
+	) // TODO(jfd): hardcoded metadata key. use  PerRPCCredentials?
 
 	ctx = metadata.AppendToOutgoingContext(ctx, ctxpkg.UserAgentHeader, r.UserAgent())
 
 	return ctx, nil
 }
 
-func logError(isUnprotectedEndpoint bool, log *zerolog.Logger, err error, msg string, status int, w http.ResponseWriter) {
+func logError(
+	isUnprotectedEndpoint bool,
+	log *zerolog.Logger,
+	err error,
+	msg string,
+	status int,
+	w http.ResponseWriter,
+) {
 	if !isUnprotectedEndpoint {
 		log.Error().Err(err).Msg(msg)
 		w.WriteHeader(status)

@@ -865,6 +865,8 @@ func (fs *eosfs) getUserFromID(ctx context.Context, userID *userpb.UserId) (*use
 		pool.Endpoint(fs.conf.GatewaySvc),
 		pool.Insecure(fs.conf.Insecure),
 		pool.SkipVerify(fs.conf.SkipVerify),
+		pool.CACertFile(fs.conf.CACertFile),
+		pool.MaxCallRecvMsgSize(fs.conf.MaxCallRecvMsgSize),
 	)
 	if err != nil {
 		return nil, err
@@ -2313,6 +2315,8 @@ func (fs *eosfs) getUIDGateway(ctx context.Context, u *userpb.UserId) (eosclient
 		pool.Endpoint(fs.conf.GatewaySvc),
 		pool.Insecure(fs.conf.Insecure),
 		pool.SkipVerify(fs.conf.SkipVerify),
+		pool.CACertFile(fs.conf.CACertFile),
+		pool.MaxCallRecvMsgSize(fs.conf.MaxCallRecvMsgSize),
 	)
 	if err != nil {
 		return eosclient.Authorization{}, errors.Wrap(err, "eosfs: error getting gateway grpc client")
@@ -2351,6 +2355,8 @@ func (fs *eosfs) getUserIDGateway(ctx context.Context, uid string) (*userpb.User
 		pool.Endpoint(fs.conf.GatewaySvc),
 		pool.Insecure(fs.conf.Insecure),
 		pool.SkipVerify(fs.conf.SkipVerify),
+		pool.CACertFile(fs.conf.CACertFile),
+		pool.MaxCallRecvMsgSize(fs.conf.MaxCallRecvMsgSize),
 	)
 	if err != nil {
 		return nil, errors.Wrap(err, "eosfs: error getting gateway grpc client")

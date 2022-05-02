@@ -49,11 +49,13 @@ func init() {
 }
 
 type config struct {
-	MountPath   string `mapstructure:"mount_path"`
-	MountID     string `mapstructure:"mount_id"`
-	GatewayAddr string `mapstructure:"gateway_addr"`
-	Insecure    bool   `mapstructure:"insecure"`
-	SkipVerify  bool   `mapstructure:"SkipVerify"`
+	MountPath          string `mapstructure:"mount_path"`
+	MountID            string `mapstructure:"mount_id"`
+	GatewayAddr        string `mapstructure:"gateway_addr"`
+	CACertFile         string `mapstructure:"ca_certfile"`
+	MaxCallRecvMsgSize int    `mapstructure:"client_recv_msg_size"`
+	Insecure           bool   `mapstructure:"insecure"`
+	SkipVerify         bool   `mapstructure:"skip_verify"`
 }
 
 type service struct {
@@ -98,6 +100,8 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 		pool.Endpoint(c.GatewayAddr),
 		pool.Insecure(c.Insecure),
 		pool.SkipVerify(c.SkipVerify),
+		pool.MaxCallRecvMsgSize(c.MaxCallRecvMsgSize),
+		pool.CACertFile(c.CACertFile),
 	)
 	if err != nil {
 		return nil, err
@@ -113,7 +117,10 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 	return service, nil
 }
 
-func (s *service) SetArbitraryMetadata(ctx context.Context, req *provider.SetArbitraryMetadataRequest) (*provider.SetArbitraryMetadataResponse, error) {
+func (s *service) SetArbitraryMetadata(
+	ctx context.Context,
+	req *provider.SetArbitraryMetadataRequest,
+) (*provider.SetArbitraryMetadataResponse, error) {
 	ref, _, _, st, err := s.translatePublicRefToCS3Ref(ctx, req.Ref)
 	switch {
 	case err != nil:
@@ -123,10 +130,16 @@ func (s *service) SetArbitraryMetadata(ctx context.Context, req *provider.SetArb
 			Status: st,
 		}, nil
 	}
-	return s.gateway.SetArbitraryMetadata(ctx, &provider.SetArbitraryMetadataRequest{Opaque: req.Opaque, Ref: ref, ArbitraryMetadata: req.ArbitraryMetadata})
+	return s.gateway.SetArbitraryMetadata(
+		ctx,
+		&provider.SetArbitraryMetadataRequest{Opaque: req.Opaque, Ref: ref, ArbitraryMetadata: req.ArbitraryMetadata},
+	)
 }
 
-func (s *service) UnsetArbitraryMetadata(ctx context.Context, req *provider.UnsetArbitraryMetadataRequest) (*provider.UnsetArbitraryMetadataResponse, error) {
+func (s *service) UnsetArbitraryMetadata(
+	ctx context.Context,
+	req *provider.UnsetArbitraryMetadataRequest,
+) (*provider.UnsetArbitraryMetadataResponse, error) {
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
@@ -141,7 +154,10 @@ func (s *service) GetLock(ctx context.Context, req *provider.GetLockRequest) (*p
 }
 
 // RefreshLock refreshes an existing lock on the given reference
-func (s *service) RefreshLock(ctx context.Context, req *provider.RefreshLockRequest) (*provider.RefreshLockResponse, error) {
+func (s *service) RefreshLock(
+	ctx context.Context,
+	req *provider.RefreshLockRequest,
+) (*provider.RefreshLockResponse, error) {
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
@@ -150,7 +166,10 @@ func (s *service) Unlock(ctx context.Context, req *provider.UnlockRequest) (*pro
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
-func (s *service) InitiateFileDownload(ctx context.Context, req *provider.InitiateFileDownloadRequest) (*provider.InitiateFileDownloadResponse, error) {
+func (s *service) InitiateFileDownload(
+	ctx context.Context,
+	req *provider.InitiateFileDownloadRequest,
+) (*provider.InitiateFileDownloadResponse, error) {
 	statReq := &provider.StatRequest{Ref: req.Ref}
 	statRes, err := s.Stat(ctx, statReq)
 	if err != nil {
@@ -174,7 +193,10 @@ func (s *service) InitiateFileDownload(ctx context.Context, req *provider.Initia
 	return s.initiateFileDownload(ctx, req)
 }
 
-func (s *service) translatePublicRefToCS3Ref(ctx context.Context, ref *provider.Reference) (*provider.Reference, string, *link.PublicShare, *rpc.Status, error) {
+func (s *service) translatePublicRefToCS3Ref(
+	ctx context.Context,
+	ref *provider.Reference,
+) (*provider.Reference, string, *link.PublicShare, *rpc.Status, error) {
 	log := appctx.GetLogger(ctx)
 	tkn, relativePath, err := s.unwrap(ctx, ref)
 	if err != nil {
@@ -213,7 +235,10 @@ func (s *service) translatePublicRefToCS3Ref(ctx context.Context, ref *provider.
 // this `res` will get then expanded taking into account the authenticated user and the storage:
 // end         = /einstein/files/public-links/foldera/folderb/
 
-func (s *service) initiateFileDownload(ctx context.Context, req *provider.InitiateFileDownloadRequest) (*provider.InitiateFileDownloadResponse, error) {
+func (s *service) initiateFileDownload(
+	ctx context.Context,
+	req *provider.InitiateFileDownloadRequest,
+) (*provider.InitiateFileDownloadResponse, error) {
 	cs3Ref, _, ls, st, err := s.translatePublicRefToCS3Ref(ctx, req.Ref)
 	switch {
 	case err != nil:
@@ -265,7 +290,10 @@ func (s *service) initiateFileDownload(ctx context.Context, req *provider.Initia
 	}, nil
 }
 
-func (s *service) InitiateFileUpload(ctx context.Context, req *provider.InitiateFileUploadRequest) (*provider.InitiateFileUploadResponse, error) {
+func (s *service) InitiateFileUpload(
+	ctx context.Context,
+	req *provider.InitiateFileUploadRequest,
+) (*provider.InitiateFileUploadResponse, error) {
 	cs3Ref, _, ls, st, err := s.translatePublicRefToCS3Ref(ctx, req.Ref)
 	switch {
 	case err != nil:
@@ -329,27 +357,45 @@ func (s *service) GetHome(ctx context.Context, req *provider.GetHomeRequest) (*p
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
-func (s *service) CreateHome(ctx context.Context, req *provider.CreateHomeRequest) (*provider.CreateHomeResponse, error) {
+func (s *service) CreateHome(
+	ctx context.Context,
+	req *provider.CreateHomeRequest,
+) (*provider.CreateHomeResponse, error) {
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
-func (s *service) CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error) {
+func (s *service) CreateStorageSpace(
+	ctx context.Context,
+	req *provider.CreateStorageSpaceRequest,
+) (*provider.CreateStorageSpaceResponse, error) {
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
-func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSpacesRequest) (*provider.ListStorageSpacesResponse, error) {
+func (s *service) ListStorageSpaces(
+	ctx context.Context,
+	req *provider.ListStorageSpacesRequest,
+) (*provider.ListStorageSpacesResponse, error) {
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
-func (s *service) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
+func (s *service) UpdateStorageSpace(
+	ctx context.Context,
+	req *provider.UpdateStorageSpaceRequest,
+) (*provider.UpdateStorageSpaceResponse, error) {
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
-func (s *service) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorageSpaceRequest) (*provider.DeleteStorageSpaceResponse, error) {
+func (s *service) DeleteStorageSpace(
+	ctx context.Context,
+	req *provider.DeleteStorageSpaceRequest,
+) (*provider.DeleteStorageSpaceResponse, error) {
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
-func (s *service) CreateContainer(ctx context.Context, req *provider.CreateContainerRequest) (*provider.CreateContainerResponse, error) {
+func (s *service) CreateContainer(
+	ctx context.Context,
+	req *provider.CreateContainerRequest,
+) (*provider.CreateContainerResponse, error) {
 	ctx, span := rtrace.Provider.Tracer("publicstorageprovider").Start(ctx, "CreateContainer")
 	defer span.End()
 
@@ -495,7 +541,11 @@ func (s *service) Move(ctx context.Context, req *provider.MoveRequest) (*provide
 	})
 	if err != nil {
 		return &provider.MoveResponse{
-			Status: status.NewInternal(ctx, err, "gateway: error calling Move for source ref "+req.Source.String()+" to destination ref "+req.Destination.String()),
+			Status: status.NewInternal(
+				ctx,
+				err,
+				"gateway: error calling Move for source ref "+req.Source.String()+" to destination ref "+req.Destination.String(),
+			),
 		}, nil
 	}
 	if res.Status.Code == rpc.Code_CODE_INTERNAL {
@@ -549,7 +599,8 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 		}, nil
 	}
 
-	if shareInfo.Type == provider.ResourceType_RESOURCE_TYPE_FILE || (relativePath == "" && nodeID == "") || shareInfo.Id.OpaqueId == nodeID {
+	if shareInfo.Type == provider.ResourceType_RESOURCE_TYPE_FILE || (relativePath == "" && nodeID == "") ||
+		shareInfo.Id.OpaqueId == nodeID {
 		res := &provider.StatResponse{
 			Status: status.NewOK(ctx),
 			Info:   shareInfo,
@@ -581,11 +632,22 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 	return statResponse, nil
 }
 
-func (s *service) augmentStatResponse(ctx context.Context, res *provider.StatResponse, shareInfo *provider.ResourceInfo, share *link.PublicShare, tkn string) {
+func (s *service) augmentStatResponse(
+	ctx context.Context,
+	res *provider.StatResponse,
+	shareInfo *provider.ResourceInfo,
+	share *link.PublicShare,
+	tkn string,
+) {
 	// prevent leaking internal paths
 	if res.Info != nil {
 		if err := addShare(res.Info, share); err != nil {
-			appctx.GetLogger(ctx).Error().Err(err).Interface("share", share).Interface("info", res.Info).Msg("error when adding share")
+			appctx.GetLogger(ctx).
+				Error().
+				Err(err).
+				Interface("share", share).
+				Interface("info", res.Info).
+				Msg("error when adding share")
 		}
 
 		var sharePath string
@@ -623,11 +685,17 @@ func addShare(i *provider.ResourceInfo, ls *link.PublicShare) error {
 	return nil
 }
 
-func (s *service) ListContainerStream(req *provider.ListContainerStreamRequest, ss provider.ProviderAPI_ListContainerStreamServer) error {
+func (s *service) ListContainerStream(
+	req *provider.ListContainerStreamRequest,
+	ss provider.ProviderAPI_ListContainerStreamServer,
+) error {
 	return gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
-func (s *service) ListContainer(ctx context.Context, req *provider.ListContainerRequest) (*provider.ListContainerResponse, error) {
+func (s *service) ListContainer(
+	ctx context.Context,
+	req *provider.ListContainerRequest,
+) (*provider.ListContainerResponse, error) {
 	tkn, relativePath, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
 		return nil, err
@@ -660,10 +728,21 @@ func (s *service) ListContainer(ctx context.Context, req *provider.ListContainer
 
 	for i := range listContainerR.Infos {
 		filterPermissions(listContainerR.Infos[i].PermissionSet, share.GetPermissions().Permissions)
-		listContainerR.Infos[i].Path = path.Join(s.mountPath, "/", tkn, relativePath, path.Base(listContainerR.Infos[i].Path))
+		listContainerR.Infos[i].Path = path.Join(
+			s.mountPath,
+			"/",
+			tkn,
+			relativePath,
+			path.Base(listContainerR.Infos[i].Path),
+		)
 		s.setPublicStorageID(listContainerR.Infos[i], tkn)
 		if err := addShare(listContainerR.Infos[i], share); err != nil {
-			appctx.GetLogger(ctx).Error().Err(err).Interface("share", share).Interface("info", listContainerR.Infos[i]).Msg("error when adding share")
+			appctx.GetLogger(ctx).
+				Error().
+				Err(err).
+				Interface("share", share).
+				Interface("info", listContainerR.Infos[i]).
+				Msg("error when adding share")
 		}
 	}
 
@@ -718,31 +797,52 @@ func (s *service) unwrap(ctx context.Context, ref *provider.Reference) (token st
 	return
 }
 
-func (s *service) ListFileVersions(ctx context.Context, req *provider.ListFileVersionsRequest) (*provider.ListFileVersionsResponse, error) {
+func (s *service) ListFileVersions(
+	ctx context.Context,
+	req *provider.ListFileVersionsRequest,
+) (*provider.ListFileVersionsResponse, error) {
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
-func (s *service) RestoreFileVersion(ctx context.Context, req *provider.RestoreFileVersionRequest) (*provider.RestoreFileVersionResponse, error) {
+func (s *service) RestoreFileVersion(
+	ctx context.Context,
+	req *provider.RestoreFileVersionRequest,
+) (*provider.RestoreFileVersionResponse, error) {
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
-func (s *service) ListRecycleStream(req *provider.ListRecycleStreamRequest, ss provider.ProviderAPI_ListRecycleStreamServer) error {
+func (s *service) ListRecycleStream(
+	req *provider.ListRecycleStreamRequest,
+	ss provider.ProviderAPI_ListRecycleStreamServer,
+) error {
 	return gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
-func (s *service) ListRecycle(ctx context.Context, req *provider.ListRecycleRequest) (*provider.ListRecycleResponse, error) {
+func (s *service) ListRecycle(
+	ctx context.Context,
+	req *provider.ListRecycleRequest,
+) (*provider.ListRecycleResponse, error) {
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
-func (s *service) RestoreRecycleItem(ctx context.Context, req *provider.RestoreRecycleItemRequest) (*provider.RestoreRecycleItemResponse, error) {
+func (s *service) RestoreRecycleItem(
+	ctx context.Context,
+	req *provider.RestoreRecycleItemRequest,
+) (*provider.RestoreRecycleItemResponse, error) {
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
-func (s *service) PurgeRecycle(ctx context.Context, req *provider.PurgeRecycleRequest) (*provider.PurgeRecycleResponse, error) {
+func (s *service) PurgeRecycle(
+	ctx context.Context,
+	req *provider.PurgeRecycleRequest,
+) (*provider.PurgeRecycleResponse, error) {
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
-func (s *service) ListGrants(ctx context.Context, req *provider.ListGrantsRequest) (*provider.ListGrantsResponse, error) {
+func (s *service) ListGrants(
+	ctx context.Context,
+	req *provider.ListGrantsRequest,
+) (*provider.ListGrantsResponse, error) {
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
@@ -754,19 +854,31 @@ func (s *service) DenyGrant(ctx context.Context, req *provider.DenyGrantRequest)
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
-func (s *service) CreateReference(ctx context.Context, req *provider.CreateReferenceRequest) (*provider.CreateReferenceResponse, error) {
+func (s *service) CreateReference(
+	ctx context.Context,
+	req *provider.CreateReferenceRequest,
+) (*provider.CreateReferenceResponse, error) {
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
-func (s *service) CreateSymlink(ctx context.Context, req *provider.CreateSymlinkRequest) (*provider.CreateSymlinkResponse, error) {
+func (s *service) CreateSymlink(
+	ctx context.Context,
+	req *provider.CreateSymlinkRequest,
+) (*provider.CreateSymlinkResponse, error) {
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
-func (s *service) UpdateGrant(ctx context.Context, req *provider.UpdateGrantRequest) (*provider.UpdateGrantResponse, error) {
+func (s *service) UpdateGrant(
+	ctx context.Context,
+	req *provider.UpdateGrantRequest,
+) (*provider.UpdateGrantResponse, error) {
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
-func (s *service) RemoveGrant(ctx context.Context, req *provider.RemoveGrantRequest) (*provider.RemoveGrantResponse, error) {
+func (s *service) RemoveGrant(
+	ctx context.Context,
+	req *provider.RemoveGrantRequest,
+) (*provider.RemoveGrantResponse, error) {
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
@@ -782,7 +894,10 @@ func (s *service) trimMountPrefix(fn string) (string, error) {
 }
 
 // resolveToken returns the path and share for the publicly shared resource.
-func (s *service) resolveToken(ctx context.Context, token string) (*link.PublicShare, *provider.ResourceInfo, *rpc.Status, error) {
+func (s *service) resolveToken(
+	ctx context.Context,
+	token string,
+) (*link.PublicShare, *provider.ResourceInfo, *rpc.Status, error) {
 	driver, err := pool.GetGatewayServiceClient(
 		pool.Endpoint(s.conf.GatewayAddr),
 		pool.Insecure(s.conf.Insecure),

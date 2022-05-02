@@ -110,6 +110,8 @@ func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 				pool.Endpoint(s.c.GatewaySvc),
 				pool.Insecure(s.c.Insecure),
 				pool.SkipVerify(s.c.SkipVerify),
+				pool.CACertFile(s.c.CACertFile),
+				pool.MaxCallRecvMsgSize(s.c.MaxCallRecvMsgSize),
 			)
 			if err != nil {
 				// TODO(jfd) how do we make the user aware that some storages are not available?
@@ -167,7 +169,13 @@ func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 	})
 }
 
-func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s *svc, u *userpb.User, basePath, key, itemPath string) {
+func (h *TrashbinHandler) listTrashbin(
+	w http.ResponseWriter,
+	r *http.Request,
+	s *svc,
+	u *userpb.User,
+	basePath, key, itemPath string,
+) {
 	ctx, span := rtrace.Provider.Tracer("trash-bin").Start(r.Context(), "list_trashbin")
 	defer span.End()
 
@@ -214,6 +222,8 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 		pool.Endpoint(s.c.GatewaySvc),
 		pool.Insecure(s.c.Insecure),
 		pool.SkipVerify(s.c.SkipVerify),
+		pool.CACertFile(s.c.CACertFile),
+		pool.MaxCallRecvMsgSize(s.c.MaxCallRecvMsgSize),
 	)
 	if err != nil {
 		// TODO(jfd) how do we make the user aware that some storages are not available?
@@ -225,8 +235,10 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 	}
 
 	// ask gateway for recycle items
-	getRecycleRes, err := gc.ListRecycle(ctx, &provider.ListRecycleRequest{Ref: &provider.Reference{Path: basePath}, Key: path.Join(key, itemPath)})
-
+	getRecycleRes, err := gc.ListRecycle(
+		ctx,
+		&provider.ListRecycleRequest{Ref: &provider.Reference{Path: basePath}, Key: path.Join(key, itemPath)},
+	)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error calling ListRecycle")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -253,7 +265,10 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 
 		for len(stack) > 0 {
 			key := stack[len(stack)-1]
-			getRecycleRes, err := gc.ListRecycle(ctx, &provider.ListRecycleRequest{Ref: &provider.Reference{Path: basePath}, Key: key})
+			getRecycleRes, err := gc.ListRecycle(
+				ctx,
+				&provider.ListRecycleRequest{Ref: &provider.Reference{Path: basePath}, Key: key},
+			)
 			if err != nil {
 				sublog.Error().Err(err).Msg("error calling ListRecycle")
 				w.WriteHeader(http.StatusInternalServerError)
@@ -294,7 +309,14 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 	}
 }
 
-func (h *TrashbinHandler) formatTrashPropfind(ctx context.Context, s *svc, u *userpb.User, pf *propfindXML, items []*provider.RecycleItem, basePath string) (string, error) {
+func (h *TrashbinHandler) formatTrashPropfind(
+	ctx context.Context,
+	s *svc,
+	u *userpb.User,
+	pf *propfindXML,
+	items []*provider.RecycleItem,
+	basePath string,
+) (string, error) {
 	responses := make([]*responseXML, 0, len(items)+1)
 	// add trashbin dir . entry
 	responses = append(responses, &responseXML{
@@ -339,8 +361,14 @@ func (h *TrashbinHandler) formatTrashPropfind(ctx context.Context, s *svc, u *us
 // itemToPropResponse needs to create a listing that contains a key and destination
 // the key is the name of an entry in the trash listing
 // for now we need to limit trash to the users home, so we can expect all trash keys to have the home storage as the opaque id
-func (h *TrashbinHandler) itemToPropResponse(ctx context.Context, s *svc, u *userpb.User, pf *propfindXML, item *provider.RecycleItem, basePath string) (*responseXML, error) {
-
+func (h *TrashbinHandler) itemToPropResponse(
+	ctx context.Context,
+	s *svc,
+	u *userpb.User,
+	pf *propfindXML,
+	item *provider.RecycleItem,
+	basePath string,
+) (*responseXML, error) {
 	baseURI := ctx.Value(ctxKeyBaseURI).(string)
 	ref := path.Join(baseURI, u.Username, item.Key)
 	if item.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
@@ -366,12 +394,24 @@ func (h *TrashbinHandler) itemToPropResponse(ctx context.Context, s *svc, u *use
 			Prop:   []*propertyXML{},
 		})
 		// yes this is redundant, can be derived from oc:trashbin-original-location which contains the full path, clients should not fetch it
-		response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("oc:trashbin-original-filename", path.Base(item.Ref.Path)))
-		response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("oc:trashbin-original-location", restorePath))
-		response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("oc:trashbin-delete-timestamp", strconv.FormatUint(item.DeletionTime.Seconds, 10)))
+		response.Propstat[0].Prop = append(
+			response.Propstat[0].Prop,
+			s.newProp("oc:trashbin-original-filename", path.Base(item.Ref.Path)),
+		)
+		response.Propstat[0].Prop = append(
+			response.Propstat[0].Prop,
+			s.newProp("oc:trashbin-original-location", restorePath),
+		)
+		response.Propstat[0].Prop = append(
+			response.Propstat[0].Prop,
+			s.newProp("oc:trashbin-delete-timestamp", strconv.FormatUint(item.DeletionTime.Seconds, 10)),
+		)
 		response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newProp("oc:trashbin-delete-datetime", dTime))
 		if item.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
-			response.Propstat[0].Prop = append(response.Propstat[0].Prop, s.newPropRaw("d:resourcetype", "<d:collection/>"))
+			response.Propstat[0].Prop = append(
+				response.Propstat[0].Prop,
+				s.newPropRaw("d:resourcetype", "<d:collection/>"),
+			)
 			// TODO(jfd): decide if we can and want to list oc:size for folders
 		} else {
 			response.Propstat[0].Prop = append(response.Propstat[0].Prop,
@@ -449,7 +489,13 @@ func (h *TrashbinHandler) itemToPropResponse(ctx context.Context, s *svc, u *use
 	return &response, nil
 }
 
-func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc, u *userpb.User, basePath, dst, key, itemPath string) {
+func (h *TrashbinHandler) restore(
+	w http.ResponseWriter,
+	r *http.Request,
+	s *svc,
+	u *userpb.User,
+	basePath, dst, key, itemPath string,
+) {
 	ctx, span := rtrace.Provider.Tracer("trash-bin").Start(r.Context(), "restore")
 	defer span.End()
 
@@ -597,7 +643,13 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 }
 
 // delete has only a key
-func (h *TrashbinHandler) delete(w http.ResponseWriter, r *http.Request, s *svc, u *userpb.User, basePath, key, itemPath string) {
+func (h *TrashbinHandler) delete(
+	w http.ResponseWriter,
+	r *http.Request,
+	s *svc,
+	u *userpb.User,
+	basePath, key, itemPath string,
+) {
 	ctx, span := rtrace.Provider.Tracer("trash-bin").Start(r.Context(), "erase")
 	defer span.End()
 

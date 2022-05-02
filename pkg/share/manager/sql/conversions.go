@@ -62,9 +62,11 @@ type UserConverter interface {
 
 // GatewayUserConverter converts usernames and ids using the gateway
 type GatewayUserConverter struct {
-	gwAddr     string
-	insecure   bool
-	skipVerify bool
+	gwAddr             string
+	insecure           bool
+	skipVerify         bool
+	maxCallRecvMsgSize int
+	caCertFile         string
 }
 
 // NewGatewayUserConverter returns a instance of GatewayUserConverter
@@ -82,6 +84,8 @@ func (c *GatewayUserConverter) UserIDToUserName(ctx context.Context, userid *use
 		pool.Endpoint(c.gwAddr),
 		pool.Insecure(c.insecure),
 		pool.SkipVerify(c.skipVerify),
+		pool.CACertFile(c.caCertFile),
+		pool.MaxCallRecvMsgSize(c.maxCallRecvMsgSize),
 	)
 	if err != nil {
 		return "", err
@@ -105,6 +109,8 @@ func (c *GatewayUserConverter) UserNameToUserID(ctx context.Context, username st
 		pool.Endpoint(c.gwAddr),
 		pool.Insecure(c.insecure),
 		pool.SkipVerify(c.skipVerify),
+		pool.CACertFile(c.caCertFile),
+		pool.MaxCallRecvMsgSize(c.maxCallRecvMsgSize),
 	)
 	if err != nil {
 		return nil, err

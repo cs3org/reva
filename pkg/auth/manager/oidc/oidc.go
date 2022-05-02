@@ -58,15 +58,17 @@ type mgr struct {
 }
 
 type config struct {
-	Issuer       string `mapstructure:"issuer"        docs:";The issuer of the OIDC token."`
-	IDClaim      string `mapstructure:"id_claim"      docs:"sub;The claim containing the ID of the user."`
-	UIDClaim     string `mapstructure:"uid_claim"     docs:";The claim containing the UID of the user."`
-	GIDClaim     string `mapstructure:"gid_claim"     docs:";The claim containing the GID of the user."`
-	GatewaySvc   string `mapstructure:"gatewaysvc"    docs:";The endpoint at which the GRPC gateway is exposed."`
-	UsersMapping string `mapstructure:"users_mapping" docs:"; The optional OIDC users mapping file path"`
-	GroupClaim   string `mapstructure:"group_claim"   docs:"; The group claim to be looked up to map the user (default to 'groups')."`
-	Insecure     bool   `mapstructure:"insecure"      docs:"false;Whether to skip certificate checks when sending requests."`
-	SkipVerify   bool   `mapstructure:"skip_verify"   docs:"false;Whether to skip verifying certificate when sending requests."`
+	Issuer             string `mapstructure:"issuer"               docs:";The issuer of the OIDC token."`
+	IDClaim            string `mapstructure:"id_claim"             docs:"sub;The claim containing the ID of the user."`
+	UIDClaim           string `mapstructure:"uid_claim"            docs:";The claim containing the UID of the user."`
+	GIDClaim           string `mapstructure:"gid_claim"            docs:";The claim containing the GID of the user."`
+	GatewaySvc         string `mapstructure:"gatewaysvc"           docs:";The endpoint at which the GRPC gateway is exposed."`
+	UsersMapping       string `mapstructure:"users_mapping"        docs:"; The optional OIDC users mapping file path"`
+	GroupClaim         string `mapstructure:"group_claim"          docs:"; The group claim to be looked up to map the user (default to 'groups')."`
+	CACertFile         string `mapstructure:"ca_certfile"`
+	MaxCallRecvMsgSize int    `mapstructure:"client_recv_msg_size"`
+	Insecure           bool   `mapstructure:"insecure"             docs:"false;Whether to skip certificate checks when sending requests."`
+	SkipVerify         bool   `mapstructure:"skip_verify"          docs:"false;Whether to skip verifying certificate when sending requests."`
 }
 
 type oidcUserMapping struct {
@@ -230,6 +232,8 @@ func (am *mgr) Authenticate(
 		pool.Endpoint(am.c.GatewaySvc),
 		pool.Insecure(am.c.Insecure),
 		pool.SkipVerify(am.c.SkipVerify),
+		pool.CACertFile(am.c.CACertFile),
+		pool.MaxCallRecvMsgSize(am.c.MaxCallRecvMsgSize),
 	)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "oidc: error getting gateway grpc client")

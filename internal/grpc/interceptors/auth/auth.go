@@ -41,17 +41,21 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-var userGroupsCache gcache.Cache
-var scopeExpansionCache gcache.Cache
+var (
+	userGroupsCache     gcache.Cache
+	scopeExpansionCache gcache.Cache
+)
 
 type config struct {
 	// TODO(labkode): access a map is more performant as uri as fixed in length
 	// for SkipMethods.
-	TokenManager  string                            `mapstructure:"token_manager"`
-	TokenManagers map[string]map[string]interface{} `mapstructure:"token_managers"`
-	GatewayAddr   string                            `mapstructure:"gateway_addr"`
-	Insecure      bool                              `mapstructure:"insecure"`
-	SkipVerify    bool                              `mapstructure:"SkipVerify"`
+	TokenManager       string                            `mapstructure:"token_manager"`
+	TokenManagers      map[string]map[string]interface{} `mapstructure:"token_managers"`
+	GatewayAddr        string                            `mapstructure:"gateway_addr"`
+	CACertFile         string                            `mapstructure:"ca_certfile"`
+	MaxCallRecvMsgSize int                               `mapstructure:"client_recv_msg_size"`
+	Insecure           bool                              `mapstructure:"insecure"`
+	SkipVerify         bool                              `mapstructure:"skip_verify"`
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -209,7 +213,14 @@ func (ss *wrappedServerStream) Context() context.Context {
 	return ss.newCtx
 }
 
-func dismantleToken(ctx context.Context, tkn string, req interface{}, mgr token.Manager, c *config, unprotected bool) (*userpb.User, error) {
+func dismantleToken(
+	ctx context.Context,
+	tkn string,
+	req interface{},
+	mgr token.Manager,
+	c *config,
+	unprotected bool,
+) (*userpb.User, error) {
 	u, tokenScope, err := mgr.DismantleToken(ctx, tkn)
 	if err != nil {
 		return nil, err
@@ -224,6 +235,8 @@ func dismantleToken(ctx context.Context, tkn string, req interface{}, mgr token.
 			pool.Endpoint(c.GatewayAddr),
 			pool.Insecure(c.Insecure),
 			pool.SkipVerify(c.SkipVerify),
+			pool.MaxCallRecvMsgSize(c.MaxCallRecvMsgSize),
+			pool.CACertFile(c.CACertFile),
 		)
 		if err != nil {
 			return nil, err

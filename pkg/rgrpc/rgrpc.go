@@ -120,7 +120,7 @@ type config struct {
 	Interceptors     map[string]map[string]interface{} `mapstructure:"interceptors"`
 	EnableReflection bool                              `mapstructure:"enable_reflection"`
 	Insecure         bool                              `mapstructure:"insecure"`
-	SkipVerify       bool                              `mapstructure:"SkipVerify"`
+	SkipVerify       bool                              `mapstructure:"skip_verify"`
 	CertFile         string                            `mapstructure:"certfile"`
 	KeyFile          string                            `mapstructure:"keyfile"`
 	CAFile           string                            `mapstructure:"ca_certfile"`

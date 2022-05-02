@@ -52,14 +52,16 @@ type service struct {
 }
 
 type config struct {
-	Driver         string                            `mapstructure:"driver"`
-	Drivers        map[string]map[string]interface{} `mapstructure:"drivers"`
-	AppProviderURL string                            `mapstructure:"app_provider_url"`
-	GatewaySvc     string                            `mapstructure:"gatewaysvc"`
-	MimeTypes      []string                          `mapstructure:"mime_types"`
-	Priority       uint64                            `mapstructure:"priority"`
-	Insecure       bool                              `mapstructure:"insecure"`
-	SkipVerify     bool                              `mapstructure:"SkipVerify"`
+	Driver             string                            `mapstructure:"driver"`
+	Drivers            map[string]map[string]interface{} `mapstructure:"drivers"`
+	AppProviderURL     string                            `mapstructure:"app_provider_url"`
+	GatewaySvc         string                            `mapstructure:"gatewaysvc"`
+	MimeTypes          []string                          `mapstructure:"mime_types"`
+	Priority           uint64                            `mapstructure:"priority"`
+	CACertFile         string                            `mapstructure:"ca_certfile"`
+	MaxCallRecvMsgSize int                               `mapstructure:"client_recv_msg_size"`
+	Insecure           bool                              `mapstructure:"insecure"`
+	SkipVerify         bool                              `mapstructure:"skip_verify"`
 }
 
 func (c *config) init() {
@@ -126,6 +128,8 @@ func (s *service) registerProvider() {
 		pool.Endpoint(s.conf.GatewaySvc),
 		pool.Insecure(s.conf.Insecure),
 		pool.SkipVerify(s.conf.SkipVerify),
+		pool.MaxCallRecvMsgSize(s.conf.MaxCallRecvMsgSize),
+		pool.CACertFile(s.conf.CACertFile),
 	)
 	if err != nil {
 		log.Error().Err(err).Msgf("error registering app provider: could not get gateway client")
@@ -175,7 +179,10 @@ func getProvider(c *config) (app.Provider, error) {
 	return nil, errtypes.NotFound("driver not found: " + c.Driver)
 }
 
-func (s *service) OpenInApp(ctx context.Context, req *providerpb.OpenInAppRequest) (*providerpb.OpenInAppResponse, error) {
+func (s *service) OpenInApp(
+	ctx context.Context,
+	req *providerpb.OpenInAppRequest,
+) (*providerpb.OpenInAppResponse, error) {
 	appURL, err := s.provider.GetAppURL(ctx, req.ResourceInfo, req.ViewMode, req.AccessToken)
 	if err != nil {
 		res := &providerpb.OpenInAppResponse{
@@ -188,5 +195,4 @@ func (s *service) OpenInApp(ctx context.Context, req *providerpb.OpenInAppReques
 		AppUrl: appURL,
 	}
 	return res, nil
-
 }

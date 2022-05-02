@@ -38,9 +38,11 @@ import (
 
 // Handler renders user data for the user id given in the url path
 type Handler struct {
-	gatewayAddr string
-	insecure    bool
-	skipVerify  bool
+	gatewayAddr        string
+	maxCallRecvMsgSize int
+	caCertFile         string
+	insecure           bool
+	skipVerify         bool
 }
 
 // Init initializes this and any contained handlers
@@ -48,6 +50,8 @@ func (h *Handler) Init(c *config.Config) {
 	h.gatewayAddr = c.GatewaySvc
 	h.insecure = c.Insecure
 	h.skipVerify = c.SkipVerify
+	h.maxCallRecvMsgSize = c.MaxCallRecvMsgSize
+	h.caCertFile = c.CACertFile
 }
 
 // GetGroups handles GET requests on /cloud/users/groups
@@ -144,6 +148,8 @@ func (h *Handler) GetUsers(w http.ResponseWriter, r *http.Request) {
 		pool.Endpoint(h.gatewayAddr),
 		pool.Insecure(h.insecure),
 		pool.SkipVerify(h.skipVerify),
+		pool.CACertFile(h.caCertFile),
+		pool.MaxCallRecvMsgSize(h.maxCallRecvMsgSize),
 	)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error getting gateway client")

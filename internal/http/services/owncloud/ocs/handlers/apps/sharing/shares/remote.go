@@ -49,6 +49,8 @@ func (h *Handler) createFederatedCloudShare(
 		pool.Endpoint(h.gatewayAddr),
 		pool.Insecure(h.insecure),
 		pool.SkipVerify(h.skipVerify),
+		pool.CACertFile(h.caCertFile),
+		pool.MaxCallRecvMsgSize(h.maxCallRecvMsgSize),
 	)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
@@ -156,6 +158,8 @@ func (h *Handler) GetFederatedShare(w http.ResponseWriter, r *http.Request) {
 		pool.Endpoint(h.gatewayAddr),
 		pool.Insecure(h.insecure),
 		pool.SkipVerify(h.skipVerify),
+		pool.CACertFile(h.caCertFile),
+		pool.MaxCallRecvMsgSize(h.maxCallRecvMsgSize),
 	)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
@@ -201,6 +205,8 @@ func (h *Handler) ListFederatedShares(w http.ResponseWriter, r *http.Request) {
 		pool.Endpoint(h.gatewayAddr),
 		pool.Insecure(h.insecure),
 		pool.SkipVerify(h.skipVerify),
+		pool.CACertFile(h.caCertFile),
+		pool.MaxCallRecvMsgSize(h.maxCallRecvMsgSize),
 	)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)

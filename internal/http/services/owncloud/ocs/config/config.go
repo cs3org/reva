@@ -41,6 +41,8 @@ type Config struct {
 	ResourceInfoCacheTTL     int                               `mapstructure:"resource_info_cache_ttl"`
 	ResourceInfoCacheDrivers map[string]map[string]interface{} `mapstructure:"resource_info_caches"`
 	UserIdentifierCacheTTL   int                               `mapstructure:"user_identifier_cache_ttl"`
+	CACertFile               string                            `mapstructure:"ca_certfile"`
+	MaxCallRecvMsgSize       int                               `mapstructure:"client_recv_msg_size"`
 	Insecure                 bool                              `mapstructure:"insecure"`
 	SkipVerify               bool                              `mapstructure:"skip_verify"`
 }

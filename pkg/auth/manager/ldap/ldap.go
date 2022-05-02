@@ -49,16 +49,18 @@ type mgr struct {
 }
 
 type config struct {
-	utils.LDAPConn `           mapstructure:",squash"`
-	BaseDN         string     `mapstructure:"base_dn"`
-	UserFilter     string     `mapstructure:"userfilter"`
-	LoginFilter    string     `mapstructure:"loginfilter"`
-	Idp            string     `mapstructure:"idp"`
-	GatewaySvc     string     `mapstructure:"gatewaysvc"`
-	Schema         attributes `mapstructure:"schema"`
-	Nobody         int64      `mapstructure:"nobody"`
-	Insecure       bool       `mapstructure:"insecure"`
-	SkipVerify     bool       `mapstructure:"skip_verify"`
+	utils.LDAPConn     `           mapstructure:",squash"`
+	BaseDN             string     `mapstructure:"base_dn"`
+	UserFilter         string     `mapstructure:"userfilter"`
+	LoginFilter        string     `mapstructure:"loginfilter"`
+	Idp                string     `mapstructure:"idp"`
+	GatewaySvc         string     `mapstructure:"gatewaysvc"`
+	Schema             attributes `mapstructure:"schema"`
+	Nobody             int64      `mapstructure:"nobody"`
+	Insecure           bool       `mapstructure:"insecure"`
+	SkipVerify         bool       `mapstructure:"skip_verify"`
+	CACertFile         string     `mapstructure:"ca_certfile"`
+	MaxCallRecvMsgSize int        `mapstructure:"client_recv_msg_size"`
 }
 
 type attributes struct {
@@ -194,6 +196,8 @@ func (am *mgr) Authenticate(
 		pool.Endpoint(am.c.GatewaySvc),
 		pool.Insecure(am.c.Insecure),
 		pool.SkipVerify(am.c.SkipVerify),
+		pool.CACertFile(am.c.CACertFile),
+		pool.MaxCallRecvMsgSize(am.c.MaxCallRecvMsgSize),
 	)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "ldap: error getting gateway grpc client")

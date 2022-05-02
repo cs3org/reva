@@ -47,9 +47,11 @@ type manager struct {
 }
 
 type config struct {
-	GatewayAddr string `mapstructure:"gateway_addr"`
-	Insecure    bool   `mapstructure:"insecure"`
-	SkipVerify  bool   `mapstructure:"skip_verify"`
+	GatewayAddr        string `mapstructure:"gateway_addr"`
+	Insecure           bool   `mapstructure:"insecure"`
+	SkipVerify         bool   `mapstructure:"skip_verify"`
+	CACertFile         string `mapstructure:"ca_certfile"`
+	MaxCallRecvMsgSize int    `mapstructure:"client_recv_msg_size"`
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -88,6 +90,8 @@ func (m *manager) Authenticate(
 		pool.Endpoint(m.c.GatewayAddr),
 		pool.Insecure(m.c.Insecure),
 		pool.SkipVerify(m.c.SkipVerify),
+		pool.CACertFile(m.c.CACertFile),
+		pool.MaxCallRecvMsgSize(m.c.MaxCallRecvMsgSize),
 	)
 	if err != nil {
 		return nil, nil, err

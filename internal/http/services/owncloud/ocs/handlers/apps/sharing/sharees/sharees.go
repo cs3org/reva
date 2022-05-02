@@ -38,6 +38,8 @@ type Handler struct {
 	additionalInfoAttribute string
 	insecure                bool
 	skipVerify              bool
+	maxCallRecvMsgSize      int
+	caCertFile              string
 }
 
 // Init initializes this and any contained handlers
@@ -46,6 +48,8 @@ func (h *Handler) Init(c *config.Config) {
 	h.insecure = c.Insecure
 	h.skipVerify = c.SkipVerify
 	h.additionalInfoAttribute = c.AdditionalInfoAttribute
+	h.maxCallRecvMsgSize = c.MaxCallRecvMsgSize
+	h.caCertFile = c.CACertFile
 }
 
 // FindSharees implements the /apps/files_sharing/api/v1/sharees endpoint
@@ -62,6 +66,8 @@ func (h *Handler) FindSharees(w http.ResponseWriter, r *http.Request) {
 		pool.Endpoint(h.gatewayAddr),
 		pool.Insecure(h.insecure),
 		pool.SkipVerify(h.skipVerify),
+		pool.CACertFile(h.caCertFile),
+		pool.MaxCallRecvMsgSize(h.maxCallRecvMsgSize),
 	)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting gateway grpc client", err)

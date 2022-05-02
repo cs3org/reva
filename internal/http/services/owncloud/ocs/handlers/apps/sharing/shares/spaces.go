@@ -43,7 +43,9 @@ func (h *Handler) getGrantee(ctx context.Context, name string) (provider.Grantee
 	client, err := pool.GetGatewayServiceClient(
 		pool.Endpoint(h.gatewayAddr),
 		pool.Insecure(h.insecure),
-		pool.SkipVerify(h.skipVerify),
+		pool.MaxCallRecvMsgSize(h.maxCallRecvMsgSize),
+		pool.CACertFile(h.caCertFile),
+		pool.MaxCallRecvMsgSize(h.maxCallRecvMsgSize),
 	)
 	if err != nil {
 		return provider.Grantee{}, err

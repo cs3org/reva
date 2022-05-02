@@ -45,6 +45,8 @@ func (h *Handler) createUserShare(
 		pool.Endpoint(h.gatewayAddr),
 		pool.Insecure(h.insecure),
 		pool.SkipVerify(h.skipVerify),
+		pool.CACertFile(h.caCertFile),
+		pool.MaxCallRecvMsgSize(h.maxCallRecvMsgSize),
 	)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
@@ -102,6 +104,8 @@ func (h *Handler) isUserShare(r *http.Request, oid string) bool {
 		pool.Endpoint(h.gatewayAddr),
 		pool.Insecure(h.insecure),
 		pool.SkipVerify(h.skipVerify),
+		pool.CACertFile(h.caCertFile),
+		pool.MaxCallRecvMsgSize(h.maxCallRecvMsgSize),
 	)
 	if err != nil {
 		logger.Err(err)
@@ -131,6 +135,8 @@ func (h *Handler) removeUserShare(w http.ResponseWriter, r *http.Request, shareI
 		pool.Endpoint(h.gatewayAddr),
 		pool.Insecure(h.insecure),
 		pool.SkipVerify(h.skipVerify),
+		pool.CACertFile(h.caCertFile),
+		pool.MaxCallRecvMsgSize(h.maxCallRecvMsgSize),
 	)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
@@ -214,6 +220,8 @@ func (h *Handler) listUserShares(
 			pool.Endpoint(h.gatewayAddr),
 			pool.Insecure(h.insecure),
 			pool.SkipVerify(h.skipVerify),
+			pool.CACertFile(h.caCertFile),
+			pool.MaxCallRecvMsgSize(h.maxCallRecvMsgSize),
 		)
 		if err != nil {
 			return ocsDataPayload, nil, err

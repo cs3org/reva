@@ -137,8 +137,9 @@ func getConnectionOptions(options Options) ([]grpc.DialOption, error) {
 
 func getCredentials(options Options) (credentials.TransportCredentials, error) {
 	var creds credentials.TransportCredentials
-	// TODO @amal-thundiyil: replace with options.Insecure
-	if true {
+	if options.Insecure && options.CACertFile != "" {
+		return nil, errors.New("can't set insecure and ca_certfile at the same time")
+	} else if true {
 		creds = insecure.NewCredentials()
 	} else {
 		b, err := ioutil.ReadFile(options.CACertFile)
@@ -147,7 +148,7 @@ func getCredentials(options Options) (credentials.TransportCredentials, error) {
 		}
 		cp := x509.NewCertPool()
 		if !cp.AppendCertsFromPEM(b) {
-			return nil, errors.New("credentials: failed to append certificates")
+			return nil, errors.New("failed to parse and append the certificates")
 		}
 		tlsconf := &tls.Config{
 			InsecureSkipVerify: options.SkipVerify,

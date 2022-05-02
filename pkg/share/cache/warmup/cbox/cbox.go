@@ -45,16 +45,18 @@ func init() {
 }
 
 type config struct {
-	DbUsername   string `mapstructure:"db_username"`
-	DbPassword   string `mapstructure:"db_password"`
-	DbHost       string `mapstructure:"db_host"`
-	DbPort       int    `mapstructure:"db_port"`
-	DbName       string `mapstructure:"db_name"`
-	EOSNamespace string `mapstructure:"namespace"`
-	GatewaySvc   string `mapstructure:"gatewaysvc"`
-	JWTSecret    string `mapstructure:"jwt_secret"`
-	Insecure     bool   `mapstructure:"insecure"`
-	SkipVerify   bool   `mapstructure:"skip_verify"`
+	DbUsername         string `mapstructure:"db_username"`
+	DbPassword         string `mapstructure:"db_password"`
+	DbHost             string `mapstructure:"db_host"`
+	DbPort             int    `mapstructure:"db_port"`
+	DbName             string `mapstructure:"db_name"`
+	EOSNamespace       string `mapstructure:"namespace"`
+	GatewaySvc         string `mapstructure:"gatewaysvc"`
+	JWTSecret          string `mapstructure:"jwt_secret"`
+	Insecure           bool   `mapstructure:"insecure"`
+	SkipVerify         bool   `mapstructure:"skip_verify"`
+	CACertFile         string `mapstructure:"ca_certfile"`
+	MaxCallRecvMsgSize int    `mapstructure:"client_recv_msg_size"`
 }
 
 type manager struct {
@@ -128,6 +130,8 @@ func (m *manager) GetResourceInfos() ([]*provider.ResourceInfo, error) {
 		pool.Endpoint(m.conf.GatewaySvc),
 		pool.Insecure(m.conf.Insecure),
 		pool.SkipVerify(m.conf.SkipVerify),
+		pool.CACertFile(m.conf.CACertFile),
+		pool.MaxCallRecvMsgSize(m.conf.MaxCallRecvMsgSize),
 	)
 	if err != nil {
 		return nil, err

@@ -45,6 +45,8 @@ func (h *Handler) createPublicLinkShare(w http.ResponseWriter, r *http.Request, 
 		pool.Endpoint(h.gatewayAddr),
 		pool.Insecure(h.insecure),
 		pool.SkipVerify(h.skipVerify),
+		pool.CACertFile(h.caCertFile),
+		pool.MaxCallRecvMsgSize(h.maxCallRecvMsgSize),
 	)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
@@ -182,6 +184,8 @@ func (h *Handler) listPublicShares(
 			pool.Endpoint(h.gatewayAddr),
 			pool.Insecure(h.insecure),
 			pool.SkipVerify(h.skipVerify),
+			pool.CACertFile(h.caCertFile),
+			pool.MaxCallRecvMsgSize(h.maxCallRecvMsgSize),
 		)
 		if err != nil {
 			return ocsDataPayload, nil, err
@@ -242,6 +246,8 @@ func (h *Handler) isPublicShare(r *http.Request, oid string) bool {
 		pool.Endpoint(h.gatewayAddr),
 		pool.Insecure(h.insecure),
 		pool.SkipVerify(h.skipVerify),
+		pool.CACertFile(h.caCertFile),
+		pool.MaxCallRecvMsgSize(h.maxCallRecvMsgSize),
 	)
 	if err != nil {
 		logger.Err(err)
@@ -272,6 +278,8 @@ func (h *Handler) updatePublicShare(w http.ResponseWriter, r *http.Request, shar
 		pool.Endpoint(h.gatewayAddr),
 		pool.Insecure(h.insecure),
 		pool.SkipVerify(h.skipVerify),
+		pool.CACertFile(h.caCertFile),
+		pool.MaxCallRecvMsgSize(h.maxCallRecvMsgSize),
 	)
 	if err != nil {
 		log.Err(err).Str("shareID", shareID).Msg("updatePublicShare")
@@ -466,6 +474,8 @@ func (h *Handler) removePublicShare(w http.ResponseWriter, r *http.Request, shar
 		pool.Endpoint(h.gatewayAddr),
 		pool.Insecure(h.insecure),
 		pool.SkipVerify(h.skipVerify),
+		pool.CACertFile(h.caCertFile),
+		pool.MaxCallRecvMsgSize(h.maxCallRecvMsgSize),
 	)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)

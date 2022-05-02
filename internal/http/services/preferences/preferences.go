@@ -39,10 +39,12 @@ func init() {
 
 // Config holds the config options that for the preferences HTTP service
 type Config struct {
-	Prefix     string `mapstructure:"prefix"`
-	GatewaySvc string `mapstructure:"gatewaysvc"`
-	Insecure   bool   `mapstructure:"insecure"`
-	SkipVerify bool   `mapstructure:"skipVerify"`
+	Prefix             string `mapstructure:"prefix"`
+	GatewaySvc         string `mapstructure:"gatewaysvc"`
+	Insecure           bool   `mapstructure:"insecure"`
+	SkipVerify         bool   `mapstructure:"skipVerify"`
+	CACertFile         string `mapstructure:"ca_certfile"`
+	MaxCallRecvMsgSize int    `mapstructure:"client_recv_msg_size"`
 }
 
 func (c *Config) init() {
@@ -124,6 +126,8 @@ func (s *svc) handleGet(w http.ResponseWriter, r *http.Request) {
 		pool.Endpoint(s.conf.GatewaySvc),
 		pool.Insecure(s.conf.Insecure),
 		pool.SkipVerify(s.conf.SkipVerify),
+		pool.CACertFile(s.conf.CACertFile),
+		pool.MaxCallRecvMsgSize(s.conf.MaxCallRecvMsgSize),
 	)
 	if err != nil {
 		log.Error().Err(err).Msg("error getting grpc gateway client")
@@ -193,6 +197,8 @@ func (s *svc) handlePost(w http.ResponseWriter, r *http.Request) {
 		pool.Endpoint(s.conf.GatewaySvc),
 		pool.Insecure(s.conf.Insecure),
 		pool.SkipVerify(s.conf.SkipVerify),
+		pool.CACertFile(s.conf.CACertFile),
+		pool.MaxCallRecvMsgSize(s.conf.MaxCallRecvMsgSize),
 	)
 	if err != nil {
 		log.Error().Err(err).Msg("error getting grpc gateway client")

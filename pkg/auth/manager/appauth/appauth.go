@@ -38,9 +38,11 @@ func init() {
 }
 
 type manager struct {
-	GatewayAddr string `mapstructure:"gateway_addr"`
-	Insecure    bool   `mapstructure:"insecure"`
-	SkipVerify  bool   `mapstructure:"skip_verify"`
+	GatewayAddr        string `mapstructure:"gateway_addr"`
+	Insecure           bool   `mapstructure:"insecure"`
+	SkipVerify         bool   `mapstructure:"skip_verify"`
+	CACertFile         string `mapstructure:"ca_certfile"`
+	MaxCallRecvMsgSize int    `mapstructure:"client_recv_msg_size"`
 }
 
 // New returns a new auth Manager.
@@ -69,6 +71,8 @@ func (m *manager) Authenticate(
 		pool.Endpoint(m.GatewayAddr),
 		pool.Insecure(m.Insecure),
 		pool.SkipVerify(m.SkipVerify),
+		pool.CACertFile(m.CACertFile),
+		pool.MaxCallRecvMsgSize(m.MaxCallRecvMsgSize),
 	)
 	if err != nil {
 		return nil, nil, err
