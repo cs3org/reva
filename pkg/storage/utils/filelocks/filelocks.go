@@ -140,7 +140,9 @@ func ReleaseLock(lock *flock.Flock) error {
 
 	err = lock.Unlock()
 	if err == nil {
-		err = os.Remove(n)
+		if !lock.Locked() {
+			err = os.Remove(n)
+		}
 	}
 	releaseMutexedFlock(n)
 
