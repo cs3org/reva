@@ -38,7 +38,10 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
-func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest) (*gateway.AuthenticateResponse, error) {
+func (s *svc) Authenticate(
+	ctx context.Context,
+	req *gateway.AuthenticateRequest,
+) (*gateway.AuthenticateResponse, error) {
 	log := appctx.GetLogger(ctx)
 
 	// find auth provider
@@ -58,7 +61,11 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 	switch {
 	case err != nil:
 		return &gateway.AuthenticateResponse{
-			Status: status.NewInternal(ctx, err, fmt.Sprintf("gateway: error calling Authenticate for type: %s", req.Type)),
+			Status: status.NewInternal(
+				ctx,
+				err,
+				fmt.Sprintf("gateway: error calling Authenticate for type: %s", req.Type),
+			),
 		}, nil
 	case res.Status.Code == rpc.Code_CODE_PERMISSION_DENIED:
 		fallthrough
@@ -72,7 +79,11 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 	case res.Status.Code != rpc.Code_CODE_OK:
 		err := status.NewErrorFromCode(res.Status.Code, "gateway")
 		return &gateway.AuthenticateResponse{
-			Status: status.NewInternal(ctx, err, fmt.Sprintf("error authenticating credentials to auth provider for type: %s", req.Type)),
+			Status: status.NewInternal(
+				ctx,
+				err,
+				fmt.Sprintf("error authenticating credentials to auth provider for type: %s", req.Type),
+			),
 		}, nil
 	}
 
@@ -137,7 +148,9 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 		return res, nil
 	}
 
-	if scope, ok := res.TokenScope["user"]; s.c.DisableHomeCreationOnLogin || !ok || scope.Role != authpb.Role_ROLE_OWNER || res.User.Id.Type == userpb.UserType_USER_TYPE_FEDERATED {
+	if scope, ok := res.TokenScope["user"]; s.c.DisableHomeCreationOnLogin || !ok ||
+		scope.Role != authpb.Role_ROLE_OWNER ||
+		res.User.Id.Type == userpb.UserType_USER_TYPE_FEDERATED {
 		gwRes := &gateway.AuthenticateResponse{
 			Status: status.NewOK(ctx),
 			User:   res.User,
@@ -150,7 +163,11 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 	// TODO(labkode): appending to existing context will not pass the token.
 	ctx = ctxpkg.ContextSetToken(ctx, token)
 	ctx = ctxpkg.ContextSetUser(ctx, res.User)
-	ctx = metadata.AppendToOutgoingContext(ctx, ctxpkg.TokenHeader, token) // TODO(jfd): hardcoded metadata key. use  PerRPCCredentials?
+	ctx = metadata.AppendToOutgoingContext(
+		ctx,
+		ctxpkg.TokenHeader,
+		token,
+	) // TODO(jfd): hardcoded metadata key. use  PerRPCCredentials?
 
 	// create home directory
 	if _, err = s.createHomeCache.Get(res.User.Id.OpaqueId); err != nil {
@@ -207,7 +224,11 @@ func (s *svc) WhoAmI(ctx context.Context, req *gateway.WhoAmIRequest) (*gateway.
 }
 
 func (s *svc) findAuthProvider(ctx context.Context, authType string) (authpb.ProviderAPIClient, error) {
-	c, err := pool.GetAuthRegistryServiceClient(pool.Endpoint(s.c.AuthRegistryEndpoint))
+	c, err := pool.GetAuthRegistryServiceClient(
+		pool.Endpoint(s.c.AuthRegistryEndpoint),
+		pool.Insecure(s.c.Insecure),
+		pool.SkipVerify(s.c.SkipVerify),
+	)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error getting auth registry client")
 		return nil, err
@@ -216,7 +237,6 @@ func (s *svc) findAuthProvider(ctx context.Context, authType string) (authpb.Pro
 	res, err := c.GetAuthProviders(ctx, &registry.GetAuthProvidersRequest{
 		Type: authType,
 	})
-
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetAuthProvider")
 		return nil, err
