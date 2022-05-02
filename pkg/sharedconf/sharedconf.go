@@ -32,9 +32,9 @@ type conf struct {
 	GatewaySVC            string `mapstructure:"gatewaysvc"`
 	DataGateway           string `mapstructure:"datagateway"`
 	SkipUserGroupsInToken bool   `mapstructure:"skip_user_groups_in_token"`
-	GrpcInsecure          bool   `mapstructure:"grpc_insecure"`
-	GrpcSkipVerify        bool   `mapstructure:"grpc_skip_verify"`
-	CAFile                string `mapstructure:"ca_file"`
+	Insecure              bool   `mapstructure:"insecure"`
+	SkipVerify            bool   `mapstructure:"skip_verify"`
+	CAFile                string `mapstructure:"ca_certfile"`
 }
 
 // Decode decodes the configuration.
@@ -97,19 +97,16 @@ func SkipUserGroupsInToken() bool {
 }
 
 // GrpcSkipVerify return whether a client verifies the server's certificate chain and host name.
-func GrpcSkipVerify() bool {
-	return sharedConf.GrpcSkipVerify
+func SkipVerify() bool {
+	return sharedConf.SkipVerify
 }
 
-// GrpcInsecure returns whether to disable transport security for new GRPC connections.
-func GrpcInsecure() bool {
-	return sharedConf.GrpcInsecure
+// Insecure returns whether to disable transport security for new GRPC connections.
+func Insecure() bool {
+	return sharedConf.Insecure
 }
 
 // GetCAFilePath sets the file path for the CA file
 func GetCAFilePath() string {
-	if sharedConf.CAFile == "" {
-		sharedConf.CAFile = "/cert/ca.cert"
-	}
 	return sharedConf.CAFile
 }

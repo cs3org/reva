@@ -44,6 +44,7 @@ import (
 	storageprovider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	storageregistry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 	datatx "github.com/cs3org/go-cs3apis/cs3/tx/v1beta1"
+	"github.com/cs3org/reva/pkg/sharedconf"
 	rtrace "github.com/cs3org/reva/pkg/trace"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"google.golang.org/grpc"
@@ -137,31 +138,33 @@ func getConnectionOptions(options Options) ([]grpc.DialOption, error) {
 }
 
 func getCredentials(options Options) (credentials.TransportCredentials, error) {
-	var creds credentials.TransportCredentials
+	var useCertficates = options.CACertFile != "" || sharedconf.GetCAFilePath() != ""
+	var isInsecure = options.Insecure || sharedconf.Insecure()
 	switch {
-	case options.Insecure && options.CACertFile != "":
+	case isInsecure && useCertficates:
 		return nil, errors.New("can't set insecure and ca_certfile at the same time")
-	// TODO @amal-thundiyil: change this to options.Insecure
-	case true:
-		creds = insecure.NewCredentials()
-	case options.CACertFile != "":
+	case isInsecure:
+		return insecure.NewCredentials(), nil
+	case useCertficates:
 		b, err := ioutil.ReadFile(options.CACertFile)
 		if err != nil {
-			return nil, err
+			b, err = ioutil.ReadFile(sharedconf.GetCAFilePath())
+			if err != nil {
+				return nil, errors.New("couldn't read cert files")
+			}
 		}
 		cp := x509.NewCertPool()
 		if !cp.AppendCertsFromPEM(b) {
 			return nil, errors.New("failed to parse and append the certificates")
 		}
 		tlsconf := &tls.Config{
-			InsecureSkipVerify: options.SkipVerify,
+			InsecureSkipVerify: options.SkipVerify || sharedconf.SkipVerify(),
 			RootCAs:            cp,
 		}
-		creds = credentials.NewTLS(tlsconf)
+		return credentials.NewTLS(tlsconf), nil
 	default:
 		return nil, errors.New("invalid grpc security configuration")
 	}
-	return creds, nil
 }
 
 // GetGatewayServiceClient returns a GatewayServiceClient.
