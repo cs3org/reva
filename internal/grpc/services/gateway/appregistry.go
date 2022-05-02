@@ -35,6 +35,8 @@ func (s *svc) GetAppProviders(
 		pool.Endpoint(s.c.AppRegistryEndpoint),
 		pool.Insecure(s.c.Insecure),
 		pool.SkipVerify(s.c.SkipVerify),
+		pool.CACertFile(s.c.CACertFile),
+		pool.MaxCallRecvMsgSize(s.c.MaxCallRecvMsgSize),
 	)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetAppRegistryClient")
@@ -59,6 +61,8 @@ func (s *svc) AddAppProvider(
 		pool.Endpoint(s.c.AppRegistryEndpoint),
 		pool.Insecure(s.c.Insecure),
 		pool.SkipVerify(s.c.SkipVerify),
+		pool.CACertFile(s.c.CACertFile),
+		pool.MaxCallRecvMsgSize(s.c.MaxCallRecvMsgSize),
 	)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetAppRegistryClient")
@@ -83,6 +87,8 @@ func (s *svc) ListAppProviders(
 		pool.Endpoint(s.c.AppRegistryEndpoint),
 		pool.Insecure(s.c.Insecure),
 		pool.SkipVerify(s.c.SkipVerify),
+		pool.CACertFile(s.c.CACertFile),
+		pool.MaxCallRecvMsgSize(s.c.MaxCallRecvMsgSize),
 	)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetAppRegistryClient")
@@ -107,6 +113,8 @@ func (s *svc) ListSupportedMimeTypes(
 		pool.Endpoint(s.c.AppRegistryEndpoint),
 		pool.Insecure(s.c.Insecure),
 		pool.SkipVerify(s.c.SkipVerify),
+		pool.CACertFile(s.c.CACertFile),
+		pool.MaxCallRecvMsgSize(s.c.MaxCallRecvMsgSize),
 	)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetAppRegistryClient")
@@ -131,6 +139,8 @@ func (s *svc) GetDefaultAppProviderForMimeType(
 		pool.Endpoint(s.c.AppRegistryEndpoint),
 		pool.Insecure(s.c.Insecure),
 		pool.SkipVerify(s.c.SkipVerify),
+		pool.CACertFile(s.c.CACertFile),
+		pool.MaxCallRecvMsgSize(s.c.MaxCallRecvMsgSize),
 	)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetAppRegistryClient")
@@ -155,6 +165,8 @@ func (s *svc) SetDefaultAppProviderForMimeType(
 		pool.Endpoint(s.c.AppRegistryEndpoint),
 		pool.Insecure(s.c.Insecure),
 		pool.SkipVerify(s.c.SkipVerify),
+		pool.CACertFile(s.c.CACertFile),
+		pool.MaxCallRecvMsgSize(s.c.MaxCallRecvMsgSize),
 	)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetAppRegistryClient")

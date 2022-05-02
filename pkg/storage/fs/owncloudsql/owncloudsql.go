@@ -119,6 +119,8 @@ type config struct {
 	DbHost                   string `mapstructure:"dbhost"`
 	DbPort                   int    `mapstructure:"dbport"`
 	DbName                   string `mapstructure:"dbname"`
+	CACertFile               string `mapstructure:"ca_certfile"`
+	MaxCallRecvMsgSize       int    `mapstructure:"client_recv_msg_size"`
 	Insecure                 bool   `mapstructure:"insecure"`
 	SkipVerify               bool   `mapstructure:"skip_verify"`
 }
@@ -376,6 +378,8 @@ func (fs *owncloudsqlfs) getUser(ctx context.Context, usernameOrID string) (id *
 		pool.Endpoint(fs.c.UserProviderEndpoint),
 		pool.Insecure(fs.c.Insecure),
 		pool.SkipVerify(fs.c.SkipVerify),
+		pool.CACertFile(fs.c.CACertFile),
+		pool.MaxCallRecvMsgSize(fs.c.MaxCallRecvMsgSize),
 	)
 	if err != nil {
 		appctx.GetLogger(ctx).

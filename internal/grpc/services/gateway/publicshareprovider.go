@@ -44,6 +44,8 @@ func (s *svc) CreatePublicShare(
 		pool.Endpoint(s.c.PublicShareProviderEndpoint),
 		pool.Insecure(s.c.Insecure),
 		pool.SkipVerify(s.c.SkipVerify),
+		pool.CACertFile(s.c.CACertFile),
+		pool.MaxCallRecvMsgSize(s.c.MaxCallRecvMsgSize),
 	)
 	if err != nil {
 		return nil, err
@@ -68,6 +70,8 @@ func (s *svc) RemovePublicShare(
 		pool.Endpoint(s.c.PublicShareProviderEndpoint),
 		pool.Insecure(s.c.Insecure),
 		pool.SkipVerify(s.c.SkipVerify),
+		pool.CACertFile(s.c.CACertFile),
+		pool.MaxCallRecvMsgSize(s.c.MaxCallRecvMsgSize),
 	)
 	if err != nil {
 		return nil, err
@@ -90,6 +94,8 @@ func (s *svc) GetPublicShareByToken(
 		pool.Endpoint(s.c.PublicShareProviderEndpoint),
 		pool.Insecure(s.c.Insecure),
 		pool.SkipVerify(s.c.SkipVerify),
+		pool.CACertFile(s.c.CACertFile),
+		pool.MaxCallRecvMsgSize(s.c.MaxCallRecvMsgSize),
 	)
 	if err != nil {
 		return nil, err
@@ -114,6 +120,8 @@ func (s *svc) GetPublicShare(
 		pool.Endpoint(s.c.PublicShareProviderEndpoint),
 		pool.Insecure(s.c.Insecure),
 		pool.SkipVerify(s.c.SkipVerify),
+		pool.CACertFile(s.c.CACertFile),
+		pool.MaxCallRecvMsgSize(s.c.MaxCallRecvMsgSize),
 	)
 	if err != nil {
 		log.Err(err).Msg("error connecting to a public share provider")
@@ -138,6 +146,8 @@ func (s *svc) ListPublicShares(
 		pool.Endpoint(s.c.PublicShareProviderEndpoint),
 		pool.Insecure(s.c.Insecure),
 		pool.SkipVerify(s.c.SkipVerify),
+		pool.CACertFile(s.c.CACertFile),
+		pool.MaxCallRecvMsgSize(s.c.MaxCallRecvMsgSize),
 	)
 	if err != nil {
 		log.Err(err).Msg("error connecting to a public share provider")
@@ -167,6 +177,8 @@ func (s *svc) UpdatePublicShare(
 		pool.Endpoint(s.c.PublicShareProviderEndpoint),
 		pool.Insecure(s.c.Insecure),
 		pool.SkipVerify(s.c.SkipVerify),
+		pool.CACertFile(s.c.CACertFile),
+		pool.MaxCallRecvMsgSize(s.c.MaxCallRecvMsgSize),
 	)
 	if err != nil {
 		log.Err(err).Msg("error connecting to a public share provider")

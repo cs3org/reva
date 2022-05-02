@@ -119,6 +119,8 @@ type config struct {
 	EnableHome               bool   `mapstructure:"enable_home"`
 	Scan                     bool   `mapstructure:"scan"`
 	UserProviderEndpoint     string `mapstructure:"userprovidersvc"`
+	CACertFile               string `mapstructure:"ca_certfile"`
+	MaxCallRecvMsgSize       int    `mapstructure:"client_recv_msg_size"`
 	Insecure                 bool   `mapstructure:"insecure"`
 	SkipVerify               bool   `mapstructure:"skip_verify"`
 }
@@ -490,6 +492,8 @@ func (fs *ocfs) getUser(ctx context.Context, usernameOrID string) (id *userpb.Us
 		pool.Endpoint(fs.c.UserProviderEndpoint),
 		pool.Insecure(fs.c.Insecure),
 		pool.SkipVerify(fs.c.SkipVerify),
+		pool.CACertFile(fs.c.CACertFile),
+		pool.MaxCallRecvMsgSize(fs.c.MaxCallRecvMsgSize),
 	)
 	if err != nil {
 		appctx.GetLogger(ctx).

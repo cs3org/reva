@@ -183,6 +183,8 @@ func (h *Handler) getStorageProviderClient(p *registry.ProviderInfo) (provider.P
 		pool.Endpoint(p.Address),
 		pool.Insecure(h.insecure),
 		pool.SkipVerify(h.skipVerify),
+		pool.CACertFile(h.caCertFile),
+		pool.MaxCallRecvMsgSize(h.maxCallRecvMsgSize),
 	)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error getting a storage provider client")
@@ -197,6 +199,8 @@ func (h *Handler) findProviders(ctx context.Context, ref *provider.Reference) ([
 		pool.Endpoint(h.storageRegistryAddr),
 		pool.Insecure(h.insecure),
 		pool.SkipVerify(h.skipVerify),
+		pool.CACertFile(h.caCertFile),
+		pool.MaxCallRecvMsgSize(h.maxCallRecvMsgSize),
 	)
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error getting storage registry client")

@@ -35,6 +35,8 @@ func (s *svc) GenerateAppPassword(
 		pool.Endpoint(s.c.ApplicationAuthEndpoint),
 		pool.Insecure(s.c.Insecure),
 		pool.SkipVerify(s.c.SkipVerify),
+		pool.CACertFile(s.c.CACertFile),
+		pool.MaxCallRecvMsgSize(s.c.MaxCallRecvMsgSize),
 	)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetAppAuthProviderServiceClient")
@@ -59,6 +61,8 @@ func (s *svc) ListAppPasswords(
 		pool.Endpoint(s.c.ApplicationAuthEndpoint),
 		pool.Insecure(s.c.Insecure),
 		pool.SkipVerify(s.c.SkipVerify),
+		pool.CACertFile(s.c.CACertFile),
+		pool.MaxCallRecvMsgSize(s.c.MaxCallRecvMsgSize),
 	)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetAppAuthProviderServiceClient")
@@ -83,6 +87,8 @@ func (s *svc) InvalidateAppPassword(
 		pool.Endpoint(s.c.ApplicationAuthEndpoint),
 		pool.Insecure(s.c.Insecure),
 		pool.SkipVerify(s.c.SkipVerify),
+		pool.CACertFile(s.c.CACertFile),
+		pool.MaxCallRecvMsgSize(s.c.MaxCallRecvMsgSize),
 	)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetAppAuthProviderServiceClient")
@@ -107,6 +113,8 @@ func (s *svc) GetAppPassword(
 		pool.Endpoint(s.c.ApplicationAuthEndpoint),
 		pool.Insecure(s.c.Insecure),
 		pool.SkipVerify(s.c.SkipVerify),
+		pool.CACertFile(s.c.CACertFile),
+		pool.MaxCallRecvMsgSize(s.c.MaxCallRecvMsgSize),
 	)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetAppAuthProviderServiceClient")

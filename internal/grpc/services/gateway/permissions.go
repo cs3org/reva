@@ -35,6 +35,8 @@ func (s *svc) CheckPermission(
 		pool.Endpoint(s.c.PermissionsEndpoint),
 		pool.Insecure(s.c.Insecure),
 		pool.SkipVerify(s.c.SkipVerify),
+		pool.CACertFile(s.c.CACertFile),
+		pool.MaxCallRecvMsgSize(s.c.MaxCallRecvMsgSize),
 	)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetPermissionssClient")

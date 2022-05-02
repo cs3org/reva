@@ -45,6 +45,8 @@ func (s *svc) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareRequest
 		pool.Endpoint(s.c.OCMShareProviderEndpoint),
 		pool.Insecure(s.c.Insecure),
 		pool.SkipVerify(s.c.SkipVerify),
+		pool.CACertFile(s.c.CACertFile),
+		pool.MaxCallRecvMsgSize(s.c.MaxCallRecvMsgSize),
 	)
 	if err != nil {
 		return &ocm.CreateOCMShareResponse{
@@ -83,6 +85,8 @@ func (s *svc) RemoveOCMShare(ctx context.Context, req *ocm.RemoveOCMShareRequest
 		pool.Endpoint(s.c.OCMShareProviderEndpoint),
 		pool.Insecure(s.c.Insecure),
 		pool.SkipVerify(s.c.SkipVerify),
+		pool.CACertFile(s.c.CACertFile),
+		pool.MaxCallRecvMsgSize(s.c.MaxCallRecvMsgSize),
 	)
 	if err != nil {
 		return &ocm.RemoveOCMShareResponse{
@@ -149,6 +153,8 @@ func (s *svc) getOCMShare(ctx context.Context, req *ocm.GetOCMShareRequest) (*oc
 		pool.Endpoint(s.c.OCMShareProviderEndpoint),
 		pool.Insecure(s.c.Insecure),
 		pool.SkipVerify(s.c.SkipVerify),
+		pool.CACertFile(s.c.CACertFile),
+		pool.MaxCallRecvMsgSize(s.c.MaxCallRecvMsgSize),
 	)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetOCMShareProviderClient")
@@ -171,6 +177,8 @@ func (s *svc) ListOCMShares(ctx context.Context, req *ocm.ListOCMSharesRequest) 
 		pool.Endpoint(s.c.OCMShareProviderEndpoint),
 		pool.Insecure(s.c.Insecure),
 		pool.SkipVerify(s.c.SkipVerify),
+		pool.CACertFile(s.c.CACertFile),
+		pool.MaxCallRecvMsgSize(s.c.MaxCallRecvMsgSize),
 	)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetOCMShareProviderClient")
@@ -192,6 +200,8 @@ func (s *svc) UpdateOCMShare(ctx context.Context, req *ocm.UpdateOCMShareRequest
 		pool.Endpoint(s.c.OCMShareProviderEndpoint),
 		pool.Insecure(s.c.Insecure),
 		pool.SkipVerify(s.c.SkipVerify),
+		pool.CACertFile(s.c.CACertFile),
+		pool.MaxCallRecvMsgSize(s.c.MaxCallRecvMsgSize),
 	)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetOCMShareProviderClient")
@@ -216,6 +226,8 @@ func (s *svc) ListReceivedOCMShares(
 		pool.Endpoint(s.c.OCMShareProviderEndpoint),
 		pool.Insecure(s.c.Insecure),
 		pool.SkipVerify(s.c.SkipVerify),
+		pool.CACertFile(s.c.CACertFile),
+		pool.MaxCallRecvMsgSize(s.c.MaxCallRecvMsgSize),
 	)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetOCMShareProviderClient")
@@ -241,6 +253,8 @@ func (s *svc) UpdateReceivedOCMShare(
 		pool.Endpoint(s.c.OCMShareProviderEndpoint),
 		pool.Insecure(s.c.Insecure),
 		pool.SkipVerify(s.c.SkipVerify),
+		pool.CACertFile(s.c.CACertFile),
+		pool.MaxCallRecvMsgSize(s.c.MaxCallRecvMsgSize),
 	)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetOCMShareProviderClient")
@@ -463,6 +477,8 @@ func (s *svc) GetReceivedOCMShare(
 		pool.Endpoint(s.c.OCMShareProviderEndpoint),
 		pool.Insecure(s.c.Insecure),
 		pool.SkipVerify(s.c.SkipVerify),
+		pool.CACertFile(s.c.CACertFile),
+		pool.MaxCallRecvMsgSize(s.c.MaxCallRecvMsgSize),
 	)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetOCMShareProviderClient")

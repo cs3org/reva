@@ -228,6 +228,8 @@ func (s *svc) findAuthProvider(ctx context.Context, authType string) (authpb.Pro
 		pool.Endpoint(s.c.AuthRegistryEndpoint),
 		pool.Insecure(s.c.Insecure),
 		pool.SkipVerify(s.c.SkipVerify),
+		pool.CACertFile(s.c.CACertFile),
+		pool.MaxCallRecvMsgSize(s.c.MaxCallRecvMsgSize),
 	)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error getting auth registry client")
@@ -248,6 +250,8 @@ func (s *svc) findAuthProvider(ctx context.Context, authType string) (authpb.Pro
 			pool.Endpoint(res.Providers[0].Address),
 			pool.Insecure(s.c.Insecure),
 			pool.SkipVerify(s.c.SkipVerify),
+			pool.CACertFile(s.c.CACertFile),
+			pool.MaxCallRecvMsgSize(s.c.MaxCallRecvMsgSize),
 		)
 		if err != nil {
 			err = errors.Wrap(err, "gateway: error getting an auth provider client")

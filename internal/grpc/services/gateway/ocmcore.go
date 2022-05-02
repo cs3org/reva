@@ -35,6 +35,8 @@ func (s *svc) CreateOCMCoreShare(
 		pool.Endpoint(s.c.OCMCoreEndpoint),
 		pool.Insecure(s.c.Insecure),
 		pool.SkipVerify(s.c.SkipVerify),
+		pool.CACertFile(s.c.CACertFile),
+		pool.MaxCallRecvMsgSize(s.c.MaxCallRecvMsgSize),
 	)
 	if err != nil {
 		return &ocmcore.CreateOCMCoreShareResponse{

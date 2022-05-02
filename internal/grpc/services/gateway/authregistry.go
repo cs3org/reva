@@ -37,6 +37,8 @@ func (s *svc) ListAuthProviders(
 		pool.Endpoint(s.c.AuthRegistryEndpoint),
 		pool.Insecure(s.c.Insecure),
 		pool.SkipVerify(s.c.SkipVerify),
+		pool.CACertFile(s.c.CACertFile),
+		pool.MaxCallRecvMsgSize(s.c.MaxCallRecvMsgSize),
 	)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error getting auth registry client")

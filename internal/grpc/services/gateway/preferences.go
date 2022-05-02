@@ -32,6 +32,8 @@ func (s *svc) SetKey(ctx context.Context, req *preferences.SetKeyRequest) (*pref
 		pool.Endpoint(s.c.PreferencesEndpoint),
 		pool.Insecure(s.c.Insecure),
 		pool.SkipVerify(s.c.SkipVerify),
+		pool.CACertFile(s.c.CACertFile),
+		pool.MaxCallRecvMsgSize(s.c.MaxCallRecvMsgSize),
 	)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetPreferencesClient")
@@ -53,6 +55,8 @@ func (s *svc) GetKey(ctx context.Context, req *preferences.GetKeyRequest) (*pref
 		pool.Endpoint(s.c.PreferencesEndpoint),
 		pool.Insecure(s.c.Insecure),
 		pool.SkipVerify(s.c.SkipVerify),
+		pool.CACertFile(s.c.CACertFile),
+		pool.MaxCallRecvMsgSize(s.c.MaxCallRecvMsgSize),
 	)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetPreferencesClient")

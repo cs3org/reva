@@ -32,6 +32,8 @@ func (s *svc) GetGroup(ctx context.Context, req *group.GetGroupRequest) (*group.
 		pool.Endpoint(s.c.GroupProviderEndpoint),
 		pool.Insecure(s.c.Insecure),
 		pool.SkipVerify(s.c.SkipVerify),
+		pool.CACertFile(s.c.CACertFile),
+		pool.MaxCallRecvMsgSize(s.c.MaxCallRecvMsgSize),
 	)
 	if err != nil {
 		return &group.GetGroupResponse{
@@ -55,6 +57,8 @@ func (s *svc) GetGroupByClaim(
 		pool.Endpoint(s.c.GroupProviderEndpoint),
 		pool.Insecure(s.c.Insecure),
 		pool.SkipVerify(s.c.SkipVerify),
+		pool.CACertFile(s.c.CACertFile),
+		pool.MaxCallRecvMsgSize(s.c.MaxCallRecvMsgSize),
 	)
 	if err != nil {
 		return &group.GetGroupByClaimResponse{
@@ -75,6 +79,8 @@ func (s *svc) FindGroups(ctx context.Context, req *group.FindGroupsRequest) (*gr
 		pool.Endpoint(s.c.GroupProviderEndpoint),
 		pool.Insecure(s.c.Insecure),
 		pool.SkipVerify(s.c.SkipVerify),
+		pool.CACertFile(s.c.CACertFile),
+		pool.MaxCallRecvMsgSize(s.c.MaxCallRecvMsgSize),
 	)
 	if err != nil {
 		return &group.FindGroupsResponse{
@@ -95,6 +101,8 @@ func (s *svc) GetMembers(ctx context.Context, req *group.GetMembersRequest) (*gr
 		pool.Endpoint(s.c.GroupProviderEndpoint),
 		pool.Insecure(s.c.Insecure),
 		pool.SkipVerify(s.c.SkipVerify),
+		pool.CACertFile(s.c.CACertFile),
+		pool.MaxCallRecvMsgSize(s.c.MaxCallRecvMsgSize),
 	)
 	if err != nil {
 		return &group.GetMembersResponse{
@@ -115,6 +123,8 @@ func (s *svc) HasMember(ctx context.Context, req *group.HasMemberRequest) (*grou
 		pool.Endpoint(s.c.GroupProviderEndpoint),
 		pool.Insecure(s.c.Insecure),
 		pool.SkipVerify(s.c.SkipVerify),
+		pool.CACertFile(s.c.CACertFile),
+		pool.MaxCallRecvMsgSize(s.c.MaxCallRecvMsgSize),
 	)
 	if err != nil {
 		return &group.HasMemberResponse{

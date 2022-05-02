@@ -35,6 +35,8 @@ func (s *svc) IsProviderAllowed(
 		pool.Endpoint(s.c.OCMProviderAuthorizerEndpoint),
 		pool.Insecure(s.c.Insecure),
 		pool.SkipVerify(s.c.SkipVerify),
+		pool.CACertFile(s.c.CACertFile),
+		pool.MaxCallRecvMsgSize(s.c.MaxCallRecvMsgSize),
 	)
 	if err != nil {
 		return &ocmprovider.IsProviderAllowedResponse{
@@ -58,6 +60,8 @@ func (s *svc) GetInfoByDomain(
 		pool.Endpoint(s.c.OCMProviderAuthorizerEndpoint),
 		pool.Insecure(s.c.Insecure),
 		pool.SkipVerify(s.c.SkipVerify),
+		pool.CACertFile(s.c.CACertFile),
+		pool.MaxCallRecvMsgSize(s.c.MaxCallRecvMsgSize),
 	)
 	if err != nil {
 		return &ocmprovider.GetInfoByDomainResponse{
@@ -81,6 +85,8 @@ func (s *svc) ListAllProviders(
 		pool.Endpoint(s.c.OCMProviderAuthorizerEndpoint),
 		pool.Insecure(s.c.Insecure),
 		pool.SkipVerify(s.c.SkipVerify),
+		pool.CACertFile(s.c.CACertFile),
+		pool.MaxCallRecvMsgSize(s.c.MaxCallRecvMsgSize),
 	)
 	if err != nil {
 		return &ocmprovider.ListAllProvidersResponse{

@@ -145,6 +145,8 @@ func (s *svc) ListStorageSpaces(
 		pool.Endpoint(s.c.StorageRegistryEndpoint),
 		pool.Insecure(s.c.Insecure),
 		pool.SkipVerify(s.c.SkipVerify),
+		pool.CACertFile(s.c.CACertFile),
+		pool.MaxCallRecvMsgSize(s.c.MaxCallRecvMsgSize),
 	)
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error getting storage registry client")
@@ -2406,6 +2408,8 @@ func (s *svc) getStorageProviderClient(
 		pool.Endpoint(p.Address),
 		pool.Insecure(s.c.Insecure),
 		pool.SkipVerify(s.c.SkipVerify),
+		pool.CACertFile(s.c.CACertFile),
+		pool.MaxCallRecvMsgSize(s.c.MaxCallRecvMsgSize),
 	)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error getting a storage provider client")
@@ -2420,6 +2424,8 @@ func (s *svc) findProviders(ctx context.Context, ref *provider.Reference) ([]*re
 		pool.Endpoint(s.c.StorageRegistryEndpoint),
 		pool.Insecure(s.c.Insecure),
 		pool.SkipVerify(s.c.SkipVerify),
+		pool.CACertFile(s.c.CACertFile),
+		pool.MaxCallRecvMsgSize(s.c.MaxCallRecvMsgSize),
 	)
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error getting storage registry client")

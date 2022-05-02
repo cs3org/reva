@@ -345,6 +345,8 @@ func (am *mgr) resolveUser(ctx context.Context, claims map[string]interface{}) e
 			pool.Endpoint(am.c.GatewaySvc),
 			pool.Insecure(am.c.Insecure),
 			pool.SkipVerify(am.c.SkipVerify),
+			pool.CACertFile(am.c.CACertFile),
+			pool.MaxCallRecvMsgSize(am.c.MaxCallRecvMsgSize),
 		)
 		if err != nil {
 			return errors.Wrap(err, "error getting user provider grpc client")

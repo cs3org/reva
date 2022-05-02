@@ -50,6 +50,8 @@ func (s *svc) CreateShare(
 		pool.Endpoint(s.c.UserShareProviderEndpoint),
 		pool.Insecure(s.c.Insecure),
 		pool.SkipVerify(s.c.SkipVerify),
+		pool.CACertFile(s.c.CACertFile),
+		pool.MaxCallRecvMsgSize(s.c.MaxCallRecvMsgSize),
 	)
 	if err != nil {
 		return &collaboration.CreateShareResponse{
@@ -115,6 +117,8 @@ func (s *svc) RemoveShare(
 		pool.Endpoint(s.c.UserShareProviderEndpoint),
 		pool.Insecure(s.c.Insecure),
 		pool.SkipVerify(s.c.SkipVerify),
+		pool.CACertFile(s.c.CACertFile),
+		pool.MaxCallRecvMsgSize(s.c.MaxCallRecvMsgSize),
 	)
 	if err != nil {
 		return &collaboration.RemoveShareResponse{
@@ -189,6 +193,8 @@ func (s *svc) getShare(
 		pool.Endpoint(s.c.UserShareProviderEndpoint),
 		pool.Insecure(s.c.Insecure),
 		pool.SkipVerify(s.c.SkipVerify),
+		pool.CACertFile(s.c.CACertFile),
+		pool.MaxCallRecvMsgSize(s.c.MaxCallRecvMsgSize),
 	)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetUserShareProviderClient")
@@ -214,6 +220,8 @@ func (s *svc) ListShares(
 		pool.Endpoint(s.c.UserShareProviderEndpoint),
 		pool.Insecure(s.c.Insecure),
 		pool.SkipVerify(s.c.SkipVerify),
+		pool.CACertFile(s.c.CACertFile),
+		pool.MaxCallRecvMsgSize(s.c.MaxCallRecvMsgSize),
 	)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetUserShareProviderClient")
@@ -238,6 +246,8 @@ func (s *svc) UpdateShare(
 		pool.Endpoint(s.c.UserShareProviderEndpoint),
 		pool.Insecure(s.c.Insecure),
 		pool.SkipVerify(s.c.SkipVerify),
+		pool.CACertFile(s.c.CACertFile),
+		pool.MaxCallRecvMsgSize(s.c.MaxCallRecvMsgSize),
 	)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetUserShareProviderClient")
@@ -288,6 +298,8 @@ func (s *svc) ListReceivedShares(
 		pool.Endpoint(s.c.UserShareProviderEndpoint),
 		pool.Insecure(s.c.Insecure),
 		pool.SkipVerify(s.c.SkipVerify),
+		pool.CACertFile(s.c.CACertFile),
+		pool.MaxCallRecvMsgSize(s.c.MaxCallRecvMsgSize),
 	)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetUserShareProviderClient")
@@ -311,6 +323,8 @@ func (s *svc) GetReceivedShare(
 		pool.Endpoint(s.c.UserShareProviderEndpoint),
 		pool.Insecure(s.c.Insecure),
 		pool.SkipVerify(s.c.SkipVerify),
+		pool.CACertFile(s.c.CACertFile),
+		pool.MaxCallRecvMsgSize(s.c.MaxCallRecvMsgSize),
 	)
 	if err != nil {
 		err := errors.Wrap(err, "gateway: error getting user share provider client")
@@ -361,6 +375,8 @@ func (s *svc) UpdateReceivedShare(
 		pool.Endpoint(s.c.UserShareProviderEndpoint),
 		pool.Insecure(s.c.Insecure),
 		pool.SkipVerify(s.c.SkipVerify),
+		pool.CACertFile(s.c.CACertFile),
+		pool.MaxCallRecvMsgSize(s.c.MaxCallRecvMsgSize),
 	)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetUserShareProviderClient")

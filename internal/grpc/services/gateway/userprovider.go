@@ -32,6 +32,8 @@ func (s *svc) GetUser(ctx context.Context, req *user.GetUserRequest) (*user.GetU
 		pool.Endpoint(s.c.UserProviderEndpoint),
 		pool.Insecure(s.c.Insecure),
 		pool.SkipVerify(s.c.SkipVerify),
+		pool.CACertFile(s.c.CACertFile),
+		pool.MaxCallRecvMsgSize(s.c.MaxCallRecvMsgSize),
 	)
 	if err != nil {
 		return &user.GetUserResponse{
@@ -55,6 +57,8 @@ func (s *svc) GetUserByClaim(
 		pool.Endpoint(s.c.UserProviderEndpoint),
 		pool.Insecure(s.c.Insecure),
 		pool.SkipVerify(s.c.SkipVerify),
+		pool.CACertFile(s.c.CACertFile),
+		pool.MaxCallRecvMsgSize(s.c.MaxCallRecvMsgSize),
 	)
 	if err != nil {
 		return &user.GetUserByClaimResponse{
@@ -75,6 +79,8 @@ func (s *svc) FindUsers(ctx context.Context, req *user.FindUsersRequest) (*user.
 		pool.Endpoint(s.c.UserProviderEndpoint),
 		pool.Insecure(s.c.Insecure),
 		pool.SkipVerify(s.c.SkipVerify),
+		pool.CACertFile(s.c.CACertFile),
+		pool.MaxCallRecvMsgSize(s.c.MaxCallRecvMsgSize),
 	)
 	if err != nil {
 		return &user.FindUsersResponse{
@@ -95,6 +101,8 @@ func (s *svc) GetUserGroups(ctx context.Context, req *user.GetUserGroupsRequest)
 		pool.Endpoint(s.c.UserProviderEndpoint),
 		pool.Insecure(s.c.Insecure),
 		pool.SkipVerify(s.c.SkipVerify),
+		pool.CACertFile(s.c.CACertFile),
+		pool.MaxCallRecvMsgSize(s.c.MaxCallRecvMsgSize),
 	)
 	if err != nil {
 		return &user.GetUserGroupsResponse{

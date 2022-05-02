@@ -32,6 +32,8 @@ func (s *svc) PullTransfer(ctx context.Context, req *datatx.PullTransferRequest)
 		pool.Endpoint(s.c.DataTxEndpoint),
 		pool.Insecure(s.c.Insecure),
 		pool.SkipVerify(s.c.SkipVerify),
+		pool.CACertFile(s.c.CACertFile),
+		pool.MaxCallRecvMsgSize(s.c.MaxCallRecvMsgSize),
 	)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetDataTxClient")
@@ -56,6 +58,8 @@ func (s *svc) GetTransferStatus(
 		pool.Endpoint(s.c.DataTxEndpoint),
 		pool.Insecure(s.c.Insecure),
 		pool.SkipVerify(s.c.SkipVerify),
+		pool.CACertFile(s.c.CACertFile),
+		pool.MaxCallRecvMsgSize(s.c.MaxCallRecvMsgSize),
 	)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetDataTxClient")
@@ -80,6 +84,8 @@ func (s *svc) CancelTransfer(
 		pool.Endpoint(s.c.DataTxEndpoint),
 		pool.Insecure(s.c.Insecure),
 		pool.SkipVerify(s.c.SkipVerify),
+		pool.CACertFile(s.c.CACertFile),
+		pool.MaxCallRecvMsgSize(s.c.MaxCallRecvMsgSize),
 	)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetDataTxClient")
@@ -104,6 +110,8 @@ func (s *svc) ListTransfers(
 		pool.Endpoint(s.c.DataTxEndpoint),
 		pool.Insecure(s.c.Insecure),
 		pool.SkipVerify(s.c.SkipVerify),
+		pool.CACertFile(s.c.CACertFile),
+		pool.MaxCallRecvMsgSize(s.c.MaxCallRecvMsgSize),
 	)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetDataTxClient")
@@ -128,6 +136,8 @@ func (s *svc) RetryTransfer(
 		pool.Endpoint(s.c.DataTxEndpoint),
 		pool.Insecure(s.c.Insecure),
 		pool.SkipVerify(s.c.SkipVerify),
+		pool.CACertFile(s.c.CACertFile),
+		pool.MaxCallRecvMsgSize(s.c.MaxCallRecvMsgSize),
 	)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetDataTxClient")

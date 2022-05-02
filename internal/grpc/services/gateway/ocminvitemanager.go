@@ -35,6 +35,8 @@ func (s *svc) GenerateInviteToken(
 		pool.Endpoint(s.c.OCMInviteManagerEndpoint),
 		pool.Insecure(s.c.Insecure),
 		pool.SkipVerify(s.c.SkipVerify),
+		pool.CACertFile(s.c.CACertFile),
+		pool.MaxCallRecvMsgSize(s.c.MaxCallRecvMsgSize),
 	)
 	if err != nil {
 		return &invitepb.GenerateInviteTokenResponse{
@@ -58,6 +60,8 @@ func (s *svc) ForwardInvite(
 		pool.Endpoint(s.c.OCMInviteManagerEndpoint),
 		pool.Insecure(s.c.Insecure),
 		pool.SkipVerify(s.c.SkipVerify),
+		pool.CACertFile(s.c.CACertFile),
+		pool.MaxCallRecvMsgSize(s.c.MaxCallRecvMsgSize),
 	)
 	if err != nil {
 		return &invitepb.ForwardInviteResponse{
@@ -81,6 +85,8 @@ func (s *svc) AcceptInvite(
 		pool.Endpoint(s.c.OCMInviteManagerEndpoint),
 		pool.Insecure(s.c.Insecure),
 		pool.SkipVerify(s.c.SkipVerify),
+		pool.CACertFile(s.c.CACertFile),
+		pool.MaxCallRecvMsgSize(s.c.MaxCallRecvMsgSize),
 	)
 	if err != nil {
 		return &invitepb.AcceptInviteResponse{
@@ -104,6 +110,8 @@ func (s *svc) GetAcceptedUser(
 		pool.Endpoint(s.c.OCMInviteManagerEndpoint),
 		pool.Insecure(s.c.Insecure),
 		pool.SkipVerify(s.c.SkipVerify),
+		pool.CACertFile(s.c.CACertFile),
+		pool.MaxCallRecvMsgSize(s.c.MaxCallRecvMsgSize),
 	)
 	if err != nil {
 		return &invitepb.GetAcceptedUserResponse{
@@ -127,6 +135,8 @@ func (s *svc) FindAcceptedUsers(
 		pool.Endpoint(s.c.OCMInviteManagerEndpoint),
 		pool.Insecure(s.c.Insecure),
 		pool.SkipVerify(s.c.SkipVerify),
+		pool.CACertFile(s.c.CACertFile),
+		pool.MaxCallRecvMsgSize(s.c.MaxCallRecvMsgSize),
 	)
 	if err != nil {
 		return &invitepb.FindAcceptedUsersResponse{
