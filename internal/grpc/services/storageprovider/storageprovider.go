@@ -1251,6 +1251,6 @@ func unwrapProviderID(id *provider.ResourceId) string {
 
 func rewrapProviderID(id *provider.ResourceId, spid string) {
 	if id != nil {
-		id.StorageId = spid + "$" + id.StorageId
+		id.StorageId = resourceid.StorageIDWrap(id.StorageId, spid)
 	}
 }
