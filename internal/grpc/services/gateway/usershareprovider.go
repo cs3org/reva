@@ -38,13 +38,19 @@ import (
 )
 
 // TODO(labkode): add multi-phase commit logic when commit share or commit ref is enabled.
-func (s *svc) CreateShare(ctx context.Context, req *collaboration.CreateShareRequest) (*collaboration.CreateShareResponse, error) {
-
+func (s *svc) CreateShare(
+	ctx context.Context,
+	req *collaboration.CreateShareRequest,
+) (*collaboration.CreateShareResponse, error) {
 	if s.isSharedFolder(ctx, req.ResourceInfo.GetPath()) {
 		return nil, errtypes.AlreadyExists("gateway: can't share the share folder itself")
 	}
 
-	c, err := pool.GetUserShareProviderClient(pool.Endpoint(s.c.UserShareProviderEndpoint))
+	c, err := pool.GetUserShareProviderClient(
+		pool.Endpoint(s.c.UserShareProviderEndpoint),
+		pool.Insecure(s.c.Insecure),
+		pool.SkipVerify(s.c.SkipVerify),
+	)
 	if err != nil {
 		return &collaboration.CreateShareResponse{
 			Status: status.NewInternal(ctx, err, "error getting user share provider client"),
@@ -82,7 +88,12 @@ func (s *svc) CreateShare(ctx context.Context, req *collaboration.CreateShareReq
 			return res, nil
 		}
 
-		addGrantStatus, err := s.addGrant(ctx, req.ResourceInfo.Id, req.Grant.Grantee, req.Grant.Permissions.Permissions)
+		addGrantStatus, err := s.addGrant(
+			ctx,
+			req.ResourceInfo.Id,
+			req.Grant.Grantee,
+			req.Grant.Permissions.Permissions,
+		)
 		if err != nil {
 			return nil, errors.Wrap(err, "gateway: error adding grant to storage")
 		}
@@ -96,8 +107,15 @@ func (s *svc) CreateShare(ctx context.Context, req *collaboration.CreateShareReq
 	return res, nil
 }
 
-func (s *svc) RemoveShare(ctx context.Context, req *collaboration.RemoveShareRequest) (*collaboration.RemoveShareResponse, error) {
-	c, err := pool.GetUserShareProviderClient(pool.Endpoint(s.c.UserShareProviderEndpoint))
+func (s *svc) RemoveShare(
+	ctx context.Context,
+	req *collaboration.RemoveShareRequest,
+) (*collaboration.RemoveShareResponse, error) {
+	c, err := pool.GetUserShareProviderClient(
+		pool.Endpoint(s.c.UserShareProviderEndpoint),
+		pool.Insecure(s.c.Insecure),
+		pool.SkipVerify(s.c.SkipVerify),
+	)
 	if err != nil {
 		return &collaboration.RemoveShareResponse{
 			Status: status.NewInternal(ctx, err, "error getting user share provider client"),
@@ -156,12 +174,22 @@ func (s *svc) RemoveShare(ctx context.Context, req *collaboration.RemoveShareReq
 // TODO(labkode): we need to validate share state vs storage grant and storage ref
 // If there are any inconsistencies, the share needs to be flag as invalid and a background process
 // or active fix needs to be performed.
-func (s *svc) GetShare(ctx context.Context, req *collaboration.GetShareRequest) (*collaboration.GetShareResponse, error) {
+func (s *svc) GetShare(
+	ctx context.Context,
+	req *collaboration.GetShareRequest,
+) (*collaboration.GetShareResponse, error) {
 	return s.getShare(ctx, req)
 }
 
-func (s *svc) getShare(ctx context.Context, req *collaboration.GetShareRequest) (*collaboration.GetShareResponse, error) {
-	c, err := pool.GetUserShareProviderClient(pool.Endpoint(s.c.UserShareProviderEndpoint))
+func (s *svc) getShare(
+	ctx context.Context,
+	req *collaboration.GetShareRequest,
+) (*collaboration.GetShareResponse, error) {
+	c, err := pool.GetUserShareProviderClient(
+		pool.Endpoint(s.c.UserShareProviderEndpoint),
+		pool.Insecure(s.c.Insecure),
+		pool.SkipVerify(s.c.SkipVerify),
+	)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetUserShareProviderClient")
 		return &collaboration.GetShareResponse{
@@ -178,8 +206,15 @@ func (s *svc) getShare(ctx context.Context, req *collaboration.GetShareRequest) 
 }
 
 // TODO(labkode): read GetShare comment.
-func (s *svc) ListShares(ctx context.Context, req *collaboration.ListSharesRequest) (*collaboration.ListSharesResponse, error) {
-	c, err := pool.GetUserShareProviderClient(pool.Endpoint(s.c.UserShareProviderEndpoint))
+func (s *svc) ListShares(
+	ctx context.Context,
+	req *collaboration.ListSharesRequest,
+) (*collaboration.ListSharesResponse, error) {
+	c, err := pool.GetUserShareProviderClient(
+		pool.Endpoint(s.c.UserShareProviderEndpoint),
+		pool.Insecure(s.c.Insecure),
+		pool.SkipVerify(s.c.SkipVerify),
+	)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetUserShareProviderClient")
 		return &collaboration.ListSharesResponse{
@@ -195,8 +230,15 @@ func (s *svc) ListShares(ctx context.Context, req *collaboration.ListSharesReque
 	return res, nil
 }
 
-func (s *svc) UpdateShare(ctx context.Context, req *collaboration.UpdateShareRequest) (*collaboration.UpdateShareResponse, error) {
-	c, err := pool.GetUserShareProviderClient(pool.Endpoint(s.c.UserShareProviderEndpoint))
+func (s *svc) UpdateShare(
+	ctx context.Context,
+	req *collaboration.UpdateShareRequest,
+) (*collaboration.UpdateShareResponse, error) {
+	c, err := pool.GetUserShareProviderClient(
+		pool.Endpoint(s.c.UserShareProviderEndpoint),
+		pool.Insecure(s.c.Insecure),
+		pool.SkipVerify(s.c.SkipVerify),
+	)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetUserShareProviderClient")
 		return &collaboration.UpdateShareResponse{
@@ -220,7 +262,6 @@ func (s *svc) UpdateShare(ctx context.Context, req *collaboration.UpdateShareReq
 		updateGrantStatus, err := s.updateGrant(ctx, res.GetShare().GetResourceId(),
 			res.GetShare().GetGrantee(),
 			res.GetShare().GetPermissions().GetPermissions())
-
 		if err != nil {
 			return nil, errors.Wrap(err, "gateway: error calling updateGrant")
 		}
@@ -239,8 +280,15 @@ func (s *svc) UpdateShare(ctx context.Context, req *collaboration.UpdateShareReq
 // TODO(labkode): listing received shares just goes to the user share manager and gets the list of
 // received shares. The display name of the shares should be the a friendly name, like the basename
 // of the original file.
-func (s *svc) ListReceivedShares(ctx context.Context, req *collaboration.ListReceivedSharesRequest) (*collaboration.ListReceivedSharesResponse, error) {
-	c, err := pool.GetUserShareProviderClient(pool.Endpoint(s.c.UserShareProviderEndpoint))
+func (s *svc) ListReceivedShares(
+	ctx context.Context,
+	req *collaboration.ListReceivedSharesRequest,
+) (*collaboration.ListReceivedSharesResponse, error) {
+	c, err := pool.GetUserShareProviderClient(
+		pool.Endpoint(s.c.UserShareProviderEndpoint),
+		pool.Insecure(s.c.Insecure),
+		pool.SkipVerify(s.c.SkipVerify),
+	)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetUserShareProviderClient")
 		return &collaboration.ListReceivedSharesResponse{
@@ -255,8 +303,15 @@ func (s *svc) ListReceivedShares(ctx context.Context, req *collaboration.ListRec
 	return res, nil
 }
 
-func (s *svc) GetReceivedShare(ctx context.Context, req *collaboration.GetReceivedShareRequest) (*collaboration.GetReceivedShareResponse, error) {
-	c, err := pool.GetUserShareProviderClient(pool.Endpoint(s.c.UserShareProviderEndpoint))
+func (s *svc) GetReceivedShare(
+	ctx context.Context,
+	req *collaboration.GetReceivedShareRequest,
+) (*collaboration.GetReceivedShareResponse, error) {
+	c, err := pool.GetUserShareProviderClient(
+		pool.Endpoint(s.c.UserShareProviderEndpoint),
+		pool.Insecure(s.c.Insecure),
+		pool.SkipVerify(s.c.SkipVerify),
+	)
 	if err != nil {
 		err := errors.Wrap(err, "gateway: error getting user share provider client")
 		return &collaboration.GetReceivedShareResponse{
@@ -276,7 +331,10 @@ func (s *svc) GetReceivedShare(ctx context.Context, req *collaboration.GetReceiv
 // if the update contains update for displayName:
 //   1) if received share is mounted: we also do a rename in the storage
 //   2) if received share is not mounted: we only rename in user share provider.
-func (s *svc) UpdateReceivedShare(ctx context.Context, req *collaboration.UpdateReceivedShareRequest) (*collaboration.UpdateReceivedShareResponse, error) {
+func (s *svc) UpdateReceivedShare(
+	ctx context.Context,
+	req *collaboration.UpdateReceivedShareRequest,
+) (*collaboration.UpdateReceivedShareResponse, error) {
 	log := appctx.GetLogger(ctx)
 
 	// sanity checks
@@ -299,7 +357,11 @@ func (s *svc) UpdateReceivedShare(ctx context.Context, req *collaboration.Update
 		}, nil
 	}
 
-	c, err := pool.GetUserShareProviderClient(pool.Endpoint(s.c.UserShareProviderEndpoint))
+	c, err := pool.GetUserShareProviderClient(
+		pool.Endpoint(s.c.UserShareProviderEndpoint),
+		pool.Insecure(s.c.Insecure),
+		pool.SkipVerify(s.c.SkipVerify),
+	)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetUserShareProviderClient")
 		return &collaboration.UpdateReceivedShareResponse{
@@ -383,7 +445,11 @@ func (s *svc) removeReference(ctx context.Context, resourceID *provider.Resource
 
 	statRes, err := storageProvider.Stat(ctx, &provider.StatRequest{Ref: idReference})
 	if err != nil {
-		return status.NewInternal(ctx, err, "gateway: error calling Stat for the share resource id: "+resourceID.String())
+		return status.NewInternal(
+			ctx,
+			err,
+			"gateway: error calling Stat for the share resource id: "+resourceID.String(),
+		)
 	}
 
 	// FIXME how can we delete a reference if the original resource was deleted?
@@ -461,7 +527,11 @@ func (s *svc) createReference(ctx context.Context, resourceID *provider.Resource
 
 	statRes, err := c.Stat(ctx, statReq)
 	if err != nil {
-		return status.NewInternal(ctx, err, "gateway: error calling Stat for the share resource id: "+resourceID.String())
+		return status.NewInternal(
+			ctx,
+			err,
+			"gateway: error calling Stat for the share resource id: "+resourceID.String(),
+		)
 	}
 
 	if statRes.Status.Code != rpc.Code_CODE_OK {
@@ -549,7 +619,12 @@ func (s *svc) denyGrant(ctx context.Context, id *provider.ResourceId, g *provide
 	return status.NewOK(ctx), nil
 }
 
-func (s *svc) addGrant(ctx context.Context, id *provider.ResourceId, g *provider.Grantee, p *provider.ResourcePermissions) (*rpc.Status, error) {
+func (s *svc) addGrant(
+	ctx context.Context,
+	id *provider.ResourceId,
+	g *provider.Grantee,
+	p *provider.ResourcePermissions,
+) (*rpc.Status, error) {
 	ref := &provider.Reference{
 		ResourceId: id,
 	}
@@ -582,7 +657,12 @@ func (s *svc) addGrant(ctx context.Context, id *provider.ResourceId, g *provider
 	return status.NewOK(ctx), nil
 }
 
-func (s *svc) updateGrant(ctx context.Context, id *provider.ResourceId, g *provider.Grantee, p *provider.ResourcePermissions) (*rpc.Status, error) {
+func (s *svc) updateGrant(
+	ctx context.Context,
+	id *provider.ResourceId,
+	g *provider.Grantee,
+	p *provider.ResourcePermissions,
+) (*rpc.Status, error) {
 	ref := &provider.Reference{
 		ResourceId: id,
 	}
@@ -614,7 +694,12 @@ func (s *svc) updateGrant(ctx context.Context, id *provider.ResourceId, g *provi
 	return status.NewOK(ctx), nil
 }
 
-func (s *svc) removeGrant(ctx context.Context, id *provider.ResourceId, g *provider.Grantee, p *provider.ResourcePermissions) (*rpc.Status, error) {
+func (s *svc) removeGrant(
+	ctx context.Context,
+	id *provider.ResourceId,
+	g *provider.Grantee,
+	p *provider.ResourcePermissions,
+) (*rpc.Status, error) {
 	ref := &provider.Reference{
 		ResourceId: id,
 	}
