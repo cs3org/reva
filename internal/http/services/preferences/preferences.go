@@ -41,6 +41,8 @@ func init() {
 type Config struct {
 	Prefix     string `mapstructure:"prefix"`
 	GatewaySvc string `mapstructure:"gatewaysvc"`
+	Insecure   bool   `mapstructure:"insecure"`
+	SkipVerify bool   `mapstructure:"skipVerify"`
 }
 
 func (c *Config) init() {
@@ -57,7 +59,6 @@ type svc struct {
 
 // New returns a new ocmd object
 func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) {
-
 	conf := &Config{}
 	if err := mapstructure.Decode(m, conf); err != nil {
 		return nil, err
@@ -119,7 +120,11 @@ func (s *svc) handleGet(w http.ResponseWriter, r *http.Request) {
 
 	}
 
-	client, err := pool.GetGatewayServiceClient(pool.Endpoint(s.conf.GatewaySvc))
+	client, err := pool.GetGatewayServiceClient(
+		pool.Endpoint(s.conf.GatewaySvc),
+		pool.Insecure(s.conf.Insecure),
+		pool.SkipVerify(s.conf.SkipVerify),
+	)
 	if err != nil {
 		log.Error().Err(err).Msg("error getting grpc gateway client")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -164,7 +169,6 @@ func (s *svc) handleGet(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-
 }
 
 func (s *svc) handlePost(w http.ResponseWriter, r *http.Request) {
@@ -185,7 +189,11 @@ func (s *svc) handlePost(w http.ResponseWriter, r *http.Request) {
 
 	}
 
-	client, err := pool.GetGatewayServiceClient(pool.Endpoint(s.conf.GatewaySvc))
+	client, err := pool.GetGatewayServiceClient(
+		pool.Endpoint(s.conf.GatewaySvc),
+		pool.Insecure(s.conf.Insecure),
+		pool.SkipVerify(s.conf.SkipVerify),
+	)
 	if err != nil {
 		log.Error().Err(err).Msg("error getting grpc gateway client")
 		w.WriteHeader(http.StatusInternalServerError)

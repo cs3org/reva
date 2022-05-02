@@ -53,6 +53,8 @@ type config struct {
 	EOSNamespace string `mapstructure:"namespace"`
 	GatewaySvc   string `mapstructure:"gatewaysvc"`
 	JWTSecret    string `mapstructure:"jwt_secret"`
+	Insecure     bool   `mapstructure:"insecure"`
+	SkipVerify   bool   `mapstructure:"skip_verify"`
 }
 
 type manager struct {
@@ -75,7 +77,10 @@ func New(m map[string]interface{}) (cache.Warmup, error) {
 	if err != nil {
 		return nil, err
 	}
-	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%d)/%s", c.DbUsername, c.DbPassword, c.DbHost, c.DbPort, c.DbName))
+	db, err := sql.Open(
+		"mysql",
+		fmt.Sprintf("%s:%s@tcp(%s:%d)/%s", c.DbUsername, c.DbPassword, c.DbHost, c.DbPort, c.DbName),
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -119,7 +124,11 @@ func (m *manager) GetResourceInfos() ([]*provider.ResourceInfo, error) {
 	}
 	ctx := metadata.AppendToOutgoingContext(context.Background(), ctxpkg.TokenHeader, tkn)
 
-	client, err := pool.GetGatewayServiceClient(pool.Endpoint(m.conf.GatewaySvc))
+	client, err := pool.GetGatewayServiceClient(
+		pool.Endpoint(m.conf.GatewaySvc),
+		pool.Insecure(m.conf.Insecure),
+		pool.SkipVerify(m.conf.SkipVerify),
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -151,5 +160,4 @@ func (m *manager) GetResourceInfos() ([]*provider.ResourceInfo, error) {
 	}
 
 	return infos, nil
-
 }

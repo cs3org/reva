@@ -60,6 +60,8 @@ type config struct {
 	DbHost         string `mapstructure:"db_host"`
 	DbPort         int    `mapstructure:"db_port"`
 	DbName         string `mapstructure:"db_name"`
+	Insecure       bool   `mapstructure:"insecure"`
+	SkipVerify     bool   `mapstructure:"skip_verify"`
 }
 
 type mgr struct {
@@ -77,12 +79,15 @@ func NewMysql(m map[string]interface{}) (share.Manager, error) {
 		return nil, err
 	}
 
-	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%d)/%s", c.DbUsername, c.DbPassword, c.DbHost, c.DbPort, c.DbName))
+	db, err := sql.Open(
+		"mysql",
+		fmt.Sprintf("%s:%s@tcp(%s:%d)/%s", c.DbUsername, c.DbPassword, c.DbHost, c.DbPort, c.DbName),
+	)
 	if err != nil {
 		return nil, err
 	}
 
-	userConverter := NewGatewayUserConverter(c.GatewayAddr)
+	userConverter := NewGatewayUserConverter(c.GatewayAddr, c.Insecure, c.SkipVerify)
 
 	return New("mysql", db, c.StorageMountID, userConverter)
 }
@@ -105,7 +110,11 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 	return c, nil
 }
 
-func (m *mgr) Share(ctx context.Context, md *provider.ResourceInfo, g *collaboration.ShareGrant) (*collaboration.Share, error) {
+func (m *mgr) Share(
+	ctx context.Context,
+	md *provider.ResourceInfo,
+	g *collaboration.ShareGrant,
+) (*collaboration.Share, error) {
 	user := ctxpkg.ContextMustGetUser(ctx)
 
 	// do not allow share to myself or the owner if share is for a user
@@ -153,7 +162,18 @@ func (m *mgr) Share(ctx context.Context, md *provider.ResourceInfo, g *collabora
 	}
 
 	stmtString := "INSERT INTO oc_share (share_type,uid_owner,uid_initiator,item_type,item_source,file_source,permissions,stime,share_with,file_target) VALUES (?,?,?,?,?,?,?,?,?,?)"
-	stmtValues := []interface{}{shareType, owner, user.Username, itemType, itemSource, fileSource, permissions, now, shareWith, targetPath}
+	stmtValues := []interface{}{
+		shareType,
+		owner,
+		user.Username,
+		itemType,
+		itemSource,
+		fileSource,
+		permissions,
+		now,
+		shareWith,
+		targetPath,
+	}
 
 	stmt, err := m.db.Prepare(stmtString)
 	if err != nil {
@@ -241,7 +261,11 @@ func (m *mgr) Unshare(ctx context.Context, ref *collaboration.ShareReference) er
 	return nil
 }
 
-func (m *mgr) UpdateShare(ctx context.Context, ref *collaboration.ShareReference, p *collaboration.SharePermissions) (*collaboration.Share, error) {
+func (m *mgr) UpdateShare(
+	ctx context.Context,
+	ref *collaboration.ShareReference,
+	p *collaboration.SharePermissions,
+) (*collaboration.Share, error) {
 	permissions := sharePermToInt(p.Permissions)
 	uid := ctxpkg.ContextMustGetUser(ctx).Username
 
@@ -259,7 +283,18 @@ func (m *mgr) UpdateShare(ctx context.Context, ref *collaboration.ShareReference
 		}
 		owner := formatUserID(key.Owner)
 		query = "update oc_share set permissions=?,stime=? where (uid_owner=? or uid_initiator=?) AND item_source=? AND share_type=? AND share_with=? AND (uid_owner=? or uid_initiator=?)"
-		params = append(params, permissions, time.Now().Unix(), owner, owner, key.ResourceId.StorageId, shareType, shareWith, uid, uid)
+		params = append(
+			params,
+			permissions,
+			time.Now().Unix(),
+			owner,
+			owner,
+			key.ResourceId.StorageId,
+			shareType,
+			shareWith,
+			uid,
+			uid,
+		)
 	default:
 		return nil, errtypes.NotFound(ref.String())
 	}
@@ -327,7 +362,10 @@ func (m *mgr) ListShares(ctx context.Context, filters []*collaboration.Filter) (
 }
 
 // we list the shares that are targeted to the user in context or to the user groups.
-func (m *mgr) ListReceivedShares(ctx context.Context, filters []*collaboration.Filter) ([]*collaboration.ReceivedShare, error) {
+func (m *mgr) ListReceivedShares(
+	ctx context.Context,
+	filters []*collaboration.Filter,
+) ([]*collaboration.ReceivedShare, error) {
 	user := ctxpkg.ContextMustGetUser(ctx)
 	uid := user.Username
 
@@ -384,7 +422,10 @@ func (m *mgr) ListReceivedShares(ctx context.Context, filters []*collaboration.F
 	return shares, nil
 }
 
-func (m *mgr) GetReceivedShare(ctx context.Context, ref *collaboration.ShareReference) (*collaboration.ReceivedShare, error) {
+func (m *mgr) GetReceivedShare(
+	ctx context.Context,
+	ref *collaboration.ShareReference,
+) (*collaboration.ReceivedShare, error) {
 	var s *collaboration.ReceivedShare
 	var err error
 	switch {
@@ -401,11 +442,17 @@ func (m *mgr) GetReceivedShare(ctx context.Context, ref *collaboration.ShareRefe
 	}
 
 	return s, nil
-
 }
 
-func (m *mgr) UpdateReceivedShare(ctx context.Context, share *collaboration.ReceivedShare, fieldMask *field_mask.FieldMask) (*collaboration.ReceivedShare, error) {
-	rs, err := m.GetReceivedShare(ctx, &collaboration.ShareReference{Spec: &collaboration.ShareReference_Id{Id: share.Share.Id}})
+func (m *mgr) UpdateReceivedShare(
+	ctx context.Context,
+	share *collaboration.ReceivedShare,
+	fieldMask *field_mask.FieldMask,
+) (*collaboration.ReceivedShare, error) {
+	rs, err := m.GetReceivedShare(
+		ctx,
+		&collaboration.ShareReference{Spec: &collaboration.ShareReference_Id{Id: share.Share.Id}},
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -510,7 +557,15 @@ func (m *mgr) getReceivedByKey(ctx context.Context, key *collaboration.ShareKey)
 	if err != nil {
 		return nil, err
 	}
-	params := []interface{}{uid, formatUserID(key.Owner), key.ResourceId.StorageId, key.ResourceId.OpaqueId, shareType, shareWith, shareWith}
+	params := []interface{}{
+		uid,
+		formatUserID(key.Owner),
+		key.ResourceId.StorageId,
+		key.ResourceId.OpaqueId,
+		shareType,
+		shareWith,
+		shareWith,
+	}
 	for _, v := range user.Groups {
 		params = append(params, v)
 	}
@@ -554,7 +609,7 @@ func translateFilters(filters []*collaboration.Filter) (string, []interface{}, e
 	// That is why the filters got grouped by type.
 	// For every given filter type, iterate over the filters and if there are more than one combine them.
 	// Combine the different filter types using `AND`
-	var filterCounter = 0
+	filterCounter := 0
 	for filterType, filters := range groupedFilters {
 		switch filterType {
 		case collaboration.Filter_TYPE_RESOURCE_ID:

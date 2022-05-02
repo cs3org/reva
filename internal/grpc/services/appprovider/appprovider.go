@@ -58,6 +58,8 @@ type config struct {
 	GatewaySvc     string                            `mapstructure:"gatewaysvc"`
 	MimeTypes      []string                          `mapstructure:"mime_types"`
 	Priority       uint64                            `mapstructure:"priority"`
+	Insecure       bool                              `mapstructure:"insecure"`
+	SkipVerify     bool                              `mapstructure:"SkipVerify"`
 }
 
 func (c *config) init() {
@@ -120,7 +122,11 @@ func (s *service) registerProvider() {
 		pInfo.MimeTypes = mimeTypes
 	}
 
-	client, err := pool.GetGatewayServiceClient(pool.Endpoint(s.conf.GatewaySvc))
+	client, err := pool.GetGatewayServiceClient(
+		pool.Endpoint(s.conf.GatewaySvc),
+		pool.Insecure(s.conf.Insecure),
+		pool.SkipVerify(s.conf.SkipVerify),
+	)
 	if err != nil {
 		log.Error().Err(err).Msgf("error registering app provider: could not get gateway client")
 		return

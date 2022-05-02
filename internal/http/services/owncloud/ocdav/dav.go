@@ -175,7 +175,11 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 		case "public-files":
 			base := path.Join(ctx.Value(ctxKeyBaseURI).(string), "public-files")
 			ctx = context.WithValue(ctx, ctxKeyBaseURI, base)
-			c, err := pool.GetGatewayServiceClient(pool.Endpoint(s.c.GatewaySvc))
+			c, err := pool.GetGatewayServiceClient(
+				pool.Endpoint(s.c.GatewaySvc),
+				pool.Insecure(s.c.Insecure),
+				pool.SkipVerify(s.c.SkipVerify),
+			)
 			if err != nil {
 				w.WriteHeader(http.StatusNotFound)
 			}

@@ -61,3 +61,24 @@ func MaxCallRecvMsgSize(size int) Option {
 		o.MaxCallRecvMsgSize = size
 	}
 }
+
+// Insecure provides a function to set the Insecure option.
+func Insecure(insecure bool) Option {
+	return func(o *Options) {
+		o.Insecure = insecure
+	}
+}
+
+// SkipVerify provides a function to set the SkipVerify option.
+func SkipVerify(skipVerify bool) Option {
+	return func(o *Options) {
+		o.SkipVerify = skipVerify
+	}
+}
+
+// CACertFile provides a function to set the CACertFile option.
+func CACertFile(caCertFile string) Option {
+	return func(o *Options) {
+		o.CACertFile = caCertFile
+	}
+}

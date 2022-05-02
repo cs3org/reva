@@ -42,6 +42,8 @@ type Config struct {
 	GatewaySvc       string                      `mapstructure:"gatewaysvc"`
 	MeshDirectoryURL string                      `mapstructure:"mesh_directory_url"`
 	Config           configData                  `mapstructure:"config"`
+	Insecure         bool                        `mapstructure:"insecure"`
+	SkipVerify       bool                        `mapstructure:"skip_verify"`
 }
 
 func (c *Config) init() {

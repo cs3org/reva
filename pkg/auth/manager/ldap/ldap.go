@@ -49,7 +49,7 @@ type mgr struct {
 }
 
 type config struct {
-	utils.LDAPConn `mapstructure:",squash"`
+	utils.LDAPConn `           mapstructure:",squash"`
 	BaseDN         string     `mapstructure:"base_dn"`
 	UserFilter     string     `mapstructure:"userfilter"`
 	LoginFilter    string     `mapstructure:"loginfilter"`
@@ -57,6 +57,8 @@ type config struct {
 	GatewaySvc     string     `mapstructure:"gatewaysvc"`
 	Schema         attributes `mapstructure:"schema"`
 	Nobody         int64      `mapstructure:"nobody"`
+	Insecure       bool       `mapstructure:"insecure"`
+	SkipVerify     bool       `mapstructure:"skip_verify"`
 }
 
 type attributes struct {
@@ -116,7 +118,9 @@ func (am *mgr) Configure(m map[string]interface{}) error {
 
 	// backwards compatibility
 	if c.UserFilter != "" {
-		logger.New().Warn().Msg("userfilter is deprecated, use a loginfilter like `(&(objectclass=posixAccount)(|(cn={{login}}))(mail={{login}}))`")
+		logger.New().
+			Warn().
+			Msg("userfilter is deprecated, use a loginfilter like `(&(objectclass=posixAccount)(|(cn={{login}}))(mail={{login}}))`")
 	}
 	if c.LoginFilter == "" {
 		c.LoginFilter = c.UserFilter
@@ -131,7 +135,10 @@ func (am *mgr) Configure(m map[string]interface{}) error {
 	return nil
 }
 
-func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) (*user.User, map[string]*authpb.Scope, error) {
+func (am *mgr) Authenticate(
+	ctx context.Context,
+	clientID, clientSecret string,
+) (*user.User, map[string]*authpb.Scope, error) {
 	log := appctx.GetLogger(ctx)
 	l, err := utils.GetLDAPConnection(&am.c.LDAPConn)
 	if err != nil {
@@ -142,9 +149,21 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 	// Search for the given clientID
 	searchRequest := ldap.NewSearchRequest(
 		am.c.BaseDN,
-		ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 0, 0, false,
+		ldap.ScopeWholeSubtree,
+		ldap.NeverDerefAliases,
+		0,
+		0,
+		false,
 		am.getLoginFilter(clientID),
-		[]string{am.c.Schema.DN, am.c.Schema.UID, am.c.Schema.CN, am.c.Schema.Mail, am.c.Schema.DisplayName, am.c.Schema.UIDNumber, am.c.Schema.GIDNumber},
+		[]string{
+			am.c.Schema.DN,
+			am.c.Schema.UID,
+			am.c.Schema.CN,
+			am.c.Schema.Mail,
+			am.c.Schema.DisplayName,
+			am.c.Schema.UIDNumber,
+			am.c.Schema.GIDNumber,
+		},
 		nil,
 	)
 
@@ -171,7 +190,11 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 		OpaqueId: sr.Entries[0].GetEqualFoldAttributeValue(am.c.Schema.UID),
 		Type:     user.UserType_USER_TYPE_PRIMARY, // TODO: assign the appropriate user type
 	}
-	gwc, err := pool.GetGatewayServiceClient(pool.Endpoint(am.c.GatewaySvc))
+	gwc, err := pool.GetGatewayServiceClient(
+		pool.Endpoint(am.c.GatewaySvc),
+		pool.Insecure(am.c.Insecure),
+		pool.SkipVerify(am.c.SkipVerify),
+	)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "ldap: error getting gateway grpc client")
 	}
@@ -228,7 +251,6 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 	log.Debug().Interface("entry", sr.Entries[0]).Interface("user", u).Msg("authenticated user")
 
 	return u, scopes, nil
-
 }
 
 func (am *mgr) getLoginFilter(login string) string {

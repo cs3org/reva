@@ -43,10 +43,14 @@ import (
 
 type sharesHandler struct {
 	gatewayAddr string
+	insecure bool
+	skipVerify bool
 }
 
 func (h *sharesHandler) init(c *Config) {
 	h.gatewayAddr = c.GatewaySvc
+	h.insecure = c.Insecure
+	h.skipVerify = c.SkipVerify
 }
 
 func (h *sharesHandler) Handler() http.Handler {
@@ -109,7 +113,11 @@ func (h *sharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	gatewayClient, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	gatewayClient, err := pool.GetGatewayServiceClient(
+		pool.Endpoint(h.gatewayAddr),
+		pool.Insecure(h.insecure),
+		pool.SkipVerify(h.skipVerify),
+	)
 	if err != nil {
 		WriteError(w, r, APIErrorServerError, "error getting storage grpc client", err)
 		return

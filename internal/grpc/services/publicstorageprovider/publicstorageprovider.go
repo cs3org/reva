@@ -52,6 +52,8 @@ type config struct {
 	MountPath   string `mapstructure:"mount_path"`
 	MountID     string `mapstructure:"mount_id"`
 	GatewayAddr string `mapstructure:"gateway_addr"`
+	Insecure    bool   `mapstructure:"insecure"`
+	SkipVerify  bool   `mapstructure:"SkipVerify"`
 }
 
 type service struct {
@@ -92,7 +94,11 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 	mountPath := c.MountPath
 	mountID := c.MountID
 
-	gateway, err := pool.GetGatewayServiceClient(pool.Endpoint(c.GatewayAddr))
+	gateway, err := pool.GetGatewayServiceClient(
+		pool.Endpoint(c.GatewayAddr),
+		pool.Insecure(c.Insecure),
+		pool.SkipVerify(c.SkipVerify),
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -777,7 +783,11 @@ func (s *service) trimMountPrefix(fn string) (string, error) {
 
 // resolveToken returns the path and share for the publicly shared resource.
 func (s *service) resolveToken(ctx context.Context, token string) (*link.PublicShare, *provider.ResourceInfo, *rpc.Status, error) {
-	driver, err := pool.GetGatewayServiceClient(pool.Endpoint(s.conf.GatewayAddr))
+	driver, err := pool.GetGatewayServiceClient(
+		pool.Endpoint(s.conf.GatewayAddr),
+		pool.Insecure(s.conf.Insecure),
+		pool.SkipVerify(s.conf.SkipVerify),
+	)
 	if err != nil {
 		return nil, nil, nil, err
 	}

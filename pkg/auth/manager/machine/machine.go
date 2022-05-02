@@ -44,6 +44,8 @@ var claims = []string{"mail", "uid", "username", "gid", "userid"}
 type manager struct {
 	APIKey      string `mapstructure:"api_key"`
 	GatewayAddr string `mapstructure:"gateway_addr"`
+	Insecure    bool   `mapstructure:"insecure"`
+	SkipVerify  bool   `mapstructure:"skip_verify"`
 }
 
 func init() {
@@ -70,12 +72,19 @@ func New(conf map[string]interface{}) (auth.Manager, error) {
 }
 
 // Authenticate impersonate an user if the provided secret is equal to the api-key
-func (m *manager) Authenticate(ctx context.Context, user, secret string) (*userpb.User, map[string]*authpb.Scope, error) {
+func (m *manager) Authenticate(
+	ctx context.Context,
+	user, secret string,
+) (*userpb.User, map[string]*authpb.Scope, error) {
 	if m.APIKey != secret {
 		return nil, nil, errtypes.InvalidCredentials("")
 	}
 
-	gtw, err := pool.GetGatewayServiceClient(pool.Endpoint(m.GatewayAddr))
+	gtw, err := pool.GetGatewayServiceClient(
+		pool.Endpoint(m.GatewayAddr),
+		pool.Insecure(m.Insecure),
+		pool.SkipVerify(m.SkipVerify),
+	)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -104,7 +113,6 @@ func (m *manager) Authenticate(ctx context.Context, user, secret string) (*userp
 	}
 
 	return userResponse.GetUser(), scope, nil
-
 }
 
 func contains(lst []string, s string) bool {

@@ -61,11 +61,12 @@ type Config struct {
 	Prefix         string   `mapstructure:"prefix"`
 	GatewaySvc     string   `mapstructure:"gatewaysvc"`
 	Timeout        int64    `mapstructure:"timeout"`
-	Insecure       bool     `mapstructure:"insecure"`
 	Name           string   `mapstructure:"name"`
 	MaxNumFiles    int64    `mapstructure:"max_num_files"`
 	MaxSize        int64    `mapstructure:"max_size"`
 	AllowedFolders []string `mapstructure:"allowed_folders"`
+	Insecure       bool     `mapstructure:"insecure"`
+	SkipVerify     bool     `mapstructure:"skip_verify"`
 }
 
 func init() {
@@ -82,7 +83,11 @@ func New(conf map[string]interface{}, log *zerolog.Logger) (global.Service, erro
 
 	c.init()
 
-	gtw, err := pool.GetGatewayServiceClient(pool.Endpoint(c.GatewaySvc))
+	gtw, err := pool.GetGatewayServiceClient(
+		pool.Endpoint(c.GatewaySvc),
+		pool.Insecure(c.Insecure),
+		pool.SkipVerify(c.SkipVerify),
+	)
 	if err != nil {
 		return nil, err
 	}

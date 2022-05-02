@@ -48,6 +48,8 @@ type manager struct {
 
 type config struct {
 	GatewayAddr string `mapstructure:"gateway_addr"`
+	Insecure    bool   `mapstructure:"insecure"`
+	SkipVerify  bool   `mapstructure:"skip_verify"`
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -78,8 +80,15 @@ func (m *manager) Configure(ml map[string]interface{}) error {
 	return nil
 }
 
-func (m *manager) Authenticate(ctx context.Context, token, secret string) (*user.User, map[string]*authpb.Scope, error) {
-	gwConn, err := pool.GetGatewayServiceClient(pool.Endpoint(m.c.GatewayAddr))
+func (m *manager) Authenticate(
+	ctx context.Context,
+	token, secret string,
+) (*user.User, map[string]*authpb.Scope, error) {
+	gwConn, err := pool.GetGatewayServiceClient(
+		pool.Endpoint(m.c.GatewayAddr),
+		pool.Insecure(m.c.Insecure),
+		pool.SkipVerify(m.c.SkipVerify),
+	)
 	if err != nil {
 		return nil, nil, err
 	}

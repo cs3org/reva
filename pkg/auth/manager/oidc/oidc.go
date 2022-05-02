@@ -58,20 +58,21 @@ type mgr struct {
 }
 
 type config struct {
-	Insecure     bool   `mapstructure:"insecure" docs:"false;Whether to skip certificate checks when sending requests."`
-	Issuer       string `mapstructure:"issuer" docs:";The issuer of the OIDC token."`
-	IDClaim      string `mapstructure:"id_claim" docs:"sub;The claim containing the ID of the user."`
-	UIDClaim     string `mapstructure:"uid_claim" docs:";The claim containing the UID of the user."`
-	GIDClaim     string `mapstructure:"gid_claim" docs:";The claim containing the GID of the user."`
-	GatewaySvc   string `mapstructure:"gatewaysvc" docs:";The endpoint at which the GRPC gateway is exposed."`
+	Issuer       string `mapstructure:"issuer"        docs:";The issuer of the OIDC token."`
+	IDClaim      string `mapstructure:"id_claim"      docs:"sub;The claim containing the ID of the user."`
+	UIDClaim     string `mapstructure:"uid_claim"     docs:";The claim containing the UID of the user."`
+	GIDClaim     string `mapstructure:"gid_claim"     docs:";The claim containing the GID of the user."`
+	GatewaySvc   string `mapstructure:"gatewaysvc"    docs:";The endpoint at which the GRPC gateway is exposed."`
 	UsersMapping string `mapstructure:"users_mapping" docs:"; The optional OIDC users mapping file path"`
-	GroupClaim   string `mapstructure:"group_claim" docs:"; The group claim to be looked up to map the user (default to 'groups')."`
+	GroupClaim   string `mapstructure:"group_claim"   docs:"; The group claim to be looked up to map the user (default to 'groups')."`
+	Insecure     bool   `mapstructure:"insecure"      docs:"false;Whether to skip certificate checks when sending requests."`
+	SkipVerify   bool   `mapstructure:"skip_verify"   docs:"false;Whether to skip verifying certificate when sending requests."`
 }
 
 type oidcUserMapping struct {
 	OIDCIssuer string `mapstructure:"oidc_issuer" json:"oidc_issuer"`
-	OIDCGroup  string `mapstructure:"oidc_group" json:"oidc_group"`
-	Username   string `mapstructure:"username" json:"username"`
+	OIDCGroup  string `mapstructure:"oidc_group"  json:"oidc_group"`
+	Username   string `mapstructure:"username"    json:"username"`
 }
 
 func (c *config) init() {
@@ -147,7 +148,10 @@ func (am *mgr) Configure(m map[string]interface{}) error {
 // The clientID would be empty as we only need to validate the clientSecret variable
 // which contains the access token that we can use to contact the UserInfo endpoint
 // and get the user claims.
-func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) (*user.User, map[string]*authpb.Scope, error) {
+func (am *mgr) Authenticate(
+	ctx context.Context,
+	clientID, clientSecret string,
+) (*user.User, map[string]*authpb.Scope, error) {
 	ctx = am.getOAuthCtx(ctx)
 	log := appctx.GetLogger(ctx)
 
@@ -193,14 +197,20 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 		claims["name"] = claims[am.c.IDClaim]
 	}
 	if claims["name"] == nil {
-		return nil, nil, fmt.Errorf("no \"name\" attribute found in userinfo: maybe the client did not request the oidc \"profile\"-scope")
+		return nil, nil, fmt.Errorf(
+			"no \"name\" attribute found in userinfo: maybe the client did not request the oidc \"profile\"-scope",
+		)
 	}
 	if claims["email"] == nil {
-		return nil, nil, fmt.Errorf("no \"email\" attribute found in userinfo: maybe the client did not request the oidc \"email\"-scope")
+		return nil, nil, fmt.Errorf(
+			"no \"email\" attribute found in userinfo: maybe the client did not request the oidc \"email\"-scope",
+		)
 	}
 
 	uid, _ := claims[am.c.UIDClaim].(float64)
-	claims[am.c.UIDClaim] = int64(uid) // in case the uid claim is missing and a mapping is to be performed, resolveUser() will populate it
+	claims[am.c.UIDClaim] = int64(
+		uid,
+	) // in case the uid claim is missing and a mapping is to be performed, resolveUser() will populate it
 	// Note that if not, will silently carry a user with 0 uid, potentially problematic with storage providers
 	gid, _ := claims[am.c.GIDClaim].(float64)
 	claims[am.c.GIDClaim] = int64(gid)
@@ -216,7 +226,11 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 		Type:     getUserType(claims[am.c.IDClaim].(string)),
 	}
 
-	gwc, err := pool.GetGatewayServiceClient(pool.Endpoint(am.c.GatewaySvc))
+	gwc, err := pool.GetGatewayServiceClient(
+		pool.Endpoint(am.c.GatewaySvc),
+		pool.Insecure(am.c.Insecure),
+		pool.SkipVerify(am.c.SkipVerify),
+	)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "oidc: error getting gateway grpc client")
 	}
@@ -242,7 +256,8 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 	}
 
 	var scopes map[string]*authpb.Scope
-	if userID != nil && (userID.Type == user.UserType_USER_TYPE_LIGHTWEIGHT || userID.Type == user.UserType_USER_TYPE_FEDERATED) {
+	if userID != nil &&
+		(userID.Type == user.UserType_USER_TYPE_LIGHTWEIGHT || userID.Type == user.UserType_USER_TYPE_FEDERATED) {
 		scopes, err = scope.AddLightweightAccountScope(authpb.Role_ROLE_OWNER, nil)
 		if err != nil {
 			return nil, nil, err
@@ -285,7 +300,6 @@ func (am *mgr) getOIDCProvider(ctx context.Context) (*oidc.Provider, error) {
 	// The provider is responsible to verify the token sent by the client
 	// against the security keys oftentimes available in the .well-known endpoint.
 	provider, err := oidc.NewProvider(ctx, am.c.Issuer)
-
 	if err != nil {
 		log.Error().Err(err).Msg("oidc: error creating a new oidc provider")
 		return nil, fmt.Errorf("oidc: error creating a new oidc provider: %+v", err)
@@ -344,7 +358,11 @@ func (am *mgr) resolveUser(ctx context.Context, claims map[string]interface{}) e
 		claims["iss"] = getUserByClaimResp.GetUser().GetId().Idp
 		claims[am.c.UIDClaim] = getUserByClaimResp.GetUser().UidNumber
 		claims[am.c.GIDClaim] = getUserByClaimResp.GetUser().GidNumber
-		appctx.GetLogger(ctx).Debug().Str("username", username).Interface("claims", claims).Msg("resolveUser: claims overridden from mapped user")
+		appctx.GetLogger(ctx).
+			Debug().
+			Str("username", username).
+			Interface("claims", claims).
+			Msg("resolveUser: claims overridden from mapped user")
 	}
 	return nil
 }

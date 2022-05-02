@@ -46,6 +46,8 @@ func init() {
 type config struct {
 	Prefix     string `mapstructure:"prefix"`
 	GatewaySvc string `mapstructure:"gatewaysvc"`
+	Insecure   bool   `mapstructure:"insecure"`
+	SkipVerify bool   `mapstructure:"skip_verify"`
 }
 
 func (c *config) init() {
@@ -100,7 +102,11 @@ func (s *svc) Close() error {
 }
 
 func (s *svc) getClient() (gateway.GatewayAPIClient, error) {
-	return pool.GetGatewayServiceClient(pool.Endpoint(s.conf.GatewaySvc))
+	return pool.GetGatewayServiceClient(
+		pool.Endpoint(s.conf.GatewaySvc),
+		pool.Insecure(s.conf.Insecure),
+		pool.SkipVerify(s.conf.SkipVerify),
+	)
 }
 
 func (s *svc) serveJSON(w http.ResponseWriter, r *http.Request) {

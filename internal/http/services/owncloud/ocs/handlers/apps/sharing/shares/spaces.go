@@ -40,7 +40,11 @@ import (
 
 func (h *Handler) getGrantee(ctx context.Context, name string) (provider.Grantee, error) {
 	log := appctx.GetLogger(ctx)
-	client, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	client, err := pool.GetGatewayServiceClient(
+		pool.Endpoint(h.gatewayAddr),
+		pool.Insecure(h.insecure),
+		pool.SkipVerify(h.skipVerify),
+	)
 	if err != nil {
 		return provider.Grantee{}, err
 	}
@@ -71,7 +75,13 @@ func (h *Handler) getGrantee(ctx context.Context, name string) (provider.Grantee
 	return provider.Grantee{}, fmt.Errorf("no grantee found with name %s", name)
 }
 
-func (h *Handler) addSpaceMember(w http.ResponseWriter, r *http.Request, info *provider.ResourceInfo, role *conversions.Role, roleVal []byte) {
+func (h *Handler) addSpaceMember(
+	w http.ResponseWriter,
+	r *http.Request,
+	info *provider.ResourceInfo,
+	role *conversions.Role,
+	roleVal []byte,
+) {
 	ctx := r.Context()
 
 	shareWith := r.FormValue("shareWith")
@@ -185,7 +195,6 @@ func (h *Handler) findProviders(ctx context.Context, ref *provider.Reference) ([
 	res, err := c.GetStorageProviders(ctx, &registry.GetStorageProvidersRequest{
 		Ref: ref,
 	})
-
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error calling GetStorageProvider")
 	}
@@ -195,11 +204,17 @@ func (h *Handler) findProviders(ctx context.Context, ref *provider.Reference) ([
 		case rpc.Code_CODE_NOT_FOUND:
 			return nil, errtypes.NotFound("gateway: storage provider not found for reference:" + ref.String())
 		case rpc.Code_CODE_PERMISSION_DENIED:
-			return nil, errtypes.PermissionDenied("gateway: " + res.Status.Message + " for " + ref.String() + " with code " + res.Status.Code.String())
+			return nil, errtypes.PermissionDenied(
+				"gateway: " + res.Status.Message + " for " + ref.String() + " with code " + res.Status.Code.String(),
+			)
 		case rpc.Code_CODE_INVALID_ARGUMENT, rpc.Code_CODE_FAILED_PRECONDITION, rpc.Code_CODE_OUT_OF_RANGE:
-			return nil, errtypes.BadRequest("gateway: " + res.Status.Message + " for " + ref.String() + " with code " + res.Status.Code.String())
+			return nil, errtypes.BadRequest(
+				"gateway: " + res.Status.Message + " for " + ref.String() + " with code " + res.Status.Code.String(),
+			)
 		case rpc.Code_CODE_UNIMPLEMENTED:
-			return nil, errtypes.NotSupported("gateway: " + res.Status.Message + " for " + ref.String() + " with code " + res.Status.Code.String())
+			return nil, errtypes.NotSupported(
+				"gateway: " + res.Status.Message + " for " + ref.String() + " with code " + res.Status.Code.String(),
+			)
 		default:
 			return nil, status.NewErrorFromCode(res.Status.Code, "gateway")
 		}

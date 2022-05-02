@@ -49,7 +49,11 @@ func (h *Handler) updateReceivedShare(w http.ResponseWriter, r *http.Request, sh
 	ctx := r.Context()
 	logger := appctx.GetLogger(ctx)
 
-	client, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	client, err := pool.GetGatewayServiceClient(
+		pool.Endpoint(h.gatewayAddr),
+		pool.Insecure(h.insecure),
+		pool.SkipVerify(h.skipVerify),
+	)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
 		return
@@ -70,7 +74,13 @@ func (h *Handler) updateReceivedShare(w http.ResponseWriter, r *http.Request, sh
 
 	shareRes, err := client.UpdateReceivedShare(ctx, shareRequest)
 	if err != nil {
-		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "grpc update received share request failed", err)
+		response.WriteOCSError(
+			w,
+			r,
+			response.MetaServerError.StatusCode,
+			"grpc update received share request failed",
+			err,
+		)
 		return
 	}
 
@@ -79,7 +89,13 @@ func (h *Handler) updateReceivedShare(w http.ResponseWriter, r *http.Request, sh
 			response.WriteOCSError(w, r, response.MetaNotFound.StatusCode, "not found", nil)
 			return
 		}
-		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "grpc update received share request failed", errors.Errorf("code: %d, message: %s", shareRes.Status.Code, shareRes.Status.Message))
+		response.WriteOCSError(
+			w,
+			r,
+			response.MetaServerError.StatusCode,
+			"grpc update received share request failed",
+			errors.Errorf("code: %d, message: %s", shareRes.Status.Code, shareRes.Status.Message),
+		)
 		return
 	}
 
@@ -92,13 +108,22 @@ func (h *Handler) updateReceivedShare(w http.ResponseWriter, r *http.Request, sh
 
 	data, err := conversions.CS3Share2ShareData(r.Context(), rs.Share)
 	if err != nil {
-		logger.Debug().Interface("share", rs.Share).Interface("shareData", data).Err(err).Msg("could not CS3Share2ShareData, skipping")
+		logger.Debug().
+			Interface("share", rs.Share).
+			Interface("shareData", data).
+			Err(err).
+			Msg("could not CS3Share2ShareData, skipping")
 	}
 
 	data.State = mapState(rs.GetState())
 
 	if err := h.addFileInfo(ctx, data, info); err != nil {
-		logger.Debug().Interface("received_share", rs).Interface("info", info).Interface("shareData", data).Err(err).Msg("could not add file info, skipping")
+		logger.Debug().
+			Interface("received_share", rs).
+			Interface("info", info).
+			Interface("shareData", data).
+			Err(err).
+			Msg("could not add file info, skipping")
 	}
 	h.mapUserIds(r.Context(), client, data)
 

@@ -42,10 +42,14 @@ import (
 
 type sendHandler struct {
 	GatewaySvc string
+	Insecure   bool
+	SkipVerify bool
 }
 
 func (h *sendHandler) init(c *Config) {
 	h.GatewaySvc = c.GatewaySvc
+	h.Insecure = c.Insecure
+	h.SkipVerify = c.SkipVerify
 }
 
 func (h *sendHandler) Handler() http.Handler {
@@ -80,7 +84,11 @@ func (h *sendHandler) Handler() http.Handler {
 		// "loginPassword": "Ny4Nv6WLoC1o70kVgrVOZLZ2vRgPjuej"
 
 		gatewayAddr := h.GatewaySvc
-		gatewayClient, err := pool.GetGatewayServiceClient(pool.Endpoint(gatewayAddr))
+		gatewayClient, err := pool.GetGatewayServiceClient(
+			pool.Endpoint(gatewayAddr),
+			pool.Insecure(h.Insecure),
+			pool.SkipVerify(h.SkipVerify),
+		)
 		if err != nil {
 			log.Error().Msg("cannot get grpc client!")
 			w.WriteHeader(http.StatusInternalServerError)

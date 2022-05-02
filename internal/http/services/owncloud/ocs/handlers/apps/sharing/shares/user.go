@@ -33,9 +33,19 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 )
 
-func (h *Handler) createUserShare(w http.ResponseWriter, r *http.Request, statInfo *provider.ResourceInfo, role *conversions.Role, roleVal []byte) {
+func (h *Handler) createUserShare(
+	w http.ResponseWriter,
+	r *http.Request,
+	statInfo *provider.ResourceInfo,
+	role *conversions.Role,
+	roleVal []byte,
+) {
 	ctx := r.Context()
-	c, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	c, err := pool.GetGatewayServiceClient(
+		pool.Endpoint(h.gatewayAddr),
+		pool.Insecure(h.insecure),
+		pool.SkipVerify(h.skipVerify),
+	)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
 		return
@@ -88,7 +98,11 @@ func (h *Handler) createUserShare(w http.ResponseWriter, r *http.Request, statIn
 
 func (h *Handler) isUserShare(r *http.Request, oid string) bool {
 	logger := appctx.GetLogger(r.Context())
-	client, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	client, err := pool.GetGatewayServiceClient(
+		pool.Endpoint(h.gatewayAddr),
+		pool.Insecure(h.insecure),
+		pool.SkipVerify(h.skipVerify),
+	)
 	if err != nil {
 		logger.Err(err)
 	}
@@ -113,7 +127,11 @@ func (h *Handler) isUserShare(r *http.Request, oid string) bool {
 func (h *Handler) removeUserShare(w http.ResponseWriter, r *http.Request, shareID string) {
 	ctx := r.Context()
 
-	uClient, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	uClient, err := pool.GetGatewayServiceClient(
+		pool.Endpoint(h.gatewayAddr),
+		pool.Insecure(h.insecure),
+		pool.SkipVerify(h.skipVerify),
+	)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
 		return
@@ -129,7 +147,13 @@ func (h *Handler) removeUserShare(w http.ResponseWriter, r *http.Request, shareI
 	// Get the share, so that we can include it in the response.
 	getShareResp, err := uClient.GetShare(ctx, &collaboration.GetShareRequest{Ref: shareRef})
 	if err != nil {
-		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error sending a grpc delete share request", err)
+		response.WriteOCSError(
+			w,
+			r,
+			response.MetaServerError.StatusCode,
+			"error sending a grpc delete share request",
+			err,
+		)
 		return
 	} else if getShareResp.Status.Code != rpc.Code_CODE_OK {
 		if getShareResp.Status.Code == rpc.Code_CODE_NOT_FOUND {
@@ -151,7 +175,13 @@ func (h *Handler) removeUserShare(w http.ResponseWriter, r *http.Request, shareI
 	uReq := &collaboration.RemoveShareRequest{Ref: shareRef}
 	uRes, err := uClient.RemoveShare(ctx, uReq)
 	if err != nil {
-		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error sending a grpc delete share request", err)
+		response.WriteOCSError(
+			w,
+			r,
+			response.MetaServerError.StatusCode,
+			"error sending a grpc delete share request",
+			err,
+		)
 		return
 	}
 
@@ -166,7 +196,10 @@ func (h *Handler) removeUserShare(w http.ResponseWriter, r *http.Request, shareI
 	response.WriteOCSSuccess(w, r, data)
 }
 
-func (h *Handler) listUserShares(r *http.Request, filters []*collaboration.Filter) ([]*conversions.ShareData, *rpc.Status, error) {
+func (h *Handler) listUserShares(
+	r *http.Request,
+	filters []*collaboration.Filter,
+) ([]*conversions.ShareData, *rpc.Status, error) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
@@ -177,7 +210,11 @@ func (h *Handler) listUserShares(r *http.Request, filters []*collaboration.Filte
 	ocsDataPayload := make([]*conversions.ShareData, 0)
 	if h.gatewayAddr != "" {
 		// get a connection to the users share provider
-		client, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+		client, err := pool.GetGatewayServiceClient(
+			pool.Endpoint(h.gatewayAddr),
+			pool.Insecure(h.insecure),
+			pool.SkipVerify(h.skipVerify),
+		)
 		if err != nil {
 			return ocsDataPayload, nil, err
 		}
@@ -195,18 +232,32 @@ func (h *Handler) listUserShares(r *http.Request, filters []*collaboration.Filte
 		for _, s := range lsUserSharesResponse.Shares {
 			data, err := conversions.CS3Share2ShareData(ctx, s)
 			if err != nil {
-				log.Debug().Interface("share", s).Interface("shareData", data).Err(err).Msg("could not CS3Share2ShareData, skipping")
+				log.Debug().
+					Interface("share", s).
+					Interface("shareData", data).
+					Err(err).
+					Msg("could not CS3Share2ShareData, skipping")
 				continue
 			}
 
 			info, status, err := h.getResourceInfoByID(ctx, client, s.ResourceId)
 			if err != nil || status.Code != rpc.Code_CODE_OK {
-				log.Debug().Interface("share", s).Interface("status", status).Interface("shareData", data).Err(err).Msg("could not stat share, skipping")
+				log.Debug().
+					Interface("share", s).
+					Interface("status", status).
+					Interface("shareData", data).
+					Err(err).
+					Msg("could not stat share, skipping")
 				continue
 			}
 
 			if err := h.addFileInfo(ctx, data, info); err != nil {
-				log.Debug().Interface("share", s).Interface("info", info).Interface("shareData", data).Err(err).Msg("could not add file info, skipping")
+				log.Debug().
+					Interface("share", s).
+					Interface("info", info).
+					Interface("shareData", data).
+					Err(err).
+					Msg("could not add file info, skipping")
 				continue
 			}
 			h.mapUserIds(ctx, client, data)

@@ -50,7 +50,10 @@ const (
 )
 
 // CreateStorageSpace creates a storage space
-func (fs *Decomposedfs) CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error) {
+func (fs *Decomposedfs) CreateStorageSpace(
+	ctx context.Context,
+	req *provider.CreateStorageSpaceRequest,
+) (*provider.CreateStorageSpaceResponse, error) {
 	// spaces will be located by default in the root of the storage.
 	r, err := fs.lu.RootNode(ctx)
 	if err != nil {
@@ -158,7 +161,10 @@ func (fs *Decomposedfs) CreateStorageSpace(ctx context.Context, req *provider.Cr
 // The list can be filtered by space type or space id.
 // Spaces are persisted with symlinks in /spaces/<type>/<spaceid> pointing to ../../nodes/<nodeid>, the root node of the space
 // The spaceid is a concatenation of storageid + "!" + nodeid
-func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter) ([]*provider.StorageSpace, error) {
+func (fs *Decomposedfs) ListStorageSpaces(
+	ctx context.Context,
+	filter []*provider.ListStorageSpacesRequest_Filter,
+) ([]*provider.StorageSpace, error) {
 	// TODO check filters
 
 	// TODO when a space symlink is broken delete the space for cleanup
@@ -202,7 +208,11 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 		return spaces, nil
 	}
 
-	client, err := pool.GetGatewayServiceClient(pool.Endpoint(fs.o.GatewayAddr))
+	client, err := pool.GetGatewayServiceClient(
+		pool.Endpoint(fs.o.GatewayAddr),
+		pool.Insecure(fs.o.Insecure),
+		pool.SkipVerify(fs.o.SkipVerify),
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -260,11 +270,13 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 	}
 
 	return spaces, nil
-
 }
 
 // UpdateStorageSpace updates a storage space
-func (fs *Decomposedfs) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
+func (fs *Decomposedfs) UpdateStorageSpace(
+	ctx context.Context,
+	req *provider.UpdateStorageSpaceRequest,
+) (*provider.UpdateStorageSpaceResponse, error) {
 	space := req.StorageSpace
 
 	_, spaceID, err := utils.SplitStorageSpaceID(space.Id.OpaqueId)
@@ -343,7 +355,12 @@ func (fs *Decomposedfs) createStorageSpace(ctx context.Context, spaceType, nodeI
 	err := os.Symlink("../../nodes/"+nodeID, filepath.Join(fs.o.Root, "spaces", spaceType, nodeID))
 	if err != nil {
 		if isAlreadyExists(err) {
-			appctx.GetLogger(ctx).Debug().Err(err).Str("node", nodeID).Str("spacetype", spaceType).Msg("symlink already exists")
+			appctx.GetLogger(ctx).
+				Debug().
+				Err(err).
+				Str("node", nodeID).
+				Str("spacetype", spaceType).
+				Msg("symlink already exists")
 		} else {
 			// TODO how should we handle error cases here?
 			appctx.GetLogger(ctx).Error().Err(err).Str("node", nodeID).Str("spacetype", spaceType).Msg("could not create symlink")
@@ -353,7 +370,12 @@ func (fs *Decomposedfs) createStorageSpace(ctx context.Context, spaceType, nodeI
 	return nil
 }
 
-func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, node *node.Node, nodePath, spaceType string, canListAllSpaces bool) (*provider.StorageSpace, error) {
+func (fs *Decomposedfs) storageSpaceFromNode(
+	ctx context.Context,
+	node *node.Node,
+	nodePath, spaceType string,
+	canListAllSpaces bool,
+) (*provider.StorageSpace, error) {
 	owner, err := node.Owner()
 	if err != nil {
 		return nil, err
@@ -367,10 +389,10 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, node *node.Nod
 	}
 	space := &provider.StorageSpace{
 		// FIXME the driver should know its id move setting the spaceid from the storage provider to the drivers
-		//Id: &provider.StorageSpaceId{OpaqueId: "1284d238-aa92-42ce-bdc4-0b0000009157!" + n.ID},
+		// Id: &provider.StorageSpaceId{OpaqueId: "1284d238-aa92-42ce-bdc4-0b0000009157!" + n.ID},
 		Root: &provider.ResourceId{
 			// FIXME the driver should know its id move setting the spaceid from the storage provider to the drivers
-			//StorageId: "1284d238-aa92-42ce-bdc4-0b0000009157",
+			// StorageId: "1284d238-aa92-42ce-bdc4-0b0000009157",
 			OpaqueId: node.ID,
 		},
 		Name:      string(sname),

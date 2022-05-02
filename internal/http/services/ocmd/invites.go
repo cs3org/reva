@@ -43,9 +43,14 @@ type invitesHandler struct {
 	smtpCredentials  *smtpclient.SMTPCredentials
 	gatewayAddr      string
 	meshDirectoryURL string
+	insecure         bool
+	skipVerify       bool
 }
 
 func (h *invitesHandler) init(c *Config) {
+	h.gatewayAddr = c.GatewaySvc
+	h.insecure = c.Insecure
+	h.skipVerify = c.SkipVerify
 	h.gatewayAddr = c.GatewaySvc
 	if c.SMTPCredentials != nil {
 		h.smtpCredentials = smtpclient.NewSMTPCredentials(c.SMTPCredentials)
@@ -81,7 +86,11 @@ func (h *invitesHandler) generateInviteToken(w http.ResponseWriter, r *http.Requ
 
 	ctx := r.Context()
 
-	gatewayClient, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	gatewayClient, err := pool.GetGatewayServiceClient(
+		pool.Endpoint(h.gatewayAddr),
+		pool.Insecure(h.insecure),
+		pool.SkipVerify(h.skipVerify),
+	)
 	if err != nil {
 		WriteError(w, r, APIErrorServerError, "error getting gateway grpc client", err)
 		return
@@ -155,7 +164,11 @@ func (h *invitesHandler) forwardInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	gatewayClient, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	gatewayClient, err := pool.GetGatewayServiceClient(
+		pool.Endpoint(h.gatewayAddr),
+		pool.Insecure(h.insecure),
+		pool.SkipVerify(h.skipVerify),
+	)
 	if err != nil {
 		WriteError(w, r, APIErrorServerError, "error getting gateway grpc client", err)
 		return
@@ -226,7 +239,11 @@ func (h *invitesHandler) acceptInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	gatewayClient, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	gatewayClient, err := pool.GetGatewayServiceClient(
+		pool.Endpoint(h.gatewayAddr),
+		pool.Insecure(h.insecure),
+		pool.SkipVerify(h.skipVerify),
+	)
 	if err != nil {
 		WriteError(w, r, APIErrorServerError, "error getting gateway grpc client", err)
 		return
@@ -297,7 +314,11 @@ func (h *invitesHandler) findAcceptedUsers(w http.ResponseWriter, r *http.Reques
 	log := appctx.GetLogger(r.Context())
 
 	ctx := r.Context()
-	gatewayClient, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	gatewayClient, err := pool.GetGatewayServiceClient(
+		pool.Endpoint(h.gatewayAddr),
+		pool.Insecure(h.insecure),
+		pool.SkipVerify(h.skipVerify),
+	)
 	if err != nil {
 		WriteError(w, r, APIErrorServerError, "error getting gateway grpc client", err)
 		return
@@ -323,7 +344,11 @@ func (h *invitesHandler) generate(w http.ResponseWriter, r *http.Request) {
 	log := appctx.GetLogger(r.Context())
 
 	ctx := r.Context()
-	gatewayClient, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	gatewayClient, err := pool.GetGatewayServiceClient(
+		pool.Endpoint(h.gatewayAddr),
+		pool.Insecure(h.insecure),
+		pool.SkipVerify(h.skipVerify),
+	)
 	if err != nil {
 		WriteError(w, r, APIErrorServerError, "error getting gateway grpc client", err)
 		return

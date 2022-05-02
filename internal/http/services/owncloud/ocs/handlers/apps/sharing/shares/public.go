@@ -41,7 +41,11 @@ func (h *Handler) createPublicLinkShare(w http.ResponseWriter, r *http.Request, 
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
-	c, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	c, err := pool.GetGatewayServiceClient(
+		pool.Endpoint(h.gatewayAddr),
+		pool.Insecure(h.insecure),
+		pool.SkipVerify(h.skipVerify),
+	)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
 		return
@@ -64,7 +68,13 @@ func (h *Handler) createPublicLinkShare(w http.ResponseWriter, r *http.Request, 
 		// TODO: the default might change depending on allowed permissions and configs
 		newPermissions, err = ocPublicPermToCs3(1, h)
 		if err != nil {
-			response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "Could not convert default permissions", err)
+			response.WriteOCSError(
+				w,
+				r,
+				response.MetaServerError.StatusCode,
+				"Could not convert default permissions",
+				err,
+			)
 			return
 		}
 	}
@@ -112,21 +122,45 @@ func (h *Handler) createPublicLinkShare(w http.ResponseWriter, r *http.Request, 
 
 	createRes, err := c.CreatePublicShare(ctx, &req)
 	if err != nil {
-		log.Debug().Err(err).Str("createShare", "shares").Msgf("error creating a public share to resource id: %v", statInfo.GetId())
-		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error creating public share", fmt.Errorf("error creating a public share to resource id: %v", statInfo.GetId()))
+		log.Debug().
+			Err(err).
+			Str("createShare", "shares").
+			Msgf("error creating a public share to resource id: %v", statInfo.GetId())
+		response.WriteOCSError(
+			w,
+			r,
+			response.MetaServerError.StatusCode,
+			"error creating public share",
+			fmt.Errorf("error creating a public share to resource id: %v", statInfo.GetId()),
+		)
 		return
 	}
 
 	if createRes.Status.Code != rpc.Code_CODE_OK {
-		log.Debug().Err(errors.New("create public share failed")).Str("shares", "createShare").Msgf("create public share failed with status code: %v", createRes.Status.Code.String())
-		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "grpc create public share request failed", err)
+		log.Debug().
+			Err(errors.New("create public share failed")).
+			Str("shares", "createShare").
+			Msgf("create public share failed with status code: %v", createRes.Status.Code.String())
+		response.WriteOCSError(
+			w,
+			r,
+			response.MetaServerError.StatusCode,
+			"grpc create public share request failed",
+			err,
+		)
 		return
 	}
 
 	s := conversions.PublicShare2ShareData(createRes.Share, r, h.publicURL)
 	err = h.addFileInfo(ctx, s, statInfo)
 	if err != nil {
-		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error enhancing response with share data", err)
+		response.WriteOCSError(
+			w,
+			r,
+			response.MetaServerError.StatusCode,
+			"error enhancing response with share data",
+			err,
+		)
 		return
 	}
 	h.mapUserIds(ctx, c, s)
@@ -134,14 +168,21 @@ func (h *Handler) createPublicLinkShare(w http.ResponseWriter, r *http.Request, 
 	response.WriteOCSSuccess(w, r, s)
 }
 
-func (h *Handler) listPublicShares(r *http.Request, filters []*link.ListPublicSharesRequest_Filter) ([]*conversions.ShareData, *rpc.Status, error) {
+func (h *Handler) listPublicShares(
+	r *http.Request,
+	filters []*link.ListPublicSharesRequest_Filter,
+) ([]*conversions.ShareData, *rpc.Status, error) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
 	ocsDataPayload := make([]*conversions.ShareData, 0)
 	// TODO(refs) why is this guard needed? Are we moving towards a gateway only for service discovery? without a gateway this is dead code.
 	if h.gatewayAddr != "" {
-		client, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+		client, err := pool.GetGatewayServiceClient(
+			pool.Endpoint(h.gatewayAddr),
+			pool.Insecure(h.insecure),
+			pool.SkipVerify(h.skipVerify),
+		)
 		if err != nil {
 			return ocsDataPayload, nil, err
 		}
@@ -161,7 +202,11 @@ func (h *Handler) listPublicShares(r *http.Request, filters []*link.ListPublicSh
 		for _, share := range res.GetShare() {
 			info, status, err := h.getResourceInfoByID(ctx, client, share.ResourceId)
 			if err != nil || status.Code != rpc.Code_CODE_OK {
-				log.Debug().Interface("share", share).Interface("status", status).Err(err).Msg("could not stat share, skipping")
+				log.Debug().
+					Interface("share", share).
+					Interface("status", status).
+					Err(err).
+					Msg("could not stat share, skipping")
 				continue
 			}
 
@@ -170,7 +215,11 @@ func (h *Handler) listPublicShares(r *http.Request, filters []*link.ListPublicSh
 			sData.Name = share.DisplayName
 
 			if err := h.addFileInfo(ctx, sData, info); err != nil {
-				log.Debug().Interface("share", share).Interface("info", info).Err(err).Msg("could not add file info, skipping")
+				log.Debug().
+					Interface("share", share).
+					Interface("info", info).
+					Err(err).
+					Msg("could not add file info, skipping")
 				continue
 			}
 			h.mapUserIds(ctx, client, sData)
@@ -189,7 +238,11 @@ func (h *Handler) listPublicShares(r *http.Request, filters []*link.ListPublicSh
 
 func (h *Handler) isPublicShare(r *http.Request, oid string) bool {
 	logger := appctx.GetLogger(r.Context())
-	client, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	client, err := pool.GetGatewayServiceClient(
+		pool.Endpoint(h.gatewayAddr),
+		pool.Insecure(h.insecure),
+		pool.SkipVerify(h.skipVerify),
+	)
 	if err != nil {
 		logger.Err(err)
 	}
@@ -215,10 +268,20 @@ func (h *Handler) updatePublicShare(w http.ResponseWriter, r *http.Request, shar
 	updates := []*link.UpdatePublicShareRequest_Update{}
 	logger := appctx.GetLogger(r.Context())
 
-	gwC, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	gwC, err := pool.GetGatewayServiceClient(
+		pool.Endpoint(h.gatewayAddr),
+		pool.Insecure(h.insecure),
+		pool.SkipVerify(h.skipVerify),
+	)
 	if err != nil {
 		log.Err(err).Str("shareID", shareID).Msg("updatePublicShare")
-		response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "error getting a connection to the gateway service", nil)
+		response.WriteOCSError(
+			w,
+			r,
+			response.MetaBadRequest.StatusCode,
+			"error getting a connection to the gateway service",
+			nil,
+		)
 		return
 	}
 
@@ -275,7 +338,9 @@ func (h *Handler) updatePublicShare(w http.ResponseWriter, r *http.Request, shar
 		beforePerm, _ := json.Marshal(before.GetShare().Permissions)
 		afterPerm, _ := json.Marshal(publicSharePermissions)
 		if string(beforePerm) != string(afterPerm) {
-			logger.Info().Str("shares", "update").Msgf("updating permissions from %v to: %v", string(beforePerm), string(afterPerm))
+			logger.Info().
+				Str("shares", "update").
+				Msgf("updating permissions from %v to: %v", string(beforePerm), string(afterPerm))
 			updates = append(updates, &link.UpdatePublicShareRequest_Update{
 				Type: link.UpdatePublicShareRequest_Update_TYPE_PERMISSIONS,
 				Grant: &link.Grant{
@@ -302,7 +367,9 @@ func (h *Handler) updatePublicShare(w http.ResponseWriter, r *http.Request, shar
 		beforeExpiration, _ := json.Marshal(before.Share.Expiration)
 		afterExpiration, _ := json.Marshal(newExpiration)
 		if string(afterExpiration) != string(beforeExpiration) {
-			logger.Debug().Str("shares", "update").Msgf("updating expire date from %v to: %v", string(beforeExpiration), string(afterExpiration))
+			logger.Debug().
+				Str("shares", "update").
+				Msgf("updating expire date from %v to: %v", string(beforeExpiration), string(afterExpiration))
 			updates = append(updates, &link.UpdatePublicShareRequest_Update{
 				Type: link.UpdatePublicShareRequest_Update_TYPE_EXPIRATION,
 				Grant: &link.Grant{
@@ -344,7 +411,13 @@ func (h *Handler) updatePublicShare(w http.ResponseWriter, r *http.Request, shar
 			})
 			if err != nil {
 				log.Err(err).Str("shareID", shareID).Msg("sending update request to public link provider")
-				response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "Error sending update request to public link provider", err)
+				response.WriteOCSError(
+					w,
+					r,
+					response.MetaServerError.StatusCode,
+					"Error sending update request to public link provider",
+					err,
+				)
 				return
 			}
 		}
@@ -359,14 +432,26 @@ func (h *Handler) updatePublicShare(w http.ResponseWriter, r *http.Request, shar
 	statRes, err := gwC.Stat(r.Context(), &statReq)
 	if err != nil {
 		log.Debug().Err(err).Str("shares", "update public share").Msg("error during stat")
-		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "missing resource information", fmt.Errorf("error getting resource information"))
+		response.WriteOCSError(
+			w,
+			r,
+			response.MetaServerError.StatusCode,
+			"missing resource information",
+			fmt.Errorf("error getting resource information"),
+		)
 		return
 	}
 
 	s := conversions.PublicShare2ShareData(publicShare, r, h.publicURL)
 	err = h.addFileInfo(r.Context(), s, statRes.Info)
 	if err != nil {
-		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error enhancing response with share data", err)
+		response.WriteOCSError(
+			w,
+			r,
+			response.MetaServerError.StatusCode,
+			"error enhancing response with share data",
+			err,
+		)
 		return
 	}
 	h.mapUserIds(r.Context(), gwC, s)
@@ -377,7 +462,11 @@ func (h *Handler) updatePublicShare(w http.ResponseWriter, r *http.Request, shar
 func (h *Handler) removePublicShare(w http.ResponseWriter, r *http.Request, shareID string) {
 	ctx := r.Context()
 
-	c, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	c, err := pool.GetGatewayServiceClient(
+		pool.Endpoint(h.gatewayAddr),
+		pool.Insecure(h.insecure),
+		pool.SkipVerify(h.skipVerify),
+	)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
 		return
@@ -395,7 +484,13 @@ func (h *Handler) removePublicShare(w http.ResponseWriter, r *http.Request, shar
 
 	res, err := c.RemovePublicShare(ctx, req)
 	if err != nil {
-		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error sending a grpc delete share request", err)
+		response.WriteOCSError(
+			w,
+			r,
+			response.MetaServerError.StatusCode,
+			"error sending a grpc delete share request",
+			err,
+		)
 		return
 	}
 	if res.Status.Code != rpc.Code_CODE_OK {

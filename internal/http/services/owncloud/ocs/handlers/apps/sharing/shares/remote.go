@@ -36,10 +36,20 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 )
 
-func (h *Handler) createFederatedCloudShare(w http.ResponseWriter, r *http.Request, statInfo *provider.ResourceInfo, role *conversions.Role, roleVal []byte) {
+func (h *Handler) createFederatedCloudShare(
+	w http.ResponseWriter,
+	r *http.Request,
+	statInfo *provider.ResourceInfo,
+	role *conversions.Role,
+	roleVal []byte,
+) {
 	ctx := r.Context()
 
-	c, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	c, err := pool.GetGatewayServiceClient(
+		pool.Endpoint(h.gatewayAddr),
+		pool.Insecure(h.insecure),
+		pool.SkipVerify(h.skipVerify),
+	)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
 		return
@@ -55,12 +65,22 @@ func (h *Handler) createFederatedCloudShare(w http.ResponseWriter, r *http.Reque
 		Domain: shareWithProvider,
 	})
 	if err != nil {
-		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error sending a grpc get invite by domain info request", err)
+		response.WriteOCSError(
+			w,
+			r,
+			response.MetaServerError.StatusCode,
+			"error sending a grpc get invite by domain info request",
+			err,
+		)
 		return
 	}
 
 	remoteUserRes, err := c.GetAcceptedUser(ctx, &invitepb.GetAcceptedUserRequest{
-		RemoteUserId: &userpb.UserId{OpaqueId: shareWithUser, Idp: shareWithProvider, Type: userpb.UserType_USER_TYPE_PRIMARY},
+		RemoteUserId: &userpb.UserId{
+			OpaqueId: shareWithUser,
+			Idp:      shareWithProvider,
+			Type:     userpb.UserType_USER_TYPE_PRIMARY,
+		},
 	})
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error searching recipient", err)
@@ -105,7 +125,13 @@ func (h *Handler) createFederatedCloudShare(w http.ResponseWriter, r *http.Reque
 
 	createShareResponse, err := c.CreateOCMShare(ctx, createShareReq)
 	if err != nil {
-		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error sending a grpc create ocm share request", err)
+		response.WriteOCSError(
+			w,
+			r,
+			response.MetaServerError.StatusCode,
+			"error sending a grpc create ocm share request",
+			err,
+		)
 		return
 	}
 	if createShareResponse.Status.Code != rpc.Code_CODE_OK {
@@ -122,12 +148,15 @@ func (h *Handler) createFederatedCloudShare(w http.ResponseWriter, r *http.Reque
 
 // GetFederatedShare handles GET requests on /apps/files_sharing/api/v1/shares/remote_shares/{shareid}
 func (h *Handler) GetFederatedShare(w http.ResponseWriter, r *http.Request) {
-
 	// TODO: Implement response with HAL schemating
 	ctx := r.Context()
 
 	shareID := chi.URLParam(r, "shareid")
-	gatewayClient, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	gatewayClient, err := pool.GetGatewayServiceClient(
+		pool.Endpoint(h.gatewayAddr),
+		pool.Insecure(h.insecure),
+		pool.SkipVerify(h.skipVerify),
+	)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
 		return
@@ -144,7 +173,13 @@ func (h *Handler) GetFederatedShare(w http.ResponseWriter, r *http.Request) {
 	}
 	ocmShareResponse, err := gatewayClient.GetOCMShare(ctx, listOCMSharesRequest)
 	if err != nil {
-		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error sending a grpc get ocm share request", err)
+		response.WriteOCSError(
+			w,
+			r,
+			response.MetaServerError.StatusCode,
+			"error sending a grpc get ocm share request",
+			err,
+		)
 		return
 	}
 
@@ -158,12 +193,15 @@ func (h *Handler) GetFederatedShare(w http.ResponseWriter, r *http.Request) {
 
 // ListFederatedShares handles GET requests on /apps/files_sharing/api/v1/shares/remote_shares
 func (h *Handler) ListFederatedShares(w http.ResponseWriter, r *http.Request) {
-
 	// TODO Implement pagination.
 	// TODO Implement response with HAL schemating
 	ctx := r.Context()
 
-	gatewayClient, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	gatewayClient, err := pool.GetGatewayServiceClient(
+		pool.Endpoint(h.gatewayAddr),
+		pool.Insecure(h.insecure),
+		pool.SkipVerify(h.skipVerify),
+	)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
 		return
@@ -171,7 +209,13 @@ func (h *Handler) ListFederatedShares(w http.ResponseWriter, r *http.Request) {
 
 	listOCMSharesResponse, err := gatewayClient.ListOCMShares(ctx, &ocm.ListOCMSharesRequest{})
 	if err != nil {
-		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error sending a grpc list ocm share request", err)
+		response.WriteOCSError(
+			w,
+			r,
+			response.MetaServerError.StatusCode,
+			"error sending a grpc list ocm share request",
+			err,
+		)
 		return
 	}
 

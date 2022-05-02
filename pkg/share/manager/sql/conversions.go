@@ -62,19 +62,27 @@ type UserConverter interface {
 
 // GatewayUserConverter converts usernames and ids using the gateway
 type GatewayUserConverter struct {
-	gwAddr string
+	gwAddr     string
+	insecure   bool
+	skipVerify bool
 }
 
 // NewGatewayUserConverter returns a instance of GatewayUserConverter
-func NewGatewayUserConverter(gwAddr string) *GatewayUserConverter {
+func NewGatewayUserConverter(gwAddr string, insecure bool, skipVerify bool) *GatewayUserConverter {
 	return &GatewayUserConverter{
-		gwAddr: gwAddr,
+		gwAddr:     gwAddr,
+		insecure:   insecure,
+		skipVerify: skipVerify,
 	}
 }
 
 // UserIDToUserName converts a user ID to an username
 func (c *GatewayUserConverter) UserIDToUserName(ctx context.Context, userid *userpb.UserId) (string, error) {
-	gwConn, err := pool.GetGatewayServiceClient(pool.Endpoint(c.gwAddr))
+	gwConn, err := pool.GetGatewayServiceClient(
+		pool.Endpoint(c.gwAddr),
+		pool.Insecure(c.insecure),
+		pool.SkipVerify(c.skipVerify),
+	)
 	if err != nil {
 		return "", err
 	}
@@ -93,7 +101,11 @@ func (c *GatewayUserConverter) UserIDToUserName(ctx context.Context, userid *use
 
 // UserNameToUserID converts a username to an user ID
 func (c *GatewayUserConverter) UserNameToUserID(ctx context.Context, username string) (*userpb.UserId, error) {
-	gwConn, err := pool.GetGatewayServiceClient(pool.Endpoint(c.gwAddr))
+	gwConn, err := pool.GetGatewayServiceClient(
+		pool.Endpoint(c.gwAddr),
+		pool.Insecure(c.insecure),
+		pool.SkipVerify(c.skipVerify),
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -245,7 +257,11 @@ func (m *mgr) convertToCS3Share(ctx context.Context, s DBShare, storageMountID s
 	}, nil
 }
 
-func (m *mgr) convertToCS3ReceivedShare(ctx context.Context, s DBShare, storageMountID string) (*collaboration.ReceivedShare, error) {
+func (m *mgr) convertToCS3ReceivedShare(
+	ctx context.Context,
+	s DBShare,
+	storageMountID string,
+) (*collaboration.ReceivedShare, error) {
 	share, err := m.convertToCS3Share(ctx, s, storageMountID)
 	if err != nil {
 		return nil, err
