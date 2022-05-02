@@ -58,24 +58,24 @@ type config struct {
 	DataTxEndpoint                string `mapstructure:"datatx"`
 	DataGatewayEndpoint           string `mapstructure:"datagateway"`
 	PermissionsEndpoint           string `mapstructure:"permissionssvc"`
-	CommitShareToStorageGrant     bool   `mapstructure:"commit_share_to_storage_grant"`
-	CommitShareToStorageRef       bool   `mapstructure:"commit_share_to_storage_ref"`
-	DisableHomeCreationOnLogin    bool   `mapstructure:"disable_home_creation_on_login"`
 	TransferSharedSecret          string `mapstructure:"transfer_shared_secret"`
-	TransferExpires               int64  `mapstructure:"transfer_expires"`
 	TokenManager                  string `mapstructure:"token_manager"`
 	// ShareFolder is the location where to create shares in the recipient's storage provider.
-	ShareFolder         string                            `mapstructure:"share_folder"`
-	DataTransfersFolder string                            `mapstructure:"data_transfers_folder"`
-	HomeMapping         string                            `mapstructure:"home_mapping"`
-	TokenManagers       map[string]map[string]interface{} `mapstructure:"token_managers"`
-	EtagCacheTTL        int                               `mapstructure:"etag_cache_ttl"`
-	AllowedUserAgents   map[string][]string               `mapstructure:"allowed_user_agents"` // map[path][]user-agent
-	CreateHomeCacheTTL  int                               `mapstructure:"create_home_cache_ttl"`
-	CACertFile          string                            `mapstructure:"ca_certfile"`
-	MaxCallRecvMsgSize  int                               `mapstructure:"client_recv_msg_size"`
-	Insecure            bool                              `mapstructure:"insecure"`
-	SkipVerify          bool                              `mapstructure:"skip_verify"`
+	ShareFolder                string                            `mapstructure:"share_folder"`
+	DataTransfersFolder        string                            `mapstructure:"data_transfers_folder"`
+	HomeMapping                string                            `mapstructure:"home_mapping"`
+	CACertFile                 string                            `mapstructure:"ca_certfile"`
+	TokenManagers              map[string]map[string]interface{} `mapstructure:"token_managers"`
+	AllowedUserAgents          map[string][]string               `mapstructure:"allowed_user_agents"` // map[path][]user-agent
+	TransferExpires            int64                             `mapstructure:"transfer_expires"`
+	EtagCacheTTL               int                               `mapstructure:"etag_cache_ttl"`
+	CreateHomeCacheTTL         int                               `mapstructure:"create_home_cache_ttl"`
+	MaxCallRecvMsgSize         int                               `mapstructure:"client_recv_msg_size"`
+	CommitShareToStorageGrant  bool                              `mapstructure:"commit_share_to_storage_grant"`
+	CommitShareToStorageRef    bool                              `mapstructure:"commit_share_to_storage_ref"`
+	DisableHomeCreationOnLogin bool                              `mapstructure:"disable_home_creation_on_login"`
+	Insecure                   bool                              `mapstructure:"insecure"`
+	SkipVerify                 bool                              `mapstructure:"skip_verify"`
 }
 
 // sets defaults

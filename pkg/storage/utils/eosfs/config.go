@@ -26,12 +26,6 @@ type Config struct {
 	// QuotaNode for storing quota information
 	QuotaNode string `mapstructure:"quota_node"`
 
-	// DefaultQuotaBytes sets the default maximum bytes available for a user
-	DefaultQuotaBytes uint64 `mapstructure:"default_quota_bytes"`
-
-	// DefaultQuotaFiles sets the default maximum files available for a user
-	DefaultQuotaFiles uint64 `mapstructure:"default_quota_files"`
-
 	// ShadowNamespace for storing shadow data
 	ShadowNamespace string `mapstructure:"shadow_namespace"`
 
@@ -77,6 +71,60 @@ type Config struct {
 	// /eos/user/<username>/docs
 	UserLayout string `mapstructure:"user_layout"`
 
+	// GatewaySvc stores the endpoint at which the GRPC gateway is exposed.
+	GatewaySvc string `mapstructure:"gatewaysvc"`
+
+	// HTTP connections to EOS: client certificate (usually a X509 host certificate)
+	ClientCertFile string `mapstructure:"http_client_certfile"`
+	// HTTP connections to EOS: client certificate key (usually a X509 host certificate)
+	ClientKeyFile string `mapstructure:"http_client_keyfile"`
+	// HTTP connections to EOS: CA directories
+	ClientCADirs string `mapstructure:"http_client_cadirs"`
+	// HTTP connections to EOS: CA files
+	ClientCAFiles string `mapstructure:"http_client_cafiles"`
+
+	// GRPCAuthkey is the key that authorizes this client to connect to the GRPC service
+	// It's unclear whether this will be the final solution
+	GRPCAuthkey string `mapstructure:"grpc_auth_key"`
+
+	// URI of the EOS MGM grpc server
+	// Default is empty
+	GrpcURI string `mapstructure:"master_grpc_uri"`
+
+	CACertFile string `mapstructure:"ca_certfile"`
+
+	// DefaultQuotaBytes sets the default maximum bytes available for a user
+	DefaultQuotaBytes uint64 `mapstructure:"default_quota_bytes"`
+
+	// DefaultQuotaFiles sets the default maximum files available for a user
+	DefaultQuotaFiles uint64 `mapstructure:"default_quota_files"`
+
+	// Size of the cache used to store user ID and UID resolution.
+	// Default value is 1000000.
+	UserIDCacheSize int `mapstructure:"user_id_cache_size"`
+
+	// The depth, starting from root, that we'll parse directories to lookup the
+	// owner and warm up the cache. For example, for a layout of {{substr 0 1 .Username}}/{{.Username}}
+	// and a depth of 2, we'll lookup each user's home directory.
+	// Default value is 2.
+	UserIDCacheWarmupDepth int `mapstructure:"user_id_cache_warmup_depth"`
+
+	// HTTP connections to EOS: max number of idle conns
+	MaxIdleConns int `mapstructure:"max_idle_conns"`
+
+	// HTTP connections to EOS: max number of conns per host
+	MaxConnsPerHost int `mapstructure:"max_conns_per_host"`
+
+	// HTTP connections to EOS: max number of idle conns per host
+	MaxIdleConnsPerHost int `mapstructure:"max_idle_conns_per_host"`
+
+	// HTTP connections to EOS: idle conections TTL
+	IdleConnTimeout int `mapstructure:"idle_conn_timeout"`
+
+	// TokenExpiry stores in seconds the time after which generated tokens will expire
+	// Default is 3600
+	TokenExpiry        int
+	MaxCallRecvMsgSize int `mapstructure:"client_recv_msg_size"`
 	// Enables logging of the commands executed
 	// Defaults to false
 	EnableLogging bool `mapstructure:"enable_logging"`
@@ -101,27 +149,6 @@ type Config struct {
 	// UseGRPC controls whether we spawn eosclient processes or use GRPC to connect to EOS.
 	UseGRPC bool `mapstructure:"use_grpc"`
 
-	// GatewaySvc stores the endpoint at which the GRPC gateway is exposed.
-	GatewaySvc string `mapstructure:"gatewaysvc"`
-
-	// GRPCAuthkey is the key that authorizes this client to connect to the GRPC service
-	// It's unclear whether this will be the final solution
-	GRPCAuthkey string `mapstructure:"grpc_auth_key"`
-
-	// URI of the EOS MGM grpc server
-	// Default is empty
-	GrpcURI string `mapstructure:"master_grpc_uri"`
-
-	// Size of the cache used to store user ID and UID resolution.
-	// Default value is 1000000.
-	UserIDCacheSize int `mapstructure:"user_id_cache_size"`
-
-	// The depth, starting from root, that we'll parse directories to lookup the
-	// owner and warm up the cache. For example, for a layout of {{substr 0 1 .Username}}/{{.Username}}
-	// and a depth of 2, we'll lookup each user's home directory.
-	// Default value is 2.
-	UserIDCacheWarmupDepth int `mapstructure:"user_id_cache_warmup_depth"`
-
 	// Normally the eosgrpc plugin streams data on the fly.
 	// Setting this to true will make reva use the temp cachedirectory
 	// as intermediate step for read operations
@@ -144,32 +171,7 @@ type Config struct {
 	// revisions-related operations.
 	ImpersonateOwnerforRevisions bool `mapstructure:"impersonate_owner_for_revisions"`
 
-	// HTTP connections to EOS: max number of idle conns
-	MaxIdleConns int `mapstructure:"max_idle_conns"`
+	Insecure bool `mapstructure:"insecure"`
 
-	// HTTP connections to EOS: max number of conns per host
-	MaxConnsPerHost int `mapstructure:"max_conns_per_host"`
-
-	// HTTP connections to EOS: max number of idle conns per host
-	MaxIdleConnsPerHost int `mapstructure:"max_idle_conns_per_host"`
-
-	// HTTP connections to EOS: idle conections TTL
-	IdleConnTimeout int `mapstructure:"idle_conn_timeout"`
-
-	// HTTP connections to EOS: client certificate (usually a X509 host certificate)
-	ClientCertFile string `mapstructure:"http_client_certfile"`
-	// HTTP connections to EOS: client certificate key (usually a X509 host certificate)
-	ClientKeyFile string `mapstructure:"http_client_keyfile"`
-	// HTTP connections to EOS: CA directories
-	ClientCADirs string `mapstructure:"http_client_cadirs"`
-	// HTTP connections to EOS: CA files
-	ClientCAFiles string `mapstructure:"http_client_cafiles"`
-
-	// TokenExpiry stores in seconds the time after which generated tokens will expire
-	// Default is 3600
-	TokenExpiry        int
-	CACertFile         string `mapstructure:"ca_certfile"`
-	MaxCallRecvMsgSize int    `mapstructure:"client_recv_msg_size"`
-	Insecure           bool   `mapstructure:"insecure"`
-	SkipVerify         bool   `mapstructure:"skip_verify"`
+	SkipVerify bool `mapstructure:"skip_verify"`
 }

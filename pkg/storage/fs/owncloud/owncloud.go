@@ -116,11 +116,11 @@ type config struct {
 	ShareFolder              string `mapstructure:"share_folder"`
 	UserLayout               string `mapstructure:"user_layout"`
 	Redis                    string `mapstructure:"redis"`
-	EnableHome               bool   `mapstructure:"enable_home"`
-	Scan                     bool   `mapstructure:"scan"`
 	UserProviderEndpoint     string `mapstructure:"userprovidersvc"`
 	CACertFile               string `mapstructure:"ca_certfile"`
 	MaxCallRecvMsgSize       int    `mapstructure:"client_recv_msg_size"`
+	EnableHome               bool   `mapstructure:"enable_home"`
+	Scan                     bool   `mapstructure:"scan"`
 	Insecure                 bool   `mapstructure:"insecure"`
 	SkipVerify               bool   `mapstructure:"skip_verify"`
 }

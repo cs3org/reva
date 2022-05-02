@@ -98,14 +98,14 @@ type Config struct {
 	// /users/<first char of username>/<username>/docs
 	WebdavNamespace string `mapstructure:"webdav_namespace"`
 	GatewaySvc      string `mapstructure:"gatewaysvc"`
-	Timeout         int64  `mapstructure:"timeout"`
 	// If true, HTTP COPY will expect the HTTP-TPC (third-party copy) headers
-	EnableHTTPTpc          bool                              `mapstructure:"enable_http_tpc"`
 	PublicURL              string                            `mapstructure:"public_url"`
 	FavoriteStorageDriver  string                            `mapstructure:"favorite_storage_driver"`
-	FavoriteStorageDrivers map[string]map[string]interface{} `mapstructure:"favorite_storage_drivers"`
 	CACertFile             string                            `mapstructure:"ca_certfile"`
+	FavoriteStorageDrivers map[string]map[string]interface{} `mapstructure:"favorite_storage_drivers"`
+	Timeout                int64                             `mapstructure:"timeout"`
 	MaxCallRecvMsgSize     int                               `mapstructure:"client_recv_msg_size"`
+	EnableHTTPTpc          bool                              `mapstructure:"enable_http_tpc"`
 	Insecure               bool                              `mapstructure:"insecure"`
 	SkipVerify             bool                              `mapstructure:"skip_verify"`
 }

@@ -106,7 +106,8 @@ func getConnectionOptions(options Options) ([]grpc.DialOption, error) {
 	opts := []grpc.DialOption{
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithDefaultCallOptions(
-			grpc.MaxCallRecvMsgSize(options.MaxCallRecvMsgSize),
+			// TODO @amal-thundiyil: change this to options.MaxCallRecvMsgSize
+			grpc.MaxCallRecvMsgSize(10240000),
 		),
 		grpc.WithStreamInterceptor(otelgrpc.StreamClientInterceptor(
 			otelgrpc.WithTracerProvider(
@@ -137,11 +138,13 @@ func getConnectionOptions(options Options) ([]grpc.DialOption, error) {
 
 func getCredentials(options Options) (credentials.TransportCredentials, error) {
 	var creds credentials.TransportCredentials
-	if options.Insecure && options.CACertFile != "" {
+	switch {
+	case options.Insecure && options.CACertFile != "":
 		return nil, errors.New("can't set insecure and ca_certfile at the same time")
-	} else if true {
+	// TODO @amal-thundiyil: change this to options.Insecure
+	case true:
 		creds = insecure.NewCredentials()
-	} else {
+	case options.CACertFile != "":
 		b, err := ioutil.ReadFile(options.CACertFile)
 		if err != nil {
 			return nil, err
@@ -155,7 +158,8 @@ func getCredentials(options Options) (credentials.TransportCredentials, error) {
 			RootCAs:            cp,
 		}
 		creds = credentials.NewTLS(tlsconf)
-
+	default:
+		return nil, errors.New("invalid grpc security configuration")
 	}
 	return creds, nil
 }

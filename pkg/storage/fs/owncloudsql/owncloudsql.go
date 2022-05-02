@@ -112,15 +112,15 @@ type config struct {
 	DeprecatedShareDirectory string `mapstructure:"sharedirectory"`
 	ShareFolder              string `mapstructure:"share_folder"`
 	UserLayout               string `mapstructure:"user_layout"`
-	EnableHome               bool   `mapstructure:"enable_home"`
 	UserProviderEndpoint     string `mapstructure:"userprovidersvc"`
 	DbUsername               string `mapstructure:"dbusername"`
 	DbPassword               string `mapstructure:"dbpassword"`
 	DbHost                   string `mapstructure:"dbhost"`
-	DbPort                   int    `mapstructure:"dbport"`
 	DbName                   string `mapstructure:"dbname"`
 	CACertFile               string `mapstructure:"ca_certfile"`
+	DbPort                   int    `mapstructure:"dbport"`
 	MaxCallRecvMsgSize       int    `mapstructure:"client_recv_msg_size"`
+	EnableHome               bool   `mapstructure:"enable_home"`
 	Insecure                 bool   `mapstructure:"insecure"`
 	SkipVerify               bool   `mapstructure:"skip_verify"`
 }
