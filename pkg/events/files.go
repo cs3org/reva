@@ -25,6 +25,18 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 )
 
+type ContainerCreated struct {
+	Executant *user.UserId
+	Ref       *provider.Reference
+}
+
+// Unmarshal to fulfill umarshaller interface
+func (ContainerCreated) Unmarshal(v []byte) (interface{}, error) {
+	e := ContainerCreated{}
+	err := json.Unmarshal(v, &e)
+	return e, err
+}
+
 // FileUploaded is emitted when a file is uploaded
 type FileUploaded struct {
 	Executant *user.UserId
