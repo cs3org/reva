@@ -131,13 +131,13 @@ type config struct {
 }
 
 func (c *config) init() {
-
 	if c.Network == "" {
 		c.Network = "tcp"
 	}
 	if c.Address == "" {
 		c.Address = sharedconf.GetGatewaySVC("0.0.0.0:19000")
 	}
+	c.Insecure = true
 }
 
 // Server is a gRPC server.
