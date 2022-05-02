@@ -96,7 +96,7 @@ func SkipUserGroupsInToken() bool {
 	return sharedConf.SkipUserGroupsInToken
 }
 
-// GrpcSkipVerify return whether a client verifies the server's certificate chain and host name.
+// SkipVerify return whether a client verifies the server's certificate chain and host name.
 func SkipVerify() bool {
 	return sharedConf.SkipVerify
 }
