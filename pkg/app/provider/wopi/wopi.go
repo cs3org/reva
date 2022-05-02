@@ -64,6 +64,7 @@ type config struct {
 	AppIntURL           string `mapstructure:"app_int_url" docs:";The internal app URL in case of dockerized deployments. Defaults to AppURL"`
 	AppAPIKey           string `mapstructure:"app_api_key" docs:";The API key used by the app, if applicable."`
 	JWTSecret           string `mapstructure:"jwt_secret" docs:";The JWT secret to be used to retrieve the token TTL."`
+	CustomMimeTypesJSON string `mapstructure:"custom_mime_types_json" docs:"nil;An optional mapping file with the list of supported custom file extensions and corresponding mime types."`
 	AppDesktopOnly      bool   `mapstructure:"app_desktop_only" docs:"false;Specifies if the app can be opened only on desktop."`
 	InsecureConnections bool   `mapstructure:"insecure_connections"`
 }
@@ -109,6 +110,12 @@ func New(m map[string]interface{}) (app.Provider, error) {
 	)
 	wopiClient.CheckRedirect = func(req *http.Request, via []*http.Request) error {
 		return http.ErrUseLastResponse
+	}
+
+	// read and register custom mime types if configured
+	err = registerMimeTypes(c.CustomMimeTypesJSON)
+	if err != nil {
+		return nil, err
 	}
 
 	return &wopiProvider{
@@ -277,6 +284,27 @@ func (p *wopiProvider) GetAppProviderInfo(ctx context.Context) (*appregistry.Pro
 		DesktopOnly: p.conf.AppDesktopOnly,
 		MimeTypes:   mimeTypes,
 	}, nil
+}
+
+func registerMimeTypes(mappingFile string) error {
+	// TODO(lopresti) this function also exists in the storage provider, to be seen if we want to factor it out, though a
+	// fileext <-> mimetype "service" would have to be served by the gateway for it to be accessible both by storage providers and app providers.
+	if mappingFile != "" {
+		f, err := ioutil.ReadFile(mappingFile)
+		if err != nil {
+			return fmt.Errorf("storageprovider: error reading the custom mime types file: +%v", err)
+		}
+		mimeTypes := map[string]string{}
+		err = json.Unmarshal(f, &mimeTypes)
+		if err != nil {
+			return fmt.Errorf("storageprovider: error unmarshalling the custom mime types file: +%v", err)
+		}
+		// register all mime types that were read
+		for e, m := range mimeTypes {
+			mime.RegisterMime(e, m)
+		}
+	}
+	return nil
 }
 
 func getAppURLs(c *config) (map[string]map[string]string, error) {
