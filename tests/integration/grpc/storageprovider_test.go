@@ -155,7 +155,10 @@ var _ = Describe("storage providers", func() {
 
 	assertFileVersions := func() {
 		It("lists file versions", func() {
-			listRes, err := serviceClient.ListFileVersions(ctx, &storagep.ListFileVersionsRequest{Ref: versionedFileRef})
+			listRes, err := serviceClient.ListFileVersions(
+				ctx,
+				&storagep.ListFileVersionsRequest{Ref: versionedFileRef},
+			)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(listRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 			Expect(len(listRes.Versions)).To(Equal(1))
@@ -168,7 +171,10 @@ var _ = Describe("storage providers", func() {
 			Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 			Expect(statRes.Info.Size).To(Equal(uint64(2))) // second version contains 2 bytes
 
-			listRes, err := serviceClient.ListFileVersions(ctx, &storagep.ListFileVersionsRequest{Ref: versionedFileRef})
+			listRes, err := serviceClient.ListFileVersions(
+				ctx,
+				&storagep.ListFileVersionsRequest{Ref: versionedFileRef},
+			)
 			Expect(err).ToNot(HaveOccurred())
 			restoreRes, err := serviceClient.RestoreFileVersion(ctx,
 				&storagep.RestoreFileVersionRequest{
@@ -285,7 +291,10 @@ var _ = Describe("storage providers", func() {
 			Expect(readGrant.Permissions.Delete).To(BeTrue())
 
 			By("deleting a grant")
-			delRes, err := serviceClient.RemoveGrant(ctx, &storagep.RemoveGrantRequest{Ref: subdirRef, Grant: readGrant})
+			delRes, err := serviceClient.RemoveGrant(
+				ctx,
+				&storagep.RemoveGrantRequest{Ref: subdirRef, Grant: readGrant},
+			)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(delRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 

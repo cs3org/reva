@@ -101,7 +101,7 @@ func NewConn(options Options) (*grpc.ClientConn, error) {
 }
 
 func getConnectionOptions(options Options) ([]grpc.DialOption, error) {
-	var opts = []grpc.DialOption{
+	opts := []grpc.DialOption{
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithDefaultCallOptions(
 			grpc.MaxCallRecvMsgSize(options.MaxCallRecvMsgSize),

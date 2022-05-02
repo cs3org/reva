@@ -177,7 +177,11 @@ func (h *Handler) removeSpaceMember(w http.ResponseWriter, r *http.Request, spac
 }
 
 func (h *Handler) getStorageProviderClient(p *registry.ProviderInfo) (provider.ProviderAPIClient, error) {
-	c, err := pool.GetStorageProviderServiceClient(pool.Endpoint(p.Address))
+	c, err := pool.GetStorageProviderServiceClient(
+		pool.Endpoint(p.Address),
+		pool.Insecure(h.insecure),
+		pool.SkipVerify(h.skipVerify),
+	)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error getting a storage provider client")
 		return nil, err
