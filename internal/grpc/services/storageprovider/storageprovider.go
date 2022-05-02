@@ -506,6 +506,8 @@ func (s *service) CreateStorageSpace(ctx context.Context, req *provider.CreateSt
 		}, nil
 	}
 
+	resp.StorageSpace.Id.OpaqueId = resourceid.StorageIDWrap(resp.StorageSpace.Id.GetOpaqueId(), s.conf.MountID)
+	resp.StorageSpace.Root.StorageId = resourceid.StorageIDWrap(resp.StorageSpace.Root.GetStorageId(), s.conf.MountID)
 	return resp, nil
 }
 
@@ -582,6 +584,7 @@ func (s *service) UpdateStorageSpace(ctx context.Context, req *provider.UpdateSt
 		return nil, err
 	}
 	res.StorageSpace.Id.OpaqueId = resourceid.StorageIDWrap(res.StorageSpace.Id.GetOpaqueId(), s.conf.MountID)
+	res.StorageSpace.Root.StorageId = resourceid.StorageIDWrap(res.StorageSpace.Root.GetStorageId(), s.conf.MountID)
 	return res, nil
 }
 
