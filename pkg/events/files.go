@@ -25,6 +25,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 )
 
+// ContainerCreated is emitted when a directory has been created
 type ContainerCreated struct {
 	Executant *user.UserId
 	Ref       *provider.Reference
