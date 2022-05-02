@@ -27,6 +27,14 @@ import (
 	"github.com/cs3org/reva/v2/pkg/utils"
 )
 
+// ContainerCreated converts the response to an event
+func ContainerCreated(r *provider.CreateContainerResponse, req *provider.CreateContainerRequest, executant *user.UserId) events.ContainerCreated {
+	return events.ContainerCreated{
+		Executant: executant,
+		Ref:       req.Ref,
+	}
+}
+
 // ShareCreated converts the response to an event
 func ShareCreated(r *collaboration.CreateShareResponse) events.ShareCreated {
 	return events.ShareCreated{
