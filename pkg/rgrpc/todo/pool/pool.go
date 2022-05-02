@@ -20,6 +20,9 @@ package pool
 
 import (
 	"crypto/tls"
+	"crypto/x509"
+	"errors"
+	"io/ioutil"
 	"sync"
 
 	appprovider "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
@@ -86,7 +89,6 @@ var (
 
 // NewConn creates a new connection to a grpc server
 // with open census tracing support.
-// TODO(labkode): make grpc tls configurable.
 func NewConn(options Options) (*grpc.ClientConn, error) {
 	opts, err := getConnectionOptions(options)
 	if err != nil {
@@ -125,24 +127,36 @@ func getConnectionOptions(options Options) ([]grpc.DialOption, error) {
 			),
 		),
 	}
-	creds := getCredentials(options)
+	creds, err := getCredentials(options)
+	if err != nil {
+		return nil, err
+	}
 	opts = append(opts, grpc.WithTransportCredentials(creds))
 	return opts, nil
 }
 
-func getCredentials(options Options) credentials.TransportCredentials {
+func getCredentials(options Options) (credentials.TransportCredentials, error) {
 	var creds credentials.TransportCredentials
 	// TODO @amal-thundiyil: replace with options.Insecure
 	if true {
 		creds = insecure.NewCredentials()
 	} else {
+		b, err := ioutil.ReadFile(options.CACertFile)
+		if err != nil {
+			return nil, err
+		}
+		cp := x509.NewCertPool()
+		if !cp.AppendCertsFromPEM(b) {
+			return nil, errors.New("credentials: failed to append certificates")
+		}
 		tlsconf := &tls.Config{
 			InsecureSkipVerify: options.SkipVerify,
+			RootCAs:            cp,
 		}
 		creds = credentials.NewTLS(tlsconf)
 
 	}
-	return creds
+	return creds, nil
 }
 
 // GetGatewayServiceClient returns a GatewayServiceClient.
