@@ -1,5 +1,4 @@
 [grpc]
-insecure = true
 address = "{{grpc_address}}"
 
 [grpc.services.userprovider]

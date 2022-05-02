@@ -43,8 +43,8 @@ import (
 
 type sharesHandler struct {
 	gatewayAddr string
-	insecure bool
-	skipVerify bool
+	insecure    bool
+	skipVerify  bool
 }
 
 func (h *sharesHandler) init(c *Config) {

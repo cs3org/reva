@@ -9,7 +9,6 @@ jwt_secret = "Pive-Fumkiu4"
 gatewaysvc = "localhost:19000"
 
 [grpc]
-insecure = true
 address = "0.0.0.0:11000"
 
 # This is a storage provider that grants direct access to the wrapped storage

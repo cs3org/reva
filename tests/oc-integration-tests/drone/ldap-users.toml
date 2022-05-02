@@ -6,7 +6,6 @@
 jwt_secret = "Pive-Fumkiu4"
 
 [grpc]
-insecure = true
 address = "0.0.0.0:18000"
 
 [grpc.services.authprovider]

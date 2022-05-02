@@ -5,7 +5,6 @@ jwt_secret = "Pive-Fumkiu4"
 # - handles user metadata and user preferences
 # - serves the grpc services on port 14000
 [grpc]
-insecure = true
 address = "0.0.0.0:14000"
 
 [grpc.services.authprovider]

@@ -3,7 +3,6 @@ gatewaysvc = "localhost:19000"
 plugin = true
 
 [grpc]
-insecure = true
 address = "0.0.0.0:19000"
 
 [grpc.services.gateway]

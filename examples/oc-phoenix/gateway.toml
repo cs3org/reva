@@ -10,7 +10,6 @@ gatewaysvc = "localhost:19000"
 # - serves http datagateway on port 19001
 #   - /data - datagateway: file up and download
 [grpc]
-insecure = true
 address = "0.0.0.0:19000"
 
 [grpc.services.gateway]

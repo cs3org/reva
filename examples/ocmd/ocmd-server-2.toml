@@ -2,7 +2,6 @@
 gatewaysvc = "localhost:17000"
 
 [grpc]
-insecure = true
 address = "0.0.0.0:17000"
 
 [grpc.services.gateway]

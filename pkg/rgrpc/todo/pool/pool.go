@@ -132,7 +132,8 @@ func getConnectionOptions(options Options) ([]grpc.DialOption, error) {
 
 func getCredentials(options Options) credentials.TransportCredentials {
 	var creds credentials.TransportCredentials
-	if options.Insecure {
+	// TODO @amal-thundiyil: replace with options.Insecure
+	if true {
 		creds = insecure.NewCredentials()
 	} else {
 		tlsconf := &tls.Config{

@@ -1,5 +1,4 @@
 [grpc]
-insecure = true
 address = "0.0.0.0:19000"
 
 # services to enable

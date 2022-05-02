@@ -10,7 +10,7 @@ GO_VERSION=`go version | awk '{print $$3}'`
 MINIMUM_GO_VERSION=1.16.2
 BUILD_FLAGS="-X main.gitCommit=${GIT_COMMIT} -X main.version=${VERSION} -X main.goVersion=${GO_VERSION} -X main.buildDate=${BUILD_DATE}"
 CI_BUILD_FLAGS="-w -extldflags "-static" -X main.gitCommit=${GIT_COMMIT} -X main.version=${VERSION} -X main.goVersion=${GO_VERSION} -X main.buildDate=${BUILD_DATE}"
-LITMUS_URL_OLD="http://localhost:20080/remote.php/webdav"
+LITMUS_URL_OLD="http://localhost:20080/remote.php/dav/files/einstein"
 LITMUS_URL_NEW="http://localhost:20080/remote.php/dav/files/4c510ada-c86b-4815-8820-42cdf82c3d51"
 LITMUS_USERNAME="einstein"
 LITMUS_PASSWORD="relativity"

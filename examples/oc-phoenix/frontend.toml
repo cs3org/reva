@@ -13,7 +13,6 @@ gatewaysvc = "localhost:19000"
 # - authenticates requests using oidc bearer auth and basic auth as fallback
 # - serves the grpc services on port 18002
 [grpc]
-insecure = true
 address = "0.0.0.0:20099"
 
 [grpc.services.authprovider]
