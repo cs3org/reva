@@ -73,13 +73,21 @@ func (s *svc) OpenInApp(ctx context.Context, req *gateway.OpenInAppRequest) (*pr
 	})
 	if err != nil {
 		return &providerpb.OpenInAppResponse{
-			Status: status.NewInternal(ctx, err, "gateway: error calling Stat on the resource path for the app provider: "+req.Ref.GetPath()),
+			Status: status.NewInternal(
+				ctx,
+				err,
+				"gateway: error calling Stat on the resource path for the app provider: "+req.Ref.GetPath(),
+			),
 		}, nil
 	}
 	if statRes.Status.Code != rpc.Code_CODE_OK {
 		err := status.NewErrorFromCode(statRes.Status.GetCode(), "gateway")
 		return &providerpb.OpenInAppResponse{
-			Status: status.NewInternal(ctx, err, "Stat failed on the resource path for the app provider: "+req.Ref.GetPath()),
+			Status: status.NewInternal(
+				ctx,
+				err,
+				"Stat failed on the resource path for the app provider: "+req.Ref.GetPath(),
+			),
 		}, nil
 	}
 
@@ -103,13 +111,21 @@ func (s *svc) OpenInApp(ctx context.Context, req *gateway.OpenInAppRequest) (*pr
 		})
 		if err != nil {
 			return &providerpb.OpenInAppResponse{
-				Status: status.NewInternal(ctx, err, "gateway: error calling Stat on the resource path for the app provider: "+req.Ref.GetPath()),
+				Status: status.NewInternal(
+					ctx,
+					err,
+					"gateway: error calling Stat on the resource path for the app provider: "+req.Ref.GetPath(),
+				),
 			}, nil
 		}
 		if res.Status.Code != rpc.Code_CODE_OK {
 			err := status.NewErrorFromCode(res.Status.GetCode(), "gateway")
 			return &providerpb.OpenInAppResponse{
-				Status: status.NewInternal(ctx, err, "Stat failed on the resource path for the app provider: "+req.Ref.GetPath()),
+				Status: status.NewInternal(
+					ctx,
+					err,
+					"Stat failed on the resource path for the app provider: "+req.Ref.GetPath(),
+				),
 			}, nil
 		}
 		fileInfo = res.Info
@@ -117,8 +133,14 @@ func (s *svc) OpenInApp(ctx context.Context, req *gateway.OpenInAppRequest) (*pr
 	return s.openLocalResources(ctx, fileInfo, req.ViewMode, req.App)
 }
 
-func (s *svc) openFederatedShares(ctx context.Context, targetURL string, vm gateway.OpenInAppRequest_ViewMode, app string,
-	insecure, skipVerify bool, nameQueries ...string) (*providerpb.OpenInAppResponse, error) {
+func (s *svc) openFederatedShares(
+	ctx context.Context,
+	targetURL string,
+	vm gateway.OpenInAppRequest_ViewMode,
+	app string,
+	insecure, skipVerify bool,
+	nameQueries ...string,
+) (*providerpb.OpenInAppResponse, error) {
 	log := appctx.GetLogger(ctx)
 	targetURL, err := appendNameQuery(targetURL, nameQueries...)
 	if err != nil {
@@ -169,8 +191,8 @@ func (s *svc) openFederatedShares(ctx context.Context, targetURL string, vm gate
 }
 
 func (s *svc) openLocalResources(ctx context.Context, ri *storageprovider.ResourceInfo,
-	vm gateway.OpenInAppRequest_ViewMode, app string) (*providerpb.OpenInAppResponse, error) {
-
+	vm gateway.OpenInAppRequest_ViewMode, app string,
+) (*providerpb.OpenInAppResponse, error) {
 	accessToken, ok := ctxpkg.ContextGetToken(ctx)
 	if !ok || accessToken == "" {
 		return &providerpb.OpenInAppResponse{
@@ -188,8 +210,11 @@ func (s *svc) openLocalResources(ctx context.Context, ri *storageprovider.Resour
 		}
 		return nil, err
 	}
-
-	appProviderClient, err := pool.GetAppProviderClient(pool.Endpoint(provider.Address))
+	appProviderClient, err := pool.GetAppProviderClient(
+		pool.Endpoint(provider.Address),
+		pool.Insecure(s.c.Insecure),
+		pool.SkipVerify(s.c.SkipVerify),
+	)
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error calling GetAppProviderClient")
 	}
@@ -208,8 +233,16 @@ func (s *svc) openLocalResources(ctx context.Context, ri *storageprovider.Resour
 	return res, nil
 }
 
-func (s *svc) findAppProvider(ctx context.Context, ri *storageprovider.ResourceInfo, app string) (*registry.ProviderInfo, error) {
-	c, err := pool.GetAppRegistryClient(pool.Endpoint(s.c.AppRegistryEndpoint))
+func (s *svc) findAppProvider(
+	ctx context.Context,
+	ri *storageprovider.ResourceInfo,
+	app string,
+) (*registry.ProviderInfo, error) {
+	c, err := pool.GetAppRegistryClient(
+		pool.Endpoint(s.c.AppRegistryEndpoint),
+		pool.Insecure(s.c.Insecure),
+		pool.SkipVerify(s.c.SkipVerify),
+	)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error getting appregistry client")
 		return nil, err
@@ -243,7 +276,9 @@ func (s *svc) findAppProvider(ctx context.Context, ri *storageprovider.ResourceI
 
 		// we did not find a default provider
 		if res.Status.Code == rpc.Code_CODE_NOT_FOUND {
-			err := errtypes.NotFound(fmt.Sprintf("gateway: default app provider for mime type:%s not found", ri.MimeType))
+			err := errtypes.NotFound(
+				fmt.Sprintf("gateway: default app provider for mime type:%s not found", ri.MimeType),
+			)
 			return nil, err
 		}
 
@@ -251,7 +286,12 @@ func (s *svc) findAppProvider(ctx context.Context, ri *storageprovider.ResourceI
 		// if a default is not set we abort as returning the first application available is not
 		// deterministic for the end-user as it depends on initialization order of the app approviders with the registry.
 		// It also provides a good hint to the system admin to configure the defaults accordingly.
-		err = errtypes.InternalError(fmt.Sprintf("gateway: unexpected grpc response status:%s when calling GetDefaultAppProviderForMimeType", res.Status))
+		err = errtypes.InternalError(
+			fmt.Sprintf(
+				"gateway: unexpected grpc response status:%s when calling GetDefaultAppProviderForMimeType",
+				res.Status,
+			),
+		)
 		return nil, err
 	}
 
@@ -296,8 +336,9 @@ func (s *svc) findAppProvider(ctx context.Context, ri *storageprovider.ResourceI
 
 	// we should never arrive to the point of having more than one
 	// provider for the given "app" parameters sent by the user
-	return nil, errtypes.InternalError(fmt.Sprintf("gateway: user requested app %q and we provided %d applications", app, len(res.Providers)))
-
+	return nil, errtypes.InternalError(
+		fmt.Sprintf("gateway: user requested app %q and we provided %d applications", app, len(res.Providers)),
+	)
 }
 
 func getGRPCConfig(opaque *typespb.Opaque) (bool, bool) {

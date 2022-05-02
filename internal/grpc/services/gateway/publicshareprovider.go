@@ -29,7 +29,10 @@ import (
 	"github.com/pkg/errors"
 )
 
-func (s *svc) CreatePublicShare(ctx context.Context, req *link.CreatePublicShareRequest) (*link.CreatePublicShareResponse, error) {
+func (s *svc) CreatePublicShare(
+	ctx context.Context,
+	req *link.CreatePublicShareRequest,
+) (*link.CreatePublicShareResponse, error) {
 	if s.isSharedFolder(ctx, req.ResourceInfo.GetPath()) {
 		return nil, errtypes.AlreadyExists("gateway: can't create a public share of the share folder itself")
 	}
@@ -37,7 +40,11 @@ func (s *svc) CreatePublicShare(ctx context.Context, req *link.CreatePublicShare
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("create public share")
 
-	c, err := pool.GetPublicShareProviderClient(pool.Endpoint(s.c.PublicShareProviderEndpoint))
+	c, err := pool.GetPublicShareProviderClient(
+		pool.Endpoint(s.c.PublicShareProviderEndpoint),
+		pool.Insecure(s.c.Insecure),
+		pool.SkipVerify(s.c.SkipVerify),
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -50,11 +57,18 @@ func (s *svc) CreatePublicShare(ctx context.Context, req *link.CreatePublicShare
 	return res, nil
 }
 
-func (s *svc) RemovePublicShare(ctx context.Context, req *link.RemovePublicShareRequest) (*link.RemovePublicShareResponse, error) {
+func (s *svc) RemovePublicShare(
+	ctx context.Context,
+	req *link.RemovePublicShareRequest,
+) (*link.RemovePublicShareResponse, error) {
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("remove public share")
 
-	driver, err := pool.GetPublicShareProviderClient(pool.Endpoint(s.c.PublicShareProviderEndpoint))
+	driver, err := pool.GetPublicShareProviderClient(
+		pool.Endpoint(s.c.PublicShareProviderEndpoint),
+		pool.Insecure(s.c.Insecure),
+		pool.SkipVerify(s.c.SkipVerify),
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -65,11 +79,18 @@ func (s *svc) RemovePublicShare(ctx context.Context, req *link.RemovePublicShare
 	return res, nil
 }
 
-func (s *svc) GetPublicShareByToken(ctx context.Context, req *link.GetPublicShareByTokenRequest) (*link.GetPublicShareByTokenResponse, error) {
+func (s *svc) GetPublicShareByToken(
+	ctx context.Context,
+	req *link.GetPublicShareByTokenRequest,
+) (*link.GetPublicShareByTokenResponse, error) {
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("get public share by token")
 
-	driver, err := pool.GetPublicShareProviderClient(pool.Endpoint(s.c.PublicShareProviderEndpoint))
+	driver, err := pool.GetPublicShareProviderClient(
+		pool.Endpoint(s.c.PublicShareProviderEndpoint),
+		pool.Insecure(s.c.Insecure),
+		pool.SkipVerify(s.c.SkipVerify),
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -82,11 +103,18 @@ func (s *svc) GetPublicShareByToken(ctx context.Context, req *link.GetPublicShar
 	return res, nil
 }
 
-func (s *svc) GetPublicShare(ctx context.Context, req *link.GetPublicShareRequest) (*link.GetPublicShareResponse, error) {
+func (s *svc) GetPublicShare(
+	ctx context.Context,
+	req *link.GetPublicShareRequest,
+) (*link.GetPublicShareResponse, error) {
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("get public share")
 
-	pClient, err := pool.GetPublicShareProviderClient(pool.Endpoint(s.c.PublicShareProviderEndpoint))
+	pClient, err := pool.GetPublicShareProviderClient(
+		pool.Endpoint(s.c.PublicShareProviderEndpoint),
+		pool.Insecure(s.c.Insecure),
+		pool.SkipVerify(s.c.SkipVerify),
+	)
 	if err != nil {
 		log.Err(err).Msg("error connecting to a public share provider")
 		return &link.GetPublicShareResponse{
@@ -99,11 +127,18 @@ func (s *svc) GetPublicShare(ctx context.Context, req *link.GetPublicShareReques
 	return pClient.GetPublicShare(ctx, req)
 }
 
-func (s *svc) ListPublicShares(ctx context.Context, req *link.ListPublicSharesRequest) (*link.ListPublicSharesResponse, error) {
+func (s *svc) ListPublicShares(
+	ctx context.Context,
+	req *link.ListPublicSharesRequest,
+) (*link.ListPublicSharesResponse, error) {
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("listing public shares")
 
-	pClient, err := pool.GetPublicShareProviderClient(pool.Endpoint(s.c.PublicShareProviderEndpoint))
+	pClient, err := pool.GetPublicShareProviderClient(
+		pool.Endpoint(s.c.PublicShareProviderEndpoint),
+		pool.Insecure(s.c.Insecure),
+		pool.SkipVerify(s.c.SkipVerify),
+	)
 	if err != nil {
 		log.Err(err).Msg("error connecting to a public share provider")
 		return &link.ListPublicSharesResponse{
@@ -121,11 +156,18 @@ func (s *svc) ListPublicShares(ctx context.Context, req *link.ListPublicSharesRe
 	return res, nil
 }
 
-func (s *svc) UpdatePublicShare(ctx context.Context, req *link.UpdatePublicShareRequest) (*link.UpdatePublicShareResponse, error) {
+func (s *svc) UpdatePublicShare(
+	ctx context.Context,
+	req *link.UpdatePublicShareRequest,
+) (*link.UpdatePublicShareResponse, error) {
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("update public share")
 
-	pClient, err := pool.GetPublicShareProviderClient(pool.Endpoint(s.c.PublicShareProviderEndpoint))
+	pClient, err := pool.GetPublicShareProviderClient(
+		pool.Endpoint(s.c.PublicShareProviderEndpoint),
+		pool.Insecure(s.c.Insecure),
+		pool.SkipVerify(s.c.SkipVerify),
+	)
 	if err != nil {
 		log.Err(err).Msg("error connecting to a public share provider")
 		return &link.UpdatePublicShareResponse{

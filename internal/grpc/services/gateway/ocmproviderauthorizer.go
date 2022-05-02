@@ -27,8 +27,15 @@ import (
 	"github.com/pkg/errors"
 )
 
-func (s *svc) IsProviderAllowed(ctx context.Context, req *ocmprovider.IsProviderAllowedRequest) (*ocmprovider.IsProviderAllowedResponse, error) {
-	c, err := pool.GetOCMProviderAuthorizerClient(pool.Endpoint(s.c.OCMProviderAuthorizerEndpoint))
+func (s *svc) IsProviderAllowed(
+	ctx context.Context,
+	req *ocmprovider.IsProviderAllowedRequest,
+) (*ocmprovider.IsProviderAllowedResponse, error) {
+	c, err := pool.GetOCMProviderAuthorizerClient(
+		pool.Endpoint(s.c.OCMProviderAuthorizerEndpoint),
+		pool.Insecure(s.c.Insecure),
+		pool.SkipVerify(s.c.SkipVerify),
+	)
 	if err != nil {
 		return &ocmprovider.IsProviderAllowedResponse{
 			Status: status.NewInternal(ctx, err, "error getting ocm authorizer provider client"),
@@ -43,8 +50,15 @@ func (s *svc) IsProviderAllowed(ctx context.Context, req *ocmprovider.IsProvider
 	return res, nil
 }
 
-func (s *svc) GetInfoByDomain(ctx context.Context, req *ocmprovider.GetInfoByDomainRequest) (*ocmprovider.GetInfoByDomainResponse, error) {
-	c, err := pool.GetOCMProviderAuthorizerClient(pool.Endpoint(s.c.OCMProviderAuthorizerEndpoint))
+func (s *svc) GetInfoByDomain(
+	ctx context.Context,
+	req *ocmprovider.GetInfoByDomainRequest,
+) (*ocmprovider.GetInfoByDomainResponse, error) {
+	c, err := pool.GetOCMProviderAuthorizerClient(
+		pool.Endpoint(s.c.OCMProviderAuthorizerEndpoint),
+		pool.Insecure(s.c.Insecure),
+		pool.SkipVerify(s.c.SkipVerify),
+	)
 	if err != nil {
 		return &ocmprovider.GetInfoByDomainResponse{
 			Status: status.NewInternal(ctx, err, "error getting ocm authorizer provider client"),
@@ -59,8 +73,15 @@ func (s *svc) GetInfoByDomain(ctx context.Context, req *ocmprovider.GetInfoByDom
 	return res, nil
 }
 
-func (s *svc) ListAllProviders(ctx context.Context, req *ocmprovider.ListAllProvidersRequest) (*ocmprovider.ListAllProvidersResponse, error) {
-	c, err := pool.GetOCMProviderAuthorizerClient(pool.Endpoint(s.c.OCMProviderAuthorizerEndpoint))
+func (s *svc) ListAllProviders(
+	ctx context.Context,
+	req *ocmprovider.ListAllProvidersRequest,
+) (*ocmprovider.ListAllProvidersResponse, error) {
+	c, err := pool.GetOCMProviderAuthorizerClient(
+		pool.Endpoint(s.c.OCMProviderAuthorizerEndpoint),
+		pool.Insecure(s.c.Insecure),
+		pool.SkipVerify(s.c.SkipVerify),
+	)
 	if err != nil {
 		return &ocmprovider.ListAllProvidersResponse{
 			Status: status.NewInternal(ctx, err, "error getting ocm authorizer provider client"),

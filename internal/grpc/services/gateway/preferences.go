@@ -28,7 +28,11 @@ import (
 )
 
 func (s *svc) SetKey(ctx context.Context, req *preferences.SetKeyRequest) (*preferences.SetKeyResponse, error) {
-	c, err := pool.GetPreferencesClient(pool.Endpoint(s.c.PreferencesEndpoint))
+	c, err := pool.GetPreferencesClient(
+		pool.Endpoint(s.c.PreferencesEndpoint),
+		pool.Insecure(s.c.Insecure),
+		pool.SkipVerify(s.c.SkipVerify),
+	)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetPreferencesClient")
 		return &preferences.SetKeyResponse{
@@ -45,7 +49,11 @@ func (s *svc) SetKey(ctx context.Context, req *preferences.SetKeyRequest) (*pref
 }
 
 func (s *svc) GetKey(ctx context.Context, req *preferences.GetKeyRequest) (*preferences.GetKeyResponse, error) {
-	c, err := pool.GetPreferencesClient(pool.Endpoint(s.c.PreferencesEndpoint))
+	c, err := pool.GetPreferencesClient(
+		pool.Endpoint(s.c.PreferencesEndpoint),
+		pool.Insecure(s.c.Insecure),
+		pool.SkipVerify(s.c.SkipVerify),
+	)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetPreferencesClient")
 		return &preferences.GetKeyResponse{

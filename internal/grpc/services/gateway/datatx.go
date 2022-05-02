@@ -28,7 +28,11 @@ import (
 )
 
 func (s *svc) PullTransfer(ctx context.Context, req *datatx.PullTransferRequest) (*datatx.PullTransferResponse, error) {
-	c, err := pool.GetDataTxClient(pool.Endpoint(s.c.DataTxEndpoint))
+	c, err := pool.GetDataTxClient(
+		pool.Endpoint(s.c.DataTxEndpoint),
+		pool.Insecure(s.c.Insecure),
+		pool.SkipVerify(s.c.SkipVerify),
+	)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetDataTxClient")
 		return &datatx.PullTransferResponse{
@@ -44,8 +48,15 @@ func (s *svc) PullTransfer(ctx context.Context, req *datatx.PullTransferRequest)
 	return res, nil
 }
 
-func (s *svc) GetTransferStatus(ctx context.Context, req *datatx.GetTransferStatusRequest) (*datatx.GetTransferStatusResponse, error) {
-	c, err := pool.GetDataTxClient(pool.Endpoint(s.c.DataTxEndpoint))
+func (s *svc) GetTransferStatus(
+	ctx context.Context,
+	req *datatx.GetTransferStatusRequest,
+) (*datatx.GetTransferStatusResponse, error) {
+	c, err := pool.GetDataTxClient(
+		pool.Endpoint(s.c.DataTxEndpoint),
+		pool.Insecure(s.c.Insecure),
+		pool.SkipVerify(s.c.SkipVerify),
+	)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetDataTxClient")
 		return &datatx.GetTransferStatusResponse{
@@ -61,8 +72,15 @@ func (s *svc) GetTransferStatus(ctx context.Context, req *datatx.GetTransferStat
 	return res, nil
 }
 
-func (s *svc) CancelTransfer(ctx context.Context, req *datatx.CancelTransferRequest) (*datatx.CancelTransferResponse, error) {
-	c, err := pool.GetDataTxClient(pool.Endpoint(s.c.DataTxEndpoint))
+func (s *svc) CancelTransfer(
+	ctx context.Context,
+	req *datatx.CancelTransferRequest,
+) (*datatx.CancelTransferResponse, error) {
+	c, err := pool.GetDataTxClient(
+		pool.Endpoint(s.c.DataTxEndpoint),
+		pool.Insecure(s.c.Insecure),
+		pool.SkipVerify(s.c.SkipVerify),
+	)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetDataTxClient")
 		return &datatx.CancelTransferResponse{
@@ -78,8 +96,15 @@ func (s *svc) CancelTransfer(ctx context.Context, req *datatx.CancelTransferRequ
 	return res, nil
 }
 
-func (s *svc) ListTransfers(ctx context.Context, req *datatx.ListTransfersRequest) (*datatx.ListTransfersResponse, error) {
-	c, err := pool.GetDataTxClient(pool.Endpoint(s.c.DataTxEndpoint))
+func (s *svc) ListTransfers(
+	ctx context.Context,
+	req *datatx.ListTransfersRequest,
+) (*datatx.ListTransfersResponse, error) {
+	c, err := pool.GetDataTxClient(
+		pool.Endpoint(s.c.DataTxEndpoint),
+		pool.Insecure(s.c.Insecure),
+		pool.SkipVerify(s.c.SkipVerify),
+	)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetDataTxClient")
 		return &datatx.ListTransfersResponse{
@@ -95,8 +120,15 @@ func (s *svc) ListTransfers(ctx context.Context, req *datatx.ListTransfersReques
 	return res, nil
 }
 
-func (s *svc) RetryTransfer(ctx context.Context, req *datatx.RetryTransferRequest) (*datatx.RetryTransferResponse, error) {
-	c, err := pool.GetDataTxClient(pool.Endpoint(s.c.DataTxEndpoint))
+func (s *svc) RetryTransfer(
+	ctx context.Context,
+	req *datatx.RetryTransferRequest,
+) (*datatx.RetryTransferResponse, error) {
+	c, err := pool.GetDataTxClient(
+		pool.Endpoint(s.c.DataTxEndpoint),
+		pool.Insecure(s.c.Insecure),
+		pool.SkipVerify(s.c.SkipVerify),
+	)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetDataTxClient")
 		return &datatx.RetryTransferResponse{
