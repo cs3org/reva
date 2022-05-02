@@ -102,7 +102,7 @@ user_layout = "{{.Username}}"
 
 [grpc.services.authprovider]
 auth_manager = "nextcloud"
-[grpc.services.authprovider.drivers.nextcloud]
+[grpc.services.authprovider.auth_managers.nextcloud]
 endpoint = "http://localhost/apps/sciencemesh/"
 
 [grpc.services.userprovider]
