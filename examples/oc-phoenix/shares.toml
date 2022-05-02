@@ -1,4 +1,5 @@
 [shared]
+insecure = true
 jwt_secret = "Pive-Fumkiu4"
 
 # GRPC:

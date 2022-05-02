@@ -7,6 +7,7 @@
 #   - TODO(diocas): ocm
 
 [shared]
+insecure = true
 jwt_secret = "Pive-Fumkiu4"
 gatewaysvc = "localhost:19000"
 

@@ -1,4 +1,5 @@
 [shared]
+insecure = true
 gatewaysvc = "localhost:17000"
 
 [grpc]

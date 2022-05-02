@@ -3,6 +3,7 @@
 # - serves the grpc services on port 38000
 
 [shared]
+insecure = true
 jwt_secret = "Pive-Fumkiu4"
 
 [grpc]

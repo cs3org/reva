@@ -58,7 +58,9 @@ func Endpoint(val string) Option {
 // MaxCallRecvMsgSize provides a function to set the MaxCallRecvMsgSize option.
 func MaxCallRecvMsgSize(size int) Option {
 	return func(o *Options) {
-		o.MaxCallRecvMsgSize = size
+		if size > 0 {
+			o.MaxCallRecvMsgSize = size
+		}
 	}
 }
 

@@ -107,8 +107,7 @@ func getConnectionOptions(options Options) ([]grpc.DialOption, error) {
 	opts := []grpc.DialOption{
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithDefaultCallOptions(
-			// TODO @amal-thundiyil: change this to options.MaxCallRecvMsgSize
-			grpc.MaxCallRecvMsgSize(10240000),
+			grpc.MaxCallRecvMsgSize(options.MaxCallRecvMsgSize),
 		),
 		grpc.WithStreamInterceptor(otelgrpc.StreamClientInterceptor(
 			otelgrpc.WithTracerProvider(
@@ -150,7 +149,7 @@ func getCredentials(options Options) (credentials.TransportCredentials, error) {
 		if err != nil {
 			b, err = ioutil.ReadFile(sharedconf.GetCAFilePath())
 			if err != nil {
-				return nil, errors.New("couldn't read cert files")
+				return nil, errors.New("couldn't read CA certificate files")
 			}
 		}
 		cp := x509.NewCertPool()

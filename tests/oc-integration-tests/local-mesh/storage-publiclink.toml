@@ -2,6 +2,7 @@
 # - serves the public storage provider on grpc port 13000
 
 [shared]
+insecure = true
 jwt_secret = "Pive-Fumkiu4"
 gatewaysvc = "localhost:19000"
 
