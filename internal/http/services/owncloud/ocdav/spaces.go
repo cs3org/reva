@@ -29,6 +29,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v2/pkg/rhttp/router"
+	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/utils"
 )
 
@@ -157,7 +158,7 @@ func (h *SpacesHandler) handleSpacesTrashbin(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	ref, err := utils.ParseStorageSpaceReference(spaceID)
+	ref, err := storagespace.ParseReference(spaceID)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return

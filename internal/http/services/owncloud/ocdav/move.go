@@ -31,9 +31,9 @@ import (
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/spacelookup"
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	"github.com/cs3org/reva/v2/pkg/rhttp/router"
+	"github.com/cs3org/reva/v2/pkg/storagespace"
 	rtrace "github.com/cs3org/reva/v2/pkg/trace"
 	"github.com/cs3org/reva/v2/pkg/utils"
-	"github.com/cs3org/reva/v2/pkg/utils/resourceid"
 	"github.com/rs/zerolog"
 )
 
@@ -278,7 +278,7 @@ func (s *svc) handleMove(ctx context.Context, w http.ResponseWriter, r *http.Req
 	info := dstStatRes.Info
 	w.Header().Set(net.HeaderContentType, info.MimeType)
 	w.Header().Set(net.HeaderETag, info.Etag)
-	w.Header().Set(net.HeaderOCFileID, resourceid.OwnCloudResourceIDWrap(info.Id))
+	w.Header().Set(net.HeaderOCFileID, storagespace.FormatResourceID(*info.Id))
 	w.Header().Set(net.HeaderOCETag, info.Etag)
 	w.WriteHeader(successCode)
 }

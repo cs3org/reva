@@ -34,8 +34,8 @@ import (
 	"github.com/cs3org/reva/v2/pkg/rhttp"
 	"github.com/cs3org/reva/v2/pkg/rhttp/global"
 	"github.com/cs3org/reva/v2/pkg/sharedconf"
+	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/utils"
-	"github.com/cs3org/reva/v2/pkg/utils/resourceid"
 	"github.com/go-chi/chi"
 	ua "github.com/mileusna/useragent"
 	"github.com/mitchellh/mapstructure"
@@ -135,8 +135,8 @@ func (s *svc) handleNew(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	parentContainerRef := resourceid.OwnCloudResourceIDUnwrap(parentContainerID)
-	if parentContainerRef == nil {
+	parentContainerRef, err := storagespace.ParseID(parentContainerID)
+	if err != nil {
 		writeError(w, r, appErrorInvalidParameter, "invalid parent container ID", nil)
 		return
 	}
@@ -155,7 +155,7 @@ func (s *svc) handleNew(w http.ResponseWriter, r *http.Request) {
 
 	statParentContainerReq := &provider.StatRequest{
 		Ref: &provider.Reference{
-			ResourceId: parentContainerRef,
+			ResourceId: &parentContainerRef,
 		},
 	}
 	parentContainer, err := client.Stat(ctx, statParentContainerReq)
@@ -271,7 +271,7 @@ func (s *svc) handleNew(w http.ResponseWriter, r *http.Request) {
 
 	js, err := json.Marshal(
 		map[string]interface{}{
-			"file_id": resourceid.OwnCloudResourceIDWrap(statRes.Info.Id),
+			"file_id": storagespace.FormatResourceID(*statRes.Info.Id),
 		},
 	)
 	if err != nil {
@@ -334,14 +334,14 @@ func (s *svc) handleOpen(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resourceID := resourceid.OwnCloudResourceIDUnwrap(fileID)
-	if resourceID == nil {
+	resourceID, err := storagespace.ParseID(fileID)
+	if err != nil {
 		writeError(w, r, appErrorInvalidParameter, "invalid file ID", nil)
 		return
 	}
 
 	fileRef := &provider.Reference{
-		ResourceId: resourceID,
+		ResourceId: &resourceID,
 		Path:       ".",
 	}
 

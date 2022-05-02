@@ -56,8 +56,8 @@ import (
 	cachereg "github.com/cs3org/reva/v2/pkg/share/cache/registry"
 	warmupreg "github.com/cs3org/reva/v2/pkg/share/cache/warmup/registry"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/templates"
+	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/utils"
-	"github.com/cs3org/reva/v2/pkg/utils/resourceid"
 	"github.com/pkg/errors"
 )
 
@@ -157,7 +157,7 @@ func (h *Handler) startCacheWarmup(c cache.Warmup) {
 		return
 	}
 	for _, r := range infos {
-		key := resourceid.OwnCloudResourceIDWrap(r.Id)
+		key := storagespace.FormatResourceID(*r.Id)
 		_ = h.resourceInfoCache.SetWithExpire(key, r, h.resourceInfoCacheTTL)
 	}
 }
@@ -172,7 +172,7 @@ func (h *Handler) extractReference(r *http.Request) (provider.Reference, error) 
 		}
 	} else if spaceRef := r.FormValue("space_ref"); spaceRef != "" {
 		var err error
-		ref, err = utils.ParseStorageSpaceReference(spaceRef)
+		ref, err = storagespace.ParseReference(spaceRef)
 		if err != nil {
 			return provider.Reference{}, err
 		}
@@ -1030,7 +1030,7 @@ func (h *Handler) addFileInfo(ctx context.Context, s *conversions.ShareData, inf
 		s.MimeType = parsedMt
 		// TODO STime:     &types.Timestamp{Seconds: info.Mtime.Seconds, Nanos: info.Mtime.Nanos},
 		// TODO Storage: int
-		s.ItemSource = resourceid.OwnCloudResourceIDWrap(info.Id)
+		s.ItemSource = storagespace.FormatResourceID(*info.Id)
 		s.FileSource = s.ItemSource
 		switch {
 		case h.sharePrefix == "/":
@@ -1233,7 +1233,7 @@ func (h *Handler) getResourceInfoByReference(ctx context.Context, client gateway
 		key = ref.Path
 	} else {
 		var err error
-		key, err = utils.FormatStorageSpaceReference(ref)
+		key, err = storagespace.FormatReference(ref)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -1242,7 +1242,7 @@ func (h *Handler) getResourceInfoByReference(ctx context.Context, client gateway
 }
 
 func (h *Handler) getResourceInfoByID(ctx context.Context, client gateway.GatewayAPIClient, id *provider.ResourceId) (*provider.ResourceInfo, *rpc.Status, error) {
-	return h.getResourceInfo(ctx, client, resourceid.OwnCloudResourceIDWrap(id), &provider.Reference{ResourceId: id, Path: "."})
+	return h.getResourceInfo(ctx, client, storagespace.FormatResourceID(*id), &provider.Reference{ResourceId: id, Path: "."})
 }
 
 // getResourceInfo retrieves the resource info to a target.

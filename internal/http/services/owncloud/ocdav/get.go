@@ -37,9 +37,9 @@ import (
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/spacelookup"
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	"github.com/cs3org/reva/v2/pkg/rhttp"
+	"github.com/cs3org/reva/v2/pkg/storagespace"
 	rtrace "github.com/cs3org/reva/v2/pkg/trace"
 	"github.com/cs3org/reva/v2/pkg/utils"
-	"github.com/cs3org/reva/v2/pkg/utils/resourceid"
 	"github.com/rs/zerolog"
 )
 
@@ -146,7 +146,7 @@ func (s *svc) handleGet(ctx context.Context, w http.ResponseWriter, r *http.Requ
 	w.Header().Set(net.HeaderContentDisposistion, "attachment; filename*=UTF-8''"+
 		path.Base(r.URL.Path)+"; filename=\""+path.Base(r.URL.Path)+"\"")
 	w.Header().Set(net.HeaderETag, info.Etag)
-	w.Header().Set(net.HeaderOCFileID, resourceid.OwnCloudResourceIDWrap(info.Id))
+	w.Header().Set(net.HeaderOCFileID, storagespace.FormatResourceID(*info.Id))
 	w.Header().Set(net.HeaderOCETag, info.Etag)
 	t := utils.TSToTime(info.Mtime).UTC()
 	lastModifiedString := t.Format(time.RFC1123Z)

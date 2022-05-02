@@ -43,8 +43,8 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/templates"
+	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/utils"
-	"github.com/cs3org/reva/v2/pkg/utils/resourceid"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 )
@@ -265,7 +265,7 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 				spaceTypes = append(spaceTypes, filter[i].GetSpaceType())
 			}
 		case provider.ListStorageSpacesRequest_Filter_TYPE_ID:
-			spaceID, nodeID, _ = utils.SplitStorageSpaceID(filter[i].GetId().OpaqueId)
+			spaceID, nodeID, _ = storagespace.SplitID(filter[i].GetId().OpaqueId)
 			if strings.Contains(nodeID, "/") {
 				return []*provider.StorageSpace{}, nil
 			}
@@ -402,7 +402,7 @@ func (fs *Decomposedfs) UpdateStorageSpace(ctx context.Context, req *provider.Up
 	}
 
 	space := req.StorageSpace
-	spaceID, _, _ := utils.SplitStorageSpaceID(space.Id.OpaqueId)
+	spaceID, _, _ := storagespace.SplitID(space.Id.OpaqueId)
 
 	node, err := node.ReadNode(ctx, fs.lu, spaceID, spaceID)
 	if err != nil {
@@ -441,8 +441,8 @@ func (fs *Decomposedfs) UpdateStorageSpace(ctx context.Context, req *provider.Up
 			metadata[xattrs.SpaceAliasAttr] = alias
 		}
 		if image := utils.ReadPlainFromOpaque(space.Opaque, "image"); image != "" {
-			imageID := resourceid.OwnCloudResourceIDUnwrap(image)
-			if imageID == nil {
+			imageID, err := storagespace.ParseID(image)
+			if err != nil {
 				return &provider.UpdateStorageSpaceResponse{
 					Status: &v1beta11.Status{Code: v1beta11.Code_CODE_NOT_FOUND, Message: "decomposedFS: space image resource not found"},
 				}, nil
@@ -450,8 +450,8 @@ func (fs *Decomposedfs) UpdateStorageSpace(ctx context.Context, req *provider.Up
 			metadata[xattrs.SpaceImageAttr] = imageID.OpaqueId
 		}
 		if readme := utils.ReadPlainFromOpaque(space.Opaque, "readme"); readme != "" {
-			readmeID := resourceid.OwnCloudResourceIDUnwrap(readme)
-			if readmeID == nil {
+			readmeID, err := storagespace.ParseID(readme)
+			if err != nil {
 				return &provider.UpdateStorageSpaceResponse{
 					Status: &v1beta11.Status{Code: v1beta11.Code_CODE_NOT_FOUND, Message: "decomposedFS: space readme resource not found"},
 				}, nil
@@ -708,8 +708,8 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 	}
 	spaceImage, ok := spaceAttributes[xattrs.SpaceImageAttr]
 	if ok {
-		space.Opaque = utils.AppendPlainToOpaque(space.Opaque, "image", resourceid.OwnCloudResourceIDWrap(
-			&provider.ResourceId{StorageId: space.Root.StorageId, OpaqueId: spaceImage},
+		space.Opaque = utils.AppendPlainToOpaque(space.Opaque, "image", storagespace.FormatResourceID(
+			provider.ResourceId{StorageId: space.Root.StorageId, OpaqueId: spaceImage},
 		))
 	}
 	spaceDescription, ok := spaceAttributes[xattrs.SpaceDescriptionAttr]
@@ -718,8 +718,8 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 	}
 	spaceReadme, ok := spaceAttributes[xattrs.SpaceReadmeAttr]
 	if ok {
-		space.Opaque = utils.AppendPlainToOpaque(space.Opaque, "readme", resourceid.OwnCloudResourceIDWrap(
-			&provider.ResourceId{StorageId: space.Root.StorageId, OpaqueId: spaceReadme},
+		space.Opaque = utils.AppendPlainToOpaque(space.Opaque, "readme", storagespace.FormatResourceID(
+			provider.ResourceId{StorageId: space.Root.StorageId, OpaqueId: spaceReadme},
 		))
 	}
 	spaceAlias, ok := spaceAttributes[xattrs.SpaceAliasAttr]

@@ -26,8 +26,8 @@ import (
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/errors"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/net"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/propfind"
+	"github.com/cs3org/reva/v2/pkg/storagespace"
 	rtrace "github.com/cs3org/reva/v2/pkg/trace"
-	"github.com/cs3org/reva/v2/pkg/utils/resourceid"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -57,7 +57,7 @@ func (h *VersionsHandler) Handler(s *svc, rid *provider.ResourceId) http.Handler
 		}
 
 		// baseURI is encoded as part of the response payload in href field
-		baseURI := path.Join(ctx.Value(net.CtxKeyBaseURI).(string), resourceid.OwnCloudResourceIDWrap(rid))
+		baseURI := path.Join(ctx.Value(net.CtxKeyBaseURI).(string), storagespace.FormatResourceID(*rid))
 		ctx = context.WithValue(ctx, net.CtxKeyBaseURI, baseURI)
 		r = r.WithContext(ctx)
 

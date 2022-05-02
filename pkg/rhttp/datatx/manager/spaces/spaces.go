@@ -31,7 +31,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/rhttp/datatx/utils/download"
 	"github.com/cs3org/reva/v2/pkg/rhttp/router"
 	"github.com/cs3org/reva/v2/pkg/storage"
-	"github.com/cs3org/reva/v2/pkg/utils"
+	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )
@@ -81,7 +81,7 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 			fn := path.Clean(strings.TrimLeft(r.URL.Path, "/"))
 			defer r.Body.Close()
 
-			storageid, opaqeid, _ := utils.SplitStorageSpaceID(spaceID)
+			storageid, opaqeid, _ := storagespace.SplitID(spaceID)
 			ref := &provider.Reference{
 				ResourceId: &provider.ResourceId{StorageId: storageid, OpaqueId: opaqeid},
 				Path:       fn,

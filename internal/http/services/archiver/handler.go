@@ -39,7 +39,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/sharedconf"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/downloader"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/walker"
-	"github.com/cs3org/reva/v2/pkg/utils/resourceid"
+	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/gdexlab/go-render/render"
 	ua "github.com/mileusna/useragent"
 	"github.com/mitchellh/mapstructure"
@@ -129,12 +129,12 @@ func (s *svc) getResources(ctx context.Context, paths, ids []string) ([]*provide
 	for _, id := range ids {
 		// id is base64 encoded and after decoding has the form <storage_id>:<resource_id>
 
-		decodedID := resourceid.OwnCloudResourceIDUnwrap(id)
-		if decodedID == nil {
+		decodedID, err := storagespace.ParseID(id)
+		if err != nil {
 			return nil, errors.New("could not unwrap given file id")
 		}
 
-		resources = append(resources, decodedID)
+		resources = append(resources, &decodedID)
 
 	}
 

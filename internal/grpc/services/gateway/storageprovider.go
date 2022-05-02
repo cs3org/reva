@@ -45,6 +45,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
 	sdk "github.com/cs3org/reva/v2/pkg/sdk/common"
 	"github.com/cs3org/reva/v2/pkg/share"
+	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/golang-jwt/jwt"
 	"github.com/pkg/errors"
@@ -221,7 +222,7 @@ func (s *svc) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSp
 	for _, f := range req.Filters {
 		switch f.Type {
 		case provider.ListStorageSpacesRequest_Filter_TYPE_ID:
-			sid, oid, err := utils.SplitStorageSpaceID(f.GetId().OpaqueId)
+			sid, oid, err := storagespace.SplitID(f.GetId().OpaqueId)
 			if err != nil {
 				continue
 			}
@@ -308,7 +309,7 @@ func (s *svc) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorag
 		_, purge = opaque.Map["purge"]
 	}
 
-	storageid, opaqeid, err := utils.SplitStorageSpaceID(req.Id.OpaqueId)
+	storageid, opaqeid, err := storagespace.SplitID(req.Id.OpaqueId)
 	if err != nil {
 		return &provider.DeleteStorageSpaceResponse{
 			Status: status.NewStatusFromErrType(ctx, fmt.Sprintf("gateway could not split space id %s", req.GetId().GetOpaqueId()), err),

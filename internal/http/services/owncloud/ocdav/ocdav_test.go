@@ -21,12 +21,12 @@ import (
 	"testing"
 
 	providerv1beta1 "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/v2/pkg/utils/resourceid"
+	"github.com/cs3org/reva/v2/pkg/storagespace"
 )
 
 func TestWrapResourceID(t *testing.T) {
 	expected := "storageid" + "!" + "opaqueid"
-	wrapped := resourceid.OwnCloudResourceIDWrap(&providerv1beta1.ResourceId{StorageId: "storageid", OpaqueId: "opaqueid"})
+	wrapped := storagespace.FormatResourceID(providerv1beta1.ResourceId{StorageId: "storageid", OpaqueId: "opaqueid"})
 
 	if wrapped != expected {
 		t.Errorf("wrapped id doesn't have the expected format: got %s expected %s", wrapped, expected)
