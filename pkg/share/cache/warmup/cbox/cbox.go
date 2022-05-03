@@ -119,7 +119,7 @@ func (m *manager) GetResourceInfos() ([]*provider.ResourceInfo, error) {
 	}
 	ctx := metadata.AppendToOutgoingContext(context.Background(), ctxpkg.TokenHeader, tkn)
 
-	client, err := pool.GetGatewayServiceClient(m.conf.GatewaySvc)
+	client, err := pool.GetGatewayServiceClient(pool.Endpoint(m.conf.GatewaySvc))
 	if err != nil {
 		return nil, err
 	}

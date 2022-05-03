@@ -82,7 +82,7 @@ func New(conf map[string]interface{}, log *zerolog.Logger) (global.Service, erro
 
 	c.init()
 
-	gtw, err := pool.GetGatewayServiceClient(c.GatewaySvc)
+	gtw, err := pool.GetGatewayServiceClient(pool.Endpoint(c.GatewaySvc))
 	if err != nil {
 		return nil, err
 	}

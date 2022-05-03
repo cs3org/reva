@@ -28,7 +28,7 @@ import (
 )
 
 func (s *svc) CreateOCMCoreShare(ctx context.Context, req *ocmcore.CreateOCMCoreShareRequest) (*ocmcore.CreateOCMCoreShareResponse, error) {
-	c, err := pool.GetOCMCoreClient(s.c.OCMCoreEndpoint)
+	c, err := pool.GetOCMCoreClient(pool.Endpoint(s.c.OCMCoreEndpoint))
 	if err != nil {
 		return &ocmcore.CreateOCMCoreShareResponse{
 			Status: status.NewInternal(ctx, err, "error getting ocm core client"),

@@ -79,7 +79,7 @@ func (m *manager) Configure(ml map[string]interface{}) error {
 }
 
 func (m *manager) Authenticate(ctx context.Context, token, secret string) (*user.User, map[string]*authpb.Scope, error) {
-	gwConn, err := pool.GetGatewayServiceClient(m.c.GatewayAddr)
+	gwConn, err := pool.GetGatewayServiceClient(pool.Endpoint(m.c.GatewayAddr))
 	if err != nil {
 		return nil, nil, err
 	}

@@ -216,7 +216,7 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 		Type:     getUserType(claims[am.c.IDClaim].(string)),
 	}
 
-	gwc, err := pool.GetGatewayServiceClient(am.c.GatewaySvc)
+	gwc, err := pool.GetGatewayServiceClient(pool.Endpoint(am.c.GatewaySvc))
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "oidc: error getting gateway grpc client")
 	}
@@ -323,7 +323,7 @@ func (am *mgr) resolveUser(ctx context.Context, claims map[string]interface{}) e
 			username = am.oidcUsersMapping[m.(string)].Username
 		}
 
-		upsc, err := pool.GetUserProviderServiceClient(am.c.GatewaySvc)
+		upsc, err := pool.GetUserProviderServiceClient(pool.Endpoint(am.c.GatewaySvc))
 		if err != nil {
 			return errors.Wrap(err, "error getting user provider grpc client")
 		}

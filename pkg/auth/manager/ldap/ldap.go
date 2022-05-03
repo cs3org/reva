@@ -171,7 +171,7 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 		OpaqueId: sr.Entries[0].GetEqualFoldAttributeValue(am.c.Schema.UID),
 		Type:     user.UserType_USER_TYPE_PRIMARY, // TODO: assign the appropriate user type
 	}
-	gwc, err := pool.GetGatewayServiceClient(am.c.GatewaySvc)
+	gwc, err := pool.GetGatewayServiceClient(pool.Endpoint(am.c.GatewaySvc))
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "ldap: error getting gateway grpc client")
 	}

@@ -28,7 +28,7 @@ import (
 )
 
 func (s *svc) GetGroup(ctx context.Context, req *group.GetGroupRequest) (*group.GetGroupResponse, error) {
-	c, err := pool.GetGroupProviderServiceClient(s.c.GroupProviderEndpoint)
+	c, err := pool.GetGroupProviderServiceClient(pool.Endpoint(s.c.GroupProviderEndpoint))
 	if err != nil {
 		return &group.GetGroupResponse{
 			Status: status.NewInternal(ctx, err, "error getting auth client"),
@@ -44,7 +44,7 @@ func (s *svc) GetGroup(ctx context.Context, req *group.GetGroupRequest) (*group.
 }
 
 func (s *svc) GetGroupByClaim(ctx context.Context, req *group.GetGroupByClaimRequest) (*group.GetGroupByClaimResponse, error) {
-	c, err := pool.GetGroupProviderServiceClient(s.c.GroupProviderEndpoint)
+	c, err := pool.GetGroupProviderServiceClient(pool.Endpoint(s.c.GroupProviderEndpoint))
 	if err != nil {
 		return &group.GetGroupByClaimResponse{
 			Status: status.NewInternal(ctx, err, "error getting auth client"),
@@ -60,7 +60,7 @@ func (s *svc) GetGroupByClaim(ctx context.Context, req *group.GetGroupByClaimReq
 }
 
 func (s *svc) FindGroups(ctx context.Context, req *group.FindGroupsRequest) (*group.FindGroupsResponse, error) {
-	c, err := pool.GetGroupProviderServiceClient(s.c.GroupProviderEndpoint)
+	c, err := pool.GetGroupProviderServiceClient(pool.Endpoint(s.c.GroupProviderEndpoint))
 	if err != nil {
 		return &group.FindGroupsResponse{
 			Status: status.NewInternal(ctx, err, "error getting auth client"),
@@ -76,7 +76,7 @@ func (s *svc) FindGroups(ctx context.Context, req *group.FindGroupsRequest) (*gr
 }
 
 func (s *svc) GetMembers(ctx context.Context, req *group.GetMembersRequest) (*group.GetMembersResponse, error) {
-	c, err := pool.GetGroupProviderServiceClient(s.c.GroupProviderEndpoint)
+	c, err := pool.GetGroupProviderServiceClient(pool.Endpoint(s.c.GroupProviderEndpoint))
 	if err != nil {
 		return &group.GetMembersResponse{
 			Status: status.NewInternal(ctx, err, "error getting auth client"),
@@ -92,7 +92,7 @@ func (s *svc) GetMembers(ctx context.Context, req *group.GetMembersRequest) (*gr
 }
 
 func (s *svc) HasMember(ctx context.Context, req *group.HasMemberRequest) (*group.HasMemberResponse, error) {
-	c, err := pool.GetGroupProviderServiceClient(s.c.GroupProviderEndpoint)
+	c, err := pool.GetGroupProviderServiceClient(pool.Endpoint(s.c.GroupProviderEndpoint))
 	if err != nil {
 		return &group.HasMemberResponse{
 			Status: status.NewInternal(ctx, err, "error getting auth client"),

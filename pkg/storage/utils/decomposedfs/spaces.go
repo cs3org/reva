@@ -202,7 +202,7 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 		return spaces, nil
 	}
 
-	client, err := pool.GetGatewayServiceClient(fs.o.GatewayAddr)
+	client, err := pool.GetGatewayServiceClient(pool.Endpoint(fs.o.GatewayAddr))
 	if err != nil {
 		return nil, err
 	}

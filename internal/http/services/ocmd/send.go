@@ -80,7 +80,7 @@ func (h *sendHandler) Handler() http.Handler {
 		// "loginPassword": "Ny4Nv6WLoC1o70kVgrVOZLZ2vRgPjuej"
 
 		gatewayAddr := h.GatewaySvc
-		gatewayClient, err := pool.GetGatewayServiceClient(gatewayAddr)
+		gatewayClient, err := pool.GetGatewayServiceClient(pool.Endpoint(gatewayAddr))
 		if err != nil {
 			log.Error().Msg("cannot get grpc client!")
 			w.WriteHeader(http.StatusInternalServerError)
