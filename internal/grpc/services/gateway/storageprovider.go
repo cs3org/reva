@@ -52,6 +52,9 @@ import (
 	gstatus "google.golang.org/grpc/status"
 )
 
+// name is the Tracer name used to identify this instrumentation library.
+const tracerName = "gateway"
+
 // transferClaims are custom claims for a JWT token to be used between the metadata and data gateways.
 type transferClaims struct {
 	jwt.StandardClaims
@@ -883,7 +886,7 @@ func (s *svc) Delete(ctx context.Context, req *provider.DeleteRequest) (*provide
 		}, nil
 	}
 
-	ctx, span := rtrace.Provider.Tracer("reva").Start(ctx, "Delete")
+	ctx, span := rtrace.Provider.Tracer(tracerName).Start(ctx, "Delete")
 	defer span.End()
 
 	if !s.inSharedFolder(ctx, p) {

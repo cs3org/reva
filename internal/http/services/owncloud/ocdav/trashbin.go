@@ -164,7 +164,7 @@ func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 }
 
 func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s *svc, u *userpb.User, basePath, key, itemPath string) {
-	ctx, span := rtrace.Provider.Tracer("trash-bin").Start(r.Context(), "list_trashbin")
+	ctx, span := rtrace.Provider.Tracer(tracerName).Start(r.Context(), "list_trashbin")
 	defer span.End()
 
 	depth := r.Header.Get(HeaderDepth)
@@ -442,7 +442,7 @@ func (h *TrashbinHandler) itemToPropResponse(ctx context.Context, s *svc, u *use
 }
 
 func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc, u *userpb.User, basePath, dst, key, itemPath string) {
-	ctx, span := rtrace.Provider.Tracer("trash-bin").Start(r.Context(), "restore")
+	ctx, span := rtrace.Provider.Tracer(tracerName).Start(r.Context(), "restore")
 	defer span.End()
 
 	sublog := appctx.GetLogger(ctx).With().Logger()
@@ -590,7 +590,7 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 
 // delete has only a key
 func (h *TrashbinHandler) delete(w http.ResponseWriter, r *http.Request, s *svc, u *userpb.User, basePath, key, itemPath string) {
-	ctx, span := rtrace.Provider.Tracer("trash-bin").Start(r.Context(), "erase")
+	ctx, span := rtrace.Provider.Tracer(tracerName).Start(r.Context(), "erase")
 	defer span.End()
 
 	sublog := appctx.GetLogger(ctx).With().Str("key", key).Logger()
