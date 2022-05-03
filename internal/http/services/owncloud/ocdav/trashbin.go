@@ -295,7 +295,7 @@ func (h *TrashbinHandler) formatTrashPropfind(ctx context.Context, s *svc, space
 	responses := make([]*propfind.ResponseXML, 0, len(items)+1)
 	// add trashbin dir . entry
 	responses = append(responses, &propfind.ResponseXML{
-		Href: net.EncodePath(ctx.Value(net.CtxKeyBaseURI).(string) + "/"), // url encode response.Href TODO
+		Href: net.EncodePath(path.Join(ctx.Value(net.CtxKeyBaseURI).(string), refBase)), // url encode response.Href TODO
 		Propstat: []propfind.PropstatXML{
 			{
 				Status: "HTTP/1.1 200 OK",
