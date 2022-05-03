@@ -40,6 +40,9 @@ import (
 	"go.opentelemetry.io/otel/propagation"
 )
 
+// name is the Tracer name used to identify this instrumentation library.
+const tracerName = "rhttp"
+
 // New returns a new server
 func New(m interface{}, l zerolog.Logger) (*Server, error) {
 	conf := &config{}
@@ -302,7 +305,7 @@ func (s *Server) getHandler() (http.Handler, error) {
 func traceHandler(name string, h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := rtrace.Propagator.Extract(r.Context(), propagation.HeaderCarrier(r.Header))
-		t := rtrace.Provider.Tracer("reva")
+		t := rtrace.Provider.Tracer(tracerName)
 		ctx, span := t.Start(ctx, name)
 		defer span.End()
 

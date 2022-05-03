@@ -57,6 +57,9 @@ import (
 	"google.golang.org/grpc"
 )
 
+// name is the Tracer name used to identify this instrumentation library.
+const tracerName = "decomposedfs"
+
 // PermissionsChecker defines an interface for checking permissions on a Node
 type PermissionsChecker interface {
 	AssemblePermissions(ctx context.Context, n *node.Node) (ap provider.ResourcePermissions, err error)
@@ -493,7 +496,7 @@ func (fs *Decomposedfs) ListFolder(ctx context.Context, ref *provider.Reference,
 		return
 	}
 
-	ctx, span := rtrace.Provider.Tracer("decomposedfs").Start(ctx, "ListFolder")
+	ctx, span := rtrace.Provider.Tracer(tracerName).Start(ctx, "ListFolder")
 	defer span.End()
 
 	if !n.Exists {

@@ -75,6 +75,9 @@ import (
 	    - can be invalidated on every write or delete with fallback via TTL?
 */
 
+// name is the Tracer name used to identify this instrumentation library.
+const tracerName = "gateway"
+
 // transferClaims are custom claims for a JWT token to be used between the metadata and data gateways.
 type transferClaims struct {
 	jwt.StandardClaims
