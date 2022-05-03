@@ -45,6 +45,9 @@ import (
 	"github.com/rs/zerolog"
 )
 
+// name is the Tracer name used to identify this instrumentation library.
+const tracerName = "ocdav"
+
 var (
 	nameRules = [...]nameRule{
 		nameNotEmpty{},

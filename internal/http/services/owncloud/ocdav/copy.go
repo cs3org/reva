@@ -51,7 +51,7 @@ type copy struct {
 }
 
 func (s *svc) handlePathCopy(w http.ResponseWriter, r *http.Request, ns string) {
-	ctx, span := rtrace.Provider.Tracer("reva").Start(r.Context(), "copy")
+	ctx, span := rtrace.Provider.Tracer(tracerName).Start(r.Context(), "copy")
 	defer span.End()
 
 	if s.c.EnableHTTPTpc {
@@ -291,7 +291,7 @@ func (s *svc) executePathCopy(ctx context.Context, client gateway.GatewayAPIClie
 }
 
 func (s *svc) handleSpacesCopy(w http.ResponseWriter, r *http.Request, spaceID string) {
-	ctx, span := rtrace.Provider.Tracer("reva").Start(r.Context(), "spaces_copy")
+	ctx, span := rtrace.Provider.Tracer(tracerName).Start(r.Context(), "spaces_copy")
 	defer span.End()
 
 	dh := r.Header.Get(net.HeaderDestination)

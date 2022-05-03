@@ -38,7 +38,7 @@ import (
 )
 
 func (s *svc) handlePathMove(w http.ResponseWriter, r *http.Request, ns string) {
-	ctx, span := rtrace.Provider.Tracer("ocdav").Start(r.Context(), "move")
+	ctx, span := rtrace.Provider.Tracer(tracerName).Start(r.Context(), "move")
 	defer span.End()
 
 	srcPath := path.Join(ns, r.URL.Path)
@@ -92,7 +92,7 @@ func (s *svc) handlePathMove(w http.ResponseWriter, r *http.Request, ns string) 
 }
 
 func (s *svc) handleSpacesMove(w http.ResponseWriter, r *http.Request, srcSpaceID string) {
-	ctx, span := rtrace.Provider.Tracer("ocdav").Start(r.Context(), "spaces_move")
+	ctx, span := rtrace.Provider.Tracer(tracerName).Start(r.Context(), "spaces_move")
 	defer span.End()
 
 	dh := r.Header.Get(net.HeaderDestination)

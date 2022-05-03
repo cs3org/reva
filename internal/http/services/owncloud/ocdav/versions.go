@@ -109,7 +109,7 @@ func (h *VersionsHandler) Handler(s *svc, rid *provider.ResourceId) http.Handler
 }
 
 func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request, s *svc, rid *provider.ResourceId) {
-	ctx, span := rtrace.Provider.Tracer("ocdav").Start(r.Context(), "listVersions")
+	ctx, span := rtrace.Provider.Tracer(tracerName).Start(r.Context(), "listVersions")
 	defer span.End()
 
 	sublog := appctx.GetLogger(ctx).With().Interface("resourceid", rid).Logger()
@@ -208,7 +208,7 @@ func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request,
 }
 
 func (h *VersionsHandler) doRestore(w http.ResponseWriter, r *http.Request, s *svc, rid *provider.ResourceId, key string) {
-	ctx, span := rtrace.Provider.Tracer("ocdav").Start(r.Context(), "restore")
+	ctx, span := rtrace.Provider.Tracer(tracerName).Start(r.Context(), "restore")
 	defer span.End()
 
 	sublog := appctx.GetLogger(ctx).With().Interface("resourceid", rid).Str("key", key).Logger()

@@ -109,7 +109,7 @@ func isContentRange(r *http.Request) bool {
 }
 
 func (s *svc) handlePathPut(w http.ResponseWriter, r *http.Request, ns string) {
-	ctx, span := rtrace.Provider.Tracer("ocdav").Start(r.Context(), "put")
+	ctx, span := rtrace.Provider.Tracer(tracerName).Start(r.Context(), "put")
 	defer span.End()
 
 	fn := path.Join(ns, r.URL.Path)
@@ -344,7 +344,7 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 }
 
 func (s *svc) handleSpacesPut(w http.ResponseWriter, r *http.Request, spaceID string) {
-	ctx, span := rtrace.Provider.Tracer("ocdav").Start(r.Context(), "spaces_put")
+	ctx, span := rtrace.Provider.Tracer(tracerName).Start(r.Context(), "spaces_put")
 	defer span.End()
 
 	sublog := appctx.GetLogger(ctx).With().Str("spaceid", spaceID).Str("path", r.URL.Path).Logger()

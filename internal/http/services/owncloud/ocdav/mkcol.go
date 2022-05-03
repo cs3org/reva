@@ -35,7 +35,7 @@ import (
 )
 
 func (s *svc) handlePathMkcol(w http.ResponseWriter, r *http.Request, ns string) (status int, err error) {
-	ctx, span := rtrace.Provider.Tracer("reva").Start(r.Context(), "mkcol")
+	ctx, span := rtrace.Provider.Tracer(tracerName).Start(r.Context(), "mkcol")
 	defer span.End()
 
 	fn := path.Join(ns, r.URL.Path)
@@ -88,7 +88,7 @@ func (s *svc) handlePathMkcol(w http.ResponseWriter, r *http.Request, ns string)
 }
 
 func (s *svc) handleSpacesMkCol(w http.ResponseWriter, r *http.Request, spaceID string) (status int, err error) {
-	ctx, span := rtrace.Provider.Tracer("reva").Start(r.Context(), "spaces_mkcol")
+	ctx, span := rtrace.Provider.Tracer(tracerName).Start(r.Context(), "spaces_mkcol")
 	defer span.End()
 
 	sublog := appctx.GetLogger(ctx).With().Str("path", r.URL.Path).Str("spaceid", spaceID).Str("handler", "mkcol").Logger()

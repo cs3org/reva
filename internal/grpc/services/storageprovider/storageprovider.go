@@ -50,6 +50,9 @@ import (
 	"google.golang.org/grpc"
 )
 
+// name is the Tracer name used to identify this instrumentation library.
+const tracerName = "storageprovider"
+
 func init() {
 	rgrpc.Register("storageprovider", New)
 }
@@ -711,7 +714,7 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 	providerID := unwrapProviderID(req.Ref.GetResourceId())
 	defer rewrapProviderID(req.Ref.GetResourceId(), providerID)
 
-	ctx, span := rtrace.Provider.Tracer("reva").Start(ctx, "stat")
+	ctx, span := rtrace.Provider.Tracer(tracerName).Start(ctx, "stat")
 	defer span.End()
 
 	span.SetAttributes(attribute.KeyValue{

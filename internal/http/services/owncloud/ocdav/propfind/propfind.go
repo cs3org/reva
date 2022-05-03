@@ -50,11 +50,11 @@ import (
 	rtrace "github.com/cs3org/reva/v2/pkg/trace"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/rs/zerolog"
-	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 )
 
 const (
+	tracerName        = "ocdav"
 	_spaceTypeProject = "project"
 )
 
@@ -179,10 +179,8 @@ func NewHandler(publicURL string, getClientFunc GetGatewayServiceClientFunc) *Ha
 // HandlePathPropfind handles a path based propfind request
 // ns is the namespace that is prefixed to the path in the cs3 namespace
 func (p *Handler) HandlePathPropfind(w http.ResponseWriter, r *http.Request, ns string) {
-	ctx, span := rtrace.Provider.Tracer("reva").Start(r.Context(), fmt.Sprintf("%s %v", r.Method, r.URL.Path))
+	ctx, span := rtrace.Provider.Tracer(tracerName).Start(r.Context(), fmt.Sprintf("%s %v", r.Method, r.URL.Path))
 	defer span.End()
-
-	span.SetAttributes(attribute.String("component", "ocdav"))
 
 	fn := path.Join(ns, r.URL.Path) // TODO do we still need to jail if we query the registry about the spaces?
 
@@ -240,7 +238,7 @@ func (p *Handler) HandlePathPropfind(w http.ResponseWriter, r *http.Request, ns 
 
 // HandleSpacesPropfind handles a spaces based propfind request
 func (p *Handler) HandleSpacesPropfind(w http.ResponseWriter, r *http.Request, spaceID string) {
-	ctx, span := rtrace.Provider.Tracer("ocdav").Start(r.Context(), "spaces_propfind")
+	ctx, span := rtrace.Provider.Tracer(tracerName).Start(r.Context(), "spaces_propfind")
 	defer span.End()
 
 	sublog := appctx.GetLogger(ctx).With().Str("path", r.URL.Path).Str("spaceid", spaceID).Logger()
@@ -287,7 +285,7 @@ func (p *Handler) HandleSpacesPropfind(w http.ResponseWriter, r *http.Request, s
 }
 
 func (p *Handler) propfindResponse(ctx context.Context, w http.ResponseWriter, r *http.Request, namespace, spaceType string, pf XML, sendTusHeaders bool, resourceInfos []*provider.ResourceInfo, log zerolog.Logger) {
-	ctx, span := rtrace.Provider.Tracer("ocdav").Start(ctx, "propfind_response")
+	ctx, span := rtrace.Provider.Tracer(tracerName).Start(ctx, "propfind_response")
 	defer span.End()
 
 	filters := make([]*link.ListPublicSharesRequest_Filter, 0, len(resourceInfos))
