@@ -37,7 +37,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/rgrpc/status"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
 	sdk "github.com/cs3org/reva/v2/pkg/sdk/common"
-	"github.com/cs3org/reva/v2/pkg/utils"
+	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/pkg/errors"
 )
 
@@ -132,7 +132,7 @@ func (h *Handler) removeSpaceMember(w http.ResponseWriter, r *http.Request, spac
 		return
 	}
 
-	ref, err := utils.ParseStorageSpaceReference(spaceID)
+	ref, err := storagespace.ParseReference(spaceID)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "could not parse space id", err)
 		return

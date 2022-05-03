@@ -40,9 +40,9 @@ import (
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	statuspkg "github.com/cs3org/reva/v2/pkg/rgrpc/status"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/token"
 	"github.com/cs3org/reva/v2/pkg/utils"
-	"github.com/cs3org/reva/v2/pkg/utils/resourceid"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -137,7 +137,7 @@ func resolveLightweightScope(ctx context.Context, ref *provider.Reference, scope
 	}
 
 	for _, share := range shares.Shares {
-		shareKey := "lw:" + user.Id.OpaqueId + scopeDelimiter + resourceid.OwnCloudResourceIDWrap(share.Share.ResourceId)
+		shareKey := "lw:" + user.Id.OpaqueId + scopeDelimiter + storagespace.FormatResourceID(*share.Share.ResourceId)
 		_ = scopeExpansionCache.SetWithExpire(shareKey, nil, scopeCacheExpiration*time.Second)
 
 		if ref.ResourceId != nil && utils.ResourceIDEqual(share.Share.ResourceId, ref.ResourceId) {
@@ -174,7 +174,7 @@ func resolveUserShare(ctx context.Context, ref *provider.Reference, scope *authp
 
 func checkCacheForNestedResource(ctx context.Context, ref *provider.Reference, resource *provider.ResourceId, client gateway.GatewayAPIClient, mgr token.Manager) error {
 	// Check if this ref is cached
-	key := resourceid.OwnCloudResourceIDWrap(resource) + scopeDelimiter + getRefKey(ref)
+	key := storagespace.FormatResourceID(*resource) + scopeDelimiter + getRefKey(ref)
 	if _, err := scopeExpansionCache.Get(key); err == nil {
 		return nil
 	}
@@ -397,5 +397,5 @@ func getRefKey(ref *provider.Reference) string {
 	if ref.Path != "" {
 		return ref.Path
 	}
-	return resourceid.OwnCloudResourceIDWrap(ref.ResourceId)
+	return storagespace.FormatResourceID(*ref.ResourceId)
 }

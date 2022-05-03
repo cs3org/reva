@@ -32,8 +32,8 @@ import (
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/propfind"
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	"github.com/cs3org/reva/v2/pkg/rhttp/router"
+	"github.com/cs3org/reva/v2/pkg/storagespace"
 	rtrace "github.com/cs3org/reva/v2/pkg/trace"
-	"github.com/cs3org/reva/v2/pkg/utils/resourceid"
 )
 
 // MetaHandler handles meta requests
@@ -57,8 +57,8 @@ func (h *MetaHandler) Handler(s *svc) http.Handler {
 			return
 		}
 
-		did := resourceid.OwnCloudResourceIDUnwrap(id)
-		if did == nil {
+		did, err := storagespace.ParseID(id)
+		if err != nil {
 			logger := appctx.GetLogger(r.Context())
 			logger.Debug().Str("prop", net.PropOcMetaPathForUser).Msg("invalid resource id")
 			w.WriteHeader(http.StatusBadRequest)
@@ -76,9 +76,9 @@ func (h *MetaHandler) Handler(s *svc) http.Handler {
 				w.WriteHeader(http.StatusBadRequest)
 				return
 			}
-			h.handlePathForUser(w, r, s, did)
+			h.handlePathForUser(w, r, s, &did)
 		case "v":
-			h.VersionsHandler.Handler(s, did).ServeHTTP(w, r)
+			h.VersionsHandler.Handler(s, &did).ServeHTTP(w, r)
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}
@@ -90,7 +90,7 @@ func (h *MetaHandler) handlePathForUser(w http.ResponseWriter, r *http.Request, 
 	ctx, span := rtrace.Provider.Tracer("ocdav").Start(r.Context(), "meta_propfind")
 	defer span.End()
 
-	id := resourceid.OwnCloudResourceIDWrap(rid)
+	id := storagespace.FormatResourceID(*rid)
 	sublog := appctx.GetLogger(ctx).With().Str("path", r.URL.Path).Str("resourceid", id).Logger()
 	client, err := s.getClient()
 	if err != nil {

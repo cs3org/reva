@@ -37,9 +37,9 @@ import (
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	"github.com/cs3org/reva/v2/pkg/rhttp"
+	"github.com/cs3org/reva/v2/pkg/storagespace"
 	rtrace "github.com/cs3org/reva/v2/pkg/trace"
 	"github.com/cs3org/reva/v2/pkg/utils"
-	"github.com/cs3org/reva/v2/pkg/utils/resourceid"
 	"github.com/rs/zerolog"
 	tusd "github.com/tus/tusd/pkg/handler"
 )
@@ -326,7 +326,7 @@ func (s *svc) handleTusPost(ctx context.Context, w http.ResponseWriter, r *http.
 			)
 
 			w.Header().Set(net.HeaderContentType, info.MimeType)
-			w.Header().Set(net.HeaderOCFileID, resourceid.OwnCloudResourceIDWrap(info.Id))
+			w.Header().Set(net.HeaderOCFileID, storagespace.FormatResourceID(*info.Id))
 			w.Header().Set(net.HeaderOCETag, info.Etag)
 			w.Header().Set(net.HeaderETag, info.Etag)
 			w.Header().Set(net.HeaderOCPermissions, permissions)

@@ -37,9 +37,9 @@ import (
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/rhttp"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/chunking"
+	"github.com/cs3org/reva/v2/pkg/storagespace"
 	rtrace "github.com/cs3org/reva/v2/pkg/trace"
 	"github.com/cs3org/reva/v2/pkg/utils"
-	"github.com/cs3org/reva/v2/pkg/utils/resourceid"
 	"github.com/rs/zerolog"
 )
 
@@ -327,7 +327,7 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 
 	w.Header().Add(net.HeaderContentType, newInfo.MimeType)
 	w.Header().Set(net.HeaderETag, newInfo.Etag)
-	w.Header().Set(net.HeaderOCFileID, resourceid.OwnCloudResourceIDWrap(newInfo.Id))
+	w.Header().Set(net.HeaderOCFileID, storagespace.FormatResourceID(*newInfo.Id))
 	w.Header().Set(net.HeaderOCETag, newInfo.Etag)
 	t := utils.TSToTime(newInfo.Mtime).UTC()
 	lastModifiedString := t.Format(time.RFC1123Z)

@@ -30,7 +30,7 @@ import (
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/storage/fs/owncloudsql/filecache"
-	"github.com/cs3org/reva/v2/pkg/utils"
+	"github.com/cs3org/reva/v2/pkg/storagespace"
 )
 
 // ListStorageSpaces lists storage spaces according to the provided filters
@@ -47,7 +47,7 @@ func (fs *owncloudsqlfs) ListStorageSpaces(ctx context.Context, filter []*provid
 			t := filter[i].GetSpaceType()
 			filteringUnsupportedSpaceTypes = (t != "personal" && !strings.HasPrefix(t, "+"))
 		case provider.ListStorageSpacesRequest_Filter_TYPE_ID:
-			spaceID, _, _ = utils.SplitStorageSpaceID(filter[i].GetId().OpaqueId)
+			spaceID, _, _ = storagespace.SplitID(filter[i].GetId().OpaqueId)
 		}
 	}
 	if filteringUnsupportedSpaceTypes {

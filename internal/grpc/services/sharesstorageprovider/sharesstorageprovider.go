@@ -26,7 +26,7 @@ import (
 	"strings"
 
 	"github.com/cs3org/reva/v2/pkg/share"
-	"github.com/cs3org/reva/v2/pkg/utils/resourceid"
+	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	gstatus "google.golang.org/grpc/status"
@@ -107,7 +107,7 @@ func New(gateway gateway.GatewayAPIClient, c collaboration.CollaborationAPIClien
 
 func (s *service) SetArbitraryMetadata(ctx context.Context, req *provider.SetArbitraryMetadataRequest) (*provider.SetArbitraryMetadataResponse, error) {
 	if req.Ref.GetResourceId() != nil {
-		req.Ref.ResourceId.StorageId, _ = resourceid.StorageIDUnwrap(req.Ref.ResourceId.StorageId)
+		_, req.Ref.ResourceId.StorageId = storagespace.SplitStorageID(req.Ref.ResourceId.StorageId)
 	}
 
 	receivedShare, rpcStatus, err := s.resolveReference(ctx, req.Ref)
@@ -135,7 +135,7 @@ func (s *service) SetArbitraryMetadata(ctx context.Context, req *provider.SetArb
 
 func (s *service) UnsetArbitraryMetadata(ctx context.Context, req *provider.UnsetArbitraryMetadataRequest) (*provider.UnsetArbitraryMetadataResponse, error) {
 	if req.Ref.GetResourceId() != nil {
-		req.Ref.ResourceId.StorageId, _ = resourceid.StorageIDUnwrap(req.Ref.ResourceId.StorageId)
+		_, req.Ref.ResourceId.StorageId = storagespace.SplitStorageID(req.Ref.ResourceId.StorageId)
 	}
 
 	receivedShare, rpcStatus, err := s.resolveReference(ctx, req.Ref)
@@ -163,7 +163,7 @@ func (s *service) UnsetArbitraryMetadata(ctx context.Context, req *provider.Unse
 
 func (s *service) InitiateFileDownload(ctx context.Context, req *provider.InitiateFileDownloadRequest) (*provider.InitiateFileDownloadResponse, error) {
 	if req.Ref.GetResourceId() != nil {
-		req.Ref.ResourceId.StorageId, _ = resourceid.StorageIDUnwrap(req.Ref.ResourceId.StorageId)
+		_, req.Ref.ResourceId.StorageId = storagespace.SplitStorageID(req.Ref.ResourceId.StorageId)
 	}
 
 	receivedShare, rpcStatus, err := s.resolveReference(ctx, req.Ref)
@@ -219,7 +219,7 @@ func (s *service) InitiateFileDownload(ctx context.Context, req *provider.Initia
 
 func (s *service) InitiateFileUpload(ctx context.Context, req *provider.InitiateFileUploadRequest) (*provider.InitiateFileUploadResponse, error) {
 	if req.Ref.GetResourceId() != nil {
-		req.Ref.ResourceId.StorageId, _ = resourceid.StorageIDUnwrap(req.Ref.ResourceId.StorageId)
+		_, req.Ref.ResourceId.StorageId = storagespace.SplitStorageID(req.Ref.ResourceId.StorageId)
 	}
 
 	receivedShare, rpcStatus, err := s.resolveReference(ctx, req.Ref)
@@ -308,7 +308,7 @@ func (s *service) CreateStorageSpace(ctx context.Context, req *provider.CreateSt
 func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSpacesRequest) (*provider.ListStorageSpacesResponse, error) {
 	for i, f := range req.Filters {
 		if f.Type == provider.ListStorageSpacesRequest_Filter_TYPE_ID {
-			id, _ := resourceid.StorageIDUnwrap(f.GetId().GetOpaqueId())
+			_, id := storagespace.SplitStorageID(f.GetId().GetOpaqueId())
 			req.Filters[i].Term = &provider.ListStorageSpacesRequest_Filter_Id{Id: &provider.StorageSpaceId{OpaqueId: id}}
 			break
 		}
@@ -334,7 +334,7 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 			}
 			spaceTypes[spaceType] = exists
 		case provider.ListStorageSpacesRequest_Filter_TYPE_ID:
-			spaceid, shareid, err := utils.SplitStorageSpaceID(f.GetId().OpaqueId)
+			spaceid, shareid, err := storagespace.SplitID(f.GetId().OpaqueId)
 			if err != nil {
 				continue
 			}
@@ -499,7 +499,7 @@ func (s *service) DeleteStorageSpace(ctx context.Context, req *provider.DeleteSt
 
 func (s *service) CreateContainer(ctx context.Context, req *provider.CreateContainerRequest) (*provider.CreateContainerResponse, error) {
 	if req.Ref.GetResourceId() != nil {
-		req.Ref.ResourceId.StorageId, _ = resourceid.StorageIDUnwrap(req.Ref.ResourceId.StorageId)
+		_, req.Ref.ResourceId.StorageId = storagespace.SplitStorageID(req.Ref.ResourceId.StorageId)
 	}
 
 	receivedShare, rpcStatus, err := s.resolveReference(ctx, req.Ref)
@@ -526,7 +526,7 @@ func (s *service) CreateContainer(ctx context.Context, req *provider.CreateConta
 
 func (s *service) Delete(ctx context.Context, req *provider.DeleteRequest) (*provider.DeleteResponse, error) {
 	if req.Ref.GetResourceId() != nil {
-		req.Ref.ResourceId.StorageId, _ = resourceid.StorageIDUnwrap(req.Ref.ResourceId.StorageId)
+		_, req.Ref.ResourceId.StorageId = storagespace.SplitStorageID(req.Ref.ResourceId.StorageId)
 	}
 
 	receivedShare, rpcStatus, err := s.resolveReference(ctx, req.Ref)
@@ -567,10 +567,10 @@ func (s *service) Delete(ctx context.Context, req *provider.DeleteRequest) (*pro
 
 func (s *service) Move(ctx context.Context, req *provider.MoveRequest) (*provider.MoveResponse, error) {
 	if req.Source.GetResourceId() != nil {
-		req.Source.ResourceId.StorageId, _ = resourceid.StorageIDUnwrap(req.Source.ResourceId.StorageId)
+		_, req.Source.ResourceId.StorageId = storagespace.SplitStorageID(req.Source.ResourceId.StorageId)
 	}
 	if req.Destination.GetResourceId() != nil {
-		req.Destination.ResourceId.StorageId, _ = resourceid.StorageIDUnwrap(req.Destination.ResourceId.StorageId)
+		_, req.Destination.ResourceId.StorageId = storagespace.SplitStorageID(req.Destination.ResourceId.StorageId)
 	}
 
 	appctx.GetLogger(ctx).Debug().
@@ -671,7 +671,7 @@ func (s *service) Unlock(ctx context.Context, req *provider.UnlockRequest) (*pro
 
 func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provider.StatResponse, error) {
 	if req.Ref.GetResourceId() != nil {
-		req.Ref.ResourceId.StorageId, _ = resourceid.StorageIDUnwrap(req.Ref.ResourceId.StorageId)
+		_, req.Ref.ResourceId.StorageId = storagespace.SplitStorageID(req.Ref.ResourceId.StorageId)
 	}
 
 	if isVirtualRoot(req.Ref.ResourceId) && (req.Ref.Path == "" || req.Ref.Path == ".") {
@@ -756,7 +756,7 @@ func isVirtualRoot(id *provider.ResourceId) bool {
 }
 func (s *service) ListContainer(ctx context.Context, req *provider.ListContainerRequest) (*provider.ListContainerResponse, error) {
 	if req.Ref.GetResourceId() != nil {
-		req.Ref.ResourceId.StorageId, _ = resourceid.StorageIDUnwrap(req.Ref.ResourceId.StorageId)
+		_, req.Ref.ResourceId.StorageId = storagespace.SplitStorageID(req.Ref.ResourceId.StorageId)
 	}
 
 	if isVirtualRoot(req.Ref.ResourceId) {
@@ -792,7 +792,7 @@ func (s *service) ListContainer(ctx context.Context, req *provider.ListContainer
 }
 func (s *service) ListFileVersions(ctx context.Context, req *provider.ListFileVersionsRequest) (*provider.ListFileVersionsResponse, error) {
 	if req.Ref.GetResourceId() != nil {
-		req.Ref.ResourceId.StorageId, _ = resourceid.StorageIDUnwrap(req.Ref.ResourceId.StorageId)
+		_, req.Ref.ResourceId.StorageId = storagespace.SplitStorageID(req.Ref.ResourceId.StorageId)
 	}
 
 	receivedShare, rpcStatus, err := s.resolveReference(ctx, req.Ref)
@@ -820,7 +820,7 @@ func (s *service) ListFileVersions(ctx context.Context, req *provider.ListFileVe
 
 func (s *service) RestoreFileVersion(ctx context.Context, req *provider.RestoreFileVersionRequest) (*provider.RestoreFileVersionResponse, error) {
 	if req.Ref.GetResourceId() != nil {
-		req.Ref.ResourceId.StorageId, _ = resourceid.StorageIDUnwrap(req.Ref.ResourceId.StorageId)
+		_, req.Ref.ResourceId.StorageId = storagespace.SplitStorageID(req.Ref.ResourceId.StorageId)
 	}
 
 	receivedShare, rpcStatus, err := s.resolveReference(ctx, req.Ref)
@@ -897,7 +897,7 @@ func (s *service) TouchFile(ctx context.Context, req *provider.TouchFileRequest)
 // GetQuota returns 0 free quota. It is virtual ... the shares may have a different quota ...
 func (s *service) GetQuota(ctx context.Context, req *provider.GetQuotaRequest) (*provider.GetQuotaResponse, error) {
 	if req.Ref.GetResourceId() != nil {
-		req.Ref.ResourceId.StorageId, _ = resourceid.StorageIDUnwrap(req.Ref.ResourceId.StorageId)
+		_, req.Ref.ResourceId.StorageId = storagespace.SplitStorageID(req.Ref.ResourceId.StorageId)
 	}
 
 	// FIXME use req.Ref to get real quota

@@ -46,9 +46,9 @@ import (
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/publicshare"
 	"github.com/cs3org/reva/v2/pkg/rhttp/router"
+	"github.com/cs3org/reva/v2/pkg/storagespace"
 	rtrace "github.com/cs3org/reva/v2/pkg/trace"
 	"github.com/cs3org/reva/v2/pkg/utils"
-	"github.com/cs3org/reva/v2/pkg/utils/resourceid"
 	"github.com/rs/zerolog"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
@@ -736,7 +736,7 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 		// return all known properties
 
 		if md.Id != nil {
-			id := resourceid.OwnCloudResourceIDWrap(md.Id)
+			id := storagespace.FormatResourceID(*md.Id)
 			propstatOK.Prop = append(propstatOK.Prop,
 				prop.Escaped("oc:id", id),
 				prop.Escaped("oc:fileid", id),
@@ -840,13 +840,13 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 				// I tested the desktop client and phoenix to annotate which properties are requestted, see below cases
 				case "fileid": // phoenix only
 					if md.Id != nil {
-						propstatOK.Prop = append(propstatOK.Prop, prop.Escaped("oc:fileid", resourceid.OwnCloudResourceIDWrap(md.Id)))
+						propstatOK.Prop = append(propstatOK.Prop, prop.Escaped("oc:fileid", storagespace.FormatResourceID(*md.Id)))
 					} else {
 						propstatNotFound.Prop = append(propstatNotFound.Prop, prop.NotFound("oc:fileid"))
 					}
 				case "id": // desktop client only
 					if md.Id != nil {
-						propstatOK.Prop = append(propstatOK.Prop, prop.Escaped("oc:id", resourceid.OwnCloudResourceIDWrap(md.Id)))
+						propstatOK.Prop = append(propstatOK.Prop, prop.Escaped("oc:id", storagespace.FormatResourceID(*md.Id)))
 					} else {
 						propstatNotFound.Prop = append(propstatNotFound.Prop, prop.NotFound("oc:id"))
 					}
