@@ -43,12 +43,18 @@ import (
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/token"
 	tokenmgr "github.com/cs3org/reva/pkg/token/manager/registry"
+	rtrace "github.com/cs3org/reva/pkg/trace"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
+	semconv "go.opentelemetry.io/otel/semconv/v1.10.0"
+	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc/metadata"
 )
+
+// name is the Tracer name used to identify this instrumentation library.
+const tracerName = "auth"
 
 var userGroupsCache gcache.Cache
 
@@ -158,6 +164,13 @@ func New(m map[string]interface{}, unprotected []string) (global.Middleware, err
 			// OPTION requests need to pass for preflight requests
 			// TODO(labkode): this will break options for auth protected routes.
 			// Maybe running the CORS middleware before auth kicks in is enough.
+			ctx := r.Context()
+			span := trace.SpanFromContext(ctx)
+			defer span.End()
+			if !span.SpanContext().HasTraceID() {
+				_, span = rtrace.Provider.Tracer(tracerName).Start(ctx, "http auth interceptor")
+			}
+
 			if r.Method == "OPTIONS" {
 				h.ServeHTTP(w, r)
 				return
@@ -182,6 +195,11 @@ func New(m map[string]interface{}, unprotected []string) (global.Middleware, err
 				r = r.WithContext(ctx)
 			}
 			h.ServeHTTP(w, r)
+
+			u, ok := ctxpkg.ContextGetUser(ctx)
+			if ok {
+				span.SetAttributes(semconv.EnduserIDKey.String(u.Id.OpaqueId))
+			}
 		})
 	}
 	return chain, nil
