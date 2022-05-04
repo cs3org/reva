@@ -191,7 +191,8 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 	}
 
 	if depth == net.DepthZero {
-		propRes, err := h.formatTrashPropfind(ctx, s, ref.ResourceId.StorageId, refBase, nil, nil)
+		rootHref := path.Join(refBase, key, itemPath)
+		propRes, err := h.formatTrashPropfind(ctx, s, ref.ResourceId.StorageId, refBase, rootHref, nil, nil)
 		if err != nil {
 			sublog.Error().Err(err).Msg("error formatting propfind")
 			w.WriteHeader(http.StatusInternalServerError)
@@ -275,7 +276,8 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 		}
 	}
 
-	propRes, err := h.formatTrashPropfind(ctx, s, ref.ResourceId.StorageId, refBase, &pf, items)
+	rootHref := path.Join(refBase, key, itemPath)
+	propRes, err := h.formatTrashPropfind(ctx, s, ref.ResourceId.StorageId, refBase, rootHref, &pf, items)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error formatting propfind")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -291,11 +293,11 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 	}
 }
 
-func (h *TrashbinHandler) formatTrashPropfind(ctx context.Context, s *svc, spaceID, refBase string, pf *propfind.XML, items []*provider.RecycleItem) ([]byte, error) {
+func (h *TrashbinHandler) formatTrashPropfind(ctx context.Context, s *svc, spaceID, refBase, rootHref string, pf *propfind.XML, items []*provider.RecycleItem) ([]byte, error) {
 	responses := make([]*propfind.ResponseXML, 0, len(items)+1)
 	// add trashbin dir . entry
 	responses = append(responses, &propfind.ResponseXML{
-		Href: net.EncodePath(path.Join(ctx.Value(net.CtxKeyBaseURI).(string), refBase) + "/"), // url encode response.Href TODO
+		Href: net.EncodePath(path.Join(ctx.Value(net.CtxKeyBaseURI).(string), rootHref) + "/"), // url encode response.Href TODO
 		Propstat: []propfind.PropstatXML{
 			{
 				Status: "HTTP/1.1 200 OK",
