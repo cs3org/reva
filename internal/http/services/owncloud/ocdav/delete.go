@@ -154,5 +154,14 @@ func (s *svc) handleSpacesDelete(w http.ResponseWriter, r *http.Request, spaceID
 		return
 	}
 
+	// do not allow deleting spaces via dav endpoint - use graph endpoint instead
+	// we get a relative reference coming from the space root
+	// so if the path is "empty" we a referencing the space
+	if ref.GetPath() == "." {
+		sublog.Info().Msg("deleting spaces via dav is not allowed")
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
 	s.handleDelete(ctx, w, r, ref, sublog)
 }
