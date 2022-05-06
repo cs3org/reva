@@ -96,6 +96,11 @@ type Config struct {
 	PublicURL              string                            `mapstructure:"public_url"`
 	FavoriteStorageDriver  string                            `mapstructure:"favorite_storage_driver"`
 	FavoriteStorageDrivers map[string]map[string]interface{} `mapstructure:"favorite_storage_drivers"`
+	Version                string                            `mapstructure:"version"`
+	VersionString          string                            `mapstructure:"version_string"`
+	Edition                string                            `mapstructure:"edition"`
+	Product                string                            `mapstructure:"product"`
+	ProductName            string                            `mapstructure:"product_name"`
 }
 
 func (c *Config) init() {
@@ -104,6 +109,26 @@ func (c *Config) init() {
 
 	if c.FavoriteStorageDriver == "" {
 		c.FavoriteStorageDriver = "memory"
+	}
+
+	if c.Version == "" {
+		c.Version = "10.0.11.5"
+	}
+
+	if c.VersionString == "" {
+		c.VersionString = "10.0.11"
+	}
+
+	if c.Product == "" {
+		c.Product = "reva"
+	}
+
+	if c.ProductName == "" {
+		c.ProductName = "reva"
+	}
+
+	if c.Edition == "" {
+		c.Edition = "community"
 	}
 }
 

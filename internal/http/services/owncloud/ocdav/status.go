@@ -32,11 +32,11 @@ func (s *svc) doStatus(w http.ResponseWriter, r *http.Request) {
 		Installed:      true,
 		Maintenance:    false,
 		NeedsDBUpgrade: false,
-		Version:        "10.0.11.5", // TODO(jfd) make build/config determined
-		VersionString:  "10.0.11",
-		Edition:        "community",
-		ProductName:    "reva",
-		Product:        "reva",
+		Version:        s.c.Version,
+		VersionString:  s.c.VersionString,
+		Edition:        s.c.Edition,
+		ProductName:    s.c.ProductName,
+		Product:        s.c.Product,
 	}
 
 	statusJSON, err := json.MarshalIndent(status, "", "    ")
