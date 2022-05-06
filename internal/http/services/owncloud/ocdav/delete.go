@@ -67,15 +67,6 @@ func (s *svc) handleDelete(ctx context.Context, w http.ResponseWriter, r *http.R
 
 	req := &provider.DeleteRequest{Ref: ref}
 
-	// do not allow deleting spaces via dav endpoint - use graph one instead
-	// we get a relative reference coming from the space root
-	// so if the path is "empty" we a referencing the space
-	if ref.Path == "." {
-		log.Info().Msg("deleting spaces via dav is not allowed")
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-
 	// FIXME the lock token is part of the application level protocol, it should be part of the DeleteRequest message not the opaque
 	ih, ok := parseIfHeader(r.Header.Get(net.HeaderIf))
 	if ok {
@@ -160,6 +151,15 @@ func (s *svc) handleSpacesDelete(w http.ResponseWriter, r *http.Request, spaceID
 
 	if rpcStatus.Code != rpc.Code_CODE_OK {
 		errors.HandleErrorStatus(&sublog, w, rpcStatus)
+		return
+	}
+
+	// do not allow deleting spaces via dav endpoint - use graph endpoint instead
+	// we get a relative reference coming from the space root
+	// so if the path is "empty" we a referencing the space
+	if ref.GetPath() == "." {
+		sublog.Info().Msg("deleting spaces via dav is not allowed")
+		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
