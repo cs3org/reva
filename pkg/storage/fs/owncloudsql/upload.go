@@ -27,6 +27,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"time"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -107,6 +108,8 @@ func (fs *owncloudsqlfs) InitiateUpload(ctx context.Context, ref *provider.Refer
 	if metadata != nil {
 		if metadata["mtime"] != "" {
 			info.MetaData["mtime"] = metadata["mtime"]
+		} else {
+			info.MetaData["mtime"] = strconv.FormatInt(time.Now().Unix(), 10)
 		}
 		if _, ok := metadata["sizedeferred"]; ok {
 			info.SizeIsDeferred = true
