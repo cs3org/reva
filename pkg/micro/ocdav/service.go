@@ -59,6 +59,7 @@ func Service(opts ...Option) (micro.Service, error) {
 		server.TLSConfig(sopts.TLSConfig),
 		server.Name(sopts.Name),
 		server.Address(sopts.Address), // Address defaults to ":0" and will pick any free port
+		server.Version(sopts.Version),
 	)
 
 	revaService, err := ocdav.NewWith(&sopts.config, sopts.FavoriteManager, sopts.lockSystem, &sopts.Logger)
@@ -124,6 +125,9 @@ func setDefaults(sopts *Options) error {
 	}
 	if !strings.HasPrefix(sopts.config.Prefix, "/") {
 		sopts.config.Prefix = "/" + sopts.config.Prefix
+	}
+	if sopts.Version == "" {
+		sopts.Version = "0.0.0"
 	}
 	return nil
 }

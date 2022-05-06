@@ -39,6 +39,7 @@ type Options struct {
 	// Metrics   *metrics.Metrics
 	// Flags     []cli.Flag
 	Name      string
+	Version   string
 	JWTSecret string
 
 	FavoriteManager favorite.Manager
@@ -181,5 +182,12 @@ func Tracing(trEndpoint string, trCollector string) Option {
 		o.TracingEnabled = true
 		o.TracingEndpoint = trEndpoint
 		o.TracingCollector = trCollector
+	}
+}
+
+// Version provides a function to set the Version option.
+func Version(version string) Option {
+	return func(o *Options) {
+		o.Version = version
 	}
 }
