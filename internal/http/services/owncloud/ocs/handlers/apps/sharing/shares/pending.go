@@ -103,24 +103,31 @@ func (h *Handler) AcceptReceivedShare(w http.ResponseWriter, r *http.Request) {
 	*/
 
 	for id := range sharesToAccept {
-		h.updateReceivedShare(w, r, id, false, mount)
+		data := h.updateReceivedShare(w, r, id, false, mount)
+		// only render the data for the changed share
+		if id == shareID && data != nil {
+			response.WriteOCSSuccess(w, r, []*conversions.ShareData{data})
+		}
 	}
 }
 
 // RejectReceivedShare handles DELETE Requests on /apps/files_sharing/api/v1/shares/{shareid}
 func (h *Handler) RejectReceivedShare(w http.ResponseWriter, r *http.Request) {
 	shareID := chi.URLParam(r, "shareid")
-	h.updateReceivedShare(w, r, shareID, true, "")
+	data := h.updateReceivedShare(w, r, shareID, true, "")
+	if data != nil {
+		response.WriteOCSSuccess(w, r, []*conversions.ShareData{data})
+	}
 }
 
-func (h *Handler) updateReceivedShare(w http.ResponseWriter, r *http.Request, shareID string, rejectShare bool, mountPoint string) {
+func (h *Handler) updateReceivedShare(w http.ResponseWriter, r *http.Request, shareID string, rejectShare bool, mountPoint string) *conversions.ShareData {
 	ctx := r.Context()
 	logger := appctx.GetLogger(ctx)
 
 	client, err := h.getClient()
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
-		return
+		return nil
 	}
 
 	// we need to add a path to the share
@@ -143,16 +150,16 @@ func (h *Handler) updateReceivedShare(w http.ResponseWriter, r *http.Request, sh
 	shareRes, err := client.UpdateReceivedShare(ctx, shareRequest)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "grpc update received share request failed", err)
-		return
+		return nil
 	}
 
 	if shareRes.Status.Code != rpc.Code_CODE_OK {
 		if shareRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
 			response.WriteOCSError(w, r, response.MetaNotFound.StatusCode, "not found", nil)
-			return
+			return nil
 		}
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "grpc update received share request failed", errors.Errorf("code: %d, message: %s", shareRes.Status.Code, shareRes.Status.Message))
-		return
+		return nil
 	}
 
 	rs := shareRes.GetShare()
@@ -161,7 +168,7 @@ func (h *Handler) updateReceivedShare(w http.ResponseWriter, r *http.Request, sh
 	if err != nil || status.Code != rpc.Code_CODE_OK {
 		h.logProblems(status, err, "could not stat, skipping")
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "grpc get resource info failed", errors.Errorf("code: %d, message: %s", status.Code, status.Message))
-		return
+		return nil
 	}
 
 	data, err := conversions.CS3Share2ShareData(r.Context(), rs.Share)
@@ -181,7 +188,7 @@ func (h *Handler) updateReceivedShare(w http.ResponseWriter, r *http.Request, sh
 		data.Path = path.Join(h.sharePrefix, path.Base(info.Path))
 	}
 
-	response.WriteOCSSuccess(w, r, []*conversions.ShareData{data})
+	return data
 }
 
 // getReceivedShareFromID uses a client to the gateway to fetch a share based on its ID.
