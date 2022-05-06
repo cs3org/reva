@@ -101,6 +101,7 @@ func (fs *owncloudsqlfs) InitiateUpload(ctx context.Context, ref *provider.Refer
 		MetaData: tusd.MetaData{
 			"filename": filepath.Base(p),
 			"dir":      filepath.Dir(p),
+			"mtime":    strconv.FormatInt(time.Now().Unix(), 10),
 		},
 		Size: uploadLength,
 	}
@@ -108,8 +109,6 @@ func (fs *owncloudsqlfs) InitiateUpload(ctx context.Context, ref *provider.Refer
 	if metadata != nil {
 		if metadata["mtime"] != "" {
 			info.MetaData["mtime"] = metadata["mtime"]
-		} else {
-			info.MetaData["mtime"] = strconv.FormatInt(time.Now().Unix(), 10)
 		}
 		if _, ok := metadata["sizedeferred"]; ok {
 			info.SizeIsDeferred = true
