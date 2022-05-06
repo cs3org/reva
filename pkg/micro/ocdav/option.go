@@ -39,7 +39,6 @@ type Options struct {
 	// Metrics   *metrics.Metrics
 	// Flags     []cli.Flag
 	Name      string
-	Version   string
 	JWTSecret string
 
 	FavoriteManager favorite.Manager
@@ -185,9 +184,37 @@ func Tracing(trEndpoint string, trCollector string) Option {
 	}
 }
 
-// Version provides a function to set the Version option.
-func Version(version string) Option {
+// Version provides a function to set the Version config option.
+func Version(val string) Option {
 	return func(o *Options) {
-		o.Version = version
+		o.config.Version = val
+	}
+}
+
+// VersionString provides a function to set the VersionString config option.
+func VersionString(val string) Option {
+	return func(o *Options) {
+		o.config.VersionString = val
+	}
+}
+
+// Edition provides a function to set the Edition config option.
+func Edition(val string) Option {
+	return func(o *Options) {
+		o.config.Edition = val
+	}
+}
+
+// Product provides a function to set the Product config option.
+func Product(val string) Option {
+	return func(o *Options) {
+		o.config.Product = val
+	}
+}
+
+// ProductName provides a function to set the ProductName config option.
+func ProductName(val string) Option {
+	return func(o *Options) {
+		o.config.ProductName = val
 	}
 }
