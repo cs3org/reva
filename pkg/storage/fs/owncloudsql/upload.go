@@ -27,6 +27,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"time"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -100,6 +101,7 @@ func (fs *owncloudsqlfs) InitiateUpload(ctx context.Context, ref *provider.Refer
 		MetaData: tusd.MetaData{
 			"filename": filepath.Base(p),
 			"dir":      filepath.Dir(p),
+			"mtime":    strconv.FormatInt(time.Now().Unix(), 10),
 		},
 		Size: uploadLength,
 	}
