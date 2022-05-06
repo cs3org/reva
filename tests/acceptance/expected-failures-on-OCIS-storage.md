@@ -1547,11 +1547,6 @@ _ocs: api compatibility, return correct status code_
 - [apiShareCreateSpecialToShares2/createShareWithInvalidPermissions.feature:29](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares2/createShareWithInvalidPermissions.feature#L29)
 
 #### [OCS status code zero](https://github.com/owncloud/ocis/issues/3621)
-- [apiShareManagementToShares/mergeShare.feature:16](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementToShares/mergeShare.feature#L16)
-- [apiShareManagementToShares/mergeShare.feature:26](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementToShares/mergeShare.feature#L26)
-- [apiShareManagementToShares/mergeShare.feature:36](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementToShares/mergeShare.feature#L36)
-- [apiShareManagementToShares/mergeShare.feature:48](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementToShares/mergeShare.feature#L48)
-- [apiShareManagementToShares/mergeShare.feature:60](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementToShares/mergeShare.feature#L60)
 - [apiShareManagementToShares/moveReceivedShare.feature:32](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementToShares/moveReceivedShare.feature#L32)
 
 #### [HTTP status code differ while listing the contents of another user's trash bin](https://github.com/owncloud/ocis/issues/3561)
