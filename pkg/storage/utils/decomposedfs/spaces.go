@@ -510,6 +510,11 @@ func (fs *Decomposedfs) DeleteStorageSpace(ctx context.Context, req *provider.De
 		return err
 	}
 
+	// only managers are allowed to disable or purge a drive
+	if err := fs.checkManagerPermission(ctx, n); err != nil {
+		return errtypes.PermissionDenied(fmt.Sprintf("user is not allowed to delete spaces %s", n.ID))
+	}
+
 	if purge {
 		if !n.IsDisabled() {
 			return errtypes.NewErrtypeFromStatus(status.NewInvalidArg(ctx, "can't purge enabled space"))
