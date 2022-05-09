@@ -1,3 +1,6 @@
+[shared]
+insecure = true
+
 # example data transfer service configuration 
 [grpc.services.datatx]
 # rclone is the default data transfer driver

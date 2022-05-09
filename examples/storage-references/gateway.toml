@@ -1,3 +1,6 @@
+[shared]
+insecure = true
+
 # services to enable
 [grpc.services.gateway]
 commit_share_to_storage_grant = true
