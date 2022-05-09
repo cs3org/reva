@@ -32,6 +32,7 @@ import (
 	"regexp"
 
 	"github.com/cs3org/reva/internal/http/services/archiver/manager"
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp"
@@ -209,6 +210,7 @@ func (s *svc) Handler() http.Handler {
 	return http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
 		// get the paths and/or the resources id from the query
 		ctx := r.Context()
+		log := appctx.GetLogger(ctx)
 		v := r.URL.Query()
 
 		paths, ok := v["path"]
@@ -244,7 +246,7 @@ func (s *svc) Handler() http.Handler {
 			archName += ".tar"
 		}
 
-		s.log.Debug().Msg("Requested the following files/folders to archive: " + render.Render(files))
+		log.Debug().Msg("Requested the following files/folders to archive: " + render.Render(files))
 
 		rw.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", archName))
 		rw.Header().Set("Content-Transfer-Encoding", "binary")
