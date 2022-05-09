@@ -199,11 +199,7 @@ func (r *registry) GetProvider(ctx context.Context, space *providerpb.StorageSpa
 				if err != nil {
 					continue
 				}
-				match, err := regexp.MatchString(sc.MountPoint, spacePath)
-				if err != nil {
-					continue
-				}
-				if !match {
+				if match, err := regexp.MatchString(sc.MountPoint, spacePath); err != nil || !match {
 					continue
 				}
 			}
@@ -348,15 +344,21 @@ func (r *registry) findProvidersForFilter(ctx context.Context, filters []*provid
 					appctx.GetLogger(ctx).Error().Err(err).Interface("provider", provider).Interface("space", space).Msg("failed to execute template, continuing")
 					continue
 				}
+				if match, err := regexp.MatchString(sc.MountPoint, spacePath); err != nil || !match {
+					continue
+				}
+
 				setPath(space, spacePath)
 				validSpaces = append(validSpaces, space)
 			}
 
-			if err := setSpaces(p, validSpaces); err != nil {
-				appctx.GetLogger(ctx).Debug().Err(err).Interface("provider", provider).Interface("spaces", validSpaces).Msg("marshaling spaces failed, continuing")
-				continue
+			if len(validSpaces) > 0 {
+				if err := setSpaces(p, validSpaces); err != nil {
+					appctx.GetLogger(ctx).Debug().Err(err).Interface("provider", provider).Interface("spaces", validSpaces).Msg("marshaling spaces failed, continuing")
+					continue
+				}
+				providerInfos = append(providerInfos, p)
 			}
-			providerInfos = append(providerInfos, p)
 		}
 	}
 	return providerInfos
@@ -431,6 +433,10 @@ func (r *registry) findProvidersForResource(ctx context.Context, id string, find
 					appctx.GetLogger(ctx).Error().Err(err).Interface("provider", provider).Interface("space", space).Msg("failed to execute template, continuing")
 					continue
 				}
+				if match, err := regexp.MatchString(sc.MountPoint, spacePath); err != nil || !match {
+					continue
+				}
+
 				setPath(space, spacePath)
 			}
 			validSpaces := []*providerpb.StorageSpace{space}
@@ -501,6 +507,10 @@ func (r *registry) findProvidersForAbsolutePathReference(ctx context.Context, pa
 				appctx.GetLogger(ctx).Error().Err(err).Interface("provider", provider).Interface("space", space).Msg("failed to execute template, continuing")
 				continue
 			}
+			if match, err := regexp.MatchString(sc.MountPoint, spacePath); err != nil || !match {
+				continue
+			}
+
 			setPath(space, spacePath)
 
 			// determine deepest mount point
