@@ -20,6 +20,7 @@ package filelocks
 
 import (
 	"errors"
+	"io/fs"
 	"os"
 	"sync"
 	"time"
@@ -140,8 +141,14 @@ func ReleaseLock(lock *flock.Flock) error {
 
 	err = lock.Unlock()
 	if err == nil {
-		if !lock.Locked() {
+		if !lock.Locked() && !lock.RLocked() {
 			err = os.Remove(n)
+			// there is a concurrency issue when deleting the file
+			// see https://github.com/owncloud/ocis/issues/3757
+			// for now we just ignore "not found" errors when they pop up
+			if err != nil && errors.Is(err, fs.ErrNotExist) {
+				err = nil
+			}
 		}
 	}
 	releaseMutexedFlock(n)
