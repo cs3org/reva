@@ -49,6 +49,7 @@ var _ = Describe("Manager", func() {
 		grantee    *userpb.User
 		share      *collaboration.Share
 		share2     *collaboration.Share
+		groupShare *collaboration.Share
 		grant      *collaboration.ShareGrant
 		ctx        context.Context
 		granteeCtx context.Context
@@ -134,6 +135,27 @@ var _ = Describe("Manager", func() {
 				},
 			},
 		}
+		groupShare = &collaboration.Share{
+			Id:         &collaboration.ShareId{OpaqueId: "3"},
+			ResourceId: &provider.ResourceId{OpaqueId: "ijkl"},
+			Owner:      user.GetId(),
+			Grantee: &provider.Grantee{
+				Type: provider.GranteeType_GRANTEE_TYPE_GROUP,
+				Id: &provider.Grantee_GroupId{GroupId: &groupv1beta1.GroupId{
+					Idp:      "localhost:1111",
+					OpaqueId: "users",
+				}},
+			},
+			Permissions: &collaboration.SharePermissions{
+				Permissions: &provider.ResourcePermissions{
+					GetPath:              true,
+					InitiateFileDownload: true,
+					ListFileVersions:     true,
+					ListContainer:        true,
+					Stat:                 true,
+				},
+			},
+		}
 		ctx = ctxpkg.ContextSetUser(context.Background(), user)
 		granteeCtx = ctxpkg.ContextSetUser(context.Background(), grantee)
 	})
@@ -171,6 +193,9 @@ var _ = Describe("Manager", func() {
 			data, err = json.Marshal(share2)
 			Expect(err).ToNot(HaveOccurred())
 			storage.On("SimpleDownload", mock.Anything, path.Join("shares", share2.Id.OpaqueId)).Return(data, nil)
+			data, err = json.Marshal(groupShare)
+			Expect(err).ToNot(HaveOccurred())
+			storage.On("SimpleDownload", mock.Anything, path.Join("shares", groupShare.Id.OpaqueId)).Return(data, nil)
 			data, err = json.Marshal(&cs3.ReceivedShareMetadata{
 				State: collaboration.ShareState_SHARE_STATE_PENDING,
 				MountPoint: &provider.Reference{
@@ -446,6 +471,68 @@ var _ = Describe("Manager", func() {
 					Expect(rshare.MountPoint.ResourceId.StorageId).To(Equal("storageid"))
 					Expect(rshare.MountPoint.ResourceId.OpaqueId).To(Equal("opaqueid"))
 					Expect(rshare.MountPoint.Path).To(Equal("path"))
+				})
+			})
+
+			Context("with a received user and group share", func() {
+				BeforeEach(func() {
+					indexer.On("FindBy", mock.Anything,
+						mock.MatchedBy(func(input indexerpkg.Field) bool {
+							return input.Name == "GranteeId" && input.Value == granteeFn
+						}),
+					).
+						Return([]string{share.Id.OpaqueId}, nil)
+
+					indexer.On("FindBy", mock.Anything,
+						mock.MatchedBy(func(input indexerpkg.Field) bool {
+							return input.Name == "GranteeId" && input.Value == groupFn
+						}),
+					).
+						Return([]string{groupShare.Id.OpaqueId}, nil)
+
+					indexer.On("FindBy", mock.Anything,
+						mock.MatchedBy(func(input indexerpkg.Field) bool {
+							return input.Name == "GranteeId"
+						}),
+					).
+						Return([]string{}, nil)
+				})
+
+				It("list the user and shares", func() {
+					rshares, err := m.ListReceivedShares(granteeCtx, []*collaboration.Filter{})
+					Expect(err).ToNot(HaveOccurred())
+					Expect(rshares).ToNot(BeNil())
+					Expect(len(rshares)).To(Equal(2))
+				})
+
+				It("list only the user when user filter is given ", func() {
+					rshares, err := m.ListReceivedShares(granteeCtx, []*collaboration.Filter{
+						{
+							Type: collaboration.Filter_TYPE_GRANTEE_TYPE,
+							Term: &collaboration.Filter_GranteeType{
+								GranteeType: provider.GranteeType_GRANTEE_TYPE_USER,
+							},
+						},
+					})
+					Expect(err).ToNot(HaveOccurred())
+					Expect(rshares).ToNot(BeNil())
+					Expect(len(rshares)).To(Equal(1))
+					Expect(rshares[0].Share.Grantee.Type).To(Equal(provider.GranteeType_GRANTEE_TYPE_USER))
+				})
+
+				It("list only the group when group filter is given ", func() {
+					rshares, err := m.ListReceivedShares(granteeCtx, []*collaboration.Filter{
+						{
+							Type: collaboration.Filter_TYPE_GRANTEE_TYPE,
+							Term: &collaboration.Filter_GranteeType{
+								GranteeType: provider.GranteeType_GRANTEE_TYPE_GROUP,
+							},
+						},
+					})
+					Expect(err).ToNot(HaveOccurred())
+					Expect(rshares).ToNot(BeNil())
+					Expect(len(rshares)).To(Equal(1))
+					Expect(rshares[0].Share.Grantee.Type).To(Equal(provider.GranteeType_GRANTEE_TYPE_GROUP))
 				})
 			})
 		})
