@@ -5,6 +5,8 @@ require (
 	contrib.go.opencensus.io/exporter/prometheus v0.4.1
 	github.com/BurntSushi/toml v1.1.0
 	github.com/CiscoM31/godata v1.0.5
+	github.com/Masterminds/goutils v1.1.1 // indirect
+	github.com/Masterminds/semver v1.5.0 // indirect
 	github.com/Masterminds/sprig v2.22.0+incompatible
 	github.com/ReneKroon/ttlcache/v2 v2.11.0
 	github.com/aws/aws-sdk-go v1.43.28
@@ -17,7 +19,6 @@ require (
 	github.com/coreos/go-oidc v2.2.1+incompatible
 	github.com/cs3org/cato v0.0.0-20200828125504-e418fc54dd5e
 	github.com/cs3org/go-cs3apis v0.0.0-20220412090512-93c5918b4bde
-	github.com/cs3org/reva v1.18.0
 	github.com/cubewise-code/go-mime v0.0.0-20200519001935-8c5762b177d8
 	github.com/dgraph-io/ristretto v0.1.0
 	github.com/eventials/go-tus v0.0.0-20200718001131-45c7ec8f5d59
@@ -34,10 +35,12 @@ require (
 	github.com/gomodule/redigo v1.8.8
 	github.com/google/go-cmp v0.5.7
 	github.com/google/go-github v17.0.0+incompatible
+	github.com/google/go-querystring v1.1.0 // indirect
 	github.com/google/uuid v1.3.0
 	github.com/grpc-ecosystem/go-grpc-middleware v1.3.0
 	github.com/hashicorp/go-hclog v1.2.0
 	github.com/hashicorp/go-plugin v1.4.3
+	github.com/huandu/xstrings v1.3.2 // indirect
 	github.com/iancoleman/strcase v0.2.0
 	github.com/jedib0t/go-pretty v4.3.0+incompatible
 	github.com/juliangruber/go-intersect v1.1.0
@@ -45,12 +48,16 @@ require (
 	github.com/maxymania/go-system v0.0.0-20170110133659-647cc364bf0b
 	github.com/mileusna/useragent v1.0.2
 	github.com/minio/minio-go/v7 v7.0.24
+	github.com/mitchellh/copystructure v1.2.0 // indirect
+	github.com/mitchellh/go-testing-interface v1.14.1 // indirect
 	github.com/mitchellh/mapstructure v1.4.3
 	github.com/nats-io/nats-server/v2 v2.8.0
+	github.com/onsi/ginkgo v1.16.5 // indirect
 	github.com/onsi/ginkgo/v2 v2.1.3
 	github.com/onsi/gomega v1.19.0
 	github.com/pkg/errors v0.9.1
 	github.com/pkg/xattr v0.4.5
+	github.com/pquerna/cachecontrol v0.1.0 // indirect
 	github.com/prometheus/alertmanager v0.24.0
 	github.com/rs/cors v1.8.2
 	github.com/rs/zerolog v1.26.1
@@ -59,6 +66,7 @@ require (
 	github.com/stretchr/testify v1.7.1
 	github.com/studio-b12/gowebdav v0.0.0-20211109083228-3f8721cd4b6f
 	github.com/thanhpk/randstr v1.0.4
+	github.com/tidwall/pretty v1.2.0 // indirect
 	github.com/tus/tusd v1.8.0
 	github.com/wk8/go-ordered-map v0.2.0
 	go-micro.dev/v4 v4.6.0
@@ -76,6 +84,7 @@ require (
 	google.golang.org/genproto v0.0.0-20211021150943-2b146023228c
 	google.golang.org/grpc v1.45.0
 	google.golang.org/protobuf v1.28.0
+	gopkg.in/square/go-jose.v2 v2.6.0 // indirect
 	gotest.tools v2.2.0+incompatible
 )
 
