@@ -404,11 +404,14 @@ func (m *Manager) ListReceivedShares(ctx context.Context, filters []*collaborati
 	}
 
 	for _, id := range receivedIds {
-		share, err := m.getShareByID(ctx, id)
+		s, err := m.getShareByID(ctx, id)
 		if err != nil {
 			return nil, err
 		}
-		metadata, err := m.downloadMetadata(ctx, share)
+		if !share.MatchesFilters(s, filters) {
+			continue
+		}
+		metadata, err := m.downloadMetadata(ctx, s)
 		if err != nil {
 			if _, ok := err.(errtypes.NotFound); !ok {
 				return nil, err
@@ -419,7 +422,7 @@ func (m *Manager) ListReceivedShares(ctx context.Context, filters []*collaborati
 			}
 		}
 		result = append(result, &collaboration.ReceivedShare{
-			Share:      share,
+			Share:      s,
 			State:      metadata.State,
 			MountPoint: metadata.MountPoint,
 		})
