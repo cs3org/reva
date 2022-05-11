@@ -229,7 +229,7 @@ func ReadSpaceAndNodeFromSpaceTypeLink(path string) (string, string, error) {
 	if len(parts) != 11 || parts[0] != ".." || parts[1] != ".." || parts[2] != "spaces" || parts[5] != "nodes" {
 		return "", "", errtypes.InternalError("malformed link")
 	}
-	return parts[3] + parts[4], parts[6] + parts[7] + parts[8] + parts[9] + parts[10], nil
+	return strings.Join(parts[3:5], ""), strings.Join(parts[6:11], ""), nil
 }
 
 // ListStorageSpaces returns a list of StorageSpaces.
