@@ -17,9 +17,10 @@ ocmcoresvc = "localhost:19000"
 ocmshareprovidersvc = "localhost:19000"
 ocminvitemanagersvc = "localhost:19000"
 ocmproviderauthorizersvc = "localhost:19000"
-commit_share_to_storage_grant = false
 datagateway = "http://localhost:19001/data"
 transfer_expires = 6 # give it a moment
+commit_share_to_storage_grant = true
+commit_share_to_storage_ref = true
 
 [grpc.services.authregistry]
 driver = "static"
@@ -65,55 +66,38 @@ providers = "/etc/revad/providers.json"
 [grpc.services.publicshareprovider]
 driver = "memory"
 
-[grpc.services.appprovider]
-driver = "wopi"
-
-[grpc.services.appprovider.drivers.wopi]
-iop_secret = "hello"
-wopi_url = "http://0.0.0.0:8880/"
-app_name = "Collabora"
-app_url = "https://your-collabora-server.org:9980"
-custom_mime_types_json = "custom-mime-types-demo.json"
-
 [grpc.services.appregistry]
 driver = "static"
 
-[grpc.services.appregistry.static.rules]
-"text/plain" = "localhost:19000"
-"text/markdown" = "localhost:19000"
-"application/compressed-markdown" = "localhost:19000"
-"application/vnd.oasis.opendocument.text" = "localhost:19000"
-"application/vnd.oasis.opendocument.spreadsheet" = "localhost:19000"
-"application/vnd.oasis.opendocument.presentation" = "localhost:19000"
+[grpc.services.appprovider]
+driver = "demo"
+app_provider_url = "localhost:19000"
 
 [grpc.services.storageprovider]
 driver = "nextcloud"
 mount_path = "/home"
 mount_id = "123e4567-e89b-12d3-a456-426655440000"
 expose_data_server = true
-data_server_url = "http://127.0.0.1:19001/data"
+data_server_url = "http://localhost:19001/data"
 enable_home_creation = true
-disable_tus = true
-custom_mime_types_json = "custom-mime-types-demo.json"
 
 [grpc.services.storageprovider.drivers.nextcloud]
 endpoint = "http://localhost/apps/sciencemesh/"
 user_layout = "{{.Username}}"
 
-
 [grpc.services.authprovider]
 auth_manager = "nextcloud"
+
 [grpc.services.authprovider.auth_managers.nextcloud]
 endpoint = "http://localhost/apps/sciencemesh/"
 
 [grpc.services.userprovider]
 driver = "nextcloud"
+
 [grpc.services.userprovider.drivers.nextcloud]
 endpoint = "http://localhost/apps/sciencemesh/"
 
 [http]
-enabled_services = ["ocmd"]
-enabled_middlewares = ["providerauthorizer", "cors"]
 address = "0.0.0.0:19001"
 
 [http.services.dataprovider]
@@ -122,8 +106,8 @@ driver = "nextcloud"
 [http.services.prometheus]
 [http.services.sysinfo]
 
-[http.services.dataprovider.drivers.localhome]
-user_layout = "{{.Username}}"
+[http.services.dataprovider.drivers.nextcloud]
+endpoint = "http://localhost/apps/sciencemesh/"
 
 [http.services.ocmd]
 prefix = "ocm"
@@ -132,11 +116,13 @@ prefix = "ocm"
 driver = "json"
 
 [http.middlewares.providerauthorizer.drivers.json]
-providers = "/etc/revad/providers.json"
+providers = "/etc/revad/providers.demo.json"
 
 [http.services.ocs]
 prefix = "ocs"
 
 [http.services.ocdav]
+
+[http.services.appprovider]
 
 [http.middlewares.cors]
