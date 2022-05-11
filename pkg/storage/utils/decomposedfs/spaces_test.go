@@ -113,7 +113,7 @@ var _ = Describe("Spaces", func() {
 		})
 	})
 
-	FDescribe("ReadSpaceAndNodeFromSpaceTypeLink", func() {
+	Describe("ReadSpaceAndNodeFromSpaceTypeLink", func() {
 		var (
 			tmpdir string
 		)
