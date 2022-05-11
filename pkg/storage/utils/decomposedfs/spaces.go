@@ -215,13 +215,14 @@ func (fs *Decomposedfs) canCreateSpace(ctx context.Context, spaceID string) bool
 	return checkRes.Status.Code == v1beta11.Code_CODE_OK
 }
 
+// ReadSpaceAndNodeFromSpaceTypeLink reads a symlink and parses space and node id if the link has the correct format, eg:
+// ../../spaces/4c/510ada-c86b-4815-8820-42cdf82c3d51/nodes/4c/51/0a/da/-c86b-4815-8820-42cdf82c3d51
+// ../../spaces/4c/510ada-c86b-4815-8820-42cdf82c3d51/nodes/4c/51/0a/da/-c86b-4815-8820-42cdf82c3d51.T.2022-02-24T12:35:18.196484592Z
 func ReadSpaceAndNodeFromSpaceTypeLink(path string) (string, string, error) {
 	link, err := os.Readlink(path)
 	if err != nil {
 		return "", "", err
 	}
-	// ../../spaces/4c/510ada-c86b-4815-8820-42cdf82c3d51/nodes/4c/51/0a/da/-c86b-4815-8820-42cdf82c3d51
-	// ../../spaces/4c/510ada-c86b-4815-8820-42cdf82c3d51/nodes/4c/51/0a/da/-c86b-4815-8820-42cdf82c3d51.T.2022-02-24T12:35:18.196484592Z
 	// ../../spaces/sp/ace-id/nodes/sh/or/tn/od/eid
 	// 0  1  2      3  4      5     6  7  8  9  10
 	parts := strings.Split(link, string(filepath.Separator))
