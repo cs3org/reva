@@ -81,7 +81,7 @@ func (fs *Decomposedfs) CreateStorageSpace(ctx context.Context, req *provider.Cr
 		alias = templates.WithSpacePropertiesAndUser(u, req.Type, req.Name, fs.o.PersonalSpaceAliasTemplate)
 	}
 
-	root, err := node.ReadNode(ctx, fs.lu, spaceID, spaceID)
+	root, err := node.ReadNode(ctx, fs.lu, spaceID, spaceID, true) // will fall into `Exists` case below
 	if err == nil && root.Exists {
 		return nil, errtypes.AlreadyExists("decomposedfs: spaces: space already exists")
 	}
@@ -285,7 +285,7 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 
 	if spaceID != spaceIDAny && nodeID != spaceIDAny {
 		// try directly reading the node
-		n, err := node.ReadNode(ctx, fs.lu, spaceID, nodeID)
+		n, err := node.ReadNode(ctx, fs.lu, spaceID, nodeID, true) // permission to read disabled space is checked later
 		if err != nil {
 			appctx.GetLogger(ctx).Error().Err(err).Str("id", nodeID).Msg("could not read node")
 			return nil, err
@@ -344,7 +344,7 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 			continue
 		}
 
-		n, err := node.ReadNode(ctx, fs.lu, spaceID, nodeID)
+		n, err := node.ReadNode(ctx, fs.lu, spaceID, nodeID, true)
 		if err != nil {
 			appctx.GetLogger(ctx).Error().Err(err).Str("id", nodeID).Msg("could not read node, skipping")
 			continue
@@ -377,7 +377,7 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 	// if there are no matches (or they happened to be spaces for the owner) and the node is a child return a space
 	if len(matches) <= numShares && nodeID != spaceID {
 		// try node id
-		n, err := node.ReadNode(ctx, fs.lu, spaceID, nodeID)
+		n, err := node.ReadNode(ctx, fs.lu, spaceID, nodeID, true) // permission to read disabled space is checked in storageSpaceFromNode
 		if err != nil {
 			return nil, err
 		}
@@ -404,7 +404,7 @@ func (fs *Decomposedfs) UpdateStorageSpace(ctx context.Context, req *provider.Up
 	space := req.StorageSpace
 	spaceID, _, _ := storagespace.SplitID(space.Id.OpaqueId)
 
-	node, err := node.ReadNode(ctx, fs.lu, spaceID, spaceID)
+	node, err := node.ReadNode(ctx, fs.lu, spaceID, spaceID, true) // permission to read disabled space will be checked later
 	if err != nil {
 		return nil, err
 	}
@@ -505,7 +505,7 @@ func (fs *Decomposedfs) DeleteStorageSpace(ctx context.Context, req *provider.De
 
 	spaceID := req.Id.OpaqueId
 
-	n, err := node.ReadNode(ctx, fs.lu, spaceID, spaceID)
+	n, err := node.ReadNode(ctx, fs.lu, spaceID, spaceID, true) // permission to read disabled space is checked later
 	if err != nil {
 		return err
 	}

@@ -183,8 +183,7 @@ func (n *Node) WriteOwner(owner *userpb.UserId) error {
 }
 
 // ReadNode creates a new instance from an id and checks if it exists
-// FIXME check if user is allowed to access disabled spaces
-func ReadNode(ctx context.Context, lu PathLookup, spaceID, nodeID string) (n *Node, err error) {
+func ReadNode(ctx context.Context, lu PathLookup, spaceID, nodeID string, canListDisabledSpace bool) (n *Node, err error) {
 
 	// read space root
 	r := &Node{
@@ -201,6 +200,11 @@ func ReadNode(ctx context.Context, lu PathLookup, spaceID, nodeID string) (n *No
 		return nil, err
 	}
 	r.Exists = true
+
+	if !canListDisabledSpace && r.IsDisabled() {
+		// no permission = not found
+		return nil, errtypes.NotFound(spaceID)
+	}
 
 	// check if this is a space root
 	if spaceID == nodeID {
@@ -336,7 +340,7 @@ func (n *Node) Child(ctx context.Context, name string) (*Node, error) {
 	}
 
 	var c *Node
-	c, err = ReadNode(ctx, n.lu, spaceID, nodeID)
+	c, err = ReadNode(ctx, n.lu, spaceID, nodeID, false)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not read child node")
 	}

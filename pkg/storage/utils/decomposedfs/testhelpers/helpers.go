@@ -205,7 +205,7 @@ func (t *TestEnv) CreateTestStorageSpace(typ string, quota *providerv1beta1.Quot
 	ref := buildRef(space.StorageSpace.Id.OpaqueId, "")
 
 	// the space name attribute is the stop condition in the lookup
-	h, err := node.ReadNode(t.Ctx, t.Lookup, space.StorageSpace.Id.OpaqueId, space.StorageSpace.Id.OpaqueId)
+	h, err := node.ReadNode(t.Ctx, t.Lookup, space.StorageSpace.Id.OpaqueId, space.StorageSpace.Id.OpaqueId, false)
 	if err != nil {
 		return nil, err
 	}
