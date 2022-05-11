@@ -128,14 +128,14 @@ var _ = Describe("Spaces", func() {
 			}
 		})
 
-		FIt("correctly splits the link target", func() {
+		It("correctly splits the link target", func() {
 			err := os.Symlink("../../spaces/sp/ace-id/nodes/sh/or/tn/od/eid", link)
 			Expect(err).ToNot(HaveOccurred())
 
 			space, node, err := decomposedfs.ReadSpaceAndNodeFromSpaceTypeLink(link)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(space).To(Equal("space-id"))
-			Expect(node).To(Equal("node-id"))
+			Expect(node).To(Equal("shortnodeid"))
 		})
 	})
 })

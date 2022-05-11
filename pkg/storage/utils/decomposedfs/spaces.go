@@ -222,13 +222,13 @@ func ReadSpaceAndNodeFromSpaceTypeLink(path string) (string, string, error) {
 	}
 	// ../../spaces/4c/510ada-c86b-4815-8820-42cdf82c3d51/nodes/4c/51/0a/da/-c86b-4815-8820-42cdf82c3d51
 	// ../../spaces/4c/510ada-c86b-4815-8820-42cdf82c3d51/nodes/4c/51/0a/da/-c86b-4815-8820-42cdf82c3d51.T.2022-02-24T12:35:18.196484592Z
-	// TODO use filepath.Separator to support windows
-	link = strings.ReplaceAll(link, "/", "")
-	// ....spaces4c510ada-c86b-4815-8820-42cdf82c3d51nodes4c510ada-c86b-4815-8820-42cdf82c3d51
-	if link[0:10] != "....spaces" || link[46:51] != "nodes" {
+	// ../../spaces/sp/ace-id/nodes/sh/or/tn/od/eid
+	// 0  1  2      3  4      5     6  7  8  9  10
+	parts := strings.Split(link, string(filepath.Separator))
+	if len(parts) != 11 || parts[0] != ".." || parts[1] != ".." || parts[2] != "spaces" || parts[5] != "nodes" {
 		return "", "", errtypes.InternalError("malformed link")
 	}
-	return link[10:46], link[51:], nil
+	return parts[3] + parts[4], parts[6] + parts[7] + parts[8] + parts[9] + parts[10], nil
 }
 
 // ListStorageSpaces returns a list of StorageSpaces.
