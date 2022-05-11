@@ -370,7 +370,7 @@ func (fs *owncloudsqlfs) getUser(ctx context.Context, usernameOrID string) (id *
 	// look up at the userprovider
 
 	// parts[0] contains the username or userid. use  user service to look up id
-	c, err := pool.GetUserProviderServiceClient(fs.c.UserProviderEndpoint)
+	c, err := pool.GetUserProviderServiceClient(pool.Endpoint(fs.c.UserProviderEndpoint))
 	if err != nil {
 		appctx.GetLogger(ctx).
 			Error().Err(err).
@@ -1040,7 +1040,7 @@ func (fs *owncloudsqlfs) RefreshLock(ctx context.Context, ref *provider.Referenc
 }
 
 // Unlock removes an existing lock from the given reference
-func (fs *owncloudsqlfs) Unlock(ctx context.Context, ref *provider.Reference) error {
+func (fs *owncloudsqlfs) Unlock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
 	return errtypes.NotSupported("unimplemented")
 }
 

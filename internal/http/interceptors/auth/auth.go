@@ -173,7 +173,7 @@ func New(m map[string]interface{}, unprotected []string) (global.Middleware, err
 				isUnprotectedEndpoint = true
 			}
 
-			ctx, err := authenticateUser(w, r, conf, unprotected, tokenStrategy, tokenManager, tokenWriter, credChain, isUnprotectedEndpoint)
+			ctx, err := authenticateUser(w, r, conf, tokenStrategy, tokenManager, tokenWriter, credChain, isUnprotectedEndpoint)
 			if err != nil {
 				if !isUnprotectedEndpoint {
 					return
@@ -187,14 +187,14 @@ func New(m map[string]interface{}, unprotected []string) (global.Middleware, err
 	return chain, nil
 }
 
-func authenticateUser(w http.ResponseWriter, r *http.Request, conf *config, unprotected []string, tokenStrategy auth.TokenStrategy, tokenManager token.Manager, tokenWriter auth.TokenWriter, credChain map[string]auth.CredentialStrategy, isUnprotectedEndpoint bool) (context.Context, error) {
+func authenticateUser(w http.ResponseWriter, r *http.Request, conf *config, tokenStrategy auth.TokenStrategy, tokenManager token.Manager, tokenWriter auth.TokenWriter, credChain map[string]auth.CredentialStrategy, isUnprotectedEndpoint bool) (context.Context, error) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
 	// Add the request user-agent to the ctx
 	ctx = metadata.NewIncomingContext(ctx, metadata.New(map[string]string{ctxpkg.UserAgentHeader: r.UserAgent()}))
 
-	client, err := pool.GetGatewayServiceClient(conf.GatewaySvc)
+	client, err := pool.GetGatewayServiceClient(pool.Endpoint(conf.GatewaySvc))
 	if err != nil {
 		logError(isUnprotectedEndpoint, log, err, "error getting the authsvc client", http.StatusUnauthorized, w)
 		return nil, err

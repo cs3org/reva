@@ -40,6 +40,7 @@ import (
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -188,7 +189,7 @@ func (s *svc) openLocalResources(ctx context.Context, ri *storageprovider.Resour
 		return nil, err
 	}
 
-	appProviderClient, err := pool.GetAppProviderClient(provider.Address)
+	appProviderClient, err := pool.GetAppProviderClient(pool.Endpoint(provider.Address))
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error calling GetAppProviderClient")
 	}
@@ -208,7 +209,7 @@ func (s *svc) openLocalResources(ctx context.Context, ri *storageprovider.Resour
 }
 
 func (s *svc) findAppProvider(ctx context.Context, ri *storageprovider.ResourceInfo, app string) (*registry.ProviderInfo, error) {
-	c, err := pool.GetAppRegistryClient(s.c.AppRegistryEndpoint)
+	c, err := pool.GetAppRegistryClient(pool.Endpoint(s.c.AppRegistryEndpoint))
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error getting appregistry client")
 		return nil, err
@@ -308,9 +309,9 @@ func getGRPCConfig(opaque *typespb.Opaque) (bool, bool) {
 	return insecure, skipVerify
 }
 
-func getConn(host string, insecure, skipverify bool) (*grpc.ClientConn, error) {
-	if insecure {
-		return grpc.Dial(host, grpc.WithInsecure())
+func getConn(host string, ins, skipverify bool) (*grpc.ClientConn, error) {
+	if ins {
+		return grpc.Dial(host, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	}
 
 	// TODO(labkode): if in the future we want client-side certificate validation,

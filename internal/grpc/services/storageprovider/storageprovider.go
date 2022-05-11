@@ -63,7 +63,7 @@ type config struct {
 	DataServerURL       string                            `mapstructure:"data_server_url" docs:"http://localhost/data;The URL for the data server."`
 	ExposeDataServer    bool                              `mapstructure:"expose_data_server" docs:"false;Whether to expose data server."` // if true the client will be able to upload/download directly to it
 	AvailableXS         map[string]uint32                 `mapstructure:"available_checksums" docs:"nil;List of available checksums."`
-	CustomMimeTypesJSON string                            `mapstructure:"custom_mimetypes_json" docs:"nil;An optional mapping file with the list of supported custom file extensions and corresponding mime types."`
+	CustomMimeTypesJSON string                            `mapstructure:"custom_mime_types_json" docs:"nil;An optional mapping file with the list of supported custom file extensions and corresponding mime types."`
 }
 
 func (c *config) init() {
@@ -295,6 +295,8 @@ func (s *service) SetLock(ctx context.Context, req *provider.SetLockRequest) (*p
 			st = status.NewNotFound(ctx, "path not found when setting lock")
 		case errtypes.PermissionDenied:
 			st = status.NewPermissionDenied(ctx, err, "permission denied")
+		case errtypes.BadRequest:
+			st = status.NewFailedPrecondition(ctx, err, "reference already locked")
 		default:
 			st = status.NewInternal(ctx, err, "error setting lock: "+req.Ref.String())
 		}
@@ -324,7 +326,7 @@ func (s *service) GetLock(ctx context.Context, req *provider.GetLockRequest) (*p
 		var st *rpc.Status
 		switch err.(type) {
 		case errtypes.IsNotFound:
-			st = status.NewNotFound(ctx, "path not found when getting lock")
+			st = status.NewNotFound(ctx, "reference or lock not found")
 		case errtypes.PermissionDenied:
 			st = status.NewPermissionDenied(ctx, err, "permission denied")
 		default:
@@ -359,6 +361,8 @@ func (s *service) RefreshLock(ctx context.Context, req *provider.RefreshLockRequ
 			st = status.NewNotFound(ctx, "path not found when refreshing lock")
 		case errtypes.PermissionDenied:
 			st = status.NewPermissionDenied(ctx, err, "permission denied")
+		case errtypes.BadRequest:
+			st = status.NewFailedPrecondition(ctx, err, "reference not locked or caller does not hold the lock")
 		default:
 			st = status.NewInternal(ctx, err, "error refreshing lock: "+req.Ref.String())
 		}
@@ -383,13 +387,15 @@ func (s *service) Unlock(ctx context.Context, req *provider.UnlockRequest) (*pro
 		}, nil
 	}
 
-	if err = s.storage.Unlock(ctx, newRef); err != nil {
+	if err = s.storage.Unlock(ctx, newRef, req.Lock); err != nil {
 		var st *rpc.Status
 		switch err.(type) {
 		case errtypes.IsNotFound:
 			st = status.NewNotFound(ctx, "path not found when unlocking")
 		case errtypes.PermissionDenied:
 			st = status.NewPermissionDenied(ctx, err, "permission denied")
+		case errtypes.BadRequest:
+			st = status.NewFailedPrecondition(ctx, err, "reference not locked")
 		default:
 			st = status.NewInternal(ctx, err, "error unlocking: "+req.Ref.String())
 		}

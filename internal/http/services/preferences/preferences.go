@@ -119,7 +119,7 @@ func (s *svc) handleGet(w http.ResponseWriter, r *http.Request) {
 
 	}
 
-	client, err := pool.GetGatewayServiceClient(s.conf.GatewaySvc)
+	client, err := pool.GetGatewayServiceClient(pool.Endpoint(s.conf.GatewaySvc))
 	if err != nil {
 		log.Error().Err(err).Msg("error getting grpc gateway client")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -185,7 +185,7 @@ func (s *svc) handlePost(w http.ResponseWriter, r *http.Request) {
 
 	}
 
-	client, err := pool.GetGatewayServiceClient(s.conf.GatewaySvc)
+	client, err := pool.GetGatewayServiceClient(pool.Endpoint(s.conf.GatewaySvc))
 	if err != nil {
 		log.Error().Err(err).Msg("error getting grpc gateway client")
 		w.WriteHeader(http.StatusInternalServerError)

@@ -120,7 +120,7 @@ func (c *ChunkHandler) saveChunk(path string, r io.ReadCloser) (finish bool, chu
 	c.user.op(func(cv *cacheVal) {
 		var tmpFile *cephfs2.File
 		target := filepath.Join(c.chunkFolder, chunkTempFilename)
-		tmpFile, err = cv.mount.Open(target, os.O_CREATE|os.O_WRONLY, filePermDefault)
+		tmpFile, err = cv.mount.Open(target, os.O_CREATE|os.O_WRONLY, c.user.fs.conf.FilePerms)
 		defer closeFile(tmpFile)
 		if err != nil {
 			return
@@ -170,7 +170,7 @@ func (c *ChunkHandler) saveChunk(path string, r io.ReadCloser) (finish bool, chu
 		}
 
 		chunk = filepath.Join(c.chunkFolder, c.getChunkTempFileName())
-		assembledFile, err = cv.mount.Open(chunk, os.O_CREATE|os.O_WRONLY, filePermDefault)
+		assembledFile, err = cv.mount.Open(chunk, os.O_CREATE|os.O_WRONLY, c.user.fs.conf.FilePerms)
 		defer closeFile(assembledFile)
 		defer deleteFile(cv.mount, chunk)
 		if err != nil {

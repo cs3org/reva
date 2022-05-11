@@ -37,8 +37,6 @@ import (
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	rtrace "github.com/cs3org/reva/pkg/trace"
-	"github.com/cs3org/reva/pkg/useragent"
-	ua "github.com/mileusna/useragent"
 
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
@@ -137,7 +135,7 @@ func (s *svc) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSp
 		providers []*registry.ProviderInfo
 		err       error
 	)
-	c, err := pool.GetStorageRegistryClient(s.c.StorageRegistryEndpoint)
+	c, err := pool.GetStorageRegistryClient(pool.Endpoint(s.c.StorageRegistryEndpoint))
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error getting storage registry client")
 	}
@@ -1778,28 +1776,34 @@ func (s *svc) listSharesFolder(ctx context.Context) (*provider.ListContainerResp
 	return lcr, nil
 }
 
-func (s *svc) isPathAllowed(ua *ua.UserAgent, path string) bool {
-	uaLst, ok := s.c.AllowedUserAgents[path]
-	if !ok {
-		// if no user agent is defined for a path, all user agents are allowed
-		return true
-	}
-	return useragent.IsUserAgentAllowed(ua, uaLst)
-}
-
 func (s *svc) filterProvidersByUserAgent(ctx context.Context, providers []*registry.ProviderInfo) []*registry.ProviderInfo {
-	ua, ok := ctxpkg.ContextGetUserAgent(ctx)
+	cat, ok := ctxpkg.ContextGetUserAgentCategory(ctx)
 	if !ok {
 		return providers
 	}
 
 	filters := []*registry.ProviderInfo{}
 	for _, p := range providers {
-		if s.isPathAllowed(ua, p.ProviderPath) {
+		if s.isPathAllowed(cat, p.ProviderPath) {
 			filters = append(filters, p)
 		}
 	}
 	return filters
+}
+
+func (s *svc) isPathAllowed(cat string, path string) bool {
+	allowedUserAgents, ok := s.c.AllowedUserAgents[path]
+	if !ok {
+		// if no user agent is defined for a path, all user agents are allowed
+		return true
+	}
+
+	for _, userAgent := range allowedUserAgents {
+		if userAgent == cat {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *svc) listContainer(ctx context.Context, req *provider.ListContainerRequest) (*provider.ListContainerResponse, error) {
@@ -2282,7 +2286,7 @@ func (s *svc) find(ctx context.Context, ref *provider.Reference) (provider.Provi
 }
 
 func (s *svc) getStorageProviderClient(_ context.Context, p *registry.ProviderInfo) (provider.ProviderAPIClient, error) {
-	c, err := pool.GetStorageProviderServiceClient(p.Address)
+	c, err := pool.GetStorageProviderServiceClient(pool.Endpoint(p.Address))
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error getting a storage provider client")
 		return nil, err
@@ -2292,7 +2296,7 @@ func (s *svc) getStorageProviderClient(_ context.Context, p *registry.ProviderIn
 }
 
 func (s *svc) findProviders(ctx context.Context, ref *provider.Reference) ([]*registry.ProviderInfo, error) {
-	c, err := pool.GetStorageRegistryClient(s.c.StorageRegistryEndpoint)
+	c, err := pool.GetStorageRegistryClient(pool.Endpoint(s.c.StorageRegistryEndpoint))
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error getting storage registry client")
 	}

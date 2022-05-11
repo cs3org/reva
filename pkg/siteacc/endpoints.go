@@ -29,6 +29,7 @@ import (
 	"github.com/cs3org/reva/pkg/siteacc/config"
 	"github.com/cs3org/reva/pkg/siteacc/data"
 	"github.com/cs3org/reva/pkg/siteacc/html"
+	"github.com/cs3org/reva/pkg/siteacc/manager"
 	"github.com/pkg/errors"
 	"github.com/prometheus/alertmanager/template"
 )
@@ -38,6 +39,7 @@ const (
 )
 
 type methodCallback = func(*SiteAccounts, url.Values, []byte, *html.Session) (interface{}, error)
+type accessSetterCallback = func(*manager.AccountsManager, *data.Account, bool) error
 
 type endpoint struct {
 	Path            string
@@ -72,6 +74,9 @@ func getEndpoints() []endpoint {
 		{config.EndpointUpdate, callMethodEndpoint, createMethodCallbacks(nil, handleUpdate), false},
 		{config.EndpointConfigure, callMethodEndpoint, createMethodCallbacks(nil, handleConfigure), false},
 		{config.EndpointRemove, callMethodEndpoint, createMethodCallbacks(nil, handleRemove), false},
+		// Site endpoints
+		{config.EndpointSiteGet, callMethodEndpoint, createMethodCallbacks(handleSiteGet, nil), false},
+		{config.EndpointSiteConfigure, callMethodEndpoint, createMethodCallbacks(nil, handleSiteConfigure), false},
 		// Login endpoints
 		{config.EndpointLogin, callMethodEndpoint, createMethodCallbacks(nil, handleLogin), true},
 		{config.EndpointLogout, callMethodEndpoint, createMethodCallbacks(handleLogout, nil), true},
@@ -80,6 +85,7 @@ func getEndpoints() []endpoint {
 		// Authentication endpoints
 		{config.EndpointVerifyUserToken, callMethodEndpoint, createMethodCallbacks(handleVerifyUserToken, nil), true},
 		// Access management endpoints
+		{config.EndpointGrantSiteAccess, callMethodEndpoint, createMethodCallbacks(nil, handleGrantSiteAccess), false},
 		{config.EndpointGrantGOCDBAccess, callMethodEndpoint, createMethodCallbacks(nil, handleGrantGOCDBAccess), false},
 		// Alerting endpoints
 		{config.EndpointDispatchAlert, callMethodEndpoint, createMethodCallbacks(nil, handleDispatchAlert), false},
@@ -228,6 +234,42 @@ func handleRemove(siteacc *SiteAccounts, values url.Values, body []byte, session
 	return nil, nil
 }
 
+func handleSiteGet(siteacc *SiteAccounts, values url.Values, body []byte, session *html.Session) (interface{}, error) {
+	siteID := values.Get("site")
+	if siteID == "" {
+		return nil, errors.Errorf("no site specified")
+	}
+	site := siteacc.SitesManager().FindSite(siteID)
+	if site == nil {
+		return nil, errors.Errorf("no site with ID %v exists", siteID)
+	}
+	return map[string]interface{}{"site": site.Clone(false)}, nil
+}
+
+func handleSiteConfigure(siteacc *SiteAccounts, values url.Values, body []byte, session *html.Session) (interface{}, error) {
+	email, _, err := processInvoker(siteacc, values, session)
+	if err != nil {
+		return nil, err
+	}
+	account, err := siteacc.AccountsManager().FindAccount(manager.FindByEmail, email)
+	if err != nil {
+		return nil, err
+	}
+
+	siteData := &data.Site{}
+	if err := json.Unmarshal(body, siteData); err != nil {
+		return nil, errors.Wrap(err, "invalid form data")
+	}
+	siteData.ID = account.Site
+
+	// Configure the site through the sites manager
+	if err := siteacc.SitesManager().UpdateSite(siteData); err != nil {
+		return nil, errors.Wrap(err, "unable to configure site")
+	}
+
+	return nil, nil
+}
+
 func handleLogin(siteacc *SiteAccounts, values url.Values, body []byte, session *html.Session) (interface{}, error) {
 	account, err := unmarshalRequestData(body)
 	if err != nil {
@@ -264,7 +306,7 @@ func handleResetPassword(siteacc *SiteAccounts, values url.Values, body []byte, 
 }
 
 func handleContact(siteacc *SiteAccounts, values url.Values, body []byte, session *html.Session) (interface{}, error) {
-	if session.LoggedInUser == nil {
+	if !session.IsUserLoggedIn() {
 		return nil, errors.Errorf("no user is currently logged in")
 	}
 
@@ -278,7 +320,7 @@ func handleContact(siteacc *SiteAccounts, values url.Values, body []byte, sessio
 	}
 
 	// Send an email through the accounts manager
-	siteacc.AccountsManager().SendContactForm(session.LoggedInUser, strings.TrimSpace(contactData.Subject), strings.TrimSpace(contactData.Message))
+	siteacc.AccountsManager().SendContactForm(session.LoggedInUser().Account, strings.TrimSpace(contactData.Subject), strings.TrimSpace(contactData.Message))
 	return nil, nil
 }
 
@@ -316,7 +358,15 @@ func handleDispatchAlert(siteacc *SiteAccounts, values url.Values, body []byte, 
 	return nil, nil
 }
 
+func handleGrantSiteAccess(siteacc *SiteAccounts, values url.Values, body []byte, session *html.Session) (interface{}, error) {
+	return handleGrantAccess((*manager.AccountsManager).GrantSiteAccess, siteacc, values, body, session)
+}
+
 func handleGrantGOCDBAccess(siteacc *SiteAccounts, values url.Values, body []byte, session *html.Session) (interface{}, error) {
+	return handleGrantAccess((*manager.AccountsManager).GrantGOCDBAccess, siteacc, values, body, session)
+}
+
+func handleGrantAccess(accessSetter accessSetterCallback, siteacc *SiteAccounts, values url.Values, body []byte, session *html.Session) (interface{}, error) {
 	account, err := unmarshalRequestData(body)
 	if err != nil {
 		return nil, err
@@ -336,8 +386,8 @@ func handleGrantGOCDBAccess(siteacc *SiteAccounts, values url.Values, body []byt
 		}
 
 		// Grant access to the account through the accounts manager
-		if err := siteacc.AccountsManager().GrantGOCDBAccess(account, grantAccess); err != nil {
-			return nil, errors.Wrap(err, "unable to change the GOCDB access status of the account")
+		if err := accessSetter(siteacc.AccountsManager(), account, grantAccess); err != nil {
+			return nil, errors.Wrap(err, "unable to change the access status of the account")
 		}
 	} else {
 		return nil, errors.Errorf("no access status provided")
@@ -375,11 +425,11 @@ func processInvoker(siteacc *SiteAccounts, values url.Values, session *html.Sess
 	switch strings.ToLower(values.Get("invoker")) {
 	case invokerUser:
 		// If this endpoint was called by the user, set the account email from the stored session
-		if session.LoggedInUser == nil {
+		if !session.IsUserLoggedIn() {
 			return "", false, errors.Errorf("no user is currently logged in")
 		}
 
-		email = session.LoggedInUser.Email
+		email = session.LoggedInUser().Account.Email
 		invokedByUser = true
 
 	default:

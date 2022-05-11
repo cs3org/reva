@@ -55,6 +55,11 @@ func SendAccountCreated(account *data.Account, recipients []string, params map[s
 	return send(recipients, "ScienceMesh: Site Administrator Account created", accountCreatedTemplate, getEmailData(account, conf, params), conf.Email.SMTP)
 }
 
+// SendSiteAccessGranted sends an email about granted Site access.
+func SendSiteAccessGranted(account *data.Account, recipients []string, params map[string]string, conf config.Configuration) error {
+	return send(recipients, "ScienceMesh: Site access granted", siteAccessGrantedTemplate, getEmailData(account, conf, params), conf.Email.SMTP)
+}
+
 // SendGOCDBAccessGranted sends an email about granted GOCDB access.
 func SendGOCDBAccessGranted(account *data.Account, recipients []string, params map[string]string, conf config.Configuration) error {
 	return send(recipients, "ScienceMesh: GOCDB access granted", gocdbAccessGrantedTemplate, getEmailData(account, conf, params), conf.Email.SMTP)

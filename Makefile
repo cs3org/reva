@@ -81,7 +81,7 @@ test-go-version:
 # for manual building only
 deps:
 	cd /tmp && rm -rf golangci-lint &&  git clone --quiet -b 'v1.42.1' --single-branch --depth 1 https://github.com/golangci/golangci-lint &> /dev/null && cd golangci-lint/cmd/golangci-lint && go install
-	cd /tmp && go get golang.org/x/tools/cmd/goimports
+	cd /tmp && go install golang.org/x/tools/cmd/goimports@latest
 
 build-ci: off
 	go build -ldflags ${CI_BUILD_FLAGS} -o ./cmd/revad/revad ./cmd/revad

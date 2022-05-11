@@ -109,7 +109,7 @@ func (h *sharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	gatewayClient, err := pool.GetGatewayServiceClient(h.gatewayAddr)
+	gatewayClient, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
 	if err != nil {
 		WriteError(w, r, APIErrorServerError, "error getting storage grpc client", err)
 		return

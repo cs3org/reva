@@ -109,7 +109,7 @@ func (panel *Panel) Execute(w http.ResponseWriter, r *http.Request, session *htm
 func NewPanel(conf *config.Configuration, log *zerolog.Logger) (*Panel, error) {
 	panel := &Panel{}
 	if err := panel.initialize(conf, log); err != nil {
-		return nil, errors.Wrapf(err, "unable to initialize the administration panel")
+		return nil, errors.Wrap(err, "unable to initialize the administration panel")
 	}
 	return panel, nil
 }

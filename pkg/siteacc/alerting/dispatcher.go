@@ -121,7 +121,7 @@ func (dispatcher *Dispatcher) dispatchAlert(alert template.Alert, account *data.
 func NewDispatcher(conf *config.Configuration, log *zerolog.Logger) (*Dispatcher, error) {
 	dispatcher := &Dispatcher{}
 	if err := dispatcher.initialize(conf, log); err != nil {
-		return nil, errors.Wrapf(err, "unable to initialize the alerts dispatcher")
+		return nil, errors.Wrap(err, "unable to initialize the alerts dispatcher")
 	}
 	return dispatcher, nil
 }

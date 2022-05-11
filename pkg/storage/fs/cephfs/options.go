@@ -29,8 +29,11 @@ import (
 
 // Options for the cephfs module
 type Options struct {
+	ClientID     string `mapstructure:"client_id"`
+	Config       string `mapstructure:"config"`
 	GatewaySvc   string `mapstructure:"gatewaysvc"`
 	IndexPool    string `mapstructure:"index_pool"`
+	Keyring      string `mapstructure:"keyring"`
 	Root         string `mapstructure:"root"`
 	ShadowFolder string `mapstructure:"shadow_folder"`
 	ShareFolder  string `mapstructure:"share_folder"`
@@ -38,6 +41,8 @@ type Options struct {
 	UserLayout   string `mapstructure:"user_layout"`
 
 	DisableHome    bool   `mapstructure:"disable_home"`
+	DirPerms       uint32 `mapstructure:"dir_perms"`
+	FilePerms      uint32 `mapstructure:"file_perms"`
 	UserQuotaBytes uint64 `mapstructure:"user_quota_bytes"`
 	HiddenDirs     map[string]bool
 }
@@ -49,10 +54,26 @@ func (c *Options) fillDefaults() {
 		c.IndexPool = "path_index"
 	}
 
+	if c.Config == "" {
+		c.Config = "/etc/ceph/ceph.conf"
+	} else {
+		c.Config = addLeadingSlash(c.Config) //force absolute path in case leading "/" is omitted
+	}
+
+	if c.ClientID == "" {
+		c.ClientID = "admin"
+	}
+
+	if c.Keyring == "" {
+		c.Keyring = "/etc/ceph/keyring"
+	} else {
+		c.Keyring = addLeadingSlash(c.Keyring)
+	}
+
 	if c.Root == "" {
 		c.Root = "/home"
 	} else {
-		c.Root = addLeadingSlash(c.Root) //force absolute path in case leading "/" is omitted
+		c.Root = addLeadingSlash(c.Root)
 	}
 
 	if c.ShadowFolder == "" {
@@ -82,7 +103,13 @@ func (c *Options) fillDefaults() {
 		removeLeadingSlash(c.ShadowFolder): true,
 	}
 
-	c.DisableHome = false // it is currently only home based
+	if c.DirPerms == 0 {
+		c.DirPerms = dirPermDefault
+	}
+
+	if c.FilePerms == 0 {
+		c.FilePerms = filePermDefault
+	}
 
 	if c.UserQuotaBytes == 0 {
 		c.UserQuotaBytes = 50000000000

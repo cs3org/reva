@@ -333,6 +333,7 @@ message NSRequest {
     map<string, bytes> xattrs = 2;
     bool recursive = 3;
     repeated string keystodelete = 4;
+    bool create = 5;
   }
 
   message ChownRequest {
@@ -378,8 +379,44 @@ message NSRequest {
     QUOTAENTRY entry = 6; // select volume or inode entry for deletion
   }
 
+  message ShareRequest {
+    message LsShare {
+      enum OutFormat {
+        NONE                  = 0; //
+        MONITORING            = 1; // [-m]
+        LISTING               = 2; // [-l]
+	JSON                  = 3; // [grpc]
+      }
+    OutFormat outformat   = 1; //
+    string selection      = 2; //
+    }
+
+    message OperateShare {
+      enum Op {
+        CREATE = 0;
+        REMOVE = 1;
+        SHARE  = 2;
+        UNSHARE = 3;
+        ACCESS = 4;
+        MODIFY = 5;
+      }
+      Op op = 1;
+      string share = 2;
+      string acl = 3;
+      string path = 4;
+      string user = 5;
+      string group = 6;
+    }
+
+    oneof subcmd {
+      LsShare ls    = 1;
+      OperateShare op = 2;
+    }
+  }
+
   string authkey = 1;
   RoleId role = 2;
+
   // Actual request data object
   oneof command {
     MkdirRequest mkdir       = 21;
@@ -397,6 +434,7 @@ message NSRequest {
     AclRequest acl           = 33;
     TokenRequest token       = 34;
     QuotaRequest quota       = 35;
+    ShareRequest share       = 36;
   }
 }
 
@@ -447,11 +485,32 @@ message NSResponse {
     repeated QuotaProto quotanode = 3;
   }
 
+  message ShareInfo {
+    string name = 1;
+    string root = 2;
+    string rule = 3;
+    uint64 uid = 4;
+    uint64 nshared = 5;
+  }
+
+  message ShareAccess {
+    string name = 1;
+    bool granted = 2;
+  }
+
+  message ShareResponse {
+    int64 code = 1;
+    string msg = 2;    
+    repeated ShareInfo shares = 3;
+    repeated ShareAccess access = 4;
+  }
+
   ErrorResponse       error = 1;
   VersionResponse     version = 2;
   RecycleResponse     recycle = 3;
   AclResponse         acl = 4;
   QuotaResponse       quota = 5;
+  ShareResponse       share = 6;
 }
 
 message NsStatRequest {

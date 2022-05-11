@@ -21,10 +21,11 @@ package rest
 import (
 	"context"
 	"fmt"
-	"net/url"
-	"regexp"
-	"strconv"
+	"os"
+	"os/signal"
 	"strings"
+	"syscall"
+	"time"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
@@ -34,16 +35,12 @@ import (
 	"github.com/gomodule/redigo/redis"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog/log"
 )
 
 func init() {
 	registry.Register("rest", New)
 }
-
-var (
-	emailRegex    = regexp.MustCompile(`^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$`)
-	usernameRegex = regexp.MustCompile(`^[ a-zA-Z0-9._-]+$`)
-)
 
 type manager struct {
 	conf            *config
@@ -63,7 +60,7 @@ type config struct {
 	// The OIDC Provider
 	IDProvider string `mapstructure:"id_provider" docs:"http://cernbox.cern.ch"`
 	// Base API Endpoint
-	APIBaseURL string `mapstructure:"api_base_url" docs:"https://authorization-service-api-dev.web.cern.ch/api/v1.0"`
+	APIBaseURL string `mapstructure:"api_base_url" docs:"https://authorization-service-api-dev.web.cern.ch"`
 	// Client ID needed to authenticate
 	ClientID string `mapstructure:"client_id" docs:"-"`
 	// Client Secret
@@ -73,6 +70,8 @@ type config struct {
 	OIDCTokenEndpoint string `mapstructure:"oidc_token_endpoint" docs:"https://keycloak-dev.cern.ch/auth/realms/cern/api-access/token"`
 	// The target application for which token needs to be generated
 	TargetAPI string `mapstructure:"target_api" docs:"authorization-service-api"`
+	// The time in seconds between bulk fetch of user accounts
+	UserFetchInterval int `mapstructure:"user_fetch_interval" docs:"3600"`
 }
 
 func (c *config) init() {
@@ -83,7 +82,7 @@ func (c *config) init() {
 		c.RedisAddress = ":6379"
 	}
 	if c.APIBaseURL == "" {
-		c.APIBaseURL = "https://authorization-service-api-dev.web.cern.ch/api/v1.0"
+		c.APIBaseURL = "https://authorization-service-api-dev.web.cern.ch"
 	}
 	if c.TargetAPI == "" {
 		c.TargetAPI = "authorization-service-api"
@@ -93,6 +92,9 @@ func (c *config) init() {
 	}
 	if c.IDProvider == "" {
 		c.IDProvider = "http://cernbox.cern.ch"
+	}
+	if c.UserFetchInterval == 0 {
+		c.UserFetchInterval = 3600
 	}
 }
 
@@ -125,87 +127,73 @@ func (m *manager) Configure(ml map[string]interface{}) error {
 	m.conf = c
 	m.redisPool = redisPool
 	m.apiTokenManager = apiTokenManager
+
+	// Since we're starting a subroutine which would take some time to execute,
+	// we can't wait to see if it works before returning the user.Manager object
+	// TODO: return err if the fetch fails
+	go m.fetchAllUsers()
 	return nil
 }
 
-func (m *manager) getUser(ctx context.Context, url string) (map[string]interface{}, error) {
-	responseData, err := m.apiTokenManager.SendAPIGetRequest(ctx, url, false)
-	if err != nil {
-		return nil, err
-	}
+func (m *manager) fetchAllUsers() {
+	_ = m.fetchAllUserAccounts()
+	ticker := time.NewTicker(time.Duration(m.conf.UserFetchInterval) * time.Second)
+	work := make(chan os.Signal, 1)
+	signal.Notify(work, syscall.SIGHUP, syscall.SIGINT, syscall.SIGQUIT)
 
-	var users []map[string]interface{}
-	for _, usr := range responseData {
-		userData, ok := usr.(map[string]interface{})
-		if !ok {
-			continue
-		}
-
-		t, _ := userData["type"].(string)
-		userType := getUserType(t, userData["upn"].(string))
-		if userType != userpb.UserType_USER_TYPE_APPLICATION && userType != userpb.UserType_USER_TYPE_FEDERATED {
-			users = append(users, userData)
+	for {
+		select {
+		case <-work:
+			return
+		case <-ticker.C:
+			_ = m.fetchAllUserAccounts()
 		}
 	}
-
-	if len(users) != 1 {
-		return nil, errors.New("rest: user not found for URL: " + url)
-	}
-
-	return users[0], nil
 }
 
-func (m *manager) getUserByParam(ctx context.Context, param, val string) (map[string]interface{}, error) {
-	url := fmt.Sprintf("%s/Identity?filter=%s:%s&field=upn&field=primaryAccountEmail&field=displayName&field=uid&field=gid&field=type",
-		m.conf.APIBaseURL, param, url.QueryEscape(val))
-	return m.getUser(ctx, url)
-}
+func (m *manager) fetchAllUserAccounts() error {
+	ctx := context.Background()
+	url := fmt.Sprintf("%s/api/v1.0/Identity?field=upn&field=primaryAccountEmail&field=displayName&field=uid&field=gid&field=type", m.conf.APIBaseURL)
 
-func (m *manager) getLightweightUser(ctx context.Context, mail string) (map[string]interface{}, error) {
-	url := fmt.Sprintf("%s/Identity?filter=primaryAccountEmail:%s&filter=upn:contains:guest&field=upn&field=primaryAccountEmail&field=displayName&field=uid&field=gid&field=type",
-		m.conf.APIBaseURL, url.QueryEscape(mail))
-	return m.getUser(ctx, url)
-}
-
-func (m *manager) getInternalUserID(ctx context.Context, uid *userpb.UserId) (string, error) {
-
-	internalID, err := m.fetchCachedInternalID(uid)
-	if err != nil {
-		var (
-			userData map[string]interface{}
-			err      error
-		)
-		if uid.Type == userpb.UserType_USER_TYPE_LIGHTWEIGHT {
-			// Lightweight accounts need to be fetched by email
-			userData, err = m.getLightweightUser(ctx, strings.TrimPrefix(uid.OpaqueId, "guest:"))
-		} else {
-			userData, err = m.getUserByParam(ctx, "upn", uid.OpaqueId)
-		}
+	for url != "" {
+		result, err := m.apiTokenManager.SendAPIGetRequest(ctx, url, false)
 		if err != nil {
-			return "", err
-		}
-		id, ok := userData["id"].(string)
-		if !ok {
-			return "", errors.New("rest: error in type assertion")
+			return err
 		}
 
-		if err = m.cacheInternalID(uid, id); err != nil {
-			log := appctx.GetLogger(ctx)
-			log.Error().Err(err).Msg("rest: error caching user details")
+		responseData, ok := result["data"].([]interface{})
+		if !ok {
+			return errors.New("rest: error in type assertion")
 		}
-		return id, nil
+		for _, usr := range responseData {
+			userData, ok := usr.(map[string]interface{})
+			if !ok {
+				continue
+			}
+
+			_, err = m.parseAndCacheUser(ctx, userData)
+			if err != nil {
+				continue
+			}
+		}
+
+		url = ""
+		if pagination, ok := result["pagination"].(map[string]interface{}); ok {
+			if links, ok := pagination["links"].(map[string]interface{}); ok {
+				if next, ok := links["next"].(string); ok {
+					url = fmt.Sprintf("%s%s", m.conf.APIBaseURL, next)
+				}
+			}
+		}
 	}
-	return internalID, nil
+
+	return nil
 }
 
 func (m *manager) parseAndCacheUser(ctx context.Context, userData map[string]interface{}) (*userpb.User, error) {
-	id, ok := userData["id"].(string)
-	if !ok {
-		return nil, errors.New("parseAndCacheUser: Missing id in userData")
-	}
 	upn, ok := userData["upn"].(string)
 	if !ok {
-		return nil, errors.New("parseAndCacheUser: Missing upn in userData")
+		return nil, errors.New("rest: missing upn in user data")
 	}
 	mail, _ := userData["primaryAccountEmail"].(string)
 	name, _ := userData["displayName"].(string)
@@ -229,12 +217,7 @@ func (m *manager) parseAndCacheUser(ctx context.Context, userData map[string]int
 	}
 
 	if err := m.cacheUserDetails(u); err != nil {
-		log := appctx.GetLogger(ctx)
 		log.Error().Err(err).Msg("rest: error caching user details")
-	}
-	if err := m.cacheInternalID(userID, id); err != nil {
-		log := appctx.GetLogger(ctx)
-		log.Error().Err(err).Msg("rest: error caching internal ID")
 	}
 	return u, nil
 }
@@ -242,23 +225,7 @@ func (m *manager) parseAndCacheUser(ctx context.Context, userData map[string]int
 func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId, skipFetchingGroups bool) (*userpb.User, error) {
 	u, err := m.fetchCachedUserDetails(uid)
 	if err != nil {
-		var (
-			userData map[string]interface{}
-			err      error
-		)
-		if uid.Type == userpb.UserType_USER_TYPE_LIGHTWEIGHT {
-			// Lightweight accounts need to be fetched by email
-			userData, err = m.getLightweightUser(ctx, strings.TrimPrefix(uid.OpaqueId, "guest:"))
-		} else {
-			userData, err = m.getUserByParam(ctx, "upn", uid.OpaqueId)
-		}
-		if err != nil {
-			return nil, err
-		}
-		u, err = m.parseAndCacheUser(ctx, userData)
-		if err != nil {
-			return nil, err
-		}
+		return nil, err
 	}
 
 	if !skipFetchingGroups {
@@ -273,34 +240,7 @@ func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId, skipFetchingG
 }
 
 func (m *manager) GetUserByClaim(ctx context.Context, claim, value string, skipFetchingGroups bool) (*userpb.User, error) {
-	opaqueID, err := m.fetchCachedParam(claim, value)
-	if err == nil {
-		return m.GetUser(ctx, &userpb.UserId{OpaqueId: opaqueID}, skipFetchingGroups)
-	}
-
-	switch claim {
-	case "mail":
-		claim = "primaryAccountEmail"
-	case "uid":
-		claim = "uid"
-	case "username":
-		claim = "upn"
-	default:
-		return nil, errors.New("rest: invalid field: " + claim)
-	}
-
-	var userData map[string]interface{}
-	if strings.HasPrefix(value, "guest:") {
-		// Lightweight accounts need to be fetched by email, regardless of the demanded claim
-		if userData, err = m.getLightweightUser(ctx, strings.TrimPrefix(value, "guest:")); err != nil {
-			return nil, err
-		}
-	} else {
-		if userData, err = m.getUserByParam(ctx, claim, value); err != nil {
-			return nil, errors.Wrap(err, "rest: failed getUserByParam, claim="+claim+", value="+value)
-		}
-	}
-	u, err := m.parseAndCacheUser(ctx, userData)
+	u, err := m.fetchCachedUserByParam(claim, value)
 	if err != nil {
 		return nil, err
 	}
@@ -316,63 +256,11 @@ func (m *manager) GetUserByClaim(ctx context.Context, claim, value string, skipF
 	return u, nil
 }
 
-func (m *manager) findUsersByFilter(ctx context.Context, url string, users map[string]*userpb.User, skipFetchingGroups bool) error {
-
-	userData, err := m.apiTokenManager.SendAPIGetRequest(ctx, url, false)
-	if err != nil {
-		return err
-	}
-
-	for _, usr := range userData {
-		usrInfo, ok := usr.(map[string]interface{})
-		if !ok {
-			continue
-		}
-
-		upn, _ := usrInfo["upn"].(string)
-		mail, _ := usrInfo["primaryAccountEmail"].(string)
-		name, _ := usrInfo["displayName"].(string)
-		uidNumber, _ := usrInfo["uid"].(float64)
-		gidNumber, _ := usrInfo["gid"].(float64)
-		t, _ := usrInfo["type"].(string)
-		userType := getUserType(t, upn)
-
-		if userType == userpb.UserType_USER_TYPE_APPLICATION || userType == userpb.UserType_USER_TYPE_FEDERATED {
-			continue
-		}
-
-		uid := &userpb.UserId{
-			OpaqueId: upn,
-			Idp:      m.conf.IDProvider,
-			Type:     userType,
-		}
-		var userGroups []string
-		if !skipFetchingGroups {
-			userGroups, err = m.GetUserGroups(ctx, uid)
-			if err != nil {
-				return err
-			}
-		}
-
-		users[uid.OpaqueId] = &userpb.User{
-			Id:          uid,
-			Username:    upn,
-			Mail:        mail,
-			DisplayName: name,
-			UidNumber:   int64(uidNumber),
-			GidNumber:   int64(gidNumber),
-			Groups:      userGroups,
-		}
-	}
-
-	return nil
-}
-
 func (m *manager) FindUsers(ctx context.Context, query string, skipFetchingGroups bool) ([]*userpb.User, error) {
 
 	// Look at namespaces filters. If the query starts with:
 	// "a" => look into primary/secondary/service accounts
-	// "l" => look into lightweight accounts
+	// "l" => look into lightweight/federated accounts
 	// none => look into primary
 
 	parts := strings.SplitN(query, ":", 2)
@@ -383,25 +271,9 @@ func (m *manager) FindUsers(ctx context.Context, query string, skipFetchingGroup
 		namespace, query = parts[0], parts[1]
 	}
 
-	var filters []string
-	switch {
-	case usernameRegex.MatchString(query):
-		filters = []string{"upn", "displayName", "primaryAccountEmail"}
-	case emailRegex.MatchString(query):
-		filters = []string{"primaryAccountEmail"}
-	default:
-		return nil, errors.New("rest: illegal characters present in query: " + query)
-	}
-
-	users := make(map[string]*userpb.User)
-
-	for _, f := range filters {
-		url := fmt.Sprintf("%s/Identity/?filter=%s:contains:%s&field=id&field=upn&field=primaryAccountEmail&field=displayName&field=uid&field=gid&field=type",
-			m.conf.APIBaseURL, f, url.QueryEscape(query))
-		err := m.findUsersByFilter(ctx, url, users, skipFetchingGroups)
-		if err != nil {
-			return nil, err
-		}
+	users, err := m.findCachedUsers(query)
+	if err != nil {
+		return nil, err
 	}
 
 	userSlice := []*userpb.User{}
@@ -413,7 +285,7 @@ func (m *manager) FindUsers(ctx context.Context, query string, skipFetchingGroup
 	case "a":
 		accountsFilters = []userpb.UserType{userpb.UserType_USER_TYPE_PRIMARY, userpb.UserType_USER_TYPE_SECONDARY, userpb.UserType_USER_TYPE_SERVICE}
 	case "l":
-		accountsFilters = []userpb.UserType{userpb.UserType_USER_TYPE_LIGHTWEIGHT}
+		accountsFilters = []userpb.UserType{userpb.UserType_USER_TYPE_LIGHTWEIGHT, userpb.UserType_USER_TYPE_FEDERATED}
 	}
 
 	for _, u := range users {
@@ -436,22 +308,18 @@ func isUserAnyType(user *userpb.User, types []userpb.UserType) bool {
 }
 
 func (m *manager) GetUserGroups(ctx context.Context, uid *userpb.UserId) ([]string, error) {
-
 	groups, err := m.fetchCachedUserGroups(uid)
 	if err == nil {
 		return groups, nil
 	}
 
-	internalID, err := m.getInternalUserID(ctx, uid)
-	if err != nil {
-		return nil, err
-	}
-	url := fmt.Sprintf("%s/Identity/%s/groups?recursive=true", m.conf.APIBaseURL, internalID)
-	groupData, err := m.apiTokenManager.SendAPIGetRequest(ctx, url, false)
+	url := fmt.Sprintf("%s/api/v1.0/Identity/%s/groups?recursive=true", m.conf.APIBaseURL, uid.OpaqueId)
+	result, err := m.apiTokenManager.SendAPIGetRequest(ctx, url, false)
 	if err != nil {
 		return nil, err
 	}
 
+	groupData := result["data"].([]interface{})
 	groups = []string{}
 
 	for _, g := range groupData {
@@ -485,13 +353,6 @@ func (m *manager) IsInGroup(ctx context.Context, uid *userpb.UserId, group strin
 		}
 	}
 	return false, nil
-}
-
-func extractUID(u *userpb.User) (string, error) {
-	if u.UidNumber == 0 {
-		return "", errors.New("rest: could not retrieve UID from user")
-	}
-	return strconv.FormatInt(u.UidNumber, 10), nil
 }
 
 func getUserType(userType, upn string) userpb.UserType {

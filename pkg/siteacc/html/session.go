@@ -37,14 +37,20 @@ type Session struct {
 	CreationTime  time.Time
 	Timeout       time.Duration
 
-	LoggedInUser *data.Account
-
 	Data map[string]interface{}
+
+	loggedInUser *SessionUser
 
 	expirationTime time.Time
 	halflifeTime   time.Time
 
 	sessionCookieName string
+}
+
+// SessionUser holds information about the logged in user
+type SessionUser struct {
+	Account *data.Account
+	Site    *data.Site
 }
 
 func getRemoteAddress(r *http.Request) string {
@@ -54,6 +60,29 @@ func getRemoteAddress(r *http.Request) string {
 		remoteAddress = address[0]
 	}
 	return remoteAddress
+}
+
+// LoggedInUser retrieves the currently logged in user or nil if none is logged in.
+func (sess *Session) LoggedInUser() *SessionUser {
+	return sess.loggedInUser
+}
+
+// LoginUser logs in the provided user.
+func (sess *Session) LoginUser(acc *data.Account, site *data.Site) {
+	sess.loggedInUser = &SessionUser{
+		Account: acc,
+		Site:    site,
+	}
+}
+
+// LogoutUser logs out the currently logged in user.
+func (sess *Session) LogoutUser() {
+	sess.loggedInUser = nil
+}
+
+// IsUserLoggedIn tells whether a user is currently logged in.
+func (sess *Session) IsUserLoggedIn() bool {
+	return sess.loggedInUser != nil
 }
 
 // Save stores the session ID in a cookie using a response writer.
@@ -108,6 +137,7 @@ func NewSession(name string, timeout time.Duration, r *http.Request) *Session {
 		CreationTime:      time.Now(),
 		Timeout:           timeout,
 		Data:              make(map[string]interface{}, 10),
+		loggedInUser:      nil,
 		expirationTime:    time.Now().Add(timeout),
 		halflifeTime:      time.Now().Add(timeout / 2),
 		sessionCookieName: name,

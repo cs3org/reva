@@ -108,19 +108,23 @@ func (c *connections) clearCache() {
 }
 
 type adminConn struct {
-	indexPoolName string
-	subvolAdmin   *admin.FSAdmin
-	adminMount    Mount
-	radosConn     *rados2.Conn
-	radosIO       *rados2.IOContext
+	// indexPoolName string
+	subvolAdmin *admin.FSAdmin
+	adminMount  Mount
+	radosConn   *rados2.Conn
+	// radosIO       *rados2.IOContext
 }
 
-func newAdminConn(poolName string) *adminConn {
-	rados, err := rados2.NewConn()
+func newAdminConn(conf *Options) *adminConn {
+	rados, err := rados2.NewConnWithUser(conf.ClientID)
 	if err != nil {
 		return nil
 	}
-	if err = rados.ReadDefaultConfigFile(); err != nil {
+	if err = rados.ReadConfigFile(conf.Config); err != nil {
+		return nil
+	}
+
+	if err = rados.SetConfigOption("keyring", conf.Keyring); err != nil {
 		return nil
 	}
 
@@ -128,31 +132,35 @@ func newAdminConn(poolName string) *adminConn {
 		return nil
 	}
 
-	pools, err := rados.ListPools()
-	if err != nil {
-		rados.Shutdown()
-		return nil
-	}
+	// TODO: May use later for file ids
+	/*
+		pools, err := rados.ListPools()
+		if err != nil {
+			rados.Shutdown()
+			return nil
+		}
 
-	var radosIO *rados2.IOContext
-	if in(poolName, pools) {
-		radosIO, err = rados.OpenIOContext(poolName)
-		if err != nil {
-			rados.Shutdown()
-			return nil
+		var radosIO *rados2.IOContext
+		poolName := conf.IndexPool
+		if in(poolName, pools) {
+			radosIO, err = rados.OpenIOContext(poolName)
+			if err != nil {
+				rados.Shutdown()
+				return nil
+			}
+		} else {
+			err = rados.MakePool(poolName)
+			if err != nil {
+				rados.Shutdown()
+				return nil
+			}
+			radosIO, err = rados.OpenIOContext(poolName)
+			if err != nil {
+				rados.Shutdown()
+				return nil
+			}
 		}
-	} else {
-		err = rados.MakePool(poolName)
-		if err != nil {
-			rados.Shutdown()
-			return nil
-		}
-		radosIO, err = rados.OpenIOContext(poolName)
-		if err != nil {
-			rados.Shutdown()
-			return nil
-		}
-	}
+	*/
 
 	mount, err := cephfs2.CreateFromRados(rados)
 	if err != nil {
@@ -160,30 +168,35 @@ func newAdminConn(poolName string) *adminConn {
 		return nil
 	}
 
-	if err = mount.Mount(); err != nil {
+	if err = mount.MountWithRoot(conf.Root); err != nil {
 		rados.Shutdown()
 		destroyCephConn(mount, nil)
 		return nil
 	}
 
 	return &adminConn{
-		poolName,
+		// poolName,
 		admin.NewFromConn(rados),
 		mount,
 		rados,
-		radosIO,
+		// radosIO,
 	}
 }
 
 func newConn(user *User) *cacheVal {
 	var perm *cephfs2.UserPerm
-	mount, err := cephfs2.CreateMount()
+	mount, err := cephfs2.CreateMountWithId(user.fs.conf.ClientID)
 	if err != nil {
 		return destroyCephConn(mount, perm)
 	}
-	if err = mount.ReadDefaultConfigFile(); err != nil {
+	if err = mount.ReadConfigFile(user.fs.conf.Config); err != nil {
 		return destroyCephConn(mount, perm)
 	}
+
+	if err = mount.SetConfigOption("keyring", user.fs.conf.Keyring); err != nil {
+		return destroyCephConn(mount, perm)
+	}
+
 	if err = mount.Init(); err != nil {
 		return destroyCephConn(mount, perm)
 	}
@@ -195,7 +208,7 @@ func newConn(user *User) *cacheVal {
 		}
 	}
 
-	if err = mount.MountWithRoot("/"); err != nil {
+	if err = mount.MountWithRoot(user.fs.conf.Root); err != nil {
 		return destroyCephConn(mount, perm)
 	}
 
