@@ -24,7 +24,13 @@ import (
 	"io"
 	"net/http"
 	"path"
-	"path/filepath"
+
+	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/errors"
+	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/net"
+	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/propfind"
+	"github.com/cs3org/reva/v2/pkg/storagespace"
+	rtrace "github.com/cs3org/reva/v2/pkg/trace"
+	"github.com/cs3org/reva/v2/pkg/utils"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -70,12 +76,36 @@ func (h *VersionsHandler) Handler(s *svc, rid *provider.ResourceId) http.Handler
 			h.doListVersions(w, r, s, rid)
 			return
 		}
-		if key != "" && r.Method == MethodCopy {
-			// TODO(jfd) it seems we cannot directly GET version content with cs3 ...
-			// TODO(jfd) cs3api has no delete file version call
-			// TODO(jfd) restore version to given Destination, but cs3api has no destination
-			h.doRestore(w, r, s, rid, key)
-			return
+		if key != "" {
+			switch r.Method {
+			case MethodCopy:
+				// TODO(jfd) cs3api has no delete file version call
+				// TODO(jfd) restore version to given Destination, but cs3api has no destination
+				h.doRestore(w, r, s, rid, key)
+				return
+			case http.MethodHead:
+				log := appctx.GetLogger(ctx)
+				ref := &provider.Reference{
+					ResourceId: &provider.ResourceId{
+						StorageId: rid.StorageId,
+						OpaqueId:  key,
+					},
+					Path: utils.MakeRelativePath(r.URL.Path),
+				}
+				s.handleHead(ctx, w, r, ref, *log)
+				return
+			case http.MethodGet:
+				log := appctx.GetLogger(ctx)
+				ref := &provider.Reference{
+					ResourceId: &provider.ResourceId{
+						StorageId: rid.StorageId,
+						OpaqueId:  key,
+					},
+					Path: utils.MakeRelativePath(r.URL.Path),
+				}
+				s.handleGet(ctx, w, r, ref, "spaces", *log)
+				return
+			}
 		}
 		if key != "" && r.Method == http.MethodGet {
 			h.doDownload(w, r, s, rid, key)
