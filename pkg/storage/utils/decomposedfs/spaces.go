@@ -215,20 +215,21 @@ func (fs *Decomposedfs) canCreateSpace(ctx context.Context, spaceID string) bool
 	return checkRes.Status.Code == v1beta11.Code_CODE_OK
 }
 
-func readSpaceAndNodeFromSpaceTypeLink(path string) (string, string, error) {
+// ReadSpaceAndNodeFromSpaceTypeLink reads a symlink and parses space and node id if the link has the correct format, eg:
+// ../../spaces/4c/510ada-c86b-4815-8820-42cdf82c3d51/nodes/4c/51/0a/da/-c86b-4815-8820-42cdf82c3d51
+// ../../spaces/4c/510ada-c86b-4815-8820-42cdf82c3d51/nodes/4c/51/0a/da/-c86b-4815-8820-42cdf82c3d51.T.2022-02-24T12:35:18.196484592Z
+func ReadSpaceAndNodeFromSpaceTypeLink(path string) (string, string, error) {
 	link, err := os.Readlink(path)
 	if err != nil {
 		return "", "", err
 	}
-	// ../../spaces/4c/510ada-c86b-4815-8820-42cdf82c3d51/nodes/4c/51/0a/da/-c86b-4815-8820-42cdf82c3d51
-	// ../../spaces/4c/510ada-c86b-4815-8820-42cdf82c3d51/nodes/4c/51/0a/da/-c86b-4815-8820-42cdf82c3d51.T.2022-02-24T12:35:18.196484592Z
-	// TODO use filepath.Separator to support windows
-	link = strings.ReplaceAll(link, "/", "")
-	// ....spaces4c510ada-c86b-4815-8820-42cdf82c3d51nodes4c510ada-c86b-4815-8820-42cdf82c3d51
-	if link[0:10] != "....spaces" || link[46:51] != "nodes" {
+	// ../../spaces/sp/ace-id/nodes/sh/or/tn/od/eid
+	// 0  1  2      3  4      5     6  7  8  9  10
+	parts := strings.Split(link, string(filepath.Separator))
+	if len(parts) != 11 || parts[0] != ".." || parts[1] != ".." || parts[2] != "spaces" || parts[5] != "nodes" {
 		return "", "", errtypes.InternalError("malformed link")
 	}
-	return link[10:46], link[51:], nil
+	return strings.Join(parts[3:5], ""), strings.Join(parts[6:11], ""), nil
 }
 
 // ListStorageSpaces returns a list of StorageSpaces.
@@ -338,7 +339,7 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 			continue
 		}
 		// always read link in case storage space id != node id
-		spaceID, nodeID, err = readSpaceAndNodeFromSpaceTypeLink(matches[i])
+		spaceID, nodeID, err = ReadSpaceAndNodeFromSpaceTypeLink(matches[i])
 		if err != nil {
 			appctx.GetLogger(ctx).Error().Err(err).Str("match", matches[i]).Msg("could not read link, skipping")
 			continue
