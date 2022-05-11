@@ -215,7 +215,7 @@ func (fs *Decomposedfs) canCreateSpace(ctx context.Context, spaceID string) bool
 	return checkRes.Status.Code == v1beta11.Code_CODE_OK
 }
 
-func readSpaceAndNodeFromSpaceTypeLink(path string) (string, string, error) {
+func ReadSpaceAndNodeFromSpaceTypeLink(path string) (string, string, error) {
 	link, err := os.Readlink(path)
 	if err != nil {
 		return "", "", err
@@ -338,7 +338,7 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 			continue
 		}
 		// always read link in case storage space id != node id
-		spaceID, nodeID, err = readSpaceAndNodeFromSpaceTypeLink(matches[i])
+		spaceID, nodeID, err = ReadSpaceAndNodeFromSpaceTypeLink(matches[i])
 		if err != nil {
 			appctx.GetLogger(ctx).Error().Err(err).Str("match", matches[i]).Msg("could not read link, skipping")
 			continue

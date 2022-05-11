@@ -19,65 +19,28 @@
 package decomposedfs_test
 
 import (
+	"os"
+	"path/filepath"
+
 	permissionsv1beta1 "github.com/cs3org/go-cs3apis/cs3/permissions/v1beta1"
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs"
 	helpers "github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/testhelpers"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/stretchr/testify/mock"
 )
 
-var _ = Describe("Create Spaces", func() {
-	var (
-		env *helpers.TestEnv
-	)
+var _ = Describe("Spaces", func() {
 
-	BeforeEach(func() {
-		var err error
-		env, err = helpers.NewTestEnv(nil)
-		Expect(err).ToNot(HaveOccurred())
-		env.PermissionsClient.On("CheckPermission", mock.Anything, mock.Anything, mock.Anything).Return(&permissionsv1beta1.CheckPermissionResponse{Status: &rpcv1beta1.Status{Code: rpcv1beta1.Code_CODE_OK}}, nil)
-	})
-
-	AfterEach(func() {
-		if env != nil {
-			env.Cleanup()
-		}
-	})
-
-	Context("during login", func() {
-		It("space is created", func() {
-			resp, err := env.Fs.ListStorageSpaces(env.Ctx, nil, false)
-			Expect(err).ToNot(HaveOccurred())
-			Expect(len(resp)).To(Equal(1))
-			Expect(string(resp[0].Opaque.GetMap()["spaceAlias"].Value)).To(Equal("personal/username"))
-			Expect(resp[0].Name).To(Equal("username"))
-			Expect(resp[0].SpaceType).To(Equal("personal"))
-		})
-	})
-	Context("when creating a space", func() {
-		It("project space is created", func() {
-			resp, err := env.Fs.CreateStorageSpace(env.Ctx, &provider.CreateStorageSpaceRequest{Name: "Mission to Mars", Type: "project"})
-			Expect(err).ToNot(HaveOccurred())
-			Expect(resp.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
-			Expect(resp.StorageSpace).ToNot(Equal(nil))
-			Expect(string(resp.StorageSpace.Opaque.Map["spaceAlias"].Value)).To(Equal("project/mission-to-mars"))
-			Expect(resp.StorageSpace.Name).To(Equal("Mission to Mars"))
-			Expect(resp.StorageSpace.SpaceType).To(Equal("project"))
-		})
-	})
-	Describe("Create Spaces with custom alias template", func() {
+	Describe("Create Space", func() {
 		var (
 			env *helpers.TestEnv
 		)
-
 		BeforeEach(func() {
 			var err error
-			env, err = helpers.NewTestEnv(map[string]interface{}{
-				"personalspacealias_template": "{{.SpaceType}}/{{.Email.Local}}@{{.Email.Domain}}",
-				"generalspacealias_template":  "{{.SpaceType}}:{{.SpaceName | replace \" \" \"-\" | upper}}",
-			})
+			env, err = helpers.NewTestEnv(nil)
 			Expect(err).ToNot(HaveOccurred())
 			env.PermissionsClient.On("CheckPermission", mock.Anything, mock.Anything, mock.Anything).Return(&permissionsv1beta1.CheckPermissionResponse{Status: &rpcv1beta1.Status{Code: rpcv1beta1.Code_CODE_OK}}, nil)
 		})
@@ -87,23 +50,92 @@ var _ = Describe("Create Spaces", func() {
 				env.Cleanup()
 			}
 		})
+
 		Context("during login", func() {
-			It("personal space is created with custom alias", func() {
+			It("space is created", func() {
 				resp, err := env.Fs.ListStorageSpaces(env.Ctx, nil, false)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(resp)).To(Equal(1))
-				Expect(string(resp[0].Opaque.GetMap()["spaceAlias"].Value)).To(Equal("personal/username@_unknown"))
+				Expect(string(resp[0].Opaque.GetMap()["spaceAlias"].Value)).To(Equal("personal/username"))
+				Expect(resp[0].Name).To(Equal("username"))
+				Expect(resp[0].SpaceType).To(Equal("personal"))
 			})
 		})
-		Context("creating a space", func() {
-			It("project space is created with custom alias", func() {
-				resp, err := env.Fs.CreateStorageSpace(env.Ctx, &provider.CreateStorageSpaceRequest{Name: "Mission to Venus", Type: "project"})
+		Context("when creating a space", func() {
+			It("project space is created", func() {
+				resp, err := env.Fs.CreateStorageSpace(env.Ctx, &provider.CreateStorageSpaceRequest{Name: "Mission to Mars", Type: "project"})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(resp.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 				Expect(resp.StorageSpace).ToNot(Equal(nil))
-				Expect(string(resp.StorageSpace.Opaque.Map["spaceAlias"].Value)).To(Equal("project:MISSION-TO-VENUS"))
-
+				Expect(string(resp.StorageSpace.Opaque.Map["spaceAlias"].Value)).To(Equal("project/mission-to-mars"))
+				Expect(resp.StorageSpace.Name).To(Equal("Mission to Mars"))
+				Expect(resp.StorageSpace.SpaceType).To(Equal("project"))
 			})
+		})
+		Describe("Create Spaces with custom alias template", func() {
+			var (
+				env *helpers.TestEnv
+			)
+
+			BeforeEach(func() {
+				var err error
+				env, err = helpers.NewTestEnv(map[string]interface{}{
+					"personalspacealias_template": "{{.SpaceType}}/{{.Email.Local}}@{{.Email.Domain}}",
+					"generalspacealias_template":  "{{.SpaceType}}:{{.SpaceName | replace \" \" \"-\" | upper}}",
+				})
+				Expect(err).ToNot(HaveOccurred())
+				env.PermissionsClient.On("CheckPermission", mock.Anything, mock.Anything, mock.Anything).Return(&permissionsv1beta1.CheckPermissionResponse{Status: &rpcv1beta1.Status{Code: rpcv1beta1.Code_CODE_OK}}, nil)
+			})
+
+			AfterEach(func() {
+				if env != nil {
+					env.Cleanup()
+				}
+			})
+			Context("during login", func() {
+				It("personal space is created with custom alias", func() {
+					resp, err := env.Fs.ListStorageSpaces(env.Ctx, nil, false)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(len(resp)).To(Equal(1))
+					Expect(string(resp[0].Opaque.GetMap()["spaceAlias"].Value)).To(Equal("personal/username@_unknown"))
+				})
+			})
+			Context("creating a space", func() {
+				It("project space is created with custom alias", func() {
+					resp, err := env.Fs.CreateStorageSpace(env.Ctx, &provider.CreateStorageSpaceRequest{Name: "Mission to Venus", Type: "project"})
+					Expect(err).ToNot(HaveOccurred())
+					Expect(resp.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+					Expect(resp.StorageSpace).ToNot(Equal(nil))
+					Expect(string(resp.StorageSpace.Opaque.Map["spaceAlias"].Value)).To(Equal("project:MISSION-TO-VENUS"))
+
+				})
+			})
+		})
+	})
+
+	Describe("ReadSpaceAndNodeFromSpaceTypeLink", func() {
+		var (
+			link string
+		)
+
+		BeforeEach(func() {
+			link = filepath.Join(os.TempDir(), "testlink")
+		})
+
+		AfterEach(func() {
+			if link != "" {
+				os.RemoveAll(filepath.Dir(link))
+			}
+		})
+
+		FIt("correctly splits the link target", func() {
+			err := os.Symlink("../../spaces/sp/ace-id/nodes/sh/or/tn/od/eid", link)
+			Expect(err).ToNot(HaveOccurred())
+
+			space, node, err := decomposedfs.ReadSpaceAndNodeFromSpaceTypeLink(link)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(space).To(Equal("space-id"))
+			Expect(node).To(Equal("node-id"))
 		})
 	})
 })
