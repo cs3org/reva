@@ -10,8 +10,6 @@ Basic file management like up and download, move, copy, properties, quota, trash
 - [apiTrashbin/trashbinFilesFolders.feature:291](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L291)
 
 #### [downloading an old version of a file returns 501](https://github.com/owncloud/ocis/issues/2261)
-- [apiVersions/fileVersions.feature:444](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersions.feature#L444)
-- [apiVersions/fileVersions.feature:462](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersions.feature#L462)
 - [apiVersions/fileVersionsSharingToShares.feature:306](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersionsSharingToShares.feature#L306)
 
 #### [file versions do not report the version author](https://github.com/owncloud/ocis/issues/2914)
