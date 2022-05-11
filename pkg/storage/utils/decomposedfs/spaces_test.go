@@ -119,7 +119,7 @@ var _ = Describe("Spaces", func() {
 		)
 
 		BeforeEach(func() {
-			tmpdir = os.TempDir()
+			tmpdir, _ = os.MkdirTemp(os.TempDir(), "ReadSpaceAndNodeFromSpaceTypeLink-")
 		})
 
 		AfterEach(func() {
