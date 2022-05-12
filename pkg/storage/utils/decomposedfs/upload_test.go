@@ -40,6 +40,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/tree"
 	treemocks "github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/tree/mocks"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs"
+	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/tests/helpers"
 	"github.com/pkg/xattr"
 	"github.com/stretchr/testify/mock"
@@ -55,7 +56,6 @@ var _ = Describe("File uploads", func() {
 		fs      storage.FS
 		user    *userpb.User
 		ctx     context.Context
-		spaceID string
 
 		o                    *options.Options
 		lu                   *lookup.Lookup
@@ -122,8 +122,9 @@ var _ = Describe("File uploads", func() {
 		resp, err := fs.CreateStorageSpace(ctx, &provider.CreateStorageSpaceRequest{Owner: user, Type: "personal"})
 		Expect(err).ToNot(HaveOccurred())
 		Expect(resp.Status.Code).To(Equal(v1beta11.Code_CODE_OK))
-		spaceID = resp.StorageSpace.Id.OpaqueId
-		ref.ResourceId = &provider.ResourceId{StorageId: spaceID}
+		resID, err := storagespace.ParseID(resp.StorageSpace.Id.OpaqueId)
+		Expect(err).ToNot(HaveOccurred())
+		ref.ResourceId = &provider.ResourceId{StorageId: resID.StorageId, OpaqueId: resID.StorageId}
 	})
 
 	Context("the user's quota is exceeded", func() {
