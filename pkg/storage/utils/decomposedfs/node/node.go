@@ -1108,20 +1108,27 @@ func IsSpaceRoot(r *Node) bool {
 }
 
 // CheckQuota checks if both disk space and available quota are sufficient
-var CheckQuota = func(spaceRoot *Node, fileSize uint64) (quotaSufficient bool, err error) {
+// Overwrite must be set to true if the new file replaces the old file e.g.
+// when creating a new file version. In such a case the function will
+// reduce the used bytes by the old file size and then add the new size.
+// If overwrite is false oldSize will be ignored.
+var CheckQuota = func(spaceRoot *Node, overwrite bool, oldSize, newSize uint64) (quotaSufficient bool, err error) {
 	used, _ := spaceRoot.GetTreeSize()
-	if !enoughDiskSpace(spaceRoot.InternalPath(), fileSize) {
+	if !enoughDiskSpace(spaceRoot.InternalPath(), newSize) {
 		return false, errtypes.InsufficientStorage("disk full")
 	}
-	quotaByte, _ := xattrs.Get(spaceRoot.InternalPath(), xattrs.QuotaAttr)
-	var total uint64
-	if quotaByte == "" {
+	quotaByteStr, _ := xattrs.Get(spaceRoot.InternalPath(), xattrs.QuotaAttr)
+	if quotaByteStr == "" {
 		// if quota is not set, it means unlimited
 		return true, nil
 	}
-	total, _ = strconv.ParseUint(quotaByte, 10, 64)
-	// if total is smaller than used, total-used could overflow and be bigger than fileSize
-	if fileSize > total-used || total < used {
+	quotaByte, _ := strconv.ParseUint(quotaByteStr, 10, 64)
+	if overwrite {
+		if quotaByte < used-oldSize+newSize {
+			return false, errtypes.InsufficientStorage("quota exceeded")
+		}
+		// if total is smaller than used, total-used could overflow and be bigger than fileSize
+	} else if newSize > quotaByte-used || quotaByte < used {
 		return false, errtypes.InsufficientStorage("quota exceeded")
 	}
 	return true, nil

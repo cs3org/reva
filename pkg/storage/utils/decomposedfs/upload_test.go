@@ -130,7 +130,7 @@ var _ = Describe("File uploads", func() {
 		When("the user wants to initiate a file upload", func() {
 			It("fails", func() {
 				var originalFunc = node.CheckQuota
-				node.CheckQuota = func(spaceRoot *node.Node, fileSize uint64) (quotaSufficient bool, err error) {
+				node.CheckQuota = func(spaceRoot *node.Node, overwrite bool, oldSize, newSize uint64) (quotaSufficient bool, err error) {
 					return false, errtypes.InsufficientStorage("quota exceeded")
 				}
 				_, err := fs.InitiateUpload(ctx, ref, 10, map[string]string{})
