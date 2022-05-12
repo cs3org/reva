@@ -1,3 +1,3 @@
-Bugfix: Use `eos-all` parent image for building the revad docker image with EOS binary
+Bugfix: Use `eos-all` parent image
 
 https://github.com/cs3org/reva/pull/2860
