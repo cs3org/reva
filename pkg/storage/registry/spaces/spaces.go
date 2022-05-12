@@ -475,14 +475,22 @@ func (r *registry) findProvidersForAbsolutePathReference(ctx context.Context, pa
 		}
 		var spaces []*providerpb.StorageSpace
 		var err error
-		filters := []*providerpb.ListStorageSpacesRequest_Filter{}
+
 		// when listing paths also return mountpoints
-		filters = append(filters, &providerpb.ListStorageSpacesRequest_Filter{
-			Type: providerpb.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE,
-			Term: &providerpb.ListStorageSpacesRequest_Filter_SpaceType{
-				SpaceType: "+mountpoint",
+		filters := []*providerpb.ListStorageSpacesRequest_Filter{
+			{
+				Type: providerpb.ListStorageSpacesRequest_Filter_TYPE_PATH,
+				Term: &providerpb.ListStorageSpacesRequest_Filter_Path{
+					Path: path,
+				},
 			},
-		})
+			{
+				Type: providerpb.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE,
+				Term: &providerpb.ListStorageSpacesRequest_Filter_SpaceType{
+					SpaceType: "+mountpoint",
+				},
+			},
+		}
 
 		spaces, err = r.findStorageSpaceOnProvider(ctx, p.Address, filters, unrestricted)
 		if err != nil {
