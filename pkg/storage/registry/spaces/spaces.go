@@ -41,6 +41,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/sharedconf"
 	"github.com/cs3org/reva/v2/pkg/storage"
 	pkgregistry "github.com/cs3org/reva/v2/pkg/storage/registry/registry"
+	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/mitchellh/mapstructure"
 	"google.golang.org/grpc"
 )
@@ -76,7 +77,8 @@ func (sc *spaceConfig) SpacePath(currentUser *userpb.User, space *providerpb.Sto
 // Provider holds information on Spaces
 type Provider struct {
 	// Spaces is a map from space type to space config
-	Spaces map[string]*spaceConfig `mapstructure:"spaces"`
+	Spaces     map[string]*spaceConfig `mapstructure:"spaces"`
+	ProviderID string                  `mapstructure:"providerid"`
 }
 
 type templateData struct {
@@ -368,7 +370,14 @@ func (r *registry) findProvidersForFilter(ctx context.Context, filters []*provid
 func (r *registry) findProvidersForResource(ctx context.Context, id string, findMoundpoint, findGrant, unrestricted bool) []*registrypb.ProviderInfo {
 	currentUser := ctxpkg.ContextMustGetUser(ctx)
 	providerInfos := []*registrypb.ProviderInfo{}
+	sdid, _ := storagespace.SplitStorageID(id)
+
 	for address, provider := range r.c.Providers {
+		// try to find provider based on storageproviderid prefix
+		if provider.ProviderID != "" && sdid != "" && provider.ProviderID != sdid {
+			// skip mismatching storageproviders
+			continue
+		}
 		p := &registrypb.ProviderInfo{
 			Address:    address,
 			ProviderId: id,

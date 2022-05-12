@@ -58,6 +58,8 @@ driver = "spaces"
 home_template = "/users/{{.Id.OpaqueId}}"
 
 ## obviously, we do not want to define a rule for every user and space, which is why we can define naming rules:
+[grpc.services.storageregistry.drivers.spaces.providers."localhost:11000"]
+providerid = "1284d238-aa92-42ce-bdc4-0b0000009157"
 [grpc.services.storageregistry.drivers.spaces.providers."localhost:11000".spaces]
 "personal" = { "mount_point" = "/users", "path_template" = "/users/{{.Space.Owner.Id.OpaqueId}}" }
 
@@ -67,6 +69,8 @@ home_template = "/users/{{.Id.OpaqueId}}"
 
 ## the virtual /Shares folder of every user is routed like this:
 ## whenever the path matches the pattern /users/{{.CurrentUser.Id.OpaqueId}}/Shares we forward requests to the sharesstorageprovider
+[grpc.services.storageregistry.drivers.spaces.providers."localhost:14000"]
+providerid = "a0ca6a90-a365-4782-871e-d44447bbc668"
 [grpc.services.storageregistry.drivers.spaces.providers."localhost:14000".spaces]
 "virtual" = { "mount_point" = "/users/{{.CurrentUser.Id.OpaqueId}}/Shares" }
 "grant" = { "mount_point" = "." }
@@ -77,6 +81,8 @@ home_template = "/users/{{.Id.OpaqueId}}"
 
 ## While public shares are mounted at /public logged in end will should never see that path because it is only created by the spaces registry when
 ## a public link is accessed.
+[grpc.services.storageregistry.drivers.spaces.providers."localhost:13000"]
+providerid = "7993447f-687f-490d-875c-ac95e89a62a4"
 [grpc.services.storageregistry.drivers.spaces.providers."localhost:13000".spaces]
 "grant" = { "mount_point" = "." }
 "mountpoint" = { "mount_point" = "/public", "path_template" = "/public/{{.Space.Root.OpaqueId}}" }
