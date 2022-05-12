@@ -374,10 +374,14 @@ func (r *registry) findProvidersForResource(ctx context.Context, id string, find
 
 	for address, provider := range r.c.Providers {
 		// try to find provider based on storageproviderid prefix
-		if provider.ProviderID != "" && sdid != "" && provider.ProviderID != sdid {
+		if provider.ProviderID != "" && sdid != "" {
 			// skip mismatching storageproviders
-			continue
+			match, err := regexp.MatchString("^"+provider.ProviderID+"$", sdid)
+			if err != nil || !match {
+				continue
+			}
 		}
+
 		p := &registrypb.ProviderInfo{
 			Address:    address,
 			ProviderId: id,

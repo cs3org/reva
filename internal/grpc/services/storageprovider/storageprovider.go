@@ -1288,25 +1288,29 @@ func (v descendingMtime) Swap(i, j int) {
 
 func unwrapProviderIDAndPath(ref *provider.Reference, mountPath string) string {
 	var spid string
-	if ref.ResourceId != nil {
-		spid, ref.ResourceId.StorageId = storagespace.SplitStorageID(ref.ResourceId.StorageId)
-	}
+	if ref != nil {
+		if ref.ResourceId != nil {
+			spid, ref.ResourceId.StorageId = storagespace.SplitStorageID(ref.ResourceId.StorageId)
+		}
 
-	// Trim the mount path of the storage provider if the request was for an absolute reference
-	if !utils.IsRelativeReference(ref) {
-		ref.Path = strings.TrimPrefix(ref.Path, mountPath)
+		// Trim the mount path of the storage provider if the request was for an absolute reference
+		if !utils.IsRelativeReference(ref) {
+			ref.Path = strings.TrimPrefix(ref.Path, mountPath)
+		}
 	}
 
 	return spid
 }
 
 func rewrapProviderIDAndPath(ref *provider.Reference, spid, mountPath string) {
-	if ref.ResourceId != nil {
-		ref.ResourceId.StorageId = storagespace.FormatStorageID(spid, ref.ResourceId.StorageId)
-	}
+	if ref != nil {
+		if ref.ResourceId != nil {
+			ref.ResourceId.StorageId = storagespace.FormatStorageID(spid, ref.ResourceId.StorageId)
+		}
 
-	// Prepend the mount path of the storage provider if the request was for an absolute reference
-	if !utils.IsRelativeReference(ref) {
-		ref.Path = path.Join(mountPath, ref.Path)
+		// Prepend the mount path of the storage provider if the request was for an absolute reference
+		if !utils.IsRelativeReference(ref) {
+			ref.Path = path.Join(mountPath, ref.Path)
+		}
 	}
 }
