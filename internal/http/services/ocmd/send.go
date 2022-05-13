@@ -41,11 +41,13 @@ import (
 )
 
 type sendHandler struct {
-	GatewaySvc string
+	GatewaySvc         string
+	MaxCallRecvMsgSize int `mapstructure:"client_recv_msg_size"`
 }
 
 func (h *sendHandler) init(c *Config) {
 	h.GatewaySvc = c.GatewaySvc
+	h.MaxCallRecvMsgSize = c.MaxCallRecvMsgSize
 }
 
 func (h *sendHandler) Handler() http.Handler {
@@ -80,7 +82,7 @@ func (h *sendHandler) Handler() http.Handler {
 		// "loginPassword": "Ny4Nv6WLoC1o70kVgrVOZLZ2vRgPjuej"
 
 		gatewayAddr := h.GatewaySvc
-		gatewayClient, err := pool.GetGatewayServiceClient(pool.Endpoint(gatewayAddr))
+		gatewayClient, err := pool.GetGatewayServiceClient(h, pool.Endpoint(gatewayAddr))
 		if err != nil {
 			log.Error().Msg("cannot get grpc client!")
 			w.WriteHeader(http.StatusInternalServerError)

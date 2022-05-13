@@ -42,11 +42,13 @@ import (
 )
 
 type sharesHandler struct {
-	gatewayAddr string
+	gatewayAddr        string
+	maxCallRecvMsgSize int `mapstructure:"client_recv_msg_size"`
 }
 
 func (h *sharesHandler) init(c *Config) {
 	h.gatewayAddr = c.GatewaySvc
+	h.maxCallRecvMsgSize = c.MaxCallRecvMsgSize
 }
 
 func (h *sharesHandler) Handler() http.Handler {
@@ -109,7 +111,7 @@ func (h *sharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	gatewayClient, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	gatewayClient, err := pool.GetGatewayServiceClient(h, pool.Endpoint(h.gatewayAddr))
 	if err != nil {
 		WriteError(w, r, APIErrorServerError, "error getting storage grpc client", err)
 		return

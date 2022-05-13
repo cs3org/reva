@@ -168,4 +168,6 @@ type Config struct {
 	// TokenExpiry stores in seconds the time after which generated tokens will expire
 	// Default is 3600
 	TokenExpiry int
+
+	MaxCallRecvMsgSize int `mapstructure:"client_recv_msg_size"`
 }

@@ -42,8 +42,9 @@ import (
 var claims = []string{"mail", "uid", "username", "gid", "userid"}
 
 type manager struct {
-	APIKey      string `mapstructure:"api_key"`
-	GatewayAddr string `mapstructure:"gateway_addr"`
+	APIKey             string `mapstructure:"api_key"`
+	GatewayAddr        string `mapstructure:"gateway_addr"`
+	MaxCallRecvMsgSize int    `mapstructure:"client_recv_msg_size"`
 }
 
 func init() {
@@ -75,7 +76,7 @@ func (m *manager) Authenticate(ctx context.Context, user, secret string) (*userp
 		return nil, nil, errtypes.InvalidCredentials("")
 	}
 
-	gtw, err := pool.GetGatewayServiceClient(pool.Endpoint(m.GatewayAddr))
+	gtw, err := pool.GetGatewayServiceClient(m, pool.Endpoint(m.GatewayAddr))
 	if err != nil {
 		return nil, nil, err
 	}

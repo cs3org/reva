@@ -44,8 +44,9 @@ func init() {
 }
 
 type config struct {
-	Prefix     string `mapstructure:"prefix"`
-	GatewaySvc string `mapstructure:"gatewaysvc"`
+	Prefix             string `mapstructure:"prefix"`
+	GatewaySvc         string `mapstructure:"gatewaysvc"`
+	MaxCallRecvMsgSize int    `mapstructure:"client_recv_msg_size"`
 }
 
 func (c *config) init() {
@@ -100,7 +101,7 @@ func (s *svc) Close() error {
 }
 
 func (s *svc) getClient() (gateway.GatewayAPIClient, error) {
-	return pool.GetGatewayServiceClient(pool.Endpoint(s.conf.GatewaySvc))
+	return pool.GetGatewayServiceClient(s.conf, pool.Endpoint(s.conf.GatewaySvc))
 }
 
 func (s *svc) serveJSON(w http.ResponseWriter, r *http.Request) {

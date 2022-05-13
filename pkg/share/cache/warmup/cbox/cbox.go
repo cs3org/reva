@@ -45,14 +45,15 @@ func init() {
 }
 
 type config struct {
-	DbUsername   string `mapstructure:"db_username"`
-	DbPassword   string `mapstructure:"db_password"`
-	DbHost       string `mapstructure:"db_host"`
-	DbPort       int    `mapstructure:"db_port"`
-	DbName       string `mapstructure:"db_name"`
-	EOSNamespace string `mapstructure:"namespace"`
-	GatewaySvc   string `mapstructure:"gatewaysvc"`
-	JWTSecret    string `mapstructure:"jwt_secret"`
+	DbUsername         string `mapstructure:"db_username"`
+	DbPassword         string `mapstructure:"db_password"`
+	DbHost             string `mapstructure:"db_host"`
+	DbPort             int    `mapstructure:"db_port"`
+	DbName             string `mapstructure:"db_name"`
+	EOSNamespace       string `mapstructure:"namespace"`
+	GatewaySvc         string `mapstructure:"gatewaysvc"`
+	JWTSecret          string `mapstructure:"jwt_secret"`
+	MaxCallRecvMsgSize int    `mapstructure:"client_recv_msg_size"`
 }
 
 type manager struct {
@@ -119,7 +120,7 @@ func (m *manager) GetResourceInfos() ([]*provider.ResourceInfo, error) {
 	}
 	ctx := metadata.AppendToOutgoingContext(context.Background(), ctxpkg.TokenHeader, tkn)
 
-	client, err := pool.GetGatewayServiceClient(pool.Endpoint(m.conf.GatewaySvc))
+	client, err := pool.GetGatewayServiceClient(m.conf, pool.Endpoint(m.conf.GatewaySvc))
 	if err != nil {
 		return nil, err
 	}

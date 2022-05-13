@@ -66,6 +66,7 @@ type config struct {
 	TokenManagers          map[string]map[string]interface{} `mapstructure:"token_managers"`
 	TokenWriter            string                            `mapstructure:"token_writer"`
 	TokenWriters           map[string]map[string]interface{} `mapstructure:"token_writers"`
+	MaxCallRecvMsgSize     int                               `mapstructure:"client_recv_msg_size"`
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -194,7 +195,7 @@ func authenticateUser(w http.ResponseWriter, r *http.Request, conf *config, toke
 	// Add the request user-agent to the ctx
 	ctx = metadata.NewIncomingContext(ctx, metadata.New(map[string]string{ctxpkg.UserAgentHeader: r.UserAgent()}))
 
-	client, err := pool.GetGatewayServiceClient(pool.Endpoint(conf.GatewaySvc))
+	client, err := pool.GetGatewayServiceClient(conf, pool.Endpoint(conf.GatewaySvc))
 	if err != nil {
 		logError(isUnprotectedEndpoint, log, err, "error getting the authsvc client", http.StatusUnauthorized, w)
 		return nil, err

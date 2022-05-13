@@ -39,8 +39,9 @@ func init() {
 
 // Config holds the config options that for the preferences HTTP service
 type Config struct {
-	Prefix     string `mapstructure:"prefix"`
-	GatewaySvc string `mapstructure:"gatewaysvc"`
+	Prefix             string `mapstructure:"prefix"`
+	GatewaySvc         string `mapstructure:"gatewaysvc"`
+	MaxCallRecvMsgSize int    `mapstructure:"client_recv_msg_size"`
 }
 
 func (c *Config) init() {
@@ -119,7 +120,7 @@ func (s *svc) handleGet(w http.ResponseWriter, r *http.Request) {
 
 	}
 
-	client, err := pool.GetGatewayServiceClient(pool.Endpoint(s.conf.GatewaySvc))
+	client, err := pool.GetGatewayServiceClient(s.conf, pool.Endpoint(s.conf.GatewaySvc))
 	if err != nil {
 		log.Error().Err(err).Msg("error getting grpc gateway client")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -185,7 +186,7 @@ func (s *svc) handlePost(w http.ResponseWriter, r *http.Request) {
 
 	}
 
-	client, err := pool.GetGatewayServiceClient(pool.Endpoint(s.conf.GatewaySvc))
+	client, err := pool.GetGatewayServiceClient(s.conf, pool.Endpoint(s.conf.GatewaySvc))
 	if err != nil {
 		log.Error().Err(err).Msg("error getting grpc gateway client")
 		w.WriteHeader(http.StatusInternalServerError)

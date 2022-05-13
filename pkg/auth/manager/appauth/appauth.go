@@ -38,7 +38,8 @@ func init() {
 }
 
 type manager struct {
-	GatewayAddr string `mapstructure:"gateway_addr"`
+	GatewayAddr        string `mapstructure:"gateway_addr"`
+	MaxCallRecvMsgSize int    `mapstructure:"client_recv_msg_size"`
 }
 
 // New returns a new auth Manager.
@@ -60,7 +61,7 @@ func (m *manager) Configure(ml map[string]interface{}) error {
 }
 
 func (m *manager) Authenticate(ctx context.Context, username, password string) (*user.User, map[string]*authpb.Scope, error) {
-	gtw, err := pool.GetGatewayServiceClient(pool.Endpoint(m.GatewayAddr))
+	gtw, err := pool.GetGatewayServiceClient(m, pool.Endpoint(m.GatewayAddr))
 	if err != nil {
 		return nil, nil, err
 	}

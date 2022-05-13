@@ -68,7 +68,7 @@ var _ = Describe("user providers", func() {
 
 		revads, err = startRevads(dependencies, map[string]string{})
 		Expect(err).ToNot(HaveOccurred())
-		serviceClient, err = pool.GetUserProviderServiceClient(pool.Endpoint(revads["users"].GrpcAddress))
+		serviceClient, err = pool.GetUserProviderServiceClient(&struct{}{}, pool.Endpoint(revads["users"].GrpcAddress))
 		Expect(err).ToNot(HaveOccurred())
 	})
 

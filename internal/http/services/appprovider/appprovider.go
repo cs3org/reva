@@ -49,9 +49,10 @@ func init() {
 
 // Config holds the config options for the HTTP appprovider service
 type Config struct {
-	Prefix     string `mapstructure:"prefix"`
-	GatewaySvc string `mapstructure:"gatewaysvc"`
-	Insecure   bool   `mapstructure:"insecure"`
+	Prefix             string `mapstructure:"prefix"`
+	GatewaySvc         string `mapstructure:"gatewaysvc"`
+	Insecure           bool   `mapstructure:"insecure"`
+	MaxCallRecvMsgSize int    `mapstructure:"client_recv_msg_size"`
 }
 
 func (c *Config) init() {
@@ -117,7 +118,7 @@ func (s *svc) Handler() http.Handler {
 func (s *svc) handleNew(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	client, err := pool.GetGatewayServiceClient(pool.Endpoint(s.conf.GatewaySvc))
+	client, err := pool.GetGatewayServiceClient(s.conf, pool.Endpoint(s.conf.GatewaySvc))
 	if err != nil {
 		writeError(w, r, appErrorServerError, "error getting grpc gateway client", err)
 		return
@@ -288,7 +289,7 @@ func (s *svc) handleNew(w http.ResponseWriter, r *http.Request) {
 
 func (s *svc) handleList(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	client, err := pool.GetGatewayServiceClient(pool.Endpoint(s.conf.GatewaySvc))
+	client, err := pool.GetGatewayServiceClient(s.conf, pool.Endpoint(s.conf.GatewaySvc))
 	if err != nil {
 		writeError(w, r, appErrorServerError, "error getting grpc gateway client", err)
 		return
@@ -321,7 +322,7 @@ func (s *svc) handleList(w http.ResponseWriter, r *http.Request) {
 func (s *svc) handleOpen(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	client, err := pool.GetGatewayServiceClient(pool.Endpoint(s.conf.GatewaySvc))
+	client, err := pool.GetGatewayServiceClient(s.conf, pool.Endpoint(s.conf.GatewaySvc))
 	if err != nil {
 		writeError(w, r, appErrorServerError, "Internal error with the gateway, please try again later", err)
 		return

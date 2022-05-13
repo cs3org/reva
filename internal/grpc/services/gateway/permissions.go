@@ -28,7 +28,7 @@ import (
 )
 
 func (s *svc) CheckPermission(ctx context.Context, req *permissions.CheckPermissionRequest) (*permissions.CheckPermissionResponse, error) {
-	c, err := pool.GetPermissionsClient(pool.Endpoint(s.c.PermissionsEndpoint))
+	c, err := pool.GetPermissionsClient(s.c, pool.Endpoint(s.c.PermissionsEndpoint))
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetPermissionssClient")
 		return &permissions.CheckPermissionResponse{

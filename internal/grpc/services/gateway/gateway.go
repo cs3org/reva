@@ -72,6 +72,7 @@ type config struct {
 	EtagCacheTTL        int                               `mapstructure:"etag_cache_ttl"`
 	AllowedUserAgents   map[string][]string               `mapstructure:"allowed_user_agents"` // map[path][]user-agent
 	CreateHomeCacheTTL  int                               `mapstructure:"create_home_cache_ttl"`
+	MaxCallRecvMsgSize  int                               `mapstructure:"client_recv_msg_size"`
 }
 
 // sets defaults

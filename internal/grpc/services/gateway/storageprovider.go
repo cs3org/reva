@@ -135,7 +135,7 @@ func (s *svc) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSp
 		providers []*registry.ProviderInfo
 		err       error
 	)
-	c, err := pool.GetStorageRegistryClient(pool.Endpoint(s.c.StorageRegistryEndpoint))
+	c, err := pool.GetStorageRegistryClient(s.c, pool.Endpoint(s.c.StorageRegistryEndpoint))
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error getting storage registry client")
 	}
@@ -2286,7 +2286,7 @@ func (s *svc) find(ctx context.Context, ref *provider.Reference) (provider.Provi
 }
 
 func (s *svc) getStorageProviderClient(_ context.Context, p *registry.ProviderInfo) (provider.ProviderAPIClient, error) {
-	c, err := pool.GetStorageProviderServiceClient(pool.Endpoint(p.Address))
+	c, err := pool.GetStorageProviderServiceClient(s.c, pool.Endpoint(p.Address))
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error getting a storage provider client")
 		return nil, err
@@ -2296,7 +2296,7 @@ func (s *svc) getStorageProviderClient(_ context.Context, p *registry.ProviderIn
 }
 
 func (s *svc) findProviders(ctx context.Context, ref *provider.Reference) ([]*registry.ProviderInfo, error) {
-	c, err := pool.GetStorageRegistryClient(pool.Endpoint(s.c.StorageRegistryEndpoint))
+	c, err := pool.GetStorageRegistryClient(s.c, pool.Endpoint(s.c.StorageRegistryEndpoint))
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error getting storage registry client")
 	}

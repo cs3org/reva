@@ -105,6 +105,7 @@ type Config struct {
 	PublicURL              string                            `mapstructure:"public_url"`
 	FavoriteStorageDriver  string                            `mapstructure:"favorite_storage_driver"`
 	FavoriteStorageDrivers map[string]map[string]interface{} `mapstructure:"favorite_storage_drivers"`
+	MaxCallRecvMsgSize     int                               `mapstructure:"client_recv_msg_size"`
 }
 
 func (c *Config) init() {
@@ -255,7 +256,7 @@ func (s *svc) Handler() http.Handler {
 }
 
 func (s *svc) getClient() (gateway.GatewayAPIClient, error) {
-	return pool.GetGatewayServiceClient(pool.Endpoint(s.c.GatewaySvc))
+	return pool.GetGatewayServiceClient(s.c, pool.Endpoint(s.c.GatewaySvc))
 }
 
 func applyLayout(ctx context.Context, ns string, useLoggedInUserNS bool, requestPath string) string {

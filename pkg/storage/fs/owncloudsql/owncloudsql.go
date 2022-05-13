@@ -118,6 +118,7 @@ type config struct {
 	DbHost                   string `mapstructure:"dbhost"`
 	DbPort                   int    `mapstructure:"dbport"`
 	DbName                   string `mapstructure:"dbname"`
+	MaxCallRecvMsgSize       int    `mapstructure:"client_recv_msg_size"`
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -370,7 +371,7 @@ func (fs *owncloudsqlfs) getUser(ctx context.Context, usernameOrID string) (id *
 	// look up at the userprovider
 
 	// parts[0] contains the username or userid. use  user service to look up id
-	c, err := pool.GetUserProviderServiceClient(pool.Endpoint(fs.c.UserProviderEndpoint))
+	c, err := pool.GetUserProviderServiceClient(fs.c, pool.Endpoint(fs.c.UserProviderEndpoint))
 	if err != nil {
 		appctx.GetLogger(ctx).
 			Error().Err(err).

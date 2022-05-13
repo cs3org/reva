@@ -41,6 +41,7 @@ type Config struct {
 	ResourceInfoCacheTTL     int                               `mapstructure:"resource_info_cache_ttl"`
 	ResourceInfoCacheDrivers map[string]map[string]interface{} `mapstructure:"resource_info_caches"`
 	UserIdentifierCacheTTL   int                               `mapstructure:"user_identifier_cache_ttl"`
+	MaxCallRecvMsgSize       int                               `mapstructure:"client_recv_msg_size"`
 }
 
 // Init sets sane defaults

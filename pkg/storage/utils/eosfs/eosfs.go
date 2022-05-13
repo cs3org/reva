@@ -817,7 +817,7 @@ func (fs *eosfs) SetLock(ctx context.Context, ref *provider.Reference, l *provid
 }
 
 func (fs *eosfs) getUserFromID(ctx context.Context, userID *userpb.UserId) (*userpb.User, error) {
-	client, err := pool.GetGatewayServiceClient(pool.Endpoint(fs.conf.GatewaySvc))
+	client, err := pool.GetGatewayServiceClient(fs.conf, pool.Endpoint(fs.conf.GatewaySvc))
 	if err != nil {
 		return nil, err
 	}
@@ -2211,7 +2211,7 @@ func (fs *eosfs) getUIDGateway(ctx context.Context, u *userpb.UserId) (eosclient
 		return fs.extractUIDAndGID(userIDInterface.(*userpb.User))
 	}
 
-	client, err := pool.GetGatewayServiceClient(pool.Endpoint(fs.conf.GatewaySvc))
+	client, err := pool.GetGatewayServiceClient(fs.conf, pool.Endpoint(fs.conf.GatewaySvc))
 	if err != nil {
 		return eosclient.Authorization{}, errors.Wrap(err, "eosfs: error getting gateway grpc client")
 	}
@@ -2245,7 +2245,7 @@ func (fs *eosfs) getUserIDGateway(ctx context.Context, uid string) (*userpb.User
 	}
 
 	log.Debug().Msg("eosfs: retrieving user from gateway for uid " + uid)
-	client, err := pool.GetGatewayServiceClient(pool.Endpoint(fs.conf.GatewaySvc))
+	client, err := pool.GetGatewayServiceClient(fs.conf, pool.Endpoint(fs.conf.GatewaySvc))
 	if err != nil {
 		return nil, errors.Wrap(err, "eosfs: error getting gateway grpc client")
 	}
