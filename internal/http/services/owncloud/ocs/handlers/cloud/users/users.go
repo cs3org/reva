@@ -112,7 +112,7 @@ func (h *Handler) GetUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	gc, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	gc, err := pool.GetGatewayServiceClient(h, pool.Endpoint(h.gatewayAddr))
 	if err != nil {
 		sublog.Error().Err(err).Msg("error getting gateway client")
 		w.WriteHeader(http.StatusInternalServerError)

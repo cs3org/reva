@@ -74,7 +74,7 @@ func NewGatewayUserConverter(gwAddr string) *GatewayUserConverter {
 
 // UserIDToUserName converts a user ID to an username
 func (c *GatewayUserConverter) UserIDToUserName(ctx context.Context, userid *userpb.UserId) (string, error) {
-	gwConn, err := pool.GetGatewayServiceClient(pool.Endpoint(c.gwAddr))
+	gwConn, err := pool.GetGatewayServiceClient(c, pool.Endpoint(c.gwAddr))
 	if err != nil {
 		return "", err
 	}
@@ -93,7 +93,7 @@ func (c *GatewayUserConverter) UserIDToUserName(ctx context.Context, userid *use
 
 // UserNameToUserID converts a username to an user ID
 func (c *GatewayUserConverter) UserNameToUserID(ctx context.Context, username string) (*userpb.UserId, error) {
-	gwConn, err := pool.GetGatewayServiceClient(pool.Endpoint(c.gwAddr))
+	gwConn, err := pool.GetGatewayServiceClient(c, pool.Endpoint(c.gwAddr))
 	if err != nil {
 		return nil, err
 	}

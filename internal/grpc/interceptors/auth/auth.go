@@ -98,7 +98,7 @@ func NewUnary(m map[string]interface{}, unprotected []string) (grpc.UnaryServerI
 			// to decide the storage provider.
 			tkn, ok := ctxpkg.ContextGetToken(ctx)
 			if ok {
-				u, err := dismantleToken(ctx, tkn, req, tokenManager, conf.GatewayAddr, true)
+				u, err := dismantleToken(ctx, tkn, req, tokenManager, conf, true)
 				if err == nil {
 					ctx = ctxpkg.ContextSetUser(ctx, u)
 				}
@@ -114,7 +114,7 @@ func NewUnary(m map[string]interface{}, unprotected []string) (grpc.UnaryServerI
 		}
 
 		// validate the token and ensure access to the resource is allowed
-		u, err := dismantleToken(ctx, tkn, req, tokenManager, conf.GatewayAddr, false)
+		u, err := dismantleToken(ctx, tkn, req, tokenManager, conf, false)
 		if err != nil {
 			log.Warn().Err(err).Msg("access token is invalid")
 			return nil, status.Errorf(codes.PermissionDenied, "auth: core access token is invalid")
@@ -162,7 +162,7 @@ func NewStream(m map[string]interface{}, unprotected []string) (grpc.StreamServe
 			// to decide the storage provider.
 			tkn, ok := ctxpkg.ContextGetToken(ctx)
 			if ok {
-				u, err := dismantleToken(ctx, tkn, ss, tokenManager, conf.GatewayAddr, true)
+				u, err := dismantleToken(ctx, tkn, ss, tokenManager, conf, true)
 				if err == nil {
 					ctx = ctxpkg.ContextSetUser(ctx, u)
 					ss = newWrappedServerStream(ctx, ss)
@@ -180,7 +180,7 @@ func NewStream(m map[string]interface{}, unprotected []string) (grpc.StreamServe
 		}
 
 		// validate the token and ensure access to the resource is allowed
-		u, err := dismantleToken(ctx, tkn, ss, tokenManager, conf.GatewayAddr, false)
+		u, err := dismantleToken(ctx, tkn, ss, tokenManager, conf, false)
 		if err != nil {
 			log.Warn().Err(err).Msg("access token is invalid")
 			return status.Errorf(codes.PermissionDenied, "auth: core access token is invalid")
@@ -207,7 +207,7 @@ func (ss *wrappedServerStream) Context() context.Context {
 	return ss.newCtx
 }
 
-func dismantleToken(ctx context.Context, tkn string, req interface{}, mgr token.Manager, gatewayAddr string, unprotected bool) (*userpb.User, error) {
+func dismantleToken(ctx context.Context, tkn string, req interface{}, mgr token.Manager, conf *config, unprotected bool) (*userpb.User, error) {
 	u, tokenScope, err := mgr.DismantleToken(ctx, tkn)
 	if err != nil {
 		return nil, err
@@ -218,7 +218,7 @@ func dismantleToken(ctx context.Context, tkn string, req interface{}, mgr token.
 	}
 
 	if sharedconf.SkipUserGroupsInToken() {
-		client, err := pool.GetGatewayServiceClient(pool.Endpoint(gatewayAddr))
+		client, err := pool.GetGatewayServiceClient(conf, pool.Endpoint(conf.GatewayAddr))
 		if err != nil {
 			return nil, err
 		}
@@ -238,7 +238,7 @@ func dismantleToken(ctx context.Context, tkn string, req interface{}, mgr token.
 		return u, nil
 	}
 
-	if err = expandAndVerifyScope(ctx, req, tokenScope, u, gatewayAddr, mgr); err != nil {
+	if err = expandAndVerifyScope(ctx, req, tokenScope, u, conf, mgr); err != nil {
 		return nil, err
 	}
 

@@ -106,7 +106,7 @@ func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 		// If not, we user the user home to route the request
 		basePath := r.URL.Query().Get("base_path")
 		if basePath == "" {
-			gc, err := pool.GetGatewayServiceClient(pool.Endpoint(s.c.GatewaySvc))
+			gc, err := pool.GetGatewayServiceClient(s.c, pool.Endpoint(s.c.GatewaySvc))
 			if err != nil {
 				// TODO(jfd) how do we make the user aware that some storages are not available?
 				// opaque response property? Or a list of errors?
@@ -206,7 +206,7 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 		return
 	}
 
-	gc, err := pool.GetGatewayServiceClient(pool.Endpoint(s.c.GatewaySvc))
+	gc, err := pool.GetGatewayServiceClient(s.c, pool.Endpoint(s.c.GatewaySvc))
 	if err != nil {
 		// TODO(jfd) how do we make the user aware that some storages are not available?
 		// opaque response property? Or a list of errors?

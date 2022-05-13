@@ -85,7 +85,7 @@ var (
 // NewConn creates a new connection to a grpc server
 // with open census tracing support.
 // TODO(labkode): make grpc tls configurable.
-func NewConn(options Options) (*grpc.ClientConn, error) {
+func NewConn(options *Options) (*grpc.ClientConn, error) {
 	conn, err := grpc.Dial(
 		options.Endpoint,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
@@ -119,11 +119,15 @@ func NewConn(options Options) (*grpc.ClientConn, error) {
 }
 
 // GetGatewayServiceClient returns a GatewayServiceClient.
-func GetGatewayServiceClient(opts ...Option) (gateway.GatewayAPIClient, error) {
+func GetGatewayServiceClient(c interface{}, opts ...Option) (gateway.GatewayAPIClient, error) {
 	gatewayProviders.m.Lock()
 	defer gatewayProviders.m.Unlock()
 
-	options := newOptions(opts...)
+	options, err := NewOptions(c, opts...)
+	if err != nil {
+		return nil, err
+	}
+
 	if val, ok := gatewayProviders.conn[options.Endpoint]; ok {
 		return val.(gateway.GatewayAPIClient), nil
 	}
@@ -140,11 +144,15 @@ func GetGatewayServiceClient(opts ...Option) (gateway.GatewayAPIClient, error) {
 }
 
 // GetUserProviderServiceClient returns a UserProviderServiceClient.
-func GetUserProviderServiceClient(opts ...Option) (user.UserAPIClient, error) {
+func GetUserProviderServiceClient(c interface{}, opts ...Option) (user.UserAPIClient, error) {
 	userProviders.m.Lock()
 	defer userProviders.m.Unlock()
 
-	options := newOptions(opts...)
+	options, err := NewOptions(c, opts...)
+	if err != nil {
+		return nil, err
+	}
+
 	if val, ok := userProviders.conn[options.Endpoint]; ok {
 		return val.(user.UserAPIClient), nil
 	}
@@ -160,11 +168,15 @@ func GetUserProviderServiceClient(opts ...Option) (user.UserAPIClient, error) {
 }
 
 // GetGroupProviderServiceClient returns a GroupProviderServiceClient.
-func GetGroupProviderServiceClient(opts ...Option) (group.GroupAPIClient, error) {
+func GetGroupProviderServiceClient(c interface{}, opts ...Option) (group.GroupAPIClient, error) {
 	groupProviders.m.Lock()
 	defer groupProviders.m.Unlock()
 
-	options := newOptions(opts...)
+	options, err := NewOptions(c, opts...)
+	if err != nil {
+		return nil, err
+	}
+
 	if val, ok := groupProviders.conn[options.Endpoint]; ok {
 		return val.(group.GroupAPIClient), nil
 	}
@@ -180,11 +192,15 @@ func GetGroupProviderServiceClient(opts ...Option) (group.GroupAPIClient, error)
 }
 
 // GetStorageProviderServiceClient returns a StorageProviderServiceClient.
-func GetStorageProviderServiceClient(opts ...Option) (storageprovider.ProviderAPIClient, error) {
+func GetStorageProviderServiceClient(c interface{}, opts ...Option) (storageprovider.ProviderAPIClient, error) {
 	storageProviders.m.Lock()
 	defer storageProviders.m.Unlock()
 
-	options := newOptions(opts...)
+	options, err := NewOptions(c, opts...)
+	if err != nil {
+		return nil, err
+	}
+
 	if c, ok := storageProviders.conn[options.Endpoint]; ok {
 		return c.(storageprovider.ProviderAPIClient), nil
 	}
@@ -200,12 +216,16 @@ func GetStorageProviderServiceClient(opts ...Option) (storageprovider.ProviderAP
 }
 
 // GetAuthRegistryServiceClient returns a new AuthRegistryServiceClient.
-func GetAuthRegistryServiceClient(opts ...Option) (authregistry.RegistryAPIClient, error) {
+func GetAuthRegistryServiceClient(c interface{}, opts ...Option) (authregistry.RegistryAPIClient, error) {
 	authRegistries.m.Lock()
 	defer authRegistries.m.Unlock()
 
 	// if there is already a connection to this node, use it.
-	options := newOptions(opts...)
+	options, err := NewOptions(c, opts...)
+	if err != nil {
+		return nil, err
+	}
+
 	if c, ok := authRegistries.conn[options.Endpoint]; ok {
 		return c.(authregistry.RegistryAPIClient), nil
 	}
@@ -223,11 +243,15 @@ func GetAuthRegistryServiceClient(opts ...Option) (authregistry.RegistryAPIClien
 }
 
 // GetAuthProviderServiceClient returns a new AuthProviderServiceClient.
-func GetAuthProviderServiceClient(opts ...Option) (authprovider.ProviderAPIClient, error) {
+func GetAuthProviderServiceClient(c interface{}, opts ...Option) (authprovider.ProviderAPIClient, error) {
 	authProviders.m.Lock()
 	defer authProviders.m.Unlock()
 
-	options := newOptions(opts...)
+	options, err := NewOptions(c, opts...)
+	if err != nil {
+		return nil, err
+	}
+
 	if c, ok := authProviders.conn[options.Endpoint]; ok {
 		return c.(authprovider.ProviderAPIClient), nil
 	}
@@ -243,11 +267,15 @@ func GetAuthProviderServiceClient(opts ...Option) (authprovider.ProviderAPIClien
 }
 
 // GetAppAuthProviderServiceClient returns a new AppAuthProviderServiceClient.
-func GetAppAuthProviderServiceClient(opts ...Option) (applicationauth.ApplicationsAPIClient, error) {
+func GetAppAuthProviderServiceClient(c interface{}, opts ...Option) (applicationauth.ApplicationsAPIClient, error) {
 	appAuthProviders.m.Lock()
 	defer appAuthProviders.m.Unlock()
 
-	options := newOptions(opts...)
+	options, err := NewOptions(c, opts...)
+	if err != nil {
+		return nil, err
+	}
+
 	if c, ok := appAuthProviders.conn[options.Endpoint]; ok {
 		return c.(applicationauth.ApplicationsAPIClient), nil
 	}
@@ -263,11 +291,15 @@ func GetAppAuthProviderServiceClient(opts ...Option) (applicationauth.Applicatio
 }
 
 // GetUserShareProviderClient returns a new UserShareProviderClient.
-func GetUserShareProviderClient(opts ...Option) (collaboration.CollaborationAPIClient, error) {
+func GetUserShareProviderClient(c interface{}, opts ...Option) (collaboration.CollaborationAPIClient, error) {
 	userShareProviders.m.Lock()
 	defer userShareProviders.m.Unlock()
 
-	options := newOptions(opts...)
+	options, err := NewOptions(c, opts...)
+	if err != nil {
+		return nil, err
+	}
+
 	if c, ok := userShareProviders.conn[options.Endpoint]; ok {
 		return c.(collaboration.CollaborationAPIClient), nil
 	}
@@ -283,11 +315,15 @@ func GetUserShareProviderClient(opts ...Option) (collaboration.CollaborationAPIC
 }
 
 // GetOCMShareProviderClient returns a new OCMShareProviderClient.
-func GetOCMShareProviderClient(opts ...Option) (ocm.OcmAPIClient, error) {
+func GetOCMShareProviderClient(c interface{}, opts ...Option) (ocm.OcmAPIClient, error) {
 	ocmShareProviders.m.Lock()
 	defer ocmShareProviders.m.Unlock()
 
-	options := newOptions(opts...)
+	options, err := NewOptions(c, opts...)
+	if err != nil {
+		return nil, err
+	}
+
 	if c, ok := ocmShareProviders.conn[options.Endpoint]; ok {
 		return c.(ocm.OcmAPIClient), nil
 	}
@@ -303,11 +339,15 @@ func GetOCMShareProviderClient(opts ...Option) (ocm.OcmAPIClient, error) {
 }
 
 // GetOCMInviteManagerClient returns a new OCMInviteManagerClient.
-func GetOCMInviteManagerClient(opts ...Option) (invitepb.InviteAPIClient, error) {
+func GetOCMInviteManagerClient(c interface{}, opts ...Option) (invitepb.InviteAPIClient, error) {
 	ocmInviteManagers.m.Lock()
 	defer ocmInviteManagers.m.Unlock()
 
-	options := newOptions(opts...)
+	options, err := NewOptions(c, opts...)
+	if err != nil {
+		return nil, err
+	}
+
 	if c, ok := ocmInviteManagers.conn[options.Endpoint]; ok {
 		return c.(invitepb.InviteAPIClient), nil
 	}
@@ -323,11 +363,15 @@ func GetOCMInviteManagerClient(opts ...Option) (invitepb.InviteAPIClient, error)
 }
 
 // GetPublicShareProviderClient returns a new PublicShareProviderClient.
-func GetPublicShareProviderClient(opts ...Option) (link.LinkAPIClient, error) {
+func GetPublicShareProviderClient(c interface{}, opts ...Option) (link.LinkAPIClient, error) {
 	publicShareProviders.m.Lock()
 	defer publicShareProviders.m.Unlock()
 
-	options := newOptions(opts...)
+	options, err := NewOptions(c, opts...)
+	if err != nil {
+		return nil, err
+	}
+
 	if c, ok := publicShareProviders.conn[options.Endpoint]; ok {
 		return c.(link.LinkAPIClient), nil
 	}
@@ -343,11 +387,15 @@ func GetPublicShareProviderClient(opts ...Option) (link.LinkAPIClient, error) {
 }
 
 // GetPreferencesClient returns a new PreferencesClient.
-func GetPreferencesClient(opts ...Option) (preferences.PreferencesAPIClient, error) {
+func GetPreferencesClient(c interface{}, opts ...Option) (preferences.PreferencesAPIClient, error) {
 	preferencesProviders.m.Lock()
 	defer preferencesProviders.m.Unlock()
 
-	options := newOptions(opts...)
+	options, err := NewOptions(c, opts...)
+	if err != nil {
+		return nil, err
+	}
+
 	if c, ok := preferencesProviders.conn[options.Endpoint]; ok {
 		return c.(preferences.PreferencesAPIClient), nil
 	}
@@ -363,11 +411,15 @@ func GetPreferencesClient(opts ...Option) (preferences.PreferencesAPIClient, err
 }
 
 // GetPermissionsClient returns a new PermissionsClient.
-func GetPermissionsClient(opts ...Option) (permissions.PermissionsAPIClient, error) {
+func GetPermissionsClient(c interface{}, opts ...Option) (permissions.PermissionsAPIClient, error) {
 	permissionsProviders.m.Lock()
 	defer permissionsProviders.m.Unlock()
 
-	options := newOptions(opts...)
+	options, err := NewOptions(c, opts...)
+	if err != nil {
+		return nil, err
+	}
+
 	if c, ok := permissionsProviders.conn[options.Endpoint]; ok {
 		return c.(permissions.PermissionsAPIClient), nil
 	}
@@ -383,11 +435,15 @@ func GetPermissionsClient(opts ...Option) (permissions.PermissionsAPIClient, err
 }
 
 // GetAppRegistryClient returns a new AppRegistryClient.
-func GetAppRegistryClient(opts ...Option) (appregistry.RegistryAPIClient, error) {
+func GetAppRegistryClient(c interface{}, opts ...Option) (appregistry.RegistryAPIClient, error) {
 	appRegistries.m.Lock()
 	defer appRegistries.m.Unlock()
 
-	options := newOptions(opts...)
+	options, err := NewOptions(c, opts...)
+	if err != nil {
+		return nil, err
+	}
+
 	if c, ok := appRegistries.conn[options.Endpoint]; ok {
 		return c.(appregistry.RegistryAPIClient), nil
 	}
@@ -403,11 +459,15 @@ func GetAppRegistryClient(opts ...Option) (appregistry.RegistryAPIClient, error)
 }
 
 // GetAppProviderClient returns a new AppRegistryClient.
-func GetAppProviderClient(opts ...Option) (appprovider.ProviderAPIClient, error) {
+func GetAppProviderClient(c interface{}, opts ...Option) (appprovider.ProviderAPIClient, error) {
 	appProviders.m.Lock()
 	defer appProviders.m.Unlock()
 
-	options := newOptions(opts...)
+	options, err := NewOptions(c, opts...)
+	if err != nil {
+		return nil, err
+	}
+
 	if c, ok := appProviders.conn[options.Endpoint]; ok {
 		return c.(appprovider.ProviderAPIClient), nil
 	}
@@ -423,11 +483,15 @@ func GetAppProviderClient(opts ...Option) (appprovider.ProviderAPIClient, error)
 }
 
 // GetStorageRegistryClient returns a new StorageRegistryClient.
-func GetStorageRegistryClient(opts ...Option) (storageregistry.RegistryAPIClient, error) {
+func GetStorageRegistryClient(c interface{}, opts ...Option) (storageregistry.RegistryAPIClient, error) {
 	storageRegistries.m.Lock()
 	defer storageRegistries.m.Unlock()
 
-	options := newOptions(opts...)
+	options, err := NewOptions(c, opts...)
+	if err != nil {
+		return nil, err
+	}
+
 	if c, ok := storageRegistries.conn[options.Endpoint]; ok {
 		return c.(storageregistry.RegistryAPIClient), nil
 	}
@@ -443,11 +507,15 @@ func GetStorageRegistryClient(opts ...Option) (storageregistry.RegistryAPIClient
 }
 
 // GetOCMProviderAuthorizerClient returns a new OCMProviderAuthorizerClient.
-func GetOCMProviderAuthorizerClient(opts ...Option) (ocmprovider.ProviderAPIClient, error) {
+func GetOCMProviderAuthorizerClient(c interface{}, opts ...Option) (ocmprovider.ProviderAPIClient, error) {
 	ocmProviderAuthorizers.m.Lock()
 	defer ocmProviderAuthorizers.m.Unlock()
 
-	options := newOptions(opts...)
+	options, err := NewOptions(c, opts...)
+	if err != nil {
+		return nil, err
+	}
+
 	if c, ok := ocmProviderAuthorizers.conn[options.Endpoint]; ok {
 		return c.(ocmprovider.ProviderAPIClient), nil
 	}
@@ -463,11 +531,15 @@ func GetOCMProviderAuthorizerClient(opts ...Option) (ocmprovider.ProviderAPIClie
 }
 
 // GetOCMCoreClient returns a new OCMCoreClient.
-func GetOCMCoreClient(opts ...Option) (ocmcore.OcmCoreAPIClient, error) {
+func GetOCMCoreClient(c interface{}, opts ...Option) (ocmcore.OcmCoreAPIClient, error) {
 	ocmCores.m.Lock()
 	defer ocmCores.m.Unlock()
 
-	options := newOptions(opts...)
+	options, err := NewOptions(c, opts...)
+	if err != nil {
+		return nil, err
+	}
+
 	if c, ok := ocmCores.conn[options.Endpoint]; ok {
 		return c.(ocmcore.OcmCoreAPIClient), nil
 	}
@@ -483,11 +555,15 @@ func GetOCMCoreClient(opts ...Option) (ocmcore.OcmCoreAPIClient, error) {
 }
 
 // GetDataTxClient returns a new DataTxClient.
-func GetDataTxClient(opts ...Option) (datatx.TxAPIClient, error) {
+func GetDataTxClient(c interface{}, opts ...Option) (datatx.TxAPIClient, error) {
 	dataTxs.m.Lock()
 	defer dataTxs.m.Unlock()
 
-	options := newOptions(opts...)
+	options, err := NewOptions(c, opts...)
+	if err != nil {
+		return nil, err
+	}
+
 	if c, ok := dataTxs.conn[options.Endpoint]; ok {
 		return c.(datatx.TxAPIClient), nil
 	}

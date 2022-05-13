@@ -50,9 +50,9 @@ const (
 	scopeCacheExpiration = 3600
 )
 
-func expandAndVerifyScope(ctx context.Context, req interface{}, tokenScope map[string]*authpb.Scope, user *userpb.User, gatewayAddr string, mgr token.Manager) error {
+func expandAndVerifyScope(ctx context.Context, req interface{}, tokenScope map[string]*authpb.Scope, user *userpb.User, conf *config, mgr token.Manager) error {
 	log := appctx.GetLogger(ctx)
-	client, err := pool.GetGatewayServiceClient(pool.Endpoint(gatewayAddr))
+	client, err := pool.GetGatewayServiceClient(conf, pool.Endpoint(conf.GatewayAddr))
 	if err != nil {
 		return err
 	}
