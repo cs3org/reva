@@ -555,7 +555,7 @@ func (t *Tree) PurgeRecycleItemFunc(ctx context.Context, spaceid, key string, pa
 	fn := func() error {
 		// delete the actual node
 		// TODO recursively delete children
-		if err := os.RemoveAll(deletedNodePath); err != nil {
+		if err := utils.RemoveItem(deletedNodePath); err != nil {
 			log.Error().Err(err).Str("deletedNodePath", deletedNodePath).Msg("error deleting trash node")
 			return err
 		}
@@ -577,7 +577,7 @@ func (t *Tree) PurgeRecycleItemFunc(ctx context.Context, spaceid, key string, pa
 		// delete children
 		for i := len(nodes) - 1; i >= 0; i-- {
 			n := nodes[i]
-			if err := os.RemoveAll(n.InternalPath()); err != nil {
+			if err := utils.RemoveItem(n.InternalPath()); err != nil {
 				log.Error().Err(err).Str("deletedNodePath", deletedNodePath).Msg("error deleting trash node")
 				return err
 			}

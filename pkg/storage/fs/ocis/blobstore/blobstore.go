@@ -26,6 +26,7 @@ import (
 
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/lookup"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
+	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/pkg/errors"
 )
 
@@ -79,8 +80,7 @@ func (bs *Blobstore) Download(node *node.Node) (io.ReadCloser, error) {
 
 // Delete deletes a blob from the blobstore
 func (bs *Blobstore) Delete(node *node.Node) error {
-	err := os.Remove(bs.path(node))
-	if err != nil {
+	if err := utils.RemoveItem(bs.path(node)); err != nil {
 		return errors.Wrapf(err, "could not delete blob '%s'", bs.path(node))
 	}
 	return nil

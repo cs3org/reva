@@ -23,6 +23,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"os/user"
 	"path"
 	"path/filepath"
@@ -367,4 +368,22 @@ func ExistsInOpaque(o *types.Opaque, key string) bool {
 
 	_, ok := o.Map[key]
 	return ok
+}
+
+// RemoveItem removes the given item, its children and all empty parent folders
+func RemoveItem(path string) error {
+	if err := os.RemoveAll(path); err != nil {
+		return err
+	}
+
+	for {
+		path = filepath.Dir(path)
+		if err := os.Remove(path); err != nil {
+			// remove will fail when the dir is not empty.
+			// We can exit in that case
+			return nil
+		}
+
+	}
+
 }
