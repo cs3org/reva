@@ -25,6 +25,7 @@ import (
 
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/lookup"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs"
+	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/google/uuid"
 	"github.com/pkg/xattr"
 	"github.com/stretchr/testify/mock"
@@ -205,7 +206,11 @@ func (t *TestEnv) CreateTestStorageSpace(typ string, quota *providerv1beta1.Quot
 	ref := buildRef(space.StorageSpace.Id.OpaqueId, "")
 
 	// the space name attribute is the stop condition in the lookup
-	h, err := node.ReadNode(t.Ctx, t.Lookup, space.StorageSpace.Id.OpaqueId, space.StorageSpace.Id.OpaqueId, false)
+	sid, err := storagespace.ParseID(space.StorageSpace.Id.OpaqueId)
+	if err != nil {
+		return nil, err
+	}
+	h, err := node.ReadNode(t.Ctx, t.Lookup, sid.StorageId, sid.OpaqueId, false)
 	if err != nil {
 		return nil, err
 	}
@@ -252,10 +257,14 @@ func (t *TestEnv) CreateTestStorageSpace(typ string, quota *providerv1beta1.Quot
 
 // shortcut to get a ref
 func buildRef(id, path string) *providerv1beta1.Reference {
+	res, err := storagespace.ParseID(id)
+	if err != nil {
+		return nil
+	}
 	return &providerv1beta1.Reference{
 		ResourceId: &providerv1beta1.ResourceId{
-			StorageId: id,
-			OpaqueId:  id,
+			StorageId: res.StorageId,
+			OpaqueId:  res.OpaqueId,
 		},
 		Path: path,
 	}

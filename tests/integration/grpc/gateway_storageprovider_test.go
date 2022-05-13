@@ -24,6 +24,7 @@ import (
 	"path"
 	"time"
 
+	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"google.golang.org/grpc/metadata"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
@@ -192,9 +193,11 @@ var _ = Describe("gateway", func() {
 			Expect(res.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 			shard1Space = res.StorageSpace
 
+			ssid, err := storagespace.ParseID(shard1Space.Id.OpaqueId)
+			Expect(err).ToNot(HaveOccurred())
 			err = helpers.Upload(ctx,
 				shard1Fs,
-				&storagep.Reference{ResourceId: &storagep.ResourceId{StorageId: shard1Space.Id.OpaqueId}, Path: "/file.txt"},
+				&storagep.Reference{ResourceId: &storagep.ResourceId{StorageId: ssid.StorageId}, Path: "/file.txt"},
 				[]byte("1"),
 			)
 			Expect(err).ToNot(HaveOccurred())
@@ -303,10 +306,11 @@ var _ = Describe("gateway", func() {
 				listRes, err := serviceClient.ListContainer(ctx, &storagep.ListContainerRequest{Ref: ref})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(listRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
-
-				_, err = os.Stat(path.Join(revads["storage"].StorageRoot, "/spacetypes/project", space.Id.OpaqueId))
+				ssid, err := storagespace.ParseID(space.Id.OpaqueId)
+				Expect(err).ToNot(HaveOccurred())
+				_, err = os.Stat(path.Join(revads["storage"].StorageRoot, "/spacetypes/project", ssid.StorageId))
 				Expect(err).To(HaveOccurred())
-				_, err = os.Stat(path.Join(revads["storage2"].StorageRoot, "/spacetypes/project", space.Id.OpaqueId))
+				_, err = os.Stat(path.Join(revads["storage2"].StorageRoot, "/spacetypes/project", ssid.StorageId))
 				Expect(err).ToNot(HaveOccurred())
 			})
 
@@ -376,10 +380,11 @@ var _ = Describe("gateway", func() {
 			spaces, err := fs.ListStorageSpaces(ctx, []*storagep.ListStorageSpacesRequest_Filter{}, false)
 			Expect(err).ToNot(HaveOccurred())
 			homeSpace = spaces[0]
-
+			ssid, err := storagespace.ParseID(homeSpace.Id.OpaqueId)
+			Expect(err).ToNot(HaveOccurred())
 			err = helpers.Upload(ctx,
 				fs,
-				&storagep.Reference{ResourceId: &storagep.ResourceId{StorageId: homeSpace.Id.OpaqueId}, Path: "/file.txt"},
+				&storagep.Reference{ResourceId: &storagep.ResourceId{StorageId: ssid.StorageId}, Path: "/file.txt"},
 				[]byte("1"),
 			)
 			Expect(err).ToNot(HaveOccurred())
@@ -401,16 +406,18 @@ var _ = Describe("gateway", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(res.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 			embeddedSpace = res.StorageSpace
+			essid, err := storagespace.ParseID(embeddedSpace.Id.OpaqueId)
+			Expect(err).ToNot(HaveOccurred())
 			embeddedRef = &storagep.Reference{
 				ResourceId: &storagep.ResourceId{
-					StorageId: embeddedSpace.Id.OpaqueId,
-					OpaqueId:  embeddedSpace.Id.OpaqueId,
+					StorageId: essid.StorageId,
+					OpaqueId:  essid.OpaqueId,
 				},
 				Path: ".", //  path.Join(homeRef.Path, "Projects", embeddedSpace.Id.OpaqueId),
 			}
 			err = helpers.Upload(ctx,
 				embeddedFs,
-				&storagep.Reference{ResourceId: &storagep.ResourceId{StorageId: embeddedSpace.Id.OpaqueId}, Path: "/embedded.txt"},
+				&storagep.Reference{ResourceId: &storagep.ResourceId{StorageId: essid.StorageId}, Path: "/embedded.txt"},
 				[]byte("22"),
 			)
 			Expect(err).ToNot(HaveOccurred())
@@ -576,9 +583,10 @@ var _ = Describe("gateway", func() {
 				Expect(err).ToNot(HaveOccurred())
 				Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 				etag := statRes.Info.Etag
-
+				ssid, err := storagespace.ParseID(homeSpace.Id.OpaqueId)
+				Expect(err).ToNot(HaveOccurred())
 				By("Uploading a new file")
-				err = helpers.Upload(ctx, fs, &storagep.Reference{ResourceId: &storagep.ResourceId{StorageId: homeSpace.Id.OpaqueId}, Path: "/newfile.txt"}, []byte("1"))
+				err = helpers.Upload(ctx, fs, &storagep.Reference{ResourceId: &storagep.ResourceId{StorageId: ssid.StorageId}, Path: "/newfile.txt"}, []byte("1"))
 				Expect(err).ToNot(HaveOccurred())
 
 				time.Sleep(time.Second) // cache must expire
@@ -590,7 +598,7 @@ var _ = Describe("gateway", func() {
 				Expect(newEtag).ToNot(Equal(etag))
 
 				By("Creating a new dir")
-				err = fs.CreateDir(ctx, &storagep.Reference{ResourceId: &storagep.ResourceId{StorageId: homeSpace.Id.OpaqueId}, Path: "/newdir"})
+				err = fs.CreateDir(ctx, &storagep.Reference{ResourceId: &storagep.ResourceId{StorageId: ssid.StorageId}, Path: "/newdir"})
 				Expect(err).ToNot(HaveOccurred())
 
 				time.Sleep(time.Second) // cache must expire
@@ -602,7 +610,7 @@ var _ = Describe("gateway", func() {
 				Expect(newEtag2).ToNot(Equal(newEtag))
 
 				By("Updating an existing file")
-				err = helpers.Upload(ctx, fs, &storagep.Reference{ResourceId: &storagep.ResourceId{StorageId: homeSpace.Id.OpaqueId}, Path: "/file.txt"}, []byte("2"))
+				err = helpers.Upload(ctx, fs, &storagep.Reference{ResourceId: &storagep.ResourceId{StorageId: ssid.StorageId}, Path: "/file.txt"}, []byte("2"))
 				Expect(err).ToNot(HaveOccurred())
 
 				time.Sleep(time.Second) // cache must expire
@@ -619,9 +627,10 @@ var _ = Describe("gateway", func() {
 				Expect(err).ToNot(HaveOccurred())
 				Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 				etag := statRes.Info.Etag
-
+				essid, err := storagespace.ParseID(embeddedSpace.Id.OpaqueId)
+				Expect(err).ToNot(HaveOccurred())
 				By("Uploading a new file")
-				err = helpers.Upload(ctx, embeddedFs, &storagep.Reference{ResourceId: &storagep.ResourceId{StorageId: embeddedSpace.Id.OpaqueId}, Path: "/newfile.txt"}, []byte("1"))
+				err = helpers.Upload(ctx, embeddedFs, &storagep.Reference{ResourceId: &storagep.ResourceId{StorageId: essid.StorageId}, Path: "/newfile.txt"}, []byte("1"))
 				Expect(err).ToNot(HaveOccurred())
 
 				time.Sleep(time.Second) // cache must expire
@@ -633,7 +642,7 @@ var _ = Describe("gateway", func() {
 				Expect(newEtag).ToNot(Equal(etag))
 
 				By("Creating a new dir")
-				err = embeddedFs.CreateDir(ctx, &storagep.Reference{ResourceId: &storagep.ResourceId{StorageId: embeddedSpace.Id.OpaqueId}, Path: "/newdir"})
+				err = embeddedFs.CreateDir(ctx, &storagep.Reference{ResourceId: &storagep.ResourceId{StorageId: essid.StorageId}, Path: "/newdir"})
 				Expect(err).ToNot(HaveOccurred())
 
 				time.Sleep(time.Second) // cache must expire
@@ -645,7 +654,7 @@ var _ = Describe("gateway", func() {
 				Expect(newEtag2).ToNot(Equal(newEtag))
 
 				By("Updating an existing file")
-				err = helpers.Upload(ctx, embeddedFs, &storagep.Reference{ResourceId: &storagep.ResourceId{StorageId: embeddedSpace.Id.OpaqueId}, Path: "/newfile.txt"}, []byte("1"))
+				err = helpers.Upload(ctx, embeddedFs, &storagep.Reference{ResourceId: &storagep.ResourceId{StorageId: essid.StorageId}, Path: "/newfile.txt"}, []byte("1"))
 				Expect(err).ToNot(HaveOccurred())
 
 				time.Sleep(time.Second) // cache must expire
@@ -660,11 +669,13 @@ var _ = Describe("gateway", func() {
 
 		Describe("Move", func() {
 			It("moves a directory", func() {
-				sourceRef := &storagep.Reference{ResourceId: &storagep.ResourceId{StorageId: homeSpace.Id.OpaqueId, OpaqueId: homeSpace.Id.OpaqueId}, Path: "./source"}
-				targetRef := &storagep.Reference{ResourceId: &storagep.ResourceId{StorageId: homeSpace.Id.OpaqueId, OpaqueId: homeSpace.Id.OpaqueId}, Path: "./destination"}
-				dstRef := &storagep.Reference{ResourceId: &storagep.ResourceId{StorageId: homeSpace.Id.OpaqueId, OpaqueId: homeSpace.Id.OpaqueId}, Path: "./destination/source"}
+				hssid, err := storagespace.ParseID(homeSpace.Id.OpaqueId)
+				Expect(err).ToNot(HaveOccurred())
+				sourceRef := &storagep.Reference{ResourceId: &storagep.ResourceId{StorageId: hssid.StorageId, OpaqueId: hssid.OpaqueId}, Path: "./source"}
+				targetRef := &storagep.Reference{ResourceId: &storagep.ResourceId{StorageId: hssid.StorageId, OpaqueId: hssid.OpaqueId}, Path: "./destination"}
+				dstRef := &storagep.Reference{ResourceId: &storagep.ResourceId{StorageId: hssid.StorageId, OpaqueId: hssid.OpaqueId}, Path: "./destination/source"}
 
-				err := fs.CreateDir(ctx, sourceRef)
+				err = fs.CreateDir(ctx, sourceRef)
 				Expect(err).ToNot(HaveOccurred())
 				err = fs.CreateDir(ctx, targetRef)
 				Expect(err).ToNot(HaveOccurred())
