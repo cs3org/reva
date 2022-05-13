@@ -384,8 +384,50 @@ func (t *Tree) ListFolder(ctx context.Context, n *node.Node) ([]*node.Node, erro
 	return nodes, nil
 }
 
-// Delete deletes a node in the tree by moving it to the trash
+// Delete deletes a node and all its children in the tree by moving them to the trash
 func (t *Tree) Delete(ctx context.Context, n *node.Node) (err error) {
+	nodes, err := appendChildren(ctx, n, nil)
+	if err != nil {
+		return err
+	}
+
+	// traverse tree from leave to root
+	for i := len(nodes) - 1; i >= 0; i-- {
+		if err := t.delete(ctx, nodes[i]); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// appendChildren appends `n` and all its children to `nodes`
+func appendChildren(ctx context.Context, n *node.Node, nodes []*node.Node) ([]*node.Node, error) {
+	nodes = append(nodes, n)
+
+	children, err := os.ReadDir(n.InternalPath())
+	if err != nil {
+		// TODO: How to differentiate folders from files?
+		return nodes, nil
+	}
+
+	for _, c := range children {
+		cn, err := n.Child(ctx, c.Name())
+		if err != nil {
+			// continue?
+			return nil, err
+		}
+		nodes, err = appendChildren(ctx, cn, nodes)
+		if err != nil {
+			// continue?
+			return nil, err
+		}
+	}
+
+	return nodes, nil
+}
+
+// Delete deletes one node in the tree by moving it to the trash
+func (t *Tree) delete(ctx context.Context, n *node.Node) (err error) {
 	deletingSharedResource := ctx.Value(appctx.DeletingSharedResource)
 
 	if deletingSharedResource != nil && deletingSharedResource.(bool) {
