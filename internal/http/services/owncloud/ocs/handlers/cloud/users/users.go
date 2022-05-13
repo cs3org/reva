@@ -19,14 +19,16 @@
 package users
 
 import (
+	"context"
 	"fmt"
 	"net/http"
+	"net/url"
+	"strconv"
 
-	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
-	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
-	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/errors"
+	cs3gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+	cs3identity "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	cs3rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	cs3storage "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocs/config"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocs/response"
@@ -69,19 +71,24 @@ func (h *Handler) GetGroups(w http.ResponseWriter, r *http.Request) {
 
 // Quota holds quota information
 type Quota struct {
-	Free       int64   `json:"free" xml:"free"`
-	Used       int64   `json:"used" xml:"used"`
-	Total      int64   `json:"total" xml:"total"`
-	Relative   float32 `json:"relative" xml:"relative"`
-	Definition string  `json:"definition" xml:"definition"`
+	Free       int64   `json:"free,omitempty" xml:"free,omitempty"`
+	Used       int64   `json:"used,omitempty" xml:"used,omitempty"`
+	Total      int64   `json:"total,omitempty" xml:"total,omitempty"`
+	Relative   float32 `json:"relative,omitempty" xml:"relative,omitempty"`
+	Definition string  `json:"definition,omitempty" xml:"definition,omitempty"`
 }
 
-// Users holds users data
-type Users struct {
-	Quota       *Quota `json:"quota" xml:"quota"`
-	Email       string `json:"email" xml:"email"`
-	DisplayName string `json:"displayname" xml:"displayname"`
-	UserType    string `json:"user-type" xml:"user-type"`
+// User holds user data
+type User struct {
+	Enabled           string `json:"enabled" xml:"enabled"`
+	UserType          string `json:"user-type" xml:"user-type"`
+	UserID            string `json:"id" xml:"id"` // UserID is mapped to the preferred_name attribute in accounts
+	DisplayName       string `json:"display-name" xml:"display-name"`
+	LegacyDisplayName string `json:"displayname" xml:"displayname"`
+	Email             string `json:"email" xml:"email"`
+	Quota             *Quota `json:"quota,omitempty" xml:"quota,omitempty"`
+	UIDNumber         int64  `json:"uidnumber" xml:"uidnumber"`
+	GIDNumber         int64  `json:"gidnumber" xml:"gidnumber"`
 	// FIXME home should never be exposed ... even in oc 10
 	// home
 	TwoFactorAuthEnabled bool `json:"two_factor_auth_enabled" xml:"two_factor_auth_enabled"`
@@ -96,40 +103,71 @@ type Groups struct {
 // Only allow self-read currently. TODO: List Users and Get on other users (both require
 // administrative privileges)
 func (h *Handler) GetUsers(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	sublog := appctx.GetLogger(r.Context())
+	userid := chi.URLParam(r, "userid")
+	userid, err := url.PathUnescape(userid)
+	if err != nil {
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "could not unescape username", err)
+		return
+	}
 
-	user := chi.URLParam(r, "userid")
-	// FIXME use ldap to fetch user info
-	u, ok := ctxpkg.ContextGetUser(ctx)
+	currentUser, ok := ctxpkg.ContextGetUser(r.Context())
 	if !ok {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "missing user in context", fmt.Errorf("missing user in context"))
 		return
 	}
-	if user != u.Username {
+
+	var user *cs3identity.User
+	switch {
+	case userid == "":
+		response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "missing username", fmt.Errorf("missing username"))
+		return
+	case userid == currentUser.Username:
+		user = currentUser
+	default:
 		// FIXME allow fetching other users info? only for admins
-		response.WriteOCSError(w, r, http.StatusForbidden, "user id mismatch", fmt.Errorf("%s tried to access %s user info endpoint", u.Id.OpaqueId, user))
+		response.WriteOCSError(w, r, http.StatusForbidden, "user id mismatch", fmt.Errorf("%s tried to access %s user info endpoint", currentUser.Id.OpaqueId, user))
 		return
 	}
+
+	d := &User{
+		UserID:            user.Username,
+		Enabled:           "true", // TODO include in response only when admin?
+		DisplayName:       user.DisplayName,
+		LegacyDisplayName: user.DisplayName,
+		Email:             user.Mail,
+		UserType:          conversions.UserTypeString(user.Id.Type),
+		Quota:             &Quota{},
+	}
+
+	// lightweight and federated users don't have access to their storage space
+	if currentUser.Id.Type != cs3identity.UserType_USER_TYPE_LIGHTWEIGHT && currentUser.Id.Type != cs3identity.UserType_USER_TYPE_FEDERATED {
+		h.fillPersonalQuota(r.Context(), d, user)
+	}
+
+	response.WriteOCSSuccess(w, r, d)
+}
+
+func (h Handler) fillPersonalQuota(ctx context.Context, d *User, u *cs3identity.User) {
+
+	sublog := appctx.GetLogger(ctx)
 
 	gc, err := pool.GetGatewayServiceClient(h.gatewayAddr)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error getting gateway client")
-		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
-	res, err := gc.ListStorageSpaces(ctx, &provider.ListStorageSpacesRequest{
-		Filters: []*provider.ListStorageSpacesRequest_Filter{
+	res, err := gc.ListStorageSpaces(ctx, &cs3storage.ListStorageSpacesRequest{
+		Filters: []*cs3storage.ListStorageSpacesRequest_Filter{
 			{
-				Type: provider.ListStorageSpacesRequest_Filter_TYPE_OWNER,
-				Term: &provider.ListStorageSpacesRequest_Filter_Owner{
+				Type: cs3storage.ListStorageSpacesRequest_Filter_TYPE_OWNER,
+				Term: &cs3storage.ListStorageSpacesRequest_Filter_Owner{
 					Owner: u.Id,
 				},
 			},
 			{
-				Type: provider.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE,
-				Term: &provider.ListStorageSpacesRequest_Filter_SpaceType{
+				Type: cs3storage.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE,
+				Term: &cs3storage.ListStorageSpacesRequest_Filter_SpaceType{
 					SpaceType: "personal",
 				},
 			},
@@ -137,57 +175,56 @@ func (h *Handler) GetUsers(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		sublog.Error().Err(err).Msg("error calling ListStorageSpaces")
-		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	if res.Status.Code != rpc.Code_CODE_OK {
-		errors.HandleErrorStatus(sublog, w, res.Status)
+	if res.Status.Code != cs3rpc.Code_CODE_OK {
 		return
 	}
 
 	if len(res.StorageSpaces) == 0 {
 		sublog.Error().Err(err).Msg("list spaces returned empty list")
-		w.WriteHeader(http.StatusInternalServerError)
 		return
 
 	}
 
-	var total, used uint64
-	var relative float32
-	// lightweight and federated accounts don't have access to their storage space
-	if u.Id.Type != userpb.UserType_USER_TYPE_LIGHTWEIGHT && u.Id.Type != userpb.UserType_USER_TYPE_FEDERATED {
-		getQuotaRes, err := gc.GetQuota(ctx, &gateway.GetQuotaRequest{Ref: &provider.Reference{
-			ResourceId: res.StorageSpaces[0].Root,
-			Path:       ".",
-		}})
-		if err != nil {
-			sublog.Error().Err(err).Msg("error calling GetQuota")
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-
-		if getQuotaRes.Status.Code != rpc.Code_CODE_OK {
-			errors.HandleErrorStatus(sublog, w, getQuotaRes.Status)
-			return
-		}
-		total = getQuotaRes.TotalBytes
-		used = getQuotaRes.UsedBytes
-		relative = float32(float64(used) / float64(total))
+	getQuotaRes, err := gc.GetQuota(ctx, &cs3gateway.GetQuotaRequest{Ref: &cs3storage.Reference{
+		ResourceId: res.StorageSpaces[0].Root,
+		Path:       ".",
+	}})
+	if err != nil {
+		sublog.Error().Err(err).Msg("error calling GetQuota")
+		return
+	}
+	if res.Status.Code != cs3rpc.Code_CODE_OK {
+		sublog.Debug().Interface("status", res.Status).Msg("GetQuota returned non OK result")
+		return
 	}
 
-	response.WriteOCSSuccess(w, r, &Users{
-		// ocs can only return the home storage quota
-		Quota: &Quota{
-			Free: int64(total - used),
-			Used: int64(used),
-			// TODO support negative values or flags for the quota to carry special meaning: -1 = uncalculated, -2 = unknown, -3 = unlimited
-			// for now we can only report total and used
-			Total:      int64(total),
-			Relative:   relative,
-			Definition: "default",
-		},
-		DisplayName: u.DisplayName,
-		Email:       u.Mail,
-		UserType:    conversions.UserTypeString(u.Id.Type),
-	})
+	total := getQuotaRes.TotalBytes
+	used := getQuotaRes.UsedBytes
+
+	d.Quota = &Quota{
+		Used: int64(used),
+		// TODO support negative values or flags for the quota to carry special meaning: -1 = uncalculated, -2 = unknown, -3 = unlimited
+		// for now we can only report total and used
+		Total: int64(total),
+		// we cannot differentiate between `default` or a human readable `1 GB` defanation.
+		// The web ui can create a human readable string from the actual total if it is sot. Otherwise it has to leave out relative and total anyway.
+		// Definition: "default",
+	}
+
+	if getQuotaRes.Opaque != nil {
+		m := getQuotaRes.Opaque.Map
+		if e, ok := m["remaining"]; ok {
+			d.Quota.Free, _ = strconv.ParseInt(string(e.Value), 10, 64)
+		}
+	}
+
+	// only calculate free and relative when total is available
+	if total > 0 {
+		d.Quota.Free = int64(total - used)
+		d.Quota.Relative = float32(float64(used) / float64(total))
+	} else {
+		d.Quota.Definition = "none" // this indicates no quota / unlimited to the ui
+	}
 }
