@@ -4,10 +4,10 @@
 Basic file management like up and download, move, copy, properties, quota, trash, versions and chunking.
 
 #### [invalid webdav responses for unauthorized requests.](https://github.com/owncloud/product/issues/273)
-- [apiTrashbin/trashbinFilesFolders.feature:267](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L267)
-- [apiTrashbin/trashbinFilesFolders.feature:272](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L272)
-- [apiTrashbin/trashbinFilesFolders.feature:286](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L286)
-- [apiTrashbin/trashbinFilesFolders.feature:291](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L291)
+- [apiTrashbin/trashbinFilesFolders.feature:297](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L297)
+- [apiTrashbin/trashbinFilesFolders.feature:302](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L302)
+- [apiTrashbin/trashbinFilesFolders.feature:316](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L316)
+- [apiTrashbin/trashbinFilesFolders.feature:321](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L321)
 
 #### [downloading an old version of a file returns 501](https://github.com/owncloud/ocis/issues/2261)
 - [apiVersions/fileVersionsSharingToShares.feature:306](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersionsSharingToShares.feature#L306)
@@ -1521,8 +1521,8 @@ _ocs: api compatibility, return correct status code_
 - [apiWebdavOperations/listFiles.feature:423](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavOperations/listFiles.feature#L423)
 - [apiWebdavOperations/listFiles.feature:428](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavOperations/listFiles.feature#L428)
 - [apiWebdavOperations/listFiles.feature:443](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavOperations/listFiles.feature#L443)
-- [apiWebdavOperations/listFiles.feature:444](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavOperations/listFiles.feature#L444)
-- [apiWebdavOperations/listFiles.feature:449](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavOperations/listFiles.feature#L449)
+- [apiWebdavOperations/listFiles.feature:442](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavOperations/listFiles.feature#L442)
+- [apiWebdavOperations/listFiles.feature:448](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavOperations/listFiles.feature#L448)
 
 ### [[spaces webdav] upload to a share that was locked by owner ends with status code 409](https://github.com/owncloud/ocis/issues/3128)
 - [apiWebdavLocks2/resharedSharesToShares.feature:39](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavLocks2/resharedSharesToShares.feature#L39)
@@ -1561,6 +1561,9 @@ _ocs: api compatibility, return correct status code_
 - [apiTrashbin/trashbinFilesFolders.feature:223](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L223)
 - [apiTrashbin/trashbinFilesFolders.feature:248](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L248)
 - [apiTrashbin/trashbinFilesFolders.feature:253](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L253)
+- [apiTrashbin/trashbinFilesFolders.feature:269](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L269)
+- [apiTrashbin/trashbinFilesFolders.feature:278](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L278)
+- [apiTrashbin/trashbinFilesFolders.feature:283](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L283)
 
 #### [HTTP status code differ while deleting file of another user's trash bin](https://github.com/owncloud/ocis/issues/3544)
 - [apiTrashbin/trashbinDelete.feature:108](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinDelete.feature#L108)
@@ -1584,16 +1587,16 @@ _ocs: api compatibility, return correct status code_
 - [apiTrashbin/trashbinFilesFolders.feature:99](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L99)
 - [apiTrashbin/trashbinFilesFolders.feature:135](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L135)
 - [apiTrashbin/trashbinFilesFolders.feature:158](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L158)
-- [apiTrashbin/trashbinFilesFolders.feature:313](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L313)
-- [apiTrashbin/trashbinFilesFolders.feature:314](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L314)
-- [apiTrashbin/trashbinFilesFolders.feature:315](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L315)
-- [apiTrashbin/trashbinFilesFolders.feature:316](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L316)
-- [apiTrashbin/trashbinFilesFolders.feature:317](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L317)
-- [apiTrashbin/trashbinFilesFolders.feature:318](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L318)
-- [apiTrashbin/trashbinFilesFolders.feature:334](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L334)
-- [apiTrashbin/trashbinFilesFolders.feature:354](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L354)
-- [apiTrashbin/trashbinFilesFolders.feature:408](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L408)
-- [apiTrashbin/trashbinFilesFolders.feature:445](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L445)
+- [apiTrashbin/trashbinFilesFolders.feature:343](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L343)
+- [apiTrashbin/trashbinFilesFolders.feature:344](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L344)
+- [apiTrashbin/trashbinFilesFolders.feature:345](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L345)
+- [apiTrashbin/trashbinFilesFolders.feature:346](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L346)
+- [apiTrashbin/trashbinFilesFolders.feature:347](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L347)
+- [apiTrashbin/trashbinFilesFolders.feature:348](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L348)
+- [apiTrashbin/trashbinFilesFolders.feature:364](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L364)
+- [apiTrashbin/trashbinFilesFolders.feature:384](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L384)
+- [apiTrashbin/trashbinFilesFolders.feature:438](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L438)
+- [apiTrashbin/trashbinFilesFolders.feature:475](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L475)
 
 Note: always have an empty line at the end of this file.
 The bash script that processes this file may not process a scenario reference on the last line.
