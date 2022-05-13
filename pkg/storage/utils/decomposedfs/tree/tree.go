@@ -384,50 +384,8 @@ func (t *Tree) ListFolder(ctx context.Context, n *node.Node) ([]*node.Node, erro
 	return nodes, nil
 }
 
-// Delete deletes a node and all its children in the tree by moving them to the trash
+// Delete deletes a node in the tree by moving it to the trash
 func (t *Tree) Delete(ctx context.Context, n *node.Node) (err error) {
-	nodes, err := appendChildren(ctx, n, nil)
-	if err != nil {
-		return err
-	}
-
-	// traverse tree from leave to root
-	for i := len(nodes) - 1; i >= 0; i-- {
-		if err := t.delete(ctx, nodes[i]); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// appendChildren appends `n` and all its children to `nodes`
-func appendChildren(ctx context.Context, n *node.Node, nodes []*node.Node) ([]*node.Node, error) {
-	nodes = append(nodes, n)
-
-	children, err := os.ReadDir(n.InternalPath())
-	if err != nil {
-		// TODO: How to differentiate folders from files?
-		return nodes, nil
-	}
-
-	for _, c := range children {
-		cn, err := n.Child(ctx, c.Name())
-		if err != nil {
-			// continue?
-			return nil, err
-		}
-		nodes, err = appendChildren(ctx, cn, nodes)
-		if err != nil {
-			// continue?
-			return nil, err
-		}
-	}
-
-	return nodes, nil
-}
-
-// Delete deletes one node in the tree by moving it to the trash
-func (t *Tree) delete(ctx context.Context, n *node.Node) (err error) {
 	deletingSharedResource := ctx.Value(appctx.DeletingSharedResource)
 
 	if deletingSharedResource != nil && deletingSharedResource.(bool) {
@@ -580,6 +538,20 @@ func (t *Tree) PurgeRecycleItemFunc(ctx context.Context, spaceid, key string, pa
 		return nil, nil, err
 	}
 
+	// only the root node is trashed, the rest is still in normal file system
+	children, err := os.ReadDir(deletedNodePath)
+	var nodes []*node.Node
+	for _, c := range children {
+		n, _, _, _, err := t.readRecycleItem(ctx, spaceid, key, filepath.Join(path, c.Name()))
+		if err != nil {
+			return nil, nil, err
+		}
+		nodes, err = appendChildren(ctx, n, nodes)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+
 	fn := func() error {
 		// delete the actual node
 		// TODO recursively delete children
@@ -600,6 +572,23 @@ func (t *Tree) PurgeRecycleItemFunc(ctx context.Context, spaceid, key string, pa
 		if err = os.Remove(trashItem); err != nil {
 			log.Error().Err(err).Str("trashItem", trashItem).Msg("error deleting trash item")
 			return err
+		}
+
+		// delete children
+		for i := len(nodes) - 1; i >= 0; i-- {
+			n := nodes[i]
+			if err := os.RemoveAll(n.InternalPath()); err != nil {
+				log.Error().Err(err).Str("deletedNodePath", deletedNodePath).Msg("error deleting trash node")
+				return err
+			}
+			if n.BlobID != "" {
+				if err = t.DeleteBlob(n); err != nil {
+					log.Error().Err(err).Str("trashItem", trashItem).Msg("error deleting item blob")
+					return err
+				}
+
+			}
+
 		}
 
 		return nil
@@ -907,4 +896,30 @@ func (t *Tree) readRecycleItem(ctx context.Context, spaceID, key, path string) (
 	}
 
 	return
+}
+
+// appendChildren appends `n` and all its children to `nodes`
+func appendChildren(ctx context.Context, n *node.Node, nodes []*node.Node) ([]*node.Node, error) {
+	nodes = append(nodes, n)
+
+	children, err := os.ReadDir(n.InternalPath())
+	if err != nil {
+		// TODO: How to differentiate folders from files?
+		return nodes, nil
+	}
+
+	for _, c := range children {
+		cn, err := n.Child(ctx, c.Name())
+		if err != nil {
+			// continue?
+			return nil, err
+		}
+		nodes, err = appendChildren(ctx, cn, nodes)
+		if err != nil {
+			// continue?
+			return nil, err
+		}
+	}
+
+	return nodes, nil
 }
