@@ -33,19 +33,6 @@ type Options struct {
 	MaxCallRecvMsgSize int `mapstructure:"client_recv_msg_size"`
 }
 
-// newOptions initializes the available default options.
-func newOptions(opts ...Option) Options {
-	opt := Options{
-		MaxCallRecvMsgSize: defaultMaxCallRecvMsgSize,
-	}
-
-	for _, o := range opts {
-		o(&opt)
-	}
-
-	return opt
-}
-
 // NewOptions initializes the available default options.
 func NewOptions(conf interface{}, opts ...Option) (*Options, error) {
 	opt := &Options{}

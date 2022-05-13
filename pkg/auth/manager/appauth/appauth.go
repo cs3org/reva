@@ -38,7 +38,8 @@ func init() {
 }
 
 type manager struct {
-	GatewayAddr string `mapstructure:"gateway_addr"`
+	GatewayAddr        string `mapstructure:"gateway_addr"`
+	MaxCallRecvMsgSize int    `mapstructure:"client_recv_msg_size"`
 }
 
 // New returns a new auth Manager.

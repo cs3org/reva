@@ -118,6 +118,7 @@ type config struct {
 	EnableHome               bool   `mapstructure:"enable_home"`
 	Scan                     bool   `mapstructure:"scan"`
 	UserProviderEndpoint     string `mapstructure:"userprovidersvc"`
+	MaxCallRecvMsgSize       int    `mapstructure:"client_recv_msg_size"`
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {

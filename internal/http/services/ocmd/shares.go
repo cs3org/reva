@@ -42,11 +42,13 @@ import (
 )
 
 type sharesHandler struct {
-	gatewayAddr string
+	gatewayAddr        string
+	maxCallRecvMsgSize int `mapstructure:"client_recv_msg_size"`
 }
 
 func (h *sharesHandler) init(c *Config) {
 	h.gatewayAddr = c.GatewaySvc
+	h.maxCallRecvMsgSize = c.MaxCallRecvMsgSize
 }
 
 func (h *sharesHandler) Handler() http.Handler {

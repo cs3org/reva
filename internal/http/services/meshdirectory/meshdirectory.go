@@ -44,8 +44,9 @@ func init() {
 }
 
 type config struct {
-	Prefix     string `mapstructure:"prefix"`
-	GatewaySvc string `mapstructure:"gatewaysvc"`
+	Prefix             string `mapstructure:"prefix"`
+	GatewaySvc         string `mapstructure:"gatewaysvc"`
+	MaxCallRecvMsgSize int    `mapstructure:"client_recv_msg_size"`
 }
 
 func (c *config) init() {

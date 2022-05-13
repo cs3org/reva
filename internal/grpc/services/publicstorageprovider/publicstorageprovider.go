@@ -49,9 +49,10 @@ func init() {
 }
 
 type config struct {
-	MountPath   string `mapstructure:"mount_path"`
-	MountID     string `mapstructure:"mount_id"`
-	GatewayAddr string `mapstructure:"gateway_addr"`
+	MountPath          string `mapstructure:"mount_path"`
+	MountID            string `mapstructure:"mount_id"`
+	GatewayAddr        string `mapstructure:"gateway_addr"`
+	MaxCallRecvMsgSize int    `mapstructure:"client_recv_msg_size"`
 }
 
 type service struct {

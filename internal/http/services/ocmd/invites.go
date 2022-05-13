@@ -40,13 +40,15 @@ import (
 )
 
 type invitesHandler struct {
-	smtpCredentials  *smtpclient.SMTPCredentials
-	gatewayAddr      string
-	meshDirectoryURL string
+	smtpCredentials    *smtpclient.SMTPCredentials
+	gatewayAddr        string
+	meshDirectoryURL   string
+	maxCallRecvMsgSize int `mapstructure:"client_recv_msg_size"`
 }
 
 func (h *invitesHandler) init(c *Config) {
 	h.gatewayAddr = c.GatewaySvc
+	h.maxCallRecvMsgSize = c.MaxCallRecvMsgSize
 	if c.SMTPCredentials != nil {
 		h.smtpCredentials = smtpclient.NewSMTPCredentials(c.SMTPCredentials)
 	}

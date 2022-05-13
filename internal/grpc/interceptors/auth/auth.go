@@ -47,9 +47,10 @@ var scopeExpansionCache gcache.Cache
 type config struct {
 	// TODO(labkode): access a map is more performant as uri as fixed in length
 	// for SkipMethods.
-	TokenManager  string                            `mapstructure:"token_manager"`
-	TokenManagers map[string]map[string]interface{} `mapstructure:"token_managers"`
-	GatewayAddr   string                            `mapstructure:"gateway_addr"`
+	TokenManager       string                            `mapstructure:"token_manager"`
+	TokenManagers      map[string]map[string]interface{} `mapstructure:"token_managers"`
+	GatewayAddr        string                            `mapstructure:"gateway_addr"`
+	MaxCallRecvMsgSize int                               `mapstructure:"client_recv_msg_size"`
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {

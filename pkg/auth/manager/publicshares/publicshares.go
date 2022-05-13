@@ -47,7 +47,8 @@ type manager struct {
 }
 
 type config struct {
-	GatewayAddr string `mapstructure:"gateway_addr"`
+	GatewayAddr        string `mapstructure:"gateway_addr"`
+	MaxCallRecvMsgSize int    `mapstructure:"client_recv_msg_size"`
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {

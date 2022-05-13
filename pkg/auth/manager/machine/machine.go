@@ -42,8 +42,9 @@ import (
 var claims = []string{"mail", "uid", "username", "gid", "userid"}
 
 type manager struct {
-	APIKey      string `mapstructure:"api_key"`
-	GatewayAddr string `mapstructure:"gateway_addr"`
+	APIKey             string `mapstructure:"api_key"`
+	GatewayAddr        string `mapstructure:"gateway_addr"`
+	MaxCallRecvMsgSize int    `mapstructure:"client_recv_msg_size"`
 }
 
 func init() {

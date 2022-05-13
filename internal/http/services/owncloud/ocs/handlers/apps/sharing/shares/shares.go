@@ -73,6 +73,7 @@ type Handler struct {
 	userIdentifierCache    *ttlcache.Cache
 	resourceInfoCache      cache.ResourceInfoCache
 	resourceInfoCacheTTL   time.Duration
+	maxCallRecvMsgSize     int `mapstructure:"client_recv_msg_size"`
 }
 
 // we only cache the minimal set of data instead of the full user metadata
@@ -106,6 +107,7 @@ func (h *Handler) Init(c *config.Config) {
 
 	h.additionalInfoTemplate, _ = template.New("additionalInfo").Parse(c.AdditionalInfoAttribute)
 	h.resourceInfoCacheTTL = time.Second * time.Duration(c.ResourceInfoCacheTTL)
+	h.maxCallRecvMsgSize = c.MaxCallRecvMsgSize
 
 	h.userIdentifierCache = ttlcache.NewCache()
 	_ = h.userIdentifierCache.SetTTL(time.Second * time.Duration(c.UserIdentifierCacheTTL))

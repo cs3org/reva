@@ -52,12 +52,13 @@ type service struct {
 }
 
 type config struct {
-	Driver         string                            `mapstructure:"driver"`
-	Drivers        map[string]map[string]interface{} `mapstructure:"drivers"`
-	AppProviderURL string                            `mapstructure:"app_provider_url"`
-	GatewaySvc     string                            `mapstructure:"gatewaysvc"`
-	MimeTypes      []string                          `mapstructure:"mime_types"`
-	Priority       uint64                            `mapstructure:"priority"`
+	Driver             string                            `mapstructure:"driver"`
+	Drivers            map[string]map[string]interface{} `mapstructure:"drivers"`
+	AppProviderURL     string                            `mapstructure:"app_provider_url"`
+	GatewaySvc         string                            `mapstructure:"gatewaysvc"`
+	MimeTypes          []string                          `mapstructure:"mime_types"`
+	Priority           uint64                            `mapstructure:"priority"`
+	MaxCallRecvMsgSize int                               `mapstructure:"client_recv_msg_size"`
 }
 
 func (c *config) init() {

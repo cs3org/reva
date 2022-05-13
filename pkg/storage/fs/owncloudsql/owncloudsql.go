@@ -118,6 +118,7 @@ type config struct {
 	DbHost                   string `mapstructure:"dbhost"`
 	DbPort                   int    `mapstructure:"dbport"`
 	DbName                   string `mapstructure:"dbname"`
+	MaxCallRecvMsgSize       int    `mapstructure:"client_recv_msg_size"`
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {

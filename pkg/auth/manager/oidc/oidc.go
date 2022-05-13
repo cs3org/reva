@@ -58,14 +58,15 @@ type mgr struct {
 }
 
 type config struct {
-	Insecure     bool   `mapstructure:"insecure" docs:"false;Whether to skip certificate checks when sending requests."`
-	Issuer       string `mapstructure:"issuer" docs:";The issuer of the OIDC token."`
-	IDClaim      string `mapstructure:"id_claim" docs:"sub;The claim containing the ID of the user."`
-	UIDClaim     string `mapstructure:"uid_claim" docs:";The claim containing the UID of the user."`
-	GIDClaim     string `mapstructure:"gid_claim" docs:";The claim containing the GID of the user."`
-	GatewaySvc   string `mapstructure:"gatewaysvc" docs:";The endpoint at which the GRPC gateway is exposed."`
-	UsersMapping string `mapstructure:"users_mapping" docs:"; The optional OIDC users mapping file path"`
-	GroupClaim   string `mapstructure:"group_claim" docs:"; The group claim to be looked up to map the user (default to 'groups')."`
+	Insecure           bool   `mapstructure:"insecure" docs:"false;Whether to skip certificate checks when sending requests."`
+	Issuer             string `mapstructure:"issuer" docs:";The issuer of the OIDC token."`
+	IDClaim            string `mapstructure:"id_claim" docs:"sub;The claim containing the ID of the user."`
+	UIDClaim           string `mapstructure:"uid_claim" docs:";The claim containing the UID of the user."`
+	GIDClaim           string `mapstructure:"gid_claim" docs:";The claim containing the GID of the user."`
+	GatewaySvc         string `mapstructure:"gatewaysvc" docs:";The endpoint at which the GRPC gateway is exposed."`
+	UsersMapping       string `mapstructure:"users_mapping" docs:"; The optional OIDC users mapping file path"`
+	GroupClaim         string `mapstructure:"group_claim" docs:"; The group claim to be looked up to map the user (default to 'groups')."`
+	MaxCallRecvMsgSize int    `mapstructure:"client_recv_msg_size"`
 }
 
 type oidcUserMapping struct {

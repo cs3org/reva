@@ -62,13 +62,15 @@ type UserConverter interface {
 
 // GatewayUserConverter converts usernames and ids using the gateway
 type GatewayUserConverter struct {
-	gwAddr string
+	gwAddr             string
+	maxCallRecvMsgSize int `mapstructure:"client_recv_msg_size"`
 }
 
 // NewGatewayUserConverter returns a instance of GatewayUserConverter
-func NewGatewayUserConverter(gwAddr string) *GatewayUserConverter {
+func NewGatewayUserConverter(gwAddr string, maxCallRecvMsgSize int) *GatewayUserConverter {
 	return &GatewayUserConverter{
-		gwAddr: gwAddr,
+		gwAddr:             gwAddr,
+		maxCallRecvMsgSize: maxCallRecvMsgSize,
 	}
 }
 

@@ -49,14 +49,15 @@ type mgr struct {
 }
 
 type config struct {
-	utils.LDAPConn `mapstructure:",squash"`
-	BaseDN         string     `mapstructure:"base_dn"`
-	UserFilter     string     `mapstructure:"userfilter"`
-	LoginFilter    string     `mapstructure:"loginfilter"`
-	Idp            string     `mapstructure:"idp"`
-	GatewaySvc     string     `mapstructure:"gatewaysvc"`
-	Schema         attributes `mapstructure:"schema"`
-	Nobody         int64      `mapstructure:"nobody"`
+	utils.LDAPConn     `mapstructure:",squash"`
+	BaseDN             string     `mapstructure:"base_dn"`
+	UserFilter         string     `mapstructure:"userfilter"`
+	LoginFilter        string     `mapstructure:"loginfilter"`
+	Idp                string     `mapstructure:"idp"`
+	GatewaySvc         string     `mapstructure:"gatewaysvc"`
+	Schema             attributes `mapstructure:"schema"`
+	Nobody             int64      `mapstructure:"nobody"`
+	MaxCallRecvMsgSize int        `mapstructure:"client_recv_msg_size"`
 }
 
 type attributes struct {
