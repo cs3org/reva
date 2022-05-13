@@ -483,7 +483,7 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 
 	var oldSize uint64
 	if n.ID != "" {
-		old, _ := node.ReadNode(ctx, upload.fs.lu, spaceID, n.ID)
+		old, _ := node.ReadNode(ctx, upload.fs.lu, spaceID, n.ID, false)
 		oldSize = uint64(old.Blobsize)
 	}
 	_, err = node.CheckQuota(n.SpaceRoot, n.ID != "", oldSize, uint64(fi.Size()))
