@@ -210,7 +210,7 @@ func (t *TestEnv) CreateTestStorageSpace(typ string, quota *providerv1beta1.Quot
 	if err != nil {
 		return nil, err
 	}
-	h, err := node.ReadNode(t.Ctx, t.Lookup, sid.StorageId, sid.OpaqueId, false))
+	h, err := node.ReadNode(t.Ctx, t.Lookup, sid.StorageId, sid.OpaqueId, false)
 	if err != nil {
 		return nil, err
 	}

@@ -124,7 +124,7 @@ var _ = Describe("File uploads", func() {
 		Expect(resp.Status.Code).To(Equal(v1beta11.Code_CODE_OK))
 		resID, err := storagespace.ParseID(resp.StorageSpace.Id.OpaqueId)
 		Expect(err).ToNot(HaveOccurred())
-		ref.ResourceId = &provider.ResourceId{StorageId: resID.StorageId, OpaqueId: resID.StorageId}
+		ref.ResourceId = &provider.ResourceId{StorageId: resID.StorageId, OpaqueId: resID.OpaqueId}
 	})
 
 	Context("the user's quota is exceeded", func() {
