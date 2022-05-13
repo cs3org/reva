@@ -74,7 +74,7 @@ func (lu *Lookup) NodeFromID(ctx context.Context, id *provider.ResourceId) (n *n
 		// The Resource references the root of a space
 		return lu.NodeFromSpaceID(ctx, id)
 	}
-	return node.ReadNode(ctx, lu, id.StorageId, id.OpaqueId)
+	return node.ReadNode(ctx, lu, id.StorageId, id.OpaqueId, false)
 }
 
 // Pathify segments the beginning of a string into depth segments of width length
@@ -95,7 +95,7 @@ func Pathify(id string, depth, width int) string {
 
 // NodeFromSpaceID converts a resource id without an opaque id into a Node
 func (lu *Lookup) NodeFromSpaceID(ctx context.Context, id *provider.ResourceId) (n *node.Node, err error) {
-	node, err := node.ReadNode(ctx, lu, id.StorageId, id.StorageId)
+	node, err := node.ReadNode(ctx, lu, id.StorageId, id.StorageId, false)
 	if err != nil {
 		return nil, err
 	}

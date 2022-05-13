@@ -371,7 +371,7 @@ func (t *Tree) ListFolder(ctx context.Context, n *node.Node) ([]*node.Node, erro
 			continue
 		}
 
-		child, err := node.ReadNode(ctx, t.lookup, n.SpaceID, nodeID)
+		child, err := node.ReadNode(ctx, t.lookup, n.SpaceID, nodeID, false)
 		if err != nil {
 			// TODO log
 			continue
@@ -826,7 +826,7 @@ func (t *Tree) readRecycleItem(ctx context.Context, spaceID, key, path string) (
 	}
 
 	recycleNode = node.New(spaceID, nodeID, "", "", 0, "", nil, t.lookup)
-	recycleNode.SpaceRoot, err = node.ReadNode(ctx, t.lookup, spaceID, spaceID)
+	recycleNode.SpaceRoot, err = node.ReadNode(ctx, t.lookup, spaceID, spaceID, false)
 	if err != nil {
 		return
 	}

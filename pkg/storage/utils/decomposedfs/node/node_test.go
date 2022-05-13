@@ -71,7 +71,7 @@ var _ = Describe("Node", func() {
 			})
 			Expect(err).ToNot(HaveOccurred())
 
-			n, err := node.ReadNode(env.Ctx, env.Lookup, lookupNode.SpaceID, lookupNode.ID)
+			n, err := node.ReadNode(env.Ctx, env.Lookup, lookupNode.SpaceID, lookupNode.ID, false)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(n.BlobID).To(Equal("file1-blobid"))
 		})
