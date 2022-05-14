@@ -8,14 +8,11 @@ description: >
 
 # _struct: Config_
 
-{{% dir name="drivers" type="map[string]map[string]interface{}" default="localhome" %}}
- [[Ref]](https://github.com/cs3org/reva/tree/master/internal/http/services/owncloud/ocdav/ocdav.go#L110)
+{{% dir name="insecure" type="bool" default=false %}}
+Whether to skip certificate checks when sending requests. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/http/services/owncloud/ocdav/ocdav.go#L102)
 {{< highlight toml >}}
-[http.services.owncloud.ocdav.drivers.localhome]
-root = "/var/tmp/reva/"
-share_folder = "/MyShares"
-user_layout = "{{.Username}}"
-
+[http.services.owncloud.ocdav]
+insecure = false
 {{< /highlight >}}
 {{% /dir %}}
 
