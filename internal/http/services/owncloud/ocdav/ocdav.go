@@ -98,13 +98,16 @@ type Config struct {
 	// /users/<first char of username>/<username>/docs
 	WebdavNamespace string `mapstructure:"webdav_namespace"`
 	GatewaySvc      string `mapstructure:"gatewaysvc"`
-	Timeout         int64  `mapstructure:"timeout"`
-	Insecure        bool   `mapstructure:"insecure"`
 	// If true, HTTP COPY will expect the HTTP-TPC (third-party copy) headers
-	EnableHTTPTpc          bool                              `mapstructure:"enable_http_tpc"`
 	PublicURL              string                            `mapstructure:"public_url"`
 	FavoriteStorageDriver  string                            `mapstructure:"favorite_storage_driver"`
+	CACertFile             string                            `mapstructure:"ca_certfile"`
 	FavoriteStorageDrivers map[string]map[string]interface{} `mapstructure:"favorite_storage_drivers"`
+	Timeout                int64                             `mapstructure:"timeout"`
+	MaxCallRecvMsgSize     int                               `mapstructure:"client_recv_msg_size"`
+	EnableHTTPTpc          bool                              `mapstructure:"enable_http_tpc"`
+	Insecure               bool                              `mapstructure:"insecure"`
+	SkipVerify             bool                              `mapstructure:"skip_verify"`
 }
 
 func (c *Config) init() {
@@ -255,7 +258,13 @@ func (s *svc) Handler() http.Handler {
 }
 
 func (s *svc) getClient() (gateway.GatewayAPIClient, error) {
-	return pool.GetGatewayServiceClient(pool.Endpoint(s.c.GatewaySvc))
+	return pool.GetGatewayServiceClient(
+		pool.Endpoint(s.c.GatewaySvc),
+		pool.Insecure(s.c.Insecure),
+		pool.SkipVerify(s.c.SkipVerify),
+		pool.CACertFile(s.c.CACertFile),
+		pool.MaxCallRecvMsgSize(s.c.MaxCallRecvMsgSize),
+	)
 }
 
 func applyLayout(ctx context.Context, ns string, useLoggedInUserNS bool, requestPath string) string {

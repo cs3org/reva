@@ -1,4 +1,5 @@
 [shared]
+insecure = true
 gatewaysvc = "localhost:29000"
 datagateway = "http://localhost:29001/datagateway"
 

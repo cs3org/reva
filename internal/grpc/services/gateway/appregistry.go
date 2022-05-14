@@ -27,8 +27,17 @@ import (
 	"github.com/pkg/errors"
 )
 
-func (s *svc) GetAppProviders(ctx context.Context, req *registry.GetAppProvidersRequest) (*registry.GetAppProvidersResponse, error) {
-	c, err := pool.GetAppRegistryClient(pool.Endpoint(s.c.AppRegistryEndpoint))
+func (s *svc) GetAppProviders(
+	ctx context.Context,
+	req *registry.GetAppProvidersRequest,
+) (*registry.GetAppProvidersResponse, error) {
+	c, err := pool.GetAppRegistryClient(
+		pool.Endpoint(s.c.AppRegistryEndpoint),
+		pool.Insecure(s.c.Insecure),
+		pool.SkipVerify(s.c.SkipVerify),
+		pool.CACertFile(s.c.CACertFile),
+		pool.MaxCallRecvMsgSize(s.c.MaxCallRecvMsgSize),
+	)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetAppRegistryClient")
 		return &registry.GetAppProvidersResponse{
@@ -44,8 +53,17 @@ func (s *svc) GetAppProviders(ctx context.Context, req *registry.GetAppProviders
 	return res, nil
 }
 
-func (s *svc) AddAppProvider(ctx context.Context, req *registry.AddAppProviderRequest) (*registry.AddAppProviderResponse, error) {
-	c, err := pool.GetAppRegistryClient(pool.Endpoint(s.c.AppRegistryEndpoint))
+func (s *svc) AddAppProvider(
+	ctx context.Context,
+	req *registry.AddAppProviderRequest,
+) (*registry.AddAppProviderResponse, error) {
+	c, err := pool.GetAppRegistryClient(
+		pool.Endpoint(s.c.AppRegistryEndpoint),
+		pool.Insecure(s.c.Insecure),
+		pool.SkipVerify(s.c.SkipVerify),
+		pool.CACertFile(s.c.CACertFile),
+		pool.MaxCallRecvMsgSize(s.c.MaxCallRecvMsgSize),
+	)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetAppRegistryClient")
 		return &registry.AddAppProviderResponse{
@@ -61,8 +79,17 @@ func (s *svc) AddAppProvider(ctx context.Context, req *registry.AddAppProviderRe
 	return res, nil
 }
 
-func (s *svc) ListAppProviders(ctx context.Context, req *registry.ListAppProvidersRequest) (*registry.ListAppProvidersResponse, error) {
-	c, err := pool.GetAppRegistryClient(pool.Endpoint(s.c.AppRegistryEndpoint))
+func (s *svc) ListAppProviders(
+	ctx context.Context,
+	req *registry.ListAppProvidersRequest,
+) (*registry.ListAppProvidersResponse, error) {
+	c, err := pool.GetAppRegistryClient(
+		pool.Endpoint(s.c.AppRegistryEndpoint),
+		pool.Insecure(s.c.Insecure),
+		pool.SkipVerify(s.c.SkipVerify),
+		pool.CACertFile(s.c.CACertFile),
+		pool.MaxCallRecvMsgSize(s.c.MaxCallRecvMsgSize),
+	)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetAppRegistryClient")
 		return &registry.ListAppProvidersResponse{
@@ -78,8 +105,17 @@ func (s *svc) ListAppProviders(ctx context.Context, req *registry.ListAppProvide
 	return res, nil
 }
 
-func (s *svc) ListSupportedMimeTypes(ctx context.Context, req *registry.ListSupportedMimeTypesRequest) (*registry.ListSupportedMimeTypesResponse, error) {
-	c, err := pool.GetAppRegistryClient(pool.Endpoint(s.c.AppRegistryEndpoint))
+func (s *svc) ListSupportedMimeTypes(
+	ctx context.Context,
+	req *registry.ListSupportedMimeTypesRequest,
+) (*registry.ListSupportedMimeTypesResponse, error) {
+	c, err := pool.GetAppRegistryClient(
+		pool.Endpoint(s.c.AppRegistryEndpoint),
+		pool.Insecure(s.c.Insecure),
+		pool.SkipVerify(s.c.SkipVerify),
+		pool.CACertFile(s.c.CACertFile),
+		pool.MaxCallRecvMsgSize(s.c.MaxCallRecvMsgSize),
+	)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetAppRegistryClient")
 		return &registry.ListSupportedMimeTypesResponse{
@@ -95,8 +131,17 @@ func (s *svc) ListSupportedMimeTypes(ctx context.Context, req *registry.ListSupp
 	return res, nil
 }
 
-func (s *svc) GetDefaultAppProviderForMimeType(ctx context.Context, req *registry.GetDefaultAppProviderForMimeTypeRequest) (*registry.GetDefaultAppProviderForMimeTypeResponse, error) {
-	c, err := pool.GetAppRegistryClient(pool.Endpoint(s.c.AppRegistryEndpoint))
+func (s *svc) GetDefaultAppProviderForMimeType(
+	ctx context.Context,
+	req *registry.GetDefaultAppProviderForMimeTypeRequest,
+) (*registry.GetDefaultAppProviderForMimeTypeResponse, error) {
+	c, err := pool.GetAppRegistryClient(
+		pool.Endpoint(s.c.AppRegistryEndpoint),
+		pool.Insecure(s.c.Insecure),
+		pool.SkipVerify(s.c.SkipVerify),
+		pool.CACertFile(s.c.CACertFile),
+		pool.MaxCallRecvMsgSize(s.c.MaxCallRecvMsgSize),
+	)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetAppRegistryClient")
 		return &registry.GetDefaultAppProviderForMimeTypeResponse{
@@ -112,8 +157,17 @@ func (s *svc) GetDefaultAppProviderForMimeType(ctx context.Context, req *registr
 	return res, nil
 }
 
-func (s *svc) SetDefaultAppProviderForMimeType(ctx context.Context, req *registry.SetDefaultAppProviderForMimeTypeRequest) (*registry.SetDefaultAppProviderForMimeTypeResponse, error) {
-	c, err := pool.GetAppRegistryClient(pool.Endpoint(s.c.AppRegistryEndpoint))
+func (s *svc) SetDefaultAppProviderForMimeType(
+	ctx context.Context,
+	req *registry.SetDefaultAppProviderForMimeTypeRequest,
+) (*registry.SetDefaultAppProviderForMimeTypeResponse, error) {
+	c, err := pool.GetAppRegistryClient(
+		pool.Endpoint(s.c.AppRegistryEndpoint),
+		pool.Insecure(s.c.Insecure),
+		pool.SkipVerify(s.c.SkipVerify),
+		pool.CACertFile(s.c.CACertFile),
+		pool.MaxCallRecvMsgSize(s.c.MaxCallRecvMsgSize),
+	)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetAppRegistryClient")
 		return &registry.SetDefaultAppProviderForMimeTypeResponse{

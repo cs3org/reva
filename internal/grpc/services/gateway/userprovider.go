@@ -28,7 +28,13 @@ import (
 )
 
 func (s *svc) GetUser(ctx context.Context, req *user.GetUserRequest) (*user.GetUserResponse, error) {
-	c, err := pool.GetUserProviderServiceClient(pool.Endpoint(s.c.UserProviderEndpoint))
+	c, err := pool.GetUserProviderServiceClient(
+		pool.Endpoint(s.c.UserProviderEndpoint),
+		pool.Insecure(s.c.Insecure),
+		pool.SkipVerify(s.c.SkipVerify),
+		pool.CACertFile(s.c.CACertFile),
+		pool.MaxCallRecvMsgSize(s.c.MaxCallRecvMsgSize),
+	)
 	if err != nil {
 		return &user.GetUserResponse{
 			Status: status.NewInternal(ctx, err, "error getting auth client"),
@@ -43,8 +49,17 @@ func (s *svc) GetUser(ctx context.Context, req *user.GetUserRequest) (*user.GetU
 	return res, nil
 }
 
-func (s *svc) GetUserByClaim(ctx context.Context, req *user.GetUserByClaimRequest) (*user.GetUserByClaimResponse, error) {
-	c, err := pool.GetUserProviderServiceClient(pool.Endpoint(s.c.UserProviderEndpoint))
+func (s *svc) GetUserByClaim(
+	ctx context.Context,
+	req *user.GetUserByClaimRequest,
+) (*user.GetUserByClaimResponse, error) {
+	c, err := pool.GetUserProviderServiceClient(
+		pool.Endpoint(s.c.UserProviderEndpoint),
+		pool.Insecure(s.c.Insecure),
+		pool.SkipVerify(s.c.SkipVerify),
+		pool.CACertFile(s.c.CACertFile),
+		pool.MaxCallRecvMsgSize(s.c.MaxCallRecvMsgSize),
+	)
 	if err != nil {
 		return &user.GetUserByClaimResponse{
 			Status: status.NewInternal(ctx, err, "error getting auth client"),
@@ -60,7 +75,13 @@ func (s *svc) GetUserByClaim(ctx context.Context, req *user.GetUserByClaimReques
 }
 
 func (s *svc) FindUsers(ctx context.Context, req *user.FindUsersRequest) (*user.FindUsersResponse, error) {
-	c, err := pool.GetUserProviderServiceClient(pool.Endpoint(s.c.UserProviderEndpoint))
+	c, err := pool.GetUserProviderServiceClient(
+		pool.Endpoint(s.c.UserProviderEndpoint),
+		pool.Insecure(s.c.Insecure),
+		pool.SkipVerify(s.c.SkipVerify),
+		pool.CACertFile(s.c.CACertFile),
+		pool.MaxCallRecvMsgSize(s.c.MaxCallRecvMsgSize),
+	)
 	if err != nil {
 		return &user.FindUsersResponse{
 			Status: status.NewInternal(ctx, err, "error getting auth client"),
@@ -76,7 +97,13 @@ func (s *svc) FindUsers(ctx context.Context, req *user.FindUsersRequest) (*user.
 }
 
 func (s *svc) GetUserGroups(ctx context.Context, req *user.GetUserGroupsRequest) (*user.GetUserGroupsResponse, error) {
-	c, err := pool.GetUserProviderServiceClient(pool.Endpoint(s.c.UserProviderEndpoint))
+	c, err := pool.GetUserProviderServiceClient(
+		pool.Endpoint(s.c.UserProviderEndpoint),
+		pool.Insecure(s.c.Insecure),
+		pool.SkipVerify(s.c.SkipVerify),
+		pool.CACertFile(s.c.CACertFile),
+		pool.MaxCallRecvMsgSize(s.c.MaxCallRecvMsgSize),
+	)
 	if err != nil {
 		return &user.GetUserGroupsResponse{
 			Status: status.NewInternal(ctx, err, "error getting auth client"),

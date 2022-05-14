@@ -1,4 +1,5 @@
 [shared]
+insecure = true
 
 [http.services.metrics]
 # one of dummy, json.

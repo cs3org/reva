@@ -19,10 +19,19 @@
 package rgrpc
 
 import (
+	"crypto"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net"
+	"net/url"
+	"os"
 	"sort"
+	"time"
 
 	"github.com/cs3org/reva/internal/grpc/interceptors/appctx"
 	"github.com/cs3org/reva/internal/grpc/interceptors/auth"
@@ -33,11 +42,15 @@ import (
 	"github.com/cs3org/reva/pkg/sharedconf"
 	rtrace "github.com/cs3org/reva/pkg/trace"
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
+	"github.com/johanbrandhorst/certify"
+	"github.com/johanbrandhorst/certify/issuers/vault"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/reflection"
 )
 
@@ -94,6 +107,11 @@ type streamInterceptorTriple struct {
 	Interceptor grpc.StreamServerInterceptor
 }
 
+// RSA is a private key based on RSA algorithm
+type RSA struct {
+	bits int
+}
+
 type config struct {
 	Network          string                            `mapstructure:"network"`
 	Address          string                            `mapstructure:"address"`
@@ -101,16 +119,25 @@ type config struct {
 	Services         map[string]map[string]interface{} `mapstructure:"services"`
 	Interceptors     map[string]map[string]interface{} `mapstructure:"interceptors"`
 	EnableReflection bool                              `mapstructure:"enable_reflection"`
+	Insecure         bool                              `mapstructure:"insecure"`
+	SkipVerify       bool                              `mapstructure:"skip_verify"`
+	CertFile         string                            `mapstructure:"certfile"`
+	KeyFile          string                            `mapstructure:"keyfile"`
+	CAFile           string                            `mapstructure:"ca_certfile"`
+	VaultURL         string                            `mapstructure:"vault_url"`
+	VaultToken       string                            `mapstructure:"vault_token"`
+	VaultRole        string                            `mapstructure:"vault_role"`
+	VaultCertFile    string                            `mapstructure:"vault_certfile"`
 }
 
 func (c *config) init() {
 	if c.Network == "" {
 		c.Network = "tcp"
 	}
-
 	if c.Address == "" {
 		c.Address = sharedconf.GetGatewaySVC("0.0.0.0:19000")
 	}
+	c.Insecure = true
 }
 
 // Server is a gRPC server.
@@ -197,6 +224,13 @@ func (s *Server) registerServices() error {
 	if err != nil {
 		return err
 	}
+
+	creds, err := getCredentials(s)
+	if err != nil {
+		return err
+	}
+	opts = append(opts, grpc.Creds(creds))
+
 	grpcServer := grpc.NewServer(opts...)
 
 	for _, svc := range s.services {
@@ -345,4 +379,138 @@ func (s *Server) getInterceptors(unprotected []string) ([]grpc.ServerOption, err
 	}
 
 	return opts, nil
+}
+
+func getCredentials(s *Server) (credentials.TransportCredentials, error) {
+	selfSignedCert, certErr := certFilesExist(s.conf)
+	certifyCA, vaultErr := vaultConfigExists(s.conf)
+
+	switch {
+	case selfSignedCert && certifyCA:
+		return nil, errors.New("can't choose self-signed files and vault at the same time")
+	// Certificates signed by Vault via Certify
+	case certifyCA:
+		s.log.Info().Msg("setting up secure connection with vault")
+		if vaultErr != nil {
+			return nil, vaultErr
+		}
+		creds, err := getVaultCredentials(s.conf)
+		if err != nil {
+			return nil, fmt.Errorf("failed to setup TLS with vault: %s", err)
+		}
+		return creds, nil
+	// Self-signed cetificates
+	case selfSignedCert:
+		s.log.Info().Msg("setting up secure connection with local certificates")
+		// cert files not found at path
+		if certErr != nil {
+			return nil, certErr
+		}
+		creds, err := credentials.NewServerTLSFromFile(s.conf.CertFile, s.conf.KeyFile)
+		if err != nil {
+			return nil, errors.New("failed to setup TLS with local files")
+		}
+		return creds, nil
+	// Insecure
+	case s.conf.Insecure:
+		creds := insecure.NewCredentials()
+		s.log.Info().Msg("setting up insecure connection")
+		return creds, nil
+	}
+	return nil, errors.New("wrong grpc security configurations")
+}
+
+func certFilesExist(conf *config) (bool, error) {
+	if conf.CertFile == "" && conf.KeyFile == "" {
+		return false, nil
+	}
+	err := fileExists(conf.CertFile)
+	if err != nil {
+		return true, err
+	}
+	err = fileExists(conf.KeyFile)
+	if fileExists(conf.KeyFile) != nil {
+		return true, err
+	}
+	return true, nil
+}
+
+func vaultConfigExists(conf *config) (bool, error) {
+	if conf.VaultCertFile == "" && conf.VaultURL == "" {
+		return false, nil
+	}
+	if !isURL(conf.VaultURL) {
+		return true, errors.New("could not parse vault_url")
+	}
+	err := fileExists(conf.VaultCertFile)
+	if err != nil {
+		return true, err
+	}
+	err = fileExists(conf.CAFile)
+	if err != nil {
+		return true, err
+	}
+	return true, nil
+}
+
+func fileExists(file string) error {
+	if _, err := os.Stat(file); errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("%s doesn't exist at specified path", file)
+	}
+	return nil
+}
+
+func isURL(str string) bool {
+	u, err := url.Parse(str)
+	return err == nil && u.Scheme != "" && u.Host != ""
+}
+
+// Generate generates an RSA keypair of the given bit size using the random source random (for example, crypto/rand.Reader).
+func (r RSA) Generate() (crypto.PrivateKey, error) {
+	return rsa.GenerateKey(rand.Reader, r.bits)
+}
+
+func getVaultCredentials(conf *config) (credentials.TransportCredentials, error) {
+	b, err := ioutil.ReadFile(conf.VaultCertFile)
+	if err != nil {
+		return nil, errors.New("problem with vault certificate file")
+	}
+	cp := x509.NewCertPool()
+	if !cp.AppendCertsFromPEM(b) {
+		return nil, errors.New("failed to append vault certificates")
+	}
+	parsedURL, err := url.Parse(conf.VaultURL)
+	if err != nil {
+		return nil, fmt.Errorf("could not parse vault_url: %s", conf.VaultURL)
+	}
+	issuer := &vault.Issuer{
+		URL: &url.URL{
+			Scheme: parsedURL.Scheme,
+			Host:   parsedURL.Host,
+		},
+		TLSConfig: &tls.Config{
+			RootCAs: cp,
+		},
+		Token: conf.VaultToken,
+		Role:  conf.VaultRole,
+	}
+	cfg := certify.CertConfig{
+		SubjectAlternativeNames: []string{"localhost"},
+		IPSubjectAlternativeNames: []net.IP{
+			net.ParseIP("127.0.0.1"),
+			net.ParseIP("::1"),
+		},
+		KeyGenerator: RSA{bits: 2048},
+	}
+	c := &certify.Certify{
+		CommonName:  "localhost",
+		Issuer:      issuer,
+		Cache:       certify.NewMemCache(),
+		CertConfig:  &cfg,
+		RenewBefore: 24 * time.Hour,
+	}
+	tlsConfig := &tls.Config{
+		GetCertificate: c.GetCertificate,
+	}
+	return credentials.NewTLS(tlsConfig), nil
 }

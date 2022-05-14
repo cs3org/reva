@@ -32,9 +32,21 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 )
 
-func (h *Handler) createGroupShare(w http.ResponseWriter, r *http.Request, statInfo *provider.ResourceInfo, role *conversions.Role, roleVal []byte) {
+func (h *Handler) createGroupShare(
+	w http.ResponseWriter,
+	r *http.Request,
+	statInfo *provider.ResourceInfo,
+	role *conversions.Role,
+	roleVal []byte,
+) {
 	ctx := r.Context()
-	c, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	c, err := pool.GetGatewayServiceClient(
+		pool.Endpoint(h.gatewayAddr),
+		pool.Insecure(h.insecure),
+		pool.SkipVerify(h.skipVerify),
+		pool.CACertFile(h.caCertFile),
+		pool.MaxCallRecvMsgSize(h.maxCallRecvMsgSize),
+	)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
 		return

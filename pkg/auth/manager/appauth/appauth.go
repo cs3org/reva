@@ -38,7 +38,11 @@ func init() {
 }
 
 type manager struct {
-	GatewayAddr string `mapstructure:"gateway_addr"`
+	GatewayAddr        string `mapstructure:"gateway_addr"`
+	Insecure           bool   `mapstructure:"insecure"`
+	SkipVerify         bool   `mapstructure:"skip_verify"`
+	CACertFile         string `mapstructure:"ca_certfile"`
+	MaxCallRecvMsgSize int    `mapstructure:"client_recv_msg_size"`
 }
 
 // New returns a new auth Manager.
@@ -59,8 +63,17 @@ func (m *manager) Configure(ml map[string]interface{}) error {
 	return nil
 }
 
-func (m *manager) Authenticate(ctx context.Context, username, password string) (*user.User, map[string]*authpb.Scope, error) {
-	gtw, err := pool.GetGatewayServiceClient(pool.Endpoint(m.GatewayAddr))
+func (m *manager) Authenticate(
+	ctx context.Context,
+	username, password string,
+) (*user.User, map[string]*authpb.Scope, error) {
+	gtw, err := pool.GetGatewayServiceClient(
+		pool.Endpoint(m.GatewayAddr),
+		pool.Insecure(m.Insecure),
+		pool.SkipVerify(m.SkipVerify),
+		pool.CACertFile(m.CACertFile),
+		pool.MaxCallRecvMsgSize(m.MaxCallRecvMsgSize),
+	)
 	if err != nil {
 		return nil, nil, err
 	}

@@ -2,6 +2,7 @@
 # - serves user and public link shares
 
 [shared]
+insecure = true
 jwt_secret = "Pive-Fumkiu4"
 
 [grpc]

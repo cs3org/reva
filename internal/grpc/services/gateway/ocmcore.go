@@ -27,8 +27,17 @@ import (
 	"github.com/pkg/errors"
 )
 
-func (s *svc) CreateOCMCoreShare(ctx context.Context, req *ocmcore.CreateOCMCoreShareRequest) (*ocmcore.CreateOCMCoreShareResponse, error) {
-	c, err := pool.GetOCMCoreClient(pool.Endpoint(s.c.OCMCoreEndpoint))
+func (s *svc) CreateOCMCoreShare(
+	ctx context.Context,
+	req *ocmcore.CreateOCMCoreShareRequest,
+) (*ocmcore.CreateOCMCoreShareResponse, error) {
+	c, err := pool.GetOCMCoreClient(
+		pool.Endpoint(s.c.OCMCoreEndpoint),
+		pool.Insecure(s.c.Insecure),
+		pool.SkipVerify(s.c.SkipVerify),
+		pool.CACertFile(s.c.CACertFile),
+		pool.MaxCallRecvMsgSize(s.c.MaxCallRecvMsgSize),
+	)
 	if err != nil {
 		return &ocmcore.CreateOCMCoreShareResponse{
 			Status: status.NewInternal(ctx, err, "error getting ocm core client"),

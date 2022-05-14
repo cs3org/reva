@@ -27,8 +27,17 @@ import (
 	"github.com/pkg/errors"
 )
 
-func (s *svc) GenerateInviteToken(ctx context.Context, req *invitepb.GenerateInviteTokenRequest) (*invitepb.GenerateInviteTokenResponse, error) {
-	c, err := pool.GetOCMInviteManagerClient(pool.Endpoint(s.c.OCMInviteManagerEndpoint))
+func (s *svc) GenerateInviteToken(
+	ctx context.Context,
+	req *invitepb.GenerateInviteTokenRequest,
+) (*invitepb.GenerateInviteTokenResponse, error) {
+	c, err := pool.GetOCMInviteManagerClient(
+		pool.Endpoint(s.c.OCMInviteManagerEndpoint),
+		pool.Insecure(s.c.Insecure),
+		pool.SkipVerify(s.c.SkipVerify),
+		pool.CACertFile(s.c.CACertFile),
+		pool.MaxCallRecvMsgSize(s.c.MaxCallRecvMsgSize),
+	)
 	if err != nil {
 		return &invitepb.GenerateInviteTokenResponse{
 			Status: status.NewInternal(ctx, err, "error getting user invite provider client"),
@@ -43,8 +52,17 @@ func (s *svc) GenerateInviteToken(ctx context.Context, req *invitepb.GenerateInv
 	return res, nil
 }
 
-func (s *svc) ForwardInvite(ctx context.Context, req *invitepb.ForwardInviteRequest) (*invitepb.ForwardInviteResponse, error) {
-	c, err := pool.GetOCMInviteManagerClient(pool.Endpoint(s.c.OCMInviteManagerEndpoint))
+func (s *svc) ForwardInvite(
+	ctx context.Context,
+	req *invitepb.ForwardInviteRequest,
+) (*invitepb.ForwardInviteResponse, error) {
+	c, err := pool.GetOCMInviteManagerClient(
+		pool.Endpoint(s.c.OCMInviteManagerEndpoint),
+		pool.Insecure(s.c.Insecure),
+		pool.SkipVerify(s.c.SkipVerify),
+		pool.CACertFile(s.c.CACertFile),
+		pool.MaxCallRecvMsgSize(s.c.MaxCallRecvMsgSize),
+	)
 	if err != nil {
 		return &invitepb.ForwardInviteResponse{
 			Status: status.NewInternal(ctx, err, "error getting user invite provider client"),
@@ -59,8 +77,17 @@ func (s *svc) ForwardInvite(ctx context.Context, req *invitepb.ForwardInviteRequ
 	return res, nil
 }
 
-func (s *svc) AcceptInvite(ctx context.Context, req *invitepb.AcceptInviteRequest) (*invitepb.AcceptInviteResponse, error) {
-	c, err := pool.GetOCMInviteManagerClient(pool.Endpoint(s.c.OCMInviteManagerEndpoint))
+func (s *svc) AcceptInvite(
+	ctx context.Context,
+	req *invitepb.AcceptInviteRequest,
+) (*invitepb.AcceptInviteResponse, error) {
+	c, err := pool.GetOCMInviteManagerClient(
+		pool.Endpoint(s.c.OCMInviteManagerEndpoint),
+		pool.Insecure(s.c.Insecure),
+		pool.SkipVerify(s.c.SkipVerify),
+		pool.CACertFile(s.c.CACertFile),
+		pool.MaxCallRecvMsgSize(s.c.MaxCallRecvMsgSize),
+	)
 	if err != nil {
 		return &invitepb.AcceptInviteResponse{
 			Status: status.NewInternal(ctx, err, "error getting user invite provider client"),
@@ -75,8 +102,17 @@ func (s *svc) AcceptInvite(ctx context.Context, req *invitepb.AcceptInviteReques
 	return res, nil
 }
 
-func (s *svc) GetAcceptedUser(ctx context.Context, req *invitepb.GetAcceptedUserRequest) (*invitepb.GetAcceptedUserResponse, error) {
-	c, err := pool.GetOCMInviteManagerClient(pool.Endpoint(s.c.OCMInviteManagerEndpoint))
+func (s *svc) GetAcceptedUser(
+	ctx context.Context,
+	req *invitepb.GetAcceptedUserRequest,
+) (*invitepb.GetAcceptedUserResponse, error) {
+	c, err := pool.GetOCMInviteManagerClient(
+		pool.Endpoint(s.c.OCMInviteManagerEndpoint),
+		pool.Insecure(s.c.Insecure),
+		pool.SkipVerify(s.c.SkipVerify),
+		pool.CACertFile(s.c.CACertFile),
+		pool.MaxCallRecvMsgSize(s.c.MaxCallRecvMsgSize),
+	)
 	if err != nil {
 		return &invitepb.GetAcceptedUserResponse{
 			Status: status.NewInternal(ctx, err, "error getting user invite provider client"),
@@ -91,8 +127,17 @@ func (s *svc) GetAcceptedUser(ctx context.Context, req *invitepb.GetAcceptedUser
 	return res, nil
 }
 
-func (s *svc) FindAcceptedUsers(ctx context.Context, req *invitepb.FindAcceptedUsersRequest) (*invitepb.FindAcceptedUsersResponse, error) {
-	c, err := pool.GetOCMInviteManagerClient(pool.Endpoint(s.c.OCMInviteManagerEndpoint))
+func (s *svc) FindAcceptedUsers(
+	ctx context.Context,
+	req *invitepb.FindAcceptedUsersRequest,
+) (*invitepb.FindAcceptedUsersResponse, error) {
+	c, err := pool.GetOCMInviteManagerClient(
+		pool.Endpoint(s.c.OCMInviteManagerEndpoint),
+		pool.Insecure(s.c.Insecure),
+		pool.SkipVerify(s.c.SkipVerify),
+		pool.CACertFile(s.c.CACertFile),
+		pool.MaxCallRecvMsgSize(s.c.MaxCallRecvMsgSize),
+	)
 	if err != nil {
 		return &invitepb.FindAcceptedUsersResponse{
 			Status: status.NewInternal(ctx, err, "error getting user invite provider client"),

@@ -41,11 +41,19 @@ import (
 )
 
 type sendHandler struct {
-	GatewaySvc string
+	GatewaySvc         string
+	Insecure           bool
+	SkipVerify         bool
+	MaxCallRecvMsgSize int
+	CACertFile         string
 }
 
 func (h *sendHandler) init(c *Config) {
 	h.GatewaySvc = c.GatewaySvc
+	h.Insecure = c.Insecure
+	h.SkipVerify = c.SkipVerify
+	h.MaxCallRecvMsgSize = c.MaxCallRecvMsgSize
+	h.CACertFile = c.CACertFile
 }
 
 func (h *sendHandler) Handler() http.Handler {
@@ -80,7 +88,13 @@ func (h *sendHandler) Handler() http.Handler {
 		// "loginPassword": "Ny4Nv6WLoC1o70kVgrVOZLZ2vRgPjuej"
 
 		gatewayAddr := h.GatewaySvc
-		gatewayClient, err := pool.GetGatewayServiceClient(pool.Endpoint(gatewayAddr))
+		gatewayClient, err := pool.GetGatewayServiceClient(
+			pool.Endpoint(gatewayAddr),
+			pool.Insecure(h.Insecure),
+			pool.SkipVerify(h.SkipVerify),
+			pool.CACertFile(h.CACertFile),
+			pool.MaxCallRecvMsgSize(h.MaxCallRecvMsgSize),
+		)
 		if err != nil {
 			log.Error().Msg("cannot get grpc client!")
 			w.WriteHeader(http.StatusInternalServerError)
@@ -152,7 +166,13 @@ func (h *sendHandler) Handler() http.Handler {
 			return
 		}
 		if recipientProviderInfo.Status.Code != rpc.Code_CODE_OK {
-			WriteError(w, r, APIErrorServerError, "grpc forward invite request failed", errors.New(recipientProviderInfo.Status.Message))
+			WriteError(
+				w,
+				r,
+				APIErrorServerError,
+				"grpc forward invite request failed",
+				errors.New(recipientProviderInfo.Status.Message),
+			)
 			return
 		}
 

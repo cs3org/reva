@@ -1,4 +1,5 @@
 [shared]
+insecure = true
 gatewaysvc = "localhost:19000"
 plugin = true
 

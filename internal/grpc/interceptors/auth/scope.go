@@ -50,9 +50,22 @@ const (
 	scopeCacheExpiration = 3600
 )
 
-func expandAndVerifyScope(ctx context.Context, req interface{}, tokenScope map[string]*authpb.Scope, user *userpb.User, gatewayAddr string, mgr token.Manager) error {
+func expandAndVerifyScope(
+	ctx context.Context,
+	req interface{},
+	tokenScope map[string]*authpb.Scope,
+	user *userpb.User,
+	c *config,
+	mgr token.Manager,
+) error {
 	log := appctx.GetLogger(ctx)
-	client, err := pool.GetGatewayServiceClient(pool.Endpoint(gatewayAddr))
+	client, err := pool.GetGatewayServiceClient(
+		pool.Endpoint(c.GatewayAddr),
+		pool.Insecure(c.Insecure),
+		pool.SkipVerify(c.SkipVerify),
+		pool.MaxCallRecvMsgSize(c.MaxCallRecvMsgSize),
+		pool.CACertFile(c.CACertFile),
+	)
 	if err != nil {
 		return err
 	}
@@ -123,7 +136,14 @@ func expandAndVerifyScope(ctx context.Context, req interface{}, tokenScope map[s
 	return errtypes.PermissionDenied("access to resource not allowed within the assigned scope")
 }
 
-func resolveLightweightScope(ctx context.Context, ref *provider.Reference, scope *authpb.Scope, user *userpb.User, client gateway.GatewayAPIClient, mgr token.Manager) error {
+func resolveLightweightScope(
+	ctx context.Context,
+	ref *provider.Reference,
+	scope *authpb.Scope,
+	user *userpb.User,
+	client gateway.GatewayAPIClient,
+	mgr token.Manager,
+) error {
 	// Check if this ref is cached
 	key := "lw:" + user.Id.OpaqueId + scopeDelimiter + getRefKey(ref)
 	if _, err := scopeExpansionCache.Get(key); err == nil {
@@ -136,7 +156,9 @@ func resolveLightweightScope(ctx context.Context, ref *provider.Reference, scope
 	}
 
 	for _, share := range shares.Shares {
-		shareKey := "lw:" + user.Id.OpaqueId + scopeDelimiter + resourceid.OwnCloudResourceIDWrap(share.Share.ResourceId)
+		shareKey := "lw:" + user.Id.OpaqueId + scopeDelimiter + resourceid.OwnCloudResourceIDWrap(
+			share.Share.ResourceId,
+		)
 		_ = scopeExpansionCache.SetWithExpire(shareKey, nil, scopeCacheExpiration*time.Second)
 
 		if ref.ResourceId != nil && utils.ResourceIDEqual(share.Share.ResourceId, ref.ResourceId) {
@@ -151,7 +173,13 @@ func resolveLightweightScope(ctx context.Context, ref *provider.Reference, scope
 	return errtypes.PermissionDenied("request is not for a nested resource")
 }
 
-func resolvePublicShare(ctx context.Context, ref *provider.Reference, scope *authpb.Scope, client gateway.GatewayAPIClient, mgr token.Manager) error {
+func resolvePublicShare(
+	ctx context.Context,
+	ref *provider.Reference,
+	scope *authpb.Scope,
+	client gateway.GatewayAPIClient,
+	mgr token.Manager,
+) error {
 	var share link.PublicShare
 	err := utils.UnmarshalJSONToProtoV1(scope.Resource.Value, &share)
 	if err != nil {
@@ -161,7 +189,13 @@ func resolvePublicShare(ctx context.Context, ref *provider.Reference, scope *aut
 	return checkCacheForNestedResource(ctx, ref, share.ResourceId, client, mgr)
 }
 
-func resolveUserShare(ctx context.Context, ref *provider.Reference, scope *authpb.Scope, client gateway.GatewayAPIClient, mgr token.Manager) error {
+func resolveUserShare(
+	ctx context.Context,
+	ref *provider.Reference,
+	scope *authpb.Scope,
+	client gateway.GatewayAPIClient,
+	mgr token.Manager,
+) error {
 	var share collaboration.Share
 	err := utils.UnmarshalJSONToProtoV1(scope.Resource.Value, &share)
 	if err != nil {
@@ -171,7 +205,13 @@ func resolveUserShare(ctx context.Context, ref *provider.Reference, scope *authp
 	return checkCacheForNestedResource(ctx, ref, share.ResourceId, client, mgr)
 }
 
-func checkCacheForNestedResource(ctx context.Context, ref *provider.Reference, resource *provider.ResourceId, client gateway.GatewayAPIClient, mgr token.Manager) error {
+func checkCacheForNestedResource(
+	ctx context.Context,
+	ref *provider.Reference,
+	resource *provider.ResourceId,
+	client gateway.GatewayAPIClient,
+	mgr token.Manager,
+) error {
 	// Check if this ref is cached
 	key := resourceid.OwnCloudResourceIDWrap(resource) + scopeDelimiter + getRefKey(ref)
 	if _, err := scopeExpansionCache.Get(key); err == nil {
@@ -186,7 +226,13 @@ func checkCacheForNestedResource(ctx context.Context, ref *provider.Reference, r
 	return errtypes.PermissionDenied("request is not for a nested resource")
 }
 
-func checkIfNestedResource(ctx context.Context, ref *provider.Reference, parent *provider.ResourceId, client gateway.GatewayAPIClient, mgr token.Manager) (bool, error) {
+func checkIfNestedResource(
+	ctx context.Context,
+	ref *provider.Reference,
+	parent *provider.ResourceId,
+	client gateway.GatewayAPIClient,
+	mgr token.Manager,
+) (bool, error) {
 	// Since the resource ID is obtained from the scope, the current token
 	// has access to it.
 	statResponse, err := client.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{ResourceId: parent}})
@@ -203,7 +249,10 @@ func checkIfNestedResource(ctx context.Context, ref *provider.Reference, parent 
 		// We mint a token as the owner of the public share and try to stat the reference
 		// TODO(ishank011): We need to find a better alternative to this
 
-		userResp, err := client.GetUser(ctx, &userpb.GetUserRequest{UserId: statResponse.Info.Owner, SkipFetchingUserGroups: true})
+		userResp, err := client.GetUser(
+			ctx,
+			&userpb.GetUserRequest{UserId: statResponse.Info.Owner, SkipFetchingUserGroups: true},
+		)
 		if err != nil || userResp.Status.Code != rpc.Code_CODE_OK {
 			return false, err
 		}
@@ -229,7 +278,6 @@ func checkIfNestedResource(ctx context.Context, ref *provider.Reference, parent 
 	}
 
 	return strings.HasPrefix(childPath, parentPath), nil
-
 }
 
 func extractRefForReaderRole(req interface{}) (*provider.Reference, bool) {
@@ -254,7 +302,6 @@ func extractRefForReaderRole(req interface{}) (*provider.Reference, bool) {
 	}
 
 	return nil, false
-
 }
 
 func extractRefForUploaderRole(req interface{}) (*provider.Reference, bool) {
@@ -273,7 +320,6 @@ func extractRefForUploaderRole(req interface{}) (*provider.Reference, bool) {
 	}
 
 	return nil, false
-
 }
 
 func extractRefForEditorRole(req interface{}) (*provider.Reference, bool) {
@@ -290,7 +336,6 @@ func extractRefForEditorRole(req interface{}) (*provider.Reference, bool) {
 	}
 
 	return nil, false
-
 }
 
 func extractRef(req interface{}, tokenScope map[string]*authpb.Scope) (*provider.Reference, bool) {
@@ -299,7 +344,8 @@ func extractRef(req interface{}, tokenScope map[string]*authpb.Scope) (*provider
 		if v.Role == authpb.Role_ROLE_OWNER || v.Role == authpb.Role_ROLE_EDITOR || v.Role == authpb.Role_ROLE_VIEWER {
 			readPerm = true
 		}
-		if v.Role == authpb.Role_ROLE_OWNER || v.Role == authpb.Role_ROLE_EDITOR || v.Role == authpb.Role_ROLE_UPLOADER {
+		if v.Role == authpb.Role_ROLE_OWNER || v.Role == authpb.Role_ROLE_EDITOR ||
+			v.Role == authpb.Role_ROLE_UPLOADER {
 			uploadPerm = true
 		}
 		if v.Role == authpb.Role_ROLE_OWNER || v.Role == authpb.Role_ROLE_EDITOR {

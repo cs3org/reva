@@ -19,6 +19,10 @@
 package pool
 
 import (
+	"crypto/tls"
+	"crypto/x509"
+	"errors"
+	"io/ioutil"
 	"sync"
 
 	appprovider "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
@@ -40,9 +44,11 @@ import (
 	storageprovider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	storageregistry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 	datatx "github.com/cs3org/go-cs3apis/cs3/tx/v1beta1"
+	"github.com/cs3org/reva/pkg/sharedconf"
 	rtrace "github.com/cs3org/reva/pkg/trace"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 )
 
@@ -84,10 +90,21 @@ var (
 
 // NewConn creates a new connection to a grpc server
 // with open census tracing support.
-// TODO(labkode): make grpc tls configurable.
 func NewConn(options Options) (*grpc.ClientConn, error) {
+	opts, err := getConnectionOptions(options)
+	if err != nil {
+		return nil, err
+	}
 	conn, err := grpc.Dial(
-		options.Endpoint,
+		options.Endpoint, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return conn, nil
+}
+
+func getConnectionOptions(options Options) ([]grpc.DialOption, error) {
+	opts := []grpc.DialOption{
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithDefaultCallOptions(
 			grpc.MaxCallRecvMsgSize(options.MaxCallRecvMsgSize),
@@ -110,12 +127,43 @@ func NewConn(options Options) (*grpc.ClientConn, error) {
 				),
 			),
 		),
-	)
+	}
+	creds, err := getCredentials(options)
 	if err != nil {
 		return nil, err
 	}
+	opts = append(opts, grpc.WithTransportCredentials(creds))
+	return opts, nil
+}
 
-	return conn, nil
+func getCredentials(options Options) (credentials.TransportCredentials, error) {
+	var useCertficates = options.CACertFile != "" || sharedconf.GetCAFilePath() != ""
+	var isInsecure = options.Insecure || sharedconf.Insecure()
+	switch {
+	case isInsecure && useCertficates:
+		return nil, errors.New("can't set insecure and ca_certfile at the same time")
+	case isInsecure:
+		return insecure.NewCredentials(), nil
+	case useCertficates:
+		b, err := ioutil.ReadFile(options.CACertFile)
+		if err != nil {
+			b, err = ioutil.ReadFile(sharedconf.GetCAFilePath())
+			if err != nil {
+				return nil, errors.New("couldn't read CA certificate files")
+			}
+		}
+		cp := x509.NewCertPool()
+		if !cp.AppendCertsFromPEM(b) {
+			return nil, errors.New("failed to parse and append the certificates")
+		}
+		tlsconf := &tls.Config{
+			InsecureSkipVerify: options.SkipVerify || sharedconf.SkipVerify(),
+			RootCAs:            cp,
+		}
+		return credentials.NewTLS(tlsconf), nil
+	default:
+		return nil, errors.New("invalid grpc security configuration")
+	}
 }
 
 // GetGatewayServiceClient returns a GatewayServiceClient.

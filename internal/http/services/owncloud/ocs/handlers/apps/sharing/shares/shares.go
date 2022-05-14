@@ -73,6 +73,10 @@ type Handler struct {
 	userIdentifierCache    *ttlcache.Cache
 	resourceInfoCache      cache.ResourceInfoCache
 	resourceInfoCacheTTL   time.Duration
+	maxCallRecvMsgSize     int
+	caCertFile             string
+	insecure               bool
+	skipVerify             bool
 }
 
 // we only cache the minimal set of data instead of the full user metadata
@@ -103,6 +107,10 @@ func (h *Handler) Init(c *config.Config) {
 	h.publicURL = c.Config.Host
 	h.sharePrefix = c.SharePrefix
 	h.homeNamespace = c.HomeNamespace
+	h.insecure = c.Insecure
+	h.skipVerify = c.SkipVerify
+	h.caCertFile = c.CACertFile
+	h.maxCallRecvMsgSize = c.MaxCallRecvMsgSize
 
 	h.additionalInfoTemplate, _ = template.New("additionalInfo").Parse(c.AdditionalInfoAttribute)
 	h.resourceInfoCacheTTL = time.Second * time.Duration(c.ResourceInfoCacheTTL)
@@ -159,7 +167,13 @@ func (h *Handler) CreateShare(w http.ResponseWriter, r *http.Request) {
 	}
 	// get user permissions on the shared file
 
-	client, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	client, err := pool.GetGatewayServiceClient(
+		pool.Endpoint(h.gatewayAddr),
+		pool.Insecure(h.insecure),
+		pool.MaxCallRecvMsgSize(h.maxCallRecvMsgSize),
+		pool.CACertFile(h.caCertFile),
+		pool.MaxCallRecvMsgSize(h.maxCallRecvMsgSize),
+	)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
 		return
@@ -167,7 +181,13 @@ func (h *Handler) CreateShare(w http.ResponseWriter, r *http.Request) {
 
 	ref, err := h.extractReference(r)
 	if err != nil {
-		response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "could not parse the reference", fmt.Errorf("could not parse the reference"))
+		response.WriteOCSError(
+			w,
+			r,
+			response.MetaBadRequest.StatusCode,
+			"could not parse the reference",
+			fmt.Errorf("could not parse the reference"),
+		)
 		return
 	}
 
@@ -180,7 +200,13 @@ func (h *Handler) CreateShare(w http.ResponseWriter, r *http.Request) {
 	statRes, err := client.Stat(ctx, &statReq)
 	if err != nil {
 		sublog.Debug().Err(err).Str("createShare", "shares").Msg("error on stat call")
-		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "missing resource information", fmt.Errorf("error getting resource information"))
+		response.WriteOCSError(
+			w,
+			r,
+			response.MetaServerError.StatusCode,
+			"missing resource information",
+			fmt.Errorf("error getting resource information"),
+		)
 		return
 	}
 
@@ -190,7 +216,9 @@ func (h *Handler) CreateShare(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// check user has share permissions
-	if !conversions.RoleFromResourcePermissions(statRes.Info.PermissionSet).OCSPermissions().Contain(conversions.PermissionShare) {
+	if !conversions.RoleFromResourcePermissions(statRes.Info.PermissionSet).
+		OCSPermissions().
+		Contain(conversions.PermissionShare) {
 		response.WriteOCSError(w, r, http.StatusNotFound, "No share permission", nil)
 		return
 	}
@@ -231,7 +259,12 @@ func (h *Handler) CreateShare(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (h *Handler) extractPermissions(w http.ResponseWriter, r *http.Request, ri *provider.ResourceInfo, defaultPermissions *conversions.Role) (*conversions.Role, []byte, error) {
+func (h *Handler) extractPermissions(
+	w http.ResponseWriter,
+	r *http.Request,
+	ri *provider.ResourceInfo,
+	defaultPermissions *conversions.Role,
+) (*conversions.Role, []byte, error) {
 	reqRole, reqPermissions := r.FormValue("role"), r.FormValue("permissions")
 	var role *conversions.Role
 
@@ -268,7 +301,13 @@ func (h *Handler) extractPermissions(w http.ResponseWriter, r *http.Request, ri 
 		permissions &^= conversions.PermissionCreate
 		permissions &^= conversions.PermissionDelete
 		if permissions == conversions.PermissionInvalid {
-			response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "Cannot set the requested share permissions", nil)
+			response.WriteOCSError(
+				w,
+				r,
+				response.MetaBadRequest.StatusCode,
+				"Cannot set the requested share permissions",
+				nil,
+			)
 			return nil, nil, errors.New("cannot set the requested share permissions")
 		}
 	}
@@ -301,7 +340,13 @@ func (h *Handler) GetShare(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	logger := appctx.GetLogger(r.Context())
 	logger.Debug().Str("shareID", shareID).Msg("get share by id")
-	client, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	client, err := pool.GetGatewayServiceClient(
+		pool.Endpoint(h.gatewayAddr),
+		pool.Insecure(h.insecure),
+		pool.MaxCallRecvMsgSize(h.maxCallRecvMsgSize),
+		pool.CACertFile(h.caCertFile),
+		pool.MaxCallRecvMsgSize(h.maxCallRecvMsgSize),
+	)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
 		return
@@ -440,7 +485,13 @@ func (h *Handler) updateShare(w http.ResponseWriter, r *http.Request, shareID st
 		return
 	}
 
-	client, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	client, err := pool.GetGatewayServiceClient(
+		pool.Endpoint(h.gatewayAddr),
+		pool.Insecure(h.insecure),
+		pool.MaxCallRecvMsgSize(h.maxCallRecvMsgSize),
+		pool.CACertFile(h.caCertFile),
+		pool.MaxCallRecvMsgSize(h.maxCallRecvMsgSize),
+	)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
 		return
@@ -465,7 +516,13 @@ func (h *Handler) updateShare(w http.ResponseWriter, r *http.Request, shareID st
 	}
 	uRes, err := client.UpdateShare(ctx, uReq)
 	if err != nil {
-		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error sending a grpc update share request", err)
+		response.WriteOCSError(
+			w,
+			r,
+			response.MetaServerError.StatusCode,
+			"error sending a grpc update share request",
+			err,
+		)
 		return
 	}
 
@@ -491,7 +548,13 @@ func (h *Handler) updateShare(w http.ResponseWriter, r *http.Request, shareID st
 	statRes, err := client.Stat(r.Context(), &statReq)
 	if err != nil {
 		log.Debug().Err(err).Str("shares", "update user share").Msg("error during stat")
-		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "missing resource information", fmt.Errorf("error getting resource information"))
+		response.WriteOCSError(
+			w,
+			r,
+			response.MetaServerError.StatusCode,
+			"missing resource information",
+			fmt.Errorf("error getting resource information"),
+		)
 		return
 	}
 
@@ -501,7 +564,13 @@ func (h *Handler) updateShare(w http.ResponseWriter, r *http.Request, shareID st
 			return
 		}
 
-		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "grpc stat request failed for stat after updating user share", err)
+		response.WriteOCSError(
+			w,
+			r,
+			response.MetaServerError.StatusCode,
+			"grpc stat request failed for stat after updating user share",
+			err,
+		)
 		return
 	}
 
@@ -557,7 +626,13 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 	stateFilter := getStateFilter(r.FormValue("state"))
 
 	log := appctx.GetLogger(r.Context())
-	client, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	client, err := pool.GetGatewayServiceClient(
+		pool.Endpoint(h.gatewayAddr),
+		pool.Insecure(h.insecure),
+		pool.MaxCallRecvMsgSize(h.maxCallRecvMsgSize),
+		pool.CACertFile(h.caCertFile),
+		pool.MaxCallRecvMsgSize(h.maxCallRecvMsgSize),
+	)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
 		return
@@ -622,7 +697,13 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 
 	lrsRes, err := client.ListReceivedShares(ctx, &collaboration.ListReceivedSharesRequest{Filters: filters})
 	if err != nil {
-		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error sending a grpc ListReceivedShares request", err)
+		response.WriteOCSError(
+			w,
+			r,
+			response.MetaServerError.StatusCode,
+			"error sending a grpc ListReceivedShares request",
+			err,
+		)
 		return
 	}
 
@@ -649,7 +730,11 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 				Ref: &provider.Reference{Path: path.Join(h.homeNamespace, h.sharePrefix)},
 			})
 			if err != nil || lcRes.Status.Code != rpc.Code_CODE_OK {
-				h.logProblems(lcRes.GetStatus(), err, "could not list container, continuing without share jail path info")
+				h.logProblems(
+					lcRes.GetStatus(),
+					err,
+					"could not list container, continuing without share jail path info",
+				)
 			} else {
 				shareJailInfos = lcRes.Infos
 			}
@@ -683,14 +768,23 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 
 		data, err := conversions.CS3Share2ShareData(r.Context(), rs.Share)
 		if err != nil {
-			log.Debug().Interface("share", rs.Share).Interface("shareData", data).Err(err).Msg("could not CS3Share2ShareData, skipping")
+			log.Debug().
+				Interface("share", rs.Share).
+				Interface("shareData", data).
+				Err(err).
+				Msg("could not CS3Share2ShareData, skipping")
 			continue
 		}
 
 		data.State = mapState(rs.GetState())
 
 		if err := h.addFileInfo(ctx, data, info); err != nil {
-			log.Debug().Interface("received_share", rs).Interface("info", info).Interface("shareData", data).Err(err).Msg("could not add file info, skipping")
+			log.Debug().
+				Interface("received_share", rs).
+				Interface("info", info).
+				Interface("shareData", data).
+				Err(err).
+				Msg("could not add file info, skipping")
 			continue
 		}
 		h.mapUserIds(r.Context(), client, data)
@@ -743,7 +837,8 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 
 func findMatch(shareJailInfos []*provider.ResourceInfo, id *provider.ResourceId) *provider.ResourceInfo {
 	for i := range shareJailInfos {
-		if shareJailInfos[i].Id != nil && shareJailInfos[i].Id.StorageId == id.StorageId && shareJailInfos[i].Id.OpaqueId == id.OpaqueId {
+		if shareJailInfos[i].Id != nil && shareJailInfos[i].Id.StorageId == id.StorageId &&
+			shareJailInfos[i].Id.OpaqueId == id.OpaqueId {
 			return shareJailInfos[i]
 		}
 	}
@@ -831,13 +926,23 @@ func (h *Handler) logProblems(s *rpc.Status, e error, msg string) {
 	}
 }
 
-func (h *Handler) addFilters(w http.ResponseWriter, r *http.Request, prefix string) ([]*collaboration.Filter, []*link.ListPublicSharesRequest_Filter, error) {
+func (h *Handler) addFilters(
+	w http.ResponseWriter,
+	r *http.Request,
+	prefix string,
+) ([]*collaboration.Filter, []*link.ListPublicSharesRequest_Filter, error) {
 	collaborationFilters := []*collaboration.Filter{}
 	linkFilters := []*link.ListPublicSharesRequest_Filter{}
 	ctx := r.Context()
 
 	// first check if the file exists
-	client, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	client, err := pool.GetGatewayServiceClient(
+		pool.Endpoint(h.gatewayAddr),
+		pool.Insecure(h.insecure),
+		pool.MaxCallRecvMsgSize(h.maxCallRecvMsgSize),
+		pool.CACertFile(h.caCertFile),
+		pool.MaxCallRecvMsgSize(h.maxCallRecvMsgSize),
+	)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
 		return nil, nil, err
@@ -910,7 +1015,12 @@ func (h *Handler) addFileInfo(ctx context.Context, s *conversions.ShareData, inf
 }
 
 // mustGetIdentifiers always returns a struct with identifiers, if the user or group could not be found they will all be empty
-func (h *Handler) mustGetIdentifiers(ctx context.Context, client gateway.GatewayAPIClient, id string, isGroup bool) *userIdentifiers {
+func (h *Handler) mustGetIdentifiers(
+	ctx context.Context,
+	client gateway.GatewayAPIClient,
+	id string,
+	isGroup bool,
+) *userIdentifiers {
 	sublog := appctx.GetLogger(ctx).With().Str("id", id).Logger()
 	if id == "" {
 		return &userIdentifiers{}
@@ -1035,19 +1145,32 @@ func (h *Handler) getAdditionalInfoAttribute(ctx context.Context, u *userIdentif
 	return buf.String()
 }
 
-func (h *Handler) getResourceInfoByPath(ctx context.Context, client gateway.GatewayAPIClient, path string) (*provider.ResourceInfo, *rpc.Status, error) {
+func (h *Handler) getResourceInfoByPath(
+	ctx context.Context,
+	client gateway.GatewayAPIClient,
+	path string,
+) (*provider.ResourceInfo, *rpc.Status, error) {
 	return h.getResourceInfo(ctx, client, path, &provider.Reference{
 		Path: path,
 	})
 }
 
-func (h *Handler) getResourceInfoByID(ctx context.Context, client gateway.GatewayAPIClient, id *provider.ResourceId) (*provider.ResourceInfo, *rpc.Status, error) {
+func (h *Handler) getResourceInfoByID(
+	ctx context.Context,
+	client gateway.GatewayAPIClient,
+	id *provider.ResourceId,
+) (*provider.ResourceInfo, *rpc.Status, error) {
 	return h.getResourceInfo(ctx, client, resourceid.OwnCloudResourceIDWrap(id), &provider.Reference{ResourceId: id})
 }
 
 // getResourceInfo retrieves the resource info to a target.
 // This method utilizes caching if it is enabled.
-func (h *Handler) getResourceInfo(ctx context.Context, client gateway.GatewayAPIClient, key string, ref *provider.Reference) (*provider.ResourceInfo, *rpc.Status, error) {
+func (h *Handler) getResourceInfo(
+	ctx context.Context,
+	client gateway.GatewayAPIClient,
+	key string,
+	ref *provider.Reference,
+) (*provider.ResourceInfo, *rpc.Status, error) {
 	logger := appctx.GetLogger(ctx)
 
 	var pinfo *provider.ResourceInfo
@@ -1086,10 +1209,23 @@ func (h *Handler) getResourceInfo(ctx context.Context, client gateway.GatewayAPI
 	return pinfo, status, nil
 }
 
-func (h *Handler) createCs3Share(ctx context.Context, w http.ResponseWriter, r *http.Request, client gateway.GatewayAPIClient, req *collaboration.CreateShareRequest, info *provider.ResourceInfo) {
+func (h *Handler) createCs3Share(
+	ctx context.Context,
+	w http.ResponseWriter,
+	r *http.Request,
+	client gateway.GatewayAPIClient,
+	req *collaboration.CreateShareRequest,
+	info *provider.ResourceInfo,
+) {
 	createShareResponse, err := client.CreateShare(ctx, req)
 	if err != nil {
-		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error sending a grpc create share request", err)
+		response.WriteOCSError(
+			w,
+			r,
+			response.MetaServerError.StatusCode,
+			"error sending a grpc create share request",
+			err,
+		)
 		return
 	}
 	if createShareResponse.Status.Code != rpc.Code_CODE_OK {

@@ -29,12 +29,16 @@ type Option func(o *Options)
 type Options struct {
 	Endpoint           string
 	MaxCallRecvMsgSize int
+	Insecure           bool
+	SkipVerify         bool
+	CACertFile         string
 }
 
 // newOptions initializes the available default options.
 func newOptions(opts ...Option) Options {
 	opt := Options{
 		MaxCallRecvMsgSize: defaultMaxCallRecvMsgSize,
+		Insecure:           true,
 	}
 
 	for _, o := range opts {
@@ -54,6 +58,29 @@ func Endpoint(val string) Option {
 // MaxCallRecvMsgSize provides a function to set the MaxCallRecvMsgSize option.
 func MaxCallRecvMsgSize(size int) Option {
 	return func(o *Options) {
-		o.MaxCallRecvMsgSize = size
+		if size > 0 {
+			o.MaxCallRecvMsgSize = size
+		}
+	}
+}
+
+// Insecure provides a function to set the Insecure option.
+func Insecure(insecure bool) Option {
+	return func(o *Options) {
+		o.Insecure = insecure
+	}
+}
+
+// SkipVerify provides a function to set the SkipVerify option.
+func SkipVerify(skipVerify bool) Option {
+	return func(o *Options) {
+		o.SkipVerify = skipVerify
+	}
+}
+
+// CACertFile provides a function to set the CACertFile option.
+func CACertFile(caCertFile string) Option {
+	return func(o *Options) {
+		o.CACertFile = caCertFile
 	}
 }

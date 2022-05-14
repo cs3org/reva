@@ -41,7 +41,13 @@ import (
 
 // TODO(labkode): add multi-phase commit logic when commit share or commit ref is enabled.
 func (s *svc) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareRequest) (*ocm.CreateOCMShareResponse, error) {
-	c, err := pool.GetOCMShareProviderClient(pool.Endpoint(s.c.OCMShareProviderEndpoint))
+	c, err := pool.GetOCMShareProviderClient(
+		pool.Endpoint(s.c.OCMShareProviderEndpoint),
+		pool.Insecure(s.c.Insecure),
+		pool.SkipVerify(s.c.SkipVerify),
+		pool.CACertFile(s.c.CACertFile),
+		pool.MaxCallRecvMsgSize(s.c.MaxCallRecvMsgSize),
+	)
 	if err != nil {
 		return &ocm.CreateOCMShareResponse{
 			Status: status.NewInternal(ctx, err, "error getting user share provider client"),
@@ -75,7 +81,13 @@ func (s *svc) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareRequest
 }
 
 func (s *svc) RemoveOCMShare(ctx context.Context, req *ocm.RemoveOCMShareRequest) (*ocm.RemoveOCMShareResponse, error) {
-	c, err := pool.GetOCMShareProviderClient(pool.Endpoint(s.c.OCMShareProviderEndpoint))
+	c, err := pool.GetOCMShareProviderClient(
+		pool.Endpoint(s.c.OCMShareProviderEndpoint),
+		pool.Insecure(s.c.Insecure),
+		pool.SkipVerify(s.c.SkipVerify),
+		pool.CACertFile(s.c.CACertFile),
+		pool.MaxCallRecvMsgSize(s.c.MaxCallRecvMsgSize),
+	)
 	if err != nil {
 		return &ocm.RemoveOCMShareResponse{
 			Status: status.NewInternal(ctx, err, "error getting user share provider client"),
@@ -137,7 +149,13 @@ func (s *svc) GetOCMShare(ctx context.Context, req *ocm.GetOCMShareRequest) (*oc
 }
 
 func (s *svc) getOCMShare(ctx context.Context, req *ocm.GetOCMShareRequest) (*ocm.GetOCMShareResponse, error) {
-	c, err := pool.GetOCMShareProviderClient(pool.Endpoint(s.c.OCMShareProviderEndpoint))
+	c, err := pool.GetOCMShareProviderClient(
+		pool.Endpoint(s.c.OCMShareProviderEndpoint),
+		pool.Insecure(s.c.Insecure),
+		pool.SkipVerify(s.c.SkipVerify),
+		pool.CACertFile(s.c.CACertFile),
+		pool.MaxCallRecvMsgSize(s.c.MaxCallRecvMsgSize),
+	)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetOCMShareProviderClient")
 		return &ocm.GetOCMShareResponse{
@@ -155,7 +173,13 @@ func (s *svc) getOCMShare(ctx context.Context, req *ocm.GetOCMShareRequest) (*oc
 
 // TODO(labkode): read GetShare comment.
 func (s *svc) ListOCMShares(ctx context.Context, req *ocm.ListOCMSharesRequest) (*ocm.ListOCMSharesResponse, error) {
-	c, err := pool.GetOCMShareProviderClient(pool.Endpoint(s.c.OCMShareProviderEndpoint))
+	c, err := pool.GetOCMShareProviderClient(
+		pool.Endpoint(s.c.OCMShareProviderEndpoint),
+		pool.Insecure(s.c.Insecure),
+		pool.SkipVerify(s.c.SkipVerify),
+		pool.CACertFile(s.c.CACertFile),
+		pool.MaxCallRecvMsgSize(s.c.MaxCallRecvMsgSize),
+	)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetOCMShareProviderClient")
 		return &ocm.ListOCMSharesResponse{
@@ -172,7 +196,13 @@ func (s *svc) ListOCMShares(ctx context.Context, req *ocm.ListOCMSharesRequest) 
 }
 
 func (s *svc) UpdateOCMShare(ctx context.Context, req *ocm.UpdateOCMShareRequest) (*ocm.UpdateOCMShareResponse, error) {
-	c, err := pool.GetOCMShareProviderClient(pool.Endpoint(s.c.OCMShareProviderEndpoint))
+	c, err := pool.GetOCMShareProviderClient(
+		pool.Endpoint(s.c.OCMShareProviderEndpoint),
+		pool.Insecure(s.c.Insecure),
+		pool.SkipVerify(s.c.SkipVerify),
+		pool.CACertFile(s.c.CACertFile),
+		pool.MaxCallRecvMsgSize(s.c.MaxCallRecvMsgSize),
+	)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetOCMShareProviderClient")
 		return &ocm.UpdateOCMShareResponse{
@@ -188,8 +218,17 @@ func (s *svc) UpdateOCMShare(ctx context.Context, req *ocm.UpdateOCMShareRequest
 	return res, nil
 }
 
-func (s *svc) ListReceivedOCMShares(ctx context.Context, req *ocm.ListReceivedOCMSharesRequest) (*ocm.ListReceivedOCMSharesResponse, error) {
-	c, err := pool.GetOCMShareProviderClient(pool.Endpoint(s.c.OCMShareProviderEndpoint))
+func (s *svc) ListReceivedOCMShares(
+	ctx context.Context,
+	req *ocm.ListReceivedOCMSharesRequest,
+) (*ocm.ListReceivedOCMSharesResponse, error) {
+	c, err := pool.GetOCMShareProviderClient(
+		pool.Endpoint(s.c.OCMShareProviderEndpoint),
+		pool.Insecure(s.c.Insecure),
+		pool.SkipVerify(s.c.SkipVerify),
+		pool.CACertFile(s.c.CACertFile),
+		pool.MaxCallRecvMsgSize(s.c.MaxCallRecvMsgSize),
+	)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetOCMShareProviderClient")
 		return &ocm.ListReceivedOCMSharesResponse{
@@ -205,9 +244,18 @@ func (s *svc) ListReceivedOCMShares(ctx context.Context, req *ocm.ListReceivedOC
 	return res, nil
 }
 
-func (s *svc) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateReceivedOCMShareRequest) (*ocm.UpdateReceivedOCMShareResponse, error) {
+func (s *svc) UpdateReceivedOCMShare(
+	ctx context.Context,
+	req *ocm.UpdateReceivedOCMShareRequest,
+) (*ocm.UpdateReceivedOCMShareResponse, error) {
 	log := appctx.GetLogger(ctx)
-	c, err := pool.GetOCMShareProviderClient(pool.Endpoint(s.c.OCMShareProviderEndpoint))
+	c, err := pool.GetOCMShareProviderClient(
+		pool.Endpoint(s.c.OCMShareProviderEndpoint),
+		pool.Insecure(s.c.Insecure),
+		pool.SkipVerify(s.c.SkipVerify),
+		pool.CACertFile(s.c.CACertFile),
+		pool.MaxCallRecvMsgSize(s.c.MaxCallRecvMsgSize),
+	)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetOCMShareProviderClient")
 		return &ocm.UpdateReceivedOCMShareResponse{
@@ -287,7 +335,8 @@ func (s *svc) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateReceive
 						if strings.ToLower(s.Endpoint.Type.Name) == "webdav" {
 							url, err := url.Parse(s.Endpoint.Path)
 							if err != nil {
-								log.Err(err).Msg("gateway: error calling UpdateReceivedShare: unable to parse webdav endpoint " + s.Endpoint.Path)
+								log.Err(err).
+									Msg("gateway: error calling UpdateReceivedShare: unable to parse webdav endpoint " + s.Endpoint.Path)
 								return &ocm.UpdateReceivedOCMShareResponse{
 									Status: &rpc.Status{Code: rpc.Code_CODE_INTERNAL},
 								}, nil
@@ -336,7 +385,8 @@ func (s *svc) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateReceive
 					}
 					url, err := url.Parse(destWebdavEndpoint)
 					if err != nil {
-						log.Err(err).Msg("gateway: error calling UpdateReceivedShare: unable to parse webdav endpoint " + destWebdavEndpoint)
+						log.Err(err).
+							Msg("gateway: error calling UpdateReceivedShare: unable to parse webdav endpoint " + destWebdavEndpoint)
 						return &ocm.UpdateReceivedOCMShareResponse{
 							Status: &rpc.Status{Code: rpc.Code_CODE_INTERNAL},
 						}, nil
@@ -352,8 +402,19 @@ func (s *svc) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateReceive
 							Status: &rpc.Status{Code: rpc.Code_CODE_INTERNAL},
 						}, nil
 					}
-					destPath := path.Join(destEndpointBaseURI, homeRes.Path, s.c.DataTransfersFolder, path.Base(share.GetShare().Name))
-					destTargetURI := fmt.Sprintf("%s://%s@%s?name=%s", destEndpointScheme, destToken, destEndpoint, destPath)
+					destPath := path.Join(
+						destEndpointBaseURI,
+						homeRes.Path,
+						s.c.DataTransfersFolder,
+						path.Base(share.GetShare().Name),
+					)
+					destTargetURI := fmt.Sprintf(
+						"%s://%s@%s?name=%s",
+						destEndpointScheme,
+						destToken,
+						destEndpoint,
+						destPath,
+					)
 
 					opaqueObj := &types.Opaque{
 						Map: map[string]*types.OpaqueEntry{
@@ -408,8 +469,17 @@ func (s *svc) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateReceive
 	return res, nil
 }
 
-func (s *svc) GetReceivedOCMShare(ctx context.Context, req *ocm.GetReceivedOCMShareRequest) (*ocm.GetReceivedOCMShareResponse, error) {
-	c, err := pool.GetOCMShareProviderClient(pool.Endpoint(s.c.OCMShareProviderEndpoint))
+func (s *svc) GetReceivedOCMShare(
+	ctx context.Context,
+	req *ocm.GetReceivedOCMShareRequest,
+) (*ocm.GetReceivedOCMShareResponse, error) {
+	c, err := pool.GetOCMShareProviderClient(
+		pool.Endpoint(s.c.OCMShareProviderEndpoint),
+		pool.Insecure(s.c.Insecure),
+		pool.SkipVerify(s.c.SkipVerify),
+		pool.CACertFile(s.c.CACertFile),
+		pool.MaxCallRecvMsgSize(s.c.MaxCallRecvMsgSize),
+	)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetOCMShareProviderClient")
 		return &ocm.GetReceivedOCMShareResponse{
@@ -426,7 +496,6 @@ func (s *svc) GetReceivedOCMShare(ctx context.Context, req *ocm.GetReceivedOCMSh
 }
 
 func (s *svc) createOCMReference(ctx context.Context, share *ocm.Share) (*rpc.Status, error) {
-
 	log := appctx.GetLogger(ctx)
 
 	var token string
@@ -458,7 +527,8 @@ func (s *svc) createOCMReference(ctx context.Context, share *ocm.Share) (*rpc.St
 		if err != nil {
 			return status.NewInternal(ctx, err, "error creating transfers directory"), nil
 		}
-		if createTransferDir.Status.Code != rpc.Code_CODE_OK && createTransferDir.Status.Code != rpc.Code_CODE_ALREADY_EXISTS {
+		if createTransferDir.Status.Code != rpc.Code_CODE_OK &&
+			createTransferDir.Status.Code != rpc.Code_CODE_ALREADY_EXISTS {
 			err := status.NewErrorFromCode(createTransferDir.Status.GetCode(), "gateway")
 			return status.NewInternal(ctx, err, "error creating transfers directory"), nil
 		}

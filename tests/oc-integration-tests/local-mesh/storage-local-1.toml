@@ -5,6 +5,7 @@
 #   - /data - dataprovider: file up and download
 
 [shared]
+insecure = true
 jwt_secret = "Pive-Fumkiu4"
 gatewaysvc = "localhost:39000"
 

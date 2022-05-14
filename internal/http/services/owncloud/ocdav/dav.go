@@ -135,7 +135,7 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 			h.AvatarsHandler.Handler(s).ServeHTTP(w, r)
 		case "files":
 			var requestUserID string
-			var oldPath = r.URL.Path
+			oldPath := r.URL.Path
 
 			// detect and check current user in URL
 			requestUserID, r.URL.Path = router.ShiftPath(r.URL.Path)
@@ -175,7 +175,13 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 		case "public-files":
 			base := path.Join(ctx.Value(ctxKeyBaseURI).(string), "public-files")
 			ctx = context.WithValue(ctx, ctxKeyBaseURI, base)
-			c, err := pool.GetGatewayServiceClient(pool.Endpoint(s.c.GatewaySvc))
+			c, err := pool.GetGatewayServiceClient(
+				pool.Endpoint(s.c.GatewaySvc),
+				pool.Insecure(s.c.Insecure),
+				pool.SkipVerify(s.c.SkipVerify),
+				pool.CACertFile(s.c.CACertFile),
+				pool.MaxCallRecvMsgSize(s.c.MaxCallRecvMsgSize),
+			)
 			if err != nil {
 				w.WriteHeader(http.StatusNotFound)
 			}
@@ -262,11 +268,19 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 	})
 }
 
-func getTokenStatInfo(ctx context.Context, client gatewayv1beta1.GatewayAPIClient, token string) (*provider.StatResponse, error) {
+func getTokenStatInfo(
+	ctx context.Context,
+	client gatewayv1beta1.GatewayAPIClient,
+	token string,
+) (*provider.StatResponse, error) {
 	return client.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{Path: path.Join("/public", token)}})
 }
 
-func handleBasicAuth(ctx context.Context, c gatewayv1beta1.GatewayAPIClient, token, pw string) (*gatewayv1beta1.AuthenticateResponse, error) {
+func handleBasicAuth(
+	ctx context.Context,
+	c gatewayv1beta1.GatewayAPIClient,
+	token, pw string,
+) (*gatewayv1beta1.AuthenticateResponse, error) {
 	authenticateRequest := gatewayv1beta1.AuthenticateRequest{
 		Type:         "publicshares",
 		ClientId:     token,
@@ -276,7 +290,11 @@ func handleBasicAuth(ctx context.Context, c gatewayv1beta1.GatewayAPIClient, tok
 	return c.Authenticate(ctx, &authenticateRequest)
 }
 
-func handleSignatureAuth(ctx context.Context, c gatewayv1beta1.GatewayAPIClient, token, sig, expiration string) (*gatewayv1beta1.AuthenticateResponse, error) {
+func handleSignatureAuth(
+	ctx context.Context,
+	c gatewayv1beta1.GatewayAPIClient,
+	token, sig, expiration string,
+) (*gatewayv1beta1.AuthenticateResponse, error) {
 	authenticateRequest := gatewayv1beta1.AuthenticateRequest{
 		Type:         "publicshares",
 		ClientId:     token,

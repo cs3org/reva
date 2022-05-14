@@ -23,13 +23,12 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"regexp"
 	"time"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-
-	"regexp"
 
 	"github.com/cs3org/reva/internal/http/services/archiver/manager"
 	"github.com/cs3org/reva/pkg/appctx"
@@ -59,14 +58,17 @@ type svc struct {
 
 // Config holds the config options that need to be passed down to all ocdav handlers
 type Config struct {
-	Prefix         string   `mapstructure:"prefix"`
-	GatewaySvc     string   `mapstructure:"gatewaysvc"`
-	Timeout        int64    `mapstructure:"timeout"`
-	Insecure       bool     `mapstructure:"insecure"`
-	Name           string   `mapstructure:"name"`
-	MaxNumFiles    int64    `mapstructure:"max_num_files"`
-	MaxSize        int64    `mapstructure:"max_size"`
-	AllowedFolders []string `mapstructure:"allowed_folders"`
+	Prefix             string   `mapstructure:"prefix"`
+	GatewaySvc         string   `mapstructure:"gatewaysvc"`
+	Timeout            int64    `mapstructure:"timeout"`
+	Name               string   `mapstructure:"name"`
+	MaxNumFiles        int64    `mapstructure:"max_num_files"`
+	MaxSize            int64    `mapstructure:"max_size"`
+	AllowedFolders     []string `mapstructure:"allowed_folders"`
+	CACertFile         string   `mapstructure:"ca_certfile"`
+	MaxCallRecvMsgSize int      `mapstructure:"client_recv_msg_size"`
+	Insecure           bool     `mapstructure:"insecure"`
+	SkipVerify         bool     `mapstructure:"skip_verify"`
 }
 
 func init() {
@@ -83,7 +85,13 @@ func New(conf map[string]interface{}, log *zerolog.Logger) (global.Service, erro
 
 	c.init()
 
-	gtw, err := pool.GetGatewayServiceClient(pool.Endpoint(c.GatewaySvc))
+	gtw, err := pool.GetGatewayServiceClient(
+		pool.Endpoint(c.GatewaySvc),
+		pool.Insecure(c.Insecure),
+		pool.SkipVerify(c.SkipVerify),
+		pool.CACertFile(c.CACertFile),
+		pool.MaxCallRecvMsgSize(c.MaxCallRecvMsgSize),
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -99,9 +107,13 @@ func New(conf map[string]interface{}, log *zerolog.Logger) (global.Service, erro
 	}
 
 	return &svc{
-		config:         c,
-		gtwClient:      gtw,
-		downloader:     downloader.NewDownloader(gtw, rhttp.Insecure(c.Insecure), rhttp.Timeout(time.Duration(c.Timeout*int64(time.Second)))),
+		config:    c,
+		gtwClient: gtw,
+		downloader: downloader.NewDownloader(
+			gtw,
+			rhttp.Insecure(c.Insecure),
+			rhttp.Timeout(time.Duration(c.Timeout*int64(time.Second))),
+		),
 		walker:         walker.NewWalker(gtw),
 		log:            log,
 		allowedFolders: allowedFolderRegex,
@@ -262,7 +274,6 @@ func (s *svc) Handler() http.Handler {
 			s.writeHTTPError(rw, err)
 			return
 		}
-
 	})
 }
 

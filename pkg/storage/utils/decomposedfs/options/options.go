@@ -40,7 +40,17 @@ type Options struct {
 	// TODO NodeLayout option to save nodes as eg. nodes/1d/d8/1dd84abf-9466-4e14-bb86-02fc4ea3abcf
 	ShareFolder string `mapstructure:"share_folder"`
 
+	// set an owner for the root node
+	Owner     string `mapstructure:"owner"`
+	OwnerIDP  string `mapstructure:"owner_idp"`
+	OwnerType string `mapstructure:"owner_type"`
+
+	GatewayAddr string `mapstructure:"gateway_addr"`
+
+	CACertFile         string `mapstructure:"ca_certfile"`
+	MaxCallRecvMsgSize int    `mapstructure:"client_recv_msg_size"`
 	// EnableHome enables the creation of home directories.
+
 	EnableHome bool `mapstructure:"enable_home"`
 
 	// propagate mtime changes as tmtime (tree modification time) to the parent directory when user.ocis.propagation=1 is set on a node
@@ -49,12 +59,8 @@ type Options struct {
 	// propagate size changes as treesize
 	TreeSizeAccounting bool `mapstructure:"treesize_accounting"`
 
-	// set an owner for the root node
-	Owner     string `mapstructure:"owner"`
-	OwnerIDP  string `mapstructure:"owner_idp"`
-	OwnerType string `mapstructure:"owner_type"`
-
-	GatewayAddr string `mapstructure:"gateway_addr"`
+	Insecure   bool `mapstructure:"insecure"`
+	SkipVerify bool `mapstructure:"skip_verify"`
 }
 
 // New returns a new Options instance for the given configuration

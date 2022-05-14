@@ -40,13 +40,22 @@ import (
 )
 
 type invitesHandler struct {
-	smtpCredentials  *smtpclient.SMTPCredentials
-	gatewayAddr      string
-	meshDirectoryURL string
+	smtpCredentials    *smtpclient.SMTPCredentials
+	gatewayAddr        string
+	meshDirectoryURL   string
+	insecure           bool
+	skipVerify         bool
+	caCertFile         string
+	maxCallRecvMsgSize int
 }
 
 func (h *invitesHandler) init(c *Config) {
 	h.gatewayAddr = c.GatewaySvc
+	h.insecure = c.Insecure
+	h.skipVerify = c.SkipVerify
+	h.gatewayAddr = c.GatewaySvc
+	h.maxCallRecvMsgSize = c.MaxCallRecvMsgSize
+	h.caCertFile = c.CACertFile
 	if c.SMTPCredentials != nil {
 		h.smtpCredentials = smtpclient.NewSMTPCredentials(c.SMTPCredentials)
 	}
@@ -78,10 +87,15 @@ func (h *invitesHandler) Handler() http.Handler {
 }
 
 func (h *invitesHandler) generateInviteToken(w http.ResponseWriter, r *http.Request) {
-
 	ctx := r.Context()
 
-	gatewayClient, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	gatewayClient, err := pool.GetGatewayServiceClient(
+		pool.Endpoint(h.gatewayAddr),
+		pool.Insecure(h.insecure),
+		pool.SkipVerify(h.skipVerify),
+		pool.CACertFile(h.caCertFile),
+		pool.MaxCallRecvMsgSize(h.maxCallRecvMsgSize),
+	)
 	if err != nil {
 		WriteError(w, r, APIErrorServerError, "error getting gateway grpc client", err)
 		return
@@ -155,7 +169,13 @@ func (h *invitesHandler) forwardInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	gatewayClient, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	gatewayClient, err := pool.GetGatewayServiceClient(
+		pool.Endpoint(h.gatewayAddr),
+		pool.Insecure(h.insecure),
+		pool.SkipVerify(h.skipVerify),
+		pool.CACertFile(h.caCertFile),
+		pool.MaxCallRecvMsgSize(h.maxCallRecvMsgSize),
+	)
 	if err != nil {
 		WriteError(w, r, APIErrorServerError, "error getting gateway grpc client", err)
 		return
@@ -173,7 +193,13 @@ func (h *invitesHandler) forwardInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if providerInfo.Status.Code != rpc.Code_CODE_OK {
-		WriteError(w, r, APIErrorServerError, "grpc forward invite request failed", errors.New(providerInfo.Status.Message))
+		WriteError(
+			w,
+			r,
+			APIErrorServerError,
+			"grpc forward invite request failed",
+			errors.New(providerInfo.Status.Message),
+		)
 		return
 	}
 
@@ -187,7 +213,13 @@ func (h *invitesHandler) forwardInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if forwardInviteResponse.Status.Code != rpc.Code_CODE_OK {
-		WriteError(w, r, APIErrorServerError, "grpc forward invite request failed", errors.New(forwardInviteResponse.Status.Message))
+		WriteError(
+			w,
+			r,
+			APIErrorServerError,
+			"grpc forward invite request failed",
+			errors.New(forwardInviteResponse.Status.Message),
+		)
 		return
 	}
 
@@ -226,7 +258,13 @@ func (h *invitesHandler) acceptInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	gatewayClient, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	gatewayClient, err := pool.GetGatewayServiceClient(
+		pool.Endpoint(h.gatewayAddr),
+		pool.Insecure(h.insecure),
+		pool.SkipVerify(h.skipVerify),
+		pool.CACertFile(h.caCertFile),
+		pool.MaxCallRecvMsgSize(h.maxCallRecvMsgSize),
+	)
 	if err != nil {
 		WriteError(w, r, APIErrorServerError, "error getting gateway grpc client", err)
 		return
@@ -234,13 +272,25 @@ func (h *invitesHandler) acceptInvite(w http.ResponseWriter, r *http.Request) {
 
 	clientIP, err := utils.GetClientIP(r)
 	if err != nil {
-		WriteError(w, r, APIErrorServerError, fmt.Sprintf("error retrieving client IP from request: %s", r.RemoteAddr), err)
+		WriteError(
+			w,
+			r,
+			APIErrorServerError,
+			fmt.Sprintf("error retrieving client IP from request: %s", r.RemoteAddr),
+			err,
+		)
 		return
 	}
 
 	recipientProviderURL, err := url.Parse(recipientProvider)
 	if err != nil {
-		WriteError(w, r, APIErrorServerError, fmt.Sprintf("error parseing recipientProvider URL: %s", recipientProvider), err)
+		WriteError(
+			w,
+			r,
+			APIErrorServerError,
+			fmt.Sprintf("error parseing recipientProvider URL: %s", recipientProvider),
+			err,
+		)
 		return
 	}
 
@@ -261,7 +311,13 @@ func (h *invitesHandler) acceptInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if providerAllowedResp.Status.Code != rpc.Code_CODE_OK {
-		WriteError(w, r, APIErrorUnauthenticated, "provider not authorized", errors.New(providerAllowedResp.Status.Message))
+		WriteError(
+			w,
+			r,
+			APIErrorUnauthenticated,
+			"provider not authorized",
+			errors.New(providerAllowedResp.Status.Message),
+		)
 		return
 	}
 
@@ -286,7 +342,13 @@ func (h *invitesHandler) acceptInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if acceptInviteResponse.Status.Code != rpc.Code_CODE_OK {
-		WriteError(w, r, APIErrorServerError, "grpc accept invite request failed", errors.New(acceptInviteResponse.Status.Message))
+		WriteError(
+			w,
+			r,
+			APIErrorServerError,
+			"grpc accept invite request failed",
+			errors.New(acceptInviteResponse.Status.Message),
+		)
 		return
 	}
 
@@ -297,7 +359,13 @@ func (h *invitesHandler) findAcceptedUsers(w http.ResponseWriter, r *http.Reques
 	log := appctx.GetLogger(r.Context())
 
 	ctx := r.Context()
-	gatewayClient, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	gatewayClient, err := pool.GetGatewayServiceClient(
+		pool.Endpoint(h.gatewayAddr),
+		pool.Insecure(h.insecure),
+		pool.SkipVerify(h.skipVerify),
+		pool.CACertFile(h.caCertFile),
+		pool.MaxCallRecvMsgSize(h.maxCallRecvMsgSize),
+	)
 	if err != nil {
 		WriteError(w, r, APIErrorServerError, "error getting gateway grpc client", err)
 		return
@@ -323,7 +391,13 @@ func (h *invitesHandler) generate(w http.ResponseWriter, r *http.Request) {
 	log := appctx.GetLogger(r.Context())
 
 	ctx := r.Context()
-	gatewayClient, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	gatewayClient, err := pool.GetGatewayServiceClient(
+		pool.Endpoint(h.gatewayAddr),
+		pool.Insecure(h.insecure),
+		pool.SkipVerify(h.skipVerify),
+		pool.CACertFile(h.caCertFile),
+		pool.MaxCallRecvMsgSize(h.maxCallRecvMsgSize),
+	)
 	if err != nil {
 		WriteError(w, r, APIErrorServerError, "error getting gateway grpc client", err)
 		return

@@ -15,6 +15,7 @@ LITMUS_URL_NEW="http://localhost:20080/remote.php/dav/files/4c510ada-c86b-4815-8
 LITMUS_USERNAME="einstein"
 LITMUS_PASSWORD="relativity"
 TESTS="basic http copymove props"
+CERT_DIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))cert
 
 default: build test lint gen-doc check-changelog
 release: deps build test lint gen-doc
@@ -29,6 +30,16 @@ off:
 
 imports: off
 	`go env GOPATH`/bin/goimports -w tools pkg internal cmd
+
+# Create certificates to encrypt the gRPC connection
+cert: 
+	mkdir -p ${CERT_DIR}
+	openssl genrsa -out cert/ca.key 4096
+	openssl req -new -x509 -key cert/ca.key -sha256 -subj "/C=CH/ST=GE/O=CERN" -days 365 -out cert/ca.cert
+	openssl genrsa -out cert/vault.key 4096
+	openssl req -new -key cert/vault.key -out cert/vault.csr -config certificate.conf
+	openssl x509 -req -in cert/vault.csr -CA cert/ca.cert -CAkey cert/ca.key -CAcreateserial \
+		-out cert/vault.pem -days 365 -sha256 -extfile certificate.conf -extensions req_ext
 
 build: build-revad build-reva test-go-version
 
