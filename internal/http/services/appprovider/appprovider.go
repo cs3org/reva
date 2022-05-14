@@ -51,7 +51,7 @@ func init() {
 type Config struct {
 	Prefix     string `mapstructure:"prefix"`
 	GatewaySvc string `mapstructure:"gatewaysvc"`
-	Insecure   bool   `mapstructure:"insecure"`
+	Insecure   bool   `mapstructure:"insecure" docs:"false;Whether to skip certificate checks when sending requests."`
 }
 
 func (c *Config) init() {

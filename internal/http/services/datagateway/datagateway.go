@@ -58,7 +58,7 @@ type config struct {
 	Prefix               string `mapstructure:"prefix"`
 	TransferSharedSecret string `mapstructure:"transfer_shared_secret"`
 	Timeout              int64  `mapstructure:"timeout"`
-	Insecure             bool   `mapstructure:"insecure"`
+	Insecure             bool   `mapstructure:"insecure" docs:"false;Whether to skip certificate checks when sending requests."`
 }
 
 func (c *config) init() {
