@@ -223,7 +223,7 @@ func (s *svc) Close() error {
 }
 
 func (s *svc) Unprotected() []string {
-	return []string{"/status.php", "/remote.php/dav/public-files/", "/apps/files/", "/index.php/f/", "/index.php/s/"}
+	return []string{"/status.php", "/status", "/remote.php/dav/public-files/", "/apps/files/", "/index.php/f/", "/index.php/s/"}
 }
 
 func (s *svc) Handler() http.Handler {
@@ -248,7 +248,7 @@ func (s *svc) Handler() http.Handler {
 		head, r.URL.Path = router.ShiftPath(r.URL.Path)
 		log.Debug().Str("head", head).Str("tail", r.URL.Path).Msg("http routing")
 		switch head {
-		case "status.php":
+		case "status.php", "status":
 			s.doStatus(w, r)
 			return
 		case "remote.php":
