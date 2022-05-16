@@ -86,6 +86,7 @@ type Status struct {
 	Edition        string  `json:"edition" xml:"edition"`
 	ProductName    string  `json:"productname" xml:"productname"`
 	Product        string  `json:"product" xml:"product"`
+	ProductVersion string  `json:"productversion" xml:"productversion"`
 	Hostname       string  `json:"hostname,omitempty" xml:"hostname,omitempty"`
 }
 

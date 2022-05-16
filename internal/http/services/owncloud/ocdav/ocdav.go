@@ -101,6 +101,7 @@ type Config struct {
 	Edition                string                            `mapstructure:"edition"`
 	Product                string                            `mapstructure:"product"`
 	ProductName            string                            `mapstructure:"product_name"`
+	ProductVersion         string                            `mapstructure:"product_version"`
 }
 
 func (c *Config) init() {
@@ -125,6 +126,10 @@ func (c *Config) init() {
 
 	if c.ProductName == "" {
 		c.ProductName = "reva"
+	}
+
+	if c.ProductVersion == "" {
+		c.ProductVersion = "10.0.11"
 	}
 
 	if c.Edition == "" {
