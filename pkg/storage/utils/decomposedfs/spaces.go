@@ -585,11 +585,7 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 		}
 
 		if n.SpaceRoot.IsDisabled() {
-			ok, err := node.NewPermissions(fs.lu).HasPermission(ctx, n, func(p *provider.ResourcePermissions) bool {
-				// TODO: Which permission do I need to see the space?
-				return p.AddGrant
-			})
-			if err != nil || !ok {
+			if err := fs.checkManagerPermission(ctx, n); err != nil {
 				return nil, errtypes.PermissionDenied(fmt.Sprintf("user %s is not allowed to list deleted spaces %s", user.Username, n.ID))
 			}
 		}
@@ -752,9 +748,9 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 
 func (fs *Decomposedfs) checkManagerPermission(ctx context.Context, n *node.Node) error {
 	// to update the space name or short description we need the manager role
-	// current workaround: check if AddGrant Permission exists
+	// current workaround: check if RemoveGrant Permission exists
 	managerPerm, err := fs.p.HasPermission(ctx, n, func(rp *provider.ResourcePermissions) bool {
-		return rp.AddGrant
+		return rp.RemoveGrant
 	})
 	switch {
 	case err != nil:

@@ -158,17 +158,20 @@ var _ = Describe("ACE", func() {
 			Expect(newGrant.Permissions.AddGrant).To(BeTrue())
 			Expect(newGrant.Permissions.Delete).To(BeFalse())
 
-			userGrant.Permissions.RemoveGrant = true
-			newGrant = ace.FromGrant(userGrant).Grant()
-			userGrant.Permissions.RemoveGrant = false
-			Expect(newGrant.Permissions.RemoveGrant).To(BeTrue())
-			Expect(newGrant.Permissions.Delete).To(BeFalse())
+			// TODO: test via manager permission
+			/*
+				userGrant.Permissions.RemoveGrant = true
+				newGrant = ace.FromGrant(userGrant).Grant()
+				userGrant.Permissions.RemoveGrant = false
+				Expect(newGrant.Permissions.RemoveGrant).To(BeTrue())
+				Expect(newGrant.Permissions.Delete).To(BeFalse())
 
-			userGrant.Permissions.UpdateGrant = true
-			newGrant = ace.FromGrant(userGrant).Grant()
-			userGrant.Permissions.UpdateGrant = false
-			Expect(newGrant.Permissions.UpdateGrant).To(BeTrue())
-			Expect(newGrant.Permissions.Delete).To(BeFalse())
+				userGrant.Permissions.UpdateGrant = true
+				newGrant = ace.FromGrant(userGrant).Grant()
+				userGrant.Permissions.UpdateGrant = false
+				Expect(newGrant.Permissions.UpdateGrant).To(BeTrue())
+				Expect(newGrant.Permissions.Delete).To(BeFalse())
+			*/
 		})
 
 		It("converts c", func() {

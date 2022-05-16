@@ -25,6 +25,7 @@ import (
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v2/pkg/appctx"
+	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/ace"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
@@ -51,9 +52,26 @@ func (fs *Decomposedfs) AddGrant(ctx context.Context, ref *provider.Reference, g
 		return
 	}
 
-	grantees, err := node.ListGrantees(ctx)
+	u := ctxpkg.ContextMustGetUser(ctx)
+	grants, err := node.ListGrants(ctx)
 	if err != nil {
 		return err
+	}
+
+	var exists bool
+	for _, grant := range grants {
+		if g.Grantee.GetUserId().GetOpaqueId() == grant.Grantee.GetUserId().GetOpaqueId() {
+			exists = true
+			g.Grantee.Opaque = utils.MergeOpaques(g.Grantee.Opaque, grant.Grantee.Opaque)
+
+			break
+		}
+	}
+
+	// TODO: change cs3api to have a field for this
+	// TODO: take idp into account
+	if !exists {
+		g.Grantee.Opaque = utils.AppendPlainToOpaque(g.Grantee.Opaque, "granting-user", u.Id.GetOpaqueId())
 	}
 
 	owner := node.Owner()
@@ -61,7 +79,8 @@ func (fs *Decomposedfs) AddGrant(ctx context.Context, ref *provider.Reference, g
 	// In this case we don't need to check for permissions and just add the grant since this will be the project
 	// manager.
 	// When the owner is empty but grants are set then we do want to check the grants.
-	if !(len(grantees) == 0 && (owner == nil || owner.OpaqueId == "")) {
+	// However, if we are trying to edit an existing grant we do not have to check for permission if the user owns the grant
+	if !(len(grants) == 0 && (owner == nil || owner.OpaqueId == "")) {
 		ok, err := fs.p.HasPermission(ctx, node, func(rp *provider.ResourcePermissions) bool {
 			// TODO remove AddGrant or UpdateGrant grant from CS3 api, redundant? tracked in https://github.com/cs3org/cs3apis/issues/92
 			return rp.AddGrant || rp.UpdateGrant
@@ -148,14 +167,34 @@ func (fs *Decomposedfs) RemoveGrant(ctx context.Context, ref *provider.Reference
 		return
 	}
 
-	ok, err := fs.p.HasPermission(ctx, node, func(rp *provider.ResourcePermissions) bool {
-		return rp.RemoveGrant
-	})
-	switch {
-	case err != nil:
-		return errtypes.InternalError(err.Error())
-	case !ok:
-		return errtypes.PermissionDenied(filepath.Join(node.ParentID, node.Name))
+	// you are allowed to remove grants you created yourself
+	var ownsGrant bool
+	u, ok := ctxpkg.ContextGetUser(ctx)
+	if ok {
+		grants, err := fs.ListGrants(ctx, ref)
+		if err != nil {
+			return err
+		}
+
+		for _, grant := range grants {
+			if g.Grantee.GetUserId().GetOpaqueId() == grant.Grantee.GetUserId().GetOpaqueId() {
+				if utils.ReadPlainFromOpaque(grant.Grantee.Opaque, "granting-user") == u.GetId().GetOpaqueId() { // TODO: adjust cs3api
+					ownsGrant = true
+				}
+			}
+		}
+	}
+
+	if !ownsGrant {
+		ok, err = fs.p.HasPermission(ctx, node, func(rp *provider.ResourcePermissions) bool {
+			return rp.RemoveGrant
+		})
+		switch {
+		case err != nil:
+			return errtypes.InternalError(err.Error())
+		case !ok:
+			return errtypes.PermissionDenied(filepath.Join(node.ParentID, node.Name))
+		}
 	}
 
 	// check lock

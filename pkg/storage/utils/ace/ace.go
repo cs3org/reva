@@ -27,6 +27,7 @@ import (
 	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/v2/pkg/utils"
 )
 
 // ACE represents an Access Control Entry, mimicing NFSv4 ACLs
@@ -129,7 +130,7 @@ func FromGrant(g *provider.Grant) *ACE {
 	e := &ACE{
 		_type:       "A",
 		permissions: getACEPerm(g.Permissions),
-		// TODO creator ...
+		creator:     utils.ReadPlainFromOpaque(g.Grantee.Opaque, "granting-user"), // TODO: change cs3api
 	}
 	if g.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_GROUP {
 		e.flags = "g"
@@ -148,7 +149,7 @@ func (e *ACE) Principal() string {
 // Marshal renders a principal and byte[] that can be used to persist the ACE as an extended attribute
 func (e *ACE) Marshal() (string, []byte) {
 	// first byte will be replaced after converting to byte array
-	val := fmt.Sprintf("_t=%s:f=%s:p=%s", e._type, e.flags, e.permissions)
+	val := fmt.Sprintf("_t=%s:f=%s:p=%s:c=%s", e._type, e.flags, e.permissions, e.creator)
 	b := []byte(val)
 	b[0] = 0 // indicate key value
 	return e.principal, b
@@ -193,6 +194,9 @@ func (e *ACE) Grant() *provider.Grant {
 	} else if e.granteeType() == provider.GranteeType_GRANTEE_TYPE_USER {
 		g.Grantee.Id = &provider.Grantee_UserId{UserId: &userpb.UserId{OpaqueId: id}}
 	}
+
+	// TODO: change cs3api
+	g.Grantee.Opaque = utils.AppendPlainToOpaque(g.Grantee.Opaque, "granting-user", e.creator)
 	return g
 }
 
@@ -240,11 +244,13 @@ func (e *ACE) grantPermissionSet() *provider.ResourcePermissions {
 	// sharing
 	if strings.Contains(e.permissions, "C") {
 		p.AddGrant = true
-		p.RemoveGrant = true
-		p.UpdateGrant = true
 	}
 	if strings.Contains(e.permissions, "c") {
 		p.ListGrants = true
+	}
+	if strings.Contains(e.permissions, "o") { // missuse o = write-owner
+		p.RemoveGrant = true
+		p.UpdateGrant = true
 	}
 
 	// trash
@@ -339,11 +345,14 @@ func getACEPerm(set *provider.ResourcePermissions) string {
 	}
 
 	// sharing
-	if set.AddGrant || set.RemoveGrant || set.UpdateGrant {
+	if set.AddGrant {
 		b.WriteString("C")
 	}
 	if set.ListGrants {
 		b.WriteString("c")
+	}
+	if set.RemoveGrant || set.UpdateGrant {
+		b.WriteString("o")
 	}
 
 	// trash

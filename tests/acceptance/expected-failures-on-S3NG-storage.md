@@ -1497,10 +1497,12 @@ _ocs: api compatibility, return correct status code_
 - [apiTrashbin/trashbinFilesFolders.feature:438](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L438)
 - [apiTrashbin/trashbinFilesFolders.feature:475](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L475)
 
-#### [reShareUpdate API tests failing in reva](https://github.com/cs3org/reva/issues/2916)
-
-- [apiShareReshareToShares3/reShareUpdate.feature:152](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareReshareToShares3/reShareUpdate.feature#L152)
-- [apiShareReshareToShares3/reShareUpdate.feature:153](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareReshareToShares3/reShareUpdate.feature#L153)
+#### Resharing is allowed for viewers and editors
+- [apiShareCreateSpecialToShares2/createShareReceivedInMultipleWays.feature:602](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares2/createShareReceivedInMultipleWays.feature#L602)
+- [apiSharePublicLink2/reShareAsPublicLinkToSharesNewDav.feature:27](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink2/reShareAsPublicLinkToSharesNewDav.feature#L27)
+- [apiSharePublicLink2/reShareAsPublicLinkToSharesNewDav.feature:28](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink2/reShareAsPublicLinkToSharesNewDav.feature#L28)
+- [apiSharePublicLink2/reShareAsPublicLinkToSharesNewDav.feature:79](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink2/reShareAsPublicLinkToSharesNewDav.feature#L79)
+- [apiSharePublicLink2/reShareAsPublicLinkToSharesNewDav.feature:80](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink2/reShareAsPublicLinkToSharesNewDav.feature#L80)
 
 #### [apiShareOperationsToShares1/gettingShares.feature:28 fails in CI](https://github.com/cs3org/reva/issues/2926)
 
