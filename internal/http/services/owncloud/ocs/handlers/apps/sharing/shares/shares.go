@@ -441,6 +441,7 @@ func (h *Handler) extractPermissions(w http.ResponseWriter, r *http.Request, ri 
 				Error:   errors.New("cannot set the requested share permissions"),
 			}
 		}
+		role = conversions.RoleFromOCSPermissions(permissions)
 	}
 
 	existingPermissions := conversions.RoleFromResourcePermissions(ri.PermissionSet).OCSPermissions()
@@ -452,7 +453,6 @@ func (h *Handler) extractPermissions(w http.ResponseWriter, r *http.Request, ri 
 		}
 	}
 
-	role = conversions.RoleFromOCSPermissions(permissions)
 	roleMap := map[string]string{"name": role.Name}
 	val, err := json.Marshal(roleMap)
 	if err != nil {

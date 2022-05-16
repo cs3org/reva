@@ -336,12 +336,8 @@ func GetViewMode(viewMode string) gateway.OpenInAppRequest_ViewMode {
 
 // AppendPlainToOpaque adds a new key value pair as a plain string on the given opaque and returns it
 func AppendPlainToOpaque(o *types.Opaque, key, value string) *types.Opaque {
-	if o == nil {
-		o = &types.Opaque{}
-	}
-	if o.Map == nil {
-		o.Map = map[string]*types.OpaqueEntry{}
-	}
+	o = ensureOpaque(o)
+
 	o.Map[key] = &types.OpaqueEntry{
 		Decoder: "plain",
 		Value:   []byte(value),
@@ -351,7 +347,7 @@ func AppendPlainToOpaque(o *types.Opaque, key, value string) *types.Opaque {
 
 // ReadPlainFromOpaque reads a plain string from the given opaque map
 func ReadPlainFromOpaque(o *types.Opaque, key string) string {
-	if o == nil || o.Map == nil {
+	if o.GetMap() == nil {
 		return ""
 	}
 	if e, ok := o.Map[key]; ok && e.Decoder == "plain" {
@@ -362,12 +358,33 @@ func ReadPlainFromOpaque(o *types.Opaque, key string) string {
 
 // ExistsInOpaque returns true if the key exists in the opaque (ignoring the value)
 func ExistsInOpaque(o *types.Opaque, key string) bool {
-	if o == nil || o.Map == nil {
+	if o.GetMap() == nil {
 		return false
 	}
 
 	_, ok := o.Map[key]
 	return ok
+}
+
+// MergeOpaques will merge the opaques. If a key exists in both opaques
+// the values from the first opaque will be taken
+func MergeOpaques(o *types.Opaque, p *types.Opaque) *types.Opaque {
+	p = ensureOpaque(p)
+	for k, v := range o.GetMap() {
+		p.Map[k] = v
+	}
+	return p
+}
+
+// ensures the opaque is initialized
+func ensureOpaque(o *types.Opaque) *types.Opaque {
+	if o == nil {
+		o = &types.Opaque{}
+	}
+	if o.Map == nil {
+		o.Map = map[string]*types.OpaqueEntry{}
+	}
+	return o
 }
 
 // RemoveItem removes the given item, its children and all empty parent folders

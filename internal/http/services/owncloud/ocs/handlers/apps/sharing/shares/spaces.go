@@ -249,10 +249,10 @@ func (h *Handler) findProvider(ctx context.Context, ref *provider.Reference) (*r
 
 func isSpaceManagerRemaining(grants []*provider.Grant, grantee provider.Grantee) bool {
 	for _, g := range grants {
-		// AddGrant is currently the way to check for the manager role
+		// RemoveGrant is currently the way to check for the manager role
 		// If it is not set than the current grant is not for a manager and
 		// we can just continue with the next one.
-		if g.Permissions.AddGrant && !isEqualGrantee(*g.Grantee, grantee) {
+		if g.Permissions.RemoveGrant && !isEqualGrantee(*g.Grantee, grantee) {
 			return true
 		}
 	}

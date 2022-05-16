@@ -151,16 +151,17 @@ func NewViewerRole() *Role {
 	return &Role{
 		Name: RoleViewer,
 		cS3ResourcePermissions: &provider.ResourcePermissions{
+			AddGrant:             true,
 			GetPath:              true,
 			GetQuota:             true,
 			InitiateFileDownload: true,
-			ListGrants:           true,
 			ListContainer:        true,
 			ListFileVersions:     true,
+			ListGrants:           true,
 			ListRecycle:          true,
 			Stat:                 true,
 		},
-		ocsPermissions: PermissionRead,
+		ocsPermissions: PermissionRead | PermissionShare,
 	}
 }
 
@@ -169,23 +170,24 @@ func NewEditorRole() *Role {
 	return &Role{
 		Name: RoleEditor,
 		cS3ResourcePermissions: &provider.ResourcePermissions{
+			AddGrant:             true,
+			CreateContainer:      true,
+			Delete:               true,
 			GetPath:              true,
 			GetQuota:             true,
 			InitiateFileDownload: true,
-			ListGrants:           true,
+			InitiateFileUpload:   true,
 			ListContainer:        true,
 			ListFileVersions:     true,
+			ListGrants:           true,
 			ListRecycle:          true,
-			Stat:                 true,
-			InitiateFileUpload:   true,
-			RestoreFileVersion:   true,
-			RestoreRecycleItem:   true,
-			CreateContainer:      true,
-			Delete:               true,
 			Move:                 true,
 			PurgeRecycle:         true,
+			RestoreFileVersion:   true,
+			RestoreRecycleItem:   true,
+			Stat:                 true,
 		},
-		ocsPermissions: PermissionRead | PermissionCreate | PermissionWrite | PermissionDelete,
+		ocsPermissions: PermissionRead | PermissionCreate | PermissionWrite | PermissionDelete | PermissionShare,
 	}
 }
 
@@ -271,13 +273,10 @@ func RoleFromOCSPermissions(p Permissions) *Role {
 	}
 
 	if p.Contain(PermissionRead) {
-		if p.Contain(PermissionWrite) && p.Contain(PermissionCreate) && p.Contain(PermissionDelete) {
-			if p.Contain(PermissionShare) {
-				return NewManagerRole()
-			}
+		if p.Contain(PermissionWrite) && p.Contain(PermissionCreate) && p.Contain(PermissionDelete) && p.Contain(PermissionShare) {
 			return NewEditorRole()
 		}
-		if p == PermissionRead {
+		if p == PermissionRead|PermissionShare {
 			return NewViewerRole()
 		}
 	}
@@ -328,8 +327,8 @@ func NewLegacyRoleFromOCSPermissions(p Permissions) *Role {
 	}
 	if p.Contain(PermissionShare) {
 		r.cS3ResourcePermissions.AddGrant = true
-		r.cS3ResourcePermissions.RemoveGrant = true // TODO when are you able to unshare / delete
-		r.cS3ResourcePermissions.UpdateGrant = true
+		// r.cS3ResourcePermissions.RemoveGrant = true // TODO when are you able to unshare / delete
+		// r.cS3ResourcePermissions.UpdateGrant = true
 	}
 	return r
 }
@@ -369,20 +368,19 @@ func RoleFromResourcePermissions(rp *provider.ResourcePermissions) *Role {
 		rp.PurgeRecycle {
 		r.ocsPermissions |= PermissionDelete
 	}
-	if rp.AddGrant &&
-		rp.RemoveGrant &&
-		rp.UpdateGrant {
+	if rp.AddGrant {
 		r.ocsPermissions |= PermissionShare
 	}
 	if r.ocsPermissions.Contain(PermissionRead) {
-		if r.ocsPermissions.Contain(PermissionWrite) && r.ocsPermissions.Contain(PermissionCreate) && r.ocsPermissions.Contain(PermissionDelete) {
+		if r.ocsPermissions.Contain(PermissionWrite) && r.ocsPermissions.Contain(PermissionCreate) && r.ocsPermissions.Contain(PermissionDelete) && r.ocsPermissions.Contain(PermissionShare) {
 			r.Name = RoleEditor
-			if r.ocsPermissions.Contain(PermissionShare) {
+
+			if rp.RemoveGrant {
 				r.Name = RoleManager
 			}
 			return r // editor or manager
 		}
-		if r.ocsPermissions == PermissionRead {
+		if r.ocsPermissions == PermissionRead|PermissionShare {
 			r.Name = RoleViewer
 			return r
 		}
