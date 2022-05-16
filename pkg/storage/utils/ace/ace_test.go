@@ -43,6 +43,10 @@ var _ = Describe("ACE", func() {
 				},
 			},
 			Permissions: &provider.ResourcePermissions{},
+			Creator: &userpb.UserId{
+				OpaqueId: "baz",
+				Idp:      "idp",
+			},
 		}
 
 		groupGrant = &provider.Grant{
@@ -74,6 +78,8 @@ var _ = Describe("ACE", func() {
 		It("returns a proper Grant", func() {
 			ace := ace.FromGrant(userGrant)
 			grant := ace.Grant()
+			// do not check opaque values
+			grant.Grantee.Opaque = nil
 			Expect(grant).To(Equal(userGrant))
 		})
 	})
@@ -152,26 +158,11 @@ var _ = Describe("ACE", func() {
 		})
 
 		It("converts C", func() {
-			userGrant.Permissions.AddGrant = true
+			userGrant.Permissions.RemoveGrant = true
 			newGrant := ace.FromGrant(userGrant).Grant()
-			userGrant.Permissions.AddGrant = false
-			Expect(newGrant.Permissions.AddGrant).To(BeTrue())
+			userGrant.Permissions.RemoveGrant = false
+			Expect(newGrant.Permissions.RemoveGrant).To(BeTrue())
 			Expect(newGrant.Permissions.Delete).To(BeFalse())
-
-			// TODO: test via manager permission
-			/*
-				userGrant.Permissions.RemoveGrant = true
-				newGrant = ace.FromGrant(userGrant).Grant()
-				userGrant.Permissions.RemoveGrant = false
-				Expect(newGrant.Permissions.RemoveGrant).To(BeTrue())
-				Expect(newGrant.Permissions.Delete).To(BeFalse())
-
-				userGrant.Permissions.UpdateGrant = true
-				newGrant = ace.FromGrant(userGrant).Grant()
-				userGrant.Permissions.UpdateGrant = false
-				Expect(newGrant.Permissions.UpdateGrant).To(BeTrue())
-				Expect(newGrant.Permissions.Delete).To(BeFalse())
-			*/
 		})
 
 		It("converts c", func() {

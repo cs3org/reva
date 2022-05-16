@@ -51,10 +51,10 @@ func TestContainPermissionAll(t *testing.T) {
 		4:  PermissionCreate,
 		8:  PermissionDelete,
 		16: PermissionShare,
-		31: PermissionAll,
+		63: PermissionAll,
 	}
 
-	p, _ := NewPermissions(31) // all permissions should contain all other permissions
+	p, _ := NewPermissions(63) // all permissions should contain all other permissions
 	for _, value := range table {
 		if !p.Contain(value) {
 			t.Errorf("permissions %d should contain %d", p, value)
@@ -144,7 +144,6 @@ func TestPermissions2Role(t *testing.T) {
 	table := map[Permissions]string{
 		PermissionRead | PermissionShare: RoleViewer,
 		PermissionRead | PermissionWrite | PermissionCreate | PermissionDelete | PermissionShare: RoleEditor,
-		//PermissionAll:                     RoleManager,
 		PermissionWrite:                   RoleLegacy,
 		PermissionShare:                   RoleLegacy,
 		PermissionWrite | PermissionShare: RoleLegacy,
