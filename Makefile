@@ -56,6 +56,11 @@ test: off
 test-integration: build-ci
 	cd tests/integration && go test -race ./...
 
+# This is needed for osx because this os does not support static linking
+# Use the build target without the static flag
+test-integration-osx: build
+	cd tests/integration && go test -race ./...
+
 litmus-test-old: build
 	cd tests/oc-integration-tests/local && ../../../cmd/revad/revad -c frontend.toml &
 	cd tests/oc-integration-tests/local && ../../../cmd/revad/revad -c gateway.toml &

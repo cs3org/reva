@@ -129,13 +129,13 @@ func (s *svc) handleNew(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	parentContainerID := r.URL.Query().Get("parent_container_id")
-	if parentContainerID == "" {
+	parentContainerIDStr := r.URL.Query().Get("parent_container_id")
+	if parentContainerIDStr == "" {
 		writeError(w, r, appErrorInvalidParameter, "missing parent container ID", nil)
 		return
 	}
 
-	parentContainerRef, err := storagespace.ParseID(parentContainerID)
+	parentContainerID, err := storagespace.ParseID(parentContainerIDStr)
 	if err != nil {
 		writeError(w, r, appErrorInvalidParameter, "invalid parent container ID", nil)
 		return
@@ -155,7 +155,7 @@ func (s *svc) handleNew(w http.ResponseWriter, r *http.Request) {
 
 	statParentContainerReq := &provider.StatRequest{
 		Ref: &provider.Reference{
-			ResourceId: &parentContainerRef,
+			ResourceId: &parentContainerID,
 		},
 	}
 	parentContainer, err := client.Stat(ctx, statParentContainerReq)
@@ -175,7 +175,8 @@ func (s *svc) handleNew(w http.ResponseWriter, r *http.Request) {
 	}
 
 	fileRef := &provider.Reference{
-		Path: path.Join(parentContainer.Info.Path, utils.MakeRelativePath(filename)),
+		ResourceId: &parentContainerID,
+		Path:       utils.MakeRelativePath(filename),
 	}
 
 	statFileReq := &provider.StatRequest{
