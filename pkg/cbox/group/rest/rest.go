@@ -116,7 +116,10 @@ func New(m map[string]interface{}) (group.Manager, error) {
 	c.init()
 
 	redisPool := initRedisPool(c.RedisAddress, c.RedisUsername, c.RedisPassword)
-	apiTokenManager := utils.InitAPITokenManager(c.TargetAPI, c.OIDCTokenEndpoint, c.ClientID, c.ClientSecret)
+	apiTokenManager, err := utils.InitAPITokenManager(m)
+	if err != nil {
+		return nil, err
+	}
 
 	mgr := &manager{
 		conf:            c,

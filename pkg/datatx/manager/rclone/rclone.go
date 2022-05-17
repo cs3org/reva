@@ -67,6 +67,7 @@ type config struct {
 	File                   string `mapstructure:"file"`
 	JobStatusCheckInterval int    `mapstructure:"job_status_check_interval"`
 	JobTimeout             int    `mapstructure:"job_timeout"`
+	Insecure               bool   `mapstructure:"insecure"`
 }
 
 type rclone struct {
@@ -125,8 +126,7 @@ func New(m map[string]interface{}) (txdriver.Manager, error) {
 	}
 	c.init(m)
 
-	// TODO insecure should be configurable
-	client := rhttp.GetHTTPClient(rhttp.Insecure(true))
+	client := rhttp.GetHTTPClient(rhttp.Insecure(c.Insecure))
 
 	// The persistency driver
 	// Load or create 'db'
