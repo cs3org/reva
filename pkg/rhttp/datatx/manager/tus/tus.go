@@ -20,14 +20,21 @@ package tus
 
 import (
 	"net/http"
+	"path/filepath"
 
 	"github.com/pkg/errors"
 
+	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	providerv1beta1 "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/v2/pkg/appctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
+	"github.com/cs3org/reva/v2/pkg/events"
 	"github.com/cs3org/reva/v2/pkg/rhttp/datatx"
 	"github.com/cs3org/reva/v2/pkg/rhttp/datatx/manager/registry"
 	"github.com/cs3org/reva/v2/pkg/rhttp/datatx/utils/download"
 	"github.com/cs3org/reva/v2/pkg/storage"
+	"github.com/cs3org/reva/v2/pkg/storagespace"
+	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/mitchellh/mapstructure"
 	tusd "github.com/tus/tusd/pkg/handler"
 )
@@ -39,7 +46,8 @@ func init() {
 type config struct{}
 
 type manager struct {
-	conf *config
+	conf      *config
+	publisher events.Publisher
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -52,13 +60,16 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 }
 
 // New returns a datatx manager implementation that relies on HTTP PUT/GET.
-func New(m map[string]interface{}) (datatx.DataTX, error) {
+func New(m map[string]interface{}, publisher events.Publisher) (datatx.DataTX, error) {
 	c, err := parseConfig(m)
 	if err != nil {
 		return nil, err
 	}
 
-	return &manager{conf: c}, nil
+	return &manager{
+		conf:      c,
+		publisher: publisher,
+	}, nil
 }
 
 func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
@@ -66,6 +77,8 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 	if !ok {
 		return nil, errtypes.NotSupported("file system does not support the tus protocol")
 	}
+
+	sublog := appctx.GetLogger(ctx).With().Str("datatx", "spaces").Str("space", spaceID).Logger()
 
 	// A storage backend for tusd may consist of multiple different parts which
 	// handle upload creation, locking, termination and so on. The composer is a
@@ -77,12 +90,42 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 	composable.UseIn(composer)
 
 	config := tusd.Config{
-		StoreComposer: composer,
+		StoreComposer:         composer,
+		NotifyCompleteUploads: true,
 	}
 
 	handler, err := tusd.NewUnroutedHandler(config)
 	if err != nil {
 		return nil, err
+	}
+
+	if m.publisher != nil {
+		go func() {
+			for {
+				ev := <-handler.CompleteUploads
+
+				u := ev.Upload
+				owner := &userv1beta1.UserId{
+					Idp:      u.Storage["Idp"],
+					OpaqueId: u.Storage["UserId"],
+				}
+				uploadedEv := events.FileUploaded{
+					Owner:     owner,
+					Executant: owner,
+					Ref: &providerv1beta1.Reference{
+						ResourceId: &providerv1beta1.ResourceId{
+							StorageId: storagespace.FormatStorageID(u.MetaData["providerID"], u.Storage["SpaceRoot"]),
+							OpaqueId:  u.Storage["SpaceRoot"],
+						},
+						Path: utils.MakeRelativePath(filepath.Join(u.MetaData["dir"], u.MetaData["filename"])),
+					},
+				}
+
+				if err := events.Publish(m.publisher, uploadedEv); err != nil {
+					sublog.Error().Err(err).Msg("failed to publish FileUploaded event")
+				}
+			}
+		}()
 	}
 
 	h := handler.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

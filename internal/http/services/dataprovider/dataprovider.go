@@ -23,11 +23,14 @@ import (
 	"net/http"
 
 	"github.com/cs3org/reva/v2/pkg/appctx"
+	"github.com/cs3org/reva/v2/pkg/events"
+	"github.com/cs3org/reva/v2/pkg/events/server"
 	datatxregistry "github.com/cs3org/reva/v2/pkg/rhttp/datatx/manager/registry"
 	"github.com/cs3org/reva/v2/pkg/rhttp/global"
 	"github.com/cs3org/reva/v2/pkg/rhttp/router"
 	"github.com/cs3org/reva/v2/pkg/storage"
 	"github.com/cs3org/reva/v2/pkg/storage/fs/registry"
+	"github.com/go-micro/plugins/v4/events/natsjs"
 	"github.com/mitchellh/mapstructure"
 	"github.com/rs/zerolog"
 )
@@ -37,12 +40,14 @@ func init() {
 }
 
 type config struct {
-	Prefix   string                            `mapstructure:"prefix" docs:"data;The prefix to be used for this HTTP service"`
-	Driver   string                            `mapstructure:"driver" docs:"localhome;The storage driver to be used."`
-	Drivers  map[string]map[string]interface{} `mapstructure:"drivers" docs:"url:pkg/storage/fs/localhome/localhome.go;The configuration for the storage driver"`
-	DataTXs  map[string]map[string]interface{} `mapstructure:"data_txs" docs:"url:pkg/rhttp/datatx/manager/simple/simple.go;The configuration for the data tx protocols"`
-	Timeout  int64                             `mapstructure:"timeout"`
-	Insecure bool                              `mapstructure:"insecure"`
+	Prefix        string                            `mapstructure:"prefix" docs:"data;The prefix to be used for this HTTP service"`
+	Driver        string                            `mapstructure:"driver" docs:"localhome;The storage driver to be used."`
+	Drivers       map[string]map[string]interface{} `mapstructure:"drivers" docs:"url:pkg/storage/fs/localhome/localhome.go;The configuration for the storage driver"`
+	DataTXs       map[string]map[string]interface{} `mapstructure:"data_txs" docs:"url:pkg/rhttp/datatx/manager/simple/simple.go;The configuration for the data tx protocols"`
+	Timeout       int64                             `mapstructure:"timeout"`
+	Insecure      bool                              `mapstructure:"insecure"`
+	NatsAddress   string                            `mapstructure:"nats_address"`
+	NatsClusterID string                            `mapstructure:"nats_clusterID"`
 }
 
 func (c *config) init() {
@@ -75,7 +80,16 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 		return nil, err
 	}
 
-	dataTXs, err := getDataTXs(conf, fs)
+	var publisher events.Publisher
+
+	if conf.NatsAddress != "" && conf.NatsClusterID != "" {
+		publisher, err = server.NewNatsStream(natsjs.Address(conf.NatsAddress), natsjs.ClusterID(conf.NatsClusterID))
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	dataTXs, err := getDataTXs(conf, fs, publisher)
 	if err != nil {
 		return nil, err
 	}
@@ -97,7 +111,7 @@ func getFS(c *config) (storage.FS, error) {
 	return nil, fmt.Errorf("driver not found: %s", c.Driver)
 }
 
-func getDataTXs(c *config, fs storage.FS) (map[string]http.Handler, error) {
+func getDataTXs(c *config, fs storage.FS, publisher events.Publisher) (map[string]http.Handler, error) {
 	if c.DataTXs == nil {
 		c.DataTXs = make(map[string]map[string]interface{})
 	}
@@ -110,7 +124,7 @@ func getDataTXs(c *config, fs storage.FS) (map[string]http.Handler, error) {
 	txs := make(map[string]http.Handler)
 	for t := range c.DataTXs {
 		if f, ok := datatxregistry.NewFuncs[t]; ok {
-			if tx, err := f(c.DataTXs[t]); err == nil {
+			if tx, err := f(c.DataTXs[t], publisher); err == nil {
 				if handler, err := tx.Handler(fs); err == nil {
 					txs[t] = handler
 				}
