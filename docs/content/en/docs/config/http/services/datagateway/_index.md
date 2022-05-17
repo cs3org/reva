@@ -6,15 +6,13 @@ description: >
   Configuration for the DataGateway service
 ---
 
-{{% pageinfo %}}
-TODO
-{{% /pageinfo %}}
+# _struct: config_
 
-{{% dir name="prefix" type="string" default="datagateway" %}}
-Where the HTTP service is exposed.
+{{% dir name="insecure" type="bool" default=false %}}
+Whether to skip certificate checks when sending requests. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/http/services/datagateway/datagateway.go#L61)
 {{< highlight toml >}}
 [http.services.datagateway]
-prefix = "/"
+insecure = false
 {{< /highlight >}}
 {{% /dir %}}
 

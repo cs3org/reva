@@ -99,7 +99,7 @@ type Config struct {
 	WebdavNamespace string `mapstructure:"webdav_namespace"`
 	GatewaySvc      string `mapstructure:"gatewaysvc"`
 	Timeout         int64  `mapstructure:"timeout"`
-	Insecure        bool   `mapstructure:"insecure"`
+	Insecure        bool   `mapstructure:"insecure" docs:"false;Whether to skip certificate checks when sending requests."`
 	// If true, HTTP COPY will expect the HTTP-TPC (third-party copy) headers
 	EnableHTTPTpc          bool                              `mapstructure:"enable_http_tpc"`
 	PublicURL              string                            `mapstructure:"public_url"`

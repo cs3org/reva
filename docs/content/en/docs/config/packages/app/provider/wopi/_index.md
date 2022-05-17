@@ -72,8 +72,16 @@ jwt_secret = ""
 {{< /highlight >}}
 {{% /dir %}}
 
+{{% dir name="custom_mime_types_json" type="string" default="nil" %}}
+An optional mapping file with the list of supported custom file extensions and corresponding mime types. [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/app/provider/wopi/wopi.go#L67)
+{{< highlight toml >}}
+[app.provider.wopi]
+custom_mime_types_json = "nil"
+{{< /highlight >}}
+{{% /dir %}}
+
 {{% dir name="app_desktop_only" type="bool" default=false %}}
-Specifies if the app can be opened only on desktop. [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/app/provider/wopi/wopi.go#L67)
+Specifies if the app can be opened only on desktop. [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/app/provider/wopi/wopi.go#L68)
 {{< highlight toml >}}
 [app.provider.wopi]
 app_desktop_only = false

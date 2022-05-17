@@ -62,7 +62,7 @@ type Config struct {
 	Prefix         string   `mapstructure:"prefix"`
 	GatewaySvc     string   `mapstructure:"gatewaysvc"`
 	Timeout        int64    `mapstructure:"timeout"`
-	Insecure       bool     `mapstructure:"insecure"`
+	Insecure       bool     `mapstructure:"insecure" docs:"false;Whether to skip certificate checks when sending requests."`
 	Name           string   `mapstructure:"name"`
 	MaxNumFiles    int64    `mapstructure:"max_num_files"`
 	MaxSize        int64    `mapstructure:"max_size"`

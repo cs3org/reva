@@ -42,7 +42,7 @@ type config struct {
 	Drivers  map[string]map[string]interface{} `mapstructure:"drivers" docs:"url:pkg/storage/fs/localhome/localhome.go;The configuration for the storage driver"`
 	DataTXs  map[string]map[string]interface{} `mapstructure:"data_txs" docs:"url:pkg/rhttp/datatx/manager/simple/simple.go;The configuration for the data tx protocols"`
 	Timeout  int64                             `mapstructure:"timeout"`
-	Insecure bool                              `mapstructure:"insecure"`
+	Insecure bool                              `mapstructure:"insecure" docs:"false;Whether to skip certificate checks when sending requests."`
 }
 
 func (c *config) init() {
