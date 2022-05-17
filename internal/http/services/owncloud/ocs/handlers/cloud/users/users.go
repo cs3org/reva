@@ -35,6 +35,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -208,16 +209,13 @@ func (h Handler) fillPersonalQuota(ctx context.Context, d *User, u *cs3identity.
 		// TODO support negative values or flags for the quota to carry special meaning: -1 = uncalculated, -2 = unknown, -3 = unlimited
 		// for now we can only report total and used
 		Total: int64(total),
-		// we cannot differentiate between `default` or a human readable `1 GB` defanation.
-		// The web ui can create a human readable string from the actual total if it is sot. Otherwise it has to leave out relative and total anyway.
+		// we cannot differentiate between `default` or a human readable `1 GB` definition.
+		// The web UI can create a human readable string from the actual total if it is set. Otherwise it has to leave out relative and total anyway.
 		// Definition: "default",
 	}
 
-	if getQuotaRes.Opaque != nil {
-		m := getQuotaRes.Opaque.Map
-		if e, ok := m["remaining"]; ok {
-			d.Quota.Free, _ = strconv.ParseInt(string(e.Value), 10, 64)
-		}
+	if raw := utils.ReadPlainFromOpaque(getQuotaRes.Opaque, "remaining"); raw != "" {
+		d.Quota.Free, _ = strconv.ParseInt(raw, 10, 64)
 	}
 
 	// only calculate free and relative when total is available
