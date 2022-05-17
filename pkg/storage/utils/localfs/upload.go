@@ -99,6 +99,7 @@ func (fs *localfs) InitiateUpload(ctx context.Context, ref *provider.Reference, 
 	}
 
 	if metadata != nil {
+		info.MetaData["providerID"] = metadata["providerID"]
 		if metadata["mtime"] != "" {
 			info.MetaData["mtime"] = metadata["mtime"]
 		}

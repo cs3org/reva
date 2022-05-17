@@ -111,6 +111,7 @@ func (fs *cephfs) InitiateUpload(ctx context.Context, ref *provider.Reference, u
 	}
 
 	if metadata != nil {
+		info.MetaData["providerID"] = metadata["providerID"]
 		if metadata["mtime"] != "" {
 			info.MetaData["mtime"] = metadata["mtime"]
 		}

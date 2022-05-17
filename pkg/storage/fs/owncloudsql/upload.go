@@ -107,6 +107,7 @@ func (fs *owncloudsqlfs) InitiateUpload(ctx context.Context, ref *provider.Refer
 	}
 
 	if metadata != nil {
+		info.MetaData["providerID"] = metadata["providerID"]
 		if metadata["mtime"] != "" {
 			info.MetaData["mtime"] = metadata["mtime"]
 		}

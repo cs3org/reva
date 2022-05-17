@@ -99,7 +99,6 @@ func (fs *Decomposedfs) Upload(ctx context.Context, ref *provider.Reference, r i
 // TODO read optional content for small files in this request
 // TODO InitiateUpload (and Upload) needs a way to receive the expected checksum. Maybe in metadata as 'checksum' => 'sha1 aeosvp45w5xaeoe' = lowercase, space separated?
 func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64, metadata map[string]string) (map[string]string, error) {
-
 	log := appctx.GetLogger(ctx)
 
 	n, err := fs.lu.NodeFromResource(ctx, ref)
@@ -129,6 +128,7 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 	}
 
 	if metadata != nil {
+		info.MetaData["providerID"] = metadata["providerID"]
 		if mtime, ok := metadata["mtime"]; ok {
 			info.MetaData["mtime"] = mtime
 		}

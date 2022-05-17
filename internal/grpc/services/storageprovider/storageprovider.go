@@ -371,6 +371,10 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 			metadata["mtime"] = string(req.Opaque.Map["X-OC-Mtime"].Value)
 		}
 	}
+
+	// pass on the provider it to be persisted with the upload info. that is required to correlate the upload with the proper provider later on
+	metadata["providerID"] = s.conf.MountID
+
 	uploadIDs, err := s.storage.InitiateUpload(ctx, req.Ref, uploadLength, metadata)
 	if err != nil {
 		var st *rpc.Status
