@@ -19,13 +19,15 @@
 package tus
 
 import (
+	"context"
 	"net/http"
 	"path/filepath"
 
 	"github.com/pkg/errors"
+	tusd "github.com/tus/tusd/pkg/handler"
 
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-	providerv1beta1 "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/events"
@@ -36,7 +38,6 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/mitchellh/mapstructure"
-	tusd "github.com/tus/tusd/pkg/handler"
 )
 
 func init() {
@@ -78,8 +79,6 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 		return nil, errtypes.NotSupported("file system does not support the tus protocol")
 	}
 
-	sublog := appctx.GetLogger(ctx).With().Str("datatx", "spaces").Str("space", spaceID).Logger()
-
 	// A storage backend for tusd may consist of multiple different parts which
 	// handle upload creation, locking, termination and so on. The composer is a
 	// place where all those separated pieces are joined together. In this example
@@ -103,26 +102,20 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 		go func() {
 			for {
 				ev := <-handler.CompleteUploads
-
-				u := ev.Upload
+				info := ev.Upload
 				owner := &userv1beta1.UserId{
-					Idp:      u.Storage["Idp"],
-					OpaqueId: u.Storage["UserId"],
+					Idp:      info.Storage["Idp"],
+					OpaqueId: info.Storage["UserId"],
 				}
-				uploadedEv := events.FileUploaded{
-					Owner:     owner,
-					Executant: owner,
-					Ref: &providerv1beta1.Reference{
-						ResourceId: &providerv1beta1.ResourceId{
-							StorageId: storagespace.FormatStorageID(u.MetaData["providerID"], u.Storage["SpaceRoot"]),
-							OpaqueId:  u.Storage["SpaceRoot"],
-						},
-						Path: utils.MakeRelativePath(filepath.Join(u.MetaData["dir"], u.MetaData["filename"])),
+				ref := &provider.Reference{
+					ResourceId: &provider.ResourceId{
+						StorageId: storagespace.FormatStorageID(info.MetaData["providerID"], info.Storage["SpaceRoot"]),
+						OpaqueId:  info.Storage["SpaceRoot"],
 					},
+					Path: utils.MakeRelativePath(filepath.Join(info.MetaData["dir"], info.MetaData["filename"])),
 				}
-
-				if err := events.Publish(m.publisher, uploadedEv); err != nil {
-					sublog.Error().Err(err).Msg("failed to publish FileUploaded event")
+				if err := datatx.EmitFileUploadedEvent(owner, ref, m.publisher); err != nil {
+					appctx.GetLogger(context.Background()).Error().Err(err).Msg("failed to publish FileUploaded event")
 				}
 			}
 		}()

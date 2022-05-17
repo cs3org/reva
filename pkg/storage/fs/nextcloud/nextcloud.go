@@ -395,7 +395,7 @@ func (nc *StorageDriver) InitiateUpload(ctx context.Context, ref *provider.Refer
 }
 
 // Upload as defined in the storage.FS interface
-func (nc *StorageDriver) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser) error {
+func (nc *StorageDriver) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser, _ storage.UploadFinishedFunc) error {
 	return nc.doUpload(ctx, ref.Path, r)
 }
 

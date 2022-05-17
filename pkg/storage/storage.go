@@ -23,9 +23,13 @@ import (
 	"io"
 	"net/url"
 
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	registry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 )
+
+// UploadFinishedFunc is a callback function used in storage drivers to indicate that an upload has finished
+type UploadFinishedFunc func(owner *userpb.UserId, ref *provider.Reference)
 
 // FS is the interface to implement access to the storage.
 type FS interface {
@@ -38,7 +42,7 @@ type FS interface {
 	GetMD(ctx context.Context, ref *provider.Reference, mdKeys []string) (*provider.ResourceInfo, error)
 	ListFolder(ctx context.Context, ref *provider.Reference, mdKeys []string) ([]*provider.ResourceInfo, error)
 	InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64, metadata map[string]string) (map[string]string, error)
-	Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser) error
+	Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser, uploadFunc UploadFinishedFunc) error
 	Download(ctx context.Context, ref *provider.Reference) (io.ReadCloser, error)
 	ListRevisions(ctx context.Context, ref *provider.Reference) ([]*provider.FileVersion, error)
 	DownloadRevision(ctx context.Context, ref *provider.Reference, key string) (io.ReadCloser, error)

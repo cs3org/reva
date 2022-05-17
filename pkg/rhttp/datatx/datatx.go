@@ -23,10 +23,27 @@ package datatx
 import (
 	"net/http"
 
+	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/v2/pkg/events"
 	"github.com/cs3org/reva/v2/pkg/storage"
 )
 
 // DataTX provides an abstraction around various data transfer protocols.
 type DataTX interface {
 	Handler(fs storage.FS) (http.Handler, error)
+}
+
+func EmitFileUploadedEvent(owner *userv1beta1.UserId, ref *provider.Reference, publisher events.Publisher) error {
+	if ref == nil {
+		return nil
+	}
+
+	uploadedEv := events.FileUploaded{
+		Owner:     owner,
+		Executant: owner,
+		Ref:       ref,
+	}
+
+	return events.Publish(publisher, uploadedEv)
 }

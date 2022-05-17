@@ -615,7 +615,7 @@ func (fs *s3FS) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys 
 	return finfos, nil
 }
 
-func (fs *s3FS) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser) error {
+func (fs *s3FS) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser, _ storage.UploadFinishedFunc) error {
 	log := appctx.GetLogger(ctx)
 
 	fn, err := fs.resolve(ctx, ref)

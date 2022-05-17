@@ -23,6 +23,7 @@ import (
 	"path"
 	"strings"
 
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
@@ -91,7 +92,11 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 				ResourceId: &provider.ResourceId{StorageId: storageid, OpaqueId: opaqeid},
 				Path:       fn,
 			}
-			err := fs.Upload(ctx, ref, r.Body)
+			err := fs.Upload(ctx, ref, r.Body, func(owner *userpb.UserId, ref *provider.Reference) {
+				if err := datatx.EmitFileUploadedEvent(owner, ref, m.publisher); err != nil {
+					sublog.Error().Err(err).Msg("failed to publish FileUploaded event")
+				}
+			})
 			switch v := err.(type) {
 			case nil:
 				w.WriteHeader(http.StatusOK)

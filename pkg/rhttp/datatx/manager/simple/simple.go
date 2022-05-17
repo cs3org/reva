@@ -21,6 +21,10 @@ package simple
 import (
 	"net/http"
 
+	"github.com/mitchellh/mapstructure"
+	"github.com/pkg/errors"
+
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
@@ -29,8 +33,6 @@ import (
 	"github.com/cs3org/reva/v2/pkg/rhttp/datatx/manager/registry"
 	"github.com/cs3org/reva/v2/pkg/rhttp/datatx/utils/download"
 	"github.com/cs3org/reva/v2/pkg/storage"
-	"github.com/mitchellh/mapstructure"
-	"github.com/pkg/errors"
 )
 
 func init() {
@@ -79,8 +81,11 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 			defer r.Body.Close()
 
 			ref := &provider.Reference{Path: fn}
-
-			err := fs.Upload(ctx, ref, r.Body)
+			err := fs.Upload(ctx, ref, r.Body, func(owner *userpb.UserId, ref *provider.Reference) {
+				if err := datatx.EmitFileUploadedEvent(owner, ref, m.publisher); err != nil {
+					sublog.Error().Err(err).Msg("failed to publish FileUploaded event")
+				}
+			})
 			switch v := err.(type) {
 			case nil:
 				w.WriteHeader(http.StatusOK)
