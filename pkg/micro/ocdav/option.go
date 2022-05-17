@@ -218,3 +218,10 @@ func ProductName(val string) Option {
 		o.config.ProductName = val
 	}
 }
+
+// ProductVersion provides a function to set the ProductVersion config option.
+func ProductVersion(val string) Option {
+	return func(o *Options) {
+		o.config.ProductVersion = val
+	}
+}
