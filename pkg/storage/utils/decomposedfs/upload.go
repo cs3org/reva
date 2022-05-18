@@ -95,7 +95,7 @@ func (fs *Decomposedfs) Upload(ctx context.Context, ref *provider.Reference, r i
 	}
 
 	if err := uploadInfo.FinishUpload(ctx); err != nil {
-		return errors.Wrap(err, "Decomposedfs: error finishing upload")
+		return err
 	}
 
 	if uff != nil {
