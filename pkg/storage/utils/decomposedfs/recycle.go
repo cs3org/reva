@@ -288,7 +288,7 @@ func (fs *Decomposedfs) RestoreRecycleItem(ctx context.Context, ref *provider.Re
 	return restoreFunc()
 }
 
-// PurgeRecycleItem purges the specified item and all its children
+// PurgeRecycleItem purges the specified item, all its children and all their revisions
 func (fs *Decomposedfs) PurgeRecycleItem(ctx context.Context, ref *provider.Reference, key, relativePath string) error {
 	if ref == nil {
 		return errtypes.BadRequest("missing reference, needs a space id")

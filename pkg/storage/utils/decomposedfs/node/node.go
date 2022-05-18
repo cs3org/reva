@@ -1055,6 +1055,15 @@ func ReadBlobSizeAttr(path string) (int64, error) {
 	return blobSize, nil
 }
 
+// ReadBlobIDAttr reads the blobsize from the xattrs
+func ReadBlobIDAttr(path string) (string, error) {
+	attr, err := xattrs.Get(path, xattrs.BlobIDAttr)
+	if err != nil {
+		return "", errors.Wrapf(err, "error reading blobid xattr")
+	}
+	return attr, nil
+}
+
 func (n *Node) hasUserShares(ctx context.Context) bool {
 	g, err := n.ListGrantees(ctx)
 	if err != nil {

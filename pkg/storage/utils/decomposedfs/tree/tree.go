@@ -553,19 +553,8 @@ func (t *Tree) PurgeRecycleItemFunc(ctx context.Context, spaceid, key string, pa
 	}
 
 	fn := func() error {
-		// delete the actual node
-		// TODO recursively delete children
-		if err := utils.RemoveItem(deletedNodePath); err != nil {
-			log.Error().Err(err).Str("deletedNodePath", deletedNodePath).Msg("error deleting trash node")
+		if err := t.removeNode(deletedNodePath, rn); err != nil {
 			return err
-		}
-
-		// delete blob from blobstore
-		if rn.BlobID != "" {
-			if err = t.DeleteBlob(rn); err != nil {
-				log.Error().Err(err).Str("trashItem", trashItem).Msg("error deleting trash item blob")
-				return err
-			}
 		}
 
 		// delete item link in trash
@@ -577,16 +566,8 @@ func (t *Tree) PurgeRecycleItemFunc(ctx context.Context, spaceid, key string, pa
 		// delete children
 		for i := len(nodes) - 1; i >= 0; i-- {
 			n := nodes[i]
-			if err := utils.RemoveItem(n.InternalPath()); err != nil {
-				log.Error().Err(err).Str("deletedNodePath", deletedNodePath).Msg("error deleting trash node")
+			if err := t.removeNode(n.InternalPath(), n); err != nil {
 				return err
-			}
-			if n.BlobID != "" {
-				if err = t.DeleteBlob(n); err != nil {
-					log.Error().Err(err).Str("trashItem", trashItem).Msg("error deleting item blob")
-					return err
-				}
-
 			}
 
 		}
@@ -595,6 +576,51 @@ func (t *Tree) PurgeRecycleItemFunc(ctx context.Context, spaceid, key string, pa
 	}
 
 	return rn, fn, nil
+}
+
+func (t *Tree) removeNode(path string, n *node.Node) error {
+	// delete the actual node
+	if err := utils.RemoveItem(path); err != nil {
+		log.Error().Err(err).Str("path", path).Msg("error node")
+		return err
+	}
+
+	// delete blob from blobstore
+	if n.BlobID != "" {
+		if err := t.DeleteBlob(n); err != nil {
+			log.Error().Err(err).Str("blobID", n.BlobID).Msg("error deleting nodes blob")
+			return err
+		}
+	}
+
+	// delete revisions
+	revs, err := filepath.Glob(n.InternalPath() + node.RevisionIDDelimiter + "*")
+	if err != nil {
+		log.Error().Err(err).Str("path", n.InternalPath()+node.RevisionIDDelimiter+"*").Msg("glob failed badly")
+		return err
+	}
+	for _, rev := range revs {
+		bID, err := node.ReadBlobIDAttr(rev)
+		if err != nil {
+			log.Error().Err(err).Str("revision", rev).Msg("error reading blobid attribute")
+			return err
+		}
+
+		if err := utils.RemoveItem(rev); err != nil {
+			log.Error().Err(err).Str("revision", rev).Msg("error removing revision node")
+			return err
+		}
+
+		if bID != "" {
+			if err := t.DeleteBlob(&node.Node{SpaceID: n.SpaceID, BlobID: bID}); err != nil {
+				log.Error().Err(err).Str("revision", rev).Str("blobID", bID).Msg("error removing revision node blob")
+				return err
+			}
+		}
+
+	}
+
+	return nil
 }
 
 // Propagate propagates changes to the root of the tree
