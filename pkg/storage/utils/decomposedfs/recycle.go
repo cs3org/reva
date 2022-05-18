@@ -288,11 +288,12 @@ func (fs *Decomposedfs) RestoreRecycleItem(ctx context.Context, ref *provider.Re
 	return restoreFunc()
 }
 
-// PurgeRecycleItem purges the specified item
+// PurgeRecycleItem purges the specified item, all its children and all their revisions
 func (fs *Decomposedfs) PurgeRecycleItem(ctx context.Context, ref *provider.Reference, key, relativePath string) error {
 	if ref == nil {
 		return errtypes.BadRequest("missing reference, needs a space id")
 	}
+
 	rn, purgeFunc, err := fs.tp.PurgeRecycleItemFunc(ctx, ref.ResourceId.OpaqueId, key, relativePath)
 	if err != nil {
 		if errors.Is(err, iofs.ErrNotExist) {
@@ -320,6 +321,17 @@ func (fs *Decomposedfs) PurgeRecycleItem(ctx context.Context, ref *provider.Refe
 func (fs *Decomposedfs) EmptyRecycle(ctx context.Context, ref *provider.Reference) error {
 	if ref == nil || ref.ResourceId == nil || ref.ResourceId.OpaqueId == "" {
 		return errtypes.BadRequest("spaceid must be set")
+	}
+
+	items, err := fs.ListRecycle(ctx, ref, "", "/")
+	if err != nil {
+		return err
+	}
+
+	for _, i := range items {
+		if err := fs.PurgeRecycleItem(ctx, ref, i.Key, ""); err != nil {
+			return err
+		}
 	}
 	// TODO what permission should we check? we could check the root node of the user? or the owner permissions on his home root node?
 	// The current impl will wipe your own trash. or when no user provided the trash of 'root'

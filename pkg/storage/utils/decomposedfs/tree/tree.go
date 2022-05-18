@@ -538,20 +538,23 @@ func (t *Tree) PurgeRecycleItemFunc(ctx context.Context, spaceid, key string, pa
 		return nil, nil, err
 	}
 
-	fn := func() error {
-		// delete the actual node
-		// TODO recursively delete children
-		if err := os.RemoveAll(deletedNodePath); err != nil {
-			log.Error().Err(err).Str("deletedNodePath", deletedNodePath).Msg("error deleting trash node")
-			return err
+	// only the root node is trashed, the rest is still in normal file system
+	children, err := os.ReadDir(deletedNodePath)
+	var nodes []*node.Node
+	for _, c := range children {
+		n, _, _, _, err := t.readRecycleItem(ctx, spaceid, key, filepath.Join(path, c.Name()))
+		if err != nil {
+			return nil, nil, err
 		}
+		nodes, err = appendChildren(ctx, n, nodes)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
 
-		// delete blob from blobstore
-		if rn.BlobID != "" {
-			if err = t.DeleteBlob(rn); err != nil {
-				log.Error().Err(err).Str("trashItem", trashItem).Msg("error deleting trash item blob")
-				return err
-			}
+	fn := func() error {
+		if err := t.removeNode(deletedNodePath, rn); err != nil {
+			return err
 		}
 
 		// delete item link in trash
@@ -560,10 +563,64 @@ func (t *Tree) PurgeRecycleItemFunc(ctx context.Context, spaceid, key string, pa
 			return err
 		}
 
+		// delete children
+		for i := len(nodes) - 1; i >= 0; i-- {
+			n := nodes[i]
+			if err := t.removeNode(n.InternalPath(), n); err != nil {
+				return err
+			}
+
+		}
+
 		return nil
 	}
 
 	return rn, fn, nil
+}
+
+func (t *Tree) removeNode(path string, n *node.Node) error {
+	// delete the actual node
+	if err := utils.RemoveItem(path); err != nil {
+		log.Error().Err(err).Str("path", path).Msg("error node")
+		return err
+	}
+
+	// delete blob from blobstore
+	if n.BlobID != "" {
+		if err := t.DeleteBlob(n); err != nil {
+			log.Error().Err(err).Str("blobID", n.BlobID).Msg("error deleting nodes blob")
+			return err
+		}
+	}
+
+	// delete revisions
+	revs, err := filepath.Glob(n.InternalPath() + node.RevisionIDDelimiter + "*")
+	if err != nil {
+		log.Error().Err(err).Str("path", n.InternalPath()+node.RevisionIDDelimiter+"*").Msg("glob failed badly")
+		return err
+	}
+	for _, rev := range revs {
+		bID, err := node.ReadBlobIDAttr(rev)
+		if err != nil {
+			log.Error().Err(err).Str("revision", rev).Msg("error reading blobid attribute")
+			return err
+		}
+
+		if err := utils.RemoveItem(rev); err != nil {
+			log.Error().Err(err).Str("revision", rev).Msg("error removing revision node")
+			return err
+		}
+
+		if bID != "" {
+			if err := t.DeleteBlob(&node.Node{SpaceID: n.SpaceID, BlobID: bID}); err != nil {
+				log.Error().Err(err).Str("revision", rev).Str("blobID", bID).Msg("error removing revision node blob")
+				return err
+			}
+		}
+
+	}
+
+	return nil
 }
 
 // Propagate propagates changes to the root of the tree
@@ -865,4 +922,30 @@ func (t *Tree) readRecycleItem(ctx context.Context, spaceID, key, path string) (
 	}
 
 	return
+}
+
+// appendChildren appends `n` and all its children to `nodes`
+func appendChildren(ctx context.Context, n *node.Node, nodes []*node.Node) ([]*node.Node, error) {
+	nodes = append(nodes, n)
+
+	children, err := os.ReadDir(n.InternalPath())
+	if err != nil {
+		// TODO: How to differentiate folders from files?
+		return nodes, nil
+	}
+
+	for _, c := range children {
+		cn, err := n.Child(ctx, c.Name())
+		if err != nil {
+			// continue?
+			return nil, err
+		}
+		nodes, err = appendChildren(ctx, cn, nodes)
+		if err != nil {
+			// continue?
+			return nil, err
+		}
+	}
+
+	return nodes, nil
 }
