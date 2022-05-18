@@ -82,7 +82,9 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 
 	var publisher events.Publisher
 
-	if conf.NatsAddress != "" && conf.NatsClusterID != "" {
+	if conf.NatsAddress == "" || conf.NatsClusterID == "" {
+		log.Warn().Msg("missing or incomplete nats configuration. Events will not be published.")
+	} else {
 		publisher, err = server.NewNatsStream(natsjs.Address(conf.NatsAddress), natsjs.ClusterID(conf.NatsClusterID))
 		if err != nil {
 			return nil, err
