@@ -231,7 +231,7 @@ var _ = Describe("File uploads", func() {
 
 				uploadRef := &provider.Reference{Path: "/" + uploadIds["simple"]}
 
-				bs.On("Upload", mock.AnythingOfType("*node.Node"), mock.AnythingOfType("*os.File")).
+				bs.On("Upload", mock.AnythingOfType("*node.Node"), mock.AnythingOfType("*os.File"), mock.Anything).
 					Return(nil).
 					Run(func(args mock.Arguments) {
 						reader := args.Get(1).(io.Reader)
@@ -241,10 +241,10 @@ var _ = Describe("File uploads", func() {
 						Expect(data).To(Equal([]byte("0123456789")))
 					})
 
-				err = fs.Upload(ctx, uploadRef, ioutil.NopCloser(bytes.NewReader(fileContent)))
+				err = fs.Upload(ctx, uploadRef, ioutil.NopCloser(bytes.NewReader(fileContent)), nil)
 
 				Expect(err).ToNot(HaveOccurred())
-				bs.AssertCalled(GinkgoT(), "Upload", mock.Anything, mock.Anything)
+				bs.AssertCalled(GinkgoT(), "Upload", mock.Anything, mock.Anything, mock.Anything)
 
 				resources, err := fs.ListFolder(ctx, rootRef, []string{})
 
@@ -269,7 +269,7 @@ var _ = Describe("File uploads", func() {
 
 				uploadRef := &provider.Reference{Path: "/" + uploadIds["simple"]}
 
-				bs.On("Upload", mock.AnythingOfType("*node.Node"), mock.AnythingOfType("*os.File")).
+				bs.On("Upload", mock.AnythingOfType("*node.Node"), mock.AnythingOfType("*os.File"), mock.Anything).
 					Return(nil).
 					Run(func(args mock.Arguments) {
 						reader := args.Get(1).(io.Reader)
@@ -279,10 +279,10 @@ var _ = Describe("File uploads", func() {
 						Expect(data).To(Equal([]byte("")))
 					})
 
-				err = fs.Upload(ctx, uploadRef, ioutil.NopCloser(bytes.NewReader(fileContent)))
+				err = fs.Upload(ctx, uploadRef, ioutil.NopCloser(bytes.NewReader(fileContent)), nil)
 
 				Expect(err).ToNot(HaveOccurred())
-				bs.AssertCalled(GinkgoT(), "Upload", mock.Anything, mock.Anything)
+				bs.AssertCalled(GinkgoT(), "Upload", mock.Anything, mock.Anything, mock.Anything)
 
 				resources, err := fs.ListFolder(ctx, rootRef, []string{})
 
@@ -299,7 +299,7 @@ var _ = Describe("File uploads", func() {
 				)
 
 				uploadRef := &provider.Reference{Path: "/some-non-existent-upload-reference"}
-				err := fs.Upload(ctx, uploadRef, ioutil.NopCloser(bytes.NewReader(fileContent)))
+				err := fs.Upload(ctx, uploadRef, ioutil.NopCloser(bytes.NewReader(fileContent)), nil)
 
 				Expect(err).To(HaveOccurred())
 
