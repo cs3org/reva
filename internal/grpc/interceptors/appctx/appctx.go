@@ -20,10 +20,12 @@ package appctx
 
 import (
 	"context"
+	"runtime"
 
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	rtrace "github.com/cs3org/reva/v2/pkg/trace"
 	"github.com/rs/zerolog"
+	semconv "go.opentelemetry.io/otel/semconv/v1.10.0"
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
 )
@@ -38,6 +40,10 @@ func NewUnary(log zerolog.Logger) grpc.UnaryServerInterceptor {
 		defer span.End()
 		if !span.SpanContext().HasTraceID() {
 			ctx, span = rtrace.Provider.Tracer(tracerName).Start(ctx, "grpc unary")
+		}
+		_, file, _, ok := runtime.Caller(1)
+		if ok {
+			span.SetAttributes(semconv.CodeFilepathKey.String(file))
 		}
 
 		sub := log.With().Str("traceid", span.SpanContext().TraceID().String()).Logger()
@@ -58,6 +64,10 @@ func NewStream(log zerolog.Logger) grpc.StreamServerInterceptor {
 
 		if !span.SpanContext().HasTraceID() {
 			ctx, span = rtrace.Provider.Tracer(tracerName).Start(ctx, "grpc stream")
+		}
+		_, file, _, ok := runtime.Caller(1)
+		if ok {
+			span.SetAttributes(semconv.CodeFilepathKey.String(file))
 		}
 
 		sub := log.With().Str("traceid", span.SpanContext().TraceID().String()).Logger()
