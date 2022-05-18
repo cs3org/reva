@@ -81,18 +81,17 @@ type Quota struct {
 
 // User holds user data
 type User struct {
-	Enabled           string `json:"enabled" xml:"enabled"`
-	UserType          string `json:"user-type" xml:"user-type"`
-	UserID            string `json:"id" xml:"id"` // UserID is mapped to the preferred_name attribute in accounts
-	DisplayName       string `json:"display-name" xml:"display-name"`
-	LegacyDisplayName string `json:"displayname" xml:"displayname"`
-	Email             string `json:"email" xml:"email"`
-	Quota             *Quota `json:"quota,omitempty" xml:"quota,omitempty"`
-	UIDNumber         int64  `json:"uidnumber" xml:"uidnumber"`
-	GIDNumber         int64  `json:"gidnumber" xml:"gidnumber"`
-	// FIXME home should never be exposed ... even in oc 10
-	// home
-	TwoFactorAuthEnabled bool `json:"two_factor_auth_enabled" xml:"two_factor_auth_enabled"`
+	Enabled     string `json:"enabled" xml:"enabled"`
+	Quota       *Quota `json:"quota,omitempty" xml:"quota,omitempty"`
+	Email       string `json:"email" xml:"email"`
+	DisplayName string `json:"displayname" xml:"displayname"` // is used in ocs/v(1|2).php/cloud/users/{username} - yes this is different from the /user endpoint
+	UserType    string `json:"user-type" xml:"user-type"`
+	UIDNumber   int64  `json:"uidnumber,omitempty" xml:"uidnumber,omitempty"`
+	GIDNumber   int64  `json:"gidnumber,omitempty" xml:"gidnumber,omitempty"`
+	// FIXME home should never be exposed ... even in oc 10, well only the admin can call this endpoint ...
+	// Home                 string `json:"home" xml:"home"`
+	TwoFactorAuthEnabled bool  `json:"two_factor_auth_enabled" xml:"two_factor_auth_enabled"`
+	LastLogin            int64 `json:"last_login" xml:"last_login"`
 }
 
 // Groups holds group data
@@ -131,13 +130,16 @@ func (h *Handler) GetUsers(w http.ResponseWriter, r *http.Request) {
 	}
 
 	d := &User{
-		UserID:            user.Username,
-		Enabled:           "true", // TODO include in response only when admin?
-		DisplayName:       user.DisplayName,
-		LegacyDisplayName: user.DisplayName,
-		Email:             user.Mail,
-		UserType:          conversions.UserTypeString(user.Id.Type),
-		Quota:             &Quota{},
+		Enabled:     "true", // TODO include in response only when admin?
+		DisplayName: user.DisplayName,
+		Email:       user.Mail,
+		UserType:    conversions.UserTypeString(user.Id.Type),
+		Quota:       &Quota{},
+	}
+	// TODO how do we fill lastlogin of a user when another user (with the necessary permissions) looks up the user?
+	// TODO someone needs to fill last-login
+	if lastLogin := utils.ReadPlainFromOpaque(user.Opaque, "last-login"); lastLogin != "" {
+		d.LastLogin, _ = strconv.ParseInt(lastLogin, 10, 64)
 	}
 
 	// lightweight and federated users don't have access to their storage space
