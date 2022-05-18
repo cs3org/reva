@@ -19,17 +19,25 @@
 package tus
 
 import (
+	"context"
 	"net/http"
+	"path/filepath"
 
 	"github.com/pkg/errors"
+	tusd "github.com/tus/tusd/pkg/handler"
 
+	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/v2/pkg/appctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
+	"github.com/cs3org/reva/v2/pkg/events"
 	"github.com/cs3org/reva/v2/pkg/rhttp/datatx"
 	"github.com/cs3org/reva/v2/pkg/rhttp/datatx/manager/registry"
 	"github.com/cs3org/reva/v2/pkg/rhttp/datatx/utils/download"
 	"github.com/cs3org/reva/v2/pkg/storage"
+	"github.com/cs3org/reva/v2/pkg/storagespace"
+	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/mitchellh/mapstructure"
-	tusd "github.com/tus/tusd/pkg/handler"
 )
 
 func init() {
@@ -39,7 +47,8 @@ func init() {
 type config struct{}
 
 type manager struct {
-	conf *config
+	conf      *config
+	publisher events.Publisher
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -52,13 +61,16 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 }
 
 // New returns a datatx manager implementation that relies on HTTP PUT/GET.
-func New(m map[string]interface{}) (datatx.DataTX, error) {
+func New(m map[string]interface{}, publisher events.Publisher) (datatx.DataTX, error) {
 	c, err := parseConfig(m)
 	if err != nil {
 		return nil, err
 	}
 
-	return &manager{conf: c}, nil
+	return &manager{
+		conf:      c,
+		publisher: publisher,
+	}, nil
 }
 
 func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
@@ -76,8 +88,10 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 	// let the composable storage tell tus which extensions it supports
 	composable.UseIn(composer)
 
+	publishEvents := m.publisher != nil
 	config := tusd.Config{
-		StoreComposer: composer,
+		StoreComposer:         composer,
+		NotifyCompleteUploads: publishEvents,
 	}
 
 	handler, err := tusd.NewUnroutedHandler(config)
@@ -85,8 +99,30 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 		return nil, err
 	}
 
-	h := handler.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	if publishEvents {
+		go func() {
+			for {
+				ev := <-handler.CompleteUploads
+				info := ev.Upload
+				owner := &userv1beta1.UserId{
+					Idp:      info.Storage["Idp"],
+					OpaqueId: info.Storage["UserId"],
+				}
+				ref := &provider.Reference{
+					ResourceId: &provider.ResourceId{
+						StorageId: storagespace.FormatStorageID(info.MetaData["providerID"], info.Storage["SpaceRoot"]),
+						OpaqueId:  info.Storage["SpaceRoot"],
+					},
+					Path: utils.MakeRelativePath(filepath.Join(info.MetaData["dir"], info.MetaData["filename"])),
+				}
+				if err := datatx.EmitFileUploadedEvent(owner, ref, m.publisher); err != nil {
+					appctx.GetLogger(context.Background()).Error().Err(err).Msg("failed to publish FileUploaded event")
+				}
+			}
+		}()
+	}
 
+	h := handler.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		method := r.Method
 		// https://github.com/tus/tus-resumable-upload-protocol/blob/master/protocol.md#x-http-method-override
 		if r.Header.Get("X-HTTP-Method-Override") != "" {

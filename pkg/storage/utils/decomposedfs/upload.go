@@ -41,10 +41,12 @@ import (
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/logger"
+	"github.com/cs3org/reva/v2/pkg/storage"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/chunking"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/lookup"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs"
+	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
@@ -57,7 +59,7 @@ var defaultFilePerm = os.FileMode(0664)
 // Upload uploads data to the given resource
 // TODO Upload (and InitiateUpload) needs a way to receive the expected checksum.
 // Maybe in metadata as 'checksum' => 'sha1 aeosvp45w5xaeoe' = lowercase, space separated?
-func (fs *Decomposedfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser) (err error) {
+func (fs *Decomposedfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser, uff storage.UploadFinishedFunc) error {
 	upload, err := fs.GetUpload(ctx, ref.GetPath())
 	if err != nil {
 		return errors.Wrap(err, "Decomposedfs: error retrieving upload")
@@ -92,14 +94,33 @@ func (fs *Decomposedfs) Upload(ctx context.Context, ref *provider.Reference, r i
 		return errors.Wrap(err, "Decomposedfs: error writing to binary file")
 	}
 
-	return uploadInfo.FinishUpload(ctx)
+	if err := uploadInfo.FinishUpload(ctx); err != nil {
+		return err
+	}
+
+	if uff != nil {
+		info := uploadInfo.info
+		uploadRef := &provider.Reference{
+			ResourceId: &provider.ResourceId{
+				StorageId: storagespace.FormatStorageID(info.MetaData["providerID"], info.Storage["SpaceRoot"]),
+				OpaqueId:  info.Storage["SpaceRoot"],
+			},
+			Path: utils.MakeRelativePath(filepath.Join(info.MetaData["dir"], info.MetaData["filename"])),
+		}
+		owner, ok := ctxpkg.ContextGetUser(uploadInfo.ctx)
+		if !ok {
+			return errtypes.PreconditionFailed("error getting user from uploadinfo context")
+		}
+		uff(owner.Id, uploadRef)
+	}
+
+	return nil
 }
 
 // InitiateUpload returns upload ids corresponding to different protocols it supports
 // TODO read optional content for small files in this request
 // TODO InitiateUpload (and Upload) needs a way to receive the expected checksum. Maybe in metadata as 'checksum' => 'sha1 aeosvp45w5xaeoe' = lowercase, space separated?
 func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64, metadata map[string]string) (map[string]string, error) {
-
 	log := appctx.GetLogger(ctx)
 
 	n, err := fs.lu.NodeFromResource(ctx, ref)
@@ -129,6 +150,7 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 	}
 
 	if metadata != nil {
+		info.MetaData["providerID"] = metadata["providerID"]
 		if mtime, ok := metadata["mtime"]; ok {
 			info.MetaData["mtime"] = mtime
 		}

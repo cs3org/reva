@@ -108,10 +108,6 @@ func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error
 			if isSuccess(v) {
 				ev = ContainerCreated(v, req.(*provider.CreateContainerRequest), executantID)
 			}
-		case *provider.InitiateFileUploadResponse:
-			if isSuccess(v) {
-				ev = FileUploaded(v, req.(*provider.InitiateFileUploadRequest), executantID)
-			}
 		case *provider.InitiateFileDownloadResponse:
 			if isSuccess(v) {
 				ev = FileDownloaded(v, req.(*provider.InitiateFileDownloadRequest))

@@ -23,9 +23,11 @@ import (
 	"path"
 	"strings"
 
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
+	"github.com/cs3org/reva/v2/pkg/events"
 	"github.com/cs3org/reva/v2/pkg/rhttp/datatx"
 	"github.com/cs3org/reva/v2/pkg/rhttp/datatx/manager/registry"
 	"github.com/cs3org/reva/v2/pkg/rhttp/datatx/utils/download"
@@ -43,7 +45,8 @@ func init() {
 type config struct{}
 
 type manager struct {
-	conf *config
+	conf      *config
+	publisher events.Publisher
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -56,13 +59,16 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 }
 
 // New returns a datatx manager implementation that relies on HTTP PUT/GET.
-func New(m map[string]interface{}) (datatx.DataTX, error) {
+func New(m map[string]interface{}, publisher events.Publisher) (datatx.DataTX, error) {
 	c, err := parseConfig(m)
 	if err != nil {
 		return nil, err
 	}
 
-	return &manager{conf: c}, nil
+	return &manager{
+		conf:      c,
+		publisher: publisher,
+	}, nil
 }
 
 func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
@@ -86,7 +92,11 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 				ResourceId: &provider.ResourceId{StorageId: storageid, OpaqueId: opaqeid},
 				Path:       fn,
 			}
-			err := fs.Upload(ctx, ref, r.Body)
+			err := fs.Upload(ctx, ref, r.Body, func(owner *userpb.UserId, ref *provider.Reference) {
+				if err := datatx.EmitFileUploadedEvent(owner, ref, m.publisher); err != nil {
+					sublog.Error().Err(err).Msg("failed to publish FileUploaded event")
+				}
+			})
 			switch v := err.(type) {
 			case nil:
 				w.WriteHeader(http.StatusOK)
