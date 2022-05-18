@@ -34,6 +34,7 @@ type DataTX interface {
 	Handler(fs storage.FS) (http.Handler, error)
 }
 
+// EmitFileUploadedEvent is a helper function which publishes a FileUploaded event
 func EmitFileUploadedEvent(owner *userv1beta1.UserId, ref *provider.Reference, publisher events.Publisher) error {
 	if ref == nil {
 		return nil
