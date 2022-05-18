@@ -581,26 +581,36 @@ func (h *Handler) UpdateShare(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) updateShare(w http.ResponseWriter, r *http.Request, shareID string) {
 	ctx := r.Context()
 
-	pval := r.FormValue("permissions")
-	if pval == "" {
-		response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "permissions missing", nil)
-		return
-	}
-
-	pint, err := strconv.Atoi(pval)
-	if err != nil {
-		response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "permissions must be an integer", nil)
-		return
-	}
-	permissions, err := conversions.NewPermissions(pint)
-	if err != nil {
-		response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, err.Error(), nil)
-		return
-	}
-
 	client, err := pool.GetGatewayServiceClient(h.gatewayAddr)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
+		return
+	}
+
+	shareR, err := client.GetShare(r.Context(), &collaboration.GetShareRequest{
+		Ref: &collaboration.ShareReference{
+			Spec: &collaboration.ShareReference_Id{
+				Id: &collaboration.ShareId{
+					OpaqueId: shareID,
+				},
+			},
+		},
+	})
+
+	if err != nil {
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error sending a grpc update share request", err)
+		return
+	}
+
+	info, status, err := h.getResourceInfoByID(ctx, client, shareR.Share.ResourceId)
+	if err != nil || status.Code != rpc.Code_CODE_OK {
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error mapping share data", err)
+		return
+	}
+
+	role, _, ocsErr := h.extractPermissions(w, r, info, conversions.NewManagerRole())
+	if ocsErr != nil {
+		response.WriteOCSError(w, r, ocsErr.Code, ocsErr.Message, ocsErr.Error)
 		return
 	}
 
@@ -616,7 +626,7 @@ func (h *Handler) updateShare(w http.ResponseWriter, r *http.Request, shareID st
 			Field: &collaboration.UpdateShareRequest_UpdateField_Permissions{
 				Permissions: &collaboration.SharePermissions{
 					// this completely overwrites the permissions for this user
-					Permissions: conversions.RoleFromOCSPermissions(permissions).CS3ResourcePermissions(),
+					Permissions: role.CS3ResourcePermissions(),
 				},
 			},
 		},
