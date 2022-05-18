@@ -88,9 +88,10 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 	// let the composable storage tell tus which extensions it supports
 	composable.UseIn(composer)
 
+	publishEvents := m.publisher != nil
 	config := tusd.Config{
 		StoreComposer:         composer,
-		NotifyCompleteUploads: true,
+		NotifyCompleteUploads: publishEvents,
 	}
 
 	handler, err := tusd.NewUnroutedHandler(config)
@@ -98,7 +99,7 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 		return nil, err
 	}
 
-	if m.publisher != nil {
+	if publishEvents {
 		go func() {
 			for {
 				ev := <-handler.CompleteUploads
@@ -122,7 +123,6 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 	}
 
 	h := handler.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-
 		method := r.Method
 		// https://github.com/tus/tus-resumable-upload-protocol/blob/master/protocol.md#x-http-method-override
 		if r.Header.Get("X-HTTP-Method-Override") != "" {
