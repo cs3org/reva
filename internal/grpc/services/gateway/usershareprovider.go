@@ -170,6 +170,7 @@ func (s *svc) ListReceivedShares(ctx context.Context, req *collaboration.ListRec
 	// The `ListStorageSpaces` method in sharesstorageprovider/sharesstorageprovider.go needs the etags.
 	shareMetaData := make(map[string]share.Metadata, len(res.Shares))
 	for _, rs := range res.Shares {
+		// Stat .. here, only for etag and mtime? and then we throw the rest away?
 		sRes, err := s.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{ResourceId: rs.Share.ResourceId}})
 		if err != nil {
 			logger.Error().
