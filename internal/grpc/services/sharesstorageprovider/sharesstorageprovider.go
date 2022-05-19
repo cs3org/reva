@@ -781,7 +781,7 @@ func (s *service) ListContainer(ctx context.Context, req *provider.ListContainer
 				Opaque: req.Opaque,
 				Ref: &provider.Reference{
 					ResourceId: share.Share.ResourceId,
-					// Path: "." TODO force a relative request? should not matter because we always only want the name
+					Path:       ".",
 				},
 				ArbitraryMetadataKeys: req.ArbitraryMetadataKeys,
 			})
