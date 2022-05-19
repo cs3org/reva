@@ -52,9 +52,8 @@ func (h *Handler) GetSelf(w http.ResponseWriter, r *http.Request) {
 
 // User holds user data
 type User struct {
-	// TODO needs better naming, clarify if we need a userid, a username or both
-	ID          string `json:"id" xml:"id"`
-	DisplayName string `json:"display-name" xml:"display-name"`
+	ID          string `json:"id" xml:"id"`                     // UserID in ocs is the owncloud internal username
+	DisplayName string `json:"display-name" xml:"display-name"` // is used in ocs/v(1|2).php/cloud/user - yes this is different from the users endpoint
 	Email       string `json:"email" xml:"email"`
 	UserType    string `json:"user-type" xml:"user-type"`
 }
