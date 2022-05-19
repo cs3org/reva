@@ -382,8 +382,10 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 			if spaceID == nil || utils.ResourceIDEqual(virtualRootID, spaceID) {
 				earliestShare, atLeastOneAccepted := findEarliestShare(receivedShares, shareMd)
 				var opaque *typesv1beta1.Opaque
+				var mtime *typesv1beta1.Timestamp
 				if earliestShare != nil {
 					if md, ok := shareMd[earliestShare.Id.OpaqueId]; ok {
+						mtime = md.Mtime
 						opaque = utils.AppendPlainToOpaque(opaque, "etag", md.ETag)
 					}
 				}
@@ -398,8 +400,9 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 						SpaceType: "virtual",
 						//Owner:     &userv1beta1.User{Id: receivedShare.Share.Owner}, // FIXME actually, the mount point belongs to the recipient
 						// the sharesstorageprovider keeps track of mount points
-						Root: virtualRootID,
-						Name: "Shares Jail",
+						Root:  virtualRootID,
+						Name:  "Shares Jail",
+						Mtime: mtime,
 					}
 					res.StorageSpaces = append(res.StorageSpaces, space)
 				}
@@ -761,9 +764,55 @@ func (s *service) ListContainer(ctx context.Context, req *provider.ListContainer
 
 	if isVirtualRoot(req.Ref.ResourceId) {
 		// The root is empty, it is filled by mountpoints
+		// but when accessing the root via /dav/spaces we need to list the content
+
+		receivedShares, _, err := s.fetchShares(ctx)
+		if err != nil {
+			return nil, errors.Wrap(err, "sharesstorageprovider: error calling ListReceivedSharesRequest")
+		}
+
+		infos := []*provider.ResourceInfo{}
+		for _, share := range receivedShares {
+			if share.GetState() != collaboration.ShareState_SHARE_STATE_ACCEPTED {
+				continue
+			}
+
+			statRes, err := s.gateway.Stat(ctx, &provider.StatRequest{
+				Opaque: req.Opaque,
+				Ref: &provider.Reference{
+					ResourceId: share.Share.ResourceId,
+					Path:       ".",
+				},
+				ArbitraryMetadataKeys: req.ArbitraryMetadataKeys,
+			})
+			switch {
+			case err != nil:
+				appctx.GetLogger(ctx).Error().
+					Err(err).
+					Interface("share", share).
+					Msg("sharesstorageprovider: could not make stat request when listing virtual root, skipping")
+				continue
+			case statRes.Status.Code != rpc.Code_CODE_OK:
+				appctx.GetLogger(ctx).Debug().
+					Interface("share", share).
+					Interface("status", statRes.Status).
+					Msg("sharesstorageprovider: could not stat share when listing virtual root, skipping")
+				continue
+			}
+
+			// override info
+			info := statRes.Info
+			info.Id = &provider.ResourceId{
+				StorageId: utils.ShareStorageProviderID,
+				OpaqueId:  share.Share.Id.OpaqueId,
+			}
+			info.Path = filepath.Base(share.MountPoint.Path)
+
+			infos = append(infos, info)
+		}
 		return &provider.ListContainerResponse{
 			Status: status.NewOK(ctx),
-			Infos:  []*provider.ResourceInfo{},
+			Infos:  infos,
 		}, nil
 	}
 	receivedShare, rpcStatus, err := s.resolveReference(ctx, req.Ref)
