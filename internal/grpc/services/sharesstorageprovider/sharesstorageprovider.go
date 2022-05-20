@@ -990,6 +990,9 @@ func (s *service) resolveReference(ctx context.Context, ref *provider.Reference)
 			case utils.ResourceIDEqual(ref.ResourceId, receivedShare.Share.ResourceId):
 				// we have a mount point
 				return receivedShare, nil, nil
+			case isVirtualRoot(ref.ResourceId) && utils.MakeRelativePath(ref.Path) == utils.MakeRelativePath(receivedShare.MountPoint.Path):
+				// we have a mountpoint
+				return receivedShare, nil, nil
 			default:
 				continue
 			}

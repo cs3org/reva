@@ -165,6 +165,7 @@ func (s *svc) handleMove(ctx context.Context, w http.ResponseWriter, r *http.Req
 	}
 
 	// check src exists
+	// TODO get rid of this stat by making CS3 move return necessary codes
 	srcStatReq := &provider.StatRequest{Ref: src}
 	srcStatRes, err := client.Stat(ctx, srcStatReq)
 	if err != nil {
@@ -184,6 +185,7 @@ func (s *svc) handleMove(ctx context.Context, w http.ResponseWriter, r *http.Req
 	}
 
 	// check dst exists
+	// TODO get rid of this stat by making CS3 move return necessary codes
 	dstStatReq := &provider.StatRequest{Ref: dst}
 	dstStatRes, err := client.Stat(ctx, dstStatReq)
 	if err != nil {
