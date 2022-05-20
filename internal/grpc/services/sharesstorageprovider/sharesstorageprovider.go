@@ -20,7 +20,6 @@ package sharesstorageprovider
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -1025,16 +1024,32 @@ func (s *service) fetchShares(ctx context.Context) ([]*collaboration.ReceivedSha
 	if lsRes.Status.Code != rpc.Code_CODE_OK {
 		return nil, nil, fmt.Errorf("sharesstorageprovider: error calling ListReceivedSharesRequest")
 	}
-	receivedShares := lsRes.Shares
 
-	var shareMd map[string]share.Metadata
-	if lsRes.Opaque != nil {
-		if entry, ok := lsRes.Opaque.Map["shareMetadata"]; ok {
-			// If we can't get the etags thats fine, just continue.
-			_ = json.Unmarshal(entry.Value, &shareMd)
+	shareMetaData := make(map[string]share.Metadata, len(lsRes.Shares))
+	for _, rs := range lsRes.Shares {
+		// only stat accepted shares
+		if rs.State != collaboration.ShareState_SHARE_STATE_ACCEPTED {
+			continue
 		}
+		sRes, err := s.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{ResourceId: rs.Share.ResourceId}})
+		if err != nil {
+			appctx.GetLogger(ctx).Error().
+				Err(err).
+				Interface("resourceID", rs.Share.ResourceId).
+				Msg("ListRecievedShares: failed to make stat call")
+			continue
+		}
+		if sRes.Status.Code != rpc.Code_CODE_OK {
+			appctx.GetLogger(ctx).Debug().
+				Interface("resourceID", rs.Share.ResourceId).
+				Interface("status", sRes.Status).
+				Msg("ListRecievedShares: failed to stat the resource")
+			continue
+		}
+		shareMetaData[rs.Share.Id.OpaqueId] = share.Metadata{ETag: sRes.Info.Etag, Mtime: sRes.Info.Mtime}
 	}
-	return receivedShares, shareMd, nil
+
+	return lsRes.Shares, shareMetaData, nil
 }
 
 func findEarliestShare(receivedShares []*collaboration.ReceivedShare, shareMd map[string]share.Metadata) (earliestShare *collaboration.Share, atLeastOneAccepted bool) {
