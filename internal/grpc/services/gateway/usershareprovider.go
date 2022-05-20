@@ -20,7 +20,6 @@ package gateway
 
 import (
 	"context"
-	"encoding/json"
 	"path"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
@@ -32,7 +31,6 @@ import (
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/status"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
-	"github.com/cs3org/reva/v2/pkg/share"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/grants"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
 	rtrace "github.com/cs3org/reva/v2/pkg/trace"
@@ -164,49 +162,6 @@ func (s *svc) ListReceivedShares(ctx context.Context, req *collaboration.ListRec
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error calling ListReceivedShares")
 	}
-
-	// TODO: This is a hack for now.
-	// Can we do that cleaner somehow?
-	// The `ListStorageSpaces` method in sharesstorageprovider/sharesstorageprovider.go needs the etags.
-	shareMetaData := make(map[string]share.Metadata, len(res.Shares))
-	for _, rs := range res.Shares {
-		// FIXME: usershareprovider should not stat resources
-		sRes, err := s.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{ResourceId: rs.Share.ResourceId}})
-		if err != nil {
-			logger.Error().
-				Err(err).
-				Interface("resourceID", rs.Share.ResourceId).
-				Msg("ListRecievedShares: failed to stat the resource")
-			continue
-		}
-		if sRes.Status.Code != rpc.Code_CODE_OK {
-			logger.Error().
-				Interface("resourceID", rs.Share.ResourceId).
-				Msg("ListRecievedShares: failed to stat the resource")
-			continue
-		}
-		shareMetaData[rs.Share.Id.OpaqueId] = share.Metadata{ETag: sRes.Info.Etag, Mtime: sRes.Info.Mtime}
-	}
-
-	marshalled, err := json.Marshal(shareMetaData)
-	if err != nil {
-		logger.Error().
-			Err(err).
-			Msg("ListRecievedShares: failed marshal share etags")
-	} else {
-		opaque := res.Opaque
-		if opaque == nil {
-			opaque = &typesv1beta1.Opaque{
-				Map: map[string]*typesv1beta1.OpaqueEntry{},
-			}
-		}
-		opaque.Map["shareMetadata"] = &typesv1beta1.OpaqueEntry{
-			Decoder: "json",
-			Value:   marshalled,
-		}
-		res.Opaque = opaque
-	}
-
 	return res, nil
 }
 
