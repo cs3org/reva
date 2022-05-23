@@ -214,12 +214,13 @@ func (h *Handler) Init(c *config.Config) {
 	if h.c.Version == nil {
 		h.c.Version = &data.Version{
 			// TODO get from build env
-			Major:   10,
-			Minor:   0,
-			Micro:   11,
-			String:  "10.0.11",
-			Edition: "community",
-			Product: "reva",
+			Major:          10,
+			Minor:          0,
+			Micro:          11,
+			String:         "10.0.11",
+			Edition:        "community",
+			Product:        "reva",
+			ProductVersion: "",
 		}
 	}
 
