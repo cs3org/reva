@@ -224,10 +224,11 @@ type CapabilitiesNotifications struct {
 
 // Version holds version information
 type Version struct {
-	Major   int    `json:"major" xml:"major"`
-	Minor   int    `json:"minor" xml:"minor"`
-	Micro   int    `json:"micro" xml:"micro"` // = patch level
-	String  string `json:"string" xml:"string"`
-	Edition string `json:"edition" xml:"edition"`
-	Product string `json:"product" xml:"product"`
+	Major          int    `json:"major" xml:"major"`
+	Minor          int    `json:"minor" xml:"minor"`
+	Micro          int    `json:"micro" xml:"micro"` // = patch level
+	String         string `json:"string" xml:"string"`
+	Edition        string `json:"edition" xml:"edition"`
+	Product        string `json:"product" xml:"product"`
+	ProductVersion string `json:"productversion" xml:"productversion"`
 }
