@@ -217,7 +217,10 @@ func (s *svc) CreateStorageSpace(ctx context.Context, req *provider.CreateStorag
 
 func (s *svc) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSpacesRequest) (*provider.ListStorageSpacesResponse, error) {
 	// TODO update CS3 api to forward the filters to the registry so it can filter the number of providers the gateway needs to query
-	filters := map[string]string{}
+	filters := map[string]string{
+		// TODO add opaque / CS3 api to expand 'path,root' properties / field mask
+		"mask": "*", // fetch all properties when listing storage spaces
+	}
 
 	for _, f := range req.Filters {
 		switch f.Type {
@@ -1093,6 +1096,7 @@ func (s *svc) findSpaces(ctx context.Context, ref *provider.Reference) ([]*regis
 	}
 
 	filters := map[string]string{
+		"mask": "root", // we only need the root for routing
 		"path": ref.Path,
 	}
 	if ref.ResourceId != nil {
