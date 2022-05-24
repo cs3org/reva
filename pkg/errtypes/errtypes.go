@@ -145,19 +145,19 @@ func (e InsufficientStorage) Error() string { return "error: insufficient storag
 // IsInsufficientStorage implements the IsInsufficientStorage interface.
 func (e InsufficientStorage) IsInsufficientStorage() {}
 
-// StatusCode returns StatusInssufficientStorage, this implementation is neede to allow TUS to cast the correct http errors.
+// StatusCode returns StatusInsufficientStorage, this implementation is needed to allow TUS to cast the correct http errors.
 func (e InsufficientStorage) StatusCode() int {
-	return StatusInssufficientStorage
+	return StatusInsufficientStorage
 }
 
-// Body returns the error body. This implementation is neede to allow TUS to cast the correct http errors
+// Body returns the error body. This implementation is needed to allow TUS to cast the correct http errors
 func (e InsufficientStorage) Body() []byte {
 	return []byte(e.Error())
 }
 
-// StatusInssufficientStorage 507 is an official http status code to indicate that there is insufficient storage
+// StatusInsufficientStorage 507 is an official HTTP status code to indicate that there is insufficient storage
 // https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/507
-const StatusInssufficientStorage = 507
+const StatusInsufficientStorage = 507
 
 // IsNotFound is the interface to implement
 // to specify that an a resource is not found.
