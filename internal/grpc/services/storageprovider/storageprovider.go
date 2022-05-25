@@ -324,28 +324,29 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 	}
 
 	metadata := map[string]string{}
-	ifMatch := req.GetIfMatch()
-	if ifMatch != "" {
-		sRes, err := s.Stat(ctx, &provider.StatRequest{Ref: req.Ref})
-		if err != nil {
-			return nil, err
+	info, err := s.storage.GetMD(ctx, req.GetRef(), nil)
+	switch err.(type) {
+	case nil:
+		if info.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
+			return &provider.InitiateFileUploadResponse{
+				Status: status.NewAlreadyExists(ctx, errors.New("cannot overwrite directiory"), "cannot overwrite directiory"),
+			}, nil
 		}
-
-		switch sRes.Status.Code {
-		case rpc.Code_CODE_OK:
-			if sRes.Info.Etag != ifMatch {
+		ifMatch := req.GetIfMatch()
+		if ifMatch != "" {
+			if info.Etag != ifMatch {
 				return &provider.InitiateFileUploadResponse{
 					Status: status.NewFailedPrecondition(ctx, errors.New("etag doesn't match"), "etag doesn't match"),
 				}, nil
 			}
-		case rpc.Code_CODE_NOT_FOUND:
-			// Just continue with a normal upload
-		default:
-			return &provider.InitiateFileUploadResponse{
-				Status: sRes.Status,
-			}, nil
+			metadata["if-match"] = ifMatch
 		}
-		metadata["if-match"] = ifMatch
+	case errtypes.IsNotFound:
+		// ok, continue with a normal upload
+	default:
+		return &provider.InitiateFileUploadResponse{
+			Status: status.NewStatusFromErrType(ctx, "could not stat resource", err),
+		}, nil
 	}
 
 	ctx = ctxpkg.ContextSetLockID(ctx, req.LockId)
@@ -396,6 +397,8 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 			st = status.NewPermissionDenied(ctx, err, "permission denied")
 		case errtypes.InsufficientStorage:
 			st = status.NewInsufficientStorage(ctx, err, "insufficient storage")
+		case errtypes.AlreadyExists:
+			st = status.NewAlreadyExists(ctx, err, "cannot overwrite directiory")
 		default:
 			st = status.NewInternal(ctx, "error getting upload id: "+req.Ref.String())
 		}
@@ -430,6 +433,13 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 		Protocols: protocols,
 		Status:    status.NewOK(ctx),
 	}
+
+	// when a file does not exist yet, webdav expects a 201 created (otherwise 200 OK or 204 No Content)
+	// so we need to report back to the caller if it existed or not
+	if info != nil {
+		res.Opaque = utils.AppendPlainToOpaque(res.Opaque, "exists", "true")
+	}
+
 	return res, nil
 }
 

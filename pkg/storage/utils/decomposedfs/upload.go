@@ -246,6 +246,13 @@ func (fs *Decomposedfs) NewUpload(ctx context.Context, info tusd.FileInfo) (uplo
 		ok, err = fs.p.HasPermission(ctx, n, func(rp *provider.ResourcePermissions) bool {
 			return rp.InitiateFileUpload
 		})
+		isDir, derr := n.IsDir(ctx)
+		if derr != nil {
+			return nil, errors.Wrap(derr, "Decomposedfs: could check if node IsDir")
+		}
+		if isDir {
+			return nil, errtypes.AlreadyExists("cannot overwrite directory")
+		}
 	} else {
 		// check permissions of parent
 		ok, err = fs.p.HasPermission(ctx, p, func(rp *provider.ResourcePermissions) bool {

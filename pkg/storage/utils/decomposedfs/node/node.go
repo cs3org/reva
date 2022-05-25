@@ -567,6 +567,25 @@ func (n *Node) SetFavorite(uid *userpb.UserId, val string) error {
 	return xattrs.Set(nodePath, fa, val)
 }
 
+// IsDir checks if the node represents a directory
+func (n *Node) IsDir(tx context.Context) (isDir bool, err error) {
+	if n.Exists == false {
+		return false, nil
+	}
+
+	var fi os.FileInfo
+	if fi, err = os.Lstat(n.InternalPath()); err != nil {
+		return false, err
+	}
+	if !fi.IsDir() {
+		return false, nil
+	}
+	if _, err := xattrs.Get(n.InternalPath(), xattrs.ReferenceAttr); err == nil {
+		return false, nil
+	}
+	return true, nil
+}
+
 // AsResourceInfo return the node as CS3 ResourceInfo
 func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissions, mdKeys []string, returnBasename bool) (ri *provider.ResourceInfo, err error) {
 	sublog := appctx.GetLogger(ctx).With().Interface("node", n.ID).Logger()
