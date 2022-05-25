@@ -218,8 +218,14 @@ func (s *svc) CreateStorageSpace(ctx context.Context, req *provider.CreateStorag
 func (s *svc) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSpacesRequest) (*provider.ListStorageSpacesResponse, error) {
 	// TODO update CS3 api to forward the filters to the registry so it can filter the number of providers the gateway needs to query
 	filters := map[string]string{
-		// TODO add opaque / CS3 api to expand 'path,root' properties / field mask
+		// TODO add opaque / CS3 api to expand 'path,root,stat?' properties / field mask
 		"mask": "*", // fetch all properties when listing storage spaces
+	}
+
+	mask := utils.ReadPlainFromOpaque(req.Opaque, "mask")
+	if mask != "" {
+		// TODO check for allowed filters
+		filters["mask"] = mask
 	}
 
 	for _, f := range req.Filters {

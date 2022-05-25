@@ -381,7 +381,9 @@ func (p *Handler) getResourceInfos(ctx context.Context, w http.ResponseWriter, r
 		}
 		spacePath := string(space.Opaque.Map["path"].Value)
 		// TODO separate stats to the path or to the children, after statting all children update the mtime/etag
-		// TODO get mtime, and size from space as well, so we no longer have to stat here?
+		// TODO get mtime, and size from space as well, so we no longer have to stat here? would require sending the requested metadata keys as well
+		// root should be a ResourceInfo so it can contain the full stat, not only the id ... do we even need spaces then?
+		// metadata keys could all be prefixed with "root." to indicate we want more than the root id ...
 		spaceRef := spacelookup.MakeRelativeReference(space, requestPath, spacesPropfind)
 		info, status, err := p.statSpace(ctx, client, space, spaceRef, metadataKeys)
 		if err != nil || status.GetCode() != rpc.Code_CODE_OK {
