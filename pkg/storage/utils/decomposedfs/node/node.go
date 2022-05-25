@@ -1131,7 +1131,7 @@ var CheckQuota = func(spaceRoot *Node, overwrite bool, oldSize, newSize uint64) 
 		return false, errtypes.InsufficientStorage("disk full")
 	}
 	quotaByteStr, _ := xattrs.Get(spaceRoot.InternalPath(), xattrs.QuotaAttr)
-	if quotaByteStr == "" {
+	if quotaByteStr == "" || quotaByteStr == QuotaUnlimited {
 		// if quota is not set, it means unlimited
 		return true, nil
 	}
