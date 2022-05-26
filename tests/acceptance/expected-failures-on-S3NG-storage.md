@@ -1419,5 +1419,14 @@ _ocs: api compatibility, return correct status code_
 - [apiWebdavEtagPropagation2/restoreFromTrash.feature:93](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavEtagPropagation2/restoreFromTrash.feature#L93)
 - [apiWebdavEtagPropagation2/restoreFromTrash.feature:94](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavEtagPropagation2/restoreFromTrash.feature#L94)
 
+#### [`meta` requests have empty responses with master branch](https://github.com/cs3org/reva/issues/2897)
+- [apiVersions/fileVersions.feature:481](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersions.feature#L481)
+- [apiVersions/fileVersions.feature:488](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersions.feature#L488)
+- [apiVersions/fileVersions.feature:496](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersions.feature#L496)
+- [apiVersions/fileVersions.feature:509](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersions.feature#L509)
+- [apiVersions/fileVersions.feature:510](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersions.feature#L510)
+- [apiVersions/fileVersions.feature:511](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersions.feature#L511)
+- [apiVersions/fileVersions.feature:512](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersions.feature#L512)
+
 Note: always have an empty line at the end of this file.
 The bash script that processes this file may not process a scenario reference on the last line.
