@@ -53,7 +53,11 @@ func (h *MetaHandler) Handler(s *svc) http.Handler {
 		var id string
 		id, r.URL.Path = router.ShiftPath(r.URL.Path)
 		if id == "" {
-			w.WriteHeader(http.StatusBadRequest)
+			if r.Method != MethodPropfind {
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			h.handleEmptyID(w, r)
 			return
 		}
 
@@ -154,6 +158,53 @@ func (h *MetaHandler) handlePathForUser(w http.ResponseWriter, r *http.Request, 
 			Href: net.EncodePath(path.Join(baseURI, id) + "/"),
 			Propstat: []propfind.PropstatXML{
 				propstatOK,
+			},
+		},
+	}
+	propRes, err := xml.Marshal(msr)
+	if err != nil {
+		sublog.Error().Err(err).Msg("error marshalling propfind response xml")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set(net.HeaderDav, "1, 3, extended-mkcol")
+	w.Header().Set(net.HeaderContentType, "application/xml; charset=utf-8")
+	w.WriteHeader(http.StatusMultiStatus)
+	if _, err := w.Write(propRes); err != nil {
+		sublog.Error().Err(err).Msg("error writing propfind response")
+		return
+	}
+}
+
+func (h *MetaHandler) handleEmptyID(w http.ResponseWriter, r *http.Request) {
+	ctx, span := rtrace.Provider.Tracer("ocdav").Start(r.Context(), "meta_propfind")
+	defer span.End()
+
+	sublog := appctx.GetLogger(ctx).With().Str("path", r.URL.Path).Logger()
+	pf, status, err := propfind.ReadPropfind(r.Body)
+	if err != nil {
+		sublog.Debug().Err(err).Msg("error reading propfind request")
+		w.WriteHeader(status)
+		return
+	}
+
+	if ok := hasProp(&pf, net.PropOcMetaPathForUser); !ok {
+		sublog.Debug().Str("prop", net.PropOcMetaPathForUser).Msg("error finding prop in request")
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	propstatNotFound := propfind.PropstatXML{
+		Status: "HTTP/1.1 404 Not Found",
+	}
+	baseURI := ctx.Value(net.CtxKeyBaseURI).(string)
+	msr := propfind.NewMultiStatusResponseXML()
+	msr.Responses = []*propfind.ResponseXML{
+		{
+			Href: net.EncodePath(baseURI + "/"),
+			Propstat: []propfind.PropstatXML{
+				propstatNotFound,
 			},
 		},
 	}
