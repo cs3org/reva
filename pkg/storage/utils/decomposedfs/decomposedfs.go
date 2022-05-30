@@ -259,6 +259,15 @@ func (fs *Decomposedfs) GetPathByID(ctx context.Context, id *provider.ResourceId
 	if err != nil {
 		return "", err
 	}
+	ok, err := fs.p.HasPermission(ctx, node, func(rp *provider.ResourcePermissions) bool {
+		return rp.GetPath
+	})
+	switch {
+	case err != nil:
+		return "", errtypes.InternalError(err.Error())
+	case !ok:
+		return "", errtypes.PermissionDenied(filepath.Join(node.ParentID, node.Name))
+	}
 
 	return fs.lu.Path(ctx, node)
 }

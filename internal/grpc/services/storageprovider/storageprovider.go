@@ -440,12 +440,8 @@ func (s *service) GetPath(ctx context.Context, req *provider.GetPathRequest) (*p
 	// TODO(labkode): check that the storage ID is the same as the storage provider id.
 	fn, err := s.storage.GetPathByID(ctx, req.ResourceId)
 	if err != nil {
-		appctx.GetLogger(ctx).Error().
-			Err(err).
-			Interface("resource_id", req.ResourceId).
-			Msg("error getting path by id")
 		return &provider.GetPathResponse{
-			Status: status.NewInternal(ctx, "error getting path by id"),
+			Status: status.NewStatusFromErrType(ctx, "get path", err),
 		}, nil
 	}
 	res := &provider.GetPathResponse{
