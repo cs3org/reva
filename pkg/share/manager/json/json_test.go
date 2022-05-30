@@ -112,10 +112,10 @@ var _ = Describe("Json", func() {
 			Expect(len(shares)).To(Equal(1))
 			Expect(shares[0].Creator).To(Equal(user1.Id))
 			Expect(shares[0].Grantee.GetUserId()).To(Equal(user2.Id))
-			Expect(shares[0].ResourceId).To(Equal(sharedResource))
+			Expect(shares[0].ResourceId).To(Equal(sharedResource.Id))
 		})
 
-		FIt("dumps all received shares", func() {
+		It("dumps all received shares", func() {
 			sharesChan := make(chan *collaboration.Share)
 			receivedChan := make(chan share.ReceivedShareDump)
 

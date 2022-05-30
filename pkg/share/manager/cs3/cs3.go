@@ -163,6 +163,41 @@ func (m *Manager) initialize() error {
 	return nil
 }
 
+func (m *Manager) Load(shareChan <-chan *collaboration.Share, receivedShareChan <-chan share.ReceivedShareDump) error {
+	if err := m.initialize(); err != nil {
+		return err
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		for s := range shareChan {
+			fmt.Println("Loading share", s.Id.OpaqueId)
+			if s == nil {
+				continue
+			}
+			if err := m.persistShare(context.Background(), s); err != nil {
+				fmt.Println("error persisting share:", s, err)
+			}
+		}
+		wg.Done()
+	}()
+	go func() {
+		for s := range receivedShareChan {
+			if s.ReceivedShare != nil && s.UserId != nil {
+				fmt.Println("Loading received share", s.ReceivedShare.Share.Id)
+				if err := m.persistReceivedShare(context.Background(), s.UserId, s.ReceivedShare); err != nil {
+					fmt.Println("error persisting share:", s, err)
+				}
+			}
+		}
+		wg.Done()
+	}()
+	wg.Wait()
+
+	return nil
+}
+
 // Share creates a new share
 func (m *Manager) Share(ctx context.Context, md *provider.ResourceInfo, g *collaboration.ShareGrant) (*collaboration.Share, error) {
 	if err := m.initialize(); err != nil {
@@ -184,25 +219,29 @@ func (m *Manager) Share(ctx context.Context, md *provider.ResourceInfo, g *colla
 		Mtime:       ts,
 	}
 
+	err := m.persistShare(ctx, share)
+	return share, err
+}
+
+func (m *Manager) persistShare(ctx context.Context, share *collaboration.Share) error {
 	data, err := json.Marshal(share)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	err = m.storage.SimpleUpload(ctx, shareFilename(share.Id.OpaqueId), data)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	metadataPath := path.Join("metadata", share.Id.OpaqueId)
 	err = m.storage.MakeDirIfNotExist(ctx, metadataPath)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	_, err = m.indexer.Add(share)
-
-	return share, err
+	return err
 }
 
 // GetShare gets the information for a share by the given ref.
@@ -474,35 +513,40 @@ func (m *Manager) UpdateReceivedShare(ctx context.Context, rshare *collaboration
 		return nil, err
 	}
 
-	meta := ReceivedShareMetadata{
-		State:      rs.State,
-		MountPoint: rs.MountPoint,
-	}
 	for i := range fieldMask.Paths {
 		switch fieldMask.Paths[i] {
 		case "state":
-			meta.State = rshare.State
 			rs.State = rshare.State
 		case "mount_point":
-			meta.MountPoint = rshare.MountPoint
 			rs.MountPoint = rshare.MountPoint
 		default:
 			return nil, errtypes.NotSupported("updating " + fieldMask.Paths[i] + " is not supported")
 		}
 	}
 
+	err = m.persistReceivedShare(ctx, user.Id, rs)
+	if err != nil {
+		return nil, err
+	}
+	return rs, nil
+}
+
+func (m *Manager) persistReceivedShare(ctx context.Context, userId *userpb.UserId, rs *collaboration.ReceivedShare) error {
+	m.persistShare(ctx, rs.Share)
+	meta := ReceivedShareMetadata{
+		State:      rs.State,
+		MountPoint: rs.MountPoint,
+	}
 	data, err := json.Marshal(meta)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	fn, err := metadataFilename(rshare.Share, user)
+	fn, err := metadataFilename(rs.Share, userId)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	err = m.storage.SimpleUpload(ctx, fn, data)
-
-	return rs, err
+	return m.storage.SimpleUpload(ctx, fn, data)
 }
 
 func (m *Manager) downloadMetadata(ctx context.Context, share *collaboration.Share) (ReceivedShareMetadata, error) {
@@ -511,7 +555,7 @@ func (m *Manager) downloadMetadata(ctx context.Context, share *collaboration.Sha
 		return ReceivedShareMetadata{}, errtypes.UserRequired("error getting user from context")
 	}
 
-	metadataFn, err := metadataFilename(share, user)
+	metadataFn, err := metadataFilename(share, user.Id)
 	if err != nil {
 		return ReceivedShareMetadata{}, err
 	}
@@ -587,8 +631,8 @@ func shareFilename(id string) string {
 func metadataFilename(s *collaboration.Share, g interface{}) (string, error) {
 	var granteePart string
 	switch v := g.(type) {
-	case *userpb.User:
-		granteePart = url.QueryEscape("user:" + v.Id.Idp + ":" + v.Id.OpaqueId)
+	case *userpb.UserId:
+		granteePart = url.QueryEscape("user:" + v.Idp + ":" + v.OpaqueId)
 	case *provider.Grantee:
 		var err error
 		granteePart, err = granteeToIndex(v)
