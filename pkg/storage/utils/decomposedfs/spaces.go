@@ -410,12 +410,6 @@ func (fs *Decomposedfs) UpdateStorageSpace(ctx context.Context, req *provider.Up
 		return nil, err
 	}
 
-	if restore {
-		if err := node.SetDTime(nil); err != nil {
-			return nil, err
-		}
-	}
-
 	u, ok := ctxpkg.ContextGetUser(ctx)
 	if !ok {
 		return nil, fmt.Errorf("decomposedfs: spaces: contextual user not found")
@@ -462,11 +456,17 @@ func (fs *Decomposedfs) UpdateStorageSpace(ctx context.Context, req *provider.Up
 	}
 
 	// TODO change the permission handling
-	// these two attributes need manager permissions
-	if space.Name != "" || hasDescription {
+	// these three attributes need manager permissions
+	if space.Name != "" || hasDescription || restore {
 		err = fs.checkManagerPermission(ctx, node)
 	}
 	if err != nil {
+		if restore {
+			// a disabled space is invisible to non admins
+			return &provider.UpdateStorageSpaceResponse{
+				Status: &v1beta11.Status{Code: v1beta11.Code_CODE_NOT_FOUND, Message: err.Error()},
+			}, nil
+		}
 		return &provider.UpdateStorageSpaceResponse{
 			Status: &v1beta11.Status{Code: v1beta11.Code_CODE_PERMISSION_DENIED, Message: err.Error()},
 		}, nil
@@ -482,6 +482,12 @@ func (fs *Decomposedfs) UpdateStorageSpace(ctx context.Context, req *provider.Up
 	err = xattrs.SetMultiple(node.InternalPath(), metadata)
 	if err != nil {
 		return nil, err
+	}
+
+	if restore {
+		if err := node.SetDTime(nil); err != nil {
+			return nil, err
+		}
 	}
 
 	// send back the updated data from the storage

@@ -501,8 +501,10 @@ func (s *service) CreateStorageSpace(ctx context.Context, req *provider.CreateSt
 		}, nil
 	}
 
-	resp.StorageSpace.Id.OpaqueId = storagespace.FormatStorageID(s.conf.MountID, resp.StorageSpace.Id.GetOpaqueId())
-	resp.StorageSpace.Root.StorageId = storagespace.FormatStorageID(s.conf.MountID, resp.StorageSpace.Root.GetStorageId())
+	if resp.StorageSpace != nil {
+		resp.StorageSpace.Id.OpaqueId = storagespace.FormatStorageID(s.conf.MountID, resp.StorageSpace.Id.GetOpaqueId())
+		resp.StorageSpace.Root.StorageId = storagespace.FormatStorageID(s.conf.MountID, resp.StorageSpace.Root.GetStorageId())
+	}
 	return resp, nil
 }
 
@@ -578,8 +580,10 @@ func (s *service) UpdateStorageSpace(ctx context.Context, req *provider.UpdateSt
 			Msg("failed to update storage space")
 		return nil, err
 	}
-	res.StorageSpace.Id.OpaqueId = storagespace.FormatStorageID(s.conf.MountID, res.StorageSpace.Id.GetOpaqueId())
-	res.StorageSpace.Root.StorageId = storagespace.FormatStorageID(s.conf.MountID, res.StorageSpace.Root.GetStorageId())
+	if res.StorageSpace != nil {
+		res.StorageSpace.Id.OpaqueId = storagespace.FormatStorageID(s.conf.MountID, res.StorageSpace.Id.GetOpaqueId())
+		res.StorageSpace.Root.StorageId = storagespace.FormatStorageID(s.conf.MountID, res.StorageSpace.Root.GetStorageId())
+	}
 	return res, nil
 }
 
