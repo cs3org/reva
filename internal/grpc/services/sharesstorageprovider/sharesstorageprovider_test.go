@@ -43,6 +43,11 @@ import (
 )
 
 var (
+	ShareJail = &sprovider.ResourceId{
+		StorageId: utils.ShareStorageProviderID,
+		OpaqueId:  utils.ShareStorageProviderID,
+	}
+
 	BaseShare = &collaboration.ReceivedShare{
 		State: collaboration.ShareState_SHARE_STATE_ACCEPTED,
 		Share: &collaboration.Share{
@@ -561,7 +566,28 @@ var _ = Describe("Sharesstorageprovider", func() {
 						Path:       ".",
 					},
 					Destination: &sprovider.Reference{
-						ResourceId: BaseShare.Share.ResourceId,
+						ResourceId: ShareJail,
+						Path:       "./newname",
+					},
+				}
+				res, err := s.Move(ctx, req)
+				gw.AssertNotCalled(GinkgoT(), "Move", mock.Anything, mock.Anything)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(res).ToNot(BeNil())
+				Expect(res.Status.Code).To(Equal(rpc.Code_CODE_OK))
+				sharesProviderClient.AssertCalled(GinkgoT(), "UpdateReceivedShare", mock.Anything, mock.Anything)
+			})
+
+			It("renames a sharejail entry", func() {
+				sharesProviderClient.On("UpdateReceivedShare", mock.Anything, mock.Anything).Return(nil, nil)
+
+				req := &sprovider.MoveRequest{
+					Source: &sprovider.Reference{
+						ResourceId: ShareJail,
+						Path:       "./oldname",
+					},
+					Destination: &sprovider.Reference{
+						ResourceId: ShareJail,
 						Path:       "./newname",
 					},
 				}

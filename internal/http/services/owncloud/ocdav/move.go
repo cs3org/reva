@@ -69,7 +69,7 @@ func (s *svc) handlePathMove(w http.ResponseWriter, r *http.Request, ns string) 
 
 	srcSpace, status, err := spacelookup.LookUpStorageSpaceForPath(ctx, client, srcPath)
 	if err != nil {
-		sublog.Error().Err(err).Str("path", srcPath).Msg("failed to look up storage space")
+		sublog.Error().Err(err).Str("path", srcPath).Msg("failed to look up source storage space")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -79,18 +79,13 @@ func (s *svc) handlePathMove(w http.ResponseWriter, r *http.Request, ns string) 
 	}
 	dstSpace, status, err := spacelookup.LookUpStorageSpaceForPath(ctx, client, dstPath)
 	if err != nil {
-		sublog.Error().Err(err).Str("path", srcPath).Msg("failed to look up storage space")
+		sublog.Error().Err(err).Str("path", dstPath).Msg("failed to look up destination storage space")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 	if status.Code != rpc.Code_CODE_OK {
 		errors.HandleErrorStatus(&sublog, w, status)
 		return
-	}
-
-	// FIXME I suck
-	if dstSpace.Root.OpaqueId == utils.ShareStorageProviderID {
-		dstSpace.Root = srcSpace.Root
 	}
 
 	s.handleMove(ctx, w, r, spacelookup.MakeRelativeReference(srcSpace, srcPath, false), spacelookup.MakeRelativeReference(dstSpace, dstPath, false), sublog)
