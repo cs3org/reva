@@ -144,6 +144,11 @@ type PropstatUnmarshalXML struct {
 	ResponseDescription string              `xml:"responsedescription,omitempty"`
 }
 
+type SpaceData struct {
+	Ref   *provider.Reference
+	Space *provider.StorageSpace
+}
+
 // NewMultiStatusResponseXML returns a preconfigured instance of MultiStatusResponseXML
 func NewMultiStatusResponseXML() *MultiStatusResponseXML {
 	return &MultiStatusResponseXML{
@@ -209,12 +214,28 @@ func (p *Handler) HandlePathPropfind(w http.ResponseWriter, r *http.Request, ns 
 		return
 	}
 
+	var root *provider.StorageSpace
+
+	switch {
+	case len(spaces) == 1:
+		root = spaces[0]
+	case len(spaces) > 1:
+		for _, space := range spaces {
+			if isVirtualRootResourceID(space.Root) {
+				root = space
+			}
+		}
+		if root == nil {
+			root = spaces[0]
+		}
+	}
+
 	resourceInfos, sendTusHeaders, ok := p.getResourceInfos(ctx, w, r, pf, spaces, fn, false, sublog)
 	if !ok {
 		// getResourceInfos handles responses in case of an error so we can just return here.
 		return
 	}
-	p.propfindResponse(ctx, w, r, ns, spaces[0].SpaceType, pf, sendTusHeaders, resourceInfos, sublog)
+	p.propfindResponse(ctx, w, r, ns, root.SpaceType, pf, sendTusHeaders, resourceInfos, sublog)
 }
 
 // HandleSpacesPropfind handles a spaces based propfind request
@@ -305,7 +326,6 @@ func (p *Handler) propfindResponse(ctx context.Context, w http.ResponseWriter, r
 	}
 	w.Header().Set(net.HeaderDav, "1, 3, extended-mkcol")
 	w.Header().Set(net.HeaderContentType, "application/xml; charset=utf-8")
-
 	if sendTusHeaders {
 		w.Header().Add(net.HeaderAccessControlExposeHeaders, strings.Join([]string{net.HeaderTusResumable, net.HeaderTusVersion, net.HeaderTusExtension}, ", "))
 		w.Header().Set(net.HeaderTusResumable, "1.0.0")
@@ -374,7 +394,7 @@ func (p *Handler) getResourceInfos(ctx context.Context, w http.ResponseWriter, r
 	var mostRecentChildInfo *provider.ResourceInfo
 	var aggregatedChildSize uint64
 	spaceInfos := make([]*provider.ResourceInfo, 0, len(spaces))
-	spaceMap := map[*provider.ResourceInfo]*provider.Reference{}
+	spaceMap := map[*provider.ResourceInfo]SpaceData{}
 	for _, space := range spaces {
 		if space.Opaque == nil || space.Opaque.Map == nil || space.Opaque.Map["path"] == nil || space.Opaque.Map["path"].Decoder != "plain" {
 			continue // not mounted
@@ -398,8 +418,9 @@ func (p *Handler) getResourceInfos(ctx context.Context, w http.ResponseWriter, r
 			info.Path = filepath.Join(spacePath, spaceRef.Path)
 		}
 
-		spaceMap[info] = spaceRef
+		spaceMap[info] = SpaceData{Ref: spaceRef, Space: space}
 		spaceInfos = append(spaceInfos, info)
+
 		if rootInfo == nil && (requestPath == info.Path || (spacesPropfind && requestPath == path.Join("/", info.Path))) {
 			rootInfo = info
 		} else if requestPath != spacePath && strings.HasPrefix(spacePath, requestPath) { // Check if the space is a child of the requested path
@@ -483,9 +504,9 @@ func (p *Handler) getResourceInfos(ctx context.Context, w http.ResponseWriter, r
 
 		case spaceInfo.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER && depth == net.DepthOne:
 			switch {
-			case strings.HasPrefix(requestPath, spaceInfo.Path):
+			case strings.HasPrefix(requestPath, spaceInfo.Path) && spaceMap[spaceInfo].Space.SpaceType != "virtual":
 				req := &provider.ListContainerRequest{
-					Ref:                   spaceMap[spaceInfo],
+					Ref:                   spaceMap[spaceInfo].Ref,
 					ArbitraryMetadataKeys: metadataKeys,
 				}
 				res, err := client.ListContainer(ctx, req)
@@ -519,7 +540,7 @@ func (p *Handler) getResourceInfos(ctx context.Context, w http.ResponseWriter, r
 				info := stack[0]
 				stack = stack[1:]
 
-				if info.Type != provider.ResourceType_RESOURCE_TYPE_CONTAINER {
+				if info.Type != provider.ResourceType_RESOURCE_TYPE_CONTAINER || spaceMap[spaceInfo].Space.SpaceType == "virtual" {
 					continue
 				}
 				req := &provider.ListContainerRequest{
@@ -1319,4 +1340,15 @@ func (pn *Props) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
 			*pn = append(*pn, e.Name)
 		}
 	}
+}
+
+func isVirtualRoot(ref *provider.Reference) bool {
+	return isVirtualRootResourceID(ref.ResourceId) && (ref.Path == "" || ref.Path == "." || ref.Path == "./")
+}
+
+func isVirtualRootResourceID(id *provider.ResourceId) bool {
+	return utils.ResourceIDEqual(id, &provider.ResourceId{
+		StorageId: utils.ShareStorageProviderID,
+		OpaqueId:  utils.ShareStorageProviderID,
+	})
 }
