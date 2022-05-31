@@ -43,47 +43,35 @@ func (fs *Decomposedfs) DenyGrant(ctx context.Context, ref *provider.Reference, 
 func (fs *Decomposedfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) (err error) {
 	log := appctx.GetLogger(ctx)
 	log.Debug().Interface("ref", ref).Interface("grant", g).Msg("AddGrant()")
-	var node *node.Node
-	if node, err = fs.lu.NodeFromResource(ctx, ref); err != nil {
-		return
+	node, grant, err := fs.loadGrant(ctx, ref, g)
+	if err != nil {
+		return err
 	}
-	if !node.Exists {
-		err = errtypes.NotFound(filepath.Join(node.ParentID, node.Name))
-		return
+
+	if grant != nil {
+		// grant exists -> go to UpdateGrant
+		// TODO: should we hard error in this case?
+		return fs.UpdateGrant(ctx, ref, g)
 	}
 
 	u := ctxpkg.ContextMustGetUser(ctx)
+	g.Grantee.Opaque = utils.AppendPlainToOpaque(g.Grantee.Opaque, "granting-user", u.Id.GetOpaqueId())
+
+	owner := node.Owner()
 	grants, err := node.ListGrants(ctx)
 	if err != nil {
 		return err
 	}
 
-	var exists bool
-	for _, grant := range grants {
-		if g.Grantee.GetUserId().GetOpaqueId() == grant.Grantee.GetUserId().GetOpaqueId() {
-			exists = true
-			g.Grantee.Opaque = utils.MergeOpaques(g.Grantee.Opaque, grant.Grantee.Opaque)
-
-			break
-		}
-	}
-
-	// TODO: change cs3api to have a field for this
-	// TODO: take idp into account
-	if !exists {
-		g.Grantee.Opaque = utils.AppendPlainToOpaque(g.Grantee.Opaque, "granting-user", u.Id.GetOpaqueId())
-	}
-
-	owner := node.Owner()
 	// If the owner is empty and there are no grantees then we are dealing with a just created project space.
 	// In this case we don't need to check for permissions and just add the grant since this will be the project
 	// manager.
 	// When the owner is empty but grants are set then we do want to check the grants.
 	// However, if we are trying to edit an existing grant we do not have to check for permission if the user owns the grant
+	// TODO: find a better to check this
 	if !(len(grants) == 0 && (owner == nil || owner.OpaqueId == "")) {
 		ok, err := fs.p.HasPermission(ctx, node, func(rp *provider.ResourcePermissions) bool {
-			// TODO remove AddGrant or UpdateGrant grant from CS3 api, redundant? tracked in https://github.com/cs3org/cs3apis/issues/92
-			return rp.AddGrant || rp.UpdateGrant
+			return rp.AddGrant
 		})
 		switch {
 		case err != nil:
@@ -93,26 +81,7 @@ func (fs *Decomposedfs) AddGrant(ctx context.Context, ref *provider.Reference, g
 		}
 	}
 
-	// check lock
-	if err := node.CheckLock(ctx); err != nil {
-		return err
-	}
-
-	e := ace.FromGrant(g)
-	principal, value := e.Marshal()
-	if err := node.SetMetadata(xattrs.GrantPrefix+principal, string(value)); err != nil {
-		return err
-	}
-
-	// when a grant is added to a space, do not add a new space under "shares"
-	if spaceGrant := ctx.Value(utils.SpaceGrant); spaceGrant == nil {
-		err := fs.linkStorageSpaceType(ctx, spaceTypeShare, node.ID)
-		if err != nil {
-			return err
-		}
-	}
-
-	return fs.tp.Propagate(ctx, node)
+	return fs.storeGrant(ctx, node, g)
 }
 
 // ListGrants lists the grants on the specified resource
@@ -217,9 +186,94 @@ func (fs *Decomposedfs) RemoveGrant(ctx context.Context, ref *provider.Reference
 }
 
 // UpdateGrant updates a grant on a resource
+// TODO remove AddGrant or UpdateGrant grant from CS3 api, redundant? tracked in https://github.com/cs3org/cs3apis/issues/92
 func (fs *Decomposedfs) UpdateGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
-	// TODO remove AddGrant or UpdateGrant grant from CS3 api, redundant? tracked in https://github.com/cs3org/cs3apis/issues/92
-	return fs.AddGrant(ctx, ref, g)
+	log := appctx.GetLogger(ctx)
+	log.Debug().Interface("ref", ref).Interface("grant", g).Msg("UpdateGrant()")
+
+	node, grant, err := fs.loadGrant(ctx, ref, g)
+	if err != nil {
+		return err
+	}
+
+	if grant == nil {
+		// grant not found
+		// TODO: fallback to AddGrant?
+		return errtypes.NotFound(g.Grantee.GetUserId().GetOpaqueId())
+	}
+
+	g.Grantee.Opaque = utils.MergeOpaques(g.Grantee.Opaque, grant.Grantee.Opaque)
+	creator := utils.ReadPlainFromOpaque(g.Grantee.Opaque, "granting-user")
+
+	u := ctxpkg.ContextMustGetUser(ctx)
+	// You may update a grant when you have the UpdateGrant permission or created the grant (regardless what your permissions are now)
+	if u.GetId().GetOpaqueId() != creator {
+		ok, err := fs.p.HasPermission(ctx, node, func(rp *provider.ResourcePermissions) bool {
+			return rp.UpdateGrant
+		})
+		switch {
+		case err != nil:
+			return errtypes.InternalError(err.Error())
+		case !ok:
+			return errtypes.PermissionDenied(filepath.Join(node.ParentID, node.Name))
+		}
+	}
+
+	return fs.storeGrant(ctx, node, g)
+}
+
+// checks if the given grant exists and returns it. Nil grant means it doesn't exist
+func (fs *Decomposedfs) loadGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) (*node.Node, *provider.Grant, error) {
+	n, err := fs.lu.NodeFromResource(ctx, ref)
+	if err != nil {
+		return nil, nil, err
+	}
+	if !n.Exists {
+		return nil, nil, errtypes.NotFound(filepath.Join(n.ParentID, n.Name))
+	}
+
+	grants, err := n.ListGrants(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	for _, grant := range grants {
+		switch grant.Grantee.GetType() {
+		case provider.GranteeType_GRANTEE_TYPE_USER:
+			if g.Grantee.GetUserId().GetOpaqueId() == grant.Grantee.GetUserId().GetOpaqueId() {
+				return n, grant, nil
+			}
+		case provider.GranteeType_GRANTEE_TYPE_GROUP:
+			if g.Grantee.GetGroupId().GetOpaqueId() == grant.Grantee.GetGroupId().GetOpaqueId() {
+				return n, grant, nil
+			}
+		}
+	}
+
+	return n, nil, nil
+}
+
+func (fs *Decomposedfs) storeGrant(ctx context.Context, n *node.Node, g *provider.Grant) error {
+	// check lock
+	if err := n.CheckLock(ctx); err != nil {
+		return err
+	}
+
+	e := ace.FromGrant(g)
+	principal, value := e.Marshal()
+	if err := n.SetMetadata(xattrs.GrantPrefix+principal, string(value)); err != nil {
+		return err
+	}
+
+	// when a grant is added to a space, do not add a new space under "shares"
+	if spaceGrant := ctx.Value(utils.SpaceGrant); spaceGrant == nil {
+		err := fs.linkStorageSpaceType(ctx, spaceTypeShare, n.ID)
+		if err != nil {
+			return err
+		}
+	}
+
+	return fs.tp.Propagate(ctx, n)
 }
 
 // extractACEsFromAttrs reads ACEs in the list of attrs from the node
