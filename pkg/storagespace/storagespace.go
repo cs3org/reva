@@ -87,6 +87,18 @@ func FormatStorageID(providerID, spaceID string) string {
 	return strings.Join([]string{providerID, spaceID}, _storageIDDelimiter)
 }
 
+// FormatID converts provider, storage and opaqueID into the string format
+// <providerid>$<storageid>!<opaquaid> or
+// <storageid>!<opaquaid> in case the provider ID is empty or
+// <opaquaid> in case the storage ID is empty or
+func FormatID(providerID, storageID, opaqueID string) string {
+	id := opaqueID
+	if storageID != "" {
+		id = storageID + _idDelimiter + opaqueID
+	}
+	return FormatStorageID(providerID, id)
+}
+
 // ParseID parses a storage space ID and returns a storageprovider ResourceId.
 // The accepted formats are:
 // <providerid>$<spaceid>!<nodeid> 	-> <providerid>$<spaceid>, <nodeid>

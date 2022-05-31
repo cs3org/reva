@@ -125,6 +125,42 @@ func TestFormatStorageID(t *testing.T) {
 	}
 }
 
+func TestFormatId(t *testing.T) {
+	tests := []struct {
+		pid         string
+		sid         string
+		oid         string
+		expectation string
+	}{
+		{
+			"",
+			"",
+			"oid",
+			"oid",
+		},
+		{
+			"",
+			"sid",
+			"oid",
+			"sid!oid",
+		},
+		{
+			"pid",
+			"sid",
+			"oid",
+			"pid$sid!oid",
+		},
+	}
+
+	for _, tt := range tests {
+		id := FormatID(tt.pid, tt.sid, tt.oid)
+
+		if id != tt.expectation {
+			t.Errorf("Expected id %s got %s", tt.expectation, id)
+		}
+	}
+}
+
 func TestParseStorageSpaceReference(t *testing.T) {
 	tests := []struct {
 		sRef      string

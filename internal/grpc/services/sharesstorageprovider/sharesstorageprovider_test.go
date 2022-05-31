@@ -112,6 +112,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 	var (
 		config = map[string]interface{}{
 			"gateway_addr": "127.0.0.1:1234",
+			"mount_id":     "mountid",
 			"driver":       "json",
 			"drivers": map[string]map[string]interface{}{
 				"json": {},
@@ -240,7 +241,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 	})
 
 	JustBeforeEach(func() {
-		p, err := provider.New(gw, sharesProviderClient)
+		p, err := provider.New(gw, sharesProviderClient, "mountid")
 		Expect(err).ToNot(HaveOccurred())
 		s = p.(sprovider.ProviderAPIServer)
 		Expect(s).ToNot(BeNil())

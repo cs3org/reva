@@ -55,11 +55,13 @@ func init() {
 type config struct {
 	GatewayAddr               string `mapstructure:"gateway_addr"`
 	UserShareProviderEndpoint string `mapstructure:"usershareprovidersvc"`
+	MountID                   string `mapstructure:"mount_id"`
 }
 
 type service struct {
 	gateway              gateway.GatewayAPIClient
 	sharesProviderClient collaboration.CollaborationAPIClient
+	mountID              string
 }
 
 func (s *service) Close() error {
@@ -92,14 +94,15 @@ func NewDefault(m map[string]interface{}, _ *grpc.Server) (rgrpc.Service, error)
 		return nil, errors.Wrap(err, "sharesstorageprovider: error getting UserShareProvider client")
 	}
 
-	return New(gateway, client)
+	return New(gateway, client, c.MountID)
 }
 
 // New returns a new instance of the SharesStorageProvider service
-func New(gateway gateway.GatewayAPIClient, c collaboration.CollaborationAPIClient) (rgrpc.Service, error) {
+func New(gateway gateway.GatewayAPIClient, c collaboration.CollaborationAPIClient, mountID string) (rgrpc.Service, error) {
 	s := &service{
 		gateway:              gateway,
 		sharesProviderClient: c,
+		mountID:              mountID,
 	}
 	return s, nil
 }
@@ -394,7 +397,7 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 					space := &provider.StorageSpace{
 						Opaque: opaque,
 						Id: &provider.StorageSpaceId{
-							OpaqueId: virtualRootID.StorageId + "!" + virtualRootID.OpaqueId,
+							OpaqueId: storagespace.FormatID(s.mountID, virtualRootID.StorageId, virtualRootID.OpaqueId),
 						},
 						SpaceType: "virtual",
 						//Owner:     &userv1beta1.User{Id: receivedShare.Share.Owner}, // FIXME actually, the mount point belongs to the recipient
@@ -422,7 +425,7 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 				space := &provider.StorageSpace{
 					Opaque: opaque,
 					Id: &provider.StorageSpaceId{
-						OpaqueId: root.StorageId + "!" + root.OpaqueId,
+						OpaqueId: storagespace.FormatID("", root.StorageId, root.OpaqueId),
 					},
 					SpaceType: "grant",
 					Owner:     &userv1beta1.User{Id: receivedShare.Share.Owner},
@@ -468,7 +471,7 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 				space := &provider.StorageSpace{
 					Opaque: opaque,
 					Id: &provider.StorageSpaceId{
-						OpaqueId: root.StorageId + "!" + root.OpaqueId,
+						OpaqueId: storagespace.FormatID(s.mountID, root.StorageId, root.OpaqueId),
 					},
 					SpaceType: "mountpoint",
 					Owner:     &userv1beta1.User{Id: receivedShare.Share.Owner}, // FIXME actually, the mount point belongs to the recipient
