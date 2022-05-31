@@ -36,8 +36,12 @@ type Role struct {
 const (
 	// RoleViewer grants non-editor role on a resource.
 	RoleViewer = "viewer"
+	// RoleSpaceViewer grants non-editor role on a space.
+	RoleSpaceViewer = "spaceviewer"
 	// RoleEditor grants editor permission on a resource, including folders.
 	RoleEditor = "editor"
+	// RoleSpaceEditor grants editor permission on a space.
+	RoleSpaceEditor = "spaceeditor"
 	// RoleFileEditor grants editor permission on a single file.
 	RoleFileEditor = "file-editor"
 	// RoleUploader grants uploader permission to upload onto a resource.
@@ -124,8 +128,12 @@ func RoleFromName(name string) *Role {
 	switch name {
 	case RoleViewer:
 		return NewViewerRole()
+	case RoleSpaceViewer:
+		return NewSpaceViewerRole()
 	case RoleEditor:
 		return NewEditorRole()
+	case RoleSpaceEditor:
+		return NewSpaceEditorRole()
 	case RoleFileEditor:
 		return NewFileEditorRole()
 	case RoleUploader:
@@ -157,11 +165,28 @@ func NewViewerRole() *Role {
 			InitiateFileDownload: true,
 			ListContainer:        true,
 			ListFileVersions:     true,
-			ListGrants:           true,
 			ListRecycle:          true,
 			Stat:                 true,
 		},
 		ocsPermissions: PermissionRead | PermissionShare,
+	}
+}
+
+// NewSpaceViewerRole creates a spaceviewer role
+func NewSpaceViewerRole() *Role {
+	return &Role{
+		Name: RoleSpaceViewer,
+		cS3ResourcePermissions: &provider.ResourcePermissions{
+			GetPath:              true,
+			GetQuota:             true,
+			InitiateFileDownload: true,
+			ListContainer:        true,
+			ListFileVersions:     true,
+			ListGrants:           true,
+			ListRecycle:          true,
+			Stat:                 true,
+		},
+		ocsPermissions: PermissionRead,
 	}
 }
 
@@ -179,7 +204,6 @@ func NewEditorRole() *Role {
 			InitiateFileUpload:   true,
 			ListContainer:        true,
 			ListFileVersions:     true,
-			ListGrants:           true,
 			ListRecycle:          true,
 			Move:                 true,
 			PurgeRecycle:         true,
@@ -188,6 +212,31 @@ func NewEditorRole() *Role {
 			Stat:                 true,
 		},
 		ocsPermissions: PermissionRead | PermissionCreate | PermissionWrite | PermissionDelete | PermissionShare,
+	}
+}
+
+// NewSpaceEditorRole creates an editor role
+func NewSpaceEditorRole() *Role {
+	return &Role{
+		Name: RoleSpaceEditor,
+		cS3ResourcePermissions: &provider.ResourcePermissions{
+			CreateContainer:      true,
+			Delete:               true,
+			GetPath:              true,
+			GetQuota:             true,
+			InitiateFileDownload: true,
+			InitiateFileUpload:   true,
+			ListContainer:        true,
+			ListFileVersions:     true,
+			ListGrants:           true,
+			ListRecycle:          true,
+			Move:                 true,
+			PurgeRecycle:         true,
+			RestoreFileVersion:   true,
+			RestoreRecycleItem:   true,
+			Stat:                 true,
+		},
+		ocsPermissions: PermissionRead | PermissionCreate | PermissionWrite | PermissionDelete,
 	}
 }
 
@@ -267,17 +316,25 @@ func NewManagerRole() *Role {
 }
 
 // RoleFromOCSPermissions tries to map ocs permissions to a role
+// TODO: rethink using this. ocs permissions cannot be assigned 1:1 to roles
 func RoleFromOCSPermissions(p Permissions) *Role {
 	if p == PermissionInvalid {
 		return NewNoneRole()
 	}
 
 	if p.Contain(PermissionRead) {
-		if p.Contain(PermissionWrite) && p.Contain(PermissionCreate) && p.Contain(PermissionDelete) && p.Contain(PermissionShare) {
-			return NewEditorRole()
+		if p.Contain(PermissionWrite) && p.Contain(PermissionCreate) && p.Contain(PermissionDelete) {
+			if p.Contain(PermissionShare) {
+				return NewEditorRole()
+			}
+
+			return NewSpaceEditorRole()
 		}
 		if p == PermissionRead|PermissionShare {
 			return NewViewerRole()
+		}
+		if p == PermissionRead {
+			return NewSpaceViewerRole()
 		}
 	}
 	if p == PermissionCreate {
@@ -296,7 +353,7 @@ func NewLegacyRoleFromOCSPermissions(p Permissions) *Role {
 	}
 	if p.Contain(PermissionRead) {
 		r.cS3ResourcePermissions.ListContainer = true
-		r.cS3ResourcePermissions.ListGrants = true
+		// r.cS3ResourcePermissions.ListGrants = true
 		r.cS3ResourcePermissions.ListFileVersions = true
 		r.cS3ResourcePermissions.ListRecycle = true
 		r.cS3ResourcePermissions.Stat = true
@@ -344,7 +401,6 @@ func RoleFromResourcePermissions(rp *provider.ResourcePermissions) *Role {
 		return r
 	}
 	if rp.ListContainer &&
-		rp.ListGrants &&
 		rp.ListFileVersions &&
 		rp.ListRecycle &&
 		rp.Stat &&

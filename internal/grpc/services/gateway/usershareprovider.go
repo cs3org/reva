@@ -34,6 +34,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/grants"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
 	rtrace "github.com/cs3org/reva/v2/pkg/trace"
+	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/pkg/errors"
 )
 
@@ -652,6 +653,7 @@ func (s *svc) removeShare(ctx context.Context, req *collaboration.RemoveShareReq
 
 	// if we need to commit the share, we need the resource it points to.
 	var share *collaboration.Share
+	// FIXME: I will cause a panic as share will be nil when I'm false
 	if s.c.CommitShareToStorageGrant || s.c.CommitShareToStorageRef {
 		getShareReq := &collaboration.GetShareRequest{
 			Ref: req.Ref,
@@ -676,7 +678,10 @@ func (s *svc) removeShare(ctx context.Context, req *collaboration.RemoveShareReq
 		return nil, errors.Wrap(err, "gateway: error calling RemoveShare")
 	}
 
-	s.removeReference(ctx, share.ResourceId)
+	// we do not want to remove the reference if it is a reshare
+	if utils.UserEqual(share.Owner, share.Creator) {
+		s.removeReference(ctx, share.ResourceId)
+	}
 
 	// if we don't need to commit we return earlier
 	if !s.c.CommitShareToStorageGrant && !s.c.CommitShareToStorageRef {

@@ -245,10 +245,11 @@ func (h *Handler) CreateShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	reqRole, reqPermissions := r.FormValue("role"), r.FormValue("permissions")
 	switch shareType {
 	case int(conversions.ShareTypeUser), int(conversions.ShareTypeGroup):
 		// user collaborations default to Manager (=all permissions)
-		role, val, ocsErr := h.extractPermissions(w, r, statRes.Info, conversions.NewManagerRole())
+		role, val, ocsErr := h.extractPermissions(reqRole, reqPermissions, statRes.Info, conversions.NewManagerRole())
 		if ocsErr != nil {
 			response.WriteOCSError(w, r, ocsErr.Code, ocsErr.Message, ocsErr.Error)
 			return
@@ -290,7 +291,7 @@ func (h *Handler) CreateShare(w http.ResponseWriter, r *http.Request) {
 		response.WriteOCSSuccess(w, r, s)
 	case int(conversions.ShareTypePublicLink):
 		// public links default to read only
-		_, _, ocsErr := h.extractPermissions(w, r, statRes.Info, conversions.NewViewerRole())
+		_, _, ocsErr := h.extractPermissions(reqRole, reqPermissions, statRes.Info, conversions.NewViewerRole())
 		if ocsErr != nil {
 			response.WriteOCSError(w, r, http.StatusNotFound, "No share permission", nil)
 			return
@@ -312,13 +313,21 @@ func (h *Handler) CreateShare(w http.ResponseWriter, r *http.Request) {
 		response.WriteOCSSuccess(w, r, s)
 	case int(conversions.ShareTypeFederatedCloudShare):
 		// federated shares default to read only
-		if role, val, err := h.extractPermissions(w, r, statRes.Info, conversions.NewViewerRole()); err == nil {
+		if role, val, err := h.extractPermissions(reqRole, reqPermissions, statRes.Info, conversions.NewViewerRole()); err == nil {
 			h.createFederatedCloudShare(w, r, statRes.Info, role, val)
 		}
 	case int(conversions.ShareTypeSpaceMembership):
-		if role, val, err := h.extractPermissions(w, r, statRes.Info, conversions.NewViewerRole()); err == nil {
+		switch reqRole {
+		// Note: we convert viewer and editor roles to spaceviewer and spaceditor to keep backwards compatibility
+		// we can remove this switch when this behaviour is no longer wanted.
+		case conversions.RoleViewer:
+			reqRole = conversions.RoleSpaceViewer
+		case conversions.RoleEditor:
+			reqRole = conversions.RoleSpaceEditor
+		}
+		if role, val, err := h.extractPermissions(reqRole, reqPermissions, statRes.Info, conversions.NewSpaceViewerRole()); err == nil {
 			switch role.Name {
-			case conversions.RoleManager, conversions.RoleEditor, conversions.RoleViewer:
+			case conversions.RoleManager, conversions.RoleSpaceEditor, conversions.RoleSpaceViewer:
 				h.addSpaceMember(w, r, statRes.Info, role, val)
 			default:
 				response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "invalid role for space member", nil)
@@ -620,13 +629,19 @@ func (h *Handler) updateShare(w http.ResponseWriter, r *http.Request, shareID st
 		return
 	}
 
+	if shareR.Status.GetCode() != rpc.Code_CODE_OK {
+		// TODO: error code from shareR response
+		response.WriteOCSError(w, r, response.MetaNotFound.StatusCode, "cant find requested share", fmt.Errorf("Can't find share %s. Response code: %v", shareID, shareR.Status.GetCode()))
+		return
+	}
+
 	info, status, err := h.getResourceInfoByID(ctx, client, shareR.Share.ResourceId)
 	if err != nil || status.Code != rpc.Code_CODE_OK {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error mapping share data", err)
 		return
 	}
 
-	role, _, ocsErr := h.extractPermissions(w, r, info, conversions.NewManagerRole())
+	role, _, ocsErr := h.extractPermissions(r.FormValue("role"), r.FormValue("permissions"), info, conversions.NewManagerRole())
 	if ocsErr != nil {
 		response.WriteOCSError(w, r, ocsErr.Code, ocsErr.Message, ocsErr.Error)
 		return
