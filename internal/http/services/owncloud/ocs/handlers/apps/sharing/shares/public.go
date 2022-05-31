@@ -33,6 +33,7 @@ import (
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocs/response"
 	"github.com/cs3org/reva/v2/pkg/appctx"
+	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/publicshare"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/pkg/errors"
@@ -277,6 +278,21 @@ func (h *Handler) updatePublicShare(w http.ResponseWriter, r *http.Request, shar
 		return
 	}
 
+	u := ctxpkg.ContextMustGetUser(r.Context())
+	if !publicshare.IsCreatedByUser(*before.Share, u) {
+		sRes, err := gwC.Stat(r.Context(), &provider.StatRequest{Ref: &provider.Reference{ResourceId: before.Share.ResourceId}})
+		if err != nil {
+			log.Err(err).Interface("resource_id", before.Share.ResourceId).Msg("failed to stat shared resource")
+			response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "failed to get public share", nil)
+			return
+		}
+
+		if !sRes.Info.PermissionSet.UpdateGrant {
+			response.WriteOCSError(w, r, response.MetaUnauthorized.StatusCode, "missing permissions to update share", err)
+			return
+		}
+	}
+
 	err = r.ParseForm()
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "Could not parse form from request", err)
@@ -422,6 +438,35 @@ func (h *Handler) removePublicShare(w http.ResponseWriter, r *http.Request, shar
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
 		return
+	}
+
+	before, err := c.GetPublicShare(r.Context(), &link.GetPublicShareRequest{
+		Ref: &link.PublicShareReference{
+			Spec: &link.PublicShareReference_Id{
+				Id: &link.PublicShareId{
+					OpaqueId: shareID,
+				},
+			},
+		},
+	})
+	if err != nil {
+		response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "failed to get public share", nil)
+		return
+	}
+
+	u := ctxpkg.ContextMustGetUser(ctx)
+	if !publicshare.IsCreatedByUser(*before.Share, u) {
+		sRes, err := c.Stat(r.Context(), &provider.StatRequest{Ref: &provider.Reference{ResourceId: before.Share.ResourceId}})
+		if err != nil {
+			log.Err(err).Interface("resource_id", before.Share.ResourceId).Msg("failed to stat shared resource")
+			response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "failed to get public share", nil)
+			return
+		}
+
+		if !sRes.Info.PermissionSet.RemoveGrant {
+			response.WriteOCSError(w, r, response.MetaUnauthorized.StatusCode, "missing permissions to remove share", err)
+			return
+		}
 	}
 
 	req := &link.RemovePublicShareRequest{
