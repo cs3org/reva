@@ -482,11 +482,12 @@ func (p *Handler) getResourceInfos(ctx context.Context, w http.ResponseWriter, r
 		}
 		spaceInfo.Path = path.Join(requestPath, childName)
 		if existingChild, ok := childInfos[childName]; ok {
+			// aggregate size
+			childInfos[childName].Size += spaceInfo.Size
 			// use most recent child
 			if existingChild.Mtime == nil || (spaceInfo.Mtime != nil && utils.TSToUnixNano(spaceInfo.Mtime) > utils.TSToUnixNano(existingChild.Mtime)) {
 				childInfos[childName].Mtime = spaceInfo.Mtime
 				childInfos[childName].Etag = spaceInfo.Etag
-				childInfos[childName].Size += spaceInfo.Size
 			}
 			// only update fileid if the resource is a direct child
 			if tail == "/" {
