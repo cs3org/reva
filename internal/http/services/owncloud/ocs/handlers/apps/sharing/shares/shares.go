@@ -164,19 +164,29 @@ func (h *Handler) startCacheWarmup(c cache.Warmup) {
 
 func (h *Handler) extractReference(r *http.Request) (provider.Reference, error) {
 	var ref provider.Reference
-	if p := r.FormValue("path"); p != "" {
-		u := ctxpkg.ContextMustGetUser(r.Context())
-		ref = provider.Reference{
-			// FIXME ResourceId?
-			Path: path.Join(h.getHomeNamespace(u), p),
+
+	p, id := r.FormValue("path"), r.FormValue("space")
+	if p == "" && id == "" {
+		// NOTE: space_ref is deprecated and will be removed in ~2 weeks (1.6.22)
+		if sr := r.FormValue("space_ref"); sr != "" {
+			return storagespace.ParseReference(sr)
 		}
-	} else if spaceRef := r.FormValue("space_ref"); spaceRef != "" {
-		var err error
-		ref, err = storagespace.ParseReference(spaceRef)
-		if err != nil {
-			return provider.Reference{}, err
-		}
+		return ref, errors.New("need path or space to extract reference")
 	}
+
+	if p != "" {
+		u := ctxpkg.ContextMustGetUser(r.Context())
+		ref.Path = path.Join(h.getHomeNamespace(u), p)
+	}
+
+	if id != "" {
+		rid, err := storagespace.ParseID(id)
+		if err != nil {
+			return ref, err
+		}
+		ref.ResourceId = &rid
+	}
+
 	return ref, nil
 }
 
@@ -918,8 +928,9 @@ func (h *Handler) listSharesWithOthers(w http.ResponseWriter, r *http.Request) {
 
 	// shared with others
 	p := r.URL.Query().Get("path")
+	s := r.URL.Query().Get("space")
 	spaceRef := r.URL.Query().Get("space_ref")
-	if p != "" || spaceRef != "" {
+	if p != "" || s != "" || spaceRef != "" {
 		ref, err := h.extractReference(r)
 		if err != nil {
 			response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, errParsingSpaceReference.Error(), errParsingSpaceReference)
