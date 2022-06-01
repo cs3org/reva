@@ -146,6 +146,28 @@ func (m *manager) startJanitorRun() {
 	}
 }
 
+// Dump exports public shares to channels (e.g. during migration)
+func (m *manager) Dump(shareChan chan<- *publicshare.PublicShareWithPassword) error {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+
+	db, err := m.readDb()
+	if err != nil {
+		return err
+	}
+
+	for _, v := range db {
+		var local publicshare.PublicShareWithPassword
+		if err := utils.UnmarshalJSONToProtoV1([]byte(v.(map[string]interface{})["share"].(string)), &local.PublicShare); err != nil {
+			fmt.Printf("error unmarshalling share")
+		}
+		shareChan <- &local
+	}
+	close(shareChan)
+
+	return nil
+}
+
 // CreatePublicShare adds a new entry to manager.shares
 func (m *manager) CreatePublicShare(ctx context.Context, u *user.User, rInfo *provider.ResourceInfo, g *link.Grant) (*link.PublicShare, error) {
 	id := &link.PublicShareId{
