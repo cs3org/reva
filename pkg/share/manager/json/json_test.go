@@ -22,6 +22,7 @@ import (
 	"context"
 	"io/ioutil"
 	"os"
+	"sync"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
@@ -110,20 +111,23 @@ var _ = Describe("Json", func() {
 
 			shares := []*collaboration.Share{}
 
+			wg := sync.WaitGroup{}
+			wg.Add(2)
 			go func() {
-				for {
-					s := <-sharesChan
+				for s := range sharesChan {
 					if s != nil {
 						shares = append(shares, s)
 					}
 				}
+				wg.Done()
 			}()
 			go func() {
-				for {
-					_ = <-receivedChan
+				for range receivedChan {
 				}
+				wg.Done()
 			}()
 			m.(share.DumpableManager).Dump(sharesChan, receivedChan)
+			wg.Wait()
 			Eventually(sharesChan).Should(BeClosed())
 			Eventually(receivedChan).Should(BeClosed())
 
@@ -139,20 +143,24 @@ var _ = Describe("Json", func() {
 
 			shares := []share.ReceivedShareDump{}
 
+			wg := sync.WaitGroup{}
+			wg.Add(2)
 			go func() {
-				for {
-					_ = <-sharesChan
+				for range sharesChan {
 				}
+				wg.Done()
 			}()
 			go func() {
-				for {
-					rs := <-receivedChan
+				for rs := range receivedChan {
 					if rs.UserID != nil && rs.ReceivedShare != nil {
 						shares = append(shares, rs)
 					}
 				}
+				wg.Done()
 			}()
 			m.(share.DumpableManager).Dump(sharesChan, receivedChan)
+			wg.Wait()
+
 			Eventually(sharesChan).Should(BeClosed())
 			Eventually(receivedChan).Should(BeClosed())
 

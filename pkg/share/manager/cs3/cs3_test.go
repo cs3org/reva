@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"net/url"
 	"path"
+	"sync"
 
 	groupv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -181,14 +182,19 @@ var _ = Describe("Manager", func() {
 			sharesChan := make(chan *collaboration.Share)
 			receivedChan := make(chan sharespkg.ReceivedShareDump)
 
+			wg := sync.WaitGroup{}
+			wg.Add(2)
 			go func() {
 				m.Load(sharesChan, receivedChan)
+				wg.Done()
 			}()
 			go func() {
 				sharesChan <- share
 				close(sharesChan)
 				close(receivedChan)
+				wg.Done()
 			}()
+			wg.Wait()
 			Eventually(sharesChan).Should(BeClosed())
 			Eventually(receivedChan).Should(BeClosed())
 
