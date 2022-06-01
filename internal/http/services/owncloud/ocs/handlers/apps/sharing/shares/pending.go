@@ -23,8 +23,10 @@ import (
 	"fmt"
 	"net/http"
 	"path"
+	"path/filepath"
 	"sort"
 	"strconv"
+	"strings"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
@@ -75,7 +77,7 @@ func (h *Handler) AcceptReceivedShare(w http.ResponseWriter, r *http.Request) {
 	// we need to sort the received shares by mount point in order to make things easier to evaluate.
 	base := path.Base(sharedResource.GetInfo().GetPath())
 	mount := base
-	var mountPoints []string
+	var mountedShares []*collaboration.ReceivedShare
 	sharesToAccept := map[string]bool{shareID: true}
 	for _, s := range lrs.Shares {
 		if utils.ResourceIDEqual(s.Share.ResourceId, rs.Share.Share.GetResourceId()) {
@@ -86,19 +88,38 @@ func (h *Handler) AcceptReceivedShare(w http.ResponseWriter, r *http.Request) {
 			}
 		} else {
 			if s.State == collaboration.ShareState_SHARE_STATE_ACCEPTED {
-				mountPoints = append(mountPoints, s.MountPoint.Path)
+				mountedShares = append(mountedShares, s)
 			}
 		}
 	}
 
-	sort.Strings(mountPoints)
+	compareMountPoint := func(i, j int) bool {
+		return mountedShares[i].MountPoint.Path > mountedShares[j].MountPoint.Path
+	}
+	sort.Slice(mountedShares, compareMountPoint)
 
 	// now we have a list of shares, we want to iterate over all of them and check for name collisions
-	// FIXME: adjust logic
+	for i, ms := range mountedShares {
+		if ms.MountPoint.Path == mount {
+			// does the shared resource still exist?
+			res, err := client.Stat(ctx, &provider.StatRequest{
+				Ref: &provider.Reference{
+					ResourceId: ms.Share.ResourceId,
+				},
+			})
+			if err == nil && res.Status.Code == rpc.Code_CODE_OK {
+				// The mount point really already exists, we need to insert a number into the filename
+				ext := filepath.Ext(base)
+				name := strings.TrimSuffix(base, ext)
+				// be smart about .tar.(gz|bz) files
+				if strings.HasSuffix(name, ".tar") {
+					name = strings.TrimSuffix(name, ".tar")
+					ext = ".tar" + ext
+				}
 
-	for i, mp := range mountPoints {
-		if mp == mount {
-			mount = fmt.Sprintf("%s (%s)", base, strconv.Itoa(i+1))
+				mount = fmt.Sprintf("%s (%s)%s", name, strconv.Itoa(i+1), ext)
+			}
+			// TODO we could delete shares here if the stat returns code NOT FOUND ... but listening for file deletes would be better
 		}
 	}
 
