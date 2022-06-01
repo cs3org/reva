@@ -1583,5 +1583,10 @@ _ocs: api compatibility, return correct status code_
 - [apiTrashbin/trashbinFilesFolders.feature:438](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L438)
 - [apiTrashbin/trashbinFilesFolders.feature:475](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L475)
 
+#### [reShareUpdate API tests failing in reva](https://github.com/cs3org/reva/issues/2916)
+
+- [apiShareReshareToShares3/reShareUpdate.feature:152](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareReshareToShares3/reShareUpdate.feature#L152)
+- [apiShareReshareToShares3/reShareUpdate.feature:153](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareReshareToShares3/reShareUpdate.feature#L153)
+
 Note: always have an empty line at the end of this file.
 The bash script that processes this file may not process a scenario reference on the last line.
