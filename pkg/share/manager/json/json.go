@@ -189,6 +189,7 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 	return c, nil
 }
 
+// Dump exports shares and received shares to channels (e.g. during migration)
 func (m *mgr) Dump(shareChan chan<- *collaboration.Share, receivedShareChan chan<- share.ReceivedShareDump) error {
 	for _, s := range m.model.Shares {
 		shareChan <- s
