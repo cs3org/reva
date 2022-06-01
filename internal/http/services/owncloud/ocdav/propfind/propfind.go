@@ -144,7 +144,8 @@ type PropstatUnmarshalXML struct {
 	ResponseDescription string              `xml:"responsedescription,omitempty"`
 }
 
-type SpaceData struct {
+// spaceData is used to remember the space for a resource info
+type spaceData struct {
 	Ref   *provider.Reference
 	Space *provider.StorageSpace
 }
@@ -394,7 +395,7 @@ func (p *Handler) getResourceInfos(ctx context.Context, w http.ResponseWriter, r
 	var mostRecentChildInfo *provider.ResourceInfo
 	var aggregatedChildSize uint64
 	spaceInfos := make([]*provider.ResourceInfo, 0, len(spaces))
-	spaceMap := map[*provider.ResourceInfo]SpaceData{}
+	spaceMap := map[*provider.ResourceInfo]spaceData{}
 	for _, space := range spaces {
 		if space.Opaque == nil || space.Opaque.Map == nil || space.Opaque.Map["path"] == nil || space.Opaque.Map["path"].Decoder != "plain" {
 			continue // not mounted
@@ -418,7 +419,7 @@ func (p *Handler) getResourceInfos(ctx context.Context, w http.ResponseWriter, r
 			info.Path = filepath.Join(spacePath, spaceRef.Path)
 		}
 
-		spaceMap[info] = SpaceData{Ref: spaceRef, Space: space}
+		spaceMap[info] = spaceData{Ref: spaceRef, Space: space}
 		spaceInfos = append(spaceInfos, info)
 
 		if rootInfo == nil && (requestPath == info.Path || (spacesPropfind && requestPath == path.Join("/", info.Path))) {
@@ -1341,10 +1342,6 @@ func (pn *Props) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
 			*pn = append(*pn, e.Name)
 		}
 	}
-}
-
-func isVirtualRoot(ref *provider.Reference) bool {
-	return isVirtualRootResourceID(ref.ResourceId) && (ref.Path == "" || ref.Path == "." || ref.Path == "./")
 }
 
 func isVirtualRootResourceID(id *provider.ResourceId) bool {
