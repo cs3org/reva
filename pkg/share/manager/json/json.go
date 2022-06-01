@@ -194,16 +194,16 @@ func (m *mgr) Dump(shareChan chan<- *collaboration.Share, receivedShareChan chan
 		shareChan <- s
 	}
 
-	for userIdString, states := range m.model.State {
-		userMountPoints := m.model.MountPoint[userIdString]
+	for userIDString, states := range m.model.State {
+		userMountPoints := m.model.MountPoint[userIDString]
 		id := &userv1beta1.UserId{}
 		mV2 := proto.MessageV2(id)
-		prototext.Unmarshal([]byte(userIdString), mV2)
+		prototext.Unmarshal([]byte(userIDString), mV2)
 
-		for shareIdString, state := range states {
+		for shareIDString, state := range states {
 			sid := &collaboration.ShareId{}
 			mV2 := proto.MessageV2(sid)
-			prototext.Unmarshal([]byte(shareIdString), mV2)
+			prototext.Unmarshal([]byte(shareIDString), mV2)
 
 			var s *collaboration.Share
 			for _, is := range m.model.Shares {
@@ -218,11 +218,11 @@ func (m *mgr) Dump(shareChan chan<- *collaboration.Share, receivedShareChan chan
 
 			var mp *provider.Reference
 			if userMountPoints != nil {
-				mp = userMountPoints[shareIdString]
+				mp = userMountPoints[shareIDString]
 			}
 
 			receivedShareChan <- share.ReceivedShareDump{
-				UserId: id,
+				UserID: id,
 				ReceivedShare: &collaboration.ReceivedShare{
 					Share:      s,
 					State:      state,

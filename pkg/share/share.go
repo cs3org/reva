@@ -72,8 +72,9 @@ type Manager interface {
 	UpdateReceivedShare(ctx context.Context, share *collaboration.ReceivedShare, fieldMask *field_mask.FieldMask) (*collaboration.ReceivedShare, error)
 }
 
+// ReceivedShareDump holds the relevant information for representing a received share of a user
 type ReceivedShareDump struct {
-	UserId        *userv1beta1.UserId
+	UserID        *userv1beta1.UserId
 	ReceivedShare *collaboration.ReceivedShare
 }
 

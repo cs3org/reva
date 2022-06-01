@@ -147,7 +147,7 @@ var _ = Describe("Json", func() {
 			go func() {
 				for {
 					rs := <-receivedChan
-					if rs.UserId != nil && rs.ReceivedShare != nil {
+					if rs.UserID != nil && rs.ReceivedShare != nil {
 						shares = append(shares, rs)
 					}
 				}
@@ -157,7 +157,7 @@ var _ = Describe("Json", func() {
 			Eventually(receivedChan).Should(BeClosed())
 
 			Expect(len(shares)).To(Equal(1))
-			Expect(shares[0].UserId).To(Equal(user2.Id))
+			Expect(shares[0].UserID).To(Equal(user2.Id))
 			Expect(shares[0].ReceivedShare.State).To(Equal(collaboration.ShareState_SHARE_STATE_ACCEPTED))
 			Expect(shares[0].ReceivedShare.MountPoint.Path).To(Equal("newPath/"))
 			Expect(shares[0].ReceivedShare.Share.Creator).To(Equal(user1.Id))

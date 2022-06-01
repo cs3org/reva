@@ -164,6 +164,7 @@ func (m *Manager) initialize() error {
 	return nil
 }
 
+// Load imports shares and received shares from channels (e.g. during migration)
 func (m *Manager) Load(shareChan <-chan *collaboration.Share, receivedShareChan <-chan share.ReceivedShareDump) error {
 	if err := m.initialize(); err != nil {
 		return err
@@ -173,10 +174,10 @@ func (m *Manager) Load(shareChan <-chan *collaboration.Share, receivedShareChan 
 	wg.Add(2)
 	go func() {
 		for s := range shareChan {
-			fmt.Println("Loading share", s.Id.OpaqueId)
 			if s == nil {
 				continue
 			}
+			fmt.Println("Loading share", s.Id.OpaqueId)
 			if err := m.persistShare(context.Background(), s); err != nil {
 				fmt.Println("error persisting share:", s, err)
 			}
@@ -185,9 +186,9 @@ func (m *Manager) Load(shareChan <-chan *collaboration.Share, receivedShareChan 
 	}()
 	go func() {
 		for s := range receivedShareChan {
-			if s.ReceivedShare != nil && s.UserId != nil {
+			if s.ReceivedShare != nil && s.UserID != nil {
 				fmt.Println("Loading received share", s.ReceivedShare.Share.Id)
-				if err := m.persistReceivedShare(context.Background(), s.UserId, s.ReceivedShare); err != nil {
+				if err := m.persistReceivedShare(context.Background(), s.UserID, s.ReceivedShare); err != nil {
 					fmt.Println("error persisting received share:", s, err)
 				}
 			}
@@ -535,8 +536,12 @@ func (m *Manager) UpdateReceivedShare(ctx context.Context, rshare *collaboration
 	return rs, nil
 }
 
-func (m *Manager) persistReceivedShare(ctx context.Context, userId *userpb.UserId, rs *collaboration.ReceivedShare) error {
-	m.persistShare(ctx, rs.Share)
+func (m *Manager) persistReceivedShare(ctx context.Context, userID *userpb.UserId, rs *collaboration.ReceivedShare) error {
+	err := m.persistShare(ctx, rs.Share)
+	if err != nil {
+		return err
+	}
+
 	meta := ReceivedShareMetadata{
 		State:      rs.State,
 		MountPoint: rs.MountPoint,
@@ -546,7 +551,7 @@ func (m *Manager) persistReceivedShare(ctx context.Context, userId *userpb.UserI
 		return err
 	}
 
-	fn, err := metadataFilename(rs.Share, userId)
+	fn, err := metadataFilename(rs.Share, userID)
 	if err != nil {
 		return err
 	}
