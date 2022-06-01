@@ -39,6 +39,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/share"
 	"github.com/cs3org/reva/v2/pkg/share/manager/registry"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/indexer"
+	indexerErrors "github.com/cs3org/reva/v2/pkg/storage/utils/indexer/errors"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/indexer/option"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/metadata"
 	"github.com/cs3org/reva/v2/pkg/utils"
@@ -187,7 +188,7 @@ func (m *Manager) Load(shareChan <-chan *collaboration.Share, receivedShareChan 
 			if s.ReceivedShare != nil && s.UserId != nil {
 				fmt.Println("Loading received share", s.ReceivedShare.Share.Id)
 				if err := m.persistReceivedShare(context.Background(), s.UserId, s.ReceivedShare); err != nil {
-					fmt.Println("error persisting share:", s, err)
+					fmt.Println("error persisting received share:", s, err)
 				}
 			}
 		}
@@ -241,6 +242,9 @@ func (m *Manager) persistShare(ctx context.Context, share *collaboration.Share) 
 	}
 
 	_, err = m.indexer.Add(share)
+	if _, ok := err.(*indexerErrors.AlreadyExistsErr); ok {
+		return nil
+	}
 	return err
 }
 
