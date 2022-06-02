@@ -107,7 +107,7 @@ var _ = Describe("Json", func() {
 
 		It("dumps all shares", func() {
 			sharesChan := make(chan *collaboration.Share)
-			receivedChan := make(chan share.ReceivedShareDump)
+			receivedChan := make(chan share.ReceivedShareWithUser)
 
 			shares := []*collaboration.Share{}
 
@@ -139,9 +139,9 @@ var _ = Describe("Json", func() {
 
 		It("dumps all received shares", func() {
 			sharesChan := make(chan *collaboration.Share)
-			receivedChan := make(chan share.ReceivedShareDump)
+			receivedChan := make(chan share.ReceivedShareWithUser)
 
-			shares := []share.ReceivedShareDump{}
+			shares := []share.ReceivedShareWithUser{}
 
 			wg := sync.WaitGroup{}
 			wg.Add(2)

@@ -180,7 +180,7 @@ var _ = Describe("Manager", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			sharesChan := make(chan *collaboration.Share)
-			receivedChan := make(chan sharespkg.ReceivedShareDump)
+			receivedChan := make(chan sharespkg.ReceivedShareWithUser)
 
 			wg := sync.WaitGroup{}
 			wg.Add(2)

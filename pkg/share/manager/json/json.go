@@ -190,7 +190,7 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 }
 
 // Dump exports shares and received shares to channels (e.g. during migration)
-func (m *mgr) Dump(ctx context.Context, shareChan chan<- *collaboration.Share, receivedShareChan chan<- share.ReceivedShareDump) error {
+func (m *mgr) Dump(ctx context.Context, shareChan chan<- *collaboration.Share, receivedShareChan chan<- share.ReceivedShareWithUser) error {
 	log := appctx.GetLogger(ctx)
 	for _, s := range m.model.Shares {
 		shareChan <- s
@@ -230,7 +230,7 @@ func (m *mgr) Dump(ctx context.Context, shareChan chan<- *collaboration.Share, r
 				mp = userMountPoints[shareIDString]
 			}
 
-			receivedShareChan <- share.ReceivedShareDump{
+			receivedShareChan <- share.ReceivedShareWithUser{
 				UserID: id,
 				ReceivedShare: &collaboration.ReceivedShare{
 					Share:      s,

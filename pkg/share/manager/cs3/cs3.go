@@ -166,7 +166,7 @@ func (m *Manager) initialize() error {
 }
 
 // Load imports shares and received shares from channels (e.g. during migration)
-func (m *Manager) Load(ctx context.Context, shareChan <-chan *collaboration.Share, receivedShareChan <-chan share.ReceivedShareDump) error {
+func (m *Manager) Load(ctx context.Context, shareChan <-chan *collaboration.Share, receivedShareChan <-chan share.ReceivedShareWithUser) error {
 	log := appctx.GetLogger(ctx)
 	if err := m.initialize(); err != nil {
 		return err
