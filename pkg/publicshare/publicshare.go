@@ -50,20 +50,20 @@ type Manager interface {
 	GetPublicShareByToken(ctx context.Context, token string, auth *link.PublicShareAuthentication, sign bool) (*link.PublicShare, error)
 }
 
-// PublicShareWithPassword holds the relevant information for representing a public share
-type PublicShareWithPassword struct {
+// WithPassword holds the relevant information for representing a public share
+type WithPassword struct {
 	Password    string `json:"password"`
 	PublicShare link.PublicShare
 }
 
 // DumpableManager defines a share manager which supports dumping its contents
 type DumpableManager interface {
-	Dump(ctx context.Context, shareChan chan<- *PublicShareWithPassword) error
+	Dump(ctx context.Context, shareChan chan<- *WithPassword) error
 }
 
 // LoadableManager defines a share manager which supports loading contents from a dump
 type LoadableManager interface {
-	Load(ctx context.Context, shareChan <-chan *PublicShareWithPassword) error
+	Load(ctx context.Context, shareChan <-chan *WithPassword) error
 }
 
 // CreateSignature calculates a signature for a public share.

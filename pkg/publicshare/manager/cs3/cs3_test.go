@@ -147,7 +147,7 @@ var _ = Describe("Cs3", func() {
 			Expect(link.Token).ToNot(Equal(""))
 			Expect(link.PasswordProtected).To(BeTrue())
 			storage.AssertCalled(GinkgoT(), "SimpleUpload", mock.Anything, mock.Anything, mock.MatchedBy(func(in []byte) bool {
-				ps := publicshare.PublicShareWithPassword{}
+				ps := publicshare.WithPassword{}
 				err = json.Unmarshal(in, &ps)
 				Expect(err).ToNot(HaveOccurred())
 				return bcrypt.CompareHashAndPassword([]byte(ps.Password), []byte("secret123")) == nil
@@ -183,7 +183,7 @@ var _ = Describe("Cs3", func() {
 			h, err := bcrypt.GenerateFromPassword([]byte(grant.Password), bcrypt.DefaultCost)
 			Expect(err).ToNot(HaveOccurred())
 			hashedPassword = string(h)
-			shareJSON, err := json.Marshal(publicshare.PublicShareWithPassword{PublicShare: *existingShare, Password: hashedPassword})
+			shareJSON, err := json.Marshal(publicshare.WithPassword{PublicShare: *existingShare, Password: hashedPassword})
 			Expect(err).ToNot(HaveOccurred())
 			storage.On("SimpleDownload", mock.Anything, mock.MatchedBy(func(in string) bool {
 				return strings.HasPrefix(in, "publicshares/")
@@ -195,7 +195,7 @@ var _ = Describe("Cs3", func() {
 				m, err := cs3.New(nil, storage, indexer, bcrypt.DefaultCost)
 				Expect(err).ToNot(HaveOccurred())
 
-				sharesChan := make(chan *publicshare.PublicShareWithPassword)
+				sharesChan := make(chan *publicshare.WithPassword)
 
 				wg := sync.WaitGroup{}
 				wg.Add(2)
@@ -204,7 +204,7 @@ var _ = Describe("Cs3", func() {
 					wg.Done()
 				}()
 				go func() {
-					sharesChan <- &publicshare.PublicShareWithPassword{
+					sharesChan <- &publicshare.WithPassword{
 						Password:    "foo",
 						PublicShare: *existingShare,
 					}
@@ -469,7 +469,7 @@ var _ = Describe("Cs3", func() {
 				Expect(ps).ToNot(BeNil())
 				Expect(ps.DisplayName).To(Equal("new displayname"))
 				storage.AssertCalled(GinkgoT(), "SimpleUpload", mock.Anything, path.Join("publicshares", ps.Token), mock.MatchedBy(func(data []byte) bool {
-					s := publicshare.PublicShareWithPassword{}
+					s := publicshare.WithPassword{}
 					err := json.Unmarshal(data, &s)
 					Expect(err).ToNot(HaveOccurred())
 					return s.PublicShare.DisplayName == "new displayname"
@@ -487,7 +487,7 @@ var _ = Describe("Cs3", func() {
 				Expect(err).ToNot(HaveOccurred())
 				Expect(ps).ToNot(BeNil())
 				storage.AssertCalled(GinkgoT(), "SimpleUpload", mock.Anything, path.Join("publicshares", ps.Token), mock.MatchedBy(func(data []byte) bool {
-					s := publicshare.PublicShareWithPassword{}
+					s := publicshare.WithPassword{}
 					err := json.Unmarshal(data, &s)
 					Expect(err).ToNot(HaveOccurred())
 					return s.Password != ""
@@ -505,7 +505,7 @@ var _ = Describe("Cs3", func() {
 				Expect(err).ToNot(HaveOccurred())
 				Expect(ps).ToNot(BeNil())
 				storage.AssertCalled(GinkgoT(), "SimpleUpload", mock.Anything, path.Join("publicshares", ps.Token), mock.MatchedBy(func(data []byte) bool {
-					s := publicshare.PublicShareWithPassword{}
+					s := publicshare.WithPassword{}
 					err := json.Unmarshal(data, &s)
 					Expect(err).ToNot(HaveOccurred())
 					return s.PublicShare.Permissions.Permissions.Delete
@@ -524,7 +524,7 @@ var _ = Describe("Cs3", func() {
 				Expect(err).ToNot(HaveOccurred())
 				Expect(ps).ToNot(BeNil())
 				storage.AssertCalled(GinkgoT(), "SimpleUpload", mock.Anything, path.Join("publicshares", ps.Token), mock.MatchedBy(func(data []byte) bool {
-					s := publicshare.PublicShareWithPassword{}
+					s := publicshare.WithPassword{}
 					err := json.Unmarshal(data, &s)
 					Expect(err).ToNot(HaveOccurred())
 					return s.PublicShare.Expiration != nil && s.PublicShare.Expiration.Seconds == ts.Seconds

@@ -157,7 +157,7 @@ func (m *Manager) initialize() error {
 }
 
 // Load imports public shares and received shares from channels (e.g. during migration)
-func (m *Manager) Load(ctx context.Context, shareChan <-chan *publicshare.PublicShareWithPassword) error {
+func (m *Manager) Load(ctx context.Context, shareChan <-chan *publicshare.WithPassword) error {
 	log := appctx.GetLogger(ctx)
 	if err := m.initialize(); err != nil {
 		return err
@@ -209,7 +209,7 @@ func (m *Manager) CreatePublicShare(ctx context.Context, u *user.User, ri *provi
 		Nanos:   uint32(now % int64(time.Second)),
 	}
 
-	s := &publicshare.PublicShareWithPassword{
+	s := &publicshare.WithPassword{
 		PublicShare: link.PublicShare{
 			Id:                id,
 			Owner:             ri.GetOwner(),
@@ -293,7 +293,7 @@ func (m *Manager) GetPublicShare(ctx context.Context, u *user.User, ref *link.Pu
 	return &ps.PublicShare, nil
 }
 
-func (m *Manager) getWithPassword(ctx context.Context, ref *link.PublicShareReference) (*publicshare.PublicShareWithPassword, error) {
+func (m *Manager) getWithPassword(ctx context.Context, ref *link.PublicShareReference) (*publicshare.WithPassword, error) {
 	switch {
 	case ref.GetToken() != "":
 		return m.getByToken(ctx, ref.GetToken())
@@ -304,7 +304,7 @@ func (m *Manager) getWithPassword(ctx context.Context, ref *link.PublicShareRefe
 	}
 }
 
-func (m *Manager) getByID(ctx context.Context, id string) (*publicshare.PublicShareWithPassword, error) {
+func (m *Manager) getByID(ctx context.Context, id string) (*publicshare.WithPassword, error) {
 	tokens, err := m.indexer.FindBy(&link.PublicShare{},
 		indexer.NewField("Id.OpaqueId", id),
 	)
@@ -317,14 +317,14 @@ func (m *Manager) getByID(ctx context.Context, id string) (*publicshare.PublicSh
 	return m.getByToken(ctx, tokens[0])
 }
 
-func (m *Manager) getByToken(ctx context.Context, token string) (*publicshare.PublicShareWithPassword, error) {
+func (m *Manager) getByToken(ctx context.Context, token string) (*publicshare.WithPassword, error) {
 	fn := path.Join("publicshares", token)
 	data, err := m.storage.SimpleDownload(ctx, fn)
 	if err != nil {
 		return nil, err
 	}
 
-	ps := &publicshare.PublicShareWithPassword{}
+	ps := &publicshare.WithPassword{}
 	err = json.Unmarshal(data, ps)
 	if err != nil {
 		return nil, err
@@ -527,7 +527,7 @@ func resourceIDToIndex(id *provider.ResourceId) string {
 	return strings.Join([]string{id.StorageId, id.OpaqueId}, "!")
 }
 
-func (m *Manager) persist(ctx context.Context, ps *publicshare.PublicShareWithPassword) error {
+func (m *Manager) persist(ctx context.Context, ps *publicshare.WithPassword) error {
 	data, err := json.Marshal(ps)
 	if err != nil {
 		return err

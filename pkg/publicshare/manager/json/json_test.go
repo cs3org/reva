@@ -90,8 +90,8 @@ var _ = Describe("Json", func() {
 		})
 
 		It("dumps all public shares", func() {
-			psharesChan := make(chan *publicshare.PublicShareWithPassword)
-			pshares := []*publicshare.PublicShareWithPassword{}
+			psharesChan := make(chan *publicshare.WithPassword)
+			pshares := []*publicshare.WithPassword{}
 
 			wg := sync.WaitGroup{}
 			wg.Add(1)
