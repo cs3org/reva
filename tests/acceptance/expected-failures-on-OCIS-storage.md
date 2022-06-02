@@ -1430,5 +1430,10 @@ _ocs: api compatibility, return correct status code_
 - [apiVersions/fileVersions.feature:511](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersions.feature#L511)
 - [apiVersions/fileVersions.feature:512](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersions.feature#L512)
 
+#### [reShareUpdate API tests failing in reva](https://github.com/cs3org/reva/issues/2916)
+
+- [apiShareReshareToShares3/reShareUpdate.feature:152](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareReshareToShares3/reShareUpdate.feature#L152)
+- [apiShareReshareToShares3/reShareUpdate.feature:153](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareReshareToShares3/reShareUpdate.feature#L153)
+
 Note: always have an empty line at the end of this file.
 The bash script that processes this file may not process a scenario reference on the last line.
