@@ -121,7 +121,7 @@ func (s *svc) handlePathPut(w http.ResponseWriter, r *http.Request, ns string) {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	space, status, err := spacelookup.LookUpStorageSpaceForPath(ctx, client, path.Dir(fn))
+	space, status, err := spacelookup.LookUpStorageSpaceForPath(ctx, client, fn)
 	if err != nil {
 		sublog.Error().Err(err).Str("path", fn).Msg("failed to look up storage space")
 		w.WriteHeader(http.StatusInternalServerError)
