@@ -502,20 +502,6 @@ func (r *registry) findProvidersForAbsolutePathReference(ctx context.Context, pa
 	var deepestMountPathProvider *registrypb.ProviderInfo
 	providers := map[string]*registrypb.ProviderInfo{}
 	for address, provider := range r.c.Providers {
-
-		// Only list spaces on this provider if the request matches the mountpoint
-		var providerMatchesPath bool
-		for _, sc := range provider.Spaces {
-			match, err := regexp.MatchString(sc.MountPoint, path)
-			if (err == nil && match) || strings.HasPrefix(sc.MountPoint, path) {
-				providerMatchesPath = true
-				break
-			}
-		}
-		if !providerMatchesPath {
-			continue
-		}
-
 		p := &registrypb.ProviderInfo{
 			Opaque:  &typesv1beta1.Opaque{Map: map[string]*typesv1beta1.OpaqueEntry{}},
 			Address: address,
@@ -565,10 +551,6 @@ func (r *registry) findProvidersForAbsolutePathReference(ctx context.Context, pa
 				appctx.GetLogger(ctx).Error().Err(err).Interface("provider", provider).Interface("space", space).Msg("failed to execute template, continuing")
 				continue
 			}
-			if match, err := regexp.MatchString(sc.MountPoint, spacePath); err != nil || !match {
-				continue
-			}
-
 			setPath(space, spacePath)
 
 			// determine deepest mount point
