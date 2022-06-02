@@ -66,7 +66,7 @@ var (
 			},
 		},
 		MountPoint: &sprovider.Reference{
-			Path: "",
+			Path: "oldname",
 		},
 	}
 
@@ -242,6 +242,9 @@ var _ = Describe("Sharesstorageprovider", func() {
 				}
 			}, nil)
 
+		// reset share state and mount point
+		BaseShare.MountPoint = &sprovider.Reference{Path: "oldname"}
+		BaseShare.State = collaboration.ShareState_SHARE_STATE_ACCEPTED
 	})
 
 	JustBeforeEach(func() {
@@ -588,7 +591,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 					},
 					Destination: &sprovider.Reference{
 						ResourceId: ShareJail,
-						Path:       "./newname",
+						Path:       "./newfname",
 					},
 				}
 				res, err := s.Move(ctx, req)
