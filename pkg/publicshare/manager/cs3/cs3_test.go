@@ -200,7 +200,7 @@ var _ = Describe("Cs3", func() {
 				wg := sync.WaitGroup{}
 				wg.Add(2)
 				go func() {
-					m.Load(sharesChan)
+					m.Load(ctx, sharesChan)
 					wg.Done()
 				}()
 				go func() {

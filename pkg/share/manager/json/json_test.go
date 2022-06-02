@@ -126,7 +126,7 @@ var _ = Describe("Json", func() {
 				}
 				wg.Done()
 			}()
-			m.(share.DumpableManager).Dump(sharesChan, receivedChan)
+			m.(share.DumpableManager).Dump(ctx, sharesChan, receivedChan)
 			wg.Wait()
 			Eventually(sharesChan).Should(BeClosed())
 			Eventually(receivedChan).Should(BeClosed())
@@ -158,7 +158,7 @@ var _ = Describe("Json", func() {
 				}
 				wg.Done()
 			}()
-			m.(share.DumpableManager).Dump(sharesChan, receivedChan)
+			m.(share.DumpableManager).Dump(ctx, sharesChan, receivedChan)
 			wg.Wait()
 
 			Eventually(sharesChan).Should(BeClosed())

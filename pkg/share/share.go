@@ -80,12 +80,12 @@ type ReceivedShareDump struct {
 
 // DumpableManager defines a share manager which supports dumping its contents
 type DumpableManager interface {
-	Dump(shareChan chan<- *collaboration.Share, receivedShareChan chan<- ReceivedShareDump) error
+	Dump(ctx context.Context, shareChan chan<- *collaboration.Share, receivedShareChan chan<- ReceivedShareDump) error
 }
 
 // LoadableManager defines a share manager which supports loading contents from a dump
 type LoadableManager interface {
-	Load(shareChan <-chan *collaboration.Share, receivedShareChan <-chan ReceivedShareDump) error
+	Load(ctx context.Context, shareChan <-chan *collaboration.Share, receivedShareChan <-chan ReceivedShareDump) error
 }
 
 // GroupGranteeFilter is an abstraction for creating filter by grantee type group.

@@ -33,6 +33,7 @@ import (
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/v2/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
@@ -165,7 +166,8 @@ func (m *Manager) initialize() error {
 }
 
 // Load imports shares and received shares from channels (e.g. during migration)
-func (m *Manager) Load(shareChan <-chan *collaboration.Share, receivedShareChan <-chan share.ReceivedShareDump) error {
+func (m *Manager) Load(ctx context.Context, shareChan <-chan *collaboration.Share, receivedShareChan <-chan share.ReceivedShareDump) error {
+	log := appctx.GetLogger(ctx)
 	if err := m.initialize(); err != nil {
 		return err
 	}
@@ -177,9 +179,8 @@ func (m *Manager) Load(shareChan <-chan *collaboration.Share, receivedShareChan 
 			if s == nil {
 				continue
 			}
-			fmt.Println("Loading share", s.Id.OpaqueId)
 			if err := m.persistShare(context.Background(), s); err != nil {
-				fmt.Println("error persisting share:", s, err)
+				log.Error().Err(err).Interface("share", s).Msg("error persisting share")
 			}
 		}
 		wg.Done()
@@ -187,9 +188,8 @@ func (m *Manager) Load(shareChan <-chan *collaboration.Share, receivedShareChan 
 	go func() {
 		for s := range receivedShareChan {
 			if s.ReceivedShare != nil && s.UserID != nil {
-				fmt.Println("Loading received share", s.ReceivedShare.Share.Id)
 				if err := m.persistReceivedShare(context.Background(), s.UserID, s.ReceivedShare); err != nil {
-					fmt.Println("error persisting received share:", s, err)
+					log.Error().Err(err).Interface("received share", s).Msg("error persisting received share")
 				}
 			}
 		}

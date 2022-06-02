@@ -185,7 +185,7 @@ var _ = Describe("Manager", func() {
 			wg := sync.WaitGroup{}
 			wg.Add(2)
 			go func() {
-				m.Load(sharesChan, receivedChan)
+				m.Load(ctx, sharesChan, receivedChan)
 				wg.Done()
 			}()
 			go func() {

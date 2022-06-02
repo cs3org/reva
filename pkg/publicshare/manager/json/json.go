@@ -147,7 +147,9 @@ func (m *manager) startJanitorRun() {
 }
 
 // Dump exports public shares to channels (e.g. during migration)
-func (m *manager) Dump(shareChan chan<- *publicshare.PublicShareWithPassword) error {
+func (m *manager) Dump(ctx context.Context, shareChan chan<- *publicshare.PublicShareWithPassword) error {
+	log := appctx.GetLogger(ctx)
+
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
@@ -159,7 +161,7 @@ func (m *manager) Dump(shareChan chan<- *publicshare.PublicShareWithPassword) er
 	for _, v := range db {
 		var local publicshare.PublicShareWithPassword
 		if err := utils.UnmarshalJSONToProtoV1([]byte(v.(map[string]interface{})["share"].(string)), &local.PublicShare); err != nil {
-			fmt.Printf("error unmarshalling share")
+			log.Error().Err(err).Msg("error unmarshalling share")
 		}
 		local.Password = v.(map[string]interface{})["password"].(string)
 		shareChan <- &local

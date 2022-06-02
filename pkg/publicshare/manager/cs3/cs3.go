@@ -157,13 +157,14 @@ func (m *Manager) initialize() error {
 }
 
 // Load imports public shares and received shares from channels (e.g. during migration)
-func (m *Manager) Load(shareChan <-chan *publicshare.PublicShareWithPassword) error {
+func (m *Manager) Load(ctx context.Context, shareChan <-chan *publicshare.PublicShareWithPassword) error {
+	log := appctx.GetLogger(ctx)
 	if err := m.initialize(); err != nil {
 		return err
 	}
 	for ps := range shareChan {
 		if err := m.persist(context.Background(), ps); err != nil {
-			fmt.Println("error loading public share", ps, err)
+			log.Error().Err(err).Interface("publicshare", ps).Msg("error loading public share")
 		}
 	}
 	return nil

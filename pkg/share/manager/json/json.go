@@ -190,7 +190,8 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 }
 
 // Dump exports shares and received shares to channels (e.g. during migration)
-func (m *mgr) Dump(shareChan chan<- *collaboration.Share, receivedShareChan chan<- share.ReceivedShareDump) error {
+func (m *mgr) Dump(ctx context.Context, shareChan chan<- *collaboration.Share, receivedShareChan chan<- share.ReceivedShareDump) error {
+	log := appctx.GetLogger(ctx)
 	for _, s := range m.model.Shares {
 		shareChan <- s
 	}
@@ -199,12 +200,18 @@ func (m *mgr) Dump(shareChan chan<- *collaboration.Share, receivedShareChan chan
 		userMountPoints := m.model.MountPoint[userIDString]
 		id := &userv1beta1.UserId{}
 		mV2 := proto.MessageV2(id)
-		prototext.Unmarshal([]byte(userIDString), mV2)
+		if err := prototext.Unmarshal([]byte(userIDString), mV2); err != nil {
+			log.Error().Err(err).Msg("error unmarshalling the user id")
+			continue
+		}
 
 		for shareIDString, state := range states {
 			sid := &collaboration.ShareId{}
 			mV2 := proto.MessageV2(sid)
-			prototext.Unmarshal([]byte(shareIDString), mV2)
+			if err := prototext.Unmarshal([]byte(shareIDString), mV2); err != nil {
+				log.Error().Err(err).Msg("error unmarshalling the user id")
+				continue
+			}
 
 			var s *collaboration.Share
 			for _, is := range m.model.Shares {
@@ -214,6 +221,7 @@ func (m *mgr) Dump(shareChan chan<- *collaboration.Share, receivedShareChan chan
 				}
 			}
 			if s == nil {
+				log.Warn().Str("share id", sid.OpaqueId).Msg("Share not found")
 				continue
 			}
 

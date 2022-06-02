@@ -58,12 +58,12 @@ type PublicShareWithPassword struct {
 
 // DumpableManager defines a share manager which supports dumping its contents
 type DumpableManager interface {
-	Dump(shareChan chan<- *PublicShareWithPassword) error
+	Dump(ctx context.Context, shareChan chan<- *PublicShareWithPassword) error
 }
 
 // LoadableManager defines a share manager which supports loading contents from a dump
 type LoadableManager interface {
-	Load(shareChan <-chan *PublicShareWithPassword) error
+	Load(ctx context.Context, shareChan <-chan *PublicShareWithPassword) error
 }
 
 // CreateSignature calculates a signature for a public share.
