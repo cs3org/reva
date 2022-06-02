@@ -103,7 +103,8 @@ var _ = Describe("Json", func() {
 				}
 				wg.Done()
 			}()
-			m.(publicshare.DumpableManager).Dump(ctx, psharesChan)
+			err := m.(publicshare.DumpableManager).Dump(ctx, psharesChan)
+			Expect(err).ToNot(HaveOccurred())
 			wg.Wait()
 			Eventually(psharesChan).Should(BeClosed())
 

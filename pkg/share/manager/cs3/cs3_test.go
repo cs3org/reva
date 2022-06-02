@@ -185,7 +185,8 @@ var _ = Describe("Manager", func() {
 			wg := sync.WaitGroup{}
 			wg.Add(2)
 			go func() {
-				m.Load(ctx, sharesChan, receivedChan)
+				err := m.Load(ctx, sharesChan, receivedChan)
+				Expect(err).ToNot(HaveOccurred())
 				wg.Done()
 			}()
 			go func() {
@@ -638,7 +639,6 @@ var _ = Describe("Manager", func() {
 					err := json.Unmarshal(data, &meta)
 					Expect(err).ToNot(HaveOccurred())
 					return meta.MountPoint != nil && meta.State == collaboration.ShareState_SHARE_STATE_PENDING && meta.MountPoint.Path == "newPath/"
-					return true
 				}))
 			})
 		})

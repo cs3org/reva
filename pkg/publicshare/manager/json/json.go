@@ -615,11 +615,7 @@ func (m *manager) writeDb(db map[string]interface{}) error {
 		return err
 	}
 
-	if err := ioutil.WriteFile(m.file, dbAsJSON, 0644); err != nil {
-		return err
-	}
-
-	return nil
+	return ioutil.WriteFile(m.file, dbAsJSON, 0644)
 }
 
 type publicShare struct {
