@@ -161,6 +161,7 @@ func (m *manager) Dump(shareChan chan<- *publicshare.PublicShareWithPassword) er
 		if err := utils.UnmarshalJSONToProtoV1([]byte(v.(map[string]interface{})["share"].(string)), &local.PublicShare); err != nil {
 			fmt.Printf("error unmarshalling share")
 		}
+		local.Password = v.(map[string]interface{})["password"].(string)
 		shareChan <- &local
 	}
 	close(shareChan)

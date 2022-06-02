@@ -30,6 +30,7 @@ import (
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/publicshare"
 	"github.com/cs3org/reva/v2/pkg/publicshare/manager/json"
+	"golang.org/x/crypto/bcrypt"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -82,7 +83,9 @@ var _ = Describe("Json", func() {
 
 	Describe("Dump", func() {
 		JustBeforeEach(func() {
-			_, err := m.CreatePublicShare(ctx, user1, sharedResource, &link.Grant{})
+			_, err := m.CreatePublicShare(ctx, user1, sharedResource, &link.Grant{
+				Password: "foo",
+			})
 			Expect(err).ToNot(HaveOccurred())
 		})
 
@@ -105,6 +108,7 @@ var _ = Describe("Json", func() {
 			Eventually(psharesChan).Should(BeClosed())
 
 			Expect(len(pshares)).To(Equal(1))
+			Expect(bcrypt.CompareHashAndPassword([]byte(pshares[0].Password), []byte("foo"))).To(Succeed())
 			Expect(pshares[0].PublicShare.Creator).To(Equal(user1.Id))
 			Expect(pshares[0].PublicShare.ResourceId).To(Equal(sharedResource.Id))
 		})
