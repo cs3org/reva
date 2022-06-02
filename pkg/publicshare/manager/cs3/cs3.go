@@ -45,6 +45,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/publicshare/manager/registry"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/indexer"
+	indexerErrors "github.com/cs3org/reva/v2/pkg/storage/utils/indexer/errors"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/indexer/option"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/metadata"
 	"github.com/cs3org/reva/v2/pkg/utils"
@@ -539,8 +540,8 @@ func (m *Manager) persist(ctx context.Context, ps *publicshare.PublicShareWithPa
 
 	_, err = m.indexer.Add(&ps.PublicShare)
 	if err != nil {
-		if _, ok := err.(errtypes.IsAlreadyExists); !ok {
-			return err
+		if _, ok := err.(*indexerErrors.AlreadyExistsErr); ok {
+			return nil
 		}
 		err = m.indexer.Delete(&ps.PublicShare)
 		if err != nil {
