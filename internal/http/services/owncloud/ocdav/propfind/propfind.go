@@ -146,8 +146,8 @@ type PropstatUnmarshalXML struct {
 
 // spaceData is used to remember the space for a resource info
 type spaceData struct {
-	Ref   *provider.Reference
-	Space *provider.StorageSpace
+	Ref       *provider.Reference
+	SpaceType string
 }
 
 // NewMultiStatusResponseXML returns a preconfigured instance of MultiStatusResponseXML
@@ -382,6 +382,7 @@ func (p *Handler) getResourceInfos(ctx context.Context, w http.ResponseWriter, r
 		// tracked in https://github.com/cs3org/cs3apis/issues/104
 		metadataKeys = append(metadataKeys, "*")
 	} else {
+		metadataKeys = make([]string, 0, len(pf.Prop))
 		for i := range pf.Prop {
 			if requiresExplicitFetching(&pf.Prop[i]) {
 				metadataKeys = append(metadataKeys, metadataKeyOf(&pf.Prop[i]))
@@ -391,13 +392,16 @@ func (p *Handler) getResourceInfos(ctx context.Context, w http.ResponseWriter, r
 
 	// we need to stat all spaces to aggregate the root etag, mtime and size
 	// TODO cache per space (hah, no longer per user + per space!)
-	var rootInfo *provider.ResourceInfo
-	var mostRecentChildInfo *provider.ResourceInfo
-	var aggregatedChildSize uint64
-	spaceInfos := make([]*provider.ResourceInfo, 0, len(spaces))
-	spaceMap := map[*provider.ResourceInfo]spaceData{}
+	var (
+		rootInfo            *provider.ResourceInfo
+		mostRecentChildInfo *provider.ResourceInfo
+		aggregatedChildSize uint64
+		spaceMap            = make(map[*provider.ResourceInfo]spaceData, len(spaces))
+	)
 	for _, space := range spaces {
-		if space.Opaque == nil || space.Opaque.Map == nil || space.Opaque.Map["path"] == nil || space.Opaque.Map["path"].Decoder != "plain" {
+		if space.Opaque == nil ||
+			space.Opaque.Map["path"] == nil ||
+			space.Opaque.Map["path"].Decoder != "plain" {
 			continue // not mounted
 		}
 		spacePath := string(space.Opaque.Map["path"].Value)
@@ -419,10 +423,9 @@ func (p *Handler) getResourceInfos(ctx context.Context, w http.ResponseWriter, r
 			info.Path = filepath.Join(spacePath, spaceRef.Path)
 		}
 
-		spaceMap[info] = spaceData{Ref: spaceRef, Space: space}
-		spaceInfos = append(spaceInfos, info)
+		spaceMap[info] = spaceData{Ref: spaceRef, SpaceType: space.SpaceType}
 
-		if rootInfo == nil && (requestPath == info.Path || (spacesPropfind && requestPath == path.Join("/", info.Path))) {
+		if rootInfo == nil && requestPath == info.Path {
 			rootInfo = info
 		} else if requestPath != spacePath && strings.HasPrefix(spacePath, requestPath) { // Check if the space is a child of the requested path
 			// aggregate child metadata
@@ -437,7 +440,7 @@ func (p *Handler) getResourceInfos(ctx context.Context, w http.ResponseWriter, r
 		}
 	}
 
-	if len(spaceInfos) == 0 || rootInfo == nil {
+	if len(spaceMap) == 0 || rootInfo == nil {
 		// TODO if we have children invent node on the fly
 		w.WriteHeader(http.StatusNotFound)
 		m := "Resource not found"
@@ -499,16 +502,16 @@ func (p *Handler) getResourceInfos(ctx context.Context, w http.ResponseWriter, r
 		}
 	}
 	// then add children
-	for _, spaceInfo := range spaceInfos {
+	for spaceInfo, spaceData := range spaceMap {
 		switch {
 		case !spacesPropfind && spaceInfo.Type != provider.ResourceType_RESOURCE_TYPE_CONTAINER && depth != net.DepthInfinity:
 			addChild(spaceInfo)
 
 		case spaceInfo.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER && depth == net.DepthOne:
 			switch {
-			case strings.HasPrefix(requestPath, spaceInfo.Path) && spaceMap[spaceInfo].Space.SpaceType != "virtual":
+			case strings.HasPrefix(requestPath, spaceInfo.Path) && spaceData.SpaceType != "virtual":
 				req := &provider.ListContainerRequest{
-					Ref:                   spaceMap[spaceInfo].Ref,
+					Ref:                   spaceData.Ref,
 					ArbitraryMetadataKeys: metadataKeys,
 				}
 				res, err := client.ListContainer(ctx, req)
@@ -542,7 +545,7 @@ func (p *Handler) getResourceInfos(ctx context.Context, w http.ResponseWriter, r
 				info := stack[0]
 				stack = stack[1:]
 
-				if info.Type != provider.ResourceType_RESOURCE_TYPE_CONTAINER || spaceMap[spaceInfo].Space.SpaceType == "virtual" {
+				if info.Type != provider.ResourceType_RESOURCE_TYPE_CONTAINER || spaceData.SpaceType == "virtual" {
 					continue
 				}
 				req := &provider.ListContainerRequest{
