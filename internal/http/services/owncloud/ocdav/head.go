@@ -78,6 +78,7 @@ func (s *svc) handleHead(ctx context.Context, w http.ResponseWriter, r *http.Req
 	w.Header().Set(HeaderOCETag, info.Etag)
 	if info.Checksum != nil {
 		w.Header().Set(HeaderOCChecksum, fmt.Sprintf("%s:%s", strings.ToUpper(string(storageprovider.GRPC2PKGXS(info.Checksum.Type))), info.Checksum.Sum))
+		w.Header().Set(HeaderChecksum, fmt.Sprintf("%s=%s", strings.ToLower(string(storageprovider.GRPC2PKGXS(info.Checksum.Type))), info.Checksum.Sum))
 	}
 	t := utils.TSToTime(info.Mtime).UTC()
 	lastModifiedString := t.Format(time.RFC1123Z)

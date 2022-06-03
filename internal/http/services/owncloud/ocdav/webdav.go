@@ -51,6 +51,7 @@ const (
 	HeaderLocation                   = "Location"
 	HeaderRange                      = "Range"
 	HeaderIfMatch                    = "If-Match"
+	HeaderChecksum                   = "Digest"
 )
 
 // Non standard HTTP headers.
