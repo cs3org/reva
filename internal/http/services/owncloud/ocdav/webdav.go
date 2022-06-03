@@ -108,7 +108,6 @@ func (h *WebDavHandler) Handler(s *svc) http.Handler {
 			w.WriteHeader(http.StatusNotFound)
 		}
 
-		log := appctx.GetLogger(r.Context())
 		if status != 0 { // 0 means the handler already sent the response
 			w.WriteHeader(status)
 			if status != http.StatusNoContent {
@@ -119,7 +118,7 @@ func (h *WebDavHandler) Handler(s *svc) http.Handler {
 			}
 		}
 		if err != nil {
-			log.Error().Err(err).Msg(err.Error())
+			appctx.GetLogger(r.Context()).Error().Err(err).Msg(err.Error())
 		}
 	})
 }

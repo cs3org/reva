@@ -114,7 +114,6 @@ func (h *SpacesHandler) Handler(s *svc, trashbinHandler *TrashbinHandler) http.H
 			http.Error(w, http.StatusText(http.StatusNotImplemented), http.StatusNotImplemented)
 		}
 
-		log := appctx.GetLogger(r.Context())
 		if status != 0 { // 0 means the handler already sent the response
 			w.WriteHeader(status)
 			if status != http.StatusNoContent {
@@ -125,7 +124,7 @@ func (h *SpacesHandler) Handler(s *svc, trashbinHandler *TrashbinHandler) http.H
 			}
 		}
 		if err != nil {
-			log.Error().Err(err).Msg(err.Error())
+			appctx.GetLogger(r.Context()).Error().Err(err).Msg(err.Error())
 		}
 	})
 }
