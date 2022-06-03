@@ -85,7 +85,7 @@ func (h *WebDavHandler) Handler(s *svc) http.Handler {
 		case MethodProppatch:
 			status, err = s.handlePathProppatch(w, r, ns)
 		case MethodMkcol:
-			s.handlePathMkcol(w, r, ns)
+			status, err = s.handlePathMkcol(w, r, ns)
 		case MethodMove:
 			s.handlePathMove(w, r, ns)
 		case MethodCopy:
