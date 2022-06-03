@@ -514,7 +514,7 @@ func (r *registry) findProvidersForAbsolutePathReference(ctx context.Context, pa
 			{
 				Type: providerpb.ListStorageSpacesRequest_Filter_TYPE_PATH,
 				Term: &providerpb.ListStorageSpacesRequest_Filter_Path{
-					Path: path,
+					Path: strings.TrimSuffix(path, p.ProviderPath),
 				},
 			},
 			{
