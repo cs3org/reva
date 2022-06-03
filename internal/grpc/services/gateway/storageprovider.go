@@ -626,7 +626,9 @@ func (s *svc) CreateContainer(ctx context.Context, req *provider.CreateContainer
 }
 
 func (s *svc) TouchFile(ctx context.Context, req *provider.TouchFileRequest) (*provider.TouchFileResponse, error) {
-	c, _, err := s.find(ctx, req.Ref)
+	var c provider.ProviderAPIClient
+	var err error
+	c, _, req.Ref, err = s.findAndUnwrap(ctx, req.Ref)
 	if err != nil {
 		return &provider.TouchFileResponse{
 			Status: status.NewStatusFromErrType(ctx, "TouchFile ref="+req.Ref.String(), err),
