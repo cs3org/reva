@@ -632,26 +632,6 @@ func (s *service) Move(ctx context.Context, req *provider.MoveRequest) (*provide
 	})
 }
 
-// isRename checks if the two references lie in the responsibility of the sharesstorageprovider and if a rename occurs
-func isRename(s, d *provider.Reference) bool {
-	// if the source is a share jail child where the path is .
-	return ((isShareJailChild(s.ResourceId) && s.Path == ".") ||
-		// or if the source is the share jail with a single path segment, e.g. './old'
-		(isShareJailRoot(s.ResourceId) && len(strings.SplitN(s.Path, "/", 3)) == 2)) &&
-		// and if the destination is the share jail a single path segment, e.g. './new'
-		isShareJailRoot(d.ResourceId) && len(strings.SplitN(d.Path, "/", 3)) == 2
-}
-
-func isShareJailRoot(id *provider.ResourceId) bool {
-	_, space := storagespace.SplitStorageID(id.StorageId)
-	return space == utils.ShareStorageProviderID && id.OpaqueId == utils.ShareStorageProviderID
-}
-
-func isShareJailChild(id *provider.ResourceId) bool {
-	_, space := storagespace.SplitStorageID(id.StorageId)
-	return space == utils.ShareStorageProviderID && id.OpaqueId != utils.ShareStorageProviderID
-}
-
 // SetLock puts a lock on the given reference
 func (s *service) SetLock(ctx context.Context, req *provider.SetLockRequest) (*provider.SetLockResponse, error) {
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
@@ -1087,6 +1067,26 @@ func buildReferenceInShare(ref *provider.Reference, s *collaboration.ReceivedSha
 		ResourceId: s.Share.ResourceId,
 		Path:       path,
 	}
+}
+
+// isRename checks if the two references lie in the responsibility of the sharesstorageprovider and if a rename occurs
+func isRename(s, d *provider.Reference) bool {
+	// if the source is a share jail child where the path is .
+	return ((isShareJailChild(s.ResourceId) && s.Path == ".") ||
+		// or if the source is the share jail with a single path segment, e.g. './old'
+		(isShareJailRoot(s.ResourceId) && len(strings.SplitN(s.Path, "/", 3)) == 2)) &&
+		// and if the destination is the share jail a single path segment, e.g. './new'
+		isShareJailRoot(d.ResourceId) && len(strings.SplitN(d.Path, "/", 3)) == 2
+}
+
+func isShareJailChild(id *provider.ResourceId) bool {
+	_, space := storagespace.SplitStorageID(id.StorageId)
+	return space == utils.ShareStorageProviderID && id.OpaqueId != utils.ShareStorageProviderID
+}
+
+func isShareJailRoot(id *provider.ResourceId) bool {
+	_, space := storagespace.SplitStorageID(id.StorageId)
+	return space == utils.ShareStorageProviderID && id.OpaqueId == utils.ShareStorageProviderID
 }
 
 func isVirtualRoot(ref *provider.Reference) bool {
