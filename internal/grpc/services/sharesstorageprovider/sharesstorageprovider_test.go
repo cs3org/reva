@@ -594,7 +594,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 					},
 					Destination: &sprovider.Reference{
 						ResourceId: ShareJail,
-						Path:       "./newfname",
+						Path:       "./newname",
 					},
 				}
 				res, err := s.Move(ctx, req)
