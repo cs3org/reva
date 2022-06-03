@@ -42,9 +42,11 @@ import (
 const (
 	spaceTypePersonal = "personal"
 	spaceTypeProject  = "project"
-	spaceTypeShare    = "share"
+	// spaceTypeShare    = "share"
 )
 
+// SpacesConfig specifies the required configuration parameters needed
+// to connect to the project spaces DB
 type SpacesConfig struct {
 	Enabled    bool   `mapstructure:"enabled"`
 	DbUsername string `mapstructure:"db_username"`
