@@ -42,6 +42,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage"
 	pkgregistry "github.com/cs3org/reva/v2/pkg/storage/registry/registry"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
+	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/mitchellh/mapstructure"
 	"google.golang.org/grpc"
 )
@@ -627,10 +628,7 @@ func setPath(space *providerpb.StorageSpace, path string) {
 		space.Opaque.Map = map[string]*typesv1beta1.OpaqueEntry{}
 	}
 	if _, ok := space.Opaque.Map["path"]; !ok {
-		space.Opaque.Map["path"] = &typesv1beta1.OpaqueEntry{
-			Decoder: "plain",
-			Value:   []byte(path),
-		}
+		space.Opaque = utils.AppendPlainToOpaque(space.Opaque, "path", path)
 	}
 }
 func setSpaces(providerInfo *registrypb.ProviderInfo, spaces []*providerpb.StorageSpace) error {
