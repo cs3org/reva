@@ -1029,14 +1029,31 @@ func (fs *eosfs) listShareFolderRoot(ctx context.Context, p string) (finfos []*p
 }
 
 func (fs *eosfs) GetQuota(ctx context.Context, ref *provider.Reference) (uint64, uint64, uint64, error) {
+	// Check if the quota request is for the user's home or a project space
 	u, err := getUser(ctx)
 	if err != nil {
 		return 0, 0, 0, errors.Wrap(err, "eosfs: no user in ctx")
 	}
-	// lightweight accounts don't have quota nodes, so we're passing an empty string as path
-	auth, err := fs.getUserAuth(ctx, u, "")
-	if err != nil {
-		return 0, 0, 0, errors.Wrap(err, "eosfs: error getting uid and gid for user")
+
+	// If the quota request is for a resource different than the user home,
+	// we impersonate the owner in that case
+	uid := strconv.FormatInt(u.UidNumber, 10)
+	if ref.ResourceId != nil {
+		fid, err := strconv.ParseUint(ref.ResourceId.OpaqueId, 10, 64)
+		if err != nil {
+			return 0, 0, 0, fmt.Errorf("error converting string to int for eos fileid: %s", ref.ResourceId.OpaqueId)
+		}
+
+		// lightweight accounts don't have quota nodes, so we're passing an empty string as path
+		auth, err := fs.getUserAuth(ctx, u, "")
+		if err != nil {
+			return 0, 0, 0, errors.Wrap(err, "eosfs: error getting uid and gid for user")
+		}
+		eosFileInfo, err := fs.c.GetFileInfoByInode(ctx, auth, fid)
+		if err != nil {
+			return 0, 0, 0, err
+		}
+		uid = strconv.FormatUint(eosFileInfo.UID, 10)
 	}
 
 	rootAuth, err := fs.getRootAuth(ctx)
@@ -1044,7 +1061,7 @@ func (fs *eosfs) GetQuota(ctx context.Context, ref *provider.Reference) (uint64,
 		return 0, 0, 0, err
 	}
 
-	qi, err := fs.c.GetQuota(ctx, auth.Role.UID, rootAuth, fs.conf.QuotaNode)
+	qi, err := fs.c.GetQuota(ctx, uid, rootAuth, fs.conf.QuotaNode)
 	if err != nil {
 		err := errors.Wrap(err, "eosfs: error getting quota")
 		return 0, 0, 0, err
