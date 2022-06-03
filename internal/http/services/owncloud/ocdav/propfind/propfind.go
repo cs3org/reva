@@ -467,45 +467,16 @@ func (p *Handler) getResourceInfos(ctx context.Context, w http.ResponseWriter, r
 		rootInfo, // PROPFIND always includes the root resource
 	}
 	if rootInfo.Type == provider.ResourceType_RESOURCE_TYPE_FILE {
-		// no need to stat any other spaces, we got our file stat already
+		// If the resource is a file then it can't have any children so we can
+		// stop here.
 		return resourceInfos, true, true
 	}
 
 	childInfos := map[string]*provider.ResourceInfo{}
-	addChild := func(spaceInfo *provider.ResourceInfo) {
-		if spaceInfo == rootInfo {
-			return // already accounted for
-		}
-
-		childPath := strings.TrimPrefix(spaceInfo.Path, requestPath)
-		childName, tail := router.ShiftPath(childPath)
-		if tail != "/" {
-			spaceInfo.Type = provider.ResourceType_RESOURCE_TYPE_CONTAINER
-			spaceInfo.Checksum = nil
-			// TODO unset opaque checksum
-		}
-		spaceInfo.Path = path.Join(requestPath, childName)
-		if existingChild, ok := childInfos[childName]; ok {
-			// aggregate size
-			childInfos[childName].Size += spaceInfo.Size
-			// use most recent child
-			if existingChild.Mtime == nil || (spaceInfo.Mtime != nil && utils.TSToUnixNano(spaceInfo.Mtime) > utils.TSToUnixNano(existingChild.Mtime)) {
-				childInfos[childName].Mtime = spaceInfo.Mtime
-				childInfos[childName].Etag = spaceInfo.Etag
-			}
-			// only update fileid if the resource is a direct child
-			if tail == "/" {
-				childInfos[childName].Id = spaceInfo.Id
-			}
-		} else {
-			childInfos[childName] = spaceInfo
-		}
-	}
-	// then add children
 	for spaceInfo, spaceData := range spaceMap {
 		switch {
 		case !spacesPropfind && spaceInfo.Type != provider.ResourceType_RESOURCE_TYPE_CONTAINER && depth != net.DepthInfinity:
-			addChild(spaceInfo)
+			addChild(childInfos, spaceInfo, requestPath, rootInfo)
 
 		case spaceInfo.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER && depth == net.DepthOne:
 			switch {
@@ -530,9 +501,7 @@ func (p *Handler) getResourceInfos(ctx context.Context, w http.ResponseWriter, r
 				}
 				resourceInfos = append(resourceInfos, res.Infos...)
 			case strings.HasPrefix(spaceInfo.Path, requestPath): // space is a deep child of the requested path
-				addChild(spaceInfo)
-			default:
-				log.Debug().Msg("unhandled")
+				addChild(childInfos, spaceInfo, requestPath, rootInfo)
 			}
 
 		case depth == net.DepthInfinity:
@@ -604,6 +573,40 @@ func (p *Handler) getResourceInfos(ctx context.Context, w http.ResponseWriter, r
 	}
 
 	return resourceInfos, sendTusHeaders, true
+}
+
+func addChild(childInfos map[string]*provider.ResourceInfo,
+	spaceInfo *provider.ResourceInfo,
+	requestPath string,
+	rootInfo *provider.ResourceInfo,
+) {
+	if spaceInfo == rootInfo {
+		return // already accounted for
+	}
+
+	childPath := strings.TrimPrefix(spaceInfo.Path, requestPath)
+	childName, tail := router.ShiftPath(childPath)
+	if tail != "/" {
+		spaceInfo.Type = provider.ResourceType_RESOURCE_TYPE_CONTAINER
+		spaceInfo.Checksum = nil
+		// TODO unset opaque checksum
+	}
+	spaceInfo.Path = path.Join(requestPath, childName)
+	if existingChild, ok := childInfos[childName]; ok {
+		// aggregate size
+		childInfos[childName].Size += spaceInfo.Size
+		// use most recent child
+		if existingChild.Mtime == nil || (spaceInfo.Mtime != nil && utils.TSToUnixNano(spaceInfo.Mtime) > utils.TSToUnixNano(existingChild.Mtime)) {
+			childInfos[childName].Mtime = spaceInfo.Mtime
+			childInfos[childName].Etag = spaceInfo.Etag
+		}
+		// only update fileid if the resource is a direct child
+		if tail == "/" {
+			childInfos[childName].Id = spaceInfo.Id
+		}
+	} else {
+		childInfos[childName] = spaceInfo
+	}
 }
 
 func requiresExplicitFetching(n *xml.Name) bool {
