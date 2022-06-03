@@ -369,7 +369,7 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 				StorageId: utils.ShareStorageProviderID,
 				OpaqueId:  utils.ShareStorageProviderID,
 			}
-			if spaceID == nil || utils.ResourceIDEqual(virtualRootID, spaceID) {
+			if spaceID == nil || isShareJailRoot(spaceID) {
 				earliestShare, atLeastOneAccepted := findEarliestShare(receivedShares, shareMd)
 				var opaque *typesv1beta1.Opaque
 				var mtime *typesv1beta1.Timestamp
@@ -586,12 +586,7 @@ func (s *service) Move(ctx context.Context, req *provider.MoveRequest) (*provide
 	}
 
 	// we can do a rename
-	// if the source is a share jail child where the path is .
-	if ((isShareJailChild(req.Source.ResourceId) && req.Source.Path == ".") ||
-		// or if the source is the share jail with a single path segment, e.g. './old'
-		(isShareJailRoot(req.Source.ResourceId) && len(strings.SplitN(req.Destination.Path, "/", 3)) == 2)) &&
-		// and if the destination is a dot followed by a single path segment, e.g. './new'
-		isShareJailRoot(req.Destination.ResourceId) && len(strings.SplitN(req.Destination.Path, "/", 3)) == 2 {
+	if isRename(req.Source, req.Destination) {
 
 		// Change the MountPoint of the share, it has no relative prefix
 		srcReceivedShare.MountPoint = &provider.Reference{
@@ -633,6 +628,16 @@ func (s *service) Move(ctx context.Context, req *provider.MoveRequest) (*provide
 		Source:      buildReferenceInShare(req.Source, srcReceivedShare),
 		Destination: buildReferenceInShare(req.Destination, dstReceivedShare),
 	})
+}
+
+// isRename checks if the two references lie in the responsibility of the sharesstorageprovider and if a rename occurs
+func isRename(s, d *provider.Reference) bool {
+	// if the source is a share jail child where the path is .
+	return ((isShareJailChild(s.ResourceId) && s.Path == ".") ||
+		// or if the source is the share jail with a single path segment, e.g. './old'
+		(isShareJailRoot(s.ResourceId) && len(strings.SplitN(s.Path, "/", 3)) == 2)) &&
+		// and if the destination is the share jail a single path segment, e.g. './new'
+		isShareJailRoot(d.ResourceId) && len(strings.SplitN(d.Path, "/", 3)) == 2
 }
 
 func isShareJailRoot(id *provider.ResourceId) bool {
@@ -731,9 +736,13 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 		ArbitraryMetadataKeys: req.ArbitraryMetadataKeys,
 	})
 
-	// we need to rewrite the id if the request was made relative to the virtual space root?
-	// but won't that be problematic for eg. wopi because it needs the correct id?
-	// the web ui seems to continue navigating based on the id.
+	// FIXME when stating a share jail child we need to rewrite the id and use the share
+	// jail space id as the mountpoint has a different id than the grant
+	// but that might be problematic for eg. wopi because it needs the correct id? ...
+	// ... but that should stat the grant anyway
+
+	// FIXME when navigating via /dav/spaces/a0ca6a90-a365-4782-871e-d44447bbc668 the web ui seems
+	// to continue navigating based on the id of resources, causing the path to change. Is that related to WOPI?
 
 }
 
@@ -966,10 +975,7 @@ func (s *service) resolveAcceptedShare(ctx context.Context, ref *provider.Refere
 			case utils.ResourceIDEqual(ref.ResourceId, receivedShare.Share.ResourceId):
 				// we have a mount point
 				return receivedShare, lsRes.Status, nil
-			case utils.ResourceIDEqual(ref.ResourceId, &provider.ResourceId{
-				StorageId: utils.ShareStorageProviderID,
-				OpaqueId:  utils.ShareStorageProviderID,
-			}) && strings.HasPrefix(strings.TrimPrefix(ref.Path, "./"), receivedShare.MountPoint.Path):
+			case isShareJailRoot(ref.ResourceId) && strings.HasPrefix(strings.TrimPrefix(ref.Path, "./"), receivedShare.MountPoint.Path):
 				// we have a mount point referenced by the share jail id
 				return receivedShare, lsRes.Status, nil
 			default:
@@ -1071,7 +1077,7 @@ func findEarliestShare(receivedShares []*collaboration.ReceivedShare, shareMd ma
 
 func buildReferenceInShare(ref *provider.Reference, s *collaboration.ReceivedShare) *provider.Reference {
 	path := ref.Path
-	if isVirtualRootResourceID(ref.ResourceId) {
+	if isShareJailRoot(ref.ResourceId) {
 		// we need to cut off the mountpoint from the path in the request reference
 		path = utils.MakeRelativePath(strings.TrimPrefix(strings.TrimPrefix(path, "./"), s.MountPoint.Path))
 	}
@@ -1082,12 +1088,5 @@ func buildReferenceInShare(ref *provider.Reference, s *collaboration.ReceivedSha
 }
 
 func isVirtualRoot(ref *provider.Reference) bool {
-	return isVirtualRootResourceID(ref.ResourceId) && (ref.Path == "" || ref.Path == "." || ref.Path == "./")
-}
-
-func isVirtualRootResourceID(id *provider.ResourceId) bool {
-	return utils.ResourceIDEqual(id, &provider.ResourceId{
-		StorageId: utils.ShareStorageProviderID,
-		OpaqueId:  utils.ShareStorageProviderID,
-	})
+	return isShareJailRoot(ref.ResourceId) && (ref.Path == "" || ref.Path == "." || ref.Path == "./")
 }
