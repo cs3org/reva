@@ -33,6 +33,7 @@ import (
 const (
 	userPrefix       = "user:"
 	usernamePrefix   = "username:"
+	userIDPrefix     = "userid:"
 	namePrefix       = "name:"
 	mailPrefix       = "mail:"
 	uidPrefix        = "uid:"
@@ -155,6 +156,9 @@ func (m *manager) cacheUserDetails(u *userpb.User) error {
 		return err
 	}
 	if err = m.setVal(userPrefix+usernamePrefix+strings.ToLower(u.Id.OpaqueId), string(encodedUser), -1); err != nil {
+		return err
+	}
+	if err = m.setVal(userPrefix+userIDPrefix+strings.ToLower(u.Id.OpaqueId), string(encodedUser), -1); err != nil {
 		return err
 	}
 
