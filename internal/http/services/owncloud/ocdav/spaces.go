@@ -85,7 +85,7 @@ func (h *SpacesHandler) Handler(s *svc, trashbinHandler *TrashbinHandler) http.H
 			})
 			p.HandleSpacesPropfind(w, r, spaceID)
 		case MethodProppatch:
-			s.handleSpacesProppatch(w, r, spaceID)
+			status, err = s.handleSpacesProppatch(w, r, spaceID)
 		case MethodLock:
 			status, err = s.handleSpacesLock(w, r, spaceID)
 		case MethodUnlock:
