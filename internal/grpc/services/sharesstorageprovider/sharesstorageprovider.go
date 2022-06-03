@@ -178,6 +178,7 @@ func (s *service) InitiateFileDownload(ctx context.Context, req *provider.Initia
 	gwres, err := s.gateway.InitiateFileDownload(ctx, &provider.InitiateFileDownloadRequest{
 		Opaque: req.Opaque,
 		Ref:    buildReferenceInShare(req.Ref, receivedShare),
+		LockId: req.LockId,
 	})
 	if err != nil {
 		return nil, err
@@ -231,6 +232,7 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 	gwres, err := s.gateway.InitiateFileUpload(ctx, &provider.InitiateFileUploadRequest{
 		Opaque:  req.Opaque,
 		Ref:     buildReferenceInShare(req.Ref, receivedShare),
+		LockId:  req.LockId,
 		Options: req.Options,
 	})
 	if err != nil {
