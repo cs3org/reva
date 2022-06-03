@@ -63,15 +63,16 @@ type config struct {
 	TokenManager                  string `mapstructure:"token_manager"`
 	// ShareFolder is the location where to create shares in the recipient's storage provider.
 	// FIXME get rid of ShareFolder, there are findByPath calls in the ocmshareporvider.go and usershareprovider.go
-	ShareFolder         string                            `mapstructure:"share_folder"`
-	DataTransfersFolder string                            `mapstructure:"data_transfers_folder"`
-	HomeMapping         string                            `mapstructure:"home_mapping"`
-	TokenManagers       map[string]map[string]interface{} `mapstructure:"token_managers"`
-	EtagCacheTTL        int                               `mapstructure:"etag_cache_ttl"`
-	AllowedUserAgents   map[string][]string               `mapstructure:"allowed_user_agents"` // map[path][]user-agent
-	CreateHomeCacheTTL  int                               `mapstructure:"create_home_cache_ttl"`
-	ProviderCacheTTL    int                               `mapstructure:"provider_cache_ttl"`
-	StatCacheTTL        int                               `mapstructure:"stat_cache_ttl"`
+	ShareFolder                  string                            `mapstructure:"share_folder"`
+	DataTransfersFolder          string                            `mapstructure:"data_transfers_folder"`
+	HomeMapping                  string                            `mapstructure:"home_mapping"`
+	TokenManagers                map[string]map[string]interface{} `mapstructure:"token_managers"`
+	EtagCacheTTL                 int                               `mapstructure:"etag_cache_ttl"`
+	AllowedUserAgents            map[string][]string               `mapstructure:"allowed_user_agents"` // map[path][]user-agent
+	CreateHomeCacheTTL           int                               `mapstructure:"create_home_cache_ttl"`
+	ProviderCacheTTL             int                               `mapstructure:"provider_cache_ttl"`
+	StatCacheTTL                 int                               `mapstructure:"stat_cache_ttl"`
+	UseCommonSpaceRootShareLogic bool                              `mapstructure:"use_common_space_root_share_logic"`
 	// MountCacheTTL       int                               `mapstructure:"mount_cache_ttl"`
 }
 

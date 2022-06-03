@@ -39,6 +39,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/publicshare"
 	"github.com/cs3org/reva/v2/pkg/publicshare/manager/registry"
+	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
@@ -133,7 +134,7 @@ func (m *manager) CreatePublicShare(ctx context.Context, u *user.User, rInfo *pr
 	owner := conversions.FormatUserID(rInfo.Owner)
 	permissions := conversions.SharePermToInt(g.Permissions.Permissions)
 	itemType := conversions.ResourceTypeToItem(rInfo.Type)
-	prefix := rInfo.Id.StorageId
+	prefix, _ := storagespace.SplitStorageID(rInfo.Id.StorageId)
 	itemSource := rInfo.Id.OpaqueId
 	fileSource, err := strconv.ParseUint(itemSource, 10, 64)
 	if err != nil {
@@ -311,33 +312,44 @@ func (m *manager) GetPublicShare(ctx context.Context, u *user.User, ref *link.Pu
 func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []*link.ListPublicSharesRequest_Filter, sign bool) ([]*link.PublicShare, error) {
 	uid := conversions.FormatUserID(u.Id)
 	query := "select coalesce(uid_owner, '') as uid_owner, coalesce(uid_initiator, '') as uid_initiator, coalesce(share_with, '') as share_with, coalesce(fileid_prefix, '') as fileid_prefix, coalesce(item_source, '') as item_source, coalesce(item_type, '') as item_type, coalesce(token,'') as token, coalesce(expiration, '') as expiration, coalesce(share_name, '') as share_name, id, stime, permissions FROM oc_share WHERE (orphan = 0 or orphan IS NULL) AND (uid_owner=? or uid_initiator=?) AND (share_type=?)"
-	var filterQuery string
+	var resourceFilters, ownerFilters, creatorFilters string
+	var resourceParams, ownerParams, creatorParams []interface{}
 	params := []interface{}{uid, uid, publicShareType}
 
-	for i, f := range filters {
+	for _, f := range filters {
 		switch f.Type {
 		case link.ListPublicSharesRequest_Filter_TYPE_RESOURCE_ID:
-			filterQuery += "(fileid_prefix=? AND item_source=?)"
-			if i != len(filters)-1 {
-				filterQuery += " AND "
+			if len(resourceFilters) != 0 {
+				resourceFilters += " OR "
 			}
-			params = append(params, f.GetResourceId().StorageId, f.GetResourceId().OpaqueId)
+			resourceFilters += "(fileid_prefix=? AND item_source=?)"
+			prefix, _ := storagespace.SplitStorageID(f.GetResourceId().StorageId)
+			resourceParams = append(resourceParams, prefix, f.GetResourceId().OpaqueId)
 		case link.ListPublicSharesRequest_Filter_TYPE_OWNER:
-			filterQuery += "(uid_owner=?)"
-			if i != len(filters)-1 {
-				filterQuery += " AND "
+			if len(ownerFilters) != 0 {
+				ownerFilters += " OR "
 			}
-			params = append(params, conversions.FormatUserID(f.GetOwner()))
+			ownerFilters += "(uid_owner=?)"
+			ownerParams = append(ownerParams, conversions.FormatUserID(f.GetOwner()))
 		case link.ListPublicSharesRequest_Filter_TYPE_CREATOR:
-			filterQuery += "(uid_initiator=?)"
-			if i != len(filters)-1 {
-				filterQuery += " AND "
+			if len(creatorFilters) != 0 {
+				creatorFilters += " OR "
 			}
-			params = append(params, conversions.FormatUserID(f.GetCreator()))
+			creatorFilters += "(uid_initiator=?)"
+			creatorParams = append(creatorParams, conversions.FormatUserID(f.GetCreator()))
 		}
 	}
-	if filterQuery != "" {
-		query = fmt.Sprintf("%s AND (%s)", query, filterQuery)
+	if resourceFilters != "" {
+		query = fmt.Sprintf("%s AND (%s)", query, resourceFilters)
+		params = append(params, resourceParams...)
+	}
+	if ownerFilters != "" {
+		query = fmt.Sprintf("%s AND (%s)", query, ownerFilters)
+		params = append(params, ownerParams...)
+	}
+	if creatorFilters != "" {
+		query = fmt.Sprintf("%s AND (%s)", query, creatorFilters)
+		params = append(params, creatorParams...)
 	}
 
 	rows, err := m.db.Query(query, params...)

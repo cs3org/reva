@@ -20,12 +20,14 @@ package eosfs
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/url"
 	"os"
 	"path"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -54,6 +56,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/chunking"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/grants"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/templates"
+	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/pkg/errors"
 )
 
@@ -141,9 +144,11 @@ type eosfs struct {
 	c              eosclient.EOSClient
 	conf           *Config
 	chunkHandler   *chunking.ChunkHandler
+	spacesDB       *sql.DB
 	singleUserAuth eosclient.Authorization
 	userIDCache    *ttlcache.Cache
 	tokenCache     gcache.Cache
+	spacesCache    gcache.Cache
 }
 
 // NewEOSFS returns a storage.FS interface implementation that connects to an EOS instance
@@ -207,12 +212,22 @@ func NewEOSFS(c *Config) (storage.FS, error) {
 		return nil, errors.Wrap(err, "error initializing eosclient")
 	}
 
+	var db *sql.DB
+	if c.SpacesConfig.Enabled {
+		db, err = sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%d)/%s", c.SpacesConfig.DbUsername, c.SpacesConfig.DbPassword, c.SpacesConfig.DbHost, c.SpacesConfig.DbPort, c.SpacesConfig.DbName))
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	eosfs := &eosfs{
 		c:            eosClient,
 		conf:         c,
+		spacesDB:     db,
 		chunkHandler: chunking.NewChunkHandler(c.CacheDirectory),
 		userIDCache:  ttlcache.NewCache(),
 		tokenCache:   gcache.New(c.UserIDCacheSize).LFU().Build(),
+		spacesCache:  gcache.New(c.UserIDCacheSize).LFU().Build(),
 	}
 
 	eosfs.userIDCache.SetCacheSizeLimit(c.UserIDCacheSize)
@@ -305,6 +320,7 @@ func (fs *eosfs) wrapShadow(ctx context.Context, fn string) (internal string) {
 }
 
 func (fs *eosfs) wrap(ctx context.Context, fn string) (internal string) {
+	fn = strings.TrimPrefix(fn, fs.conf.MountPath)
 	if fs.conf.EnableHome {
 		layout, err := fs.getInternalHome(ctx)
 		if err != nil {
@@ -493,7 +509,11 @@ func (fs *eosfs) GetPathByID(ctx context.Context, id *provider.ResourceId) (stri
 		return "", errors.Wrap(err, "eosfs: error getting file info by inode")
 	}
 
-	return fs.unwrap(ctx, eosFileInfo.File)
+	p, err := fs.unwrap(ctx, eosFileInfo.File)
+	if err != nil {
+		return "", err
+	}
+	return path.Join(fs.conf.MountPath, p), nil
 }
 
 func (fs *eosfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Reference, md *provider.ArbitraryMetadata) error {
@@ -782,6 +802,8 @@ func (fs *eosfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []st
 	}
 
 	fn := ""
+	p := ref.Path
+
 	if u.Id.Type == userpb.UserType_USER_TYPE_LIGHTWEIGHT ||
 		u.Id.Type == userpb.UserType_USER_TYPE_FEDERATED {
 		p, err := fs.resolve(ctx, ref)
@@ -797,6 +819,9 @@ func (fs *eosfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []st
 		return nil, err
 	}
 
+	// We handle the case when resource ID is set to avoid making duplicate calls to EOS.
+	// In the previous workflow, we would have called the resolve() method which would return
+	// the path and then we'll stat the path.
 	if ref.ResourceId != nil {
 		fid, err := strconv.ParseUint(ref.ResourceId.OpaqueId, 10, 64)
 		if err != nil {
@@ -807,10 +832,19 @@ func (fs *eosfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []st
 		if err != nil {
 			return nil, err
 		}
-		return fs.convertToResourceInfo(ctx, eosFileInfo)
-	}
 
-	p := ref.Path
+		// If it's not a relative reference, return now, else we need to append the path
+		if !utils.IsRelativeReference(ref) {
+			return fs.convertToResourceInfo(ctx, eosFileInfo)
+		}
+
+		parent, err := fs.unwrap(ctx, eosFileInfo.File)
+		if err != nil {
+			return nil, err
+		}
+
+		p = path.Join(parent, p)
+	}
 
 	// if path is home we need to add in the response any shadow folder in the shadow homedirectory.
 	if fs.conf.EnableHome {
@@ -994,20 +1028,32 @@ func (fs *eosfs) listShareFolderRoot(ctx context.Context, p string) (finfos []*p
 	return finfos, nil
 }
 
-// CreateStorageSpace creates a storage space
-func (fs *eosfs) CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error) {
-	return nil, errtypes.NotSupported("unimplemented: CreateStorageSpace")
-}
-
 func (fs *eosfs) GetQuota(ctx context.Context, ref *provider.Reference) (uint64, uint64, uint64, error) {
+	// Check if the quota request is for the user's home or a project space
 	u, err := getUser(ctx)
 	if err != nil {
 		return 0, 0, 0, errors.Wrap(err, "eosfs: no user in ctx")
 	}
-	// lightweight accounts don't have quota nodes, so we're passing an empty string as path
-	auth, err := fs.getUserAuth(ctx, u, "")
-	if err != nil {
-		return 0, 0, 0, errors.Wrap(err, "eosfs: error getting uid and gid for user")
+
+	// If the quota request is for a resource different than the user home,
+	// we impersonate the owner in that case
+	uid := strconv.FormatInt(u.UidNumber, 10)
+	if ref.ResourceId != nil {
+		fid, err := strconv.ParseUint(ref.ResourceId.OpaqueId, 10, 64)
+		if err != nil {
+			return 0, 0, 0, fmt.Errorf("error converting string to int for eos fileid: %s", ref.ResourceId.OpaqueId)
+		}
+
+		// lightweight accounts don't have quota nodes, so we're passing an empty string as path
+		auth, err := fs.getUserAuth(ctx, u, "")
+		if err != nil {
+			return 0, 0, 0, errors.Wrap(err, "eosfs: error getting uid and gid for user")
+		}
+		eosFileInfo, err := fs.c.GetFileInfoByInode(ctx, auth, fid)
+		if err != nil {
+			return 0, 0, 0, err
+		}
+		uid = strconv.FormatUint(eosFileInfo.UID, 10)
 	}
 
 	rootAuth, err := fs.getRootAuth(ctx)
@@ -1015,7 +1061,7 @@ func (fs *eosfs) GetQuota(ctx context.Context, ref *provider.Reference) (uint64,
 		return 0, 0, 0, err
 	}
 
-	qi, err := fs.c.GetQuota(ctx, auth.Role.UID, rootAuth, fs.conf.QuotaNode)
+	qi, err := fs.c.GetQuota(ctx, uid, rootAuth, fs.conf.QuotaNode)
 	if err != nil {
 		err := errors.Wrap(err, "eosfs: error getting quota")
 		return 0, 0, 0, err
@@ -1035,7 +1081,7 @@ func (fs *eosfs) GetHome(ctx context.Context) (string, error) {
 	return "/", nil
 }
 
-func (fs *eosfs) createShadowHome(ctx context.Context) error {
+func (fs *eosfs) createShadowHome(ctx context.Context, home string) error {
 	u, err := getUser(ctx)
 	if err != nil {
 		return errors.Wrap(err, "eosfs: no user in ctx")
@@ -1044,7 +1090,6 @@ func (fs *eosfs) createShadowHome(ctx context.Context) error {
 	if err != nil {
 		return nil
 	}
-	home := fs.wrapShadow(ctx, "/")
 	shadowFolders := []string{fs.conf.ShareFolder}
 
 	for _, sf := range shadowFolders {
@@ -1064,9 +1109,7 @@ func (fs *eosfs) createShadowHome(ctx context.Context) error {
 	return nil
 }
 
-func (fs *eosfs) createNominalHome(ctx context.Context) error {
-	home := fs.wrap(ctx, "/")
-
+func (fs *eosfs) createNominalHome(ctx context.Context, home string) error {
 	u, err := getUser(ctx)
 	if err != nil {
 		return errors.Wrap(err, "eosfs: no user in ctx")
@@ -1120,11 +1163,11 @@ func (fs *eosfs) CreateHome(ctx context.Context) error {
 		return errtypes.NotSupported("eosfs: create home not supported")
 	}
 
-	if err := fs.createNominalHome(ctx); err != nil {
+	if err := fs.createNominalHome(ctx, fs.wrap(ctx, "/")); err != nil {
 		return errors.Wrap(err, "eosfs: error creating nominal home")
 	}
 
-	if err := fs.createShadowHome(ctx); err != nil {
+	if err := fs.createShadowHome(ctx, fs.wrapShadow(ctx, "/")); err != nil {
 		return errors.Wrap(err, "eosfs: error creating shadow home")
 	}
 
@@ -1603,25 +1646,12 @@ func (fs *eosfs) RestoreRecycleItem(ctx context.Context, ref *provider.Reference
 	return fs.c.RestoreDeletedEntry(ctx, auth, key)
 }
 
-func (fs *eosfs) ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter, unrestricted bool) ([]*provider.StorageSpace, error) {
-	return nil, errtypes.NotSupported("list storage spaces")
-}
-
-// UpdateStorageSpace updates a storage space
-func (fs *eosfs) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
-	return nil, errtypes.NotSupported("update storage space")
-}
-
-// DeleteStorageSpace deletes a storage space
-func (fs *eosfs) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorageSpaceRequest) error {
-	return errtypes.NotSupported("delete storage space")
-}
-
 func (fs *eosfs) convertToRecycleItem(ctx context.Context, eosDeletedItem *eosclient.DeletedEntry) (*provider.RecycleItem, error) {
 	path, err := fs.unwrap(ctx, eosDeletedItem.RestorePath)
 	if err != nil {
 		return nil, err
 	}
+
 	recycleItem := &provider.RecycleItem{
 		Ref:          &provider.Reference{Path: path},
 		Key:          eosDeletedItem.RestoreKey,
@@ -1758,6 +1788,7 @@ func (fs *eosfs) convert(ctx context.Context, eosFileInfo *eosclient.FileInfo) (
 	if err != nil {
 		return nil, err
 	}
+	path = filepath.Join(fs.conf.MountPath, path)
 
 	size := eosFileInfo.Size
 	if eosFileInfo.IsDir {

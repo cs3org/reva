@@ -22,6 +22,7 @@ import (
 	"bytes"
 	"context"
 	"io"
+	"path"
 	"strings"
 	"text/template"
 
@@ -32,6 +33,8 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage"
 	"github.com/cs3org/reva/v2/pkg/storage/fs/registry"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/eosfs"
+	"github.com/cs3org/reva/v2/pkg/storagespace"
+	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )
@@ -101,7 +104,7 @@ func New(m map[string]interface{}) (storage.FS, error) {
 	return &wrapper{FS: eos, conf: c, mountIDTemplate: mountIDTemplate}, nil
 }
 
-// We need to override the two methods, GetMD and ListFolder to fill the
+// We need to override the methods, GetMD, GetPathByID and ListFolder to fill the
 // StorageId in the ResourceInfo objects.
 
 func (w *wrapper) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []string) (*provider.ResourceInfo, error) {
@@ -115,13 +118,18 @@ func (w *wrapper) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []s
 	// Take the first letter of the resource path after the namespace has been removed.
 	// If it's empty, leave it empty to be filled by storageprovider.
 	res.Id.StorageId = w.getMountID(ctx, res)
+	res.Id.StorageId = storagespace.FormatStorageID(res.Id.StorageId, res.Id.OpaqueId)
 
 	if err = w.setProjectSharingPermissions(ctx, res); err != nil {
 		return nil, err
 	}
 
-	return res, nil
+	// If the request contains a relative reference, we also need to return the base path instead of the full one
+	if utils.IsRelativeReference(ref) {
+		res.Path = path.Base(res.Path)
+	}
 
+	return res, nil
 }
 
 func (w *wrapper) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys []string) ([]*provider.ResourceInfo, error) {
@@ -131,11 +139,53 @@ func (w *wrapper) ListFolder(ctx context.Context, ref *provider.Reference, mdKey
 	}
 	for _, r := range res {
 		r.Id.StorageId = w.getMountID(ctx, r)
+		r.Id.StorageId = storagespace.FormatStorageID(r.Id.StorageId, r.Id.OpaqueId)
+
+		// If the request contains a relative reference, we also need to return the base path instead of the full one
+		if utils.IsRelativeReference(ref) {
+			r.Path = path.Base(r.Path)
+		}
+
 		if err = w.setProjectSharingPermissions(ctx, r); err != nil {
 			continue
 		}
 	}
 	return res, nil
+}
+
+func (w *wrapper) ListRecycle(ctx context.Context, ref *provider.Reference, key, relativePath string) ([]*provider.RecycleItem, error) {
+	res, err := w.FS.ListRecycle(ctx, ref, key, relativePath)
+	if err != nil {
+		return nil, err
+	}
+
+	// If the request contains a relative reference, we also need to return the base path instead of the full one
+	if utils.IsRelativeReference(ref) {
+		for _, info := range res {
+			info.Ref.Path = path.Base(info.Ref.Path)
+		}
+	}
+
+	return res, nil
+
+}
+
+func (w *wrapper) ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter, unrestricted bool) ([]*provider.StorageSpace, error) {
+	res, err := w.FS.ListStorageSpaces(ctx, filter, unrestricted)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, r := range res {
+		if mountID, _ := storagespace.SplitStorageID(r.Id.OpaqueId); mountID == "" {
+			mountID = w.getMountID(ctx, &provider.ResourceInfo{Path: r.Name})
+
+			r.Root.StorageId = storagespace.FormatStorageID(mountID, r.Root.StorageId)
+			r.Id.OpaqueId = storagespace.FormatStorageID(mountID, r.Id.OpaqueId)
+		}
+	}
+	return res, nil
+
 }
 
 func (w *wrapper) ListRevisions(ctx context.Context, ref *provider.Reference) ([]*provider.FileVersion, error) {
@@ -178,10 +228,12 @@ func (w *wrapper) getMountID(ctx context.Context, r *provider.ResourceInfo) stri
 	if r == nil {
 		return ""
 	}
+	r.Path = strings.TrimPrefix(r.Path, w.conf.MountPath)
 	b := bytes.Buffer{}
 	if err := w.mountIDTemplate.Execute(&b, r); err != nil {
 		return ""
 	}
+	r.Path = path.Join(w.conf.MountPath, r.Path)
 	return b.String()
 }
 

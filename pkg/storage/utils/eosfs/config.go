@@ -23,6 +23,9 @@ type Config struct {
 	// Namespace for metadata operations
 	Namespace string `mapstructure:"namespace"`
 
+	// The root at which the file system is mounted
+	MountPath string `mapstructure:"mount_path"`
+
 	// QuotaNode for storing quota information
 	QuotaNode string `mapstructure:"quota_node"`
 
@@ -167,5 +170,7 @@ type Config struct {
 
 	// TokenExpiry stores in seconds the time after which generated tokens will expire
 	// Default is 3600
-	TokenExpiry int
+	TokenExpiry int `mapstructure:"token_expiry"`
+
+	SpacesConfig SpacesConfig `mapstructure:"spaces_config"`
 }

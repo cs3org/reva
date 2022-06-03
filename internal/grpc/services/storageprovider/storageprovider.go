@@ -498,8 +498,7 @@ func (s *service) CreateStorageSpace(ctx context.Context, req *provider.CreateSt
 	}
 
 	if resp.StorageSpace != nil {
-		resp.StorageSpace.Id.OpaqueId = storagespace.FormatStorageID(s.conf.MountID, resp.StorageSpace.Id.GetOpaqueId())
-		resp.StorageSpace.Root.StorageId = storagespace.FormatStorageID(s.conf.MountID, resp.StorageSpace.Root.GetStorageId())
+		s.addMissingStorageProviderID(resp.StorageSpace.Root, resp.StorageSpace.Id)
 	}
 	return resp, nil
 }
@@ -509,7 +508,8 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 		if f.Type == provider.ListStorageSpacesRequest_Filter_TYPE_ID {
 			_, id := storagespace.SplitStorageID(f.GetId().GetOpaqueId())
 			req.Filters[i].Term = &provider.ListStorageSpacesRequest_Filter_Id{Id: &provider.StorageSpaceId{OpaqueId: id}}
-			break
+		} else if f.Type == provider.ListStorageSpacesRequest_Filter_TYPE_PATH {
+			req.Filters[i].Term = &provider.ListStorageSpacesRequest_Filter_Path{Path: f.GetPath()}
 		}
 	}
 
@@ -551,8 +551,8 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 			log.Error().Str("service", "storageprovider").Str("driver", s.conf.Driver).Interface("space", sp).Msg("space is missing space id and root id")
 			continue
 		}
-		sp.Id.OpaqueId = storagespace.FormatStorageID(s.conf.MountID, sp.Id.GetOpaqueId())
-		sp.Root.StorageId = storagespace.FormatStorageID(s.conf.MountID, sp.Root.GetStorageId())
+
+		s.addMissingStorageProviderID(sp.Root, sp.Id)
 	}
 
 	return &provider.ListStorageSpacesResponse{
@@ -577,8 +577,7 @@ func (s *service) UpdateStorageSpace(ctx context.Context, req *provider.UpdateSt
 		return nil, err
 	}
 	if res.StorageSpace != nil {
-		res.StorageSpace.Id.OpaqueId = storagespace.FormatStorageID(s.conf.MountID, res.StorageSpace.Id.GetOpaqueId())
-		res.StorageSpace.Root.StorageId = storagespace.FormatStorageID(s.conf.MountID, res.StorageSpace.Root.GetStorageId())
+		s.addMissingStorageProviderID(res.StorageSpace.Root, res.StorageSpace.Id)
 	}
 	return res, nil
 }
@@ -687,7 +686,7 @@ func (s *service) Delete(ctx context.Context, req *provider.DeleteRequest) (*pro
 		Status: status.NewStatusFromErrType(ctx, "delete", err),
 		Opaque: &typesv1beta1.Opaque{
 			Map: map[string]*typesv1beta1.OpaqueEntry{
-				"opaque_id": &typesv1beta1.OpaqueEntry{Decoder: "plain", Value: []byte(md.Id.OpaqueId)},
+				"opaque_id": {Decoder: "plain", Value: []byte(md.Id.OpaqueId)},
 			},
 		},
 	}, nil
@@ -727,10 +726,15 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 		}, nil
 	}
 
-	if providerID == "" {
-		providerID = s.conf.MountID
+	// The storage driver might set the mount ID by itself, in which case skip this step
+	if mountID, _ := storagespace.SplitStorageID(md.Id.GetStorageId()); mountID == "" {
+		if providerID == "" {
+			providerID = s.conf.MountID
+		}
+
+		md.Id.StorageId = storagespace.FormatStorageID(providerID, md.Id.GetStorageId())
 	}
-	md.Id.StorageId = storagespace.FormatStorageID(providerID, md.Id.GetStorageId())
+
 	return &provider.StatResponse{
 		Status: status.NewOK(ctx),
 		Info:   md,
@@ -771,6 +775,7 @@ func (s *service) ListContainerStream(req *provider.ListContainerStreamRequest, 
 	}
 
 	for _, md := range mds {
+		s.addMissingStorageProviderID(md.Id, nil)
 		res := &provider.ListContainerStreamResponse{
 			Info:   md,
 			Status: status.NewOK(ctx),
@@ -798,7 +803,7 @@ func (s *service) ListContainer(ctx context.Context, req *provider.ListContainer
 	}
 
 	for _, i := range res.Infos {
-		i.Id.StorageId = storagespace.FormatStorageID(s.conf.MountID, i.Id.GetStorageId())
+		s.addMissingStorageProviderID(i.Id, nil)
 	}
 	return res, nil
 }
@@ -867,6 +872,9 @@ func (s *service) ListRecycleStream(req *provider.ListRecycleStreamRequest, ss p
 
 	// TODO(labkode): CRITICAL: fill recycle info with storage provider.
 	for _, item := range items {
+		if item.Ref != nil && item.Ref.ResourceId != nil {
+			s.addMissingStorageProviderID(item.Ref.GetResourceId(), nil)
+		}
 		res := &provider.ListRecycleStreamResponse{
 			RecycleItem: item,
 			Status:      status.NewOK(ctx),
@@ -909,7 +917,7 @@ func (s *service) ListRecycle(ctx context.Context, req *provider.ListRecycleRequ
 
 	for _, i := range items {
 		if i.Ref != nil && i.Ref.ResourceId != nil {
-			i.Ref.ResourceId.StorageId = storagespace.FormatStorageID(s.conf.MountID, i.Ref.GetResourceId().GetStorageId())
+			s.addMissingStorageProviderID(i.Ref.GetResourceId(), nil)
 		}
 	}
 	res := &provider.ListRecycleResponse{
@@ -1222,6 +1230,16 @@ func (s *service) GetQuota(ctx context.Context, req *provider.GetQuotaRequest) (
 		UsedBytes:  used,
 	}
 	return res, nil
+}
+
+func (s *service) addMissingStorageProviderID(resourceID *provider.ResourceId, spaceID *provider.StorageSpaceId) {
+	// The storage driver might set the mount ID by itself, in which case skip this step
+	if mountID, _ := storagespace.SplitStorageID(resourceID.GetStorageId()); mountID == "" {
+		resourceID.StorageId = storagespace.FormatStorageID(s.conf.MountID, resourceID.GetStorageId())
+		if spaceID != nil {
+			spaceID.OpaqueId = storagespace.FormatStorageID(s.conf.MountID, spaceID.GetOpaqueId())
+		}
+	}
 }
 
 func getFS(c *config) (storage.FS, error) {

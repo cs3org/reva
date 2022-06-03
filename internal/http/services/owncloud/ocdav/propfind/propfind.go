@@ -187,7 +187,6 @@ func (p *Handler) HandlePathPropfind(w http.ResponseWriter, r *http.Request, ns 
 	fn := path.Join(ns, r.URL.Path) // TODO do we still need to jail if we query the registry about the spaces?
 
 	sublog := appctx.GetLogger(ctx).With().Str("path", fn).Logger()
-
 	pf, status, err := ReadPropfind(r.Body)
 	if err != nil {
 		sublog.Debug().Err(err).Msg("error reading propfind request")
