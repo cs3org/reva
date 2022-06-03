@@ -43,74 +43,11 @@ import (
 )
 
 var (
-	ShareJail = &sprovider.ResourceId{
-		StorageId: utils.ShareStorageProviderID,
-		OpaqueId:  utils.ShareStorageProviderID,
-	}
-
-	BaseShare = &collaboration.ReceivedShare{
-		State: collaboration.ShareState_SHARE_STATE_ACCEPTED,
-		Share: &collaboration.Share{
-			Id: &collaboration.ShareId{
-				OpaqueId: "shareid",
-			},
-			ResourceId: &sprovider.ResourceId{
-				StorageId: utils.ShareStorageProviderID,
-				OpaqueId:  "shareddir",
-			},
-			Permissions: &collaboration.SharePermissions{
-				Permissions: &sprovider.ResourcePermissions{
-					Stat:          true,
-					ListContainer: true,
-				},
-			},
-		},
-		MountPoint: &sprovider.Reference{
-			Path: "oldname",
-		},
-	}
-
-	BaseShareTwo = &collaboration.ReceivedShare{
-		State: collaboration.ShareState_SHARE_STATE_ACCEPTED,
-		Share: &collaboration.Share{
-			Id: &collaboration.ShareId{
-				OpaqueId: "shareidtwo",
-			},
-			ResourceId: &sprovider.ResourceId{
-				StorageId: utils.ShareStorageProviderID,
-				OpaqueId:  "shareddir",
-			},
-			Permissions: &collaboration.SharePermissions{
-				Permissions: &sprovider.ResourcePermissions{
-					Stat:          true,
-					ListContainer: true,
-				},
-			},
-		},
-		MountPoint: &sprovider.Reference{
-			Path: "",
-		},
-	}
-
-	BaseStatRequest = &sprovider.StatRequest{
-		Ref: &sprovider.Reference{
-			ResourceId: &sprovider.ResourceId{
-				StorageId: utils.ShareStorageProviderID,
-				OpaqueId:  "shareddir",
-			},
-			Path: ".",
-		},
-	}
-
-	BaseListContainerRequest = &sprovider.ListContainerRequest{
-		Ref: &sprovider.Reference{
-			ResourceId: &sprovider.ResourceId{
-				StorageId: utils.ShareStorageProviderID,
-				OpaqueId:  "shareddir",
-			},
-			Path: ".",
-		},
-	}
+	ShareJail                *sprovider.ResourceId
+	BaseShare                *collaboration.ReceivedShare
+	BaseShareTwo             *collaboration.ReceivedShare
+	BaseStatRequest          *sprovider.StatRequest
+	BaseListContainerRequest *sprovider.ListContainerRequest
 )
 
 var _ = Describe("Sharesstorageprovider", func() {
@@ -135,6 +72,75 @@ var _ = Describe("Sharesstorageprovider", func() {
 	)
 
 	BeforeEach(func() {
+		ShareJail = &sprovider.ResourceId{
+			StorageId: utils.ShareStorageProviderID,
+			OpaqueId:  utils.ShareStorageProviderID,
+		}
+
+		BaseShare = &collaboration.ReceivedShare{
+			State: collaboration.ShareState_SHARE_STATE_ACCEPTED,
+			Share: &collaboration.Share{
+				Id: &collaboration.ShareId{
+					OpaqueId: "shareid",
+				},
+				ResourceId: &sprovider.ResourceId{
+					StorageId: utils.ShareStorageProviderID,
+					OpaqueId:  "shareddir",
+				},
+				Permissions: &collaboration.SharePermissions{
+					Permissions: &sprovider.ResourcePermissions{
+						Stat:          true,
+						ListContainer: true,
+					},
+				},
+			},
+			MountPoint: &sprovider.Reference{
+				Path: "oldname",
+			},
+		}
+
+		BaseShareTwo = &collaboration.ReceivedShare{
+			State: collaboration.ShareState_SHARE_STATE_ACCEPTED,
+			Share: &collaboration.Share{
+				Id: &collaboration.ShareId{
+					OpaqueId: "shareidtwo",
+				},
+				ResourceId: &sprovider.ResourceId{
+					StorageId: utils.ShareStorageProviderID,
+					OpaqueId:  "shareddir",
+				},
+				Permissions: &collaboration.SharePermissions{
+					Permissions: &sprovider.ResourcePermissions{
+						Stat:          true,
+						ListContainer: true,
+					},
+				},
+			},
+			MountPoint: &sprovider.Reference{
+				Path: "",
+			},
+		}
+
+		BaseStatRequest = &sprovider.StatRequest{
+			Ref: &sprovider.Reference{
+				ResourceId: &sprovider.ResourceId{
+					StorageId: utils.ShareStorageProviderID,
+					OpaqueId:  "shareddir",
+				},
+				Path: ".",
+			},
+		}
+
+		BaseListContainerRequest = &sprovider.ListContainerRequest{
+			Ref: &sprovider.Reference{
+				ResourceId: &sprovider.ResourceId{
+					StorageId: utils.ShareStorageProviderID,
+					OpaqueId:  "shareddir",
+				},
+				Path: ".",
+			},
+		}
+
 		sharesProviderClient = &cs3mocks.CollaborationAPIClient{}
 
 		gw = &cs3mocks.GatewayAPIClient{}
@@ -242,9 +248,6 @@ var _ = Describe("Sharesstorageprovider", func() {
 				}
 			}, nil)
 
-		// reset share state and mount point
-		BaseShare.MountPoint = &sprovider.Reference{Path: "oldname"}
-		BaseShare.State = collaboration.ShareState_SHARE_STATE_ACCEPTED
 	})
 
 	JustBeforeEach(func() {
