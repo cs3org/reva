@@ -28,6 +28,7 @@ import (
 	"strings"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	sprovider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
@@ -275,6 +276,32 @@ var _ = Describe("Propfind", func() {
 				return &link.ListPublicSharesResponse{
 					Status: status.NewOK(ctx),
 					Share:  shares,
+				}
+			}, nil)
+
+		client.On("ListShares", mock.Anything, mock.Anything).Return(
+			func(_ context.Context, req *collaboration.ListSharesRequest, _ ...grpc.CallOption) *collaboration.ListSharesResponse {
+
+				var shares []*collaboration.Share
+				if len(req.Filters) == 0 {
+					shares = []*collaboration.Share{}
+				} else {
+					term := req.Filters[0].Term.(*collaboration.Filter_ResourceId)
+					switch {
+					case term != nil && term.ResourceId != nil && term.ResourceId.OpaqueId == "foospacebar":
+						shares = []*collaboration.Share{
+							{
+								Id:         &collaboration.ShareId{OpaqueId: "share1"},
+								ResourceId: &sprovider.ResourceId{StorageId: "foospace", OpaqueId: "foospacebar"},
+							},
+						}
+					default:
+						shares = []*collaboration.Share{}
+					}
+				}
+				return &collaboration.ListSharesResponse{
+					Status: status.NewOK(ctx),
+					Shares: shares,
 				}
 			}, nil)
 	})
