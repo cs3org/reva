@@ -109,7 +109,7 @@ func (s *service) SetArbitraryMetadata(ctx context.Context, req *provider.SetArb
 		_, req.Ref.ResourceId.StorageId = storagespace.SplitStorageID(req.Ref.ResourceId.StorageId)
 	}
 
-	receivedShare, rpcStatus, err := s.resolveReference(ctx, req.Ref)
+	receivedShare, rpcStatus, err := s.resolveAcceptedShare(ctx, req.Ref)
 	appctx.GetLogger(ctx).Debug().
 		Interface("ref", req.Ref).
 		Interface("received_share", receivedShare).
@@ -117,17 +117,15 @@ func (s *service) SetArbitraryMetadata(ctx context.Context, req *provider.SetArb
 	if err != nil {
 		return nil, err
 	}
-	if rpcStatus != nil {
+	if rpcStatus.Code != rpc.Code_CODE_OK {
 		return &provider.SetArbitraryMetadataResponse{
 			Status: rpcStatus,
 		}, nil
 	}
 
 	return s.gateway.SetArbitraryMetadata(ctx, &provider.SetArbitraryMetadataRequest{
-		Ref: &provider.Reference{
-			ResourceId: receivedShare.Share.ResourceId,
-			Path:       req.Ref.Path,
-		},
+		Opaque:            req.Opaque,
+		Ref:               buildReferenceInShare(req.Ref, receivedShare),
 		ArbitraryMetadata: req.ArbitraryMetadata,
 	})
 }
@@ -137,7 +135,7 @@ func (s *service) UnsetArbitraryMetadata(ctx context.Context, req *provider.Unse
 		_, req.Ref.ResourceId.StorageId = storagespace.SplitStorageID(req.Ref.ResourceId.StorageId)
 	}
 
-	receivedShare, rpcStatus, err := s.resolveReference(ctx, req.Ref)
+	receivedShare, rpcStatus, err := s.resolveAcceptedShare(ctx, req.Ref)
 	appctx.GetLogger(ctx).Debug().
 		Interface("ref", req.Ref).
 		Interface("received_share", receivedShare).
@@ -145,17 +143,15 @@ func (s *service) UnsetArbitraryMetadata(ctx context.Context, req *provider.Unse
 	if err != nil {
 		return nil, err
 	}
-	if rpcStatus != nil {
+	if rpcStatus.Code != rpc.Code_CODE_OK {
 		return &provider.UnsetArbitraryMetadataResponse{
 			Status: rpcStatus,
 		}, nil
 	}
 
 	return s.gateway.UnsetArbitraryMetadata(ctx, &provider.UnsetArbitraryMetadataRequest{
-		Ref: &provider.Reference{
-			ResourceId: receivedShare.Share.ResourceId,
-			Path:       req.Ref.Path,
-		},
+		Opaque:                req.Opaque,
+		Ref:                   buildReferenceInShare(req.Ref, receivedShare),
 		ArbitraryMetadataKeys: req.ArbitraryMetadataKeys,
 	})
 }
@@ -165,7 +161,7 @@ func (s *service) InitiateFileDownload(ctx context.Context, req *provider.Initia
 		_, req.Ref.ResourceId.StorageId = storagespace.SplitStorageID(req.Ref.ResourceId.StorageId)
 	}
 
-	receivedShare, rpcStatus, err := s.resolveReference(ctx, req.Ref)
+	receivedShare, rpcStatus, err := s.resolveAcceptedShare(ctx, req.Ref)
 	appctx.GetLogger(ctx).Debug().
 		Interface("ref", req.Ref).
 		Interface("received_share", receivedShare).
@@ -173,17 +169,16 @@ func (s *service) InitiateFileDownload(ctx context.Context, req *provider.Initia
 	if err != nil {
 		return nil, err
 	}
-	if rpcStatus != nil {
+	if rpcStatus.Code != rpc.Code_CODE_OK {
 		return &provider.InitiateFileDownloadResponse{
 			Status: rpcStatus,
 		}, nil
 	}
+
 	gwres, err := s.gateway.InitiateFileDownload(ctx, &provider.InitiateFileDownloadRequest{
-		Ref: &provider.Reference{
-			ResourceId: receivedShare.Share.ResourceId,
-			Path:       req.Ref.Path,
-		},
 		Opaque: req.Opaque,
+		Ref:    buildReferenceInShare(req.Ref, receivedShare),
+		LockId: req.LockId,
 	})
 	if err != nil {
 		return nil, err
@@ -221,7 +216,7 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 		_, req.Ref.ResourceId.StorageId = storagespace.SplitStorageID(req.Ref.ResourceId.StorageId)
 	}
 
-	receivedShare, rpcStatus, err := s.resolveReference(ctx, req.Ref)
+	receivedShare, rpcStatus, err := s.resolveAcceptedShare(ctx, req.Ref)
 	appctx.GetLogger(ctx).Debug().
 		Interface("ref", req.Ref).
 		Interface("received_share", receivedShare).
@@ -229,17 +224,15 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 	if err != nil {
 		return nil, err
 	}
-	if rpcStatus != nil {
+	if rpcStatus.Code != rpc.Code_CODE_OK {
 		return &provider.InitiateFileUploadResponse{
 			Status: rpcStatus,
 		}, nil
 	}
 	gwres, err := s.gateway.InitiateFileUpload(ctx, &provider.InitiateFileUploadRequest{
-		Opaque: req.Opaque,
-		Ref: &provider.Reference{
-			ResourceId: receivedShare.Share.ResourceId,
-			Path:       req.Ref.Path,
-		},
+		Opaque:  req.Opaque,
+		Ref:     buildReferenceInShare(req.Ref, receivedShare),
+		LockId:  req.LockId,
 		Options: req.Options,
 	})
 	if err != nil {
@@ -378,7 +371,7 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 				StorageId: utils.ShareStorageProviderID,
 				OpaqueId:  utils.ShareStorageProviderID,
 			}
-			if spaceID == nil || utils.ResourceIDEqual(virtualRootID, spaceID) {
+			if spaceID == nil || isShareJailRoot(spaceID) {
 				earliestShare, atLeastOneAccepted := findEarliestShare(receivedShares, shareMd)
 				var opaque *typesv1beta1.Opaque
 				var mtime *typesv1beta1.Timestamp
@@ -458,6 +451,9 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 				var opaque *typesv1beta1.Opaque
 				if md, ok := shareMd[receivedShare.Share.Id.OpaqueId]; ok {
 					opaque = utils.AppendPlainToOpaque(opaque, "etag", md.ETag)
+				} else {
+					// we could not stat the share, skip it
+					continue
 				}
 				// add the resourceID for the grant
 				if receivedShare.Share.ResourceId != nil {
@@ -504,7 +500,7 @@ func (s *service) CreateContainer(ctx context.Context, req *provider.CreateConta
 		_, req.Ref.ResourceId.StorageId = storagespace.SplitStorageID(req.Ref.ResourceId.StorageId)
 	}
 
-	receivedShare, rpcStatus, err := s.resolveReference(ctx, req.Ref)
+	receivedShare, rpcStatus, err := s.resolveAcceptedShare(ctx, req.Ref)
 	appctx.GetLogger(ctx).Debug().
 		Interface("ref", req.Ref).
 		Interface("received_share", receivedShare).
@@ -512,17 +508,15 @@ func (s *service) CreateContainer(ctx context.Context, req *provider.CreateConta
 	if err != nil {
 		return nil, err
 	}
-	if rpcStatus != nil {
+	if rpcStatus.Code != rpc.Code_CODE_OK {
 		return &provider.CreateContainerResponse{
 			Status: rpcStatus,
 		}, nil
 	}
 
 	return s.gateway.CreateContainer(ctx, &provider.CreateContainerRequest{
-		Ref: &provider.Reference{
-			ResourceId: receivedShare.Share.ResourceId,
-			Path:       req.Ref.Path,
-		},
+		Opaque: req.Opaque,
+		Ref:    buildReferenceInShare(req.Ref, receivedShare),
 	})
 }
 
@@ -531,7 +525,7 @@ func (s *service) Delete(ctx context.Context, req *provider.DeleteRequest) (*pro
 		_, req.Ref.ResourceId.StorageId = storagespace.SplitStorageID(req.Ref.ResourceId.StorageId)
 	}
 
-	receivedShare, rpcStatus, err := s.resolveReference(ctx, req.Ref)
+	receivedShare, rpcStatus, err := s.resolveAcceptedShare(ctx, req.Ref)
 	appctx.GetLogger(ctx).Debug().
 		Interface("ref", req.Ref).
 		Interface("received_share", receivedShare).
@@ -540,7 +534,7 @@ func (s *service) Delete(ctx context.Context, req *provider.DeleteRequest) (*pro
 	if err != nil {
 		return nil, err
 	}
-	if rpcStatus != nil {
+	if rpcStatus.Code != rpc.Code_CODE_OK {
 		return &provider.DeleteResponse{
 			Status: rpcStatus,
 		}, nil
@@ -560,10 +554,8 @@ func (s *service) Delete(ctx context.Context, req *provider.DeleteRequest) (*pro
 	}
 
 	return s.gateway.Delete(ctx, &provider.DeleteRequest{
-		Ref: &provider.Reference{
-			ResourceId: receivedShare.Share.ResourceId,
-			Path:       req.Ref.Path,
-		},
+		Opaque: req.Opaque,
+		Ref:    buildReferenceInShare(req.Ref, receivedShare),
 	})
 }
 
@@ -585,24 +577,18 @@ func (s *service) Move(ctx context.Context, req *provider.MoveRequest) (*provide
 	//      - the registry needs to invalidate the alias
 	//      - the rhe share manager needs to change the name
 	//      ... but which storageprovider will receive the move request???
-	srcReceivedShare, rpcStatus, err := s.resolveReference(ctx, req.Source)
+	srcReceivedShare, rpcStatus, err := s.resolveAcceptedShare(ctx, req.Source)
 	if err != nil {
 		return nil, err
 	}
-	if rpcStatus != nil {
+	if rpcStatus.Code != rpc.Code_CODE_OK {
 		return &provider.MoveResponse{
 			Status: rpcStatus,
 		}, nil
 	}
 
-	// can we do a rename
-	if utils.ResourceIDEqual(req.Source.ResourceId, req.Destination.ResourceId) &&
-		// only if we are responsible for the space
-		req.Source.ResourceId.StorageId == utils.ShareStorageProviderID &&
-		// only if the source path has no path segment
-		req.Source.Path == "." &&
-		// only if the destination is a dot followed by a single path segment, e.g. './new'
-		len(strings.SplitN(req.Destination.Path, "/", 3)) == 2 {
+	// we can do a rename
+	if isRename(req.Source, req.Destination) {
 
 		// Change the MountPoint of the share, it has no relative prefix
 		srcReceivedShare.MountPoint = &provider.Reference{
@@ -624,11 +610,11 @@ func (s *service) Move(ctx context.Context, req *provider.MoveRequest) (*provide
 		}, nil
 	}
 
-	dstReceivedShare, rpcStatus, err2 := s.resolveReference(ctx, req.Destination)
+	dstReceivedShare, rpcStatus, err2 := s.resolveAcceptedShare(ctx, req.Destination)
 	if err2 != nil {
 		return nil, err2
 	}
-	if rpcStatus != nil {
+	if rpcStatus.Code != rpc.Code_CODE_OK {
 		return &provider.MoveResponse{
 			Status: rpcStatus,
 		}, nil
@@ -640,14 +626,9 @@ func (s *service) Move(ctx context.Context, req *provider.MoveRequest) (*provide
 	}
 
 	return s.gateway.Move(ctx, &provider.MoveRequest{
-		Source: &provider.Reference{
-			ResourceId: srcReceivedShare.Share.ResourceId,
-			Path:       req.Source.Path,
-		},
-		Destination: &provider.Reference{
-			ResourceId: dstReceivedShare.Share.ResourceId,
-			Path:       req.Destination.Path,
-		},
+		Opaque:      req.Opaque,
+		Source:      buildReferenceInShare(req.Source, srcReceivedShare),
+		Destination: buildReferenceInShare(req.Destination, dstReceivedShare),
 	})
 }
 
@@ -676,7 +657,7 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 		_, req.Ref.ResourceId.StorageId = storagespace.SplitStorageID(req.Ref.ResourceId.StorageId)
 	}
 
-	if isVirtualRoot(req.Ref.ResourceId) && (req.Ref.Path == "" || req.Ref.Path == ".") {
+	if isVirtualRoot(req.Ref) {
 		receivedShares, shareMd, err := s.fetchShares(ctx)
 		if err != nil {
 			return nil, err
@@ -709,7 +690,7 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 			},
 		}, nil
 	}
-	receivedShare, rpcStatus, err := s.resolveReference(ctx, req.Ref)
+	receivedShare, rpcStatus, err := s.resolveAcceptedShare(ctx, req.Ref)
 	appctx.GetLogger(ctx).Debug().
 		Interface("ref", req.Ref).
 		Interface("received_share", receivedShare).
@@ -718,7 +699,7 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 	if err != nil {
 		return nil, err
 	}
-	if rpcStatus != nil {
+	if rpcStatus.Code != rpc.Code_CODE_OK {
 		return &provider.StatResponse{
 			Status: rpcStatus,
 		}, nil
@@ -730,40 +711,34 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 		}, nil
 	}
 
-	path := req.Ref.Path
-	if receivedShare.MountPoint.Path == strings.TrimPrefix(req.Ref.Path, "./") {
-		path = "."
-	}
-
 	// TODO return reference?
 	return s.gateway.Stat(ctx, &provider.StatRequest{
-		Opaque: req.Opaque,
-		Ref: &provider.Reference{
-			ResourceId: receivedShare.Share.ResourceId,
-			Path:       path,
-		},
+		Opaque:                req.Opaque,
+		Ref:                   buildReferenceInShare(req.Ref, receivedShare),
 		ArbitraryMetadataKeys: req.ArbitraryMetadataKeys,
 	})
+
+	// FIXME when stating a share jail child we need to rewrite the id and use the share
+	// jail space id as the mountpoint has a different id than the grant
+	// but that might be problematic for eg. wopi because it needs the correct id? ...
+	// ... but that should stat the grant anyway
+
+	// FIXME when navigating via /dav/spaces/a0ca6a90-a365-4782-871e-d44447bbc668 the web ui seems
+	// to continue navigating based on the id of resources, causing the path to change. Is that related to WOPI?
+
 }
 
 func (s *service) ListContainerStream(req *provider.ListContainerStreamRequest, ss provider.ProviderAPI_ListContainerStreamServer) error {
 	return gstatus.Errorf(codes.Unimplemented, "method not implemented")
-}
-
-func isVirtualRoot(id *provider.ResourceId) bool {
-	return utils.ResourceIDEqual(id, &provider.ResourceId{
-		StorageId: utils.ShareStorageProviderID,
-		OpaqueId:  utils.ShareStorageProviderID,
-	})
 }
 func (s *service) ListContainer(ctx context.Context, req *provider.ListContainerRequest) (*provider.ListContainerResponse, error) {
 	if req.Ref.GetResourceId() != nil {
 		_, req.Ref.ResourceId.StorageId = storagespace.SplitStorageID(req.Ref.ResourceId.StorageId)
 	}
 
-	if isVirtualRoot(req.Ref.ResourceId) {
+	if isVirtualRoot(req.Ref) {
 		// The root is empty, it is filled by mountpoints
-		// but when accessing the root via /dav/spaces we need to list the content
+		// so, when accessing the root via /dav/spaces, we need to list the accepted shares with their mountpoint
 
 		receivedShares, _, err := s.fetchShares(ctx)
 		if err != nil {
@@ -814,7 +789,7 @@ func (s *service) ListContainer(ctx context.Context, req *provider.ListContainer
 			Infos:  infos,
 		}, nil
 	}
-	receivedShare, rpcStatus, err := s.resolveReference(ctx, req.Ref)
+	receivedShare, rpcStatus, err := s.resolveAcceptedShare(ctx, req.Ref)
 	appctx.GetLogger(ctx).Debug().
 		Interface("ref", req.Ref).
 		Interface("received_share", receivedShare).
@@ -823,18 +798,15 @@ func (s *service) ListContainer(ctx context.Context, req *provider.ListContainer
 	if err != nil {
 		return nil, err
 	}
-	if rpcStatus != nil {
+	if rpcStatus.Code != rpc.Code_CODE_OK {
 		return &provider.ListContainerResponse{
 			Status: rpcStatus,
 		}, nil
 	}
 
 	return s.gateway.ListContainer(ctx, &provider.ListContainerRequest{
-		Opaque: req.Opaque,
-		Ref: &provider.Reference{
-			ResourceId: receivedShare.Share.ResourceId,
-			Path:       req.Ref.Path,
-		},
+		Opaque:                req.Opaque,
+		Ref:                   buildReferenceInShare(req.Ref, receivedShare),
 		ArbitraryMetadataKeys: req.ArbitraryMetadataKeys,
 	})
 }
@@ -843,7 +815,7 @@ func (s *service) ListFileVersions(ctx context.Context, req *provider.ListFileVe
 		_, req.Ref.ResourceId.StorageId = storagespace.SplitStorageID(req.Ref.ResourceId.StorageId)
 	}
 
-	receivedShare, rpcStatus, err := s.resolveReference(ctx, req.Ref)
+	receivedShare, rpcStatus, err := s.resolveAcceptedShare(ctx, req.Ref)
 	appctx.GetLogger(ctx).Debug().
 		Interface("ref", req.Ref).
 		Interface("received_share", receivedShare).
@@ -852,17 +824,15 @@ func (s *service) ListFileVersions(ctx context.Context, req *provider.ListFileVe
 	if err != nil {
 		return nil, err
 	}
-	if rpcStatus != nil {
+	if rpcStatus.Code != rpc.Code_CODE_OK {
 		return &provider.ListFileVersionsResponse{
 			Status: rpcStatus,
 		}, nil
 	}
 
 	return s.gateway.ListFileVersions(ctx, &provider.ListFileVersionsRequest{
-		Ref: &provider.Reference{
-			ResourceId: receivedShare.Share.ResourceId,
-			Path:       req.Ref.Path,
-		},
+		Opaque: req.Opaque,
+		Ref:    buildReferenceInShare(req.Ref, receivedShare),
 	})
 }
 
@@ -871,7 +841,7 @@ func (s *service) RestoreFileVersion(ctx context.Context, req *provider.RestoreF
 		_, req.Ref.ResourceId.StorageId = storagespace.SplitStorageID(req.Ref.ResourceId.StorageId)
 	}
 
-	receivedShare, rpcStatus, err := s.resolveReference(ctx, req.Ref)
+	receivedShare, rpcStatus, err := s.resolveAcceptedShare(ctx, req.Ref)
 	appctx.GetLogger(ctx).Debug().
 		Interface("ref", req.Ref).
 		Interface("received_share", receivedShare).
@@ -880,17 +850,15 @@ func (s *service) RestoreFileVersion(ctx context.Context, req *provider.RestoreF
 	if err != nil {
 		return nil, err
 	}
-	if rpcStatus != nil {
+	if rpcStatus.Code != rpc.Code_CODE_OK {
 		return &provider.RestoreFileVersionResponse{
 			Status: rpcStatus,
 		}, nil
 	}
 
 	return s.gateway.RestoreFileVersion(ctx, &provider.RestoreFileVersionRequest{
-		Ref: &provider.Reference{
-			ResourceId: receivedShare.Share.ResourceId,
-			Path:       req.Ref.Path,
-		},
+		Opaque: req.Opaque,
+		Ref:    buildReferenceInShare(req.Ref, receivedShare),
 	})
 }
 
@@ -954,7 +922,7 @@ func (s *service) GetQuota(ctx context.Context, req *provider.GetQuotaRequest) (
 	}, nil
 }
 
-func (s *service) resolveReference(ctx context.Context, ref *provider.Reference) (*collaboration.ReceivedShare, *rpc.Status, error) {
+func (s *service) resolveAcceptedShare(ctx context.Context, ref *provider.Reference) (*collaboration.ReceivedShare, *rpc.Status, error) {
 	// treat absolute id based references as relative ones
 	if ref.Path == "" {
 		ref.Path = "."
@@ -965,13 +933,13 @@ func (s *service) resolveReference(ctx context.Context, ref *provider.Reference)
 		}
 		// look up share for this resourceid
 		lsRes, err := s.sharesProviderClient.ListReceivedShares(ctx, &collaboration.ListReceivedSharesRequest{
-			// FIXME filter by received shares for resource id - listing all shares is tooo expensive!
+			// FIXME filter by received shares for reference - listing all shares is tooo expensive!
 		})
 		if err != nil {
 			return nil, nil, errors.Wrap(err, "sharesstorageprovider: error calling ListReceivedSharesRequest")
 		}
 		if lsRes.Status.Code != rpc.Code_CODE_OK {
-			return nil, nil, fmt.Errorf("sharesstorageprovider: error calling ListReceivedSharesRequest")
+			return nil, lsRes.Status, nil
 		}
 		for _, receivedShare := range lsRes.Shares {
 			if receivedShare.State != collaboration.ShareState_SHARE_STATE_ACCEPTED {
@@ -985,10 +953,13 @@ func (s *service) resolveReference(ctx context.Context, ref *provider.Reference)
 			switch {
 			case utils.ResourceIDEqual(ref.ResourceId, root):
 				// we have a virtual node
-				return receivedShare, nil, nil
+				return receivedShare, lsRes.Status, nil
 			case utils.ResourceIDEqual(ref.ResourceId, receivedShare.Share.ResourceId):
 				// we have a mount point
-				return receivedShare, nil, nil
+				return receivedShare, lsRes.Status, nil
+			case isShareJailRoot(ref.ResourceId) && strings.HasPrefix(strings.TrimPrefix(ref.Path, "./"), receivedShare.MountPoint.Path):
+				// we have a mount point referenced by the share jail id
+				return receivedShare, lsRes.Status, nil
 			default:
 				continue
 			}
@@ -1031,7 +1002,7 @@ func (s *service) fetchShares(ctx context.Context) ([]*collaboration.ReceivedSha
 		if rs.State != collaboration.ShareState_SHARE_STATE_ACCEPTED {
 			continue
 		}
-		sRes, err := s.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{ResourceId: rs.Share.ResourceId}})
+		sRes, err := s.gateway.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{ResourceId: rs.Share.ResourceId}})
 		if err != nil {
 			appctx.GetLogger(ctx).Error().
 				Err(err).
@@ -1084,4 +1055,40 @@ func findEarliestShare(receivedShares []*collaboration.ReceivedShare, shareMd ma
 		}
 	}
 	return earliestShare, atLeastOneAccepted
+}
+
+func buildReferenceInShare(ref *provider.Reference, s *collaboration.ReceivedShare) *provider.Reference {
+	path := ref.Path
+	if isShareJailRoot(ref.ResourceId) {
+		// we need to cut off the mountpoint from the path in the request reference
+		path = utils.MakeRelativePath(strings.TrimPrefix(strings.TrimPrefix(path, "./"), s.MountPoint.Path))
+	}
+	return &provider.Reference{
+		ResourceId: s.Share.ResourceId,
+		Path:       path,
+	}
+}
+
+// isRename checks if the two references lie in the responsibility of the sharesstorageprovider and if a rename occurs
+func isRename(s, d *provider.Reference) bool {
+	// if the source is a share jail child where the path is .
+	return ((isShareJailChild(s.ResourceId) && s.Path == ".") ||
+		// or if the source is the share jail with a single path segment, e.g. './old'
+		(isShareJailRoot(s.ResourceId) && len(strings.SplitN(s.Path, "/", 3)) == 2)) &&
+		// and if the destination is the share jail a single path segment, e.g. './new'
+		isShareJailRoot(d.ResourceId) && len(strings.SplitN(d.Path, "/", 3)) == 2
+}
+
+func isShareJailChild(id *provider.ResourceId) bool {
+	_, space := storagespace.SplitStorageID(id.StorageId)
+	return space == utils.ShareStorageProviderID && id.OpaqueId != utils.ShareStorageProviderID
+}
+
+func isShareJailRoot(id *provider.ResourceId) bool {
+	_, space := storagespace.SplitStorageID(id.StorageId)
+	return space == utils.ShareStorageProviderID && id.OpaqueId == utils.ShareStorageProviderID
+}
+
+func isVirtualRoot(ref *provider.Reference) bool {
+	return isShareJailRoot(ref.ResourceId) && (ref.Path == "" || ref.Path == "." || ref.Path == "./")
 }
