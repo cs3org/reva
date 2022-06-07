@@ -463,7 +463,8 @@ func (p *Handler) getResourceInfos(ctx context.Context, w http.ResponseWriter, r
 	resourceInfos := []*provider.ResourceInfo{
 		rootInfo, // PROPFIND always includes the root resource
 	}
-	if rootInfo.Type == provider.ResourceType_RESOURCE_TYPE_FILE {
+
+	if rootInfo.Type == provider.ResourceType_RESOURCE_TYPE_FILE || depth == net.DepthZero {
 		// If the resource is a file then it can't have any children so we can
 		// stop here.
 		return resourceInfos, true, true
