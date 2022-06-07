@@ -170,6 +170,6 @@ func (s *svc) handleMkcol(ctx context.Context, w http.ResponseWriter, r *http.Re
 	case res.Status.Code == rpc.Code_CODE_NOT_FOUND:
 		return http.StatusConflict, fmt.Errorf("intermediate collection does not exist")
 	default:
-		return rstatus.HTTPStatusFromCode(statRes.Status.Code), errtypes.NewErrtypeFromStatus(statRes.Status)
+		return rstatus.HTTPStatusFromCode(res.Status.Code), errtypes.NewErrtypeFromStatus(res.Status)
 	}
 }
