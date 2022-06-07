@@ -65,9 +65,13 @@ func (h *WebDavHandler) Handler(s *svc) http.Handler {
 			w.WriteHeader(http.StatusNotFound)
 			b, err := errors.Marshal(http.StatusNotFound, fmt.Sprintf("could not get storage for %s", r.URL.Path), "")
 			errors.HandleWebdavError(appctx.GetLogger(r.Context()), w, b, err)
+			return
 		}
 		r.URL.Path = newPath
 
+		// TODO initialize status with http.StatusBadRequest
+		// TODO initialize err with errors.ErrUnsupportedMethod
+		var status int // status 0 means the handler already sent the response
 		switch r.Method {
 		case MethodPropfind:
 			p := propfind.NewHandler(config.PublicURL, func() (gateway.GatewayAPIClient, error) {
@@ -75,41 +79,13 @@ func (h *WebDavHandler) Handler(s *svc) http.Handler {
 			})
 			p.HandlePathPropfind(w, r, ns)
 		case MethodLock:
-			log := appctx.GetLogger(r.Context())
-			// TODO initialize status with http.StatusBadRequest
-			// TODO initialize err with errors.ErrUnsupportedMethod
-			status, err := s.handleLock(w, r, ns)
-			if status != 0 { // 0 would mean handleLock already sent the response
-				w.WriteHeader(status)
-				if status != http.StatusNoContent {
-					var b []byte
-					if b, err = errors.Marshal(status, err.Error(), ""); err == nil {
-						_, err = w.Write(b)
-					}
-				}
-			}
-			if err != nil {
-				log.Error().Err(err).Msg(err.Error())
-			}
+			status, err = s.handleLock(w, r, ns)
 		case MethodUnlock:
-			log := appctx.GetLogger(r.Context())
-			status, err := s.handleUnlock(w, r, ns)
-			if status != 0 { // 0 would mean handleUnlock already sent the response
-				w.WriteHeader(status)
-				if status != http.StatusNoContent {
-					var b []byte
-					if b, err = errors.Marshal(status, err.Error(), ""); err == nil {
-						_, err = w.Write(b)
-					}
-				}
-			}
-			if err != nil {
-				log.Error().Err(err).Msg(err.Error())
-			}
+			status, err = s.handleUnlock(w, r, ns)
 		case MethodProppatch:
-			s.handlePathProppatch(w, r, ns)
+			status, err = s.handlePathProppatch(w, r, ns)
 		case MethodMkcol:
-			s.handlePathMkcol(w, r, ns)
+			status, err = s.handlePathMkcol(w, r, ns)
 		case MethodMove:
 			s.handlePathMove(w, r, ns)
 		case MethodCopy:
@@ -130,6 +106,19 @@ func (h *WebDavHandler) Handler(s *svc) http.Handler {
 			s.handlePathDelete(w, r, ns)
 		default:
 			w.WriteHeader(http.StatusNotFound)
+		}
+
+		if status != 0 { // 0 means the handler already sent the response
+			w.WriteHeader(status)
+			if status != http.StatusNoContent {
+				var b []byte
+				if b, err = errors.Marshal(status, err.Error(), ""); err == nil {
+					_, err = w.Write(b)
+				}
+			}
+		}
+		if err != nil {
+			appctx.GetLogger(r.Context()).Error().Err(err).Msg(err.Error())
 		}
 	})
 }

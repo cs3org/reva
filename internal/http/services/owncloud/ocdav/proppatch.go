@@ -37,11 +37,13 @@ import (
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/spacelookup"
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
+	"github.com/cs3org/reva/v2/pkg/errtypes"
+	rstatus "github.com/cs3org/reva/v2/pkg/rgrpc/status"
 	rtrace "github.com/cs3org/reva/v2/pkg/trace"
 	"github.com/rs/zerolog"
 )
 
-func (s *svc) handlePathProppatch(w http.ResponseWriter, r *http.Request, ns string) {
+func (s *svc) handlePathProppatch(w http.ResponseWriter, r *http.Request, ns string) (status int, err error) {
 	ctx, span := rtrace.Provider.Tracer("ocdav").Start(r.Context(), "proppatch")
 	defer span.End()
 
@@ -51,55 +53,35 @@ func (s *svc) handlePathProppatch(w http.ResponseWriter, r *http.Request, ns str
 
 	pp, status, err := readProppatch(r.Body)
 	if err != nil {
-		sublog.Debug().Err(err).Msg("error reading proppatch")
-		w.WriteHeader(status)
-		m := fmt.Sprintf("Error reading proppatch: %v", err)
-		b, err := errors.Marshal(status, m, "")
-		errors.HandleWebdavError(&sublog, w, b, err)
-		return
+		return status, err
 	}
 
 	c, err := s.getClient()
 	if err != nil {
-		sublog.Error().Err(err).Msg("error getting grpc client")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
+		return http.StatusInternalServerError, err
 	}
 
 	space, rpcStatus, err := spacelookup.LookUpStorageSpaceForPath(ctx, c, fn)
 	if err != nil {
-		sublog.Error().Err(err).Str("path", fn).Msg("failed to look up storage space")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
+		return http.StatusInternalServerError, err
 	}
 	if rpcStatus.Code != rpc.Code_CODE_OK {
-		errors.HandleErrorStatus(&sublog, w, rpcStatus)
-		return
+		return rstatus.HTTPStatusFromCode(rpcStatus.Code), errtypes.NewErrtypeFromStatus(rpcStatus)
 	}
 	// check if resource exists
 	statReq := &provider.StatRequest{Ref: spacelookup.MakeRelativeReference(space, fn, false)}
 	statRes, err := c.Stat(ctx, statReq)
 	if err != nil {
-		sublog.Error().Err(err).Msg("error sending a grpc stat request")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
+		return http.StatusInternalServerError, err
 	}
-
 	if statRes.Status.Code != rpc.Code_CODE_OK {
-		if statRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
-			w.WriteHeader(http.StatusNotFound)
-			m := fmt.Sprintf("Resource %v not found", fn)
-			b, err := errors.Marshal(http.StatusNotFound, m, "")
-			errors.HandleWebdavError(&sublog, w, b, err)
-		}
-		errors.HandleErrorStatus(&sublog, w, statRes.Status)
-		return
+		return rstatus.HTTPStatusFromCode(rpcStatus.Code), errtypes.NewErrtypeFromStatus(rpcStatus)
 	}
 
 	acceptedProps, removedProps, ok := s.handleProppatch(ctx, w, r, spacelookup.MakeRelativeReference(space, fn, false), pp, sublog)
 	if !ok {
-		// handleProppatch handles responses in error cases so we can just return
-		return
+		// handleProppatch handles responses in error cases so return 0
+		return 0, nil
 	}
 
 	nRef := strings.TrimPrefix(fn, ns)
@@ -109,9 +91,10 @@ func (s *svc) handlePathProppatch(w http.ResponseWriter, r *http.Request, ns str
 	}
 
 	s.handleProppatchResponse(ctx, w, r, acceptedProps, removedProps, nRef, sublog)
+	return 0, nil
 }
 
-func (s *svc) handleSpacesProppatch(w http.ResponseWriter, r *http.Request, spaceID string) {
+func (s *svc) handleSpacesProppatch(w http.ResponseWriter, r *http.Request, spaceID string) (status int, err error) {
 	ctx, span := rtrace.Provider.Tracer("ocdav").Start(r.Context(), "spaces_proppatch")
 	defer span.End()
 
@@ -119,29 +102,21 @@ func (s *svc) handleSpacesProppatch(w http.ResponseWriter, r *http.Request, spac
 
 	c, err := s.getClient()
 	if err != nil {
-		sublog.Error().Err(err).Msg("error getting grpc client")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
+		return http.StatusInternalServerError, err
 	}
 
 	pp, status, err := readProppatch(r.Body)
 	if err != nil {
-		sublog.Debug().Err(err).Msg("error reading proppatch")
-		w.WriteHeader(status)
-		return
+		return status, err
 	}
 
 	// retrieve a specific storage space
 	ref, rpcStatus, err := spacelookup.LookUpStorageSpaceReference(ctx, c, spaceID, r.URL.Path, true)
 	if err != nil {
-		sublog.Error().Err(err).Msg("error sending a grpc request")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
+		return http.StatusInternalServerError, err
 	}
-
 	if rpcStatus.Code != rpc.Code_CODE_OK {
-		errors.HandleErrorStatus(&sublog, w, rpcStatus)
-		return
+		return rstatus.HTTPStatusFromCode(rpcStatus.Code), errtypes.NewErrtypeFromStatus(rpcStatus)
 	}
 
 	// check if resource exists
@@ -150,20 +125,17 @@ func (s *svc) handleSpacesProppatch(w http.ResponseWriter, r *http.Request, spac
 	}
 	statRes, err := c.Stat(ctx, statReq)
 	if err != nil {
-		sublog.Error().Err(err).Msg("error sending a grpc stat request")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
+		return http.StatusInternalServerError, err
 	}
 
 	if statRes.Status.Code != rpc.Code_CODE_OK {
-		errors.HandleErrorStatus(&sublog, w, statRes.Status)
-		return
+		return rstatus.HTTPStatusFromCode(rpcStatus.Code), errtypes.NewErrtypeFromStatus(rpcStatus)
 	}
 
 	acceptedProps, removedProps, ok := s.handleProppatch(ctx, w, r, ref, pp, sublog)
 	if !ok {
-		// handleProppatch handles responses in error cases so we can just return
-		return
+		// handleProppatch handles responses in error cases so return 0
+		return 0, nil
 	}
 
 	nRef := path.Join(spaceID, statRes.Info.Path)
@@ -173,6 +145,7 @@ func (s *svc) handleSpacesProppatch(w http.ResponseWriter, r *http.Request, spac
 	}
 
 	s.handleProppatchResponse(ctx, w, r, acceptedProps, removedProps, nRef, sublog)
+	return 0, nil
 }
 
 func (s *svc) handleProppatch(ctx context.Context, w http.ResponseWriter, r *http.Request, ref *provider.Reference, patches []Proppatch, log zerolog.Logger) ([]xml.Name, []xml.Name, bool) {

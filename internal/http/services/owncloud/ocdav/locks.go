@@ -403,17 +403,14 @@ func (s *svc) handleSpacesLock(w http.ResponseWriter, r *http.Request, spaceID s
 
 	client, err := s.getClient()
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		return
+		return http.StatusInternalServerError, err
 	}
 
 	// retrieve a specific storage space
 	space, cs3Status, err := spacelookup.LookUpStorageSpaceByID(ctx, client, spaceID)
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		return
+		return http.StatusInternalServerError, err
 	}
-
 	if cs3Status.Code != rpc.Code_CODE_OK {
 		return http.StatusInternalServerError, errtypes.NewErrtypeFromStatus(cs3Status)
 	}

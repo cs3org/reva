@@ -26,30 +26,28 @@ import (
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/errors"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/spacelookup"
 	"github.com/cs3org/reva/v2/pkg/appctx"
+	"github.com/cs3org/reva/v2/pkg/errtypes"
+	rstatus "github.com/cs3org/reva/v2/pkg/rgrpc/status"
 	rtrace "github.com/cs3org/reva/v2/pkg/trace"
 	"github.com/rs/zerolog"
 )
 
-func (s *svc) handlePathMkcol(w http.ResponseWriter, r *http.Request, ns string) {
+func (s *svc) handlePathMkcol(w http.ResponseWriter, r *http.Request, ns string) (status int, err error) {
 	ctx, span := rtrace.Provider.Tracer("reva").Start(r.Context(), "mkcol")
 	defer span.End()
 
 	fn := path.Join(ns, r.URL.Path)
 	for _, r := range nameRules {
 		if !r.Test(fn) {
-			w.WriteHeader(http.StatusBadRequest)
-			return
+			return http.StatusBadRequest, fmt.Errorf("invalid name rule")
 		}
 	}
 	sublog := appctx.GetLogger(ctx).With().Str("path", fn).Logger()
 	client, err := s.getClient()
 	if err != nil {
-		sublog.Error().Err(err).Msg("error getting grpc client")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
+		return http.StatusInternalServerError, err
 	}
 
 	// stat requested path to make sure it isn't existing yet
@@ -59,154 +57,119 @@ func (s *svc) handlePathMkcol(w http.ResponseWriter, r *http.Request, ns string)
 			Path: fn,
 		},
 	})
-	if err != nil {
-		sublog.Error().Err(err).Str("path", fn).Msg("failed to look up storage space")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	if sr.Status.Code != rpc.Code_CODE_NOT_FOUND {
-		sublog.Info().Err(err).Str("path", fn).Interface("code", sr.Status.Code).Msg("response code for stat was unexpected")
-		// tests want this errorcode. StatusConflict would be more logical
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		b, err := errors.Marshal(http.StatusMethodNotAllowed, "The resource you tried to create already exists", "")
-		errors.HandleWebdavError(&sublog, w, b, err)
-		return
+	switch {
+	case err != nil:
+		return http.StatusInternalServerError, err
+	case sr.Status.Code == rpc.Code_CODE_OK:
+		// https://www.rfc-editor.org/rfc/rfc4918#section-9.3.1:
+		// 405 (Method Not Allowed) - MKCOL can only be executed on an unmapped URL.
+		return http.StatusMethodNotAllowed, fmt.Errorf("The resource you tried to create already exists")
+	case sr.Status.Code != rpc.Code_CODE_NOT_FOUND:
+		return rstatus.HTTPStatusFromCode(sr.Status.Code), errtypes.NewErrtypeFromStatus(sr.Status)
 	}
 
 	parentPath := path.Dir(fn)
 
-	space, status, err := spacelookup.LookUpStorageSpaceForPath(ctx, client, parentPath)
-	if err != nil {
-		sublog.Error().Err(err).Str("path", parentPath).Msg("failed to look up storage space")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	if status.Code != rpc.Code_CODE_OK {
-		errors.HandleErrorStatus(&sublog, w, status)
-		return
+	space, rpcStatus, err := spacelookup.LookUpStorageSpaceForPath(ctx, client, parentPath)
+	switch {
+	case err != nil:
+		return http.StatusInternalServerError, err
+	case rpcStatus.Code == rpc.Code_CODE_NOT_FOUND:
+		// https://www.rfc-editor.org/rfc/rfc4918#section-9.3.1:
+		// 409 (Conflict) - A collection cannot be made at the Request-URI until
+		// one or more intermediate collections have been created.  The server
+		// MUST NOT create those intermediate collections automatically.
+		return http.StatusConflict, fmt.Errorf("intermediate collection does not exist")
+	case rpcStatus.Code != rpc.Code_CODE_OK:
+		return rstatus.HTTPStatusFromCode(rpcStatus.Code), errtypes.NewErrtypeFromStatus(rpcStatus)
 	}
 
-	s.handleMkcol(ctx, w, r, spacelookup.MakeRelativeReference(space, parentPath, false), spacelookup.MakeRelativeReference(space, fn, false), sublog)
+	return s.handleMkcol(ctx, w, r, spacelookup.MakeRelativeReference(space, parentPath, false), spacelookup.MakeRelativeReference(space, fn, false), sublog)
 }
 
-func (s *svc) handleSpacesMkCol(w http.ResponseWriter, r *http.Request, spaceID string) {
+func (s *svc) handleSpacesMkCol(w http.ResponseWriter, r *http.Request, spaceID string) (status int, err error) {
 	ctx, span := rtrace.Provider.Tracer("reva").Start(r.Context(), "spaces_mkcol")
 	defer span.End()
 
 	sublog := appctx.GetLogger(ctx).With().Str("path", r.URL.Path).Str("spaceid", spaceID).Str("handler", "mkcol").Logger()
 	client, err := s.getClient()
 	if err != nil {
-		sublog.Error().Err(err).Msg("error getting grpc client")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
+		return http.StatusInternalServerError, err
 	}
 
 	parentRef, rpcStatus, err := spacelookup.LookUpStorageSpaceReference(ctx, client, spaceID, path.Dir(r.URL.Path), true)
 	if err != nil {
-		sublog.Error().Err(err).Msg("error sending a grpc request")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
+		return http.StatusInternalServerError, err
 	}
-
 	if rpcStatus.Code != rpc.Code_CODE_OK {
-		errors.HandleErrorStatus(&sublog, w, rpcStatus)
-		return
+		return rstatus.HTTPStatusFromCode(rpcStatus.Code), errtypes.NewErrtypeFromStatus(rpcStatus)
 	}
 
 	childRef, rpcStatus, err := spacelookup.LookUpStorageSpaceReference(ctx, client, spaceID, r.URL.Path, true)
 	if err != nil {
-		sublog.Error().Err(err).Msg("error sending a grpc request")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
+		return http.StatusInternalServerError, err
 	}
-
 	if rpcStatus.Code != rpc.Code_CODE_OK {
-		errors.HandleErrorStatus(&sublog, w, rpcStatus)
-		return
+		return rstatus.HTTPStatusFromCode(rpcStatus.Code), errtypes.NewErrtypeFromStatus(rpcStatus)
 	}
 
-	s.handleMkcol(ctx, w, r, parentRef, childRef, sublog)
-
+	return s.handleMkcol(ctx, w, r, parentRef, childRef, sublog)
 }
 
-func (s *svc) handleMkcol(ctx context.Context, w http.ResponseWriter, r *http.Request, parentRef, childRef *provider.Reference, log zerolog.Logger) {
+func (s *svc) handleMkcol(ctx context.Context, w http.ResponseWriter, r *http.Request, parentRef, childRef *provider.Reference, log zerolog.Logger) (status int, err error) {
 	if r.Body != http.NoBody {
-		w.WriteHeader(http.StatusUnsupportedMediaType)
-		return
+		// We currently do not support extended mkcol https://datatracker.ietf.org/doc/rfc5689/
+		// TODO let clients send a body with properties to set on the new resource
+		return http.StatusUnsupportedMediaType, fmt.Errorf("extended-mkcol not supported")
 	}
 
 	client, err := s.getClient()
 	if err != nil {
-		log.Error().Err(err).Msg("error getting grpc client")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
+		return http.StatusInternalServerError, err
 	}
 
 	// check if parent exists
 	parentStatReq := &provider.StatRequest{Ref: parentRef}
 	parentStatRes, err := client.Stat(ctx, parentStatReq)
-	if err != nil {
-		log.Error().Err(err).Msg("error sending a grpc stat request")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	if parentStatRes.Status.Code != rpc.Code_CODE_OK {
-		if parentStatRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
-			// http://www.webdav.org/specs/rfc4918.html#METHOD_MKCOL
-			// When the MKCOL operation creates a new collection resource,
-			// all ancestors must already exist, or the method must fail
-			// with a 409 (Conflict) status code.
-			w.WriteHeader(http.StatusConflict)
-			b, err := errors.Marshal(http.StatusConflict, "Parent node does not exist", "")
-			errors.HandleWebdavError(&log, w, b, err)
-		} else {
-			errors.HandleErrorStatus(&log, w, parentStatRes.Status)
-		}
-		return
+	switch {
+	case err != nil:
+		return http.StatusInternalServerError, err
+	case parentStatRes.Status.Code == rpc.Code_CODE_NOT_FOUND:
+		// https://www.rfc-editor.org/rfc/rfc4918#section-9.3.1:
+		// 409 (Conflict) - A collection cannot be made at the Request-URI until
+		// one or more intermediate collections have been created.  The server
+		// MUST NOT create those intermediate collections automatically.
+		return http.StatusConflict, fmt.Errorf("intermediate collection does not exist")
+	case parentStatRes.Status.Code != rpc.Code_CODE_OK:
+		return rstatus.HTTPStatusFromCode(parentStatRes.Status.Code), errtypes.NewErrtypeFromStatus(parentStatRes.Status)
 	}
 
 	// check if child exists
+	// TODO again? we did that already in handlePathMkCol and handleSpacesMkCol
 	statReq := &provider.StatRequest{Ref: childRef}
 	statRes, err := client.Stat(ctx, statReq)
-	if err != nil {
-		log.Error().Err(err).Msg("error sending a grpc stat request")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	if statRes.Status.Code != rpc.Code_CODE_NOT_FOUND {
-		if statRes.Status.Code == rpc.Code_CODE_OK {
-			w.WriteHeader(http.StatusMethodNotAllowed) // 405 if it already exists
-			b, err := errors.Marshal(http.StatusMethodNotAllowed, "The resource you tried to create already exists", "")
-			errors.HandleWebdavError(&log, w, b, err)
-		} else {
-			errors.HandleErrorStatus(&log, w, statRes.Status)
-		}
-		return
+	switch {
+	case err != nil:
+		return http.StatusInternalServerError, err
+	case statRes.Status.Code == rpc.Code_CODE_OK:
+		// https://www.rfc-editor.org/rfc/rfc4918#section-9.3.1:
+		// 405 (Method Not Allowed) - MKCOL can only be executed on an unmapped URL.
+		return http.StatusMethodNotAllowed, fmt.Errorf("The resource you tried to create already exists")
+	case statRes.Status.Code != rpc.Code_CODE_NOT_FOUND:
+		return rstatus.HTTPStatusFromCode(statRes.Status.Code), errtypes.NewErrtypeFromStatus(statRes.Status)
 	}
 
 	req := &provider.CreateContainerRequest{Ref: childRef}
 	res, err := client.CreateContainer(ctx, req)
-	if err != nil {
-		log.Error().Err(err).Msg("error sending create container grpc request")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	switch res.Status.Code {
-	case rpc.Code_CODE_OK:
+	switch {
+	case err != nil:
+		return http.StatusInternalServerError, err
+	case res.Status.Code == rpc.Code_CODE_OK:
 		w.WriteHeader(http.StatusCreated)
-	case rpc.Code_CODE_NOT_FOUND:
-		log.Debug().Str("path", childRef.Path).Interface("status", statRes.Status).Msg("conflict")
-		w.WriteHeader(http.StatusConflict)
-	case rpc.Code_CODE_PERMISSION_DENIED:
-		w.WriteHeader(http.StatusForbidden)
-		// TODO path could be empty or relative...
-		m := fmt.Sprintf("Permission denied to create %v", childRef.Path)
-		b, err := errors.Marshal(http.StatusForbidden, m, "")
-		errors.HandleWebdavError(&log, w, b, err)
+		return 0, nil
+	case res.Status.Code == rpc.Code_CODE_NOT_FOUND:
+		return http.StatusConflict, fmt.Errorf("intermediate collection does not exist")
 	default:
-		errors.HandleErrorStatus(&log, w, res.Status)
+		return rstatus.HTTPStatusFromCode(statRes.Status.Code), errtypes.NewErrtypeFromStatus(statRes.Status)
 	}
 }

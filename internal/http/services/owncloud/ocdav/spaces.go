@@ -74,6 +74,10 @@ func (h *SpacesHandler) Handler(s *svc, trashbinHandler *TrashbinHandler) http.H
 
 		spaceID := segment
 
+		// TODO initialize status with http.StatusBadRequest
+		// TODO initialize err with errors.ErrUnsupportedMethod
+		var status int // status 0 means the handler already sent the response
+		var err error
 		switch r.Method {
 		case MethodPropfind:
 			p := propfind.NewHandler(config.PublicURL, func() (gateway.GatewayAPIClient, error) {
@@ -81,47 +85,13 @@ func (h *SpacesHandler) Handler(s *svc, trashbinHandler *TrashbinHandler) http.H
 			})
 			p.HandleSpacesPropfind(w, r, spaceID)
 		case MethodProppatch:
-			s.handleSpacesProppatch(w, r, spaceID)
+			status, err = s.handleSpacesProppatch(w, r, spaceID)
 		case MethodLock:
-			log := appctx.GetLogger(r.Context())
-			// TODO initialize status with http.StatusBadRequest
-			// TODO initialize err with errors.ErrUnsupportedMethod
-			status, err := s.handleSpacesLock(w, r, spaceID)
-			if err != nil {
-				log.Error().Err(err).Str("space", spaceID).Msg(err.Error())
-			}
-			if status != 0 { // 0 would mean handleLock already sent the response
-				w.WriteHeader(status)
-				if status != http.StatusNoContent {
-					var b []byte
-					if b, err = errors.Marshal(status, err.Error(), ""); err == nil {
-						_, err = w.Write(b)
-					}
-					if err != nil {
-						log.Error().Err(err).Str("space", spaceID).Msg(err.Error())
-					}
-				}
-			}
+			status, err = s.handleSpacesLock(w, r, spaceID)
 		case MethodUnlock:
-			log := appctx.GetLogger(r.Context())
-			status, err := s.handleUnlock(w, r, spaceID)
-			if err != nil {
-				log.Error().Err(err).Str("space", spaceID).Msg(err.Error())
-			}
-			if status != 0 { // 0 would mean handleUnlock already sent the response
-				w.WriteHeader(status)
-				if status != http.StatusNoContent {
-					var b []byte
-					if b, err = errors.Marshal(status, err.Error(), ""); err == nil {
-						_, err = w.Write(b)
-					}
-					if err != nil {
-						log.Error().Err(err).Str("space", spaceID).Msg(err.Error())
-					}
-				}
-			}
+			status, err = s.handleUnlock(w, r, spaceID)
 		case MethodMkcol:
-			s.handleSpacesMkCol(w, r, spaceID)
+			status, err = s.handleSpacesMkCol(w, r, spaceID)
 		case MethodMove:
 			s.handleSpacesMove(w, r, spaceID)
 		case MethodCopy:
@@ -142,6 +112,19 @@ func (h *SpacesHandler) Handler(s *svc, trashbinHandler *TrashbinHandler) http.H
 			s.handleSpacesDelete(w, r, spaceID)
 		default:
 			http.Error(w, http.StatusText(http.StatusNotImplemented), http.StatusNotImplemented)
+		}
+
+		if status != 0 { // 0 means the handler already sent the response
+			w.WriteHeader(status)
+			if status != http.StatusNoContent {
+				var b []byte
+				if b, err = errors.Marshal(status, err.Error(), ""); err == nil {
+					_, err = w.Write(b)
+				}
+			}
+		}
+		if err != nil {
+			appctx.GetLogger(r.Context()).Error().Err(err).Msg(err.Error())
 		}
 	})
 }
