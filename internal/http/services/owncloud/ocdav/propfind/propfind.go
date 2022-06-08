@@ -477,7 +477,7 @@ func (p *Handler) getResourceInfos(ctx context.Context, w http.ResponseWriter, r
 
 		case spaceInfo.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER && depth == net.DepthOne:
 			switch {
-			case strings.HasPrefix(requestPath, spaceInfo.Path) && spaceData.SpaceType != "virtual":
+			case strings.HasPrefix(requestPath, spaceInfo.Path) && (spacesPropfind || spaceData.SpaceType != "virtual"):
 				req := &provider.ListContainerRequest{
 					Ref:                   spaceData.Ref,
 					ArbitraryMetadataKeys: metadataKeys,
