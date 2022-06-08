@@ -71,16 +71,17 @@ var (
 
 // Handler implements the shares part of the ownCloud sharing API
 type Handler struct {
-	gatewayAddr            string
-	machineAuthAPIKey      string
-	storageRegistryAddr    string
-	publicURL              string
-	sharePrefix            string
-	homeNamespace          string
-	additionalInfoTemplate *template.Template
-	userIdentifierCache    *ttlcache.Cache
-	resourceInfoCache      cache.ResourceInfoCache
-	resourceInfoCacheTTL   time.Duration
+	gatewayAddr                           string
+	machineAuthAPIKey                     string
+	storageRegistryAddr                   string
+	publicURL                             string
+	sharePrefix                           string
+	homeNamespace                         string
+	skipUpdatingExistingSharesMountpoints bool
+	additionalInfoTemplate                *template.Template
+	userIdentifierCache                   *ttlcache.Cache
+	resourceInfoCache                     cache.ResourceInfoCache
+	resourceInfoCacheTTL                  time.Duration
 
 	getClient GatewayClientGetter
 }
@@ -123,6 +124,7 @@ func (h *Handler) Init(c *config.Config) {
 	h.publicURL = c.Config.Host
 	h.sharePrefix = c.SharePrefix
 	h.homeNamespace = c.HomeNamespace
+	h.skipUpdatingExistingSharesMountpoints = c.SkipUpdatingExistingSharesMountpoints
 
 	h.additionalInfoTemplate, _ = template.New("additionalInfo").Parse(c.AdditionalInfoAttribute)
 	h.resourceInfoCacheTTL = time.Second * time.Duration(c.ResourceInfoCacheTTL)
@@ -274,68 +276,15 @@ func (h *Handler) CreateShare(w http.ResponseWriter, r *http.Request) {
 		}
 
 		h.mapUserIds(ctx, client, s)
-		if shareType == int(conversions.ShareTypeUser) {
-			res, err := client.GetUser(ctx, &userpb.GetUserRequest{
-				UserId: &userpb.UserId{
-					OpaqueId: share.Grantee.GetUserId().GetOpaqueId(),
-				},
-			})
-			if err != nil {
-				response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "could not look up user", err)
-				return
-			}
-			if res.GetStatus().GetCode() != rpc.Code_CODE_OK {
-				response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "get user call failed", nil)
-				return
-			}
-			if res.User == nil {
-				response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "grantee not found", nil)
-				return
-			}
 
-			// Get auth
-			granteeCtx := ctxpkg.ContextSetUser(context.Background(), res.User)
-
-			authRes, err := client.Authenticate(granteeCtx, &gateway.AuthenticateRequest{
-				Type:         "machine",
-				ClientId:     res.User.Username,
-				ClientSecret: h.machineAuthAPIKey,
-			})
-			if err != nil {
-				response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "could not do machine authentication", err)
+		if !h.skipUpdatingExistingSharesMountpoints {
+			status, msg, err := h.updateExistingShareMountpoints(ctx, shareType, share, statRes.Info, client)
+			if status != response.MetaOK.StatusCode {
+				response.WriteOCSError(w, r, status, msg, err)
 				return
-			}
-			if authRes.GetStatus().GetCode() != rpc.Code_CODE_OK {
-				response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "machine authentication failed", nil)
-				return
-			}
-			granteeCtx = metadata.AppendToOutgoingContext(granteeCtx, ctxpkg.TokenHeader, authRes.Token)
-
-			lrs, ocsResponse := getSharesList(granteeCtx, client)
-			if ocsResponse != nil {
-				response.WriteOCSResponse(w, r, *ocsResponse, nil)
-				return
-			}
-
-			for _, s := range lrs.Shares {
-				if s.GetShare().GetId() != share.Id && s.State == collaboration.ShareState_SHARE_STATE_ACCEPTED && utils.ResourceIDEqual(s.Share.ResourceId, statRes.Info.GetId()) {
-					updateRequest := &collaboration.UpdateReceivedShareRequest{
-						Share: &collaboration.ReceivedShare{
-							Share:      share,
-							MountPoint: s.MountPoint,
-							State:      collaboration.ShareState_SHARE_STATE_ACCEPTED,
-						},
-						UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"state", "mount_point"}},
-					}
-
-					shareRes, err := client.UpdateReceivedShare(granteeCtx, updateRequest)
-					if err != nil || shareRes.Status.Code != rpc.Code_CODE_OK {
-						response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "grpc update received share request failed", err)
-						return
-					}
-				}
 			}
 		}
+
 		response.WriteOCSSuccess(w, r, s)
 	case int(conversions.ShareTypePublicLink):
 		// public links default to read only
@@ -377,6 +326,65 @@ func (h *Handler) CreateShare(w http.ResponseWriter, r *http.Request) {
 	default:
 		response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "unknown share type", nil)
 	}
+}
+
+func (h *Handler) updateExistingShareMountpoints(ctx context.Context, shareType int, share *collaboration.Share, info *provider.ResourceInfo, client gateway.GatewayAPIClient) (int, string, error) {
+	if shareType == int(conversions.ShareTypeUser) {
+		res, err := client.GetUser(ctx, &userpb.GetUserRequest{
+			UserId: &userpb.UserId{
+				OpaqueId: share.Grantee.GetUserId().GetOpaqueId(),
+			},
+		})
+		if err != nil {
+			return response.MetaServerError.StatusCode, "could not look up user", err
+		}
+		if res.GetStatus().GetCode() != rpc.Code_CODE_OK {
+			return response.MetaServerError.StatusCode, "get user call failed", nil
+		}
+		if res.User == nil {
+			return response.MetaServerError.StatusCode, "grantee not found", nil
+		}
+
+		// Get auth
+		granteeCtx := ctxpkg.ContextSetUser(context.Background(), res.User)
+
+		authRes, err := client.Authenticate(granteeCtx, &gateway.AuthenticateRequest{
+			Type:         "machine",
+			ClientId:     res.User.Username,
+			ClientSecret: h.machineAuthAPIKey,
+		})
+		if err != nil {
+			return response.MetaServerError.StatusCode, "could not do machine authentication", err
+		}
+		if authRes.GetStatus().GetCode() != rpc.Code_CODE_OK {
+			return response.MetaServerError.StatusCode, "machine authentication failed", nil
+		}
+		granteeCtx = metadata.AppendToOutgoingContext(granteeCtx, ctxpkg.TokenHeader, authRes.Token)
+
+		lrs, ocsResponse := getSharesList(granteeCtx, client)
+		if ocsResponse != nil {
+			return ocsResponse.OCS.Meta.StatusCode, ocsResponse.OCS.Meta.Message, nil
+		}
+
+		for _, s := range lrs.Shares {
+			if s.GetShare().GetId() != share.Id && s.State == collaboration.ShareState_SHARE_STATE_ACCEPTED && utils.ResourceIDEqual(s.Share.ResourceId, info.GetId()) {
+				updateRequest := &collaboration.UpdateReceivedShareRequest{
+					Share: &collaboration.ReceivedShare{
+						Share:      share,
+						MountPoint: s.MountPoint,
+						State:      collaboration.ShareState_SHARE_STATE_ACCEPTED,
+					},
+					UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"state", "mount_point"}},
+				}
+
+				shareRes, err := client.UpdateReceivedShare(granteeCtx, updateRequest)
+				if err != nil || shareRes.Status.Code != rpc.Code_CODE_OK {
+					return response.MetaServerError.StatusCode, "grpc update received share request failed", err
+				}
+			}
+		}
+	}
+	return response.MetaOK.StatusCode, "", nil
 }
 
 func (h *Handler) extractPermissions(w http.ResponseWriter, r *http.Request, ri *provider.ResourceInfo, defaultPermissions *conversions.Role) (*conversions.Role, []byte, *ocsError) {
@@ -834,13 +842,15 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 		} else {
 			var status *rpc.Status
 			// FIXME the ResourceID is the id of the resource, but we want the id of the mount point so we can fetch that path, well we have the mountpoint path in the receivedshare
-			// first stat mount point
-			mountID := &provider.ResourceId{
-				StorageId: utils.ShareStorageProviderID,
-				OpaqueId:  rs.Share.Id.OpaqueId,
+			// first stat mount point, but the shares storage provider only handles accepted shares so we send the try to make the requests for only those
+			if rs.State == collaboration.ShareState_SHARE_STATE_ACCEPTED {
+				mountID := &provider.ResourceId{
+					StorageId: utils.ShareStorageProviderID,
+					OpaqueId:  rs.Share.Id.OpaqueId,
+				}
+				info, status, err = h.getResourceInfoByID(ctx, client, mountID)
 			}
-			info, status, err = h.getResourceInfoByID(ctx, client, mountID)
-			if err != nil || status.Code != rpc.Code_CODE_OK {
+			if rs.State != collaboration.ShareState_SHARE_STATE_ACCEPTED || err != nil || status.Code != rpc.Code_CODE_OK {
 				// fallback to unmounted resource
 				info, status, err = h.getResourceInfoByID(ctx, client, rs.Share.ResourceId)
 				if err != nil || status.Code != rpc.Code_CODE_OK {
