@@ -47,7 +47,7 @@ require (
 	github.com/mitchellh/go-testing-interface v1.14.1 // indirect
 	github.com/mitchellh/mapstructure v1.5.0
 	github.com/nats-io/nats-server/v2 v2.8.2
-	github.com/nats-io/nats-streaming-server v0.24.5
+	github.com/nats-io/nats-streaming-server v0.24.6
 	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/gomega v1.19.0
 	github.com/pkg/errors v0.9.1
