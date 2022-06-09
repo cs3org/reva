@@ -487,7 +487,7 @@ func (s *svc) newPropRaw(key, val string) *propertyXML {
 // ns is the CS3 namespace that needs to be removed from the CS3 path before
 // prefixing it with the baseURI
 func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provider.ResourceInfo, ns string, linkshares map[string]struct{}) (*responseXML, error) {
-	sublog := appctx.GetLogger(ctx).With().Interface("md", md).Str("ns", ns).Logger()
+	sublog := appctx.GetLogger(ctx).With().Str("ns", ns).Logger()
 	md.Path = strings.TrimPrefix(md.Path, ns)
 
 	baseURI := ctx.Value(ctxKeyBaseURI).(string)
@@ -713,7 +713,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 							propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:public-link-share-owner", u.Username))
 						} else {
 							u, _ := ctxpkg.ContextGetUser(ctx)
-							sublog.Error().Interface("share", ls).Interface("user", u).Msg("the current user in the context should be the owner of a public link share")
+							sublog.Error().Interface("share", ls).Interface("user", u.GetId()).Msg("the current user in the context should be the owner of a public link share")
 							propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:public-link-share-owner", ""))
 						}
 					} else {
