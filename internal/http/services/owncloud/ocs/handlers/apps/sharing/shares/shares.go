@@ -660,7 +660,7 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 	shares := make([]*conversions.ShareData, 0, len(lrsRes.GetShares()))
 
 	var wg sync.WaitGroup
-	workers := 50
+	workers := 1
 	input := make(chan *collaboration.ReceivedShare, len(lrsRes.GetShares()))
 	output := make(chan *conversions.ShareData, len(lrsRes.GetShares()))
 

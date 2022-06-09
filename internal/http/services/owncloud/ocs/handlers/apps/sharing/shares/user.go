@@ -193,7 +193,7 @@ func (h *Handler) listUserShares(r *http.Request, filters []*collaboration.Filte
 	}
 
 	var wg sync.WaitGroup
-	workers := 50
+	workers := 1
 	input := make(chan *collaboration.Share, len(lsUserSharesResponse.Shares))
 	output := make(chan *conversions.ShareData, len(lsUserSharesResponse.Shares))
 

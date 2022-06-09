@@ -160,7 +160,7 @@ func (h *Handler) listPublicShares(r *http.Request, filters []*link.ListPublicSh
 	}
 
 	var wg sync.WaitGroup
-	workers := 50
+	workers := 1
 	input := make(chan *link.PublicShare, len(res.Share))
 	output := make(chan *conversions.ShareData, len(res.Share))
 
