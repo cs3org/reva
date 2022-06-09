@@ -159,7 +159,7 @@ func (m *mgr) Share(ctx context.Context, md *provider.ResourceInfo, g *collabora
 	if err != nil {
 		return nil, err
 	}
-	result, err := stmt.Exec(stmtValues...)
+	result, err := stmt.ExecContext(ctx, stmtValues...)
 	if err != nil {
 		return nil, err
 	}
@@ -226,7 +226,7 @@ func (m *mgr) Unshare(ctx context.Context, ref *collaboration.ShareReference) er
 	if err != nil {
 		return err
 	}
-	res, err := stmt.Exec(params...)
+	res, err := stmt.ExecContext(ctx, params...)
 	if err != nil {
 		return err
 	}
@@ -268,7 +268,7 @@ func (m *mgr) UpdateShare(ctx context.Context, ref *collaboration.ShareReference
 	if err != nil {
 		return nil, err
 	}
-	if _, err = stmt.Exec(params...); err != nil {
+	if _, err = stmt.ExecContext(ctx, params...); err != nil {
 		return nil, err
 	}
 
@@ -309,7 +309,7 @@ func (m *mgr) ListShares(ctx context.Context, filters []*collaboration.Filter) (
 		query = fmt.Sprintf("%s AND (%s)", query, filterQuery)
 	}
 
-	rows, err := m.db.Query(query, params...)
+	rows, err := m.db.QueryContext(ctx, query, params...)
 	if err != nil {
 		return nil, err
 	}
@@ -377,7 +377,7 @@ func (m *mgr) ListReceivedShares(ctx context.Context, filters []*collaboration.F
 		query = fmt.Sprintf("%s AND (%s)", query, filterQuery)
 	}
 	query += ";"
-	rows, err := m.db.Query(query, params...)
+	rows, err := m.db.QueryContext(ctx, query, params...)
 	if err != nil {
 		return nil, err
 	}
@@ -464,7 +464,7 @@ func (m *mgr) UpdateReceivedShare(ctx context.Context, receivedShare *collaborat
 		if err != nil {
 			return err
 		}
-		res, err := stmt.Exec(params...)
+		res, err := stmt.ExecContext(ctx, params...)
 		if err != nil {
 			return err
 		}
@@ -492,7 +492,7 @@ func (m *mgr) getByID(ctx context.Context, id *collaboration.ShareId) (*collabor
 	uid := ctxpkg.ContextMustGetUser(ctx).Username
 	s := DBShare{ID: id.OpaqueId}
 	query := "select coalesce(uid_owner, '') as uid_owner, coalesce(uid_initiator, '') as uid_initiator, coalesce(share_with, '') as share_with, coalesce(file_source, '') as file_source, file_target, stime, permissions, share_type FROM oc_share WHERE id=? AND (uid_owner=? or uid_initiator=?)"
-	if err := m.db.QueryRow(query, id.OpaqueId, uid, uid).Scan(&s.UIDOwner, &s.UIDInitiator, &s.ShareWith, &s.FileSource, &s.FileTarget, &s.STime, &s.Permissions, &s.ShareType); err != nil {
+	if err := m.db.QueryRowContext(ctx, query, id.OpaqueId, uid, uid).Scan(&s.UIDOwner, &s.UIDInitiator, &s.ShareWith, &s.FileSource, &s.FileTarget, &s.STime, &s.Permissions, &s.ShareType); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, errtypes.NotFound(id.OpaqueId)
 		}
@@ -514,7 +514,7 @@ func (m *mgr) getByKey(ctx context.Context, key *collaboration.ShareKey) (*colla
 		return nil, err
 	}
 	query := "select coalesce(uid_owner, '') as uid_owner, coalesce(uid_initiator, '') as uid_initiator, coalesce(share_with, '') as share_with, coalesce(file_source, '') as file_source, file_target, id, stime, permissions, share_type FROM oc_share WHERE uid_owner=? AND file_source=? AND share_type=? AND share_with=? AND (uid_owner=? or uid_initiator=?)"
-	if err = m.db.QueryRow(query, owner, key.ResourceId.StorageId, shareType, shareWith, uid, uid).Scan(&s.UIDOwner, &s.UIDInitiator, &s.ShareWith, &s.FileSource, &s.FileTarget, &s.ID, &s.STime, &s.Permissions, &s.ShareType); err != nil {
+	if err = m.db.QueryRowContext(ctx, query, owner, key.ResourceId.StorageId, shareType, shareWith, uid, uid).Scan(&s.UIDOwner, &s.UIDInitiator, &s.ShareWith, &s.FileSource, &s.FileTarget, &s.ID, &s.STime, &s.Permissions, &s.ShareType); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, errtypes.NotFound(key.String())
 		}
@@ -562,7 +562,7 @@ func (m *mgr) getReceivedByID(ctx context.Context, id *collaboration.ShareId) (*
 	`
 
 	s := DBShare{}
-	if err := m.db.QueryRow(query, params...).Scan(&s.UIDOwner, &s.UIDInitiator, &s.ShareWith, &s.FileSource, &s.FileTarget, &s.ID, &s.STime, &s.Permissions, &s.ShareType, &s.State, &s.ItemStorage, &s.Parent); err != nil {
+	if err := m.db.QueryRowContext(ctx, query, params...).Scan(&s.UIDOwner, &s.UIDInitiator, &s.ShareWith, &s.FileSource, &s.FileTarget, &s.ID, &s.STime, &s.Permissions, &s.ShareType, &s.State, &s.ItemStorage, &s.Parent); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, errtypes.NotFound(id.OpaqueId)
 		}
@@ -592,7 +592,7 @@ func (m *mgr) getReceivedByKey(ctx context.Context, key *collaboration.ShareKey)
 		query += "AND (share_with=?)"
 	}
 
-	if err := m.db.QueryRow(query, params...).Scan(&s.UIDOwner, &s.UIDInitiator, &s.ShareWith, &s.FileSource, &s.FileTarget, &s.ID, &s.STime, &s.Permissions, &s.ShareType, &s.State); err != nil {
+	if err := m.db.QueryRowContext(ctx, query, params...).Scan(&s.UIDOwner, &s.UIDInitiator, &s.ShareWith, &s.FileSource, &s.FileTarget, &s.ID, &s.STime, &s.Permissions, &s.ShareType, &s.State); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, errtypes.NotFound(key.String())
 		}
