@@ -191,7 +191,7 @@ func (fs *owncloudsqlfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upl
 		return nil, errors.Wrap(err, "owncloudsql: error resolving upload path")
 	}
 	usr := ctxpkg.ContextMustGetUser(ctx)
-	storageID, err := fs.getStorage(ip)
+	storageID, err := fs.getStorage(ctx, ip)
 	if err != nil {
 		return nil, err
 	}
@@ -405,7 +405,7 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) error {
 		"mtime":         upload.info.MetaData["mtime"],
 		"storage_mtime": upload.info.MetaData["mtime"],
 	}
-	_, err = upload.fs.filecache.InsertOrUpdate(upload.info.Storage["StorageId"], data, false)
+	_, err = upload.fs.filecache.InsertOrUpdate(ctx, upload.info.Storage["StorageId"], data, false)
 	if err != nil {
 		return err
 	}
