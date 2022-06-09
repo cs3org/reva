@@ -192,14 +192,15 @@ func New(m map[string]interface{}, unprotected []string) (global.Middleware, err
 					return
 				}
 			} else {
+				u, ok := ctxpkg.ContextGetUser(ctx)
+				if ok {
+					span.SetAttributes(semconv.EnduserIDKey.String(u.Id.OpaqueId))
+				}
+
 				r = r.WithContext(ctx)
 			}
 			h.ServeHTTP(w, r)
 
-			u, ok := ctxpkg.ContextGetUser(ctx)
-			if ok {
-				span.SetAttributes(semconv.EnduserIDKey.String(u.Id.OpaqueId))
-			}
 		})
 	}
 	return chain, nil
