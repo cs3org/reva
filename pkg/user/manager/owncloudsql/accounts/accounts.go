@@ -42,8 +42,11 @@ func NewMysql(dsn string, joinUsername, joinUUID, enableMedialSearch bool) (*Acc
 	if err != nil {
 		return nil, errors.Wrap(err, "error connecting to the database")
 	}
+
+	// FIXME make configurable
 	sqldb.SetConnMaxLifetime(time.Minute * 3)
-	sqldb.SetMaxOpenConns(10)
+	sqldb.SetConnMaxIdleTime(time.Second * 30)
+	sqldb.SetMaxOpenConns(100)
 	sqldb.SetMaxIdleConns(10)
 
 	err = sqldb.Ping()
