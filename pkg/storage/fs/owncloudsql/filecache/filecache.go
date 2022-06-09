@@ -19,6 +19,7 @@
 package filecache
 
 import (
+	"context"
 	"crypto/md5"
 	"database/sql"
 	"encoding/hex"
@@ -34,6 +35,9 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
+
+	// Provides mysql drivers
+	_ "github.com/go-sql-driver/mysql"
 )
 
 // Cache represents a oc10-style file cache
@@ -88,8 +92,11 @@ func NewMysql(dsn string) (*Cache, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "error connecting to the database")
 	}
+
+	// FIXME make configurable
 	sqldb.SetConnMaxLifetime(time.Minute * 3)
-	sqldb.SetMaxOpenConns(10)
+	sqldb.SetConnMaxIdleTime(time.Second * 30)
+	sqldb.SetMaxOpenConns(100)
 	sqldb.SetMaxIdleConns(10)
 
 	err = sqldb.Ping()
@@ -110,7 +117,7 @@ func New(driver string, sqldb *sql.DB) (*Cache, error) {
 
 // ListStorages returns the list of numeric ids of all storages
 // Optionally only home storages are considered
-func (c *Cache) ListStorages(onlyHome bool) ([]*Storage, error) {
+func (c *Cache) ListStorages(ctx context.Context, onlyHome bool) ([]*Storage, error) {
 	query := ""
 	if onlyHome {
 		mountPointConcat := ""
@@ -124,7 +131,7 @@ func (c *Cache) ListStorages(onlyHome bool) ([]*Storage, error) {
 	} else {
 		query = "SELECT id, numeric_id FROM oc_storages"
 	}
-	rows, err := c.db.Query(query)
+	rows, err := c.db.QueryContext(ctx, query)
 	if err != nil {
 		return nil, err
 	}
@@ -143,12 +150,12 @@ func (c *Cache) ListStorages(onlyHome bool) ([]*Storage, error) {
 }
 
 // GetStorage returns the storage with the given numeric id
-func (c *Cache) GetStorage(numeridID interface{}) (*Storage, error) {
+func (c *Cache) GetStorage(ctx context.Context, numeridID interface{}) (*Storage, error) {
 	numericID, err := toIntID(numeridID)
 	if err != nil {
 		return nil, err
 	}
-	row := c.db.QueryRow("SELECT id, numeric_id FROM oc_storages WHERE numeric_id = ?", numericID)
+	row := c.db.QueryRowContext(ctx, "SELECT id, numeric_id FROM oc_storages WHERE numeric_id = ?", numericID)
 	s := &Storage{}
 	switch err := row.Scan(&s.ID, &s.NumericID); err {
 	case nil:
@@ -159,8 +166,8 @@ func (c *Cache) GetStorage(numeridID interface{}) (*Storage, error) {
 }
 
 // GetNumericStorageID returns the database id for the given storage
-func (c *Cache) GetNumericStorageID(id string) (int, error) {
-	row := c.db.QueryRow("SELECT numeric_id FROM oc_storages WHERE id = ?", id)
+func (c *Cache) GetNumericStorageID(ctx context.Context, id string) (int, error) {
+	row := c.db.QueryRowContext(ctx, "SELECT numeric_id FROM oc_storages WHERE id = ?", id)
 	var nid int
 	switch err := row.Scan(&nid); err {
 	case nil:
@@ -171,20 +178,20 @@ func (c *Cache) GetNumericStorageID(id string) (int, error) {
 }
 
 // CreateStorage creates a new storage and returns its numeric id
-func (c *Cache) CreateStorage(id string) (int, error) {
+func (c *Cache) CreateStorage(ctx context.Context, id string) (int, error) {
 	tx, err := c.db.Begin()
 	if err != nil {
 		return -1, err
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	stmt, err := tx.Prepare("INSERT INTO oc_storages(id) VALUES(?)")
+	stmt, err := tx.PrepareContext(ctx, "INSERT INTO oc_storages(id) VALUES(?)")
 	if err != nil {
 		return -1, err
 	}
 	defer stmt.Close()
 
-	res, err := stmt.Exec(id)
+	res, err := stmt.ExecContext(ctx, id)
 	if err != nil {
 		return -1, err
 	}
@@ -198,7 +205,7 @@ func (c *Cache) CreateStorage(id string) (int, error) {
 		"etag":     "",
 		"mimetype": "httpd/unix-directory",
 	}
-	_, err = c.doInsertOrUpdate(tx, int(insertedID), data, true)
+	_, err = c.doInsertOrUpdate(ctx, tx, int(insertedID), data, true)
 	if err != nil {
 		return -1, err
 	}
@@ -212,12 +219,12 @@ func (c *Cache) CreateStorage(id string) (int, error) {
 }
 
 // GetStorageOwner returns the username of the owner of the given storage
-func (c *Cache) GetStorageOwner(numericID interface{}) (string, error) {
+func (c *Cache) GetStorageOwner(ctx context.Context, numericID interface{}) (string, error) {
 	numericID, err := toIntID(numericID)
 	if err != nil {
 		return "", err
 	}
-	row := c.db.QueryRow("SELECT id FROM oc_storages WHERE numeric_id = ?", numericID)
+	row := c.db.QueryRowContext(ctx, "SELECT id FROM oc_storages WHERE numeric_id = ?", numericID)
 	var id string
 	switch err := row.Scan(&id); err {
 	case nil:
@@ -228,12 +235,12 @@ func (c *Cache) GetStorageOwner(numericID interface{}) (string, error) {
 }
 
 // GetStorageOwnerByFileID returns the username of the owner of the given entry
-func (c *Cache) GetStorageOwnerByFileID(numericID interface{}) (string, error) {
+func (c *Cache) GetStorageOwnerByFileID(ctx context.Context, numericID interface{}) (string, error) {
 	numericID, err := toIntID(numericID)
 	if err != nil {
 		return "", err
 	}
-	row := c.db.QueryRow("SELECT id FROM oc_storages storages, oc_filecache cache WHERE storages.numeric_id = cache.storage AND cache.fileid = ?", numericID)
+	row := c.db.QueryRowContext(ctx, "SELECT id FROM oc_storages storages, oc_filecache cache WHERE storages.numeric_id = cache.storage AND cache.fileid = ?", numericID)
 	var id string
 	switch err := row.Scan(&id); err {
 	case nil:
@@ -273,7 +280,7 @@ func (c *Cache) rowToFile(row Scannable) (*File, error) {
 }
 
 // Get returns the cache entry for the specified storage/path
-func (c *Cache) Get(s interface{}, p string) (*File, error) {
+func (c *Cache) Get(ctx context.Context, s interface{}, p string) (*File, error) {
 	storageID, err := toIntID(s)
 	if err != nil {
 		return nil, err
@@ -282,7 +289,7 @@ func (c *Cache) Get(s interface{}, p string) (*File, error) {
 	phashBytes := md5.Sum([]byte(p))
 	phash := hex.EncodeToString(phashBytes[:])
 
-	row := c.db.QueryRow(`
+	row := c.db.QueryRowContext(ctx, `
 		SELECT
 			fc.fileid, fc.storage, fc.path, fc.parent, fc.permissions, fc.mimetype, fc.mimepart,
 			mt.mimetype, fc.size, fc.mtime, fc.storage_mtime, fc.encrypted, fc.unencrypted_size,
@@ -294,13 +301,13 @@ func (c *Cache) Get(s interface{}, p string) (*File, error) {
 }
 
 // Path returns the path for the specified entry
-func (c *Cache) Path(id interface{}) (string, error) {
+func (c *Cache) Path(ctx context.Context, id interface{}) (string, error) {
 	id, err := toIntID(id)
 	if err != nil {
 		return "", err
 	}
 
-	row := c.db.QueryRow("SELECT path FROM oc_filecache WHERE fileid = ?", id)
+	row := c.db.QueryRowContext(ctx, "SELECT path FROM oc_filecache WHERE fileid = ?", id)
 	var path string
 	err = row.Scan(&path)
 	if err != nil {
@@ -310,7 +317,7 @@ func (c *Cache) Path(id interface{}) (string, error) {
 }
 
 // List returns the list of entries below the given path
-func (c *Cache) List(storage interface{}, p string) ([]*File, error) {
+func (c *Cache) List(ctx context.Context, storage interface{}, p string) ([]*File, error) {
 	storageID, err := toIntID(storage)
 	if err != nil {
 		return nil, err
@@ -318,7 +325,7 @@ func (c *Cache) List(storage interface{}, p string) ([]*File, error) {
 
 	var rows *sql.Rows
 	phash := fmt.Sprintf("%x", md5.Sum([]byte(strings.Trim(p, "/"))))
-	rows, err = c.db.Query(`
+	rows, err = c.db.QueryContext(ctx, `
 		SELECT
 			fc.fileid, fc.storage, fc.path, fc.parent, fc.permissions, fc.mimetype, fc.mimepart,
 			mt.mimetype, fc.size, fc.mtime, fc.storage_mtime, fc.encrypted, fc.unencrypted_size,
@@ -344,8 +351,8 @@ func (c *Cache) List(storage interface{}, p string) ([]*File, error) {
 }
 
 // Permissions returns the permissions for the specified storage/path
-func (c *Cache) Permissions(storage interface{}, p string) (*provider.ResourcePermissions, error) {
-	entry, err := c.Get(storage, p)
+func (c *Cache) Permissions(ctx context.Context, storage interface{}, p string) (*provider.ResourcePermissions, error) {
+	entry, err := c.Get(ctx, storage, p)
 	if err != nil {
 		return nil, err
 	}
@@ -359,14 +366,14 @@ func (c *Cache) Permissions(storage interface{}, p string) (*provider.ResourcePe
 }
 
 // InsertOrUpdate creates or updates a cache entry
-func (c *Cache) InsertOrUpdate(storage interface{}, data map[string]interface{}, allowEmptyParent bool) (int, error) {
+func (c *Cache) InsertOrUpdate(ctx context.Context, storage interface{}, data map[string]interface{}, allowEmptyParent bool) (int, error) {
 	tx, err := c.db.Begin()
 	if err != nil {
 		return -1, err
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	id, err := c.doInsertOrUpdate(tx, storage, data, allowEmptyParent)
+	id, err := c.doInsertOrUpdate(ctx, tx, storage, data, allowEmptyParent)
 	if err != nil {
 		return -1, err
 	}
@@ -379,7 +386,7 @@ func (c *Cache) InsertOrUpdate(storage interface{}, data map[string]interface{},
 	return id, err
 }
 
-func (c *Cache) doInsertOrUpdate(tx *sql.Tx, storage interface{}, data map[string]interface{}, allowEmptyParent bool) (int, error) {
+func (c *Cache) doInsertOrUpdate(ctx context.Context, tx *sql.Tx, storage interface{}, data map[string]interface{}, allowEmptyParent bool) (int, error) {
 	storageID, err := toIntID(storage)
 	if err != nil {
 		return -1, err
@@ -408,7 +415,7 @@ func (c *Cache) doInsertOrUpdate(tx *sql.Tx, storage interface{}, data map[strin
 	if path == "" {
 		data["parent"] = -1
 	} else {
-		parent, err := c.Get(storageID, parentPath)
+		parent, err := c.Get(ctx, storageID, parentPath)
 		if err == nil {
 			data["parent"] = parent.ID
 		} else {
@@ -454,7 +461,7 @@ func (c *Cache) doInsertOrUpdate(tx *sql.Tx, storage interface{}, data map[strin
 		placeholders = append(placeholders, "?")
 	}
 
-	err = c.insertMimetype(tx, data["mimetype"].(string))
+	err = c.insertMimetype(ctx, tx, data["mimetype"].(string))
 	if err != nil {
 		return -1, err
 	}
@@ -475,12 +482,12 @@ func (c *Cache) doInsertOrUpdate(tx *sql.Tx, storage interface{}, data map[strin
 	}
 	query += strings.Join(updates, ",")
 
-	stmt, err := tx.Prepare(query)
+	stmt, err := tx.PrepareContext(ctx, query)
 	if err != nil {
 		return -1, err
 	}
 
-	res, err := stmt.Exec(values...)
+	res, err := stmt.ExecContext(ctx, values...)
 	if err != nil {
 		log.Err(err).Msg("could not store filecache item")
 		return -1, err
@@ -493,17 +500,17 @@ func (c *Cache) doInsertOrUpdate(tx *sql.Tx, storage interface{}, data map[strin
 }
 
 // Copy creates a copy of the specified entry at the target path
-func (c *Cache) Copy(storage interface{}, sourcePath, targetPath string) (int, error) {
+func (c *Cache) Copy(ctx context.Context, storage interface{}, sourcePath, targetPath string) (int, error) {
 	storageID, err := toIntID(storage)
 	if err != nil {
 		return -1, err
 	}
-	source, err := c.Get(storageID, sourcePath)
+	source, err := c.Get(ctx, storageID, sourcePath)
 	if err != nil {
 		return -1, errors.Wrap(err, "could not find source")
 	}
 
-	row := c.db.QueryRow("SELECT mimetype FROM oc_mimetypes WHERE id=?", source.MimeType)
+	row := c.db.QueryRowContext(ctx, "SELECT mimetype FROM oc_mimetypes WHERE id=?", source.MimeType)
 	var mimetype string
 	err = row.Scan(&mimetype)
 	if err != nil {
@@ -522,21 +529,21 @@ func (c *Cache) Copy(storage interface{}, sourcePath, targetPath string) (int, e
 		"encrypted":        source.Encrypted,
 		"unencrypted_size": source.UnencryptedSize,
 	}
-	return c.InsertOrUpdate(storage, data, false)
+	return c.InsertOrUpdate(ctx, storage, data, false)
 }
 
 // Move moves the specified entry to the target path
-func (c *Cache) Move(storage interface{}, sourcePath, targetPath string) error {
+func (c *Cache) Move(ctx context.Context, storage interface{}, sourcePath, targetPath string) error {
 	storageID, err := toIntID(storage)
 	if err != nil {
 		return err
 	}
-	source, err := c.Get(storageID, sourcePath)
+	source, err := c.Get(ctx, storageID, sourcePath)
 	if err != nil {
 		return errors.Wrap(err, "could not find source")
 	}
 	newParentPath := strings.TrimRight(filepath.Dir(targetPath), "/")
-	newParent, err := c.Get(storageID, newParentPath)
+	newParent, err := c.Get(ctx, storageID, newParentPath)
 	if err != nil {
 		return errors.Wrap(err, "could not find new parent")
 	}
@@ -552,12 +559,12 @@ func (c *Cache) Move(storage interface{}, sourcePath, targetPath string) error {
 	}
 	defer stmt.Close()
 	phashBytes := md5.Sum([]byte(targetPath))
-	_, err = stmt.Exec(newParent.ID, targetPath, filepath.Base(targetPath), hex.EncodeToString(phashBytes[:]), storageID, source.ID)
+	_, err = stmt.ExecContext(ctx, newParent.ID, targetPath, filepath.Base(targetPath), hex.EncodeToString(phashBytes[:]), storageID, source.ID)
 	if err != nil {
 		return err
 	}
 
-	childRows, err := tx.Query("SELECT fileid, path FROM oc_filecache WHERE parent = ?", source.ID)
+	childRows, err := tx.QueryContext(ctx, "SELECT fileid, path FROM oc_filecache WHERE parent = ?", source.ID)
 	if err != nil {
 		return err
 	}
@@ -578,7 +585,7 @@ func (c *Cache) Move(storage interface{}, sourcePath, targetPath string) error {
 	for id, path := range children {
 		path = strings.ReplaceAll(path, sourcePath, targetPath)
 		phashBytes = md5.Sum([]byte(path))
-		_, err = stmt.Exec(source.ID, path, filepath.Base(path), hex.EncodeToString(phashBytes[:]), storageID, id)
+		_, err = stmt.ExecContext(ctx, source.ID, path, filepath.Base(path), hex.EncodeToString(phashBytes[:]), storageID, id)
 		if err != nil {
 			return err
 		}
@@ -588,20 +595,20 @@ func (c *Cache) Move(storage interface{}, sourcePath, targetPath string) error {
 }
 
 // Purge removes the specified storage/path from the cache without putting it into the trash
-func (c *Cache) Purge(storage interface{}, path string) error {
+func (c *Cache) Purge(ctx context.Context, storage interface{}, path string) error {
 	storageID, err := toIntID(storage)
 	if err != nil {
 		return err
 	}
 	phashBytes := md5.Sum([]byte(path))
 	phash := hex.EncodeToString(phashBytes[:])
-	_, err = c.db.Exec("DELETE FROM oc_filecache WHERE storage = ? and path_hash = ?", storageID, phash)
+	_, err = c.db.ExecContext(ctx, "DELETE FROM oc_filecache WHERE storage = ? and path_hash = ?", storageID, phash)
 	return err
 }
 
 // Delete removes the specified storage/path from the cache
-func (c *Cache) Delete(storage interface{}, user, path, trashPath string) error {
-	err := c.Move(storage, path, trashPath)
+func (c *Cache) Delete(ctx context.Context, storage interface{}, user, path, trashPath string) error {
+	err := c.Move(ctx, storage, path, trashPath)
 	if err != nil {
 		return err
 	}
@@ -610,7 +617,7 @@ func (c *Cache) Delete(storage interface{}, user, path, trashPath string) error 
 	parts := re.FindStringSubmatch(filepath.Base(trashPath))
 
 	query := "INSERT INTO oc_files_trash(user,id,timestamp,location) VALUES(?,?,?,?)"
-	stmt, err := c.db.Prepare(query)
+	stmt, err := c.db.PrepareContext(ctx, query)
 	if err != nil {
 		return err
 	}
@@ -619,7 +626,7 @@ func (c *Cache) Delete(storage interface{}, user, path, trashPath string) error 
 	if err != nil {
 		return err
 	}
-	_, err = stmt.Exec(user, filepath.Base(parts[1]), parts[2], relativeLocation)
+	_, err = stmt.ExecContext(ctx, user, filepath.Base(parts[1]), parts[2], relativeLocation)
 	if err != nil {
 		log.Err(err).Msg("could not store filecache item")
 		return err
@@ -629,8 +636,8 @@ func (c *Cache) Delete(storage interface{}, user, path, trashPath string) error 
 }
 
 // GetRecycleItem returns the specified recycle item
-func (c *Cache) GetRecycleItem(user, path string, timestamp int) (*TrashItem, error) {
-	row := c.db.QueryRow("SELECT auto_id, id, location FROM oc_files_trash WHERE id = ? AND user = ? AND timestamp = ?", path, user, timestamp)
+func (c *Cache) GetRecycleItem(ctx context.Context, user, path string, timestamp int) (*TrashItem, error) {
+	row := c.db.QueryRowContext(ctx, "SELECT auto_id, id, location FROM oc_files_trash WHERE id = ? AND user = ? AND timestamp = ?", path, user, timestamp)
 	var autoID int
 	var id, location string
 	err := row.Scan(&autoID, &id, &location)
@@ -648,30 +655,30 @@ func (c *Cache) GetRecycleItem(user, path string, timestamp int) (*TrashItem, er
 }
 
 // EmptyRecycle clears the recycle bin for the given user
-func (c *Cache) EmptyRecycle(user string) error {
-	_, err := c.db.Exec("DELETE FROM oc_files_trash WHERE user = ?", user)
+func (c *Cache) EmptyRecycle(ctx context.Context, user string) error {
+	_, err := c.db.ExecContext(ctx, "DELETE FROM oc_files_trash WHERE user = ?", user)
 	if err != nil {
 		return err
 	}
 
-	storage, err := c.GetNumericStorageID("home::" + user)
+	storage, err := c.GetNumericStorageID(ctx, "home::"+user)
 	if err != nil {
 		return err
 	}
 
-	_, err = c.db.Exec("DELETE FROM oc_filecache WHERE storage = ? AND PATH LIKE ?", storage, "files_trashbin/%")
+	_, err = c.db.ExecContext(ctx, "DELETE FROM oc_filecache WHERE storage = ? AND PATH LIKE ?", storage, "files_trashbin/%")
 	return err
 }
 
 // DeleteRecycleItem deletes the specified item from the trash
-func (c *Cache) DeleteRecycleItem(user, path string, timestamp int) error {
-	_, err := c.db.Exec("DELETE FROM oc_files_trash WHERE id = ? AND user = ? AND timestamp = ?", path, user, timestamp)
+func (c *Cache) DeleteRecycleItem(ctx context.Context, user, path string, timestamp int) error {
+	_, err := c.db.ExecContext(ctx, "DELETE FROM oc_files_trash WHERE id = ? AND user = ? AND timestamp = ?", path, user, timestamp)
 	return err
 }
 
 // PurgeRecycleItem deletes the specified item from the filecache and the trash
-func (c *Cache) PurgeRecycleItem(user, path string, timestamp int, isVersionFile bool) error {
-	row := c.db.QueryRow("SELECT auto_id, location FROM oc_files_trash WHERE id = ? AND user = ? AND timestamp = ?", path, user, timestamp)
+func (c *Cache) PurgeRecycleItem(ctx context.Context, user, path string, timestamp int, isVersionFile bool) error {
+	row := c.db.QueryRowContext(ctx, "SELECT auto_id, location FROM oc_files_trash WHERE id = ? AND user = ? AND timestamp = ?", path, user, timestamp)
 	var autoID int
 	var location string
 	err := row.Scan(&autoID, &location)
@@ -679,12 +686,12 @@ func (c *Cache) PurgeRecycleItem(user, path string, timestamp int, isVersionFile
 		return err
 	}
 
-	_, err = c.db.Exec("DELETE FROM oc_files_trash WHERE auto_id=?", autoID)
+	_, err = c.db.ExecContext(ctx, "DELETE FROM oc_files_trash WHERE auto_id=?", autoID)
 	if err != nil {
 		return err
 	}
 
-	storage, err := c.GetNumericStorageID("home::" + user)
+	storage, err := c.GetNumericStorageID(ctx, "home::"+user)
 	if err != nil {
 		return err
 	}
@@ -692,40 +699,40 @@ func (c *Cache) PurgeRecycleItem(user, path string, timestamp int, isVersionFile
 	if isVersionFile {
 		trashType = "versions"
 	}
-	item, err := c.Get(storage, filepath.Join("files_trashbin", trashType, path+".d"+strconv.Itoa(timestamp)))
+	item, err := c.Get(ctx, storage, filepath.Join("files_trashbin", trashType, path+".d"+strconv.Itoa(timestamp)))
 	if err != nil {
 		return err
 	}
-	_, err = c.db.Exec("DELETE FROM oc_filecache WHERE fileid=? OR parent=?", item.ID, item.ID)
+	_, err = c.db.ExecContext(ctx, "DELETE FROM oc_filecache WHERE fileid=? OR parent=?", item.ID, item.ID)
 
 	return err
 }
 
 // SetEtag set a new etag for the specified item
-func (c *Cache) SetEtag(storage interface{}, path, etag string) error {
+func (c *Cache) SetEtag(ctx context.Context, storage interface{}, path, etag string) error {
 	storageID, err := toIntID(storage)
 	if err != nil {
 		return err
 	}
-	source, err := c.Get(storageID, path)
+	source, err := c.Get(ctx, storageID, path)
 	if err != nil {
 		return errors.Wrap(err, "could not find source")
 	}
-	stmt, err := c.db.Prepare("UPDATE oc_filecache SET etag=? WHERE storage = ? AND fileid=?")
+	stmt, err := c.db.PrepareContext(ctx, "UPDATE oc_filecache SET etag=? WHERE storage = ? AND fileid=?")
 	if err != nil {
 		return err
 	}
-	_, err = stmt.Exec(etag, storageID, source.ID)
+	_, err = stmt.ExecContext(ctx, etag, storageID, source.ID)
 	return err
 }
 
-func (c *Cache) insertMimetype(tx *sql.Tx, mimetype string) error {
+func (c *Cache) insertMimetype(ctx context.Context, tx *sql.Tx, mimetype string) error {
 	insertPart := func(v string) error {
-		stmt, err := tx.Prepare("INSERT INTO oc_mimetypes(mimetype) VALUES(?)")
+		stmt, err := tx.PrepareContext(ctx, "INSERT INTO oc_mimetypes(mimetype) VALUES(?)")
 		if err != nil {
 			return err
 		}
-		_, err = stmt.Exec(v)
+		_, err = stmt.ExecContext(ctx, v)
 		if err != nil {
 			if strings.Contains(err.Error(), "UNIQUE") || strings.Contains(err.Error(), "Error 1062") {
 				return nil // Already exists

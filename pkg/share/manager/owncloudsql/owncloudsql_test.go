@@ -97,7 +97,7 @@ var _ = Describe("SQL manager", func() {
 			if err != nil {
 				return -1, err
 			}
-			result, err := stmt.Exec(stmtValues...)
+			result, err := stmt.ExecContext(ctx, stmtValues...)
 			if err != nil {
 				return -1, err
 			}

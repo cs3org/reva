@@ -501,14 +501,14 @@ func (fs *owncloudsqlfs) permissionSet(ctx context.Context, owner *userpb.UserId
 	}
 }
 
-func (fs *owncloudsqlfs) getStorage(ip string) (int, error) {
-	return fs.filecache.GetNumericStorageID("home::" + fs.getOwner(ip))
+func (fs *owncloudsqlfs) getStorage(ctx context.Context, ip string) (int, error) {
+	return fs.filecache.GetNumericStorageID(ctx, "home::"+fs.getOwner(ip))
 }
 
-func (fs *owncloudsqlfs) getUserStorage(user string) (int, error) {
-	id, err := fs.filecache.GetNumericStorageID("home::" + user)
+func (fs *owncloudsqlfs) getUserStorage(ctx context.Context, user string) (int, error) {
+	id, err := fs.filecache.GetNumericStorageID(ctx, "home::"+user)
 	if err != nil {
-		id, err = fs.filecache.CreateStorage("home::" + user)
+		id, err = fs.filecache.CreateStorage(ctx, "home::"+user)
 	}
 	return id, err
 }
@@ -587,13 +587,13 @@ func (fs *owncloudsqlfs) GetPathByID(ctx context.Context, id *provider.ResourceI
 func (fs *owncloudsqlfs) resolve(ctx context.Context, ref *provider.Reference) (string, error) {
 
 	if ref.GetResourceId() != nil {
-		p, err := fs.filecache.Path(ref.GetResourceId().OpaqueId)
+		p, err := fs.filecache.Path(ctx, ref.GetResourceId().OpaqueId)
 		if err != nil {
 			return "", err
 		}
 		p = strings.TrimPrefix(p, "files/")
 		if !fs.c.EnableHome {
-			owner, err := fs.filecache.GetStorageOwnerByFileID(ref.GetResourceId().OpaqueId)
+			owner, err := fs.filecache.GetStorageOwnerByFileID(ctx, ref.GetResourceId().OpaqueId)
 			if err != nil {
 				return "", err
 			}
@@ -635,11 +635,11 @@ func (fs *owncloudsqlfs) readPermissions(ctx context.Context, ip string) (p *pro
 	}
 
 	// otherwise this is a share
-	ownerStorageID, err := fs.filecache.GetNumericStorageID("home::" + owner)
+	ownerStorageID, err := fs.filecache.GetNumericStorageID(ctx, "home::"+owner)
 	if err != nil {
 		return nil, err
 	}
-	entry, err := fs.filecache.Get(ownerStorageID, fs.toDatabasePath(ip))
+	entry, err := fs.filecache.Get(ctx, ownerStorageID, fs.toDatabasePath(ip))
 	if err != nil {
 		return nil, err
 	}
@@ -692,7 +692,7 @@ func (fs *owncloudsqlfs) createHomeForUser(ctx context.Context, user string) err
 		filepath.Join(fs.c.DataDirectory, user, "uploads"),
 	}
 
-	storageID, err := fs.getUserStorage(user)
+	storageID, err := fs.getUserStorage(ctx, user)
 	if err != nil {
 		return err
 	}
@@ -713,7 +713,7 @@ func (fs *owncloudsqlfs) createHomeForUser(ctx context.Context, user string) err
 		}
 
 		allowEmptyParent := v == filepath.Join(fs.c.DataDirectory, user) // the root doesn't have a parent
-		_, err = fs.filecache.InsertOrUpdate(storageID, data, allowEmptyParent)
+		_, err = fs.filecache.InsertOrUpdate(ctx, storageID, data, allowEmptyParent)
 		if err != nil {
 			return err
 		}
@@ -774,11 +774,11 @@ func (fs *owncloudsqlfs) CreateDir(ctx context.Context, ref *provider.Reference)
 		"mtime":         mtime,
 		"storage_mtime": mtime,
 	}
-	storageID, err := fs.getStorage(ip)
+	storageID, err := fs.getStorage(ctx, ip)
 	if err != nil {
 		return err
 	}
-	_, err = fs.filecache.InsertOrUpdate(storageID, data, false)
+	_, err = fs.filecache.InsertOrUpdate(ctx, storageID, data, false)
 	if err != nil {
 		if err != nil {
 			return err
@@ -1136,13 +1136,13 @@ func (fs *owncloudsqlfs) trash(ctx context.Context, ip string, rp string, origin
 		}
 	}
 
-	storage, err := fs.getStorage(ip)
+	storage, err := fs.getStorage(ctx, ip)
 	if err != nil {
 		return err
 	}
 
 	tryDelete := func() error {
-		return fs.filecache.Delete(storage, fs.getOwner(ip), fs.toDatabasePath(ip), fs.toDatabasePath(tgt))
+		return fs.filecache.Delete(ctx, storage, fs.getOwner(ip), fs.toDatabasePath(ip), fs.toDatabasePath(tgt))
 	}
 	err = tryDelete()
 	if err != nil {
@@ -1177,7 +1177,7 @@ func (fs *owncloudsqlfs) trashVersions(ctx context.Context, ip string, origin st
 
 	// Ignore error since the only possible error is malformed pattern.
 	versions, _ := filepath.Glob(vp + ".v*")
-	storage, err := fs.getStorage(ip)
+	storage, err := fs.getStorage(ctx, ip)
 	if err != nil {
 		return err
 	}
@@ -1196,7 +1196,7 @@ func (fs *owncloudsqlfs) trashVersions(ctx context.Context, ip string, origin st
 		if err != nil {
 			return errors.Wrap(err, "owncloudsql: error deleting file "+v)
 		}
-		err = fs.filecache.Move(storage, fs.toDatabasePath(v), fs.toDatabasePath(tgt))
+		err = fs.filecache.Move(ctx, storage, fs.toDatabasePath(v), fs.toDatabasePath(tgt))
 		if err != nil {
 			return errors.Wrap(err, "owncloudsql: error deleting file "+v)
 		}
@@ -1228,11 +1228,11 @@ func (fs *owncloudsqlfs) Move(ctx context.Context, oldRef, newRef *provider.Refe
 	}
 
 	// TODO check target permissions ... if it exists
-	storage, err := fs.getStorage(oldIP)
+	storage, err := fs.getStorage(ctx, oldIP)
 	if err != nil {
 		return err
 	}
-	err = fs.filecache.Move(storage, fs.toDatabasePath(oldIP), fs.toDatabasePath(newIP))
+	err = fs.filecache.Move(ctx, storage, fs.toDatabasePath(oldIP), fs.toDatabasePath(newIP))
 	if err != nil {
 		return err
 	}
@@ -1280,11 +1280,11 @@ func (fs *owncloudsqlfs) GetMD(ctx context.Context, ref *provider.Reference, mdK
 		return nil, errors.Wrap(err, "owncloudsql: error reading permissions")
 	}
 
-	ownerStorageID, err := fs.filecache.GetNumericStorageID("home::" + fs.getOwner(ip))
+	ownerStorageID, err := fs.filecache.GetNumericStorageID(ctx, "home::"+fs.getOwner(ip))
 	if err != nil {
 		return nil, err
 	}
-	entry, err := fs.filecache.Get(ownerStorageID, fs.toDatabasePath(ip))
+	entry, err := fs.filecache.Get(ctx, ownerStorageID, fs.toDatabasePath(ip))
 	switch {
 	case err == sql.ErrNoRows:
 		return nil, errtypes.NotFound(fs.toStoragePath(ctx, filepath.Dir(ip)))
@@ -1338,11 +1338,11 @@ func (fs *owncloudsqlfs) listWithNominalHome(ctx context.Context, ip string, mdK
 		return nil, errors.Wrap(err, "owncloudsql: error reading permissions")
 	}
 
-	storage, err := fs.getStorage(ip)
+	storage, err := fs.getStorage(ctx, ip)
 	if err != nil {
 		return nil, err
 	}
-	entries, err := fs.filecache.List(storage, fs.toDatabasePath(ip)+"/")
+	entries, err := fs.filecache.List(ctx, storage, fs.toDatabasePath(ip)+"/")
 	if err != nil {
 		return nil, errors.Wrapf(err, "owncloudsql: error listing %s", ip)
 	}
@@ -1389,11 +1389,11 @@ func (fs *owncloudsqlfs) listHome(ctx context.Context, home string, mdKeys []str
 		return nil, errors.Wrap(err, "owncloudsql: error reading permissions")
 	}
 
-	storage, err := fs.getStorage(ip)
+	storage, err := fs.getStorage(ctx, ip)
 	if err != nil {
 		return nil, err
 	}
-	entries, err := fs.filecache.List(storage, fs.toDatabasePath(ip)+"/")
+	entries, err := fs.filecache.List(ctx, storage, fs.toDatabasePath(ip)+"/")
 	if err != nil {
 		return nil, errors.Wrapf(err, "owncloudsql: error listing %s", ip)
 	}
@@ -1422,7 +1422,7 @@ func (fs *owncloudsqlfs) archiveRevision(ctx context.Context, vbp string, ip str
 		return errors.Wrap(err, "owncloudsql: error renaming from "+ip+" to "+vp)
 	}
 
-	storage, err := fs.getStorage(ip)
+	storage, err := fs.getStorage(ctx, ip)
 	if err != nil {
 		return err
 	}
@@ -1433,7 +1433,7 @@ func (fs *owncloudsqlfs) archiveRevision(ctx context.Context, vbp string, ip str
 	walkPath := ""
 	for i := 0; i < len(parts); i++ {
 		walkPath = filepath.Join(walkPath, parts[i])
-		_, err := fs.filecache.Get(storage, walkPath)
+		_, err := fs.filecache.Get(ctx, storage, walkPath)
 		if err == nil {
 			continue
 		}
@@ -1449,12 +1449,12 @@ func (fs *owncloudsqlfs) archiveRevision(ctx context.Context, vbp string, ip str
 			"permissions": 31, // 1: READ, 2: UPDATE, 4: CREATE, 8: DELETE, 16: SHARE
 		}
 
-		_, err = fs.filecache.InsertOrUpdate(storage, data, false)
+		_, err = fs.filecache.InsertOrUpdate(ctx, storage, data, false)
 		if err != nil {
 			return errors.Wrap(err, "could not create parent version directory")
 		}
 	}
-	_, err = fs.filecache.Copy(storage, fs.toDatabasePath(ip), vdp)
+	_, err = fs.filecache.Copy(ctx, storage, fs.toDatabasePath(ip), vdp)
 	return err
 }
 
@@ -1506,11 +1506,11 @@ func (fs *owncloudsqlfs) ListRevisions(ctx context.Context, ref *provider.Refere
 
 	vp := fs.getVersionsPath(ctx, ip)
 	bn := filepath.Base(ip)
-	storageID, err := fs.getStorage(ip)
+	storageID, err := fs.getStorage(ctx, ip)
 	if err != nil {
 		return nil, err
 	}
-	entries, err := fs.filecache.List(storageID, filepath.Dir(fs.toDatabasePath(vp))+"/")
+	entries, err := fs.filecache.List(ctx, storageID, filepath.Dir(fs.toDatabasePath(vp))+"/")
 	if err != nil {
 		return nil, err
 	}
@@ -1613,11 +1613,11 @@ func (fs *owncloudsqlfs) RestoreRevision(ctx context.Context, ref *provider.Refe
 		"mtime":         mtime,
 		"storage_mtime": mtime,
 	}
-	storageID, err := fs.getStorage(ip)
+	storageID, err := fs.getStorage(ctx, ip)
 	if err != nil {
 		return err
 	}
-	_, err = fs.filecache.InsertOrUpdate(storageID, data, false)
+	_, err = fs.filecache.InsertOrUpdate(ctx, storageID, data, false)
 	if err != nil {
 		return err
 	}
@@ -1657,7 +1657,7 @@ func (fs *owncloudsqlfs) PurgeRecycleItem(ctx context.Context, ref *provider.Ref
 	if err != nil {
 		return err
 	}
-	err = fs.filecache.PurgeRecycleItem(ctxpkg.ContextMustGetUser(ctx).Username, base, ttime, false)
+	err = fs.filecache.PurgeRecycleItem(ctx, ctxpkg.ContextMustGetUser(ctx).Username, base, ttime, false)
 	if err != nil {
 		return err
 	}
@@ -1667,7 +1667,7 @@ func (fs *owncloudsqlfs) PurgeRecycleItem(ctx context.Context, ref *provider.Ref
 	if err != nil {
 		return errors.Wrap(err, "owncloudsql: error listing recycle item versions")
 	}
-	storageID, err := fs.getStorage(ip)
+	storageID, err := fs.getStorage(ctx, ip)
 	if err != nil {
 		return err
 	}
@@ -1676,7 +1676,7 @@ func (fs *owncloudsqlfs) PurgeRecycleItem(ctx context.Context, ref *provider.Ref
 		if err != nil {
 			return errors.Wrap(err, "owncloudsql: error deleting recycle item versions")
 		}
-		err = fs.filecache.Purge(storageID, fs.toDatabasePath(versionFile))
+		err = fs.filecache.Purge(ctx, storageID, fs.toDatabasePath(versionFile))
 		if err != nil {
 			return err
 		}
@@ -1702,7 +1702,7 @@ func (fs *owncloudsqlfs) EmptyRecycle(ctx context.Context, ref *provider.Referen
 	}
 
 	u := ctxpkg.ContextMustGetUser(ctx)
-	err = fs.filecache.EmptyRecycle(u.Username)
+	err = fs.filecache.EmptyRecycle(ctx, u.Username)
 	if err != nil {
 		return errors.Wrap(err, "owncloudsql: error deleting recycle items from the database")
 	}
@@ -1733,7 +1733,7 @@ func (fs *owncloudsqlfs) convertToRecycleItem(ctx context.Context, md os.FileInf
 	}
 
 	u := ctxpkg.ContextMustGetUser(ctx)
-	item, err := fs.filecache.GetRecycleItem(u.Username, base, ttime)
+	item, err := fs.filecache.GetRecycleItem(ctx, u.Username, base, ttime)
 	if err != nil {
 		log := appctx.GetLogger(ctx)
 		log.Error().Err(err).Str("path", md.Name()).Msg("could not get trash item")
@@ -1802,7 +1802,7 @@ func (fs *owncloudsqlfs) RestoreRecycleItem(ctx context.Context, ref *provider.R
 
 	if restoreRef.Path == "" {
 		u := ctxpkg.ContextMustGetUser(ctx)
-		item, err := fs.filecache.GetRecycleItem(u.Username, base, ttime)
+		item, err := fs.filecache.GetRecycleItem(ctx, u.Username, base, ttime)
 		if err != nil {
 			log := appctx.GetLogger(ctx)
 			log.Error().Err(err).Str("path", key).Msg("could not get trash item")
@@ -1818,15 +1818,15 @@ func (fs *owncloudsqlfs) RestoreRecycleItem(ctx context.Context, ref *provider.R
 		return errors.Wrap(err, "owncloudsql: could not restore item")
 	}
 
-	storage, err := fs.getStorage(src)
+	storage, err := fs.getStorage(ctx, src)
 	if err != nil {
 		return err
 	}
-	err = fs.filecache.Move(storage, fs.toDatabasePath(src), fs.toDatabasePath(tgt))
+	err = fs.filecache.Move(ctx, storage, fs.toDatabasePath(src), fs.toDatabasePath(tgt))
 	if err != nil {
 		return err
 	}
-	err = fs.filecache.DeleteRecycleItem(ctxpkg.ContextMustGetUser(ctx).Username, base, ttime)
+	err = fs.filecache.DeleteRecycleItem(ctx, ctxpkg.ContextMustGetUser(ctx).Username, base, ttime)
 	if err != nil {
 		return err
 	}
@@ -1843,7 +1843,7 @@ func (fs *owncloudsqlfs) RestoreRecycleItemVersions(ctx context.Context, key, ta
 	if err != nil {
 		return fmt.Errorf("invalid trash item suffix")
 	}
-	storage, err := fs.getStorage(target)
+	storage, err := fs.getStorage(ctx, target)
 	if err != nil {
 		return err
 	}
@@ -1869,7 +1869,7 @@ func (fs *owncloudsqlfs) RestoreRecycleItemVersions(ctx context.Context, key, ta
 		if err = os.Rename(versionFile, versionsRestorePath); err != nil {
 			return errors.Wrap(err, "owncloudsql: could not restore version file")
 		}
-		err = fs.filecache.Move(storage, fs.toDatabasePath(versionFile), fs.toDatabasePath(versionsRestorePath))
+		err = fs.filecache.Move(ctx, storage, fs.toDatabasePath(versionFile), fs.toDatabasePath(versionsRestorePath))
 		if err != nil {
 			return err
 		}
@@ -1906,7 +1906,7 @@ func (fs *owncloudsqlfs) propagate(ctx context.Context, leafPath string) error {
 		return err
 	}
 
-	storageID, err := fs.getStorage(leafPath)
+	storageID, err := fs.getStorage(ctx, leafPath)
 	if err != nil {
 		return err
 	}
@@ -1936,7 +1936,7 @@ func (fs *owncloudsqlfs) propagate(ctx context.Context, leafPath string) error {
 			return err
 		}
 		etag := calcEtag(ctx, fi)
-		if err := fs.filecache.SetEtag(storageID, fs.toDatabasePath(currentPath), etag); err != nil {
+		if err := fs.filecache.SetEtag(ctx, storageID, fs.toDatabasePath(currentPath), etag); err != nil {
 			appctx.GetLogger(ctx).Error().
 				Err(err).
 				Str("leafPath", leafPath).

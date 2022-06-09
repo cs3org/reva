@@ -19,6 +19,7 @@
 package filecache_test
 
 import (
+	"context"
 	"database/sql"
 	"io/ioutil"
 	"os"
@@ -37,9 +38,12 @@ var _ = Describe("Filecache", func() {
 		cache      *filecache.Cache
 		testDbFile *os.File
 		sqldb      *sql.DB
+		ctx        context.Context
 	)
 
 	BeforeEach(func() {
+		ctx = context.Background()
+
 		var err error
 		testDbFile, err = ioutil.TempFile("", "example")
 		Expect(err).ToNot(HaveOccurred())
@@ -65,7 +69,7 @@ var _ = Describe("Filecache", func() {
 
 	Describe("ListStorages", func() {
 		It("returns all storages", func() {
-			storages, err := cache.ListStorages(false)
+			storages, err := cache.ListStorages(ctx, false)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(len(storages)).To(Equal(2))
 			ids := []string{}
@@ -79,7 +83,7 @@ var _ = Describe("Filecache", func() {
 		})
 
 		It("returns all home storages", func() {
-			storages, err := cache.ListStorages(true)
+			storages, err := cache.ListStorages(ctx, true)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(len(storages)).To(Equal(1))
 			Expect(storages[0].ID).To(Equal("home::admin"))
@@ -89,26 +93,26 @@ var _ = Describe("Filecache", func() {
 
 	Describe("GetStorage", func() {
 		It("returns an error when the id is invalid", func() {
-			s, err := cache.GetStorage("foo")
+			s, err := cache.GetStorage(ctx, "foo")
 			Expect(err).To(HaveOccurred())
 			Expect(s).To(BeNil())
 		})
 
 		It("returns an error when the id doesn't exist", func() {
-			s, err := cache.GetStorage(100)
+			s, err := cache.GetStorage(ctx, 100)
 			Expect(err).To(HaveOccurred())
 			Expect(s).To(BeNil())
 		})
 
 		It("returns the storage", func() {
-			s, err := cache.GetStorage(1)
+			s, err := cache.GetStorage(ctx, 1)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(s.ID).To(Equal("home::admin"))
 			Expect(s.NumericID).To(Equal(1))
 		})
 
 		It("takes string ids", func() {
-			s, err := cache.GetStorage("1")
+			s, err := cache.GetStorage(ctx, "1")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(s.ID).To(Equal("home::admin"))
 			Expect(s.NumericID).To(Equal(1))
@@ -117,7 +121,7 @@ var _ = Describe("Filecache", func() {
 
 	Describe("GetNumericStorageID", func() {
 		It("returns the proper storage id", func() {
-			nid, err := cache.GetNumericStorageID("home::admin")
+			nid, err := cache.GetNumericStorageID(ctx, "home::admin")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(nid).To(Equal(1))
 		})
@@ -125,7 +129,7 @@ var _ = Describe("Filecache", func() {
 
 	Describe("GetStorageOwner", func() {
 		It("returns the owner", func() {
-			owner, err := cache.GetStorageOwner("1")
+			owner, err := cache.GetStorageOwner(ctx, "1")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(owner).To(Equal("admin"))
 		})
@@ -133,22 +137,22 @@ var _ = Describe("Filecache", func() {
 
 	Describe("CreateStorage", func() {
 		It("creates the storage and a root item", func() {
-			id, err := cache.CreateStorage("bar")
+			id, err := cache.CreateStorage(ctx, "bar")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(id > 0).To(BeTrue())
 
-			owner, err := cache.GetStorageOwner(id)
+			owner, err := cache.GetStorageOwner(ctx, id)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(owner).To(Equal("bar"))
 
-			file, err := cache.Get(1, "")
+			file, err := cache.Get(ctx, 1, "")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(file).ToNot(BeNil())
 		})
 	})
 	Describe("GetStorageOwnerByFileID", func() {
 		It("returns the owner", func() {
-			owner, err := cache.GetStorageOwnerByFileID("10")
+			owner, err := cache.GetStorageOwnerByFileID(ctx, "10")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(owner).To(Equal("admin"))
 		})
@@ -157,7 +161,7 @@ var _ = Describe("Filecache", func() {
 	Describe("Get", func() {
 		It("gets existing files", func() {
 			path := "files/Photos/Portugal.jpg"
-			file, err := cache.Get(1, path)
+			file, err := cache.Get(ctx, 1, path)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(file).ToNot(BeNil())
 			Expect(file.ID).To(Equal(10))
@@ -180,19 +184,19 @@ var _ = Describe("Filecache", func() {
 
 	Describe("List", func() {
 		It("lists all entries", func() {
-			list, err := cache.List(1, "")
+			list, err := cache.List(ctx, 1, "")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(len(list)).To(Equal(3))
 		})
 
 		It("filters", func() {
-			list, err := cache.List(1, "files_trashbin/")
+			list, err := cache.List(ctx, 1, "files_trashbin/")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(len(list)).To(Equal(3))
 		})
 
 		It("filters deep", func() {
-			list, err := cache.List(1, "files/Photos/")
+			list, err := cache.List(ctx, 1, "files/Photos/")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(len(list)).To(Equal(3))
 		})
@@ -200,13 +204,13 @@ var _ = Describe("Filecache", func() {
 
 	Describe("Path", func() {
 		It("returns the path", func() {
-			path, err := cache.Path(10)
+			path, err := cache.Path(ctx, 10)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(path).To(Equal("files/Photos/Portugal.jpg"))
 		})
 
 		It("returns the path when given a string id", func() {
-			path, err := cache.Path("10")
+			path, err := cache.Path(ctx, "10")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(path).To(Equal("files/Photos/Portugal.jpg"))
 		})
@@ -219,21 +223,21 @@ var _ = Describe("Filecache", func() {
 					"mimetype": "httpd/unix-directory",
 					"etag":     "abcdefg",
 				}
-				_, err := cache.InsertOrUpdate(3, data, false)
+				_, err := cache.InsertOrUpdate(ctx, 3, data, false)
 				Expect(err).To(MatchError("missing required data"))
 
 				data = map[string]interface{}{
 					"path": "files/Photos/foo.jpg",
 					"etag": "abcdefg",
 				}
-				_, err = cache.InsertOrUpdate(3, data, false)
+				_, err = cache.InsertOrUpdate(ctx, 3, data, false)
 				Expect(err).To(MatchError("missing required data"))
 
 				data = map[string]interface{}{
 					"path":     "files/Photos/foo.jpg",
 					"mimetype": "httpd/unix-directory",
 				}
-				_, err = cache.InsertOrUpdate(3, data, false)
+				_, err = cache.InsertOrUpdate(ctx, 3, data, false)
 				Expect(err).To(MatchError("missing required data"))
 			})
 
@@ -243,11 +247,11 @@ var _ = Describe("Filecache", func() {
 					"mimetype": "httpd/unix-directory",
 					"etag":     "abcdefg",
 				}
-				id, err := cache.InsertOrUpdate(1, data, false)
+				id, err := cache.InsertOrUpdate(ctx, 1, data, false)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(id).To(Equal(18))
 
-				entry, err := cache.Get(1, "files/Photos/foo.jpg")
+				entry, err := cache.Get(ctx, 1, "files/Photos/foo.jpg")
 				Expect(err).ToNot(HaveOccurred())
 				Expect(entry.Path).To(Equal("files/Photos/foo.jpg"))
 				Expect(entry.Name).To(Equal("foo.jpg"))
@@ -268,10 +272,10 @@ var _ = Describe("Filecache", func() {
 					"encrypted":        true,
 					"unencrypted_size": 2000,
 				}
-				_, err := cache.InsertOrUpdate(1, data, false)
+				_, err := cache.InsertOrUpdate(ctx, 1, data, false)
 				Expect(err).ToNot(HaveOccurred())
 
-				entry, err := cache.Get(1, "files/Photos/foo.jpg")
+				entry, err := cache.Get(ctx, 1, "files/Photos/foo.jpg")
 				Expect(err).ToNot(HaveOccurred())
 				Expect(entry.Path).To(Equal("files/Photos/foo.jpg"))
 				Expect(entry.Name).To(Equal("foo.jpg"))
@@ -293,10 +297,10 @@ var _ = Describe("Filecache", func() {
 					"etag":     "abcdefg",
 				}
 
-				_, err := cache.InsertOrUpdate(1, data, false)
+				_, err := cache.InsertOrUpdate(ctx, 1, data, false)
 				Expect(err).ToNot(HaveOccurred())
 
-				entry, err := cache.Get(1, "files/Photos/foo.jpg")
+				entry, err := cache.Get(ctx, 1, "files/Photos/foo.jpg")
 				Expect(err).ToNot(HaveOccurred())
 				Expect(entry.Parent).To(Equal(9))
 			})
@@ -309,10 +313,10 @@ var _ = Describe("Filecache", func() {
 					"storage_mtime": 1617702483,
 				}
 
-				_, err := cache.InsertOrUpdate(1, data, false)
+				_, err := cache.InsertOrUpdate(ctx, 1, data, false)
 				Expect(err).ToNot(HaveOccurred())
 
-				entry, err := cache.Get(1, "files/Photos/foo.jpg")
+				entry, err := cache.Get(ctx, 1, "files/Photos/foo.jpg")
 				Expect(err).ToNot(HaveOccurred())
 				Expect(entry.MTime).To(Equal(1617702483))
 			})
@@ -325,10 +329,10 @@ var _ = Describe("Filecache", func() {
 					"mimetype": "image/jpeg",
 				}
 
-				_, err := cache.InsertOrUpdate(1, data, false)
+				_, err := cache.InsertOrUpdate(ctx, 1, data, false)
 				Expect(err).ToNot(HaveOccurred())
 
-				entry, err := cache.Get(1, "files/Photos/foo.jpg")
+				entry, err := cache.Get(ctx, 1, "files/Photos/foo.jpg")
 				Expect(err).ToNot(HaveOccurred())
 				Expect(entry.MimeType).To(Equal(6))
 				Expect(entry.MimePart).To(Equal(5))
@@ -342,10 +346,10 @@ var _ = Describe("Filecache", func() {
 					"mimetype": "image/tiff",
 				}
 
-				_, err := cache.InsertOrUpdate(1, data, false)
+				_, err := cache.InsertOrUpdate(ctx, 1, data, false)
 				Expect(err).ToNot(HaveOccurred())
 
-				entry, err := cache.Get(1, "files/Photos/foo.tiff")
+				entry, err := cache.Get(ctx, 1, "files/Photos/foo.tiff")
 				Expect(err).ToNot(HaveOccurred())
 				Expect(entry.MimeType).To(Equal(9))
 				Expect(entry.MimePart).To(Equal(5))
@@ -359,10 +363,10 @@ var _ = Describe("Filecache", func() {
 					"mimetype": "image/tiff",
 				}
 
-				_, err := cache.InsertOrUpdate(1, data, false)
+				_, err := cache.InsertOrUpdate(ctx, 1, data, false)
 				Expect(err).ToNot(HaveOccurred())
 
-				file, err := cache.Get(1, "")
+				file, err := cache.Get(ctx, 1, "")
 				Expect(err).ToNot(HaveOccurred())
 				Expect(file).ToNot(BeNil())
 				Expect(file.Name).To(Equal(""))
@@ -380,20 +384,20 @@ var _ = Describe("Filecache", func() {
 					"mimetype": "httpd/unix-directory",
 					"etag":     "abcdefg",
 				}
-				_, err := cache.InsertOrUpdate(1, data, false)
+				_, err := cache.InsertOrUpdate(ctx, 1, data, false)
 				Expect(err).ToNot(HaveOccurred())
 			})
 
 			It("updates the record", func() {
-				recordBefore, err := cache.Get(1, data["path"].(string))
+				recordBefore, err := cache.Get(ctx, 1, data["path"].(string))
 				Expect(err).ToNot(HaveOccurred())
 
 				data["etag"] = "12345"
-				id, err := cache.InsertOrUpdate(1, data, false)
+				id, err := cache.InsertOrUpdate(ctx, 1, data, false)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(id).To(Equal(recordBefore.ID))
 
-				recordAfter, err := cache.Get(1, data["path"].(string))
+				recordAfter, err := cache.Get(ctx, 1, data["path"].(string))
 				Expect(err).ToNot(HaveOccurred())
 
 				Expect(recordBefore.Etag).To(Equal("abcdefg"))
@@ -405,40 +409,40 @@ var _ = Describe("Filecache", func() {
 
 	Describe("Move", func() {
 		It("moves a file", func() {
-			err := cache.Move(1, "files/Photos/Portugal.jpg", "files/Documents/Portugal.jpg")
+			err := cache.Move(ctx, 1, "files/Photos/Portugal.jpg", "files/Documents/Portugal.jpg")
 			Expect(err).ToNot(HaveOccurred())
 
-			_, err = cache.Get(1, "files/Photos/Portugal.jpg")
+			_, err = cache.Get(ctx, 1, "files/Photos/Portugal.jpg")
 			Expect(err).To(HaveOccurred())
 
-			newEntry, err := cache.Get(1, "files/Documents/Portugal.jpg")
+			newEntry, err := cache.Get(ctx, 1, "files/Documents/Portugal.jpg")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(newEntry.Path).To(Equal("files/Documents/Portugal.jpg"))
 		})
 
 		It("moves a file while changing its name", func() {
-			err := cache.Move(1, "files/Photos/Portugal.jpg", "files/Documents/Spain.jpg")
+			err := cache.Move(ctx, 1, "files/Photos/Portugal.jpg", "files/Documents/Spain.jpg")
 			Expect(err).ToNot(HaveOccurred())
 
-			_, err = cache.Get(1, "files/Photos/Portugal.jpg")
+			_, err = cache.Get(ctx, 1, "files/Photos/Portugal.jpg")
 			Expect(err).To(HaveOccurred())
 
-			newEntry, err := cache.Get(1, "files/Documents/Spain.jpg")
+			newEntry, err := cache.Get(ctx, 1, "files/Documents/Spain.jpg")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(newEntry.Path).To(Equal("files/Documents/Spain.jpg"))
 			Expect(newEntry.Name).To(Equal("Spain.jpg"))
 		})
 
 		It("moves a directory", func() {
-			err := cache.Move(1, "files/Photos", "files/Foo")
+			err := cache.Move(ctx, 1, "files/Photos", "files/Foo")
 			Expect(err).ToNot(HaveOccurred())
 
-			_, err = cache.Get(1, "files/Photos")
+			_, err = cache.Get(ctx, 1, "files/Photos")
 			Expect(err).To(HaveOccurred())
 
-			_, err = cache.Get(1, "files/Photos/Portugal.jpg")
+			_, err = cache.Get(ctx, 1, "files/Photos/Portugal.jpg")
 			Expect(err).To(HaveOccurred())
-			newEntry, err := cache.Get(1, "files/Foo/Portugal.jpg")
+			newEntry, err := cache.Get(ctx, 1, "files/Foo/Portugal.jpg")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(newEntry.Path).To(Equal("files/Foo/Portugal.jpg"))
 		})
@@ -446,14 +450,14 @@ var _ = Describe("Filecache", func() {
 
 	Describe("SetEtag", func() {
 		It("updates the etag", func() {
-			entry, err := cache.Get(1, "files/Photos/Portugal.jpg")
+			entry, err := cache.Get(ctx, 1, "files/Photos/Portugal.jpg")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(entry.Etag).To(Equal("13cf411aefccd7183d3b117ccd0ac5f8"))
 
-			err = cache.SetEtag(1, "files/Photos/Portugal.jpg", "foo")
+			err = cache.SetEtag(ctx, 1, "files/Photos/Portugal.jpg", "foo")
 			Expect(err).ToNot(HaveOccurred())
 
-			entry, err = cache.Get(1, "files/Photos/Portugal.jpg")
+			entry, err = cache.Get(ctx, 1, "files/Photos/Portugal.jpg")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(entry.Etag).To(Equal("foo"))
 		})
@@ -474,113 +478,113 @@ var _ = Describe("Filecache", func() {
 		)
 
 		BeforeEach(func() {
-			_, err := cache.InsertOrUpdate(1, data, false)
+			_, err := cache.InsertOrUpdate(ctx, 1, data, false)
 			Expect(err).ToNot(HaveOccurred())
 		})
 
 		Describe("Delete", func() {
 			It("deletes an item", func() {
-				err := cache.Delete(1, "admin", filePath, trashPath)
+				err := cache.Delete(ctx, 1, "admin", filePath, trashPath)
 				Expect(err).ToNot(HaveOccurred())
 
-				_, err = cache.Get(1, "files/Photos/Portugal.jpg")
+				_, err = cache.Get(ctx, 1, "files/Photos/Portugal.jpg")
 				Expect(err).To(HaveOccurred())
-				_, err = cache.Get(1, "files_trashbin/files/Portugal.jpg.d1619007109")
+				_, err = cache.Get(ctx, 1, "files_trashbin/files/Portugal.jpg.d1619007109")
 				Expect(err).ToNot(HaveOccurred())
 			})
 
 			It("creates an entry in the trash table", func() {
-				_, err := cache.GetRecycleItem("admin", trashPathBase, trashPathTimestamp)
+				_, err := cache.GetRecycleItem(ctx, "admin", trashPathBase, trashPathTimestamp)
 				Expect(err).To(HaveOccurred())
 
-				err = cache.Delete(1, "admin", filePath, trashPath)
+				err = cache.Delete(ctx, 1, "admin", filePath, trashPath)
 				Expect(err).ToNot(HaveOccurred())
 
-				item, err := cache.GetRecycleItem("admin", trashPathBase, trashPathTimestamp)
+				item, err := cache.GetRecycleItem(ctx, "admin", trashPathBase, trashPathTimestamp)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(item.Path).To(Equal("Photos"))
 			})
 
 			It("rewrites the path of the children", func() {
-				err := cache.Delete(1, "admin", "files/Photos", "files_trashbin/files/Photos.d1619007109")
+				err := cache.Delete(ctx, 1, "admin", "files/Photos", "files_trashbin/files/Photos.d1619007109")
 				Expect(err).ToNot(HaveOccurred())
 			})
 		})
 
 		Describe("EmptyRecycle", func() {
 			It("clears the recycle bin", func() {
-				err := cache.Delete(1, "admin", filePath, trashPath)
+				err := cache.Delete(ctx, 1, "admin", filePath, trashPath)
 				Expect(err).ToNot(HaveOccurred())
 
-				err = cache.EmptyRecycle("admin")
+				err = cache.EmptyRecycle(ctx, "admin")
 				Expect(err).ToNot(HaveOccurred())
 
-				_, err = cache.GetRecycleItem("admin", trashPathBase, trashPathTimestamp)
+				_, err = cache.GetRecycleItem(ctx, "admin", trashPathBase, trashPathTimestamp)
 				Expect(err).To(HaveOccurred())
 			})
 		})
 
 		Describe("DeleteRecycleItem", func() {
 			It("removes the item from the trash", func() {
-				err := cache.Delete(1, "admin", filePath, trashPath)
+				err := cache.Delete(ctx, 1, "admin", filePath, trashPath)
 				Expect(err).ToNot(HaveOccurred())
 
-				err = cache.DeleteRecycleItem("admin", trashPathBase, trashPathTimestamp)
+				err = cache.DeleteRecycleItem(ctx, "admin", trashPathBase, trashPathTimestamp)
 				Expect(err).ToNot(HaveOccurred())
 
-				_, err = cache.GetRecycleItem("admin", trashPathBase, trashPathTimestamp)
+				_, err = cache.GetRecycleItem(ctx, "admin", trashPathBase, trashPathTimestamp)
 				Expect(err).To(HaveOccurred())
 			})
 
 			It("does not remove the item from the file cache", func() {
-				err := cache.Delete(1, "admin", filePath, trashPath)
+				err := cache.Delete(ctx, 1, "admin", filePath, trashPath)
 				Expect(err).ToNot(HaveOccurred())
 
-				err = cache.DeleteRecycleItem("admin", trashPathBase, trashPathTimestamp)
+				err = cache.DeleteRecycleItem(ctx, "admin", trashPathBase, trashPathTimestamp)
 				Expect(err).ToNot(HaveOccurred())
 
-				_, err = cache.Get(1, trashPath)
+				_, err = cache.Get(ctx, 1, trashPath)
 				Expect(err).ToNot(HaveOccurred())
 			})
 		})
 
 		Describe("PurgeRecycleItem", func() {
 			It("removes the item from the database", func() {
-				err := cache.Delete(1, "admin", filePath, trashPath)
+				err := cache.Delete(ctx, 1, "admin", filePath, trashPath)
 				Expect(err).ToNot(HaveOccurred())
 
-				_, err = cache.GetRecycleItem("admin", trashPathBase, trashPathTimestamp)
+				_, err = cache.GetRecycleItem(ctx, "admin", trashPathBase, trashPathTimestamp)
 				Expect(err).ToNot(HaveOccurred())
 
-				err = cache.PurgeRecycleItem("admin", trashPathBase, trashPathTimestamp, false)
+				err = cache.PurgeRecycleItem(ctx, "admin", trashPathBase, trashPathTimestamp, false)
 				Expect(err).ToNot(HaveOccurred())
 
-				_, err = cache.GetRecycleItem("admin", trashPathBase, trashPathTimestamp)
+				_, err = cache.GetRecycleItem(ctx, "admin", trashPathBase, trashPathTimestamp)
 				Expect(err).To(HaveOccurred())
 			})
 
 			It("removes the item from the filecache table", func() {
-				err := cache.Delete(1, "admin", filePath, trashPath)
+				err := cache.Delete(ctx, 1, "admin", filePath, trashPath)
 				Expect(err).ToNot(HaveOccurred())
 
-				err = cache.PurgeRecycleItem("admin", trashPathBase, trashPathTimestamp, false)
+				err = cache.PurgeRecycleItem(ctx, "admin", trashPathBase, trashPathTimestamp, false)
 				Expect(err).ToNot(HaveOccurred())
 
-				_, err = cache.Get(1, trashPath)
+				_, err = cache.Get(ctx, 1, trashPath)
 				Expect(err).To(HaveOccurred())
 			})
 
 			It("removes children from the filecache table", func() {
-				err := cache.Delete(1, "admin", "files/Photos", "files_trashbin/files/Photos.d1619007109")
+				err := cache.Delete(ctx, 1, "admin", "files/Photos", "files_trashbin/files/Photos.d1619007109")
 				Expect(err).ToNot(HaveOccurred())
 
-				_, err = cache.Get(1, "files_trashbin/files/Photos.d1619007109/Portugal.jpg")
+				_, err = cache.Get(ctx, 1, "files_trashbin/files/Photos.d1619007109/Portugal.jpg")
 				Expect(err).ToNot(HaveOccurred())
 
-				err = cache.PurgeRecycleItem("admin", "Photos", 1619007109, false)
+				err = cache.PurgeRecycleItem(ctx, "admin", "Photos", 1619007109, false)
 				Expect(err).ToNot(HaveOccurred())
 
-				_, err = cache.Get(1, "files_trashbin/files/Photos.d1619007109/Portugal.jpg")
+				_, err = cache.Get(ctx, 1, "files_trashbin/files/Photos.d1619007109/Portugal.jpg")
 				Expect(err).To(HaveOccurred())
 			})
 		})
@@ -594,16 +598,16 @@ var _ = Describe("Filecache", func() {
 					"mimetype": "httpd/unix-directory",
 					"etag":     "abcdefg",
 				}
-				_, err := cache.InsertOrUpdate(1, parentData, false)
+				_, err := cache.InsertOrUpdate(ctx, 1, parentData, false)
 				Expect(err).ToNot(HaveOccurred())
 			}
 
-			existingEntry, err := cache.Get(1, "files/Photos/Portugal.jpg")
+			existingEntry, err := cache.Get(ctx, 1, "files/Photos/Portugal.jpg")
 			Expect(err).ToNot(HaveOccurred())
-			_, err = cache.Copy(1, "files/Photos/Portugal.jpg", "files_versions/Photos/Portugal.jpg.v1619528083")
+			_, err = cache.Copy(ctx, 1, "files/Photos/Portugal.jpg", "files_versions/Photos/Portugal.jpg.v1619528083")
 			Expect(err).ToNot(HaveOccurred())
 
-			newEntry, err := cache.Get(1, "files_versions/Photos/Portugal.jpg.v1619528083")
+			newEntry, err := cache.Get(ctx, 1, "files_versions/Photos/Portugal.jpg.v1619528083")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(newEntry.ID).ToNot(Equal(existingEntry.ID))
 			Expect(newEntry.MimeType).To(Equal(existingEntry.MimeType))
@@ -612,12 +616,12 @@ var _ = Describe("Filecache", func() {
 
 	Describe("Permissions", func() {
 		It("returns the permissions", func() {
-			perms, err := cache.Permissions(1, "files/Photos/Portugal.jpg")
+			perms, err := cache.Permissions(ctx, 1, "files/Photos/Portugal.jpg")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(perms).ToNot(BeNil())
 			Expect(perms.InitiateFileUpload).To(BeTrue())
 
-			perms, err = cache.Permissions(1, "files/Photos/Teotihuacan.jpg")
+			perms, err = cache.Permissions(ctx, 1, "files/Photos/Teotihuacan.jpg")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(perms).ToNot(BeNil())
 			Expect(perms.InitiateFileUpload).To(BeFalse())

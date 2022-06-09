@@ -61,7 +61,7 @@ func (fs *owncloudsqlfs) ListStorageSpaces(ctx context.Context, filter []*provid
 		if !ok {
 			return nil, errtypes.UserRequired("error getting user from context")
 		}
-		space, err := fs.getPersonalSpace(u)
+		space, err := fs.getPersonalSpace(ctx, u)
 		if err != nil {
 			return nil, err
 		}
@@ -113,16 +113,16 @@ func (fs *owncloudsqlfs) DeleteStorageSpace(ctx context.Context, req *provider.D
 // 	return spaces, nil
 // }
 
-func (fs *owncloudsqlfs) getPersonalSpace(owner *userpb.User) (*provider.StorageSpace, error) {
-	storageID, err := fs.filecache.GetNumericStorageID("home::" + owner.Username)
+func (fs *owncloudsqlfs) getPersonalSpace(ctx context.Context, owner *userpb.User) (*provider.StorageSpace, error) {
+	storageID, err := fs.filecache.GetNumericStorageID(ctx, "home::"+owner.Username)
 	if err != nil {
 		return nil, err
 	}
-	storage, err := fs.filecache.GetStorage(storageID)
+	storage, err := fs.filecache.GetStorage(ctx, storageID)
 	if err != nil {
 		return nil, err
 	}
-	root, err := fs.filecache.Get(storage.NumericID, "")
+	root, err := fs.filecache.Get(ctx, storage.NumericID, "")
 	if err != nil {
 		return nil, err
 	}
@@ -142,7 +142,7 @@ func (fs *owncloudsqlfs) getPersonalSpace(owner *userpb.User) (*provider.Storage
 }
 
 func (fs *owncloudsqlfs) getSpaceByNumericID(ctx context.Context, spaceID int) (*provider.StorageSpace, error) {
-	storage, err := fs.filecache.GetStorage(spaceID)
+	storage, err := fs.filecache.GetStorage(ctx, spaceID)
 	if err != nil {
 		return nil, err
 	}
@@ -154,7 +154,7 @@ func (fs *owncloudsqlfs) getSpaceByNumericID(ctx context.Context, spaceID int) (
 }
 
 func (fs *owncloudsqlfs) storageToSpace(ctx context.Context, storage *filecache.Storage) (*provider.StorageSpace, error) {
-	root, err := fs.filecache.Get(storage.NumericID, "")
+	root, err := fs.filecache.Get(ctx, storage.NumericID, "")
 	if err != nil {
 		return nil, err
 	}
