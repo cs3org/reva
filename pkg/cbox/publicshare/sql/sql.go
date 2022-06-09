@@ -32,6 +32,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
@@ -39,12 +40,20 @@ import (
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/publicshare"
 	"github.com/cs3org/reva/pkg/publicshare/manager/registry"
+	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )
 
-const publicShareType = 3
+const (
+	publicShareType = 3
+
+	projectInstancesPrefix        = "newproject"
+	projectSpaceGroupsPrefix      = "cernbox-project-"
+	projectSpaceAdminGroupsSuffix = "-admins"
+)
 
 func init() {
 	registry.Register("sql", New)
@@ -59,6 +68,7 @@ type config struct {
 	DbHost                     string `mapstructure:"db_host"`
 	DbPort                     int    `mapstructure:"db_port"`
 	DbName                     string `mapstructure:"db_name"`
+	GatewaySvc                 string `mapstructure:"gatewaysvc"`
 }
 
 type manager struct {
@@ -73,6 +83,8 @@ func (c *config) init() {
 	if c.JanitorRunInterval == 0 {
 		c.JanitorRunInterval = 3600
 	}
+
+	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
 }
 
 func (m *manager) startJanitorRun() {
@@ -309,11 +321,10 @@ func (m *manager) GetPublicShare(ctx context.Context, u *user.User, ref *link.Pu
 }
 
 func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []*link.ListPublicSharesRequest_Filter, md *provider.ResourceInfo, sign bool) ([]*link.PublicShare, error) {
-	uid := conversions.FormatUserID(u.Id)
-	query := "select coalesce(uid_owner, '') as uid_owner, coalesce(uid_initiator, '') as uid_initiator, coalesce(share_with, '') as share_with, coalesce(fileid_prefix, '') as fileid_prefix, coalesce(item_source, '') as item_source, coalesce(item_type, '') as item_type, coalesce(token,'') as token, coalesce(expiration, '') as expiration, coalesce(share_name, '') as share_name, id, stime, permissions FROM oc_share WHERE (orphan = 0 or orphan IS NULL) AND (uid_owner=? or uid_initiator=?) AND (share_type=?)"
+	query := "select coalesce(uid_owner, '') as uid_owner, coalesce(uid_initiator, '') as uid_initiator, coalesce(share_with, '') as share_with, coalesce(fileid_prefix, '') as fileid_prefix, coalesce(item_source, '') as item_source, coalesce(item_type, '') as item_type, coalesce(token,'') as token, coalesce(expiration, '') as expiration, coalesce(share_name, '') as share_name, id, stime, permissions FROM oc_share WHERE (orphan = 0 or orphan IS NULL) AND (share_type=?)"
 	var resourceFilters, ownerFilters, creatorFilters string
 	var resourceParams, ownerParams, creatorParams []interface{}
-	params := []interface{}{uid, uid, publicShareType}
+	params := []interface{}{publicShareType}
 	for _, f := range filters {
 		switch f.Type {
 		case link.ListPublicSharesRequest_Filter_TYPE_RESOURCE_ID:
@@ -348,6 +359,15 @@ func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []
 	if creatorFilters != "" {
 		query = fmt.Sprintf("%s AND (%s)", query, creatorFilters)
 		params = append(params, creatorParams...)
+	}
+
+	uidOwnersQuery, uidOwnersParams, err := m.uidOwnerFilters(ctx, u, filters)
+	if err != nil {
+		return nil, err
+	}
+	params = append(params, uidOwnersParams...)
+	if uidOwnersQuery != "" {
+		query = fmt.Sprintf("%s AND (%s)", query, uidOwnersQuery)
 	}
 
 	rows, err := m.db.Query(query, params...)
@@ -474,6 +494,57 @@ func expired(s *link.PublicShare) bool {
 		}
 	}
 	return false
+}
+
+func (m *manager) uidOwnerFilters(ctx context.Context, u *user.User, filters []*link.ListPublicSharesRequest_Filter) (string, []interface{}, error) {
+	uid := conversions.FormatUserID(u.Id)
+
+	query := "uid_owner=? or uid_initiator=?"
+	params := []interface{}{uid, uid}
+
+	client, err := pool.GetGatewayServiceClient(pool.Endpoint(m.c.GatewaySvc))
+	if err != nil {
+		return "", nil, err
+	}
+
+	for _, f := range filters {
+		if f.Type == link.ListPublicSharesRequest_Filter_TYPE_RESOURCE_ID {
+			// For shares inside project spaces, if the user is an admin, we try to list all shares created by other admins
+			if strings.HasPrefix(f.GetResourceId().GetStorageId(), projectInstancesPrefix) {
+				res, err := client.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{ResourceId: f.GetResourceId()}})
+				if err != nil || res.Status.Code != rpc.Code_CODE_OK {
+					continue
+				}
+
+				// The path will look like /eos/project/c/cernbox, we need to extract the project name
+				parts := strings.SplitN(res.Info.Path, "/", 6)
+				if len(parts) < 5 {
+					continue
+				}
+
+				adminGroup := projectSpaceGroupsPrefix + parts[4] + projectSpaceAdminGroupsSuffix
+				for _, g := range u.Groups {
+					if g == adminGroup {
+						// User belongs to the admin group, list all shares for the resource
+
+						// TODO: this only works if shares for a single project are requested.
+						// If shares for multiple projects are requested, then we're not checking if the
+						// user is an admin for all of those. We can append the query ` or uid_owner=?`
+						// for all the project owners, which works fine for new reva
+						// but won't work for revaold since there, we store the uid of the share creator as uid_owner.
+						// For this to work across the two versions, this change would have to be made in revaold
+						// but it won't be straightforward as there, the storage provider doesn't return the
+						// resource owners.
+						query = ""
+						params = []interface{}{}
+						break
+					}
+				}
+			}
+		}
+	}
+
+	return query, params, nil
 }
 
 func hashPassword(password string, cost int) (string, error) {

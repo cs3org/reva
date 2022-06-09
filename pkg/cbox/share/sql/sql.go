@@ -27,14 +27,17 @@ import (
 	"strings"
 	"time"
 
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	conversions "github.com/cs3org/reva/pkg/cbox/utils"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/share"
 	"github.com/cs3org/reva/pkg/share/manager/registry"
+	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
@@ -47,6 +50,10 @@ import (
 const (
 	shareTypeUser  = 0
 	shareTypeGroup = 1
+
+	projectInstancesPrefix        = "newproject"
+	projectSpaceGroupsPrefix      = "cernbox-project-"
+	projectSpaceAdminGroupsSuffix = "-admins"
 )
 
 func init() {
@@ -59,6 +66,7 @@ type config struct {
 	DbHost     string `mapstructure:"db_host"`
 	DbPort     int    `mapstructure:"db_port"`
 	DbName     string `mapstructure:"db_name"`
+	GatewaySvc string `mapstructure:"gatewaysvc"`
 }
 
 type mgr struct {
@@ -90,6 +98,7 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 	if err := mapstructure.Decode(m, c); err != nil {
 		return nil, err
 	}
+	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
 	return c, nil
 }
 
@@ -281,16 +290,15 @@ func (m *mgr) UpdateShare(ctx context.Context, ref *collaboration.ShareReference
 }
 
 func (m *mgr) ListShares(ctx context.Context, filters []*collaboration.Filter) ([]*collaboration.Share, error) {
-	uid := conversions.FormatUserID(ctxpkg.ContextMustGetUser(ctx).Id)
 	query := `select coalesce(uid_owner, '') as uid_owner, coalesce(uid_initiator, '') as uid_initiator, coalesce(share_with, '') as share_with,
 				coalesce(fileid_prefix, '') as fileid_prefix, coalesce(item_source, '') as item_source, coalesce(item_type, '') as item_type,
 			  	id, stime, permissions, share_type
-			  FROM oc_share
-			  WHERE (orphan = 0 or orphan IS NULL) AND (uid_owner=? or uid_initiator=?) AND (share_type=? OR share_type=?)`
-	params := []interface{}{uid, uid, shareTypeUser, shareTypeGroup}
+			  FROM oc_share WHERE (orphan = 0 or orphan IS NULL) AND (share_type=? OR share_type=?)`
+	params := []interface{}{shareTypeUser, shareTypeGroup}
 
-	if len(filters) > 0 {
-		filterQuery, filterParams, err := translateFilters(filters)
+	groupedFilters := share.GroupFiltersByType(filters)
+	if len(groupedFilters) > 0 {
+		filterQuery, filterParams, err := translateFilters(groupedFilters)
 		if err != nil {
 			return nil, err
 		}
@@ -298,6 +306,15 @@ func (m *mgr) ListShares(ctx context.Context, filters []*collaboration.Filter) (
 		if filterQuery != "" {
 			query = fmt.Sprintf("%s AND (%s)", query, filterQuery)
 		}
+	}
+
+	uidOwnersQuery, uidOwnersParams, err := m.uidOwnerFilters(ctx, groupedFilters)
+	if err != nil {
+		return nil, err
+	}
+	params = append(params, uidOwnersParams...)
+	if uidOwnersQuery != "" {
+		query = fmt.Sprintf("%s AND (%s)", query, uidOwnersQuery)
 	}
 
 	rows, err := m.db.Query(query, params...)
@@ -342,7 +359,8 @@ func (m *mgr) ListReceivedShares(ctx context.Context, filters []*collaboration.F
 		query += " AND (share_with=? AND share_type = 0)"
 	}
 
-	filterQuery, filterParams, err := translateFilters(filters)
+	groupedFilters := share.GroupFiltersByType(filters)
+	filterQuery, filterParams, err := translateFilters(groupedFilters)
 	if err != nil {
 		return nil, err
 	}
@@ -493,6 +511,58 @@ func (m *mgr) UpdateReceivedShare(ctx context.Context, share *collaboration.Rece
 	return rs, nil
 }
 
+func (m *mgr) uidOwnerFilters(ctx context.Context, filters map[collaboration.Filter_Type][]*collaboration.Filter) (string, []interface{}, error) {
+	user := ctxpkg.ContextMustGetUser(ctx)
+	uid := conversions.FormatUserID(user.Id)
+
+	query := "uid_owner=? or uid_initiator=?"
+	params := []interface{}{uid, uid}
+
+	client, err := pool.GetGatewayServiceClient(pool.Endpoint(m.c.GatewaySvc))
+	if err != nil {
+		return "", nil, err
+	}
+
+	if resourceFilters, ok := filters[collaboration.Filter_TYPE_RESOURCE_ID]; ok {
+		for _, f := range resourceFilters {
+			// For shares inside project spaces, if the user is an admin, we try to list all shares created by other admins
+			if strings.HasPrefix(f.GetResourceId().GetStorageId(), projectInstancesPrefix) {
+				res, err := client.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{ResourceId: f.GetResourceId()}})
+				if err != nil || res.Status.Code != rpc.Code_CODE_OK {
+					continue
+				}
+
+				// The path will look like /eos/project/c/cernbox, we need to extract the project name
+				parts := strings.SplitN(res.Info.Path, "/", 6)
+				if len(parts) < 5 {
+					continue
+				}
+
+				adminGroup := projectSpaceGroupsPrefix + parts[4] + projectSpaceAdminGroupsSuffix
+				for _, g := range user.Groups {
+					if g == adminGroup {
+						// User belongs to the admin group, list all shares for the resource
+
+						// TODO: this only works if shares for a single project are requested.
+						// If shares for multiple projects are requested, then we're not checking if the
+						// user is an admin for all of those. We can append the query ` or uid_owner=?`
+						// for all the project owners, which works fine for new reva
+						// but won't work for revaold since there, we store the uid of the share creator as uid_owner.
+						// For this to work across the two versions, this change would have to be made in revaold
+						// but it won't be straightforward as there, the storage provider doesn't return the
+						// resource owners.
+						query = ""
+						params = []interface{}{}
+						break
+					}
+				}
+			}
+		}
+	}
+
+	return query, params, nil
+}
+
 func granteeTypeToShareType(granteeType provider.GranteeType) int {
 	switch granteeType {
 	case provider.GranteeType_GRANTEE_TYPE_USER:
@@ -504,38 +574,37 @@ func granteeTypeToShareType(granteeType provider.GranteeType) int {
 }
 
 // translateFilters translates the filters to sql queries
-func translateFilters(filters []*collaboration.Filter) (string, []interface{}, error) {
+func translateFilters(filters map[collaboration.Filter_Type][]*collaboration.Filter) (string, []interface{}, error) {
 	var (
 		filterQuery string
 		params      []interface{}
 	)
 
-	groupedFilters := share.GroupFiltersByType(filters)
 	// If multiple filters of the same type are passed to this function, they need to be combined with the `OR` operator.
 	// That is why the filters got grouped by type.
 	// For every given filter type, iterate over the filters and if there are more than one combine them.
 	// Combine the different filter types using `AND`
 	var filterCounter = 0
-	for filterType, filters := range groupedFilters {
+	for filterType, currFilters := range filters {
 		switch filterType {
 		case collaboration.Filter_TYPE_RESOURCE_ID:
 			filterQuery += "("
-			for i, f := range filters {
+			for i, f := range currFilters {
 				filterQuery += "(fileid_prefix =? AND item_source=?)"
 				params = append(params, f.GetResourceId().StorageId, f.GetResourceId().OpaqueId)
 
-				if i != len(filters)-1 {
+				if i != len(currFilters)-1 {
 					filterQuery += " OR "
 				}
 			}
 			filterQuery += ")"
 		case collaboration.Filter_TYPE_GRANTEE_TYPE:
 			filterQuery += "("
-			for i, f := range filters {
+			for i, f := range currFilters {
 				filterQuery += "share_type=?"
 				params = append(params, granteeTypeToShareType(f.GetGranteeType()))
 
-				if i != len(filters)-1 {
+				if i != len(currFilters)-1 {
 					filterQuery += " OR "
 				}
 			}
@@ -546,7 +615,7 @@ func translateFilters(filters []*collaboration.Filter) (string, []interface{}, e
 		default:
 			return "", nil, fmt.Errorf("filter type is not supported")
 		}
-		if filterCounter != len(groupedFilters)-1 {
+		if filterCounter != len(filters)-1 {
 			filterQuery += " AND "
 		}
 		filterCounter++
