@@ -20,11 +20,14 @@ package events
 
 import (
 	"encoding/json"
+
+	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 )
 
 // GroupCreated is emitted when a group was created
 type GroupCreated struct {
-	GroupID string
+	Executant *user.UserId
+	GroupID   string
 }
 
 // Unmarshal to fulfill umarshaller interface
@@ -36,7 +39,8 @@ func (GroupCreated) Unmarshal(v []byte) (interface{}, error) {
 
 // GroupDeleted is emitted when a group was deleted
 type GroupDeleted struct {
-	GroupID string
+	Executant *user.UserId
+	GroupID   string
 }
 
 // Unmarshal to fulfill umarshaller interface
@@ -48,8 +52,9 @@ func (GroupDeleted) Unmarshal(v []byte) (interface{}, error) {
 
 // GroupMemberAdded is emitted when a user was added to a group
 type GroupMemberAdded struct {
-	GroupID string
-	UserID  string
+	Executant *user.UserId
+	GroupID   string
+	UserID    string
 }
 
 // Unmarshal to fulfill umarshaller interface
@@ -61,8 +66,9 @@ func (GroupMemberAdded) Unmarshal(v []byte) (interface{}, error) {
 
 // GroupMemberRemoved is emitted when a user was removed from a group
 type GroupMemberRemoved struct {
-	GroupID string
-	UserID  string
+	Executant *user.UserId
+	GroupID   string
+	UserID    string
 }
 
 // Unmarshal to fulfill umarshaller interface

@@ -20,11 +20,14 @@ package events
 
 import (
 	"encoding/json"
+
+	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 )
 
 // UserCreated is emitted when a user was created
 type UserCreated struct {
-	UserID string
+	Executant *user.UserId
+	UserID    string
 }
 
 // Unmarshal to fulfill umarshaller interface
@@ -36,7 +39,8 @@ func (UserCreated) Unmarshal(v []byte) (interface{}, error) {
 
 // UserDeleted is emitted when a user was deleted
 type UserDeleted struct {
-	UserID string
+	Executant *user.UserId
+	UserID    string
 }
 
 // Unmarshal to fulfill umarshaller interface
@@ -54,8 +58,9 @@ type UserFeature struct {
 
 // UserFeatureChanged is emitted when a user feature was changed
 type UserFeatureChanged struct {
-	UserID   string
-	Features []UserFeature
+	Executant *user.UserId
+	UserID    string
+	Features  []UserFeature
 }
 
 // Unmarshal to fulfill umarshaller interface

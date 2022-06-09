@@ -32,7 +32,8 @@ import (
 
 // ShareCreated is emitted when a share is created
 type ShareCreated struct {
-	Sharer *user.UserId
+	Executant *user.UserId
+	Sharer    *user.UserId
 	// split the protobuf Grantee oneof so we can use stdlib encoding/json
 	GranteeUserID  *user.UserId
 	GranteeGroupID *group.GroupId
@@ -51,6 +52,7 @@ func (ShareCreated) Unmarshal(v []byte) (interface{}, error) {
 
 // ShareRemoved is emitted when a share is removed
 type ShareRemoved struct {
+	Executant *user.UserId
 	// split protobuf Spec
 	ShareID  *collaboration.ShareId
 	ShareKey *collaboration.ShareKey
@@ -65,6 +67,7 @@ func (ShareRemoved) Unmarshal(v []byte) (interface{}, error) {
 
 // ShareUpdated is emitted when a share is updated
 type ShareUpdated struct {
+	Executant      *user.UserId
 	ShareID        *collaboration.ShareId
 	ItemID         *provider.ResourceId
 	Permissions    *collaboration.SharePermissions
@@ -86,6 +89,7 @@ func (ShareUpdated) Unmarshal(v []byte) (interface{}, error) {
 
 // ReceivedShareUpdated is emitted when a received share is accepted or declined
 type ReceivedShareUpdated struct {
+	Executant      *user.UserId
 	ShareID        *collaboration.ShareId
 	ItemID         *provider.ResourceId
 	Permissions    *collaboration.SharePermissions
@@ -106,6 +110,7 @@ func (ReceivedShareUpdated) Unmarshal(v []byte) (interface{}, error) {
 
 // LinkCreated is emitted when a public link is created
 type LinkCreated struct {
+	Executant         *user.UserId
 	ShareID           *link.PublicShareId
 	Sharer            *user.UserId
 	ItemID            *provider.ResourceId
@@ -126,6 +131,7 @@ func (LinkCreated) Unmarshal(v []byte) (interface{}, error) {
 
 // LinkUpdated is emitted when a public link is updated
 type LinkUpdated struct {
+	Executant         *user.UserId
 	ShareID           *link.PublicShareId
 	Sharer            *user.UserId
 	ItemID            *provider.ResourceId
@@ -148,6 +154,7 @@ func (LinkUpdated) Unmarshal(v []byte) (interface{}, error) {
 
 // LinkAccessed is emitted when a public link is accessed successfully (by token)
 type LinkAccessed struct {
+	Executant         *user.UserId
 	ShareID           *link.PublicShareId
 	Sharer            *user.UserId
 	ItemID            *provider.ResourceId
@@ -168,10 +175,11 @@ func (LinkAccessed) Unmarshal(v []byte) (interface{}, error) {
 
 // LinkAccessFailed is emitted when an access to a public link has resulted in an error (by token)
 type LinkAccessFailed struct {
-	ShareID *link.PublicShareId
-	Token   string
-	Status  rpc.Code
-	Message string
+	Executant *user.UserId
+	ShareID   *link.PublicShareId
+	Token     string
+	Status    rpc.Code
+	Message   string
 }
 
 // Unmarshal to fulfill umarshaller interface
@@ -183,6 +191,7 @@ func (LinkAccessFailed) Unmarshal(v []byte) (interface{}, error) {
 
 // LinkRemoved is emitted when a share is removed
 type LinkRemoved struct {
+	Executant *user.UserId
 	// split protobuf Ref
 	ShareID    *link.PublicShareId
 	ShareToken string

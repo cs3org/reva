@@ -29,6 +29,7 @@ import (
 type ContainerCreated struct {
 	Executant *user.UserId
 	Ref       *provider.Reference
+	Owner     *user.UserId
 }
 
 // Unmarshal to fulfill umarshaller interface
@@ -54,8 +55,9 @@ func (FileUploaded) Unmarshal(v []byte) (interface{}, error) {
 
 // FileDownloaded is emitted when a file is downloaded
 type FileDownloaded struct {
-	Ref   *provider.Reference
-	Owner *user.UserId
+	Executant *user.UserId
+	Ref       *provider.Reference
+	Owner     *user.UserId
 }
 
 // Unmarshal to fulfill umarshaller interface
