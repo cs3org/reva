@@ -25,23 +25,24 @@ import (
 
 // Config holds the config options that need to be passed down to all ocs handlers
 type Config struct {
-	Prefix                   string                            `mapstructure:"prefix"`
-	Config                   data.ConfigData                   `mapstructure:"config"`
-	Capabilities             data.CapabilitiesData             `mapstructure:"capabilities"`
-	GatewaySvc               string                            `mapstructure:"gatewaysvc"`
-	StorageregistrySvc       string                            `mapstructure:"storage_registry_svc"`
-	DefaultUploadProtocol    string                            `mapstructure:"default_upload_protocol"`
-	UserAgentChunkingMap     map[string]string                 `mapstructure:"user_agent_chunking_map"`
-	SharePrefix              string                            `mapstructure:"share_prefix"`
-	HomeNamespace            string                            `mapstructure:"home_namespace"`
-	AdditionalInfoAttribute  string                            `mapstructure:"additional_info_attribute"`
-	CacheWarmupDriver        string                            `mapstructure:"cache_warmup_driver"`
-	CacheWarmupDrivers       map[string]map[string]interface{} `mapstructure:"cache_warmup_drivers"`
-	ResourceInfoCacheDriver  string                            `mapstructure:"resource_info_cache_type"`
-	ResourceInfoCacheTTL     int                               `mapstructure:"resource_info_cache_ttl"`
-	ResourceInfoCacheDrivers map[string]map[string]interface{} `mapstructure:"resource_info_caches"`
-	UserIdentifierCacheTTL   int                               `mapstructure:"user_identifier_cache_ttl"`
-	MachineAuthAPIKey        string                            `mapstructure:"machine_auth_apikey"`
+	Prefix                                string                            `mapstructure:"prefix"`
+	Config                                data.ConfigData                   `mapstructure:"config"`
+	Capabilities                          data.CapabilitiesData             `mapstructure:"capabilities"`
+	GatewaySvc                            string                            `mapstructure:"gatewaysvc"`
+	StorageregistrySvc                    string                            `mapstructure:"storage_registry_svc"`
+	DefaultUploadProtocol                 string                            `mapstructure:"default_upload_protocol"`
+	UserAgentChunkingMap                  map[string]string                 `mapstructure:"user_agent_chunking_map"`
+	SharePrefix                           string                            `mapstructure:"share_prefix"`
+	HomeNamespace                         string                            `mapstructure:"home_namespace"`
+	AdditionalInfoAttribute               string                            `mapstructure:"additional_info_attribute"`
+	CacheWarmupDriver                     string                            `mapstructure:"cache_warmup_driver"`
+	CacheWarmupDrivers                    map[string]map[string]interface{} `mapstructure:"cache_warmup_drivers"`
+	ResourceInfoCacheDriver               string                            `mapstructure:"resource_info_cache_type"`
+	ResourceInfoCacheTTL                  int                               `mapstructure:"resource_info_cache_ttl"`
+	ResourceInfoCacheDrivers              map[string]map[string]interface{} `mapstructure:"resource_info_caches"`
+	UserIdentifierCacheTTL                int                               `mapstructure:"user_identifier_cache_ttl"`
+	MachineAuthAPIKey                     string                            `mapstructure:"machine_auth_apikey"`
+	SkipUpdatingExistingSharesMountpoints bool                              `mapstructure:"skip_updating_existing_shares_mountpoint"`
 }
 
 // Init sets sane defaults
