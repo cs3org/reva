@@ -167,12 +167,14 @@ func (h *Handler) startCacheWarmup(c cache.Warmup) {
 func (h *Handler) extractReference(r *http.Request) (provider.Reference, error) {
 	var ref provider.Reference
 
+	// NOTE: space_ref is deprecated and will be removed in ~2 weeks (1.6.22)
+	sr := r.FormValue("space_ref")
+	if sr != "" {
+		return storagespace.ParseReference(sr)
+	}
+
 	p, id := r.FormValue("path"), r.FormValue("space")
 	if p == "" && id == "" {
-		// NOTE: space_ref is deprecated and will be removed in ~2 weeks (1.6.22)
-		if sr := r.FormValue("space_ref"); sr != "" {
-			return storagespace.ParseReference(sr)
-		}
 		return ref, errors.New("need path or space to extract reference")
 	}
 
