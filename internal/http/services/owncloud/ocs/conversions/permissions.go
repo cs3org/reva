@@ -39,8 +39,6 @@ const (
 	PermissionDelete
 	// PermissionShare grants share permissions on a resource
 	PermissionShare
-	// PermissionManager grants manager permissions on a resource
-	PermissionManager // FIXME: this permissions exists to differentiate a editor from a manager. They are not distinguishable without.
 	// PermissionAll grants all permissions on a resource
 	PermissionAll Permissions = (1 << (iota - 1)) - 1
 )
