@@ -72,37 +72,37 @@ func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error
 		switch v := res.(type) {
 		case *collaboration.CreateShareResponse:
 			if isSuccess(v) {
-				ev = ShareCreated(v)
+				ev = ShareCreated(v, executantID)
 			}
 		case *collaboration.RemoveShareResponse:
 			if isSuccess(v) {
-				ev = ShareRemoved(v, req.(*collaboration.RemoveShareRequest))
+				ev = ShareRemoved(v, req.(*collaboration.RemoveShareRequest), executantID)
 			}
 		case *collaboration.UpdateShareResponse:
 			if isSuccess(v) {
-				ev = ShareUpdated(v, req.(*collaboration.UpdateShareRequest))
+				ev = ShareUpdated(v, req.(*collaboration.UpdateShareRequest), executantID)
 			}
 		case *collaboration.UpdateReceivedShareResponse:
 			if isSuccess(v) {
-				ev = ReceivedShareUpdated(v)
+				ev = ReceivedShareUpdated(v, executantID)
 			}
 		case *link.CreatePublicShareResponse:
 			if isSuccess(v) {
-				ev = LinkCreated(v)
+				ev = LinkCreated(v, executantID)
 			}
 		case *link.UpdatePublicShareResponse:
 			if isSuccess(v) {
-				ev = LinkUpdated(v, req.(*link.UpdatePublicShareRequest))
+				ev = LinkUpdated(v, req.(*link.UpdatePublicShareRequest), executantID)
 			}
 		case *link.RemovePublicShareResponse:
 			if isSuccess(v) {
-				ev = LinkRemoved(v, req.(*link.RemovePublicShareRequest))
+				ev = LinkRemoved(v, req.(*link.RemovePublicShareRequest), executantID)
 			}
 		case *link.GetPublicShareByTokenResponse:
 			if isSuccess(v) {
-				ev = LinkAccessed(v)
+				ev = LinkAccessed(v, executantID)
 			} else {
-				ev = LinkAccessFailed(v, req.(*link.GetPublicShareByTokenRequest))
+				ev = LinkAccessFailed(v, req.(*link.GetPublicShareByTokenRequest), executantID)
 			}
 		case *provider.CreateContainerResponse:
 			if isSuccess(v) {
@@ -110,7 +110,7 @@ func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error
 			}
 		case *provider.InitiateFileDownloadResponse:
 			if isSuccess(v) {
-				ev = FileDownloaded(v, req.(*provider.InitiateFileDownloadRequest))
+				ev = FileDownloaded(v, req.(*provider.InitiateFileDownloadRequest), executantID)
 			}
 		case *provider.DeleteResponse:
 			if isSuccess(v) {
@@ -122,7 +122,7 @@ func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error
 			}
 		case *provider.PurgeRecycleResponse:
 			if isSuccess(v) {
-				ev = ItemPurged(v, req.(*provider.PurgeRecycleRequest))
+				ev = ItemPurged(v, req.(*provider.PurgeRecycleRequest), executantID)
 			}
 		case *provider.RestoreRecycleItemResponse:
 			if isSuccess(v) {
@@ -134,26 +134,26 @@ func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error
 			}
 		case *provider.CreateStorageSpaceResponse:
 			if isSuccess(v) && v.StorageSpace != nil { // TODO: Why are there CreateStorageSpaceResponses with nil StorageSpace?
-				ev = SpaceCreated(v)
+				ev = SpaceCreated(v, executantID)
 			}
 		case *provider.UpdateStorageSpaceResponse:
 			if isSuccess(v) {
 				r := req.(*provider.UpdateStorageSpaceRequest)
 				if r.StorageSpace.Name != "" {
-					ev = SpaceRenamed(v, r)
+					ev = SpaceRenamed(v, r, executantID)
 				}
 
 				if utils.ExistsInOpaque(r.Opaque, "restore") {
-					ev = SpaceEnabled(v, r)
+					ev = SpaceEnabled(v, r, executantID)
 				}
 			}
 		case *provider.DeleteStorageSpaceResponse:
 			if isSuccess(v) {
 				r := req.(*provider.DeleteStorageSpaceRequest)
 				if utils.ExistsInOpaque(r.Opaque, "purge") {
-					ev = SpaceDeleted(v, r)
+					ev = SpaceDeleted(v, r, executantID)
 				} else {
-					ev = SpaceDisabled(v, r)
+					ev = SpaceDisabled(v, r, executantID)
 				}
 			}
 		}

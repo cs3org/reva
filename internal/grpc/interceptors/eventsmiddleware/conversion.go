@@ -36,8 +36,9 @@ func ContainerCreated(r *provider.CreateContainerResponse, req *provider.CreateC
 }
 
 // ShareCreated converts the response to an event
-func ShareCreated(r *collaboration.CreateShareResponse) events.ShareCreated {
+func ShareCreated(r *collaboration.CreateShareResponse, executant *user.UserId) events.ShareCreated {
 	return events.ShareCreated{
+		Executant:      executant,
 		Sharer:         r.Share.Creator,
 		GranteeUserID:  r.Share.GetGrantee().GetUserId(),
 		GranteeGroupID: r.Share.GetGrantee().GetGroupId(),
@@ -48,15 +49,16 @@ func ShareCreated(r *collaboration.CreateShareResponse) events.ShareCreated {
 }
 
 // ShareRemoved converts the response to an event
-func ShareRemoved(r *collaboration.RemoveShareResponse, req *collaboration.RemoveShareRequest) events.ShareRemoved {
+func ShareRemoved(r *collaboration.RemoveShareResponse, req *collaboration.RemoveShareRequest, executant *user.UserId) events.ShareRemoved {
 	return events.ShareRemoved{
-		ShareID:  req.Ref.GetId(),
-		ShareKey: req.Ref.GetKey(),
+		Executant: executant,
+		ShareID:   req.Ref.GetId(),
+		ShareKey:  req.Ref.GetKey(),
 	}
 }
 
 // ShareUpdated converts the response to an event
-func ShareUpdated(r *collaboration.UpdateShareResponse, req *collaboration.UpdateShareRequest) events.ShareUpdated {
+func ShareUpdated(r *collaboration.UpdateShareResponse, req *collaboration.UpdateShareRequest, executant *user.UserId) events.ShareUpdated {
 	updated := ""
 	if req.Field.GetPermissions() != nil {
 		updated = "permissions"
@@ -64,6 +66,7 @@ func ShareUpdated(r *collaboration.UpdateShareResponse, req *collaboration.Updat
 		updated = "displayname"
 	}
 	return events.ShareUpdated{
+		Executant:      executant,
 		ShareID:        r.Share.Id,
 		ItemID:         r.Share.ResourceId,
 		Permissions:    r.Share.Permissions,
@@ -76,8 +79,9 @@ func ShareUpdated(r *collaboration.UpdateShareResponse, req *collaboration.Updat
 }
 
 // ReceivedShareUpdated converts the response to an event
-func ReceivedShareUpdated(r *collaboration.UpdateReceivedShareResponse) events.ReceivedShareUpdated {
+func ReceivedShareUpdated(r *collaboration.UpdateReceivedShareResponse, executant *user.UserId) events.ReceivedShareUpdated {
 	return events.ReceivedShareUpdated{
+		Executant:      executant,
 		ShareID:        r.Share.Share.Id,
 		ItemID:         r.Share.Share.ResourceId,
 		Permissions:    r.Share.Share.Permissions,
@@ -90,8 +94,9 @@ func ReceivedShareUpdated(r *collaboration.UpdateReceivedShareResponse) events.R
 }
 
 // LinkCreated converts the response to an event
-func LinkCreated(r *link.CreatePublicShareResponse) events.LinkCreated {
+func LinkCreated(r *link.CreatePublicShareResponse, executant *user.UserId) events.LinkCreated {
 	return events.LinkCreated{
+		Executant:         executant,
 		ShareID:           r.Share.Id,
 		Sharer:            r.Share.Creator,
 		ItemID:            r.Share.ResourceId,
@@ -105,8 +110,9 @@ func LinkCreated(r *link.CreatePublicShareResponse) events.LinkCreated {
 }
 
 // LinkUpdated converts the response to an event
-func LinkUpdated(r *link.UpdatePublicShareResponse, req *link.UpdatePublicShareRequest) events.LinkUpdated {
+func LinkUpdated(r *link.UpdatePublicShareResponse, req *link.UpdatePublicShareRequest, executant *user.UserId) events.LinkUpdated {
 	return events.LinkUpdated{
+		Executant:         executant,
 		ShareID:           r.Share.Id,
 		Sharer:            r.Share.Creator,
 		ItemID:            r.Share.ResourceId,
@@ -121,8 +127,9 @@ func LinkUpdated(r *link.UpdatePublicShareResponse, req *link.UpdatePublicShareR
 }
 
 // LinkAccessed converts the response to an event
-func LinkAccessed(r *link.GetPublicShareByTokenResponse) events.LinkAccessed {
+func LinkAccessed(r *link.GetPublicShareByTokenResponse, executant *user.UserId) events.LinkAccessed {
 	return events.LinkAccessed{
+		Executant:         executant,
 		ShareID:           r.Share.Id,
 		Sharer:            r.Share.Creator,
 		ItemID:            r.Share.ResourceId,
@@ -136,10 +143,11 @@ func LinkAccessed(r *link.GetPublicShareByTokenResponse) events.LinkAccessed {
 }
 
 // LinkAccessFailed converts the response to an event
-func LinkAccessFailed(r *link.GetPublicShareByTokenResponse, req *link.GetPublicShareByTokenRequest) events.LinkAccessFailed {
+func LinkAccessFailed(r *link.GetPublicShareByTokenResponse, req *link.GetPublicShareByTokenRequest, executant *user.UserId) events.LinkAccessFailed {
 	e := events.LinkAccessFailed{
-		Status:  r.Status.Code,
-		Message: r.Status.Message,
+		Executant: executant,
+		Status:    r.Status.Code,
+		Message:   r.Status.Message,
 	}
 	if r.Share != nil {
 		e.ShareID = r.Share.Id
@@ -149,8 +157,9 @@ func LinkAccessFailed(r *link.GetPublicShareByTokenResponse, req *link.GetPublic
 }
 
 // LinkRemoved converts the response to an event
-func LinkRemoved(r *link.RemovePublicShareResponse, req *link.RemovePublicShareRequest) events.LinkRemoved {
+func LinkRemoved(r *link.RemovePublicShareResponse, req *link.RemovePublicShareRequest, executant *user.UserId) events.LinkRemoved {
 	return events.LinkRemoved{
+		Executant:  executant,
 		ShareID:    req.Ref.GetId(),
 		ShareToken: req.Ref.GetToken(),
 	}
@@ -165,9 +174,10 @@ func FileUploaded(r *provider.InitiateFileUploadResponse, req *provider.Initiate
 }
 
 // FileDownloaded converts the response to an event
-func FileDownloaded(r *provider.InitiateFileDownloadResponse, req *provider.InitiateFileDownloadRequest) events.FileDownloaded {
+func FileDownloaded(r *provider.InitiateFileDownloadResponse, req *provider.InitiateFileDownloadRequest, executant *user.UserId) events.FileDownloaded {
 	return events.FileDownloaded{
-		Ref: req.Ref,
+		Executant: executant,
+		Ref:       req.Ref,
 	}
 }
 
@@ -194,9 +204,10 @@ func ItemMoved(r *provider.MoveResponse, req *provider.MoveRequest, executant *u
 }
 
 // ItemPurged converts the response to an event
-func ItemPurged(r *provider.PurgeRecycleResponse, req *provider.PurgeRecycleRequest) events.ItemPurged {
+func ItemPurged(r *provider.PurgeRecycleResponse, req *provider.PurgeRecycleRequest, executant *user.UserId) events.ItemPurged {
 	return events.ItemPurged{
-		Ref: req.Ref,
+		Executant: executant,
+		Ref:       req.Ref,
 	}
 }
 
@@ -224,46 +235,51 @@ func FileVersionRestored(r *provider.RestoreFileVersionResponse, req *provider.R
 }
 
 // SpaceCreated converts the response to an event
-func SpaceCreated(r *provider.CreateStorageSpaceResponse) events.SpaceCreated {
+func SpaceCreated(r *provider.CreateStorageSpaceResponse, executant *user.UserId) events.SpaceCreated {
 	return events.SpaceCreated{
-		ID:    r.StorageSpace.Id,
-		Owner: extractOwner(r.StorageSpace.Owner),
-		Root:  r.StorageSpace.Root,
-		Name:  r.StorageSpace.Name,
-		Type:  r.StorageSpace.SpaceType,
-		Quota: r.StorageSpace.Quota,
-		MTime: r.StorageSpace.Mtime,
+		Executant: executant,
+		ID:        r.StorageSpace.Id,
+		Owner:     extractOwner(r.StorageSpace.Owner),
+		Root:      r.StorageSpace.Root,
+		Name:      r.StorageSpace.Name,
+		Type:      r.StorageSpace.SpaceType,
+		Quota:     r.StorageSpace.Quota,
+		MTime:     r.StorageSpace.Mtime,
 	}
 }
 
 // SpaceRenamed converts the response to an event
-func SpaceRenamed(r *provider.UpdateStorageSpaceResponse, req *provider.UpdateStorageSpaceRequest) events.SpaceRenamed {
+func SpaceRenamed(r *provider.UpdateStorageSpaceResponse, req *provider.UpdateStorageSpaceRequest, executant *user.UserId) events.SpaceRenamed {
 	return events.SpaceRenamed{
-		ID:    r.StorageSpace.Id,
-		Owner: extractOwner(r.StorageSpace.Owner),
-		Name:  r.StorageSpace.Name,
+		Executant: executant,
+		ID:        r.StorageSpace.Id,
+		Owner:     extractOwner(r.StorageSpace.Owner),
+		Name:      r.StorageSpace.Name,
 	}
 }
 
 // SpaceEnabled converts the response to an event
-func SpaceEnabled(r *provider.UpdateStorageSpaceResponse, req *provider.UpdateStorageSpaceRequest) events.SpaceEnabled {
+func SpaceEnabled(r *provider.UpdateStorageSpaceResponse, req *provider.UpdateStorageSpaceRequest, executant *user.UserId) events.SpaceEnabled {
 	return events.SpaceEnabled{
-		ID:    r.StorageSpace.Id,
-		Owner: extractOwner(r.StorageSpace.Owner),
+		Executant: executant,
+		ID:        r.StorageSpace.Id,
+		Owner:     extractOwner(r.StorageSpace.Owner),
 	}
 }
 
 // SpaceDisabled converts the response to an event
-func SpaceDisabled(r *provider.DeleteStorageSpaceResponse, req *provider.DeleteStorageSpaceRequest) events.SpaceDisabled {
+func SpaceDisabled(r *provider.DeleteStorageSpaceResponse, req *provider.DeleteStorageSpaceRequest, executant *user.UserId) events.SpaceDisabled {
 	return events.SpaceDisabled{
-		ID: req.Id,
+		Executant: executant,
+		ID:        req.Id,
 	}
 }
 
 // SpaceDeleted converts the response to an event
-func SpaceDeleted(r *provider.DeleteStorageSpaceResponse, req *provider.DeleteStorageSpaceRequest) events.SpaceDeleted {
+func SpaceDeleted(r *provider.DeleteStorageSpaceResponse, req *provider.DeleteStorageSpaceRequest, executant *user.UserId) events.SpaceDeleted {
 	return events.SpaceDeleted{
-		ID: req.Id,
+		Executant: executant,
+		ID:        req.Id,
 	}
 }
 
