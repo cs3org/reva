@@ -398,14 +398,16 @@ func (h *Handler) updateExistingShareMountpoints(ctx context.Context, shareType 
 	return response.MetaOK.StatusCode, "", nil
 }
 
-func (h *Handler) extractPermissions(w http.ResponseWriter, r *http.Request, ri *provider.ResourceInfo, defaultPermissions *conversions.Role) (*conversions.Role, []byte, *ocsError) {
-	reqRole, reqPermissions := r.FormValue("role"), r.FormValue("permissions")
+func (h *Handler) extractPermissions(reqRole string, reqPermissions string, ri *provider.ResourceInfo, defaultPermissions *conversions.Role) (*conversions.Role, []byte, *ocsError) {
 	var role *conversions.Role
 
 	// the share role overrides the requested permissions
 	if reqRole != "" {
 		role = conversions.RoleFromName(reqRole)
-	} else {
+	}
+
+	// if the role is unknown - fall back to reqPermissions or defaultPermissions
+	if role == nil || role.Name == conversions.RoleUnknown {
 		// map requested permissions
 		if reqPermissions == "" {
 			// TODO default link vs user share

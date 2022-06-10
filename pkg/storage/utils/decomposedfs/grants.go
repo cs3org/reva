@@ -54,8 +54,9 @@ func (fs *Decomposedfs) AddGrant(ctx context.Context, ref *provider.Reference, g
 		return fs.UpdateGrant(ctx, ref, g)
 	}
 
+	// add acting user
 	u := ctxpkg.ContextMustGetUser(ctx)
-	g.Grantee.Opaque = utils.AppendPlainToOpaque(g.Grantee.Opaque, "granting-user", u.Id.GetOpaqueId())
+	g.Creator = u.GetId()
 
 	owner := node.Owner()
 	grants, err := node.ListGrants(ctx)
@@ -95,14 +96,11 @@ func (fs *Decomposedfs) ListGrants(ctx context.Context, ref *provider.Reference)
 		return
 	}
 
-	ok, err := fs.p.HasPermission(ctx, node, func(rp *provider.ResourcePermissions) bool {
+	listGrants, err := fs.p.HasPermission(ctx, node, func(rp *provider.ResourcePermissions) bool {
 		return rp.ListGrants
 	})
-	switch {
-	case err != nil:
+	if err != nil {
 		return nil, errtypes.InternalError(err.Error())
-	case !ok:
-		return nil, errtypes.PermissionDenied(filepath.Join(node.ParentID, node.Name))
 	}
 
 	log := appctx.GetLogger(ctx)
@@ -117,9 +115,17 @@ func (fs *Decomposedfs) ListGrants(ctx context.Context, ref *provider.Reference)
 
 	aces := extractACEsFromAttrs(ctx, np, attrs)
 
+	uid := ctxpkg.ContextMustGetUser(ctx).GetId()
 	grants = make([]*provider.Grant, 0, len(aces))
 	for i := range aces {
-		grants = append(grants, aces[i].Grant())
+		g := aces[i].Grant()
+
+		// you may list your own grants even without listgrants permission
+		if !listGrants && !utils.UserEqual(g.Creator, uid) && !utils.UserEqual(g.Grantee.GetUserId(), uid) {
+			continue
+		}
+
+		grants = append(grants, g)
 	}
 
 	return grants, nil
@@ -127,35 +133,14 @@ func (fs *Decomposedfs) ListGrants(ctx context.Context, ref *provider.Reference)
 
 // RemoveGrant removes a grant from resource
 func (fs *Decomposedfs) RemoveGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) (err error) {
-	var node *node.Node
-	if node, err = fs.lu.NodeFromResource(ctx, ref); err != nil {
-		return
-	}
-	if !node.Exists {
-		err = errtypes.NotFound(filepath.Join(node.ParentID, node.Name))
-		return
+	node, grant, err := fs.loadGrant(ctx, ref, g)
+	if err != nil {
+		return err
 	}
 
-	// you are allowed to remove grants you created yourself
-	var ownsGrant bool
-	u, ok := ctxpkg.ContextGetUser(ctx)
-	if ok {
-		grants, err := fs.ListGrants(ctx, ref)
-		if err != nil {
-			return err
-		}
-
-		for _, grant := range grants {
-			if g.Grantee.GetUserId().GetOpaqueId() == grant.Grantee.GetUserId().GetOpaqueId() {
-				if utils.ReadPlainFromOpaque(grant.Grantee.Opaque, "granting-user") == u.GetId().GetOpaqueId() { // TODO: adjust cs3api
-					ownsGrant = true
-				}
-			}
-		}
-	}
-
-	if !ownsGrant {
-		ok, err = fs.p.HasPermission(ctx, node, func(rp *provider.ResourcePermissions) bool {
+	// you are allowed to remove grants if you created them yourself or have the proper permission
+	if !utils.UserEqual(grant.Creator, ctxpkg.ContextMustGetUser(ctx).GetId()) {
+		ok, err := fs.p.HasPermission(ctx, node, func(rp *provider.ResourcePermissions) bool {
 			return rp.RemoveGrant
 		})
 		switch {
@@ -202,12 +187,8 @@ func (fs *Decomposedfs) UpdateGrant(ctx context.Context, ref *provider.Reference
 		return errtypes.NotFound(g.Grantee.GetUserId().GetOpaqueId())
 	}
 
-	g.Grantee.Opaque = utils.MergeOpaques(g.Grantee.Opaque, grant.Grantee.Opaque)
-	creator := utils.ReadPlainFromOpaque(g.Grantee.Opaque, "granting-user")
-
-	u := ctxpkg.ContextMustGetUser(ctx)
 	// You may update a grant when you have the UpdateGrant permission or created the grant (regardless what your permissions are now)
-	if u.GetId().GetOpaqueId() != creator {
+	if !utils.UserEqual(grant.Creator, ctxpkg.ContextMustGetUser(ctx).GetId()) {
 		ok, err := fs.p.HasPermission(ctx, node, func(rp *provider.ResourcePermissions) bool {
 			return rp.UpdateGrant
 		})
