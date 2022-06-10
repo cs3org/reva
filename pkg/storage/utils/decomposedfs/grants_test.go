@@ -19,6 +19,7 @@
 package decomposedfs_test
 
 import (
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -114,10 +115,11 @@ var _ = Describe("Grants", func() {
 				err = env.Fs.AddGrant(env.Ctx, ref, grant)
 				Expect(err).ToNot(HaveOccurred())
 
+				o := env.Owner.GetId()
 				localPath := n.InternalPath()
 				attr, err := xattr.Get(localPath, xattrs.GrantUserAcePrefix+grant.Grantee.GetUserId().OpaqueId)
 				Expect(err).ToNot(HaveOccurred())
-				Expect(string(attr)).To(Equal("\x00t=A:f=:p=rw"))
+				Expect(string(attr)).To(Equal(fmt.Sprintf("\x00t=A:f=:p=rw:c=%s", o.GetOpaqueId()+"!"+o.GetIdp()+"\n"))) // NOTE: this tests ace package
 			})
 
 			It("creates a storage space per created grant", func() {

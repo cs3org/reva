@@ -19,6 +19,7 @@
 package ace
 
 import (
+	"bytes"
 	"encoding/csv"
 	"fmt"
 	"strconv"
@@ -27,7 +28,6 @@ import (
 	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/v2/pkg/utils"
 )
 
 // ACE represents an Access Control Entry, mimicing NFSv4 ACLs
@@ -130,7 +130,7 @@ func FromGrant(g *provider.Grant) *ACE {
 	e := &ACE{
 		_type:       "A",
 		permissions: getACEPerm(g.Permissions),
-		creator:     utils.ReadPlainFromOpaque(g.Grantee.Opaque, "granting-user"), // TODO: change cs3api
+		creator:     userIDToString(g.Creator),
 	}
 	if g.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_GROUP {
 		e.flags = "g"
@@ -148,11 +148,23 @@ func (e *ACE) Principal() string {
 
 // Marshal renders a principal and byte[] that can be used to persist the ACE as an extended attribute
 func (e *ACE) Marshal() (string, []byte) {
-	// first byte will be replaced after converting to byte array
-	val := fmt.Sprintf("_t=%s:f=%s:p=%s:c=%s", e._type, e.flags, e.permissions, e.creator)
-	b := []byte(val)
-	b[0] = 0 // indicate key value
-	return e.principal, b
+	// NOTE: first byte will be replaced after converting to byte array
+	b := bytes.NewBuffer([]byte{})
+	w := csv.NewWriter(b)
+	w.Comma = ':'
+	if err := w.Write([]string{
+		fmt.Sprintf("_t=%s", e._type),
+		fmt.Sprintf("f=%s", e.flags),
+		fmt.Sprintf("p=%s", e.permissions),
+		fmt.Sprintf("c=%s", e.creator),
+	}); err != nil {
+		return "", nil
+	}
+	w.Flush()
+
+	bs := b.Bytes()
+	bs[0] = 0 // indicate key value
+	return e.principal, bs
 }
 
 // Unmarshal parses a principal string and byte[] into an ACE
@@ -187,6 +199,7 @@ func (e *ACE) Grant() *provider.Grant {
 			Type: e.granteeType(),
 		},
 		Permissions: e.grantPermissionSet(),
+		Creator:     userIDFromString(e.creator),
 	}
 	id := e.principal[2:]
 	if e.granteeType() == provider.GranteeType_GRANTEE_TYPE_GROUP {
@@ -195,8 +208,6 @@ func (e *ACE) Grant() *provider.Grant {
 		g.Grantee.Id = &provider.Grantee_UserId{UserId: &userpb.UserId{OpaqueId: id}}
 	}
 
-	// TODO: change cs3api
-	g.Grantee.Opaque = utils.AppendPlainToOpaque(g.Grantee.Opaque, "granting-user", e.creator)
 	return g
 }
 
@@ -381,4 +392,19 @@ func getACEPerm(set *provider.ResourcePermissions) string {
 	// TODO set quota permission?
 	// TODO GetPath
 	return b.String()
+}
+
+func userIDToString(u *userpb.UserId) string {
+	return u.GetOpaqueId() + "!" + u.GetIdp()
+}
+
+func userIDFromString(uid string) *userpb.UserId {
+	s := strings.SplitN(uid, "!", 2)
+	if len(s) != 2 {
+		return nil
+	}
+	return &userpb.UserId{
+		OpaqueId: s[0],
+		Idp:      s[1],
+	}
 }
