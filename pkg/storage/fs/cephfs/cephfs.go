@@ -239,6 +239,13 @@ func (fs *cephfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKey
 		return
 	}
 
+	// The user wants to access their home, create it if it doesn't exist
+	if path == fs.conf.Root {
+		if err = fs.CreateHome(ctx); err != nil {
+			return
+		}
+	}
+
 	user.op(func(cv *cacheVal) {
 		var dir *cephfs2.Directory
 		if dir, err = cv.mount.OpenDir(path); err != nil {

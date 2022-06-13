@@ -24,6 +24,7 @@ package cephfs
 import (
 	"context"
 	"fmt"
+	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -239,8 +240,5 @@ func (user *User) resolveRef(ref *provider.Reference) (str string, err error) {
 	if str = ref.GetPath(); str == "" {
 		return "", errtypes.NotSupported("cephfs: entry IDs not currently supported")
 	}
-
-	str = removeLeadingSlash(str) //path must be relative
-
 	return
 }

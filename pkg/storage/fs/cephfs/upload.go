@@ -45,14 +45,7 @@ func (fs *cephfs) Upload(ctx context.Context, ref *provider.Reference, r io.Read
 	user := fs.makeUser(ctx)
 	upload, err := fs.GetUpload(ctx, ref.GetPath())
 	if err != nil {
-		metadata := map[string]string{"sizedeferred": "true"}
-		uploadIDs, err := fs.InitiateUpload(ctx, ref, 0, metadata)
-		if err != nil {
-			return err
-		}
-		if upload, err = fs.GetUpload(ctx, uploadIDs["simple"]); err != nil {
-			return errors.Wrap(err, "cephfs: error retrieving upload")
-		}
+		return errors.Wrap(err, "cephfs: error retrieving upload")
 	}
 
 	uploadInfo := upload.(*fileUpload)
@@ -195,14 +188,6 @@ func (fs *cephfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tus
 		infoPath: binPath + ".info",
 		fs:       fs,
 		ctx:      ctx,
-	}
-
-	if !info.SizeIsDeferred && info.Size == 0 {
-		log.Debug().Interface("info", info).Msg("cephfs: finishing upload for empty file")
-		// no need to create info file and finish directly
-		err = upload.FinishUpload(ctx)
-
-		return
 	}
 
 	// writeInfo creates the file by itself if necessary
