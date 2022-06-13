@@ -207,6 +207,7 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 	httpReq.Header.Set("Authorization", "Bearer "+p.conf.IOPSecret)
 	httpReq.Header.Set("TokenHeader", token)
 
+	log.Debug().Str("url", httpReq.URL.String()).Msg("Sending request to wopi server")
 	// Call the WOPI server and parse the response (body will always contain a payload)
 	openRes, err := p.wopiClient.Do(httpReq)
 	if err != nil {
