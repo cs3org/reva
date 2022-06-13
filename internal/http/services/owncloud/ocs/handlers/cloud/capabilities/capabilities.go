@@ -28,9 +28,10 @@ import (
 
 // Handler renders the capability endpoint
 type Handler struct {
-	c                     data.CapabilitiesData
-	defaultUploadProtocol string
-	userAgentChunkingMap  map[string]string
+	c                      data.CapabilitiesData
+	defaultUploadProtocol  string
+	userAgentChunkingMap   map[string]string
+	groupBasedCapabilities map[string][]string
 }
 
 // Init initializes this and any contained handlers
@@ -38,6 +39,7 @@ func (h *Handler) Init(c *config.Config) {
 	h.c = c.Capabilities
 	h.defaultUploadProtocol = c.DefaultUploadProtocol
 	h.userAgentChunkingMap = c.UserAgentChunkingMap
+	h.groupBasedCapabilities = c.GroupBasedCapabilities
 
 	// capabilities
 	if h.c.Capabilities == nil {
@@ -209,6 +211,12 @@ func (h *Handler) Init(c *config.Config) {
 	//    h.c.Capabilities.Notifications.Endpoints = []string{"list", "get", "delete"}
 	//  }
 
+	// group based
+
+	if h.c.Capabilities.GroupBased == nil {
+		h.c.Capabilities.GroupBased = &data.CapabilitiesGroupBased{}
+	}
+
 	// version
 
 	if h.c.Version == nil {
@@ -224,12 +232,12 @@ func (h *Handler) Init(c *config.Config) {
 	}
 
 	// upload protocol-specific details
-	setCapabilitiesForChunkProtocol(chunkProtocol(h.defaultUploadProtocol), &h.c)
+	setCapabilitiesForChunkProtocol(chunkProtocol(h.defaultUploadProtocol), h.c.Capabilities)
 
 }
 
 // Handler renders the capabilities
 func (h *Handler) GetCapabilities(w http.ResponseWriter, r *http.Request) {
-	c := h.getCapabilitiesForUserAgent(r.UserAgent())
+	c := h.getCapabilitiesForUserAgent(r.Context(), r.UserAgent())
 	response.WriteOCSSuccess(w, r, c)
 }
