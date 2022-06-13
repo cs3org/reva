@@ -827,7 +827,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 					}
 
 					if md.Id != nil {
-						if _, ok := linkshares[md.Id.OpaqueId]; ok {
+						if _, ok := linkshares[resourceid.OwnCloudResourceIDWrap(md.Id)]; ok {
 							types.WriteString("<oc:share-type>3</oc:share-type>")
 						}
 					}

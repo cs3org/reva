@@ -487,15 +487,6 @@ func (m *manager) cleanupExpiredShares() error {
 	return nil
 }
 
-func expired(s *link.PublicShare) bool {
-	if s.Expiration != nil {
-		if t := time.Unix(int64(s.Expiration.GetSeconds()), int64(s.Expiration.GetNanos())); t.Before(time.Now()) {
-			return true
-		}
-	}
-	return false
-}
-
 func (m *manager) uidOwnerFilters(ctx context.Context, u *user.User, filters []*link.ListPublicSharesRequest_Filter) (string, []interface{}, error) {
 	uid := conversions.FormatUserID(u.Id)
 
@@ -535,9 +526,7 @@ func (m *manager) uidOwnerFilters(ctx context.Context, u *user.User, filters []*
 						// For this to work across the two versions, this change would have to be made in revaold
 						// but it won't be straightforward as there, the storage provider doesn't return the
 						// resource owners.
-						query = ""
-						params = []interface{}{}
-						break
+						return "", []interface{}{}, nil
 					}
 				}
 			}
@@ -545,6 +534,15 @@ func (m *manager) uidOwnerFilters(ctx context.Context, u *user.User, filters []*
 	}
 
 	return query, params, nil
+}
+
+func expired(s *link.PublicShare) bool {
+	if s.Expiration != nil {
+		if t := time.Unix(int64(s.Expiration.GetSeconds()), int64(s.Expiration.GetNanos())); t.Before(time.Now()) {
+			return true
+		}
+	}
+	return false
 }
 
 func hashPassword(password string, cost int) (string, error) {
