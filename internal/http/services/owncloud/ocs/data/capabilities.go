@@ -58,6 +58,8 @@ type Capabilities struct {
 	Spaces       *Spaces                   `json:"spaces,omitempty" xml:"spaces,omitempty" mapstructure:"spaces"`
 
 	Notifications *CapabilitiesNotifications `json:"notifications,omitempty" xml:"notifications,omitempty"`
+
+	GroupBased *CapabilitiesGroupBased `json:"group_based" xml:"group_based" mapstructure:"group_based"`
 }
 
 // Spaces lets a service configure its advertised options related to Storage Spaces.
@@ -123,15 +125,16 @@ type CapabilitiesAppProvider struct {
 
 // CapabilitiesFiles TODO this is storage specific, not global. What effect do these options have on the clients?
 type CapabilitiesFiles struct {
-	PrivateLinks     ocsBool                      `json:"privateLinks" xml:"privateLinks" mapstructure:"private_links"`
-	BigFileChunking  ocsBool                      `json:"bigfilechunking" xml:"bigfilechunking"`
-	Undelete         ocsBool                      `json:"undelete" xml:"undelete"`
-	Versioning       ocsBool                      `json:"versioning" xml:"versioning"`
-	Favorites        ocsBool                      `json:"favorites" xml:"favorites"`
-	BlacklistedFiles []string                     `json:"blacklisted_files" xml:"blacklisted_files>element" mapstructure:"blacklisted_files"`
-	TusSupport       *CapabilitiesFilesTusSupport `json:"tus_support" xml:"tus_support" mapstructure:"tus_support"`
-	Archivers        []*CapabilitiesArchiver      `json:"archivers" xml:"archivers" mapstructure:"archivers"`
-	AppProviders     []*CapabilitiesAppProvider   `json:"app_providers" xml:"app_providers" mapstructure:"app_providers"`
+	PrivateLinks      ocsBool                      `json:"privateLinks" xml:"privateLinks" mapstructure:"private_links"`
+	BigFileChunking   ocsBool                      `json:"bigfilechunking" xml:"bigfilechunking"`
+	Undelete          ocsBool                      `json:"undelete" xml:"undelete"`
+	Versioning        ocsBool                      `json:"versioning" xml:"versioning"`
+	Favorites         ocsBool                      `json:"favorites" xml:"favorites"`
+	PermanentDeletion ocsBool                      `json:"permanent_deletion" xml:"permanent_deletion"`
+	BlacklistedFiles  []string                     `json:"blacklisted_files" xml:"blacklisted_files>element" mapstructure:"blacklisted_files"`
+	TusSupport        *CapabilitiesFilesTusSupport `json:"tus_support" xml:"tus_support" mapstructure:"tus_support"`
+	Archivers         []*CapabilitiesArchiver      `json:"archivers" xml:"archivers" mapstructure:"archivers"`
+	AppProviders      []*CapabilitiesAppProvider   `json:"app_providers" xml:"app_providers" mapstructure:"app_providers"`
 }
 
 // CapabilitiesDav holds dav endpoint config
@@ -150,6 +153,8 @@ type CapabilitiesFilesSharing struct {
 	AutoAcceptShare               ocsBool                                  `json:"auto_accept_share" xml:"auto_accept_share" mapstructure:"auto_accept_share"`
 	ShareWithGroupMembersOnly     ocsBool                                  `json:"share_with_group_members_only" xml:"share_with_group_members_only" mapstructure:"share_with_group_members_only"`
 	ShareWithMembershipGroupsOnly ocsBool                                  `json:"share_with_membership_groups_only" xml:"share_with_membership_groups_only" mapstructure:"share_with_membership_groups_only"`
+	CanRename                     ocsBool                                  `json:"can_rename" xml:"can_rename" mapstructure:"can_rename"`
+	AllowCustom                   ocsBool                                  `json:"allow_custom" xml:"allow_custom" mapstructure:"allow_custom"`
 	SearchMinLength               int                                      `json:"search_min_length" xml:"search_min_length" mapstructure:"search_min_length"`
 	DefaultPermissions            int                                      `json:"default_permissions" xml:"default_permissions" mapstructure:"default_permissions"`
 	UserEnumeration               *CapabilitiesFilesSharingUserEnumeration `json:"user_enumeration" xml:"user_enumeration" mapstructure:"user_enumeration"`
@@ -166,6 +171,7 @@ type CapabilitiesFilesSharingPublic struct {
 	Upload             ocsBool                                   `json:"upload" xml:"upload"`
 	Multiple           ocsBool                                   `json:"multiple" xml:"multiple"`
 	SupportsUploadOnly ocsBool                                   `json:"supports_upload_only" xml:"supports_upload_only" mapstructure:"supports_upload_only"`
+	CanEdit            ocsBool                                   `json:"can_edit" xml:"can_edit" mapstructure:"can_edit"`
 	Password           *CapabilitiesFilesSharingPublicPassword   `json:"password" xml:"password"`
 	ExpireDate         *CapabilitiesFilesSharingPublicExpireDate `json:"expire_date" xml:"expire_date" mapstructure:"expire_date"`
 }
@@ -216,6 +222,11 @@ type CapabilitiesFilesSharingFederation struct {
 // CapabilitiesNotifications holds a list of notification endpoints
 type CapabilitiesNotifications struct {
 	Endpoints []string `json:"ocs-endpoints,omitempty" xml:"ocs-endpoints>element,omitempty" mapstructure:"endpoints"`
+}
+
+// CapabilitiesGroupBased holds capabilities based on the groups a user belongs to
+type CapabilitiesGroupBased struct {
+	Capabilities []string `json:"capabilities" xml:"capabilities" mapstructure:"capabilities"`
 }
 
 // Version holds version information
