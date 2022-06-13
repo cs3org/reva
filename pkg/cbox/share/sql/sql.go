@@ -551,9 +551,7 @@ func (m *mgr) uidOwnerFilters(ctx context.Context, filters map[collaboration.Fil
 						// For this to work across the two versions, this change would have to be made in revaold
 						// but it won't be straightforward as there, the storage provider doesn't return the
 						// resource owners.
-						query = ""
-						params = []interface{}{}
-						break
+						return "", []interface{}{}, nil
 					}
 				}
 			}
