@@ -96,7 +96,7 @@ func NewConn(endpoint string) (*grpc.ClientConn, error) {
 		),
 		grpc.WithStreamInterceptor(otelgrpc.StreamClientInterceptor(
 			otelgrpc.WithTracerProvider(
-				rtrace.Provider,
+				rtrace.DefaultProvider(),
 			),
 			otelgrpc.WithPropagators(
 				rtrace.Propagator,
@@ -105,7 +105,7 @@ func NewConn(endpoint string) (*grpc.ClientConn, error) {
 		grpc.WithUnaryInterceptor(
 			otelgrpc.UnaryClientInterceptor(
 				otelgrpc.WithTracerProvider(
-					rtrace.Provider,
+					rtrace.DefaultProvider(),
 				),
 				otelgrpc.WithPropagators(
 					rtrace.Propagator,

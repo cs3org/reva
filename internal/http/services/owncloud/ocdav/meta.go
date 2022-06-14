@@ -91,7 +91,7 @@ func (h *MetaHandler) Handler(s *svc) http.Handler {
 }
 
 func (h *MetaHandler) handlePathForUser(w http.ResponseWriter, r *http.Request, s *svc, rid *provider.ResourceId) {
-	ctx, span := rtrace.Provider.Tracer(tracerName).Start(r.Context(), "meta_propfind")
+	ctx, span := rtrace.DefaultProvider().Tracer(tracerName).Start(r.Context(), "meta_propfind")
 	defer span.End()
 
 	id := storagespace.FormatResourceID(*rid)
@@ -178,7 +178,7 @@ func (h *MetaHandler) handlePathForUser(w http.ResponseWriter, r *http.Request, 
 }
 
 func (h *MetaHandler) handleEmptyID(w http.ResponseWriter, r *http.Request) {
-	ctx, span := rtrace.Provider.Tracer(tracerName).Start(r.Context(), "meta_propfind")
+	ctx, span := rtrace.DefaultProvider().Tracer(tracerName).Start(r.Context(), "meta_propfind")
 	defer span.End()
 
 	sublog := appctx.GetLogger(ctx).With().Str("path", r.URL.Path).Logger()

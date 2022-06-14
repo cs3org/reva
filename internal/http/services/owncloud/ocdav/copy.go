@@ -37,7 +37,6 @@ import (
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	"github.com/cs3org/reva/v2/pkg/rhttp"
 	"github.com/cs3org/reva/v2/pkg/rhttp/router"
-	rtrace "github.com/cs3org/reva/v2/pkg/trace"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/rs/zerolog"
 )
@@ -51,7 +50,7 @@ type copy struct {
 }
 
 func (s *svc) handlePathCopy(w http.ResponseWriter, r *http.Request, ns string) {
-	ctx, span := rtrace.Provider.Tracer(tracerName).Start(r.Context(), "copy")
+	ctx, span := s.tracerProvider.Tracer(tracerName).Start(r.Context(), "copy")
 	defer span.End()
 
 	if s.c.EnableHTTPTpc {
@@ -291,7 +290,7 @@ func (s *svc) executePathCopy(ctx context.Context, client gateway.GatewayAPIClie
 }
 
 func (s *svc) handleSpacesCopy(w http.ResponseWriter, r *http.Request, spaceID string) {
-	ctx, span := rtrace.Provider.Tracer(tracerName).Start(r.Context(), "spaces_copy")
+	ctx, span := s.tracerProvider.Tracer(tracerName).Start(r.Context(), "spaces_copy")
 	defer span.End()
 
 	dh := r.Header.Get(net.HeaderDestination)

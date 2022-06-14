@@ -38,7 +38,6 @@ import (
 	"github.com/cs3org/reva/v2/pkg/rhttp"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/chunking"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
-	rtrace "github.com/cs3org/reva/v2/pkg/trace"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/rs/zerolog"
 )
@@ -109,7 +108,7 @@ func isContentRange(r *http.Request) bool {
 }
 
 func (s *svc) handlePathPut(w http.ResponseWriter, r *http.Request, ns string) {
-	ctx, span := rtrace.Provider.Tracer(tracerName).Start(r.Context(), "put")
+	ctx, span := s.tracerProvider.Tracer(tracerName).Start(r.Context(), "put")
 	defer span.End()
 
 	fn := path.Join(ns, r.URL.Path)
@@ -344,7 +343,7 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 }
 
 func (s *svc) handleSpacesPut(w http.ResponseWriter, r *http.Request, spaceID string) {
-	ctx, span := rtrace.Provider.Tracer(tracerName).Start(r.Context(), "spaces_put")
+	ctx, span := s.tracerProvider.Tracer(tracerName).Start(r.Context(), "spaces_put")
 	defer span.End()
 
 	sublog := appctx.GetLogger(ctx).With().Str("spaceid", spaceID).Str("path", r.URL.Path).Logger()

@@ -43,7 +43,6 @@ import (
 	"github.com/cs3org/reva/v2/pkg/sharedconf"
 	"github.com/cs3org/reva/v2/pkg/token"
 	tokenmgr "github.com/cs3org/reva/v2/pkg/token/manager/registry"
-	rtrace "github.com/cs3org/reva/v2/pkg/trace"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
@@ -84,7 +83,7 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 }
 
 // New returns a new middleware with defined priority.
-func New(m map[string]interface{}, unprotected []string) (global.Middleware, error) {
+func New(m map[string]interface{}, unprotected []string, tp trace.TracerProvider) (global.Middleware, error) {
 	conf, err := parseConfig(m)
 	if err != nil {
 		return nil, err
@@ -168,7 +167,7 @@ func New(m map[string]interface{}, unprotected []string) (global.Middleware, err
 			span := trace.SpanFromContext(ctx)
 			defer span.End()
 			if !span.SpanContext().HasTraceID() {
-				_, span = rtrace.Provider.Tracer(tracerName).Start(ctx, "http auth interceptor")
+				_, span = tp.Tracer(tracerName).Start(ctx, "http auth interceptor")
 			}
 
 			if r.Method == "OPTIONS" {

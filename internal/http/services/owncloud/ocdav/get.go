@@ -38,13 +38,12 @@ import (
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	"github.com/cs3org/reva/v2/pkg/rhttp"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
-	rtrace "github.com/cs3org/reva/v2/pkg/trace"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/rs/zerolog"
 )
 
 func (s *svc) handlePathGet(w http.ResponseWriter, r *http.Request, ns string) {
-	ctx, span := rtrace.Provider.Tracer(tracerName).Start(r.Context(), "get")
+	ctx, span := s.tracerProvider.Tracer(tracerName).Start(r.Context(), "get")
 	defer span.End()
 
 	fn := path.Join(ns, r.URL.Path)
@@ -179,7 +178,7 @@ func (s *svc) handleGet(ctx context.Context, w http.ResponseWriter, r *http.Requ
 }
 
 func (s *svc) handleSpacesGet(w http.ResponseWriter, r *http.Request, spaceID string) {
-	ctx, span := rtrace.Provider.Tracer(tracerName).Start(r.Context(), "spaces_get")
+	ctx, span := s.tracerProvider.Tracer(tracerName).Start(r.Context(), "spaces_get")
 	defer span.End()
 
 	sublog := appctx.GetLogger(ctx).With().Str("path", r.URL.Path).Str("spaceid", spaceID).Str("handler", "get").Logger()

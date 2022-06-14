@@ -38,13 +38,14 @@ import (
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // name is the Tracer name used to identify this instrumentation library.
 const tracerName = "rhttp"
 
 // New returns a new server
-func New(m interface{}, l zerolog.Logger) (*Server, error) {
+func New(m interface{}, l zerolog.Logger, tp trace.TracerProvider) (*Server, error) {
 	conf := &config{}
 	if err := mapstructure.Decode(m, conf); err != nil {
 		return nil, err
@@ -54,26 +55,28 @@ func New(m interface{}, l zerolog.Logger) (*Server, error) {
 
 	httpServer := &http.Server{}
 	s := &Server{
-		httpServer:  httpServer,
-		conf:        conf,
-		svcs:        map[string]global.Service{},
-		unprotected: []string{},
-		handlers:    map[string]http.Handler{},
-		log:         l,
+		httpServer:     httpServer,
+		conf:           conf,
+		svcs:           map[string]global.Service{},
+		unprotected:    []string{},
+		handlers:       map[string]http.Handler{},
+		log:            l,
+		tracerProvider: tp,
 	}
 	return s, nil
 }
 
 // Server contains the server info.
 type Server struct {
-	httpServer  *http.Server
-	conf        *config
-	listener    net.Listener
-	svcs        map[string]global.Service // map key is svc Prefix
-	unprotected []string
-	handlers    map[string]http.Handler
-	middlewares []*middlewareTriple
-	log         zerolog.Logger
+	httpServer     *http.Server
+	conf           *config
+	listener       net.Listener
+	svcs           map[string]global.Service // map key is svc Prefix
+	unprotected    []string
+	handlers       map[string]http.Handler
+	middlewares    []*middlewareTriple
+	log            zerolog.Logger
+	tracerProvider trace.TracerProvider
 }
 
 type config struct {
@@ -210,7 +213,7 @@ func (s *Server) registerServices() error {
 			}
 
 			// instrument services with opencensus tracing.
-			h := traceHandler(svcName, svc.Handler())
+			h := traceHandler(svcName, svc.Handler(), s.tracerProvider)
 			s.handlers[svc.Prefix()] = h
 			s.svcs[svc.Prefix()] = svc
 			s.unprotected = append(s.unprotected, getUnprotected(svc.Prefix(), svc.Unprotected())...)
@@ -268,13 +271,13 @@ func (s *Server) getHandler() (http.Handler, error) {
 
 	for _, triple := range s.middlewares {
 		s.log.Info().Msgf("chaining http middleware %s with priority  %d", triple.Name, triple.Priority)
-		handler = triple.Middleware(traceHandler(triple.Name, handler))
+		handler = triple.Middleware(traceHandler(triple.Name, handler, s.tracerProvider))
 	}
 
 	for _, v := range s.unprotected {
 		s.log.Info().Msgf("unprotected URL: %s", v)
 	}
-	authMiddle, err := auth.New(s.conf.Middlewares["auth"], s.unprotected)
+	authMiddle, err := auth.New(s.conf.Middlewares["auth"], s.unprotected, s.tracerProvider)
 	if err != nil {
 		return nil, errors.Wrap(err, "rhttp: error creating auth middleware")
 	}
@@ -293,19 +296,19 @@ func (s *Server) getHandler() (http.Handler, error) {
 
 	coreMiddlewares = append(coreMiddlewares, &middlewareTriple{Middleware: authMiddle, Name: "auth"})
 	coreMiddlewares = append(coreMiddlewares, &middlewareTriple{Middleware: log.New(), Name: "log"})
-	coreMiddlewares = append(coreMiddlewares, &middlewareTriple{Middleware: appctx.New(s.log), Name: "appctx"})
+	coreMiddlewares = append(coreMiddlewares, &middlewareTriple{Middleware: appctx.New(s.log, s.tracerProvider), Name: "appctx"})
 
 	for _, triple := range coreMiddlewares {
-		handler = triple.Middleware(traceHandler(triple.Name, handler))
+		handler = triple.Middleware(traceHandler(triple.Name, handler, s.tracerProvider))
 	}
 
 	return handler, nil
 }
 
-func traceHandler(name string, h http.Handler) http.Handler {
+func traceHandler(name string, h http.Handler, tp trace.TracerProvider) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := rtrace.Propagator.Extract(r.Context(), propagation.HeaderCarrier(r.Header))
-		t := rtrace.Provider.Tracer(tracerName)
+		t := tp.Tracer(tracerName)
 		ctx, span := t.Start(ctx, name)
 		defer span.End()
 

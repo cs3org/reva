@@ -36,6 +36,7 @@ import (
 	"go-micro.dev/v4/registry"
 	"go-micro.dev/v4/server"
 	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/trace"
 )
 
 const (
@@ -62,7 +63,8 @@ func Service(opts ...Option) (micro.Service, error) {
 		server.Version(sopts.config.VersionString),
 	)
 
-	revaService, err := ocdav.NewWith(&sopts.config, sopts.FavoriteManager, sopts.lockSystem, &sopts.Logger)
+	tp := rtrace.GetTracerProvider(sopts.TracingEnabled, sopts.TracingCollector, sopts.TracingEndpoint, sopts.Name)
+	revaService, err := ocdav.NewWith(&sopts.config, sopts.FavoriteManager, sopts.lockSystem, &sopts.Logger, tp)
 	if err != nil {
 		return nil, err
 	}
@@ -80,7 +82,7 @@ func Service(opts ...Option) (micro.Service, error) {
 	// chi.RegisterMethod(ocdav.MethodReport)
 	r := chi.NewRouter()
 
-	if err := useMiddlewares(r, &sopts, revaService); err != nil {
+	if err := useMiddlewares(r, &sopts, revaService, tp); err != nil {
 		return nil, err
 	}
 
@@ -132,8 +134,7 @@ func setDefaults(sopts *Options) error {
 	return nil
 }
 
-func useMiddlewares(r *chi.Mux, sopts *Options, svc global.Service) error {
-
+func useMiddlewares(r *chi.Mux, sopts *Options, svc global.Service, tp trace.TracerProvider) error {
 	// auth
 	for _, v := range svc.Unprotected() {
 		sopts.Logger.Info().Str("url", v).Msg("unprotected URL")
@@ -145,7 +146,7 @@ func useMiddlewares(r *chi.Mux, sopts *Options, svc global.Service) error {
 				"secret": sopts.JWTSecret,
 			},
 		},
-	}, svc.Unprotected())
+	}, svc.Unprotected(), tp)
 	if err != nil {
 		return err
 	}
@@ -156,23 +157,22 @@ func useMiddlewares(r *chi.Mux, sopts *Options, svc global.Service) error {
 	// tracing
 	tm := func(h http.Handler) http.Handler { return h }
 	if sopts.TracingEnabled {
-		tm = traceHandler("ocdav", sopts.TracingCollector, sopts.TracingEndpoint)
+		tm = traceHandler(tp, "ocdav")
 	}
 
 	// ctx
-	cm := appctx.New(sopts.Logger)
+	cm := appctx.New(sopts.Logger, tp)
 
 	// actually register
 	r.Use(tm, lm, authMiddle, cm)
 	return nil
 }
 
-func traceHandler(name string, collector string, endpoint string) func(http.Handler) http.Handler {
-	rtrace.SetTraceProvider(collector, endpoint, "ocdav-micro")
+func traceHandler(tp trace.TracerProvider, name string) func(http.Handler) http.Handler {
 	return func(h http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ctx := rtrace.Propagator.Extract(r.Context(), propagation.HeaderCarrier(r.Header))
-			t := rtrace.Provider.Tracer("reva")
+			t := tp.Tracer("reva")
 			ctx, span := t.Start(ctx, name)
 			defer span.End()
 

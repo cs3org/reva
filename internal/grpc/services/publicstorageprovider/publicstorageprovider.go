@@ -555,7 +555,7 @@ func (s *service) CreateContainer(ctx context.Context, req *provider.CreateConta
 		_, req.Ref.ResourceId.StorageId = storagespace.SplitStorageID(req.Ref.ResourceId.StorageId)
 	}
 
-	ctx, span := rtrace.Provider.Tracer(tracerName).Start(ctx, "CreateContainer")
+	ctx, span := rtrace.DefaultProvider().Tracer(tracerName).Start(ctx, "CreateContainer")
 	defer span.End()
 
 	span.SetAttributes(attribute.KeyValue{
@@ -616,7 +616,7 @@ func (s *service) Delete(ctx context.Context, req *provider.DeleteRequest) (*pro
 		_, req.Ref.ResourceId.StorageId = storagespace.SplitStorageID(req.Ref.ResourceId.StorageId)
 	}
 
-	ctx, span := rtrace.Provider.Tracer(tracerName).Start(ctx, "Delete")
+	ctx, span := rtrace.DefaultProvider().Tracer(tracerName).Start(ctx, "Delete")
 	defer span.End()
 
 	span.SetAttributes(attribute.KeyValue{
@@ -663,7 +663,7 @@ func (s *service) Move(ctx context.Context, req *provider.MoveRequest) (*provide
 		_, req.Destination.ResourceId.StorageId = storagespace.SplitStorageID(req.Destination.ResourceId.StorageId)
 	}
 
-	ctx, span := rtrace.Provider.Tracer(tracerName).Start(ctx, "Move")
+	ctx, span := rtrace.DefaultProvider().Tracer(tracerName).Start(ctx, "Move")
 	defer span.End()
 
 	span.SetAttributes(
@@ -730,7 +730,7 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 		_, req.Ref.ResourceId.StorageId = storagespace.SplitStorageID(req.Ref.ResourceId.StorageId)
 	}
 
-	ctx, span := rtrace.Provider.Tracer(tracerName).Start(ctx, "Stat")
+	ctx, span := rtrace.DefaultProvider().Tracer(tracerName).Start(ctx, "Stat")
 	defer span.End()
 
 	span.SetAttributes(

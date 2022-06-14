@@ -23,6 +23,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"sync"
 
 	"go.opentelemetry.io/otel/exporters/jaeger"
 	"go.opentelemetry.io/otel/propagation"
@@ -34,14 +35,41 @@ import (
 
 var (
 	// Propagator is the default Reva propagator.
-	Propagator = propagation.NewCompositeTextMapPropagator(propagation.Baggage{}, propagation.TraceContext{})
-
-	// Provider is the default Reva tracer provider.
-	Provider = trace.NewNoopTracerProvider()
+	Propagator      = propagation.NewCompositeTextMapPropagator(propagation.Baggage{}, propagation.TraceContext{})
+	defaultProvider = revaDefaultTracerProvider{
+		provider: trace.NewNoopTracerProvider(),
+	}
 )
 
-// SetTraceProvider sets the TracerProvider at a package level.
-func SetTraceProvider(collectorEndpoint string, agentEndpoint, serviceName string) {
+type revaDefaultTracerProvider struct {
+	mutex       sync.RWMutex
+	initialized bool
+	provider    trace.TracerProvider
+}
+
+// InitDefaultTracerProvider initializes a global default TracerProvider at a package level.
+func InitDefaultTracerProvider(collectorEndpoint string, agentEndpoint string) {
+	defaultProvider.mutex.Lock()
+	defer defaultProvider.mutex.Unlock()
+	if !defaultProvider.initialized {
+		defaultProvider.provider = GetTracerProvider(true, collectorEndpoint, agentEndpoint, "reva default provider")
+	}
+	defaultProvider.initialized = true
+}
+
+// DefaultProvider returns the "global" default TracerProvider
+func DefaultProvider() trace.TracerProvider {
+	defaultProvider.mutex.RLock()
+	defer defaultProvider.mutex.RUnlock()
+	return defaultProvider.provider
+}
+
+// GetTracerProvider returns a new TracerProvider, configure for the specified service
+func GetTracerProvider(enabled bool, collectorEndpoint string, agentEndpoint, serviceName string) trace.TracerProvider {
+	if !enabled {
+		return trace.NewNoopTracerProvider()
+	}
+
 	// default to 'reva' as service name if not set
 	if serviceName == "" {
 		serviceName = "reva"
@@ -82,7 +110,7 @@ func SetTraceProvider(collectorEndpoint string, agentEndpoint, serviceName strin
 		panic(err)
 	}
 
-	Provider = sdktrace.NewTracerProvider(
+	return sdktrace.NewTracerProvider(
 		sdktrace.WithBatcher(exp),
 		sdktrace.WithResource(resource.NewWithAttributes(
 			semconv.SchemaURL,

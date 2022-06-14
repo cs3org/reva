@@ -32,13 +32,12 @@ import (
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	"github.com/cs3org/reva/v2/pkg/rhttp/router"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
-	rtrace "github.com/cs3org/reva/v2/pkg/trace"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/rs/zerolog"
 )
 
 func (s *svc) handlePathMove(w http.ResponseWriter, r *http.Request, ns string) {
-	ctx, span := rtrace.Provider.Tracer(tracerName).Start(r.Context(), "move")
+	ctx, span := s.tracerProvider.Tracer(tracerName).Start(r.Context(), "move")
 	defer span.End()
 
 	srcPath := path.Join(ns, r.URL.Path)
@@ -92,7 +91,7 @@ func (s *svc) handlePathMove(w http.ResponseWriter, r *http.Request, ns string) 
 }
 
 func (s *svc) handleSpacesMove(w http.ResponseWriter, r *http.Request, srcSpaceID string) {
-	ctx, span := rtrace.Provider.Tracer(tracerName).Start(r.Context(), "spaces_move")
+	ctx, span := s.tracerProvider.Tracer(tracerName).Start(r.Context(), "spaces_move")
 	defer span.End()
 
 	dh := r.Header.Get(net.HeaderDestination)
