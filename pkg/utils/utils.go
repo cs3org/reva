@@ -50,8 +50,10 @@ var (
 	// globals is not encouraged, and this is a workaround until the PR is out of a draft state.
 	GlobalRegistry registry.Registry = memory.New(map[string]interface{}{})
 
-	// ShareStorageProviderID is the id used by the sharestorageprovider
+	// ShareStorageProviderID is the provider id used by the sharestorageprovider
 	ShareStorageProviderID = "a0ca6a90-a365-4782-871e-d44447bbc668"
+	// ShareStorageSpaceID is the space id used by the sharestorageprovider share jail space
+	ShareStorageSpaceID = "a0ca6a90-a365-4782-871e-d44447bbc668"
 
 	// PublicStorageProviderID is the id used by the sharestorageprovider
 	PublicStorageProviderID = "7993447f-687f-490d-875c-ac95e89a62a4"
