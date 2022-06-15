@@ -864,7 +864,7 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 			// first stat mount point, but the shares storage provider only handles accepted shares so we send the try to make the requests for only those
 			if rs.State == collaboration.ShareState_SHARE_STATE_ACCEPTED {
 				mountID := &provider.ResourceId{
-					StorageId: utils.ShareStorageProviderID,
+					StorageId: storagespace.FormatStorageID(utils.ShareStorageProviderID, utils.ShareStorageProviderID),
 					OpaqueId:  rs.Share.Id.OpaqueId,
 				}
 				info, status, err = h.getResourceInfoByID(ctx, client, mountID)
