@@ -1272,7 +1272,6 @@ func (fs *eosfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys
 	if fs.conf.EnableHome {
 		return fs.listWithHome(ctx, p)
 	}
-
 	return fs.listWithNominalHome(ctx, p)
 }
 
