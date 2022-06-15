@@ -321,9 +321,28 @@ func (r *registry) buildFilters(filterMap map[string]string) []*providerpb.ListS
 
 func (r *registry) findProvidersForFilter(ctx context.Context, filters []*providerpb.ListStorageSpacesRequest_Filter, unrestricted bool, _ string) []*registrypb.ProviderInfo {
 
+	var requestedSpaceType string
+	for _, f := range filters {
+		if f.Type == providerpb.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE {
+			requestedSpaceType = f.GetSpaceType()
+		}
+	}
+
 	currentUser := ctxpkg.ContextMustGetUser(ctx)
 	providerInfos := []*registrypb.ProviderInfo{}
 	for address, provider := range r.c.Providers {
+		if requestedSpaceType != "" {
+			// check if we can skip this provider altogether
+			found := false
+			for spaceType := range provider.Spaces {
+				if spaceType == requestedSpaceType {
+					found = true
+				}
+			}
+			if !found {
+				continue
+			}
+		}
 		p := &registrypb.ProviderInfo{
 			Address: address,
 		}
