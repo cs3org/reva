@@ -41,6 +41,11 @@ func (s *svc) handlePathMove(w http.ResponseWriter, r *http.Request, ns string) 
 	ctx, span := rtrace.Provider.Tracer(tracerName).Start(r.Context(), "move")
 	defer span.End()
 
+	if r.Body != http.NoBody {
+		w.WriteHeader(http.StatusUnsupportedMediaType)
+		return
+	}
+
 	srcPath := path.Join(ns, r.URL.Path)
 	dh := r.Header.Get(net.HeaderDestination)
 	baseURI := r.Context().Value(net.CtxKeyBaseURI).(string)
@@ -94,6 +99,11 @@ func (s *svc) handlePathMove(w http.ResponseWriter, r *http.Request, ns string) 
 func (s *svc) handleSpacesMove(w http.ResponseWriter, r *http.Request, srcSpaceID string) {
 	ctx, span := rtrace.Provider.Tracer(tracerName).Start(r.Context(), "spaces_move")
 	defer span.End()
+
+	if r.Body != http.NoBody {
+		w.WriteHeader(http.StatusUnsupportedMediaType)
+		return
+	}
 
 	dh := r.Header.Get(net.HeaderDestination)
 	baseURI := r.Context().Value(net.CtxKeyBaseURI).(string)
