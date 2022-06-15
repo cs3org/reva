@@ -238,7 +238,6 @@ func (s *svc) extractEndpointInfo(ctx context.Context, targetURL string) (*webda
 }
 
 func (s *svc) getWebdavEndpoint(ctx context.Context, domain string) (string, error) {
-	fmt.Printf("getWebdavEndpoint( domain = %v )\n", domain)
 	meshProvider, err := s.GetInfoByDomain(ctx, &ocmprovider.GetInfoByDomainRequest{
 		Domain: domain,
 	})
