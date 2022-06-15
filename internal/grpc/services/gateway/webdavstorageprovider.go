@@ -238,6 +238,7 @@ func (s *svc) extractEndpointInfo(ctx context.Context, targetURL string) (*webda
 }
 
 func (s *svc) getWebdavEndpoint(ctx context.Context, domain string) (string, error) {
+	fmt.Printf("getWebdavEndpoint( domain = %v )\n", domain)
 	meshProvider, err := s.GetInfoByDomain(ctx, &ocmprovider.GetInfoByDomainRequest{
 		Domain: domain,
 	})
@@ -247,6 +248,21 @@ func (s *svc) getWebdavEndpoint(ctx context.Context, domain string) (string, err
 	for _, s := range meshProvider.ProviderInfo.Services {
 		if strings.ToLower(s.Endpoint.Type.Name) == "webdav" {
 			return s.Endpoint.Path, nil
+		}
+	}
+	return "", errtypes.NotFound(domain)
+}
+
+func (s *svc) getWebdavHost(ctx context.Context, domain string) (string, error) {
+	meshProvider, err := s.GetInfoByDomain(ctx, &ocmprovider.GetInfoByDomainRequest{
+		Domain: domain,
+	})
+	if err != nil {
+		return "", errors.Wrap(err, "gateway: error calling GetInfoByDomain")
+	}
+	for _, s := range meshProvider.ProviderInfo.Services {
+		if strings.ToLower(s.Endpoint.Type.Name) == "webdav" {
+			return s.Host, nil
 		}
 	}
 	return "", errtypes.NotFound(domain)
