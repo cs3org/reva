@@ -19,6 +19,7 @@
 package trace
 
 import (
+	"context"
 	"fmt"
 	"net/url"
 	"os"
@@ -45,6 +46,28 @@ type revaDefaultTracerProvider struct {
 	mutex       sync.RWMutex
 	initialized bool
 	provider    trace.TracerProvider
+}
+
+type ctxKey struct{}
+
+// ContextSetTracerProvider returns a copy of ctx with p associated.
+func ContextSetTracerProvider(ctx context.Context, p trace.TracerProvider) context.Context {
+	if tp, ok := ctx.Value(ctxKey{}).(trace.TracerProvider); ok {
+		if tp == p {
+			return ctx
+		}
+	}
+	return context.WithValue(ctx, ctxKey{}, p)
+}
+
+// ContextGetTracerProvider returns the TracerProvider associated with the ctx.
+// If no TracerProvider is associated is associated, the global default TracerProvider
+// is returned
+func ContextGetTracerProvider(ctx context.Context) trace.TracerProvider {
+	if p, ok := ctx.Value(ctxKey{}).(trace.TracerProvider); ok {
+		return p
+	}
+	return DefaultProvider()
 }
 
 // InitDefaultTracerProvider initializes a global default TracerProvider at a package level.

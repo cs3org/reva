@@ -47,6 +47,7 @@ func NewUnary(log zerolog.Logger, tp trace.TracerProvider) grpc.UnaryServerInter
 
 		sub := log.With().Str("traceid", span.SpanContext().TraceID().String()).Logger()
 		ctx = appctx.WithLogger(ctx, &sub)
+		ctx = appctx.WithTracerProvider(ctx, tp)
 		res, err := handler(ctx, req)
 		return res, err
 	}

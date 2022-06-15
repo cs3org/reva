@@ -50,7 +50,6 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/tree"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/templates"
-	rtrace "github.com/cs3org/reva/v2/pkg/trace"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/pkg/errors"
 	"go.opentelemetry.io/otel/codes"
@@ -347,7 +346,7 @@ func (fs *Decomposedfs) TouchFile(ctx context.Context, ref *provider.Reference) 
 // To mimic the eos and owncloud driver we only allow references as children of the "/Shares" folder
 // FIXME: This comment should explain briefly what a reference is in this context.
 func (fs *Decomposedfs) CreateReference(ctx context.Context, p string, targetURI *url.URL) (err error) {
-	ctx, span := rtrace.DefaultProvider().Tracer("reva").Start(ctx, "CreateReference")
+	ctx, span := appctx.GetTracerProvider(ctx).Tracer("reva").Start(ctx, "CreateReference")
 	defer span.End()
 
 	p = strings.Trim(p, "/")
@@ -496,7 +495,7 @@ func (fs *Decomposedfs) ListFolder(ctx context.Context, ref *provider.Reference,
 		return
 	}
 
-	ctx, span := rtrace.DefaultProvider().Tracer(tracerName).Start(ctx, "ListFolder")
+	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "ListFolder")
 	defer span.End()
 
 	if !n.Exists {

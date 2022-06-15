@@ -53,6 +53,7 @@ func handler(log zerolog.Logger, tp trace.TracerProvider, h http.Handler) http.H
 
 		sub := log.With().Str("traceid", span.SpanContext().TraceID().String()).Logger()
 		ctx = appctx.WithLogger(ctx, &sub)
+		ctx = appctx.WithTracerProvider(ctx, tp)
 		r = r.WithContext(ctx)
 		h.ServeHTTP(w, r)
 	})
