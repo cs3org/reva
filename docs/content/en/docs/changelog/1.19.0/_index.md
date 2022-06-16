@@ -1,3 +1,12 @@
+
+---
+title: "v1.19.0"
+linkTitle: "v1.19.0"
+weight: 40
+description: >
+  Changelog for Reva v1.19.0 (2022-06-16)
+---
+
 Changelog for reva 1.19.0 (2022-06-16)
 =======================================
 
