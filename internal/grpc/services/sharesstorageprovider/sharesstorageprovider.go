@@ -368,7 +368,7 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 		switch k {
 		case "virtual":
 			virtualRootID := &provider.ResourceId{
-				StorageId: storagespace.FormatStorageID(utils.ShareStorageProviderID, utils.ShareStorageProviderID),
+				StorageId: storagespace.FormatStorageID(utils.ShareStorageProviderID, utils.ShareStorageSpaceID),
 				OpaqueId:  utils.ShareStorageProviderID,
 			}
 			if spaceID == nil || isShareJailRoot(spaceID) {
