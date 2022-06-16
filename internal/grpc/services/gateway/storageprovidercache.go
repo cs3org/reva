@@ -200,7 +200,7 @@ func (c *cachedRegistryClient) ListStorageProviders(ctx context.Context, in *reg
 		return resp, nil
 	case storageID == "":
 		return resp, nil
-	case storageID == utils.ShareStorageProviderID:
+	case storageID == utils.ShareStorageProviderID: // TODO do we need to compare providerid and spaceid separately?
 		return resp, nil
 	default:
 		return resp, pushToCache(cache, key, resp)

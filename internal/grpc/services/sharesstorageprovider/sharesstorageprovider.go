@@ -368,7 +368,7 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 		switch k {
 		case "virtual":
 			virtualRootID := &provider.ResourceId{
-				StorageId: utils.ShareStorageProviderID,
+				StorageId: storagespace.FormatStorageID(utils.ShareStorageProviderID, utils.ShareStorageSpaceID),
 				OpaqueId:  utils.ShareStorageProviderID,
 			}
 			if spaceID == nil || isShareJailRoot(spaceID) {
@@ -387,7 +387,7 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 					space := &provider.StorageSpace{
 						Opaque: opaque,
 						Id: &provider.StorageSpaceId{
-							OpaqueId: virtualRootID.StorageId + "!" + virtualRootID.OpaqueId,
+							OpaqueId: storagespace.FormatResourceID(*virtualRootID),
 						},
 						SpaceType: "virtual",
 						//Owner:     &userv1beta1.User{Id: receivedShare.Share.Owner}, // FIXME actually, the mount point belongs to the recipient
@@ -415,7 +415,7 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 				space := &provider.StorageSpace{
 					Opaque: opaque,
 					Id: &provider.StorageSpaceId{
-						OpaqueId: root.StorageId + "!" + root.OpaqueId,
+						OpaqueId: storagespace.FormatResourceID(*root),
 					},
 					SpaceType: "grant",
 					Owner:     &userv1beta1.User{Id: receivedShare.Share.Owner},
@@ -433,7 +433,6 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 				root := &provider.ResourceId{
 					StorageId: utils.ShareStorageProviderID,
 					OpaqueId:  receivedShare.Share.Id.OpaqueId,
-					//OpaqueId: utils.ShareStorageProviderID,
 				}
 				// do we filter by id
 				if spaceID != nil {
@@ -461,10 +460,15 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 					opaque = utils.AppendPlainToOpaque(opaque, "grantOpaqueID", receivedShare.Share.ResourceId.OpaqueId)
 				}
 
+				// prefix storageid if we are responsible
+				if root.StorageId == utils.ShareStorageSpaceID {
+					root.StorageId = storagespace.FormatStorageID(utils.ShareStorageProviderID, root.StorageId)
+				}
+
 				space := &provider.StorageSpace{
 					Opaque: opaque,
 					Id: &provider.StorageSpaceId{
-						OpaqueId: root.StorageId + "!" + root.OpaqueId,
+						OpaqueId: storagespace.FormatResourceID(*root),
 					},
 					SpaceType: "mountpoint",
 					Owner:     &userv1beta1.User{Id: receivedShare.Share.Owner}, // FIXME actually, the mount point belongs to the recipient
