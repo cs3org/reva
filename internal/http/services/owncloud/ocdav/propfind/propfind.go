@@ -36,6 +36,7 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v2/internal/grpc/services/storageprovider"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/errors"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/net"
@@ -232,7 +233,7 @@ func (p *Handler) HandlePathPropfind(w http.ResponseWriter, r *http.Request, ns 
 		// getResourceInfos handles responses in case of an error so we can just return here.
 		return
 	}
-	p.propfindResponse(ctx, w, r, ns, root.SpaceType, pf, sendTusHeaders, resourceInfos, sublog)
+	p.propfindResponse(ctx, w, r, ns /*root.SpaceType,*/, pf, sendTusHeaders, resourceInfos, sublog)
 }
 
 // HandleSpacesPropfind handles a spaces based propfind request
@@ -241,12 +242,13 @@ func (p *Handler) HandleSpacesPropfind(w http.ResponseWriter, r *http.Request, s
 	defer span.End()
 
 	sublog := appctx.GetLogger(ctx).With().Str("path", r.URL.Path).Str("spaceid", spaceID).Logger()
-	client, err := p.getClient()
+	/*client, err := p.getClient()
 	if err != nil {
 		sublog.Error().Err(err).Msg("error getting grpc client")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+	*/
 
 	pf, status, err := ReadPropfind(r.Body)
 	if err != nil {
@@ -255,20 +257,35 @@ func (p *Handler) HandleSpacesPropfind(w http.ResponseWriter, r *http.Request, s
 		return
 	}
 
-	// retrieve a specific storage space
-	space, rpcStatus, err := spacelookup.LookUpStorageSpaceByID(ctx, client, spaceID)
-	if err != nil {
-		sublog.Error().Err(err).Msg("error looking up the space by id")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
+	/*
+		// retrieve a specific storage space
+		space, rpcStatus, err := spacelookup.LookUpStorageSpaceByID(ctx, client, spaceID)
+		if err != nil {
+			sublog.Error().Err(err).Msg("error looking up the space by id")
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
 
-	if rpcStatus.Code != rpc.Code_CODE_OK {
-		errors.HandleErrorStatus(&sublog, w, rpcStatus)
-		return
-	}
+		if rpcStatus.Code != rpc.Code_CODE_OK {
+			errors.HandleErrorStatus(&sublog, w, rpcStatus)
+			return
+		}
+	*/
 
-	resourceInfos, sendTusHeaders, ok := p.getResourceInfos(ctx, w, r, pf, []*provider.StorageSpace{space}, r.URL.Path, true, sublog)
+	resourceID, err := storagespace.ParseID(spaceID)
+	// fake a space root
+	root := &provider.StorageSpace{
+		Opaque: &typesv1beta1.Opaque{
+			Map: map[string]*typesv1beta1.OpaqueEntry{
+				"path": {
+					Decoder: "plain",
+					Value:   []byte("/"),
+				},
+			},
+		},
+		Root: &resourceID,
+	}
+	resourceInfos, sendTusHeaders, ok := p.getResourceInfos(ctx, w, r, pf, []*provider.StorageSpace{root /*space*/}, r.URL.Path, true, sublog)
 	if !ok {
 		// getResourceInfos handles responses in case of an error so we can just return here.
 		return
@@ -279,11 +296,11 @@ func (p *Handler) HandleSpacesPropfind(w http.ResponseWriter, r *http.Request, s
 		resourceInfos[i].Path = path.Join("/", spaceID, resourceInfos[i].Path)
 	}
 
-	p.propfindResponse(ctx, w, r, "", space.SpaceType, pf, sendTusHeaders, resourceInfos, sublog)
+	p.propfindResponse(ctx, w, r, "" /*space.SpaceType,*/, pf, sendTusHeaders, resourceInfos, sublog)
 
 }
 
-func (p *Handler) propfindResponse(ctx context.Context, w http.ResponseWriter, r *http.Request, namespace, spaceType string, pf XML, sendTusHeaders bool, resourceInfos []*provider.ResourceInfo, log zerolog.Logger) {
+func (p *Handler) propfindResponse(ctx context.Context, w http.ResponseWriter, r *http.Request, namespace /*, spaceType*/ string, pf XML, sendTusHeaders bool, resourceInfos []*provider.ResourceInfo, log zerolog.Logger) {
 	ctx, span := appctx.GetTracerProvider(r.Context()).Tracer(tracerName).Start(ctx, "propfind_response")
 	defer span.End()
 
@@ -315,7 +332,7 @@ func (p *Handler) propfindResponse(ctx context.Context, w http.ResponseWriter, r
 		}
 	}
 
-	propRes, err := MultistatusResponse(ctx, &pf, resourceInfos, p.PublicURL, namespace, spaceType, linkshares)
+	propRes, err := MultistatusResponse(ctx, &pf, resourceInfos, p.PublicURL, namespace /*spaceType,*/, linkshares)
 	if err != nil {
 		log.Error().Err(err).Msg("error formatting propfind")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -337,7 +354,7 @@ func (p *Handler) propfindResponse(ctx context.Context, w http.ResponseWriter, r
 }
 
 // TODO this is just a stat -> rename
-func (p *Handler) statSpace(ctx context.Context, client gateway.GatewayAPIClient, space *provider.StorageSpace, ref *provider.Reference, metadataKeys []string) (*provider.ResourceInfo, *rpc.Status, error) {
+func (p *Handler) statSpace(ctx context.Context, client gateway.GatewayAPIClient, ref *provider.Reference, metadataKeys []string) (*provider.ResourceInfo, *rpc.Status, error) {
 	req := &provider.StatRequest{
 		Ref:                   ref,
 		ArbitraryMetadataKeys: metadataKeys,
@@ -395,16 +412,17 @@ func (p *Handler) getResourceInfos(ctx context.Context, w http.ResponseWriter, r
 		spaceMap            = make(map[*provider.ResourceInfo]spaceData, len(spaces))
 	)
 	for _, space := range spaces {
-		spacePath, ok := getMountPoint(*space)
-		if !ok {
+		spacePath := ""
+		if spacePath = utils.ReadPlainFromOpaque(space.Opaque, "path"); spacePath == "" {
 			continue // not mounted
 		}
+
 		// TODO separate stats to the path or to the children, after statting all children update the mtime/etag
 		// TODO get mtime, and size from space as well, so we no longer have to stat here? would require sending the requested metadata keys as well
 		// root should be a ResourceInfo so it can contain the full stat, not only the id ... do we even need spaces then?
 		// metadata keys could all be prefixed with "root." to indicate we want more than the root id ...
 		spaceRef := spacelookup.MakeRelativeReference(space, requestPath, spacesPropfind)
-		info, status, err := p.statSpace(ctx, client, space, spaceRef, metadataKeys)
+		info, status, err := p.statSpace(ctx, client, spaceRef, metadataKeys)
 		if err != nil || status.GetCode() != rpc.Code_CODE_OK {
 			continue
 		}
@@ -604,15 +622,6 @@ func addChild(childInfos map[string]*provider.ResourceInfo,
 	}
 }
 
-func getMountPoint(space provider.StorageSpace) (string, bool) {
-	if space.Opaque == nil ||
-		space.Opaque.Map["path"] == nil ||
-		space.Opaque.Map["path"].Decoder != "plain" {
-		return "", false
-	}
-	return string(space.Opaque.Map["path"].Value), true
-}
-
 func requiresExplicitFetching(n *xml.Name) bool {
 	switch n.Space {
 	case net.NsDav:
@@ -670,10 +679,10 @@ func ReadPropfind(r io.Reader) (pf XML, status int, err error) {
 }
 
 // MultistatusResponse converts a list of resource infos into a multistatus response string
-func MultistatusResponse(ctx context.Context, pf *XML, mds []*provider.ResourceInfo, publicURL, ns, spaceType string, linkshares map[string]struct{}) ([]byte, error) {
+func MultistatusResponse(ctx context.Context, pf *XML, mds []*provider.ResourceInfo, publicURL, ns /*, spaceType*/ string, linkshares map[string]struct{}) ([]byte, error) {
 	responses := make([]*ResponseXML, 0, len(mds))
 	for i := range mds {
-		res, err := mdToPropResponse(ctx, pf, mds[i], publicURL, ns, spaceType, linkshares)
+		res, err := mdToPropResponse(ctx, pf, mds[i], publicURL, ns /*spaceType,*/, linkshares)
 		if err != nil {
 			return nil, err
 		}
@@ -692,7 +701,7 @@ func MultistatusResponse(ctx context.Context, pf *XML, mds []*provider.ResourceI
 // mdToPropResponse converts the CS3 metadata into a webdav PropResponse
 // ns is the CS3 namespace that needs to be removed from the CS3 path before
 // prefixing it with the baseURI
-func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, publicURL, ns, spaceType string, linkshares map[string]struct{}) (*ResponseXML, error) {
+func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, publicURL, ns /*, spaceType*/ string, linkshares map[string]struct{}) (*ResponseXML, error) {
 	sublog := appctx.GetLogger(ctx).With().Interface("md", md).Str("ns", ns).Logger()
 	md.Path = strings.TrimPrefix(md.Path, ns)
 
@@ -740,7 +749,7 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 
 	role := conversions.RoleFromResourcePermissions(md.PermissionSet)
 
-	isShared := spaceType != _spaceTypeProject && !net.IsCurrentUserOwner(ctx, md.Owner)
+	isShared := /*spaceType != _spaceTypeProject &&*/ !net.IsCurrentUserOwner(ctx, md.Owner)
 	var wdp string
 	isPublic := ls != nil
 	if md.PermissionSet != nil {
