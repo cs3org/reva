@@ -714,7 +714,7 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 	providerID := unwrapProviderID(req.Ref.GetResourceId())
 	defer rewrapProviderID(req.Ref.GetResourceId(), providerID)
 
-	ctx, span := rtrace.Provider.Tracer(tracerName).Start(ctx, "stat")
+	ctx, span := rtrace.DefaultProvider().Tracer(tracerName).Start(ctx, "stat")
 	defer span.End()
 
 	span.SetAttributes(attribute.KeyValue{

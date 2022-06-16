@@ -39,6 +39,7 @@ import (
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // Run runs a reva server with the given config file and pid file.
@@ -87,12 +88,10 @@ func run(mainConf map[string]interface{}, coreConf *coreConf, logger *zerolog.Lo
 	host, _ := os.Hostname()
 	logger.Info().Msgf("host info: %s", host)
 
-	if coreConf.TracingEnabled {
-		initTracing(coreConf)
-	}
+	tp := initTracing(coreConf)
 	initCPUCount(coreConf, logger)
 
-	servers := initServers(mainConf, logger)
+	servers := initServers(mainConf, logger, tp)
 	watcher, err := initWatcher(logger, filename)
 	if err != nil {
 		log.Panic(err)
@@ -121,10 +120,10 @@ func initWatcher(log *zerolog.Logger, filename string) (*grace.Watcher, error) {
 	return watcher, err
 }
 
-func initServers(mainConf map[string]interface{}, log *zerolog.Logger) map[string]grace.Server {
+func initServers(mainConf map[string]interface{}, log *zerolog.Logger, tp trace.TracerProvider) map[string]grace.Server {
 	servers := map[string]grace.Server{}
 	if isEnabledHTTP(mainConf) {
-		s, err := getHTTPServer(mainConf["http"], log)
+		s, err := getHTTPServer(mainConf["http"], log, tp)
 		if err != nil {
 			log.Error().Err(err).Msg("error creating http server")
 			os.Exit(1)
@@ -133,7 +132,7 @@ func initServers(mainConf map[string]interface{}, log *zerolog.Logger) map[strin
 	}
 
 	if isEnabledGRPC(mainConf) {
-		s, err := getGRPCServer(mainConf["grpc"], log)
+		s, err := getGRPCServer(mainConf["grpc"], log, tp)
 		if err != nil {
 			log.Error().Err(err).Msg("error creating grpc server")
 			os.Exit(1)
@@ -148,8 +147,9 @@ func initServers(mainConf map[string]interface{}, log *zerolog.Logger) map[strin
 	return servers
 }
 
-func initTracing(conf *coreConf) {
-	rtrace.SetTraceProvider(conf.TracingCollector, conf.TracingEndpoint, conf.TracingServiceName)
+func initTracing(conf *coreConf) trace.TracerProvider {
+	rtrace.InitDefaultTracerProvider(conf.TracingCollector, conf.TracingEndpoint)
+	return rtrace.GetTracerProvider(conf.TracingEnabled, conf.TracingCollector, conf.TracingEndpoint, conf.TracingServiceName)
 }
 
 func initCPUCount(conf *coreConf, log *zerolog.Logger) {
@@ -244,9 +244,9 @@ func getWriter(out string) (io.Writer, error) {
 	return fd, nil
 }
 
-func getGRPCServer(conf interface{}, l *zerolog.Logger) (*rgrpc.Server, error) {
+func getGRPCServer(conf interface{}, l *zerolog.Logger, tp trace.TracerProvider) (*rgrpc.Server, error) {
 	sub := l.With().Str("pkg", "rgrpc").Logger()
-	s, err := rgrpc.NewServer(conf, sub)
+	s, err := rgrpc.NewServer(conf, sub, tp)
 	if err != nil {
 		err = errors.Wrap(err, "main: error creating grpc server")
 		return nil, err
@@ -254,9 +254,9 @@ func getGRPCServer(conf interface{}, l *zerolog.Logger) (*rgrpc.Server, error) {
 	return s, nil
 }
 
-func getHTTPServer(conf interface{}, l *zerolog.Logger) (*rhttp.Server, error) {
+func getHTTPServer(conf interface{}, l *zerolog.Logger, tp trace.TracerProvider) (*rhttp.Server, error) {
 	sub := l.With().Str("pkg", "rhttp").Logger()
-	s, err := rhttp.New(conf, sub)
+	s, err := rhttp.New(conf, sub, tp)
 	if err != nil {
 		err = errors.Wrap(err, "main: error creating http server")
 		return nil, err

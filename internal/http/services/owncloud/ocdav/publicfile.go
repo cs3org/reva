@@ -29,7 +29,6 @@ import (
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/propfind"
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	"github.com/cs3org/reva/v2/pkg/rhttp/router"
-	rtrace "github.com/cs3org/reva/v2/pkg/trace"
 )
 
 // PublicFileHandler handles requests on a shared file. it needs to be wrapped in a collection
@@ -85,7 +84,7 @@ func (h *PublicFileHandler) Handler(s *svc) http.Handler {
 
 // ns is the namespace that is prefixed to the path in the cs3 namespace
 func (s *svc) handlePropfindOnToken(w http.ResponseWriter, r *http.Request, ns string, onContainer bool) {
-	ctx, span := rtrace.Provider.Tracer(tracerName).Start(r.Context(), "token_propfind")
+	ctx, span := s.tracerProvider.Tracer(tracerName).Start(r.Context(), "token_propfind")
 	defer span.End()
 
 	tokenStatInfo := ctx.Value(tokenStatInfoKey{}).(*provider.ResourceInfo)

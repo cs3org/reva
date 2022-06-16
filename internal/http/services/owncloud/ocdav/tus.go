@@ -38,14 +38,13 @@ import (
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	"github.com/cs3org/reva/v2/pkg/rhttp"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
-	rtrace "github.com/cs3org/reva/v2/pkg/trace"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/rs/zerolog"
 	tusd "github.com/tus/tusd/pkg/handler"
 )
 
 func (s *svc) handlePathTusPost(w http.ResponseWriter, r *http.Request, ns string) {
-	ctx, span := rtrace.Provider.Tracer(tracerName).Start(r.Context(), "tus-post")
+	ctx, span := s.tracerProvider.Tracer(tracerName).Start(r.Context(), "tus-post")
 	defer span.End()
 
 	// read filename from metadata
@@ -71,7 +70,7 @@ func (s *svc) handlePathTusPost(w http.ResponseWriter, r *http.Request, ns strin
 }
 
 func (s *svc) handleSpacesTusPost(w http.ResponseWriter, r *http.Request, spaceID string) {
-	ctx, span := rtrace.Provider.Tracer(tracerName).Start(r.Context(), "spaces-tus-post")
+	ctx, span := s.tracerProvider.Tracer(tracerName).Start(r.Context(), "spaces-tus-post")
 	defer span.End()
 
 	// read filename from metadata

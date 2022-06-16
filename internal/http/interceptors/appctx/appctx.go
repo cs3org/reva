@@ -25,7 +25,6 @@ import (
 	"net/http"
 
 	"github.com/cs3org/reva/v2/pkg/appctx"
-	rtrace "github.com/cs3org/reva/v2/pkg/trace"
 	"github.com/rs/zerolog"
 	"go.opentelemetry.io/otel/trace"
 )
@@ -35,25 +34,26 @@ const tracerName = "appctx"
 
 // New returns a new HTTP middleware that stores the log
 // in the context with request ID information.
-func New(log zerolog.Logger) func(http.Handler) http.Handler {
+func New(log zerolog.Logger, tp trace.TracerProvider) func(http.Handler) http.Handler {
 	chain := func(h http.Handler) http.Handler {
-		return handler(log, h)
+		return handler(log, tp, h)
 	}
 	return chain
 }
 
-func handler(log zerolog.Logger, h http.Handler) http.Handler {
+func handler(log zerolog.Logger, tp trace.TracerProvider, h http.Handler) http.Handler {
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		span := trace.SpanFromContext(ctx)
 		defer span.End()
 		if !span.SpanContext().HasTraceID() {
-			ctx, span = rtrace.Provider.Tracer(tracerName).Start(ctx, "http interceptor")
+			ctx, span = tp.Tracer(tracerName).Start(ctx, "http interceptor")
 		}
 
 		sub := log.With().Str("traceid", span.SpanContext().TraceID().String()).Logger()
 		ctx = appctx.WithLogger(ctx, &sub)
+		ctx = appctx.WithTracerProvider(ctx, tp)
 		r = r.WithContext(ctx)
 		h.ServeHTTP(w, r)
 	})

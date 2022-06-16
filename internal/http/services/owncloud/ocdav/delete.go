@@ -31,7 +31,6 @@ import (
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/spacelookup"
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/status"
-	rtrace "github.com/cs3org/reva/v2/pkg/trace"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/rs/zerolog"
 )
@@ -61,7 +60,7 @@ func (s *svc) handlePathDelete(w http.ResponseWriter, r *http.Request, ns string
 }
 
 func (s *svc) handleDelete(ctx context.Context, w http.ResponseWriter, r *http.Request, ref *provider.Reference, log zerolog.Logger) {
-	ctx, span := rtrace.Provider.Tracer(tracerName).Start(ctx, "delete")
+	ctx, span := s.tracerProvider.Tracer(tracerName).Start(ctx, "delete")
 	defer span.End()
 
 	req := &provider.DeleteRequest{Ref: ref}
@@ -130,7 +129,7 @@ func (s *svc) handleDelete(ctx context.Context, w http.ResponseWriter, r *http.R
 
 func (s *svc) handleSpacesDelete(w http.ResponseWriter, r *http.Request, spaceID string) {
 	ctx := r.Context()
-	ctx, span := rtrace.Provider.Tracer(tracerName).Start(ctx, "spaces_delete")
+	ctx, span := s.tracerProvider.Tracer(tracerName).Start(ctx, "spaces_delete")
 	defer span.End()
 
 	sublog := appctx.GetLogger(ctx).With().Logger()

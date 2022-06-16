@@ -37,6 +37,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
+	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 )
@@ -115,15 +116,16 @@ func (c *config) init() {
 
 // Server is a gRPC server.
 type Server struct {
-	s        *grpc.Server
-	conf     *config
-	listener net.Listener
-	log      zerolog.Logger
-	services map[string]Service
+	s              *grpc.Server
+	conf           *config
+	listener       net.Listener
+	log            zerolog.Logger
+	tracerProvider trace.TracerProvider
+	services       map[string]Service
 }
 
 // NewServer returns a new Server.
-func NewServer(m interface{}, log zerolog.Logger) (*Server, error) {
+func NewServer(m interface{}, log zerolog.Logger, tp trace.TracerProvider) (*Server, error) {
 	conf := &config{}
 	if err := mapstructure.Decode(m, conf); err != nil {
 		return nil, err
@@ -131,7 +133,7 @@ func NewServer(m interface{}, log zerolog.Logger) (*Server, error) {
 
 	conf.init()
 
-	server := &Server{conf: conf, log: log, services: map[string]Service{}}
+	server := &Server{conf: conf, log: log, tracerProvider: tp, services: map[string]Service{}}
 
 	return server, nil
 }
@@ -271,7 +273,7 @@ func (s *Server) getInterceptors(unprotected []string) ([]grpc.ServerOption, err
 		return unaryTriples[i].Priority < unaryTriples[j].Priority
 	})
 
-	authUnary, err := auth.NewUnary(s.conf.Interceptors["auth"], unprotected)
+	authUnary, err := auth.NewUnary(s.conf.Interceptors["auth"], unprotected, s.tracerProvider)
 	if err != nil {
 		return nil, errors.Wrap(err, "rgrpc: error creating unary auth interceptor")
 	}
@@ -284,12 +286,12 @@ func (s *Server) getInterceptors(unprotected []string) ([]grpc.ServerOption, err
 
 	unaryInterceptors = append(unaryInterceptors,
 		otelgrpc.UnaryServerInterceptor(
-			otelgrpc.WithTracerProvider(rtrace.Provider),
+			otelgrpc.WithTracerProvider(s.tracerProvider),
 			otelgrpc.WithPropagators(rtrace.Propagator)),
 	)
 
 	unaryInterceptors = append([]grpc.UnaryServerInterceptor{
-		appctx.NewUnary(s.log),
+		appctx.NewUnary(s.log, s.tracerProvider),
 		token.NewUnary(),
 		useragent.NewUnary(),
 		log.NewUnary(),
@@ -318,7 +320,7 @@ func (s *Server) getInterceptors(unprotected []string) ([]grpc.ServerOption, err
 		return streamTriples[i].Priority < streamTriples[j].Priority
 	})
 
-	authStream, err := auth.NewStream(s.conf.Interceptors["auth"], unprotected)
+	authStream, err := auth.NewStream(s.conf.Interceptors["auth"], unprotected, s.tracerProvider)
 	if err != nil {
 		return nil, errors.Wrap(err, "rgrpc: error creating stream auth interceptor")
 	}
@@ -331,7 +333,7 @@ func (s *Server) getInterceptors(unprotected []string) ([]grpc.ServerOption, err
 
 	streamInterceptors = append([]grpc.StreamServerInterceptor{
 		authStream,
-		appctx.NewStream(s.log),
+		appctx.NewStream(s.log, s.tracerProvider),
 		token.NewStream(),
 		useragent.NewStream(),
 		log.NewStream(),

@@ -33,7 +33,6 @@ import (
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	"github.com/cs3org/reva/v2/pkg/rhttp/router"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
-	rtrace "github.com/cs3org/reva/v2/pkg/trace"
 )
 
 // MetaHandler handles meta requests
@@ -91,7 +90,7 @@ func (h *MetaHandler) Handler(s *svc) http.Handler {
 }
 
 func (h *MetaHandler) handlePathForUser(w http.ResponseWriter, r *http.Request, s *svc, rid *provider.ResourceId) {
-	ctx, span := rtrace.Provider.Tracer(tracerName).Start(r.Context(), "meta_propfind")
+	ctx, span := appctx.GetTracerProvider(r.Context()).Tracer(tracerName).Start(r.Context(), "meta_propfind")
 	defer span.End()
 
 	id := storagespace.FormatResourceID(*rid)
@@ -178,7 +177,7 @@ func (h *MetaHandler) handlePathForUser(w http.ResponseWriter, r *http.Request, 
 }
 
 func (h *MetaHandler) handleEmptyID(w http.ResponseWriter, r *http.Request) {
-	ctx, span := rtrace.Provider.Tracer(tracerName).Start(r.Context(), "meta_propfind")
+	ctx, span := appctx.GetTracerProvider(r.Context()).Tracer(tracerName).Start(r.Context(), "meta_propfind")
 	defer span.End()
 
 	sublog := appctx.GetLogger(ctx).With().Str("path", r.URL.Path).Logger()

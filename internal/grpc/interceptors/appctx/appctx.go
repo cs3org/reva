@@ -23,7 +23,6 @@ import (
 	"runtime"
 
 	"github.com/cs3org/reva/v2/pkg/appctx"
-	rtrace "github.com/cs3org/reva/v2/pkg/trace"
 	"github.com/rs/zerolog"
 	semconv "go.opentelemetry.io/otel/semconv/v1.10.0"
 	"go.opentelemetry.io/otel/trace"
@@ -34,12 +33,12 @@ import (
 const tracerName = "appctx"
 
 // NewUnary returns a new unary interceptor that creates the application context.
-func NewUnary(log zerolog.Logger) grpc.UnaryServerInterceptor {
+func NewUnary(log zerolog.Logger, tp trace.TracerProvider) grpc.UnaryServerInterceptor {
 	interceptor := func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 		span := trace.SpanFromContext(ctx)
 		defer span.End()
 		if !span.SpanContext().HasTraceID() {
-			ctx, span = rtrace.Provider.Tracer(tracerName).Start(ctx, "grpc unary")
+			ctx, span = tp.Tracer(tracerName).Start(ctx, "grpc unary")
 		}
 		_, file, _, ok := runtime.Caller(1)
 		if ok {
@@ -48,6 +47,7 @@ func NewUnary(log zerolog.Logger) grpc.UnaryServerInterceptor {
 
 		sub := log.With().Str("traceid", span.SpanContext().TraceID().String()).Logger()
 		ctx = appctx.WithLogger(ctx, &sub)
+		ctx = appctx.WithTracerProvider(ctx, tp)
 		res, err := handler(ctx, req)
 		return res, err
 	}
@@ -56,14 +56,14 @@ func NewUnary(log zerolog.Logger) grpc.UnaryServerInterceptor {
 
 // NewStream returns a new server stream interceptor
 // that creates the application context.
-func NewStream(log zerolog.Logger) grpc.StreamServerInterceptor {
+func NewStream(log zerolog.Logger, tp trace.TracerProvider) grpc.StreamServerInterceptor {
 	interceptor := func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 		ctx := ss.Context()
 		span := trace.SpanFromContext(ctx)
 		defer span.End()
 
 		if !span.SpanContext().HasTraceID() {
-			ctx, span = rtrace.Provider.Tracer(tracerName).Start(ctx, "grpc stream")
+			ctx, span = tp.Tracer(tracerName).Start(ctx, "grpc stream")
 		}
 		_, file, _, ok := runtime.Caller(1)
 		if ok {

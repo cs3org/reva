@@ -21,7 +21,9 @@ package appctx
 import (
 	"context"
 
+	rtrace "github.com/cs3org/reva/v2/pkg/trace"
 	"github.com/rs/zerolog"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // DeletingSharedResource flags to a storage a shared resource is being deleted not by the owner.
@@ -36,4 +38,16 @@ func WithLogger(ctx context.Context, l *zerolog.Logger) context.Context {
 // or a disabled logger in case no logger is stored inside the context.
 func GetLogger(ctx context.Context) *zerolog.Logger {
 	return zerolog.Ctx(ctx)
+}
+
+// WithTracerProvider returns a context with an associated TracerProvider
+func WithTracerProvider(ctx context.Context, p trace.TracerProvider) context.Context {
+	return rtrace.ContextSetTracerProvider(ctx, p)
+}
+
+// GetTracerProvider returns the TracerProvider associated with
+// the given context. (Or the global default TracerProvider if there
+// is no TracerProvider in the context)
+func GetTracerProvider(ctx context.Context) trace.TracerProvider {
+	return rtrace.ContextGetTracerProvider(ctx)
 }

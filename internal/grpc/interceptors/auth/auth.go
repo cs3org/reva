@@ -34,7 +34,6 @@ import (
 	"github.com/cs3org/reva/v2/pkg/sharedconf"
 	"github.com/cs3org/reva/v2/pkg/token"
 	tokenmgr "github.com/cs3org/reva/v2/pkg/token/manager/registry"
-	rtrace "github.com/cs3org/reva/v2/pkg/trace"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
@@ -70,7 +69,7 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 
 // NewUnary returns a new unary interceptor that adds
 // trace information for the request.
-func NewUnary(m map[string]interface{}, unprotected []string) (grpc.UnaryServerInterceptor, error) {
+func NewUnary(m map[string]interface{}, unprotected []string, tp trace.TracerProvider) (grpc.UnaryServerInterceptor, error) {
 	conf, err := parseConfig(m)
 	if err != nil {
 		err = errors.Wrap(err, "auth: error parsing config")
@@ -101,7 +100,7 @@ func NewUnary(m map[string]interface{}, unprotected []string) (grpc.UnaryServerI
 		span := trace.SpanFromContext(ctx)
 		defer span.End()
 		if !span.SpanContext().HasTraceID() {
-			ctx, span = rtrace.Provider.Tracer(tracerName).Start(ctx, "grpc auth unary")
+			ctx, span = tp.Tracer(tracerName).Start(ctx, "grpc auth unary")
 		}
 
 		if utils.Skip(info.FullMethod, unprotected) {
@@ -150,7 +149,7 @@ func NewUnary(m map[string]interface{}, unprotected []string) (grpc.UnaryServerI
 
 // NewStream returns a new server stream interceptor
 // that adds trace information to the request.
-func NewStream(m map[string]interface{}, unprotected []string) (grpc.StreamServerInterceptor, error) {
+func NewStream(m map[string]interface{}, unprotected []string, tp trace.TracerProvider) (grpc.StreamServerInterceptor, error) {
 	conf, err := parseConfig(m)
 	if err != nil {
 		return nil, err
@@ -180,7 +179,7 @@ func NewStream(m map[string]interface{}, unprotected []string) (grpc.StreamServe
 		span := trace.SpanFromContext(ctx)
 		defer span.End()
 		if !span.SpanContext().HasTraceID() {
-			ctx, span = rtrace.Provider.Tracer(tracerName).Start(ctx, "grpc auth new stream")
+			ctx, span = tp.Tracer(tracerName).Start(ctx, "grpc auth new stream")
 		}
 
 		if utils.Skip(info.FullMethod, unprotected) {

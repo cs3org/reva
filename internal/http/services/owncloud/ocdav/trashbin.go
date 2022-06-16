@@ -35,7 +35,6 @@ import (
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/propfind"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/spacelookup"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
-	rtrace "github.com/cs3org/reva/v2/pkg/trace"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -177,7 +176,7 @@ func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 }
 
 func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s *svc, ref *provider.Reference, refBase, key, itemPath string) {
-	ctx, span := rtrace.Provider.Tracer(tracerName).Start(r.Context(), "list_trashbin")
+	ctx, span := s.tracerProvider.Tracer(tracerName).Start(r.Context(), "list_trashbin")
 	defer span.End()
 
 	sublog := appctx.GetLogger(ctx).With().Logger()
@@ -453,7 +452,7 @@ func (h *TrashbinHandler) itemToPropResponse(ctx context.Context, s *svc, spaceI
 }
 
 func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc, ref, dst *provider.Reference, key, itemPath string) {
-	ctx, span := rtrace.Provider.Tracer(tracerName).Start(r.Context(), "restore")
+	ctx, span := s.tracerProvider.Tracer(tracerName).Start(r.Context(), "restore")
 	defer span.End()
 
 	sublog := appctx.GetLogger(ctx).With().Logger()
@@ -581,7 +580,7 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 
 // delete has only a key
 func (h *TrashbinHandler) delete(w http.ResponseWriter, r *http.Request, s *svc, ref *provider.Reference, key, itemPath string) {
-	ctx, span := rtrace.Provider.Tracer(tracerName).Start(r.Context(), "erase")
+	ctx, span := s.tracerProvider.Tracer(tracerName).Start(r.Context(), "erase")
 	defer span.End()
 
 	sublog := appctx.GetLogger(ctx).With().Interface("reference", ref).Str("key", key).Str("item_path", itemPath).Logger()

@@ -41,8 +41,10 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/favorite"
 	"github.com/cs3org/reva/v2/pkg/storage/favorite/registry"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/templates"
+	rtrace "github.com/cs3org/reva/v2/pkg/trace"
 	"github.com/mitchellh/mapstructure"
 	"github.com/rs/zerolog"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // name is the Tracer name used to identify this instrumentation library.
@@ -149,6 +151,7 @@ type svc struct {
 	// LockSystem is the lock management system.
 	LockSystem          LockSystem
 	userIdentifierCache *ttlcache.Cache
+	tracerProvider      trace.TracerProvider
 }
 
 func (s *svc) Config() *Config {
@@ -188,11 +191,11 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 		return nil, err
 	}
 
-	return NewWith(conf, fm, ls, log)
+	return NewWith(conf, fm, ls, log, rtrace.DefaultProvider())
 }
 
 // NewWith returns a new ocdav service
-func NewWith(conf *Config, fm favorite.Manager, ls LockSystem, _ *zerolog.Logger) (global.Service, error) {
+func NewWith(conf *Config, fm favorite.Manager, ls LockSystem, _ *zerolog.Logger, tp trace.TracerProvider) (global.Service, error) {
 	s := &svc{
 		c:             conf,
 		webDavHandler: new(WebDavHandler),
@@ -204,6 +207,7 @@ func NewWith(conf *Config, fm favorite.Manager, ls LockSystem, _ *zerolog.Logger
 		favoritesManager:    fm,
 		LockSystem:          ls,
 		userIdentifierCache: ttlcache.NewCache(),
+		tracerProvider:      tp,
 	}
 	_ = s.userIdentifierCache.SetTTL(60 * time.Second)
 

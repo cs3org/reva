@@ -39,12 +39,11 @@ import (
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	rstatus "github.com/cs3org/reva/v2/pkg/rgrpc/status"
-	rtrace "github.com/cs3org/reva/v2/pkg/trace"
 	"github.com/rs/zerolog"
 )
 
 func (s *svc) handlePathProppatch(w http.ResponseWriter, r *http.Request, ns string) (status int, err error) {
-	ctx, span := rtrace.Provider.Tracer(tracerName).Start(r.Context(), "proppatch")
+	ctx, span := s.tracerProvider.Tracer(tracerName).Start(r.Context(), "proppatch")
 	defer span.End()
 
 	fn := path.Join(ns, r.URL.Path)
@@ -95,7 +94,7 @@ func (s *svc) handlePathProppatch(w http.ResponseWriter, r *http.Request, ns str
 }
 
 func (s *svc) handleSpacesProppatch(w http.ResponseWriter, r *http.Request, spaceID string) (status int, err error) {
-	ctx, span := rtrace.Provider.Tracer(tracerName).Start(r.Context(), "spaces_proppatch")
+	ctx, span := s.tracerProvider.Tracer(tracerName).Start(r.Context(), "spaces_proppatch")
 	defer span.End()
 
 	sublog := appctx.GetLogger(ctx).With().Str("path", r.URL.Path).Str("spaceid", spaceID).Logger()
