@@ -54,8 +54,8 @@ import (
 )
 
 const (
-	tracerName        = "ocdav"
-	_spaceTypeProject = "project"
+	tracerName = "ocdav"
+	// _spaceTypeProject = "project"
 )
 
 type countingReader struct {
@@ -212,7 +212,7 @@ func (p *Handler) HandlePathPropfind(w http.ResponseWriter, r *http.Request, ns 
 		return
 	}
 
-	var root *provider.StorageSpace
+	/*var root *provider.StorageSpace
 
 	switch {
 	case len(spaces) == 1:
@@ -226,7 +226,7 @@ func (p *Handler) HandlePathPropfind(w http.ResponseWriter, r *http.Request, ns 
 		if root == nil {
 			root = spaces[0]
 		}
-	}
+	}*/
 
 	resourceInfos, sendTusHeaders, ok := p.getResourceInfos(ctx, w, r, pf, spaces, fn, false, sublog)
 	if !ok {
@@ -273,6 +273,14 @@ func (p *Handler) HandleSpacesPropfind(w http.ResponseWriter, r *http.Request, s
 	*/
 
 	resourceID, err := storagespace.ParseID(spaceID)
+	if err != nil {
+		sublog.Debug().Str("spaceID", spaceID).Msg(err.Error())
+		w.WriteHeader(http.StatusBadRequest)
+		m := fmt.Sprintf("Invalid space id: %v", spaceID)
+		b, err := errors.Marshal(http.StatusBadRequest, m, "")
+		errors.HandleWebdavError(&sublog, w, b, err)
+		return
+	}
 	// fake a space root
 	root := &provider.StorageSpace{
 		Opaque: &typesv1beta1.Opaque{
@@ -1364,6 +1372,7 @@ func (pn *Props) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
 }
 
 // isVirtualRootResourceID returns true if the id points to the share jail root. The providerid is optional for legacy ids
+/*
 func isVirtualRootResourceID(id *provider.ResourceId) bool {
 	switch {
 	case id == nil:
@@ -1374,3 +1383,4 @@ func isVirtualRootResourceID(id *provider.ResourceId) bool {
 	providerID, spaceID := storagespace.SplitStorageID(id.StorageId)
 	return spaceID == utils.ShareStorageProviderID && (providerID == "" || providerID == utils.ShareStorageProviderID)
 }
+*/
