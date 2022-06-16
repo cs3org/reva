@@ -609,27 +609,32 @@ var _ = Describe("Propfind", func() {
 	})
 
 	Describe("HandleSpacesPropfind", func() {
-		JustBeforeEach(func() {
-			client.On("ListStorageSpaces", mock.Anything, mock.Anything).Return(
-				func(_ context.Context, req *sprovider.ListStorageSpacesRequest, _ ...grpc.CallOption) *sprovider.ListStorageSpacesResponse {
-					var spaces []*sprovider.StorageSpace
+		/*
+			JustBeforeEach(func() {
+				client.On("Stat", mock.Anything, mock.Anything).Return(func(_ context.Context, req *sprovider.StatRequest, _ ...grpc.CallOption) *sprovider.StatResponse {
 					switch {
-					case req.Filters[0].Term.(*sprovider.ListStorageSpacesRequest_Filter_Id).Id.OpaqueId == "foospace":
-						spaces = []*sprovider.StorageSpace{foospace}
+					case req.Ref.ResourceId.OpaqueId == "foospace":
+						return &sprovider.StatResponse{
+							Status: status.NewOK(ctx),
+							Info: &sprovider.ResourceInfo{
+								Type: sprovider.ResourceType_RESOURCE_TYPE_CONTAINER,
+								Id:   &sprovider.ResourceId{OpaqueId: "foospaceroot", StorageId: "foospaceroot"},
+								Size: 131,
+								Path: ".",
+							},
+						}
 					default:
-						spaces = []*sprovider.StorageSpace{}
-					}
-					return &sprovider.ListStorageSpacesResponse{
-						Status:        status.NewOK(ctx),
-						StorageSpaces: spaces,
+						return &sprovider.StatResponse{
+							Status: status.NewNotFound(ctx, "not found"),
+						}
 					}
 				}, nil)
-		})
+			})
+		*/
 
 		It("handles invalid space ids", func() {
-			client.On("ListStorageSpaces", mock.Anything, mock.Anything).Return(&sprovider.ListStorageSpacesResponse{
-				Status:        status.NewOK(ctx),
-				StorageSpaces: []*sprovider.StorageSpace{},
+			client.On("Stat", mock.Anything, mock.Anything).Return(&sprovider.StatResponse{
+				Status: status.NewNotFound(ctx, "not found"),
 			}, nil)
 
 			rr := httptest.NewRecorder()
@@ -641,12 +646,15 @@ var _ = Describe("Propfind", func() {
 		})
 
 		It("stats the space root", func() {
+			client.On("Stat", mock.Anything, mock.Anything).Return(&sprovider.StatResponse{
+				Status: status.NewNotFound(ctx, "not found"),
+			}, nil)
 			rr := httptest.NewRecorder()
 			req, err := http.NewRequest("GET", "/", strings.NewReader(""))
 			Expect(err).ToNot(HaveOccurred())
 			req = req.WithContext(ctx)
 
-			handler.HandleSpacesPropfind(rr, req, "foospace")
+			handler.HandleSpacesPropfind(rr, req, "foospaceroot")
 			Expect(rr.Code).To(Equal(http.StatusMultiStatus))
 
 			res, _, err := readResponse(rr.Result().Body)
@@ -654,19 +662,19 @@ var _ = Describe("Propfind", func() {
 			Expect(len(res.Responses)).To(Equal(4))
 
 			root := res.Responses[0]
-			Expect(root.Href).To(Equal("http:/127.0.0.1:3000/foospace/"))
+			Expect(root.Href).To(Equal("http:/127.0.0.1:3000/foospaceroot/"))
 			Expect(string(root.Propstat[0].Prop[0].InnerXML)).To(ContainSubstring("<oc:size>131</oc:size>"))
 
 			bar := res.Responses[1]
-			Expect(bar.Href).To(Equal("http:/127.0.0.1:3000/foospace/bar"))
+			Expect(bar.Href).To(Equal("http:/127.0.0.1:3000/foospaceroot/bar"))
 			Expect(string(bar.Propstat[0].Prop[0].InnerXML)).To(ContainSubstring("<d:getcontentlength>100</d:getcontentlength>"))
 
 			baz := res.Responses[2]
-			Expect(baz.Href).To(Equal("http:/127.0.0.1:3000/foospace/baz"))
+			Expect(baz.Href).To(Equal("http:/127.0.0.1:3000/foospaceroot/baz"))
 			Expect(string(baz.Propstat[0].Prop[0].InnerXML)).To(ContainSubstring("<d:getcontentlength>1</d:getcontentlength>"))
 
 			dir := res.Responses[3]
-			Expect(dir.Href).To(Equal("http:/127.0.0.1:3000/foospace/dir/"))
+			Expect(dir.Href).To(Equal("http:/127.0.0.1:3000/foospaceroot/dir/"))
 			Expect(string(dir.Propstat[0].Prop[0].InnerXML)).To(ContainSubstring("<oc:size>30</oc:size>"))
 		})
 
@@ -676,7 +684,7 @@ var _ = Describe("Propfind", func() {
 			Expect(err).ToNot(HaveOccurred())
 			req = req.WithContext(ctx)
 
-			handler.HandleSpacesPropfind(rr, req, "foospace")
+			handler.HandleSpacesPropfind(rr, req, "foospaceroot")
 			Expect(rr.Code).To(Equal(http.StatusMultiStatus))
 
 			res, _, err := readResponse(rr.Result().Body)
@@ -702,7 +710,7 @@ var _ = Describe("Propfind", func() {
 			Expect(err).ToNot(HaveOccurred())
 			req = req.WithContext(ctx)
 
-			handler.HandleSpacesPropfind(rr, req, "foospace")
+			handler.HandleSpacesPropfind(rr, req, "foospaceroot")
 			Expect(rr.Code).To(Equal(http.StatusMultiStatus))
 
 			res, _, err := readResponse(rr.Result().Body)
@@ -719,7 +727,7 @@ var _ = Describe("Propfind", func() {
 			Expect(err).ToNot(HaveOccurred())
 			req = req.WithContext(ctx)
 
-			handler.HandleSpacesPropfind(rr, req, "foospace")
+			handler.HandleSpacesPropfind(rr, req, "foospaceroot")
 			Expect(rr.Code).To(Equal(http.StatusMultiStatus))
 
 			res, _, err := readResponse(rr.Result().Body)
@@ -731,11 +739,11 @@ var _ = Describe("Propfind", func() {
 				paths = append(paths, r.Href)
 			}
 			Expect(paths).To(ConsistOf(
-				"http:/127.0.0.1:3000/foospace/",
-				"http:/127.0.0.1:3000/foospace/bar",
-				"http:/127.0.0.1:3000/foospace/baz",
-				"http:/127.0.0.1:3000/foospace/dir/",
-				"http:/127.0.0.1:3000/foospace/dir/entry",
+				"http:/127.0.0.1:3000/foospaceroot/",
+				"http:/127.0.0.1:3000/foospaceroot/bar",
+				"http:/127.0.0.1:3000/foospaceroot/baz",
+				"http:/127.0.0.1:3000/foospaceroot/dir/",
+				"http:/127.0.0.1:3000/foospaceroot/dir/entry",
 			))
 		})
 	})
