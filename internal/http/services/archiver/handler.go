@@ -201,7 +201,7 @@ func (s *svc) writeHTTPError(rw http.ResponseWriter, err error) {
 	s.log.Error().Msg(err.Error())
 
 	switch err.(type) {
-	case errtypes.NotFound:
+	case errtypes.NotFound, errtypes.PermissionDenied:
 		rw.WriteHeader(http.StatusNotFound)
 	case manager.ErrMaxSize, manager.ErrMaxFileCount:
 		rw.WriteHeader(http.StatusRequestEntityTooLarge)
