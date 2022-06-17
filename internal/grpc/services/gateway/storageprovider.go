@@ -1132,6 +1132,7 @@ func (s *svc) findSingleSpace(ctx context.Context, ref *provider.Reference) ([]*
 	}
 
 	filters := map[string]string{
+		"mask":   "root", // FIXME replace with fieldmask, here we only want to get the root resourceid
 		"path":   ref.Path,
 		"unique": "true",
 	}
