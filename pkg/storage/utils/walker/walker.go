@@ -20,7 +20,6 @@ package walker
 
 import (
 	"context"
-	"fmt"
 	"path/filepath"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -101,10 +100,8 @@ func (r *revaWalker) readDir(ctx context.Context, id *provider.ResourceId) ([]*p
 	switch {
 	case err != nil:
 		return nil, err
-	case resp.Status.Code == rpc.Code_CODE_NOT_FOUND:
-		return nil, errtypes.NotFound(id.String())
 	case resp.Status.Code != rpc.Code_CODE_OK:
-		return nil, errtypes.InternalError(fmt.Sprintf("error listing container %+v", id))
+		return nil, errtypes.NewErrtypeFromStatus(resp.Status)
 	}
 
 	return resp.Infos, nil
@@ -116,10 +113,8 @@ func (r *revaWalker) stat(ctx context.Context, id *provider.ResourceId) (*provid
 	switch {
 	case err != nil:
 		return nil, err
-	case resp.Status.Code == rpc.Code_CODE_NOT_FOUND:
-		return nil, errtypes.NotFound(id.String())
 	case resp.Status.Code != rpc.Code_CODE_OK:
-		return nil, errtypes.InternalError(fmt.Sprintf("error stating %+v", id))
+		return nil, errtypes.NewErrtypeFromStatus(resp.Status)
 	}
 
 	return resp.Info, nil
