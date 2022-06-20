@@ -931,16 +931,51 @@ func (s *service) resolveAcceptedShare(ctx context.Context, ref *provider.Refere
 	if ref.Path == "" {
 		ref.Path = "."
 	}
-	if utils.IsRelativeReference(ref) {
-		if ref.ResourceId.StorageId != utils.ShareStorageProviderID {
+	if !utils.IsRelativeReference(ref) {
+		return nil, status.NewInvalidArg(ctx, "sharesstorageprovider: can only handle relative references"), nil
+	}
+
+	if ref.ResourceId.StorageId != utils.ShareStorageProviderID {
+		return nil, status.NewNotFound(ctx, "sharesstorageprovider: not found "+ref.String()), nil
+	}
+
+	// we can get the share if the reference carries a share id
+	if ref.ResourceId.OpaqueId != utils.ShareStorageProviderID {
+		// look up share for this resourceid
+		lsRes, err := s.sharesProviderClient.GetReceivedShare(ctx, &collaboration.GetReceivedShareRequest{
+			Ref: &collaboration.ShareReference{
+				Spec: &collaboration.ShareReference_Id{
+					Id: &collaboration.ShareId{
+						OpaqueId: ref.ResourceId.OpaqueId,
+					},
+				},
+			},
+		})
+
+		if err != nil {
+			return nil, nil, errors.Wrap(err, "sharesstorageprovider: error calling GetReceivedShare")
+		}
+		if lsRes.Status.Code != rpc.Code_CODE_OK {
+			return nil, lsRes.Status, nil
+		}
+		if lsRes.Share.State != collaboration.ShareState_SHARE_STATE_ACCEPTED {
 			return nil, status.NewNotFound(ctx, "sharesstorageprovider: not found "+ref.String()), nil
 		}
+		return lsRes.Share, lsRes.Status, nil
+	}
+
+	// we currently need to list all shares and match the path if the request is relative to the share jail root
+	if ref.ResourceId.OpaqueId == utils.ShareStorageProviderID && ref.Path != "." {
+		// we need to list accepted shares and match the path
+
 		// look up share for this resourceid
 		lsRes, err := s.sharesProviderClient.ListReceivedShares(ctx, &collaboration.ListReceivedSharesRequest{
-			// FIXME filter by received shares for reference - listing all shares is tooo expensive!
+			Filters: []*collaboration.Filter{
+				// FIXME filter by accepted ... and by mountpoint?
+			},
 		})
 		if err != nil {
-			return nil, nil, errors.Wrap(err, "sharesstorageprovider: error calling ListReceivedSharesRequest")
+			return nil, nil, errors.Wrap(err, "sharesstorageprovider: error calling GetReceivedShare")
 		}
 		if lsRes.Status.Code != rpc.Code_CODE_OK {
 			return nil, lsRes.Status, nil
@@ -949,29 +984,14 @@ func (s *service) resolveAcceptedShare(ctx context.Context, ref *provider.Refere
 			if receivedShare.State != collaboration.ShareState_SHARE_STATE_ACCEPTED {
 				continue
 			}
-			root := &provider.ResourceId{
-				StorageId: utils.ShareStorageProviderID,
-				OpaqueId:  receivedShare.Share.Id.OpaqueId,
-			}
-
-			switch {
-			case utils.ResourceIDEqual(ref.ResourceId, root):
-				// we have a virtual node
+			if strings.HasPrefix(strings.TrimPrefix(ref.Path, "./"), receivedShare.MountPoint.Path) {
 				return receivedShare, lsRes.Status, nil
-			case utils.ResourceIDEqual(ref.ResourceId, receivedShare.Share.ResourceId):
-				// we have a mount point
-				return receivedShare, lsRes.Status, nil
-			case isShareJailRoot(ref.ResourceId) && strings.HasPrefix(strings.TrimPrefix(ref.Path, "./"), receivedShare.MountPoint.Path):
-				// we have a mount point referenced by the share jail id
-				return receivedShare, lsRes.Status, nil
-			default:
-				continue
 			}
 		}
-		return nil, status.NewNotFound(ctx, "sharesstorageprovider: not found "+ref.String()), nil
+
 	}
 
-	return nil, status.NewInvalidArg(ctx, "sharesstorageprovider: can only handle relative references"), nil
+	return nil, status.NewNotFound(ctx, "sharesstorageprovider: not found "+ref.String()), nil
 }
 
 func (s *service) rejectReceivedShare(ctx context.Context, receivedShare *collaboration.ReceivedShare) error {
@@ -990,7 +1010,7 @@ func (s *service) rejectReceivedShare(ctx context.Context, receivedShare *collab
 }
 
 func (s *service) fetchShares(ctx context.Context) ([]*collaboration.ReceivedShare, map[string]share.Metadata, error) {
-	lsRes, err := s.gateway.ListReceivedShares(ctx, &collaboration.ListReceivedSharesRequest{
+	lsRes, err := s.sharesProviderClient.ListReceivedShares(ctx, &collaboration.ListReceivedSharesRequest{
 		// FIXME filter by received shares for resource id - listing all shares is tooo expensive!
 	})
 	if err != nil {
