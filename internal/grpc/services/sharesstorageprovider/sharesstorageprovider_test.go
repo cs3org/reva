@@ -46,6 +46,7 @@ var (
 	ShareJail                *sprovider.ResourceId
 	BaseShare                *collaboration.ReceivedShare
 	BaseShareTwo             *collaboration.ReceivedShare
+	ShareJailStatRequest     *sprovider.StatRequest
 	BaseStatRequest          *sprovider.StatRequest
 	BaseListContainerRequest *sprovider.ListContainerRequest
 )
@@ -84,7 +85,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 					OpaqueId: "shareid",
 				},
 				ResourceId: &sprovider.ResourceId{
-					StorageId: utils.ShareStorageProviderID,
+					StorageId: "share1-storageid",
 					OpaqueId:  "shareddir",
 				},
 				Permissions: &collaboration.SharePermissions{
@@ -106,7 +107,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 					OpaqueId: "shareidtwo",
 				},
 				ResourceId: &sprovider.ResourceId{
-					StorageId: utils.ShareStorageProviderID,
+					StorageId: "share1-storageid",
 					OpaqueId:  "shareddir",
 				},
 				Permissions: &collaboration.SharePermissions{
@@ -121,11 +122,21 @@ var _ = Describe("Sharesstorageprovider", func() {
 			},
 		}
 
+		ShareJailStatRequest = &sprovider.StatRequest{
+			Ref: &sprovider.Reference{
+				ResourceId: &sprovider.ResourceId{
+					StorageId: utils.ShareStorageProviderID,
+					OpaqueId:  utils.ShareStorageProviderID,
+				},
+				Path: ".",
+			},
+		}
+
 		BaseStatRequest = &sprovider.StatRequest{
 			Ref: &sprovider.Reference{
 				ResourceId: &sprovider.ResourceId{
 					StorageId: utils.ShareStorageProviderID,
-					OpaqueId:  "shareddir",
+					OpaqueId:  "shareid",
 				},
 				Path: ".",
 			},
@@ -135,7 +146,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 			Ref: &sprovider.Reference{
 				ResourceId: &sprovider.ResourceId{
 					StorageId: utils.ShareStorageProviderID,
-					OpaqueId:  "shareddir",
+					OpaqueId:  "shareid",
 				},
 				Path: ".",
 			},
@@ -146,9 +157,26 @@ var _ = Describe("Sharesstorageprovider", func() {
 		gw = &cs3mocks.GatewayAPIClient{}
 
 		// mock stat requests
+		// some-provider-id
 		gw.On("Stat", mock.Anything, mock.AnythingOfType("*providerv1beta1.StatRequest")).Return(
 			func(_ context.Context, req *sprovider.StatRequest, _ ...grpc.CallOption) *sprovider.StatResponse {
 				switch req.Ref.GetPath() {
+				case "./share1-shareddir":
+					return &sprovider.StatResponse{
+						Status: status.NewOK(context.Background()),
+						Info: &sprovider.ResourceInfo{
+							Type: sprovider.ResourceType_RESOURCE_TYPE_CONTAINER,
+							Path: "share1-shareddir",
+							Id: &sprovider.ResourceId{
+								StorageId: "share1-storageid",
+								OpaqueId:  "shareddir",
+							},
+							PermissionSet: &sprovider.ResourcePermissions{
+								Stat: true,
+							},
+							Size: 100,
+						},
+					}
 				case "./share1-subdir":
 					return &sprovider.StatResponse{
 						Status: status.NewOK(context.Background()),
@@ -198,7 +226,9 @@ var _ = Describe("Sharesstorageprovider", func() {
 						},
 					}
 				default:
-					return nil
+					return &sprovider.StatResponse{
+						Status: status.NewNotFound(context.Background(), "not found"),
+					}
 				}
 			},
 			nil)
@@ -276,22 +306,51 @@ var _ = Describe("Sharesstorageprovider", func() {
 	})
 
 	Describe("ListContainer", func() {
-		It("only considers accepted shares", func() {
-			sharesProviderClient.On("ListReceivedShares", mock.Anything, mock.Anything).Return(&collaboration.ListReceivedSharesResponse{
+		It("lists accepted shares", func() {
+			sharesProviderClient.On("GetReceivedShare", mock.Anything, mock.Anything).Return(&collaboration.GetReceivedShareResponse{
 				Status: status.NewOK(context.Background()),
-				Shares: []*collaboration.ReceivedShare{
-					{
-						Share: &collaboration.Share{ResourceId: &sprovider.ResourceId{}},
-						State: collaboration.ShareState_SHARE_STATE_INVALID,
-					},
-					{
-						Share: &collaboration.Share{ResourceId: &sprovider.ResourceId{}},
-						State: collaboration.ShareState_SHARE_STATE_PENDING,
-					},
-					{
-						Share: &collaboration.Share{ResourceId: &sprovider.ResourceId{}},
-						State: collaboration.ShareState_SHARE_STATE_REJECTED,
-					},
+				Share: &collaboration.ReceivedShare{
+					Share: BaseShare.Share,
+					State: collaboration.ShareState_SHARE_STATE_ACCEPTED,
+				},
+			}, nil)
+			res, err := s.ListContainer(ctx, BaseListContainerRequest)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(res).ToNot(BeNil())
+			Expect(len(res.Infos)).To(Equal(1))
+		})
+		It("ignores invalid shares", func() {
+			sharesProviderClient.On("GetReceivedShare", mock.Anything, mock.Anything).Return(&collaboration.GetReceivedShareResponse{
+				Status: status.NewOK(context.Background()),
+				Share: &collaboration.ReceivedShare{
+					Share: &collaboration.Share{ResourceId: &sprovider.ResourceId{}},
+					State: collaboration.ShareState_SHARE_STATE_INVALID,
+				},
+			}, nil)
+			res, err := s.ListContainer(ctx, BaseListContainerRequest)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(res).ToNot(BeNil())
+			Expect(len(res.Infos)).To(Equal(0))
+		})
+		It("ignores pending shares", func() {
+			sharesProviderClient.On("GetReceivedShare", mock.Anything, mock.Anything).Return(&collaboration.GetReceivedShareResponse{
+				Status: status.NewOK(context.Background()),
+				Share: &collaboration.ReceivedShare{
+					Share: &collaboration.Share{ResourceId: &sprovider.ResourceId{}},
+					State: collaboration.ShareState_SHARE_STATE_PENDING,
+				},
+			}, nil)
+			res, err := s.ListContainer(ctx, BaseListContainerRequest)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(res).ToNot(BeNil())
+			Expect(len(res.Infos)).To(Equal(0))
+		})
+		It("ignores rejected shares", func() {
+			sharesProviderClient.On("GetReceivedShare", mock.Anything, mock.Anything).Return(&collaboration.GetReceivedShareResponse{
+				Status: status.NewOK(context.Background()),
+				Share: &collaboration.ReceivedShare{
+					Share: &collaboration.Share{ResourceId: &sprovider.ResourceId{}},
+					State: collaboration.ShareState_SHARE_STATE_REJECTED,
 				},
 			}, nil)
 			res, err := s.ListContainer(ctx, BaseListContainerRequest)
@@ -307,11 +366,32 @@ var _ = Describe("Sharesstorageprovider", func() {
 				Status: status.NewOK(context.Background()),
 				Shares: []*collaboration.ReceivedShare{BaseShare, BaseShareTwo},
 			}, nil)
+			sharesProviderClient.On("GetReceivedShare", mock.Anything, mock.Anything).Return(
+				func(_ context.Context, req *collaboration.GetReceivedShareRequest, _ ...grpc.CallOption) *collaboration.GetReceivedShareResponse {
+					switch req.Ref.GetId().GetOpaqueId() {
+					case BaseShare.Share.Id.OpaqueId:
+						return &collaboration.GetReceivedShareResponse{
+							Status: status.NewOK(context.Background()),
+							Share:  BaseShare,
+						}
+					case BaseShareTwo.Share.Id.OpaqueId:
+						return &collaboration.GetReceivedShareResponse{
+							Status: status.NewOK(context.Background()),
+							Share:  BaseShareTwo,
+						}
+					default:
+						return &collaboration.GetReceivedShareResponse{
+							Status: status.NewNotFound(context.Background(), "not found"),
+						}
+					}
+				}, nil)
 		})
 
 		Describe("Stat", func() {
-			It("stats the root shares folder", func() {
-				res, err := s.Stat(ctx, BaseStatRequest)
+			It("stats the first share folder", func() {
+				req := ShareJailStatRequest
+				req.Ref.Path = "./share1-shareddir"
+				res, err := s.Stat(ctx, req)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(res).ToNot(BeNil())
 				Expect(res.Status.Code).To(Equal(rpc.Code_CODE_OK))
@@ -324,7 +404,6 @@ var _ = Describe("Sharesstorageprovider", func() {
 
 			It("stats a shares folder", func() {
 				statReq := BaseStatRequest
-				statReq.Ref.ResourceId.OpaqueId = "shareddir"
 				res, err := s.Stat(ctx, statReq)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(res).ToNot(BeNil())
@@ -336,44 +415,68 @@ var _ = Describe("Sharesstorageprovider", func() {
 			})
 
 			It("merges permissions from multiple shares", func() {
-				sharesProviderClient.On("ListReceivedShares", mock.Anything, mock.Anything).Return(&collaboration.ListReceivedSharesResponse{
-					Status: status.NewOK(context.Background()),
-					Shares: []*collaboration.ReceivedShare{
-						{
-							State: collaboration.ShareState_SHARE_STATE_ACCEPTED,
-							Share: &collaboration.Share{
-								ResourceId: &sprovider.ResourceId{
-									StorageId: "share1-storageid",
-									OpaqueId:  "shareddir",
-								},
-								Permissions: &collaboration.SharePermissions{
-									Permissions: &sprovider.ResourcePermissions{
-										Stat: true,
-									},
-								},
-							},
-							MountPoint: &sprovider.Reference{Path: "share1-shareddir"},
+				s1 := &collaboration.ReceivedShare{
+					State: collaboration.ShareState_SHARE_STATE_ACCEPTED,
+					Share: &collaboration.Share{
+						Id: &collaboration.ShareId{
+							OpaqueId: "multishare1",
 						},
-						{
-							State: collaboration.ShareState_SHARE_STATE_ACCEPTED,
-							Share: &collaboration.Share{
-								ResourceId: &sprovider.ResourceId{
-									StorageId: "share1-storageid",
-									OpaqueId:  "shareddir",
-								},
-								Permissions: &collaboration.SharePermissions{
-									Permissions: &sprovider.ResourcePermissions{
-										ListContainer: true,
-									},
-								},
+						ResourceId: &sprovider.ResourceId{
+							StorageId: "share1-storageid",
+							OpaqueId:  "shareddir",
+						},
+						Permissions: &collaboration.SharePermissions{
+							Permissions: &sprovider.ResourcePermissions{
+								Stat: true,
 							},
-							MountPoint: &sprovider.Reference{Path: "share2-shareddir"},
 						},
 					},
+					MountPoint: &sprovider.Reference{Path: "share1-shareddir"},
+				}
+				s2 := &collaboration.ReceivedShare{
+					State: collaboration.ShareState_SHARE_STATE_ACCEPTED,
+					Share: &collaboration.Share{
+						Id: &collaboration.ShareId{
+							OpaqueId: "multishare2",
+						},
+						ResourceId: &sprovider.ResourceId{
+							StorageId: "share1-storageid",
+							OpaqueId:  "shareddir",
+						},
+						Permissions: &collaboration.SharePermissions{
+							Permissions: &sprovider.ResourcePermissions{
+								ListContainer: true,
+							},
+						},
+					},
+					MountPoint: &sprovider.Reference{Path: "share2-shareddir"},
+				}
+
+				sharesProviderClient.On("ListReceivedShares", mock.Anything, mock.Anything).Return(&collaboration.ListReceivedSharesResponse{
+					Status: status.NewOK(context.Background()),
+					Shares: []*collaboration.ReceivedShare{s1, s2},
 				}, nil)
-				statReq := BaseStatRequest
-				statReq.Ref.ResourceId.OpaqueId = "shareddir"
-				res, err := s.Stat(ctx, statReq)
+				sharesProviderClient.On("GetReceivedShare", mock.Anything, mock.Anything).Return(
+					func(_ context.Context, req *collaboration.GetReceivedShareRequest, _ ...grpc.CallOption) *collaboration.GetReceivedShareResponse {
+						switch req.Ref.GetId().GetOpaqueId() {
+						case BaseShare.Share.Id.OpaqueId:
+							return &collaboration.GetReceivedShareResponse{
+								Status: status.NewOK(context.Background()),
+								Share:  s1,
+							}
+						case BaseShareTwo.Share.Id.OpaqueId:
+							return &collaboration.GetReceivedShareResponse{
+								Status: status.NewOK(context.Background()),
+								Share:  s2,
+							}
+						default:
+							return &collaboration.GetReceivedShareResponse{
+								Status: status.NewNotFound(context.Background(), "not found"),
+							}
+						}
+					}, nil)
+
+				res, err := s.Stat(ctx, BaseStatRequest)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(res).ToNot(BeNil())
 				Expect(res.Info).ToNot(BeNil())
@@ -446,7 +549,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 
 				req := &sprovider.InitiateFileDownloadRequest{
 					Ref: &sprovider.Reference{
-						ResourceId: BaseShare.Share.ResourceId,
+						ResourceId: ShareJail,
 						Path:       "./share1-shareddir/does-not-exist",
 					},
 				}
@@ -470,7 +573,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 				}, nil)
 				req := &sprovider.InitiateFileDownloadRequest{
 					Ref: &sprovider.Reference{
-						ResourceId: BaseShare.Share.ResourceId,
+						ResourceId: ShareJail,
 						Path:       "./share1-shareddir/share1-subdir/share1-subdir-file",
 					},
 				}
@@ -506,7 +609,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 			It("creates a directory", func() {
 				req := &sprovider.CreateContainerRequest{
 					Ref: &sprovider.Reference{
-						ResourceId: BaseShare.Share.ResourceId,
+						ResourceId: ShareJail,
 						Path:       "./share1-shareddir/share1-newsubdir",
 					},
 				}
@@ -528,8 +631,11 @@ var _ = Describe("Sharesstorageprovider", func() {
 					&collaboration.UpdateReceivedShareResponse{Status: status.NewOK(ctx)}, nil)
 				req := &sprovider.DeleteRequest{
 					Ref: &sprovider.Reference{
-						ResourceId: BaseShare.Share.ResourceId,
-						Path:       ".",
+						ResourceId: &sprovider.ResourceId{
+							StorageId: utils.ShareStorageProviderID,
+							OpaqueId:  BaseShare.Share.Id.OpaqueId,
+						},
+						Path: ".",
 					},
 				}
 				res, err := s.Delete(ctx, req)
@@ -544,7 +650,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 			It("deletes a file", func() {
 				req := &sprovider.DeleteRequest{
 					Ref: &sprovider.Reference{
-						ResourceId: BaseShare.Share.ResourceId,
+						ResourceId: ShareJail,
 						Path:       "./share1-shareddir/share1-subdir/share1-subdir-file",
 					},
 				}
@@ -568,8 +674,11 @@ var _ = Describe("Sharesstorageprovider", func() {
 
 				req := &sprovider.MoveRequest{
 					Source: &sprovider.Reference{
-						ResourceId: BaseShare.Share.ResourceId,
-						Path:       ".",
+						ResourceId: &sprovider.ResourceId{
+							StorageId: utils.ShareStorageProviderID,
+							OpaqueId:  BaseShare.Share.Id.OpaqueId,
+						},
+						Path: ".",
 					},
 					Destination: &sprovider.Reference{
 						ResourceId: ShareJail,
@@ -624,11 +733,11 @@ var _ = Describe("Sharesstorageprovider", func() {
 			It("moves a file", func() {
 				req := &sprovider.MoveRequest{
 					Source: &sprovider.Reference{
-						ResourceId: BaseShare.Share.ResourceId,
+						ResourceId: ShareJail,
 						Path:       "./share1-shareddir/share1-shareddir-file",
 					},
 					Destination: &sprovider.Reference{
-						ResourceId: BaseShare.Share.ResourceId,
+						ResourceId: ShareJail,
 						Path:       "./share1-shareddir/share1-shareddir-filenew",
 					},
 				}
@@ -689,7 +798,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 			It("lists versions", func() {
 				req := &sprovider.ListFileVersionsRequest{
 					Ref: &sprovider.Reference{
-						ResourceId: BaseShare.Share.ResourceId,
+						ResourceId: ShareJail,
 						Path:       "./share1-shareddir/share1-shareddir-file",
 					},
 				}
@@ -718,7 +827,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 			It("restores a file version", func() {
 				req := &sprovider.RestoreFileVersionRequest{
 					Ref: &sprovider.Reference{
-						ResourceId: BaseShare.Share.ResourceId,
+						ResourceId: ShareJail,
 						Path:       "./share1-shareddir/share1-shareddir-file",
 					},
 					Key: "1",
@@ -750,7 +859,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 			It("initiates a file upload", func() {
 				req := &sprovider.InitiateFileUploadRequest{
 					Ref: &sprovider.Reference{
-						ResourceId: BaseShare.Share.ResourceId,
+						ResourceId: ShareJail,
 						Path:       "./share1-shareddir/share1-shareddir-file",
 					},
 				}
@@ -775,7 +884,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 			It("sets the metadata", func() {
 				req := &sprovider.SetArbitraryMetadataRequest{
 					Ref: &sprovider.Reference{
-						ResourceId: BaseShare.Share.ResourceId,
+						ResourceId: ShareJail,
 						Path:       "./share1-shareddir/share1-subdir/share1-subdir-file",
 					},
 					ArbitraryMetadata: &sprovider.ArbitraryMetadata{
