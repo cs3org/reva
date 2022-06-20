@@ -172,6 +172,7 @@ type CapabilitiesFilesSharingPublic struct {
 	Password           *CapabilitiesFilesSharingPublicPassword   `json:"password" xml:"password"`
 	ExpireDate         *CapabilitiesFilesSharingPublicExpireDate `json:"expire_date" xml:"expire_date" mapstructure:"expire_date"`
 	CanEdit            ocsBool                                   `json:"can_edit" xml:"can_edit" mapstructure:"can_edit"`
+	Alias              ocsBool                                   `json:"alias" xml:"alias"`
 }
 
 // CapabilitiesFilesSharingPublicPassword TODO document
