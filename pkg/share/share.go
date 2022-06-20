@@ -72,6 +72,22 @@ type Manager interface {
 	UpdateReceivedShare(ctx context.Context, share *collaboration.ReceivedShare, fieldMask *field_mask.FieldMask) (*collaboration.ReceivedShare, error)
 }
 
+// ReceivedShareWithUser holds the relevant information for representing a received share of a user
+type ReceivedShareWithUser struct {
+	UserID        *userv1beta1.UserId
+	ReceivedShare *collaboration.ReceivedShare
+}
+
+// DumpableManager defines a share manager which supports dumping its contents
+type DumpableManager interface {
+	Dump(ctx context.Context, shareChan chan<- *collaboration.Share, receivedShareChan chan<- ReceivedShareWithUser) error
+}
+
+// LoadableManager defines a share manager which supports loading contents from a dump
+type LoadableManager interface {
+	Load(ctx context.Context, shareChan <-chan *collaboration.Share, receivedShareChan <-chan ReceivedShareWithUser) error
+}
+
 // GroupGranteeFilter is an abstraction for creating filter by grantee type group.
 func GroupGranteeFilter() *collaboration.Filter {
 	return &collaboration.Filter{

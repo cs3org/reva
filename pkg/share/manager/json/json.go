@@ -38,10 +38,12 @@ import (
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v2/pkg/share"
+	"github.com/golang/protobuf/proto" // nolint:staticcheck // we need the legacy package to convert V1 to V2 messages
 	"github.com/google/uuid"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"google.golang.org/genproto/protobuf/field_mask"
+	"google.golang.org/protobuf/encoding/prototext"
 
 	"github.com/cs3org/reva/v2/pkg/share/manager/registry"
 	"github.com/cs3org/reva/v2/pkg/utils"
@@ -185,6 +187,64 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 		return nil, err
 	}
 	return c, nil
+}
+
+// Dump exports shares and received shares to channels (e.g. during migration)
+func (m *mgr) Dump(ctx context.Context, shareChan chan<- *collaboration.Share, receivedShareChan chan<- share.ReceivedShareWithUser) error {
+	log := appctx.GetLogger(ctx)
+	for _, s := range m.model.Shares {
+		shareChan <- s
+	}
+
+	for userIDString, states := range m.model.State {
+		userMountPoints := m.model.MountPoint[userIDString]
+		id := &userv1beta1.UserId{}
+		mV2 := proto.MessageV2(id)
+		if err := prototext.Unmarshal([]byte(userIDString), mV2); err != nil {
+			log.Error().Err(err).Msg("error unmarshalling the user id")
+			continue
+		}
+
+		for shareIDString, state := range states {
+			sid := &collaboration.ShareId{}
+			mV2 := proto.MessageV2(sid)
+			if err := prototext.Unmarshal([]byte(shareIDString), mV2); err != nil {
+				log.Error().Err(err).Msg("error unmarshalling the user id")
+				continue
+			}
+
+			var s *collaboration.Share
+			for _, is := range m.model.Shares {
+				if is.Id.OpaqueId == sid.OpaqueId {
+					s = is
+					break
+				}
+			}
+			if s == nil {
+				log.Warn().Str("share id", sid.OpaqueId).Msg("Share not found")
+				continue
+			}
+
+			var mp *provider.Reference
+			if userMountPoints != nil {
+				mp = userMountPoints[shareIDString]
+			}
+
+			receivedShareChan <- share.ReceivedShareWithUser{
+				UserID: id,
+				ReceivedShare: &collaboration.ReceivedShare{
+					Share:      s,
+					State:      state,
+					MountPoint: mp,
+				},
+			}
+		}
+	}
+
+	close(shareChan)
+	close(receivedShareChan)
+
+	return nil
 }
 
 func (m *mgr) Share(ctx context.Context, md *provider.ResourceInfo, g *collaboration.ShareGrant) (*collaboration.Share, error) {
@@ -398,7 +458,7 @@ func (m *mgr) ListReceivedShares(ctx context.Context, filters []*collaboration.F
 			share.IsGrantedToUser(s, user) &&
 			share.MatchesFilters(s, filters) {
 
-			rs := m.convert(user, s)
+			rs := m.convert(user.Id, s)
 			idx, seen := mem[s.ResourceId.OpaqueId]
 			if !seen {
 				rss = append(rss, rs)
@@ -425,17 +485,17 @@ func (m *mgr) ListReceivedShares(ctx context.Context, filters []*collaboration.F
 }
 
 // convert must be called in a lock-controlled block.
-func (m *mgr) convert(currentUser *userv1beta1.User, s *collaboration.Share) *collaboration.ReceivedShare {
+func (m *mgr) convert(currentUser *userv1beta1.UserId, s *collaboration.Share) *collaboration.ReceivedShare {
 	rs := &collaboration.ReceivedShare{
 		Share: s,
 		State: collaboration.ShareState_SHARE_STATE_PENDING,
 	}
-	if v, ok := m.model.State[currentUser.Id.String()]; ok {
+	if v, ok := m.model.State[currentUser.String()]; ok {
 		if state, ok := v[s.Id.String()]; ok {
 			rs.State = state
 		}
 	}
-	if v, ok := m.model.MountPoint[currentUser.Id.String()]; ok {
+	if v, ok := m.model.MountPoint[currentUser.String()]; ok {
 		if mp, ok := v[s.Id.String()]; ok {
 			rs.MountPoint = mp
 		}
@@ -458,7 +518,7 @@ func (m *mgr) getReceived(ctx context.Context, ref *collaboration.ShareReference
 	if !share.IsGrantedToUser(s, user) {
 		return nil, errtypes.NotFound(ref.String())
 	}
-	return m.convert(user, s), nil
+	return m.convert(user.Id, s), nil
 }
 
 func (m *mgr) UpdateReceivedShare(ctx context.Context, receivedShare *collaboration.ReceivedShare, fieldMask *field_mask.FieldMask) (*collaboration.ReceivedShare, error) {

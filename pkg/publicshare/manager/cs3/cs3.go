@@ -45,6 +45,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/publicshare/manager/registry"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/indexer"
+	indexerErrors "github.com/cs3org/reva/v2/pkg/storage/utils/indexer/errors"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/indexer/option"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/metadata"
 	"github.com/cs3org/reva/v2/pkg/utils"
@@ -64,12 +65,6 @@ type Manager struct {
 	passwordHashCost int
 
 	initialized bool
-}
-
-// PublicShareWithPassword represents a public share including its hashes password
-type PublicShareWithPassword struct {
-	PublicShare    *link.PublicShare `json:"public_share"`
-	HashedPassword string            `json:"password"`
 }
 
 type config struct {
@@ -103,7 +98,7 @@ func NewDefault(m map[string]interface{}) (publicshare.Manager, error) {
 }
 
 // New returns a new manager instance
-func New(gatewayClient gateway.GatewayAPIClient, storage metadata.Storage, indexer indexer.Indexer, passwordHashCost int) (publicshare.Manager, error) {
+func New(gatewayClient gateway.GatewayAPIClient, storage metadata.Storage, indexer indexer.Indexer, passwordHashCost int) (*Manager, error) {
 	return &Manager{
 		gatewayClient:    gatewayClient,
 		storage:          storage,
@@ -161,6 +156,20 @@ func (m *Manager) initialize() error {
 	return nil
 }
 
+// Load imports public shares and received shares from channels (e.g. during migration)
+func (m *Manager) Load(ctx context.Context, shareChan <-chan *publicshare.WithPassword) error {
+	log := appctx.GetLogger(ctx)
+	if err := m.initialize(); err != nil {
+		return err
+	}
+	for ps := range shareChan {
+		if err := m.persist(context.Background(), ps); err != nil {
+			log.Error().Err(err).Interface("publicshare", ps).Msg("error loading public share")
+		}
+	}
+	return nil
+}
+
 // CreatePublicShare creates a new public share
 func (m *Manager) CreatePublicShare(ctx context.Context, u *user.User, ri *provider.ResourceInfo, g *link.Grant) (*link.PublicShare, error) {
 	if err := m.initialize(); err != nil {
@@ -200,8 +209,8 @@ func (m *Manager) CreatePublicShare(ctx context.Context, u *user.User, ri *provi
 		Nanos:   uint32(now % int64(time.Second)),
 	}
 
-	s := &PublicShareWithPassword{
-		PublicShare: &link.PublicShare{
+	s := &publicshare.WithPassword{
+		PublicShare: link.PublicShare{
 			Id:                id,
 			Owner:             ri.GetOwner(),
 			Creator:           u.Id,
@@ -215,7 +224,7 @@ func (m *Manager) CreatePublicShare(ctx context.Context, u *user.User, ri *provi
 			DisplayName:       displayName,
 			Quicklink:         quicklink,
 		},
-		HashedPassword: password,
+		Password: password,
 	}
 
 	err := m.persist(ctx, s)
@@ -223,7 +232,7 @@ func (m *Manager) CreatePublicShare(ctx context.Context, u *user.User, ri *provi
 		return nil, err
 	}
 
-	return s.PublicShare, nil
+	return &s.PublicShare, nil
 }
 
 // UpdatePublicShare updates an existing public share
@@ -249,7 +258,7 @@ func (m *Manager) UpdatePublicShare(ctx context.Context, u *user.User, req *link
 		if err != nil {
 			return nil, errors.Wrap(err, "could not hash share password")
 		}
-		ps.HashedPassword = string(h)
+		ps.Password = string(h)
 		ps.PublicShare.PasswordProtected = true
 	default:
 		return nil, errtypes.BadRequest("no valid update type given")
@@ -260,7 +269,7 @@ func (m *Manager) UpdatePublicShare(ctx context.Context, u *user.User, req *link
 		return nil, err
 	}
 
-	return ps.PublicShare, nil
+	return &ps.PublicShare, nil
 }
 
 // GetPublicShare returns an existing public share
@@ -275,16 +284,16 @@ func (m *Manager) GetPublicShare(ctx context.Context, u *user.User, ref *link.Pu
 	}
 
 	if ps.PublicShare.PasswordProtected && sign {
-		err = publicshare.AddSignature(ps.PublicShare, ps.HashedPassword)
+		err = publicshare.AddSignature(&ps.PublicShare, ps.Password)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	return ps.PublicShare, nil
+	return &ps.PublicShare, nil
 }
 
-func (m *Manager) getWithPassword(ctx context.Context, ref *link.PublicShareReference) (*PublicShareWithPassword, error) {
+func (m *Manager) getWithPassword(ctx context.Context, ref *link.PublicShareReference) (*publicshare.WithPassword, error) {
 	switch {
 	case ref.GetToken() != "":
 		return m.getByToken(ctx, ref.GetToken())
@@ -295,7 +304,7 @@ func (m *Manager) getWithPassword(ctx context.Context, ref *link.PublicShareRefe
 	}
 }
 
-func (m *Manager) getByID(ctx context.Context, id string) (*PublicShareWithPassword, error) {
+func (m *Manager) getByID(ctx context.Context, id string) (*publicshare.WithPassword, error) {
 	tokens, err := m.indexer.FindBy(&link.PublicShare{},
 		indexer.NewField("Id.OpaqueId", id),
 	)
@@ -308,14 +317,14 @@ func (m *Manager) getByID(ctx context.Context, id string) (*PublicShareWithPassw
 	return m.getByToken(ctx, tokens[0])
 }
 
-func (m *Manager) getByToken(ctx context.Context, token string) (*PublicShareWithPassword, error) {
+func (m *Manager) getByToken(ctx context.Context, token string) (*publicshare.WithPassword, error) {
 	fn := path.Join("publicshares", token)
 	data, err := m.storage.SimpleDownload(ctx, fn)
 	if err != nil {
 		return nil, err
 	}
 
-	ps := &PublicShareWithPassword{}
+	ps := &publicshare.WithPassword{}
 	err = json.Unmarshal(data, ps)
 	if err != nil {
 		return nil, err
@@ -349,11 +358,11 @@ func (m *Manager) ListPublicShares(ctx context.Context, u *user.User, filters []
 			return nil, err
 		}
 
-		if !publicshare.MatchesFilters(*ps.PublicShare, filters) {
+		if !publicshare.MatchesFilters(ps.PublicShare, filters) {
 			continue
 		}
 
-		if publicshare.IsExpired(*ps.PublicShare) {
+		if publicshare.IsExpired(ps.PublicShare) {
 			ref := &link.PublicShareReference{
 				Spec: &link.PublicShareReference_Id{
 					Id: ps.PublicShare.Id,
@@ -369,12 +378,12 @@ func (m *Manager) ListPublicShares(ctx context.Context, u *user.User, filters []
 		}
 
 		if ps.PublicShare.PasswordProtected && sign {
-			err = publicshare.AddSignature(ps.PublicShare, ps.HashedPassword)
+			err = publicshare.AddSignature(&ps.PublicShare, ps.Password)
 			if err != nil {
 				return nil, err
 			}
 		}
-		result = append(result, ps.PublicShare)
+		result = append(result, &ps.PublicShare)
 		shareMem[ps.PublicShare.Token] = struct{}{}
 	}
 
@@ -433,8 +442,8 @@ func (m *Manager) ListPublicShares(ctx context.Context, u *user.User, filters []
 		if err != nil {
 			return nil, err
 		}
-		if publicshare.MatchesFilters(*s.PublicShare, filters) {
-			result = append(result, s.PublicShare)
+		if publicshare.MatchesFilters(s.PublicShare, filters) {
+			result = append(result, &s.PublicShare)
 			shareMem[s.PublicShare.Token] = struct{}{}
 		}
 	}
@@ -473,17 +482,17 @@ func (m *Manager) GetPublicShareByToken(ctx context.Context, token string, auth 
 		return nil, err
 	}
 
-	if publicshare.IsExpired(*ps.PublicShare) {
+	if publicshare.IsExpired(ps.PublicShare) {
 		return nil, errtypes.NotFound("public share has expired")
 	}
 
 	if ps.PublicShare.PasswordProtected {
-		if !publicshare.Authenticate(ps.PublicShare, ps.HashedPassword, auth) {
+		if !publicshare.Authenticate(&ps.PublicShare, ps.Password, auth) {
 			return nil, errtypes.InvalidCredentials("access denied")
 		}
 	}
 
-	return ps.PublicShare, nil
+	return &ps.PublicShare, nil
 }
 
 func indexOwnerFunc(v interface{}) (string, error) {
@@ -518,7 +527,7 @@ func resourceIDToIndex(id *provider.ResourceId) string {
 	return strings.Join([]string{id.StorageId, id.OpaqueId}, "!")
 }
 
-func (m *Manager) persist(ctx context.Context, ps *PublicShareWithPassword) error {
+func (m *Manager) persist(ctx context.Context, ps *publicshare.WithPassword) error {
 	data, err := json.Marshal(ps)
 	if err != nil {
 		return err
@@ -530,16 +539,16 @@ func (m *Manager) persist(ctx context.Context, ps *PublicShareWithPassword) erro
 		return err
 	}
 
-	_, err = m.indexer.Add(ps.PublicShare)
+	_, err = m.indexer.Add(&ps.PublicShare)
 	if err != nil {
-		if _, ok := err.(errtypes.IsAlreadyExists); !ok {
-			return err
+		if _, ok := err.(*indexerErrors.AlreadyExistsErr); ok {
+			return nil
 		}
-		err = m.indexer.Delete(ps.PublicShare)
+		err = m.indexer.Delete(&ps.PublicShare)
 		if err != nil {
 			return err
 		}
-		_, err = m.indexer.Add(ps.PublicShare)
+		_, err = m.indexer.Add(&ps.PublicShare)
 		return err
 	}
 

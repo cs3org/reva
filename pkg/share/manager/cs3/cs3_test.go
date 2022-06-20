@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"net/url"
 	"path"
+	"sync"
 
 	groupv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -30,6 +31,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
+	sharespkg "github.com/cs3org/reva/v2/pkg/share"
 	"github.com/cs3org/reva/v2/pkg/share/manager/cs3"
 	indexerpkg "github.com/cs3org/reva/v2/pkg/storage/utils/indexer"
 	indexermocks "github.com/cs3org/reva/v2/pkg/storage/utils/indexer/mocks"
@@ -169,6 +171,36 @@ var _ = Describe("Manager", func() {
 
 		It("does not initialize the storage yet", func() {
 			storage.AssertNotCalled(GinkgoT(), "Init", mock.Anything, mock.Anything)
+		})
+	})
+
+	Describe("Load", func() {
+		It("loads shares including state and mountpoint information", func() {
+			m, err := cs3.New(nil, storage, indexer)
+			Expect(err).ToNot(HaveOccurred())
+
+			sharesChan := make(chan *collaboration.Share)
+			receivedChan := make(chan sharespkg.ReceivedShareWithUser)
+
+			wg := sync.WaitGroup{}
+			wg.Add(2)
+			go func() {
+				err := m.Load(ctx, sharesChan, receivedChan)
+				Expect(err).ToNot(HaveOccurred())
+				wg.Done()
+			}()
+			go func() {
+				sharesChan <- share
+				close(sharesChan)
+				close(receivedChan)
+				wg.Done()
+			}()
+			wg.Wait()
+			Eventually(sharesChan).Should(BeClosed())
+			Eventually(receivedChan).Should(BeClosed())
+
+			expectedPath := path.Join("shares", share.Id.OpaqueId)
+			storage.AssertCalled(GinkgoT(), "SimpleUpload", mock.Anything, expectedPath, mock.Anything)
 		})
 	})
 
@@ -585,9 +617,7 @@ var _ = Describe("Manager", func() {
 					meta := cs3.ReceivedShareMetadata{}
 					err := json.Unmarshal(data, &meta)
 					Expect(err).ToNot(HaveOccurred())
-					Expect(meta.State).To(Equal(collaboration.ShareState_SHARE_STATE_ACCEPTED))
-					Expect(meta.MountPoint.Path).To(Equal("newPath/"))
-					return true
+					return meta.MountPoint != nil && meta.State == collaboration.ShareState_SHARE_STATE_ACCEPTED && meta.MountPoint.Path == "newPath/"
 				}))
 			})
 
@@ -608,9 +638,7 @@ var _ = Describe("Manager", func() {
 					meta := cs3.ReceivedShareMetadata{}
 					err := json.Unmarshal(data, &meta)
 					Expect(err).ToNot(HaveOccurred())
-					Expect(meta.State).To(Equal(collaboration.ShareState_SHARE_STATE_PENDING))
-					Expect(meta.MountPoint.Path).To(Equal("newPath/"))
-					return true
+					return meta.MountPoint != nil && meta.State == collaboration.ShareState_SHARE_STATE_PENDING && meta.MountPoint.Path == "newPath/"
 				}))
 			})
 		})

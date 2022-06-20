@@ -146,6 +146,31 @@ func (m *manager) startJanitorRun() {
 	}
 }
 
+// Dump exports public shares to channels (e.g. during migration)
+func (m *manager) Dump(ctx context.Context, shareChan chan<- *publicshare.WithPassword) error {
+	log := appctx.GetLogger(ctx)
+
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+
+	db, err := m.readDb()
+	if err != nil {
+		return err
+	}
+
+	for _, v := range db {
+		var local publicshare.WithPassword
+		if err := utils.UnmarshalJSONToProtoV1([]byte(v.(map[string]interface{})["share"].(string)), &local.PublicShare); err != nil {
+			log.Error().Err(err).Msg("error unmarshalling share")
+		}
+		local.Password = v.(map[string]interface{})["password"].(string)
+		shareChan <- &local
+	}
+	close(shareChan)
+
+	return nil
+}
+
 // CreatePublicShare adds a new entry to manager.shares
 func (m *manager) CreatePublicShare(ctx context.Context, u *user.User, rInfo *provider.ResourceInfo, g *link.Grant) (*link.PublicShare, error) {
 	id := &link.PublicShareId{
@@ -590,11 +615,7 @@ func (m *manager) writeDb(db map[string]interface{}) error {
 		return err
 	}
 
-	if err := ioutil.WriteFile(m.file, dbAsJSON, 0644); err != nil {
-		return err
-	}
-
-	return nil
+	return ioutil.WriteFile(m.file, dbAsJSON, 0644)
 }
 
 type publicShare struct {
