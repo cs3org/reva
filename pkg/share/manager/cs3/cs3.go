@@ -256,18 +256,32 @@ func (m *Manager) persistShare(ctx context.Context, share *collaboration.Share) 
 
 // GetShare gets the information for a share by the given ref.
 func (m *Manager) GetShare(ctx context.Context, ref *collaboration.ShareReference) (*collaboration.Share, error) {
-	if err := m.initialize(); err != nil {
+	err := m.initialize()
+	if err != nil {
 		return nil, err
 	}
 
+	var s *collaboration.Share
 	switch {
 	case ref.GetId() != nil:
-		return m.getShareByID(ctx, ref.GetId().OpaqueId)
+		s, err = m.getShareByID(ctx, ref.GetId().OpaqueId)
 	case ref.GetKey() != nil:
-		return m.getShareByKey(ctx, ref.GetKey())
+		s, err = m.getShareByKey(ctx, ref.GetKey())
 	default:
 		return nil, errtypes.BadRequest("neither share id nor key was given")
 	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	// check if we are the owner or the grantee
+	user := ctxpkg.ContextMustGetUser(ctx)
+	if share.IsCreatedByUser(s, user) || share.IsGrantedToUser(s, user) {
+		return s, nil
+	}
+
+	return nil, errtypes.NotFound("not found")
 }
 
 // Unshare deletes the share pointed by ref.
