@@ -315,7 +315,7 @@ func (fs *Decomposedfs) CreateDir(ctx context.Context, ref *provider.Reference) 
 		return
 	}
 	if n.Exists {
-		return errtypes.AlreadyExists(parentRef.Path)
+		return errtypes.AlreadyExists(ref.Path)
 	}
 
 	if err = fs.tp.CreateDir(ctx, n); err != nil {
