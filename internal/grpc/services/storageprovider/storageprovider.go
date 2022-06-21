@@ -60,7 +60,6 @@ func init() {
 type config struct {
 	Driver              string                            `mapstructure:"driver" docs:"localhome;The storage driver to be used."`
 	Drivers             map[string]map[string]interface{} `mapstructure:"drivers" docs:"url:pkg/storage/fs/localhome/localhome.go"`
-	TmpFolder           string                            `mapstructure:"tmp_folder" docs:"/var/tmp;Path to temporary folder."`
 	DataServerURL       string                            `mapstructure:"data_server_url" docs:"http://localhost/data;The URL for the data server."`
 	ExposeDataServer    bool                              `mapstructure:"expose_data_server" docs:"false;Whether to expose data server."` // if true the client will be able to upload/download directly to it
 	AvailableXS         map[string]uint32                 `mapstructure:"available_checksums" docs:"nil;List of available checksums."`
@@ -71,10 +70,6 @@ type config struct {
 func (c *config) init() {
 	if c.Driver == "" {
 		c.Driver = "localhome"
-	}
-
-	if c.TmpFolder == "" {
-		c.TmpFolder = "/var/tmp/reva/tmp"
 	}
 
 	if c.DataServerURL == "" {
@@ -95,7 +90,6 @@ func (c *config) init() {
 type service struct {
 	conf          *config
 	storage       storage.FS
-	tmpFolder     string
 	dataServerURL *url.URL
 	availableXS   []*provider.ResourceChecksumPriority
 }
@@ -164,10 +158,6 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 
 	c.init()
 
-	if err := os.MkdirAll(c.TmpFolder, 0755); err != nil {
-		return nil, err
-	}
-
 	fs, err := getFS(c)
 	if err != nil {
 		return nil, err
@@ -198,7 +188,6 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 	service := &service{
 		conf:          c,
 		storage:       fs,
-		tmpFolder:     c.TmpFolder,
 		dataServerURL: u,
 		availableXS:   xsTypes,
 	}
