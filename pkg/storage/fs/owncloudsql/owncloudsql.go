@@ -790,7 +790,61 @@ func (fs *owncloudsqlfs) CreateDir(ctx context.Context, ref *provider.Reference)
 
 // TouchFile as defined in the storage.FS interface
 func (fs *owncloudsqlfs) TouchFile(ctx context.Context, ref *provider.Reference) error {
-	return fmt.Errorf("unimplemented: TouchFile")
+	ip, err := fs.resolve(ctx, ref)
+	if err != nil {
+		return err
+	}
+
+	// check permissions of parent dir
+	parentPerms, err := fs.readPermissions(ctx, filepath.Dir(ip))
+	if err == nil {
+		if !parentPerms.InitiateFileUpload {
+			return errtypes.PermissionDenied("")
+		}
+	} else {
+		if isNotFound(err) {
+			return errtypes.NotFound(ref.Path)
+		}
+		return errors.Wrap(err, "owncloudsql: error reading permissions")
+	}
+
+	_, err = os.Create(ip)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return errtypes.NotFound(ref.Path)
+		}
+		// FIXME we also need already exists error, webdav expects 405 MethodNotAllowed
+		return errors.Wrap(err, "owncloudsql: error creating file "+fs.toStoragePath(ctx, filepath.Dir(ip)))
+	}
+
+	if err = os.Chmod(ip, 0700); err != nil {
+		return errors.Wrap(err, "owncloudsql: error setting file permissions on "+fs.toStoragePath(ctx, filepath.Dir(ip)))
+	}
+
+	fi, err := os.Stat(ip)
+	if err != nil {
+		return err
+	}
+	mtime := time.Now().Unix()
+
+	data := map[string]interface{}{
+		"path":          fs.toDatabasePath(ip),
+		"etag":          calcEtag(ctx, fi),
+		"mimetype":      mime.Detect(false, ip),
+		"permissions":   int(conversions.RoleFromResourcePermissions(parentPerms).OCSPermissions()), // inherit permissions of parent
+		"mtime":         mtime,
+		"storage_mtime": mtime,
+	}
+	storageID, err := fs.getStorage(ctx, ip)
+	if err != nil {
+		return err
+	}
+	_, err = fs.filecache.InsertOrUpdate(ctx, storageID, data, false)
+	if err != nil {
+		return err
+	}
+
+	return fs.propagate(ctx, filepath.Dir(ip))
 }
 
 func (fs *owncloudsqlfs) CreateReference(ctx context.Context, sp string, targetURI *url.URL) error {
