@@ -172,6 +172,7 @@ func (m *Manager) Load(ctx context.Context, shareChan <-chan *collaboration.Shar
 		return err
 	}
 
+	var mu sync.Mutex
 	var wg sync.WaitGroup
 	wg.Add(2)
 	go func() {
@@ -179,18 +180,22 @@ func (m *Manager) Load(ctx context.Context, shareChan <-chan *collaboration.Shar
 			if s == nil {
 				continue
 			}
+			mu.Lock()
 			if err := m.persistShare(context.Background(), s); err != nil {
 				log.Error().Err(err).Interface("share", s).Msg("error persisting share")
 			}
+			mu.Unlock()
 		}
 		wg.Done()
 	}()
 	go func() {
 		for s := range receivedShareChan {
 			if s.ReceivedShare != nil && s.UserID != nil {
+				mu.Lock()
 				if err := m.persistReceivedShare(context.Background(), s.UserID, s.ReceivedShare); err != nil {
 					log.Error().Err(err).Interface("received share", s).Msg("error persisting received share")
 				}
+				mu.Unlock()
 			}
 		}
 		wg.Done()
