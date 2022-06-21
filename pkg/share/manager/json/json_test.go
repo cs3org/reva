@@ -128,9 +128,9 @@ var _ = Describe("Json", func() {
 			}()
 			err := m.(share.DumpableManager).Dump(ctx, sharesChan, receivedChan)
 			Expect(err).ToNot(HaveOccurred())
+			close(sharesChan)
+			close(receivedChan)
 			wg.Wait()
-			Eventually(sharesChan).Should(BeClosed())
-			Eventually(receivedChan).Should(BeClosed())
 
 			Expect(len(shares)).To(Equal(1))
 			Expect(shares[0].Creator).To(Equal(user1.Id))
@@ -157,14 +157,14 @@ var _ = Describe("Json", func() {
 						shares = append(shares, rs)
 					}
 				}
+
 				wg.Done()
 			}()
 			err := m.(share.DumpableManager).Dump(ctx, sharesChan, receivedChan)
 			Expect(err).ToNot(HaveOccurred())
+			close(sharesChan)
+			close(receivedChan)
 			wg.Wait()
-
-			Eventually(sharesChan).Should(BeClosed())
-			Eventually(receivedChan).Should(BeClosed())
 
 			Expect(len(shares)).To(Equal(1))
 			Expect(shares[0].UserID).To(Equal(user2.Id))

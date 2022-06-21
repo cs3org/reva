@@ -241,9 +241,6 @@ func (m *mgr) Dump(ctx context.Context, shareChan chan<- *collaboration.Share, r
 		}
 	}
 
-	close(shareChan)
-	close(receivedShareChan)
-
 	return nil
 }
 
