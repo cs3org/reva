@@ -108,9 +108,25 @@ func (s *svc) handleDelete(ctx context.Context, w http.ResponseWriter, r *http.R
 			w.Header().Set("Lock-Token", "<"+lockID+">")
 			status = http.StatusLocked
 		}
-		w.WriteHeader(status)
 		// TODO path might be empty or relative...
 		m := fmt.Sprintf("Permission denied to delete %v", ref.Path)
+		// check if user has access to resource
+		sRes, err := client.Stat(ctx, &provider.StatRequest{Ref: ref})
+		if err != nil {
+			span.RecordError(err)
+			log.Error().Err(err).Msg("error performing stat grpc request")
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		if sRes.Status.Code != rpc.Code_CODE_OK {
+			// return not found error so we dont leak existence of a file
+			// TODO hide permission failed for users without access in every kind of request
+			// TODO should this be done in the driver?
+			status = http.StatusNotFound
+			// TODO path might be empty or relative...
+			m = fmt.Sprintf("%s not fount", ref.Path)
+		}
+		w.WriteHeader(status)
 		b, err := errors.Marshal(status, m, "")
 		errors.HandleWebdavError(&log, w, b, err)
 	case rpc.Code_CODE_INTERNAL:
@@ -133,22 +149,10 @@ func (s *svc) handleSpacesDelete(w http.ResponseWriter, r *http.Request, spaceID
 	defer span.End()
 
 	sublog := appctx.GetLogger(ctx).With().Logger()
-	client, err := s.getClient()
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
 
-	// retrieve a specific storage space
-	ref, rpcStatus, err := spacelookup.LookUpStorageSpaceReference(ctx, client, spaceID, r.URL.Path, true)
+	ref, err := spacelookup.MakeStorageSpaceReference(spaceID, r.URL.Path)
 	if err != nil {
-		sublog.Error().Err(err).Msg("error sending a grpc request")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	if rpcStatus.Code != rpc.Code_CODE_OK {
-		errors.HandleErrorStatus(&sublog, w, rpcStatus)
+		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
@@ -161,5 +165,5 @@ func (s *svc) handleSpacesDelete(w http.ResponseWriter, r *http.Request, spaceID
 		return
 	}
 
-	s.handleDelete(ctx, w, r, ref, sublog)
+	s.handleDelete(ctx, w, r, &ref, sublog)
 }

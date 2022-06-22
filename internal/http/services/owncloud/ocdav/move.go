@@ -113,42 +113,22 @@ func (s *svc) handleSpacesMove(w http.ResponseWriter, r *http.Request, srcSpaceI
 	}
 
 	sublog := appctx.GetLogger(ctx).With().Str("spaceid", srcSpaceID).Str("path", r.URL.Path).Logger()
-	client, err := s.getClient()
-	if err != nil {
-		sublog.Error().Err(err).Msg("error getting grpc client")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
 
-	// retrieve a specific storage space
-	srcRef, status, err := spacelookup.LookUpStorageSpaceReference(ctx, client, srcSpaceID, r.URL.Path, true)
+	srcRef, err := spacelookup.MakeStorageSpaceReference(srcSpaceID, r.URL.Path)
 	if err != nil {
-		sublog.Error().Err(err).Msg("error sending a grpc request")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	if status.Code != rpc.Code_CODE_OK {
-		errors.HandleErrorStatus(&sublog, w, status)
+		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
 	dstSpaceID, dstRelPath := router.ShiftPath(dst)
 
-	// retrieve a specific storage space
-	dstRef, status, err := spacelookup.LookUpStorageSpaceReference(ctx, client, dstSpaceID, dstRelPath, true)
+	dstRef, err := spacelookup.MakeStorageSpaceReference(dstSpaceID, dstRelPath)
 	if err != nil {
-		sublog.Error().Err(err).Msg("error sending a grpc request")
-		w.WriteHeader(http.StatusInternalServerError)
+		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
-	if status.Code != rpc.Code_CODE_OK {
-		errors.HandleErrorStatus(&sublog, w, status)
-		return
-	}
-
-	s.handleMove(ctx, w, r, srcRef, dstRef, sublog)
+	s.handleMove(ctx, w, r, &srcRef, &dstRef, sublog)
 }
 
 func (s *svc) handleMove(ctx context.Context, w http.ResponseWriter, r *http.Request, src, dst *provider.Reference, log zerolog.Logger) {

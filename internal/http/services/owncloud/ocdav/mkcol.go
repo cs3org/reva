@@ -91,28 +91,14 @@ func (s *svc) handleSpacesMkCol(w http.ResponseWriter, r *http.Request, spaceID 
 	defer span.End()
 
 	sublog := appctx.GetLogger(ctx).With().Str("path", r.URL.Path).Str("spaceid", spaceID).Str("handler", "mkcol").Logger()
-	client, err := s.getClient()
-	if err != nil {
-		return http.StatusInternalServerError, err
-	}
 
-	parentRef, rpcStatus, err := spacelookup.LookUpStorageSpaceReference(ctx, client, spaceID, path.Dir(r.URL.Path), true)
+	parentRef, err := spacelookup.MakeStorageSpaceReference(spaceID, path.Dir(r.URL.Path))
 	if err != nil {
-		return http.StatusInternalServerError, err
+		return http.StatusBadRequest, fmt.Errorf("invalid space id")
 	}
-	if rpcStatus.Code != rpc.Code_CODE_OK {
-		return rstatus.HTTPStatusFromCode(rpcStatus.Code), errtypes.NewErrtypeFromStatus(rpcStatus)
-	}
+	childRef, _ := spacelookup.MakeStorageSpaceReference(spaceID, r.URL.Path)
 
-	childRef, rpcStatus, err := spacelookup.LookUpStorageSpaceReference(ctx, client, spaceID, r.URL.Path, true)
-	if err != nil {
-		return http.StatusInternalServerError, err
-	}
-	if rpcStatus.Code != rpc.Code_CODE_OK {
-		return rstatus.HTTPStatusFromCode(rpcStatus.Code), errtypes.NewErrtypeFromStatus(rpcStatus)
-	}
-
-	return s.handleMkcol(ctx, w, r, parentRef, childRef, sublog)
+	return s.handleMkcol(ctx, w, r, &parentRef, &childRef, sublog)
 }
 
 func (s *svc) handleMkcol(ctx context.Context, w http.ResponseWriter, r *http.Request, parentRef, childRef *provider.Reference, log zerolog.Logger) (status int, err error) {

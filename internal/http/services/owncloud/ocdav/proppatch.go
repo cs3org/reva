@@ -99,49 +99,24 @@ func (s *svc) handleSpacesProppatch(w http.ResponseWriter, r *http.Request, spac
 
 	sublog := appctx.GetLogger(ctx).With().Str("path", r.URL.Path).Str("spaceid", spaceID).Logger()
 
-	c, err := s.getClient()
-	if err != nil {
-		return http.StatusInternalServerError, err
-	}
-
 	pp, status, err := readProppatch(r.Body)
 	if err != nil {
 		return status, err
 	}
 
-	// retrieve a specific storage space
-	ref, rpcStatus, err := spacelookup.LookUpStorageSpaceReference(ctx, c, spaceID, r.URL.Path, true)
+	ref, err := spacelookup.MakeStorageSpaceReference(spaceID, r.URL.Path)
 	if err != nil {
-		return http.StatusInternalServerError, err
-	}
-	if rpcStatus.Code != rpc.Code_CODE_OK {
-		return rstatus.HTTPStatusFromCode(rpcStatus.Code), errtypes.NewErrtypeFromStatus(rpcStatus)
+		return http.StatusBadRequest, err
 	}
 
-	// check if resource exists
-	statReq := &provider.StatRequest{
-		Ref: ref,
-	}
-	statRes, err := c.Stat(ctx, statReq)
-	if err != nil {
-		return http.StatusInternalServerError, err
-	}
-
-	if statRes.Status.Code != rpc.Code_CODE_OK {
-		return rstatus.HTTPStatusFromCode(rpcStatus.Code), errtypes.NewErrtypeFromStatus(rpcStatus)
-	}
-
-	acceptedProps, removedProps, ok := s.handleProppatch(ctx, w, r, ref, pp, sublog)
+	acceptedProps, removedProps, ok := s.handleProppatch(ctx, w, r, &ref, pp, sublog)
 	if !ok {
 		// handleProppatch handles responses in error cases so return 0
 		return 0, nil
 	}
 
-	nRef := path.Join(spaceID, statRes.Info.Path)
+	nRef := path.Join(spaceID, r.URL.Path)
 	nRef = path.Join(ctx.Value(net.CtxKeyBaseURI).(string), nRef)
-	if statRes.Info.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
-		nRef += "/"
-	}
 
 	s.handleProppatchResponse(ctx, w, r, acceptedProps, removedProps, nRef, sublog)
 	return 0, nil
@@ -236,9 +211,24 @@ func (s *svc) handleProppatch(ctx context.Context, w http.ResponseWriter, r *htt
 
 				if res.Status.Code != rpc.Code_CODE_OK {
 					if res.Status.Code == rpc.Code_CODE_PERMISSION_DENIED {
-						w.WriteHeader(http.StatusForbidden)
+						status := http.StatusForbidden
 						m := fmt.Sprintf("Permission denied to set properties on resource %v", ref.Path)
-						b, err := errors.Marshal(http.StatusForbidden, m, "")
+						// check if user has access to resource
+						sRes, err := c.Stat(ctx, &provider.StatRequest{Ref: ref})
+						if err != nil {
+							log.Error().Err(err).Msg("error performing stat grpc request")
+							w.WriteHeader(http.StatusInternalServerError)
+							return nil, nil, false
+						}
+						if sRes.Status.Code != rpc.Code_CODE_OK {
+							// return not found error so we dont leak existence of a file
+							// TODO hide permission failed for users without access in every kind of request
+							// TODO should this be done in the driver?
+							status = http.StatusNotFound
+							m = fmt.Sprintf("%v not found", ref.Path)
+						}
+						w.WriteHeader(status)
+						b, err := errors.Marshal(status, m, "")
 						errors.HandleWebdavError(&log, w, b, err)
 						return nil, nil, false
 					}
@@ -251,7 +241,7 @@ func (s *svc) handleProppatch(ctx context.Context, w http.ResponseWriter, r *htt
 
 				if key == "http://owncloud.org/ns/favorite" {
 					statRes, err := c.Stat(ctx, &provider.StatRequest{Ref: ref})
-					if err != nil {
+					if err != nil || statRes.Info == nil {
 						w.WriteHeader(http.StatusInternalServerError)
 						return nil, nil, false
 					}
