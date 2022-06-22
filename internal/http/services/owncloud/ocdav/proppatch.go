@@ -114,30 +114,14 @@ func (s *svc) handleSpacesProppatch(w http.ResponseWriter, r *http.Request, spac
 		return http.StatusBadRequest, err
 	}
 
-	// check if resource exists
-	statReq := &provider.StatRequest{
-		Ref: ref,
-	}
-	statRes, err := c.Stat(ctx, statReq)
-	if err != nil {
-		return http.StatusInternalServerError, err
-	}
-
-	if statRes.Status.Code != rpc.Code_CODE_OK {
-		return rstatus.HTTPStatusFromCode(statRes.Status.Code), errtypes.NewErrtypeFromStatus(statRes.Status)
-	}
-
 	acceptedProps, removedProps, ok := s.handleProppatch(ctx, w, r, ref, pp, sublog)
 	if !ok {
 		// handleProppatch handles responses in error cases so return 0
 		return 0, nil
 	}
 
-	nRef := path.Join(spaceID, statRes.Info.Path)
+	nRef := path.Join(spaceID, r.URL.Path)
 	nRef = path.Join(ctx.Value(net.CtxKeyBaseURI).(string), nRef)
-	if statRes.Info.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
-		nRef += "/"
-	}
 
 	s.handleProppatchResponse(ctx, w, r, acceptedProps, removedProps, nRef, sublog)
 	return 0, nil
@@ -262,7 +246,7 @@ func (s *svc) handleProppatch(ctx context.Context, w http.ResponseWriter, r *htt
 
 				if key == "http://owncloud.org/ns/favorite" {
 					statRes, err := c.Stat(ctx, &provider.StatRequest{Ref: ref})
-					if err != nil {
+					if err != nil || statRes.Info == nil {
 						w.WriteHeader(http.StatusInternalServerError)
 						return nil, nil, false
 					}
