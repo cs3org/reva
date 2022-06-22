@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	iofs "io/fs"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -226,6 +227,49 @@ func (t *Tree) GetMD(ctx context.Context, n *node.Node) (os.FileInfo, error) {
 	}
 
 	return md, nil
+}
+
+// TouchFile creates a new empty file
+func (t *Tree) TouchFile(ctx context.Context, n *node.Node) error {
+	if n.Exists {
+		return errtypes.AlreadyExists(n.ID)
+	}
+
+	if n.ID == "" {
+		n.ID = uuid.New().String()
+	}
+
+	nodePath := n.InternalPath()
+	if err := os.MkdirAll(filepath.Dir(nodePath), 0700); err != nil {
+		return errors.Wrap(err, "Decomposedfs: error creating node")
+	}
+	_, err := os.Create(nodePath)
+	if err != nil {
+		return errors.Wrap(err, "Decomposedfs: error creating node")
+	}
+
+	err = n.WriteAllNodeMetadata()
+	if err != nil {
+		return err
+	}
+
+	// link child name to parent if it is new
+	childNameLink := filepath.Join(n.ParentInternalPath(), n.Name)
+	var link string
+	link, err = os.Readlink(childNameLink)
+	if err == nil && link != "../"+n.ID {
+		if err = os.Remove(childNameLink); err != nil {
+			return errors.Wrap(err, "Decomposedfs: could not remove symlink child entry")
+		}
+	}
+	if errors.Is(err, iofs.ErrNotExist) || link != "../"+n.ID {
+		relativeNodePath := filepath.Join("../../../../../", lookup.Pathify(n.ID, 4, 2))
+		if err = os.Symlink(relativeNodePath, childNameLink); err != nil {
+			return errors.Wrap(err, "Decomposedfs: could not symlink child entry")
+		}
+	}
+
+	return t.Propagate(ctx, n)
 }
 
 // CreateDir creates a new directory entry in the tree

@@ -265,6 +265,20 @@ func (_m *Tree) Setup() error {
 	return r0
 }
 
+// TouchFile provides a mock function with given fields: ctx, _a1
+func (_m *Tree) TouchFile(ctx context.Context, _a1 *node.Node) error {
+	ret := _m.Called(ctx, _a1)
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, *node.Node) error); ok {
+		r0 = rf(ctx, _a1)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
 // WriteBlob provides a mock function with given fields: _a0, reader
 func (_m *Tree) WriteBlob(_a0 *node.Node, reader io.Reader) error {
 	ret := _m.Called(_a0, reader)

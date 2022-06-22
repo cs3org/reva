@@ -233,6 +233,25 @@ var _ = Describe("Tree", func() {
 			Expect(err).ToNot(HaveOccurred())
 		})
 
+		Describe("TouchFile", func() {
+			It("creates a file inside", func() {
+				ref := &provider.Reference{
+					ResourceId: env.SpaceRootRes,
+					Path:       "emptydir/newFile",
+				}
+				fileToBeCreated, err := env.Lookup.NodeFromResource(env.Ctx, ref)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(fileToBeCreated.Exists).To(BeFalse())
+
+				err = t.TouchFile(env.Ctx, fileToBeCreated)
+				Expect(err).ToNot(HaveOccurred())
+
+				existingFile, err := env.Lookup.NodeFromResource(env.Ctx, ref)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(existingFile.Exists).To(BeTrue())
+			})
+		})
+
 		Context("that was deleted", func() {
 			var (
 				trashPath string

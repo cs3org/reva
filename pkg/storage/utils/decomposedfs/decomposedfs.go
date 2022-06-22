@@ -24,7 +24,6 @@ package decomposedfs
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"net/url"
 	"os"
@@ -78,6 +77,7 @@ type Tree interface {
 	ListFolder(ctx context.Context, node *node.Node) ([]*node.Node, error)
 	// CreateHome(owner *userpb.UserId) (n *node.Node, err error)
 	CreateDir(ctx context.Context, node *node.Node) (err error)
+	TouchFile(ctx context.Context, node *node.Node) error
 	// CreateReference(ctx context.Context, node *node.Node, targetURI *url.URL) error
 	Move(ctx context.Context, oldNode *node.Node, newNode *node.Node) (err error)
 	Delete(ctx context.Context, node *node.Node) (err error)
@@ -337,7 +337,39 @@ func (fs *Decomposedfs) CreateDir(ctx context.Context, ref *provider.Reference) 
 
 // TouchFile as defined in the storage.FS interface
 func (fs *Decomposedfs) TouchFile(ctx context.Context, ref *provider.Reference) error {
-	return fmt.Errorf("unimplemented: TouchFile")
+	parentRef := &provider.Reference{
+		ResourceId: ref.ResourceId,
+		Path:       path.Dir(ref.Path),
+	}
+
+	// verify parent exists
+	parent, err := fs.lu.NodeFromResource(ctx, parentRef)
+	if err != nil {
+		return errtypes.InternalError(err.Error())
+	}
+	if !parent.Exists {
+		return errtypes.NotFound(parentRef.Path)
+	}
+
+	n, err := fs.lu.NodeFromResource(ctx, ref)
+	if err != nil {
+		return errtypes.InternalError(err.Error())
+	}
+	ok, err := fs.p.HasPermission(ctx, n, func(rp *provider.ResourcePermissions) bool {
+		return rp.InitiateFileUpload
+	})
+	switch {
+	case err != nil:
+		return errtypes.InternalError(err.Error())
+	case !ok:
+		return errtypes.PermissionDenied(filepath.Join(n.ParentID, n.Name))
+	}
+
+	// check lock
+	if err := n.CheckLock(ctx); err != nil {
+		return err
+	}
+	return fs.tp.TouchFile(ctx, n)
 }
 
 // CreateReference creates a reference as a node folder with the target stored in extended attributes

@@ -168,6 +168,28 @@ func (s *svc) handleTusPost(ctx context.Context, w http.ResponseWriter, r *http.
 		}
 	}
 
+	uploadLength, err := strconv.ParseInt(r.Header.Get(net.HeaderUploadLength), 10, 64)
+	if err != nil {
+		log.Debug().Err(err).Msg("wrong request")
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	if uploadLength == 0 {
+		tfRes, err := client.TouchFile(ctx, &provider.TouchFileRequest{
+			Ref: ref,
+		})
+		if err != nil {
+			log.Error().Err(err).Msg("error sending grpc stat request")
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		if tfRes.Status.Code != rpc.Code_CODE_OK {
+			log.Error().Interface("status", tfRes.Status).Msg("error touching file")
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+	}
+
 	opaqueMap := map[string]*typespb.OpaqueEntry{
 		net.HeaderUploadLength: {
 			Decoder: "plain",
@@ -228,14 +250,12 @@ func (s *svc) handleTusPost(ctx context.Context, w http.ResponseWriter, r *http.
 	// for creation-with-upload extension forward bytes to dataprovider
 	// TODO check this really streams
 	if r.Header.Get(net.HeaderContentType) == "application/offset+octet-stream" {
-
 		length, err := strconv.ParseInt(r.Header.Get(net.HeaderContentLength), 10, 64)
 		if err != nil {
 			log.Debug().Err(err).Msg("wrong request")
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
-
 		var httpRes *http.Response
 
 		httpReq, err := rhttp.NewRequest(ctx, http.MethodPatch, ep, r.Body)

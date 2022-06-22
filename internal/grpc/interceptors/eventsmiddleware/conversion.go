@@ -165,6 +165,14 @@ func LinkRemoved(r *link.RemovePublicShareResponse, req *link.RemovePublicShareR
 	}
 }
 
+// FileTouched converts the response to an event
+func FileTouched(r *provider.TouchFileResponse, req *provider.TouchFileRequest, executant *user.UserId) events.FileTouched {
+	return events.FileTouched{
+		Executant: executant,
+		Ref:       req.Ref,
+	}
+}
+
 // FileUploaded converts the response to an event
 func FileUploaded(r *provider.InitiateFileUploadResponse, req *provider.InitiateFileUploadRequest, executant *user.UserId) events.FileUploaded {
 	return events.FileUploaded{
