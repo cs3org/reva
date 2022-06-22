@@ -150,7 +150,10 @@ func LookUpStorageSpaceByID(ctx context.Context, client gateway.GatewayAPIClient
 
 // MakeStorageSpaceReference find a space by id and returns a relative reference or nil if the space id was invalid
 func MakeStorageSpaceReference(spaceID string, relativePath string) *storageProvider.Reference {
-	resourceID, _ := storagespace.ParseID(spaceID)
+	resourceID, err := storagespace.ParseID(spaceID)
+	if err != nil {
+		return nil
+	}
 	return &storageProvider.Reference{
 		ResourceId: &resourceID,
 		Path:       utils.MakeRelativePath(relativePath),
