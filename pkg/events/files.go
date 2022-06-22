@@ -53,6 +53,19 @@ func (FileUploaded) Unmarshal(v []byte) (interface{}, error) {
 	return e, err
 }
 
+// FileTouched is emitted when a file is uploaded
+type FileTouched struct {
+	Executant *user.UserId
+	Ref       *provider.Reference
+}
+
+// Unmarshal to fulfill umarshaller interface
+func (FileTouched) Unmarshal(v []byte) (interface{}, error) {
+	e := FileTouched{}
+	err := json.Unmarshal(v, &e)
+	return e, err
+}
+
 // FileDownloaded is emitted when a file is downloaded
 type FileDownloaded struct {
 	Executant *user.UserId

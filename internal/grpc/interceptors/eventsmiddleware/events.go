@@ -156,6 +156,10 @@ func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error
 					ev = SpaceDisabled(v, r, executantID)
 				}
 			}
+		case *provider.TouchFileResponse:
+			if isSuccess(v) {
+				ev = FileTouched(v, req.(*provider.TouchFileRequest), executantID)
+			}
 		}
 
 		if ev != nil {
