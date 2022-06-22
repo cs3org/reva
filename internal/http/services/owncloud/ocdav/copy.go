@@ -310,31 +310,17 @@ func (s *svc) handleSpacesCopy(w http.ResponseWriter, r *http.Request, spaceID s
 		return
 	}
 
-	// retrieve a specific storage space
-	srcRef, status, err := spacelookup.LookUpStorageSpaceReference(ctx, client, spaceID, r.URL.Path, true)
-	if err != nil {
-		sublog.Error().Err(err).Msg("error sending a grpc request")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	if status.Code != rpc.Code_CODE_OK {
-		errors.HandleErrorStatus(&sublog, w, status)
+	srcRef := spacelookup.MakeStorageSpaceReference(spaceID, r.URL.Path)
+	if srcRef == nil {
+		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
 	dstSpaceID, dstRelPath := router.ShiftPath(dst)
 
-	// retrieve a specific storage space
-	dstRef, status, err := spacelookup.LookUpStorageSpaceReference(ctx, client, dstSpaceID, dstRelPath, true)
-	if err != nil {
-		sublog.Error().Err(err).Msg("error sending a grpc request")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	if status.Code != rpc.Code_CODE_OK {
-		errors.HandleErrorStatus(&sublog, w, status)
+	dstRef := spacelookup.MakeStorageSpaceReference(dstSpaceID, dstRelPath)
+	if dstRef == nil {
+		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 

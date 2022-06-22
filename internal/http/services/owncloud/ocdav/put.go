@@ -347,22 +347,10 @@ func (s *svc) handleSpacesPut(w http.ResponseWriter, r *http.Request, spaceID st
 	defer span.End()
 
 	sublog := appctx.GetLogger(ctx).With().Str("spaceid", spaceID).Str("path", r.URL.Path).Logger()
-	client, err := s.getClient()
-	if err != nil {
-		sublog.Error().Err(err).Msg("error getting grpc client")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
 
-	spaceRef, status, err := spacelookup.LookUpStorageSpaceReference(ctx, client, spaceID, r.URL.Path, true)
-	if err != nil {
-		sublog.Error().Err(err).Msg("error sending a grpc request")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	if status.Code != rpc.Code_CODE_OK {
-		errors.HandleErrorStatus(&sublog, w, status)
+	spaceRef := spacelookup.MakeStorageSpaceReference(spaceID, r.URL.Path)
+	if spaceRef == nil {
+		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 

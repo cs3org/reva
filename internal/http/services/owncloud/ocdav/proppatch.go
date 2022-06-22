@@ -109,13 +109,9 @@ func (s *svc) handleSpacesProppatch(w http.ResponseWriter, r *http.Request, spac
 		return status, err
 	}
 
-	// retrieve a specific storage space
-	ref, rpcStatus, err := spacelookup.LookUpStorageSpaceReference(ctx, c, spaceID, r.URL.Path, true)
-	if err != nil {
-		return http.StatusInternalServerError, err
-	}
-	if rpcStatus.Code != rpc.Code_CODE_OK {
-		return rstatus.HTTPStatusFromCode(rpcStatus.Code), errtypes.NewErrtypeFromStatus(rpcStatus)
+	ref := spacelookup.MakeStorageSpaceReference(spaceID, r.URL.Path)
+	if ref == nil {
+		return http.StatusBadRequest, err
 	}
 
 	// check if resource exists
@@ -128,7 +124,7 @@ func (s *svc) handleSpacesProppatch(w http.ResponseWriter, r *http.Request, spac
 	}
 
 	if statRes.Status.Code != rpc.Code_CODE_OK {
-		return rstatus.HTTPStatusFromCode(rpcStatus.Code), errtypes.NewErrtypeFromStatus(rpcStatus)
+		return rstatus.HTTPStatusFromCode(statRes.Status.Code), errtypes.NewErrtypeFromStatus(statRes.Status)
 	}
 
 	acceptedProps, removedProps, ok := s.handleProppatch(ctx, w, r, ref, pp, sublog)

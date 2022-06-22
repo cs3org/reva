@@ -29,6 +29,7 @@ import (
 	storageProvider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/status"
+	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/utils"
 )
 
@@ -147,13 +148,13 @@ func LookUpStorageSpaceByID(ctx context.Context, client gateway.GatewayAPIClient
 	}
 }
 
-// LookUpStorageSpaceReference find a space by id and returns a relative reference
-func LookUpStorageSpaceReference(ctx context.Context, client gateway.GatewayAPIClient, spaceID string, relativePath string, spacesDavRequest bool) (*storageProvider.Reference, *rpc.Status, error) {
-	space, status, err := LookUpStorageSpaceByID(ctx, client, spaceID)
-	if space == nil {
-		return nil, status, err
+// MakeStorageSpaceReference find a space by id and returns a relative reference or nil if the space id was invalid
+func MakeStorageSpaceReference(spaceID string, relativePath string) *storageProvider.Reference {
+	resourceID, _ := storagespace.ParseID(spaceID)
+	return &storageProvider.Reference{
+		ResourceId: &resourceID,
+		Path:       utils.MakeRelativePath(relativePath),
 	}
-	return MakeRelativeReference(space, relativePath, spacesDavRequest), status, err
 }
 
 // MakeRelativeReference returns a relative reference for the given space and path

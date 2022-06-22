@@ -182,24 +182,12 @@ func (s *svc) handleSpacesGet(w http.ResponseWriter, r *http.Request, spaceID st
 	defer span.End()
 
 	sublog := appctx.GetLogger(ctx).With().Str("path", r.URL.Path).Str("spaceid", spaceID).Str("handler", "get").Logger()
-	client, err := s.getClient()
-	if err != nil {
-		sublog.Error().Err(err).Msg("error getting grpc client")
-		w.WriteHeader(http.StatusInternalServerError)
+
+	ref := spacelookup.MakeStorageSpaceReference(spaceID, r.URL.Path)
+	if ref == nil {
+		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
-	// retrieve a specific storage space
-	ref, rpcStatus, err := spacelookup.LookUpStorageSpaceReference(ctx, client, spaceID, r.URL.Path, true)
-	if err != nil {
-		sublog.Error().Err(err).Msg("error sending a grpc request")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	if rpcStatus.Code != rpc.Code_CODE_OK {
-		errors.HandleErrorStatus(&sublog, w, rpcStatus)
-		return
-	}
 	s.handleGet(ctx, w, r, ref, "spaces", sublog)
 }
