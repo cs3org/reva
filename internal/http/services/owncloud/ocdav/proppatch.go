@@ -232,9 +232,24 @@ func (s *svc) handleProppatch(ctx context.Context, w http.ResponseWriter, r *htt
 
 				if res.Status.Code != rpc.Code_CODE_OK {
 					if res.Status.Code == rpc.Code_CODE_PERMISSION_DENIED {
-						w.WriteHeader(http.StatusForbidden)
+						status := http.StatusForbidden
 						m := fmt.Sprintf("Permission denied to set properties on resource %v", ref.Path)
-						b, err := errors.Marshal(http.StatusForbidden, m, "")
+						// check if user has access to resource
+						sRes, err := c.Stat(ctx, &provider.StatRequest{Ref: ref})
+						if err != nil {
+							log.Error().Err(err).Msg("error performing stat grpc request")
+							w.WriteHeader(http.StatusInternalServerError)
+							return nil, nil, false
+						}
+						if sRes.Status.Code != rpc.Code_CODE_OK {
+							// return not found error so we dont leak existence of a file
+							// TODO hide permission failed for users without access in every kind of request
+							// TODO should this be done in the driver?
+							status = http.StatusNotFound
+							m = fmt.Sprintf("%v not found", ref.Path)
+						}
+						w.WriteHeader(status)
+						b, err := errors.Marshal(status, m, "")
 						errors.HandleWebdavError(&log, w, b, err)
 						return nil, nil, false
 					}
