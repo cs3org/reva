@@ -99,22 +99,17 @@ func (s *svc) handleSpacesProppatch(w http.ResponseWriter, r *http.Request, spac
 
 	sublog := appctx.GetLogger(ctx).With().Str("path", r.URL.Path).Str("spaceid", spaceID).Logger()
 
-	c, err := s.getClient()
-	if err != nil {
-		return http.StatusInternalServerError, err
-	}
-
 	pp, status, err := readProppatch(r.Body)
 	if err != nil {
 		return status, err
 	}
 
-	ref := spacelookup.MakeStorageSpaceReference(spaceID, r.URL.Path)
-	if ref == nil {
+	ref, err := spacelookup.MakeStorageSpaceReference(spaceID, r.URL.Path)
+	if err != nil {
 		return http.StatusBadRequest, err
 	}
 
-	acceptedProps, removedProps, ok := s.handleProppatch(ctx, w, r, ref, pp, sublog)
+	acceptedProps, removedProps, ok := s.handleProppatch(ctx, w, r, &ref, pp, sublog)
 	if !ok {
 		// handleProppatch handles responses in error cases so return 0
 		return 0, nil

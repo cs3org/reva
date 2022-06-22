@@ -114,21 +114,21 @@ func (s *svc) handleSpacesMove(w http.ResponseWriter, r *http.Request, srcSpaceI
 
 	sublog := appctx.GetLogger(ctx).With().Str("spaceid", srcSpaceID).Str("path", r.URL.Path).Logger()
 
-	srcRef := spacelookup.MakeStorageSpaceReference(srcSpaceID, r.URL.Path)
-	if srcRef == nil {
+	srcRef, err := spacelookup.MakeStorageSpaceReference(srcSpaceID, r.URL.Path)
+	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
 	dstSpaceID, dstRelPath := router.ShiftPath(dst)
 
-	dstRef := spacelookup.MakeStorageSpaceReference(dstSpaceID, dstRelPath)
-	if dstRef == nil {
+	dstRef, err := spacelookup.MakeStorageSpaceReference(dstSpaceID, dstRelPath)
+	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
-	s.handleMove(ctx, w, r, srcRef, dstRef, sublog)
+	s.handleMove(ctx, w, r, &srcRef, &dstRef, sublog)
 }
 
 func (s *svc) handleMove(ctx context.Context, w http.ResponseWriter, r *http.Request, src, dst *provider.Reference, log zerolog.Logger) {

@@ -150,8 +150,8 @@ func (s *svc) handleSpacesDelete(w http.ResponseWriter, r *http.Request, spaceID
 
 	sublog := appctx.GetLogger(ctx).With().Logger()
 
-	ref := spacelookup.MakeStorageSpaceReference(spaceID, r.URL.Path)
-	if ref == nil {
+	ref, err := spacelookup.MakeStorageSpaceReference(spaceID, r.URL.Path)
+	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
@@ -165,5 +165,5 @@ func (s *svc) handleSpacesDelete(w http.ResponseWriter, r *http.Request, spaceID
 		return
 	}
 
-	s.handleDelete(ctx, w, r, ref, sublog)
+	s.handleDelete(ctx, w, r, &ref, sublog)
 }

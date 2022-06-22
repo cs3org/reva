@@ -113,11 +113,11 @@ func (s *svc) handleSpacesHead(w http.ResponseWriter, r *http.Request, spaceID s
 
 	sublog := appctx.GetLogger(ctx).With().Str("spaceid", spaceID).Str("path", r.URL.Path).Logger()
 
-	spaceRef := spacelookup.MakeStorageSpaceReference(spaceID, r.URL.Path)
-	if spaceRef == nil {
+	ref, err := spacelookup.MakeStorageSpaceReference(spaceID, r.URL.Path)
+	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
-	s.handleHead(ctx, w, r, spaceRef, sublog)
+	s.handleHead(ctx, w, r, &ref, sublog)
 }

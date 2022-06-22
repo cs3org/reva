@@ -310,21 +310,21 @@ func (s *svc) handleSpacesCopy(w http.ResponseWriter, r *http.Request, spaceID s
 		return
 	}
 
-	srcRef := spacelookup.MakeStorageSpaceReference(spaceID, r.URL.Path)
-	if srcRef == nil {
+	srcRef, err := spacelookup.MakeStorageSpaceReference(spaceID, r.URL.Path)
+	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
 	dstSpaceID, dstRelPath := router.ShiftPath(dst)
 
-	dstRef := spacelookup.MakeStorageSpaceReference(dstSpaceID, dstRelPath)
-	if dstRef == nil {
+	dstRef, err := spacelookup.MakeStorageSpaceReference(dstSpaceID, dstRelPath)
+	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
-	cp := s.prepareCopy(ctx, w, r, srcRef, dstRef, &sublog)
+	cp := s.prepareCopy(ctx, w, r, &srcRef, &dstRef, &sublog)
 	if cp == nil {
 		return
 	}

@@ -348,13 +348,13 @@ func (s *svc) handleSpacesPut(w http.ResponseWriter, r *http.Request, spaceID st
 
 	sublog := appctx.GetLogger(ctx).With().Str("spaceid", spaceID).Str("path", r.URL.Path).Logger()
 
-	spaceRef := spacelookup.MakeStorageSpaceReference(spaceID, r.URL.Path)
-	if spaceRef == nil {
+	ref, err := spacelookup.MakeStorageSpaceReference(spaceID, r.URL.Path)
+	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
-	s.handlePut(ctx, w, r, spaceRef, sublog)
+	s.handlePut(ctx, w, r, &ref, sublog)
 }
 
 func checkPreconditions(w http.ResponseWriter, r *http.Request, log zerolog.Logger) bool {

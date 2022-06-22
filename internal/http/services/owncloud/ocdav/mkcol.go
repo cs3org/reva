@@ -92,13 +92,13 @@ func (s *svc) handleSpacesMkCol(w http.ResponseWriter, r *http.Request, spaceID 
 
 	sublog := appctx.GetLogger(ctx).With().Str("path", r.URL.Path).Str("spaceid", spaceID).Str("handler", "mkcol").Logger()
 
-	parentRef := spacelookup.MakeStorageSpaceReference(spaceID, path.Dir(r.URL.Path))
-	if parentRef == nil {
+	parentRef, err := spacelookup.MakeStorageSpaceReference(spaceID, path.Dir(r.URL.Path))
+	if err != nil {
 		return http.StatusBadRequest, fmt.Errorf("invalid space id")
 	}
-	childRef := spacelookup.MakeStorageSpaceReference(spaceID, r.URL.Path)
+	childRef, _ := spacelookup.MakeStorageSpaceReference(spaceID, r.URL.Path)
 
-	return s.handleMkcol(ctx, w, r, parentRef, childRef, sublog)
+	return s.handleMkcol(ctx, w, r, &parentRef, &childRef, sublog)
 }
 
 func (s *svc) handleMkcol(ctx context.Context, w http.ResponseWriter, r *http.Request, parentRef, childRef *provider.Reference, log zerolog.Logger) (status int, err error) {

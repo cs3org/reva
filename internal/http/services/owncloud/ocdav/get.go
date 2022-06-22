@@ -183,11 +183,11 @@ func (s *svc) handleSpacesGet(w http.ResponseWriter, r *http.Request, spaceID st
 
 	sublog := appctx.GetLogger(ctx).With().Str("path", r.URL.Path).Str("spaceid", spaceID).Str("handler", "get").Logger()
 
-	ref := spacelookup.MakeStorageSpaceReference(spaceID, r.URL.Path)
-	if ref == nil {
+	ref, err := spacelookup.MakeStorageSpaceReference(spaceID, r.URL.Path)
+	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
-	s.handleGet(ctx, w, r, ref, "spaces", sublog)
+	s.handleGet(ctx, w, r, &ref, "spaces", sublog)
 }
