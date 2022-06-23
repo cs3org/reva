@@ -174,7 +174,7 @@ var _ = Describe("Node locks", func() {
 			It("fails when the node is unlocked", func() {
 				err := n2.RefreshLock(env.Ctx, lockByUser)
 				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("precondition failed"))
+				Expect(err.Error()).To(ContainSubstring("aborted"))
 			})
 
 			It("refuses to refresh the lock without holding the lock", func() {
@@ -278,7 +278,7 @@ var _ = Describe("Node locks", func() {
 			It("fails when the node is unlocked", func() {
 				err := n2.RefreshLock(env.Ctx, lockByApp)
 				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("precondition failed"))
+				Expect(err.Error()).To(ContainSubstring("aborted"))
 			})
 
 			It("refuses to refresh the lock without holding the lock", func() {
