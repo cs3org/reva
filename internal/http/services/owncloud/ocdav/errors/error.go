@@ -165,6 +165,11 @@ var (
 // and writes an appropriate http status
 func HandleErrorStatus(log *zerolog.Logger, w http.ResponseWriter, s *rpc.Status) {
 	hsc := status.HTTPStatusFromCode(s.Code)
+	if s.Code == rpc.Code_CODE_ABORTED {
+		// aborted is used for etag an lock mismatches, which translates to 412
+		// in case a real Conflict response is needed, the calling code needs to send the header
+		hsc = http.StatusPreconditionFailed
+	}
 	if hsc == http.StatusInternalServerError {
 		log.Error().Interface("status", s).Int("code", hsc).Msg(http.StatusText(hsc))
 	} else {

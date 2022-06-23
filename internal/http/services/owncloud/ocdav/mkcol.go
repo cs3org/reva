@@ -63,6 +63,8 @@ func (s *svc) handlePathMkcol(w http.ResponseWriter, r *http.Request, ns string)
 		// https://www.rfc-editor.org/rfc/rfc4918#section-9.3.1:
 		// 405 (Method Not Allowed) - MKCOL can only be executed on an unmapped URL.
 		return http.StatusMethodNotAllowed, fmt.Errorf("The resource you tried to create already exists")
+	case sr.Status.Code == rpc.Code_CODE_ABORTED:
+		return http.StatusPreconditionFailed, errtypes.NewErrtypeFromStatus(sr.Status)
 	case sr.Status.Code != rpc.Code_CODE_NOT_FOUND:
 		return rstatus.HTTPStatusFromCode(sr.Status.Code), errtypes.NewErrtypeFromStatus(sr.Status)
 	}
@@ -79,6 +81,8 @@ func (s *svc) handlePathMkcol(w http.ResponseWriter, r *http.Request, ns string)
 		// one or more intermediate collections have been created.  The server
 		// MUST NOT create those intermediate collections automatically.
 		return http.StatusConflict, fmt.Errorf("intermediate collection does not exist")
+	case rpcStatus.Code == rpc.Code_CODE_ABORTED:
+		return http.StatusPreconditionFailed, errtypes.NewErrtypeFromStatus(rpcStatus)
 	case rpcStatus.Code != rpc.Code_CODE_OK:
 		return rstatus.HTTPStatusFromCode(rpcStatus.Code), errtypes.NewErrtypeFromStatus(rpcStatus)
 	}
@@ -113,37 +117,6 @@ func (s *svc) handleMkcol(ctx context.Context, w http.ResponseWriter, r *http.Re
 		return http.StatusInternalServerError, err
 	}
 
-	// check if parent exists
-	parentStatReq := &provider.StatRequest{Ref: parentRef}
-	parentStatRes, err := client.Stat(ctx, parentStatReq)
-	switch {
-	case err != nil:
-		return http.StatusInternalServerError, err
-	case parentStatRes.Status.Code == rpc.Code_CODE_NOT_FOUND:
-		// https://www.rfc-editor.org/rfc/rfc4918#section-9.3.1:
-		// 409 (Conflict) - A collection cannot be made at the Request-URI until
-		// one or more intermediate collections have been created.  The server
-		// MUST NOT create those intermediate collections automatically.
-		return http.StatusConflict, fmt.Errorf("intermediate collection does not exist")
-	case parentStatRes.Status.Code != rpc.Code_CODE_OK:
-		return rstatus.HTTPStatusFromCode(parentStatRes.Status.Code), errtypes.NewErrtypeFromStatus(parentStatRes.Status)
-	}
-
-	// check if child exists
-	// TODO again? we did that already in handlePathMkCol and handleSpacesMkCol
-	statReq := &provider.StatRequest{Ref: childRef}
-	statRes, err := client.Stat(ctx, statReq)
-	switch {
-	case err != nil:
-		return http.StatusInternalServerError, err
-	case statRes.Status.Code == rpc.Code_CODE_OK:
-		// https://www.rfc-editor.org/rfc/rfc4918#section-9.3.1:
-		// 405 (Method Not Allowed) - MKCOL can only be executed on an unmapped URL.
-		return http.StatusMethodNotAllowed, fmt.Errorf("The resource you tried to create already exists")
-	case statRes.Status.Code != rpc.Code_CODE_NOT_FOUND:
-		return rstatus.HTTPStatusFromCode(statRes.Status.Code), errtypes.NewErrtypeFromStatus(statRes.Status)
-	}
-
 	req := &provider.CreateContainerRequest{Ref: childRef}
 	res, err := client.CreateContainer(ctx, req)
 	switch {
@@ -152,9 +125,18 @@ func (s *svc) handleMkcol(ctx context.Context, w http.ResponseWriter, r *http.Re
 	case res.Status.Code == rpc.Code_CODE_OK:
 		w.WriteHeader(http.StatusCreated)
 		return 0, nil
-	case res.Status.Code == rpc.Code_CODE_NOT_FOUND:
-		return http.StatusConflict, fmt.Errorf("intermediate collection does not exist")
-	default:
-		return rstatus.HTTPStatusFromCode(res.Status.Code), errtypes.NewErrtypeFromStatus(res.Status)
+	case res.Status.Code == rpc.Code_CODE_ABORTED:
+		return http.StatusPreconditionFailed, fmt.Errorf(res.Status.Message)
+	case res.Status.Code == rpc.Code_CODE_FAILED_PRECONDITION:
+		// https://www.rfc-editor.org/rfc/rfc4918#section-9.3.1:
+		// 409 (Conflict) - A collection cannot be made at the Request-URI until
+		// one or more intermediate collections have been created. The server
+		// MUST NOT create those intermediate collections automatically.
+		return http.StatusConflict, fmt.Errorf(res.Status.Message)
+	case res.Status.Code == rpc.Code_CODE_ALREADY_EXISTS:
+		// https://www.rfc-editor.org/rfc/rfc4918#section-9.3.1:
+		// 405 (Method Not Allowed) - MKCOL can only be executed on an unmapped URL.
+		return http.StatusMethodNotAllowed, fmt.Errorf("The resource you tried to create already exists")
 	}
+	return rstatus.HTTPStatusFromCode(res.Status.Code), errtypes.NewErrtypeFromStatus(res.Status)
 }

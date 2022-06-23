@@ -327,7 +327,7 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 		case rpc.Code_CODE_OK:
 			if sRes.Info.Etag != ifMatch {
 				return &provider.InitiateFileUploadResponse{
-					Status: status.NewFailedPrecondition(ctx, errors.New("etag doesn't match"), "etag doesn't match"),
+					Status: status.NewAborted(ctx, errors.New("etag mismatch"), "etag mismatch"),
 				}, nil
 			}
 		case rpc.Code_CODE_NOT_FOUND:

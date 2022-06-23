@@ -86,6 +86,15 @@ func NewPermissionDenied(ctx context.Context, err error, msg string) *rpc.Status
 	}
 }
 
+// NewAborted returns a Status with ABORTED.
+func NewAborted(ctx context.Context, err error, msg string) *rpc.Status {
+	return &rpc.Status{
+		Code:    rpc.Code_CODE_ABORTED,
+		Message: msg,
+		Trace:   getTrace(ctx),
+	}
+}
+
 // NewFailedPrecondition returns a Status with FAILED_PRECONDITION.
 func NewFailedPrecondition(ctx context.Context, err error, msg string) *rpc.Status {
 	return &rpc.Status{
@@ -131,6 +140,10 @@ func NewInvalidArg(ctx context.Context, msg string) *rpc.Status {
 }
 
 // NewConflict returns a Status with Code_CODE_ABORTED.
+//
+// Deprecated: NewConflict exists for historical compatibility
+// and should not be used. To create a Status with code ABORTED,
+// use NewAborted.
 func NewConflict(ctx context.Context, err error, msg string) *rpc.Status {
 	return &rpc.Status{
 		Code:    rpc.Code_CODE_ABORTED,
@@ -155,7 +168,10 @@ func NewStatusFromErrType(ctx context.Context, msg string, err error) *rpc.Statu
 		return NewPermissionDenied(ctx, e, msg+": "+err.Error())
 	case errtypes.Locked:
 		// FIXME a locked error returns the current lockid
+		// FIXME use NewAborted as per the rpc code docs
 		return NewPermissionDenied(ctx, e, msg+": "+err.Error())
+	case errtypes.Aborted:
+		return NewAborted(ctx, e, msg+": "+err.Error())
 	case errtypes.PreconditionFailed:
 		return NewFailedPrecondition(ctx, e, msg+": "+err.Error())
 	case errtypes.IsNotSupported:
@@ -203,7 +219,7 @@ func getTrace(ctx context.Context) string {
 
 // a mapping from the CS3 status codes to http codes
 var httpStatusCode = map[rpc.Code]int{
-	rpc.Code_CODE_ABORTED:              http.StatusConflict,
+	rpc.Code_CODE_ABORTED:              http.StatusConflict, // webdav uses 412 PreconditionFailed for locks and etags
 	rpc.Code_CODE_ALREADY_EXISTS:       http.StatusConflict,
 	rpc.Code_CODE_CANCELLED:            499, // Client Closed Request
 	rpc.Code_CODE_DATA_LOSS:            http.StatusInternalServerError,

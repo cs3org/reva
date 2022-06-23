@@ -584,7 +584,7 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 				return errtypes.InternalError(err.Error())
 			}
 			if ifMatch != targetEtag {
-				return errtypes.PreconditionFailed("etag doesn't match")
+				return errtypes.Aborted("etag mismatch")
 			}
 		}
 

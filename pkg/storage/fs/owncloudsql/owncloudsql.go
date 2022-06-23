@@ -743,16 +743,18 @@ func (fs *owncloudsqlfs) CreateDir(ctx context.Context, ref *provider.Reference)
 		}
 	} else {
 		if isNotFound(err) {
-			return errtypes.NotFound(ref.Path)
+			return errtypes.PreconditionFailed(ref.Path)
 		}
 		return errors.Wrap(err, "owncloudsql: error reading permissions")
 	}
 
 	if err = os.Mkdir(ip, 0700); err != nil {
 		if os.IsNotExist(err) {
-			return errtypes.NotFound(ref.Path)
+			return errtypes.PreconditionFailed(ref.Path)
 		}
-		// FIXME we also need already exists error, webdav expects 405 MethodNotAllowed
+		if os.IsExist(err) {
+			return errtypes.AlreadyExists(ref.Path)
+		}
 		return errors.Wrap(err, "owncloudsql: error creating dir "+fs.toStoragePath(ctx, filepath.Dir(ip)))
 	}
 
