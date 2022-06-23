@@ -798,7 +798,7 @@ func (fs *localfs) CreateDir(ctx context.Context, ref *provider.Reference) error
 	err = os.Mkdir(fn, 0700)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return errtypes.NotFound(fn)
+			return errtypes.PreconditionFailed(fn)
 		}
 		return errors.Wrap(err, "localfs: error creating dir "+fn)
 	}

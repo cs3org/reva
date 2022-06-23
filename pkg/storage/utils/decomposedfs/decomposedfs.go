@@ -292,7 +292,7 @@ func (fs *Decomposedfs) CreateDir(ctx context.Context, ref *provider.Reference) 
 		return
 	}
 	if !n.Exists {
-		return errtypes.NotFound(parentRef.Path)
+		return errtypes.PreconditionFailed(parentRef.Path)
 	}
 
 	ok, err := fs.p.HasPermission(ctx, n, func(rp *provider.ResourcePermissions) bool {
