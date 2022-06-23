@@ -65,7 +65,27 @@ func (e Locked) LockID() string {
 // IsLocked implements the IsLocked interface.
 func (e Locked) IsLocked() {}
 
-// PreconditionFailed is the error to use when a request fails because a requested etag or lock ID mismatches.
+// Aborted is the error to use when a client should retry at a higher level
+// (e.g., when a client-specified test-and-set fails, indicating the
+// client should restart a read-modify-write sequence) request fails
+// because a requested etag or lock ID mismatches.
+//
+// HTTP Mapping: 409 Conflict, 412 Precondition Failed
+type Aborted string
+
+func (e Aborted) Error() string { return "error: aborted: " + string(e) }
+
+// IsAborted implements the IsAborted interface.
+func (e Aborted) IsAborted() {}
+
+// PreconditionFailed is the error to use when a client should not retry until
+// the system state has been explicitly fixed.  E.g., if an "rmdir"
+// fails because the directory is non-empty, PreconditionFailed
+// should be returned since the client should not retry unless
+// the files are deleted from the directory. ProconditionFailed should also be
+// returned when an intermediate directory for an MKCOL or PUT is missing.
+//
+// HTTP Mapping: 400 Bad Request, 405 Method Not Allowed, 409 Conflict
 type PreconditionFailed string
 
 func (e PreconditionFailed) Error() string { return "error: precondition failed: " + string(e) }
@@ -207,6 +227,12 @@ type IsLocked interface {
 	IsLocked()
 }
 
+// IsAborted is the interface to implement
+// to specify that a request was aborted.
+type IsAborted interface {
+	IsAborted()
+}
+
 // IsPreconditionFailed is the interface to implement
 // to specify that a precondition failed.
 type IsPreconditionFailed interface {
@@ -262,6 +288,8 @@ func NewErrtypeFromStatus(status *rpc.Status) error {
 	//	return Locked(status.Message)
 	// case rpc.Code_CODE_DATA_LOSS: ?
 	//	IsPartialContent
+	case rpc.Code_CODE_ABORTED:
+		return Aborted(status.Message)
 	case rpc.Code_CODE_FAILED_PRECONDITION:
 		return PreconditionFailed(status.Message)
 	case rpc.Code_CODE_INSUFFICIENT_STORAGE:
