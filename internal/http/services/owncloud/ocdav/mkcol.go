@@ -136,7 +136,7 @@ func (s *svc) handleMkcol(ctx context.Context, w http.ResponseWriter, r *http.Re
 	case res.Status.Code == rpc.Code_CODE_ALREADY_EXISTS:
 		// https://www.rfc-editor.org/rfc/rfc4918#section-9.3.1:
 		// 405 (Method Not Allowed) - MKCOL can only be executed on an unmapped URL.
-		return http.StatusMethodNotAllowed, fmt.Errorf(res.Status.Message)
+		return http.StatusMethodNotAllowed, fmt.Errorf("The resource you tried to create already exists")
 	}
 	return rstatus.HTTPStatusFromCode(res.Status.Code), errtypes.NewErrtypeFromStatus(res.Status)
 }
