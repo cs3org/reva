@@ -61,20 +61,24 @@ func (s *svc) handlePathProppatch(w http.ResponseWriter, r *http.Request, ns str
 	}
 
 	space, rpcStatus, err := spacelookup.LookUpStorageSpaceForPath(ctx, c, fn)
-	if err != nil {
+	switch {
+	case err != nil:
 		return http.StatusInternalServerError, err
-	}
-	if rpcStatus.Code != rpc.Code_CODE_OK {
+	case rpcStatus.Code == rpc.Code_CODE_ABORTED:
+		return http.StatusPreconditionFailed, errtypes.NewErrtypeFromStatus(rpcStatus)
+	case rpcStatus.Code != rpc.Code_CODE_OK:
 		return rstatus.HTTPStatusFromCode(rpcStatus.Code), errtypes.NewErrtypeFromStatus(rpcStatus)
 	}
 	// check if resource exists
 	statReq := &provider.StatRequest{Ref: spacelookup.MakeRelativeReference(space, fn, false)}
 	statRes, err := c.Stat(ctx, statReq)
-	if err != nil {
+	switch {
+	case err != nil:
 		return http.StatusInternalServerError, err
-	}
-	if statRes.Status.Code != rpc.Code_CODE_OK {
-		return rstatus.HTTPStatusFromCode(rpcStatus.Code), errtypes.NewErrtypeFromStatus(rpcStatus)
+	case statRes.Status.Code == rpc.Code_CODE_ABORTED:
+		return http.StatusPreconditionFailed, errtypes.NewErrtypeFromStatus(statRes.Status)
+	case statRes.Status.Code != rpc.Code_CODE_OK:
+		return rstatus.HTTPStatusFromCode(rpcStatus.Code), errtypes.NewErrtypeFromStatus(statRes.Status)
 	}
 
 	acceptedProps, removedProps, ok := s.handleProppatch(ctx, w, r, spacelookup.MakeRelativeReference(space, fn, false), pp, sublog)

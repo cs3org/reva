@@ -109,7 +109,7 @@ var _ = Describe("Node locks", func() {
 
 			err = n.SetLock(env.Ctx, lockByUser)
 			Expect(err).To(HaveOccurred())
-			_, ok := err.(errtypes.PreconditionFailed)
+			_, ok := err.(errtypes.Aborted)
 			Expect(ok).To(BeTrue())
 		})
 	})
@@ -132,7 +132,7 @@ var _ = Describe("Node locks", func() {
 
 			err = n.SetLock(env.Ctx, lockByApp)
 			Expect(err).To(HaveOccurred())
-			_, ok := err.(errtypes.PreconditionFailed)
+			_, ok := err.(errtypes.Aborted)
 			Expect(ok).To(BeTrue())
 		})
 
