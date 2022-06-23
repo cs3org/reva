@@ -166,7 +166,6 @@ func (m *manager) Dump(ctx context.Context, shareChan chan<- *publicshare.WithPa
 		local.Password = v.(map[string]interface{})["password"].(string)
 		shareChan <- &local
 	}
-	close(shareChan)
 
 	return nil
 }
