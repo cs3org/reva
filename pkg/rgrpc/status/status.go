@@ -219,7 +219,7 @@ func getTrace(ctx context.Context) string {
 
 // a mapping from the CS3 status codes to http codes
 var httpStatusCode = map[rpc.Code]int{
-	rpc.Code_CODE_ABORTED:              http.StatusConflict,
+	rpc.Code_CODE_ABORTED:              http.StatusConflict, // webdav uses 412 PreconditionFailed for locks and etags
 	rpc.Code_CODE_ALREADY_EXISTS:       http.StatusConflict,
 	rpc.Code_CODE_CANCELLED:            499, // Client Closed Request
 	rpc.Code_CODE_DATA_LOSS:            http.StatusInternalServerError,
