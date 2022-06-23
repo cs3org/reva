@@ -65,7 +65,6 @@ type config struct {
 	// FIXME get rid of ShareFolder, there are findByPath calls in the ocmshareporvider.go and usershareprovider.go
 	ShareFolder                  string                            `mapstructure:"share_folder"`
 	DataTransfersFolder          string                            `mapstructure:"data_transfers_folder"`
-	HomeMapping                  string                            `mapstructure:"home_mapping"`
 	TokenManagers                map[string]map[string]interface{} `mapstructure:"token_managers"`
 	EtagCacheTTL                 int                               `mapstructure:"etag_cache_ttl"`
 	AllowedUserAgents            map[string][]string               `mapstructure:"allowed_user_agents"` // map[path][]user-agent
