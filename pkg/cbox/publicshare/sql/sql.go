@@ -315,7 +315,6 @@ func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []
 	var resourceFilters, ownerFilters, creatorFilters string
 	var resourceParams, ownerParams, creatorParams []interface{}
 	params := []interface{}{uid, uid, publicShareType}
-
 	for _, f := range filters {
 		switch f.Type {
 		case link.ListPublicSharesRequest_Filter_TYPE_RESOURCE_ID:
