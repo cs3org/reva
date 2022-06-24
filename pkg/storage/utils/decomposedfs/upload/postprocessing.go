@@ -18,36 +18,56 @@
 
 package upload
 
-import "github.com/cs3org/reva/v2/pkg/utils/postprocessing"
+import (
+	"time"
 
-func configurePostprocessing(upload *Upload) postprocessing.Postprocessing {
-	// TODO: make configurable
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/options"
+	"github.com/cs3org/reva/v2/pkg/utils/postprocessing"
+)
+
+func configurePostprocessing(upload *Upload, o options.PostprocessingOptions) postprocessing.Postprocessing {
+	waitfor := []string{"initialize"}
+	if !o.ASyncFileUploads {
+		waitfor = append(waitfor, "assembling")
+	}
+
+	steps := []postprocessing.Step{
+		postprocessing.NewStep("initialize", func() error {
+			// we need the node to start processing
+			n, err := CreateNodeForUpload(upload)
+			if err != nil {
+				return err
+			}
+
+			// set processing status
+			upload.node = n
+			return upload.node.MarkProcessing()
+		}, nil),
+		postprocessing.NewStep("assembling", upload.finishUpload, upload.cleanup, "initialize"),
+	}
+	if o.DelayProcessing != 0 {
+		steps = append(steps, postprocessing.NewStep("sleep", func() error {
+			time.Sleep(o.DelayProcessing)
+			return nil
+		}, nil))
+	}
+
 	return postprocessing.Postprocessing{
-		Steps: []postprocessing.Step{
-			postprocessing.NewStep("initialize", func() error {
-				// we need the node to start processing
-				n, err := CreateNodeForUpload(upload)
+		Steps:   steps,
+		WaitFor: waitfor,
+		Finish: func(m map[string]error) {
+			for alias, err := range m {
 				if err != nil {
-					return err
+					upload.log.Info().Str("ID", upload.Info.ID).Str("step", alias).Err(err).Msg("postprocessing failed")
 				}
 
-				// set processing status
-				upload.node = n
-				return upload.node.SetMetadata("user.ocis.nodestatus", "processing")
-			}, nil),
-			postprocessing.NewStep("assembling", upload.finishUpload, upload.cleanup, "initialize"),
-		},
-		WaitFor: []string{"assembling"}, // needed for testsuite atm, see comment in upload.cleanup
-		Finish: func(_ map[string]error) {
-			// TODO: Handle postprocessing errors
+			}
 
 			if upload.node != nil {
-				// temp if to lock marie in eternal processing - dont merge with this
-				if upload.node.SpaceID == "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c" && upload.node.SpaceID != upload.node.ID {
-					return
-				}
 				// unset processing status
-				_ = upload.node.RemoveMetadata("user.ocis.nodestatus")
+				if err := upload.node.UnmarkProcessing(); err != nil {
+					upload.log.Info().Str("path", upload.node.InternalPath()).Err(err).Msg("unmarking processing failed")
+				}
 			}
 		},
 	}

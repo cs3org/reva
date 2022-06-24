@@ -35,6 +35,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/chunking"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/lookup"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/options"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
@@ -50,7 +51,7 @@ type PermissionsChecker interface {
 }
 
 // New returns a new processing instance
-func New(ctx context.Context, info tusd.FileInfo, lu *lookup.Lookup, tp Tree, p PermissionsChecker, fsRoot string) (upload *Upload, err error) {
+func New(ctx context.Context, info tusd.FileInfo, lu *lookup.Lookup, tp Tree, p PermissionsChecker, fsRoot string, o options.PostprocessingOptions) (upload *Upload, err error) {
 
 	log := appctx.GetLogger(ctx)
 	log.Debug().Interface("info", info).Msg("Decomposedfs: NewUpload")
@@ -100,6 +101,11 @@ func New(ctx context.Context, info tusd.FileInfo, lu *lookup.Lookup, tp Tree, p 
 		return nil, errtypes.InternalError(err.Error())
 	case !ok:
 		return nil, errtypes.PermissionDenied(filepath.Join(n.ParentID, n.Name))
+	}
+
+	// are we trying to overwriting a folder with a file?
+	if n.Exists && n.IsDir() {
+		return nil, errtypes.PreconditionFailed("resource is not a file")
 	}
 
 	// check lock
@@ -155,6 +161,11 @@ func New(ctx context.Context, info tusd.FileInfo, lu *lookup.Lookup, tp Tree, p 
 		lu:       lu,
 		tp:       tp,
 		Ctx:      ctx,
+		log: appctx.GetLogger(ctx).
+			With().
+			Interface("info", info).
+			Str("binPath", binPath).
+			Logger(),
 	}
 
 	// writeInfo creates the file by itself if necessary
@@ -163,12 +174,12 @@ func New(ctx context.Context, info tusd.FileInfo, lu *lookup.Lookup, tp Tree, p 
 		return nil, err
 	}
 
-	u.pp = configurePostprocessing(u)
+	u.pp = configurePostprocessing(u, o)
 	return u, nil
 }
 
 // Get returns the Upload for the given upload id
-func Get(ctx context.Context, id string, lu *lookup.Lookup, tp Tree, fsRoot string) (*Upload, error) {
+func Get(ctx context.Context, id string, lu *lookup.Lookup, tp Tree, fsRoot string, o options.PostprocessingOptions) (*Upload, error) {
 	infoPath := filepath.Join(fsRoot, "uploads", id+".info")
 
 	info := tusd.FileInfo{}
@@ -221,7 +232,7 @@ func Get(ctx context.Context, id string, lu *lookup.Lookup, tp Tree, fsRoot stri
 		Ctx:      ctx,
 	}
 
-	up.pp = configurePostprocessing(up)
+	up.pp = configurePostprocessing(up, o)
 	return up, nil
 }
 

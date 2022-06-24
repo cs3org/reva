@@ -24,7 +24,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cs3org/reva/v2/pkg/utils/postprocessing"
+	pp "github.com/cs3org/reva/v2/pkg/utils/postprocessing"
 	"github.com/test-go/testify/require"
 )
 
@@ -72,9 +72,9 @@ func (b *Cbool) Get() bool {
 
 func Test_ItRunsStepsAsync(t *testing.T) {
 	stepdone := Bool()
-	pp := postprocessing.Postprocessing{
-		Steps: []postprocessing.Step{
-			postprocessing.NewStep("stepA", FailureAfter(_waitTime), func(error) {
+	pp := pp.Postprocessing{
+		Steps: []pp.Step{
+			pp.NewStep("stepA", FailureAfter(_waitTime), func(error) {
 				stepdone.Set(true)
 			}),
 		},
@@ -87,9 +87,9 @@ func Test_ItRunsStepsAsync(t *testing.T) {
 
 func Test_ItSyncsIfConfigured(t *testing.T) {
 	stepdone := Bool()
-	pp := postprocessing.Postprocessing{
-		Steps: []postprocessing.Step{
-			postprocessing.NewStep("stepA", FailureAfter(_waitTime), func(error) {
+	pp := pp.Postprocessing{
+		Steps: []pp.Step{
+			pp.NewStep("stepA", FailureAfter(_waitTime), func(error) {
 				stepdone.Set(true)
 			}),
 		},
@@ -104,16 +104,16 @@ func Test_ItSyncsIfConfigured(t *testing.T) {
 func Test_ItRunsStepsInParallel(t *testing.T) {
 	astarted, afinished := Bool(), Bool()
 	bstarted, bfinished := Bool(), Bool()
-	pp := postprocessing.Postprocessing{
-		Steps: []postprocessing.Step{
-			postprocessing.NewStep("stepA", func() error {
+	pp := pp.Postprocessing{
+		Steps: []pp.Step{
+			pp.NewStep("stepA", func() error {
 				astarted.Set(true)
 				time.Sleep(_waitTime)
 				return nil
 			}, func(error) {
 				afinished.Set(true)
 			}),
-			postprocessing.NewStep("stepB", func() error {
+			pp.NewStep("stepB", func() error {
 				bstarted.Set(true)
 				time.Sleep(_waitTime)
 				return nil
@@ -134,14 +134,14 @@ func Test_ItRunsStepsInParallel(t *testing.T) {
 
 func Test_ItWaitsForSpecificSteps(t *testing.T) {
 	stepdone := Bool()
-	pp := postprocessing.Postprocessing{
-		Steps: []postprocessing.Step{
-			postprocessing.NewStep("stepA", func() error {
+	pp := pp.Postprocessing{
+		Steps: []pp.Step{
+			pp.NewStep("stepA", func() error {
 				time.Sleep(_waitTime)
 				stepdone.Set(true)
 				return nil
 			}, nil),
-			postprocessing.NewStep("stepB", func() error {
+			pp.NewStep("stepB", func() error {
 				if !stepdone.Get() {
 					return errors.New("step not done")
 				}
@@ -159,14 +159,14 @@ func Test_ItCollectsStepResults(t *testing.T) {
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	var results map[string]error
-	pp := postprocessing.Postprocessing{
-		Steps: []postprocessing.Step{
-			postprocessing.NewStep("stepA", func() error {
+	pp := pp.Postprocessing{
+		Steps: []pp.Step{
+			pp.NewStep("stepA", func() error {
 				time.Sleep(_waitTime)
 				return errors.New("stepA failed")
 			}, nil),
-			postprocessing.NewStep("stepB", SuccessAfter(_waitTime), nil),
-			postprocessing.NewStep("stepC", func() error {
+			pp.NewStep("stepB", SuccessAfter(_waitTime), nil),
+			pp.NewStep("stepC", func() error {
 				time.Sleep(_waitTime)
 				return errors.New("stepC failed")
 			}, nil),
