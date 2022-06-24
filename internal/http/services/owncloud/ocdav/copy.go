@@ -486,6 +486,25 @@ func (s *svc) executeSpacesCopy(ctx context.Context, w http.ResponseWriter, clie
 }
 
 func (s *svc) prepareCopy(ctx context.Context, w http.ResponseWriter, r *http.Request, srcRef, dstRef *provider.Reference, log *zerolog.Logger) *copy {
+	client, err := s.getClient()
+	if err != nil {
+		log.Error().Err(err).Msg("error getting grpc client")
+		w.WriteHeader(http.StatusInternalServerError)
+		return nil
+	}
+
+	isChild, err := s.referenceIsChildOf(ctx, client, dstRef, srcRef)
+	if err != nil {
+		log.Error().Err(err).Msg("error while trying to detect recursive move operation")
+		w.WriteHeader(http.StatusInternalServerError)
+	}
+	if isChild {
+		w.WriteHeader(http.StatusBadRequest)
+		b, err := errors.Marshal(http.StatusBadRequest, "can not copy a folder into one of its children", "")
+		errors.HandleWebdavError(log, w, b, err)
+		return nil
+	}
+
 	oh := r.Header.Get(net.HeaderOverwrite)
 	overwrite, err := net.ParseOverwrite(oh)
 	if err != nil {
@@ -512,13 +531,6 @@ func (s *svc) prepareCopy(ctx context.Context, w http.ResponseWriter, r *http.Re
 	}
 
 	log.Debug().Bool("overwrite", overwrite).Str("depth", depth.String()).Msg("copy")
-
-	client, err := s.getClient()
-	if err != nil {
-		log.Error().Err(err).Msg("error getting grpc client")
-		w.WriteHeader(http.StatusInternalServerError)
-		return nil
-	}
 
 	srcStatReq := &provider.StatRequest{Ref: srcRef}
 	srcStatRes, err := client.Stat(ctx, srcStatReq)

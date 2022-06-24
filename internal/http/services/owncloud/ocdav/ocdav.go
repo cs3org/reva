@@ -27,8 +27,10 @@ import (
 
 	"github.com/ReneKroon/ttlcache/v2"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+	gatewayv1beta1 "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/net"
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
@@ -42,6 +44,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/favorite/registry"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/templates"
 	rtrace "github.com/cs3org/reva/v2/pkg/trace"
+	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/mitchellh/mapstructure"
 	"github.com/rs/zerolog"
 	"go.opentelemetry.io/otel/trace"
@@ -383,4 +386,29 @@ func addAccessHeaders(w http.ResponseWriter, r *http.Request) {
 	if r.TLS != nil {
 		headers.Set("Strict-Transport-Security", "max-age=63072000")
 	}
+}
+
+func (s *svc) referenceIsChildOf(ctx context.Context, client gatewayv1beta1.GatewayAPIClient, child, parent *provider.Reference) (bool, error) {
+	if utils.ResourceIDEqual(child.ResourceId, parent.ResourceId) {
+		return strings.HasPrefix(child.Path, parent.Path+"/"), nil // Relative to the same resource -> compare paths
+	}
+
+	if child.ResourceId.StorageId != parent.ResourceId.StorageId {
+		return false, nil // Not on the same storage -> not a child
+	}
+
+	// the references are on the same storage but relative to different resources
+	// -> we need to get the path for both resources
+	childPathRes, err := client.GetPath(ctx, &provider.GetPathRequest{ResourceId: child.ResourceId})
+	if err != nil {
+		return false, err
+	}
+	parentPathRes, err := client.GetPath(ctx, &provider.GetPathRequest{ResourceId: parent.ResourceId})
+	if err != nil {
+		return false, err
+	}
+
+	return strings.HasPrefix(
+		path.Join(childPathRes.Path, child.Path),
+		path.Join(parentPathRes.Path, parent.Path)+"/"), nil
 }
