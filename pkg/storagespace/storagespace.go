@@ -140,7 +140,6 @@ func FormatReference(ref *provider.Reference) (string, error) {
 	if ref == nil || ref.ResourceId == nil || ref.ResourceId.SpaceId == "" {
 		return "", ErrInvalidSpaceReference
 	}
-	var ssid string
-	ssid = FormatResourceID(*ref.ResourceId)
+	ssid := FormatResourceID(*ref.ResourceId)
 	return path.Join(ssid, ref.Path), nil
 }

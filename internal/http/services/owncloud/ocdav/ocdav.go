@@ -43,7 +43,6 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/favorite"
 	"github.com/cs3org/reva/v2/pkg/storage/favorite/registry"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/templates"
-	"github.com/cs3org/reva/v2/pkg/storagespace"
 	rtrace "github.com/cs3org/reva/v2/pkg/trace"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/mitchellh/mapstructure"
@@ -459,10 +458,7 @@ func (s *svc) sspReferenceIsChildOf(ctx context.Context, client gatewayv1beta1.G
 }
 
 func (s *svc) referenceIsChildOf(ctx context.Context, client gatewayv1beta1.GatewayAPIClient, child, parent *provider.Reference) (bool, error) {
-	_, csid := storagespace.SplitStorageID(child.ResourceId.StorageId)
-	_, psid := storagespace.SplitStorageID(parent.ResourceId.StorageId)
-
-	if child.ResourceId.StorageId != parent.ResourceId.StorageId {
+	if child.ResourceId.SpaceId != parent.ResourceId.SpaceId {
 		return false, nil // Not on the same storage -> not a child
 	}
 
@@ -470,7 +466,7 @@ func (s *svc) referenceIsChildOf(ctx context.Context, client gatewayv1beta1.Gate
 		return strings.HasPrefix(child.Path, parent.Path+"/"), nil // Relative to the same resource -> compare paths
 	}
 
-	if csid == utils.ShareStorageProviderID || psid == utils.ShareStorageProviderID {
+	if child.ResourceId.SpaceId == utils.ShareStorageSpaceID || parent.ResourceId.SpaceId == utils.ShareStorageSpaceID {
 		// the sharesstorageprovider needs some special handling
 		return s.sspReferenceIsChildOf(ctx, client, child, parent)
 	}

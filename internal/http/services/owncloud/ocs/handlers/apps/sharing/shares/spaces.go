@@ -211,6 +211,7 @@ func (h *Handler) findProvider(ctx context.Context, ref *provider.Reference) (*r
 	}
 	if ref.ResourceId != nil {
 		filters["storage_id"] = ref.ResourceId.StorageId
+		filters["space_id"] = ref.ResourceId.SpaceId
 		filters["opaque_id"] = ref.ResourceId.OpaqueId
 	}
 

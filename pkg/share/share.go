@@ -163,7 +163,7 @@ func MatchesFilter(share *collaboration.Share, filter *collaboration.Filter) boo
 		// I.e. if the permission is 0 we don't want to show it.
 		return int(conversions.RoleFromResourcePermissions(share.Permissions.Permissions).OCSPermissions()) != 0
 	case StorageIDFilterType:
-		return share.ResourceId.StorageId == filter.GetResourceId().GetStorageId()
+		return share.ResourceId.SpaceId == filter.GetResourceId().GetSpaceId()
 	default:
 		return false
 	}

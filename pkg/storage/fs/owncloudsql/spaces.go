@@ -47,7 +47,7 @@ func (fs *owncloudsqlfs) ListStorageSpaces(ctx context.Context, filter []*provid
 			t := filter[i].GetSpaceType()
 			filteringUnsupportedSpaceTypes = (t != "personal" && !strings.HasPrefix(t, "+"))
 		case provider.ListStorageSpacesRequest_Filter_TYPE_ID:
-			spaceID, _, _ = storagespace.SplitID(filter[i].GetId().OpaqueId)
+			_, spaceID, _, _ = storagespace.SplitID(filter[i].GetId().OpaqueId)
 		}
 	}
 	if filteringUnsupportedSpaceTypes {

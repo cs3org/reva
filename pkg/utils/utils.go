@@ -55,8 +55,10 @@ var (
 	// ShareStorageSpaceID is the space id used by the sharestorageprovider share jail space
 	ShareStorageSpaceID = "a0ca6a90-a365-4782-871e-d44447bbc668"
 
-	// PublicStorageProviderID is the id used by the sharestorageprovider
+	// PublicStorageProviderID is the storage id used by the sharestorageprovider
 	PublicStorageProviderID = "7993447f-687f-490d-875c-ac95e89a62a4"
+	// PublicStorageSpaceID is the space id used by the sharestorageprovider
+	PublicStorageSpaceID = "7993447f-687f-490d-875c-ac95e89a62a4"
 
 	// SpaceGrant is used to signal the storageprovider that the grant is on a space
 	SpaceGrant struct{}

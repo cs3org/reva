@@ -960,7 +960,7 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 	}
 
 	// replace fileid of /public/{token} mountpoint with grant fileid
-	if ls != nil && md.Id != nil && md.Id.StorageId == utils.PublicStorageProviderID && md.Id.OpaqueId == ls.Token {
+	if ls != nil && md.Id != nil && md.Id.SpaceId == utils.PublicStorageSpaceID && md.Id.OpaqueId == ls.Token {
 		md.Id = ls.ResourceId
 	}
 
@@ -981,7 +981,7 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 			propstatOK.Prop = append(propstatOK.Prop,
 				prop.Escaped("oc:id", id),
 				prop.Escaped("oc:fileid", id),
-				prop.Escaped("oc:spaceid", md.Id.StorageId),
+				prop.Escaped("oc:spaceid", md.Id.SpaceId),
 			)
 		}
 
@@ -1093,7 +1093,7 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 					}
 				case "spaceid":
 					if md.Id != nil {
-						propstatOK.Prop = append(propstatOK.Prop, prop.Escaped("oc:spaceid", md.Id.StorageId))
+						propstatOK.Prop = append(propstatOK.Prop, prop.Escaped("oc:spaceid", md.Id.SpaceId))
 					} else {
 						propstatNotFound.Prop = append(propstatNotFound.Prop, prop.Escaped("oc:spaceid", ""))
 					}

@@ -279,6 +279,7 @@ func getTokenStatInfo(ctx context.Context, client gatewayv1beta1.GatewayAPIClien
 	return client.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{
 		ResourceId: &provider.ResourceId{
 			StorageId: utils.PublicStorageProviderID,
+			SpaceId:   utils.PublicStorageSpaceID,
 			OpaqueId:  token,
 		},
 	}})

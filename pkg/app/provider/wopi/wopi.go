@@ -135,7 +135,7 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 
 	q := httpReq.URL.Query()
 	q.Add("fileid", resource.GetId().OpaqueId)
-	q.Add("endpoint", resource.GetId().StorageId)
+	q.Add("endpoint", resource.GetId().SpaceId)
 	q.Add("viewmode", viewMode.String())
 
 	u, ok := ctxpkg.ContextGetUser(ctx)

@@ -83,6 +83,7 @@ func (h *VersionsHandler) Handler(s *svc, rid *provider.ResourceId) http.Handler
 				ref := &provider.Reference{
 					ResourceId: &provider.ResourceId{
 						StorageId: rid.StorageId,
+						SpaceId:   rid.SpaceId,
 						OpaqueId:  key,
 					},
 					Path: utils.MakeRelativePath(r.URL.Path),
@@ -94,6 +95,7 @@ func (h *VersionsHandler) Handler(s *svc, rid *provider.ResourceId) http.Handler
 				ref := &provider.Reference{
 					ResourceId: &provider.ResourceId{
 						StorageId: rid.StorageId,
+						SpaceId:   rid.SpaceId,
 						OpaqueId:  key,
 					},
 					Path: utils.MakeRelativePath(r.URL.Path),

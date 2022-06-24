@@ -35,7 +35,6 @@ import (
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/share"
 	"github.com/cs3org/reva/v2/pkg/share/manager/registry"
-	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
@@ -126,7 +125,7 @@ func (m *mgr) Share(ctx context.Context, md *provider.ResourceInfo, g *collabora
 	itemType := conversions.ResourceTypeToItem(md.Type)
 	targetPath := path.Join("/", path.Base(md.Path))
 	permissions := conversions.SharePermToInt(g.Permissions.Permissions)
-	prefix, _ := storagespace.SplitStorageID(md.Id.StorageId)
+	prefix := md.Id.StorageId
 	itemSource := md.Id.OpaqueId
 	fileSource, err := strconv.ParseUint(itemSource, 10, 64)
 	if err != nil {
@@ -525,8 +524,7 @@ func translateFilters(filters []*collaboration.Filter) (string, []interface{}, e
 			filterQuery += "("
 			for i, f := range filters {
 				filterQuery += "(fileid_prefix =? AND item_source=?)"
-				prefix, _ := storagespace.SplitStorageID(f.GetResourceId().StorageId)
-				params = append(params, prefix, f.GetResourceId().OpaqueId)
+				params = append(params, f.GetResourceId().StorageId, f.GetResourceId().OpaqueId)
 
 				if i != len(filters)-1 {
 					filterQuery += " OR "

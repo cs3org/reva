@@ -56,9 +56,16 @@ func publicshareScope(ctx context.Context, scope *authpb.Scope, resource interfa
 		ref := &provider.Reference{}
 		if v.Opaque != nil && v.Opaque.Map != nil {
 			if e, ok := v.Opaque.Map["storage_id"]; ok {
-				ref.ResourceId = &provider.ResourceId{
-					StorageId: string(e.Value),
+				if ref.ResourceId == nil {
+					ref.ResourceId = &provider.ResourceId{}
 				}
+				ref.ResourceId.StorageId = string(e.Value)
+			}
+			if e, ok := v.Opaque.Map["space_id"]; ok {
+				if ref.ResourceId == nil {
+					ref.ResourceId = &provider.ResourceId{}
+				}
+				ref.ResourceId.SpaceId = string(e.Value)
 			}
 			if e, ok := v.Opaque.Map["opaque_id"]; ok {
 				if ref.ResourceId == nil {
@@ -145,7 +152,7 @@ func publicshareScope(ctx context.Context, scope *authpb.Scope, resource interfa
 }
 
 func checkStorageRef(ctx context.Context, s *link.PublicShare, r *provider.Reference) bool {
-	// r: <resource_id:<storage_id:$storageID opaque_id:$opaqueID> path:$path > >
+	// r: <resource_id:<storage_id:$storageID space_id:$spaceID opaque_id:$opaqueID> path:$path > >
 	if utils.ResourceIDEqual(s.ResourceId, r.GetResourceId()) {
 		return true
 	}
@@ -155,7 +162,7 @@ func checkStorageRef(ctx context.Context, s *link.PublicShare, r *provider.Refer
 		return true
 	}
 
-	// r: <resource_id:<storage_id: opaque_id:$token> path:$path>
+	// r: <resource_id:<storage_id: space_id: opaque_id:$token> path:$path>
 	if id := r.GetResourceId(); id.GetStorageId() == PublicStorageProviderID {
 		// access to /public
 		if id.GetOpaqueId() == PublicStorageProviderID {
