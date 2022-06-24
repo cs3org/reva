@@ -230,6 +230,12 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 			Status: rpcStatus,
 		}, nil
 	}
+
+	if !receivedShare.GetShare().GetPermissions().GetPermissions().GetInitiateFileUpload() {
+		return &provider.InitiateFileUploadResponse{
+			Status: status.NewPermissionDenied(ctx, nil, "share does not grant InitiateFileDownload permission"),
+		}, nil
+	}
 	gwres, err := s.gateway.InitiateFileUpload(ctx, &provider.InitiateFileUploadRequest{
 		Opaque:  req.Opaque,
 		Ref:     buildReferenceInShare(req.Ref, receivedShare),
