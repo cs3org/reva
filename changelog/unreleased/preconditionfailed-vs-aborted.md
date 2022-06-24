@@ -9,3 +9,4 @@ Unfortunately, we currently use and map FAILED_PRECONDITION to 412. I assume, be
 With this PR we internally clean up the usage in the decomposedfs and mapping in the ocdav handler.
 
 https://github.com/cs3org/reva/pull/3003
+https://github.com/cs3org/reva/pull/3010

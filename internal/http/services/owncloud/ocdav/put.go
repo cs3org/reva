@@ -328,6 +328,7 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 	w.Header().Set(net.HeaderLastModified, lastModifiedString)
 
 	// file was new
+	// FIXME make created flag a property on the InitiateFileUploadResponse
 	if created := utils.ReadPlainFromOpaque(uRes.Opaque, "created"); created == "true" {
 		w.WriteHeader(http.StatusCreated)
 		return
