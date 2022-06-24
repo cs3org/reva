@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	iofs "io/fs"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -163,8 +164,9 @@ func (fs *owncloudsqlfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upl
 	// check permissions
 	var perm *provider.ResourcePermissions
 	var perr error
+	var fsInfo iofs.FileInfo
 	// if destination exists
-	if _, err := os.Stat(ip); err == nil {
+	if fsInfo, err = os.Stat(ip); err == nil {
 		// check permissions of file to be overwritten
 		perm, perr = fs.readPermissions(ctx, ip)
 	} else {
@@ -180,6 +182,11 @@ func (fs *owncloudsqlfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upl
 			return nil, errtypes.NotFound(fs.toStoragePath(ctx, filepath.Dir(ip)))
 		}
 		return nil, errors.Wrap(err, "owncloudsql: error reading permissions")
+	}
+
+	// if we are trying to overwriting a folder with a file
+	if fsInfo != nil && fsInfo.IsDir() {
+		return nil, errtypes.PreconditionFailed("resource is not a file")
 	}
 
 	log.Debug().Interface("info", info).Msg("owncloudsql: resolved filename")

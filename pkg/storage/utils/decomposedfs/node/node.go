@@ -567,6 +567,19 @@ func (n *Node) SetFavorite(uid *userpb.UserId, val string) error {
 	return xattrs.Set(nodePath, fa, val)
 }
 
+// IsDir returns true if the note is a directory
+func (n *Node) IsDir() bool {
+	nodePath := n.InternalPath()
+	if fi, err := os.Lstat(nodePath); err == nil {
+		if fi.IsDir() {
+			if _, err = xattrs.Get(nodePath, xattrs.ReferenceAttr); err != nil {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // AsResourceInfo return the node as CS3 ResourceInfo
 func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissions, mdKeys []string, returnBasename bool) (ri *provider.ResourceInfo, err error) {
 	sublog := appctx.GetLogger(ctx).With().Interface("node", n.ID).Logger()

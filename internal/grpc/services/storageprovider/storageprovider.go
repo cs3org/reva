@@ -318,6 +318,7 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 	metadata := map[string]string{}
 	ifMatch := req.GetIfMatch()
 	if ifMatch != "" {
+		// FIXME move the etag check into the InitiateUpload call instead of making a Stat call here
 		sRes, err := s.Stat(ctx, &provider.StatRequest{Ref: req.Ref})
 		if err != nil {
 			return nil, err

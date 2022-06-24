@@ -153,36 +153,6 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	sReq := &provider.StatRequest{Ref: ref}
-	sRes, err := client.Stat(ctx, sReq)
-	if err != nil {
-		log.Error().Err(err).Msg("error sending grpc stat request")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	if sRes.Status.Code != rpc.Code_CODE_OK && sRes.Status.Code != rpc.Code_CODE_NOT_FOUND {
-		errors.HandleErrorStatus(&log, w, sRes.Status)
-		return
-	}
-
-	info := sRes.Info
-	if info != nil {
-		if info.Type != provider.ResourceType_RESOURCE_TYPE_FILE {
-			log.Debug().Msg("resource is not a file")
-			w.WriteHeader(http.StatusConflict)
-			return
-		}
-		clientETag := r.Header.Get(net.HeaderIfMatch)
-		serverETag := info.Etag
-		if clientETag != "" {
-			if clientETag != serverETag {
-				log.Debug().Str("client-etag", clientETag).Str("server-etag", serverETag).Msg("etags mismatch")
-				w.WriteHeader(http.StatusPreconditionFailed)
-				return
-			}
-		}
-	}
-
 	opaqueMap := map[string]*typespb.OpaqueEntry{
 		net.HeaderUploadLength: {
 			Decoder: "plain",
@@ -234,6 +204,9 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 		Ref:    ref,
 		Opaque: &typespb.Opaque{Map: opaqueMap},
 	}
+	if ifMatch := r.Header.Get(net.HeaderIfMatch); ifMatch != "" {
+		uReq.Options = &provider.InitiateFileUploadRequest_IfMatch{IfMatch: ifMatch}
+	}
 
 	// where to upload the file?
 	uRes, err := client.InitiateFileUpload(ctx, uReq)
@@ -249,6 +222,10 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 			w.WriteHeader(http.StatusForbidden)
 			b, err := errors.Marshal(http.StatusForbidden, "permission denied: you have no permission to upload content", "")
 			errors.HandleWebdavError(&log, w, b, err)
+		case rpc.Code_CODE_ABORTED:
+			w.WriteHeader(http.StatusPreconditionFailed)
+		case rpc.Code_CODE_FAILED_PRECONDITION:
+			w.WriteHeader(http.StatusConflict)
 		case rpc.Code_CODE_NOT_FOUND:
 			w.WriteHeader(http.StatusConflict)
 		default:
@@ -297,6 +274,7 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	sReq := &provider.StatRequest{Ref: ref}
 	if chunking.IsChunked(ref.Path) {
 		chunk, err := chunking.GetChunkBLOBInfo(ref.Path)
 		if err != nil {
@@ -310,7 +288,7 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 	}
 
 	// stat again to check the new file's metadata
-	sRes, err = client.Stat(ctx, sReq)
+	sRes, err := client.Stat(ctx, sReq)
 	if err != nil {
 		log.Error().Err(err).Msg("error sending grpc stat request")
 		w.WriteHeader(http.StatusInternalServerError)
