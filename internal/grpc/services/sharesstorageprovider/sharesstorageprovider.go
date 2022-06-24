@@ -205,6 +205,7 @@ func (s *service) InitiateFileDownload(ctx context.Context, req *provider.Initia
 	}
 
 	return &provider.InitiateFileDownloadResponse{
+		Opaque:    gwres.GetOpaque(),
 		Status:    gwres.Status,
 		Protocols: protocols,
 	}, nil
@@ -260,6 +261,7 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 		})
 	}
 	return &provider.InitiateFileUploadResponse{
+		Opaque:    gwres.GetOpaque(),
 		Status:    gwres.Status,
 		Protocols: protocols,
 	}, nil
