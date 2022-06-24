@@ -220,6 +220,8 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 	if uRes.Status.Code != rpc.Code_CODE_OK {
 		switch uRes.Status.Code {
 		case rpc.Code_CODE_PERMISSION_DENIED:
+			status := http.StatusForbidden
+			m := uRes.Status.Message
 			// check if user has access to resource
 			sRes, err := client.Stat(ctx, &provider.StatRequest{Ref: ref})
 			if err != nil {
@@ -227,8 +229,6 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
-			status := http.StatusForbidden
-			m := uRes.Status.Message
 			if sRes.Status.Code != rpc.Code_CODE_OK {
 				// return not found error so we dont leak existence of a file
 				// TODO hide permission failed for users without access in every kind of request
@@ -328,7 +328,7 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 	w.Header().Set(net.HeaderLastModified, lastModifiedString)
 
 	// file was new
-	if info == nil {
+	if created := utils.ReadPlainFromOpaque(uRes.Opaque, "created"); created == "true" {
 		w.WriteHeader(http.StatusCreated)
 		return
 	}
