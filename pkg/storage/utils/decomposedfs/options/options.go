@@ -21,6 +21,7 @@ package options
 import (
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
@@ -51,6 +52,15 @@ type Options struct {
 
 	PersonalSpaceAliasTemplate string `mapstructure:"personalspacealias_template"`
 	GeneralSpaceAliasTemplate  string `mapstructure:"generalspacealias_template"`
+
+	Postprocessing PostprocessingOptions `mapstructure:"postprocessing"`
+}
+
+// PostprocessingOptions defines the available options for postprocessing
+type PostprocessingOptions struct {
+	ASyncFileUploads bool `mapstructure:"asyncfileuploads"`
+
+	DelayProcessing time.Duration `mapstructure:"delayprocessing"` // for testing purposes, or if you want to annoy your users
 }
 
 // New returns a new Options instance for the given configuration

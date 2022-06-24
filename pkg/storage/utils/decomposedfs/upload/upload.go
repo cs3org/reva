@@ -92,7 +92,8 @@ type Upload struct {
 	oldsize *uint64
 	// Postprocessing to start postprocessing
 	pp postprocessing.Postprocessing
-	// TODO add logger as well?
+	// and a logger as well
+	log zerolog.Logger
 }
 
 // WriteChunk writes the stream from the reader to the given offset of the upload
@@ -195,8 +196,6 @@ func (upload *Upload) finishUpload() (err error) {
 		return errors.New("need node to finish upload")
 	}
 
-	_ = xattrs.Set(upload.binPath, "user.ocis.nodestatus", "processing")
-
 	spaceID := upload.Info.Storage["SpaceRoot"]
 	targetPath := n.InternalPath()
 	sublog := appctx.GetLogger(upload.Ctx).
@@ -273,6 +272,12 @@ func (upload *Upload) finishUpload() (err error) {
 		// versions are stored alongside the actual file, so a rename can be efficient and does not cross storage / partition boundaries
 		versionsPath = upload.lu.InternalPath(spaceID, n.ID+node.RevisionIDDelimiter+fi.ModTime().UTC().Format(time.RFC3339Nano))
 
+		// we unset the processing flag before moving
+		// NOTE: this leads to a minimal time the node has no processing flag
+		if err := n.UnmarkProcessing(); err != nil {
+			sublog.Error().Err(err).Msg("Decomposedfs: could not unmark processing")
+			return err
+		}
 		// This move drops all metadata!!! We copy it below with CopyMetadata
 		// FIXME the node must remain the same. otherwise we might restore share metadata
 		if err = os.Rename(targetPath, versionsPath); err != nil {
@@ -283,20 +288,20 @@ func (upload *Upload) finishUpload() (err error) {
 			return err
 		}
 
-		// NOTE: In case there is an existing version we have
-		// - a processing flag on the version
-		// - a processing flag on the binPath
-		// - NO processing flag on the targetPath, as we just moved that file
-		// so we remove the processing flag from version,
-		_ = xattrs.Remove(versionsPath, "user.ocis.nodestatus")
-		// create an empty file instead,
-		_, _ = os.Create(targetPath)
-		// and set the processing flag on this
-		_ = xattrs.Set(targetPath, "user.ocis.nodestatus", "processing")
-		// TODO: that means that there is a short amount of time when there is no targetPath
+		// NOTE: In case there is an existing version we have no processing flag on the targetPath,
+		// as we just moved that file. We need to create an empty file again
+		// TODO: that means that there is a short amount of time when there is no targetPath or no processing flag
 		// If clients query in exactly that moment the file will be gone from their PROPFIND
 		// How can we omit this issue? How critical is it?
-
+		if _, err := os.Create(targetPath); err != nil {
+			sublog.Error().Err(err).Msg("Decomposedfs: could not create file")
+			return err
+		}
+		// and set the processing flag on this
+		if err := n.MarkProcessing(); err != nil {
+			sublog.Error().Err(err).Msg("Decomposedfs: could not mark processing")
+			return err
+		}
 	}
 
 	// upload the data to the blobstore
@@ -319,6 +324,11 @@ func (upload *Upload) finishUpload() (err error) {
 	}
 	if err = os.Rename(upload.binPath, targetPath); err != nil {
 		sublog.Error().Err(err).Msg("Decomposedfs: could not rename")
+		return err
+	}
+	// the rename dropped the "processing" status - we need to set it again
+	if err := n.MarkProcessing(); err != nil {
+		sublog.Error().Err(err).Msg("Decomposedfs: could not mark processing")
 		return err
 	}
 	if versionsPath != "" {
@@ -401,7 +411,6 @@ func (upload *Upload) checkHash(expected string, h hash.Hash) error {
 }
 
 // cleanup cleans up after the upload is finished
-// TODO: error handling?
 func (upload *Upload) cleanup(err error) {
 	if upload.node != nil {
 		// NOTE: this should not be part of the upload. The upload doesn't know
@@ -409,15 +418,21 @@ func (upload *Upload) cleanup(err error) {
 		// However, when not removing it here the testsuite will fail as it
 		// can't handle processing status at the moment.
 		// TODO: adjust testsuite, remove this if case and adjust PostProcessing to not wait for "assembling"
-		_ = upload.node.RemoveMetadata("user.ocis.nodestatus")
+		_ = upload.node.UnmarkProcessing()
 	}
 
 	if upload.node != nil && err != nil && upload.oldsize == nil {
-		_ = utils.RemoveItem(upload.node.InternalPath())
+		if err := utils.RemoveItem(upload.node.InternalPath()); err != nil {
+			upload.log.Info().Str("path", upload.node.InternalPath()).Err(err).Msg("removing node failed")
+		}
 	}
 
-	_ = os.Remove(upload.binPath)
-	_ = os.Remove(upload.infoPath)
+	if err := os.Remove(upload.binPath); err != nil {
+		upload.log.Error().Str("path", upload.binPath).Err(err).Msg("removing upload failed")
+	}
+	if err := os.Remove(upload.infoPath); err != nil {
+		upload.log.Error().Str("path", upload.infoPath).Err(err).Msg("removing upload info failed")
+	}
 }
 
 func tryWritingChecksum(log *zerolog.Logger, n *node.Node, algo string, h hash.Hash) {

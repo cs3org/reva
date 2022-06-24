@@ -132,12 +132,12 @@ func RandString(n int) string {
 // TSToUnixNano converts a protobuf Timestamp to uint64
 // with nanoseconds resolution.
 func TSToUnixNano(ts *types.Timestamp) uint64 {
-	return uint64(time.Unix(int64(ts.Seconds), int64(ts.Nanos)).UnixNano())
+	return uint64(time.Unix(int64(ts.GetSeconds()), int64(ts.GetNanos())).UnixNano())
 }
 
 // TSToTime converts a protobuf Timestamp to Go's time.Time.
 func TSToTime(ts *types.Timestamp) time.Time {
-	return time.Unix(int64(ts.Seconds), int64(ts.Nanos))
+	return time.Unix(int64(ts.GetSeconds()), int64(ts.GetNanos()))
 }
 
 // LaterTS returns the timestamp which occurs later.

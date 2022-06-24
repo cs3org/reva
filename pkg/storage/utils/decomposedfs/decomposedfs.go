@@ -504,13 +504,17 @@ func (fs *Decomposedfs) GetMD(ctx context.Context, ref *provider.Reference, mdKe
 		return
 	}
 
-	if !node.Exists {
+	isprocessed := node.IsProcessed()
+	if !isprocessed && !node.Exists {
 		err = errtypes.NotFound(filepath.Join(node.ParentID, node.Name))
 		return
 	}
 
 	rp, err := fs.p.AssemblePermissions(ctx, node)
 	switch {
+	case isprocessed:
+		// FIXME: how to check permissions for files while processing?
+		// the node is empty and holds no further information
 	case err != nil:
 		return nil, errtypes.InternalError(err.Error())
 	case !rp.Stat:

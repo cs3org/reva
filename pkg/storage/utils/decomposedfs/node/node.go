@@ -641,6 +641,11 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 		ParentId:      parentID,
 	}
 
+	if n.IsProcessed() {
+		ri.Opaque = utils.AppendPlainToOpaque(ri.Opaque, "status", "processing")
+		return ri, nil
+	}
+
 	if nodeType == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
 		ts, err := n.GetTreeSize()
 		if err == nil {
@@ -1122,6 +1127,22 @@ func (n *Node) FindStorageSpaceRoot() error {
 		}
 	}
 	return nil
+}
+
+// MarkProcessing marks the node as being processed
+func (n *Node) MarkProcessing() error {
+	return n.SetMetadata("user.ocis.nodestatus", "processing")
+}
+
+// UnmarkProcessing removes the processing flag from the node
+func (n *Node) UnmarkProcessing() error {
+	return n.RemoveMetadata("user.ocis.nodestatus")
+}
+
+// IsProcessed returns true if the node is currently being processed
+func (n *Node) IsProcessed() bool {
+	v, err := n.GetMetadata("user.ocis.nodestatus")
+	return err == nil && v == "processing"
 }
 
 // IsSpaceRoot checks if the node is a space root
