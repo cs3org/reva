@@ -20,6 +20,7 @@ package ocdav
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"path"
 	"strconv"
@@ -219,8 +220,24 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 	if uRes.Status.Code != rpc.Code_CODE_OK {
 		switch uRes.Status.Code {
 		case rpc.Code_CODE_PERMISSION_DENIED:
-			w.WriteHeader(http.StatusForbidden)
-			b, err := errors.Marshal(http.StatusForbidden, "permission denied: you have no permission to upload content", "")
+			// check if user has access to resource
+			sRes, err := client.Stat(ctx, &provider.StatRequest{Ref: ref})
+			if err != nil {
+				log.Error().Err(err).Msg("error performing stat grpc request")
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			status := http.StatusForbidden
+			m := uRes.Status.Message
+			if sRes.Status.Code != rpc.Code_CODE_OK {
+				// return not found error so we dont leak existence of a file
+				// TODO hide permission failed for users without access in every kind of request
+				// TODO should this be done in the driver?
+				status = http.StatusNotFound
+				m = fmt.Sprintf("%v not found", ref.Path)
+			}
+			w.WriteHeader(status)
+			b, err := errors.Marshal(status, m, "")
 			errors.HandleWebdavError(&log, w, b, err)
 		case rpc.Code_CODE_ABORTED:
 			w.WriteHeader(http.StatusPreconditionFailed)
