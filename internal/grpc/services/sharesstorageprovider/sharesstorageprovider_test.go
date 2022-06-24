@@ -90,8 +90,9 @@ var _ = Describe("Sharesstorageprovider", func() {
 				},
 				Permissions: &collaboration.SharePermissions{
 					Permissions: &sprovider.ResourcePermissions{
-						Stat:          true,
-						ListContainer: true,
+						Stat:               true,
+						ListContainer:      true,
+						InitiateFileUpload: true,
 					},
 				},
 			},
@@ -112,8 +113,9 @@ var _ = Describe("Sharesstorageprovider", func() {
 				},
 				Permissions: &collaboration.SharePermissions{
 					Permissions: &sprovider.ResourcePermissions{
-						Stat:          true,
-						ListContainer: true,
+						Stat:               true,
+						ListContainer:      true,
+						InitiateFileUpload: true,
 					},
 				},
 			},

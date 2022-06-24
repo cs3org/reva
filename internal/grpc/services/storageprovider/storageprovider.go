@@ -389,8 +389,10 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 			st = status.NewPermissionDenied(ctx, err, "permission denied")
 		case errtypes.InsufficientStorage:
 			st = status.NewInsufficientStorage(ctx, err, "insufficient storage")
+		case errtypes.PreconditionFailed:
+			st = status.NewFailedPrecondition(ctx, err, "failed precondition")
 		default:
-			st = status.NewInternal(ctx, "error getting upload id: "+req.Ref.String())
+			st = status.NewInternal(ctx, "error getting upload id: "+err.Error())
 		}
 		log.Error().
 			Err(err).

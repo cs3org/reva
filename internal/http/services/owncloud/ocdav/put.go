@@ -222,8 +222,11 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 		case rpc.Code_CODE_PERMISSION_DENIED:
 			status := http.StatusForbidden
 			m := uRes.Status.Message
-			// check if user has access to resource
-			sRes, err := client.Stat(ctx, &provider.StatRequest{Ref: ref})
+			// check if user has access to parent
+			sRes, err := client.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{
+				ResourceId: ref.ResourceId,
+				Path:       utils.MakeRelativePath(path.Dir(ref.Path)),
+			}})
 			if err != nil {
 				log.Error().Err(err).Msg("error performing stat grpc request")
 				w.WriteHeader(http.StatusInternalServerError)
