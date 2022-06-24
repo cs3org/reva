@@ -68,6 +68,7 @@ func OwnerPermissions() provider.ResourcePermissions {
 		RestoreRecycleItem:   true,
 		Stat:                 true,
 		UpdateGrant:          true,
+		DenyGrant:            true,
 	}
 }
 
@@ -160,4 +161,5 @@ func AddPermissions(l *provider.ResourcePermissions, r *provider.ResourcePermiss
 	l.RestoreRecycleItem = l.RestoreRecycleItem || r.RestoreRecycleItem
 	l.Stat = l.Stat || r.Stat
 	l.UpdateGrant = l.UpdateGrant || r.UpdateGrant
+	l.DenyGrant = l.DenyGrant || r.DenyGrant
 }

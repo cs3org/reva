@@ -329,6 +329,7 @@ func NewManagerRole() *Role {
 			AddGrant:    true, // managers can add users to the space
 			RemoveGrant: true, // managers can remove users from the space
 			UpdateGrant: true,
+			DenyGrant:   true, // managers can deny access to sub folders
 		},
 		ocsPermissions: PermissionAll,
 	}

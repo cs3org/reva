@@ -323,6 +323,9 @@ func (e *ACE) grantPermissionSet() *provider.ResourcePermissions {
 		p.RemoveGrant = true
 		p.UpdateGrant = true
 	}
+	if strings.Contains(e.permissions, "O") {
+		p.DenyGrant = true
+	}
 
 	// trash
 	if strings.Contains(e.permissions, "u") { // u = undelete
@@ -424,6 +427,9 @@ func getACEPerm(set *provider.ResourcePermissions) string {
 	}
 	if set.RemoveGrant || set.UpdateGrant {
 		b.WriteString("o")
+	}
+	if set.DenyGrant {
+		b.WriteString("O")
 	}
 
 	// trash
