@@ -259,6 +259,11 @@ func (fs *Decomposedfs) NewUpload(ctx context.Context, info tusd.FileInfo) (uplo
 		return nil, errtypes.PermissionDenied(filepath.Join(n.ParentID, n.Name))
 	}
 
+	// if we are trying to overwriting a folder with a file
+	if n.Exists && n.IsDir() {
+		return nil, errtypes.PreconditionFailed("resource is not a file")
+	}
+
 	// check lock
 	if info.MetaData["lockid"] != "" {
 		ctx = ctxpkg.ContextSetLockID(ctx, info.MetaData["lockid"])

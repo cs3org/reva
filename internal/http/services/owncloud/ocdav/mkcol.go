@@ -30,6 +30,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	rstatus "github.com/cs3org/reva/v2/pkg/rgrpc/status"
+	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/rs/zerolog"
 )
 
@@ -125,6 +126,22 @@ func (s *svc) handleMkcol(ctx context.Context, w http.ResponseWriter, r *http.Re
 	case res.Status.Code == rpc.Code_CODE_OK:
 		w.WriteHeader(http.StatusCreated)
 		return 0, nil
+	case res.Status.Code == rpc.Code_CODE_PERMISSION_DENIED:
+		// check if user has access to parent
+		sRes, err := client.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{
+			ResourceId: childRef.GetResourceId(),
+			Path:       utils.MakeRelativePath(path.Dir(childRef.Path)),
+		}})
+		if err != nil {
+			return http.StatusInternalServerError, err
+		}
+		if sRes.Status.Code != rpc.Code_CODE_OK {
+			// return not found error so we dont leak existence of a file
+			// TODO hide permission failed for users without access in every kind of request
+			// TODO should this be done in the driver?
+			return http.StatusNotFound, fmt.Errorf(sRes.Status.Message)
+		}
+		return http.StatusForbidden, fmt.Errorf(sRes.Status.Message)
 	case res.Status.Code == rpc.Code_CODE_ABORTED:
 		return http.StatusPreconditionFailed, fmt.Errorf(res.Status.Message)
 	case res.Status.Code == rpc.Code_CODE_FAILED_PRECONDITION:

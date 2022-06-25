@@ -205,6 +205,7 @@ func (s *service) InitiateFileDownload(ctx context.Context, req *provider.Initia
 	}
 
 	return &provider.InitiateFileDownloadResponse{
+		Opaque:    gwres.GetOpaque(),
 		Status:    gwres.Status,
 		Protocols: protocols,
 	}, nil
@@ -227,6 +228,12 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 	if rpcStatus.Code != rpc.Code_CODE_OK {
 		return &provider.InitiateFileUploadResponse{
 			Status: rpcStatus,
+		}, nil
+	}
+
+	if !receivedShare.GetShare().GetPermissions().GetPermissions().GetInitiateFileUpload() {
+		return &provider.InitiateFileUploadResponse{
+			Status: status.NewPermissionDenied(ctx, nil, "share does not grant InitiateFileDownload permission"),
 		}, nil
 	}
 	gwres, err := s.gateway.InitiateFileUpload(ctx, &provider.InitiateFileUploadRequest{
@@ -260,6 +267,7 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 		})
 	}
 	return &provider.InitiateFileUploadResponse{
+		Opaque:    gwres.GetOpaque(),
 		Status:    gwres.Status,
 		Protocols: protocols,
 	}, nil

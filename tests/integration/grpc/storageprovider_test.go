@@ -616,14 +616,15 @@ var _ = Describe("storage providers", func() {
 
 			})
 
+			// FIXME these tests are all wrong as they use the reference of a directory, but try to lock and upload a file
 			Context("with the owner holding the lock", func() {
-				It("can initiate an upload", func() {
+				It("can not initiate an upload that would overwrite a folder", func() {
 					ulRes, err := serviceClient.InitiateFileUpload(ctx, &storagep.InitiateFileUploadRequest{
 						Ref:    subdirRef,
 						LockId: lock.LockId,
 					})
 					Expect(err).ToNot(HaveOccurred())
-					Expect(ulRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+					Expect(ulRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_FAILED_PRECONDITION))
 				})
 
 				It("can delete the file", func() {

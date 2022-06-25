@@ -315,14 +315,15 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 		}, nil
 	}
 
+	// FIXME move the etag check into the InitiateUpload call instead of making a Stat call here
+	sRes, err := s.Stat(ctx, &provider.StatRequest{Ref: req.Ref})
+	if err != nil {
+		return nil, err
+	}
+
 	metadata := map[string]string{}
 	ifMatch := req.GetIfMatch()
 	if ifMatch != "" {
-		sRes, err := s.Stat(ctx, &provider.StatRequest{Ref: req.Ref})
-		if err != nil {
-			return nil, err
-		}
-
 		switch sRes.Status.Code {
 		case rpc.Code_CODE_OK:
 			if sRes.Info.Etag != ifMatch {
@@ -388,8 +389,10 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 			st = status.NewPermissionDenied(ctx, err, "permission denied")
 		case errtypes.InsufficientStorage:
 			st = status.NewInsufficientStorage(ctx, err, "insufficient storage")
+		case errtypes.PreconditionFailed:
+			st = status.NewFailedPrecondition(ctx, err, "failed precondition")
 		default:
-			st = status.NewInternal(ctx, "error getting upload id: "+req.Ref.String())
+			st = status.NewInternal(ctx, "error getting upload id: "+err.Error())
 		}
 		log.Error().
 			Err(err).
@@ -421,6 +424,10 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 	res := &provider.InitiateFileUploadResponse{
 		Protocols: protocols,
 		Status:    status.NewOK(ctx),
+	}
+	// FIXME make created flag a property on the InitiateFileUploadResponse
+	if sRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
+		res.Opaque = utils.AppendPlainToOpaque(res.Opaque, "created", "true")
 	}
 	return res, nil
 }
