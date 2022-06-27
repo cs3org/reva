@@ -27,7 +27,7 @@ import (
 
 func configurePostprocessing(upload *Upload, o options.PostprocessingOptions) postprocessing.Postprocessing {
 	waitfor := []string{"initialize"}
-	if !o.ASyncFileUploads {
+	if !o.AsyncFileUploads {
 		waitfor = append(waitfor, "assembling")
 	}
 
