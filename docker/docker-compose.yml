@@ -1,0 +1,7 @@
+version: '3.7'
+
+services:
+  clamav-icap:
+    build: ./icap
+    ports:
+      - '1344:1344'

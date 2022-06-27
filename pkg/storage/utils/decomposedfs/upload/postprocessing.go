@@ -20,12 +20,19 @@ package upload
 
 import (
 	"fmt"
+	"io"
+	"os"
 	"time"
 
+	"github.com/cs3org/reva/v2/pkg/antivirus"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/options"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/cs3org/reva/v2/pkg/utils/postprocessing"
 )
+
+type Scanner interface {
+	Scan(file io.Reader) (*antivirus.ScanResult, error)
+}
 
 func configurePostprocessing(upload *Upload, o options.PostprocessingOptions) postprocessing.Postprocessing {
 	waitfor := []string{"initialize"}
@@ -34,6 +41,27 @@ func configurePostprocessing(upload *Upload, o options.PostprocessingOptions) po
 	}
 
 	steps := []postprocessing.Step{
+		postprocessing.NewStep(
+			"scanning",
+			func() error {
+
+				f, err := os.Open(upload.binPath)
+				if err != nil {
+					return err
+				}
+
+				var scanner Scanner
+				scanner = antivirus.NewClamAV()
+
+				result, err := scanner.Scan(f)
+				// toDo: handle infected file handling, what to do?
+				fmt.Printf("\n\nScanning result infected: %v\n\n", result.Infected)
+
+				return err
+			},
+			func(err error) {},
+			"initialize",
+		),
 		postprocessing.NewStep("initialize", func() error {
 			// we need the node to start processing
 			n, err := CreateNodeForUpload(upload)
