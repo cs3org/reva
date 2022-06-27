@@ -641,7 +641,7 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 		ParentId:      parentID,
 	}
 
-	if n.IsProcessed() {
+	if n.IsProcessing() {
 		ri.Opaque = utils.AppendPlainToOpaque(ri.Opaque, "status", "processing")
 		return ri, nil
 	}
@@ -1139,8 +1139,8 @@ func (n *Node) UnmarkProcessing() error {
 	return n.RemoveMetadata("user.ocis.nodestatus")
 }
 
-// IsProcessed returns true if the node is currently being processed
-func (n *Node) IsProcessed() bool {
+// IsProcessing returns true if the node is currently being processed
+func (n *Node) IsProcessing() bool {
 	v, err := n.GetMetadata("user.ocis.nodestatus")
 	return err == nil && v == "processing"
 }

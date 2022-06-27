@@ -58,7 +58,7 @@ type Options struct {
 
 // PostprocessingOptions defines the available options for postprocessing
 type PostprocessingOptions struct {
-	ASyncFileUploads bool `mapstructure:"asyncfileuploads"`
+	AsyncFileUploads bool `mapstructure:"asyncfileuploads"`
 
 	DelayProcessing time.Duration `mapstructure:"delayprocessing"` // for testing purposes, or if you want to annoy your users
 }
