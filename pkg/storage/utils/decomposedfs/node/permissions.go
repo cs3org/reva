@@ -118,7 +118,11 @@ func (p *Permissions) AssemblePermissions(ctx context.Context, n *Node) (ap prov
 
 	// for all segments, starting at the leaf
 	for cn.ID != rn.ID {
-		if np, err := cn.ReadUserPermissions(ctx, u); err == nil {
+		if np, accessDenied, err := cn.ReadUserPermissions(ctx, u); err == nil {
+			// check if we have a denial on this node
+			if accessDenied {
+				return np, nil
+			}
 			AddPermissions(&ap, &np)
 		} else {
 			appctx.GetLogger(ctx).Error().Err(err).Interface("node", cn.ID).Msg("error reading permissions")
@@ -130,7 +134,11 @@ func (p *Permissions) AssemblePermissions(ctx context.Context, n *Node) (ap prov
 	}
 
 	// for the root node
-	if np, err := cn.ReadUserPermissions(ctx, u); err == nil {
+	if np, accessDenied, err := cn.ReadUserPermissions(ctx, u); err == nil {
+		// check if we have a denial on this node
+		if accessDenied {
+			return np, nil
+		}
 		AddPermissions(&ap, &np)
 	} else {
 		appctx.GetLogger(ctx).Error().Err(err).Interface("node", cn.ID).Msg("error reading root node permissions")

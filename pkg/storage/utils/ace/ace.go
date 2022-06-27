@@ -28,6 +28,7 @@ import (
 	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/grants"
 )
 
 /*
@@ -187,8 +188,34 @@ type ACE struct {
 
 // FromGrant creates an ACE from a CS3 grant
 func FromGrant(g *provider.Grant) *ACE {
+	t := "A"
+	// Currently we only deny the full permission set
+	if grants.PermissionsEqual(&provider.ResourcePermissions{}, g.Permissions) {
+		t = "D"
+		g.Permissions = &provider.ResourcePermissions{
+			AddGrant:             true,
+			Delete:               true,
+			CreateContainer:      true,
+			GetPath:              true,
+			GetQuota:             true,
+			InitiateFileDownload: true,
+			InitiateFileUpload:   true,
+			ListGrants:           true,
+			ListContainer:        true,
+			ListFileVersions:     true,
+			ListRecycle:          true,
+			Move:                 true,
+			RemoveGrant:          true,
+			PurgeRecycle:         true,
+			RestoreFileVersion:   true,
+			RestoreRecycleItem:   true,
+			Stat:                 true,
+			UpdateGrant:          true,
+			DenyGrant:            true,
+		}
+	}
 	e := &ACE{
-		_type:       "A",
+		_type:       t,
 		permissions: getACEPerm(g.Permissions),
 		creator:     userIDToString(g.Creator),
 	}
@@ -254,11 +281,15 @@ func Unmarshal(principal string, v []byte) (e *ACE, err error) {
 
 // Grant returns a CS3 grant
 func (e *ACE) Grant() *provider.Grant {
+	permissions := &provider.ResourcePermissions{}
+	if e._type == "A" {
+		permissions = e.grantPermissionSet()
+	}
 	g := &provider.Grant{
 		Grantee: &provider.Grantee{
 			Type: e.granteeType(),
 		},
-		Permissions: e.grantPermissionSet(),
+		Permissions: permissions,
 		Creator:     userIDFromString(e.creator),
 	}
 	id := e.principal[2:]

@@ -43,6 +43,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/mime"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/ace"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/grants"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
@@ -463,22 +464,26 @@ func (n *Node) readOwner() (*userpb.UserId, error) {
 	return owner, nil
 }
 
-// PermissionSet returns the permission set for the current user
+// PermissionSet returns the permission set and an accessDenied flag
+// for the current user
 // the parent nodes are not taken into account
-func (n *Node) PermissionSet(ctx context.Context) provider.ResourcePermissions {
+// accessDenied is separate from the resource permissions
+// because we only support full denials
+func (n *Node) PermissionSet(ctx context.Context) (provider.ResourcePermissions, bool) {
 	u, ok := ctxpkg.ContextGetUser(ctx)
 	if !ok {
 		appctx.GetLogger(ctx).Debug().Interface("node", n).Msg("no user in context, returning default permissions")
-		return NoPermissions()
+		return NoPermissions(), false
 	}
 	if utils.UserEqual(u.Id, n.SpaceRoot.Owner()) {
-		return OwnerPermissions()
+		return OwnerPermissions(), false
 	}
 	// read the permissions for the current user from the acls of the current node
-	if np, err := n.ReadUserPermissions(ctx, u); err == nil {
-		return np
+	if np, accessDenied, err := n.ReadUserPermissions(ctx, u); err == nil {
+		return np, accessDenied
 	}
-	return NoPermissions()
+	// be defensive, we could have access via another grant
+	return NoPermissions(), true
 }
 
 // InternalPath returns the internal path of the Node
@@ -985,11 +990,12 @@ func (n *Node) UnsetTempEtag() (err error) {
 }
 
 // ReadUserPermissions will assemble the permissions for the current user on the given node without parent nodes
-func (n *Node) ReadUserPermissions(ctx context.Context, u *userpb.User) (ap provider.ResourcePermissions, err error) {
+// we indicate if the access was denied by setting a grant with no permissions
+func (n *Node) ReadUserPermissions(ctx context.Context, u *userpb.User) (ap provider.ResourcePermissions, accessDenied bool, err error) {
 	// check if the current user is the owner
 	if utils.UserEqual(u.Id, n.Owner()) {
 		appctx.GetLogger(ctx).Debug().Str("node", n.ID).Msg("user is owner, returning owner permissions")
-		return OwnerPermissions(), nil
+		return OwnerPermissions(), false, nil
 	}
 
 	ap = provider.ResourcePermissions{}
@@ -1007,7 +1013,7 @@ func (n *Node) ReadUserPermissions(ctx context.Context, u *userpb.User) (ap prov
 	var grantees []string
 	if grantees, err = n.ListGrantees(ctx); err != nil {
 		appctx.GetLogger(ctx).Error().Err(err).Interface("node", n).Msg("error listing grantees")
-		return NoPermissions(), err
+		return NoPermissions(), true, err
 	}
 
 	// instead of making n getxattr syscalls we are going to list the acls and filter them here
@@ -1037,6 +1043,10 @@ func (n *Node) ReadUserPermissions(ctx context.Context, u *userpb.User) (ap prov
 
 		switch {
 		case err == nil:
+			// If all permissions are set to false we have a deny grant
+			if grants.PermissionsEqual(g.Permissions, &provider.ResourcePermissions{}) {
+				return NoPermissions(), true, nil
+			}
 			AddPermissions(&ap, g.GetPermissions())
 		case xattrs.IsAttrUnset(err):
 			err = nil
@@ -1049,7 +1059,24 @@ func (n *Node) ReadUserPermissions(ctx context.Context, u *userpb.User) (ap prov
 	}
 
 	appctx.GetLogger(ctx).Debug().Interface("permissions", ap).Interface("node", n).Interface("user", u).Msg("returning aggregated permissions")
-	return ap, nil
+	return ap, false, nil
+}
+
+// IsDenied checks if the node was denied to that user
+func (n *Node) IsDenied(ctx context.Context) bool {
+	u := ctxpkg.ContextMustGetUser(ctx)
+	userace := xattrs.GrantUserAcePrefix + u.Id.OpaqueId
+	g, err := n.ReadGrant(ctx, userace)
+	switch {
+	case err == nil:
+		// If all permissions are set to false we have a deny grant
+		return grants.PermissionsEqual(g.Permissions, &provider.ResourcePermissions{})
+	case xattrs.IsAttrUnset(err):
+		return false
+	default:
+		// be paranoid, resource is denied
+		return true
+	}
 }
 
 // ListGrantees lists the grantees of the current node
