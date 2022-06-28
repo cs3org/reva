@@ -1,22 +1,25 @@
 package antivirus
 
 import (
-	ic "github.com/egirna/icap-client"
 	"io"
 	"net/http"
 	"net/url"
+	"time"
+
+	ic "github.com/egirna/icap-client"
 )
 
-func NewIcap() (*Icap, error) {
-	endpoint, err := url.Parse(icapUrl)
+// NewICAP returns a Scanner talking to an ICAP server
+func NewICAP(icapURL string, icapService string, timeout time.Duration) (ICAP, error) {
+	endpoint, err := url.Parse(icapURL)
 	if err != nil {
-		return nil, err
+		return ICAP{}, err
 	}
 
 	endpoint.Scheme = "icap"
 	endpoint.Path = icapService
 
-	return &Icap{
+	return ICAP{
 		client: &ic.Client{
 			Timeout: timeout,
 		},
@@ -24,30 +27,32 @@ func NewIcap() (*Icap, error) {
 	}, nil
 }
 
-type Icap struct {
+// ICAP is a Scanner talking to an ICAP server
+type ICAP struct {
 	client   *ic.Client
 	endpoint string
 }
 
-func (s *Icap) Scan(file io.Reader) (*ScanResult, error) {
+// Scan to fulfill Scanner interface
+func (s ICAP) Scan(file io.Reader) (ScanResult, error) {
 	httpReq, err := http.NewRequest(http.MethodGet, "http://localhost", file)
 	if err != nil {
-		return nil, err
+		return ScanResult{}, err
 	}
 
 	req, err := ic.NewRequest(ic.MethodREQMOD, s.endpoint, httpReq, nil)
 	if err != nil {
-		return nil, err
+		return ScanResult{}, err
 	}
 
 	resp, err := s.client.Do(req)
 	if err != nil {
-		return nil, err
+		return ScanResult{}, err
 	}
 
 	_, infected := resp.Header["X-Infection-Found"]
 
-	return &ScanResult{
+	return ScanResult{
 		Infected: infected,
 	}, nil
 }

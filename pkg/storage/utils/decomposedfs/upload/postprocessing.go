@@ -20,7 +20,6 @@ package upload
 
 import (
 	"fmt"
-	"io"
 	"os"
 	"time"
 
@@ -30,10 +29,6 @@ import (
 	"github.com/cs3org/reva/v2/pkg/utils/postprocessing"
 )
 
-type Scanner interface {
-	Scan(file io.Reader) (*antivirus.ScanResult, error)
-}
-
 func configurePostprocessing(upload *Upload, o options.PostprocessingOptions) postprocessing.Postprocessing {
 	waitfor := []string{"initialize"}
 	if !o.AsyncFileUploads {
@@ -41,27 +36,6 @@ func configurePostprocessing(upload *Upload, o options.PostprocessingOptions) po
 	}
 
 	steps := []postprocessing.Step{
-		postprocessing.NewStep(
-			"scanning",
-			func() error {
-
-				f, err := os.Open(upload.binPath)
-				if err != nil {
-					return err
-				}
-
-				var scanner Scanner
-				scanner = antivirus.NewClamAV()
-
-				result, err := scanner.Scan(f)
-				// toDo: handle infected file handling, what to do?
-				fmt.Printf("\n\nScanning result infected: %v\n\n", result.Infected)
-
-				return err
-			},
-			func(err error) {},
-			"initialize",
-		),
 		postprocessing.NewStep("initialize", func() error {
 			// we need the node to start processing
 			n, err := CreateNodeForUpload(upload)
@@ -81,6 +55,33 @@ func configurePostprocessing(upload *Upload, o options.PostprocessingOptions) po
 			}
 			return err
 		}, upload.cleanup, "initialize"),
+		postprocessing.NewStep(
+			"scanning",
+			func() error {
+
+				f, err := os.Open(upload.binPath)
+				if err != nil {
+					return err
+				}
+
+				scanner, err := antivirus.New("")
+				if err != nil {
+					return err
+				}
+
+				result, err := scanner.Scan(f)
+				// toDo: handle infected file handling, what to do?
+				s := ""
+				if upload.node != nil {
+					s = upload.node.InternalPath()
+				}
+				fmt.Printf("Scanning result(%s): %v %v\n", s, result, err)
+
+				return err
+			},
+			func(err error) {},
+			"initialize",
+		),
 	}
 	if o.DelayProcessing != 0 {
 		steps = append(steps, postprocessing.NewStep("sleep", func() error {
@@ -88,7 +89,6 @@ func configurePostprocessing(upload *Upload, o options.PostprocessingOptions) po
 			return nil
 		}, nil))
 	}
-
 	return postprocessing.Postprocessing{
 		Steps:   steps,
 		WaitFor: waitfor,
