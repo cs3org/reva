@@ -50,6 +50,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/rs/zerolog"
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"google.golang.org/protobuf/types/known/fieldmaskpb"
 )
@@ -353,16 +354,23 @@ func (p *Handler) propfindResponse(ctx context.Context, w http.ResponseWriter, r
 
 	var linkshares map[string]struct{}
 	// public link access does not show share-types
+	// oc:share-type is not part of an allprops response
 	if namespace != "/public" {
-		listResp, err := client.ListPublicShares(ctx, &link.ListPublicSharesRequest{Filters: filters})
-		if err == nil {
-			linkshares = make(map[string]struct{}, len(listResp.Share))
-			for i := range listResp.Share {
-				linkshares[listResp.Share[i].ResourceId.OpaqueId] = struct{}{}
+		// only fetch this if property was queried
+		for _, p := range pf.Prop {
+			if p.Space == net.NsOwncloud && p.Local == "share-type" {
+				listResp, err := client.ListPublicShares(ctx, &link.ListPublicSharesRequest{Filters: filters})
+				if err == nil {
+					linkshares = make(map[string]struct{}, len(listResp.Share))
+					for i := range listResp.Share {
+						linkshares[listResp.Share[i].ResourceId.OpaqueId] = struct{}{}
+					}
+				} else {
+					log.Error().Err(err).Msg("propfindResponse: couldn't list public shares")
+					span.SetStatus(codes.Error, err.Error())
+				}
 			}
-		} else {
-			log.Error().Err(err).Msg("propfindResponse: couldn't list public shares")
-			span.SetStatus(codes.Error, err.Error())
+			break
 		}
 	}
 
@@ -401,6 +409,10 @@ func (p *Handler) statSpace(ctx context.Context, client gateway.GatewayAPIClient
 }
 
 func (p *Handler) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *http.Request, pf XML, spaces []*provider.StorageSpace, requestPath string, log zerolog.Logger) ([]*provider.ResourceInfo, bool, bool) {
+	ctx, span := appctx.GetTracerProvider(r.Context()).Tracer(tracerName).Start(r.Context(), "get_resource_infos")
+	span.SetAttributes(attribute.KeyValue{Key: "requestPath", Value: attribute.StringValue(requestPath)})
+	defer span.End()
+
 	dh := r.Header.Get(net.HeaderDepth)
 	depth, err := net.ParseDepth(dh)
 	if err != nil {
@@ -411,6 +423,7 @@ func (p *Handler) getResourceInfos(ctx context.Context, w http.ResponseWriter, r
 		errors.HandleWebdavError(&log, w, b, err)
 		return nil, false, false
 	}
+	span.SetAttributes(attribute.KeyValue{Key: "depth", Value: attribute.StringValue(depth.String())})
 
 	client, err := p.getClient()
 	if err != nil {
@@ -617,6 +630,10 @@ func (p *Handler) getResourceInfos(ctx context.Context, w http.ResponseWriter, r
 }
 
 func (p *Handler) getSpaceResourceInfos(ctx context.Context, w http.ResponseWriter, r *http.Request, pf XML, ref *provider.Reference, requestPath string, depth net.Depth, log zerolog.Logger) ([]*provider.ResourceInfo, bool) {
+	ctx, span := appctx.GetTracerProvider(r.Context()).Tracer(tracerName).Start(r.Context(), "get_space_resource_infos")
+	span.SetAttributes(attribute.KeyValue{Key: "requestPath", Value: attribute.StringValue(requestPath)})
+	span.SetAttributes(attribute.KeyValue{Key: "depth", Value: attribute.StringValue(depth.String())})
+	defer span.End()
 
 	client, err := p.getClient()
 	if err != nil {
@@ -836,6 +853,11 @@ func MultistatusResponse(ctx context.Context, pf *XML, mds []*provider.ResourceI
 // ns is the CS3 namespace that needs to be removed from the CS3 path before
 // prefixing it with the baseURI
 func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, publicURL, ns string, linkshares map[string]struct{}) (*ResponseXML, error) {
+	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "md_to_prop_response")
+	span.SetAttributes(attribute.KeyValue{Key: "publicURL", Value: attribute.StringValue(publicURL)})
+	span.SetAttributes(attribute.KeyValue{Key: "ns", Value: attribute.StringValue(ns)})
+	defer span.End()
+
 	sublog := appctx.GetLogger(ctx).With().Interface("md", md).Str("ns", ns).Logger()
 	md.Path = strings.TrimPrefix(md.Path, ns)
 
