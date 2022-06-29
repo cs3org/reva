@@ -279,6 +279,26 @@ func CreateNodeForUpload(upload *Upload) (*node.Node, error) {
 			return nil, err
 		}
 
+		// link child name to parent if it is new
+		childNameLink := filepath.Join(n.ParentInternalPath(), n.Name)
+		var link string
+		link, err = os.Readlink(childNameLink)
+		if err == nil && link != "../"+n.ID {
+			if err = os.Remove(childNameLink); err != nil {
+				return nil, errors.Wrap(err, "Decomposedfs: could not remove symlink child entry")
+			}
+		}
+		if errors.Is(err, iofs.ErrNotExist) || link != "../"+n.ID {
+			relativeNodePath := filepath.Join("../../../../../", lookup.Pathify(n.ID, 4, 2))
+			if err = os.Symlink(relativeNodePath, childNameLink); err != nil {
+				return nil, errors.Wrap(err, "Decomposedfs: could not symlink child entry")
+			}
+		}
+		err = n.WriteAllNodeMetadata()
+		if err != nil {
+			return nil, errors.Wrap(err, "Decomposedfs: could not write metadata")
+		}
+
 	default:
 		old, _ := node.ReadNode(upload.Ctx, upload.lu, spaceID, n.ID, false)
 		oldsize := uint64(old.Blobsize)
@@ -289,7 +309,7 @@ func CreateNodeForUpload(upload *Upload) (*node.Node, error) {
 		}
 	}
 
-	return n, nil
+	return n, upload.tp.Propagate(upload.Ctx, n)
 }
 
 // lookupNode looks up nodes by path.

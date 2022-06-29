@@ -643,7 +643,6 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 
 	if n.IsProcessing() {
 		ri.Opaque = utils.AppendPlainToOpaque(ri.Opaque, "status", "processing")
-		return ri, nil
 	}
 
 	if nodeType == provider.ResourceType_RESOURCE_TYPE_CONTAINER {

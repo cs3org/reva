@@ -19,9 +19,11 @@
 package upload
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/options"
+	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/cs3org/reva/v2/pkg/utils/postprocessing"
 )
 
@@ -64,9 +66,17 @@ func configurePostprocessing(upload *Upload, o options.PostprocessingOptions) po
 			}
 
 			if upload.node != nil {
-				// unset processing status
+				// unset processing status and propagate changes
 				if err := upload.node.UnmarkProcessing(); err != nil {
 					upload.log.Info().Str("path", upload.node.InternalPath()).Err(err).Msg("unmarking processing failed")
+				}
+				now := utils.TSNow()
+				if err := upload.node.SetMtime(upload.Ctx, fmt.Sprintf("%d.%d", now.Seconds, now.Nanos)); err != nil {
+					upload.log.Info().Str("path", upload.node.InternalPath()).Err(err).Msg("could not set mtime")
+				}
+
+				if err := upload.tp.Propagate(upload.Ctx, upload.node); err != nil {
+					upload.log.Info().Str("path", upload.node.InternalPath()).Err(err).Msg("could not set mtime")
 				}
 			}
 		},
