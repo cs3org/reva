@@ -629,7 +629,7 @@ var _ = Describe("Propfind", func() {
 				Expect(rr.Code).To(Equal(http.StatusOK))
 			})
 
-			FIt("mounts embedded spaces", func() {
+			It("mounts embedded spaces", func() {
 				rr := httptest.NewRecorder()
 				req, err := http.NewRequest("GET", "/foo", strings.NewReader(""))
 				Expect(err).ToNot(HaveOccurred())
@@ -640,9 +640,25 @@ var _ = Describe("Propfind", func() {
 
 				res, _, err := readResponse(rr.Result().Body)
 				Expect(err).ToNot(HaveOccurred())
-				Expect(len(res.Responses)).To(Equal(1))
+				Expect(len(res.Responses)).To(Equal(5))
 
-				qux := res.Responses[0]
+				root := res.Responses[0]
+				Expect(root.Href).To(Equal("http:/127.0.0.1:3000/foo/"))
+				Expect(string(root.Propstat[0].Prop[0].InnerXML)).To(ContainSubstring("<oc:size>1131</oc:size>"))
+
+				bar := res.Responses[1]
+				Expect(bar.Href).To(Equal("http:/127.0.0.1:3000/foo/bar"))
+				Expect(string(bar.Propstat[0].Prop[0].InnerXML)).To(ContainSubstring("<d:getcontentlength>100</d:getcontentlength>"))
+
+				baz := res.Responses[2]
+				Expect(baz.Href).To(Equal("http:/127.0.0.1:3000/foo/baz"))
+				Expect(string(baz.Propstat[0].Prop[0].InnerXML)).To(ContainSubstring("<d:getcontentlength>1</d:getcontentlength>"))
+
+				dir := res.Responses[3]
+				Expect(dir.Href).To(Equal("http:/127.0.0.1:3000/foo/dir/"))
+				Expect(string(dir.Propstat[0].Prop[0].InnerXML)).To(ContainSubstring("<oc:size>30</oc:size>"))
+
+				qux := res.Responses[4]
 				Expect(qux.Href).To(Equal("http:/127.0.0.1:3000/foo/qux/"))
 				Expect(string(qux.Propstat[0].Prop[0].InnerXML)).To(ContainSubstring("<oc:size>1000</oc:size>"))
 			})
@@ -658,7 +674,7 @@ var _ = Describe("Propfind", func() {
 
 				res, _, err := readResponse(rr.Result().Body)
 				Expect(err).ToNot(HaveOccurred())
-				Expect(len(res.Responses)).To(Equal(4))
+				Expect(len(res.Responses)).To(Equal(2))
 
 				qux := res.Responses[0]
 				Expect(qux.Href).To(Equal("http:/127.0.0.1:3000/foo/qux/"))
