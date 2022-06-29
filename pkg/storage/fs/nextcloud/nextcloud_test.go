@@ -319,7 +319,7 @@ var _ = Describe("Nextcloud", func() {
 				Path: "/some",
 			}
 			mdKeys := []string{"val1", "val2", "val3"}
-			results, err := nc.ListFolder(ctx, ref, mdKeys)
+			results, err := nc.ListFolder(ctx, ref, mdKeys, []string{})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(len(results)).To(Equal(1))
 			Expect(*results[0]).To(Equal(provider.ResourceInfo{
