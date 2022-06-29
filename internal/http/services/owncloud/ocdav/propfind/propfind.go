@@ -1542,17 +1542,3 @@ func (pn *Props) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
 		}
 	}
 }
-
-// isVirtualRootResourceID returns true if the id points to the share jail root. The providerid is optional for legacy ids
-/*
-func isVirtualRootResourceID(id *provider.ResourceId) bool {
-	switch {
-	case id == nil:
-		return false
-	case id.OpaqueId != utils.ShareStorageProviderID:
-		return false
-	}
-	providerID, spaceID := storagespace.SplitStorageID(id.StorageId)
-	return spaceID == utils.ShareStorageProviderID && (providerID == "" || providerID == utils.ShareStorageProviderID)
-}
-*/
