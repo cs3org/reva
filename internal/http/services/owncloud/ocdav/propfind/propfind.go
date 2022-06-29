@@ -46,6 +46,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/publicshare"
+	rstatus "github.com/cs3org/reva/v2/pkg/rgrpc/status"
 	"github.com/cs3org/reva/v2/pkg/rhttp/router"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/utils"
@@ -250,7 +251,6 @@ func (p *Handler) HandleSpacesPropfind(w http.ResponseWriter, r *http.Request, s
 
 	ref, err := spacelookup.MakeStorageSpaceReference(spaceID, r.URL.Path)
 	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
 		sublog.Debug().Msg("invalid space id")
 		w.WriteHeader(http.StatusBadRequest)
 		m := fmt.Sprintf("Invalid space id: %v", spaceID)
@@ -278,7 +278,30 @@ func (p *Handler) HandleSpacesPropfind(w http.ResponseWriter, r *http.Request, s
 		return
 	}
 	if res.Status.Code != rpc.Code_CODE_OK {
-		errors.HandleErrorStatus(&sublog, w, res.Status)
+		status := rstatus.HTTPStatusFromCode(res.Status.Code)
+		if res.Status.Code == rpc.Code_CODE_ABORTED {
+			// aborted is used for etag an lock mismatches, which translates to 412
+			// in case a real Conflict response is needed, the calling code needs to send the header
+			status = http.StatusPreconditionFailed
+		}
+		m := res.Status.Message
+		if res.Status.Code == rpc.Code_CODE_PERMISSION_DENIED {
+			// check if user has access to resource
+			sRes, err := client.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{ResourceId: ref.GetResourceId()}})
+			if err != nil {
+				sublog.Error().Err(err).Msg("error performing stat grpc request")
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			if sRes.Status.Code != rpc.Code_CODE_OK {
+				// return not found error so we dont leak existence of a space
+				status = http.StatusNotFound
+				m = fmt.Sprintf("%v not found", ref.Path)
+			}
+		}
+		w.WriteHeader(status)
+		b, err := errors.Marshal(status, m, "")
+		errors.HandleWebdavError(&sublog, w, b, err)
 		return
 	}
 	var space *provider.StorageSpace
