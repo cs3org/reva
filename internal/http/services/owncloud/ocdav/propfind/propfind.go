@@ -952,10 +952,11 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 	}
 	var wdp string
 	isPublic := ls != nil
+	isShared := shareTypes != "" && !net.IsCurrentUserOwner(ctx, md.Owner)
 	if md.PermissionSet != nil {
 		wdp = role.WebDAVPermissions(
 			md.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER,
-			shareTypes != "",
+			isShared,
 			false,
 			isPublic,
 		)
@@ -1234,23 +1235,18 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 					} else {
 						propstatNotFound.Prop = append(propstatNotFound.Prop, prop.NotFound("oc:checksums"))
 					}
-				case "share-types": // desktop
+				case "share-types": // used to render share indicators to share owners
 					var types strings.Builder
 
 					sts := strings.Split(shareTypes, ",")
 					for _, shareType := range sts {
-						// TODO implement conversion
 						switch shareType {
 						case "1": // provider.GranteeType_GRANTEE_TYPE_USER
-							types.WriteString("<oc:share-type>")
-							types.WriteString(strconv.Itoa(int(conversions.ShareTypeUser)))
-							types.WriteString("</oc:share-type>")
+							types.WriteString("<oc:share-type>" + strconv.Itoa(int(conversions.ShareTypeUser)) + "</oc:share-type>")
 						case "2": // provider.GranteeType_GRANTEE_TYPE_GROUP
-							types.WriteString("<oc:share-type>")
-							types.WriteString(strconv.Itoa(int(conversions.ShareTypeGroup)))
-							types.WriteString("</oc:share-type>")
+							types.WriteString("<oc:share-type>" + strconv.Itoa(int(conversions.ShareTypeGroup)) + "</oc:share-type>")
 						default:
-							sublog.Warn().Interface("shareType", shareType).Msg("unknown share type")
+							sublog.Debug().Interface("shareType", shareType).Msg("unknown share type, ignoring")
 						}
 					}
 

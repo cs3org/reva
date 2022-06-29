@@ -1106,13 +1106,22 @@ func ReadBlobIDAttr(path string) (string, error) {
 func (n *Node) getGranteeTypes(ctx context.Context) []provider.GranteeType {
 	types := []provider.GranteeType{}
 	if g, err := n.ListGrantees(ctx); err == nil {
+		hasUserShares, hasGroupShares := false, false
 		for i := range g {
 			switch {
-			case strings.HasPrefix(g[i], xattrs.GrantUserAcePrefix):
-				types = append(types, provider.GranteeType_GRANTEE_TYPE_USER)
-			case strings.HasPrefix(g[i], xattrs.GrantGroupAcePrefix):
-				types = append(types, provider.GranteeType_GRANTEE_TYPE_GROUP)
+			case !hasUserShares && strings.HasPrefix(g[i], xattrs.GrantUserAcePrefix):
+				hasUserShares = true
+			case !hasGroupShares && strings.HasPrefix(g[i], xattrs.GrantGroupAcePrefix):
+				hasGroupShares = true
+			case hasUserShares && hasGroupShares:
+				break
 			}
+		}
+		if hasUserShares {
+			types = append(types, provider.GranteeType_GRANTEE_TYPE_USER)
+		}
+		if hasGroupShares {
+			types = append(types, provider.GranteeType_GRANTEE_TYPE_GROUP)
 		}
 	}
 	return types
