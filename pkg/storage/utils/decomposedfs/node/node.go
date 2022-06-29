@@ -581,7 +581,7 @@ func (n *Node) IsDir() bool {
 }
 
 // AsResourceInfo return the node as CS3 ResourceInfo
-func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissions, mdKeys []string, returnBasename bool) (ri *provider.ResourceInfo, err error) {
+func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissions, mdKeys, fieldMask []string, returnBasename bool) (ri *provider.ResourceInfo, err error) {
 	sublog := appctx.GetLogger(ctx).With().Interface("node", n.ID).Logger()
 
 	var fn string
@@ -679,15 +679,25 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 		mdKeysMap[k] = struct{}{}
 	}
 
-	var returnAllKeys bool
+	var returnAllMetadata bool
 	if _, ok := mdKeysMap["*"]; len(mdKeys) == 0 || ok {
-		returnAllKeys = true
+		returnAllMetadata = true
 	}
 
 	metadata := map[string]string{}
 
+	fieldMaskKeysMap := make(map[string]struct{})
+	for _, k := range fieldMask {
+		fieldMaskKeysMap[k] = struct{}{}
+	}
+
+	var returnAllFields bool
+	if _, ok := fieldMaskKeysMap["*"]; len(fieldMask) == 0 || ok {
+		returnAllFields = true
+	}
+
 	// read favorite flag for the current user
-	if _, ok := mdKeysMap[FavoriteKey]; returnAllKeys || ok {
+	if _, ok := mdKeysMap[FavoriteKey]; returnAllMetadata || ok {
 		favorite := ""
 		if u, ok := ctxpkg.ContextGetUser(ctx); ok {
 			// the favorite flag is specific to the user, so we need to incorporate the userid
@@ -708,7 +718,8 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 		metadata[FavoriteKey] = favorite
 	}
 	// read locks
-	if _, ok := mdKeysMap[LockdiscoveryKey]; returnAllKeys || ok {
+	// FIXME move to fieldmask
+	if _, ok := mdKeysMap[LockdiscoveryKey]; returnAllMetadata || ok {
 		if n.hasLocks(ctx) {
 			err = readLocksIntoOpaque(ctx, n, ri)
 			if err != nil {
@@ -718,21 +729,36 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 	}
 
 	// share indicator
-	if _, ok := mdKeysMap[ShareTypesKey]; returnAllKeys || ok {
-		if n.hasUserShares(ctx) {
-			metadata[ShareTypesKey] = UserShareType
+	if _, ok := fieldMaskKeysMap["share-types"]; returnAllFields || ok {
+		granteeTypes := n.getGranteeTypes(ctx)
+		if len(granteeTypes) > 0 {
+			// TODO add optional property to CS3 ResourceInfo to transport grants?
+			var s strings.Builder
+			first := true
+			for _, t := range granteeTypes {
+				if !first {
+					s.WriteString(",")
+				} else {
+					first = false
+				}
+				s.WriteString(strconv.Itoa(int(t)))
+			}
+			ri.Opaque = utils.AppendPlainToOpaque(ri.Opaque, "share-types", s.String())
 		}
 	}
 
 	// checksums
-	if _, ok := mdKeysMap[ChecksumsKey]; (nodeType == provider.ResourceType_RESOURCE_TYPE_FILE) && (returnAllKeys || ok) {
+	// FIXME move to fieldmask
+	if _, ok := mdKeysMap[ChecksumsKey]; (nodeType == provider.ResourceType_RESOURCE_TYPE_FILE) && (returnAllMetadata || ok) {
 		// TODO which checksum was requested? sha1 adler32 or md5? for now hardcode sha1?
+		// TODO make ResourceInfo carry multiple checksums
 		readChecksumIntoResourceChecksum(ctx, nodePath, storageprovider.XSSHA1, ri)
 		readChecksumIntoOpaque(ctx, nodePath, storageprovider.XSMD5, ri)
 		readChecksumIntoOpaque(ctx, nodePath, storageprovider.XSAdler32, ri)
 	}
 	// quota
-	if _, ok := mdKeysMap[QuotaKey]; (nodeType == provider.ResourceType_RESOURCE_TYPE_CONTAINER) && returnAllKeys || ok {
+	// FIXME move to fieldmask
+	if _, ok := mdKeysMap[QuotaKey]; (nodeType == provider.ResourceType_RESOURCE_TYPE_CONTAINER) && returnAllMetadata || ok {
 		if n.SpaceRoot != nil && n.SpaceRoot.InternalPath() != "" {
 			readQuotaIntoOpaque(ctx, n.SpaceRoot.InternalPath(), ri)
 		}
@@ -750,7 +776,7 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 			}
 			// only read when key was requested
 			k := attrs[i][len(xattrs.MetadataPrefix):]
-			if _, ok := mdKeysMap[k]; returnAllKeys || ok {
+			if _, ok := mdKeysMap[k]; returnAllMetadata || ok {
 				if val, err := xattrs.Get(nodePath, attrs[i]); err == nil {
 					metadata[k] = val
 				} else {
@@ -1077,19 +1103,19 @@ func ReadBlobIDAttr(path string) (string, error) {
 	return attr, nil
 }
 
-func (n *Node) hasUserShares(ctx context.Context) bool {
-	g, err := n.ListGrantees(ctx)
-	if err != nil {
-		appctx.GetLogger(ctx).Error().Err(err).Msg("hasUserShares: listGrantees")
-		return false
-	}
-
-	for i := range g {
-		if strings.HasPrefix(g[i], xattrs.GrantUserAcePrefix) {
-			return true
+func (n *Node) getGranteeTypes(ctx context.Context) []provider.GranteeType {
+	types := []provider.GranteeType{}
+	if g, err := n.ListGrantees(ctx); err == nil {
+		for i := range g {
+			switch {
+			case strings.HasPrefix(g[i], xattrs.GrantUserAcePrefix):
+				types = append(types, provider.GranteeType_GRANTEE_TYPE_USER)
+			case strings.HasPrefix(g[i], xattrs.GrantGroupAcePrefix):
+				types = append(types, provider.GranteeType_GRANTEE_TYPE_GROUP)
+			}
 		}
 	}
-	return false
+	return types
 }
 
 func parseMTime(v string) (t time.Time, err error) {

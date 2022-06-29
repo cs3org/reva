@@ -224,7 +224,7 @@ var _ = Describe("Nextcloud", func() {
 				Path: "/some/path",
 			}
 			mdKeys := []string{"val1", "val2", "val3"}
-			result, err := nc.GetMD(ctx, ref, mdKeys)
+			result, err := nc.GetMD(ctx, ref, mdKeys, nil)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(*result).To(Equal(provider.ResourceInfo{
 				Opaque: &types.Opaque{

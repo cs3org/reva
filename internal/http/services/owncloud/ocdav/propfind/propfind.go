@@ -266,11 +266,13 @@ func (p *Handler) HandleSpacesPropfind(w http.ResponseWriter, r *http.Request, s
 		return
 	}
 
+	metadataKeys, _ := metadataKeys(pf)
+
 	// stat the reference and request the space in the field mask
 	res, err := client.Stat(ctx, &provider.StatRequest{
 		Ref:                   &ref,
-		ArbitraryMetadataKeys: metadataKeys(pf),
-		FieldMask:             &fieldmaskpb.FieldMask{Paths: []string{"*"}},
+		ArbitraryMetadataKeys: metadataKeys,
+		FieldMask:             &fieldmaskpb.FieldMask{Paths: []string{"*"}}, // TODO use more sophisticated filter
 	})
 	if err != nil {
 		sublog.Error().Err(err).Msg("error getting grpc client")
@@ -381,7 +383,7 @@ func (p *Handler) propfindResponse(ctx context.Context, w http.ResponseWriter, r
 	if namespace != "/public" {
 		// only fetch this if property was queried
 		for _, p := range pf.Prop {
-			if p.Space == net.NsOwncloud && p.Local == "share-type" {
+			if p.Space == net.NsOwncloud && (p.Local == "share-types" || p.Local == "permissions") {
 				listResp, err := client.ListPublicShares(ctx, &link.ListPublicSharesRequest{Filters: filters})
 				if err == nil {
 					linkshares = make(map[string]struct{}, len(listResp.Share))
@@ -419,10 +421,11 @@ func (p *Handler) propfindResponse(ctx context.Context, w http.ResponseWriter, r
 }
 
 // TODO this is just a stat -> rename
-func (p *Handler) statSpace(ctx context.Context, client gateway.GatewayAPIClient, ref *provider.Reference, metadataKeys []string) (*provider.ResourceInfo, *rpc.Status, error) {
+func (p *Handler) statSpace(ctx context.Context, client gateway.GatewayAPIClient, ref *provider.Reference, metadataKeys, fieldMaskPaths []string) (*provider.ResourceInfo, *rpc.Status, error) {
 	req := &provider.StatRequest{
 		Ref:                   ref,
 		ArbitraryMetadataKeys: metadataKeys,
+		FieldMask:             &fieldmaskpb.FieldMask{Paths: fieldMaskPaths},
 	}
 	res, err := client.Stat(ctx, req)
 	if err != nil {
@@ -454,7 +457,7 @@ func (p *Handler) getResourceInfos(ctx context.Context, w http.ResponseWriter, r
 		return nil, false, false
 	}
 
-	metadataKeys := metadataKeys(pf)
+	metadataKeys, fieldMaskPaths := metadataKeys(pf)
 
 	// we need to stat all spaces to aggregate the root etag, mtime and size
 	// TODO cache per space (hah, no longer per user + per space!)
@@ -474,7 +477,7 @@ func (p *Handler) getResourceInfos(ctx context.Context, w http.ResponseWriter, r
 			if err != nil {
 				continue
 			}
-			info, status, err := p.statSpace(ctx, client, &spaceRef, metadataKeys)
+			info, status, err := p.statSpace(ctx, client, &spaceRef, metadataKeys, fieldMaskPaths)
 			if err != nil || status.GetCode() != rpc.Code_CODE_OK {
 				continue
 			}
@@ -492,7 +495,7 @@ func (p *Handler) getResourceInfos(ctx context.Context, w http.ResponseWriter, r
 			info = space.RootInfo
 		} else {
 			var status *rpc.Status
-			info, status, err = p.statSpace(ctx, client, spaceRef, metadataKeys)
+			info, status, err = p.statSpace(ctx, client, spaceRef, metadataKeys, fieldMaskPaths)
 			if err != nil || status.GetCode() != rpc.Code_CODE_OK {
 				continue
 			}
@@ -664,7 +667,7 @@ func (p *Handler) getSpaceResourceInfos(ctx context.Context, w http.ResponseWrit
 		return nil, false
 	}
 
-	metadataKeys := metadataKeys(pf)
+	metadataKeys, _ := metadataKeys(pf)
 
 	// we need to prefix the path with / to make subsequent prefix matches work
 	// info.Path = filepath.Join("/", spaceRef.Path)
@@ -674,6 +677,7 @@ func (p *Handler) getSpaceResourceInfos(ctx context.Context, w http.ResponseWrit
 	req := &provider.ListContainerRequest{
 		Ref:                   ref,
 		ArbitraryMetadataKeys: metadataKeys,
+		FieldMask:             &fieldmaskpb.FieldMask{Paths: []string{"*"}}, // TODO use more sophisticated filter
 	}
 	res, err := client.ListContainer(ctx, req)
 	if err != nil {
@@ -739,9 +743,11 @@ func (p *Handler) getSpaceResourceInfos(ctx context.Context, w http.ResponseWrit
 	return resourceInfos, true
 }
 
-func metadataKeys(pf XML) []string {
+// metadataKeys splits the propfind properties into arbitrary metadata and ResourceInfo field mask paths
+func metadataKeys(pf XML) ([]string, []string) {
 
 	var metadataKeys []string
+	var fieldMaskKeys []string
 
 	if pf.Allprop != nil {
 		// TODO this changes the behavior and returns all properties if allprops has been set,
@@ -750,15 +756,24 @@ func metadataKeys(pf XML) []string {
 		// the description of arbitrary_metadata_keys in https://cs3org.github.io/cs3apis/#cs3.storage.provider.v1beta1.ListContainerRequest an others may need clarification
 		// tracked in https://github.com/cs3org/cs3apis/issues/104
 		metadataKeys = append(metadataKeys, "*")
+		fieldMaskKeys = append(fieldMaskKeys, "*")
 	} else {
 		metadataKeys = make([]string, 0, len(pf.Prop))
+		fieldMaskKeys = make([]string, 0, len(pf.Prop))
 		for i := range pf.Prop {
 			if requiresExplicitFetching(&pf.Prop[i]) {
-				metadataKeys = append(metadataKeys, metadataKeyOf(&pf.Prop[i]))
+				key := metadataKeyOf(&pf.Prop[i])
+				switch key {
+				case "share-types":
+					fieldMaskKeys = append(fieldMaskKeys, key)
+				default:
+					metadataKeys = append(metadataKeys, key)
+				}
+
 			}
 		}
 	}
-	return metadataKeys
+	return metadataKeys, fieldMaskKeys
 }
 
 func addChild(childInfos map[string]*provider.ResourceInfo,
@@ -903,6 +918,7 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 	quota := net.PropQuotaUnknown
 	size := strconv.FormatUint(md.Size, 10)
 	var lock *provider.Lock
+	shareTypes := ""
 	// TODO refactor helper functions: GetOpaqueJSONEncoded(opaque, key string, *struct) err, GetOpaquePlainEncoded(opaque, key) value, err
 	// or use ok like pattern and return bool?
 	if md.Opaque != nil && md.Opaque.Map != nil {
@@ -913,8 +929,8 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 				sublog.Error().Err(err).Msg("could not unmarshal link json")
 			}
 		}
-		if md.Opaque.Map["quota"] != nil && md.Opaque.Map["quota"].Decoder == "plain" {
-			quota = string(md.Opaque.Map["quota"].Value)
+		if quota := utils.ReadPlainFromOpaque(md.Opaque, "quota"); quota == "" {
+			quota = net.PropQuotaUnknown
 		}
 		if md.Opaque.Map["lock"] != nil && md.Opaque.Map["lock"].Decoder == "json" {
 			lock = &provider.Lock{}
@@ -923,23 +939,24 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 				sublog.Error().Err(err).Msg("could not unmarshal locks json")
 			}
 		}
+		shareTypes = utils.ReadPlainFromOpaque(md.Opaque, "share-types")
 	}
 
 	role := conversions.RoleFromResourcePermissions(md.PermissionSet)
 
-	// TODO we need a better way to determine if the webdav permissions should list S
-	// afaict when the storage space root info of the resource is a grant ... and not an actual space root.
-	isShared := md.Space != nil && md.Space.SpaceType != _spaceTypeProject && !net.IsCurrentUserOwner(ctx, md.Owner)
+	if md.Space != nil && md.Space.SpaceType != "grant" && utils.ResourceIDEqual(md.Space.Root, md.Id) {
+		// a space root is never shared
+		shareTypes = ""
+	}
 	var wdp string
 	isPublic := ls != nil
 	if md.PermissionSet != nil {
 		wdp = role.WebDAVPermissions(
 			md.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER,
-			isShared,
+			shareTypes != "",
 			false,
 			isPublic,
 		)
-		sublog.Debug().Interface("role", role).Str("dav-permissions", wdp).Msg("converted PermissionSet")
 	}
 
 	// replace fileid of /public/{token} mountpoint with grant fileid
@@ -1217,12 +1234,22 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 					}
 				case "share-types": // desktop
 					var types strings.Builder
-					k := md.GetArbitraryMetadata()
-					amd := k.GetMetadata()
-					if amdv, ok := amd[metadataKeyOf(&pf.Prop[i])]; ok {
-						types.WriteString("<oc:share-type>")
-						types.WriteString(amdv)
-						types.WriteString("</oc:share-type>")
+
+					sts := strings.Split(shareTypes, ",")
+					for _, shareType := range sts {
+						// TODO implement conversion
+						switch shareType {
+						case "1": // provider.GranteeType_GRANTEE_TYPE_USER
+							types.WriteString("<oc:share-type>")
+							types.WriteString(strconv.Itoa(int(conversions.ShareTypeUser)))
+							types.WriteString("</oc:share-type>")
+						case "2": // provider.GranteeType_GRANTEE_TYPE_GROUP
+							types.WriteString("<oc:share-type>")
+							types.WriteString(strconv.Itoa(int(conversions.ShareTypeGroup)))
+							types.WriteString("</oc:share-type>")
+						default:
+							sublog.Warn().Interface("shareType", shareType).Msg("unknown share type")
+						}
 					}
 
 					if md.Id != nil {
@@ -1503,12 +1530,19 @@ func (c *countingReader) Read(p []byte) (int, error) {
 }
 
 func metadataKeyOf(n *xml.Name) string {
-	switch {
-	case n.Space == net.NsDav && n.Local == "quota-available-bytes":
-		return "quota"
-	default:
-		return fmt.Sprintf("%s/%s", n.Space, n.Local)
+	switch n.Space {
+	case net.NsDav:
+		switch n.Local {
+		case "quota-available-bytes":
+			return "quota"
+		}
+	case net.NsOwncloud:
+		switch n.Local {
+		case "share-types":
+			return "share-types"
+		}
 	}
+	return fmt.Sprintf("%s/%s", n.Space, n.Local)
 }
 
 // UnmarshalXML appends the property names enclosed within start to pn.

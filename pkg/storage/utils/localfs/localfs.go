@@ -920,7 +920,7 @@ func (fs *localfs) moveReferences(ctx context.Context, oldName, newName string) 
 	return nil
 }
 
-func (fs *localfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []string) (*provider.ResourceInfo, error) {
+func (fs *localfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []string, fieldMask []string) (*provider.ResourceInfo, error) {
 	fn, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return nil, errors.Wrap(err, "localfs: error resolving ref")
@@ -961,7 +961,7 @@ func (fs *localfs) getMDShareFolder(ctx context.Context, p string, mdKeys []stri
 	return fs.convertToFileReference(ctx, md, fn, mdKeys)
 }
 
-func (fs *localfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys []string) ([]*provider.ResourceInfo, error) {
+func (fs *localfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys, fieldMask []string) ([]*provider.ResourceInfo, error) {
 	fn, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return nil, errors.Wrap(err, "localfs: error resolving ref")
