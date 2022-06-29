@@ -238,8 +238,8 @@ func statKey(user *userpb.User, ref *provider.Reference, metaDataKeys, fieldMask
 	for _, k := range metaDataKeys {
 		key += "!mdk:" + k
 	}
-	for _, k := range fieldMaskPaths {
-		key += "!fmp:" + k
+	for _, p := range fieldMaskPaths {
+		key += "!fmp:" + p
 	}
 
 	return key
