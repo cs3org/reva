@@ -124,7 +124,7 @@ func (s *svc) handleDelete(ctx context.Context, w http.ResponseWriter, r *http.R
 			// TODO should this be done in the driver?
 			status = http.StatusNotFound
 			// TODO path might be empty or relative...
-			m = fmt.Sprintf("%s not fount", ref.Path)
+			m = fmt.Sprintf("%s not found", ref.Path)
 		}
 		w.WriteHeader(status)
 		b, err := errors.Marshal(status, m, "")

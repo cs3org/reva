@@ -200,7 +200,7 @@ func (s *svc) handleProppatch(ctx context.Context, w http.ResponseWriter, r *htt
 							// TODO hide permission failed for users without access in every kind of request
 							// TODO should this be done in the driver?
 							status = http.StatusNotFound
-							m = fmt.Sprintf("%v not found", ref.Path)
+							m = "Resource not found" // mimic the oc10 error message
 						}
 					}
 					w.WriteHeader(status)
@@ -252,7 +252,7 @@ func (s *svc) handleProppatch(ctx context.Context, w http.ResponseWriter, r *htt
 							// TODO hide permission failed for users without access in every kind of request
 							// TODO should this be done in the driver?
 							status = http.StatusNotFound
-							m = fmt.Sprintf("%v not found", ref.Path)
+							m = "Resource not found" // mimic the oc10 error message
 						}
 					}
 					w.WriteHeader(status)
