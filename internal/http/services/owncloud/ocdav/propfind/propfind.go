@@ -298,8 +298,10 @@ func (p *Handler) HandleSpacesPropfind(w http.ResponseWriter, r *http.Request, s
 			if sRes.Status.Code != rpc.Code_CODE_OK {
 				// return not found error so we dont leak existence of a space
 				status = http.StatusNotFound
-				m = "Resource not found" // mimic the oc10 error message
 			}
+		}
+		if status == http.StatusNotFound {
+			m = "Resource not found" // mimic the oc10 error message
 		}
 		w.WriteHeader(status)
 		b, err := errors.Marshal(status, m, "")
