@@ -518,7 +518,25 @@ func (fs *Decomposedfs) GetMD(ctx context.Context, ref *provider.Reference, mdKe
 		return nil, errtypes.PermissionDenied(node.ID)
 	}
 
-	return node.AsResourceInfo(ctx, &rp, mdKeys, fieldMask, utils.IsRelativeReference(ref))
+	md, err := node.AsResourceInfo(ctx, &rp, mdKeys, fieldMask, utils.IsRelativeReference(ref))
+	if err != nil {
+		return nil, err
+	}
+
+	addSpace := len(fieldMask) == 0
+	for _, p := range fieldMask {
+		if p == "space" || p == "*" {
+			addSpace = true
+			break
+		}
+	}
+	if addSpace {
+		if md.Space, err = fs.storageSpaceFromNode(ctx, node, node.InternalPath(), false, false); err != nil {
+			return nil, err
+		}
+	}
+
+	return md, nil
 }
 
 // ListFolder returns a list of resources in the specified folder
