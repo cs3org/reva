@@ -34,6 +34,7 @@ import (
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/net"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/propfind"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/status"
+	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/cs3org/reva/v2/tests/cs3mocks/mocks"
 	"github.com/stretchr/testify/mock"
 	"google.golang.org/grpc"
@@ -64,7 +65,7 @@ var _ = Describe("Propfind", func() {
 
 		mockStat = func(ref *sprovider.Reference, info *sprovider.ResourceInfo) {
 			client.On("Stat", mock.Anything, mock.MatchedBy(func(req *sprovider.StatRequest) bool {
-				return (ref.ResourceId.GetOpaqueId() == "" || req.Ref.ResourceId.GetOpaqueId() == ref.ResourceId.GetOpaqueId()) &&
+				return utils.ResourceIDEqual(req.Ref.ResourceId, ref.ResourceId) &&
 					(ref.Path == "" || req.Ref.Path == ref.Path)
 			})).Return(&sprovider.StatResponse{
 				Status: status.NewOK(ctx),
@@ -73,7 +74,7 @@ var _ = Describe("Propfind", func() {
 		}
 		mockListContainer = func(ref *sprovider.Reference, infos []*sprovider.ResourceInfo) {
 			client.On("ListContainer", mock.Anything, mock.MatchedBy(func(req *sprovider.ListContainerRequest) bool {
-				match := (ref.ResourceId.GetOpaqueId() == "" || req.Ref.ResourceId.GetOpaqueId() == ref.ResourceId.GetOpaqueId()) &&
+				match := utils.ResourceIDEqual(req.Ref.ResourceId, ref.ResourceId) &&
 					(ref.Path == "" || req.Ref.Path == ref.Path)
 				return match
 			})).Return(&sprovider.ListContainerResponse{
@@ -628,7 +629,7 @@ var _ = Describe("Propfind", func() {
 				Expect(rr.Code).To(Equal(http.StatusOK))
 			})
 
-			FIt("mounts embedded spaces", func() {
+			It("mounts embedded spaces", func() {
 				rr := httptest.NewRecorder()
 				req, err := http.NewRequest("GET", "/foo", strings.NewReader(""))
 				Expect(err).ToNot(HaveOccurred())
@@ -639,9 +640,25 @@ var _ = Describe("Propfind", func() {
 
 				res, _, err := readResponse(rr.Result().Body)
 				Expect(err).ToNot(HaveOccurred())
-				Expect(len(res.Responses)).To(Equal(1))
+				Expect(len(res.Responses)).To(Equal(5))
 
-				qux := res.Responses[0]
+				root := res.Responses[0]
+				Expect(root.Href).To(Equal("http:/127.0.0.1:3000/foo/"))
+				Expect(string(root.Propstat[0].Prop[0].InnerXML)).To(ContainSubstring("<oc:size>1131</oc:size>"))
+
+				bar := res.Responses[1]
+				Expect(bar.Href).To(Equal("http:/127.0.0.1:3000/foo/bar"))
+				Expect(string(bar.Propstat[0].Prop[0].InnerXML)).To(ContainSubstring("<d:getcontentlength>100</d:getcontentlength>"))
+
+				baz := res.Responses[2]
+				Expect(baz.Href).To(Equal("http:/127.0.0.1:3000/foo/baz"))
+				Expect(string(baz.Propstat[0].Prop[0].InnerXML)).To(ContainSubstring("<d:getcontentlength>1</d:getcontentlength>"))
+
+				dir := res.Responses[3]
+				Expect(dir.Href).To(Equal("http:/127.0.0.1:3000/foo/dir/"))
+				Expect(string(dir.Propstat[0].Prop[0].InnerXML)).To(ContainSubstring("<oc:size>30</oc:size>"))
+
+				qux := res.Responses[4]
 				Expect(qux.Href).To(Equal("http:/127.0.0.1:3000/foo/qux/"))
 				Expect(string(qux.Propstat[0].Prop[0].InnerXML)).To(ContainSubstring("<oc:size>1000</oc:size>"))
 			})
@@ -657,7 +674,7 @@ var _ = Describe("Propfind", func() {
 
 				res, _, err := readResponse(rr.Result().Body)
 				Expect(err).ToNot(HaveOccurred())
-				Expect(len(res.Responses)).To(Equal(4))
+				Expect(len(res.Responses)).To(Equal(2))
 
 				qux := res.Responses[0]
 				Expect(qux.Href).To(Equal("http:/127.0.0.1:3000/foo/qux/"))
