@@ -42,7 +42,9 @@ var _ = Describe("ACE", func() {
 					},
 				},
 			},
-			Permissions: &provider.ResourcePermissions{},
+			Permissions: &provider.ResourcePermissions{
+				CreateContainer: true,
+			},
 			Creator: &userpb.UserId{
 				OpaqueId: "baz",
 			},
@@ -57,7 +59,9 @@ var _ = Describe("ACE", func() {
 					},
 				},
 			},
-			Permissions: &provider.ResourcePermissions{},
+			Permissions: &provider.ResourcePermissions{
+				CreateContainer: true,
+			},
 		}
 	)
 
