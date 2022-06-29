@@ -57,8 +57,7 @@ import (
 )
 
 const (
-	tracerName        = "ocdav"
-	_spaceTypeProject = "project"
+	tracerName = "ocdav"
 )
 
 type countingReader struct {
@@ -931,7 +930,7 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 				sublog.Error().Err(err).Msg("could not unmarshal link json")
 			}
 		}
-		if quota := utils.ReadPlainFromOpaque(md.Opaque, "quota"); quota == "" {
+		if quota = utils.ReadPlainFromOpaque(md.Opaque, "quota"); quota == "" {
 			quota = net.PropQuotaUnknown
 		}
 		if md.Opaque.Map["lock"] != nil && md.Opaque.Map["lock"].Decoder == "json" {
@@ -1530,13 +1529,11 @@ func (c *countingReader) Read(p []byte) (int, error) {
 func metadataKeyOf(n *xml.Name) string {
 	switch n.Space {
 	case net.NsDav:
-		switch n.Local {
-		case "quota-available-bytes":
+		if n.Local == "quota-available-bytes" {
 			return "quota"
 		}
 	case net.NsOwncloud:
-		switch n.Local {
-		case "share-types":
+		if n.Local == "share-types" {
 			return "share-types"
 		}
 	}
