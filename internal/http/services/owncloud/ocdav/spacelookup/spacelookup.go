@@ -102,7 +102,7 @@ func LookUpStorageSpacesForPathWithChildren(ctx context.Context, client gateway.
 		Opaque: &typesv1beta1.Opaque{
 			Map: map[string]*typesv1beta1.OpaqueEntry{
 				// TODO encode requested metadata as json
-				//"metadata": {Decoder: "json", Value: []byte("*")},
+				// "metadata": {Decoder: "json", Value: []byte("*")},
 			}},
 		// get all fields, including root_info
 		FieldMask: &fieldmaskpb.FieldMask{Paths: []string{"*"}},

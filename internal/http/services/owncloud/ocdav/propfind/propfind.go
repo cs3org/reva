@@ -369,8 +369,8 @@ func (p *Handler) propfindResponse(ctx context.Context, w http.ResponseWriter, r
 					log.Error().Err(err).Msg("propfindResponse: couldn't list public shares")
 					span.SetStatus(codes.Error, err.Error())
 				}
+				break
 			}
-			break
 		}
 	}
 
@@ -409,14 +409,13 @@ func (p *Handler) statSpace(ctx context.Context, client gateway.GatewayAPIClient
 }
 
 func (p *Handler) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *http.Request, pf XML, spaces []*provider.StorageSpace, requestPath string, log zerolog.Logger) ([]*provider.ResourceInfo, bool, bool) {
-	ctx, span := appctx.GetTracerProvider(r.Context()).Tracer(tracerName).Start(r.Context(), "get_resource_infos")
+	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "get_resource_infos")
 	span.SetAttributes(attribute.KeyValue{Key: "requestPath", Value: attribute.StringValue(requestPath)})
 	defer span.End()
 
 	dh := r.Header.Get(net.HeaderDepth)
 	depth, err := net.ParseDepth(dh)
 	if err != nil {
-		log.Debug().Str("depth", dh).Msg(err.Error())
 		w.WriteHeader(http.StatusBadRequest)
 		m := fmt.Sprintf("Invalid Depth header value: %v", dh)
 		b, err := errors.Marshal(http.StatusBadRequest, m, "")
@@ -630,7 +629,7 @@ func (p *Handler) getResourceInfos(ctx context.Context, w http.ResponseWriter, r
 }
 
 func (p *Handler) getSpaceResourceInfos(ctx context.Context, w http.ResponseWriter, r *http.Request, pf XML, ref *provider.Reference, requestPath string, depth net.Depth, log zerolog.Logger) ([]*provider.ResourceInfo, bool) {
-	ctx, span := appctx.GetTracerProvider(r.Context()).Tracer(tracerName).Start(r.Context(), "get_space_resource_infos")
+	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "get_space_resource_infos")
 	span.SetAttributes(attribute.KeyValue{Key: "requestPath", Value: attribute.StringValue(requestPath)})
 	span.SetAttributes(attribute.KeyValue{Key: "depth", Value: attribute.StringValue(depth.String())})
 	defer span.End()
@@ -645,7 +644,7 @@ func (p *Handler) getSpaceResourceInfos(ctx context.Context, w http.ResponseWrit
 	metadataKeys := metadataKeys(pf)
 
 	// we need to prefix the path with / to make subsequent prefix matches work
-	//info.Path = filepath.Join("/", spaceRef.Path)
+	// info.Path = filepath.Join("/", spaceRef.Path)
 
 	resourceInfos := []*provider.ResourceInfo{}
 
