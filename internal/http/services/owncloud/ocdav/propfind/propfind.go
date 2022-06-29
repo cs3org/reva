@@ -296,7 +296,7 @@ func (p *Handler) HandleSpacesPropfind(w http.ResponseWriter, r *http.Request, s
 				return
 			}
 			if sRes.Status.Code != rpc.Code_CODE_OK {
-				// return not found error so we dont leak existence of a space
+				// return not found error so we do not leak existence of a space
 				status = http.StatusNotFound
 			}
 		}

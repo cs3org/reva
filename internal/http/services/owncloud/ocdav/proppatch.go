@@ -196,7 +196,7 @@ func (s *svc) handleProppatch(ctx context.Context, w http.ResponseWriter, r *htt
 							return nil, nil, false
 						}
 						if sRes.Status.Code != rpc.Code_CODE_OK {
-							// return not found error so we dont leak existence of a file
+							// return not found error so we do not leak existence of a file
 							// TODO hide permission failed for users without access in every kind of request
 							// TODO should this be done in the driver?
 							status = http.StatusNotFound
@@ -250,7 +250,7 @@ func (s *svc) handleProppatch(ctx context.Context, w http.ResponseWriter, r *htt
 							return nil, nil, false
 						}
 						if sRes.Status.Code != rpc.Code_CODE_OK {
-							// return not found error so we dont leak existence of a file
+							// return not found error so we don't leak existence of a file
 							// TODO hide permission failed for users without access in every kind of request
 							// TODO should this be done in the driver?
 							status = http.StatusNotFound
