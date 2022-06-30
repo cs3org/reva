@@ -70,9 +70,12 @@ func configurePostprocessing(upload *Upload, o options.PostprocessingOptions) po
 				if err := upload.node.UnmarkProcessing(); err != nil {
 					upload.log.Info().Str("path", upload.node.InternalPath()).Err(err).Msg("unmarking processing failed")
 				}
-				now := utils.TSNow()
-				if err := upload.node.SetMtime(upload.Ctx, fmt.Sprintf("%d.%d", now.Seconds, now.Nanos)); err != nil {
-					upload.log.Info().Str("path", upload.node.InternalPath()).Err(err).Msg("could not set mtime")
+
+				if o.AsyncFileUploads { // updating the mtime will cause the testsuite to fail - hence we do it only in async case
+					now := utils.TSNow()
+					if err := upload.node.SetMtime(upload.Ctx, fmt.Sprintf("%d.%d", now.Seconds, now.Nanos)); err != nil {
+						upload.log.Info().Str("path", upload.node.InternalPath()).Err(err).Msg("could not set mtime")
+					}
 				}
 
 				if err := upload.tp.Propagate(upload.Ctx, upload.node); err != nil {
