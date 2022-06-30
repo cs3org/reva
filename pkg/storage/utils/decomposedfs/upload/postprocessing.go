@@ -45,7 +45,14 @@ func configurePostprocessing(upload *Upload, o options.PostprocessingOptions) po
 			upload.node = n
 			return upload.node.MarkProcessing()
 		}, nil),
-		postprocessing.NewStep("assembling", upload.finishUpload, upload.cleanup, "initialize"),
+		postprocessing.NewStep("assembling", func() error {
+			err := upload.finishUpload()
+			// NOTE: this makes the testsuite happy - remove once adjusted
+			if !o.AsyncFileUploads && upload.node != nil {
+				_ = upload.node.UnmarkProcessing()
+			}
+			return err
+		}, upload.cleanup, "initialize"),
 	}
 	if o.DelayProcessing != 0 {
 		steps = append(steps, postprocessing.NewStep("sleep", func() error {
