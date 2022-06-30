@@ -50,6 +50,9 @@ const (
 	BlobIDAttr   string = OcisPrefix + "blobid"
 	BlobsizeAttr string = OcisPrefix + "blobsize"
 
+	// statusPrefix is the prefix for the node status
+	StatusPrefix string = OcisPrefix + "nodestatus"
+
 	// grantPrefix is the prefix for sharing related extended attributes
 	GrantPrefix         string = OcisPrefix + "grant."
 	GrantUserAcePrefix  string = OcisPrefix + "grant." + UserAcePrefix
