@@ -259,7 +259,7 @@ func (upload *Upload) finishUpload() (err error) {
 		// etag still matches before finishing the upload.
 		if ifMatch, ok := upload.Info.MetaData["if-match"]; ok {
 			var targetEtag string
-			targetEtag, err = n.CalculateEtag()
+			targetEtag, err = node.CalculateEtag(n.ID, fi.ModTime())
 			if err != nil {
 				return errtypes.InternalError(err.Error())
 			}
