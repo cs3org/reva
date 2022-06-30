@@ -412,15 +412,6 @@ func (upload *Upload) checkHash(expected string, h hash.Hash) error {
 
 // cleanup cleans up after the upload is finished
 func (upload *Upload) cleanup(err error) {
-	if upload.node != nil {
-		// NOTE: this should not be part of the upload. The upload doesn't know
-		// when the processing is finshed. It just cares about the actual upload
-		// However, when not removing it here the testsuite will fail as it
-		// can't handle processing status at the moment.
-		// TODO: adjust testsuite, remove this if case and adjust PostProcessing to not wait for "assembling"
-		_ = upload.node.UnmarkProcessing()
-	}
-
 	if upload.node != nil && err != nil && upload.oldsize == nil {
 		if err := utils.RemoveItem(upload.node.InternalPath()); err != nil {
 			upload.log.Info().Str("path", upload.node.InternalPath()).Err(err).Msg("removing node failed")
