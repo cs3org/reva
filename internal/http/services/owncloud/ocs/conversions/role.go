@@ -125,7 +125,7 @@ func (r *Role) WebDAVPermissions(isDir, isShared, isMountpoint, isPublic bool) s
 		fmt.Fprintf(&b, "CK")
 	}
 
-	if r.ocsPermissions.Contain(PermissionDeny) {
+	if grants.PermissionsEqual(r.CS3ResourcePermissions(), &provider.ResourcePermissions{}) {
 		fmt.Fprintf(&b, "Z")
 	}
 
@@ -170,7 +170,7 @@ func NewDeniedRole() *Role {
 	return &Role{
 		Name:                   RoleDenied,
 		cS3ResourcePermissions: &provider.ResourcePermissions{},
-		ocsPermissions:         PermissionNone,
+		ocsPermissions:         PermissionInvalid,
 	}
 }
 
@@ -338,9 +338,6 @@ func NewManagerRole() *Role {
 // RoleFromOCSPermissions tries to map ocs permissions to a role
 // TODO: rethink using this. ocs permissions cannot be assigned 1:1 to roles
 func RoleFromOCSPermissions(p Permissions) *Role {
-	if p.Contain(PermissionNone) {
-		return NewDeniedRole()
-	}
 	if p == PermissionInvalid {
 		return NewNoneRole()
 	}
@@ -409,9 +406,6 @@ func NewLegacyRoleFromOCSPermissions(p Permissions) *Role {
 		// r.cS3ResourcePermissions.RemoveGrant = true // TODO when are you able to unshare / delete
 		// r.cS3ResourcePermissions.UpdateGrant = true
 	}
-	if p.Contain(PermissionDeny) {
-		r.cS3ResourcePermissions.DenyGrant = true
-	}
 	return r
 }
 
@@ -426,7 +420,7 @@ func RoleFromResourcePermissions(rp *provider.ResourcePermissions) *Role {
 		return r
 	}
 	if grants.PermissionsEqual(rp, &provider.ResourcePermissions{}) {
-		r.ocsPermissions = PermissionNone
+		r.ocsPermissions = PermissionInvalid
 		r.Name = RoleDenied
 		return r
 	}
@@ -455,9 +449,6 @@ func RoleFromResourcePermissions(rp *provider.ResourcePermissions) *Role {
 	}
 	if rp.AddGrant {
 		r.ocsPermissions |= PermissionShare
-	}
-	if rp.DenyGrant {
-		r.ocsPermissions |= PermissionDeny
 	}
 
 	if r.ocsPermissions.Contain(PermissionRead) {

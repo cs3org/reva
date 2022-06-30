@@ -453,7 +453,7 @@ func (h *Handler) extractPermissions(reqRole string, reqPermissions string, ri *
 		}
 	}
 	// add a deny permission only if the user has the grant to deny (ResourcePermissions.DenyGrant == true)
-	if permissions == conversions.PermissionNone && !ri.PermissionSet.DenyGrant {
+	if role.Name == conversions.RoleDenied && !ri.PermissionSet.DenyGrant {
 		return nil, nil, &ocsError{
 			Code:    http.StatusNotFound,
 			Message: "Cannot set the requested share permissions: no deny grant on resource",
