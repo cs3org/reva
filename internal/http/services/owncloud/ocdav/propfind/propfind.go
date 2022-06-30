@@ -271,7 +271,7 @@ func (p *Handler) HandleSpacesPropfind(w http.ResponseWriter, r *http.Request, s
 	res, err := client.Stat(ctx, &provider.StatRequest{
 		Ref:                   &ref,
 		ArbitraryMetadataKeys: metadataKeys,
-		FieldMask:             &fieldmaskpb.FieldMask{Paths: []string{"*"}}, // TODO use more sophisticated filter
+		FieldMask:             &fieldmaskpb.FieldMask{Paths: []string{"*"}}, // TODO use more sophisticated filter? we don't need all space properties, afaict only the spacetype
 	})
 	if err != nil {
 		sublog.Error().Err(err).Msg("error getting grpc client")
@@ -326,6 +326,8 @@ func (p *Handler) HandleSpacesPropfind(w http.ResponseWriter, r *http.Request, s
 			RootInfo: res.Info,
 		}
 	}
+
+	res.Info.Path = r.URL.Path
 
 	resourceInfos := []*provider.ResourceInfo{
 		res.Info,
