@@ -68,6 +68,9 @@ const (
 
 	// RootID defines the root node's ID
 	RootID = "root"
+
+	// ProcessingStatus is the name of the status when processing a file
+	ProcessingStatus = "processing"
 )
 
 // Node represents a node in the tree and provides methods to get a Parent or Child instance
@@ -1130,18 +1133,18 @@ func (n *Node) FindStorageSpaceRoot() error {
 
 // MarkProcessing marks the node as being processed
 func (n *Node) MarkProcessing() error {
-	return n.SetMetadata("user.ocis.nodestatus", "processing")
+	return n.SetMetadata(xattrs.StatusPrefix, ProcessingStatus)
 }
 
 // UnmarkProcessing removes the processing flag from the node
 func (n *Node) UnmarkProcessing() error {
-	return n.RemoveMetadata("user.ocis.nodestatus")
+	return n.RemoveMetadata(xattrs.StatusPrefix)
 }
 
 // IsProcessing returns true if the node is currently being processed
 func (n *Node) IsProcessing() bool {
-	v, err := n.GetMetadata("user.ocis.nodestatus")
-	return err == nil && v == "processing"
+	v, err := n.GetMetadata(xattrs.StatusPrefix)
+	return err == nil && v == ProcessingStatus
 }
 
 // IsSpaceRoot checks if the node is a space root

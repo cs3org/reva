@@ -203,7 +203,13 @@ func (upload *Upload) finishUpload() (err error) {
 		Interface("info", upload.Info).
 		Str("binPath", upload.binPath).
 		Str("targetPath", targetPath).
+		Str("spaceID", spaceID).
 		Logger()
+
+	// copy metadata to binpath
+	if err := xattrs.CopyMetadata(targetPath, upload.binPath, func(_ string) bool { return true }); err != nil {
+		sublog.Info().Err(err).Msg("Decomposedfs: failed to copy xattrs to binpath")
+	}
 
 	// calculate the checksum of the written bytes
 	// they will all be written to the metadata later, so we cannot omit any of them
@@ -324,11 +330,6 @@ func (upload *Upload) finishUpload() (err error) {
 	}
 	if err = os.Rename(upload.binPath, targetPath); err != nil {
 		sublog.Error().Err(err).Msg("Decomposedfs: could not rename")
-		return err
-	}
-	// the rename dropped the "processing" status - we need to set it again
-	if err := n.MarkProcessing(); err != nil {
-		sublog.Error().Err(err).Msg("Decomposedfs: could not mark processing")
 		return err
 	}
 	if versionsPath != "" {
