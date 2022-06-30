@@ -472,12 +472,27 @@ func (n *Node) LockFilePath() string {
 }
 
 // CalculateEtag returns a hash of fileid + tmtime (or mtime)
-func CalculateEtag(nodeID string, tmTime time.Time) (string, error) {
-	return calculateEtag(nodeID, tmTime)
+func (n *Node) CalculateEtag() (string, error) {
+	tmTime, err := n.GetTMTime()
+	if err != nil {
+		// no tmtime, use mtime
+		var fi os.FileInfo
+		if fi, err = os.Lstat(n.InternalPath()); err != nil {
+			return "", err
+		}
+		tmTime = fi.ModTime()
+	}
+
+	var checksum string
+	if !n.IsProcessing() {
+		checksum, _ = n.GetChecksum("sha1")
+	}
+
+	return calculateEtag(n.ID, tmTime, checksum)
 }
 
 // calculateEtag returns a hash of fileid + tmtime (or mtime)
-func calculateEtag(nodeID string, tmTime time.Time) (string, error) {
+func calculateEtag(nodeID string, tmTime time.Time, checksum string) (string, error) {
 	h := md5.New()
 	if _, err := io.WriteString(h, nodeID); err != nil {
 		return "", err
@@ -487,6 +502,9 @@ func calculateEtag(nodeID string, tmTime time.Time) (string, error) {
 			return "", err
 		}
 	} else {
+		return "", err
+	}
+	if _, err := h.Write([]byte(checksum)); err != nil {
 		return "", err
 	}
 	return fmt.Sprintf(`"%x"`, h.Sum(nil)), nil
@@ -517,17 +535,9 @@ func (n *Node) SetMtime(ctx context.Context, mtime string) error {
 func (n *Node) SetEtag(ctx context.Context, val string) (err error) {
 	sublog := appctx.GetLogger(ctx).With().Interface("node", n).Logger()
 	nodePath := n.InternalPath()
-	var tmTime time.Time
-	if tmTime, err = n.GetTMTime(); err != nil {
-		// no tmtime, use mtime
-		var fi os.FileInfo
-		if fi, err = os.Lstat(nodePath); err != nil {
-			return
-		}
-		tmTime = fi.ModTime()
-	}
+
 	var etag string
-	if etag, err = calculateEtag(n.ID, tmTime); err != nil {
+	if etag, err = n.CalculateEtag(); err != nil {
 		return
 	}
 
@@ -655,8 +665,6 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 		}
 	}
 
-	// TODO make etag of files use fileid and checksum
-
 	var tmTime time.Time
 	if tmTime, err = n.GetTMTime(); err != nil {
 		// no tmtime, use mtime
@@ -666,8 +674,11 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 	// use temporary etag if it is set
 	if b, err := xattrs.Get(nodePath, xattrs.TmpEtagAttr); err == nil {
 		ri.Etag = fmt.Sprintf(`"%x"`, b) // TODO why do we convert string(b)? is the temporary etag stored as string? -> should we use bytes? use hex.EncodeToString?
-	} else if ri.Etag, err = calculateEtag(n.ID, tmTime); err != nil {
-		sublog.Debug().Err(err).Msg("could not calculate etag")
+	} else {
+		ri.Etag, err = n.CalculateEtag()
+		if err != nil {
+			sublog.Debug().Err(err).Msg("could not calculate etag")
+		}
 	}
 
 	// mtime uses tmtime if present
@@ -925,6 +936,11 @@ func (n *Node) SetTreeSize(ts uint64) (err error) {
 // SetChecksum writes the checksum with the given checksum type to the extended attributes
 func (n *Node) SetChecksum(csType string, h hash.Hash) (err error) {
 	return n.SetMetadata(xattrs.ChecksumPrefix+csType, string(h.Sum(nil)))
+}
+
+// GetChecksum writes the checksum with the given checksum type to the extended attributes
+func (n *Node) GetChecksum(csType string) (string, error) {
+	return n.GetMetadata(xattrs.ChecksumPrefix + csType)
 }
 
 // UnsetTempEtag removes the temporary etag attribute
