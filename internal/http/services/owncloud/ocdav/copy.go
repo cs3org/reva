@@ -495,7 +495,7 @@ func (s *svc) prepareCopy(ctx context.Context, w http.ResponseWriter, r *http.Re
 
 	isChild, err := s.referenceIsChildOf(ctx, client, dstRef, srcRef)
 	if err != nil {
-		log.Error().Err(err).Msg("error while trying to detect recursive move operation")
+		log.Error().Err(err).Msg("error while trying to detect recursive copy operation")
 		w.WriteHeader(http.StatusInternalServerError)
 	}
 	if isChild {
