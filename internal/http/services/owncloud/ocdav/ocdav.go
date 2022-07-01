@@ -110,6 +110,8 @@ type Config struct {
 	Product                string                            `mapstructure:"product"`
 	ProductName            string                            `mapstructure:"product_name"`
 	ProductVersion         string                            `mapstructure:"product_version"`
+
+	MachineAuthApiKey string `mapstructure:"machine_auth_apikey"`
 }
 
 func (c *Config) init() {

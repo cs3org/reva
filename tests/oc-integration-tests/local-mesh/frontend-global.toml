@@ -45,6 +45,7 @@ files_namespace = "/"
 # - the oc js sdk is hardcoded to the remote.php/webdav so it will see the new tree
 # - TODO android? no sync ... but will see different tree
 webdav_namespace = "/"
+machine_auth_apikey = "change-me-please"
 
 [http.services.ocs]
 
