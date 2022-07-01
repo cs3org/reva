@@ -234,15 +234,25 @@ func statKey(user *userpb.User, ref *provider.Reference, metaDataKeys, fieldMask
 		return ""
 	}
 
-	key := "uid:" + user.Id.OpaqueId + "!sid:" + ref.ResourceId.StorageId + "!oid:" + ref.ResourceId.OpaqueId + "!path:" + ref.Path
+	key := strings.Builder{}
+	key.WriteString("uid:")
+	key.WriteString(user.Id.OpaqueId)
+	key.WriteString("!sid:")
+	key.WriteString(ref.ResourceId.StorageId)
+	key.WriteString("!oid:")
+	key.WriteString(ref.ResourceId.OpaqueId)
+	key.WriteString("!path:")
+	key.WriteString(ref.Path)
 	for _, k := range metaDataKeys {
-		key += "!mdk:" + k
+		key.WriteString("!mdk:")
+		key.WriteString(k)
 	}
 	for _, p := range fieldMaskPaths {
-		key += "!fmp:" + p
+		key.WriteString("!fmp:")
+		key.WriteString(p)
 	}
 
-	return key
+	return key.String()
 }
 
 // Stat looks in cache first before forwarding to storage provider
