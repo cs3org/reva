@@ -455,8 +455,7 @@ func (h *Handler) extractPermissions(reqRole string, reqPermissions string, ri *
 		role = conversions.RoleFromOCSPermissions(permissions)
 	}
 
-	existingPermissions := conversions.RoleFromResourcePermissions(ri.PermissionSet).OCSPermissions()
-	if !existingPermissions.Contain(permissions) {
+	if !sufficientPermissions(ri.PermissionSet, role.CS3ResourcePermissions()) {
 		return nil, nil, &ocsError{
 			Code:    http.StatusNotFound,
 			Message: "Cannot set the requested share permissions",
@@ -1398,4 +1397,11 @@ func (h *Handler) getPoolClient() (gateway.GatewayAPIClient, error) {
 
 func (h *Handler) getHomeNamespace(u *userpb.User) string {
 	return templates.WithUser(u, h.homeNamespace)
+}
+
+// sufficientPermissions returns true if the `existing` permissions contain the `requested` permissions
+func sufficientPermissions(existing, requested *provider.ResourcePermissions) bool {
+	ep := conversions.RoleFromResourcePermissions(existing).OCSPermissions()
+	rp := conversions.RoleFromResourcePermissions(requested).OCSPermissions()
+	return ep.Contain(rp)
 }
