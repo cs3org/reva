@@ -115,7 +115,7 @@ type Config struct {
 	ProductName            string                            `mapstructure:"product_name"`
 	ProductVersion         string                            `mapstructure:"product_version"`
 
-	MachineAuthApiKey string `mapstructure:"machine_auth_apikey"`
+	MachineAuthAPIKey string `mapstructure:"machine_auth_apikey"`
 }
 
 func (c *Config) init() {
@@ -418,7 +418,7 @@ func (s *svc) sspReferenceIsChildOf(ctx context.Context, client gatewayv1beta1.G
 	if err != nil {
 		return false, err
 	}
-	parentAuthCtx, err := authContextForUser(client, parentStatRes.Info.Owner, s.c.MachineAuthApiKey)
+	parentAuthCtx, err := authContextForUser(client, parentStatRes.Info.Owner, s.c.MachineAuthAPIKey)
 	if err != nil {
 		return false, err
 	}
@@ -441,7 +441,7 @@ func (s *svc) sspReferenceIsChildOf(ctx context.Context, client gatewayv1beta1.G
 			return false, err
 		}
 	}
-	childAuthCtx, err := authContextForUser(client, childStatRes.Info.Owner, s.c.MachineAuthApiKey)
+	childAuthCtx, err := authContextForUser(client, childStatRes.Info.Owner, s.c.MachineAuthAPIKey)
 	if err != nil {
 		return false, err
 	}

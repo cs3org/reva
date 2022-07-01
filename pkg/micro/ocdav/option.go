@@ -84,10 +84,10 @@ func JWTSecret(s string) Option {
 	}
 }
 
-// MachineAuthApiKey provides a function to set the machine auth api key option.
-func MachineAuthApiKey(s string) Option {
+// MachineAuthAPIKey provides a function to set the machine auth api key option.
+func MachineAuthAPIKey(s string) Option {
 	return func(o *Options) {
-		o.config.MachineAuthApiKey = s
+		o.config.MachineAuthAPIKey = s
 	}
 }
 
