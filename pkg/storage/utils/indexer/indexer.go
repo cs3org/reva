@@ -166,9 +166,14 @@ func (i *StorageIndexer) FindBy(t interface{}, queryFields ...Field) ([]string, 
 
 	resultPaths := make(map[string]struct{})
 	if fields, ok := i.indices[typeName]; ok {
-		for _, field := range queryFields {
-			for _, idx := range fields.IndicesByField[strcase.ToCamel(field.Name)] {
-				res, err := idx.Lookup(field.Value)
+		for fieldName, queryFields := range groupFieldsByName(queryFields) {
+			idxes := fields.IndicesByField[strcase.ToCamel(fieldName)]
+			values := make([]string, 0, len(queryFields))
+			for _, f := range queryFields {
+				values = append(values, f.Value)
+			}
+			for _, idx := range idxes {
+				res, err := idx.LookupCtx(context.Background(), values...)
 				if err != nil {
 					if _, ok := err.(errtypes.IsNotFound); ok {
 						continue
@@ -191,6 +196,15 @@ func (i *StorageIndexer) FindBy(t interface{}, queryFields ...Field) ([]string, 
 	}
 
 	return result, nil
+}
+
+// groupFieldsByName groups the given filters and returns a map using the filter type as the key.
+func groupFieldsByName(queryFields []Field) map[string][]Field {
+	grouped := make(map[string][]Field)
+	for _, f := range queryFields {
+		grouped[f.Name] = append(grouped[f.Name], f)
+	}
+	return grouped
 }
 
 // Delete deletes all indexed fields of a given type t on the Indexer.
