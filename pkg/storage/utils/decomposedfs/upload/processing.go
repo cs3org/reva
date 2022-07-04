@@ -174,7 +174,7 @@ func New(ctx context.Context, info tusd.FileInfo, lu *lookup.Lookup, tp Tree, p 
 		return nil, err
 	}
 
-	u.pp = configurePostprocessing(u, o)
+	u.pp = Postprocessing(u, o)
 	return u, nil
 }
 
@@ -232,7 +232,7 @@ func Get(ctx context.Context, id string, lu *lookup.Lookup, tp Tree, fsRoot stri
 		Ctx:      ctx,
 	}
 
-	up.pp = configurePostprocessing(up, o)
+	up.pp = Postprocessing(up, o)
 	return up, nil
 }
 

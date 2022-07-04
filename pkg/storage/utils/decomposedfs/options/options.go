@@ -58,9 +58,14 @@ type Options struct {
 
 // PostprocessingOptions defines the available options for postprocessing
 type PostprocessingOptions struct {
+	// do file assembling asynchronly
 	AsyncFileUploads bool `mapstructure:"asyncfileuploads"`
-
-	DelayProcessing time.Duration `mapstructure:"delayprocessing"` // for testing purposes, or if you want to annoy your users
+	// scan files for viruses before assembling
+	UploadVirusscan bool `mapstructure:"uploadvirusscan"`
+	// the virusscanner to user
+	VirusScanner string `mapstructure:"virusscanner"`
+	// for testing purposes, or if you want to annoy your users
+	DelayProcessing time.Duration `mapstructure:"delayprocessing"`
 }
 
 // New returns a new Options instance for the given configuration
