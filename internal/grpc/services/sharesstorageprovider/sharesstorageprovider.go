@@ -273,6 +273,14 @@ func (s *service) GetPath(ctx context.Context, req *provider.GetPathRequest) (*p
 	// - getPath of every received share on the same space - needs also owner permissions -> needs machine auth
 	// - find the shortest root path that is a prefix of the resource path
 	// alternatively implement this on storageprovider - it needs to know about grants to do so
+
+	if isShareJailRoot(req.ResourceId) {
+		return &provider.GetPathResponse{
+			Status: status.NewOK(ctx),
+			Path:   "/",
+		}, nil
+	}
+
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
