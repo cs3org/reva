@@ -30,6 +30,7 @@ import (
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/net"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/spacelookup"
 	"github.com/cs3org/reva/v2/pkg/appctx"
+	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/rhttp/router"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/utils"
@@ -141,8 +142,14 @@ func (s *svc) handleMove(ctx context.Context, w http.ResponseWriter, r *http.Req
 
 	isChild, err := s.referenceIsChildOf(ctx, client, dst, src)
 	if err != nil {
-		log.Error().Err(err).Msg("error while trying to detect recursive move operation")
-		w.WriteHeader(http.StatusInternalServerError)
+		switch err.(type) {
+		case errtypes.IsNotSupported:
+			log.Error().Err(err).Msg("can not detect recursive move operation. missing machine auth configuration?")
+			w.WriteHeader(http.StatusForbidden)
+		default:
+			log.Error().Err(err).Msg("error while trying to detect recursive move operation")
+			w.WriteHeader(http.StatusInternalServerError)
+		}
 	}
 	if isChild {
 		w.WriteHeader(http.StatusBadRequest)

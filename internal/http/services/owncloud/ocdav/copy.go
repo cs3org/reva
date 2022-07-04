@@ -35,6 +35,7 @@ import (
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/net"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/spacelookup"
 	"github.com/cs3org/reva/v2/pkg/appctx"
+	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/rhttp"
 	"github.com/cs3org/reva/v2/pkg/rhttp/router"
 	"github.com/cs3org/reva/v2/pkg/utils"
@@ -495,8 +496,14 @@ func (s *svc) prepareCopy(ctx context.Context, w http.ResponseWriter, r *http.Re
 
 	isChild, err := s.referenceIsChildOf(ctx, client, dstRef, srcRef)
 	if err != nil {
-		log.Error().Err(err).Msg("error while trying to detect recursive copy operation")
-		w.WriteHeader(http.StatusInternalServerError)
+		switch err.(type) {
+		case errtypes.IsNotSupported:
+			log.Error().Err(err).Msg("can not detect recursive copy operation. missing machine auth configuration?")
+			w.WriteHeader(http.StatusForbidden)
+		default:
+			log.Error().Err(err).Msg("error while trying to detect recursive copy operation")
+			w.WriteHeader(http.StatusInternalServerError)
+		}
 	}
 	if isChild {
 		w.WriteHeader(http.StatusBadRequest)

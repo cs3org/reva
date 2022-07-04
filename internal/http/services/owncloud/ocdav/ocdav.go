@@ -395,6 +395,9 @@ func addAccessHeaders(w http.ResponseWriter, r *http.Request) {
 }
 
 func authContextForUser(client gatewayv1beta1.GatewayAPIClient, userID *userpb.UserId, machineAuthAPIKey string) (context.Context, error) {
+	if machineAuthAPIKey == "" {
+		return nil, errtypes.NotSupported("machine auth not configured")
+	}
 	// Get auth
 	granteeCtx := ctxpkg.ContextSetUser(context.Background(), &userpb.User{Id: userID})
 
