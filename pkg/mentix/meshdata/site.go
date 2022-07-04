@@ -28,7 +28,6 @@ import (
 
 // Site represents a single site managed by Mentix.
 type Site struct {
-	// Internal settings
 	ID           string
 	Name         string
 	FullName     string
@@ -52,7 +51,7 @@ type Site struct {
 // AddService adds a new service; if a service with the same name already exists, the existing one is overwritten.
 func (site *Site) AddService(service *Service) {
 	if serviceExisting := site.FindService(service.Name); serviceExisting != nil {
-		*service = *serviceExisting
+		*serviceExisting = *service
 	} else {
 		site.Services = append(site.Services, service)
 	}
