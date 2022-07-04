@@ -128,7 +128,7 @@ const tplBody = `
 		<div style="grid-row: 2;">
 			<select id="operator" name="operator">
 			{{range .Operators}}
-			<option value="{{.ID}}">{{.ID}} | TODO MA HIER</option>
+			<option value="{{.ID}}">{{getOperatorName .ID}} | {{getOperatorSites .ID false}}</option>
 			{{end}}
 			</select>
 		</div>

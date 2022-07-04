@@ -79,7 +79,11 @@ const tplBody = `
 	<ul style="margin-top: 0em;">
 		<li>Name: <em>{{.Account.Title}}. {{.Account.FirstName}} {{.Account.LastName}}</em></li>
 		<li>Email: <em><a href="mailto:{{.Account.Email}}">{{.Account.Email}}</a></em></li>
-		<li>ScienceMesh Operator: <em>{{getOperatorName .Account.Operator}} ({{getOperatorSites .Account.Operator true}})</em></li>
+		<li>
+			<span>ScienceMesh Operator: {{getOperatorName .Account.Operator}}</span>
+			<br>
+			<span style="margin-left: 20px;">Sites: <em>{{getOperatorSites .Account.Operator true}}</em></span>
+		</li>
 		<li>Role: <em>{{.Account.Role}}</em></li>
 		{{if .Account.PhoneNumber}}
 		<li>Phone: <em>{{.Account.PhoneNumber}}</em></li>
@@ -100,8 +104,8 @@ const tplBody = `
 			<button type="button" onClick="handleEditAccount();">Edit account</button>
 			<span style="width: 25px;">&nbsp;</span>
 			
-			{{if .Account.Data.SiteAccess}}
-			<button type="button" onClick="handleSitesSettings();">Site settings</button>
+			{{if .Account.Data.SitesAccess}}
+			<button type="button" onClick="handleSitesSettings();">Sites settings</button>
 			<span style="width: 25px;">&nbsp;</span>
 			{{end}}	
 

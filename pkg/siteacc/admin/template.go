@@ -61,7 +61,11 @@ const tplBody = `
 				</div>
 				<div>
 					<ul style="padding-left: 1em;">
-						<li>ScienceMesh Operator: {{getOperatorName .Operator}} ({{getOperatorSites .Operator true}})</li>
+						<li>
+							<span>ScienceMesh Operator: {{getOperatorName .Operator}}</span>
+							<br>
+							<span style="margin-left: 20px;">Sites: <em>{{getOperatorSites .Operator true}}</em></span>
+						</li>
 						<li>Role: {{.Role}}</li>
 						<li>Phone: {{.PhoneNumber}}</li>
 					</ul>

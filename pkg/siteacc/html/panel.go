@@ -156,11 +156,13 @@ func (panel *Panel) prepareTemplate(tpl *template.Template) {
 		},
 		"getOperatorSites": func(opID string, fullNames bool) string {
 			sites, _ := data.QueryOperatorSites(opID, panel.conf.Mentix.URL, panel.conf.Mentix.DataEndpoint)
-			if fullNames {
-				for i, s := range sites {
-					longName, _ := data.QuerySiteName(s, true, panel.conf.Mentix.URL, panel.conf.Mentix.DataEndpoint)
+			for i, s := range sites {
+				longName, _ := data.QuerySiteName(s, true, panel.conf.Mentix.URL, panel.conf.Mentix.DataEndpoint)
+				if fullNames {
 					shortName, _ := data.QuerySiteName(s, false, panel.conf.Mentix.URL, panel.conf.Mentix.DataEndpoint)
 					sites[i] = fmt.Sprintf("%v (%v)", longName, shortName)
+				} else {
+					sites[i] = longName
 				}
 			}
 			return strings.Join(sites, ", ")
