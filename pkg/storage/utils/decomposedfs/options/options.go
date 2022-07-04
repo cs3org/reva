@@ -56,6 +56,18 @@ type Options struct {
 	Postprocessing PostprocessingOptions `mapstructure:"postprocessing"`
 }
 
+// InfectedFileOption are the options when finding an infected file
+type InfectedFileOption string
+
+var (
+	// Delete deletes the file
+	Delete InfectedFileOption = "delete"
+	// Error errors which will cause the upload to cancel
+	Error InfectedFileOption = "error"
+	// Ignore ignores infected files
+	Ignore InfectedFileOption = "ignore"
+)
+
 // PostprocessingOptions defines the available options for postprocessing
 type PostprocessingOptions struct {
 	// do file assembling asynchronly
@@ -64,6 +76,8 @@ type PostprocessingOptions struct {
 	UploadVirusscan bool `mapstructure:"uploadvirusscan"`
 	// the virusscanner to user
 	VirusScanner string `mapstructure:"virusscanner"`
+	// how to handle infected files
+	InfectedFileHandling InfectedFileOption `mapstructure:"infectedfilehandling"`
 	// for testing purposes, or if you want to annoy your users
 	DelayProcessing time.Duration `mapstructure:"delayprocessing"`
 }

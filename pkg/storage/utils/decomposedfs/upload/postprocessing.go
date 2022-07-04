@@ -44,7 +44,7 @@ func stepsFromConfig(upload *Upload, o options.PostprocessingOptions) []postproc
 	steps := []postprocessing.Step{Initialize(upload)}
 
 	if o.UploadVirusscan {
-		steps = append(steps, Scan(upload, o.VirusScanner))
+		steps = append(steps, Scan(upload, o.VirusScanner, ""))
 	}
 
 	steps = append(steps, Assemble(upload, o.AsyncFileUploads, o.UploadVirusscan))
