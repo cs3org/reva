@@ -82,7 +82,7 @@ const tplBody = `
 		<li>
 			<span>ScienceMesh Operator: {{getOperatorName .Account.Operator}}</span>
 			<br>
-			<span style="margin-left: 20px;">Sites: <em>{{getOperatorSites .Account.Operator true}}</em></span>
+			<span style="margin-left: 20px; font-size: 90%;"><em>{{getOperatorSites .Account.Operator true}}</em></span>
 		</li>
 		<li>Role: <em>{{.Account.Role}}</em></li>
 		{{if .Account.PhoneNumber}}

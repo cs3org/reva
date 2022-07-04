@@ -204,6 +204,7 @@ func (panel *Panel) redirect(path string, w http.ResponseWriter, r *http.Request
 
 func (panel *Panel) cloneUserOperator(op *data.Operator) *data.Operator {
 	// Clone the user's operator and decrypt all credentials for the panel
+	// TODO: Fetch sites?!
 	opClone := op.Clone(true)
 	for _, site := range opClone.Sites {
 		id, secret, err := site.Config.TestClientCredentials.Get(panel.conf.Security.CredentialsPassphrase)

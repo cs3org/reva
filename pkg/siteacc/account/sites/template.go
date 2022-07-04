@@ -84,23 +84,25 @@ input[type="checkbox"] {
 
 const tplBody = `
 <div>
-	<p>Configure your ScienceMesh Site below. <em>These settings affect your entire sites and not just your account.</em></p>
+	<p>Configure your ScienceMesh Sites below. <em>These settings affect the entire sites and not just your account.</em></p>
 </div>
 <div>&nbsp;</div>
 <div>
 	<form id="form" method="POST" class="box container-inline" style="width: 100%;" onSubmit="handleAction('sites-configure?invoker=user'); return false;">
 		<div style="grid-row: 1; grid-column: 1 / span 2;">
 			<h3>Test user settings</h3>
-			<p>In order to perform automated tests on your sites, a test user has to be configured below. Please note that the user <em>has to exist in your Reva instance</em>! If you do not have a user for automated tests in your instance yet, create one first.</p>
+			<p>In order to perform automated tests on your sites, a test user has to be configured below for each site. Please note that the users <em>have to exist in your respective Reva instances</em>! If you do not have users for automated tests in your instances yet, create them first.</p>
 			<hr>
 		</div>
 
-		<div style="grid-row: 2;"><label for="clientID">User name: <span class="mandatory">*</span></label></div>
-		<div style="grid-row: 3;"><input type="text" id="clientID" name="clientID" placeholder="User name" value="{{.Site.Config.TestClientCredentials.ID}}"/></div>
-		<div style="grid-row: 2;"><label for="secret">Password: <span class="mandatory">*</span></label></div>
-		<div style="grid-row: 3;"><input type="password" id="secret" name="secret" placeholder="Password" value="{{.Site.Config.TestClientCredentials.Secret}}"/></div>
-
-		<div style="grid-row: 4;">&nbsp;</div>
+		{{range .Account.Operator.Sites}}
+			<div style="grid-row: 2;"><label for="clientID">User name: <span class="mandatory">*</span></label></div>
+			<div style="grid-row: 3;"><input type="text" id="clientID" name="clientID" placeholder="User name" value="{{.Config.TestClientCredentials.ID}}"/></div>
+			<div style="grid-row: 2;"><label for="secret">Password: <span class="mandatory">*</span></label></div>
+			<div style="grid-row: 3;"><input type="password" id="secret" name="secret" placeholder="Password" value="{{.Config.TestClientCredentials.Secret}}"/></div>
+	
+			<div style="grid-row: 4;">&nbsp;</div>
+		{{end}}
 
 		<div style="grid-row: 5; align-self: center;">
 			Fields marked with <span class="mandatory">*</span> are mandatory.
