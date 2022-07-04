@@ -35,13 +35,13 @@ function verifyForm(formData) {
 		return false;
 	}
 
-	if (formData.getTrimmed("site") == "") {
-		setState(STATE_ERROR, "Please select your ScienceMesh site.", "form", "site", true);
+	if (formData.getTrimmed("operator") == "") {
+		setState(STATE_ERROR, "Please select your ScienceMesh operator.", "form", "operator", true);
 		return false;
 	}
 
 	if (formData.getTrimmed("role") == "") {
-		setState(STATE_ERROR, "Please specify your role within your site.", "form", "role", true);
+		setState(STATE_ERROR, "Please specify your role within your sites.", "form", "role", true);
 		return false;
 	}
 
@@ -92,7 +92,7 @@ function handleAction(action) {
 		"title": formData.getTrimmed("title"),
 		"firstName": formData.getTrimmed("fname"),
 		"lastName": formData.getTrimmed("lname"),
-		"site": formData.getTrimmed("site"),
+		"operator": formData.getTrimmed("operator"),
 		"role": formData.getTrimmed("role"),
 		"phoneNumber": formData.getTrimmed("phone"),
 		"password": {
@@ -124,11 +124,11 @@ const tplBody = `
 	<form id="form" method="POST" class="box container-inline" style="width: 100%;" onSubmit="handleAction('create'); return false;">	
 		<div style="grid-row: 1;"><label for="email">Email address: <span class="mandatory">*</span></label></div>
 		<div style="grid-row: 2;"><input type="text" id="email" name="email" placeholder="me@example.com"/></div>
-		<div style="grid-row: 1;"><label for="site">ScienceMesh Site: <span class="mandatory">*</span></label></div>
+		<div style="grid-row: 1;"><label for="operator">ScienceMesh Operator: <span class="mandatory">*</span></label></div>
 		<div style="grid-row: 2;">
-			<select id="site" name="site">
-			{{range .Sites}}
-			<option value="{{.ID}}">{{.Name}} | {{.FullName}}</option>
+			<select id="operator" name="operator">
+			{{range .Operators}}
+			<option value="{{.ID}}">{{.ID}} | TODO MA HIER</option>
 			{{end}}
 			</select>
 		</div>

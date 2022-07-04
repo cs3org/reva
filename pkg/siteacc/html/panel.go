@@ -19,6 +19,7 @@
 package html
 
 import (
+	"fmt"
 	"html/template"
 	"net/http"
 	"strings"
@@ -149,9 +150,20 @@ func (panel *Panel) prepareTemplate(tpl *template.Template) {
 		"getServerAddress": func() string {
 			return strings.TrimRight(panel.conf.Webserver.URL, "/")
 		},
-		"getSiteName": func(siteID string, fullName bool) string {
-			siteName, _ := data.QuerySiteName(siteID, fullName, panel.conf.Mentix.URL, panel.conf.Mentix.DataEndpoint)
-			return siteName
+		"getOperatorName": func(opID string) string {
+			opName, _ := data.QueryOperatorName(opID, panel.conf.Mentix.URL, panel.conf.Mentix.DataEndpoint)
+			return opName
+		},
+		"getOperatorSites": func(opID string, fullNames bool) string {
+			sites, _ := data.QueryOperatorSites(opID, panel.conf.Mentix.URL, panel.conf.Mentix.DataEndpoint)
+			if fullNames {
+				for i, s := range sites {
+					longName, _ := data.QuerySiteName(s, true, panel.conf.Mentix.URL, panel.conf.Mentix.DataEndpoint)
+					shortName, _ := data.QuerySiteName(s, false, panel.conf.Mentix.URL, panel.conf.Mentix.DataEndpoint)
+					sites[i] = fmt.Sprintf("%v (%v)", longName, shortName)
+				}
+			}
+			return strings.Join(sites, ", ")
 		},
 	})
 }

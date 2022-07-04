@@ -122,10 +122,10 @@ driver = "file"
 
 ### Storage settings - File drivers
 {{% dir name="sites_file" type="string" default="" %}}
-The sites file location.
+The operators file location.
 {{< highlight toml >}}
 [http.services.siteacc.storage.file]
-sites_file = "/var/reva/sites.json"
+operators_file = "/var/reva/operators.json"
 {{< /highlight >}}
 {{% /dir %}}
 

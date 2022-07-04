@@ -79,8 +79,8 @@ const tplBody = `
 	<p>Contact the ScienceMesh administration using the form below.</p>
 	<p style="margin-bottom: 0em;">Please include as much information as possible in your request, especially:</p>
 	<ul style="margin-top: 0em;">
-		<li>The site your request refers to (if not obvious from your account information)</li>
-		<li>Your role within the ScienceMesh site (e.g., administrator, operational team member, etc.)</li>
+		<li>The site(s) your request refers to (if not obvious from your account information)</li>
+		<li>Your role within the ScienceMesh sites (e.g., administrator, operational team member, etc.)</li>
 		<li>Any specific reasons for your request</li>
 		<li>Anything else that might help to process your request</li>
 	</ul>

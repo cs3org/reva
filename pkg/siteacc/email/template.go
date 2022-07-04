@@ -32,10 +32,10 @@ Kind regards,
 The ScienceMesh Team
 `
 
-const siteAccessGrantedTemplate = `
+const sitesAccessGrantedTemplate = `
 Dear {{.Account.FirstName}} {{.Account.LastName}},
 
-You have been granted access to the global configuration of your site.
+You have been granted access to the global configuration of your sites.
 
 Log in to your account to access this configuration:
 {{.AccountsAddress}} 

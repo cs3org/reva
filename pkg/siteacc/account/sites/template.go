@@ -16,7 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package site
+package sites
 
 const tplJavaScript = `
 function verifyForm(formData) {
@@ -39,7 +39,7 @@ function handleAction(action) {
 		return;
 	}
 
-	setState(STATE_STATUS, "Configuring site... this should only take a moment.", "form", null, false);
+	setState(STATE_STATUS, "Configuring sites... this should only take a moment.", "form", null, false);
 
 	var xhr = new XMLHttpRequest();
     xhr.open("POST", "{{getServerAddress}}/" + action);
@@ -47,10 +47,10 @@ function handleAction(action) {
 
 	xhr.onload = function() {
 		if (this.status == 200) {
-			setState(STATE_SUCCESS, "Your site was successfully configured!", "form", null, true);
+			setState(STATE_SUCCESS, "Your sites was successfully configured!", "form", null, true);
 		} else {
 			var resp = JSON.parse(this.responseText);
-			setState(STATE_ERROR, "An error occurred while trying to configure your site:<br><em>" + resp.error + "</em>", "form", null, true);
+			setState(STATE_ERROR, "An error occurred while trying to configure your sites:<br><em>" + resp.error + "</em>", "form", null, true);
 		}
 	}
 
@@ -84,14 +84,14 @@ input[type="checkbox"] {
 
 const tplBody = `
 <div>
-	<p>Configure your ScienceMesh Site below. <em>These settings affect your entire site and not just your account.</em></p>
+	<p>Configure your ScienceMesh Site below. <em>These settings affect your entire sites and not just your account.</em></p>
 </div>
 <div>&nbsp;</div>
 <div>
-	<form id="form" method="POST" class="box container-inline" style="width: 100%;" onSubmit="handleAction('site-configure?invoker=user'); return false;">
+	<form id="form" method="POST" class="box container-inline" style="width: 100%;" onSubmit="handleAction('sites-configure?invoker=user'); return false;">
 		<div style="grid-row: 1; grid-column: 1 / span 2;">
 			<h3>Test user settings</h3>
-			<p>In order to perform automated tests on your site, a test user has to be configured below. Please note that the user <em>has to exist in your Reva instance</em>! If you do not have a user for automated tests in your instance yet, create one first.</p>
+			<p>In order to perform automated tests on your sites, a test user has to be configured below. Please note that the user <em>has to exist in your Reva instance</em>! If you do not have a user for automated tests in your instance yet, create one first.</p>
 			<hr>
 		</div>
 

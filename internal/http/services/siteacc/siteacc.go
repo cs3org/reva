@@ -111,10 +111,10 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 		return nil, err
 	}
 
-	// Create the site accounts instance
+	// Create the sites accounts instance
 	siteacc, err := siteacc.New(conf, log)
 	if err != nil {
-		return nil, errors.Wrap(err, "error creating the site accounts service")
+		return nil, errors.Wrap(err, "error creating the sites accounts service")
 	}
 
 	// Create the service

@@ -42,9 +42,9 @@ type SiteAccounts struct {
 
 	storage data.Storage
 
-	sitesManager    *manager.SitesManager
-	accountsManager *manager.AccountsManager
-	usersManager    *manager.UsersManager
+	operatorsManager *manager.OperatorsManager
+	accountsManager  *manager.AccountsManager
+	usersManager     *manager.UsersManager
 
 	alertsDispatcher *alerting.Dispatcher
 
@@ -78,11 +78,11 @@ func (siteacc *SiteAccounts) initialize(conf *config.Configuration, log *zerolog
 	siteacc.storage = storage
 
 	// Create the sites manager instance
-	smngr, err := manager.NewSitesManager(storage, conf, log)
+	omngr, err := manager.NewOperatorsManager(storage, conf, log)
 	if err != nil {
-		return errors.Wrap(err, "error creating the sites manager")
+		return errors.Wrap(err, "error creating the operators manager")
 	}
-	siteacc.sitesManager = smngr
+	siteacc.operatorsManager = omngr
 
 	// Create the accounts manager instance
 	amngr, err := manager.NewAccountsManager(storage, conf, log)
@@ -92,7 +92,7 @@ func (siteacc *SiteAccounts) initialize(conf *config.Configuration, log *zerolog
 	siteacc.accountsManager = amngr
 
 	// Create the users manager instance
-	umngr, err := manager.NewUsersManager(conf, log, siteacc.sitesManager, siteacc.accountsManager)
+	umngr, err := manager.NewUsersManager(conf, log, siteacc.operatorsManager, siteacc.accountsManager)
 	if err != nil {
 		return errors.Wrap(err, "error creating the users manager")
 	}
@@ -162,9 +162,9 @@ func (siteacc *SiteAccounts) ShowAccountPanel(w http.ResponseWriter, r *http.Req
 	return siteacc.accountPanel.Execute(w, r, session)
 }
 
-// SitesManager returns the central sites manager instance.
-func (siteacc *SiteAccounts) SitesManager() *manager.SitesManager {
-	return siteacc.sitesManager
+// OperatorsManager returns the central operators manager instance.
+func (siteacc *SiteAccounts) OperatorsManager() *manager.OperatorsManager {
+	return siteacc.operatorsManager
 }
 
 // AccountsManager returns the central accounts manager instance.
@@ -185,7 +185,7 @@ func (siteacc *SiteAccounts) AlertsDispatcher() *alerting.Dispatcher {
 // GetPublicEndpoints returns a list of all public endpoints.
 func (siteacc *SiteAccounts) GetPublicEndpoints() []string {
 	// TODO: Only for local testing!
-	// return []string{"/"}
+	return []string{"/"}
 
 	endpoints := make([]string, 0, 5)
 	for _, ep := range getEndpoints() {
@@ -209,7 +209,7 @@ func New(conf *config.Configuration, log *zerolog.Logger) (*SiteAccounts, error)
 	// Configure the accounts service
 	siteacc := new(SiteAccounts)
 	if err := siteacc.initialize(conf, log); err != nil {
-		return nil, fmt.Errorf("unable to initialize site accounts: %v", err)
+		return nil, fmt.Errorf("unable to initialize sites accounts: %v", err)
 	}
 	return siteacc, nil
 }

@@ -18,19 +18,19 @@
 
 package data
 
-// Storage defines the interface for sites and accounts storages.
+// Storage defines the interface for operators and accounts storages.
 type Storage interface {
-	// ReadSites reads all stored sites into the given data object.
-	ReadSites() (*Sites, error)
-	// WriteSites writes all stored sites from the given data object.
-	WriteSites(sites *Sites) error
+	// ReadOperators reads all stored operators into the given data object.
+	ReadOperators() (*Operators, error)
+	// WriteOperators writes all stored operators from the given data object.
+	WriteOperators(ops *Operators) error
 
-	// SiteAdded is called when a site has been added.
-	SiteAdded(site *Site)
-	// SiteUpdated is called when a site has been updated.
-	SiteUpdated(site *Site)
-	// SiteRemoved is called when a site has been removed.
-	SiteRemoved(site *Site)
+	// OperatorAdded is called when an operator has been added.
+	OperatorAdded(op *Operator)
+	// OperatorUpdated is called when an operator has been updated.
+	OperatorUpdated(op *Operator)
+	// OperatorRemoved is called when an operator has been removed.
+	OperatorRemoved(op *Operator)
 
 	// ReadAccounts reads all stored accounts into the given data object.
 	ReadAccounts() (*Accounts, error)
