@@ -400,7 +400,6 @@ func (s *svc) handleSpacesLock(w http.ResponseWriter, r *http.Request, spaceID s
 
 	span.SetAttributes(attribute.String("component", "ocdav"))
 
-	// build storage space reference
 	ref, err := spacelookup.MakeStorageSpaceReference(spaceID, r.URL.Path)
 	if err != nil {
 		return http.StatusBadRequest, fmt.Errorf("invalid space id")

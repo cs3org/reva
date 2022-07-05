@@ -292,6 +292,7 @@ func (fs *Decomposedfs) CreateDir(ctx context.Context, ref *provider.Reference) 
 	if n, err = fs.lu.NodeFromResource(ctx, parentRef); err != nil {
 		return
 	}
+	// TODO check if user has access to root / space
 	if !n.Exists {
 		return errtypes.PreconditionFailed(parentRef.Path)
 	}

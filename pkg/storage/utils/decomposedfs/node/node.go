@@ -201,10 +201,14 @@ func ReadNode(ctx context.Context, lu PathLookup, spaceID, nodeID string, canLis
 	}
 	r.Exists = true
 
+	// TODO ReadNode should not check permissions
 	if !canListDisabledSpace && r.IsDisabled() {
 		// no permission = not found
 		return nil, errtypes.NotFound(spaceID)
 	}
+
+	// if current user cannot stat the root return not found?
+	// no for shares the root might be a different resource
 
 	// check if this is a space root
 	if spaceID == nodeID {

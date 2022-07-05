@@ -310,7 +310,6 @@ func (p *Handler) HandleSpacesPropfind(w http.ResponseWriter, r *http.Request, s
 	var space *provider.StorageSpace
 	if res.Info.Space == nil {
 		sublog.Debug().Msg("stat did not include a space, executing an additional lookup request")
-		// TODO look up space? hm can the isShared check even work when stating a space? hm yeah ... well ... *mindblown*
 		// fake a space root
 		space = &provider.StorageSpace{
 			Id: &provider.StorageSpaceId{OpaqueId: spaceID},
@@ -671,9 +670,6 @@ func (p *Handler) getSpaceResourceInfos(ctx context.Context, w http.ResponseWrit
 	}
 
 	metadataKeys, _ := metadataKeys(pf)
-
-	// we need to prefix the path with / to make subsequent prefix matches work
-	// info.Path = filepath.Join("/", spaceRef.Path)
 
 	resourceInfos := []*provider.ResourceInfo{}
 
