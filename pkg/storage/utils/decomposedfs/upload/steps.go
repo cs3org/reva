@@ -89,12 +89,15 @@ func Scan(upload *Upload, avType string, handle string) postprocessing.Step {
 			return err
 		}
 
+		if err := upload.node.SetScanData(result.Description); err != nil {
+			// What to do? scan is done but we can't write the info to the node
+			return err
+		}
+
 		if !result.Infected {
 			// all good
 			return nil
 		}
-
-		// TODO: write metadata to node
 
 		// TODO: send email that file was infected
 

@@ -28,6 +28,7 @@ import (
 	"hash"
 	"hash/adler32"
 	"io"
+	"io/fs"
 	iofs "io/fs"
 	"io/ioutil"
 	"os"
@@ -439,13 +440,13 @@ func (upload *Upload) cleanup(cleanNode, cleanBin, cleanInfo bool) {
 	}
 
 	if cleanBin {
-		if err := os.Remove(upload.binPath); err != nil {
+		if err := os.Remove(upload.binPath); err != nil && !errors.Is(err, fs.ErrNotExist) {
 			upload.log.Error().Str("path", upload.binPath).Err(err).Msg("removing upload failed")
 		}
 	}
 
 	if cleanInfo {
-		if err := os.Remove(upload.infoPath); err != nil {
+		if err := os.Remove(upload.infoPath); err != nil && !errors.Is(err, fs.ErrNotExist) {
 			upload.log.Error().Str("path", upload.infoPath).Err(err).Msg("removing upload info failed")
 		}
 	}

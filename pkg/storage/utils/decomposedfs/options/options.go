@@ -66,7 +66,7 @@ var (
 	Keep InfectedFileOption = "keep"
 	// Error will throw an error to the postprocessing but not cancel the upload
 	Error InfectedFileOption = "error"
-	// Ignore ignores the virus (except of marking it) and continues the upload regulary
+	// Ignore ignores the virus (except of marking it) and continues the upload regularly
 	Ignore InfectedFileOption = "ignore"
 )
 
