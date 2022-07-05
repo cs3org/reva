@@ -1,3 +1,21 @@
+// Copyright 2018-2022 CERN
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// In applying this license, CERN does not waive the privileges and immunities
+// granted to it by virtue of its status as an Intergovernmental Organization
+// or submit itself to any jurisdiction.
+
 package upload
 
 import (
@@ -13,6 +31,9 @@ import (
 // Initialize is the step that initializes the node
 func Initialize(upload *Upload) postprocessing.Step {
 	return postprocessing.NewStep("initialize", func() error {
+		if upload.Cancelled.IsTrue() {
+			return nil
+		}
 		// we need the node to start processing
 		n, err := CreateNodeForUpload(upload)
 		if err != nil {
@@ -32,17 +53,25 @@ func Assemble(upload *Upload, async bool, waitforscan bool) postprocessing.Step 
 		requires = append(requires, "scanning")
 	}
 	return postprocessing.NewStep("assembling", func() error {
+		if upload.Cancelled.IsTrue() {
+			return nil
+		}
+
 		err := upload.finishUpload()
 		if !async && upload.node != nil {
 			_ = upload.node.UnmarkProcessing() // NOTE: this makes the testsuite happy - remove once adjusted
 		}
 		return err
-	}, upload.cleanup, requires...)
+	}, nil, requires...)
 }
 
 // Scan scans the file for viruses
 func Scan(upload *Upload, avType string, handle string) postprocessing.Step {
 	return postprocessing.NewStep("scanning", func() error {
+		if upload.Cancelled.IsTrue() {
+			return nil
+		}
+
 		f, err := os.Open(upload.binPath)
 		if err != nil {
 			return err
@@ -56,6 +85,7 @@ func Scan(upload *Upload, avType string, handle string) postprocessing.Step {
 		result, err := scanner.Scan(f)
 		if err != nil {
 			// What to do when there was an error while scanning? -> file should stay in uploadpath for now
+			upload.Cancelled.True()
 			return err
 		}
 
@@ -64,14 +94,20 @@ func Scan(upload *Upload, avType string, handle string) postprocessing.Step {
 			return nil
 		}
 
+		// TODO: write metadata to node
+
 		// TODO: send email that file was infected
 
 		switch options.InfectedFileOption(handle) {
 		default:
+			// NOTE: we secretly default to delete
 			fallthrough
 		case options.Delete:
-			upload.cleanup(errors.New("infected"))
-			upload.node = nil
+			upload.cleanup(true, true, true)
+			upload.Cancelled.True()
+			return nil
+		case options.Keep:
+			upload.Cancelled.True()
 			return nil
 		case options.Error:
 			return errors.New("file infected")
@@ -79,7 +115,6 @@ func Scan(upload *Upload, avType string, handle string) postprocessing.Step {
 			return nil
 		}
 
-		return nil
 	}, nil, "initialize")
 }
 

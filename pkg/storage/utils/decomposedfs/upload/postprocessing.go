@@ -58,29 +58,44 @@ func stepsFromConfig(upload *Upload, o options.PostprocessingOptions) []postproc
 
 func finishPostprocessing(upload *Upload, o options.PostprocessingOptions) func(map[string]error) {
 	return func(m map[string]error) {
+
+		var failure bool
 		for alias, err := range m {
 			if err != nil {
 				upload.log.Info().Str("ID", upload.Info.ID).Str("step", alias).Err(err).Msg("postprocessing failed")
-			}
 
+				// NOTE: not all errors might be critical failures - use alias to determine which are not
+				failure = true
+			}
 		}
 
-		if upload.node != nil {
-			// unset processing status and propagate changes
-			if err := upload.node.UnmarkProcessing(); err != nil {
-				upload.log.Info().Str("path", upload.node.InternalPath()).Err(err).Msg("unmarking processing failed")
-			}
+		cancelled := upload.Cancelled.IsTrue()
+		removeNode := failure || cancelled // remove node when upload failed or upload is cancelled
+		removeBin := !cancelled            // remove bin & info when upload wasn't cancelled
+		upload.cleanup(removeNode, removeBin, removeBin)
 
-			if o.AsyncFileUploads { // updating the mtime will cause the testsuite to fail - hence we do it only in async case
-				now := utils.TSNow()
-				if err := upload.node.SetMtime(upload.Ctx, fmt.Sprintf("%d.%d", now.Seconds, now.Nanos)); err != nil {
-					upload.log.Info().Str("path", upload.node.InternalPath()).Err(err).Msg("could not set mtime")
-				}
-			}
+		if upload.node == nil {
+			return
+		}
 
-			if err := upload.tp.Propagate(upload.Ctx, upload.node); err != nil {
+		// unset processing status
+		if err := upload.node.UnmarkProcessing(); err != nil {
+			upload.log.Info().Str("path", upload.node.InternalPath()).Err(err).Msg("unmarking processing failed")
+		}
+
+		if failure || cancelled {
+			return
+		}
+
+		if o.AsyncFileUploads { // updating the mtime will cause the testsuite to fail - hence we do it only in async case
+			now := utils.TSNow()
+			if err := upload.node.SetMtime(upload.Ctx, fmt.Sprintf("%d.%d", now.Seconds, now.Nanos)); err != nil {
 				upload.log.Info().Str("path", upload.node.InternalPath()).Err(err).Msg("could not set mtime")
 			}
+		}
+
+		if err := upload.tp.Propagate(upload.Ctx, upload.node); err != nil {
+			upload.log.Info().Str("path", upload.node.InternalPath()).Err(err).Msg("could not set mtime")
 		}
 	}
 

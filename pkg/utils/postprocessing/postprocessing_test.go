@@ -24,6 +24,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cs3org/reva/v2/pkg/utils"
 	pp "github.com/cs3org/reva/v2/pkg/utils/postprocessing"
 	"github.com/test-go/testify/require"
 )
@@ -48,49 +49,27 @@ func FailureAfter(t time.Duration) func() error {
 	}
 }
 
-// concurrent boolean
-type Cbool struct {
-	b bool
-	l *sync.Mutex
-}
-
-func Bool() *Cbool {
-	return &Cbool{b: false, l: &sync.Mutex{}}
-}
-
-func (b *Cbool) Set(v bool) {
-	b.l.Lock()
-	defer b.l.Unlock()
-	b.b = v
-}
-
-func (b *Cbool) Get() bool {
-	b.l.Lock()
-	defer b.l.Unlock()
-	return b.b
-}
-
 func Test_ItRunsStepsAsync(t *testing.T) {
-	stepdone := Bool()
+	stepdone := utils.Bool()
 	pp := pp.Postprocessing{
 		Steps: []pp.Step{
 			pp.NewStep("stepA", FailureAfter(_waitTime), func(error) {
-				stepdone.Set(true)
+				stepdone.True()
 			}),
 		},
 	}
 
 	err := pp.Start()
 	require.NoError(t, err)
-	require.False(t, stepdone.Get())
+	require.False(t, stepdone.IsTrue())
 }
 
 func Test_ItSyncsIfConfigured(t *testing.T) {
-	stepdone := Bool()
+	stepdone := utils.Bool()
 	pp := pp.Postprocessing{
 		Steps: []pp.Step{
 			pp.NewStep("stepA", FailureAfter(_waitTime), func(error) {
-				stepdone.Set(true)
+				stepdone.True()
 			}),
 		},
 		WaitFor: []string{"stepA"},
@@ -98,27 +77,27 @@ func Test_ItSyncsIfConfigured(t *testing.T) {
 
 	err := pp.Start()
 	require.Error(t, err)
-	require.True(t, stepdone.Get())
+	require.True(t, stepdone.IsTrue())
 }
 
 func Test_ItRunsStepsInParallel(t *testing.T) {
-	astarted, afinished := Bool(), Bool()
-	bstarted, bfinished := Bool(), Bool()
+	astarted, afinished := utils.Bool(), utils.Bool()
+	bstarted, bfinished := utils.Bool(), utils.Bool()
 	pp := pp.Postprocessing{
 		Steps: []pp.Step{
 			pp.NewStep("stepA", func() error {
-				astarted.Set(true)
+				astarted.True()
 				time.Sleep(_waitTime)
 				return nil
 			}, func(error) {
-				afinished.Set(true)
+				afinished.True()
 			}),
 			pp.NewStep("stepB", func() error {
-				bstarted.Set(true)
+				bstarted.True()
 				time.Sleep(_waitTime)
 				return nil
 			}, func(error) {
-				bfinished.Set(false)
+				bfinished.True()
 			}),
 		},
 	}
@@ -126,23 +105,23 @@ func Test_ItRunsStepsInParallel(t *testing.T) {
 	err := pp.Start()
 	require.NoError(t, err)
 	time.Sleep(_minWaitTime) // wait till processes have started
-	require.True(t, astarted.Get())
-	require.True(t, bstarted.Get())
-	require.False(t, afinished.Get())
-	require.False(t, bfinished.Get())
+	require.True(t, astarted.IsTrue())
+	require.True(t, bstarted.IsTrue())
+	require.False(t, afinished.IsTrue())
+	require.False(t, bfinished.IsTrue())
 }
 
 func Test_ItWaitsForSpecificSteps(t *testing.T) {
-	stepdone := Bool()
+	stepdone := utils.Bool()
 	pp := pp.Postprocessing{
 		Steps: []pp.Step{
 			pp.NewStep("stepA", func() error {
 				time.Sleep(_waitTime)
-				stepdone.Set(true)
+				stepdone.True()
 				return nil
 			}, nil),
 			pp.NewStep("stepB", func() error {
-				if !stepdone.Get() {
+				if !stepdone.IsTrue() {
 					return errors.New("step not done")
 				}
 				return nil

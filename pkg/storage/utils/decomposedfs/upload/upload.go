@@ -94,6 +94,25 @@ type Upload struct {
 	pp postprocessing.Postprocessing
 	// and a logger as well
 	log zerolog.Logger
+	// cancelled to cancel processing steps
+	Cancelled *utils.Cbool
+}
+
+func buildUpload(ctx context.Context, info tusd.FileInfo, binPath string, infoPath string, lu *lookup.Lookup, tp Tree) *Upload {
+	return &Upload{
+		Info:     info,
+		binPath:  binPath,
+		infoPath: infoPath,
+		lu:       lu,
+		tp:       tp,
+		Ctx:      ctx,
+		log: appctx.GetLogger(ctx).
+			With().
+			Interface("info", info).
+			Str("binPath", binPath).
+			Logger(),
+		Cancelled: utils.Bool(),
+	}
 }
 
 // WriteChunk writes the stream from the reader to the given offset of the upload
@@ -144,7 +163,7 @@ func (upload *Upload) FinishUpload(_ context.Context) error {
 
 // Terminate terminates the upload
 func (upload *Upload) Terminate(_ context.Context) error {
-	upload.cleanup(errors.New("upload terminated"))
+	upload.cleanup(true, true, true)
 	return nil
 }
 
@@ -412,18 +431,23 @@ func (upload *Upload) checkHash(expected string, h hash.Hash) error {
 }
 
 // cleanup cleans up after the upload is finished
-func (upload *Upload) cleanup(err error) {
-	if upload.node != nil && err != nil && upload.oldsize == nil {
+func (upload *Upload) cleanup(cleanNode, cleanBin, cleanInfo bool) {
+	if cleanNode && upload.node != nil && upload.oldsize == nil {
 		if err := utils.RemoveItem(upload.node.InternalPath()); err != nil {
 			upload.log.Info().Str("path", upload.node.InternalPath()).Err(err).Msg("removing node failed")
 		}
 	}
 
-	if err := os.Remove(upload.binPath); err != nil {
-		upload.log.Error().Str("path", upload.binPath).Err(err).Msg("removing upload failed")
+	if cleanBin {
+		if err := os.Remove(upload.binPath); err != nil {
+			upload.log.Error().Str("path", upload.binPath).Err(err).Msg("removing upload failed")
+		}
 	}
-	if err := os.Remove(upload.infoPath); err != nil {
-		upload.log.Error().Str("path", upload.infoPath).Err(err).Msg("removing upload info failed")
+
+	if cleanInfo {
+		if err := os.Remove(upload.infoPath); err != nil {
+			upload.log.Error().Str("path", upload.infoPath).Err(err).Msg("removing upload info failed")
+		}
 	}
 }
 

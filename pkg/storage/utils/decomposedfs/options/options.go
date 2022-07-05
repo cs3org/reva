@@ -60,11 +60,13 @@ type Options struct {
 type InfectedFileOption string
 
 var (
-	// Delete deletes the file
+	// Delete deletes the infected file and cancels the upload
 	Delete InfectedFileOption = "delete"
-	// Error errors which will cause the upload to cancel
+	// Keep will keep the infected file on disc but cancel the upload
+	Keep InfectedFileOption = "keep"
+	// Error will throw an error to the postprocessing but not cancel the upload
 	Error InfectedFileOption = "error"
-	// Ignore ignores infected files
+	// Ignore ignores the virus (except of marking it) and continues the upload regulary
 	Ignore InfectedFileOption = "ignore"
 )
 
