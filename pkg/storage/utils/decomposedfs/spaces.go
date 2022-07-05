@@ -105,7 +105,7 @@ func (fs *Decomposedfs) CreateStorageSpace(ctx context.Context, req *provider.Cr
 		}
 	}
 
-	err = fs.linkStorageSpaceType(ctx, req.Type, root.ID)
+	err = fs.updateIndexes(ctx, req.GetOwner().GetId().GetOpaqueId(), req.Type, root.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -250,6 +250,7 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 	var (
 		spaceID = spaceIDAny
 		nodeID  = spaceIDAny
+		userID  = ctxpkg.ContextMustGetUser(ctx).GetId().GetOpaqueId()
 	)
 
 	spaceTypes := []string{}
@@ -270,6 +271,10 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 			if strings.Contains(nodeID, "/") {
 				return []*provider.StorageSpace{}, nil
 			}
+
+		case provider.ListStorageSpacesRequest_Filter_TYPE_USER:
+			// TODO: refactor this to GetUserId() in cs3
+			userID = filter[i].GetUser()
 		}
 	}
 	if len(spaceTypes) == 0 {
@@ -555,7 +560,43 @@ func (fs *Decomposedfs) DeleteStorageSpace(ctx context.Context, req *provider.De
 	return n.SetDTime(&dtime)
 }
 
+func (fs *Decomposedfs) updateIndexes(ctx context.Context, userID, spaceType, spaceID string) error {
+	err := fs.linkStorageSpaceType(ctx, spaceType, spaceID)
+	if err != nil {
+		return err
+	}
+	return fs.linkSpaceByUser(ctx, userID, spaceID)
+}
+
+func (fs *Decomposedfs) linkSpaceByUser(ctx context.Context, userID, spaceID string) error {
+	if userID == "" {
+		return nil
+	}
+	// create user index dir
+	if err := os.MkdirAll(filepath.Join(fs.o.Root, "indexes", "by-user-id", userID), 0700); err != nil {
+		return err
+	}
+
+	err := os.Symlink("../../../spaces/"+lookup.Pathify(spaceID, 1, 2)+"/nodes/"+lookup.Pathify(spaceID, 4, 2), filepath.Join(fs.o.Root, "indexes/by-user-id", userID, spaceID))
+	if err != nil {
+		if isAlreadyExists(err) {
+			appctx.GetLogger(ctx).Debug().Err(err).Str("space", spaceID).Str("indexes/by-user-id", userID).Msg("symlink already exists")
+			// FIXME: is it ok to wipe this err if the symlink already exists?
+			err = nil
+		} else {
+			// TODO how should we handle error cases here?
+			appctx.GetLogger(ctx).Error().Err(err).Str("space", spaceID).Str("indexes/by-user-id", userID).Msg("could not create symlink")
+		}
+	}
+	return nil
+}
+
+// TODO: implement linkSpaceByGroup
+
 func (fs *Decomposedfs) linkStorageSpaceType(ctx context.Context, spaceType string, spaceID string) error {
+	if spaceType == "" {
+		return nil
+	}
 	// create space type dir
 	if err := os.MkdirAll(filepath.Join(fs.o.Root, "spacetypes", spaceType), 0700); err != nil {
 		return err
