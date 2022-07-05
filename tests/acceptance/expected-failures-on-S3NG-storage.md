@@ -1488,10 +1488,5 @@ _ocs: api compatibility, return correct status code_
 - [apiShareOperationsToShares1/gettingShares.feature:40](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareOperationsToShares1/gettingShares.feature#L40)
 - [apiShareOperationsToShares1/gettingShares.feature:39](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareOperationsToShares1/gettingShares.feature#L39)
 
-#### [apiWebdavMove1/moveFolder.feature:135 fails with 400 status](https://github.com/owncloud/ocis/issues/3023)
-- [apiWebdavMove1/moveFolder.feature:147](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove1/moveFolder.feature#L147)
-- [apiWebdavMove1/moveFolder.feature:148](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove1/moveFolder.feature#L148)
-- [apiWebdavMove1/moveFolder.feature:153](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove1/moveFolder.feature#L153)
-
 Note: always have an empty line at the end of this file.
 The bash script that processes this file may not process a scenario reference on the last line.
