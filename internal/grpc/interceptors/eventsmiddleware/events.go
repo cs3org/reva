@@ -25,7 +25,7 @@ import (
 	"go-micro.dev/v4/util/log"
 	"google.golang.org/grpc"
 
-	"github.com/asim/go-micro/plugins/events/nats/v4"
+	nats "github.com/asim/go-micro/plugins/events/nats/v4"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	"github.com/cs3org/reva/pkg/events"
 	"github.com/cs3org/reva/pkg/events/server"

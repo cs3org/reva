@@ -21,7 +21,7 @@ package server
 import (
 	"fmt"
 
-	"github.com/asim/go-micro/plugins/events/nats/v4"
+	nats "github.com/asim/go-micro/plugins/events/nats/v4"
 	"github.com/cenkalti/backoff"
 	"go-micro.dev/v4/events"
 

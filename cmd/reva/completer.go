@@ -22,7 +22,7 @@ import (
 	"flag"
 	"strings"
 
-	"github.com/c-bata/go-prompt"
+	prompt "github.com/c-bata/go-prompt"
 )
 
 // Completer provides completion command handler

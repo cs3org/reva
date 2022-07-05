@@ -36,7 +36,7 @@ import (
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/cs3org/reva/pkg/utils/resourceid"
-	"github.com/go-chi/chi/v5"
+	chi "github.com/go-chi/chi/v5"
 	ua "github.com/mileusna/useragent"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"

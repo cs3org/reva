@@ -25,7 +25,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/c-bata/go-prompt"
+	prompt "github.com/c-bata/go-prompt"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"

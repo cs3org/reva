@@ -36,7 +36,7 @@ import (
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/eventials/go-tus"
+	tus "github.com/eventials/go-tus"
 	"github.com/eventials/go-tus/memorystore"
 	"github.com/studio-b12/gowebdav"
 

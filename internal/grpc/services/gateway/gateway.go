@@ -26,7 +26,7 @@ import (
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 
-	"github.com/ReneKroon/ttlcache/v2"
+	ttlcache "github.com/ReneKroon/ttlcache/v2"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/sharedconf"

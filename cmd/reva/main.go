@@ -26,7 +26,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/c-bata/go-prompt"
+	prompt "github.com/c-bata/go-prompt"
 	"github.com/cs3org/reva/pkg/rhttp"
 )
 

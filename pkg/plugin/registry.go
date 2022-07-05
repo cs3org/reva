@@ -18,7 +18,7 @@
 
 package plugin
 
-import "github.com/hashicorp/go-plugin"
+import plugin "github.com/hashicorp/go-plugin"
 
 // PluginMap is a map containing all the plugins
 var PluginMap = map[string]plugin.Plugin{}
