@@ -301,7 +301,8 @@ func (nc *StorageDriver) Move(ctx context.Context, oldRef, newRef *provider.Refe
 }
 
 // GetMD as defined in the storage.FS interface
-func (nc *StorageDriver) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []string) (*provider.ResourceInfo, error) {
+// TODO forward fieldMask
+func (nc *StorageDriver) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []string, fieldMask []string) (*provider.ResourceInfo, error) {
 	type paramsObj struct {
 		Ref    *provider.Reference `json:"ref"`
 		MdKeys []string            `json:"mdKeys"`
@@ -331,7 +332,7 @@ func (nc *StorageDriver) GetMD(ctx context.Context, ref *provider.Reference, mdK
 }
 
 // ListFolder as defined in the storage.FS interface
-func (nc *StorageDriver) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys []string) ([]*provider.ResourceInfo, error) {
+func (nc *StorageDriver) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys, fieldMask []string) ([]*provider.ResourceInfo, error) {
 	type paramsObj struct {
 		Ref    *provider.Reference `json:"ref"`
 		MdKeys []string            `json:"mdKeys"`

@@ -516,7 +516,7 @@ func (fs *s3FS) Move(ctx context.Context, oldRef, newRef *provider.Reference) er
 	return nil
 }
 
-func (fs *s3FS) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []string) (*provider.ResourceInfo, error) {
+func (fs *s3FS) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []string, fieldMask []string) (*provider.ResourceInfo, error) {
 	log := appctx.GetLogger(ctx)
 
 	fn, err := fs.resolve(ctx, ref)
@@ -579,7 +579,7 @@ func (fs *s3FS) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []str
 	return fs.normalizeHead(ctx, output, fn), nil
 }
 
-func (fs *s3FS) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys []string) ([]*provider.ResourceInfo, error) {
+func (fs *s3FS) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys, fieldMask []string) ([]*provider.ResourceInfo, error) {
 	fn, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return nil, errors.Wrap(err, "error resolving ref")
