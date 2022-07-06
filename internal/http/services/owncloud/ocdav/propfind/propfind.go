@@ -404,7 +404,7 @@ func (p *Handler) propfindResponse(ctx context.Context, w http.ResponseWriter, r
 	}
 
 	/*propRes, err :=*/
-	RenderMultistatusResponse(ctx, w, &pf, resourceInfos, p.PublicURL, namespace, spaceType, linkshares, sendTusHeaders)
+	RenderMultistatusResponse(ctx, w, &pf, resourceInfos, p.PublicURL, namespace, linkshares, sendTusHeaders)
 	/*
 		if err != nil {
 			log.Error().Err(err).Msg("error formatting propfind")
@@ -891,7 +891,7 @@ func RenderMultistatusFooter(_ context.Context, w http.ResponseWriter, sendTusHe
 }
 
 // RenderMultistatusResponse converts a list of resource infos into a multistatus response string
-func RenderMultistatusResponse(ctx context.Context, w http.ResponseWriter, pf *XML, mds []*provider.ResourceInfo, publicURL, ns, spaceType string, linkshares map[string]struct{}, sendTusHeaders bool) {
+func RenderMultistatusResponse(ctx context.Context, w http.ResponseWriter, pf *XML, mds []*provider.ResourceInfo, publicURL, ns string, linkshares map[string]struct{}, sendTusHeaders bool) {
 	log := appctx.GetLogger(ctx)
 	if err := RenderMultistatusHeader(ctx, w, sendTusHeaders); err != nil {
 		log.Err(err).Msg("error writing xml header")

@@ -110,7 +110,7 @@ func (s *svc) doFilterFiles(w http.ResponseWriter, r *http.Request, ff *reportFi
 		}
 
 		/*responsesXML, err :=*/
-		propfind.RenderMultistatusResponse(ctx, w, &propfind.XML{Prop: ff.Prop}, infos, s.c.PublicURL, namespace, "", nil, false) // TODO why not announce TUS by sending headers?
+		propfind.RenderMultistatusResponse(ctx, w, &propfind.XML{Prop: ff.Prop}, infos, s.c.PublicURL, namespace, nil, false) // TODO why not announce TUS by sending headers?
 		/*
 			if err != nil {
 				log.Error().Err(err).Msg("error formatting propfind")

@@ -190,7 +190,7 @@ func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request,
 	}
 
 	/*propRes, err :=*/
-	propfind.RenderMultistatusResponse(ctx, w, &pf, infos, s.c.PublicURL, "", "", nil, false)
+	propfind.RenderMultistatusResponse(ctx, w, &pf, infos, s.c.PublicURL, "", nil, false)
 	/*
 		if err != nil {
 			sublog.Error().Err(err).Msg("error formatting propfind")

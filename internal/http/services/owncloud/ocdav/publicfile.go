@@ -112,7 +112,7 @@ func (s *svc) handlePropfindOnToken(w http.ResponseWriter, r *http.Request, ns s
 	infos := s.getPublicFileInfos(onContainer, depth == net.DepthZero, tokenStatInfo)
 
 	/*propRes, err :=*/
-	propfind.RenderMultistatusResponse(ctx, w, &pf, infos, s.c.PublicURL, ns, "", nil, false) // TODO why not announce TUS by sending the headers?
+	propfind.RenderMultistatusResponse(ctx, w, &pf, infos, s.c.PublicURL, ns, nil, false) // TODO why not announce TUS by sending the headers?
 	/*
 		if err != nil {
 			sublog.Error().Err(err).Msg("error formatting propfind")
