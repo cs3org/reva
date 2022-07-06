@@ -133,7 +133,7 @@ var _ = Describe("Spaces", func() {
 				err := os.Symlink(link, filepath.Join(tmpdir, "link"))
 				Expect(err).ToNot(HaveOccurred())
 
-				space, node, err := decomposedfs.ReadSpaceAndNodeFromSpaceTypeLink(filepath.Join(tmpdir, "link"))
+				space, node, err := decomposedfs.ReadSpaceAndNodeFromIndexLink(filepath.Join(tmpdir, "link"))
 				if shouldErr {
 					Expect(err).To(HaveOccurred())
 				} else {

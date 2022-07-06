@@ -316,7 +316,7 @@ func (r *registry) buildFilters(filterMap map[string]string) []*providerpb.ListS
 			})
 		}
 	}
-	if filterMap["user_id"] != "" && filterMap["user_idp"] != "" {
+	if filterMap["user_id"] != "" {
 		filters = append(filters, &providerpb.ListStorageSpacesRequest_Filter{
 			Type: providerpb.ListStorageSpacesRequest_Filter_TYPE_USER,
 			Term: &providerpb.ListStorageSpacesRequest_Filter_User{
