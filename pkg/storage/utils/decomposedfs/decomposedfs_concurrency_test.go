@@ -111,7 +111,7 @@ var _ = Describe("Decomposed", func() {
 						}
 						if err := env.Fs.CreateDir(env.Ctx, ref); err != nil {
 							Expect(err).To(MatchError(ContainSubstring("already exists")))
-							rinfo, err := env.Fs.GetMD(env.Ctx, ref, nil)
+							rinfo, err := env.Fs.GetMD(env.Ctx, ref, nil, nil)
 							Expect(err).ToNot(HaveOccurred())
 							Expect(rinfo).ToNot(BeNil())
 						}

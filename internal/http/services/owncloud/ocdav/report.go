@@ -110,7 +110,7 @@ func (s *svc) doFilterFiles(w http.ResponseWriter, r *http.Request, ff *reportFi
 			infos = append(infos, statRes.Info)
 		}
 
-		responsesXML, err := propfind.MultistatusResponse(ctx, &propfind.XML{Prop: ff.Prop}, infos, s.c.PublicURL, namespace, "", nil)
+		responsesXML, err := propfind.MultistatusResponse(ctx, &propfind.XML{Prop: ff.Prop}, infos, s.c.PublicURL, namespace, nil)
 		if err != nil {
 			log.Error().Err(err).Msg("error formatting propfind")
 			w.WriteHeader(http.StatusInternalServerError)
