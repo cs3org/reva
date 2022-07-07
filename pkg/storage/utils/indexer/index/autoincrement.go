@@ -91,23 +91,21 @@ func (idx *Autoincrement) LookupCtx(ctx context.Context, values ...string) ([]st
 		allValues = values
 	}
 
-	var matches = []string{}
-	for _, av := range allValues {
-		// TODO check if av can contain more than the base path
-		av = path.Base(av)
-		for i, v := range values {
-			if av == v {
-				oldname, err := idx.storage.ResolveSymlink(context.Background(), path.Join("/", idx.indexRootDir, av))
-				if err != nil {
-					break
-				}
-				matches = append(matches, oldname)
-				values = remove(values, i)
-				break
-			}
-		}
-
+	valueSet := make(map[string]struct{}, len(allValues))
+	for _, v := range allValues {
+		valueSet[path.Base(v)] = struct{}{}
 	}
+
+	var matches = []string{}
+
+	for v := range valueSet {
+		oldname, err := idx.storage.ResolveSymlink(context.Background(), path.Join("/", idx.indexRootDir, v))
+		if err != nil {
+			continue
+		}
+		matches = append(matches, oldname)
+	}
+
 	if len(matches) == 0 {
 		var v string
 		switch len(values) {

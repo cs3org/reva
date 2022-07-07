@@ -89,27 +89,23 @@ func (idx *NonUnique) LookupCtx(ctx context.Context, values ...string) ([]string
 		return nil, err
 	}
 
-	if idx.caseInsensitive {
-		for i := range values {
-			values[i] = strings.ToLower(values[i])
+	valueSet := make(map[string]struct{}, len(allValues))
+	for _, v := range allValues {
+		if idx.caseInsensitive {
+			valueSet[strings.ToLower(path.Base(v))] = struct{}{}
+		} else {
+			valueSet[path.Base(v)] = struct{}{}
 		}
 	}
 
 	var matches = map[string]struct{}{}
-	for _, av := range allValues {
-		av = path.Base(av)
-		for i, v := range values {
-			if av == v {
-				children, err := idx.storage.ReadDir(context.Background(), path.Join("/", idx.indexRootDir, av))
-				if err != nil {
-					break
-				}
-				for _, c := range children {
-					matches[path.Base(c)] = struct{}{}
-				}
-				values = remove(values, i)
-				break
-			}
+	for v := range valueSet {
+		children, err := idx.storage.ReadDir(context.Background(), path.Join("/", idx.indexRootDir, v))
+		if err != nil {
+			continue
+		}
+		for _, c := range children {
+			matches[path.Base(c)] = struct{}{}
 		}
 	}
 

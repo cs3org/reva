@@ -397,9 +397,9 @@ func (m *Manager) ListPublicShares(ctx context.Context, u *user.User, filters []
 		return result, nil
 	}
 
-	tokens := []string{}
+	var tokens []string
 	if len(idFilter) > 0 {
-		idFilters := []indexer.Field{}
+		idFilters := make([]indexer.Field, 0, len(idFilter))
 		for _, filter := range idFilter {
 			resourceID := filter.GetResourceId()
 			idFilters = append(idFilters, indexer.NewField("ResourceId", resourceIDToIndex(resourceID)))
