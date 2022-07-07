@@ -14,7 +14,6 @@ issues:
         - scopelint
 linters:
   enable:
-    - maligned
     - bodyclose
     - deadcode
     - errcheck
@@ -27,10 +26,8 @@ linters:
     - unused
     - varcheck
     - depguard
-    - golint
     - goimports
     - unconvert
-    - scopelint
     - misspell
     - gocritic
     - prealloc

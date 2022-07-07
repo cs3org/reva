@@ -80,7 +80,7 @@ test-go-version:
 
 # for manual building only
 deps:
-	cd /tmp && rm -rf golangci-lint &&  git clone --quiet -b 'v1.42.1' --single-branch --depth 1 https://github.com/golangci/golangci-lint &> /dev/null && cd golangci-lint/cmd/golangci-lint && go install
+	cd /tmp && rm -rf golangci-lint &&  git clone --quiet -b 'v1.46.2' --single-branch --depth 1 https://github.com/golangci/golangci-lint &> /dev/null && cd golangci-lint/cmd/golangci-lint && go install
 	cd /tmp && go install golang.org/x/tools/cmd/goimports@latest
 
 build-ci: off
@@ -141,3 +141,6 @@ vendor-bin/behat/composer.lock: vendor-bin/behat/composer.json
 
 composer.lock: composer.json
 	@echo composer.lock is not up to date.
+
+
+

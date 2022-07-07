@@ -22,6 +22,7 @@ import (
 	"context"
 	"errors"
 	"flag"
+	"fmt"
 	"log"
 	"os"
 	"os/exec"
@@ -59,6 +60,7 @@ func skipPR(prID int) bool {
 
 func main() {
 	repo := flag.String("repo", "", "the remote repo against which diff-index is to be derived")
+	branch := flag.String("branch", "master", "the branch to use")
 	prID := flag.Int("pr", 0, "the ID of the PR")
 	flag.Parse()
 
@@ -66,25 +68,24 @@ func main() {
 		return
 	}
 
-	branch := "master"
 	if *repo != "" {
-		branch = *repo + "/master"
+		*branch = fmt.Sprintf("%s/%s", *repo, *branch)
 	}
 
-	cmd := exec.Command("git", "diff-index", branch, "--", ".")
-	out, err := cmd.Output()
+	cmd := exec.Command("git", "diff-index", *branch, "--", ".")
+	out, err := cmd.CombinedOutput()
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("%+v: %s", err, out)
 	}
 	// Return successfully if there are no changes
 	if len(out) == 0 {
 		return
 	}
 
-	cmd = exec.Command("git", "diff-index", branch, "--", "changelog/unreleased")
-	out, err = cmd.Output()
+	cmd = exec.Command("git", "diff-index", *branch, "--", "changelog/unreleased")
+	out, err = cmd.CombinedOutput()
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("%+v: %s", err, out)
 	}
 
 	mods := strings.Split(string(out), "\n")

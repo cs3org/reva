@@ -50,3 +50,8 @@ tmp/
 
 # drone
 .drone.yml
+
+
+# rpm builds
+revad-*
+rpmbuild

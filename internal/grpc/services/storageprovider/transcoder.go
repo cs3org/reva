@@ -33,7 +33,7 @@ func (x XS) String() string {
 		return strings.ToUpper(string(x))
 	}
 	if x == XSAdler32 {
-		return strings.Title(string(x))
+		return "Adler32"
 	}
 	return string(x)
 

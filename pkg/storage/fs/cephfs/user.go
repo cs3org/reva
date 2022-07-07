@@ -24,7 +24,6 @@ package cephfs
 import (
 	"context"
 	"fmt"
-	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
