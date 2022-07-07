@@ -25,6 +25,35 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 )
 
+// BytesReceived is emitted by the server when it received all bytes of an upload
+type BytesReceived struct {
+	Executant *user.UserId
+	UploadURL string
+	Token     string
+}
+
+// Unmarshal to fulfill umarshaller interface
+func (BytesReceived) Unmarshal(v []byte) (interface{}, error) {
+	e := BytesReceived{}
+	err := json.Unmarshal(v, &e)
+	return e, err
+}
+
+// PostprocessingFinished is emitted by *some* service which can decide that
+type PostprocessingFinished struct {
+	Executant  *user.UserId
+	UploadID   string
+	UploadPath string
+	Result     string
+}
+
+// Unmarshal to fulfill umarshaller interface
+func (PostprocessingFinished) Unmarshal(v []byte) (interface{}, error) {
+	e := PostprocessingFinished{}
+	err := json.Unmarshal(v, &e)
+	return e, err
+}
+
 // ContainerCreated is emitted when a directory has been created
 type ContainerCreated struct {
 	Executant *user.UserId

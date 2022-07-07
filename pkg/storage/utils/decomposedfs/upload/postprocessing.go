@@ -28,7 +28,8 @@ import (
 
 // Postprocessing will configure a postprocessing instance from config
 func Postprocessing(upload *Upload, o options.PostprocessingOptions) postprocessing.Postprocessing {
-	waitfor := []string{"initialize"}
+	//waitfor := []string{"initialize"}
+	waitfor := []string{}
 	if !o.AsyncFileUploads {
 		waitfor = append(waitfor, "assembling")
 	}
@@ -42,16 +43,15 @@ func Postprocessing(upload *Upload, o options.PostprocessingOptions) postprocess
 
 func stepsFromConfig(upload *Upload, o options.PostprocessingOptions) []postprocessing.Step {
 	steps := []postprocessing.Step{Initialize(upload)}
+	if o.DelayProcessing != 0 {
+		steps = append(steps, Sleep(upload, o.DelayProcessing))
+	}
 
 	if o.UploadVirusscan {
 		steps = append(steps, Scan(upload, o.VirusScanner, ""))
 	}
 
-	steps = append(steps, Assemble(upload, o.AsyncFileUploads, o.UploadVirusscan))
-
-	if o.DelayProcessing != 0 {
-		steps = append(steps, Sleep(upload, o.DelayProcessing))
-	}
+	steps = append(steps, Assemble(upload, o.AsyncFileUploads, o.UploadVirusscan, o.DelayProcessing != 0))
 
 	return steps
 }

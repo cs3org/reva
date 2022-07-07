@@ -47,8 +47,11 @@ func Initialize(upload *Upload) postprocessing.Step {
 }
 
 // Assemble assembles the file and moves it to the blobstore
-func Assemble(upload *Upload, async bool, waitforscan bool) postprocessing.Step {
+func Assemble(upload *Upload, async bool, waitforscan bool, delayprocessing bool) postprocessing.Step {
 	requires := []string{"initialize"}
+	if delayprocessing {
+		requires = append(requires, "sleep")
+	}
 	if waitforscan {
 		requires = append(requires, "scanning")
 	}
