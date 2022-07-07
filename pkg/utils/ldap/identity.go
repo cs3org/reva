@@ -172,6 +172,8 @@ func (i *Identity) GetLDAPUserByFilter(log *zerolog.Logger, lc ldap.Client, filt
 			i.User.Schema.ID,
 			i.User.Schema.Mail,
 			i.User.Schema.Username,
+			i.User.Schema.UIDNumber,
+			i.User.Schema.GIDNumber,
 		},
 		nil,
 	)
@@ -210,6 +212,8 @@ func (i *Identity) GetLDAPUserByDN(log *zerolog.Logger, lc ldap.Client, dn strin
 			i.User.Schema.ID,
 			i.User.Schema.Mail,
 			i.User.Schema.Username,
+			i.User.Schema.UIDNumber,
+			i.User.Schema.GIDNumber,
 		},
 		nil,
 	)
@@ -235,7 +239,14 @@ func (i *Identity) GetLDAPUsers(log *zerolog.Logger, lc ldap.Client, query strin
 		i.User.BaseDN,
 		i.User.scopeVal, ldap.NeverDerefAliases, 0, 0, false,
 		filter,
-		[]string{i.User.Schema.ID, i.User.Schema.Username, i.User.Schema.Mail, i.User.Schema.DisplayName, i.User.Schema.UIDNumber, i.User.Schema.GIDNumber},
+		[]string{
+			i.User.Schema.ID,
+			i.User.Schema.Username,
+			i.User.Schema.Mail,
+			i.User.Schema.DisplayName,
+			i.User.Schema.UIDNumber,
+			i.User.Schema.GIDNumber,
+		},
 		nil,
 	)
 
@@ -321,6 +332,7 @@ func (i *Identity) GetLDAPGroupByFilter(log *zerolog.Logger, lc ldap.Client, fil
 			i.Group.Schema.Mail,
 			i.Group.Schema.Groupname,
 			i.Group.Schema.Member,
+			i.Group.Schema.GIDNumber,
 		},
 		nil,
 	)
@@ -352,7 +364,12 @@ func (i *Identity) GetLDAPGroups(log *zerolog.Logger, lc ldap.Client, query stri
 		i.Group.BaseDN,
 		ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 0, 0, false,
 		i.getGroupFindFilter(query),
-		[]string{i.Group.Schema.ID, i.Group.Schema.Groupname, i.Group.Schema.Mail, i.Group.Schema.DisplayName, i.Group.Schema.GIDNumber},
+		[]string{
+			i.Group.Schema.DisplayName,
+			i.Group.Schema.ID,
+			i.Group.Schema.Mail,
+			i.Group.Schema.Groupname,
+			i.Group.Schema.GIDNumber},
 		nil,
 	)
 
