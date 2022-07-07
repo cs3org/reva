@@ -29,6 +29,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
@@ -407,4 +408,30 @@ func RemoveItem(path string) error {
 
 	}
 
+}
+
+// Cbool is a boolean that can be accessed concurrently
+type Cbool struct {
+	b bool
+	l *sync.RWMutex
+}
+
+// Bool returns a CBool
+func Bool() *Cbool {
+	return &Cbool{b: false, l: &sync.RWMutex{}}
+}
+
+// True sets the Cbool to true
+// NOTE: False method missing - implement it when you need it
+func (b *Cbool) True() {
+	b.l.Lock()
+	defer b.l.Unlock()
+	b.b = true
+}
+
+// IsTrue returns the current bool value
+func (b *Cbool) IsTrue() bool {
+	b.l.RLock()
+	defer b.l.RUnlock()
+	return b.b
 }

@@ -31,6 +31,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
+	"github.com/cs3org/reva/v2/pkg/events"
 	"github.com/cs3org/reva/v2/pkg/logger"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/chunking"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/lookup"
@@ -51,7 +52,7 @@ type PermissionsChecker interface {
 }
 
 // New returns a new processing instance
-func New(ctx context.Context, info tusd.FileInfo, lu *lookup.Lookup, tp Tree, p PermissionsChecker, fsRoot string, o options.PostprocessingOptions) (upload *Upload, err error) {
+func New(ctx context.Context, info tusd.FileInfo, lu *lookup.Lookup, tp Tree, p PermissionsChecker, fsRoot string, o options.PostprocessingOptions, pub events.Publisher) (upload *Upload, err error) {
 
 	log := appctx.GetLogger(ctx)
 	log.Debug().Interface("info", info).Msg("Decomposedfs: NewUpload")
@@ -155,19 +156,9 @@ func New(ctx context.Context, info tusd.FileInfo, lu *lookup.Lookup, tp Tree, p 
 	}
 	defer file.Close()
 
-	u := &Upload{
-		Info:     info,
-		binPath:  binPath,
-		infoPath: filepath.Join(fsRoot, "uploads", info.ID+".info"),
-		lu:       lu,
-		tp:       tp,
-		Ctx:      ctx,
-		log: appctx.GetLogger(ctx).
-			With().
-			Interface("info", info).
-			Str("binPath", binPath).
-			Logger(),
-	}
+	u := buildUpload(ctx, info, binPath, filepath.Join(fsRoot, "uploads", info.ID+".info"), lu, tp)
+	u.pub = pub
+	u.pp = Postprocessing(u, o)
 
 	// writeInfo creates the file by itself if necessary
 	err = u.writeInfo()
@@ -175,12 +166,11 @@ func New(ctx context.Context, info tusd.FileInfo, lu *lookup.Lookup, tp Tree, p 
 		return nil, err
 	}
 
-	u.pp = configurePostprocessing(u, o)
 	return u, nil
 }
 
 // Get returns the Upload for the given upload id
-func Get(ctx context.Context, id string, lu *lookup.Lookup, tp Tree, fsRoot string, o options.PostprocessingOptions) (*Upload, error) {
+func Get(ctx context.Context, id string, lu *lookup.Lookup, tp Tree, fsRoot string, o options.PostprocessingOptions, pub events.Publisher) (*Upload, error) {
 	infoPath := filepath.Join(fsRoot, "uploads", id+".info")
 
 	info := tusd.FileInfo{}
@@ -224,16 +214,9 @@ func Get(ctx context.Context, id string, lu *lookup.Lookup, tp Tree, fsRoot stri
 
 	ctx = appctx.WithLogger(ctx, &sub)
 
-	up := &Upload{
-		Info:     info,
-		binPath:  info.Storage["BinPath"],
-		infoPath: infoPath,
-		lu:       lu,
-		tp:       tp,
-		Ctx:      ctx,
-	}
-
-	up.pp = configurePostprocessing(up, o)
+	up := buildUpload(ctx, info, info.Storage["BinPath"], infoPath, lu, tp)
+	up.pub = pub
+	up.pp = Postprocessing(up, o)
 	return up, nil
 }
 

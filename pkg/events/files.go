@@ -20,10 +20,85 @@ package events
 
 import (
 	"encoding/json"
+	"time"
 
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 )
+
+// BytesReceived is emitted by the server when it received all bytes of an upload
+type BytesReceived struct {
+	UploadID  string
+	UploadURL string
+	Token     string
+}
+
+// Unmarshal to fulfill umarshaller interface
+func (BytesReceived) Unmarshal(v []byte) (interface{}, error) {
+	e := BytesReceived{}
+	err := json.Unmarshal(v, &e)
+	return e, err
+}
+
+// VirusscanFinished is emitted by the server when it has completed an antivirus scan
+type VirusscanFinished struct {
+	UploadID    string
+	Infected    bool
+	Description string
+	Scandate    time.Time
+}
+
+// Unmarshal to fulfill umarshaller interface
+func (VirusscanFinished) Unmarshal(v []byte) (interface{}, error) {
+	e := VirusscanFinished{}
+	err := json.Unmarshal(v, &e)
+	return e, err
+}
+
+// StartPostprocessingStep can be issued by the server to start a postprocessing step
+type StartPostprocessingStep struct {
+	UploadID  string
+	UploadURL string
+	Token     string
+
+	StepToStart string
+}
+
+// Unmarshal to fulfill umarshaller interface
+func (StartPostprocessingStep) Unmarshal(v []byte) (interface{}, error) {
+	e := StartPostprocessingStep{}
+	err := json.Unmarshal(v, &e)
+	return e, err
+}
+
+// TODO: implement PostprocessingStepFinished event to enable client to track pp status
+
+// PostprocessingFinished is emitted by *some* service which can decide that
+type PostprocessingFinished struct {
+	UploadID string
+	Result   map[string]interface{} // it is basically a map[step]Event
+	Action   string                 // "delete", "cancel" or "continue"
+}
+
+// Unmarshal to fulfill umarshaller interface
+func (PostprocessingFinished) Unmarshal(v []byte) (interface{}, error) {
+	e := PostprocessingFinished{}
+	err := json.Unmarshal(v, &e)
+	return e, err
+}
+
+// UploadReady is emitted by the storage provider when postprocessing is finished and the file is ready to work with
+type UploadReady struct {
+	UploadID string
+	// add reference here? We could use it to inform client pp is finished
+}
+
+// Unmarshal to fulfill umarshaller interface
+func (UploadReady) Unmarshal(v []byte) (interface{}, error) {
+	e := UploadReady{}
+	err := json.Unmarshal(v, &e)
+	return e, err
+}
 
 // ContainerCreated is emitted when a directory has been created
 type ContainerCreated struct {

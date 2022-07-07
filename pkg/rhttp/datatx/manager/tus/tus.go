@@ -33,7 +33,6 @@ import (
 	"github.com/cs3org/reva/v2/pkg/events"
 	"github.com/cs3org/reva/v2/pkg/rhttp/datatx"
 	"github.com/cs3org/reva/v2/pkg/rhttp/datatx/manager/registry"
-	"github.com/cs3org/reva/v2/pkg/rhttp/datatx/utils/download"
 	"github.com/cs3org/reva/v2/pkg/storage"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/mitchellh/mapstructure"
@@ -139,7 +138,8 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 		case "DELETE":
 			handler.DelFile(w, r)
 		case "GET":
-			download.GetOrHeadFile(w, r, fs, "")
+			//download.GetOrHeadFile(w, r, fs, "")
+			handler.GetFile(w, r)
 		default:
 			w.WriteHeader(http.StatusNotImplemented)
 		}

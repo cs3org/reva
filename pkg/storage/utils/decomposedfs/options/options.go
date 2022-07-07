@@ -54,6 +54,14 @@ type Options struct {
 	GeneralSpaceAliasTemplate  string `mapstructure:"generalspacealias_template"`
 
 	Postprocessing PostprocessingOptions `mapstructure:"postprocessing"`
+
+	Events EventOptions `mapstructure:"events"`
+}
+
+// EventOptions are the configurable options for events
+type EventOptions struct {
+	NatsAddress   string `mapstructure:"natsaddress"`
+	NatsClusterID string `mapstructure:"natsclusterid"`
 }
 
 // PostprocessingOptions defines the available options for postprocessing

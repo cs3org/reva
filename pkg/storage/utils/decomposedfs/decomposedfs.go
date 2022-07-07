@@ -39,6 +39,8 @@ import (
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
+	"github.com/cs3org/reva/v2/pkg/events"
+	"github.com/cs3org/reva/v2/pkg/events/server"
 	"github.com/cs3org/reva/v2/pkg/logger"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v2/pkg/storage"
@@ -47,9 +49,11 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/options"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/tree"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/upload"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/templates"
 	"github.com/cs3org/reva/v2/pkg/utils"
+	"github.com/go-micro/plugins/v4/events/natsjs"
 	"github.com/pkg/errors"
 	"go.opentelemetry.io/otel/codes"
 	"google.golang.org/grpc"
@@ -99,6 +103,7 @@ type Decomposedfs struct {
 	p                 PermissionsChecker
 	chunkHandler      *chunking.ChunkHandler
 	permissionsClient CS3PermissionsClient
+	stream            events.Stream
 }
 
 // NewDefault returns an instance with default components
@@ -133,14 +138,54 @@ func New(o *options.Options, lu *lookup.Lookup, p PermissionsChecker, tp Tree, p
 		return nil, errors.Wrap(err, "could not setup tree")
 	}
 
-	return &Decomposedfs{
+	var ev events.Stream
+	if o.Events.NatsAddress != "" {
+		ev, err = server.NewNatsStream(natsjs.Address(o.Events.NatsAddress), natsjs.ClusterID(o.Events.NatsClusterID))
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	fs := &Decomposedfs{
 		tp:                tp,
 		lu:                lu,
 		o:                 o,
 		p:                 p,
 		chunkHandler:      chunking.NewChunkHandler(filepath.Join(o.Root, "uploads")),
 		permissionsClient: permissionsClient,
-	}, nil
+		stream:            ev,
+	}
+
+	if o.Events.NatsAddress != "" {
+		ch, err := events.Consume(ev, "dcfs", events.PostprocessingFinished{}, events.BytesReceived{})
+		if err != nil {
+			return nil, err
+		}
+
+		go fs.Postprocessing(ch)
+	}
+
+	return fs, nil
+}
+
+// Postprocessing starts the postprocessing result collector
+func (fs *Decomposedfs) Postprocessing(ch <-chan interface{}) {
+	for event := range ch {
+		switch ev := event.(type) {
+		case events.PostprocessingFinished:
+			up, err := upload.Get(nil, ev.UploadID, fs.lu, fs.tp, fs.o.Root, fs.o.Postprocessing, fs.stream) // fs.GetUpload(nil, ev.UploadID)
+			if err != nil {
+				// TODO: error handling
+			}
+
+			//if err := upload.Finalize(up); err != nil {
+			// TODO: more error handling
+			//}
+			_ = up
+
+		}
+	}
+
 }
 
 // Shutdown shuts down the storage
