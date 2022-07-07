@@ -870,7 +870,7 @@ func ReadPropfind(r io.Reader) (pf XML, status int, err error) {
 	return pf, 0, nil
 }
 
-func RenderMultistatusHeader(_ context.Context, w http.ResponseWriter, sendTusHeaders bool) error {
+func renderMultistatusHeader(_ context.Context, w http.ResponseWriter, sendTusHeaders bool) error {
 	// TODO transfer encoding chunked?
 	w.Header().Set(net.HeaderDav, "1, 3, extended-mkcol")
 	w.Header().Set(net.HeaderContentType, "application/xml; charset=utf-8")
@@ -885,7 +885,7 @@ func RenderMultistatusHeader(_ context.Context, w http.ResponseWriter, sendTusHe
 	_, err := w.Write([]byte(`<d:multistatus xmlns:s="http://sabredav.org/ns" xmlns:d="DAV:" xmlns:oc="http://owncloud.org/ns">`))
 	return err
 }
-func RenderMultistatusFooter(_ context.Context, w http.ResponseWriter, sendTusHeaders bool) error {
+func renderMultistatusFooter(_ context.Context, w http.ResponseWriter, sendTusHeaders bool) error {
 	_, err := w.Write([]byte(`</d:multistatus>`))
 	return err
 }
@@ -893,7 +893,7 @@ func RenderMultistatusFooter(_ context.Context, w http.ResponseWriter, sendTusHe
 // RenderMultistatusResponse converts a list of resource infos into a multistatus response string
 func RenderMultistatusResponse(ctx context.Context, w http.ResponseWriter, pf *XML, mds []*provider.ResourceInfo, publicURL, ns string, linkshares map[string]struct{}, sendTusHeaders bool) {
 	log := appctx.GetLogger(ctx)
-	if err := RenderMultistatusHeader(ctx, w, sendTusHeaders); err != nil {
+	if err := renderMultistatusHeader(ctx, w, sendTusHeaders); err != nil {
 		log.Err(err).Msg("error writing xml header")
 	}
 	enc := xml.NewEncoder(w)
@@ -910,7 +910,7 @@ func RenderMultistatusResponse(ctx context.Context, w http.ResponseWriter, pf *X
 		}
 	}
 
-	if err := RenderMultistatusFooter(ctx, w, sendTusHeaders); err != nil {
+	if err := renderMultistatusFooter(ctx, w, sendTusHeaders); err != nil {
 		log.Err(err).Msg("error writing xml footer")
 	}
 }

@@ -82,6 +82,7 @@ func (idx *NonUnique) Lookup(v string) ([]string, error) {
 	return idx.LookupCtx(context.Background(), v)
 }
 
+// LookupCtx retieves multiple exact values and allows passing in a context
 func (idx *NonUnique) LookupCtx(ctx context.Context, values ...string) ([]string, error) {
 	allValues, err := idx.storage.ReadDir(context.Background(), path.Join("/", idx.indexRootDir))
 	if err != nil {

@@ -77,6 +77,7 @@ func (idx *Unique) Lookup(v string) ([]string, error) {
 	return idx.LookupCtx(context.Background(), v)
 }
 
+// LookupCtx retieves multiple exact values and allows passing in a context
 func (idx *Unique) LookupCtx(ctx context.Context, values ...string) ([]string, error) {
 	var allValues []string
 	var err error
