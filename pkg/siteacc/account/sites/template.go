@@ -20,15 +20,21 @@ package sites
 
 const tplJavaScript = `
 function verifyForm(formData) {
-	if (formData.getTrimmed("clientID") == "") {
-		setState(STATE_ERROR, "Please enter the name of the test user.", "form", "clientID", true);
+	{{$parent := .}}
+	{{range .Operator.Sites}}
+	{{$site := index $parent.Sites .ID}} 
+	{{$clientID := print "clientID-" .ID}}
+	if (formData.getTrimmed("{{$clientID}}") == "") {
+		setState(STATE_ERROR, "Please enter the name of the test user for site {{$site}}.", "form", "{{$clientID}}", true);
 		return false;
 	}
 
-	if (formData.get("secret") == "") {
-		setState(STATE_ERROR, "Please enter the password of the test user.", "form", "secret", true);
+	{{$secret := print "secret-" .ID}}
+	if (formData.get("{{$secret}}") == "") {
+		setState(STATE_ERROR, "Please enter the password of the test user for site {{$site}}.", "form", "{{$secret}}", true);
 		return false;
 	}
+	{{end}}
 
 	return true;
 }
@@ -54,14 +60,19 @@ function handleAction(action) {
 		}
 	}
 
-	var postData = {
-		"config": {
-			"testClientCredentials": {
-				"id": formData.getTrimmed("clientID"),
-				"secret": formData.get("secret")
+	var postData = [
+		{{range .Operator.Sites}}
+		{
+			"id": "{{.ID}}",
+			"config": {
+				"testClientCredentials": {
+					"id": formData.getTrimmed({{print "clientID-" .ID}}),
+					"secret": formData.get({{print "secret-" .ID}})
+				}
 			}
-		}
-    };
+		},
+		{{end}}
+    ];
 
     xhr.send(JSON.stringify(postData));
 }
@@ -95,19 +106,26 @@ const tplBody = `
 			<hr>
 		</div>
 
-		{{range .Account.Operator.Sites}}
-			<div style="grid-row: 2;"><label for="clientID">User name: <span class="mandatory">*</span></label></div>
-			<div style="grid-row: 3;"><input type="text" id="clientID" name="clientID" placeholder="User name" value="{{.Config.TestClientCredentials.ID}}"/></div>
-			<div style="grid-row: 2;"><label for="secret">Password: <span class="mandatory">*</span></label></div>
-			<div style="grid-row: 3;"><input type="password" id="secret" name="secret" placeholder="Password" value="{{.Config.TestClientCredentials.Secret}}"/></div>
+		{{$row := 2}}{{$parent := .}}
+		{{range $index, $elem := .Operator.Sites}}
+			<div style="grid-row: {{$row}};"><em><strong>{{index $parent.Sites .ID}}</strong> ({{.ID}})</em></div>
+
+			{{$clientID := print "clientID-" .ID}}
+			<div style="grid-row: {{add $row 1}};"><label for="{{$clientID}}">User name: <span class="mandatory">*</span></label></div>
+			<div style="grid-row: {{add $row 2}};"><input type="text" id="{{$clientID}}" name="{{$clientID}}" placeholder="User name" value="{{.Config.TestClientCredentials.ID}}"/></div>
+			{{$secret := print "secret-" .ID}}
+			<div style="grid-row: {{add $row 1}};"><label for="{{$secret}}">Password: <span class="mandatory">*</span></label></div>
+			<div style="grid-row: {{add $row 2}};"><input type="password" id="{{$secret}}" name="{{$secret}}" placeholder="Password" value="{{.Config.TestClientCredentials.Secret}}"/></div>
 	
-			<div style="grid-row: 4;">&nbsp;</div>
+			<div style="grid-row: {{add $row 3}};">&nbsp;</div>
+			
+			{{$row = add $row 4}}
 		{{end}}
 
-		<div style="grid-row: 5; align-self: center;">
+		<div style="grid-row: {{add $row 1}}; align-self: center;">
 			Fields marked with <span class="mandatory">*</span> are mandatory.
 		</div>
-		<div style="grid-row: 5; grid-column: 2; text-align: right;">
+		<div style="grid-row: {{add $row 1}}; grid-column: 2; text-align: right;">
 			<button type="reset">Reset</button>
 			<button type="submit" style="font-weight: bold;">Save</button>
 		</div>

@@ -124,7 +124,7 @@ func (mngr *OperatorsManager) UpdateOperator(opData *data.Operator) error {
 		return errors.Wrap(err, "operator to update not found")
 	}
 
-	if err := op.Update(opData); err == nil {
+	if err := op.Update(opData, mngr.conf.Security.CredentialsPassphrase); err == nil {
 		mngr.storage.OperatorUpdated(op)
 		mngr.writeAllOperators()
 	} else {

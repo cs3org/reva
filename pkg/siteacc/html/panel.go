@@ -147,6 +147,9 @@ func (panel *Panel) Execute(w http.ResponseWriter, r *http.Request, session *Ses
 func (panel *Panel) prepareTemplate(tpl *template.Template) {
 	// Add some custom helper functions to the template
 	tpl.Funcs(template.FuncMap{
+		"add": func(x, y int) int {
+			return x + y
+		},
 		"getServerAddress": func() string {
 			return strings.TrimRight(panel.conf.Webserver.URL, "/")
 		},

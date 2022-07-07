@@ -164,20 +164,28 @@ func (panel *Panel) Execute(w http.ResponseWriter, r *http.Request, session *htm
 			Account  *data.Account
 			Params   map[string]string
 
-			Titles    []string
 			Operators []data.OperatorInformation
+			Sites     map[string]string
+			Titles    []string
 		}
 
 		tplData := TemplateData{
 			Operator:  nil,
 			Account:   nil,
 			Params:    flatValues,
-			Titles:    []string{"Mr", "Mrs", "Ms", "Prof", "Dr"},
 			Operators: availOps,
+			Sites:     make(map[string]string, 10),
+			Titles:    []string{"Mr", "Mrs", "Ms", "Prof", "Dr"},
 		}
 		if user := session.LoggedInUser(); user != nil {
-			tplData.Operator = panel.cloneUserOperator(user.Operator)
+			availSites, err := panel.fetchAvailableSites(user.Operator)
+			if err != nil {
+				return errors.Wrap(err, "unable to query available sites")
+			}
+
+			tplData.Operator = panel.cloneUserOperator(user.Operator, availSites)
 			tplData.Account = user.Account
+			tplData.Sites = availSites
 		}
 		return tplData
 	}
@@ -202,10 +210,25 @@ func (panel *Panel) redirect(path string, w http.ResponseWriter, r *http.Request
 	return html.AbortExecution
 }
 
-func (panel *Panel) cloneUserOperator(op *data.Operator) *data.Operator {
+func (panel *Panel) fetchAvailableSites(op *data.Operator) (map[string]string, error) {
+	ids, err := data.QueryOperatorSites(op.ID, panel.conf.Mentix.URL, panel.conf.Mentix.DataEndpoint)
+	if err != nil {
+		return nil, err
+	}
+	sites := make(map[string]string, 10)
+	for _, id := range ids {
+		if siteName, _ := data.QuerySiteName(id, true, panel.conf.Mentix.URL, panel.conf.Mentix.DataEndpoint); err == nil {
+			sites[id] = siteName
+		} else {
+			sites[id] = id
+		}
+	}
+	return sites, nil
+}
+
+func (panel *Panel) cloneUserOperator(op *data.Operator, sites map[string]string) *data.Operator {
 	// Clone the user's operator and decrypt all credentials for the panel
-	// TODO: Fetch sites?!
-	opClone := op.Clone(true)
+	opClone := op.Clone(false)
 	for _, site := range opClone.Sites {
 		id, secret, err := site.Config.TestClientCredentials.Get(panel.conf.Security.CredentialsPassphrase)
 		if err == nil {
@@ -213,6 +236,24 @@ func (panel *Panel) cloneUserOperator(op *data.Operator) *data.Operator {
 			site.Config.TestClientCredentials.Secret = secret
 		}
 	}
+
+	// Add missing sites
+	for id, _ := range sites {
+		siteFound := false
+		for _, site := range opClone.Sites {
+			if strings.EqualFold(site.ID, id) {
+				siteFound = true
+				break
+			}
+		}
+		if !siteFound {
+			opClone.Sites = append(opClone.Sites, &data.Site{
+				ID:     id,
+				Config: data.SiteConfiguration{},
+			})
+		}
+	}
+
 	return opClone
 }
 

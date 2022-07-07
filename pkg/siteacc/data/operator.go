@@ -18,6 +18,10 @@
 
 package data
 
+import (
+	"github.com/pkg/errors"
+)
+
 // Operator represents the global operator-specific settings stored in the service.
 type Operator struct {
 	ID string `json:"id"`
@@ -29,7 +33,16 @@ type Operator struct {
 type Operators = []*Operator
 
 // Update copies the data of the given operator to this operator.
-func (op *Operator) Update(other *Operator) error {
+func (op *Operator) Update(other *Operator, credsPassphrase string) error {
+	// Clear currently stored sites and clone over the new ones
+	op.Sites = make([]*Site, 0, len(other.Sites))
+	for _, otherSite := range other.Sites {
+		site := otherSite.Clone(true)
+		if err := site.Update(otherSite, credsPassphrase); err != nil {
+			return errors.Wrapf(err, "unable to update site %v", site.ID)
+		}
+		op.Sites = append(op.Sites, site)
+	}
 	return nil
 }
 

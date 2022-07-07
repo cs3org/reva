@@ -248,28 +248,29 @@ func handleSiteGet(siteacc *SiteAccounts, values url.Values, body []byte, sessio
 }
 
 func handleSitesConfigure(siteacc *SiteAccounts, values url.Values, body []byte, session *html.Session) (interface{}, error) {
-	// TODO:
-	/*
-		email, _, err := processInvoker(siteacc, values, session)
-		if err != nil {
-			return nil, err
-		}
-		account, err := siteacc.AccountsManager().FindAccount(manager.FindByEmail, email)
-		if err != nil {
-			return nil, err
-		}
+	email, _, err := processInvoker(siteacc, values, session)
+	if err != nil {
+		return nil, err
+	}
+	account, err := siteacc.AccountsManager().FindAccount(manager.FindByEmail, email)
+	if err != nil {
+		return nil, err
+	}
 
-		siteData := &data.Site{}
-		if err := json.Unmarshal(body, siteData); err != nil {
-			return nil, errors.Wrap(err, "invalid form data")
-		}
-		siteData.ID = account.Site
+	sitesData := &[]*data.Site{}
+	if err := json.Unmarshal(body, sitesData); err != nil {
+		return nil, errors.Wrap(err, "invalid form data")
+	}
 
-		// Configure the sites through the sites manager
-		if err := siteacc.SitesManager().UpdateSite(siteData); err != nil {
-			return nil, errors.Wrap(err, "unable to configure sites")
-		}
-	*/
+	// Configure the sites through the operators manager
+	opData := &data.Operator{
+		ID:    account.Operator,
+		Sites: *sitesData,
+	}
+	if err := siteacc.OperatorsManager().UpdateOperator(opData); err != nil {
+		return nil, errors.Wrap(err, "unable to configure operator")
+	}
+
 	return nil, nil
 }
 
