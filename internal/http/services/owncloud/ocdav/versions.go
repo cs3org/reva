@@ -189,23 +189,8 @@ func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request,
 		infos = append(infos, vi)
 	}
 
-	/*propRes, err :=*/
 	propfind.RenderMultistatusResponse(ctx, w, &pf, infos, s.c.PublicURL, "", nil, false)
-	/*
-		if err != nil {
-			sublog.Error().Err(err).Msg("error formatting propfind")
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-		w.Header().Set(net.HeaderDav, "1, 3, extended-mkcol")
-		w.Header().Set(net.HeaderContentType, "application/xml; charset=utf-8")
-		w.WriteHeader(http.StatusMultiStatus)
-		_, err = w.Write(propRes)
-		if err != nil {
-			sublog.Error().Err(err).Msg("error writing body")
-			return
-		}
-	*/
+
 }
 
 func (h *VersionsHandler) doRestore(w http.ResponseWriter, r *http.Request, s *svc, rid *provider.ResourceId, key string) {

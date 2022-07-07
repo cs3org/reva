@@ -401,28 +401,8 @@ func (p *Handler) propfindResponse(ctx context.Context, w http.ResponseWriter, r
 		}
 	}
 
-	/*propRes, err :=*/
 	RenderMultistatusResponse(ctx, w, &pf, resourceInfos, p.PublicURL, namespace, linkshares, sendTusHeaders)
-	/*
-		if err != nil {
-			log.Error().Err(err).Msg("error formatting propfind")
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-		w.Header().Set(net.HeaderDav, "1, 3, extended-mkcol")
-		w.Header().Set(net.HeaderContentType, "application/xml; charset=utf-8")
-		if sendTusHeaders {
-			w.Header().Add(net.HeaderAccessControlExposeHeaders, strings.Join([]string{net.HeaderTusResumable, net.HeaderTusVersion, net.HeaderTusExtension}, ", "))
-			w.Header().Set(net.HeaderTusResumable, "1.0.0")
-			w.Header().Set(net.HeaderTusVersion, "1.0.0")
-			w.Header().Set(net.HeaderTusExtension, "creation,creation-with-upload,checksum,expiration")
-		}
 
-		w.WriteHeader(http.StatusMultiStatus)
-		if _, err := w.Write(propRes); err != nil {
-			log.Err(err).Msg("error writing response")
-		}
-	*/
 }
 
 // TODO this is just a stat -> rename
