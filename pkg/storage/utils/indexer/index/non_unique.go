@@ -79,63 +79,24 @@ func (idx *NonUnique) Init() error {
 
 // Lookup exact lookup by value.
 func (idx *NonUnique) Lookup(v string) ([]string, error) {
-	return idx.LookupCtx(context.Background(), v)
-}
-
-// LookupCtx retieves multiple exact values and allows passing in a context
-func (idx *NonUnique) LookupCtx(ctx context.Context, values ...string) ([]string, error) {
-	allValues, err := idx.storage.ReadDir(context.Background(), path.Join("/", idx.indexRootDir))
+	if idx.caseInsensitive {
+		v = strings.ToLower(v)
+	}
+	paths, err := idx.storage.ReadDir(context.Background(), path.Join("/", idx.indexRootDir, v))
 	if err != nil {
 		return nil, err
 	}
 
-	if idx.caseInsensitive {
-		for i := range values {
-			values[i] = strings.ToLower(values[i])
-		}
-	}
-
-	var matches = map[string]struct{}{}
-	for _, av := range allValues {
-		av = path.Base(av)
-		for i, v := range values {
-			if av == v {
-				children, err := idx.storage.ReadDir(context.Background(), path.Join("/", idx.indexRootDir, av))
-				if err != nil {
-					break
-				}
-				for _, c := range children {
-					matches[path.Base(c)] = struct{}{}
-				}
-				values = remove(values, i)
-				break
-			}
-		}
+	var matches = make([]string, 0)
+	for _, p := range paths {
+		matches = append(matches, path.Base(p))
 	}
 
 	if len(matches) == 0 {
-		var v string
-		switch len(values) {
-		case 0:
-			v = "none"
-		case 1:
-			v = values[0]
-		default:
-			v = "multiple"
-		}
 		return nil, &idxerrs.NotFoundErr{TypeName: idx.typeName, IndexBy: idx.indexBy, Value: v}
 	}
 
-	ret := make([]string, 0, len(matches))
-	for m := range matches {
-		ret = append(ret, m)
-	}
-	return ret, nil
-}
-
-func remove(s []string, i int) []string {
-	s[i] = s[len(s)-1]
-	return s[:len(s)-1]
+	return matches, nil
 }
 
 // Add a new value to the index.

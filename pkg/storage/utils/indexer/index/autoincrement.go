@@ -75,53 +75,17 @@ func (idx *Autoincrement) Init() error {
 
 // Lookup exact lookup by value.
 func (idx *Autoincrement) Lookup(v string) ([]string, error) {
-	return idx.LookupCtx(context.Background(), v)
-}
-
-// LookupCtx retieves multiple exact values and allows passing in a context
-func (idx *Autoincrement) LookupCtx(ctx context.Context, values ...string) ([]string, error) {
-	var allValues []string
-	var err error
-	if len(values) != 1 {
-		allValues, err = idx.storage.ReadDir(context.Background(), path.Join("/", idx.indexRootDir))
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		allValues = values
-	}
-
-	var matches = []string{}
-	for _, av := range allValues {
-		// TODO check if av can contain more than the base path
-		av = path.Base(av)
-		for i, v := range values {
-			if av == v {
-				oldname, err := idx.storage.ResolveSymlink(context.Background(), path.Join("/", idx.indexRootDir, av))
-				if err != nil {
-					break
-				}
-				matches = append(matches, oldname)
-				values = remove(values, i)
-				break
-			}
+	searchPath := path.Join(idx.indexRootDir, v)
+	oldname, err := idx.storage.ResolveSymlink(context.Background(), searchPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			err = &idxerrs.NotFoundErr{TypeName: idx.typeName, IndexBy: idx.indexBy, Value: v}
 		}
 
-	}
-	if len(matches) == 0 {
-		var v string
-		switch len(values) {
-		case 0:
-			v = "none"
-		case 1:
-			v = values[0]
-		default:
-			v = "multiple"
-		}
-		return nil, &idxerrs.NotFoundErr{TypeName: idx.typeName, IndexBy: idx.indexBy, Value: v}
+		return nil, err
 	}
 
-	return matches, nil
+	return []string{oldname}, nil
 }
 
 // Add a new value to the index.

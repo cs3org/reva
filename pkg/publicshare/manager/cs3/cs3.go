@@ -397,37 +397,33 @@ func (m *Manager) ListPublicShares(ctx context.Context, u *user.User, filters []
 		return result, nil
 	}
 
-	tokens := []string{}
-	if len(idFilter) > 0 {
-		idFilters := []indexer.Field{}
-		for _, filter := range idFilter {
-			resourceID := filter.GetResourceId()
-			idFilters = append(idFilters, indexer.NewField("ResourceId", resourceIDToIndex(resourceID)))
-		}
-		tokens, err = m.indexer.FindBy(&link.PublicShare{}, idFilters...)
+	tokensByResourceID := make(map[string]*provider.ResourceId)
+	for _, filter := range idFilter {
+		resourceID := filter.GetResourceId()
+		tokens, err := m.indexer.FindBy(&link.PublicShare{},
+			indexer.NewField("ResourceId", resourceIDToIndex(resourceID)),
+		)
 		if err != nil {
-			return nil, err
+			continue
+		}
+		for _, token := range tokens {
+			tokensByResourceID[token] = resourceID
 		}
 	}
 
 	// statMem is used as a local cache to prevent statting resources which
 	// already have been checked.
 	statMem := make(map[string]struct{})
-	for _, token := range tokens {
+	for token, resourceID := range tokensByResourceID {
 		if _, handled := shareMem[token]; handled {
 			// We don't want to add a share multiple times when we added it
 			// already.
 			continue
 		}
 
-		s, err := m.getByToken(ctx, token)
-		if err != nil {
-			return nil, err
-		}
-
-		if _, checked := statMem[resourceIDToIndex(s.PublicShare.GetResourceId())]; !checked {
+		if _, checked := statMem[resourceIDToIndex(resourceID)]; !checked {
 			sReq := &provider.StatRequest{
-				Ref: &provider.Reference{ResourceId: s.PublicShare.GetResourceId()},
+				Ref: &provider.Reference{ResourceId: resourceID},
 			}
 			sRes, err := m.gatewayClient.Stat(ctx, sReq)
 			if err != nil {
@@ -439,9 +435,13 @@ func (m *Manager) ListPublicShares(ctx context.Context, u *user.User, filters []
 			if !sRes.Info.PermissionSet.ListGrants {
 				continue
 			}
-			statMem[resourceIDToIndex(s.PublicShare.GetResourceId())] = struct{}{}
+			statMem[resourceIDToIndex(resourceID)] = struct{}{}
 		}
 
+		s, err := m.getByToken(ctx, token)
+		if err != nil {
+			return nil, err
+		}
 		if publicshare.MatchesFilters(s.PublicShare, filters) {
 			result = append(result, &s.PublicShare)
 			shareMem[s.PublicShare.Token] = struct{}{}
