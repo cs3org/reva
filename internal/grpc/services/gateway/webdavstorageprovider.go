@@ -252,6 +252,21 @@ func (s *svc) getWebdavEndpoint(ctx context.Context, domain string) (string, err
 	return "", errtypes.NotFound(domain)
 }
 
+func (s *svc) getWebdavHost(ctx context.Context, domain string) (string, error) {
+	meshProvider, err := s.GetInfoByDomain(ctx, &ocmprovider.GetInfoByDomainRequest{
+		Domain: domain,
+	})
+	if err != nil {
+		return "", errors.Wrap(err, "gateway: error calling GetInfoByDomain")
+	}
+	for _, s := range meshProvider.ProviderInfo.Services {
+		if strings.ToLower(s.Endpoint.Type.Name) == "webdav" {
+			return s.Host, nil
+		}
+	}
+	return "", errtypes.NotFound(domain)
+}
+
 func normalize(info *gowebdav.File) *provider.ResourceInfo {
 	return &provider.ResourceInfo{
 		// TODO(ishank011): Add Id, PermissionSet, Owner
