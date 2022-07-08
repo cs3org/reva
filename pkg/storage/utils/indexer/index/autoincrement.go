@@ -98,13 +98,15 @@ func (idx *Autoincrement) LookupCtx(ctx context.Context, values ...string) ([]st
 
 	var matches = []string{}
 
-	for v := range valueSet {
-		oldname, err := idx.storage.ResolveSymlink(context.Background(), path.Join("/", idx.indexRootDir, v))
-		if err != nil {
-			continue
-		}
-		matches = append(matches, oldname)
+for _, v := range values {
+	if _, ok := valueSet[v]; ok {
+	    oldname, err := idx.storage.ResolveSymlink(context.Background(), path.Join("/", idx.indexRootDir, v))
+            if err != nil {
+	    	continue
+            }
+	    matches = append(matches, oldname)
 	}
+}
 
 	if len(matches) == 0 {
 		var v string
