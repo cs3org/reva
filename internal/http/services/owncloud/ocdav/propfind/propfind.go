@@ -690,7 +690,7 @@ func (p *Handler) getSpaceResourceInfos(ctx context.Context, w http.ResponseWrit
 		return nil, false
 	}
 	for _, info := range res.Infos {
-		info.Path = path.Join(requestPath, info.Path)
+		info.Path = path.Join(requestPath, filepath.Base(info.Path))
 	}
 	resourceInfos = append(resourceInfos, res.Infos...)
 
@@ -726,7 +726,7 @@ func (p *Handler) getSpaceResourceInfos(ctx context.Context, w http.ResponseWrit
 			// the reversed order here will produce a more logical sorting of results
 			for i := len(res.Infos) - 1; i >= 0; i-- {
 				// add path to resource
-				res.Infos[i].Path = filepath.Join(info.Path, res.Infos[i].Path)
+				res.Infos[i].Path = filepath.Join(info.Path, filepath.Base(res.Infos[i].Path)) // TODO: use ResourceInfo.Name
 				res.Infos[i].Path = utils.MakeRelativePath(res.Infos[i].Path)
 				if res.Infos[i].Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
 					stack = append(stack, res.Infos[i])
