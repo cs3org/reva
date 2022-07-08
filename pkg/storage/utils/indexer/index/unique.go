@@ -79,33 +79,41 @@ func (idx *Unique) Lookup(v string) ([]string, error) {
 
 // LookupCtx retieves multiple exact values and allows passing in a context
 func (idx *Unique) LookupCtx(ctx context.Context, values ...string) ([]string, error) {
-	var allValues []string
-	var err error
+	var allValues map[string]struct{}
 	if len(values) != 1 {
-		allValues, err = idx.storage.ReadDir(context.Background(), path.Join("/", idx.indexRootDir))
+		// prefetch all values with one request
+		entries, err := idx.storage.ReadDir(context.Background(), path.Join("/", idx.indexRootDir))
 		if err != nil {
 			return nil, err
 		}
-	} else {
-		allValues = values
+		// convert known values to set
+		allValues = make(map[string]struct{}, len(entries))
+		for _, e := range entries {
+			allValues[path.Base(e)] = struct{}{}
+		}
 	}
 
-	valueSet := make(map[string]struct{}, len(allValues))
-	for _, v := range allValues {
-		if idx.caseInsensitive {
-			valueSet[strings.ToLower(path.Base(v))] = struct{}{}
-		} else {
-			valueSet[path.Base(v)] = struct{}{}
+	// convert requested values to set
+	valueSet := make(map[string]struct{}, len(values))
+	if idx.caseInsensitive {
+		for _, v := range values {
+			valueSet[strings.ToLower(v)] = struct{}{}
+		}
+	} else {
+		for _, v := range values {
+			valueSet[v] = struct{}{}
 		}
 	}
 
 	var matches = make([]string, 0)
 	for v := range valueSet {
-		oldname, err := idx.storage.ResolveSymlink(context.Background(), path.Join(idx.indexRootDir, v))
-		if err != nil {
-			continue
+		if _, ok := allValues[v]; ok || len(allValues) == 0 {
+			oldname, err := idx.storage.ResolveSymlink(context.Background(), path.Join(idx.indexRootDir, v))
+			if err != nil {
+				continue
+			}
+			matches = append(matches, oldname)
 		}
-		matches = append(matches, oldname)
 	}
 
 	if len(matches) == 0 {
