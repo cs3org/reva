@@ -526,7 +526,10 @@ func (fs *owncloudsqlfs) convertToResourceInfo(ctx context.Context, entry *filec
 
 	isDir := entry.MimeTypeString == "httpd/unix-directory"
 	ri := &provider.ResourceInfo{
-		Id:       &provider.ResourceId{StorageId: strconv.Itoa(entry.Storage), OpaqueId: strconv.Itoa(entry.ID)},
+		Id: &provider.ResourceId{
+			// return ownclouds numeric storage id as the space id!
+			SpaceId: strconv.Itoa(entry.Storage), OpaqueId: strconv.Itoa(entry.ID),
+		},
 		Path:     filepath.Base(ip),
 		Type:     getResourceType(isDir),
 		Etag:     entry.Etag,
