@@ -128,7 +128,7 @@ var _ = Describe("Spaces", func() {
 				spaces := []*provider.StorageSpace{space1, space2}
 				for _, f := range req.Filters {
 					if f.Type == provider.ListStorageSpacesRequest_Filter_TYPE_ID {
-						if f.GetId().OpaqueId == "provider-1$bazspace1!bazspace1" {
+						if f.GetId().OpaqueId == "provider-1$bazspace1!bazspace2" {
 							spaces = []*provider.StorageSpace{space1}
 						} else if f.GetId().OpaqueId == "provider-1$bazspace2!bazspace2" {
 							spaces = []*provider.StorageSpace{space2}

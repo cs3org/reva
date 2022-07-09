@@ -195,8 +195,7 @@ func ConvertToCS3Share(s DBShare) *collaboration.Share {
 		},
 		//ResourceId:  &provider.Reference{StorageId: s.Prefix, NodeId: s.ItemSource},
 		ResourceId: &provider.ResourceId{
-			StorageId: s.Prefix,
-			// SpaceId: TODO: we need to add the spaceID
+			SpaceId:  s.Prefix,
 			OpaqueId: s.ItemSource,
 		},
 		Permissions: &collaboration.SharePermissions{Permissions: IntTosharePerm(s.Permissions, s.ItemType)},
@@ -240,8 +239,7 @@ func ConvertToCS3PublicShare(s DBShare) *link.PublicShare {
 			OpaqueId: s.ID,
 		},
 		ResourceId: &provider.ResourceId{
-			StorageId: s.Prefix,
-			// SpaceId: TODO: we also need a spaceID
+			SpaceId:  s.Prefix,
 			OpaqueId: s.ItemSource,
 		},
 		Permissions:       &link.PublicSharePermissions{Permissions: IntTosharePerm(s.Permissions, s.ItemType)},

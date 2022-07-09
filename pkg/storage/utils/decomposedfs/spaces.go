@@ -510,7 +510,10 @@ func (fs *Decomposedfs) DeleteStorageSpace(ctx context.Context, req *provider.De
 		_, purge = opaque.Map["purge"]
 	}
 
-	spaceID := req.Id.OpaqueId
+	_, spaceID, _, err := storagespace.SplitID(req.Id.GetOpaqueId())
+	if err != nil {
+		return err
+	}
 
 	n, err := node.ReadNode(ctx, fs.lu, spaceID, spaceID, true) // permission to read disabled space is checked later
 	if err != nil {

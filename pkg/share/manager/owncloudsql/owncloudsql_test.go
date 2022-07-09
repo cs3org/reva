@@ -184,8 +184,8 @@ var _ = Describe("SQL manager", func() {
 			}
 			info := &provider.ResourceInfo{
 				Id: &provider.ResourceId{
-					StorageId: "/",
-					OpaqueId:  "something",
+					SpaceId:  "/",
+					OpaqueId: "something",
 				},
 			}
 			share, err := mgr.Share(ctx, info, grant)
@@ -202,15 +202,15 @@ var _ = Describe("SQL manager", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(len(shares)).To(Equal(1))
 			share := shares[0]
-			Expect(share.ResourceId.StorageId).To(Equal("1"))
+			Expect(share.ResourceId.SpaceId).To(Equal("1"))
 
 			shares, err = mgr.ListShares(ctx, []*collaboration.Filter{
 				{
 					Type: collaboration.Filter_TYPE_RESOURCE_ID,
 					Term: &collaboration.Filter_ResourceId{
 						ResourceId: &provider.ResourceId{
-							StorageId: "/",
-							OpaqueId:  "somethingElse",
+							SpaceId:  "/",
+							OpaqueId: "somethingElse",
 						},
 					},
 				},

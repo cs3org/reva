@@ -99,9 +99,11 @@ func TestParseID(t *testing.T) {
 				t.Errorf("Expected ParseID to return error %s, got %s", tt.expectedErr, err)
 			}
 		case rid.StorageId != tt.expected.StorageId:
-			t.Errorf("StorageIDs don't match. Expected %v, got %v", tt.expected, rid)
+			t.Errorf("StorageIDs don't match. Expected %s, got %s", tt.expected.StorageId, rid.StorageId)
+		case rid.SpaceId != tt.expected.SpaceId:
+			t.Errorf("SpaceIDs don't match. Expected %s, got %s", tt.expected.SpaceId, rid.SpaceId)
 		case rid.OpaqueId != tt.expected.OpaqueId:
-			t.Errorf("StorageIDs don't match. Expected %v, got %v", tt.expected, rid)
+			t.Errorf("OpaqueIDs don't match. Expected %s, got %s", tt.expected.OpaqueId, rid.OpaqueId)
 		}
 	}
 

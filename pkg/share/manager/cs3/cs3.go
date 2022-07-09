@@ -708,7 +708,7 @@ func indexResourceIDFunc(v interface{}) (string, error) {
 }
 
 func resourceIDToIndex(id *provider.ResourceId) string {
-	return strings.Join([]string{id.StorageId, id.OpaqueId}, "!")
+	return strings.Join([]string{id.SpaceId, id.OpaqueId}, "!")
 }
 
 func granteeToIndex(grantee *provider.Grantee) (string, error) {
