@@ -109,7 +109,7 @@ func (dispatcher *Dispatcher) dispatchAlert(alert template.Alert, account *data.
 		"Severity":   alert.Labels["severity"],
 		"Operator":   alert.Labels["operator"],
 		"OperatorID": alert.Labels["operator_id"],
-		"Site":       alert.Labels["sites"],
+		"Site":       alert.Labels["site"],
 		"SiteID":     alert.Labels["site_id"],
 
 		"Description": alert.Annotations["description"],
