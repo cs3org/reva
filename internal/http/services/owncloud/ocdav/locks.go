@@ -400,23 +400,12 @@ func (s *svc) handleSpacesLock(w http.ResponseWriter, r *http.Request, spaceID s
 
 	span.SetAttributes(attribute.String("component", "ocdav"))
 
-	client, err := s.getClient()
+	ref, err := spacelookup.MakeStorageSpaceReference(spaceID, r.URL.Path)
 	if err != nil {
-		return http.StatusInternalServerError, err
+		return http.StatusBadRequest, fmt.Errorf("invalid space id")
 	}
 
-	// retrieve a specific storage space
-	space, cs3Status, err := spacelookup.LookUpStorageSpaceByID(ctx, client, spaceID)
-	if err != nil {
-		return http.StatusInternalServerError, err
-	}
-	if cs3Status.Code != rpc.Code_CODE_OK {
-		return http.StatusInternalServerError, errtypes.NewErrtypeFromStatus(cs3Status)
-	}
-
-	ref := spacelookup.MakeRelativeReference(space, r.URL.Path, true)
-
-	return s.lockReference(ctx, w, r, ref)
+	return s.lockReference(ctx, w, r, &ref)
 }
 
 func (s *svc) lockReference(ctx context.Context, w http.ResponseWriter, r *http.Request, ref *provider.Reference) (retStatus int, retErr error) {

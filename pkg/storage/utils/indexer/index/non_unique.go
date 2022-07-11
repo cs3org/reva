@@ -79,24 +79,65 @@ func (idx *NonUnique) Init() error {
 
 // Lookup exact lookup by value.
 func (idx *NonUnique) Lookup(v string) ([]string, error) {
-	if idx.caseInsensitive {
-		v = strings.ToLower(v)
-	}
-	paths, err := idx.storage.ReadDir(context.Background(), path.Join("/", idx.indexRootDir, v))
+	return idx.LookupCtx(context.Background(), v)
+}
+
+// LookupCtx retieves multiple exact values and allows passing in a context
+func (idx *NonUnique) LookupCtx(ctx context.Context, values ...string) ([]string, error) {
+	// prefetch all values with one request
+	entries, err := idx.storage.ReadDir(context.Background(), path.Join("/", idx.indexRootDir))
 	if err != nil {
 		return nil, err
 	}
+	// convert known values to set
+	allValues := make(map[string]struct{}, len(entries))
+	for _, e := range entries {
+		allValues[path.Base(e)] = struct{}{}
+	}
 
-	var matches = make([]string, 0)
-	for _, p := range paths {
-		matches = append(matches, path.Base(p))
+	// convert requested values to set
+	valueSet := make(map[string]struct{}, len(values))
+	if idx.caseInsensitive {
+		for _, v := range values {
+			valueSet[strings.ToLower(v)] = struct{}{}
+		}
+	} else {
+		for _, v := range values {
+			valueSet[v] = struct{}{}
+		}
+	}
+
+	var matches = map[string]struct{}{}
+	for v := range valueSet {
+		if _, ok := allValues[v]; ok {
+			children, err := idx.storage.ReadDir(context.Background(), path.Join("/", idx.indexRootDir, v))
+			if err != nil {
+				continue
+			}
+			for _, c := range children {
+				matches[path.Base(c)] = struct{}{}
+			}
+		}
 	}
 
 	if len(matches) == 0 {
+		var v string
+		switch len(values) {
+		case 0:
+			v = "none"
+		case 1:
+			v = values[0]
+		default:
+			v = "multiple"
+		}
 		return nil, &idxerrs.NotFoundErr{TypeName: idx.typeName, IndexBy: idx.indexBy, Value: v}
 	}
 
-	return matches, nil
+	ret := make([]string, 0, len(matches))
+	for m := range matches {
+		ret = append(ret, m)
+	}
+	return ret, nil
 }
 
 // Add a new value to the index.
