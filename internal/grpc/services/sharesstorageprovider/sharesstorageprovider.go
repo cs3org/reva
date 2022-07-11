@@ -987,6 +987,10 @@ func (s *service) fetchShares(ctx context.Context) ([]*collaboration.ReceivedSha
 		if rs.State != collaboration.ShareState_SHARE_STATE_ACCEPTED {
 			continue
 		}
+		if rs.Share.ResourceId.SpaceId == "" {
+			// convert backwards compatible share id
+			rs.Share.ResourceId.StorageId, rs.Share.ResourceId.SpaceId = storagespace.SplitStorageID(rs.Share.ResourceId.StorageId)
+		}
 		sRes, err := s.gateway.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{ResourceId: rs.Share.ResourceId}})
 		if err != nil {
 			appctx.GetLogger(ctx).Error().
