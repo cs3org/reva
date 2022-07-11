@@ -156,9 +156,7 @@ func New(ctx context.Context, info tusd.FileInfo, lu *lookup.Lookup, tp Tree, p 
 	}
 	defer file.Close()
 
-	u := buildUpload(ctx, info, binPath, filepath.Join(fsRoot, "uploads", info.ID+".info"), lu, tp)
-	u.pub = pub
-	u.pp = Postprocessing(u, o)
+	u := buildUpload(ctx, info, binPath, filepath.Join(fsRoot, "uploads", info.ID+".info"), lu, tp, pub, o.AsyncFileUploads)
 
 	// writeInfo creates the file by itself if necessary
 	err = u.writeInfo()
@@ -214,9 +212,7 @@ func Get(ctx context.Context, id string, lu *lookup.Lookup, tp Tree, fsRoot stri
 
 	ctx = appctx.WithLogger(ctx, &sub)
 
-	up := buildUpload(ctx, info, info.Storage["BinPath"], infoPath, lu, tp)
-	up.pub = pub
-	up.pp = Postprocessing(up, o)
+	up := buildUpload(ctx, info, info.Storage["BinPath"], infoPath, lu, tp, pub, o.AsyncFileUploads)
 	return up, nil
 }
 

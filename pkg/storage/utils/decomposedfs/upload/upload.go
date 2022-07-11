@@ -44,7 +44,6 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs"
 	"github.com/cs3org/reva/v2/pkg/utils"
-	"github.com/cs3org/reva/v2/pkg/utils/postprocessing"
 	"github.com/golang-jwt/jwt"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -100,17 +99,15 @@ type Upload struct {
 	node *node.Node
 	// oldsize will be nil if there was no file before
 	oldsize *uint64
-	// Postprocessing to start postprocessing
-	pp postprocessing.Postprocessing
 	// and a logger as well
 	log zerolog.Logger
-	// cancelled to cancel processing steps
-	Cancelled *utils.Cbool
 	// publisher used to publish events
 	pub events.Publisher
+	// async determines if uploads shoud be done asynchronously
+	async bool
 }
 
-func buildUpload(ctx context.Context, info tusd.FileInfo, binPath string, infoPath string, lu *lookup.Lookup, tp Tree) *Upload {
+func buildUpload(ctx context.Context, info tusd.FileInfo, binPath string, infoPath string, lu *lookup.Lookup, tp Tree, pub events.Publisher, async bool) *Upload {
 	return &Upload{
 		Info:     info,
 		binPath:  binPath,
@@ -118,18 +115,61 @@ func buildUpload(ctx context.Context, info tusd.FileInfo, binPath string, infoPa
 		lu:       lu,
 		tp:       tp,
 		Ctx:      ctx,
+		pub:      pub,
+		async:    async,
 		log: appctx.GetLogger(ctx).
 			With().
 			Interface("info", info).
 			Str("binPath", binPath).
 			Logger(),
-		Cancelled: utils.Bool(),
 	}
+}
+
+// Initialize initializes the node
+func Initialize(upload *Upload) error {
+	// we need the node to start processing
+	n, err := CreateNodeForUpload(upload)
+	if err != nil {
+		return err
+	}
+
+	// set processing status
+	upload.node = n
+	return upload.node.MarkProcessing()
 }
 
 // Finalize finalizes a upload
 func Finalize(upload *Upload) error {
 	return upload.finishUpload()
+}
+
+// Cleanup cleans the upload
+func Cleanup(upload *Upload, failure bool, aborted bool) {
+	removeNode := failure || aborted // remove node when upload failed or upload is cancelled
+	removeBin := !aborted            // remove bin & info when upload wasn't cancelled
+	upload.cleanup(removeNode, removeBin, removeBin)
+
+	// unset processing status
+	if err := upload.node.UnmarkProcessing(); err != nil {
+		upload.log.Info().Str("path", upload.node.InternalPath()).Err(err).Msg("unmarking processing failed")
+	}
+
+	if failure || aborted {
+		return
+	}
+
+	if upload.async { // updating the mtime will cause the testsuite to fail - hence we do it only in async case
+		now := utils.TSNow()
+		if err := upload.node.SetMtime(upload.Ctx, fmt.Sprintf("%d.%d", now.Seconds, now.Nanos)); err != nil {
+			upload.log.Info().Str("path", upload.node.InternalPath()).Err(err).Msg("could not set mtime")
+		}
+	}
+
+	if err := upload.tp.Propagate(upload.Ctx, upload.node); err != nil {
+		upload.log.Info().Str("path", upload.node.InternalPath()).Err(err).Msg("could not set mtime")
+	}
+
+	return
 }
 
 // WriteChunk writes the stream from the reader to the given offset of the upload
@@ -175,10 +215,12 @@ func (upload *Upload) FinishUpload(_ context.Context) error {
 		upload.Ctx = ctxpkg.ContextSetLockID(upload.Ctx, upload.Info.MetaData["lockid"])
 	}
 
-	Initialize(upload).Step()
+	if err := Initialize(upload); err != nil {
+		return err
+	}
 
-	s, tkn, _ := upload.UploadURL(upload.Ctx)
 	if upload.pub != nil {
+		s, tkn, _ := upload.UploadURL(upload.Ctx)
 		if err := events.Publish(upload.pub, events.BytesReceived{
 			UploadURL: s,
 			Token:     tkn,
@@ -187,7 +229,14 @@ func (upload *Upload) FinishUpload(_ context.Context) error {
 		}
 	}
 
-	return upload.pp.Start()
+	if upload.async {
+		// handle postprocessing asynchronously
+		return nil
+	}
+
+	err := Finalize(upload)
+	Cleanup(upload, err == nil, false)
+	return err
 }
 
 // Terminate terminates the upload
