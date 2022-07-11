@@ -106,7 +106,7 @@ def main(ctx):
         litmusOcisOldWebdav(),
         litmusOcisNewWebdav(),
         litmusOcisSpacesDav(),
-        #virtualViews(),
+        virtualViews(),
     ] + ocisIntegrationTests(6) + s3ngIntegrationTests(12)
 
 def buildAndPublishDocker():
