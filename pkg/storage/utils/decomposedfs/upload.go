@@ -191,12 +191,12 @@ func (fs *Decomposedfs) UseIn(composer *tusd.StoreComposer) {
 
 // NewUpload returns a new tus Upload instance
 func (fs *Decomposedfs) NewUpload(ctx context.Context, info tusd.FileInfo) (tusd.Upload, error) {
-	return upload.New(ctx, info, fs.lu, fs.tp, fs.p, fs.o.Root, fs.o.Postprocessing, fs.stream)
+	return upload.New(ctx, info, fs.lu, fs.tp, fs.p, fs.o.Root, fs.stream, fs.o.AsyncFileUploads, fs.o.Tokens)
 }
 
 // GetUpload returns the Upload for the given upload id
 func (fs *Decomposedfs) GetUpload(ctx context.Context, id string) (tusd.Upload, error) {
-	return upload.Get(ctx, id, fs.lu, fs.tp, fs.o.Root, fs.o.Postprocessing, fs.stream)
+	return upload.Get(ctx, id, fs.lu, fs.tp, fs.o.Root, fs.stream, fs.o.AsyncFileUploads, fs.o.Tokens)
 }
 
 // AsTerminatableUpload returns a TerminatableUpload

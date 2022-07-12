@@ -52,7 +52,7 @@ type PermissionsChecker interface {
 }
 
 // New returns a new processing instance
-func New(ctx context.Context, info tusd.FileInfo, lu *lookup.Lookup, tp Tree, p PermissionsChecker, fsRoot string, o options.PostprocessingOptions, pub events.Publisher) (upload *Upload, err error) {
+func New(ctx context.Context, info tusd.FileInfo, lu *lookup.Lookup, tp Tree, p PermissionsChecker, fsRoot string, pub events.Publisher, async bool, tknopts options.TokenOptions) (upload *Upload, err error) {
 
 	log := appctx.GetLogger(ctx)
 	log.Debug().Interface("info", info).Msg("Decomposedfs: NewUpload")
@@ -156,7 +156,7 @@ func New(ctx context.Context, info tusd.FileInfo, lu *lookup.Lookup, tp Tree, p 
 	}
 	defer file.Close()
 
-	u := buildUpload(ctx, info, binPath, filepath.Join(fsRoot, "uploads", info.ID+".info"), lu, tp, pub, o.AsyncFileUploads)
+	u := buildUpload(ctx, info, binPath, filepath.Join(fsRoot, "uploads", info.ID+".info"), lu, tp, pub, async, tknopts)
 
 	// writeInfo creates the file by itself if necessary
 	err = u.writeInfo()
@@ -168,7 +168,7 @@ func New(ctx context.Context, info tusd.FileInfo, lu *lookup.Lookup, tp Tree, p 
 }
 
 // Get returns the Upload for the given upload id
-func Get(ctx context.Context, id string, lu *lookup.Lookup, tp Tree, fsRoot string, o options.PostprocessingOptions, pub events.Publisher) (*Upload, error) {
+func Get(ctx context.Context, id string, lu *lookup.Lookup, tp Tree, fsRoot string, pub events.Publisher, async bool, tknopts options.TokenOptions) (*Upload, error) {
 	infoPath := filepath.Join(fsRoot, "uploads", id+".info")
 
 	info := tusd.FileInfo{}
@@ -212,7 +212,12 @@ func Get(ctx context.Context, id string, lu *lookup.Lookup, tp Tree, fsRoot stri
 
 	ctx = appctx.WithLogger(ctx, &sub)
 
-	up := buildUpload(ctx, info, info.Storage["BinPath"], infoPath, lu, tp, pub, o.AsyncFileUploads)
+	up := buildUpload(ctx, info, info.Storage["BinPath"], infoPath, lu, tp, pub, async, tknopts)
+
+	// add node if possible - only in async case
+	if n, err := node.ReadNode(ctx, lu, info.Storage["SpaceRoot"], info.Storage["NodeId"], false); err == nil && async {
+		up.Node = n
+	}
 	return up, nil
 }
 
@@ -289,6 +294,11 @@ func CreateNodeForUpload(upload *Upload) (*node.Node, error) {
 		}
 	}
 
+	// update nodeid for later
+	upload.Info.Storage["NodeId"] = n.ID
+	if err := upload.writeInfo(); err != nil {
+		return n, err
+	}
 	return n, upload.tp.Propagate(upload.Ctx, n)
 }
 

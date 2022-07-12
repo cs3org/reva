@@ -1196,10 +1196,10 @@ func IsSpaceRoot(r *Node) bool {
 }
 
 // SetScanData sets the virus scan info to the node
-func (n *Node) SetScanData(info string) error {
+func (n *Node) SetScanData(info string, date time.Time) error {
 	return xattrs.SetMultiple(n.InternalPath(), map[string]string{
 		xattrs.ScanStatusPrefix: info,
-		xattrs.ScanDatePrefix:   time.Now().Format(time.RFC3339Nano),
+		xattrs.ScanDatePrefix:   date.Format(time.RFC3339Nano),
 	})
 }
 

@@ -42,19 +42,13 @@ import (
 	"github.com/cs3org/reva/v2/pkg/events"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/lookup"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/options"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/golang-jwt/jwt"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	tusd "github.com/tus/tusd/pkg/handler"
-)
-
-var (
-	_transferExpires      = 86400
-	_transferSharedSecret = "iSGZ-MdRpf^Rtni%rCSh#M$!K7G@0T@*"
-	_uploadEndpoint       = "http://localhost:9158/data/"
-	_gatewayEndpoint      = "https://localhost:9200/data/"
 )
 
 // Tree is used to manage a tree hierarchy
@@ -88,6 +82,8 @@ type Upload struct {
 	Ctx context.Context
 	// info stores the current information about the upload
 	Info tusd.FileInfo
+	// node for easy access
+	Node *node.Node
 	// infoPath is the path to the .info file
 	infoPath string
 	// binPath is the path to the binary file (which has no extension)
@@ -95,8 +91,6 @@ type Upload struct {
 	// lu and tp needed for file operations
 	lu *lookup.Lookup
 	tp Tree
-	// node for easy access
-	node *node.Node
 	// oldsize will be nil if there was no file before
 	oldsize *uint64
 	// and a logger as well
@@ -105,9 +99,11 @@ type Upload struct {
 	pub events.Publisher
 	// async determines if uploads shoud be done asynchronously
 	async bool
+	// tknopts hold token signing information
+	tknopts options.TokenOptions
 }
 
-func buildUpload(ctx context.Context, info tusd.FileInfo, binPath string, infoPath string, lu *lookup.Lookup, tp Tree, pub events.Publisher, async bool) *Upload {
+func buildUpload(ctx context.Context, info tusd.FileInfo, binPath string, infoPath string, lu *lookup.Lookup, tp Tree, pub events.Publisher, async bool, tknopts options.TokenOptions) *Upload {
 	return &Upload{
 		Info:     info,
 		binPath:  binPath,
@@ -117,6 +113,7 @@ func buildUpload(ctx context.Context, info tusd.FileInfo, binPath string, infoPa
 		Ctx:      ctx,
 		pub:      pub,
 		async:    async,
+		tknopts:  tknopts,
 		log: appctx.GetLogger(ctx).
 			With().
 			Interface("info", info).
@@ -134,8 +131,8 @@ func Initialize(upload *Upload) error {
 	}
 
 	// set processing status
-	upload.node = n
-	return upload.node.MarkProcessing()
+	upload.Node = n
+	return upload.Node.MarkProcessing()
 }
 
 // Finalize finalizes a upload
@@ -144,32 +141,28 @@ func Finalize(upload *Upload) error {
 }
 
 // Cleanup cleans the upload
-func Cleanup(upload *Upload, failure bool, aborted bool) {
-	removeNode := failure || aborted // remove node when upload failed or upload is cancelled
-	removeBin := !aborted            // remove bin & info when upload wasn't cancelled
-	upload.cleanup(removeNode, removeBin, removeBin)
+func Cleanup(upload *Upload, failure bool, keepUpload bool) {
+	upload.cleanup(failure, !keepUpload, !keepUpload)
 
 	// unset processing status
-	if err := upload.node.UnmarkProcessing(); err != nil {
-		upload.log.Info().Str("path", upload.node.InternalPath()).Err(err).Msg("unmarking processing failed")
+	if err := upload.Node.UnmarkProcessing(); err != nil {
+		upload.log.Info().Str("path", upload.Node.InternalPath()).Err(err).Msg("unmarking processing failed")
 	}
 
-	if failure || aborted {
+	if failure {
 		return
 	}
 
 	if upload.async { // updating the mtime will cause the testsuite to fail - hence we do it only in async case
 		now := utils.TSNow()
-		if err := upload.node.SetMtime(upload.Ctx, fmt.Sprintf("%d.%d", now.Seconds, now.Nanos)); err != nil {
-			upload.log.Info().Str("path", upload.node.InternalPath()).Err(err).Msg("could not set mtime")
+		if err := upload.Node.SetMtime(upload.Ctx, fmt.Sprintf("%d.%d", now.Seconds, now.Nanos)); err != nil {
+			upload.log.Info().Str("path", upload.Node.InternalPath()).Err(err).Msg("could not set mtime")
 		}
 	}
 
-	if err := upload.tp.Propagate(upload.Ctx, upload.node); err != nil {
-		upload.log.Info().Str("path", upload.node.InternalPath()).Err(err).Msg("could not set mtime")
+	if err := upload.tp.Propagate(upload.Ctx, upload.Node); err != nil {
+		upload.log.Info().Str("path", upload.Node.InternalPath()).Err(err).Msg("could not set mtime")
 	}
-
-	return
 }
 
 // WriteChunk writes the stream from the reader to the given offset of the upload
@@ -220,10 +213,16 @@ func (upload *Upload) FinishUpload(_ context.Context) error {
 	}
 
 	if upload.pub != nil {
-		s, tkn, _ := upload.UploadURL(upload.Ctx)
+		u, _ := ctxpkg.ContextGetUser(upload.Ctx)
+		s, err := upload.URL(upload.Ctx)
+		if err != nil {
+			return err
+		}
+
 		if err := events.Publish(upload.pub, events.BytesReceived{
-			UploadURL: s,
-			Token:     tkn,
+			UploadID:      upload.Info.ID,
+			URL:           s,
+			ExecutingUser: u,
 		}); err != nil {
 			return err
 		}
@@ -235,7 +234,7 @@ func (upload *Upload) FinishUpload(_ context.Context) error {
 	}
 
 	err := Finalize(upload)
-	Cleanup(upload, err == nil, false)
+	Cleanup(upload, err != nil, false)
 	return err
 }
 
@@ -288,9 +287,9 @@ func (upload *Upload) writeInfo() error {
 
 // finishUpload finishes an upload and moves the file to the internal destination
 func (upload *Upload) finishUpload() (err error) {
-	n := upload.node
+	n := upload.Node
 	if n == nil {
-		return errors.New("need node to finish upload")
+		return errors.New("need Node to finish upload")
 	}
 
 	spaceID := upload.Info.Storage["SpaceRoot"]
@@ -353,7 +352,7 @@ func (upload *Upload) finishUpload() (err error) {
 	}
 	n.BlobID = upload.Info.ID // This can be changed to a content hash in the future when reference counting for the blobs was added
 
-	// defer writing the checksums until the node is in place
+	// defer writing the checksums until the Node is in place
 
 	// if target exists create new version
 	versionsPath := ""
@@ -510,9 +509,9 @@ func (upload *Upload) checkHash(expected string, h hash.Hash) error {
 
 // cleanup cleans up after the upload is finished
 func (upload *Upload) cleanup(cleanNode, cleanBin, cleanInfo bool) {
-	if cleanNode && upload.node != nil && upload.oldsize == nil {
-		if err := utils.RemoveItem(upload.node.InternalPath()); err != nil {
-			upload.log.Info().Str("path", upload.node.InternalPath()).Err(err).Msg("removing node failed")
+	if cleanNode && upload.Node != nil && upload.oldsize == nil {
+		if err := utils.RemoveItem(upload.Node.InternalPath()); err != nil {
+			upload.log.Info().Str("path", upload.Node.InternalPath()).Err(err).Msg("removing node failed")
 		}
 	}
 
@@ -529,18 +528,15 @@ func (upload *Upload) cleanup(cleanNode, cleanBin, cleanInfo bool) {
 	}
 }
 
-// UploadURL returns a url and token to download an upload
-func (upload *Upload) UploadURL(_ context.Context) (string, string, error) {
+// URL returns a url to download an upload
+func (upload *Upload) URL(_ context.Context) (string, error) {
 	type transferClaims struct {
 		jwt.StandardClaims
 		Target string `json:"target"`
 	}
 
-	u := _uploadEndpoint + "tus/" + upload.Info.ID //path.Join(_uploadEndpoint, "simple", upload.Info.ID)
-
-	// Tus sends a separate request to the datagateway service for every chunk.
-	// For large files, this can take a long time, so we extend the expiration
-	ttl := time.Duration(_transferExpires) * time.Second
+	u := upload.tknopts.DownloadEndpoint + "tus/" + upload.Info.ID
+	ttl := time.Duration(upload.tknopts.TransferExpires) * time.Second
 	claims := transferClaims{
 		StandardClaims: jwt.StandardClaims{
 			ExpiresAt: time.Now().Add(ttl).Unix(),
@@ -552,12 +548,12 @@ func (upload *Upload) UploadURL(_ context.Context) (string, string, error) {
 
 	t := jwt.NewWithClaims(jwt.GetSigningMethod("HS256"), claims)
 
-	tkn, err := t.SignedString([]byte(_transferSharedSecret))
+	tkn, err := t.SignedString([]byte(upload.tknopts.TransferSharedSecret))
 	if err != nil {
-		return "", "", errors.Wrapf(err, "error signing token with claims %+v", claims)
+		return "", errors.Wrapf(err, "error signing token with claims %+v", claims)
 	}
 
-	return _gatewayEndpoint, tkn, nil
+	return upload.tknopts.DataGatewayEndpoint + tkn, nil
 }
 
 func tryWritingChecksum(log *zerolog.Logger, n *node.Node, algo string, h hash.Hash) {

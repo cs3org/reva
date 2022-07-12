@@ -138,7 +138,9 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 		case "DELETE":
 			handler.DelFile(w, r)
 		case "GET":
-			//download.GetOrHeadFile(w, r, fs, "")
+			// NOTE: this is breaking change - allthought it does not seem to be used
+			// We can make a switch here depending on some header value if that is needed
+			// download.GetOrHeadFile(w, r, fs, "")
 			handler.GetFile(w, r)
 		default:
 			w.WriteHeader(http.StatusNotImplemented)
