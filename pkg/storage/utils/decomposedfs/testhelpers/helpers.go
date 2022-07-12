@@ -210,7 +210,7 @@ func (t *TestEnv) CreateTestStorageSpace(typ string, quota *providerv1beta1.Quot
 	if err != nil {
 		return nil, err
 	}
-	h, err := node.ReadNode(t.Ctx, t.Lookup, sid.StorageId, sid.OpaqueId, false)
+	h, err := node.ReadNode(t.Ctx, t.Lookup, sid.SpaceId, sid.OpaqueId, false)
 	if err != nil {
 		return nil, err
 	}
@@ -264,6 +264,7 @@ func buildRef(id, path string) *providerv1beta1.Reference {
 	return &providerv1beta1.Reference{
 		ResourceId: &providerv1beta1.ResourceId{
 			StorageId: res.StorageId,
+			SpaceId:   res.SpaceId,
 			OpaqueId:  res.OpaqueId,
 		},
 		Path: path,

@@ -35,7 +35,6 @@ import (
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/share"
 	"github.com/cs3org/reva/v2/pkg/share/manager/registry"
-	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
@@ -126,7 +125,7 @@ func (m *mgr) Share(ctx context.Context, md *provider.ResourceInfo, g *collabora
 	itemType := conversions.ResourceTypeToItem(md.Type)
 	targetPath := path.Join("/", path.Base(md.Path))
 	permissions := conversions.SharePermToInt(g.Permissions.Permissions)
-	prefix, _ := storagespace.SplitStorageID(md.Id.StorageId)
+	prefix := md.Id.SpaceId
 	itemSource := md.Id.OpaqueId
 	fileSource, err := strconv.ParseUint(itemSource, 10, 64)
 	if err != nil {
@@ -185,7 +184,7 @@ func (m *mgr) getByKey(ctx context.Context, key *collaboration.ShareKey) (*colla
 	s := conversions.DBShare{}
 	shareType, shareWith := conversions.FormatGrantee(key.Grantee)
 	query := "select coalesce(uid_owner, '') as uid_owner, coalesce(uid_initiator, '') as uid_initiator, coalesce(share_with, '') as share_with, coalesce(fileid_prefix, '') as fileid_prefix, coalesce(item_source, '') as item_source, coalesce(item_type, '') as item_type, id, stime, permissions, share_type FROM oc_share WHERE (orphan = 0 or orphan IS NULL) AND uid_owner=? AND fileid_prefix=? AND item_source=? AND share_type=? AND share_with=? AND (uid_owner=? or uid_initiator=?)"
-	if err := m.db.QueryRow(query, owner, key.ResourceId.StorageId, key.ResourceId.OpaqueId, shareType, shareWith, uid, uid).Scan(&s.UIDOwner, &s.UIDInitiator, &s.ShareWith, &s.Prefix, &s.ItemSource, &s.ItemType, &s.ID, &s.STime, &s.Permissions, &s.ShareType); err != nil {
+	if err := m.db.QueryRow(query, owner, key.ResourceId.SpaceId, key.ResourceId.OpaqueId, shareType, shareWith, uid, uid).Scan(&s.UIDOwner, &s.UIDInitiator, &s.ShareWith, &s.Prefix, &s.ItemSource, &s.ItemType, &s.ID, &s.STime, &s.Permissions, &s.ShareType); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, errtypes.NotFound(key.String())
 		}
@@ -226,7 +225,7 @@ func (m *mgr) Unshare(ctx context.Context, ref *collaboration.ShareReference) er
 		shareType, shareWith := conversions.FormatGrantee(key.Grantee)
 		owner := conversions.FormatUserID(key.Owner)
 		query = "delete from oc_share where uid_owner=? AND fileid_prefix=? AND item_source=? AND share_type=? AND share_with=? AND (uid_owner=? or uid_initiator=?)"
-		params = append(params, owner, key.ResourceId.StorageId, key.ResourceId.OpaqueId, shareType, shareWith, uid, uid)
+		params = append(params, owner, key.ResourceId.SpaceId, key.ResourceId.OpaqueId, shareType, shareWith, uid, uid)
 	default:
 		return errtypes.NotFound(ref.String())
 	}
@@ -265,7 +264,7 @@ func (m *mgr) UpdateShare(ctx context.Context, ref *collaboration.ShareReference
 		shareType, shareWith := conversions.FormatGrantee(key.Grantee)
 		owner := conversions.FormatUserID(key.Owner)
 		query = "update oc_share set permissions=?,stime=? where (uid_owner=? or uid_initiator=?) AND fileid_prefix=? AND item_source=? AND share_type=? AND share_with=? AND (uid_owner=? or uid_initiator=?)"
-		params = append(params, permissions, time.Now().Unix(), owner, owner, key.ResourceId.StorageId, key.ResourceId.OpaqueId, shareType, shareWith, uid, uid)
+		params = append(params, permissions, time.Now().Unix(), owner, owner, key.ResourceId.SpaceId, key.ResourceId.OpaqueId, shareType, shareWith, uid, uid)
 	default:
 		return nil, errtypes.NotFound(ref.String())
 	}
@@ -408,7 +407,7 @@ func (m *mgr) getReceivedByKey(ctx context.Context, key *collaboration.ShareKey)
 	uid := conversions.FormatUserID(user.Id)
 
 	shareType, shareWith := conversions.FormatGrantee(key.Grantee)
-	params := []interface{}{uid, conversions.FormatUserID(key.Owner), key.ResourceId.StorageId, key.ResourceId.OpaqueId, shareType, shareWith, shareWith}
+	params := []interface{}{uid, conversions.FormatUserID(key.Owner), key.GetResourceId().SpaceId, key.ResourceId.OpaqueId, shareType, shareWith, shareWith}
 	for _, v := range user.Groups {
 		params = append(params, v)
 	}
@@ -525,8 +524,7 @@ func translateFilters(filters []*collaboration.Filter) (string, []interface{}, e
 			filterQuery += "("
 			for i, f := range filters {
 				filterQuery += "(fileid_prefix =? AND item_source=?)"
-				prefix, _ := storagespace.SplitStorageID(f.GetResourceId().StorageId)
-				params = append(params, prefix, f.GetResourceId().OpaqueId)
+				params = append(params, f.GetResourceId().SpaceId, f.GetResourceId().OpaqueId)
 
 				if i != len(filters)-1 {
 					filterQuery += " OR "

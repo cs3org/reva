@@ -191,7 +191,7 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 
 	if depth == net.DepthZero {
 		rootHref := path.Join(refBase, key, itemPath)
-		propRes, err := h.formatTrashPropfind(ctx, s, ref.ResourceId.StorageId, refBase, rootHref, nil, nil)
+		propRes, err := h.formatTrashPropfind(ctx, s, ref.ResourceId.SpaceId, refBase, rootHref, nil, nil)
 		if err != nil {
 			sublog.Error().Err(err).Msg("error formatting propfind")
 			w.WriteHeader(http.StatusInternalServerError)
@@ -276,7 +276,7 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 	}
 
 	rootHref := path.Join(refBase, key, itemPath)
-	propRes, err := h.formatTrashPropfind(ctx, s, ref.ResourceId.StorageId, refBase, rootHref, &pf, items)
+	propRes, err := h.formatTrashPropfind(ctx, s, ref.ResourceId.SpaceId, refBase, rootHref, &pf, items)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error formatting propfind")
 		w.WriteHeader(http.StatusInternalServerError)

@@ -196,9 +196,6 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 }
 
 func (s *service) SetArbitraryMetadata(ctx context.Context, req *provider.SetArbitraryMetadataRequest) (*provider.SetArbitraryMetadataResponse, error) {
-	providerID := unwrapProviderID(req.Ref.GetResourceId())
-	defer rewrapProviderID(req.Ref.GetResourceId(), providerID)
-
 	ctx = ctxpkg.ContextSetLockID(ctx, req.LockId)
 
 	err := s.storage.SetArbitraryMetadata(ctx, req.Ref, req.ArbitraryMetadata)
@@ -209,9 +206,6 @@ func (s *service) SetArbitraryMetadata(ctx context.Context, req *provider.SetArb
 }
 
 func (s *service) UnsetArbitraryMetadata(ctx context.Context, req *provider.UnsetArbitraryMetadataRequest) (*provider.UnsetArbitraryMetadataResponse, error) {
-	providerID := unwrapProviderID(req.Ref.GetResourceId())
-	defer rewrapProviderID(req.Ref.GetResourceId(), providerID)
-
 	ctx = ctxpkg.ContextSetLockID(ctx, req.LockId)
 
 	err := s.storage.UnsetArbitraryMetadata(ctx, req.Ref, req.ArbitraryMetadataKeys)
@@ -223,9 +217,6 @@ func (s *service) UnsetArbitraryMetadata(ctx context.Context, req *provider.Unse
 
 // SetLock puts a lock on the given reference
 func (s *service) SetLock(ctx context.Context, req *provider.SetLockRequest) (*provider.SetLockResponse, error) {
-	providerID := unwrapProviderID(req.Ref.GetResourceId())
-	defer rewrapProviderID(req.Ref.GetResourceId(), providerID)
-
 	err := s.storage.SetLock(ctx, req.Ref, req.Lock)
 
 	return &provider.SetLockResponse{
@@ -235,9 +226,6 @@ func (s *service) SetLock(ctx context.Context, req *provider.SetLockRequest) (*p
 
 // GetLock returns an existing lock on the given reference
 func (s *service) GetLock(ctx context.Context, req *provider.GetLockRequest) (*provider.GetLockResponse, error) {
-	providerID := unwrapProviderID(req.Ref.GetResourceId())
-	defer rewrapProviderID(req.Ref.GetResourceId(), providerID)
-
 	lock, err := s.storage.GetLock(ctx, req.Ref)
 
 	return &provider.GetLockResponse{
@@ -248,9 +236,6 @@ func (s *service) GetLock(ctx context.Context, req *provider.GetLockRequest) (*p
 
 // RefreshLock refreshes an existing lock on the given reference
 func (s *service) RefreshLock(ctx context.Context, req *provider.RefreshLockRequest) (*provider.RefreshLockResponse, error) {
-	providerID := unwrapProviderID(req.Ref.GetResourceId())
-	defer rewrapProviderID(req.Ref.GetResourceId(), providerID)
-
 	err := s.storage.RefreshLock(ctx, req.Ref, req.Lock)
 
 	return &provider.RefreshLockResponse{
@@ -260,9 +245,6 @@ func (s *service) RefreshLock(ctx context.Context, req *provider.RefreshLockRequ
 
 // Unlock removes an existing lock from the given reference
 func (s *service) Unlock(ctx context.Context, req *provider.UnlockRequest) (*provider.UnlockResponse, error) {
-	providerID := unwrapProviderID(req.Ref.GetResourceId())
-	defer rewrapProviderID(req.Ref.GetResourceId(), providerID)
-
 	err := s.storage.Unlock(ctx, req.Ref, req.Lock)
 
 	return &provider.UnlockResponse{
@@ -271,9 +253,6 @@ func (s *service) Unlock(ctx context.Context, req *provider.UnlockRequest) (*pro
 }
 
 func (s *service) InitiateFileDownload(ctx context.Context, req *provider.InitiateFileDownloadRequest) (*provider.InitiateFileDownloadResponse, error) {
-	providerID := unwrapProviderID(req.Ref.GetResourceId())
-	defer rewrapProviderID(req.Ref.GetResourceId(), providerID)
-
 	// TODO(labkode): maybe add some checks before download starts? eg. check permissions?
 	// TODO(labkode): maybe add short-lived token?
 	// We now simply point the client to the data server.
@@ -287,7 +266,7 @@ func (s *service) InitiateFileDownload(ctx context.Context, req *provider.Initia
 
 	if utils.IsRelativeReference(req.Ref) {
 		protocol.Protocol = "spaces"
-		u.Path = path.Join(u.Path, "spaces", req.Ref.ResourceId.StorageId+"!"+req.Ref.ResourceId.OpaqueId, req.Ref.Path)
+		u.Path = path.Join(u.Path, "spaces", storagespace.FormatResourceID(*req.Ref.ResourceId), req.Ref.Path)
 	} else {
 		// Currently, we only support the simple protocol for GET requests
 		// Once we have multiple protocols, this would be moved to the fs layer
@@ -304,9 +283,6 @@ func (s *service) InitiateFileDownload(ctx context.Context, req *provider.Initia
 }
 
 func (s *service) InitiateFileUpload(ctx context.Context, req *provider.InitiateFileUploadRequest) (*provider.InitiateFileUploadResponse, error) {
-	providerID := unwrapProviderID(req.Ref.GetResourceId())
-	defer rewrapProviderID(req.Ref.GetResourceId(), providerID)
-
 	// TODO(labkode): same considerations as download
 	log := appctx.GetLogger(ctx)
 	if req.Ref.GetPath() == "/" {
@@ -433,9 +409,6 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 }
 
 func (s *service) GetPath(ctx context.Context, req *provider.GetPathRequest) (*provider.GetPathResponse, error) {
-	providerID := unwrapProviderID(req.GetResourceId())
-	defer rewrapProviderID(req.GetResourceId(), providerID)
-
 	// TODO(labkode): check that the storage ID is the same as the storage provider id.
 	fn, err := s.storage.GetPathByID(ctx, req.ResourceId)
 	if err != nil {
@@ -503,15 +476,6 @@ func (s *service) CreateStorageSpace(ctx context.Context, req *provider.CreateSt
 }
 
 func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSpacesRequest) (*provider.ListStorageSpacesResponse, error) {
-	for i, f := range req.Filters {
-		if f.Type == provider.ListStorageSpacesRequest_Filter_TYPE_ID {
-			_, id := storagespace.SplitStorageID(f.GetId().GetOpaqueId())
-			req.Filters[i].Term = &provider.ListStorageSpacesRequest_Filter_Id{Id: &provider.StorageSpaceId{OpaqueId: id}}
-		} else if f.Type == provider.ListStorageSpacesRequest_Filter_TYPE_PATH {
-			req.Filters[i].Term = &provider.ListStorageSpacesRequest_Filter_Path{Path: f.GetPath()}
-		}
-	}
-
 	log := appctx.GetLogger(ctx)
 
 	// TODO this is just temporary. Update the API to include this flag.
@@ -561,11 +525,6 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 }
 
 func (s *service) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
-	if req.GetStorageSpace().GetId() != nil {
-		_, req.StorageSpace.Id.OpaqueId = storagespace.SplitStorageID(req.StorageSpace.Id.OpaqueId)
-		_, req.StorageSpace.Root.StorageId = storagespace.SplitStorageID(req.StorageSpace.Root.StorageId)
-	}
-
 	res, err := s.storage.UpdateStorageSpace(ctx, req)
 	if err != nil {
 		appctx.GetLogger(ctx).
@@ -582,10 +541,6 @@ func (s *service) UpdateStorageSpace(ctx context.Context, req *provider.UpdateSt
 }
 
 func (s *service) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorageSpaceRequest) (*provider.DeleteStorageSpaceResponse, error) {
-	if req.GetId() != nil {
-		_, req.Id.OpaqueId = storagespace.SplitStorageID(req.Id.OpaqueId)
-	}
-
 	if err := s.storage.DeleteStorageSpace(ctx, req); err != nil {
 		var st *rpc.Status
 		switch err.(type) {
@@ -616,9 +571,6 @@ func (s *service) DeleteStorageSpace(ctx context.Context, req *provider.DeleteSt
 }
 
 func (s *service) CreateContainer(ctx context.Context, req *provider.CreateContainerRequest) (*provider.CreateContainerResponse, error) {
-	providerID := unwrapProviderID(req.Ref.GetResourceId())
-	defer rewrapProviderID(req.Ref.GetResourceId(), providerID)
-
 	// FIXME these should be part of the CreateContainerRequest object
 	if req.Opaque != nil {
 		if e, ok := req.Opaque.Map["lockid"]; ok && e.Decoder == "plain" {
@@ -634,9 +586,6 @@ func (s *service) CreateContainer(ctx context.Context, req *provider.CreateConta
 }
 
 func (s *service) TouchFile(ctx context.Context, req *provider.TouchFileRequest) (*provider.TouchFileResponse, error) {
-	providerID := unwrapProviderID(req.Ref.GetResourceId())
-	defer rewrapProviderID(req.Ref.GetResourceId(), providerID)
-
 	// FIXME these should be part of the TouchFileRequest object
 	if req.Opaque != nil {
 		if e, ok := req.Opaque.Map["lockid"]; ok && e.Decoder == "plain" {
@@ -652,9 +601,6 @@ func (s *service) TouchFile(ctx context.Context, req *provider.TouchFileRequest)
 }
 
 func (s *service) Delete(ctx context.Context, req *provider.DeleteRequest) (*provider.DeleteResponse, error) {
-	providerID := unwrapProviderID(req.Ref.GetResourceId())
-	defer rewrapProviderID(req.Ref.GetResourceId(), providerID)
-
 	if req.Ref.GetPath() == "/" {
 		return &provider.DeleteResponse{
 			Status: status.NewInternal(ctx, "can't delete mount path"),
@@ -692,11 +638,6 @@ func (s *service) Delete(ctx context.Context, req *provider.DeleteRequest) (*pro
 }
 
 func (s *service) Move(ctx context.Context, req *provider.MoveRequest) (*provider.MoveResponse, error) {
-	sourceProviderID := unwrapProviderID(req.Source.GetResourceId())
-	defer rewrapProviderID(req.Source.GetResourceId(), sourceProviderID)
-	destProviderID := unwrapProviderID(req.Destination.GetResourceId())
-	defer rewrapProviderID(req.Destination.GetResourceId(), destProviderID)
-
 	ctx = ctxpkg.ContextSetLockID(ctx, req.LockId)
 
 	err := s.storage.Move(ctx, req.Source, req.Destination)
@@ -707,9 +648,6 @@ func (s *service) Move(ctx context.Context, req *provider.MoveRequest) (*provide
 }
 
 func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provider.StatResponse, error) {
-	providerID := unwrapProviderID(req.Ref.GetResourceId())
-	defer rewrapProviderID(req.Ref.GetResourceId(), providerID)
-
 	ctx, span := rtrace.DefaultProvider().Tracer(tracerName).Start(ctx, "stat")
 	defer span.End()
 
@@ -726,12 +664,8 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 	}
 
 	// The storage driver might set the mount ID by itself, in which case skip this step
-	if mountID, _ := storagespace.SplitStorageID(md.Id.GetStorageId()); mountID == "" {
-		if providerID == "" {
-			providerID = s.conf.MountID
-		}
-
-		md.Id.StorageId = storagespace.FormatStorageID(providerID, md.Id.GetStorageId())
+	if md.Id.GetStorageId() == "" {
+		md.Id.StorageId = s.conf.MountID
 	}
 
 	return &provider.StatResponse{
@@ -741,9 +675,6 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 }
 
 func (s *service) ListContainerStream(req *provider.ListContainerStreamRequest, ss provider.ProviderAPI_ListContainerStreamServer) error {
-	providerID := unwrapProviderID(req.Ref.GetResourceId())
-	defer rewrapProviderID(req.Ref.GetResourceId(), providerID)
-
 	ctx := ss.Context()
 	log := appctx.GetLogger(ctx)
 
@@ -789,9 +720,6 @@ func (s *service) ListContainerStream(req *provider.ListContainerStreamRequest, 
 }
 
 func (s *service) ListContainer(ctx context.Context, req *provider.ListContainerRequest) (*provider.ListContainerResponse, error) {
-	providerID := unwrapProviderID(req.Ref.GetResourceId())
-	defer rewrapProviderID(req.Ref.GetResourceId(), providerID)
-
 	mds, err := s.storage.ListFolder(ctx, req.GetRef(), req.GetArbitraryMetadataKeys(), req.GetFieldMask().GetPaths())
 	res := &provider.ListContainerResponse{
 		Status: status.NewStatusFromErrType(ctx, "list container", err),
@@ -808,9 +736,6 @@ func (s *service) ListContainer(ctx context.Context, req *provider.ListContainer
 }
 
 func (s *service) ListFileVersions(ctx context.Context, req *provider.ListFileVersionsRequest) (*provider.ListFileVersionsResponse, error) {
-	providerID := unwrapProviderID(req.Ref.GetResourceId())
-	defer rewrapProviderID(req.Ref.GetResourceId(), providerID)
-
 	revs, err := s.storage.ListRevisions(ctx, req.Ref)
 
 	sort.Sort(descendingMtime(revs))
@@ -822,9 +747,6 @@ func (s *service) ListFileVersions(ctx context.Context, req *provider.ListFileVe
 }
 
 func (s *service) RestoreFileVersion(ctx context.Context, req *provider.RestoreFileVersionRequest) (*provider.RestoreFileVersionResponse, error) {
-	providerID := unwrapProviderID(req.Ref.GetResourceId())
-	defer rewrapProviderID(req.Ref.GetResourceId(), providerID)
-
 	ctx = ctxpkg.ContextSetLockID(ctx, req.LockId)
 
 	err := s.storage.RestoreRevision(ctx, req.Ref, req.Key)
@@ -835,9 +757,6 @@ func (s *service) RestoreFileVersion(ctx context.Context, req *provider.RestoreF
 }
 
 func (s *service) ListRecycleStream(req *provider.ListRecycleStreamRequest, ss provider.ProviderAPI_ListRecycleStreamServer) error {
-	providerID := unwrapProviderID(req.Ref.GetResourceId())
-	defer rewrapProviderID(req.Ref.GetResourceId(), providerID)
-
 	ctx := ss.Context()
 	log := appctx.GetLogger(ctx)
 
@@ -887,9 +806,6 @@ func (s *service) ListRecycleStream(req *provider.ListRecycleStreamRequest, ss p
 }
 
 func (s *service) ListRecycle(ctx context.Context, req *provider.ListRecycleRequest) (*provider.ListRecycleResponse, error) {
-	providerID := unwrapProviderID(req.Ref.GetResourceId())
-	defer rewrapProviderID(req.Ref.GetResourceId(), providerID)
-
 	key, itemPath := router.ShiftPath(req.Key)
 	items, err := s.storage.ListRecycle(ctx, req.Ref, key, itemPath)
 	if err != nil {
@@ -927,11 +843,6 @@ func (s *service) ListRecycle(ctx context.Context, req *provider.ListRecycleRequ
 }
 
 func (s *service) RestoreRecycleItem(ctx context.Context, req *provider.RestoreRecycleItemRequest) (*provider.RestoreRecycleItemResponse, error) {
-	providerID := unwrapProviderID(req.Ref.GetResourceId())
-	defer rewrapProviderID(req.Ref.GetResourceId(), providerID)
-	restoreProviderID := unwrapProviderID(req.RestoreRef.GetResourceId())
-	defer rewrapProviderID(req.RestoreRef.GetResourceId(), restoreProviderID)
-
 	ctx = ctxpkg.ContextSetLockID(ctx, req.LockId)
 
 	// TODO(labkode): CRITICAL: fill recycle info with storage provider.
@@ -945,9 +856,6 @@ func (s *service) RestoreRecycleItem(ctx context.Context, req *provider.RestoreR
 }
 
 func (s *service) PurgeRecycle(ctx context.Context, req *provider.PurgeRecycleRequest) (*provider.PurgeRecycleResponse, error) {
-	providerID := unwrapProviderID(req.Ref.GetResourceId())
-	defer rewrapProviderID(req.Ref.GetResourceId(), providerID)
-
 	// FIXME these should be part of the PurgeRecycleRequest object
 	if req.Opaque != nil {
 		if e, ok := req.Opaque.Map["lockid"]; ok && e.Decoder == "plain" {
@@ -993,9 +901,6 @@ func (s *service) PurgeRecycle(ctx context.Context, req *provider.PurgeRecycleRe
 }
 
 func (s *service) ListGrants(ctx context.Context, req *provider.ListGrantsRequest) (*provider.ListGrantsResponse, error) {
-	providerID := unwrapProviderID(req.Ref.GetResourceId())
-	defer rewrapProviderID(req.Ref.GetResourceId(), providerID)
-
 	grants, err := s.storage.ListGrants(ctx, req.Ref)
 	if err != nil {
 		var st *rpc.Status
@@ -1026,9 +931,6 @@ func (s *service) ListGrants(ctx context.Context, req *provider.ListGrantsReques
 }
 
 func (s *service) DenyGrant(ctx context.Context, req *provider.DenyGrantRequest) (*provider.DenyGrantResponse, error) {
-	providerID := unwrapProviderID(req.Ref.GetResourceId())
-	defer rewrapProviderID(req.Ref.GetResourceId(), providerID)
-
 	// check grantee type is valid
 	if req.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_INVALID {
 		return &provider.DenyGrantResponse{
@@ -1070,9 +972,6 @@ func (s *service) DenyGrant(ctx context.Context, req *provider.DenyGrantRequest)
 }
 
 func (s *service) AddGrant(ctx context.Context, req *provider.AddGrantRequest) (*provider.AddGrantResponse, error) {
-	providerID := unwrapProviderID(req.Ref.GetResourceId())
-	defer rewrapProviderID(req.Ref.GetResourceId(), providerID)
-
 	ctx = ctxpkg.ContextSetLockID(ctx, req.LockId)
 
 	// TODO: update CS3 APIs
@@ -1099,9 +998,6 @@ func (s *service) AddGrant(ctx context.Context, req *provider.AddGrantRequest) (
 }
 
 func (s *service) UpdateGrant(ctx context.Context, req *provider.UpdateGrantRequest) (*provider.UpdateGrantResponse, error) {
-	providerID := unwrapProviderID(req.Ref.GetResourceId())
-	defer rewrapProviderID(req.Ref.GetResourceId(), providerID)
-
 	// FIXME these should be part of the UpdateGrantRequest object
 	if req.Opaque != nil {
 		if e, ok := req.Opaque.Map["lockid"]; ok && e.Decoder == "plain" {
@@ -1124,9 +1020,6 @@ func (s *service) UpdateGrant(ctx context.Context, req *provider.UpdateGrantRequ
 }
 
 func (s *service) RemoveGrant(ctx context.Context, req *provider.RemoveGrantRequest) (*provider.RemoveGrantResponse, error) {
-	providerID := unwrapProviderID(req.Ref.GetResourceId())
-	defer rewrapProviderID(req.Ref.GetResourceId(), providerID)
-
 	ctx = ctxpkg.ContextSetLockID(ctx, req.LockId)
 
 	// check targetType is valid
@@ -1144,9 +1037,6 @@ func (s *service) RemoveGrant(ctx context.Context, req *provider.RemoveGrantRequ
 }
 
 func (s *service) CreateReference(ctx context.Context, req *provider.CreateReferenceRequest) (*provider.CreateReferenceResponse, error) {
-	providerID := unwrapProviderID(req.Ref.GetResourceId())
-	defer rewrapProviderID(req.Ref.GetResourceId(), providerID)
-
 	log := appctx.GetLogger(ctx)
 
 	// parse uri is valid
@@ -1190,9 +1080,6 @@ func (s *service) CreateSymlink(ctx context.Context, req *provider.CreateSymlink
 }
 
 func (s *service) GetQuota(ctx context.Context, req *provider.GetQuotaRequest) (*provider.GetQuotaResponse, error) {
-	providerID := unwrapProviderID(req.Ref.GetResourceId())
-	defer rewrapProviderID(req.Ref.GetResourceId(), providerID)
-
 	total, used, remaining, err := s.storage.GetQuota(ctx, req.Ref)
 	if err != nil {
 		var st *rpc.Status
@@ -1233,10 +1120,12 @@ func (s *service) GetQuota(ctx context.Context, req *provider.GetQuotaRequest) (
 
 func (s *service) addMissingStorageProviderID(resourceID *provider.ResourceId, spaceID *provider.StorageSpaceId) {
 	// The storage driver might set the mount ID by itself, in which case skip this step
-	if mountID, _ := storagespace.SplitStorageID(resourceID.GetStorageId()); mountID == "" {
-		resourceID.StorageId = storagespace.FormatStorageID(s.conf.MountID, resourceID.GetStorageId())
+	if resourceID.GetStorageId() == "" {
+		resourceID.StorageId = s.conf.MountID
 		if spaceID != nil {
-			spaceID.OpaqueId = storagespace.FormatStorageID(s.conf.MountID, spaceID.GetOpaqueId())
+			rid, _ := storagespace.ParseID(spaceID.GetOpaqueId())
+			rid.StorageId = s.conf.MountID
+			spaceID.OpaqueId, _ = storagespace.FormatReference(&provider.Reference{ResourceId: &rid})
 		}
 	}
 }
@@ -1260,18 +1149,4 @@ func (v descendingMtime) Less(i, j int) bool {
 
 func (v descendingMtime) Swap(i, j int) {
 	v[i], v[j] = v[j], v[i]
-}
-
-func unwrapProviderID(id *provider.ResourceId) string {
-	var spid string
-	if id != nil {
-		spid, id.StorageId = storagespace.SplitStorageID(id.StorageId)
-	}
-	return spid
-}
-
-func rewrapProviderID(id *provider.ResourceId, spid string) {
-	if id != nil {
-		id.StorageId = storagespace.FormatStorageID(spid, id.StorageId)
-	}
 }

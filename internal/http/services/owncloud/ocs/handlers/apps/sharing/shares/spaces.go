@@ -138,6 +138,10 @@ func (h *Handler) removeSpaceMember(w http.ResponseWriter, r *http.Request, spac
 		return
 	}
 
+	if ref.ResourceId.OpaqueId == "" {
+		ref.ResourceId.OpaqueId = ref.ResourceId.SpaceId
+	}
+
 	p, err := h.findProvider(ctx, &ref)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaNotFound.StatusCode, "error getting storage provider", err)
@@ -211,6 +215,7 @@ func (h *Handler) findProvider(ctx context.Context, ref *provider.Reference) (*r
 	}
 	if ref.ResourceId != nil {
 		filters["storage_id"] = ref.ResourceId.StorageId
+		filters["space_id"] = ref.ResourceId.SpaceId
 		filters["opaque_id"] = ref.ResourceId.OpaqueId
 	}
 

@@ -30,6 +30,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage"
 	"github.com/cs3org/reva/v2/pkg/storage/registry/spaces"
 	"github.com/cs3org/reva/v2/pkg/storage/registry/spaces/mocks"
+	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/stretchr/testify/mock"
 	"google.golang.org/grpc"
 
@@ -64,17 +65,18 @@ var _ = Describe("Spaces", func() {
 
 		fooClient.On("ListStorageSpaces", mock.Anything, mock.Anything).Return(
 			func(_ context.Context, req *provider.ListStorageSpacesRequest, _ ...grpc.CallOption) *provider.ListStorageSpacesResponse {
+				rid := provider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "foospace"}
 				spaces := []*provider.StorageSpace{
 					{
-						Id:        &provider.StorageSpaceId{OpaqueId: "foospace"},
-						Root:      &provider.ResourceId{StorageId: "foospace", OpaqueId: "foospace"},
+						Id:        &provider.StorageSpaceId{OpaqueId: storagespace.FormatResourceID(rid)},
+						Root:      &rid,
 						Name:      "Foo space",
 						SpaceType: "personal",
 						Owner:     alice,
 					},
 				}
 				for _, f := range req.Filters {
-					if f.Type == provider.ListStorageSpacesRequest_Filter_TYPE_ID && f.GetId().OpaqueId != "foospace!foospace" {
+					if f.Type == provider.ListStorageSpacesRequest_Filter_TYPE_ID && f.GetId().OpaqueId != "provider-1$foospace!foospace" {
 						spaces = []*provider.StorageSpace{}
 					}
 				}
@@ -85,10 +87,11 @@ var _ = Describe("Spaces", func() {
 			}, nil)
 		barClient.On("ListStorageSpaces", mock.Anything, mock.Anything).Return(
 			func(_ context.Context, req *provider.ListStorageSpacesRequest, _ ...grpc.CallOption) *provider.ListStorageSpacesResponse {
+				rid := provider.ResourceId{StorageId: "provider-1", SpaceId: "barspace", OpaqueId: "barspace"}
 				spaces := []*provider.StorageSpace{
 					{
-						Id:        &provider.StorageSpaceId{OpaqueId: "barspace"},
-						Root:      &provider.ResourceId{StorageId: "barspace", OpaqueId: "barspace"},
+						Id:        &provider.StorageSpaceId{OpaqueId: storagespace.FormatResourceID(rid)},
+						Root:      &rid,
 						Name:      "Bar space",
 						SpaceType: "personal",
 						Owner:     alice,
@@ -106,16 +109,18 @@ var _ = Describe("Spaces", func() {
 			}, nil)
 		bazClient.On("ListStorageSpaces", mock.Anything, mock.Anything).Return(
 			func(_ context.Context, req *provider.ListStorageSpacesRequest, _ ...grpc.CallOption) *provider.ListStorageSpacesResponse {
+				rid1 := provider.ResourceId{StorageId: "provider-1", SpaceId: "bazspace1", OpaqueId: "bazspace1"}
+				rid2 := provider.ResourceId{StorageId: "provider-1", SpaceId: "bazspace2", OpaqueId: "bazspace2"}
 				space1 := &provider.StorageSpace{
-					Id:        &provider.StorageSpaceId{OpaqueId: "bazspace1"},
-					Root:      &provider.ResourceId{StorageId: "bazspace1", OpaqueId: "bazspace1"},
+					Id:        &provider.StorageSpaceId{OpaqueId: storagespace.FormatResourceID(rid1)},
+					Root:      &rid1,
 					Name:      "Baz space 1",
 					SpaceType: "project",
 					Owner:     alice,
 				}
 				space2 := &provider.StorageSpace{
-					Id:        &provider.StorageSpaceId{OpaqueId: "bazspace2"},
-					Root:      &provider.ResourceId{StorageId: "bazspace2", OpaqueId: "bazspace2"},
+					Id:        &provider.StorageSpaceId{OpaqueId: storagespace.FormatResourceID(rid2)},
+					Root:      &rid2,
 					Name:      "Baz space 2",
 					SpaceType: "project",
 					Owner:     alice,
@@ -123,9 +128,9 @@ var _ = Describe("Spaces", func() {
 				spaces := []*provider.StorageSpace{space1, space2}
 				for _, f := range req.Filters {
 					if f.Type == provider.ListStorageSpacesRequest_Filter_TYPE_ID {
-						if f.GetId().OpaqueId == "bazspace1!bazspace1" {
+						if f.GetId().OpaqueId == "provider-1$bazspace1!bazspace2" {
 							spaces = []*provider.StorageSpace{space1}
-						} else if f.GetId().OpaqueId == "bazspace2!bazspace2" {
+						} else if f.GetId().OpaqueId == "provider-1$bazspace2!bazspace2" {
 							spaces = []*provider.StorageSpace{space2}
 						} else {
 							spaces = []*provider.StorageSpace{}
@@ -307,10 +312,10 @@ var _ = Describe("Spaces", func() {
 				for _, space := range spaces {
 					spacePath := string(space.Opaque.Map["path"].Value)
 					switch space.Id.OpaqueId {
-					case "bazspace1":
+					case "provider-1$bazspace1!bazspace1":
 						baz1Found = true
 						Expect(spacePath).To(Equal("/projects/Baz space 1"))
-					case "bazspace2":
+					case "provider-1$bazspace2!bazspace2":
 						baz2Found = true
 						Expect(spacePath).To(Equal("/projects/Baz space 2"))
 					default:
@@ -324,6 +329,7 @@ var _ = Describe("Spaces", func() {
 			It("returns an empty list when a non-existent id is given", func() {
 				filters := map[string]string{
 					"storage_id": "invalid",
+					"space_id":   "invalid",
 					"opaque_id":  "barspace",
 				}
 				providers, err := handler.ListProviders(ctxAlice, filters)
@@ -333,7 +339,8 @@ var _ = Describe("Spaces", func() {
 
 			It("filters by id", func() {
 				filters := map[string]string{
-					"storage_id": "foospace",
+					"storage_id": "provider-1",
+					"space_id":   "foospace",
 					"opaque_id":  "foospace",
 				}
 				providers, err := handler.ListProviders(ctxAlice, filters)
@@ -347,13 +354,14 @@ var _ = Describe("Spaces", func() {
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(spaces)).To(Equal(1))
 
-				Expect(spaces[0].Id.OpaqueId).To(Equal("foospace"))
+				Expect(spaces[0].Id.OpaqueId).To(Equal("provider-1$foospace!foospace"))
 				Expect(spaces[0].Opaque.Map["path"].Decoder).To(Equal("plain"))
 				spacePath := string(spaces[0].Opaque.Map["path"].Value)
 				Expect(spacePath).To(Equal("/users/alice"))
 
 				filters = map[string]string{
-					"storage_id": "bazspace2",
+					"storage_id": "provider-1",
+					"space_id":   "bazspace2",
 					"opaque_id":  "bazspace2",
 				}
 				providers, err = handler.ListProviders(ctxAlice, filters)
@@ -365,7 +373,7 @@ var _ = Describe("Spaces", func() {
 				err = json.Unmarshal(p.Opaque.Map["spaces"].Value, &spaces)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(spaces)).To(Equal(1))
-				Expect(spaces[0].Id.OpaqueId).To(Equal("bazspace2"))
+				Expect(spaces[0].Id.OpaqueId).To(Equal("provider-1$bazspace2!bazspace2"))
 				Expect(spaces[0].Opaque.Map["path"].Decoder).To(Equal("plain"))
 				spacePath = string(spaces[0].Opaque.Map["path"].Value)
 				Expect(spacePath).To(Equal("/projects/Baz space 2"))

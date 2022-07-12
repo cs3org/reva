@@ -35,7 +35,6 @@ import (
 	"github.com/cs3org/reva/v2/pkg/rhttp/datatx/manager/registry"
 	"github.com/cs3org/reva/v2/pkg/rhttp/datatx/utils/download"
 	"github.com/cs3org/reva/v2/pkg/storage"
-	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/mitchellh/mapstructure"
 )
@@ -110,7 +109,8 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 				}
 				ref := &provider.Reference{
 					ResourceId: &provider.ResourceId{
-						StorageId: storagespace.FormatStorageID(info.MetaData["providerID"], info.Storage["SpaceRoot"]),
+						StorageId: info.MetaData["providerID"],
+						SpaceId:   info.Storage["SpaceRoot"],
 						OpaqueId:  info.Storage["SpaceRoot"],
 					},
 					Path: utils.MakeRelativePath(filepath.Join(info.MetaData["dir"], info.MetaData["filename"])),

@@ -46,7 +46,6 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/lookup"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs"
-	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
@@ -102,7 +101,8 @@ func (fs *Decomposedfs) Upload(ctx context.Context, ref *provider.Reference, r i
 		info := uploadInfo.info
 		uploadRef := &provider.Reference{
 			ResourceId: &provider.ResourceId{
-				StorageId: storagespace.FormatStorageID(info.MetaData["providerID"], info.Storage["SpaceRoot"]),
+				StorageId: info.MetaData["providerID"],
+				SpaceId:   info.Storage["SpaceRoot"],
 				OpaqueId:  info.Storage["SpaceRoot"],
 			},
 			Path: utils.MakeRelativePath(filepath.Join(info.MetaData["dir"], info.MetaData["filename"])),
@@ -220,7 +220,8 @@ func (fs *Decomposedfs) NewUpload(ctx context.Context, info tusd.FileInfo) (uplo
 	}
 
 	n, err := fs.lu.NodeFromSpaceID(ctx, &provider.ResourceId{
-		StorageId: info.Storage["SpaceRoot"],
+		SpaceId:  info.Storage["SpaceRoot"],
+		OpaqueId: info.Storage["SpaceRoot"],
 	})
 	if err != nil {
 		return nil, errors.Wrap(err, "Decomposedfs: error getting space root node")

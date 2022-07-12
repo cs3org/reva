@@ -118,7 +118,6 @@ func (w *wrapper) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []s
 	// Take the first letter of the resource path after the namespace has been removed.
 	// If it's empty, leave it empty to be filled by storageprovider.
 	res.Id.StorageId = w.getMountID(ctx, res)
-	res.Id.StorageId = storagespace.FormatStorageID(res.Id.StorageId, res.Id.OpaqueId)
 
 	if err = w.setProjectSharingPermissions(ctx, res); err != nil {
 		return nil, err
@@ -139,7 +138,6 @@ func (w *wrapper) ListFolder(ctx context.Context, ref *provider.Reference, mdKey
 	}
 	for _, r := range res {
 		r.Id.StorageId = w.getMountID(ctx, r)
-		r.Id.StorageId = storagespace.FormatStorageID(r.Id.StorageId, r.Id.OpaqueId)
 
 		// If the request contains a relative reference, we also need to return the base path instead of the full one
 		if utils.IsRelativeReference(ref) {
@@ -177,11 +175,9 @@ func (w *wrapper) ListStorageSpaces(ctx context.Context, filter []*provider.List
 	}
 
 	for _, r := range res {
-		if mountID, _ := storagespace.SplitStorageID(r.Id.OpaqueId); mountID == "" {
+		if mountID, _, _, _ := storagespace.SplitID(r.Id.OpaqueId); mountID == "" {
 			mountID = w.getMountID(ctx, &provider.ResourceInfo{Path: r.Name})
-
-			r.Root.StorageId = storagespace.FormatStorageID(mountID, r.Root.StorageId)
-			r.Id.OpaqueId = storagespace.FormatStorageID(mountID, r.Id.OpaqueId)
+			r.Root.StorageId = mountID
 		}
 	}
 	return res, nil

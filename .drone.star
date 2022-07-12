@@ -808,7 +808,7 @@ def cs3ApiValidatorOcis():
             },
             {
                 "name": "cs3api-validator-ocis",
-                "image": "owncloud/cs3api-validator:0.1.0",
+                "image": "owncloud/cs3api-validator:0.2.0",
                 "commands": [
                     "/usr/bin/cs3api-validator /var/lib/cs3api-validator --endpoint=revad-services:19000",
                 ],
@@ -861,7 +861,7 @@ def cs3ApiValidatorS3NG():
             },
             {
                 "name": "cs3api-validator-S3NG",
-                "image": "owncloud/cs3api-validator:0.1.0",
+                "image": "owncloud/cs3api-validator:0.2.0",
                 "commands": [
                     "/usr/bin/cs3api-validator /var/lib/cs3api-validator --endpoint=revad-services:19000",
                 ],

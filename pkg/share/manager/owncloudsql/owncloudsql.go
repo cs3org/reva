@@ -217,7 +217,7 @@ func (m *mgr) Unshare(ctx context.Context, ref *collaboration.ShareReference) er
 		}
 		owner := formatUserID(key.Owner)
 		query = "DELETE FROM oc_share WHERE uid_owner=? AND file_source=? AND share_type=? AND share_with=? AND (uid_owner=? or uid_initiator=?)"
-		params = append(params, owner, key.ResourceId.StorageId, shareType, shareWith, uid, uid)
+		params = append(params, owner, key.ResourceId.OpaqueId, shareType, shareWith, uid, uid)
 	default:
 		return errtypes.NotFound(ref.String())
 	}
@@ -259,7 +259,7 @@ func (m *mgr) UpdateShare(ctx context.Context, ref *collaboration.ShareReference
 		}
 		owner := formatUserID(key.Owner)
 		query = "update oc_share set permissions=?,stime=? where (uid_owner=? or uid_initiator=?) AND file_source=? AND share_type=? AND share_with=? AND (uid_owner=? or uid_initiator=?)"
-		params = append(params, permissions, time.Now().Unix(), owner, owner, key.ResourceId.StorageId, shareType, shareWith, uid, uid)
+		params = append(params, permissions, time.Now().Unix(), owner, owner, key.ResourceId.OpaqueId, shareType, shareWith, uid, uid)
 	default:
 		return nil, errtypes.NotFound(ref.String())
 	}

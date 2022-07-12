@@ -87,12 +87,15 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 			fn := path.Clean(strings.TrimLeft(r.URL.Path, "/"))
 			defer r.Body.Close()
 
-			storageid, opaqeid, _ := storagespace.SplitID(spaceID)
+			rid, err := storagespace.ParseID(spaceID)
+			if err != nil {
+				sublog.Error().Err(err).Msg("failed to parse resourceID")
+			}
 			ref := &provider.Reference{
-				ResourceId: &provider.ResourceId{StorageId: storageid, OpaqueId: opaqeid},
+				ResourceId: &rid,
 				Path:       fn,
 			}
-			err := fs.Upload(ctx, ref, r.Body, func(owner *userpb.UserId, ref *provider.Reference) {
+			err = fs.Upload(ctx, ref, r.Body, func(owner *userpb.UserId, ref *provider.Reference) {
 				if err := datatx.EmitFileUploadedEvent(owner, ref, m.publisher); err != nil {
 					sublog.Error().Err(err).Msg("failed to publish FileUploaded event")
 				}

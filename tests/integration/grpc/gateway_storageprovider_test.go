@@ -68,8 +68,8 @@ var _ = Describe("gateway", func() {
 		}
 		homeRef = &storagep.Reference{
 			ResourceId: &storagep.ResourceId{
-				StorageId: user.Id.OpaqueId,
-				OpaqueId:  user.Id.OpaqueId,
+				SpaceId:  user.Id.OpaqueId,
+				OpaqueId: user.Id.OpaqueId,
 			},
 			Path: ".",
 		}
@@ -197,7 +197,7 @@ var _ = Describe("gateway", func() {
 			Expect(err).ToNot(HaveOccurred())
 			err = helpers.Upload(ctx,
 				shard1Fs,
-				&storagep.Reference{ResourceId: &storagep.ResourceId{StorageId: ssid.StorageId}, Path: "/file.txt"},
+				&storagep.Reference{ResourceId: &ssid, Path: "/file.txt"},
 				[]byte("1"),
 			)
 			Expect(err).ToNot(HaveOccurred())
@@ -308,9 +308,9 @@ var _ = Describe("gateway", func() {
 				Expect(listRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 				ssid, err := storagespace.ParseID(space.Id.OpaqueId)
 				Expect(err).ToNot(HaveOccurred())
-				_, err = os.Stat(path.Join(revads["storage"].StorageRoot, "/spacetypes/project", ssid.StorageId))
+				_, err = os.Stat(path.Join(revads["storage"].StorageRoot, "/spacetypes/project", ssid.SpaceId))
 				Expect(err).To(HaveOccurred())
-				_, err = os.Stat(path.Join(revads["storage2"].StorageRoot, "/spacetypes/project", ssid.StorageId))
+				_, err = os.Stat(path.Join(revads["storage2"].StorageRoot, "/spacetypes/project", ssid.SpaceId))
 				Expect(err).ToNot(HaveOccurred())
 			})
 
@@ -384,7 +384,7 @@ var _ = Describe("gateway", func() {
 			Expect(err).ToNot(HaveOccurred())
 			err = helpers.Upload(ctx,
 				fs,
-				&storagep.Reference{ResourceId: &storagep.ResourceId{StorageId: ssid.StorageId}, Path: "/file.txt"},
+				&storagep.Reference{ResourceId: &ssid, Path: "/file.txt"},
 				[]byte("1"),
 			)
 			Expect(err).ToNot(HaveOccurred())
@@ -409,15 +409,12 @@ var _ = Describe("gateway", func() {
 			essid, err := storagespace.ParseID(embeddedSpace.Id.OpaqueId)
 			Expect(err).ToNot(HaveOccurred())
 			embeddedRef = &storagep.Reference{
-				ResourceId: &storagep.ResourceId{
-					StorageId: essid.StorageId,
-					OpaqueId:  essid.OpaqueId,
-				},
-				Path: ".", //  path.Join(homeRef.Path, "Projects", embeddedSpace.Id.OpaqueId),
+				ResourceId: &essid,
+				Path:       ".", //  path.Join(homeRef.Path, "Projects", embeddedSpace.Id.OpaqueId),
 			}
 			err = helpers.Upload(ctx,
 				embeddedFs,
-				&storagep.Reference{ResourceId: &storagep.ResourceId{StorageId: essid.StorageId}, Path: "/embedded.txt"},
+				&storagep.Reference{ResourceId: &essid, Path: "/embedded.txt"},
 				[]byte("22"),
 			)
 			Expect(err).ToNot(HaveOccurred())
@@ -507,7 +504,9 @@ var _ = Describe("gateway", func() {
 				Expect(statRes.Info.Size).To(Equal(uint64(3)))
 
 				By("Uploading a new file")
-				err = helpers.Upload(ctx, fs, &storagep.Reference{ResourceId: &storagep.ResourceId{StorageId: homeSpace.Id.OpaqueId}, Path: "/newfile.txt"}, []byte("1234567890"))
+				rid, err := storagespace.ParseID(homeSpace.Id.OpaqueId)
+				Expect(err).ToNot(HaveOccurred())
+				err = helpers.Upload(ctx, fs, &storagep.Reference{ResourceId: &rid, Path: "/newfile.txt"}, []byte("1234567890"))
 				Expect(err).ToNot(HaveOccurred())
 
 				time.Sleep(time.Second) // cache must expire
@@ -517,9 +516,9 @@ var _ = Describe("gateway", func() {
 				Expect(statRes.Info.Size).To(Equal(uint64(13)))
 
 				By("Uploading a new file into a subdir")
-				err = fs.CreateDir(ctx, &storagep.Reference{ResourceId: &storagep.ResourceId{StorageId: homeSpace.Id.OpaqueId}, Path: "/newdir"})
+				err = fs.CreateDir(ctx, &storagep.Reference{ResourceId: &rid, Path: "/newdir"})
 				Expect(err).ToNot(HaveOccurred())
-				err = helpers.Upload(ctx, fs, &storagep.Reference{ResourceId: &storagep.ResourceId{StorageId: homeSpace.Id.OpaqueId}, Path: "/newdir/newfile.txt"}, []byte("1234567890"))
+				err = helpers.Upload(ctx, fs, &storagep.Reference{ResourceId: &rid, Path: "/newdir/newfile.txt"}, []byte("1234567890"))
 				Expect(err).ToNot(HaveOccurred())
 
 				time.Sleep(time.Second) // cache must expire
@@ -529,7 +528,7 @@ var _ = Describe("gateway", func() {
 				Expect(statRes.Info.Size).To(Equal(uint64(23)))
 
 				By("Updating an existing file")
-				err = helpers.Upload(ctx, fs, &storagep.Reference{ResourceId: &storagep.ResourceId{StorageId: homeSpace.Id.OpaqueId}, Path: "/newdir/newfile.txt"}, []byte("12345678901234567890"))
+				err = helpers.Upload(ctx, fs, &storagep.Reference{ResourceId: &rid, Path: "/newdir/newfile.txt"}, []byte("12345678901234567890"))
 				Expect(err).ToNot(HaveOccurred())
 
 				time.Sleep(time.Second) // cache must expire
@@ -546,7 +545,9 @@ var _ = Describe("gateway", func() {
 				Expect(statRes.Info.Size).To(Equal(uint64(3)))
 
 				By("Uploading a new file")
-				err = helpers.Upload(ctx, embeddedFs, &storagep.Reference{ResourceId: &storagep.ResourceId{StorageId: embeddedSpace.Id.OpaqueId}, Path: "/newfile.txt"}, []byte("1234567890"))
+				rid, err := storagespace.ParseID(embeddedSpace.Id.OpaqueId)
+				Expect(err).ToNot(HaveOccurred())
+				err = helpers.Upload(ctx, embeddedFs, &storagep.Reference{ResourceId: &rid, Path: "/newfile.txt"}, []byte("1234567890"))
 				Expect(err).ToNot(HaveOccurred())
 
 				time.Sleep(time.Second) // cache must expire
@@ -556,9 +557,9 @@ var _ = Describe("gateway", func() {
 				Expect(statRes.Info.Size).To(Equal(uint64(13)))
 
 				By("Uploading a new file into a subdir")
-				err = embeddedFs.CreateDir(ctx, &storagep.Reference{ResourceId: &storagep.ResourceId{StorageId: embeddedSpace.Id.OpaqueId}, Path: "/newdir"})
+				err = embeddedFs.CreateDir(ctx, &storagep.Reference{ResourceId: &rid, Path: "/newdir"})
 				Expect(err).ToNot(HaveOccurred())
-				err = helpers.Upload(ctx, embeddedFs, &storagep.Reference{ResourceId: &storagep.ResourceId{StorageId: embeddedSpace.Id.OpaqueId}, Path: "/newdir/newfile.txt"}, []byte("1234567890"))
+				err = helpers.Upload(ctx, embeddedFs, &storagep.Reference{ResourceId: &rid, Path: "/newdir/newfile.txt"}, []byte("1234567890"))
 				Expect(err).ToNot(HaveOccurred())
 
 				time.Sleep(time.Second) // cache must expire
@@ -568,7 +569,7 @@ var _ = Describe("gateway", func() {
 				Expect(statRes.Info.Size).To(Equal(uint64(23)))
 
 				By("Updating an existing file")
-				err = helpers.Upload(ctx, embeddedFs, &storagep.Reference{ResourceId: &storagep.ResourceId{StorageId: embeddedSpace.Id.OpaqueId}, Path: "/newdir/newfile.txt"}, []byte("12345678901234567890"))
+				err = helpers.Upload(ctx, embeddedFs, &storagep.Reference{ResourceId: &rid, Path: "/newdir/newfile.txt"}, []byte("12345678901234567890"))
 				Expect(err).ToNot(HaveOccurred())
 
 				time.Sleep(time.Second) // cache must expire
@@ -586,7 +587,7 @@ var _ = Describe("gateway", func() {
 				ssid, err := storagespace.ParseID(homeSpace.Id.OpaqueId)
 				Expect(err).ToNot(HaveOccurred())
 				By("Uploading a new file")
-				err = helpers.Upload(ctx, fs, &storagep.Reference{ResourceId: &storagep.ResourceId{StorageId: ssid.StorageId}, Path: "/newfile.txt"}, []byte("1"))
+				err = helpers.Upload(ctx, fs, &storagep.Reference{ResourceId: &ssid, Path: "/newfile.txt"}, []byte("1"))
 				Expect(err).ToNot(HaveOccurred())
 
 				time.Sleep(time.Second) // cache must expire
@@ -598,7 +599,7 @@ var _ = Describe("gateway", func() {
 				Expect(newEtag).ToNot(Equal(etag))
 
 				By("Creating a new dir")
-				err = fs.CreateDir(ctx, &storagep.Reference{ResourceId: &storagep.ResourceId{StorageId: ssid.StorageId}, Path: "/newdir"})
+				err = fs.CreateDir(ctx, &storagep.Reference{ResourceId: &ssid, Path: "/newdir"})
 				Expect(err).ToNot(HaveOccurred())
 
 				time.Sleep(time.Second) // cache must expire
@@ -610,7 +611,7 @@ var _ = Describe("gateway", func() {
 				Expect(newEtag2).ToNot(Equal(newEtag))
 
 				By("Updating an existing file")
-				err = helpers.Upload(ctx, fs, &storagep.Reference{ResourceId: &storagep.ResourceId{StorageId: ssid.StorageId}, Path: "/file.txt"}, []byte("2"))
+				err = helpers.Upload(ctx, fs, &storagep.Reference{ResourceId: &ssid, Path: "/file.txt"}, []byte("2"))
 				Expect(err).ToNot(HaveOccurred())
 
 				time.Sleep(time.Second) // cache must expire
@@ -630,7 +631,7 @@ var _ = Describe("gateway", func() {
 				essid, err := storagespace.ParseID(embeddedSpace.Id.OpaqueId)
 				Expect(err).ToNot(HaveOccurred())
 				By("Uploading a new file")
-				err = helpers.Upload(ctx, embeddedFs, &storagep.Reference{ResourceId: &storagep.ResourceId{StorageId: essid.StorageId}, Path: "/newfile.txt"}, []byte("1"))
+				err = helpers.Upload(ctx, embeddedFs, &storagep.Reference{ResourceId: &essid, Path: "/newfile.txt"}, []byte("1"))
 				Expect(err).ToNot(HaveOccurred())
 
 				time.Sleep(time.Second) // cache must expire
@@ -642,7 +643,7 @@ var _ = Describe("gateway", func() {
 				Expect(newEtag).ToNot(Equal(etag))
 
 				By("Creating a new dir")
-				err = embeddedFs.CreateDir(ctx, &storagep.Reference{ResourceId: &storagep.ResourceId{StorageId: essid.StorageId}, Path: "/newdir"})
+				err = embeddedFs.CreateDir(ctx, &storagep.Reference{ResourceId: &essid, Path: "/newdir"})
 				Expect(err).ToNot(HaveOccurred())
 
 				time.Sleep(time.Second) // cache must expire
@@ -654,7 +655,7 @@ var _ = Describe("gateway", func() {
 				Expect(newEtag2).ToNot(Equal(newEtag))
 
 				By("Updating an existing file")
-				err = helpers.Upload(ctx, embeddedFs, &storagep.Reference{ResourceId: &storagep.ResourceId{StorageId: essid.StorageId}, Path: "/newfile.txt"}, []byte("1"))
+				err = helpers.Upload(ctx, embeddedFs, &storagep.Reference{ResourceId: &essid, Path: "/newfile.txt"}, []byte("1"))
 				Expect(err).ToNot(HaveOccurred())
 
 				time.Sleep(time.Second) // cache must expire
@@ -671,9 +672,9 @@ var _ = Describe("gateway", func() {
 			It("moves a directory", func() {
 				hssid, err := storagespace.ParseID(homeSpace.Id.OpaqueId)
 				Expect(err).ToNot(HaveOccurred())
-				sourceRef := &storagep.Reference{ResourceId: &storagep.ResourceId{StorageId: hssid.StorageId, OpaqueId: hssid.OpaqueId}, Path: "./source"}
-				targetRef := &storagep.Reference{ResourceId: &storagep.ResourceId{StorageId: hssid.StorageId, OpaqueId: hssid.OpaqueId}, Path: "./destination"}
-				dstRef := &storagep.Reference{ResourceId: &storagep.ResourceId{StorageId: hssid.StorageId, OpaqueId: hssid.OpaqueId}, Path: "./destination/source"}
+				sourceRef := &storagep.Reference{ResourceId: &hssid, Path: "./source"}
+				targetRef := &storagep.Reference{ResourceId: &hssid, Path: "./destination"}
+				dstRef := &storagep.Reference{ResourceId: &hssid, Path: "./destination/source"}
 
 				err = fs.CreateDir(ctx, sourceRef)
 				Expect(err).ToNot(HaveOccurred())

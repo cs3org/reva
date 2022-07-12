@@ -39,7 +39,6 @@ import (
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/publicshare"
 	"github.com/cs3org/reva/v2/pkg/publicshare/manager/registry"
-	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
@@ -134,7 +133,7 @@ func (m *manager) CreatePublicShare(ctx context.Context, u *user.User, rInfo *pr
 	owner := conversions.FormatUserID(rInfo.Owner)
 	permissions := conversions.SharePermToInt(g.Permissions.Permissions)
 	itemType := conversions.ResourceTypeToItem(rInfo.Type)
-	prefix, _ := storagespace.SplitStorageID(rInfo.Id.StorageId)
+	prefix := rInfo.Id.SpaceId
 	itemSource := rInfo.Id.OpaqueId
 	fileSource, err := strconv.ParseUint(itemSource, 10, 64)
 	if err != nil {
@@ -323,8 +322,7 @@ func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []
 				resourceFilters += " OR "
 			}
 			resourceFilters += "(fileid_prefix=? AND item_source=?)"
-			prefix, _ := storagespace.SplitStorageID(f.GetResourceId().StorageId)
-			resourceParams = append(resourceParams, prefix, f.GetResourceId().OpaqueId)
+			resourceParams = append(resourceParams, f.GetResourceId().SpaceId, f.GetResourceId().OpaqueId)
 		case link.ListPublicSharesRequest_Filter_TYPE_OWNER:
 			if len(ownerFilters) != 0 {
 				ownerFilters += " OR "

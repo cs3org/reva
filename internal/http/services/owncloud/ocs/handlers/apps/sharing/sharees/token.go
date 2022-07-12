@@ -37,6 +37,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"google.golang.org/grpc/metadata"
 )
@@ -81,7 +82,7 @@ func handleGetToken(ctx context.Context, tkn string, pw string, c gateway.Gatewa
 	}
 
 	if protected && !t.PasswordProtected {
-		space, status, err := spacelookup.LookUpStorageSpaceByID(ctx, c, t.StorageID)
+		space, status, err := spacelookup.LookUpStorageSpaceByID(ctx, c, storagespace.FormatResourceID(provider.ResourceId{StorageId: t.StorageID, SpaceId: t.SpaceID, OpaqueId: t.OpaqueID}))
 		// add info only if user is able to stat
 		if err == nil && status.Code == rpc.Code_CODE_OK {
 			t.SpacePath = utils.ReadPlainFromOpaque(space.Opaque, "path")
@@ -114,6 +115,7 @@ func buildTokenInfo(owner *user.User, tkn string, token string, passProtected bo
 	_ = json.Unmarshal(sRes.Info.Opaque.Map["link-share"].Value, ls)
 
 	t.StorageID = ls.ResourceId.GetStorageId()
+	t.SpaceID = ls.ResourceId.GetSpaceId()
 	t.OpaqueID = ls.ResourceId.GetOpaqueId()
 
 	return t, nil
@@ -160,6 +162,7 @@ func getTokenStatInfo(ctx context.Context, client gateway.GatewayAPIClient, toke
 	return client.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{
 		ResourceId: &provider.ResourceId{
 			StorageId: utils.PublicStorageProviderID,
+			SpaceId:   utils.PublicStorageSpaceID,
 			OpaqueId:  token,
 		},
 	}})

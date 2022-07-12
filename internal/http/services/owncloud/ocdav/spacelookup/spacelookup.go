@@ -156,6 +156,10 @@ func MakeStorageSpaceReference(spaceID string, relativePath string) (storageProv
 	if err != nil {
 		return storageProvider.Reference{}, err
 	}
+	// be tolerant about missing sharesstorageprovider id
+	if resourceID.StorageId == "" && resourceID.SpaceId == utils.ShareStorageSpaceID {
+		resourceID.StorageId = utils.ShareStorageProviderID
+	}
 	return storageProvider.Reference{
 		ResourceId: &resourceID,
 		Path:       utils.MakeRelativePath(relativePath),

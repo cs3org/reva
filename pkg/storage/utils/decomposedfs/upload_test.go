@@ -67,7 +67,7 @@ var _ = Describe("File uploads", func() {
 	BeforeEach(func() {
 		ref = &provider.Reference{
 			ResourceId: &provider.ResourceId{
-				StorageId: "u-s-e-r-id",
+				SpaceId: "u-s-e-r-id",
 			},
 			Path: "/foo",
 		}
@@ -83,7 +83,8 @@ var _ = Describe("File uploads", func() {
 
 		rootRef = &provider.Reference{
 			ResourceId: &provider.ResourceId{
-				StorageId: "u-s-e-r-id",
+				SpaceId:  "u-s-e-r-id",
+				OpaqueId: "u-s-e-r-id",
 			},
 			Path: "/",
 		}
@@ -124,7 +125,7 @@ var _ = Describe("File uploads", func() {
 		Expect(resp.Status.Code).To(Equal(v1beta11.Code_CODE_OK))
 		resID, err := storagespace.ParseID(resp.StorageSpace.Id.OpaqueId)
 		Expect(err).ToNot(HaveOccurred())
-		ref.ResourceId = &provider.ResourceId{StorageId: resID.StorageId, OpaqueId: resID.OpaqueId}
+		ref.ResourceId = &resID
 	})
 
 	Context("the user's quota is exceeded", func() {

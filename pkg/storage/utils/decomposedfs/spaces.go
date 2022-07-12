@@ -144,8 +144,8 @@ func (fs *Decomposedfs) CreateStorageSpace(ctx context.Context, req *provider.Cr
 		u := ctxpkg.ContextMustGetUser(ctx)
 		if err := fs.AddGrant(ctx, &provider.Reference{
 			ResourceId: &provider.ResourceId{
-				StorageId: spaceID,
-				OpaqueId:  spaceID,
+				SpaceId:  spaceID,
+				OpaqueId: spaceID,
 			},
 		}, &provider.Grant{
 			Grantee: &provider.Grantee{
@@ -266,7 +266,7 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 				spaceTypes = append(spaceTypes, filter[i].GetSpaceType())
 			}
 		case provider.ListStorageSpacesRequest_Filter_TYPE_ID:
-			spaceID, nodeID, _ = storagespace.SplitID(filter[i].GetId().OpaqueId)
+			_, spaceID, nodeID, _ = storagespace.SplitID(filter[i].GetId().OpaqueId)
 			if strings.Contains(nodeID, "/") {
 				return []*provider.StorageSpace{}, nil
 			}
@@ -403,7 +403,7 @@ func (fs *Decomposedfs) UpdateStorageSpace(ctx context.Context, req *provider.Up
 	}
 
 	space := req.StorageSpace
-	spaceID, _, _ := storagespace.SplitID(space.Id.OpaqueId)
+	_, spaceID, _, _ := storagespace.SplitID(space.Id.OpaqueId)
 
 	node, err := node.ReadNode(ctx, fs.lu, spaceID, spaceID, true) // permission to read disabled space will be checked later
 	if err != nil {
@@ -510,7 +510,10 @@ func (fs *Decomposedfs) DeleteStorageSpace(ctx context.Context, req *provider.De
 		_, purge = opaque.Map["purge"]
 	}
 
-	spaceID := req.Id.OpaqueId
+	_, spaceID, _, err := storagespace.SplitID(req.Id.GetOpaqueId())
+	if err != nil {
+		return err
+	}
 
 	n, err := node.ReadNode(ctx, fs.lu, spaceID, spaceID, true) // permission to read disabled space is checked later
 	if err != nil {
@@ -632,8 +635,8 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 	ssID, err := storagespace.FormatReference(
 		&provider.Reference{
 			ResourceId: &provider.ResourceId{
-				StorageId: n.SpaceRoot.SpaceID,
-				OpaqueId:  n.ID},
+				SpaceId:  n.SpaceRoot.SpaceID,
+				OpaqueId: n.ID},
 		},
 	)
 	if err != nil {
@@ -650,8 +653,8 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 		},
 		Id: &provider.StorageSpaceId{OpaqueId: ssID},
 		Root: &provider.ResourceId{
-			StorageId: n.SpaceRoot.SpaceID,
-			OpaqueId:  n.ID,
+			SpaceId:  n.SpaceRoot.SpaceID,
+			OpaqueId: n.ID,
 		},
 		Name: sname,
 		// SpaceType is read from xattr below
@@ -726,7 +729,7 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 	spaceImage, ok := spaceAttributes[xattrs.SpaceImageAttr]
 	if ok {
 		space.Opaque = utils.AppendPlainToOpaque(space.Opaque, "image", storagespace.FormatResourceID(
-			provider.ResourceId{StorageId: space.Root.StorageId, OpaqueId: spaceImage},
+			provider.ResourceId{StorageId: space.Root.StorageId, SpaceId: space.Root.SpaceId, OpaqueId: spaceImage},
 		))
 	}
 	spaceDescription, ok := spaceAttributes[xattrs.SpaceDescriptionAttr]
@@ -736,7 +739,7 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 	spaceReadme, ok := spaceAttributes[xattrs.SpaceReadmeAttr]
 	if ok {
 		space.Opaque = utils.AppendPlainToOpaque(space.Opaque, "readme", storagespace.FormatResourceID(
-			provider.ResourceId{StorageId: space.Root.StorageId, OpaqueId: spaceReadme},
+			provider.ResourceId{StorageId: space.Root.StorageId, SpaceId: space.Root.SpaceId, OpaqueId: spaceReadme},
 		))
 	}
 	spaceAlias, ok := spaceAttributes[xattrs.SpaceAliasAttr]

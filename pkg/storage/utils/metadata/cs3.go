@@ -104,7 +104,7 @@ func (cs3 *CS3) Init(ctx context.Context, spaceid string) (err error) {
 		cs3.SpaceRoot = cssr.StorageSpace.Root
 	case cssr.Status.Code == rpc.Code_CODE_ALREADY_EXISTS:
 		// TODO make CreateStorageSpace return existing space?
-		cs3.SpaceRoot = &provider.ResourceId{StorageId: spaceid, OpaqueId: spaceid}
+		cs3.SpaceRoot = &provider.ResourceId{SpaceId: spaceid, OpaqueId: spaceid}
 	default:
 		return errtypes.NewErrtypeFromStatus(cssr.Status)
 	}
