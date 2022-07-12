@@ -369,7 +369,7 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 				var opaque *typesv1beta1.Opaque
 				var mtime *typesv1beta1.Timestamp
 				if earliestShare != nil {
-					if info, ok := shareInfo[earliestShare.Id.OpaqueId]; ok {
+					if info, ok := shareInfo[earliestShare.GetId().GetOpaqueId()]; ok {
 						mtime = info.Mtime
 						opaque = utils.AppendPlainToOpaque(opaque, "etag", info.Etag)
 					}
@@ -642,6 +642,14 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 			return nil, err
 		}
 		earliestShare, _ := findEarliestShare(receivedShares, shareMd)
+		var mtime *typesv1beta1.Timestamp
+		var etag string
+		if earliestShare != nil {
+			if info, ok := shareMd[earliestShare.GetId().GetOpaqueId()]; ok {
+				mtime = info.Mtime
+				etag = info.Etag
+			}
+		}
 		return &provider.StatResponse{
 			Status: status.NewOK(ctx),
 			Info: &provider.ResourceInfo{
@@ -659,14 +667,14 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 					OpaqueId:  utils.ShareStorageSpaceID,
 				},
 				Type:          provider.ResourceType_RESOURCE_TYPE_CONTAINER,
-				Mtime:         shareMd[earliestShare.Id.OpaqueId].Mtime,
+				Mtime:         mtime,
 				Path:          "/",
 				MimeType:      "httpd/unix-directory",
 				Size:          0,
 				PermissionSet: &provider.ResourcePermissions{
 					// TODO
 				},
-				Etag:  shareMd[earliestShare.Id.OpaqueId].Etag,
+				Etag:  etag,
 				Owner: owner.Id,
 			},
 		}, nil
