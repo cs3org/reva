@@ -52,7 +52,7 @@ var projectRegex = regexp.MustCompile(`^cernbox-project-(?P<Name>.+)-(?P<Permiss
 
 func parseConfig(c map[string]interface{}) (*config, error) {
 	conf := &config{}
-	err := mapstructure.Decode(conf, c)
+	err := mapstructure.Decode(c, conf)
 	if err != nil {
 		return nil, errors.Wrap(err, "error deconding config")
 	}
