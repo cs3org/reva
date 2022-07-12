@@ -545,7 +545,7 @@ func (fs *Decomposedfs) GetMD(ctx context.Context, ref *provider.Reference, mdKe
 		}
 	}
 	if addSpace {
-		if md.Space, err = fs.storageSpaceFromNode(ctx, node, node.InternalPath(), false, false); err != nil {
+		if md.Space, err = fs.storageSpaceFromNode(ctx, node, false, false); err != nil {
 			return nil, err
 		}
 	}
