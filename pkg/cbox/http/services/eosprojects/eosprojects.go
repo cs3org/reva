@@ -31,14 +31,12 @@ type eosProj struct {
 }
 
 type config struct {
-	DB struct {
-		Username string `mapstructure:"username"`
-		Password string `mapstructure:"password"`
-		Host     string `mapstructure:"host"`
-		Port     int    `mapstructure:"port"`
-		Name     string `mapstructure:"name"`
-		Table    string `mapstructure:"table"`
-	} `mapstructure:"db"`
+	Username              string `mapstructure:"username"`
+	Password              string `mapstructure:"password"`
+	Host                  string `mapstructure:"host"`
+	Port                  int    `mapstructure:"port"`
+	Name                  string `mapstructure:"name"`
+	Table                 string `mapstructure:"table"`
 	Prefix                string `mapstructure:"db"`
 	GatewaySvc            string `mapstructure:"gateway_svc"`
 	SkipUserGroupsInToken bool   `mapstructure:"skip_user_groups_in_token"`
@@ -80,7 +78,7 @@ func New(conf map[string]interface{}, log *zerolog.Logger) (global.Service, erro
 
 	c.init()
 
-	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%d)/%s", c.DB.Username, c.DB.Password, c.DB.Host, c.DB.Port, c.DB.Name))
+	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%d)/%s", c.Username, c.Password, c.Host, c.Port, c.Name))
 	if err != nil {
 		return nil, errors.Wrap(err, "error creating open sql connection")
 	}
@@ -177,7 +175,7 @@ func (e *eosProj) getProjects(ctx context.Context) ([]*project, error) {
 
 	var dbProjects []string
 	dbProjectsPaths := make(map[string]string)
-	query := fmt.Sprintf("SELECT project_name, eos_relative_path FROM %s", e.c.DB.Table)
+	query := fmt.Sprintf("SELECT project_name, eos_relative_path FROM %s", e.c.Table)
 	results, err := e.db.Query(query)
 	if err != nil {
 		return nil, errors.Wrap(err, "error getting projects from db")
