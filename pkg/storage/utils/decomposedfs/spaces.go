@@ -565,7 +565,7 @@ func (fs *Decomposedfs) DeleteStorageSpace(ctx context.Context, req *provider.De
 			return err
 		}
 		// remove type index
-		spaceTypePath := filepath.Join(fs.o.Root, "spacetypes", spaceType, spaceID)
+		spaceTypePath := filepath.Join(fs.o.Root, "indexes", "by-type", spaceType, spaceID)
 		if err := os.Remove(spaceTypePath); err != nil {
 			return err
 		}
@@ -608,7 +608,7 @@ func (fs *Decomposedfs) linkSpaceByUser(ctx context.Context, userID, spaceID str
 		if isAlreadyExists(err) {
 			appctx.GetLogger(ctx).Debug().Err(err).Str("space", spaceID).Str("user-id", userID).Msg("symlink already exists")
 			// FIXME: is it ok to wipe this err if the symlink already exists?
-			err = nil
+			err = nil //nolint
 		} else {
 			// TODO how should we handle error cases here?
 			appctx.GetLogger(ctx).Error().Err(err).Str("space", spaceID).Str("user-id", userID).Msg("could not create symlink")
@@ -629,7 +629,7 @@ func (fs *Decomposedfs) linkStorageSpaceType(ctx context.Context, spaceType stri
 	}
 
 	// link space in spacetypes
-	err := os.Symlink("../../../spaces/"+lookup.Pathify(spaceID, 1, 2)+"/nodes/"+lookup.Pathify(spaceID, 4, 2), filepath.Join(fs.o.Root, "spacetypes", spaceType, spaceID))
+	err := os.Symlink("../../../spaces/"+lookup.Pathify(spaceID, 1, 2)+"/nodes/"+lookup.Pathify(spaceID, 4, 2), filepath.Join(fs.o.Root, "indexes", "by-type", spaceType, spaceID))
 	if err != nil {
 		if isAlreadyExists(err) {
 			appctx.GetLogger(ctx).Debug().Err(err).Str("space", spaceID).Str("spacetype", spaceType).Msg("symlink already exists")

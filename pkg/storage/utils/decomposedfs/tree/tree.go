@@ -194,41 +194,6 @@ func (t *Tree) moveSpaceType(spaceType string) error {
 }
 
 // linkSpace creates a new symbolic link for a space with the given type st, and node id
-func (t *Tree) linkSpaceType(spaceType, spaceID string) error {
-	if err := os.MkdirAll(filepath.Join(t.root, "indexes", "by-type"), 0700); err != nil {
-		return err
-	}
-	spaceTypesPath := filepath.Join(t.root, "indexes", "by-type", spaceType, spaceID)
-	expectedTarget := "../../spaces/" + lookup.Pathify(spaceID, 1, 2) + "/nodes/" + lookup.Pathify(spaceID, 4, 2)
-	linkTarget, err := os.Readlink(spaceTypesPath)
-	if errors.Is(err, os.ErrNotExist) {
-		err = os.Symlink(expectedTarget, spaceTypesPath)
-		if err != nil {
-			logger.New().Error().Err(err).
-				Str("space_type", spaceType).
-				Str("space", spaceID).
-				Msg("could not create symlink")
-		}
-	} else {
-		if err != nil {
-			logger.New().Error().Err(err).
-				Str("space_type", spaceType).
-				Str("space", spaceID).
-				Msg("could not read symlink")
-		}
-		if linkTarget != expectedTarget {
-			logger.New().Warn().
-				Str("space_type", spaceType).
-				Str("space", spaceID).
-				Str("expected", expectedTarget).
-				Str("actual", linkTarget).
-				Msg("expected a different link target")
-		}
-	}
-	return nil
-}
-
-// linkSpace creates a new symbolic link for a space with the given type st, and node id
 func (t *Tree) linkSpaceNode(spaceType, spaceID string) {
 	spaceTypesPath := filepath.Join(t.root, "spacetypes", spaceType, spaceID)
 	expectedTarget := "../../spaces/" + lookup.Pathify(spaceID, 1, 2) + "/nodes/" + lookup.Pathify(spaceID, 4, 2)
