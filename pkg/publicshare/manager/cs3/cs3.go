@@ -48,6 +48,7 @@ import (
 	indexerErrors "github.com/cs3org/reva/v2/pkg/storage/utils/indexer/errors"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/indexer/option"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/metadata"
+	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/utils"
 )
 
@@ -329,6 +330,8 @@ func (m *Manager) getByToken(ctx context.Context, token string) (*publicshare.Wi
 	if err != nil {
 		return nil, err
 	}
+	id := storagespace.UpdateLegacyResourceID(*ps.PublicShare.ResourceId)
+	ps.PublicShare.ResourceId = &id
 	return ps, nil
 }
 
