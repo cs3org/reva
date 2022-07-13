@@ -317,3 +317,26 @@ func TestFormatAndParseReference(t *testing.T) {
 		}
 	}
 }
+
+func TestUpdateLegacyResourceID(t *testing.T) {
+	tests := []struct {
+		orig     provider.ResourceId
+		expected provider.ResourceId
+	}{
+		{
+			orig:     provider.ResourceId{StorageId: "storageid", SpaceId: "spaceid", OpaqueId: "opaqueid"},
+			expected: provider.ResourceId{StorageId: "storageid", SpaceId: "spaceid", OpaqueId: "opaqueid"},
+		},
+		{
+			orig:     provider.ResourceId{StorageId: "storageid$spaceid", SpaceId: "", OpaqueId: "opaqueid"},
+			expected: provider.ResourceId{StorageId: "storageid", SpaceId: "spaceid", OpaqueId: "opaqueid"},
+		},
+	}
+
+	for _, tt := range tests {
+		updated := UpdateLegacyResourceID(tt.orig)
+		if !(utils.ResourceIDEqual(&updated, &tt.expected)) {
+			t.Errorf("Updating resourceid failed, got: %v expected %v", updated, tt.expected)
+		}
+	}
+}

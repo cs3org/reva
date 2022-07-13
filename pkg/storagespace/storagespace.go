@@ -143,3 +143,16 @@ func FormatReference(ref *provider.Reference) (string, error) {
 	ssid := FormatResourceID(*ref.ResourceId)
 	return path.Join(ssid, ref.Path), nil
 }
+
+// UpdateLegacyResourceID checks if the given resource id contains a correct triple and will convert legacy ids without a spaceid
+// by splitting the storageid.
+func UpdateLegacyResourceID(id provider.ResourceId) provider.ResourceId {
+	if storageid, spaceid := SplitStorageID(id.StorageId); storageid != "" && id.SpaceId == "" {
+		return provider.ResourceId{
+			StorageId: storageid,
+			SpaceId:   spaceid,
+			OpaqueId:  id.OpaqueId,
+		}
+	}
+	return id
+}
