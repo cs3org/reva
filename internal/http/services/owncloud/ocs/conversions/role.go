@@ -125,7 +125,7 @@ func (r *Role) WebDAVPermissions(isDir, isShared, isMountpoint, isPublic bool) s
 		fmt.Fprintf(&b, "CK")
 	}
 
-	if grants.PermissionsEqual(r.CS3ResourcePermissions(), &provider.ResourcePermissions{}) {
+	if r.CS3ResourcePermissions().DenyGrant {
 		fmt.Fprintf(&b, "Z")
 	}
 
@@ -170,7 +170,7 @@ func NewDeniedRole() *Role {
 	return &Role{
 		Name:                   RoleDenied,
 		cS3ResourcePermissions: &provider.ResourcePermissions{},
-		ocsPermissions:         PermissionInvalid,
+		ocsPermissions:         PermissionsNone,
 	}
 }
 
@@ -420,7 +420,7 @@ func RoleFromResourcePermissions(rp *provider.ResourcePermissions) *Role {
 		return r
 	}
 	if grants.PermissionsEqual(rp, &provider.ResourcePermissions{}) {
-		r.ocsPermissions = PermissionInvalid
+		r.ocsPermissions = PermissionsNone
 		r.Name = RoleDenied
 		return r
 	}
