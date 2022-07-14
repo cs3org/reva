@@ -119,14 +119,6 @@ func (h *Handler) createPublicLinkShare(w http.ResponseWriter, r *http.Request, 
 		newPermissions = conversions.RoleFromOCSPermissions(permissions).CS3ResourcePermissions()
 	}
 
-	if !sufficientPermissions(statInfo.PermissionSet, newPermissions) {
-		return nil, &ocsError{
-			Code:    http.StatusNotFound,
-			Message: "Cannot set the requested share permissions",
-			Error:   errors.New("cannot set the requested share permissions"),
-		}
-	}
-
 	req := link.CreatePublicShareRequest{
 		ResourceInfo: statInfo,
 		Grant: &link.Grant{
@@ -350,19 +342,6 @@ func (h *Handler) updatePublicShare(w http.ResponseWriter, r *http.Request, shar
 		}
 	}
 
-	statReq := provider.StatRequest{Ref: &provider.Reference{ResourceId: before.Share.ResourceId}}
-	statRes, err := gwC.Stat(r.Context(), &statReq)
-	if err != nil {
-		log.Debug().Err(err).Str("shares", "update public share").Msg("error during stat")
-		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "missing resource information", fmt.Errorf("error getting resource information"))
-		return
-	}
-
-	if !sufficientPermissions(statRes.Info.PermissionSet, newPermissions) {
-		response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "no share permission", nil)
-		return
-	}
-
 	// ExpireDate
 	expireTimeString, ok := r.Form["expireDate"]
 	// check if value is set and must be updated or cleared
@@ -429,6 +408,15 @@ func (h *Handler) updatePublicShare(w http.ResponseWriter, r *http.Request, shar
 		publicShare = uRes.Share
 	} else if !updatesFound {
 		response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "No updates specified in request", nil)
+		return
+	}
+
+	statReq := provider.StatRequest{Ref: &provider.Reference{ResourceId: before.Share.ResourceId}}
+
+	statRes, err := gwC.Stat(r.Context(), &statReq)
+	if err != nil {
+		log.Debug().Err(err).Str("shares", "update public share").Msg("error during stat")
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "missing resource information", fmt.Errorf("error getting resource information"))
 		return
 	}
 
