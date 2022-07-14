@@ -99,7 +99,7 @@ func (t *Tree) migration0002SpaceTypes() error {
 	d, err := os.Open(spaceTypesPath)
 	if err != nil {
 		logger.New().Error().Err(err).
-			Str("spacetypesdir", d.Name()).
+			Str("spacetypesdir", spaceTypesPath).
 			Msg("could open spacetypesdir")
 		return err
 	}
