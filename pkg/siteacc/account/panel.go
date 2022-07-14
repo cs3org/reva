@@ -238,7 +238,7 @@ func (panel *Panel) cloneUserOperator(op *data.Operator, sites map[string]string
 	}
 
 	// Add missing sites
-	for id, _ := range sites {
+	for id := range sites {
 		siteFound := false
 		for _, site := range opClone.Sites {
 			if strings.EqualFold(site.ID, id) {
