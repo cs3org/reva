@@ -44,10 +44,7 @@ func (action *RecycleOperationsAction) Purge() error {
 	ref := &provider.Reference{Path: homePath}
 	req := &provider.PurgeRecycleRequest{Ref: ref}
 	res, err := action.session.Client().PurgeRecycle(action.session.Context(), req)
-	if err := net.CheckRPCInvocation("purging recycle bin", res, err); err != nil {
-		return err
-	}
-	return nil
+	return net.CheckRPCInvocation("purging recycle bin", res, err)
 }
 
 // NewRecycleOperationsAction creates a new recycle operations action.
