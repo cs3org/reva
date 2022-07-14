@@ -491,6 +491,19 @@ func (fs *Decomposedfs) Move(ctx context.Context, oldRef, newRef *provider.Refer
 		return
 	}
 
+	ok, err = fs.p.HasPermission(ctx, newNode, func(rp *provider.ResourcePermissions) bool {
+		if oldNode.IsDir() {
+			return rp.CreateContainer
+		}
+		return rp.InitiateFileUpload
+	})
+	switch {
+	case err != nil:
+		return errtypes.InternalError(err.Error())
+	case !ok:
+		return errtypes.PermissionDenied(newNode.ID)
+	}
+
 	// check lock on target
 	if err := newNode.CheckLock(ctx); err != nil {
 		return err
