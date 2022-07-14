@@ -29,9 +29,9 @@ function handleEditAccount() {
 	window.location.replace("{{getServerAddress}}/account/?path=edit");
 }
 
-function handleSiteSettings() {
-	setState(STATE_STATUS, "Redirecting to the site settings...");
-	window.location.replace("{{getServerAddress}}/account/?path=site");
+function handleSitesSettings() {
+	setState(STATE_STATUS, "Redirecting to the sites settings...");
+	window.location.replace("{{getServerAddress}}/account/?path=sites");
 }
 
 function handleRequestAccess(scope) {
@@ -79,7 +79,11 @@ const tplBody = `
 	<ul style="margin-top: 0em;">
 		<li>Name: <em>{{.Account.Title}}. {{.Account.FirstName}} {{.Account.LastName}}</em></li>
 		<li>Email: <em><a href="mailto:{{.Account.Email}}">{{.Account.Email}}</a></em></li>
-		<li>ScienceMesh Site: <em>{{getSiteName .Account.Site false}} ({{getSiteName .Account.Site true}})</em></li>
+		<li>
+			<span>ScienceMesh Operator: {{getOperatorName .Account.Operator}}</span>
+			<br>
+			<span style="margin-left: 20px; font-size: 90%;"><em>{{getOperatorSites .Account.Operator true}}</em></span>
+		</li>
 		<li>Role: <em>{{.Account.Role}}</em></li>
 		{{if .Account.PhoneNumber}}
 		<li>Phone: <em>{{.Account.PhoneNumber}}</em></li>
@@ -89,7 +93,7 @@ const tplBody = `
 <div>
 	<strong>Account data:</strong>
 	<ul style="margin-top: 0em;">	
-		<li>Site access: <em>{{if .Account.Data.SiteAccess}}Granted{{else}}Not granted{{end}}</em></li>
+		<li>Sites access: <em>{{if .Account.Data.SitesAccess}}Granted{{else}}Not granted{{end}}</em></li>
 		<li>GOCDB access: <em>{{if .Account.Data.GOCDBAccess}}Granted{{else}}Not granted{{end}}</em></li>	
 	</ul>
 </div>
@@ -100,15 +104,15 @@ const tplBody = `
 			<button type="button" onClick="handleEditAccount();">Edit account</button>
 			<span style="width: 25px;">&nbsp;</span>
 			
-			{{if .Account.Data.SiteAccess}}
-			<button type="button" onClick="handleSiteSettings();">Site settings</button>
+			{{if .Account.Data.SitesAccess}}
+			<button type="button" onClick="handleSitesSettings();">Sites settings</button>
 			<span style="width: 25px;">&nbsp;</span>
 			{{end}}	
 
 			<button type="button" onClick="handleLogout();" style="float: right;">Logout</button>
 		</div>
 		<div style="margin-top: 0.5em;">
-			<button type="button" onClick="handleRequestAccess('Site');" {{if .Account.Data.SiteAccess}}disabled{{end}}>Request Site access</button>
+			<button type="button" onClick="handleRequestAccess('Sites');" {{if .Account.Data.SitesAccess}}disabled{{end}}>Request Sites access</button>
 			<button type="button" onClick="handleRequestAccess('GOCDB');" {{if .Account.Data.GOCDBAccess}}disabled{{end}}>Request GOCDB access</button>	
 		</div>
 	</form>
@@ -117,8 +121,8 @@ const tplBody = `
 	<div>
 		<div>Notes:</div>
 		<ul style="margin-top: 0em;">
-			<li>The <em>Site access</em> allows you to access and modify the global configuration of your site.</li>
-			<li>The <em>GOCDB access</em> allows you to log into the central database where all site metadata is stored.</li>
+			<li>The <em>Sites access</em> allows you to access and modify the global configuration of your sites.</li>
+			<li>The <em>GOCDB access</em> allows you to log into the central database where all sites metadata is stored.</li>
 		</ul>
 	</div>
 	<div>

@@ -28,13 +28,13 @@ import (
 	"github.com/cs3org/reva/pkg/utils"
 )
 
-// Account represents a single site account.
+// Account represents a single sites account.
 type Account struct {
 	Email       string `json:"email"`
 	Title       string `json:"title"`
 	FirstName   string `json:"firstName"`
 	LastName    string `json:"lastName"`
-	Site        string `json:"site"`
+	Operator    string `json:"operator"`
 	Role        string `json:"role"`
 	PhoneNumber string `json:"phoneNumber"`
 
@@ -47,18 +47,18 @@ type Account struct {
 	Settings AccountSettings `json:"settings"`
 }
 
-// AccountData holds additional data for a site account.
+// AccountData holds additional data for a sites account.
 type AccountData struct {
 	GOCDBAccess bool `json:"gocdbAccess"`
-	SiteAccess  bool `json:"siteAccess"`
+	SitesAccess bool `json:"sitesAccess"`
 }
 
-// AccountSettings holds additional settings for a site account.
+// AccountSettings holds additional settings for a sites account.
 type AccountSettings struct {
 	ReceiveAlerts bool `json:"receiveAlerts"`
 }
 
-// Accounts holds an array of site accounts.
+// Accounts holds an array of sites accounts.
 type Accounts = []*Account
 
 // Update copies the data of the given account to this account.
@@ -126,8 +126,8 @@ func (acc *Account) CheckScopeAccess(scope string) bool {
 	case ScopeGOCDB:
 		hasAccess = acc.Data.GOCDBAccess
 
-	case ScopeSite:
-		hasAccess = acc.Data.SiteAccess
+	case ScopeSites:
+		hasAccess = acc.Data.SitesAccess
 	}
 
 	return hasAccess
@@ -139,7 +139,7 @@ func (acc *Account) Cleanup() {
 	acc.Title = strings.TrimSpace(acc.Title)
 	acc.FirstName = strings.TrimSpace(acc.FirstName)
 	acc.LastName = strings.TrimSpace(acc.LastName)
-	acc.Site = strings.TrimSpace(acc.Site)
+	acc.Operator = strings.TrimSpace(acc.Operator)
 	acc.Role = strings.TrimSpace(acc.Role)
 	acc.PhoneNumber = strings.TrimSpace(acc.PhoneNumber)
 }
@@ -163,8 +163,8 @@ func (acc *Account) verify(isNewAccount, verifyPassword bool) error {
 		return errors.Errorf("last name contains invalid characters: %v", acc.LastName)
 	}
 
-	if isNewAccount && acc.Site == "" {
-		return errors.Errorf("no site provided")
+	if isNewAccount && acc.Operator == "" {
+		return errors.Errorf("no operator provided")
 	}
 
 	if acc.Role == "" {
@@ -186,8 +186,8 @@ func (acc *Account) verify(isNewAccount, verifyPassword bool) error {
 	return nil
 }
 
-// NewAccount creates a new site account.
-func NewAccount(email string, title, firstName, lastName string, site, role string, phoneNumber string, password string) (*Account, error) {
+// NewAccount creates a new sites account.
+func NewAccount(email string, title, firstName, lastName string, operator, role string, phoneNumber string, password string) (*Account, error) {
 	t := time.Now()
 
 	acc := &Account{
@@ -195,14 +195,14 @@ func NewAccount(email string, title, firstName, lastName string, site, role stri
 		Title:        title,
 		FirstName:    firstName,
 		LastName:     lastName,
-		Site:         site,
+		Operator:     operator,
 		Role:         role,
 		PhoneNumber:  phoneNumber,
 		DateCreated:  t,
 		DateModified: t,
 		Data: AccountData{
 			GOCDBAccess: false,
-			SiteAccess:  false,
+			SitesAccess: false,
 		},
 		Settings: AccountSettings{
 			ReceiveAlerts: true,

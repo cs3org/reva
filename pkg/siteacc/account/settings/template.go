@@ -78,7 +78,7 @@ const tplBody = `
 	
 		<div style="grid-row: 2; grid-column: 1 / span 2;">
 			<input type="checkbox" id="rcvAlerts" name="rcvAlerts" value="on" checked disabled/>
-			<label for="rcvAlerts" style="font-weight: normal;">Receive email notifications about site alerts <em>(mandatory; always on)</em></label>
+			<label for="rcvAlerts" style="font-weight: normal;">Receive email notifications about sites alerts <em>(mandatory; always on)</em></label>
 		</div>
 
 		<div style="grid-row: 3; grid-column: 2; text-align: right;">

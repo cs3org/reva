@@ -61,7 +61,11 @@ const tplBody = `
 				</div>
 				<div>
 					<ul style="padding-left: 1em;">
-						<li>ScienceMesh Site: {{getSiteName .Site false}} ({{getSiteName .Site true}})</li>
+						<li>
+							<span>ScienceMesh Operator: {{getOperatorName .Operator}}</span>
+							<br>
+							<span style="margin-left: 20px; font-size: 90%;"><em>{{getOperatorSites .Operator true}}</em></span>
+						</li>
 						<li>Role: {{.Role}}</li>
 						<li>Phone: {{.PhoneNumber}}</li>
 					</ul>
@@ -73,7 +77,7 @@ const tplBody = `
 			<div>
 				<strong>Account data:</strong>
 				<ul style="padding-left: 1em; padding-top: 0em;">	
-					<li>Site access: <em>{{if .Data.SiteAccess}}Granted{{else}}Not granted{{end}}</em></li>
+					<li>Sites access: <em>{{if .Data.SitesAccess}}Granted{{else}}Not granted{{end}}</em></li>
 					<li>GOCDB access: <em>{{if .Data.GOCDBAccess}}Granted{{else}}Not granted{{end}}</em></li>	
 				</ul>
 			</div>
@@ -82,10 +86,10 @@ const tplBody = `
 
 			<div>
 				<form method="POST" style="width: 100%;">
-				{{if .Data.SiteAccess}}
-					<button type="button" onClick="handleAction('grant-site-access?status=false', '{{.Email}}');">Revoke Site access</button>
+				{{if .Data.SitesAccess}}
+					<button type="button" onClick="handleAction('grant-sites-access?status=false', '{{.Email}}');">Revoke Sites access</button>
 				{{else}}
-					<button type="button" onClick="handleAction('grant-site-access?status=true', '{{.Email}}');">Grant Site access</button>
+					<button type="button" onClick="handleAction('grant-sites-access?status=true', '{{.Email}}');">Grant Sites access</button>
 				{{end}}
 
 				{{if .Data.GOCDBAccess}}

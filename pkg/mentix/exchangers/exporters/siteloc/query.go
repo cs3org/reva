@@ -49,14 +49,16 @@ func HandleDefaultQuery(meshData *meshdata.MeshData, params url.Values, _ *confi
 
 func convertMeshDataToLocationData(meshData *meshdata.MeshData) ([]*SiteLocation, error) {
 	// Gather the locations of all sites
-	locations := make([]*SiteLocation, 0, len(meshData.Sites))
-	for _, site := range meshData.Sites {
-		locations = append(locations, &SiteLocation{
-			SiteID:    site.ID,
-			FullName:  site.FullName,
-			Longitude: site.Longitude,
-			Latitude:  site.Latitude,
-		})
+	locations := make([]*SiteLocation, 0, len(meshData.Operators)*3)
+	for _, op := range meshData.Operators {
+		for _, site := range op.Sites {
+			locations = append(locations, &SiteLocation{
+				SiteID:    site.ID,
+				FullName:  site.FullName,
+				Longitude: site.Longitude,
+				Latitude:  site.Latitude,
+			})
+		}
 	}
 
 	return locations, nil

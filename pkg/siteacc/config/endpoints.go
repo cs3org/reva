@@ -40,8 +40,9 @@ const (
 
 	// EndpointSiteGet is the endpoint path for retrieving site data.
 	EndpointSiteGet = "/site-get"
-	// EndpointSiteConfigure is the endpoint path for site configuration.
-	EndpointSiteConfigure = "/site-configure"
+
+	// EndpointSitesConfigure is the endpoint path for sites configuration.
+	EndpointSitesConfigure = "/sites-configure"
 
 	// EndpointLogin is the endpoint path for (internal) user login.
 	EndpointLogin = "/login"
@@ -55,8 +56,8 @@ const (
 	// EndpointVerifyUserToken is the endpoint path for user token validation.
 	EndpointVerifyUserToken = "/verify-user-token"
 
-	// EndpointGrantSiteAccess is the endpoint path for granting or revoking Site access.
-	EndpointGrantSiteAccess = "/grant-site-access"
+	// EndpointGrantSitesAccess is the endpoint path for granting or revoking Sites access.
+	EndpointGrantSitesAccess = "/grant-sites-access"
 	// EndpointGrantGOCDBAccess is the endpoint path for granting or revoking GOCDB access.
 	EndpointGrantGOCDBAccess = "/grant-gocdb-access"
 

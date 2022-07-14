@@ -39,6 +39,7 @@ type Metrics struct {
 }
 
 const (
+	keyOperatorID  = "operator_id"
 	keySiteID      = "site_id"
 	keySiteName    = "site"
 	keyServiceType = "service_type"
@@ -69,7 +70,7 @@ func (m *Metrics) registerMetrics() error {
 		Name:        m.isScheduledStats.Name(),
 		Description: m.isScheduledStats.Description(),
 		Measure:     m.isScheduledStats,
-		TagKeys:     []tag.Key{tag.MustNewKey(keySiteID), tag.MustNewKey(keySiteName), tag.MustNewKey(keyServiceType)},
+		TagKeys:     []tag.Key{tag.MustNewKey(keyOperatorID), tag.MustNewKey(keySiteID), tag.MustNewKey(keySiteName), tag.MustNewKey(keyServiceType)},
 		Aggregation: view.LastValue(),
 	}
 
@@ -82,17 +83,20 @@ func (m *Metrics) registerMetrics() error {
 
 // Update is used to update/expose all metrics.
 func (m *Metrics) Update(meshData *meshdata.MeshData) error {
-	for _, site := range meshData.Sites {
-		if err := m.exportSiteMetrics(site); err != nil {
-			return errors.Wrapf(err, "error while exporting metrics for site '%v'", site.Name)
+	for _, op := range meshData.Operators {
+		for _, site := range op.Sites {
+			if err := m.exportSiteMetrics(site, op); err != nil {
+				return errors.Wrapf(err, "error while exporting metrics for site '%v'", site.Name)
+			}
 		}
 	}
 
 	return nil
 }
 
-func (m *Metrics) exportSiteMetrics(site *meshdata.Site) error {
+func (m *Metrics) exportSiteMetrics(site *meshdata.Site, op *meshdata.Operator) error {
 	mutators := make([]tag.Mutator, 0)
+	mutators = append(mutators, tag.Insert(tag.MustNewKey(keyOperatorID), op.ID))
 	mutators = append(mutators, tag.Insert(tag.MustNewKey(keySiteID), site.ID))
 	mutators = append(mutators, tag.Insert(tag.MustNewKey(keySiteName), site.Name))
 	mutators = append(mutators, tag.Insert(tag.MustNewKey(keyServiceType), "SCIENCEMESH_HCHECK"))

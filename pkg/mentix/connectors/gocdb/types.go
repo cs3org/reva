@@ -40,6 +40,19 @@ type ServiceTypes struct {
 	Types []*ServiceType `xml:"SERVICE_TYPE"`
 }
 
+// NGI represents an NGI in GOCDB.
+type NGI struct {
+	Name          string `xml:"NAME"`
+	Email         string `xml:"EMAIL"`
+	HelpdeskEmail string `xml:"HELPDESK_EMAIL"`
+	SecurityEmail string `xml:"SECURITY_EMAIL"`
+}
+
+// NGIs is a list of NGI objects.
+type NGIs struct {
+	NGIs []*NGI `xml:"NGI"`
+}
+
 // Site represents a site in GOCDB.
 type Site struct {
 	ShortName    string     `xml:"SHORT_NAME"`
