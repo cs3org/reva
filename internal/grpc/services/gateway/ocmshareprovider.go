@@ -53,6 +53,12 @@ func (s *svc) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareRequest
 		return nil, errors.Wrap(err, "gateway: error calling CreateShare")
 	}
 
+	// if we don't need to commit we return earlier
+	if !s.c.CommitShareToStorageGrant && !s.c.CommitShareToStorageRef {
+		return res, nil
+	}
+
+	// TODO(labkode): if both commits are enabled they could be done concurrently.
 	if s.c.CommitShareToStorageGrant {
 		addGrantStatus, err := s.addGrant(ctx, req.ResourceId, req.Grant.Grantee, req.Grant.Permissions.Permissions, nil)
 		if err != nil {
@@ -102,6 +108,12 @@ func (s *svc) RemoveOCMShare(ctx context.Context, req *ocm.RemoveOCMShareRequest
 		return nil, errors.Wrap(err, "gateway: error calling RemoveShare")
 	}
 
+	// if we don't need to commit we return earlier
+	if !s.c.CommitShareToStorageGrant && !s.c.CommitShareToStorageRef {
+		return res, nil
+	}
+
+	// TODO(labkode): if both commits are enabled they could be done concurrently.
 	if s.c.CommitShareToStorageGrant {
 		removeGrantStatus, err := s.removeGrant(ctx, share.ResourceId, share.Grantee, share.Permissions.Permissions)
 		if err != nil {
@@ -209,7 +221,7 @@ func (s *svc) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateReceive
 	}
 
 	// if we don't need to create/delete references then we return early.
-	if !s.c.CommitShareToStorageGrant {
+	if !s.c.CommitShareToStorageGrant && !s.c.CommitShareToStorageRef {
 		return res, nil
 	}
 

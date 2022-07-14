@@ -1,6 +1,7 @@
 # services to enable
 [grpc.services.gateway]
 commit_share_to_storage_grant = true
+commit_share_to_storage_ref = true
 
 [grpc.services.storageregistry]
 [grpc.services.storageregistry.drivers.static]

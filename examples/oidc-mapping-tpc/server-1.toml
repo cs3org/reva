@@ -8,6 +8,7 @@ gatewaysvc = "localhost:19000"
 # services to enable
 [grpc.services.gateway]
 commit_share_to_storage_grant = true
+commit_share_to_storage_ref = true
 
 [grpc.services.authprovider]
 [grpc.services.authprovider.auth_managers.json]

@@ -22,6 +22,7 @@ jwt_secret = "Pive-Fumkiu4"
 #groupprovidersvc = "localhost:18000"
 # other
 commit_share_to_storage_grant = true
+commit_share_to_storage_ref = true
 #share_folder = "Shares"
 transfer_expires = 6 # give it a moment
 #disable_home_creation_on_login = true
@@ -74,7 +75,7 @@ users = "users.demo.json"
 [grpc.services.sharesstorageprovider]
 usershareprovidersvc = "0.0.0.0:19000"
 
-# FIXME start as a separate service ... collides with the storageprovider:
+# FIXME start as a separate service ... collides with the storageprovider: 
 # Server.RegisterService found duplicate service registration for "cs3.storage.provider.v1beta1.ProviderAPI"
 #[grpc.services.sharesstorageprovider]
 
