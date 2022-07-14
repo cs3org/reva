@@ -38,7 +38,6 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v2/pkg/appctx"
-	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/rgrpc"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/status"
@@ -281,14 +280,6 @@ func (s *service) GetPath(ctx context.Context, req *provider.GetPathRequest) (*p
 	// - getPath of every received share on the same space - needs also owner permissions -> needs machine auth
 	// - find the shortest root path that is a prefix of the resource path
 	// alternatively implement this on storageprovider - it needs to know about grants to do so
-
-	if isShareJailRoot(req.ResourceId) {
-		return &provider.GetPathResponse{
-			Status: status.NewOK(ctx),
-			Path:   "/",
-		}, nil
-	}
-
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
@@ -679,10 +670,6 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 	}
 
 	if isVirtualRoot(req.Ref) {
-		owner, ok := ctxpkg.ContextGetUser(ctx)
-		if !ok {
-			return nil, fmt.Errorf("missing user in context")
-		}
 		receivedShares, shareMd, err := s.fetchShares(ctx)
 		if err != nil {
 			return nil, err
@@ -711,8 +698,7 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 				PermissionSet: &provider.ResourcePermissions{
 					// TODO
 				},
-				Etag:  shareMd[earliestShare.Id.OpaqueId].ETag,
-				Owner: owner.Id,
+				Etag: shareMd[earliestShare.Id.OpaqueId].ETag,
 			},
 		}, nil
 	}

@@ -30,7 +30,6 @@ import (
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/net"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/spacelookup"
 	"github.com/cs3org/reva/v2/pkg/appctx"
-	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/rhttp/router"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/utils"
@@ -133,37 +132,19 @@ func (s *svc) handleSpacesMove(w http.ResponseWriter, r *http.Request, srcSpaceI
 }
 
 func (s *svc) handleMove(ctx context.Context, w http.ResponseWriter, r *http.Request, src, dst *provider.Reference, log zerolog.Logger) {
-	client, err := s.getClient()
-	if err != nil {
-		log.Error().Err(err).Msg("error getting grpc client")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	isChild, err := s.referenceIsChildOf(ctx, client, dst, src)
-	if err != nil {
-		switch err.(type) {
-		case errtypes.IsNotSupported:
-			log.Error().Err(err).Msg("can not detect recursive move operation. missing machine auth configuration?")
-			w.WriteHeader(http.StatusForbidden)
-		default:
-			log.Error().Err(err).Msg("error while trying to detect recursive move operation")
-			w.WriteHeader(http.StatusInternalServerError)
-		}
-	}
-	if isChild {
-		w.WriteHeader(http.StatusBadRequest)
-		b, err := errors.Marshal(http.StatusBadRequest, "can not move a folder into one of its children", "")
-		errors.HandleWebdavError(&log, w, b, err)
-		return
-	}
-
 	oh := r.Header.Get(net.HeaderOverwrite)
 	log.Debug().Str("overwrite", oh).Msg("move")
 
 	overwrite, err := net.ParseOverwrite(oh)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	client, err := s.getClient()
+	if err != nil {
+		log.Error().Err(err).Msg("error getting grpc client")
+		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 

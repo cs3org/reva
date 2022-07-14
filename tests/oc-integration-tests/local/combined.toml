@@ -119,7 +119,6 @@ files_namespace = "/personal/{{.Id.OpaqueId}}"
 # - the oc js sdk is hardcoded to the remote.php/webdav so it will see the new tree
 # - TODO android? no sync ... but will see different tree
 webdav_namespace = "/home"
-machine_auth_apikey = "change-me-please"
 
 [http.services.ocs]
 machine_auth_apikey = "change-me-please"
