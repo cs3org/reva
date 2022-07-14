@@ -354,7 +354,7 @@ func (m *mgr) ListReceivedShares(ctx context.Context, filters []*collaboration.F
 			  FROM oc_share ts LEFT JOIN oc_share_status tr ON (ts.id = tr.id AND tr.recipient = ?)
 			  WHERE (orphan = 0 or orphan IS NULL) AND (uid_owner != ? AND uid_initiator != ?)`
 	if len(user.Groups) > 0 {
-		query += " AND ((share_with=? AND share_type = 0) OR (share_type = 1 AND share_with in (?" + strings.Repeat(",?", len(user.Groups)-1) + ")))"
+		query += " AND ((share_with=? AND share_type = 0) OR (share_type = 1 AND lower(share_with) in (?" + strings.Repeat(",?", len(user.Groups)-1) + ")))"
 	} else {
 		query += " AND (share_with=? AND share_type = 0)"
 	}

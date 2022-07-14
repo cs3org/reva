@@ -2077,7 +2077,9 @@ func (fs *eosfs) permissionSet(ctx context.Context, eosFileInfo *eosclient.FileI
 		var userInGroup bool
 		if e.Type == acl.TypeGroup {
 			for _, g := range u.Groups {
-				if e.Qualifier == g {
+				// workaround as groups are case insensitive
+				group := strings.ToLower(e.Qualifier)
+				if group == g {
 					userInGroup = true
 					break
 				}
