@@ -94,29 +94,30 @@ func (t *Tree) migration0002SpaceTypes() error {
 				continue
 			}
 		}
-	}
-	// delete spacetypespath
-	d, err := os.Open(spaceTypesPath)
-	if err != nil {
-		logger.New().Error().Err(err).
-			Str("spacetypesdir", spaceTypesPath).
-			Msg("could not open spacetypesdir")
-		return err
-	}
-	defer d.Close()
-	_, err = d.Readdirnames(1) // Or f.Readdir(1)
-	if err == io.EOF {
-		// directory is empty we can delete
-		err := os.Remove(spaceTypesPath)
+
+		// delete spacetypespath
+		d, err := os.Open(spaceTypesPath)
 		if err != nil {
 			logger.New().Error().Err(err).
-				Str("spacetypesdir", d.Name()).
-				Msg("could not delete")
+				Str("spacetypesdir", spaceTypesPath).
+				Msg("could not open spacetypesdir")
+			return nil
 		}
-	} else {
-		logger.New().Error().Err(err).
-			Str("spacetypesdir", d.Name()).
-			Msg("could not delete, not empty")
+		defer d.Close()
+		_, err = d.Readdirnames(1) // Or f.Readdir(1)
+		if err == io.EOF {
+			// directory is empty we can delete
+			err := os.Remove(spaceTypesPath)
+			if err != nil {
+				logger.New().Error().Err(err).
+					Str("spacetypesdir", d.Name()).
+					Msg("could not delete")
+			}
+		} else {
+			logger.New().Error().Err(err).
+				Str("spacetypesdir", d.Name()).
+				Msg("could not delete, not empty")
+		}
 	}
 	return nil
 }
