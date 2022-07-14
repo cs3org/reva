@@ -75,7 +75,8 @@ var _ = Describe("Sharesstorageprovider", func() {
 	BeforeEach(func() {
 		ShareJail = &sprovider.ResourceId{
 			StorageId: utils.ShareStorageProviderID,
-			OpaqueId:  utils.ShareStorageProviderID,
+			SpaceId:   utils.ShareStorageSpaceID,
+			OpaqueId:  utils.ShareStorageSpaceID,
 		}
 
 		BaseShare = &collaboration.ReceivedShare{
@@ -86,6 +87,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 				},
 				ResourceId: &sprovider.ResourceId{
 					StorageId: "share1-storageid",
+					SpaceId:   "share1-storageid",
 					OpaqueId:  "shareddir",
 				},
 				Permissions: &collaboration.SharePermissions{
@@ -109,6 +111,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 				},
 				ResourceId: &sprovider.ResourceId{
 					StorageId: "share1-storageid",
+					SpaceId:   "share1-storageid",
 					OpaqueId:  "shareddir",
 				},
 				Permissions: &collaboration.SharePermissions{
@@ -128,7 +131,8 @@ var _ = Describe("Sharesstorageprovider", func() {
 			Ref: &sprovider.Reference{
 				ResourceId: &sprovider.ResourceId{
 					StorageId: utils.ShareStorageProviderID,
-					OpaqueId:  utils.ShareStorageProviderID,
+					SpaceId:   utils.ShareStorageSpaceID,
+					OpaqueId:  utils.ShareStorageSpaceID,
 				},
 				Path: ".",
 			},
@@ -138,6 +142,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 			Ref: &sprovider.Reference{
 				ResourceId: &sprovider.ResourceId{
 					StorageId: utils.ShareStorageProviderID,
+					SpaceId:   utils.ShareStorageSpaceID,
 					OpaqueId:  "shareid",
 				},
 				Path: ".",
@@ -148,6 +153,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 			Ref: &sprovider.Reference{
 				ResourceId: &sprovider.ResourceId{
 					StorageId: utils.ShareStorageProviderID,
+					SpaceId:   utils.ShareStorageSpaceID,
 					OpaqueId:  "shareid",
 				},
 				Path: ".",
@@ -171,6 +177,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 							Path: "share1-shareddir",
 							Id: &sprovider.ResourceId{
 								StorageId: "share1-storageid",
+								SpaceId:   "share1-storageid",
 								OpaqueId:  "shareddir",
 							},
 							PermissionSet: &sprovider.ResourcePermissions{
@@ -187,6 +194,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 							Path: "share1-subdir",
 							Id: &sprovider.ResourceId{
 								StorageId: "share1-storageid",
+								SpaceId:   "share1-storageid",
 								OpaqueId:  "subdir",
 							},
 							PermissionSet: &sprovider.ResourcePermissions{
@@ -203,6 +211,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 							Path: "share1-subdir-file",
 							Id: &sprovider.ResourceId{
 								StorageId: "share1-storageid",
+								SpaceId:   "share1-storageid",
 								OpaqueId:  "file",
 							},
 							PermissionSet: &sprovider.ResourcePermissions{
@@ -219,6 +228,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 							Path: "share1-shareddir",
 							Id: &sprovider.ResourceId{
 								StorageId: "share1-storageid",
+								SpaceId:   "share1-storageid",
 								OpaqueId:  "shareddir",
 							},
 							PermissionSet: &sprovider.ResourcePermissions{
@@ -251,6 +261,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 							Path: "share1-shareddir/share1-subdir",
 							Id: &sprovider.ResourceId{
 								StorageId: "share1-storageid",
+								SpaceId:   "share1-storageid",
 								OpaqueId:  "subdir",
 							},
 							Size: 1,
@@ -261,6 +272,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 							Path: "share1-shareddir/share1-subdir/share1-subdir-file",
 							Id: &sprovider.ResourceId{
 								StorageId: "share1-storageid",
+								SpaceId:   "share1-storageid",
 								OpaqueId:  "file",
 							},
 							Size: 1,
@@ -425,6 +437,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 						},
 						ResourceId: &sprovider.ResourceId{
 							StorageId: "share1-storageid",
+							SpaceId:   "share1-storageid",
 							OpaqueId:  "shareddir",
 						},
 						Permissions: &collaboration.SharePermissions{
@@ -443,6 +456,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 						},
 						ResourceId: &sprovider.ResourceId{
 							StorageId: "share1-storageid",
+							SpaceId:   "share1-storageid",
 							OpaqueId:  "shareddir",
 						},
 						Permissions: &collaboration.SharePermissions{
@@ -635,6 +649,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 					Ref: &sprovider.Reference{
 						ResourceId: &sprovider.ResourceId{
 							StorageId: utils.ShareStorageProviderID,
+							SpaceId:   utils.ShareStorageSpaceID,
 							OpaqueId:  BaseShare.Share.Id.OpaqueId,
 						},
 						Path: ".",
@@ -678,6 +693,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 					Source: &sprovider.Reference{
 						ResourceId: &sprovider.ResourceId{
 							StorageId: utils.ShareStorageProviderID,
+							SpaceId:   utils.ShareStorageSpaceID,
 							OpaqueId:  BaseShare.Share.Id.OpaqueId,
 						},
 						Path: ".",

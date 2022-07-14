@@ -151,6 +151,7 @@ func (s *svc) handleMove(ctx context.Context, w http.ResponseWriter, r *http.Req
 			log.Error().Err(err).Msg("error while trying to detect recursive move operation")
 			w.WriteHeader(http.StatusInternalServerError)
 		}
+		return
 	}
 	if isChild {
 		w.WriteHeader(http.StatusConflict)

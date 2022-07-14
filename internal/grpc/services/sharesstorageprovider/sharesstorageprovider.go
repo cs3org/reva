@@ -105,10 +105,6 @@ func New(gateway gateway.GatewayAPIClient, c collaboration.CollaborationAPIClien
 }
 
 func (s *service) SetArbitraryMetadata(ctx context.Context, req *provider.SetArbitraryMetadataRequest) (*provider.SetArbitraryMetadataResponse, error) {
-	if req.Ref.GetResourceId() != nil {
-		_, req.Ref.ResourceId.StorageId = storagespace.SplitStorageID(req.Ref.ResourceId.StorageId)
-	}
-
 	receivedShare, rpcStatus, err := s.resolveAcceptedShare(ctx, req.Ref)
 	appctx.GetLogger(ctx).Debug().
 		Interface("ref", req.Ref).
@@ -131,10 +127,6 @@ func (s *service) SetArbitraryMetadata(ctx context.Context, req *provider.SetArb
 }
 
 func (s *service) UnsetArbitraryMetadata(ctx context.Context, req *provider.UnsetArbitraryMetadataRequest) (*provider.UnsetArbitraryMetadataResponse, error) {
-	if req.Ref.GetResourceId() != nil {
-		_, req.Ref.ResourceId.StorageId = storagespace.SplitStorageID(req.Ref.ResourceId.StorageId)
-	}
-
 	receivedShare, rpcStatus, err := s.resolveAcceptedShare(ctx, req.Ref)
 	appctx.GetLogger(ctx).Debug().
 		Interface("ref", req.Ref).
@@ -157,10 +149,6 @@ func (s *service) UnsetArbitraryMetadata(ctx context.Context, req *provider.Unse
 }
 
 func (s *service) InitiateFileDownload(ctx context.Context, req *provider.InitiateFileDownloadRequest) (*provider.InitiateFileDownloadResponse, error) {
-	if req.Ref.GetResourceId() != nil {
-		_, req.Ref.ResourceId.StorageId = storagespace.SplitStorageID(req.Ref.ResourceId.StorageId)
-	}
-
 	receivedShare, rpcStatus, err := s.resolveAcceptedShare(ctx, req.Ref)
 	appctx.GetLogger(ctx).Debug().
 		Interface("ref", req.Ref).
@@ -213,10 +201,6 @@ func (s *service) InitiateFileDownload(ctx context.Context, req *provider.Initia
 }
 
 func (s *service) InitiateFileUpload(ctx context.Context, req *provider.InitiateFileUploadRequest) (*provider.InitiateFileUploadResponse, error) {
-	if req.Ref.GetResourceId() != nil {
-		_, req.Ref.ResourceId.StorageId = storagespace.SplitStorageID(req.Ref.ResourceId.StorageId)
-	}
-
 	receivedShare, rpcStatus, err := s.resolveAcceptedShare(ctx, req.Ref)
 	appctx.GetLogger(ctx).Debug().
 		Interface("ref", req.Ref).
@@ -314,14 +298,6 @@ func (s *service) CreateStorageSpace(ctx context.Context, req *provider.CreateSt
 // should be found.
 
 func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSpacesRequest) (*provider.ListStorageSpacesResponse, error) {
-	for i, f := range req.Filters {
-		if f.Type == provider.ListStorageSpacesRequest_Filter_TYPE_ID {
-			_, id := storagespace.SplitStorageID(f.GetId().GetOpaqueId())
-			req.Filters[i].Term = &provider.ListStorageSpacesRequest_Filter_Id{Id: &provider.StorageSpaceId{OpaqueId: id}}
-			break
-		}
-	}
-
 	spaceTypes := map[string]struct{}{}
 	var exists = struct{}{}
 	var fetchShares bool
@@ -342,18 +318,18 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 			}
 			spaceTypes[spaceType] = exists
 		case provider.ListStorageSpacesRequest_Filter_TYPE_ID:
-			spaceid, shareid, err := storagespace.SplitID(f.GetId().OpaqueId)
+			storageid, spaceid, shareid, err := storagespace.SplitID(f.GetId().OpaqueId)
 			if err != nil {
 				continue
 			}
-			if spaceid != utils.ShareStorageProviderID {
+			if spaceid != utils.ShareStorageSpaceID {
 				return &provider.ListStorageSpacesResponse{
 					// a specific id was requested, return not found instead of empty list
 					Status: &rpc.Status{Code: rpc.Code_CODE_NOT_FOUND},
 				}, nil
 			}
 
-			spaceID = &provider.ResourceId{StorageId: spaceid, OpaqueId: shareid}
+			spaceID = &provider.ResourceId{StorageId: storageid, SpaceId: spaceid, OpaqueId: shareid}
 		}
 	}
 
@@ -384,15 +360,16 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 		switch k {
 		case "virtual":
 			virtualRootID := &provider.ResourceId{
-				StorageId: storagespace.FormatStorageID(utils.ShareStorageProviderID, utils.ShareStorageSpaceID),
-				OpaqueId:  utils.ShareStorageProviderID,
+				StorageId: utils.ShareStorageProviderID,
+				SpaceId:   utils.ShareStorageSpaceID,
+				OpaqueId:  utils.ShareStorageSpaceID,
 			}
 			if spaceID == nil || isShareJailRoot(spaceID) {
 				earliestShare, atLeastOneAccepted := findEarliestShare(receivedShares, shareInfo)
 				var opaque *typesv1beta1.Opaque
 				var mtime *typesv1beta1.Timestamp
 				if earliestShare != nil {
-					if info, ok := shareInfo[earliestShare.Id.OpaqueId]; ok {
+					if info, ok := shareInfo[earliestShare.GetId().GetOpaqueId()]; ok {
 						mtime = info.Mtime
 						opaque = utils.AppendPlainToOpaque(opaque, "etag", info.Etag)
 					}
@@ -444,6 +421,7 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 				}
 				root := &provider.ResourceId{
 					StorageId: utils.ShareStorageProviderID,
+					SpaceId:   utils.ShareStorageSpaceID,
 					OpaqueId:  receivedShare.Share.Id.OpaqueId,
 				}
 				// do we filter by id
@@ -467,12 +445,13 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 				// add the resourceID for the grant
 				if receivedShare.Share.ResourceId != nil {
 					opaque = utils.AppendPlainToOpaque(opaque, "grantStorageID", receivedShare.Share.ResourceId.StorageId)
+					opaque = utils.AppendPlainToOpaque(opaque, "grantSpaceID", receivedShare.Share.ResourceId.SpaceId)
 					opaque = utils.AppendPlainToOpaque(opaque, "grantOpaqueID", receivedShare.Share.ResourceId.OpaqueId)
 				}
 
 				// prefix storageid if we are responsible
-				if root.StorageId == utils.ShareStorageSpaceID {
-					root.StorageId = storagespace.FormatStorageID(utils.ShareStorageProviderID, root.StorageId)
+				if root.SpaceId == utils.ShareStorageSpaceID {
+					root.StorageId = utils.ShareStorageProviderID
 				}
 
 				space := &provider.StorageSpace{
@@ -511,10 +490,6 @@ func (s *service) DeleteStorageSpace(ctx context.Context, req *provider.DeleteSt
 }
 
 func (s *service) CreateContainer(ctx context.Context, req *provider.CreateContainerRequest) (*provider.CreateContainerResponse, error) {
-	if req.Ref.GetResourceId() != nil {
-		_, req.Ref.ResourceId.StorageId = storagespace.SplitStorageID(req.Ref.ResourceId.StorageId)
-	}
-
 	receivedShare, rpcStatus, err := s.resolveAcceptedShare(ctx, req.Ref)
 	appctx.GetLogger(ctx).Debug().
 		Interface("ref", req.Ref).
@@ -536,10 +511,6 @@ func (s *service) CreateContainer(ctx context.Context, req *provider.CreateConta
 }
 
 func (s *service) Delete(ctx context.Context, req *provider.DeleteRequest) (*provider.DeleteResponse, error) {
-	if req.Ref.GetResourceId() != nil {
-		_, req.Ref.ResourceId.StorageId = storagespace.SplitStorageID(req.Ref.ResourceId.StorageId)
-	}
-
 	receivedShare, rpcStatus, err := s.resolveAcceptedShare(ctx, req.Ref)
 	appctx.GetLogger(ctx).Debug().
 		Interface("ref", req.Ref).
@@ -556,7 +527,7 @@ func (s *service) Delete(ctx context.Context, req *provider.DeleteRequest) (*pro
 	}
 
 	// the root of a share always has the path "."
-	if req.Ref.ResourceId.StorageId == utils.ShareStorageProviderID && req.Ref.Path == "." {
+	if req.Ref.ResourceId.StorageId == utils.ShareStorageProviderID && req.Ref.ResourceId.SpaceId == utils.ShareStorageSpaceID && req.Ref.Path == "." {
 		err := s.rejectReceivedShare(ctx, receivedShare)
 		if err != nil {
 			return &provider.DeleteResponse{
@@ -575,13 +546,6 @@ func (s *service) Delete(ctx context.Context, req *provider.DeleteRequest) (*pro
 }
 
 func (s *service) Move(ctx context.Context, req *provider.MoveRequest) (*provider.MoveResponse, error) {
-	if req.Source.GetResourceId() != nil {
-		_, req.Source.ResourceId.StorageId = storagespace.SplitStorageID(req.Source.ResourceId.StorageId)
-	}
-	if req.Destination.GetResourceId() != nil {
-		_, req.Destination.ResourceId.StorageId = storagespace.SplitStorageID(req.Destination.ResourceId.StorageId)
-	}
-
 	appctx.GetLogger(ctx).Debug().
 		Interface("source", req.Source).
 		Interface("destination", req.Destination).
@@ -634,7 +598,7 @@ func (s *service) Move(ctx context.Context, req *provider.MoveRequest) (*provide
 			Status: rpcStatus,
 		}, nil
 	}
-	if srcReceivedShare.Share.ResourceId.StorageId != dstReceivedShare.Share.ResourceId.StorageId {
+	if srcReceivedShare.Share.ResourceId.SpaceId != dstReceivedShare.Share.ResourceId.SpaceId {
 		return &provider.MoveResponse{
 			Status: status.NewInvalid(ctx, "sharesstorageprovider: can not move between shares on different storages"),
 		}, nil
@@ -668,10 +632,6 @@ func (s *service) Unlock(ctx context.Context, req *provider.UnlockRequest) (*pro
 }
 
 func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provider.StatResponse, error) {
-	if req.Ref.GetResourceId() != nil {
-		_, req.Ref.ResourceId.StorageId = storagespace.SplitStorageID(req.Ref.ResourceId.StorageId)
-	}
-
 	if isVirtualRoot(req.Ref) {
 		owner, ok := ctxpkg.ContextGetUser(ctx)
 		if !ok {
@@ -682,6 +642,14 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 			return nil, err
 		}
 		earliestShare, _ := findEarliestShare(receivedShares, shareMd)
+		var mtime *typesv1beta1.Timestamp
+		var etag string
+		if earliestShare != nil {
+			if info, ok := shareMd[earliestShare.GetId().GetOpaqueId()]; ok {
+				mtime = info.Mtime
+				etag = info.Etag
+			}
+		}
 		return &provider.StatResponse{
 			Status: status.NewOK(ctx),
 			Info: &provider.ResourceInfo{
@@ -695,17 +663,18 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 				},
 				Id: &provider.ResourceId{
 					StorageId: utils.ShareStorageProviderID,
-					OpaqueId:  utils.ShareStorageProviderID,
+					SpaceId:   utils.ShareStorageSpaceID,
+					OpaqueId:  utils.ShareStorageSpaceID,
 				},
 				Type:          provider.ResourceType_RESOURCE_TYPE_CONTAINER,
-				Mtime:         shareMd[earliestShare.Id.OpaqueId].Mtime,
+				Mtime:         mtime,
 				Path:          "/",
 				MimeType:      "httpd/unix-directory",
 				Size:          0,
 				PermissionSet: &provider.ResourcePermissions{
 					// TODO
 				},
-				Etag:  shareMd[earliestShare.Id.OpaqueId].Etag,
+				Etag:  etag,
 				Owner: owner.Id,
 			},
 		}, nil
@@ -752,10 +721,6 @@ func (s *service) ListContainerStream(req *provider.ListContainerStreamRequest, 
 	return gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 func (s *service) ListContainer(ctx context.Context, req *provider.ListContainerRequest) (*provider.ListContainerResponse, error) {
-	if req.Ref.GetResourceId() != nil {
-		_, req.Ref.ResourceId.StorageId = storagespace.SplitStorageID(req.Ref.ResourceId.StorageId)
-	}
-
 	if isVirtualRoot(req.Ref) {
 		// The root is empty, it is filled by mountpoints
 		// so, when accessing the root via /dav/spaces, we need to list the accepted shares with their mountpoint
@@ -831,10 +796,6 @@ func (s *service) ListContainer(ctx context.Context, req *provider.ListContainer
 	})
 }
 func (s *service) ListFileVersions(ctx context.Context, req *provider.ListFileVersionsRequest) (*provider.ListFileVersionsResponse, error) {
-	if req.Ref.GetResourceId() != nil {
-		_, req.Ref.ResourceId.StorageId = storagespace.SplitStorageID(req.Ref.ResourceId.StorageId)
-	}
-
 	receivedShare, rpcStatus, err := s.resolveAcceptedShare(ctx, req.Ref)
 	appctx.GetLogger(ctx).Debug().
 		Interface("ref", req.Ref).
@@ -857,10 +818,6 @@ func (s *service) ListFileVersions(ctx context.Context, req *provider.ListFileVe
 }
 
 func (s *service) RestoreFileVersion(ctx context.Context, req *provider.RestoreFileVersionRequest) (*provider.RestoreFileVersionResponse, error) {
-	if req.Ref.GetResourceId() != nil {
-		_, req.Ref.ResourceId.StorageId = storagespace.SplitStorageID(req.Ref.ResourceId.StorageId)
-	}
-
 	receivedShare, rpcStatus, err := s.resolveAcceptedShare(ctx, req.Ref)
 	appctx.GetLogger(ctx).Debug().
 		Interface("ref", req.Ref).
@@ -932,10 +889,6 @@ func (s *service) TouchFile(ctx context.Context, req *provider.TouchFileRequest)
 
 // GetQuota returns 0 free quota. It is virtual ... the shares may have a different quota ...
 func (s *service) GetQuota(ctx context.Context, req *provider.GetQuotaRequest) (*provider.GetQuotaResponse, error) {
-	if req.Ref.GetResourceId() != nil {
-		_, req.Ref.ResourceId.StorageId = storagespace.SplitStorageID(req.Ref.ResourceId.StorageId)
-	}
-
 	// FIXME use req.Ref to get real quota
 	return &provider.GetQuotaResponse{
 		Status: status.NewOK(ctx),
@@ -951,7 +904,7 @@ func (s *service) resolveAcceptedShare(ctx context.Context, ref *provider.Refere
 		return nil, status.NewInvalidArg(ctx, "sharesstorageprovider: can only handle relative references"), nil
 	}
 
-	if ref.ResourceId.StorageId != utils.ShareStorageProviderID {
+	if ref.ResourceId.SpaceId != utils.ShareStorageSpaceID {
 		return nil, status.NewNotFound(ctx, "sharesstorageprovider: not found "+ref.String()), nil
 	}
 
@@ -1042,6 +995,10 @@ func (s *service) fetchShares(ctx context.Context) ([]*collaboration.ReceivedSha
 		if rs.State != collaboration.ShareState_SHARE_STATE_ACCEPTED {
 			continue
 		}
+		if rs.Share.ResourceId.SpaceId == "" {
+			// convert backwards compatible share id
+			rs.Share.ResourceId.StorageId, rs.Share.ResourceId.SpaceId = storagespace.SplitStorageID(rs.Share.ResourceId.StorageId)
+		}
 		sRes, err := s.gateway.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{ResourceId: rs.Share.ResourceId}})
 		if err != nil {
 			appctx.GetLogger(ctx).Error().
@@ -1120,13 +1077,11 @@ func isRename(s, d *provider.Reference) bool {
 }
 
 func isShareJailChild(id *provider.ResourceId) bool {
-	_, space := storagespace.SplitStorageID(id.StorageId)
-	return space == utils.ShareStorageProviderID && id.OpaqueId != utils.ShareStorageProviderID
+	return id.SpaceId == utils.ShareStorageSpaceID && id.OpaqueId != utils.ShareStorageSpaceID
 }
 
 func isShareJailRoot(id *provider.ResourceId) bool {
-	_, space := storagespace.SplitStorageID(id.StorageId)
-	return space == utils.ShareStorageProviderID && id.OpaqueId == utils.ShareStorageProviderID
+	return id.SpaceId == utils.ShareStorageSpaceID && id.OpaqueId == utils.ShareStorageSpaceID
 }
 
 func isVirtualRoot(ref *provider.Reference) bool {

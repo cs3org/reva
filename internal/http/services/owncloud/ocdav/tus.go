@@ -75,9 +75,11 @@ func (s *svc) handleSpacesTusPost(w http.ResponseWriter, r *http.Request, spaceI
 
 	// read filename from metadata
 	meta := tusd.ParseMetadataHeader(r.Header.Get(net.HeaderUploadMetadata))
-	if meta["filename"] == "" {
-		w.WriteHeader(http.StatusPreconditionFailed)
-		return
+	for _, r := range nameRules {
+		if !r.Test(meta["filename"]) {
+			w.WriteHeader(http.StatusPreconditionFailed)
+			return
+		}
 	}
 
 	sublog := appctx.GetLogger(ctx).With().Str("spaceid", spaceID).Str("path", r.URL.Path).Logger()

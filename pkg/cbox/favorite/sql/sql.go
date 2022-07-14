@@ -29,7 +29,6 @@ import (
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/storage/favorite"
 	"github.com/cs3org/reva/v2/pkg/storage/favorite/registry"
-	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/mitchellh/mapstructure"
 )
 
@@ -80,10 +79,9 @@ func (m *mgr) ListFavorites(ctx context.Context, userID *user.UserId) ([]*provid
 
 	for rows.Next() {
 		var info provider.ResourceId
-		if err := rows.Scan(&info.StorageId, &info.OpaqueId); err != nil {
+		if err := rows.Scan(&info.SpaceId, &info.OpaqueId); err != nil {
 			return nil, err
 		}
-		info.StorageId = storagespace.FormatStorageID(info.StorageId, info.OpaqueId)
 		infos = append(infos, &info)
 	}
 
@@ -95,19 +93,19 @@ func (m *mgr) ListFavorites(ctx context.Context, userID *user.UserId) ([]*provid
 
 func (m *mgr) SetFavorite(ctx context.Context, userID *user.UserId, resourceInfo *provider.ResourceInfo) error {
 	user := ctxpkg.ContextMustGetUser(ctx)
-	storageID, _ := storagespace.SplitStorageID(resourceInfo.Id.StorageId)
+	spaceID := resourceInfo.Id.SpaceId
 
 	// The primary key is just the ID in the table, it should ideally be (uid, fileid_prefix, fileid, tag_key)
 	// For the time being, just check if the favorite already exists. If it does, return early
 	var id int
 	query := `SELECT id FROM cbox_metadata WHERE uid=? AND fileid_prefix=? AND fileid=? AND tag_key="fav"`
-	if err := m.db.QueryRow(query, user.Id.OpaqueId, storageID, resourceInfo.Id.OpaqueId).Scan(&id); err == nil {
+	if err := m.db.QueryRow(query, user.Id.OpaqueId, spaceID, resourceInfo.Id.OpaqueId).Scan(&id); err == nil {
 		// Favorite is already set, return
 		return nil
 	}
 
 	query = `INSERT INTO cbox_metadata SET item_type=?, uid=?, fileid_prefix=?, fileid=?, tag_key="fav"`
-	vals := []interface{}{utils.ResourceTypeToItemInt(resourceInfo.Type), user.Id.OpaqueId, storageID, resourceInfo.Id.OpaqueId}
+	vals := []interface{}{utils.ResourceTypeToItemInt(resourceInfo.Type), user.Id.OpaqueId, spaceID, resourceInfo.Id.OpaqueId}
 	stmt, err := m.db.Prepare(query)
 	if err != nil {
 		return err
@@ -121,14 +119,14 @@ func (m *mgr) SetFavorite(ctx context.Context, userID *user.UserId, resourceInfo
 
 func (m *mgr) UnsetFavorite(ctx context.Context, userID *user.UserId, resourceInfo *provider.ResourceInfo) error {
 	user := ctxpkg.ContextMustGetUser(ctx)
-	storageID, _ := storagespace.SplitStorageID(resourceInfo.Id.StorageId)
+	spaceID := resourceInfo.Id.SpaceId
 
 	stmt, err := m.db.Prepare(`DELETE FROM cbox_metadata WHERE uid=? AND fileid_prefix=? AND fileid=? AND tag_key="fav"`)
 	if err != nil {
 		return err
 	}
 
-	res, err := stmt.Exec(user.Id.OpaqueId, storageID, resourceInfo.Id.OpaqueId)
+	res, err := stmt.Exec(user.Id.OpaqueId, spaceID, resourceInfo.Id.OpaqueId)
 	if err != nil {
 		return err
 	}

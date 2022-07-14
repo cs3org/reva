@@ -75,17 +75,56 @@ func (idx *Autoincrement) Init() error {
 
 // Lookup exact lookup by value.
 func (idx *Autoincrement) Lookup(v string) ([]string, error) {
-	searchPath := path.Join(idx.indexRootDir, v)
-	oldname, err := idx.storage.ResolveSymlink(context.Background(), searchPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			err = &idxerrs.NotFoundErr{TypeName: idx.typeName, IndexBy: idx.indexBy, Value: v}
-		}
+	return idx.LookupCtx(context.Background(), v)
+}
 
-		return nil, err
+// LookupCtx retieves multiple exact values and allows passing in a context
+func (idx *Autoincrement) LookupCtx(ctx context.Context, values ...string) ([]string, error) {
+	var allValues map[string]struct{}
+	if len(values) != 1 {
+		// prefetch all values with one request
+		entries, err := idx.storage.ReadDir(context.Background(), path.Join("/", idx.indexRootDir))
+		if err != nil {
+			return nil, err
+		}
+		// convert known values to set
+		allValues = make(map[string]struct{}, len(entries))
+		for _, e := range entries {
+			allValues[path.Base(e)] = struct{}{}
+		}
 	}
 
-	return []string{oldname}, nil
+	// convert requested values to set
+	valueSet := make(map[string]struct{}, len(values))
+	for _, v := range values {
+		valueSet[v] = struct{}{}
+	}
+
+	var matches = []string{}
+	for v := range valueSet {
+		if _, ok := allValues[v]; ok || len(allValues) == 0 {
+			oldname, err := idx.storage.ResolveSymlink(context.Background(), path.Join("/", idx.indexRootDir, v))
+			if err != nil {
+				continue
+			}
+			matches = append(matches, oldname)
+		}
+	}
+
+	if len(matches) == 0 {
+		var v string
+		switch len(values) {
+		case 0:
+			v = "none"
+		case 1:
+			v = values[0]
+		default:
+			v = "multiple"
+		}
+		return nil, &idxerrs.NotFoundErr{TypeName: idx.typeName, IndexBy: idx.indexBy, Value: v}
+	}
+
+	return matches, nil
 }
 
 // Add a new value to the index.

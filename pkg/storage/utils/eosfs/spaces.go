@@ -73,7 +73,7 @@ func (fs *eosfs) ListStorageSpaces(ctx context.Context, filter []*provider.ListS
 	for i := range filter {
 		switch filter[i].Type {
 		case provider.ListStorageSpacesRequest_Filter_TYPE_ID:
-			spaceID, _, _ = storagespace.SplitID(filter[i].GetId().OpaqueId)
+			_, spaceID, _, _ = storagespace.SplitID(filter[i].GetId().OpaqueId)
 		case provider.ListStorageSpacesRequest_Filter_TYPE_PATH:
 			spacePath = filter[i].GetPath()
 		case provider.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE:

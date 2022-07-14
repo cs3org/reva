@@ -126,15 +126,15 @@ func (m *manager) GetResourceInfos() ([]*provider.ResourceInfo, error) {
 
 	infos := []*provider.ResourceInfo{}
 	for rows.Next() {
-		var storageID, nodeID string
-		if err := rows.Scan(&storageID, &nodeID); err != nil {
+		var spaceID, nodeID string
+		if err := rows.Scan(&spaceID, &nodeID); err != nil {
 			continue
 		}
 
 		statReq := provider.StatRequest{Ref: &provider.Reference{
 			ResourceId: &provider.ResourceId{
-				StorageId: storageID,
-				OpaqueId:  nodeID,
+				SpaceId:  spaceID,
+				OpaqueId: nodeID,
 			},
 		}}
 

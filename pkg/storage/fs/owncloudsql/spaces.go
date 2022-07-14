@@ -47,7 +47,7 @@ func (fs *owncloudsqlfs) ListStorageSpaces(ctx context.Context, filter []*provid
 			t := filter[i].GetSpaceType()
 			filteringUnsupportedSpaceTypes = (t != "personal" && !strings.HasPrefix(t, "+"))
 		case provider.ListStorageSpacesRequest_Filter_TYPE_ID:
-			spaceID, _, _ = storagespace.SplitID(filter[i].GetId().OpaqueId)
+			_, spaceID, _, _ = storagespace.SplitID(filter[i].GetId().OpaqueId)
 		}
 	}
 	if filteringUnsupportedSpaceTypes {
@@ -130,8 +130,9 @@ func (fs *owncloudsqlfs) getPersonalSpace(ctx context.Context, owner *userpb.Use
 	space := &provider.StorageSpace{
 		Id: &provider.StorageSpaceId{OpaqueId: strconv.Itoa(storage.NumericID)},
 		Root: &provider.ResourceId{
-			StorageId: strconv.Itoa(storage.NumericID),
-			OpaqueId:  strconv.Itoa(root.ID),
+			// return ownclouds numeric storage id as the space id!
+			SpaceId:  strconv.Itoa(storage.NumericID),
+			OpaqueId: strconv.Itoa(root.ID),
 		},
 		Name:      owner.Username,
 		SpaceType: "personal",
@@ -167,8 +168,9 @@ func (fs *owncloudsqlfs) storageToSpace(ctx context.Context, storage *filecache.
 	space := &provider.StorageSpace{
 		Id: &provider.StorageSpaceId{OpaqueId: strconv.Itoa(storage.NumericID)},
 		Root: &provider.ResourceId{
-			StorageId: strconv.Itoa(storage.NumericID),
-			OpaqueId:  strconv.Itoa(root.ID),
+			// return ownclouds numeric storage id as the space id!
+			SpaceId:  strconv.Itoa(storage.NumericID),
+			OpaqueId: strconv.Itoa(root.ID),
 		},
 		Name:      owner.Username,
 		SpaceType: "personal",

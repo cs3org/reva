@@ -32,7 +32,6 @@ import (
 	"github.com/cs3org/reva/v2/pkg/rgrpc/status"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/grants"
-	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/pkg/errors"
 )
@@ -717,11 +716,11 @@ func refIsSpaceRoot(ref *provider.ResourceId) bool {
 	if ref == nil {
 		return false
 	}
-	if ref.StorageId == "" || ref.OpaqueId == "" {
+	if ref.SpaceId == "" || ref.OpaqueId == "" {
 		return false
 	}
-	_, sid := storagespace.SplitStorageID(ref.GetStorageId())
-	return sid == ref.OpaqueId
+
+	return ref.SpaceId == ref.OpaqueId
 }
 
 func shareIsSpaceRoot(key *collaboration.ShareKey) bool {

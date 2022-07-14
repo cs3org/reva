@@ -617,7 +617,7 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 		// nodeType = provider.ResourceType_RESOURCE_TYPE_REFERENCE
 	}
 
-	id := &provider.ResourceId{StorageId: n.SpaceID, OpaqueId: n.ID}
+	id := &provider.ResourceId{SpaceId: n.SpaceID, OpaqueId: n.ID}
 
 	if returnBasename {
 		fn = n.Name
@@ -631,8 +631,8 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 	var parentID *provider.ResourceId
 	if p, err := n.Parent(); err == nil {
 		parentID = &provider.ResourceId{
-			StorageId: p.SpaceID,
-			OpaqueId:  p.ID,
+			SpaceId:  p.SpaceID,
+			OpaqueId: p.ID,
 		}
 	}
 

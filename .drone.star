@@ -569,6 +569,8 @@ def virtualViews():
                 "image": "registry.cern.ch/docker.io/owncloudci/php:7.4",
                 "commands": [
                     "cd /drone/src",
+                    "composer self-update",
+                    "composer --version",
                     "make test-acceptance-api",
                 ],
                 "environment": {
@@ -806,7 +808,7 @@ def cs3ApiValidatorOcis():
             },
             {
                 "name": "cs3api-validator-ocis",
-                "image": "owncloud/cs3api-validator:latest",
+                "image": "owncloud/cs3api-validator:0.2.0",
                 "commands": [
                     "/usr/bin/cs3api-validator /var/lib/cs3api-validator --endpoint=revad-services:19000",
                 ],
@@ -859,7 +861,7 @@ def cs3ApiValidatorS3NG():
             },
             {
                 "name": "cs3api-validator-S3NG",
-                "image": "owncloud/cs3api-validator:latest",
+                "image": "owncloud/cs3api-validator:0.2.0",
                 "commands": [
                     "/usr/bin/cs3api-validator /var/lib/cs3api-validator --endpoint=revad-services:19000",
                 ],
@@ -920,6 +922,8 @@ def ocisIntegrationTests(parallelRuns, skipExceptParts = []):
                         "image": "registry.cern.ch/docker.io/owncloudci/php:7.4",
                         "commands": [
                             "cd /drone/src/tmp/testrunner",
+                            "composer self-update",
+                            "composer --version",
                             "make test-acceptance-api",
                         ],
                         "environment": {
@@ -997,6 +1001,8 @@ def s3ngIntegrationTests(parallelRuns, skipExceptParts = []):
                         "image": "registry.cern.ch/docker.io/owncloudci/php:7.4",
                         "commands": [
                             "cd /drone/src/tmp/testrunner",
+                            "composer self-update",
+                            "composer --version",
                             "make test-acceptance-api",
                         ],
                         "environment": {

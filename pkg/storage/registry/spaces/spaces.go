@@ -269,10 +269,21 @@ func (r *registry) ListProviders(ctx context.Context, filters map[string]string)
 	unrestricted, _ := strconv.ParseBool(filters["unrestricted"])
 	mask := filters["mask"]
 	switch {
-	case filters["storage_id"] != "" && filters["opaque_id"] != "":
+	case filters["space_id"] != "":
+
 		findMountpoint := filters["type"] == "mountpoint"
-		findGrant := !findMountpoint && filters["path"] == "" // relvative references, by definition, occur in the correct storage, so do not look for grants
-		return r.findProvidersForResource(ctx, filters["storage_id"]+"!"+filters["opaque_id"], findMountpoint, findGrant, unrestricted, mask), nil
+		findGrant := !findMountpoint && filters["path"] == "" // relative references, by definition, occur in the correct storage, so do not look for grants
+		// If opaque_id is empty, we assume that we are looking for a space root
+		if filters["opaque_id"] == "" {
+			filters["opaque_id"] = filters["space_id"]
+		}
+		id := storagespace.FormatResourceID(providerpb.ResourceId{
+			StorageId: filters["storage_id"],
+			SpaceId:   filters["space_id"],
+			OpaqueId:  filters["opaque_id"],
+		})
+
+		return r.findProvidersForResource(ctx, id, findMountpoint, findGrant, unrestricted, mask), nil
 	case filters["path"] != "":
 		return r.findProvidersForAbsolutePathReference(ctx, filters["path"], b, unrestricted, mask), nil
 	case len(filters) == 0:
@@ -387,13 +398,12 @@ func (r *registry) findProvidersForFilter(ctx context.Context, filters []*provid
 }
 
 // findProvidersForResource looks up storage providers based on a resource id
-// for the root of a space the res.StorageId is the same as the res.OpaqueId
-// for share spaces the res.StorageId tells the registry the spaceid and res.OpaqueId is a node in that space
+// for the root of a space the res.SpaceId is the same as the res.OpaqueId
+// for share spaces the res.SpaceId tells the registry the spaceid and res.OpaqueId is a node in that space
 func (r *registry) findProvidersForResource(ctx context.Context, id string, findMoundpoint, findGrant, unrestricted bool, mask string) []*registrypb.ProviderInfo {
 	currentUser := ctxpkg.ContextMustGetUser(ctx)
 	providerInfos := []*registrypb.ProviderInfo{}
-	providerID, spaceID := storagespace.SplitStorageID(id)
-	spaceID, nodeID, err := storagespace.SplitID(spaceID)
+	rid, err := storagespace.ParseID(id)
 	if err != nil {
 		appctx.GetLogger(ctx).Error().Err(err).Msg("splitting spaceid failed")
 		return nil
@@ -402,21 +412,18 @@ func (r *registry) findProvidersForResource(ctx context.Context, id string, find
 	for address, provider := range r.c.Providers {
 		p := &registrypb.ProviderInfo{
 			Address:    address,
-			ProviderId: providerID,
+			ProviderId: rid.StorageId,
 		}
 		// try to find provider based on storageproviderid prefix if only root is requested
-		if provider.ProviderID != "" && providerID != "" && mask == "root" {
-			match, err := regexp.MatchString("^"+provider.ProviderID+"$", providerID)
+		if provider.ProviderID != "" && rid.StorageId != "" && mask == "root" {
+			match, err := regexp.MatchString("^"+provider.ProviderID+"$", rid.StorageId)
 			if err != nil || !match {
 				continue
 			}
 			// construct space based on configured properties without actually making a ListStorageSpaces call
 			space := &providerpb.StorageSpace{
-				Id: &providerpb.StorageSpaceId{OpaqueId: id},
-				Root: &providerpb.ResourceId{
-					StorageId: spaceID,
-					OpaqueId:  nodeID,
-				},
+				Id:   &providerpb.StorageSpaceId{OpaqueId: id},
+				Root: &rid,
 			}
 			// this is a request for requests by id
 			// setPath(space, provider.Path) // hmm not enough info to build a path.... the space alias is no longer known here we would need to query the provider
@@ -429,8 +436,8 @@ func (r *registry) findProvidersForResource(ctx context.Context, id string, find
 			providerInfos = append(providerInfos, p)
 			return providerInfos
 		}
-		if provider.ProviderID != "" && providerID != "" {
-			match, err := regexp.MatchString("^"+provider.ProviderID+"$", providerID)
+		if provider.ProviderID != "" && rid.StorageId != "" {
+			match, err := regexp.MatchString("^"+provider.ProviderID+"$", rid.StorageId)
 			if err != nil || !match {
 				// skip mismatching storageproviders
 				continue

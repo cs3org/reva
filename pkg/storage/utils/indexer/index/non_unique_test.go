@@ -37,7 +37,9 @@ func TestNonUniqueIndexAdd(t *testing.T) {
 
 	ids, err := sut.Lookup("Green")
 	assert.NoError(t, err)
-	assert.EqualValues(t, []string{"goefe-789", "xadaf-189"}, ids)
+	assert.Len(t, ids, 2)
+	assert.Contains(t, ids, "goefe-789")
+	assert.Contains(t, ids, "xadaf-189")
 
 	ids, err = sut.Lookup("White")
 	assert.NoError(t, err)

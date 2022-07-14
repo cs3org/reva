@@ -366,26 +366,28 @@ func (p *Handler) propfindResponse(ctx context.Context, w http.ResponseWriter, r
 	ctx, span := appctx.GetTracerProvider(r.Context()).Tracer(tracerName).Start(ctx, "propfind_response")
 	defer span.End()
 
-	filters := make([]*link.ListPublicSharesRequest_Filter, 0, len(resourceInfos))
-	for i := range resourceInfos {
-		// the list of filters grows with every public link in a folder
-		filters = append(filters, publicshare.ResourceIDFilter(resourceInfos[i].Id))
-	}
-
-	client, err := p.getClient()
-	if err != nil {
-		log.Error().Err(err).Msg("error getting grpc client")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
 	var linkshares map[string]struct{}
 	// public link access does not show share-types
 	// oc:share-type is not part of an allprops response
 	if namespace != "/public" {
 		// only fetch this if property was queried
-		for _, p := range pf.Prop {
-			if p.Space == net.NsOwncloud && (p.Local == "share-types" || p.Local == "permissions") {
+		for _, prop := range pf.Prop {
+			if prop.Space == net.NsOwncloud && (prop.Local == "share-types" || prop.Local == "permissions") {
+				filters := make([]*link.ListPublicSharesRequest_Filter, 0, len(resourceInfos))
+				for i := range resourceInfos {
+					// FIXME this is expensive
+					// the filters array grow by one for every file in a folder
+					// TODO store public links as grants on the storage, reassembling them here is too costly
+					// we can then add the filter if the file has share-types=3 in the opaque,
+					// same as user / group shares for share indicators
+					filters = append(filters, publicshare.ResourceIDFilter(resourceInfos[i].Id))
+				}
+				client, err := p.getClient()
+				if err != nil {
+					log.Error().Err(err).Msg("error getting grpc client")
+					w.WriteHeader(http.StatusInternalServerError)
+					return
+				}
 				listResp, err := client.ListPublicShares(ctx, &link.ListPublicSharesRequest{Filters: filters})
 				if err == nil {
 					linkshares = make(map[string]struct{}, len(listResp.Share))
@@ -960,7 +962,7 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 	}
 
 	// replace fileid of /public/{token} mountpoint with grant fileid
-	if ls != nil && md.Id != nil && md.Id.StorageId == utils.PublicStorageProviderID && md.Id.OpaqueId == ls.Token {
+	if ls != nil && md.Id != nil && md.Id.SpaceId == utils.PublicStorageSpaceID && md.Id.OpaqueId == ls.Token {
 		md.Id = ls.ResourceId
 	}
 
@@ -981,7 +983,7 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 			propstatOK.Prop = append(propstatOK.Prop,
 				prop.Escaped("oc:id", id),
 				prop.Escaped("oc:fileid", id),
-				prop.Escaped("oc:spaceid", md.Id.StorageId),
+				prop.Escaped("oc:spaceid", md.Id.SpaceId),
 			)
 		}
 
@@ -1093,7 +1095,7 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 					}
 				case "spaceid":
 					if md.Id != nil {
-						propstatOK.Prop = append(propstatOK.Prop, prop.Escaped("oc:spaceid", md.Id.StorageId))
+						propstatOK.Prop = append(propstatOK.Prop, prop.Escaped("oc:spaceid", md.Id.SpaceId))
 					} else {
 						propstatNotFound.Prop = append(propstatNotFound.Prop, prop.Escaped("oc:spaceid", ""))
 					}

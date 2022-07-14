@@ -42,26 +42,28 @@ var (
 // SplitID splits a storage space ID into a provider ID and a node ID.
 // The accepted formats results of the storage space ID and respective results
 // are:
-// <providerid>$<spaceid>!<nodeid> 	-> <providerid>$<spaceid>, <nodeid>
-// <providerid>$<spaceid>			-> <providerid>$<spaceid>, <spaceid>
-// <spaceid>						-> <spaceid>, <spaceid>
-func SplitID(ssid string) (storageid, nodeid string, err error) {
+// <storageid>$<spaceid>!<nodeid> 	-> <storageid>, <spaceid>, <nodeid>
+// <storageid>$<spaceid>			-> <storageid>, <spaceid>, ""
+// <spaceid>						-> "", <spaceid>, ""
+func SplitID(ssid string) (storageid, spaceid, nodeid string, err error) {
 	if ssid == "" {
-		return "", "", errors.Wrap(ErrInvalidSpaceID, "can't split empty storage space ID")
+		return "", "", "", errors.Wrap(ErrInvalidSpaceID, "can't split empty storage space ID")
 	}
-	parts := strings.SplitN(ssid, _idDelimiter, 2)
+
+	storageid, snid := SplitStorageID(ssid)
+	parts := strings.SplitN(snid, _idDelimiter, 2)
 	if len(parts) == 1 || parts[1] == "" {
-		_, sid := SplitStorageID(parts[0])
-		return parts[0], sid, nil
+		return storageid, parts[0], "", nil
 	}
-	return parts[0], parts[1], nil
+
+	return storageid, parts[0], parts[1], nil
 }
 
-// SplitStorageID splits a storage ID into the provider ID and the spaceID.
+// SplitStorageID splits a storage ID into the storage ID and the spaceID.
 // The accepted formats are:
-// <providerid>$<spaceid>			-> <providerid>, <spaceid>
+// <storageid>$<spaceid>			-> <storageid>, <spaceid>
 // <spaceid>						-> "", <spaceid>
-func SplitStorageID(sid string) (providerID, spaceID string) {
+func SplitStorageID(sid string) (storageID, spaceID string) {
 	parts := strings.SplitN(sid, _storageIDDelimiter, 2)
 	if len(parts) == 2 {
 		return parts[0], parts[1]
@@ -71,20 +73,23 @@ func SplitStorageID(sid string) (providerID, spaceID string) {
 
 // FormatResourceID converts a ResourceId into the string format.
 // The result format will look like:
-// <storageid>!<opaqueid>
+// <storageid>$<spaceid>!<opaqueid>
 func FormatResourceID(sid provider.ResourceId) string {
-	return strings.Join([]string{sid.StorageId, sid.OpaqueId}, _idDelimiter)
+	if sid.OpaqueId == "" {
+		return FormatStorageID(sid.StorageId, sid.SpaceId)
+	}
+	return strings.Join([]string{FormatStorageID(sid.StorageId, sid.SpaceId), sid.OpaqueId}, _idDelimiter)
 }
 
 // FormatStorageID converts the provider ID and space ID into the string format.
 // The result format will look like:
-// <providerid>$<spaceid> or
+// <storageid>$<spaceid> or
 // <spaceid> in case the provider ID is empty.
-func FormatStorageID(providerID, spaceID string) string {
-	if providerID == "" {
+func FormatStorageID(storageID, spaceID string) string {
+	if storageID == "" {
 		return spaceID
 	}
-	return strings.Join([]string{providerID, spaceID}, _storageIDDelimiter)
+	return strings.Join([]string{storageID, spaceID}, _storageIDDelimiter)
 }
 
 // ParseID parses a storage space ID and returns a storageprovider ResourceId.
@@ -93,10 +98,11 @@ func FormatStorageID(providerID, spaceID string) string {
 // <providerid>$<spaceid>			-> <providerid>$<spaceid>, <spaceid>
 // <spaceid>						-> <spaceid>, <spaceid>
 func ParseID(ssid string) (provider.ResourceId, error) {
-	sid, nid, err := SplitID(ssid)
+	sid, spid, oid, err := SplitID(ssid)
 	return provider.ResourceId{
 		StorageId: sid,
-		OpaqueId:  nid,
+		SpaceId:   spid,
+		OpaqueId:  oid,
 	}, err
 }
 
@@ -131,21 +137,22 @@ func ParseReference(sRef string) (provider.Reference, error) {
 // "storage_id/path"
 // "storage_id"
 func FormatReference(ref *provider.Reference) (string, error) {
-	if ref == nil || ref.ResourceId == nil || ref.ResourceId.StorageId == "" {
+	if ref == nil || ref.ResourceId == nil || ref.ResourceId.SpaceId == "" {
 		return "", ErrInvalidSpaceReference
 	}
-	var ssid string
-	if ref.ResourceId.OpaqueId == "" {
-
-		ssid = ref.ResourceId.StorageId
-	} else {
-		var sb strings.Builder
-		// ssid == storage_id!opaque_id
-		sb.Grow(len(ref.ResourceId.StorageId) + len(ref.ResourceId.OpaqueId) + 1)
-		sb.WriteString(ref.ResourceId.StorageId)
-		sb.WriteString(_idDelimiter)
-		sb.WriteString(ref.ResourceId.OpaqueId)
-		ssid = sb.String()
-	}
+	ssid := FormatResourceID(*ref.ResourceId)
 	return path.Join(ssid, ref.Path), nil
+}
+
+// UpdateLegacyResourceID checks if the given resource id contains a correct triple and will convert legacy ids without a spaceid
+// by splitting the storageid.
+func UpdateLegacyResourceID(id provider.ResourceId) provider.ResourceId {
+	if storageid, spaceid := SplitStorageID(id.StorageId); storageid != "" && id.SpaceId == "" {
+		return provider.ResourceId{
+			StorageId: storageid,
+			SpaceId:   spaceid,
+			OpaqueId:  id.OpaqueId,
+		}
+	}
+	return id
 }

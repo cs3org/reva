@@ -32,16 +32,16 @@ func TestSplitStorageID(t *testing.T) {
 		expected []string
 	}{
 		{
-			"providerid" + _storageIDDelimiter + "storageid",
-			[]string{"storageid", "providerid"},
+			"storageid" + _storageIDDelimiter + "spaceid",
+			[]string{"storageid", "spaceid"},
 		},
 		{
 			"",
 			nil,
 		},
 		{
-			"storageid",
-			[]string{"storageid", ""},
+			"spaceid",
+			[]string{"", "spaceid"},
 		},
 	}
 
@@ -54,10 +54,10 @@ func TestSplitStorageID(t *testing.T) {
 			}
 		case len(tt.expected) != 2:
 			t.Error("testcase won't work with len(expected) != 2. Avoiding panic")
-		case spaceID != tt.expected[0]:
-			t.Errorf("StorageID doesn't match, expected '%s' got '%s'", tt.expected[0], spaceID)
-		case storageID != tt.expected[1]:
-			t.Errorf("ProviderID doesn't match, expected '%s' got '%s'", tt.expected[1], storageID)
+		case storageID != tt.expected[0]:
+			t.Errorf("StorageID doesn't match, expected '%s' got '%s'", tt.expected[0], storageID)
+		case spaceID != tt.expected[1]:
+			t.Errorf("ProviderID doesn't match, expected '%s' got '%s'", tt.expected[1], spaceID)
 		}
 	}
 
@@ -71,12 +71,12 @@ func TestParseID(t *testing.T) {
 	}{
 		{
 			"spaceid" + _idDelimiter + "opaqueid",
-			provider.ResourceId{StorageId: "spaceid", OpaqueId: "opaqueid"},
+			provider.ResourceId{SpaceId: "spaceid", OpaqueId: "opaqueid"},
 			nil,
 		},
 		{
-			"providerid" + _storageIDDelimiter + "spaceid" + _idDelimiter + "opaqueid",
-			provider.ResourceId{StorageId: "providerid$spaceid", OpaqueId: "opaqueid"},
+			"storageid" + _storageIDDelimiter + "spaceid" + _idDelimiter + "opaqueid",
+			provider.ResourceId{StorageId: "storageid", SpaceId: "spaceid", OpaqueId: "opaqueid"},
 			nil,
 		},
 		{
@@ -86,7 +86,7 @@ func TestParseID(t *testing.T) {
 		},
 		{
 			"spaceid",
-			provider.ResourceId{StorageId: "spaceid", OpaqueId: "spaceid"},
+			provider.ResourceId{SpaceId: "spaceid"},
 			nil,
 		},
 	}
@@ -99,17 +99,19 @@ func TestParseID(t *testing.T) {
 				t.Errorf("Expected ParseID to return error %s, got %s", tt.expectedErr, err)
 			}
 		case rid.StorageId != tt.expected.StorageId:
-			t.Errorf("StorageIDs don't match. Expected %v, got %v", tt.expected, rid)
+			t.Errorf("StorageIDs don't match. Expected %s, got %s", tt.expected.StorageId, rid.StorageId)
+		case rid.SpaceId != tt.expected.SpaceId:
+			t.Errorf("SpaceIDs don't match. Expected %s, got %s", tt.expected.SpaceId, rid.SpaceId)
 		case rid.OpaqueId != tt.expected.OpaqueId:
-			t.Errorf("StorageIDs don't match. Expected %v, got %v", tt.expected, rid)
+			t.Errorf("OpaqueIDs don't match. Expected %s, got %s", tt.expected.OpaqueId, rid.OpaqueId)
 		}
 	}
 
 }
 
 func TestFormatResourceID(t *testing.T) {
-	expected := "storageid" + _idDelimiter + "opaqueid"
-	wrapped := FormatResourceID(provider.ResourceId{StorageId: "storageid", OpaqueId: "opaqueid"})
+	expected := "spaceid" + _idDelimiter + "opaqueid"
+	wrapped := FormatResourceID(provider.ResourceId{SpaceId: "spaceid", OpaqueId: "opaqueid"})
 
 	if wrapped != expected {
 		t.Errorf("wrapped id doesn't have the expected format: got %s expected %s", wrapped, expected)
@@ -117,8 +119,8 @@ func TestFormatResourceID(t *testing.T) {
 }
 
 func TestFormatStorageID(t *testing.T) {
-	expected := "providerid" + _storageIDDelimiter + "spaceid"
-	wrapped := FormatStorageID("providerid", "spaceid")
+	expected := "storageid" + _storageIDDelimiter + "spaceid"
+	wrapped := FormatStorageID("storageid", "spaceid")
 
 	if wrapped != expected {
 		t.Errorf("wrapped id doesn't have the expected format: got %s expected %s", wrapped, expected)
@@ -127,38 +129,84 @@ func TestFormatStorageID(t *testing.T) {
 
 func TestParseStorageSpaceReference(t *testing.T) {
 	tests := []struct {
-		sRef      string
-		storageID string
-		nodeID    string
-		relPath   string
+		sRef        string
+		resourceID  *provider.ResourceId
+		relPath     string
+		expectedErr error
 	}{
 		{
-			"1234!abcd/f1/f2",
-			"1234",
-			"abcd",
+			"1234$abcd!5678/f1/f2",
+			&provider.ResourceId{
+				StorageId: "1234",
+				SpaceId:   "abcd",
+				OpaqueId:  "5678",
+			},
 			"./f1/f2",
+			nil,
 		},
 		{
 			"1234!abcd",
-			"1234",
-			"abcd",
+			&provider.ResourceId{
+				SpaceId:  "1234",
+				OpaqueId: "abcd",
+			},
 			".",
+			nil,
 		},
 		{
 			"01234$56789!abcd",
-			"01234$56789",
-			"abcd",
+			&provider.ResourceId{
+				StorageId: "01234",
+				SpaceId:   "56789",
+				OpaqueId:  "abcd",
+			},
 			".",
+			nil,
+		},
+		{
+			"",
+			nil,
+			"",
+			ErrInvalidSpaceID,
+		},
+		{
+			"01234$abcd",
+			&provider.ResourceId{
+				StorageId: "01234",
+				SpaceId:   "abcd",
+				OpaqueId:  "",
+			},
+			".",
+			nil,
+		},
+		{
+			"01234$!5678",
+			&provider.ResourceId{
+				StorageId: "01234",
+				SpaceId:   "",
+				OpaqueId:  "5678",
+			},
+			".",
+			nil,
+		},
+		{
+			"/f1/f2",
+			nil,
+			"",
+			ErrInvalidSpaceID,
 		},
 	}
 	for _, tt := range tests {
-		ref, _ := ParseReference(tt.sRef)
+		ref, err := ParseReference(tt.sRef)
 
-		if ref.ResourceId.StorageId != tt.storageID {
-			t.Errorf("Expected storageId %s got %s", tt.storageID, ref.ResourceId.StorageId)
+		if !errors.Is(err, tt.expectedErr) {
+			t.Errorf("Expected error %s got %s", tt.expectedErr, err)
 		}
-		if ref.ResourceId.OpaqueId != tt.nodeID {
-			t.Errorf("Expected OpaqueId %s got %s", tt.nodeID, ref.ResourceId.OpaqueId)
+		if ref.ResourceId != nil && !utils.ResourceIDEqual(ref.ResourceId, tt.resourceID) {
+			t.Errorf("Expected ResourceID %s got %s", tt.resourceID, ref.ResourceId)
+		}
+		if ref.ResourceId == nil && tt.resourceID != nil {
+			t.Errorf("Expected ResourceID to be %s got %s", tt.resourceID, ref.ResourceId)
 		}
 		if ref.Path != tt.relPath {
 			t.Errorf("Expected path %s got %s", tt.relPath, ref.Path)
@@ -187,24 +235,28 @@ func TestFormatStorageSpaceReference(t *testing.T) {
 			expectedErr: ErrInvalidSpaceReference,
 		},
 		{
-			ref:      &provider.Reference{ResourceId: &provider.ResourceId{StorageId: "storageid"}, Path: "path"},
-			expected: "storageid/path",
+			ref:      &provider.Reference{ResourceId: &provider.ResourceId{SpaceId: "spaceid"}, Path: "path"},
+			expected: "spaceid/path",
 		},
 		{
-			ref:      &provider.Reference{ResourceId: &provider.ResourceId{StorageId: "storageid", OpaqueId: "opaqueid"}, Path: "path"},
-			expected: "storageid!opaqueid/path",
+			ref:      &provider.Reference{ResourceId: &provider.ResourceId{SpaceId: "spaceid", OpaqueId: "opaqueid"}, Path: "path"},
+			expected: "spaceid!opaqueid/path",
 		},
 		{
-			ref:      &provider.Reference{ResourceId: &provider.ResourceId{StorageId: "storageid", OpaqueId: "opaqueid"}, Path: "."},
-			expected: "storageid!opaqueid",
+			ref:      &provider.Reference{ResourceId: &provider.ResourceId{StorageId: "storageid", SpaceId: "spaceid", OpaqueId: "opaqueid"}, Path: "path"},
+			expected: "storageid$spaceid!opaqueid/path",
 		},
 		{
-			ref:      &provider.Reference{ResourceId: &provider.ResourceId{StorageId: "storageid"}, Path: "."},
-			expected: "storageid",
+			ref:      &provider.Reference{ResourceId: &provider.ResourceId{SpaceId: "spaceid", OpaqueId: "opaqueid"}, Path: "."},
+			expected: "spaceid!opaqueid",
 		},
 		{
-			ref:      &provider.Reference{ResourceId: &provider.ResourceId{StorageId: "storageid"}},
-			expected: "storageid",
+			ref:      &provider.Reference{ResourceId: &provider.ResourceId{SpaceId: "spaceid"}, Path: "."},
+			expected: "spaceid",
+		},
+		{
+			ref:      &provider.Reference{ResourceId: &provider.ResourceId{SpaceId: "spaceid"}},
+			expected: "spaceid",
 		},
 	}
 
@@ -225,32 +277,32 @@ func TestFormatAndParseReference(t *testing.T) {
 		expected *provider.Reference
 	}{
 		{
-			orig:     &provider.Reference{ResourceId: &provider.ResourceId{StorageId: "storageid"}, Path: "./path"},
-			expected: &provider.Reference{ResourceId: &provider.ResourceId{StorageId: "storageid", OpaqueId: "storageid"}, Path: "./path"},
+			orig:     &provider.Reference{ResourceId: &provider.ResourceId{SpaceId: "spaceid"}, Path: "./path"},
+			expected: &provider.Reference{ResourceId: &provider.ResourceId{SpaceId: "spaceid"}, Path: "./path"},
 		},
 		{
-			orig:     &provider.Reference{ResourceId: &provider.ResourceId{StorageId: "storageid$spaceid"}, Path: "./path"},
-			expected: &provider.Reference{ResourceId: &provider.ResourceId{StorageId: "storageid$spaceid", OpaqueId: "spaceid"}, Path: "./path"},
+			orig:     &provider.Reference{ResourceId: &provider.ResourceId{StorageId: "storageid", SpaceId: "spaceid"}, Path: "./path"},
+			expected: &provider.Reference{ResourceId: &provider.ResourceId{StorageId: "storageid", SpaceId: "spaceid"}, Path: "./path"},
 		},
 		{
-			orig:     &provider.Reference{ResourceId: &provider.ResourceId{StorageId: "storageid", OpaqueId: "opaqueid"}, Path: "./path"},
-			expected: &provider.Reference{ResourceId: &provider.ResourceId{StorageId: "storageid", OpaqueId: "opaqueid"}, Path: "./path"},
+			orig:     &provider.Reference{ResourceId: &provider.ResourceId{SpaceId: "spaceid", OpaqueId: "opaqueid"}, Path: "./path"},
+			expected: &provider.Reference{ResourceId: &provider.ResourceId{SpaceId: "spaceid", OpaqueId: "opaqueid"}, Path: "./path"},
 		},
 		{
-			orig:     &provider.Reference{ResourceId: &provider.ResourceId{StorageId: "storageid$spaceid", OpaqueId: "opaqueid"}, Path: "./path"},
-			expected: &provider.Reference{ResourceId: &provider.ResourceId{StorageId: "storageid$spaceid", OpaqueId: "opaqueid"}, Path: "./path"},
+			orig:     &provider.Reference{ResourceId: &provider.ResourceId{StorageId: "storageid", SpaceId: "spaceid", OpaqueId: "opaqueid"}, Path: "./path"},
+			expected: &provider.Reference{ResourceId: &provider.ResourceId{StorageId: "storageid", SpaceId: "spaceid", OpaqueId: "opaqueid"}, Path: "./path"},
 		},
 		{
-			orig:     &provider.Reference{ResourceId: &provider.ResourceId{StorageId: "storageid", OpaqueId: "opaqueid"}, Path: "."},
-			expected: &provider.Reference{ResourceId: &provider.ResourceId{StorageId: "storageid", OpaqueId: "opaqueid"}, Path: "."},
+			orig:     &provider.Reference{ResourceId: &provider.ResourceId{SpaceId: "spaceid", OpaqueId: "opaqueid"}, Path: "."},
+			expected: &provider.Reference{ResourceId: &provider.ResourceId{SpaceId: "spaceid", OpaqueId: "opaqueid"}, Path: "."},
 		},
 		{
-			orig:     &provider.Reference{ResourceId: &provider.ResourceId{StorageId: "storageid"}, Path: "."},
-			expected: &provider.Reference{ResourceId: &provider.ResourceId{StorageId: "storageid", OpaqueId: "storageid"}, Path: "."},
+			orig:     &provider.Reference{ResourceId: &provider.ResourceId{SpaceId: "spaceid"}, Path: "."},
+			expected: &provider.Reference{ResourceId: &provider.ResourceId{SpaceId: "spaceid"}, Path: "."},
 		},
 		{
-			orig:     &provider.Reference{ResourceId: &provider.ResourceId{StorageId: "storageid"}},
-			expected: &provider.Reference{ResourceId: &provider.ResourceId{StorageId: "storageid", OpaqueId: "storageid"}, Path: "."},
+			orig:     &provider.Reference{ResourceId: &provider.ResourceId{SpaceId: "spaceid"}},
+			expected: &provider.Reference{ResourceId: &provider.ResourceId{SpaceId: "spaceid"}, Path: "."},
 		},
 	}
 
@@ -262,6 +314,29 @@ func TestFormatAndParseReference(t *testing.T) {
 		}
 		if !(utils.ResourceIDEqual(parsed.ResourceId, tt.expected.ResourceId) && parsed.Path == tt.expected.Path) {
 			t.Errorf("Formatted then parsed references don't match the original got: %v expected %v", parsed, tt.expected)
+		}
+	}
+}
+
+func TestUpdateLegacyResourceID(t *testing.T) {
+	tests := []struct {
+		orig     provider.ResourceId
+		expected provider.ResourceId
+	}{
+		{
+			orig:     provider.ResourceId{StorageId: "storageid", SpaceId: "spaceid", OpaqueId: "opaqueid"},
+			expected: provider.ResourceId{StorageId: "storageid", SpaceId: "spaceid", OpaqueId: "opaqueid"},
+		},
+		{
+			orig:     provider.ResourceId{StorageId: "storageid$spaceid", SpaceId: "", OpaqueId: "opaqueid"},
+			expected: provider.ResourceId{StorageId: "storageid", SpaceId: "spaceid", OpaqueId: "opaqueid"},
+		},
+	}
+
+	for _, tt := range tests {
+		updated := UpdateLegacyResourceID(tt.orig)
+		if !(utils.ResourceIDEqual(&updated, &tt.expected)) {
+			t.Errorf("Updating resourceid failed, got: %v expected %v", updated, tt.expected)
 		}
 	}
 }

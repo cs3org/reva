@@ -43,6 +43,7 @@ import (
 	indexerErrors "github.com/cs3org/reva/v2/pkg/storage/utils/indexer/errors"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/indexer/option"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/metadata"
+	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/google/uuid"
 	"github.com/mitchellh/mapstructure"
@@ -607,6 +608,8 @@ func (m *Manager) getShareByID(ctx context.Context, id string) (*collaboration.S
 	}
 	err = json.Unmarshal(data, userShare)
 	if err == nil && userShare.Grantee.GetUserId() != nil {
+		id := storagespace.UpdateLegacyResourceID(*userShare.GetResourceId())
+		userShare.ResourceId = &id
 		return userShare, nil
 	}
 
@@ -615,6 +618,8 @@ func (m *Manager) getShareByID(ctx context.Context, id string) (*collaboration.S
 	}
 	err = json.Unmarshal(data, groupShare) // try to unmarshal to a group share if the user share unmarshalling failed
 	if err == nil && groupShare.Grantee.GetGroupId() != nil {
+		id := storagespace.UpdateLegacyResourceID(*groupShare.GetResourceId())
+		groupShare.ResourceId = &id
 		return groupShare, nil
 	}
 
@@ -708,7 +713,7 @@ func indexResourceIDFunc(v interface{}) (string, error) {
 }
 
 func resourceIDToIndex(id *provider.ResourceId) string {
-	return strings.Join([]string{id.StorageId, id.OpaqueId}, "!")
+	return strings.Join([]string{id.SpaceId, id.OpaqueId}, "!")
 }
 
 func granteeToIndex(grantee *provider.Grantee) (string, error) {

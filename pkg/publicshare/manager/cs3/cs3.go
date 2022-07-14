@@ -48,6 +48,7 @@ import (
 	indexerErrors "github.com/cs3org/reva/v2/pkg/storage/utils/indexer/errors"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/indexer/option"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/metadata"
+	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/utils"
 )
 
@@ -329,6 +330,8 @@ func (m *Manager) getByToken(ctx context.Context, token string) (*publicshare.Wi
 	if err != nil {
 		return nil, err
 	}
+	id := storagespace.UpdateLegacyResourceID(*ps.PublicShare.ResourceId)
+	ps.PublicShare.ResourceId = &id
 	return ps, nil
 }
 
@@ -397,33 +400,37 @@ func (m *Manager) ListPublicShares(ctx context.Context, u *user.User, filters []
 		return result, nil
 	}
 
-	tokensByResourceID := make(map[string]*provider.ResourceId)
-	for _, filter := range idFilter {
-		resourceID := filter.GetResourceId()
-		tokens, err := m.indexer.FindBy(&link.PublicShare{},
-			indexer.NewField("ResourceId", resourceIDToIndex(resourceID)),
-		)
-		if err != nil {
-			continue
+	var tokens []string
+	if len(idFilter) > 0 {
+		idFilters := make([]indexer.Field, 0, len(idFilter))
+		for _, filter := range idFilter {
+			resourceID := filter.GetResourceId()
+			idFilters = append(idFilters, indexer.NewField("ResourceId", resourceIDToIndex(resourceID)))
 		}
-		for _, token := range tokens {
-			tokensByResourceID[token] = resourceID
+		tokens, err = m.indexer.FindBy(&link.PublicShare{}, idFilters...)
+		if err != nil {
+			return nil, err
 		}
 	}
 
 	// statMem is used as a local cache to prevent statting resources which
 	// already have been checked.
 	statMem := make(map[string]struct{})
-	for token, resourceID := range tokensByResourceID {
+	for _, token := range tokens {
 		if _, handled := shareMem[token]; handled {
 			// We don't want to add a share multiple times when we added it
 			// already.
 			continue
 		}
 
-		if _, checked := statMem[resourceIDToIndex(resourceID)]; !checked {
+		s, err := m.getByToken(ctx, token)
+		if err != nil {
+			return nil, err
+		}
+
+		if _, checked := statMem[resourceIDToIndex(s.PublicShare.GetResourceId())]; !checked {
 			sReq := &provider.StatRequest{
-				Ref: &provider.Reference{ResourceId: resourceID},
+				Ref: &provider.Reference{ResourceId: s.PublicShare.GetResourceId()},
 			}
 			sRes, err := m.gatewayClient.Stat(ctx, sReq)
 			if err != nil {
@@ -435,13 +442,9 @@ func (m *Manager) ListPublicShares(ctx context.Context, u *user.User, filters []
 			if !sRes.Info.PermissionSet.ListGrants {
 				continue
 			}
-			statMem[resourceIDToIndex(resourceID)] = struct{}{}
+			statMem[resourceIDToIndex(s.PublicShare.GetResourceId())] = struct{}{}
 		}
 
-		s, err := m.getByToken(ctx, token)
-		if err != nil {
-			return nil, err
-		}
 		if publicshare.MatchesFilters(s.PublicShare, filters) {
 			result = append(result, &s.PublicShare)
 			shareMem[s.PublicShare.Token] = struct{}{}

@@ -231,11 +231,11 @@ func (s *svc) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSp
 	for _, f := range req.Filters {
 		switch f.Type {
 		case provider.ListStorageSpacesRequest_Filter_TYPE_ID:
-			sid, oid, err := storagespace.SplitID(f.GetId().OpaqueId)
+			sid, spid, oid, err := storagespace.SplitID(f.GetId().OpaqueId)
 			if err != nil {
 				continue
 			}
-			filters["storage_id"], filters["opaque_id"] = sid, oid
+			filters["storage_id"], filters["space_id"], filters["opaque_id"] = sid, spid, oid
 		case provider.ListStorageSpacesRequest_Filter_TYPE_OWNER:
 			filters["owner_idp"] = f.GetOwner().Idp
 			filters["owner_id"] = f.GetOwner().OpaqueId
@@ -318,17 +318,14 @@ func (s *svc) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorag
 		_, purge = opaque.Map["purge"]
 	}
 
-	storageid, opaqeid, err := storagespace.SplitID(req.Id.OpaqueId)
+	rid, err := storagespace.ParseID(req.Id.OpaqueId)
 	if err != nil {
 		return &provider.DeleteStorageSpaceResponse{
-			Status: status.NewStatusFromErrType(ctx, fmt.Sprintf("gateway could not split space id %s", req.GetId().GetOpaqueId()), err),
+			Status: status.NewStatusFromErrType(ctx, fmt.Sprintf("gateway could not parse space id %s", req.GetId().GetOpaqueId()), err),
 		}, nil
 	}
 
-	ref := &provider.Reference{ResourceId: &provider.ResourceId{
-		StorageId: storageid,
-		OpaqueId:  opaqeid,
-	}}
+	ref := &provider.Reference{ResourceId: &rid}
 	c, _, err := s.find(ctx, ref)
 	if err != nil {
 		return &provider.DeleteStorageSpaceResponse{
@@ -359,7 +356,7 @@ func (s *svc) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorag
 	log.Debug().Msg("purging storage space")
 	// List all shares in this storage space
 	lsRes, err := s.ListShares(ctx, &collaborationv1beta1.ListSharesRequest{
-		Filters: []*collaborationv1beta1.Filter{share.StorageIDFilter(storageid)},
+		Filters: []*collaborationv1beta1.Filter{share.SpaceIDFilter(id.SpaceId)}, // FIXME rename the filter? @c0rby
 	})
 	switch {
 	case err != nil:
@@ -384,7 +381,7 @@ func (s *svc) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorag
 
 	// List all public shares in this storage space
 	lpsRes, err := s.ListPublicShares(ctx, &linkv1beta1.ListPublicSharesRequest{
-		Filters: []*linkv1beta1.ListPublicSharesRequest_Filter{publicshare.StorageIDFilter(storageid)},
+		Filters: []*linkv1beta1.ListPublicSharesRequest_Filter{publicshare.StorageIDFilter(id.SpaceId)}, // FIXME rename the filter? @c0rby
 	})
 	switch {
 	case err != nil:
@@ -1102,7 +1099,9 @@ func (s *svc) findSpaces(ctx context.Context, ref *provider.Reference) ([]*regis
 	case ref == nil:
 		return nil, errtypes.BadRequest("missing reference")
 	case ref.ResourceId != nil:
-		// no action needed in that case
+		if ref.ResourceId.OpaqueId == "" {
+			ref.ResourceId.OpaqueId = ref.ResourceId.SpaceId
+		}
 	case ref.Path != "": //  TODO implement a mount path cache in the registry?
 		// nothing to do here either
 	default:
@@ -1115,6 +1114,7 @@ func (s *svc) findSpaces(ctx context.Context, ref *provider.Reference) ([]*regis
 	}
 	if ref.ResourceId != nil {
 		filters["storage_id"] = ref.ResourceId.StorageId
+		filters["space_id"] = ref.ResourceId.SpaceId
 		filters["opaque_id"] = ref.ResourceId.OpaqueId
 	}
 
@@ -1132,7 +1132,9 @@ func (s *svc) findSingleSpace(ctx context.Context, ref *provider.Reference) ([]*
 	case ref == nil:
 		return nil, errtypes.BadRequest("missing reference")
 	case ref.ResourceId != nil:
-		// no action needed in that case
+		if ref.ResourceId.OpaqueId == "" {
+			ref.ResourceId.OpaqueId = ref.ResourceId.SpaceId
+		}
 	case ref.Path != "": //  TODO implement a mount path cache in the registry?
 		// nothing to do here either
 	default:
@@ -1146,6 +1148,7 @@ func (s *svc) findSingleSpace(ctx context.Context, ref *provider.Reference) ([]*
 	}
 	if ref.ResourceId != nil {
 		filters["storage_id"] = ref.ResourceId.StorageId
+		filters["space_id"] = ref.ResourceId.SpaceId
 		filters["opaque_id"] = ref.ResourceId.OpaqueId
 	}
 
@@ -1208,6 +1211,7 @@ func unwrap(ref *provider.Reference, mountPoint string, root *provider.ResourceI
 	return &provider.Reference{
 		ResourceId: &provider.ResourceId{
 			StorageId: ref.ResourceId.StorageId,
+			SpaceId:   ref.ResourceId.SpaceId,
 			OpaqueId:  ref.ResourceId.OpaqueId,
 		},
 		Path: ref.Path,

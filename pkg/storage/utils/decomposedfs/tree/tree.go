@@ -520,7 +520,7 @@ func (t *Tree) RestoreRecycleItemFunc(ctx context.Context, spaceid, key, trashPa
 	}
 
 	targetRef := &provider.Reference{
-		ResourceId: &provider.ResourceId{StorageId: spaceid, OpaqueId: spaceid},
+		ResourceId: &provider.ResourceId{SpaceId: spaceid, OpaqueId: spaceid},
 		Path:       utils.MakeRelativePath(origin),
 	}
 
