@@ -60,13 +60,12 @@ func (fs *Decomposedfs) DenyGrant(ctx context.Context, ref *provider.Reference, 
 	u := ctxpkg.ContextMustGetUser(ctx)
 	grant.Creator = u.GetId()
 
-	ok, err := fs.p.HasPermission(ctx, node, func(rp *provider.ResourcePermissions) bool {
-		return rp.DenyGrant
-	})
+	rp, err := fs.p.AssemblePermissions(ctx, node)
+
 	switch {
 	case err != nil:
 		return errtypes.InternalError(err.Error())
-	case !ok:
+	case !rp.DenyGrant:
 		return errtypes.PermissionDenied(filepath.Join(node.ParentID, node.Name))
 	}
 

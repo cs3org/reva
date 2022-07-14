@@ -239,10 +239,6 @@ var _ = Describe("Recycle", func() {
 
 		When("a user deletes files from different spaces", func() {
 			BeforeEach(func() {
-				env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(provider.ResourcePermissions{
-					Stat:     true,
-					AddGrant: true,
-				}, nil).Times(1)
 				var err error
 				projectID, err = env.CreateTestStorageSpace("project", &provider.Quota{QuotaMaxBytes: 2000})
 				Expect(err).ToNot(HaveOccurred())

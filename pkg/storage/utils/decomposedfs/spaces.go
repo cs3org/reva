@@ -922,7 +922,7 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 	}
 
 	// add rootinfo
-	ps := n.SpaceRoot.PermissionSet(ctx)
+	ps, _ := n.SpaceRoot.PermissionSet(ctx)
 	space.RootInfo, _ = n.SpaceRoot.AsResourceInfo(ctx, &ps, nil, nil, false)
 	return space, nil
 }
