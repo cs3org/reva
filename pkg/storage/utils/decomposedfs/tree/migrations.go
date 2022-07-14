@@ -107,7 +107,12 @@ func (t *Tree) migration0002SpaceTypes() error {
 	_, err = d.Readdirnames(1) // Or f.Readdir(1)
 	if err == io.EOF {
 		// directory is empty we can delete
-		os.Remove(spaceTypesPath)
+		err := os.Remove(spaceTypesPath)
+		if err != nil {
+			logger.New().Error().Err(err).
+				Str("spacetypesdir", d.Name()).
+				Msg("could not delete")
+		}
 	} else {
 		logger.New().Error().Err(err).
 			Str("spacetypesdir", d.Name()).
