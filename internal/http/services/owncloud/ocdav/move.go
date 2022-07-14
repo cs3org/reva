@@ -31,7 +31,6 @@ import (
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/spacelookup"
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
-	rstatus "github.com/cs3org/reva/v2/pkg/rgrpc/status"
 	"github.com/cs3org/reva/v2/pkg/rhttp/router"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/utils"
@@ -257,24 +256,13 @@ func (s *svc) handleMove(ctx context.Context, w http.ResponseWriter, r *http.Req
 	}
 
 	if mRes.Status.Code != rpc.Code_CODE_OK {
-		status := rstatus.HTTPStatusFromCode(mRes.Status.Code)
-		m := mRes.Status.Message
-		switch mRes.Status.Code {
-		case rpc.Code_CODE_ABORTED:
-			status = http.StatusPreconditionFailed
-		case rpc.Code_CODE_UNIMPLEMENTED:
-			// We translate this into a Bad Gateway error as per https://www.rfc-editor.org/rfc/rfc4918#section-9.9.4
-			// > 502 (Bad Gateway) - This may occur when the destination is on another
-			// > server and the destination server refuses to accept the resource.
-			// > This could also occur when the destination is on another sub-section
-			// > of the same server namespace.
-			status = http.StatusBadGateway
+		if mRes.Status.Code == rpc.Code_CODE_PERMISSION_DENIED {
+			w.WriteHeader(http.StatusForbidden)
+			m := fmt.Sprintf("Permission denied to move %v", src.Path)
+			b, err := errors.Marshal(http.StatusForbidden, m, "")
+			errors.HandleWebdavError(&log, w, b, err)
 		}
-
-		w.WriteHeader(status)
-
-		b, err := errors.Marshal(status, m, "")
-		errors.HandleWebdavError(&log, w, b, err)
+		errors.HandleErrorStatus(&log, w, mRes.Status)
 		return
 	}
 
