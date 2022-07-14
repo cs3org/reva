@@ -290,7 +290,7 @@ var _ = Describe("Recycle", func() {
 				Expect(len(items)).To(Equal(1))
 
 				// use up 2000 byte quota
-				_, err = env.CreateTestFile("largefile", "largefile-blobid", projectID.OpaqueId, projectID.StorageId, 2000)
+				_, err = env.CreateTestFile("largefile", "largefile-blobid", projectID.OpaqueId, projectID.SpaceId, 2000)
 				Expect(err).ToNot(HaveOccurred())
 
 				err = env.Fs.RestoreRecycleItem(env.Ctx, &provider.Reference{ResourceId: projectID}, items[0].Key, "/", nil)

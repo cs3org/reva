@@ -64,7 +64,8 @@ func New(ctx context.Context, info tusd.FileInfo, lu *lookup.Lookup, tp Tree, p 
 	}
 
 	n, err := lu.NodeFromSpaceID(ctx, &provider.ResourceId{
-		StorageId: info.Storage["SpaceRoot"],
+		SpaceId:  info.Storage["SpaceRoot"],
+		OpaqueId: info.Storage["SpaceRoot"],
 	})
 	if err != nil {
 		return nil, errors.Wrap(err, "Decomposedfs: error getting space root node")

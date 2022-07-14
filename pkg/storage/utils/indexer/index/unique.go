@@ -74,20 +74,62 @@ func (idx *Unique) Init() error {
 
 // Lookup exact lookup by value.
 func (idx *Unique) Lookup(v string) ([]string, error) {
-	if idx.caseInsensitive {
-		v = strings.ToLower(v)
-	}
-	searchPath := path.Join(idx.indexRootDir, v)
-	oldname, err := idx.storage.ResolveSymlink(context.Background(), searchPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			err = &idxerrs.NotFoundErr{TypeName: idx.typeName, IndexBy: idx.indexBy, Value: v}
+	return idx.LookupCtx(context.Background(), v)
+}
+
+// LookupCtx retieves multiple exact values and allows passing in a context
+func (idx *Unique) LookupCtx(ctx context.Context, values ...string) ([]string, error) {
+	var allValues map[string]struct{}
+	if len(values) != 1 {
+		// prefetch all values with one request
+		entries, err := idx.storage.ReadDir(context.Background(), path.Join("/", idx.indexRootDir))
+		if err != nil {
+			return nil, err
 		}
-
-		return nil, err
+		// convert known values to set
+		allValues = make(map[string]struct{}, len(entries))
+		for _, e := range entries {
+			allValues[path.Base(e)] = struct{}{}
+		}
 	}
 
-	return []string{oldname}, nil
+	// convert requested values to set
+	valueSet := make(map[string]struct{}, len(values))
+	if idx.caseInsensitive {
+		for _, v := range values {
+			valueSet[strings.ToLower(v)] = struct{}{}
+		}
+	} else {
+		for _, v := range values {
+			valueSet[v] = struct{}{}
+		}
+	}
+
+	var matches = make([]string, 0)
+	for v := range valueSet {
+		if _, ok := allValues[v]; ok || len(allValues) == 0 {
+			oldname, err := idx.storage.ResolveSymlink(context.Background(), path.Join(idx.indexRootDir, v))
+			if err != nil {
+				continue
+			}
+			matches = append(matches, oldname)
+		}
+	}
+
+	if len(matches) == 0 {
+		var v string
+		switch len(values) {
+		case 0:
+			v = "none"
+		case 1:
+			v = values[0]
+		default:
+			v = "multiple"
+		}
+		return nil, &idxerrs.NotFoundErr{TypeName: idx.typeName, IndexBy: idx.indexBy, Value: v}
+	}
+
+	return matches, nil
 }
 
 // Add adds a value to the index, returns the path to the root-document

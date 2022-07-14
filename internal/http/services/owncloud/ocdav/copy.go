@@ -35,6 +35,7 @@ import (
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/net"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/spacelookup"
 	"github.com/cs3org/reva/v2/pkg/appctx"
+	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/rhttp"
 	"github.com/cs3org/reva/v2/pkg/rhttp/router"
 	"github.com/cs3org/reva/v2/pkg/utils"
@@ -486,6 +487,31 @@ func (s *svc) executeSpacesCopy(ctx context.Context, w http.ResponseWriter, clie
 }
 
 func (s *svc) prepareCopy(ctx context.Context, w http.ResponseWriter, r *http.Request, srcRef, dstRef *provider.Reference, log *zerolog.Logger) *copy {
+	client, err := s.getClient()
+	if err != nil {
+		log.Error().Err(err).Msg("error getting grpc client")
+		w.WriteHeader(http.StatusInternalServerError)
+		return nil
+	}
+
+	isChild, err := s.referenceIsChildOf(ctx, client, dstRef, srcRef)
+	if err != nil {
+		switch err.(type) {
+		case errtypes.IsNotSupported:
+			log.Error().Err(err).Msg("can not detect recursive copy operation. missing machine auth configuration?")
+			w.WriteHeader(http.StatusForbidden)
+		default:
+			log.Error().Err(err).Msg("error while trying to detect recursive copy operation")
+			w.WriteHeader(http.StatusInternalServerError)
+		}
+	}
+	if isChild {
+		w.WriteHeader(http.StatusConflict)
+		b, err := errors.Marshal(http.StatusBadRequest, "can not copy a folder into one of its children", "")
+		errors.HandleWebdavError(log, w, b, err)
+		return nil
+	}
+
 	oh := r.Header.Get(net.HeaderOverwrite)
 	overwrite, err := net.ParseOverwrite(oh)
 	if err != nil {
@@ -512,13 +538,6 @@ func (s *svc) prepareCopy(ctx context.Context, w http.ResponseWriter, r *http.Re
 	}
 
 	log.Debug().Bool("overwrite", overwrite).Str("depth", depth.String()).Msg("copy")
-
-	client, err := s.getClient()
-	if err != nil {
-		log.Error().Err(err).Msg("error getting grpc client")
-		w.WriteHeader(http.StatusInternalServerError)
-		return nil
-	}
 
 	srcStatReq := &provider.StatRequest{Ref: srcRef}
 	srcStatRes, err := client.Stat(ctx, srcStatReq)

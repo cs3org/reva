@@ -31,9 +31,9 @@ import (
 )
 
 const (
-	// StorageIDFilterType defines a new filter type for storage id.
+	// SpaceIDFilterType defines a new filter type for space id.
 	// TODO: Remove once this filter type is in the CS3 API.
-	StorageIDFilterType collaboration.Filter_Type = 7
+	SpaceIDFilterType collaboration.Filter_Type = 7
 )
 
 //go:generate make --no-print-directory -C ../.. mockery NAME=Manager
@@ -118,13 +118,13 @@ func ResourceIDFilter(id *provider.ResourceId) *collaboration.Filter {
 	}
 }
 
-// StorageIDFilter is an abstraction for creating filter by storage id.
-func StorageIDFilter(id string) *collaboration.Filter {
+// SpaceIDFilter is an abstraction for creating filter by space id.
+func SpaceIDFilter(id string) *collaboration.Filter {
 	return &collaboration.Filter{
-		Type: StorageIDFilterType,
+		Type: SpaceIDFilterType,
 		Term: &collaboration.Filter_ResourceId{
 			ResourceId: &provider.ResourceId{
-				StorageId: id,
+				SpaceId: id,
 			},
 		},
 	}
@@ -162,8 +162,8 @@ func MatchesFilter(share *collaboration.Share, filter *collaboration.Filter) boo
 		// This filter type is used to filter out "denial shares". These are currently implemented by having the permission "0".
 		// I.e. if the permission is 0 we don't want to show it.
 		return int(conversions.RoleFromResourcePermissions(share.Permissions.Permissions).OCSPermissions()) != 0
-	case StorageIDFilterType:
-		return share.ResourceId.StorageId == filter.GetResourceId().GetStorageId()
+	case SpaceIDFilterType:
+		return share.ResourceId.SpaceId == filter.GetResourceId().GetSpaceId()
 	default:
 		return false
 	}

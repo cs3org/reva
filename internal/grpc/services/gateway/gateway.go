@@ -56,7 +56,6 @@ type config struct {
 	DataGatewayEndpoint           string `mapstructure:"datagateway"`
 	PermissionsEndpoint           string `mapstructure:"permissionssvc"`
 	CommitShareToStorageGrant     bool   `mapstructure:"commit_share_to_storage_grant"`
-	CommitShareToStorageRef       bool   `mapstructure:"commit_share_to_storage_ref"`
 	DisableHomeCreationOnLogin    bool   `mapstructure:"disable_home_creation_on_login"`
 	TransferSharedSecret          string `mapstructure:"transfer_shared_secret"`
 	TransferExpires               int64  `mapstructure:"transfer_expires"`

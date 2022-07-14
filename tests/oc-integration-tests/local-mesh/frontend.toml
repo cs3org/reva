@@ -46,6 +46,7 @@ files_namespace = "/users"
 # - the oc js sdk is hardcoded to the remote.php/webdav so it will see the new tree
 # - TODO android? no sync ... but will see different tree
 webdav_namespace = "/home"
+machine_auth_apikey = "change-me-please"
 
 # serve /ocs which contains the sharing and user provisioning api of owncloud classic
 [http.services.ocs]

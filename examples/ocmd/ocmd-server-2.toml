@@ -18,7 +18,6 @@ ocmproviderauthorizersvc = "localhost:17000"
 datagateway = "http://localhost:17001/data"
 transfer_expires = 6 # give it a moment
 commit_share_to_storage_grant = true
-commit_share_to_storage_ref = true
 
 [grpc.services.authregistry]
 driver = "static"

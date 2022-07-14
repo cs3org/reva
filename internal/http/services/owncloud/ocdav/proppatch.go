@@ -180,6 +180,13 @@ func (s *svc) handleProppatch(ctx context.Context, w http.ResponseWriter, r *htt
 				}
 
 				if res.Status.Code != rpc.Code_CODE_OK {
+					status := rstatus.HTTPStatusFromCode(res.Status.Code)
+					if res.Status.Code == rpc.Code_CODE_ABORTED {
+						// aborted is used for etag an lock mismatches, which translates to 412
+						// in case a real Conflict response is needed, the calling code needs to send the header
+						status = http.StatusPreconditionFailed
+					}
+					m := res.Status.Message
 					if res.Status.Code == rpc.Code_CODE_PERMISSION_DENIED {
 						// check if user has access to resource
 						sRes, err := c.Stat(ctx, &provider.StatRequest{Ref: ref})
@@ -188,21 +195,19 @@ func (s *svc) handleProppatch(ctx context.Context, w http.ResponseWriter, r *htt
 							w.WriteHeader(http.StatusInternalServerError)
 							return nil, nil, false
 						}
-						status := http.StatusForbidden
-						m := fmt.Sprintf("Permission denied to remove properties on resource %v", ref.Path)
 						if sRes.Status.Code != rpc.Code_CODE_OK {
-							// return not found error so we dont leak existence of a file
+							// return not found error so we do not leak existence of a file
 							// TODO hide permission failed for users without access in every kind of request
 							// TODO should this be done in the driver?
 							status = http.StatusNotFound
-							m = fmt.Sprintf("%v not found", ref.Path)
 						}
-						w.WriteHeader(status)
-						b, err := errors.Marshal(status, m, "")
-						errors.HandleWebdavError(&log, w, b, err)
-						return nil, nil, false
 					}
-					errors.HandleErrorStatus(&log, w, res.Status)
+					if status == http.StatusNotFound {
+						m = "Resource not found" // mimic the oc10 error message
+					}
+					w.WriteHeader(status)
+					b, err := errors.Marshal(status, m, "")
+					errors.HandleWebdavError(&log, w, b, err)
 					return nil, nil, false
 				}
 				if key == "http://owncloud.org/ns/favorite" {
@@ -229,6 +234,13 @@ func (s *svc) handleProppatch(ctx context.Context, w http.ResponseWriter, r *htt
 				}
 
 				if res.Status.Code != rpc.Code_CODE_OK {
+					status := rstatus.HTTPStatusFromCode(res.Status.Code)
+					if res.Status.Code == rpc.Code_CODE_ABORTED {
+						// aborted is used for etag an lock mismatches, which translates to 412
+						// in case a real Conflict response is needed, the calling code needs to send the header
+						status = http.StatusPreconditionFailed
+					}
+					m := res.Status.Message
 					if res.Status.Code == rpc.Code_CODE_PERMISSION_DENIED {
 						// check if user has access to resource
 						sRes, err := c.Stat(ctx, &provider.StatRequest{Ref: ref})
@@ -237,21 +249,19 @@ func (s *svc) handleProppatch(ctx context.Context, w http.ResponseWriter, r *htt
 							w.WriteHeader(http.StatusInternalServerError)
 							return nil, nil, false
 						}
-						status := http.StatusForbidden
-						m := fmt.Sprintf("Permission denied to set properties on resource %v", ref.Path)
 						if sRes.Status.Code != rpc.Code_CODE_OK {
-							// return not found error so we dont leak existence of a file
+							// return not found error so we don't leak existence of a file
 							// TODO hide permission failed for users without access in every kind of request
 							// TODO should this be done in the driver?
 							status = http.StatusNotFound
-							m = fmt.Sprintf("%v not found", ref.Path)
 						}
-						w.WriteHeader(status)
-						b, err := errors.Marshal(status, m, "")
-						errors.HandleWebdavError(&log, w, b, err)
-						return nil, nil, false
 					}
-					errors.HandleErrorStatus(&log, w, res.Status)
+					if status == http.StatusNotFound {
+						m = "Resource not found" // mimic the oc10 error message
+					}
+					w.WriteHeader(status)
+					b, err := errors.Marshal(status, m, "")
+					errors.HandleWebdavError(&log, w, b, err)
 					return nil, nil, false
 				}
 

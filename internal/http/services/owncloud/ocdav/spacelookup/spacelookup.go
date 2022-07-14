@@ -31,6 +31,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/rgrpc/status"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/utils"
+	"google.golang.org/protobuf/types/known/fieldmaskpb"
 )
 
 // LookupReferenceForPath returns:
@@ -98,12 +99,13 @@ func LookUpStorageSpacesForPathWithChildren(ctx context.Context, client gateway.
 	// TODO use ListContainerStream to listen for changes
 	// retrieve a specific storage space
 	lSSReq := &storageProvider.ListStorageSpacesRequest{
-		Opaque: &typesv1beta1.Opaque{
-			Map: map[string]*typesv1beta1.OpaqueEntry{
-				"path":            {Decoder: "plain", Value: []byte(path)},
-				"withChildMounts": {Decoder: "plain", Value: []byte("true")},
-			}},
+		// get all fields, including root_info
+		FieldMask: &fieldmaskpb.FieldMask{Paths: []string{"*"}},
 	}
+	// list all providers at or below the given path
+	lSSReq.Opaque = utils.AppendPlainToOpaque(lSSReq.Opaque, "path", path)
+	// we want to get all metadata? really? when looking up the space roots we actually only want etag, mtime and type so we can construct a child ...
+	lSSReq.Opaque = utils.AppendPlainToOpaque(lSSReq.Opaque, "metadata", "*")
 
 	lSSRes, err := client.ListStorageSpaces(ctx, lSSReq)
 	if err != nil {
@@ -153,6 +155,10 @@ func MakeStorageSpaceReference(spaceID string, relativePath string) (storageProv
 	resourceID, err := storagespace.ParseID(spaceID)
 	if err != nil {
 		return storageProvider.Reference{}, err
+	}
+	// be tolerant about missing sharesstorageprovider id
+	if resourceID.StorageId == "" && resourceID.SpaceId == utils.ShareStorageSpaceID {
+		resourceID.StorageId = utils.ShareStorageProviderID
 	}
 	return storageProvider.Reference{
 		ResourceId: &resourceID,

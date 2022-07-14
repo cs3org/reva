@@ -257,7 +257,7 @@ func (fs *Decomposedfs) RestoreRecycleItem(ctx context.Context, ref *provider.Re
 		targetNode = tn
 	}
 
-	rn, parent, restoreFunc, err := fs.tp.RestoreRecycleItemFunc(ctx, ref.ResourceId.OpaqueId, key, relativePath, targetNode)
+	rn, parent, restoreFunc, err := fs.tp.RestoreRecycleItemFunc(ctx, ref.ResourceId.SpaceId, key, relativePath, targetNode)
 	if err != nil {
 		return err
 	}
@@ -335,7 +335,7 @@ func (fs *Decomposedfs) EmptyRecycle(ctx context.Context, ref *provider.Referenc
 	}
 	// TODO what permission should we check? we could check the root node of the user? or the owner permissions on his home root node?
 	// The current impl will wipe your own trash. or when no user provided the trash of 'root'
-	return os.RemoveAll(fs.getRecycleRoot(ctx, ref.ResourceId.StorageId))
+	return os.RemoveAll(fs.getRecycleRoot(ctx, ref.ResourceId.SpaceId))
 }
 
 func getResourceType(isDir bool) provider.ResourceType {

@@ -173,7 +173,8 @@ func (fs *Decomposedfs) GetQuota(ctx context.Context, ref *provider.Reference) (
 		return 0, 0, 0, errtypes.PermissionDenied(n.ID)
 	}
 
-	ri, err := n.AsResourceInfo(ctx, &rp, []string{"treesize", "quota"}, true)
+	// FIXME move treesize & quota to fieldmask
+	ri, err := n.AsResourceInfo(ctx, &rp, []string{"treesize", "quota"}, []string{}, true)
 	if err != nil {
 		return 0, 0, 0, err
 	}
@@ -291,6 +292,7 @@ func (fs *Decomposedfs) CreateDir(ctx context.Context, ref *provider.Reference) 
 	if n, err = fs.lu.NodeFromResource(ctx, parentRef); err != nil {
 		return
 	}
+	// TODO check if user has access to root / space
 	if !n.Exists {
 		return errtypes.PreconditionFailed(parentRef.Path)
 	}
@@ -498,7 +500,7 @@ func (fs *Decomposedfs) Move(ctx context.Context, oldRef, newRef *provider.Refer
 }
 
 // GetMD returns the metadata for the specified resource
-func (fs *Decomposedfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []string) (ri *provider.ResourceInfo, err error) {
+func (fs *Decomposedfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []string, fieldMask []string) (ri *provider.ResourceInfo, err error) {
 	var node *node.Node
 	if node, err = fs.lu.NodeFromResource(ctx, ref); err != nil {
 		return
@@ -517,11 +519,29 @@ func (fs *Decomposedfs) GetMD(ctx context.Context, ref *provider.Reference, mdKe
 		return nil, errtypes.PermissionDenied(node.ID)
 	}
 
-	return node.AsResourceInfo(ctx, &rp, mdKeys, utils.IsRelativeReference(ref))
+	md, err := node.AsResourceInfo(ctx, &rp, mdKeys, fieldMask, utils.IsRelativeReference(ref))
+	if err != nil {
+		return nil, err
+	}
+
+	addSpace := len(fieldMask) == 0
+	for _, p := range fieldMask {
+		if p == "space" || p == "*" {
+			addSpace = true
+			break
+		}
+	}
+	if addSpace {
+		if md.Space, err = fs.storageSpaceFromNode(ctx, node, node.InternalPath(), false, false); err != nil {
+			return nil, err
+		}
+	}
+
+	return md, nil
 }
 
 // ListFolder returns a list of resources in the specified folder
-func (fs *Decomposedfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys []string) (finfos []*provider.ResourceInfo, err error) {
+func (fs *Decomposedfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys []string, fieldMask []string) (finfos []*provider.ResourceInfo, err error) {
 	var n *node.Node
 	if n, err = fs.lu.NodeFromResource(ctx, ref); err != nil {
 		return
@@ -554,7 +574,7 @@ func (fs *Decomposedfs) ListFolder(ctx context.Context, ref *provider.Reference,
 		// add this childs permissions
 		pset := n.PermissionSet(ctx)
 		node.AddPermissions(&np, &pset)
-		if ri, err := children[i].AsResourceInfo(ctx, &np, mdKeys, utils.IsRelativeReference(ref)); err == nil {
+		if ri, err := children[i].AsResourceInfo(ctx, &np, mdKeys, fieldMask, utils.IsRelativeReference(ref)); err == nil {
 			finfos = append(finfos, ri)
 		}
 	}

@@ -46,8 +46,8 @@ func ref(provider string, path string) *storagep.Reference {
 	}
 	if provider == "ocis" {
 		r.ResourceId = &storagep.ResourceId{
-			StorageId: "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
-			OpaqueId:  "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
+			SpaceId:  "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
+			OpaqueId: "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
 		}
 	}
 	return r
@@ -284,6 +284,7 @@ var _ = Describe("storage providers", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			// TODO: FIXME both cases should work for all providers
+
 			Expect(res.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 			if provider != "nextcloud" {
 				Expect(res.Path).To(Equal(subdirPath))

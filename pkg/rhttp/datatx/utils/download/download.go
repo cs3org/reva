@@ -55,9 +55,12 @@ func GetOrHeadFile(w http.ResponseWriter, r *http.Request, fs storage.FS, spaceI
 		ref = &provider.Reference{Path: path.Join("/", fn)}
 	} else {
 		// build a storage space reference
-		storageid, opaqeid, _ := storagespace.SplitID(spaceID)
+		rid, err := storagespace.ParseID(spaceID)
+		if err != nil {
+			handleError(w, &sublog, err, "parse ID")
+		}
 		ref = &provider.Reference{
-			ResourceId: &provider.ResourceId{StorageId: storageid, OpaqueId: opaqeid},
+			ResourceId: &rid,
 			// ensure the relative path starts with '.'
 			Path: utils.MakeRelativePath(fn),
 		}
@@ -69,7 +72,7 @@ func GetOrHeadFile(w http.ResponseWriter, r *http.Request, fs storage.FS, spaceI
 
 	// do a stat to set a Content-Length header
 
-	if md, err = fs.GetMD(ctx, ref, nil); err != nil {
+	if md, err = fs.GetMD(ctx, ref, nil, []string{"size", "mimetype"}); err != nil {
 		handleError(w, &sublog, err, "stat")
 		return
 	}

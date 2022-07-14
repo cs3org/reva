@@ -33,7 +33,6 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/chunking"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/upload"
-	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/pkg/errors"
 	tusd "github.com/tus/tusd/pkg/handler"
@@ -85,7 +84,8 @@ func (fs *Decomposedfs) Upload(ctx context.Context, ref *provider.Reference, r i
 		info := uploadInfo.Info
 		uploadRef := &provider.Reference{
 			ResourceId: &provider.ResourceId{
-				StorageId: storagespace.FormatStorageID(info.MetaData["providerID"], info.Storage["SpaceRoot"]),
+				StorageId: info.MetaData["providerID"],
+				SpaceId:   info.Storage["SpaceRoot"],
 				OpaqueId:  info.Storage["SpaceRoot"],
 			},
 			Path: utils.MakeRelativePath(filepath.Join(info.MetaData["dir"], info.MetaData["filename"])),

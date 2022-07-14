@@ -178,6 +178,7 @@ type TokenInfo struct {
 
 	// if not password protected
 	StorageID string `json:"storage_id" xml:"storage_id"`
+	SpaceID   string `json:"space_id" xml:"space_id"`
 	OpaqueID  string `json:"opaque_id" xml:"opaque_id"`
 	Path      string `json:"path" xml:"path"`
 

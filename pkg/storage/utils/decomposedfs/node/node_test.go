@@ -55,8 +55,8 @@ var _ = Describe("Node", func() {
 
 	Describe("New", func() {
 		It("generates unique blob ids if none are given", func() {
-			n1 := node.New(env.SpaceRootRes.StorageId, id, "", name, 10, "", env.Owner.Id, env.Lookup)
-			n2 := node.New(env.SpaceRootRes.StorageId, id, "", name, 10, "", env.Owner.Id, env.Lookup)
+			n1 := node.New(env.SpaceRootRes.SpaceId, id, "", name, 10, "", env.Owner.Id, env.Lookup)
+			n2 := node.New(env.SpaceRootRes.SpaceId, id, "", name, 10, "", env.Owner.Id, env.Lookup)
 
 			Expect(len(n1.BlobID)).To(Equal(36))
 			Expect(n1.BlobID).ToNot(Equal(n2.BlobID))
@@ -184,14 +184,14 @@ var _ = Describe("Node", func() {
 		Describe("the Etag field", func() {
 			It("is set", func() {
 				perms := node.OwnerPermissions()
-				ri, err := n.AsResourceInfo(env.Ctx, &perms, []string{}, false)
+				ri, err := n.AsResourceInfo(env.Ctx, &perms, []string{}, []string{}, false)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(ri.Etag)).To(Equal(34))
 			})
 
 			It("changes when the tmtime is set", func() {
 				perms := node.OwnerPermissions()
-				ri, err := n.AsResourceInfo(env.Ctx, &perms, []string{}, false)
+				ri, err := n.AsResourceInfo(env.Ctx, &perms, []string{}, []string{}, false)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(ri.Etag)).To(Equal(34))
 				before := ri.Etag
@@ -199,7 +199,7 @@ var _ = Describe("Node", func() {
 				tmtime := time.Now()
 				Expect(n.SetTMTime(&tmtime)).To(Succeed())
 
-				ri, err = n.AsResourceInfo(env.Ctx, &perms, []string{}, false)
+				ri, err = n.AsResourceInfo(env.Ctx, &perms, []string{}, []string{}, false)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(ri.Etag)).To(Equal(34))
 				Expect(ri.Etag).ToNot(Equal(before))
@@ -215,7 +215,7 @@ var _ = Describe("Node", func() {
 				Expect(err).ToNot(HaveOccurred())
 
 				perms := node.OwnerPermissions()
-				ri, err := n.AsResourceInfo(env.Ctx, &perms, []string{}, false)
+				ri, err := n.AsResourceInfo(env.Ctx, &perms, []string{}, []string{}, false)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(ri.Opaque).ToNot(BeNil())
 				Expect(ri.Opaque.Map["lock"]).ToNot(BeNil())

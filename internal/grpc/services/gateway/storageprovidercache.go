@@ -105,7 +105,7 @@ func (c Caches) RemoveStat(user *userpb.User, res *provider.ResourceId) {
 	sid := ""
 	oid := ""
 	if res != nil {
-		sid = "sid:" + res.StorageId
+		sid = "sid:" + res.SpaceId
 		oid = "oid:" + res.OpaqueId
 	}
 
@@ -133,7 +133,7 @@ func (c Caches) RemoveListStorageProviders(res *provider.ResourceId) {
 	if res == nil {
 		return
 	}
-	sid := res.StorageId
+	sid := res.SpaceId
 
 	cache := c[listproviders]
 	for _, key := range cache.GetKeys() {
@@ -182,9 +182,9 @@ func (c *cachedRegistryClient) ListStorageProviders(ctx context.Context, in *reg
 
 	user := ctxpkg.ContextMustGetUser(ctx)
 
-	storageID := sdk.DecodeOpaqueMap(in.Opaque)["storage_id"]
+	spaceID := sdk.DecodeOpaqueMap(in.Opaque)["space_id"]
 
-	key := user.GetId().GetOpaqueId() + "!" + storageID
+	key := user.GetId().GetOpaqueId() + "!" + spaceID
 	if key != "!" {
 		s := &registry.ListStorageProvidersResponse{}
 		if err := pullFromCache(cache, key, s); err == nil {
@@ -198,9 +198,9 @@ func (c *cachedRegistryClient) ListStorageProviders(ctx context.Context, in *reg
 		return nil, err
 	case resp.Status.Code != rpc.Code_CODE_OK:
 		return resp, nil
-	case storageID == "":
+	case spaceID == "":
 		return resp, nil
-	case storageID == utils.ShareStorageProviderID: // TODO do we need to compare providerid and spaceid separately?
+	case spaceID == utils.ShareStorageSpaceID: // TODO do we need to compare providerid and spaceid separately?
 		return resp, nil
 	default:
 		return resp, pushToCache(cache, key, resp)
@@ -229,24 +229,37 @@ type cachedAPIClient struct {
 // generates a user specific key pointing to ref - used for statcache
 // a key looks like: uid:1234-1233!sid:5678-5677!oid:9923-9934!path:/path/to/source
 // as you see it adds "uid:"/"sid:"/"oid:" prefixes to the uuids so they can be differentiated
-func statKey(user *userpb.User, ref *provider.Reference, metaDataKeys []string) string {
-	if ref == nil || ref.ResourceId == nil || ref.ResourceId.StorageId == "" {
+func statKey(user *userpb.User, ref *provider.Reference, metaDataKeys, fieldMaskPaths []string) string {
+	if ref == nil || ref.ResourceId == nil || ref.ResourceId.SpaceId == "" {
 		return ""
 	}
 
-	key := "uid:" + user.Id.OpaqueId + "!sid:" + ref.ResourceId.StorageId + "!oid:" + ref.ResourceId.OpaqueId + "!path:" + ref.Path
+	key := strings.Builder{}
+	key.WriteString("uid:")
+	key.WriteString(user.Id.OpaqueId)
+	key.WriteString("!sid:")
+	key.WriteString(ref.ResourceId.SpaceId)
+	key.WriteString("!oid:")
+	key.WriteString(ref.ResourceId.OpaqueId)
+	key.WriteString("!path:")
+	key.WriteString(ref.Path)
 	for _, k := range metaDataKeys {
-		key += "!mdk:" + k
+		key.WriteString("!mdk:")
+		key.WriteString(k)
+	}
+	for _, p := range fieldMaskPaths {
+		key.WriteString("!fmp:")
+		key.WriteString(p)
 	}
 
-	return key
+	return key.String()
 }
 
 // Stat looks in cache first before forwarding to storage provider
 func (c *cachedAPIClient) Stat(ctx context.Context, in *provider.StatRequest, opts ...grpc.CallOption) (*provider.StatResponse, error) {
 	cache := c.caches[stat]
 
-	key := statKey(ctxpkg.ContextMustGetUser(ctx), in.Ref, in.ArbitraryMetadataKeys)
+	key := statKey(ctxpkg.ContextMustGetUser(ctx), in.GetRef(), in.GetArbitraryMetadataKeys(), in.GetFieldMask().GetPaths())
 	if key != "" {
 		s := &provider.StatResponse{}
 		if err := pullFromCache(cache, key, s); err == nil {

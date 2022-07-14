@@ -27,8 +27,10 @@ import (
 
 	"github.com/ReneKroon/ttlcache/v2"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+	gatewayv1beta1 "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/net"
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
@@ -42,9 +44,13 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/favorite/registry"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/templates"
 	rtrace "github.com/cs3org/reva/v2/pkg/trace"
+	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/mitchellh/mapstructure"
 	"github.com/rs/zerolog"
 	"go.opentelemetry.io/otel/trace"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 )
 
 // name is the Tracer name used to identify this instrumentation library.
@@ -107,6 +113,8 @@ type Config struct {
 	Product                string                            `mapstructure:"product"`
 	ProductName            string                            `mapstructure:"product_name"`
 	ProductVersion         string                            `mapstructure:"product_version"`
+
+	MachineAuthAPIKey string `mapstructure:"machine_auth_apikey"`
 }
 
 func (c *Config) init() {
@@ -383,4 +391,101 @@ func addAccessHeaders(w http.ResponseWriter, r *http.Request) {
 	if r.TLS != nil {
 		headers.Set("Strict-Transport-Security", "max-age=63072000")
 	}
+}
+
+func authContextForUser(client gatewayv1beta1.GatewayAPIClient, userID *userpb.UserId, machineAuthAPIKey string) (context.Context, error) {
+	if machineAuthAPIKey == "" {
+		return nil, errtypes.NotSupported("machine auth not configured")
+	}
+	// Get auth
+	granteeCtx := ctxpkg.ContextSetUser(context.Background(), &userpb.User{Id: userID})
+
+	authRes, err := client.Authenticate(granteeCtx, &gateway.AuthenticateRequest{
+		Type:         "machine",
+		ClientId:     "userid:" + userID.OpaqueId,
+		ClientSecret: machineAuthAPIKey,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if authRes.GetStatus().GetCode() != rpc.Code_CODE_OK {
+		return nil, errtypes.NewErrtypeFromStatus(authRes.Status)
+	}
+	granteeCtx = metadata.AppendToOutgoingContext(granteeCtx, ctxpkg.TokenHeader, authRes.Token)
+	return granteeCtx, nil
+}
+
+func (s *svc) sspReferenceIsChildOf(ctx context.Context, client gatewayv1beta1.GatewayAPIClient, child, parent *provider.Reference) (bool, error) {
+	parentStatRes, err := client.Stat(ctx, &provider.StatRequest{Ref: parent})
+	if err != nil {
+		return false, err
+	}
+	parentAuthCtx, err := authContextForUser(client, parentStatRes.Info.Owner, s.c.MachineAuthAPIKey)
+	if err != nil {
+		return false, err
+	}
+	parentPathRes, err := client.GetPath(parentAuthCtx, &provider.GetPathRequest{ResourceId: parentStatRes.Info.Id})
+	if err != nil {
+		return false, err
+	}
+
+	childStatRes, err := client.Stat(ctx, &provider.StatRequest{Ref: child})
+	if err != nil {
+		return false, err
+	}
+	if childStatRes.Status.Code == rpc.Code_CODE_NOT_FOUND && utils.IsRelativeReference(child) && child.Path != "." {
+		childParentRef := &provider.Reference{
+			ResourceId: child.ResourceId,
+			Path:       utils.MakeRelativePath(path.Dir(child.Path)),
+		}
+		childStatRes, err = client.Stat(ctx, &provider.StatRequest{Ref: childParentRef})
+		if err != nil {
+			return false, err
+		}
+	}
+	childAuthCtx, err := authContextForUser(client, childStatRes.Info.Owner, s.c.MachineAuthAPIKey)
+	if err != nil {
+		return false, err
+	}
+	childPathRes, err := client.GetPath(childAuthCtx, &provider.GetPathRequest{ResourceId: childStatRes.Info.Id})
+	if err != nil {
+		return false, err
+	}
+
+	cp := childPathRes.Path + "/"
+	pp := parentPathRes.Path + "/"
+	return strings.HasPrefix(cp, pp), nil
+}
+
+func (s *svc) referenceIsChildOf(ctx context.Context, client gatewayv1beta1.GatewayAPIClient, child, parent *provider.Reference) (bool, error) {
+	if child.ResourceId.SpaceId != parent.ResourceId.SpaceId {
+		return false, nil // Not on the same storage -> not a child
+	}
+
+	if utils.ResourceIDEqual(child.ResourceId, parent.ResourceId) {
+		return strings.HasPrefix(child.Path, parent.Path+"/"), nil // Relative to the same resource -> compare paths
+	}
+
+	if child.ResourceId.SpaceId == utils.ShareStorageSpaceID || parent.ResourceId.SpaceId == utils.ShareStorageSpaceID {
+		// the sharesstorageprovider needs some special handling
+		return s.sspReferenceIsChildOf(ctx, client, child, parent)
+	}
+
+	// the references are on the same storage but relative to different resources
+	// -> we need to get the path for both resources
+	childPathRes, err := client.GetPath(ctx, &provider.GetPathRequest{ResourceId: child.ResourceId})
+	if err != nil {
+		if st, ok := status.FromError(err); ok && st.Code() == codes.Unimplemented {
+			return false, nil // the storage provider doesn't support GetPath() -> rely on it taking care of recursion issues
+		}
+		return false, err
+	}
+	parentPathRes, err := client.GetPath(ctx, &provider.GetPathRequest{ResourceId: parent.ResourceId})
+	if err != nil {
+		return false, err
+	}
+
+	cp := path.Join(childPathRes.Path, child.Path) + "/"
+	pp := path.Join(parentPathRes.Path, parent.Path) + "/"
+	return strings.HasPrefix(cp, pp), nil
 }

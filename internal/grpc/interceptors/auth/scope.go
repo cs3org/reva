@@ -237,9 +237,16 @@ func extractRefFromListProvidersReq(v *registry.ListStorageProvidersRequest) (*p
 	ref := &provider.Reference{}
 	if v.Opaque != nil && v.Opaque.Map != nil {
 		if e, ok := v.Opaque.Map["storage_id"]; ok {
-			ref.ResourceId = &provider.ResourceId{
-				StorageId: string(e.Value),
+			if ref.ResourceId == nil {
+				ref.ResourceId = &provider.ResourceId{}
 			}
+			ref.ResourceId.StorageId = string(e.Value)
+		}
+		if e, ok := v.Opaque.Map["space_id"]; ok {
+			if ref.ResourceId == nil {
+				ref.ResourceId = &provider.ResourceId{}
+			}
+			ref.ResourceId.SpaceId = string(e.Value)
 		}
 		if e, ok := v.Opaque.Map["opaque_id"]; ok {
 			if ref.ResourceId == nil {

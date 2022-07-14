@@ -310,6 +310,15 @@ func (t *Tree) CreateDir(ctx context.Context, n *node.Node) (err error) {
 
 // Move replaces the target with the source
 func (t *Tree) Move(ctx context.Context, oldNode *node.Node, newNode *node.Node) (err error) {
+	if oldNode.SpaceID != newNode.SpaceID {
+		// WebDAV RFC https://www.rfc-editor.org/rfc/rfc4918#section-9.9.4 says to use
+		// > 502 (Bad Gateway) - This may occur when the destination is on another
+		// > server and the destination server refuses to accept the resource.
+		// > This could also occur when the destination is on another sub-section
+		// > of the same server namespace.
+		// but we only have a not supported error
+		return errtypes.NotSupported("cannot move across spaces")
+	}
 	// if target exists delete it without trashing it
 	if newNode.Exists {
 		// TODO make sure all children are deleted
@@ -511,7 +520,7 @@ func (t *Tree) RestoreRecycleItemFunc(ctx context.Context, spaceid, key, trashPa
 	}
 
 	targetRef := &provider.Reference{
-		ResourceId: &provider.ResourceId{StorageId: spaceid, OpaqueId: spaceid},
+		ResourceId: &provider.ResourceId{SpaceId: spaceid, OpaqueId: spaceid},
 		Path:       utils.MakeRelativePath(origin),
 	}
 

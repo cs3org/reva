@@ -455,8 +455,7 @@ func (h *Handler) extractPermissions(reqRole string, reqPermissions string, ri *
 		role = conversions.RoleFromOCSPermissions(permissions)
 	}
 
-	existingPermissions := conversions.RoleFromResourcePermissions(ri.PermissionSet).OCSPermissions()
-	if !existingPermissions.Contain(permissions) {
+	if !sufficientPermissions(ri.PermissionSet, role.CS3ResourcePermissions()) {
 		return nil, nil, &ocsError{
 			Code:    http.StatusNotFound,
 			Message: "Cannot set the requested share permissions",
@@ -864,7 +863,8 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 			// first stat mount point, but the shares storage provider only handles accepted shares so we send the try to make the requests for only those
 			if rs.State == collaboration.ShareState_SHARE_STATE_ACCEPTED {
 				mountID := &provider.ResourceId{
-					StorageId: storagespace.FormatStorageID(utils.ShareStorageProviderID, utils.ShareStorageSpaceID),
+					StorageId: utils.ShareStorageProviderID,
+					SpaceId:   utils.ShareStorageSpaceID,
 					OpaqueId:  rs.Share.Id.OpaqueId,
 				}
 				info, status, err = h.getResourceInfoByID(ctx, client, mountID)
@@ -1398,4 +1398,11 @@ func (h *Handler) getPoolClient() (gateway.GatewayAPIClient, error) {
 
 func (h *Handler) getHomeNamespace(u *userpb.User) string {
 	return templates.WithUser(u, h.homeNamespace)
+}
+
+// sufficientPermissions returns true if the `existing` permissions contain the `requested` permissions
+func sufficientPermissions(existing, requested *provider.ResourcePermissions) bool {
+	ep := conversions.RoleFromResourcePermissions(existing).OCSPermissions()
+	rp := conversions.RoleFromResourcePermissions(requested).OCSPermissions()
+	return ep.Contain(rp)
 }

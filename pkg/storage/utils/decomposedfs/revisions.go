@@ -107,7 +107,7 @@ func (fs *Decomposedfs) DownloadRevision(ctx context.Context, ref *provider.Refe
 	}
 	log.Debug().Str("revisionKey", revisionKey).Msg("DownloadRevision")
 
-	spaceID := ref.ResourceId.OpaqueId
+	spaceID := ref.ResourceId.SpaceId
 	// check if the node is available and has not been deleted
 	n, err := node.ReadNode(ctx, fs.lu, spaceID, kp[0], false)
 	if err != nil {
@@ -152,7 +152,7 @@ func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Refer
 		return errtypes.NotFound(revisionKey)
 	}
 
-	spaceID := ref.ResourceId.StorageId
+	spaceID := ref.ResourceId.SpaceId
 	// check if the node is available and has not been deleted
 	n, err := node.ReadNode(ctx, fs.lu, spaceID, kp[0], false)
 	if err != nil {

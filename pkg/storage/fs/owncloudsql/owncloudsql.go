@@ -526,7 +526,10 @@ func (fs *owncloudsqlfs) convertToResourceInfo(ctx context.Context, entry *filec
 
 	isDir := entry.MimeTypeString == "httpd/unix-directory"
 	ri := &provider.ResourceInfo{
-		Id:       &provider.ResourceId{StorageId: strconv.Itoa(entry.Storage), OpaqueId: strconv.Itoa(entry.ID)},
+		Id: &provider.ResourceId{
+			// return ownclouds numeric storage id as the space id!
+			SpaceId: strconv.Itoa(entry.Storage), OpaqueId: strconv.Itoa(entry.ID),
+		},
 		Path:     filepath.Base(ip),
 		Type:     getResourceType(isDir),
 		Etag:     entry.Etag,
@@ -1307,7 +1310,7 @@ func (fs *owncloudsqlfs) Move(ctx context.Context, oldRef, newRef *provider.Refe
 	return nil
 }
 
-func (fs *owncloudsqlfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []string) (*provider.ResourceInfo, error) {
+func (fs *owncloudsqlfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []string, fieldMask []string) (*provider.ResourceInfo, error) {
 	ip, err := fs.resolve(ctx, ref)
 	if err != nil {
 		// TODO return correct errtype
@@ -1351,7 +1354,7 @@ func (fs *owncloudsqlfs) GetMD(ctx context.Context, ref *provider.Reference, mdK
 	return fs.convertToResourceInfo(ctx, entry, ip, mdKeys)
 }
 
-func (fs *owncloudsqlfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys []string) ([]*provider.ResourceInfo, error) {
+func (fs *owncloudsqlfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys, fieldMask []string) ([]*provider.ResourceInfo, error) {
 	log := appctx.GetLogger(ctx)
 
 	ip, err := fs.resolve(ctx, ref)

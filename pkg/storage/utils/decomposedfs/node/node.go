@@ -204,10 +204,14 @@ func ReadNode(ctx context.Context, lu PathLookup, spaceID, nodeID string, canLis
 	}
 	r.Exists = true
 
+	// TODO ReadNode should not check permissions
 	if !canListDisabledSpace && r.IsDisabled() {
 		// no permission = not found
 		return nil, errtypes.NotFound(spaceID)
 	}
+
+	// if current user cannot stat the root return not found?
+	// no for shares the root might be a different resource
 
 	// check if this is a space root
 	if spaceID == nodeID {
@@ -584,7 +588,7 @@ func (n *Node) IsDir() bool {
 }
 
 // AsResourceInfo return the node as CS3 ResourceInfo
-func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissions, mdKeys []string, returnBasename bool) (ri *provider.ResourceInfo, err error) {
+func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissions, mdKeys, fieldMask []string, returnBasename bool) (ri *provider.ResourceInfo, err error) {
 	sublog := appctx.GetLogger(ctx).With().Interface("node", n.ID).Logger()
 
 	var fn string
@@ -613,7 +617,7 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 		// nodeType = provider.ResourceType_RESOURCE_TYPE_REFERENCE
 	}
 
-	id := &provider.ResourceId{StorageId: n.SpaceID, OpaqueId: n.ID}
+	id := &provider.ResourceId{SpaceId: n.SpaceID, OpaqueId: n.ID}
 
 	if returnBasename {
 		fn = n.Name
@@ -627,8 +631,8 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 	var parentID *provider.ResourceId
 	if p, err := n.Parent(); err == nil {
 		parentID = &provider.ResourceId{
-			StorageId: p.SpaceID,
-			OpaqueId:  p.ID,
+			SpaceId:  p.SpaceID,
+			OpaqueId: p.ID,
 		}
 	}
 
@@ -686,15 +690,25 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 		mdKeysMap[k] = struct{}{}
 	}
 
-	var returnAllKeys bool
+	var returnAllMetadata bool
 	if _, ok := mdKeysMap["*"]; len(mdKeys) == 0 || ok {
-		returnAllKeys = true
+		returnAllMetadata = true
 	}
 
 	metadata := map[string]string{}
 
+	fieldMaskKeysMap := make(map[string]struct{})
+	for _, k := range fieldMask {
+		fieldMaskKeysMap[k] = struct{}{}
+	}
+
+	var returnAllFields bool
+	if _, ok := fieldMaskKeysMap["*"]; len(fieldMask) == 0 || ok {
+		returnAllFields = true
+	}
+
 	// read favorite flag for the current user
-	if _, ok := mdKeysMap[FavoriteKey]; returnAllKeys || ok {
+	if _, ok := mdKeysMap[FavoriteKey]; returnAllMetadata || ok {
 		favorite := ""
 		if u, ok := ctxpkg.ContextGetUser(ctx); ok {
 			// the favorite flag is specific to the user, so we need to incorporate the userid
@@ -715,7 +729,8 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 		metadata[FavoriteKey] = favorite
 	}
 	// read locks
-	if _, ok := mdKeysMap[LockdiscoveryKey]; returnAllKeys || ok {
+	// FIXME move to fieldmask
+	if _, ok := mdKeysMap[LockdiscoveryKey]; returnAllMetadata || ok {
 		if n.hasLocks(ctx) {
 			err = readLocksIntoOpaque(ctx, n, ri)
 			if err != nil {
@@ -725,21 +740,36 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 	}
 
 	// share indicator
-	if _, ok := mdKeysMap[ShareTypesKey]; returnAllKeys || ok {
-		if n.hasUserShares(ctx) {
-			metadata[ShareTypesKey] = UserShareType
+	if _, ok := fieldMaskKeysMap["share-types"]; returnAllFields || ok {
+		granteeTypes := n.getGranteeTypes(ctx)
+		if len(granteeTypes) > 0 {
+			// TODO add optional property to CS3 ResourceInfo to transport grants?
+			var s strings.Builder
+			first := true
+			for _, t := range granteeTypes {
+				if !first {
+					s.WriteString(",")
+				} else {
+					first = false
+				}
+				s.WriteString(strconv.Itoa(int(t)))
+			}
+			ri.Opaque = utils.AppendPlainToOpaque(ri.Opaque, "share-types", s.String())
 		}
 	}
 
 	// checksums
-	if _, ok := mdKeysMap[ChecksumsKey]; (nodeType == provider.ResourceType_RESOURCE_TYPE_FILE) && (returnAllKeys || ok) {
+	// FIXME move to fieldmask
+	if _, ok := mdKeysMap[ChecksumsKey]; (nodeType == provider.ResourceType_RESOURCE_TYPE_FILE) && (returnAllMetadata || ok) {
 		// TODO which checksum was requested? sha1 adler32 or md5? for now hardcode sha1?
+		// TODO make ResourceInfo carry multiple checksums
 		readChecksumIntoResourceChecksum(ctx, nodePath, storageprovider.XSSHA1, ri)
 		readChecksumIntoOpaque(ctx, nodePath, storageprovider.XSMD5, ri)
 		readChecksumIntoOpaque(ctx, nodePath, storageprovider.XSAdler32, ri)
 	}
 	// quota
-	if _, ok := mdKeysMap[QuotaKey]; (nodeType == provider.ResourceType_RESOURCE_TYPE_CONTAINER) && returnAllKeys || ok {
+	// FIXME move to fieldmask
+	if _, ok := mdKeysMap[QuotaKey]; (nodeType == provider.ResourceType_RESOURCE_TYPE_CONTAINER) && returnAllMetadata || ok {
 		if n.SpaceRoot != nil && n.SpaceRoot.InternalPath() != "" {
 			readQuotaIntoOpaque(ctx, n.SpaceRoot.InternalPath(), ri)
 		}
@@ -757,7 +787,7 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 			}
 			// only read when key was requested
 			k := attrs[i][len(xattrs.MetadataPrefix):]
-			if _, ok := mdKeysMap[k]; returnAllKeys || ok {
+			if _, ok := mdKeysMap[k]; returnAllMetadata || ok {
 				if val, err := xattrs.Get(nodePath, attrs[i]); err == nil {
 					metadata[k] = val
 				} else {
@@ -791,7 +821,7 @@ func readChecksumIntoResourceChecksum(ctx context.Context, nodePath, algo string
 	case xattrs.IsAttrUnset(err):
 		appctx.GetLogger(ctx).Debug().Err(err).Str("nodepath", nodePath).Str("algorithm", algo).Msg("checksum not set")
 	case xattrs.IsNotExist(err):
-		appctx.GetLogger(ctx).Error().Err(err).Str("nodepath", nodePath).Str("algorithm", algo).Msg("file not fount")
+		appctx.GetLogger(ctx).Error().Err(err).Str("nodepath", nodePath).Str("algorithm", algo).Msg("file not found")
 	default:
 		appctx.GetLogger(ctx).Error().Err(err).Str("nodepath", nodePath).Str("algorithm", algo).Msg("could not read checksum")
 	}
@@ -813,7 +843,7 @@ func readChecksumIntoOpaque(ctx context.Context, nodePath, algo string, ri *prov
 	case xattrs.IsAttrUnset(err):
 		appctx.GetLogger(ctx).Debug().Err(err).Str("nodepath", nodePath).Str("algorithm", algo).Msg("checksum not set")
 	case xattrs.IsNotExist(err):
-		appctx.GetLogger(ctx).Error().Err(err).Str("nodepath", nodePath).Str("algorithm", algo).Msg("file not fount")
+		appctx.GetLogger(ctx).Error().Err(err).Str("nodepath", nodePath).Str("algorithm", algo).Msg("file not found")
 	default:
 		appctx.GetLogger(ctx).Error().Err(err).Str("nodepath", nodePath).Str("algorithm", algo).Msg("could not read checksum")
 	}
@@ -1084,19 +1114,28 @@ func ReadBlobIDAttr(path string) (string, error) {
 	return attr, nil
 }
 
-func (n *Node) hasUserShares(ctx context.Context) bool {
-	g, err := n.ListGrantees(ctx)
-	if err != nil {
-		appctx.GetLogger(ctx).Error().Err(err).Msg("hasUserShares: listGrantees")
-		return false
-	}
-
-	for i := range g {
-		if strings.HasPrefix(g[i], xattrs.GrantUserAcePrefix) {
-			return true
+func (n *Node) getGranteeTypes(ctx context.Context) []provider.GranteeType {
+	types := []provider.GranteeType{}
+	if g, err := n.ListGrantees(ctx); err == nil {
+		hasUserShares, hasGroupShares := false, false
+		for i := range g {
+			switch {
+			case !hasUserShares && strings.HasPrefix(g[i], xattrs.GrantUserAcePrefix):
+				hasUserShares = true
+			case !hasGroupShares && strings.HasPrefix(g[i], xattrs.GrantGroupAcePrefix):
+				hasGroupShares = true
+			case hasUserShares && hasGroupShares:
+				break
+			}
+		}
+		if hasUserShares {
+			types = append(types, provider.GranteeType_GRANTEE_TYPE_USER)
+		}
+		if hasGroupShares {
+			types = append(types, provider.GranteeType_GRANTEE_TYPE_GROUP)
 		}
 	}
-	return false
+	return types
 }
 
 func parseMTime(v string) (t time.Time, err error) {

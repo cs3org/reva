@@ -67,7 +67,7 @@ var _ = Describe("File uploads", func() {
 	BeforeEach(func() {
 		ref = &provider.Reference{
 			ResourceId: &provider.ResourceId{
-				StorageId: "u-s-e-r-id",
+				SpaceId: "u-s-e-r-id",
 			},
 			Path: "/foo",
 		}
@@ -83,7 +83,8 @@ var _ = Describe("File uploads", func() {
 
 		rootRef = &provider.Reference{
 			ResourceId: &provider.ResourceId{
-				StorageId: "u-s-e-r-id",
+				SpaceId:  "u-s-e-r-id",
+				OpaqueId: "u-s-e-r-id",
 			},
 			Path: "/",
 		}
@@ -124,7 +125,7 @@ var _ = Describe("File uploads", func() {
 		Expect(resp.Status.Code).To(Equal(v1beta11.Code_CODE_OK))
 		resID, err := storagespace.ParseID(resp.StorageSpace.Id.OpaqueId)
 		Expect(err).ToNot(HaveOccurred())
-		ref.ResourceId = &provider.ResourceId{StorageId: resID.StorageId, OpaqueId: resID.OpaqueId}
+		ref.ResourceId = &resID
 	})
 
 	Context("the user's quota is exceeded", func() {
@@ -193,7 +194,7 @@ var _ = Describe("File uploads", func() {
 				Expect(uploadIds["simple"]).ToNot(BeEmpty())
 				Expect(uploadIds["tus"]).ToNot(BeEmpty())
 
-				resources, err := fs.ListFolder(ctx, rootRef, []string{})
+				resources, err := fs.ListFolder(ctx, rootRef, []string{}, []string{})
 
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(resources)).To(Equal(0))
@@ -209,7 +210,7 @@ var _ = Describe("File uploads", func() {
 				Expect(uploadIds["simple"]).ToNot(BeEmpty())
 				Expect(uploadIds["tus"]).ToNot(BeEmpty())
 
-				resources, err := fs.ListFolder(ctx, rootRef, []string{})
+				resources, err := fs.ListFolder(ctx, rootRef, []string{}, []string{})
 
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(resources)).To(Equal(0))
@@ -246,7 +247,7 @@ var _ = Describe("File uploads", func() {
 				Expect(err).ToNot(HaveOccurred())
 				bs.AssertCalled(GinkgoT(), "Upload", mock.Anything, mock.Anything, mock.Anything)
 
-				resources, err := fs.ListFolder(ctx, rootRef, []string{})
+				resources, err := fs.ListFolder(ctx, rootRef, []string{}, []string{})
 
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(resources)).To(Equal(1))
@@ -284,7 +285,7 @@ var _ = Describe("File uploads", func() {
 				Expect(err).ToNot(HaveOccurred())
 				bs.AssertCalled(GinkgoT(), "Upload", mock.Anything, mock.Anything, mock.Anything)
 
-				resources, err := fs.ListFolder(ctx, rootRef, []string{})
+				resources, err := fs.ListFolder(ctx, rootRef, []string{}, []string{})
 
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(resources)).To(Equal(1))
@@ -303,7 +304,7 @@ var _ = Describe("File uploads", func() {
 
 				Expect(err).To(HaveOccurred())
 
-				resources, err := fs.ListFolder(ctx, rootRef, []string{})
+				resources, err := fs.ListFolder(ctx, rootRef, []string{}, []string{})
 
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(resources)).To(Equal(0))

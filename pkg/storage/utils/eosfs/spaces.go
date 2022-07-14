@@ -73,7 +73,7 @@ func (fs *eosfs) ListStorageSpaces(ctx context.Context, filter []*provider.ListS
 	for i := range filter {
 		switch filter[i].Type {
 		case provider.ListStorageSpacesRequest_Filter_TYPE_ID:
-			spaceID, _, _ = storagespace.SplitID(filter[i].GetId().OpaqueId)
+			_, spaceID, _, _ = storagespace.SplitID(filter[i].GetId().OpaqueId)
 		case provider.ListStorageSpacesRequest_Filter_TYPE_PATH:
 			spacePath = filter[i].GetPath()
 		case provider.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE:
@@ -228,7 +228,7 @@ func (fs *eosfs) listProjectStorageSpaces(ctx context.Context, user *userpb.User
 	for rows.Next() {
 		var name, relPath string
 		if err = rows.Scan(&name, &relPath); err == nil {
-			info, err := fs.GetMD(ctx, &provider.Reference{Path: relPath}, []string{})
+			info, err := fs.GetMD(ctx, &provider.Reference{Path: relPath}, []string{}, nil)
 			if err == nil {
 				if (spaceID == "" || spaceID == info.Id.OpaqueId) && (spacePath == "" || spacePath == relPath) {
 					// If the request was for a relative ref, return just the base path

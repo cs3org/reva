@@ -32,7 +32,6 @@ import (
 	"github.com/cs3org/reva/v2/pkg/rgrpc/status"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/grants"
-	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/pkg/errors"
 )
@@ -114,13 +113,6 @@ func (s *svc) UpdateShare(ctx context.Context, req *collaboration.UpdateShareReq
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error calling UpdateShare")
 	}
-
-	// if we don't need to commit we return earlier
-	if !s.c.CommitShareToStorageGrant && !s.c.CommitShareToStorageRef {
-		return res, nil
-	}
-
-	// TODO(labkode): if both commits are enabled they could be done concurrently.
 
 	if s.c.CommitShareToStorageGrant {
 		updateGrantStatus, err := s.updateGrant(ctx, res.GetShare().GetResourceId(),
@@ -559,12 +551,7 @@ func (s *svc) addShare(ctx context.Context, req *collaboration.CreateShareReques
 	if res.Status.Code != rpc.Code_CODE_OK {
 		return res, nil
 	}
-	// if we don't need to commit we return earlier
-	if !s.c.CommitShareToStorageGrant && !s.c.CommitShareToStorageRef {
-		return res, nil
-	}
 
-	// TODO(labkode): if both commits are enabled they could be done concurrently.
 	if s.c.CommitShareToStorageGrant {
 		// If the share is a denial we call  denyGrant instead.
 		var status *rpc.Status
@@ -652,7 +639,7 @@ func (s *svc) removeShare(ctx context.Context, req *collaboration.RemoveShareReq
 	// if we need to commit the share, we need the resource it points to.
 	var share *collaboration.Share
 	// FIXME: I will cause a panic as share will be nil when I'm false
-	if s.c.CommitShareToStorageGrant || s.c.CommitShareToStorageRef {
+	if s.c.CommitShareToStorageGrant {
 		getShareReq := &collaboration.GetShareRequest{
 			Ref: req.Ref,
 		}
@@ -681,12 +668,6 @@ func (s *svc) removeShare(ctx context.Context, req *collaboration.RemoveShareReq
 		s.removeReference(ctx, share.ResourceId)
 	}
 
-	// if we don't need to commit we return earlier
-	if !s.c.CommitShareToStorageGrant && !s.c.CommitShareToStorageRef {
-		return res, nil
-	}
-
-	// TODO(labkode): if both commits are enabled they could be done concurrently.
 	if s.c.CommitShareToStorageGrant {
 		removeGrantStatus, err := s.removeGrant(ctx, share.ResourceId, share.Grantee, share.Permissions.Permissions)
 		if err != nil {
@@ -735,11 +716,11 @@ func refIsSpaceRoot(ref *provider.ResourceId) bool {
 	if ref == nil {
 		return false
 	}
-	if ref.StorageId == "" || ref.OpaqueId == "" {
+	if ref.SpaceId == "" || ref.OpaqueId == "" {
 		return false
 	}
-	_, sid := storagespace.SplitStorageID(ref.GetStorageId())
-	return sid == ref.OpaqueId
+
+	return ref.SpaceId == ref.OpaqueId
 }
 
 func shareIsSpaceRoot(key *collaboration.ShareKey) bool {
