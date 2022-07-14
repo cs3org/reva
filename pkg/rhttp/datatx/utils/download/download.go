@@ -69,7 +69,7 @@ func GetOrHeadFile(w http.ResponseWriter, r *http.Request, fs storage.FS, spaceI
 
 	// do a stat to set a Content-Length header
 
-	if md, err = fs.GetMD(ctx, ref, nil, []string{"size", "mimetype"}); err != nil {
+	if md, err = fs.GetMD(ctx, ref, nil); err != nil {
 		handleError(w, &sublog, err, "stat")
 		return
 	}

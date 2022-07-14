@@ -184,14 +184,14 @@ var _ = Describe("Node", func() {
 		Describe("the Etag field", func() {
 			It("is set", func() {
 				perms := node.OwnerPermissions()
-				ri, err := n.AsResourceInfo(env.Ctx, &perms, []string{}, []string{}, false)
+				ri, err := n.AsResourceInfo(env.Ctx, &perms, []string{}, false)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(ri.Etag)).To(Equal(34))
 			})
 
 			It("changes when the tmtime is set", func() {
 				perms := node.OwnerPermissions()
-				ri, err := n.AsResourceInfo(env.Ctx, &perms, []string{}, []string{}, false)
+				ri, err := n.AsResourceInfo(env.Ctx, &perms, []string{}, false)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(ri.Etag)).To(Equal(34))
 				before := ri.Etag
@@ -199,7 +199,7 @@ var _ = Describe("Node", func() {
 				tmtime := time.Now()
 				Expect(n.SetTMTime(&tmtime)).To(Succeed())
 
-				ri, err = n.AsResourceInfo(env.Ctx, &perms, []string{}, []string{}, false)
+				ri, err = n.AsResourceInfo(env.Ctx, &perms, []string{}, false)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(ri.Etag)).To(Equal(34))
 				Expect(ri.Etag).ToNot(Equal(before))
@@ -215,7 +215,7 @@ var _ = Describe("Node", func() {
 				Expect(err).ToNot(HaveOccurred())
 
 				perms := node.OwnerPermissions()
-				ri, err := n.AsResourceInfo(env.Ctx, &perms, []string{}, []string{}, false)
+				ri, err := n.AsResourceInfo(env.Ctx, &perms, []string{}, false)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(ri.Opaque).ToNot(BeNil())
 				Expect(ri.Opaque.Map["lock"]).ToNot(BeNil())

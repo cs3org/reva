@@ -20,6 +20,7 @@ package ocdav
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"path"
 	"strconv"
@@ -232,13 +233,11 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 				return
 			}
 			if sRes.Status.Code != rpc.Code_CODE_OK {
-				// return not found error so we do not leak existence of a file
+				// return not found error so we dont leak existence of a file
 				// TODO hide permission failed for users without access in every kind of request
 				// TODO should this be done in the driver?
 				status = http.StatusNotFound
-			}
-			if status == http.StatusNotFound {
-				m = "Resource not found" // mimic the oc10 error message
+				m = fmt.Sprintf("%v not found", ref.Path)
 			}
 			w.WriteHeader(status)
 			b, err := errors.Marshal(status, m, "")

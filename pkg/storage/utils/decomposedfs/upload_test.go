@@ -193,7 +193,7 @@ var _ = Describe("File uploads", func() {
 				Expect(uploadIds["simple"]).ToNot(BeEmpty())
 				Expect(uploadIds["tus"]).ToNot(BeEmpty())
 
-				resources, err := fs.ListFolder(ctx, rootRef, []string{}, []string{})
+				resources, err := fs.ListFolder(ctx, rootRef, []string{})
 
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(resources)).To(Equal(0))
@@ -209,7 +209,7 @@ var _ = Describe("File uploads", func() {
 				Expect(uploadIds["simple"]).ToNot(BeEmpty())
 				Expect(uploadIds["tus"]).ToNot(BeEmpty())
 
-				resources, err := fs.ListFolder(ctx, rootRef, []string{}, []string{})
+				resources, err := fs.ListFolder(ctx, rootRef, []string{})
 
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(resources)).To(Equal(0))
@@ -246,7 +246,7 @@ var _ = Describe("File uploads", func() {
 				Expect(err).ToNot(HaveOccurred())
 				bs.AssertCalled(GinkgoT(), "Upload", mock.Anything, mock.Anything, mock.Anything)
 
-				resources, err := fs.ListFolder(ctx, rootRef, []string{}, []string{})
+				resources, err := fs.ListFolder(ctx, rootRef, []string{})
 
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(resources)).To(Equal(1))
@@ -284,7 +284,7 @@ var _ = Describe("File uploads", func() {
 				Expect(err).ToNot(HaveOccurred())
 				bs.AssertCalled(GinkgoT(), "Upload", mock.Anything, mock.Anything, mock.Anything)
 
-				resources, err := fs.ListFolder(ctx, rootRef, []string{}, []string{})
+				resources, err := fs.ListFolder(ctx, rootRef, []string{})
 
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(resources)).To(Equal(1))
@@ -303,7 +303,7 @@ var _ = Describe("File uploads", func() {
 
 				Expect(err).To(HaveOccurred())
 
-				resources, err := fs.ListFolder(ctx, rootRef, []string{}, []string{})
+				resources, err := fs.ListFolder(ctx, rootRef, []string{})
 
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(resources)).To(Equal(0))

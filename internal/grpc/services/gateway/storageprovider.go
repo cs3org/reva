@@ -837,12 +837,7 @@ func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 		}, nil
 	}
 
-	return c.Stat(ctx, &provider.StatRequest{
-		Opaque:                req.Opaque,
-		Ref:                   ref,
-		ArbitraryMetadataKeys: req.ArbitraryMetadataKeys,
-		FieldMask:             req.FieldMask,
-	})
+	return c.Stat(ctx, &provider.StatRequest{Opaque: req.Opaque, Ref: ref, ArbitraryMetadataKeys: req.ArbitraryMetadataKeys})
 }
 
 func (s *svc) ListContainerStream(_ *provider.ListContainerStreamRequest, _ gateway.GatewayAPI_ListContainerStreamServer) error {
@@ -863,7 +858,6 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 		Opaque:                req.Opaque,
 		Ref:                   ref,
 		ArbitraryMetadataKeys: req.ArbitraryMetadataKeys,
-		FieldMask:             req.FieldMask,
 	})
 }
 

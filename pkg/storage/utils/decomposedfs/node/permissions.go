@@ -181,6 +181,13 @@ func (p *Permissions) HasPermission(ctx context.Context, n *Node, check func(*pr
 		return check(perms), nil
 	}
 
+	// determine root
+	/*
+		if err = n.FindStorageSpaceRoot(); err != nil {
+			return false, err
+		}
+	*/
+
 	// for an efficient group lookup convert the list of groups to a map
 	// groups are just strings ... groupnames ... or group ids ??? AAARGH !!!
 	groupsMap := make(map[string]bool, len(u.Groups))
@@ -200,7 +207,7 @@ func (p *Permissions) HasPermission(ctx context.Context, n *Node, check func(*pr
 		}
 	}
 
-	// also check permissions on root, eg. for project spaces
+	// also check permissions on root, eg. for for project spaces
 	return nodeHasPermission(ctx, cn, groupsMap, u.Id.OpaqueId, check), nil
 }
 

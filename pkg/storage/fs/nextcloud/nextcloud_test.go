@@ -224,7 +224,7 @@ var _ = Describe("Nextcloud", func() {
 				Path: "/some/path",
 			}
 			mdKeys := []string{"val1", "val2", "val3"}
-			result, err := nc.GetMD(ctx, ref, mdKeys, nil)
+			result, err := nc.GetMD(ctx, ref, mdKeys)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(*result).To(Equal(provider.ResourceInfo{
 				Opaque: &types.Opaque{
@@ -319,7 +319,7 @@ var _ = Describe("Nextcloud", func() {
 				Path: "/some",
 			}
 			mdKeys := []string{"val1", "val2", "val3"}
-			results, err := nc.ListFolder(ctx, ref, mdKeys, []string{})
+			results, err := nc.ListFolder(ctx, ref, mdKeys)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(len(results)).To(Equal(1))
 			Expect(*results[0]).To(Equal(provider.ResourceInfo{

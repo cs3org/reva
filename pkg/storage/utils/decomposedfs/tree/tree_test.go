@@ -302,13 +302,13 @@ var _ = Describe("Tree", func() {
 				Expect(err).ToNot(HaveOccurred())
 
 				perms := node.OwnerPermissions()
-				riBefore, err := dir.AsResourceInfo(env.Ctx, &perms, []string{}, []string{}, false)
+				riBefore, err := dir.AsResourceInfo(env.Ctx, &perms, []string{}, false)
 				Expect(err).ToNot(HaveOccurred())
 
 				err = env.Tree.Propagate(env.Ctx, file)
 				Expect(err).ToNot(HaveOccurred())
 
-				riAfter, err := dir.AsResourceInfo(env.Ctx, &perms, []string{}, []string{}, false)
+				riAfter, err := dir.AsResourceInfo(env.Ctx, &perms, []string{}, false)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(riAfter.Etag).ToNot(Equal(riBefore.Etag))
 			})

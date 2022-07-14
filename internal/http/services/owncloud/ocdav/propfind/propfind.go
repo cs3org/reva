@@ -36,7 +36,6 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v2/internal/grpc/services/storageprovider"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/errors"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/net"
@@ -46,18 +45,16 @@ import (
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/publicshare"
-	rstatus "github.com/cs3org/reva/v2/pkg/rgrpc/status"
 	"github.com/cs3org/reva/v2/pkg/rhttp/router"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/rs/zerolog"
-	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
-	"google.golang.org/protobuf/types/known/fieldmaskpb"
 )
 
 const (
-	tracerName = "ocdav"
+	tracerName        = "ocdav"
+	_spaceTypeProject = "project"
 )
 
 type countingReader struct {
@@ -202,7 +199,6 @@ func (p *Handler) HandlePathPropfind(w http.ResponseWriter, r *http.Request, ns 
 		return
 	}
 
-	// TODO look up all spaces and request the root_info in the field mask
 	spaces, rpcStatus, err := spacelookup.LookUpStorageSpacesForPathWithChildren(ctx, client, fn)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error sending a grpc request")
@@ -215,12 +211,28 @@ func (p *Handler) HandlePathPropfind(w http.ResponseWriter, r *http.Request, ns 
 		return
 	}
 
-	resourceInfos, sendTusHeaders, ok := p.getResourceInfos(ctx, w, r, pf, spaces, fn, sublog)
+	var root *provider.StorageSpace
+
+	switch {
+	case len(spaces) == 1:
+		root = spaces[0]
+	case len(spaces) > 1:
+		for _, space := range spaces {
+			if isVirtualRootResourceID(space.Root) {
+				root = space
+			}
+		}
+		if root == nil {
+			root = spaces[0]
+		}
+	}
+
+	resourceInfos, sendTusHeaders, ok := p.getResourceInfos(ctx, w, r, pf, spaces, fn, false, sublog)
 	if !ok {
 		// getResourceInfos handles responses in case of an error so we can just return here.
 		return
 	}
-	p.propfindResponse(ctx, w, r, ns, pf, sendTusHeaders, resourceInfos, sublog)
+	p.propfindResponse(ctx, w, r, ns, root.SpaceType, pf, sendTusHeaders, resourceInfos, sublog)
 }
 
 // HandleSpacesPropfind handles a spaces based propfind request
@@ -229,15 +241,10 @@ func (p *Handler) HandleSpacesPropfind(w http.ResponseWriter, r *http.Request, s
 	defer span.End()
 
 	sublog := appctx.GetLogger(ctx).With().Str("path", r.URL.Path).Str("spaceid", spaceID).Logger()
-	dh := r.Header.Get(net.HeaderDepth)
-
-	depth, err := net.ParseDepth(dh)
+	client, err := p.getClient()
 	if err != nil {
-		sublog.Debug().Str("depth", dh).Msg(err.Error())
-		w.WriteHeader(http.StatusBadRequest)
-		m := fmt.Sprintf("Invalid Depth header value: %v", dh)
-		b, err := errors.Marshal(http.StatusBadRequest, m, "")
-		errors.HandleWebdavError(&sublog, w, b, err)
+		sublog.Error().Err(err).Msg("error getting grpc client")
+		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
@@ -248,121 +255,35 @@ func (p *Handler) HandleSpacesPropfind(w http.ResponseWriter, r *http.Request, s
 		return
 	}
 
-	ref, err := spacelookup.MakeStorageSpaceReference(spaceID, r.URL.Path)
+	// retrieve a specific storage space
+	space, rpcStatus, err := spacelookup.LookUpStorageSpaceByID(ctx, client, spaceID)
 	if err != nil {
-		sublog.Debug().Msg("invalid space id")
-		w.WriteHeader(http.StatusBadRequest)
-		m := fmt.Sprintf("Invalid space id: %v", spaceID)
-		b, err := errors.Marshal(http.StatusBadRequest, m, "")
-		errors.HandleWebdavError(&sublog, w, b, err)
-		return
-	}
-
-	client, err := p.getClient()
-	if err != nil {
-		sublog.Error().Err(err).Msg("error getting grpc client")
+		sublog.Error().Err(err).Msg("error looking up the space by id")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
-	metadataKeys, _ := metadataKeys(pf)
-
-	// stat the reference and request the space in the field mask
-	res, err := client.Stat(ctx, &provider.StatRequest{
-		Ref:                   &ref,
-		ArbitraryMetadataKeys: metadataKeys,
-		FieldMask:             &fieldmaskpb.FieldMask{Paths: []string{"*"}}, // TODO use more sophisticated filter? we don't need all space properties, afaict only the spacetype
-	})
-	if err != nil {
-		sublog.Error().Err(err).Msg("error getting grpc client")
-		w.WriteHeader(http.StatusInternalServerError)
+	if rpcStatus.Code != rpc.Code_CODE_OK {
+		errors.HandleErrorStatus(&sublog, w, rpcStatus)
 		return
 	}
-	if res.Status.Code != rpc.Code_CODE_OK {
-		status := rstatus.HTTPStatusFromCode(res.Status.Code)
-		if res.Status.Code == rpc.Code_CODE_ABORTED {
-			// aborted is used for etag an lock mismatches, which translates to 412
-			// in case a real Conflict response is needed, the calling code needs to send the header
-			status = http.StatusPreconditionFailed
-		}
-		m := res.Status.Message
-		if res.Status.Code == rpc.Code_CODE_PERMISSION_DENIED {
-			// check if user has access to resource
-			sRes, err := client.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{ResourceId: ref.GetResourceId()}})
-			if err != nil {
-				sublog.Error().Err(err).Msg("error performing stat grpc request")
-				w.WriteHeader(http.StatusInternalServerError)
-				return
-			}
-			if sRes.Status.Code != rpc.Code_CODE_OK {
-				// return not found error so we do not leak existence of a space
-				status = http.StatusNotFound
-			}
-		}
-		if status == http.StatusNotFound {
-			m = "Resource not found" // mimic the oc10 error message
-		}
-		w.WriteHeader(status)
-		b, err := errors.Marshal(status, m, "")
-		errors.HandleWebdavError(&sublog, w, b, err)
+
+	resourceInfos, sendTusHeaders, ok := p.getResourceInfos(ctx, w, r, pf, []*provider.StorageSpace{space}, r.URL.Path, true, sublog)
+	if !ok {
+		// getResourceInfos handles responses in case of an error so we can just return here.
 		return
-	}
-	var space *provider.StorageSpace
-	if res.Info.Space == nil {
-		sublog.Debug().Msg("stat did not include a space, executing an additional lookup request")
-		// fake a space root
-		space = &provider.StorageSpace{
-			Id: &provider.StorageSpaceId{OpaqueId: spaceID},
-			Opaque: &typesv1beta1.Opaque{
-				Map: map[string]*typesv1beta1.OpaqueEntry{
-					"path": {
-						Decoder: "plain",
-						Value:   []byte("/"),
-					},
-				},
-			},
-			Root:     ref.ResourceId,
-			RootInfo: res.Info,
-		}
-	}
-
-	res.Info.Path = r.URL.Path
-
-	resourceInfos := []*provider.ResourceInfo{
-		res.Info,
-	}
-	if res.Info.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER && depth != net.DepthZero {
-		childInfos, ok := p.getSpaceResourceInfos(ctx, w, r, pf, &ref, r.URL.Path, depth, sublog)
-		if !ok {
-			// getResourceInfos handles responses in case of an error so we can just return here.
-			return
-		}
-		resourceInfos = append(resourceInfos, childInfos...)
 	}
 
 	// prefix space id to paths
 	for i := range resourceInfos {
 		resourceInfos[i].Path = path.Join("/", spaceID, resourceInfos[i].Path)
-		// add space to info so propfindResponse can access space type
-		if resourceInfos[i].Space == nil {
-			resourceInfos[i].Space = space
-		}
 	}
 
-	sendTusHeaders := true
-	// let clients know this collection supports tus.io POST requests to start uploads
-	if res.Info.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
-		if res.Info.Opaque != nil {
-			_, ok := res.Info.Opaque.Map["disable_tus"]
-			sendTusHeaders = !ok
-		}
-	}
-
-	p.propfindResponse(ctx, w, r, "", pf, sendTusHeaders, resourceInfos, sublog)
+	p.propfindResponse(ctx, w, r, "", space.SpaceType, pf, sendTusHeaders, resourceInfos, sublog)
 
 }
 
-func (p *Handler) propfindResponse(ctx context.Context, w http.ResponseWriter, r *http.Request, namespace string, pf XML, sendTusHeaders bool, resourceInfos []*provider.ResourceInfo, log zerolog.Logger) {
+func (p *Handler) propfindResponse(ctx context.Context, w http.ResponseWriter, r *http.Request, namespace, spaceType string, pf XML, sendTusHeaders bool, resourceInfos []*provider.ResourceInfo, log zerolog.Logger) {
 	ctx, span := appctx.GetTracerProvider(r.Context()).Tracer(tracerName).Start(ctx, "propfind_response")
 	defer span.End()
 
@@ -381,27 +302,20 @@ func (p *Handler) propfindResponse(ctx context.Context, w http.ResponseWriter, r
 
 	var linkshares map[string]struct{}
 	// public link access does not show share-types
-	// oc:share-type is not part of an allprops response
 	if namespace != "/public" {
-		// only fetch this if property was queried
-		for _, p := range pf.Prop {
-			if p.Space == net.NsOwncloud && (p.Local == "share-types" || p.Local == "permissions") {
-				listResp, err := client.ListPublicShares(ctx, &link.ListPublicSharesRequest{Filters: filters})
-				if err == nil {
-					linkshares = make(map[string]struct{}, len(listResp.Share))
-					for i := range listResp.Share {
-						linkshares[listResp.Share[i].ResourceId.OpaqueId] = struct{}{}
-					}
-				} else {
-					log.Error().Err(err).Msg("propfindResponse: couldn't list public shares")
-					span.SetStatus(codes.Error, err.Error())
-				}
-				break
+		listResp, err := client.ListPublicShares(ctx, &link.ListPublicSharesRequest{Filters: filters})
+		if err == nil {
+			linkshares = make(map[string]struct{}, len(listResp.Share))
+			for i := range listResp.Share {
+				linkshares[listResp.Share[i].ResourceId.OpaqueId] = struct{}{}
 			}
+		} else {
+			log.Error().Err(err).Msg("propfindResponse: couldn't list public shares")
+			span.SetStatus(codes.Error, err.Error())
 		}
 	}
 
-	propRes, err := MultistatusResponse(ctx, &pf, resourceInfos, p.PublicURL, namespace, linkshares)
+	propRes, err := MultistatusResponse(ctx, &pf, resourceInfos, p.PublicURL, namespace, spaceType, linkshares)
 	if err != nil {
 		log.Error().Err(err).Msg("error formatting propfind")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -423,11 +337,10 @@ func (p *Handler) propfindResponse(ctx context.Context, w http.ResponseWriter, r
 }
 
 // TODO this is just a stat -> rename
-func (p *Handler) statSpace(ctx context.Context, client gateway.GatewayAPIClient, ref *provider.Reference, metadataKeys, fieldMaskPaths []string) (*provider.ResourceInfo, *rpc.Status, error) {
+func (p *Handler) statSpace(ctx context.Context, client gateway.GatewayAPIClient, space *provider.StorageSpace, ref *provider.Reference, metadataKeys []string) (*provider.ResourceInfo, *rpc.Status, error) {
 	req := &provider.StatRequest{
 		Ref:                   ref,
 		ArbitraryMetadataKeys: metadataKeys,
-		FieldMask:             &fieldmaskpb.FieldMask{Paths: fieldMaskPaths},
 	}
 	res, err := client.Stat(ctx, req)
 	if err != nil {
@@ -436,21 +349,17 @@ func (p *Handler) statSpace(ctx context.Context, client gateway.GatewayAPIClient
 	return res.GetInfo(), res.GetStatus(), nil
 }
 
-func (p *Handler) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *http.Request, pf XML, spaces []*provider.StorageSpace, requestPath string, log zerolog.Logger) ([]*provider.ResourceInfo, bool, bool) {
-	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "get_resource_infos")
-	span.SetAttributes(attribute.KeyValue{Key: "requestPath", Value: attribute.StringValue(requestPath)})
-	defer span.End()
-
+func (p *Handler) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *http.Request, pf XML, spaces []*provider.StorageSpace, requestPath string, spacesPropfind bool, log zerolog.Logger) ([]*provider.ResourceInfo, bool, bool) {
 	dh := r.Header.Get(net.HeaderDepth)
 	depth, err := net.ParseDepth(dh)
 	if err != nil {
+		log.Debug().Str("depth", dh).Msg(err.Error())
 		w.WriteHeader(http.StatusBadRequest)
 		m := fmt.Sprintf("Invalid Depth header value: %v", dh)
 		b, err := errors.Marshal(http.StatusBadRequest, m, "")
 		errors.HandleWebdavError(&log, w, b, err)
 		return nil, false, false
 	}
-	span.SetAttributes(attribute.KeyValue{Key: "depth", Value: attribute.StringValue(depth.String())})
 
 	client, err := p.getClient()
 	if err != nil {
@@ -459,7 +368,23 @@ func (p *Handler) getResourceInfos(ctx context.Context, w http.ResponseWriter, r
 		return nil, false, false
 	}
 
-	metadataKeys, fieldMaskPaths := metadataKeys(pf)
+	var metadataKeys []string
+
+	if pf.Allprop != nil {
+		// TODO this changes the behavior and returns all properties if allprops has been set,
+		// but allprops should only return some default properties
+		// see https://tools.ietf.org/html/rfc4918#section-9.1
+		// the description of arbitrary_metadata_keys in https://cs3org.github.io/cs3apis/#cs3.storage.provider.v1beta1.ListContainerRequest an others may need clarification
+		// tracked in https://github.com/cs3org/cs3apis/issues/104
+		metadataKeys = append(metadataKeys, "*")
+	} else {
+		metadataKeys = make([]string, 0, len(pf.Prop))
+		for i := range pf.Prop {
+			if requiresExplicitFetching(&pf.Prop[i]) {
+				metadataKeys = append(metadataKeys, metadataKeyOf(&pf.Prop[i]))
+			}
+		}
+	}
 
 	// we need to stat all spaces to aggregate the root etag, mtime and size
 	// TODO cache per space (hah, no longer per user + per space!)
@@ -470,41 +395,27 @@ func (p *Handler) getResourceInfos(ctx context.Context, w http.ResponseWriter, r
 		spaceMap            = make(map[*provider.ResourceInfo]spaceData, len(spaces))
 	)
 	for _, space := range spaces {
-		spacePath := ""
-		if spacePath = utils.ReadPlainFromOpaque(space.Opaque, "path"); spacePath == "" {
+		spacePath, ok := getMountPoint(*space)
+		if !ok {
 			continue // not mounted
 		}
-		if space.RootInfo == nil {
-			spaceRef, err := spacelookup.MakeStorageSpaceReference(space.Id.OpaqueId, ".")
-			if err != nil {
-				continue
-			}
-			info, status, err := p.statSpace(ctx, client, &spaceRef, metadataKeys, fieldMaskPaths)
-			if err != nil || status.GetCode() != rpc.Code_CODE_OK {
-				continue
-			}
-			space.RootInfo = info
-		}
-
 		// TODO separate stats to the path or to the children, after statting all children update the mtime/etag
 		// TODO get mtime, and size from space as well, so we no longer have to stat here? would require sending the requested metadata keys as well
 		// root should be a ResourceInfo so it can contain the full stat, not only the id ... do we even need spaces then?
 		// metadata keys could all be prefixed with "root." to indicate we want more than the root id ...
-		// TODO can we reuse the space.rootinfo?
-		spaceRef := spacelookup.MakeRelativeReference(space, requestPath, false)
-		var info *provider.ResourceInfo
-		if spaceRef.Path == "." && utils.ResourceIDEqual(spaceRef.ResourceId, space.Root) {
-			info = space.RootInfo
-		} else {
-			var status *rpc.Status
-			info, status, err = p.statSpace(ctx, client, spaceRef, metadataKeys, fieldMaskPaths)
-			if err != nil || status.GetCode() != rpc.Code_CODE_OK {
-				continue
-			}
+		spaceRef := spacelookup.MakeRelativeReference(space, requestPath, spacesPropfind)
+		info, status, err := p.statSpace(ctx, client, space, spaceRef, metadataKeys)
+		if err != nil || status.GetCode() != rpc.Code_CODE_OK {
+			continue
 		}
 
 		// adjust path
-		info.Path = filepath.Join(spacePath, spaceRef.Path)
+		if spacesPropfind {
+			// we need to prefix the path with / to make subsequent prefix matches work
+			info.Path = filepath.Join("/", spaceRef.Path)
+		} else {
+			info.Path = filepath.Join(spacePath, spaceRef.Path)
+		}
 
 		spaceMap[info] = spaceData{Ref: spaceRef, SpaceType: space.SpaceType}
 
@@ -559,12 +470,12 @@ func (p *Handler) getResourceInfos(ctx context.Context, w http.ResponseWriter, r
 	childInfos := map[string]*provider.ResourceInfo{}
 	for spaceInfo, spaceData := range spaceMap {
 		switch {
-		case spaceInfo.Type != provider.ResourceType_RESOURCE_TYPE_CONTAINER && depth != net.DepthInfinity:
+		case !spacesPropfind && spaceInfo.Type != provider.ResourceType_RESOURCE_TYPE_CONTAINER && depth != net.DepthInfinity:
 			addChild(childInfos, spaceInfo, requestPath, rootInfo)
 
 		case spaceInfo.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER && depth == net.DepthOne:
 			switch {
-			case strings.HasPrefix(requestPath, spaceInfo.Path) && spaceData.SpaceType != "virtual":
+			case strings.HasPrefix(requestPath, spaceInfo.Path) && (spacesPropfind || spaceData.SpaceType != "virtual"):
 				req := &provider.ListContainerRequest{
 					Ref:                   spaceData.Ref,
 					ArbitraryMetadataKeys: metadataKeys,
@@ -625,6 +536,9 @@ func (p *Handler) getResourceInfos(ctx context.Context, w http.ResponseWriter, r
 				for i := len(res.Infos) - 1; i >= 0; i-- {
 					// add path to resource
 					res.Infos[i].Path = filepath.Join(info.Path, res.Infos[i].Path)
+					if spacesPropfind {
+						res.Infos[i].Path = utils.MakeRelativePath(res.Infos[i].Path)
+					}
 					if res.Infos[i].Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
 						stack = append(stack, res.Infos[i])
 					}
@@ -654,125 +568,6 @@ func (p *Handler) getResourceInfos(ctx context.Context, w http.ResponseWriter, r
 	}
 
 	return resourceInfos, sendTusHeaders, true
-}
-
-func (p *Handler) getSpaceResourceInfos(ctx context.Context, w http.ResponseWriter, r *http.Request, pf XML, ref *provider.Reference, requestPath string, depth net.Depth, log zerolog.Logger) ([]*provider.ResourceInfo, bool) {
-	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "get_space_resource_infos")
-	span.SetAttributes(attribute.KeyValue{Key: "requestPath", Value: attribute.StringValue(requestPath)})
-	span.SetAttributes(attribute.KeyValue{Key: "depth", Value: attribute.StringValue(depth.String())})
-	defer span.End()
-
-	client, err := p.getClient()
-	if err != nil {
-		log.Error().Err(err).Msg("error getting grpc client")
-		w.WriteHeader(http.StatusInternalServerError)
-		return nil, false
-	}
-
-	metadataKeys, _ := metadataKeys(pf)
-
-	resourceInfos := []*provider.ResourceInfo{}
-
-	req := &provider.ListContainerRequest{
-		Ref:                   ref,
-		ArbitraryMetadataKeys: metadataKeys,
-		FieldMask:             &fieldmaskpb.FieldMask{Paths: []string{"*"}}, // TODO use more sophisticated filter
-	}
-	res, err := client.ListContainer(ctx, req)
-	if err != nil {
-		log.Error().Err(err).Msg("error sending list container grpc request")
-		w.WriteHeader(http.StatusInternalServerError)
-		return nil, false
-	}
-
-	if res.Status.Code != rpc.Code_CODE_OK {
-		log.Debug().Interface("status", res.Status).Msg("List Container not ok, skipping")
-		return nil, false
-	}
-	for _, info := range res.Infos {
-		info.Path = path.Join(requestPath, info.Path)
-	}
-	resourceInfos = append(resourceInfos, res.Infos...)
-
-	if depth == net.DepthInfinity {
-		// use a stack to explore sub-containers breadth-first
-		stack := resourceInfos
-		for len(stack) != 0 {
-			info := stack[0]
-			stack = stack[1:]
-
-			if info.Type != provider.ResourceType_RESOURCE_TYPE_CONTAINER /*|| space.SpaceType == "virtual"*/ {
-				continue
-			}
-			req := &provider.ListContainerRequest{
-				Ref: &provider.Reference{
-					ResourceId: info.Id,
-					Path:       ".",
-				},
-				ArbitraryMetadataKeys: metadataKeys,
-			}
-			res, err := client.ListContainer(ctx, req) // FIXME public link depth infinity -> "gateway: could not find provider: gateway: error calling ListStorageProviders: rpc error: code = PermissionDenied desc = auth: core access token is invalid"
-			if err != nil {
-				log.Error().Err(err).Interface("info", info).Msg("error sending list container grpc request")
-				w.WriteHeader(http.StatusInternalServerError)
-				return nil, false
-			}
-			if res.Status.Code != rpc.Code_CODE_OK {
-				log.Debug().Interface("status", res.Status).Msg("List Container not ok, skipping")
-				continue
-			}
-
-			// check sub-containers in reverse order and add them to the stack
-			// the reversed order here will produce a more logical sorting of results
-			for i := len(res.Infos) - 1; i >= 0; i-- {
-				// add path to resource
-				res.Infos[i].Path = filepath.Join(info.Path, res.Infos[i].Path)
-				res.Infos[i].Path = utils.MakeRelativePath(res.Infos[i].Path)
-				if res.Infos[i].Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
-					stack = append(stack, res.Infos[i])
-				}
-			}
-
-			resourceInfos = append(resourceInfos, res.Infos...)
-			// TODO: stream response to avoid storing too many results in memory
-			// we can do that after having stated the root.
-		}
-	}
-
-	return resourceInfos, true
-}
-
-// metadataKeys splits the propfind properties into arbitrary metadata and ResourceInfo field mask paths
-func metadataKeys(pf XML) ([]string, []string) {
-
-	var metadataKeys []string
-	var fieldMaskKeys []string
-
-	if pf.Allprop != nil {
-		// TODO this changes the behavior and returns all properties if allprops has been set,
-		// but allprops should only return some default properties
-		// see https://tools.ietf.org/html/rfc4918#section-9.1
-		// the description of arbitrary_metadata_keys in https://cs3org.github.io/cs3apis/#cs3.storage.provider.v1beta1.ListContainerRequest an others may need clarification
-		// tracked in https://github.com/cs3org/cs3apis/issues/104
-		metadataKeys = append(metadataKeys, "*")
-		fieldMaskKeys = append(fieldMaskKeys, "*")
-	} else {
-		metadataKeys = make([]string, 0, len(pf.Prop))
-		fieldMaskKeys = make([]string, 0, len(pf.Prop))
-		for i := range pf.Prop {
-			if requiresExplicitFetching(&pf.Prop[i]) {
-				key := metadataKeyOf(&pf.Prop[i])
-				switch key {
-				case "share-types":
-					fieldMaskKeys = append(fieldMaskKeys, key)
-				default:
-					metadataKeys = append(metadataKeys, key)
-				}
-
-			}
-		}
-	}
-	return metadataKeys, fieldMaskKeys
 }
 
 func addChild(childInfos map[string]*provider.ResourceInfo,
@@ -807,6 +602,15 @@ func addChild(childInfos map[string]*provider.ResourceInfo,
 	} else {
 		childInfos[childName] = spaceInfo
 	}
+}
+
+func getMountPoint(space provider.StorageSpace) (string, bool) {
+	if space.Opaque == nil ||
+		space.Opaque.Map["path"] == nil ||
+		space.Opaque.Map["path"].Decoder != "plain" {
+		return "", false
+	}
+	return string(space.Opaque.Map["path"].Value), true
 }
 
 func requiresExplicitFetching(n *xml.Name) bool {
@@ -866,10 +670,10 @@ func ReadPropfind(r io.Reader) (pf XML, status int, err error) {
 }
 
 // MultistatusResponse converts a list of resource infos into a multistatus response string
-func MultistatusResponse(ctx context.Context, pf *XML, mds []*provider.ResourceInfo, publicURL, ns string, linkshares map[string]struct{}) ([]byte, error) {
+func MultistatusResponse(ctx context.Context, pf *XML, mds []*provider.ResourceInfo, publicURL, ns, spaceType string, linkshares map[string]struct{}) ([]byte, error) {
 	responses := make([]*ResponseXML, 0, len(mds))
 	for i := range mds {
-		res, err := mdToPropResponse(ctx, pf, mds[i], publicURL, ns, linkshares)
+		res, err := mdToPropResponse(ctx, pf, mds[i], publicURL, ns, spaceType, linkshares)
 		if err != nil {
 			return nil, err
 		}
@@ -888,12 +692,7 @@ func MultistatusResponse(ctx context.Context, pf *XML, mds []*provider.ResourceI
 // mdToPropResponse converts the CS3 metadata into a webdav PropResponse
 // ns is the CS3 namespace that needs to be removed from the CS3 path before
 // prefixing it with the baseURI
-func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, publicURL, ns string, linkshares map[string]struct{}) (*ResponseXML, error) {
-	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "md_to_prop_response")
-	span.SetAttributes(attribute.KeyValue{Key: "publicURL", Value: attribute.StringValue(publicURL)})
-	span.SetAttributes(attribute.KeyValue{Key: "ns", Value: attribute.StringValue(ns)})
-	defer span.End()
-
+func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, publicURL, ns, spaceType string, linkshares map[string]struct{}) (*ResponseXML, error) {
 	sublog := appctx.GetLogger(ctx).With().Interface("md", md).Str("ns", ns).Logger()
 	md.Path = strings.TrimPrefix(md.Path, ns)
 
@@ -917,7 +716,6 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 	quota := net.PropQuotaUnknown
 	size := strconv.FormatUint(md.Size, 10)
 	var lock *provider.Lock
-	shareTypes := ""
 	// TODO refactor helper functions: GetOpaqueJSONEncoded(opaque, key string, *struct) err, GetOpaquePlainEncoded(opaque, key) value, err
 	// or use ok like pattern and return bool?
 	if md.Opaque != nil && md.Opaque.Map != nil {
@@ -928,8 +726,8 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 				sublog.Error().Err(err).Msg("could not unmarshal link json")
 			}
 		}
-		if quota = utils.ReadPlainFromOpaque(md.Opaque, "quota"); quota == "" {
-			quota = net.PropQuotaUnknown
+		if md.Opaque.Map["quota"] != nil && md.Opaque.Map["quota"].Decoder == "plain" {
+			quota = string(md.Opaque.Map["quota"].Value)
 		}
 		if md.Opaque.Map["lock"] != nil && md.Opaque.Map["lock"].Decoder == "json" {
 			lock = &provider.Lock{}
@@ -938,18 +736,13 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 				sublog.Error().Err(err).Msg("could not unmarshal locks json")
 			}
 		}
-		shareTypes = utils.ReadPlainFromOpaque(md.Opaque, "share-types")
 	}
 
 	role := conversions.RoleFromResourcePermissions(md.PermissionSet)
 
-	if md.Space != nil && md.Space.SpaceType != "grant" && utils.ResourceIDEqual(md.Space.Root, md.Id) {
-		// a space root is never shared
-		shareTypes = ""
-	}
+	isShared := spaceType != _spaceTypeProject && !net.IsCurrentUserOwner(ctx, md.Owner)
 	var wdp string
 	isPublic := ls != nil
-	isShared := shareTypes != "" && !net.IsCurrentUserOwner(ctx, md.Owner)
 	if md.PermissionSet != nil {
 		wdp = role.WebDAVPermissions(
 			md.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER,
@@ -957,6 +750,7 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 			false,
 			isPublic,
 		)
+		sublog.Debug().Interface("role", role).Str("dav-permissions", wdp).Msg("converted PermissionSet")
 	}
 
 	// replace fileid of /public/{token} mountpoint with grant fileid
@@ -1232,19 +1026,14 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 					} else {
 						propstatNotFound.Prop = append(propstatNotFound.Prop, prop.NotFound("oc:checksums"))
 					}
-				case "share-types": // used to render share indicators to share owners
+				case "share-types": // desktop
 					var types strings.Builder
-
-					sts := strings.Split(shareTypes, ",")
-					for _, shareType := range sts {
-						switch shareType {
-						case "1": // provider.GranteeType_GRANTEE_TYPE_USER
-							types.WriteString("<oc:share-type>" + strconv.Itoa(int(conversions.ShareTypeUser)) + "</oc:share-type>")
-						case "2": // provider.GranteeType_GRANTEE_TYPE_GROUP
-							types.WriteString("<oc:share-type>" + strconv.Itoa(int(conversions.ShareTypeGroup)) + "</oc:share-type>")
-						default:
-							sublog.Debug().Interface("shareType", shareType).Msg("unknown share type, ignoring")
-						}
+					k := md.GetArbitraryMetadata()
+					amd := k.GetMetadata()
+					if amdv, ok := amd[metadataKeyOf(&pf.Prop[i])]; ok {
+						types.WriteString("<oc:share-type>")
+						types.WriteString(amdv)
+						types.WriteString("</oc:share-type>")
 					}
 
 					if md.Id != nil {
@@ -1533,17 +1322,12 @@ func (c *countingReader) Read(p []byte) (int, error) {
 }
 
 func metadataKeyOf(n *xml.Name) string {
-	switch n.Space {
-	case net.NsDav:
-		if n.Local == "quota-available-bytes" {
-			return "quota"
-		}
-	case net.NsOwncloud:
-		if n.Local == "share-types" {
-			return "share-types"
-		}
+	switch {
+	case n.Space == net.NsDav && n.Local == "quota-available-bytes":
+		return "quota"
+	default:
+		return fmt.Sprintf("%s/%s", n.Space, n.Local)
 	}
-	return fmt.Sprintf("%s/%s", n.Space, n.Local)
 }
 
 // UnmarshalXML appends the property names enclosed within start to pn.
@@ -1576,4 +1360,16 @@ func (pn *Props) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
 			*pn = append(*pn, e.Name)
 		}
 	}
+}
+
+// isVirtualRootResourceID returns true if the id points to the share jail root. The providerid is optional for legacy ids
+func isVirtualRootResourceID(id *provider.ResourceId) bool {
+	switch {
+	case id == nil:
+		return false
+	case id.OpaqueId != utils.ShareStorageProviderID:
+		return false
+	}
+	providerID, spaceID := storagespace.SplitStorageID(id.StorageId)
+	return spaceID == utils.ShareStorageProviderID && (providerID == "" || providerID == utils.ShareStorageProviderID)
 }

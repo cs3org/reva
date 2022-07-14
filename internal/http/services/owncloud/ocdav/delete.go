@@ -96,7 +96,8 @@ func (s *svc) handleDelete(ctx context.Context, w http.ResponseWriter, r *http.R
 		w.WriteHeader(http.StatusNoContent)
 	case rpc.Code_CODE_NOT_FOUND:
 		w.WriteHeader(http.StatusNotFound)
-		m := "Resource not found" // mimic the oc10 error message
+		// TODO path might be empty or relative...
+		m := fmt.Sprintf("Resource %v not found", ref.Path)
 		b, err := errors.Marshal(http.StatusNotFound, m, "")
 		errors.HandleWebdavError(&log, w, b, err)
 	case rpc.Code_CODE_PERMISSION_DENIED:
@@ -118,11 +119,12 @@ func (s *svc) handleDelete(ctx context.Context, w http.ResponseWriter, r *http.R
 			return
 		}
 		if sRes.Status.Code != rpc.Code_CODE_OK {
-			// return not found error so we do not leak existence of a file
+			// return not found error so we dont leak existence of a file
 			// TODO hide permission failed for users without access in every kind of request
 			// TODO should this be done in the driver?
 			status = http.StatusNotFound
-			m = "Resource not found" // mimic the oc10 error message
+			// TODO path might be empty or relative...
+			m = fmt.Sprintf("%s not fount", ref.Path)
 		}
 		w.WriteHeader(status)
 		b, err := errors.Marshal(status, m, "")

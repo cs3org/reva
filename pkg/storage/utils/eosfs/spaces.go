@@ -228,7 +228,7 @@ func (fs *eosfs) listProjectStorageSpaces(ctx context.Context, user *userpb.User
 	for rows.Next() {
 		var name, relPath string
 		if err = rows.Scan(&name, &relPath); err == nil {
-			info, err := fs.GetMD(ctx, &provider.Reference{Path: relPath}, []string{}, nil)
+			info, err := fs.GetMD(ctx, &provider.Reference{Path: relPath}, []string{})
 			if err == nil {
 				if (spaceID == "" || spaceID == info.Id.OpaqueId) && (spacePath == "" || spacePath == relPath) {
 					// If the request was for a relative ref, return just the base path

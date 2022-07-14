@@ -229,37 +229,24 @@ type cachedAPIClient struct {
 // generates a user specific key pointing to ref - used for statcache
 // a key looks like: uid:1234-1233!sid:5678-5677!oid:9923-9934!path:/path/to/source
 // as you see it adds "uid:"/"sid:"/"oid:" prefixes to the uuids so they can be differentiated
-func statKey(user *userpb.User, ref *provider.Reference, metaDataKeys, fieldMaskPaths []string) string {
+func statKey(user *userpb.User, ref *provider.Reference, metaDataKeys []string) string {
 	if ref == nil || ref.ResourceId == nil || ref.ResourceId.StorageId == "" {
 		return ""
 	}
 
-	key := strings.Builder{}
-	key.WriteString("uid:")
-	key.WriteString(user.Id.OpaqueId)
-	key.WriteString("!sid:")
-	key.WriteString(ref.ResourceId.StorageId)
-	key.WriteString("!oid:")
-	key.WriteString(ref.ResourceId.OpaqueId)
-	key.WriteString("!path:")
-	key.WriteString(ref.Path)
+	key := "uid:" + user.Id.OpaqueId + "!sid:" + ref.ResourceId.StorageId + "!oid:" + ref.ResourceId.OpaqueId + "!path:" + ref.Path
 	for _, k := range metaDataKeys {
-		key.WriteString("!mdk:")
-		key.WriteString(k)
-	}
-	for _, p := range fieldMaskPaths {
-		key.WriteString("!fmp:")
-		key.WriteString(p)
+		key += "!mdk:" + k
 	}
 
-	return key.String()
+	return key
 }
 
 // Stat looks in cache first before forwarding to storage provider
 func (c *cachedAPIClient) Stat(ctx context.Context, in *provider.StatRequest, opts ...grpc.CallOption) (*provider.StatResponse, error) {
 	cache := c.caches[stat]
 
-	key := statKey(ctxpkg.ContextMustGetUser(ctx), in.GetRef(), in.GetArbitraryMetadataKeys(), in.GetFieldMask().GetPaths())
+	key := statKey(ctxpkg.ContextMustGetUser(ctx), in.Ref, in.ArbitraryMetadataKeys)
 	if key != "" {
 		s := &provider.StatResponse{}
 		if err := pullFromCache(cache, key, s); err == nil {

@@ -792,7 +792,7 @@ func (fs *eosfs) ListGrants(ctx context.Context, ref *provider.Reference) ([]*pr
 	return grantList, nil
 }
 
-func (fs *eosfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []string, fieldMask []string) (*provider.ResourceInfo, error) {
+func (fs *eosfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []string) (*provider.ResourceInfo, error) {
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("eosfs: get md for ref:" + ref.String())
 
@@ -887,7 +887,7 @@ func (fs *eosfs) getMDShareFolder(ctx context.Context, p string, mdKeys []string
 	return fs.convertToFileReference(ctx, eosFileInfo)
 }
 
-func (fs *eosfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys, fieldMask []string) ([]*provider.ResourceInfo, error) {
+func (fs *eosfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys []string) ([]*provider.ResourceInfo, error) {
 	p, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return nil, errors.Wrap(err, "eosfs: error resolving reference")
@@ -1444,7 +1444,7 @@ func (fs *eosfs) ListRevisions(ctx context.Context, ref *provider.Reference) ([]
 		// We need to access the revisions for a non-home reference.
 		// We'll get the owner of the particular resource and impersonate them
 		// if we have access to it.
-		md, err := fs.GetMD(ctx, ref, nil, nil)
+		md, err := fs.GetMD(ctx, ref, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -1487,7 +1487,7 @@ func (fs *eosfs) DownloadRevision(ctx context.Context, ref *provider.Reference, 
 		// We need to access the revisions for a non-home reference.
 		// We'll get the owner of the particular resource and impersonate them
 		// if we have access to it.
-		md, err := fs.GetMD(ctx, ref, nil, nil)
+		md, err := fs.GetMD(ctx, ref, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -1520,7 +1520,7 @@ func (fs *eosfs) RestoreRevision(ctx context.Context, ref *provider.Reference, r
 		// We need to access the revisions for a non-home reference.
 		// We'll get the owner of the particular resource and impersonate them
 		// if we have access to it.
-		md, err := fs.GetMD(ctx, ref, nil, nil)
+		md, err := fs.GetMD(ctx, ref, nil)
 		if err != nil {
 			return err
 		}
@@ -1568,7 +1568,7 @@ func (fs *eosfs) ListRecycle(ctx context.Context, ref *provider.Reference, key, 
 		// We need to access the recycle bin for a non-home reference.
 		// We'll get the owner of the particular resource and impersonate them
 		// if we have access to it.
-		md, err := fs.GetMD(ctx, &provider.Reference{Path: ref.Path}, nil, nil)
+		md, err := fs.GetMD(ctx, &provider.Reference{Path: ref.Path}, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -1619,7 +1619,7 @@ func (fs *eosfs) RestoreRecycleItem(ctx context.Context, ref *provider.Reference
 		// We need to access the recycle bin for a non-home reference.
 		// We'll get the owner of the particular resource and impersonate them
 		// if we have access to it.
-		md, err := fs.GetMD(ctx, &provider.Reference{Path: ref.Path}, nil, nil)
+		md, err := fs.GetMD(ctx, &provider.Reference{Path: ref.Path}, nil)
 		if err != nil {
 			return err
 		}

@@ -672,7 +672,7 @@ func (s *service) Delete(ctx context.Context, req *provider.DeleteRequest) (*pro
 		}
 	}
 
-	md, err := s.storage.GetMD(ctx, req.Ref, []string{}, []string{"id"})
+	md, err := s.storage.GetMD(ctx, req.Ref, []string{})
 	if err != nil {
 		return &provider.DeleteResponse{
 			Status: status.NewStatusFromErrType(ctx, "can't stat resource to delete", err),
@@ -718,7 +718,7 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 		Value: attribute.StringValue(req.Ref.String()),
 	})
 
-	md, err := s.storage.GetMD(ctx, req.GetRef(), req.GetArbitraryMetadataKeys(), req.GetFieldMask().GetPaths())
+	md, err := s.storage.GetMD(ctx, req.Ref, req.ArbitraryMetadataKeys)
 	if err != nil {
 		return &provider.StatResponse{
 			Status: status.NewStatusFromErrType(ctx, "stat", err),
@@ -747,7 +747,7 @@ func (s *service) ListContainerStream(req *provider.ListContainerStreamRequest, 
 	ctx := ss.Context()
 	log := appctx.GetLogger(ctx)
 
-	mds, err := s.storage.ListFolder(ctx, req.GetRef(), req.GetArbitraryMetadataKeys(), req.GetFieldMask().GetPaths())
+	mds, err := s.storage.ListFolder(ctx, req.Ref, req.ArbitraryMetadataKeys)
 	if err != nil {
 		var st *rpc.Status
 		switch err.(type) {
@@ -792,7 +792,7 @@ func (s *service) ListContainer(ctx context.Context, req *provider.ListContainer
 	providerID := unwrapProviderID(req.Ref.GetResourceId())
 	defer rewrapProviderID(req.Ref.GetResourceId(), providerID)
 
-	mds, err := s.storage.ListFolder(ctx, req.GetRef(), req.GetArbitraryMetadataKeys(), req.GetFieldMask().GetPaths())
+	mds, err := s.storage.ListFolder(ctx, req.Ref, req.ArbitraryMetadataKeys)
 	res := &provider.ListContainerResponse{
 		Status: status.NewStatusFromErrType(ctx, "list container", err),
 		Infos:  mds,

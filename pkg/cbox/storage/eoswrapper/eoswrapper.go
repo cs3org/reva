@@ -107,8 +107,8 @@ func New(m map[string]interface{}) (storage.FS, error) {
 // We need to override the methods, GetMD, GetPathByID and ListFolder to fill the
 // StorageId in the ResourceInfo objects.
 
-func (w *wrapper) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []string, fieldMask []string) (*provider.ResourceInfo, error) {
-	res, err := w.FS.GetMD(ctx, ref, mdKeys, fieldMask)
+func (w *wrapper) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []string) (*provider.ResourceInfo, error) {
+	res, err := w.FS.GetMD(ctx, ref, mdKeys)
 	if err != nil {
 		return nil, err
 	}
@@ -132,8 +132,8 @@ func (w *wrapper) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []s
 	return res, nil
 }
 
-func (w *wrapper) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys, fieldMask []string) ([]*provider.ResourceInfo, error) {
-	res, err := w.FS.ListFolder(ctx, ref, mdKeys, fieldMask)
+func (w *wrapper) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys []string) ([]*provider.ResourceInfo, error) {
+	res, err := w.FS.ListFolder(ctx, ref, mdKeys)
 	if err != nil {
 		return nil, err
 	}
@@ -272,7 +272,7 @@ func (w *wrapper) userIsProjectAdmin(ctx context.Context, ref *provider.Referenc
 		return nil
 	}
 
-	res, err := w.FS.GetMD(ctx, ref, nil, nil)
+	res, err := w.FS.GetMD(ctx, ref, nil)
 	if err != nil {
 		return err
 	}
