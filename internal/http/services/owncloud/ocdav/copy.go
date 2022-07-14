@@ -506,7 +506,7 @@ func (s *svc) prepareCopy(ctx context.Context, w http.ResponseWriter, r *http.Re
 		}
 	}
 	if isChild {
-		w.WriteHeader(http.StatusConflict)
+		w.WriteHeader(http.StatusBadRequest)
 		b, err := errors.Marshal(http.StatusBadRequest, "can not copy a folder into one of its children", "")
 		errors.HandleWebdavError(log, w, b, err)
 		return nil

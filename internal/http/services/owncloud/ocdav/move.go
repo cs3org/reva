@@ -152,7 +152,7 @@ func (s *svc) handleMove(ctx context.Context, w http.ResponseWriter, r *http.Req
 		}
 	}
 	if isChild {
-		w.WriteHeader(http.StatusConflict)
+		w.WriteHeader(http.StatusBadRequest)
 		b, err := errors.Marshal(http.StatusBadRequest, "can not move a folder into one of its children", "")
 		errors.HandleWebdavError(&log, w, b, err)
 		return
