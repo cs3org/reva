@@ -29,7 +29,7 @@ def lintStep():
         "name": "lint",
         "image": "registry.cern.ch/docker.io/golangci/golangci-lint:v1.42.1",
         "commands": [
-            "golangci-lint run --timeout 3m0s",
+            "golangci-lint run --timeout 10m0s",
         ],
     }
 
