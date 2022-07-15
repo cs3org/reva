@@ -308,9 +308,9 @@ var _ = Describe("gateway", func() {
 				Expect(listRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 				ssid, err := storagespace.ParseID(space.Id.OpaqueId)
 				Expect(err).ToNot(HaveOccurred())
-				_, err = os.Stat(path.Join(revads["storage"].StorageRoot, "/spacetypes/project", ssid.SpaceId))
+				_, err = os.Stat(path.Join(revads["storage"].StorageRoot, "/indexes/by-type/project", ssid.SpaceId))
 				Expect(err).To(HaveOccurred())
-				_, err = os.Stat(path.Join(revads["storage2"].StorageRoot, "/spacetypes/project", ssid.SpaceId))
+				_, err = os.Stat(path.Join(revads["storage2"].StorageRoot, "/indexes/by-type/project", ssid.SpaceId))
 				Expect(err).ToNot(HaveOccurred())
 			})
 

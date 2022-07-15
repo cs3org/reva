@@ -316,6 +316,17 @@ func (r *registry) buildFilters(filterMap map[string]string) []*providerpb.ListS
 			})
 		}
 	}
+	if filterMap["user_id"] != "" {
+		filters = append(filters, &providerpb.ListStorageSpacesRequest_Filter{
+			Type: providerpb.ListStorageSpacesRequest_Filter_TYPE_USER,
+			Term: &providerpb.ListStorageSpacesRequest_Filter_User{
+				User: &userpb.UserId{
+					Idp:      filterMap["user_idp"],
+					OpaqueId: filterMap["user_id"],
+				},
+			},
+		})
+	}
 	if filterMap["owner_id"] != "" && filterMap["owner_idp"] != "" {
 		filters = append(filters, &providerpb.ListStorageSpacesRequest_Filter{
 			Type: providerpb.ListStorageSpacesRequest_Filter_TYPE_OWNER,
