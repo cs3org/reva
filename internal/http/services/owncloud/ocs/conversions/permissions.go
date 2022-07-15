@@ -19,6 +19,7 @@
 package conversions
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 )
@@ -50,13 +51,15 @@ const (
 var (
 	// ErrPermissionNotInRange defines a permission specific error.
 	ErrPermissionNotInRange = fmt.Errorf("The provided permission is not between %d and %d", PermissionMinInput, PermissionMaxInput)
+	// ErrZeroPermission defines a permission specific error
+	ErrZeroPermission = errors.New("permission is zero")
 )
 
 // NewPermissions creates a new Permissions instance.
 // The value must be in the valid range.
 func NewPermissions(val int) (Permissions, error) {
 	if val == int(PermissionInvalid) {
-		return PermissionInvalid, nil
+		return PermissionInvalid, ErrZeroPermission
 	} else if val < int(PermissionInvalid) || int(PermissionMaxInput) < val {
 		return PermissionInvalid, ErrPermissionNotInRange
 	}
