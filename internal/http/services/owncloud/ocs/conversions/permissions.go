@@ -56,7 +56,7 @@ var (
 // The value must be in the valid range.
 func NewPermissions(val int) (Permissions, error) {
 	if val == int(PermissionInvalid) {
-		return PermissionInvalid, fmt.Errorf("permissions %d out of range %d - %d", val, PermissionMinInput, PermissionMaxInput)
+		return PermissionInvalid, nil
 	} else if val < int(PermissionInvalid) || int(PermissionMaxInput) < val {
 		return PermissionInvalid, ErrPermissionNotInRange
 	}
