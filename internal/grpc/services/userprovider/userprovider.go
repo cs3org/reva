@@ -25,6 +25,7 @@ import (
 	"sort"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	"github.com/cs3org/reva/v2/pkg/appctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/plugin"
 	"github.com/cs3org/reva/v2/pkg/rgrpc"
@@ -184,8 +185,10 @@ func (s *service) FindUsers(ctx context.Context, req *userpb.FindUsersRequest) (
 }
 
 func (s *service) GetUserGroups(ctx context.Context, req *userpb.GetUserGroupsRequest) (*userpb.GetUserGroupsResponse, error) {
+	log := appctx.GetLogger(ctx)
 	groups, err := s.usermgr.GetUserGroups(ctx, req.UserId)
 	if err != nil {
+		log.Warn().Err(err).Interface("userid", req.UserId).Msg("error getting user groups")
 		res := &userpb.GetUserGroupsResponse{
 			Status: status.NewInternal(ctx, "error getting user groups"),
 		}
