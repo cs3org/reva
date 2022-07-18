@@ -154,7 +154,7 @@ func (t *Tree) moveSpaceType(spaceType string) error {
 				Str("space", spaceType).
 				Str("nodes", child.Name()).
 				Str("oldLink", old).
-				Msg("could not read old symplink")
+				Msg("could not read old symlink")
 			continue
 		}
 		newDir := filepath.Join(t.root, "indexes", "by-type", spaceType)
@@ -163,7 +163,7 @@ func (t *Tree) moveSpaceType(spaceType string) error {
 				Str("space", spaceType).
 				Str("nodes", child.Name()).
 				Str("targetDir", newDir).
-				Msg("could not read old symplink")
+				Msg("could not read old symlink")
 		}
 		newLink := filepath.Join(newDir, child.Name())
 		if err := os.Symlink(filepath.Join("..", target), newLink); err != nil {

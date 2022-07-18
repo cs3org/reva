@@ -153,11 +153,11 @@ Details
 
    https://github.com/owncloud/reva/issues/3080
 
- * Enhancement #4072: Add user filter
+ * Enhancement #3046: Add user filter
 
    This PR adds the ability to filter spaces by user-id
 
-   https://github.com/owncloud/ocis/pull/4072
+   https://github.com/cs3org/reva/pull/3046
 
 
 Changelog for reva 2.6.1 (2022-06-27)
