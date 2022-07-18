@@ -80,6 +80,11 @@ func GetOrHeadFile(w http.ResponseWriter, r *http.Request, fs storage.FS, spaceI
 		return
 	}
 
+	// fill in storage provider id if it is missing
+	if spaceID != "" && md.GetId().GetStorageId() == "" {
+		md.Id.StorageId = ref.ResourceId.StorageId
+	}
+
 	var ranges []HTTPRange
 
 	if r.Header.Get("Range") != "" {

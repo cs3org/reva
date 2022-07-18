@@ -265,6 +265,10 @@ func (s *service) InitiateFileDownload(ctx context.Context, req *provider.Initia
 	protocol := &provider.FileDownloadProtocol{Expose: s.conf.ExposeDataServer}
 
 	if utils.IsRelativeReference(req.Ref) {
+		// fill in storage provider id if it is missing
+		if req.GetRef().GetResourceId().GetStorageId() == "" {
+			req.GetRef().GetResourceId().StorageId = s.conf.MountID
+		}
 		protocol.Protocol = "spaces"
 		u.Path = path.Join(u.Path, "spaces", storagespace.FormatResourceID(*req.Ref.ResourceId), req.Ref.Path)
 	} else {
