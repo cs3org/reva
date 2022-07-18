@@ -282,7 +282,7 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 		return nil, errtypes.PermissionDenied(fmt.Sprintf("user %s is not allowed to list spaces of other users", ctxpkg.ContextMustGetUser(ctx).GetId().GetOpaqueId()))
 	}
 
-	checkNodePermissions := !canListAllSpaces && !unrestricted
+	checkNodePermissions := !canListAllSpaces || !unrestricted
 
 	spaces := []*provider.StorageSpace{}
 	// build the glob path, eg.
