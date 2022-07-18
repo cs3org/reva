@@ -22,6 +22,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"time"
 
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
@@ -37,8 +38,7 @@ import (
 )
 
 const (
-	shareTypeUser  = 0
-	shareTypeGroup = 1
+	publicShareType = 3
 )
 
 func init() {
@@ -46,16 +46,20 @@ func init() {
 }
 
 type config struct {
-	DbUsername string `mapstructure:"db_username"`
-	DbPassword string `mapstructure:"db_password"`
-	DbHost     string `mapstructure:"db_host"`
-	DbPort     int    `mapstructure:"db_port"`
-	DbName     string `mapstructure:"db_name"`
+	GatewayAddr                string `mapstructure:"gateway_addr"`
+	DbUsername                 string `mapstructure:"db_username"`
+	DbPassword                 string `mapstructure:"db_password"`
+	DbHost                     string `mapstructure:"db_host"`
+	DbPort                     int    `mapstructure:"db_port"`
+	DbName                     string `mapstructure:"db_name"`
+	EnableExpiredSharesCleanup bool   `mapstructure:"enable_expired_shares_cleanup"`
 }
 
 type mgr struct {
-	driver string
-	db     *sql.DB
+	driver        string
+	db            *sql.DB
+	c             config
+	userConverter UserConverter
 }
 
 // NewMysql returns a new publicshare manager connection to a mysql database
@@ -71,14 +75,18 @@ func NewMysql(m map[string]interface{}) (publicshare.Manager, error) {
 		return nil, err
 	}
 
-	return New("mysql", db)
+	userConverter := NewGatewayUserConverter(c.GatewayAddr)
+
+	return New("mysql", db, *c, userConverter)
 }
 
 // New returns a new Cache instance connecting to the given sql.DB
-func New(driver string, db *sql.DB) (publicshare.Manager, error) {
+func New(driver string, db *sql.DB, c config, userConverter UserConverter) (publicshare.Manager, error) {
 	return &mgr{
-		driver: driver,
-		db:     db,
+		driver:        driver,
+		db:            db,
+		c:             c,
+		userConverter: userConverter,
 	}, nil
 }
 
@@ -104,7 +112,75 @@ func (m *mgr) GetPublicShare(ctx context.Context, u *user.User, ref *link.Public
 }
 
 func (m *mgr) ListPublicShares(ctx context.Context, u *user.User, filters []*link.ListPublicSharesRequest_Filter, sign bool) ([]*link.PublicShare, error) {
+	uid := FormatUserID(u.Id)
+	query := "select coalesce(uid_owner, '') as uid_owner, coalesce(uid_initiator, '') as uid_initiator, coalesce(share_with, '') as share_with, coalesce(item_source, '') as item_source, coalesce(item_type, '') as item_type, coalesce(token,'') as token, coalesce(expiration, '') as expiration, coalesce(share_name, '') as share_name, id, stime, permissions FROM oc_share WHERE (uid_owner=? or uid_initiator=?) AND (share_type=?)"
+	var resourceFilters, ownerFilters, creatorFilters string
+	var resourceParams, ownerParams, creatorParams []interface{}
+	params := []interface{}{uid, uid, publicShareType}
+
+	for _, f := range filters {
+		switch f.Type {
+		case link.ListPublicSharesRequest_Filter_TYPE_RESOURCE_ID:
+			if len(resourceFilters) != 0 {
+				resourceFilters += " OR "
+			}
+			resourceFilters += "item_source=?"
+			resourceParams = append(resourceParams, f.GetResourceId().OpaqueId)
+		case link.ListPublicSharesRequest_Filter_TYPE_OWNER:
+			if len(ownerFilters) != 0 {
+				ownerFilters += " OR "
+			}
+			ownerFilters += "(uid_owner=?)"
+			ownerParams = append(ownerParams, conversions.FormatUserID(f.GetOwner()))
+		case link.ListPublicSharesRequest_Filter_TYPE_CREATOR:
+			if len(creatorFilters) != 0 {
+				creatorFilters += " OR "
+			}
+			creatorFilters += "(uid_initiator=?)"
+			creatorParams = append(creatorParams, conversions.FormatUserID(f.GetCreator()))
+		}
+	}
+	if resourceFilters != "" {
+		query = fmt.Sprintf("%s AND (%s)", query, resourceFilters)
+		params = append(params, resourceParams...)
+	}
+	if ownerFilters != "" {
+		query = fmt.Sprintf("%s AND (%s)", query, ownerFilters)
+		params = append(params, ownerParams...)
+	}
+	if creatorFilters != "" {
+		query = fmt.Sprintf("%s AND (%s)", query, creatorFilters)
+		params = append(params, creatorParams...)
+	}
+
+	rows, err := m.db.Query(query, params...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var s conversions.DBShare
 	shares := []*link.PublicShare{}
+	for rows.Next() {
+		if err := rows.Scan(&s.UIDOwner, &s.UIDInitiator, &s.ShareWith, &s.Prefix, &s.ItemSource, &s.ItemType, &s.Token, &s.Expiration, &s.ShareName, &s.ID, &s.STime, &s.Permissions); err != nil {
+			continue
+		}
+		cs3Share := conversions.ConvertToCS3PublicShare(s)
+		if expired(cs3Share) {
+			_ = m.cleanupExpiredShares()
+		} else {
+			if cs3Share.PasswordProtected && sign {
+				if err := publicshare.AddSignature(cs3Share, s.ShareWith); err != nil {
+					return nil, err
+				}
+			}
+			shares = append(shares, cs3Share)
+		}
+	}
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+
 	return shares, nil
 }
 
@@ -114,4 +190,33 @@ func (m *mgr) RevokePublicShare(ctx context.Context, u *user.User, ref *link.Pub
 
 func (m *mgr) GetPublicShareByToken(ctx context.Context, token string, auth *link.PublicShareAuthentication, sign bool) (*link.PublicShare, error) {
 	return nil, errtypes.NotSupported("not implemented")
+}
+
+func expired(s *link.PublicShare) bool {
+	if s.Expiration != nil {
+		if t := time.Unix(int64(s.Expiration.GetSeconds()), int64(s.Expiration.GetNanos())); t.Before(time.Now()) {
+			return true
+		}
+	}
+	return false
+}
+
+func (m *mgr) cleanupExpiredShares() error {
+	/*
+		if !m.c.EnableExpiredSharesCleanup {
+			return nil
+		}
+
+		query := "update oc_share set orphan = 1 where expiration IS NOT NULL AND expiration < ?"
+		params := []interface{}{time.Now().Format("2006-01-02 03:04:05")}
+
+		stmt, err := m.db.Prepare(query)
+		if err != nil {
+			return err
+		}
+		if _, err = stmt.Exec(params...); err != nil {
+			return err
+		}
+	*/
+	return nil
 }
