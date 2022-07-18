@@ -197,6 +197,7 @@ func ItemTrashed(r *provider.DeleteResponse, req *provider.DeleteRequest, execut
 		Ref:       req.Ref,
 		ID: &provider.ResourceId{
 			StorageId: req.Ref.GetResourceId().GetStorageId(),
+			SpaceId:   req.Ref.GetResourceId().GetSpaceId(),
 			OpaqueId:  opaqueID,
 		},
 	}
