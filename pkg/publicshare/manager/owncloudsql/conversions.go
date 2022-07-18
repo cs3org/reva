@@ -29,6 +29,7 @@ import (
 	userprovider "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
+	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	conversions "github.com/cs3org/reva/v2/internal/http/services/owncloud/ocs/conversions"
@@ -45,6 +46,7 @@ type DBShare struct {
 	UIDInitiator string
 	ItemStorage  string
 	FileSource   string
+	ItemType     string // 'file' or 'folder'
 	ShareWith    string
 	Token        string
 	Expiration   string
@@ -288,5 +290,60 @@ func (m *mgr) convertToCS3ReceivedShare(ctx context.Context, s DBShare, storageM
 		Share:      share,
 		State:      state,
 		MountPoint: &provider.Reference{Path: strings.TrimLeft(s.FileTarget, "/")},
+	}, nil
+}
+
+// ConvertToCS3PublicShare converts a DBShare to a CS3API public share
+func (m *mgr) ConvertToCS3PublicShare(ctx context.Context, s DBShare) (*link.PublicShare, error) {
+	ts := &typespb.Timestamp{
+		Seconds: uint64(s.STime),
+	}
+	permissions, err := intTosharePerm(s.Permissions)
+	if err != nil {
+		return nil, err
+	}
+	owner, err := m.userConverter.UserNameToUserID(ctx, s.UIDOwner)
+	if err != nil {
+		return nil, err
+	}
+	var creator *userpb.UserId
+	if s.UIDOwner == s.UIDInitiator {
+		creator = owner
+	} else {
+		creator, err = m.userConverter.UserNameToUserID(ctx, s.UIDOwner)
+		if err != nil {
+			return nil, err
+		}
+	}
+	pwd := false
+	if s.ShareWith != "" {
+		pwd = true
+	}
+	var expires *typespb.Timestamp
+	if s.Expiration != "" {
+		t, err := time.Parse("2006-01-02 15:04:05", s.Expiration)
+		if err == nil {
+			expires = &typespb.Timestamp{
+				Seconds: uint64(t.Unix()),
+			}
+		}
+	}
+	return &link.PublicShare{
+		Id: &link.PublicShareId{
+			OpaqueId: s.ID,
+		},
+		ResourceId: &provider.ResourceId{
+			SpaceId:  s.ItemStorage,
+			OpaqueId: s.FileSource,
+		},
+		Permissions:       &link.PublicSharePermissions{Permissions: permissions},
+		Owner:             owner,
+		Creator:           creator,
+		Token:             s.Token,
+		DisplayName:       s.ShareName,
+		PasswordProtected: pwd,
+		Expiration:        expires,
+		Ctime:             ts,
+		Mtime:             ts,
 	}, nil
 }

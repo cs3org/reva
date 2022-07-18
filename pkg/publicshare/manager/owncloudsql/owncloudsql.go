@@ -27,9 +27,11 @@ import (
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/publicshare"
 	"github.com/cs3org/reva/v2/pkg/publicshare/manager/registry"
+	"github.com/cs3org/reva/v2/pkg/sharedconf"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 
@@ -45,7 +47,7 @@ func init() {
 	registry.Register("owncloudsql", NewMysql)
 }
 
-type config struct {
+type Config struct {
 	GatewayAddr                string `mapstructure:"gateway_addr"`
 	DbUsername                 string `mapstructure:"db_username"`
 	DbPassword                 string `mapstructure:"db_password"`
@@ -58,7 +60,7 @@ type config struct {
 type mgr struct {
 	driver        string
 	db            *sql.DB
-	c             config
+	c             Config
 	userConverter UserConverter
 }
 
@@ -75,13 +77,13 @@ func NewMysql(m map[string]interface{}) (publicshare.Manager, error) {
 		return nil, err
 	}
 
-	userConverter := NewGatewayUserConverter(c.GatewayAddr)
+	userConverter := NewGatewayUserConverter(sharedconf.GetGatewaySVC(c.GatewayAddr))
 
 	return New("mysql", db, *c, userConverter)
 }
 
 // New returns a new Cache instance connecting to the given sql.DB
-func New(driver string, db *sql.DB, c config, userConverter UserConverter) (publicshare.Manager, error) {
+func New(driver string, db *sql.DB, c Config, userConverter UserConverter) (publicshare.Manager, error) {
 	return &mgr{
 		driver:        driver,
 		db:            db,
@@ -90,8 +92,8 @@ func New(driver string, db *sql.DB, c config, userConverter UserConverter) (publ
 	}, nil
 }
 
-func parseConfig(m map[string]interface{}) (*config, error) {
-	c := &config{}
+func parseConfig(m map[string]interface{}) (*Config, error) {
+	c := &Config{}
 	if err := mapstructure.Decode(m, c); err != nil {
 		return nil, err
 	}
@@ -112,8 +114,24 @@ func (m *mgr) GetPublicShare(ctx context.Context, u *user.User, ref *link.Public
 }
 
 func (m *mgr) ListPublicShares(ctx context.Context, u *user.User, filters []*link.ListPublicSharesRequest_Filter, sign bool) ([]*link.PublicShare, error) {
-	uid := FormatUserID(u.Id)
-	query := "select coalesce(uid_owner, '') as uid_owner, coalesce(uid_initiator, '') as uid_initiator, coalesce(share_with, '') as share_with, coalesce(item_source, '') as item_source, coalesce(item_type, '') as item_type, coalesce(token,'') as token, coalesce(expiration, '') as expiration, coalesce(share_name, '') as share_name, id, stime, permissions FROM oc_share WHERE (uid_owner=? or uid_initiator=?) AND (share_type=?)"
+	uid := ctxpkg.ContextMustGetUser(ctx).Username
+	query := `SELECT
+				coalesce(uid_owner, '') as uid_owner,
+				coalesce(uid_initiator, '') as uid_initiator, 
+				coalesce(share_with, '') as share_with,
+				coalesce(file_source, '') as file_source,
+				coalesce(item_type, '') as item_type,
+				coalesce(token,'') as token,
+				coalesce(expiration, '') as expiration,
+				coalesce(share_name, '') as share_name,
+				id,
+				stime,
+				s.permissions,
+				fc.storage as storage
+			FROM oc_share s
+			LEFT JOIN oc_filecache fc ON fc.fileid = file_source
+			WHERE (uid_owner=? or uid_initiator=?)
+			AND (share_type=?)`
 	var resourceFilters, ownerFilters, creatorFilters string
 	var resourceParams, ownerParams, creatorParams []interface{}
 	params := []interface{}{uid, uid, publicShareType}
@@ -131,13 +149,13 @@ func (m *mgr) ListPublicShares(ctx context.Context, u *user.User, filters []*lin
 				ownerFilters += " OR "
 			}
 			ownerFilters += "(uid_owner=?)"
-			ownerParams = append(ownerParams, conversions.FormatUserID(f.GetOwner()))
+			ownerParams = append(ownerParams, formatUserID(f.GetOwner()))
 		case link.ListPublicSharesRequest_Filter_TYPE_CREATOR:
 			if len(creatorFilters) != 0 {
 				creatorFilters += " OR "
 			}
 			creatorFilters += "(uid_initiator=?)"
-			creatorParams = append(creatorParams, conversions.FormatUserID(f.GetCreator()))
+			creatorParams = append(creatorParams, formatUserID(f.GetCreator()))
 		}
 	}
 	if resourceFilters != "" {
@@ -159,13 +177,16 @@ func (m *mgr) ListPublicShares(ctx context.Context, u *user.User, filters []*lin
 	}
 	defer rows.Close()
 
-	var s conversions.DBShare
+	var s DBShare
 	shares := []*link.PublicShare{}
 	for rows.Next() {
-		if err := rows.Scan(&s.UIDOwner, &s.UIDInitiator, &s.ShareWith, &s.Prefix, &s.ItemSource, &s.ItemType, &s.Token, &s.Expiration, &s.ShareName, &s.ID, &s.STime, &s.Permissions); err != nil {
+		if err := rows.Scan(&s.UIDOwner, &s.UIDInitiator, &s.ShareWith, &s.FileSource, &s.ItemType, &s.Token, &s.Expiration, &s.ShareName, &s.ID, &s.STime, &s.Permissions, &s.ItemStorage); err != nil {
 			continue
 		}
-		cs3Share := conversions.ConvertToCS3PublicShare(s)
+		var cs3Share *link.PublicShare
+		if cs3Share, err = m.ConvertToCS3PublicShare(ctx, s); err != nil {
+			return nil, err
+		}
 		if expired(cs3Share) {
 			_ = m.cleanupExpiredShares()
 		} else {

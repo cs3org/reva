@@ -30,6 +30,8 @@ import (
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/publicshare"
 	"github.com/cs3org/reva/v2/pkg/publicshare/manager/owncloudsql"
+	"github.com/cs3org/reva/v2/pkg/share/manager/owncloudsql/mocks"
+	"github.com/stretchr/testify/mock"
 
 	_ "github.com/mattn/go-sqlite3"
 
@@ -71,7 +73,16 @@ var _ = Describe("SQL manager", func() {
 		sqldb, err = sql.Open("sqlite3", testDbFile.Name())
 		Expect(err).ToNot(HaveOccurred())
 
-		m, err = owncloudsql.New("sqlite3", sqldb)
+		userConverter := &mocks.UserConverter{}
+		userConverter.On("UserIDToUserName", mock.Anything, mock.Anything).Return("username", nil)
+		userConverter.On("UserNameToUserID", mock.Anything, mock.Anything).Return(
+			func(_ context.Context, username string) *userpb.UserId {
+				return &userpb.UserId{
+					OpaqueId: username,
+				}
+			},
+			func(_ context.Context, username string) error { return nil })
+		m, err = owncloudsql.New("sqlite3", sqldb, owncloudsql.Config{}, userConverter)
 		Expect(err).ToNot(HaveOccurred())
 
 		user = &userpb.User{
