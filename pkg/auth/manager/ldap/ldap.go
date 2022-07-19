@@ -148,10 +148,12 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 		UserId: userID,
 	})
 	if err != nil {
+		log.Warn().Err(err).Msg("error getting user groups")
 		return nil, nil, errors.Wrap(err, "ldap: error getting user groups")
 	}
 	if getGroupsResp.Status.Code != rpc.Code_CODE_OK {
-		return nil, nil, errors.Wrap(err, "ldap: grpc getting user groups failed")
+		log.Warn().Err(err).Str("msg", getGroupsResp.Status.Message).Msg("grpc getting user groups failed")
+		return nil, nil, fmt.Errorf("ldap: grpc getting user groups failed: '%s'", getGroupsResp.Status.Message)
 	}
 	gidNumber := am.c.Nobody
 	gidValue := userEntry.GetEqualFoldAttributeValue(am.c.LDAPIdentity.User.Schema.GIDNumber)

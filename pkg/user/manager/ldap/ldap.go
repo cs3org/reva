@@ -197,10 +197,12 @@ func (m *manager) FindUsers(ctx context.Context, query string, skipFetchingGroup
 func (m *manager) GetUserGroups(ctx context.Context, uid *userpb.UserId) ([]string, error) {
 	log := appctx.GetLogger(ctx)
 	if uid.Idp != "" && uid.Idp != m.c.Idp {
+		log.Debug().Str("useridp", uid.Idp).Str("configured idp", m.c.Idp).Msg("IDP mismatch")
 		return nil, errtypes.NotFound("idp mismatch")
 	}
 	userEntry, err := m.c.LDAPIdentity.GetLDAPUserByID(log, m.ldapClient, uid.OpaqueId)
 	if err != nil {
+		log.Debug().Err(err).Interface("userid", uid).Msg("Failed to lookup user")
 		return []string{}, err
 	}
 	return m.c.LDAPIdentity.GetLDAPUserGroups(log, m.ldapClient, userEntry)
