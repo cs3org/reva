@@ -35,7 +35,7 @@ import (
 // Downloader is the interface implemented by the objects that are able to
 // download a path into a destination Writer
 type Downloader interface {
-	Download(context.Context, string, io.Writer) error
+	Download(context.Context, string) (io.ReadCloser, error)
 }
 
 type revaDownloader struct {
@@ -60,8 +60,8 @@ func getDownloadProtocol(protocols []*gateway.FileDownloadProtocol, prot string)
 	return nil, errtypes.InternalError(fmt.Sprintf("protocol %s not supported for downloading", prot))
 }
 
-// Download downloads a resource given the path to the dst Writer
-func (r *revaDownloader) Download(ctx context.Context, path string, dst io.Writer) error {
+// Download downloads a resource given the path. Is responsability of the caller close the reader
+func (r *revaDownloader) Download(ctx context.Context, path string) (io.ReadCloser, error) {
 	downResp, err := r.gtw.InitiateFileDownload(ctx, &provider.InitiateFileDownloadRequest{
 		Ref: &provider.Reference{
 			Path: path,
@@ -70,37 +70,35 @@ func (r *revaDownloader) Download(ctx context.Context, path string, dst io.Write
 
 	switch {
 	case err != nil:
-		return err
+		return nil, err
 	case downResp.Status.Code != rpc.Code_CODE_OK:
-		return errtypes.InternalError(downResp.Status.Message)
+		return nil, errtypes.InternalError(downResp.Status.Message)
 	}
 
 	p, err := getDownloadProtocol(downResp.Protocols, "simple")
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	httpReq, err := rhttp.NewRequest(ctx, http.MethodGet, p.DownloadEndpoint, nil)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	httpReq.Header.Set(datagateway.TokenTransportHeader, p.Token)
 
 	httpRes, err := r.httpClient.Do(httpReq)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	defer httpRes.Body.Close()
 
 	if httpRes.StatusCode != http.StatusOK {
 		switch httpRes.StatusCode {
 		case http.StatusNotFound:
-			return errtypes.NotFound(path)
+			return nil, errtypes.NotFound(path)
 		default:
-			return errtypes.InternalError(httpRes.Status)
+			return nil, errtypes.InternalError(httpRes.Status)
 		}
 	}
 
-	_, err = io.Copy(dst, httpRes.Body)
-	return err
+	return httpRes.Body, nil
 }
