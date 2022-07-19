@@ -8,6 +8,7 @@ require (
 	github.com/Masterminds/semver v1.5.0 // indirect
 	github.com/Masterminds/sprig v2.22.0+incompatible
 	github.com/ReneKroon/ttlcache/v2 v2.11.0
+	github.com/anthonynsimon/bild v0.13.0
 	github.com/asim/go-micro/plugins/events/nats/v4 v4.0.0-20220118152736-9e0be6c85d75
 	github.com/aws/aws-sdk-go v1.44.27
 	github.com/beevik/etree v1.1.0
