@@ -22,9 +22,9 @@ import (
 type FileType int
 
 const (
-	pngType FileType = iota
-	jpegType
-	bmpType
+	PNGType FileType = iota
+	JPEGType
+	BMPType
 )
 
 type Config struct {
@@ -92,9 +92,9 @@ func (t *Thumbnail) GetThumbnail(ctx context.Context, file string, width, height
 
 func getMimeType(ttype FileType) string {
 	switch ttype {
-	case pngType:
+	case PNGType:
 		return mime.Detect(false, ".png")
-	case bmpType:
+	case BMPType:
 		return mime.Detect(false, ".bmp")
 	default:
 		return mime.Detect(false, ".jpg")
@@ -103,9 +103,9 @@ func getMimeType(ttype FileType) string {
 
 func (t *Thumbnail) getEncoderByType(ttype FileType) imgio.Encoder {
 	switch ttype {
-	case pngType:
+	case PNGType:
 		return imgio.PNGEncoder()
-	case bmpType:
+	case BMPType:
 		return imgio.BMPEncoder()
 	default:
 		return imgio.JPEGEncoder(t.c.Quality)
