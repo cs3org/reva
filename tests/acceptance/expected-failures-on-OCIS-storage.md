@@ -1259,6 +1259,9 @@ _ocs: api compatibility, return correct status code_
 - [apiShareOperationsToShares1/gettingShares.feature:40](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareOperationsToShares1/gettingShares.feature#L40)
 - [apiShareOperationsToShares1/gettingShares.feature:39](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareOperationsToShares1/gettingShares.feature#L39)
 
+#### [These tests pass in ocis and reva egde but fail in master with `file_target has unexpected value '/home'`]()
+- [apiSharePublicLink1/createPublicLinkShare.feature:477](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink1/createPublicLinkShare.feature#L477)
+- [apiSharePublicLink1/createPublicLinkShare.feature:478](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink1/createPublicLinkShare.feature#L478)
 
 Note: always have an empty line at the end of this file.
 The bash script that processes this file may not process a scenario reference on the last line.
