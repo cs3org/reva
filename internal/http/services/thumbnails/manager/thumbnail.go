@@ -6,13 +6,12 @@ import (
 	"fmt"
 	"image"
 
-	"github.com/anthonynsimon/bild/imgio"
-	"github.com/anthonynsimon/bild/transform"
 	"github.com/cs3org/reva/internal/http/services/thumbnails/cache"
 	"github.com/cs3org/reva/internal/http/services/thumbnails/cache/registry"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/mime"
 	"github.com/cs3org/reva/pkg/storage/utils/downloader"
+	"github.com/disintegration/imaging"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 
@@ -72,11 +71,11 @@ func (t *Thumbnail) GetThumbnail(ctx context.Context, file string, width, height
 		return nil, "", errors.Wrap(err, "thumbnails: error decoding file "+file)
 	}
 
-	resized := transform.Resize(img, width, height, transform.Linear)
-	encoder := t.getEncoderByType(outType)
+	thumb := imaging.Thumbnail(img, width, height, imaging.Linear)
 
 	var buf bytes.Buffer
-	err = encoder(&buf, resized)
+	format, opts := t.getEncoderFormat(outType)
+	err = imaging.Encode(&buf, thumb, format, opts...)
 	if err != nil {
 		return nil, "", errors.Wrap(err, "thumbnails: error encoding image")
 	}
@@ -101,14 +100,14 @@ func getMimeType(ttype FileType) string {
 	}
 }
 
-func (t *Thumbnail) getEncoderByType(ttype FileType) imgio.Encoder {
+func (t *Thumbnail) getEncoderFormat(ttype FileType) (imaging.Format, []imaging.EncodeOption) {
 	switch ttype {
 	case PNGType:
-		return imgio.PNGEncoder()
+		return imaging.PNG, nil
 	case BMPType:
-		return imgio.BMPEncoder()
+		return imaging.BMP, nil
 	default:
-		return imgio.JPEGEncoder(t.c.Quality)
+		return imaging.JPEG, []imaging.EncodeOption{imaging.JPEGQuality(t.c.Quality)}
 	}
 }
 
