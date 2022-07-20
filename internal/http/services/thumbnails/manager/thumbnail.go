@@ -29,16 +29,18 @@ const (
 type Config struct {
 	GatewaySVC   string                            `mapstructure:"gateway_svc"`
 	Quality      int                               `mapstructure:"quality"`
+	Resolutions  []string                          `mapstructure:"quality"`
 	Cache        bool                              `mapstructure:"cache"`
 	CacheDriver  string                            `mapstructure:"cache_driver"`
 	CacheDrivers map[string]map[string]interface{} `mapstructure:"cache_drivers"`
 }
 
 type Thumbnail struct {
-	c          *Config
-	downloader downloader.Downloader
-	cache      cache.Cache
-	log        *zerolog.Logger
+	c           *Config
+	downloader  downloader.Downloader
+	cache       cache.Cache
+	log         *zerolog.Logger
+	resolutions Resolutions
 }
 
 func NewThumbnail(d downloader.Downloader, c *Config, log *zerolog.Logger) (*Thumbnail, error) {
@@ -71,7 +73,9 @@ func (t *Thumbnail) GetThumbnail(ctx context.Context, file string, width, height
 		return nil, "", errors.Wrap(err, "thumbnails: error decoding file "+file)
 	}
 
-	thumb := imaging.Thumbnail(img, width, height, imaging.Linear)
+	resolution := image.Rect(0, 0, width, height)
+	match := t.resolutions.ClosestMatch(resolution, img.Bounds())
+	thumb := imaging.Thumbnail(img, match.Dx(), match.Dy(), imaging.Linear)
 
 	var buf bytes.Buffer
 	format, opts := t.getEncoderFormat(outType)
