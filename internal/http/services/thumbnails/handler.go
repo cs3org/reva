@@ -27,6 +27,10 @@ import (
 	"net/url"
 	"strconv"
 
+	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	share "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/thumbnails/manager"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
@@ -43,12 +47,6 @@ import (
 func init() {
 	global.Register("thumbnails", New)
 }
-
-type ContextKey int
-
-const (
-	ContextKeyPath ContextKey = iota
-)
 
 const (
 	DefaultWidth  int = 32
@@ -70,6 +68,7 @@ type svc struct {
 	c         *config
 	router    *chi.Mux
 	log       *zerolog.Logger
+	client    gateway.GatewayAPIClient
 	thumbnail *manager.Thumbnail
 }
 
@@ -128,13 +127,8 @@ func New(conf map[string]interface{}, log *zerolog.Logger) (global.Service, erro
 
 	// thumbnails for public links
 	r.Group(func(r chi.Router) {
-		// r.Use(s.DavPublicContext())
-
-		// r.Head("/remote.php/dav/public-files/{token}/*", s.PublicThumbnailHead)
-		// r.Head("/dav/public-files/{token}/*", s.PublicThumbnailHead)
-
-		// r.Get("/remote.php/dav/public-files/{token}/*", s.PublicThumbnail)
-		// r.Get("/dav/public-files/{token}/*", s.PublicThumbnail)
+		r.Use(s.DavPublicContext)
+		r.Get("/public-files/*", s.Thumbnail)
 	})
 
 	return s, nil
@@ -148,14 +142,81 @@ func (s *svc) DavUserContext(next http.Handler) http.Handler {
 		path, _ = url.QueryUnescape(path)
 		path = "/" + path
 
-		ctx = context.WithValue(ctx, ContextKeyPath, path)
+		res, err := s.statRes(ctx, &provider.Reference{
+			Path: path,
+		})
+		if err != nil {
+			s.writeHTTPError(w, err)
+			return
+		}
+
+		ctx = ContextSetResource(ctx, res)
 
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
 
+func (s *svc) DavPublicContext(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+
+		token := chi.URLParam(r, "*")
+		token, _ = url.QueryUnescape(token)
+
+		res, err := s.statPublicFile(ctx, token)
+		if err != nil {
+			s.writeHTTPError(w, err)
+			return
+		}
+
+		ctx = ContextSetResource(ctx, res)
+
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+func (s *svc) statPublicFile(ctx context.Context, token string) (*provider.ResourceInfo, error) {
+	resp, err := s.client.GetPublicShare(ctx, &share.GetPublicShareRequest{
+		Ref: &share.PublicShareReference{
+			Spec: &share.PublicShareReference_Token{
+				Token: token,
+			},
+		},
+	})
+
+	switch {
+	case err != nil:
+		return nil, err
+	case resp.Status.Code == rpc.Code_CODE_NOT_FOUND:
+		return nil, errtypes.NotFound(token)
+	case resp.Status.Code != rpc.Code_CODE_OK:
+		return nil, errtypes.InternalError(fmt.Sprintf("error getting public share %s", token))
+	}
+
+	return s.statRes(ctx, &provider.Reference{
+		ResourceId: resp.Share.ResourceId,
+	})
+}
+
+func (s *svc) statRes(ctx context.Context, ref *provider.Reference) (*provider.ResourceInfo, error) {
+	resp, err := s.client.Stat(ctx, &provider.StatRequest{
+		Ref: ref,
+	})
+	switch {
+	case err != nil:
+		return nil, err
+	case resp.Status.Code == rpc.Code_CODE_NOT_FOUND:
+		return nil, errtypes.NotFound(fmt.Sprintf("%+v", ref))
+	case resp.Status.Code != rpc.Code_CODE_OK:
+		return nil, errtypes.InternalError(fmt.Sprintf("error statting resource %+v", ref))
+	}
+
+	return resp.Info, nil
+}
+
 type ThumbnailRequest struct {
 	File       string
+	ETag       string
 	Width      int
 	Height     int
 	OutputType manager.FileType
@@ -164,7 +225,7 @@ type ThumbnailRequest struct {
 func (s *svc) parseThumbnailRequest(r *http.Request) (*ThumbnailRequest, error) {
 	ctx := r.Context()
 
-	file := ctx.Value(ContextKeyPath).(string)
+	res := ContextMustGetResource(ctx)
 	width, height, err := parseDimensions(r.URL.Query())
 	if err != nil {
 		return nil, errtypes.BadRequest(fmt.Sprintf("error parsing dimensions: %v", err))
@@ -173,7 +234,8 @@ func (s *svc) parseThumbnailRequest(r *http.Request) (*ThumbnailRequest, error) 
 	t := getOutType(s.c.OutputType)
 
 	return &ThumbnailRequest{
-		File:       file,
+		File:       res.Path,
+		ETag:       res.Etag,
 		Width:      width,
 		Height:     height,
 		OutputType: t,
@@ -222,7 +284,7 @@ func (s *svc) Thumbnail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data, mimetype, err := s.thumbnail.GetThumbnail(r.Context(), thumbReq.File, thumbReq.Width, thumbReq.Height, thumbReq.OutputType)
+	data, mimetype, err := s.thumbnail.GetThumbnail(r.Context(), thumbReq.File, thumbReq.ETag, thumbReq.Width, thumbReq.Height, thumbReq.OutputType)
 	if err != nil {
 		s.writeHTTPError(w, err)
 		return
