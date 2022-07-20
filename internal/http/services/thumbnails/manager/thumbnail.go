@@ -11,6 +11,7 @@ import (
 	"github.com/cs3org/reva/internal/http/services/thumbnails/cache"
 	"github.com/cs3org/reva/internal/http/services/thumbnails/cache/registry"
 	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/mime"
 	"github.com/cs3org/reva/pkg/storage/utils/downloader"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -54,33 +55,30 @@ func NewThumbnail(d downloader.Downloader, c *Config, log *zerolog.Logger) (*Thu
 	return t, nil
 }
 
-func (t *Thumbnail) GetThumbnail(ctx context.Context, file string, width, height int, outType FileType) ([]byte, error) {
+func (t *Thumbnail) GetThumbnail(ctx context.Context, file string, width, height int, outType FileType) ([]byte, string, error) {
 	if d, err := t.cache.Get(file, width, height); err == nil {
-		return d, nil
+		return d, "", nil
 	}
 
 	// the thumbnail was not found in the cache
 	r, err := t.downloader.Download(ctx, file)
 	if err != nil {
-		return nil, errors.Wrap(err, "thumbnails: error downloading file "+file)
+		return nil, "", errors.Wrap(err, "thumbnails: error downloading file "+file)
 	}
 	defer r.Close()
 
 	img, _, err := image.Decode(r)
 	if err != nil {
-		return nil, errors.Wrap(err, "thumbnails: error decoding file "+file)
+		return nil, "", errors.Wrap(err, "thumbnails: error decoding file "+file)
 	}
 
 	resized := transform.Resize(img, width, height, transform.Linear)
-	encoder, err := t.getEncoderByType(outType)
-	if err != nil {
-		return nil, err
-	}
+	encoder := t.getEncoderByType(outType)
 
 	var buf bytes.Buffer
 	err = encoder(&buf, resized)
 	if err != nil {
-		return nil, errors.Wrap(err, "thumbnails: error encoding image")
+		return nil, "", errors.Wrap(err, "thumbnails: error encoding image")
 	}
 
 	data := buf.Bytes()
@@ -89,19 +87,29 @@ func (t *Thumbnail) GetThumbnail(ctx context.Context, file string, width, height
 		t.log.Warn().Str("file", file).Int("width", width).Int("height", height).Err(err).Msg("failed to save data into the cache")
 	}
 
-	return data, nil
+	return data, getMimeType(outType), nil
 }
 
-func (t *Thumbnail) getEncoderByType(ttype FileType) (imgio.Encoder, error) {
+func getMimeType(ttype FileType) string {
 	switch ttype {
 	case pngType:
-		return imgio.PNGEncoder(), nil
-	case jpegType:
-		return imgio.JPEGEncoder(t.c.Quality), nil
+		return mime.Detect(false, ".png")
 	case bmpType:
-		return imgio.BMPEncoder(), nil
+		return mime.Detect(false, ".bmp")
+	default:
+		return mime.Detect(false, ".jpg")
 	}
-	return nil, errtypes.NotSupported("type not supported")
+}
+
+func (t *Thumbnail) getEncoderByType(ttype FileType) imgio.Encoder {
+	switch ttype {
+	case pngType:
+		return imgio.PNGEncoder()
+	case bmpType:
+		return imgio.BMPEncoder()
+	default:
+		return imgio.JPEGEncoder(t.c.Quality)
+	}
 }
 
 func (t *Thumbnail) initCache() error {
