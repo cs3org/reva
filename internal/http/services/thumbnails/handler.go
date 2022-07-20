@@ -31,8 +31,11 @@ import (
 
 	"github.com/cs3org/reva/internal/http/services/thumbnails/manager"
 	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/sharedconf"
+	"github.com/cs3org/reva/pkg/storage/utils/downloader"
 	"github.com/go-chi/chi/v5"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
@@ -58,6 +61,7 @@ type config struct {
 	manager.Config
 	OutputType string `mapstructure:"output_type"`
 	Prefix     string `mapstructure:"prefix"`
+	Insecure   bool   `mapstructure:"insecure"`
 }
 
 type svc struct {
@@ -68,6 +72,9 @@ type svc struct {
 }
 
 func (c *config) init() {
+	if c.Prefix == "" {
+		c.Prefix = "thumbnails"
+	}
 	if c.OutputType == "" {
 		c.OutputType = "jpg"
 	}
@@ -87,10 +94,23 @@ func New(conf map[string]interface{}, log *zerolog.Logger) (global.Service, erro
 
 	r := chi.NewRouter()
 
+	gtw, err := pool.GetGatewayServiceClient(pool.Endpoint(c.GatewaySVC))
+	if err != nil {
+		return nil, errors.Wrap(err, "error getting gateway client")
+	}
+
+	d := downloader.NewDownloader(gtw, rhttp.Insecure(c.Insecure))
+
+	mgr, err := manager.NewThumbnail(d, &c.Config, log)
+	if err != nil {
+		return nil, err
+	}
+
 	s := &svc{
-		c:      c,
-		log:    log,
-		router: r,
+		c:         c,
+		log:       log,
+		router:    r,
+		thumbnail: mgr,
 	}
 
 	// thumbnails for normal files
