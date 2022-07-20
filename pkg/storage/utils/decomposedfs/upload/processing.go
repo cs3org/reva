@@ -25,6 +25,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strconv"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -214,6 +215,11 @@ func Get(ctx context.Context, id string, lu *lookup.Lookup, tp Tree, fsRoot stri
 
 	up := buildUpload(ctx, info, info.Storage["BinPath"], infoPath, lu, tp, pub, async, tknopts)
 
+	oldsize, err := strconv.ParseUint(info.MetaData["oldsize"], 10, 64)
+	if err == nil {
+		up.oldsize = &oldsize
+	}
+
 	// add node if possible - only in async case
 	if n, err := node.ReadNode(ctx, lu, info.Storage["SpaceRoot"], info.Storage["NodeId"], false); err == nil && async {
 		up.Node = n
@@ -289,6 +295,7 @@ func CreateNodeForUpload(upload *Upload) (*node.Node, error) {
 		oldsize := uint64(old.Blobsize)
 		upload.oldsize = &oldsize
 
+		upload.Info.MetaData["oldsize"] = strconv.Itoa(int(old.Blobsize))
 		if _, err = node.CheckQuota(n.SpaceRoot, true, oldsize, uint64(fsize)); err != nil {
 			return nil, err
 		}
