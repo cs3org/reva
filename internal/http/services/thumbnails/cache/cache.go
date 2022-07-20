@@ -1,13 +1,8 @@
 package cache
 
-import (
-	"io"
-	"io/ioutil"
-)
-
 type Cache interface {
-	Get(file string, width, height int) (io.ReadCloser, error)
-	Set(file string, width, height int, r io.Reader) error
+	Get(file string, width, height int) ([]byte, error)
+	Set(file string, width, height int, data []byte) error
 }
 
 type noCache struct{}
@@ -16,12 +11,10 @@ func NewNoCache() Cache {
 	return noCache{}
 }
 
-func (noCache) Get(_ string, _, _ int) (io.ReadCloser, error) {
+func (noCache) Get(_ string, _, _ int) ([]byte, error) {
 	return nil, ErrNotFound{}
 }
 
-func (noCache) Set(_ string, _, _ int, r io.Reader) error {
-	// consume the reader
-	_, _ = io.Copy(ioutil.Discard, r)
+func (noCache) Set(_ string, _, _ int, _ []byte) error {
 	return nil
 }
