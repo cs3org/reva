@@ -27,12 +27,11 @@ const (
 )
 
 type Config struct {
-	GatewaySVC   string                            `mapstructure:"gateway_svc"`
-	Quality      int                               `mapstructure:"quality"`
-	Resolutions  []string                          `mapstructure:"quality"`
-	Cache        bool                              `mapstructure:"cache"`
-	CacheDriver  string                            `mapstructure:"cache_driver"`
-	CacheDrivers map[string]map[string]interface{} `mapstructure:"cache_drivers"`
+	Quality      int
+	Resolutions  []string
+	Cache        bool
+	CacheDriver  string
+	CacheDrivers map[string]map[string]interface{}
 }
 
 type Thumbnail struct {
