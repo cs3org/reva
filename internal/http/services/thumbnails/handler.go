@@ -59,8 +59,7 @@ type config struct {
 	GatewaySVC   string                            `mapstructure:"gateway_svc"`
 	Quality      int                               `mapstructure:"quality"`
 	Resolutions  []string                          `mapstructure:"quality"`
-	Cache        bool                              `mapstructure:"cache"`
-	CacheDriver  string                            `mapstructure:"cache_driver"`
+	Cache        string                            `mapstructure:"cache"`
 	CacheDrivers map[string]map[string]interface{} `mapstructure:"cache_drivers"`
 	OutputType   string                            `mapstructure:"output_type"`
 	Prefix       string                            `mapstructure:"prefix"`
@@ -108,7 +107,6 @@ func New(conf map[string]interface{}, log *zerolog.Logger) (global.Service, erro
 		Quality:      c.Quality,
 		Resolutions:  c.Resolutions,
 		Cache:        c.Cache,
-		CacheDriver:  c.CacheDriver,
 		CacheDrivers: c.CacheDrivers,
 	}, log)
 	if err != nil {
