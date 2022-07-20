@@ -25,9 +25,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"path"
 	"strconv"
-	"strings"
 
 	"github.com/cs3org/reva/internal/http/services/thumbnails/manager"
 	"github.com/cs3org/reva/pkg/errtypes"
@@ -137,17 +135,11 @@ func New(conf map[string]interface{}, log *zerolog.Logger) (global.Service, erro
 func (s *svc) DavUserContext(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
-		filePath := r.URL.Path
 
 		id := chi.URLParam(r, "id")
 		id, _ = url.QueryUnescape(id)
 
-		if id != "" {
-			filePath = strings.TrimPrefix(filePath, path.Join("/files", id))
-			filePath = strings.TrimPrefix(filePath, "/")
-		}
-
-		ctx = context.WithValue(ctx, ContextKeyPath, filePath)
+		ctx = context.WithValue(ctx, ContextKeyPath, id)
 
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
