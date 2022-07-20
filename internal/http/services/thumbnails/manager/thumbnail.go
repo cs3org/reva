@@ -58,8 +58,11 @@ func NewThumbnail(d downloader.Downloader, c *Config, log *zerolog.Logger) (*Thu
 
 func (t *Thumbnail) GetThumbnail(ctx context.Context, file string, width, height int, outType FileType) ([]byte, string, error) {
 	if d, err := t.cache.Get(file, width, height); err == nil {
+		t.log.Debug().Str("file", file).Int("width", width).Int("height", height).Msg("thumbnails: cache hit")
 		return d, "", nil
 	}
+
+	t.log.Debug().Str("file", file).Int("width", width).Int("height", height).Msg("thumbnails: cache miss")
 
 	// the thumbnail was not found in the cache
 	r, err := t.downloader.Download(ctx, file)
