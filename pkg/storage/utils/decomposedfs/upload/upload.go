@@ -535,7 +535,7 @@ func (upload *Upload) URL(_ context.Context) (string, error) {
 		Target string `json:"target"`
 	}
 
-	u := upload.tknopts.DownloadEndpoint + "tus/" + upload.Info.ID
+	u := joinurl(upload.tknopts.DownloadEndpoint, "tus/", upload.Info.ID)
 	ttl := time.Duration(upload.tknopts.TransferExpires) * time.Second
 	claims := transferClaims{
 		StandardClaims: jwt.StandardClaims{
@@ -553,7 +553,21 @@ func (upload *Upload) URL(_ context.Context) (string, error) {
 		return "", errors.Wrapf(err, "error signing token with claims %+v", claims)
 	}
 
-	return upload.tknopts.DataGatewayEndpoint + tkn, nil
+	return joinurl(upload.tknopts.DataGatewayEndpoint, tkn), nil
+}
+
+// replace with url.JoinPath after switching to go1.19
+func joinurl(paths ...string) string {
+	var s strings.Builder
+	l := len(paths)
+	for i, p := range paths {
+		s.WriteString(p)
+		if !strings.HasSuffix(p, "/") && i != l-1 {
+			s.WriteString("/")
+		}
+	}
+
+	return s.String()
 }
 
 func tryWritingChecksum(log *zerolog.Logger, n *node.Node, algo string, h hash.Hash) {
