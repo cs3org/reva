@@ -29,8 +29,7 @@ const (
 type Config struct {
 	Quality      int
 	Resolutions  []string
-	Cache        bool
-	CacheDriver  string
+	Cache        string
 	CacheDrivers map[string]map[string]interface{}
 }
 
@@ -125,15 +124,15 @@ func (t *Thumbnail) getEncoderFormat(ttype FileType) (imaging.Format, []imaging.
 }
 
 func (t *Thumbnail) initCache() error {
-	if !t.c.Cache {
+	if t.c.Cache == "" {
 		t.cache = cache.NewNoCache()
 		return nil
 	}
-	f, ok := registry.NewFuncs[t.c.CacheDriver]
+	f, ok := registry.NewFuncs[t.c.Cache]
 	if !ok {
-		return errtypes.NotFound(fmt.Sprintf("driver %s not found for thumbnails cache", t.c.CacheDriver))
+		return errtypes.NotFound(fmt.Sprintf("driver %s not found for thumbnails cache", t.c.Cache))
 	}
-	c, ok := t.c.CacheDrivers[t.c.CacheDriver]
+	c, ok := t.c.CacheDrivers[t.c.Cache]
 	if !ok {
 		// if the user did not provide the config
 		// just use an empty config
