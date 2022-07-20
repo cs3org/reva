@@ -114,7 +114,7 @@ func New(conf map[string]interface{}, log *zerolog.Logger) (global.Service, erro
 	// thumbnails for normal files
 	r.Group(func(r chi.Router) {
 		r.Use(s.DavUserContext)
-		r.Get("/files/{id}", s.Thumbnail)
+		r.Get("/files/*", s.Thumbnail)
 	})
 
 	// thumbnails for public links
@@ -135,10 +135,11 @@ func (s *svc) DavUserContext(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 
-		id := chi.URLParam(r, "id")
-		id, _ = url.QueryUnescape(id)
+		path := chi.URLParam(r, "*")
+		path, _ = url.QueryUnescape(path)
+		path = "/" + path
 
-		ctx = context.WithValue(ctx, ContextKeyPath, id)
+		ctx = context.WithValue(ctx, ContextKeyPath, path)
 
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
