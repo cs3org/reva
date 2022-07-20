@@ -91,9 +91,9 @@ func New(m map[string]interface{}) (share.Manager, error) {
 	}
 
 	return &mgr{
-		c:             c,
-		model:         model,
-		storagesCache: gcache.New(1000000).LFU().Build(),
+		c:          c,
+		model:      model,
+		spaceETags: gcache.New(1000000).LFU().Build(),
 	}, nil
 
 }
@@ -183,12 +183,12 @@ func (m *shareModel) Save() error {
 }
 
 type mgr struct {
-	c             *config
-	sync.Mutex    // concurrent access to the file
-	model         *shareModel
-	serviceUser   *userv1beta1.User
-	SpaceRoot     *provider.ResourceId
-	storagesCache gcache.Cache
+	c           *config
+	sync.Mutex  // concurrent access to the file
+	model       *shareModel
+	serviceUser *userv1beta1.User
+	SpaceRoot   *provider.ResourceId
+	spaceETags  gcache.Cache
 
 	initialized bool
 }
@@ -200,13 +200,13 @@ type mgr struct {
 //  - the changed mtime can be used to determine when a space needs to be reread for redundant setups
 
 // when initializing we only initialize per user:
-//  - we list /{userid}/*, for every space we fetch /{storageid}/{spaceid}.json if we
-//    have not cached it yet, or if the /{userid}/{storageid}/{spaceid} etag changed
+//  - we list /{userid}/created/*, for every space we fetch /{storageid}/{spaceid}.json if we
+//    have not cached it yet, or if the /{userid}/created/{storageid}${spaceid} etag changed
 //  - if it does not exist we query the registry for every storage provider id, then
 //    we traverse /{storageid}/ in the metadata storage to
-//    1. create /{userid}/
-//    3. touch /{userid}/{storageid}/{spaceid}
-//    2. touch /{userid}/{storageid} (not needed when mtime propagation is enabled)
+//    1. create /{userid}/created
+//    2. touch /{userid}/created/{storageid}${spaceid}
+//    TODO 3. split storageid from spaceid touch /{userid}/created/{storageid} && /{userid}/created/{storageid}/{spaceid} (not needed when mtime propagation is enabled)
 
 // we need to split the two lists:
 // /{userid}/received/{storageid}/{spaceid}
@@ -214,7 +214,7 @@ type mgr struct {
 
 func (m *mgr) initialize(ctx context.Context) error {
 	// if local copy is invalid fetch a new one
-	// invalid = net set || etag changed
+	// invalid = not set || etag changed
 	if m.initialized {
 		return nil
 	}
@@ -275,13 +275,31 @@ func (m *mgr) initialize(ctx context.Context) error {
 		return err
 	case cssr.Status.Code == rpcv1beta1.Code_CODE_OK:
 		// for every space we fetch /{storageid}/{spaceid}.json if we
-		//    have not cached it yet, or if the /{userid}/created/{storageid}/{spaceid} etag changed
+		//    have not cached it yet, or if the /{userid}/created/{storageid}${spaceid} etag changed
 		for _, storageInfo := range res.Infos {
 			// do we have spaces for this storage cached?
-			if spaces := m.storagesCache.Get(storageInfo.Name); spaces != nil {
-				// TODO return space if etag is same
+			etag := m.getCachedSpaceETag(storageInfo.Name)
+			if etag == "" || etag != storageInfo.Etag {
+
+				// TODO update cache
+				// reread /{storageid}/{spaceid}.json ?
+				// hmm the dir listing for a /einstein-id/created/{storageid}${spaceid} might have a different
+				// etag than the one for /marie-id/created/{storageid}${spaceid}
+				// do we also need the mtime in addition to the etag? so we can determine which one is younger?
+				// currently if einstein creates a share in space a we do a stat for every
+				// other user with access to the space because we update the cached space etag AND we touch the
+				// /einstein-id/created/{storageid}${spaceid} ... which updates the mtime ... so we don't need
+				// the etag, but only the mtime of /einstein-id/created/{storageid}${spaceid} ? which we set to
+				// the /{storageid}/{spaceid}.json mtime. since we always do the mtime setting ... this should work
+				// well .. if cs3 touch allows setting the mtime
+				client.TouchFile(ctx, &provider.TouchFileRequest{
+					Ref:    &provider.Reference{},
+					Opaque: &typespb.Opaque{ /*TODO allow setting the mtime with touch*/ },
+				})
+				// maybe we need SetArbitraryMetadata to set the mtime
 			}
-			// TODO update cache
+			//
+			// TODO use space if etag is same
 		}
 	case cssr.Status.Code == rpcv1beta1.Code_CODE_NOT_FOUND:
 		// if it does not exist we query the registry for every storage provider id, then
@@ -294,6 +312,15 @@ func (m *mgr) initialize(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+func (m *mgr) getCachedSpaceETag(spaceid string) string {
+	if e, err := m.spaceETags.Get(spaceid); err != gcache.KeyNotFoundError {
+		if etag, ok := e.(string); ok {
+			return etag
+		}
+	}
+	return ""
 }
 
 func (m *mgr) metadataClient() (provider.ProviderAPIClient, error) {
@@ -506,7 +533,7 @@ func (m *mgr) UpdateShare(ctx context.Context, ref *collaboration.ShareReference
 }
 
 func (m *mgr) ListShares(ctx context.Context, filters []*collaboration.Filter) ([]*collaboration.Share, error) {
-	if err := m.initialize(); err != nil {
+	if err := m.initialize(ctx); err != nil {
 		return nil, err
 	}
 
