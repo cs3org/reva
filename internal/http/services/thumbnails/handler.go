@@ -116,8 +116,8 @@ func New(conf map[string]interface{}, log *zerolog.Logger) (global.Service, erro
 	// thumbnails for normal files
 	r.Group(func(r chi.Router) {
 		r.Use(s.DavUserContext)
-		r.Get("files/{id}", s.Thumbnail)
-		r.Get("files/{id}/*", s.Thumbnail)
+		r.Get("/files/{id}", s.Thumbnail)
+		r.Get("/files/{id}/*", s.Thumbnail)
 	})
 
 	// thumbnails for public links
