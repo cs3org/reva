@@ -81,13 +81,12 @@ type transferClaims struct {
 	Target string `json:"target"`
 }
 
-func (s *svc) sign(_ context.Context, target string) (string, error) {
+func (s *svc) sign(_ context.Context, target string, expiresAt int64) (string, error) {
 	// Tus sends a separate request to the datagateway service for every chunk.
 	// For large files, this can take a long time, so we extend the expiration
-	ttl := time.Duration(s.c.TransferExpires) * time.Second
 	claims := transferClaims{
 		StandardClaims: jwt.StandardClaims{
-			ExpiresAt: time.Now().Add(ttl).Unix(),
+			ExpiresAt: expiresAt,
 			Audience:  "reva",
 			IssuedAt:  time.Now().Unix(),
 		},
@@ -510,7 +509,7 @@ func (s *svc) InitiateFileDownload(ctx context.Context, req *provider.InitiateFi
 
 			// TODO(labkode): calculate signature of the whole request? we only sign the URI now. Maybe worth https://tools.ietf.org/html/draft-cavage-http-signatures-11
 			target := u.String()
-			token, err := s.sign(ctx, target)
+			token, err := s.sign(ctx, target, s.c.TransferExpires)
 			if err != nil {
 				return &gateway.InitiateFileDownloadResponse{
 					Status: status.NewStatusFromErrType(ctx, "error creating signature for download", err),
@@ -572,7 +571,12 @@ func (s *svc) InitiateFileUpload(ctx context.Context, req *provider.InitiateFile
 
 			// TODO(labkode): calculate signature of the whole request? we only sign the URI now. Maybe worth https://tools.ietf.org/html/draft-cavage-http-signatures-11
 			target := u.String()
-			token, err := s.sign(ctx, target)
+			ttl := time.Duration(s.c.TransferExpires) * time.Second
+			expiresAt := time.Now().Add(ttl).Unix()
+			if storageRes.Protocols[p].Expiration != nil {
+				expiresAt = utils.TSToTime(storageRes.Protocols[p].Expiration).Unix()
+			}
+			token, err := s.sign(ctx, target, expiresAt)
 			if err != nil {
 				return &gateway.InitiateFileUploadResponse{
 					Status: status.NewStatusFromErrType(ctx, "error creating signature for upload", err),
