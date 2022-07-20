@@ -14,6 +14,8 @@ import (
 	"github.com/cs3org/reva/pkg/storage/utils/downloader"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
+
+	_ "github.com/cs3org/reva/internal/http/services/thumbnails/cache/loader"
 )
 
 type FileType int
