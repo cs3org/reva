@@ -44,12 +44,17 @@ type Thumbnail struct {
 }
 
 func NewThumbnail(d downloader.Downloader, c *Config, log *zerolog.Logger) (*Thumbnail, error) {
-	t := &Thumbnail{
-		c:          c,
-		downloader: d,
-		log:        log,
+	res, err := ParseResolutions(c.Resolutions)
+	if err != nil {
+		return nil, errors.Wrap(err, "thumbnails: error parsing resolutions")
 	}
-	err := t.initCache()
+	t := &Thumbnail{
+		c:           c,
+		downloader:  d,
+		log:         log,
+		resolutions: res,
+	}
+	err = t.initCache()
 	if err != nil {
 		return nil, errors.Wrap(err, "thumbnails: error initting the cache")
 	}
