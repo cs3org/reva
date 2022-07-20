@@ -57,6 +57,7 @@ const (
 type config struct {
 	manager.Config
 	OutputType string `mapstructure:"output_type"`
+	Prefix     string `mapstructure:"prefix"`
 }
 
 type svc struct {
@@ -92,19 +93,14 @@ func New(conf map[string]interface{}, log *zerolog.Logger) (global.Service, erro
 		router: r,
 	}
 
+	// thumbnails for normal files
 	r.Group(func(r chi.Router) {
 		r.Use(s.DavUserContext)
-		// r.Get("/remote.php/dav/spaces/{id}", s.SpacesThumbnail)
-		// r.Get("/remote.php/dav/spaces/{id}/*", s.SpacesThumbnail)
-		// r.Get("/dav/spaces/{id}", s.SpacesThumbnail)
-		// r.Get("/dav/spaces/{id}/*", s.SpacesThumbnail)
-
-		r.Get("/remote.php/dav/files/{id}", s.Thumbnail)
-		r.Get("/remote.php/dav/files/{id}/*", s.Thumbnail)
-		r.Get("/dav/files/{id}", s.Thumbnail)
-		r.Get("/dav/files/{id}/*", s.Thumbnail)
+		r.Get("files/{id}", s.Thumbnail)
+		r.Get("files/{id}/*", s.Thumbnail)
 	})
 
+	// thumbnails for public links
 	r.Group(func(r chi.Router) {
 		// r.Use(s.DavPublicContext())
 
@@ -114,12 +110,6 @@ func New(conf map[string]interface{}, log *zerolog.Logger) (global.Service, erro
 		// r.Get("/remote.php/dav/public-files/{token}/*", s.PublicThumbnail)
 		// r.Get("/dav/public-files/{token}/*", s.PublicThumbnail)
 	})
-
-	// r.Group(func(r chi.Router) {
-	// 	// r.Use(s.WebDAVContext())
-	// 	r.Get("/remote.php/webdav/*", s.Thumbnail)
-	// 	r.Get("/webdav/*", s.Thumbnail)
-	// })
 
 	return s, nil
 }
@@ -133,11 +123,7 @@ func (s *svc) DavUserContext(next http.Handler) http.Handler {
 		id, _ = url.QueryUnescape(id)
 
 		if id != "" {
-			filePath = strings.TrimPrefix(filePath, path.Join("/remote.php/dav/spaces", id))
-			filePath = strings.TrimPrefix(filePath, path.Join("/dav/spaces", id))
-
-			filePath = strings.TrimPrefix(filePath, path.Join("/remote.php/dav/files", id))
-			filePath = strings.TrimPrefix(filePath, path.Join("/dav/files", id))
+			filePath = strings.TrimPrefix(filePath, path.Join("/files", id))
 			filePath = strings.TrimPrefix(filePath, "/")
 		}
 
@@ -251,8 +237,7 @@ func (s *svc) Handler() http.Handler {
 }
 
 func (s *svc) Prefix() string {
-	// FIXME: hardcoded for compatibility
-	return "/"
+	return s.c.Prefix
 }
 
 func (s *svc) Close() error {
