@@ -21,6 +21,7 @@ package gateway
 import (
 	"context"
 
+	userprovider "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	"github.com/cs3org/reva/v2/pkg/appctx"
@@ -138,6 +139,13 @@ func (s *svc) UpdatePublicShare(ctx context.Context, req *link.UpdatePublicShare
 	if err != nil {
 		return nil, errors.Wrap(err, "error updating share")
 	}
-	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), res.Share.ResourceId)
+	s.cache.RemoveStat(
+		&userprovider.User{
+			Id: &userprovider.UserId{
+				OpaqueId: res.Share.Owner.GetOpaqueId(),
+			},
+		},
+		res.Share.ResourceId,
+	)
 	return res, nil
 }

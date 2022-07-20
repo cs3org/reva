@@ -62,6 +62,7 @@ var _ = Describe("Spaces", func() {
 		})
 		Context("when creating a space", func() {
 			It("project space is created", func() {
+				env.Owner = nil
 				resp, err := env.Fs.CreateStorageSpace(env.Ctx, &provider.CreateStorageSpaceRequest{Name: "Mission to Mars", Type: "project"})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(resp.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
@@ -101,6 +102,7 @@ var _ = Describe("Spaces", func() {
 			})
 			Context("creating a space", func() {
 				It("project space is created with custom alias", func() {
+					env.Owner = nil
 					resp, err := env.Fs.CreateStorageSpace(env.Ctx, &provider.CreateStorageSpaceRequest{Name: "Mission to Venus", Type: "project"})
 					Expect(err).ToNot(HaveOccurred())
 					Expect(resp.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
