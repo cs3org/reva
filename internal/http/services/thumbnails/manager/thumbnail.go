@@ -91,6 +91,8 @@ func (t *Thumbnail) GetThumbnail(ctx context.Context, file string, width, height
 	err = t.cache.Set(file, width, height, data)
 	if err != nil {
 		t.log.Warn().Str("file", file).Int("width", width).Int("height", height).Err(err).Msg("failed to save data into the cache")
+	} else {
+		t.log.Debug().Str("file", file).Int("width", width).Int("height", height).Err(err).Msg("saved thumbnail into cache")
 	}
 
 	return data, getMimeType(outType), nil
