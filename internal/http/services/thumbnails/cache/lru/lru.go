@@ -50,19 +50,19 @@ func (c *config) init() {
 	}
 }
 
-func getKey(file string, width, height int) string {
-	return fmt.Sprintf("%s:%d:%d", file, width, height)
+func getKey(file, etag string, width, height int) string {
+	return fmt.Sprintf("%s:%s:%d:%d", file, etag, width, height)
 }
 
-func (l *lru) Get(file string, width, height int) ([]byte, error) {
-	key := getKey(file, width, height)
+func (l *lru) Get(file, etag string, width, height int) ([]byte, error) {
+	key := getKey(file, etag, width, height)
 	if value, err := l.cache.Get(key); err == nil {
 		return value.([]byte), nil
 	}
 	return nil, cache.ErrNotFound{}
 }
 
-func (l *lru) Set(file string, width, height int, data []byte) error {
-	key := getKey(file, width, height)
+func (l *lru) Set(file, etag string, width, height int, data []byte) error {
+	key := getKey(file, etag, width, height)
 	return l.cache.SetWithExpire(key, data, time.Duration(l.config.Expiration)*time.Second)
 }

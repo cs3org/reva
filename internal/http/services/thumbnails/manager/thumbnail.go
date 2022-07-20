@@ -59,8 +59,8 @@ func NewThumbnail(d downloader.Downloader, c *Config, log *zerolog.Logger) (*Thu
 	return t, nil
 }
 
-func (t *Thumbnail) GetThumbnail(ctx context.Context, file string, width, height int, outType FileType) ([]byte, string, error) {
-	if d, err := t.cache.Get(file, width, height); err == nil {
+func (t *Thumbnail) GetThumbnail(ctx context.Context, file, etag string, width, height int, outType FileType) ([]byte, string, error) {
+	if d, err := t.cache.Get(file, etag, width, height); err == nil {
 		t.log.Debug().Str("file", file).Int("width", width).Int("height", height).Msg("thumbnails: cache hit")
 		return d, "", nil
 	}
@@ -91,7 +91,7 @@ func (t *Thumbnail) GetThumbnail(ctx context.Context, file string, width, height
 	}
 
 	data := buf.Bytes()
-	err = t.cache.Set(file, width, height, data)
+	err = t.cache.Set(file, etag, width, height, data)
 	if err != nil {
 		t.log.Warn().Str("file", file).Int("width", width).Int("height", height).Err(err).Msg("failed to save data into the cache")
 	} else {
