@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"image"
-	"io"
 
 	"github.com/anthonynsimon/bild/imgio"
 	"github.com/anthonynsimon/bild/transform"
@@ -14,6 +13,15 @@ import (
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/storage/utils/downloader"
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog"
+)
+
+type FileType int
+
+const (
+	pngType FileType = iota
+	jpegType
+	bmpType
 )
 
 type Config struct {
@@ -28,12 +36,14 @@ type Thumbnail struct {
 	c          *Config
 	downloader downloader.Downloader
 	cache      cache.Cache
+	log        *zerolog.Logger
 }
 
-func NewThumbnail(d downloader.Downloader, c *Config) (*Thumbnail, error) {
+func NewThumbnail(d downloader.Downloader, c *Config, log *zerolog.Logger) (*Thumbnail, error) {
 	t := &Thumbnail{
 		c:          c,
 		downloader: d,
+		log:        log,
 	}
 	err := t.initCache()
 	if err != nil {
@@ -42,17 +52,9 @@ func NewThumbnail(d downloader.Downloader, c *Config) (*Thumbnail, error) {
 	return t, nil
 }
 
-type FileType int
-
-const (
-	pngType FileType = iota
-	jpegType
-	bmpType
-)
-
-func (t *Thumbnail) GetThumbnail(ctx context.Context, file string, width, height int, outType FileType) (io.ReadCloser, error) {
-	if r, err := t.cache.Get(file, width, height); err == nil {
-		return r, nil
+func (t *Thumbnail) GetThumbnail(ctx context.Context, file string, width, height int, outType FileType) ([]byte, error) {
+	if d, err := t.cache.Get(file, width, height); err == nil {
+		return d, nil
 	}
 
 	// the thumbnail was not found in the cache
@@ -73,19 +75,19 @@ func (t *Thumbnail) GetThumbnail(ctx context.Context, file string, width, height
 		return nil, err
 	}
 
-	reader, writer := io.Pipe()
-
 	var buf bytes.Buffer
-	out := io.TeeReader(reader, &buf)
+	err = encoder(&buf, resized)
+	if err != nil {
+		return nil, errors.Wrap(err, "thumbnails: error encoding image")
+	}
 
-	go func() {
-		defer writer.Close()
-		encoder(writer, resized)
-	}()
+	data := buf.Bytes()
+	err = t.cache.Set(file, width, height, data)
+	if err != nil {
+		t.log.Warn().Str("file", file).Int("width", width).Int("height", height).Err(err).Msg("failed to save data into the cache")
+	}
 
-	return NewFuncReadCloser(out, func() error {
-		return reader.Close()
-	}), nil
+	return data, nil
 }
 
 func (t *Thumbnail) getEncoderByType(ttype FileType) (imgio.Encoder, error) {
