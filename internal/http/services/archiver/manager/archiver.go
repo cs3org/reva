@@ -176,7 +176,7 @@ func (a *Archiver) CreateTar(ctx context.Context, dst io.Writer) error {
 					return err
 				}
 				defer reader.Close()
-				_, err = io.Copy(dst, reader)
+				_, err = io.Copy(w, reader)
 				if err != nil {
 					return err
 				}
