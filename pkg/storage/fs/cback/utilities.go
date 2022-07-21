@@ -44,6 +44,7 @@ type FsReturn struct {
 	Type  int
 	Mtime uint64
 	Size  uint64
+	Path  string
 }
 
 var permID = provider.ResourcePermissions{
@@ -204,6 +205,7 @@ func (fs *cback) fileSystem(backupId int, snapId, userName string, path string) 
 		resp[i].Size = responseObject[i].Size
 		resp[i].Type = m
 		resp[i].Mtime = uint64(responseObject[i].Mtime)
+		resp[i].Path = responseObject[i].Name
 
 	}
 	return resp

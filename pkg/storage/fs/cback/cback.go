@@ -2,13 +2,15 @@ package cback
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net/url"
+	"strings"
 
-	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/mime"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
 	"github.com/mitchellh/mapstructure"
@@ -17,13 +19,6 @@ import (
 
 type cback struct {
 	conf *Options
-}
-
-type User struct {
-	*userv1beta1.User
-	fs   *cback
-	ctx  context.Context
-	home string
 }
 
 func init() {
@@ -42,31 +37,78 @@ func New(m map[string]interface{}) (fs storage.FS, err error) {
 
 }
 
-func (fs *cback) makeUser(ctx context.Context) *User {
-	u := ctxpkg.ContextMustGetUser(ctx)
-	home := fs.conf.Root
-
-	return &User{u, fs, ctx, home}
-}
-
 func (fs *cback) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []string) (ri *provider.ResourceInfo, err error) {
-	var path string = ref.GetPath()
-	user, _ := ctxpkg.ContextGetUser(ctx)
-
-	ri.Path = path
-	ri.Id.StorageId = "cback"
-	ri.Id.OpaqueId = path
-	ri.Owner = user.GetId()
-	ri.PermissionSet = getPermID()
-
 	return nil, errtypes.NotSupported("Operation Not Yet Implemented")
 }
 
 func (fs *cback) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys []string) (files []*provider.ResourceInfo, err error) {
 	//Implement this
 	//Fix the ID part
+	var path string = ref.GetPath()
+	var ssId, searchPath string
 
-	return nil, errtypes.NotSupported("Operation Not Yet Implemented")
+	user, _ := ctxpkg.ContextGetUser(ctx)
+
+	perm := getPermID()
+	resp := fs.matchBackups(user.Username, path)
+
+	if resp == nil {
+		fmt.Printf("Error!\n")
+	} else {
+
+		d := fs.listSnapshots(user.Username, resp.Id)
+
+		if resp.Substring != "" {
+			for i := range d {
+
+				if d[i].Id == resp.Substring {
+					ssId = resp.Substring
+					searchPath = resp.Source
+					break
+				} else if strings.HasPrefix(resp.Substring, d[i].Id) {
+					searchPath = strings.TrimPrefix(resp.Substring, d[i].Id)
+					searchPath = resp.Source + searchPath
+					ssId = d[i].Id
+					break
+				}
+			}
+
+			//If no match in path, therefore prints the files
+			fmt.Printf("The ssId is: %v\nThe Path is %v\n", ssId, searchPath)
+			ret := fs.fileSystem(resp.Id, ssId, user.Username, searchPath)
+
+			for j := range ret {
+				files[j].Path = ret[j].Path
+				files[j].Id.StorageId = "cback"
+				files[j].Id.OpaqueId = ret[j].Path
+				files[j].Owner = user.Id
+				files[j].PermissionSet = perm
+				files[j].Type = provider.ResourceType(ret[j].Type)
+				files[j].Size = ret[j].Size
+				files[j].Mtime.Seconds = ret[j].Mtime
+				files[j].Mtime.Nanos = 0
+				if ret[j].Type == 2 {
+					files[j].MimeType = mime.Detect(true, ret[j].Path)
+				} else {
+					files[j].MimeType = mime.Detect(false, ret[j].Path)
+				}
+				files[j].Etag = ""
+				files[j].Checksum.Sum = ""
+				files[j].Checksum.Type = provider.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_UNSET
+			}
+
+			return
+
+		} else {
+			//If match in path, therefore prints the Snapshots
+			for i := range d {
+				fmt.Printf("%v\n", d[i].Id)
+			}
+		}
+
+	}
+
+	return
 
 }
 
