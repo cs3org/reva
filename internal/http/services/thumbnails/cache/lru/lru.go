@@ -43,6 +43,7 @@ type config struct {
 	Expiration int `mapstructure:"expiration"`
 }
 
+// New creates a LRU cache for thumbnails
 func New(conf map[string]interface{}) (cache.Cache, error) {
 	c := &config{}
 	err := mapstructure.Decode(conf, c)
@@ -72,6 +73,7 @@ func getKey(file, etag string, width, height int) string {
 	return fmt.Sprintf("%s:%s:%d:%d", file, etag, width, height)
 }
 
+// Get gets a thumbnail if stored in the LRU cache
 func (l *lru) Get(file, etag string, width, height int) ([]byte, error) {
 	key := getKey(file, etag, width, height)
 	if value, err := l.cache.Get(key); err == nil {
@@ -80,6 +82,7 @@ func (l *lru) Get(file, etag string, width, height int) ([]byte, error) {
 	return nil, cache.ErrNotFound{}
 }
 
+// Set stores the thumbnail in the LRU cache
 func (l *lru) Set(file, etag string, width, height int, data []byte) error {
 	key := getKey(file, etag, width, height)
 	return l.cache.SetWithExpire(key, data, time.Duration(l.config.Expiration)*time.Second)

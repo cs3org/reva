@@ -18,8 +18,11 @@
 
 package cache
 
+// ErrNotFound is the error returned by the cache when the requested
+// thumbnail is not in the cache
 type ErrNotFound struct{}
 
+// Error implements the Error interface
 func (ErrNotFound) Error() string {
 	return "entry in cache not found"
 }
