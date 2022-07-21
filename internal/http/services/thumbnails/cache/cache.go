@@ -18,21 +18,27 @@
 
 package cache
 
+// Cache is the interface for a thumbnail cache
 type Cache interface {
+	// Get gets the thumbnail if stored in the cache
 	Get(file, etag string, width, height int) ([]byte, error)
+	// Set adds the thumbnail in the cache
 	Set(file, etag string, width, height int, data []byte) error
 }
 
 type noCache struct{}
 
+// NewNoCache creates a dummy cache that does not cache anything
 func NewNoCache() Cache {
 	return noCache{}
 }
 
+// Get on a NoCache always return ErrNotFound
 func (noCache) Get(_, _ string, _, _ int) ([]byte, error) {
 	return nil, ErrNotFound{}
 }
 
+// Set on a NoCache just does not save the thumbnail
 func (noCache) Set(_, _ string, _, _ int, _ []byte) error {
 	return nil
 }

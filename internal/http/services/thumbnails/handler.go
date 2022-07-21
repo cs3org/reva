@@ -49,7 +49,9 @@ func init() {
 }
 
 const (
-	DefaultWidth  int = 32
+	// DefaultWidth is the default width when the HTTP request is missing the width
+	DefaultWidth int = 32
+	// DefaultHeight is the default height when the HTTP request is missing the height
 	DefaultHeight int = 32
 )
 
@@ -85,6 +87,7 @@ func (c *config) init() {
 	c.GatewaySVC = sharedconf.GetGatewaySVC(c.GatewaySVC)
 }
 
+// New creates a new thumbnails HTTP service
 func New(conf map[string]interface{}, log *zerolog.Logger) (global.Service, error) {
 	c := &config{}
 	err := mapstructure.Decode(conf, c)
@@ -122,20 +125,20 @@ func New(conf map[string]interface{}, log *zerolog.Logger) (global.Service, erro
 
 	// thumbnails for normal files
 	r.Group(func(r chi.Router) {
-		r.Use(s.DavUserContext)
+		r.Use(s.davUserContext)
 		r.Get("/files/*", s.Thumbnail)
 	})
 
 	// thumbnails for public links
 	r.Group(func(r chi.Router) {
-		r.Use(s.DavPublicContext)
+		r.Use(s.davPublicContext)
 		r.Get("/public-files/*", s.Thumbnail)
 	})
 
 	return s, nil
 }
 
-func (s *svc) DavUserContext(next http.Handler) http.Handler {
+func (s *svc) davUserContext(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 
@@ -157,7 +160,7 @@ func (s *svc) DavUserContext(next http.Handler) http.Handler {
 	})
 }
 
-func (s *svc) DavPublicContext(next http.Handler) http.Handler {
+func (s *svc) davPublicContext(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 
@@ -215,7 +218,7 @@ func (s *svc) statRes(ctx context.Context, ref *provider.Reference) (*provider.R
 	return resp.Info, nil
 }
 
-type ThumbnailRequest struct {
+type thumbnailRequest struct {
 	File       string
 	ETag       string
 	Width      int
@@ -223,7 +226,7 @@ type ThumbnailRequest struct {
 	OutputType manager.FileType
 }
 
-func (s *svc) parseThumbnailRequest(r *http.Request) (*ThumbnailRequest, error) {
+func (s *svc) parseThumbnailRequest(r *http.Request) (*thumbnailRequest, error) {
 	ctx := r.Context()
 
 	res := ContextMustGetResource(ctx)
@@ -239,7 +242,7 @@ func (s *svc) parseThumbnailRequest(r *http.Request) (*ThumbnailRequest, error) 
 
 	t := getOutType(s.c.OutputType)
 
-	return &ThumbnailRequest{
+	return &thumbnailRequest{
 		File:       res.Path,
 		ETag:       res.Etag,
 		Width:      width,
@@ -277,12 +280,12 @@ func parseDimension(d, name string, defaultValue int) (int, error) {
 	}
 	result, err := strconv.ParseInt(d, 10, 32)
 	if err != nil || result < 1 {
-		// The error message doesn't fit but for OC10 API compatibility reasons we have to set this.
-		return 0, fmt.Errorf("Cannot set %s of 0 or smaller!", name)
+		return 0, fmt.Errorf("cannot set %s of 0 or smaller", name)
 	}
 	return int(result), nil
 }
 
+// Thumbnail generates a thumbnail of the resource in the request
 func (s *svc) Thumbnail(w http.ResponseWriter, r *http.Request) {
 	thumbReq, err := s.parseThumbnailRequest(r)
 	if err != nil {

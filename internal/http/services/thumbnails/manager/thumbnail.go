@@ -33,9 +33,11 @@ import (
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 
+	// load all the cache drivers
 	_ "github.com/cs3org/reva/internal/http/services/thumbnails/cache/loader"
 )
 
+// FileType is the output format of the thumbnail
 type FileType int
 
 const (
@@ -44,6 +46,7 @@ const (
 	BMPType
 )
 
+// Config is the config for the Thumbnail service
 type Config struct {
 	Quality      int
 	Resolutions  []string
@@ -51,6 +54,7 @@ type Config struct {
 	CacheDrivers map[string]map[string]interface{}
 }
 
+// Thumbnail is the service that generates thumbnails
 type Thumbnail struct {
 	c           *Config
 	downloader  downloader.Downloader
@@ -59,6 +63,7 @@ type Thumbnail struct {
 	resolutions Resolutions
 }
 
+// NewThumbnail creates a new Thumbnail service that generates thumbnails
 func NewThumbnail(d downloader.Downloader, c *Config, log *zerolog.Logger) (*Thumbnail, error) {
 	res, err := ParseResolutions(c.Resolutions)
 	if err != nil {
@@ -77,6 +82,10 @@ func NewThumbnail(d downloader.Downloader, c *Config, log *zerolog.Logger) (*Thu
 	return t, nil
 }
 
+// GetThumbnail generate a thumbnail from the file, returning the thumb and the mimetype of the thumb.
+// The mimetype depends on the out type (PNG, JPEG, BMP).
+// If a cache is enabled in the configuration, it will first check if the file with the given etag
+// was already generated and saved into the cache.
 func (t *Thumbnail) GetThumbnail(ctx context.Context, file, etag string, width, height int, outType FileType) ([]byte, string, error) {
 	log := t.log.With().Str("file", file).Str("etag", etag).Int("width", width).Int("height", height).Logger()
 	if d, err := t.cache.Get(file, etag, width, height); err == nil {
