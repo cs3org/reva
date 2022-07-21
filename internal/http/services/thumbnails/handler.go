@@ -117,6 +117,7 @@ func New(conf map[string]interface{}, log *zerolog.Logger) (global.Service, erro
 		log:       log,
 		router:    r,
 		thumbnail: mgr,
+		client:    gtw,
 	}
 
 	// thumbnails for normal files
