@@ -26,8 +26,11 @@ import (
 	"net/http"
 	"path"
 	"strconv"
+	"strings"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/v2/internal/grpc/services/storageprovider"
+	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/net"
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/storage"
@@ -77,6 +80,11 @@ func GetOrHeadFile(w http.ResponseWriter, r *http.Request, fs storage.FS, spaceI
 		return
 	}
 
+	// fill in storage provider id if it is missing
+	if spaceID != "" && md.GetId().GetStorageId() == "" {
+		md.Id.StorageId = ref.ResourceId.StorageId
+	}
+
 	var ranges []HTTPRange
 
 	if r.Header.Get("Range") != "" {
@@ -124,6 +132,8 @@ func GetOrHeadFile(w http.ResponseWriter, r *http.Request, fs storage.FS, spaceI
 			return
 		}
 
+		code = http.StatusPartialContent
+
 		switch {
 		case len(ranges) == 1:
 			// RFC 7233, Section 4.1:
@@ -144,11 +154,9 @@ func GetOrHeadFile(w http.ResponseWriter, r *http.Request, fs storage.FS, spaceI
 				return
 			}
 			sendSize = ra.Length
-			code = http.StatusPartialContent
 			w.Header().Set("Content-Range", ra.ContentRange(int64(md.Size)))
 		case len(ranges) > 1:
 			sendSize = RangesMIMESize(ranges, md.MimeType, int64(md.Size))
-			code = http.StatusPartialContent
 
 			pr, pw := io.Pipe()
 			mw := multipart.NewWriter(pw)
@@ -177,8 +185,19 @@ func GetOrHeadFile(w http.ResponseWriter, r *http.Request, fs storage.FS, spaceI
 		}
 	}
 
-	if w.Header().Get("Content-Encoding") == "" {
-		w.Header().Set("Content-Length", strconv.FormatInt(sendSize, 10))
+	if w.Header().Get(net.HeaderContentEncoding) == "" {
+		w.Header().Set(net.HeaderContentLength, strconv.FormatInt(sendSize, 10))
+	}
+
+	w.Header().Set(net.HeaderContentType, md.MimeType)
+	w.Header().Set(net.HeaderContentDisposistion, net.ContentDispositionAttachment(path.Base(md.Path)))
+	w.Header().Set(net.HeaderETag, md.Etag)
+	w.Header().Set(net.HeaderOCFileID, storagespace.FormatResourceID(*md.Id))
+	w.Header().Set(net.HeaderOCETag, md.Etag)
+	w.Header().Set(net.HeaderLastModified, net.RFC1123Z(md.Mtime))
+
+	if md.Checksum != nil {
+		w.Header().Set(net.HeaderOCChecksum, fmt.Sprintf("%s:%s", strings.ToUpper(string(storageprovider.GRPC2PKGXS(md.Checksum.Type))), md.Checksum.Sum))
 	}
 
 	w.WriteHeader(code)

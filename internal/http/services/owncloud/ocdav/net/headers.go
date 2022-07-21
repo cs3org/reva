@@ -24,6 +24,7 @@ const (
 	HeaderAccessControlAllowHeaders  = "Access-Control-Allow-Headers"
 	HeaderAccessControlExposeHeaders = "Access-Control-Expose-Headers"
 	HeaderContentDisposistion        = "Content-Disposition"
+	HeaderContentEncoding            = "Content-Encoding"
 	HeaderContentLength              = "Content-Length"
 	HeaderContentRange               = "Content-Range"
 	HeaderContentType                = "Content-Type"

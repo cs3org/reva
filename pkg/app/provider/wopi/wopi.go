@@ -46,6 +46,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/mime"
 	"github.com/cs3org/reva/v2/pkg/rhttp"
 	"github.com/cs3org/reva/v2/pkg/sharedconf"
+	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/golang-jwt/jwt"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
@@ -134,8 +135,9 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 	}
 
 	q := httpReq.URL.Query()
+
+	q.Add("endpoint", storagespace.FormatStorageID(resource.GetId().GetStorageId(), resource.GetId().GetSpaceId()))
 	q.Add("fileid", resource.GetId().OpaqueId)
-	q.Add("endpoint", resource.GetId().SpaceId)
 	q.Add("viewmode", viewMode.String())
 
 	u, ok := ctxpkg.ContextGetUser(ctx)

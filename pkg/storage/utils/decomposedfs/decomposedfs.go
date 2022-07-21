@@ -583,6 +583,19 @@ func (fs *Decomposedfs) Move(ctx context.Context, oldRef, newRef *provider.Refer
 		return
 	}
 
+	ok, err = fs.p.HasPermission(ctx, newNode, func(rp *provider.ResourcePermissions) bool {
+		if oldNode.IsDir() {
+			return rp.CreateContainer
+		}
+		return rp.InitiateFileUpload
+	})
+	switch {
+	case err != nil:
+		return errtypes.InternalError(err.Error())
+	case !ok:
+		return errtypes.PermissionDenied(newNode.ID)
+	}
+
 	// check lock on target
 	if err := newNode.CheckLock(ctx); err != nil {
 		return err
@@ -624,7 +637,7 @@ func (fs *Decomposedfs) GetMD(ctx context.Context, ref *provider.Reference, mdKe
 		}
 	}
 	if addSpace {
-		if md.Space, err = fs.storageSpaceFromNode(ctx, node, node.InternalPath(), false, false); err != nil {
+		if md.Space, err = fs.storageSpaceFromNode(ctx, node, true); err != nil {
 			return nil, err
 		}
 	}
