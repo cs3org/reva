@@ -60,12 +60,13 @@ func NewThumbnail(d downloader.Downloader, c *Config, log *zerolog.Logger) (*Thu
 }
 
 func (t *Thumbnail) GetThumbnail(ctx context.Context, file, etag string, width, height int, outType FileType) ([]byte, string, error) {
+	log := t.log.With().Str("file", file).Str("etag", etag).Int("width", width).Int("height", height).Logger()
 	if d, err := t.cache.Get(file, etag, width, height); err == nil {
-		t.log.Debug().Str("file", file).Int("width", width).Int("height", height).Msg("thumbnails: cache hit")
+		log.Debug().Msg("thumbnails: cache hit")
 		return d, "", nil
 	}
 
-	t.log.Debug().Str("file", file).Int("width", width).Int("height", height).Msg("thumbnails: cache miss")
+	log.Debug().Msg("thumbnails: cache miss")
 
 	// the thumbnail was not found in the cache
 	r, err := t.downloader.Download(ctx, file)
@@ -93,9 +94,9 @@ func (t *Thumbnail) GetThumbnail(ctx context.Context, file, etag string, width, 
 	data := buf.Bytes()
 	err = t.cache.Set(file, etag, width, height, data)
 	if err != nil {
-		t.log.Warn().Str("file", file).Int("width", width).Int("height", height).Err(err).Msg("failed to save data into the cache")
+		log.Warn().Msg("failed to save data into the cache")
 	} else {
-		t.log.Debug().Str("file", file).Int("width", width).Int("height", height).Err(err).Msg("saved thumbnail into cache")
+		t.log.Debug().Msg("saved thumbnail into cache")
 	}
 
 	return data, getMimeType(outType), nil
