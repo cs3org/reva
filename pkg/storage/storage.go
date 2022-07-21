@@ -77,6 +77,12 @@ type FS interface {
 	DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorageSpaceRequest) error
 }
 
+// UploadsManager defines the interface for FS implementations that allow for managing uploads
+type UploadsManager interface {
+	ListUploads() ([]tusd.FileInfo, error)
+	PurgeExpiredUploads(chan<- tusd.FileInfo) error
+}
+
 // Registry is the interface that storage registries implement
 // for discovering storage providers
 type Registry interface {

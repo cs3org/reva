@@ -37,6 +37,8 @@ import (
 	"strings"
 	"time"
 
+	tusd "github.com/tus/tusd/pkg/handler"
+
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v2/pkg/appctx"
@@ -52,7 +54,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
-	tusd "github.com/tus/tusd/pkg/handler"
 )
 
 var defaultFilePerm = os.FileMode(0664)
@@ -396,10 +397,56 @@ func (fs *Decomposedfs) GetUpload(ctx context.Context, id string) (tusd.Upload, 
 	return &fileUpload{
 		info:     info,
 		binPath:  info.Storage["BinPath"],
-		infoPath: infoPath,
+		infoPath: filepath.Join(fs.o.Root, "uploads", id+".info"),
 		fs:       fs,
 		ctx:      ctx,
 	}, nil
+}
+
+// ListUploads returns a list of all incomplete uploads
+func (fs *Decomposedfs) ListUploads() ([]tusd.FileInfo, error) {
+	infos, err := filepath.Glob(filepath.Join(fs.o.Root, "uploads", "*.info"))
+	if err != nil {
+		return nil, err
+	}
+	list := make([]tusd.FileInfo, len(infos))
+	idRegexp := regexp.MustCompile(".*/([^/]+).info")
+	for i, info := range infos {
+		match := idRegexp.FindStringSubmatch(info)
+		upload, err := fs.readInfo(match[1])
+		if err != nil {
+			return nil, err
+		}
+		list[i] = upload
+	}
+	return list, nil
+}
+
+// PurgeExpiredUploads scans the fs for expired downloads and removes any leftovers
+func (fs *Decomposedfs) PurgeExpiredUploads(purgedChan chan<- tusd.FileInfo) error {
+	infos, err := filepath.Glob(filepath.Join(fs.o.Root, "uploads", "*.info"))
+	if err != nil {
+		return err
+	}
+
+	idRegexp := regexp.MustCompile(".*/([^/]+).info")
+	for _, info := range infos {
+		match := idRegexp.FindStringSubmatch(info)
+		upload, err := fs.readInfo(match[1])
+		if err != nil {
+			return err
+		}
+		expires, err := strconv.Atoi(upload.MetaData["expires"])
+		if err != nil {
+			continue
+		}
+		if int64(expires) < time.Now().Unix() {
+			purgedChan <- upload
+			os.Remove(upload.Storage["BinPath"])
+			os.Remove(info)
+		}
+	}
+	return nil
 }
 
 // lookupNode looks up nodes by path.
