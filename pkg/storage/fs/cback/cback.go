@@ -53,7 +53,7 @@ func (fs *cback) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys
 	resp := fs.matchBackups(user.Username, path)
 
 	if resp == nil {
-		fmt.Printf("Error!\n")
+		err = errors.New("not found")
 	} else {
 
 		d := fs.listSnapshots(user.Username, resp.Id)
@@ -93,11 +93,11 @@ func (fs *cback) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys
 					files[j].MimeType = mime.Detect(false, ret[j].Path)
 				}
 				files[j].Etag = ""
-				files[j].Checksum.Sum = ""
+				files[j].Checksum.Sum = "0"
 				files[j].Checksum.Type = provider.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_UNSET
 			}
 
-			return
+			return files, err
 
 		} else {
 			//If match in path, therefore prints the Snapshots
@@ -108,7 +108,7 @@ func (fs *cback) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys
 
 	}
 
-	return
+	return files, err
 
 }
 

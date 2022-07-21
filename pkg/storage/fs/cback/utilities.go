@@ -144,7 +144,7 @@ func (fs *cback) matchBackups(userName, pathInput string) *BackUpResponse {
 		json.Unmarshal([]byte(responseData), &responseObject)
 
 		if len(responseObject) == 0 {
-			err = errors.New("no match")
+			return nil
 
 		} else {
 
