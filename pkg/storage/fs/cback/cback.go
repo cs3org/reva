@@ -46,15 +46,11 @@ func (fs *cback) makeUser(ctx context.Context) *User {
 	u := ctxpkg.ContextMustGetUser(ctx)
 	home := fs.conf.Root
 
-	/*if !fs.conf.DisableHome {
-		home = filepath.Join(fs.conf.Root, templates.WithUser(u, fs.conf.UserLayout))
-	}*/
-
 	return &User{u, fs, ctx, home}
 }
 
 func (fs *cback) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []string) (ri *provider.ResourceInfo, err error) {
-
+	return nil, errtypes.NotSupported("Operation Not Yet Implemented")
 }
 
 func (fs *cback) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys []string) (files []*provider.ResourceInfo, err error) {
@@ -70,10 +66,13 @@ func (fs *cback) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys
 	ri.Owner = user.GetId()
 	ri.PermissionSet = getPermID()
 
+	return nil, errtypes.NotSupported("Operation Not Yet Implemented")
+
 }
 
 func (fs *cback) Download(ctx context.Context, ref *provider.Reference) (rc io.ReadCloser, err error) {
 	//Implement this
+	return nil, errtypes.NotSupported("Operation Not Yet Implemented")
 }
 
 func (fs *cback) GetHome(ctx context.Context) (string, error) {
