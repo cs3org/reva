@@ -50,21 +50,21 @@ func (fs *cback) makeUser(ctx context.Context) *User {
 }
 
 func (fs *cback) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []string) (ri *provider.ResourceInfo, err error) {
-	return nil, errtypes.NotSupported("Operation Not Yet Implemented")
-}
-
-func (fs *cback) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys []string) (files []*provider.ResourceInfo, err error) {
-	//Implement this
 	var path string = ref.GetPath()
 	user, _ := ctxpkg.ContextGetUser(ctx)
-
-	ri := new(provider.ResourceInfo)
 
 	ri.Path = path
 	ri.Id.StorageId = "cback"
 	ri.Id.OpaqueId = path
 	ri.Owner = user.GetId()
 	ri.PermissionSet = getPermID()
+
+	return nil, errtypes.NotSupported("Operation Not Yet Implemented")
+}
+
+func (fs *cback) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys []string) (files []*provider.ResourceInfo, err error) {
+	//Implement this
+	//Fix the ID part
 
 	return nil, errtypes.NotSupported("Operation Not Yet Implemented")
 
