@@ -21,7 +21,6 @@ package options
 import (
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
@@ -53,14 +52,25 @@ type Options struct {
 	PersonalSpaceAliasTemplate string `mapstructure:"personalspacealias_template"`
 	GeneralSpaceAliasTemplate  string `mapstructure:"generalspacealias_template"`
 
-	Postprocessing PostprocessingOptions `mapstructure:"postprocessing"`
-}
-
-// PostprocessingOptions defines the available options for postprocessing
-type PostprocessingOptions struct {
 	AsyncFileUploads bool `mapstructure:"asyncfileuploads"`
 
-	DelayProcessing time.Duration `mapstructure:"delayprocessing"` // for testing purposes, or if you want to annoy your users
+	Events EventOptions `mapstructure:"events"`
+
+	Tokens TokenOptions `mapstructure:"tokens"`
+}
+
+// EventOptions are the configurable options for events
+type EventOptions struct {
+	NatsAddress   string `mapstructure:"natsaddress"`
+	NatsClusterID string `mapstructure:"natsclusterid"`
+}
+
+// TokenOptions are the configurable option for tokens
+type TokenOptions struct {
+	DownloadEndpoint     string `mapstructure:"download_endpoint"`
+	DataGatewayEndpoint  string `mapstructure:"datagateway_endpoint"`
+	TransferSharedSecret string `mapstructure:"transfer_shared_secret"`
+	TransferExpires      int64  `mapstructure:"transfer_expires"`
 }
 
 // New returns a new Options instance for the given configuration

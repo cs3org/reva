@@ -1195,6 +1195,34 @@ func IsSpaceRoot(r *Node) bool {
 	return false
 }
 
+// SetScanData sets the virus scan info to the node
+func (n *Node) SetScanData(info string, date time.Time) error {
+	return xattrs.SetMultiple(n.InternalPath(), map[string]string{
+		xattrs.ScanStatusPrefix: info,
+		xattrs.ScanDatePrefix:   date.Format(time.RFC3339Nano),
+	})
+}
+
+// ScanData returns scanning information of the node
+func (n *Node) ScanData() (scanned bool, virus string, scantime time.Time) {
+	ti, _ := n.GetMetadata(xattrs.ScanDatePrefix)
+	if ti == "" {
+		return // not scanned yet
+	}
+
+	t, err := time.Parse(time.RFC3339Nano, ti)
+	if err != nil {
+		return
+	}
+
+	i, err := n.GetMetadata(xattrs.ScanStatusPrefix)
+	if err != nil {
+		return
+	}
+
+	return true, i, t
+}
+
 // CheckQuota checks if both disk space and available quota are sufficient
 // Overwrite must be set to true if the new file replaces the old file e.g.
 // when creating a new file version. In such a case the function will

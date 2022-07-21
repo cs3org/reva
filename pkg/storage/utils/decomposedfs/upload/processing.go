@@ -25,12 +25,14 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strconv"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
+	"github.com/cs3org/reva/v2/pkg/events"
 	"github.com/cs3org/reva/v2/pkg/logger"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/chunking"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/lookup"
@@ -51,7 +53,7 @@ type PermissionsChecker interface {
 }
 
 // New returns a new processing instance
-func New(ctx context.Context, info tusd.FileInfo, lu *lookup.Lookup, tp Tree, p PermissionsChecker, fsRoot string, o options.PostprocessingOptions) (upload *Upload, err error) {
+func New(ctx context.Context, info tusd.FileInfo, lu *lookup.Lookup, tp Tree, p PermissionsChecker, fsRoot string, pub events.Publisher, async bool, tknopts options.TokenOptions) (upload *Upload, err error) {
 
 	log := appctx.GetLogger(ctx)
 	log.Debug().Interface("info", info).Msg("Decomposedfs: NewUpload")
@@ -155,19 +157,7 @@ func New(ctx context.Context, info tusd.FileInfo, lu *lookup.Lookup, tp Tree, p 
 	}
 	defer file.Close()
 
-	u := &Upload{
-		Info:     info,
-		binPath:  binPath,
-		infoPath: filepath.Join(fsRoot, "uploads", info.ID+".info"),
-		lu:       lu,
-		tp:       tp,
-		Ctx:      ctx,
-		log: appctx.GetLogger(ctx).
-			With().
-			Interface("info", info).
-			Str("binPath", binPath).
-			Logger(),
-	}
+	u := buildUpload(ctx, info, binPath, filepath.Join(fsRoot, "uploads", info.ID+".info"), lu, tp, pub, async, tknopts)
 
 	// writeInfo creates the file by itself if necessary
 	err = u.writeInfo()
@@ -175,12 +165,11 @@ func New(ctx context.Context, info tusd.FileInfo, lu *lookup.Lookup, tp Tree, p 
 		return nil, err
 	}
 
-	u.pp = configurePostprocessing(u, o)
 	return u, nil
 }
 
 // Get returns the Upload for the given upload id
-func Get(ctx context.Context, id string, lu *lookup.Lookup, tp Tree, fsRoot string, o options.PostprocessingOptions) (*Upload, error) {
+func Get(ctx context.Context, id string, lu *lookup.Lookup, tp Tree, fsRoot string, pub events.Publisher, async bool, tknopts options.TokenOptions) (*Upload, error) {
 	infoPath := filepath.Join(fsRoot, "uploads", id+".info")
 
 	info := tusd.FileInfo{}
@@ -224,16 +213,17 @@ func Get(ctx context.Context, id string, lu *lookup.Lookup, tp Tree, fsRoot stri
 
 	ctx = appctx.WithLogger(ctx, &sub)
 
-	up := &Upload{
-		Info:     info,
-		binPath:  info.Storage["BinPath"],
-		infoPath: infoPath,
-		lu:       lu,
-		tp:       tp,
-		Ctx:      ctx,
+	up := buildUpload(ctx, info, info.Storage["BinPath"], infoPath, lu, tp, pub, async, tknopts)
+
+	oldsize, err := strconv.ParseUint(info.MetaData["oldsize"], 10, 64)
+	if err == nil {
+		up.oldsize = &oldsize
 	}
 
-	up.pp = configurePostprocessing(up, o)
+	// add node if possible - only in async case
+	if n, err := node.ReadNode(ctx, lu, info.Storage["SpaceRoot"], info.Storage["NodeId"], false); err == nil && async {
+		up.Node = n
+	}
 	return up, nil
 }
 
@@ -305,11 +295,17 @@ func CreateNodeForUpload(upload *Upload) (*node.Node, error) {
 		oldsize := uint64(old.Blobsize)
 		upload.oldsize = &oldsize
 
+		upload.Info.MetaData["oldsize"] = strconv.Itoa(int(old.Blobsize))
 		if _, err = node.CheckQuota(n.SpaceRoot, true, oldsize, uint64(fsize)); err != nil {
 			return nil, err
 		}
 	}
 
+	// update nodeid for later
+	upload.Info.Storage["NodeId"] = n.ID
+	if err := upload.writeInfo(); err != nil {
+		return n, err
+	}
 	return n, upload.tp.Propagate(upload.Ctx, n)
 }
 

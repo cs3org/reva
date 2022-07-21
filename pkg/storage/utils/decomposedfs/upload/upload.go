@@ -28,6 +28,7 @@ import (
 	"hash"
 	"hash/adler32"
 	"io"
+	"io/fs"
 	iofs "io/fs"
 	"io/ioutil"
 	"os"
@@ -38,11 +39,13 @@ import (
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
+	"github.com/cs3org/reva/v2/pkg/events"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/lookup"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/options"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs"
 	"github.com/cs3org/reva/v2/pkg/utils"
-	"github.com/cs3org/reva/v2/pkg/utils/postprocessing"
+	"github.com/golang-jwt/jwt"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	tusd "github.com/tus/tusd/pkg/handler"
@@ -79,6 +82,8 @@ type Upload struct {
 	Ctx context.Context
 	// info stores the current information about the upload
 	Info tusd.FileInfo
+	// node for easy access
+	Node *node.Node
 	// infoPath is the path to the .info file
 	infoPath string
 	// binPath is the path to the binary file (which has no extension)
@@ -86,14 +91,78 @@ type Upload struct {
 	// lu and tp needed for file operations
 	lu *lookup.Lookup
 	tp Tree
-	// node for easy access
-	node *node.Node
 	// oldsize will be nil if there was no file before
 	oldsize *uint64
-	// Postprocessing to start postprocessing
-	pp postprocessing.Postprocessing
 	// and a logger as well
 	log zerolog.Logger
+	// publisher used to publish events
+	pub events.Publisher
+	// async determines if uploads shoud be done asynchronously
+	async bool
+	// tknopts hold token signing information
+	tknopts options.TokenOptions
+}
+
+func buildUpload(ctx context.Context, info tusd.FileInfo, binPath string, infoPath string, lu *lookup.Lookup, tp Tree, pub events.Publisher, async bool, tknopts options.TokenOptions) *Upload {
+	return &Upload{
+		Info:     info,
+		binPath:  binPath,
+		infoPath: infoPath,
+		lu:       lu,
+		tp:       tp,
+		Ctx:      ctx,
+		pub:      pub,
+		async:    async,
+		tknopts:  tknopts,
+		log: appctx.GetLogger(ctx).
+			With().
+			Interface("info", info).
+			Str("binPath", binPath).
+			Logger(),
+	}
+}
+
+// Initialize initializes the node
+func Initialize(upload *Upload) error {
+	// we need the node to start processing
+	n, err := CreateNodeForUpload(upload)
+	if err != nil {
+		return err
+	}
+
+	// set processing status
+	upload.Node = n
+	return upload.Node.MarkProcessing()
+}
+
+// Finalize finalizes a upload
+func Finalize(upload *Upload) error {
+	return upload.finishUpload()
+}
+
+// Cleanup cleans the upload
+func Cleanup(upload *Upload, failure bool, keepUpload bool) {
+	upload.cleanup(failure, !keepUpload, !keepUpload)
+
+	// unset processing status
+	if err := upload.Node.UnmarkProcessing(); err != nil {
+		upload.log.Info().Str("path", upload.Node.InternalPath()).Err(err).Msg("unmarking processing failed")
+	}
+
+	if failure {
+		return
+	}
+
+	if upload.async { // updating the mtime will cause the testsuite to fail - hence we do it only in async case
+		now := utils.TSNow()
+		if err := upload.Node.SetMtime(upload.Ctx, fmt.Sprintf("%d.%d", now.Seconds, now.Nanos)); err != nil {
+			upload.log.Info().Str("path", upload.Node.InternalPath()).Err(err).Msg("could not set mtime")
+		}
+	}
+
+	if err := upload.tp.Propagate(upload.Ctx, upload.Node); err != nil {
+		upload.log.Info().Str("path", upload.Node.InternalPath()).Err(err).Msg("could not set mtime")
+	}
 }
 
 // WriteChunk writes the stream from the reader to the given offset of the upload
@@ -139,12 +208,39 @@ func (upload *Upload) FinishUpload(_ context.Context) error {
 		upload.Ctx = ctxpkg.ContextSetLockID(upload.Ctx, upload.Info.MetaData["lockid"])
 	}
 
-	return upload.pp.Start()
+	if err := Initialize(upload); err != nil {
+		return err
+	}
+
+	if upload.pub != nil {
+		u, _ := ctxpkg.ContextGetUser(upload.Ctx)
+		s, err := upload.URL(upload.Ctx)
+		if err != nil {
+			return err
+		}
+
+		if err := events.Publish(upload.pub, events.BytesReceived{
+			UploadID:      upload.Info.ID,
+			URL:           s,
+			ExecutingUser: u,
+		}); err != nil {
+			return err
+		}
+	}
+
+	if upload.async {
+		// handle postprocessing asynchronously
+		return nil
+	}
+
+	err := Finalize(upload)
+	Cleanup(upload, err != nil, false)
+	return err
 }
 
 // Terminate terminates the upload
 func (upload *Upload) Terminate(_ context.Context) error {
-	upload.cleanup(errors.New("upload terminated"))
+	upload.cleanup(true, true, true)
 	return nil
 }
 
@@ -191,9 +287,9 @@ func (upload *Upload) writeInfo() error {
 
 // finishUpload finishes an upload and moves the file to the internal destination
 func (upload *Upload) finishUpload() (err error) {
-	n := upload.node
+	n := upload.Node
 	if n == nil {
-		return errors.New("need node to finish upload")
+		return errors.New("need Node to finish upload")
 	}
 
 	spaceID := upload.Info.Storage["SpaceRoot"]
@@ -256,7 +352,7 @@ func (upload *Upload) finishUpload() (err error) {
 	}
 	n.BlobID = upload.Info.ID // This can be changed to a content hash in the future when reference counting for the blobs was added
 
-	// defer writing the checksums until the node is in place
+	// defer writing the checksums until the Node is in place
 
 	// if target exists create new version
 	versionsPath := ""
@@ -412,19 +508,74 @@ func (upload *Upload) checkHash(expected string, h hash.Hash) error {
 }
 
 // cleanup cleans up after the upload is finished
-func (upload *Upload) cleanup(err error) {
-	if upload.node != nil && err != nil && upload.oldsize == nil {
-		if err := utils.RemoveItem(upload.node.InternalPath()); err != nil {
-			upload.log.Info().Str("path", upload.node.InternalPath()).Err(err).Msg("removing node failed")
+func (upload *Upload) cleanup(cleanNode, cleanBin, cleanInfo bool) {
+	if cleanNode && upload.Node != nil && upload.oldsize == nil {
+		// remove node
+		if err := utils.RemoveItem(upload.Node.InternalPath()); err != nil {
+			upload.log.Info().Str("path", upload.Node.InternalPath()).Err(err).Msg("removing node failed")
+		}
+
+		// remove parent entry
+		src := filepath.Join(upload.Node.ParentInternalPath(), upload.Node.Name)
+		if err := os.Remove(src); err != nil {
+			upload.log.Info().Str("path", upload.Node.ParentInternalPath()).Err(err).Msg("removing node from parent failed")
+
 		}
 	}
 
-	if err := os.Remove(upload.binPath); err != nil {
-		upload.log.Error().Str("path", upload.binPath).Err(err).Msg("removing upload failed")
+	if cleanBin {
+		if err := os.Remove(upload.binPath); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			upload.log.Error().Str("path", upload.binPath).Err(err).Msg("removing upload failed")
+		}
 	}
-	if err := os.Remove(upload.infoPath); err != nil {
-		upload.log.Error().Str("path", upload.infoPath).Err(err).Msg("removing upload info failed")
+
+	if cleanInfo {
+		if err := os.Remove(upload.infoPath); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			upload.log.Error().Str("path", upload.infoPath).Err(err).Msg("removing upload info failed")
+		}
 	}
+}
+
+// URL returns a url to download an upload
+func (upload *Upload) URL(_ context.Context) (string, error) {
+	type transferClaims struct {
+		jwt.StandardClaims
+		Target string `json:"target"`
+	}
+
+	u := joinurl(upload.tknopts.DownloadEndpoint, "tus/", upload.Info.ID)
+	ttl := time.Duration(upload.tknopts.TransferExpires) * time.Second
+	claims := transferClaims{
+		StandardClaims: jwt.StandardClaims{
+			ExpiresAt: time.Now().Add(ttl).Unix(),
+			Audience:  "reva",
+			IssuedAt:  time.Now().Unix(),
+		},
+		Target: u,
+	}
+
+	t := jwt.NewWithClaims(jwt.GetSigningMethod("HS256"), claims)
+
+	tkn, err := t.SignedString([]byte(upload.tknopts.TransferSharedSecret))
+	if err != nil {
+		return "", errors.Wrapf(err, "error signing token with claims %+v", claims)
+	}
+
+	return joinurl(upload.tknopts.DataGatewayEndpoint, tkn), nil
+}
+
+// replace with url.JoinPath after switching to go1.19
+func joinurl(paths ...string) string {
+	var s strings.Builder
+	l := len(paths)
+	for i, p := range paths {
+		s.WriteString(p)
+		if !strings.HasSuffix(p, "/") && i != l-1 {
+			s.WriteString("/")
+		}
+	}
+
+	return s.String()
 }
 
 func tryWritingChecksum(log *zerolog.Logger, n *node.Node, algo string, h hash.Hash) {

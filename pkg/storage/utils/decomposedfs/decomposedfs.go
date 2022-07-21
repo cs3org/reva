@@ -39,6 +39,8 @@ import (
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
+	"github.com/cs3org/reva/v2/pkg/events"
+	"github.com/cs3org/reva/v2/pkg/events/server"
 	"github.com/cs3org/reva/v2/pkg/logger"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v2/pkg/storage"
@@ -47,9 +49,11 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/options"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/tree"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/upload"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/templates"
 	"github.com/cs3org/reva/v2/pkg/utils"
+	"github.com/go-micro/plugins/v4/events/natsjs"
 	"github.com/pkg/errors"
 	"go.opentelemetry.io/otel/codes"
 	"google.golang.org/grpc"
@@ -99,6 +103,7 @@ type Decomposedfs struct {
 	p                 PermissionsChecker
 	chunkHandler      *chunking.ChunkHandler
 	permissionsClient CS3PermissionsClient
+	stream            events.Stream
 }
 
 // NewDefault returns an instance with default components
@@ -126,21 +131,108 @@ func NewDefault(m map[string]interface{}, bs tree.Blobstore) (storage.FS, error)
 // New returns an implementation of the storage.FS interface that talks to
 // a local filesystem.
 func New(o *options.Options, lu *lookup.Lookup, p PermissionsChecker, tp Tree, permissionsClient CS3PermissionsClient) (storage.FS, error) {
+	log := logger.New()
 	err := tp.Setup()
 	if err != nil {
-		logger.New().Error().Err(err).
-			Msg("could not setup tree")
+		log.Error().Err(err).Msg("could not setup tree")
 		return nil, errors.Wrap(err, "could not setup tree")
 	}
 
-	return &Decomposedfs{
+	var ev events.Stream
+	if o.Events.NatsAddress != "" {
+		ev, err = server.NewNatsStream(natsjs.Address(o.Events.NatsAddress), natsjs.ClusterID(o.Events.NatsClusterID))
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	fs := &Decomposedfs{
 		tp:                tp,
 		lu:                lu,
 		o:                 o,
 		p:                 p,
 		chunkHandler:      chunking.NewChunkHandler(filepath.Join(o.Root, "uploads")),
 		permissionsClient: permissionsClient,
-	}, nil
+		stream:            ev,
+	}
+
+	if o.AsyncFileUploads {
+		if o.Events.NatsAddress == "" {
+			log.Error().Msg("need nats for async file processing")
+			return nil, errors.New("need nats for async file processing")
+		}
+
+		ch, err := events.Consume(ev, "dcfs", events.PostprocessingFinished{}, events.VirusscanFinished{})
+		if err != nil {
+			return nil, err
+		}
+
+		go fs.Postprocessing(ch)
+	}
+
+	return fs, nil
+}
+
+// Postprocessing starts the postprocessing result collector
+func (fs *Decomposedfs) Postprocessing(ch <-chan interface{}) {
+	ctx := context.TODO()
+	log := logger.New()
+	for event := range ch {
+		switch ev := event.(type) {
+		case events.PostprocessingFinished:
+			up, err := upload.Get(ctx, ev.UploadID, fs.lu, fs.tp, fs.o.Root, fs.stream, fs.o.AsyncFileUploads, fs.o.Tokens)
+			if err != nil {
+				log.Error().Err(err).Str("uploadID", ev.UploadID).Msg("Failed to get upload")
+				continue // NOTE: since we can't get the upload, we can't delete the blob
+			}
+
+			var (
+				failed     bool
+				keepUpload bool
+			)
+
+			switch ev.Action {
+			default:
+				log.Error().Str("action", ev.Action).Str("uploadID", ev.UploadID).Msg("unknown postprocessing outcome - aborting")
+				fallthrough
+			case "abort":
+				failed = true
+				keepUpload = true
+			case "continue":
+				if err := upload.Finalize(up); err != nil {
+					log.Error().Err(err).Str("uploadID", ev.UploadID).Msg("could not finalize upload")
+					keepUpload = true // should we keep the upload when assembling failed?
+					failed = true
+				}
+			case "delete":
+				failed = true
+			}
+
+			upload.Cleanup(up, failed, keepUpload)
+
+			if err := events.Publish(fs.stream, events.UploadReady{UploadID: ev.UploadID}); err != nil {
+				log.Error().Err(err).Str("uploadID", ev.UploadID).Msg("Failed to publish UploadReady event")
+			}
+		case events.VirusscanFinished:
+			if ev.Error != nil {
+				// scan failed somehow
+				continue
+			}
+
+			up, err := upload.Get(ctx, ev.UploadID, fs.lu, fs.tp, fs.o.Root, fs.stream, fs.o.AsyncFileUploads, fs.o.Tokens)
+			if err != nil {
+				log.Error().Err(err).Str("uploadID", ev.UploadID).Msg("Failed to get upload")
+				continue
+			}
+
+			if err := up.Node.SetScanData(ev.Description, ev.Scandate); err != nil {
+				log.Error().Err(err).Str("uploadID", ev.UploadID).Msg("Failed to set scan results")
+				continue
+			}
+
+		}
+	}
+
 }
 
 // Shutdown shuts down the storage

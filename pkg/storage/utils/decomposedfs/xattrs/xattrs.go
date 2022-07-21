@@ -53,6 +53,10 @@ const (
 	// statusPrefix is the prefix for the node status
 	StatusPrefix string = OcisPrefix + "nodestatus"
 
+	// scanPrefix is the prefix for the virus scan status and date
+	ScanStatusPrefix string = OcisPrefix + "scanstatus"
+	ScanDatePrefix   string = OcisPrefix + "scandate"
+
 	// grantPrefix is the prefix for sharing related extended attributes
 	GrantPrefix         string = OcisPrefix + "grant."
 	GrantUserAcePrefix  string = OcisPrefix + "grant." + UserAcePrefix
