@@ -278,8 +278,10 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 
 	canListAllSpaces := fs.canListAllSpaces(ctx)
 
-	if userID != spaceTypeAny && !canListAllSpaces {
-		return nil, errtypes.PermissionDenied(fmt.Sprintf("user %s is not allowed to list spaces of other users", ctxpkg.ContextMustGetUser(ctx).GetId().GetOpaqueId()))
+	u := ctxpkg.ContextMustGetUser(ctx).GetId().GetOpaqueId()
+
+	if userID != spaceTypeAny && !canListAllSpaces && u != userID {
+		return nil, errtypes.PermissionDenied(fmt.Sprintf("user %s is not allowed to list spaces of other users", u))
 	}
 
 	checkNodePermissions := !canListAllSpaces || !unrestricted
