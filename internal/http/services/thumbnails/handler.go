@@ -227,6 +227,11 @@ func (s *svc) parseThumbnailRequest(r *http.Request) (*ThumbnailRequest, error) 
 	ctx := r.Context()
 
 	res := ContextMustGetResource(ctx)
+
+	if res.Type != provider.ResourceType_RESOURCE_TYPE_FILE {
+		return nil, errtypes.BadRequest("resource is not a file")
+	}
+
 	width, height, err := parseDimensions(r.URL.Query())
 	if err != nil {
 		return nil, errtypes.BadRequest(fmt.Sprintf("error parsing dimensions: %v", err))
