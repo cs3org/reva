@@ -36,10 +36,5 @@ func NewDownloader() downloader.Downloader {
 
 // Download copies the content of a local file into the dst Writer
 func (m *mockDownloader) Download(ctx context.Context, path string) (io.ReadCloser, error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-	return io.NopCloser(f), nil
+	return os.Open(path)
 }
