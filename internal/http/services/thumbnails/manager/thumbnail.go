@@ -41,8 +41,11 @@ import (
 type FileType int
 
 const (
+	// PNGType is the value to specify a PNF output
 	PNGType FileType = iota
+	// JPEGType is the value to specify a JPEG output
 	JPEGType
+	// BMPType is the value to specify a BMP output
 	BMPType
 )
 
