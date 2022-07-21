@@ -23,6 +23,8 @@ import (
 	"io"
 	"net/url"
 
+	tusd "github.com/tus/tusd/pkg/handler"
+
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	registry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"

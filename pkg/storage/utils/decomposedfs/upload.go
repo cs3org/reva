@@ -32,6 +32,8 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -153,6 +155,9 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 		info.MetaData["providerID"] = metadata["providerID"]
 		if mtime, ok := metadata["mtime"]; ok {
 			info.MetaData["mtime"] = mtime
+		}
+		if expiration, ok := metadata["expires"]; ok {
+			info.MetaData["expires"] = expiration
 		}
 		if _, ok := metadata["sizedeferred"]; ok {
 			info.SizeIsDeferred = true
@@ -335,8 +340,7 @@ func (fs *Decomposedfs) getUploadPath(ctx context.Context, uploadID string) (str
 	return filepath.Join(fs.o.Root, "uploads", uploadID), nil
 }
 
-// GetUpload returns the Upload for the given upload id
-func (fs *Decomposedfs) GetUpload(ctx context.Context, id string) (tusd.Upload, error) {
+func (fs *Decomposedfs) readInfo(id string) (tusd.FileInfo, error) {
 	infoPath := filepath.Join(fs.o.Root, "uploads", id+".info")
 
 	info := tusd.FileInfo{}
@@ -346,18 +350,27 @@ func (fs *Decomposedfs) GetUpload(ctx context.Context, id string) (tusd.Upload, 
 			// Interpret os.ErrNotExist as 404 Not Found
 			err = tusd.ErrNotFound
 		}
-		return nil, err
+		return tusd.FileInfo{}, err
 	}
 	if err := json.Unmarshal(data, &info); err != nil {
-		return nil, err
+		return tusd.FileInfo{}, err
 	}
 
 	stat, err := os.Stat(info.Storage["BinPath"])
 	if err != nil {
+		return tusd.FileInfo{}, err
+	}
+	info.Offset = stat.Size()
+
+	return info, nil
+}
+
+// GetUpload returns the Upload for the given upload id
+func (fs *Decomposedfs) GetUpload(ctx context.Context, id string) (tusd.Upload, error) {
+	info, err := fs.readInfo(id)
+	if err != nil {
 		return nil, err
 	}
-
-	info.Offset = stat.Size()
 
 	u := &userpb.User{
 		Id: &userpb.UserId{
