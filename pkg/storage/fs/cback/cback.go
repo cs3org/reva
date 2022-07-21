@@ -16,7 +16,6 @@ import (
 )
 
 type cback struct {
-	// Update accordingly to
 	conf *Options
 }
 
@@ -39,9 +38,7 @@ func New(m map[string]interface{}) (fs storage.FS, err error) {
 	}
 
 	// returns the storage.FS interface
-	return &cback{
-		conf: c,
-	}, nil
+	return &cback{conf: c}, nil
 
 }
 
@@ -57,14 +54,21 @@ func (fs *cback) makeUser(ctx context.Context) *User {
 }
 
 func (fs *cback) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []string) (ri *provider.ResourceInfo, err error) {
-	//Implement this
 
 }
 
 func (fs *cback) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys []string) (files []*provider.ResourceInfo, err error) {
 	//Implement this
-	var path string
-	user := fs.makeUser(ctx)
+	var path string = ref.GetPath()
+	user, _ := ctxpkg.ContextGetUser(ctx)
+
+	ri := new(provider.ResourceInfo)
+
+	ri.Path = path
+	ri.Id.StorageId = "cback"
+	ri.Id.OpaqueId = path
+	ri.Owner = user.GetId()
+	ri.PermissionSet = getPermID()
 
 }
 
