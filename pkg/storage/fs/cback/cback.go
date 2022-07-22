@@ -39,6 +39,7 @@ func New(m map[string]interface{}) (fs storage.FS, err error) {
 }
 
 func (fs *cback) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []string) (ri *provider.ResourceInfo, err error) {
+	fmt.Print("Test\n\n")
 	return nil, errtypes.NotSupported("Operation Not Yet Implemented")
 }
 
@@ -113,7 +114,7 @@ func (fs *cback) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys
 				files[j] = &f
 			}
 
-			return files, err
+			return files, nil
 
 		} else {
 			//If match in path, therefore prints the Snapshots
