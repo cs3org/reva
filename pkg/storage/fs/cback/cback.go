@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	v1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/mime"
@@ -48,6 +49,7 @@ func (fs *cback) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys
 	var ssId, searchPath string
 
 	user, _ := ctxpkg.ContextGetUser(ctx)
+	uId, _ := ctxpkg.ContextGetUserID(ctx)
 
 	perm := getPermID()
 	resp := fs.matchBackups(user.Username, path)
@@ -78,24 +80,35 @@ func (fs *cback) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys
 			ret := fs.fileSystem(resp.Id, ssId, user.Username, searchPath)
 
 			for j := range ret {
+
 				f := provider.ResourceInfo{}
+				time := v1beta1.Timestamp{}
+				time.Seconds = ret[j].Mtime
+				time.Nanos = 0
+				f.Mtime = &time
+
+				ident := provider.ResourceId{}
+				ident.OpaqueId = ret[j].Path
+				ident.StorageId = "cback"
+				f.Id = &ident
+
+				checkSum := provider.ResourceChecksum{}
+				checkSum.Sum = ""
+				checkSum.Type = provider.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_UNSET
+				f.Checksum = &checkSum
+
 				f.Path = ret[j].Path
-				f.Id.StorageId = "cback"
-				f.Id.OpaqueId = ret[j].Path
-				f.Owner = user.Id
+				f.Owner = uId
 				f.PermissionSet = perm
 				f.Type = provider.ResourceType(ret[j].Type)
 				f.Size = ret[j].Size
-				f.Mtime.Seconds = ret[j].Mtime
-				f.Mtime.Nanos = 0
+
 				if ret[j].Type == 2 {
 					f.MimeType = mime.Detect(true, ret[j].Path)
 				} else {
 					f.MimeType = mime.Detect(false, ret[j].Path)
 				}
 				f.Etag = ""
-				f.Checksum.Sum = "0"
-				f.Checksum.Type = provider.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_UNSET
 
 				files[j] = &f
 			}
