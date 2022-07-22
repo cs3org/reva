@@ -21,6 +21,7 @@ package tus
 import (
 	"context"
 	"net/http"
+	"path"
 	"path/filepath"
 
 	"github.com/pkg/errors"
@@ -28,6 +29,7 @@ import (
 
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/net"
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/events"
@@ -135,6 +137,7 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 		case "HEAD":
 			handler.HeadFile(w, r)
 		case "PATCH":
+			setExpiresHeader(fs, w, r)
 			handler.PatchFile(w, r)
 		case "DELETE":
 			handler.DelFile(w, r)
@@ -152,4 +155,28 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 // to be composable, so that it can support the TUS methods
 type composable interface {
 	UseIn(composer *tusd.StoreComposer)
+}
+
+func setExpiresHeader(fs storage.FS, w http.ResponseWriter, r *http.Request) {
+	ctx := context.Background()
+	id := path.Base(r.URL.Path)
+	datastore, ok := fs.(tusd.DataStore)
+	if !ok {
+		appctx.GetLogger(ctx).Error().Interface("fs", fs).Msg("storage is not a tus datastore")
+		return
+	}
+	upload, err := datastore.GetUpload(context.Background(), id)
+	if err != nil {
+		appctx.GetLogger(ctx).Error().Err(err).Msg("could not get upload from storage")
+		return
+	}
+	info, err := upload.GetInfo(ctx)
+	if err != nil {
+		appctx.GetLogger(ctx).Error().Err(err).Msg("could not get upload info for upload")
+		return
+	}
+	expires := info.MetaData["expires"]
+	if expires != "" {
+		w.Header().Set(net.HeaderTusUploadExpires, expires)
+	}
 }
