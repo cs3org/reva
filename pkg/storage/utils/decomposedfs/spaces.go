@@ -428,6 +428,7 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 
 }
 
+// Checks if permission checks are need to be performed when user requests spaces
 func (fs *Decomposedfs) CheckNodePermissions(ctx context.Context, requestedUserID string, unrestricted bool) bool {
 	authenticatedUserID := ctxpkg.ContextMustGetUser(ctx).GetId().GetOpaqueId()
 	canListAllSpaces := fs.canListAllSpaces(ctx)
@@ -444,6 +445,7 @@ func (fs *Decomposedfs) CheckNodePermissions(ctx context.Context, requestedUserI
 	return true
 }
 
+// Checks if user is allowed to list spaces of another user
 func (fs *Decomposedfs) CanListSpacesOfRequestedUser(ctx context.Context, requestedUserID string) bool {
 	authenticatedUserID := ctxpkg.ContextMustGetUser(ctx).GetId().GetOpaqueId()
 	switch {
