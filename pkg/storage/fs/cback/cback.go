@@ -49,6 +49,8 @@ func (fs *cback) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys
 	var path string = ref.GetPath()
 	var ssId, searchPath string
 
+	fmt.Print(path)
+
 	user, _ := ctxpkg.ContextGetUser(ctx)
 	uId, _ := ctxpkg.ContextGetUserID(ctx)
 
@@ -89,7 +91,8 @@ func (fs *cback) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys
 				f.Mtime = &time
 
 				ident := provider.ResourceId{}
-				ident.OpaqueId = ret[j].Path
+				//Check this
+				ident.OpaqueId = ref.Path
 				ident.StorageId = "cback"
 				f.Id = &ident
 
@@ -98,7 +101,7 @@ func (fs *cback) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys
 				checkSum.Type = provider.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_UNSET
 				f.Checksum = &checkSum
 
-				f.Path = ret[j].Path
+				f.Path = ref.Path
 				f.Owner = uId
 				f.PermissionSet = perm
 				f.Type = provider.ResourceType(ret[j].Type)
