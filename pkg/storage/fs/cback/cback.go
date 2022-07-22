@@ -78,23 +78,26 @@ func (fs *cback) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys
 			ret := fs.fileSystem(resp.Id, ssId, user.Username, searchPath)
 
 			for j := range ret {
-				files[j].Path = ret[j].Path
-				files[j].Id.StorageId = "cback"
-				files[j].Id.OpaqueId = ret[j].Path
-				files[j].Owner = user.Id
-				files[j].PermissionSet = perm
-				files[j].Type = provider.ResourceType(ret[j].Type)
-				files[j].Size = ret[j].Size
-				files[j].Mtime.Seconds = ret[j].Mtime
-				files[j].Mtime.Nanos = 0
+				f := provider.ResourceInfo{}
+				f.Path = ret[j].Path
+				f.Id.StorageId = "cback"
+				f.Id.OpaqueId = ret[j].Path
+				f.Owner = user.Id
+				f.PermissionSet = perm
+				f.Type = provider.ResourceType(ret[j].Type)
+				f.Size = ret[j].Size
+				f.Mtime.Seconds = ret[j].Mtime
+				f.Mtime.Nanos = 0
 				if ret[j].Type == 2 {
-					files[j].MimeType = mime.Detect(true, ret[j].Path)
+					f.MimeType = mime.Detect(true, ret[j].Path)
 				} else {
-					files[j].MimeType = mime.Detect(false, ret[j].Path)
+					f.MimeType = mime.Detect(false, ret[j].Path)
 				}
-				files[j].Etag = ""
-				files[j].Checksum.Sum = "0"
-				files[j].Checksum.Type = provider.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_UNSET
+				f.Etag = ""
+				f.Checksum.Sum = "0"
+				f.Checksum.Type = provider.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_UNSET
+
+				files[j] = &f
 			}
 
 			return files, err
