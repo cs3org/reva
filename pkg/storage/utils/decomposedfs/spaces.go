@@ -55,6 +55,7 @@ const (
 	spaceTypeShare = "share"
 	spaceTypeAny   = "*"
 	spaceIDAny     = "*"
+	userIDAny      = "*"
 )
 
 // CreateStorageSpace creates a storage space
@@ -246,7 +247,7 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 	var (
 		spaceID         = spaceIDAny
 		nodeID          = spaceIDAny
-		requestedUserID = spaceIDAny
+		requestedUserID = userIDAny
 	)
 
 	spaceTypes := map[string]struct{}{}
@@ -278,11 +279,11 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 
 	authenticatedUserID := ctxpkg.ContextMustGetUser(ctx).GetId().GetOpaqueId()
 
-	if !fs.canListSpacesOfRequestedUser(ctx, requestedUserID) {
+	if !fs.CanListSpacesOfRequestedUser(ctx, requestedUserID) {
 		return nil, errtypes.PermissionDenied(fmt.Sprintf("user %s is not allowed to list spaces of other users", authenticatedUserID))
 	}
 
-	checkNodePermissions := fs.checkNodePermissions(ctx, requestedUserID, unrestricted)
+	checkNodePermissions := fs.CheckNodePermissions(ctx, requestedUserID, unrestricted)
 
 	spaces := []*provider.StorageSpace{}
 	// build the glob path, eg.
@@ -317,7 +318,7 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 
 	matches := map[string]struct{}{}
 
-	if requestedUserID != spaceTypeAny {
+	if requestedUserID != userIDAny {
 		path := filepath.Join(fs.o.Root, "indexes", "by-user-id", requestedUserID, nodeID)
 		m, err := filepath.Glob(path)
 		if err != nil {
@@ -332,7 +333,7 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 		}
 	}
 
-	if requestedUserID == spaceTypeAny {
+	if requestedUserID == userIDAny {
 		for spaceType := range spaceTypes {
 			path := filepath.Join(fs.o.Root, "indexes", "by-type", spaceType, nodeID)
 			m, err := filepath.Glob(path)
@@ -427,11 +428,11 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 
 }
 
-func (fs *Decomposedfs) checkNodePermissions(ctx context.Context, requestedUserID string, unrestricted bool) bool {
+func (fs *Decomposedfs) CheckNodePermissions(ctx context.Context, requestedUserID string, unrestricted bool) bool {
 	authenticatedUserID := ctxpkg.ContextMustGetUser(ctx).GetId().GetOpaqueId()
 	canListAllSpaces := fs.canListAllSpaces(ctx)
 	switch {
-	case canListAllSpaces && requestedUserID == spaceTypeAny:
+	case canListAllSpaces && requestedUserID == userIDAny:
 		return true
 	case canListAllSpaces && authenticatedUserID != requestedUserID:
 		// as admin you have to be able to see other users spaces
@@ -443,10 +444,10 @@ func (fs *Decomposedfs) checkNodePermissions(ctx context.Context, requestedUserI
 	return true
 }
 
-func (fs *Decomposedfs) canListSpacesOfRequestedUser(ctx context.Context, requestedUserID string) bool {
+func (fs *Decomposedfs) CanListSpacesOfRequestedUser(ctx context.Context, requestedUserID string) bool {
 	authenticatedUserID := ctxpkg.ContextMustGetUser(ctx).GetId().GetOpaqueId()
 	switch {
-	case requestedUserID == spaceTypeAny:
+	case requestedUserID == userIDAny:
 		// there is no filter
 		return true
 	case requestedUserID == authenticatedUserID:
