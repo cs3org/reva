@@ -283,7 +283,7 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 		return nil, errtypes.PermissionDenied(fmt.Sprintf("user %s is not allowed to list spaces of other users", authenticatedUserID))
 	}
 
-	checkNodePermissions := fs.CheckNodePermissions(ctx, requestedUserID, unrestricted)
+	checkNodePermissions := fs.MustCheckNodePermissions(ctx, requestedUserID, unrestricted)
 
 	spaces := []*provider.StorageSpace{}
 	// build the glob path, eg.
@@ -428,8 +428,8 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 
 }
 
-// Checks if permission checks are need to be performed when user requests spaces
-func (fs *Decomposedfs) CheckNodePermissions(ctx context.Context, requestedUserID string, unrestricted bool) bool {
+// MustCheckNodePermissions checks if permission checks are needed to be performed when user requests spaces
+func (fs *Decomposedfs) MustCheckNodePermissions(ctx context.Context, requestedUserID string, unrestricted bool) bool {
 	authenticatedUserID := ctxpkg.ContextMustGetUser(ctx).GetId().GetOpaqueId()
 	canListAllSpaces := fs.canListAllSpaces(ctx)
 	switch {
@@ -439,13 +439,12 @@ func (fs *Decomposedfs) CheckNodePermissions(ctx context.Context, requestedUserI
 		// as admin you have to be able to see other users spaces
 		return false
 	case canListAllSpaces, unrestricted:
-		// standard case, requesting user needs to check space permissions
 		return false
 	}
 	return true
 }
 
-// Checks if user is allowed to list spaces of another user
+// CanListSpacesOfRequestedUser checks if user is allowed to list spaces of another user
 func (fs *Decomposedfs) CanListSpacesOfRequestedUser(ctx context.Context, requestedUserID string) bool {
 	authenticatedUserID := ctxpkg.ContextMustGetUser(ctx).GetId().GetOpaqueId()
 	switch {

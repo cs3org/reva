@@ -74,7 +74,7 @@ type FS interface {
 	UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error)
 	DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorageSpaceRequest) error
 	CanListSpacesOfRequestedUser(ctx context.Context, requestedUserID string) bool
-	CheckNodePermissions(ctx context.Context, requestedUserID string, unrestricted bool) bool
+	MustCheckNodePermissions(ctx context.Context, requestedUserID string, unrestricted bool) bool
 }
 
 // Registry is the interface that storage registries implement
