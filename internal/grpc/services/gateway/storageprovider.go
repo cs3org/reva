@@ -241,6 +241,9 @@ func (s *svc) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSp
 			filters["owner_id"] = f.GetOwner().OpaqueId
 		case provider.ListStorageSpacesRequest_Filter_TYPE_SPACE_TYPE:
 			filters["space_type"] = f.GetSpaceType()
+		case provider.ListStorageSpacesRequest_Filter_TYPE_USER:
+			filters["user_idp"] = f.GetUser().GetIdp()
+			filters["user_id"] = f.GetUser().GetOpaqueId()
 		default:
 			return &provider.ListStorageSpacesResponse{
 				Status: status.NewInvalidArg(ctx, fmt.Sprintf("unknown filter %v", f.Type)),

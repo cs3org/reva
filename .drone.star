@@ -29,7 +29,7 @@ def lintStep():
         "name": "lint",
         "image": "registry.cern.ch/docker.io/golangci/golangci-lint:v1.42.1",
         "commands": [
-            "golangci-lint run --timeout 3m0s",
+            "golangci-lint run --timeout 10m0s",
         ],
     }
 
@@ -577,7 +577,7 @@ def virtualViews():
                     "PATH_TO_CORE": "/drone/src/tmp/testrunner",
                     "TEST_SERVER_URL": "http://revad-services:20180",
                     "OCIS_REVA_DATA_ROOT": "/drone/src/tmp/reva/data/",
-                    "DELETE_USER_DATA_CMD": "rm -rf /drone/src/tmp/reva/data/spaces/* /drone/src/tmp/reva/data/blobs/* /drone/src/tmp/reva/data/spacetypes/*",
+                    "DELETE_USER_DATA_CMD": "rm -rf /drone/src/tmp/reva/data/spaces/* /drone/src/tmp/reva/data/blobs/* /drone/src/tmp/reva/data/indexes",
                     "STORAGE_DRIVER": "OCIS",
                     "SKELETON_DIR": "/drone/src/tmp/testing/data/apiSkeleton",
                     "TEST_REVA": "true",
@@ -756,7 +756,7 @@ def litmusOcisSpacesDav():
                 "commands": [
                     # The spaceid is randomly generated during the first login so we need this hack to construct the correct url.
                     "curl -s -k -u einstein:relativity -I http://revad-services:20080/remote.php/dav/files/einstein",
-                    "export LITMUS_URL=http://revad-services:20080/remote.php/dav/spaces/$(ls /drone/src/tmp/reva/data/spacetypes/personal/)",
+                    "export LITMUS_URL=http://revad-services:20080/remote.php/dav/spaces/$(ls /drone/src/tmp/reva/data/indexes/by-type/personal/)",
                     "/usr/local/bin/litmus-wrapper",
                 ],
             },
@@ -929,14 +929,14 @@ def ocisIntegrationTests(parallelRuns, skipExceptParts = []):
                         "environment": {
                             "TEST_SERVER_URL": "http://revad-services:20080",
                             "OCIS_REVA_DATA_ROOT": "/drone/src/tmp/reva/data/",
-                            "DELETE_USER_DATA_CMD": "rm -rf /drone/src/tmp/reva/data/spaces/* /drone/src/tmp/reva/data/blobs/* /drone/src/tmp/reva/data/spacetypes/*",
+                            "DELETE_USER_DATA_CMD": "rm -rf /drone/src/tmp/reva/data/spaces/* /drone/src/tmp/reva/data/blobs/* /drone/src/tmp/reva/data/indexes/by-type/*",
                             "STORAGE_DRIVER": "OCIS",
                             "SKELETON_DIR": "/drone/src/tmp/testing/data/apiSkeleton",
                             "TEST_WITH_LDAP": "true",
                             "REVA_LDAP_HOSTNAME": "ldap",
                             "TEST_REVA": "true",
                             "SEND_SCENARIO_LINE_REFERENCES": "true",
-                            "BEHAT_FILTER_TAGS": "~@notToImplementOnOCIS&&~@toImplementOnOCIS&&~comments-app-required&&~@federation-app-required&&~@notifications-app-required&&~systemtags-app-required&&~@provisioning_api-app-required&&~@preview-extension-required&&~@local_storage&&~@skipOnOcis-OCIS-Storage&&~@skipOnOcis&&~@skipOnGraph",
+                            "BEHAT_FILTER_TAGS": "~@notToImplementOnOCIS&&~@toImplementOnOCIS&&~comments-app-required&&~@federation-app-required&&~@notifications-app-required&&~systemtags-app-required&&~@provisioning_api-app-required&&~@preview-extension-required&&~@local_storage&&~@skipOnOcis-OCIS-Storage&&~@skipOnOcis&&~@skipOnGraph&&~@caldav&&~@carddav&&~@skipOnReva",
                             "DIVIDE_INTO_NUM_PARTS": parallelRuns,
                             "RUN_PART": runPart,
                             "EXPECTED_FAILURES_FILE": "/drone/src/tests/acceptance/expected-failures-on-OCIS-storage.md",
@@ -1008,14 +1008,14 @@ def s3ngIntegrationTests(parallelRuns, skipExceptParts = []):
                         "environment": {
                             "TEST_SERVER_URL": "http://revad-services:20080",
                             "OCIS_REVA_DATA_ROOT": "/drone/src/tmp/reva/data/",
-                            "DELETE_USER_DATA_CMD": "rm -rf /drone/src/tmp/reva/data/spaces/* /drone/src/tmp/reva/data/blobs/* /drone/src/tmp/reva/data/spacetypes/*",
+                            "DELETE_USER_DATA_CMD": "rm -rf /drone/src/tmp/reva/data/spaces/* /drone/src/tmp/reva/data/blobs/* /drone/src/tmp/reva/data/indexes/by-type/*",
                             "STORAGE_DRIVER": "S3NG",
                             "SKELETON_DIR": "/drone/src/tmp/testing/data/apiSkeleton",
                             "TEST_WITH_LDAP": "true",
                             "REVA_LDAP_HOSTNAME": "ldap",
                             "TEST_REVA": "true",
                             "SEND_SCENARIO_LINE_REFERENCES": "true",
-                            "BEHAT_FILTER_TAGS": "~@notToImplementOnOCIS&&~@toImplementOnOCIS&&~comments-app-required&&~@federation-app-required&&~@notifications-app-required&&~systemtags-app-required&&~@provisioning_api-app-required&&~@preview-extension-required&&~@local_storage&&~@skipOnOcis-OCIS-Storage&&~@skipOnOcis&&~@skipOnGraph",
+                            "BEHAT_FILTER_TAGS": "~@notToImplementOnOCIS&&~@toImplementOnOCIS&&~comments-app-required&&~@federation-app-required&&~@notifications-app-required&&~systemtags-app-required&&~@provisioning_api-app-required&&~@preview-extension-required&&~@local_storage&&~@skipOnOcis-OCIS-Storage&&~@skipOnOcis&&~@skipOnGraph&&~@caldav&&~@carddav&&~@skipOnReva",
                             "DIVIDE_INTO_NUM_PARTS": parallelRuns,
                             "RUN_PART": runPart,
                             "EXPECTED_FAILURES_FILE": "/drone/src/tests/acceptance/expected-failures-on-S3NG-storage.md",

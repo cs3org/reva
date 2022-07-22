@@ -102,40 +102,10 @@ func (t *Tree) Setup() error {
 			return err
 		}
 	}
-
-	// create spaces folder and iterate over existing nodes to populate it
-	nodesPath := filepath.Join(t.root, "nodes")
-	fi, err := os.Stat(nodesPath)
-	if err == nil && fi.IsDir() {
-
-		f, err := os.Open(nodesPath)
-		if err != nil {
-			return err
-		}
-		nodes, err := f.Readdir(0)
-		if err != nil {
-			return err
-		}
-
-		for _, node := range nodes {
-			nodePath := filepath.Join(nodesPath, node.Name())
-
-			if isRootNode(nodePath) {
-				if err := t.moveNode(node.Name(), node.Name()); err != nil {
-					logger.New().Error().Err(err).
-						Str("space", node.Name()).
-						Msg("could not move space")
-					continue
-				}
-				t.linkSpace("personal", node.Name())
-			}
-		}
-		// TODO delete nodesPath if empty
-
-	}
-
-	return nil
+	// Run migrations & return
+	return t.runMigrations()
 }
+
 func (t *Tree) moveNode(spaceID, nodeID string) error {
 	dirPath := filepath.Join(t.root, "nodes", nodeID)
 	f, err := os.Open(dirPath)
@@ -166,8 +136,65 @@ func (t *Tree) moveNode(spaceID, nodeID string) error {
 	return nil
 }
 
+func (t *Tree) moveSpaceType(spaceType string) error {
+	dirPath := filepath.Join(t.root, "spacetypes", spaceType)
+	f, err := os.Open(dirPath)
+	if err != nil {
+		return err
+	}
+	children, err := f.Readdir(0)
+	if err != nil {
+		return err
+	}
+	for _, child := range children {
+		old := filepath.Join(t.root, "spacetypes", spaceType, child.Name())
+		target, err := os.Readlink(old)
+		if err != nil {
+			logger.New().Error().Err(err).
+				Str("space", spaceType).
+				Str("nodes", child.Name()).
+				Str("oldLink", old).
+				Msg("could not read old symlink")
+			continue
+		}
+		newDir := filepath.Join(t.root, "indexes", "by-type", spaceType)
+		if err := os.MkdirAll(newDir, 0700); err != nil {
+			logger.New().Error().Err(err).
+				Str("space", spaceType).
+				Str("nodes", child.Name()).
+				Str("targetDir", newDir).
+				Msg("could not read old symlink")
+		}
+		newLink := filepath.Join(newDir, child.Name())
+		if err := os.Symlink(filepath.Join("..", target), newLink); err != nil {
+			logger.New().Error().Err(err).
+				Str("space", spaceType).
+				Str("nodes", child.Name()).
+				Str("oldpath", old).
+				Str("newpath", newLink).
+				Msg("could not rename node")
+			continue
+		}
+		if err := os.Remove(old); err != nil {
+			logger.New().Error().Err(err).
+				Str("space", spaceType).
+				Str("nodes", child.Name()).
+				Str("oldLink", old).
+				Msg("could not remove old symlink")
+			continue
+		}
+	}
+	if err := os.Remove(dirPath); err != nil {
+		logger.New().Error().Err(err).
+			Str("space", spaceType).
+			Str("dir", dirPath).
+			Msg("could not remove spaces folder, folder probably not empty")
+	}
+	return nil
+}
+
 // linkSpace creates a new symbolic link for a space with the given type st, and node id
-func (t *Tree) linkSpace(spaceType, spaceID string) {
+func (t *Tree) linkSpaceNode(spaceType, spaceID string) {
 	spaceTypesPath := filepath.Join(t.root, "spacetypes", spaceType, spaceID)
 	expectedTarget := "../../spaces/" + lookup.Pathify(spaceID, 1, 2) + "/nodes/" + lookup.Pathify(spaceID, 4, 2)
 	linkTarget, err := os.Readlink(spaceTypesPath)

@@ -248,7 +248,7 @@ func (fs *Decomposedfs) storeGrant(ctx context.Context, n *node.Node, g *provide
 
 	// when a grant is added to a space, do not add a new space under "shares"
 	if spaceGrant := ctx.Value(utils.SpaceGrant); spaceGrant == nil {
-		err := fs.linkStorageSpaceType(ctx, spaceTypeShare, n.ID)
+		err := fs.updateIndexes(ctx, g.GetGrantee().GetUserId().GetOpaqueId(), spaceTypeShare, n.ID)
 		if err != nil {
 			return err
 		}

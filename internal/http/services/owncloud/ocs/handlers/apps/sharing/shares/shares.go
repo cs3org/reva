@@ -292,7 +292,7 @@ func (h *Handler) CreateShare(w http.ResponseWriter, r *http.Request) {
 	case int(conversions.ShareTypePublicLink):
 		// public links default to read only
 		_, _, ocsErr := h.extractPermissions(reqRole, reqPermissions, statRes.Info, conversions.NewViewerRole())
-		if ocsErr != nil {
+		if ocsErr != nil && ocsErr.Error != conversions.ErrZeroPermission {
 			response.WriteOCSError(w, r, http.StatusNotFound, "No share permission", nil)
 			return
 		}

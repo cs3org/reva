@@ -105,7 +105,7 @@ func (fs *Decomposedfs) CreateStorageSpace(ctx context.Context, req *provider.Cr
 		}
 	}
 
-	err = fs.linkStorageSpaceType(ctx, req.Type, root.ID)
+	err = fs.updateIndexes(ctx, req.GetOwner().GetId().GetOpaqueId(), req.Type, root.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -160,7 +160,7 @@ func (fs *Decomposedfs) CreateStorageSpace(ctx context.Context, req *provider.Cr
 		}
 	}
 
-	space, err := fs.storageSpaceFromNode(ctx, root, root.InternalPath(), false, false)
+	space, err := fs.storageSpaceFromNode(ctx, root, true)
 	if err != nil {
 		return nil, err
 	}
@@ -215,21 +215,17 @@ func (fs *Decomposedfs) canCreateSpace(ctx context.Context, spaceID string) bool
 	return checkRes.Status.Code == v1beta11.Code_CODE_OK
 }
 
-// ReadSpaceAndNodeFromSpaceTypeLink reads a symlink and parses space and node id if the link has the correct format, eg:
+// ReadSpaceAndNodeFromIndexLink reads a symlink and parses space and node id if the link has the correct format, eg:
 // ../../spaces/4c/510ada-c86b-4815-8820-42cdf82c3d51/nodes/4c/51/0a/da/-c86b-4815-8820-42cdf82c3d51
 // ../../spaces/4c/510ada-c86b-4815-8820-42cdf82c3d51/nodes/4c/51/0a/da/-c86b-4815-8820-42cdf82c3d51.T.2022-02-24T12:35:18.196484592Z
-func ReadSpaceAndNodeFromSpaceTypeLink(path string) (string, string, error) {
-	link, err := os.Readlink(path)
-	if err != nil {
-		return "", "", err
-	}
-	// ../../spaces/sp/ace-id/nodes/sh/or/tn/od/eid
-	// 0  1  2      3  4      5     6  7  8  9  10
+func ReadSpaceAndNodeFromIndexLink(link string) (string, string, error) {
+	// ../../../spaces/sp/ace-id/nodes/sh/or/tn/od/eid
+	// 0  1  2  3      4  5      6     7  8  9  10  11
 	parts := strings.Split(link, string(filepath.Separator))
-	if len(parts) != 11 || parts[0] != ".." || parts[1] != ".." || parts[2] != "spaces" || parts[5] != "nodes" {
+	if len(parts) != 12 || parts[0] != ".." || parts[1] != ".." || parts[2] != ".." || parts[3] != "spaces" || parts[6] != "nodes" {
 		return "", "", errtypes.InternalError("malformed link")
 	}
-	return strings.Join(parts[3:5], ""), strings.Join(parts[6:11], ""), nil
+	return strings.Join(parts[4:6], ""), strings.Join(parts[7:12], ""), nil
 }
 
 // ListStorageSpaces returns a list of StorageSpaces.
@@ -250,9 +246,10 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 	var (
 		spaceID = spaceIDAny
 		nodeID  = spaceIDAny
+		userID  = spaceIDAny
 	)
 
-	spaceTypes := []string{}
+	spaceTypes := map[string]struct{}{}
 
 	for i := range filter {
 		switch filter[i].Type {
@@ -263,20 +260,29 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 			case "+grant":
 				// TODO include grants
 			default:
-				spaceTypes = append(spaceTypes, filter[i].GetSpaceType())
+				spaceTypes[filter[i].GetSpaceType()] = struct{}{}
 			}
 		case provider.ListStorageSpacesRequest_Filter_TYPE_ID:
 			_, spaceID, nodeID, _ = storagespace.SplitID(filter[i].GetId().OpaqueId)
 			if strings.Contains(nodeID, "/") {
 				return []*provider.StorageSpace{}, nil
 			}
+		case provider.ListStorageSpacesRequest_Filter_TYPE_USER:
+			// TODO: refactor this to GetUserId() in cs3
+			userID = filter[i].GetUser().GetOpaqueId()
 		}
 	}
 	if len(spaceTypes) == 0 {
-		spaceTypes = []string{spaceTypeAny}
+		spaceTypes[spaceTypeAny] = struct{}{}
 	}
 
 	canListAllSpaces := fs.canListAllSpaces(ctx)
+
+	if userID != spaceTypeAny && !canListAllSpaces {
+		return nil, errtypes.PermissionDenied(fmt.Sprintf("user %s is not allowed to list spaces of other users", ctxpkg.ContextMustGetUser(ctx).GetId().GetOpaqueId()))
+	}
+
+	checkNodePermissions := !canListAllSpaces || !unrestricted
 
 	spaces := []*provider.StorageSpace{}
 	// build the glob path, eg.
@@ -295,28 +301,52 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 			// return empty list
 			return spaces, nil
 		}
-		space, err := fs.storageSpaceFromNode(ctx, n, n.InternalPath(), canListAllSpaces, unrestricted)
+		space, err := fs.storageSpaceFromNode(ctx, n, checkNodePermissions)
 		if err != nil {
 			return nil, err
 		}
 		// filter space types
-		for _, spaceType := range spaceTypes {
-			if spaceType == spaceTypeAny || spaceType == space.SpaceType {
-				spaces = append(spaces, space)
-			}
+		_, ok1 := spaceTypes[spaceTypeAny]
+		_, ok2 := spaceTypes[space.SpaceType]
+		if ok1 || ok2 {
+			spaces = append(spaces, space)
 		}
-
+		// TODO: filter user id
 		return spaces, nil
 	}
 
-	matches := []string{}
-	for _, spaceType := range spaceTypes {
-		path := filepath.Join(fs.o.Root, "spacetypes", spaceType, nodeID)
+	matches := map[string]struct{}{}
+
+	if userID != spaceTypeAny {
+		path := filepath.Join(fs.o.Root, "indexes", "by-user-id", userID, nodeID)
 		m, err := filepath.Glob(path)
 		if err != nil {
 			return nil, err
 		}
-		matches = append(matches, m...)
+		for _, match := range m {
+			link, err := os.Readlink(match)
+			if err != nil {
+				continue
+			}
+			matches[link] = struct{}{}
+		}
+	}
+
+	if userID == spaceTypeAny {
+		for spaceType := range spaceTypes {
+			path := filepath.Join(fs.o.Root, "indexes", "by-type", spaceType, nodeID)
+			m, err := filepath.Glob(path)
+			if err != nil {
+				return nil, err
+			}
+			for _, match := range m {
+				link, err := os.Readlink(match)
+				if err != nil {
+					continue
+				}
+				matches[link] = struct{}{}
+			}
+		}
 	}
 
 	// FIXME if the space does not exist try a node as the space root.
@@ -332,16 +362,16 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 
 	numShares := 0
 
-	for i := range matches {
+	for match := range matches {
 		var err error
 		// do not investigate flock files any further. They indicate file locks but are not relevant here.
-		if strings.HasSuffix(matches[i], ".flock") {
+		if strings.HasSuffix(match, ".flock") {
 			continue
 		}
 		// always read link in case storage space id != node id
-		spaceID, nodeID, err = ReadSpaceAndNodeFromSpaceTypeLink(matches[i])
+		spaceID, nodeID, err = ReadSpaceAndNodeFromIndexLink(match)
 		if err != nil {
-			appctx.GetLogger(ctx).Error().Err(err).Str("match", matches[i]).Msg("could not read link, skipping")
+			appctx.GetLogger(ctx).Error().Err(err).Str("match", match).Msg("could not read link, skipping")
 			continue
 		}
 
@@ -355,25 +385,27 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 			continue
 		}
 
-		spaceType := filepath.Base(filepath.Dir(matches[i]))
-
-		// FIXME type share evolved to grant on the edge branch ... make it configurable if the driver should support them or not for now ... ignore type share
-		if spaceType == spaceTypeShare {
-			numShares++
-			// do not list shares as spaces for the owner
-			continue
-		}
-
-		// TODO apply more filters
-		space, err := fs.storageSpaceFromNode(ctx, n, matches[i], canListAllSpaces, unrestricted)
+		space, err := fs.storageSpaceFromNode(ctx, n, checkNodePermissions)
 		if err != nil {
 			if _, ok := err.(errtypes.IsPermissionDenied); !ok {
 				appctx.GetLogger(ctx).Error().Err(err).Interface("node", n).Msg("could not convert to storage space")
 			}
 			continue
 		}
-		spaces = append(spaces, space)
 
+		// FIXME type share evolved to grant on the edge branch ... make it configurable if the driver should support them or not for now ... ignore type share
+		if space.SpaceType == spaceTypeShare {
+			numShares++
+			// do not list shares as spaces for the owner
+			continue
+		}
+
+		// TODO apply more filters
+		_, ok1 := spaceTypes[spaceTypeAny]
+		_, ok2 := spaceTypes[space.SpaceType]
+		if ok1 || ok2 {
+			spaces = append(spaces, space)
+		}
 	}
 	// if there are no matches (or they happened to be spaces for the owner) and the node is a child return a space
 	if len(matches) <= numShares && nodeID != spaceID {
@@ -383,7 +415,7 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 			return nil, err
 		}
 		if n.Exists {
-			space, err := fs.storageSpaceFromNode(ctx, n, n.InternalPath(), canListAllSpaces, unrestricted)
+			space, err := fs.storageSpaceFromNode(ctx, n, checkNodePermissions)
 			if err != nil {
 				return nil, err
 			}
@@ -491,7 +523,7 @@ func (fs *Decomposedfs) UpdateStorageSpace(ctx context.Context, req *provider.Up
 	}
 
 	// send back the updated data from the storage
-	updatedSpace, err := fs.storageSpaceFromNode(ctx, node, node.InternalPath(), false, false)
+	updatedSpace, err := fs.storageSpaceFromNode(ctx, node, true)
 	if err != nil {
 		return nil, err
 	}
@@ -535,7 +567,7 @@ func (fs *Decomposedfs) DeleteStorageSpace(ctx context.Context, req *provider.De
 			return err
 		}
 		// remove type index
-		spaceTypePath := filepath.Join(fs.o.Root, "spacetypes", spaceType, spaceID)
+		spaceTypePath := filepath.Join(fs.o.Root, "indexes", "by-type", spaceType, spaceID)
 		if err := os.Remove(spaceTypePath); err != nil {
 			return err
 		}
@@ -555,14 +587,51 @@ func (fs *Decomposedfs) DeleteStorageSpace(ctx context.Context, req *provider.De
 	return n.SetDTime(&dtime)
 }
 
+func (fs *Decomposedfs) updateIndexes(ctx context.Context, userID, spaceType, spaceID string) error {
+	err := fs.linkStorageSpaceType(ctx, spaceType, spaceID)
+	if err != nil {
+		return err
+	}
+	return fs.linkSpaceByUser(ctx, userID, spaceID)
+}
+
+func (fs *Decomposedfs) linkSpaceByUser(ctx context.Context, userID, spaceID string) error {
+	if userID == "" {
+		return nil
+	}
+	// create user index dir
+	// TODO: pathify userID
+	if err := os.MkdirAll(filepath.Join(fs.o.Root, "indexes", "by-user-id", userID), 0700); err != nil {
+		return err
+	}
+
+	err := os.Symlink("../../../spaces/"+lookup.Pathify(spaceID, 1, 2)+"/nodes/"+lookup.Pathify(spaceID, 4, 2), filepath.Join(fs.o.Root, "indexes/by-user-id", userID, spaceID))
+	if err != nil {
+		if isAlreadyExists(err) {
+			appctx.GetLogger(ctx).Debug().Err(err).Str("space", spaceID).Str("user-id", userID).Msg("symlink already exists")
+			// FIXME: is it ok to wipe this err if the symlink already exists?
+			err = nil //nolint
+		} else {
+			// TODO how should we handle error cases here?
+			appctx.GetLogger(ctx).Error().Err(err).Str("space", spaceID).Str("user-id", userID).Msg("could not create symlink")
+		}
+	}
+	return nil
+}
+
+// TODO: implement linkSpaceByGroup
+
 func (fs *Decomposedfs) linkStorageSpaceType(ctx context.Context, spaceType string, spaceID string) error {
+	if spaceType == "" {
+		return nil
+	}
 	// create space type dir
-	if err := os.MkdirAll(filepath.Join(fs.o.Root, "spacetypes", spaceType), 0700); err != nil {
+	if err := os.MkdirAll(filepath.Join(fs.o.Root, "indexes", "by-type", spaceType), 0700); err != nil {
 		return err
 	}
 
 	// link space in spacetypes
-	err := os.Symlink("../../spaces/"+lookup.Pathify(spaceID, 1, 2)+"/nodes/"+lookup.Pathify(spaceID, 4, 2), filepath.Join(fs.o.Root, "spacetypes", spaceType, spaceID))
+	err := os.Symlink("../../../spaces/"+lookup.Pathify(spaceID, 1, 2)+"/nodes/"+lookup.Pathify(spaceID, 4, 2), filepath.Join(fs.o.Root, "indexes", "by-type", spaceType, spaceID))
 	if err != nil {
 		if isAlreadyExists(err) {
 			appctx.GetLogger(ctx).Debug().Err(err).Str("space", spaceID).Str("spacetype", spaceType).Msg("symlink already exists")
@@ -577,9 +646,9 @@ func (fs *Decomposedfs) linkStorageSpaceType(ctx context.Context, spaceType stri
 	return err
 }
 
-func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, nodePath string, canListAllSpaces bool, unrestricted bool) (*provider.StorageSpace, error) {
+func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, checkPermissions bool) (*provider.StorageSpace, error) {
 	user := ctxpkg.ContextMustGetUser(ctx)
-	if !canListAllSpaces || !unrestricted {
+	if checkPermissions {
 		ok, err := node.NewPermissions(fs.lu).HasPermission(ctx, n, func(p *provider.ResourcePermissions) bool {
 			return p.Stat
 		})
@@ -685,7 +754,7 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 			Seconds: uint64(un / 1000000000),
 			Nanos:   uint32(un % 1000000000),
 		}
-	} else if fi, err := os.Stat(nodePath); err == nil {
+	} else if fi, err := os.Stat(n.InternalPath()); err == nil {
 		// fall back to stat mtime
 		tmtime = fi.ModTime()
 		un := fi.ModTime().UnixNano()
@@ -704,7 +773,7 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 		Value:   []byte(etag),
 	}
 
-	spaceAttributes, err := xattrs.All(nodePath)
+	spaceAttributes, err := xattrs.All(n.InternalPath())
 	if err != nil {
 		return nil, err
 	}

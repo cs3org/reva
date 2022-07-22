@@ -529,7 +529,7 @@ func ocPublicPermToCs3(permKey int, h *Handler) (*provider.ResourcePermissions, 
 	}
 
 	perm, err := conversions.NewPermissions(permKey)
-	if err != nil {
+	if err != nil && err != conversions.ErrZeroPermission { // we allow empty permissions for public links
 		return nil, err
 	}
 

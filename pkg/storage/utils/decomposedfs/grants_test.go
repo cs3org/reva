@@ -126,7 +126,7 @@ var _ = Describe("Grants", func() {
 				err := env.Fs.AddGrant(env.Ctx, ref, grant)
 				Expect(err).ToNot(HaveOccurred())
 
-				spaceTypesPath := filepath.Join(env.Root, "spacetypes")
+				spaceTypesPath := filepath.Join(env.Root, "indexes", "by-type")
 				tfs.root = spaceTypesPath
 				entries, err := fs.ReadDir(tfs, "share")
 				Expect(err).ToNot(HaveOccurred())

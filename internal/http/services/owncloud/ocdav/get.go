@@ -20,25 +20,19 @@ package ocdav
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"net/http"
 	"path"
 	"strconv"
-	"strings"
-	"time"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/v2/internal/grpc/services/storageprovider"
 	"github.com/cs3org/reva/v2/internal/http/services/datagateway"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/errors"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/net"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/spacelookup"
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	"github.com/cs3org/reva/v2/pkg/rhttp"
-	"github.com/cs3org/reva/v2/pkg/storagespace"
-	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/rs/zerolog"
 )
 
@@ -75,22 +69,6 @@ func (s *svc) handleGet(ctx context.Context, w http.ResponseWriter, r *http.Requ
 	if err != nil {
 		log.Error().Err(err).Msg("error getting grpc client")
 		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	sReq := &provider.StatRequest{Ref: ref}
-	sRes, err := client.Stat(ctx, sReq)
-	switch {
-	case err != nil:
-		log.Error().Err(err).Msg("error sending grpc stat request")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	case sRes.Status.Code != rpc.Code_CODE_OK:
-		errors.HandleErrorStatus(&log, w, sRes.Status)
-		return
-	case sRes.Info.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER:
-		log.Warn().Msg("resource is a folder and cannot be downloaded")
-		w.WriteHeader(http.StatusNotImplemented)
 		return
 	}
 
@@ -134,33 +112,15 @@ func (s *svc) handleGet(ctx context.Context, w http.ResponseWriter, r *http.Requ
 	}
 	defer httpRes.Body.Close()
 
+	copyHeader(w.Header(), httpRes.Header)
+	w.WriteHeader(httpRes.StatusCode)
+
 	if httpRes.StatusCode != http.StatusOK && httpRes.StatusCode != http.StatusPartialContent {
-		w.WriteHeader(httpRes.StatusCode)
+		// swallow the body and set content-length to 0 to prevent reverse proxies from trying to read from it
+		w.Header().Set("Content-Length", "0")
 		return
 	}
 
-	info := sRes.Info
-
-	w.Header().Set(net.HeaderContentType, info.MimeType)
-	w.Header().Set(net.HeaderContentDisposistion, "attachment; filename*=UTF-8''"+
-		path.Base(info.Path)+"; filename=\""+path.Base(info.Path)+"\"")
-	w.Header().Set(net.HeaderETag, info.Etag)
-	w.Header().Set(net.HeaderOCFileID, storagespace.FormatResourceID(*info.Id))
-	w.Header().Set(net.HeaderOCETag, info.Etag)
-	t := utils.TSToTime(info.Mtime).UTC()
-	lastModifiedString := t.Format(time.RFC1123Z)
-	w.Header().Set(net.HeaderLastModified, lastModifiedString)
-
-	if httpRes.StatusCode == http.StatusPartialContent {
-		w.Header().Set(net.HeaderContentRange, httpRes.Header.Get(net.HeaderContentRange))
-		w.Header().Set(net.HeaderContentLength, httpRes.Header.Get(net.HeaderContentLength))
-		w.WriteHeader(http.StatusPartialContent)
-	} else {
-		w.Header().Set(net.HeaderContentLength, strconv.FormatUint(info.Size, 10))
-	}
-	if info.Checksum != nil {
-		w.Header().Set(net.HeaderOCChecksum, fmt.Sprintf("%s:%s", strings.ToUpper(string(storageprovider.GRPC2PKGXS(info.Checksum.Type))), info.Checksum.Sum))
-	}
 	var c int64
 	if c, err = io.Copy(w, httpRes.Body); err != nil {
 		log.Error().Err(err).Msg("error finishing copying data to response")
@@ -175,6 +135,14 @@ func (s *svc) handleGet(ctx context.Context, w http.ResponseWriter, r *http.Requ
 		}
 	}
 	// TODO we need to send the If-Match etag in the GET to the datagateway to prevent race conditions between stating and reading the file
+}
+
+func copyHeader(dst, src http.Header) {
+	for key, values := range src {
+		for i := range values {
+			dst.Add(key, values[i])
+		}
+	}
 }
 
 func (s *svc) handleSpacesGet(w http.ResponseWriter, r *http.Request, spaceID string) {

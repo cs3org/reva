@@ -36,21 +36,25 @@ type Identity struct {
 }
 
 type userConfig struct {
-	BaseDN      string `mapstructure:"user_base_dn"`
-	Scope       string `mapstructure:"user_search_scope"`
-	scopeVal    int
-	Filter      string     `mapstructure:"user_filter"`
-	Objectclass string     `mapstructure:"user_objectclass"`
-	Schema      userSchema `mapstructure:"user_schema"`
+	BaseDN              string `mapstructure:"user_base_dn"`
+	Scope               string `mapstructure:"user_search_scope"`
+	scopeVal            int
+	Filter              string     `mapstructure:"user_filter"`
+	Objectclass         string     `mapstructure:"user_objectclass"`
+	Schema              userSchema `mapstructure:"user_schema"`
+	SubstringFilterType string     `mapstructure:"user_substring_filter_type"`
+	substringFilterVal  int
 }
 
 type groupConfig struct {
-	BaseDN      string `mapstructure:"group_base_dn"`
-	Scope       string `mapstructure:"group_search_scope"`
-	scopeVal    int
-	Filter      string      `mapstructure:"group_filter"`
-	Objectclass string      `mapstructure:"group_objectclass"`
-	Schema      groupSchema `mapstructure:"group_schema"`
+	BaseDN              string `mapstructure:"group_base_dn"`
+	Scope               string `mapstructure:"group_search_scope"`
+	scopeVal            int
+	Filter              string      `mapstructure:"group_filter"`
+	Objectclass         string      `mapstructure:"group_objectclass"`
+	Schema              groupSchema `mapstructure:"group_schema"`
+	SubstringFilterType string      `mapstructure:"group_substring_filter_type"`
+	substringFilterVal  int
 }
 
 type groupSchema struct {
@@ -99,6 +103,7 @@ var userDefaults = userConfig{
 		UIDNumber:       "uidNumber",
 		GIDNumber:       "gidNumber",
 	},
+	SubstringFilterType: "initial",
 }
 
 // Default groupConfig (Active Directory)
@@ -114,6 +119,7 @@ var groupDefaults = groupConfig{
 		GIDNumber:       "gidNumber",
 		Member:          "memberUid",
 	},
+	SubstringFilterType: "initial",
 }
 
 // New initializes the default config
@@ -136,6 +142,15 @@ func (i *Identity) Setup() error {
 	if i.Group.scopeVal, err = stringToScope(i.Group.Scope); err != nil {
 		return fmt.Errorf("error configuring group scope: %w", err)
 	}
+
+	if i.User.substringFilterVal, err = stringToFilterType(i.User.SubstringFilterType); err != nil {
+		return fmt.Errorf("error configuring user substring filter type: %w", err)
+	}
+
+	if i.Group.substringFilterVal, err = stringToFilterType(i.Group.SubstringFilterType); err != nil {
+		return fmt.Errorf("error configuring group substring filter type: %w", err)
+	}
+
 	return nil
 }
 
@@ -475,9 +490,17 @@ func (i *Identity) getUserFindFilter(query string) string {
 		i.User.Schema.DisplayName,
 		i.User.Schema.Username,
 	}
-	var filter string
+	var filter, squery string
+	switch i.User.substringFilterVal {
+	case ldap.FilterSubstringsInitial:
+		squery = fmt.Sprintf("%s*", ldap.EscapeFilter(query))
+	case ldap.FilterSubstringsAny:
+		squery = fmt.Sprintf("*%s*", ldap.EscapeFilter(query))
+	case ldap.FilterSubstringsFinal:
+		squery = fmt.Sprintf("*%s", ldap.EscapeFilter(query))
+	}
 	for _, attr := range searchAttrs {
-		filter = fmt.Sprintf("%s(%s=%s*)", filter, attr, ldap.EscapeFilter(query))
+		filter = fmt.Sprintf("%s(%s=%s)", filter, attr, squery)
 	}
 	// substring search for UUID is not possible
 	filter = fmt.Sprintf("%s(%s=%s)", filter, i.User.Schema.ID, ldap.EscapeFilter(query))
@@ -497,9 +520,17 @@ func (i *Identity) getGroupFindFilter(query string) string {
 		i.Group.Schema.DisplayName,
 		i.Group.Schema.Groupname,
 	}
-	var filter string
+	var filter, squery string
+	switch i.Group.substringFilterVal {
+	case ldap.FilterSubstringsInitial:
+		squery = fmt.Sprintf("%s*", ldap.EscapeFilter(query))
+	case ldap.FilterSubstringsAny:
+		squery = fmt.Sprintf("*%s*", ldap.EscapeFilter(query))
+	case ldap.FilterSubstringsFinal:
+		squery = fmt.Sprintf("*%s", ldap.EscapeFilter(query))
+	}
 	for _, attr := range searchAttrs {
-		filter = fmt.Sprintf("%s(%s=%s*)", filter, attr, ldap.EscapeFilter(query))
+		filter = fmt.Sprintf("%s(%s=%s)", filter, attr, squery)
 	}
 	// substring search for UUID is not possible
 	filter = fmt.Sprintf("%s(%s=%s)", filter, i.Group.Schema.ID, ldap.EscapeFilter(query))
@@ -522,6 +553,21 @@ func stringToScope(scope string) (int, error) {
 		s = ldap.ScopeBaseObject
 	default:
 		return 0, fmt.Errorf("invalid Scope '%s'", scope)
+	}
+	return s, nil
+}
+
+func stringToFilterType(t string) (int, error) {
+	var s int
+	switch t {
+	case "initial":
+		s = ldap.FilterSubstringsInitial
+	case "any":
+		s = ldap.FilterSubstringsAny
+	case "final":
+		s = ldap.FilterSubstringsFinal
+	default:
+		return 0, fmt.Errorf("invalid filter type '%s'", t)
 	}
 	return s, nil
 }

@@ -376,15 +376,14 @@ func (s *svc) doPatch(w http.ResponseWriter, r *http.Request) {
 	defer httpRes.Body.Close()
 
 	copyHeader(w.Header(), httpRes.Header)
-
-	if httpRes.StatusCode != http.StatusOK {
+	if httpRes.StatusCode != http.StatusOK && httpRes.StatusCode != http.StatusPartialContent {
 		// swallow the body and set content-length to 0 to prevent reverse proxies from trying to read from it
 		w.Header().Set("Content-Length", "0")
 		w.WriteHeader(httpRes.StatusCode)
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
+	w.WriteHeader(httpRes.StatusCode)
 	_, err = io.Copy(w, httpRes.Body)
 	if err != nil {
 		log.Err(err).Msg("error writing body after header were set")
