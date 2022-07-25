@@ -8,6 +8,7 @@ require (
 	github.com/BurntSushi/toml v1.2.0
 	github.com/CiscoM31/godata v1.0.5
 	github.com/Masterminds/sprig v2.22.0+incompatible
+	github.com/ReneKroon/ttlcache/v2 v2.11.0
 	github.com/aws/aws-sdk-go v1.44.61
 	github.com/beevik/etree v1.1.0
 	github.com/bluele/gcache v0.0.2
@@ -116,7 +117,6 @@ require (
 	github.com/huandu/xstrings v1.3.2 // indirect
 	github.com/imdario/mergo v0.3.12 // indirect
 	github.com/jbenet/go-context v0.0.0-20150711004518-d14ea06fba99 // indirect
-	github.com/jellydator/ttlcache/v3 v3.0.0 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/jtolds/gls v4.20.0+incompatible // indirect

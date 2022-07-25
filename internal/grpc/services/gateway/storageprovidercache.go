@@ -24,6 +24,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ReneKroon/ttlcache/v2"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -31,7 +32,6 @@ import (
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	sdk "github.com/cs3org/reva/v2/pkg/sdk/common"
 	"github.com/cs3org/reva/v2/pkg/utils"
-	"github.com/jellydator/ttlcache/v3"
 	"google.golang.org/grpc"
 )
 

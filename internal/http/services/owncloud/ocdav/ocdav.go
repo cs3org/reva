@@ -25,6 +25,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ReneKroon/ttlcache/v2"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	gatewayv1beta1 "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -44,7 +45,6 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/templates"
 	rtrace "github.com/cs3org/reva/v2/pkg/trace"
 	"github.com/cs3org/reva/v2/pkg/utils"
-	"github.com/jellydator/ttlcache/v3"
 	"github.com/mitchellh/mapstructure"
 	"github.com/rs/zerolog"
 	"go.opentelemetry.io/otel/trace"
