@@ -223,6 +223,7 @@ func (upload *Upload) FinishUpload(_ context.Context) error {
 			UploadID:      upload.Info.ID,
 			URL:           s,
 			ExecutingUser: u,
+			Filename:      upload.Info.Storage["NodeName"],
 		}); err != nil {
 			return err
 		}

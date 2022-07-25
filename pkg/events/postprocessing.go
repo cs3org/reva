@@ -53,6 +53,7 @@ var (
 type BytesReceived struct {
 	UploadID      string
 	ExecutingUser *user.User
+	Filename      string
 	URL           string
 }
 
@@ -65,12 +66,14 @@ func (BytesReceived) Unmarshal(v []byte) (interface{}, error) {
 
 // VirusscanFinished is emitted by the server when it has completed an antivirus scan
 type VirusscanFinished struct {
-	Infected    bool
-	Outcome     PostprocessingOutcome
-	UploadID    string
-	Description string
-	Scandate    time.Time
-	Error       error
+	Infected      bool
+	Outcome       PostprocessingOutcome
+	UploadID      string
+	Filename      string
+	ExecutingUser *user.User
+	Description   string
+	Scandate      time.Time
+	Error         error
 }
 
 // Unmarshal to fulfill umarshaller interface
@@ -82,8 +85,10 @@ func (VirusscanFinished) Unmarshal(v []byte) (interface{}, error) {
 
 // StartPostprocessingStep can be issued by the server to start a postprocessing step
 type StartPostprocessingStep struct {
-	UploadID string
-	URL      string
+	UploadID      string
+	URL           string
+	ExecutingUser *user.User
+	Filename      string
 
 	StepToStart Postprocessingstep
 }
@@ -97,9 +102,11 @@ func (StartPostprocessingStep) Unmarshal(v []byte) (interface{}, error) {
 
 // PostprocessingFinished is emitted by *some* service which can decide that
 type PostprocessingFinished struct {
-	UploadID string
-	Result   map[Postprocessingstep]interface{} // it is a map[step]Event
-	Outcome  PostprocessingOutcome
+	UploadID      string
+	Filename      string
+	ExecutingUser *user.User
+	Result        map[Postprocessingstep]interface{} // it is a map[step]Event
+	Outcome       PostprocessingOutcome
 }
 
 // Unmarshal to fulfill umarshaller interface
@@ -111,8 +118,10 @@ func (PostprocessingFinished) Unmarshal(v []byte) (interface{}, error) {
 
 // UploadReady is emitted by the storage provider when postprocessing is finished
 type UploadReady struct {
-	UploadID string
-	Failed   bool
+	UploadID      string
+	Filename      string
+	ExecutingUser *user.User
+	Failed        bool
 	// add reference here? We could use it to inform client pp is finished
 }
 
