@@ -194,9 +194,25 @@ type mgr struct {
 }
 
 // We store the shares in the metadata storage under /{storageid}/{spaceid}.json
-// To determine the spaces a user has access to we maintain an empty /{userid}/{storageid}/{spaceid} file
+
+// To persist the mountpoints of group shares the /{userid}/received/{storageid}/{spaceid}.json file is used.
+// - it allows every user to update his own mountpoint without having to update&reread the /{storageid}/{spaceid}.json file
+
+// To persist the accepted / pending state of shares the /{userid}/received/{storageid}/{spaceid}.json file is used.
+// - it allows every user to update his own mountpoint without having to update&reread the /{storageid}/{spaceid}.json file
+
+// To determine access to group shares a /{groupid}/received/{storageid}/{spaceid} file is used.
+
+// Whenever a share is created, the share manager has to
+// 1. update the /{storageid}/{spaceid}.json file,
+// 2. touch /{userid}/created/{storageid}/{spaceid} and
+// 3. touch /{userid}/received/{storageid}/{spaceid}.json or /{groupid}/received/{storageid}/{spaceid}
+// - The /{userid}/received/{storageid}/{spaceid}.json file persists mountpoints and accepted / rejected state
+// - (optional) to wrap these three steps in a transaction the share manager can create a transaction file befor the first step and clean it up when all steps succeded
+
+// To determine the spaces a user has access to we maintain an empty /{userid}/(received|created)/{storageid}/{spaceid} folder
 // that we persist when initially traversing all shares in the metadata /{storageid}/{spaceid}.json files
-// when a user creates a new share the jsoncs3 manager touches a new /{userid}/{storageid}/{spaceid} file
+// when a user creates a new share the jsoncs3 manager touches a new /{userid}/(received|created)/{storageid}/{spaceid} folder
 //  - the changed mtime can be used to determine when a space needs to be reread for redundant setups
 
 // when initializing we only initialize per user:
