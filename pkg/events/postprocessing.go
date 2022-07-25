@@ -25,8 +25,13 @@ import (
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 )
 
-// Postprocessingstep are the available postprocessingsteps
-type Postprocessingstep string
+type (
+	// Postprocessingstep are the available postprocessingsteps
+	Postprocessingstep string
+
+	// PostprocessingOutcome defines the result of the postprocessing
+	PostprocessingOutcome string
+)
 
 var (
 	// PPStepAntivirus is the step that scans for viruses
@@ -35,6 +40,13 @@ var (
 	PPStepFTS Postprocessingstep = "fts"
 	// PPStepDelay is the step that processing. Useful for testing or user annoyment
 	PPStepDelay Postprocessingstep = "delay"
+
+	// PPOutcomeDelete means that the file and the upload should be deleted
+	PPOutcomeDelete PostprocessingOutcome = "delete"
+	// PPOutcomeAbort means that the upload is cancelled but the bytes are being kept in the upload folder
+	PPOutcomeAbort PostprocessingOutcome = "abort"
+	// PPOutcomeContinue means that the upload is moved to its final destination (eventually being marked with pp results)
+	PPOutcomeContinue PostprocessingOutcome = "continue"
 )
 
 // BytesReceived is emitted by the server when it received all bytes of an upload
@@ -53,8 +65,9 @@ func (BytesReceived) Unmarshal(v []byte) (interface{}, error) {
 
 // VirusscanFinished is emitted by the server when it has completed an antivirus scan
 type VirusscanFinished struct {
-	UploadID    string
 	Infected    bool
+	Outcome     PostprocessingOutcome
+	UploadID    string
 	Description string
 	Scandate    time.Time
 	Error       error
@@ -86,7 +99,7 @@ func (StartPostprocessingStep) Unmarshal(v []byte) (interface{}, error) {
 type PostprocessingFinished struct {
 	UploadID string
 	Result   map[Postprocessingstep]interface{} // it is a map[step]Event
-	Action   string                             // "delete", "cancel" or "continue"
+	Outcome  PostprocessingOutcome
 }
 
 // Unmarshal to fulfill umarshaller interface
@@ -96,9 +109,10 @@ func (PostprocessingFinished) Unmarshal(v []byte) (interface{}, error) {
 	return e, err
 }
 
-// UploadReady is emitted by the storage provider when postprocessing is finished and the file is ready to work with
+// UploadReady is emitted by the storage provider when postprocessing is finished
 type UploadReady struct {
 	UploadID string
+	Failed   bool
 	// add reference here? We could use it to inform client pp is finished
 }
 
