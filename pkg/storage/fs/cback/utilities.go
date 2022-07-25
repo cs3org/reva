@@ -3,9 +3,7 @@ package cback
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -47,7 +45,7 @@ type FsReturn struct {
 	Path  string
 }
 
-var permID = provider.ResourcePermissions{
+var PermID = provider.ResourcePermissions{
 	AddGrant:             false,
 	CreateContainer:      false,
 	Delete:               false,
@@ -68,10 +66,6 @@ var permID = provider.ResourcePermissions{
 	UpdateGrant:          false,
 	DenyGrant:            false}
 
-func getPermID() *provider.ResourcePermissions {
-	return &permID
-}
-
 func mapReturn(fileType string) (int, error) {
 	m := make(map[string]int)
 
@@ -86,96 +80,99 @@ func mapReturn(fileType string) (int, error) {
 
 }
 
-func (fs *cback) getRequest(userName, url string, reqType string) (responseData []byte, erro error) {
+func (fs *cback) getRequest(userName, url string, reqType string) ([]byte, error) {
 
 	req, err := http.NewRequest(reqType, url, nil)
 	req.SetBasicAuth(userName, fs.conf.ImpersonatorToken)
 
 	if err != nil {
-		fmt.Println("Error!")
+		return nil, err
 	}
 
 	req.Header.Add("accept", `application/json`)
 
-	// Send request using HTTP Client
 	client := &http.Client{}
 
 	resp, err := client.Do(req)
+
 	if err != nil {
-		fmt.Println("Error!")
+		return nil, err
 	}
 
-	responseData, erro = ioutil.ReadAll(resp.Body)
-	return
+	responseData, err := ioutil.ReadAll(resp.Body)
 
+	if err != nil {
+		return nil, err
+	}
+
+	return responseData, nil
 }
 
-func (fs *cback) listSnapshots(userName string, backupId int) []SnapshotResponse {
+func (fs *cback) listSnapshots(userName string, backupId int) ([]SnapshotResponse, error) {
 
 	url := "http://cback-portal-dev-01:8000/backups/" + strconv.Itoa(backupId) + "/snapshots"
 	requestType := "GET"
 	responseData, err := fs.getRequest(userName, url, requestType)
 
 	if err != nil {
-		fmt.Printf("Invalid API request. Check backupID is valid.")
-		log.Fatal(err)
+		return nil, err
 	}
 
 	/*Unmarshalling the JSON response into the Response struct*/
 	responseObject := []SnapshotResponse{}
 	json.Unmarshal([]byte(responseData), &responseObject)
 
-	return responseObject
+	return responseObject, nil
 }
 
-func (fs *cback) matchBackups(userName, pathInput string) *BackUpResponse {
+func (fs *cback) matchBackups(userName, pathInput string) (*BackUpResponse, error) {
 
 	url := "http://cback-portal-dev-01:8000/backups/"
 	requestType := "GET"
 	responseData, err := fs.getRequest(userName, url, requestType)
 
 	if err != nil {
-		fmt.Printf("Invalid API request. Check backupID is valid.")
-		log.Fatal(err)
+		return nil, err
+	}
 
-	} else {
-		/*Unmarshalling the JSON response into the Response struct*/
-		responseObject := []BackUpResponse{}
-		json.Unmarshal([]byte(responseData), &responseObject)
+	/*Unmarshalling the JSON response into the Response struct*/
+	responseObject := []BackUpResponse{}
+	json.Unmarshal([]byte(responseData), &responseObject)
 
-		if len(responseObject) == 0 {
-			return nil
+	if len(responseObject) == 0 {
+		err = errors.New("no match found")
+		return nil, err
+	}
 
-		} else {
+	for i := range responseObject {
+		if responseObject[i].Detail != "" {
+			err = errors.New(responseObject[i].Detail)
+			return nil, err
+		}
 
-			for i := range responseObject {
-				if responseObject[i].Detail != "" {
-					fmt.Print(responseObject[i].Detail)
-				}
-
-				if strings.Compare(pathInput, responseObject[i].Source) == 0 {
-					return &responseObject[i]
-				}
-			}
-
-			for i := range responseObject {
-				if responseObject[i].Detail != "" {
-					fmt.Print(responseObject[i].Detail)
-				}
-
-				if strings.HasPrefix(pathInput, responseObject[i].Source) {
-					substr := strings.TrimPrefix(pathInput, responseObject[i].Source)
-					substr = strings.TrimLeft(substr, "/")
-					responseObject[i].Substring = substr
-					return &responseObject[i]
-				}
-			}
+		if strings.Compare(pathInput, responseObject[i].Source) == 0 {
+			return &responseObject[i], nil
 		}
 	}
-	return nil
+
+	for i := range responseObject {
+		if responseObject[i].Detail != "" {
+			err = errors.New(responseObject[i].Detail)
+			return nil, err
+		}
+
+		if strings.HasPrefix(pathInput, responseObject[i].Source) {
+			substr := strings.TrimPrefix(pathInput, responseObject[i].Source)
+			substr = strings.TrimLeft(substr, "/")
+			responseObject[i].Substring = substr
+			return &responseObject[i], nil
+		}
+	}
+	err = errors.New("no match found")
+	return nil, err
 }
 
-func (fs *cback) fileSystem(backupId int, snapId, userName string, path string) []FsReturn {
+func (fs *cback) fileSystem(backupId int, snapId, userName string, path string) ([]FsReturn, error) {
 
 	url := "http://cback-portal-dev-01:8000/backups/" + strconv.Itoa(backupId) + "/snapshots/" + snapId + "/" + path + "?content=true"
 	requestType := "OPTIONS"
@@ -183,8 +180,7 @@ func (fs *cback) fileSystem(backupId int, snapId, userName string, path string) 
 	responseData, err := fs.getRequest(userName, url, requestType)
 
 	if err != nil {
-		fmt.Printf("Invalid API request. Check backupID is valid.")
-		log.Fatal(err)
+		return nil, err
 	}
 
 	/*Unmarshalling the JSON response into the Response struct*/
@@ -193,20 +189,24 @@ func (fs *cback) fileSystem(backupId int, snapId, userName string, path string) 
 
 	resp := make([]FsReturn, len(responseObject))
 
-	for i := range responseObject {
+	for i, response := range responseObject {
 
-		m, _ := mapReturn(responseObject[i].Type)
+		m, err := mapReturn(response.Type)
 
+		if err != nil {
+			return nil, err
+		}
 		/*fmt.Printf("\nName is: %v\n", responseObject[i].Name)
 		fmt.Printf("Type is: %d\n", m)
 		fmt.Printf("Time is: %v", uint64(responseObject[i].Mtime))
 		fmt.Printf("\n")*/
 
-		resp[i].Size = responseObject[i].Size
+		resp[i].Size = response.Size
 		resp[i].Type = m
-		resp[i].Mtime = uint64(responseObject[i].Mtime)
-		resp[i].Path = responseObject[i].Name
+		resp[i].Mtime = uint64(response.Mtime)
+		resp[i].Path = response.Name
 
 	}
-	return resp
+
+	return resp, nil
 }
