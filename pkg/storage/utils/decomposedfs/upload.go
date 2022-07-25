@@ -405,45 +405,47 @@ func (fs *Decomposedfs) GetUpload(ctx context.Context, id string) (tusd.Upload, 
 
 // ListUploads returns a list of all incomplete uploads
 func (fs *Decomposedfs) ListUploads() ([]tusd.FileInfo, error) {
-	infos, err := filepath.Glob(filepath.Join(fs.o.Root, "uploads", "*.info"))
+	return fs.uploadInfos()
+}
+
+func (fs *Decomposedfs) uploadInfos() ([]tusd.FileInfo, error) {
+	infos := []tusd.FileInfo{}
+	infoFiles, err := filepath.Glob(filepath.Join(fs.o.Root, "uploads", "*.info"))
 	if err != nil {
 		return nil, err
 	}
-	list := make([]tusd.FileInfo, len(infos))
+
 	idRegexp := regexp.MustCompile(".*/([^/]+).info")
-	for i, info := range infos {
+	for _, info := range infoFiles {
 		match := idRegexp.FindStringSubmatch(info)
-		upload, err := fs.readInfo(match[1])
+		if match == nil || len(match) < 2 {
+			continue
+		}
+		info, err := fs.readInfo(match[1])
 		if err != nil {
 			return nil, err
 		}
-		list[i] = upload
+		infos = append(infos, info)
 	}
-	return list, nil
+	return infos, nil
 }
 
 // PurgeExpiredUploads scans the fs for expired downloads and removes any leftovers
 func (fs *Decomposedfs) PurgeExpiredUploads(purgedChan chan<- tusd.FileInfo) error {
-	infos, err := filepath.Glob(filepath.Join(fs.o.Root, "uploads", "*.info"))
+	infos, err := fs.uploadInfos()
 	if err != nil {
 		return err
 	}
 
-	idRegexp := regexp.MustCompile(".*/([^/]+).info")
 	for _, info := range infos {
-		match := idRegexp.FindStringSubmatch(info)
-		upload, err := fs.readInfo(match[1])
-		if err != nil {
-			return err
-		}
-		expires, err := strconv.Atoi(upload.MetaData["expires"])
+		expires, err := strconv.Atoi(info.MetaData["expires"])
 		if err != nil {
 			continue
 		}
 		if int64(expires) < time.Now().Unix() {
-			purgedChan <- upload
-			os.Remove(upload.Storage["BinPath"])
-			os.Remove(info)
+			purgedChan <- info
+			os.Remove(info.Storage["BinPath"])
+			os.Remove(filepath.Join(fs.o.Root, "uploads", info.ID+".info"))
 		}
 	}
 	return nil
