@@ -509,7 +509,7 @@ func (s *svc) InitiateFileDownload(ctx context.Context, req *provider.InitiateFi
 
 			// TODO(labkode): calculate signature of the whole request? we only sign the URI now. Maybe worth https://tools.ietf.org/html/draft-cavage-http-signatures-11
 			target := u.String()
-			token, err := s.sign(ctx, target, s.c.TransferExpires)
+			token, err := s.sign(ctx, target, time.Now().UTC().Add(time.Duration(s.c.TransferExpires)*time.Second).Unix())
 			if err != nil {
 				return &gateway.InitiateFileDownloadResponse{
 					Status: status.NewStatusFromErrType(ctx, "error creating signature for download", err),
