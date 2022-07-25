@@ -191,26 +191,26 @@ func (fs *Decomposedfs) Postprocessing(ch <-chan interface{}) {
 				keepUpload bool
 			)
 
-			switch ev.Action {
+			switch ev.Outcome {
 			default:
-				log.Error().Str("action", ev.Action).Str("uploadID", ev.UploadID).Msg("unknown postprocessing outcome - aborting")
+				log.Error().Str("outcome", string(ev.Outcome)).Str("uploadID", ev.UploadID).Msg("unknown postprocessing outcome - aborting")
 				fallthrough
-			case "abort":
+			case events.PPOutcomeAbort:
 				failed = true
 				keepUpload = true
-			case "continue":
+			case events.PPOutcomeContinue:
 				if err := upload.Finalize(up); err != nil {
 					log.Error().Err(err).Str("uploadID", ev.UploadID).Msg("could not finalize upload")
 					keepUpload = true // should we keep the upload when assembling failed?
 					failed = true
 				}
-			case "delete":
+			case events.PPOutcomeDelete:
 				failed = true
 			}
 
 			upload.Cleanup(up, failed, keepUpload)
 
-			if err := events.Publish(fs.stream, events.UploadReady{UploadID: ev.UploadID}); err != nil {
+			if err := events.Publish(fs.stream, events.UploadReady{UploadID: ev.UploadID, Failed: failed}); err != nil {
 				log.Error().Err(err).Str("uploadID", ev.UploadID).Msg("Failed to publish UploadReady event")
 			}
 		case events.VirusscanFinished:
