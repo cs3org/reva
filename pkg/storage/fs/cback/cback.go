@@ -101,7 +101,7 @@ func (fs *cback) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys
 			}
 
 			ident := provider.ResourceId{
-				OpaqueId:  ref.Path,
+				OpaqueId:  j.Path,
 				StorageId: "cback",
 			}
 
@@ -135,12 +135,45 @@ func (fs *cback) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys
 
 	} else {
 		//If match in path, therefore prints the Snapshots
-		for _, snapshot := range snapshotList {
+		for index, snapshot := range snapshotList {
+
+			checkSum := provider.ResourceChecksum{
+				Sum:  "",
+				Type: provider.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_UNSET,
+			}
+
+			ident := provider.ResourceId{
+				OpaqueId:  ref.Path + "/" + snapshot.Id,
+				StorageId: "cback",
+			}
+
+			time := v1beta1.Timestamp{
+				Seconds: 0,
+				Nanos:   0,
+			}
+
+			f := provider.ResourceInfo{
+
+				Path:          ref.Path + "/" + snapshot.Id,
+				Checksum:      &checkSum,
+				Etag:          "",
+				Owner:         UId,
+				PermissionSet: &PermID,
+				Id:            &ident,
+				MimeType:      mime.Detect(true, ref.Path+"/"+snapshot.Id),
+				Size:          0,
+
+				//Check what time to put
+				Mtime: &time,
+
+				//Check Type
+				Type: provider.ResourceType_RESOURCE_TYPE_CONTAINER,
+			}
+			files[index] = &f
 			fmt.Printf("%v\n", snapshot.Id)
 		}
+		return files, nil
 	}
-
-	return files, nil
 }
 
 func (fs *cback) Download(ctx context.Context, ref *provider.Reference) (rc io.ReadCloser, err error) {
