@@ -117,7 +117,12 @@ func (fs *cback) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []st
 		return nil, err
 	}
 
-	time := v1beta1.Timestamp{
+	if ret.Detail != "" {
+		err = errors.New(ret.Detail)
+		return nil, err
+	}
+
+	setTime := v1beta1.Timestamp{
 		Seconds: ret.Mtime,
 		Nanos:   0,
 	}
@@ -136,7 +141,7 @@ func (fs *cback) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []st
 		Etag:          "",
 		PermissionSet: &PermID,
 		Checksum:      &checkSum,
-		Mtime:         &time,
+		Mtime:         &setTime,
 		Id:            &ident,
 		Owner:         UId,
 		Type:          provider.ResourceType(ret.Type),

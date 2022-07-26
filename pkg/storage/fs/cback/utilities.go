@@ -40,10 +40,11 @@ type Contents struct {
 }
 
 type FsReturn struct {
-	Type  int
-	Mtime uint64
-	Size  uint64
-	Path  string
+	Type   int
+	Mtime  uint64
+	Size   uint64
+	Path   string
+	Detail string
 }
 
 var PermID = provider.ResourcePermissions{
@@ -194,10 +195,11 @@ func (fs *cback) statResource(backupId int, snapId, userName, path, source strin
 	}
 
 	retObject := FsReturn{
-		Path:  source + "/" + snapId + strings.TrimPrefix(responseObject.Name, source),
-		Type:  m,
-		Mtime: uint64(responseObject.Mtime),
-		Size:  responseObject.Size,
+		Path:   source + "/" + snapId + strings.TrimPrefix(responseObject.Name, source),
+		Type:   m,
+		Mtime:  uint64(responseObject.Mtime),
+		Size:   responseObject.Size,
+		Detail: responseObject.Detail,
 	}
 
 	return &retObject, nil
