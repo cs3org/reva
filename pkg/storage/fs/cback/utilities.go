@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 )
@@ -209,4 +210,15 @@ func (fs *cback) fileSystem(backupId int, snapId, userName string, path string) 
 	}
 
 	return resp, nil
+}
+
+func (fs *cback) timeConv(timeInput string) (int64, error) {
+	tm, err := time.Parse(time.RFC3339, timeInput)
+
+	if err != nil {
+		return 0, err
+	}
+
+	epoch := tm.Unix()
+	return epoch, nil
 }

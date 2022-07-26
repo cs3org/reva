@@ -137,6 +137,12 @@ func (fs *cback) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys
 		//If match in path, therefore prints the Snapshots
 		for index, snapshot := range snapshotList {
 
+			epochTime, err := fs.timeConv(snapshot.Time)
+
+			if err != nil {
+				return nil, err
+			}
+
 			checkSum := provider.ResourceChecksum{
 				Sum:  "",
 				Type: provider.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_UNSET,
@@ -148,7 +154,7 @@ func (fs *cback) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys
 			}
 
 			time := v1beta1.Timestamp{
-				Seconds: 0,
+				Seconds: uint64(epochTime),
 				Nanos:   0,
 			}
 
