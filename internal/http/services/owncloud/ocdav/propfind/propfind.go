@@ -1055,6 +1055,10 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 			propstatOK.Prop = append(propstatOK.Prop, prop.Raw("oc:checksums", checksums.String()))
 		}
 
+		if k := md.GetArbitraryMetadata().GetMetadata(); k != nil {
+			propstatOK.Prop = append(propstatOK.Prop, prop.Raw("oc:tags", k["tags"]))
+		}
+
 		// ls do not report any properties as missing by default
 		if ls == nil {
 			// favorites from arbitrary metadata
@@ -1067,6 +1071,7 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 			} else {
 				propstatOK.Prop = append(propstatOK.Prop, prop.Raw("oc:favorite", "0"))
 			}
+
 		}
 
 		if lock != nil {

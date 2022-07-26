@@ -75,11 +75,12 @@ func (h *MetaHandler) Handler(s *svc) http.Handler {
 		head, r.URL.Path = router.ShiftPath(r.URL.Path)
 		switch head {
 		case "":
-			if r.Method != MethodPropfind {
+			switch r.Method {
+			default:
 				w.WriteHeader(http.StatusBadRequest)
-				return
+			case MethodPropfind:
+				h.handlePathForUser(w, r, s, &did)
 			}
-			h.handlePathForUser(w, r, s, &did)
 		case "v":
 			h.VersionsHandler.Handler(s, &did).ServeHTTP(w, r)
 		default:
