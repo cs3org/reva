@@ -173,7 +173,7 @@ func (fs *cback) matchBackups(userName, pathInput string) (*BackUpResponse, erro
 	return nil, err
 }
 
-func (fs *cback) fileSystem(backupId int, snapId, userName string, path string) ([]FsReturn, error) {
+func (fs *cback) fileSystem(backupId int, snapId, userName, path, source string) ([]FsReturn, error) {
 
 	url := "http://cback-portal-dev-01:8000/backups/" + strconv.Itoa(backupId) + "/snapshots/" + snapId + "/" + path + "?content=true"
 	requestType := "OPTIONS"
@@ -205,7 +205,7 @@ func (fs *cback) fileSystem(backupId int, snapId, userName string, path string) 
 		resp[i].Size = response.Size
 		resp[i].Type = m
 		resp[i].Mtime = uint64(response.Mtime)
-		resp[i].Path = response.Name
+		resp[i].Path = source + "/" + snapId + strings.TrimPrefix(response.Name, source)
 
 	}
 

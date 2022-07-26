@@ -43,7 +43,7 @@ func (fs *cback) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []st
 	return nil, errtypes.NotSupported("Operation Not Yet Implemented")
 }
 
-func (fs *cback) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys []string) (files []*provider.ResourceInfo, err error) {
+func (fs *cback) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys []string) ([]*provider.ResourceInfo, error) {
 	//Implement this
 	//Fix the ID part
 	var path string = ref.GetPath()
@@ -86,12 +86,14 @@ func (fs *cback) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys
 
 		//If no match in path, therefore prints the files
 		fmt.Printf("The ssId is: %v\nThe Path is %v\n", ssId, searchPath)
-		ret, err := fs.fileSystem(resp.Id, ssId, user.Username, searchPath)
+		ret, err := fs.fileSystem(resp.Id, ssId, user.Username, searchPath, resp.Source)
 
 		if err != nil {
 			fmt.Print(err)
 			return nil, err
 		}
+
+		files := make([]*provider.ResourceInfo, len(ret))
 
 		for index, j := range ret {
 
@@ -135,6 +137,8 @@ func (fs *cback) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys
 
 	} else {
 		//If match in path, therefore prints the Snapshots
+		files := make([]*provider.ResourceInfo, len(snapshotList))
+
 		for index, snapshot := range snapshotList {
 
 			epochTime, err := fs.timeConv(snapshot.Time)
