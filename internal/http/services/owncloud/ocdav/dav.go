@@ -96,11 +96,7 @@ func (h *DavHandler) init(c *Config) error {
 	}
 
 	h.TagHandler = new(TagHandler)
-	if err := h.TagHandler.init(c); err != nil {
-		return err
-	}
-
-	return nil
+	return h.TagHandler.init(c)
 }
 
 func isOwner(userIDorName string, user *userv1beta1.User) bool {

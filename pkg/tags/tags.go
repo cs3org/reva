@@ -56,8 +56,9 @@ func (t *Tags) AddString(s string) bool {
 	return len(tags) != 0
 }
 
-// RemoveString removes the the tags
-func (t *Tags) RemoveString(s string) {
+// RemoveString removes the the tags and returns true if at least one was removed
+func (t *Tags) RemoveString(s string) bool {
+	var removed bool
 	for _, tag := range strings.Split(s, t.sep) {
 		if !t.exists[tag] {
 			// should this be reported?
@@ -72,7 +73,9 @@ func (t *Tags) RemoveString(s string) {
 		}
 
 		delete(t.exists, tag)
+		removed = true
 	}
+	return removed
 }
 
 // AsString returns the tags converted to a string
