@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/url"
 	"strings"
+	"time"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	v1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
@@ -74,6 +75,41 @@ func (fs *cback) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []st
 	}
 
 	fmt.Printf("The ssId is: %v\nThe Path is %v\n", ssId, searchPath)
+
+	if resp.Source == ref.Path {
+		setTime := v1beta1.Timestamp{
+			Seconds: uint64(time.Now().Unix()),
+			Nanos:   0,
+		}
+
+		ident := provider.ResourceId{
+			OpaqueId:  ref.Path,
+			StorageId: "cback",
+		}
+
+		checkSum := provider.ResourceChecksum{
+			Sum:  "",
+			Type: provider.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_UNSET,
+		}
+
+		ri := &provider.ResourceInfo{
+			Etag:          "test",
+			PermissionSet: &PermID,
+			Checksum:      &checkSum,
+			Mtime:         &setTime,
+			Id:            &ident,
+			Owner:         UId,
+			Type:          provider.ResourceType_RESOURCE_TYPE_CONTAINER,
+			Size:          0,
+			Path:          ref.Path,
+			//Check if this is fine
+			MimeType: mime.Detect(true, ref.Path),
+		}
+
+		return ri, nil
+
+	}
+
 	ret, err := fs.statResource(resp.Id, ssId, user.Username, searchPath, resp.Source)
 
 	if err != nil {
@@ -171,7 +207,7 @@ func (fs *cback) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys
 
 		for index, j := range ret {
 
-			time := v1beta1.Timestamp{
+			setTime := v1beta1.Timestamp{
 				Seconds: j.Mtime,
 				Nanos:   0,
 			}
@@ -187,7 +223,7 @@ func (fs *cback) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys
 			}
 
 			f := provider.ResourceInfo{
-				Mtime:         &time,
+				Mtime:         &setTime,
 				Id:            &ident,
 				Checksum:      &checkSum,
 				Path:          j.Path,
@@ -231,7 +267,7 @@ func (fs *cback) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys
 				StorageId: "cback",
 			}
 
-			time := v1beta1.Timestamp{
+			setTime := v1beta1.Timestamp{
 				Seconds: uint64(epochTime),
 				Nanos:   0,
 			}
@@ -248,7 +284,7 @@ func (fs *cback) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys
 				Size:          0,
 
 				//Check what time to put
-				Mtime: &time,
+				Mtime: &setTime,
 
 				//Check Type
 				Type: provider.ResourceType_RESOURCE_TYPE_CONTAINER,
