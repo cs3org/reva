@@ -60,7 +60,7 @@ func getDownloadProtocol(protocols []*gateway.FileDownloadProtocol, prot string)
 	return nil, errtypes.InternalError(fmt.Sprintf("protocol %s not supported for downloading", prot))
 }
 
-// Download downloads a resource given the path. Is responsability of the caller close the reader
+// Download downloads a resource given the path. Is responsibility of the caller close the reader
 func (r *revaDownloader) Download(ctx context.Context, path string) (io.ReadCloser, error) {
 	downResp, err := r.gtw.InitiateFileDownload(ctx, &provider.InitiateFileDownloadRequest{
 		Ref: &provider.Reference{
