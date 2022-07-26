@@ -173,6 +173,36 @@ func (fs *cback) matchBackups(userName, pathInput string) (*BackUpResponse, erro
 	return nil, err
 }
 
+func (fs *cback) statResource(backupId int, snapId, userName, path, source string) (*FsReturn, error) {
+
+	url := "http://cback-portal-dev-01:8000/backups/" + strconv.Itoa(backupId) + "/snapshots/" + snapId + "/" + path + "?content=false"
+	requestType := "OPTIONS"
+
+	responseData, err := fs.getRequest(userName, url, requestType)
+
+	if err != nil {
+		return nil, err
+	}
+
+	responseObject := Contents{}
+	json.Unmarshal([]byte(responseData), &responseObject)
+
+	m, err := mapReturn(responseObject.Type)
+
+	if err != nil {
+		return nil, err
+	}
+
+	retObject := FsReturn{
+		Path:  source + "/" + snapId + strings.TrimPrefix(responseObject.Name, source),
+		Type:  m,
+		Mtime: uint64(responseObject.Mtime),
+		Size:  responseObject.Size,
+	}
+
+	return &retObject, nil
+}
+
 func (fs *cback) fileSystem(backupId int, snapId, userName, path, source string) ([]FsReturn, error) {
 
 	url := "http://cback-portal-dev-01:8000/backups/" + strconv.Itoa(backupId) + "/snapshots/" + snapId + "/" + path + "?content=true"

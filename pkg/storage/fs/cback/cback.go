@@ -38,9 +38,83 @@ func New(m map[string]interface{}) (fs storage.FS, err error) {
 
 }
 
-func (fs *cback) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []string) (ri *provider.ResourceInfo, err error) {
-	fmt.Print("Test\n\n")
-	return nil, errtypes.NotSupported("Operation Not Yet Implemented")
+func (fs *cback) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []string) (*provider.ResourceInfo, error) {
+	var ssId, searchPath string
+
+	user, _ := ctxpkg.ContextGetUser(ctx)
+	UId, _ := ctxpkg.ContextGetUserID(ctx)
+
+	resp, err := fs.matchBackups(user.Username, ref.Path)
+
+	if err != nil {
+		fmt.Print(err)
+		return nil, err
+	}
+
+	snapshotList, err := fs.listSnapshots(user.Username, resp.Id)
+
+	if err != nil {
+		fmt.Print(err)
+		return nil, err
+	}
+
+	for _, snapshot := range snapshotList {
+
+		if snapshot.Id == resp.Substring {
+			ssId = resp.Substring
+			searchPath = resp.Source
+			break
+
+		} else if strings.HasPrefix(resp.Substring, snapshot.Id) {
+			searchPath = strings.TrimPrefix(resp.Substring, snapshot.Id)
+			searchPath = resp.Source + searchPath
+			ssId = snapshot.Id
+			break
+		}
+	}
+
+	fmt.Printf("The ssId is: %v\nThe Path is %v\n", ssId, searchPath)
+	ret, err := fs.statResource(resp.Id, ssId, user.Username, searchPath, resp.Source)
+
+	if err != nil {
+		fmt.Print(err)
+		return nil, err
+	}
+
+	time := v1beta1.Timestamp{
+		Seconds: ret.Mtime,
+		Nanos:   0,
+	}
+
+	ident := provider.ResourceId{
+		OpaqueId:  ret.Path,
+		StorageId: "cback",
+	}
+
+	checkSum := provider.ResourceChecksum{
+		Sum:  "",
+		Type: provider.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_UNSET,
+	}
+
+	ri := &provider.ResourceInfo{
+		Etag:          "",
+		PermissionSet: &PermID,
+		Checksum:      &checkSum,
+		Mtime:         &time,
+		Id:            &ident,
+		Owner:         UId,
+		Type:          provider.ResourceType(ret.Type),
+		Size:          ret.Size,
+		Path:          ret.Path,
+	}
+
+	if ret.Type == 2 {
+		ri.MimeType = mime.Detect(true, ret.Path)
+	} else {
+		ri.MimeType = mime.Detect(false, ret.Path)
+	}
+
+	return ri, nil
 }
 
 func (fs *cback) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys []string) ([]*provider.ResourceInfo, error) {
