@@ -21,16 +21,14 @@ package jsoncs3
 import (
 	"context"
 	"encoding/json"
-	"io/fs"
+	"fmt"
 	"io/ioutil"
-	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/bluele/gcache"
-	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
@@ -41,12 +39,12 @@ import (
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v2/pkg/share"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/metadata"
 	"github.com/golang/protobuf/proto" // nolint:staticcheck // we need the legacy package to convert V1 to V2 messages
 	"github.com/google/uuid"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"google.golang.org/genproto/protobuf/field_mask"
-	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/encoding/prototext"
 
 	"github.com/cs3org/reva/v2/pkg/share/manager/registry"
@@ -66,83 +64,50 @@ import (
 */
 
 func init() {
-	registry.Register("jsoncs3", New)
+	registry.Register("jsoncs3", NewDefault)
 }
 
-// New returns a new mgr.
-func New(m map[string]interface{}) (share.Manager, error) {
-	c, err := parseConfig(m)
-	if err != nil {
+type config struct {
+	GatewayAddr       string `mapstructure:"gateway_addr"`
+	ProviderAddr      string `mapstructure:"provider_addr"`
+	ServiceUserID     string `mapstructure:"service_user_id"`
+	ServiceUserIdp    string `mapstructure:"service_user_idp"`
+	MachineAuthAPIKey string `mapstructure:"machine_auth_apikey"`
+}
+
+type manager struct {
+	sync.RWMutex
+
+	storage     metadata.Storage
+	spaceETags  gcache.Cache
+	serviceUser *userv1beta1.User
+	SpaceRoot   *provider.ResourceId
+	initialized bool
+}
+
+// NewDefault returns a new manager instance with default dependencies
+func NewDefault(m map[string]interface{}) (share.Manager, error) {
+	c := &config{}
+	if err := mapstructure.Decode(m, c); err != nil {
 		err = errors.Wrap(err, "error creating a new manager")
 		return nil, err
 	}
 
-	if c.GatewayAddr == "" {
-		return nil, errors.New("share manager config is missing gateway address")
-	}
-
-	c.init()
-
-	// load or create file
-	model, err := loadOrCreate(c.File)
+	s, err := metadata.NewCS3Storage(c.GatewayAddr, c.ProviderAddr, c.ServiceUserID, c.ServiceUserIdp, c.MachineAuthAPIKey)
 	if err != nil {
-		err = errors.Wrap(err, "error loading the file containing the shares")
 		return nil, err
 	}
 
-	return &mgr{
-		c:          c,
-		model:      model,
-		spaceETags: gcache.New(1000000).LFU().Build(),
-	}, nil
-
+	return New(s)
 }
 
-func loadOrCreate(file string) (*shareModel, error) {
-	if info, err := os.Stat(file); errors.Is(err, fs.ErrNotExist) || info.Size() == 0 {
-		if err := ioutil.WriteFile(file, []byte("{}"), 0700); err != nil {
-			err = errors.Wrap(err, "error opening/creating the file: "+file)
-			return nil, err
-		}
-	}
+// New returns a new manager instance.
+func New(s metadata.Storage) (share.Manager, error) {
+	return &manager{
+		storage:    s,
+		spaceETags: gcache.New(1_000_000).LFU().Build(),
+	}, nil
 
-	fd, err := os.OpenFile(file, os.O_CREATE, 0644)
-	if err != nil {
-		err = errors.Wrap(err, "error opening/creating the file: "+file)
-		return nil, err
-	}
-	defer fd.Close()
-
-	data, err := ioutil.ReadAll(fd)
-	if err != nil {
-		err = errors.Wrap(err, "error reading the data")
-		return nil, err
-	}
-
-	j := &jsonEncoding{}
-	if err := json.Unmarshal(data, j); err != nil {
-		err = errors.Wrap(err, "error decoding data from json")
-		return nil, err
-	}
-
-	m := &shareModel{State: j.State, MountPoint: j.MountPoint}
-	for _, s := range j.Shares {
-		var decShare collaboration.Share
-		if err = utils.UnmarshalJSONToProtoV1([]byte(s), &decShare); err != nil {
-			return nil, errors.Wrap(err, "error decoding share from json")
-		}
-		m.Shares = append(m.Shares, &decShare)
-	}
-
-	if m.State == nil {
-		m.State = map[string]map[string]collaboration.ShareState{}
-	}
-	if m.MountPoint == nil {
-		m.MountPoint = map[string]map[string]*provider.Reference{}
-	}
-
-	m.file = file
-	return m, nil
 }
 
 type shareModel struct {
@@ -182,17 +147,6 @@ func (m *shareModel) Save() error {
 	return nil
 }
 
-type mgr struct {
-	c           *config
-	sync.Mutex  // concurrent access to the file
-	model       *shareModel
-	serviceUser *userv1beta1.User
-	SpaceRoot   *provider.ResourceId
-	spaceETags  gcache.Cache
-
-	initialized bool
-}
-
 // We store the shares in the metadata storage under /{storageid}/{spaceid}.json
 
 // To persist the mountpoints of group shares the /{userid}/received/{storageid}/{spaceid}.json file is used.
@@ -228,7 +182,7 @@ type mgr struct {
 // /{userid}/received/{storageid}/{spaceid}
 // /{userid}/created/{storageid}/{spaceid}
 
-func (m *mgr) initialize(ctx context.Context) error {
+func (m *manager) initialize(ctx context.Context) error {
 	// if local copy is invalid fetch a new one
 	// invalid = not set || etag changed
 	if m.initialized {
@@ -242,43 +196,14 @@ func (m *mgr) initialize(ctx context.Context) error {
 		return nil
 	}
 
-	user := ctxpkg.ContextMustGetUser(ctx)
-
-	client, err := m.metadataClient()
-	if err != nil {
-		return err
+	user, ok := ctxpkg.ContextGetUser(ctx)
+	if !ok {
+		return fmt.Errorf("missing user in context")
 	}
 
-	ctx, err = m.getAuthContext(context.Background())
+	err := m.storage.Init(context.Background(), "jsoncs3-share-manager-metadata")
 	if err != nil {
 		return err
-	}
-	spaceid := "shares-space"
-
-	// FIXME only create space if ListContainer fails
-	cssr, err := client.CreateStorageSpace(ctx, &provider.CreateStorageSpaceRequest{
-		Opaque: &typespb.Opaque{
-			Map: map[string]*typespb.OpaqueEntry{
-				"spaceid": {
-					Decoder: "plain",
-					Value:   []byte(spaceid),
-				},
-			},
-		},
-		Owner: m.serviceUser,
-		Name:  "Shares",
-		Type:  "metadata",
-	})
-	switch {
-	case err != nil:
-		return err
-	case cssr.Status.Code == rpcv1beta1.Code_CODE_OK:
-		m.SpaceRoot = cssr.StorageSpace.Root
-	case cssr.Status.Code == rpcv1beta1.Code_CODE_ALREADY_EXISTS:
-		// TODO make CreateStorageSpace return existing space?
-		m.SpaceRoot = &provider.ResourceId{SpaceId: spaceid, OpaqueId: spaceid}
-	default:
-		return errtypes.NewErrtypeFromStatus(cssr.Status)
 	}
 
 	// we list /{userid}/* || /{userid}/received ? created?
@@ -330,7 +255,7 @@ func (m *mgr) initialize(ctx context.Context) error {
 	return nil
 }
 
-func (m *mgr) getCachedSpaceETag(spaceid string) string {
+func (m *manager) getCachedSpaceETag(spaceid string) string {
 	if e, err := m.spaceETags.Get(spaceid); err != gcache.KeyNotFoundError {
 		if etag, ok := e.(string); ok {
 			return etag
@@ -339,60 +264,7 @@ func (m *mgr) getCachedSpaceETag(spaceid string) string {
 	return ""
 }
 
-func (m *mgr) metadataClient() (provider.ProviderAPIClient, error) {
-	return pool.GetStorageProviderServiceClient(m.c.ProviderAddr)
-}
-
-func (m *mgr) getAuthContext(ctx context.Context) (context.Context, error) {
-	client, err := pool.GetGatewayServiceClient(m.c.GatewayAddr)
-	if err != nil {
-		return nil, err
-	}
-
-	authCtx := ctxpkg.ContextSetUser(context.Background(), m.serviceUser)
-	authRes, err := client.Authenticate(authCtx, &gateway.AuthenticateRequest{
-		Type:         "machine",
-		ClientId:     "userid:" + m.serviceUser.Id.OpaqueId,
-		ClientSecret: m.c.MachineAuthAPIKey,
-	})
-	if err != nil {
-		return nil, err
-	}
-	if authRes.GetStatus().GetCode() != rpcv1beta1.Code_CODE_OK {
-		return nil, errtypes.NewErrtypeFromStatus(authRes.GetStatus())
-	}
-	authCtx = metadata.AppendToOutgoingContext(authCtx, ctxpkg.TokenHeader, authRes.Token)
-	return authCtx, nil
-}
-
-func (m *mgr) getClient() (gateway.GatewayAPIClient, error) {
-	return pool.GetGatewayServiceClient(m.c.GatewayAddr)
-}
-
-type config struct {
-	File        string `mapstructure:"file"`
-	GatewayAddr string `mapstructure:"gateway_addr"`
-	// ProviderAddr is the address of the metadata storage provider
-	ProviderAddr      string `mapstructure:"provider_addr"`
-	ServiceUser       string `mapstructure:"service_user"`
-	MachineAuthAPIKey string `mapstructure:"machine_auth_api_key"`
-}
-
-func (c *config) init() {
-	if c.File == "" {
-		c.File = "/var/tmp/reva/shares.json"
-	}
-}
-
-func parseConfig(m map[string]interface{}) (*config, error) {
-	c := &config{}
-	if err := mapstructure.Decode(m, c); err != nil {
-		return nil, err
-	}
-	return c, nil
-}
-
-func (m *mgr) Share(ctx context.Context, md *provider.ResourceInfo, g *collaboration.ShareGrant) (*collaboration.Share, error) {
+func (m *manager) Share(ctx context.Context, md *provider.ResourceInfo, g *collaboration.ShareGrant) (*collaboration.Share, error) {
 	id := uuid.NewString()
 	user := ctxpkg.ContextMustGetUser(ctx)
 	now := time.Now().UnixNano()
@@ -446,7 +318,7 @@ func (m *mgr) Share(ctx context.Context, md *provider.ResourceInfo, g *collabora
 }
 
 // getByID must be called in a lock-controlled block.
-func (m *mgr) getByID(id *collaboration.ShareId) (int, *collaboration.Share, error) {
+func (m *manager) getByID(id *collaboration.ShareId) (int, *collaboration.Share, error) {
 	for i, s := range m.model.Shares {
 		if s.GetId().OpaqueId == id.OpaqueId {
 			return i, s, nil
@@ -456,7 +328,7 @@ func (m *mgr) getByID(id *collaboration.ShareId) (int, *collaboration.Share, err
 }
 
 // getByKey must be called in a lock-controlled block.
-func (m *mgr) getByKey(key *collaboration.ShareKey) (int, *collaboration.Share, error) {
+func (m *manager) getByKey(key *collaboration.ShareKey) (int, *collaboration.Share, error) {
 	for i, s := range m.model.Shares {
 		if (utils.UserEqual(key.Owner, s.Owner) || utils.UserEqual(key.Owner, s.Creator)) &&
 			utils.ResourceIDEqual(key.ResourceId, s.ResourceId) && utils.GranteeEqual(key.Grantee, s.Grantee) {
@@ -467,7 +339,7 @@ func (m *mgr) getByKey(key *collaboration.ShareKey) (int, *collaboration.Share, 
 }
 
 // get must be called in a lock-controlled block.
-func (m *mgr) get(ref *collaboration.ShareReference) (idx int, s *collaboration.Share, err error) {
+func (m *manager) get(ref *collaboration.ShareReference) (idx int, s *collaboration.Share, err error) {
 	switch {
 	case ref.GetId() != nil:
 		idx, s, err = m.getByID(ref.GetId())
@@ -479,7 +351,7 @@ func (m *mgr) get(ref *collaboration.ShareReference) (idx int, s *collaboration.
 	return
 }
 
-func (m *mgr) GetShare(ctx context.Context, ref *collaboration.ShareReference) (*collaboration.Share, error) {
+func (m *manager) GetShare(ctx context.Context, ref *collaboration.ShareReference) (*collaboration.Share, error) {
 	m.Lock()
 	defer m.Unlock()
 	_, s, err := m.get(ref)
@@ -495,7 +367,7 @@ func (m *mgr) GetShare(ctx context.Context, ref *collaboration.ShareReference) (
 	return nil, errtypes.NotFound(ref.String())
 }
 
-func (m *mgr) Unshare(ctx context.Context, ref *collaboration.ShareReference) error {
+func (m *manager) Unshare(ctx context.Context, ref *collaboration.ShareReference) error {
 	m.Lock()
 	defer m.Unlock()
 	user := ctxpkg.ContextMustGetUser(ctx)
@@ -521,7 +393,7 @@ func (m *mgr) Unshare(ctx context.Context, ref *collaboration.ShareReference) er
 	return nil
 }
 
-func (m *mgr) UpdateShare(ctx context.Context, ref *collaboration.ShareReference, p *collaboration.SharePermissions) (*collaboration.Share, error) {
+func (m *manager) UpdateShare(ctx context.Context, ref *collaboration.ShareReference, p *collaboration.SharePermissions) (*collaboration.Share, error) {
 	m.Lock()
 	defer m.Unlock()
 	idx, s, err := m.get(ref)
@@ -548,7 +420,7 @@ func (m *mgr) UpdateShare(ctx context.Context, ref *collaboration.ShareReference
 	return m.model.Shares[idx], nil
 }
 
-func (m *mgr) ListShares(ctx context.Context, filters []*collaboration.Filter) ([]*collaboration.Share, error) {
+func (m *manager) ListShares(ctx context.Context, filters []*collaboration.Filter) ([]*collaboration.Share, error) {
 	if err := m.initialize(ctx); err != nil {
 		return nil, err
 	}
@@ -595,7 +467,7 @@ func (m *mgr) ListShares(ctx context.Context, filters []*collaboration.Filter) (
 }
 
 // we list the shares that are targeted to the user in context or to the user groups.
-func (m *mgr) ListReceivedShares(ctx context.Context, filters []*collaboration.Filter) ([]*collaboration.ReceivedShare, error) {
+func (m *manager) ListReceivedShares(ctx context.Context, filters []*collaboration.Filter) ([]*collaboration.ReceivedShare, error) {
 	m.Lock()
 	defer m.Unlock()
 
@@ -634,7 +506,7 @@ func (m *mgr) ListReceivedShares(ctx context.Context, filters []*collaboration.F
 }
 
 // convert must be called in a lock-controlled block.
-func (m *mgr) convert(currentUser *userv1beta1.UserId, s *collaboration.Share) *collaboration.ReceivedShare {
+func (m *manager) convert(currentUser *userv1beta1.UserId, s *collaboration.Share) *collaboration.ReceivedShare {
 	rs := &collaboration.ReceivedShare{
 		Share: s,
 		State: collaboration.ShareState_SHARE_STATE_PENDING,
@@ -652,11 +524,11 @@ func (m *mgr) convert(currentUser *userv1beta1.UserId, s *collaboration.Share) *
 	return rs
 }
 
-func (m *mgr) GetReceivedShare(ctx context.Context, ref *collaboration.ShareReference) (*collaboration.ReceivedShare, error) {
+func (m *manager) GetReceivedShare(ctx context.Context, ref *collaboration.ShareReference) (*collaboration.ReceivedShare, error) {
 	return m.getReceived(ctx, ref)
 }
 
-func (m *mgr) getReceived(ctx context.Context, ref *collaboration.ShareReference) (*collaboration.ReceivedShare, error) {
+func (m *manager) getReceived(ctx context.Context, ref *collaboration.ShareReference) (*collaboration.ReceivedShare, error) {
 	m.Lock()
 	defer m.Unlock()
 	_, s, err := m.get(ref)
@@ -670,7 +542,7 @@ func (m *mgr) getReceived(ctx context.Context, ref *collaboration.ShareReference
 	return m.convert(user.Id, s), nil
 }
 
-func (m *mgr) UpdateReceivedShare(ctx context.Context, receivedShare *collaboration.ReceivedShare, fieldMask *field_mask.FieldMask) (*collaboration.ReceivedShare, error) {
+func (m *manager) UpdateReceivedShare(ctx context.Context, receivedShare *collaboration.ReceivedShare, fieldMask *field_mask.FieldMask) (*collaboration.ReceivedShare, error) {
 	rs, err := m.getReceived(ctx, &collaboration.ShareReference{Spec: &collaboration.ShareReference_Id{Id: receivedShare.Share.Id}})
 	if err != nil {
 		return nil, err
@@ -722,7 +594,7 @@ func (m *mgr) UpdateReceivedShare(ctx context.Context, receivedShare *collaborat
 }
 
 // Dump exports shares and received shares to channels (e.g. during migration)
-func (m *mgr) Dump(ctx context.Context, shareChan chan<- *collaboration.Share, receivedShareChan chan<- share.ReceivedShareWithUser) error {
+func (m *manager) Dump(ctx context.Context, shareChan chan<- *collaboration.Share, receivedShareChan chan<- share.ReceivedShareWithUser) error {
 	log := appctx.GetLogger(ctx)
 	for _, s := range m.model.Shares {
 		shareChan <- s

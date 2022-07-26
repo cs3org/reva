@@ -20,17 +20,13 @@ package jsoncs3_test
 
 import (
 	"context"
-	"io/ioutil"
-	"os"
-	"sync"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	providerv1beta1 "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/share"
-	"github.com/cs3org/reva/v2/pkg/share/manager/json"
-	"google.golang.org/protobuf/types/known/fieldmaskpb"
+	"github.com/cs3org/reva/v2/pkg/share/manager/jsoncs3"
+	"github.com/stretchr/testify/mock"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -58,121 +54,22 @@ var _ = Describe("Json", func() {
 			},
 		}
 
+		storage    *storagemocks.Storage
 		m          share.Manager
-		tmpFile    *os.File
 		ctx        context.Context
 		granteeCtx context.Context
 	)
 
 	BeforeEach(func() {
-		var err error
-		tmpFile, err = ioutil.TempFile("", "reva-unit-test-*.json")
-		Expect(err).ToNot(HaveOccurred())
+		storage = &storagemocks.Storage{}
+		storage.On("Init", mock.Anything, mock.Anything).Return(nil)
+		storage.On("MakeDirIfNotExist", mock.Anything, mock.Anything).Return(nil)
+		storage.On("SimpleUpload", mock.Anything, mock.Anything, mock.Anything).Return(nil)
 
-		config := map[string]interface{}{
-			"file":         tmpFile.Name(),
-			"gateway_addr": "https://localhost:9200",
-		}
-		m, err = json.New(config)
+		m, err = jsoncs3.New(storage)
 		Expect(err).ToNot(HaveOccurred())
 
 		ctx = ctxpkg.ContextSetUser(context.Background(), user1)
 		granteeCtx = ctxpkg.ContextSetUser(context.Background(), user2)
-	})
-
-	AfterEach(func() {
-		os.Remove(tmpFile.Name())
-	})
-
-	Describe("Dump", func() {
-		JustBeforeEach(func() {
-			share, err := m.Share(ctx, sharedResource, &collaboration.ShareGrant{
-				Grantee: &providerv1beta1.Grantee{
-					Type: providerv1beta1.GranteeType_GRANTEE_TYPE_USER,
-					Id:   &providerv1beta1.Grantee_UserId{UserId: user2.Id},
-				},
-			})
-			Expect(err).ToNot(HaveOccurred())
-
-			rs, err := m.GetReceivedShare(granteeCtx, &collaboration.ShareReference{Spec: &collaboration.ShareReference_Id{Id: share.Id}})
-			Expect(err).ToNot(HaveOccurred())
-			Expect(rs.State).To(Equal(collaboration.ShareState_SHARE_STATE_PENDING))
-			rs.State = collaboration.ShareState_SHARE_STATE_ACCEPTED
-			rs.MountPoint = &providerv1beta1.Reference{Path: "newPath/"}
-
-			_, err = m.UpdateReceivedShare(granteeCtx,
-				rs, &fieldmaskpb.FieldMask{Paths: []string{"state", "mount_point"}})
-			Expect(err).ToNot(HaveOccurred())
-		})
-
-		It("dumps all shares", func() {
-			sharesChan := make(chan *collaboration.Share)
-			receivedChan := make(chan share.ReceivedShareWithUser)
-
-			shares := []*collaboration.Share{}
-
-			wg := sync.WaitGroup{}
-			wg.Add(2)
-			go func() {
-				for s := range sharesChan {
-					if s != nil {
-						shares = append(shares, s)
-					}
-				}
-				wg.Done()
-			}()
-			go func() {
-				for range receivedChan {
-				}
-				wg.Done()
-			}()
-			err := m.(share.DumpableManager).Dump(ctx, sharesChan, receivedChan)
-			Expect(err).ToNot(HaveOccurred())
-			close(sharesChan)
-			close(receivedChan)
-			wg.Wait()
-
-			Expect(len(shares)).To(Equal(1))
-			Expect(shares[0].Creator).To(Equal(user1.Id))
-			Expect(shares[0].Grantee.GetUserId()).To(Equal(user2.Id))
-			Expect(shares[0].ResourceId).To(Equal(sharedResource.Id))
-		})
-
-		It("dumps all received shares", func() {
-			sharesChan := make(chan *collaboration.Share)
-			receivedChan := make(chan share.ReceivedShareWithUser)
-
-			shares := []share.ReceivedShareWithUser{}
-
-			wg := sync.WaitGroup{}
-			wg.Add(2)
-			go func() {
-				for range sharesChan {
-				}
-				wg.Done()
-			}()
-			go func() {
-				for rs := range receivedChan {
-					if rs.UserID != nil && rs.ReceivedShare != nil {
-						shares = append(shares, rs)
-					}
-				}
-
-				wg.Done()
-			}()
-			err := m.(share.DumpableManager).Dump(ctx, sharesChan, receivedChan)
-			Expect(err).ToNot(HaveOccurred())
-			close(sharesChan)
-			close(receivedChan)
-			wg.Wait()
-
-			Expect(len(shares)).To(Equal(1))
-			Expect(shares[0].UserID).To(Equal(user2.Id))
-			Expect(shares[0].ReceivedShare.State).To(Equal(collaboration.ShareState_SHARE_STATE_ACCEPTED))
-			Expect(shares[0].ReceivedShare.MountPoint.Path).To(Equal("newPath/"))
-			Expect(shares[0].ReceivedShare.Share.Creator).To(Equal(user1.Id))
-			Expect(shares[0].ReceivedShare.Share.Grantee.GetUserId()).To(Equal(user2.Id))
-			Expect(shares[0].ReceivedShare.Share.ResourceId).To(Equal(sharedResource.Id))
-		})
 	})
 })
