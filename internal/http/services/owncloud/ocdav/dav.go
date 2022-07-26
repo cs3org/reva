@@ -55,6 +55,7 @@ type DavHandler struct {
 	PublicFolderHandler *WebDavHandler
 	PublicFileHandler   *PublicFileHandler
 	SharesHandler       *WebDavHandler
+	TagHandler          *TagHandler
 }
 
 func (h *DavHandler) init(c *Config) error {
@@ -91,6 +92,11 @@ func (h *DavHandler) init(c *Config) error {
 
 	h.PublicFileHandler = new(PublicFileHandler)
 	if err := h.PublicFileHandler.init("public"); err != nil { // jail public file requests to /public/ prefix
+		return err
+	}
+
+	h.TagHandler = new(TagHandler)
+	if err := h.TagHandler.init(c); err != nil {
 		return err
 	}
 
@@ -179,6 +185,11 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 			ctx := context.WithValue(ctx, net.CtxKeyBaseURI, base)
 			r = r.WithContext(ctx)
 			h.SpacesHandler.Handler(s, h.TrashbinHandler).ServeHTTP(w, r)
+		case "tags":
+			base := path.Join(ctx.Value(net.CtxKeyBaseURI).(string), "tags")
+			ctx := context.WithValue(ctx, net.CtxKeyBaseURI, base)
+			r = r.WithContext(ctx)
+			h.TagHandler.Handler(s).ServeHTTP(w, r)
 		case "public-files":
 			base := path.Join(ctx.Value(net.CtxKeyBaseURI).(string), "public-files")
 			ctx = context.WithValue(ctx, net.CtxKeyBaseURI, base)
