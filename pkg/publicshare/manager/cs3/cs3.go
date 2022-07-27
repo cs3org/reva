@@ -255,12 +255,17 @@ func (m *Manager) UpdatePublicShare(ctx context.Context, u *user.User, req *link
 	case link.UpdatePublicShareRequest_Update_TYPE_EXPIRATION:
 		ps.PublicShare.Expiration = req.Update.Grant.Expiration
 	case link.UpdatePublicShareRequest_Update_TYPE_PASSWORD:
-		h, err := bcrypt.GenerateFromPassword([]byte(req.Update.Grant.Password), m.passwordHashCost)
-		if err != nil {
-			return nil, errors.Wrap(err, "could not hash share password")
+		if req.Update.Grant.Password == "" {
+			ps.Password = ""
+			ps.PublicShare.PasswordProtected = false
+		} else {
+			h, err := bcrypt.GenerateFromPassword([]byte(req.Update.Grant.Password), m.passwordHashCost)
+			if err != nil {
+				return nil, errors.Wrap(err, "could not hash share password")
+			}
+			ps.Password = string(h)
+			ps.PublicShare.PasswordProtected = true
 		}
-		ps.Password = string(h)
-		ps.PublicShare.PasswordProtected = true
 	default:
 		return nil, errtypes.BadRequest("no valid update type given")
 	}
