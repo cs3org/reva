@@ -721,7 +721,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 							propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:public-link-share-owner", u.Username))
 						} else {
 							u, _ := ctxpkg.ContextGetUser(ctx)
-							sublog.Error().Interface("share", ls).Interface("user", u).Msg("the current user in the context should be the owner of a public link share")
+							sublog.Error().Interface("share", ls).Interface("user", u.Id).Msg("the current user in the context should be the owner of a public link share")
 							propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:public-link-share-owner", ""))
 						}
 					} else {

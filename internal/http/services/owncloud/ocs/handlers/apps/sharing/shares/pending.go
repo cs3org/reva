@@ -92,13 +92,13 @@ func (h *Handler) updateReceivedShare(w http.ResponseWriter, r *http.Request, sh
 
 	data, err := conversions.CS3Share2ShareData(r.Context(), rs.Share)
 	if err != nil {
-		logger.Debug().Interface("share", rs.Share).Interface("shareData", data).Err(err).Msg("could not CS3Share2ShareData, skipping")
+		logger.Debug().Interface("share", rs.Share.Id).Err(err).Msg("CS3Share2ShareData returned error, skipping")
 	}
 
 	data.State = mapState(rs.GetState())
 
 	if err := h.addFileInfo(ctx, data, info); err != nil {
-		logger.Debug().Interface("received_share", rs).Interface("info", info).Interface("shareData", data).Err(err).Msg("could not add file info, skipping")
+		logger.Debug().Interface("received_share", rs.Share.Id).Err(err).Msg("could not add file info, skipping")
 	}
 	h.mapUserIds(r.Context(), client, data)
 
