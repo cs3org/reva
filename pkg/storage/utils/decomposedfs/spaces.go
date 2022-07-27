@@ -433,7 +433,8 @@ func (fs *Decomposedfs) MustCheckNodePermissions(ctx context.Context, requestedU
 	authenticatedUserID := ctxpkg.ContextMustGetUser(ctx).GetId().GetOpaqueId()
 	canListAllSpaces := fs.canListAllSpaces(ctx)
 	switch {
-	case canListAllSpaces && requestedUserID == userIDAny:
+	case (canListAllSpaces && requestedUserID == userIDAny):
+		// admins should not see any other spaces when they request their own, without settings filters
 		return true
 	case canListAllSpaces && authenticatedUserID != requestedUserID:
 		// as admin you have to be able to see other users spaces

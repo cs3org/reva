@@ -35,7 +35,6 @@ import (
 	v1beta11 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	providerv1beta1 "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	ruser "github.com/cs3org/reva/v2/pkg/ctx"
-	"github.com/cs3org/reva/v2/pkg/storage"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/mocks"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
@@ -48,7 +47,7 @@ import (
 // TestEnv represents a test environment for unit tests
 type TestEnv struct {
 	Root              string
-	Fs                storage.FS
+	Fs                *decomposedfs.Decomposedfs
 	Tree              *tree.Tree
 	Permissions       *mocks.PermissionsChecker
 	Blobstore         *treemocks.Blobstore
@@ -60,6 +59,7 @@ type TestEnv struct {
 	PermissionsClient *mocks.CS3PermissionsClient
 }
 
+// Constant UUIDs for the space users
 const (
 	OwnerID = "25b69780-5f39-43be-a7ac-a9b9e9fe4230"
 	User0ID = "824385ae-8fc6-4896-8eb2-d1d171290bd0"
@@ -132,9 +132,11 @@ func NewTestEnv(config map[string]interface{}) (*TestEnv, error) {
 	}
 	ctx := ruser.ContextSetUser(context.Background(), owner)
 
+	tmpFs, _ := fs.(*decomposedfs.Decomposedfs)
+
 	env := &TestEnv{
 		Root:              tmpRoot,
-		Fs:                fs,
+		Fs:                tmpFs,
 		Tree:              tree,
 		Lookup:            lookup,
 		Permissions:       permissions,
