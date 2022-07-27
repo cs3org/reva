@@ -39,7 +39,7 @@ import (
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/go-chi/chi/v5"
-	"github.com/rs/zerolog/log"
+	"github.com/rs/zerolog"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/types/known/fieldmaskpb"
 
@@ -233,7 +233,7 @@ func (h *Handler) CreateShare(w http.ResponseWriter, r *http.Request) {
 			response.WriteOCSError(w, r, http.StatusNotFound, "No share permission", nil)
 			w.WriteHeader(http.StatusForbidden)
 		default:
-			log.Error().Interface("status", statRes.Status).Msg("CreateShare: stat failed")
+			sublog.Error().Interface("status", statRes.Status).Msg("CreateShare: stat failed")
 			w.WriteHeader(http.StatusInternalServerError)
 		}
 		return
@@ -485,15 +485,15 @@ func (h *Handler) GetShare(w http.ResponseWriter, r *http.Request) {
 	var resourceID *provider.ResourceId
 	shareID := chi.URLParam(r, "shareid")
 	ctx := r.Context()
-	logger := appctx.GetLogger(r.Context())
-	logger.Debug().Str("shareID", shareID).Msg("get share by id")
+	sublog := appctx.GetLogger(ctx).With().Str("shareID", shareID).Logger()
+
 	client, err := pool.GetGatewayServiceClient(h.gatewayAddr)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
 		return
 	}
 
-	logger.Debug().Str("shareID", shareID).Msg("get public share by id")
+	sublog.Debug().Msg("get public share by id")
 	psRes, err := client.GetPublicShare(r.Context(), &link.GetPublicShareRequest{
 		Ref: &link.PublicShareReference{
 			Spec: &link.PublicShareReference_Id{
@@ -528,7 +528,7 @@ func (h *Handler) GetShare(w http.ResponseWriter, r *http.Request) {
 
 	if share == nil {
 		// check if we have a user share
-		logger.Debug().Str("shareID", shareID).Msg("get user share by id")
+		sublog.Debug().Msg("get user share by id")
 		uRes, err := client.GetShare(r.Context(), &collaboration.GetShareRequest{
 			Ref: &collaboration.ShareReference{
 				Spec: &collaboration.ShareReference_Id{
@@ -566,27 +566,27 @@ func (h *Handler) GetShare(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if share == nil {
-		logger.Debug().Str("shareID", shareID).Msg("no share found with this id")
+		sublog.Debug().Msg("no share found with this id")
 		response.WriteOCSError(w, r, response.MetaNotFound.StatusCode, "share not found", nil)
 		return
 	}
 
 	info, status, err := h.getResourceInfoByID(ctx, client, resourceID)
 	if err != nil {
-		log.Error().Err(err).Msg("error mapping share data")
+		sublog.Error().Err(err).Msg("error mapping share data")
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error mapping share data", err)
 		return
 	}
 
 	if status.Code != rpc.Code_CODE_OK {
-		log.Error().Err(err).Str("status", status.Code.String()).Msg("error mapping share data")
+		sublog.Error().Err(err).Str("status", status.Code.String()).Msg("error mapping share data")
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error mapping share data", err)
 		return
 	}
 
 	err = h.addFileInfo(ctx, share, info)
 	if err != nil {
-		log.Error().Err(err).Msg("error mapping share data")
+		sublog.Error().Err(err).Msg("error mapping share data")
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error mapping share data", err)
 	}
 	h.mapUserIds(ctx, client, share)
@@ -608,6 +608,7 @@ func (h *Handler) UpdateShare(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) updateShare(w http.ResponseWriter, r *http.Request, shareID string) {
 	ctx := r.Context()
+	sublog := appctx.GetLogger(ctx).With().Str("shareID", shareID).Logger()
 
 	client, err := pool.GetGatewayServiceClient(h.gatewayAddr)
 	if err != nil {
@@ -692,7 +693,7 @@ func (h *Handler) updateShare(w http.ResponseWriter, r *http.Request, shareID st
 
 	statRes, err := client.Stat(r.Context(), &statReq)
 	if err != nil {
-		log.Debug().Err(err).Str("shares", "update user share").Msg("error during stat")
+		sublog.Debug().Err(err).Str("shares", "update user share").Msg("error during stat")
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "missing resource information", fmt.Errorf("error getting resource information"))
 		return
 	}
@@ -758,18 +759,19 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 	// which pending state to list
 	stateFilter := getStateFilter(r.FormValue("state"))
 
-	log := appctx.GetLogger(r.Context())
+	ctx := r.Context()
+	p := r.URL.Query().Get("path")
+	shareRef := r.URL.Query().Get("share_ref")
+	shareTypesParam := r.URL.Query().Get("share_types")
+	sublog := appctx.GetLogger(ctx).With().Str("path", p).Str("share_ref", shareRef).Str("share_types", shareTypesParam).Logger()
+
 	client, err := h.getClient()
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
 		return
 	}
 
-	ctx := r.Context()
-
 	var pinfo *provider.ResourceInfo
-	p := r.URL.Query().Get("path")
-	shareRef := r.URL.Query().Get("share_ref")
 	// we need to lookup the resource id so we can filter the list of shares later
 	if p != "" || shareRef != "" {
 		ref, err := h.extractReference(r)
@@ -799,7 +801,6 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 
 	filters := []*collaboration.Filter{}
 	var shareTypes []string
-	shareTypesParam := r.URL.Query().Get("share_types")
 	if shareTypesParam != "" {
 		shareTypes = strings.Split(shareTypesParam, ",")
 	}
@@ -873,7 +874,7 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 				// fallback to unmounted resource
 				info, status, err = h.getResourceInfoByID(ctx, client, rs.Share.ResourceId)
 				if err != nil || status.Code != rpc.Code_CODE_OK {
-					h.logProblems(status, err, "could not stat, skipping")
+					h.logProblems(&sublog, status, err, "could not stat, skipping")
 					continue
 				}
 			}
@@ -881,14 +882,14 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 
 		data, err := conversions.CS3Share2ShareData(r.Context(), rs.Share)
 		if err != nil {
-			log.Debug().Interface("share", rs.Share).Interface("shareData", data).Err(err).Msg("could not CS3Share2ShareData, skipping")
+			sublog.Debug().Interface("share", rs.Share).Interface("shareData", data).Err(err).Msg("could not CS3Share2ShareData, skipping")
 			continue
 		}
 
 		data.State = mapState(rs.GetState())
 
 		if err := h.addFileInfo(ctx, data, info); err != nil {
-			log.Debug().Interface("received_share", rs.Share.Id).Err(err).Msg("could not add file info, skipping")
+			sublog.Debug().Interface("received_share", rs.Share.Id).Err(err).Msg("could not add file info, skipping")
 			continue
 		}
 		h.mapUserIds(r.Context(), client, data)
@@ -940,7 +941,7 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 		}
 
 		shares = append(shares, data)
-		log.Debug().Msgf("share: %+v", *data)
+		sublog.Debug().Msgf("share: %+v", *data)
 	}
 
 	response.WriteOCSSuccess(w, r, shares)
@@ -957,6 +958,8 @@ func (h *Handler) listSharesWithOthers(w http.ResponseWriter, r *http.Request) {
 	p := r.URL.Query().Get("path")
 	s := r.URL.Query().Get("space")
 	spaceRef := r.URL.Query().Get("space_ref")
+	ctx := r.Context()
+	sublog := appctx.GetLogger(ctx).With().Str("path", p).Str("space", s).Str("space_ref", spaceRef).Logger()
 	if p != "" || s != "" || spaceRef != "" {
 		ref, err := h.extractReference(r)
 		if err != nil {
@@ -1002,34 +1005,34 @@ func (h *Handler) listSharesWithOthers(w http.ResponseWriter, r *http.Request) {
 
 	if listPublicShares {
 		publicShares, status, err := h.listPublicShares(r, linkFilters)
-		h.logProblems(status, err, "could not listPublicShares")
+		h.logProblems(&sublog, status, err, "could not listPublicShares")
 		shares = append(shares, publicShares...)
 	}
 	if listUserShares {
 		userShares, status, err := h.listUserShares(r, filters)
-		h.logProblems(status, err, "could not listUserShares")
+		h.logProblems(&sublog, status, err, "could not listUserShares")
 		shares = append(shares, userShares...)
 	}
 
 	response.WriteOCSSuccess(w, r, shares)
 }
 
-func (h *Handler) logProblems(s *rpc.Status, e error, msg string) {
+func (h *Handler) logProblems(sublog *zerolog.Logger, s *rpc.Status, e error, msg string) {
 	if e != nil {
 		// errors need to be taken care of
-		log.Error().Err(e).Msg(msg)
+		sublog.Error().Err(e).Msg(msg)
 		return
 	}
 	if s != nil && s.Code != rpc.Code_CODE_OK {
 		switch s.Code {
 		// not found and permission denied can happen during normal operations
 		case rpc.Code_CODE_NOT_FOUND:
-			log.Debug().Interface("status", s).Msg(msg)
+			sublog.Debug().Interface("status", s).Msg(msg)
 		case rpc.Code_CODE_PERMISSION_DENIED:
-			log.Debug().Interface("status", s).Msg(msg)
+			sublog.Debug().Interface("status", s).Msg(msg)
 		default:
 			// anything else should not happen, someone needs to dig into it
-			log.Error().Interface("status", s).Msg(msg)
+			sublog.Error().Interface("status", s).Msg(msg)
 		}
 	}
 }
@@ -1067,13 +1070,13 @@ func (h *Handler) addFilters(w http.ResponseWriter, r *http.Request, ref *provid
 }
 
 func (h *Handler) addFileInfo(ctx context.Context, s *conversions.ShareData, info *provider.ResourceInfo) error {
-	log := appctx.GetLogger(ctx)
+	sublog := appctx.GetLogger(ctx)
 	if info != nil {
 		// TODO The owner is not set in the storage stat metadata ...
 		parsedMt, _, err := mime.ParseMediaType(info.MimeType)
 		if err != nil {
 			// Should never happen. We log anyways so that we know if it happens.
-			log.Warn().Err(err).Msg("failed to parse mimetype")
+			sublog.Warn().Err(err).Msg("failed to parse mimetype")
 		}
 		s.MimeType = parsedMt
 		// TODO STime:     &types.Timestamp{Seconds: info.Mtime.Seconds, Nanos: info.Mtime.Nanos},
@@ -1225,7 +1228,7 @@ func (h *Handler) mustGetIdentifiers(ctx context.Context, client gateway.Gateway
 		}
 	}
 	_ = h.userIdentifierCache.Set(id, ui)
-	log.Debug().Str("id", id).Msg("cache update")
+	sublog.Debug().Str("id", id).Msg("cache update")
 	return ui
 }
 
@@ -1267,8 +1270,7 @@ func (h *Handler) mapUserIds(ctx context.Context, client gateway.GatewayAPIClien
 func (h *Handler) getAdditionalInfoAttribute(ctx context.Context, u *userIdentifiers) string {
 	var buf bytes.Buffer
 	if err := h.additionalInfoTemplate.Execute(&buf, u); err != nil {
-		log := appctx.GetLogger(ctx)
-		log.Warn().Err(err).Msg("failed to parse additional info template")
+		appctx.GetLogger(ctx).Warn().Err(err).Msg("failed to parse additional info template")
 		return ""
 	}
 	return buf.String()
