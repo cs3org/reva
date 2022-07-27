@@ -479,12 +479,16 @@ File and sync features in a shared scenario
 - [apiSharePublicLink2/reShareAsPublicLinkToSharesNewDav.feature:181](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink2/reShareAsPublicLinkToSharesNewDav.feature#L181)
 - [apiSharePublicLink2/reShareAsPublicLinkToSharesNewDav.feature:182](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink2/reShareAsPublicLinkToSharesNewDav.feature#L182)
 
+#### [Removing the public link password is broken](https://github.com/owncloud/ocis/issues/4262)
+
+- [apiSharePublicLink3/updatePublicLinkShare.feature:165](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink3/updatePublicLinkShare.feature#L165)
+
 #### [Adding public upload to a read only shared folder as a receipient is allowed ](https://github.com/owncloud/ocis/issues/2164)
 
-- [apiSharePublicLink3/updatePublicLinkShare.feature:338](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink3/updatePublicLinkShare.feature#L338)
-- [apiSharePublicLink3/updatePublicLinkShare.feature:339](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink3/updatePublicLinkShare.feature#L339)
-- [apiSharePublicLink3/updatePublicLinkShare.feature:398](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink3/updatePublicLinkShare.feature#L398)
-- [apiSharePublicLink3/updatePublicLinkShare.feature:399](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink3/updatePublicLinkShare.feature#L399)
+- [apiSharePublicLink3/updatePublicLinkShare.feature:356](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink3/updatePublicLinkShare.feature#L356)
+- [apiSharePublicLink3/updatePublicLinkShare.feature:357](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink3/updatePublicLinkShare.feature#L357)
+- [apiSharePublicLink3/updatePublicLinkShare.feature:416](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink3/updatePublicLinkShare.feature#L416)
+- [apiSharePublicLink3/updatePublicLinkShare.feature:417](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink3/updatePublicLinkShare.feature#L417)
 
 #### [Upload-only shares must not overwrite but create a separate file](https://github.com/owncloud/ocis-reva/issues/286)
 
@@ -866,12 +870,6 @@ _ocdav: api compatibility, return correct status code_
 - [apiWebdavProperties1/copyFile.feature:548](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L548)
 - [apiWebdavProperties1/copyFile.feature:580](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L580)
 - [apiWebdavProperties1/copyFile.feature:612](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L612)
-- [apiWebdavProperties1/createFileFolderWhenSharesExist.feature:37](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/createFileFolderWhenSharesExist.feature#L37)
-- [apiWebdavProperties1/createFileFolderWhenSharesExist.feature:38](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/createFileFolderWhenSharesExist.feature#L38)
-- [apiWebdavProperties1/createFileFolderWhenSharesExist.feature:39](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/createFileFolderWhenSharesExist.feature#L39)
-- [apiWebdavProperties1/createFileFolderWhenSharesExist.feature:60](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/createFileFolderWhenSharesExist.feature#L60)
-- [apiWebdavProperties1/createFileFolderWhenSharesExist.feature:61](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/createFileFolderWhenSharesExist.feature#L61)
-- [apiWebdavProperties1/createFileFolderWhenSharesExist.feature:62](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/createFileFolderWhenSharesExist.feature#L62)
 - [apiWebdavUploadTUS/uploadToShare.feature:31](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUploadTUS/uploadToShare.feature#L31)
 - [apiWebdavUploadTUS/uploadToShare.feature:50](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUploadTUS/uploadToShare.feature#L50)
 - [apiWebdavUploadTUS/uploadToShare.feature:72](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUploadTUS/uploadToShare.feature#L72)
@@ -989,7 +987,7 @@ _ocdav: api compatibility, return correct status code_
 - [apiShareManagementBasicToShares/createShareToSharesFolder.feature:711](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L711)
 
 #### [Request to edit non-existing user by authorized admin gets unauthorized in http response](https://github.com/owncloud/core/issues/38423)
-[apiAuthOcs/ocsPUTAuth.feature:26](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthOcs/ocsPUTAuth.feature#L26)
+- [apiAuthOcs/ocsPUTAuth.feature:26](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthOcs/ocsPUTAuth.feature#L26)
 
 
 ### Won't fix
@@ -1213,10 +1211,6 @@ moving outside of the Shares folder gives 501 Not Implemented.
 - [apiWebdavOperations/downloadFile.feature:229](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavOperations/downloadFile.feature#L229)
 - [apiWebdavOperations/downloadFile.feature:230](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavOperations/downloadFile.feature#L230)
 - [apiWebdavOperations/downloadFile.feature:235](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavOperations/downloadFile.feature#L235)
-
-#### [Creating a new folder which is a substring of Shares leads to Unknown Error](https://github.com/owncloud/ocis/issues/3033)
-- [apiWebdavProperties1/createFileFolderWhenSharesExist.feature:79](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/createFileFolderWhenSharesExist.feature#L79)
-- [apiWebdavProperties1/createFileFolderWhenSharesExist.feature:96](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/createFileFolderWhenSharesExist.feature#L96)
 
 ### [send PUT requests to another user's webDav endpoints as normal user](https://github.com/owncloud/ocis/issues/2893)
 - [apiAuthWebDav/webDavPUTAuth.feature:58](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthWebDav/webDavPUTAuth.feature#L58)
