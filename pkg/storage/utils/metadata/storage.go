@@ -20,6 +20,8 @@ package metadata
 
 import (
 	"context"
+
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 )
 
 //go:generate make --no-print-directory -C ../../../.. mockery NAME=Storage
@@ -34,6 +36,7 @@ type Storage interface {
 	Delete(ctx context.Context, path string) error
 
 	ReadDir(ctx context.Context, path string) ([]string, error)
+	ListDir(ctx context.Context, path string) ([]*provider.ResourceInfo, error)
 
 	CreateSymlink(ctx context.Context, oldname, newname string) error
 	ResolveSymlink(ctx context.Context, name string) (string, error)

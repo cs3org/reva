@@ -25,6 +25,8 @@ import (
 
 	mock "github.com/stretchr/testify/mock"
 
+	providerv1beta1 "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+
 	testing "testing"
 )
 
@@ -87,6 +89,29 @@ func (_m *Storage) Init(ctx context.Context, name string) error {
 	}
 
 	return r0
+}
+
+// ListDir provides a mock function with given fields: ctx, path
+func (_m *Storage) ListDir(ctx context.Context, path string) ([]*providerv1beta1.ResourceInfo, error) {
+	ret := _m.Called(ctx, path)
+
+	var r0 []*providerv1beta1.ResourceInfo
+	if rf, ok := ret.Get(0).(func(context.Context, string) []*providerv1beta1.ResourceInfo); ok {
+		r0 = rf(ctx, path)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]*providerv1beta1.ResourceInfo)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(context.Context, string) error); ok {
+		r1 = rf(ctx, path)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
 }
 
 // MakeDirIfNotExist provides a mock function with given fields: ctx, name

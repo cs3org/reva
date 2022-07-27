@@ -24,6 +24,9 @@ import (
 	"io/ioutil"
 	"os"
 	"path"
+
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 )
 
 // Disk represents a disk metadata storage
@@ -76,6 +79,33 @@ func (disk *Disk) ReadDir(_ context.Context, p string) ([]string, error) {
 	entries := make([]string, 0, len(infos))
 	for _, entry := range infos {
 		entries = append(entries, path.Join(p, entry.Name()))
+	}
+	return entries, nil
+}
+
+// ListDir returns a list of ResourceInfos for the entries in a given directory
+func (disk *Disk) ListDir(ctx context.Context, path string) ([]*provider.ResourceInfo, error) {
+	infos, err := ioutil.ReadDir(disk.targetPath(path))
+	if err != nil {
+		if _, ok := err.(*fs.PathError); ok {
+			return []*provider.ResourceInfo{}, nil
+		}
+		return nil, err
+	}
+
+	entries := make([]*provider.ResourceInfo, 0, len(infos))
+	for _, info := range infos {
+		entry := &provider.ResourceInfo{
+			Type:  provider.ResourceType_RESOURCE_TYPE_FILE,
+			Path:  "./" + info.Name(),
+			Name:  info.Name(),
+			Mtime: &typesv1beta1.Timestamp{Seconds: uint64(info.ModTime().Unix()), Nanos: uint32(info.ModTime().Nanosecond())},
+		}
+		if info.IsDir() {
+			entry.Type = provider.ResourceType_RESOURCE_TYPE_CONTAINER
+		}
+		entry.Type = provider.ResourceType_RESOURCE_TYPE_FILE
+		entries = append(entries, entry)
 	}
 	return entries, nil
 }

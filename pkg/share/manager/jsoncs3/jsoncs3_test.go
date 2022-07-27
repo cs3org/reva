@@ -22,10 +22,13 @@ import (
 	"context"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	providerv1beta1 "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/share"
 	"github.com/cs3org/reva/v2/pkg/share/manager/jsoncs3"
+	storagemocks "github.com/cs3org/reva/v2/pkg/storage/utils/metadata/mocks"
 	"github.com/stretchr/testify/mock"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -40,12 +43,12 @@ var _ = Describe("Json", func() {
 				OpaqueId: "admin",
 			},
 		}
-		user2 = &userpb.User{
-			Id: &userpb.UserId{
-				Idp:      "https://localhost:9200",
-				OpaqueId: "einstein",
-			},
-		}
+		// user2 = &userpb.User{
+		// 	Id: &userpb.UserId{
+		// 		Idp:      "https://localhost:9200",
+		// 		OpaqueId: "einstein",
+		// 	},
+		// }
 
 		sharedResource = &providerv1beta1.ResourceInfo{
 			Id: &providerv1beta1.ResourceId{
@@ -54,10 +57,33 @@ var _ = Describe("Json", func() {
 			},
 		}
 
-		storage    *storagemocks.Storage
-		m          share.Manager
-		ctx        context.Context
-		granteeCtx context.Context
+		grantee = &userpb.User{
+			Id: &userpb.UserId{
+				Idp:      "localhost:1111",
+				OpaqueId: "2",
+			},
+			Groups: []string{"users"},
+		}
+		grant = &collaboration.ShareGrant{
+			Grantee: &provider.Grantee{
+				Type: provider.GranteeType_GRANTEE_TYPE_USER,
+				Id:   &provider.Grantee_UserId{UserId: grantee.GetId()},
+			},
+			Permissions: &collaboration.SharePermissions{
+				Permissions: &provider.ResourcePermissions{
+					GetPath:              true,
+					InitiateFileDownload: true,
+					ListFileVersions:     true,
+					ListContainer:        true,
+					Stat:                 true,
+				},
+			},
+		}
+
+		storage *storagemocks.Storage
+		m       share.Manager
+		ctx     context.Context
+		// granteeCtx context.Context
 	)
 
 	BeforeEach(func() {
@@ -66,10 +92,28 @@ var _ = Describe("Json", func() {
 		storage.On("MakeDirIfNotExist", mock.Anything, mock.Anything).Return(nil)
 		storage.On("SimpleUpload", mock.Anything, mock.Anything, mock.Anything).Return(nil)
 
+		var err error
 		m, err = jsoncs3.New(storage)
 		Expect(err).ToNot(HaveOccurred())
 
 		ctx = ctxpkg.ContextSetUser(context.Background(), user1)
-		granteeCtx = ctxpkg.ContextSetUser(context.Background(), user2)
+		// granteeCtx = ctxpkg.ContextSetUser(context.Background(), user2)
+	})
+
+	Describe("Share", func() {
+		It("fails if the share already exists", func() {
+			_, err := m.Share(ctx, sharedResource, grant)
+			Expect(err).ToNot(HaveOccurred())
+			_, err = m.Share(ctx, sharedResource, grant)
+			Expect(err).To(HaveOccurred())
+		})
+
+		It("creates a share", func() {
+			share, err := m.Share(ctx, sharedResource, grant)
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(share).ToNot(BeNil())
+			Expect(share.ResourceId).To(Equal(sharedResource.Id))
+		})
 	})
 })

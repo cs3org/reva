@@ -255,6 +255,20 @@ func (cs3 *CS3) Delete(ctx context.Context, path string) error {
 
 // ReadDir returns the entries in a given directory
 func (cs3 *CS3) ReadDir(ctx context.Context, path string) ([]string, error) {
+	infos, err := cs3.ListDir(ctx, path)
+	if err != nil {
+		return nil, err
+	}
+
+	entries := []string{}
+	for _, ri := range infos {
+		entries = append(entries, ri.Path)
+	}
+	return entries, nil
+}
+
+// ListDir returns a list of ResourceInfos for the entries in a given directory
+func (cs3 *CS3) ListDir(ctx context.Context, path string) ([]*provider.ResourceInfo, error) {
 	client, err := cs3.providerClient()
 	if err != nil {
 		return nil, err
@@ -279,11 +293,7 @@ func (cs3 *CS3) ReadDir(ctx context.Context, path string) ([]string, error) {
 		return nil, errtypes.NewErrtypeFromStatus(res.Status)
 	}
 
-	entries := []string{}
-	for _, ri := range res.Infos {
-		entries = append(entries, ri.Path)
-	}
-	return entries, nil
+	return res.Infos, nil
 }
 
 // MakeDirIfNotExist will create a root node in the metadata storage. Requires an authenticated context.
