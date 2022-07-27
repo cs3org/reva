@@ -19,16 +19,21 @@
 package decomposedfs_test
 
 import (
+	"context"
 	"os"
 
+	cs3permissions "github.com/cs3org/go-cs3apis/cs3/permissions/v1beta1"
 	permissionsv1beta1 "github.com/cs3org/go-cs3apis/cs3/permissions/v1beta1"
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
+	ruser "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs"
 	helpers "github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/testhelpers"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/stretchr/testify/mock"
+	"google.golang.org/grpc"
 )
 
 var _ = Describe("Spaces", func() {
@@ -41,7 +46,17 @@ var _ = Describe("Spaces", func() {
 			var err error
 			env, err = helpers.NewTestEnv(nil)
 			Expect(err).ToNot(HaveOccurred())
-			env.PermissionsClient.On("CheckPermission", mock.Anything, mock.Anything, mock.Anything).Return(&permissionsv1beta1.CheckPermissionResponse{Status: &rpcv1beta1.Status{Code: rpcv1beta1.Code_CODE_OK}}, nil)
+			env.PermissionsClient.On("CheckPermission", mock.Anything, mock.Anything, mock.Anything).Return(
+				func(ctx context.Context, in *cs3permissions.CheckPermissionRequest, opts ...grpc.CallOption) *cs3permissions.CheckPermissionResponse {
+					if ctxpkg.ContextMustGetUser(ctx).Id.GetOpaqueId() == "25b69780-5f39-43be-a7ac-a9b9e9fe4230" {
+						// id of owner/admin
+						return &permissionsv1beta1.CheckPermissionResponse{Status: &rpcv1beta1.Status{Code: rpcv1beta1.Code_CODE_OK}}
+					}
+					// id of generic user
+					return &permissionsv1beta1.CheckPermissionResponse{Status: &rpcv1beta1.Status{Code: rpcv1beta1.Code_CODE_PERMISSION_DENIED}}
+				},
+				nil)
+
 		})
 
 		AfterEach(func() {
@@ -71,6 +86,44 @@ var _ = Describe("Spaces", func() {
 				Expect(resp.StorageSpace.SpaceType).To(Equal("project"))
 			})
 		})
+
+		Context("needs to check node permissions", func() {
+			It("returns true on requesting for other user as non-admin", func() {
+				ctx := ruser.ContextSetUser(context.Background(), env.Users[0])
+				resp := env.Fs.MustCheckNodePermissions(ctx, helpers.User1ID, false)
+				Expect(resp).To(Equal(true))
+			})
+			It("returns false on requesting for other user as admin", func() {
+				resp := env.Fs.MustCheckNodePermissions(env.Ctx, helpers.User0ID, false)
+				Expect(resp).To(Equal(false))
+			})
+			It("returns true on requesting for own spaces", func() {
+				ctx := ruser.ContextSetUser(context.Background(), env.Users[0])
+				resp := env.Fs.MustCheckNodePermissions(ctx, helpers.User0ID, false)
+				Expect(resp).To(Equal(true))
+			})
+			It("returns false on unrestricted", func() {
+				resp := env.Fs.MustCheckNodePermissions(env.Ctx, "some-uuid-that-does-not-make-sense", true)
+				Expect(resp).To(Equal(false))
+			})
+		})
+
+		Context("can list spaces of requested user", func() {
+			It("returns false on requesting for other user as non-admin", func() {
+				ctx := ruser.ContextSetUser(context.Background(), env.Users[0])
+				res := env.Fs.CanListSpacesOfRequestedUser(ctx, helpers.User1ID)
+				Expect(res).To(Equal(false))
+			})
+			It("returns true on requesting for other user as admin", func() {
+				res := env.Fs.CanListSpacesOfRequestedUser(env.Ctx, helpers.User0ID)
+				Expect(res).To(Equal(true))
+			})
+			It("returns true on requesting for own spaces", func() {
+				res := env.Fs.CanListSpacesOfRequestedUser(env.Ctx, helpers.OwnerID)
+				Expect(res).To(Equal(true))
+			})
+		})
+
 		Describe("Create Spaces with custom alias template", func() {
 			var (
 				env *helpers.TestEnv

@@ -55,6 +55,7 @@ const (
 	spaceTypeShare = "share"
 	spaceTypeAny   = "*"
 	spaceIDAny     = "*"
+	userIDAny      = "*"
 )
 
 // CreateStorageSpace creates a storage space
@@ -244,9 +245,9 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 	// we would not need /nodes/root if access always happened via spaceid+relative path
 
 	var (
-		spaceID = spaceIDAny
-		nodeID  = spaceIDAny
-		userID  = spaceIDAny
+		spaceID         = spaceIDAny
+		nodeID          = spaceIDAny
+		requestedUserID = userIDAny
 	)
 
 	spaceTypes := map[string]struct{}{}
@@ -269,20 +270,20 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 			}
 		case provider.ListStorageSpacesRequest_Filter_TYPE_USER:
 			// TODO: refactor this to GetUserId() in cs3
-			userID = filter[i].GetUser().GetOpaqueId()
+			requestedUserID = filter[i].GetUser().GetOpaqueId()
 		}
 	}
 	if len(spaceTypes) == 0 {
 		spaceTypes[spaceTypeAny] = struct{}{}
 	}
 
-	canListAllSpaces := fs.canListAllSpaces(ctx)
+	authenticatedUserID := ctxpkg.ContextMustGetUser(ctx).GetId().GetOpaqueId()
 
-	if userID != spaceTypeAny && !canListAllSpaces {
-		return nil, errtypes.PermissionDenied(fmt.Sprintf("user %s is not allowed to list spaces of other users", ctxpkg.ContextMustGetUser(ctx).GetId().GetOpaqueId()))
+	if !fs.CanListSpacesOfRequestedUser(ctx, requestedUserID) {
+		return nil, errtypes.PermissionDenied(fmt.Sprintf("user %s is not allowed to list spaces of other users", authenticatedUserID))
 	}
 
-	checkNodePermissions := !canListAllSpaces || !unrestricted
+	checkNodePermissions := fs.MustCheckNodePermissions(ctx, requestedUserID, unrestricted)
 
 	spaces := []*provider.StorageSpace{}
 	// build the glob path, eg.
@@ -317,8 +318,8 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 
 	matches := map[string]struct{}{}
 
-	if userID != spaceTypeAny {
-		path := filepath.Join(fs.o.Root, "indexes", "by-user-id", userID, nodeID)
+	if requestedUserID != userIDAny {
+		path := filepath.Join(fs.o.Root, "indexes", "by-user-id", requestedUserID, nodeID)
 		m, err := filepath.Glob(path)
 		if err != nil {
 			return nil, err
@@ -332,7 +333,7 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 		}
 	}
 
-	if userID == spaceTypeAny {
+	if requestedUserID == userIDAny {
 		for spaceType := range spaceTypes {
 			path := filepath.Join(fs.o.Root, "indexes", "by-type", spaceType, nodeID)
 			m, err := filepath.Glob(path)
@@ -425,6 +426,34 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 
 	return spaces, nil
 
+}
+
+// MustCheckNodePermissions checks if permission checks are needed to be performed when user requests spaces
+func (fs *Decomposedfs) MustCheckNodePermissions(ctx context.Context, requestedUserID string, unrestricted bool) bool {
+	canListAllSpaces := fs.canListAllSpaces(ctx)
+	switch {
+	case (canListAllSpaces && requestedUserID == userIDAny):
+		// admins should not see any other spaces when they request their own, without settings filters
+		return true
+	case canListAllSpaces, unrestricted:
+		return false
+	}
+	return true
+}
+
+// CanListSpacesOfRequestedUser checks if user is allowed to list spaces of another user
+func (fs *Decomposedfs) CanListSpacesOfRequestedUser(ctx context.Context, requestedUserID string) bool {
+	authenticatedUserID := ctxpkg.ContextMustGetUser(ctx).GetId().GetOpaqueId()
+	switch {
+	case requestedUserID == userIDAny:
+		// there is no filter
+		return true
+	case requestedUserID == authenticatedUserID:
+		return true
+	case fs.canListAllSpaces(ctx):
+		return true
+	}
+	return false
 }
 
 // UpdateStorageSpace updates a storage space
