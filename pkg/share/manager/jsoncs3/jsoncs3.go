@@ -70,7 +70,7 @@ type config struct {
 
 type shareCache map[string]providerSpaces
 type providerSpaces map[string]spaceShares
-type spaceShares []*collaboration.Share
+type spaceShares gcache.Cache
 
 type manager struct {
 	sync.RWMutex
@@ -277,9 +277,9 @@ func (m *manager) Share(ctx context.Context, md *provider.ResourceInfo, g *colla
 		m.cache[md.Id.StorageId] = providerSpaces{}
 	}
 	if m.cache[md.Id.StorageId][md.Id.SpaceId] == nil {
-		m.cache[md.Id.StorageId][md.Id.SpaceId] = spaceShares{}
+		m.cache[md.Id.StorageId][md.Id.SpaceId] = gcache.New(-1).Simple().Build()
 	}
-	m.cache[md.Id.StorageId][md.Id.SpaceId] = append(m.cache[md.Id.StorageId][md.Id.SpaceId], s)
+	m.cache[md.Id.StorageId][md.Id.SpaceId].Set(s.Id.OpaqueId, s)
 
 	return s, nil
 }
@@ -293,9 +293,11 @@ func (m *manager) getByID(id *collaboration.ShareId) (*collaboration.Share, erro
 	}
 	if providerSpaces, ok := m.cache[shareid.StorageId]; ok {
 		if spaceShares, ok := providerSpaces[shareid.SpaceId]; ok {
-			for _, share := range spaceShares {
-				if share.GetId().OpaqueId == id.OpaqueId {
-					return share, nil
+			for _, value := range spaceShares.GetALL(false) {
+				if share, ok := value.(*collaboration.Share); ok {
+					if share.GetId().OpaqueId == id.OpaqueId {
+						return share, nil
+					}
 				}
 			}
 		}
@@ -307,9 +309,11 @@ func (m *manager) getByID(id *collaboration.ShareId) (*collaboration.Share, erro
 func (m *manager) getByKey(key *collaboration.ShareKey) (*collaboration.Share, error) {
 	if providerSpaces, ok := m.cache[key.ResourceId.StorageId]; ok {
 		if spaceShares, ok := providerSpaces[key.ResourceId.SpaceId]; ok {
-			for _, share := range spaceShares {
-				if utils.GranteeEqual(key.Grantee, share.Grantee) {
-					return share, nil
+			for _, value := range spaceShares.GetALL(false) {
+				if share, ok := value.(*collaboration.Share); ok {
+					if utils.GranteeEqual(key.Grantee, share.Grantee) {
+						return share, nil
+					}
 				}
 			}
 		}
@@ -349,26 +353,20 @@ func (m *manager) GetShare(ctx context.Context, ref *collaboration.ShareReferenc
 func (m *manager) Unshare(ctx context.Context, ref *collaboration.ShareReference) error {
 	m.Lock()
 	defer m.Unlock()
-	// user := ctxpkg.ContextMustGetUser(ctx)
+	user := ctxpkg.ContextMustGetUser(ctx)
 
-	// idx, s, err := m.get(ref)
-	// if err != nil {
-	// 	return err
-	// }
-	// if !share.IsCreatedByUser(s, user) {
-	// 	return errtypes.NotFound(ref.String())
-	// }
+	s, err := m.get(ref)
+	if err != nil {
+		return err
+	}
+	if !share.IsCreatedByUser(s, user) {
+		// TODO why not permission denied?
+		return errtypes.NotFound(ref.String())
+	}
 
-	// last := len(m.model.Shares) - 1
-	// m.model.Shares[idx] = m.model.Shares[last]
-	// // explicitly nil the reference to prevent memory leaks
-	// // https://github.com/golang/go/wiki/SliceTricks#delete-without-preserving-order
-	// m.model.Shares[last] = nil
-	// m.model.Shares = m.model.Shares[:last]
-	// if err := m.model.Save(); err != nil {
-	// 	err = errors.Wrap(err, "error saving model")
-	// 	return err
-	// }
+	shareid, err := storagespace.ParseID(s.Id.OpaqueId)
+	m.cache[shareid.StorageId][shareid.SpaceId].Remove(s.Id.OpaqueId)
+
 	return nil
 }
 

@@ -122,6 +122,7 @@ var _ = Describe("Json", func() {
 		It("retrieves an existing share by id", func() {
 			share, err := m.Share(ctx, sharedResource, grant)
 			Expect(err).ToNot(HaveOccurred())
+
 			s, err := m.GetShare(ctx, &collaboration.ShareReference{
 				Spec: &collaboration.ShareReference_Id{
 					Id: &collaboration.ShareId{
@@ -150,6 +151,59 @@ var _ = Describe("Json", func() {
 			Expect(s).ToNot(BeNil())
 			Expect(s.ResourceId).To(Equal(sharedResource.Id))
 			Expect(s.Id.OpaqueId).To(Equal(share.Id.OpaqueId))
+		})
+	})
+
+	Describe("UnShare", func() {
+		It("removes an existing share by id", func() {
+			share, err := m.Share(ctx, sharedResource, grant)
+			Expect(err).ToNot(HaveOccurred())
+
+			err = m.Unshare(ctx, &collaboration.ShareReference{
+				Spec: &collaboration.ShareReference_Id{
+					Id: &collaboration.ShareId{
+						OpaqueId: share.Id.OpaqueId,
+					},
+				},
+			})
+			Expect(err).ToNot(HaveOccurred())
+
+			s, err := m.GetShare(ctx, &collaboration.ShareReference{
+				Spec: &collaboration.ShareReference_Key{
+					Key: &collaboration.ShareKey{
+						ResourceId: sharedResource.Id,
+						Grantee:    grant.Grantee,
+					},
+				},
+			})
+			Expect(err).To(HaveOccurred())
+			Expect(s).To(BeNil())
+		})
+
+		It("removes an existing share by key", func() {
+			_, err := m.Share(ctx, sharedResource, grant)
+			Expect(err).ToNot(HaveOccurred())
+
+			err = m.Unshare(ctx, &collaboration.ShareReference{
+				Spec: &collaboration.ShareReference_Key{
+					Key: &collaboration.ShareKey{
+						ResourceId: sharedResource.Id,
+						Grantee:    grant.Grantee,
+					},
+				},
+			})
+			Expect(err).ToNot(HaveOccurred())
+
+			s, err := m.GetShare(ctx, &collaboration.ShareReference{
+				Spec: &collaboration.ShareReference_Key{
+					Key: &collaboration.ShareKey{
+						ResourceId: sharedResource.Id,
+						Grantee:    grant.Grantee,
+					},
+				},
+			})
+			Expect(err).To(HaveOccurred())
+			Expect(s).To(BeNil())
 		})
 	})
 })
