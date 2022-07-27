@@ -19,12 +19,11 @@
 package ocdav
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"strings"
 
-	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/errors"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/net"
@@ -118,11 +117,37 @@ func (h *TagHandler) modifyTags(w http.ResponseWriter, r *http.Request, s *svc, 
 		return
 	}
 
-	oldtags, err := getExistingTags(ctx, client, rid)
+	sres, err := client.Stat(ctx, &provider.StatRequest{
+		Ref: &provider.Reference{ResourceId: rid},
+	})
 	if err != nil {
-		log.Error().Err(err).Msg("error getting existing tags")
+		log.Error().Err(err).Msg("error stating file")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
+	}
+
+	if sres.GetStatus().GetCode() != rpc.Code_CODE_OK {
+		errors.HandleErrorStatus(&log, w, sres.Status)
+		return
+	}
+
+	pm := sres.GetInfo().GetPermissionSet()
+	if pm == nil {
+		log.Error().Err(err).Msg("no permissionset on file")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	// it says we need "write access" to set tags. One if those should do
+	if !pm.InitiateFileUpload && !pm.CreateContainer {
+		log.Info().Msg("no permission to create a tag")
+		w.WriteHeader(http.StatusForbidden)
+		return
+	}
+
+	var oldtags string
+	if m := sres.GetInfo().GetArbitraryMetadata().GetMetadata(); m != nil {
+		oldtags = m["tags"]
 	}
 
 	ts := tags.FromString(oldtags)
@@ -131,7 +156,7 @@ func (h *TagHandler) modifyTags(w http.ResponseWriter, r *http.Request, s *svc, 
 		return
 	}
 
-	_, err = client.SetArbitraryMetadata(ctx, &provider.SetArbitraryMetadataRequest{
+	resp, err := client.SetArbitraryMetadata(ctx, &provider.SetArbitraryMetadataRequest{
 		Ref: &provider.Reference{ResourceId: rid},
 		ArbitraryMetadata: &provider.ArbitraryMetadata{
 			Metadata: map[string]string{
@@ -145,21 +170,10 @@ func (h *TagHandler) modifyTags(w http.ResponseWriter, r *http.Request, s *svc, 
 		return
 	}
 
+	if resp.GetStatus().GetCode() != rpc.Code_CODE_OK {
+		errors.HandleErrorStatus(&log, w, resp.Status)
+		return
+	}
+
 	w.WriteHeader(http.StatusOK)
-}
-
-func getExistingTags(ctx context.Context, client gateway.GatewayAPIClient, rid *provider.ResourceId) (string, error) {
-	// check for existing tags - could also be done by the storage provider, but then it has to know about tags!?
-	sres, err := client.Stat(ctx, &provider.StatRequest{
-		Ref: &provider.Reference{ResourceId: rid},
-	})
-	if err != nil {
-		return "", err
-	}
-
-	if m := sres.GetInfo().GetArbitraryMetadata().GetMetadata(); m != nil {
-		return m["tags"], nil
-	}
-
-	return "", nil
 }
