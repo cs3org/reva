@@ -71,10 +71,10 @@ func (h *TagHandler) Handler(s *svc) http.Handler {
 
 func (h *TagHandler) handleCreateTags(w http.ResponseWriter, r *http.Request, s *svc, rid *provider.ResourceId) {
 	h.modifyTags(w, r, s, rid, func(ts *tags.Tags, newtags string) bool {
-		if !ts.AddString(newtags) {
+		if !ts.AddList(newtags) {
 			w.WriteHeader(http.StatusBadRequest)
 			log := appctx.GetLogger(r.Context()).With().Interface("resourceid", rid).Logger()
-			b, err := errors.Marshal(http.StatusBadRequest, "no new tags in createtagsrequest", "")
+			b, err := errors.Marshal(http.StatusBadRequest, "no new tags in createtagsrequest or maximum reached", "")
 			errors.HandleWebdavError(&log, w, b, err)
 			return false
 		}
@@ -84,7 +84,7 @@ func (h *TagHandler) handleCreateTags(w http.ResponseWriter, r *http.Request, s 
 
 func (h *TagHandler) handleDeleteTags(w http.ResponseWriter, r *http.Request, s *svc, rid *provider.ResourceId) {
 	h.modifyTags(w, r, s, rid, func(ts *tags.Tags, rmtags string) bool {
-		if !ts.RemoveString(rmtags) {
+		if !ts.RemoveList(rmtags) {
 			w.WriteHeader(http.StatusBadRequest)
 			log := appctx.GetLogger(r.Context()).With().Interface("resourceid", rid).Logger()
 			b, err := errors.Marshal(http.StatusBadRequest, "no tags to delete in deletetagsrequest", "")
@@ -150,7 +150,7 @@ func (h *TagHandler) modifyTags(w http.ResponseWriter, r *http.Request, s *svc, 
 		oldtags = m["tags"]
 	}
 
-	ts := tags.FromString(oldtags)
+	ts := tags.FromList(oldtags)
 	if !f(ts, tgs) {
 		// header should be written by caller in this case
 		return
@@ -160,7 +160,7 @@ func (h *TagHandler) modifyTags(w http.ResponseWriter, r *http.Request, s *svc, 
 		Ref: &provider.Reference{ResourceId: rid},
 		ArbitraryMetadata: &provider.ArbitraryMetadata{
 			Metadata: map[string]string{
-				"tags": ts.AsString(),
+				"tags": ts.AsList(),
 			},
 		},
 	})

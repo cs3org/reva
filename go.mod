@@ -57,7 +57,7 @@ require (
 	github.com/rs/zerolog v1.27.0
 	github.com/sciencemesh/meshdirectory-web v1.0.4
 	github.com/sethvargo/go-password v0.2.0
-	github.com/stretchr/testify v1.8.0
+	github.com/stretchr/testify v1.7.2
 	github.com/studio-b12/gowebdav v0.0.0-20220128162035-c7b1ff8a5e62
 	github.com/thanhpk/randstr v1.0.4
 	github.com/tus/tusd v1.9.0

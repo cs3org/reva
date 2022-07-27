@@ -16,13 +16,12 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package tags_test
+package tags
 
 import (
 	"testing"
 
-	"github.com/cs3org/reva/v2/pkg/tags"
-	"github.com/test-go/testify/require"
+	"github.com/stretchr/testify/require"
 )
 
 func TestAddTags(t *testing.T) {
@@ -52,24 +51,58 @@ func TestAddTags(t *testing.T) {
 			TagsToAdd:    "b,b,b,b,a,a,a,a,a",
 			ExpectedTags: "b,a",
 		},
+		{
+			Alias:        "stop adding when maximum is reached",
+			InitialTags:  "a,b,c,d,e,f,g,h,i",
+			TagsToAdd:    "j,k,l,m",
+			ExpectedTags: "j,a,b,c,d,e,f,g,h,i",
+		},
+		{
+			Alias:             "don't do anything when already maxed",
+			InitialTags:       "a,b,c,d,e,f,g,h,i,j",
+			TagsToAdd:         "k,l,m,n,o,p",
+			ExpectedTags:      "a,b,c,d,e,f,g,h,i,j",
+			ExpectNoTagsAdded: true,
+		},
+		{
+			Alias:        "special characters are allowed",
+			InitialTags:  "old tag",
+			TagsToAdd:    "new  tag,bettertag!",
+			ExpectedTags: "new  tag,bettertag!,old tag",
+		},
+		{
+			Alias:        "empty tags are ignored",
+			InitialTags:  "tag1",
+			TagsToAdd:    "tag2,,tag3",
+			ExpectedTags: "tag2,tag3,tag1",
+		},
+		{
+			Alias:             "empty tags are not ignored if there are no new tags",
+			InitialTags:       "tag1",
+			TagsToAdd:         ",,,tag1,,",
+			ExpectedTags:      "tag1",
+			ExpectNoTagsAdded: true,
+		},
 	}
 
 	for _, tc := range testCases {
-		ts := tags.FromString(tc.InitialTags)
+		ts := FromList(tc.InitialTags)
+		ts.maxtags = 10
 
-		added := ts.AddString(tc.TagsToAdd)
-		require.Equal(t, tc.ExpectNoTagsAdded, !added)
-		require.Equal(t, tc.ExpectedTags, ts.AsString())
+		added := ts.AddList(tc.TagsToAdd)
+		require.Equal(t, tc.ExpectNoTagsAdded, !added, tc.Alias)
+		require.Equal(t, tc.ExpectedTags, ts.AsList(), tc.Alias)
 	}
 
 }
 
 func TestRemoveTags(t *testing.T) {
 	testCases := []struct {
-		Alias        string
-		InitialTags  string
-		TagsToRemove string
-		ExpectedTags string
+		Alias               string
+		InitialTags         string
+		TagsToRemove        string
+		ExpectedTags        string
+		ExpectNoTagsRemoved bool
 	}{
 		{
 			Alias:        "simple",
@@ -95,13 +128,34 @@ func TestRemoveTags(t *testing.T) {
 			TagsToRemove: "a,c",
 			ExpectedTags: "b,d",
 		},
+		{
+			Alias:        "special characters are allowed",
+			InitialTags:  "anothertag,btag!!,c#,distro 66",
+			TagsToRemove: "distro 66,btag!!",
+			ExpectedTags: "anothertag,c#",
+		},
+		{
+			Alias:               "empty list errors",
+			InitialTags:         "tag1,tag2",
+			TagsToRemove:        ",,,,,",
+			ExpectedTags:        "tag1,tag2",
+			ExpectNoTagsRemoved: true,
+		},
+		{
+			Alias:               "unknown tag errors",
+			InitialTags:         "tag1,tag2",
+			TagsToRemove:        "tag3",
+			ExpectedTags:        "tag1,tag2",
+			ExpectNoTagsRemoved: true,
+		},
 	}
 
 	for _, tc := range testCases {
-		ts := tags.FromString(tc.InitialTags)
+		ts := FromList(tc.InitialTags)
 
-		ts.RemoveString(tc.TagsToRemove)
-		require.Equal(t, tc.ExpectedTags, ts.AsString())
+		removed := ts.RemoveList(tc.TagsToRemove)
+		require.Equal(t, tc.ExpectNoTagsRemoved, !removed, tc.Alias)
+		require.Equal(t, tc.ExpectedTags, ts.AsList(), tc.Alias)
 	}
 
 }
