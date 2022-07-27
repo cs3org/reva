@@ -20,48 +20,68 @@ package tags
 
 import "strings"
 
-// character to separate tags - do we need this configurable?
-var _tagsep = ","
+var (
+	// character used to separate tags in lists
+	_tagsep = ","
+	// maximum number of tags
+	_maxtags = 100
+)
 
 // Tags is a helper struct for merging, deleting and deduplicating the tags while preserving the order
 type Tags struct {
-	t      []string
-	sep    string
-	exists map[string]bool
+	sep     string
+	maxtags int
+
+	t       []string
+	exists  map[string]bool
+	numtags int
 }
 
-// FromString creates a Tags struct from a string
-func FromString(s string) *Tags {
-	t := &Tags{sep: _tagsep, exists: make(map[string]bool)}
+// FromList creates a Tags struct from a list of tags
+func FromList(s string) *Tags {
+	t := &Tags{sep: _tagsep, maxtags: _maxtags, exists: make(map[string]bool)}
 
 	tags := strings.Split(s, t.sep)
 	for _, tag := range tags {
 		t.t = append(t.t, tag)
 		t.exists[tag] = true
+		t.numtags++
 	}
 	return t
 }
 
-// AddString appends the the new tags and returns true if at least one was appended
-func (t *Tags) AddString(s string) bool {
-	var tags []string
+// AddList appends a list of new tags and returns true if at least one was appended
+func (t *Tags) AddList(s string) bool {
+	tags := make([]string, 0)
 	for _, tag := range strings.Split(s, t.sep) {
-		if !t.exists[tag] {
-			tags = append(tags, tag)
-			t.exists[tag] = true
+		if tag == "" {
+			// ignore empty tags
+			continue
 		}
-	}
 
+		if t.exists[tag] {
+			// tag is already existing
+			continue
+		}
+
+		if t.numtags >= t.maxtags {
+			// max number of tags reached. We return silently without warning anyone
+			break
+		}
+
+		tags = append(tags, tag)
+		t.exists[tag] = true
+		t.numtags++
+	}
 	t.t = append(tags, t.t...)
-	return len(tags) != 0
+	return len(tags) > 0
 }
 
-// RemoveString removes the the tags and returns true if at least one was removed
-func (t *Tags) RemoveString(s string) bool {
+// RemoveList removes a list of tags and returns true if at least one was removed
+func (t *Tags) RemoveList(s string) bool {
 	var removed bool
 	for _, tag := range strings.Split(s, t.sep) {
 		if !t.exists[tag] {
-			// should this be reported?
 			continue
 		}
 
@@ -78,7 +98,7 @@ func (t *Tags) RemoveString(s string) bool {
 	return removed
 }
 
-// AsString returns the tags converted to a string
-func (t *Tags) AsString() string {
+// AsList returns the tags converted to a list
+func (t *Tags) AsList() string {
 	return strings.Join(t.t, t.sep)
 }
