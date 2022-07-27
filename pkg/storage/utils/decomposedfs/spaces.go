@@ -430,15 +430,11 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 
 // MustCheckNodePermissions checks if permission checks are needed to be performed when user requests spaces
 func (fs *Decomposedfs) MustCheckNodePermissions(ctx context.Context, requestedUserID string, unrestricted bool) bool {
-	authenticatedUserID := ctxpkg.ContextMustGetUser(ctx).GetId().GetOpaqueId()
 	canListAllSpaces := fs.canListAllSpaces(ctx)
 	switch {
 	case (canListAllSpaces && requestedUserID == userIDAny):
 		// admins should not see any other spaces when they request their own, without settings filters
 		return true
-	case canListAllSpaces && authenticatedUserID != requestedUserID:
-		// as admin you have to be able to see other users spaces
-		return false
 	case canListAllSpaces, unrestricted:
 		return false
 	}

@@ -90,7 +90,7 @@ var _ = Describe("Spaces", func() {
 		Context("needs to check node permissions", func() {
 			It("returns true on requesting for other user as non-admin", func() {
 				ctx := ruser.ContextSetUser(context.Background(), env.Users[0])
-				resp := env.Fs.MustCheckNodePermissions(ctx, helpers.User0ID, false)
+				resp := env.Fs.MustCheckNodePermissions(ctx, helpers.User1ID, false)
 				Expect(resp).To(Equal(true))
 			})
 			It("returns false on requesting for other user as admin", func() {
