@@ -206,4 +206,75 @@ var _ = Describe("Json", func() {
 			Expect(s).To(BeNil())
 		})
 	})
+
+	Describe("UpdateShare", func() {
+		It("updates an existing share by id", func() {
+			share, err := m.Share(ctx, sharedResource, grant)
+			Expect(err).ToNot(HaveOccurred())
+
+			us, err := m.UpdateShare(ctx, &collaboration.ShareReference{
+				Spec: &collaboration.ShareReference_Id{
+					Id: &collaboration.ShareId{
+						OpaqueId: share.Id.OpaqueId,
+					},
+				},
+			}, &collaboration.SharePermissions{
+				Permissions: &providerv1beta1.ResourcePermissions{
+					Stat: true,
+				},
+			})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(us).ToNot(BeNil())
+			Expect(us.GetPermissions().GetPermissions().Stat).To(BeTrue())
+			Expect(us.GetPermissions().GetPermissions().ListContainer).To(BeFalse())
+
+			s, err := m.GetShare(ctx, &collaboration.ShareReference{
+				Spec: &collaboration.ShareReference_Key{
+					Key: &collaboration.ShareKey{
+						ResourceId: sharedResource.Id,
+						Grantee:    grant.Grantee,
+					},
+				},
+			})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(s).ToNot(BeNil())
+			Expect(s.GetPermissions().GetPermissions().Stat).To(BeTrue())
+			Expect(s.GetPermissions().GetPermissions().ListContainer).To(BeFalse())
+		})
+
+		It("updates an existing share by key", func() {
+			_, err := m.Share(ctx, sharedResource, grant)
+			Expect(err).ToNot(HaveOccurred())
+
+			us, err := m.UpdateShare(ctx, &collaboration.ShareReference{
+				Spec: &collaboration.ShareReference_Key{
+					Key: &collaboration.ShareKey{
+						ResourceId: sharedResource.Id,
+						Grantee:    grant.Grantee,
+					},
+				},
+			}, &collaboration.SharePermissions{
+				Permissions: &providerv1beta1.ResourcePermissions{
+					Stat: true,
+				},
+			})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(us).ToNot(BeNil())
+			Expect(us.GetPermissions().GetPermissions().Stat).To(BeTrue())
+			Expect(us.GetPermissions().GetPermissions().ListContainer).To(BeFalse())
+
+			s, err := m.GetShare(ctx, &collaboration.ShareReference{
+				Spec: &collaboration.ShareReference_Key{
+					Key: &collaboration.ShareKey{
+						ResourceId: sharedResource.Id,
+						Grantee:    grant.Grantee,
+					},
+				},
+			})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(s).ToNot(BeNil())
+			Expect(s.GetPermissions().GetPermissions().Stat).To(BeTrue())
+			Expect(s.GetPermissions().GetPermissions().ListContainer).To(BeFalse())
+		})
+	})
 })

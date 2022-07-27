@@ -373,29 +373,29 @@ func (m *manager) Unshare(ctx context.Context, ref *collaboration.ShareReference
 func (m *manager) UpdateShare(ctx context.Context, ref *collaboration.ShareReference, p *collaboration.SharePermissions) (*collaboration.Share, error) {
 	m.Lock()
 	defer m.Unlock()
-	// idx, s, err := m.get(ref)
-	// if err != nil {
-	// 	return nil, err
-	// }
+	s, err := m.get(ref)
+	if err != nil {
+		return nil, err
+	}
 
-	// user := ctxpkg.ContextMustGetUser(ctx)
-	// if !share.IsCreatedByUser(s, user) {
-	// 	return nil, errtypes.NotFound(ref.String())
-	// }
+	user := ctxpkg.ContextMustGetUser(ctx)
+	if !share.IsCreatedByUser(s, user) {
+		return nil, errtypes.NotFound(ref.String())
+	}
 
-	// now := time.Now().UnixNano()
-	// m.model.Shares[idx].Permissions = p
-	// m.model.Shares[idx].Mtime = &typespb.Timestamp{
-	// 	Seconds: uint64(now / int64(time.Second)),
-	// 	Nanos:   uint32(now % int64(time.Second)),
-	// }
+	now := time.Now().UnixNano()
+	s.Permissions = p
+	s.Mtime = &typespb.Timestamp{
+		Seconds: uint64(now / int64(time.Second)),
+		Nanos:   uint32(now % int64(time.Second)),
+	}
 
+	// FIXME actually persist
 	// if err := m.model.Save(); err != nil {
 	// 	err = errors.Wrap(err, "error saving model")
 	// 	return nil, err
 	// }
-	// return m.model.Shares[idx], nil
-	return nil, nil
+	return s, nil
 }
 
 func (m *manager) ListShares(ctx context.Context, filters []*collaboration.Filter) ([]*collaboration.Share, error) {
