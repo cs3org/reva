@@ -53,6 +53,7 @@ var _ = Describe("Json", func() {
 		sharedResource = &providerv1beta1.ResourceInfo{
 			Id: &providerv1beta1.ResourceId{
 				StorageId: "storageid",
+				SpaceId:   "spaceid",
 				OpaqueId:  "opaqueid",
 			},
 		}
@@ -114,6 +115,41 @@ var _ = Describe("Json", func() {
 
 			Expect(share).ToNot(BeNil())
 			Expect(share.ResourceId).To(Equal(sharedResource.Id))
+		})
+	})
+
+	Describe("GetShare", func() {
+		It("retrieves an existing share by id", func() {
+			share, err := m.Share(ctx, sharedResource, grant)
+			Expect(err).ToNot(HaveOccurred())
+			s, err := m.GetShare(ctx, &collaboration.ShareReference{
+				Spec: &collaboration.ShareReference_Id{
+					Id: &collaboration.ShareId{
+						OpaqueId: share.Id.OpaqueId,
+					},
+				},
+			})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(s).ToNot(BeNil())
+			Expect(share.ResourceId).To(Equal(sharedResource.Id))
+		})
+
+		It("retrieves an existing share by key", func() {
+			share, err := m.Share(ctx, sharedResource, grant)
+			Expect(err).ToNot(HaveOccurred())
+
+			s, err := m.GetShare(ctx, &collaboration.ShareReference{
+				Spec: &collaboration.ShareReference_Key{
+					Key: &collaboration.ShareKey{
+						ResourceId: sharedResource.Id,
+						Grantee:    grant.Grantee,
+					},
+				},
+			})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(s).ToNot(BeNil())
+			Expect(s.ResourceId).To(Equal(sharedResource.Id))
+			Expect(s.Id.OpaqueId).To(Equal(share.Id.OpaqueId))
 		})
 	})
 })

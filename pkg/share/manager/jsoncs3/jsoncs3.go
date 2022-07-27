@@ -220,7 +220,7 @@ func (m *manager) getCachedSpaceETag(spaceid string) string {
 }
 
 func (m *manager) Share(ctx context.Context, md *provider.ResourceInfo, g *collaboration.ShareGrant) (*collaboration.Share, error) {
-	id := uuid.NewString()
+
 	user := ctxpkg.ContextMustGetUser(ctx)
 	now := time.Now().UnixNano()
 	ts := &typespb.Timestamp{
@@ -249,7 +249,17 @@ func (m *manager) Share(ctx context.Context, md *provider.ResourceInfo, g *colla
 		// share already exists
 		return nil, errtypes.AlreadyExists(key.String())
 	}
-
+	shareReference := &provider.Reference{
+		ResourceId: &provider.ResourceId{
+			StorageId: md.GetId().StorageId,
+			SpaceId:   md.GetId().SpaceId,
+			OpaqueId:  uuid.NewString(),
+		},
+	}
+	id, err := storagespace.FormatReference(shareReference)
+	if err != nil {
+		return nil, err
+	}
 	s := &collaboration.Share{
 		Id: &collaboration.ShareId{
 			OpaqueId: id,
@@ -284,7 +294,7 @@ func (m *manager) getByID(id *collaboration.ShareId) (*collaboration.Share, erro
 	if providerSpaces, ok := m.cache[shareid.StorageId]; ok {
 		if spaceShares, ok := providerSpaces[shareid.SpaceId]; ok {
 			for _, share := range spaceShares {
-				if share.GetId().OpaqueId == shareid.OpaqueId {
+				if share.GetId().OpaqueId == id.OpaqueId {
 					return share, nil
 				}
 			}
@@ -327,7 +337,7 @@ func (m *manager) GetShare(ctx context.Context, ref *collaboration.ShareReferenc
 	if err != nil {
 		return nil, err
 	}
-	// check if we are the owner or the grantee
+	// check if we are the creator or the grantee
 	user := ctxpkg.ContextMustGetUser(ctx)
 	if share.IsCreatedByUser(s, user) || share.IsGrantedToUser(s, user) {
 		return s, nil
