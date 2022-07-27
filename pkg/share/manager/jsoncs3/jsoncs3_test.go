@@ -277,4 +277,17 @@ var _ = Describe("Json", func() {
 			Expect(s.GetPermissions().GetPermissions().ListContainer).To(BeFalse())
 		})
 	})
+
+	Describe("ListShares", func() {
+		It("lists an existing share", func() {
+			share, err := m.Share(ctx, sharedResource, grant)
+			Expect(err).ToNot(HaveOccurred())
+
+			shares, err := m.ListShares(ctx, nil)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(shares).To(HaveLen(1))
+
+			Expect(shares[0].Id).To(Equal(share.Id))
+		})
+	})
 })
