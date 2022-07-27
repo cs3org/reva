@@ -20,7 +20,7 @@ package tags
 
 import "strings"
 
-// character to seperate tags - do we need this configurable?
+// character to separate tags - do we need this configurable?
 var _tagsep = ","
 
 // Tags is a helper struct for merging, deleting and deduplicating the tags while preserving the order
