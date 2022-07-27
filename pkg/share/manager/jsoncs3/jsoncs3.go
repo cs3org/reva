@@ -34,6 +34,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/share"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/metadata" // nolint:staticcheck // we need the legacy package to convert V1 to V2 messages
+	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/google/uuid"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
@@ -236,14 +237,14 @@ func (m *manager) Share(ctx context.Context, md *provider.ResourceInfo, g *colla
 
 	// check if share already exists.
 	key := &collaboration.ShareKey{
-		Owner:      md.Owner,
+		//Owner:      md.Owner, owner not longer matters as it belongs to the space
 		ResourceId: md.Id,
 		Grantee:    g.Grantee,
 	}
 
 	m.Lock()
 	defer m.Unlock()
-	_, _, err := m.getByKey(key)
+	_, err := m.getByKey(key)
 	if err == nil {
 		// share already exists
 		return nil, errtypes.AlreadyExists(key.String())
@@ -274,33 +275,45 @@ func (m *manager) Share(ctx context.Context, md *provider.ResourceInfo, g *colla
 }
 
 // getByID must be called in a lock-controlled block.
-func (m *manager) getByID(id *collaboration.ShareId) (int, *collaboration.Share, error) {
-	// for i, s := range m.model.Shares {
-	// 	if s.GetId().OpaqueId == id.OpaqueId {
-	// 		return i, s, nil
-	// 	}
-	// }
-	return -1, nil, errtypes.NotFound(id.String())
+func (m *manager) getByID(id *collaboration.ShareId) (*collaboration.Share, error) {
+	shareid, err := storagespace.ParseID(id.OpaqueId)
+	if err != nil {
+		// invalid share id, does not exist
+		return nil, errtypes.NotFound(id.String())
+	}
+	if providerSpaces, ok := m.cache[shareid.StorageId]; ok {
+		if spaceShares, ok := providerSpaces[shareid.SpaceId]; ok {
+			for _, share := range spaceShares {
+				if share.GetId().OpaqueId == shareid.OpaqueId {
+					return share, nil
+				}
+			}
+		}
+	}
+	return nil, errtypes.NotFound(id.String())
 }
 
 // getByKey must be called in a lock-controlled block.
-func (m *manager) getByKey(key *collaboration.ShareKey) (int, *collaboration.Share, error) {
-	// for i, s := range m.model.Shares {
-	// 	if (utils.UserEqual(key.Owner, s.Owner) || utils.UserEqual(key.Owner, s.Creator)) &&
-	// 		utils.ResourceIDEqual(key.ResourceId, s.ResourceId) && utils.GranteeEqual(key.Grantee, s.Grantee) {
-	// 		return i, s, nil
-	// 	}
-	// }
-	return -1, nil, errtypes.NotFound(key.String())
+func (m *manager) getByKey(key *collaboration.ShareKey) (*collaboration.Share, error) {
+	if providerSpaces, ok := m.cache[key.ResourceId.StorageId]; ok {
+		if spaceShares, ok := providerSpaces[key.ResourceId.SpaceId]; ok {
+			for _, share := range spaceShares {
+				if utils.GranteeEqual(key.Grantee, share.Grantee) {
+					return share, nil
+				}
+			}
+		}
+	}
+	return nil, errtypes.NotFound(key.String())
 }
 
 // get must be called in a lock-controlled block.
-func (m *manager) get(ref *collaboration.ShareReference) (idx int, s *collaboration.Share, err error) {
+func (m *manager) get(ref *collaboration.ShareReference) (s *collaboration.Share, err error) {
 	switch {
 	case ref.GetId() != nil:
-		idx, s, err = m.getByID(ref.GetId())
+		s, err = m.getByID(ref.GetId())
 	case ref.GetKey() != nil:
-		idx, s, err = m.getByKey(ref.GetKey())
+		s, err = m.getByKey(ref.GetKey())
 	default:
 		err = errtypes.NotFound(ref.String())
 	}
@@ -310,7 +323,7 @@ func (m *manager) get(ref *collaboration.ShareReference) (idx int, s *collaborat
 func (m *manager) GetShare(ctx context.Context, ref *collaboration.ShareReference) (*collaboration.Share, error) {
 	m.Lock()
 	defer m.Unlock()
-	_, s, err := m.get(ref)
+	s, err := m.get(ref)
 	if err != nil {
 		return nil, err
 	}
@@ -488,7 +501,7 @@ func (m *manager) GetReceivedShare(ctx context.Context, ref *collaboration.Share
 func (m *manager) getReceived(ctx context.Context, ref *collaboration.ShareReference) (*collaboration.ReceivedShare, error) {
 	m.Lock()
 	defer m.Unlock()
-	_, s, err := m.get(ref)
+	s, err := m.get(ref)
 	if err != nil {
 		return nil, err
 	}
