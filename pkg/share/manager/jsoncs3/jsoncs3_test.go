@@ -43,12 +43,12 @@ var _ = Describe("Json", func() {
 				OpaqueId: "admin",
 			},
 		}
-		// user2 = &userpb.User{
-		// 	Id: &userpb.UserId{
-		// 		Idp:      "https://localhost:9200",
-		// 		OpaqueId: "einstein",
-		// 	},
-		// }
+		user2 = &userpb.User{
+			Id: &userpb.UserId{
+				Idp:      "https://localhost:9200",
+				OpaqueId: "einstein",
+			},
+		}
 
 		sharedResource = &providerv1beta1.ResourceInfo{
 			Id: &providerv1beta1.ResourceId{
@@ -59,10 +59,7 @@ var _ = Describe("Json", func() {
 		}
 
 		grantee = &userpb.User{
-			Id: &userpb.UserId{
-				Idp:      "localhost:1111",
-				OpaqueId: "2",
-			},
+			Id:     user2.Id,
 			Groups: []string{"users"},
 		}
 		readPermissions = &provider.ResourcePermissions{
@@ -90,10 +87,10 @@ var _ = Describe("Json", func() {
 			},
 		}
 
-		storage *storagemocks.Storage
-		m       share.Manager
-		ctx     context.Context
-		// granteeCtx context.Context
+		storage    *storagemocks.Storage
+		m          share.Manager
+		ctx        context.Context
+		granteeCtx context.Context
 
 		// helper functions
 		shareBykey = func(key *collaboration.ShareKey) *collaboration.Share {
@@ -119,7 +116,7 @@ var _ = Describe("Json", func() {
 		Expect(err).ToNot(HaveOccurred())
 
 		ctx = ctxpkg.ContextSetUser(context.Background(), user1)
-		// granteeCtx = ctxpkg.ContextSetUser(context.Background(), user2)
+		granteeCtx = ctxpkg.ContextSetUser(context.Background(), user2)
 	})
 
 	Describe("Share", func() {
@@ -255,6 +252,19 @@ var _ = Describe("Json", func() {
 				Expect(shares).To(HaveLen(1))
 
 				Expect(shares[0].Id).To(Equal(share.Id))
+			})
+		})
+
+		Describe("ListReceivedShares", func() {
+			PIt("filters by resource id")
+			PIt("filters by owner")
+			PIt("filters by creator")
+			PIt("filters by grantee type")
+
+			It("lists the received shares", func() {
+				received, err := m.ListReceivedShares(granteeCtx, []*collaboration.Filter{})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(len(received)).To(Equal(1))
 			})
 		})
 	})

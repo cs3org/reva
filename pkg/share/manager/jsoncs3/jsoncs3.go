@@ -72,14 +72,15 @@ type shareCache map[string]providerSpaces
 type providerSpaces map[string]spaceShares
 type spaceShares gcache.Cache
 
-type createdCache map[string]createdSpaces
-type createdSpaces gcache.Cache
+type accessCache map[string]spaceTimes
+type spaceTimes gcache.Cache
 
 type manager struct {
 	sync.RWMutex
 
-	cache        shareCache
-	createdCache createdCache
+	cache         shareCache
+	createdCache  accessCache
+	receivedCache accessCache
 
 	storage     metadata.Storage
 	spaceETags  gcache.Cache
@@ -107,10 +108,11 @@ func NewDefault(m map[string]interface{}) (share.Manager, error) {
 // New returns a new manager instance.
 func New(s metadata.Storage) (share.Manager, error) {
 	return &manager{
-		cache:        shareCache{},
-		createdCache: createdCache{},
-		storage:      s,
-		spaceETags:   gcache.New(1_000_000).LFU().Build(),
+		cache:         shareCache{},
+		createdCache:  accessCache{},
+		receivedCache: accessCache{},
+		storage:       s,
+		spaceETags:    gcache.New(1_000_000).LFU().Build(),
 	}, nil
 }
 
@@ -287,11 +289,20 @@ func (m *manager) Share(ctx context.Context, md *provider.ResourceInfo, g *colla
 	}
 	m.cache[md.Id.StorageId][md.Id.SpaceId].Set(s.Id.OpaqueId, s)
 
+	// set flag for creator to have access to space
 	if m.createdCache[user.Id.OpaqueId] == nil {
 		m.createdCache[user.Id.OpaqueId] = gcache.New(-1).Simple().Build()
 	}
-	// set flag for creator to have access to space
 	m.createdCache[user.Id.OpaqueId].Set(storagespace.FormatResourceID(provider.ResourceId{
+		StorageId: md.Id.StorageId,
+		SpaceId:   md.Id.SpaceId,
+	}), time.Now())
+
+	// set flag for grantee to have access to space
+	if m.receivedCache[g.Grantee.GetUserId().GetOpaqueId()] == nil {
+		m.receivedCache[g.Grantee.GetUserId().GetOpaqueId()] = gcache.New(-1).Simple().Build()
+	}
+	m.receivedCache[g.Grantee.GetUserId().GetOpaqueId()].Set(storagespace.FormatResourceID(provider.ResourceId{
 		StorageId: md.Id.StorageId,
 		SpaceId:   md.Id.SpaceId,
 	}), time.Now())
@@ -459,38 +470,6 @@ func (m *manager) ListShares(ctx context.Context, filters []*collaboration.Filte
 		}
 	}
 
-	// client, err := pool.GetGatewayServiceClient(m.c.GatewayAddr)
-	// if err != nil {
-	// 	return nil, errors.Wrap(err, "failed to list shares")
-	// }
-	// cache := make(map[string]struct{})
-	// for _, s := range m.model.Shares {
-	// 	if share.MatchesFilters(s, filters) {
-	// 		// Only add the share if the share was created by the user or if
-	// 		// the user has ListGrants permissions on the shared resource.
-	// 		// The ListGrants check is necessary when a space member wants
-	// 		// to list shares in a space.
-	// 		// We are using a cache here so that we don't have to stat a
-	// 		// resource multiple times.
-	// 		key := strings.Join([]string{s.ResourceId.StorageId, s.ResourceId.OpaqueId}, "!")
-	// 		if _, hit := cache[key]; !hit && !share.IsCreatedByUser(s, user) {
-	// 			sRes, err := client.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{ResourceId: s.ResourceId}})
-	// 			if err != nil || sRes.Status.Code != rpcv1beta1.Code_CODE_OK {
-	// 				log.Error().
-	// 					Err(err).
-	// 					Interface("status", sRes.Status).
-	// 					Interface("resource_id", s.ResourceId).
-	// 					Msg("ListShares: could not stat resource")
-	// 				continue
-	// 			}
-	// 			if !sRes.Info.PermissionSet.ListGrants {
-	// 				continue
-	// 			}
-	// 			cache[key] = struct{}{}
-	// 		}
-	// 		ss = append(ss, s)
-	// 	}
-	// }
 	return ss, nil
 }
 
@@ -499,37 +478,45 @@ func (m *manager) ListReceivedShares(ctx context.Context, filters []*collaborati
 	m.Lock()
 	defer m.Unlock()
 
-	// user := ctxpkg.ContextMustGetUser(ctx)
-	// mem := make(map[string]int)
 	var rss []*collaboration.ReceivedShare
-	// for _, s := range m.model.Shares {
-	// 	if !share.IsCreatedByUser(s, user) &&
-	// 		share.IsGrantedToUser(s, user) &&
-	// 		share.MatchesFilters(s, filters) {
+	user := ctxpkg.ContextMustGetUser(ctx)
 
-	// 		rs := m.convert(user.Id, s)
-	// 		idx, seen := mem[s.ResourceId.OpaqueId]
-	// 		if !seen {
-	// 			rss = append(rss, rs)
-	// 			mem[s.ResourceId.OpaqueId] = len(rss) - 1
-	// 			continue
-	// 		}
+	if m.receivedCache[user.Id.OpaqueId] == nil {
+		return rss, nil
+	}
 
-	// 		// When we arrive here there was already a share for this resource.
-	// 		// if there is a mix-up of shares of type group and shares of type user we need to deduplicate them, since it points
-	// 		// to the same resource. Leave the more explicit and hide the less explicit. In this case we hide the group shares
-	// 		// and return the user share to the user.
-	// 		other := rss[idx]
-	// 		if other.Share.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_GROUP && s.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER {
-	// 			if other.State == rs.State {
-	// 				rss[idx] = rs
-	// 			} else {
-	// 				rss = append(rss, rs)
-	// 			}
-	// 		}
-	// 	}
-	// }
-
+	for key, value := range m.receivedCache[user.Id.OpaqueId].GetALL(false) {
+		var ssid string
+		var mtime time.Time
+		var ok bool
+		if ssid, ok = key.(string); !ok {
+			continue
+		}
+		if mtime, ok = value.(time.Time); !ok {
+			continue
+		}
+		if mtime.Sub(time.Now()) > time.Second*30 {
+			// TODO reread from disk
+		}
+		providerid, spaceid, _, err := storagespace.SplitID(ssid)
+		if err != nil {
+			continue
+		}
+		if providerSpaces, ok := m.cache[providerid]; ok {
+			if spaceShares, ok := providerSpaces[spaceid]; ok {
+				for _, value := range spaceShares.GetALL(false) {
+					if share, ok := value.(*collaboration.Share); ok {
+						if utils.UserEqual(user.GetId(), share.GetGrantee().GetUserId()) {
+							rs := &collaboration.ReceivedShare{
+								Share: share,
+							}
+							rss = append(rss, rs)
+						}
+					}
+				}
+			}
+		}
+	}
 	return rss, nil
 }
 
