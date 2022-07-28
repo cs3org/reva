@@ -72,7 +72,7 @@ type providerCache map[string]providerSpaces
 type providerSpaces map[string]spaceShares
 type spaceShares gcache.Cache
 
-type createdCache map[string]spaceTimes
+type accessedCache map[string]spaceTimes
 type spaceTimes gcache.Cache
 
 type receivedCache map[string]receivedSpaces
@@ -89,9 +89,10 @@ type receivedShareState struct {
 type manager struct {
 	sync.RWMutex
 
-	cache         providerCache
-	createdCache  createdCache
-	receivedCache receivedCache
+	cache              providerCache
+	createdCache       accessedCache
+	receivedCache      receivedCache
+	groupReceivedCache accessedCache
 
 	storage     metadata.Storage
 	spaceETags  gcache.Cache
@@ -119,11 +120,12 @@ func NewDefault(m map[string]interface{}) (share.Manager, error) {
 // New returns a new manager instance.
 func New(s metadata.Storage) (share.Manager, error) {
 	return &manager{
-		cache:         providerCache{},
-		createdCache:  createdCache{},
-		receivedCache: receivedCache{},
-		storage:       s,
-		spaceETags:    gcache.New(1_000_000).LFU().Build(),
+		cache:              providerCache{},
+		createdCache:       accessedCache{},
+		receivedCache:      receivedCache{},
+		groupReceivedCache: accessedCache{},
+		storage:            s,
+		spaceETags:         gcache.New(1_000_000).LFU().Build(),
 	}, nil
 }
 
@@ -311,32 +313,42 @@ func (m *manager) Share(ctx context.Context, md *provider.ResourceInfo, g *colla
 	m.createdCache[user.Id.OpaqueId].Set(spaceId, time.Now())
 
 	// set flag for grantee to have access to space
-	if m.receivedCache[g.Grantee.GetUserId().GetOpaqueId()] == nil {
-		m.receivedCache[g.Grantee.GetUserId().GetOpaqueId()] = gcache.New(-1).Simple().Build() // receivedSpaces
-	}
-	if !m.receivedCache[g.Grantee.GetUserId().GetOpaqueId()].Has(spaceId) {
-		err := m.receivedCache[g.Grantee.GetUserId().GetOpaqueId()].Set(spaceId, receivedSpace{})
-		if err != nil {
+	switch g.Grantee.Type {
+	case provider.GranteeType_GRANTEE_TYPE_USER:
+		userid := g.Grantee.GetUserId().GetOpaqueId()
+		if m.receivedCache[userid] == nil {
+			m.receivedCache[userid] = gcache.New(-1).Simple().Build() // receivedSpaces
+		}
+		if !m.receivedCache[userid].Has(spaceId) {
+			err := m.receivedCache[userid].Set(spaceId, receivedSpace{})
+			if err != nil {
+				return nil, err
+			}
+		}
+		val, err := m.receivedCache[userid].GetIFPresent(spaceId)
+		if err != nil && err != gcache.KeyNotFoundError {
 			return nil, err
 		}
+		receivedSpace, ok := val.(receivedSpace)
+		if !ok {
+			return nil, errtypes.InternalError("invalid type in cache")
+		}
+		receivedSpace.mtime = now
+		if receivedSpace.receivedShareStates == nil {
+			receivedSpace.receivedShareStates = map[string]receivedShareState{}
+		}
+		receivedSpace.receivedShareStates[id] = receivedShareState{
+			state: collaboration.ShareState_SHARE_STATE_PENDING,
+			// mountpoint stays empty until user accepts the share
+		}
+		m.receivedCache[userid].Set(spaceId, receivedSpace)
+	case provider.GranteeType_GRANTEE_TYPE_GROUP:
+		groupid := g.Grantee.GetGroupId().GetOpaqueId()
+		if m.groupReceivedCache[groupid] == nil {
+			m.groupReceivedCache[groupid] = gcache.New(-1).Simple().Build()
+		}
+		m.groupReceivedCache[groupid].Set(spaceId, time.Now())
 	}
-	val, err := m.receivedCache[g.Grantee.GetUserId().GetOpaqueId()].GetIFPresent(spaceId)
-	if err != nil && err != gcache.KeyNotFoundError {
-		return nil, err
-	}
-	receivedSpace, ok := val.(receivedSpace)
-	if !ok {
-		return nil, errtypes.InternalError("invalid type in cache")
-	}
-	receivedSpace.mtime = now
-	if receivedSpace.receivedShareStates == nil {
-		receivedSpace.receivedShareStates = map[string]receivedShareState{}
-	}
-	receivedSpace.receivedShareStates[id] = receivedShareState{
-		state: collaboration.ShareState_SHARE_STATE_PENDING,
-		// mountpoint stays empty until user accepts the share
-	}
-	m.receivedCache[g.Grantee.GetUserId().GetOpaqueId()].Set(spaceId, receivedSpace)
 
 	return s, nil
 }
@@ -514,10 +526,30 @@ func (m *manager) ListReceivedShares(ctx context.Context, filters []*collaborati
 	var rss []*collaboration.ReceivedShare
 	user := ctxpkg.ContextMustGetUser(ctx)
 
-	if m.receivedCache[user.Id.OpaqueId] == nil {
-		return rss, nil
+	ssids := map[string]receivedSpace{}
+
+	// first collect all spaceids the user has access to as a group member
+	for _, group := range user.Groups {
+		for key, value := range m.groupReceivedCache[group].GetALL(false) {
+			var ssid string
+			var mtime time.Time
+			var ok bool
+			if ssid, ok = key.(string); !ok {
+				continue
+			}
+			if mtime, ok = value.(time.Time); !ok {
+				continue
+			}
+			if mtime.Sub(time.Now()) > time.Second*30 {
+				// TODO reread from disk
+			}
+			// add an empty entry, it will be overwritten with actual receivedSpace entries
+			// from the receivedCache per user below
+			ssids[ssid] = receivedSpace{}
+		}
 	}
 
+	// add all spaces the user has receved shares for, this includes mount points and share stat for groups
 	for key, value := range m.receivedCache[user.Id.OpaqueId].GetALL(false) {
 		var ssid string
 		var rspace receivedSpace
@@ -532,6 +564,10 @@ func (m *manager) ListReceivedShares(ctx context.Context, filters []*collaborati
 		if rspace.mtime < time.Now().Add(-30*time.Second).UnixNano() {
 			// TODO reread from disk
 		}
+		ssids[ssid] = rspace
+	}
+
+	for ssid, rspace := range ssids {
 
 		providerid, spaceid, _, err := storagespace.SplitID(ssid)
 		if err != nil {
@@ -560,6 +596,7 @@ func (m *manager) ListReceivedShares(ctx context.Context, filters []*collaborati
 			}
 		}
 	}
+
 	return rss, nil
 }
 
