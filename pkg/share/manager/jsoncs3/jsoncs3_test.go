@@ -30,6 +30,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/share/manager/jsoncs3"
 	storagemocks "github.com/cs3org/reva/v2/pkg/storage/utils/metadata/mocks"
 	"github.com/stretchr/testify/mock"
+	"google.golang.org/protobuf/types/known/fieldmaskpb"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -265,6 +266,45 @@ var _ = Describe("Json", func() {
 				received, err := m.ListReceivedShares(granteeCtx, []*collaboration.Filter{})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(received)).To(Equal(1))
+				Expect(received[0].Share.ResourceId).To(Equal(sharedResource.Id))
+				Expect(received[0].State).To(Equal(collaboration.ShareState_SHARE_STATE_PENDING))
+			})
+		})
+
+		Describe("GetReceivedShare", func() {
+			It("gets the state", func() {
+				rs, err := m.GetReceivedShare(granteeCtx, &collaboration.ShareReference{
+					Spec: &collaboration.ShareReference_Id{
+						Id: share.Id,
+					},
+				})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(rs.State).To(Equal(collaboration.ShareState_SHARE_STATE_PENDING))
+			})
+		})
+
+		Describe("UpdateReceivedShare", func() {
+			It("updates the state", func() {
+				rs, err := m.GetReceivedShare(granteeCtx, &collaboration.ShareReference{
+					Spec: &collaboration.ShareReference_Id{
+						Id: share.Id,
+					},
+				})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(rs.State).To(Equal(collaboration.ShareState_SHARE_STATE_PENDING))
+
+				rs.State = collaboration.ShareState_SHARE_STATE_ACCEPTED
+				rs, err = m.UpdateReceivedShare(granteeCtx, rs, &fieldmaskpb.FieldMask{Paths: []string{"state"}})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(rs.State).To(Equal(collaboration.ShareState_SHARE_STATE_ACCEPTED))
+
+				rs, err = m.GetReceivedShare(granteeCtx, &collaboration.ShareReference{
+					Spec: &collaboration.ShareReference_Id{
+						Id: share.Id,
+					},
+				})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(rs.State).To(Equal(collaboration.ShareState_SHARE_STATE_ACCEPTED))
 			})
 		})
 	})

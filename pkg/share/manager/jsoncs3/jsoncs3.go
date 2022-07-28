@@ -68,19 +68,30 @@ type config struct {
 	MachineAuthAPIKey string `mapstructure:"machine_auth_apikey"`
 }
 
-type shareCache map[string]providerSpaces
+type providerCache map[string]providerSpaces
 type providerSpaces map[string]spaceShares
 type spaceShares gcache.Cache
 
-type accessCache map[string]spaceTimes
+type createdCache map[string]spaceTimes
 type spaceTimes gcache.Cache
+
+type receivedCache map[string]receivedSpaces
+type receivedSpaces gcache.Cache
+type receivedSpace struct {
+	mtime               int64
+	receivedShareStates map[string]receivedShareState
+}
+type receivedShareState struct {
+	state      collaboration.ShareState
+	mountPoint *provider.Reference
+}
 
 type manager struct {
 	sync.RWMutex
 
-	cache         shareCache
-	createdCache  accessCache
-	receivedCache accessCache
+	cache         providerCache
+	createdCache  createdCache
+	receivedCache receivedCache
 
 	storage     metadata.Storage
 	spaceETags  gcache.Cache
@@ -108,9 +119,9 @@ func NewDefault(m map[string]interface{}) (share.Manager, error) {
 // New returns a new manager instance.
 func New(s metadata.Storage) (share.Manager, error) {
 	return &manager{
-		cache:         shareCache{},
-		createdCache:  accessCache{},
-		receivedCache: accessCache{},
+		cache:         providerCache{},
+		createdCache:  createdCache{},
+		receivedCache: receivedCache{},
 		storage:       s,
 		spaceETags:    gcache.New(1_000_000).LFU().Build(),
 	}, nil
@@ -300,12 +311,35 @@ func (m *manager) Share(ctx context.Context, md *provider.ResourceInfo, g *colla
 
 	// set flag for grantee to have access to space
 	if m.receivedCache[g.Grantee.GetUserId().GetOpaqueId()] == nil {
-		m.receivedCache[g.Grantee.GetUserId().GetOpaqueId()] = gcache.New(-1).Simple().Build()
+		m.receivedCache[g.Grantee.GetUserId().GetOpaqueId()] = gcache.New(-1).Simple().Build() // receivedSpaces
 	}
-	m.receivedCache[g.Grantee.GetUserId().GetOpaqueId()].Set(storagespace.FormatResourceID(provider.ResourceId{
+	spaceId := storagespace.FormatResourceID(provider.ResourceId{
 		StorageId: md.Id.StorageId,
 		SpaceId:   md.Id.SpaceId,
-	}), time.Now())
+	})
+	if !m.receivedCache[g.Grantee.GetUserId().GetOpaqueId()].Has(spaceId) {
+		err := m.receivedCache[g.Grantee.GetUserId().GetOpaqueId()].Set(spaceId, receivedSpace{})
+		if err != nil {
+			return nil, err
+		}
+	}
+	val, err := m.receivedCache[g.Grantee.GetUserId().GetOpaqueId()].GetIFPresent(spaceId)
+	if err != nil && err != gcache.KeyNotFoundError {
+		return nil, err
+	}
+	receivedSpace, ok := val.(receivedSpace)
+	if !ok {
+		return nil, errtypes.InternalError("invalid type in cache")
+	}
+	receivedSpace.mtime = now
+	if receivedSpace.receivedShareStates == nil {
+		receivedSpace.receivedShareStates = map[string]receivedShareState{}
+	}
+	receivedSpace.receivedShareStates[id] = receivedShareState{
+		state: collaboration.ShareState_SHARE_STATE_PENDING,
+		// mountpoint stays empty until user accepts the share
+	}
+	m.receivedCache[g.Grantee.GetUserId().GetOpaqueId()].Set(spaceId, receivedSpace)
 
 	return s, nil
 }
@@ -487,28 +521,36 @@ func (m *manager) ListReceivedShares(ctx context.Context, filters []*collaborati
 
 	for key, value := range m.receivedCache[user.Id.OpaqueId].GetALL(false) {
 		var ssid string
-		var mtime time.Time
+		var rspace receivedSpace
 		var ok bool
 		if ssid, ok = key.(string); !ok {
 			continue
 		}
-		if mtime, ok = value.(time.Time); !ok {
+		if rspace, ok = value.(receivedSpace); !ok {
 			continue
 		}
-		if mtime.Sub(time.Now()) > time.Second*30 {
+
+		if rspace.mtime < time.Now().Add(-30*time.Second).UnixNano() {
 			// TODO reread from disk
 		}
+
 		providerid, spaceid, _, err := storagespace.SplitID(ssid)
 		if err != nil {
 			continue
 		}
 		if providerSpaces, ok := m.cache[providerid]; ok {
 			if spaceShares, ok := providerSpaces[spaceid]; ok {
-				for _, value := range spaceShares.GetALL(false) {
+				for shareId, state := range rspace.receivedShareStates {
+					value, err := spaceShares.Get(shareId)
+					if err != nil {
+						continue
+					}
 					if share, ok := value.(*collaboration.Share); ok {
 						if utils.UserEqual(user.GetId(), share.GetGrantee().GetUserId()) {
 							rs := &collaboration.ReceivedShare{
-								Share: share,
+								Share:      share,
+								State:      state.state,
+								MountPoint: state.mountPoint,
 							}
 							rss = append(rss, rs)
 						}
@@ -576,34 +618,6 @@ func (m *manager) UpdateReceivedShare(ctx context.Context, receivedShare *collab
 			return nil, errtypes.NotSupported("updating " + fieldMask.Paths[i] + " is not supported")
 		}
 	}
-
-	// user := ctxpkg.ContextMustGetUser(ctx)
-	// Persist state
-	// if v, ok := m.model.State[user.Id.String()]; ok {
-	// 	v[rs.Share.Id.String()] = rs.State
-	// 	m.model.State[user.Id.String()] = v
-	// } else {
-	// 	a := map[string]collaboration.ShareState{
-	// 		rs.Share.Id.String(): rs.State,
-	// 	}
-	// 	m.model.State[user.Id.String()] = a
-	// }
-
-	// // Persist mount point
-	// if v, ok := m.model.MountPoint[user.Id.String()]; ok {
-	// 	v[rs.Share.Id.String()] = rs.MountPoint
-	// 	m.model.MountPoint[user.Id.String()] = v
-	// } else {
-	// 	a := map[string]*provider.Reference{
-	// 		rs.Share.Id.String(): rs.MountPoint,
-	// 	}
-	// 	m.model.MountPoint[user.Id.String()] = a
-	// }
-
-	// if err := m.model.Save(); err != nil {
-	// 	err = errors.Wrap(err, "error saving model")
-	// 	return nil, err
-	// }
 
 	return rs, nil
 }
