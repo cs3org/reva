@@ -43,6 +43,7 @@ bin/
 # API acceptance tests
 composer.lock
 /vendor
+/vendor-php
 vendor-bin/**/vendor
 vendor-bin/**/composer.lock
 tests/acceptance/output
