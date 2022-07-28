@@ -2049,6 +2049,10 @@ func (fs *eosfs) permissionSet(ctx context.Context, eosFileInfo *eosclient.FileI
 		return conversions.NewViewerRole().CS3ResourcePermissions()
 	}
 
+	if utils.UserEqual(u.Id, owner) {
+		return conversions.NewManagerRole().CS3ResourcePermissions()
+	}
+
 	auth, err := fs.getUserAuth(ctx, u, eosFileInfo.File)
 	if err != nil {
 		return &provider.ResourcePermissions{
