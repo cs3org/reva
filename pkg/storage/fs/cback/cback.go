@@ -93,7 +93,7 @@ func (fs *cback) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []st
 		}
 
 		ri := &provider.ResourceInfo{
-			Etag:          "test",
+			Etag:          "",
 			PermissionSet: &PermID,
 			Checksum:      &checkSum,
 			Mtime:         &setTime,
@@ -114,11 +114,6 @@ func (fs *cback) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []st
 
 	if err != nil {
 		fmt.Print(err)
-		return nil, err
-	}
-
-	if ret.Detail != "" {
-		err = errors.New(ret.Detail)
 		return nil, err
 	}
 

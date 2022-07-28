@@ -3,7 +3,7 @@ package cback
 import (
 	"encoding/json"
 	"errors"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -82,7 +82,7 @@ func mapReturn(fileType string) (int, error) {
 
 }
 
-func (fs *cback) getRequest(userName, url string, reqType string) ([]byte, error) {
+func (fs *cback) getRequest(userName, url string, reqType string) (io.ReadCloser, error) {
 
 	req, err := http.NewRequest(reqType, url, nil)
 	req.SetBasicAuth(userName, fs.conf.ImpersonatorToken)
@@ -101,13 +101,7 @@ func (fs *cback) getRequest(userName, url string, reqType string) ([]byte, error
 		return nil, err
 	}
 
-	responseData, err := ioutil.ReadAll(resp.Body)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return responseData, nil
+	return resp.Body, nil
 }
 
 func (fs *cback) listSnapshots(userName string, backupId int) ([]SnapshotResponse, error) {
