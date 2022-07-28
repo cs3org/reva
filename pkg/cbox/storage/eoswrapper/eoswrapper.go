@@ -32,6 +32,7 @@ import (
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
 	"github.com/cs3org/reva/pkg/storage/utils/eosfs"
+	"github.com/cs3org/reva/pkg/utils"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )
@@ -199,6 +200,8 @@ func (w *wrapper) setProjectSharingPermissions(ctx context.Context, r *provider.
 		adminGroup := projectSpaceGroupsPrefix + parts[2] + projectSpaceAdminGroupsSuffix
 		user := ctxpkg.ContextMustGetUser(ctx)
 
+		_, isPublicShare := utils.HasPublicShareRole(user)
+
 		for _, g := range user.Groups {
 			if g == adminGroup {
 				r.PermissionSet.AddGrant = true
@@ -206,7 +209,9 @@ func (w *wrapper) setProjectSharingPermissions(ctx context.Context, r *provider.
 				r.PermissionSet.UpdateGrant = true
 				r.PermissionSet.ListGrants = true
 				r.PermissionSet.GetQuota = true
-				r.PermissionSet.DenyGrant = true
+				if !isPublicShare {
+					r.PermissionSet.DenyGrant = true
+				}
 				return nil
 			}
 		}
