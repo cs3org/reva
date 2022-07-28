@@ -2039,23 +2039,17 @@ func (fs *eosfs) permissionSet(ctx context.Context, eosFileInfo *eosclient.FileI
 		}
 	}
 
-	if owner != nil && u.Id.OpaqueId == owner.OpaqueId && u.Id.Idp == owner.Idp {
-		// The logged-in user is the owner but we may be impersonating them
-		// on behalf of a public share accessor.
-
-		if u.Opaque != nil {
-			if publicShare, ok := u.Opaque.Map["public-share-role"]; ok {
-				if string(publicShare.Value) == "editor" {
-					return conversions.NewEditorRole().CS3ResourcePermissions()
-				} else if string(publicShare.Value) == "uploader" {
-					return conversions.NewUploaderRole().CS3ResourcePermissions()
-				}
-				// Default to viewer role
-				return conversions.NewViewerRole().CS3ResourcePermissions()
-			}
+	if role, ok := utils.HasPublicShareRole(u); ok {
+		switch role {
+		case "editor":
+			return conversions.NewEditorRole().CS3ResourcePermissions()
+		case "uploader":
+			return conversions.NewUploaderRole().CS3ResourcePermissions()
 		}
+		return conversions.NewViewerRole().CS3ResourcePermissions()
+	}
 
-		// owner has all permissions
+	if utils.UserEqual(u.Id, owner) {
 		return conversions.NewManagerRole().CS3ResourcePermissions()
 	}
 

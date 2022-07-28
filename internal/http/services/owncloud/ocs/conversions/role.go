@@ -121,7 +121,7 @@ func (r *Role) WebDAVPermissions(isDir, isShared, isMountpoint, isPublic bool) s
 		fmt.Fprintf(&b, "CK")
 	}
 
-	if r.ocsPermissions.Contain(PermissionDeny) {
+	if r.ocsPermissions.Contain(PermissionDeny) && !isPublic {
 		fmt.Fprintf(&b, "Z")
 	}
 

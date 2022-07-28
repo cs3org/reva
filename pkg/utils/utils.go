@@ -352,3 +352,15 @@ func GetViewMode(viewMode string) gateway.OpenInAppRequest_ViewMode {
 		return gateway.OpenInAppRequest_VIEW_MODE_INVALID
 	}
 }
+
+// HasPublicShareRole return true if the user has a public share role.
+// If yes, the string is the type of role, viewer, editor or uploader
+func HasPublicShareRole(u *userpb.User) (string, bool) {
+	if u.Opaque == nil {
+		return "", false
+	}
+	if publicShare, ok := u.Opaque.Map["public-share-role"]; ok {
+		return string(publicShare.Value), true
+	}
+	return "", false
+}
