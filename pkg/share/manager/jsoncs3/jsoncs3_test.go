@@ -65,19 +65,28 @@ var _ = Describe("Json", func() {
 			},
 			Groups: []string{"users"},
 		}
+		readPermissions = &provider.ResourcePermissions{
+			GetPath:              true,
+			InitiateFileDownload: true,
+			ListFileVersions:     true,
+			ListContainer:        true,
+			Stat:                 true,
+		}
+		writePermissions = &provider.ResourcePermissions{
+			GetPath:              true,
+			InitiateFileDownload: true,
+			InitiateFileUpload:   true,
+			ListFileVersions:     true,
+			ListContainer:        true,
+			Stat:                 true,
+		}
 		grant = &collaboration.ShareGrant{
 			Grantee: &provider.Grantee{
 				Type: provider.GranteeType_GRANTEE_TYPE_USER,
 				Id:   &provider.Grantee_UserId{UserId: grantee.GetId()},
 			},
 			Permissions: &collaboration.SharePermissions{
-				Permissions: &provider.ResourcePermissions{
-					GetPath:              true,
-					InitiateFileDownload: true,
-					ListFileVersions:     true,
-					ListContainer:        true,
-					Stat:                 true,
-				},
+				Permissions: readPermissions,
 			},
 		}
 
@@ -139,7 +148,6 @@ var _ = Describe("Json", func() {
 			var err error
 			share, err = m.Share(ctx, sharedResource, grant)
 			Expect(err).ToNot(HaveOccurred())
-
 		})
 
 		Describe("GetShare", func() {
@@ -167,34 +175,11 @@ var _ = Describe("Json", func() {
 		})
 
 		Describe("UnShare", func() {
-			It("removes an existing share by id", func() {
+			It("removes an existing share", func() {
 				err := m.Unshare(ctx, &collaboration.ShareReference{
 					Spec: &collaboration.ShareReference_Id{
 						Id: &collaboration.ShareId{
 							OpaqueId: share.Id.OpaqueId,
-						},
-					},
-				})
-				Expect(err).ToNot(HaveOccurred())
-
-				s, err := m.GetShare(ctx, &collaboration.ShareReference{
-					Spec: &collaboration.ShareReference_Key{
-						Key: &collaboration.ShareKey{
-							ResourceId: sharedResource.Id,
-							Grantee:    grant.Grantee,
-						},
-					},
-				})
-				Expect(err).To(HaveOccurred())
-				Expect(s).To(BeNil())
-			})
-
-			It("removes an existing share by key", func() {
-				err := m.Unshare(ctx, &collaboration.ShareReference{
-					Spec: &collaboration.ShareReference_Key{
-						Key: &collaboration.ShareKey{
-							ResourceId: sharedResource.Id,
-							Grantee:    grant.Grantee,
 						},
 					},
 				})
@@ -214,7 +199,14 @@ var _ = Describe("Json", func() {
 		})
 
 		Describe("UpdateShare", func() {
-			It("updates an existing share by id", func() {
+			It("updates an existing share", func() {
+				s := shareBykey(&collaboration.ShareKey{
+					ResourceId: sharedResource.Id,
+					Grantee:    grant.Grantee,
+				})
+				Expect(s.GetPermissions().GetPermissions()).To(Equal(readPermissions))
+
+				// enhance privileges
 				us, err := m.UpdateShare(ctx, &collaboration.ShareReference{
 					Spec: &collaboration.ShareReference_Id{
 						Id: &collaboration.ShareId{
@@ -222,47 +214,37 @@ var _ = Describe("Json", func() {
 						},
 					},
 				}, &collaboration.SharePermissions{
-					Permissions: &providerv1beta1.ResourcePermissions{
-						Stat: true,
-					},
+					Permissions: writePermissions,
 				})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(us).ToNot(BeNil())
-				Expect(us.GetPermissions().GetPermissions().Stat).To(BeTrue())
-				Expect(us.GetPermissions().GetPermissions().ListContainer).To(BeFalse())
+				Expect(us.GetPermissions().GetPermissions()).To(Equal(writePermissions))
 
-				s := shareBykey(&collaboration.ShareKey{
+				s = shareBykey(&collaboration.ShareKey{
 					ResourceId: sharedResource.Id,
 					Grantee:    grant.Grantee,
 				})
-				Expect(s.GetPermissions().GetPermissions().Stat).To(BeTrue())
-				Expect(s.GetPermissions().GetPermissions().ListContainer).To(BeFalse())
-			})
+				Expect(s.GetPermissions().GetPermissions()).To(Equal(writePermissions))
 
-			It("updates an existing share by key", func() {
-				us, err := m.UpdateShare(ctx, &collaboration.ShareReference{
-					Spec: &collaboration.ShareReference_Key{
-						Key: &collaboration.ShareKey{
-							ResourceId: sharedResource.Id,
-							Grantee:    grant.Grantee,
+				// reduce privileges
+				us, err = m.UpdateShare(ctx, &collaboration.ShareReference{
+					Spec: &collaboration.ShareReference_Id{
+						Id: &collaboration.ShareId{
+							OpaqueId: share.Id.OpaqueId,
 						},
 					},
 				}, &collaboration.SharePermissions{
-					Permissions: &providerv1beta1.ResourcePermissions{
-						Stat: true,
-					},
+					Permissions: readPermissions,
 				})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(us).ToNot(BeNil())
-				Expect(us.GetPermissions().GetPermissions().Stat).To(BeTrue())
-				Expect(us.GetPermissions().GetPermissions().ListContainer).To(BeFalse())
+				Expect(us.GetPermissions().GetPermissions()).To(Equal(readPermissions))
 
-				s := shareBykey(&collaboration.ShareKey{
+				s = shareBykey(&collaboration.ShareKey{
 					ResourceId: sharedResource.Id,
 					Grantee:    grant.Grantee,
 				})
-				Expect(s.GetPermissions().GetPermissions().Stat).To(BeTrue())
-				Expect(s.GetPermissions().GetPermissions().ListContainer).To(BeFalse())
+				Expect(s.GetPermissions().GetPermissions()).To(Equal(readPermissions))
 			})
 		})
 
