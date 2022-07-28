@@ -16,25 +16,10 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package mock
+package loader
 
 import (
-	"context"
-	"io"
-	"os"
-
-	"github.com/cs3org/reva/pkg/storage/utils/downloader"
+	// Load cache driver for thumbnails service.
+	_ "github.com/cs3org/reva/internal/http/services/thumbnails/cache/lru"
+	// Add your own here
 )
-
-type mockDownloader struct{}
-
-// NewDownloader creates a mock downloader that implements the Downloader interface
-// supposed to be used for testing
-func NewDownloader() downloader.Downloader {
-	return &mockDownloader{}
-}
-
-// Download copies the content of a local file into the dst Writer
-func (m *mockDownloader) Download(ctx context.Context, path string) (io.ReadCloser, error) {
-	return os.Open(path)
-}

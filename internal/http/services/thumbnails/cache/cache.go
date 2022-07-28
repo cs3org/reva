@@ -16,25 +16,29 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package mock
+package cache
 
-import (
-	"context"
-	"io"
-	"os"
-
-	"github.com/cs3org/reva/pkg/storage/utils/downloader"
-)
-
-type mockDownloader struct{}
-
-// NewDownloader creates a mock downloader that implements the Downloader interface
-// supposed to be used for testing
-func NewDownloader() downloader.Downloader {
-	return &mockDownloader{}
+// Cache is the interface for a thumbnail cache
+type Cache interface {
+	// Get gets the thumbnail if stored in the cache
+	Get(file, etag string, width, height int) ([]byte, error)
+	// Set adds the thumbnail in the cache
+	Set(file, etag string, width, height int, data []byte) error
 }
 
-// Download copies the content of a local file into the dst Writer
-func (m *mockDownloader) Download(ctx context.Context, path string) (io.ReadCloser, error) {
-	return os.Open(path)
+type noCache struct{}
+
+// NewNoCache creates a dummy cache that does not cache anything
+func NewNoCache() Cache {
+	return noCache{}
+}
+
+// Get on a NoCache always return ErrNotFound
+func (noCache) Get(_, _ string, _, _ int) ([]byte, error) {
+	return nil, ErrNotFound{}
+}
+
+// Set on a NoCache just does not save the thumbnail
+func (noCache) Set(_, _ string, _, _ int, _ []byte) error {
+	return nil
 }

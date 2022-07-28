@@ -16,25 +16,21 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package mock
+package registry
 
 import (
-	"context"
-	"io"
-	"os"
-
-	"github.com/cs3org/reva/pkg/storage/utils/downloader"
+	"github.com/cs3org/reva/internal/http/services/thumbnails/cache"
 )
 
-type mockDownloader struct{}
+// NewFunc is the function that thumbnails cache implementations
+// should register at init time.
+type NewFunc func(map[string]interface{}) (cache.Cache, error)
 
-// NewDownloader creates a mock downloader that implements the Downloader interface
-// supposed to be used for testing
-func NewDownloader() downloader.Downloader {
-	return &mockDownloader{}
-}
+// NewFuncs is a map containing all the thumbnails cache backends.
+var NewFuncs = map[string]NewFunc{}
 
-// Download copies the content of a local file into the dst Writer
-func (m *mockDownloader) Download(ctx context.Context, path string) (io.ReadCloser, error) {
-	return os.Open(path)
+// Register registers a new thumbnails cache function.
+// Not safe for concurrent use. Safe for use from package init.
+func Register(name string, f NewFunc) {
+	NewFuncs[name] = f
 }

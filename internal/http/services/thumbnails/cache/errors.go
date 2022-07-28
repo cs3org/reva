@@ -16,25 +16,13 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package mock
+package cache
 
-import (
-	"context"
-	"io"
-	"os"
+// ErrNotFound is the error returned by the cache when the requested
+// thumbnail is not in the cache
+type ErrNotFound struct{}
 
-	"github.com/cs3org/reva/pkg/storage/utils/downloader"
-)
-
-type mockDownloader struct{}
-
-// NewDownloader creates a mock downloader that implements the Downloader interface
-// supposed to be used for testing
-func NewDownloader() downloader.Downloader {
-	return &mockDownloader{}
-}
-
-// Download copies the content of a local file into the dst Writer
-func (m *mockDownloader) Download(ctx context.Context, path string) (io.ReadCloser, error) {
-	return os.Open(path)
+// Error implements the Error interface
+func (ErrNotFound) Error() string {
+	return "entry in cache not found"
 }

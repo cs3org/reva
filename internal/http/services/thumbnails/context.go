@@ -16,25 +16,32 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package mock
+package thumbnails
 
 import (
 	"context"
-	"io"
-	"os"
 
-	"github.com/cs3org/reva/pkg/storage/utils/downloader"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 )
 
-type mockDownloader struct{}
+type contextKey int
 
-// NewDownloader creates a mock downloader that implements the Downloader interface
-// supposed to be used for testing
-func NewDownloader() downloader.Downloader {
-	return &mockDownloader{}
+const (
+	// contextKeyResource is the key used to store a resource info into the context
+	contextKeyResource contextKey = iota
+)
+
+// ContextSetResource adds a ResourceInfo into the context
+func ContextSetResource(ctx context.Context, res *provider.ResourceInfo) context.Context {
+	return context.WithValue(ctx, contextKeyResource, res)
 }
 
-// Download copies the content of a local file into the dst Writer
-func (m *mockDownloader) Download(ctx context.Context, path string) (io.ReadCloser, error) {
-	return os.Open(path)
+// ContextMustGetResource gets a ResourceInfo from the context.
+// Panics if not available.
+func ContextMustGetResource(ctx context.Context) *provider.ResourceInfo {
+	v, ok := ctx.Value(contextKeyResource).(*provider.ResourceInfo)
+	if !ok {
+		panic("resource not in context")
+	}
+	return v
 }
