@@ -340,8 +340,14 @@ func (fs *cback) Download(ctx context.Context, ref *provider.Reference) (io.Read
 			return nil, err
 		}
 
+		//Debugging purposes
+		fmt.Printf("\nGetting Not here!\n")
+
 		if md.Type == provider.ResourceType_RESOURCE_TYPE_FILE {
+
 			responseData, err := fs.getRequest(user.Username, url, requestType)
+			//Debugging purposes
+			fmt.Printf("\nGetting Here!\n")
 
 			if err != nil {
 				return nil, err
