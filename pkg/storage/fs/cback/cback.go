@@ -297,7 +297,7 @@ func (fs *cback) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys
 	}
 }
 
-func (fs *cback) Download(ctx context.Context, ref *provider.Reference) (rc io.ReadCloser, err error) {
+func (fs *cback) Download(ctx context.Context, ref *provider.Reference) (io.ReadCloser, error) {
 	var path string = ref.GetPath()
 	var ssId, searchPath string
 	user, _ := ctxpkg.ContextGetUser(ctx)
