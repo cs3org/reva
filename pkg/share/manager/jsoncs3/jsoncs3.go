@@ -491,9 +491,11 @@ func (m *manager) ListShares(ctx context.Context, filters []*collaboration.Filte
 		if providerSpaces, ok := m.cache[providerid]; ok {
 			if spaceShares, ok := providerSpaces[spaceid]; ok {
 				for _, value := range spaceShares.GetALL(false) {
-					if share, ok := value.(*collaboration.Share); ok {
-						if utils.UserEqual(user.GetId(), share.GetCreator()) {
-							ss = append(ss, share)
+					if s, ok := value.(*collaboration.Share); ok {
+						if utils.UserEqual(user.GetId(), s.GetCreator()) {
+							if share.MatchesFilters(s, filters) {
+								ss = append(ss, s)
+							}
 						}
 					}
 				}
@@ -542,14 +544,16 @@ func (m *manager) ListReceivedShares(ctx context.Context, filters []*collaborati
 					if err != nil {
 						continue
 					}
-					if share, ok := value.(*collaboration.Share); ok {
-						if utils.UserEqual(user.GetId(), share.GetGrantee().GetUserId()) {
-							rs := &collaboration.ReceivedShare{
-								Share:      share,
-								State:      state.state,
-								MountPoint: state.mountPoint,
+					if s, ok := value.(*collaboration.Share); ok {
+						if utils.UserEqual(user.GetId(), s.GetGrantee().GetUserId()) {
+							if share.MatchesFilters(s, filters) {
+								rs := &collaboration.ReceivedShare{
+									Share:      s,
+									State:      state.state,
+									MountPoint: state.mountPoint,
+								}
+								rss = append(rss, rs)
 							}
-							rss = append(rss, rs)
 						}
 					}
 				}

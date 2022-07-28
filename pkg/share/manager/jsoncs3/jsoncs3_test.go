@@ -59,6 +59,14 @@ var _ = Describe("Json", func() {
 			},
 		}
 
+		sharedResource2 = &providerv1beta1.ResourceInfo{
+			Id: &providerv1beta1.ResourceId{
+				StorageId: "storageid2",
+				SpaceId:   "spaceid2",
+				OpaqueId:  "opaqueid2",
+			},
+		}
+
 		grantee = &userpb.User{
 			Id:     user2.Id,
 			Groups: []string{"users"},
@@ -128,13 +136,15 @@ var _ = Describe("Json", func() {
 			Expect(err).To(HaveOccurred())
 		})
 
-		It("creates a share", func() {
+		It("creates a user share", func() {
 			share, err := m.Share(ctx, sharedResource, grant)
 			Expect(err).ToNot(HaveOccurred())
 
 			Expect(share).ToNot(BeNil())
 			Expect(share.ResourceId).To(Equal(sharedResource.Id))
 		})
+
+		PIt("creates a group share")
 	})
 
 	Context("with an existing share", func() {
@@ -257,10 +267,47 @@ var _ = Describe("Json", func() {
 		})
 
 		Describe("ListReceivedShares", func() {
-			PIt("filters by resource id")
 			PIt("filters by owner")
 			PIt("filters by creator")
 			PIt("filters by grantee type")
+
+			It("filters by resource id", func() {
+				share2, err := m.Share(ctx, sharedResource2, grant)
+				Expect(err).ToNot(HaveOccurred())
+
+				received, err := m.ListReceivedShares(granteeCtx, []*collaboration.Filter{})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(len(received)).To(Equal(2))
+
+				received, err = m.ListReceivedShares(granteeCtx, []*collaboration.Filter{
+					{
+						Type: collaboration.Filter_TYPE_RESOURCE_ID,
+						Term: &collaboration.Filter_ResourceId{
+							ResourceId: sharedResource.Id,
+						},
+					},
+				})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(len(received)).To(Equal(1))
+				Expect(received[0].Share.ResourceId).To(Equal(sharedResource.Id))
+				Expect(received[0].State).To(Equal(collaboration.ShareState_SHARE_STATE_PENDING))
+				Expect(received[0].Share.Id).To(Equal(share.Id))
+
+				received, err = m.ListReceivedShares(granteeCtx, []*collaboration.Filter{
+					{
+						Type: collaboration.Filter_TYPE_RESOURCE_ID,
+						Term: &collaboration.Filter_ResourceId{
+							ResourceId: sharedResource2.Id,
+						},
+					},
+				})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(len(received)).To(Equal(1))
+				Expect(received[0].Share.ResourceId).To(Equal(sharedResource2.Id))
+				Expect(received[0].State).To(Equal(collaboration.ShareState_SHARE_STATE_PENDING))
+				Expect(received[0].Share.Id).To(Equal(share2.Id))
+
+			})
 
 			It("lists the received shares", func() {
 				received, err := m.ListReceivedShares(granteeCtx, []*collaboration.Filter{})
