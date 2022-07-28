@@ -568,13 +568,14 @@ func (m *manager) ListReceivedShares(ctx context.Context, filters []*collaborati
 	}
 
 	for ssid, rspace := range ssids {
-
 		providerid, spaceid, _, err := storagespace.SplitID(ssid)
 		if err != nil {
 			continue
 		}
 		if providerSpaces, ok := m.cache[providerid]; ok {
 			if spaceShares, ok := providerSpaces[spaceid]; ok {
+				// FIXME we need to iterate over all shares to pick up pending group shares here
+				// or we use a receivedCache for groups as well ... with a groupid$userid key?
 				for shareId, state := range rspace.receivedShareStates {
 					value, err := spaceShares.Get(shareId)
 					if err != nil {
