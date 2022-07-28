@@ -114,9 +114,11 @@ func (fs *cback) listSnapshots(userName string, backupId int) ([]SnapshotRespons
 		return nil, err
 	}
 
+	defer responseData.Close()
+
 	/*Unmarshalling the JSON response into the Response struct*/
 	responseObject := []SnapshotResponse{}
-	json.Unmarshal([]byte(responseData), &responseObject)
+	json.NewDecoder(responseData).Decode(&responseObject)
 
 	return responseObject, nil
 }
@@ -131,9 +133,11 @@ func (fs *cback) matchBackups(userName, pathInput string) (*BackUpResponse, erro
 		return nil, err
 	}
 
+	defer responseData.Close()
+
 	/*Unmarshalling the JSON response into the Response struct*/
 	responseObject := []BackUpResponse{}
-	json.Unmarshal([]byte(responseData), &responseObject)
+	json.NewDecoder(responseData).Decode(&responseObject)
 
 	if len(responseObject) == 0 {
 		err = errors.New("no match found")
@@ -179,8 +183,10 @@ func (fs *cback) statResource(backupId int, snapId, userName, path, source strin
 		return nil, err
 	}
 
+	defer responseData.Close()
+
 	responseObject := Contents{}
-	json.Unmarshal([]byte(responseData), &responseObject)
+	json.NewDecoder(responseData).Decode(&responseObject)
 
 	m, err := mapReturn(responseObject.Type)
 
@@ -210,9 +216,11 @@ func (fs *cback) fileSystem(backupId int, snapId, userName, path, source string)
 		return nil, err
 	}
 
+	defer responseData.Close()
+
 	/*Unmarshalling the JSON response into the Response struct*/
 	responseObject := []Contents{}
-	json.Unmarshal([]byte(responseData), &responseObject)
+	json.NewDecoder(responseData).Decode(&responseObject)
 
 	resp := make([]FsReturn, len(responseObject))
 
