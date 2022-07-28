@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -297,8 +298,65 @@ func (fs *cback) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys
 }
 
 func (fs *cback) Download(ctx context.Context, ref *provider.Reference) (rc io.ReadCloser, err error) {
-	//Implement this
-	return nil, errtypes.NotSupported("Operation Not Yet Implemented")
+	var path string = ref.GetPath()
+	var ssId, searchPath string
+	user, _ := ctxpkg.ContextGetUser(ctx)
+
+	resp, err := fs.matchBackups(user.Username, path)
+
+	if err != nil {
+		fmt.Print(err)
+		return nil, err
+	}
+
+	snapshotList, err := fs.listSnapshots(user.Username, resp.Id)
+
+	if err != nil {
+		fmt.Print(err)
+		return nil, err
+	}
+
+	if resp.Substring != "" {
+		for _, snapshot := range snapshotList {
+
+			if snapshot.Id == resp.Substring {
+				ssId = resp.Substring
+				searchPath = resp.Source
+				break
+
+			} else if strings.HasPrefix(resp.Substring, snapshot.Id) {
+				searchPath = strings.TrimPrefix(resp.Substring, snapshot.Id)
+				searchPath = resp.Source + searchPath
+				ssId = snapshot.Id
+				break
+			}
+		}
+
+		url := "http://cback-portal-dev-01:8000/backups/" + strconv.Itoa(resp.Id) + "/snapshots/" + ssId + "/" + searchPath
+		requestType := "GET"
+		md, err := fs.GetMD(ctx, ref, nil)
+
+		if err != nil {
+			return nil, err
+		}
+
+		if md.Type == provider.ResourceType_RESOURCE_TYPE_FILE {
+			responseData, err := fs.getRequest(user.Username, url, requestType)
+
+			if err != nil {
+				return nil, err
+			}
+
+			return responseData, nil
+		}
+
+		err = errors.New("can only download files")
+		return nil, err
+
+	}
+
+	err = errors.New("not found")
+	return nil, err
 }
 
 func (fs *cback) GetHome(ctx context.Context) (string, error) {
