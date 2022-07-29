@@ -84,6 +84,28 @@ func (c *shareCache) Add(userid, shareID string) error {
 	return nil
 }
 
+func (c *shareCache) Remove(userid, shareID string) error {
+	storageid, spaceid, _, err := storagespace.SplitID(shareID)
+	if err != nil {
+		return err
+	}
+	ssid := storagespace.FormatResourceID(provider.ResourceId{
+		StorageId: storageid,
+		SpaceId:   spaceid,
+	})
+
+	if c.userShares[userid] != nil {
+		if c.userShares[userid].userShares[ssid] != nil {
+			// remove share id
+			now := time.Now()
+			c.userShares[userid].mtime = now
+			c.userShares[userid].userShares[ssid].mtime = now
+			delete(c.userShares[userid].userShares[ssid].IDs, shareID)
+		}
+	}
+	return nil
+}
+
 func (c *shareCache) List(userid string) map[string]spaceShareIDs {
 	r := make(map[string]spaceShareIDs)
 	for ssid, cached := range c.userShares[userid].userShares {

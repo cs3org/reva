@@ -444,6 +444,21 @@ func (m *manager) Unshare(ctx context.Context, ref *collaboration.ShareReference
 	shareid, err := storagespace.ParseID(s.Id.OpaqueId)
 	m.cache[shareid.StorageId][shareid.SpaceId].Remove(s.Id.OpaqueId)
 
+	// remove from created cache
+	if err := m.createdCache.Remove(s.GetCreator().GetOpaqueId(), s.Id.OpaqueId); err != nil {
+		return err
+	}
+	createdBytes, err := json.Marshal(m.createdCache.GetShareCache(user.Id.OpaqueId))
+	if err != nil {
+		return err
+	}
+	// FIXME needs stat & upload if match combo to prevent lost update in redundant deployments
+	if err := m.storage.SimpleUpload(ctx, userCreatedPath(user.Id.OpaqueId), createdBytes); err != nil {
+		return err
+	}
+
+	// remove from grantee cache
+
 	return nil
 }
 
