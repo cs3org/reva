@@ -20,6 +20,7 @@ package jsoncs3
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"sync"
@@ -508,8 +509,19 @@ func (m *manager) ListShares(ctx context.Context, filters []*collaboration.Filte
 	}
 	if utils.TSToTime(info.Mtime).After(mtime) {
 		//  - update cached list of created shares for the user in memory if changed
-		m.storage.SimpleDownload(ctx, userCreatedPath)
-		// rip out gcache so we can marshal / unmarshal the shareCache struct
+		createdBlob, err := m.storage.SimpleDownload(ctx, userCreatedPath)
+		if err == nil {
+			newShareCache := userShareCache{}
+			err := json.Unmarshal(createdBlob, &newShareCache)
+			if err != nil {
+				// TODO log error but continue?
+				// data corrupted, admin needs to take action
+				// the service still has data. dump it before ding?
+			}
+			m.createdCache.SetShareCache(userid, &newShareCache)
+		} else {
+			// TODO log error but continue with current cached data
+		}
 
 	}
 

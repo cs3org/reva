@@ -19,10 +19,8 @@
 package jsoncs3
 
 import (
-	"errors"
 	"time"
 
-	"github.com/bluele/gcache"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
 )
@@ -33,7 +31,7 @@ type shareCache struct {
 
 type userShareCache struct {
 	mtime      time.Time
-	userShares gcache.Cache
+	userShares map[string]*spaceShareIDs
 }
 
 type spaceShareIDs struct {
@@ -54,55 +52,41 @@ func (c *shareCache) Get(userid string) *userShareCache {
 	return c.userShares[userid]
 }
 
+func (c *shareCache) SetShareCache(userid string, shareCache *userShareCache) {
+	c.userShares[userid] = shareCache
+}
+
 func (c *shareCache) Add(userid, shareID string) error {
-	now := time.Now()
-	if _, ok := c.userShares[userid]; !ok {
-		c.userShares[userid] = &userShareCache{
-			userShares: gcache.New(-1).Simple().Build(),
-		}
-	}
-	c.userShares[userid].mtime = now
 	storageid, spaceid, _, err := storagespace.SplitID(shareID)
 	if err != nil {
 		return err
 	}
-	spaceId := storagespace.FormatResourceID(provider.ResourceId{
+	ssid := storagespace.FormatResourceID(provider.ResourceId{
 		StorageId: storageid,
 		SpaceId:   spaceid,
 	})
-	v, err := c.userShares[userid].userShares.Get(spaceId)
-	switch {
-	case err == gcache.KeyNotFoundError:
-		// create new entry
-		return c.userShares[userid].userShares.Set(spaceId, &spaceShareIDs{
-			mtime: now,
-			IDs:   map[string]struct{}{shareID: {}},
-		})
-	case err != nil:
-		return err
+
+	now := time.Now()
+	if c.userShares[userid] == nil {
+		c.userShares[userid] = &userShareCache{
+			userShares: map[string]*spaceShareIDs{},
+		}
 	}
-	// update list
-	spaceShareIDs, ok := v.(*spaceShareIDs)
-	if !ok {
-		return errors.New("invalid type")
+	if c.userShares[userid].userShares[ssid] == nil {
+		c.userShares[userid].userShares[ssid] = &spaceShareIDs{
+			IDs: map[string]struct{}{},
+		}
 	}
-	spaceShareIDs.IDs[shareID] = struct{}{}
+	// add share id
+	c.userShares[userid].mtime = now
+	c.userShares[userid].userShares[ssid].mtime = now
+	c.userShares[userid].userShares[ssid].IDs[shareID] = struct{}{}
 	return nil
 }
 
 func (c *shareCache) List(userid string) map[string]spaceShareIDs {
 	r := make(map[string]spaceShareIDs)
-	for k, v := range c.userShares[userid].userShares.GetALL(false) {
-
-		var ssid string
-		var cached *spaceShareIDs
-		var ok bool
-		if ssid, ok = k.(string); !ok {
-			continue
-		}
-		if cached, ok = v.(*spaceShareIDs); !ok {
-			continue
-		}
+	for ssid, cached := range c.userShares[userid].userShares {
 		r[ssid] = spaceShareIDs{
 			mtime: cached.mtime,
 			IDs:   cached.IDs,
