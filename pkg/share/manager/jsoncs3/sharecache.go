@@ -28,7 +28,12 @@ import (
 )
 
 type shareCache struct {
-	userShares map[string]gcache.Cache
+	userShares map[string]*userShareCache
+}
+
+type userShareCache struct {
+	mtime      time.Time
+	userShares gcache.Cache
 }
 
 type spaceShareIDs struct {
@@ -38,14 +43,25 @@ type spaceShareIDs struct {
 
 func NewShareCache() shareCache {
 	return shareCache{
-		userShares: map[string]gcache.Cache{},
+		userShares: map[string]*userShareCache{},
 	}
 }
 
+func (c *shareCache) Has(userid string) bool {
+	return c.userShares[userid] != nil
+}
+func (c *shareCache) Get(userid string) *userShareCache {
+	return c.userShares[userid]
+}
+
 func (c *shareCache) Add(userid, shareID string) error {
-	if c.userShares[userid] == nil {
-		c.userShares[userid] = gcache.New(-1).Simple().Build()
+	now := time.Now()
+	if _, ok := c.userShares[userid]; !ok {
+		c.userShares[userid] = &userShareCache{
+			userShares: gcache.New(-1).Simple().Build(),
+		}
 	}
+	c.userShares[userid].mtime = now
 	storageid, spaceid, _, err := storagespace.SplitID(shareID)
 	if err != nil {
 		return err
@@ -54,12 +70,12 @@ func (c *shareCache) Add(userid, shareID string) error {
 		StorageId: storageid,
 		SpaceId:   spaceid,
 	})
-	v, err := c.userShares[userid].Get(spaceId)
+	v, err := c.userShares[userid].userShares.Get(spaceId)
 	switch {
 	case err == gcache.KeyNotFoundError:
 		// create new entry
-		return c.userShares[userid].Set(spaceId, &spaceShareIDs{
-			mtime: time.Now(),
+		return c.userShares[userid].userShares.Set(spaceId, &spaceShareIDs{
+			mtime: now,
 			IDs:   map[string]struct{}{shareID: {}},
 		})
 	case err != nil:
@@ -73,9 +89,10 @@ func (c *shareCache) Add(userid, shareID string) error {
 	spaceShareIDs.IDs[shareID] = struct{}{}
 	return nil
 }
+
 func (c *shareCache) List(userid string) map[string]spaceShareIDs {
 	r := make(map[string]spaceShareIDs)
-	for k, v := range c.userShares[userid].GetALL(false) {
+	for k, v := range c.userShares[userid].userShares.GetALL(false) {
 
 		var ssid string
 		var cached *spaceShareIDs

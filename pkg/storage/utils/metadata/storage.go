@@ -20,6 +20,10 @@ package metadata
 
 import (
 	"context"
+	"crypto/md5"
+	"encoding/binary"
+	"fmt"
+	"time"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 )
@@ -34,6 +38,7 @@ type Storage interface {
 	SimpleUpload(ctx context.Context, uploadpath string, content []byte) error
 	SimpleDownload(ctx context.Context, path string) ([]byte, error)
 	Delete(ctx context.Context, path string) error
+	Stat(ctx context.Context, path string) (*provider.ResourceInfo, error)
 
 	ReadDir(ctx context.Context, path string) ([]string, error)
 	ListDir(ctx context.Context, path string) ([]*provider.ResourceInfo, error)
@@ -42,4 +47,15 @@ type Storage interface {
 	ResolveSymlink(ctx context.Context, name string) (string, error)
 
 	MakeDirIfNotExist(ctx context.Context, name string) error
+}
+
+func calcEtag(mtime time.Time, size int64) (string, error) {
+	h := md5.New()
+	if err := binary.Write(h, binary.BigEndian, mtime.UnixNano()); err != nil {
+		return "", err
+	}
+	if err := binary.Write(h, binary.BigEndian, size); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%x", h.Sum(nil)), nil
 }

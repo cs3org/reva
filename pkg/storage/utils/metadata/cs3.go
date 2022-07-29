@@ -163,6 +163,34 @@ func (cs3 *CS3) SimpleUpload(ctx context.Context, uploadpath string, content []b
 	return resp.Body.Close()
 }
 
+func (cs3 *CS3) Stat(ctx context.Context, path string) (*provider.ResourceInfo, error) {
+	client, err := cs3.providerClient()
+	if err != nil {
+		return nil, err
+	}
+	ctx, err = cs3.getAuthContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	req := provider.StatRequest{
+		Ref: &provider.Reference{
+			ResourceId: cs3.SpaceRoot,
+			Path:       utils.MakeRelativePath(path),
+		},
+	}
+
+	res, err := client.Stat(ctx, &req)
+	if err != nil {
+		return nil, err
+	}
+	if res.Status.Code != rpc.Code_CODE_OK {
+		return nil, errtypes.NewErrtypeFromStatus(res.Status)
+	}
+
+	return res.Info, nil
+}
+
 // SimpleDownload reads a file from the metadata storage
 func (cs3 *CS3) SimpleDownload(ctx context.Context, downloadpath string) (content []byte, err error) {
 	client, err := cs3.providerClient()

@@ -51,6 +51,27 @@ func (disk *Disk) Backend() string {
 	return "disk"
 }
 
+func (disk *Disk) Stat(ctx context.Context, path string) (*provider.ResourceInfo, error) {
+	info, err := os.Stat(disk.targetPath(path))
+	if err != nil {
+		return nil, err
+	}
+	entry := &provider.ResourceInfo{
+		Type:  provider.ResourceType_RESOURCE_TYPE_FILE,
+		Path:  "./" + info.Name(),
+		Name:  info.Name(),
+		Mtime: &typesv1beta1.Timestamp{Seconds: uint64(info.ModTime().Unix()), Nanos: uint32(info.ModTime().Nanosecond())},
+	}
+	if info.IsDir() {
+		entry.Type = provider.ResourceType_RESOURCE_TYPE_CONTAINER
+	}
+	entry.Etag, err = calcEtag(info.ModTime(), info.Size())
+	if err != nil {
+		return nil, err
+	}
+	return entry, nil
+}
+
 // SimpleUpload stores a file on disk
 func (disk *Disk) SimpleUpload(_ context.Context, uploadpath string, content []byte) error {
 	return os.WriteFile(disk.targetPath(uploadpath), content, 0644)
@@ -104,7 +125,6 @@ func (disk *Disk) ListDir(ctx context.Context, path string) ([]*provider.Resourc
 		if info.IsDir() {
 			entry.Type = provider.ResourceType_RESOURCE_TYPE_CONTAINER
 		}
-		entry.Type = provider.ResourceType_RESOURCE_TYPE_FILE
 		entries = append(entries, entry)
 	}
 	return entries, nil

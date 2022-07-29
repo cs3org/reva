@@ -209,6 +209,29 @@ func (_m *Storage) SimpleUpload(ctx context.Context, uploadpath string, content 
 	return r0
 }
 
+// Stat provides a mock function with given fields: ctx, path
+func (_m *Storage) Stat(ctx context.Context, path string) (*providerv1beta1.ResourceInfo, error) {
+	ret := _m.Called(ctx, path)
+
+	var r0 *providerv1beta1.ResourceInfo
+	if rf, ok := ret.Get(0).(func(context.Context, string) *providerv1beta1.ResourceInfo); ok {
+		r0 = rf(ctx, path)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*providerv1beta1.ResourceInfo)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(context.Context, string) error); ok {
+		r1 = rf(ctx, path)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
 // NewStorage creates a new instance of Storage. It also registers a cleanup function to assert the mocks expectations.
 func NewStorage(t testing.TB) *Storage {
 	mock := &Storage{}

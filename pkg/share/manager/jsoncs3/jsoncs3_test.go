@@ -25,6 +25,7 @@ import (
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	providerv1beta1 "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/share"
 	"github.com/cs3org/reva/v2/pkg/share/manager/jsoncs3"
@@ -95,6 +96,12 @@ var _ = Describe("Json", func() {
 				Permissions: readPermissions,
 			},
 		}
+		cacheStatInfo = &provider.ResourceInfo{
+			Etag:  "someetag",
+			Name:  "created.json",
+			Size:  10,
+			Mtime: &typesv1beta1.Timestamp{},
+		}
 
 		storage    *storagemocks.Storage
 		m          share.Manager
@@ -119,6 +126,7 @@ var _ = Describe("Json", func() {
 		storage.On("Init", mock.Anything, mock.Anything).Return(nil)
 		storage.On("MakeDirIfNotExist", mock.Anything, mock.Anything).Return(nil)
 		storage.On("SimpleUpload", mock.Anything, mock.Anything, mock.Anything).Return(nil)
+		storage.On("Stat", mock.Anything, mock.Anything).Return(cacheStatInfo, nil)
 
 		var err error
 		m, err = jsoncs3.New(storage)

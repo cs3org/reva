@@ -472,32 +472,46 @@ func (m *manager) ListShares(ctx context.Context, filters []*collaboration.Filte
 		return nil, err
 	}*/
 
+	m.Lock()
+	defer m.Unlock()
+	//log := appctx.GetLogger(ctx)
+	user := ctxpkg.ContextMustGetUser(ctx)
+	var ss []*collaboration.Share
+
 	// Q: how do we detect that a created list changed?
 	// Option 1: we rely on etag propagation on the storage to bubble up changes in any space to a single created list
 	//           - drawback should stop etag propagation at /{userid}/ to prevent further propagation to the root of the share provider space
 	//           - we could use the user.ocis.propagation xattr in decomposedfs or the eos equivalent to optimize the storage
 	//           - pro: more efficient, more elegant
 	//           - con: more complex, does not work on plain posix
-	// Option 2: we touch /{userid}/created/{storageid}/{spaceid},
-	//                    /{userid}/created/{storageid} and
-	//                    /{userid}/created ourself
-	//           - pro: easier to implement, works on plain posix
-	//           - con: more requests
+	// Option 2: we stat users/{userid}/created.json
+	//           - pro: easier to implement, works on plain posix, no folders
 	// Can this be hidden behind the metadata storage interface?
 	// Decision: use touch for now as it works withe plain posix and is easier to test
 
-	// TODO check mtime of /users/{userid}/created/
-	// check if a created or owned filter is set
-	//  - do we have a cached list of created shares for the user in memory?
-	//    - y: set if-not-match etag or mtime header to only get a listing if it changed
-	//  - PROPFIND /users/{userid}/created/
-	//  - update cached list of created shares for the user in memory if changed
+	// TODO check if a created or owned filter is set
+	userid := user.Id.OpaqueId
 
-	m.Lock()
-	defer m.Unlock()
-	//log := appctx.GetLogger(ctx)
-	user := ctxpkg.ContextMustGetUser(ctx)
-	var ss []*collaboration.Share
+	var mtime time.Time
+	//  - do we have a cached list of created shares for the user in memory?
+	if usc := m.createdCache.Get(userid); usc != nil {
+		mtime = usc.mtime
+		//    - y: set If-Modified-Since header to only download if it changed
+	}
+	//  - read /users/{userid}/created.json (with If-Modified-Since header) aka read if changed
+	userCreatedPath := filepath.Join("/users", userid, "created.json")
+	// check mtime of /users/{userid}/created.json
+	info, err := m.storage.Stat(ctx, userCreatedPath)
+	if err != nil {
+		// TODO check other cases, we currently only assume it does not exist
+		return ss, nil
+	}
+	if utils.TSToTime(info.Mtime).After(mtime) {
+		//  - update cached list of created shares for the user in memory if changed
+		m.storage.SimpleDownload(ctx, userCreatedPath)
+		// rip out gcache so we can marshal / unmarshal the shareCache struct
+
+	}
 
 	for ssid, spaceShareIDs := range m.createdCache.List(user.Id.OpaqueId) {
 		if time.Now().Sub(spaceShareIDs.mtime) > time.Second*30 {
@@ -536,6 +550,11 @@ func (m *manager) ListReceivedShares(ctx context.Context, filters []*collaborati
 
 	var rss []*collaboration.ReceivedShare
 	user := ctxpkg.ContextMustGetUser(ctx)
+
+	// Q: how do we detect that a received list changed?
+	// - similar to the created.json we stat and download a received.json
+	// con: when adding a received share we MUST have if-match for the initiate-file-upload request
+	//      to ensure consistency / prevent lost updates
 
 	ssids := map[string]receivedSpace{}
 
