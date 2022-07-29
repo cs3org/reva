@@ -408,6 +408,7 @@ func (m *manager) GetShare(ctx context.Context, ref *collaboration.ShareReferenc
 		return nil, err
 	}
 	// check if we are the creator or the grantee
+	// TODO allow manager to get shares in a space created by other users
 	user := ctxpkg.ContextMustGetUser(ctx)
 	if share.IsCreatedByUser(s, user) || share.IsGrantedToUser(s, user) {
 		return s, nil
@@ -425,6 +426,7 @@ func (m *manager) Unshare(ctx context.Context, ref *collaboration.ShareReference
 	if err != nil {
 		return err
 	}
+	// TODO allow manager to unshare shares in a space created by other users
 	if !share.IsCreatedByUser(s, user) {
 		// TODO why not permission denied?
 		return errtypes.NotFound(ref.String())
