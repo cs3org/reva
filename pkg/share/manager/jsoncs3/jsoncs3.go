@@ -70,7 +70,8 @@ type config struct {
 }
 
 type providerCache map[string]providerSpaces
-type providerSpaces map[string]gcache.Cache
+type providerSpaces map[string]providerShares
+type providerShares map[string]*collaboration.Share
 
 type receivedCache map[string]gcache.Cache
 type receivedSpace struct {
@@ -298,9 +299,9 @@ func (m *manager) Share(ctx context.Context, md *provider.ResourceInfo, g *colla
 		m.cache[md.Id.StorageId] = providerSpaces{}
 	}
 	if m.cache[md.Id.StorageId][md.Id.SpaceId] == nil {
-		m.cache[md.Id.StorageId][md.Id.SpaceId] = gcache.New(-1).Simple().Build()
+		m.cache[md.Id.StorageId][md.Id.SpaceId] = providerShares{}
 	}
-	m.cache[md.Id.StorageId][md.Id.SpaceId].Set(s.Id.OpaqueId, s)
+	m.cache[md.Id.StorageId][md.Id.SpaceId][s.Id.OpaqueId] = s
 
 	err = m.setCreatedCache(ctx, s.GetCreator().GetOpaqueId(), shareID)
 	if err != nil {
@@ -360,11 +361,9 @@ func (m *manager) getByID(id *collaboration.ShareId) (*collaboration.Share, erro
 	}
 	if providerSpaces, ok := m.cache[shareid.StorageId]; ok {
 		if spaceShares, ok := providerSpaces[shareid.SpaceId]; ok {
-			for _, value := range spaceShares.GetALL(false) {
-				if share, ok := value.(*collaboration.Share); ok {
-					if share.GetId().OpaqueId == id.OpaqueId {
-						return share, nil
-					}
+			for _, share := range spaceShares {
+				if share.GetId().OpaqueId == id.OpaqueId {
+					return share, nil
 				}
 			}
 		}
@@ -376,11 +375,9 @@ func (m *manager) getByID(id *collaboration.ShareId) (*collaboration.Share, erro
 func (m *manager) getByKey(key *collaboration.ShareKey) (*collaboration.Share, error) {
 	if providerSpaces, ok := m.cache[key.ResourceId.StorageId]; ok {
 		if spaceShares, ok := providerSpaces[key.ResourceId.SpaceId]; ok {
-			for _, value := range spaceShares.GetALL(false) {
-				if share, ok := value.(*collaboration.Share); ok {
-					if utils.GranteeEqual(key.Grantee, share.Grantee) {
-						return share, nil
-					}
+			for _, share := range spaceShares {
+				if utils.GranteeEqual(key.Grantee, share.Grantee) {
+					return share, nil
 				}
 			}
 		}
@@ -434,7 +431,7 @@ func (m *manager) Unshare(ctx context.Context, ref *collaboration.ShareReference
 	}
 
 	shareid, err := storagespace.ParseID(s.Id.OpaqueId)
-	m.cache[shareid.StorageId][shareid.SpaceId].Remove(s.Id.OpaqueId)
+	delete(m.cache[shareid.StorageId][shareid.SpaceId], s.Id.OpaqueId)
 
 	// remove from created cache
 	err = m.removeFromCreatedCache(ctx, s.GetCreator().GetOpaqueId(), s.Id.OpaqueId)
@@ -575,15 +572,13 @@ func (m *manager) ListShares(ctx context.Context, filters []*collaboration.Filte
 		if providerSpaces, ok := m.cache[providerid]; ok {
 			if spaceShares, ok := providerSpaces[spaceid]; ok {
 				for shareid, _ := range spaceShareIDs.IDs {
-					v, err := spaceShares.Get(shareid)
-					if err != nil {
+					s := spaceShares[shareid]
+					if s == nil {
 						continue
 					}
-					if s, ok := v.(*collaboration.Share); ok {
-						if utils.UserEqual(user.GetId(), s.GetCreator()) {
-							if share.MatchesFilters(s, filters) {
-								ss = append(ss, s)
-							}
+					if utils.UserEqual(user.GetId(), s.GetCreator()) {
+						if share.MatchesFilters(s, filters) {
+							ss = append(ss, s)
 						}
 					}
 				}
@@ -670,20 +665,18 @@ func (m *manager) ListReceivedShares(ctx context.Context, filters []*collaborati
 		if providerSpaces, ok := m.cache[providerid]; ok {
 			if spaceShares, ok := providerSpaces[spaceid]; ok {
 				for shareId, state := range rspace.receivedShareStates {
-					value, err := spaceShares.Get(shareId)
-					if err != nil {
+					s := spaceShares[shareId]
+					if s == nil {
 						continue
 					}
-					if s, ok := value.(*collaboration.Share); ok {
-						if utils.UserEqual(user.GetId(), s.GetGrantee().GetUserId()) {
-							if share.MatchesFilters(s, filters) {
-								rs := &collaboration.ReceivedShare{
-									Share:      s,
-									State:      state.state,
-									MountPoint: state.mountPoint,
-								}
-								rss = append(rss, rs)
+					if utils.UserEqual(user.GetId(), s.GetGrantee().GetUserId()) {
+						if share.MatchesFilters(s, filters) {
+							rs := &collaboration.ReceivedShare{
+								Share:      s,
+								State:      state.state,
+								MountPoint: state.mountPoint,
 							}
+							rss = append(rss, rs)
 						}
 					}
 				}
