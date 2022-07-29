@@ -302,16 +302,8 @@ func (m *manager) Share(ctx context.Context, md *provider.ResourceInfo, g *colla
 	}
 	m.cache[md.Id.StorageId][md.Id.SpaceId].Set(s.Id.OpaqueId, s)
 
-	// set flag for creator to have access to space
-	if err := m.createdCache.Add(user.Id.OpaqueId, shareID); err != nil {
-		return nil, err
-	}
-	createdBytes, err := json.Marshal(m.createdCache.GetShareCache(user.Id.OpaqueId))
+	err = m.setCreatedCache(ctx, s.GetCreator().GetOpaqueId(), shareID)
 	if err != nil {
-		return nil, err
-	}
-	// FIXME needs stat & upload if match combo to prevent lost update in redundant deployments
-	if err := m.storage.SimpleUpload(ctx, userCreatedPath(user.Id.OpaqueId), createdBytes); err != nil {
 		return nil, err
 	}
 
@@ -319,7 +311,7 @@ func (m *manager) Share(ctx context.Context, md *provider.ResourceInfo, g *colla
 		StorageId: md.Id.StorageId,
 		SpaceId:   md.Id.SpaceId,
 	})
-	// set flag for grantee to have access to space
+	// set flag for grantee to have access to share
 	switch g.Grantee.Type {
 	case provider.GranteeType_GRANTEE_TYPE_USER:
 		userid := g.Grantee.GetUserId().GetOpaqueId()
@@ -445,20 +437,28 @@ func (m *manager) Unshare(ctx context.Context, ref *collaboration.ShareReference
 	m.cache[shareid.StorageId][shareid.SpaceId].Remove(s.Id.OpaqueId)
 
 	// remove from created cache
-	if err := m.createdCache.Remove(s.GetCreator().GetOpaqueId(), s.Id.OpaqueId); err != nil {
+	err = m.removeFromCreatedCache(ctx, s.GetCreator().GetOpaqueId(), s.Id.OpaqueId)
+	if err != nil {
 		return err
 	}
-	createdBytes, err := json.Marshal(m.createdCache.GetShareCache(user.Id.OpaqueId))
+
+	// TODO remove from grantee cache
+
+	return nil
+}
+
+func (m *manager) removeFromCreatedCache(ctx context.Context, creatorid, shareid string) error {
+	if err := m.createdCache.Remove(creatorid, shareid); err != nil {
+		return err
+	}
+	createdBytes, err := json.Marshal(m.createdCache.GetShareCache(creatorid))
 	if err != nil {
 		return err
 	}
 	// FIXME needs stat & upload if match combo to prevent lost update in redundant deployments
-	if err := m.storage.SimpleUpload(ctx, userCreatedPath(user.Id.OpaqueId), createdBytes); err != nil {
+	if err := m.storage.SimpleUpload(ctx, userCreatedPath(creatorid), createdBytes); err != nil {
 		return err
 	}
-
-	// remove from grantee cache
-
 	return nil
 }
 
@@ -482,12 +482,27 @@ func (m *manager) UpdateShare(ctx context.Context, ref *collaboration.ShareRefer
 		Nanos:   uint32(now % int64(time.Second)),
 	}
 
-	// FIXME actually persist
-	// if err := m.model.Save(); err != nil {
-	// 	err = errors.Wrap(err, "error saving model")
-	// 	return nil, err
-	// }
+	err = m.setCreatedCache(ctx, s.GetCreator().GetOpaqueId(), s.Id.OpaqueId)
+	if err != nil {
+		return nil, err
+	}
+
 	return s, nil
+}
+
+func (m *manager) setCreatedCache(ctx context.Context, creatorid, shareid string) error {
+	if err := m.createdCache.Add(creatorid, shareid); err != nil {
+		return err
+	}
+	createdBytes, err := json.Marshal(m.createdCache.GetShareCache(creatorid))
+	if err != nil {
+		return err
+	}
+	// FIXME needs stat & upload if match combo to prevent lost update in redundant deployments
+	if err := m.storage.SimpleUpload(ctx, userCreatedPath(creatorid), createdBytes); err != nil {
+		return err
+	}
+	return nil
 }
 
 // ListShares

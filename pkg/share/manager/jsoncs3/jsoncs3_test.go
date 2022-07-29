@@ -37,7 +37,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var _ = Describe("Json", func() {
+var _ = Describe("Jsoncs3", func() {
 	var (
 		user1 = &userpb.User{
 			Id: &userpb.UserId{
