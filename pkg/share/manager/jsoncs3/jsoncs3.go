@@ -472,6 +472,27 @@ func (m *manager) ListShares(ctx context.Context, filters []*collaboration.Filte
 		return nil, err
 	}*/
 
+	// Q: how do we detect that a created list changed?
+	// Option 1: we rely on etag propagation on the storage to bubble up changes in any space to a single created list
+	//           - drawback should stop etag propagation at /{userid}/ to prevent further propagation to the root of the share provider space
+	//           - we could use the user.ocis.propagation xattr in decomposedfs or the eos equivalent to optimize the storage
+	//           - pro: more efficient, more elegant
+	//           - con: more complex, does not work on plain posix
+	// Option 2: we touch /{userid}/created/{storageid}/{spaceid},
+	//                    /{userid}/created/{storageid} and
+	//                    /{userid}/created ourself
+	//           - pro: easier to implement, works on plain posix
+	//           - con: more requests
+	// Can this be hidden behind the metadata storage interface?
+	// Decision: use touch for now as it works withe plain posix and is easier to test
+
+	// TODO check mtime of /users/{userid}/created/
+	// check if a created or owned filter is set
+	//  - do we have a cached list of created shares for the user in memory?
+	//    - y: set if-not-match etag or mtime header to only get a listing if it changed
+	//  - PROPFIND /users/{userid}/created/
+	//  - update cached list of created shares for the user in memory if changed
+
 	m.Lock()
 	defer m.Unlock()
 	//log := appctx.GetLogger(ctx)
