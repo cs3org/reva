@@ -299,6 +299,7 @@ func (fs *cback) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys
 
 func (fs *cback) Download(ctx context.Context, ref *provider.Reference) (io.ReadCloser, error) {
 	var path string = ref.GetPath()
+	fmt.Printf("\n\nThe path being delivered by Download is : %v\n\n", ref.Path)
 	var ssId, searchPath string
 	user, _ := ctxpkg.ContextGetUser(ctx)
 
