@@ -143,7 +143,7 @@ func (fs *Decomposedfs) CreateStorageSpace(ctx context.Context, req *provider.Cr
 		return nil, err
 	}
 
-	ctx = context.WithValue(ctx, utils.SpaceGrant, struct{}{})
+	ctx = context.WithValue(ctx, utils.SpaceGrant, struct{ SpaceType string }{SpaceType: req.Type})
 
 	if req.Type != spaceTypePersonal {
 		u := ctxpkg.ContextMustGetUser(ctx)
@@ -287,7 +287,7 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 		return nil, errtypes.PermissionDenied(fmt.Sprintf("user %s is not allowed to list spaces of other users", authenticatedUserID))
 	}
 
-	checkNodePermissions := fs.MustCheckNodePermissions(ctx, requestedUserID, unrestricted)
+	checkNodePermissions := fs.MustCheckNodePermissions(ctx, unrestricted)
 
 	spaces := []*provider.StorageSpace{}
 	// build the glob path, eg.
@@ -433,15 +433,14 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 }
 
 // MustCheckNodePermissions checks if permission checks are needed to be performed when user requests spaces
-func (fs *Decomposedfs) MustCheckNodePermissions(ctx context.Context, requestedUserID string, unrestricted bool) bool {
+func (fs *Decomposedfs) MustCheckNodePermissions(ctx context.Context, unrestricted bool) bool {
+	// canListAllSpaces indicates if the user has the permission from the global user role
 	canListAllSpaces := fs.canListAllSpaces(ctx)
-	switch {
-	case canListAllSpaces && !unrestricted:
-		return true
-	case (canListAllSpaces && requestedUserID == userIDAny):
-		// admins should not see any other spaces when they request their own, without settings filters
-		return true
-	case canListAllSpaces, unrestricted:
+	// unrestricted is the param which indicates if the user wants to list all spaces or only the spaces he is part of
+	// if a user lists all spaces unrestricted and doesn't have the permissions from the role, we need to check
+	// the nodePermissions and this will return a spaces list where the user has access to
+	// we can only skip the NodePermissions check if both values are true
+	if canListAllSpaces && unrestricted {
 		return false
 	}
 	return true

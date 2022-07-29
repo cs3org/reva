@@ -980,11 +980,15 @@ func (s *service) AddGrant(ctx context.Context, req *provider.AddGrantRequest) (
 
 	// TODO: update CS3 APIs
 	// FIXME these should be part of the AddGrantRequest object
-	if req.Opaque != nil {
-		_, spacegrant := req.Opaque.Map["spacegrant"]
-		if spacegrant {
-			ctx = context.WithValue(ctx, utils.SpaceGrant, struct{}{})
-		}
+	// https://github.com/owncloud/ocis/issues/4312
+	if utils.ExistsInOpaque(req.Opaque, "spacegrant") {
+		ctx = context.WithValue(
+			ctx,
+			utils.SpaceGrant,
+			struct{ SpaceType string }{
+				SpaceType: utils.ReadPlainFromOpaque(req.Opaque, "spacetype"),
+			},
+		)
 	}
 
 	// check grantee type is valid
@@ -1031,6 +1035,13 @@ func (s *service) RemoveGrant(ctx context.Context, req *provider.RemoveGrantRequ
 		return &provider.RemoveGrantResponse{
 			Status: status.NewInvalid(ctx, "grantee type is invalid"),
 		}, nil
+	}
+
+	// TODO: update CS3 APIs
+	// FIXME these should be part of the RemoveGrantRequest object
+	// https://github.com/owncloud/ocis/issues/4312
+	if utils.ExistsInOpaque(req.Opaque, "spacegrant") {
+		ctx = context.WithValue(ctx, utils.SpaceGrant, struct{}{})
 	}
 
 	err := s.storage.RemoveGrant(ctx, req.Ref, req.Grant)
