@@ -127,11 +127,18 @@ func (m *manager) Authenticate(ctx context.Context, token, secret string) (*user
 		return nil, nil, errtypes.InternalError(publicShareResponse.Status.Message)
 	}
 
-	getUserResponse, err := gwConn.GetUser(ctx, &userprovider.GetUserRequest{
-		UserId: publicShareResponse.GetShare().GetCreator(),
-	})
-	if err != nil {
-		return nil, nil, err
+	var owner *user.User
+	// FIXME use new user type SPACE_OWNER
+	if publicShareResponse.GetShare().GetOwner().Type == 8 {
+		owner = &user.User{Id: publicShareResponse.GetShare().GetOwner(), DisplayName: "Public", Username: "public"}
+	} else {
+		getUserResponse, err := gwConn.GetUser(ctx, &userprovider.GetUserRequest{
+			UserId: publicShareResponse.GetShare().GetCreator(),
+		})
+		if err != nil {
+			return nil, nil, err
+		}
+		owner = getUserResponse.GetUser()
 	}
 
 	share := publicShareResponse.GetShare()
@@ -150,8 +157,7 @@ func (m *manager) Authenticate(ctx context.Context, token, secret string) (*user
 		return nil, nil, err
 	}
 
-	u := getUserResponse.GetUser()
-	u.Opaque = &types.Opaque{
+	owner.Opaque = &types.Opaque{
 		Map: map[string]*types.OpaqueEntry{
 			"public-share-role": {
 				Decoder: "plain",
@@ -160,7 +166,7 @@ func (m *manager) Authenticate(ctx context.Context, token, secret string) (*user
 		},
 	}
 
-	return u, scope, nil
+	return owner, scope, nil
 }
 
 // ErrPasswordNotProvided is returned when the public share is password protected, but there was no password on the request

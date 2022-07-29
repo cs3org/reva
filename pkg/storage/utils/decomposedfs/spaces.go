@@ -100,10 +100,14 @@ func (fs *Decomposedfs) CreateStorageSpace(ctx context.Context, req *provider.Cr
 	if err := root.WriteAllNodeMetadata(); err != nil {
 		return nil, err
 	}
+	var owner *userv1beta1.UserId
 	if req.GetOwner() != nil && req.GetOwner().GetId() != nil {
-		if err := root.WriteOwner(req.GetOwner().GetId()); err != nil {
-			return nil, err
-		}
+		owner = req.GetOwner().GetId()
+	} else {
+		owner = &userv1beta1.UserId{OpaqueId: spaceID, Type: 8}
+	}
+	if err := root.WriteOwner(owner); err != nil {
+		return nil, err
 	}
 
 	err = fs.updateIndexes(ctx, req.GetOwner().GetId().GetOpaqueId(), req.Type, root.ID)

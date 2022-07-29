@@ -347,11 +347,32 @@ func (m *Manager) ListPublicShares(ctx context.Context, u *user.User, filters []
 	}
 
 	log := appctx.GetLogger(ctx)
+	var rID *provider.ResourceId
+	if len(filters) != 0 {
+		grouped := publicshare.GroupFiltersByType(filters)
+		for _, f := range grouped {
+			for _, f := range f {
+				if f.GetResourceId() != nil {
+					rID = f.GetResourceId()
+				}
+			}
+		}
+	}
+	var createdShareTokens []string
+	var err error
+	// in spaces, always use the resourceId
+	if rID != nil {
+		createdShareTokens, err = m.indexer.FindBy(&link.PublicShare{},
+			indexer.NewField("ResourceId", resourceIDToIndex(rID)),
+		)
+	} else {
+		// fallback for legacy use
+		createdShareTokens, err = m.indexer.FindBy(&link.PublicShare{},
+			indexer.NewField("Owner", userIDToIndex(u.Id)),
+			indexer.NewField("Creator", userIDToIndex(u.Id)),
+		)
+	}
 
-	createdShareTokens, err := m.indexer.FindBy(&link.PublicShare{},
-		indexer.NewField("Owner", userIDToIndex(u.Id)),
-		indexer.NewField("Creator", userIDToIndex(u.Id)),
-	)
 	if err != nil {
 		return nil, err
 	}
