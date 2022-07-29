@@ -48,7 +48,7 @@ func NewShareCache() shareCache {
 func (c *shareCache) Has(userid string) bool {
 	return c.userShares[userid] != nil
 }
-func (c *shareCache) Get(userid string) *userShareCache {
+func (c *shareCache) GetShareCache(userid string) *userShareCache {
 	return c.userShares[userid]
 }
 

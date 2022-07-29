@@ -277,13 +277,13 @@ func (m *manager) Share(ctx context.Context, md *provider.ResourceInfo, g *colla
 			OpaqueId:  uuid.NewString(),
 		},
 	}
-	id, err := storagespace.FormatReference(shareReference)
+	shareID, err := storagespace.FormatReference(shareReference)
 	if err != nil {
 		return nil, err
 	}
 	s := &collaboration.Share{
 		Id: &collaboration.ShareId{
-			OpaqueId: id,
+			OpaqueId: shareID,
 		},
 		ResourceId:  md.Id,
 		Permissions: g.Permissions,
@@ -303,11 +303,19 @@ func (m *manager) Share(ctx context.Context, md *provider.ResourceInfo, g *colla
 	m.cache[md.Id.StorageId][md.Id.SpaceId].Set(s.Id.OpaqueId, s)
 
 	// set flag for creator to have access to space
-	if err := m.createdCache.Add(user.Id.OpaqueId, id); err != nil {
+	if err := m.createdCache.Add(user.Id.OpaqueId, shareID); err != nil {
+		return nil, err
+	}
+	createdBytes, err := json.Marshal(m.createdCache.GetShareCache(user.Id.OpaqueId))
+	if err != nil {
+		return nil, err
+	}
+	// FIXME needs stat & upload if match combo to prevent lost update in redundant deployments
+	if err := m.storage.SimpleUpload(ctx, userCreatedPath(user.Id.OpaqueId), createdBytes); err != nil {
 		return nil, err
 	}
 
-	spaceId := storagespace.FormatResourceID(provider.ResourceId{
+	spaceID := storagespace.FormatResourceID(provider.ResourceId{
 		StorageId: md.Id.StorageId,
 		SpaceId:   md.Id.SpaceId,
 	})
@@ -318,13 +326,13 @@ func (m *manager) Share(ctx context.Context, md *provider.ResourceInfo, g *colla
 		if m.userReceivedStates[userid] == nil {
 			m.userReceivedStates[userid] = gcache.New(-1).Simple().Build() // receivedSpaces
 		}
-		if !m.userReceivedStates[userid].Has(spaceId) {
-			err := m.userReceivedStates[userid].Set(spaceId, receivedSpace{})
+		if !m.userReceivedStates[userid].Has(spaceID) {
+			err := m.userReceivedStates[userid].Set(spaceID, receivedSpace{})
 			if err != nil {
 				return nil, err
 			}
 		}
-		val, err := m.userReceivedStates[userid].GetIFPresent(spaceId)
+		val, err := m.userReceivedStates[userid].GetIFPresent(spaceID)
 		if err != nil && err != gcache.KeyNotFoundError {
 			return nil, err
 		}
@@ -336,14 +344,14 @@ func (m *manager) Share(ctx context.Context, md *provider.ResourceInfo, g *colla
 		if receivedSpace.receivedShareStates == nil {
 			receivedSpace.receivedShareStates = map[string]receivedShareState{}
 		}
-		receivedSpace.receivedShareStates[id] = receivedShareState{
+		receivedSpace.receivedShareStates[shareID] = receivedShareState{
 			state: collaboration.ShareState_SHARE_STATE_PENDING,
 			// mountpoint stays empty until user accepts the share
 		}
-		m.userReceivedStates[userid].Set(spaceId, receivedSpace)
+		m.userReceivedStates[userid].Set(spaceID, receivedSpace)
 	case provider.GranteeType_GRANTEE_TYPE_GROUP:
 		groupid := g.Grantee.GetGroupId().GetOpaqueId()
-		if err := m.groupReceivedCache.Add(groupid, id); err != nil {
+		if err := m.groupReceivedCache.Add(groupid, shareID); err != nil {
 			return nil, err
 		}
 	}
@@ -495,12 +503,14 @@ func (m *manager) ListShares(ctx context.Context, filters []*collaboration.Filte
 
 	var mtime time.Time
 	//  - do we have a cached list of created shares for the user in memory?
-	if usc := m.createdCache.Get(userid); usc != nil {
+	if usc := m.createdCache.GetShareCache(userid); usc != nil {
 		mtime = usc.mtime
 		//    - y: set If-Modified-Since header to only download if it changed
+	} else {
+		mtime = time.Now()
 	}
 	//  - read /users/{userid}/created.json (with If-Modified-Since header) aka read if changed
-	userCreatedPath := filepath.Join("/users", userid, "created.json")
+	userCreatedPath := userCreatedPath(userid)
 	// check mtime of /users/{userid}/created.json
 	info, err := m.storage.Stat(ctx, userCreatedPath)
 	if err != nil {
@@ -522,7 +532,6 @@ func (m *manager) ListShares(ctx context.Context, filters []*collaboration.Filte
 		} else {
 			// TODO log error but continue with current cached data
 		}
-
 	}
 
 	for ssid, spaceShareIDs := range m.createdCache.List(user.Id.OpaqueId) {
@@ -553,6 +562,11 @@ func (m *manager) ListShares(ctx context.Context, filters []*collaboration.Filte
 	}
 
 	return ss, nil
+}
+
+func userCreatedPath(userid string) string {
+	userCreatedPath := filepath.Join("/users", userid, "created.json")
+	return userCreatedPath
 }
 
 // we list the shares that are targeted to the user in context or to the user groups.
