@@ -100,6 +100,25 @@ func (StartPostprocessingStep) Unmarshal(v []byte) (interface{}, error) {
 	return e, err
 }
 
+// PostprocessingStepFinished can be issued by the server when a postprocessing step is finished
+type PostprocessingStepFinished struct {
+	UploadID      string
+	ExecutingUser *user.User
+	Filename      string
+
+	FinishedStep Postprocessingstep    // name of the step
+	Result       interface{}           // result information
+	Error        error                 // possible error of the step
+	Outcome      PostprocessingOutcome // some services may cause postprocessing to stop
+}
+
+// Unmarshal to fulfill umarshaller interface
+func (PostprocessingStepFinished) Unmarshal(v []byte) (interface{}, error) {
+	e := PostprocessingStepFinished{}
+	err := json.Unmarshal(v, &e)
+	return e, err
+}
+
 // PostprocessingFinished is emitted by *some* service which can decide that
 type PostprocessingFinished struct {
 	UploadID      string
