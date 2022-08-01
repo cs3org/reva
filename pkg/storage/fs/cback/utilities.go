@@ -256,3 +256,37 @@ func (fs *cback) timeConv(timeInput string) (int64, error) {
 	epoch := tm.Unix()
 	return epoch, nil
 }
+
+func (fs *cback) pathFinder(userName, path string) ([]string, error) {
+	url := "http://cback-portal-dev-01:8000/backups/"
+	requestType := "GET"
+	responseData, err := fs.getRequest(userName, url, requestType)
+
+	if err != nil {
+		return nil, err
+	}
+
+	defer responseData.Close()
+
+	/*Unmarshalling the JSON response into the Response struct*/
+	responseObject := []BackUpResponse{}
+	json.NewDecoder(responseData).Decode(&responseObject)
+
+	returnString := make([]string, len(responseObject))
+
+	for i := range responseObject {
+		if responseObject[i].Detail != "" {
+			err = errors.New(responseObject[i].Detail)
+			return nil, err
+		}
+
+		if strings.HasPrefix(responseObject[i].Source, path) {
+			substr := strings.TrimPrefix(responseObject[i].Source, path)
+			substr = strings.TrimLeft(substr, "/")
+			responseObject[i].Substring = substr
+			temp := strings.Split(substr, "/")
+			returnString[i] = temp[0]
+		}
+	}
+	return returnString, nil
+}

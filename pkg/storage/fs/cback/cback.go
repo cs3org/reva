@@ -155,8 +155,7 @@ func (fs *cback) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []st
 }
 
 func (fs *cback) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys []string) ([]*provider.ResourceInfo, error) {
-	//Implement this
-	//Fix the ID part
+
 	var path string = ref.GetPath()
 	var ssId, searchPath string
 
@@ -172,49 +171,26 @@ func (fs *cback) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys
 		return nil, err
 	}
 
-	snapshotList, err := fs.listSnapshots(user.Username, resp.Id)
-
-	if err != nil {
-		fmt.Print(err)
-		return nil, err
-	}
-
-	if resp.Substring != "" {
-		for _, snapshot := range snapshotList {
-
-			if snapshot.Id == resp.Substring {
-				ssId = resp.Substring
-				searchPath = resp.Source
-				break
-
-			} else if strings.HasPrefix(resp.Substring, snapshot.Id) {
-				searchPath = strings.TrimPrefix(resp.Substring, snapshot.Id)
-				searchPath = resp.Source + searchPath
-				ssId = snapshot.Id
-				break
-			}
-		}
-
-		//If no match in path, therefore prints the files
-		fmt.Printf("The ssId is: %v\nThe Path is %v\n", ssId, searchPath)
-		ret, err := fs.fileSystem(resp.Id, ssId, user.Username, searchPath, resp.Source)
+	if resp == nil {
+		pathList, err := fs.pathFinder(user.Username, ref.Path)
 
 		if err != nil {
 			fmt.Print(err)
 			return nil, err
 		}
 
-		files := make([]*provider.ResourceInfo, len(ret))
+		files := make([]*provider.ResourceInfo, len(pathList))
 
-		for index, j := range ret {
+		for i, paths := range pathList {
 
 			setTime := v1beta1.Timestamp{
-				Seconds: j.Mtime,
+				//Ask about this time
+				Seconds: 0,
 				Nanos:   0,
 			}
 
 			ident := provider.ResourceId{
-				OpaqueId:  j.Path,
+				OpaqueId:  ref.Path + paths,
 				StorageId: "cback",
 			}
 
@@ -227,73 +203,143 @@ func (fs *cback) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys
 				Mtime:         &setTime,
 				Id:            &ident,
 				Checksum:      &checkSum,
-				Path:          j.Path,
+				Path:          ref.Path + paths,
 				Owner:         UId,
 				PermissionSet: &PermID,
-				Type:          provider.ResourceType(j.Type),
-				Size:          j.Size,
+				Type:          provider.ResourceType_RESOURCE_TYPE_CONTAINER,
+				Size:          0,
 				Etag:          "",
+				MimeType:      mime.Detect(true, ref.Path+paths),
 			}
-
-			if j.Type == 2 {
-				f.MimeType = mime.Detect(true, j.Path)
-			} else {
-				f.MimeType = mime.Detect(false, j.Path)
-			}
-
-			files[index] = &f
+			files[i] = &f
 		}
 
 		return files, nil
-
 	} else {
-		//If match in path, therefore prints the Snapshots
-		files := make([]*provider.ResourceInfo, len(snapshotList))
 
-		for index, snapshot := range snapshotList {
+		snapshotList, err := fs.listSnapshots(user.Username, resp.Id)
 
-			epochTime, err := fs.timeConv(snapshot.Time)
+		if err != nil {
+			fmt.Print(err)
+			return nil, err
+		}
+
+		if resp.Substring != "" {
+			for _, snapshot := range snapshotList {
+
+				if snapshot.Id == resp.Substring {
+					ssId = resp.Substring
+					searchPath = resp.Source
+					break
+
+				} else if strings.HasPrefix(resp.Substring, snapshot.Id) {
+					searchPath = strings.TrimPrefix(resp.Substring, snapshot.Id)
+					searchPath = resp.Source + searchPath
+					ssId = snapshot.Id
+					break
+				}
+			}
+
+			//If no match in path, therefore prints the files
+			fmt.Printf("The ssId is: %v\nThe Path is %v\n", ssId, searchPath)
+			ret, err := fs.fileSystem(resp.Id, ssId, user.Username, searchPath, resp.Source)
 
 			if err != nil {
+				fmt.Print(err)
 				return nil, err
 			}
 
-			checkSum := provider.ResourceChecksum{
-				Sum:  "",
-				Type: provider.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_UNSET,
+			files := make([]*provider.ResourceInfo, len(ret))
+
+			for index, j := range ret {
+
+				setTime := v1beta1.Timestamp{
+					Seconds: j.Mtime,
+					Nanos:   0,
+				}
+
+				ident := provider.ResourceId{
+					OpaqueId:  j.Path,
+					StorageId: "cback",
+				}
+
+				checkSum := provider.ResourceChecksum{
+					Sum:  "",
+					Type: provider.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_UNSET,
+				}
+
+				f := provider.ResourceInfo{
+					Mtime:         &setTime,
+					Id:            &ident,
+					Checksum:      &checkSum,
+					Path:          j.Path,
+					Owner:         UId,
+					PermissionSet: &PermID,
+					Type:          provider.ResourceType(j.Type),
+					Size:          j.Size,
+					Etag:          "",
+				}
+
+				if j.Type == 2 {
+					f.MimeType = mime.Detect(true, j.Path)
+				} else {
+					f.MimeType = mime.Detect(false, j.Path)
+				}
+
+				files[index] = &f
 			}
 
-			ident := provider.ResourceId{
-				OpaqueId:  ref.Path + "/" + snapshot.Id,
-				StorageId: "cback",
+			return files, nil
+
+		} else {
+			//If match in path, therefore prints the Snapshots
+			files := make([]*provider.ResourceInfo, len(snapshotList))
+
+			for index, snapshot := range snapshotList {
+
+				epochTime, err := fs.timeConv(snapshot.Time)
+
+				if err != nil {
+					return nil, err
+				}
+
+				checkSum := provider.ResourceChecksum{
+					Sum:  "",
+					Type: provider.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_UNSET,
+				}
+
+				ident := provider.ResourceId{
+					OpaqueId:  ref.Path + "/" + snapshot.Id,
+					StorageId: "cback",
+				}
+
+				setTime := v1beta1.Timestamp{
+					Seconds: uint64(epochTime),
+					Nanos:   0,
+				}
+
+				f := provider.ResourceInfo{
+
+					Path:          ref.Path + "/" + snapshot.Id,
+					Checksum:      &checkSum,
+					Etag:          "",
+					Owner:         UId,
+					PermissionSet: &PermID,
+					Id:            &ident,
+					MimeType:      mime.Detect(true, ref.Path+"/"+snapshot.Id),
+					Size:          0,
+
+					//Check what time to put
+					Mtime: &setTime,
+
+					//Check Type
+					Type: provider.ResourceType_RESOURCE_TYPE_CONTAINER,
+				}
+				files[index] = &f
+				fmt.Printf("%v\n", snapshot.Id)
 			}
-
-			setTime := v1beta1.Timestamp{
-				Seconds: uint64(epochTime),
-				Nanos:   0,
-			}
-
-			f := provider.ResourceInfo{
-
-				Path:          ref.Path + "/" + snapshot.Id,
-				Checksum:      &checkSum,
-				Etag:          "",
-				Owner:         UId,
-				PermissionSet: &PermID,
-				Id:            &ident,
-				MimeType:      mime.Detect(true, ref.Path+"/"+snapshot.Id),
-				Size:          0,
-
-				//Check what time to put
-				Mtime: &setTime,
-
-				//Check Type
-				Type: provider.ResourceType_RESOURCE_TYPE_CONTAINER,
-			}
-			files[index] = &f
-			fmt.Printf("%v\n", snapshot.Id)
+			return files, nil
 		}
-		return files, nil
 	}
 }
 
