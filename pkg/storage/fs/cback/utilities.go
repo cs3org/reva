@@ -283,9 +283,11 @@ func (fs *cback) pathFinder(userName, path string) ([]string, error) {
 
 		if strings.HasPrefix(responseObject[i].Source, path) {
 			substr := strings.TrimPrefix(responseObject[i].Source, path)
+			fmt.Printf("The substring 1 is %v", substr)
 			substr = strings.TrimLeft(substr, "/")
-			responseObject[i].Substring = substr
+			fmt.Printf("The substring 2 is %v", substr)
 			temp := strings.Split(substr, "/")
+			fmt.Printf("The substring 3 is %v", substr)
 			returnString[i] = temp[0]
 		}
 	}
