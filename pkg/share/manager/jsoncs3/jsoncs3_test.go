@@ -110,10 +110,9 @@ var _ = Describe("Jsoncs3", func() {
 			},
 		}
 		cacheStatInfo = &provider.ResourceInfo{
-			Etag:  "someetag",
 			Name:  "created.json",
 			Size:  10,
-			Mtime: &typesv1beta1.Timestamp{},
+			Mtime: &typesv1beta1.Timestamp{Seconds: 100},
 		}
 
 		storage *storagemocks.Storage
@@ -346,6 +345,15 @@ var _ = Describe("Jsoncs3", func() {
 			})
 		})
 		Describe("ListShares", func() {
+			It("loads the list of created shares if it hasn't been cashed yet", func() {
+				storage.On("SimpleDownload", mock.Anything, mock.Anything).Return([]byte{}, nil)
+
+				shares, err := m.ListShares(otherCtx, nil)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(shares).To(HaveLen(0))
+				storage.AssertCalled(GinkgoT(), "SimpleDownload", mock.Anything, "/users/otheruser/created.json")
+			})
+
 			It("lists an existing share", func() {
 				shares, err := m.ListShares(ctx, nil)
 				Expect(err).ToNot(HaveOccurred())

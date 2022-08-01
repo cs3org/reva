@@ -453,7 +453,7 @@ func (m *manager) ListShares(ctx context.Context, filters []*collaboration.Filte
 		mtime = usc.mtime
 		//    - y: set If-Modified-Since header to only download if it changed
 	} else {
-		mtime = time.Now()
+		mtime = time.Time{}
 	}
 	//  - read /users/{userid}/created.json (with If-Modified-Since header) aka read if changed
 	userCreatedPath := userCreatedPath(userid)
