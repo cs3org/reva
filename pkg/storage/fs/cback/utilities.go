@@ -3,6 +3,7 @@ package cback
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strconv"
@@ -288,6 +289,8 @@ func (fs *cback) pathFinder(userName, path string) ([]string, error) {
 			returnString[i] = temp[0]
 		}
 	}
+
+	fmt.Printf("\n\nThe length of the array is: %d\n\n", len(returnString))
 
 	if len(returnString) == 0 {
 		err = errors.New("no match found")
