@@ -107,7 +107,11 @@ func (c *shareCache) Remove(userid, shareID string) error {
 }
 
 func (c *shareCache) List(userid string) map[string]spaceShareIDs {
-	r := make(map[string]spaceShareIDs)
+	r := map[string]spaceShareIDs{}
+	if c.userShares[userid] == nil {
+		return r
+	}
+
 	for ssid, cached := range c.userShares[userid].userShares {
 		r[ssid] = spaceShareIDs{
 			mtime: cached.mtime,
