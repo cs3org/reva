@@ -164,12 +164,12 @@ func (fs *cback) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys
 	user, _ := ctxpkg.ContextGetUser(ctx)
 	UId, _ := ctxpkg.ContextGetUserID(ctx)
 
-	resp, _ := fs.matchBackups(user.Username, path)
+	resp, err := fs.matchBackups(user.Username, path)
 
-	/*if err != nil {
+	if err != nil {
 		fmt.Print(err)
 		return nil, err
-	}*/
+	}
 
 	if resp == nil {
 		pathList, err := fs.pathFinder(user.Username, ref.Path)
@@ -190,7 +190,7 @@ func (fs *cback) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys
 			}
 
 			ident := provider.ResourceId{
-				OpaqueId:  ref.Path + paths,
+				OpaqueId:  paths,
 				StorageId: "cback",
 			}
 
@@ -203,13 +203,13 @@ func (fs *cback) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys
 				Mtime:         &setTime,
 				Id:            &ident,
 				Checksum:      &checkSum,
-				Path:          ref.Path + paths,
+				Path:          paths,
 				Owner:         UId,
 				PermissionSet: &PermID,
 				Type:          provider.ResourceType_RESOURCE_TYPE_CONTAINER,
 				Size:          0,
 				Etag:          "",
-				MimeType:      mime.Detect(true, ref.Path+paths),
+				MimeType:      mime.Detect(true, paths),
 			}
 			files[i] = &f
 		}

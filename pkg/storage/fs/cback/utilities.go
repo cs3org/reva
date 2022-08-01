@@ -168,8 +168,8 @@ func (fs *cback) matchBackups(userName, pathInput string) (*BackUpResponse, erro
 			return &responseObject[i], nil
 		}
 	}
-	err = errors.New("no match found")
-	return nil, err
+
+	return nil, nil
 }
 
 func (fs *cback) statResource(backupId int, snapId, userName, path, source string) (*FsReturn, error) {
