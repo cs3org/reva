@@ -164,12 +164,12 @@ func (fs *cback) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys
 	user, _ := ctxpkg.ContextGetUser(ctx)
 	UId, _ := ctxpkg.ContextGetUserID(ctx)
 
-	resp, err := fs.matchBackups(user.Username, path)
+	resp, _ := fs.matchBackups(user.Username, path)
 
-	if err != nil {
+	/*if err != nil {
 		fmt.Print(err)
 		return nil, err
-	}
+	}*/
 
 	if resp == nil {
 		pathList, err := fs.pathFinder(user.Username, ref.Path)
