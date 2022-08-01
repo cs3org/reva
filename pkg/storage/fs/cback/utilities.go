@@ -288,5 +288,12 @@ func (fs *cback) pathFinder(userName, path string) ([]string, error) {
 			returnString[i] = temp[0]
 		}
 	}
-	return returnString, nil
+
+	if len(returnString) == 0 {
+		err = errors.New("no match found")
+		return nil, err
+	} else {
+		return returnString, nil
+	}
+
 }
