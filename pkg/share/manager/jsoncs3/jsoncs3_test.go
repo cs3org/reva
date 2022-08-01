@@ -21,6 +21,7 @@ package jsoncs3_test
 import (
 	"context"
 
+	groupv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -96,6 +97,18 @@ var _ = Describe("Jsoncs3", func() {
 				Permissions: readPermissions,
 			},
 		}
+
+		groupGrant = &collaboration.ShareGrant{
+			Grantee: &provider.Grantee{
+				Type: provider.GranteeType_GRANTEE_TYPE_GROUP,
+				Id: &provider.Grantee_GroupId{GroupId: &groupv1beta1.GroupId{
+					OpaqueId: "group1",
+				}},
+			},
+			Permissions: &collaboration.SharePermissions{
+				Permissions: readPermissions,
+			},
+		}
 		cacheStatInfo = &provider.ResourceInfo{
 			Etag:  "someetag",
 			Name:  "created.json",
@@ -103,10 +116,12 @@ var _ = Describe("Jsoncs3", func() {
 			Mtime: &typesv1beta1.Timestamp{},
 		}
 
-		storage    *storagemocks.Storage
-		m          share.Manager
-		ctx        context.Context
-		granteeCtx context.Context
+		storage *storagemocks.Storage
+		m       share.Manager
+
+		ctx        = ctxpkg.ContextSetUser(context.Background(), user1)
+		granteeCtx = ctxpkg.ContextSetUser(context.Background(), user2)
+		otherCtx   = ctxpkg.ContextSetUser(context.Background(), &userpb.User{Id: &userpb.UserId{OpaqueId: "otheruser"}})
 
 		// helper functions
 		shareBykey = func(key *collaboration.ShareKey) *collaboration.Share {
@@ -131,9 +146,6 @@ var _ = Describe("Jsoncs3", func() {
 		var err error
 		m, err = jsoncs3.New(storage)
 		Expect(err).ToNot(HaveOccurred())
-
-		ctx = ctxpkg.ContextSetUser(context.Background(), user1)
-		granteeCtx = ctxpkg.ContextSetUser(context.Background(), user2)
 	})
 
 	Describe("Share", func() {
@@ -152,7 +164,13 @@ var _ = Describe("Jsoncs3", func() {
 			Expect(share.ResourceId).To(Equal(sharedResource.Id))
 		})
 
-		PIt("creates a group share")
+		It("creates a group share", func() {
+			share, err := m.Share(ctx, sharedResource, groupGrant)
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(share).ToNot(BeNil())
+			Expect(share.ResourceId).To(Equal(sharedResource.Id))
+		})
 	})
 
 	Context("with an existing share", func() {
@@ -167,6 +185,33 @@ var _ = Describe("Jsoncs3", func() {
 		})
 
 		Describe("GetShare", func() {
+			It("handles unknown ids", func() {
+				s, err := m.GetShare(ctx, &collaboration.ShareReference{
+					Spec: &collaboration.ShareReference_Id{
+						Id: &collaboration.ShareId{
+							OpaqueId: "unknown-id",
+						},
+					},
+				})
+				Expect(s).To(BeNil())
+				Expect(err).To(HaveOccurred())
+			})
+
+			It("handles unknown keys", func() {
+				s, err := m.GetShare(ctx, &collaboration.ShareReference{
+					Spec: &collaboration.ShareReference_Key{
+						Key: &collaboration.ShareKey{
+							ResourceId: &providerv1beta1.ResourceId{
+								OpaqueId: "unknown",
+							},
+							Grantee: grant.Grantee,
+						},
+					},
+				})
+				Expect(s).To(BeNil())
+				Expect(err).To(HaveOccurred())
+			})
+
 			It("retrieves an existing share by id", func() {
 				s, err := m.GetShare(ctx, &collaboration.ShareReference{
 					Spec: &collaboration.ShareReference_Id{
@@ -188,9 +233,33 @@ var _ = Describe("Jsoncs3", func() {
 				Expect(s.ResourceId).To(Equal(sharedResource.Id))
 				Expect(s.Id.OpaqueId).To(Equal(share.Id.OpaqueId))
 			})
+
+			It("does not return other users' shares", func() {
+				s, err := m.GetShare(otherCtx, &collaboration.ShareReference{
+					Spec: &collaboration.ShareReference_Id{
+						Id: &collaboration.ShareId{
+							OpaqueId: share.Id.OpaqueId,
+						},
+					},
+				})
+				Expect(err).To(HaveOccurred())
+				Expect(s).To(BeNil())
+			})
 		})
 
 		Describe("UnShare", func() {
+			It("does not remove shares of other users", func() {
+				err := m.Unshare(otherCtx, &collaboration.ShareReference{
+					Spec: &collaboration.ShareReference_Id{
+						Id: &collaboration.ShareId{
+							OpaqueId: share.Id.OpaqueId,
+						},
+					},
+				})
+
+				Expect(err).To(HaveOccurred())
+			})
+
 			It("removes an existing share", func() {
 				err := m.Unshare(ctx, &collaboration.ShareReference{
 					Spec: &collaboration.ShareReference_Id{
@@ -215,6 +284,19 @@ var _ = Describe("Jsoncs3", func() {
 		})
 
 		Describe("UpdateShare", func() {
+			It("does not update shares of other users", func() {
+				_, err := m.UpdateShare(otherCtx, &collaboration.ShareReference{
+					Spec: &collaboration.ShareReference_Id{
+						Id: &collaboration.ShareId{
+							OpaqueId: share.Id.OpaqueId,
+						},
+					},
+				}, &collaboration.SharePermissions{
+					Permissions: writePermissions,
+				})
+				Expect(err).To(HaveOccurred())
+			})
+
 			It("updates an existing share", func() {
 				s := shareBykey(&collaboration.ShareKey{
 					ResourceId: sharedResource.Id,
@@ -263,7 +345,6 @@ var _ = Describe("Jsoncs3", func() {
 				Expect(s.GetPermissions().GetPermissions()).To(Equal(readPermissions))
 			})
 		})
-
 		Describe("ListShares", func() {
 			It("lists an existing share", func() {
 				shares, err := m.ListShares(ctx, nil)
