@@ -3,7 +3,6 @@ package cback
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
 	"strconv"
@@ -262,6 +261,7 @@ func (fs *cback) pathFinder(userName, path string) ([]string, error) {
 	url := "http://cback-portal-dev-01:8000/backups/"
 	requestType := "GET"
 	responseData, err := fs.getRequest(userName, url, requestType)
+	var matchFound bool = false
 
 	if err != nil {
 		return nil, err
@@ -275,30 +275,26 @@ func (fs *cback) pathFinder(userName, path string) ([]string, error) {
 
 	returnString := make([]string, len(responseObject))
 
-	for i := range responseObject {
-		if responseObject[i].Detail != "" {
-			err = errors.New(responseObject[i].Detail)
+	for index, response := range responseObject {
+		if response.Detail != "" {
+			err = errors.New(response.Detail)
 			return nil, err
 		}
 
-		if strings.HasPrefix(responseObject[i].Source, path) {
-			substr := strings.TrimPrefix(responseObject[i].Source, path)
-			fmt.Printf("The substring 1 is %v", substr)
+		if strings.HasPrefix(response.Source, path) {
+			substr := strings.TrimPrefix(response.Source, path)
 			substr = strings.TrimLeft(substr, "/")
-			fmt.Printf("The substring 2 is %v", substr)
 			temp := strings.Split(substr, "/")
-			fmt.Printf("The substring 3 is %v", substr)
-			returnString[i] = temp[0]
+			returnString[index] = temp[0]
+			matchFound = true
 		}
 	}
 
-	fmt.Printf("\n\nThe length of the array is: %d\n\n", len(returnString))
-
-	if len(returnString) == 0 {
+	if matchFound {
+		return returnString, nil
+	} else {
 		err = errors.New("no match found")
 		return nil, err
-	} else {
-		return returnString, nil
 	}
 
 }
