@@ -1122,16 +1122,18 @@ func (h *Handler) addFileInfo(ctx context.Context, s *conversions.ShareData, inf
 					// TODO log error?
 					s.Path = gpRes.Path
 				}
-
-				// cut off configured home namespace, paths in ocs shares are relative to it
-				identifier := h.mustGetIdentifiers(ctx, client, info.GetOwner().GetOpaqueId(), false)
-				u := &userpb.User{
-					Id:          info.Owner,
-					Username:    identifier.Username,
-					DisplayName: identifier.DisplayName,
-					Mail:        identifier.Mail,
+				// on spaces, we could have no owner set
+				if info.Owner != nil {
+					// cut off configured home namespace, paths in ocs shares are relative to it
+					identifier := h.mustGetIdentifiers(ctx, client, info.GetOwner().GetOpaqueId(), false)
+					u := &userpb.User{
+						Id:          info.Owner,
+						Username:    identifier.Username,
+						DisplayName: identifier.DisplayName,
+						Mail:        identifier.Mail,
+					}
+					s.Path = strings.TrimPrefix(s.Path, h.getHomeNamespace(u))
 				}
-				s.Path = strings.TrimPrefix(s.Path, h.getHomeNamespace(u))
 			}
 		}
 		s.StorageID = storageIDPrefix + s.FileTarget
@@ -1139,13 +1141,14 @@ func (h *Handler) addFileInfo(ctx context.Context, s *conversions.ShareData, inf
 		// item type
 		s.ItemType = conversions.ResourceType(info.GetType()).String()
 
+		owner := info.GetOwner()
 		// file owner might not yet be set. Use file info
-		if s.UIDFileOwner == "" {
-			s.UIDFileOwner = info.GetOwner().GetOpaqueId()
+		if s.UIDFileOwner == "" && owner != nil {
+			s.UIDFileOwner = owner.GetOpaqueId()
 		}
 		// share owner might not yet be set. Use file info
-		if s.UIDOwner == "" {
-			s.UIDOwner = info.GetOwner().GetOpaqueId()
+		if s.UIDOwner == "" && owner != nil {
+			s.UIDOwner = owner.GetOpaqueId()
 		}
 	}
 	return nil
@@ -1239,19 +1242,21 @@ func (h *Handler) mapUserIds(ctx context.Context, client gateway.GatewayAPIClien
 		if s.DisplaynameOwner == "" {
 			s.DisplaynameOwner = owner.DisplayName
 		}
-		if s.AdditionalInfoFileOwner == "" {
-			s.AdditionalInfoFileOwner = h.getAdditionalInfoAttribute(ctx, owner)
+		if s.AdditionalInfoOwner == "" {
+			s.AdditionalInfoOwner = h.getAdditionalInfoAttribute(ctx, owner)
 		}
 	}
 
 	if s.UIDFileOwner != "" {
 		fileOwner := h.mustGetIdentifiers(ctx, client, s.UIDFileOwner, false)
-		s.UIDFileOwner = fileOwner.Username
+		if fileOwner.Username != "" {
+			s.UIDFileOwner = fileOwner.Username
+		}
 		if s.DisplaynameFileOwner == "" {
 			s.DisplaynameFileOwner = fileOwner.DisplayName
 		}
-		if s.AdditionalInfoOwner == "" {
-			s.AdditionalInfoOwner = h.getAdditionalInfoAttribute(ctx, fileOwner)
+		if s.AdditionalInfoFileOwner == "" {
+			s.AdditionalInfoFileOwner = h.getAdditionalInfoAttribute(ctx, fileOwner)
 		}
 	}
 

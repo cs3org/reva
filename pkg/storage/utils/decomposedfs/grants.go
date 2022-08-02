@@ -70,7 +70,7 @@ func (fs *Decomposedfs) AddGrant(ctx context.Context, ref *provider.Reference, g
 	// When the owner is empty but grants are set then we do want to check the grants.
 	// However, if we are trying to edit an existing grant we do not have to check for permission if the user owns the grant
 	// TODO: find a better to check this
-	if !(len(grants) == 0 && (owner == nil || owner.OpaqueId == "")) {
+	if !(len(grants) == 0 && (owner == nil || owner.OpaqueId == "" || (owner.OpaqueId == node.SpaceID && owner.Type == 8))) {
 		ok, err := fs.p.HasPermission(ctx, node, func(rp *provider.ResourcePermissions) bool {
 			return rp.AddGrant
 		})
