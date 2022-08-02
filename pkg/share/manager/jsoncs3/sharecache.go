@@ -25,38 +25,38 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storagespace"
 )
 
-type shareCache struct {
-	userShares map[string]*userShareCache
+type ShareCache struct {
+	UserShares map[string]*UserShareCache
 }
 
-type userShareCache struct {
-	mtime      time.Time
-	userShares map[string]*spaceShareIDs
+type UserShareCache struct {
+	Mtime      time.Time
+	UserShares map[string]*SpaceShareIDs
 }
 
-type spaceShareIDs struct {
-	mtime time.Time
+type SpaceShareIDs struct {
+	Mtime time.Time
 	IDs   map[string]struct{}
 }
 
-func NewShareCache() shareCache {
-	return shareCache{
-		userShares: map[string]*userShareCache{},
+func NewShareCache() ShareCache {
+	return ShareCache{
+		UserShares: map[string]*UserShareCache{},
 	}
 }
 
-func (c *shareCache) Has(userid string) bool {
-	return c.userShares[userid] != nil
+func (c *ShareCache) Has(userid string) bool {
+	return c.UserShares[userid] != nil
 }
-func (c *shareCache) GetShareCache(userid string) *userShareCache {
-	return c.userShares[userid]
-}
-
-func (c *shareCache) SetShareCache(userid string, shareCache *userShareCache) {
-	c.userShares[userid] = shareCache
+func (c *ShareCache) GetShareCache(userid string) *UserShareCache {
+	return c.UserShares[userid]
 }
 
-func (c *shareCache) Add(userid, shareID string) error {
+func (c *ShareCache) SetShareCache(userid string, shareCache *UserShareCache) {
+	c.UserShares[userid] = shareCache
+}
+
+func (c *ShareCache) Add(userid, shareID string) error {
 	storageid, spaceid, _, err := storagespace.SplitID(shareID)
 	if err != nil {
 		return err
@@ -67,24 +67,24 @@ func (c *shareCache) Add(userid, shareID string) error {
 	})
 
 	now := time.Now()
-	if c.userShares[userid] == nil {
-		c.userShares[userid] = &userShareCache{
-			userShares: map[string]*spaceShareIDs{},
+	if c.UserShares[userid] == nil {
+		c.UserShares[userid] = &UserShareCache{
+			UserShares: map[string]*SpaceShareIDs{},
 		}
 	}
-	if c.userShares[userid].userShares[ssid] == nil {
-		c.userShares[userid].userShares[ssid] = &spaceShareIDs{
+	if c.UserShares[userid].UserShares[ssid] == nil {
+		c.UserShares[userid].UserShares[ssid] = &SpaceShareIDs{
 			IDs: map[string]struct{}{},
 		}
 	}
 	// add share id
-	c.userShares[userid].mtime = now
-	c.userShares[userid].userShares[ssid].mtime = now
-	c.userShares[userid].userShares[ssid].IDs[shareID] = struct{}{}
+	c.UserShares[userid].Mtime = now
+	c.UserShares[userid].UserShares[ssid].Mtime = now
+	c.UserShares[userid].UserShares[ssid].IDs[shareID] = struct{}{}
 	return nil
 }
 
-func (c *shareCache) Remove(userid, shareID string) error {
+func (c *ShareCache) Remove(userid, shareID string) error {
 	storageid, spaceid, _, err := storagespace.SplitID(shareID)
 	if err != nil {
 		return err
@@ -94,27 +94,27 @@ func (c *shareCache) Remove(userid, shareID string) error {
 		SpaceId:   spaceid,
 	})
 
-	if c.userShares[userid] != nil {
-		if c.userShares[userid].userShares[ssid] != nil {
+	if c.UserShares[userid] != nil {
+		if c.UserShares[userid].UserShares[ssid] != nil {
 			// remove share id
 			now := time.Now()
-			c.userShares[userid].mtime = now
-			c.userShares[userid].userShares[ssid].mtime = now
-			delete(c.userShares[userid].userShares[ssid].IDs, shareID)
+			c.UserShares[userid].Mtime = now
+			c.UserShares[userid].UserShares[ssid].Mtime = now
+			delete(c.UserShares[userid].UserShares[ssid].IDs, shareID)
 		}
 	}
 	return nil
 }
 
-func (c *shareCache) List(userid string) map[string]spaceShareIDs {
-	r := map[string]spaceShareIDs{}
-	if c.userShares[userid] == nil {
+func (c *ShareCache) List(userid string) map[string]SpaceShareIDs {
+	r := map[string]SpaceShareIDs{}
+	if c.UserShares[userid] == nil {
 		return r
 	}
 
-	for ssid, cached := range c.userShares[userid].userShares {
-		r[ssid] = spaceShareIDs{
-			mtime: cached.mtime,
+	for ssid, cached := range c.UserShares[userid].UserShares {
+		r[ssid] = SpaceShareIDs{
+			Mtime: cached.Mtime,
 			IDs:   cached.IDs,
 		}
 	}

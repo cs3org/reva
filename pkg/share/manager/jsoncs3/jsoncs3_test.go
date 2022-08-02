@@ -20,6 +20,8 @@ package jsoncs3_test
 
 import (
 	"context"
+	"encoding/json"
+	"time"
 
 	groupv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -31,6 +33,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/share"
 	"github.com/cs3org/reva/v2/pkg/share/manager/jsoncs3"
 	storagemocks "github.com/cs3org/reva/v2/pkg/storage/utils/metadata/mocks"
+	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/stretchr/testify/mock"
 	"google.golang.org/protobuf/types/known/fieldmaskpb"
 
@@ -109,14 +112,9 @@ var _ = Describe("Jsoncs3", func() {
 				Permissions: readPermissions,
 			},
 		}
-		cacheStatInfo = &provider.ResourceInfo{
-			Name:  "created.json",
-			Size:  10,
-			Mtime: &typesv1beta1.Timestamp{Seconds: 100},
-		}
-
-		storage *storagemocks.Storage
-		m       share.Manager
+		cacheStatInfo *provider.ResourceInfo
+		storage       *storagemocks.Storage
+		m             share.Manager
 
 		ctx        = ctxpkg.ContextSetUser(context.Background(), user1)
 		granteeCtx = ctxpkg.ContextSetUser(context.Background(), user2)
@@ -136,6 +134,12 @@ var _ = Describe("Jsoncs3", func() {
 	)
 
 	BeforeEach(func() {
+		cacheStatInfo = &provider.ResourceInfo{
+			Name:  "created.json",
+			Size:  10,
+			Mtime: &typesv1beta1.Timestamp{Seconds: 100},
+		}
+
 		storage = &storagemocks.Storage{}
 		storage.On("Init", mock.Anything, mock.Anything).Return(nil)
 		storage.On("MakeDirIfNotExist", mock.Anything, mock.Anything).Return(nil)
@@ -345,21 +349,66 @@ var _ = Describe("Jsoncs3", func() {
 			})
 		})
 		Describe("ListShares", func() {
-			It("loads the list of created shares if it hasn't been cashed yet", func() {
-				storage.On("SimpleDownload", mock.Anything, mock.Anything).Return([]byte{}, nil)
-
-				shares, err := m.ListShares(otherCtx, nil)
-				Expect(err).ToNot(HaveOccurred())
-				Expect(shares).To(HaveLen(0))
-				storage.AssertCalled(GinkgoT(), "SimpleDownload", mock.Anything, "/users/otheruser/created.json")
-			})
-
 			It("lists an existing share", func() {
 				shares, err := m.ListShares(ctx, nil)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(shares).To(HaveLen(1))
 
 				Expect(shares[0].Id).To(Equal(share.Id))
+			})
+
+			It("loads the list of created shares if it hasn't been cashed yet", func() {
+				storage.On("SimpleDownload", mock.Anything, mock.Anything).Return([]byte("{}"), nil)
+
+				emptyCtx := ctxpkg.ContextSetUser(context.Background(), &userpb.User{Id: &userpb.UserId{OpaqueId: "emptyuser"}})
+				shares, err := m.ListShares(emptyCtx, nil)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(shares).To(HaveLen(0))
+				storage.AssertCalled(GinkgoT(), "SimpleDownload", mock.Anything, "/users/emptyuser/created.json")
+			})
+
+			It("reloads the shares only if the cache was invalidated", func() {
+				storage.On("SimpleDownload", mock.Anything, mock.Anything).Return([]byte("{}"), nil)
+
+				_, err := m.ListShares(ctx, nil) // data in storage is older -> no download
+				Expect(err).ToNot(HaveOccurred())
+
+				cacheStatInfo.Mtime.Seconds = uint64(time.Now().UnixNano())
+
+				_, err = m.ListShares(ctx, nil) // data in storage is younger -> download
+				Expect(err).ToNot(HaveOccurred())
+
+				storage.AssertNumberOfCalls(GinkgoT(), "SimpleDownload", 1)
+			})
+
+			It("uses the data from the storage after reload", func() {
+				shares, err := m.ListShares(ctx, nil)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(len(shares)).To(Equal(1))
+
+				providerid, spaceid, _, err := storagespace.SplitID(shares[0].Id.OpaqueId)
+				Expect(err).ToNot(HaveOccurred())
+
+				cache := jsoncs3.UserShareCache{
+					Mtime: time.Now(),
+					UserShares: map[string]*jsoncs3.SpaceShareIDs{
+						providerid + "$" + spaceid: {
+							Mtime: time.Now(),
+							IDs: map[string]struct{}{
+								shares[0].Id.OpaqueId: {},
+								shares[0].Id.OpaqueId: {},
+							},
+						},
+					},
+				}
+				bytes, err := json.Marshal(cache)
+				Expect(err).ToNot(HaveOccurred())
+				storage.On("SimpleDownload", mock.Anything, mock.Anything).Return(bytes, nil)
+				cacheStatInfo.Mtime.Seconds = uint64(time.Now().UnixNano()) // Trigger reload
+
+				shares, err = m.ListShares(ctx, nil)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(len(shares)).To(Equal(2))
 			})
 		})
 

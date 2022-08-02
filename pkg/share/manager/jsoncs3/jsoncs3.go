@@ -67,10 +67,6 @@ type config struct {
 	MachineAuthAPIKey string `mapstructure:"machine_auth_apikey"`
 }
 
-type providerCache map[string]providerSpaces
-type providerSpaces map[string]providerShares
-type providerShares map[string]*collaboration.Share
-
 type receivedCache map[string]receivedSpaces
 type receivedSpaces map[string]*receivedSpace
 type receivedSpace struct {
@@ -86,11 +82,11 @@ type manager struct {
 	sync.RWMutex
 
 	// cache holds the all shares, sharded by provider id and space id
-	cache providerCache
+	cache ProviderCache
 	// createdCache holds the list of shares a user has created, sharded by user id and space id
-	createdCache shareCache
+	createdCache ShareCache
 	// groupReceivedCache holds the list of shares a group has access to, sharded by group id and space id
-	groupReceivedCache shareCache
+	groupReceivedCache ShareCache
 	// userReceivedStates holds the state of shares a user has received, sharded by user id and space id
 	userReceivedStates receivedCache
 
@@ -119,7 +115,7 @@ func NewDefault(m map[string]interface{}) (share.Manager, error) {
 // New returns a new manager instance.
 func New(s metadata.Storage) (share.Manager, error) {
 	return &manager{
-		cache:              providerCache{},
+		cache:              NewProviderCache(),
 		createdCache:       NewShareCache(),
 		userReceivedStates: receivedCache{},
 		groupReceivedCache: NewShareCache(),
@@ -224,13 +220,7 @@ func (m *manager) Share(ctx context.Context, md *provider.ResourceInfo, g *colla
 		Mtime:       ts,
 	}
 
-	if m.cache[md.Id.StorageId] == nil {
-		m.cache[md.Id.StorageId] = providerSpaces{}
-	}
-	if m.cache[md.Id.StorageId][md.Id.SpaceId] == nil {
-		m.cache[md.Id.StorageId][md.Id.SpaceId] = providerShares{}
-	}
-	m.cache[md.Id.StorageId][md.Id.SpaceId][s.Id.OpaqueId] = s
+	m.cache.Add(md.Id.StorageId, md.Id.SpaceId, shareID, s)
 
 	err = m.setCreatedCache(ctx, s.GetCreator().GetOpaqueId(), shareID)
 	if err != nil {
@@ -278,27 +268,19 @@ func (m *manager) getByID(id *collaboration.ShareId) (*collaboration.Share, erro
 		// invalid share id, does not exist
 		return nil, errtypes.NotFound(id.String())
 	}
-	if providerSpaces, ok := m.cache[shareid.StorageId]; ok {
-		if spaceShares, ok := providerSpaces[shareid.SpaceId]; ok {
-			for _, share := range spaceShares {
-				if share.GetId().OpaqueId == id.OpaqueId {
-					return share, nil
-				}
-			}
-		}
+	share := m.cache.Get(shareid.StorageId, shareid.SpaceId, id.OpaqueId)
+	if share == nil {
+		return nil, errtypes.NotFound(id.String())
 	}
-	return nil, errtypes.NotFound(id.String())
+	return share, nil
 }
 
 // getByKey must be called in a lock-controlled block.
 func (m *manager) getByKey(key *collaboration.ShareKey) (*collaboration.Share, error) {
-	if providerSpaces, ok := m.cache[key.ResourceId.StorageId]; ok {
-		if spaceShares, ok := providerSpaces[key.ResourceId.SpaceId]; ok {
-			for _, share := range spaceShares {
-				if utils.GranteeEqual(key.Grantee, share.Grantee) {
-					return share, nil
-				}
-			}
+	spaceShares := m.cache.ListSpace(key.ResourceId.StorageId, key.ResourceId.SpaceId)
+	for _, share := range spaceShares.Shares {
+		if utils.GranteeEqual(key.Grantee, share.Grantee) {
+			return share, nil
 		}
 	}
 	return nil, errtypes.NotFound(key.String())
@@ -350,7 +332,7 @@ func (m *manager) Unshare(ctx context.Context, ref *collaboration.ShareReference
 	}
 
 	shareid, err := storagespace.ParseID(s.Id.OpaqueId)
-	delete(m.cache[shareid.StorageId][shareid.SpaceId], s.Id.OpaqueId)
+	m.cache.Remove(shareid.StorageId, shareid.SpaceId, s.Id.OpaqueId)
 
 	// remove from created cache
 	err = m.removeFromCreatedCache(ctx, s.GetCreator().GetOpaqueId(), s.Id.OpaqueId)
@@ -423,14 +405,12 @@ func (m *manager) setCreatedCache(ctx context.Context, creatorid, shareid string
 
 // ListShares
 func (m *manager) ListShares(ctx context.Context, filters []*collaboration.Filter) ([]*collaboration.Share, error) {
-	/*if err := m.initialize(ctx); err != nil {
-		return nil, err
-	}*/
-
 	m.Lock()
 	defer m.Unlock()
+
 	//log := appctx.GetLogger(ctx)
 	user := ctxpkg.ContextMustGetUser(ctx)
+	userid := user.Id.OpaqueId
 	var ss []*collaboration.Share
 
 	// Q: how do we detect that a created list changed?
@@ -445,29 +425,29 @@ func (m *manager) ListShares(ctx context.Context, filters []*collaboration.Filte
 	// Decision: use touch for now as it works withe plain posix and is easier to test
 
 	// TODO check if a created or owned filter is set
-	userid := user.Id.OpaqueId
 
 	var mtime time.Time
 	//  - do we have a cached list of created shares for the user in memory?
 	if usc := m.createdCache.GetShareCache(userid); usc != nil {
-		mtime = usc.mtime
+		mtime = usc.Mtime
 		//    - y: set If-Modified-Since header to only download if it changed
 	} else {
-		mtime = time.Time{}
+		mtime = time.Time{} // Set zero time so that data from storage always takes precedence
 	}
+
 	//  - read /users/{userid}/created.json (with If-Modified-Since header) aka read if changed
 	userCreatedPath := userCreatedPath(userid)
-	// check mtime of /users/{userid}/created.json
 	info, err := m.storage.Stat(ctx, userCreatedPath)
 	if err != nil {
 		// TODO check other cases, we currently only assume it does not exist
 		return ss, nil
 	}
+	// check mtime of /users/{userid}/created.json
 	if utils.TSToTime(info.Mtime).After(mtime) {
 		//  - update cached list of created shares for the user in memory if changed
 		createdBlob, err := m.storage.SimpleDownload(ctx, userCreatedPath)
 		if err == nil {
-			newShareCache := userShareCache{}
+			newShareCache := UserShareCache{}
 			err := json.Unmarshal(createdBlob, &newShareCache)
 			if err != nil {
 				// TODO log error but continue?
@@ -481,25 +461,22 @@ func (m *manager) ListShares(ctx context.Context, filters []*collaboration.Filte
 	}
 
 	for ssid, spaceShareIDs := range m.createdCache.List(user.Id.OpaqueId) {
-		if time.Now().Sub(spaceShareIDs.mtime) > time.Second*30 {
+		if time.Now().Sub(spaceShareIDs.Mtime) > time.Second*30 {
 			// TODO reread from disk
 		}
 		providerid, spaceid, _, err := storagespace.SplitID(ssid)
 		if err != nil {
 			continue
 		}
-		if providerSpaces, ok := m.cache[providerid]; ok {
-			if spaceShares, ok := providerSpaces[spaceid]; ok {
-				for shareid, _ := range spaceShareIDs.IDs {
-					s := spaceShares[shareid]
-					if s == nil {
-						continue
-					}
-					if utils.UserEqual(user.GetId(), s.GetCreator()) {
-						if share.MatchesFilters(s, filters) {
-							ss = append(ss, s)
-						}
-					}
+		spaceShares := m.cache.ListSpace(providerid, spaceid)
+		for shareid, _ := range spaceShareIDs.IDs {
+			s := spaceShares.Shares[shareid]
+			if s == nil {
+				continue
+			}
+			if utils.UserEqual(user.GetId(), s.GetCreator()) {
+				if share.MatchesFilters(s, filters) {
+					ss = append(ss, s)
 				}
 			}
 		}
@@ -531,13 +508,13 @@ func (m *manager) ListReceivedShares(ctx context.Context, filters []*collaborati
 	// first collect all spaceids the user has access to as a group member
 	for _, group := range user.Groups {
 		for ssid, spaceShareIDs := range m.groupReceivedCache.List(group) {
-			if time.Now().Sub(spaceShareIDs.mtime) > time.Second*30 {
+			if time.Now().Sub(spaceShareIDs.Mtime) > time.Second*30 {
 				// TODO reread from disk
 			}
 			// add a pending entry, the state will be updated
 			// when reading the received shares below if they have already been accepted or denied
 			rs := receivedSpace{
-				mtime:               spaceShareIDs.mtime.UnixNano(),
+				mtime:               spaceShareIDs.Mtime.UnixNano(),
 				receivedShareStates: make(map[string]receivedShareState, len(spaceShareIDs.IDs)),
 			}
 
@@ -571,23 +548,20 @@ func (m *manager) ListReceivedShares(ctx context.Context, filters []*collaborati
 		if err != nil {
 			continue
 		}
-		if providerSpaces, ok := m.cache[providerid]; ok {
-			if spaceShares, ok := providerSpaces[spaceid]; ok {
-				for shareId, state := range rspace.receivedShareStates {
-					s := spaceShares[shareId]
-					if s == nil {
-						continue
+		spaceShares := m.cache.ListSpace(providerid, spaceid)
+		for shareId, state := range rspace.receivedShareStates {
+			s := spaceShares.Shares[shareId]
+			if s == nil {
+				continue
+			}
+			if utils.UserEqual(user.GetId(), s.GetGrantee().GetUserId()) {
+				if share.MatchesFilters(s, filters) {
+					rs := &collaboration.ReceivedShare{
+						Share:      s,
+						State:      state.state,
+						MountPoint: state.mountPoint,
 					}
-					if utils.UserEqual(user.GetId(), s.GetGrantee().GetUserId()) {
-						if share.MatchesFilters(s, filters) {
-							rs := &collaboration.ReceivedShare{
-								Share:      s,
-								State:      state.state,
-								MountPoint: state.mountPoint,
-							}
-							rss = append(rss, rs)
-						}
-					}
+					rss = append(rss, rs)
 				}
 			}
 		}
