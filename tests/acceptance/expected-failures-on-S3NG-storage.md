@@ -1256,6 +1256,10 @@ _ocs: api compatibility, return correct status code_
 - [apiVersions/fileVersions.feature:517](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersions.feature#L517)
 - [apiVersions/fileVersions.feature:518](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersions.feature#L518)
 
+#### [WebDAV MOVE with body returns 400 rather than 415](https://github.com/cs3org/reva/issues/3119)
+
+- [apiAuthWebDav/webDavMOVEAuth.feature:163](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthWebDav/webDavMOVEAuth.feature#L163)
+
 #### [reShareUpdate API tests failing in reva](https://github.com/cs3org/reva/issues/2916)
 
 - [apiShareReshareToShares3/reShareUpdate.feature:152](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareReshareToShares3/reShareUpdate.feature#L152)
