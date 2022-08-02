@@ -298,6 +298,9 @@ func UserTypeMap(accountType string) userpb.UserType {
 		t = userpb.UserType_USER_TYPE_FEDERATED
 	case "lightweight":
 		t = userpb.UserType_USER_TYPE_LIGHTWEIGHT
+	// FIXME new user type
+	case "spaceowner":
+		t = 8
 	}
 	return t
 }
@@ -320,6 +323,9 @@ func UserTypeToString(accountType userpb.UserType) string {
 		t = "federated"
 	case userpb.UserType_USER_TYPE_LIGHTWEIGHT:
 		t = "lightweight"
+	// FIXME new user type
+	case 8:
+		t = "spaceowner"
 	}
 	return t
 }
