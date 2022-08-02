@@ -40,6 +40,19 @@ type ServiceTypes struct {
 	Types []*ServiceType `xml:"SERVICE_TYPE"`
 }
 
+// NGI represents an NGI in GOCDB.
+type NGI struct {
+	Name          string `xml:"NAME"`
+	Email         string `xml:"EMAIL"`
+	HelpdeskEmail string `xml:"HELPDESK_EMAIL"`
+	SecurityEmail string `xml:"SECURITY_EMAIL"`
+}
+
+// NGIs is a list of NGI objects.
+type NGIs struct {
+	NGIs []*NGI `xml:"NGI"`
+}
+
 // Site represents a site in GOCDB.
 type Site struct {
 	ShortName    string     `xml:"SHORT_NAME"`
@@ -87,4 +100,28 @@ type Service struct {
 // Services is a list of Service objects.
 type Services struct {
 	Services []*Service `xml:"SERVICE_ENDPOINT"`
+}
+
+// DowntimeService represents a service scheduled for downtime.
+type DowntimeService struct {
+	Type string `xml:"SERVICE_TYPE"`
+}
+
+// DowntimeServices represents a list of DowntimeService objects.
+type DowntimeServices struct {
+	Services []*DowntimeService `xml:"SERVICE"`
+}
+
+// Downtime is a scheduled downtime for a site.
+type Downtime struct {
+	Severity  string `xml:"SEVERITY"`
+	StartDate int64  `xml:"START_DATE"`
+	EndDate   int64  `xml:"END_DATE"`
+
+	AffectedServices DowntimeServices `xml:"SERVICES"`
+}
+
+// Downtimes represents a list of Downtime objects.
+type Downtimes struct {
+	Downtimes []*Downtime `xml:"DOWNTIME"`
 }

@@ -27,19 +27,29 @@ import (
 	"sync"
 	"time"
 
+	"google.golang.org/protobuf/types/known/fieldmaskpb"
+
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	registry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
+	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
+	rtrace "github.com/cs3org/reva/pkg/trace"
+
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/storage/utils/etag"
 	"github.com/cs3org/reva/pkg/utils"
-	"github.com/dgrijalva/jwt-go"
+	"github.com/golang-jwt/jwt"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
+
+	"google.golang.org/grpc/codes"
+	gstatus "google.golang.org/grpc/status"
 )
 
 // transferClaims are custom claims for a JWT token to be used between the metadata and data gateways.
@@ -51,8 +61,7 @@ type transferClaims struct {
 func (s *svc) sign(_ context.Context, target string) (string, error) {
 	// Tus sends a separate request to the datagateway service for every chunk.
 	// For large files, this can take a long time, so we extend the expiration
-	// for 10 minutes. TODO: Make this configurable.
-	ttl := time.Duration(s.c.TransferExpires) * 10 * time.Minute
+	ttl := time.Duration(s.c.TransferExpires) * time.Second
 	claims := transferClaims{
 		StandardClaims: jwt.StandardClaims{
 			ExpiresAt: time.Now().Add(ttl).Unix(),
@@ -96,7 +105,7 @@ func (s *svc) CreateHome(ctx context.Context, req *provider.CreateHomeRequest) (
 func (s *svc) CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error) {
 	log := appctx.GetLogger(ctx)
 	// TODO: needs to be fixed
-	c, err := s.findByPath(ctx, req.Type)
+	c, err := s.findByPath(ctx, "/users")
 	if err != nil {
 		return &provider.CreateStorageSpaceResponse{
 			Status: status.NewStatusFromErrType(ctx, "error finding path", err),
@@ -115,36 +124,136 @@ func (s *svc) CreateStorageSpace(ctx context.Context, req *provider.CreateStorag
 
 func (s *svc) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSpacesRequest) (*provider.ListStorageSpacesResponse, error) {
 	log := appctx.GetLogger(ctx)
-	// TODO: needs to be fixed
 	var id *provider.StorageSpaceId
 	for _, f := range req.Filters {
 		if f.Type == provider.ListStorageSpacesRequest_Filter_TYPE_ID {
 			id = f.GetId()
 		}
 	}
-	c, err := s.findByID(ctx, &provider.ResourceId{
-		OpaqueId: id.OpaqueId,
-	})
+
+	var (
+		providers []*registry.ProviderInfo
+		err       error
+	)
+	c, err := pool.GetStorageRegistryClient(pool.Endpoint(s.c.StorageRegistryEndpoint))
 	if err != nil {
+		return nil, errors.Wrap(err, "gateway: error getting storage registry client")
+	}
+
+	if id != nil {
+		// query that specific storage provider
+		storageid, opaqeid, err := utils.SplitStorageSpaceID(id.OpaqueId)
+		if err != nil {
+			return &provider.ListStorageSpacesResponse{
+				Status: status.NewInvalidArg(ctx, "space id must be separated by !"),
+			}, nil
+		}
+		res, err := c.GetStorageProviders(ctx, &registry.GetStorageProvidersRequest{
+			Ref: &provider.Reference{ResourceId: &provider.ResourceId{
+				StorageId: storageid,
+				OpaqueId:  opaqeid,
+			}},
+		})
+		if err != nil {
+			return &provider.ListStorageSpacesResponse{
+				Status: status.NewStatusFromErrType(ctx, "ListStorageSpaces filters: req "+req.String(), err),
+			}, nil
+		}
+		if res.Status.Code != rpc.Code_CODE_OK {
+			return &provider.ListStorageSpacesResponse{
+				Status: res.Status,
+			}, nil
+		}
+		providers = res.Providers
+	} else {
+		// get list of all storage providers
+		res, err := c.ListStorageProviders(ctx, &registry.ListStorageProvidersRequest{})
+
+		if err != nil {
+			return &provider.ListStorageSpacesResponse{
+				Status: status.NewStatusFromErrType(ctx, "error listing providers", err),
+			}, nil
+		}
+		if res.Status.Code != rpc.Code_CODE_OK {
+			return &provider.ListStorageSpacesResponse{
+				Status: res.Status,
+			}, nil
+		}
+
+		providers = make([]*registry.ProviderInfo, 0, len(res.Providers))
+		// FIXME filter only providers that have an id set ... currently none have?
+		// bug? only ProviderPath is set
+		for i := range res.Providers {
+			// use only providers whose path does not start with a /?
+			if strings.HasPrefix(res.Providers[i].ProviderPath, "/") {
+				continue
+			}
+			providers = append(providers, res.Providers[i])
+		}
+	}
+
+	spacesFromProviders := make([][]*provider.StorageSpace, len(providers))
+	errors := make([]error, len(providers))
+
+	var wg sync.WaitGroup
+	for i, p := range providers {
+		wg.Add(1)
+		go s.listStorageSpacesOnProvider(ctx, req, &spacesFromProviders[i], p, &errors[i], &wg)
+	}
+	wg.Wait()
+
+	uniqueSpaces := map[string]*provider.StorageSpace{}
+	for i := range providers {
+		if errors[i] != nil {
+			if len(providers) > 1 {
+				log.Debug().Err(errors[i]).Msg("skipping provider")
+				continue
+			}
+			return &provider.ListStorageSpacesResponse{
+				Status: status.NewStatusFromErrType(ctx, "error listing space", errors[i]),
+			}, nil
+		}
+		for j := range spacesFromProviders[i] {
+			uniqueSpaces[spacesFromProviders[i][j].Id.OpaqueId] = spacesFromProviders[i][j]
+		}
+	}
+	spaces := make([]*provider.StorageSpace, 0, len(uniqueSpaces))
+	for spaceID := range uniqueSpaces {
+		spaces = append(spaces, uniqueSpaces[spaceID])
+	}
+	if len(spaces) == 0 {
 		return &provider.ListStorageSpacesResponse{
-			Status: status.NewStatusFromErrType(ctx, "error finding path", err),
+			Status: status.NewNotFound(ctx, "space not found"),
 		}, nil
 	}
 
-	res, err := c.ListStorageSpaces(ctx, req)
+	return &provider.ListStorageSpacesResponse{
+		Status:        status.NewOK(ctx),
+		StorageSpaces: spaces,
+	}, nil
+}
+
+func (s *svc) listStorageSpacesOnProvider(ctx context.Context, req *provider.ListStorageSpacesRequest, res *[]*provider.StorageSpace, p *registry.ProviderInfo, e *error, wg *sync.WaitGroup) {
+	defer wg.Done()
+	c, err := s.getStorageProviderClient(ctx, p)
 	if err != nil {
-		log.Err(err).Msg("gateway: error listing storage space on storage provider")
-		return &provider.ListStorageSpacesResponse{
-			Status: status.NewInternal(ctx, err, "error calling ListStorageSpaces"),
-		}, nil
+		*e = errors.Wrap(err, "error connecting to storage provider="+p.Address)
+		return
 	}
-	return res, nil
+
+	r, err := c.ListStorageSpaces(ctx, req)
+	if err != nil {
+		*e = errors.Wrap(err, "gateway: error calling ListStorageSpaces")
+		return
+	}
+
+	*res = r.StorageSpaces
 }
 
 func (s *svc) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
 	log := appctx.GetLogger(ctx)
 	// TODO: needs to be fixed
-	c, err := s.findByID(ctx, req.StorageSpace.Root)
+	c, err := s.find(ctx, &provider.Reference{ResourceId: req.StorageSpace.Root})
 	if err != nil {
 		return &provider.UpdateStorageSpaceResponse{
 			Status: status.NewStatusFromErrType(ctx, "error finding ID", err),
@@ -164,9 +273,16 @@ func (s *svc) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorag
 func (s *svc) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorageSpaceRequest) (*provider.DeleteStorageSpaceResponse, error) {
 	log := appctx.GetLogger(ctx)
 	// TODO: needs to be fixed
-	c, err := s.findByID(ctx, &provider.ResourceId{
-		OpaqueId: req.Id.OpaqueId,
-	})
+	storageid, opaqeid, err := utils.SplitStorageSpaceID(req.Id.OpaqueId)
+	if err != nil {
+		return &provider.DeleteStorageSpaceResponse{
+			Status: status.NewInvalidArg(ctx, "space id must be separated by !"),
+		}, nil
+	}
+	c, err := s.find(ctx, &provider.Reference{ResourceId: &provider.ResourceId{
+		StorageId: storageid,
+		OpaqueId:  opaqeid,
+	}})
 	if err != nil {
 		return &provider.DeleteStorageSpaceResponse{
 			Status: status.NewStatusFromErrType(ctx, "error finding path", err),
@@ -184,9 +300,10 @@ func (s *svc) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorag
 }
 
 func (s *svc) GetHome(ctx context.Context, _ *provider.GetHomeRequest) (*provider.GetHomeResponse, error) {
-	home := s.getHome(ctx)
-	homeRes := &provider.GetHomeResponse{Path: home, Status: status.NewOK(ctx)}
-	return homeRes, nil
+	return &provider.GetHomeResponse{
+		Path:   s.getHome(ctx),
+		Status: status.NewOK(ctx),
+	}, nil
 }
 
 func (s *svc) getHome(_ context.Context) string {
@@ -196,6 +313,11 @@ func (s *svc) getHome(_ context.Context) string {
 
 func (s *svc) InitiateFileDownload(ctx context.Context, req *provider.InitiateFileDownloadRequest) (*gateway.InitiateFileDownloadResponse, error) {
 	log := appctx.GetLogger(ctx)
+
+	if utils.IsRelativeReference(req.Ref) {
+		return s.initiateFileDownload(ctx, req)
+	}
+
 	p, st := s.getPath(ctx, req.Ref)
 	if st.Code != rpc.Code_CODE_OK {
 		return &gateway.InitiateFileDownloadResponse{
@@ -244,7 +366,7 @@ func (s *svc) InitiateFileDownload(ctx context.Context, req *provider.InitiateFi
 		}
 
 		if statRes.Info.Type != provider.ResourceType_RESOURCE_TYPE_REFERENCE {
-			err := errors.New(fmt.Sprintf("gateway: expected reference: got:%+v", statRes.Info))
+			err := errtypes.BadRequest(fmt.Sprintf("gateway: expected reference: got:%+v", statRes.Info))
 			log.Err(err).Msg("gateway: error stating share name")
 			return &gateway.InitiateFileDownloadResponse{
 				Status: status.NewInternal(ctx, err, "gateway: error initiating download"),
@@ -258,40 +380,35 @@ func (s *svc) InitiateFileDownload(ctx context.Context, req *provider.InitiateFi
 			}, nil
 		}
 
+		if protocol == "webdav" {
+			// TODO(ishank011): pass this through the datagateway service
+			// For now, we just expose the file server to the user
+			ep, opaque, err := s.webdavRefTransferEndpoint(ctx, statRes.Info.Target)
+			if err != nil {
+				return &gateway.InitiateFileDownloadResponse{
+					Status: status.NewInternal(ctx, err, "gateway: error downloading from webdav host: "+p),
+				}, nil
+			}
+			return &gateway.InitiateFileDownloadResponse{
+				Status: status.NewOK(ctx),
+				Protocols: []*gateway.FileDownloadProtocol{
+					{
+						Opaque:           opaque,
+						Protocol:         "simple",
+						DownloadEndpoint: ep,
+					},
+				},
+			}, nil
+		}
+
 		// if it is a file allow download
 		if ri.Type == provider.ResourceType_RESOURCE_TYPE_FILE {
 			log.Debug().Str("path", p).Interface("ri", ri).Msg("path points to share name file")
-
-			if protocol == "webdav" {
-				// TODO(ishank011): pass this through the datagateway service
-				// for now, we just expose the file server to the user
-				ep, opaque, err := s.webdavRefTransferEndpoint(ctx, statRes.Info.Target)
-				if err != nil {
-					return &gateway.InitiateFileDownloadResponse{
-						Status: status.NewInternal(ctx, err, "gateway: error downloading from webdav host: "+p),
-					}, nil
-				}
-				return &gateway.InitiateFileDownloadResponse{
-					Status: status.NewOK(ctx),
-					Protocols: []*gateway.FileDownloadProtocol{
-						{
-							Opaque:           opaque,
-							Protocol:         "simple",
-							DownloadEndpoint: ep,
-						},
-					},
-				}, nil
-			}
-
-			req.Ref = &provider.Reference{
-				Spec: &provider.Reference_Path{
-					Path: ri.Path,
-				},
-			}
-			log.Debug().Msg("download path: " + ri.Path)
+			req.Ref.Path = ri.Path
+			log.Debug().Str("path", ri.Path).Msg("download")
 			return s.initiateFileDownload(ctx, req)
-
 		}
+
 		log.Debug().Str("path", p).Interface("statRes", statRes).Msg("path:%s points to share name")
 		err = errtypes.PermissionDenied("gateway: cannot download share name: path=" + p)
 		log.Err(err).Str("path", p).Msg("gateway: error downloading")
@@ -305,11 +422,7 @@ func (s *svc) InitiateFileDownload(ctx context.Context, req *provider.InitiateFi
 		shareName, shareChild := s.splitShare(ctx, p)
 
 		statReq := &provider.StatRequest{
-			Ref: &provider.Reference{
-				Spec: &provider.Reference_Path{
-					Path: shareName,
-				},
-			},
+			Ref: &provider.Reference{Path: shareName},
 		}
 		statRes, err := s.stat(ctx, statReq)
 		if err != nil {
@@ -333,7 +446,7 @@ func (s *svc) InitiateFileDownload(ctx context.Context, req *provider.InitiateFi
 
 		if protocol == "webdav" {
 			// TODO(ishank011): pass this through the datagateway service
-			// for now, we just expose the file server to the user
+			// For now, we just expose the file server to the user
 			ep, opaque, err := s.webdavRefTransferEndpoint(ctx, statRes.Info.Target, shareChild)
 			if err != nil {
 				return &gateway.InitiateFileDownloadResponse{
@@ -353,13 +466,8 @@ func (s *svc) InitiateFileDownload(ctx context.Context, req *provider.InitiateFi
 		}
 
 		// append child to target
-		target := path.Join(ri.Path, shareChild)
-		req.Ref = &provider.Reference{
-			Spec: &provider.Reference_Path{
-				Path: target,
-			},
-		}
-		log.Debug().Msg("download path: " + target)
+		req.Ref.Path = path.Join(ri.Path, shareChild)
+		log.Debug().Str("path", req.Ref.Path).Msg("download")
 		return s.initiateFileDownload(ctx, req)
 	}
 
@@ -377,6 +485,9 @@ func (s *svc) initiateFileDownload(ctx context.Context, req *provider.InitiateFi
 
 	storageRes, err := c.InitiateFileDownload(ctx, req)
 	if err != nil {
+		if gstatus.Code(err) == codes.PermissionDenied {
+			return &gateway.InitiateFileDownloadResponse{Status: &rpc.Status{Code: rpc.Code_CODE_PERMISSION_DENIED}}, nil
+		}
 		return nil, errors.Wrap(err, "gateway: error calling InitiateFileDownload")
 	}
 
@@ -420,6 +531,9 @@ func (s *svc) initiateFileDownload(ctx context.Context, req *provider.InitiateFi
 
 func (s *svc) InitiateFileUpload(ctx context.Context, req *provider.InitiateFileUploadRequest) (*gateway.InitiateFileUploadResponse, error) {
 	log := appctx.GetLogger(ctx)
+	if utils.IsRelativeReference(req.Ref) {
+		return s.initiateFileUpload(ctx, req)
+	}
 	p, st := s.getPath(ctx, req.Ref)
 	if st.Code != rpc.Code_CODE_OK {
 		return &gateway.InitiateFileUploadResponse{
@@ -457,7 +571,7 @@ func (s *svc) InitiateFileUpload(ctx context.Context, req *provider.InitiateFile
 		}
 
 		if statRes.Info.Type != provider.ResourceType_RESOURCE_TYPE_REFERENCE {
-			err := errors.New(fmt.Sprintf("gateway: expected reference: got:%+v", statRes.Info))
+			err := errtypes.BadRequest(fmt.Sprintf("gateway: expected reference: got:%+v", statRes.Info))
 			log.Err(err).Msg("gateway: error stating share name")
 			return &gateway.InitiateFileUploadResponse{
 				Status: status.NewInternal(ctx, err, "gateway: error initiating upload"),
@@ -471,40 +585,35 @@ func (s *svc) InitiateFileUpload(ctx context.Context, req *provider.InitiateFile
 			}, nil
 		}
 
+		if protocol == "webdav" {
+			// TODO(ishank011): pass this through the datagateway service
+			// For now, we just expose the file server to the user
+			ep, opaque, err := s.webdavRefTransferEndpoint(ctx, statRes.Info.Target)
+			if err != nil {
+				return &gateway.InitiateFileUploadResponse{
+					Status: status.NewInternal(ctx, err, "gateway: error downloading from webdav host: "+p),
+				}, nil
+			}
+			return &gateway.InitiateFileUploadResponse{
+				Status: status.NewOK(ctx),
+				Protocols: []*gateway.FileUploadProtocol{
+					{
+						Opaque:         opaque,
+						Protocol:       "simple",
+						UploadEndpoint: ep,
+					},
+				},
+			}, nil
+		}
+
 		// if it is a file allow upload
 		if ri.Type == provider.ResourceType_RESOURCE_TYPE_FILE {
 			log.Debug().Str("path", p).Interface("ri", ri).Msg("path points to share name file")
-
-			if protocol == "webdav" {
-				// TODO(ishank011): pass this through the datagateway service
-				// for now, we just expose the file server to the user
-				ep, opaque, err := s.webdavRefTransferEndpoint(ctx, statRes.Info.Target)
-				if err != nil {
-					return &gateway.InitiateFileUploadResponse{
-						Status: status.NewInternal(ctx, err, "gateway: error downloading from webdav host: "+p),
-					}, nil
-				}
-				return &gateway.InitiateFileUploadResponse{
-					Status: status.NewOK(ctx),
-					Protocols: []*gateway.FileUploadProtocol{
-						{
-							Opaque:         opaque,
-							Protocol:       "simple",
-							UploadEndpoint: ep,
-						},
-					},
-				}, nil
-			}
-
-			req.Ref = &provider.Reference{
-				Spec: &provider.Reference_Path{
-					Path: ri.Path,
-				},
-			}
-			log.Debug().Msg("upload path: " + ri.Path)
+			req.Ref.Path = ri.Path
+			log.Debug().Str("path", ri.Path).Msg("upload")
 			return s.initiateFileUpload(ctx, req)
-
 		}
+
 		err = errtypes.PermissionDenied("gateway: cannot upload to share name: path=" + p)
 		log.Err(err).Msg("gateway: error uploading")
 		return &gateway.InitiateFileUploadResponse{
@@ -517,13 +626,7 @@ func (s *svc) InitiateFileUpload(ctx context.Context, req *provider.InitiateFile
 		log.Debug().Msgf("shared child: %s", p)
 		shareName, shareChild := s.splitShare(ctx, p)
 
-		statReq := &provider.StatRequest{
-			Ref: &provider.Reference{
-				Spec: &provider.Reference_Path{
-					Path: shareName,
-				},
-			},
-		}
+		statReq := &provider.StatRequest{Ref: &provider.Reference{Path: shareName}}
 		statRes, err := s.stat(ctx, statReq)
 		if err != nil {
 			return &gateway.InitiateFileUploadResponse{
@@ -546,7 +649,7 @@ func (s *svc) InitiateFileUpload(ctx context.Context, req *provider.InitiateFile
 
 		if protocol == "webdav" {
 			// TODO(ishank011): pass this through the datagateway service
-			// for now, we just expose the file server to the user
+			// For now, we just expose the file server to the user
 			ep, opaque, err := s.webdavRefTransferEndpoint(ctx, statRes.Info.Target, shareChild)
 			if err != nil {
 				return &gateway.InitiateFileUploadResponse{
@@ -566,12 +669,7 @@ func (s *svc) InitiateFileUpload(ctx context.Context, req *provider.InitiateFile
 		}
 
 		// append child to target
-		target := path.Join(ri.Path, shareChild)
-		req.Ref = &provider.Reference{
-			Spec: &provider.Reference_Path{
-				Path: target,
-			},
-		}
+		req.Ref.Path = path.Join(ri.Path, shareChild)
 		return s.initiateFileUpload(ctx, req)
 	}
 
@@ -588,6 +686,9 @@ func (s *svc) initiateFileUpload(ctx context.Context, req *provider.InitiateFile
 
 	storageRes, err := c.InitiateFileUpload(ctx, req)
 	if err != nil {
+		if gstatus.Code(err) == codes.PermissionDenied {
+			return &gateway.InitiateFileUploadResponse{Status: &rpc.Status{Code: rpc.Code_CODE_PERMISSION_DENIED}}, nil
+		}
 		return nil, errors.Wrap(err, "gateway: error calling InitiateFileUpload")
 	}
 
@@ -637,13 +738,7 @@ func (s *svc) initiateFileUpload(ctx context.Context, req *provider.InitiateFile
 }
 
 func (s *svc) GetPath(ctx context.Context, req *provider.GetPathRequest) (*provider.GetPathResponse, error) {
-	statReq := &provider.StatRequest{
-		Ref: &provider.Reference{
-			Spec: &provider.Reference_Id{
-				Id: req.ResourceId,
-			},
-		},
-	}
+	statReq := &provider.StatRequest{Ref: &provider.Reference{ResourceId: req.ResourceId}}
 	statRes, err := s.stat(ctx, statReq)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error stating ref:"+statReq.Ref.String())
@@ -664,6 +759,11 @@ func (s *svc) GetPath(ctx context.Context, req *provider.GetPathRequest) (*provi
 
 func (s *svc) CreateContainer(ctx context.Context, req *provider.CreateContainerRequest) (*provider.CreateContainerResponse, error) {
 	log := appctx.GetLogger(ctx)
+
+	if utils.IsRelativeReference(req.Ref) {
+		return s.createContainer(ctx, req)
+	}
+
 	p, st := s.getPath(ctx, req.Ref)
 	if st.Code != rpc.Code_CODE_OK {
 		return &provider.CreateContainerResponse{
@@ -689,13 +789,7 @@ func (s *svc) CreateContainer(ctx context.Context, req *provider.CreateContainer
 		log.Debug().Msgf("shared child: %s", p)
 		shareName, shareChild := s.splitShare(ctx, p)
 
-		statReq := &provider.StatRequest{
-			Ref: &provider.Reference{
-				Spec: &provider.Reference_Path{
-					Path: shareName,
-				},
-			},
-		}
+		statReq := &provider.StatRequest{Ref: &provider.Reference{Path: shareName}}
 		statRes, err := s.stat(ctx, statReq)
 		if err != nil {
 			return &provider.CreateContainerResponse{
@@ -729,12 +823,7 @@ func (s *svc) CreateContainer(ctx context.Context, req *provider.CreateContainer
 		}
 
 		// append child to target
-		target := path.Join(ri.Path, shareChild)
-		req.Ref = &provider.Reference{
-			Spec: &provider.Reference_Path{
-				Path: target,
-			},
-		}
+		req.Ref.Path = path.Join(ri.Path, shareChild)
 		return s.createContainer(ctx, req)
 	}
 
@@ -751,7 +840,29 @@ func (s *svc) createContainer(ctx context.Context, req *provider.CreateContainer
 
 	res, err := c.CreateContainer(ctx, req)
 	if err != nil {
+		if gstatus.Code(err) == codes.PermissionDenied {
+			return &provider.CreateContainerResponse{Status: &rpc.Status{Code: rpc.Code_CODE_PERMISSION_DENIED}}, nil
+		}
 		return nil, errors.Wrap(err, "gateway: error calling CreateContainer")
+	}
+
+	return res, nil
+}
+
+func (s *svc) TouchFile(ctx context.Context, req *provider.TouchFileRequest) (*provider.TouchFileResponse, error) {
+	c, err := s.find(ctx, req.Ref)
+	if err != nil {
+		return &provider.TouchFileResponse{
+			Status: status.NewStatusFromErrType(ctx, "TouchFile ref="+req.Ref.String(), err),
+		}, nil
+	}
+
+	res, err := c.TouchFile(ctx, req)
+	if err != nil {
+		if gstatus.Code(err) == codes.PermissionDenied {
+			return &provider.TouchFileResponse{Status: &rpc.Status{Code: rpc.Code_CODE_PERMISSION_DENIED}}, nil
+		}
+		return nil, errors.Wrap(err, "gateway: error calling TouchFile")
 	}
 
 	return res, nil
@@ -772,15 +883,17 @@ func (s *svc) Delete(ctx context.Context, req *provider.DeleteRequest) (*provide
 		}, nil
 	}
 
+	ctx, span := rtrace.Provider.Tracer("reva").Start(ctx, "Delete")
+	defer span.End()
+
 	if !s.inSharedFolder(ctx, p) {
 		return s.delete(ctx, req)
 	}
 
 	if s.isSharedFolder(ctx, p) {
 		// TODO(labkode): deleting share names should be allowed, means unmounting.
-		log.Debug().Msgf("path:%s points to shared folder or share name", p)
 		err := errtypes.BadRequest("gateway: cannot delete share folder or share name: path=" + p)
-		log.Err(err).Msg("gateway: error creating container")
+		span.RecordError(err)
 		return &provider.DeleteResponse{
 			Status: status.NewInvalidArg(ctx, "path points to share folder or share name"),
 		}, nil
@@ -790,25 +903,68 @@ func (s *svc) Delete(ctx context.Context, req *provider.DeleteRequest) (*provide
 	if s.isShareName(ctx, p) {
 		log.Debug().Msgf("path:%s points to share name", p)
 
-		ref := &provider.Reference{
-			Spec: &provider.Reference_Path{
-				Path: p,
-			},
+		sRes, err := s.ListReceivedShares(ctx, &collaboration.ListReceivedSharesRequest{})
+		if err != nil {
+			return nil, err
 		}
 
-		req.Ref = ref
-		return s.delete(ctx, req)
+		statRes, err := s.Stat(ctx, &provider.StatRequest{
+			Ref: &provider.Reference{
+				Path: p,
+			},
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		// the following will check that:
+		// - the resource to delete is a share the current user received
+		// - signal the storage the delete must not land in the trashbin
+		// - delete the resource and update the share status to "rejected"
+		for _, share := range sRes.Shares {
+			if statRes != nil && (share.Share.ResourceId.OpaqueId == statRes.Info.Id.OpaqueId) && (share.Share.ResourceId.StorageId == statRes.Info.Id.StorageId) {
+				// this opaque needs explanation. It signals the storage the resource we're about to delete does not
+				// belong to the current user because it was share to her, thus delete the "node" and don't send it to
+				// the trash bin, since the share can be mounted as many times as desired.
+				req.Opaque = &types.Opaque{
+					Map: map[string]*types.OpaqueEntry{
+						"deleting_shared_resource": {
+							Value:   []byte("true"),
+							Decoder: "plain",
+						},
+					},
+				}
+
+				// the following block takes care of updating the state of the share to "rejected". This will ensure the user
+				// can "Accept" the share once again.
+				// TODO should this be pending? If so, update the two comments above as well. If not, get rid of this comment.
+				share.State = collaboration.ShareState_SHARE_STATE_REJECTED
+				r := &collaboration.UpdateReceivedShareRequest{
+					Share:      share,
+					UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"state"}},
+				}
+
+				_, err := s.UpdateReceivedShare(ctx, r)
+				if err != nil {
+					return nil, err
+				}
+
+				return &provider.DeleteResponse{
+					Status: status.NewOK(ctx),
+				}, nil
+			}
+		}
+
+		return &provider.DeleteResponse{
+			Status: status.NewNotFound(ctx, "could not find share"),
+		}, nil
 	}
 
 	if s.isShareChild(ctx, p) {
 		shareName, shareChild := s.splitShare(ctx, p)
 		log.Debug().Msgf("path:%s sharename:%s sharechild: %s", p, shareName, shareChild)
 
-		ref := &provider.Reference{
-			Spec: &provider.Reference_Path{
-				Path: shareName,
-			},
-		}
+		ref := &provider.Reference{Path: shareName}
 
 		statReq := &provider.StatRequest{Ref: ref}
 		statRes, err := s.stat(ctx, statReq)
@@ -844,14 +1000,7 @@ func (s *svc) Delete(ctx context.Context, req *provider.DeleteRequest) (*provide
 		}
 
 		// append child to target
-		target := path.Join(ri.Path, shareChild)
-		ref = &provider.Reference{
-			Spec: &provider.Reference_Path{
-				Path: target,
-			},
-		}
-
-		req.Ref = ref
+		req.Ref.Path = path.Join(ri.Path, shareChild)
 		return s.delete(ctx, req)
 	}
 
@@ -869,6 +1018,9 @@ func (s *svc) delete(ctx context.Context, req *provider.DeleteRequest) (*provide
 
 	res, err := c.Delete(ctx, req)
 	if err != nil {
+		if gstatus.Code(err) == codes.PermissionDenied {
+			return &provider.DeleteResponse{Status: &rpc.Status{Code: rpc.Code_CODE_PERMISSION_DENIED}}, nil
+		}
 		return nil, errors.Wrap(err, "gateway: error calling Delete")
 	}
 
@@ -884,10 +1036,10 @@ func (s *svc) Move(ctx context.Context, req *provider.MoveRequest) (*provider.Mo
 		}, nil
 	}
 
-	dp, st2 := s.getPath(ctx, req.Destination)
-	if st2.Code != rpc.Code_CODE_OK && st2.Code != rpc.Code_CODE_NOT_FOUND {
+	dp, st := s.getPath(ctx, req.Destination)
+	if st.Code != rpc.Code_CODE_OK && st.Code != rpc.Code_CODE_NOT_FOUND {
 		return &provider.MoveResponse{
-			Status: st2,
+			Status: st,
 		}, nil
 	}
 
@@ -907,43 +1059,61 @@ func (s *svc) Move(ctx context.Context, req *provider.MoveRequest) (*provider.Mo
 		dshareName, dshareChild := s.splitShare(ctx, dp)
 		log.Debug().Msgf("srcpath:%s dstpath:%s srcsharename:%s srcsharechild: %s dstsharename:%s dstsharechild:%s ", p, dp, shareName, shareChild, dshareName, dshareChild)
 
-		if shareName != dshareName {
-			err := errtypes.BadRequest("gateway: move: src and dst points to different targets")
-			return &provider.MoveResponse{
-				Status: status.NewStatusFromErrType(ctx, "gateway: error moving", err),
-			}, nil
-
-		}
-
-		statReq := &provider.StatRequest{
-			Ref: &provider.Reference{
-				Spec: &provider.Reference_Path{
-					Path: shareName,
-				},
-			},
-		}
-		statRes, err := s.stat(ctx, statReq)
+		srcStatReq := &provider.StatRequest{Ref: &provider.Reference{Path: shareName}}
+		srcStatRes, err := s.stat(ctx, srcStatReq)
 		if err != nil {
 			return &provider.MoveResponse{
-				Status: status.NewInternal(ctx, err, "gateway: error stating ref:"+statReq.Ref.String()),
+				Status: status.NewInternal(ctx, err, "gateway: error stating ref:"+srcStatReq.Ref.String()),
 			}, nil
 		}
 
-		if statRes.Status.Code != rpc.Code_CODE_OK {
+		if srcStatRes.Status.Code != rpc.Code_CODE_OK {
 			return &provider.MoveResponse{
-				Status: statRes.Status,
+				Status: srcStatRes.Status,
 			}, nil
 		}
 
-		ri, protocol, err := s.checkRef(ctx, statRes.Info)
+		dstStatReq := &provider.StatRequest{Ref: &provider.Reference{Path: dshareName}}
+		dstStatRes, err := s.stat(ctx, dstStatReq)
 		if err != nil {
 			return &provider.MoveResponse{
-				Status: status.NewStatusFromErrType(ctx, "error resolving reference "+statRes.Info.Target, err),
+				Status: status.NewInternal(ctx, err, "gateway: error stating ref:"+srcStatReq.Ref.String()),
 			}, nil
 		}
 
-		if protocol == "webdav" {
-			err = s.webdavRefMove(ctx, statRes.Info.Target, shareChild, dshareChild)
+		if dstStatRes.Status.Code != rpc.Code_CODE_OK {
+			return &provider.MoveResponse{
+				Status: srcStatRes.Status,
+			}, nil
+		}
+
+		srcRi, srcProtocol, err := s.checkRef(ctx, srcStatRes.Info)
+		if err != nil {
+			return &provider.MoveResponse{
+				Status: status.NewStatusFromErrType(ctx, "error resolving reference "+srcStatRes.Info.Target, err),
+			}, nil
+		}
+
+		if srcProtocol == "webdav" {
+			err = s.webdavRefMove(ctx, dstStatRes.Info.Target, shareChild, dshareChild)
+			if err != nil {
+				return &provider.MoveResponse{
+					Status: status.NewInternal(ctx, err, "gateway: error moving resource on webdav host: "+p),
+				}, nil
+			}
+			return &provider.MoveResponse{
+				Status: status.NewOK(ctx),
+			}, nil
+		}
+		dstRi, dstProtocol, err := s.checkRef(ctx, dstStatRes.Info)
+		if err != nil {
+			return &provider.MoveResponse{
+				Status: status.NewStatusFromErrType(ctx, "error resolving reference "+srcStatRes.Info.Target, err),
+			}, nil
+		}
+
+		if dstProtocol == "webdav" {
+			err = s.webdavRefMove(ctx, dstStatRes.Info.Target, shareChild, dshareChild)
 			if err != nil {
 				return &provider.MoveResponse{
 					Status: status.NewInternal(ctx, err, "gateway: error moving resource on webdav host: "+p),
@@ -955,14 +1125,10 @@ func (s *svc) Move(ctx context.Context, req *provider.MoveRequest) (*provider.Mo
 		}
 
 		src := &provider.Reference{
-			Spec: &provider.Reference_Path{
-				Path: path.Join(ri.Path, shareChild),
-			},
+			Path: path.Join(srcRi.Path, shareChild),
 		}
 		dst := &provider.Reference{
-			Spec: &provider.Reference_Path{
-				Path: path.Join(ri.Path, dshareChild),
-			},
+			Path: path.Join(dstRi.Path, dshareChild),
 		}
 
 		req.Source = src
@@ -977,33 +1143,42 @@ func (s *svc) Move(ctx context.Context, req *provider.MoveRequest) (*provider.Mo
 }
 
 func (s *svc) move(ctx context.Context, req *provider.MoveRequest) (*provider.MoveResponse, error) {
-	srcList, err := s.findProviders(ctx, req.Source)
+	srcProviders, err := s.findProviders(ctx, req.Source)
 	if err != nil {
 		return &provider.MoveResponse{
 			Status: status.NewStatusFromErrType(ctx, "move src="+req.Source.String(), err),
 		}, nil
 	}
 
-	dstList, err := s.findProviders(ctx, req.Destination)
+	dstProviders, err := s.findProviders(ctx, req.Destination)
 	if err != nil {
 		return &provider.MoveResponse{
 			Status: status.NewStatusFromErrType(ctx, "move dst="+req.Destination.String(), err),
 		}, nil
 	}
-	srcP, dstP := srcList[0], dstList[0]
 
-	// if providers are not the same we do not implement cross storage copy yet.
-	if srcP.Address != dstP.Address {
+	// if providers are not the same we do not implement cross storage move yet.
+	if len(srcProviders) != 1 || len(dstProviders) != 1 {
 		res := &provider.MoveResponse{
 			Status: status.NewUnimplemented(ctx, nil, "gateway: cross storage copy not yet implemented"),
 		}
 		return res, nil
 	}
 
-	c, err := s.getStorageProviderClient(ctx, srcP)
+	srcProvider, dstProvider := srcProviders[0], dstProviders[0]
+
+	// if providers are not the same we do not implement cross storage copy yet.
+	if srcProvider.Address != dstProvider.Address {
+		res := &provider.MoveResponse{
+			Status: status.NewUnimplemented(ctx, nil, "gateway: cross storage copy not yet implemented"),
+		}
+		return res, nil
+	}
+
+	c, err := s.getStorageProviderClient(ctx, srcProvider)
 	if err != nil {
 		return &provider.MoveResponse{
-			Status: status.NewInternal(ctx, err, "error connecting to storage provider="+srcP.Address),
+			Status: status.NewInternal(ctx, err, "error connecting to storage provider="+srcProvider.Address),
 		}, nil
 	}
 
@@ -1021,7 +1196,10 @@ func (s *svc) SetArbitraryMetadata(ctx context.Context, req *provider.SetArbitra
 
 	res, err := c.SetArbitraryMetadata(ctx, req)
 	if err != nil {
-		return nil, errors.Wrap(err, "gateway: error calling Stat")
+		if gstatus.Code(err) == codes.PermissionDenied {
+			return &provider.SetArbitraryMetadataResponse{Status: &rpc.Status{Code: rpc.Code_CODE_PERMISSION_DENIED}}, nil
+		}
+		return nil, errors.Wrap(err, "gateway: error calling SetArbitraryMetadata")
 	}
 
 	return res, nil
@@ -1038,20 +1216,97 @@ func (s *svc) UnsetArbitraryMetadata(ctx context.Context, req *provider.UnsetArb
 
 	res, err := c.UnsetArbitraryMetadata(ctx, req)
 	if err != nil {
-		return nil, errors.Wrap(err, "gateway: error calling Stat")
+		if gstatus.Code(err) == codes.PermissionDenied {
+			return &provider.UnsetArbitraryMetadataResponse{Status: &rpc.Status{Code: rpc.Code_CODE_PERMISSION_DENIED}}, nil
+		}
+		return nil, errors.Wrap(err, "gateway: error calling UnsetArbitraryMetadata")
+	}
+
+	return res, nil
+}
+
+// SetLock puts a lock on the given reference
+func (s *svc) SetLock(ctx context.Context, req *provider.SetLockRequest) (*provider.SetLockResponse, error) {
+	c, err := s.find(ctx, req.Ref)
+	if err != nil {
+		return &provider.SetLockResponse{
+			Status: status.NewStatusFromErrType(ctx, "SetLock ref="+req.Ref.String(), err),
+		}, nil
+	}
+
+	res, err := c.SetLock(ctx, req)
+	if err != nil {
+		if gstatus.Code(err) == codes.PermissionDenied {
+			return &provider.SetLockResponse{Status: &rpc.Status{Code: rpc.Code_CODE_PERMISSION_DENIED}}, nil
+		}
+		return nil, errors.Wrap(err, "gateway: error calling SetLock")
+	}
+
+	return res, nil
+}
+
+// GetLock returns an existing lock on the given reference
+func (s *svc) GetLock(ctx context.Context, req *provider.GetLockRequest) (*provider.GetLockResponse, error) {
+	c, err := s.find(ctx, req.Ref)
+	if err != nil {
+		return &provider.GetLockResponse{
+			Status: status.NewStatusFromErrType(ctx, "GetLock ref="+req.Ref.String(), err),
+		}, nil
+	}
+
+	res, err := c.GetLock(ctx, req)
+	if err != nil {
+		if gstatus.Code(err) == codes.PermissionDenied {
+			return &provider.GetLockResponse{Status: &rpc.Status{Code: rpc.Code_CODE_PERMISSION_DENIED}}, nil
+		}
+		return nil, errors.Wrap(err, "gateway: error calling GetLock")
+	}
+
+	return res, nil
+}
+
+// RefreshLock refreshes an existing lock on the given reference
+func (s *svc) RefreshLock(ctx context.Context, req *provider.RefreshLockRequest) (*provider.RefreshLockResponse, error) {
+	c, err := s.find(ctx, req.Ref)
+	if err != nil {
+		return &provider.RefreshLockResponse{
+			Status: status.NewStatusFromErrType(ctx, "RefreshLock ref="+req.Ref.String(), err),
+		}, nil
+	}
+
+	res, err := c.RefreshLock(ctx, req)
+	if err != nil {
+		if gstatus.Code(err) == codes.PermissionDenied {
+			return &provider.RefreshLockResponse{Status: &rpc.Status{Code: rpc.Code_CODE_PERMISSION_DENIED}}, nil
+		}
+		return nil, errors.Wrap(err, "gateway: error calling RefreshLock")
+	}
+
+	return res, nil
+}
+
+// Unlock removes an existing lock from the given reference
+func (s *svc) Unlock(ctx context.Context, req *provider.UnlockRequest) (*provider.UnlockResponse, error) {
+	c, err := s.find(ctx, req.Ref)
+	if err != nil {
+		return &provider.UnlockResponse{
+			Status: status.NewStatusFromErrType(ctx, "Unlock ref="+req.Ref.String(), err),
+		}, nil
+	}
+
+	res, err := c.Unlock(ctx, req)
+	if err != nil {
+		if gstatus.Code(err) == codes.PermissionDenied {
+			return &provider.UnlockResponse{Status: &rpc.Status{Code: rpc.Code_CODE_PERMISSION_DENIED}}, nil
+		}
+		return nil, errors.Wrap(err, "gateway: error calling Unlock")
 	}
 
 	return res, nil
 }
 
 func (s *svc) statHome(ctx context.Context) (*provider.StatResponse, error) {
-	statRes, err := s.stat(ctx, &provider.StatRequest{
-		Ref: &provider.Reference{
-			Spec: &provider.Reference_Path{
-				Path: s.getHome(ctx),
-			},
-		},
-	})
+	statRes, err := s.stat(ctx, &provider.StatRequest{Ref: &provider.Reference{Path: s.getHome(ctx)}})
 	if err != nil {
 		return &provider.StatResponse{
 			Status: status.NewInternal(ctx, err, "gateway: error stating home"),
@@ -1099,13 +1354,7 @@ func (s *svc) statHome(ctx context.Context) (*provider.StatResponse, error) {
 }
 
 func (s *svc) statSharesFolder(ctx context.Context) (*provider.StatResponse, error) {
-	statRes, err := s.stat(ctx, &provider.StatRequest{
-		Ref: &provider.Reference{
-			Spec: &provider.Reference_Path{
-				Path: s.getSharedFolder(ctx),
-			},
-		},
-	})
+	statRes, err := s.stat(ctx, &provider.StatRequest{Ref: &provider.Reference{Path: s.getSharedFolder(ctx)}})
 	if err != nil {
 		return &provider.StatResponse{
 			Status: status.NewInternal(ctx, err, "gateway: error stating shares folder"),
@@ -1154,91 +1403,98 @@ func (s *svc) stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 			Status: status.NewStatusFromErrType(ctx, "stat ref: "+req.Ref.String(), err),
 		}, nil
 	}
+	providers = getUniqueProviders(providers)
 
 	resPath := req.Ref.GetPath()
-	if len(providers) == 1 && (resPath == "" || strings.HasPrefix(resPath, providers[0].ProviderPath)) {
+	if len(providers) == 1 && (utils.IsRelativeReference(req.Ref) || resPath == "" || strings.HasPrefix(resPath, providers[0].ProviderPath)) {
 		c, err := s.getStorageProviderClient(ctx, providers[0])
 		if err != nil {
 			return &provider.StatResponse{
 				Status: status.NewInternal(ctx, err, "error connecting to storage provider="+providers[0].Address),
 			}, nil
 		}
-		return c.Stat(ctx, req)
-	}
-
-	infoFromProviders := make([]*provider.ResourceInfo, len(providers))
-	errors := make([]error, len(providers))
-	var wg sync.WaitGroup
-
-	for i, p := range providers {
-		wg.Add(1)
-		go s.statOnProvider(ctx, req, infoFromProviders[i], p, &errors[i], &wg)
-	}
-	wg.Wait()
-
-	var totalSize uint64
-	for i := range providers {
-		if errors[i] != nil {
-			return &provider.StatResponse{
-				Status: status.NewStatusFromErrType(ctx, "stat ref: "+req.Ref.String(), errors[i]),
-			}, nil
+		rsp, err := c.Stat(ctx, req)
+		if err != nil || rsp.Status.Code != rpc.Code_CODE_OK {
+			return rsp, err
 		}
-		if infoFromProviders[i] != nil {
-			totalSize += infoFromProviders[i].Size
+		return rsp, nil
+	}
+
+	return s.statAcrossProviders(ctx, req, providers)
+}
+
+func (s *svc) statAcrossProviders(ctx context.Context, req *provider.StatRequest, providers []*registry.ProviderInfo) (*provider.StatResponse, error) {
+	// TODO(ishank011): aggregrate properties such as etag, checksum, etc.
+	log := appctx.GetLogger(ctx)
+	info := &provider.ResourceInfo{
+		Id: &provider.ResourceId{
+			StorageId: "/",
+			OpaqueId:  uuid.New().String(),
+		},
+		Type:     provider.ResourceType_RESOURCE_TYPE_CONTAINER,
+		Path:     req.Ref.GetPath(),
+		MimeType: "httpd/unix-directory",
+		Size:     0,
+		Mtime:    &types.Timestamp{},
+	}
+
+	for _, p := range providers {
+		c, err := s.getStorageProviderClient(ctx, p)
+		if err != nil {
+			log.Err(err).Msg("error connecting to storage provider=" + p.Address)
+			continue
+		}
+		resp, err := c.Stat(ctx, req)
+		if err != nil {
+			log.Err(err).Msgf("gateway: error calling Stat %s: %+v", req.Ref.String(), p)
+			continue
+		}
+		if resp.Status.Code != rpc.Code_CODE_OK {
+			log.Err(status.NewErrorFromCode(rpc.Code_CODE_OK, "gateway"))
+			continue
+		}
+		if resp.Info != nil {
+			info.Size += resp.Info.Size
+			if utils.TSToUnixNano(resp.Info.Mtime) > utils.TSToUnixNano(info.Mtime) {
+				info.Mtime = resp.Info.Mtime
+				info.Etag = resp.Info.Etag
+				info.Checksum = resp.Info.Checksum
+			}
+			if info.Etag == "" && info.Etag != resp.Info.Etag {
+				info.Etag = resp.Info.Etag
+			}
 		}
 	}
 
-	// TODO(ishank011): aggregrate other properties for references spread across storage providers, eg. /eos
 	return &provider.StatResponse{
 		Status: status.NewOK(ctx),
-		Info: &provider.ResourceInfo{
-			Id: &provider.ResourceId{
-				StorageId: "/",
-				OpaqueId:  uuid.New().String(),
-			},
-			Type: provider.ResourceType_RESOURCE_TYPE_CONTAINER,
-			Path: resPath,
-			Size: totalSize,
-		},
+		Info:   info,
 	}, nil
 }
 
-func (s *svc) statOnProvider(ctx context.Context, req *provider.StatRequest, res *provider.ResourceInfo, p *registry.ProviderInfo, e *error, wg *sync.WaitGroup) {
-	defer wg.Done()
-	c, err := s.getStorageProviderClient(ctx, p)
-	if err != nil {
-		*e = errors.Wrap(err, "error connecting to storage provider="+p.Address)
-		return
-	}
-
-	resPath := path.Clean(req.Ref.GetPath())
-	newPath := req.Ref.GetPath()
-	if resPath != "" && !strings.HasPrefix(resPath, p.ProviderPath) {
-		newPath = p.ProviderPath
-	}
-	r, err := c.Stat(ctx, &provider.StatRequest{
-		Ref: &provider.Reference{
-			Spec: &provider.Reference_Path{
-				Path: newPath,
-			},
-		},
-	})
-	if err != nil {
-		*e = errors.Wrap(err, "gateway: error calling ListContainer")
-		return
-	}
-	if res == nil {
-		res = &provider.ResourceInfo{}
-	}
-	*res = *r.Info
-}
-
 func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.StatResponse, error) {
-	p, st := s.getPath(ctx, req.Ref, req.ArbitraryMetadataKeys...)
-	if st.Code != rpc.Code_CODE_OK {
-		return &provider.StatResponse{
-			Status: st,
-		}, nil
+	if utils.IsRelativeReference(req.Ref) {
+		return s.stat(ctx, req)
+	}
+
+	p := ""
+	var res *provider.StatResponse
+	var err error
+	if utils.IsAbsolutePathReference(req.Ref) {
+		p = req.Ref.Path
+	} else {
+		// Reference by just resource ID
+		// Stat it and store for future use
+		res, err = s.stat(ctx, req)
+		if err != nil {
+			return &provider.StatResponse{
+				Status: status.NewInternal(ctx, err, "gateway: error stating ref:"+req.Ref.String()),
+			}, nil
+		}
+		if res != nil && res.Status.Code != rpc.Code_CODE_OK {
+			return res, nil
+		}
+		p = res.Info.Path
 	}
 
 	if path.Clean(p) == s.getHome(ctx) {
@@ -1250,33 +1506,41 @@ func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 	}
 
 	if !s.inSharedFolder(ctx, p) {
+		if res != nil {
+			return res, nil
+		}
 		return s.stat(ctx, req)
 	}
 
 	// we need to provide the info of the target, not the reference.
 	if s.isShareName(ctx, p) {
-		statRes, err := s.stat(ctx, req)
-		if err != nil {
-			return &provider.StatResponse{
-				Status: status.NewInternal(ctx, err, "gateway: error stating ref:"+req.Ref.String()),
-			}, nil
+		// If we haven't returned an error by now and res is nil, it means that
+		// req is an absolute path based ref, so we didn't stat it previously.
+		// So stat it now
+		if res == nil {
+			res, err = s.stat(ctx, req)
+			if err != nil {
+				return &provider.StatResponse{
+					Status: status.NewInternal(ctx, err, "gateway: error stating ref:"+req.Ref.String()),
+				}, nil
+			}
+
+			if res.Status.Code != rpc.Code_CODE_OK {
+				return &provider.StatResponse{
+					Status: res.Status,
+				}, nil
+			}
 		}
 
-		if statRes.Status.Code != rpc.Code_CODE_OK {
-			return &provider.StatResponse{
-				Status: statRes.Status,
-			}, nil
-		}
-
-		ri, protocol, err := s.checkRef(ctx, statRes.Info)
+		ri, protocol, err := s.checkRef(ctx, res.Info)
 		if err != nil {
 			return &provider.StatResponse{
-				Status: status.NewStatusFromErrType(ctx, "error resolving reference "+statRes.Info.Target, err),
+				Status: status.NewStatusFromErrType(ctx, "error resolving reference "+res.Info.Target, err),
 			}, nil
 		}
 
 		if protocol == "webdav" {
-			ri, err = s.webdavRefStat(ctx, statRes.Info.Target)
+			ri, err = s.webdavRefStat(ctx, res.Info.Target)
 			if err != nil {
 				return &provider.StatResponse{
 					Status: status.NewInternal(ctx, err, "gateway: error resolving webdav reference: "+p),
@@ -1288,23 +1552,17 @@ func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 		// information. For example, if requests comes to: /home/MyShares/photos and photos
 		// is reference to /user/peter/Holidays/photos, we need to still return to the user
 		// /home/MyShares/photos
-		orgPath := statRes.Info.Path
-		statRes.Info = ri
-		statRes.Info.Path = orgPath
-		return statRes, nil
+		orgPath := res.Info.Path
+		res.Info = ri
+		res.Info.Path = orgPath
+		return res, nil
 
 	}
 
 	if s.isShareChild(ctx, p) {
 		shareName, shareChild := s.splitShare(ctx, p)
 
-		statReq := &provider.StatRequest{
-			Ref: &provider.Reference{
-				Spec: &provider.Reference_Path{
-					Path: shareName,
-				},
-			},
-		}
+		statReq := &provider.StatRequest{Ref: &provider.Reference{Path: shareName}}
 		statRes, err := s.stat(ctx, statReq)
 		if err != nil {
 			return &provider.StatResponse{
@@ -1340,11 +1598,7 @@ func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 		}
 
 		// append child to target
-		req.Ref = &provider.Reference{
-			Spec: &provider.Reference_Path{
-				Path: path.Join(ri.Path, shareChild),
-			},
-		}
+		req.Ref.Path = path.Join(ri.Path, shareChild)
 		res, err := s.stat(ctx, req)
 		if err != nil {
 			return &provider.StatResponse{
@@ -1389,7 +1643,7 @@ func (s *svc) checkRef(ctx context.Context, ri *provider.ResourceInfo) (*provide
 	case "webdav":
 		return nil, "webdav", nil
 	default:
-		err := errors.New("gateway: no reference handler for scheme: " + uri.Scheme)
+		err := errtypes.BadRequest("gateway: no reference handler for scheme: " + uri.Scheme)
 		return nil, "", err
 	}
 }
@@ -1407,11 +1661,9 @@ func (s *svc) handleCS3Ref(ctx context.Context, opaque string) (*provider.Resour
 
 	req := &provider.StatRequest{
 		Ref: &provider.Reference{
-			Spec: &provider.Reference_Id{
-				Id: &provider.ResourceId{
-					StorageId: parts[0],
-					OpaqueId:  parts[1],
-				},
+			ResourceId: &provider.ResourceId{
+				StorageId: parts[0],
+				OpaqueId:  parts[1],
 			},
 		},
 	}
@@ -1431,12 +1683,12 @@ func (s *svc) handleCS3Ref(ctx context.Context, opaque string) (*provider.Resour
 		case rpc.Code_CODE_UNIMPLEMENTED:
 			return nil, errtypes.NotSupported(req.Ref.String())
 		default:
-			return nil, errors.New("gateway: error stating target reference")
+			return nil, errtypes.InternalError("gateway: error stating target reference")
 		}
 	}
 
 	if res.Info.Type == provider.ResourceType_RESOURCE_TYPE_REFERENCE {
-		err := errors.New("gateway: error the target of a reference cannot be another reference")
+		err := errtypes.BadRequest("gateway: error the target of a reference cannot be another reference")
 		return nil, err
 	}
 
@@ -1449,11 +1701,7 @@ func (s *svc) ListContainerStream(_ *provider.ListContainerStreamRequest, _ gate
 
 func (s *svc) listHome(ctx context.Context, req *provider.ListContainerRequest) (*provider.ListContainerResponse, error) {
 	lcr, err := s.listContainer(ctx, &provider.ListContainerRequest{
-		Ref: &provider.Reference{
-			Spec: &provider.Reference_Path{
-				Path: s.getHome(ctx),
-			},
-		},
+		Ref:                   &provider.Reference{Path: s.getHome(ctx)},
 		ArbitraryMetadataKeys: req.ArbitraryMetadataKeys,
 	})
 	if err != nil {
@@ -1468,7 +1716,7 @@ func (s *svc) listHome(ctx context.Context, req *provider.ListContainerRequest) 
 	}
 
 	for i := range lcr.Infos {
-		if s.isSharedFolder(ctx, lcr.Infos[i].Path) {
+		if s.isSharedFolder(ctx, lcr.Infos[i].GetPath()) {
 			statSharedFolder, err := s.statSharesFolder(ctx)
 			if err != nil {
 				return &provider.ListContainerResponse{
@@ -1489,13 +1737,7 @@ func (s *svc) listHome(ctx context.Context, req *provider.ListContainerRequest) 
 }
 
 func (s *svc) listSharesFolder(ctx context.Context) (*provider.ListContainerResponse, error) {
-	lcr, err := s.listContainer(ctx, &provider.ListContainerRequest{
-		Ref: &provider.Reference{
-			Spec: &provider.Reference_Path{
-				Path: s.getSharedFolder(ctx),
-			},
-		},
-	})
+	lcr, err := s.listContainer(ctx, &provider.ListContainerRequest{Ref: &provider.Reference{Path: s.getSharedFolder(ctx)}})
 	if err != nil {
 		return &provider.ListContainerResponse{
 			Status: status.NewInternal(ctx, err, "gateway: error listing shared folder"),
@@ -1526,12 +1768,42 @@ func (s *svc) listSharesFolder(ctx context.Context) (*provider.ListContainerResp
 			}
 		}
 
-		info.Path = lcr.Infos[i].GetPath()
+		info.Path = lcr.Infos[i].Path
 		checkedInfos = append(checkedInfos, info)
 	}
 	lcr.Infos = checkedInfos
 
 	return lcr, nil
+}
+
+func (s *svc) filterProvidersByUserAgent(ctx context.Context, providers []*registry.ProviderInfo) []*registry.ProviderInfo {
+	cat, ok := ctxpkg.ContextGetUserAgentCategory(ctx)
+	if !ok {
+		return providers
+	}
+
+	filters := []*registry.ProviderInfo{}
+	for _, p := range providers {
+		if s.isPathAllowed(cat, p.ProviderPath) {
+			filters = append(filters, p)
+		}
+	}
+	return filters
+}
+
+func (s *svc) isPathAllowed(cat string, path string) bool {
+	allowedUserAgents, ok := s.c.AllowedUserAgents[path]
+	if !ok {
+		// if no user agent is defined for a path, all user agents are allowed
+		return true
+	}
+
+	for _, userAgent := range allowedUserAgents {
+		if userAgent == cat {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *svc) listContainer(ctx context.Context, req *provider.ListContainerRequest) (*provider.ListContainerResponse, error) {
@@ -1541,49 +1813,76 @@ func (s *svc) listContainer(ctx context.Context, req *provider.ListContainerRequ
 			Status: status.NewStatusFromErrType(ctx, "listContainer ref: "+req.Ref.String(), err),
 		}, nil
 	}
+	providers = getUniqueProviders(providers)
 
-	resPath := path.Clean(req.Ref.GetPath())
-	infoFromProviders := make([][]*provider.ResourceInfo, len(providers))
-	errors := make([]error, len(providers))
-	var wg sync.WaitGroup
+	resPath := req.Ref.GetPath()
 
-	for i, p := range providers {
-		wg.Add(1)
-		go s.listContainerOnProvider(ctx, req, &infoFromProviders[i], p, &errors[i], &wg)
-	}
-	wg.Wait()
-
-	infos := []*provider.ResourceInfo{}
-	indirects := make(map[string][]*provider.ResourceInfo)
-	for i := range providers {
-		if errors[i] != nil {
+	if len(providers) == 1 && (utils.IsRelativeReference(req.Ref) || resPath == "" || strings.HasPrefix(resPath, providers[0].ProviderPath)) {
+		c, err := s.getStorageProviderClient(ctx, providers[0])
+		if err != nil {
 			return &provider.ListContainerResponse{
-				Status: status.NewStatusFromErrType(ctx, "listContainer ref: "+req.Ref.String(), errors[i]),
+				Status: status.NewInternal(ctx, err, "error connecting to storage provider="+providers[0].Address),
 			}, nil
 		}
-		for _, inf := range infoFromProviders[i] {
-			if parent := path.Dir(inf.Path); resPath != "" && resPath != parent {
-				parts := strings.Split(strings.TrimPrefix(inf.Path, resPath), "/")
-				p := path.Join(resPath, parts[1])
-				indirects[p] = append(indirects[p], inf)
+		rsp, err := c.ListContainer(ctx, req)
+		if err != nil || rsp.Status.Code != rpc.Code_CODE_OK {
+			return rsp, err
+		}
+		return rsp, nil
+	}
+
+	return s.listContainerAcrossProviders(ctx, req, providers)
+}
+
+func (s *svc) listContainerAcrossProviders(ctx context.Context, req *provider.ListContainerRequest, providers []*registry.ProviderInfo) (*provider.ListContainerResponse, error) {
+	nestedInfos := make(map[string]*provider.ResourceInfo)
+	log := appctx.GetLogger(ctx)
+
+	for _, p := range s.filterProvidersByUserAgent(ctx, providers) {
+		c, err := s.getStorageProviderClient(ctx, p)
+		if err != nil {
+			log.Err(err).Msg("error connecting to storage provider=" + p.Address)
+			continue
+		}
+		resp, err := c.ListContainer(ctx, req)
+		if err != nil {
+			log.Err(err).Msgf("gateway: error calling Stat %s: %+v", req.Ref.String(), p)
+			continue
+		}
+		if resp.Status.Code != rpc.Code_CODE_OK {
+			log.Err(status.NewErrorFromCode(rpc.Code_CODE_OK, "gateway"))
+			continue
+		}
+
+		for _, info := range resp.Infos {
+			if p, ok := nestedInfos[info.Path]; ok {
+				// Since more than one providers contribute to this path,
+				// use a generic ID
+				p.Id = &provider.ResourceId{
+					StorageId: "/",
+					OpaqueId:  uuid.New().String(),
+				}
+				// TODO(ishank011): aggregrate properties such as etag, checksum, etc.
+				p.Size += info.Size
+				if utils.TSToUnixNano(info.Mtime) > utils.TSToUnixNano(p.Mtime) {
+					p.Mtime = info.Mtime
+					p.Etag = info.Etag
+					p.Checksum = info.Checksum
+				}
+				if p.Etag == "" && p.Etag != info.Etag {
+					p.Etag = info.Etag
+				}
+				p.Type = provider.ResourceType_RESOURCE_TYPE_CONTAINER
+				p.MimeType = "httpd/unix-directory"
 			} else {
-				infos = append(infos, inf)
+				nestedInfos[info.Path] = info
 			}
 		}
 	}
 
-	for k, v := range indirects {
-		inf := &provider.ResourceInfo{
-			Id: &provider.ResourceId{
-				StorageId: "/",
-				OpaqueId:  uuid.New().String(),
-			},
-			Type: provider.ResourceType_RESOURCE_TYPE_CONTAINER,
-			Etag: etag.GenerateEtagFromResources(nil, v),
-			Path: k,
-			Size: 0,
-		}
-		infos = append(infos, inf)
+	infos := make([]*provider.ResourceInfo, 0, len(nestedInfos))
+	for _, info := range nestedInfos {
+		infos = append(infos, info)
 	}
 
 	return &provider.ListContainerResponse{
@@ -1592,35 +1891,13 @@ func (s *svc) listContainer(ctx context.Context, req *provider.ListContainerRequ
 	}, nil
 }
 
-func (s *svc) listContainerOnProvider(ctx context.Context, req *provider.ListContainerRequest, res *[]*provider.ResourceInfo, p *registry.ProviderInfo, e *error, wg *sync.WaitGroup) {
-	defer wg.Done()
-	c, err := s.getStorageProviderClient(ctx, p)
-	if err != nil {
-		*e = errors.Wrap(err, "error connecting to storage provider="+p.Address)
-		return
-	}
-
-	resPath := path.Clean(req.Ref.GetPath())
-	newPath := req.Ref.GetPath()
-	if resPath != "" && !strings.HasPrefix(resPath, p.ProviderPath) {
-		newPath = p.ProviderPath
-	}
-	r, err := c.ListContainer(ctx, &provider.ListContainerRequest{
-		Ref: &provider.Reference{
-			Spec: &provider.Reference_Path{
-				Path: newPath,
-			},
-		},
-	})
-	if err != nil {
-		*e = errors.Wrap(err, "gateway: error calling ListContainer")
-		return
-	}
-	*res = r.Infos
-}
-
 func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequest) (*provider.ListContainerResponse, error) {
 	log := appctx.GetLogger(ctx)
+
+	if utils.IsRelativeReference(req.Ref) {
+		return s.listContainer(ctx, req)
+	}
+
 	p, st := s.getPath(ctx, req.Ref, req.ArbitraryMetadataKeys...)
 	if st.Code != rpc.Code_CODE_OK {
 		return &provider.ListContainerResponse{
@@ -1642,13 +1919,7 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 
 	// we need to provide the info of the target, not the reference.
 	if s.isShareName(ctx, p) {
-		statReq := &provider.StatRequest{
-			Ref: &provider.Reference{
-				Spec: &provider.Reference_Path{
-					Path: p,
-				},
-			},
-		}
+		statReq := &provider.StatRequest{Ref: &provider.Reference{Path: p}}
 		statRes, err := s.stat(ctx, statReq)
 		if err != nil {
 			return &provider.ListContainerResponse{
@@ -1696,11 +1967,7 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 		}
 
 		newReq := &provider.ListContainerRequest{
-			Ref: &provider.Reference{
-				Spec: &provider.Reference_Path{
-					Path: ri.Path,
-				},
-			},
+			Ref:                   &provider.Reference{Path: ri.Path},
 			ArbitraryMetadataKeys: req.ArbitraryMetadataKeys,
 		}
 		newRes, err := s.listContainer(ctx, newReq)
@@ -1729,13 +1996,7 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 	if s.isShareChild(ctx, p) {
 		shareName, shareChild := s.splitShare(ctx, p)
 
-		statReq := &provider.StatRequest{
-			Ref: &provider.Reference{
-				Spec: &provider.Reference_Path{
-					Path: shareName,
-				},
-			},
-		}
+		statReq := &provider.StatRequest{Ref: &provider.Reference{Path: shareName}}
 		statRes, err := s.stat(ctx, statReq)
 		if err != nil {
 			return &provider.ListContainerResponse{
@@ -1783,11 +2044,7 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 		}
 
 		newReq := &provider.ListContainerRequest{
-			Ref: &provider.Reference{
-				Spec: &provider.Reference_Path{
-					Path: path.Join(ri.Path, shareChild),
-				},
-			},
+			Ref:                   &provider.Reference{Path: path.Join(ri.Path, shareChild)},
 			ArbitraryMetadataKeys: req.ArbitraryMetadataKeys,
 		}
 		newRes, err := s.listContainer(ctx, newReq)
@@ -1817,20 +2074,24 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 }
 
 func (s *svc) getPath(ctx context.Context, ref *provider.Reference, keys ...string) (string, *rpc.Status) {
-	if ref.GetPath() != "" {
-		return ref.GetPath(), &rpc.Status{Code: rpc.Code_CODE_OK}
-	}
 
-	if ref.GetId() != nil && ref.GetId().GetOpaqueId() != "" {
+	// check if it is an id based or combined reference first
+	if ref.ResourceId != nil {
 		req := &provider.StatRequest{Ref: ref, ArbitraryMetadataKeys: keys}
 		res, err := s.stat(ctx, req)
-		if (res != nil && res.Status.Code != rpc.Code_CODE_OK) || err != nil {
+		if err != nil {
+			return "", status.NewStatusFromErrType(ctx, "getPath ref="+ref.String(), err)
+		}
+		if res != nil && res.Status.Code != rpc.Code_CODE_OK {
 			return "", res.Status
 		}
 
 		return res.Info.Path, res.Status
 	}
 
+	if utils.IsAbsolutePathReference(ref) {
+		return ref.Path, &rpc.Status{Code: rpc.Code_CODE_OK}
+	}
 	return "", &rpc.Status{Code: rpc.Code_CODE_INTERNAL}
 }
 
@@ -1905,7 +2166,7 @@ func (s *svc) getSharedFolder(ctx context.Context) string {
 
 func (s *svc) CreateSymlink(ctx context.Context, req *provider.CreateSymlinkRequest) (*provider.CreateSymlinkResponse, error) {
 	return &provider.CreateSymlinkResponse{
-		Status: status.NewUnimplemented(ctx, errors.New("CreateSymlink not implemented"), "CreateSymlink not implemented"),
+		Status: status.NewUnimplemented(ctx, errtypes.NotSupported("CreateSymlink not implemented"), "CreateSymlink not implemented"),
 	}, nil
 }
 
@@ -1941,12 +2202,12 @@ func (s *svc) RestoreFileVersion(ctx context.Context, req *provider.RestoreFileV
 	return res, nil
 }
 
-func (s *svc) ListRecycleStream(_ *gateway.ListRecycleStreamRequest, _ gateway.GatewayAPI_ListRecycleStreamServer) error {
-	return errors.New("Unimplemented")
+func (s *svc) ListRecycleStream(_ *provider.ListRecycleStreamRequest, _ gateway.GatewayAPI_ListRecycleStreamServer) error {
+	return errtypes.NotSupported("ListRecycleStream unimplemented")
 }
 
 // TODO use the ListRecycleRequest.Ref to only list the trash of a specific storage
-func (s *svc) ListRecycle(ctx context.Context, req *gateway.ListRecycleRequest) (*provider.ListRecycleResponse, error) {
+func (s *svc) ListRecycle(ctx context.Context, req *provider.ListRecycleRequest) (*provider.ListRecycleResponse, error) {
 	c, err := s.find(ctx, req.GetRef())
 	if err != nil {
 		return &provider.ListRecycleResponse{
@@ -1954,11 +2215,7 @@ func (s *svc) ListRecycle(ctx context.Context, req *gateway.ListRecycleRequest) 
 		}, nil
 	}
 
-	res, err := c.ListRecycle(ctx, &provider.ListRecycleRequest{
-		Opaque: req.Opaque,
-		FromTs: req.FromTs,
-		ToTs:   req.ToTs,
-	})
+	res, err := c.ListRecycle(ctx, req)
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error calling ListRecycleRequest")
 	}
@@ -1982,8 +2239,7 @@ func (s *svc) RestoreRecycleItem(ctx context.Context, req *provider.RestoreRecyc
 	return res, nil
 }
 
-func (s *svc) PurgeRecycle(ctx context.Context, req *gateway.PurgeRecycleRequest) (*provider.PurgeRecycleResponse, error) {
-	// lookup storage by treating the key as a path. It has been prefixed with the storage path in ListRecycle
+func (s *svc) PurgeRecycle(ctx context.Context, req *provider.PurgeRecycleRequest) (*provider.PurgeRecycleResponse, error) {
 	c, err := s.find(ctx, req.Ref)
 	if err != nil {
 		return &provider.PurgeRecycleResponse{
@@ -1991,10 +2247,7 @@ func (s *svc) PurgeRecycle(ctx context.Context, req *gateway.PurgeRecycleRequest
 		}, nil
 	}
 
-	res, err := c.PurgeRecycle(ctx, &provider.PurgeRecycleRequest{
-		Opaque: req.GetOpaque(),
-		Ref:    req.GetRef(),
-	})
+	res, err := c.PurgeRecycle(ctx, req)
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error calling PurgeRecycle")
 	}
@@ -2011,7 +2264,7 @@ func (s *svc) GetQuota(ctx context.Context, req *gateway.GetQuotaRequest) (*prov
 
 	res, err := c.GetQuota(ctx, &provider.GetQuotaRequest{
 		Opaque: req.GetOpaque(),
-		// Ref:    req.GetRef(), // TODO send which storage space ... or root
+		Ref:    req.GetRef(),
 	})
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error calling GetQuota")
@@ -2019,21 +2272,8 @@ func (s *svc) GetQuota(ctx context.Context, req *gateway.GetQuotaRequest) (*prov
 	return res, nil
 }
 
-func (s *svc) findByID(ctx context.Context, id *provider.ResourceId) (provider.ProviderAPIClient, error) {
-	ref := &provider.Reference{
-		Spec: &provider.Reference_Id{
-			Id: id,
-		},
-	}
-	return s.find(ctx, ref)
-}
-
 func (s *svc) findByPath(ctx context.Context, path string) (provider.ProviderAPIClient, error) {
-	ref := &provider.Reference{
-		Spec: &provider.Reference_Path{
-			Path: path,
-		},
-	}
+	ref := &provider.Reference{Path: path}
 	return s.find(ctx, ref)
 }
 
@@ -2046,7 +2286,7 @@ func (s *svc) find(ctx context.Context, ref *provider.Reference) (provider.Provi
 }
 
 func (s *svc) getStorageProviderClient(_ context.Context, p *registry.ProviderInfo) (provider.ProviderAPIClient, error) {
-	c, err := pool.GetStorageProviderServiceClient(p.Address)
+	c, err := pool.GetStorageProviderServiceClient(pool.Endpoint(p.Address))
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error getting a storage provider client")
 		return nil, err
@@ -2056,7 +2296,7 @@ func (s *svc) getStorageProviderClient(_ context.Context, p *registry.ProviderIn
 }
 
 func (s *svc) findProviders(ctx context.Context, ref *provider.Reference) ([]*registry.ProviderInfo, error) {
-	c, err := pool.GetStorageRegistryClient(s.c.StorageRegistryEndpoint)
+	c, err := pool.GetStorageRegistryClient(pool.Endpoint(s.c.StorageRegistryEndpoint))
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error getting storage registry client")
 	}
@@ -2085,10 +2325,22 @@ func (s *svc) findProviders(ctx context.Context, ref *provider.Reference) ([]*re
 	}
 
 	if res.Providers == nil {
-		return nil, errors.New("gateway: provider is nil")
+		return nil, errtypes.NotFound("gateway: provider is nil")
 	}
 
 	return res.Providers, nil
+}
+
+func getUniqueProviders(providers []*registry.ProviderInfo) []*registry.ProviderInfo {
+	unique := make(map[string]*registry.ProviderInfo)
+	for _, p := range providers {
+		unique[p.Address] = p
+	}
+	res := make([]*registry.ProviderInfo, 0, len(unique))
+	for _, provider := range unique {
+		res = append(res, provider)
+	}
+	return res
 }
 
 type etagWithTS struct {

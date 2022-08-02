@@ -51,9 +51,7 @@ func lsCommand() *command {
 			return err
 		}
 
-		ref := &provider.Reference{
-			Spec: &provider.Reference_Path{Path: fn},
-		}
+		ref := &provider.Reference{Path: fn}
 		req := &provider.ListContainerRequest{Ref: ref}
 
 		ctx := getAuthContext()

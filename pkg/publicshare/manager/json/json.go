@@ -44,7 +44,6 @@ import (
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
-	"go.opencensus.io/trace"
 )
 
 func init() {
@@ -222,7 +221,7 @@ func (m *manager) CreatePublicShare(ctx context.Context, u *user.User, rInfo *pr
 // UpdatePublicShare updates the public share
 func (m *manager) UpdatePublicShare(ctx context.Context, u *user.User, req *link.UpdatePublicShareRequest, g *link.Grant) (*link.PublicShare, error) {
 	log := appctx.GetLogger(ctx)
-	share, err := m.GetPublicShare(ctx, u, req.Ref)
+	share, err := m.GetPublicShare(ctx, u, req.Ref, false)
 	if err != nil {
 		return nil, errors.New("ref does not exist")
 	}
@@ -301,11 +300,17 @@ func (m *manager) UpdatePublicShare(ctx context.Context, u *user.User, req *link
 }
 
 // GetPublicShare gets a public share either by ID or Token.
-func (m *manager) GetPublicShare(ctx context.Context, u *user.User, ref *link.PublicShareReference) (*link.PublicShare, error) {
+func (m *manager) GetPublicShare(ctx context.Context, u *user.User, ref *link.PublicShareReference, sign bool) (*link.PublicShare, error) {
 	if ref.GetToken() != "" {
-		ps, err := m.getByToken(ctx, ref.GetToken())
+		ps, pw, err := m.getByToken(ctx, ref.GetToken())
 		if err != nil {
 			return nil, errors.New("no shares found by token")
+		}
+		if ps.PasswordProtected && sign {
+			err := publicshare.AddSignature(ps, pw)
+			if err != nil {
+				return nil, err
+			}
 		}
 		return ps, nil
 	}
@@ -320,6 +325,7 @@ func (m *manager) GetPublicShare(ctx context.Context, u *user.User, ref *link.Pu
 
 	for _, v := range db {
 		d := v.(map[string]interface{})["share"]
+		passDB := v.(map[string]interface{})["password"].(string)
 
 		var ps link.PublicShare
 		if err := utils.UnmarshalJSONToProtoV1([]byte(d.(string)), &ps); err != nil {
@@ -327,11 +333,17 @@ func (m *manager) GetPublicShare(ctx context.Context, u *user.User, ref *link.Pu
 		}
 
 		if ref.GetId().GetOpaqueId() == ps.Id.OpaqueId {
-			if !notExpired(&ps) {
+			if publicshare.IsExpired(&ps) {
 				if err := m.revokeExpiredPublicShare(ctx, &ps, u); err != nil {
 					return nil, err
 				}
 				return nil, errors.New("no shares found by id:" + ref.GetId().String())
+			}
+			if ps.PasswordProtected && sign {
+				err := publicshare.AddSignature(&ps, passDB)
+				if err != nil {
+					return nil, err
+				}
 			}
 			return &ps, nil
 		}
@@ -341,7 +353,7 @@ func (m *manager) GetPublicShare(ctx context.Context, u *user.User, ref *link.Pu
 }
 
 // ListPublicShares retrieves all the shares on the manager that are valid.
-func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []*link.ListPublicSharesRequest_Filter, md *provider.ResourceInfo) ([]*link.PublicShare, error) {
+func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []*link.ListPublicSharesRequest_Filter, md *provider.ResourceInfo, sign bool) ([]*link.PublicShare, error) {
 	var shares []*link.PublicShare
 
 	m.mutex.Lock()
@@ -363,34 +375,27 @@ func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []
 			continue
 		}
 
+		if local.PublicShare.PasswordProtected && sign {
+			if err := publicshare.AddSignature(&local.PublicShare, local.Password); err != nil {
+				return nil, err
+			}
+		}
+
 		if len(filters) == 0 {
 			shares = append(shares, &local.PublicShare)
-		} else {
-			for i := range filters {
-				if filters[i].Type == link.ListPublicSharesRequest_Filter_TYPE_RESOURCE_ID {
-					if local.ResourceId.StorageId == filters[i].GetResourceId().StorageId && local.ResourceId.OpaqueId == filters[i].GetResourceId().OpaqueId {
-						if notExpired(&local.PublicShare) {
-							shares = append(shares, &local.PublicShare)
-						} else if err := m.revokeExpiredPublicShare(ctx, &local.PublicShare, u); err != nil {
-							return nil, err
-						}
-					}
+			continue
+		}
 
-				}
+		if publicshare.MatchesFilters(&local.PublicShare, filters) {
+			if !publicshare.IsExpired(&local.PublicShare) {
+				shares = append(shares, &local.PublicShare)
+			} else if err := m.revokeExpiredPublicShare(ctx, &local.PublicShare, u); err != nil {
+				return nil, err
 			}
 		}
 	}
 
 	return shares, nil
-}
-
-// notExpired tests whether a public share is expired
-func notExpired(s *link.PublicShare) bool {
-	t := time.Unix(int64(s.Expiration.GetSeconds()), int64(s.Expiration.GetNanos()))
-	if (s.Expiration != nil && t.After(time.Now())) || s.Expiration == nil {
-		return true
-	}
-	return false
 }
 
 func (m *manager) cleanupExpiredShares() {
@@ -405,7 +410,7 @@ func (m *manager) cleanupExpiredShares() {
 		var ps link.PublicShare
 		_ = utils.UnmarshalJSONToProtoV1([]byte(d.(string)), &ps)
 
-		if !notExpired(&ps) {
+		if publicshare.IsExpired(&ps) {
 			_ = m.revokeExpiredPublicShare(context.Background(), &ps, nil)
 		}
 	}
@@ -418,12 +423,6 @@ func (m *manager) revokeExpiredPublicShare(ctx context.Context, s *link.PublicSh
 
 	m.mutex.Unlock()
 	defer m.mutex.Lock()
-
-	span := trace.FromContext(ctx)
-	span.AddAttributes(
-		trace.StringAttribute("operation", "delete expired share"),
-		trace.StringAttribute("opaqueId", s.Id.OpaqueId),
-	)
 
 	err := m.RevokePublicShare(ctx, u, &link.PublicShareReference{
 		Spec: &link.PublicShareReference_Id{
@@ -457,7 +456,7 @@ func (m *manager) RevokePublicShare(ctx context.Context, u *user.User, ref *link
 			return errors.New("reference does not exist")
 		}
 	case ref.GetToken() != "":
-		share, err := m.getByToken(ctx, ref.GetToken())
+		share, _, err := m.getByToken(ctx, ref.GetToken())
 		if err != nil {
 			return err
 		}
@@ -471,10 +470,10 @@ func (m *manager) RevokePublicShare(ctx context.Context, u *user.User, ref *link
 	return m.writeDb(db)
 }
 
-func (m *manager) getByToken(ctx context.Context, token string) (*link.PublicShare, error) {
+func (m *manager) getByToken(ctx context.Context, token string) (*link.PublicShare, string, error) {
 	db, err := m.readDb()
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	m.mutex.Lock()
@@ -483,19 +482,20 @@ func (m *manager) getByToken(ctx context.Context, token string) (*link.PublicSha
 	for _, v := range db {
 		var local link.PublicShare
 		if err := utils.UnmarshalJSONToProtoV1([]byte(v.(map[string]interface{})["share"].(string)), &local); err != nil {
-			return nil, err
+			return nil, "", err
 		}
 
 		if local.Token == token {
-			return &local, nil
+			passDB := v.(map[string]interface{})["password"].(string)
+			return &local, passDB, nil
 		}
 	}
 
-	return nil, fmt.Errorf("share with token: `%v` not found", token)
+	return nil, "", fmt.Errorf("share with token: `%v` not found", token)
 }
 
 // GetPublicShareByToken gets a public share by its opaque token.
-func (m *manager) GetPublicShareByToken(ctx context.Context, token, password string) (*link.PublicShare, error) {
+func (m *manager) GetPublicShareByToken(ctx context.Context, token string, auth *link.PublicShareAuthentication, sign bool) (*link.PublicShare, error) {
 	db, err := m.readDb()
 	if err != nil {
 		return nil, err
@@ -512,7 +512,7 @@ func (m *manager) GetPublicShareByToken(ctx context.Context, token, password str
 		}
 
 		if local.Token == token {
-			if !notExpired(&local) {
+			if publicshare.IsExpired(&local) {
 				// TODO user is not needed at all in this API.
 				if err := m.revokeExpiredPublicShare(ctx, &local, nil); err != nil {
 					return nil, err
@@ -521,7 +521,13 @@ func (m *manager) GetPublicShareByToken(ctx context.Context, token, password str
 			}
 
 			if local.PasswordProtected {
-				if err := bcrypt.CompareHashAndPassword([]byte(passDB), []byte(password)); err == nil {
+				if authenticate(&local, passDB, auth) {
+					if sign {
+						err := publicshare.AddSignature(&local, passDB)
+						if err != nil {
+							return nil, err
+						}
+					}
 					return &local, nil
 				}
 
@@ -557,6 +563,30 @@ func (m *manager) writeDb(db map[string]interface{}) error {
 	}
 
 	return nil
+}
+
+func authenticate(share *link.PublicShare, pw string, auth *link.PublicShareAuthentication) bool {
+	switch {
+	case auth.GetPassword() != "":
+		if err := bcrypt.CompareHashAndPassword([]byte(pw), []byte(auth.GetPassword())); err == nil {
+			return true
+		}
+	case auth.GetSignature() != nil:
+		sig := auth.GetSignature()
+		now := time.Now()
+		expiration := time.Unix(int64(sig.GetSignatureExpiration().GetSeconds()), int64(sig.GetSignatureExpiration().GetNanos()))
+		if now.After(expiration) {
+			return false
+		}
+		s, err := publicshare.CreateSignature(share.Token, pw, expiration)
+		if err != nil {
+			// TODO(labkode): pass ctx to log error
+			// Now we are blind
+			return false
+		}
+		return sig.GetSignature() == s
+	}
+	return false
 }
 
 type publicShare struct {

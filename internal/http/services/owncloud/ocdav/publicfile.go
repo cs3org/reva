@@ -27,7 +27,7 @@ import (
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp/router"
-	"go.opencensus.io/trace"
+	rtrace "github.com/cs3org/reva/pkg/trace"
 )
 
 // PublicFileHandler handles requests on a shared file. it needs to be wrapped in a collection
@@ -51,34 +51,33 @@ func (h *PublicFileHandler) Handler(s *svc) http.Handler {
 		if relativePath != "" && relativePath != "/" {
 			// accessing the file
 			// PROPFIND has an implicit call
-			if r.Method != "PROPFIND" && !s.adjustResourcePathInURL(w, r) {
+			if r.Method != MethodPropfind && !s.adjustResourcePathInURL(w, r) {
 				return
 			}
 
-			r.URL.Path = path.Base(r.URL.Path)
 			switch r.Method {
-			case "PROPFIND":
+			case MethodPropfind:
 				s.handlePropfindOnToken(w, r, h.namespace, false)
 			case http.MethodGet:
-				s.handleGet(w, r, h.namespace)
+				s.handlePathGet(w, r, h.namespace)
 			case http.MethodOptions:
-				s.handleOptions(w, r, h.namespace)
+				s.handleOptions(w, r)
 			case http.MethodHead:
-				s.handleHead(w, r, h.namespace)
+				s.handlePathHead(w, r, h.namespace)
 			case http.MethodPut:
-				s.handlePut(w, r, h.namespace)
+				s.handlePathPut(w, r, h.namespace)
 			default:
 				w.WriteHeader(http.StatusMethodNotAllowed)
 			}
 		} else {
 			// accessing the virtual parent folder
 			switch r.Method {
-			case "PROPFIND":
+			case MethodPropfind:
 				s.handlePropfindOnToken(w, r, h.namespace, true)
 			case http.MethodOptions:
-				s.handleOptions(w, r, h.namespace)
+				s.handleOptions(w, r)
 			case http.MethodHead:
-				s.handleHead(w, r, h.namespace)
+				s.handlePathHead(w, r, h.namespace)
 			default:
 				w.WriteHeader(http.StatusMethodNotAllowed)
 			}
@@ -87,8 +86,7 @@ func (h *PublicFileHandler) Handler(s *svc) http.Handler {
 }
 
 func (s *svc) adjustResourcePathInURL(w http.ResponseWriter, r *http.Request) bool {
-	ctx := r.Context()
-	ctx, span := trace.StartSpan(ctx, "adjustResourcePathInURL")
+	ctx, span := rtrace.Provider.Tracer("ocdav").Start(r.Context(), "adjustResourcePathInURL")
 	defer span.End()
 
 	// find actual file name
@@ -122,23 +120,19 @@ func (s *svc) adjustResourcePathInURL(w http.ResponseWriter, r *http.Request) bo
 		return false
 	}
 
-	// adjust path in request URL to point at the parent
-	r.URL.Path = path.Dir(r.URL.Path)
-
 	return true
 }
 
 // ns is the namespace that is prefixed to the path in the cs3 namespace
 func (s *svc) handlePropfindOnToken(w http.ResponseWriter, r *http.Request, ns string, onContainer bool) {
-	ctx := r.Context()
-	ctx, span := trace.StartSpan(ctx, "propfind")
+	ctx, span := rtrace.Provider.Tracer("ocdav").Start(r.Context(), "token_propfind")
 	defer span.End()
 
 	tokenStatInfo := ctx.Value(tokenStatInfoKey{}).(*provider.ResourceInfo)
 	sublog := appctx.GetLogger(ctx).With().Interface("tokenStatInfo", tokenStatInfo).Logger()
 	sublog.Debug().Msg("handlePropfindOnToken")
 
-	depth := r.Header.Get("Depth")
+	depth := r.Header.Get(HeaderDepth)
 	if depth == "" {
 		depth = "1"
 	}
@@ -183,20 +177,17 @@ func (s *svc) handlePropfindOnToken(w http.ResponseWriter, r *http.Request, ns s
 		w.WriteHeader(http.StatusNotFound)
 		return
 	}
-	// adjust path
-	tokenStatInfo.Path = path.Join("/", tokenStatInfo.Path, path.Base(pathRes.Path))
-
 	infos := s.getPublicFileInfos(onContainer, depth == "0", tokenStatInfo)
 
-	propRes, err := s.formatPropfind(ctx, &pf, infos, ns)
+	propRes, err := s.multistatusResponse(ctx, &pf, infos, ns, nil, nil)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error formatting propfind")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
-	w.Header().Set("DAV", "1, 3, extended-mkcol")
-	w.Header().Set("Content-Type", "application/xml; charset=utf-8")
+	w.Header().Set(HeaderDav, "1, 3, extended-mkcol")
+	w.Header().Set(HeaderContentType, "application/xml; charset=utf-8")
 	w.WriteHeader(http.StatusMultiStatus)
 	if _, err := w.Write([]byte(propRes)); err != nil {
 		sublog.Err(err).Msg("error writing response")
@@ -230,9 +221,6 @@ func (s *svc) getPublicFileInfos(onContainer, onlyRoot bool, i *provider.Resourc
 			return infos
 		}
 	}
-
-	// link share only appears on root collection
-	delete(i.Opaque.Map, "link-share")
 
 	// add the file info
 	infos = append(infos, i)

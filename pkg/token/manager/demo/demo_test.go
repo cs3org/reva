@@ -20,9 +20,13 @@ package demo
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 
+	auth "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 )
 
 var ctx = context.Background()
@@ -33,17 +37,36 @@ func TestEncodeDecode(t *testing.T) {
 		Username: "marie",
 	}
 
-	encoded, err := m.MintToken(ctx, u)
+	ref := &provider.Reference{Path: "/"}
+	val, err := json.Marshal(ref)
+	if err != nil {
+		t.Fatal(err)
+	}
+	scope := map[string]*auth.Scope{
+		"user": {
+			Resource: &types.OpaqueEntry{
+				Decoder: "json",
+				Value:   val,
+			},
+			Role: auth.Role_ROLE_OWNER,
+		},
+	}
+
+	encoded, err := m.MintToken(ctx, u, scope)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	decodedUser, err := m.DismantleToken(ctx, encoded)
+	decodedUser, decodedScope, err := m.DismantleToken(ctx, encoded)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	if u.Username != decodedUser.Username {
 		t.Fatalf("mail claims differ: expected=%s got=%s", u.Username, decodedUser.Username)
+	}
+
+	if s, ok := decodedScope["user"]; !ok || s.Role != auth.Role_ROLE_OWNER {
+		t.Fatalf("scope claims differ: expected=%s got=%s", scope, decodedScope)
 	}
 }

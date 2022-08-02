@@ -20,6 +20,7 @@ package exporters
 
 import (
 	"github.com/cs3org/reva/pkg/mentix/exchangers"
+	"github.com/cs3org/reva/pkg/mentix/meshdata"
 )
 
 // Exporter is the interface that all exporters must implement.
@@ -30,4 +31,11 @@ type Exporter interface {
 // BaseExporter implements basic exporter functionality common to all exporters.
 type BaseExporter struct {
 	exchangers.BaseExchanger
+}
+
+// Start starts the exporter.
+func (exporter *BaseExporter) Start() error {
+	// Initialize the exporter with empty data
+	_ = exporter.Update(meshdata.Map{})
+	return nil
 }

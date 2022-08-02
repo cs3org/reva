@@ -34,7 +34,7 @@ import (
 
 func (h *Handler) createGroupShare(w http.ResponseWriter, r *http.Request, statInfo *provider.ResourceInfo, role *conversions.Role, roleVal []byte) {
 	ctx := r.Context()
-	c, err := pool.GetGatewayServiceClient(h.gatewayAddr)
+	c, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
 		return
@@ -47,8 +47,9 @@ func (h *Handler) createGroupShare(w http.ResponseWriter, r *http.Request, statI
 	}
 
 	groupRes, err := c.GetGroupByClaim(ctx, &grouppb.GetGroupByClaimRequest{
-		Claim: "group_name",
-		Value: shareWith,
+		Claim:               "group_name",
+		Value:               shareWith,
+		SkipFetchingMembers: true,
 	})
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error searching recipient", err)
@@ -80,30 +81,5 @@ func (h *Handler) createGroupShare(w http.ResponseWriter, r *http.Request, statI
 		},
 	}
 
-	createShareResponse, err := c.CreateShare(ctx, createShareReq)
-	if err != nil {
-		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error sending a grpc create share request", err)
-		return
-	}
-	if createShareResponse.Status.Code != rpc.Code_CODE_OK {
-		if createShareResponse.Status.Code == rpc.Code_CODE_NOT_FOUND {
-			response.WriteOCSError(w, r, response.MetaNotFound.StatusCode, "not found", nil)
-			return
-		}
-		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "grpc create share request failed", err)
-		return
-	}
-	s, err := conversions.CS3Share2ShareData(ctx, createShareResponse.Share)
-	if err != nil {
-		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error mapping share data", err)
-		return
-	}
-	err = h.addFileInfo(ctx, s, statInfo)
-	if err != nil {
-		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error adding fileinfo to share", err)
-		return
-	}
-	h.mapUserIds(ctx, c, s)
-
-	response.WriteOCSSuccess(w, r, s)
+	h.createCs3Share(ctx, w, r, c, createShareReq, statInfo)
 }

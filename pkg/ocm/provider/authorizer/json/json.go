@@ -84,9 +84,29 @@ type authorizer struct {
 	conf        *config
 }
 
+func normalizeDomain(d string) (string, error) {
+	var urlString string
+	if strings.Contains(d, "://") {
+		urlString = d
+	} else {
+		urlString = "https://" + d
+	}
+
+	u, err := url.Parse(urlString)
+	if err != nil {
+		return "", err
+	}
+
+	return u.Hostname(), nil
+}
+
 func (a *authorizer) GetInfoByDomain(ctx context.Context, domain string) (*ocmprovider.ProviderInfo, error) {
+	normalizedDomain, err := normalizeDomain(domain)
+	if err != nil {
+		return nil, err
+	}
 	for _, p := range a.providers {
-		if strings.Contains(p.Domain, domain) {
+		if strings.Contains(p.Domain, normalizedDomain) {
 			return p, nil
 		}
 	}
@@ -94,11 +114,15 @@ func (a *authorizer) GetInfoByDomain(ctx context.Context, domain string) (*ocmpr
 }
 
 func (a *authorizer) IsProviderAllowed(ctx context.Context, provider *ocmprovider.ProviderInfo) error {
-
+	var err error
+	normalizedDomain, err := normalizeDomain(provider.Domain)
+	if err != nil {
+		return err
+	}
 	var providerAuthorized bool
-	if provider.Domain != "" {
+	if normalizedDomain != "" {
 		for _, p := range a.providers {
-			if p.Domain == provider.Domain {
+			if p.Domain == normalizedDomain {
 				providerAuthorized = true
 				break
 			}
@@ -117,9 +141,8 @@ func (a *authorizer) IsProviderAllowed(ctx context.Context, provider *ocmprovide
 	}
 
 	var ocmHost string
-	var err error
 	for _, p := range a.providers {
-		if p.Domain == provider.Domain {
+		if p.Domain == normalizedDomain {
 			ocmHost, err = a.getOCMHost(p)
 			if err != nil {
 				return err
@@ -127,7 +150,7 @@ func (a *authorizer) IsProviderAllowed(ctx context.Context, provider *ocmprovide
 		}
 	}
 	if ocmHost == "" {
-		return errors.Wrap(err, "json: ocm host not specified for mesh provider")
+		return errtypes.InternalError("json: ocm host not specified for mesh provider")
 	}
 
 	providerAuthorized = false

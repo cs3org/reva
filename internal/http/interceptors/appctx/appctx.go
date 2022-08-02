@@ -25,8 +25,9 @@ import (
 	"net/http"
 
 	"github.com/cs3org/reva/pkg/appctx"
+	rtrace "github.com/cs3org/reva/pkg/trace"
 	"github.com/rs/zerolog"
-	"go.opencensus.io/trace"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // New returns a new HTTP middleware that stores the log
@@ -42,12 +43,14 @@ func handler(log zerolog.Logger, h http.Handler) http.Handler {
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
+		span := trace.SpanFromContext(ctx)
+		defer span.End()
+		if !span.SpanContext().HasTraceID() {
+			ctx, span = rtrace.Provider.Tracer("http").Start(ctx, "http interceptor")
+		}
 
-		// trace is set on the httpserver.go file as the outermost wrapper handler.
-		span := trace.FromContext(ctx)
-		sub := log.With().Str("traceid", span.SpanContext().TraceID.String()).Logger()
+		sub := log.With().Str("traceid", span.SpanContext().TraceID().String()).Logger()
 		ctx = appctx.WithLogger(ctx, &sub)
-
 		r = r.WithContext(ctx)
 		h.ServeHTTP(w, r)
 	})

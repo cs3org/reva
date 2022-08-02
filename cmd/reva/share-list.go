@@ -29,6 +29,7 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/pkg/share"
 	"github.com/jedib0t/go-pretty/table"
 )
 
@@ -60,14 +61,7 @@ func shareListCommand() *command {
 				StorageId: tokens[0],
 				OpaqueId:  tokens[1],
 			}
-			shareRequest.Filters = []*collaboration.ListSharesRequest_Filter{
-				&collaboration.ListSharesRequest_Filter{
-					Type: collaboration.ListSharesRequest_Filter_TYPE_RESOURCE_ID,
-					Term: &collaboration.ListSharesRequest_Filter_ResourceId{
-						ResourceId: id,
-					},
-				},
-			}
+			shareRequest.Filters = []*collaboration.Filter{share.ResourceIDFilter(id)}
 		}
 
 		shareRes, err := shareClient.ListShares(ctx, shareRequest)

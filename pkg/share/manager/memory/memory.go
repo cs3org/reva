@@ -26,14 +26,15 @@ import (
 	"sync/atomic"
 	"time"
 
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/share"
+	"google.golang.org/genproto/protobuf/field_mask"
 
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/share/manager/registry"
-	"github.com/cs3org/reva/pkg/user"
 	"github.com/cs3org/reva/pkg/utils"
 )
 
@@ -68,7 +69,7 @@ func (m *manager) add(ctx context.Context, s *collaboration.Share) {
 
 func (m *manager) Share(ctx context.Context, md *provider.ResourceInfo, g *collaboration.ShareGrant) (*collaboration.Share, error) {
 	id := atomic.AddUint64(&counter, 1)
-	user := user.ContextMustGetUser(ctx)
+	user := ctxpkg.ContextMustGetUser(ctx)
 	now := time.Now().UnixNano()
 	ts := &typespb.Timestamp{
 		Seconds: uint64(now / 1000000000),
@@ -125,7 +126,7 @@ func (m *manager) getByKey(ctx context.Context, key *collaboration.ShareKey) (*c
 	defer m.lock.Unlock()
 	for _, s := range m.shares {
 		if (utils.UserEqual(key.Owner, s.Owner) || utils.UserEqual(key.Owner, s.Creator)) &&
-			utils.ResourceEqual(key.ResourceId, s.ResourceId) && utils.GranteeEqual(key.Grantee, s.Grantee) {
+			utils.ResourceIDEqual(key.ResourceId, s.ResourceId) && utils.GranteeEqual(key.Grantee, s.Grantee) {
 			return s, nil
 		}
 	}
@@ -147,8 +148,8 @@ func (m *manager) get(ctx context.Context, ref *collaboration.ShareReference) (s
 	}
 
 	// check if we are the owner
-	user := user.ContextMustGetUser(ctx)
-	if utils.UserEqual(user.Id, s.Owner) || utils.UserEqual(user.Id, s.Creator) {
+	user := ctxpkg.ContextMustGetUser(ctx)
+	if share.IsCreatedByUser(s, user) {
 		return s, nil
 	}
 
@@ -168,10 +169,10 @@ func (m *manager) GetShare(ctx context.Context, ref *collaboration.ShareReferenc
 func (m *manager) Unshare(ctx context.Context, ref *collaboration.ShareReference) error {
 	m.lock.Lock()
 	defer m.lock.Unlock()
-	user := user.ContextMustGetUser(ctx)
+	user := ctxpkg.ContextMustGetUser(ctx)
 	for i, s := range m.shares {
 		if sharesEqual(ref, s) {
-			if utils.UserEqual(user.Id, s.Owner) || utils.UserEqual(user.Id, s.Creator) {
+			if share.IsCreatedByUser(s, user) {
 				m.shares[len(m.shares)-1], m.shares[i] = m.shares[i], m.shares[len(m.shares)-1]
 				m.shares = m.shares[:len(m.shares)-1]
 				return nil
@@ -188,7 +189,7 @@ func sharesEqual(ref *collaboration.ShareReference, s *collaboration.Share) bool
 		}
 	} else if ref.GetKey() != nil {
 		if (utils.UserEqual(ref.GetKey().Owner, s.Owner) || utils.UserEqual(ref.GetKey().Owner, s.Creator)) &&
-			utils.ResourceEqual(ref.GetKey().ResourceId, s.ResourceId) && utils.GranteeEqual(ref.GetKey().Grantee, s.Grantee) {
+			utils.ResourceIDEqual(ref.GetKey().ResourceId, s.ResourceId) && utils.GranteeEqual(ref.GetKey().Grantee, s.Grantee) {
 			return true
 		}
 	}
@@ -198,10 +199,10 @@ func sharesEqual(ref *collaboration.ShareReference, s *collaboration.Share) bool
 func (m *manager) UpdateShare(ctx context.Context, ref *collaboration.ShareReference, p *collaboration.SharePermissions) (*collaboration.Share, error) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
-	user := user.ContextMustGetUser(ctx)
+	user := ctxpkg.ContextMustGetUser(ctx)
 	for i, s := range m.shares {
 		if sharesEqual(ref, s) {
-			if utils.UserEqual(user.Id, s.Owner) || utils.UserEqual(user.Id, s.Creator) {
+			if share.IsCreatedByUser(s, user) {
 				now := time.Now().UnixNano()
 				m.shares[i].Permissions = p
 				m.shares[i].Mtime = &typespb.Timestamp{
@@ -215,26 +216,21 @@ func (m *manager) UpdateShare(ctx context.Context, ref *collaboration.ShareRefer
 	return nil, errtypes.NotFound(ref.String())
 }
 
-func (m *manager) ListShares(ctx context.Context, filters []*collaboration.ListSharesRequest_Filter) ([]*collaboration.Share, error) {
+func (m *manager) ListShares(ctx context.Context, filters []*collaboration.Filter) ([]*collaboration.Share, error) {
 	var ss []*collaboration.Share
 	m.lock.Lock()
 	defer m.lock.Unlock()
-	user := user.ContextMustGetUser(ctx)
+	user := ctxpkg.ContextMustGetUser(ctx)
 	for _, s := range m.shares {
-		if utils.UserEqual(user.Id, s.Owner) || utils.UserEqual(user.Id, s.Creator) {
+		if share.IsCreatedByUser(s, user) {
 			// no filter we return earlier
 			if len(filters) == 0 {
 				ss = append(ss, s)
-			} else {
-				// check filters
-				// TODO(labkode): add the rest of filters.
-				for _, f := range filters {
-					if f.Type == collaboration.ListSharesRequest_Filter_TYPE_RESOURCE_ID {
-						if utils.ResourceEqual(s.ResourceId, f.GetResourceId()) {
-							ss = append(ss, s)
-						}
-					}
-				}
+				continue
+			}
+			// check filters
+			if share.MatchesFilters(s, filters) {
+				ss = append(ss, s)
 			}
 		}
 	}
@@ -242,27 +238,26 @@ func (m *manager) ListShares(ctx context.Context, filters []*collaboration.ListS
 }
 
 // we list the shares that are targeted to the user in context or to the user groups.
-func (m *manager) ListReceivedShares(ctx context.Context) ([]*collaboration.ReceivedShare, error) {
+func (m *manager) ListReceivedShares(ctx context.Context, filters []*collaboration.Filter) ([]*collaboration.ReceivedShare, error) {
 	var rss []*collaboration.ReceivedShare
 	m.lock.Lock()
 	defer m.lock.Unlock()
-	user := user.ContextMustGetUser(ctx)
+	user := ctxpkg.ContextMustGetUser(ctx)
 	for _, s := range m.shares {
-		if utils.UserEqual(user.Id, s.Owner) || utils.UserEqual(user.Id, s.Creator) {
-			// omit shares created by me
+		if share.IsCreatedByUser(s, user) || !share.IsGrantedToUser(s, user) {
+			// omit shares created by the user or shares the user can't access
 			continue
 		}
-		if s.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER && utils.UserEqual(user.Id, s.Grantee.GetUserId()) {
+
+		if len(filters) == 0 {
 			rs := m.convert(ctx, s)
 			rss = append(rss, rs)
-		} else if s.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_GROUP {
-			// check if all user groups match this share; TODO(labkode): filter shares created by us.
-			for _, g := range user.Groups {
-				if g == s.Grantee.GetGroupId().OpaqueId {
-					rs := m.convert(ctx, s)
-					rss = append(rss, rs)
-				}
-			}
+			continue
+		}
+
+		if share.MatchesFilters(s, filters) {
+			rs := m.convert(ctx, s)
+			rss = append(rss, rs)
 		}
 	}
 	return rss, nil
@@ -274,7 +269,7 @@ func (m *manager) convert(ctx context.Context, s *collaboration.Share) *collabor
 		Share: s,
 		State: collaboration.ShareState_SHARE_STATE_PENDING,
 	}
-	user := user.ContextMustGetUser(ctx)
+	user := ctxpkg.ContextMustGetUser(ctx)
 	if v, ok := m.shareState[user.Id.String()]; ok {
 		if state, ok := v[s.Id]; ok {
 			rs.State = state
@@ -290,43 +285,47 @@ func (m *manager) GetReceivedShare(ctx context.Context, ref *collaboration.Share
 func (m *manager) getReceived(ctx context.Context, ref *collaboration.ShareReference) (*collaboration.ReceivedShare, error) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
-	user := user.ContextMustGetUser(ctx)
+	user := ctxpkg.ContextMustGetUser(ctx)
 	for _, s := range m.shares {
 		if sharesEqual(ref, s) {
-			if s.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER && utils.UserEqual(user.Id, s.Grantee.GetUserId()) {
+			if share.IsGrantedToUser(s, user) {
 				rs := m.convert(ctx, s)
 				return rs, nil
-			} else if s.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_GROUP {
-				for _, g := range user.Groups {
-					if s.Grantee.GetGroupId().OpaqueId == g {
-						rs := m.convert(ctx, s)
-						return rs, nil
-					}
-				}
 			}
 		}
 	}
 	return nil, errtypes.NotFound(ref.String())
 }
 
-func (m *manager) UpdateReceivedShare(ctx context.Context, ref *collaboration.ShareReference, f *collaboration.UpdateReceivedShareRequest_UpdateField) (*collaboration.ReceivedShare, error) {
-	rs, err := m.getReceived(ctx, ref)
+func (m *manager) UpdateReceivedShare(ctx context.Context, receivedShare *collaboration.ReceivedShare, fieldMask *field_mask.FieldMask) (*collaboration.ReceivedShare, error) {
+	rs, err := m.getReceived(ctx, &collaboration.ShareReference{Spec: &collaboration.ShareReference_Id{Id: receivedShare.Share.Id}})
 	if err != nil {
 		return nil, err
 	}
 
-	user := user.ContextMustGetUser(ctx)
+	user := ctxpkg.ContextMustGetUser(ctx)
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
+	for i := range fieldMask.Paths {
+		switch fieldMask.Paths[i] {
+		case "state":
+			rs.State = receivedShare.State
+		// TODO case "mount_point":
+		default:
+			return nil, errtypes.NotSupported("updating " + fieldMask.Paths[i] + " is not supported")
+		}
+	}
+
 	if v, ok := m.shareState[user.Id.String()]; ok {
-		v[rs.Share.Id] = f.GetState()
+		v[rs.Share.Id] = rs.GetState()
 		m.shareState[user.Id.String()] = v
 	} else {
 		a := map[*collaboration.ShareId]collaboration.ShareState{
-			rs.Share.Id: f.GetState(),
+			rs.Share.Id: rs.GetState(),
 		}
 		m.shareState[user.Id.String()] = a
 	}
+
 	return rs, nil
 }

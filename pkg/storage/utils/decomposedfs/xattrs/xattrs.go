@@ -18,6 +18,12 @@
 
 package xattrs
 
+import (
+	"strings"
+
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+)
+
 // Declare a list of xattr keys
 // TODO the below comment is currently copied from the owncloud driver, revisit
 // Currently,extended file attributes have four separated
@@ -27,13 +33,15 @@ package xattrs
 // collisions with other apps We are going to introduce a sub namespace
 // "user.ocis."
 const (
-	OcisPrefix   string = "user.ocis."
-	ParentidAttr string = OcisPrefix + "parentid"
-	OwnerIDAttr  string = OcisPrefix + "owner.id"
-	OwnerIDPAttr string = OcisPrefix + "owner.idp"
+	OcisPrefix    string = "user.ocis."
+	ParentidAttr  string = OcisPrefix + "parentid"
+	OwnerIDAttr   string = OcisPrefix + "owner.id"
+	OwnerIDPAttr  string = OcisPrefix + "owner.idp"
+	OwnerTypeAttr string = OcisPrefix + "owner.type"
 	// the base name of the node
 	// updated when the file is renamed or moved
-	NameAttr     string = OcisPrefix + "name"
+	NameAttr string = OcisPrefix + "name"
+
 	BlobIDAttr   string = OcisPrefix + "blobid"
 	BlobsizeAttr string = OcisPrefix + "blobsize"
 
@@ -70,6 +78,27 @@ const (
 	// the quota for the storage space / tree, regardless who accesses it
 	QuotaAttr string = OcisPrefix + "quota"
 
+	// the name given to a storage space. It should not contain any semantics as its only purpose is to be read.
+	SpaceNameAttr string = OcisPrefix + "space.name"
+
 	UserAcePrefix  string = "u:"
 	GroupAcePrefix string = "g:"
 )
+
+// ReferenceFromAttr returns a CS3 reference from xattr of a node.
+// Supported formats are: "cs3:storageid/nodeid"
+func ReferenceFromAttr(b []byte) (*provider.Reference, error) {
+	return refFromCS3(b)
+}
+
+// refFromCS3 creates a CS3 reference from a set of bytes. This method should remain private
+// and only be called after validation because it can potentially panic.
+func refFromCS3(b []byte) (*provider.Reference, error) {
+	parts := string(b[4:])
+	return &provider.Reference{
+		ResourceId: &provider.ResourceId{
+			StorageId: strings.Split(parts, "/")[0],
+			OpaqueId:  strings.Split(parts, "/")[1],
+		},
+	}, nil
+}

@@ -73,9 +73,7 @@ func ImportMetadata(ctx context.Context, client gateway.GatewayAPIClient, export
 		if len(m) > 0 {
 			resourcePath := path.Join(ns, path.Base(exportPath), strings.TrimPrefix(fileData.Path, "/files/"))
 			samReq := &storageprovider.SetArbitraryMetadataRequest{
-				Ref: &storageprovider.Reference{
-					Spec: &storageprovider.Reference_Path{Path: resourcePath},
-				},
+				Ref: &storageprovider.Reference{Path: resourcePath},
 				ArbitraryMetadata: &storageprovider.ArbitraryMetadata{
 					Metadata: m,
 				},

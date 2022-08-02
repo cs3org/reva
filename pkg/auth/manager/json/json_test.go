@@ -25,7 +25,6 @@ import (
 	"testing"
 
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-	"github.com/cs3org/reva/pkg/auth"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -122,10 +121,6 @@ func TestGetManagerWithJSONObject(t *testing.T) {
 			manager, err := New(input)
 
 			if tt.expectManager {
-				_, ok := manager.(auth.Manager)
-				if !ok {
-					t.Fatal("Expected response of type auth.Manager but found something else.")
-				}
 				assert.Equal(t, nil, err)
 			} else if !tt.expectManager {
 				assert.Empty(t, manager)
@@ -190,7 +185,7 @@ func TestGetAuthenticatedManager(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			authenticated, err := manager.Authenticate(ctx, tt.username, tt.secret)
+			authenticated, _, err := manager.Authenticate(ctx, tt.username, tt.secret)
 			if !tt.expectAuthenticated {
 				assert.Empty(t, authenticated)
 				assert.EqualError(t, err, tt.expectedError.message)

@@ -21,8 +21,10 @@ package groupprovider
 import (
 	"context"
 	"fmt"
+	"sort"
 
 	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
+	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/group"
 	"github.com/cs3org/reva/pkg/group/manager/registry"
 	"github.com/cs3org/reva/pkg/rgrpc"
@@ -62,7 +64,7 @@ func getDriver(c *config) (group.Manager, error) {
 		return f(c.Drivers[c.Driver])
 	}
 
-	return nil, fmt.Errorf("driver %s not found for group manager", c.Driver)
+	return nil, errtypes.NotFound(fmt.Sprintf("driver %s not found for group manager", c.Driver))
 }
 
 // New returns a new GroupProviderServiceServer.
@@ -99,12 +101,16 @@ func (s *service) Register(ss *grpc.Server) {
 }
 
 func (s *service) GetGroup(ctx context.Context, req *grouppb.GetGroupRequest) (*grouppb.GetGroupResponse, error) {
-	group, err := s.groupmgr.GetGroup(ctx, req.GroupId)
+	group, err := s.groupmgr.GetGroup(ctx, req.GroupId, req.SkipFetchingMembers)
 	if err != nil {
-		err = errors.Wrap(err, "groupprovidersvc: error getting group")
-		return &grouppb.GetGroupResponse{
-			Status: status.NewInternal(ctx, err, "error getting group"),
-		}, nil
+		res := &grouppb.GetGroupResponse{}
+		if _, ok := err.(errtypes.NotFound); ok {
+			res.Status = status.NewNotFound(ctx, "group not found")
+		} else {
+			err = errors.Wrap(err, "groupprovidersvc: error getting group")
+			res.Status = status.NewInternal(ctx, err, "error getting group")
+		}
+		return res, nil
 	}
 
 	return &grouppb.GetGroupResponse{
@@ -114,12 +120,16 @@ func (s *service) GetGroup(ctx context.Context, req *grouppb.GetGroupRequest) (*
 }
 
 func (s *service) GetGroupByClaim(ctx context.Context, req *grouppb.GetGroupByClaimRequest) (*grouppb.GetGroupByClaimResponse, error) {
-	group, err := s.groupmgr.GetGroupByClaim(ctx, req.Claim, req.Value)
+	group, err := s.groupmgr.GetGroupByClaim(ctx, req.Claim, req.Value, req.SkipFetchingMembers)
 	if err != nil {
-		err = errors.Wrap(err, "groupprovidersvc: error getting group by claim")
-		return &grouppb.GetGroupByClaimResponse{
-			Status: status.NewInternal(ctx, err, "error getting group by claim"),
-		}, nil
+		res := &grouppb.GetGroupByClaimResponse{}
+		if _, ok := err.(errtypes.NotFound); ok {
+			res.Status = status.NewNotFound(ctx, fmt.Sprintf("group not found %s %s", req.Claim, req.Value))
+		} else {
+			err = errors.Wrap(err, "groupprovidersvc: error getting group by claim")
+			res.Status = status.NewInternal(ctx, err, "error getting group by claim")
+		}
+		return res, nil
 	}
 
 	return &grouppb.GetGroupByClaimResponse{
@@ -129,13 +139,18 @@ func (s *service) GetGroupByClaim(ctx context.Context, req *grouppb.GetGroupByCl
 }
 
 func (s *service) FindGroups(ctx context.Context, req *grouppb.FindGroupsRequest) (*grouppb.FindGroupsResponse, error) {
-	groups, err := s.groupmgr.FindGroups(ctx, req.Filter)
+	groups, err := s.groupmgr.FindGroups(ctx, req.Filter, req.SkipFetchingMembers)
 	if err != nil {
 		err = errors.Wrap(err, "groupprovidersvc: error finding groups")
 		return &grouppb.FindGroupsResponse{
 			Status: status.NewInternal(ctx, err, "error finding groups"),
 		}, nil
 	}
+
+	// sort group by groupname
+	sort.Slice(groups, func(i, j int) bool {
+		return groups[i].GroupName <= groups[j].GroupName
+	})
 
 	return &grouppb.FindGroupsResponse{
 		Status: status.NewOK(ctx),

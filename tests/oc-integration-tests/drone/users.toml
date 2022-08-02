@@ -1,9 +1,10 @@
+# This config file will start a reva service that:
+# - handles user metadata and user preferences
+# - serves the grpc services on port 18000
+
 [shared]
 jwt_secret = "Pive-Fumkiu4"
 
-# This users.toml config file will start a reva service that:
-# - handles user metadata and user preferences
-# - serves the grpc services on port 18000
 [grpc]
 address = "0.0.0.0:18000"
 

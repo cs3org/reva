@@ -25,7 +25,6 @@ import (
 	"strconv"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
-	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
@@ -42,7 +41,7 @@ func (h *Handler) createPublicLinkShare(w http.ResponseWriter, r *http.Request, 
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
-	c, err := pool.GetGatewayServiceClient(h.gatewayAddr)
+	c, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
 		return
@@ -142,7 +141,7 @@ func (h *Handler) listPublicShares(r *http.Request, filters []*link.ListPublicSh
 	ocsDataPayload := make([]*conversions.ShareData, 0)
 	// TODO(refs) why is this guard needed? Are we moving towards a gateway only for service discovery? without a gateway this is dead code.
 	if h.gatewayAddr != "" {
-		c, err := pool.GetGatewayServiceClient(h.gatewayAddr)
+		client, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
 		if err != nil {
 			return ocsDataPayload, nil, err
 		}
@@ -151,7 +150,7 @@ func (h *Handler) listPublicShares(r *http.Request, filters []*link.ListPublicSh
 			Filters: filters,
 		}
 
-		res, err := c.ListPublicShares(ctx, &req)
+		res, err := client.ListPublicShares(ctx, &req)
 		if err != nil {
 			return ocsDataPayload, nil, err
 		}
@@ -160,18 +159,9 @@ func (h *Handler) listPublicShares(r *http.Request, filters []*link.ListPublicSh
 		}
 
 		for _, share := range res.GetShare() {
-
-			statRequest := &provider.StatRequest{
-				Ref: &provider.Reference{
-					Spec: &provider.Reference_Id{
-						Id: share.ResourceId,
-					},
-				},
-			}
-
-			statResponse, err := c.Stat(ctx, statRequest)
-			if err != nil || res.Status.Code != rpc.Code_CODE_OK {
-				log.Debug().Interface("share", share).Interface("response", statResponse).Err(err).Msg("could not stat share, skipping")
+			info, status, err := h.getResourceInfoByID(ctx, client, share.ResourceId)
+			if err != nil || status.Code != rpc.Code_CODE_OK {
+				log.Debug().Interface("share", share).Interface("status", status).Err(err).Msg("could not stat share, skipping")
 				continue
 			}
 
@@ -179,13 +169,13 @@ func (h *Handler) listPublicShares(r *http.Request, filters []*link.ListPublicSh
 
 			sData.Name = share.DisplayName
 
-			if err := h.addFileInfo(ctx, sData, statResponse.Info); err != nil {
-				log.Debug().Interface("share", share).Interface("info", statResponse.Info).Err(err).Msg("could not add file info, skipping")
+			if err := h.addFileInfo(ctx, sData, info); err != nil {
+				log.Debug().Interface("share", share).Interface("info", info).Err(err).Msg("could not add file info, skipping")
 				continue
 			}
-			h.mapUserIds(ctx, c, sData)
+			h.mapUserIds(ctx, client, sData)
 
-			log.Debug().Interface("share", share).Interface("info", statResponse.Info).Interface("shareData", share).Msg("mapped")
+			log.Debug().Interface("share", share).Interface("info", info).Interface("shareData", share).Msg("mapped")
 
 			ocsDataPayload = append(ocsDataPayload, sData)
 
@@ -199,7 +189,7 @@ func (h *Handler) listPublicShares(r *http.Request, filters []*link.ListPublicSh
 
 func (h *Handler) isPublicShare(r *http.Request, oid string) bool {
 	logger := appctx.GetLogger(r.Context())
-	client, err := pool.GetGatewayServiceClient(h.gatewayAddr)
+	client, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
 	if err != nil {
 		logger.Err(err)
 	}
@@ -215,39 +205,17 @@ func (h *Handler) isPublicShare(r *http.Request, oid string) bool {
 	})
 	if err != nil {
 		logger.Err(err)
-	}
-
-	if psRes.GetShare() != nil {
-		return true
-	}
-
-	// check if we have a user share
-	uRes, err := client.GetShare(r.Context(), &collaboration.GetShareRequest{
-		Ref: &collaboration.ShareReference{
-			Spec: &collaboration.ShareReference_Id{
-				Id: &collaboration.ShareId{
-					OpaqueId: oid,
-				},
-			},
-		},
-	})
-	if err != nil {
-		logger.Err(err)
-	}
-
-	if uRes.GetShare() != nil {
 		return false
 	}
 
-	// TODO token is neither a public or a user share.
-	return false
+	return psRes.GetShare() != nil
 }
 
 func (h *Handler) updatePublicShare(w http.ResponseWriter, r *http.Request, shareID string) {
 	updates := []*link.UpdatePublicShareRequest_Update{}
 	logger := appctx.GetLogger(r.Context())
 
-	gwC, err := pool.GetGatewayServiceClient(h.gatewayAddr)
+	gwC, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
 	if err != nil {
 		log.Err(err).Str("shareID", shareID).Msg("updatePublicShare")
 		response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "error getting a connection to the gateway service", nil)
@@ -386,13 +354,7 @@ func (h *Handler) updatePublicShare(w http.ResponseWriter, r *http.Request, shar
 		return
 	}
 
-	statReq := provider.StatRequest{
-		Ref: &provider.Reference{
-			Spec: &provider.Reference_Id{
-				Id: before.Share.ResourceId,
-			},
-		},
-	}
+	statReq := provider.StatRequest{Ref: &provider.Reference{ResourceId: before.Share.ResourceId}}
 
 	statRes, err := gwC.Stat(r.Context(), &statReq)
 	if err != nil {
@@ -415,7 +377,7 @@ func (h *Handler) updatePublicShare(w http.ResponseWriter, r *http.Request, shar
 func (h *Handler) removePublicShare(w http.ResponseWriter, r *http.Request, shareID string) {
 	ctx := r.Context()
 
-	c, err := pool.GetGatewayServiceClient(h.gatewayAddr)
+	c, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
 		return
@@ -514,6 +476,8 @@ func permissionFromRequest(r *http.Request, h *Handler) (*provider.ResourcePermi
 var ocPublicPermToRole = map[int]string{
 	// Recipients can view and download contents.
 	1: "viewer",
+	// Recipients can view, download and edit single files.
+	3: "file-editor",
 	// Recipients can view, download, edit, delete and upload contents
 	15: "editor",
 	// Recipients can upload but existing contents are not revealed

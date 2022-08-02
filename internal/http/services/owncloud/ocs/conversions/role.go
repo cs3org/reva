@@ -26,7 +26,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 )
 
-// Role describes the interface to transform different permission sets into each other
+// Role is a set of ocs permissions and cs3 resource permissions under a common name.
 type Role struct {
 	Name                   string
 	cS3ResourcePermissions *provider.ResourcePermissions
@@ -34,20 +34,23 @@ type Role struct {
 }
 
 const (
-	// RoleUnknown is used for unknown roles
-	RoleUnknown string = "unknown"
-	// RoleLegacy provides backwards compatibility
-	RoleLegacy string = "legacy"
-	// RoleViewer grants non-editor role on a resource
-	RoleViewer string = "viewer"
-	// RoleEditor grants editor permission on a resource, including folders
-	RoleEditor string = "editor"
-	// RoleFileEditor grants editor permission on a single file
-	RoleFileEditor string = "file-editor"
-	// RoleCoowner grants owner permissions on a resource
-	RoleCoowner string = "coowner"
-	// RoleUploader FIXME: uploader role with only write permission can use InitiateFileUpload, not anything else
-	RoleUploader string = "uploader"
+	// RoleViewer grants non-editor role on a resource.
+	RoleViewer = "viewer"
+	// RoleEditor grants editor permission on a resource, including folders.
+	RoleEditor = "editor"
+	// RoleFileEditor grants editor permission on a single file.
+	RoleFileEditor = "file-editor"
+	// RoleCoowner grants co-owner permissions on a resource.
+	RoleCoowner = "coowner"
+	// RoleUploader grants uploader permission to upload onto a resource.
+	RoleUploader = "uploader"
+	// RoleManager grants manager permissions on a resource. Semantically equivalent to co-owner.
+	RoleManager = "manager"
+
+	// RoleUnknown is used for unknown roles.
+	RoleUnknown = "unknown"
+	// RoleLegacy provides backwards compatibility.
+	RoleLegacy = "legacy"
 )
 
 // CS3ResourcePermissions for the role
@@ -91,7 +94,6 @@ func (r *Role) OCSPermissions() Permissions {
 // M = Mounted
 func (r *Role) WebDAVPermissions(isDir, isShared, isMountpoint, isPublic bool) string {
 	var b strings.Builder
-	// b.Grow(7)
 	if !isPublic && isShared {
 		fmt.Fprintf(&b, "S")
 	}
@@ -129,11 +131,14 @@ func RoleFromName(name string) *Role {
 		return NewCoownerRole()
 	case RoleUploader:
 		return NewUploaderRole()
+	case RoleManager:
+		return NewManagerRole()
+	default:
+		return NewUnknownRole()
 	}
-	return NewUnknownRole()
 }
 
-// NewUnknownRole creates an unknown role
+// NewUnknownRole creates an unknown role. An Unknown role has no permissions over a cs3 resource nor any ocs endpoint.
 func NewUnknownRole() *Role {
 	return &Role{
 		Name:                   RoleUnknown,
@@ -147,7 +152,6 @@ func NewViewerRole() *Role {
 	return &Role{
 		Name: RoleViewer,
 		cS3ResourcePermissions: &provider.ResourcePermissions{
-			// read
 			GetPath:              true,
 			GetQuota:             true,
 			InitiateFileDownload: true,
@@ -166,7 +170,6 @@ func NewEditorRole() *Role {
 	return &Role{
 		Name: RoleEditor,
 		cS3ResourcePermissions: &provider.ResourcePermissions{
-			// read
 			GetPath:              true,
 			GetQuota:             true,
 			InitiateFileDownload: true,
@@ -175,21 +178,13 @@ func NewEditorRole() *Role {
 			ListFileVersions:     true,
 			ListRecycle:          true,
 			Stat:                 true,
-
-			// write
-			InitiateFileUpload: true,
-			RestoreFileVersion: true,
-			RestoreRecycleItem: true,
-
-			// create
-			CreateContainer: true,
-
-			// delete
-			Delete: true,
-
-			// not sure where to put these, but they are part of an editor
-			Move:         true,
-			PurgeRecycle: true,
+			InitiateFileUpload:   true,
+			RestoreFileVersion:   true,
+			RestoreRecycleItem:   true,
+			CreateContainer:      true,
+			Delete:               true,
+			Move:                 true,
+			PurgeRecycle:         true,
 		},
 		ocsPermissions: PermissionRead | PermissionCreate | PermissionWrite | PermissionDelete,
 	}
@@ -200,7 +195,6 @@ func NewFileEditorRole() *Role {
 	return &Role{
 		Name: RoleEditor,
 		cS3ResourcePermissions: &provider.ResourcePermissions{
-			// read
 			GetPath:              true,
 			GetQuota:             true,
 			InitiateFileDownload: true,
@@ -209,11 +203,9 @@ func NewFileEditorRole() *Role {
 			ListFileVersions:     true,
 			ListRecycle:          true,
 			Stat:                 true,
-
-			// write
-			InitiateFileUpload: true,
-			RestoreFileVersion: true,
-			RestoreRecycleItem: true,
+			InitiateFileUpload:   true,
+			RestoreFileVersion:   true,
+			RestoreRecycleItem:   true,
 		},
 		ocsPermissions: PermissionRead | PermissionWrite,
 	}
@@ -224,7 +216,6 @@ func NewCoownerRole() *Role {
 	return &Role{
 		Name: RoleCoowner,
 		cS3ResourcePermissions: &provider.ResourcePermissions{
-			// read
 			GetPath:              true,
 			GetQuota:             true,
 			InitiateFileDownload: true,
@@ -233,26 +224,16 @@ func NewCoownerRole() *Role {
 			ListFileVersions:     true,
 			ListRecycle:          true,
 			Stat:                 true,
-
-			// write
-			InitiateFileUpload: true,
-			RestoreFileVersion: true,
-			RestoreRecycleItem: true,
-
-			// create
-			CreateContainer: true,
-
-			// delete
-			Delete: true,
-
-			// not sure where to put these, but they are part of an editor
-			Move:         true,
-			PurgeRecycle: true,
-
-			// grants
-			AddGrant:    true,
-			UpdateGrant: true,
-			RemoveGrant: true,
+			InitiateFileUpload:   true,
+			RestoreFileVersion:   true,
+			RestoreRecycleItem:   true,
+			CreateContainer:      true,
+			Delete:               true,
+			Move:                 true,
+			PurgeRecycle:         true,
+			AddGrant:             true,
+			UpdateGrant:          true,
+			RemoveGrant:          true,
 		},
 		ocsPermissions: PermissionAll,
 	}
@@ -261,20 +242,45 @@ func NewCoownerRole() *Role {
 // NewUploaderRole creates an uploader role
 func NewUploaderRole() *Role {
 	return &Role{
-		Name: RoleViewer,
+		Name: RoleUploader,
 		cS3ResourcePermissions: &provider.ResourcePermissions{
-			// he will need to make stat requests
-			// TODO and List requests
-			Stat:          true,
-			ListContainer: true,
-			// read
-			GetPath: true,
-			// mkdir
-			CreateContainer: true,
-			// upload
+			Stat:               true,
+			ListContainer:      true,
+			GetPath:            true,
+			CreateContainer:    true,
 			InitiateFileUpload: true,
 		},
 		ocsPermissions: PermissionCreate,
+	}
+}
+
+// NewManagerRole creates an editor role
+func NewManagerRole() *Role {
+	return &Role{
+		Name: RoleManager,
+		cS3ResourcePermissions: &provider.ResourcePermissions{
+			GetPath:              true,
+			GetQuota:             true,
+			InitiateFileDownload: true,
+			ListGrants:           true,
+			ListContainer:        true,
+			ListFileVersions:     true,
+			ListRecycle:          true,
+			Stat:                 true,
+			InitiateFileUpload:   true,
+			RestoreFileVersion:   true,
+			RestoreRecycleItem:   true,
+			Move:                 true,
+			CreateContainer:      true,
+			Delete:               true,
+			PurgeRecycle:         true,
+
+			// these permissions only make sense to enforce them in the root of the storage space.
+			AddGrant:    true, // managers can add users to the space
+			RemoveGrant: true, // managers can remove users from the space
+			UpdateGrant: true,
+		},
+		ocsPermissions: PermissionAll,
 	}
 }
 

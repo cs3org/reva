@@ -19,33 +19,39 @@
 package decomposedfs_test
 
 import (
+	"io/fs"
+	"os"
 	"path"
+	"path/filepath"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	helpers "github.com/cs3org/reva/pkg/storage/utils/decomposedfs/testhelpers"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/xattrs"
-	"github.com/pkg/xattr"
-	"github.com/stretchr/testify/mock"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/pkg/xattr"
+	"github.com/stretchr/testify/mock"
 )
+
+type testFS struct {
+	root string
+}
+
+func (t testFS) Open(name string) (fs.File, error) {
+	return os.Open(filepath.Join(t.root, name))
+}
 
 var _ = Describe("Grants", func() {
 	var (
-		env *helpers.TestEnv
-
+		env   *helpers.TestEnv
 		ref   *provider.Reference
 		grant *provider.Grant
+		tfs   = &testFS{}
 	)
 
 	BeforeEach(func() {
-		ref = &provider.Reference{
-			Spec: &provider.Reference_Path{
-				Path: "/dir1",
-			},
-		}
+		ref = &provider.Reference{Path: "/dir1"}
 
 		grant = &provider.Grant{
 			Grantee: &provider.Grantee{
@@ -96,7 +102,7 @@ var _ = Describe("Grants", func() {
 
 		Describe("AddGrant", func() {
 			It("adds grants", func() {
-				n, err := env.Lookup.NodeFromPath(env.Ctx, "/dir1")
+				n, err := env.Lookup.NodeFromPath(env.Ctx, "/dir1", false)
 				Expect(err).ToNot(HaveOccurred())
 
 				err = env.Fs.AddGrant(env.Ctx, ref, grant)
@@ -106,6 +112,17 @@ var _ = Describe("Grants", func() {
 				attr, err := xattr.Get(localPath, xattrs.GrantPrefix+xattrs.UserAcePrefix+grant.Grantee.GetUserId().OpaqueId)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(string(attr)).To(Equal("\x00t=A:f=:p=rw"))
+			})
+
+			It("creates a storage space per created grant", func() {
+				err := env.Fs.AddGrant(env.Ctx, ref, grant)
+				Expect(err).ToNot(HaveOccurred())
+
+				spacesPath := filepath.Join(env.Root, "spaces")
+				tfs.root = spacesPath
+				entries, err := fs.ReadDir(tfs, "share")
+				Expect(err).ToNot(HaveOccurred())
+				Expect(len(entries)).To(BeNumerically(">=", 1))
 			})
 		})
 

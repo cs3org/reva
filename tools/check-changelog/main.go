@@ -32,7 +32,7 @@ import (
 )
 
 // Case-insensitive list of PRs for which changelog enforcement needs to be skipped
-var skipTags = []string{"[tests-only]", "[build-deps]"}
+var skipTags = []string{"[tests-only]", "[build-deps]", "[docs-only]"}
 
 func skipPR(prID int) bool {
 	ctx := context.Background()

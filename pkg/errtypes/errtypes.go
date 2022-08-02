@@ -110,6 +110,18 @@ func (e ChecksumMismatch) IsChecksumMismatch() {}
 // oc clienst issue: https://github.com/owncloud/core/issues/22711
 const StatusChecksumMismatch = 419
 
+// InsufficientStorage is the error to use when there is insufficient storage.
+type InsufficientStorage string
+
+func (e InsufficientStorage) Error() string { return "error: insufficient storage: " + string(e) }
+
+// IsInsufficientStorage implements the IsInsufficientStorage interface.
+func (e InsufficientStorage) IsInsufficientStorage() {}
+
+// StatusInssufficientStorage 507 is an official http status code to indicate that there is insufficient storage
+// https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/507
+const StatusInssufficientStorage = 507
+
 // IsNotFound is the interface to implement
 // to specify that an a resource is not found.
 type IsNotFound interface {
@@ -168,4 +180,10 @@ type IsBadRequest interface {
 // to specify that a checksum does not match.
 type IsChecksumMismatch interface {
 	IsChecksumMismatch()
+}
+
+// IsInsufficientStorage is the interface to implement
+// to specify that there is insufficient storage.
+type IsInsufficientStorage interface {
+	IsInsufficientStorage()
 }

@@ -1,195 +1,335 @@
-Changelog for reva 1.6.0 (2021-02-16)
+Changelog for reva 1.19.0 (2022-06-16)
 =======================================
 
-The following sections list the changes in reva 1.6.0 relevant to
+The following sections list the changes in reva 1.19.0 relevant to
 reva users. The changes are ordered by importance.
 
 Summary
 -------
 
- * Fix #1425: Align href URL encoding with oc10
- * Fix #1461: Fix public link webdav permissions
- * Fix #1457: Cloning of internal mesh data lost some values
- * Fix #1429: Purge non-empty dirs from trash-bin
- * Fix #1408: Get error status from trash-bin response
- * Enh #1451: Render additional share with in ocs sharing api
- * Enh #1424: We categorized the list of expected failures
- * Enh #1434: CERNBox REST driver for groupprovider service
- * Enh #1400: Checksum support
- * Enh #1431: Update npm packages to fix vulnerabilities
- * Enh #1415: Indicate in EOS containers that TUS is not supported
- * Enh #1402: Parse EOS sys ACLs to generate CS3 resource permissions
- * Enh #1477: Set quota when creating home directory in EOS
- * Enh #1416: Use updated etag of home directory even if it is cached
- * Enh #1478: Enhance error handling for grappa REST drivers
- * Enh #1453: Add functionality to share resources with groups
- * Enh #99: Add stubs and manager for groupprovider service
- * Enh #1462: Hash public share passwords
- * Enh #1464: LDAP driver for the groupprovider service
- * Enh #1430: Capture non-deterministic behavior on storages
- * Enh #1456: Fetch user groups in OIDC and LDAP backend
- * Enh #1429: Add s3ng storage driver, storing blobs in a s3-compatible blobstore
- * Enh #1467: Align default location for xrdcopy binary
+ * Fix #2693: Support editnew actions from MS Office
+ * Fix #2588: Dockerfile.revad-ceph to use the right base image
+ * Fix #2216: Make hardcoded HTTP "insecure" options configurable
+ * Fix #2860: Use `eos-all` parent image
+ * Fix #2499: Removed check DenyGrant in resource permission
+ * Fix #2712: Update Dockerfile.revad.eos to not break the image
+ * Fix #2789: Minor fixes in cephfs and eosfs
+ * Fix #2285: Accept new userid idp format
+ * Fix #2608: Respect the tracing_service_name config variable
+ * Fix #2841: Refactors logger to have ctx
+ * Fix #2759: Made uid, gid claims parsing more robust in OIDC auth provider
+ * Fix #2842: Fix download action in SDK
+ * Fix #2555: Fix site accounts endpoints
+ * Fix #2675: Updates Makefile according to latest go standards
+ * Fix #2572: Wait for nats server on middleware start
+ * Chg #2596: Remove hash from public link urls
+ * Chg #2559: Do not encode webDAV ids to base64
+ * Chg #2561: Merge oidcmapping auth manager into oidc
+ * Enh #2698: Make capabilities endpoint public, authenticate users is present
+ * Enh #2813: Support custom mimetypes in the WOPI appprovider driver
+ * Enh #2515: Enabling tracing by default if not explicitly disabled
+ * Enh #160: Implement the CS3 Lock API in the EOS storage driver
+ * Enh #2686: Features for favorites xattrs in EOS, cache for scope expansion
+ * Enh #2494: Use sys ACLs for file permissions
+ * Enh #2522: Introduce events
+ * Enh #2685: Enable federated account access
+ * Enh #2801: Use functional options for client gRPC connections
+ * Enh #2921: Use standard header for checksums
+ * Enh #2480: Group based capabilities
+ * Enh #1787: Add support for HTTP TPC
+ * Enh #2560: Mentix PromSD extensions
+ * Enh #2613: Externalize custom mime types configuration for storage providers
+ * Enh #2163: Nextcloud-based share manager for pkg/ocm/share
+ * Enh #2696: Preferences driver refactor and cbox sql implementation
+ * Enh #2052: New CS3API datatx methods
+ * Enh #2738: Site accounts site-global settings
+ * Enh #2672: Further Site Accounts improvements
+ * Enh #2549: Site accounts improvements
+ * Enh #2488: Cephfs support keyrings with IDs
+ * Enh #2514: Reuse ocs role objects in other drivers
+ * Enh #2752: Refactor the rest user and group provider drivers
+ * Enh #2946: Make user share indicators read from the share provider service
 
 Details
 -------
 
- * Bugfix #1425: Align href URL encoding with oc10
+ * Bugfix #2693: Support editnew actions from MS Office
 
-   We now use the same percent encoding for URLs in WebDAV href properties as ownCloud 10.
+   This fixes the incorrect behavior when creating new xlsx and pptx files, as MS Office supports
+   the editnew action and it must be used for newly created files instead of the normal edit action.
 
-   https://github.com/owncloud/ocis/issues/1120
-   https://github.com/owncloud/ocis/issues/1296
-   https://github.com/owncloud/ocis/issues/1307
-   https://github.com/cs3org/reva/pull/1425
-   https://github.com/cs3org/reva/pull/1472
+   https://github.com/cs3org/reva/pull/2693
 
- * Bugfix #1461: Fix public link webdav permissions
+ * Bugfix #2588: Dockerfile.revad-ceph to use the right base image
 
-   We now correctly render `oc:permissions` on the root collection of a publicly shared folder
-   when it has more than read permissions.
+   In Aug2021 https://hub.docker.com/r/ceph/daemon-base was moved to quay.ceph.io and the
+   builds for this image were failing for some weeks after January.
 
-   https://github.com/cs3org/reva/pull/1461
+   https://github.com/cs3org/reva/pull/2588
 
- * Bugfix #1457: Cloning of internal mesh data lost some values
+ * Bugfix #2216: Make hardcoded HTTP "insecure" options configurable
 
-   This update fixes a bug in Mentix that caused some (non-critical) values to be lost during data
-   cloning that happens internally.
+   HTTP "insecure" options must be configurable and default to false.
 
-   https://github.com/cs3org/reva/pull/1457
+   https://github.com/cs3org/reva/issues/2216
 
- * Bugfix #1429: Purge non-empty dirs from trash-bin
+ * Bugfix #2860: Use `eos-all` parent image
 
-   This wasn't possible before if the directory was not empty
+   https://github.com/cs3org/reva/pull/2860
 
-   https://github.com/cs3org/reva/pull/1429
+ * Bugfix #2499: Removed check DenyGrant in resource permission
 
- * Bugfix #1408: Get error status from trash-bin response
+   When adding a denial permission
 
-   Previously the status code was gathered from the wrong response.
+   https://github.com/cs3org/reva/pull/2499
 
-   https://github.com/cs3org/reva/pull/1408
+ * Bugfix #2712: Update Dockerfile.revad.eos to not break the image
 
- * Enhancement #1451: Render additional share with in ocs sharing api
+   https://github.com/cs3org/reva/pull/2712
 
-   Recipients can now be distinguished by their email, which is rendered as additional info in the
-   ocs api for share and file owners as well as share recipients.
+ * Bugfix #2789: Minor fixes in cephfs and eosfs
 
-   https://github.com/owncloud/ocis/issues/1190
-   https://github.com/cs3org/reva/pull/1451
+   https://github.com/cs3org/reva/pull/2789
 
- * Enhancement #1424: We categorized the list of expected failures
+ * Bugfix #2285: Accept new userid idp format
 
-   We categorized all expected failures into _File_ (Basic file management like up and download,
-   move, copy, properties, trash, versions and chunking), _Sync_ (Synchronization features
-   like etag propagation, setting mtime and locking files), _Share_ (File and sync features in a
-   shared scenario), _User management_ (User and group management features) and _Other_ (API,
-   search, favorites, config, capabilities, not existing endpoints, CORS and others). The
-   [Review and fix the tests that have sharing step to work with
-   ocis](https://github.com/owncloud/core/issues/38006) reference has been removed, as we
-   now have the sharing category
+   The format for userid idp [changed](https://github.com/cs3org/cs3apis/pull/159) and
+   this broke [the ocmd
+   tutorial](https://reva.link/docs/tutorials/share-tutorial/#5-1-4-create-the-share)
+   This PR makes the provider authorizer interceptor accept both the old and the new string
+   format.
 
-   https://github.com/owncloud/core/issues/38006
-   https://github.com/cs3org/reva/pull/1424
+   https://github.com/cs3org/reva/issues/2285
+   https://github.com/cs3org/reva/issues/2285
+   See
+   and
 
- * Enhancement #1434: CERNBox REST driver for groupprovider service
+ * Bugfix #2608: Respect the tracing_service_name config variable
 
-   https://github.com/cs3org/reva/pull/1434
+   https://github.com/cs3org/reva/pull/2608
 
- * Enhancement #1400: Checksum support
+ * Bugfix #2841: Refactors logger to have ctx
 
-   We now support checksums on file uploads and PROPFIND results. On uploads, the ocdav service
-   now forwards the `OC-Checksum` (and the similar TUS `Upload-Checksum`) header to the storage
-   provider. We added an internal http status code that allows storage drivers to return checksum
-   errors. On PROPFINDs, ocdav now renders the `<oc:checksum>` header in a bug compatible way for
-   oc10 backward compatibility with existing clients. Finally, GET and HEAD requests now return
-   the `OC-Checksum` header.
+   This fixes the native library loggers which are not associated with the context and thus are not
+   handled properly in the reva runtime.
 
-   https://github.com/owncloud/ocis/issues/1291
-   https://github.com/owncloud/ocis/issues/1316
-   https://github.com/cs3org/reva/pull/1400
-   https://github.com/owncloud/core/pull/38304
+   https://github.com/cs3org/reva/pull/2841
 
- * Enhancement #1431: Update npm packages to fix vulnerabilities
+ * Bugfix #2759: Made uid, gid claims parsing more robust in OIDC auth provider
 
-   https://github.com/cs3org/reva/pull/1431
+   This fix makes sure the uid and gid claims are defined at init time, and that the necessary
+   typecasts are performed correctly when authenticating users. A comment was added that in case
+   the uid/gid claims are missing AND that no mapping takes place, a user entity is returned with
+   uid = gid = 0.
 
- * Enhancement #1415: Indicate in EOS containers that TUS is not supported
+   https://github.com/cs3org/reva/pull/2759
 
-   The OCDAV propfind response previously hardcoded the TUS headers due to which clients such as
-   phoenix used the TUS protocol for uploads, which EOS doesn't support. Now we pass this property
-   as an opaque entry in the containers metadata.
+ * Bugfix #2842: Fix download action in SDK
 
-   https://github.com/cs3org/reva/pull/1415
+   The download action was no longer working in the SDK (used by our testing probes); this PR fixes
+   the underlying issue.
 
- * Enhancement #1402: Parse EOS sys ACLs to generate CS3 resource permissions
+   https://github.com/cs3org/reva/pull/2842
 
-   https://github.com/cs3org/reva/pull/1402
+ * Bugfix #2555: Fix site accounts endpoints
 
- * Enhancement #1477: Set quota when creating home directory in EOS
+   This PR fixes small bugs in the site accounts endpoints.
 
-   https://github.com/cs3org/reva/pull/1477
+   https://github.com/cs3org/reva/pull/2555
 
- * Enhancement #1416: Use updated etag of home directory even if it is cached
+ * Bugfix #2675: Updates Makefile according to latest go standards
 
-   We cache the home directory and shares folder etags as calculating these is an expensive
-   process. But if these directories were updated after the previously calculated etag was
-   cached, we can ignore this calculation and directly return the new one.
+   Earlier, we were using go get to install packages. Now, we are using go install to install
+   packages
 
-   https://github.com/cs3org/reva/pull/1416
+   https://github.com/cs3org/reva/issues/2675
+   https://github.com/cs3org/reva/pull/2747
 
- * Enhancement #1478: Enhance error handling for grappa REST drivers
+ * Bugfix #2572: Wait for nats server on middleware start
 
-   https://github.com/cs3org/reva/pull/1478
+   Use a retry mechanism to connect to the nats server when it is not ready yet
 
- * Enhancement #1453: Add functionality to share resources with groups
+   https://github.com/cs3org/reva/pull/2572
 
-   https://github.com/cs3org/reva/pull/1453
+ * Change #2596: Remove hash from public link urls
 
- * Enhancement #99: Add stubs and manager for groupprovider service
+   Public link urls do not contain the hash anymore, this is needed to support the ocis and web
+   history mode.
 
-   Recently, there was a separation of concerns with regard to users and groups in CS3APIs. This PR
-   adds the required stubs and drivers for the group manager.
+   https://github.com/cs3org/reva/pull/2596
+   https://github.com/owncloud/ocis/pull/3109
+   https://github.com/owncloud/web/pull/6363
 
-   https://github.com/cs3org/cs3apis/pull/99
-   https://github.com/cs3org/cs3apis/pull/102
-   https://github.com/cs3org/reva/pull/1358
+ * Change #2559: Do not encode webDAV ids to base64
 
- * Enhancement #1462: Hash public share passwords
+   We removed the base64 encoding of the IDs and use the format <storageID>!<opaqueID> with a `!`
+   delimiter. As a reserved delimiter it is URL safe. The IDs will be XML and JSON encoded as
+   necessary.
 
-   The share passwords were only base64 encoded. Added hashing using bcrypt with configurable
-   hash cost.
+   https://github.com/cs3org/reva/pull/2559
 
-   https://github.com/cs3org/reva/pull/1462
+ * Change #2561: Merge oidcmapping auth manager into oidc
 
- * Enhancement #1464: LDAP driver for the groupprovider service
+   The oidcmapping auth manager was created as a separate package to ease testing. As it has now
+   been tested also as a pure OIDC auth provider without mapping, and as the code is largely
+   refactored, it makes sense to merge it back so to maintain a single OIDC manager.
 
-   https://github.com/cs3org/reva/pull/1464
+   https://github.com/cs3org/reva/pull/2561
 
- * Enhancement #1430: Capture non-deterministic behavior on storages
+ * Enhancement #2698: Make capabilities endpoint public, authenticate users is present
 
-   As a developer creating/maintaining a storage driver I want to be able to validate the
-   atomicity of all my storage driver operations. * Test for: Start 2 uploads, pause the first one,
-   let the second one finish first, resume the first one at some point in time. Both uploads should
-   finish. Needs to result in 2 versions, last finished is the most recent version. * Test for:
-   Start 2 MKCOL requests with the same path, one needs to fail.
+   https://github.com/cs3org/reva/pull/2698
 
-   https://github.com/cs3org/reva/pull/1430
+ * Enhancement #2813: Support custom mimetypes in the WOPI appprovider driver
 
- * Enhancement #1456: Fetch user groups in OIDC and LDAP backend
+   Similarly to the storage provider, also the WOPI appprovider driver now supports custom mime
+   types. Also fixed a small typo.
 
-   https://github.com/cs3org/reva/pull/1456
+   https://github.com/cs3org/reva/pull/2813
 
- * Enhancement #1429: Add s3ng storage driver, storing blobs in a s3-compatible blobstore
+ * Enhancement #2515: Enabling tracing by default if not explicitly disabled
 
-   We added a new storage driver (s3ng) which stores the file metadata on a local filesystem
-   (reusing the decomposed filesystem of the ocis driver) and the actual content as blobs in any
-   s3-compatible blobstore.
+   https://github.com/cs3org/reva/pull/2515
 
-   https://github.com/cs3org/reva/pull/1429
+ * Enhancement #160: Implement the CS3 Lock API in the EOS storage driver
 
- * Enhancement #1467: Align default location for xrdcopy binary
+   https://github.com/cs3org/cs3apis/pull/160
+   https://github.com/cs3org/reva/pull/2444
 
-   https://github.com/cs3org/reva/pull/1467
+ * Enhancement #2686: Features for favorites xattrs in EOS, cache for scope expansion
+
+   https://github.com/cs3org/reva/pull/2686
+
+ * Enhancement #2494: Use sys ACLs for file permissions
+
+   https://github.com/cs3org/reva/pull/2494
+
+ * Enhancement #2522: Introduce events
+
+   This will introduce events into the system. Events are a simple way to bring information from
+   one service to another. Read `pkg/events/example` and subfolders for more information
+
+   https://github.com/cs3org/reva/pull/2522
+
+ * Enhancement #2685: Enable federated account access
+
+   https://github.com/cs3org/reva/pull/2685
+
+ * Enhancement #2801: Use functional options for client gRPC connections
+
+   This will add more ability to configure the client side gRPC connections.
+
+   https://github.com/cs3org/reva/pull/2801
+
+ * Enhancement #2921: Use standard header for checksums
+
+   On HEAD requests, we currently expose checksums (when available) using the
+   ownCloud-specific header, which is typically consumed by the sync clients.
+
+   This patch adds the standard Digest header using the standard format detailed at
+   https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Digest. This is e.g. used
+   by GFAL/Rucio clients in the context of managed transfers of datasets.
+
+   https://github.com/cs3org/reva/pull/2921
+
+ * Enhancement #2480: Group based capabilities
+
+   We can now return specific capabilities for users who belong to certain configured groups.
+
+   https://github.com/cs3org/reva/pull/2480
+
+ * Enhancement #1787: Add support for HTTP TPC
+
+   We have added support for HTTP Third Party Copy. This allows remote data transfers between
+   storages managed by either two different reva servers, or a reva server and a Grid
+   (WLCG/ESCAPE) site server.
+
+   Such remote transfers are expected to be driven by
+   [GFAL](https://cern.ch/dmc-docs/gfal2/gfal2.html), the underlying library used by
+   [FTS](https://cern.ch/fts), and [Rucio](https://rucio.cern.ch).
+
+   In addition, the oidcmapping package has been refactored to support the standard OIDC use
+   cases as well when no mapping is defined.
+
+   https://github.com/cs3org/reva/issues/1787
+   https://github.com/cs3org/reva/pull/2007
+
+ * Enhancement #2560: Mentix PromSD extensions
+
+   The Mentix Prometheus SD scrape targets are now split into one file per service type, making
+   health checks configuration easier. Furthermore, the local file connector for mesh data and
+   the site registration endpoint have been dropped, as they aren't needed anymore.
+
+   https://github.com/cs3org/reva/pull/2560
+
+ * Enhancement #2613: Externalize custom mime types configuration for storage providers
+
+   Added ability to configure custom mime types in an external JSON file, such that it can be reused
+   when many storage providers are deployed at the same time.
+
+   https://github.com/cs3org/reva/pull/2613
+
+ * Enhancement #2163: Nextcloud-based share manager for pkg/ocm/share
+
+   Note that pkg/ocm/share is very similar to pkg/share, but it deals with cs3/sharing/ocm
+   whereas pkg/share deals with cs3/sharing/collaboration
+
+   https://github.com/cs3org/reva/pull/2163
+
+ * Enhancement #2696: Preferences driver refactor and cbox sql implementation
+
+   This PR uses the updated CS3APIs which accepts a namespace in addition to a single string key to
+   recognize a user preference. It also refactors the GRPC service to support multiple drivers
+   and adds the cbox SQL implementation.
+
+   https://github.com/cs3org/reva/pull/2696
+
+ * Enhancement #2052: New CS3API datatx methods
+
+   CS3 datatx pull model methods: PullTransfer, RetryTransfer, ListTransfers Method
+   CreateTransfer removed.
+
+   https://github.com/cs3org/reva/pull/2052
+
+ * Enhancement #2738: Site accounts site-global settings
+
+   This PR extends the site accounts service by adding site-global settings. These are used to
+   store test user credentials that are in return used by our BBE port to perform CS3API-specific
+   health checks.
+
+   https://github.com/cs3org/reva/pull/2738
+
+ * Enhancement #2672: Further Site Accounts improvements
+
+   Yet another PR to update the site accounts (and Mentix): New default site ID; Include service
+   type in alerts; Naming unified; Remove obsolete stuff.
+
+   https://github.com/cs3org/reva/pull/2672
+
+ * Enhancement #2549: Site accounts improvements
+
+   This PR improves the site accounts: - Removed/hid API key stuff - Added quick links to the main
+   panel - Made alert notifications mandatory
+
+   https://github.com/cs3org/reva/pull/2549
+
+ * Enhancement #2488: Cephfs support keyrings with IDs
+
+   https://github.com/cs3org/reva/pull/2488
+
+ * Enhancement #2514: Reuse ocs role objects in other drivers
+
+   https://github.com/cs3org/reva/pull/2514
+
+ * Enhancement #2752: Refactor the rest user and group provider drivers
+
+   We now maintain our own cache for all user and group data, and periodically refresh it. A redis
+   server now becomes a necessary dependency, whereas it was optional previously.
+
+   https://github.com/cs3org/reva/pull/2752
+
+ * Enhancement #2946: Make user share indicators read from the share provider service
+
+   https://github.com/cs3org/reva/pull/2946
 
 

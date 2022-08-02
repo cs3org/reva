@@ -104,18 +104,18 @@ func (_m *Tree) GetMD(ctx context.Context, _a1 *node.Node) (os.FileInfo, error) 
 }
 
 // GetPathByID provides a mock function with given fields: ctx, id
-func (_m *Tree) GetPathByID(ctx context.Context, id *providerv1beta1.ResourceId) (string, error) {
+func (_m *Tree) GetPathByID(ctx context.Context, id *providerv1beta1.Reference) (string, error) {
 	ret := _m.Called(ctx, id)
 
 	var r0 string
-	if rf, ok := ret.Get(0).(func(context.Context, *providerv1beta1.ResourceId) string); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, *providerv1beta1.Reference) string); ok {
 		r0 = rf(ctx, id)
 	} else {
 		r0 = ret.Get(0).(string)
 	}
 
 	var r1 error
-	if rf, ok := ret.Get(1).(func(context.Context, *providerv1beta1.ResourceId) error); ok {
+	if rf, ok := ret.Get(1).(func(context.Context, *providerv1beta1.Reference) error); ok {
 		r1 = rf(ctx, id)
 	} else {
 		r1 = ret.Error(1)

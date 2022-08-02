@@ -27,8 +27,8 @@ import (
 	"sync"
 	"time"
 
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/user"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
@@ -87,7 +87,7 @@ type config struct {
 
 func (m *manager) GenerateToken(ctx context.Context) (*invitepb.InviteToken, error) {
 
-	ctxUser := user.ContextMustGetUser(ctx)
+	ctxUser := ctxpkg.ContextMustGetUser(ctx)
 	inviteToken, err := token.CreateToken(m.Config.Expiration, ctxUser.GetId())
 	if err != nil {
 		return nil, errors.Wrap(err, "memory: error creating token")
@@ -99,7 +99,7 @@ func (m *manager) GenerateToken(ctx context.Context) (*invitepb.InviteToken, err
 
 func (m *manager) ForwardInvite(ctx context.Context, invite *invitepb.InviteToken, originProvider *ocmprovider.ProviderInfo) error {
 
-	contextUser := user.ContextMustGetUser(ctx)
+	contextUser := ctxpkg.ContextMustGetUser(ctx)
 	requestBody := url.Values{
 		"token":             {invite.GetToken()},
 		"userID":            {contextUser.GetId().GetOpaqueId()},
@@ -172,7 +172,7 @@ func (m *manager) AcceptInvite(ctx context.Context, invite *invitepb.InviteToken
 }
 
 func (m *manager) GetAcceptedUser(ctx context.Context, remoteUserID *userpb.UserId) (*userpb.User, error) {
-	currUser := user.ContextMustGetUser(ctx).GetId().GetOpaqueId()
+	currUser := ctxpkg.ContextMustGetUser(ctx).GetId().GetOpaqueId()
 	usersList, ok := m.AcceptedUsers.Load(currUser)
 	if !ok {
 		return nil, errtypes.NotFound(remoteUserID.OpaqueId)
@@ -188,7 +188,7 @@ func (m *manager) GetAcceptedUser(ctx context.Context, remoteUserID *userpb.User
 }
 
 func (m *manager) FindAcceptedUsers(ctx context.Context, query string) ([]*userpb.User, error) {
-	currUser := user.ContextMustGetUser(ctx).GetId().GetOpaqueId()
+	currUser := ctxpkg.ContextMustGetUser(ctx).GetId().GetOpaqueId()
 	usersList, ok := m.AcceptedUsers.Load(currUser)
 	if !ok {
 		return []*userpb.User{}, nil

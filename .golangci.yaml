@@ -14,6 +14,7 @@ issues:
         - scopelint
 linters:
   enable:
+    - maligned
     - bodyclose
     - deadcode
     - errcheck
@@ -30,7 +31,6 @@ linters:
     - goimports
     - unconvert
     - scopelint
-    - maligned
     - misspell
     - gocritic
     - prealloc

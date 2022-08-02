@@ -16,9 +16,26 @@
 # granted to it by virtue of its status as an Intergovernmental Organization
 # or submit itself to any jurisdiction.
 
-FROM golang:1.16
+FROM golang:alpine3.13 as builder
+
+RUN apk --no-cache add \
+  ca-certificates \
+  bash \
+  git \
+  gcc \
+  libc-dev \
+  make
+
+ENV PATH /go/bin:/usr/local/go/bin:$PATH
+ENV GOPATH /go
 
 WORKDIR /go/src/github/cs3org/reva
 COPY . .
 RUN make build-reva-docker && cp /go/src/github/cs3org/reva/cmd/reva/reva /go/bin/reva
-ENTRYPOINT ["/go/bin/reva"]
+
+FROM scratch
+
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+COPY --from=builder /go/bin/reva /usr/bin/reva
+
+ENTRYPOINT [ "/usr/bin/reva" ]

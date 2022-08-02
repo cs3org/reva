@@ -19,7 +19,7 @@
 package ocdav
 
 import (
-	"io"
+	"context"
 	"net/http"
 	"path"
 	"strconv"
@@ -34,12 +34,14 @@ import (
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/storage/utils/chunking"
+	rtrace "github.com/cs3org/reva/pkg/trace"
 	"github.com/cs3org/reva/pkg/utils"
-	"go.opencensus.io/trace"
+	"github.com/cs3org/reva/pkg/utils/resourceid"
+	"github.com/rs/zerolog"
 )
 
 func sufferMacOSFinder(r *http.Request) bool {
-	return r.Header.Get("X-Expected-Entity-Length") != ""
+	return r.Header.Get(HeaderExpectedEntityLength) != ""
 }
 
 func handleMacOSFinder(w http.ResponseWriter, r *http.Request) error {
@@ -61,8 +63,8 @@ func handleMacOSFinder(w http.ResponseWriter, r *http.Request) error {
 	*/
 
 	log := appctx.GetLogger(r.Context())
-	content := r.Header.Get("Content-Length")
-	expected := r.Header.Get("X-Expected-Entity-Length")
+	content := r.Header.Get(HeaderContentLength)
+	expected := r.Header.Get(HeaderExpectedEntityLength)
 	log.Warn().Str("content-length", content).Str("x-expected-entity-length", expected).Msg("Mac OS Finder corner-case detected")
 
 	// The best mitigation to this problem is to tell users to not use crappy Finder.
@@ -100,89 +102,65 @@ func isContentRange(r *http.Request) bool {
 		   in unexpected behaviour (cf PEAR::HTTP_WebDAV_Client 1.0.1), we reject
 		   all PUT requests with a Content-Range for now.
 	*/
-	return r.Header.Get("Content-Range") != ""
+	return r.Header.Get(HeaderContentRange) != ""
 }
 
-func (s *svc) handlePut(w http.ResponseWriter, r *http.Request, ns string) {
-	ctx := r.Context()
+func (s *svc) handlePathPut(w http.ResponseWriter, r *http.Request, ns string) {
+	ctx, span := rtrace.Provider.Tracer("ocdav").Start(r.Context(), "put")
+	defer span.End()
+
 	fn := path.Join(ns, r.URL.Path)
 
 	sublog := appctx.GetLogger(ctx).With().Str("path", fn).Logger()
 
-	if r.Body == nil {
-		sublog.Debug().Msg("body is nil")
+	ref := &provider.Reference{Path: fn}
+
+	s.handlePut(ctx, w, r, ref, sublog)
+}
+
+func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Request, ref *provider.Reference, log zerolog.Logger) {
+	if !checkPreconditions(w, r, log) {
+		// checkPreconditions handles error returns
+		return
+	}
+
+	length, err := getContentLength(w, r)
+	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
-	if isContentRange(r) {
-		sublog.Debug().Msg("Content-Range not supported for PUT")
-		w.WriteHeader(http.StatusNotImplemented)
-		return
-	}
-
-	if sufferMacOSFinder(r) {
-		err := handleMacOSFinder(w, r)
-		if err != nil {
-			sublog.Debug().Err(err).Msg("error handling Mac OS corner-case")
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-	}
-
-	length, err := strconv.ParseInt(r.Header.Get("Content-Length"), 10, 64)
-	if err != nil {
-		// Fallback to Upload-Length
-		length, err = strconv.ParseInt(r.Header.Get("Upload-Length"), 10, 64)
-		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-	}
-
-	s.handlePutHelper(w, r, r.Body, fn, length)
-}
-
-func (s *svc) handlePutHelper(w http.ResponseWriter, r *http.Request, content io.Reader, fn string, length int64) {
-	ctx := r.Context()
-	ctx, span := trace.StartSpan(ctx, "put")
-	defer span.End()
-
-	sublog := appctx.GetLogger(ctx).With().Str("path", fn).Logger()
 	client, err := s.getClient()
 	if err != nil {
-		sublog.Error().Err(err).Msg("error getting grpc client")
+		log.Error().Err(err).Msg("error getting grpc client")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
-	ref := &provider.Reference{
-		Spec: &provider.Reference_Path{Path: fn},
-	}
 	sReq := &provider.StatRequest{Ref: ref}
 	sRes, err := client.Stat(ctx, sReq)
 	if err != nil {
-		sublog.Error().Err(err).Msg("error sending grpc stat request")
+		log.Error().Err(err).Msg("error sending grpc stat request")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 	if sRes.Status.Code != rpc.Code_CODE_OK && sRes.Status.Code != rpc.Code_CODE_NOT_FOUND {
-		HandleErrorStatus(&sublog, w, sRes.Status)
+		HandleErrorStatus(&log, w, sRes.Status)
 		return
 	}
 
 	info := sRes.Info
 	if info != nil {
 		if info.Type != provider.ResourceType_RESOURCE_TYPE_FILE {
-			sublog.Debug().Msg("resource is not a file")
+			log.Debug().Msg("resource is not a file")
 			w.WriteHeader(http.StatusConflict)
 			return
 		}
-		clientETag := r.Header.Get("If-Match")
+		clientETag := r.Header.Get(HeaderIfMatch)
 		serverETag := info.Etag
 		if clientETag != "" {
 			if clientETag != serverETag {
-				sublog.Debug().Str("client-etag", clientETag).Str("server-etag", serverETag).Msg("etags mismatch")
+				log.Debug().Str("client-etag", clientETag).Str("server-etag", serverETag).Msg("etags mismatch")
 				w.WriteHeader(http.StatusPreconditionFailed)
 				return
 			}
@@ -190,38 +168,38 @@ func (s *svc) handlePutHelper(w http.ResponseWriter, r *http.Request, content io
 	}
 
 	opaqueMap := map[string]*typespb.OpaqueEntry{
-		"Upload-Length": {
+		HeaderUploadLength: {
 			Decoder: "plain",
 			Value:   []byte(strconv.FormatInt(length, 10)),
 		},
 	}
 
-	if mtime := r.Header.Get("X-OC-Mtime"); mtime != "" {
-		opaqueMap["X-OC-Mtime"] = &typespb.OpaqueEntry{
+	if mtime := r.Header.Get(HeaderOCMtime); mtime != "" {
+		opaqueMap[HeaderOCMtime] = &typespb.OpaqueEntry{
 			Decoder: "plain",
 			Value:   []byte(mtime),
 		}
 
 		// TODO: find a way to check if the storage really accepted the value
-		w.Header().Set("X-OC-Mtime", "accepted")
+		w.Header().Set(HeaderOCMtime, "accepted")
 	}
 
 	// curl -X PUT https://demo.owncloud.com/remote.php/webdav/testcs.bin -u demo:demo -d '123' -v -H 'OC-Checksum: SHA1:40bd001563085fc35165329ea1ff5c5ecbdbbeef'
 
 	var cparts []string
 	// TUS Upload-Checksum header takes precedence
-	if checksum := r.Header.Get("Upload-Checksum"); checksum != "" {
+	if checksum := r.Header.Get(HeaderUploadChecksum); checksum != "" {
 		cparts = strings.SplitN(checksum, " ", 2)
 		if len(cparts) != 2 {
-			sublog.Debug().Str("upload-checksum", checksum).Msg("invalid Upload-Checksum format, expected '[algorithm] [checksum]'")
+			log.Debug().Str("upload-checksum", checksum).Msg("invalid Upload-Checksum format, expected '[algorithm] [checksum]'")
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
 		// Then try owncloud header
-	} else if checksum := r.Header.Get("OC-Checksum"); checksum != "" {
+	} else if checksum := r.Header.Get(HeaderOCChecksum); checksum != "" {
 		cparts = strings.SplitN(checksum, ":", 2)
 		if len(cparts) != 2 {
-			sublog.Debug().Str("oc-checksum", checksum).Msg("invalid OC-Checksum format, expected '[algorithm]:[checksum]'")
+			log.Debug().Str("oc-checksum", checksum).Msg("invalid OC-Checksum format, expected '[algorithm]:[checksum]'")
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
@@ -229,7 +207,7 @@ func (s *svc) handlePutHelper(w http.ResponseWriter, r *http.Request, content io
 	// we do not check the algorithm here, because it might depend on the storage
 	if len(cparts) == 2 {
 		// Translate into TUS style Upload-Checksum header
-		opaqueMap["Upload-Checksum"] = &typespb.OpaqueEntry{
+		opaqueMap[HeaderUploadChecksum] = &typespb.OpaqueEntry{
 			Decoder: "plain",
 			// algorithm is always lowercase, checksum is separated by space
 			Value: []byte(strings.ToLower(cparts[0]) + " " + cparts[1]),
@@ -244,13 +222,25 @@ func (s *svc) handlePutHelper(w http.ResponseWriter, r *http.Request, content io
 	// where to upload the file?
 	uRes, err := client.InitiateFileUpload(ctx, uReq)
 	if err != nil {
-		sublog.Error().Err(err).Msg("error initiating file upload")
+		log.Error().Err(err).Msg("error initiating file upload")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
 	if uRes.Status.Code != rpc.Code_CODE_OK {
-		HandleErrorStatus(&sublog, w, uRes.Status)
+		switch uRes.Status.Code {
+		case rpc.Code_CODE_PERMISSION_DENIED:
+			w.WriteHeader(http.StatusForbidden)
+			b, err := Marshal(exception{
+				code:    SabredavPermissionDenied,
+				message: "permission denied: you have no permission to upload content",
+			})
+			HandleWebdavError(&log, w, b, err)
+		case rpc.Code_CODE_NOT_FOUND:
+			w.WriteHeader(http.StatusConflict)
+		default:
+			HandleErrorStatus(&log, w, uRes.Status)
+		}
 		return
 	}
 
@@ -261,91 +251,75 @@ func (s *svc) handlePutHelper(w http.ResponseWriter, r *http.Request, content io
 		}
 	}
 
-	if length > 0 {
-		httpReq, err := rhttp.NewRequest(ctx, "PUT", ep, content)
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-		httpReq.Header.Set(datagateway.TokenTransportHeader, token)
+	httpReq, err := rhttp.NewRequest(ctx, http.MethodPut, ep, r.Body)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	httpReq.Header.Set(datagateway.TokenTransportHeader, token)
 
-		httpRes, err := s.client.Do(httpReq)
-		if err != nil {
-			sublog.Error().Err(err).Msg("error doing PUT request to data service")
-			w.WriteHeader(http.StatusInternalServerError)
+	httpRes, err := s.client.Do(httpReq)
+	if err != nil {
+		log.Error().Err(err).Msg("error doing PUT request to data service")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	defer httpRes.Body.Close()
+	if httpRes.StatusCode != http.StatusOK {
+		if httpRes.StatusCode == http.StatusPartialContent {
+			w.WriteHeader(http.StatusPartialContent)
 			return
 		}
-		defer httpRes.Body.Close()
-		if httpRes.StatusCode != http.StatusOK {
-			if httpRes.StatusCode == http.StatusPartialContent {
-				w.WriteHeader(http.StatusPartialContent)
-				return
-			}
-			if httpRes.StatusCode == errtypes.StatusChecksumMismatch {
-				w.WriteHeader(http.StatusBadRequest)
-				b, err := Marshal(exception{
-					code:    SabredavMethodBadRequest,
-					message: "The computed checksum does not match the one received from the client.",
-				})
-				if err != nil {
-					sublog.Error().Msgf("error marshaling xml response: %s", b)
-					w.WriteHeader(http.StatusInternalServerError)
-					return
-				}
-				_, err = w.Write(b)
-				if err != nil {
-					sublog.Err(err).Msg("error writing response")
-				}
-				return
-			}
-			sublog.Error().Err(err).Msg("PUT request to data server failed")
-			w.WriteHeader(httpRes.StatusCode)
+		if httpRes.StatusCode == errtypes.StatusChecksumMismatch {
+			w.WriteHeader(http.StatusBadRequest)
+			b, err := Marshal(exception{
+				code:    SabredavBadRequest,
+				message: "The computed checksum does not match the one received from the client.",
+			})
+			HandleWebdavError(&log, w, b, err)
 			return
 		}
+		log.Error().Err(err).Msg("PUT request to data server failed")
+		w.WriteHeader(httpRes.StatusCode)
+		return
 	}
 
-	ok, err := chunking.IsChunked(fn)
+	ok, err := chunking.IsChunked(ref.Path)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 	if ok {
-		chunk, err := chunking.GetChunkBLOBInfo(fn)
+		chunk, err := chunking.GetChunkBLOBInfo(ref.Path)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-		sReq = &provider.StatRequest{
-			Ref: &provider.Reference{
-				Spec: &provider.Reference_Path{
-					Path: chunk.Path,
-				},
-			},
-		}
+		sReq = &provider.StatRequest{Ref: &provider.Reference{Path: chunk.Path}}
 	}
 
 	// stat again to check the new file's metadata
 	sRes, err = client.Stat(ctx, sReq)
 	if err != nil {
-		sublog.Error().Err(err).Msg("error sending grpc stat request")
+		log.Error().Err(err).Msg("error sending grpc stat request")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
 	if sRes.Status.Code != rpc.Code_CODE_OK {
-		HandleErrorStatus(&sublog, w, sRes.Status)
+		HandleErrorStatus(&log, w, sRes.Status)
 		return
 	}
 
 	newInfo := sRes.Info
 
-	w.Header().Add("Content-Type", newInfo.MimeType)
-	w.Header().Set("ETag", newInfo.Etag)
-	w.Header().Set("OC-FileId", wrapResourceID(newInfo.Id))
-	w.Header().Set("OC-ETag", newInfo.Etag)
+	w.Header().Add(HeaderContentType, newInfo.MimeType)
+	w.Header().Set(HeaderETag, newInfo.Etag)
+	w.Header().Set(HeaderOCFileID, resourceid.OwnCloudResourceIDWrap(newInfo.Id))
+	w.Header().Set(HeaderOCETag, newInfo.Etag)
 	t := utils.TSToTime(newInfo.Mtime).UTC()
 	lastModifiedString := t.Format(time.RFC1123Z)
-	w.Header().Set("Last-Modified", lastModifiedString)
+	w.Header().Set(HeaderLastModified, lastModifiedString)
 
 	// file was new
 	if info == nil {
@@ -355,4 +329,55 @@ func (s *svc) handlePutHelper(w http.ResponseWriter, r *http.Request, content io
 
 	// overwrite
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *svc) handleSpacesPut(w http.ResponseWriter, r *http.Request, spaceID string) {
+	ctx, span := rtrace.Provider.Tracer("ocdav").Start(r.Context(), "spaces_put")
+	defer span.End()
+
+	sublog := appctx.GetLogger(ctx).With().Str("spaceid", spaceID).Str("path", r.URL.Path).Logger()
+
+	spaceRef, status, err := s.lookUpStorageSpaceReference(ctx, spaceID, r.URL.Path)
+	if err != nil {
+		sublog.Error().Err(err).Msg("error sending a grpc request")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	if status.Code != rpc.Code_CODE_OK {
+		HandleErrorStatus(&sublog, w, status)
+		return
+	}
+
+	s.handlePut(ctx, w, r, spaceRef, sublog)
+}
+
+func checkPreconditions(w http.ResponseWriter, r *http.Request, log zerolog.Logger) bool {
+	if isContentRange(r) {
+		log.Debug().Msg("Content-Range not supported for PUT")
+		w.WriteHeader(http.StatusNotImplemented)
+		return false
+	}
+
+	if sufferMacOSFinder(r) {
+		err := handleMacOSFinder(w, r)
+		if err != nil {
+			log.Debug().Err(err).Msg("error handling Mac OS corner-case")
+			w.WriteHeader(http.StatusInternalServerError)
+			return false
+		}
+	}
+	return true
+}
+
+func getContentLength(w http.ResponseWriter, r *http.Request) (int64, error) {
+	length, err := strconv.ParseInt(r.Header.Get(HeaderContentLength), 10, 64)
+	if err != nil {
+		// Fallback to Upload-Length
+		length, err = strconv.ParseInt(r.Header.Get(HeaderUploadLength), 10, 64)
+		if err != nil {
+			return 0, err
+		}
+	}
+	return length, nil
 }

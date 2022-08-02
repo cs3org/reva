@@ -1,0 +1,7 @@
+[
+	{
+		"oidc_issuer": "https://iam-escape.cloud.cnaf.infn.it/",
+		"oidc_group": "/escape",
+		"username": "einstein"
+	}
+]

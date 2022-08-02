@@ -26,12 +26,12 @@ import (
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	registrypb "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/registry/registry"
 	"github.com/cs3org/reva/pkg/storage/utils/templates"
-	"github.com/cs3org/reva/pkg/user"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )
@@ -60,10 +60,10 @@ func (c *config) init() {
 
 	if len(c.Rules) == 0 {
 		c.Rules = map[string]rule{
-			"/": rule{
+			"/": {
 				Address: sharedconf.GetGatewaySVC(""),
 			},
-			"00000000-0000-0000-0000-000000000000": rule{
+			"00000000-0000-0000-0000-000000000000": {
 				Address: sharedconf.GetGatewaySVC(""),
 			},
 		}
@@ -96,7 +96,7 @@ type reg struct {
 func getProviderAddr(ctx context.Context, r rule) string {
 	addr := r.Address
 	if addr == "" {
-		if u, ok := user.ContextGetUser(ctx); ok {
+		if u, ok := ctxpkg.ContextGetUser(ctx); ok {
 			layout := templates.WithUser(u, r.Mapping)
 			for k, v := range r.Aliases {
 				if match, _ := regexp.MatchString("^"+k, layout); match {
@@ -143,16 +143,47 @@ func (b *reg) FindProviders(ctx context.Context, ref *provider.Reference) ([]*re
 	var match *registrypb.ProviderInfo
 	var shardedMatches []*registrypb.ProviderInfo
 
-	// Try to find by path first as most storage operations will be done using the path.
+	// If the reference has a resource id set, use it to route
+	if ref.ResourceId != nil {
+		if ref.ResourceId.StorageId != "" {
+			for prefix, rule := range b.c.Rules {
+				addr := getProviderAddr(ctx, rule)
+				r, err := regexp.Compile("^" + prefix + "$")
+				if err != nil {
+					continue
+				}
+				// TODO(labkode): fill path info based on provider id, if path and storage id points to same id, take that.
+				if m := r.FindString(ref.ResourceId.StorageId); m != "" {
+					return []*registrypb.ProviderInfo{{
+						ProviderId: ref.ResourceId.StorageId,
+						Address:    addr,
+					}}, nil
+				}
+			}
+			// TODO if the storage id is not set but node id is set we could poll all storage providers to check if the node is known there
+			// for now, say the reference is invalid
+			if ref.ResourceId.OpaqueId != "" {
+				return nil, errtypes.BadRequest("invalid reference " + ref.String())
+			}
+		}
+	}
+
+	// Try to find by path  as most storage operations will be done using the path.
+	// TODO this needs to be reevaluated once all clients query the storage registry for a list of storage providers
 	fn := path.Clean(ref.GetPath())
 	if fn != "" {
 		for prefix, rule := range b.c.Rules {
+
 			addr := getProviderAddr(ctx, rule)
 			r, err := regexp.Compile("^" + prefix)
 			if err != nil {
 				continue
 			}
 			if m := r.FindString(fn); m != "" {
+				if match != nil && len(match.ProviderPath) > len(m) {
+					// Do not overwrite existing longer match
+					continue
+				}
 				match = &registrypb.ProviderInfo{
 					ProviderPath: m,
 					Address:      addr,
@@ -177,27 +208,6 @@ func (b *reg) FindProviders(ctx context.Context, ref *provider.Reference) ([]*re
 		// If we don't find a perfect match but at least one provider is encapsulated
 		// by the reference, return all such providers.
 		return shardedMatches, nil
-	}
-
-	// Try with id
-	id := ref.GetId()
-	if id == nil {
-		return nil, errtypes.NotFound("storage provider not found for ref " + ref.String())
-	}
-
-	for prefix, rule := range b.c.Rules {
-		addr := getProviderAddr(ctx, rule)
-		r, err := regexp.Compile("^" + prefix + "$")
-		if err != nil {
-			continue
-		}
-		// TODO(labkode): fill path info based on provider id, if path and storage id points to same id, take that.
-		if m := r.FindString(id.StorageId); m != "" {
-			return []*registrypb.ProviderInfo{&registrypb.ProviderInfo{
-				ProviderId: id.StorageId,
-				Address:    addr,
-			}}, nil
-		}
 	}
 
 	return nil, errtypes.NotFound("storage provider not found for ref " + ref.String())

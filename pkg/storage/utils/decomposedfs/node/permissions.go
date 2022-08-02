@@ -26,41 +26,61 @@ import (
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/xattrs"
-	"github.com/cs3org/reva/pkg/user"
+	"github.com/cs3org/reva/pkg/utils"
 	"github.com/pkg/errors"
 	"github.com/pkg/xattr"
 )
 
-// NoPermissions represents an empty set of permssions
-var NoPermissions *provider.ResourcePermissions = &provider.ResourcePermissions{}
+// NoPermissions represents an empty set of permissions
+func NoPermissions() provider.ResourcePermissions {
+	return provider.ResourcePermissions{}
+}
 
 // NoOwnerPermissions defines permissions for nodes that don't have an owner set, eg the root node
-var NoOwnerPermissions *provider.ResourcePermissions = &provider.ResourcePermissions{
-	Stat: true,
+func NoOwnerPermissions() provider.ResourcePermissions {
+	return provider.ResourcePermissions{
+		Stat: true,
+	}
+}
+
+// ShareFolderPermissions defines permissions for the shared jail
+func ShareFolderPermissions() provider.ResourcePermissions {
+	return provider.ResourcePermissions{
+		// read permissions
+		ListContainer:        true,
+		Stat:                 true,
+		InitiateFileDownload: true,
+		GetPath:              true,
+		GetQuota:             true,
+		ListFileVersions:     true,
+	}
 }
 
 // OwnerPermissions defines permissions for nodes owned by the user
-var OwnerPermissions *provider.ResourcePermissions = &provider.ResourcePermissions{
-	// all permissions
-	AddGrant:             true,
-	CreateContainer:      true,
-	Delete:               true,
-	GetPath:              true,
-	GetQuota:             true,
-	InitiateFileDownload: true,
-	InitiateFileUpload:   true,
-	ListContainer:        true,
-	ListFileVersions:     true,
-	ListGrants:           true,
-	ListRecycle:          true,
-	Move:                 true,
-	PurgeRecycle:         true,
-	RemoveGrant:          true,
-	RestoreFileVersion:   true,
-	RestoreRecycleItem:   true,
-	Stat:                 true,
-	UpdateGrant:          true,
+func OwnerPermissions() provider.ResourcePermissions {
+	return provider.ResourcePermissions{
+		// all permissions
+		AddGrant:             true,
+		CreateContainer:      true,
+		Delete:               true,
+		GetPath:              true,
+		GetQuota:             true,
+		InitiateFileDownload: true,
+		InitiateFileUpload:   true,
+		ListContainer:        true,
+		ListFileVersions:     true,
+		ListGrants:           true,
+		ListRecycle:          true,
+		Move:                 true,
+		PurgeRecycle:         true,
+		RemoveGrant:          true,
+		RestoreFileVersion:   true,
+		RestoreRecycleItem:   true,
+		Stat:                 true,
+		UpdateGrant:          true,
+	}
 }
 
 // Permissions implements permission checks
@@ -76,38 +96,41 @@ func NewPermissions(lu PathLookup) *Permissions {
 }
 
 // AssemblePermissions will assemble the permissions for the current user on the given node, taking into account all parent nodes
-func (p *Permissions) AssemblePermissions(ctx context.Context, n *Node) (ap *provider.ResourcePermissions, err error) {
-	u, ok := user.ContextGetUser(ctx)
+func (p *Permissions) AssemblePermissions(ctx context.Context, n *Node) (ap provider.ResourcePermissions, err error) {
+	u, ok := ctxpkg.ContextGetUser(ctx)
 	if !ok {
 		appctx.GetLogger(ctx).Debug().Interface("node", n).Msg("no user in context, returning default permissions")
-		return NoPermissions, nil
+		return NoPermissions(), nil
 	}
 	// check if the current user is the owner
 	o, err := n.Owner()
 	if err != nil {
 		// TODO check if a parent folder has the owner set?
 		appctx.GetLogger(ctx).Error().Err(err).Interface("node", n).Msg("could not determine owner, returning default permissions")
-		return NoPermissions, err
+		return NoPermissions(), err
 	}
 	if o.OpaqueId == "" {
 		// this happens for root nodes in the storage. the extended attributes are set to emptystring to indicate: no owner
 		// TODO what if no owner is set but grants are present?
-		return NoOwnerPermissions, nil
+		return NoOwnerPermissions(), nil
 	}
-	if isSameUserID(u.Id, o) {
+	if utils.UserEqual(u.Id, o) {
+		lp, err := n.lu.Path(ctx, n)
+		if err == nil && lp == n.lu.ShareFolder() {
+			return ShareFolderPermissions(), nil
+		}
 		appctx.GetLogger(ctx).Debug().Interface("node", n).Msg("user is owner, returning owner permissions")
-		return OwnerPermissions, nil
+		return OwnerPermissions(), nil
 	}
-
 	// determine root
 	var rn *Node
 	if rn, err = p.lu.RootNode(ctx); err != nil {
-		return nil, err
+		return NoPermissions(), err
 	}
 
 	cn := n
 
-	ap = &provider.ResourcePermissions{}
+	ap = provider.ResourcePermissions{}
 
 	// for an efficient group lookup convert the list of groups to a map
 	// groups are just strings ... groupnames ... or group ids ??? AAARGH !!!
@@ -118,14 +141,12 @@ func (p *Permissions) AssemblePermissions(ctx context.Context, n *Node) (ap *pro
 
 	// for all segments, starting at the leaf
 	for cn.ID != rn.ID {
-
 		if np, err := cn.ReadUserPermissions(ctx, u); err == nil {
-			AddPermissions(ap, np)
+			AddPermissions(&ap, &np)
 		} else {
 			appctx.GetLogger(ctx).Error().Err(err).Interface("node", cn).Msg("error reading permissions")
 			// continue with next segment
 		}
-
 		if cn, err = cn.Parent(); err != nil {
 			return ap, errors.Wrap(err, "Decomposedfs: error getting parent "+cn.ParentID)
 		}
@@ -218,7 +239,7 @@ func (p *Permissions) HasPermission(ctx context.Context, n *Node, check func(*pr
 				if check(g.GetPermissions()) {
 					return true, nil
 				}
-			case isNoData(err):
+			case isAttrUnset(err):
 				err = nil
 				appctx.GetLogger(ctx).Error().Interface("node", cn).Str("grant", grantees[i]).Interface("grantees", grantees).Msg("grant vanished from node after listing")
 			default:
@@ -232,40 +253,36 @@ func (p *Permissions) HasPermission(ctx context.Context, n *Node, check func(*pr
 		}
 	}
 
-	appctx.GetLogger(ctx).Debug().Interface("permissions", NoPermissions).Interface("node", n).Interface("user", u).Msg("no grant found, returning default permissions")
+	appctx.GetLogger(ctx).Debug().Interface("permissions", NoPermissions()).Interface("node", n).Interface("user", u).Msg("no grant found, returning default permissions")
 	return false, nil
 }
 
 func (p *Permissions) getUserAndPermissions(ctx context.Context, n *Node) (*userv1beta1.User, *provider.ResourcePermissions) {
-	u, ok := user.ContextGetUser(ctx)
+	u, ok := ctxpkg.ContextGetUser(ctx)
 	if !ok {
 		appctx.GetLogger(ctx).Debug().Interface("node", n).Msg("no user in context, returning default permissions")
-		return nil, NoPermissions
+		perms := NoPermissions()
+		return nil, &perms
 	}
 	// check if the current user is the owner
 	o, err := n.Owner()
 	if err != nil {
 		appctx.GetLogger(ctx).Error().Err(err).Interface("node", n).Msg("could not determine owner, returning default permissions")
-		return nil, NoPermissions
+		perms := NoPermissions()
+		return nil, &perms
 	}
 	if o.OpaqueId == "" {
 		// this happens for root nodes in the storage. the extended attributes are set to emptystring to indicate: no owner
 		// TODO what if no owner is set but grants are present?
-		return nil, NoOwnerPermissions
+		perms := NoOwnerPermissions()
+		return nil, &perms
 	}
-	if isSameUserID(u.Id, o) {
+	if utils.UserEqual(u.Id, o) {
 		appctx.GetLogger(ctx).Debug().Interface("node", n).Msg("user is owner, returning owner permissions")
-		return u, OwnerPermissions
+		perms := OwnerPermissions()
+		return u, &perms
 	}
 	return u, nil
-}
-func isNoData(err error) bool {
-	if xerr, ok := err.(*xattr.Error); ok {
-		if serr, ok2 := xerr.Err.(syscall.Errno); ok2 {
-			return serr == syscall.ENODATA
-		}
-	}
-	return false
 }
 
 // The os not exists error is buried inside the xattr error,

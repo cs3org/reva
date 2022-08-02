@@ -21,6 +21,7 @@ package gateway
 import (
 	"context"
 	"crypto/tls"
+	"fmt"
 	"net/url"
 	"strings"
 
@@ -32,32 +33,33 @@ import (
 	storageprovider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
-	"github.com/cs3org/reva/pkg/token"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
 )
 
-func (s *svc) OpenFileInAppProvider(ctx context.Context, req *gateway.OpenFileInAppProviderRequest) (*providerpb.OpenFileInAppProviderResponse, error) {
+func (s *svc) OpenInApp(ctx context.Context, req *gateway.OpenInAppRequest) (*providerpb.OpenInAppResponse, error) {
 	p, st := s.getPath(ctx, req.Ref)
 	if st.Code != rpc.Code_CODE_OK {
 		if st.Code == rpc.Code_CODE_NOT_FOUND {
-			return &providerpb.OpenFileInAppProviderResponse{
-				Status: status.NewNotFound(ctx, "gateway: file not found:"+req.Ref.String()),
+			return &providerpb.OpenInAppResponse{
+				Status: status.NewNotFound(ctx, "gateway: resource not found:"+req.Ref.String()),
 			}, nil
 		}
-		return &providerpb.OpenFileInAppProviderResponse{
+		return &providerpb.OpenInAppResponse{
 			Status: st,
 		}, nil
 	}
 
 	if s.isSharedFolder(ctx, p) {
-		return &providerpb.OpenFileInAppProviderResponse{
-			Status: status.NewInvalid(ctx, "gateway: can't open shares folder"),
+		return &providerpb.OpenInAppResponse{
+			Status: status.NewInvalid(ctx, "gateway: can't open shared folder"),
 		}, nil
 	}
 
@@ -67,20 +69,16 @@ func (s *svc) OpenFileInAppProvider(ctx context.Context, req *gateway.OpenFileIn
 	}
 
 	statRes, err := s.stat(ctx, &storageprovider.StatRequest{
-		Ref: &storageprovider.Reference{
-			Spec: &storageprovider.Reference_Path{
-				Path: resName,
-			},
-		},
+		Ref: &storageprovider.Reference{Path: resName},
 	})
 	if err != nil {
-		return &providerpb.OpenFileInAppProviderResponse{
+		return &providerpb.OpenInAppResponse{
 			Status: status.NewInternal(ctx, err, "gateway: error calling Stat on the resource path for the app provider: "+req.Ref.GetPath()),
 		}, nil
 	}
 	if statRes.Status.Code != rpc.Code_CODE_OK {
 		err := status.NewErrorFromCode(statRes.Status.GetCode(), "gateway")
-		return &providerpb.OpenFileInAppProviderResponse{
+		return &providerpb.OpenInAppResponse{
 			Status: status.NewInternal(ctx, err, "Stat failed on the resource path for the app provider: "+req.Ref.GetPath()),
 		}, nil
 	}
@@ -91,36 +89,36 @@ func (s *svc) OpenFileInAppProvider(ctx context.Context, req *gateway.OpenFileIn
 	if fileInfo.Type == storageprovider.ResourceType_RESOURCE_TYPE_REFERENCE {
 		uri, err := url.Parse(fileInfo.Target)
 		if err != nil {
-			return &providerpb.OpenFileInAppProviderResponse{
+			return &providerpb.OpenInAppResponse{
 				Status: status.NewInternal(ctx, err, "gateway: error parsing target uri: "+fileInfo.Target),
 			}, nil
 		}
 		if uri.Scheme == "webdav" {
 			insecure, skipVerify := getGRPCConfig(req.Opaque)
-			return s.openFederatedShares(ctx, fileInfo.Target, req.ViewMode, insecure, skipVerify, resChild)
+			return s.openFederatedShares(ctx, fileInfo.Target, req.ViewMode, req.App, insecure, skipVerify, resChild)
 		}
 
 		res, err := s.Stat(ctx, &storageprovider.StatRequest{
 			Ref: req.Ref,
 		})
 		if err != nil {
-			return &providerpb.OpenFileInAppProviderResponse{
+			return &providerpb.OpenInAppResponse{
 				Status: status.NewInternal(ctx, err, "gateway: error calling Stat on the resource path for the app provider: "+req.Ref.GetPath()),
 			}, nil
 		}
 		if res.Status.Code != rpc.Code_CODE_OK {
 			err := status.NewErrorFromCode(res.Status.GetCode(), "gateway")
-			return &providerpb.OpenFileInAppProviderResponse{
+			return &providerpb.OpenInAppResponse{
 				Status: status.NewInternal(ctx, err, "Stat failed on the resource path for the app provider: "+req.Ref.GetPath()),
 			}, nil
 		}
 		fileInfo = res.Info
 	}
-	return s.openLocalResources(ctx, fileInfo, req.ViewMode)
+	return s.openLocalResources(ctx, fileInfo, req.ViewMode, req.App)
 }
 
-func (s *svc) openFederatedShares(ctx context.Context, targetURL string, vm gateway.OpenFileInAppProviderRequest_ViewMode,
-	insecure, skipVerify bool, nameQueries ...string) (*providerpb.OpenFileInAppProviderResponse, error) {
+func (s *svc) openFederatedShares(ctx context.Context, targetURL string, vm gateway.OpenInAppRequest_ViewMode, app string,
+	insecure, skipVerify bool, nameQueries ...string) (*providerpb.OpenInAppResponse, error) {
 	log := appctx.GetLogger(ctx)
 	targetURL, err := appendNameQuery(targetURL, nameQueries...)
 	if err != nil {
@@ -131,14 +129,11 @@ func (s *svc) openFederatedShares(ctx context.Context, targetURL string, vm gate
 		return nil, err
 	}
 
-	ref := &storageprovider.Reference{
-		Spec: &storageprovider.Reference_Path{
-			Path: ep.filePath,
-		},
-	}
-	appProviderReq := &gateway.OpenFileInAppProviderRequest{
+	ref := &storageprovider.Reference{Path: ep.filePath}
+	appProviderReq := &gateway.OpenInAppRequest{
 		Ref:      ref,
 		ViewMode: vm,
+		App:      app,
 	}
 
 	meshProvider, err := s.GetInfoByDomain(ctx, &ocmprovider.GetInfoByDomainRequest{
@@ -153,100 +148,156 @@ func (s *svc) openFederatedShares(ctx context.Context, targetURL string, vm gate
 			gatewayEP = s.Endpoint.Path
 		}
 	}
-	log.Debug().Msgf("Forwarding OpenFileInAppProvider request to: %s", gatewayEP)
+	log.Debug().Msgf("Forwarding OpenInApp request to: %s", gatewayEP)
 
 	conn, err := getConn(gatewayEP, insecure, skipVerify)
 	if err != nil {
-		err = errors.Wrap(err, "gateway: error connecting to remote reva")
-		return &providerpb.OpenFileInAppProviderResponse{
-			Status: status.NewInternal(ctx, err, "error error connecting to remote reva"),
-		}, nil
+		log.Err(err).Msg("error connecting to remote reva")
+		return nil, errors.Wrap(err, "gateway: error connecting to remote reva")
 	}
 
 	gatewayClient := gateway.NewGatewayAPIClient(conn)
-	remoteCtx := token.ContextSetToken(context.Background(), ep.token)
-	remoteCtx = metadata.AppendToOutgoingContext(remoteCtx, token.TokenHeader, ep.token)
+	remoteCtx := ctxpkg.ContextSetToken(context.Background(), ep.token)
+	remoteCtx = metadata.AppendToOutgoingContext(remoteCtx, ctxpkg.TokenHeader, ep.token)
 
-	res, err := gatewayClient.OpenFileInAppProvider(remoteCtx, appProviderReq)
+	res, err := gatewayClient.OpenInApp(remoteCtx, appProviderReq)
 	if err != nil {
-		log.Err(err).Msg("error reaching remote reva")
-		return nil, errors.Wrap(err, "gateway: error calling OpenFileInAppProvider")
+		log.Err(err).Msg("error returned by remote OpenInApp call")
+		return nil, errors.Wrap(err, "gateway: error calling OpenInApp")
 	}
 	return res, nil
 }
 
 func (s *svc) openLocalResources(ctx context.Context, ri *storageprovider.ResourceInfo,
-	vm gateway.OpenFileInAppProviderRequest_ViewMode) (*providerpb.OpenFileInAppProviderResponse, error) {
+	vm gateway.OpenInAppRequest_ViewMode, app string) (*providerpb.OpenInAppResponse, error) {
 
-	accessToken, ok := token.ContextGetToken(ctx)
+	accessToken, ok := ctxpkg.ContextGetToken(ctx)
 	if !ok || accessToken == "" {
-		return &providerpb.OpenFileInAppProviderResponse{
-			Status: status.NewUnauthenticated(ctx, errors.New("Access token is invalid or empty"), ""),
+		return &providerpb.OpenInAppResponse{
+			Status: status.NewUnauthenticated(ctx, errtypes.InvalidCredentials("Access token is invalid or empty"), ""),
 		}, nil
 	}
 
-	provider, err := s.findAppProvider(ctx, ri)
+	provider, err := s.findAppProvider(ctx, ri, app)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling findAppProvider")
-		var st *rpc.Status
 		if _, ok := err.(errtypes.IsNotFound); ok {
-			st = status.NewNotFound(ctx, "app provider not found")
-		} else {
-			st = status.NewInternal(ctx, err, "error searching for app provider")
+			return &providerpb.OpenInAppResponse{
+				Status: status.NewNotFound(ctx, "Could not find the requested app provider"),
+			}, nil
 		}
-		return &providerpb.OpenFileInAppProviderResponse{
-			Status: st,
-		}, nil
+		return nil, err
 	}
 
-	appProviderClient, err := pool.GetAppProviderClient(provider.Address)
+	appProviderClient, err := pool.GetAppProviderClient(pool.Endpoint(provider.Address))
 	if err != nil {
-		err = errors.Wrap(err, "gateway: error calling GetAppProviderClient")
-		return &providerpb.OpenFileInAppProviderResponse{
-			Status: status.NewInternal(ctx, err, "error getting appprovider client"),
-		}, nil
+		return nil, errors.Wrap(err, "gateway: error calling GetAppProviderClient")
 	}
 
-	appProviderReq := &providerpb.OpenFileInAppProviderRequest{
+	appProviderReq := &providerpb.OpenInAppRequest{
 		ResourceInfo: ri,
-		ViewMode:     providerpb.OpenFileInAppProviderRequest_ViewMode(vm),
+		ViewMode:     providerpb.OpenInAppRequest_ViewMode(vm),
 		AccessToken:  accessToken,
 	}
 
-	res, err := appProviderClient.OpenFileInAppProvider(ctx, appProviderReq)
+	res, err := appProviderClient.OpenInApp(ctx, appProviderReq)
 	if err != nil {
-		return nil, errors.Wrap(err, "gateway: error calling OpenFileInAppProvider")
+		return nil, errors.Wrap(err, "gateway: error calling OpenInApp")
 	}
 
 	return res, nil
 }
 
-func (s *svc) findAppProvider(ctx context.Context, ri *storageprovider.ResourceInfo) (*registry.ProviderInfo, error) {
-	c, err := pool.GetAppRegistryClient(s.c.AppRegistryEndpoint)
+func (s *svc) findAppProvider(ctx context.Context, ri *storageprovider.ResourceInfo, app string) (*registry.ProviderInfo, error) {
+	c, err := pool.GetAppRegistryClient(pool.Endpoint(s.c.AppRegistryEndpoint))
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error getting appregistry client")
 		return nil, err
 	}
+
+	// when app is empty it means the user assumes a default behaviour.
+	// From a web perspective, means the user click on the file itself.
+	// Normally the file will get downloaded but if a suitable application exists
+	// the behaviour will change from download to open the file with the app.
+	if app == "" {
+		// If app is empty means that we need to rely on "default" behaviour.
+		// We currently do not have user preferences implemented so the only default
+		// we can currently enforce is one configured by the system admins, the
+		// "system default".
+		// If a default is not set we raise an error rather that giving the user the first provider in the list
+		// as the list is built on init time and is not deterministic, giving the user different results on service
+		// reload.
+		res, err := c.GetDefaultAppProviderForMimeType(ctx, &registry.GetDefaultAppProviderForMimeTypeRequest{
+			MimeType: ri.MimeType,
+		})
+		if err != nil {
+			err = errors.Wrap(err, "gateway: error calling GetDefaultAppProviderForMimeType")
+			return nil, err
+
+		}
+
+		// we've found a provider
+		if res.Status.Code == rpc.Code_CODE_OK && res.Provider != nil {
+			return res.Provider, nil
+		}
+
+		// we did not find a default provider
+		if res.Status.Code == rpc.Code_CODE_NOT_FOUND {
+			err := errtypes.NotFound(fmt.Sprintf("gateway: default app provider for mime type:%s not found", ri.MimeType))
+			return nil, err
+		}
+
+		// response code is something else, bubble up error
+		// if a default is not set we abort as returning the first application available is not
+		// deterministic for the end-user as it depends on initialization order of the app approviders with the registry.
+		// It also provides a good hint to the system admin to configure the defaults accordingly.
+		err = errtypes.InternalError(fmt.Sprintf("gateway: unexpected grpc response status:%s when calling GetDefaultAppProviderForMimeType", res.Status))
+		return nil, err
+	}
+
+	// app has been forced and is set, we try to get an app provider that can satisfy it
+	// Note that we ask for the list of all available providers for a given resource
+	// even though we're only interested into the one set by the "app" parameter.
+	// A better call will be to issue a (to be added) GetAppProviderByName(app) method
+	// to just get what we ask for.
 	res, err := c.GetAppProviders(ctx, &registry.GetAppProvidersRequest{
 		ResourceInfo: ri,
 	})
-
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetAppProviders")
 		return nil, err
 	}
 
-	// TODO(labkode): when sending an Open to the proxy we need to choose one
-	// provider from the list of available as the client
-	if res.Status.Code == rpc.Code_CODE_OK {
+	// if the list of app providers is empty means we expect a CODE_NOT_FOUND in the response
+	if res.Status.Code != rpc.Code_CODE_OK {
+		if res.Status.Code == rpc.Code_CODE_NOT_FOUND {
+			return nil, errtypes.NotFound("gateway: app provider not found for resource: " + ri.String())
+		}
+		return nil, errtypes.InternalError("gateway: error finding app providers")
+	}
+
+	// as long as the above mentioned GetAppProviderByName(app) method is not available
+	// we need to apply a manual filter
+	filteredProviders := []*registry.ProviderInfo{}
+	for _, p := range res.Providers {
+		if p.Name == app {
+			filteredProviders = append(filteredProviders, p)
+		}
+	}
+	res.Providers = filteredProviders
+
+	if len(res.Providers) == 0 {
+		return nil, errtypes.NotFound(fmt.Sprintf("app '%s' not found", app))
+	}
+
+	if len(res.Providers) == 1 {
 		return res.Providers[0], nil
 	}
 
-	if res.Status.Code == rpc.Code_CODE_NOT_FOUND {
-		return nil, errtypes.NotFound("gateway: app provider not found for resource: " + ri.String())
-	}
+	// we should never arrive to the point of having more than one
+	// provider for the given "app" parameters sent by the user
+	return nil, errtypes.InternalError(fmt.Sprintf("gateway: user requested app %q and we provided %d applications", app, len(res.Providers)))
 
-	return nil, errors.New("gateway: error finding a storage provider")
 }
 
 func getGRPCConfig(opaque *typespb.Opaque) (bool, bool) {
@@ -258,9 +309,9 @@ func getGRPCConfig(opaque *typespb.Opaque) (bool, bool) {
 	return insecure, skipVerify
 }
 
-func getConn(host string, insecure, skipverify bool) (*grpc.ClientConn, error) {
-	if insecure {
-		return grpc.Dial(host, grpc.WithInsecure())
+func getConn(host string, ins, skipverify bool) (*grpc.ClientConn, error) {
+	if ins {
+		return grpc.Dial(host, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	}
 
 	// TODO(labkode): if in the future we want client-side certificate validation,

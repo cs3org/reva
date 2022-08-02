@@ -55,13 +55,13 @@ func ocmShareListReceivedCommand() *command {
 			t := table.NewWriter()
 			t.SetOutputMirror(os.Stdout)
 			t.AppendHeader(table.Row{"#", "Owner.Idp", "Owner.OpaqueId", "ResourceId", "Permissions", "Type",
-				"Grantee.Idp", "Grantee.OpaqueId", "Created", "Updated", "State"})
+				"Grantee.Idp", "Grantee.OpaqueId", "Created", "Updated", "State", "ShareType"})
 			for _, s := range shareRes.Shares {
 				t.AppendRows([]table.Row{
 					{s.Share.Id.OpaqueId, s.Share.Owner.Idp, s.Share.Owner.OpaqueId, s.Share.ResourceId.String(),
 						s.Share.Permissions.String(), s.Share.Grantee.Type.String(), s.Share.Grantee.GetUserId().Idp,
 						s.Share.Grantee.GetUserId().OpaqueId, time.Unix(int64(s.Share.Ctime.Seconds), 0),
-						time.Unix(int64(s.Share.Mtime.Seconds), 0), s.State.String()},
+						time.Unix(int64(s.Share.Mtime.Seconds), 0), s.State.String(), s.Share.ShareType.String()},
 				})
 			}
 			t.Render()

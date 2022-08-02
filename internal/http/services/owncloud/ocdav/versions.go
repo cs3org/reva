@@ -23,12 +23,14 @@ import (
 	"net/http"
 	"path"
 
+	rtrace "github.com/cs3org/reva/pkg/trace"
+	"github.com/cs3org/reva/pkg/utils/resourceid"
+
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp/router"
-	"go.opencensus.io/trace"
 )
 
 // VersionsHandler handles version requests
@@ -46,27 +48,27 @@ func (h *VersionsHandler) Handler(s *svc, rid *provider.ResourceId) http.Handler
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 
-		if rid == (*provider.ResourceId)(nil) {
+		if rid == nil {
 			http.Error(w, "404 Not Found", http.StatusNotFound)
 			return
 		}
 
 		// baseURI is encoded as part of the response payload in href field
-		baseURI := path.Join(ctx.Value(ctxKeyBaseURI).(string), wrapResourceID(rid))
+		baseURI := path.Join(ctx.Value(ctxKeyBaseURI).(string), resourceid.OwnCloudResourceIDWrap(rid))
 		ctx = context.WithValue(ctx, ctxKeyBaseURI, baseURI)
 		r = r.WithContext(ctx)
 
 		var key string
 		key, r.URL.Path = router.ShiftPath(r.URL.Path)
 		if r.Method == http.MethodOptions {
-			s.handleOptions(w, r, "versions")
+			s.handleOptions(w, r)
 			return
 		}
-		if key == "" && r.Method == "PROPFIND" {
+		if key == "" && r.Method == MethodPropfind {
 			h.doListVersions(w, r, s, rid)
 			return
 		}
-		if key != "" && r.Method == "COPY" {
+		if key != "" && r.Method == MethodCopy {
 			// TODO(jfd) it seems we cannot directly GET version content with cs3 ...
 			// TODO(jfd) cs3api has no delete file version call
 			// TODO(jfd) restore version to given Destination, but cs3api has no destination
@@ -79,8 +81,7 @@ func (h *VersionsHandler) Handler(s *svc, rid *provider.ResourceId) http.Handler
 }
 
 func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request, s *svc, rid *provider.ResourceId) {
-	ctx := r.Context()
-	ctx, span := trace.StartSpan(ctx, "listVersions")
+	ctx, span := rtrace.Provider.Tracer("ocdav").Start(r.Context(), "listVersions")
 	defer span.End()
 
 	sublog := appctx.GetLogger(ctx).With().Interface("resourceid", rid).Logger()
@@ -99,27 +100,30 @@ func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request,
 		return
 	}
 
-	ref := &provider.Reference{
-		Spec: &provider.Reference_Id{Id: rid},
-	}
-	req := &provider.StatRequest{Ref: ref}
-	res, err := client.Stat(ctx, req)
+	ref := &provider.Reference{ResourceId: rid}
+	res, err := client.Stat(ctx, &provider.StatRequest{Ref: ref})
 	if err != nil {
 		sublog.Error().Err(err).Msg("error sending a grpc stat request")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 	if res.Status.Code != rpc.Code_CODE_OK {
+		if res.Status.Code == rpc.Code_CODE_PERMISSION_DENIED {
+			w.WriteHeader(http.StatusNotFound)
+			b, err := Marshal(exception{
+				code:    SabredavNotFound,
+				message: "Resource not found",
+			})
+			HandleWebdavError(&sublog, w, b, err)
+			return
+		}
 		HandleErrorStatus(&sublog, w, res.Status)
 		return
 	}
 
 	info := res.Info
 
-	lvReq := &provider.ListFileVersionsRequest{
-		Ref: ref,
-	}
-	lvRes, err := client.ListFileVersions(ctx, lvReq)
+	lvRes, err := client.ListFileVersions(ctx, &provider.ListFileVersionsRequest{Ref: ref})
 	if err != nil {
 		sublog.Error().Err(err).Msg("error sending list container grpc request")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -143,7 +147,7 @@ func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request,
 			// Opaque
 			Type: provider.ResourceType_RESOURCE_TYPE_FILE,
 			Id: &provider.ResourceId{
-				StorageId: "versions", // this is a virtual storage
+				StorageId: "versions",
 				OpaqueId:  info.Id.OpaqueId + "@" + versions[i].GetKey(),
 			},
 			// Checksum
@@ -161,14 +165,14 @@ func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request,
 		infos = append(infos, vi)
 	}
 
-	propRes, err := s.formatPropfind(ctx, &pf, infos, "")
+	propRes, err := s.multistatusResponse(ctx, &pf, infos, "", nil, nil)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error formatting propfind")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	w.Header().Set("DAV", "1, 3, extended-mkcol")
-	w.Header().Set("Content-Type", "application/xml; charset=utf-8")
+	w.Header().Set(HeaderDav, "1, 3, extended-mkcol")
+	w.Header().Set(HeaderContentType, "application/xml; charset=utf-8")
 	w.WriteHeader(http.StatusMultiStatus)
 	_, err = w.Write([]byte(propRes))
 	if err != nil {
@@ -179,8 +183,7 @@ func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request,
 }
 
 func (h *VersionsHandler) doRestore(w http.ResponseWriter, r *http.Request, s *svc, rid *provider.ResourceId, key string) {
-	ctx := r.Context()
-	ctx, span := trace.StartSpan(ctx, "restore")
+	ctx, span := rtrace.Provider.Tracer("ocdav").Start(r.Context(), "restore")
 	defer span.End()
 
 	sublog := appctx.GetLogger(ctx).With().Interface("resourceid", rid).Str("key", key).Logger()
@@ -193,9 +196,7 @@ func (h *VersionsHandler) doRestore(w http.ResponseWriter, r *http.Request, s *s
 	}
 
 	req := &provider.RestoreFileVersionRequest{
-		Ref: &provider.Reference{
-			Spec: &provider.Reference_Id{Id: rid},
-		},
+		Ref: &provider.Reference{ResourceId: rid},
 		Key: key,
 	}
 

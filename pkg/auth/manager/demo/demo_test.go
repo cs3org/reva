@@ -30,13 +30,13 @@ func TestUserManager(t *testing.T) {
 	manager, _ := New(nil)
 
 	// Authenticate - positive test
-	_, err := manager.Authenticate(ctx, "einstein", "relativity")
+	_, _, err := manager.Authenticate(ctx, "einstein", "relativity")
 	if err != nil {
 		t.Fatalf("error while authenticate with correct credentials")
 	}
 
 	// Authenticate - negative test
-	_, err = manager.Authenticate(ctx, "einstein", "NotARealPassword")
+	_, _, err = manager.Authenticate(ctx, "einstein", "NotARealPassword")
 	if err == nil {
 		t.Fatalf("no error (but we expected one) while authenticate with bad credentials")
 	}

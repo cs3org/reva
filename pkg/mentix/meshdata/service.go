@@ -21,6 +21,7 @@ package meshdata
 import (
 	"fmt"
 	"net/url"
+	"strings"
 
 	"github.com/cs3org/reva/pkg/mentix/utils/network"
 )
@@ -31,6 +32,17 @@ type Service struct {
 
 	Host                string
 	AdditionalEndpoints []*ServiceEndpoint
+}
+
+// FindEndpoint searches for an additional endpoint with the given name.
+func (service *Service) FindEndpoint(name string) *ServiceEndpoint {
+	for _, endpoint := range service.AdditionalEndpoints {
+		if strings.EqualFold(endpoint.Name, name) {
+			return endpoint
+		}
+	}
+
+	return nil
 }
 
 // InferMissingData infers missing data from other data where possible.
@@ -82,6 +94,7 @@ func (serviceType *ServiceType) Verify() error {
 type ServiceEndpoint struct {
 	Type        *ServiceType
 	Name        string
+	RawURL      string
 	URL         string
 	IsMonitored bool
 	Properties  map[string]string

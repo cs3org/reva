@@ -81,10 +81,10 @@ github_project_repo = "https://github.com/cs3org/reva"
 github_subdir = "docs"
 
 # Google Custom Search Engine ID. Remove or comment out to disable search.
-gcs_engine_id = "010913146518163072247:tinkle2veql"
+# gcs_engine_id = "010913146518163072247:tinkle2veql"
 
 # Enable Algolia DocSearch
-algolia_docsearch = false
+algolia_docsearch = true
 
 # User interface configuration
 [params.ui]
@@ -94,6 +94,7 @@ sidebar_menu_compact = true
 breadcrumb_disable = false
 #  Set to true to hide the sidebar search box (the top nav search box will still be displayed if search is enabled)
 sidebar_search_disable = true
+
 #  Set to false if you don't want to display a logo (/assets/icons/logo.svg) in the top nav bar
 navbar_logo = true
 # Set to true to disable the About link in the site footer

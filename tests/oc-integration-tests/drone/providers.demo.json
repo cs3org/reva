@@ -1,0 +1,100 @@
+[
+	{
+		"name": "local",
+		"full_name": "ownCloud@Example",
+		"organization": "Example",
+		"domain": "example.org",
+		"homepage": "http://example.org",
+		"description": "Example cloud storage.",
+		"services": [
+			{
+				"endpoint": {
+					"type": {
+						"name": "OCM",
+						"description": "Example Open Cloud Mesh API"
+					},
+					"name": "Example - OCM API",
+					"path": "http://127.0.0.1:20080/ocm/",
+					"is_monitored": true
+				},
+				"api_version": "0.0.1",
+				"host": "http://127.0.0.1:20080/"
+			},
+			{
+				"endpoint": {
+					"type": {
+						"name": "Webdav",
+						"description": "Example Webdav API"
+					},
+					"name": "Example - Webdav API",
+					"path": "http://127.0.0.1:20080/remote.php/webdav/",
+					"is_monitored": true
+				},
+				"api_version": "0.0.1",
+				"host": "http://127.0.0.1:20080/"
+			},
+			{
+				"endpoint": {
+					"type": {
+						"name": "Gateway",
+						"description": "Example GRPC Gateway"
+					},
+					"name": "Example - GRPC Gateway",
+					"path": "127.0.0.1:19000",
+					"is_monitored": true
+				},
+				"api_version": "0.0.1",
+				"host": "127.0.0.1:19000"
+			}
+		]
+	},
+	{
+		"name": "local-mesh",
+		"full_name": "ownCloud@Example2",
+		"organization": "Example 2",
+		"domain": "example.org",
+		"homepage": "http://example.org",
+		"description": "Example cloud storage 2.",
+		"services": [
+			{
+				"endpoint": {
+					"type": {
+						"name": "OCM",
+						"description": "Example 2 Open Cloud Mesh API"
+					},
+					"name": "Example 2 - OCM API",
+					"path": "http://127.0.0.1:40080/ocm/",
+					"is_monitored": true
+				},
+				"api_version": "0.0.1",
+				"host": "http://127.0.0.1:40080/"
+			},
+			{
+				"endpoint": {
+					"type": {
+						"name": "Webdav",
+						"description": "Example 2 Webdav API"
+					},
+					"name": "Example 2 - Webdav API",
+					"path": "http://127.0.0.1:40080/remote.php/webdav/",
+					"is_monitored": true
+				},
+				"api_version": "0.0.1",
+				"host": "http://127.0.0.1:40080/"
+			},
+			{
+				"endpoint": {
+					"type": {
+						"name": "Gateway",
+						"description": "Example 2 GRPC Gateway"
+					},
+					"name": "Example 2 - GRPC Gateway",
+					"path": "127.0.0.1:39000",
+					"is_monitored": true
+				},
+				"api_version": "0.0.1",
+				"host": "127.0.0.1:39000"
+			}
+		]
+	}
+]

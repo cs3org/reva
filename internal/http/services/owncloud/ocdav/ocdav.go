@@ -20,7 +20,6 @@ package ocdav
 
 import (
 	"context"
-	"encoding/base64"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -28,19 +27,20 @@ import (
 	"regexp"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
+	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/rhttp/router"
 	"github.com/cs3org/reva/pkg/sharedconf"
+	"github.com/cs3org/reva/pkg/storage/favorite"
+	"github.com/cs3org/reva/pkg/storage/favorite/registry"
 	"github.com/cs3org/reva/pkg/storage/utils/templates"
-	ctxuser "github.com/cs3org/reva/pkg/user"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -51,6 +51,33 @@ type ctxKey int
 const (
 	ctxKeyBaseURI ctxKey = iota
 )
+
+var (
+	errInvalidValue = errors.New("invalid value")
+
+	nameRules = [...]nameRule{
+		nameNotEmpty{},
+		nameDoesNotContain{chars: "\f\r\n\\"},
+	}
+)
+
+type nameRule interface {
+	Test(name string) bool
+}
+
+type nameNotEmpty struct{}
+
+func (r nameNotEmpty) Test(name string) bool {
+	return len(strings.TrimSpace(name)) > 0
+}
+
+type nameDoesNotContain struct {
+	chars string
+}
+
+func (r nameDoesNotContain) Test(name string) bool {
+	return !strings.ContainsAny(name, r.chars)
+}
 
 func init() {
 	global.Register("ocdav", New)
@@ -71,19 +98,36 @@ type Config struct {
 	WebdavNamespace string `mapstructure:"webdav_namespace"`
 	GatewaySvc      string `mapstructure:"gatewaysvc"`
 	Timeout         int64  `mapstructure:"timeout"`
-	Insecure        bool   `mapstructure:"insecure"`
+	Insecure        bool   `mapstructure:"insecure" docs:"false;Whether to skip certificate checks when sending requests."`
+	// If true, HTTP COPY will expect the HTTP-TPC (third-party copy) headers
+	EnableHTTPTpc          bool                              `mapstructure:"enable_http_tpc"`
+	PublicURL              string                            `mapstructure:"public_url"`
+	FavoriteStorageDriver  string                            `mapstructure:"favorite_storage_driver"`
+	FavoriteStorageDrivers map[string]map[string]interface{} `mapstructure:"favorite_storage_drivers"`
 }
 
 func (c *Config) init() {
 	// note: default c.Prefix is an empty string
 	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
+
+	if c.FavoriteStorageDriver == "" {
+		c.FavoriteStorageDriver = "memory"
+	}
 }
 
 type svc struct {
-	c             *Config
-	webDavHandler *WebDavHandler
-	davHandler    *DavHandler
-	client        *http.Client
+	c                *Config
+	webDavHandler    *WebDavHandler
+	davHandler       *DavHandler
+	favoritesManager favorite.Manager
+	client           *http.Client
+}
+
+func getFavoritesManager(c *Config) (favorite.Manager, error) {
+	if f, ok := registry.NewFuncs[c.FavoriteStorageDriver]; ok {
+		return f(c.FavoriteStorageDrivers[c.FavoriteStorageDriver])
+	}
+	return nil, errtypes.NotFound("driver not found: " + c.FavoriteStorageDriver)
 }
 
 // New returns a new ocdav
@@ -95,6 +139,11 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 
 	conf.init()
 
+	fm, err := getFavoritesManager(conf)
+	if err != nil {
+		return nil, err
+	}
+
 	s := &svc{
 		c:             conf,
 		webDavHandler: new(WebDavHandler),
@@ -103,6 +152,7 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 			rhttp.Timeout(time.Duration(conf.Timeout*int64(time.Second))),
 			rhttp.Insecure(conf.Insecure),
 		),
+		favoritesManager: fm,
 	}
 	// initialize handlers and set default configs
 	if err := s.webDavHandler.init(conf.WebdavNamespace, true); err != nil {
@@ -123,7 +173,7 @@ func (s *svc) Close() error {
 }
 
 func (s *svc) Unprotected() []string {
-	return []string{"/status.php", "/remote.php/dav/public-files/"}
+	return []string{"/status.php", "/remote.php/dav/public-files/", "/apps/files/", "/index.php/f/", "/index.php/s/"}
 }
 
 func (s *svc) Handler() http.Handler {
@@ -157,7 +207,21 @@ func (s *svc) Handler() http.Handler {
 
 			// yet, add it to baseURI
 			base = path.Join(base, "remote.php")
+		case "apps":
+			head, r.URL.Path = router.ShiftPath(r.URL.Path)
+			if head == "files" {
+				s.handleLegacyPath(w, r)
+				return
+			}
+		case "index.php":
+			head, r.URL.Path = router.ShiftPath(r.URL.Path)
+			if head == "s" {
+				token := r.URL.Path
+				rURL := s.c.PublicURL + path.Join(head, token)
 
+				http.Redirect(w, r, rURL, http.StatusMovedPermanently)
+				return
+			}
 		}
 		switch head {
 		// the old `/webdav` endpoint uses remote.php/webdav/$path
@@ -186,7 +250,7 @@ func (s *svc) Handler() http.Handler {
 }
 
 func (s *svc) getClient() (gateway.GatewayAPIClient, error) {
-	return pool.GetGatewayServiceClient(s.c.GatewaySvc)
+	return pool.GetGatewayServiceClient(pool.Endpoint(s.c.GatewaySvc))
 }
 
 func applyLayout(ctx context.Context, ns string, useLoggedInUserNS bool, requestPath string) string {
@@ -195,7 +259,7 @@ func applyLayout(ctx context.Context, ns string, useLoggedInUserNS bool, request
 	// is not the same as the logged in user. In that case, we'll treat fileOwner
 	// as the username whose files are to be accessed and use that in the
 	// namespace template.
-	u, ok := ctxuser.ContextGetUser(ctx)
+	u, ok := ctxpkg.ContextGetUser(ctx)
 	if !ok || !useLoggedInUserNS {
 		requestUserID, _ := router.ShiftPath(requestPath)
 		u = &userpb.User{
@@ -203,39 +267,6 @@ func applyLayout(ctx context.Context, ns string, useLoggedInUserNS bool, request
 		}
 	}
 	return templates.WithUser(u, ns)
-}
-
-func wrapResourceID(r *provider.ResourceId) string {
-	return wrap(r.StorageId, r.OpaqueId)
-}
-
-// The fileID must be encoded
-// - XML safe, because it is going to be used in the propfind result
-// - url safe, because the id might be used in a url, eg. the /dav/meta nodes
-// which is why we base64 encode it
-func wrap(sid string, oid string) string {
-	return base64.URLEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", sid, oid)))
-}
-
-func unwrap(rid string) *provider.ResourceId {
-	decodedID, err := base64.URLEncoding.DecodeString(rid)
-	if err != nil {
-		return nil
-	}
-
-	parts := strings.SplitN(string(decodedID), ":", 2)
-	if len(parts) != 2 {
-		return nil
-	}
-
-	if !utf8.ValidString(parts[0]) || !utf8.ValidString(parts[1]) {
-		return nil
-	}
-
-	return &provider.ResourceId{
-		StorageId: parts[0],
-		OpaqueId:  parts[1],
-	}
 }
 
 func addAccessHeaders(w http.ResponseWriter, r *http.Request) {
@@ -262,20 +293,22 @@ func addAccessHeaders(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func extractDestination(dstHeader, baseURI string) (string, error) {
+func extractDestination(r *http.Request) (string, error) {
+	dstHeader := r.Header.Get(HeaderDestination)
 	if dstHeader == "" {
-		return "", errors.New("destination header is empty")
+		return "", errors.Wrap(errInvalidValue, "destination header is empty")
 	}
 	dstURL, err := url.ParseRequestURI(dstHeader)
 	if err != nil {
-		return "", err
+		return "", errors.Wrap(errInvalidValue, err.Error())
 	}
 
+	baseURI := r.Context().Value(ctxKeyBaseURI).(string)
 	// TODO check if path is on same storage, return 502 on problems, see https://tools.ietf.org/html/rfc4918#section-9.9.4
 	// Strip the base URI from the destination. The destination might contain redirection prefixes which need to be handled
 	urlSplit := strings.Split(dstURL.Path, baseURI)
 	if len(urlSplit) != 2 {
-		return "", errors.New("destination path does not contain base URI")
+		return "", errors.Wrap(errInvalidValue, "destination path does not contain base URI")
 	}
 
 	return urlSplit[1], nil
@@ -297,7 +330,7 @@ func replaceAllStringSubmatchFunc(re *regexp.Regexp, str string, repl func([]str
 	return result + str[lastIndex:]
 }
 
-var hrefre = regexp.MustCompile(`([^A-Za-z0-9_\-.~()/:@])`)
+var hrefre = regexp.MustCompile(`([^A-Za-z0-9_\-.~()/:@!$])`)
 
 // encodePath encodes the path of a url.
 //

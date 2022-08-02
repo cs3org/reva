@@ -29,32 +29,23 @@ import (
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
-	"github.com/cs3org/reva/pkg/rhttp/router"
+	"github.com/cs3org/reva/pkg/storage/utils/templates"
 )
 
 // Handler implements the ownCloud sharing API
 type Handler struct {
-	gatewayAddr string
+	gatewayAddr             string
+	additionalInfoAttribute string
 }
 
 // Init initializes this and any contained handlers
-func (h *Handler) Init(c *config.Config) error {
+func (h *Handler) Init(c *config.Config) {
 	h.gatewayAddr = c.GatewaySvc
-	return nil
+	h.additionalInfoAttribute = c.AdditionalInfoAttribute
 }
 
-func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	log := appctx.GetLogger(r.Context())
-
-	var head string
-	head, r.URL.Path = router.ShiftPath(r.URL.Path)
-
-	log.Debug().Str("head", head).Str("tail", r.URL.Path).Msg("http routing")
-
-	h.findSharees(w, r)
-}
-
-func (h *Handler) findSharees(w http.ResponseWriter, r *http.Request) {
+// FindSharees implements the /apps/files_sharing/api/v1/sharees endpoint
+func (h *Handler) FindSharees(w http.ResponseWriter, r *http.Request) {
 	log := appctx.GetLogger(r.Context())
 	term := r.URL.Query().Get("search")
 
@@ -63,13 +54,12 @@ func (h *Handler) findSharees(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	gwc, err := pool.GetGatewayServiceClient(h.gatewayAddr)
+	gwc, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting gateway grpc client", err)
 		return
 	}
-
-	usersRes, err := gwc.FindUsers(r.Context(), &userpb.FindUsersRequest{Filter: term})
+	usersRes, err := gwc.FindUsers(r.Context(), &userpb.FindUsersRequest{Filter: term, SkipFetchingUserGroups: true})
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error searching users", err)
 		return
@@ -83,7 +73,7 @@ func (h *Handler) findSharees(w http.ResponseWriter, r *http.Request) {
 		userMatches = append(userMatches, match)
 	}
 
-	groupsRes, err := gwc.FindGroups(r.Context(), &grouppb.FindGroupsRequest{Filter: term})
+	groupsRes, err := gwc.FindGroups(r.Context(), &grouppb.FindGroupsRequest{Filter: term, SkipFetchingMembers: true})
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error searching groups", err)
 		return
@@ -116,7 +106,7 @@ func (h *Handler) userAsMatch(u *userpb.User) *conversions.MatchData {
 			ShareType: int(conversions.ShareTypeUser),
 			// api compatibility with oc10: always use the username
 			ShareWith:               u.Username,
-			ShareWithAdditionalInfo: u.Mail,
+			ShareWithAdditionalInfo: h.getAdditionalInfoAttribute(u),
 		},
 	}
 }
@@ -125,10 +115,13 @@ func (h *Handler) groupAsMatch(g *grouppb.Group) *conversions.MatchData {
 	return &conversions.MatchData{
 		Label: g.DisplayName,
 		Value: &conversions.MatchValueData{
-			ShareType: int(conversions.ShareTypeGroup),
-			// api compatibility with oc10
+			ShareType:               int(conversions.ShareTypeGroup),
 			ShareWith:               g.GroupName,
 			ShareWithAdditionalInfo: g.Mail,
 		},
 	}
+}
+
+func (h *Handler) getAdditionalInfoAttribute(u *userpb.User) string {
+	return templates.WithUser(u, h.additionalInfoAttribute)
 }

@@ -23,7 +23,7 @@ import (
 
 	"github.com/cs3org/reva/internal/http/interceptors/auth/tokenwriter/registry"
 	"github.com/cs3org/reva/pkg/auth"
-	"github.com/cs3org/reva/pkg/token"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 )
 
 func init() {
@@ -36,7 +36,7 @@ type strategy struct {
 
 // New returns a new token writer strategy that stores token in a header.
 func New(m map[string]interface{}) (auth.TokenWriter, error) {
-	return &strategy{header: token.TokenHeader}, nil
+	return &strategy{header: ctxpkg.TokenHeader}, nil
 }
 
 func (s *strategy) WriteToken(token string, w http.ResponseWriter) {

@@ -27,6 +27,7 @@ import (
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 
 	"github.com/ReneKroon/ttlcache/v2"
+	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/token"
@@ -42,6 +43,7 @@ func init() {
 
 type config struct {
 	AuthRegistryEndpoint          string `mapstructure:"authregistrysvc"`
+	ApplicationAuthEndpoint       string `mapstructure:"applicationauthsvc"`
 	StorageRegistryEndpoint       string `mapstructure:"storageregistrysvc"`
 	AppRegistryEndpoint           string `mapstructure:"appregistrysvc"`
 	PreferencesEndpoint           string `mapstructure:"preferencessvc"`
@@ -55,6 +57,7 @@ type config struct {
 	GroupProviderEndpoint         string `mapstructure:"groupprovidersvc"`
 	DataTxEndpoint                string `mapstructure:"datatx"`
 	DataGatewayEndpoint           string `mapstructure:"datagateway"`
+	PermissionsEndpoint           string `mapstructure:"permissionssvc"`
 	CommitShareToStorageGrant     bool   `mapstructure:"commit_share_to_storage_grant"`
 	CommitShareToStorageRef       bool   `mapstructure:"commit_share_to_storage_ref"`
 	DisableHomeCreationOnLogin    bool   `mapstructure:"disable_home_creation_on_login"`
@@ -62,10 +65,13 @@ type config struct {
 	TransferExpires               int64  `mapstructure:"transfer_expires"`
 	TokenManager                  string `mapstructure:"token_manager"`
 	// ShareFolder is the location where to create shares in the recipient's storage provider.
-	ShareFolder   string                            `mapstructure:"share_folder"`
-	HomeMapping   string                            `mapstructure:"home_mapping"`
-	TokenManagers map[string]map[string]interface{} `mapstructure:"token_managers"`
-	EtagCacheTTL  int                               `mapstructure:"etag_cache_ttl"`
+	ShareFolder         string                            `mapstructure:"share_folder"`
+	DataTransfersFolder string                            `mapstructure:"data_transfers_folder"`
+	HomeMapping         string                            `mapstructure:"home_mapping"`
+	TokenManagers       map[string]map[string]interface{} `mapstructure:"token_managers"`
+	EtagCacheTTL        int                               `mapstructure:"etag_cache_ttl"`
+	AllowedUserAgents   map[string][]string               `mapstructure:"allowed_user_agents"` // map[path][]user-agent
+	CreateHomeCacheTTL  int                               `mapstructure:"create_home_cache_ttl"`
 }
 
 // sets defaults
@@ -76,6 +82,10 @@ func (c *config) init() {
 
 	c.ShareFolder = strings.Trim(c.ShareFolder, "/")
 
+	if c.DataTransfersFolder == "" {
+		c.DataTransfersFolder = "DataTransfers"
+	}
+
 	if c.TokenManager == "" {
 		c.TokenManager = "jwt"
 	}
@@ -83,6 +93,7 @@ func (c *config) init() {
 	// if services address are not specified we used the shared conf
 	// for the gatewaysvc to have dev setups very quickly.
 	c.AuthRegistryEndpoint = sharedconf.GetGatewaySVC(c.AuthRegistryEndpoint)
+	c.ApplicationAuthEndpoint = sharedconf.GetGatewaySVC(c.ApplicationAuthEndpoint)
 	c.StorageRegistryEndpoint = sharedconf.GetGatewaySVC(c.StorageRegistryEndpoint)
 	c.AppRegistryEndpoint = sharedconf.GetGatewaySVC(c.AppRegistryEndpoint)
 	c.PreferencesEndpoint = sharedconf.GetGatewaySVC(c.PreferencesEndpoint)
@@ -101,17 +112,18 @@ func (c *config) init() {
 	// use shared secret if not set
 	c.TransferSharedSecret = sharedconf.GetJWTSecret(c.TransferSharedSecret)
 
-	// if the transfer does not start in the next 10 seconds the session is expired.
+	// lifetime for the transfer token (TUS upload)
 	if c.TransferExpires == 0 {
-		c.TransferExpires = 10
+		c.TransferExpires = 100 * 60 // seconds
 	}
 }
 
 type svc struct {
-	c              *config
-	dataGatewayURL url.URL
-	tokenmgr       token.Manager
-	etagCache      *ttlcache.Cache `mapstructure:"etag_cache"`
+	c               *config
+	dataGatewayURL  url.URL
+	tokenmgr        token.Manager
+	etagCache       *ttlcache.Cache `mapstructure:"etag_cache"`
+	createHomeCache *ttlcache.Cache `mapstructure:"create_home_cache"`
 }
 
 // New creates a new gateway svc that acts as a proxy for any grpc operation.
@@ -140,11 +152,16 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 	_ = etagCache.SetTTL(time.Duration(c.EtagCacheTTL) * time.Second)
 	etagCache.SkipTTLExtensionOnHit(true)
 
+	createHomeCache := ttlcache.NewCache()
+	_ = createHomeCache.SetTTL(time.Duration(c.CreateHomeCacheTTL) * time.Second)
+	createHomeCache.SkipTTLExtensionOnHit(true)
+
 	s := &svc{
-		c:              c,
-		dataGatewayURL: *u,
-		tokenmgr:       tokenManager,
-		etagCache:      etagCache,
+		c:               c,
+		dataGatewayURL:  *u,
+		tokenmgr:        tokenManager,
+		etagCache:       etagCache,
+		createHomeCache: createHomeCache,
 	}
 
 	return s, nil
@@ -177,5 +194,5 @@ func getTokenManager(manager string, m map[string]map[string]interface{}) (token
 		return f(m[manager])
 	}
 
-	return nil, fmt.Errorf("driver %s not found for token manager", manager)
+	return nil, errtypes.NotFound(fmt.Sprintf("driver %s not found for token manager", manager))
 }

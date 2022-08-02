@@ -35,11 +35,19 @@ type FileOperationsAction struct {
 	action
 }
 
+// GetHome retrieves the home directory path of the current user.
+func (action *FileOperationsAction) GetHome() (string, error) {
+	req := &provider.GetHomeRequest{}
+	res, err := action.session.Client().GetHome(action.session.Context(), req)
+	if err := net.CheckRPCInvocation("querying home directory", res, err); err != nil {
+		return "", err
+	}
+	return res.Path, nil
+}
+
 // Stat queries the file information of the specified remote resource.
 func (action *FileOperationsAction) Stat(path string) (*storage.ResourceInfo, error) {
-	ref := &provider.Reference{
-		Spec: &provider.Reference_Path{Path: path},
-	}
+	ref := &provider.Reference{Path: path}
 	req := &provider.StatRequest{Ref: ref}
 	res, err := action.session.Client().Stat(action.session.Context(), req)
 	if err := net.CheckRPCInvocation("querying resource information", res, err); err != nil {
@@ -85,9 +93,7 @@ func (action *FileOperationsAction) MakePath(path string) error {
 
 		fileInfo, err := action.Stat(curPath)
 		if err != nil { // Stating failed, so the path probably doesn't exist yet
-			ref := &provider.Reference{
-				Spec: &provider.Reference_Path{Path: curPath},
-			}
+			ref := &provider.Reference{Path: curPath}
 			req := &provider.CreateContainerRequest{Ref: ref}
 			res, err := action.session.Client().CreateContainer(action.session.Context(), req)
 			if err := net.CheckRPCInvocation("creating container", res, err); err != nil {
@@ -104,12 +110,8 @@ func (action *FileOperationsAction) MakePath(path string) error {
 
 // Move moves the specified source to a new location. The caller must ensure that the target directory exists.
 func (action *FileOperationsAction) Move(source string, target string) error {
-	sourceRef := &provider.Reference{
-		Spec: &provider.Reference_Path{Path: source},
-	}
-	targetRef := &provider.Reference{
-		Spec: &provider.Reference_Path{Path: target},
-	}
+	sourceRef := &provider.Reference{Path: source}
+	targetRef := &provider.Reference{Path: target}
 	req := &provider.MoveRequest{Source: sourceRef, Destination: targetRef}
 	res, err := action.session.Client().Move(action.session.Context(), req)
 	if err := net.CheckRPCInvocation("moving resource", res, err); err != nil {
@@ -131,9 +133,7 @@ func (action *FileOperationsAction) MoveTo(source string, path string) error {
 
 // Remove deletes the specified resource.
 func (action *FileOperationsAction) Remove(path string) error {
-	ref := &provider.Reference{
-		Spec: &provider.Reference_Path{Path: path},
-	}
+	ref := &provider.Reference{Path: path}
 	req := &provider.DeleteRequest{Ref: ref}
 	res, err := action.session.Client().Delete(action.session.Context(), req)
 	if err := net.CheckRPCInvocation("deleting resource", res, err); err != nil {

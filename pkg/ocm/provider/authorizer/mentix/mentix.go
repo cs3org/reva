@@ -79,7 +79,7 @@ type config struct {
 	Timeout               int64  `mapstructure:"timeout"`
 	RefreshInterval       int64  `mapstructure:"refresh"`
 	VerifyRequestHostname bool   `mapstructure:"verify_request_hostname"`
-	Insecure              bool   `mapstructure:"insecure"`
+	Insecure              bool   `mapstructure:"insecure" docs:"false;Whether to skip certificate checks when sending requests."`
 }
 
 func (c *config) init() {
@@ -180,7 +180,7 @@ func (a *authorizer) IsProviderAllowed(ctx context.Context, provider *ocmprovide
 		}
 	}
 	if ocmHost == "" {
-		return errors.Wrap(err, "json: ocm host not specified for mesh provider")
+		return errtypes.InternalError("mentix: ocm host not specified for mesh provider")
 	}
 
 	providerAuthorized = false

@@ -31,7 +31,8 @@ import (
 type FS interface {
 	GetHome(ctx context.Context) (string, error)
 	CreateHome(ctx context.Context) error
-	CreateDir(ctx context.Context, fn string) error
+	CreateDir(ctx context.Context, ref *provider.Reference) error
+	TouchFile(ctx context.Context, ref *provider.Reference) error
 	Delete(ctx context.Context, ref *provider.Reference) error
 	Move(ctx context.Context, oldRef, newRef *provider.Reference) error
 	GetMD(ctx context.Context, ref *provider.Reference, mdKeys []string) (*provider.ResourceInfo, error)
@@ -42,20 +43,28 @@ type FS interface {
 	ListRevisions(ctx context.Context, ref *provider.Reference) ([]*provider.FileVersion, error)
 	DownloadRevision(ctx context.Context, ref *provider.Reference, key string) (io.ReadCloser, error)
 	RestoreRevision(ctx context.Context, ref *provider.Reference, key string) error
-	ListRecycle(ctx context.Context) ([]*provider.RecycleItem, error)
-	RestoreRecycleItem(ctx context.Context, key string) error
-	PurgeRecycleItem(ctx context.Context, key string) error
+	ListRecycle(ctx context.Context, basePath, key, relativePath string) ([]*provider.RecycleItem, error)
+	RestoreRecycleItem(ctx context.Context, basePath, key, relativePath string, restoreRef *provider.Reference) error
+	PurgeRecycleItem(ctx context.Context, basePath, key, relativePath string) error
 	EmptyRecycle(ctx context.Context) error
 	GetPathByID(ctx context.Context, id *provider.ResourceId) (string, error)
 	AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error
+	DenyGrant(ctx context.Context, ref *provider.Reference, g *provider.Grantee) error
 	RemoveGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error
 	UpdateGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error
 	ListGrants(ctx context.Context, ref *provider.Reference) ([]*provider.Grant, error)
-	GetQuota(ctx context.Context) (uint64, uint64, error)
+	GetQuota(ctx context.Context, ref *provider.Reference) ( /*TotalBytes*/ uint64 /*UsedBytes*/, uint64, error)
 	CreateReference(ctx context.Context, path string, targetURI *url.URL) error
 	Shutdown(ctx context.Context) error
 	SetArbitraryMetadata(ctx context.Context, ref *provider.Reference, md *provider.ArbitraryMetadata) error
 	UnsetArbitraryMetadata(ctx context.Context, ref *provider.Reference, keys []string) error
+	SetLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error
+	GetLock(ctx context.Context, ref *provider.Reference) (*provider.Lock, error)
+	RefreshLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error
+	Unlock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error
+	ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter) ([]*provider.StorageSpace, error)
+	CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error)
+	UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error)
 }
 
 // Registry is the interface that storage registries implement

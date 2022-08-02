@@ -6,10 +6,11 @@ update_interval = "15m"
 
 [http.services.mentix.connectors.gocdb]
 address = "http://sciencemesh-test.uni-muenster.de"
+apikey = "abc123"
 
-# Sites can also be stored in a local file
-[http.services.mentix.connectors.localfile]
-file = "/usr/share/revad/sites.json"
+# Configure the service types that are considered as critical/essential
+[http.services.mentix.services]
+critical_types = ["REVAD"]
 
 # Enable the WebAPI exporter
 [http.services.mentix.exporters.webapi]
@@ -20,24 +21,11 @@ endpoint = "/"
 [http.services.mentix.exporters.siteloc]
 # If this setting is omitted, all connectors will be used as data sources
 enabled_connectors = ["gocdb"]
-
-# Enable the site registration importer
-[http.services.mentix.importers.sitereg]
-# For importers, this is obligatory; the connectors will be used as the target for data updates
-enabled_connectors = ["localfile"]
-# If set to true, ScienceMesh sites will be ignored when they try to register
-ignore_sm_sites = false
-
-# Set up the accounts service used to query information about accounts associated with registered sites
-[http.services.mentix.accounts]
-# Depending on where the service is running, localhost may also be used here
-url = "https://sciencemesh.example.com/iop/accounts"
-user = "username"
-password = "userpass"
+# Enable the Metrics exporter
+[http.services.mentix.exporters.metrics]
 
 # Configure the Prometheus Service Discovery:
 [http.services.mentix.exporters.promsd]
-# The following files must be made available to Prometheus.
-# They can then be used as the file_sd source of a job.
-metrics_output_file = "/usr/share/prom/sciencemesh_metrics.json"
-blackbox_output_file = "/usr/share/prom/sciencemesh_blackbox.json"
+# The following path must be made available to Prometheus.
+# The contained target files can then be used as the file_sd sources of a job.
+output_path = "/usr/share/prom"

@@ -37,11 +37,12 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/logger"
 	"github.com/cs3org/reva/pkg/storage/utils/chunking"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/node"
-	"github.com/cs3org/reva/pkg/user"
+	"github.com/cs3org/reva/pkg/utils"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -56,18 +57,7 @@ var defaultFilePerm = os.FileMode(0664)
 func (fs *Decomposedfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser) (err error) {
 	upload, err := fs.GetUpload(ctx, ref.GetPath())
 	if err != nil {
-		// Upload corresponding to this ID was not found.
-		// Assume that this corresponds to the resource path to which the file has to be uploaded.
-
-		// Set the length to 0 and set SizeIsDeferred to true
-		metadata := map[string]string{"sizedeferred": "true"}
-		uploadIDs, err := fs.InitiateUpload(ctx, ref, 0, metadata)
-		if err != nil {
-			return err
-		}
-		if upload, err = fs.GetUpload(ctx, uploadIDs["simple"]); err != nil {
-			return errors.Wrap(err, "Decomposedfs: error retrieving upload")
-		}
+		return errors.Wrap(err, "Decomposedfs: error retrieving upload")
 	}
 
 	uploadInfo := upload.(*fileUpload)
@@ -113,8 +103,6 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 
 	log := appctx.GetLogger(ctx)
 
-	var relative string // the internal path of the file node
-
 	n, err := fs.lu.NodeFromResource(ctx, ref)
 	if err != nil {
 		return nil, err
@@ -122,7 +110,7 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 
 	// permissions are checked in NewUpload below
 
-	relative, err = fs.lu.Path(ctx, n)
+	relative, err := fs.lu.Path(ctx, n)
 	if err != nil {
 		return nil, err
 	}
@@ -133,6 +121,9 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 			"dir":      filepath.Dir(relative),
 		},
 		Size: uploadLength,
+		Storage: map[string]string{
+			"SpaceRoot": n.SpaceRoot.ID,
+		},
 	}
 
 	if metadata != nil {
@@ -157,6 +148,11 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 	}
 
 	log.Debug().Interface("info", info).Interface("node", n).Interface("metadata", metadata).Msg("Decomposedfs: resolved filename")
+
+	_, err = node.CheckQuota(n.SpaceRoot, uint64(info.Size))
+	if err != nil {
+		return nil, err
+	}
 
 	upload, err := fs.NewUpload(ctx, info)
 	if err != nil {
@@ -201,7 +197,7 @@ func (fs *Decomposedfs) NewUpload(ctx context.Context, info tusd.FileInfo) (uplo
 	}
 	info.MetaData["dir"] = filepath.Clean(info.MetaData["dir"])
 
-	n, err := fs.lu.NodeFromPath(ctx, filepath.Join(info.MetaData["dir"], info.MetaData["filename"]))
+	n, err := fs.lookupNode(ctx, filepath.Join(info.MetaData["dir"], info.MetaData["filename"]))
 	if err != nil {
 		return nil, errors.Wrap(err, "Decomposedfs: error wrapping filename")
 	}
@@ -240,11 +236,19 @@ func (fs *Decomposedfs) NewUpload(ctx context.Context, info tusd.FileInfo) (uplo
 	if err != nil {
 		return nil, errors.Wrap(err, "Decomposedfs: error resolving upload path")
 	}
-	usr := user.ContextMustGetUser(ctx)
+	usr := ctxpkg.ContextMustGetUser(ctx)
 
 	owner, err := p.Owner()
 	if err != nil {
 		return nil, errors.Wrap(err, "Decomposedfs: error determining owner")
+	}
+	var spaceRoot string
+	if info.Storage != nil {
+		if spaceRoot, ok = info.Storage["SpaceRoot"]; !ok {
+			spaceRoot = n.SpaceRoot.ID
+		}
+	} else {
+		spaceRoot = n.SpaceRoot.ID
 	}
 
 	info.Storage = map[string]string{
@@ -254,9 +258,11 @@ func (fs *Decomposedfs) NewUpload(ctx context.Context, info tusd.FileInfo) (uplo
 		"NodeId":       n.ID,
 		"NodeParentId": n.ParentID,
 		"NodeName":     n.Name,
+		"SpaceRoot":    spaceRoot,
 
 		"Idp":      usr.Id.Idp,
 		"UserId":   usr.Id.OpaqueId,
+		"UserType": utils.UserTypeToString(usr.Id.Type),
 		"UserName": usr.Username,
 
 		"OwnerIdp": owner.Idp,
@@ -280,16 +286,6 @@ func (fs *Decomposedfs) NewUpload(ctx context.Context, info tusd.FileInfo) (uplo
 		ctx:      ctx,
 	}
 
-	if !info.SizeIsDeferred && info.Size == 0 {
-		log.Debug().Interface("info", info).Msg("Decomposedfs: finishing upload for empty file")
-		// no need to create info file and finish directly
-		err := u.FinishUpload(ctx)
-		if err != nil {
-			return nil, err
-		}
-		return u, nil
-	}
-
 	// writeInfo creates the file by itself if necessary
 	err = u.writeInfo()
 	if err != nil {
@@ -310,6 +306,10 @@ func (fs *Decomposedfs) GetUpload(ctx context.Context, id string) (tusd.Upload, 
 	info := tusd.FileInfo{}
 	data, err := ioutil.ReadFile(infoPath)
 	if err != nil {
+		if os.IsNotExist(err) {
+			// Interpret os.ErrNotExist as 404 Not Found
+			err = tusd.ErrNotFound
+		}
 		return nil, err
 	}
 	if err := json.Unmarshal(data, &info); err != nil {
@@ -327,11 +327,12 @@ func (fs *Decomposedfs) GetUpload(ctx context.Context, id string) (tusd.Upload, 
 		Id: &userpb.UserId{
 			Idp:      info.Storage["Idp"],
 			OpaqueId: info.Storage["UserId"],
+			Type:     utils.UserTypeMap(info.Storage["UserType"]),
 		},
 		Username: info.Storage["UserName"],
 	}
 
-	ctx = user.ContextSetUser(ctx, u)
+	ctx = ctxpkg.ContextSetUser(ctx, u)
 	// TODO configure the logger the same way ... store and add traceid in file info
 
 	var opts []logger.Option
@@ -350,6 +351,33 @@ func (fs *Decomposedfs) GetUpload(ctx context.Context, id string) (tusd.Upload, 
 		fs:       fs,
 		ctx:      ctx,
 	}, nil
+}
+
+// lookupNode looks up nodes by path.
+// This method can also handle lookups for paths which contain chunking information.
+func (fs *Decomposedfs) lookupNode(ctx context.Context, path string) (*node.Node, error) {
+	p := path
+	isChunked, err := chunking.IsChunked(path)
+	if err != nil {
+		return nil, err
+	}
+	if isChunked {
+		chunkInfo, err := chunking.GetChunkBLOBInfo(path)
+		if err != nil {
+			return nil, err
+		}
+		p = chunkInfo.Path
+	}
+
+	n, err := fs.lu.NodeFromPath(ctx, p, false)
+	if err != nil {
+		return nil, err
+	}
+
+	if isChunked {
+		n.Name = filepath.Base(path)
+	}
+	return n, nil
 }
 
 type fileUpload struct {
@@ -417,6 +445,10 @@ func (upload *fileUpload) writeInfo() error {
 
 // FinishUpload finishes an upload and moves the file to the internal destination
 func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
+
+	// ensure cleanup
+	defer upload.discardChunk()
+
 	fi, err := os.Stat(upload.binPath)
 	if err != nil {
 		appctx.GetLogger(upload.ctx).Err(err).Msg("Decomposedfs: could not stat uploaded file")
@@ -432,6 +464,12 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 		nil,
 		upload.fs.lu,
 	)
+	n.SpaceRoot = node.New(upload.info.Storage["SpaceRoot"], "", "", 0, "", nil, upload.fs.lu)
+
+	_, err = node.CheckQuota(n.SpaceRoot, uint64(fi.Size()))
+	if err != nil {
+		return err
+	}
 
 	if n.ID == "" {
 		n.ID = uuid.New().String()
@@ -573,13 +611,13 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 		}
 	}
 	// use set arbitrary metadata?
-	/*if upload.info.MetaData["mtime"] != "" {
-		err := upload.fs.SetMtime(ctx, np, upload.info.MetaData["mtime"])
+	if upload.info.MetaData["mtime"] != "" {
+		err := n.SetMtime(ctx, upload.info.MetaData["mtime"])
 		if err != nil {
-			log.Err(err).Interface("info", upload.info).Msg("Decomposedfs: could not set mtime metadata")
+			sublog.Err(err).Interface("info", upload.info).Msg("Decomposedfs: could not set mtime metadata")
 			return err
 		}
-	}*/
+	}
 
 	n.Exists = true
 
@@ -607,6 +645,12 @@ func (upload *fileUpload) discardChunk() {
 	if err := os.Remove(upload.binPath); err != nil {
 		if !os.IsNotExist(err) {
 			appctx.GetLogger(upload.ctx).Err(err).Interface("info", upload.info).Str("binPath", upload.binPath).Interface("info", upload.info).Msg("Decomposedfs: could not discard chunk")
+			return
+		}
+	}
+	if err := os.Remove(upload.infoPath); err != nil {
+		if !os.IsNotExist(err) {
+			appctx.GetLogger(upload.ctx).Err(err).Interface("info", upload.info).Str("infoPath", upload.infoPath).Interface("info", upload.info).Msg("Decomposedfs: could not discard chunk info")
 			return
 		}
 	}

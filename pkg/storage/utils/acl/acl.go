@@ -42,6 +42,8 @@ const (
 
 	// TypeUser indicates the qualifier identifies a user
 	TypeUser = "u"
+	// TypeLightweight indicates the qualifier identifies a lightweight user
+	TypeLightweight = "lw"
 	// TypeGroup indicates the qualifier identifies a group
 	TypeGroup = "egroup"
 )
@@ -55,14 +57,16 @@ func Parse(acls string, delimiter string) (*ACLs, error) {
 		if t == "" || isComment(t) {
 			continue
 		}
-		entry, err := ParseEntry(t)
+		var err error
+		var entry *Entry
+		if strings.HasPrefix(t, TypeLightweight) {
+			entry, err = ParseLWEntry(t)
+		} else {
+			entry, err = ParseEntry(t)
+		}
 		if err != nil {
 			return nil, err
 		}
-		// for now we ignore default / empty qualifiers
-		// if entry.Qualifier == "" {
-		//	continue
-		// }
 		entries = append(entries, entry)
 	}
 
@@ -77,7 +81,7 @@ func isComment(line string) bool {
 func (m *ACLs) Serialize() string {
 	sysACL := []string{}
 	for _, e := range m.Entries {
-		sysACL = append(sysACL, e.serialize())
+		sysACL = append(sysACL, e.CitrineSerialize())
 	}
 	return strings.Join(sysACL, ShortTextForm)
 }
@@ -120,22 +124,47 @@ type Entry struct {
 // ParseEntry parses a single ACL
 func ParseEntry(singleSysACL string) (*Entry, error) {
 	tokens := strings.Split(singleSysACL, ":")
-	if len(tokens) != 3 {
+	switch len(tokens) {
+	case 2:
+		// The ACL entries might be stored as type:qualifier=permissions
+		// Handle that case separately
+		parts := strings.SplitN(tokens[1], "=", 2)
+		if len(parts) == 2 {
+			return &Entry{
+				Type:        tokens[0],
+				Qualifier:   parts[0],
+				Permissions: parts[1],
+			}, nil
+		}
+	case 3:
+		return &Entry{
+			Type:        tokens[0],
+			Qualifier:   tokens[1],
+			Permissions: tokens[2],
+		}, nil
+	}
+	return nil, errInvalidACL
+}
+
+// ParseLWEntry parses a single lightweight ACL
+func ParseLWEntry(singleSysACL string) (*Entry, error) {
+	if !strings.HasPrefix(singleSysACL, TypeLightweight+":") {
 		return nil, errInvalidACL
 	}
+	singleSysACL = strings.TrimPrefix(singleSysACL, TypeLightweight+":")
 
+	tokens := strings.Split(singleSysACL, "=")
+	if len(tokens) != 2 {
+		return nil, errInvalidACL
+	}
 	return &Entry{
-		Type:        tokens[0],
-		Qualifier:   tokens[1],
-		Permissions: tokens[2],
+		Type:        TypeLightweight,
+		Qualifier:   tokens[0],
+		Permissions: tokens[1],
 	}, nil
 }
 
 // CitrineSerialize serializes an ACL entry for citrine EOS ACLs
 func (a *Entry) CitrineSerialize() string {
 	return fmt.Sprintf("%s:%s=%s", a.Type, a.Qualifier, a.Permissions)
-}
-
-func (a *Entry) serialize() string {
-	return strings.Join([]string{a.Type, a.Qualifier, a.Permissions}, ":")
 }

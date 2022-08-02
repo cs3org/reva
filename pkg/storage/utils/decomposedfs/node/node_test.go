@@ -64,7 +64,7 @@ var _ = Describe("Node", func() {
 
 	Describe("ReadNode", func() {
 		It("reads the blobID from the xattrs", func() {
-			lookupNode, err := env.Lookup.NodeFromPath(env.Ctx, "/dir1/file1")
+			lookupNode, err := env.Lookup.NodeFromPath(env.Ctx, "/dir1/file1", false)
 			Expect(err).ToNot(HaveOccurred())
 
 			n, err := node.ReadNode(env.Ctx, env.Lookup, lookupNode.ID)
@@ -75,7 +75,7 @@ var _ = Describe("Node", func() {
 
 	Describe("WriteMetadata", func() {
 		It("writes all xattrs", func() {
-			n, err := env.Lookup.NodeFromPath(env.Ctx, "/dir1/file1")
+			n, err := env.Lookup.NodeFromPath(env.Ctx, "/dir1/file1", false)
 			Expect(err).ToNot(HaveOccurred())
 
 			blobsize := 239485734
@@ -85,11 +85,12 @@ var _ = Describe("Node", func() {
 			owner := &userpb.UserId{
 				Idp:      "testidp",
 				OpaqueId: "testuserid",
+				Type:     userpb.UserType_USER_TYPE_PRIMARY,
 			}
 
 			err = n.WriteMetadata(owner)
 			Expect(err).ToNot(HaveOccurred())
-			n2, err := env.Lookup.NodeFromPath(env.Ctx, "/dir1/file1")
+			n2, err := env.Lookup.NodeFromPath(env.Ctx, "/dir1/file1", false)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(n2.Name).To(Equal("TestName"))
 			Expect(n2.BlobID).To(Equal("TestBlobID"))
@@ -99,7 +100,7 @@ var _ = Describe("Node", func() {
 
 	Describe("Parent", func() {
 		It("returns the parent node", func() {
-			child, err := env.Lookup.NodeFromPath(env.Ctx, "/dir1/subdir1")
+			child, err := env.Lookup.NodeFromPath(env.Ctx, "/dir1/subdir1", false)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(child).ToNot(BeNil())
 
@@ -117,7 +118,7 @@ var _ = Describe("Node", func() {
 
 		BeforeEach(func() {
 			var err error
-			parent, err = env.Lookup.NodeFromPath(env.Ctx, "/dir1")
+			parent, err = env.Lookup.NodeFromPath(env.Ctx, "/dir1", false)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(parent).ToNot(BeNil())
 		})
@@ -148,6 +149,13 @@ var _ = Describe("Node", func() {
 			Expect(child.Name).To(Equal("file1"))
 			Expect(child.Blobsize).To(Equal(int64(1234)))
 		})
+
+		It("handles (broken) links including file segments by returning an non-existent node", func() {
+			child, err := parent.Child(env.Ctx, "file1/broken")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(child).ToNot(BeNil())
+			Expect(child.Exists).To(BeFalse())
+		})
 	})
 
 	Describe("AsResourceInfo", func() {
@@ -157,26 +165,28 @@ var _ = Describe("Node", func() {
 
 		BeforeEach(func() {
 			var err error
-			n, err = env.Lookup.NodeFromPath(env.Ctx, "dir1/file1")
+			n, err = env.Lookup.NodeFromPath(env.Ctx, "dir1/file1", false)
 			Expect(err).ToNot(HaveOccurred())
 		})
 
 		Describe("the Etag field", func() {
 			It("is set", func() {
-				ri, err := n.AsResourceInfo(env.Ctx, node.OwnerPermissions, []string{})
+				perms := node.OwnerPermissions()
+				ri, err := n.AsResourceInfo(env.Ctx, &perms, []string{}, false)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(ri.Etag)).To(Equal(34))
 			})
 
 			It("changes when the tmtime is set", func() {
-				ri, err := n.AsResourceInfo(env.Ctx, node.OwnerPermissions, []string{})
+				perms := node.OwnerPermissions()
+				ri, err := n.AsResourceInfo(env.Ctx, &perms, []string{}, false)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(ri.Etag)).To(Equal(34))
 				before := ri.Etag
 
 				Expect(n.SetTMTime(time.Now().UTC())).To(Succeed())
 
-				ri, err = n.AsResourceInfo(env.Ctx, node.OwnerPermissions, []string{})
+				ri, err = n.AsResourceInfo(env.Ctx, &perms, []string{}, false)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(ri.Etag)).To(Equal(34))
 				Expect(ri.Etag).ToNot(Equal(before))

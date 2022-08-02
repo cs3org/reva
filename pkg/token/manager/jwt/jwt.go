@@ -22,12 +22,13 @@ import (
 	"context"
 	"time"
 
+	auth "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/token"
 	"github.com/cs3org/reva/pkg/token/manager/registry"
-	"github.com/dgrijalva/jwt-go"
+	"github.com/golang-jwt/jwt"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )
@@ -41,6 +42,17 @@ func init() {
 type config struct {
 	Secret  string `mapstructure:"secret"`
 	Expires int64  `mapstructure:"expires"`
+}
+
+type manager struct {
+	conf *config
+}
+
+// claims are custom claims for the JWT token.
+type claims struct {
+	jwt.StandardClaims
+	User  *user.User             `json:"user"`
+	Scope map[string]*auth.Scope `json:"scope"`
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -73,23 +85,7 @@ func New(value map[string]interface{}) (token.Manager, error) {
 	return m, nil
 }
 
-type manager struct {
-	conf *config
-}
-
-// claims are custom claims for the JWT token.
-type claims struct {
-	jwt.StandardClaims
-	User *user.User `json:"user"`
-}
-
-// TODO(labkode): resulting JSON contains internal protobuf fields:
-//  "Username": "einstein",
-//  "XXX_NoUnkeyedLiteral": {},
-//  "XXX_sizecache": 0,
-//  "XXX_unrecognized": null
-//}
-func (m *manager) MintToken(ctx context.Context, u *user.User) (string, error) {
+func (m *manager) MintToken(ctx context.Context, u *user.User, scope map[string]*auth.Scope) (string, error) {
 	ttl := time.Duration(m.conf.Expires) * time.Second
 	claims := claims{
 		StandardClaims: jwt.StandardClaims{
@@ -98,7 +94,8 @@ func (m *manager) MintToken(ctx context.Context, u *user.User) (string, error) {
 			Audience:  "reva",
 			IssuedAt:  time.Now().Unix(),
 		},
-		User: u,
+		User:  u,
+		Scope: scope,
 	}
 
 	t := jwt.NewWithClaims(jwt.GetSigningMethod("HS256"), claims)
@@ -111,19 +108,18 @@ func (m *manager) MintToken(ctx context.Context, u *user.User) (string, error) {
 	return tkn, nil
 }
 
-func (m *manager) DismantleToken(ctx context.Context, tkn string) (*user.User, error) {
+func (m *manager) DismantleToken(ctx context.Context, tkn string) (*user.User, map[string]*auth.Scope, error) {
 	token, err := jwt.ParseWithClaims(tkn, &claims{}, func(token *jwt.Token) (interface{}, error) {
 		return []byte(m.conf.Secret), nil
 	})
 
 	if err != nil {
-		return nil, errors.Wrap(err, "error parsing token")
+		return nil, nil, errors.Wrap(err, "error parsing token")
 	}
 
 	if claims, ok := token.Claims.(*claims); ok && token.Valid {
-		return claims.User, nil
+		return claims.User, claims.Scope, nil
 	}
 
-	err = errtypes.InvalidCredentials("token invalid")
-	return nil, err
+	return nil, nil, errtypes.InvalidCredentials("invalid token")
 }

@@ -1,0 +1,80 @@
+# This config file will start a reva service that:
+# - serves as a gateway for all CS3 requests
+# - looks up the storageprovider using a storageregistry
+# - looks up the authprovider using an authregistry
+# - serves the gateway on grpc port 19000
+# - serves http datagateway on port 19001
+#   - /data - datagateway: file up and download
+
+[shared]
+jwt_secret = "Pive-Fumkiu4"
+gatewaysvc = "localhost:39000"
+
+[grpc]
+address = "0.0.0.0:39000"
+
+[grpc.services.gateway]
+# registries
+authregistrysvc = "localhost:39000"
+storageregistrysvc = "localhost:39000"
+# user metadata
+preferencessvc = "localhost:38000"
+userprovidersvc = "localhost:38000"
+groupprovidersvc = "localhost:38000"
+# an approvider lives on "localhost:38000" as well, see users.toml
+# sharing
+usershareprovidersvc = "localhost:37000"
+publicshareprovidersvc = "localhost:37000"
+# ocm
+ocmcoresvc = "localhost:34000"
+ocmshareprovidersvc = "localhost:34000"
+ocminvitemanagersvc = "localhost:34000"
+ocmproviderauthorizersvc = "localhost:34000"
+# other
+commit_share_to_storage_grant = true
+commit_share_to_storage_ref = true
+share_folder = "Shares"
+datagateway = "http://localhost:39001/data"
+transfer_shared_secret = "replace-me-with-a-transfer-secret" # for direct uploads
+transfer_expires = 6 # give it a moment
+#disable_home_creation_on_login = true
+link_grants_file = "/var/tmp/reva/link_grants_file.json"
+
+[grpc.services.authregistry]
+driver = "static"
+
+[grpc.services.authregistry.drivers.static.rules]
+publicshares = "localhost:37000" # started with the shares.toml
+basic = "localhost:38000" # started with the users.toml
+
+[grpc.services.storageregistry]
+driver = "static"
+
+[grpc.services.storageregistry.drivers.static]
+home_provider = "/home"
+
+[grpc.services.storageregistry.drivers.static.rules]
+
+# mount a home storage provider that uses a context based path wrapper
+# to jail users into their home dir
+"/home" = {"address" = "localhost:32000"}
+
+# mount a storage provider without a path wrapper for direct access to users.
+"/users" = {"address" = "localhost:31000"}
+"123e4567-e89b-12d3-a456-426655440000" = {"address" = "localhost:31000"}
+
+# the /virtual namespace is only accessible via the frontend-global service
+"/virtual/[a-k]" = {"address" = "localhost:31100"}
+"virtual-a-k" = {"address" = "localhost:31100"}
+"/virtual/[l-z]" = {"address" = "localhost:31110"}
+"virtual-l-z" = {"address" = "localhost:31110"}
+
+# another mount point might be "/projects/"
+
+"/public" = {"address" = "localhost:33000"}
+
+[http]
+address = "0.0.0.0:39001"
+
+[http.services.datagateway]
+transfer_shared_secret = "replace-me-with-a-transfer-secret"

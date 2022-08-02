@@ -21,12 +21,14 @@ package authprovider
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/auth"
 	"github.com/cs3org/reva/pkg/auth/manager/registry"
 	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/plugin"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/mitchellh/mapstructure"
@@ -52,6 +54,7 @@ func (c *config) init() {
 type service struct {
 	authmgr auth.Manager
 	conf    *config
+	plugin  *plugin.RevaPlugin
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -64,14 +67,31 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 	return c, nil
 }
 
-func getAuthManager(manager string, m map[string]map[string]interface{}) (auth.Manager, error) {
+func getAuthManager(manager string, m map[string]map[string]interface{}) (auth.Manager, *plugin.RevaPlugin, error) {
 	if manager == "" {
-		return nil, errors.New("authsvc: driver not configured for auth manager")
+		return nil, nil, errtypes.InternalError("authsvc: driver not configured for auth manager")
 	}
-	if f, ok := registry.NewFuncs[manager]; ok {
-		return f(m[manager])
+	p, err := plugin.Load("authprovider", manager)
+	if err == nil {
+		authManager, ok := p.Plugin.(auth.Manager)
+		if !ok {
+			return nil, nil, fmt.Errorf("could not assert the loaded plugin")
+		}
+		pluginConfig := filepath.Base(manager)
+		err = authManager.Configure(m[pluginConfig])
+		if err != nil {
+			return nil, nil, err
+		}
+		return authManager, p, nil
+	} else if _, ok := err.(errtypes.NotFound); ok {
+		if f, ok := registry.NewFuncs[manager]; ok {
+			authmgr, err := f(m[manager])
+			return authmgr, nil, err
+		}
+	} else {
+		return nil, nil, err
 	}
-	return nil, fmt.Errorf("authsvc: driver %s not found for auth manager", manager)
+	return nil, nil, errtypes.NotFound(fmt.Sprintf("authsvc: driver %s not found for auth manager", manager))
 }
 
 // New returns a new AuthProviderServiceServer.
@@ -81,17 +101,24 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 		return nil, err
 	}
 
-	authManager, err := getAuthManager(c.AuthManager, c.AuthManagers)
+	authManager, plug, err := getAuthManager(c.AuthManager, c.AuthManagers)
 	if err != nil {
 		return nil, err
 	}
 
-	svc := &service{conf: c, authmgr: authManager}
+	svc := &service{
+		conf:    c,
+		authmgr: authManager,
+		plugin:  plug,
+	}
 
 	return svc, nil
 }
 
 func (s *service) Close() error {
+	if s.plugin != nil {
+		s.plugin.Kill()
+	}
 	return nil
 }
 
@@ -108,13 +135,14 @@ func (s *service) Authenticate(ctx context.Context, req *provider.AuthenticateRe
 	username := req.ClientId
 	password := req.ClientSecret
 
-	u, err := s.authmgr.Authenticate(ctx, username, password)
+	u, scope, err := s.authmgr.Authenticate(ctx, username, password)
 	switch v := err.(type) {
 	case nil:
-		log.Info().Msgf("user %s authenticated", u.String())
+		log.Info().Msgf("user %s authenticated", u.Id)
 		return &provider.AuthenticateResponse{
-			Status: status.NewOK(ctx),
-			User:   u,
+			Status:     status.NewOK(ctx),
+			User:       u,
+			TokenScope: scope,
 		}, nil
 	case errtypes.InvalidCredentials:
 		return &provider.AuthenticateResponse{

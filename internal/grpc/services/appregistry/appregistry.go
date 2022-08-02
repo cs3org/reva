@@ -20,13 +20,13 @@ package appregistry
 
 import (
 	"context"
-	"fmt"
 
 	"google.golang.org/grpc"
 
 	registrypb "github.com/cs3org/go-cs3apis/cs3/app/registry/v1beta1"
 	"github.com/cs3org/reva/pkg/app"
-	"github.com/cs3org/reva/pkg/app/registry/static"
+	"github.com/cs3org/reva/pkg/app/registry/registry"
+	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/mitchellh/mapstructure"
@@ -37,7 +37,7 @@ func init() {
 }
 
 type svc struct {
-	registry app.Registry
+	reg app.Registry
 }
 
 func (s *svc) Close() error {
@@ -45,7 +45,7 @@ func (s *svc) Close() error {
 }
 
 func (s *svc) UnprotectedEndpoints() []string {
-	return []string{}
+	return []string{"/cs3.app.registry.v1beta1.RegistryAPI/AddAppProvider", "/cs3.app.registry.v1beta1.RegistryAPI/ListSupportedMimeTypes"}
 }
 
 func (s *svc) Register(ss *grpc.Server) {
@@ -53,8 +53,14 @@ func (s *svc) Register(ss *grpc.Server) {
 }
 
 type config struct {
-	Driver string                 `mapstructure:"driver"`
-	Static map[string]interface{} `mapstructure:"static"`
+	Driver  string                            `mapstructure:"driver"`
+	Drivers map[string]map[string]interface{} `mapstructure:"drivers"`
+}
+
+func (c *config) init() {
+	if c.Driver == "" {
+		c.Driver = "static"
+	}
 }
 
 // New creates a new StorageRegistryService
@@ -65,13 +71,13 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 		return nil, err
 	}
 
-	registry, err := getRegistry(c)
+	reg, err := getRegistry(c)
 	if err != nil {
 		return nil, err
 	}
 
 	svc := &svc{
-		registry: registry,
+		reg: reg,
 	}
 
 	return svc, nil
@@ -82,44 +88,52 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 	if err := mapstructure.Decode(m, c); err != nil {
 		return nil, err
 	}
+	c.init()
 	return c, nil
 }
 
 func getRegistry(c *config) (app.Registry, error) {
-	switch c.Driver {
-	case "static":
-		return static.New(c.Static)
-	default:
-		return nil, fmt.Errorf("driver not found: %s", c.Driver)
+	if f, ok := registry.NewFuncs[c.Driver]; ok {
+		return f(c.Drivers[c.Driver])
 	}
+	return nil, errtypes.NotFound("appregistrysvc: driver not found: " + c.Driver)
 }
 
 func (s *svc) GetAppProviders(ctx context.Context, req *registrypb.GetAppProvidersRequest) (*registrypb.GetAppProvidersResponse, error) {
-	p, err := s.registry.FindProvider(ctx, req.ResourceInfo.MimeType)
+	p, err := s.reg.FindProviders(ctx, req.ResourceInfo.MimeType)
 	if err != nil {
 		return &registrypb.GetAppProvidersResponse{
 			Status: status.NewInternal(ctx, err, "error looking for the app provider"),
 		}, nil
 	}
 
-	provider := format(p)
 	res := &registrypb.GetAppProvidersResponse{
 		Status:    status.NewOK(ctx),
-		Providers: []*registrypb.ProviderInfo{provider},
+		Providers: p,
+	}
+	return res, nil
+}
+
+func (s *svc) AddAppProvider(ctx context.Context, req *registrypb.AddAppProviderRequest) (*registrypb.AddAppProviderResponse, error) {
+	err := s.reg.AddProvider(ctx, req.Provider)
+	if err != nil {
+		return &registrypb.AddAppProviderResponse{
+			Status: status.NewInternal(ctx, err, "error adding the app provider"),
+		}, nil
+	}
+
+	res := &registrypb.AddAppProviderResponse{
+		Status: status.NewOK(ctx),
 	}
 	return res, nil
 }
 
 func (s *svc) ListAppProviders(ctx context.Context, req *registrypb.ListAppProvidersRequest) (*registrypb.ListAppProvidersResponse, error) {
-	pvds, err := s.registry.ListProviders(ctx)
+	providers, err := s.reg.ListProviders(ctx)
 	if err != nil {
 		return &registrypb.ListAppProvidersResponse{
 			Status: status.NewInternal(ctx, err, "error listing the app providers"),
 		}, nil
-	}
-	providers := make([]*registrypb.ProviderInfo, 0, len(pvds))
-	for _, pvd := range pvds {
-		providers = append(providers, format(pvd))
 	}
 
 	res := &registrypb.ListAppProvidersResponse{
@@ -129,8 +143,53 @@ func (s *svc) ListAppProviders(ctx context.Context, req *registrypb.ListAppProvi
 	return res, nil
 }
 
-func format(p *app.ProviderInfo) *registrypb.ProviderInfo {
-	return &registrypb.ProviderInfo{
-		Address: p.Location,
+func (s *svc) ListSupportedMimeTypes(ctx context.Context, req *registrypb.ListSupportedMimeTypesRequest) (*registrypb.ListSupportedMimeTypesResponse, error) {
+	mimeTypes, err := s.reg.ListSupportedMimeTypes(ctx)
+	if err != nil {
+		return &registrypb.ListSupportedMimeTypesResponse{
+			Status: status.NewInternal(ctx, err, "error listing the supported mime types"),
+		}, nil
 	}
+
+	// hide mimetypes for app providers
+	for _, mime := range mimeTypes {
+		for _, app := range mime.AppProviders {
+			app.MimeTypes = nil
+		}
+	}
+
+	res := &registrypb.ListSupportedMimeTypesResponse{
+		Status:    status.NewOK(ctx),
+		MimeTypes: mimeTypes,
+	}
+	return res, nil
+}
+
+func (s *svc) GetDefaultAppProviderForMimeType(ctx context.Context, req *registrypb.GetDefaultAppProviderForMimeTypeRequest) (*registrypb.GetDefaultAppProviderForMimeTypeResponse, error) {
+	provider, err := s.reg.GetDefaultProviderForMimeType(ctx, req.MimeType)
+	if err != nil {
+		return &registrypb.GetDefaultAppProviderForMimeTypeResponse{
+			Status: status.NewInternal(ctx, err, "error getting the default app provider for the mimetype"),
+		}, nil
+	}
+
+	res := &registrypb.GetDefaultAppProviderForMimeTypeResponse{
+		Status:   status.NewOK(ctx),
+		Provider: provider,
+	}
+	return res, nil
+}
+
+func (s *svc) SetDefaultAppProviderForMimeType(ctx context.Context, req *registrypb.SetDefaultAppProviderForMimeTypeRequest) (*registrypb.SetDefaultAppProviderForMimeTypeResponse, error) {
+	err := s.reg.SetDefaultProviderForMimeType(ctx, req.MimeType, req.Provider)
+	if err != nil {
+		return &registrypb.SetDefaultAppProviderForMimeTypeResponse{
+			Status: status.NewInternal(ctx, err, "error setting the default app provider for the mimetype"),
+		}, nil
+	}
+
+	res := &registrypb.SetDefaultAppProviderForMimeTypeResponse{
+		Status: status.NewOK(ctx),
+	}
+	return res, nil
 }

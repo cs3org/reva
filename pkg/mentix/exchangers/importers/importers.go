@@ -85,6 +85,9 @@ func AvailableImporters(conf *config.Configuration) (*Collection, error) {
 	return &Collection{Importers: importers}, nil
 }
 
+// TODO: Uncomment once an importer is actually implemented
+/*
 func registerImporter(importer Importer) {
 	registeredImporters.Register(importer)
 }
+*/

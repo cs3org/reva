@@ -25,6 +25,7 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	"github.com/pkg/errors"
+	"google.golang.org/protobuf/types/known/fieldmaskpb"
 )
 
 func shareUpdateReceivedCommand() *command {
@@ -57,7 +58,7 @@ func shareUpdateReceivedCommand() *command {
 
 		shareState := getShareState(*state)
 
-		shareRequest := &collaboration.UpdateReceivedShareRequest{
+		shareRes, err := shareClient.GetReceivedShare(ctx, &collaboration.GetReceivedShareRequest{
 			Ref: &collaboration.ShareReference{
 				Spec: &collaboration.ShareReference_Id{
 					Id: &collaboration.ShareId{
@@ -65,20 +66,27 @@ func shareUpdateReceivedCommand() *command {
 					},
 				},
 			},
-			Field: &collaboration.UpdateReceivedShareRequest_UpdateField{
-				Field: &collaboration.UpdateReceivedShareRequest_UpdateField_State{
-					State: shareState,
-				},
-			},
+		})
+		if err != nil {
+			return err
+		}
+		if shareRes.Status.Code != rpc.Code_CODE_OK {
+			return formatError(shareRes.Status)
+		}
+		shareRes.Share.State = shareState
+
+		shareRequest := &collaboration.UpdateReceivedShareRequest{
+			Share:      shareRes.Share,
+			UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"state"}},
 		}
 
-		shareRes, err := shareClient.UpdateReceivedShare(ctx, shareRequest)
+		updateRes, err := shareClient.UpdateReceivedShare(ctx, shareRequest)
 		if err != nil {
 			return err
 		}
 
-		if shareRes.Status.Code != rpc.Code_CODE_OK {
-			return formatError(shareRes.Status)
+		if updateRes.Status.Code != rpc.Code_CODE_OK {
+			return formatError(updateRes.Status)
 		}
 
 		fmt.Println("OK")

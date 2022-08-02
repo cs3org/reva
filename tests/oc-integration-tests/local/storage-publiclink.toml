@@ -1,4 +1,6 @@
-# This storage.toml config file will start a reva service that:
+# This config file will start a reva service that:
+# - serves the public storage provider on grpc port 13000
+
 [shared]
 jwt_secret = "Pive-Fumkiu4"
 gatewaysvc = "localhost:19000"
@@ -10,4 +12,5 @@ address = "0.0.0.0:13000"
 # we have a locally running dataprovider
 [grpc.services.publicstorageprovider]
 mount_path = "/public/"
+mount_id = "e1a73ede-549b-4226-abdf-40e69ca8230d"
 gateway_addr = "0.0.0.0:19000"

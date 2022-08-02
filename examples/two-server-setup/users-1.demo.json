@@ -1,0 +1,28 @@
+[
+	{
+		"id": {
+			"opaque_id": "4c510ada-c86b-4815-8820-42cdf82c3d51",
+			"idp": "cernbox.cern.ch"
+		},
+		"username": "einstein",
+		"secret": "relativity",
+		"mail": "einstein@cern.ch",
+		"display_name": "Albert Einstein",
+		"groups": ["sailing-lovers", "violin-haters", "physics-lovers"],
+		"uid_number": 123,
+		"gid_number": 987
+	},
+	{
+		"id": {
+			"opaque_id": "932b4540-8d16-481e-8ef4-588e4b6b151c",
+			"idp": "example.org"
+		},
+		"username": "richard",
+		"secret": "superfluidity",
+		"mail": "richard@example.org",
+		"display_name": "Richard Feynman",
+		"groups": ["quantum-lovers", "philosophy-haters", "physics-lovers"],
+		"uid_number": 246,
+		"gid_number": 135
+	}
+]

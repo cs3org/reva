@@ -22,6 +22,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/gob"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -29,7 +30,6 @@ import (
 	registry "github.com/cs3org/go-cs3apis/cs3/auth/registry/v1beta1"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
-	"github.com/pkg/errors"
 )
 
 var loginCommand = func() *command {
@@ -37,9 +37,13 @@ var loginCommand = func() *command {
 	cmd.Description = func() string { return "login into the reva server" }
 	cmd.Usage = func() string { return "Usage: login <type>" }
 	listFlag := cmd.Bool("list", false, "list available login methods")
+	usernameOpt := cmd.String("username", "", "provide the username (only with machine auth)")
+	apiKeyOpt := cmd.String("api-key", "", "secret for the machine auth")
 
 	cmd.ResetFlags = func() {
 		*listFlag = false
+		*usernameOpt = ""
+		*apiKeyOpt = ""
 	}
 
 	cmd.Action = func(w ...io.Writer) error {
@@ -81,17 +85,29 @@ var loginCommand = func() *command {
 		}
 
 		authType := cmd.Args()[0]
-		reader := bufio.NewReader(os.Stdin)
-		fmt.Print("username: ")
-		username, err := read(reader)
-		if err != nil {
-			return err
-		}
+		var username, password string
+		var err error
 
-		fmt.Print("password: ")
-		password, err := readPassword(0)
-		if err != nil {
-			return err
+		// if the user select the machine authentication, the only way
+		// to provide the username and the password (api-key) is through
+		// the flags -username and -api-key respectively
+		if authType == "machine" {
+			username = *usernameOpt
+			password = *apiKeyOpt
+		} else {
+			// for the other methods, take the username and pw from the stdin
+			reader := bufio.NewReader(os.Stdin)
+			fmt.Print("username: ")
+			username, err = read(reader)
+			if err != nil {
+				return err
+			}
+
+			fmt.Print("password: ")
+			password, err = readPassword(0)
+			if err != nil {
+				return err
+			}
 		}
 
 		client, err := getClient()

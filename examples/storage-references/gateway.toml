@@ -6,15 +6,21 @@ commit_share_to_storage_ref = true
 [grpc.services.storageregistry]
 [grpc.services.storageregistry.drivers.static]
 home_provider = "/home"
-[grpc.services.storageregistry.drivers.static.rules."/home"]
-address = "localhost:17000"
-[grpc.services.storageregistry.drivers.static.rules."/reva"]
-address = "localhost:18000"
-[grpc.services.storageregistry.drivers.static.rules."123e4567-e89b-12d3-a456-426655440000"]
-address = "localhost:18000"
+[grpc.services.storageregistry.drivers.static.rules]
+"/home" = {"address" = "localhost:17000"}
+"/reva" = {"address" = "localhost:18000"}
+"/public" = {"address" = "localhost:16000"}
+"123e4567-e89b-12d3-a456-426655440000" = {"address" = "localhost:18000"}
 
 [grpc.services.authprovider]
 [grpc.services.authregistry]
+
+[grpc.services.authregistry.drivers.static.rules]
+basic = "localhost:19000"
+publicshares = "localhost:16000"
+appauth = "localhost:15000"
+
+[grpc.services.applicationauth]
 [grpc.services.userprovider]
 [grpc.services.usershareprovider]
 [grpc.services.groupprovider]
@@ -24,8 +30,26 @@ address = "localhost:18000"
 [grpc.services.ocminvitemanager]
 [grpc.services.ocmproviderauthorizer]
 
+[grpc.services.appregistry]
+[grpc.services.appregistry.drivers.static]
+mime_types = [
+    {"mime_type" = "text/plain", "extension" = "txt", "name" = "Text file", "description" = "Text file", "allow_creation" = true},
+    {"mime_type" = "text/markdown", "extension" = "md", "name" = "Markdown file", "description" = "Markdown file", "allow_creation" = true},
+    {"mime_type" = "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "extension" = "docx", "name" = "Microsoft Word", "description" = "Microsoft Word document", "allow_creation" = true},
+    {"mime_type" = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "extension" = "xlsx", "name" = "Microsoft Excel", "description" = "Microsoft Excel document", "allow_creation" = true},
+    {"mime_type" = "application/vnd.openxmlformats-officedocument.presentationml.presentation", "extension" = "pptx", "name" = "Microsoft PowerPoint", "description" = "Microsoft PowerPoint document", "allow_creation" = true},
+    {"mime_type" = "application/vnd.oasis.opendocument.text", "extension" = "odt", "name" = "OpenDocument", "description" = "OpenDocument text document", "allow_creation" = true},
+    {"mime_type" = "application/vnd.oasis.opendocument.spreadsheet", "extension" = "ods", "name" = "OpenSpreadsheet", "description" = "OpenDocument spreadsheet document", "allow_creation" = true},
+    {"mime_type" = "application/vnd.oasis.opendocument.presentation", "extension" = "odp", "name" = "OpenPresentation", "description" = "OpenDocument presentation document", "allow_creation" = true},
+    {"mime_type" = "application/vnd.jupyter", "extension" = "ipynb", "name" = "Jupyter Notebook", "description" = "Jupyter Notebook"}
+]
+
+[grpc.services.appprovider]
+mime_types = ["text/plain"]
+
 [http.services.datagateway]
 [http.services.prometheus]
 [http.services.ocmd]
 [http.services.ocdav]
 [http.services.ocs]
+[http.services.appprovider]

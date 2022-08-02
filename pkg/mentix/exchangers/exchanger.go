@@ -55,8 +55,7 @@ type BaseExchanger struct {
 
 	enabledConnectors []string
 
-	meshData               *meshdata.MeshData
-	allowUnauthorizedSites bool
+	meshData *meshdata.MeshData
 
 	locker sync.RWMutex
 }
@@ -76,7 +75,7 @@ func (exchanger *BaseExchanger) Activate(conf *config.Configuration, log *zerolo
 	return nil
 }
 
-// Start starts the exchanger; only exchanger which perform periodical background tasks should do something here.
+// Start starts the exchanger; only exchangers which perform periodical background tasks should do something here.
 func (exchanger *BaseExchanger) Start() error {
 	return nil
 }
@@ -125,21 +124,10 @@ func (exchanger *BaseExchanger) storeMeshDataSet(meshDataSet meshdata.Map) error
 	return nil
 }
 
-func (exchanger *BaseExchanger) cloneMeshData(clean bool) *meshdata.MeshData {
+func (exchanger *BaseExchanger) cloneMeshData() *meshdata.MeshData {
 	exchanger.locker.RLock()
 	meshDataClone := exchanger.meshData.Clone()
 	exchanger.locker.RUnlock()
-
-	if clean && !exchanger.allowUnauthorizedSites {
-		cleanedSites := make([]*meshdata.Site, 0, len(meshDataClone.Sites))
-		for _, site := range meshDataClone.Sites {
-			// Only keep authorized sites
-			if site.IsAuthorized() {
-				cleanedSites = append(cleanedSites, site)
-			}
-		}
-		meshDataClone.Sites = cleanedSites
-	}
 
 	return meshDataClone
 }
@@ -167,7 +155,7 @@ func (exchanger *BaseExchanger) SetEnabledConnectors(connectors []string) {
 // MeshData returns the stored mesh data. The returned data is cloned to prevent accidental data changes.
 // Unauthorized sites are also removed if this exchanger doesn't allow them.
 func (exchanger *BaseExchanger) MeshData() *meshdata.MeshData {
-	return exchanger.cloneMeshData(true)
+	return exchanger.cloneMeshData()
 }
 
 func (exchanger *BaseExchanger) setMeshData(meshData *meshdata.MeshData) {
@@ -175,11 +163,6 @@ func (exchanger *BaseExchanger) setMeshData(meshData *meshdata.MeshData) {
 	defer exchanger.locker.Unlock()
 
 	exchanger.meshData = meshData
-}
-
-// SetAllowUnauthorizedSites sets whether this exchanger allows the exchange of unauthorized sites.
-func (exchanger *BaseExchanger) SetAllowUnauthorizedSites(allow bool) {
-	exchanger.allowUnauthorizedSites = allow
 }
 
 // Locker returns the locking object.

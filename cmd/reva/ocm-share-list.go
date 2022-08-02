@@ -29,6 +29,7 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/pkg/ocm/share"
 	"github.com/jedib0t/go-pretty/table"
 )
 
@@ -60,14 +61,7 @@ func ocmShareListCommand() *command {
 				StorageId: tokens[0],
 				OpaqueId:  tokens[1],
 			}
-			shareRequest.Filters = []*ocm.ListOCMSharesRequest_Filter{
-				&ocm.ListOCMSharesRequest_Filter{
-					Type: ocm.ListOCMSharesRequest_Filter_TYPE_RESOURCE_ID,
-					Term: &ocm.ListOCMSharesRequest_Filter_ResourceId{
-						ResourceId: id,
-					},
-				},
-			}
+			shareRequest.Filters = []*ocm.ListOCMSharesRequest_Filter{share.ResourceIDFilter(id)}
 		}
 
 		shareRes, err := shareClient.ListOCMShares(ctx, shareRequest)
@@ -83,12 +77,12 @@ func ocmShareListCommand() *command {
 			t := table.NewWriter()
 			t.SetOutputMirror(os.Stdout)
 			t.AppendHeader(table.Row{"#", "Owner.Idp", "Owner.OpaqueId", "ResourceId", "Permissions", "Type",
-				"Grantee.Idp", "Grantee.OpaqueId", "Created", "Updated"})
+				"ShareType", "Grantee.Idp", "Grantee.OpaqueId", "Created", "Updated"})
 
 			for _, s := range shareRes.Shares {
 				t.AppendRows([]table.Row{
 					{s.Id.OpaqueId, s.Owner.Idp, s.Owner.OpaqueId, s.ResourceId.String(), s.Permissions.String(),
-						s.Grantee.Type.String(), s.Grantee.GetUserId().Idp, s.Grantee.GetUserId().OpaqueId,
+						s.Grantee.Type.String(), s.ShareType.String(), s.Grantee.GetUserId().Idp, s.Grantee.GetUserId().OpaqueId,
 						time.Unix(int64(s.Ctime.Seconds), 0), time.Unix(int64(s.Mtime.Seconds), 0)},
 				})
 			}

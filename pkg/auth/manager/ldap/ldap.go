@@ -20,20 +20,21 @@ package ldap
 
 import (
 	"context"
-	"crypto/tls"
-	"fmt"
+	"strconv"
 	"strings"
 
+	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
-	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/auth"
 	"github.com/cs3org/reva/pkg/auth/manager/registry"
+	"github.com/cs3org/reva/pkg/auth/scope"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/logger"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/sharedconf"
+	"github.com/cs3org/reva/pkg/utils"
 	"github.com/go-ldap/ldap/v3"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
@@ -48,16 +49,14 @@ type mgr struct {
 }
 
 type config struct {
-	Hostname     string     `mapstructure:"hostname"`
-	Port         int        `mapstructure:"port"`
-	BaseDN       string     `mapstructure:"base_dn"`
-	UserFilter   string     `mapstructure:"userfilter"`
-	LoginFilter  string     `mapstructure:"loginfilter"`
-	BindUsername string     `mapstructure:"bind_username"`
-	BindPassword string     `mapstructure:"bind_password"`
-	Idp          string     `mapstructure:"idp"`
-	GatewaySvc   string     `mapstructure:"gatewaysvc"`
-	Schema       attributes `mapstructure:"schema"`
+	utils.LDAPConn `mapstructure:",squash"`
+	BaseDN         string     `mapstructure:"base_dn"`
+	UserFilter     string     `mapstructure:"userfilter"`
+	LoginFilter    string     `mapstructure:"loginfilter"`
+	Idp            string     `mapstructure:"idp"`
+	GatewaySvc     string     `mapstructure:"gatewaysvc"`
+	Schema         attributes `mapstructure:"schema"`
+	Nobody         int64      `mapstructure:"nobody"`
 }
 
 type attributes struct {
@@ -101,9 +100,18 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 
 // New returns an auth manager implementation that connects to a LDAP server to validate the user.
 func New(m map[string]interface{}) (auth.Manager, error) {
-	c, err := parseConfig(m)
+	manager := &mgr{}
+	err := manager.Configure(m)
 	if err != nil {
 		return nil, err
+	}
+	return manager, nil
+}
+
+func (am *mgr) Configure(m map[string]interface{}) error {
+	c, err := parseConfig(m)
+	if err != nil {
+		return err
 	}
 
 	// backwards compatibility
@@ -114,29 +122,22 @@ func New(m map[string]interface{}) (auth.Manager, error) {
 		c.LoginFilter = c.UserFilter
 		c.LoginFilter = strings.ReplaceAll(c.LoginFilter, "%s", "{{login}}")
 	}
+	if c.Nobody == 0 {
+		c.Nobody = 99
+	}
 
 	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
-
-	return &mgr{
-		c: c,
-	}, nil
+	am.c = c
+	return nil
 }
 
-func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) (*user.User, error) {
+func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) (*user.User, map[string]*authpb.Scope, error) {
 	log := appctx.GetLogger(ctx)
-
-	l, err := ldap.DialTLS("tcp", fmt.Sprintf("%s:%d", am.c.Hostname, am.c.Port), &tls.Config{InsecureSkipVerify: true})
+	l, err := utils.GetLDAPConnection(&am.c.LDAPConn)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	defer l.Close()
-
-	// First bind with a read only user
-	err = l.Bind(am.c.BindUsername, am.c.BindPassword)
-	if err != nil {
-		log.Error().Err(err).Msg("bind with system user failed")
-		return nil, err
-	}
 
 	// Search for the given clientID
 	searchRequest := ldap.NewSearchRequest(
@@ -149,11 +150,11 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 
 	sr, err := l.Search(searchRequest)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	if len(sr.Entries) != 1 {
-		return nil, errtypes.NotFound(clientID)
+		return nil, nil, errtypes.NotFound(clientID)
 	}
 
 	userdn := sr.Entries[0].DN
@@ -162,27 +163,43 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 	err = l.Bind(userdn, clientSecret)
 	if err != nil {
 		log.Debug().Err(err).Interface("userdn", userdn).Msg("bind with user credentials failed")
-		return nil, err
+		return nil, nil, err
 	}
 
 	userID := &user.UserId{
 		Idp:      am.c.Idp,
 		OpaqueId: sr.Entries[0].GetEqualFoldAttributeValue(am.c.Schema.UID),
+		Type:     user.UserType_USER_TYPE_PRIMARY, // TODO: assign the appropriate user type
 	}
-	gwc, err := pool.GetGatewayServiceClient(am.c.GatewaySvc)
+	gwc, err := pool.GetGatewayServiceClient(pool.Endpoint(am.c.GatewaySvc))
 	if err != nil {
-		return nil, errors.Wrap(err, "ldap: error getting gateway grpc client")
+		return nil, nil, errors.Wrap(err, "ldap: error getting gateway grpc client")
 	}
 	getGroupsResp, err := gwc.GetUserGroups(ctx, &user.GetUserGroupsRequest{
 		UserId: userID,
 	})
 	if err != nil {
-		return nil, errors.Wrap(err, "ldap: error getting user groups")
+		return nil, nil, errors.Wrap(err, "ldap: error getting user groups")
 	}
 	if getGroupsResp.Status.Code != rpc.Code_CODE_OK {
-		return nil, errors.Wrap(err, "ldap: grpc getting user groups failed")
+		return nil, nil, errors.Wrap(err, "ldap: grpc getting user groups failed")
 	}
-
+	gidNumber := am.c.Nobody
+	gidValue := sr.Entries[0].GetEqualFoldAttributeValue(am.c.Schema.GIDNumber)
+	if gidValue != "" {
+		gidNumber, err = strconv.ParseInt(gidValue, 10, 64)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+	uidNumber := am.c.Nobody
+	uidValue := sr.Entries[0].GetEqualFoldAttributeValue(am.c.Schema.UIDNumber)
+	if uidValue != "" {
+		uidNumber, err = strconv.ParseInt(uidValue, 10, 64)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
 	u := &user.User{
 		Id: userID,
 		// TODO add more claims from the StandardClaims, eg EmailVerified
@@ -191,25 +208,29 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 		Groups:      getGroupsResp.Groups,
 		Mail:        sr.Entries[0].GetEqualFoldAttributeValue(am.c.Schema.Mail),
 		DisplayName: sr.Entries[0].GetEqualFoldAttributeValue(am.c.Schema.DisplayName),
-		Opaque: &types.Opaque{
-			Map: map[string]*types.OpaqueEntry{
-				"uid": {
-					Decoder: "plain",
-					Value:   []byte(sr.Entries[0].GetEqualFoldAttributeValue(am.c.Schema.UIDNumber)),
-				},
-				"gid": {
-					Decoder: "plain",
-					Value:   []byte(sr.Entries[0].GetEqualFoldAttributeValue(am.c.Schema.GIDNumber)),
-				},
-			},
-		},
+		UidNumber:   uidNumber,
+		GidNumber:   gidNumber,
 	}
+
+	var scopes map[string]*authpb.Scope
+	if userID != nil && userID.Type == user.UserType_USER_TYPE_LIGHTWEIGHT {
+		scopes, err = scope.AddLightweightAccountScope(authpb.Role_ROLE_OWNER, nil)
+		if err != nil {
+			return nil, nil, err
+		}
+	} else {
+		scopes, err = scope.AddOwnerScope(nil)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+
 	log.Debug().Interface("entry", sr.Entries[0]).Interface("user", u).Msg("authenticated user")
 
-	return u, nil
+	return u, scopes, nil
 
 }
 
 func (am *mgr) getLoginFilter(login string) string {
-	return strings.ReplaceAll(am.c.LoginFilter, "{{login}}", login)
+	return strings.ReplaceAll(am.c.LoginFilter, "{{login}}", ldap.EscapeFilter(login))
 }

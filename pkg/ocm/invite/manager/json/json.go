@@ -34,12 +34,12 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/ocm/invite"
 	"github.com/cs3org/reva/pkg/ocm/invite/manager/registry"
 	"github.com/cs3org/reva/pkg/ocm/invite/token"
 	"github.com/cs3org/reva/pkg/rhttp"
-	"github.com/cs3org/reva/pkg/user"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )
@@ -178,7 +178,7 @@ func (model *inviteModel) Save() error {
 
 func (m *manager) GenerateToken(ctx context.Context) (*invitepb.InviteToken, error) {
 
-	contexUser := user.ContextMustGetUser(ctx)
+	contexUser := ctxpkg.ContextMustGetUser(ctx)
 	inviteToken, err := token.CreateToken(m.config.Expiration, contexUser.GetId())
 	if err != nil {
 		return nil, err
@@ -199,11 +199,13 @@ func (m *manager) GenerateToken(ctx context.Context) (*invitepb.InviteToken, err
 
 func (m *manager) ForwardInvite(ctx context.Context, invite *invitepb.InviteToken, originProvider *ocmprovider.ProviderInfo) error {
 
-	contextUser := user.ContextMustGetUser(ctx)
+	contextUser := ctxpkg.ContextMustGetUser(ctx)
+	recipientProvider := contextUser.GetId().GetIdp()
+
 	requestBody := url.Values{
 		"token":             {invite.GetToken()},
 		"userID":            {contextUser.GetId().GetOpaqueId()},
-		"recipientProvider": {contextUser.GetId().GetIdp()},
+		"recipientProvider": {recipientProvider},
 		"email":             {contextUser.GetMail()},
 		"name":              {contextUser.GetDisplayName()},
 	}
@@ -275,7 +277,7 @@ func (m *manager) AcceptInvite(ctx context.Context, invite *invitepb.InviteToken
 
 func (m *manager) GetAcceptedUser(ctx context.Context, remoteUserID *userpb.UserId) (*userpb.User, error) {
 
-	userKey := user.ContextMustGetUser(ctx).GetId().GetOpaqueId()
+	userKey := ctxpkg.ContextMustGetUser(ctx).GetId().GetOpaqueId()
 	for _, acceptedUser := range m.model.AcceptedUsers[userKey] {
 		if (acceptedUser.Id.GetOpaqueId() == remoteUserID.OpaqueId) && (remoteUserID.Idp == "" || acceptedUser.Id.GetIdp() == remoteUserID.Idp) {
 			return acceptedUser, nil
@@ -286,7 +288,7 @@ func (m *manager) GetAcceptedUser(ctx context.Context, remoteUserID *userpb.User
 
 func (m *manager) FindAcceptedUsers(ctx context.Context, query string) ([]*userpb.User, error) {
 	users := []*userpb.User{}
-	userKey := user.ContextMustGetUser(ctx).GetId().GetOpaqueId()
+	userKey := ctxpkg.ContextMustGetUser(ctx).GetId().GetOpaqueId()
 	for _, acceptedUser := range m.model.AcceptedUsers[userKey] {
 		if query == "" || userContains(acceptedUser, query) {
 			users = append(users, acceptedUser)

@@ -43,9 +43,7 @@ func mkdirCommand() *command {
 			return err
 		}
 
-		ref := &provider.Reference{
-			Spec: &provider.Reference_Path{Path: fn},
-		}
+		ref := &provider.Reference{Path: fn}
 		req := &provider.CreateContainerRequest{Ref: ref}
 		res, err := client.CreateContainer(ctx, req)
 		if err != nil {

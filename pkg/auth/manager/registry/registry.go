@@ -21,7 +21,7 @@ package registry
 import "github.com/cs3org/reva/pkg/auth"
 
 // NewFunc is the function that auth implementations
-// should register at init time.
+// should register to at init time.
 type NewFunc func(map[string]interface{}) (auth.Manager, error)
 
 // NewFuncs is a map containing all the registered auth managers.

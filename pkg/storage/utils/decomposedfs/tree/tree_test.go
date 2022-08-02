@@ -55,12 +55,13 @@ var _ = Describe("Tree", func() {
 
 	Context("with an existingfile", func() {
 		var (
-			n *node.Node
+			n            *node.Node
+			originalPath = "dir1/file1"
 		)
 
 		JustBeforeEach(func() {
 			var err error
-			n, err = env.Lookup.NodeFromPath(env.Ctx, "/dir1/file1")
+			n, err = env.Lookup.NodeFromPath(env.Ctx, originalPath, false)
 			Expect(err).ToNot(HaveOccurred())
 		})
 
@@ -114,7 +115,7 @@ var _ = Describe("Tree", func() {
 					_, err := os.Stat(trashPath)
 					Expect(err).ToNot(HaveOccurred())
 
-					_, purgeFunc, err := t.PurgeRecycleItemFunc(env.Ctx, env.Owner.Id.OpaqueId+":"+n.ID)
+					_, purgeFunc, err := t.PurgeRecycleItemFunc(env.Ctx, n.ID, "")
 					Expect(err).ToNot(HaveOccurred())
 					Expect(purgeFunc()).To(Succeed())
 				})
@@ -135,18 +136,41 @@ var _ = Describe("Tree", func() {
 					Expect(err).ToNot(HaveOccurred())
 					_, err = os.Stat(n.InternalPath())
 					Expect(err).To(HaveOccurred())
+				})
 
-					_, restoreFunc, err := t.RestoreRecycleItemFunc(env.Ctx, env.Owner.Id.OpaqueId+":"+n.ID)
+				It("restores the file to its original location if the targetPath is empty", func() {
+					_, _, restoreFunc, err := t.RestoreRecycleItemFunc(env.Ctx, n.ID, "", "")
 					Expect(err).ToNot(HaveOccurred())
+
 					Expect(restoreFunc()).To(Succeed())
+
+					originalNode, err := env.Lookup.NodeFromPath(env.Ctx, originalPath, false)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(originalNode.Exists).To(BeTrue())
 				})
 
-				It("restores the file to its original location", func() {
-					_, err := os.Stat(n.InternalPath())
+				It("restores files to different locations", func() {
+					_, _, restoreFunc, err := t.RestoreRecycleItemFunc(env.Ctx, n.ID, "", "dir1/newLocation")
 					Expect(err).ToNot(HaveOccurred())
+
+					Expect(restoreFunc()).To(Succeed())
+
+					newNode, err := env.Lookup.NodeFromPath(env.Ctx, "dir1/newLocation", false)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(newNode.Exists).To(BeTrue())
+
+					originalNode, err := env.Lookup.NodeFromPath(env.Ctx, originalPath, false)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(originalNode.Exists).To(BeFalse())
 				})
+
 				It("removes the file from the trash", func() {
-					_, err := os.Stat(trashPath)
+					_, _, restoreFunc, err := t.RestoreRecycleItemFunc(env.Ctx, n.ID, "", "")
+					Expect(err).ToNot(HaveOccurred())
+
+					Expect(restoreFunc()).To(Succeed())
+
+					_, err = os.Stat(trashPath)
 					Expect(err).To(HaveOccurred())
 				})
 			})
@@ -160,7 +184,7 @@ var _ = Describe("Tree", func() {
 
 		JustBeforeEach(func() {
 			var err error
-			n, err = env.Lookup.NodeFromPath(env.Ctx, "emptydir")
+			n, err = env.Lookup.NodeFromPath(env.Ctx, "emptydir", false)
 			Expect(err).ToNot(HaveOccurred())
 		})
 
@@ -179,7 +203,7 @@ var _ = Describe("Tree", func() {
 					_, err := os.Stat(trashPath)
 					Expect(err).ToNot(HaveOccurred())
 
-					_, purgeFunc, err := t.PurgeRecycleItemFunc(env.Ctx, env.Owner.Id.OpaqueId+":"+n.ID)
+					_, purgeFunc, err := t.PurgeRecycleItemFunc(env.Ctx, n.ID, "")
 					Expect(err).ToNot(HaveOccurred())
 					Expect(purgeFunc()).To(Succeed())
 				})
@@ -213,13 +237,14 @@ var _ = Describe("Tree", func() {
 				file, err := env.CreateTestFile("file1", "", 1, dir.ID)
 				Expect(err).ToNot(HaveOccurred())
 
-				riBefore, err := dir.AsResourceInfo(env.Ctx, node.OwnerPermissions, []string{})
+				perms := node.OwnerPermissions()
+				riBefore, err := dir.AsResourceInfo(env.Ctx, &perms, []string{}, false)
 				Expect(err).ToNot(HaveOccurred())
 
 				err = env.Tree.Propagate(env.Ctx, file)
 				Expect(err).ToNot(HaveOccurred())
 
-				riAfter, err := dir.AsResourceInfo(env.Ctx, node.OwnerPermissions, []string{})
+				riAfter, err := dir.AsResourceInfo(env.Ctx, &perms, []string{}, false)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(riAfter.Etag).ToNot(Equal(riBefore.Etag))
 			})

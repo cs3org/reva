@@ -16,14 +16,26 @@
 # granted to it by virtue of its status as an Intergovernmental Organization
 # or submit itself to any jurisdiction.
 
-FROM golang:1.16 as builder
+FROM gitlab-registry.cern.ch/dss/eos/eos-all:4.8.66
+
+RUN yum -y update && yum clean all
+
+RUN yum -y install https://packages.endpointdev.com/rhel/7/os/x86_64/endpoint-repo.x86_64.rpm
+RUN yum install -y make git gcc libc-dev bash epel-release golang && \
+  yum clean all && \
+  rm -rf /var/cache/yum
+
+ENV PATH /go/bin:/usr/local/go/bin:$PATH
+ENV GOPATH /go
 
 WORKDIR /go/src/github/cs3org/reva
 COPY . .
-RUN make build-revad-docker && \
-    cp /go/src/github/cs3org/reva/cmd/revad/revad /go/bin/revad
+RUN make build-revad-docker && cp /go/src/github/cs3org/reva/cmd/revad/revad /usr/bin/revad
 
-FROM gitlab-registry.cern.ch/dss/eos:c8_4.8.15
+RUN mkdir -p /etc/revad/ && echo "" > /etc/revad/revad.toml
 RUN mkdir -p /usr/local/bin
-COPY --from=builder /go/bin/revad /go/bin/
-RUN chmod +x /go/bin/revad
+
+RUN chmod +x /usr/bin/revad
+
+ENTRYPOINT [ "/usr/bin/revad" ]
+CMD [ "-c", "/etc/revad/revad.toml", "-p", "/var/run/revad.pid" ]

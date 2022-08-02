@@ -6,15 +6,13 @@ description: >
   Configuration for the OCDav service
 ---
 
-{{% pageinfo %}}
-TODO
-{{% /pageinfo %}}
+# _struct: Config_
 
-{{% dir name="prefix" type="string" default=".well-known" %}}
-Where the HTTP service is exposed.
+{{% dir name="insecure" type="bool" default=false %}}
+Whether to skip certificate checks when sending requests. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/http/services/owncloud/ocdav/ocdav.go#L102)
 {{< highlight toml >}}
-[http.services.wellknown]
-prefix = "/"
+[http.services.owncloud.ocdav]
+insecure = false
 {{< /highlight >}}
 {{% /dir %}}
 

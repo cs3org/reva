@@ -28,7 +28,9 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
-	"go.opencensus.io/trace"
+	"go.opentelemetry.io/otel/trace"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // NewOK returns a Status with CODE_OK.
@@ -101,6 +103,18 @@ func NewPermissionDenied(ctx context.Context, err error, msg string) *rpc.Status
 	}
 }
 
+// NewInsufficientStorage returns a Status with INSUFFICIENT_STORAGE and logs the msg.
+func NewInsufficientStorage(ctx context.Context, err error, msg string) *rpc.Status {
+	log := appctx.GetLogger(ctx).With().CallerWithSkipFrameCount(3).Logger()
+	log.Err(err).Msg(msg)
+
+	return &rpc.Status{
+		Code:    rpc.Code_CODE_INSUFFICIENT_STORAGE,
+		Message: msg,
+		Trace:   getTrace(ctx),
+	}
+}
+
 // NewUnimplemented returns a Status with CODE_UNIMPLEMENTED and logs the msg.
 func NewUnimplemented(ctx context.Context, err error, msg string) *rpc.Status {
 	log := appctx.GetLogger(ctx).With().CallerWithSkipFrameCount(3).Logger()
@@ -112,9 +126,40 @@ func NewUnimplemented(ctx context.Context, err error, msg string) *rpc.Status {
 	}
 }
 
+// NewAlreadyExists returns a Status with CODE_ALREADY_EXISTS and logs the msg.
+func NewAlreadyExists(ctx context.Context, err error, msg string) *rpc.Status {
+	log := appctx.GetLogger(ctx).With().CallerWithSkipFrameCount(3).Logger()
+	log.Error().Err(err).Msg(msg)
+	return &rpc.Status{
+		Code:    rpc.Code_CODE_ALREADY_EXISTS,
+		Message: msg,
+		Trace:   getTrace(ctx),
+	}
+}
+
 // NewInvalidArg returns a Status with CODE_INVALID_ARGUMENT.
 func NewInvalidArg(ctx context.Context, msg string) *rpc.Status {
 	return &rpc.Status{Code: rpc.Code_CODE_INVALID_ARGUMENT,
+		Message: msg,
+		Trace:   getTrace(ctx),
+	}
+}
+
+// NewConflict returns a Status with Code_CODE_ABORTED and logs the msg.
+func NewConflict(ctx context.Context, err error, msg string) *rpc.Status {
+	return &rpc.Status{
+		Code:    rpc.Code_CODE_ABORTED,
+		Message: msg,
+		Trace:   getTrace(ctx),
+	}
+}
+
+// NewFailedPrecondition TODO
+func NewFailedPrecondition(ctx context.Context, err error, msg string) *rpc.Status {
+	log := appctx.GetLogger(ctx).With().CallerWithSkipFrameCount(3).Logger()
+	log.Error().Err(err).Msg(msg)
+	return &rpc.Status{
+		Code:    rpc.Code_CODE_FAILED_PRECONDITION,
 		Message: msg,
 		Trace:   getTrace(ctx),
 	}
@@ -137,6 +182,28 @@ func NewStatusFromErrType(ctx context.Context, msg string, err error) *rpc.Statu
 	case errtypes.BadRequest:
 		return NewInvalidArg(ctx, "gateway: "+msg+":"+err.Error())
 	}
+
+	// map GRPC status codes coming from the auth middleware
+	grpcErr := err
+	for {
+		st, ok := status.FromError(grpcErr)
+		if ok {
+			switch st.Code() {
+			case codes.NotFound:
+				return NewNotFound(ctx, "gateway: "+msg+": "+err.Error())
+			case codes.Unauthenticated:
+				return NewUnauthenticated(ctx, err, "gateway: "+msg+": "+err.Error())
+			case codes.PermissionDenied:
+				return NewPermissionDenied(ctx, err, "gateway: "+msg+": "+err.Error())
+			}
+		}
+		// the actual error can be wrapped multiple times
+		grpcErr = errors.Unwrap(grpcErr)
+		if grpcErr == nil {
+			break
+		}
+	}
+
 	return NewInternal(ctx, err, "gateway: "+msg+":"+err.Error())
 }
 
@@ -147,6 +214,6 @@ func NewErrorFromCode(code rpc.Code, pkgname string) error {
 
 // internal function to attach the trace to a context
 func getTrace(ctx context.Context) string {
-	span := trace.FromContext(ctx)
-	return span.SpanContext().TraceID.String()
+	span := trace.SpanFromContext(ctx)
+	return span.SpanContext().TraceID().String()
 }

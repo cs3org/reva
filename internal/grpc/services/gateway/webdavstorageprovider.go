@@ -28,8 +28,8 @@ import (
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/token"
 	"github.com/pkg/errors"
 	"github.com/studio-b12/gowebdav"
 )
@@ -56,7 +56,7 @@ func (s *svc) webdavRefStat(ctx context.Context, targetURL string, nameQueries .
 	}
 
 	c := gowebdav.NewClient(webdavEP, "", "")
-	c.SetHeader(token.TokenHeader, ep.token)
+	c.SetHeader(ctxpkg.TokenHeader, ep.token)
 
 	// TODO(ishank011): We need to call PROPFIND ourselves as we need to retrieve
 	// ownloud-specific fields to get the resource ID and permissions.
@@ -83,7 +83,7 @@ func (s *svc) webdavRefLs(ctx context.Context, targetURL string, nameQueries ...
 	}
 
 	c := gowebdav.NewClient(webdavEP, "", "")
-	c.SetHeader(token.TokenHeader, ep.token)
+	c.SetHeader(ctxpkg.TokenHeader, ep.token)
 
 	// TODO(ishank011): We need to call PROPFIND ourselves as we need to retrieve
 	// ownloud-specific fields to get the resource ID and permissions.
@@ -116,7 +116,7 @@ func (s *svc) webdavRefMkdir(ctx context.Context, targetURL string, nameQueries 
 	}
 
 	c := gowebdav.NewClient(webdavEP, "", "")
-	c.SetHeader(token.TokenHeader, ep.token)
+	c.SetHeader(ctxpkg.TokenHeader, ep.token)
 
 	err = c.Mkdir(ep.filePath, 0700)
 	if err != nil {
@@ -149,7 +149,7 @@ func (s *svc) webdavRefMove(ctx context.Context, targetURL, src, destination str
 	}
 
 	c := gowebdav.NewClient(srcWebdavEP, "", "")
-	c.SetHeader(token.TokenHeader, srcEP.token)
+	c.SetHeader(ctxpkg.TokenHeader, srcEP.token)
 
 	err = c.Rename(srcEP.filePath, destEP.filePath, true)
 	if err != nil {
@@ -174,7 +174,7 @@ func (s *svc) webdavRefDelete(ctx context.Context, targetURL string, nameQueries
 	}
 
 	c := gowebdav.NewClient(webdavEP, "", "")
-	c.SetHeader(token.TokenHeader, ep.token)
+	c.SetHeader(ctxpkg.TokenHeader, ep.token)
 
 	err = c.Remove(ep.filePath)
 	if err != nil {
@@ -214,7 +214,7 @@ func (s *svc) webdavRefTransferEndpoint(ctx context.Context, targetURL string, n
 
 func (s *svc) extractEndpointInfo(ctx context.Context, targetURL string) (*webdavEndpoint, error) {
 	if targetURL == "" {
-		return nil, errors.New("gateway: ref target is an empty uri")
+		return nil, errtypes.BadRequest("gateway: ref target is an empty uri")
 	}
 
 	uri, err := url.Parse(targetURL)
@@ -247,6 +247,21 @@ func (s *svc) getWebdavEndpoint(ctx context.Context, domain string) (string, err
 	for _, s := range meshProvider.ProviderInfo.Services {
 		if strings.ToLower(s.Endpoint.Type.Name) == "webdav" {
 			return s.Endpoint.Path, nil
+		}
+	}
+	return "", errtypes.NotFound(domain)
+}
+
+func (s *svc) getWebdavHost(ctx context.Context, domain string) (string, error) {
+	meshProvider, err := s.GetInfoByDomain(ctx, &ocmprovider.GetInfoByDomainRequest{
+		Domain: domain,
+	})
+	if err != nil {
+		return "", errors.Wrap(err, "gateway: error calling GetInfoByDomain")
+	}
+	for _, s := range meshProvider.ProviderInfo.Services {
+		if strings.ToLower(s.Endpoint.Type.Name) == "webdav" {
+			return s.Host, nil
 		}
 	}
 	return "", errtypes.NotFound(domain)

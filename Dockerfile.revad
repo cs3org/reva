@@ -16,11 +16,36 @@
 # granted to it by virtue of its status as an Intergovernmental Organization
 # or submit itself to any jurisdiction.
 
-FROM golang:1.16
+FROM golang:alpine3.13 as builder
+
+RUN apk --no-cache add \
+  ca-certificates \
+  bash \
+  git \
+  gcc \
+  libc-dev \
+  make
+
+ENV PATH /go/bin:/usr/local/go/bin:$PATH
+ENV GOPATH /go
 
 WORKDIR /go/src/github/cs3org/reva
 COPY . .
-RUN make build-revad-docker && cp /go/src/github/cs3org/reva/cmd/revad/revad /go/bin/revad && mkdir -p /etc/revad/ && echo "" > /etc/revad/revad.toml
-EXPOSE 9999
-EXPOSE 10000
-CMD ["/go/bin/revad", "-c", "/etc/revad/revad.toml", "-p", "/var/run/revad.pid"]
+RUN make build-revad-docker && \
+    cp /go/src/github/cs3org/reva/cmd/revad/revad /go/bin/revad
+
+RUN mkdir -p /etc/revad/ && echo "" > /etc/revad/revad.toml
+
+FROM golang:alpine3.13
+
+RUN apk --no-cache add \
+  mailcap
+
+EXPOSE 9999 10000
+
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+COPY --from=builder /go/bin/revad /usr/bin/revad
+COPY --from=builder /etc/revad /etc/revad
+
+ENTRYPOINT [ "/usr/bin/revad" ]
+CMD [ "-c", "/etc/revad/revad.toml", "-p", "/var/run/revad.pid" ]

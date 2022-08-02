@@ -20,17 +20,17 @@ package publicshareprovider
 
 import (
 	"context"
-	"fmt"
+	"regexp"
 
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/publicshare"
 	"github.com/cs3org/reva/pkg/publicshare/manager/registry"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
-	"github.com/cs3org/reva/pkg/user"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
@@ -41,8 +41,9 @@ func init() {
 }
 
 type config struct {
-	Driver  string                            `mapstructure:"driver"`
-	Drivers map[string]map[string]interface{} `mapstructure:"drivers"`
+	Driver                string                            `mapstructure:"driver"`
+	Drivers               map[string]map[string]interface{} `mapstructure:"drivers"`
+	AllowedPathsForShares []string                          `mapstructure:"allowed_paths_for_shares"`
 }
 
 func (c *config) init() {
@@ -52,15 +53,16 @@ func (c *config) init() {
 }
 
 type service struct {
-	conf *config
-	sm   publicshare.Manager
+	conf                  *config
+	sm                    publicshare.Manager
+	allowedPathsForShares []*regexp.Regexp
 }
 
 func getShareManager(c *config) (publicshare.Manager, error) {
 	if f, ok := registry.NewFuncs[c.Driver]; ok {
 		return f(c.Drivers[c.Driver])
 	}
-	return nil, fmt.Errorf("driver not found: %s", c.Driver)
+	return nil, errtypes.NotFound("driver not found: " + c.Driver)
 }
 
 // TODO(labkode): add ctx to Close.
@@ -99,19 +101,47 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 		return nil, err
 	}
 
+	allowedPathsForShares := make([]*regexp.Regexp, 0, len(c.AllowedPathsForShares))
+	for _, s := range c.AllowedPathsForShares {
+		regex, err := regexp.Compile(s)
+		if err != nil {
+			return nil, err
+		}
+		allowedPathsForShares = append(allowedPathsForShares, regex)
+	}
+
 	service := &service{
-		conf: c,
-		sm:   sm,
+		conf:                  c,
+		sm:                    sm,
+		allowedPathsForShares: allowedPathsForShares,
 	}
 
 	return service, nil
+}
+
+func (s *service) isPathAllowed(path string) bool {
+	if len(s.allowedPathsForShares) == 0 {
+		return true
+	}
+	for _, reg := range s.allowedPathsForShares {
+		if reg.MatchString(path) {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *service) CreatePublicShare(ctx context.Context, req *link.CreatePublicShareRequest) (*link.CreatePublicShareResponse, error) {
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("publicshareprovider", "create").Msg("create public share")
 
-	u, ok := user.ContextGetUser(ctx)
+	if !s.isPathAllowed(req.ResourceInfo.Path) {
+		return &link.CreatePublicShareResponse{
+			Status: status.NewInvalidArg(ctx, "share creation is not allowed for the specified path"),
+		}, nil
+	}
+
+	u, ok := ctxpkg.ContextGetUser(ctx)
 	if !ok {
 		log.Error().Msg("error getting user from context")
 	}
@@ -132,7 +162,7 @@ func (s *service) RemovePublicShare(ctx context.Context, req *link.RemovePublicS
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("publicshareprovider", "remove").Msg("remove public share")
 
-	user := user.ContextMustGetUser(ctx)
+	user := ctxpkg.ContextMustGetUser(ctx)
 	err := s.sm.RevokePublicShare(ctx, user, req.Ref)
 	if err != nil {
 		return &link.RemovePublicShareResponse{
@@ -149,7 +179,7 @@ func (s *service) GetPublicShareByToken(ctx context.Context, req *link.GetPublic
 	log.Debug().Msg("getting public share by token")
 
 	// there are 2 passes here, and the second request has no password
-	found, err := s.sm.GetPublicShareByToken(ctx, req.GetToken(), req.GetPassword())
+	found, err := s.sm.GetPublicShareByToken(ctx, req.GetToken(), req.GetAuthentication(), req.GetSign())
 	switch v := err.(type) {
 	case nil:
 		return &link.GetPublicShareByTokenResponse{
@@ -175,12 +205,12 @@ func (s *service) GetPublicShare(ctx context.Context, req *link.GetPublicShareRe
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("publicshareprovider", "get").Msg("get public share")
 
-	u, ok := user.ContextGetUser(ctx)
+	u, ok := ctxpkg.ContextGetUser(ctx)
 	if !ok {
 		log.Error().Msg("error getting user from context")
 	}
 
-	found, err := s.sm.GetPublicShare(ctx, u, req.Ref)
+	found, err := s.sm.GetPublicShare(ctx, u, req.Ref, req.GetSign())
 	if err != nil {
 		return nil, err
 	}
@@ -194,9 +224,9 @@ func (s *service) GetPublicShare(ctx context.Context, req *link.GetPublicShareRe
 func (s *service) ListPublicShares(ctx context.Context, req *link.ListPublicSharesRequest) (*link.ListPublicSharesResponse, error) {
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("publicshareprovider", "list").Msg("list public share")
-	user, _ := user.ContextGetUser(ctx)
+	user, _ := ctxpkg.ContextGetUser(ctx)
 
-	shares, err := s.sm.ListPublicShares(ctx, user, req.Filters, &provider.ResourceInfo{})
+	shares, err := s.sm.ListPublicShares(ctx, user, req.Filters, &provider.ResourceInfo{}, req.GetSign())
 	if err != nil {
 		log.Err(err).Msg("error listing shares")
 		return &link.ListPublicSharesResponse{
@@ -215,7 +245,7 @@ func (s *service) UpdatePublicShare(ctx context.Context, req *link.UpdatePublicS
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("publicshareprovider", "update").Msg("update public share")
 
-	u, ok := user.ContextGetUser(ctx)
+	u, ok := ctxpkg.ContextGetUser(ctx)
 	if !ok {
 		log.Error().Msg("error getting user from context")
 	}

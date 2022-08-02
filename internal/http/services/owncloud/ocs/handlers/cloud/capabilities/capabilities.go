@@ -28,9 +28,10 @@ import (
 
 // Handler renders the capability endpoint
 type Handler struct {
-	c                     data.CapabilitiesData
-	defaultUploadProtocol string
-	userAgentChunkingMap  map[string]string
+	c                      data.CapabilitiesData
+	defaultUploadProtocol  string
+	userAgentChunkingMap   map[string]string
+	groupBasedCapabilities map[string][]string
 }
 
 // Init initializes this and any contained handlers
@@ -38,6 +39,7 @@ func (h *Handler) Init(c *config.Config) {
 	h.c = c.Capabilities
 	h.defaultUploadProtocol = c.DefaultUploadProtocol
 	h.userAgentChunkingMap = c.UserAgentChunkingMap
+	h.groupBasedCapabilities = c.GroupBasedCapabilities
 
 	// capabilities
 	if h.c.Capabilities == nil {
@@ -64,16 +66,19 @@ func (h *Handler) Init(c *config.Config) {
 	// h.c.Capabilities.Core.Status.Maintenance is boolean
 	// h.c.Capabilities.Core.Status.NeedsDBUpgrade is boolean
 	if h.c.Capabilities.Core.Status.Version == "" {
-		h.c.Capabilities.Core.Status.Version = "10.0.9.5" // TODO make build determined
+		h.c.Capabilities.Core.Status.Version = "10.0.11.5" // TODO make build determined
 	}
 	if h.c.Capabilities.Core.Status.VersionString == "" {
-		h.c.Capabilities.Core.Status.VersionString = "10.0.9" // TODO make build determined
+		h.c.Capabilities.Core.Status.VersionString = "10.0.11" // TODO make build determined
 	}
 	if h.c.Capabilities.Core.Status.Edition == "" {
 		h.c.Capabilities.Core.Status.Edition = "community" // TODO make build determined
 	}
 	if h.c.Capabilities.Core.Status.ProductName == "" {
 		h.c.Capabilities.Core.Status.ProductName = "reva" // TODO make build determined
+	}
+	if h.c.Capabilities.Core.Status.Product == "" {
+		h.c.Capabilities.Core.Status.Product = "reva" // TODO make build determined
 	}
 	if h.c.Capabilities.Core.Status.Hostname == "" {
 		h.c.Capabilities.Core.Status.Hostname = "" // TODO get from context?
@@ -104,6 +109,14 @@ func (h *Handler) Init(c *config.Config) {
 	// h.c.Capabilities.Files.Versioning is boolean
 	// h.c.Capabilities.Files.Favorites is boolean
 
+	if h.c.Capabilities.Files.Archivers == nil {
+		h.c.Capabilities.Files.Archivers = []*data.CapabilitiesArchiver{}
+	}
+
+	if h.c.Capabilities.Files.AppProviders == nil {
+		h.c.Capabilities.Files.AppProviders = []*data.CapabilitiesAppProvider{}
+	}
+
 	// dav
 
 	if h.c.Capabilities.Dav == nil {
@@ -113,7 +126,7 @@ func (h *Handler) Init(c *config.Config) {
 		h.c.Capabilities.Dav.Trashbin = "1.0"
 	}
 	if h.c.Capabilities.Dav.Reports == nil {
-		h.c.Capabilities.Dav.Reports = []string{"search-files"}
+		h.c.Capabilities.Dav.Reports = []string{}
 	}
 
 	// sharing
@@ -128,7 +141,7 @@ func (h *Handler) Init(c *config.Config) {
 		h.c.Capabilities.FilesSharing.Public = &data.CapabilitiesFilesSharingPublic{}
 	}
 
-	// h.c.Capabilities.FilesSharing.Public.Enabled is boolean
+	// h.c.Capabilities.FilesSharing.IsPublic.Enabled is boolean
 	h.c.Capabilities.FilesSharing.Public.Enabled = true
 
 	if h.c.Capabilities.FilesSharing.Public.Password == nil {
@@ -139,22 +152,22 @@ func (h *Handler) Init(c *config.Config) {
 		h.c.Capabilities.FilesSharing.Public.Password.EnforcedFor = &data.CapabilitiesFilesSharingPublicPasswordEnforcedFor{}
 	}
 
-	// h.c.Capabilities.FilesSharing.Public.Password.EnforcedFor.ReadOnly is boolean
-	// h.c.Capabilities.FilesSharing.Public.Password.EnforcedFor.ReadWrite is boolean
-	// h.c.Capabilities.FilesSharing.Public.Password.EnforcedFor.UploadOnly is boolean
+	// h.c.Capabilities.FilesSharing.IsPublic.Password.EnforcedFor.ReadOnly is boolean
+	// h.c.Capabilities.FilesSharing.IsPublic.Password.EnforcedFor.ReadWrite is boolean
+	// h.c.Capabilities.FilesSharing.IsPublic.Password.EnforcedFor.UploadOnly is boolean
 
-	// h.c.Capabilities.FilesSharing.Public.Password.Enforced is boolean
+	// h.c.Capabilities.FilesSharing.IsPublic.Password.Enforced is boolean
 
 	if h.c.Capabilities.FilesSharing.Public.ExpireDate == nil {
 		h.c.Capabilities.FilesSharing.Public.ExpireDate = &data.CapabilitiesFilesSharingPublicExpireDate{}
 	}
-	// h.c.Capabilities.FilesSharing.Public.ExpireDate.Enabled is boolean
+	// h.c.Capabilities.FilesSharing.IsPublic.ExpireDate.Enabled is boolean
 
-	// h.c.Capabilities.FilesSharing.Public.SendMail is boolean
-	// h.c.Capabilities.FilesSharing.Public.SocialShare is boolean
-	// h.c.Capabilities.FilesSharing.Public.Upload is boolean
-	// h.c.Capabilities.FilesSharing.Public.Multiple is boolean
-	// h.c.Capabilities.FilesSharing.Public.SupportsUploadOnly is boolean
+	// h.c.Capabilities.FilesSharing.IsPublic.SendMail is boolean
+	// h.c.Capabilities.FilesSharing.IsPublic.SocialShare is boolean
+	// h.c.Capabilities.FilesSharing.IsPublic.Upload is boolean
+	// h.c.Capabilities.FilesSharing.IsPublic.Multiple is boolean
+	// h.c.Capabilities.FilesSharing.IsPublic.SupportsUploadOnly is boolean
 
 	if h.c.Capabilities.FilesSharing.User == nil {
 		h.c.Capabilities.FilesSharing.User = &data.CapabilitiesFilesSharingUser{}
@@ -191,11 +204,17 @@ func (h *Handler) Init(c *config.Config) {
 
 	// notifications
 
-	if h.c.Capabilities.Notifications == nil {
-		h.c.Capabilities.Notifications = &data.CapabilitiesNotifications{}
-	}
-	if h.c.Capabilities.Notifications.Endpoints == nil {
-		h.c.Capabilities.Notifications.Endpoints = []string{"list", "get", "delete"}
+	// if h.c.Capabilities.Notifications == nil {
+	// 	 h.c.Capabilities.Notifications = &data.CapabilitiesNotifications{}
+	// }
+	// if h.c.Capabilities.Notifications.Endpoints == nil {
+	//    h.c.Capabilities.Notifications.Endpoints = []string{"list", "get", "delete"}
+	//  }
+
+	// group based
+
+	if h.c.Capabilities.GroupBased == nil {
+		h.c.Capabilities.GroupBased = &data.CapabilitiesGroupBased{}
 	}
 
 	// version
@@ -205,21 +224,20 @@ func (h *Handler) Init(c *config.Config) {
 			// TODO get from build env
 			Major:   10,
 			Minor:   0,
-			Micro:   9,
-			String:  "10.0.9",
+			Micro:   11,
+			String:  "10.0.11",
 			Edition: "community",
+			Product: "reva",
 		}
 	}
 
 	// upload protocol-specific details
-	setCapabilitiesForChunkProtocol(chunkProtocol(h.defaultUploadProtocol), &h.c)
+	setCapabilitiesForChunkProtocol(chunkProtocol(h.defaultUploadProtocol), h.c.Capabilities)
 
 }
 
 // Handler renders the capabilities
-func (h *Handler) Handler() http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		c := h.getCapabilitiesForUserAgent(r.UserAgent())
-		response.WriteOCSSuccess(w, r, c)
-	})
+func (h *Handler) GetCapabilities(w http.ResponseWriter, r *http.Request) {
+	c := h.getCapabilitiesForUserAgent(r.Context(), r.UserAgent())
+	response.WriteOCSSuccess(w, r, c)
 }

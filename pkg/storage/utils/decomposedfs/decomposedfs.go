@@ -23,17 +23,23 @@ package decomposedfs
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/logger"
+	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/utils/chunking"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/node"
@@ -41,20 +47,21 @@ import (
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/tree"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/xattrs"
 	"github.com/cs3org/reva/pkg/storage/utils/templates"
-	"github.com/cs3org/reva/pkg/user"
+	rtrace "github.com/cs3org/reva/pkg/trace"
+	"github.com/cs3org/reva/pkg/utils"
 	"github.com/pkg/errors"
 	"github.com/pkg/xattr"
 )
 
 // PermissionsChecker defines an interface for checking permissions on a Node
 type PermissionsChecker interface {
-	AssemblePermissions(ctx context.Context, n *node.Node) (ap *provider.ResourcePermissions, err error)
+	AssemblePermissions(ctx context.Context, n *node.Node) (ap provider.ResourcePermissions, err error)
 	HasPermission(ctx context.Context, n *node.Node, check func(*provider.ResourcePermissions) bool) (can bool, err error)
 }
 
 // Tree is used to manage a tree hierarchy
 type Tree interface {
-	Setup(owner string) error
+	Setup(owner *userpb.UserId, propagateToRoot bool) error
 
 	GetMD(ctx context.Context, node *node.Node) (os.FileInfo, error)
 	ListFolder(ctx context.Context, node *node.Node) ([]*node.Node, error)
@@ -63,8 +70,8 @@ type Tree interface {
 	// CreateReference(ctx context.Context, node *node.Node, targetURI *url.URL) error
 	Move(ctx context.Context, oldNode *node.Node, newNode *node.Node) (err error)
 	Delete(ctx context.Context, node *node.Node) (err error)
-	RestoreRecycleItemFunc(ctx context.Context, key string) (*node.Node, func() error, error)
-	PurgeRecycleItemFunc(ctx context.Context, key string) (*node.Node, func() error, error)
+	RestoreRecycleItemFunc(ctx context.Context, key, trashPath, restorePath string) (*node.Node, *node.Node, func() error, error) // FIXME REFERENCE use ref instead of path
+	PurgeRecycleItemFunc(ctx context.Context, key, purgePath string) (*node.Node, func() error, error)
 
 	WriteBlob(key string, reader io.Reader) error
 	ReadBlob(key string) (io.ReadCloser, error)
@@ -95,13 +102,24 @@ func NewDefault(m map[string]interface{}, bs tree.Blobstore) (storage.FS, error)
 	lu.Options = o
 
 	tp := tree.New(o.Root, o.TreeTimeAccounting, o.TreeSizeAccounting, lu, bs)
+
+	o.GatewayAddr = sharedconf.GetGatewaySVC(o.GatewayAddr)
 	return New(o, lu, p, tp)
+}
+
+// when enable home is false we want propagation to root if tree size or mtime accounting is enabled
+func enablePropagationForRoot(o *options.Options) bool {
+	return (!o.EnableHome && (o.TreeSizeAccounting || o.TreeTimeAccounting))
 }
 
 // New returns an implementation of the storage.FS interface that talks to
 // a local filesystem.
 func New(o *options.Options, lu *Lookup, p PermissionsChecker, tp Tree) (storage.FS, error) {
-	err := tp.Setup(o.Owner)
+	err := tp.Setup(&userpb.UserId{
+		OpaqueId: o.Owner,
+		Idp:      o.OwnerIDP,
+		Type:     userpb.UserType(userpb.UserType_value[o.OwnerType]),
+	}, enablePropagationForRoot(o))
 	if err != nil {
 		logger.New().Error().Err(err).
 			Msg("could not setup tree")
@@ -124,11 +142,16 @@ func (fs *Decomposedfs) Shutdown(ctx context.Context) error {
 
 // GetQuota returns the quota available
 // TODO Document in the cs3 should we return quota or free space?
-func (fs *Decomposedfs) GetQuota(ctx context.Context) (uint64, uint64, error) {
+func (fs *Decomposedfs) GetQuota(ctx context.Context, ref *provider.Reference) (total uint64, inUse uint64, err error) {
 	var n *node.Node
-	var err error
-	if n, err = fs.lu.HomeOrRootNode(ctx); err != nil {
-		return 0, 0, err
+	if ref != nil {
+		if n, err = fs.lu.NodeFromResource(ctx, ref); err != nil {
+			return 0, 0, err
+		}
+	} else {
+		if n, err = fs.lu.HomeOrRootNode(ctx); err != nil {
+			return 0, 0, err
+		}
 	}
 
 	if !n.Exists {
@@ -144,7 +167,7 @@ func (fs *Decomposedfs) GetQuota(ctx context.Context) (uint64, uint64, error) {
 		return 0, 0, errtypes.PermissionDenied(n.ID)
 	}
 
-	ri, err := n.AsResourceInfo(ctx, rp, []string{"treesize", "quota"})
+	ri, err := n.AsResourceInfo(ctx, &rp, []string{"treesize", "quota"}, true)
 	if err != nil {
 		return 0, 0, err
 	}
@@ -154,11 +177,11 @@ func (fs *Decomposedfs) GetQuota(ctx context.Context) (uint64, uint64, error) {
 		quotaStr = string(ri.Opaque.Map["quota"].Value)
 	}
 
-	avail, err := fs.getAvailableSize(n.InternalPath())
+	avail, err := node.GetAvailableSize(n.InternalPath())
 	if err != nil {
 		return 0, 0, err
 	}
-	total := avail + ri.Size
+	total = avail + ri.Size
 
 	switch {
 	case quotaStr == node.QuotaUncalculated, quotaStr == node.QuotaUnknown, quotaStr == node.QuotaUnlimited:
@@ -171,6 +194,7 @@ func (fs *Decomposedfs) GetQuota(ctx context.Context) (uint64, uint64, error) {
 			}
 		}
 	}
+
 	return total, ri.Size, nil
 }
 
@@ -184,7 +208,7 @@ func (fs *Decomposedfs) CreateHome(ctx context.Context) (err error) {
 	if n, err = fs.lu.RootNode(ctx); err != nil {
 		return
 	}
-	h, err = fs.lu.WalkPath(ctx, n, fs.lu.mustGetUserLayout(ctx), func(ctx context.Context, n *node.Node) error {
+	h, err = fs.lu.WalkPath(ctx, n, fs.lu.mustGetUserLayout(ctx), false, func(ctx context.Context, n *node.Node) error {
 		if !n.Exists {
 			if err := fs.tp.CreateDir(ctx, n); err != nil {
 				return err
@@ -197,12 +221,12 @@ func (fs *Decomposedfs) CreateHome(ctx context.Context) (err error) {
 	}
 
 	// update the owner
-	u := user.ContextMustGetUser(ctx)
+	u := ctxpkg.ContextMustGetUser(ctx)
 	if err = h.WriteMetadata(u.Id); err != nil {
 		return
 	}
 
-	if fs.o.TreeTimeAccounting {
+	if fs.o.TreeTimeAccounting || fs.o.TreeSizeAccounting {
 		homePath := h.InternalPath()
 		// mark the home node as the end of propagation
 		if err = xattr.Set(homePath, xattrs.PropagationAttr, []byte("1")); err != nil {
@@ -210,7 +234,28 @@ func (fs *Decomposedfs) CreateHome(ctx context.Context) (err error) {
 			return
 		}
 	}
+
+	if err := h.SetMetadata(xattrs.SpaceNameAttr, u.DisplayName); err != nil {
+		return err
+	}
+
+	// add storage space
+	if err := fs.createStorageSpace(ctx, "personal", h.ID); err != nil {
+		return err
+	}
+
 	return
+}
+
+// The os not exists error is buried inside the xattr error,
+// so we cannot just use os.IsNotExists().
+func isAlreadyExists(err error) bool {
+	if xerr, ok := err.(*os.LinkError); ok {
+		if serr, ok2 := xerr.Err.(syscall.Errno); ok2 {
+			return serr == syscall.EEXIST
+		}
+	}
+	return false
 }
 
 // GetHome is called to look up the home path for a user
@@ -219,7 +264,7 @@ func (fs *Decomposedfs) GetHome(ctx context.Context) (string, error) {
 	if !fs.o.EnableHome || fs.o.UserLayout == "" {
 		return "", errtypes.NotSupported("Decomposedfs: GetHome() home supported disabled")
 	}
-	u := user.ContextMustGetUser(ctx)
+	u := ctxpkg.ContextMustGetUser(ctx)
 	layout := templates.WithUser(u, fs.o.UserLayout)
 	return filepath.Join(fs.o.Root, layout), nil // TODO use a namespace?
 }
@@ -235,14 +280,22 @@ func (fs *Decomposedfs) GetPathByID(ctx context.Context, id *provider.ResourceId
 }
 
 // CreateDir creates the specified directory
-func (fs *Decomposedfs) CreateDir(ctx context.Context, fn string) (err error) {
+func (fs *Decomposedfs) CreateDir(ctx context.Context, ref *provider.Reference) (err error) {
+	name := path.Base(ref.Path)
+	if name == "" || name == "." || name == "/" {
+		return errtypes.BadRequest("Invalid path")
+	}
+	ref.Path = path.Dir(ref.Path)
 	var n *node.Node
-	if n, err = fs.lu.NodeFromPath(ctx, fn); err != nil {
+	if n, err = fs.lu.NodeFromResource(ctx, ref); err != nil {
+		return
+	}
+	if n, err = n.Child(ctx, name); err != nil {
 		return
 	}
 
 	if n.Exists {
-		return errtypes.AlreadyExists(fn)
+		return errtypes.AlreadyExists(ref.Path)
 	}
 	pn, err := n.Parent()
 	if err != nil {
@@ -260,7 +313,7 @@ func (fs *Decomposedfs) CreateDir(ctx context.Context, fn string) (err error) {
 
 	err = fs.tp.CreateDir(ctx, n)
 
-	if fs.o.TreeTimeAccounting {
+	if fs.o.TreeTimeAccounting || fs.o.TreeSizeAccounting {
 		nodePath := n.InternalPath()
 		// mark the home node as the end of propagation
 		if err = xattr.Set(nodePath, xattrs.PropagationAttr, []byte("1")); err != nil {
@@ -269,6 +322,11 @@ func (fs *Decomposedfs) CreateDir(ctx context.Context, fn string) (err error) {
 		}
 	}
 	return
+}
+
+// TouchFile as defined in the storage.FS interface
+func (fs *Decomposedfs) TouchFile(ctx context.Context, ref *provider.Reference) error {
+	return fmt.Errorf("unimplemented: TouchFile")
 }
 
 // CreateReference creates a reference as a node folder with the target stored in extended attributes
@@ -291,7 +349,7 @@ func (fs *Decomposedfs) CreateReference(ctx context.Context, p string, targetURI
 
 	// create Shares folder if it does not exist
 	var n *node.Node
-	if n, err = fs.lu.NodeFromPath(ctx, fs.o.ShareFolder); err != nil {
+	if n, err = fs.lu.NodeFromPath(ctx, fs.o.ShareFolder, false); err != nil {
 		return errtypes.InternalError(err.Error())
 	} else if !n.Exists {
 		if err = fs.tp.CreateDir(ctx, n); err != nil {
@@ -372,7 +430,7 @@ func (fs *Decomposedfs) GetMD(ctx context.Context, ref *provider.Reference, mdKe
 		return nil, errtypes.PermissionDenied(node.ID)
 	}
 
-	return node.AsResourceInfo(ctx, rp, mdKeys)
+	return node.AsResourceInfo(ctx, &rp, mdKeys, utils.IsRelativeReference(ref))
 }
 
 // ListFolder returns a list of resources in the specified folder
@@ -381,6 +439,9 @@ func (fs *Decomposedfs) ListFolder(ctx context.Context, ref *provider.Reference,
 	if n, err = fs.lu.NodeFromResource(ctx, ref); err != nil {
 		return
 	}
+
+	ctx, span := rtrace.Provider.Tracer("decomposedfs").Start(ctx, "ListFolder")
+	defer span.End()
 
 	if !n.Exists {
 		err = errtypes.NotFound(filepath.Join(n.ParentID, n.Name))
@@ -404,8 +465,9 @@ func (fs *Decomposedfs) ListFolder(ctx context.Context, ref *provider.Reference,
 	for i := range children {
 		np := rp
 		// add this childs permissions
-		node.AddPermissions(np, n.PermissionSet(ctx))
-		if ri, err := children[i].AsResourceInfo(ctx, np, mdKeys); err == nil {
+		pset := n.PermissionSet(ctx)
+		node.AddPermissions(&np, &pset)
+		if ri, err := children[i].AsResourceInfo(ctx, &np, mdKeys, utils.IsRelativeReference(ref)); err == nil {
 			finfos = append(finfos, ri)
 		}
 	}
@@ -465,21 +527,22 @@ func (fs *Decomposedfs) Download(ctx context.Context, ref *provider.Reference) (
 	return reader, nil
 }
 
-func (fs *Decomposedfs) copyMD(s string, t string) (err error) {
-	var attrs []string
-	if attrs, err = xattr.List(s); err != nil {
-		return err
-	}
-	for i := range attrs {
-		if strings.HasPrefix(attrs[i], xattrs.OcisPrefix) {
-			var d []byte
-			if d, err = xattr.Get(s, attrs[i]); err != nil {
-				return err
-			}
-			if err = xattr.Set(t, attrs[i], d); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
+// GetLock returns an existing lock on the given reference
+func (fs *Decomposedfs) GetLock(ctx context.Context, ref *provider.Reference) (*provider.Lock, error) {
+	return nil, errtypes.NotSupported("unimplemented")
+}
+
+// SetLock puts a lock on the given reference
+func (fs *Decomposedfs) SetLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
+	return errtypes.NotSupported("unimplemented")
+}
+
+// RefreshLock refreshes an existing lock on the given reference
+func (fs *Decomposedfs) RefreshLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
+	return errtypes.NotSupported("unimplemented")
+}
+
+// Unlock removes an existing lock from the given reference
+func (fs *Decomposedfs) Unlock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
+	return errtypes.NotSupported("unimplemented")
 }

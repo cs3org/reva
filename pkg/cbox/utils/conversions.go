@@ -19,6 +19,7 @@
 package utils
 
 import (
+	"strings"
 	"time"
 
 	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
@@ -27,6 +28,7 @@ import (
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 )
 
 // DBShare stores information about user and public shares.
@@ -36,6 +38,7 @@ type DBShare struct {
 	UIDInitiator string
 	Prefix       string
 	ItemSource   string
+	ItemType     string
 	ShareWith    string
 	Token        string
 	Expiration   string
@@ -80,7 +83,7 @@ func ExtractGrantee(t int, g string) *provider.Grantee {
 	return &grantee
 }
 
-// ResourceTypeToItem maps a resource type to an integer
+// ResourceTypeToItem maps a resource type to a string
 func ResourceTypeToItem(r provider.ResourceType) string {
 	switch r {
 	case provider.ResourceType_RESOURCE_TYPE_FILE:
@@ -96,51 +99,47 @@ func ResourceTypeToItem(r provider.ResourceType) string {
 	}
 }
 
+// ResourceTypeToItemInt maps a resource type to an integer
+func ResourceTypeToItemInt(r provider.ResourceType) int {
+	switch r {
+	case provider.ResourceType_RESOURCE_TYPE_CONTAINER:
+		return 0
+	case provider.ResourceType_RESOURCE_TYPE_FILE:
+		return 1
+	default:
+		return -1
+	}
+}
+
 // SharePermToInt maps read/write permissions to an integer
 func SharePermToInt(p *provider.ResourcePermissions) int {
 	var perm int
-	if p.CreateContainer {
+	switch {
+	case p.InitiateFileUpload && !p.InitiateFileDownload:
+		perm = 4
+	case p.InitiateFileUpload:
 		perm = 15
-	} else if p.ListContainer {
+	case p.InitiateFileDownload:
 		perm = 1
 	}
+	// TODO map denials and resharing; currently, denials are mapped to 0
 	return perm
 }
 
 // IntTosharePerm retrieves read/write permissions from an integer
-func IntTosharePerm(p int) *provider.ResourcePermissions {
+func IntTosharePerm(p int, itemType string) *provider.ResourcePermissions {
 	switch p {
 	case 1:
-		return &provider.ResourcePermissions{
-			ListContainer:        true,
-			ListGrants:           true,
-			ListFileVersions:     true,
-			ListRecycle:          true,
-			Stat:                 true,
-			GetPath:              true,
-			GetQuota:             true,
-			InitiateFileDownload: true,
-		}
+		return conversions.NewViewerRole().CS3ResourcePermissions()
 	case 15:
-		return &provider.ResourcePermissions{
-			ListContainer:        true,
-			ListGrants:           true,
-			ListFileVersions:     true,
-			ListRecycle:          true,
-			Stat:                 true,
-			GetPath:              true,
-			GetQuota:             true,
-			InitiateFileDownload: true,
-
-			Move:               true,
-			InitiateFileUpload: true,
-			RestoreFileVersion: true,
-			RestoreRecycleItem: true,
-			CreateContainer:    true,
-			Delete:             true,
-			PurgeRecycle:       true,
+		if itemType == "folder" {
+			return conversions.NewEditorRole().CS3ResourcePermissions()
 		}
+		return conversions.NewFileEditorRole().CS3ResourcePermissions()
+	case 4:
+		return conversions.NewUploaderRole().CS3ResourcePermissions()
 	default:
+		// TODO we may have other options, for now this is a denial
 		return &provider.ResourcePermissions{}
 	}
 }
@@ -152,6 +151,8 @@ func IntToShareState(g int) collaboration.ShareState {
 		return collaboration.ShareState_SHARE_STATE_PENDING
 	case 1:
 		return collaboration.ShareState_SHARE_STATE_ACCEPTED
+	case -1:
+		return collaboration.ShareState_SHARE_STATE_REJECTED
 	default:
 		return collaboration.ShareState_SHARE_STATE_INVALID
 	}
@@ -164,7 +165,13 @@ func FormatUserID(u *userpb.UserId) string {
 
 // ExtractUserID retrieves a CS3API user ID from a string
 func ExtractUserID(u string) *userpb.UserId {
-	return &userpb.UserId{OpaqueId: u}
+	t := userpb.UserType_USER_TYPE_PRIMARY
+	if strings.HasPrefix(u, "guest:") {
+		t = userpb.UserType_USER_TYPE_LIGHTWEIGHT
+	} else if strings.Contains(u, "@") {
+		t = userpb.UserType_USER_TYPE_FEDERATED
+	}
+	return &userpb.UserId{OpaqueId: u, Type: t}
 }
 
 // FormatGroupID formats a CS3API group ID to a string
@@ -186,8 +193,12 @@ func ConvertToCS3Share(s DBShare) *collaboration.Share {
 		Id: &collaboration.ShareId{
 			OpaqueId: s.ID,
 		},
-		ResourceId:  &provider.ResourceId{OpaqueId: s.ItemSource, StorageId: s.Prefix},
-		Permissions: &collaboration.SharePermissions{Permissions: IntTosharePerm(s.Permissions)},
+		//ResourceId:  &provider.Reference{StorageId: s.Prefix, NodeId: s.ItemSource},
+		ResourceId: &provider.ResourceId{
+			StorageId: s.Prefix,
+			OpaqueId:  s.ItemSource,
+		},
+		Permissions: &collaboration.SharePermissions{Permissions: IntTosharePerm(s.Permissions, s.ItemType)},
 		Grantee:     ExtractGrantee(s.ShareType, s.ShareWith),
 		Owner:       ExtractUserID(s.UIDOwner),
 		Creator:     ExtractUserID(s.UIDInitiator),
@@ -198,9 +209,8 @@ func ConvertToCS3Share(s DBShare) *collaboration.Share {
 
 // ConvertToCS3ReceivedShare converts a DBShare to a CS3API collaboration received share
 func ConvertToCS3ReceivedShare(s DBShare) *collaboration.ReceivedShare {
-	share := ConvertToCS3Share(s)
 	return &collaboration.ReceivedShare{
-		Share: share,
+		Share: ConvertToCS3Share(s),
 		State: IntToShareState(s.State),
 	}
 }
@@ -216,7 +226,7 @@ func ConvertToCS3PublicShare(s DBShare) *link.PublicShare {
 	}
 	var expires *typespb.Timestamp
 	if s.Expiration != "" {
-		t, err := time.Parse("2006-01-02 03:04:05", s.Expiration)
+		t, err := time.Parse("2006-01-02 15:04:05", s.Expiration)
 		if err == nil {
 			expires = &typespb.Timestamp{
 				Seconds: uint64(t.Unix()),
@@ -227,8 +237,11 @@ func ConvertToCS3PublicShare(s DBShare) *link.PublicShare {
 		Id: &link.PublicShareId{
 			OpaqueId: s.ID,
 		},
-		ResourceId:        &provider.ResourceId{OpaqueId: s.ItemSource, StorageId: s.Prefix},
-		Permissions:       &link.PublicSharePermissions{Permissions: IntTosharePerm(s.Permissions)},
+		ResourceId: &provider.ResourceId{
+			StorageId: s.Prefix,
+			OpaqueId:  s.ItemSource,
+		},
+		Permissions:       &link.PublicSharePermissions{Permissions: IntTosharePerm(s.Permissions, s.ItemType)},
 		Owner:             ExtractUserID(s.UIDOwner),
 		Creator:           ExtractUserID(s.UIDInitiator),
 		Token:             s.Token,

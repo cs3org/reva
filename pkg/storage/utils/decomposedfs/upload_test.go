@@ -21,22 +21,26 @@ package decomposedfs_test
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/stretchr/testify/mock"
-
+	ruser "github.com/cs3org/reva/pkg/ctx"
+	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/mocks"
+	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/options"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/tree"
 	treemocks "github.com/cs3org/reva/pkg/storage/utils/decomposedfs/tree/mocks"
-	ruser "github.com/cs3org/reva/pkg/user"
+	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/xattrs"
 	"github.com/cs3org/reva/tests/helpers"
+	"github.com/pkg/xattr"
+	"github.com/stretchr/testify/mock"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -56,15 +60,12 @@ var _ = Describe("File uploads", func() {
 	)
 
 	BeforeEach(func() {
-		ref = &provider.Reference{
-			Spec: &provider.Reference_Path{
-				Path: "/foo",
-			},
-		}
+		ref = &provider.Reference{Path: "/foo"}
 		user = &userpb.User{
 			Id: &userpb.UserId{
 				Idp:      "idp",
 				OpaqueId: "userid",
+				Type:     userpb.UserType_USER_TYPE_PRIMARY,
 			},
 			Username: "username",
 		}
@@ -96,12 +97,26 @@ var _ = Describe("File uploads", func() {
 		Expect(err).ToNot(HaveOccurred())
 	})
 
-	Context("with insufficient permissions", func() {
+	Context("the user's quota is exceeded", func() {
+		When("the user wants to initiate a file upload", func() {
+			It("fails", func() {
+				var originalFunc = node.CheckQuota
+				node.CheckQuota = func(spaceRoot *node.Node, fileSize uint64) (quotaSufficient bool, err error) {
+					return false, errtypes.InsufficientStorage("quota exceeded")
+				}
+				_, err := fs.InitiateUpload(ctx, ref, 10, map[string]string{})
+				Expect(err).To(MatchError(errtypes.InsufficientStorage("quota exceeded")))
+				node.CheckQuota = originalFunc
+			})
+		})
+	})
+
+	Context("the user has insufficient permissions", func() {
 		BeforeEach(func() {
 			permissions.On("HasPermission", mock.Anything, mock.Anything, mock.Anything).Return(false, nil)
 		})
 
-		Describe("InitiateUpload", func() {
+		When("the user wants to initiate a file upload", func() {
 			It("fails", func() {
 				_, err := fs.InitiateUpload(ctx, ref, 10, map[string]string{})
 				Expect(err).To(MatchError("error: permission denied: root/foo"))
@@ -109,28 +124,93 @@ var _ = Describe("File uploads", func() {
 		})
 	})
 
+	Context("with insufficient permissions, home node", func() {
+		BeforeEach(func() {
+			var err error
+			// recreate the fs with home enabled
+			o.EnableHome = true
+			tree := tree.New(o.Root, true, true, lookup, bs)
+			fs, err = decomposedfs.New(o, lookup, permissions, tree)
+			Expect(err).ToNot(HaveOccurred())
+			err = fs.CreateHome(ctx)
+			Expect(err).ToNot(HaveOccurred())
+			// the space name attribute is the stop condition in the lookup
+			h, err := lookup.HomeNode(ctx)
+			Expect(err).ToNot(HaveOccurred())
+			err = xattr.Set(h.InternalPath(), xattrs.SpaceNameAttr, []byte("username"))
+			Expect(err).ToNot(HaveOccurred())
+			permissions.On("HasPermission", mock.Anything, mock.Anything, mock.Anything).Return(false, nil)
+		})
+
+		When("the user wants to initiate a file upload", func() {
+			It("fails", func() {
+				h, err := lookup.HomeNode(ctx)
+				Expect(err).ToNot(HaveOccurred())
+				msg := fmt.Sprintf("error: permission denied: %s/foo", h.ID)
+				_, err = fs.InitiateUpload(ctx, ref, 10, map[string]string{})
+				Expect(err).To(MatchError(msg))
+			})
+		})
+	})
+
 	Context("with sufficient permissions", func() {
 		BeforeEach(func() {
 			permissions.On("HasPermission", mock.Anything, mock.Anything, mock.Anything).Return(true, nil)
+			permissions.On("AssemblePermissions", mock.Anything, mock.Anything).
+				Return(provider.ResourcePermissions{
+					ListContainer: true,
+				}, nil)
 		})
 
-		Describe("InitiateUpload", func() {
-			It("returns uploadIds for simple and tus uploads", func() {
+		When("the user initiates a non zero byte file upload", func() {
+			It("succeeds", func() {
 				uploadIds, err := fs.InitiateUpload(ctx, ref, 10, map[string]string{})
 
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(uploadIds)).To(Equal(2))
 				Expect(uploadIds["simple"]).ToNot(BeEmpty())
 				Expect(uploadIds["tus"]).ToNot(BeEmpty())
+
+				rootRef := &provider.Reference{Path: "/"}
+				resources, err := fs.ListFolder(ctx, rootRef, []string{})
+
+				Expect(err).ToNot(HaveOccurred())
+				Expect(len(resources)).To(Equal(0))
 			})
 		})
 
-		Describe("Upload", func() {
-			var (
-				fileContent = []byte("0123456789")
-			)
+		When("the user initiates a zero byte file upload", func() {
+			It("succeeds", func() {
+				uploadIds, err := fs.InitiateUpload(ctx, ref, 0, map[string]string{})
 
-			It("stores the blob in the blobstore", func() {
+				Expect(err).ToNot(HaveOccurred())
+				Expect(len(uploadIds)).To(Equal(2))
+				Expect(uploadIds["simple"]).ToNot(BeEmpty())
+				Expect(uploadIds["tus"]).ToNot(BeEmpty())
+
+				rootRef := &provider.Reference{Path: "/"}
+				resources, err := fs.ListFolder(ctx, rootRef, []string{})
+
+				Expect(err).ToNot(HaveOccurred())
+				Expect(len(resources)).To(Equal(0))
+			})
+		})
+
+		When("the user uploads a non zero byte file", func() {
+			It("succeeds", func() {
+				var (
+					fileContent = []byte("0123456789")
+				)
+
+				uploadIds, err := fs.InitiateUpload(ctx, ref, 10, map[string]string{})
+
+				Expect(err).ToNot(HaveOccurred())
+				Expect(len(uploadIds)).To(Equal(2))
+				Expect(uploadIds["simple"]).ToNot(BeEmpty())
+				Expect(uploadIds["tus"]).ToNot(BeEmpty())
+
+				uploadRef := &provider.Reference{Path: "/" + uploadIds["simple"]}
+
 				bs.On("Upload", mock.AnythingOfType("string"), mock.AnythingOfType("*os.File")).
 					Return(nil).
 					Run(func(args mock.Arguments) {
@@ -141,11 +221,77 @@ var _ = Describe("File uploads", func() {
 						Expect(data).To(Equal([]byte("0123456789")))
 					})
 
-				err := fs.Upload(ctx, ref, ioutil.NopCloser(bytes.NewReader(fileContent)))
-				Expect(err).ToNot(HaveOccurred())
+				err = fs.Upload(ctx, uploadRef, ioutil.NopCloser(bytes.NewReader(fileContent)))
 
+				Expect(err).ToNot(HaveOccurred())
 				bs.AssertCalled(GinkgoT(), "Upload", mock.Anything, mock.Anything)
+
+				rootRef := &provider.Reference{Path: "/"}
+				resources, err := fs.ListFolder(ctx, rootRef, []string{})
+
+				Expect(err).ToNot(HaveOccurred())
+				Expect(len(resources)).To(Equal(1))
+				Expect(resources[0].Path).To(Equal(ref.Path))
 			})
 		})
+
+		When("the user uploads a zero byte file", func() {
+			It("succeeds", func() {
+				var (
+					fileContent = []byte("")
+				)
+
+				uploadIds, err := fs.InitiateUpload(ctx, ref, 0, map[string]string{})
+
+				Expect(err).ToNot(HaveOccurred())
+				Expect(len(uploadIds)).To(Equal(2))
+				Expect(uploadIds["simple"]).ToNot(BeEmpty())
+				Expect(uploadIds["tus"]).ToNot(BeEmpty())
+
+				uploadRef := &provider.Reference{Path: "/" + uploadIds["simple"]}
+
+				bs.On("Upload", mock.AnythingOfType("string"), mock.AnythingOfType("*os.File")).
+					Return(nil).
+					Run(func(args mock.Arguments) {
+						reader := args.Get(1).(io.Reader)
+						data, err := ioutil.ReadAll(reader)
+
+						Expect(err).ToNot(HaveOccurred())
+						Expect(data).To(Equal([]byte("")))
+					})
+
+				err = fs.Upload(ctx, uploadRef, ioutil.NopCloser(bytes.NewReader(fileContent)))
+
+				Expect(err).ToNot(HaveOccurred())
+				bs.AssertCalled(GinkgoT(), "Upload", mock.Anything, mock.Anything)
+
+				rootRef := &provider.Reference{Path: "/"}
+				resources, err := fs.ListFolder(ctx, rootRef, []string{})
+
+				Expect(err).ToNot(HaveOccurred())
+				Expect(len(resources)).To(Equal(1))
+				Expect(resources[0].Path).To(Equal(ref.Path))
+			})
+		})
+
+		When("the user tries to upload a file without intialising the upload", func() {
+			It("fails", func() {
+				var (
+					fileContent = []byte("0123456789")
+				)
+
+				uploadRef := &provider.Reference{Path: "/some-non-existent-upload-reference"}
+				err := fs.Upload(ctx, uploadRef, ioutil.NopCloser(bytes.NewReader(fileContent)))
+
+				Expect(err).To(HaveOccurred())
+
+				rootRef := &provider.Reference{Path: "/"}
+				resources, err := fs.ListFolder(ctx, rootRef, []string{})
+
+				Expect(err).ToNot(HaveOccurred())
+				Expect(len(resources)).To(Equal(0))
+			})
+		})
+
 	})
 })

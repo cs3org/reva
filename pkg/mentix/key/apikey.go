@@ -24,6 +24,7 @@ import (
 	"fmt"
 	hashpkg "hash"
 	"strconv"
+	"strings"
 
 	"github.com/pkg/errors"
 )
@@ -92,6 +93,11 @@ func SplitAPIKey(apiKey APIKey) (string, int, string, error) {
 	hash := apiKey[randomStringLength+2:]
 
 	return randomString, flags, hash, nil
+}
+
+// SaltFromEmail generates a salt-value from an email address.
+func SaltFromEmail(email string) string {
+	return strings.ToLower(email)
 }
 
 func calculateHash(randomString string, flags int, salt string) hashpkg.Hash {

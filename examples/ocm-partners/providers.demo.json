@@ -250,5 +250,42 @@
 				"host": "https://sciencemesh-test.switch.ch/api/"
 			}
 		]
-	}	
+	},
+        {       
+	        "name": "sciencedata", 
+	        "full_name": "ScienceData", 
+	        "organization": "DTU",
+	        "domain": "dtu.dk",
+	        "homepage": "https://sciencedata.dk",
+	        "description": "ScienceData provides cloud storage for scientists",
+	        "services": [
+		        {
+			         "endpoint": {
+				         "type": {
+					         "name": "OCM",
+						 "description": "DTU Open Cloud Mesh API"
+					 },
+					 "name": "DTU - OCM API",
+					 "path": "https://sciencemesh.sciencedata.dk/iop/ocm/",
+					 "is_monitored": true
+				 },
+				 "api_version": "0.0.1",
+				 "host": "https://sciencemesh.sciencedata.dk/iop/"
+			},
+			{
+			         "endpoint": {
+				         "type": {
+					         "name": "Webdav",
+						 "description": "DTU Webdav API"
+					 },
+					 "name": "DTU - Webdav API",
+					 "path": "https://sciencemesh.sciencedata.dk/iop/remote.php/webdav/",
+					 "is_monitored": true
+				 },
+				 "api_version": "0.0.1",
+				 "host": "https://sciencemesh.sciencedata.dk/iop"
+			}
+		
+		]
+
 ]

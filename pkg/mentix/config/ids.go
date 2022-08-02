@@ -21,13 +21,6 @@ package config
 const (
 	// ConnectorIDGOCDB is the connector identifier for GOCDB.
 	ConnectorIDGOCDB = "gocdb"
-	// ConnectorIDLocalFile is the connector identifier for local files.
-	ConnectorIDLocalFile = "localfile"
-)
-
-const (
-	// ImporterIDSiteRegistration is the identifier for the external site registration importer.
-	ImporterIDSiteRegistration = "sitereg"
 )
 
 const (
@@ -37,6 +30,8 @@ const (
 	ExporterIDCS3API = "cs3api"
 	// ExporterIDSiteLocations is the identifier for the Site Locations exporter.
 	ExporterIDSiteLocations = "siteloc"
-	// ExporterIDPrometheusSD is the identifier for the PrometheusSD SD exporter.
+	// ExporterIDPrometheusSD is the identifier for the PrometheusSD exporter.
 	ExporterIDPrometheusSD = "promsd"
+	// ExporterIDMetrics is the identifier for the Metrics exporter.
+	ExporterIDMetrics = "metrics"
 )

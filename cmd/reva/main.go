@@ -31,10 +31,10 @@ import (
 )
 
 var (
-	conf                                   *config
-	host                                   string
-	insecure, skipverify, disableargprompt bool
-	timeout                                int
+	conf                                                        *config
+	host                                                        string
+	insecure, skipverify, disableargprompt, insecuredatagateway bool
+	timeout                                                     int64
 
 	helpCommandOutput string
 
@@ -64,8 +64,8 @@ var (
 		ocmShareUpdateCommand(),
 		ocmShareListReceivedCommand(),
 		ocmShareUpdateReceivedCommand(),
+		openInAppCommand(),
 		preferencesCommand(),
-		genCommand(),
 		publicShareCreateCommand(),
 		publicShareListCommand(),
 		publicShareRemoveCommand(),
@@ -79,10 +79,17 @@ var (
 		shareUpdateCommand(),
 		shareListReceivedCommand(),
 		shareUpdateReceivedCommand(),
-		openFileInAppProviderCommand(),
 		transferCreateCommand(),
 		transferGetStatusCommand(),
 		transferCancelCommand(),
+		transferListCommand(),
+		transferRetryCommand(),
+		appTokensListCommand(),
+		appTokensRemoveCommand(),
+		appTokensCreateCommand(),
+		setlockCommand(),
+		getlockCommand(),
+		unlockCommand(),
 		helpCommand(),
 	}
 )
@@ -90,9 +97,20 @@ var (
 func init() {
 	flag.StringVar(&host, "host", "", "address of the GRPC gateway host")
 	flag.BoolVar(&insecure, "insecure", false, "disables grpc transport security")
-	flag.BoolVar(&skipverify, "skip-verify", false, "whether to skip verifying the server's certificate chain and host name")
+	flag.BoolVar(
+		&insecuredatagateway,
+		"insecure-data-gateway",
+		false,
+		"disables grpc transport security for data gateway service",
+	)
+	flag.BoolVar(
+		&skipverify,
+		"skip-verify",
+		false,
+		"whether to skip verifying the server's certificate chain and host name",
+	)
 	flag.BoolVar(&disableargprompt, "disable-arg-prompt", false, "whether to disable prompts for command arguments")
-	flag.IntVar(&timeout, "timout", -1, "the timeout in seconds for executing the commands, -1 means no timeout")
+	flag.Int64Var(&timeout, "timeout", -1, "the timeout in seconds for executing the commands, -1 means no timeout")
 	flag.Parse()
 }
 
@@ -107,10 +125,8 @@ func main() {
 	}
 
 	client = rhttp.GetHTTPClient(
-		// TODO make insecure configurable
-		rhttp.Insecure(true),
-		// TODO make timeout configurable
-		rhttp.Timeout(time.Duration(24*int64(time.Hour))),
+		rhttp.Insecure(insecuredatagateway),
+		rhttp.Timeout(time.Duration(timeout*int64(time.Hour))),
 	)
 
 	generateMainUsage()
@@ -146,6 +162,11 @@ func generateMainUsage() {
 
 	helpCommandOutput = "Command line interface to REVA:\n"
 	for _, cmd := range commands {
-		helpCommandOutput += fmt.Sprintf("%s%s%s\n", cmd.Name, strings.Repeat(" ", 4+(n-len(cmd.Name))), cmd.Description())
+		helpCommandOutput += fmt.Sprintf(
+			"%s%s%s\n",
+			cmd.Name,
+			strings.Repeat(" ", 4+(n-len(cmd.Name))),
+			cmd.Description(),
+		)
 	}
 }

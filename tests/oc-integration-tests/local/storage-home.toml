@@ -1,10 +1,5 @@
-# This storage-home.toml config file will start a reva service that:
-[shared]
-jwt_secret = "Pive-Fumkiu4"
-gatewaysvc = "localhost:19000"
-
-# - authenticates grpc storage provider requests using the internal jwt token
-# - authenticates http upload and download requests requests using basic auth
+# This config file will start a reva service that:
+# - uses the ocis driver to serve users, jailed into their home (/home)
 # - serves the home storage provider on grpc port 12000
 # - serves http dataprovider for this storage on port 12001
 #   - /data - dataprovider: file up and download
@@ -12,15 +7,16 @@ gatewaysvc = "localhost:19000"
 # The home storage will inject the username into the path and jail users into
 # their home directory
 
+[shared]
+jwt_secret = "Pive-Fumkiu4"
+gatewaysvc = "localhost:19000"
+
+
 [grpc]
 address = "0.0.0.0:12000"
 
 # This is a storage provider that grants direct access to the wrapped storage
-# TODO same storage id as the /oc/ storage provider
-# if we have an id, we can directly go to that storage, no need to wrap paths
-# we have a locally running dataprovider
-# this is where clients can find it
-# the context path wrapper reads tho username from the context and prefixes the relative storage path with it
+# the context path wrapper reads the username from the context and prefixes the relative storage path with it
 [grpc.services.storageprovider]
 driver = "ocis"
 mount_path = "/home"
@@ -34,11 +30,13 @@ root = "/var/tmp/reva/data"
 enable_home = true
 treetime_accounting = true
 treesize_accounting = true
+gateway_addr = "0.0.0.0:19000"
 #user_layout = 
 # do we need owner for users?
 #owner = 95cb8724-03b2-11eb-a0a6-c33ef8ef53ad 
 
 
+# we have a locally running dataprovider
 [http]
 address = "0.0.0.0:12001"
 

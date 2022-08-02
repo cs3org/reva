@@ -25,13 +25,17 @@ import (
 )
 
 // QueryGOCDB retrieves data from one of GOCDB's endpoints.
-func QueryGOCDB(address string, method string, isPrivate bool, scope string, params network.URLParams) ([]byte, error) {
+func QueryGOCDB(address string, method string, isPrivate bool, scope string, apiKey string, params network.URLParams) ([]byte, error) {
 	// The method must always be specified
 	params["method"] = method
 
-	// If a scope was specified, pass it to the endpoint as well
+	// If a scope or an API key were specified, pass them to the endpoint as well
 	if len(scope) > 0 {
 		params["scope"] = scope
+	}
+
+	if len(apiKey) > 0 {
+		params["apikey"] = apiKey
 	}
 
 	// GOCDB's public API is located at <gocdb-host>/gocdbpi/public, the private one at <gocdb-host>/gocdbpi/private

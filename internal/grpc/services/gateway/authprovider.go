@@ -22,17 +22,18 @@ import (
 	"context"
 	"fmt"
 
-	provider "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
+	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	registry "github.com/cs3org/go-cs3apis/cs3/auth/registry/v1beta1"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	storageprovider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
-	tokenpkg "github.com/cs3org/reva/pkg/token"
-	userpkg "github.com/cs3org/reva/pkg/user"
+	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc/metadata"
 )
@@ -43,13 +44,13 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 	// find auth provider
 	c, err := s.findAuthProvider(ctx, req.Type)
 	if err != nil {
-		err = errors.New("gateway: error finding auth provider for type: " + req.Type)
+		err = errtypes.NotFound("gateway: error finding auth provider for type: " + req.Type)
 		return &gateway.AuthenticateResponse{
 			Status: status.NewInternal(ctx, err, "error getting auth provider client"),
 		}, nil
 	}
 
-	authProviderReq := &provider.AuthenticateRequest{
+	authProviderReq := &authpb.AuthenticateRequest{
 		ClientId:     req.ClientId,
 		ClientSecret: req.ClientSecret,
 	}
@@ -77,25 +78,32 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 
 	// validate valid userId
 	if res.User == nil {
-		err := errors.New("gateway: user after Authenticate is nil")
+		err := errtypes.NotFound("gateway: user after Authenticate is nil")
 		log.Err(err).Msg("user is nil")
 		return &gateway.AuthenticateResponse{
 			Status: status.NewInternal(ctx, err, "user is nil"),
 		}, nil
 	}
 
-	uid := res.User.Id
-	if uid == nil {
-		err := errors.New("gateway: uid after Authenticate is nil")
+	if res.User.Id == nil {
+		err := errtypes.NotFound("gateway: uid after Authenticate is nil")
 		log.Err(err).Msg("user id is nil")
 		return &gateway.AuthenticateResponse{
 			Status: status.NewInternal(ctx, err, "user id is nil"),
 		}, nil
 	}
 
-	user := res.User
+	u := *res.User
+	if sharedconf.SkipUserGroupsInToken() {
+		u.Groups = []string{}
+	}
 
-	token, err := s.tokenmgr.MintToken(ctx, user)
+	// We need to expand the scopes of lightweight accounts, user shares and
+	// public shares, for which we need to retrieve the receieved shares and stat
+	// the resources referenced by these. Since the current scope can do that,
+	// mint a temporary token based on that and expand the scope. Then set the
+	// token obtained from the updated scope in the context.
+	token, err := s.tokenmgr.MintToken(ctx, &u, res.TokenScope)
 	if err != nil {
 		err = errors.Wrap(err, "authsvc: error in MintToken")
 		res := &gateway.AuthenticateResponse{
@@ -104,7 +112,32 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 		return res, nil
 	}
 
-	if s.c.DisableHomeCreationOnLogin {
+	ctx = ctxpkg.ContextSetToken(ctx, token)
+	ctx = ctxpkg.ContextSetUser(ctx, res.User)
+	ctx = metadata.AppendToOutgoingContext(ctx, ctxpkg.TokenHeader, token)
+
+	// Commenting out as the token size can get too big
+	// For now, we'll try to resolve all resources on every request and cache those
+	/* scope, err := s.expandScopes(ctx, res.TokenScope)
+	if err != nil {
+		err = errors.Wrap(err, "authsvc: error expanding token scope")
+		return &gateway.AuthenticateResponse{
+			Status: status.NewUnauthenticated(ctx, err, "error expanding access token scope"),
+		}, nil
+	}
+	*/
+	scope := res.TokenScope
+
+	token, err = s.tokenmgr.MintToken(ctx, &u, scope)
+	if err != nil {
+		err = errors.Wrap(err, "authsvc: error in MintToken")
+		res := &gateway.AuthenticateResponse{
+			Status: status.NewUnauthenticated(ctx, err, "error creating access token"),
+		}
+		return res, nil
+	}
+
+	if scope, ok := res.TokenScope["user"]; s.c.DisableHomeCreationOnLogin || !ok || scope.Role != authpb.Role_ROLE_OWNER || res.User.Id.Type == userpb.UserType_USER_TYPE_FEDERATED {
 		gwRes := &gateway.AuthenticateResponse{
 			Status: status.NewOK(ctx),
 			User:   res.User,
@@ -115,25 +148,30 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 
 	// we need to pass the token to authenticate the CreateHome request.
 	// TODO(labkode): appending to existing context will not pass the token.
-	ctx = tokenpkg.ContextSetToken(ctx, token)
-	ctx = userpkg.ContextSetUser(ctx, user)
-	ctx = metadata.AppendToOutgoingContext(ctx, tokenpkg.TokenHeader, token) // TODO(jfd): hardcoded metadata key. use  PerRPCCredentials?
+	ctx = ctxpkg.ContextSetToken(ctx, token)
+	ctx = ctxpkg.ContextSetUser(ctx, res.User)
+	ctx = metadata.AppendToOutgoingContext(ctx, ctxpkg.TokenHeader, token) // TODO(jfd): hardcoded metadata key. use  PerRPCCredentials?
 
 	// create home directory
-	createHomeRes, err := s.CreateHome(ctx, &storageprovider.CreateHomeRequest{})
-	if err != nil {
-		log.Err(err).Msg("error calling CreateHome")
-		return &gateway.AuthenticateResponse{
-			Status: status.NewInternal(ctx, err, "error creating user home"),
-		}, nil
-	}
+	if _, err = s.createHomeCache.Get(res.User.Id.OpaqueId); err != nil {
+		createHomeRes, err := s.CreateHome(ctx, &storageprovider.CreateHomeRequest{})
+		if err != nil {
+			log.Err(err).Msg("error calling CreateHome")
+			return &gateway.AuthenticateResponse{
+				Status: status.NewInternal(ctx, err, "error creating user home"),
+			}, nil
+		}
 
-	if createHomeRes.Status.Code != rpc.Code_CODE_OK {
-		err := status.NewErrorFromCode(createHomeRes.Status.Code, "gateway")
-		log.Err(err).Msg("error calling Createhome")
-		return &gateway.AuthenticateResponse{
-			Status: status.NewInternal(ctx, err, "error creating user home"),
-		}, nil
+		if createHomeRes.Status.Code != rpc.Code_CODE_OK {
+			err := status.NewErrorFromCode(createHomeRes.Status.Code, "gateway")
+			log.Err(err).Msg("error calling Createhome")
+			return &gateway.AuthenticateResponse{
+				Status: status.NewInternal(ctx, err, "error creating user home"),
+			}, nil
+		}
+		if s.c.CreateHomeCacheTTL > 0 {
+			_ = s.createHomeCache.Set(res.User.Id.OpaqueId, true)
+		}
 	}
 
 	gwRes := &gateway.AuthenticateResponse{
@@ -145,12 +183,20 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 }
 
 func (s *svc) WhoAmI(ctx context.Context, req *gateway.WhoAmIRequest) (*gateway.WhoAmIResponse, error) {
-	u, err := s.tokenmgr.DismantleToken(ctx, req.Token)
+	u, _, err := s.tokenmgr.DismantleToken(ctx, req.Token)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error getting user from token")
 		return &gateway.WhoAmIResponse{
 			Status: status.NewUnauthenticated(ctx, err, "error dismantling token"),
 		}, nil
+	}
+
+	if sharedconf.SkipUserGroupsInToken() {
+		groupsRes, err := s.GetUserGroups(ctx, &userpb.GetUserGroupsRequest{UserId: u.Id})
+		if err != nil {
+			return nil, err
+		}
+		u.Groups = groupsRes.Groups
 	}
 
 	res := &gateway.WhoAmIResponse{
@@ -160,14 +206,14 @@ func (s *svc) WhoAmI(ctx context.Context, req *gateway.WhoAmIRequest) (*gateway.
 	return res, nil
 }
 
-func (s *svc) findAuthProvider(ctx context.Context, authType string) (provider.ProviderAPIClient, error) {
-	c, err := pool.GetAuthRegistryServiceClient(s.c.AuthRegistryEndpoint)
+func (s *svc) findAuthProvider(ctx context.Context, authType string) (authpb.ProviderAPIClient, error) {
+	c, err := pool.GetAuthRegistryServiceClient(pool.Endpoint(s.c.AuthRegistryEndpoint))
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error getting auth registry client")
 		return nil, err
 	}
 
-	res, err := c.GetAuthProvider(ctx, &registry.GetAuthProviderRequest{
+	res, err := c.GetAuthProviders(ctx, &registry.GetAuthProvidersRequest{
 		Type: authType,
 	})
 
@@ -176,9 +222,9 @@ func (s *svc) findAuthProvider(ctx context.Context, authType string) (provider.P
 		return nil, err
 	}
 
-	if res.Status.Code == rpc.Code_CODE_OK && res.Provider != nil {
+	if res.Status.Code == rpc.Code_CODE_OK && res.Providers != nil && len(res.Providers) > 0 {
 		// TODO(labkode): check for capabilities here
-		c, err := pool.GetAuthProviderServiceClient(res.Provider.Address)
+		c, err := pool.GetAuthProviderServiceClient(pool.Endpoint(res.Providers[0].Address))
 		if err != nil {
 			err = errors.Wrap(err, "gateway: error getting an auth provider client")
 			return nil, err
@@ -191,5 +237,78 @@ func (s *svc) findAuthProvider(ctx context.Context, authType string) (provider.P
 		return nil, errtypes.NotFound("gateway: auth provider not found for type:" + authType)
 	}
 
-	return nil, errors.New("gateway: error finding an auth provider for type: " + authType)
+	return nil, errtypes.InternalError("gateway: error finding an auth provider for type: " + authType)
 }
+
+/*
+func (s *svc) expandScopes(ctx context.Context, scopeMap map[string]*authpb.Scope) (map[string]*authpb.Scope, error) {
+	log := appctx.GetLogger(ctx)
+	newMap := make(map[string]*authpb.Scope)
+
+	for k, v := range scopeMap {
+		newMap[k] = v
+		switch {
+		case strings.HasPrefix(k, "publicshare"):
+			var share link.PublicShare
+			err := utils.UnmarshalJSONToProtoV1(v.Resource.Value, &share)
+			if err != nil {
+				log.Warn().Err(err).Msgf("error unmarshalling public share %+v", v.Resource.Value)
+				continue
+			}
+			newMap, err = s.statAndAddResource(ctx, share.ResourceId, v.Role, newMap)
+			if err != nil {
+				log.Warn().Err(err).Msgf("error expanding publicshare resource scope %+v", share.ResourceId)
+				continue
+			}
+
+		case strings.HasPrefix(k, "share"):
+			var share collaboration.Share
+			err := utils.UnmarshalJSONToProtoV1(v.Resource.Value, &share)
+			if err != nil {
+				log.Warn().Err(err).Msgf("error unmarshalling share %+v", v.Resource.Value)
+				continue
+			}
+			newMap, err = s.statAndAddResource(ctx, share.ResourceId, v.Role, newMap)
+			if err != nil {
+				log.Warn().Err(err).Msgf("error expanding share resource scope %+v", share.ResourceId)
+				continue
+			}
+
+		case strings.HasPrefix(k, "lightweight"):
+			shares, err := s.ListReceivedShares(ctx, &collaboration.ListReceivedSharesRequest{})
+			if err != nil || shares.Status.Code != rpc.Code_CODE_OK {
+				log.Warn().Err(err).Msg("error listing received shares")
+				continue
+			}
+			for _, share := range shares.Shares {
+				newMap, err = scope.AddReceivedShareScope(share, v.Role, newMap)
+				if err != nil {
+					log.Warn().Err(err).Msgf("error expanding received share scope %+v", share.Share.ResourceId)
+					continue
+				}
+				newMap, err = s.statAndAddResource(ctx, share.Share.ResourceId, v.Role, newMap)
+				if err != nil {
+					log.Warn().Err(err).Msgf("error expanding received share resource scope %+v", share.Share.ResourceId)
+					continue
+				}
+			}
+		}
+	}
+	return newMap, nil
+}
+
+func (s *svc) statAndAddResource(ctx context.Context, r *storageprovider.ResourceId, role authpb.Role, scopeMap map[string]*authpb.Scope) (map[string]*authpb.Scope, error) {
+	statReq := &storageprovider.StatRequest{
+		Ref: &storageprovider.Reference{ResourceId: r},
+	}
+	statResponse, err := s.Stat(ctx, statReq)
+	if err != nil {
+		return scopeMap, err
+	}
+	if statResponse.Status.Code != rpc.Code_CODE_OK {
+		return scopeMap, status.NewErrorFromCode(statResponse.Status.Code, "authprovider")
+	}
+
+	return scope.AddResourceInfoScope(statResponse.Info, role, scopeMap)
+}
+*/

@@ -20,46 +20,55 @@ package shares
 
 import (
 	"net/http"
+	"path"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/go-chi/chi/v5"
 	"github.com/pkg/errors"
+	"google.golang.org/protobuf/types/known/fieldmaskpb"
 )
+
+// AcceptReceivedShare handles Post Requests on /apps/files_sharing/api/v1/shares/{shareid}
+func (h *Handler) AcceptReceivedShare(w http.ResponseWriter, r *http.Request) {
+	shareID := chi.URLParam(r, "shareid")
+	h.updateReceivedShare(w, r, shareID, false)
+}
+
+// RejectReceivedShare handles DELETE Requests on /apps/files_sharing/api/v1/shares/{shareid}
+func (h *Handler) RejectReceivedShare(w http.ResponseWriter, r *http.Request) {
+	shareID := chi.URLParam(r, "shareid")
+	h.updateReceivedShare(w, r, shareID, true)
+}
 
 func (h *Handler) updateReceivedShare(w http.ResponseWriter, r *http.Request, shareID string, rejectShare bool) {
 	ctx := r.Context()
+	logger := appctx.GetLogger(ctx)
 
-	uClient, err := pool.GetGatewayServiceClient(h.gatewayAddr)
+	client, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
 		return
 	}
 
 	shareRequest := &collaboration.UpdateReceivedShareRequest{
-		Ref: &collaboration.ShareReference{
-			Spec: &collaboration.ShareReference_Id{
-				Id: &collaboration.ShareId{
-					OpaqueId: shareID,
-				},
-			},
+		Share: &collaboration.ReceivedShare{
+			Share: &collaboration.Share{Id: &collaboration.ShareId{OpaqueId: shareID}},
 		},
-		Field: &collaboration.UpdateReceivedShareRequest_UpdateField{
-			Field: &collaboration.UpdateReceivedShareRequest_UpdateField_State{
-				State: collaboration.ShareState_SHARE_STATE_ACCEPTED,
-			},
-		},
+		UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"state"}},
 	}
 	if rejectShare {
-		shareRequest.Field = &collaboration.UpdateReceivedShareRequest_UpdateField{
-			Field: &collaboration.UpdateReceivedShareRequest_UpdateField_State{
-				State: collaboration.ShareState_SHARE_STATE_REJECTED,
-			},
-		}
+		shareRequest.Share.State = collaboration.ShareState_SHARE_STATE_REJECTED
+	} else {
+		// TODO find free mount point and pass it on with an updated field mask
+		shareRequest.Share.State = collaboration.ShareState_SHARE_STATE_ACCEPTED
 	}
 
-	shareRes, err := uClient.UpdateReceivedShare(ctx, shareRequest)
+	shareRes, err := client.UpdateReceivedShare(ctx, shareRequest)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "grpc update received share request failed", err)
 		return
@@ -73,4 +82,30 @@ func (h *Handler) updateReceivedShare(w http.ResponseWriter, r *http.Request, sh
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "grpc update received share request failed", errors.Errorf("code: %d, message: %s", shareRes.Status.Code, shareRes.Status.Message))
 		return
 	}
+
+	rs := shareRes.GetShare()
+
+	info, status, err := h.getResourceInfoByID(ctx, client, rs.Share.ResourceId)
+	if err != nil || status.Code != rpc.Code_CODE_OK {
+		h.logProblems(status, err, "could not stat, skipping")
+	}
+
+	data, err := conversions.CS3Share2ShareData(r.Context(), rs.Share)
+	if err != nil {
+		logger.Debug().Interface("share", rs.Share).Interface("shareData", data).Err(err).Msg("could not CS3Share2ShareData, skipping")
+	}
+
+	data.State = mapState(rs.GetState())
+
+	if err := h.addFileInfo(ctx, data, info); err != nil {
+		logger.Debug().Interface("received_share", rs).Interface("info", info).Interface("shareData", data).Err(err).Msg("could not add file info, skipping")
+	}
+	h.mapUserIds(r.Context(), client, data)
+
+	if data.State == ocsStateAccepted {
+		// Needed because received shares can be jailed in a folder in the users home
+		data.Path = path.Join(h.sharePrefix, path.Base(info.Path))
+	}
+
+	response.WriteOCSSuccess(w, r, []*conversions.ShareData{data})
 }

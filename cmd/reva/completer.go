@@ -79,15 +79,7 @@ func (c *Completer) argumentCompleter(args ...string) []prompt.Suggest {
 		return []prompt.Suggest{}
 	}
 
-	var suggests []prompt.Suggest
-
 	switch args[0] {
-	case "gen":
-		suggests = convertCmdToSuggests([]*command{
-			genConfigSubCommand(),
-			genUsersSubCommand(),
-		})
-		return prompt.FilterHasPrefix(suggests, args[1], true)
 
 	case "login":
 		if len(args) == 2 {
@@ -106,7 +98,7 @@ func (c *Completer) argumentCompleter(args ...string) []prompt.Suggest {
 			return prompt.FilterHasPrefix(c.lsArgumentCompleter(false), args[2], true)
 		}
 
-	case "rm", "stat", "share-create", "ocm-share-create", "public-share-create", "open-file-in-app-provider", "download":
+	case "rm", "stat", "share-create", "ocm-share-create", "public-share-create", "open-in-app", "open-file-in-app-provider", "download":
 		if len(args) == 2 {
 			return prompt.FilterHasPrefix(c.lsArgumentCompleter(false), args[1], true)
 		}
@@ -168,22 +160,22 @@ func (c *Completer) completeOptionArguments(d prompt.Document) ([]prompt.Suggest
 	var match bool
 	switch option {
 	case "-cs":
-		suggests = []prompt.Suggest{prompt.Suggest{Text: "basic"}, prompt.Suggest{Text: "oidc"}}
+		suggests = []prompt.Suggest{{Text: "basic"}, {Text: "oidc"}}
 		match = true
 	case "-dd":
-		suggests = []prompt.Suggest{prompt.Suggest{Text: "local"}, prompt.Suggest{Text: "owncloud"}}
+		suggests = []prompt.Suggest{{Text: "local"}, {Text: "owncloud"}}
 		match = true
 	case "-type":
-		suggests = []prompt.Suggest{prompt.Suggest{Text: "user"}, prompt.Suggest{Text: "group"}}
+		suggests = []prompt.Suggest{{Text: "user"}, {Text: "group"}}
 		match = true
 	case "-rol":
-		suggests = []prompt.Suggest{prompt.Suggest{Text: "viewer"}, prompt.Suggest{Text: "editor"}}
+		suggests = []prompt.Suggest{{Text: "viewer"}, {Text: "editor"}}
 		match = true
 	case "-state":
-		suggests = []prompt.Suggest{prompt.Suggest{Text: "pending"}, prompt.Suggest{Text: "accepted"}, prompt.Suggest{Text: "rejected"}}
+		suggests = []prompt.Suggest{{Text: "pending"}, {Text: "accepted"}, {Text: "rejected"}}
 		match = true
 	case "-viewmode":
-		suggests = []prompt.Suggest{prompt.Suggest{Text: "view"}, prompt.Suggest{Text: "read"}, prompt.Suggest{Text: "write"}}
+		suggests = []prompt.Suggest{{Text: "view"}, {Text: "read"}, {Text: "write"}}
 		match = true
 	case "-c", "-grantee", "-idp", "-by-resource-id", "-xs", "-token":
 		match = true

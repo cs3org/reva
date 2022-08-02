@@ -51,6 +51,9 @@ const (
 
 	// ShareTypeFederatedCloudShare represents a federated share
 	ShareTypeFederatedCloudShare ShareType = 6
+
+	// ShareTypeSpaceMembership represents an action regarding space members
+	ShareTypeSpaceMembership ShareType = 7
 )
 
 // ResourceType indicates the OCS type of the resource
@@ -146,21 +149,21 @@ type ShareData struct {
 // ShareeData holds share recipient search results
 type ShareeData struct {
 	Exact   *ExactMatchesData `json:"exact" xml:"exact"`
-	Users   []*MatchData      `json:"users" xml:"users"`
-	Groups  []*MatchData      `json:"groups" xml:"groups"`
-	Remotes []*MatchData      `json:"remotes" xml:"remotes"`
+	Users   []*MatchData      `json:"users" xml:"users>element"`
+	Groups  []*MatchData      `json:"groups" xml:"groups>element"`
+	Remotes []*MatchData      `json:"remotes" xml:"remotes>element"`
 }
 
 // ExactMatchesData hold exact matches
 type ExactMatchesData struct {
-	Users   []*MatchData `json:"users" xml:"users"`
-	Groups  []*MatchData `json:"groups" xml:"groups"`
-	Remotes []*MatchData `json:"remotes" xml:"remotes"`
+	Users   []*MatchData `json:"users" xml:"users>element"`
+	Groups  []*MatchData `json:"groups" xml:"groups>element"`
+	Remotes []*MatchData `json:"remotes" xml:"remotes>element"`
 }
 
 // MatchData describes a single match
 type MatchData struct {
-	Label string          `json:"label" xml:"label"`
+	Label string          `json:"label" xml:"label,omitempty"`
 	Value *MatchValueData `json:"value" xml:"value"`
 }
 
@@ -209,7 +212,7 @@ func PublicShare2ShareData(share *link.PublicShare, r *http.Request, publicURL s
 		Token:        share.Token,
 		Name:         share.DisplayName,
 		MailSend:     0,
-		URL:          publicURL + path.Join("/", "#/s/"+share.Token),
+		URL:          publicURL + path.Join("/", "s/"+share.Token),
 		UIDOwner:     LocalUserIDToString(share.Creator),
 		UIDFileOwner: LocalUserIDToString(share.Owner),
 	}
@@ -252,19 +255,6 @@ func LocalGroupIDToString(groupID *grouppb.GroupId) string {
 	return groupID.OpaqueId
 }
 
-// UserIDToString transforms a cs3api user id into an ocs data model
-// TODO This should be used instead of LocalUserIDToString bit it requires interpreting an @ on the client side
-// TODO An alternative would be to send the idp / iss as an additional attribute. might be less intrusive
-func UserIDToString(userID *userpb.UserId) string {
-	if userID == nil || userID.OpaqueId == "" {
-		return ""
-	}
-	if userID.Idp == "" {
-		return userID.OpaqueId
-	}
-	return userID.OpaqueId + "@" + userID.Idp
-}
-
 // GetUserManager returns a connection to a user share manager
 func GetUserManager(manager string, m map[string]map[string]interface{}) (user.Manager, error) {
 	if f, ok := usermgr.NewFuncs[manager]; ok {
@@ -304,4 +294,25 @@ func ParseTimestamp(timestampString string) (*types.Timestamp, error) {
 		Seconds: uint64(final / 1000000000),
 		Nanos:   uint32(final % 1000000000),
 	}, nil
+}
+
+// UserTypeString returns human readable strings for various user types
+func UserTypeString(userType userpb.UserType) string {
+	switch userType {
+	case userpb.UserType_USER_TYPE_PRIMARY:
+		return "primary"
+	case userpb.UserType_USER_TYPE_SECONDARY:
+		return "secondary"
+	case userpb.UserType_USER_TYPE_SERVICE:
+		return "service"
+	case userpb.UserType_USER_TYPE_APPLICATION:
+		return "application"
+	case userpb.UserType_USER_TYPE_GUEST:
+		return "guest"
+	case userpb.UserType_USER_TYPE_FEDERATED:
+		return "federated"
+	case userpb.UserType_USER_TYPE_LIGHTWEIGHT:
+		return "lightweight"
+	}
+	return "invalid"
 }

@@ -20,11 +20,11 @@ package authregistry
 
 import (
 	"context"
-	"fmt"
 
 	registrypb "github.com/cs3org/go-cs3apis/cs3/auth/registry/v1beta1"
 	"github.com/cs3org/reva/pkg/auth"
 	"github.com/cs3org/reva/pkg/auth/registry/registry"
+	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/mitchellh/mapstructure"
@@ -98,7 +98,7 @@ func getRegistry(c *config) (auth.Registry, error) {
 	if f, ok := registry.NewFuncs[c.Driver]; ok {
 		return f(c.Drivers[c.Driver])
 	}
-	return nil, fmt.Errorf("authregistrysvc: driver not found: %s", c.Driver)
+	return nil, errtypes.NotFound("authregistrysvc: driver not found: " + c.Driver)
 }
 
 func (s *service) ListAuthProviders(ctx context.Context, req *registrypb.ListAuthProvidersRequest) (*registrypb.ListAuthProvidersResponse, error) {
@@ -116,17 +116,17 @@ func (s *service) ListAuthProviders(ctx context.Context, req *registrypb.ListAut
 	return res, nil
 }
 
-func (s *service) GetAuthProvider(ctx context.Context, req *registrypb.GetAuthProviderRequest) (*registrypb.GetAuthProviderResponse, error) {
+func (s *service) GetAuthProviders(ctx context.Context, req *registrypb.GetAuthProvidersRequest) (*registrypb.GetAuthProvidersResponse, error) {
 	pinfo, err := s.reg.GetProvider(ctx, req.Type)
 	if err != nil {
-		return &registrypb.GetAuthProviderResponse{
+		return &registrypb.GetAuthProvidersResponse{
 			Status: status.NewInternal(ctx, err, "error getting auth provider for type: "+req.Type),
 		}, nil
 	}
 
-	res := &registrypb.GetAuthProviderResponse{
-		Status:   status.NewOK(ctx),
-		Provider: pinfo,
+	res := &registrypb.GetAuthProvidersResponse{
+		Status:    status.NewOK(ctx),
+		Providers: []*registrypb.ProviderInfo{pinfo},
 	}
 	return res, nil
 }

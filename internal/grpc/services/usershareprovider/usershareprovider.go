@@ -20,17 +20,18 @@ package usershareprovider
 
 import (
 	"context"
-	"fmt"
+	"regexp"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
+	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/share"
 	"github.com/cs3org/reva/pkg/share/manager/registry"
-	"github.com/cs3org/reva/pkg/user"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
@@ -41,8 +42,9 @@ func init() {
 }
 
 type config struct {
-	Driver  string                            `mapstructure:"driver"`
-	Drivers map[string]map[string]interface{} `mapstructure:"drivers"`
+	Driver                string                            `mapstructure:"driver"`
+	Drivers               map[string]map[string]interface{} `mapstructure:"drivers"`
+	AllowedPathsForShares []string                          `mapstructure:"allowed_paths_for_shares"`
 }
 
 func (c *config) init() {
@@ -52,15 +54,16 @@ func (c *config) init() {
 }
 
 type service struct {
-	conf *config
-	sm   share.Manager
+	conf                  *config
+	sm                    share.Manager
+	allowedPathsForShares []*regexp.Regexp
 }
 
 func getShareManager(c *config) (share.Manager, error) {
 	if f, ok := registry.NewFuncs[c.Driver]; ok {
 		return f(c.Drivers[c.Driver])
 	}
-	return nil, fmt.Errorf("driver not found: %s", c.Driver)
+	return nil, errtypes.NotFound("driver not found: " + c.Driver)
 }
 
 // TODO(labkode): add ctx to Close.
@@ -100,21 +103,50 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 		return nil, err
 	}
 
+	allowedPathsForShares := make([]*regexp.Regexp, 0, len(c.AllowedPathsForShares))
+	for _, s := range c.AllowedPathsForShares {
+		regex, err := regexp.Compile(s)
+		if err != nil {
+			return nil, err
+		}
+		allowedPathsForShares = append(allowedPathsForShares, regex)
+	}
+
 	service := &service{
-		conf: c,
-		sm:   sm,
+		conf:                  c,
+		sm:                    sm,
+		allowedPathsForShares: allowedPathsForShares,
 	}
 
 	return service, nil
 }
 
+func (s *service) isPathAllowed(path string) bool {
+	if len(s.allowedPathsForShares) == 0 {
+		return true
+	}
+	for _, reg := range s.allowedPathsForShares {
+		if reg.MatchString(path) {
+			return true
+		}
+	}
+	return false
+}
+
 func (s *service) CreateShare(ctx context.Context, req *collaboration.CreateShareRequest) (*collaboration.CreateShareResponse, error) {
-	u := user.ContextMustGetUser(ctx)
+	u := ctxpkg.ContextMustGetUser(ctx)
 	if req.Grant.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER && req.Grant.Grantee.GetUserId().Idp == "" {
 		// use logged in user Idp as default.
-		g := &userpb.UserId{OpaqueId: req.Grant.Grantee.GetUserId().OpaqueId, Idp: u.Id.Idp}
+		g := &userpb.UserId{OpaqueId: req.Grant.Grantee.GetUserId().OpaqueId, Idp: u.Id.Idp, Type: userpb.UserType_USER_TYPE_PRIMARY}
 		req.Grant.Grantee.Id = &provider.Grantee_UserId{UserId: g}
 	}
+
+	if !s.isPathAllowed(req.ResourceInfo.Path) {
+		return &collaboration.CreateShareResponse{
+			Status: status.NewInvalidArg(ctx, "share creation is not allowed for the specified path"),
+		}, nil
+	}
+
 	share, err := s.sm.Share(ctx, req.ResourceInfo, req.Grant)
 	if err != nil {
 		return &collaboration.CreateShareResponse{
@@ -172,7 +204,7 @@ func (s *service) ListShares(ctx context.Context, req *collaboration.ListSharesR
 }
 
 func (s *service) UpdateShare(ctx context.Context, req *collaboration.UpdateShareRequest) (*collaboration.UpdateShareResponse, error) {
-	_, err := s.sm.UpdateShare(ctx, req.Ref, req.Field.GetPermissions()) // TODO(labkode): check what to update
+	share, err := s.sm.UpdateShare(ctx, req.Ref, req.Field.GetPermissions()) // TODO(labkode): check what to update
 	if err != nil {
 		return &collaboration.UpdateShareResponse{
 			Status: status.NewInternal(ctx, err, "error updating share"),
@@ -181,12 +213,24 @@ func (s *service) UpdateShare(ctx context.Context, req *collaboration.UpdateShar
 
 	res := &collaboration.UpdateShareResponse{
 		Status: status.NewOK(ctx),
+		Share:  share,
 	}
 	return res, nil
 }
 
 func (s *service) ListReceivedShares(ctx context.Context, req *collaboration.ListReceivedSharesRequest) (*collaboration.ListReceivedSharesResponse, error) {
-	shares, err := s.sm.ListReceivedShares(ctx) // TODO(labkode): check what to update
+	// For the UI add a filter to not display the denial shares
+	foundExclude := false
+	for _, f := range req.Filters {
+		if f.Type == collaboration.Filter_TYPE_EXCLUDE_DENIALS {
+			foundExclude = true
+			break
+		}
+	}
+	if !foundExclude {
+		req.Filters = append(req.Filters, &collaboration.Filter{Type: collaboration.Filter_TYPE_EXCLUDE_DENIALS})
+	}
+	shares, err := s.sm.ListReceivedShares(ctx, req.Filters) // TODO(labkode): check what to update
 	if err != nil {
 		return &collaboration.ListReceivedSharesResponse{
 			Status: status.NewInternal(ctx, err, "error listing received shares"),
@@ -219,7 +263,7 @@ func (s *service) GetReceivedShare(ctx context.Context, req *collaboration.GetRe
 }
 
 func (s *service) UpdateReceivedShare(ctx context.Context, req *collaboration.UpdateReceivedShareRequest) (*collaboration.UpdateReceivedShareResponse, error) {
-	_, err := s.sm.UpdateReceivedShare(ctx, req.Ref, req.Field) // TODO(labkode): check what to update
+	share, err := s.sm.UpdateReceivedShare(ctx, req.Share, req.UpdateMask) // TODO(labkode): check what to update
 	if err != nil {
 		return &collaboration.UpdateReceivedShareResponse{
 			Status: status.NewInternal(ctx, err, "error updating received share"),
@@ -228,6 +272,7 @@ func (s *service) UpdateReceivedShare(ctx context.Context, req *collaboration.Up
 
 	res := &collaboration.UpdateReceivedShareResponse{
 		Status: status.NewOK(ctx),
+		Share:  share,
 	}
 	return res, nil
 }

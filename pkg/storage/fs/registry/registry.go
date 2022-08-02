@@ -27,7 +27,7 @@ type NewFunc func(map[string]interface{}) (storage.FS, error)
 // NewFuncs is a map containing all the registered storage backends.
 var NewFuncs = map[string]NewFunc{}
 
-// Register registers a new storage backend new function.
+// Register registers a new storage backend function.
 // Not safe for concurrent use. Safe for use from package init.
 func Register(name string, f NewFunc) {
 	NewFuncs[name] = f

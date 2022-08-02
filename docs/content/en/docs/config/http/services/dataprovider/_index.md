@@ -43,3 +43,11 @@ The configuration for the data tx protocols [[Ref]](https://github.com/cs3org/re
 {{< /highlight >}}
 {{% /dir %}}
 
+{{% dir name="insecure" type="bool" default=false %}}
+Whether to skip certificate checks when sending requests. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/http/services/dataprovider/dataprovider.go#L45)
+{{< highlight toml >}}
+[http.services.dataprovider]
+insecure = false
+{{< /highlight >}}
+{{% /dir %}}
+

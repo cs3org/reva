@@ -32,7 +32,7 @@ import (
 	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/sharedconf"
-	"github.com/dgrijalva/jwt-go"
+	"github.com/golang-jwt/jwt"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -41,6 +41,8 @@ import (
 const (
 	// TokenTransportHeader holds the header key for the reva transfer token
 	TokenTransportHeader = "X-Reva-Transfer"
+	// UploadExpiresHeader holds the timestamp for the transport token expiry, defined in https://tus.io/protocols/resumable-upload.html#expiration
+	UploadExpiresHeader = "Upload-Expires"
 )
 
 func init() {
@@ -56,7 +58,7 @@ type config struct {
 	Prefix               string `mapstructure:"prefix"`
 	TransferSharedSecret string `mapstructure:"transfer_shared_secret"`
 	Timeout              int64  `mapstructure:"timeout"`
-	Insecure             bool   `mapstructure:"insecure"`
+	Insecure             bool   `mapstructure:"insecure" docs:"false;Whether to skip certificate checks when sending requests."`
 }
 
 func (c *config) init() {
@@ -107,7 +109,9 @@ func (s *svc) Handler() http.Handler {
 }
 
 func (s *svc) Unprotected() []string {
-	return []string{}
+	return []string{
+		"/",
+	}
 }
 
 func (s *svc) setHandler() {
@@ -197,7 +201,12 @@ func (s *svc) doHead(w http.ResponseWriter, r *http.Request) {
 
 	copyHeader(w.Header(), httpRes.Header)
 
+	// add upload expiry / transfer token expiry header for tus https://tus.io/protocols/resumable-upload.html#expiration
+	w.Header().Set(UploadExpiresHeader, time.Unix(claims.ExpiresAt, 0).Format(time.RFC1123))
+
 	if httpRes.StatusCode != http.StatusOK {
+		// swallow the body and set content-length to 0 to prevent reverse proxies from trying to read from it
+		w.Header().Set("Content-Length", "0")
 		w.WriteHeader(httpRes.StatusCode)
 		return
 	}
@@ -237,11 +246,16 @@ func (s *svc) doGet(w http.ResponseWriter, r *http.Request) {
 	defer httpRes.Body.Close()
 
 	copyHeader(w.Header(), httpRes.Header)
-	// TODO why do we swallow the body?
-	w.WriteHeader(httpRes.StatusCode)
-	if httpRes.StatusCode != http.StatusOK && httpRes.StatusCode != http.StatusPartialContent {
+	switch httpRes.StatusCode {
+	case http.StatusOK:
+	case http.StatusPartialContent:
+	default:
+		// swallow the body and set content-length to 0 to prevent reverse proxies from trying to read from it
+		w.Header().Set("Content-Length", "0")
+		w.WriteHeader(httpRes.StatusCode)
 		return
 	}
+	w.WriteHeader(httpRes.StatusCode)
 
 	var c int64
 	c, err = io.Copy(w, httpRes.Body)
@@ -304,6 +318,8 @@ func (s *svc) doPut(w http.ResponseWriter, r *http.Request) {
 
 	copyHeader(w.Header(), httpRes.Header)
 	if httpRes.StatusCode != http.StatusOK {
+		// swallow the body and set content-length to 0 to prevent reverse proxies from trying to read from it
+		w.Header().Set("Content-Length", "0")
 		w.WriteHeader(httpRes.StatusCode)
 		return
 	}
@@ -362,6 +378,8 @@ func (s *svc) doPatch(w http.ResponseWriter, r *http.Request) {
 	copyHeader(w.Header(), httpRes.Header)
 
 	if httpRes.StatusCode != http.StatusOK {
+		// swallow the body and set content-length to 0 to prevent reverse proxies from trying to read from it
+		w.Header().Set("Content-Length", "0")
 		w.WriteHeader(httpRes.StatusCode)
 		return
 	}

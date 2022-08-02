@@ -32,7 +32,7 @@ func TestGetCredsForUserAgent(t *testing.T) {
 
 	tests := []*test{
 		// no user agent we return all available credentials
-		&test{
+		{
 			userAgent:            "",
 			userAgentMap:         map[string]string{},
 			availableCredentials: []string{"basic"},
@@ -40,7 +40,7 @@ func TestGetCredsForUserAgent(t *testing.T) {
 		},
 
 		// map set but user agent not in map
-		&test{
+		{
 			userAgent:            "curl",
 			userAgentMap:         map[string]string{"mirall": "basic"},
 			availableCredentials: []string{"basic", "bearer"},
@@ -48,7 +48,7 @@ func TestGetCredsForUserAgent(t *testing.T) {
 		},
 
 		// no user map we return all available credentials
-		&test{
+		{
 			userAgent:            "mirall",
 			userAgentMap:         map[string]string{},
 			availableCredentials: []string{"basic"},
@@ -56,7 +56,7 @@ func TestGetCredsForUserAgent(t *testing.T) {
 		},
 
 		// user agent set but no mapping set we return all credentials
-		&test{
+		{
 			userAgent:            "mirall",
 			userAgentMap:         map[string]string{},
 			availableCredentials: []string{"basic"},
@@ -64,7 +64,7 @@ func TestGetCredsForUserAgent(t *testing.T) {
 		},
 
 		// user mapping set to non available credential, we return all available
-		&test{
+		{
 			userAgent:            "mirall",
 			userAgentMap:         map[string]string{"mirall": "notfound"},
 			availableCredentials: []string{"basic", "bearer"},
@@ -72,7 +72,7 @@ func TestGetCredsForUserAgent(t *testing.T) {
 		},
 
 		// user mapping set and we return only desired credential
-		&test{
+		{
 			userAgent:            "mirall",
 			userAgentMap:         map[string]string{"mirall": "bearer"},
 			availableCredentials: []string{"basic", "bearer"},

@@ -19,20 +19,14 @@
 package siteacc
 
 import (
-	"encoding/json"
-	"fmt"
-	"io/ioutil"
 	"net/http"
-	"net/url"
-	"strings"
 
+	"github.com/cs3org/reva/pkg/siteacc"
+	"github.com/cs3org/reva/pkg/siteacc/config"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 
-	"github.com/cs3org/reva/internal/http/services/siteacc/config"
-	"github.com/cs3org/reva/internal/http/services/siteacc/data"
-	"github.com/cs3org/reva/pkg/mentix/key"
 	"github.com/cs3org/reva/pkg/rhttp/global"
 )
 
@@ -44,7 +38,7 @@ type svc struct {
 	conf *config.Configuration
 	log  *zerolog.Logger
 
-	manager *Manager
+	siteacc *siteacc.SiteAccounts
 }
 
 const (
@@ -63,263 +57,12 @@ func (s *svc) Prefix() string {
 
 // Unprotected returns all endpoints that can be queried without prior authorization.
 func (s *svc) Unprotected() []string {
-	// This service currently only has one public endpoint used for account registration
-	return []string{config.EndpointCreate}
+	return s.siteacc.GetPublicEndpoints()
 }
 
 // Handler serves all HTTP requests.
 func (s *svc) Handler() http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		defer r.Body.Close()
-
-		switch r.URL.Path {
-		case config.EndpointPanel:
-			s.handlePanelEndpoint(w, r)
-
-		default:
-			s.handleRequestEndpoints(w, r)
-		}
-	})
-}
-
-func (s *svc) handlePanelEndpoint(w http.ResponseWriter, r *http.Request) {
-	if err := s.manager.ShowPanel(w); err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		_, _ = w.Write([]byte(fmt.Sprintf("Unable to show the web interface panel: %v", err)))
-	}
-}
-
-func (s *svc) handleRequestEndpoints(w http.ResponseWriter, r *http.Request) {
-	// Allow definition of endpoints in a flexible and easy way
-	type Endpoint struct {
-		Path    string
-		Method  string
-		Handler func(url.Values, []byte) (interface{}, error)
-	}
-
-	// Every request to the accounts service results in a standardized JSON response
-	type Response struct {
-		Success bool        `json:"success"`
-		Error   string      `json:"error,omitempty"`
-		Data    interface{} `json:"data,omitempty"`
-	}
-
-	endpoints := []Endpoint{
-		{config.EndpointGenerateAPIKey, http.MethodGet, s.handleGenerateAPIKey},
-		{config.EndpointVerifyAPIKey, http.MethodGet, s.handleVerifyAPIKey},
-		{config.EndpointAssignAPIKey, http.MethodPost, s.handleAssignAPIKey},
-		{config.EndpointList, http.MethodGet, s.handleList},
-		{config.EndpointFind, http.MethodGet, s.handleFind},
-		{config.EndpointCreate, http.MethodPost, s.handleCreate},
-		{config.EndpointUpdate, http.MethodPost, s.handleUpdate},
-		{config.EndpointRemove, http.MethodPost, s.handleRemove},
-		{config.EndpointAuthorize, http.MethodPost, s.handleAuthorize},
-		{config.EndpointIsAuthorized, http.MethodGet, s.handleIsAuthorized},
-	}
-
-	// The default response is an unknown endpoint (for the specified method)
-	resp := Response{
-		Success: false,
-		Error:   fmt.Sprintf("unknown endpoint %v for method %v", r.URL.Path, r.Method),
-		Data:    nil,
-	}
-
-	// Check each endpoint if it can handle the request
-	for _, endpoint := range endpoints {
-		if r.URL.Path == endpoint.Path && r.Method == endpoint.Method {
-			body, _ := ioutil.ReadAll(r.Body)
-
-			if data, err := endpoint.Handler(r.URL.Query(), body); err == nil {
-				resp.Success = true
-				resp.Error = ""
-				resp.Data = data
-			} else {
-				resp.Success = false
-				resp.Error = fmt.Sprintf("%v", err)
-				resp.Data = nil
-			}
-
-			break
-		}
-	}
-
-	// Any failure during query handling results in a bad request
-	if !resp.Success {
-		w.WriteHeader(http.StatusBadRequest)
-	}
-
-	jsonData, _ := json.MarshalIndent(&resp, "", "\t")
-	_, _ = w.Write(jsonData)
-}
-
-func (s *svc) handleGenerateAPIKey(values url.Values, body []byte) (interface{}, error) {
-	email := values.Get("email")
-	flags := key.FlagDefault
-
-	if strings.EqualFold(values.Get("isScienceMesh"), "true") {
-		flags |= key.FlagScienceMesh
-	}
-
-	if len(email) == 0 {
-		return nil, errors.Errorf("no email provided")
-	}
-
-	apiKey, err := key.GenerateAPIKey(strings.ToLower(email), flags)
-	if err != nil {
-		return nil, errors.Wrap(err, "unable to generate API key")
-	}
-	return map[string]string{"apiKey": apiKey}, nil
-}
-
-func (s *svc) handleVerifyAPIKey(values url.Values, body []byte) (interface{}, error) {
-	apiKey := values.Get("apiKey")
-	email := values.Get("email")
-
-	if len(apiKey) == 0 {
-		return nil, errors.Errorf("no API key provided")
-	}
-
-	if len(email) == 0 {
-		return nil, errors.Errorf("no email provided")
-	}
-
-	err := key.VerifyAPIKey(apiKey, strings.ToLower(email))
-	if err != nil {
-		return nil, errors.Wrap(err, "invalid API key")
-	}
-	return nil, nil
-}
-
-func (s *svc) handleAssignAPIKey(values url.Values, body []byte) (interface{}, error) {
-	account, err := s.unmarshalRequestData(body)
-	if err != nil {
-		return nil, err
-	}
-
-	flags := key.FlagDefault
-	if _, ok := values["isScienceMesh"]; ok {
-		flags |= key.FlagScienceMesh
-	}
-
-	// Assign a new API key to the account through the account manager
-	if err := s.manager.AssignAPIKeyToAccount(account, flags); err != nil {
-		return nil, errors.Wrap(err, "unable to assign API key")
-	}
-
-	return nil, nil
-}
-
-func (s *svc) handleList(values url.Values, body []byte) (interface{}, error) {
-	return s.manager.CloneAccounts(), nil
-}
-
-func (s *svc) handleFind(values url.Values, body []byte) (interface{}, error) {
-	account, err := s.findAccount(values.Get("by"), values.Get("value"))
-	if err != nil {
-		return nil, err
-	}
-	return map[string]interface{}{"account": account}, nil
-}
-
-func (s *svc) handleCreate(values url.Values, body []byte) (interface{}, error) {
-	account, err := s.unmarshalRequestData(body)
-	if err != nil {
-		return nil, err
-	}
-
-	// Create a new account through the account manager
-	if err := s.manager.CreateAccount(account); err != nil {
-		return nil, errors.Wrap(err, "unable to create account")
-	}
-
-	return nil, nil
-}
-
-func (s *svc) handleUpdate(values url.Values, body []byte) (interface{}, error) {
-	account, err := s.unmarshalRequestData(body)
-	if err != nil {
-		return nil, err
-	}
-
-	// Update the account through the account manager; only the basic data of an account can be updated through this endpoint
-	if err := s.manager.UpdateAccount(account, false); err != nil {
-		return nil, errors.Wrap(err, "unable to update account")
-	}
-
-	return nil, nil
-}
-
-func (s *svc) handleRemove(values url.Values, body []byte) (interface{}, error) {
-	account, err := s.unmarshalRequestData(body)
-	if err != nil {
-		return nil, err
-	}
-
-	// Remove the account through the account manager
-	if err := s.manager.RemoveAccount(account); err != nil {
-		return nil, errors.Wrap(err, "unable to remove account")
-	}
-
-	return nil, nil
-}
-
-func (s *svc) handleIsAuthorized(values url.Values, body []byte) (interface{}, error) {
-	account, err := s.findAccount(values.Get("by"), values.Get("value"))
-	if err != nil {
-		return nil, err
-	}
-	return account.Data.Authorized, nil
-}
-
-func (s *svc) handleAuthorize(values url.Values, body []byte) (interface{}, error) {
-	account, err := s.unmarshalRequestData(body)
-	if err != nil {
-		return nil, err
-	}
-
-	if val := values.Get("status"); len(val) > 0 {
-		var authorize bool
-		switch strings.ToLower(val) {
-		case "true":
-			authorize = true
-
-		case "false":
-			authorize = false
-
-		default:
-			return nil, errors.Errorf("unsupported authorization status %v", val[0])
-		}
-
-		// Authorize the account through the account manager
-		if err := s.manager.AuthorizeAccount(account, authorize); err != nil {
-			return nil, errors.Wrap(err, "unable to remove account")
-		}
-	} else {
-		return nil, errors.Errorf("no authorization status provided")
-	}
-
-	return nil, nil
-}
-
-func (s *svc) unmarshalRequestData(body []byte) (*data.Account, error) {
-	account := &data.Account{}
-	if err := json.Unmarshal(body, account); err != nil {
-		return nil, errors.Wrap(err, "invalid account data")
-	}
-	return account, nil
-}
-
-func (s *svc) findAccount(by string, value string) (*data.Account, error) {
-	if len(by) == 0 && len(value) == 0 {
-		return nil, errors.Errorf("missing search criteria")
-	}
-
-	// Find the account using the account manager
-	account, err := s.manager.FindAccount(by, value)
-	if err != nil {
-		return nil, errors.Wrap(err, "user not found")
-	}
-	return account, nil
+	return s.siteacc.RequestHandler()
 }
 
 func parseConfig(m map[string]interface{}) (*config.Configuration, error) {
@@ -328,6 +71,12 @@ func parseConfig(m map[string]interface{}) (*config.Configuration, error) {
 		return nil, errors.Wrap(err, "error decoding configuration")
 	}
 	applyDefaultConfig(conf)
+	conf.Cleanup()
+
+	if conf.Webserver.URL == "" {
+		return nil, errors.Errorf("no webserver URL specified")
+	}
+
 	return conf, nil
 }
 
@@ -339,6 +88,19 @@ func applyDefaultConfig(conf *config.Configuration) {
 	if conf.Storage.Driver == "" {
 		conf.Storage.Driver = "file"
 	}
+
+	if conf.Mentix.DataEndpoint == "" {
+		conf.Mentix.DataEndpoint = "/sites"
+	}
+
+	if conf.Mentix.SiteRegistrationEndpoint == "" {
+		conf.Mentix.SiteRegistrationEndpoint = "/sitereg"
+	}
+
+	// Enforce a minimum session timeout of 1 minute (and default to 5 minutes)
+	if conf.Webserver.SessionTimeout < 60 {
+		conf.Webserver.SessionTimeout = 5 * 60
+	}
 }
 
 // New returns a new Site Accounts service.
@@ -349,17 +111,17 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 		return nil, err
 	}
 
-	// Create the accounts manager instance
-	mngr, err := newManager(conf, log)
+	// Create the sites accounts instance
+	siteacc, err := siteacc.New(conf, log)
 	if err != nil {
-		return nil, errors.Wrap(err, "error creating the site accounts service")
+		return nil, errors.Wrap(err, "error creating the sites accounts service")
 	}
 
 	// Create the service
 	s := &svc{
 		conf:    conf,
 		log:     log,
-		manager: mngr,
+		siteacc: siteacc,
 	}
 	return s, nil
 }

@@ -28,6 +28,8 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
+	"github.com/cs3org/reva/pkg/utils"
 	"github.com/jedib0t/go-pretty/table"
 	"github.com/pkg/errors"
 )
@@ -39,10 +41,11 @@ func shareCreateCommand() *command {
 	grantType := cmd.String("type", "user", "grantee type (user or group)")
 	grantee := cmd.String("grantee", "", "the grantee")
 	idp := cmd.String("idp", "", "the idp of the grantee, default to same idp as the user triggering the action")
-	rol := cmd.String("rol", "viewer", "the permission for the share (viewer or editor)")
+	rol := cmd.String("rol", "viewer", "the permission for the share (viewer, editor, denied)")
+	userType := cmd.String("user-type", "primary", "the type of user account, defaults to primary")
 
 	cmd.ResetFlags = func() {
-		*grantType, *grantee, *idp, *rol = "user", "", "", "viewer"
+		*grantType, *grantee, *idp, *rol, *userType = "user", "", "", "viewer", "primary"
 	}
 
 	cmd.Action = func(w ...io.Writer) error {
@@ -63,10 +66,7 @@ func shareCreateCommand() *command {
 			return err
 		}
 
-		ref := &provider.Reference{
-			Spec: &provider.Reference_Path{Path: fn},
-		}
-
+		ref := &provider.Reference{Path: fn}
 		req := &provider.StatRequest{Ref: ref}
 		res, err := client.Stat(ctx, req)
 		if err != nil {
@@ -97,6 +97,7 @@ func shareCreateCommand() *command {
 			grant.Grantee.Id = &provider.Grantee_UserId{UserId: &userpb.UserId{
 				Idp:      *idp,
 				OpaqueId: *grantee,
+				Type:     utils.UserTypeMap(*userType),
 			}}
 		case "group":
 			grant.Grantee.Id = &provider.Grantee_GroupId{GroupId: &grouppb.GroupId{
@@ -156,27 +157,16 @@ func getGrantType(t string) provider.GranteeType {
 }
 
 func getSharePerm(p string) (*provider.ResourcePermissions, error) {
-	if p == viewerPermission {
-		return &provider.ResourcePermissions{
-			GetPath:              true,
-			InitiateFileDownload: true,
-			ListFileVersions:     true,
-			ListContainer:        true,
-			Stat:                 true,
-		}, nil
-	} else if p == editorPermission {
-		return &provider.ResourcePermissions{
-			GetPath:              true,
-			InitiateFileDownload: true,
-			ListFileVersions:     true,
-			ListContainer:        true,
-			Stat:                 true,
-			CreateContainer:      true,
-			Delete:               true,
-			InitiateFileUpload:   true,
-			RestoreFileVersion:   true,
-			Move:                 true,
-		}, nil
+	switch p {
+	case viewerPermission:
+		return conversions.NewViewerRole().CS3ResourcePermissions(), nil
+	case editorPermission:
+		return conversions.NewEditorRole().CS3ResourcePermissions(), nil
+	case collabPermission:
+		return conversions.NewCoownerRole().CS3ResourcePermissions(), nil
+	case denyPermission:
+		return &provider.ResourcePermissions{}, nil
+	default:
+		return nil, errors.New("invalid rol: " + p)
 	}
-	return nil, errors.New("invalid rol: " + p)
 }

@@ -31,6 +31,8 @@ import (
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
+	"github.com/cs3org/reva/pkg/utils"
 	"github.com/jedib0t/go-pretty/table"
 	"github.com/pkg/errors"
 )
@@ -42,10 +44,11 @@ func ocmShareCreateCommand() *command {
 	grantType := cmd.String("type", "user", "grantee type (user or group)")
 	grantee := cmd.String("grantee", "", "the grantee")
 	idp := cmd.String("idp", "", "the idp of the grantee, default to same idp as the user triggering the action")
+	userType := cmd.String("user-type", "primary", "the type of user account, defaults to primary")
 	rol := cmd.String("rol", "viewer", "the permission for the share (viewer or editor)")
 
 	cmd.ResetFlags = func() {
-		*grantType, *grantee, *idp, *rol = "user", "", "", "viewer"
+		*grantType, *grantee, *idp, *rol, *userType = "user", "", "", "viewer", "primary"
 	}
 
 	cmd.Action = func(w ...io.Writer) error {
@@ -77,8 +80,9 @@ func ocmShareCreateCommand() *command {
 			return err
 		}
 
+		u := &userpb.UserId{OpaqueId: *grantee, Idp: *idp, Type: utils.UserTypeMap(*userType)}
 		remoteUserRes, err := client.GetAcceptedUser(ctx, &invitepb.GetAcceptedUserRequest{
-			RemoteUserId: &userpb.UserId{OpaqueId: *grantee, Idp: *idp},
+			RemoteUserId: u,
 		})
 		if err != nil {
 			return err
@@ -87,9 +91,7 @@ func ocmShareCreateCommand() *command {
 			return formatError(remoteUserRes.Status)
 		}
 
-		ref := &provider.Reference{
-			Spec: &provider.Reference_Path{Path: fn},
-		}
+		ref := &provider.Reference{Path: fn}
 		req := &provider.StatRequest{Ref: ref}
 		res, err := client.Stat(ctx, req)
 		if err != nil {
@@ -111,20 +113,17 @@ func ocmShareCreateCommand() *command {
 				Type: gt,
 				// For now, we only support user shares.
 				// TODO (ishank011): To be updated once this is decided.
-				Id: &provider.Grantee_UserId{UserId: &userpb.UserId{
-					Idp:      *idp,
-					OpaqueId: *grantee,
-				}},
+				Id: &provider.Grantee_UserId{UserId: u},
 			},
 		}
 
 		opaqueObj := &types.Opaque{
 			Map: map[string]*types.OpaqueEntry{
-				"permissions": &types.OpaqueEntry{
+				"permissions": {
 					Decoder: "plain",
 					Value:   []byte(strconv.Itoa(pint)),
 				},
-				"name": &types.OpaqueEntry{
+				"name": {
 					Decoder: "plain",
 					Value:   []byte(res.Info.Path),
 				},
@@ -167,28 +166,11 @@ func ocmShareCreateCommand() *command {
 func getOCMSharePerm(p string) (*ocm.SharePermissions, int, error) {
 	if p == viewerPermission {
 		return &ocm.SharePermissions{
-			Permissions: &provider.ResourcePermissions{
-				GetPath:              true,
-				InitiateFileDownload: true,
-				ListFileVersions:     true,
-				ListContainer:        true,
-				Stat:                 true,
-			},
+			Permissions: conversions.NewViewerRole().CS3ResourcePermissions(),
 		}, 1, nil
 	} else if p == editorPermission {
 		return &ocm.SharePermissions{
-			Permissions: &provider.ResourcePermissions{
-				GetPath:              true,
-				InitiateFileDownload: true,
-				ListFileVersions:     true,
-				ListContainer:        true,
-				Stat:                 true,
-				CreateContainer:      true,
-				Delete:               true,
-				InitiateFileUpload:   true,
-				RestoreFileVersion:   true,
-				Move:                 true,
-			},
+			Permissions: conversions.NewEditorRole().CS3ResourcePermissions(),
 		}, 15, nil
 	}
 	return nil, 0, errors.New("invalid rol: " + p)

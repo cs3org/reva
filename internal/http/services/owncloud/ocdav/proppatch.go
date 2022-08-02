@@ -27,21 +27,18 @@ import (
 	"path"
 	"strings"
 
-	"go.opencensus.io/trace"
-
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
+	rtrace "github.com/cs3org/reva/pkg/trace"
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog"
 )
 
-func (s *svc) handleProppatch(w http.ResponseWriter, r *http.Request, ns string) {
-	ctx := r.Context()
-	ctx, span := trace.StartSpan(ctx, "proppatch")
+func (s *svc) handlePathProppatch(w http.ResponseWriter, r *http.Request, ns string) {
+	ctx, span := rtrace.Provider.Tracer("ocdav").Start(r.Context(), "proppatch")
 	defer span.End()
-
-	acceptedProps := []xml.Name{}
-	removedProps := []xml.Name{}
 
 	fn := path.Join(ns, r.URL.Path)
 
@@ -51,6 +48,12 @@ func (s *svc) handleProppatch(w http.ResponseWriter, r *http.Request, ns string)
 	if err != nil {
 		sublog.Debug().Err(err).Msg("error reading proppatch")
 		w.WriteHeader(status)
+		m := fmt.Sprintf("Error reading proppatch: %v", err)
+		b, err := Marshal(exception{
+			code:    SabredavBadRequest,
+			message: m,
+		})
+		HandleWebdavError(&sublog, w, b, err)
 		return
 	}
 
@@ -61,11 +64,80 @@ func (s *svc) handleProppatch(w http.ResponseWriter, r *http.Request, ns string)
 		return
 	}
 
+	ref := &provider.Reference{Path: fn}
+	// check if resource exists
+	statReq := &provider.StatRequest{Ref: ref}
+	statRes, err := c.Stat(ctx, statReq)
+	if err != nil {
+		sublog.Error().Err(err).Msg("error sending a grpc stat request")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	if statRes.Status.Code != rpc.Code_CODE_OK {
+		if statRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
+			w.WriteHeader(http.StatusNotFound)
+			m := fmt.Sprintf("Resource %v not found", fn)
+			b, err := Marshal(exception{
+				code:    SabredavNotFound,
+				message: m,
+			})
+			HandleWebdavError(&sublog, w, b, err)
+		}
+		HandleErrorStatus(&sublog, w, statRes.Status)
+		return
+	}
+
+	acceptedProps, removedProps, ok := s.handleProppatch(ctx, w, r, ref, pp, sublog)
+	if !ok {
+		// handleProppatch handles responses in error cases so we can just return
+		return
+	}
+
+	nRef := strings.TrimPrefix(fn, ns)
+	nRef = path.Join(ctx.Value(ctxKeyBaseURI).(string), nRef)
+	if statRes.Info.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
+		nRef += "/"
+	}
+
+	s.handleProppatchResponse(ctx, w, r, acceptedProps, removedProps, nRef, sublog)
+}
+
+func (s *svc) handleSpacesProppatch(w http.ResponseWriter, r *http.Request, spaceID string) {
+	ctx, span := rtrace.Provider.Tracer("ocdav").Start(r.Context(), "spaces_proppatch")
+	defer span.End()
+
+	sublog := appctx.GetLogger(ctx).With().Str("path", r.URL.Path).Str("spaceid", spaceID).Logger()
+
+	pp, status, err := readProppatch(r.Body)
+	if err != nil {
+		sublog.Debug().Err(err).Msg("error reading proppatch")
+		w.WriteHeader(status)
+		return
+	}
+
+	// retrieve a specific storage space
+	ref, rpcStatus, err := s.lookUpStorageSpaceReference(ctx, spaceID, r.URL.Path)
+	if err != nil {
+		sublog.Error().Err(err).Msg("error sending a grpc request")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	if rpcStatus.Code != rpc.Code_CODE_OK {
+		HandleErrorStatus(&sublog, w, rpcStatus)
+		return
+	}
+
+	c, err := s.getClient()
+	if err != nil {
+		sublog.Error().Err(err).Msg("error getting grpc client")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 	// check if resource exists
 	statReq := &provider.StatRequest{
-		Ref: &provider.Reference{
-			Spec: &provider.Reference_Path{Path: fn},
-		},
+		Ref: ref,
 	}
 	statRes, err := c.Stat(ctx, statReq)
 	if err != nil {
@@ -79,30 +151,53 @@ func (s *svc) handleProppatch(w http.ResponseWriter, r *http.Request, ns string)
 		return
 	}
 
+	acceptedProps, removedProps, ok := s.handleProppatch(ctx, w, r, ref, pp, sublog)
+	if !ok {
+		// handleProppatch handles responses in error cases so we can just return
+		return
+	}
+
+	nRef := path.Join(spaceID, statRes.Info.Path)
+	nRef = path.Join(ctx.Value(ctxKeyBaseURI).(string), nRef)
+	if statRes.Info.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
+		nRef += "/"
+	}
+
+	s.handleProppatchResponse(ctx, w, r, acceptedProps, removedProps, nRef, sublog)
+}
+
+func (s *svc) handleProppatch(ctx context.Context, w http.ResponseWriter, r *http.Request, ref *provider.Reference, patches []Proppatch, log zerolog.Logger) ([]xml.Name, []xml.Name, bool) {
+	c, err := s.getClient()
+	if err != nil {
+		log.Error().Err(err).Msg("error getting grpc client")
+		w.WriteHeader(http.StatusInternalServerError)
+		return nil, nil, false
+	}
+
 	rreq := &provider.UnsetArbitraryMetadataRequest{
-		Ref: &provider.Reference{
-			Spec: &provider.Reference_Path{Path: fn},
-		},
+		Ref:                   ref,
 		ArbitraryMetadataKeys: []string{""},
 	}
 	sreq := &provider.SetArbitraryMetadataRequest{
-		Ref: &provider.Reference{
-			Spec: &provider.Reference_Path{Path: fn},
-		},
+		Ref: ref,
 		ArbitraryMetadata: &provider.ArbitraryMetadata{
 			Metadata: map[string]string{},
 		},
 	}
-	for i := range pp {
-		if len(pp[i].Props) < 1 {
+
+	acceptedProps := []xml.Name{}
+	removedProps := []xml.Name{}
+
+	for i := range patches {
+		if len(patches[i].Props) < 1 {
 			continue
 		}
-		for j := range pp[i].Props {
-			propNameXML := pp[i].Props[j].XMLName
+		for j := range patches[i].Props {
+			propNameXML := patches[i].Props[j].XMLName
 			// don't use path.Join. It removes the double slash! concatenate with a /
-			key := fmt.Sprintf("%s/%s", pp[i].Props[j].XMLName.Space, pp[i].Props[j].XMLName.Local)
-			value := string(pp[i].Props[j].InnerXML)
-			remove := pp[i].Remove
+			key := fmt.Sprintf("%s/%s", patches[i].Props[j].XMLName.Space, patches[i].Props[j].XMLName.Local)
+			value := string(patches[i].Props[j].InnerXML)
+			remove := patches[i].Remove
 			// boolean flags may be "set" to false as well
 			if s.isBooleanProperty(key) {
 				// Make boolean properties either "0" or "1"
@@ -119,32 +214,79 @@ func (s *svc) handleProppatch(w http.ResponseWriter, r *http.Request, ns string)
 				rreq.ArbitraryMetadataKeys[0] = key
 				res, err := c.UnsetArbitraryMetadata(ctx, rreq)
 				if err != nil {
-					sublog.Error().Err(err).Msg("error sending a grpc UnsetArbitraryMetadata request")
+					log.Error().Err(err).Msg("error sending a grpc UnsetArbitraryMetadata request")
 					w.WriteHeader(http.StatusInternalServerError)
-					return
+					return nil, nil, false
 				}
 
 				if res.Status.Code != rpc.Code_CODE_OK {
-					HandleErrorStatus(&sublog, w, res.Status)
-					return
+					if res.Status.Code == rpc.Code_CODE_PERMISSION_DENIED {
+						w.WriteHeader(http.StatusForbidden)
+						m := fmt.Sprintf("Permission denied to remove properties on resource %v", ref.Path)
+						b, err := Marshal(exception{
+							code:    SabredavPermissionDenied,
+							message: m,
+						})
+						HandleWebdavError(&log, w, b, err)
+						return nil, nil, false
+					}
+					HandleErrorStatus(&log, w, res.Status)
+					return nil, nil, false
+				}
+				if key == "http://owncloud.org/ns/favorite" {
+					statRes, err := c.Stat(ctx, &provider.StatRequest{Ref: ref})
+					if err != nil {
+						w.WriteHeader(http.StatusInternalServerError)
+						return nil, nil, false
+					}
+					currentUser := ctxpkg.ContextMustGetUser(ctx)
+					err = s.favoritesManager.UnsetFavorite(ctx, currentUser.Id, statRes.Info)
+					if err != nil {
+						w.WriteHeader(http.StatusInternalServerError)
+						return nil, nil, false
+					}
 				}
 				removedProps = append(removedProps, propNameXML)
 			} else {
 				sreq.ArbitraryMetadata.Metadata[key] = value
 				res, err := c.SetArbitraryMetadata(ctx, sreq)
 				if err != nil {
-					sublog.Error().Err(err).Str("key", key).Str("value", value).Msg("error sending a grpc SetArbitraryMetadata request")
+					log.Error().Err(err).Str("key", key).Str("value", value).Msg("error sending a grpc SetArbitraryMetadata request")
 					w.WriteHeader(http.StatusInternalServerError)
-					return
+					return nil, nil, false
 				}
 
 				if res.Status.Code != rpc.Code_CODE_OK {
-					HandleErrorStatus(&sublog, w, res.Status)
-					return
+					if res.Status.Code == rpc.Code_CODE_PERMISSION_DENIED {
+						w.WriteHeader(http.StatusForbidden)
+						m := fmt.Sprintf("Permission denied to set properties on resource %v", ref.Path)
+						b, err := Marshal(exception{
+							code:    SabredavPermissionDenied,
+							message: m,
+						})
+						HandleWebdavError(&log, w, b, err)
+						return nil, nil, false
+					}
+					HandleErrorStatus(&log, w, res.Status)
+					return nil, nil, false
 				}
 
 				acceptedProps = append(acceptedProps, propNameXML)
 				delete(sreq.ArbitraryMetadata.Metadata, key)
+
+				if key == "http://owncloud.org/ns/favorite" {
+					statRes, err := c.Stat(ctx, &provider.StatRequest{Ref: ref})
+					if err != nil {
+						w.WriteHeader(http.StatusInternalServerError)
+						return nil, nil, false
+					}
+					currentUser := ctxpkg.ContextMustGetUser(ctx)
+					err = s.favoritesManager.SetFavorite(ctx, currentUser.Id, statRes.Info)
+					if err != nil {
+						w.WriteHeader(http.StatusInternalServerError)
+						return nil, nil, false
+					}
+				}
 			}
 		}
 		// FIXME: in case of error, need to set all properties back to the original state,
@@ -152,23 +294,21 @@ func (s *svc) handleProppatch(w http.ResponseWriter, r *http.Request, ns string)
 		// http://www.webdav.org/specs/rfc2518.html#rfc.section.8.2
 	}
 
-	ref := strings.TrimPrefix(fn, ns)
-	ref = path.Join(ctx.Value(ctxKeyBaseURI).(string), ref)
-	if statRes.Info.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
-		ref += "/"
-	}
+	return acceptedProps, removedProps, true
+}
 
-	propRes, err := s.formatProppatchResponse(ctx, acceptedProps, removedProps, ref)
+func (s *svc) handleProppatchResponse(ctx context.Context, w http.ResponseWriter, r *http.Request, acceptedProps, removedProps []xml.Name, path string, log zerolog.Logger) {
+	propRes, err := s.formatProppatchResponse(ctx, acceptedProps, removedProps, path)
 	if err != nil {
-		sublog.Error().Err(err).Msg("error formatting proppatch response")
+		log.Error().Err(err).Msg("error formatting proppatch response")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	w.Header().Set("DAV", "1, 3, extended-mkcol")
-	w.Header().Set("Content-Type", "application/xml; charset=utf-8")
+	w.Header().Set(HeaderDav, "1, 3, extended-mkcol")
+	w.Header().Set(HeaderContentType, "application/xml; charset=utf-8")
 	w.WriteHeader(http.StatusMultiStatus)
 	if _, err := w.Write([]byte(propRes)); err != nil {
-		sublog.Err(err).Msg("error writing response")
+		log.Err(err).Msg("error writing response")
 	}
 }
 

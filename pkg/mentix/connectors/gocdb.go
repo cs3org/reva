@@ -24,7 +24,9 @@ import (
 	"net/url"
 	"path"
 	"strings"
+	"time"
 
+	"github.com/cs3org/reva/pkg/mentix/utils"
 	"github.com/rs/zerolog"
 
 	"github.com/cs3org/reva/pkg/mentix/config"
@@ -64,14 +66,25 @@ func (connector *GOCDBConnector) RetrieveMeshData() (*meshdata.MeshData, error) 
 		return nil, fmt.Errorf("could not query service types: %v", err)
 	}
 
-	if err := connector.querySites(meshData); err != nil {
-		return nil, fmt.Errorf("could not query sites: %v", err)
+	if err := connector.queryNGIs(meshData); err != nil {
+		return nil, fmt.Errorf("could not query operators: %v", err)
 	}
 
-	for _, site := range meshData.Sites {
-		// Get services associated with the current site
-		if err := connector.queryServices(meshData, site); err != nil {
-			return nil, fmt.Errorf("could not query services of site '%v': %v", site.Name, err)
+	for _, op := range meshData.Operators {
+		if err := connector.querySites(meshData, op); err != nil {
+			return nil, fmt.Errorf("could not query sites of operator '%v': %v", op.Name, err)
+		}
+
+		for _, site := range op.Sites {
+			// Get services associated with the current site
+			if err := connector.queryServices(meshData, site); err != nil {
+				return nil, fmt.Errorf("could not query services of site '%v': %v", site.Name, err)
+			}
+
+			// Get downtimes scheduled for the current site
+			if err := connector.queryDowntimes(meshData, site); err != nil {
+				return nil, fmt.Errorf("could not query downtimes of site '%v': %v", site.Name, err)
+			}
 		}
 	}
 
@@ -86,7 +99,7 @@ func (connector *GOCDBConnector) query(v interface{}, method string, isPrivate b
 	}
 
 	// Get the data from GOCDB
-	data, err := gocdb.QueryGOCDB(connector.gocdbAddress, method, isPrivate, scope, params)
+	data, err := gocdb.QueryGOCDB(connector.gocdbAddress, method, isPrivate, scope, connector.conf.Connectors.GOCDB.APIKey, params)
 	if err != nil {
 		return err
 	}
@@ -117,27 +130,49 @@ func (connector *GOCDBConnector) queryServiceTypes(meshData *meshdata.MeshData) 
 	return nil
 }
 
-func (connector *GOCDBConnector) querySites(meshData *meshdata.MeshData) error {
-	var sites gocdb.Sites
-	if err := connector.query(&sites, "get_site", false, true, network.URLParams{}); err != nil {
+func (connector *GOCDBConnector) queryNGIs(meshData *meshdata.MeshData) error {
+	var ngis gocdb.NGIs
+	if err := connector.query(&ngis, "get_ngi", false, true, network.URLParams{}); err != nil {
 		return err
 	}
 
 	// Copy retrieved data into the mesh data
-	meshData.Sites = nil
+	meshData.Operators = nil
+	for _, ngi := range ngis.NGIs {
+		operator := &meshdata.Operator{
+			ID:            ngi.Name,
+			Name:          ngi.Name,
+			Homepage:      "",
+			Email:         ngi.Email,
+			HelpdeskEmail: ngi.HelpdeskEmail,
+			SecurityEmail: ngi.SecurityEmail,
+			Sites:         nil,
+			Properties:    map[string]string{},
+		}
+		meshData.Operators = append(meshData.Operators, operator)
+	}
+
+	return nil
+}
+
+func (connector *GOCDBConnector) querySites(meshData *meshdata.MeshData, op *meshdata.Operator) error {
+	var sites gocdb.Sites
+	if err := connector.query(&sites, "get_site", false, true, network.URLParams{"roc": op.ID}); err != nil {
+		return err
+	}
+
+	// Copy retrieved data into the mesh data
+	op.Sites = nil
 	for _, site := range sites.Sites {
 		properties := connector.extensionsToMap(&site.Extensions)
 
-		siteID := meshdata.GetPropertyValue(properties, meshdata.PropertySiteID, "")
-		if len(siteID) == 0 {
-			return fmt.Errorf("site ID missing for site '%v'", site.ShortName)
-		}
+		// The site ID can be set through a property; by default, the site short name will be used
+		siteID := meshdata.GetPropertyValue(properties, meshdata.PropertySiteID, site.ShortName)
 
 		// See if an organization has been defined using properties; otherwise, use the official name
 		organization := meshdata.GetPropertyValue(properties, meshdata.PropertyOrganization, site.OfficialName)
 
 		meshsite := &meshdata.Site{
-			Type:         meshdata.SiteTypeScienceMesh, // All sites stored in the GOCDB are part of the mesh
 			ID:           siteID,
 			Name:         site.ShortName,
 			FullName:     site.OfficialName,
@@ -152,8 +187,9 @@ func (connector *GOCDBConnector) querySites(meshData *meshdata.MeshData) error {
 			Latitude:     site.Latitude,
 			Services:     nil,
 			Properties:   properties,
+			Downtimes:    meshdata.Downtimes{},
 		}
-		meshData.Sites = append(meshData.Sites, meshsite)
+		op.Sites = append(op.Sites, meshsite)
 	}
 
 	return nil
@@ -193,6 +229,7 @@ func (connector *GOCDBConnector) queryServices(meshData *meshdata.MeshData, site
 			endpoints = append(endpoints, &meshdata.ServiceEndpoint{
 				Type:        connector.findServiceType(meshData, endpoint.Type),
 				Name:        endpoint.Name,
+				RawURL:      endpoint.URL,
 				URL:         getServiceURLString(service, endpoint, host),
 				IsMonitored: strings.EqualFold(endpoint.IsMonitored, "Y"),
 				Properties:  connector.extensionsToMap(&endpoint.Extensions),
@@ -203,7 +240,8 @@ func (connector *GOCDBConnector) queryServices(meshData *meshdata.MeshData, site
 		site.Services = append(site.Services, &meshdata.Service{
 			ServiceEndpoint: &meshdata.ServiceEndpoint{
 				Type:        connector.findServiceType(meshData, service.Type),
-				Name:        fmt.Sprintf("%v - %v", service.Host, service.Type),
+				Name:        service.Type,
+				RawURL:      service.URL,
 				URL:         getServiceURLString(service, nil, host),
 				IsMonitored: strings.EqualFold(service.IsMonitored, "Y"),
 				Properties:  connector.extensionsToMap(&service.Extensions),
@@ -211,6 +249,33 @@ func (connector *GOCDBConnector) queryServices(meshData *meshdata.MeshData, site
 			Host:                host,
 			AdditionalEndpoints: endpoints,
 		})
+	}
+
+	return nil
+}
+
+func (connector *GOCDBConnector) queryDowntimes(meshData *meshdata.MeshData, site *meshdata.Site) error {
+	var downtimes gocdb.Downtimes
+	if err := connector.query(&downtimes, "get_downtime_nested_services", false, true, network.URLParams{"topentity": site.Name, "ongoing_only": "yes"}); err != nil {
+		return err
+	}
+
+	// Copy retrieved data into the mesh data
+	site.Downtimes.Clear()
+	for _, dt := range downtimes.Downtimes {
+		if !strings.EqualFold(dt.Severity, "outage") { // Only take real outages into account
+			continue
+		}
+
+		services := make([]string, 0, len(dt.AffectedServices.Services))
+		for _, service := range dt.AffectedServices.Services {
+			// Only add critical services to the list of affected services
+			if utils.FindInStringArray(service.Type, connector.conf.Services.CriticalTypes, false) != -1 {
+				services = append(services, service.Type)
+			}
+		}
+
+		_, _ = site.Downtimes.ScheduleDowntime(time.Unix(dt.StartDate, 0), time.Unix(dt.EndDate, 0), services)
 	}
 
 	return nil
@@ -258,6 +323,9 @@ func (connector *GOCDBConnector) getServiceURL(service *gocdb.Service, endpoint 
 				svcURL.Path = endpoint.URL
 			} else {
 				svcURL.Path = path.Join(svcURL.Path, endpoint.URL)
+				if strings.HasSuffix(endpoint.URL, "/") { // Restore trailing slash if necessary
+					svcURL.Path += "/"
+				}
 			}
 		}
 	}

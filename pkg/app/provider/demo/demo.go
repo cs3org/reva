@@ -22,19 +22,34 @@ import (
 	"context"
 	"fmt"
 
+	appprovider "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
+	appregistry "github.com/cs3org/go-cs3apis/cs3/app/registry/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/app"
-
-	providerpb "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/pkg/app/provider/registry"
 	"github.com/mitchellh/mapstructure"
 )
 
-type provider struct {
+func init() {
+	registry.Register("demo", New)
+}
+
+type demoProvider struct {
 	iframeUIProvider string
 }
 
-func (p *provider) GetIFrame(ctx context.Context, resID *providerpb.ResourceId, token string) (string, error) {
-	msg := fmt.Sprintf("<iframe src=%s/open/%s?access-token=%s />", p.iframeUIProvider, resID.StorageId+":"+resID.OpaqueId, token)
-	return msg, nil
+func (p *demoProvider) GetAppURL(ctx context.Context, resource *provider.ResourceInfo, viewMode appprovider.OpenInAppRequest_ViewMode, token string) (*appprovider.OpenInAppURL, error) {
+	url := fmt.Sprintf("<iframe src=%s/open/%s?view-mode=%s&access-token=%s />", p.iframeUIProvider, resource.Id.StorageId+":"+resource.Id.OpaqueId, viewMode.String(), token)
+	return &appprovider.OpenInAppURL{
+		AppUrl: url,
+		Method: "GET",
+	}, nil
+}
+
+func (p *demoProvider) GetAppProviderInfo(ctx context.Context) (*appregistry.ProviderInfo, error) {
+	return &appregistry.ProviderInfo{
+		Name: "demo-app",
+	}, nil
 }
 
 type config struct {
@@ -49,12 +64,12 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 	return c, nil
 }
 
-// New returns an implementation to of the storage.FS interface that talk to
-// a local filesystem.
+// New returns an implementation to of the app.Provider interface that
+// connects to an application in the backend.
 func New(m map[string]interface{}) (app.Provider, error) {
 	c, err := parseConfig(m)
 	if err != nil {
 		return nil, err
 	}
-	return &provider{iframeUIProvider: c.IFrameUIProvider}, nil
+	return &demoProvider{iframeUIProvider: c.IFrameUIProvider}, nil
 }

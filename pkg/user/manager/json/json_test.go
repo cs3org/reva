@@ -67,7 +67,7 @@ func TestUserManager(t *testing.T) {
 	os.Remove(file.Name())
 
 	// json object with user meta data
-	userJSON = `[{"id":{"idp":"localhost","opaque_id":"einstein"},"username":"einstein","mail":"einstein@example.org","display_name":"Albert Einstein","groups":["sailing-lovers","violin-haters","physics-lovers"]}]`
+	userJSON = `[{"id":{"idp":"localhost","opaque_id":"einstein","type":1},"username":"einstein","mail":"einstein@example.org","display_name":"Albert Einstein","groups":["sailing-lovers","violin-haters","physics-lovers"]}]`
 
 	// get file handler for temporary file
 	file, err = ioutil.TempFile(tempdir, "json_test")
@@ -89,7 +89,7 @@ func TestUserManager(t *testing.T) {
 	manager, _ := New(input)
 
 	// setup test data
-	uidEinstein := &userpb.UserId{Idp: "localhost", OpaqueId: "einstein"}
+	uidEinstein := &userpb.UserId{Idp: "localhost", OpaqueId: "einstein", Type: userpb.UserType_USER_TYPE_PRIMARY}
 	userEinstein := &userpb.User{
 		Id:          uidEinstein,
 		Username:    "einstein",
@@ -97,14 +97,14 @@ func TestUserManager(t *testing.T) {
 		Mail:        "einstein@example.org",
 		DisplayName: "Albert Einstein",
 	}
-	userFake := &userpb.UserId{Idp: "localhost", OpaqueId: "fakeUser"}
-	groupsEinstein := []string{"sailing-lovers", "violin-haters", "physics-lovers"}
-
-	// positive test GetUserGroups
-	resGroups, _ := manager.GetUserGroups(ctx, uidEinstein)
-	if !reflect.DeepEqual(resGroups, groupsEinstein) {
-		t.Fatalf("groups differ: expected=%v got=%v", resGroups, groupsEinstein)
+	userEinsteinWithoutGroups := &userpb.User{
+		Id:          uidEinstein,
+		Username:    "einstein",
+		Mail:        "einstein@example.org",
+		DisplayName: "Albert Einstein",
 	}
+	userFake := &userpb.UserId{Idp: "localhost", OpaqueId: "fakeUser", Type: userpb.UserType_USER_TYPE_PRIMARY}
+	groupsEinstein := []string{"sailing-lovers", "violin-haters", "physics-lovers"}
 
 	// negative test GetUserGroups
 	expectedErr := errtypes.NotFound(userFake.OpaqueId)
@@ -114,20 +114,32 @@ func TestUserManager(t *testing.T) {
 	}
 
 	// positive test GetUserByClaim by mail
-	resUserByEmail, _ := manager.GetUserByClaim(ctx, "mail", "einstein@example.org")
+	resUserByEmail, _ := manager.GetUserByClaim(ctx, "mail", "einstein@example.org", false)
 	if !reflect.DeepEqual(resUserByEmail, userEinstein) {
 		t.Fatalf("user differs: expected=%v got=%v", userEinstein, resUserByEmail)
 	}
 
 	// negative test GetUserByClaim by mail
 	expectedErr = errtypes.NotFound("abc@example.com")
-	_, err = manager.GetUserByClaim(ctx, "mail", "abc@example.com")
+	_, err = manager.GetUserByClaim(ctx, "mail", "abc@example.com", false)
 	if !reflect.DeepEqual(err, expectedErr) {
 		t.Fatalf("user not found error differs: expected='%v' got='%v'", expectedErr, err)
 	}
 
+	// positive test GetUserByClaim by mail without groups
+	resUserByEmailWithoutGroups, _ := manager.GetUserByClaim(ctx, "mail", "einstein@example.org", true)
+	if !reflect.DeepEqual(resUserByEmailWithoutGroups, userEinsteinWithoutGroups) {
+		t.Fatalf("user differs: expected=%v got=%v", userEinsteinWithoutGroups, resUserByEmailWithoutGroups)
+	}
+
+	// positive test GetUserGroups
+	resGroups, _ := manager.GetUserGroups(ctx, uidEinstein)
+	if !reflect.DeepEqual(resGroups, groupsEinstein) {
+		t.Fatalf("groups differ: expected=%v got=%v", resGroups, groupsEinstein)
+	}
+
 	// test FindUsers
-	resUser, _ := manager.FindUsers(ctx, "stein")
+	resUser, _ := manager.FindUsers(ctx, "stein", false)
 	if len(resUser) != 1 {
 		t.Fatalf("too many users found: expected=%d got=%d", 1, len(resUser))
 	}

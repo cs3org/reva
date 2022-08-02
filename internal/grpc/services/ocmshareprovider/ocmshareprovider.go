@@ -20,9 +20,9 @@ package ocmshareprovider
 
 import (
 	"context"
-	"fmt"
 
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
+	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/ocm/share"
 	"github.com/cs3org/reva/pkg/ocm/share/manager/registry"
 	"github.com/cs3org/reva/pkg/rgrpc"
@@ -60,7 +60,7 @@ func getShareManager(c *config) (share.Manager, error) {
 	if f, ok := registry.NewFuncs[c.Driver]; ok {
 		return f(c.Drivers[c.Driver])
 	}
-	return nil, fmt.Errorf("driver not found: %s", c.Driver)
+	return nil, errtypes.NotFound("driver not found: " + c.Driver)
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -102,11 +102,23 @@ func (s *service) UnprotectedEndpoints() []string {
 	return []string{}
 }
 
+// Note: this is for outgoing OCM shares
+// This function is used when you for instance
+// call `ocm-share-create` in reva-cli.
+// For incoming OCM shares from internal/http/services/ocmd/shares.go
+// there is the very similar but slightly different function
+// CreateOCMCoreShare (the "Core" somehow means "incoming").
+// So make sure to keep in mind the difference between this file for outgoing:
+// internal/grpc/services/ocmshareprovider/ocmshareprovider.go
+// and the other one for incoming:
+// internal/grpc/service/ocmcore/ocmcore.go
+// Both functions end up calling the same s.sm.Share function
+// on the OCM share manager:
+// pkg/ocm/share/manager/{json|nextcloud|...}
 func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareRequest) (*ocm.CreateOCMShareResponse, error) {
-
 	if req.Opaque == nil {
 		return &ocm.CreateOCMShareResponse{
-			Status: status.NewInternal(ctx, errors.New("can't find resource permissions"), ""),
+			Status: status.NewInternal(ctx, errtypes.BadRequest("can't find resource permissions"), ""),
 		}, nil
 	}
 
@@ -114,14 +126,14 @@ func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareReq
 	permOpaque, ok := req.Opaque.Map["permissions"]
 	if !ok {
 		return &ocm.CreateOCMShareResponse{
-			Status: status.NewInternal(ctx, errors.New("resource permissions not set"), ""),
+			Status: status.NewInternal(ctx, errtypes.BadRequest("resource permissions not set"), ""),
 		}, nil
 	}
 	switch permOpaque.Decoder {
 	case "plain":
 		permissions = string(permOpaque.Value)
 	default:
-		err := errors.New("opaque entry decoder not recognized: " + permOpaque.Decoder)
+		err := errtypes.NotSupported("opaque entry decoder not recognized: " + permOpaque.Decoder)
 		return &ocm.CreateOCMShareResponse{
 			Status: status.NewInternal(ctx, err, "invalid opaque entry decoder"),
 		}, nil
@@ -131,20 +143,41 @@ func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareReq
 	nameOpaque, ok := req.Opaque.Map["name"]
 	if !ok {
 		return &ocm.CreateOCMShareResponse{
-			Status: status.NewInternal(ctx, errors.New("resource name not set"), ""),
+			Status: status.NewInternal(ctx, errtypes.BadRequest("resource name not set"), ""),
 		}, nil
 	}
 	switch nameOpaque.Decoder {
 	case "plain":
 		name = string(nameOpaque.Value)
 	default:
-		err := errors.New("opaque entry decoder not recognized: " + nameOpaque.Decoder)
+		err := errtypes.NotSupported("opaque entry decoder not recognized: " + nameOpaque.Decoder)
 		return &ocm.CreateOCMShareResponse{
 			Status: status.NewInternal(ctx, err, "invalid opaque entry decoder"),
 		}, nil
 	}
 
-	share, err := s.sm.Share(ctx, req.ResourceId, req.Grant, name, req.RecipientMeshProvider, permissions, nil, "", ocm.Share_SHARE_TYPE_REGULAR)
+	// discover share type
+	sharetype := ocm.Share_SHARE_TYPE_REGULAR
+	// FIXME: https://github.com/cs3org/reva/issues/2402
+	protocol, ok := req.Opaque.Map["protocol"]
+	if ok {
+		switch protocol.Decoder {
+		case "plain":
+			if string(protocol.Value) == "datatx" {
+				sharetype = ocm.Share_SHARE_TYPE_TRANSFER
+			}
+		default:
+			err := errors.New("protocol decoder not recognized")
+			return &ocm.CreateOCMShareResponse{
+				Status: status.NewInternal(ctx, err, "error creating share"),
+			}, nil
+		}
+		// token = protocol FIXME!
+	}
+
+	var sharedSecret string
+	share, err := s.sm.Share(ctx, req.ResourceId, req.Grant, name, req.RecipientMeshProvider, permissions, nil, sharedSecret, sharetype)
+
 	if err != nil {
 		return &ocm.CreateOCMShareResponse{
 			Status: status.NewInternal(ctx, err, "error creating share"),
@@ -230,7 +263,7 @@ func (s *service) ListReceivedOCMShares(ctx context.Context, req *ocm.ListReceiv
 }
 
 func (s *service) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateReceivedOCMShareRequest) (*ocm.UpdateReceivedOCMShareResponse, error) {
-	_, err := s.sm.UpdateReceivedShare(ctx, req.Ref, req.Field) // TODO(labkode): check what to update
+	_, err := s.sm.UpdateReceivedShare(ctx, req.Share, req.UpdateMask) // TODO(labkode): check what to update
 	if err != nil {
 		return &ocm.UpdateReceivedOCMShareResponse{
 			Status: status.NewInternal(ctx, err, "error updating received share"),

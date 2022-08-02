@@ -22,19 +22,21 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
-	"github.com/cs3org/reva/pkg/user"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 )
 
 // The Handler renders the user endpoint
 type Handler struct {
 }
 
-func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+// GetSelf handles GET requests on /cloud/user
+func (h *Handler) GetSelf(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	// TODO move user to handler parameter?
-	u, ok := user.ContextGetUser(ctx)
+	u, ok := ctxpkg.ContextGetUser(ctx)
 	if !ok {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "missing user in context", fmt.Errorf("missing user in context"))
 		return
@@ -44,6 +46,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		ID:          u.Username,
 		DisplayName: u.DisplayName,
 		Email:       u.Mail,
+		UserType:    conversions.UserTypeString(u.Id.Type),
 	})
 }
 
@@ -53,4 +56,5 @@ type User struct {
 	ID          string `json:"id" xml:"id"`
 	DisplayName string `json:"display-name" xml:"display-name"`
 	Email       string `json:"email" xml:"email"`
+	UserType    string `json:"user-type" xml:"user-type"`
 }

@@ -23,6 +23,61 @@ import (
 	"path"
 )
 
+// Common Webdav methods.
+//
+// Unless otherwise noted, these are defined in RFC 4918 section 9.
+const (
+	MethodPropfind  = "PROPFIND"
+	MethodLock      = "LOCK"
+	MethodUnlock    = "UNLOCK"
+	MethodProppatch = "PROPPATCH"
+	MethodMkcol     = "MKCOL"
+	MethodMove      = "MOVE"
+	MethodCopy      = "COPY"
+	MethodReport    = "REPORT"
+)
+
+// Common HTTP headers.
+const (
+	HeaderAcceptRanges               = "Accept-Ranges"
+	HeaderAccessControlAllowHeaders  = "Access-Control-Allow-Headers"
+	HeaderAccessControlExposeHeaders = "Access-Control-Expose-Headers"
+	HeaderContentDisposistion        = "Content-Disposition"
+	HeaderContentLength              = "Content-Length"
+	HeaderContentRange               = "Content-Range"
+	HeaderContentType                = "Content-Type"
+	HeaderETag                       = "ETag"
+	HeaderLastModified               = "Last-Modified"
+	HeaderLocation                   = "Location"
+	HeaderRange                      = "Range"
+	HeaderIfMatch                    = "If-Match"
+	HeaderChecksum                   = "Digest"
+)
+
+// Non standard HTTP headers.
+const (
+	HeaderOCFileID             = "OC-FileId"
+	HeaderOCETag               = "OC-ETag"
+	HeaderOCChecksum           = "OC-Checksum"
+	HeaderOCPermissions        = "OC-Perm"
+	HeaderDepth                = "Depth"
+	HeaderDav                  = "DAV"
+	HeaderTusResumable         = "Tus-Resumable"
+	HeaderTusVersion           = "Tus-Version"
+	HeaderTusExtension         = "Tus-Extension"
+	HeaderTusChecksumAlgorithm = "Tus-Checksum-Algorithm"
+	HeaderTusUploadExpires     = "Upload-Expires"
+	HeaderDestination          = "Destination"
+	HeaderOverwrite            = "Overwrite"
+	HeaderUploadChecksum       = "Upload-Checksum"
+	HeaderUploadLength         = "Upload-Length"
+	HeaderUploadMetadata       = "Upload-Metadata"
+	HeaderUploadOffset         = "Upload-Offset"
+	HeaderOCMtime              = "X-OC-Mtime"
+	HeaderExpectedEntityLength = "X-Expected-Entity-Length"
+	HeaderTransferAuth         = "TransferHeaderAuthorization"
+)
+
 // WebDavHandler implements a dav endpoint
 type WebDavHandler struct {
 	namespace         string
@@ -40,34 +95,34 @@ func (h *WebDavHandler) Handler(s *svc) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ns := applyLayout(r.Context(), h.namespace, h.useLoggedInUserNS, r.URL.Path)
 		switch r.Method {
-		case "PROPFIND":
-			s.handlePropfind(w, r, ns)
-		case "LOCK":
+		case MethodPropfind:
+			s.handlePathPropfind(w, r, ns)
+		case MethodLock:
 			s.handleLock(w, r, ns)
-		case "UNLOCK":
+		case MethodUnlock:
 			s.handleUnlock(w, r, ns)
-		case "PROPPATCH":
-			s.handleProppatch(w, r, ns)
-		case "MKCOL":
-			s.handleMkcol(w, r, ns)
-		case "MOVE":
-			s.handleMove(w, r, ns)
-		case "COPY":
-			s.handleCopy(w, r, ns)
-		case "REPORT":
+		case MethodProppatch:
+			s.handlePathProppatch(w, r, ns)
+		case MethodMkcol:
+			s.handlePathMkcol(w, r, ns)
+		case MethodMove:
+			s.handlePathMove(w, r, ns)
+		case MethodCopy:
+			s.handlePathCopy(w, r, ns)
+		case MethodReport:
 			s.handleReport(w, r, ns)
 		case http.MethodGet:
-			s.handleGet(w, r, ns)
+			s.handlePathGet(w, r, ns)
 		case http.MethodPut:
-			s.handlePut(w, r, ns)
+			s.handlePathPut(w, r, ns)
 		case http.MethodPost:
-			s.handleTusPost(w, r, ns)
+			s.handlePathTusPost(w, r, ns)
 		case http.MethodOptions:
-			s.handleOptions(w, r, ns)
+			s.handleOptions(w, r)
 		case http.MethodHead:
-			s.handleHead(w, r, ns)
+			s.handlePathHead(w, r, ns)
 		case http.MethodDelete:
-			s.handleDelete(w, r, ns)
+			s.handlePathDelete(w, r, ns)
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}

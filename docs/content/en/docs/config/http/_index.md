@@ -29,11 +29,3 @@ List of HTTP services to be enabled.
 enabled_services = ["helloworld"]
 {{< /highlight >}}
 {{% /dir %}}
-
-{{% dir name="enabled_middlewares" type="[string]" default="[]" %}}
-List of HTTP middlewares to be enabled.
-{{< highlight toml >}}
-[http]
-enabled_middlewares = ["cors"]
-{{< /highlight >}}
-{{% /dir %}}

@@ -103,7 +103,7 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 		case "DELETE":
 			handler.DelFile(w, r)
 		case "GET":
-			download.GetOrHeadFile(w, r, fs)
+			download.GetOrHeadFile(w, r, fs, "")
 		default:
 			w.WriteHeader(http.StatusNotImplemented)
 		}

@@ -22,9 +22,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/url"
-	"regexp"
+	"os"
+	"os/signal"
 	"strings"
+	"syscall"
+	"time"
 
 	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -34,15 +36,12 @@ import (
 	"github.com/cs3org/reva/pkg/group/manager/registry"
 	"github.com/gomodule/redigo/redis"
 	"github.com/mitchellh/mapstructure"
+	"github.com/rs/zerolog/log"
 )
 
 func init() {
 	registry.Register("rest", New)
 }
-
-var (
-	emailRegex = regexp.MustCompile(`^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$`)
-)
 
 type manager struct {
 	conf            *config
@@ -62,7 +61,7 @@ type config struct {
 	// The OIDC Provider
 	IDProvider string `mapstructure:"id_provider" docs:"http://cernbox.cern.ch"`
 	// Base API Endpoint
-	APIBaseURL string `mapstructure:"api_base_url" docs:"https://authorization-service-api-dev.web.cern.ch/api/v1.0"`
+	APIBaseURL string `mapstructure:"api_base_url" docs:"https://authorization-service-api-dev.web.cern.ch"`
 	// Client ID needed to authenticate
 	ClientID string `mapstructure:"client_id" docs:"-"`
 	// Client Secret
@@ -72,6 +71,8 @@ type config struct {
 	OIDCTokenEndpoint string `mapstructure:"oidc_token_endpoint" docs:"https://keycloak-dev.cern.ch/auth/realms/cern/api-access/token"`
 	// The target application for which token needs to be generated
 	TargetAPI string `mapstructure:"target_api" docs:"authorization-service-api"`
+	// The time in seconds between bulk fetch of groups
+	GroupFetchInterval int `mapstructure:"group_fetch_interval" docs:"3600"`
 }
 
 func (c *config) init() {
@@ -82,7 +83,7 @@ func (c *config) init() {
 		c.RedisAddress = ":6379"
 	}
 	if c.APIBaseURL == "" {
-		c.APIBaseURL = "https://authorization-service-api-dev.web.cern.ch/api/v1.0"
+		c.APIBaseURL = "https://authorization-service-api-dev.web.cern.ch"
 	}
 	if c.TargetAPI == "" {
 		c.TargetAPI = "authorization-service-api"
@@ -92,6 +93,9 @@ func (c *config) init() {
 	}
 	if c.IDProvider == "" {
 		c.IDProvider = "http://cernbox.cern.ch"
+	}
+	if c.GroupFetchInterval == 0 {
+		c.GroupFetchInterval = 3600
 	}
 }
 
@@ -112,58 +116,82 @@ func New(m map[string]interface{}) (group.Manager, error) {
 	c.init()
 
 	redisPool := initRedisPool(c.RedisAddress, c.RedisUsername, c.RedisPassword)
-	apiTokenManager := utils.InitAPITokenManager(c.TargetAPI, c.OIDCTokenEndpoint, c.ClientID, c.ClientSecret)
-	return &manager{
-		conf:            c,
-		redisPool:       redisPool,
-		apiTokenManager: apiTokenManager,
-	}, nil
-}
-
-func (m *manager) getGroupByParam(ctx context.Context, param, val string) (map[string]interface{}, error) {
-	url := fmt.Sprintf("%s/Group?filter=%s:%s&field=groupIdentifier&field=displayName&field=gid",
-		m.conf.APIBaseURL, param, val)
-	responseData, err := m.apiTokenManager.SendAPIGetRequest(ctx, url, false)
+	apiTokenManager, err := utils.InitAPITokenManager(m)
 	if err != nil {
 		return nil, err
 	}
-	if len(responseData) != 1 {
-		return nil, errors.New("rest: group not found")
-	}
 
-	userData, ok := responseData[0].(map[string]interface{})
-	if !ok {
-		return nil, errors.New("rest: error in type assertion")
+	mgr := &manager{
+		conf:            c,
+		redisPool:       redisPool,
+		apiTokenManager: apiTokenManager,
 	}
-	return userData, nil
+	go mgr.fetchAllGroups()
+	return mgr, nil
 }
 
-func (m *manager) getInternalGroupID(ctx context.Context, gid *grouppb.GroupId) (string, error) {
+func (m *manager) fetchAllGroups() {
+	_ = m.fetchAllGroupAccounts()
+	ticker := time.NewTicker(time.Duration(m.conf.GroupFetchInterval) * time.Second)
+	work := make(chan os.Signal, 1)
+	signal.Notify(work, syscall.SIGHUP, syscall.SIGINT, syscall.SIGQUIT)
 
-	internalID, err := m.fetchCachedInternalID(gid)
-	if err != nil {
-		groupData, err := m.getGroupByParam(ctx, "groupIdentifier", gid.OpaqueId)
+	for {
+		select {
+		case <-work:
+			return
+		case <-ticker.C:
+			_ = m.fetchAllGroupAccounts()
+		}
+	}
+}
+
+func (m *manager) fetchAllGroupAccounts() error {
+	ctx := context.Background()
+	url := fmt.Sprintf("%s/api/v1.0/Group?field=groupIdentifier&field=displayName&field=gid", m.conf.APIBaseURL)
+
+	for url != "" {
+		result, err := m.apiTokenManager.SendAPIGetRequest(ctx, url, false)
 		if err != nil {
-			return "", err
-		}
-		id, ok := groupData["id"].(string)
-		if !ok {
-			return "", errors.New("rest: error in type assertion")
+			return err
 		}
 
-		if err = m.cacheInternalID(gid, id); err != nil {
-			log := appctx.GetLogger(ctx)
-			log.Error().Err(err).Msg("rest: error caching group details")
+		responseData, ok := result["data"].([]interface{})
+		if !ok {
+			return errors.New("rest: error in type assertion")
 		}
-		return id, nil
+		for _, usr := range responseData {
+			groupData, ok := usr.(map[string]interface{})
+			if !ok {
+				continue
+			}
+
+			_, err = m.parseAndCacheGroup(ctx, groupData)
+			if err != nil {
+				continue
+			}
+		}
+
+		url = ""
+		if pagination, ok := result["pagination"].(map[string]interface{}); ok {
+			if links, ok := pagination["links"].(map[string]interface{}); ok {
+				if next, ok := links["next"].(string); ok {
+					url = fmt.Sprintf("%s%s", m.conf.APIBaseURL, next)
+				}
+			}
+		}
 	}
-	return internalID, nil
+
+	return nil
 }
 
-func (m *manager) parseAndCacheGroup(ctx context.Context, groupData map[string]interface{}) *grouppb.Group {
-	id, _ := groupData["groupIdentifier"].(string)
-	name, _ := groupData["displayName"].(string)
+func (m *manager) parseAndCacheGroup(ctx context.Context, groupData map[string]interface{}) (*grouppb.Group, error) {
+	id, ok := groupData["groupIdentifier"].(string)
+	if !ok {
+		return nil, errors.New("rest: missing upn in user data")
+	}
 
+	name, _ := groupData["displayName"].(string)
 	groupID := &grouppb.GroupId{
 		OpaqueId: id,
 		Idp:      m.conf.IDProvider,
@@ -181,130 +209,74 @@ func (m *manager) parseAndCacheGroup(ctx context.Context, groupData map[string]i
 	}
 
 	if err := m.cacheGroupDetails(g); err != nil {
-		log := appctx.GetLogger(ctx)
 		log.Error().Err(err).Msg("rest: error caching group details")
 	}
-	if err := m.cacheInternalID(groupID, groupData["id"].(string)); err != nil {
-		log := appctx.GetLogger(ctx)
-		log.Error().Err(err).Msg("rest: error caching group details")
+
+	if internalID, ok := groupData["id"].(string); ok {
+		if err := m.cacheInternalID(groupID, internalID); err != nil {
+			log.Error().Err(err).Msg("rest: error caching group details")
+		}
 	}
-	return g
+
+	return g, nil
 
 }
 
-func (m *manager) GetGroup(ctx context.Context, gid *grouppb.GroupId) (*grouppb.Group, error) {
+func (m *manager) GetGroup(ctx context.Context, gid *grouppb.GroupId, skipFetchingMembers bool) (*grouppb.Group, error) {
 	g, err := m.fetchCachedGroupDetails(gid)
 	if err != nil {
-		groupData, err := m.getGroupByParam(ctx, "groupIdentifier", gid.OpaqueId)
+		return nil, err
+	}
+
+	if !skipFetchingMembers {
+		groupMembers, err := m.GetMembers(ctx, gid)
 		if err != nil {
 			return nil, err
 		}
-		g = m.parseAndCacheGroup(ctx, groupData)
+		g.Members = groupMembers
 	}
-
-	groupMembers, err := m.GetMembers(ctx, gid)
-	if err != nil {
-		return nil, err
-	}
-	g.Members = groupMembers
 
 	return g, nil
 }
 
-func (m *manager) GetGroupByClaim(ctx context.Context, claim, value string) (*grouppb.Group, error) {
-	value = url.QueryEscape(value)
-	opaqueID, err := m.fetchCachedParam(claim, value)
-	if err == nil {
-		return m.GetGroup(ctx, &grouppb.GroupId{OpaqueId: opaqueID})
+func (m *manager) GetGroupByClaim(ctx context.Context, claim, value string, skipFetchingMembers bool) (*grouppb.Group, error) {
+	if claim == "group_name" {
+		return m.GetGroup(ctx, &grouppb.GroupId{OpaqueId: value}, skipFetchingMembers)
 	}
 
-	switch claim {
-	case "mail":
-		claim = "groupIdentifier"
-		value = strings.TrimSuffix(value, "@cern.ch")
-	case "gid_number":
-		claim = "gid"
-	case "group_name":
-		claim = "groupIdentifier"
-	default:
-		return nil, errors.New("rest: invalid field")
-	}
-
-	groupData, err := m.getGroupByParam(ctx, claim, value)
+	g, err := m.fetchCachedGroupByParam(claim, value)
 	if err != nil {
 		return nil, err
 	}
-	g := m.parseAndCacheGroup(ctx, groupData)
 
-	groupMembers, err := m.GetMembers(ctx, g.Id)
-	if err != nil {
-		return nil, err
-	}
-	g.Members = groupMembers
-
-	return g, nil
-
-}
-
-func (m *manager) findGroupsByFilter(ctx context.Context, url string, groups map[string]*grouppb.Group) error {
-
-	groupData, err := m.apiTokenManager.SendAPIGetRequest(ctx, url, false)
-	if err != nil {
-		return err
-	}
-
-	for _, grp := range groupData {
-		grpInfo, ok := grp.(map[string]interface{})
-		if !ok {
-			continue
-		}
-		id, _ := grpInfo["groupIdentifier"].(string)
-		name, _ := grpInfo["displayName"].(string)
-
-		groupID := &grouppb.GroupId{
-			OpaqueId: id,
-			Idp:      m.conf.IDProvider,
-		}
-		gid, ok := grpInfo["gid"].(int64)
-		if !ok {
-			gid = 0
-		}
-		groups[groupID.OpaqueId] = &grouppb.Group{
-			Id:          groupID,
-			GroupName:   id,
-			Mail:        id + "@cern.ch",
-			DisplayName: name,
-			GidNumber:   gid,
-		}
-	}
-
-	return nil
-}
-
-func (m *manager) FindGroups(ctx context.Context, query string) ([]*grouppb.Group, error) {
-	filters := []string{"groupIdentifier"}
-	if emailRegex.MatchString(query) {
-		parts := strings.Split(query, "@")
-		query = parts[0]
-	}
-
-	groups := make(map[string]*grouppb.Group)
-
-	for _, f := range filters {
-		url := fmt.Sprintf("%s/Group/?filter=%s:contains:%s&field=groupIdentifier&field=displayName&field=gid",
-			m.conf.APIBaseURL, f, url.QueryEscape(query))
-		err := m.findGroupsByFilter(ctx, url, groups)
+	if !skipFetchingMembers {
+		groupMembers, err := m.GetMembers(ctx, g.Id)
 		if err != nil {
 			return nil, err
 		}
+		g.Members = groupMembers
 	}
 
-	groupSlice := []*grouppb.Group{}
-	for _, v := range groups {
-		groupSlice = append(groupSlice, v)
+	return g, nil
+}
+
+func (m *manager) FindGroups(ctx context.Context, query string, skipFetchingMembers bool) ([]*grouppb.Group, error) {
+
+	// Look at namespaces filters. If the query starts with:
+	// "a" or none => get egroups
+	// other filters => get empty list
+
+	parts := strings.SplitN(query, ":", 2)
+
+	if len(parts) == 2 {
+		if parts[0] == "a" {
+			query = parts[1]
+		} else {
+			return []*grouppb.Group{}, nil
+		}
 	}
 
-	return groupSlice, nil
+	return m.findCachedGroups(query)
 }
 
 func (m *manager) GetMembers(ctx context.Context, gid *grouppb.GroupId) ([]*userpb.UserId, error) {
@@ -314,16 +286,17 @@ func (m *manager) GetMembers(ctx context.Context, gid *grouppb.GroupId) ([]*user
 		return users, nil
 	}
 
-	internalID, err := m.getInternalGroupID(ctx, gid)
+	internalID, err := m.fetchCachedInternalID(gid)
 	if err != nil {
 		return nil, err
 	}
-	url := fmt.Sprintf("%s/Group/%s/memberidentities/precomputed", m.conf.APIBaseURL, internalID)
-	userData, err := m.apiTokenManager.SendAPIGetRequest(ctx, url, false)
+	url := fmt.Sprintf("%s/api/v1.0/Group/%s/memberidentities/precomputed", m.conf.APIBaseURL, internalID)
+	result, err := m.apiTokenManager.SendAPIGetRequest(ctx, url, false)
 	if err != nil {
 		return nil, err
 	}
 
+	userData := result["data"].([]interface{})
 	users = []*userpb.UserId{}
 
 	for _, u := range userData {
@@ -331,7 +304,9 @@ func (m *manager) GetMembers(ctx context.Context, gid *grouppb.GroupId) ([]*user
 		if !ok {
 			return nil, errors.New("rest: error in type assertion")
 		}
-		users = append(users, &userpb.UserId{OpaqueId: userInfo["upn"].(string), Idp: m.conf.IDProvider})
+		if id, ok := userInfo["upn"].(string); ok {
+			users = append(users, &userpb.UserId{OpaqueId: id, Idp: m.conf.IDProvider})
+		}
 	}
 
 	if err = m.cacheGroupMembers(gid, users); err != nil {

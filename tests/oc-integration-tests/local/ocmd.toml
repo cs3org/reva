@@ -1,0 +1,30 @@
+# This config file will start a reva service that:
+# - serves user and public link shares
+
+[shared]
+jwt_secret = "Pive-Fumkiu4"
+
+[grpc]
+address = "0.0.0.0:14000"
+
+[grpc.services.ocmcore]
+driver = "json"
+
+# Note that ocmcore and ocmshareprovider should use the same file for storing the shares.
+[grpc.services.ocmcore.drivers.json]
+file = "/var/tmp/reva/shares_server_1.json"
+
+[grpc.services.ocminvitemanager]
+driver = "json"
+
+[grpc.services.ocmshareprovider]
+driver = "json"
+
+[grpc.services.ocmshareprovider.drivers.json]
+file = "/var/tmp/reva/shares_server_1.json"
+
+[grpc.services.ocmproviderauthorizer]
+driver = "json"
+
+[grpc.services.ocmproviderauthorizer.drivers.json]
+providers = "providers.demo.json"

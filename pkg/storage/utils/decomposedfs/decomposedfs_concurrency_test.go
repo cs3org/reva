@@ -20,7 +20,6 @@ package decomposedfs_test
 
 import (
 	"context"
-	"fmt"
 	"io/ioutil"
 	"os"
 	"path"
@@ -28,10 +27,10 @@ import (
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs"
 	treemocks "github.com/cs3org/reva/pkg/storage/utils/decomposedfs/tree/mocks"
-	"github.com/cs3org/reva/pkg/user"
 	"github.com/cs3org/reva/tests/helpers"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -69,7 +68,7 @@ var _ = Describe("Decomposed", func() {
 				"physics-lovers",
 			},
 		}
-		ctx = user.ContextSetUser(context.Background(), u)
+		ctx = ctxpkg.ContextSetUser(context.Background(), u)
 
 		bs := &treemocks.Blobstore{}
 		fs, err = decomposedfs.NewDefault(options, bs)
@@ -85,21 +84,9 @@ var _ = Describe("Decomposed", func() {
 	Describe("concurrent", func() {
 		Describe("Upload", func() {
 			var (
-				f, f1 *os.File
+				r1 = []byte("test")
+				r2 = []byte("another run")
 			)
-
-			BeforeEach(func() {
-				// Prepare two test files for upload
-				err := ioutil.WriteFile(fmt.Sprintf("%s/%s", tmpRoot, "f.lol"), []byte("test"), 0644)
-				Expect(err).ToNot(HaveOccurred())
-				f, err = os.Open(fmt.Sprintf("%s/%s", tmpRoot, "f.lol"))
-				Expect(err).ToNot(HaveOccurred())
-
-				err = ioutil.WriteFile(fmt.Sprintf("%s/%s", tmpRoot, "f1.lol"), []byte("another run"), 0644)
-				Expect(err).ToNot(HaveOccurred())
-				f1, err = os.Open(fmt.Sprintf("%s/%s", tmpRoot, "f1.lol"))
-				Expect(err).ToNot(HaveOccurred())
-			})
 
 			PIt("generates two revisions", func() {
 				// runtime.GOMAXPROCS(1) // uncomment to remove concurrency and see revisions working.
@@ -108,17 +95,13 @@ var _ = Describe("Decomposed", func() {
 
 				// upload file with contents: "test"
 				go func(wg *sync.WaitGroup) {
-					_ = fs.Upload(ctx, &provider.Reference{
-						Spec: &provider.Reference_Path{Path: "uploaded.txt"},
-					}, f)
+					_ = helpers.Upload(ctx, fs, &provider.Reference{Path: "uploaded.txt"}, r1)
 					wg.Done()
 				}(wg)
 
 				// upload file with contents: "another run"
 				go func(wg *sync.WaitGroup) {
-					_ = fs.Upload(ctx, &provider.Reference{
-						Spec: &provider.Reference_Path{Path: "uploaded.txt"},
-					}, f1)
+					_ = helpers.Upload(ctx, fs, &provider.Reference{Path: "uploaded.txt"}, r2)
 					wg.Done()
 				}(wg)
 
@@ -129,9 +112,7 @@ var _ = Describe("Decomposed", func() {
 				// same for 2 uploads.
 
 				wg.Wait()
-				revisions, err := fs.ListRevisions(ctx, &provider.Reference{
-					Spec: &provider.Reference_Path{Path: "uploaded.txt"},
-				})
+				revisions, err := fs.ListRevisions(ctx, &provider.Reference{Path: "uploaded.txt"})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(revisions)).To(Equal(1))
 
@@ -144,11 +125,10 @@ var _ = Describe("Decomposed", func() {
 			It("handle already existing directories", func() {
 				for i := 0; i < 10; i++ {
 					go func() {
-						err := fs.CreateDir(ctx, "fightforit")
+						defer GinkgoRecover()
+						err := fs.CreateDir(ctx, &provider.Reference{Path: "/fightforit"})
 						if err != nil {
-							rinfo, err := fs.GetMD(ctx, &provider.Reference{
-								Spec: &provider.Reference_Path{Path: "fightforit"},
-							}, nil)
+							rinfo, err := fs.GetMD(ctx, &provider.Reference{Path: "/fightforit"}, nil)
 							Expect(err).ToNot(HaveOccurred())
 							Expect(rinfo).ToNot(BeNil())
 						}

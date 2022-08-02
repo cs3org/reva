@@ -28,19 +28,17 @@ import (
 	"strconv"
 	"strings"
 
-	"contrib.go.opencensus.io/exporter/jaeger"
 	"github.com/cs3org/reva/cmd/revad/internal/grace"
 	"github.com/cs3org/reva/pkg/logger"
+	"github.com/cs3org/reva/pkg/registry/memory"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/sharedconf"
+	rtrace "github.com/cs3org/reva/pkg/trace"
+	"github.com/cs3org/reva/pkg/utils"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
-	"go.opencensus.io/plugin/ocgrpc"
-	"go.opencensus.io/plugin/ochttp"
-	"go.opencensus.io/stats/view"
-	"go.opencensus.io/trace"
 )
 
 // Run runs a reva server with the given config file and pid file.
@@ -56,6 +54,21 @@ func RunWithOptions(mainConf map[string]interface{}, pidFile string, opts ...Opt
 	parseSharedConfOrDie(mainConf["shared"])
 	coreConf := parseCoreConfOrDie(mainConf["core"])
 
+	// TODO: one can pass the options from the config file to registry.New() and initialize a registry based upon config files.
+	if options.Registry != nil {
+		utils.GlobalRegistry = options.Registry
+	} else if _, ok := mainConf["registry"]; ok {
+		for _, services := range mainConf["registry"].(map[string]interface{}) {
+			for sName, nodes := range services.(map[string]interface{}) {
+				for _, instance := range nodes.([]interface{}) {
+					if err := utils.GlobalRegistry.Add(memory.NewService(sName, instance.(map[string]interface{})["nodes"].([]interface{}))); err != nil {
+						panic(err)
+					}
+				}
+			}
+		}
+	}
+
 	run(mainConf, coreConf, options.Logger, pidFile)
 }
 
@@ -65,13 +78,18 @@ type coreConf struct {
 	TracingEndpoint    string `mapstructure:"tracing_endpoint"`
 	TracingCollector   string `mapstructure:"tracing_collector"`
 	TracingServiceName string `mapstructure:"tracing_service_name"`
+
+	// TracingService specifies the service. i.e OpenCensus, OpenTelemetry, OpenTracing...
+	TracingService string `mapstructure:"tracing_service"`
 }
 
 func run(mainConf map[string]interface{}, coreConf *coreConf, logger *zerolog.Logger, filename string) {
 	host, _ := os.Hostname()
 	logger.Info().Msgf("host info: %s", host)
 
-	initTracing(coreConf, logger)
+	if coreConf.TracingEnabled {
+		initTracing(coreConf)
+	}
 	initCPUCount(coreConf, logger)
 
 	servers := initServers(mainConf, logger)
@@ -124,18 +142,14 @@ func initServers(mainConf map[string]interface{}, log *zerolog.Logger) map[strin
 	}
 
 	if len(servers) == 0 {
-		// nothing to do
 		log.Info().Msg("nothing to do, no grpc/http enabled_services declared in config")
 		os.Exit(1)
 	}
 	return servers
 }
 
-func initTracing(conf *coreConf, log *zerolog.Logger) {
-	if err := setupOpenCensus(conf); err != nil {
-		log.Error().Err(err).Msg("error configuring open census stats and tracing")
-		os.Exit(1)
-	}
+func initTracing(conf *coreConf) {
+	rtrace.SetTraceProvider(conf.TracingCollector, conf.TracingEndpoint, conf.TracingServiceName)
 }
 
 func initCPUCount(conf *coreConf, log *zerolog.Logger) {
@@ -221,7 +235,7 @@ func getWriter(out string) (io.Writer, error) {
 		return os.Stdout, nil
 	}
 
-	fd, err := os.Create(out)
+	fd, err := os.OpenFile(out, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		err = errors.Wrap(err, "error creating log file: "+out)
 		return nil, err
@@ -248,39 +262,6 @@ func getHTTPServer(conf interface{}, l *zerolog.Logger) (*rhttp.Server, error) {
 		return nil, err
 	}
 	return s, nil
-}
-
-func setupOpenCensus(conf *coreConf) error {
-	if err := view.Register(ochttp.DefaultServerViews...); err != nil {
-		return err
-	}
-
-	if err := view.Register(ocgrpc.DefaultServerViews...); err != nil {
-		return err
-	}
-
-	if !conf.TracingEnabled {
-		return nil
-	}
-
-	if conf.TracingServiceName == "" {
-		conf.TracingServiceName = "revad"
-	}
-
-	je, err := jaeger.NewExporter(jaeger.Options{
-		AgentEndpoint:     conf.TracingEndpoint,
-		CollectorEndpoint: conf.TracingCollector,
-		ServiceName:       conf.TracingServiceName,
-	})
-
-	if err != nil {
-		return err
-	}
-
-	// register it as a trace exporter
-	trace.RegisterExporter(je)
-	trace.ApplyConfig(trace.Config{DefaultSampler: trace.AlwaysSample()})
-	return nil
 }
 
 //  adjustCPU parses string cpu and sets GOMAXPROCS
@@ -329,6 +310,16 @@ func parseCoreConfOrDie(v interface{}) *coreConf {
 		fmt.Fprintf(os.Stderr, "error decoding core config: %s\n", err.Error())
 		os.Exit(1)
 	}
+
+	// tracing defaults to enabled if not explicitly configured
+	if v == nil {
+		c.TracingEnabled = true
+		c.TracingEndpoint = "localhost:6831"
+	} else if _, ok := v.(map[string]interface{})["tracing_enabled"]; !ok {
+		c.TracingEnabled = true
+		c.TracingEndpoint = "localhost:6831"
+	}
+
 	return c
 }
 

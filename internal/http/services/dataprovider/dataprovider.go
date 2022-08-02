@@ -42,7 +42,7 @@ type config struct {
 	Drivers  map[string]map[string]interface{} `mapstructure:"drivers" docs:"url:pkg/storage/fs/localhome/localhome.go;The configuration for the storage driver"`
 	DataTXs  map[string]map[string]interface{} `mapstructure:"data_txs" docs:"url:pkg/rhttp/datatx/manager/simple/simple.go;The configuration for the data tx protocols"`
 	Timeout  int64                             `mapstructure:"timeout"`
-	Insecure bool                              `mapstructure:"insecure"`
+	Insecure bool                              `mapstructure:"insecure" docs:"false;Whether to skip certificate checks when sending requests."`
 }
 
 func (c *config) init() {
@@ -103,6 +103,7 @@ func getDataTXs(c *config, fs storage.FS) (map[string]http.Handler, error) {
 	}
 	if len(c.DataTXs) == 0 {
 		c.DataTXs["simple"] = make(map[string]interface{})
+		c.DataTXs["spaces"] = make(map[string]interface{})
 		c.DataTXs["tus"] = make(map[string]interface{})
 	}
 
@@ -124,7 +125,9 @@ func (s *svc) Close() error {
 }
 
 func (s *svc) Unprotected() []string {
-	return []string{}
+	return []string{
+		"/tus",
+	}
 }
 
 func (s *svc) Prefix() string {

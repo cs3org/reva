@@ -21,6 +21,7 @@ package mentix
 import (
 	"net/http"
 
+	"github.com/cs3org/reva/pkg/mentix/meshdata"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -136,11 +137,6 @@ func applyDefaultConfig(conf *config.Configuration) {
 		conf.Connectors.GOCDB.Scope = "SM" // TODO(Daniel-WWU-IT): This might change in the future
 	}
 
-	// Importers
-	if conf.Importers.SiteRegistration.Endpoint == "" {
-		conf.Importers.SiteRegistration.Endpoint = "/sitereg"
-	}
-
 	// Exporters
 	addDefaultConnector := func(enabledList *[]string) {
 		if len(*enabledList) == 0 {
@@ -157,6 +153,9 @@ func applyDefaultConfig(conf *config.Configuration) {
 		conf.Exporters.CS3API.Endpoint = "/cs3"
 	}
 	addDefaultConnector(&conf.Exporters.CS3API.EnabledConnectors)
+	if len(conf.Exporters.CS3API.ElevatedServiceTypes) == 0 {
+		conf.Exporters.CS3API.ElevatedServiceTypes = append(conf.Exporters.CS3API.ElevatedServiceTypes, meshdata.EndpointGateway, meshdata.EndpointOCM, meshdata.EndpointWebdav)
+	}
 
 	if conf.Exporters.SiteLocations.Endpoint == "" {
 		conf.Exporters.SiteLocations.Endpoint = "/loc"
@@ -164,6 +163,7 @@ func applyDefaultConfig(conf *config.Configuration) {
 	addDefaultConnector(&conf.Exporters.SiteLocations.EnabledConnectors)
 
 	addDefaultConnector(&conf.Exporters.PrometheusSD.EnabledConnectors)
+	addDefaultConnector(&conf.Exporters.Metrics.EnabledConnectors)
 }
 
 // New returns a new Mentix service.

@@ -22,50 +22,20 @@ import (
 	"context"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	"github.com/cs3org/reva/pkg/plugin"
 )
-
-type key int
-
-const (
-	userKey key = iota
-	idKey
-)
-
-// ContextGetUser returns the user if set in the given context.
-func ContextGetUser(ctx context.Context) (*userpb.User, bool) {
-	u, ok := ctx.Value(userKey).(*userpb.User)
-	return u, ok
-}
-
-// ContextMustGetUser panics if user is not in context.
-func ContextMustGetUser(ctx context.Context) *userpb.User {
-	u, ok := ContextGetUser(ctx)
-	if !ok {
-		panic("user not found in context")
-	}
-	return u
-}
-
-// ContextSetUser stores the user in the context.
-func ContextSetUser(ctx context.Context, u *userpb.User) context.Context {
-	return context.WithValue(ctx, userKey, u)
-}
-
-// ContextGetUserID returns the user if set in the given context.
-func ContextGetUserID(ctx context.Context) (*userpb.UserId, bool) {
-	u, ok := ctx.Value(idKey).(*userpb.UserId)
-	return u, ok
-}
-
-// ContextSetUserID stores the userid in the context.
-func ContextSetUserID(ctx context.Context, id *userpb.UserId) context.Context {
-	return context.WithValue(ctx, idKey, id)
-}
 
 // Manager is the interface to implement to manipulate users.
 type Manager interface {
-	GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User, error)
-	GetUserByClaim(ctx context.Context, claim, value string) (*userpb.User, error)
+	plugin.Plugin
+	// GetUser returns the user metadata identified by a uid.
+	// The groups of the user are omitted if specified, as these might not be required for certain operations
+	// and might involve computational overhead.
+	GetUser(ctx context.Context, uid *userpb.UserId, skipFetchingGroups bool) (*userpb.User, error)
+	// GetUserByClaim returns the user identified by a specific value for a given claim.
+	GetUserByClaim(ctx context.Context, claim, value string, skipFetchingGroups bool) (*userpb.User, error)
+	// GetUserGroups returns the groups a user identified by a uid belongs to.
 	GetUserGroups(ctx context.Context, uid *userpb.UserId) ([]string, error)
-	FindUsers(ctx context.Context, query string) ([]*userpb.User, error)
+	// FindUsers returns all the user objects which match a query parameter.
+	FindUsers(ctx context.Context, query string, skipFetchingGroups bool) ([]*userpb.User, error)
 }

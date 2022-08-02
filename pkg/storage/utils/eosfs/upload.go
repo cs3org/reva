@@ -22,6 +22,7 @@ import (
 	"context"
 	"io"
 	"os"
+	"path"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/errtypes"
@@ -30,16 +31,7 @@ import (
 )
 
 func (fs *eosfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser) error {
-	u, err := getUser(ctx)
-	if err != nil {
-		return errors.Wrap(err, "eos: no user in ctx")
-	}
-	uid, gid, err := fs.getUserUIDAndGID(ctx, u)
-	if err != nil {
-		return err
-	}
-
-	p, err := fs.resolve(ctx, u, ref)
+	p, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return errors.Wrap(err, "eos: error resolving reference")
 	}
@@ -71,7 +63,19 @@ func (fs *eosfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadC
 	}
 
 	fn := fs.wrap(ctx, p)
-	return fs.c.Write(ctx, uid, gid, fn, r)
+
+	u, err := getUser(ctx)
+	if err != nil {
+		return errors.Wrap(err, "eos: no user in ctx")
+	}
+
+	// We need the auth corresponding to the parent directory
+	// as the file might not exist at the moment
+	auth, err := fs.getUserAuth(ctx, u, path.Dir(fn))
+	if err != nil {
+		return err
+	}
+	return fs.c.Write(ctx, auth, fn, r)
 }
 
 func (fs *eosfs) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64, metadata map[string]string) (map[string]string, error) {

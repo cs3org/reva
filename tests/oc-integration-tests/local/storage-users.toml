@@ -1,13 +1,13 @@
-# This storage.toml config file will start a reva service that:
+# This config file will start a reva service that:
+# - uses the ocis driver to serve users (/users)
+# - serves the storage provider on grpc port 11000
+# - serves http dataprovider for this storage on port 11001
+#   - /data - dataprovider: file up and download
+
 [shared]
 jwt_secret = "Pive-Fumkiu4"
 gatewaysvc = "localhost:19000"
 
-# - authenticates grpc storage provider requests using the internal jwt token
-# - authenticates http upload and download requests requests using basic auth
-# - serves the storage provider on grpc port 11000
-# - serves http dataprovider for this storage on port 11001
-#   - /data - dataprovider: file up and download
 [grpc]
 address = "0.0.0.0:11000"
 
@@ -38,3 +38,4 @@ root = "/var/tmp/reva/data"
 enable_home = false
 treetime_accounting = true
 treesize_accounting = true
+gateway_addr = "0.0.0.0:19000"

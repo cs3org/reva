@@ -21,10 +21,10 @@ package demo
 import (
 	"context"
 	"errors"
+	"strconv"
 	"strings"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/cs3org/reva/pkg/user/manager/registry"
@@ -40,23 +40,41 @@ type manager struct {
 
 // New returns a new user manager.
 func New(m map[string]interface{}) (user.Manager, error) {
-	cat := getUsers()
-	return &manager{catalog: cat}, nil
+	mgr := &manager{}
+	err := mgr.Configure(m)
+	if err != nil {
+		return nil, err
+	}
+	return mgr, err
 }
 
-func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId) (*userpb.User, error) {
+func (m *manager) Configure(ml map[string]interface{}) error {
+	cat := getUsers()
+	m.catalog = cat
+	return nil
+}
+
+func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId, skipFetchingGroups bool) (*userpb.User, error) {
 	if user, ok := m.catalog[uid.OpaqueId]; ok {
 		if uid.Idp == "" || user.Id.Idp == uid.Idp {
-			return user, nil
+			u := *user
+			if skipFetchingGroups {
+				u.Groups = nil
+			}
+			return &u, nil
 		}
 	}
 	return nil, errtypes.NotFound(uid.OpaqueId)
 }
 
-func (m *manager) GetUserByClaim(ctx context.Context, claim, value string) (*userpb.User, error) {
+func (m *manager) GetUserByClaim(ctx context.Context, claim, value string, skipFetchingGroups bool) (*userpb.User, error) {
 	for _, u := range m.catalog {
 		if userClaim, err := extractClaim(u, claim); err == nil && value == userClaim {
-			return u, nil
+			user := *u
+			if skipFetchingGroups {
+				user.Groups = nil
+			}
+			return &user, nil
 		}
 	}
 	return nil, errtypes.NotFound(value)
@@ -69,12 +87,8 @@ func extractClaim(u *userpb.User, claim string) (string, error) {
 	case "username":
 		return u.Username, nil
 	case "uid":
-		if u.Opaque != nil && u.Opaque.Map != nil {
-			if uidObj, ok := u.Opaque.Map["uid"]; ok {
-				if uidObj.Decoder == "plain" {
-					return string(uidObj.Value), nil
-				}
-			}
+		if u.UidNumber != 0 {
+			return strconv.FormatInt(u.UidNumber, 10), nil
 		}
 	}
 	return "", errors.New("demo: invalid field")
@@ -85,18 +99,22 @@ func userContains(u *userpb.User, query string) bool {
 	return strings.Contains(u.Username, query) || strings.Contains(u.DisplayName, query) || strings.Contains(u.Mail, query) || strings.Contains(u.Id.OpaqueId, query)
 }
 
-func (m *manager) FindUsers(ctx context.Context, query string) ([]*userpb.User, error) {
+func (m *manager) FindUsers(ctx context.Context, query string, skipFetchingGroups bool) ([]*userpb.User, error) {
 	users := []*userpb.User{}
 	for _, u := range m.catalog {
 		if userContains(u, query) {
-			users = append(users, u)
+			user := *u
+			if skipFetchingGroups {
+				user.Groups = nil
+			}
+			users = append(users, &user)
 		}
 	}
 	return users, nil
 }
 
 func (m *manager) GetUserGroups(ctx context.Context, uid *userpb.UserId) ([]string, error) {
-	user, err := m.GetUser(ctx, uid)
+	user, err := m.GetUser(ctx, uid, false)
 	if err != nil {
 		return nil, err
 	}
@@ -105,54 +123,37 @@ func (m *manager) GetUserGroups(ctx context.Context, uid *userpb.UserId) ([]stri
 
 func getUsers() map[string]*userpb.User {
 	return map[string]*userpb.User{
-		"4c510ada-c86b-4815-8820-42cdf82c3d51": &userpb.User{
+		"4c510ada-c86b-4815-8820-42cdf82c3d51": {
 			Id: &userpb.UserId{
 				Idp:      "http://localhost:9998",
 				OpaqueId: "4c510ada-c86b-4815-8820-42cdf82c3d51",
+				Type:     userpb.UserType_USER_TYPE_PRIMARY,
 			},
 			Username:    "einstein",
 			Groups:      []string{"sailing-lovers", "violin-haters", "physics-lovers"},
 			Mail:        "einstein@example.org",
 			DisplayName: "Albert Einstein",
-			Opaque: &types.Opaque{
-				Map: map[string]*types.OpaqueEntry{
-					"uid": &types.OpaqueEntry{
-						Decoder: "plain",
-						Value:   []byte("123"),
-					},
-					"gid": &types.OpaqueEntry{
-						Decoder: "plain",
-						Value:   []byte("987"),
-					},
-				},
-			},
+			UidNumber:   123,
+			GidNumber:   987,
 		},
-		"f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c": &userpb.User{
+		"f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c": {
 			Id: &userpb.UserId{
 				Idp:      "http://localhost:9998",
 				OpaqueId: "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
+				Type:     userpb.UserType_USER_TYPE_PRIMARY,
 			},
 			Username:    "marie",
 			Groups:      []string{"radium-lovers", "polonium-lovers", "physics-lovers"},
 			Mail:        "marie@example.org",
 			DisplayName: "Marie Curie",
-			Opaque: &types.Opaque{
-				Map: map[string]*types.OpaqueEntry{
-					"uid": &types.OpaqueEntry{
-						Decoder: "plain",
-						Value:   []byte("456"),
-					},
-					"gid": &types.OpaqueEntry{
-						Decoder: "plain",
-						Value:   []byte("987"),
-					},
-				},
-			},
+			UidNumber:   456,
+			GidNumber:   987,
 		},
-		"932b4540-8d16-481e-8ef4-588e4b6b151c": &userpb.User{
+		"932b4540-8d16-481e-8ef4-588e4b6b151c": {
 			Id: &userpb.UserId{
 				Idp:      "http://localhost:9998",
 				OpaqueId: "932b4540-8d16-481e-8ef4-588e4b6b151c",
+				Type:     userpb.UserType_USER_TYPE_PRIMARY,
 			},
 			Username:    "richard",
 			Groups:      []string{"quantum-lovers", "philosophy-haters", "physics-lovers"},

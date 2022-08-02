@@ -1,14 +1,15 @@
-[shared]
-jwt_secret = "Pive-Fumkiu4"
-gatewaysvc = "localhost:19000"
-
-# This gateway.toml config file will start a reva service that:
-# - serves as a gateway for all requests
+# This config file will start a reva service that:
+# - serves as a gateway for all CS3 requests
 # - looks up the storageprovider using a storageregistry
 # - looks up the authprovider using an authregistry
 # - serves the gateway on grpc port 19000
 # - serves http datagateway on port 19001
 #   - /data - datagateway: file up and download
+
+[shared]
+jwt_secret = "Pive-Fumkiu4"
+gatewaysvc = "localhost:19000"
+
 [grpc]
 address = "0.0.0.0:19000"
 
@@ -25,10 +26,12 @@ groupprovidersvc = "localhost:18000"
 usershareprovidersvc = "localhost:17000"
 publicshareprovidersvc = "localhost:17000"
 # ocm
-ocmcoresvc = "localhost:13000"
-ocmshareprovidersvc = "localhost:13000"
-ocminvitemanagersvc = "localhost:13000"
-ocmproviderauthorizersvc = "localhost:13000"
+ocmcoresvc = "localhost:14000"
+ocmshareprovidersvc = "localhost:14000"
+ocminvitemanagersvc = "localhost:14000"
+ocmproviderauthorizersvc = "localhost:14000"
+# permissions
+permissionssvc = "localhost:10000"
 # other
 commit_share_to_storage_grant = true
 commit_share_to_storage_ref = true
@@ -45,7 +48,6 @@ driver = "static"
 [grpc.services.authregistry.drivers.static.rules]
 publicshares = "localhost:17000" # started with the shares.toml
 basic = "localhost:18000" # started with the users.toml
-bearer = "localhost:20099" # started with the frontend.toml
 
 [grpc.services.storageregistry]
 driver = "static"
@@ -53,20 +55,26 @@ driver = "static"
 [grpc.services.storageregistry.drivers.static]
 home_provider = "/home"
 
+[grpc.services.storageregistry.drivers.static.rules]
+
 # mount a home storage provider that uses a context based path wrapper
 # to jail users into their home dir
-[grpc.services.storageregistry.drivers.static.rules."/home"]
-address = "localhost:12000"
+"/home" = {"address" = "localhost:12000"}
 
 # mount a storage provider without a path wrapper for direct access to users.
-[grpc.services.storageregistry.drivers.static.rules."/oc"]
-address = "localhost:11000"
-[grpc.services.storageregistry.drivers.static.rules."123e4567-e89b-12d3-a456-426655440000"]
-address = "localhost:11000"
+"/users" = {"address" = "localhost:11000"}
+"123e4567-e89b-12d3-a456-426655440000" = {"address" = "localhost:11000"}
+
+# the /virtual namespace is only accessible via the frontend-global service
+"/virtual/[a-k]" = {"address" = "localhost:11100"}
+"virtual-a-k" = {"address" = "localhost:11100"}
+"/virtual/[l-z]" = {"address" = "localhost:11110"}
+"virtual-l-z" = {"address" = "localhost:11110"}
+
 # another mount point might be "/projects/"
 
-[grpc.services.storageregistry.drivers.static.rules."/public"]
-address = "localhost:13000"
+"/public" = {"address" = "localhost:13000"}
+"e1a73ede-549b-4226-abdf-40e69ca8230d" = {"address" = "localhost:13000"}
 
 [http]
 address = "0.0.0.0:19001"

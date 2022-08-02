@@ -28,7 +28,7 @@ import (
 )
 
 func (s *svc) GenerateInviteToken(ctx context.Context, req *invitepb.GenerateInviteTokenRequest) (*invitepb.GenerateInviteTokenResponse, error) {
-	c, err := pool.GetOCMInviteManagerClient(s.c.OCMInviteManagerEndpoint)
+	c, err := pool.GetOCMInviteManagerClient(pool.Endpoint(s.c.OCMInviteManagerEndpoint))
 	if err != nil {
 		return &invitepb.GenerateInviteTokenResponse{
 			Status: status.NewInternal(ctx, err, "error getting user invite provider client"),
@@ -44,7 +44,7 @@ func (s *svc) GenerateInviteToken(ctx context.Context, req *invitepb.GenerateInv
 }
 
 func (s *svc) ForwardInvite(ctx context.Context, req *invitepb.ForwardInviteRequest) (*invitepb.ForwardInviteResponse, error) {
-	c, err := pool.GetOCMInviteManagerClient(s.c.OCMInviteManagerEndpoint)
+	c, err := pool.GetOCMInviteManagerClient(pool.Endpoint(s.c.OCMInviteManagerEndpoint))
 	if err != nil {
 		return &invitepb.ForwardInviteResponse{
 			Status: status.NewInternal(ctx, err, "error getting user invite provider client"),
@@ -60,7 +60,7 @@ func (s *svc) ForwardInvite(ctx context.Context, req *invitepb.ForwardInviteRequ
 }
 
 func (s *svc) AcceptInvite(ctx context.Context, req *invitepb.AcceptInviteRequest) (*invitepb.AcceptInviteResponse, error) {
-	c, err := pool.GetOCMInviteManagerClient(s.c.OCMInviteManagerEndpoint)
+	c, err := pool.GetOCMInviteManagerClient(pool.Endpoint(s.c.OCMInviteManagerEndpoint))
 	if err != nil {
 		return &invitepb.AcceptInviteResponse{
 			Status: status.NewInternal(ctx, err, "error getting user invite provider client"),
@@ -76,7 +76,7 @@ func (s *svc) AcceptInvite(ctx context.Context, req *invitepb.AcceptInviteReques
 }
 
 func (s *svc) GetAcceptedUser(ctx context.Context, req *invitepb.GetAcceptedUserRequest) (*invitepb.GetAcceptedUserResponse, error) {
-	c, err := pool.GetOCMInviteManagerClient(s.c.OCMInviteManagerEndpoint)
+	c, err := pool.GetOCMInviteManagerClient(pool.Endpoint(s.c.OCMInviteManagerEndpoint))
 	if err != nil {
 		return &invitepb.GetAcceptedUserResponse{
 			Status: status.NewInternal(ctx, err, "error getting user invite provider client"),
@@ -92,7 +92,7 @@ func (s *svc) GetAcceptedUser(ctx context.Context, req *invitepb.GetAcceptedUser
 }
 
 func (s *svc) FindAcceptedUsers(ctx context.Context, req *invitepb.FindAcceptedUsersRequest) (*invitepb.FindAcceptedUsersResponse, error) {
-	c, err := pool.GetOCMInviteManagerClient(s.c.OCMInviteManagerEndpoint)
+	c, err := pool.GetOCMInviteManagerClient(pool.Endpoint(s.c.OCMInviteManagerEndpoint))
 	if err != nil {
 		return &invitepb.FindAcceptedUsersResponse{
 			Status: status.NewInternal(ctx, err, "error getting user invite provider client"),

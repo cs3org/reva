@@ -57,10 +57,11 @@ Reva daemons are spawned using configuration specified in `toml` format. Multipl
                               G: gRPC exposed service
 ```
 
-You can start these three daemons using the `-dev-dir` flag which fires up a daemon for each toml file in a directory. The user, group and mesh provider services use JSON files by default as their data store, and expects these to be located at `/etc/revad`.
+You can start these three daemons using the `-dev-dir` flag which fires up a daemon for each toml file in a directory. The user, group and mesh provider services use JSON files by default as their data store, and expects these to be located at `/etc/revad`. Some of these commands may require `sudo`, depending on your system setup.
 
 ```
 > mkdir -p /var/tmp/reva
+> mkdir -p /etc/revad
 > cp examples/storage-references/users.demo.json /etc/revad/users.json
 > cp examples/storage-references/groups.demo.json /etc/revad/groups.json
 > cp examples/storage-references/providers.demo.json /etc/revad/ocm-providers.json

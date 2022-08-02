@@ -23,24 +23,11 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/cs3org/reva/pkg/mentix/accservice"
 	"github.com/cs3org/reva/pkg/mentix/utils/network"
 )
 
-const (
-	// SiteTypeScienceMesh flags a site as being part of the mesh.
-	SiteTypeScienceMesh SiteType = iota
-	// SiteTypeCommunity flags a site as being a community site.
-	SiteTypeCommunity
-)
-
-// SiteType holds the type of a site.
-type SiteType int
-
 // Site represents a single site managed by Mentix.
 type Site struct {
-	Type SiteType `json:"-"`
-
 	ID           string
 	Name         string
 	FullName     string
@@ -57,12 +44,14 @@ type Site struct {
 
 	Services   []*Service
 	Properties map[string]string
+
+	Downtimes Downtimes `json:"-"`
 }
 
 // AddService adds a new service; if a service with the same name already exists, the existing one is overwritten.
 func (site *Site) AddService(service *Service) {
 	if serviceExisting := site.FindService(service.Name); serviceExisting != nil {
-		*service = *serviceExisting
+		*serviceExisting = *service
 	} else {
 		site.Services = append(site.Services, service)
 	}
@@ -127,38 +116,5 @@ func (site *Site) InferMissingData() {
 	// Infer missing for services
 	for _, service := range site.Services {
 		service.InferMissingData()
-	}
-}
-
-// IsAuthorized checks whether the site is authorized. ScienceMesh are always authorized, while for community sites,
-// the accounts service is queried.
-func (site *Site) IsAuthorized() bool {
-	// ScienceMesh sites are always authorized
-	if site.Type == SiteTypeScienceMesh {
-		return true
-	}
-
-	// Use the accounts service to find out whether the site is authorized
-	resp, err := accservice.Query("is-authorized", network.URLParams{"by": "siteid", "value": site.ID})
-	if err == nil && resp.Success {
-		if authorized, ok := resp.Data.(bool); ok {
-			return authorized
-		}
-	}
-
-	return false
-}
-
-// GetSiteTypeName returns the readable name of the given site type.
-func GetSiteTypeName(siteType SiteType) string {
-	switch siteType {
-	case SiteTypeScienceMesh:
-		return "sciencemesh"
-
-	case SiteTypeCommunity:
-		return "community"
-
-	default:
-		return "unknown"
 	}
 }

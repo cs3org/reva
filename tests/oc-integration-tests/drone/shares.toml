@@ -1,8 +1,9 @@
+# This config file will start a reva service that:
+# - serves user and public link shares
+
 [shared]
 jwt_secret = "Pive-Fumkiu4"
 
-# GRPC:
-# - serves user and public link shares
 [grpc]
 address = "0.0.0.0:17000"
 

@@ -9,6 +9,9 @@ updateDocsWhiteList:
   - tests-only
   - Tests-Only
   - Build-deps
+  - docs-only
+  - Docs-only
+  - Docs-Only
 
 updateDocsTargetFiles:
   - changelog/unreleased/

@@ -23,10 +23,10 @@ import (
 	"time"
 
 	"github.com/cs3org/reva/pkg/appctx"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/rs/zerolog"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 )
@@ -40,16 +40,13 @@ func NewUnary() grpc.UnaryServerInterceptor {
 		code := status.Code(err)
 		end := time.Now()
 		diff := end.Sub(start).Nanoseconds()
-		var fromAddress, userAgent string
+		var fromAddress string
 		if p, ok := peer.FromContext(ctx); ok {
 			fromAddress = p.Addr.Network() + "://" + p.Addr.String()
 		}
-		if md, ok := metadata.FromIncomingContext(ctx); ok {
-			if vals, ok := md["user-agent"]; ok {
-				if len(vals) > 0 && vals[0] != "" {
-					userAgent = vals[0]
-				}
-			}
+		userAgent, ok := ctxpkg.ContextGetUserAgentString(ctx)
+		if !ok {
+			userAgent = ""
 		}
 
 		log := appctx.GetLogger(ctx)
@@ -77,21 +74,19 @@ func NewUnary() grpc.UnaryServerInterceptor {
 // that adds trace information to the request.
 func NewStream() grpc.StreamServerInterceptor {
 	interceptor := func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+		ctx := ss.Context()
 		start := time.Now()
 		err := handler(srv, ss)
 		end := time.Now()
 		code := status.Code(err)
 		diff := end.Sub(start).Nanoseconds()
-		var fromAddress, userAgent string
+		var fromAddress string
 		if p, ok := peer.FromContext(ss.Context()); ok {
 			fromAddress = p.Addr.Network() + "://" + p.Addr.String()
 		}
-		if md, ok := metadata.FromIncomingContext(ss.Context()); ok {
-			if vals, ok := md["user-agent"]; ok {
-				if len(vals) > 0 && vals[0] != "" {
-					userAgent = vals[0]
-				}
-			}
+		userAgent, ok := ctxpkg.ContextGetUserAgentString(ctx)
+		if !ok {
+			userAgent = ""
 		}
 
 		log := appctx.GetLogger(ss.Context())

@@ -1,26 +1,14 @@
-[shared]
-jwt_secret = "Pive-Fumkiu4"
-gatewaysvc = "localhost:19000"
-
-# This frontend.toml config file will start a reva service that:
+# This config file will start a reva service that:
 # - serves as the entrypoint for owncloud APIs.
+# - jails users into their home folder as in owncloud classic
 # - serves http endpoints on port 20080
 #   - / --------------- ocdav
 #   - /ocs ------------ ocs
-#   - /oauth2 --------- oidcprovider
-#   - /.well-known ---- wellknown service to announce openid-configuration
 #   - TODO(diocas): ocm
-# - authenticates requests using oidc bearer auth and basic auth as fallback
-# - serves the grpc services on port 20099
-[grpc]
-address = "0.0.0.0:20099"
 
-[grpc.services.authprovider]
-auth_manager = "oidc"
-
-# If you want to use your own openid provider change this config
-[grpc.services.authprovider.auth_managers.oidc]
-issuer = "http://localhost:20080"
+[shared]
+jwt_secret = "Pive-Fumkiu4"
+gatewaysvc = "localhost:19000"
 
 [http]
 address = "0.0.0.0:20080"
@@ -37,7 +25,7 @@ chunk_folder = "/var/tmp/reva/chunks"
 # While owncloud has only listed usernames at this endpoint CERN has
 # been exposing more than just usernames. For owncloud deployments we
 # can prefix the path to jail the requests to the correct CS3 namespace.
-# In this deployment we mounted the owncloud storage provider at /oc. It
+# In this deployment we mounted the owncloud storage provider at /users. It
 # expects a username as the first path segment.
 # currently, only the desktop client will use this endpoint, but only if
 # the dav.chunking capability is available
@@ -60,6 +48,7 @@ files_namespace = "/users"
 # - TODO android? no sync ... but will see different tree
 webdav_namespace = "/home"
 
+# serve /ocs which contains the sharing and user provisioning api of owncloud classic
 [http.services.ocs]
 
 [http.services.ocs.capabilities.capabilities.core.status]
@@ -107,7 +96,7 @@ outgoing = true
 incoming = true
 
 [http.services.ocs.capabilities.capabilities.notifications]
-endpoints = ["disable"]
+endpoints = []
 
 [http.services.ocs.capabilities.capabilities.files.tus_support]
 version = "1.0.0"
@@ -115,3 +104,13 @@ resumable = "1.0.0"
 extension = "creation,creation-with-upload"
 http_method_override = ""
 max_chunk_size = 0
+
+# serve /ocm
+[http.services.ocmd]
+prefix = "ocm"
+
+[http.middlewares.providerauthorizer]
+driver = "json"
+
+[http.middlewares.providerauthorizer.drivers.json]
+providers = "providers.demo.json"

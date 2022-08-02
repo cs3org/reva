@@ -67,11 +67,7 @@ func ImportShares(ctx context.Context, client gateway.GatewayAPIClient, exportPa
 
 		// Stat file, skip share creation if it does not exist on the target system
 		resourcePath := path.Join(ns, path.Base(exportPath), shareData.Path)
-		statReq := &provider.StatRequest{
-			Ref: &provider.Reference{
-				Spec: &provider.Reference_Path{Path: resourcePath},
-			},
-		}
+		statReq := &provider.StatRequest{Ref: &provider.Reference{Path: resourcePath}}
 		statResp, err := client.Stat(ctx, statReq)
 
 		if err != nil {

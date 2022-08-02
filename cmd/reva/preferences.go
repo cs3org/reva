@@ -40,6 +40,7 @@ var preferencesCommand = func() *command {
 
 		subcommand := cmd.Args()[0]
 		key := cmd.Args()[1]
+		ns := cmd.Args()[2]
 
 		client, err := getClient()
 		if err != nil {
@@ -50,12 +51,15 @@ var preferencesCommand = func() *command {
 
 		switch subcommand {
 		case "set":
-			if cmd.NArg() < 3 {
+			if cmd.NArg() < 4 {
 				return errors.New("Invalid arguments: " + cmd.Usage())
 			}
-			value := cmd.Args()[2]
+			value := cmd.Args()[3]
 			req := &preferences.SetKeyRequest{
-				Key: key,
+				Key: &preferences.PreferenceKey{
+					Namespace: ns,
+					Key:       key,
+				},
 				Val: value,
 			}
 
@@ -70,7 +74,10 @@ var preferencesCommand = func() *command {
 
 		case "get":
 			req := &preferences.GetKeyRequest{
-				Key: key,
+				Key: &preferences.PreferenceKey{
+					Namespace: ns,
+					Key:       key,
+				},
 			}
 
 			res, err := client.GetKey(ctx, req)

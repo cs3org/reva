@@ -26,23 +26,15 @@ type Configuration struct {
 		GOCDB struct {
 			Address string `mapstructure:"address"`
 			Scope   string `mapstructure:"scope"`
+			APIKey  string `mapstructure:"apikey"`
 		} `mapstructure:"gocdb"`
-
-		LocalFile struct {
-			File string `mapstructure:"file"`
-		} `mapstructure:"localfile"`
 	} `mapstructure:"connectors"`
 
 	UpdateInterval string `mapstructure:"update_interval"`
 
-	Importers struct {
-		SiteRegistration struct {
-			Endpoint               string   `mapstructure:"endpoint"`
-			EnabledConnectors      []string `mapstructure:"enabled_connectors"`
-			IsProtected            bool     `mapstructure:"is_protected"`
-			IgnoreScienceMeshSites bool     `mapstructure:"ignore_sm_sites"`
-		} `mapstructure:"sitereg"`
-	} `mapstructure:"importers"`
+	Services struct {
+		CriticalTypes []string `mapstructure:"critical_types"`
+	} `mapstructure:"services"`
 
 	Exporters struct {
 		WebAPI struct {
@@ -52,9 +44,10 @@ type Configuration struct {
 		} `mapstructure:"webapi"`
 
 		CS3API struct {
-			Endpoint          string   `mapstructure:"endpoint"`
-			EnabledConnectors []string `mapstructure:"enabled_connectors"`
-			IsProtected       bool     `mapstructure:"is_protected"`
+			Endpoint             string   `mapstructure:"endpoint"`
+			EnabledConnectors    []string `mapstructure:"enabled_connectors"`
+			IsProtected          bool     `mapstructure:"is_protected"`
+			ElevatedServiceTypes []string `mapstructure:"elevated_service_types"`
 		} `mapstructure:"cs3api"`
 
 		SiteLocations struct {
@@ -64,17 +57,14 @@ type Configuration struct {
 		} `mapstructure:"siteloc"`
 
 		PrometheusSD struct {
-			MetricsOutputFile  string   `mapstructure:"metrics_output_file"`
-			BlackboxOutputFile string   `mapstructure:"blackbox_output_file"`
-			EnabledConnectors  []string `mapstructure:"enabled_connectors"`
+			OutputPath        string   `mapstructure:"output_path"`
+			EnabledConnectors []string `mapstructure:"enabled_connectors"`
 		} `mapstructure:"promsd"`
-	} `mapstructure:"exporters"`
 
-	AccountsService struct {
-		URL      string `mapstructure:"url"`
-		User     string `mapstructure:"user"`
-		Password string `mapstructure:"password"`
-	} `mapstructure:"accounts"`
+		Metrics struct {
+			EnabledConnectors []string `mapstructure:"enabled_connectors"`
+		} `mapstructure:"metrics"`
+	} `mapstructure:"exporters"`
 
 	// Internal settings
 	EnabledConnectors []string `mapstructure:"-"`

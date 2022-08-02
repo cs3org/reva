@@ -68,7 +68,7 @@ func TestUserManager(t *testing.T) {
 	os.Remove(file.Name())
 
 	// json object with user meta data
-	userJSON = `[{"id":{"opaque_id":"sailing-lovers"},"group_name":"sailing-lovers","mail":"sailing-lovers@example.org","display_name":"Sailing Lovers","gid_number":1234,"members":[{"idp":"localhost","opaque_id":"einstein"},{"idp":"localhost","opaque_id":"marie"}]}]`
+	userJSON = `[{"id":{"opaque_id":"sailing-lovers"},"group_name":"sailing-lovers","mail":"sailing-lovers@example.org","display_name":"Sailing Lovers","gid_number":1234,"members":[{"idp":"localhost","opaque_id":"einstein","type":1},{"idp":"localhost","opaque_id":"marie","type":1}]}]`
 
 	// get file handler for temporary file
 	file, err = ioutil.TempFile(tempdir, "json_test")
@@ -91,8 +91,8 @@ func TestUserManager(t *testing.T) {
 
 	// setup test data
 	gid := &grouppb.GroupId{OpaqueId: "sailing-lovers"}
-	uidEinstein := &userpb.UserId{Idp: "localhost", OpaqueId: "einstein"}
-	uidMarie := &userpb.UserId{Idp: "localhost", OpaqueId: "marie"}
+	uidEinstein := &userpb.UserId{Idp: "localhost", OpaqueId: "einstein", Type: userpb.UserType_USER_TYPE_PRIMARY}
+	uidMarie := &userpb.UserId{Idp: "localhost", OpaqueId: "marie", Type: userpb.UserType_USER_TYPE_PRIMARY}
 	members := []*userpb.UserId{uidEinstein, uidMarie}
 	group := &grouppb.Group{
 		Id:          gid,
@@ -102,30 +102,43 @@ func TestUserManager(t *testing.T) {
 		DisplayName: "Sailing Lovers",
 		Members:     members,
 	}
+	groupWithoutMembers := &grouppb.Group{
+		Id:          gid,
+		GroupName:   "sailing-lovers",
+		Mail:        "sailing-lovers@example.org",
+		GidNumber:   1234,
+		DisplayName: "Sailing Lovers",
+	}
 	groupFake := &grouppb.GroupId{OpaqueId: "fake-group"}
 
 	// positive test GetGroup
-	resGroup, _ := manager.GetGroup(ctx, gid)
+	resGroup, _ := manager.GetGroup(ctx, gid, false)
 	if !reflect.DeepEqual(resGroup, group) {
 		t.Fatalf("group differs: expected=%v got=%v", group, resGroup)
 	}
 
+	// positive test GetGroup without members
+	resGroupWithoutMembers, _ := manager.GetGroup(ctx, gid, true)
+	if !reflect.DeepEqual(resGroupWithoutMembers, groupWithoutMembers) {
+		t.Fatalf("group differs: expected=%v got=%v", groupWithoutMembers, resGroupWithoutMembers)
+	}
+
 	// negative test GetGroup
 	expectedErr := errtypes.NotFound(groupFake.OpaqueId)
-	_, err = manager.GetGroup(ctx, groupFake)
+	_, err = manager.GetGroup(ctx, groupFake, false)
 	if !reflect.DeepEqual(err, expectedErr) {
 		t.Fatalf("group not found error differ: expected='%v' got='%v'", expectedErr, err)
 	}
 
 	// positive test GetGroupByClaim by mail
-	resGroupByEmail, _ := manager.GetGroupByClaim(ctx, "mail", "sailing-lovers@example.org")
+	resGroupByEmail, _ := manager.GetGroupByClaim(ctx, "mail", "sailing-lovers@example.org", false)
 	if !reflect.DeepEqual(resGroupByEmail, group) {
 		t.Fatalf("group differs: expected=%v got=%v", group, resGroupByEmail)
 	}
 
 	// negative test GetGroupByClaim by mail
 	expectedErr = errtypes.NotFound("abc@example.com")
-	_, err = manager.GetGroupByClaim(ctx, "mail", "abc@example.com")
+	_, err = manager.GetGroupByClaim(ctx, "mail", "abc@example.com", false)
 	if !reflect.DeepEqual(err, expectedErr) {
 		t.Fatalf("group not found error differs: expected='%v' got='%v'", expectedErr, err)
 	}
@@ -143,13 +156,13 @@ func TestUserManager(t *testing.T) {
 	}
 
 	// negative test HasMember
-	resMemberNegative, _ := manager.HasMember(ctx, gid, &userpb.UserId{Idp: "localhost", OpaqueId: "fake-user"})
+	resMemberNegative, _ := manager.HasMember(ctx, gid, &userpb.UserId{Idp: "localhost", OpaqueId: "fake-user", Type: userpb.UserType_USER_TYPE_PRIMARY})
 	if resMemberNegative != false {
 		t.Fatalf("result differs: expected=%v got=%v", false, resMemberNegative)
 	}
 
 	// test FindGroups
-	resFind, _ := manager.FindGroups(ctx, "sail")
+	resFind, _ := manager.FindGroups(ctx, "sail", false)
 	if len(resFind) != 1 {
 		t.Fatalf("too many groups found: expected=%d got=%d", 1, len(resFind))
 	}

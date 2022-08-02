@@ -35,15 +35,15 @@ type PermissionsChecker struct {
 }
 
 // AssemblePermissions provides a mock function with given fields: ctx, n
-func (_m *PermissionsChecker) AssemblePermissions(ctx context.Context, n *node.Node) (*providerv1beta1.ResourcePermissions, error) {
+func (_m *PermissionsChecker) AssemblePermissions(ctx context.Context, n *node.Node) (providerv1beta1.ResourcePermissions, error) {
 	ret := _m.Called(ctx, n)
 
-	var r0 *providerv1beta1.ResourcePermissions
-	if rf, ok := ret.Get(0).(func(context.Context, *node.Node) *providerv1beta1.ResourcePermissions); ok {
+	var r0 providerv1beta1.ResourcePermissions
+	if rf, ok := ret.Get(0).(func(context.Context, *node.Node) providerv1beta1.ResourcePermissions); ok {
 		r0 = rf(ctx, n)
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(*providerv1beta1.ResourcePermissions)
+			r0 = ret.Get(0).(providerv1beta1.ResourcePermissions)
 		}
 	}
 

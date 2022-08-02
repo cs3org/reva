@@ -25,7 +25,7 @@ anywhere else.
 #### The goal
 
 Our ultimate goal is that any open source project and software vendor that provides either storage or applications to an EFSS platform
-will adopt the CS3APIS as the facto standard way to collaborate. Having all the partners using the same APIs will enable all of us for a new dimension
+will adopt the CS3APIS as a de facto standard way to collaborate. Having all the partners using the same APIs will enable all of us for a new dimension
 of portability of applications across vendors.
 
 {{< imgproc "final.png" Fit "800x600">}}
@@ -55,10 +55,9 @@ How many times have you been using an app that you lost when you switched cloud 
 * **What is it not good for?**: Reva is not a replacement for a EFFSS or Cloud Platform, it is just a middleware component that enables inter-operability
 and runs alongside your infrastructure.
 
-* **What is it *not yet* good for?**: Reva is still very young to be used in production. We are working hard to reach a stable version soon with decent integrations to storage
-and applications. We don't want to re-invent the wheel so we have in mind that Reva will provide integrations with [rclone](https://rclone.org/) for multiple-storage support and with other protocols out there like [WOPI](https://wopi.readthedocs.io/en/latest/)
+* **What is it *not yet* good for?**: Reva is already used every day at CERN to power CERNBox's backend, but we have in mind that Reva will provide integrations with [rclone](https://rclone.org/) for multiple-storage support and with other protocols out there like [WOPI](https://wopi.readthedocs.io/en/latest/)
 , [Learning Tools Interoperability](https://www.imsglobal.org/activity/learning-tools-interoperability) and
-[OpenCloudMesh](https://rawgit.com/GEANT/OCM-API/v1/docs.html) to enable seamless collaboration.
+[OpenCloudMesh](https://cs3org.github.io/OCM-API/docs.html) to enable seamless collaboration.
 
 ## Where should I go next?
 

@@ -3,35 +3,18 @@ default:
     '': '%paths.base%/../features/bootstrap'
 
   suites:
-    apiOcisSpecific:
+    apiVirtualViews:
       paths:
-        - '%paths.base%/../features/apiOcisSpecific'
-      context: &common_ldap_suite_context
-        parameters:
-          ldapAdminPassword: admin
-          ldapUsersOU: TestUsers
-          ldapGroupsOU: TestGroups
-          ldapInitialUserFilePath: /../../config/ldap-users.ldif
+        - '%paths.base%/../features/apiVirtualViews'
       contexts:
         - RevaContext:
-        - OccContext:
         - FeatureContext: &common_feature_context_params
-            baseUrl:  http://localhost:8080
+            baseUrl:  http://localhost:20180
             adminUsername: admin
             adminPassword: admin
-            regularUserPassword: 123456
+            regularUserPassword: relativity
             ocPath: apps/testing/api/v1/occ
-        - CapabilitiesContext:
-        - ChecksumContext:
-        - FavoritesContext:
-        - FilesVersionsContext:
-        - PublicWebDavContext:
-        - TrashbinContext:
         - WebDavPropertiesContext:
 
   extensions:
-    jarnaiz\JUnitFormatter\JUnitFormatterExtension:
-      filename: report.xml
-      outputDir: '%paths.base%/../output/'
-
     Cjm\Behat\StepThroughExtension: ~

@@ -111,4 +111,61 @@ type Config struct {
 	// URI of the EOS MGM grpc server
 	// Default is empty
 	GrpcURI string `mapstructure:"master_grpc_uri"`
+
+	// Size of the cache used to store user ID and UID resolution.
+	// Default value is 1000000.
+	UserIDCacheSize int `mapstructure:"user_id_cache_size"`
+
+	// The depth, starting from root, that we'll parse directories to lookup the
+	// owner and warm up the cache. For example, for a layout of {{substr 0 1 .Username}}/{{.Username}}
+	// and a depth of 2, we'll lookup each user's home directory.
+	// Default value is 2.
+	UserIDCacheWarmupDepth int `mapstructure:"user_id_cache_warmup_depth"`
+
+	// Normally the eosgrpc plugin streams data on the fly.
+	// Setting this to true will make reva use the temp cachedirectory
+	// as intermediate step for read operations
+	ReadUsesLocalTemp bool `mapstructure:"read_uses_local_temp"`
+
+	// Normally the eosgrpc plugin streams data on the fly.
+	// Setting this to true will make reva use the temp cachedirectory
+	// as intermediate step for write operations
+	// Beware: in pure streaming mode the FST must support
+	// the HTTP chunked encoding
+	WriteUsesLocalTemp bool `mapstructure:"write_uses_local_temp"`
+
+	// Whether to allow recycle operations on base paths.
+	// If set to true, we'll look up the owner of the passed path and perform
+	// operations on that user's recycle bin.
+	// Only considered when EnableHome is false.
+	AllowPathRecycleOperations bool `mapstructure:"allow_path_recycle_operations"`
+
+	// Whether we should impersonate the owner of a resource when trying to perform
+	// revisions-related operations.
+	ImpersonateOwnerforRevisions bool `mapstructure:"impersonate_owner_for_revisions"`
+
+	// HTTP connections to EOS: max number of idle conns
+	MaxIdleConns int `mapstructure:"max_idle_conns"`
+
+	// HTTP connections to EOS: max number of conns per host
+	MaxConnsPerHost int `mapstructure:"max_conns_per_host"`
+
+	// HTTP connections to EOS: max number of idle conns per host
+	MaxIdleConnsPerHost int `mapstructure:"max_idle_conns_per_host"`
+
+	// HTTP connections to EOS: idle conections TTL
+	IdleConnTimeout int `mapstructure:"idle_conn_timeout"`
+
+	// HTTP connections to EOS: client certificate (usually a X509 host certificate)
+	ClientCertFile string `mapstructure:"http_client_certfile"`
+	// HTTP connections to EOS: client certificate key (usually a X509 host certificate)
+	ClientKeyFile string `mapstructure:"http_client_keyfile"`
+	// HTTP connections to EOS: CA directories
+	ClientCADirs string `mapstructure:"http_client_cadirs"`
+	// HTTP connections to EOS: CA files
+	ClientCAFiles string `mapstructure:"http_client_cafiles"`
+
+	// TokenExpiry stores in seconds the time after which generated tokens will expire
+	// Default is 3600
+	TokenExpiry int
 }

@@ -38,15 +38,38 @@ func (a ByAddress) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 
 func Test_ListAppProviders(t *testing.T) {
 	tests := []struct {
-		name  string
-		rules map[string]interface{}
-		want  *registrypb.ListAppProvidersResponse
+		name      string
+		providers []map[string]interface{}
+		mimeTypes []map[string]interface{}
+		want      *registrypb.ListAppProvidersResponse
 	}{
 		{
 			name: "simple test",
-			rules: map[string]interface{}{
-				"text/json":         "some Address",
-				"currently/ignored": "an other address",
+			providers: []map[string]interface{}{
+				{
+					"address":   "some Address",
+					"mimetypes": []string{"text/json"},
+				},
+				{
+					"address":   "another address",
+					"mimetypes": []string{"currently/ignored"},
+				},
+			},
+			mimeTypes: []map[string]interface{}{
+				{
+					"mime_type":   "text/json",
+					"extension":   "json",
+					"name":        "JSON File",
+					"icon":        "https://example.org/icons&file=json.png",
+					"default_app": "some Address",
+				},
+				{
+					"mime_type":   "currently/ignored",
+					"extension":   "unknown",
+					"name":        "Ignored file",
+					"icon":        "https://example.org/icons&file=unknown.png",
+					"default_app": "some Address",
+				},
 			},
 
 			// only Status and Providers will be asserted in the tests
@@ -57,27 +80,33 @@ func Test_ListAppProviders(t *testing.T) {
 					Message: "",
 				},
 				Providers: []*registrypb.ProviderInfo{
-					{Address: "some Address"},
-					{Address: "an other address"},
+					{
+						Address:   "some Address",
+						MimeTypes: []string{"text/json"},
+					},
+					{
+						Address:   "another address",
+						MimeTypes: []string{"currently/ignored"},
+					},
 				},
 			},
 		},
 		{
-			name:  "rules is nil",
-			rules: nil,
+			name:      "providers is nil",
+			providers: nil,
+			mimeTypes: nil,
 			want: &registrypb.ListAppProvidersResponse{
 				Status: &rpcv1beta1.Status{
 					Code:  1,
 					Trace: "00000000000000000000000000000000",
 				},
-				Providers: []*registrypb.ProviderInfo{
-					{Address: ""},
-				},
+				Providers: []*registrypb.ProviderInfo{},
 			},
 		},
 		{
-			name:  "empty rules",
-			rules: map[string]interface{}{},
+			name:      "empty providers",
+			providers: []map[string]interface{}{},
+			mimeTypes: []map[string]interface{}{},
 
 			// only Status and Providers will be asserted in the tests
 			want: &registrypb.ListAppProvidersResponse{
@@ -86,41 +115,21 @@ func Test_ListAppProviders(t *testing.T) {
 					Trace:   "00000000000000000000000000000000",
 					Message: "",
 				},
-				Providers: []*registrypb.ProviderInfo{
-					{Address: ""},
-				},
-			},
-		},
-		{
-			name: "rule value is nil",
-			rules: map[string]interface{}{
-				"text/json": nil,
-			},
-
-			// only Status and Providers will be asserted in the tests
-			want: &registrypb.ListAppProvidersResponse{
-				Status: &rpcv1beta1.Status{
-					Code:    1,
-					Trace:   "00000000000000000000000000000000",
-					Message: "",
-				},
-				Providers: []*registrypb.ProviderInfo{
-					{Address: ""},
-				},
+				Providers: []*registrypb.ProviderInfo{},
 			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			rr, err := static.New(map[string]interface{}{"Rules": tt.rules})
+			rr, err := static.New(map[string]interface{}{"providers": tt.providers, "mime_types": tt.mimeTypes})
 			if err != nil {
 				t.Errorf("could not create registry error = %v", err)
 				return
 			}
 
 			ss := &svc{
-				registry: rr,
+				reg: rr,
 			}
 			got, err := ss.ListAppProviders(context.Background(), nil)
 
@@ -137,13 +146,64 @@ func Test_ListAppProviders(t *testing.T) {
 }
 
 func Test_GetAppProviders(t *testing.T) {
-	rules := map[string]interface{}{
-		"text/json": "JSON format",
-		"image/bmp": "Windows OS/2 Bitmap Graphics",
-		"application/vnd.openxmlformats-officedocument.wordprocessingml.document": "Microsoft Word (OpenXML)",
-		"application/vnd.oasis.opendocument.presentation":                         "OpenDocument presentation document",
-		"application/vnd.apple.installer+xml":                                     "Apple Installer Package",
-		"text/xml":                                                                "XML",
+	providers := []map[string]interface{}{
+		{
+			"address":   "text appprovider addr",
+			"mimetypes": []string{"text/json", "text/xml"},
+		},
+		{
+			"address":   "image appprovider addr",
+			"mimetypes": []string{"image/bmp"},
+		},
+		{
+			"address":   "misc appprovider addr",
+			"mimetypes": []string{"application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/vnd.oasis.opendocument.presentation", "application/vnd.apple.installer+xml"},
+		},
+	}
+
+	mimeTypes := []map[string]string{
+		{
+			"mime_type":   "text/json",
+			"extension":   "json",
+			"name":        "JSON File",
+			"icon":        "https://example.org/icons&file=json.png",
+			"default_app": "some Address",
+		},
+		{
+			"mime_type":   "text/xml",
+			"extension":   "xml",
+			"name":        "XML File",
+			"icon":        "https://example.org/icons&file=xml.png",
+			"default_app": "some Address",
+		},
+		{
+			"mime_type":   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+			"extension":   "doc",
+			"name":        "Word File",
+			"icon":        "https://example.org/icons&file=doc.png",
+			"default_app": "some Address",
+		},
+		{
+			"mime_type":   "application/vnd.oasis.opendocument.presentation",
+			"extension":   "odf",
+			"name":        "OpenDocument File",
+			"icon":        "https://example.org/icons&file=odf.png",
+			"default_app": "some Address",
+		},
+		{
+			"mime_type":   "application/vnd.apple.installer+xml",
+			"extension":   "mpkg",
+			"name":        "Mpkg File",
+			"icon":        "https://example.org/icons&file=mpkg.png",
+			"default_app": "some Address",
+		},
+		{
+			"mime_type":   "image/bmp",
+			"extension":   "bmp",
+			"name":        "Image File",
+			"icon":        "https://example.org/icons&file=bmp.png",
+			"default_app": "some Address",
+		},
 	}
 
 	tests := []struct {
@@ -162,7 +222,10 @@ func Test_GetAppProviders(t *testing.T) {
 					Message: "",
 				},
 				Providers: []*registrypb.ProviderInfo{
-					{Address: "JSON format"},
+					{
+						Address:   "text appprovider addr",
+						MimeTypes: []string{"text/json", "text/xml"},
+					},
 				},
 			},
 		},
@@ -176,7 +239,10 @@ func Test_GetAppProviders(t *testing.T) {
 					Message: "",
 				},
 				Providers: []*registrypb.ProviderInfo{
-					{Address: "Apple Installer Package"},
+					{
+						Address:   "misc appprovider addr",
+						MimeTypes: []string{"application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/vnd.oasis.opendocument.presentation", "application/vnd.apple.installer+xml"},
+					},
 				},
 			},
 		},
@@ -230,14 +296,14 @@ func Test_GetAppProviders(t *testing.T) {
 		},
 	}
 
-	rr, err := static.New(map[string]interface{}{"Rules": rules})
+	rr, err := static.New(map[string]interface{}{"providers": providers, "mime_types": mimeTypes})
 	if err != nil {
 		t.Errorf("could not create registry error = %v", err)
 		return
 	}
 
 	ss := &svc{
-		registry: rr,
+		reg: rr,
 	}
 
 	for _, tt := range tests {
@@ -260,11 +326,11 @@ func Test_GetAppProviders(t *testing.T) {
 func TestNew(t *testing.T) {
 
 	tests := []struct {
-		name    string
-		m       map[string]interface{}
-		rules   map[string]interface{}
-		want    svc
-		wantErr interface{}
+		name      string
+		m         map[string]interface{}
+		providers map[string]interface{}
+		want      svc
+		wantErr   interface{}
 	}{
 		{
 			name:    "no error",
@@ -274,12 +340,12 @@ func TestNew(t *testing.T) {
 		{
 			name:    "not existing driver",
 			m:       map[string]interface{}{"Driver": "doesnotexist"},
-			wantErr: "driver not found: doesnotexist",
+			wantErr: "error: not found: appregistrysvc: driver not found: doesnotexist",
 		},
 		{
 			name:    "empty",
 			m:       map[string]interface{}{},
-			wantErr: "driver not found: ",
+			wantErr: nil,
 		},
 		{
 			name:    "extra not existing field in setting",

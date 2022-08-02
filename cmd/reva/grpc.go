@@ -28,8 +28,9 @@ import (
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
-	"github.com/cs3org/reva/pkg/token"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"google.golang.org/grpc"
+	ins "google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -41,8 +42,8 @@ func getAuthContext() context.Context {
 		log.Println(err)
 		return ctx
 	}
-	ctx = token.ContextSetToken(ctx, t)
-	ctx = metadata.AppendToOutgoingContext(ctx, token.TokenHeader, t)
+	ctx = ctxpkg.ContextSetToken(ctx, t)
+	ctx = metadata.AppendToOutgoingContext(ctx, ctxpkg.TokenHeader, t)
 	return ctx
 }
 
@@ -56,7 +57,7 @@ func getClient() (gateway.GatewayAPIClient, error) {
 
 func getConn() (*grpc.ClientConn, error) {
 	if insecure {
-		return grpc.Dial(conf.Host, grpc.WithInsecure())
+		return grpc.Dial(conf.Host, grpc.WithTransportCredentials(ins.NewCredentials()))
 	}
 
 	// TODO(labkode): if in the future we want client-side certificate validation,

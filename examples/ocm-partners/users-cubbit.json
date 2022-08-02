@@ -2,7 +2,8 @@
 	{
 		"id": {
 			"opaque_id": "alessandro1234",
-			"idp": "cubbit.io"
+			"idp": "cubbit.io",
+			"type": 1
 		},
 		"username": "alessandro",
 		"secret": "alessandropass",
@@ -13,7 +14,8 @@
 	{
 		"id": {
 			"opaque_id": "lorenzo5678",
-			"idp": "cubbit.io"
+			"idp": "cubbit.io",
+			"type": 1
 		},
 		"username": "lorenzo",
 		"secret": "lorenzopass",
@@ -24,7 +26,8 @@
 	{
 		"id": {
 			"opaque_id": "test4242",
-			"idp": "cubbit.io"
+			"idp": "cubbit.io",
+			"type": 1
 		},
 		"username": "test",
 		"secret": "testpass",

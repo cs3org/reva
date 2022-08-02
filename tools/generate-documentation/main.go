@@ -30,7 +30,7 @@ func main() {
 	conf := &resources.CatoConfig{
 		Driver: "reva",
 		DriverConfig: map[string]map[string]interface{}{
-			"reva": map[string]interface{}{
+			"reva": {
 				"DocPaths": map[string]string{
 					"internal/": "docs/content/en/docs/config/",
 					"pkg/":      "docs/content/en/docs/config/packages/",

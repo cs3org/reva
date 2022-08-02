@@ -28,34 +28,102 @@ import (
 )
 
 func (s *svc) GetAppProviders(ctx context.Context, req *registry.GetAppProvidersRequest) (*registry.GetAppProvidersResponse, error) {
-	c, err := pool.GetAppRegistryClient(s.c.AppRegistryEndpoint)
+	c, err := pool.GetAppRegistryClient(pool.Endpoint(s.c.AppRegistryEndpoint))
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetAppRegistryClient")
 		return &registry.GetAppProvidersResponse{
-			Status: status.NewInternal(ctx, err, "error getting user share provider client"),
+			Status: status.NewInternal(ctx, err, "error getting app registry client"),
 		}, nil
 	}
 
 	res, err := c.GetAppProviders(ctx, req)
 	if err != nil {
-		return nil, errors.Wrap(err, "gateway: error calling ListShares")
+		return nil, errors.Wrap(err, "gateway: error calling GetAppProviders")
+	}
+
+	return res, nil
+}
+
+func (s *svc) AddAppProvider(ctx context.Context, req *registry.AddAppProviderRequest) (*registry.AddAppProviderResponse, error) {
+	c, err := pool.GetAppRegistryClient(pool.Endpoint(s.c.AppRegistryEndpoint))
+	if err != nil {
+		err = errors.Wrap(err, "gateway: error calling GetAppRegistryClient")
+		return &registry.AddAppProviderResponse{
+			Status: status.NewInternal(ctx, err, "error getting app registry client"),
+		}, nil
+	}
+
+	res, err := c.AddAppProvider(ctx, req)
+	if err != nil {
+		return nil, errors.Wrap(err, "gateway: error calling AddAppProvider")
 	}
 
 	return res, nil
 }
 
 func (s *svc) ListAppProviders(ctx context.Context, req *registry.ListAppProvidersRequest) (*registry.ListAppProvidersResponse, error) {
-	c, err := pool.GetAppRegistryClient(s.c.AppRegistryEndpoint)
+	c, err := pool.GetAppRegistryClient(pool.Endpoint(s.c.AppRegistryEndpoint))
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetAppRegistryClient")
 		return &registry.ListAppProvidersResponse{
-			Status: status.NewInternal(ctx, err, "error getting user share provider client"),
+			Status: status.NewInternal(ctx, err, "error getting app registry client"),
 		}, nil
 	}
 
 	res, err := c.ListAppProviders(ctx, req)
 	if err != nil {
-		return nil, errors.Wrap(err, "gateway: error calling ListShares")
+		return nil, errors.Wrap(err, "gateway: error calling ListAppProviders")
+	}
+
+	return res, nil
+}
+
+func (s *svc) ListSupportedMimeTypes(ctx context.Context, req *registry.ListSupportedMimeTypesRequest) (*registry.ListSupportedMimeTypesResponse, error) {
+	c, err := pool.GetAppRegistryClient(pool.Endpoint(s.c.AppRegistryEndpoint))
+	if err != nil {
+		err = errors.Wrap(err, "gateway: error calling GetAppRegistryClient")
+		return &registry.ListSupportedMimeTypesResponse{
+			Status: status.NewInternal(ctx, err, "error getting app registry client"),
+		}, nil
+	}
+
+	res, err := c.ListSupportedMimeTypes(ctx, req)
+	if err != nil {
+		return nil, errors.Wrap(err, "gateway: error calling ListSupportedMimeTypes")
+	}
+
+	return res, nil
+}
+
+func (s *svc) GetDefaultAppProviderForMimeType(ctx context.Context, req *registry.GetDefaultAppProviderForMimeTypeRequest) (*registry.GetDefaultAppProviderForMimeTypeResponse, error) {
+	c, err := pool.GetAppRegistryClient(pool.Endpoint(s.c.AppRegistryEndpoint))
+	if err != nil {
+		err = errors.Wrap(err, "gateway: error calling GetAppRegistryClient")
+		return &registry.GetDefaultAppProviderForMimeTypeResponse{
+			Status: status.NewInternal(ctx, err, "error getting app registry client"),
+		}, nil
+	}
+
+	res, err := c.GetDefaultAppProviderForMimeType(ctx, req)
+	if err != nil {
+		return nil, errors.Wrap(err, "gateway: error calling GetDefaultAppProviderForMimeType")
+	}
+
+	return res, nil
+}
+
+func (s *svc) SetDefaultAppProviderForMimeType(ctx context.Context, req *registry.SetDefaultAppProviderForMimeTypeRequest) (*registry.SetDefaultAppProviderForMimeTypeResponse, error) {
+	c, err := pool.GetAppRegistryClient(pool.Endpoint(s.c.AppRegistryEndpoint))
+	if err != nil {
+		err = errors.Wrap(err, "gateway: error calling GetAppRegistryClient")
+		return &registry.SetDefaultAppProviderForMimeTypeResponse{
+			Status: status.NewInternal(ctx, err, "error getting app registry client"),
+		}, nil
+	}
+
+	res, err := c.SetDefaultAppProviderForMimeType(ctx, req)
+	if err != nil {
+		return nil, errors.Wrap(err, "gateway: error calling SetDefaultAppProviderForMimeType")
 	}
 
 	return res, nil

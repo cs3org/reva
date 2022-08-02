@@ -27,7 +27,6 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/cs3org/reva/pkg/appctx"
-	"github.com/cs3org/reva/pkg/mentix/accservice"
 	"github.com/cs3org/reva/pkg/mentix/config"
 	"github.com/cs3org/reva/pkg/mentix/connectors"
 	"github.com/cs3org/reva/pkg/mentix/entity"
@@ -52,7 +51,7 @@ type Mentix struct {
 }
 
 const (
-	runLoopSleeptime = time.Millisecond * 500
+	runLoopSleeptime = time.Millisecond * 1000
 )
 
 func (mntx *Mentix) initialize(conf *config.Configuration, log *zerolog.Logger) error {
@@ -208,8 +207,7 @@ func (mntx *Mentix) tick(updateTimestamp *time.Time) {
 	if meshDataUpdated || time.Since(*updateTimestamp) >= mntx.updateInterval {
 		// Retrieve and update the mesh data; if the importers modified any data, these changes will
 		// be reflected automatically here
-		meshDataSet, err := mntx.retrieveMeshDataSet()
-		if err == nil {
+		if meshDataSet, err := mntx.retrieveMeshDataSet(); err == nil {
 			if err := mntx.applyMeshDataSet(meshDataSet); err != nil {
 				mntx.log.Err(err).Msg("failed to apply mesh data")
 			}
@@ -244,10 +242,11 @@ func (mntx *Mentix) retrieveMeshDataSet() (meshdata.Map, error) {
 
 	for _, connector := range mntx.connectors.Connectors {
 		meshData, err := connector.RetrieveMeshData()
-		if err != nil {
-			return nil, fmt.Errorf("retrieving mesh data from connector '%v' failed: %v", connector.GetName(), err)
+		if err == nil {
+			meshDataSet[connector.GetID()] = meshData
+		} else {
+			mntx.log.Err(err).Msgf("retrieving mesh data from connector '%v' failed", connector.GetName())
 		}
-		meshDataSet[connector.GetID()] = meshData
 	}
 
 	return meshDataSet, nil
@@ -322,11 +321,6 @@ func (mntx *Mentix) handleRequest(exchangers []exchangers.RequestExchanger, w ht
 
 // New creates a new Mentix service instance.
 func New(conf *config.Configuration, log *zerolog.Logger) (*Mentix, error) {
-	// Configure the accounts service upfront
-	if err := accservice.InitAccountsService(conf); err != nil {
-		return nil, fmt.Errorf("unable to initialize the accounts service: %v", err)
-	}
-
 	mntx := new(Mentix)
 	if err := mntx.initialize(conf, log); err != nil {
 		return nil, fmt.Errorf("unable to initialize Mentix: %v", err)

@@ -21,42 +21,12 @@ package token
 import (
 	"context"
 
+	auth "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 )
 
-// TokenHeader is the header to be used across grpc and http services
-// to forward the access token.
-const TokenHeader = "x-access-token"
-
-type key int
-
-const tokenKey key = iota
-
-// Claims is the map of attributes to encode into a token
-type Claims map[string]interface{}
-
 // Manager is the interface to implement to sign and verify tokens
 type Manager interface {
-	MintToken(ctx context.Context, u *user.User) (string, error)
-	DismantleToken(ctx context.Context, token string) (*user.User, error)
-}
-
-// ContextGetToken returns the token if set in the given context.
-func ContextGetToken(ctx context.Context) (string, bool) {
-	u, ok := ctx.Value(tokenKey).(string)
-	return u, ok
-}
-
-// ContextMustGetToken panics if token is not in context.
-func ContextMustGetToken(ctx context.Context) string {
-	u, ok := ContextGetToken(ctx)
-	if !ok {
-		panic("token not found in context")
-	}
-	return u
-}
-
-// ContextSetToken stores the token in the context.
-func ContextSetToken(ctx context.Context, t string) context.Context {
-	return context.WithValue(ctx, tokenKey, t)
+	MintToken(ctx context.Context, u *user.User, scope map[string]*auth.Scope) (string, error)
+	DismantleToken(ctx context.Context, token string) (*user.User, map[string]*auth.Scope, error)
 }

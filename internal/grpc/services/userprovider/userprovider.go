@@ -21,8 +21,12 @@ package userprovider
 import (
 	"context"
 	"fmt"
+	"path/filepath"
+	"sort"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/plugin"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/user"
@@ -57,12 +61,29 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 	return c, nil
 }
 
-func getDriver(c *config) (user.Manager, error) {
-	if f, ok := registry.NewFuncs[c.Driver]; ok {
-		return f(c.Drivers[c.Driver])
+func getDriver(c *config) (user.Manager, *plugin.RevaPlugin, error) {
+	p, err := plugin.Load("userprovider", c.Driver)
+	if err == nil {
+		manager, ok := p.Plugin.(user.Manager)
+		if !ok {
+			return nil, nil, fmt.Errorf("could not assert the loaded plugin")
+		}
+		pluginConfig := filepath.Base(c.Driver)
+		err = manager.Configure(c.Drivers[pluginConfig])
+		if err != nil {
+			return nil, nil, err
+		}
+		return manager, p, nil
+	} else if _, ok := err.(errtypes.NotFound); ok {
+		// plugin not found, fetch the driver from the in-memory registry
+		if f, ok := registry.NewFuncs[c.Driver]; ok {
+			mgr, err := f(c.Drivers[c.Driver])
+			return mgr, nil, err
+		}
+	} else {
+		return nil, nil, err
 	}
-
-	return nil, fmt.Errorf("driver %s not found for user manager", c.Driver)
+	return nil, nil, errtypes.NotFound(fmt.Sprintf("driver %s not found for user manager", c.Driver))
 }
 
 // New returns a new UserProviderServiceServer.
@@ -71,27 +92,32 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	userManager, err := getDriver(c)
+	userManager, plug, err := getDriver(c)
 	if err != nil {
 		return nil, err
 	}
-
-	svc := &service{usermgr: userManager}
+	svc := &service{
+		usermgr: userManager,
+		plugin:  plug,
+	}
 
 	return svc, nil
 }
 
 type service struct {
 	usermgr user.Manager
+	plugin  *plugin.RevaPlugin
 }
 
 func (s *service) Close() error {
+	if s.plugin != nil {
+		s.plugin.Kill()
+	}
 	return nil
 }
 
 func (s *service) UnprotectedEndpoints() []string {
-	return []string{"/cs3.identity.user.v1beta1.UserAPI/GetUser"}
+	return []string{"/cs3.identity.user.v1beta1.UserAPI/GetUser", "/cs3.identity.user.v1beta1.UserAPI/GetUserByClaim", "/cs3.identity.user.v1beta1.UserAPI/GetUserGroups"}
 }
 
 func (s *service) Register(ss *grpc.Server) {
@@ -99,12 +125,14 @@ func (s *service) Register(ss *grpc.Server) {
 }
 
 func (s *service) GetUser(ctx context.Context, req *userpb.GetUserRequest) (*userpb.GetUserResponse, error) {
-	user, err := s.usermgr.GetUser(ctx, req.UserId)
+	user, err := s.usermgr.GetUser(ctx, req.UserId, req.SkipFetchingUserGroups)
 	if err != nil {
-		// TODO(labkode): check for not found.
-		err = errors.Wrap(err, "userprovidersvc: error getting user")
-		res := &userpb.GetUserResponse{
-			Status: status.NewInternal(ctx, err, "error getting user"),
+		res := &userpb.GetUserResponse{}
+		if _, ok := err.(errtypes.NotFound); ok {
+			res.Status = status.NewNotFound(ctx, "user not found")
+		} else {
+			err = errors.Wrap(err, "userprovidersvc: error getting user")
+			res.Status = status.NewInternal(ctx, err, "error getting user")
 		}
 		return res, nil
 	}
@@ -117,12 +145,14 @@ func (s *service) GetUser(ctx context.Context, req *userpb.GetUserRequest) (*use
 }
 
 func (s *service) GetUserByClaim(ctx context.Context, req *userpb.GetUserByClaimRequest) (*userpb.GetUserByClaimResponse, error) {
-	user, err := s.usermgr.GetUserByClaim(ctx, req.Claim, req.Value)
+	user, err := s.usermgr.GetUserByClaim(ctx, req.Claim, req.Value, req.SkipFetchingUserGroups)
 	if err != nil {
-		// TODO(labkode): check for not found.
-		err = errors.Wrap(err, "userprovidersvc: error getting user by claim")
-		res := &userpb.GetUserByClaimResponse{
-			Status: status.NewInternal(ctx, err, "error getting user by claim"),
+		res := &userpb.GetUserByClaimResponse{}
+		if _, ok := err.(errtypes.NotFound); ok {
+			res.Status = status.NewNotFound(ctx, fmt.Sprintf("user not found %s %s", req.Claim, req.Value))
+		} else {
+			err = errors.Wrap(err, "userprovidersvc: error getting user by claim")
+			res.Status = status.NewInternal(ctx, err, "error getting user by claim")
 		}
 		return res, nil
 	}
@@ -135,7 +165,7 @@ func (s *service) GetUserByClaim(ctx context.Context, req *userpb.GetUserByClaim
 }
 
 func (s *service) FindUsers(ctx context.Context, req *userpb.FindUsersRequest) (*userpb.FindUsersResponse, error) {
-	users, err := s.usermgr.FindUsers(ctx, req.Filter)
+	users, err := s.usermgr.FindUsers(ctx, req.Filter, req.SkipFetchingUserGroups)
 	if err != nil {
 		err = errors.Wrap(err, "userprovidersvc: error finding users")
 		res := &userpb.FindUsersResponse{
@@ -143,6 +173,11 @@ func (s *service) FindUsers(ctx context.Context, req *userpb.FindUsersRequest) (
 		}
 		return res, nil
 	}
+
+	// sort users by username
+	sort.Slice(users, func(i, j int) bool {
+		return users[i].Username <= users[j].Username
+	})
 
 	res := &userpb.FindUsersResponse{
 		Status: status.NewOK(ctx),

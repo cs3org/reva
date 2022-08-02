@@ -15,9 +15,10 @@ ocmcoresvc = "localhost:17000"
 ocmshareprovidersvc = "localhost:17000"
 ocminvitemanagersvc = "localhost:17000"
 ocmproviderauthorizersvc = "localhost:17000"
-commit_share_to_storage_grant = false
 datagateway = "http://localhost:17001/data"
 transfer_expires = 6 # give it a moment
+commit_share_to_storage_grant = true
+commit_share_to_storage_ref = true
 
 [grpc.services.authregistry]
 driver = "static"
@@ -31,10 +32,9 @@ driver = "static"
 [grpc.services.storageregistry.drivers.static]
 home_provider = "/home"
 
-[grpc.services.storageregistry.drivers.static.rules."/home"]
-address = "localhost:17000"
-[grpc.services.storageregistry.drivers.static.rules."123e4567-e89b-12d3-a456-426655440000"]
-address = "localhost:17000"
+[grpc.services.storageregistry.drivers.static.rules]
+"/home" = {"address" = "localhost:17000"}
+"123e4567-e89b-12d3-a456-426655440000" = {"address" = "localhost:17000"}
 
 [grpc.services.usershareprovider]
 driver = "memory"
@@ -88,8 +88,6 @@ driver = "json"
 users = "users.demo.json"
 
 [http]
-enabled_services = ["ocmd"]
-enabled_middlewares = ["providerauthorizer", "cors"]
 address = "0.0.0.0:17001"
 
 [http.services.dataprovider]

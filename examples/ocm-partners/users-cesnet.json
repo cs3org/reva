@@ -2,7 +2,8 @@
 	{
 		"id": {
 			"opaque_id": "miroslav1234",
-			"idp": "cesnet.cz"
+			"idp": "cesnet.cz",
+			"type": 1
 		},
 		"username": "miroslav",
 		"secret": "miroslavpass",
@@ -13,7 +14,8 @@
 	{
 		"id": {
 			"opaque_id": "milan5678",
-			"idp": "cesnet.cz"
+			"idp": "cesnet.cz",
+			"type": 1
 		},
 		"username": "milan",
 		"secret": "milanpass",
@@ -24,7 +26,8 @@
 	{
 		"id": {
 			"opaque_id": "test4242",
-			"idp": "cesnet.cz"
+			"idp": "cesnet.cz",
+			"type": 1
 		},
 		"username": "test",
 		"secret": "testpass",

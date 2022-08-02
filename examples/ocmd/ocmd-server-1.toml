@@ -1,6 +1,17 @@
 [shared]
 gatewaysvc = "localhost:19000"
 
+# [registry]
+# driver = "static"
+#
+# [registry.static]
+# services = ["authprovider","userprovider"]
+#
+# [registry.static.authprovider]
+# bearer = ["localhost:0123"]
+# basic = ["localhost:1234"]
+# publiclink = ["localhost:9876"]
+
 [grpc]
 address = "0.0.0.0:19000"
 
@@ -17,9 +28,10 @@ ocmcoresvc = "localhost:19000"
 ocmshareprovidersvc = "localhost:19000"
 ocminvitemanagersvc = "localhost:19000"
 ocmproviderauthorizersvc = "localhost:19000"
-commit_share_to_storage_grant = false
 datagateway = "http://localhost:19001/data"
 transfer_expires = 6 # give it a moment
+commit_share_to_storage_grant = true
+commit_share_to_storage_ref = true
 
 [grpc.services.authregistry]
 driver = "static"
@@ -33,10 +45,9 @@ driver = "static"
 [grpc.services.storageregistry.drivers.static]
 home_provider = "/home"
 
-[grpc.services.storageregistry.drivers.static.rules."/home"]
-address = "localhost:19000"
-[grpc.services.storageregistry.drivers.static.rules."123e4567-e89b-12d3-a456-426655440000"]
-address = "localhost:19000"
+[grpc.services.storageregistry.drivers.static.rules]
+"/home" = {"address" = "localhost:19000"}
+"123e4567-e89b-12d3-a456-426655440000" = {"address" = "localhost:19000"}
 
 [grpc.services.usershareprovider]
 driver = "memory"
@@ -66,22 +77,12 @@ providers = "providers.demo.json"
 [grpc.services.publicshareprovider]
 driver = "memory"
 
-[grpc.services.appprovider]
-driver = "demo"
-iopsecret = "testsecret"
-wopiurl = "http://0.0.0.0:8880/"
-wopibridgeurl = "http://localhost:8000/wopib"
-
 [grpc.services.appregistry]
 driver = "static"
 
-[grpc.services.appregistry.static.rules]
-"text/plain" = "localhost:19000"
-"text/markdown" = "localhost:19000"
-"application/compressed-markdown" = "localhost:19000"
-"application/vnd.oasis.opendocument.text" = "localhost:19000"
-"application/vnd.oasis.opendocument.spreadsheet" = "localhost:19000"
-"application/vnd.oasis.opendocument.presentation" = "localhost:19000"
+[grpc.services.appprovider]
+driver = "demo"
+app_provider_url = "localhost:19000"
 
 [grpc.services.storageprovider]
 driver = "localhome"
@@ -90,9 +91,6 @@ mount_id = "123e4567-e89b-12d3-a456-426655440000"
 expose_data_server = true
 data_server_url = "http://localhost:19001/data"
 enable_home_creation = true
-
-[grpc.services.storageprovider.mimetypes]
-".zmd" = "application/compressed-markdown"
 
 [grpc.services.storageprovider.drivers.localhome]
 user_layout = "{{.Username}}"
@@ -110,8 +108,6 @@ driver = "json"
 users = "users.demo.json"
 
 [http]
-enabled_services = ["ocmd"]
-enabled_middlewares = ["providerauthorizer", "cors"]
 address = "0.0.0.0:19001"
 
 [http.services.dataprovider]
@@ -136,5 +132,7 @@ providers = "providers.demo.json"
 prefix = "ocs"
 
 [http.services.ocdav]
+
+[http.services.appprovider]
 
 [http.middlewares.cors]

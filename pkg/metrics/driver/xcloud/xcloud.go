@@ -19,7 +19,6 @@
 package json
 
 import (
-	"bytes"
 	"crypto/tls"
 	"encoding/json"
 	"errors"
@@ -32,9 +31,10 @@ import (
 
 	"github.com/cs3org/reva/pkg/metrics/driver/registry"
 
+	"github.com/rs/zerolog"
+
 	"github.com/cs3org/reva/pkg/logger"
 	"github.com/cs3org/reva/pkg/metrics/config"
-	"github.com/rs/zerolog"
 )
 
 var log zerolog.Logger
@@ -43,7 +43,6 @@ func init() {
 	log = logger.New().With().Int("pid", os.Getpid()).Logger()
 	driver := &CloudDriver{CloudData: &CloudData{}}
 	registry.Register(driverName(), driver)
-
 }
 
 func driverName() string {
@@ -53,7 +52,6 @@ func driverName() string {
 // CloudDriver is the driver to use for Sciencemesh apps
 type CloudDriver struct {
 	instance     string
-	catalog      string
 	pullInterval int
 	CloudData    *CloudData
 	sync.Mutex
@@ -61,7 +59,6 @@ type CloudDriver struct {
 }
 
 func (d *CloudDriver) refresh() error {
-
 	// endpoint example: https://mybox.com or https://mybox.com/owncloud
 	endpoint := fmt.Sprintf("%s/index.php/apps/sciencemesh/internal_metrics", d.instance)
 
@@ -102,59 +99,6 @@ func (d *CloudDriver) refresh() error {
 	d.CloudData = cd
 	log.Info().Msgf("xcloud: received internal metrics from cloud provider: %+v", cd)
 
-	mc := &MentixCatalog{
-		Name:        cd.Settings.Sitename,
-		FullName:    cd.Settings.Sitename,
-		Homepage:    cd.Settings.Hostname,
-		Description: "ScienceMesh App from " + cd.Settings.Sitename,
-		CountryCode: cd.Settings.Country,
-		Services: []*MentixService{
-			&MentixService{
-				Host:        cd.Settings.Hostname,
-				IsMonitored: true,
-				Name:        cd.Settings.Hostname + " - REVAD",
-				URL:         cd.Settings.Siteurl,
-				Properties: &MentixServiceProperties{
-					MetricsPath: "/index.php/apps/sciencemesh/metrics",
-				},
-				Type: &MentixServiceType{
-					Name: "REVAD",
-				},
-			},
-		},
-	}
-
-	j, err := json.Marshal(mc)
-	if err != nil {
-		log.Err(err).Msgf("xcloud: error marhsaling mentix calalog info")
-		return err
-	}
-
-	log.Info().Msgf("xcloud: info to send to register: %s", string(j))
-
-	// send to register if catalog is set
-	req, err = http.NewRequest("POST", d.catalog, bytes.NewBuffer(j))
-	if err != nil {
-		log.Err(err).Msgf("xcloud: error creating POST request to: %s", d.catalog)
-		return err
-	}
-
-	resp, err = d.client.Do(req)
-	if err != nil {
-		log.Err(err).Msgf("xcloud: error registering catalog info to: %s with info: %s", d.catalog, string(j))
-		return err
-	}
-
-	defer resp.Body.Close()
-	body, _ := ioutil.ReadAll(resp.Body)
-
-	if resp.StatusCode != http.StatusOK {
-		err := fmt.Errorf("xcloud: error registering site: status code(%d) body(%s)", resp.StatusCode, string(body))
-		log.Err(err).Msg("xcloud: error registering site")
-		return err
-	}
-
-	log.Info().Msgf("xcloud: site registered: %s", string(body))
 	return nil
 }
 
@@ -166,16 +110,14 @@ func (d *CloudDriver) Configure(c *config.Config) error {
 	}
 
 	if c.XcloudPullInterval == 0 {
-		c.XcloudPullInterval = 10 // seconds
+		c.XcloudPullInterval = 5 // seconds
 	}
 
 	d.instance = c.XcloudInstance
 	d.pullInterval = c.XcloudPullInterval
-	d.catalog = c.XcloudCatalog
 
-	// TODO(labkode): make it configurable once site adopted are prod-ready
 	tr := &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: c.InsecureSkipVerify},
 	}
 	client := &http.Client{Transport: tr}
 
@@ -234,36 +176,5 @@ type CloudDataSettings struct {
 	IOPUrl   string `json:"iopurl"`
 	Sitename string `json:"sitename"`
 	Siteurl  string `json:"siteurl"`
-	Hostname string `json:"hostname"`
 	Country  string `json:"country"`
-}
-
-// MentixCatalog represents the information needed to register a site into the mesh
-type MentixCatalog struct {
-	CountryCode string           `json:"CountryCode"`
-	Description string           `json:"Description"`
-	FullName    string           `json:"FullName"`
-	Homepage    string           `json:"Homepage"`
-	Name        string           `json:"Name"`
-	Services    []*MentixService `json:"Services"`
-}
-
-// MentixService represents the service running in a site
-type MentixService struct {
-	Host        string                   `json:"Host"`
-	IsMonitored bool                     `json:"IsMonitored"`
-	Name        string                   `json:"Name"`
-	Properties  *MentixServiceProperties `json:"Properties"`
-	Type        *MentixServiceType       `json:"Type"`
-	URL         string                   `json:"URL"`
-}
-
-// MentixServiceProperties represents the properties to expose the metrics endpoint
-type MentixServiceProperties struct {
-	MetricsPath string `json:"METRICS_PATH"`
-}
-
-// MentixServiceType represents the type of service running
-type MentixServiceType struct {
-	Name string `json:"Name"`
 }

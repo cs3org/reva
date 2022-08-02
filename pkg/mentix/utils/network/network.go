@@ -54,19 +54,20 @@ func GenerateURL(host string, path string, params URLParams) (*url.URL, error) {
 
 	fullURL.Path = p.Join(fullURL.Path, path)
 
-	query := make(url.Values)
-	for key, value := range params {
-		query.Set(key, value)
+	if len(params) > 0 {
+		query := make(url.Values)
+		for key, value := range params {
+			query.Set(key, value)
+		}
+		fullURL.RawQuery = query.Encode()
 	}
-	fullURL.RawQuery = query.Encode()
 
 	return fullURL, nil
 }
 
-// ReadEndpoint reads data from an HTTP endpoint.
-func ReadEndpoint(endpointURL *url.URL, auth *BasicAuth, checkStatus bool) ([]byte, error) {
+func queryEndpoint(method string, endpointURL *url.URL, auth *BasicAuth, checkStatus bool) ([]byte, error) {
 	// Prepare the request
-	req, err := http.NewRequest("GET", endpointURL.String(), nil)
+	req, err := http.NewRequest(method, endpointURL.String(), nil)
 	if err != nil {
 		return nil, fmt.Errorf("unable to create HTTP request: %v", err)
 	}
@@ -80,13 +81,24 @@ func ReadEndpoint(endpointURL *url.URL, auth *BasicAuth, checkStatus bool) ([]by
 	if err != nil {
 		return nil, fmt.Errorf("unable to get data from endpoint: %v", err)
 	}
+	defer resp.Body.Close()
+
 	if checkStatus && resp.StatusCode >= 400 {
 		return nil, fmt.Errorf("invalid response received: %v", resp.Status)
 	}
 
-	defer resp.Body.Close()
 	body, _ := ioutil.ReadAll(resp.Body)
 	return body, nil
+}
+
+// ReadEndpoint reads data from an HTTP endpoint via GET.
+func ReadEndpoint(endpointURL *url.URL, auth *BasicAuth, checkStatus bool) ([]byte, error) {
+	return queryEndpoint(http.MethodGet, endpointURL, auth, checkStatus)
+}
+
+// WriteEndpoint sends data to an HTTP endpoint via POST.
+func WriteEndpoint(endpointURL *url.URL, auth *BasicAuth, checkStatus bool) ([]byte, error) {
+	return queryEndpoint(http.MethodPost, endpointURL, auth, checkStatus)
 }
 
 // CreateResponse creates a generic HTTP response in JSON format.

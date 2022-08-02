@@ -45,7 +45,7 @@ func ocmInviteForwardCommand() *command {
 			return errors.New("token cannot be empty: use -token flag\n" + cmd.Usage())
 		}
 		if *idp == "" {
-			return errors.New("Provider domain cannot be empty: use -provider flag\n" + cmd.Usage())
+			return errors.New("Provider domain cannot be empty: use -idp flag\n" + cmd.Usage())
 		}
 
 		ctx := getAuthContext()
@@ -80,7 +80,7 @@ func ocmInviteForwardCommand() *command {
 		if forwardToken.Status.Code != rpc.Code_CODE_OK {
 			return formatError(forwardToken.Status)
 		}
-		fmt.Println(forwardToken.Status.Code)
+		fmt.Println("OK")
 		return nil
 	}
 	return cmd

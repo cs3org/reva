@@ -7,7 +7,9 @@ GIT_BRANCH=`git rev-parse --symbolic-full-name --abbrev-ref HEAD`
 GIT_DIRTY=`git diff-index --quiet HEAD -- || echo "dirty-"`
 VERSION=`git describe --always`
 GO_VERSION=`go version | awk '{print $$3}'`
+MINIMUM_GO_VERSION=1.16.2
 BUILD_FLAGS="-X main.gitCommit=${GIT_COMMIT} -X main.version=${VERSION} -X main.goVersion=${GO_VERSION} -X main.buildDate=${BUILD_DATE}"
+CI_BUILD_FLAGS="-w -extldflags "-static" -X main.gitCommit=${GIT_COMMIT} -X main.version=${VERSION} -X main.goVersion=${GO_VERSION} -X main.buildDate=${BUILD_DATE}"
 LITMUS_URL_OLD="http://localhost:20080/remote.php/webdav"
 LITMUS_URL_NEW="http://localhost:20080/remote.php/dav/files/4c510ada-c86b-4815-8820-42cdf82c3d51"
 LITMUS_USERNAME="einstein"
@@ -28,9 +30,9 @@ off:
 imports: off
 	`go env GOPATH`/bin/goimports -w tools pkg internal cmd
 
-build: imports
-	go build -ldflags ${BUILD_FLAGS} -o ./cmd/revad/revad ./cmd/revad
-	go build -ldflags ${BUILD_FLAGS} -o ./cmd/reva/reva ./cmd/reva
+build: build-revad build-reva test-go-version
+
+build-cephfs: build-revad-cephfs build-reva
 
 tidy:
 	go mod tidy
@@ -38,11 +40,14 @@ tidy:
 build-revad: imports
 	go build -ldflags ${BUILD_FLAGS} -o ./cmd/revad/revad ./cmd/revad
 
+build-revad-cephfs: imports
+	go build -ldflags ${BUILD_FLAGS} -tags ceph -o ./cmd/revad/revad ./cmd/revad
+
 build-reva: imports
 	go build -ldflags ${BUILD_FLAGS} -o ./cmd/reva/reva ./cmd/reva
 
 test: off
-	go test -race $$(go list ./... | grep -v /tests/integration)
+	go test -coverprofile coverage.out -race $$(go list ./... | grep -v /tests/integration)
 
 test-integration: build-ci
 	cd tests/integration && go test -race ./...
@@ -65,19 +70,22 @@ litmus-test-new: build
 	pkill revad
 lint:
 	go run tools/check-license/check-license.go
-	`go env GOPATH`/bin/golangci-lint run --timeout 2m0s
+	`go env GOPATH`/bin/golangci-lint run --timeout 3m0s
 
 contrib:
 	git shortlog -se | cut -c8- | sort -u | awk '{print "-", $$0}' | grep -v 'users.noreply.github.com' > CONTRIBUTORS.md
 
+test-go-version:
+	@echo -e "$(MINIMUM_GO_VERSION)\n$(shell echo $(GO_VERSION) | sed 's/go//')" | sort -Vc &> /dev/null || echo -e "\n\033[33;5m[WARNING]\033[0m You are not using a supported go version. Please use $(MINIMUM_GO_VERSION) or above.\n"
+
 # for manual building only
 deps:
-	cd /tmp && rm -rf golangci-lint &&  git clone --quiet -b 'v1.38.0' --single-branch --depth 1 https://github.com/golangci/golangci-lint &> /dev/null && cd golangci-lint/cmd/golangci-lint && go install
-	cd /tmp && go get golang.org/x/tools/cmd/goimports
+	cd /tmp && rm -rf golangci-lint &&  git clone --quiet -b 'v1.42.1' --single-branch --depth 1 https://github.com/golangci/golangci-lint &> /dev/null && cd golangci-lint/cmd/golangci-lint && go install
+	cd /tmp && go install golang.org/x/tools/cmd/goimports@latest
 
 build-ci: off
-	go build -ldflags ${BUILD_FLAGS} -o ./cmd/revad/revad ./cmd/revad
-	go build -ldflags ${BUILD_FLAGS} -o ./cmd/reva/reva ./cmd/reva
+	go build -ldflags ${CI_BUILD_FLAGS} -o ./cmd/revad/revad ./cmd/revad
+	go build -ldflags ${CI_BUILD_FLAGS} -o ./cmd/reva/reva ./cmd/reva
 
 lint-ci:
 	go run tools/check-license/check-license.go
@@ -98,6 +106,8 @@ ci: build-ci test  lint-ci
 # to be run in Docker build
 build-revad-docker: off
 	go build -ldflags ${BUILD_FLAGS} -o ./cmd/revad/revad ./cmd/revad
+build-revad-cephfs-docker: off
+	go build -ldflags ${BUILD_FLAGS} -tags ceph -o ./cmd/revad/revad ./cmd/revad
 build-reva-docker: off
 	go build -ldflags ${BUILD_FLAGS} -o ./cmd/reva/reva ./cmd/reva
 clean:

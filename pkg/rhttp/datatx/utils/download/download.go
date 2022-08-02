@@ -24,17 +24,19 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
+	"path"
 	"strconv"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/storage"
+	"github.com/cs3org/reva/pkg/utils"
 	"github.com/rs/zerolog"
 )
 
 // GetOrHeadFile returns the requested file content
-func GetOrHeadFile(w http.ResponseWriter, r *http.Request, fs storage.FS) {
+func GetOrHeadFile(w http.ResponseWriter, r *http.Request, fs storage.FS, spaceID string) {
 	ctx := r.Context()
 	sublog := appctx.GetLogger(ctx).With().Str("svc", "datatx").Str("handler", "download").Logger()
 
@@ -46,8 +48,24 @@ func GetOrHeadFile(w http.ResponseWriter, r *http.Request, fs storage.FS) {
 		fn = files[0]
 	}
 
-	ref := &provider.Reference{Spec: &provider.Reference_Path{Path: fn}}
-
+	var ref *provider.Reference
+	if spaceID == "" {
+		// ensure the absolute path starts with '/'
+		ref = &provider.Reference{Path: path.Join("/", fn)}
+	} else {
+		// build a storage space reference
+		storageid, opaqeid, err := utils.SplitStorageSpaceID(spaceID)
+		if err != nil {
+			sublog.Error().Str("space_id", spaceID).Str("path", fn).Msg("invalid reference")
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		ref = &provider.Reference{
+			ResourceId: &provider.ResourceId{StorageId: storageid, OpaqueId: opaqeid},
+			// ensure the relative path starts with '.'
+			Path: utils.MakeRelativePath(fn),
+		}
+	}
 	// TODO check preconditions like If-Range, If-Match ...
 
 	var md *provider.ResourceInfo
@@ -68,8 +86,9 @@ func GetOrHeadFile(w http.ResponseWriter, r *http.Request, fs storage.FS) {
 			if err == ErrNoOverlap {
 				w.Header().Set("Content-Range", fmt.Sprintf("bytes */%d", md.Size))
 			}
+			sublog.Error().Err(err).Interface("md", md).Interface("ranges", ranges).Msg("range request not satisfiable")
 			w.WriteHeader(http.StatusRequestedRangeNotSatisfiable)
-			fmt.Fprintln(w, err)
+
 			return
 		}
 		if SumRangesSize(ranges) > int64(md.Size) {

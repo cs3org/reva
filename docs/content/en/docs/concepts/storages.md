@@ -52,7 +52,7 @@ Since the majority of these actions are already persisted by the versions histor
 
 Reva comes with a set of storage driver implementations. The following sections will list the known tradeoffs.
 
-### Local Storage Driver
+### Local and Localhome Storage Drivers
 - naive implementation for a local POSIX filesystem
 - no ETag propagation
   - could be done with an external inotify like mechanism
@@ -60,6 +60,8 @@ Reva comes with a set of storage driver implementations. The following sections 
   - uses file path as id, so ids are not stable
 - no trash
 - no versions
+- "local" and "localhome" both wrap the "localfs" code
+- whereas "local" uses a single folder tree, "localhome" uses one folder tree for each user
 
 ### EOS Storage Driver
 - requires EOS as the storage

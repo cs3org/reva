@@ -1,0 +1,29 @@
+[shared]
+jwt_secret = "Pive-Fumkiu4"
+
+# This toml config file will start a reva service that:
+# - handles user metadata and user preferences
+# - serves the grpc services on port 14000
+[grpc]
+address = "0.0.0.0:14000"
+
+[grpc.services.authprovider]
+auth_manager = "oidc"
+[grpc.services.authprovider.auth_managers.json]
+users = "users.json"
+[grpc.services.authprovider.auth_managers.oidc]
+gatewaysvc = "localhost:17000"
+issuer = "https://iam-escape.cloud.cnaf.infn.it/"
+# ESCAPE adopted the WLCG groups as group claims
+group_claim = "wlcg.groups"
+# The OIDC users mapping file path
+users_mapping = "users-oidc-2.demo.json"
+# If your local identity provider service configuration includes further claims,
+# please configure them also here
+#uid_claim = ""
+#gid_claim = ""
+
+[grpc.services.userprovider]
+driver = "json"
+[grpc.services.userprovider.drivers.json]
+users = "users.demo.json"

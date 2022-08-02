@@ -27,6 +27,7 @@ import (
 	"reflect"
 
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/go-chi/chi/v5"
 )
 
 type key int
@@ -155,19 +156,19 @@ func WriteOCSResponse(w http.ResponseWriter, r *http.Request, res Response, err 
 	version := APIVersion(r.Context())
 	m := statusCodeMapper(version)
 	statusCode := m(res.OCS.Meta)
-	w.WriteHeader(statusCode)
-	if version == "v2.php" && statusCode == http.StatusOK {
+	if version == "2" && statusCode == http.StatusOK {
 		res.OCS.Meta.StatusCode = statusCode
 	}
 
 	var encoder func(Response) ([]byte, error)
 	if r.URL.Query().Get("format") == "json" {
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		encoder = encodeJSON
 	} else {
-		w.Header().Set("Content-Type", "application/xml")
+		w.Header().Set("Content-Type", "text/xml; charset=utf-8")
 		encoder = encodeXML
 	}
+	w.WriteHeader(statusCode)
 	encoded, err := encoder(res)
 	if err != nil {
 		appctx.GetLogger(r.Context()).Error().Err(err).Msg("error encoding ocs response")
@@ -233,8 +234,19 @@ func OcsV2StatusCodes(meta Meta) int {
 }
 
 // WithAPIVersion puts the api version in the context.
-func WithAPIVersion(parent context.Context, version string) context.Context {
-	return context.WithValue(parent, apiVersionKey, version)
+func VersionCtx(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		version := chi.URLParam(r, "version")
+		if version == "" {
+			WriteOCSError(w, r, MetaBadRequest.StatusCode, "unknown ocs api version", nil)
+			return
+		}
+		w.Header().Set("Ocs-Api-Version", version)
+
+		// store version in context so handlers can access it
+		ctx := context.WithValue(r.Context(), apiVersionKey, version)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
 }
 
 // APIVersion retrieves the api version from the context.
@@ -249,9 +261,9 @@ func APIVersion(ctx context.Context) string {
 func statusCodeMapper(version string) func(Meta) int {
 	var mapper func(Meta) int
 	switch version {
-	case "v1.php":
+	case "1":
 		mapper = OcsV1StatusCodes
-	case "v2.php":
+	case "2":
 		mapper = OcsV2StatusCodes
 	default:
 		mapper = defaultStatusCodeMapper
