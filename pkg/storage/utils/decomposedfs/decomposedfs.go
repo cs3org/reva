@@ -210,7 +210,22 @@ func (fs *Decomposedfs) Postprocessing(ch <-chan interface{}) {
 
 			upload.Cleanup(up, failed, keepUpload)
 
-			if err := events.Publish(fs.stream, events.UploadReady{UploadID: ev.UploadID, Failed: failed}); err != nil {
+			if err := events.Publish(
+				fs.stream,
+				events.UploadReady{
+					UploadID:      ev.UploadID,
+					Failed:        failed,
+					ExecutingUser: ev.ExecutingUser,
+					FileRef: &provider.Reference{
+						ResourceId: &provider.ResourceId{
+							StorageId: up.Info.MetaData["providerID"],
+							SpaceId:   up.Info.Storage["SpaceRoot"],
+							OpaqueId:  up.Info.Storage["SpaceRoot"],
+						},
+						Path: utils.MakeRelativePath(filepath.Join(up.Info.MetaData["dir"], up.Info.MetaData["filename"])),
+					},
+				},
+			); err != nil {
 				log.Error().Err(err).Str("uploadID", ev.UploadID).Msg("Failed to publish UploadReady event")
 			}
 		case events.VirusscanFinished:
