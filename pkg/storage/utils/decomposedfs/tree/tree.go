@@ -832,19 +832,15 @@ func calculateTreeSize(ctx context.Context, nodePath string) (uint64, error) {
 	}
 	defer f.Close()
 
-	names, err := f.Readdirnames(0)
+	dirFiles, err := f.ReadDir(0)
 	if err != nil {
 		appctx.GetLogger(ctx).Error().Err(err).Str("nodepath", nodePath).Msg("could not read dirnames")
 		return 0, err
 	}
-	for i := range names {
-		cPath := filepath.Join(nodePath, names[i])
-		info, err := os.Stat(cPath)
-		if err != nil {
-			appctx.GetLogger(ctx).Error().Err(err).Str("childpath", cPath).Msg("could not stat child entry")
-			continue // continue after an error
-		}
-		if !info.IsDir() {
+	for i := range dirFiles {
+		de := dirFiles[i]
+		cPath := filepath.Join(nodePath, de.Name())
+		if !de.IsDir() {
 			blobSize, err := node.ReadBlobSizeAttr(cPath)
 			if err != nil {
 				appctx.GetLogger(ctx).Error().Err(err).Str("childpath", cPath).Msg("could not read blobSize xattr")
