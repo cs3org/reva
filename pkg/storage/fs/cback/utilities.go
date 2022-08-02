@@ -69,6 +69,9 @@ var PermID = provider.ResourcePermissions{
 	DenyGrant:            false}
 
 func mapReturn(fileType string) (int, error) {
+	/* This function can be changed accordingly, depending on the file type
+	being return by the APIs */
+
 	m := make(map[string]int)
 
 	m["dir"] = 2
@@ -106,7 +109,7 @@ func (fs *cback) getRequest(userName, url string, reqType string) (io.ReadCloser
 
 func (fs *cback) listSnapshots(userName string, backupId int) ([]SnapshotResponse, error) {
 
-	url := "http://cback-portal-dev-01:8000/backups/" + strconv.Itoa(backupId) + "/snapshots"
+	url := fs.conf.API_Url + strconv.Itoa(backupId) + "/snapshots"
 	requestType := "GET"
 	responseData, err := fs.getRequest(userName, url, requestType)
 
@@ -125,7 +128,7 @@ func (fs *cback) listSnapshots(userName string, backupId int) ([]SnapshotRespons
 
 func (fs *cback) matchBackups(userName, pathInput string) (*BackUpResponse, error) {
 
-	url := "http://cback-portal-dev-01:8000/backups/"
+	url := fs.conf.API_Url
 	requestType := "GET"
 	responseData, err := fs.getRequest(userName, url, requestType)
 
@@ -174,7 +177,7 @@ func (fs *cback) matchBackups(userName, pathInput string) (*BackUpResponse, erro
 
 func (fs *cback) statResource(backupId int, snapId, userName, path, source string) (*FsReturn, error) {
 
-	url := "http://cback-portal-dev-01:8000/backups/" + strconv.Itoa(backupId) + "/snapshots/" + snapId + "/" + path + "?content=false"
+	url := fs.conf.API_Url + strconv.Itoa(backupId) + "/snapshots/" + snapId + "/" + path + "?content=false"
 	requestType := "OPTIONS"
 
 	responseData, err := fs.getRequest(userName, url, requestType)
@@ -207,7 +210,7 @@ func (fs *cback) statResource(backupId int, snapId, userName, path, source strin
 
 func (fs *cback) fileSystem(backupId int, snapId, userName, path, source string) ([]FsReturn, error) {
 
-	url := "http://cback-portal-dev-01:8000/backups/" + strconv.Itoa(backupId) + "/snapshots/" + snapId + "/" + path + "?content=true"
+	url := fs.conf.API_Url + strconv.Itoa(backupId) + "/snapshots/" + snapId + "/" + path + "?content=true"
 	requestType := "OPTIONS"
 
 	responseData, err := fs.getRequest(userName, url, requestType)
@@ -258,7 +261,7 @@ func (fs *cback) timeConv(timeInput string) (int64, error) {
 }
 
 func (fs *cback) pathFinder(userName, path string) ([]string, error) {
-	url := "http://cback-portal-dev-01:8000/backups/"
+	url := fs.conf.API_Url
 	requestType := "GET"
 	responseData, err := fs.getRequest(userName, url, requestType)
 	var matchFound bool = false

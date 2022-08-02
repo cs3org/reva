@@ -75,7 +75,7 @@ func (fs *cback) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []st
 		}
 	}
 
-	fmt.Printf("The ssId is: %v\nThe Path is %v\n", ssId, searchPath)
+	//fmt.Printf("The ssId is: %v\nThe Path is %v\n", ssId, searchPath)
 
 	if resp.Source == ref.Path {
 		setTime := v1beta1.Timestamp{
@@ -103,8 +103,7 @@ func (fs *cback) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []st
 			Type:          provider.ResourceType_RESOURCE_TYPE_CONTAINER,
 			Size:          0,
 			Path:          ref.Path,
-			//Check if this is fine
-			MimeType: mime.Detect(true, ref.Path),
+			MimeType:      mime.Detect(true, ref.Path),
 		}
 
 		return ri, nil
@@ -159,8 +158,6 @@ func (fs *cback) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys
 	var path string = ref.GetPath()
 	var ssId, searchPath string
 
-	fmt.Print(path)
-
 	user, _ := ctxpkg.ContextGetUser(ctx)
 	UId, _ := ctxpkg.ContextGetUserID(ctx)
 
@@ -184,7 +181,6 @@ func (fs *cback) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys
 		for i, paths := range pathList {
 
 			setTime := v1beta1.Timestamp{
-				//Ask about this time
 				Seconds: 0,
 				Nanos:   0,
 			}
@@ -292,7 +288,8 @@ func (fs *cback) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys
 			return files, nil
 
 		} else {
-			//If match in path, therefore prints the Snapshots
+
+			//If match in path, therefore print the Snapshot IDs
 			files := make([]*provider.ResourceInfo, len(snapshotList))
 
 			for index, snapshot := range snapshotList {
@@ -328,15 +325,10 @@ func (fs *cback) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys
 					Id:            &ident,
 					MimeType:      mime.Detect(true, ref.Path+"/"+snapshot.Id),
 					Size:          0,
-
-					//Check what time to put
-					Mtime: &setTime,
-
-					//Check Type
-					Type: provider.ResourceType_RESOURCE_TYPE_CONTAINER,
+					Mtime:         &setTime,
+					Type:          provider.ResourceType_RESOURCE_TYPE_CONTAINER,
 				}
 				files[index] = &f
-				fmt.Printf("%v\n", snapshot.Id)
 			}
 			return files, nil
 		}
@@ -345,7 +337,6 @@ func (fs *cback) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys
 
 func (fs *cback) Download(ctx context.Context, ref *provider.Reference) (io.ReadCloser, error) {
 	var path string = ref.GetPath()
-	fmt.Printf("\n\nThe path being delivered by Download is : %v\n\n", ref.Path)
 	var ssId, searchPath string
 	user, _ := ctxpkg.ContextGetUser(ctx)
 
@@ -379,7 +370,7 @@ func (fs *cback) Download(ctx context.Context, ref *provider.Reference) (io.Read
 			}
 		}
 
-		url := "http://cback-portal-dev-01:8000/backups/" + strconv.Itoa(resp.Id) + "/snapshots/" + ssId + "/" + searchPath
+		url := fs.conf.API_Url + strconv.Itoa(resp.Id) + "/snapshots/" + ssId + "/" + searchPath
 		requestType := "GET"
 		md, err := fs.GetMD(ctx, ref, nil)
 
@@ -387,14 +378,9 @@ func (fs *cback) Download(ctx context.Context, ref *provider.Reference) (io.Read
 			return nil, err
 		}
 
-		//Debugging purposes
-		fmt.Printf("\nGetting Not here!\n")
-
 		if md.Type == provider.ResourceType_RESOURCE_TYPE_FILE {
 
 			responseData, err := fs.getRequest(user.Username, url, requestType)
-			//Debugging purposes
-			fmt.Printf("\nGetting Here!\n")
 
 			if err != nil {
 				return nil, err
@@ -473,7 +459,6 @@ func (fs *cback) ListGrants(ctx context.Context, ref *provider.Reference) (glist
 }
 
 func (fs *cback) GetQuota(ctx context.Context, ref *provider.Reference) (total uint64, used uint64, err error) {
-	//Check if this is valid return
 	return 0, 0, errtypes.NotSupported("Operation Not Permitted")
 }
 
