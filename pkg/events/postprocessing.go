@@ -23,6 +23,7 @@ import (
 	"time"
 
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 )
 
 type (
@@ -140,6 +141,7 @@ type UploadReady struct {
 	UploadID      string
 	Filename      string
 	ExecutingUser *user.User
+	FileRef       *provider.Reference
 	Failed        bool
 	// add reference here? We could use it to inform client pp is finished
 }
