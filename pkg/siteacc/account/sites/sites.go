@@ -16,7 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package site
+package sites
 
 import "github.com/cs3org/reva/pkg/siteacc/html"
 
@@ -27,12 +27,12 @@ type PanelTemplate struct {
 
 // GetTitle returns the title of the panel.
 func (template *PanelTemplate) GetTitle() string {
-	return "ScienceMesh Site Configuration"
+	return "ScienceMesh Sites Configuration"
 }
 
 // GetCaption returns the caption which is displayed on the panel.
 func (template *PanelTemplate) GetCaption() string {
-	return "Configure your ScienceMesh Site!"
+	return "Configure your ScienceMesh Sites!"
 }
 
 // GetContentJavaScript delivers additional JavaScript code.

@@ -1205,6 +1205,23 @@ func (c *Client) mapToFileInfo(ctx context.Context, kv, attrs map[string]string,
 		return nil, err
 	}
 
+	// Temporary until we migrate the user ACLs to sys ACLs on our MGMs
+	// Read user ACLs if sys.eval.useracl is set
+	if userACLEval, ok := attrs["sys."+userACLEvalKey]; ok && userACLEval == "1" {
+		if userACL, ok := attrs["user.acl"]; ok {
+			userAcls, err := acl.Parse(userACL, acl.ShortTextForm)
+			if err != nil {
+				return nil, err
+			}
+			for _, e := range userAcls.Entries {
+				err = sysACL.SetEntry(e.Type, e.Qualifier, e.Permissions)
+				if err != nil {
+					return nil, err
+				}
+			}
+		}
+	}
+
 	// Read lightweight ACLs recognized by the sys.reva.lwshare attr
 	if lwACLStr, ok := attrs["sys."+lwShareAttrKey]; ok {
 		lwAcls, err := acl.Parse(lwACLStr, acl.ShortTextForm)

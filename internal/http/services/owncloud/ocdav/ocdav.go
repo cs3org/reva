@@ -28,7 +28,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ReneKroon/ttlcache/v2"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
@@ -117,12 +116,11 @@ func (c *Config) init() {
 }
 
 type svc struct {
-	c                   *Config
-	webDavHandler       *WebDavHandler
-	davHandler          *DavHandler
-	favoritesManager    favorite.Manager
-	client              *http.Client
-	userIdentifierCache *ttlcache.Cache
+	c                *Config
+	webDavHandler    *WebDavHandler
+	davHandler       *DavHandler
+	favoritesManager favorite.Manager
+	client           *http.Client
 }
 
 func getFavoritesManager(c *Config) (favorite.Manager, error) {
@@ -154,11 +152,8 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 			rhttp.Timeout(time.Duration(conf.Timeout*int64(time.Second))),
 			rhttp.Insecure(conf.Insecure),
 		),
-		favoritesManager:    fm,
-		userIdentifierCache: ttlcache.NewCache(),
+		favoritesManager: fm,
 	}
-	_ = s.userIdentifierCache.SetTTL(60 * time.Second)
-
 	// initialize handlers and set default configs
 	if err := s.webDavHandler.init(conf.WebdavNamespace, true); err != nil {
 		return nil, err

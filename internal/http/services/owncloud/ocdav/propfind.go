@@ -42,7 +42,6 @@ import (
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
-	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/publicshare"
 	"github.com/cs3org/reva/pkg/share"
 	rtrace "github.com/cs3org/reva/pkg/trace"
@@ -659,13 +658,6 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 		// TODO return other properties ... but how do we put them in a namespace?
 	} else {
 		// otherwise return only the requested properties
-		var ownerUsername, ownerDisplayName string
-		owner, err := s.getOwnerInfo(ctx, md.Owner)
-		if err == nil {
-			ownerUsername = owner.Username
-			ownerDisplayName = owner.DisplayName
-		}
-
 		for i := range pf.Prop {
 			switch pf.Prop[i].Space {
 			case _nsOwncloud:
@@ -755,8 +747,14 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:size", ""))
 					}
 				case "owner-id": // phoenix only
-					if ownerUsername != "" {
-						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:owner-id", ownerUsername))
+					if md.Owner != nil {
+						if isCurrentUserOwner(ctx, md.Owner) {
+							u := ctxpkg.ContextMustGetUser(ctx)
+							propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:owner-id", u.Username))
+						} else {
+							sublog.Debug().Msg("TODO fetch user username")
+							propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:owner-id", ""))
+						}
 					} else {
 						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:owner-id", ""))
 					}
@@ -838,8 +836,14 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:"+pf.Prop[i].Local, ""))
 					}
 				case "owner-display-name": // phoenix only
-					if ownerDisplayName != "" {
-						propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:owner-display-name", ownerDisplayName))
+					if md.Owner != nil {
+						if isCurrentUserOwner(ctx, md.Owner) {
+							u := ctxpkg.ContextMustGetUser(ctx)
+							propstatOK.Prop = append(propstatOK.Prop, s.newProp("oc:owner-display-name", u.DisplayName))
+						} else {
+							sublog.Debug().Msg("TODO fetch user displayname")
+							propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:owner-display-name", ""))
+						}
 					} else {
 						propstatNotFound.Prop = append(propstatNotFound.Prop, s.newProp("oc:owner-display-name", ""))
 					}
@@ -1011,44 +1015,6 @@ func quoteEtag(etag string) string {
 		return `W/"` + strings.Trim(etag[2:], `"`) + `"`
 	}
 	return `"` + strings.Trim(etag, `"`) + `"`
-}
-
-func (s *svc) getOwnerInfo(ctx context.Context, owner *userv1beta1.UserId) (*userv1beta1.User, error) {
-	if owner == nil {
-		return nil, errtypes.NotFound("owner is nil")
-	}
-
-	if isCurrentUserOwner(ctx, owner) {
-		return ctxpkg.ContextMustGetUser(ctx), nil
-	}
-
-	log := appctx.GetLogger(ctx)
-	if idIf, err := s.userIdentifierCache.Get(owner.OpaqueId); err == nil {
-		log.Debug().Msg("cache hit")
-		return idIf.(*userv1beta1.User), nil
-	}
-
-	client, err := s.getClient()
-	if err != nil {
-		log.Error().Err(err).Msg("error getting grpc client")
-		return nil, err
-	}
-
-	res, err := client.GetUser(ctx, &userv1beta1.GetUserRequest{UserId: owner})
-	if err != nil {
-		log.Err(err).Msg("could not look up user")
-		return nil, err
-	}
-	if res.GetStatus().GetCode() != rpc.Code_CODE_OK {
-		log.Err(err).Msg("get user call failed")
-		return nil, err
-	}
-	if res.User == nil {
-		log.Debug().Msg("user not found")
-		return nil, err
-	}
-	_ = s.userIdentifierCache.Set(owner.OpaqueId, res.User)
-	return res.User, nil
 }
 
 // a file is only yours if you are the owner

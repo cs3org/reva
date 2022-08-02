@@ -24,13 +24,6 @@ enabled_connectors = ["gocdb"]
 # Enable the Metrics exporter
 [http.services.mentix.exporters.metrics]
 
-# Set up the accounts service used to query information about accounts associated with registered sites
-[http.services.mentix.accounts]
-# Depending on where the service is running, localhost may also be used here
-url = "https://sciencemesh.example.com/iop/accounts"
-user = "username"
-password = "userpass"
-
 # Configure the Prometheus Service Discovery:
 [http.services.mentix.exporters.promsd]
 # The following path must be made available to Prometheus.

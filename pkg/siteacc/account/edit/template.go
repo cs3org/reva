@@ -31,7 +31,7 @@ function verifyForm(formData) {
 	}
 
 	if (formData.getTrimmed("role") == "") {
-		setState(STATE_ERROR, "Please specify your role within your site.", "form", "role", true);
+		setState(STATE_ERROR, "Please specify your role within your operator.", "form", "role", true);
 		return false;
 	}
 

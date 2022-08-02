@@ -123,13 +123,18 @@ func (s *svc) handleNew(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if r.URL.Query().Get("template") != "" {
+	err = r.ParseForm()
+	if err != nil {
+		writeError(w, r, appErrorInvalidParameter, "parameters could not be parsed", nil)
+	}
+
+	if r.Form.Get("template") != "" {
 		// TODO in the future we want to create a file out of the given template
 		writeError(w, r, appErrorUnimplemented, "template is not implemented", nil)
 		return
 	}
 
-	parentContainerID := r.URL.Query().Get("parent_container_id")
+	parentContainerID := r.Form.Get("parent_container_id")
 	if parentContainerID == "" {
 		writeError(w, r, appErrorInvalidParameter, "missing parent container ID", nil)
 		return
@@ -141,7 +146,7 @@ func (s *svc) handleNew(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	filename := r.URL.Query().Get("filename")
+	filename := r.Form.Get("filename")
 	if filename == "" {
 		writeError(w, r, appErrorInvalidParameter, "missing filename", nil)
 		return
@@ -327,7 +332,12 @@ func (s *svc) handleOpen(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fileID := r.URL.Query().Get("file_id")
+	err = r.ParseForm()
+	if err != nil {
+		writeError(w, r, appErrorInvalidParameter, "parameters could not be parsed", nil)
+	}
+
+	fileID := r.Form.Get("file_id")
 
 	if fileID == "" {
 		writeError(w, r, appErrorInvalidParameter, "missing file ID", nil)
@@ -363,7 +373,7 @@ func (s *svc) handleOpen(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	viewMode := getViewMode(statRes.Info, r.URL.Query().Get("view_mode"))
+	viewMode := getViewMode(statRes.Info, r.Form.Get("view_mode"))
 	if viewMode == gateway.OpenInAppRequest_VIEW_MODE_INVALID {
 		writeError(w, r, appErrorInvalidParameter, "invalid view mode", err)
 		return
@@ -372,7 +382,7 @@ func (s *svc) handleOpen(w http.ResponseWriter, r *http.Request) {
 	openReq := gateway.OpenInAppRequest{
 		Ref:      fileRef,
 		ViewMode: viewMode,
-		App:      r.URL.Query().Get("app_name"),
+		App:      r.Form.Get("app_name"),
 	}
 	openRes, err := client.OpenInApp(ctx, &openReq)
 	if err != nil {

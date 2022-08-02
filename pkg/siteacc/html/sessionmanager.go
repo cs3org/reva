@@ -160,7 +160,7 @@ func (mngr *SessionManager) migrateSession(session *Session, r *http.Request) (*
 	sessionNew.Data = session.Data
 
 	if user := session.LoggedInUser(); user != nil {
-		sessionNew.LoginUser(user.Account, user.Site)
+		sessionNew.LoginUser(user.Account, user.Operator)
 	} else {
 		sessionNew.LogoutUser()
 	}

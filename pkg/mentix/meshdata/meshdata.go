@@ -37,7 +37,7 @@ const (
 
 // MeshData holds the entire mesh data managed by Mentix.
 type MeshData struct {
-	Sites        []*Site
+	Operators    []*Operator
 	ServiceTypes []*ServiceType
 
 	Status int `json:"-"`
@@ -45,39 +45,39 @@ type MeshData struct {
 
 // Clear removes all saved data, leaving an empty mesh.
 func (meshData *MeshData) Clear() {
-	meshData.Sites = nil
+	meshData.Operators = nil
 	meshData.ServiceTypes = nil
 
 	meshData.Status = StatusDefault
 }
 
-// AddSite adds a new site; if a site with the same ID already exists, the existing one is overwritten.
-func (meshData *MeshData) AddSite(site *Site) {
-	if siteExisting := meshData.FindSite(site.ID); siteExisting != nil {
-		*siteExisting = *site
+// AddOperator adds a new operator; if an operator with the same ID already exists, the existing one is overwritten.
+func (meshData *MeshData) AddOperator(op *Operator) {
+	if opExisting := meshData.FindOperator(op.ID); opExisting != nil {
+		*opExisting = *op
 	} else {
-		meshData.Sites = append(meshData.Sites, site)
+		meshData.Operators = append(meshData.Operators, op)
 	}
 }
 
-// RemoveSite removes the provided site.
-func (meshData *MeshData) RemoveSite(site *Site) {
-	for idx, siteExisting := range meshData.Sites {
-		if strings.EqualFold(siteExisting.ID, site.ID) { // Remove the site by its ID
-			lastIdx := len(meshData.Sites) - 1
-			meshData.Sites[idx] = meshData.Sites[lastIdx]
-			meshData.Sites[lastIdx] = nil
-			meshData.Sites = meshData.Sites[:lastIdx]
+// RemoveOperator removes the provided operator.
+func (meshData *MeshData) RemoveOperator(op *Operator) {
+	for idx, opExisting := range meshData.Operators {
+		if strings.EqualFold(opExisting.ID, op.ID) { // Remove the operator by its ID
+			lastIdx := len(meshData.Operators) - 1
+			meshData.Operators[idx] = meshData.Operators[lastIdx]
+			meshData.Operators[lastIdx] = nil
+			meshData.Operators = meshData.Operators[:lastIdx]
 			break
 		}
 	}
 }
 
-// FindSite searches for a site with the given ID.
-func (meshData *MeshData) FindSite(id string) *Site {
-	for _, site := range meshData.Sites {
-		if strings.EqualFold(site.ID, id) {
-			return site
+// FindOperator searches for an operator with the given ID.
+func (meshData *MeshData) FindOperator(id string) *Operator {
+	for _, op := range meshData.Operators {
+		if strings.EqualFold(op.ID, id) {
+			return op
 		}
 	}
 	return nil
@@ -117,8 +117,8 @@ func (meshData *MeshData) FindServiceType(name string) *ServiceType {
 
 // Merge merges data from another MeshData instance into this one.
 func (meshData *MeshData) Merge(inData *MeshData) {
-	for _, site := range inData.Sites {
-		meshData.AddSite(site)
+	for _, op := range inData.Operators {
+		meshData.AddOperator(op)
 	}
 
 	for _, serviceType := range inData.ServiceTypes {
@@ -126,22 +126,11 @@ func (meshData *MeshData) Merge(inData *MeshData) {
 	}
 }
 
-// Unmerge removes data from another MeshData instance from this one.
-func (meshData *MeshData) Unmerge(inData *MeshData) {
-	for _, site := range inData.Sites {
-		meshData.RemoveSite(site)
-	}
-
-	for _, serviceType := range inData.ServiceTypes {
-		meshData.RemoveServiceType(serviceType)
-	}
-}
-
 // Verify checks if the mesh data is valid.
 func (meshData *MeshData) Verify() error {
-	// Verify all sites
-	for _, site := range meshData.Sites {
-		if err := site.Verify(); err != nil {
+	// Verify all operators
+	for _, op := range meshData.Operators {
+		if err := op.Verify(); err != nil {
 			return err
 		}
 	}
@@ -158,9 +147,9 @@ func (meshData *MeshData) Verify() error {
 
 // InferMissingData infers missing data from other data where possible.
 func (meshData *MeshData) InferMissingData() {
-	// Infer missing site data
-	for _, site := range meshData.Sites {
-		site.InferMissingData()
+	// Infer missing operator data
+	for _, op := range meshData.Operators {
+		op.InferMissingData()
 	}
 
 	// Infer missing service type data

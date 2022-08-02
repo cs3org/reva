@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/mentix/utils"
@@ -51,51 +52,54 @@ func HandleDefaultQuery(meshData *meshdata.MeshData, params url.Values, conf *co
 
 func convertMeshDataToOCMData(meshData *meshdata.MeshData, elevatedServiceTypes []string) ([]*ocmprovider.ProviderInfo, error) {
 	// Convert the mesh data into the corresponding OCM data structures
-	providers := make([]*ocmprovider.ProviderInfo, 0, len(meshData.Sites))
-	for _, site := range meshData.Sites {
-		// Gather all services from the site
-		services := make([]*ocmprovider.Service, 0, len(site.Services))
+	providers := make([]*ocmprovider.ProviderInfo, 0, len(meshData.Operators)*3)
+	for _, op := range meshData.Operators {
+		for _, site := range op.Sites {
+			// Gather all services from the site
+			services := make([]*ocmprovider.Service, 0, len(site.Services))
 
-		addService := func(host string, endpoint *meshdata.ServiceEndpoint, addEndpoints []*ocmprovider.ServiceEndpoint, apiVersion string) {
-			services = append(services, &ocmprovider.Service{
-				Host:                host,
-				Endpoint:            convertServiceEndpointToOCMData(endpoint),
-				AdditionalEndpoints: addEndpoints,
-				ApiVersion:          apiVersion,
-			})
-		}
-
-		for _, service := range site.Services {
-			apiVersion := meshdata.GetPropertyValue(service.Properties, meshdata.PropertyAPIVersion, "")
-
-			// Gather all additional endpoints of the service
-			addEndpoints := make([]*ocmprovider.ServiceEndpoint, 0, len(service.AdditionalEndpoints))
-			for _, endpoint := range service.AdditionalEndpoints {
-				if utils.FindInStringArray(endpoint.Type.Name, elevatedServiceTypes, false) != -1 {
-					endpointURL, _ := url.Parse(endpoint.URL)
-					addService(endpointURL.Host, endpoint, nil, apiVersion)
-				} else {
-					addEndpoints = append(addEndpoints, convertServiceEndpointToOCMData(endpoint))
-				}
+			addService := func(host string, endpoint *meshdata.ServiceEndpoint, addEndpoints []*ocmprovider.ServiceEndpoint, apiVersion string) {
+				services = append(services, &ocmprovider.Service{
+					Host:                host,
+					Endpoint:            convertServiceEndpointToOCMData(endpoint),
+					AdditionalEndpoints: addEndpoints,
+					ApiVersion:          apiVersion,
+				})
 			}
 
-			addService(service.Host, service.ServiceEndpoint, addEndpoints, apiVersion)
+			for _, service := range site.Services {
+				apiVersion := meshdata.GetPropertyValue(service.Properties, meshdata.PropertyAPIVersion, "")
+
+				// Gather all additional endpoints of the service
+				addEndpoints := make([]*ocmprovider.ServiceEndpoint, 0, len(service.AdditionalEndpoints))
+				for _, endpoint := range service.AdditionalEndpoints {
+					if utils.FindInStringArray(endpoint.Type.Name, elevatedServiceTypes, false) != -1 {
+						endpointURL, _ := url.Parse(endpoint.URL)
+						addService(endpointURL.Host, endpoint, nil, apiVersion)
+					} else {
+						addEndpoints = append(addEndpoints, convertServiceEndpointToOCMData(endpoint))
+					}
+				}
+
+				addService(service.Host, service.ServiceEndpoint, addEndpoints, apiVersion)
+			}
+
+			// Copy the site info into a ProviderInfo
+			provider := &ocmprovider.ProviderInfo{
+				Name:         site.Name,
+				FullName:     site.FullName,
+				Description:  site.Description,
+				Organization: site.Organization,
+				Domain:       site.Domain,
+				Homepage:     site.Homepage,
+				Email:        site.Email,
+				Services:     services,
+				Properties:   site.Properties,
+			}
+			provider.Properties[strings.ToUpper(meshdata.PropertyOperator)] = op.ID // Propagate the operator ID as a property
+			providers = append(providers, provider)
 		}
-
-		// Copy the site info into a ProviderInfo
-		providers = append(providers, &ocmprovider.ProviderInfo{
-			Name:         site.Name,
-			FullName:     site.FullName,
-			Description:  site.Description,
-			Organization: site.Organization,
-			Domain:       site.Domain,
-			Homepage:     site.Homepage,
-			Email:        site.Email,
-			Services:     services,
-			Properties:   site.Properties,
-		})
 	}
-
 	return providers, nil
 }
 

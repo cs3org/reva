@@ -25,6 +25,7 @@ import (
 	"net/http"
 	"path"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/cs3org/reva/internal/http/interceptors/appctx"
@@ -32,7 +33,6 @@ import (
 	"github.com/cs3org/reva/internal/http/interceptors/log"
 	"github.com/cs3org/reva/internal/http/interceptors/providerauthorizer"
 	"github.com/cs3org/reva/pkg/rhttp/global"
-	"github.com/cs3org/reva/pkg/rhttp/router"
 	rtrace "github.com/cs3org/reva/pkg/trace"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
@@ -234,25 +234,80 @@ func getUnprotected(prefix string, unprotected []string) []string {
 	return unprotected
 }
 
+// clean the url putting a slash (/) at the beginning if it does not have it
+// and removing the slashes at the end
+// if the url is "/", the output is ""
+func cleanURL(url string) string {
+	if len(url) > 0 {
+		if url[0] != '/' {
+			url = "/" + url
+		}
+		url = strings.TrimRight(url, "/")
+	}
+	return url
+}
+
+func urlHasPrefix(url, prefix string) bool {
+	url = cleanURL(url)
+	prefix = cleanURL(prefix)
+
+	partsURL := strings.Split(url, "/")
+	partsPrefix := strings.Split(prefix, "/")
+
+	if len(partsPrefix) > len(partsURL) {
+		return false
+	}
+
+	for i, p := range partsPrefix {
+		u := partsURL[i]
+		if p != u {
+			return false
+		}
+	}
+
+	return true
+}
+
+func (s *Server) getHandlerLongestCommongURL(url string) (http.Handler, string, bool) {
+	var match string
+
+	for k := range s.handlers {
+		if urlHasPrefix(url, k) && len(k) > len(match) {
+			match = k
+		}
+	}
+
+	h, ok := s.handlers[match]
+	return h, match, ok
+}
+
+func getSubURL(url, prefix string) string {
+	// pre cond: prefix is a prefix for url
+	// example: url = "/api/v0/", prefix = "/api", res = "/v0"
+	url = cleanURL(url)
+	prefix = cleanURL(prefix)
+
+	return url[len(prefix):]
+}
+
 func (s *Server) getHandler() (http.Handler, error) {
 	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		head, tail := router.ShiftPath(r.URL.Path)
-		if h, ok := s.handlers[head]; ok {
-			r.URL.Path = tail
-			s.log.Debug().Msgf("http routing: head=%s tail=%s svc=%s", head, r.URL.Path, head)
+		if h, ok := s.handlers[r.URL.Path]; ok {
+			s.log.Debug().Msgf("http routing: url=%s", r.URL.Path)
+			r.URL.Path = "/"
 			h.ServeHTTP(w, r)
 			return
 		}
 
-		// when a service is exposed at the root.
-		if h, ok := s.handlers[""]; ok {
-			r.URL.Path = "/" + head + tail
-			s.log.Debug().Msgf("http routing: head= tail=%s svc=root", r.URL.Path)
+		// find by longest common path
+		if h, url, ok := s.getHandlerLongestCommongURL(r.URL.Path); ok {
+			s.log.Debug().Msgf("http routing: url=%s", url)
+			r.URL.Path = getSubURL(r.URL.Path, url)
 			h.ServeHTTP(w, r)
 			return
 		}
 
-		s.log.Debug().Msgf("http routing: head=%s tail=%s svc=not-found", head, tail)
+		s.log.Debug().Msgf("http routing: url=%s svc=not-found", r.URL.Path)
 		w.WriteHeader(http.StatusNotFound)
 	})
 

@@ -66,19 +66,25 @@ func (connector *GOCDBConnector) RetrieveMeshData() (*meshdata.MeshData, error) 
 		return nil, fmt.Errorf("could not query service types: %v", err)
 	}
 
-	if err := connector.querySites(meshData); err != nil {
-		return nil, fmt.Errorf("could not query sites: %v", err)
+	if err := connector.queryNGIs(meshData); err != nil {
+		return nil, fmt.Errorf("could not query operators: %v", err)
 	}
 
-	for _, site := range meshData.Sites {
-		// Get services associated with the current site
-		if err := connector.queryServices(meshData, site); err != nil {
-			return nil, fmt.Errorf("could not query services of site '%v': %v", site.Name, err)
+	for _, op := range meshData.Operators {
+		if err := connector.querySites(meshData, op); err != nil {
+			return nil, fmt.Errorf("could not query sites of operator '%v': %v", op.Name, err)
 		}
 
-		// Get downtimes scheduled for the current site
-		if err := connector.queryDowntimes(meshData, site); err != nil {
-			return nil, fmt.Errorf("could not query downtimes of site '%v': %v", site.Name, err)
+		for _, site := range op.Sites {
+			// Get services associated with the current site
+			if err := connector.queryServices(meshData, site); err != nil {
+				return nil, fmt.Errorf("could not query services of site '%v': %v", site.Name, err)
+			}
+
+			// Get downtimes scheduled for the current site
+			if err := connector.queryDowntimes(meshData, site); err != nil {
+				return nil, fmt.Errorf("could not query downtimes of site '%v': %v", site.Name, err)
+			}
 		}
 	}
 
@@ -124,14 +130,39 @@ func (connector *GOCDBConnector) queryServiceTypes(meshData *meshdata.MeshData) 
 	return nil
 }
 
-func (connector *GOCDBConnector) querySites(meshData *meshdata.MeshData) error {
-	var sites gocdb.Sites
-	if err := connector.query(&sites, "get_site", false, true, network.URLParams{}); err != nil {
+func (connector *GOCDBConnector) queryNGIs(meshData *meshdata.MeshData) error {
+	var ngis gocdb.NGIs
+	if err := connector.query(&ngis, "get_ngi", false, true, network.URLParams{}); err != nil {
 		return err
 	}
 
 	// Copy retrieved data into the mesh data
-	meshData.Sites = nil
+	meshData.Operators = nil
+	for _, ngi := range ngis.NGIs {
+		operator := &meshdata.Operator{
+			ID:            ngi.Name,
+			Name:          ngi.Name,
+			Homepage:      "",
+			Email:         ngi.Email,
+			HelpdeskEmail: ngi.HelpdeskEmail,
+			SecurityEmail: ngi.SecurityEmail,
+			Sites:         nil,
+			Properties:    map[string]string{},
+		}
+		meshData.Operators = append(meshData.Operators, operator)
+	}
+
+	return nil
+}
+
+func (connector *GOCDBConnector) querySites(meshData *meshdata.MeshData, op *meshdata.Operator) error {
+	var sites gocdb.Sites
+	if err := connector.query(&sites, "get_site", false, true, network.URLParams{"roc": op.ID}); err != nil {
+		return err
+	}
+
+	// Copy retrieved data into the mesh data
+	op.Sites = nil
 	for _, site := range sites.Sites {
 		properties := connector.extensionsToMap(&site.Extensions)
 
@@ -158,7 +189,7 @@ func (connector *GOCDBConnector) querySites(meshData *meshdata.MeshData) error {
 			Properties:   properties,
 			Downtimes:    meshdata.Downtimes{},
 		}
-		meshData.Sites = append(meshData.Sites, meshsite)
+		op.Sites = append(op.Sites, meshsite)
 	}
 
 	return nil

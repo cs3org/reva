@@ -32,15 +32,15 @@ type UsersManager struct {
 	conf *config.Configuration
 	log  *zerolog.Logger
 
-	sitesManager    *SitesManager
-	accountsManager *AccountsManager
+	operatorsManager *OperatorsManager
+	accountsManager  *AccountsManager
 }
 
 const (
 	defaultPasswordLength = 12
 )
 
-func (mngr *UsersManager) initialize(conf *config.Configuration, log *zerolog.Logger, sitesManager *SitesManager, accountsManager *AccountsManager) error {
+func (mngr *UsersManager) initialize(conf *config.Configuration, log *zerolog.Logger, opsManager *OperatorsManager, accountsManager *AccountsManager) error {
 	if conf == nil {
 		return errors.Errorf("no configuration provided")
 	}
@@ -51,10 +51,10 @@ func (mngr *UsersManager) initialize(conf *config.Configuration, log *zerolog.Lo
 	}
 	mngr.log = log
 
-	if sitesManager == nil {
-		return errors.Errorf("no sites manager provided")
+	if opsManager == nil {
+		return errors.Errorf("no operators manager provided")
 	}
-	mngr.sitesManager = sitesManager
+	mngr.operatorsManager = opsManager
 
 	if accountsManager == nil {
 		return errors.Errorf("no accounts manager provided")
@@ -81,14 +81,14 @@ func (mngr *UsersManager) LoginUser(name, password string, scope string, session
 		return "", errors.Errorf("no access to the specified scope granted")
 	}
 
-	// Get the site the account belongs to
-	site, err := mngr.sitesManager.GetSite(account.Site, false)
+	// Get the sites the account belongs to
+	op, err := mngr.operatorsManager.GetOperator(account.Operator, false)
 	if err != nil {
-		return "", errors.Wrap(err, "no site with the specified ID exists")
+		return "", errors.Wrap(err, "no operator with the specified ID exists")
 	}
 
 	// Store the user account in the session
-	session.LoginUser(account, site)
+	session.LoginUser(account, op)
 
 	// Generate a token that can be used as a "ticket"
 	token, err := generateUserToken(session.LoggedInUser().Account.Email, scope, mngr.conf.Webserver.SessionTimeout)
@@ -141,9 +141,9 @@ func (mngr *UsersManager) VerifyUserToken(token string, user string, scope strin
 }
 
 // NewUsersManager creates a new users manager instance.
-func NewUsersManager(conf *config.Configuration, log *zerolog.Logger, sitesManager *SitesManager, accountsManager *AccountsManager) (*UsersManager, error) {
+func NewUsersManager(conf *config.Configuration, log *zerolog.Logger, opsManager *OperatorsManager, accountsManager *AccountsManager) (*UsersManager, error) {
 	mngr := &UsersManager{}
-	if err := mngr.initialize(conf, log, sitesManager, accountsManager); err != nil {
+	if err := mngr.initialize(conf, log, opsManager, accountsManager); err != nil {
 		return nil, errors.Wrap(err, "unable to initialize the users manager")
 	}
 	return mngr, nil

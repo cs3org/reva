@@ -49,8 +49,8 @@ type Session struct {
 
 // SessionUser holds information about the logged in user
 type SessionUser struct {
-	Account *data.Account
-	Site    *data.Site
+	Account  *data.Account
+	Operator *data.Operator
 }
 
 func getRemoteAddress(r *http.Request) string {
@@ -68,10 +68,10 @@ func (sess *Session) LoggedInUser() *SessionUser {
 }
 
 // LoginUser logs in the provided user.
-func (sess *Session) LoginUser(acc *data.Account, site *data.Site) {
+func (sess *Session) LoginUser(acc *data.Account, op *data.Operator) {
 	sess.loggedInUser = &SessionUser{
-		Account: acc,
-		Site:    site,
+		Account:  acc,
+		Operator: op,
 	}
 }
 

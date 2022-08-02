@@ -100,7 +100,7 @@ func New(m map[string]interface{}, unprotected []string) (global.Middleware, err
 	}
 
 	if len(conf.CredentialChain) == 0 {
-		conf.CredentialChain = []string{"basic", "bearer"}
+		conf.CredentialChain = []string{"basic", "bearer", "publicshares"}
 	}
 
 	if conf.CredentialsByUserAgent == nil {

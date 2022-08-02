@@ -564,6 +564,8 @@ def virtualViews():
                 "image": "registry.cern.ch/docker.io/owncloudci/php:7.4",
                 "commands": [
                     "cd /drone/src",
+                    "composer self-update",
+                    "composer --version",
                     "make test-acceptance-api",
                 ],
                 "environment": {
@@ -796,6 +798,8 @@ def ocisIntegrationTests(parallelRuns, skipExceptParts = []):
                         "image": "registry.cern.ch/docker.io/owncloudci/php:7.4",
                         "commands": [
                             "cd /drone/src/tmp/testrunner",
+                            "composer self-update",
+                            "composer --version",
                             "make test-acceptance-api",
                         ],
                         "environment": {
@@ -871,6 +875,8 @@ def s3ngIntegrationTests(parallelRuns, skipExceptParts = []):
                         "image": "registry.cern.ch/docker.io/owncloudci/php:7.4",
                         "commands": [
                             "cd /drone/src/tmp/testrunner",
+                            "composer self-update",
+                            "composer --version",
                             "make test-acceptance-api",
                         ],
                         "environment": {
