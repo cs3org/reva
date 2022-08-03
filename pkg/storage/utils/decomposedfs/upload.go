@@ -444,8 +444,14 @@ func (fs *Decomposedfs) PurgeExpiredUploads(purgedChan chan<- tusd.FileInfo) err
 		}
 		if int64(expires) < time.Now().Unix() {
 			purgedChan <- info
-			os.Remove(info.Storage["BinPath"])
-			os.Remove(filepath.Join(fs.o.Root, "uploads", info.ID+".info"))
+			err = os.Remove(info.Storage["BinPath"])
+			if err != nil {
+				return err
+			}
+			err = os.Remove(filepath.Join(fs.o.Root, "uploads", info.ID+".info"))
+			if err != nil {
+				return err
+			}
 		}
 	}
 	return nil
