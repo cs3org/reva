@@ -64,6 +64,18 @@ var _ = Describe("Cache", func() {
 			Expect(s).ToNot(BeNil())
 			Expect(s).To(Equal(share1))
 		})
+
+		It("sets the mtime", func() {
+			c.Add(storageId, spaceid, share1.Id.OpaqueId, share1)
+			Expect(c.Providers[storageId].Spaces[spaceid].Mtime).ToNot(Equal(time.Time{}))
+		})
+
+		It("updates the mtime", func() {
+			c.Add(storageId, spaceid, share1.Id.OpaqueId, share1)
+			old := c.Providers[storageId].Spaces[spaceid].Mtime
+			c.Add(storageId, spaceid, share1.Id.OpaqueId, share1)
+			Expect(c.Providers[storageId].Spaces[spaceid].Mtime).ToNot(Equal(old))
+		})
 	})
 
 	Context("with an existing entry", func() {
@@ -81,6 +93,13 @@ var _ = Describe("Cache", func() {
 
 				s = c.Get(storageId, spaceid, share1.Id.OpaqueId)
 				Expect(s).To(BeNil())
+			})
+
+			It("updates the mtime", func() {
+				c.Add(storageId, spaceid, share1.Id.OpaqueId, share1)
+				old := c.Providers[storageId].Spaces[spaceid].Mtime
+				c.Remove(storageId, spaceid, share1.Id.OpaqueId)
+				Expect(c.Providers[storageId].Spaces[spaceid].Mtime).ToNot(Equal(old))
 			})
 		})
 

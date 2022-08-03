@@ -55,6 +55,7 @@ func New(s metadata.Storage) Cache {
 func (c *Cache) Add(storageID, spaceID, shareID string, share *collaboration.Share) {
 	c.initializeIfNeeded(storageID, spaceID)
 	c.Providers[storageID].Spaces[spaceID].Shares[shareID] = share
+	c.Providers[storageID].Spaces[spaceID].Mtime = time.Now()
 }
 
 func (c *Cache) Remove(storageID, spaceID, shareID string) {
@@ -63,6 +64,7 @@ func (c *Cache) Remove(storageID, spaceID, shareID string) {
 		return
 	}
 	delete(c.Providers[storageID].Spaces[spaceID].Shares, shareID)
+	c.Providers[storageID].Spaces[spaceID].Mtime = time.Now()
 }
 
 func (c *Cache) Get(storageID, spaceID, shareID string) *collaboration.Share {
