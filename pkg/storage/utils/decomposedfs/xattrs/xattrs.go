@@ -189,9 +189,26 @@ func CopyMetadata(src, target string, filter func(attributeName string) bool) (e
 }
 
 // Set an extended attribute key to the given value
-// No file locking is involved here as writing a single xattr is
-// considered to be atomic.
 func Set(filePath string, key string, val string) error {
+
+	var (
+		fileLock *flock.Flock
+		err      error
+	)
+	fileLock, err = filelocks.AcquireWriteLock(filePath)
+
+	if err != nil {
+		return errors.Wrap(err, "xattrs Set: Can not acquire write log")
+	}
+	defer func() {
+		rerr := filelocks.ReleaseLock(fileLock)
+
+		// if err is non nil we do not overwrite that
+		if err == nil {
+			err = rerr
+		}
+	}()
+
 	if err := xattr.Set(filePath, key, []byte(val)); err != nil {
 		return err
 	}
@@ -199,9 +216,26 @@ func Set(filePath string, key string, val string) error {
 }
 
 // Remove an extended attribute key
-// No file locking is involved here as writing a single xattr is
-// considered to be atomic.
 func Remove(filePath string, key string) error {
+
+	var (
+		fileLock *flock.Flock
+		err      error
+	)
+	fileLock, err = filelocks.AcquireWriteLock(filePath)
+
+	if err != nil {
+		return errors.Wrap(err, "xattrs Remove: Can not acquire write log")
+	}
+	defer func() {
+		rerr := filelocks.ReleaseLock(fileLock)
+
+		// if err is non nil we do not overwrite that
+		if err == nil {
+			err = rerr
+		}
+	}()
+
 	return xattr.Remove(filePath, key)
 }
 
