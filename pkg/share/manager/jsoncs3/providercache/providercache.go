@@ -16,43 +16,49 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package jsoncs3
+package providercache
 
-import collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
+import (
+	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/metadata"
+)
 
-type ProviderCache struct {
-	Providers map[string]*ProviderSpaces
+type Cache struct {
+	Providers map[string]*Spaces
+
+	storage metadata.Storage
 }
 
-type ProviderSpaces struct {
-	Spaces map[string]*ProviderShares
+type Spaces struct {
+	Spaces map[string]*Shares
 }
 
-type ProviderShares struct {
+type Shares struct {
 	Shares map[string]*collaboration.Share
 }
 
-func NewProviderCache() ProviderCache {
-	return ProviderCache{
-		Providers: map[string]*ProviderSpaces{},
+func New(s metadata.Storage) Cache {
+	return Cache{
+		Providers: map[string]*Spaces{},
+		storage:   s,
 	}
 }
 
-func (pc *ProviderCache) Add(storageID, spaceID, shareID string, share *collaboration.Share) {
+func (pc *Cache) Add(storageID, spaceID, shareID string, share *collaboration.Share) {
 	if pc.Providers[storageID] == nil {
-		pc.Providers[storageID] = &ProviderSpaces{
-			Spaces: map[string]*ProviderShares{},
+		pc.Providers[storageID] = &Spaces{
+			Spaces: map[string]*Shares{},
 		}
 	}
 	if pc.Providers[storageID].Spaces[spaceID] == nil {
-		pc.Providers[storageID].Spaces[spaceID] = &ProviderShares{
+		pc.Providers[storageID].Spaces[spaceID] = &Shares{
 			Shares: map[string]*collaboration.Share{},
 		}
 	}
 	pc.Providers[storageID].Spaces[spaceID].Shares[shareID] = share
 }
 
-func (pc *ProviderCache) Remove(storageID, spaceID, shareID string) {
+func (pc *Cache) Remove(storageID, spaceID, shareID string) {
 	if pc.Providers[storageID] == nil ||
 		pc.Providers[storageID].Spaces[spaceID] == nil {
 		return
@@ -60,7 +66,7 @@ func (pc *ProviderCache) Remove(storageID, spaceID, shareID string) {
 	delete(pc.Providers[storageID].Spaces[spaceID].Shares, shareID)
 }
 
-func (pc *ProviderCache) Get(storageID, spaceID, shareID string) *collaboration.Share {
+func (pc *Cache) Get(storageID, spaceID, shareID string) *collaboration.Share {
 	if pc.Providers[storageID] == nil ||
 		pc.Providers[storageID].Spaces[spaceID] == nil {
 		return nil
@@ -68,9 +74,9 @@ func (pc *ProviderCache) Get(storageID, spaceID, shareID string) *collaboration.
 	return pc.Providers[storageID].Spaces[spaceID].Shares[shareID]
 }
 
-func (pc *ProviderCache) ListSpace(storageID, spaceID string) *ProviderShares {
+func (pc *Cache) ListSpace(storageID, spaceID string) *Shares {
 	if pc.Providers[storageID] == nil {
-		return &ProviderShares{}
+		return &Shares{}
 	}
 	return pc.Providers[storageID].Spaces[spaceID]
 }

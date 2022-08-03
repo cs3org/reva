@@ -30,7 +30,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/utils"
 )
 
-type ShareCache struct {
+type Cache struct {
 	UserShares map[string]*UserShareCache
 
 	storage metadata.Storage
@@ -46,18 +46,18 @@ type SpaceShareIDs struct {
 	IDs   map[string]struct{}
 }
 
-func New(s metadata.Storage) ShareCache {
-	return ShareCache{
+func New(s metadata.Storage) Cache {
+	return Cache{
 		UserShares: map[string]*UserShareCache{},
 		storage:    s,
 	}
 }
 
-func (c *ShareCache) Has(userid string) bool {
+func (c *Cache) Has(userid string) bool {
 	return c.UserShares[userid] != nil
 }
 
-func (c *ShareCache) Add(userid, shareID string) error {
+func (c *Cache) Add(userid, shareID string) error {
 	storageid, spaceid, _, err := storagespace.SplitID(shareID)
 	if err != nil {
 		return err
@@ -85,7 +85,7 @@ func (c *ShareCache) Add(userid, shareID string) error {
 	return nil
 }
 
-func (c *ShareCache) Remove(userid, shareID string) error {
+func (c *Cache) Remove(userid, shareID string) error {
 	storageid, spaceid, _, err := storagespace.SplitID(shareID)
 	if err != nil {
 		return err
@@ -107,7 +107,7 @@ func (c *ShareCache) Remove(userid, shareID string) error {
 	return nil
 }
 
-func (c *ShareCache) List(userid string) map[string]SpaceShareIDs {
+func (c *Cache) List(userid string) map[string]SpaceShareIDs {
 	r := map[string]SpaceShareIDs{}
 	if c.UserShares[userid] == nil {
 		return r
@@ -122,7 +122,7 @@ func (c *ShareCache) List(userid string) map[string]SpaceShareIDs {
 	return r
 }
 
-func (c *ShareCache) Sync(ctx context.Context, userid string) error {
+func (c *Cache) Sync(ctx context.Context, userid string) error {
 	var mtime time.Time
 	//  - do we have a cached list of created shares for the user in memory?
 	if usc := c.UserShares[userid]; usc != nil {
@@ -154,7 +154,7 @@ func (c *ShareCache) Sync(ctx context.Context, userid string) error {
 	return nil
 }
 
-func (c *ShareCache) Persist(ctx context.Context, userid string) error {
+func (c *Cache) Persist(ctx context.Context, userid string) error {
 	createdBytes, err := json.Marshal(c.UserShares[userid])
 	if err != nil {
 		return err
