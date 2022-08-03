@@ -938,7 +938,7 @@ func (n *Node) IsDisabled() bool {
 func (n *Node) GetTreeSize() (treesize uint64, err error) {
 	var b string
 	if b, err = xattrs.Get(n.InternalPath(), xattrs.TreesizeAttr); err != nil {
-		return
+		return 0, err
 	}
 	return strconv.ParseUint(b, 10, 64)
 }
