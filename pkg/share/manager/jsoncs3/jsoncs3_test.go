@@ -243,17 +243,31 @@ var _ = Describe("Jsoncs3", func() {
 				Expect(s.Id.OpaqueId).To(Equal(share.Id.OpaqueId))
 			})
 
+			It("reloads the provider cache when it is outdated", func() {
+				s, err := m.GetShare(ctx, shareRef)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(s).ToNot(BeNil())
+				Expect(s.Permissions.Permissions.InitiateFileUpload).To(BeFalse())
+
+				cache := m.Cache.Providers["storageid"].Spaces["spaceid"]
+				cache.Shares[share.Id.OpaqueId].Permissions.Permissions.InitiateFileUpload = true
+				bytes, err := json.Marshal(cache)
+				Expect(err).ToNot(HaveOccurred())
+				storage.SimpleUpload(context.Background(), "storages/storageid/spaceid.json", bytes)
+				Expect(err).ToNot(HaveOccurred())
+
+				m.CreatedCache.UserShares["admin"].Mtime = time.Time{} // trigger reload
+				s, err = m.GetShare(ctx, shareRef)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(s).ToNot(BeNil())
+				Expect(s.Permissions.Permissions.InitiateFileUpload).To(BeTrue())
+			})
+
 			It("does not return other users' shares", func() {
 				s, err := m.GetShare(otherCtx, shareRef)
 				Expect(err).To(HaveOccurred())
 				Expect(s).To(BeNil())
 			})
-
-			It("reloads the provider cache when it is outdated", func() {
-
-			})
-
-			PIt("uses the new data after reload")
 		})
 
 		Describe("UnShare", func() {
@@ -363,7 +377,7 @@ var _ = Describe("Jsoncs3", func() {
 				Expect(shares[0].Id).To(Equal(share.Id))
 			})
 
-			FIt("uses the data from the storage after reload", func() {
+			It("uses the data from the storage after reload", func() {
 				shares, err := m.ListShares(ctx, nil)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(shares)).To(Equal(1))
