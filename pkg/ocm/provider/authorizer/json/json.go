@@ -84,8 +84,24 @@ type authorizer struct {
 	conf        *config
 }
 
+func normalizeDomain(d string) (string, error) {
+	var urlString string
+	if strings.Contains(d, "://") {
+		urlString = d
+	} else {
+		urlString = "https://" + d
+	}
+
+	u, err := url.Parse(urlString)
+	if err != nil {
+		return "", err
+	}
+
+	return u.Hostname(), nil
+}
+
 func (a *authorizer) GetInfoByDomain(ctx context.Context, domain string) (*ocmprovider.ProviderInfo, error) {
-	normalizedDomain, err := provider.NormalizeDomain(domain)
+	normalizedDomain, err := normalizeDomain(domain)
 	if err != nil {
 		return nil, err
 	}
@@ -99,7 +115,7 @@ func (a *authorizer) GetInfoByDomain(ctx context.Context, domain string) (*ocmpr
 
 func (a *authorizer) IsProviderAllowed(ctx context.Context, pi *ocmprovider.ProviderInfo) error {
 	var err error
-	normalizedDomain, err := provider.NormalizeDomain(pi.Domain)
+	normalizedDomain, err := normalizeDomain(pi.Domain)
 	if err != nil {
 		return err
 	}

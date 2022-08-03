@@ -96,6 +96,22 @@ type authorizer struct {
 	conf                *config
 }
 
+func normalizeDomain(d string) (string, error) {
+	var urlString string
+	if strings.Contains(d, "://") {
+		urlString = d
+	} else {
+		urlString = "https://" + d
+	}
+
+	u, err := url.Parse(urlString)
+	if err != nil {
+		return "", err
+	}
+
+	return u.Hostname(), nil
+}
+
 func (a *authorizer) fetchProviders() ([]*ocmprovider.ProviderInfo, error) {
 	if (a.providers != nil) && (time.Now().Unix() < a.providersExpiration) {
 		return a.providers, nil
@@ -130,7 +146,7 @@ func (a *authorizer) fetchProviders() ([]*ocmprovider.ProviderInfo, error) {
 }
 
 func (a *authorizer) GetInfoByDomain(ctx context.Context, domain string) (*ocmprovider.ProviderInfo, error) {
-	normalizedDomain, err := provider.NormalizeDomain(domain)
+	normalizedDomain, err := normalizeDomain(domain)
 	if err != nil {
 		return nil, err
 	}
@@ -152,11 +168,11 @@ func (a *authorizer) IsProviderAllowed(ctx context.Context, pi *ocmprovider.Prov
 	if err != nil {
 		return err
 	}
-	normalizedDomain, err := provider.NormalizeDomain(pi.Domain)
+	normalizedDomain, err := normalizeDomain(pi.Domain)
 	if err != nil {
 		return err
 	}
-	
+
 	var providerAuthorized bool
 	if normalizedDomain != "" {
 		for _, p := range providers {
