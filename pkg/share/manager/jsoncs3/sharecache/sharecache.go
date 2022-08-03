@@ -16,7 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package jsoncs3
+package sharecache
 
 import (
 	"time"
@@ -39,7 +39,7 @@ type SpaceShareIDs struct {
 	IDs   map[string]struct{}
 }
 
-func NewShareCache() ShareCache {
+func New() ShareCache {
 	return ShareCache{
 		UserShares: map[string]*UserShareCache{},
 	}

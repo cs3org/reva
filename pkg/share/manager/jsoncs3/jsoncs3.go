@@ -25,6 +25,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
+	"github.com/mitchellh/mapstructure"
+	"github.com/pkg/errors"
+	"google.golang.org/genproto/protobuf/field_mask"
+
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -32,14 +37,10 @@ import (
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/share"
+	"github.com/cs3org/reva/v2/pkg/share/manager/jsoncs3/sharecache"
+	"github.com/cs3org/reva/v2/pkg/share/manager/registry"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/metadata" // nolint:staticcheck // we need the legacy package to convert V1 to V2 messages
 	"github.com/cs3org/reva/v2/pkg/storagespace"
-	"github.com/google/uuid"
-	"github.com/mitchellh/mapstructure"
-	"github.com/pkg/errors"
-	"google.golang.org/genproto/protobuf/field_mask"
-
-	"github.com/cs3org/reva/v2/pkg/share/manager/registry"
 	"github.com/cs3org/reva/v2/pkg/utils"
 )
 
@@ -84,9 +85,9 @@ type Manager struct {
 	// Cache holds the all shares, sharded by provider id and space id
 	Cache ProviderCache
 	// createdCache holds the list of shares a user has created, sharded by user id and space id
-	createdCache ShareCache
+	createdCache sharecache.ShareCache
 	// groupReceivedCache holds the list of shares a group has access to, sharded by group id and space id
-	groupReceivedCache ShareCache
+	groupReceivedCache sharecache.ShareCache
 	// userReceivedStates holds the state of shares a user has received, sharded by user id and space id
 	userReceivedStates receivedCache
 
@@ -116,9 +117,9 @@ func NewDefault(m map[string]interface{}) (share.Manager, error) {
 func New(s metadata.Storage) (*Manager, error) {
 	return &Manager{
 		Cache:              NewProviderCache(),
-		createdCache:       NewShareCache(),
+		createdCache:       sharecache.New(),
 		userReceivedStates: receivedCache{},
-		groupReceivedCache: NewShareCache(),
+		groupReceivedCache: sharecache.New(),
 		storage:            s,
 	}, nil
 }
@@ -447,7 +448,7 @@ func (m *Manager) ListShares(ctx context.Context, filters []*collaboration.Filte
 		//  - update cached list of created shares for the user in memory if changed
 		createdBlob, err := m.storage.SimpleDownload(ctx, userCreatedPath)
 		if err == nil {
-			newShareCache := UserShareCache{}
+			newShareCache := sharecache.UserShareCache{}
 			err := json.Unmarshal(createdBlob, &newShareCache)
 			if err != nil {
 				// TODO log error but continue?

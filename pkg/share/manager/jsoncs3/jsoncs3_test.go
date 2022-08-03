@@ -31,6 +31,7 @@ import (
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/share/manager/jsoncs3"
+	"github.com/cs3org/reva/v2/pkg/share/manager/jsoncs3/sharecache"
 	storagemocks "github.com/cs3org/reva/v2/pkg/storage/utils/metadata/mocks"
 	"github.com/stretchr/testify/mock"
 	"google.golang.org/protobuf/types/known/fieldmaskpb"
@@ -246,6 +247,9 @@ var _ = Describe("Jsoncs3", func() {
 				Expect(err).To(HaveOccurred())
 				Expect(s).To(BeNil())
 			})
+
+			PIt("reloads the provider cache when it is outdated")
+			PIt("uses the new data after reload")
 		})
 
 		Describe("UnShare", func() {
@@ -389,9 +393,9 @@ var _ = Describe("Jsoncs3", func() {
 					Creator: user1.Id,
 				})
 
-				cache := jsoncs3.UserShareCache{
+				cache := sharecache.UserShareCache{
 					Mtime: time.Now(),
-					UserShares: map[string]*jsoncs3.SpaceShareIDs{
+					UserShares: map[string]*sharecache.SpaceShareIDs{
 						"storageid$spaceid": {
 							Mtime: time.Now(),
 							IDs: map[string]struct{}{
