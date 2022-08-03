@@ -78,11 +78,11 @@ type receivedShareState struct {
 	mountPoint *provider.Reference
 }
 
-type manager struct {
+type Manager struct {
 	sync.RWMutex
 
-	// cache holds the all shares, sharded by provider id and space id
-	cache ProviderCache
+	// Cache holds the all shares, sharded by provider id and space id
+	Cache ProviderCache
 	// createdCache holds the list of shares a user has created, sharded by user id and space id
 	createdCache ShareCache
 	// groupReceivedCache holds the list of shares a group has access to, sharded by group id and space id
@@ -113,9 +113,9 @@ func NewDefault(m map[string]interface{}) (share.Manager, error) {
 }
 
 // New returns a new manager instance.
-func New(s metadata.Storage) (share.Manager, error) {
-	return &manager{
-		cache:              NewProviderCache(),
+func New(s metadata.Storage) (*Manager, error) {
+	return &Manager{
+		Cache:              NewProviderCache(),
 		createdCache:       NewShareCache(),
 		userReceivedStates: receivedCache{},
 		groupReceivedCache: NewShareCache(),
@@ -166,7 +166,7 @@ func New(s metadata.Storage) (share.Manager, error) {
 // /{userid}/received/{storageid}/{spaceid}
 // /{userid}/created/{storageid}/{spaceid}
 
-func (m *manager) Share(ctx context.Context, md *provider.ResourceInfo, g *collaboration.ShareGrant) (*collaboration.Share, error) {
+func (m *Manager) Share(ctx context.Context, md *provider.ResourceInfo, g *collaboration.ShareGrant) (*collaboration.Share, error) {
 
 	user := ctxpkg.ContextMustGetUser(ctx)
 	now := time.Now().UnixNano()
@@ -220,7 +220,7 @@ func (m *manager) Share(ctx context.Context, md *provider.ResourceInfo, g *colla
 		Mtime:       ts,
 	}
 
-	m.cache.Add(md.Id.StorageId, md.Id.SpaceId, shareID, s)
+	m.Cache.Add(md.Id.StorageId, md.Id.SpaceId, shareID, s)
 
 	err = m.setCreatedCache(ctx, s.GetCreator().GetOpaqueId(), shareID)
 	if err != nil {
@@ -262,13 +262,13 @@ func (m *manager) Share(ctx context.Context, md *provider.ResourceInfo, g *colla
 }
 
 // getByID must be called in a lock-controlled block.
-func (m *manager) getByID(id *collaboration.ShareId) (*collaboration.Share, error) {
+func (m *Manager) getByID(id *collaboration.ShareId) (*collaboration.Share, error) {
 	shareid, err := storagespace.ParseID(id.OpaqueId)
 	if err != nil {
 		// invalid share id, does not exist
 		return nil, errtypes.NotFound(id.String())
 	}
-	share := m.cache.Get(shareid.StorageId, shareid.SpaceId, id.OpaqueId)
+	share := m.Cache.Get(shareid.StorageId, shareid.SpaceId, id.OpaqueId)
 	if share == nil {
 		return nil, errtypes.NotFound(id.String())
 	}
@@ -276,8 +276,8 @@ func (m *manager) getByID(id *collaboration.ShareId) (*collaboration.Share, erro
 }
 
 // getByKey must be called in a lock-controlled block.
-func (m *manager) getByKey(key *collaboration.ShareKey) (*collaboration.Share, error) {
-	spaceShares := m.cache.ListSpace(key.ResourceId.StorageId, key.ResourceId.SpaceId)
+func (m *Manager) getByKey(key *collaboration.ShareKey) (*collaboration.Share, error) {
+	spaceShares := m.Cache.ListSpace(key.ResourceId.StorageId, key.ResourceId.SpaceId)
 	for _, share := range spaceShares.Shares {
 		if utils.GranteeEqual(key.Grantee, share.Grantee) {
 			return share, nil
@@ -287,7 +287,7 @@ func (m *manager) getByKey(key *collaboration.ShareKey) (*collaboration.Share, e
 }
 
 // get must be called in a lock-controlled block.
-func (m *manager) get(ref *collaboration.ShareReference) (s *collaboration.Share, err error) {
+func (m *Manager) get(ref *collaboration.ShareReference) (s *collaboration.Share, err error) {
 	switch {
 	case ref.GetId() != nil:
 		s, err = m.getByID(ref.GetId())
@@ -299,7 +299,7 @@ func (m *manager) get(ref *collaboration.ShareReference) (s *collaboration.Share
 	return
 }
 
-func (m *manager) GetShare(ctx context.Context, ref *collaboration.ShareReference) (*collaboration.Share, error) {
+func (m *Manager) GetShare(ctx context.Context, ref *collaboration.ShareReference) (*collaboration.Share, error) {
 	m.Lock()
 	defer m.Unlock()
 	s, err := m.get(ref)
@@ -316,7 +316,7 @@ func (m *manager) GetShare(ctx context.Context, ref *collaboration.ShareReferenc
 	return nil, errtypes.NotFound(ref.String())
 }
 
-func (m *manager) Unshare(ctx context.Context, ref *collaboration.ShareReference) error {
+func (m *Manager) Unshare(ctx context.Context, ref *collaboration.ShareReference) error {
 	m.Lock()
 	defer m.Unlock()
 	user := ctxpkg.ContextMustGetUser(ctx)
@@ -332,7 +332,7 @@ func (m *manager) Unshare(ctx context.Context, ref *collaboration.ShareReference
 	}
 
 	shareid, err := storagespace.ParseID(s.Id.OpaqueId)
-	m.cache.Remove(shareid.StorageId, shareid.SpaceId, s.Id.OpaqueId)
+	m.Cache.Remove(shareid.StorageId, shareid.SpaceId, s.Id.OpaqueId)
 
 	// remove from created cache
 	err = m.removeFromCreatedCache(ctx, s.GetCreator().GetOpaqueId(), s.Id.OpaqueId)
@@ -345,7 +345,7 @@ func (m *manager) Unshare(ctx context.Context, ref *collaboration.ShareReference
 	return nil
 }
 
-func (m *manager) removeFromCreatedCache(ctx context.Context, creatorid, shareid string) error {
+func (m *Manager) removeFromCreatedCache(ctx context.Context, creatorid, shareid string) error {
 	if err := m.createdCache.Remove(creatorid, shareid); err != nil {
 		return err
 	}
@@ -360,7 +360,7 @@ func (m *manager) removeFromCreatedCache(ctx context.Context, creatorid, shareid
 	return nil
 }
 
-func (m *manager) UpdateShare(ctx context.Context, ref *collaboration.ShareReference, p *collaboration.SharePermissions) (*collaboration.Share, error) {
+func (m *Manager) UpdateShare(ctx context.Context, ref *collaboration.ShareReference, p *collaboration.SharePermissions) (*collaboration.Share, error) {
 	m.Lock()
 	defer m.Unlock()
 	s, err := m.get(ref)
@@ -388,7 +388,7 @@ func (m *manager) UpdateShare(ctx context.Context, ref *collaboration.ShareRefer
 	return s, nil
 }
 
-func (m *manager) setCreatedCache(ctx context.Context, creatorid, shareid string) error {
+func (m *Manager) setCreatedCache(ctx context.Context, creatorid, shareid string) error {
 	if err := m.createdCache.Add(creatorid, shareid); err != nil {
 		return err
 	}
@@ -404,7 +404,7 @@ func (m *manager) setCreatedCache(ctx context.Context, creatorid, shareid string
 }
 
 // ListShares
-func (m *manager) ListShares(ctx context.Context, filters []*collaboration.Filter) ([]*collaboration.Share, error) {
+func (m *Manager) ListShares(ctx context.Context, filters []*collaboration.Filter) ([]*collaboration.Share, error) {
 	m.Lock()
 	defer m.Unlock()
 
@@ -468,7 +468,7 @@ func (m *manager) ListShares(ctx context.Context, filters []*collaboration.Filte
 		if err != nil {
 			continue
 		}
-		spaceShares := m.cache.ListSpace(providerid, spaceid)
+		spaceShares := m.Cache.ListSpace(providerid, spaceid)
 		for shareid, _ := range spaceShareIDs.IDs {
 			s := spaceShares.Shares[shareid]
 			if s == nil {
@@ -491,7 +491,7 @@ func userCreatedPath(userid string) string {
 }
 
 // we list the shares that are targeted to the user in context or to the user groups.
-func (m *manager) ListReceivedShares(ctx context.Context, filters []*collaboration.Filter) ([]*collaboration.ReceivedShare, error) {
+func (m *Manager) ListReceivedShares(ctx context.Context, filters []*collaboration.Filter) ([]*collaboration.ReceivedShare, error) {
 	m.Lock()
 	defer m.Unlock()
 
@@ -548,7 +548,7 @@ func (m *manager) ListReceivedShares(ctx context.Context, filters []*collaborati
 		if err != nil {
 			continue
 		}
-		spaceShares := m.cache.ListSpace(providerid, spaceid)
+		spaceShares := m.Cache.ListSpace(providerid, spaceid)
 		for shareId, state := range rspace.receivedShareStates {
 			s := spaceShares.Shares[shareId]
 			if s == nil {
@@ -571,7 +571,7 @@ func (m *manager) ListReceivedShares(ctx context.Context, filters []*collaborati
 }
 
 // convert must be called in a lock-controlled block.
-func (m *manager) convert(currentUser *userv1beta1.UserId, s *collaboration.Share) *collaboration.ReceivedShare {
+func (m *Manager) convert(currentUser *userv1beta1.UserId, s *collaboration.Share) *collaboration.ReceivedShare {
 	rs := &collaboration.ReceivedShare{
 		Share: s,
 		State: collaboration.ShareState_SHARE_STATE_PENDING,
@@ -594,11 +594,11 @@ func (m *manager) convert(currentUser *userv1beta1.UserId, s *collaboration.Shar
 	return rs
 }
 
-func (m *manager) GetReceivedShare(ctx context.Context, ref *collaboration.ShareReference) (*collaboration.ReceivedShare, error) {
+func (m *Manager) GetReceivedShare(ctx context.Context, ref *collaboration.ShareReference) (*collaboration.ReceivedShare, error) {
 	return m.getReceived(ctx, ref)
 }
 
-func (m *manager) getReceived(ctx context.Context, ref *collaboration.ShareReference) (*collaboration.ReceivedShare, error) {
+func (m *Manager) getReceived(ctx context.Context, ref *collaboration.ShareReference) (*collaboration.ReceivedShare, error) {
 	m.Lock()
 	defer m.Unlock()
 	s, err := m.get(ref)
@@ -612,7 +612,7 @@ func (m *manager) getReceived(ctx context.Context, ref *collaboration.ShareRefer
 	return m.convert(user.Id, s), nil
 }
 
-func (m *manager) UpdateReceivedShare(ctx context.Context, receivedShare *collaboration.ReceivedShare, fieldMask *field_mask.FieldMask) (*collaboration.ReceivedShare, error) {
+func (m *Manager) UpdateReceivedShare(ctx context.Context, receivedShare *collaboration.ReceivedShare, fieldMask *field_mask.FieldMask) (*collaboration.ReceivedShare, error) {
 	rs, err := m.getReceived(ctx, &collaboration.ShareReference{Spec: &collaboration.ShareReference_Id{Id: receivedShare.Share.Id}})
 	if err != nil {
 		return nil, err

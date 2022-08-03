@@ -30,10 +30,8 @@ import (
 	providerv1beta1 "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
-	"github.com/cs3org/reva/v2/pkg/share"
 	"github.com/cs3org/reva/v2/pkg/share/manager/jsoncs3"
 	storagemocks "github.com/cs3org/reva/v2/pkg/storage/utils/metadata/mocks"
-	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/stretchr/testify/mock"
 	"google.golang.org/protobuf/types/known/fieldmaskpb"
 
@@ -114,7 +112,7 @@ var _ = Describe("Jsoncs3", func() {
 		}
 		cacheStatInfo *provider.ResourceInfo
 		storage       *storagemocks.Storage
-		m             share.Manager
+		m             *jsoncs3.Manager
 
 		ctx        = ctxpkg.ContextSetUser(context.Background(), user1)
 		granteeCtx = ctxpkg.ContextSetUser(context.Background(), user2)
@@ -386,17 +384,19 @@ var _ = Describe("Jsoncs3", func() {
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(shares)).To(Equal(1))
 
-				providerid, spaceid, _, err := storagespace.SplitID(shares[0].Id.OpaqueId)
-				Expect(err).ToNot(HaveOccurred())
+				// Add a second cache to the provider cache so it can be referenced
+				m.Cache.Add("storageid", "spaceid", "storageid$spaceid!secondshare", &collaboration.Share{
+					Creator: user1.Id,
+				})
 
 				cache := jsoncs3.UserShareCache{
 					Mtime: time.Now(),
 					UserShares: map[string]*jsoncs3.SpaceShareIDs{
-						providerid + "$" + spaceid: {
+						"storageid$spaceid": {
 							Mtime: time.Now(),
 							IDs: map[string]struct{}{
-								shares[0].Id.OpaqueId: {},
-								shares[0].Id.OpaqueId: {},
+								shares[0].Id.OpaqueId:           {},
+								"storageid$spaceid!secondshare": {},
 							},
 						},
 					},
@@ -404,8 +404,8 @@ var _ = Describe("Jsoncs3", func() {
 				bytes, err := json.Marshal(cache)
 				Expect(err).ToNot(HaveOccurred())
 				storage.On("SimpleDownload", mock.Anything, mock.Anything).Return(bytes, nil)
-				cacheStatInfo.Mtime.Seconds = uint64(time.Now().UnixNano()) // Trigger reload
 
+				cacheStatInfo.Mtime.Seconds = uint64(time.Now().UnixNano()) // Trigger reload
 				shares, err = m.ListShares(ctx, nil)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(shares)).To(Equal(2))
