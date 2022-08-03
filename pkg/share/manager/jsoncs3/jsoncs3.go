@@ -397,7 +397,6 @@ func (m *Manager) ListShares(ctx context.Context, filters []*collaboration.Filte
 
 	//log := appctx.GetLogger(ctx)
 	user := ctxpkg.ContextMustGetUser(ctx)
-	userid := user.Id.OpaqueId
 	var ss []*collaboration.Share
 
 	// Q: how do we detect that a created list changed?
@@ -413,7 +412,7 @@ func (m *Manager) ListShares(ctx context.Context, filters []*collaboration.Filte
 
 	// TODO check if a created or owned filter is set
 	//  - read /users/{userid}/created.json (with If-Modified-Since header) aka read if changed
-	m.createdCache.Sync(ctx, userid)
+	m.createdCache.Sync(ctx, user.Id.OpaqueId)
 
 	for ssid, spaceShareIDs := range m.createdCache.List(user.Id.OpaqueId) {
 		if time.Now().Sub(spaceShareIDs.Mtime) > time.Second*30 {
@@ -607,58 +606,3 @@ func (m *Manager) UpdateReceivedShare(ctx context.Context, receivedShare *collab
 
 	return rs, nil
 }
-
-// // Dump exports shares and received shares to channels (e.g. during migration)
-// func (m *manager) Dump(ctx context.Context, shareChan chan<- *collaboration.Share, receivedShareChan chan<- share.ReceivedShareWithUser) error {
-// 	log := appctx.GetLogger(ctx)
-// 	for _, s := range m.model.Shares {
-// 		shareChan <- s
-// 	}
-
-// 	for userIDString, states := range m.model.State {
-// 		userMountPoints := m.model.MountPoint[userIDString]
-// 		id := &userv1beta1.UserId{}
-// 		mV2 := proto.MessageV2(id)
-// 		if err := prototext.Unmarshal([]byte(userIDString), mV2); err != nil {
-// 			log.Error().Err(err).Msg("error unmarshalling the user id")
-// 			continue
-// 		}
-
-// 		for shareIDString, state := range states {
-// 			sid := &collaboration.ShareId{}
-// 			mV2 := proto.MessageV2(sid)
-// 			if err := prototext.Unmarshal([]byte(shareIDString), mV2); err != nil {
-// 				log.Error().Err(err).Msg("error unmarshalling the user id")
-// 				continue
-// 			}
-
-// 			var s *collaboration.Share
-// 			for _, is := range m.model.Shares {
-// 				if is.Id.OpaqueId == sid.OpaqueId {
-// 					s = is
-// 					break
-// 				}
-// 			}
-// 			if s == nil {
-// 				log.Warn().Str("share id", sid.OpaqueId).Msg("Share not found")
-// 				continue
-// 			}
-
-// 			var mp *provider.Reference
-// 			if userMountPoints != nil {
-// 				mp = userMountPoints[shareIDString]
-// 			}
-
-// 			receivedShareChan <- share.ReceivedShareWithUser{
-// 				UserID: id,
-// 				ReceivedShare: &collaboration.ReceivedShare{
-// 					Share:      s,
-// 					State:      state,
-// 					MountPoint: mp,
-// 				},
-// 			}
-// 		}
-// 	}
-
-// 	return nil
-// }

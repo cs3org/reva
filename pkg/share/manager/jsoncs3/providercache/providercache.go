@@ -19,8 +19,15 @@
 package providercache
 
 import (
+	"context"
+	"encoding/json"
+	"path"
+	"path/filepath"
+	"time"
+
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/metadata"
+	"github.com/cs3org/reva/v2/pkg/utils"
 )
 
 type Cache struct {
@@ -35,6 +42,7 @@ type Spaces struct {
 
 type Shares struct {
 	Shares map[string]*collaboration.Share
+	Mtime  time.Time
 }
 
 func New(s metadata.Storage) Cache {
@@ -44,39 +52,99 @@ func New(s metadata.Storage) Cache {
 	}
 }
 
-func (pc *Cache) Add(storageID, spaceID, shareID string, share *collaboration.Share) {
-	if pc.Providers[storageID] == nil {
-		pc.Providers[storageID] = &Spaces{
+func (c *Cache) Add(storageID, spaceID, shareID string, share *collaboration.Share) {
+	c.initializeIfNeeded(storageID, spaceID)
+	c.Providers[storageID].Spaces[spaceID].Shares[shareID] = share
+}
+
+func (c *Cache) Remove(storageID, spaceID, shareID string) {
+	if c.Providers[storageID] == nil ||
+		c.Providers[storageID].Spaces[spaceID] == nil {
+		return
+	}
+	delete(c.Providers[storageID].Spaces[spaceID].Shares, shareID)
+}
+
+func (c *Cache) Get(storageID, spaceID, shareID string) *collaboration.Share {
+	if c.Providers[storageID] == nil ||
+		c.Providers[storageID].Spaces[spaceID] == nil {
+		return nil
+	}
+	return c.Providers[storageID].Spaces[spaceID].Shares[shareID]
+}
+
+func (c *Cache) ListSpace(storageID, spaceID string) *Shares {
+	if c.Providers[storageID] == nil {
+		return &Shares{}
+	}
+	return c.Providers[storageID].Spaces[spaceID]
+}
+
+func (c *Cache) Persist(ctx context.Context, storageID, spaceID string) error {
+	if c.Providers[storageID] == nil || c.Providers[storageID].Spaces[spaceID] == nil {
+		return nil
+	}
+
+	createdBytes, err := json.Marshal(c.Providers[storageID].Spaces[spaceID])
+	if err != nil {
+		return err
+	}
+	jsonPath := spaceJSONPath(storageID, spaceID)
+	// FIXME needs stat & upload if match combo to prevent lost update in redundant deployments
+	if err := c.storage.MakeDirIfNotExist(ctx, path.Dir(jsonPath)); err != nil {
+		return err
+	}
+	if err := c.storage.SimpleUpload(ctx, jsonPath, createdBytes); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (c *Cache) Sync(ctx context.Context, storageID, spaceID string) error {
+	var mtime time.Time
+	if c.Providers[storageID] != nil && c.Providers[storageID].Spaces[spaceID] != nil {
+		mtime = c.Providers[storageID].Spaces[spaceID].Mtime
+		//    - y: set If-Modified-Since header to only download if it changed
+	} else {
+		mtime = time.Time{} // Set zero time so that data from storage always takes precedence
+	}
+
+	jsonPath := spaceJSONPath(storageID, spaceID)
+	info, err := c.storage.Stat(ctx, jsonPath)
+	if err != nil {
+		return err
+	}
+	// check mtime of /users/{userid}/created.json
+	if utils.TSToTime(info.Mtime).After(mtime) {
+		//  - update cached list of created shares for the user in memory if changed
+		createdBlob, err := c.storage.SimpleDownload(ctx, jsonPath)
+		if err != nil {
+			return err
+		}
+		newShares := &Shares{}
+		err = json.Unmarshal(createdBlob, newShares)
+		if err != nil {
+			return err
+		}
+		c.initializeIfNeeded(storageID, spaceID)
+		c.Providers[storageID].Spaces[spaceID] = newShares
+	}
+	return nil
+}
+
+func (c *Cache) initializeIfNeeded(storageID, spaceID string) {
+	if c.Providers[storageID] == nil {
+		c.Providers[storageID] = &Spaces{
 			Spaces: map[string]*Shares{},
 		}
 	}
-	if pc.Providers[storageID].Spaces[spaceID] == nil {
-		pc.Providers[storageID].Spaces[spaceID] = &Shares{
+	if c.Providers[storageID].Spaces[spaceID] == nil {
+		c.Providers[storageID].Spaces[spaceID] = &Shares{
 			Shares: map[string]*collaboration.Share{},
 		}
 	}
-	pc.Providers[storageID].Spaces[spaceID].Shares[shareID] = share
 }
 
-func (pc *Cache) Remove(storageID, spaceID, shareID string) {
-	if pc.Providers[storageID] == nil ||
-		pc.Providers[storageID].Spaces[spaceID] == nil {
-		return
-	}
-	delete(pc.Providers[storageID].Spaces[spaceID].Shares, shareID)
-}
-
-func (pc *Cache) Get(storageID, spaceID, shareID string) *collaboration.Share {
-	if pc.Providers[storageID] == nil ||
-		pc.Providers[storageID].Spaces[spaceID] == nil {
-		return nil
-	}
-	return pc.Providers[storageID].Spaces[spaceID].Shares[shareID]
-}
-
-func (pc *Cache) ListSpace(storageID, spaceID string) *Shares {
-	if pc.Providers[storageID] == nil {
-		return &Shares{}
-	}
-	return pc.Providers[storageID].Spaces[spaceID]
+func spaceJSONPath(storageID, spaceID string) string {
+	return filepath.Join("/storages", storageID, spaceID+".json")
 }

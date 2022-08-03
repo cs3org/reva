@@ -167,6 +167,5 @@ func (c *Cache) Persist(ctx context.Context, userid string) error {
 }
 
 func userCreatedPath(userid string) string {
-	userCreatedPath := filepath.Join("/users", userid, "created.json")
-	return userCreatedPath
+	return filepath.Join("/users", userid, "created.json")
 }

@@ -177,13 +177,22 @@ var _ = Describe("Jsoncs3", func() {
 
 	Context("with an existing share", func() {
 		var (
-			share *collaboration.Share
+			share    *collaboration.Share
+			shareRef *collaboration.ShareReference
 		)
 
 		BeforeEach(func() {
 			var err error
 			share, err = m.Share(ctx, sharedResource, grant)
 			Expect(err).ToNot(HaveOccurred())
+
+			shareRef = &collaboration.ShareReference{
+				Spec: &collaboration.ShareReference_Id{
+					Id: &collaboration.ShareId{
+						OpaqueId: share.Id.OpaqueId,
+					},
+				},
+			}
 		})
 
 		Describe("GetShare", func() {
@@ -215,13 +224,7 @@ var _ = Describe("Jsoncs3", func() {
 			})
 
 			It("retrieves an existing share by id", func() {
-				s, err := m.GetShare(ctx, &collaboration.ShareReference{
-					Spec: &collaboration.ShareReference_Id{
-						Id: &collaboration.ShareId{
-							OpaqueId: share.Id.OpaqueId,
-						},
-					},
-				})
+				s, err := m.GetShare(ctx, shareRef)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(s).ToNot(BeNil())
 				Expect(share.ResourceId).To(Equal(sharedResource.Id))
@@ -237,13 +240,7 @@ var _ = Describe("Jsoncs3", func() {
 			})
 
 			It("does not return other users' shares", func() {
-				s, err := m.GetShare(otherCtx, &collaboration.ShareReference{
-					Spec: &collaboration.ShareReference_Id{
-						Id: &collaboration.ShareId{
-							OpaqueId: share.Id.OpaqueId,
-						},
-					},
-				})
+				s, err := m.GetShare(otherCtx, shareRef)
 				Expect(err).To(HaveOccurred())
 				Expect(s).To(BeNil())
 			})
