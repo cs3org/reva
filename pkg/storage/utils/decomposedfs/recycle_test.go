@@ -78,7 +78,7 @@ var _ = Describe("Recycle", func() {
 				Expect(len(items)).To(Equal(2))
 			})
 
-			It("they do not count towards the quota anymore", func() {
+			FIt("they do not count towards the quota anymore", func() {
 				_, used, _, err := env.Fs.GetQuota(env.Ctx, &provider.Reference{ResourceId: env.SpaceRootRes})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(used).To(Equal(uint64(0)))

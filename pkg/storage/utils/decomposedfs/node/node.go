@@ -1085,6 +1085,17 @@ func (n *Node) ListGrants(ctx context.Context) ([]*provider.Grant, error) {
 	return grants, nil
 }
 
+// WriteBlobSizeAttr sets the blob size for files
+func WriteBlobSizeAttr(path string, size int64) error {
+
+	str := fmt.Sprint(size)
+	if str == "" {
+		return errors.New("Could not convert size to string")
+	}
+
+	return xattrs.Set(path, xattrs.BlobsizeAttr, str)
+}
+
 // ReadBlobSizeAttr reads the blobsize from the xattrs
 func ReadBlobSizeAttr(path string) (int64, error) {
 	attr, err := xattrs.Get(path, xattrs.BlobsizeAttr)

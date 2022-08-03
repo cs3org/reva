@@ -767,7 +767,7 @@ func (t *Tree) Propagate(ctx context.Context, n *node.Node) (err error) {
 		// size accounting
 		if t.treeSizeAccounting {
 			var treeSize, calculatedTreeSize uint64
-			calculatedTreeSize, err = calculateTreeSize(ctx, n.InternalPath())
+			calculatedTreeSize, err = calculateTreeSize(ctx, n.InternalPath(), 0)
 			if err != nil {
 				continue
 			}
@@ -799,7 +799,7 @@ func (t *Tree) Propagate(ctx context.Context, n *node.Node) (err error) {
 	return
 }
 
-func calculateTreeSize(ctx context.Context, nodePath string) (uint64, error) {
+func calculateTreeSize(ctx context.Context, nodePath string, loop int) (uint64, error) {
 	var size uint64
 
 	f, err := os.Open(nodePath)
@@ -822,19 +822,41 @@ func calculateTreeSize(ctx context.Context, nodePath string) (uint64, error) {
 			continue // continue after an error
 		}
 		if !info.IsDir() {
+			// we are a file.
 			blobSize, err := node.ReadBlobSizeAttr(cPath)
+
+			// in case the xattr was missing, try to write it here.
 			if err != nil {
 				appctx.GetLogger(ctx).Error().Err(err).Str("childpath", cPath).Msg("could not read blobSize xattr")
-				continue // continue after an error
+				blobSize = info.Size()
+				if err = node.WriteBlobSizeAttr(cPath, blobSize); err != nil {
+					appctx.GetLogger(ctx).Error().Err(err).Str("childpath", cPath).Msg("could not write Blob size to child entry")
+					continue
+				}
 			}
 			size += uint64(blobSize)
 		} else {
-			// read from attr
+			// we are a directory
 			var b string
 			// xattrs.Get will follow the symlink
 			if b, err = xattrs.Get(cPath, xattrs.TreesizeAttr); err != nil {
-				// TODO recursively descend and recalculate treesize
-				continue // continue after an error
+				// recursion loop breaker, if things go bonkers
+				if loop > 50 {
+					appctx.GetLogger(ctx).Error().Err(err).Str("childpath", cPath).Msg("recursion count too deep, bailing out")
+					// lets go outta here -> serious problem
+					return 0, errors.New("recursion count too deep")
+				}
+				// ATTENTION: THIS IS DANGEROUS -> recursion!
+				nb, err := calculateTreeSize(ctx, cPath, loop+1)
+
+				if err == nil {
+					b = fmt.Sprint(nb)
+					err = xattrs.Set(cPath, xattrs.TreesizeAttr, b)
+					if err != nil {
+						appctx.GetLogger(ctx).Error().Err(err).Str("childpath", cPath).Msg("could not write treesize attr to node")
+						continue
+					}
+				}
 			}
 			csize, err := strconv.ParseUint(b, 10, 64)
 			if err != nil {
