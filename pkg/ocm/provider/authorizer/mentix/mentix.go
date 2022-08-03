@@ -130,29 +130,37 @@ func (a *authorizer) fetchProviders() ([]*ocmprovider.ProviderInfo, error) {
 }
 
 func (a *authorizer) GetInfoByDomain(ctx context.Context, domain string) (*ocmprovider.ProviderInfo, error) {
-	providers, err := a.fetchProviders()
+	normalizedDomain, err := provider.NormalizeDomain(domain)
 	if err != nil {
 		return nil, err
 	}
 
+	providers, err := a.fetchProviders()
+	if err != nil {
+		return nil, err
+	}
 	for _, p := range providers {
-		if strings.Contains(p.Domain, domain) {
+		if strings.Contains(p.Domain, normalizedDomain) {
 			return p, nil
 		}
 	}
 	return nil, errtypes.NotFound(domain)
 }
 
-func (a *authorizer) IsProviderAllowed(ctx context.Context, provider *ocmprovider.ProviderInfo) error {
+func (a *authorizer) IsProviderAllowed(ctx context.Context, pi *ocmprovider.ProviderInfo) error {
 	providers, err := a.fetchProviders()
 	if err != nil {
 		return err
 	}
-
+	normalizedDomain, err := provider.NormalizeDomain(pi.Domain)
+	if err != nil {
+		return err
+	}
+	
 	var providerAuthorized bool
-	if provider.Domain != "" {
+	if normalizedDomain != "" {
 		for _, p := range providers {
-			if p.Domain == provider.Domain {
+			if p.Domain == normalizedDomain {
 				providerAuthorized = true
 				break
 			}
@@ -163,16 +171,16 @@ func (a *authorizer) IsProviderAllowed(ctx context.Context, provider *ocmprovide
 
 	switch {
 	case !providerAuthorized:
-		return errtypes.NotFound(provider.GetDomain())
+		return errtypes.NotFound(pi.GetDomain())
 	case !a.conf.VerifyRequestHostname:
 		return nil
-	case len(provider.Services) == 0:
+	case len(pi.Services) == 0:
 		return errtypes.NotSupported("No IP provided")
 	}
 
 	var ocmHost string
 	for _, p := range providers {
-		if p.Domain == provider.Domain {
+		if p.Domain == normalizedDomain {
 			ocmHost, err = a.getOCMHost(p)
 			if err != nil {
 				return err
@@ -199,7 +207,7 @@ func (a *authorizer) IsProviderAllowed(ctx context.Context, provider *ocmprovide
 	}
 
 	for _, ip := range ipList {
-		if ip == provider.Services[0].Host {
+		if ip == pi.Services[0].Host {
 			providerAuthorized = true
 		}
 	}

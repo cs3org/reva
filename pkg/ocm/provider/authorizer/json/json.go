@@ -84,24 +84,8 @@ type authorizer struct {
 	conf        *config
 }
 
-func normalizeDomain(d string) (string, error) {
-	var urlString string
-	if strings.Contains(d, "://") {
-		urlString = d
-	} else {
-		urlString = "https://" + d
-	}
-
-	u, err := url.Parse(urlString)
-	if err != nil {
-		return "", err
-	}
-
-	return u.Hostname(), nil
-}
-
 func (a *authorizer) GetInfoByDomain(ctx context.Context, domain string) (*ocmprovider.ProviderInfo, error) {
-	normalizedDomain, err := normalizeDomain(domain)
+	normalizedDomain, err := provider.NormalizeDomain(domain)
 	if err != nil {
 		return nil, err
 	}
@@ -113,9 +97,9 @@ func (a *authorizer) GetInfoByDomain(ctx context.Context, domain string) (*ocmpr
 	return nil, errtypes.NotFound(domain)
 }
 
-func (a *authorizer) IsProviderAllowed(ctx context.Context, provider *ocmprovider.ProviderInfo) error {
+func (a *authorizer) IsProviderAllowed(ctx context.Context, pi *ocmprovider.ProviderInfo) error {
 	var err error
-	normalizedDomain, err := normalizeDomain(provider.Domain)
+	normalizedDomain, err := provider.NormalizeDomain(pi.Domain)
 	if err != nil {
 		return err
 	}
@@ -133,10 +117,10 @@ func (a *authorizer) IsProviderAllowed(ctx context.Context, provider *ocmprovide
 
 	switch {
 	case !providerAuthorized:
-		return errtypes.NotFound(provider.GetDomain())
+		return errtypes.NotFound(pi.GetDomain())
 	case !a.conf.VerifyRequestHostname:
 		return nil
-	case len(provider.Services) == 0:
+	case len(pi.Services) == 0:
 		return errtypes.NotSupported("No IP provided")
 	}
 
@@ -169,7 +153,7 @@ func (a *authorizer) IsProviderAllowed(ctx context.Context, provider *ocmprovide
 	}
 
 	for _, ip := range ipList {
-		if ip == provider.Services[0].Host {
+		if ip == pi.Services[0].Host {
 			providerAuthorized = true
 		}
 	}
@@ -194,8 +178,8 @@ func (a *authorizer) getOCMProviders(providers []*ocmprovider.ProviderInfo) (po 
 	return
 }
 
-func (a *authorizer) getOCMHost(provider *ocmprovider.ProviderInfo) (string, error) {
-	for _, s := range provider.Services {
+func (a *authorizer) getOCMHost(pi *ocmprovider.ProviderInfo) (string, error) {
+	for _, s := range pi.Services {
 		if s.Endpoint.Type.Name == "OCM" {
 			ocmHost, err := url.Parse(s.Host)
 			if err != nil {

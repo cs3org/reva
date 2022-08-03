@@ -20,6 +20,8 @@ package provider
 
 import (
 	"context"
+	"net/url"
+	"strings"
 
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 )
@@ -34,4 +36,20 @@ type Authorizer interface {
 
 	// ListAllProviders returns the information of all the providers registered in the mesh.
 	ListAllProviders(ctx context.Context) ([]*ocmprovider.ProviderInfo, error)
+}
+
+func NormalizeDomain(d string) (string, error) {
+	var urlString string
+	if strings.Contains(d, "://") {
+		urlString = d
+	} else {
+		urlString = "https://" + d
+	}
+
+	u, err := url.Parse(urlString)
+	if err != nil {
+		return "", err
+	}
+
+	return u.Hostname(), nil
 }
