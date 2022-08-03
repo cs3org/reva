@@ -19,8 +19,9 @@ var _ = Describe("Cache", func() {
 		c       providercache.Cache
 		storage metadata.Storage
 
-		storageId = "storageid"
-		spaceid   = "spaceid"
+		storageID = "storageid"
+		spaceID   = "spaceid"
+		shareID   = "storageid$spaceid!share1"
 		share1    = &collaboration.Share{
 			Id: &collaboration.ShareId{
 				OpaqueId: "share1",
@@ -55,51 +56,59 @@ var _ = Describe("Cache", func() {
 
 	Describe("Add", func() {
 		It("adds a share", func() {
-			s := c.Get(storageId, spaceid, share1.Id.OpaqueId)
+			s := c.Get(storageID, spaceID, shareID)
 			Expect(s).To(BeNil())
 
-			c.Add(storageId, spaceid, share1.Id.OpaqueId, share1)
+			c.Add(storageID, spaceID, shareID, share1)
 
-			s = c.Get(storageId, spaceid, share1.Id.OpaqueId)
+			s = c.Get(storageID, spaceID, shareID)
 			Expect(s).ToNot(BeNil())
 			Expect(s).To(Equal(share1))
 		})
 
 		It("sets the mtime", func() {
-			c.Add(storageId, spaceid, share1.Id.OpaqueId, share1)
-			Expect(c.Providers[storageId].Spaces[spaceid].Mtime).ToNot(Equal(time.Time{}))
+			c.Add(storageID, spaceID, shareID, share1)
+			Expect(c.Providers[storageID].Spaces[spaceID].Mtime).ToNot(Equal(time.Time{}))
 		})
 
 		It("updates the mtime", func() {
-			c.Add(storageId, spaceid, share1.Id.OpaqueId, share1)
-			old := c.Providers[storageId].Spaces[spaceid].Mtime
-			c.Add(storageId, spaceid, share1.Id.OpaqueId, share1)
-			Expect(c.Providers[storageId].Spaces[spaceid].Mtime).ToNot(Equal(old))
+			c.Add(storageID, spaceID, shareID, share1)
+			old := c.Providers[storageID].Spaces[spaceID].Mtime
+			c.Add(storageID, spaceID, shareID, share1)
+			Expect(c.Providers[storageID].Spaces[spaceID].Mtime).ToNot(Equal(old))
 		})
 	})
 
 	Context("with an existing entry", func() {
 		BeforeEach(func() {
-			c.Add(storageId, spaceid, share1.Id.OpaqueId, share1)
+			c.Add(storageID, spaceID, shareID, share1)
+			Expect(c.Persist(context.Background(), storageID, spaceID)).To(Succeed())
+		})
+
+		Describe("Get", func() {
+			It("returns the entry", func() {
+				s := c.Get(storageID, spaceID, shareID)
+				Expect(s).ToNot(BeNil())
+			})
 		})
 
 		Describe("Remove", func() {
 			It("removes the entry", func() {
-				s := c.Get(storageId, spaceid, share1.Id.OpaqueId)
+				s := c.Get(storageID, spaceID, shareID)
 				Expect(s).ToNot(BeNil())
 				Expect(s).To(Equal(share1))
 
-				c.Remove(storageId, spaceid, share1.Id.OpaqueId)
+				c.Remove(storageID, spaceID, shareID)
 
-				s = c.Get(storageId, spaceid, share1.Id.OpaqueId)
+				s = c.Get(storageID, spaceID, shareID)
 				Expect(s).To(BeNil())
 			})
 
 			It("updates the mtime", func() {
-				c.Add(storageId, spaceid, share1.Id.OpaqueId, share1)
-				old := c.Providers[storageId].Spaces[spaceid].Mtime
-				c.Remove(storageId, spaceid, share1.Id.OpaqueId)
-				Expect(c.Providers[storageId].Spaces[spaceid].Mtime).ToNot(Equal(old))
+				c.Add(storageID, spaceID, shareID, share1)
+				old := c.Providers[storageID].Spaces[spaceID].Mtime
+				c.Remove(storageID, spaceID, shareID)
+				Expect(c.Providers[storageID].Spaces[spaceID].Mtime).ToNot(Equal(old))
 			})
 		})
 
@@ -108,46 +117,46 @@ var _ = Describe("Cache", func() {
 				Expect(c.Persist(ctx, "foo", "bar")).To(Succeed())
 			})
 			It("handles non-existent spaces", func() {
-				Expect(c.Persist(ctx, storageId, "bar")).To(Succeed())
+				Expect(c.Persist(ctx, storageID, "bar")).To(Succeed())
 			})
 
 			It("persists", func() {
-				Expect(c.Persist(ctx, storageId, spaceid)).To(Succeed())
+				Expect(c.Persist(ctx, storageID, spaceID)).To(Succeed())
 			})
 		})
 
 		Describe("Sync", func() {
 			BeforeEach(func() {
-				Expect(c.Persist(ctx, storageId, spaceid)).To(Succeed())
+				Expect(c.Persist(ctx, storageID, spaceID)).To(Succeed())
 				// reset in-memory cache
 				c = providercache.New(storage)
 			})
 
 			It("downloads if needed", func() {
-				s := c.Get(storageId, spaceid, share1.Id.OpaqueId)
+				s := c.Get(storageID, spaceID, shareID)
 				Expect(s).To(BeNil())
 
-				c.Sync(ctx, storageId, spaceid)
+				c.Sync(ctx, storageID, spaceID)
 
-				s = c.Get(storageId, spaceid, share1.Id.OpaqueId)
+				s = c.Get(storageID, spaceID, shareID)
 				Expect(s).ToNot(BeNil())
 			})
 
 			It("does not download if not needed", func() {
-				s := c.Get(storageId, spaceid, share1.Id.OpaqueId)
+				s := c.Get(storageID, spaceID, shareID)
 				Expect(s).To(BeNil())
 
-				c.Providers[storageId] = &providercache.Spaces{
+				c.Providers[storageID] = &providercache.Spaces{
 					Spaces: map[string]*providercache.Shares{
-						spaceid: {
+						spaceID: {
 							Mtime: time.Now(),
 						},
 					},
 				}
-				c.Sync(ctx, storageId, spaceid)
+				c.Sync(ctx, storageID, spaceID) // Sync from disk won't happen because in-memory mtime is later than on disk
 
-				s = c.Get(storageId, spaceid, share1.Id.OpaqueId)
-				Expect(s).To(BeNil()) // Sync from disk didn't happen because in-memory mtime is later than on disk
+				s = c.Get(storageID, spaceID, shareID)
+				Expect(s).To(BeNil())
 			})
 		})
 	})

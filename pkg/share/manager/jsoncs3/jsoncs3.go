@@ -83,8 +83,8 @@ type Manager struct {
 
 	// Cache holds the all shares, sharded by provider id and space id
 	Cache providercache.Cache
-	// createdCache holds the list of shares a user has created, sharded by user id and space id
-	createdCache sharecache.Cache
+	// CreatedCache holds the list of shares a user has created, sharded by user id and space id
+	CreatedCache sharecache.Cache
 	// groupReceivedCache holds the list of shares a group has access to, sharded by group id and space id
 	groupReceivedCache sharecache.Cache
 	// userReceivedStates holds the state of shares a user has received, sharded by user id and space id
@@ -116,7 +116,7 @@ func NewDefault(m map[string]interface{}) (share.Manager, error) {
 func New(s metadata.Storage) (*Manager, error) {
 	return &Manager{
 		Cache:              providercache.New(s),
-		createdCache:       sharecache.New(s),
+		CreatedCache:       sharecache.New(s),
 		userReceivedStates: receivedCache{},
 		groupReceivedCache: sharecache.New(s),
 		storage:            s,
@@ -338,11 +338,11 @@ func (m *Manager) Unshare(ctx context.Context, ref *collaboration.ShareReference
 	m.Cache.Remove(shareid.StorageId, shareid.SpaceId, s.Id.OpaqueId)
 
 	// remove from created cache
-	err = m.createdCache.Remove(s.GetCreator().GetOpaqueId(), s.Id.OpaqueId)
+	err = m.CreatedCache.Remove(s.GetCreator().GetOpaqueId(), s.Id.OpaqueId)
 	if err != nil {
 		return err
 	}
-	err = m.createdCache.Persist(ctx, s.GetCreator().GetOpaqueId())
+	err = m.CreatedCache.Persist(ctx, s.GetCreator().GetOpaqueId())
 	if err != nil {
 		return err
 	}
@@ -381,10 +381,10 @@ func (m *Manager) UpdateShare(ctx context.Context, ref *collaboration.ShareRefer
 }
 
 func (m *Manager) setCreatedCache(ctx context.Context, creatorid, shareid string) error {
-	if err := m.createdCache.Add(creatorid, shareid); err != nil {
+	if err := m.CreatedCache.Add(creatorid, shareid); err != nil {
 		return err
 	}
-	if err := m.createdCache.Persist(ctx, creatorid); err != nil {
+	if err := m.CreatedCache.Persist(ctx, creatorid); err != nil {
 		return err
 	}
 	return nil
@@ -412,9 +412,9 @@ func (m *Manager) ListShares(ctx context.Context, filters []*collaboration.Filte
 
 	// TODO check if a created or owned filter is set
 	//  - read /users/{userid}/created.json (with If-Modified-Since header) aka read if changed
-	m.createdCache.Sync(ctx, user.Id.OpaqueId)
+	m.CreatedCache.Sync(ctx, user.Id.OpaqueId)
 
-	for ssid, spaceShareIDs := range m.createdCache.List(user.Id.OpaqueId) {
+	for ssid, spaceShareIDs := range m.CreatedCache.List(user.Id.OpaqueId) {
 		if time.Now().Sub(spaceShareIDs.Mtime) > time.Second*30 {
 			// TODO reread from disk
 		}

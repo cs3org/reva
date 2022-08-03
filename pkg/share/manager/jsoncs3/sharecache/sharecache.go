@@ -21,6 +21,7 @@ package sharecache
 import (
 	"context"
 	"encoding/json"
+	"path"
 	"path/filepath"
 	"time"
 
@@ -159,8 +160,12 @@ func (c *Cache) Persist(ctx context.Context, userid string) error {
 	if err != nil {
 		return err
 	}
+	jsonPath := userCreatedPath(userid)
+	if err := c.storage.MakeDirIfNotExist(ctx, path.Dir(jsonPath)); err != nil {
+		return err
+	}
 	// FIXME needs stat & upload if match combo to prevent lost update in redundant deployments
-	if err := c.storage.SimpleUpload(ctx, userCreatedPath(userid), createdBytes); err != nil {
+	if err := c.storage.SimpleUpload(ctx, jsonPath, createdBytes); err != nil {
 		return err
 	}
 	return nil
