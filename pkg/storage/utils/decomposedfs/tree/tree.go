@@ -736,33 +736,22 @@ func (t *Tree) Propagate(ctx context.Context, n *node.Node) (err error) {
 		}
 
 		if t.treeTimeAccounting {
-			// update the parent tree time if it is older than the nodes mtime
-			updateSyncTime := false
-
 			var tmTime time.Time
 			tmTime, err = n.GetTMTime()
-			switch {
-			case err != nil:
+
+			if err != nil {
 				// missing attribute, or invalid format, overwrite
 				sublog.Debug().Err(err).
 					Msg("could not read tmtime attribute, overwriting")
-				updateSyncTime = true
-			case tmTime.Before(sTime):
-				sublog.Debug().
-					Time("tmtime", tmTime).
-					Time("stime", sTime).
-					Msg("parent tmtime is older than node mtime, updating")
-				updateSyncTime = true
-			default:
-				sublog.Debug().
-					Time("tmtime", tmTime).
-					Time("stime", sTime).
-					Dur("delta", sTime.Sub(tmTime)).
-					Msg("parent tmtime is younger than node mtime, not updating")
 			}
 
-			if updateSyncTime {
-				// update the tree time of the parent node
+			if sTime != tmTime {
+				delta := sTime.Nanosecond() - tmTime.Nanosecond()
+				sublog.Debug().
+					Int("time delta:", delta).
+					Msg("parent tmtime is different from node mtime, updating")
+
+					// update the tree time of the parent node
 				if err = n.SetTMTime(&sTime); err != nil {
 					sublog.Error().Err(err).Time("tmtime", sTime).Msg("could not update tmtime of parent node")
 				} else {
@@ -777,9 +766,6 @@ func (t *Tree) Propagate(ctx context.Context, n *node.Node) (err error) {
 
 		// size accounting
 		if t.treeSizeAccounting {
-			// update the treesize if it differs from the current size
-			updateTreeSize := false
-
 			var treeSize, calculatedTreeSize uint64
 			calculatedTreeSize, err = calculateTreeSize(ctx, n.InternalPath())
 			if err != nil {
@@ -787,25 +773,16 @@ func (t *Tree) Propagate(ctx context.Context, n *node.Node) (err error) {
 			}
 
 			treeSize, err = n.GetTreeSize()
-			switch {
-			case err != nil:
-				// missing attribute, or invalid format, overwrite
+			if err != nil {
 				sublog.Debug().Err(err).Msg("could not read treesize attribute, overwriting")
-				updateTreeSize = true
-			case treeSize != calculatedTreeSize:
+			}
+
+			// in case of error in GetTreeSize(), treeSize == 0 and different from calculatedTreeSize
+			if treeSize != calculatedTreeSize {
 				sublog.Debug().
 					Uint64("treesize", treeSize).
 					Uint64("calculatedTreeSize", calculatedTreeSize).
 					Msg("parent treesize is different then calculated treesize, updating")
-				updateTreeSize = true
-			default:
-				sublog.Debug().
-					Uint64("treesize", treeSize).
-					Uint64("calculatedTreeSize", calculatedTreeSize).
-					Msg("parent size matches calculated size, not updating")
-			}
-
-			if updateTreeSize {
 				// update the tree time of the parent node
 				if err = n.SetTreeSize(calculatedTreeSize); err != nil {
 					sublog.Error().Err(err).Uint64("calculatedTreeSize", calculatedTreeSize).Msg("could not update treesize of parent node")
