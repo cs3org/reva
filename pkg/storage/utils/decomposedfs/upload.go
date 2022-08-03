@@ -32,8 +32,12 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
+
+	tusd "github.com/tus/tusd/pkg/handler"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -50,7 +54,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
-	tusd "github.com/tus/tusd/pkg/handler"
 )
 
 var defaultFilePerm = os.FileMode(0664)
@@ -153,6 +156,9 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 		info.MetaData["providerID"] = metadata["providerID"]
 		if mtime, ok := metadata["mtime"]; ok {
 			info.MetaData["mtime"] = mtime
+		}
+		if expiration, ok := metadata["expires"]; ok {
+			info.MetaData["expires"] = expiration
 		}
 		if _, ok := metadata["sizedeferred"]; ok {
 			info.SizeIsDeferred = true
@@ -335,8 +341,7 @@ func (fs *Decomposedfs) getUploadPath(ctx context.Context, uploadID string) (str
 	return filepath.Join(fs.o.Root, "uploads", uploadID), nil
 }
 
-// GetUpload returns the Upload for the given upload id
-func (fs *Decomposedfs) GetUpload(ctx context.Context, id string) (tusd.Upload, error) {
+func (fs *Decomposedfs) readInfo(id string) (tusd.FileInfo, error) {
 	infoPath := filepath.Join(fs.o.Root, "uploads", id+".info")
 
 	info := tusd.FileInfo{}
@@ -346,18 +351,27 @@ func (fs *Decomposedfs) GetUpload(ctx context.Context, id string) (tusd.Upload, 
 			// Interpret os.ErrNotExist as 404 Not Found
 			err = tusd.ErrNotFound
 		}
-		return nil, err
+		return tusd.FileInfo{}, err
 	}
 	if err := json.Unmarshal(data, &info); err != nil {
-		return nil, err
+		return tusd.FileInfo{}, err
 	}
 
 	stat, err := os.Stat(info.Storage["BinPath"])
 	if err != nil {
+		return tusd.FileInfo{}, err
+	}
+	info.Offset = stat.Size()
+
+	return info, nil
+}
+
+// GetUpload returns the Upload for the given upload id
+func (fs *Decomposedfs) GetUpload(ctx context.Context, id string) (tusd.Upload, error) {
+	info, err := fs.readInfo(id)
+	if err != nil {
 		return nil, err
 	}
-
-	info.Offset = stat.Size()
 
 	u := &userpb.User{
 		Id: &userpb.UserId{
@@ -383,10 +397,64 @@ func (fs *Decomposedfs) GetUpload(ctx context.Context, id string) (tusd.Upload, 
 	return &fileUpload{
 		info:     info,
 		binPath:  info.Storage["BinPath"],
-		infoPath: infoPath,
+		infoPath: filepath.Join(fs.o.Root, "uploads", id+".info"),
 		fs:       fs,
 		ctx:      ctx,
 	}, nil
+}
+
+// ListUploads returns a list of all incomplete uploads
+func (fs *Decomposedfs) ListUploads() ([]tusd.FileInfo, error) {
+	return fs.uploadInfos()
+}
+
+func (fs *Decomposedfs) uploadInfos() ([]tusd.FileInfo, error) {
+	infos := []tusd.FileInfo{}
+	infoFiles, err := filepath.Glob(filepath.Join(fs.o.Root, "uploads", "*.info"))
+	if err != nil {
+		return nil, err
+	}
+
+	idRegexp := regexp.MustCompile(".*/([^/]+).info")
+	for _, info := range infoFiles {
+		match := idRegexp.FindStringSubmatch(info)
+		if match == nil || len(match) < 2 {
+			continue
+		}
+		info, err := fs.readInfo(match[1])
+		if err != nil {
+			return nil, err
+		}
+		infos = append(infos, info)
+	}
+	return infos, nil
+}
+
+// PurgeExpiredUploads scans the fs for expired downloads and removes any leftovers
+func (fs *Decomposedfs) PurgeExpiredUploads(purgedChan chan<- tusd.FileInfo) error {
+	infos, err := fs.uploadInfos()
+	if err != nil {
+		return err
+	}
+
+	for _, info := range infos {
+		expires, err := strconv.Atoi(info.MetaData["expires"])
+		if err != nil {
+			continue
+		}
+		if int64(expires) < time.Now().Unix() {
+			purgedChan <- info
+			err = os.Remove(info.Storage["BinPath"])
+			if err != nil {
+				return err
+			}
+			err = os.Remove(filepath.Join(fs.o.Root, "uploads", info.ID+".info"))
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // lookupNode looks up nodes by path.

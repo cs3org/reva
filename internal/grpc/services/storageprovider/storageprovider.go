@@ -28,6 +28,7 @@ import (
 	"path"
 	"sort"
 	"strconv"
+	"time"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -65,6 +66,7 @@ type config struct {
 	AvailableXS         map[string]uint32                 `mapstructure:"available_checksums" docs:"nil;List of available checksums."`
 	CustomMimeTypesJSON string                            `mapstructure:"custom_mimetypes_json" docs:"nil;An optional mapping file with the list of supported custom file extensions and corresponding mime types."`
 	MountID             string                            `mapstructure:"mount_id"`
+	UploadExpiration    int64                             `mapstructure:"upload_expiration" docs:"0;Duration for how long uploads will be valid."`
 }
 
 func (c *config) init() {
@@ -347,6 +349,13 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 
 	// pass on the provider it to be persisted with the upload info. that is required to correlate the upload with the proper provider later on
 	metadata["providerID"] = s.conf.MountID
+	var expirationTimestamp *typesv1beta1.Timestamp
+	if s.conf.UploadExpiration > 0 {
+		expirationTimestamp = &typesv1beta1.Timestamp{
+			Seconds: uint64(time.Now().UTC().Add(time.Duration(s.conf.UploadExpiration) * time.Second).Unix()),
+		}
+		metadata["expires"] = strconv.Itoa(int(expirationTimestamp.Seconds))
+	}
 
 	uploadIDs, err := s.storage.InitiateUpload(ctx, req.Ref, uploadLength, metadata)
 	if err != nil {
@@ -393,6 +402,7 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 			UploadEndpoint:     u.String(),
 			AvailableChecksums: s.availableXS,
 			Expose:             s.conf.ExposeDataServer,
+			Expiration:         expirationTimestamp,
 		}
 		i++
 		log.Info().Str("data-server", u.String()).
