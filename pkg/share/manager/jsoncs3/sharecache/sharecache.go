@@ -19,14 +19,21 @@
 package sharecache
 
 import (
+	"context"
+	"encoding/json"
+	"path/filepath"
 	"time"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/metadata"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
+	"github.com/cs3org/reva/v2/pkg/utils"
 )
 
 type ShareCache struct {
 	UserShares map[string]*UserShareCache
+
+	storage metadata.Storage
 }
 
 type UserShareCache struct {
@@ -39,21 +46,15 @@ type SpaceShareIDs struct {
 	IDs   map[string]struct{}
 }
 
-func New() ShareCache {
+func New(s metadata.Storage) ShareCache {
 	return ShareCache{
 		UserShares: map[string]*UserShareCache{},
+		storage:    s,
 	}
 }
 
 func (c *ShareCache) Has(userid string) bool {
 	return c.UserShares[userid] != nil
-}
-func (c *ShareCache) GetShareCache(userid string) *UserShareCache {
-	return c.UserShares[userid]
-}
-
-func (c *ShareCache) SetShareCache(userid string, shareCache *UserShareCache) {
-	c.UserShares[userid] = shareCache
 }
 
 func (c *ShareCache) Add(userid, shareID string) error {
@@ -119,4 +120,53 @@ func (c *ShareCache) List(userid string) map[string]SpaceShareIDs {
 		}
 	}
 	return r
+}
+
+func (c *ShareCache) Sync(ctx context.Context, userid string) error {
+	var mtime time.Time
+	//  - do we have a cached list of created shares for the user in memory?
+	if usc := c.UserShares[userid]; usc != nil {
+		mtime = usc.Mtime
+		//    - y: set If-Modified-Since header to only download if it changed
+	} else {
+		mtime = time.Time{} // Set zero time so that data from storage always takes precedence
+	}
+
+	userCreatedPath := userCreatedPath(userid)
+	info, err := c.storage.Stat(ctx, userCreatedPath)
+	if err != nil {
+		return err
+	}
+	// check mtime of /users/{userid}/created.json
+	if utils.TSToTime(info.Mtime).After(mtime) {
+		//  - update cached list of created shares for the user in memory if changed
+		createdBlob, err := c.storage.SimpleDownload(ctx, userCreatedPath)
+		if err != nil {
+			return err
+		}
+		newShareCache := &UserShareCache{}
+		err = json.Unmarshal(createdBlob, newShareCache)
+		if err != nil {
+			return err
+		}
+		c.UserShares[userid] = newShareCache
+	}
+	return nil
+}
+
+func (c *ShareCache) Persist(ctx context.Context, userid string) error {
+	createdBytes, err := json.Marshal(c.UserShares[userid])
+	if err != nil {
+		return err
+	}
+	// FIXME needs stat & upload if match combo to prevent lost update in redundant deployments
+	if err := c.storage.SimpleUpload(ctx, userCreatedPath(userid), createdBytes); err != nil {
+		return err
+	}
+	return nil
+}
+
+func userCreatedPath(userid string) string {
+	userCreatedPath := filepath.Join("/users", userid, "created.json")
+	return userCreatedPath
 }

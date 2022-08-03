@@ -20,8 +20,6 @@ package jsoncs3
 
 import (
 	"context"
-	"encoding/json"
-	"path/filepath"
 	"sync"
 	"time"
 
@@ -117,9 +115,9 @@ func NewDefault(m map[string]interface{}) (share.Manager, error) {
 func New(s metadata.Storage) (*Manager, error) {
 	return &Manager{
 		Cache:              NewProviderCache(),
-		createdCache:       sharecache.New(),
+		createdCache:       sharecache.New(s),
 		userReceivedStates: receivedCache{},
-		groupReceivedCache: sharecache.New(),
+		groupReceivedCache: sharecache.New(s),
 		storage:            s,
 	}, nil
 }
@@ -350,12 +348,7 @@ func (m *Manager) removeFromCreatedCache(ctx context.Context, creatorid, shareid
 	if err := m.createdCache.Remove(creatorid, shareid); err != nil {
 		return err
 	}
-	createdBytes, err := json.Marshal(m.createdCache.GetShareCache(creatorid))
-	if err != nil {
-		return err
-	}
-	// FIXME needs stat & upload if match combo to prevent lost update in redundant deployments
-	if err := m.storage.SimpleUpload(ctx, userCreatedPath(creatorid), createdBytes); err != nil {
+	if err := m.createdCache.Persist(ctx, creatorid); err != nil {
 		return err
 	}
 	return nil
@@ -393,12 +386,7 @@ func (m *Manager) setCreatedCache(ctx context.Context, creatorid, shareid string
 	if err := m.createdCache.Add(creatorid, shareid); err != nil {
 		return err
 	}
-	createdBytes, err := json.Marshal(m.createdCache.GetShareCache(creatorid))
-	if err != nil {
-		return err
-	}
-	// FIXME needs stat & upload if match combo to prevent lost update in redundant deployments
-	if err := m.storage.SimpleUpload(ctx, userCreatedPath(creatorid), createdBytes); err != nil {
+	if err := m.createdCache.Persist(ctx, creatorid); err != nil {
 		return err
 	}
 	return nil
@@ -426,40 +414,8 @@ func (m *Manager) ListShares(ctx context.Context, filters []*collaboration.Filte
 	// Decision: use touch for now as it works withe plain posix and is easier to test
 
 	// TODO check if a created or owned filter is set
-
-	var mtime time.Time
-	//  - do we have a cached list of created shares for the user in memory?
-	if usc := m.createdCache.GetShareCache(userid); usc != nil {
-		mtime = usc.Mtime
-		//    - y: set If-Modified-Since header to only download if it changed
-	} else {
-		mtime = time.Time{} // Set zero time so that data from storage always takes precedence
-	}
-
 	//  - read /users/{userid}/created.json (with If-Modified-Since header) aka read if changed
-	userCreatedPath := userCreatedPath(userid)
-	info, err := m.storage.Stat(ctx, userCreatedPath)
-	if err != nil {
-		// TODO check other cases, we currently only assume it does not exist
-		return ss, nil
-	}
-	// check mtime of /users/{userid}/created.json
-	if utils.TSToTime(info.Mtime).After(mtime) {
-		//  - update cached list of created shares for the user in memory if changed
-		createdBlob, err := m.storage.SimpleDownload(ctx, userCreatedPath)
-		if err == nil {
-			newShareCache := sharecache.UserShareCache{}
-			err := json.Unmarshal(createdBlob, &newShareCache)
-			if err != nil {
-				// TODO log error but continue?
-				// data corrupted, admin needs to take action
-				// the service still has data. dump it before ding?
-			}
-			m.createdCache.SetShareCache(userid, &newShareCache)
-		} else {
-			// TODO log error but continue with current cached data
-		}
-	}
+	m.createdCache.Sync(ctx, userid)
 
 	for ssid, spaceShareIDs := range m.createdCache.List(user.Id.OpaqueId) {
 		if time.Now().Sub(spaceShareIDs.Mtime) > time.Second*30 {
@@ -484,11 +440,6 @@ func (m *Manager) ListShares(ctx context.Context, filters []*collaboration.Filte
 	}
 
 	return ss, nil
-}
-
-func userCreatedPath(userid string) string {
-	userCreatedPath := filepath.Join("/users", userid, "created.json")
-	return userCreatedPath
 }
 
 // we list the shares that are targeted to the user in context or to the user groups.
