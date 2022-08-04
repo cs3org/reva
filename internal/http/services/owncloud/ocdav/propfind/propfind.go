@@ -824,7 +824,7 @@ func requiresExplicitFetching(n *xml.Name) bool {
 		}
 	case net.NsOwncloud:
 		switch n.Local {
-		case "favorite", "share-types", "checksums", "size":
+		case "favorite", "share-types", "checksums", "size", "tags":
 			return true
 		default:
 			return false
@@ -1316,6 +1316,11 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 							propstatNotFound.Prop = append(propstatNotFound.Prop, prop.NotFound("oc:signature-auth"))
 						}
 					}
+				case "tags":
+					if k := md.GetArbitraryMetadata().GetMetadata(); k != nil {
+						fmt.Println("K NOT NIL", k)
+						propstatOK.Prop = append(propstatOK.Prop, prop.Raw("oc:tags", k["tags"]))
+					}
 				case "privatelink": // phoenix only
 					// <oc:privatelink>https://phoenix.owncloud.com/f/9</oc:privatelink>
 					fallthrough
@@ -1328,10 +1333,6 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 					// see https://doc.owncloud.com/server/admin_manual/configuration/server/occ_command.html#maintenance-commands
 					// TODO(jfd): double check the client behavior with reva on backup restore
 					fallthrough
-				case "tags":
-					if k := md.GetArbitraryMetadata().GetMetadata(); k != nil {
-						propstatOK.Prop = append(propstatOK.Prop, prop.Raw("oc:tags", k["tags"]))
-					}
 				default:
 					propstatNotFound.Prop = append(propstatNotFound.Prop, prop.NotFound("oc:"+pf.Prop[i].Local))
 				}
@@ -1554,7 +1555,8 @@ func metadataKeyOf(n *xml.Name) string {
 			return "share-types"
 		}
 	}
-	return fmt.Sprintf("%s/%s", n.Space, n.Local)
+	//return fmt.Sprintf("%s/%s", n.Space, n.Local)
+	return n.Local
 }
 
 // UnmarshalXML appends the property names enclosed within start to pn.
