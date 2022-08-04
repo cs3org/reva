@@ -25,7 +25,6 @@ import (
 	"io"
 	"mime"
 	"net/http"
-	"net/url"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
@@ -238,14 +237,8 @@ func (h *invitesHandler) acceptInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	recipientProviderURL, err := url.Parse(recipientProvider)
-	if err != nil {
-		WriteError(w, r, APIErrorServerError, fmt.Sprintf("error parseing recipientProvider URL: %s", recipientProvider), err)
-		return
-	}
-
 	providerInfo := ocmprovider.ProviderInfo{
-		Domain: recipientProviderURL.Hostname(),
+		Domain: recipientProvider,
 		Services: []*ocmprovider.Service{
 			{
 				Host: clientIP,
