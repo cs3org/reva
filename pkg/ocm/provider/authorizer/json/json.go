@@ -147,6 +147,7 @@ func (a *authorizer) IsProviderAllowed(ctx context.Context, pi *ocmprovider.Prov
 			if err != nil {
 				return err
 			}
+			break
 		}
 	}
 	if ocmHost == "" {
@@ -171,6 +172,7 @@ func (a *authorizer) IsProviderAllowed(ctx context.Context, pi *ocmprovider.Prov
 	for _, ip := range ipList {
 		if ip == pi.Services[0].Host {
 			providerAuthorized = true
+			break
 		}
 	}
 	if !providerAuthorized {

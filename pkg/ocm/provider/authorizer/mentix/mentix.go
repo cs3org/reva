@@ -127,7 +127,7 @@ func (a *authorizer) fetchProviders() ([]*ocmprovider.ProviderInfo, error) {
 	res, err := a.client.HTTPClient.Do(req)
 	if err != nil {
 		err = errors.Wrap(err,
-			fmt.Sprintf("error fetching provider list from: %s", a.client.BaseURL))
+			fmt.Sprintf("mentix: error fetching provider list from: %s", a.client.BaseURL))
 		return nil, err
 	}
 
@@ -191,7 +191,8 @@ func (a *authorizer) IsProviderAllowed(ctx context.Context, pi *ocmprovider.Prov
 	case !a.conf.VerifyRequestHostname:
 		return nil
 	case len(pi.Services) == 0:
-		return errtypes.NotSupported("No IP provided")
+		return errtypes.NotSupported(
+			fmt.Sprintf("mentix: provider %s has no supported services", pi.GetDomain()))
 	}
 
 	var ocmHost string
@@ -201,10 +202,12 @@ func (a *authorizer) IsProviderAllowed(ctx context.Context, pi *ocmprovider.Prov
 			if err != nil {
 				return err
 			}
+			break
 		}
 	}
 	if ocmHost == "" {
-		return errtypes.InternalError("mentix: ocm host not specified for mesh provider")
+		return errtypes.NotSupported(
+			fmt.Sprintf("mentix: provider %s is missing OCM endpoint", pi.GetDomain()))
 	}
 
 	providerAuthorized = false
@@ -214,7 +217,8 @@ func (a *authorizer) IsProviderAllowed(ctx context.Context, pi *ocmprovider.Prov
 	} else {
 		addr, err := net.LookupIP(ocmHost)
 		if err != nil {
-			return errors.Wrap(err, "json: error looking up client IP")
+			return errors.Wrap(err,
+				fmt.Sprintf("mentix: error looking up IPs for OCM endpoint %s", ocmHost))
 		}
 		for _, a := range addr {
 			ipList = append(ipList, a.String())
@@ -225,10 +229,14 @@ func (a *authorizer) IsProviderAllowed(ctx context.Context, pi *ocmprovider.Prov
 	for _, ip := range ipList {
 		if ip == pi.Services[0].Host {
 			providerAuthorized = true
+			break
 		}
 	}
 	if !providerAuthorized {
-		return errtypes.NotFound("OCM Host")
+		return errtypes.BadRequest(
+			fmt.Sprintf(
+				"Invalid requesting OCM endpoint IP %s of provider %s",
+				pi.Services[0].Host, pi.GetDomain()))
 	}
 
 	return nil
@@ -257,7 +265,7 @@ func (a *authorizer) getOCMHost(provider *ocmprovider.ProviderInfo) (string, err
 		if s.Endpoint.Type.Name == "OCM" {
 			ocmHost, err := url.Parse(s.Host)
 			if err != nil {
-				return "", errors.Wrap(err, "json: error parsing OCM host URL")
+				return "", errors.Wrap(err, "mentix: error parsing OCM host URL")
 			}
 			return ocmHost.Host, nil
 		}
