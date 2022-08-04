@@ -51,8 +51,18 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 	}
 
 	conf.init()
+	r := chi.NewRouter()
+	s := &svc{
+		conf:   conf,
+		router: r,
+	}
 
-	return &svc{conf: conf}, nil
+	if err := s.routerInit(); err != nil {
+		return nil, err
+	}
+
+	return s, nil
+
 }
 
 // Close performs cleanup.
@@ -86,16 +96,10 @@ func (s *svc) Unprotected() []string {
 }
 
 func (s *svc) routerInit() error {
-	r := chi.NewRouter()
 
-	r.Get("/", s.handleListJobs)
-	r.Post("/", s.handleRestoreID)
-
-	r.Route("/{restore_id}", func(r chi.Router) {
-		r.Use(PostCtx)
-		r.Get("/", s.handleRestoreStatus)
-	})
-
+	s.router.Get("/cback/restore", s.handleListJobs)
+	s.router.Post("/cback/restore", s.handleRestoreID)
+	s.router.Get("/cback/restore/{restore_id}", s.handleRestoreStatus)
 	return nil
 }
 
