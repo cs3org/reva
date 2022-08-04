@@ -265,7 +265,7 @@ func (a *authorizer) getOCMHost(provider *ocmprovider.ProviderInfo) (string, err
 		if s.Endpoint.Type.Name == "OCM" {
 			ocmHost, err := url.Parse(s.Host)
 			if err != nil {
-				return "", errors.Wrap(err, "mentix: error parsing OCM host URL")
+				return "", errors.Wrap(err, fmt.Sprintf("mentix: error parsing OCM host URL %s", s.Host))
 			}
 			return ocmHost.Host, nil
 		}
