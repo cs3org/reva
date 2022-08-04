@@ -19,13 +19,25 @@
 package cback
 
 import (
+	"context"
+	"io"
 	"net/http"
 
-	"github.com/cs3org/reva/pkg/appctx"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/rhttp/global"
+	"github.com/go-chi/chi/v5"
 	"github.com/mitchellh/mapstructure"
 	"github.com/rs/zerolog"
 )
+
+type Request struct {
+	backup_id   int
+	pattern     string
+	snapshot    string
+	destination string
+	enabled     bool
+	date        string
+}
 
 func init() {
 	global.Register("cback", New)
@@ -49,7 +61,8 @@ func (s *svc) Close() error {
 }
 
 type config struct {
-	Prefix string `mapstructure:"prefix"`
+	Prefix            string `mapstructure:"prefix"`
+	ImpersonatorToken string `mapstructure:"impersonator"`
 }
 
 func (c *config) init() {
@@ -60,7 +73,8 @@ func (c *config) init() {
 }
 
 type svc struct {
-	conf *config
+	conf   *config
+	router *chi.Mux
 }
 
 func (s *svc) Prefix() string {
@@ -71,11 +85,93 @@ func (s *svc) Unprotected() []string {
 	return nil
 }
 
+func (s *svc) routerInit() error {
+	r := chi.NewRouter()
+
+	r.Get("/", s.handleListJobs)
+	r.Post("/", s.handleRestoreID)
+
+	r.Route("/{restore_id}", func(r chi.Router) {
+		r.Use(PostCtx)
+		r.Get("/", s.handleRestoreStatus)
+	})
+
+	return nil
+}
+
+func PostCtx(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx := context.WithValue(r.Context(), "restore_id", chi.URLParam(r, "restore_id"))
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+func (s *svc) handleRestoreID(w http.ResponseWriter, r *http.Request) {
+	/*ctx := r.Context()
+	user, _ := ctxpkg.ContextGetUser(ctx)
+
+	theTime := time.Now()
+
+	r.SetBasicAuth(user.Username, s.conf.ImpersonatorToken)
+
+	path := r.URL.Query().Get("path")
+
+	u, err := json.Marshal(Request{backup_id: 0, pattern: path, snapshot: "0", destination: "", enabled: true, date: theTime.Format(time.RFC3339)})
+
+	resp, err := http.Post("http://cback-portal-dev-01:8000/restores")*/
+
+}
+
+func (s *svc) handleListJobs(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	user, _ := ctxpkg.ContextGetUser(ctx)
+
+	r.SetBasicAuth(user.Username, s.conf.ImpersonatorToken)
+	resp, err := http.Get("http://cback-portal-dev-01:8000/restores")
+
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	defer resp.Body.Close()
+
+	w.Header().Set("Content-Type", "application/json")
+
+	if _, err := io.Copy(w, resp.Body); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+}
+
+func (s *svc) handleRestoreStatus(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	user, _ := ctxpkg.ContextGetUser(ctx)
+
+	r.SetBasicAuth(user.Username, s.conf.ImpersonatorToken)
+
+	restoreID := chi.URLParam(r, "restore_id")
+
+	resp, err := http.Get("http://cback-portal-dev-01:8000/restores/" + restoreID)
+
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	defer resp.Body.Close()
+
+	w.Header().Set("Content-Type", "application/json")
+
+	if _, err := io.Copy(w, resp.Body); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+}
+
 func (s *svc) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		log := appctx.GetLogger(r.Context())
-		if _, err := w.Write([]byte("hello")); err != nil {
-			log.Err(err).Msg("error writing response")
-		}
+		s.router.ServeHTTP(w, r)
+
 	})
 }
