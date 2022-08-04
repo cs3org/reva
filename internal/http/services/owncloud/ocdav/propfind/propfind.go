@@ -1328,6 +1328,10 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 					// see https://doc.owncloud.com/server/admin_manual/configuration/server/occ_command.html#maintenance-commands
 					// TODO(jfd): double check the client behavior with reva on backup restore
 					fallthrough
+				case "tags":
+					if k := md.GetArbitraryMetadata().GetMetadata(); k != nil {
+						propstatOK.Prop = append(propstatOK.Prop, prop.Raw("oc:tags", k["tags"]))
+					}
 				default:
 					propstatNotFound.Prop = append(propstatNotFound.Prop, prop.NotFound("oc:"+pf.Prop[i].Local))
 				}
