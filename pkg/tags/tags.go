@@ -18,7 +18,9 @@
 
 package tags
 
-import "strings"
+import (
+	"strings"
+)
 
 var (
 	// character used to separate tags in lists
@@ -40,39 +42,13 @@ type Tags struct {
 // FromList creates a Tags struct from a list of tags
 func FromList(s string) *Tags {
 	t := &Tags{sep: _tagsep, maxtags: _maxtags, exists: make(map[string]bool)}
-
-	tags := strings.Split(s, t.sep)
-	for _, tag := range tags {
-		t.t = append(t.t, tag)
-		t.exists[tag] = true
-		t.numtags++
-	}
+	t.t = t.addTags(s)
 	return t
 }
 
 // AddList appends a list of new tags and returns true if at least one was appended
 func (t *Tags) AddList(s string) bool {
-	tags := make([]string, 0)
-	for _, tag := range strings.Split(s, t.sep) {
-		if tag == "" {
-			// ignore empty tags
-			continue
-		}
-
-		if t.exists[tag] {
-			// tag is already existing
-			continue
-		}
-
-		if t.numtags >= t.maxtags {
-			// max number of tags reached. We return silently without warning anyone
-			break
-		}
-
-		tags = append(tags, tag)
-		t.exists[tag] = true
-		t.numtags++
-	}
+	tags := t.addTags(s)
 	t.t = append(tags, t.t...)
 	return len(tags) > 0
 }
@@ -101,4 +77,31 @@ func (t *Tags) RemoveList(s string) bool {
 // AsList returns the tags converted to a list
 func (t *Tags) AsList() string {
 	return strings.Join(t.t, t.sep)
+}
+
+// adds the tags and returns a list of added tags
+func (t *Tags) addTags(s string) []string {
+	added := make([]string, 0)
+	for _, tag := range strings.Split(s, t.sep) {
+		if tag == "" {
+			// ignore empty tags
+			continue
+		}
+
+		if t.exists[tag] {
+			// tag is already existing
+			continue
+		}
+
+		if t.numtags >= t.maxtags {
+			// max number of tags reached. We return silently without warning anyone
+			break
+		}
+
+		added = append(added, tag)
+		t.exists[tag] = true
+		t.numtags++
+	}
+
+	return added
 }
