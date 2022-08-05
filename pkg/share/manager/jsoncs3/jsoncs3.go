@@ -270,7 +270,16 @@ func (m *Manager) getByID(id *collaboration.ShareId) (*collaboration.Share, erro
 	}
 	share := m.Cache.Get(shareid.StorageId, shareid.SpaceId, id.OpaqueId)
 	if share == nil {
-		return nil, errtypes.NotFound(id.String())
+		// reload cache, maybe out data is outdated
+		err = m.Cache.Sync(context.Background(), shareid.StorageId, shareid.SpaceId)
+		if err != nil {
+			return nil, err
+		}
+
+		share = m.Cache.Get(shareid.StorageId, shareid.SpaceId, id.OpaqueId)
+		if share == nil {
+			return nil, errtypes.NotFound(id.String())
+		}
 	}
 	return share, nil
 }

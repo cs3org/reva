@@ -26,6 +26,7 @@ import (
 	"time"
 
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/metadata"
 	"github.com/cs3org/reva/v2/pkg/utils"
 )
@@ -43,6 +44,45 @@ type Spaces struct {
 type Shares struct {
 	Shares map[string]*collaboration.Share
 	Mtime  time.Time
+}
+
+func (s *Shares) UnmarshalJSON(data []byte) error {
+	// Shares are tricky to unmarshal because the contain an interface (Grantee) which makes the json Unmarshal bail out
+	// To work around that problem we unmarshal into json.RawMessage in a first step and then try to manually unmarshal
+	// into the specific types in a second step.
+	tmp := struct {
+		Shares map[string]json.RawMessage
+		Mtime  time.Time
+	}{}
+
+	err := json.Unmarshal(data, &tmp)
+	if err != nil {
+		return err
+	}
+
+	s.Mtime = tmp.Mtime
+	s.Shares = make(map[string]*collaboration.Share, len(tmp.Shares))
+	for id, genericShare := range tmp.Shares {
+		userShare := &collaboration.Share{
+			Grantee: &provider.Grantee{Id: &provider.Grantee_UserId{}},
+		}
+		err = json.Unmarshal(genericShare, userShare) // is this a user share?
+		if err == nil {
+			s.Shares[id] = userShare
+			continue
+		}
+
+		groupShare := &collaboration.Share{
+			Grantee: &provider.Grantee{Id: &provider.Grantee_GroupId{}},
+		}
+		err = json.Unmarshal(genericShare, groupShare) // try to unmarshal to a group share if the user share unmarshalling failed
+		if err != nil {
+			return err
+		}
+		s.Shares[id] = groupShare
+	}
+
+	return nil
 }
 
 func New(s metadata.Storage) Cache {

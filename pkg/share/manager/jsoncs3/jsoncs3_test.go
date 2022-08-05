@@ -263,6 +263,18 @@ var _ = Describe("Jsoncs3", func() {
 				Expect(s.Permissions.Permissions.InitiateFileUpload).To(BeTrue())
 			})
 
+			It("loads the cache when it doesn't have an entry", func() {
+				err := m.Cache.Persist(context.Background(), "storageid", "spaceid")
+				Expect(err).ToNot(HaveOccurred())
+
+				m, err = jsoncs3.New(storage)
+				Expect(err).ToNot(HaveOccurred())
+
+				s, err := m.GetShare(ctx, shareRef)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(s).ToNot(BeNil())
+			})
+
 			It("does not return other users' shares", func() {
 				s, err := m.GetShare(otherCtx, shareRef)
 				Expect(err).To(HaveOccurred())
