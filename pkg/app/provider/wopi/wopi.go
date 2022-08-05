@@ -19,7 +19,6 @@
 package wopi
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -313,27 +312,6 @@ func getAppURLs(c *config) (map[string]map[string]string, error) {
 		}
 	} else if discRes.StatusCode == http.StatusNotFound {
 		// this may be a bridge-supported app
-		discReq, err = http.NewRequest("GET", c.AppIntURL, nil)
-		if err != nil {
-			return nil, err
-		}
-		discRes, err = httpcl.Do(discReq)
-		if err != nil {
-			return nil, err
-		}
-		defer discRes.Body.Close()
-
-		buf := new(bytes.Buffer)
-		_, err = buf.ReadFrom(discRes.Body)
-		if err != nil {
-			return nil, err
-		}
-
-		// scrape app's home page to find the appname
-		if !strings.Contains(buf.String(), c.AppName) {
-			return nil, errors.New("Application server at " + c.AppURL + " does not match this AppProvider for " + c.AppName)
-		}
-
 		// register the supported mimetypes in the AppRegistry: this is hardcoded for the time being
 		// TODO(lopresti) move to config
 		switch c.AppName {
