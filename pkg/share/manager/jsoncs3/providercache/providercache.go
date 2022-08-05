@@ -95,7 +95,6 @@ func New(s metadata.Storage) Cache {
 func (c *Cache) Add(ctx context.Context, storageID, spaceID, shareID string, share *collaboration.Share) error {
 	c.initializeIfNeeded(storageID, spaceID)
 	c.Providers[storageID].Spaces[spaceID].Shares[shareID] = share
-	c.Providers[storageID].Spaces[spaceID].Mtime = time.Now()
 
 	return c.Persist(ctx, storageID, spaceID)
 }
@@ -106,7 +105,6 @@ func (c *Cache) Remove(ctx context.Context, storageID, spaceID, shareID string) 
 		return nil
 	}
 	delete(c.Providers[storageID].Spaces[spaceID].Shares, shareID)
-	c.Providers[storageID].Spaces[spaceID].Mtime = time.Now()
 
 	return c.Persist(ctx, storageID, spaceID)
 }
@@ -131,15 +129,16 @@ func (c *Cache) Persist(ctx context.Context, storageID, spaceID string) error {
 		return nil
 	}
 
+	c.Providers[storageID].Spaces[spaceID].Mtime = time.Now()
 	createdBytes, err := json.Marshal(c.Providers[storageID].Spaces[spaceID])
 	if err != nil {
 		return err
 	}
 	jsonPath := spaceJSONPath(storageID, spaceID)
-	// FIXME needs stat & upload if match combo to prevent lost update in redundant deployments
 	if err := c.storage.MakeDirIfNotExist(ctx, path.Dir(jsonPath)); err != nil {
 		return err
 	}
+	// FIXME needs stat & upload if match combo to prevent lost update in redundant deployments
 	if err := c.storage.SimpleUpload(ctx, jsonPath, createdBytes); err != nil {
 		return err
 	}

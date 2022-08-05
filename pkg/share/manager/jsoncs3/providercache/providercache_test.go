@@ -122,6 +122,13 @@ var _ = Describe("Cache", func() {
 			It("persists", func() {
 				Expect(c.Persist(ctx, storageID, spaceID)).To(Succeed())
 			})
+
+			It("updates the mtime", func() {
+				oldMtime := c.Providers[storageID].Spaces[spaceID].Mtime
+
+				Expect(c.Persist(ctx, storageID, spaceID)).To(Succeed())
+				Expect(c.Providers[storageID].Spaces[spaceID].Mtime).ToNot(Equal(oldMtime))
+			})
 		})
 
 		Describe("Sync", func() {
