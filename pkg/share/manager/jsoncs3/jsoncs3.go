@@ -384,10 +384,8 @@ func (m *Manager) UpdateShare(ctx context.Context, ref *collaboration.ShareRefer
 		Nanos:   uint32(now % int64(time.Second)),
 	}
 
-	err = m.CreatedCache.Add(ctx, s.GetCreator().GetOpaqueId(), s.Id.OpaqueId)
-	if err != nil {
-		return nil, err
-	}
+	// Update provider cache
+	m.Cache.Persist(ctx, s.ResourceId.StorageId, s.ResourceId.SpaceId)
 
 	return s, nil
 }

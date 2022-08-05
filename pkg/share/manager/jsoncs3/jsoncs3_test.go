@@ -76,30 +76,7 @@ var _ = Describe("Jsoncs3", func() {
 			Id:     user2.Id,
 			Groups: []string{"users"},
 		}
-		readPermissions = &provider.ResourcePermissions{
-			GetPath:              true,
-			InitiateFileDownload: true,
-			ListFileVersions:     true,
-			ListContainer:        true,
-			Stat:                 true,
-		}
-		writePermissions = &provider.ResourcePermissions{
-			GetPath:              true,
-			InitiateFileDownload: true,
-			InitiateFileUpload:   true,
-			ListFileVersions:     true,
-			ListContainer:        true,
-			Stat:                 true,
-		}
-		grant = &collaboration.ShareGrant{
-			Grantee: &provider.Grantee{
-				Type: provider.GranteeType_GRANTEE_TYPE_USER,
-				Id:   &provider.Grantee_UserId{UserId: grantee.GetId()},
-			},
-			Permissions: &collaboration.SharePermissions{
-				Permissions: readPermissions,
-			},
-		}
+		grant *collaboration.ShareGrant
 
 		groupGrant = &collaboration.ShareGrant{
 			Grantee: &provider.Grantee{
@@ -109,7 +86,9 @@ var _ = Describe("Jsoncs3", func() {
 				}},
 			},
 			Permissions: &collaboration.SharePermissions{
-				Permissions: readPermissions,
+				Permissions: &providerv1beta1.ResourcePermissions{
+					InitiateFileUpload: false,
+				},
 			},
 		}
 		storage metadata.Storage
@@ -134,6 +113,18 @@ var _ = Describe("Jsoncs3", func() {
 	)
 
 	BeforeEach(func() {
+		grant = &collaboration.ShareGrant{
+			Grantee: &provider.Grantee{
+				Type: provider.GranteeType_GRANTEE_TYPE_USER,
+				Id:   &provider.Grantee_UserId{UserId: grantee.GetId()},
+			},
+			Permissions: &collaboration.SharePermissions{
+				Permissions: &providerv1beta1.ResourcePermissions{
+					InitiateFileUpload: false,
+				},
+			},
+		}
+
 		var err error
 		tmpdir, err = ioutil.TempDir("", "jsoncs3-test")
 		Expect(err).ToNot(HaveOccurred())
@@ -386,7 +377,9 @@ var _ = Describe("Jsoncs3", func() {
 						},
 					},
 				}, &collaboration.SharePermissions{
-					Permissions: writePermissions,
+					Permissions: &providerv1beta1.ResourcePermissions{
+						InitiateFileUpload: true,
+					},
 				})
 				Expect(err).To(HaveOccurred())
 			})
@@ -396,7 +389,7 @@ var _ = Describe("Jsoncs3", func() {
 					ResourceId: sharedResource.Id,
 					Grantee:    grant.Grantee,
 				})
-				Expect(s.GetPermissions().GetPermissions()).To(Equal(readPermissions))
+				Expect(s.GetPermissions().GetPermissions().InitiateFileUpload).To(BeFalse())
 
 				// enhance privileges
 				us, err := m.UpdateShare(ctx, &collaboration.ShareReference{
@@ -406,17 +399,19 @@ var _ = Describe("Jsoncs3", func() {
 						},
 					},
 				}, &collaboration.SharePermissions{
-					Permissions: writePermissions,
+					Permissions: &providerv1beta1.ResourcePermissions{
+						InitiateFileUpload: true,
+					},
 				})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(us).ToNot(BeNil())
-				Expect(us.GetPermissions().GetPermissions()).To(Equal(writePermissions))
+				Expect(s.GetPermissions().GetPermissions().InitiateFileUpload).To(BeTrue())
 
 				s = shareBykey(&collaboration.ShareKey{
 					ResourceId: sharedResource.Id,
 					Grantee:    grant.Grantee,
 				})
-				Expect(s.GetPermissions().GetPermissions()).To(Equal(writePermissions))
+				Expect(s.GetPermissions().GetPermissions().InitiateFileUpload).To(BeTrue())
 
 				// reduce privileges
 				us, err = m.UpdateShare(ctx, &collaboration.ShareReference{
@@ -426,17 +421,19 @@ var _ = Describe("Jsoncs3", func() {
 						},
 					},
 				}, &collaboration.SharePermissions{
-					Permissions: readPermissions,
+					Permissions: &providerv1beta1.ResourcePermissions{
+						InitiateFileUpload: false,
+					},
 				})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(us).ToNot(BeNil())
-				Expect(us.GetPermissions().GetPermissions()).To(Equal(readPermissions))
+				Expect(s.GetPermissions().GetPermissions().InitiateFileUpload).To(BeFalse())
 
 				s = shareBykey(&collaboration.ShareKey{
 					ResourceId: sharedResource.Id,
 					Grantee:    grant.Grantee,
 				})
-				Expect(s.GetPermissions().GetPermissions()).To(Equal(readPermissions))
+				Expect(s.GetPermissions().GetPermissions().InitiateFileUpload).To(BeFalse())
 			})
 
 			It("persists the change", func() {
@@ -444,7 +441,7 @@ var _ = Describe("Jsoncs3", func() {
 					ResourceId: sharedResource.Id,
 					Grantee:    grant.Grantee,
 				})
-				Expect(s.GetPermissions().GetPermissions()).To(Equal(readPermissions))
+				Expect(s.GetPermissions().GetPermissions().InitiateFileUpload).To(BeFalse())
 
 				// enhance privileges
 				us, err := m.UpdateShare(ctx, &collaboration.ShareReference{
@@ -454,11 +451,13 @@ var _ = Describe("Jsoncs3", func() {
 						},
 					},
 				}, &collaboration.SharePermissions{
-					Permissions: writePermissions,
+					Permissions: &providerv1beta1.ResourcePermissions{
+						InitiateFileUpload: true,
+					},
 				})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(us).ToNot(BeNil())
-				Expect(us.GetPermissions().GetPermissions()).To(Equal(writePermissions))
+				Expect(s.GetPermissions().GetPermissions().InitiateFileUpload).To(BeTrue())
 
 				m, err = jsoncs3.New(storage) // Reset in-memory cache
 				Expect(err).ToNot(HaveOccurred())
@@ -467,8 +466,7 @@ var _ = Describe("Jsoncs3", func() {
 					ResourceId: sharedResource.Id,
 					Grantee:    grant.Grantee,
 				})
-				Expect(s.GetPermissions().GetPermissions()).To(Equal(writePermissions))
-
+				Expect(s.GetPermissions().GetPermissions().InitiateFileUpload).To(BeTrue())
 			})
 		})
 
@@ -481,7 +479,29 @@ var _ = Describe("Jsoncs3", func() {
 				Expect(shares[0].Id).To(Equal(share.Id))
 			})
 
-			It("uses the data from the storage after reload", func() {
+			It("syncronizes the provider cache before listing", func() {
+				shares, err := m.ListShares(ctx, nil)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(len(shares)).To(Equal(1))
+				Expect(shares[0].Id.OpaqueId).To(Equal(share.Id.OpaqueId))
+				Expect(shares[0].Permissions.Permissions.InitiateFileUpload).To(BeFalse())
+
+				cache := m.Cache.Providers["storageid"].Spaces["spaceid"]
+				cache.Shares[share.Id.OpaqueId].Permissions.Permissions.InitiateFileUpload = true
+				bytes, err := json.Marshal(cache)
+				Expect(err).ToNot(HaveOccurred())
+				storage.SimpleUpload(context.Background(), "storages/storageid/spaceid.json", bytes)
+				Expect(err).ToNot(HaveOccurred())
+
+				m.CreatedCache.UserShares["admin"].Mtime = time.Time{} // trigger reload
+				shares, err = m.ListShares(ctx, nil)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(len(shares)).To(Equal(1))
+				Expect(shares[0].Id.OpaqueId).To(Equal(share.Id.OpaqueId))
+				Expect(shares[0].Permissions.Permissions.InitiateFileUpload).To(BeTrue())
+			})
+
+			It("syncronizes the share cache before listing", func() {
 				shares, err := m.ListShares(ctx, nil)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(shares)).To(Equal(1))
