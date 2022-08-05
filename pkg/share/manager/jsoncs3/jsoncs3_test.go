@@ -177,6 +177,26 @@ var _ = Describe("Jsoncs3", func() {
 			Expect(share).ToNot(BeNil())
 			Expect(share.ResourceId).To(Equal(sharedResource.Id))
 		})
+
+		It("persists the share", func() {
+			_, err := m.Share(ctx, sharedResource, grant)
+			Expect(err).ToNot(HaveOccurred())
+
+			s := shareBykey(&collaboration.ShareKey{
+				ResourceId: sharedResource.Id,
+				Grantee:    grant.Grantee,
+			})
+			Expect(s).ToNot(BeNil())
+
+			m, err = jsoncs3.New(storage) // Reset in-memory cache
+			Expect(err).ToNot(HaveOccurred())
+
+			s = shareBykey(&collaboration.ShareKey{
+				ResourceId: sharedResource.Id,
+				Grantee:    grant.Grantee,
+			})
+			Expect(s).ToNot(BeNil())
+		})
 	})
 
 	Context("with an existing share", func() {
@@ -267,7 +287,7 @@ var _ = Describe("Jsoncs3", func() {
 				err := m.Cache.Persist(context.Background(), "storageid", "spaceid")
 				Expect(err).ToNot(HaveOccurred())
 
-				m, err = jsoncs3.New(storage)
+				m, err = jsoncs3.New(storage) // Reset in-memory cache
 				Expect(err).ToNot(HaveOccurred())
 
 				s, err := m.GetShare(ctx, shareRef)
@@ -303,6 +323,31 @@ var _ = Describe("Jsoncs3", func() {
 						},
 					},
 				})
+				Expect(err).ToNot(HaveOccurred())
+
+				s, err := m.GetShare(ctx, &collaboration.ShareReference{
+					Spec: &collaboration.ShareReference_Key{
+						Key: &collaboration.ShareKey{
+							ResourceId: sharedResource.Id,
+							Grantee:    grant.Grantee,
+						},
+					},
+				})
+				Expect(err).To(HaveOccurred())
+				Expect(s).To(BeNil())
+			})
+
+			It("removes an existing share from the storage", func() {
+				err := m.Unshare(ctx, &collaboration.ShareReference{
+					Spec: &collaboration.ShareReference_Id{
+						Id: &collaboration.ShareId{
+							OpaqueId: share.Id.OpaqueId,
+						},
+					},
+				})
+				Expect(err).ToNot(HaveOccurred())
+
+				m, err = jsoncs3.New(storage) // Reset in-memory cache
 				Expect(err).ToNot(HaveOccurred())
 
 				s, err := m.GetShare(ctx, &collaboration.ShareReference{

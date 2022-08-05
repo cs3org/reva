@@ -191,7 +191,7 @@ func (m *Manager) Share(ctx context.Context, md *provider.ResourceInfo, g *colla
 
 	m.Lock()
 	defer m.Unlock()
-	_, err := m.getByKey(key)
+	_, err := m.getByKey(ctx, key)
 	if err == nil {
 		// share already exists
 		return nil, errtypes.AlreadyExists(key.String())
@@ -221,6 +221,10 @@ func (m *Manager) Share(ctx context.Context, md *provider.ResourceInfo, g *colla
 	}
 
 	m.Cache.Add(md.Id.StorageId, md.Id.SpaceId, shareID, s)
+	err = m.Cache.Persist(ctx, md.Id.StorageId, md.Id.SpaceId)
+	if err != nil {
+		return nil, err
+	}
 
 	err = m.setCreatedCache(ctx, s.GetCreator().GetOpaqueId(), shareID)
 	if err != nil {
@@ -270,7 +274,7 @@ func (m *Manager) getByID(id *collaboration.ShareId) (*collaboration.Share, erro
 	}
 	share := m.Cache.Get(shareid.StorageId, shareid.SpaceId, id.OpaqueId)
 	if share == nil {
-		// reload cache, maybe out data is outdated
+		// reload cache, maybe our data is outdated
 		err = m.Cache.Sync(context.Background(), shareid.StorageId, shareid.SpaceId)
 		if err != nil {
 			return nil, err
@@ -285,7 +289,11 @@ func (m *Manager) getByID(id *collaboration.ShareId) (*collaboration.Share, erro
 }
 
 // getByKey must be called in a lock-controlled block.
-func (m *Manager) getByKey(key *collaboration.ShareKey) (*collaboration.Share, error) {
+func (m *Manager) getByKey(ctx context.Context, key *collaboration.ShareKey) (*collaboration.Share, error) {
+	err := m.Cache.Sync(ctx, key.ResourceId.StorageId, key.ResourceId.SpaceId)
+	if err != nil {
+		return nil, err
+	}
 	spaceShares := m.Cache.ListSpace(key.ResourceId.StorageId, key.ResourceId.SpaceId)
 	for _, share := range spaceShares.Shares {
 		if utils.GranteeEqual(key.Grantee, share.Grantee) {
@@ -296,12 +304,12 @@ func (m *Manager) getByKey(key *collaboration.ShareKey) (*collaboration.Share, e
 }
 
 // get must be called in a lock-controlled block.
-func (m *Manager) get(ref *collaboration.ShareReference) (s *collaboration.Share, err error) {
+func (m *Manager) get(ctx context.Context, ref *collaboration.ShareReference) (s *collaboration.Share, err error) {
 	switch {
 	case ref.GetId() != nil:
 		s, err = m.getByID(ref.GetId())
 	case ref.GetKey() != nil:
-		s, err = m.getByKey(ref.GetKey())
+		s, err = m.getByKey(ctx, ref.GetKey())
 	default:
 		err = errtypes.NotFound(ref.String())
 	}
@@ -311,7 +319,7 @@ func (m *Manager) get(ref *collaboration.ShareReference) (s *collaboration.Share
 func (m *Manager) GetShare(ctx context.Context, ref *collaboration.ShareReference) (*collaboration.Share, error) {
 	m.Lock()
 	defer m.Unlock()
-	s, err := m.get(ref)
+	s, err := m.get(ctx, ref)
 	if err != nil {
 		return nil, err
 	}
@@ -330,7 +338,7 @@ func (m *Manager) Unshare(ctx context.Context, ref *collaboration.ShareReference
 	defer m.Unlock()
 	user := ctxpkg.ContextMustGetUser(ctx)
 
-	s, err := m.get(ref)
+	s, err := m.get(ctx, ref)
 	if err != nil {
 		return err
 	}
@@ -345,6 +353,10 @@ func (m *Manager) Unshare(ctx context.Context, ref *collaboration.ShareReference
 		return err
 	}
 	m.Cache.Remove(shareid.StorageId, shareid.SpaceId, s.Id.OpaqueId)
+	err = m.Cache.Persist(ctx, shareid.StorageId, shareid.SpaceId)
+	if err != nil {
+		return err
+	}
 
 	// remove from created cache
 	err = m.CreatedCache.Remove(s.GetCreator().GetOpaqueId(), s.Id.OpaqueId)
@@ -364,7 +376,7 @@ func (m *Manager) Unshare(ctx context.Context, ref *collaboration.ShareReference
 func (m *Manager) UpdateShare(ctx context.Context, ref *collaboration.ShareReference, p *collaboration.SharePermissions) (*collaboration.Share, error) {
 	m.Lock()
 	defer m.Unlock()
-	s, err := m.get(ref)
+	s, err := m.get(ctx, ref)
 	if err != nil {
 		return nil, err
 	}
@@ -559,7 +571,7 @@ func (m *Manager) GetReceivedShare(ctx context.Context, ref *collaboration.Share
 func (m *Manager) getReceived(ctx context.Context, ref *collaboration.ShareReference) (*collaboration.ReceivedShare, error) {
 	m.Lock()
 	defer m.Unlock()
-	s, err := m.get(ref)
+	s, err := m.get(ctx, ref)
 	if err != nil {
 		return nil, err
 	}
