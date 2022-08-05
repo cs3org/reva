@@ -301,10 +301,7 @@ var _ = Describe("Jsoncs3", func() {
 			})
 
 			It("loads the cache when it doesn't have an entry", func() {
-				err := m.Cache.Persist(context.Background(), "storageid", "spaceid")
-				Expect(err).ToNot(HaveOccurred())
-
-				m, err = jsoncs3.New(storage) // Reset in-memory cache
+				m, err := jsoncs3.New(storage) // Reset in-memory cache
 				Expect(err).ToNot(HaveOccurred())
 
 				s, err := m.GetShare(ctx, shareRef)
@@ -441,7 +438,40 @@ var _ = Describe("Jsoncs3", func() {
 				})
 				Expect(s.GetPermissions().GetPermissions()).To(Equal(readPermissions))
 			})
+
+			It("persists the change", func() {
+				s := shareBykey(&collaboration.ShareKey{
+					ResourceId: sharedResource.Id,
+					Grantee:    grant.Grantee,
+				})
+				Expect(s.GetPermissions().GetPermissions()).To(Equal(readPermissions))
+
+				// enhance privileges
+				us, err := m.UpdateShare(ctx, &collaboration.ShareReference{
+					Spec: &collaboration.ShareReference_Id{
+						Id: &collaboration.ShareId{
+							OpaqueId: share.Id.OpaqueId,
+						},
+					},
+				}, &collaboration.SharePermissions{
+					Permissions: writePermissions,
+				})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(us).ToNot(BeNil())
+				Expect(us.GetPermissions().GetPermissions()).To(Equal(writePermissions))
+
+				m, err = jsoncs3.New(storage) // Reset in-memory cache
+				Expect(err).ToNot(HaveOccurred())
+
+				s = shareBykey(&collaboration.ShareKey{
+					ResourceId: sharedResource.Id,
+					Grantee:    grant.Grantee,
+				})
+				Expect(s.GetPermissions().GetPermissions()).To(Equal(writePermissions))
+
+			})
 		})
+
 		Describe("ListShares", func() {
 			It("lists an existing share", func() {
 				shares, err := m.ListShares(ctx, nil)
