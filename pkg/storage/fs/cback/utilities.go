@@ -107,9 +107,9 @@ func (fs *cback) getRequest(userName, url string, reqType string) (io.ReadCloser
 	return resp.Body, nil
 }
 
-func (fs *cback) listSnapshots(userName string, backupId int) ([]snapshotResponse, error) {
+func (fs *cback) listSnapshots(userName string, backupID int) ([]snapshotResponse, error) {
 
-	url := fs.conf.ApiURL + strconv.Itoa(backupId) + "/snapshots"
+	url := fs.conf.APIURL + strconv.Itoa(backupID) + "/snapshots"
 	requestType := "GET"
 	responseData, err := fs.getRequest(userName, url, requestType)
 
@@ -128,7 +128,7 @@ func (fs *cback) listSnapshots(userName string, backupId int) ([]snapshotRespons
 
 func (fs *cback) matchBackups(userName, pathInput string) (*backUpResponse, error) {
 
-	url := fs.conf.ApiURL
+	url := fs.conf.APIURL
 	requestType := "GET"
 	responseData, err := fs.getRequest(userName, url, requestType)
 
@@ -177,7 +177,7 @@ func (fs *cback) matchBackups(userName, pathInput string) (*backUpResponse, erro
 
 func (fs *cback) statResource(backupID int, snapID, userName, path, source string) (*fsReturn, error) {
 
-	url := fs.conf.ApiURL + strconv.Itoa(backupID) + "/snapshots/" + snapID + "/" + path + "?content=false"
+	url := fs.conf.APIURL + strconv.Itoa(backupID) + "/snapshots/" + snapID + "/" + path + "?content=false"
 	requestType := "OPTIONS"
 
 	responseData, err := fs.getRequest(userName, url, requestType)
@@ -210,7 +210,7 @@ func (fs *cback) statResource(backupID int, snapID, userName, path, source strin
 
 func (fs *cback) fileSystem(backupID int, snapID, userName, path, source string) ([]fsReturn, error) {
 
-	url := fs.conf.ApiURL + strconv.Itoa(backupID) + "/snapshots/" + snapID + "/" + path + "?content=true"
+	url := fs.conf.APIURL + strconv.Itoa(backupID) + "/snapshots/" + snapID + "/" + path + "?content=true"
 	requestType := "OPTIONS"
 
 	responseData, err := fs.getRequest(userName, url, requestType)
@@ -261,10 +261,10 @@ func (fs *cback) timeConv(timeInput string) (int64, error) {
 }
 
 func (fs *cback) pathFinder(userName, path string) ([]string, error) {
-	url := fs.conf.ApiURL
+	url := fs.conf.APIURL
 	requestType := "GET"
 	responseData, err := fs.getRequest(userName, url, requestType)
-	var matchFound bool = false
+	matchFound := false
 
 	if err != nil {
 		return nil, err
@@ -295,9 +295,30 @@ func (fs *cback) pathFinder(userName, path string) ([]string, error) {
 
 	if matchFound {
 		return returnString, nil
-	} else {
-		err = errors.New("no match found")
-		return nil, err
 	}
 
+	err = errors.New("no match found")
+	return nil, err
+
+}
+
+func (fs *cback) pathTrimmer(snapshotList []snapshotResponse, resp *backUpResponse) (string, string) {
+
+	var ssID, searchPath string
+	for _, snapshot := range snapshotList {
+
+		if snapshot.ID == resp.Substring {
+			ssID = resp.Substring
+			searchPath = resp.Source
+			break
+
+		} else if strings.HasPrefix(resp.Substring, snapshot.ID) {
+			searchPath = strings.TrimPrefix(resp.Substring, snapshot.ID)
+			searchPath = resp.Source + searchPath
+			ssID = snapshot.ID
+			break
+		}
+	}
+
+	return ssID, searchPath
 }

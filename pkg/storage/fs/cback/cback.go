@@ -6,7 +6,6 @@ import (
 	"io"
 	"net/url"
 	"strconv"
-	"strings"
 	"time"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -62,20 +61,7 @@ func (fs *cback) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []st
 		return nil, err
 	}
 
-	for _, snapshot := range snapshotList {
-
-		if snapshot.ID == resp.Substring {
-			ssID = resp.Substring
-			searchPath = resp.Source
-			break
-
-		} else if strings.HasPrefix(resp.Substring, snapshot.ID) {
-			searchPath = strings.TrimPrefix(resp.Substring, snapshot.ID)
-			searchPath = resp.Source + searchPath
-			ssID = snapshot.ID
-			break
-		}
-	}
+	ssID, searchPath = fs.pathTrimmer(snapshotList, resp)
 
 	//fmt.Printf("The ssID is: %v\nThe Path is %v\n", ssID, searchPath)
 
@@ -223,20 +209,7 @@ func (fs *cback) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys
 	}
 
 	if resp.Substring != "" {
-		for _, snapshot := range snapshotList {
-
-			if snapshot.ID == resp.Substring {
-				ssID = resp.Substring
-				searchPath = resp.Source
-				break
-
-			} else if strings.HasPrefix(resp.Substring, snapshot.ID) {
-				searchPath = strings.TrimPrefix(resp.Substring, snapshot.ID)
-				searchPath = resp.Source + searchPath
-				ssID = snapshot.ID
-				break
-			}
-		}
+		ssID, searchPath = fs.pathTrimmer(snapshotList, resp)
 
 		//If no match in path, therefore prints the files
 		fmt.Printf("The ssID is: %v\nThe Path is %v\n", ssID, searchPath)
@@ -356,22 +329,10 @@ func (fs *cback) Download(ctx context.Context, ref *provider.Reference) (io.Read
 	}
 
 	if resp.Substring != "" {
-		for _, snapshot := range snapshotList {
 
-			if snapshot.ID == resp.Substring {
-				ssID = resp.Substring
-				searchPath = resp.Source
-				break
+		ssID, searchPath = fs.pathTrimmer(snapshotList, resp)
 
-			} else if strings.HasPrefix(resp.Substring, snapshot.ID) {
-				searchPath = strings.TrimPrefix(resp.Substring, snapshot.ID)
-				searchPath = resp.Source + searchPath
-				ssID = snapshot.ID
-				break
-			}
-		}
-
-		url := fs.conf.ApiURL + strconv.Itoa(resp.ID) + "/snapshots/" + ssID + "/" + searchPath
+		url := fs.conf.APIURL + strconv.Itoa(resp.ID) + "/snapshots/" + ssID + "/" + searchPath
 		requestType := "GET"
 		md, err := fs.GetMD(ctx, ref, nil)
 
