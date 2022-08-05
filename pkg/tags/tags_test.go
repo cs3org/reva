@@ -33,7 +33,13 @@ func TestAddTags(t *testing.T) {
 		ExpectNoTagsAdded bool
 	}{
 		{
-			Alias:        "simple",
+			Alias:        "add one tag",
+			InitialTags:  "",
+			TagsToAdd:    "tag1",
+			ExpectedTags: "tag1",
+		},
+		{
+			Alias:        "add multiple tags",
 			InitialTags:  "a,b,c",
 			TagsToAdd:    "c,d,e",
 			ExpectedTags: "d,e,a,b,c",
@@ -65,6 +71,12 @@ func TestAddTags(t *testing.T) {
 			ExpectNoTagsAdded: true,
 		},
 		{
+			Alias:        "trailing seps are ignored",
+			InitialTags:  "tag1",
+			TagsToAdd:    "tag2,",
+			ExpectedTags: "tag2,tag1",
+		},
+		{
 			Alias:        "special characters are allowed",
 			InitialTags:  "old tag",
 			TagsToAdd:    "new  tag,bettertag!",
@@ -82,6 +94,12 @@ func TestAddTags(t *testing.T) {
 			TagsToAdd:         ",,,tag1,,",
 			ExpectedTags:      "tag1",
 			ExpectNoTagsAdded: true,
+		},
+		{
+			Alias:        "condition hold for initial tags too",
+			InitialTags:  "tag1,tag1,,tag3,",
+			TagsToAdd:    "tag2",
+			ExpectedTags: "tag2,tag1,tag3",
 		},
 	}
 
