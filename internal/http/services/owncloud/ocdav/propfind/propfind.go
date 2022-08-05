@@ -1318,7 +1318,6 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 					}
 				case "tags":
 					if k := md.GetArbitraryMetadata().GetMetadata(); k != nil {
-						fmt.Println("K NOT NIL", k)
 						propstatOK.Prop = append(propstatOK.Prop, prop.Raw("oc:tags", k["tags"]))
 					}
 				case "privatelink": // phoenix only
@@ -1554,9 +1553,12 @@ func metadataKeyOf(n *xml.Name) string {
 		if n.Local == "share-types" {
 			return "share-types"
 		}
+
+		if n.Local == "tags" {
+			return "tags"
+		}
 	}
-	//return fmt.Sprintf("%s/%s", n.Space, n.Local)
-	return n.Local
+	return fmt.Sprintf("%s/%s", n.Space, n.Local)
 }
 
 // UnmarshalXML appends the property names enclosed within start to pn.
