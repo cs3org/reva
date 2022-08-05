@@ -247,6 +247,23 @@ var _ = Describe("Jsoncs3", func() {
 				Expect(err).To(HaveOccurred())
 			})
 
+			It("considers the resource id part of the key", func() {
+				s, err := m.GetShare(ctx, &collaboration.ShareReference{
+					Spec: &collaboration.ShareReference_Key{
+						Key: &collaboration.ShareKey{
+							ResourceId: &providerv1beta1.ResourceId{
+								StorageId: "storageid",
+								SpaceId:   "spaceid",
+								OpaqueId:  "unknown",
+							},
+							Grantee: grant.Grantee,
+						},
+					},
+				})
+				Expect(s).To(BeNil())
+				Expect(err).To(HaveOccurred())
+			})
+
 			It("retrieves an existing share by id", func() {
 				s, err := m.GetShare(ctx, shareRef)
 				Expect(err).ToNot(HaveOccurred())

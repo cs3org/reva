@@ -292,7 +292,7 @@ func (m *Manager) getByKey(ctx context.Context, key *collaboration.ShareKey) (*c
 	}
 	spaceShares := m.Cache.ListSpace(key.ResourceId.StorageId, key.ResourceId.SpaceId)
 	for _, share := range spaceShares.Shares {
-		if utils.GranteeEqual(key.Grantee, share.Grantee) {
+		if utils.GranteeEqual(key.Grantee, share.Grantee) && utils.ResourceIDEqual(share.ResourceId, key.ResourceId) {
 			return share, nil
 		}
 	}
