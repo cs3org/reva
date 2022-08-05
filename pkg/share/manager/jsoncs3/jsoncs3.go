@@ -222,7 +222,7 @@ func (m *Manager) Share(ctx context.Context, md *provider.ResourceInfo, g *colla
 
 	m.Cache.Add(ctx, md.Id.StorageId, md.Id.SpaceId, shareID, s)
 
-	err = m.setCreatedCache(ctx, s.GetCreator().GetOpaqueId(), shareID)
+	err = m.CreatedCache.Add(ctx, s.GetCreator().GetOpaqueId(), shareID)
 	if err != nil {
 		return nil, err
 	}
@@ -253,7 +253,7 @@ func (m *Manager) Share(ctx context.Context, md *provider.ResourceInfo, g *colla
 		}
 	case provider.GranteeType_GRANTEE_TYPE_GROUP:
 		groupid := g.Grantee.GetGroupId().GetOpaqueId()
-		if err := m.groupReceivedCache.Add(groupid, shareID); err != nil {
+		if err := m.groupReceivedCache.Add(ctx, groupid, shareID); err != nil {
 			return nil, err
 		}
 	}
@@ -348,14 +348,13 @@ func (m *Manager) Unshare(ctx context.Context, ref *collaboration.ShareReference
 	if err != nil {
 		return err
 	}
-	m.Cache.Remove(ctx, shareid.StorageId, shareid.SpaceId, s.Id.OpaqueId)
-
-	// remove from created cache
-	err = m.CreatedCache.Remove(s.GetCreator().GetOpaqueId(), s.Id.OpaqueId)
+	err = m.Cache.Remove(ctx, shareid.StorageId, shareid.SpaceId, s.Id.OpaqueId)
 	if err != nil {
 		return err
 	}
-	err = m.CreatedCache.Persist(ctx, s.GetCreator().GetOpaqueId())
+
+	// remove from created cache
+	err = m.CreatedCache.Remove(ctx, s.GetCreator().GetOpaqueId(), s.Id.OpaqueId)
 	if err != nil {
 		return err
 	}
@@ -385,22 +384,12 @@ func (m *Manager) UpdateShare(ctx context.Context, ref *collaboration.ShareRefer
 		Nanos:   uint32(now % int64(time.Second)),
 	}
 
-	err = m.setCreatedCache(ctx, s.GetCreator().GetOpaqueId(), s.Id.OpaqueId)
+	err = m.CreatedCache.Add(ctx, s.GetCreator().GetOpaqueId(), s.Id.OpaqueId)
 	if err != nil {
 		return nil, err
 	}
 
 	return s, nil
-}
-
-func (m *Manager) setCreatedCache(ctx context.Context, creatorid, shareid string) error {
-	if err := m.CreatedCache.Add(creatorid, shareid); err != nil {
-		return err
-	}
-	if err := m.CreatedCache.Persist(ctx, creatorid); err != nil {
-		return err
-	}
-	return nil
 }
 
 // ListShares

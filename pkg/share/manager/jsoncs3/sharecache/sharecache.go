@@ -58,7 +58,7 @@ func (c *Cache) Has(userid string) bool {
 	return c.UserShares[userid] != nil
 }
 
-func (c *Cache) Add(userid, shareID string) error {
+func (c *Cache) Add(ctx context.Context, userid, shareID string) error {
 	storageid, spaceid, _, err := storagespace.SplitID(shareID)
 	if err != nil {
 		return err
@@ -83,10 +83,10 @@ func (c *Cache) Add(userid, shareID string) error {
 	c.UserShares[userid].Mtime = now
 	c.UserShares[userid].UserShares[ssid].Mtime = now
 	c.UserShares[userid].UserShares[ssid].IDs[shareID] = struct{}{}
-	return nil
+	return c.Persist(ctx, userid)
 }
 
-func (c *Cache) Remove(userid, shareID string) error {
+func (c *Cache) Remove(ctx context.Context, userid, shareID string) error {
 	storageid, spaceid, _, err := storagespace.SplitID(shareID)
 	if err != nil {
 		return err
@@ -105,7 +105,8 @@ func (c *Cache) Remove(userid, shareID string) error {
 			delete(c.UserShares[userid].UserShares[ssid].IDs, shareID)
 		}
 	}
-	return nil
+
+	return c.Persist(ctx, userid)
 }
 
 func (c *Cache) List(userid string) map[string]SpaceShareIDs {
