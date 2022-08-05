@@ -220,11 +220,7 @@ func (m *Manager) Share(ctx context.Context, md *provider.ResourceInfo, g *colla
 		Mtime:       ts,
 	}
 
-	m.Cache.Add(md.Id.StorageId, md.Id.SpaceId, shareID, s)
-	err = m.Cache.Persist(ctx, md.Id.StorageId, md.Id.SpaceId)
-	if err != nil {
-		return nil, err
-	}
+	m.Cache.Add(ctx, md.Id.StorageId, md.Id.SpaceId, shareID, s)
 
 	err = m.setCreatedCache(ctx, s.GetCreator().GetOpaqueId(), shareID)
 	if err != nil {
@@ -352,11 +348,7 @@ func (m *Manager) Unshare(ctx context.Context, ref *collaboration.ShareReference
 	if err != nil {
 		return err
 	}
-	m.Cache.Remove(shareid.StorageId, shareid.SpaceId, s.Id.OpaqueId)
-	err = m.Cache.Persist(ctx, shareid.StorageId, shareid.SpaceId)
-	if err != nil {
-		return err
-	}
+	m.Cache.Remove(ctx, shareid.StorageId, shareid.SpaceId, s.Id.OpaqueId)
 
 	// remove from created cache
 	err = m.CreatedCache.Remove(s.GetCreator().GetOpaqueId(), s.Id.OpaqueId)

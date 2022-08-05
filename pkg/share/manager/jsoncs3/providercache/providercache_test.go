@@ -59,7 +59,7 @@ var _ = Describe("Cache", func() {
 			s := c.Get(storageID, spaceID, shareID)
 			Expect(s).To(BeNil())
 
-			c.Add(storageID, spaceID, shareID, share1)
+			c.Add(ctx, storageID, spaceID, shareID, share1)
 
 			s = c.Get(storageID, spaceID, shareID)
 			Expect(s).ToNot(BeNil())
@@ -67,22 +67,21 @@ var _ = Describe("Cache", func() {
 		})
 
 		It("sets the mtime", func() {
-			c.Add(storageID, spaceID, shareID, share1)
+			c.Add(ctx, storageID, spaceID, shareID, share1)
 			Expect(c.Providers[storageID].Spaces[spaceID].Mtime).ToNot(Equal(time.Time{}))
 		})
 
 		It("updates the mtime", func() {
-			c.Add(storageID, spaceID, shareID, share1)
+			c.Add(ctx, storageID, spaceID, shareID, share1)
 			old := c.Providers[storageID].Spaces[spaceID].Mtime
-			c.Add(storageID, spaceID, shareID, share1)
+			c.Add(ctx, storageID, spaceID, shareID, share1)
 			Expect(c.Providers[storageID].Spaces[spaceID].Mtime).ToNot(Equal(old))
 		})
 	})
 
 	Context("with an existing entry", func() {
 		BeforeEach(func() {
-			c.Add(storageID, spaceID, shareID, share1)
-			Expect(c.Persist(context.Background(), storageID, spaceID)).To(Succeed())
+			Expect(c.Add(ctx, storageID, spaceID, shareID, share1)).To(Succeed())
 		})
 
 		Describe("Get", func() {
@@ -98,16 +97,16 @@ var _ = Describe("Cache", func() {
 				Expect(s).ToNot(BeNil())
 				Expect(s).To(Equal(share1))
 
-				c.Remove(storageID, spaceID, shareID)
+				c.Remove(ctx, storageID, spaceID, shareID)
 
 				s = c.Get(storageID, spaceID, shareID)
 				Expect(s).To(BeNil())
 			})
 
 			It("updates the mtime", func() {
-				c.Add(storageID, spaceID, shareID, share1)
+				c.Add(ctx, storageID, spaceID, shareID, share1)
 				old := c.Providers[storageID].Spaces[spaceID].Mtime
-				c.Remove(storageID, spaceID, shareID)
+				c.Remove(ctx, storageID, spaceID, shareID)
 				Expect(c.Providers[storageID].Spaces[spaceID].Mtime).ToNot(Equal(old))
 			})
 		})

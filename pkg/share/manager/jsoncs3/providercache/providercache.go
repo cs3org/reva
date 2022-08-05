@@ -92,19 +92,23 @@ func New(s metadata.Storage) Cache {
 	}
 }
 
-func (c *Cache) Add(storageID, spaceID, shareID string, share *collaboration.Share) {
+func (c *Cache) Add(ctx context.Context, storageID, spaceID, shareID string, share *collaboration.Share) error {
 	c.initializeIfNeeded(storageID, spaceID)
 	c.Providers[storageID].Spaces[spaceID].Shares[shareID] = share
 	c.Providers[storageID].Spaces[spaceID].Mtime = time.Now()
+
+	return c.Persist(ctx, storageID, spaceID)
 }
 
-func (c *Cache) Remove(storageID, spaceID, shareID string) {
+func (c *Cache) Remove(ctx context.Context, storageID, spaceID, shareID string) error {
 	if c.Providers[storageID] == nil ||
 		c.Providers[storageID].Spaces[spaceID] == nil {
-		return
+		return nil
 	}
 	delete(c.Providers[storageID].Spaces[spaceID].Shares, shareID)
 	c.Providers[storageID].Spaces[spaceID].Mtime = time.Now()
+
+	return c.Persist(ctx, storageID, spaceID)
 }
 
 func (c *Cache) Get(storageID, spaceID, shareID string) *collaboration.Share {
