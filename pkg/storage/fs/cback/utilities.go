@@ -12,22 +12,22 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 )
 
-type BackUpResponse struct {
+type backUpResponse struct {
 	Detail    string `json:"detail"`
-	Id        int    `json:"id"`
+	ID        int    `json:"id"`
 	Name      string `json:"name"`
 	Source    string `json:"source"`
 	Substring string //Used in function
 }
 
-type SnapshotResponse struct {
+type snapshotResponse struct {
 	Detail string   `json:"detail"`
-	Id     string   `json:"id"`
+	ID     string   `json:"id"`
 	Time   string   `json:"time"`
 	Paths  []string `json:"paths"`
 }
 
-type Contents struct {
+type contents struct {
 	Name   string  `json:"name"`
 	Type   string  `json:"type"`
 	Mode   uint64  `json:"mode"`
@@ -39,7 +39,7 @@ type Contents struct {
 	Detail string  `json:"detail"`
 }
 
-type FsReturn struct {
+type fsReturn struct {
 	Type   int
 	Mtime  uint64
 	Size   uint64
@@ -47,7 +47,7 @@ type FsReturn struct {
 	Detail string
 }
 
-var PermID = provider.ResourcePermissions{
+var permID = provider.ResourcePermissions{
 	AddGrant:             false,
 	CreateContainer:      false,
 	Delete:               false,
@@ -107,9 +107,9 @@ func (fs *cback) getRequest(userName, url string, reqType string) (io.ReadCloser
 	return resp.Body, nil
 }
 
-func (fs *cback) listSnapshots(userName string, backupId int) ([]SnapshotResponse, error) {
+func (fs *cback) listSnapshots(userName string, backupId int) ([]snapshotResponse, error) {
 
-	url := fs.conf.API_Url + strconv.Itoa(backupId) + "/snapshots"
+	url := fs.conf.ApiURL + strconv.Itoa(backupId) + "/snapshots"
 	requestType := "GET"
 	responseData, err := fs.getRequest(userName, url, requestType)
 
@@ -120,15 +120,15 @@ func (fs *cback) listSnapshots(userName string, backupId int) ([]SnapshotRespons
 	defer responseData.Close()
 
 	/*Unmarshalling the JSON response into the Response struct*/
-	responseObject := []SnapshotResponse{}
+	responseObject := []snapshotResponse{}
 	json.NewDecoder(responseData).Decode(&responseObject)
 
 	return responseObject, nil
 }
 
-func (fs *cback) matchBackups(userName, pathInput string) (*BackUpResponse, error) {
+func (fs *cback) matchBackups(userName, pathInput string) (*backUpResponse, error) {
 
-	url := fs.conf.API_Url
+	url := fs.conf.ApiURL
 	requestType := "GET"
 	responseData, err := fs.getRequest(userName, url, requestType)
 
@@ -139,7 +139,7 @@ func (fs *cback) matchBackups(userName, pathInput string) (*BackUpResponse, erro
 	defer responseData.Close()
 
 	/*Unmarshalling the JSON response into the Response struct*/
-	responseObject := []BackUpResponse{}
+	responseObject := []backUpResponse{}
 	json.NewDecoder(responseData).Decode(&responseObject)
 
 	if len(responseObject) == 0 {
@@ -175,9 +175,9 @@ func (fs *cback) matchBackups(userName, pathInput string) (*BackUpResponse, erro
 	return nil, nil
 }
 
-func (fs *cback) statResource(backupId int, snapId, userName, path, source string) (*FsReturn, error) {
+func (fs *cback) statResource(backupID int, snapID, userName, path, source string) (*fsReturn, error) {
 
-	url := fs.conf.API_Url + strconv.Itoa(backupId) + "/snapshots/" + snapId + "/" + path + "?content=false"
+	url := fs.conf.ApiURL + strconv.Itoa(backupID) + "/snapshots/" + snapID + "/" + path + "?content=false"
 	requestType := "OPTIONS"
 
 	responseData, err := fs.getRequest(userName, url, requestType)
@@ -188,7 +188,7 @@ func (fs *cback) statResource(backupId int, snapId, userName, path, source strin
 
 	defer responseData.Close()
 
-	responseObject := Contents{}
+	responseObject := contents{}
 	json.NewDecoder(responseData).Decode(&responseObject)
 
 	m, err := mapReturn(responseObject.Type)
@@ -197,8 +197,8 @@ func (fs *cback) statResource(backupId int, snapId, userName, path, source strin
 		return nil, err
 	}
 
-	retObject := FsReturn{
-		Path:   source + "/" + snapId + strings.TrimPrefix(responseObject.Name, source),
+	retObject := fsReturn{
+		Path:   source + "/" + snapID + strings.TrimPrefix(responseObject.Name, source),
 		Type:   m,
 		Mtime:  uint64(responseObject.Mtime),
 		Size:   responseObject.Size,
@@ -208,9 +208,9 @@ func (fs *cback) statResource(backupId int, snapId, userName, path, source strin
 	return &retObject, nil
 }
 
-func (fs *cback) fileSystem(backupId int, snapId, userName, path, source string) ([]FsReturn, error) {
+func (fs *cback) fileSystem(backupID int, snapID, userName, path, source string) ([]fsReturn, error) {
 
-	url := fs.conf.API_Url + strconv.Itoa(backupId) + "/snapshots/" + snapId + "/" + path + "?content=true"
+	url := fs.conf.ApiURL + strconv.Itoa(backupID) + "/snapshots/" + snapID + "/" + path + "?content=true"
 	requestType := "OPTIONS"
 
 	responseData, err := fs.getRequest(userName, url, requestType)
@@ -222,10 +222,10 @@ func (fs *cback) fileSystem(backupId int, snapId, userName, path, source string)
 	defer responseData.Close()
 
 	/*Unmarshalling the JSON response into the Response struct*/
-	responseObject := []Contents{}
+	responseObject := []contents{}
 	json.NewDecoder(responseData).Decode(&responseObject)
 
-	resp := make([]FsReturn, len(responseObject))
+	resp := make([]fsReturn, len(responseObject))
 
 	for i, response := range responseObject {
 
@@ -242,7 +242,7 @@ func (fs *cback) fileSystem(backupId int, snapId, userName, path, source string)
 		resp[i].Size = response.Size
 		resp[i].Type = m
 		resp[i].Mtime = uint64(response.Mtime)
-		resp[i].Path = source + "/" + snapId + strings.TrimPrefix(response.Name, source)
+		resp[i].Path = source + "/" + snapID + strings.TrimPrefix(response.Name, source)
 
 	}
 
@@ -261,7 +261,7 @@ func (fs *cback) timeConv(timeInput string) (int64, error) {
 }
 
 func (fs *cback) pathFinder(userName, path string) ([]string, error) {
-	url := fs.conf.API_Url
+	url := fs.conf.ApiURL
 	requestType := "GET"
 	responseData, err := fs.getRequest(userName, url, requestType)
 	var matchFound bool = false
@@ -273,7 +273,7 @@ func (fs *cback) pathFinder(userName, path string) ([]string, error) {
 	defer responseData.Close()
 
 	/*Unmarshalling the JSON response into the Response struct*/
-	responseObject := []BackUpResponse{}
+	responseObject := []backUpResponse{}
 	json.NewDecoder(responseData).Decode(&responseObject)
 
 	returnString := make([]string, len(responseObject))

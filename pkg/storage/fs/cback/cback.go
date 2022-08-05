@@ -28,6 +28,8 @@ func init() {
 	registry.Register("cback", New)
 }
 
+// New returns an implementation to the storage.FS interface that talks to
+// cback
 func New(m map[string]interface{}) (fs storage.FS, err error) {
 
 	c := &Options{}
@@ -41,10 +43,10 @@ func New(m map[string]interface{}) (fs storage.FS, err error) {
 }
 
 func (fs *cback) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []string) (*provider.ResourceInfo, error) {
-	var ssId, searchPath string
+	var ssID, searchPath string
 
 	user, _ := ctxpkg.ContextGetUser(ctx)
-	UId, _ := ctxpkg.ContextGetUserID(ctx)
+	UID, _ := ctxpkg.ContextGetUserID(ctx)
 
 	resp, err := fs.matchBackups(user.Username, ref.Path)
 
@@ -53,7 +55,7 @@ func (fs *cback) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []st
 		return nil, err
 	}
 
-	snapshotList, err := fs.listSnapshots(user.Username, resp.Id)
+	snapshotList, err := fs.listSnapshots(user.Username, resp.ID)
 
 	if err != nil {
 		fmt.Print(err)
@@ -62,20 +64,20 @@ func (fs *cback) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []st
 
 	for _, snapshot := range snapshotList {
 
-		if snapshot.Id == resp.Substring {
-			ssId = resp.Substring
+		if snapshot.ID == resp.Substring {
+			ssID = resp.Substring
 			searchPath = resp.Source
 			break
 
-		} else if strings.HasPrefix(resp.Substring, snapshot.Id) {
-			searchPath = strings.TrimPrefix(resp.Substring, snapshot.Id)
+		} else if strings.HasPrefix(resp.Substring, snapshot.ID) {
+			searchPath = strings.TrimPrefix(resp.Substring, snapshot.ID)
 			searchPath = resp.Source + searchPath
-			ssId = snapshot.Id
+			ssID = snapshot.ID
 			break
 		}
 	}
 
-	//fmt.Printf("The ssId is: %v\nThe Path is %v\n", ssId, searchPath)
+	//fmt.Printf("The ssID is: %v\nThe Path is %v\n", ssID, searchPath)
 
 	if resp.Source == ref.Path {
 		setTime := v1beta1.Timestamp{
@@ -95,11 +97,11 @@ func (fs *cback) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []st
 
 		ri := &provider.ResourceInfo{
 			Etag:          "",
-			PermissionSet: &PermID,
+			PermissionSet: &permID,
 			Checksum:      &checkSum,
 			Mtime:         &setTime,
 			Id:            &ident,
-			Owner:         UId,
+			Owner:         UID,
 			Type:          provider.ResourceType_RESOURCE_TYPE_CONTAINER,
 			Size:          0,
 			Path:          ref.Path,
@@ -110,7 +112,7 @@ func (fs *cback) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []st
 
 	}
 
-	ret, err := fs.statResource(resp.Id, ssId, user.Username, searchPath, resp.Source)
+	ret, err := fs.statResource(resp.ID, ssID, user.Username, searchPath, resp.Source)
 
 	if err != nil {
 		fmt.Print(err)
@@ -134,11 +136,11 @@ func (fs *cback) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []st
 
 	ri := &provider.ResourceInfo{
 		Etag:          "",
-		PermissionSet: &PermID,
+		PermissionSet: &permID,
 		Checksum:      &checkSum,
 		Mtime:         &setTime,
 		Id:            &ident,
-		Owner:         UId,
+		Owner:         UID,
 		Type:          provider.ResourceType(ret.Type),
 		Size:          ret.Size,
 		Path:          ret.Path,
@@ -156,10 +158,10 @@ func (fs *cback) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []st
 func (fs *cback) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys []string) ([]*provider.ResourceInfo, error) {
 
 	var path string = ref.GetPath()
-	var ssId, searchPath string
+	var ssID, searchPath string
 
 	user, _ := ctxpkg.ContextGetUser(ctx)
-	UId, _ := ctxpkg.ContextGetUserID(ctx)
+	UID, _ := ctxpkg.ContextGetUserID(ctx)
 
 	resp, err := fs.matchBackups(user.Username, path)
 
@@ -200,8 +202,8 @@ func (fs *cback) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys
 				Id:            &ident,
 				Checksum:      &checkSum,
 				Path:          paths,
-				Owner:         UId,
-				PermissionSet: &PermID,
+				Owner:         UID,
+				PermissionSet: &permID,
 				Type:          provider.ResourceType_RESOURCE_TYPE_CONTAINER,
 				Size:          0,
 				Etag:          "",
@@ -211,143 +213,9 @@ func (fs *cback) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys
 		}
 
 		return files, nil
-	} else {
-
-		snapshotList, err := fs.listSnapshots(user.Username, resp.Id)
-
-		if err != nil {
-			fmt.Print(err)
-			return nil, err
-		}
-
-		if resp.Substring != "" {
-			for _, snapshot := range snapshotList {
-
-				if snapshot.Id == resp.Substring {
-					ssId = resp.Substring
-					searchPath = resp.Source
-					break
-
-				} else if strings.HasPrefix(resp.Substring, snapshot.Id) {
-					searchPath = strings.TrimPrefix(resp.Substring, snapshot.Id)
-					searchPath = resp.Source + searchPath
-					ssId = snapshot.Id
-					break
-				}
-			}
-
-			//If no match in path, therefore prints the files
-			fmt.Printf("The ssId is: %v\nThe Path is %v\n", ssId, searchPath)
-			ret, err := fs.fileSystem(resp.Id, ssId, user.Username, searchPath, resp.Source)
-
-			if err != nil {
-				fmt.Print(err)
-				return nil, err
-			}
-
-			files := make([]*provider.ResourceInfo, len(ret))
-
-			for index, j := range ret {
-
-				setTime := v1beta1.Timestamp{
-					Seconds: j.Mtime,
-					Nanos:   0,
-				}
-
-				ident := provider.ResourceId{
-					OpaqueId:  j.Path,
-					StorageId: "cback",
-				}
-
-				checkSum := provider.ResourceChecksum{
-					Sum:  "",
-					Type: provider.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_UNSET,
-				}
-
-				f := provider.ResourceInfo{
-					Mtime:         &setTime,
-					Id:            &ident,
-					Checksum:      &checkSum,
-					Path:          j.Path,
-					Owner:         UId,
-					PermissionSet: &PermID,
-					Type:          provider.ResourceType(j.Type),
-					Size:          j.Size,
-					Etag:          "",
-				}
-
-				if j.Type == 2 {
-					f.MimeType = mime.Detect(true, j.Path)
-				} else {
-					f.MimeType = mime.Detect(false, j.Path)
-				}
-
-				files[index] = &f
-			}
-
-			return files, nil
-
-		} else {
-
-			//If match in path, therefore print the Snapshot IDs
-			files := make([]*provider.ResourceInfo, len(snapshotList))
-
-			for index, snapshot := range snapshotList {
-
-				epochTime, err := fs.timeConv(snapshot.Time)
-
-				if err != nil {
-					return nil, err
-				}
-
-				checkSum := provider.ResourceChecksum{
-					Sum:  "",
-					Type: provider.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_UNSET,
-				}
-
-				ident := provider.ResourceId{
-					OpaqueId:  ref.Path + "/" + snapshot.Id,
-					StorageId: "cback",
-				}
-
-				setTime := v1beta1.Timestamp{
-					Seconds: uint64(epochTime),
-					Nanos:   0,
-				}
-
-				f := provider.ResourceInfo{
-
-					Path:          ref.Path + "/" + snapshot.Id,
-					Checksum:      &checkSum,
-					Etag:          "",
-					Owner:         UId,
-					PermissionSet: &PermID,
-					Id:            &ident,
-					MimeType:      mime.Detect(true, ref.Path+"/"+snapshot.Id),
-					Size:          0,
-					Mtime:         &setTime,
-					Type:          provider.ResourceType_RESOURCE_TYPE_CONTAINER,
-				}
-				files[index] = &f
-			}
-			return files, nil
-		}
-	}
-}
-
-func (fs *cback) Download(ctx context.Context, ref *provider.Reference) (io.ReadCloser, error) {
-	var path string = ref.GetPath()
-	var ssId, searchPath string
-	user, _ := ctxpkg.ContextGetUser(ctx)
-
-	resp, err := fs.matchBackups(user.Username, path)
-
-	if err != nil {
-		fmt.Print(err)
-		return nil, err
 	}
 
-	snapshotList, err := fs.listSnapshots(user.Username, resp.Id)
+	snapshotList, err := fs.listSnapshots(user.Username, resp.ID)
 
 	if err != nil {
 		fmt.Print(err)
@@ -357,20 +225,153 @@ func (fs *cback) Download(ctx context.Context, ref *provider.Reference) (io.Read
 	if resp.Substring != "" {
 		for _, snapshot := range snapshotList {
 
-			if snapshot.Id == resp.Substring {
-				ssId = resp.Substring
+			if snapshot.ID == resp.Substring {
+				ssID = resp.Substring
 				searchPath = resp.Source
 				break
 
-			} else if strings.HasPrefix(resp.Substring, snapshot.Id) {
-				searchPath = strings.TrimPrefix(resp.Substring, snapshot.Id)
+			} else if strings.HasPrefix(resp.Substring, snapshot.ID) {
+				searchPath = strings.TrimPrefix(resp.Substring, snapshot.ID)
 				searchPath = resp.Source + searchPath
-				ssId = snapshot.Id
+				ssID = snapshot.ID
 				break
 			}
 		}
 
-		url := fs.conf.API_Url + strconv.Itoa(resp.Id) + "/snapshots/" + ssId + "/" + searchPath
+		//If no match in path, therefore prints the files
+		fmt.Printf("The ssID is: %v\nThe Path is %v\n", ssID, searchPath)
+		ret, err := fs.fileSystem(resp.ID, ssID, user.Username, searchPath, resp.Source)
+
+		if err != nil {
+			fmt.Print(err)
+			return nil, err
+		}
+
+		files := make([]*provider.ResourceInfo, len(ret))
+
+		for index, j := range ret {
+
+			setTime := v1beta1.Timestamp{
+				Seconds: j.Mtime,
+				Nanos:   0,
+			}
+
+			ident := provider.ResourceId{
+				OpaqueId:  j.Path,
+				StorageId: "cback",
+			}
+
+			checkSum := provider.ResourceChecksum{
+				Sum:  "",
+				Type: provider.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_UNSET,
+			}
+
+			f := provider.ResourceInfo{
+				Mtime:         &setTime,
+				Id:            &ident,
+				Checksum:      &checkSum,
+				Path:          j.Path,
+				Owner:         UID,
+				PermissionSet: &permID,
+				Type:          provider.ResourceType(j.Type),
+				Size:          j.Size,
+				Etag:          "",
+			}
+
+			if j.Type == 2 {
+				f.MimeType = mime.Detect(true, j.Path)
+			} else {
+				f.MimeType = mime.Detect(false, j.Path)
+			}
+
+			files[index] = &f
+		}
+
+		return files, nil
+
+	}
+
+	//If match in path, therefore print the Snapshot IDs
+	files := make([]*provider.ResourceInfo, len(snapshotList))
+
+	for index, snapshot := range snapshotList {
+
+		epochTime, err := fs.timeConv(snapshot.Time)
+
+		if err != nil {
+			return nil, err
+		}
+
+		checkSum := provider.ResourceChecksum{
+			Sum:  "",
+			Type: provider.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_UNSET,
+		}
+
+		ident := provider.ResourceId{
+			OpaqueId:  ref.Path + "/" + snapshot.ID,
+			StorageId: "cback",
+		}
+
+		setTime := v1beta1.Timestamp{
+			Seconds: uint64(epochTime),
+			Nanos:   0,
+		}
+
+		f := provider.ResourceInfo{
+			Path:          ref.Path + "/" + snapshot.ID,
+			Checksum:      &checkSum,
+			Etag:          "",
+			Owner:         UID,
+			PermissionSet: &permID,
+			Id:            &ident,
+			MimeType:      mime.Detect(true, ref.Path+"/"+snapshot.ID),
+			Size:          0,
+			Mtime:         &setTime,
+			Type:          provider.ResourceType_RESOURCE_TYPE_CONTAINER,
+		}
+		files[index] = &f
+	}
+
+	return files, nil
+
+}
+
+func (fs *cback) Download(ctx context.Context, ref *provider.Reference) (io.ReadCloser, error) {
+	var path string = ref.GetPath()
+	var ssID, searchPath string
+	user, _ := ctxpkg.ContextGetUser(ctx)
+
+	resp, err := fs.matchBackups(user.Username, path)
+
+	if err != nil {
+		fmt.Print(err)
+		return nil, err
+	}
+
+	snapshotList, err := fs.listSnapshots(user.Username, resp.ID)
+
+	if err != nil {
+		fmt.Print(err)
+		return nil, err
+	}
+
+	if resp.Substring != "" {
+		for _, snapshot := range snapshotList {
+
+			if snapshot.ID == resp.Substring {
+				ssID = resp.Substring
+				searchPath = resp.Source
+				break
+
+			} else if strings.HasPrefix(resp.Substring, snapshot.ID) {
+				searchPath = strings.TrimPrefix(resp.Substring, snapshot.ID)
+				searchPath = resp.Source + searchPath
+				ssID = snapshot.ID
+				break
+			}
+		}
+
+		url := fs.conf.ApiURL + strconv.Itoa(resp.ID) + "/snapshots/" + ssID + "/" + searchPath
 		requestType := "GET"
 		md, err := fs.GetMD(ctx, ref, nil)
 
