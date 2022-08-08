@@ -157,6 +157,8 @@ func (c *Cache) Sync(ctx context.Context, userid string) error {
 }
 
 func (c *Cache) Persist(ctx context.Context, userid string) error {
+	c.UserShares[userid].Mtime = time.Now()
+
 	createdBytes, err := json.Marshal(c.UserShares[userid])
 	if err != nil {
 		return err
