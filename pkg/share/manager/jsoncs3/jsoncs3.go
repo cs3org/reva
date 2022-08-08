@@ -90,10 +90,8 @@ type Manager struct {
 	// userReceivedStates holds the state of shares a user has received, sharded by user id and space id
 	userReceivedStates receivedCache
 
-	storage     metadata.Storage
-	serviceUser *userv1beta1.User
-	SpaceRoot   *provider.ResourceId
-	initialized bool
+	storage   metadata.Storage
+	SpaceRoot *provider.ResourceId
 }
 
 // NewDefault returns a new manager instance with default dependencies
@@ -125,7 +123,6 @@ func New(s metadata.Storage) (*Manager, error) {
 
 // File structure in the jsoncs3 space:
 //
-// /shares/{shareid.json}                     				// points to {storageid}/{spaceid} for looking up the share information
 // /storages/{storageid}/{spaceid.json}                     // contains all share information of all shares in that space
 // /users/{userid}/created/{storageid}/{spaceid}			// points to a space the user created shares in
 // /users/{userid}/received/{storageid}/{spaceid}.json		// holds the states of received shares of the users in the according space
