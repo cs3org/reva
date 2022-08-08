@@ -601,6 +601,30 @@ var _ = Describe("Jsoncs3", func() {
 				Expect(received[0].Share.ResourceId).To(Equal(sharedResource.Id))
 				Expect(received[0].State).To(Equal(collaboration.ShareState_SHARE_STATE_PENDING))
 			})
+
+			It("syncronizes the provider cache before listing", func() {
+				received, err := m.ListReceivedShares(granteeCtx, []*collaboration.Filter{})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(len(received)).To(Equal(1))
+				Expect(received[0].Share.Permissions.Permissions.InitiateFileUpload).To(BeFalse())
+
+				// Change providercache on disk
+				cache := m.Cache.Providers["storageid"].Spaces["spaceid"]
+				cache.Shares[share.Id.OpaqueId].Permissions.Permissions.InitiateFileUpload = true
+				bytes, err := json.Marshal(cache)
+				Expect(err).ToNot(HaveOccurred())
+				storage.SimpleUpload(context.Background(), "storages/storageid/spaceid.json", bytes)
+				Expect(err).ToNot(HaveOccurred())
+
+				// Reset providercache in memory
+				cache.Shares[share.Id.OpaqueId].Permissions.Permissions.InitiateFileUpload = false
+
+				m.Cache.Providers["storageid"].Spaces["spaceid"].Mtime = time.Time{} // trigger reload
+				received, err = m.ListReceivedShares(granteeCtx, []*collaboration.Filter{})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(len(received)).To(Equal(1))
+				Expect(received[0].Share.Permissions.Permissions.InitiateFileUpload).To(BeTrue())
+			})
 		})
 
 		Describe("GetReceivedShare", func() {

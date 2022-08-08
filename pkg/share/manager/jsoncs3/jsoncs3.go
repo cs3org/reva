@@ -502,6 +502,10 @@ func (m *Manager) ListReceivedShares(ctx context.Context, filters []*collaborati
 		if err != nil {
 			continue
 		}
+		err = m.Cache.Sync(ctx, providerid, spaceid)
+		if err != nil {
+			continue
+		}
 		spaceShares := m.Cache.ListSpace(providerid, spaceid)
 		for shareId, state := range rspace.receivedShareStates {
 			s := spaceShares.Shares[shareId]
