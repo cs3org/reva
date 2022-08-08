@@ -277,6 +277,7 @@ var _ = Describe("Jsoncs3", func() {
 				Expect(s).ToNot(BeNil())
 				Expect(s.Permissions.Permissions.InitiateFileUpload).To(BeFalse())
 
+				// Change providercache on disk
 				cache := m.Cache.Providers["storageid"].Spaces["spaceid"]
 				cache.Shares[share.Id.OpaqueId].Permissions.Permissions.InitiateFileUpload = true
 				bytes, err := json.Marshal(cache)
@@ -284,7 +285,18 @@ var _ = Describe("Jsoncs3", func() {
 				storage.SimpleUpload(context.Background(), "storages/storageid/spaceid.json", bytes)
 				Expect(err).ToNot(HaveOccurred())
 
-				m.CreatedCache.UserShares["admin"].Mtime = time.Time{} // trigger reload
+				// Reset providercache in memory
+				cache.Shares[share.Id.OpaqueId].Permissions.Permissions.InitiateFileUpload = false
+
+				// Set local cache mtime to something later then on disk
+				m.Cache.Providers["storageid"].Spaces["spaceid"].Mtime = time.Now().Add(time.Hour)
+				s, err = m.GetShare(ctx, shareRef)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(s).ToNot(BeNil())
+				Expect(s.Permissions.Permissions.InitiateFileUpload).To(BeFalse())
+
+				// Set local cache mtime to something earlier then on disk
+				m.Cache.Providers["storageid"].Spaces["spaceid"].Mtime = time.Now().Add(-time.Hour)
 				s, err = m.GetShare(ctx, shareRef)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(s).ToNot(BeNil())

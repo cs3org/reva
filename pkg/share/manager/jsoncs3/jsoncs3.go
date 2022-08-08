@@ -268,18 +268,16 @@ func (m *Manager) getByID(id *collaboration.ShareId) (*collaboration.Share, erro
 		// invalid share id, does not exist
 		return nil, errtypes.NotFound(id.String())
 	}
+
+	// sync cache, maybe our data is outdated
+	err = m.Cache.Sync(context.Background(), shareid.StorageId, shareid.SpaceId)
+	if err != nil {
+		return nil, err
+	}
+
 	share := m.Cache.Get(shareid.StorageId, shareid.SpaceId, id.OpaqueId)
 	if share == nil {
-		// reload cache, maybe our data is outdated
-		err = m.Cache.Sync(context.Background(), shareid.StorageId, shareid.SpaceId)
-		if err != nil {
-			return nil, err
-		}
-
-		share = m.Cache.Get(shareid.StorageId, shareid.SpaceId, id.OpaqueId)
-		if share == nil {
-			return nil, errtypes.NotFound(id.String())
-		}
+		return nil, errtypes.NotFound(id.String())
 	}
 	return share, nil
 }
@@ -290,6 +288,13 @@ func (m *Manager) getByKey(ctx context.Context, key *collaboration.ShareKey) (*c
 	if err != nil {
 		return nil, err
 	}
+
+	// sync cache, maybe our data is outdated
+	err = m.Cache.Sync(context.Background(), key.ResourceId.StorageId, key.ResourceId.SpaceId)
+	if err != nil {
+		return nil, err
+	}
+
 	spaceShares := m.Cache.ListSpace(key.ResourceId.StorageId, key.ResourceId.SpaceId)
 	for _, share := range spaceShares.Shares {
 		if utils.GranteeEqual(key.Grantee, share.Grantee) && utils.ResourceIDEqual(share.ResourceId, key.ResourceId) {
