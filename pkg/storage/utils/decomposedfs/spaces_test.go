@@ -30,6 +30,7 @@ import (
 	ruser "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs"
 	helpers "github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/testhelpers"
+	"github.com/cs3org/reva/v2/pkg/storagespace"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/stretchr/testify/mock"
@@ -205,5 +206,67 @@ var _ = Describe("Spaces", func() {
 			Entry("uuid", "../../../spaces/4c/510ada-c86b-4815-8820-42cdf82c3d51/nodes/4c/51/0a/da/-c86b-4815-8820-42cdf82c3d51.T.2022-02-24T12:35:18.196484592Z", "4c510ada-c86b-4815-8820-42cdf82c3d51", "4c510ada-c86b-4815-8820-42cdf82c3d51.T.2022-02-24T12:35:18.196484592Z", false),
 			Entry("short", "../../../spaces/sp/ace-id/nodes/sh/or/tn/od/eid", "space-id", "shortnodeid", false),
 		)
+	})
+
+	Describe("Update Space", func() {
+		var (
+			env *helpers.TestEnv
+		)
+		BeforeEach(func() {
+			var err error
+			env, err = helpers.NewTestEnv(nil)
+			Expect(err).ToNot(HaveOccurred())
+			env.PermissionsClient.On("CheckPermission", mock.Anything, mock.Anything, mock.Anything).Return(
+				func(ctx context.Context, in *cs3permissions.CheckPermissionRequest, opts ...grpc.CallOption) *cs3permissions.CheckPermissionResponse {
+					if ctxpkg.ContextMustGetUser(ctx).Id.GetOpaqueId() == "25b69780-5f39-43be-a7ac-a9b9e9fe4230" {
+						// id of owner/admin
+						return &permissionsv1beta1.CheckPermissionResponse{Status: &rpcv1beta1.Status{Code: rpcv1beta1.Code_CODE_OK}}
+					}
+					// id of generic user
+					return &permissionsv1beta1.CheckPermissionResponse{Status: &rpcv1beta1.Status{Code: rpcv1beta1.Code_CODE_PERMISSION_DENIED}}
+				},
+				nil)
+
+		})
+
+		AfterEach(func() {
+			if env != nil {
+				env.Cleanup()
+			}
+		})
+		Context("project space", func() {
+			It("Create a project space as admin and change quota", func() {
+				resp, err := env.Fs.CreateStorageSpace(env.Ctx, &provider.CreateStorageSpaceRequest{Name: "Mission to Venus", Type: "project"})
+				Expect(err).ToNot(HaveOccurred())
+				updateResp, err := env.Fs.UpdateStorageSpace(
+					env.Ctx,
+					&provider.UpdateStorageSpaceRequest{
+						StorageSpace: &provider.StorageSpace{
+							Id:    resp.StorageSpace.Id,
+							Quota: &provider.Quota{QuotaMaxBytes: uint64(1000)},
+						},
+					},
+				)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(updateResp.Status.Code, rpcv1beta1.Code_CODE_OK)
+				Expect(updateResp.StorageSpace.Quota.QuotaMaxBytes, uint64(1000))
+			})
+			It("try to change quota as a non admin user", func() {
+				ctx := ruser.ContextSetUser(context.Background(), env.Users[0])
+				updateResp, err := env.Fs.UpdateStorageSpace(
+					ctx,
+					&provider.UpdateStorageSpaceRequest{
+						StorageSpace: &provider.StorageSpace{
+							Id: &provider.StorageSpaceId{
+								OpaqueId: storagespace.FormatResourceID(*env.SpaceRootRes),
+							},
+							Quota: &provider.Quota{QuotaMaxBytes: uint64(1000)},
+						},
+					},
+				)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(updateResp.Status.Code, rpcv1beta1.Code_CODE_PERMISSION_DENIED)
+			})
+		})
 	})
 })

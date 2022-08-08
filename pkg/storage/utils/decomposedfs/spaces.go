@@ -220,6 +220,30 @@ func (fs *Decomposedfs) canCreateSpace(ctx context.Context, spaceID string) bool
 	return checkRes.Status.Code == v1beta11.Code_CODE_OK
 }
 
+// returns true when the user in the context can set a space quota
+func (fs *Decomposedfs) canSetSpaceQuota(ctx context.Context, spaceID string) bool {
+	user := ctxpkg.ContextMustGetUser(ctx)
+	checkRes, err := fs.permissionsClient.CheckPermission(ctx, &cs3permissions.CheckPermissionRequest{
+		Permission: "set-space-quota",
+		SubjectRef: &cs3permissions.SubjectReference{
+			Spec: &cs3permissions.SubjectReference_UserId{
+				UserId: user.Id,
+			},
+		},
+		Ref: &provider.Reference{
+			ResourceId: &provider.ResourceId{
+				StorageId: spaceID,
+				// OpaqueId is the same, no need to transfer it
+			},
+		},
+	})
+	if err != nil {
+		return false
+	}
+
+	return checkRes.Status.Code == v1beta11.Code_CODE_OK
+}
+
 // ReadSpaceAndNodeFromIndexLink reads a symlink and parses space and node id if the link has the correct format, eg:
 // ../../spaces/4c/510ada-c86b-4815-8820-42cdf82c3d51/nodes/4c/51/0a/da/-c86b-4815-8820-42cdf82c3d51
 // ../../spaces/4c/510ada-c86b-4815-8820-42cdf82c3d51/nodes/4c/51/0a/da/-c86b-4815-8820-42cdf82c3d51.T.2022-02-24T12:35:18.196484592Z
@@ -476,12 +500,6 @@ func (fs *Decomposedfs) UpdateStorageSpace(ctx context.Context, req *provider.Up
 		return nil, err
 	}
 
-	u, ok := ctxpkg.ContextGetUser(ctx)
-	if !ok {
-		return nil, fmt.Errorf("decomposedfs: spaces: contextual user not found")
-	}
-	space.Owner = u
-
 	metadata := make(map[string]string, 5)
 	if space.Name != "" {
 		metadata[xattrs.SpaceNameAttr] = space.Name
@@ -492,11 +510,9 @@ func (fs *Decomposedfs) UpdateStorageSpace(ctx context.Context, req *provider.Up
 	}
 
 	// TODO also return values which are not in the request
-	hasDescription := false
 	if space.Opaque != nil {
 		if description, ok := space.Opaque.Map["description"]; ok {
 			metadata[xattrs.SpaceDescriptionAttr] = string(description.Value)
-			hasDescription = true
 		}
 		if alias := utils.ReadPlainFromOpaque(space.Opaque, "spaceAlias"); alias != "" {
 			metadata[xattrs.SpaceAliasAttr] = alias
@@ -523,7 +539,7 @@ func (fs *Decomposedfs) UpdateStorageSpace(ctx context.Context, req *provider.Up
 
 	// TODO change the permission handling
 	// these three attributes need manager permissions
-	if space.Name != "" || hasDescription || restore {
+	if space.Name != "" || mapHasKey(metadata, xattrs.SpaceDescriptionAttr) || restore {
 		err = fs.checkManagerPermission(ctx, node)
 	}
 	if err != nil {
@@ -537,12 +553,23 @@ func (fs *Decomposedfs) UpdateStorageSpace(ctx context.Context, req *provider.Up
 			Status: &v1beta11.Status{Code: v1beta11.Code_CODE_PERMISSION_DENIED, Message: err.Error()},
 		}, nil
 	}
-	// all other attributes need editor permissions
-	err = fs.checkEditorPermission(ctx, node)
+	// these three attributes need editor permissions
+	if mapHasKey(metadata, xattrs.SpaceReadmeAttr) || mapHasKey(metadata, xattrs.SpaceAliasAttr) || mapHasKey(metadata, xattrs.SpaceImageAttr) {
+		err = fs.checkEditorPermission(ctx, node)
+	}
 	if err != nil {
 		return &provider.UpdateStorageSpaceResponse{
 			Status: &v1beta11.Status{Code: v1beta11.Code_CODE_PERMISSION_DENIED, Message: err.Error()},
 		}, nil
+	}
+
+	// this attribute needs a permission on the user role
+	if mapHasKey(metadata, xattrs.QuotaAttr) {
+		if !fs.canSetSpaceQuota(ctx, spaceID) {
+			return &provider.UpdateStorageSpaceResponse{
+				Status: &v1beta11.Status{Code: v1beta11.Code_CODE_PERMISSION_DENIED, Message: errors.New("No permission to set space quota").Error()},
+			}, nil
+		}
 	}
 
 	err = xattrs.SetMultiple(node.InternalPath(), metadata)
@@ -557,7 +584,7 @@ func (fs *Decomposedfs) UpdateStorageSpace(ctx context.Context, req *provider.Up
 	}
 
 	// send back the updated data from the storage
-	updatedSpace, err := fs.storageSpaceFromNode(ctx, node, true)
+	updatedSpace, err := fs.storageSpaceFromNode(ctx, node, false)
 	if err != nil {
 		return nil, err
 	}
@@ -881,4 +908,9 @@ func (fs *Decomposedfs) checkEditorPermission(ctx context.Context, n *node.Node)
 		return errtypes.PermissionDenied(msg)
 	}
 	return nil
+}
+
+func mapHasKey(checkMap map[string]string, key string) bool {
+	_, hasKey := checkMap[key]
+	return hasKey
 }
