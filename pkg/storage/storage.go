@@ -23,6 +23,8 @@ import (
 	"io"
 	"net/url"
 
+	tusd "github.com/tus/tusd/pkg/handler"
+
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	registry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
@@ -73,6 +75,12 @@ type FS interface {
 	CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error)
 	UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error)
 	DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorageSpaceRequest) error
+}
+
+// UploadsManager defines the interface for FS implementations that allow for managing uploads
+type UploadsManager interface {
+	ListUploads() ([]tusd.FileInfo, error)
+	PurgeExpiredUploads(chan<- tusd.FileInfo) error
 }
 
 // Registry is the interface that storage registries implement

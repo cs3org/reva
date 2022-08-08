@@ -457,7 +457,7 @@ func (s *svc) updateGrant(ctx context.Context, id *provider.ResourceId, g *provi
 	return status.NewOK(ctx), nil
 }
 
-func (s *svc) removeGrant(ctx context.Context, id *provider.ResourceId, g *provider.Grantee, p *provider.ResourcePermissions) (*rpc.Status, error) {
+func (s *svc) removeGrant(ctx context.Context, id *provider.ResourceId, g *provider.Grantee, p *provider.ResourcePermissions, opaque *typesv1beta1.Opaque) (*rpc.Status, error) {
 	ref := &provider.Reference{
 		ResourceId: id,
 	}
@@ -468,6 +468,7 @@ func (s *svc) removeGrant(ctx context.Context, id *provider.ResourceId, g *provi
 			Grantee:     g,
 			Permissions: p,
 		},
+		Opaque: opaque,
 	}
 
 	c, _, err := s.find(ctx, ref)
@@ -586,18 +587,23 @@ func (s *svc) addSpaceShare(ctx context.Context, req *collaboration.CreateShareR
 	var st *rpc.Status
 	var err error
 	// TODO: change CS3 APIs
-	opaque := typesv1beta1.Opaque{
+	opaque := &typesv1beta1.Opaque{
 		Map: map[string]*typesv1beta1.OpaqueEntry{
 			"spacegrant": {},
 		},
 	}
+	utils.AppendPlainToOpaque(
+		opaque,
+		"spacetype",
+		req.ResourceInfo.GetSpace().GetSpaceType(),
+	)
 	if grants.PermissionsEqual(req.Grant.Permissions.Permissions, &provider.ResourcePermissions{}) {
-		st, err = s.denyGrant(ctx, req.ResourceInfo.Id, req.Grant.Grantee, &opaque)
+		st, err = s.denyGrant(ctx, req.ResourceInfo.Id, req.Grant.Grantee, opaque)
 		if err != nil {
 			return nil, errors.Wrap(err, "gateway: error denying grant in storage")
 		}
 	} else {
-		st, err = s.addGrant(ctx, req.ResourceInfo.Id, req.Grant.Grantee, req.Grant.Permissions.Permissions, &opaque)
+		st, err = s.addGrant(ctx, req.ResourceInfo.Id, req.Grant.Grantee, req.Grant.Permissions.Permissions, opaque)
 		if err != nil {
 			return nil, errors.Wrap(err, "gateway: error adding grant to storage")
 		}
@@ -669,7 +675,7 @@ func (s *svc) removeShare(ctx context.Context, req *collaboration.RemoveShareReq
 	}
 
 	if s.c.CommitShareToStorageGrant {
-		removeGrantStatus, err := s.removeGrant(ctx, share.ResourceId, share.Grantee, share.Permissions.Permissions)
+		removeGrantStatus, err := s.removeGrant(ctx, share.ResourceId, share.Grantee, share.Permissions.Permissions, nil)
 		if err != nil {
 			return nil, errors.Wrap(err, "gateway: error removing grant from storage")
 		}
@@ -698,7 +704,13 @@ func (s *svc) removeSpaceShare(ctx context.Context, ref *provider.ResourceId, gr
 	if permissions == nil {
 		return nil, errors.New("gateway: error getting grant to remove from storage")
 	}
-	removeGrantStatus, err := s.removeGrant(ctx, ref, grantee, permissions)
+	// TODO: change CS3 APIs
+	opaque := &typesv1beta1.Opaque{
+		Map: map[string]*typesv1beta1.OpaqueEntry{
+			"spacegrant": {},
+		},
+	}
+	removeGrantStatus, err := s.removeGrant(ctx, ref, grantee, permissions, opaque)
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error removing grant from storage")
 	}

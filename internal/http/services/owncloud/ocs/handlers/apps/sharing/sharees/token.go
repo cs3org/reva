@@ -20,7 +20,6 @@ package sharees
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -106,17 +105,14 @@ func buildTokenInfo(owner *user.User, tkn string, token string, passProtected bo
 	ctx = ctxpkg.ContextSetUser(ctx, owner)
 	ctx = metadata.AppendToOutgoingContext(ctx, ctxpkg.TokenHeader, token)
 
-	sRes, err := getTokenStatInfo(ctx, c, tkn)
+	sRes, err := getPublicShare(ctx, c, tkn)
 	if err != nil || sRes.Status.Code != rpc.Code_CODE_OK {
 		return t, fmt.Errorf("can't stat resource. %+v %s", sRes, err)
 	}
 
-	ls := &link.PublicShare{}
-	_ = json.Unmarshal(sRes.Info.Opaque.Map["link-share"].Value, ls)
-
-	t.StorageID = ls.ResourceId.GetStorageId()
-	t.SpaceID = ls.ResourceId.GetSpaceId()
-	t.OpaqueID = ls.ResourceId.GetOpaqueId()
+	t.StorageID = sRes.Share.ResourceId.GetStorageId()
+	t.SpaceID = sRes.Share.ResourceId.GetSpaceId()
+	t.OpaqueID = sRes.Share.ResourceId.GetOpaqueId()
 
 	return t, nil
 }
@@ -158,12 +154,11 @@ func handleBasicAuth(ctx context.Context, c gateway.GatewayAPIClient, token, pw 
 	return c.Authenticate(ctx, &authenticateRequest)
 }
 
-func getTokenStatInfo(ctx context.Context, client gateway.GatewayAPIClient, token string) (*provider.StatResponse, error) {
-	return client.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{
-		ResourceId: &provider.ResourceId{
-			StorageId: utils.PublicStorageProviderID,
-			SpaceId:   utils.PublicStorageSpaceID,
-			OpaqueId:  token,
-		},
-	}})
+func getPublicShare(ctx context.Context, client gateway.GatewayAPIClient, token string) (*link.GetPublicShareResponse, error) {
+	return client.GetPublicShare(ctx, &link.GetPublicShareRequest{
+		Ref: &link.PublicShareReference{
+			Spec: &link.PublicShareReference_Token{
+				Token: token,
+			},
+		}})
 }

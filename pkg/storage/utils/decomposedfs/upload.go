@@ -23,7 +23,12 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
+	"time"
+
+	tusd "github.com/tus/tusd/pkg/handler"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v2/pkg/appctx"
@@ -35,7 +40,6 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/upload"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/pkg/errors"
-	tusd "github.com/tus/tusd/pkg/handler"
 )
 
 // Upload uploads data to the given resource
@@ -137,6 +141,9 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 		if mtime, ok := metadata["mtime"]; ok {
 			info.MetaData["mtime"] = mtime
 		}
+		if expiration, ok := metadata["expires"]; ok {
+			info.MetaData["expires"] = expiration
+		}
 		if _, ok := metadata["sizedeferred"]; ok {
 			info.SizeIsDeferred = true
 		}
@@ -199,6 +206,38 @@ func (fs *Decomposedfs) GetUpload(ctx context.Context, id string) (tusd.Upload, 
 	return upload.Get(ctx, id, fs.lu, fs.tp, fs.o.Root, fs.stream, fs.o.AsyncFileUploads, fs.o.Tokens)
 }
 
+// ListUploads returns a list of all incomplete uploads
+func (fs *Decomposedfs) ListUploads() ([]tusd.FileInfo, error) {
+	return fs.uploadInfos(context.Background())
+}
+
+// PurgeExpiredUploads scans the fs for expired downloads and removes any leftovers
+func (fs *Decomposedfs) PurgeExpiredUploads(purgedChan chan<- tusd.FileInfo) error {
+	infos, err := fs.uploadInfos(context.Background())
+	if err != nil {
+		return err
+	}
+
+	for _, info := range infos {
+		expires, err := strconv.Atoi(info.MetaData["expires"])
+		if err != nil {
+			continue
+		}
+		if int64(expires) < time.Now().Unix() {
+			purgedChan <- info
+			err = os.Remove(info.Storage["BinPath"])
+			if err != nil {
+				return err
+			}
+			err = os.Remove(filepath.Join(fs.o.Root, "uploads", info.ID+".info"))
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 // AsTerminatableUpload returns a TerminatableUpload
 // To implement the termination extension as specified in https://tus.io/protocols/resumable-upload.html#termination
 // the storage needs to implement AsTerminatableUpload
@@ -218,4 +257,31 @@ func (fs *Decomposedfs) AsLengthDeclarableUpload(up tusd.Upload) tusd.LengthDecl
 // the storage needs to implement AsConcatableUpload
 func (fs *Decomposedfs) AsConcatableUpload(up tusd.Upload) tusd.ConcatableUpload {
 	return up.(*upload.Upload)
+}
+
+func (fs *Decomposedfs) uploadInfos(ctx context.Context) ([]tusd.FileInfo, error) {
+	infos := []tusd.FileInfo{}
+	infoFiles, err := filepath.Glob(filepath.Join(fs.o.Root, "uploads", "*.info"))
+	if err != nil {
+		return nil, err
+	}
+
+	idRegexp := regexp.MustCompile(".*/([^/]+).info")
+	for _, info := range infoFiles {
+		match := idRegexp.FindStringSubmatch(info)
+		if match == nil || len(match) < 2 {
+			continue
+		}
+		up, err := fs.GetUpload(ctx, match[1])
+		if err != nil {
+			return nil, err
+		}
+		info, err := up.GetInfo(context.Background())
+		if err != nil {
+			return nil, err
+		}
+
+		infos = append(infos, info)
+	}
+	return infos, nil
 }

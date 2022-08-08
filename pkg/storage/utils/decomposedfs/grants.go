@@ -20,6 +20,7 @@ package decomposedfs
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -156,6 +157,8 @@ func (fs *Decomposedfs) RemoveGrant(ctx context.Context, ref *provider.Reference
 		return err
 	}
 
+	spaceGrant := ctx.Value(utils.SpaceGrant)
+
 	var attr string
 	if g.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_GROUP {
 		attr = xattrs.GrantGroupAcePrefix + g.Grantee.GetGroupId().OpaqueId
@@ -164,7 +167,16 @@ func (fs *Decomposedfs) RemoveGrant(ctx context.Context, ref *provider.Reference
 	}
 
 	if err = xattrs.Remove(node.InternalPath(), attr); err != nil {
-		return
+		return err
+	}
+
+	if spaceGrant != nil {
+		// remove from user index
+		// TODO we need an index for groups
+		userIDPath := filepath.Join(fs.o.Root, "indexes", "by-user-id", g.Grantee.GetUserId().OpaqueId, node.SpaceID)
+		if err := os.Remove(userIDPath); err != nil {
+			return err
+		}
 	}
 
 	return fs.tp.Propagate(ctx, node)
@@ -240,18 +252,30 @@ func (fs *Decomposedfs) storeGrant(ctx context.Context, n *node.Node, g *provide
 		return err
 	}
 
+	var spaceType string
+	spaceGrant := ctx.Value(utils.SpaceGrant)
+	// this is not a grant on a space root we are just adding a share
+	if spaceGrant == nil {
+		spaceType = spaceTypeShare
+	}
+	// this is a grant to a space root, the receiver needs the space type to update the indexes
+	if sg, ok := spaceGrant.(struct{ SpaceType string }); ok && sg.SpaceType != "" {
+		spaceType = sg.SpaceType
+	}
+
+	// set the grant
 	e := ace.FromGrant(g)
 	principal, value := e.Marshal()
 	if err := n.SetMetadata(xattrs.GrantPrefix+principal, string(value)); err != nil {
+		appctx.GetLogger(ctx).Error().Err(err).
+			Str("principal", principal).Msg("Could not set grant for principal")
 		return err
 	}
 
-	// when a grant is added to a space, do not add a new space under "shares"
-	if spaceGrant := ctx.Value(utils.SpaceGrant); spaceGrant == nil {
-		err := fs.updateIndexes(ctx, g.GetGrantee().GetUserId().GetOpaqueId(), spaceTypeShare, n.ID)
-		if err != nil {
-			return err
-		}
+	// update the indexes only after successfully setting the grant
+	err := fs.updateIndexes(ctx, g.GetGrantee().GetUserId().GetOpaqueId(), spaceType, n.ID)
+	if err != nil {
+		return err
 	}
 
 	return fs.tp.Propagate(ctx, n)
