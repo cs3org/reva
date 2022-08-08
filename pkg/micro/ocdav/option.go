@@ -232,3 +232,11 @@ func ProductVersion(val string) Option {
 		o.config.ProductVersion = val
 	}
 }
+
+// Events provisions events config
+func Events(endpoint, cluster string) Option {
+	return func(o *Options) {
+		o.config.EventsEndpoint = endpoint
+		o.config.EventsCluster = cluster
+	}
+}

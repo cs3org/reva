@@ -28,6 +28,7 @@ import (
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/errors"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/net"
 	"github.com/cs3org/reva/v2/pkg/appctx"
+	"github.com/cs3org/reva/v2/pkg/events"
 	"github.com/cs3org/reva/v2/pkg/rhttp/router"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/tags"
@@ -70,33 +71,50 @@ func (h *TagHandler) Handler(s *svc) http.Handler {
 }
 
 func (h *TagHandler) handleCreateTags(w http.ResponseWriter, r *http.Request, s *svc, rid *provider.ResourceId) {
-	h.modifyTags(w, r, s, rid, func(ts *tags.Tags, newtags string) bool {
+	h.modifyTags(w, r, s, rid, func(ts *tags.Tags, newtags string, info *provider.ResourceInfo) (bool, interface{}) {
+		log := appctx.GetLogger(r.Context()).With().Interface("resourceid", rid).Logger()
+
 		if !ts.AddList(newtags) {
 			w.WriteHeader(http.StatusBadRequest)
-			log := appctx.GetLogger(r.Context()).With().Interface("resourceid", rid).Logger()
 			b, err := errors.Marshal(http.StatusBadRequest, "no new tags in createtagsrequest or maximum reached", "")
 			errors.HandleWebdavError(&log, w, b, err)
-			return false
+			return false, nil
 		}
-		return true
+
+		return true, events.TagsAdded{
+			Tags: newtags,
+			Ref: &provider.Reference{
+				ResourceId: rid,
+				Path:       ".",
+			},
+			Executant: info.Owner,
+		}
 	})
 }
 
 func (h *TagHandler) handleDeleteTags(w http.ResponseWriter, r *http.Request, s *svc, rid *provider.ResourceId) {
-	h.modifyTags(w, r, s, rid, func(ts *tags.Tags, rmtags string) bool {
+	h.modifyTags(w, r, s, rid, func(ts *tags.Tags, rmtags string, info *provider.ResourceInfo) (bool, interface{}) {
+		log := appctx.GetLogger(r.Context()).With().Interface("resourceid", rid).Logger()
 		if !ts.RemoveList(rmtags) {
 			w.WriteHeader(http.StatusBadRequest)
-			log := appctx.GetLogger(r.Context()).With().Interface("resourceid", rid).Logger()
 			b, err := errors.Marshal(http.StatusBadRequest, "no tags to delete in deletetagsrequest", "")
 			errors.HandleWebdavError(&log, w, b, err)
-			return false
+			return false, nil
 		}
-		return true
+
+		return true, events.TagsRemoved{
+			Tags: rmtags,
+			Ref: &provider.Reference{
+				ResourceId: rid,
+				Path:       ".",
+			},
+			Executant: info.Owner,
+		}
 	})
 }
 
 // should return true if tags should be persisted
-type modifyfunc func(existingTags *tags.Tags, tagsParamater string) bool
+type modifyfunc func(existingTags *tags.Tags, tagsParamater string, info *provider.ResourceInfo) (bool, interface{})
 
 func (h *TagHandler) modifyTags(w http.ResponseWriter, r *http.Request, s *svc, rid *provider.ResourceId, f modifyfunc) {
 	ctx := r.Context()
@@ -151,7 +169,8 @@ func (h *TagHandler) modifyTags(w http.ResponseWriter, r *http.Request, s *svc, 
 	}
 
 	ts := tags.FromList(oldtags)
-	if !f(ts, tgs) {
+	ok, ev := f(ts, tgs, sres.Info)
+	if !ok {
 		// header should be written by caller in this case
 		return
 	}
@@ -173,6 +192,12 @@ func (h *TagHandler) modifyTags(w http.ResponseWriter, r *http.Request, s *svc, 
 	if resp.GetStatus().GetCode() != rpc.Code_CODE_OK {
 		errors.HandleErrorStatus(&log, w, resp.Status)
 		return
+	}
+
+	if ev != nil && s.stream != nil {
+		if err := events.Publish(s.stream, ev); err != nil {
+			log.Error().Err(err).Msg("Failed to publish TagsAdded event")
+		}
 	}
 
 	w.WriteHeader(http.StatusOK)

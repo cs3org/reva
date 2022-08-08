@@ -35,6 +35,8 @@ import (
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
+	"github.com/cs3org/reva/v2/pkg/events"
+	"github.com/cs3org/reva/v2/pkg/events/server"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v2/pkg/rhttp"
 	"github.com/cs3org/reva/v2/pkg/rhttp/global"
@@ -45,6 +47,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/templates"
 	rtrace "github.com/cs3org/reva/v2/pkg/trace"
 	"github.com/cs3org/reva/v2/pkg/utils"
+	"github.com/go-micro/plugins/v4/events/natsjs"
 	"github.com/mitchellh/mapstructure"
 	"github.com/rs/zerolog"
 	"go.opentelemetry.io/otel/trace"
@@ -113,6 +116,8 @@ type Config struct {
 	Product                string                            `mapstructure:"product"`
 	ProductName            string                            `mapstructure:"product_name"`
 	ProductVersion         string                            `mapstructure:"product_version"`
+	EventsEndpoint         string                            `mapstructure:"events_endpoint"`
+	EventsCluster          string                            `mapstructure:"events_cluster"`
 
 	MachineAuthAPIKey string `mapstructure:"machine_auth_apikey"`
 }
@@ -160,6 +165,7 @@ type svc struct {
 	LockSystem          LockSystem
 	userIdentifierCache *ttlcache.Cache
 	tracerProvider      trace.TracerProvider
+	stream              events.Stream
 }
 
 func (s *svc) Config() *Config {
@@ -226,6 +232,16 @@ func NewWith(conf *Config, fm favorite.Manager, ls LockSystem, _ *zerolog.Logger
 	if err := s.davHandler.init(conf); err != nil {
 		return nil, err
 	}
+
+	if conf.EventsEndpoint != "" {
+		ev, err := server.NewNatsStream(natsjs.Address(conf.EventsEndpoint), natsjs.ClusterID(conf.EventsCluster))
+		if err != nil {
+			return nil, err
+		}
+
+		s.stream = ev
+	}
+
 	return s, nil
 }
 
