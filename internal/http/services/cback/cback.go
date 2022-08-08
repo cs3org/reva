@@ -97,9 +97,9 @@ func (s *svc) Unprotected() []string {
 
 func (s *svc) routerInit() error {
 
-	s.router.Get("/cback/restore", s.handleListJobs)
-	s.router.Post("/cback/restore", s.handleRestoreID)
-	s.router.Get("/cback/restore/{restore_id}", s.handleRestoreStatus)
+	s.router.Get("/restore", s.handleListJobs)
+	s.router.Post("/restore", s.handleRestoreID)
+	s.router.Get("/restore/{restore_id}", s.handleRestoreStatus)
 	return nil
 }
 
