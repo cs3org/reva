@@ -685,6 +685,43 @@ var _ = Describe("Jsoncs3", func() {
 				Expect(err).ToNot(HaveOccurred())
 				Expect(rs.State).To(Equal(collaboration.ShareState_SHARE_STATE_ACCEPTED))
 			})
+
+			It("updates the mountpoint", func() {
+				rs, err := m.GetReceivedShare(granteeCtx, &collaboration.ShareReference{
+					Spec: &collaboration.ShareReference_Id{
+						Id: share.Id,
+					},
+				})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(rs.MountPoint).To(BeNil())
+
+				rs.MountPoint = &providerv1beta1.Reference{
+					Path: "newMP",
+				}
+				rs, err = m.UpdateReceivedShare(granteeCtx, rs, &fieldmaskpb.FieldMask{Paths: []string{"mount_point"}})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(rs.MountPoint.Path).To(Equal("newMP"))
+
+				rs, err = m.GetReceivedShare(granteeCtx, &collaboration.ShareReference{
+					Spec: &collaboration.ShareReference_Id{
+						Id: share.Id,
+					},
+				})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(rs.MountPoint.Path).To(Equal("newMP"))
+			})
+
+			It("handles invalid field masks", func() {
+				rs, err := m.GetReceivedShare(granteeCtx, &collaboration.ShareReference{
+					Spec: &collaboration.ShareReference_Id{
+						Id: share.Id,
+					},
+				})
+				Expect(err).ToNot(HaveOccurred())
+
+				_, err = m.UpdateReceivedShare(granteeCtx, rs, &fieldmaskpb.FieldMask{Paths: []string{"invalid"}})
+				Expect(err).To(HaveOccurred())
+			})
 		})
 	})
 })
