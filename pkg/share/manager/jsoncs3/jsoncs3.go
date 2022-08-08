@@ -164,7 +164,6 @@ func New(s metadata.Storage) (*Manager, error) {
 // /{userid}/created/{storageid}/{spaceid}
 
 func (m *Manager) Share(ctx context.Context, md *provider.ResourceInfo, g *collaboration.ShareGrant) (*collaboration.Share, error) {
-
 	user := ctxpkg.ContextMustGetUser(ctx)
 	now := time.Now().UnixNano()
 	ts := &typespb.Timestamp{
@@ -421,6 +420,10 @@ func (m *Manager) ListShares(ctx context.Context, filters []*collaboration.Filte
 			// TODO reread from disk
 		}
 		providerid, spaceid, _, err := storagespace.SplitID(ssid)
+		if err != nil {
+			continue
+		}
+		err = m.Cache.Sync(ctx, providerid, spaceid)
 		if err != nil {
 			continue
 		}

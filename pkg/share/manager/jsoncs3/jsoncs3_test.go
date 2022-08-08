@@ -498,6 +498,7 @@ var _ = Describe("Jsoncs3", func() {
 				Expect(shares[0].Id.OpaqueId).To(Equal(share.Id.OpaqueId))
 				Expect(shares[0].Permissions.Permissions.InitiateFileUpload).To(BeFalse())
 
+				// Change providercache on disk
 				cache := m.Cache.Providers["storageid"].Spaces["spaceid"]
 				cache.Shares[share.Id.OpaqueId].Permissions.Permissions.InitiateFileUpload = true
 				bytes, err := json.Marshal(cache)
@@ -505,7 +506,10 @@ var _ = Describe("Jsoncs3", func() {
 				storage.SimpleUpload(context.Background(), "storages/storageid/spaceid.json", bytes)
 				Expect(err).ToNot(HaveOccurred())
 
-				m.CreatedCache.UserShares["admin"].Mtime = time.Time{} // trigger reload
+				// Reset providercache in memory
+				cache.Shares[share.Id.OpaqueId].Permissions.Permissions.InitiateFileUpload = false
+
+				m.Cache.Providers["storageid"].Spaces["spaceid"].Mtime = time.Time{} // trigger reload
 				shares, err = m.ListShares(ctx, nil)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(shares)).To(Equal(1))
