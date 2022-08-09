@@ -21,6 +21,7 @@ package cback
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 
@@ -158,24 +159,31 @@ func (s *svc) handleListJobs(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
 }
 
 func (s *svc) handleRestoreStatus(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	user, _ := ctxpkg.ContextGetUser(ctx)
 
 	restoreID := chi.URLParam(r, "restore_id")
+	fmt.Printf("The Restore_ID is: %v", restoreID)
 
-	resp, err := http.Get("http://cback-portal-dev-01:8000/restores/" + restoreID)
+	url := "http://cback-portal-dev-01:8000/restores/" + restoreID
+	resp, err := s.Request(user.Username, url, "GET")
 
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	defer resp.Body.Close()
+	defer resp.Close()
 
 	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(resp)
 
-	if _, err := io.Copy(w, resp.Body); err != nil {
+	if _, err := io.Copy(w, resp); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
