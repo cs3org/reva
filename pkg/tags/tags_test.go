@@ -19,6 +19,7 @@
 package tags
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -110,6 +111,7 @@ func TestAddTags(t *testing.T) {
 		added := ts.AddList(tc.TagsToAdd)
 		require.Equal(t, tc.ExpectNoTagsAdded, !added, tc.Alias)
 		require.Equal(t, tc.ExpectedTags, ts.AsList(), tc.Alias)
+		require.Equal(t, strings.Split(tc.ExpectedTags, ","), ts.AsSlice(), tc.Alias)
 	}
 
 }

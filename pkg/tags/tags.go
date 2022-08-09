@@ -79,6 +79,11 @@ func (t *Tags) AsList() string {
 	return strings.Join(t.t, t.sep)
 }
 
+// AsSlice returns the tags as slice of strings
+func (t *Tags) AsSlice() []string {
+	return t.t
+}
+
 // adds the tags and returns a list of added tags
 func (t *Tags) addTags(s string) []string {
 	added := make([]string, 0)
