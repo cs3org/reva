@@ -20,6 +20,7 @@ package cback
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 
@@ -30,13 +31,22 @@ import (
 	"github.com/rs/zerolog"
 )
 
-type Request struct {
-	backup_id   int
+type RequestType struct {
+	backupId    int
 	pattern     string
 	snapshot    string
 	destination string
 	enabled     bool
 	date        string
+}
+
+type restoreType struct {
+	Id          int    `json:"id"`
+	BackupID    int    `json:"backup_id"`
+	SnapshotID  string `json:"snapshot"`
+	Destination string `json:"destination"`
+	Pattern     string `json:"pattern"`
+	Status      int    `json:"status"`
 }
 
 func init() {
@@ -129,30 +139,28 @@ func (s *svc) handleRestoreID(w http.ResponseWriter, r *http.Request) {
 func (s *svc) handleListJobs(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	user, _ := ctxpkg.ContextGetUser(ctx)
+	url := "http://cback-portal-dev-01:8000/restores/"
 
-	r.SetBasicAuth(user.Username, s.conf.ImpersonatorToken)
-	resp, err := http.Get("http://cback-portal-dev-01:8000/restores")
+	resp, err := s.Request(user.Username, url, "GET")
 
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	defer resp.Body.Close()
+	defer resp.Close()
 
 	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(resp)
 
-	if _, err := io.Copy(w, resp.Body); err != nil {
+	if _, err := io.Copy(w, resp); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 }
 
 func (s *svc) handleRestoreStatus(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	user, _ := ctxpkg.ContextGetUser(ctx)
-
-	r.SetBasicAuth(user.Username, s.conf.ImpersonatorToken)
 
 	restoreID := chi.URLParam(r, "restore_id")
 
@@ -173,8 +181,31 @@ func (s *svc) handleRestoreStatus(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (s *svc) Request(userName, url string, reqType string) (io.ReadCloser, error) {
+
+	req, err := http.NewRequest(reqType, url, nil)
+	req.SetBasicAuth(userName, s.conf.ImpersonatorToken)
+
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("accept", `application/json`)
+
+	client := &http.Client{}
+
+	resp, err := client.Do(req)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return resp.Body, nil
+}
+
 func (s *svc) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+
 		s.router.ServeHTTP(w, r)
 
 	})
