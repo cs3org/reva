@@ -315,13 +315,42 @@ func (m *Manager) ListShares(ctx context.Context, filters []*collaboration.Filte
 	if !ok {
 		return nil, errtypes.UserRequired("error getting user from context")
 	}
-
-	createdShareIds, err := m.indexer.FindBy(&collaboration.Share{},
-		indexer.NewField("OwnerId", userIDToIndex(user.Id)),
-		indexer.NewField("CreatorId", userIDToIndex(user.Id)),
+	var rIDs []*provider.ResourceId
+	if len(filters) != 0 {
+		grouped := share.GroupFiltersByType(filters)
+		for _, g := range grouped {
+			for _, f := range g {
+				if f.GetResourceId() != nil {
+					rIDs = append(rIDs, f.GetResourceId())
+				}
+			}
+		}
+	}
+	var (
+		createdShareIds []string
+		err             error
 	)
-	if err != nil {
-		return nil, err
+	// in spaces, always use the resourceId
+	// We could have more than one resourceID
+	// which would form a logical OR
+	if len(rIDs) != 0 {
+		for _, rID := range rIDs {
+			shareIDs, err := m.indexer.FindBy(&collaboration.Share{},
+				indexer.NewField("ResourceId", resourceIDToIndex(rID)),
+			)
+			if err != nil {
+				return nil, err
+			}
+			createdShareIds = append(createdShareIds, shareIDs...)
+		}
+	} else {
+		createdShareIds, err = m.indexer.FindBy(&collaboration.Share{},
+			indexer.NewField("OwnerId", userIDToIndex(user.Id)),
+			indexer.NewField("CreatorId", userIDToIndex(user.Id)),
+		)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// We use shareMem as a temporary lookup store to check which shares were
