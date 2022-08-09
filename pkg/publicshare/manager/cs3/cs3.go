@@ -347,34 +347,42 @@ func (m *Manager) ListPublicShares(ctx context.Context, u *user.User, filters []
 	}
 
 	log := appctx.GetLogger(ctx)
-	var rID *provider.ResourceId
+	var rIDs []*provider.ResourceId
 	if len(filters) != 0 {
 		grouped := publicshare.GroupFiltersByType(filters)
-		for _, f := range grouped {
-			for _, f := range f {
+		for _, g := range grouped {
+			for _, f := range g {
 				if f.GetResourceId() != nil {
-					rID = f.GetResourceId()
+					rIDs = append(rIDs, f.GetResourceId())
 				}
 			}
 		}
 	}
-	var createdShareTokens []string
-	var err error
+	var (
+		createdShareTokens []string
+		err                error
+	)
+
 	// in spaces, always use the resourceId
-	if rID != nil {
-		createdShareTokens, err = m.indexer.FindBy(&link.PublicShare{},
-			indexer.NewField("ResourceId", resourceIDToIndex(rID)),
-		)
+	if len(rIDs) != 0 {
+		for _, rID := range rIDs {
+			shareTokens, err := m.indexer.FindBy(&link.PublicShare{},
+				indexer.NewField("ResourceId", resourceIDToIndex(rID)),
+			)
+			if err != nil {
+				return nil, err
+			}
+			createdShareTokens = append(createdShareTokens, shareTokens...)
+		}
 	} else {
 		// fallback for legacy use
 		createdShareTokens, err = m.indexer.FindBy(&link.PublicShare{},
 			indexer.NewField("Owner", userIDToIndex(u.Id)),
 			indexer.NewField("Creator", userIDToIndex(u.Id)),
 		)
-	}
-
-	if err != nil {
-		return nil, err
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// We use shareMem as a temporary lookup store to check which shares were
