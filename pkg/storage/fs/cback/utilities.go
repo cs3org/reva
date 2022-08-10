@@ -68,6 +68,11 @@ var permID = provider.ResourcePermissions{
 	UpdateGrant:          false,
 	DenyGrant:            false}
 
+var checkSum = provider.ResourceChecksum{
+	Sum:  "",
+	Type: provider.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_UNSET,
+}
+
 func mapReturn(fileType string) (int, error) {
 	/* This function can be changed accordingly, depending on the file type
 	being return by the APIs */

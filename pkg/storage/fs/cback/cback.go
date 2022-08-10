@@ -76,11 +76,6 @@ func (fs *cback) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []st
 			StorageId: "cback",
 		}
 
-		checkSum := provider.ResourceChecksum{
-			Sum:  "",
-			Type: provider.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_UNSET,
-		}
-
 		ri := &provider.ResourceInfo{
 			Etag:          "",
 			PermissionSet: &permID,
@@ -113,11 +108,6 @@ func (fs *cback) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []st
 	ident := provider.ResourceId{
 		OpaqueId:  ret.Path,
 		StorageId: "cback",
-	}
-
-	checkSum := provider.ResourceChecksum{
-		Sum:  "",
-		Type: provider.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_UNSET,
 	}
 
 	ri := &provider.ResourceInfo{
@@ -178,11 +168,6 @@ func (fs *cback) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys
 				StorageId: "cback",
 			}
 
-			checkSum := provider.ResourceChecksum{
-				Sum:  "",
-				Type: provider.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_UNSET,
-			}
-
 			f := provider.ResourceInfo{
 				Mtime:         &setTime,
 				Id:            &ident,
@@ -234,11 +219,6 @@ func (fs *cback) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys
 				StorageId: "cback",
 			}
 
-			checkSum := provider.ResourceChecksum{
-				Sum:  "",
-				Type: provider.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_UNSET,
-			}
-
 			f := provider.ResourceInfo{
 				Mtime:         &setTime,
 				Id:            &ident,
@@ -273,11 +253,6 @@ func (fs *cback) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys
 
 		if err != nil {
 			return nil, err
-		}
-
-		checkSum := provider.ResourceChecksum{
-			Sum:  "",
-			Type: provider.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_UNSET,
 		}
 
 		ident := provider.ResourceId{
