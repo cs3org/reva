@@ -19,8 +19,9 @@
 package cback
 
 import (
-	"context"
+	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -33,12 +34,12 @@ import (
 )
 
 type RequestType struct {
-	backupId    int
-	pattern     string
-	snapshot    string
-	destination string
-	enabled     bool
-	date        string
+	BackupId int    `json:"backup_id"`
+	Pattern  string `json:"pattern"`
+	Snapshot string `json:"snapshot"`
+	//destination string
+	//enabled     bool
+	//date        string
 }
 
 type restoreType struct {
@@ -84,6 +85,7 @@ func (s *svc) Close() error {
 type config struct {
 	Prefix            string `mapstructure:"prefix"`
 	ImpersonatorToken string `mapstructure:"impersonator"`
+	APIURL            string `mapstructure:"apiURL"`
 }
 
 func (c *config) init() {
@@ -114,27 +116,72 @@ func (s *svc) routerInit() error {
 	return nil
 }
 
-func PostCtx(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ctx := context.WithValue(r.Context(), "restore_id", chi.URLParam(r, "restore_id"))
-		next.ServeHTTP(w, r.WithContext(ctx))
-	})
-}
-
 func (s *svc) handleRestoreID(w http.ResponseWriter, r *http.Request) {
-	/*ctx := r.Context()
+	ctx := r.Context()
 	user, _ := ctxpkg.ContextGetUser(ctx)
-
-	theTime := time.Now()
-
-	r.SetBasicAuth(user.Username, s.conf.ImpersonatorToken)
+	url := "http://cback-portal-dev-01:8000/restores/"
+	var ssID, searchPath string
 
 	path := r.URL.Query().Get("path")
 
-	u, err := json.Marshal(Request{backup_id: 0, pattern: path, snapshot: "0", destination: "", enabled: true, date: theTime.Format(time.RFC3339)})
+	if path == "" {
+		http.Error(w, "The id query parameter is missing", http.StatusBadRequest)
+		return
+	}
 
-	resp, err := http.Post("http://cback-portal-dev-01:8000/restores")*/
+	resp, err := s.matchBackups(user.Username, path)
 
+	if err != nil {
+		fmt.Print(err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+
+	snapshotList, err := s.listSnapshots(user.Username, resp.ID)
+
+	if err != nil {
+		fmt.Print(err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+
+	if resp.Substring != "" {
+		ssID, searchPath = s.pathTrimmer(snapshotList, resp)
+		requestType := "POST"
+
+		structbody := &RequestType{
+			BackupId: resp.ID,
+			Snapshot: ssID,
+			Pattern:  searchPath,
+		}
+
+		jbody, err := json.Marshal(structbody)
+
+		if err != nil {
+			fmt.Print(err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+
+		resp, err := s.Request(user.Username, url, requestType, bytes.NewBuffer(jbody))
+
+		if err != nil {
+			fmt.Print(err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+
+		defer resp.Close()
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		json.NewEncoder(w).Encode(resp)
+
+		if _, err := io.Copy(w, resp); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	} else {
+
+		err = errors.New("path incorrect")
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
 }
 
 func (s *svc) handleListJobs(w http.ResponseWriter, r *http.Request) {
@@ -142,7 +189,7 @@ func (s *svc) handleListJobs(w http.ResponseWriter, r *http.Request) {
 	user, _ := ctxpkg.ContextGetUser(ctx)
 	url := "http://cback-portal-dev-01:8000/restores/"
 
-	resp, err := s.Request(user.Username, url, "GET")
+	resp, err := s.Request(user.Username, url, "GET", nil)
 
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -170,7 +217,7 @@ func (s *svc) handleRestoreStatus(w http.ResponseWriter, r *http.Request) {
 	fmt.Printf("The Restore_ID is: %v", restoreID)
 
 	url := "http://cback-portal-dev-01:8000/restores/" + restoreID
-	resp, err := s.Request(user.Username, url, "GET")
+	resp, err := s.Request(user.Username, url, "GET", nil)
 
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -189,10 +236,15 @@ func (s *svc) handleRestoreStatus(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *svc) Request(userName, url string, reqType string) (io.ReadCloser, error) {
+func (s *svc) Request(userName, url string, reqType string, body io.Reader) (io.ReadCloser, error) {
 
-	req, err := http.NewRequest(reqType, url, nil)
+	req, err := http.NewRequest(reqType, url, body)
+
 	req.SetBasicAuth(userName, s.conf.ImpersonatorToken)
+
+	if body != nil {
+		req.Header.Add("Content-Type", "application/json")
+	}
 
 	if err != nil {
 		return nil, err
