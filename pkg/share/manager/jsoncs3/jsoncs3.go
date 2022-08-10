@@ -524,6 +524,7 @@ func (m *Manager) convert(ctx context.Context, userID string, s *collaboration.S
 		StorageId: providerid,
 		SpaceId:   sid,
 	})
+
 	m.UserReceivedStates.Sync(ctx, userID)
 	state := m.UserReceivedStates.Get(userID, spaceID, s.Id.GetOpaqueId())
 	if state != nil {

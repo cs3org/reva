@@ -704,9 +704,20 @@ var _ = Describe("Jsoncs3", func() {
 					Expect(err).ToNot(HaveOccurred())
 				})
 
-				PIt("syncs the group cache")
-
 				It("gets the group share", func() {
+					rs, err := m.GetReceivedShare(granteeCtx, &collaboration.ShareReference{
+						Spec: &collaboration.ShareReference_Id{
+							Id: gshare.Id,
+						},
+					})
+					Expect(err).ToNot(HaveOccurred())
+					Expect(rs).ToNot(BeNil())
+				})
+
+				It("syncs the cache", func() {
+					m, err := jsoncs3.New(storage) // Reset in-memory cache
+					Expect(err).ToNot(HaveOccurred())
+
 					rs, err := m.GetReceivedShare(granteeCtx, &collaboration.ShareReference{
 						Spec: &collaboration.ShareReference_Id{
 							Id: gshare.Id,
@@ -777,6 +788,67 @@ var _ = Describe("Jsoncs3", func() {
 
 				_, err = m.UpdateReceivedShare(granteeCtx, rs, &fieldmaskpb.FieldMask{Paths: []string{"invalid"}})
 				Expect(err).To(HaveOccurred())
+			})
+
+			Context("with a group share", func() {
+				var (
+					gshare *collaboration.Share
+				)
+
+				BeforeEach(func() {
+					var err error
+					gshare, err = m.Share(ctx, sharedResource, groupGrant)
+					Expect(err).ToNot(HaveOccurred())
+				})
+
+				It("updates the received group share", func() {
+					rs, err := m.GetReceivedShare(granteeCtx, &collaboration.ShareReference{
+						Spec: &collaboration.ShareReference_Id{
+							Id: gshare.Id,
+						},
+					})
+					Expect(err).ToNot(HaveOccurred())
+					Expect(rs.State).To(Equal(collaboration.ShareState_SHARE_STATE_PENDING))
+
+					rs.State = collaboration.ShareState_SHARE_STATE_ACCEPTED
+					rs, err = m.UpdateReceivedShare(granteeCtx, rs, &fieldmaskpb.FieldMask{Paths: []string{"state"}})
+					Expect(err).ToNot(HaveOccurred())
+					Expect(rs.State).To(Equal(collaboration.ShareState_SHARE_STATE_ACCEPTED))
+
+					rs, err = m.GetReceivedShare(granteeCtx, &collaboration.ShareReference{
+						Spec: &collaboration.ShareReference_Id{
+							Id: gshare.Id,
+						},
+					})
+					Expect(err).ToNot(HaveOccurred())
+					Expect(rs.State).To(Equal(collaboration.ShareState_SHARE_STATE_ACCEPTED))
+				})
+
+				It("persists the change", func() {
+					rs, err := m.GetReceivedShare(granteeCtx, &collaboration.ShareReference{
+						Spec: &collaboration.ShareReference_Id{
+							Id: gshare.Id,
+						},
+					})
+					Expect(err).ToNot(HaveOccurred())
+					Expect(rs.State).To(Equal(collaboration.ShareState_SHARE_STATE_PENDING))
+
+					rs.State = collaboration.ShareState_SHARE_STATE_ACCEPTED
+					rs, err = m.UpdateReceivedShare(granteeCtx, rs, &fieldmaskpb.FieldMask{Paths: []string{"state"}})
+					Expect(err).ToNot(HaveOccurred())
+					Expect(rs.State).To(Equal(collaboration.ShareState_SHARE_STATE_ACCEPTED))
+
+					m, err := jsoncs3.New(storage) // Reset in-memory cache
+					Expect(err).ToNot(HaveOccurred())
+
+					rs, err = m.GetReceivedShare(granteeCtx, &collaboration.ShareReference{
+						Spec: &collaboration.ShareReference_Id{
+							Id: gshare.Id,
+						},
+					})
+					Expect(err).ToNot(HaveOccurred())
+					Expect(rs.State).To(Equal(collaboration.ShareState_SHARE_STATE_ACCEPTED))
+				})
 			})
 		})
 	})
