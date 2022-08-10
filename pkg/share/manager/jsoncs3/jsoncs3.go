@@ -486,12 +486,12 @@ func (m *Manager) ListReceivedShares(ctx context.Context, filters []*collaborati
 		if err != nil {
 			continue
 		}
-		spaceShares := m.Cache.ListSpace(providerid, spaceid)
 		for shareId, state := range rspace.States {
-			s := spaceShares.Shares[shareId]
+			s := m.Cache.Get(providerid, spaceid, shareId)
 			if s == nil {
 				continue
 			}
+
 			if share.IsGrantedToUser(s, user) {
 				if share.MatchesFilters(s, filters) {
 					rs := &collaboration.ReceivedShare{
