@@ -67,7 +67,7 @@ func (s *Shares) UnmarshalJSON(data []byte) error {
 			Grantee: &provider.Grantee{Id: &provider.Grantee_UserId{}},
 		}
 		err = json.Unmarshal(genericShare, userShare) // is this a user share?
-		if err == nil {
+		if err == nil && userShare.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER {
 			s.Shares[id] = userShare
 			continue
 		}
