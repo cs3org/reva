@@ -149,6 +149,11 @@ func (s *svc) handleRestoreID(w http.ResponseWriter, r *http.Request) {
 		ssID, searchPath = s.pathTrimmer(snapshotList, resp)
 		requestType := "POST"
 
+		if ssID == "" {
+			http.Error(w, "snapshot not found", http.StatusInternalServerError)
+			return
+		}
+
 		structbody := &RequestType{
 			BackupId: resp.ID,
 			Snapshot: ssID,
