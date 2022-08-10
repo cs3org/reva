@@ -154,6 +154,11 @@ func (s *svc) handleRestoreID(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		if searchPath == "" {
+			http.Error(w, "invalid path", http.StatusInternalServerError)
+			return
+		}
+
 		structbody := &RequestType{
 			BackupId: resp.ID,
 			Snapshot: ssID,
