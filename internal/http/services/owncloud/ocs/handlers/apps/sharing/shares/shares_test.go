@@ -33,6 +33,7 @@ import (
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocs/handlers/apps/sharing/shares"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/status"
+	helpers "github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/testhelpers"
 	cs3mocks "github.com/cs3org/reva/v2/tests/cs3mocks/mocks"
 	"github.com/stretchr/testify/mock"
 
@@ -53,12 +54,23 @@ var _ = Describe("The ocs API", func() {
 
 		ctx = ctxpkg.ContextSetUser(context.Background(), user)
 	)
-
+	type (
+		share struct {
+			ID string `xml:"id"`
+		}
+		data struct {
+			Shares []share `xml:"element"`
+		}
+		response struct {
+			Data data `xml:"data"`
+		}
+	)
 	BeforeEach(func() {
 		h = &shares.Handler{}
 		client = &cs3mocks.GatewayAPIClient{}
 
 		c := &config.Config{}
+		c.GatewaySvc = "gatewaysvc"
 		c.Init()
 		h.InitWithGetter(c, func() (gateway.GatewayAPIClient, error) {
 			return client, nil
@@ -229,6 +241,7 @@ var _ = Describe("The ocs API", func() {
 		BeforeEach(func() {
 			resID := &provider.ResourceId{
 				StorageId: "share1-storageid",
+				SpaceId:   "space-1",
 				OpaqueId:  "share1",
 			}
 			client.On("ListReceivedShares", mock.Anything, mock.Anything, mock.Anything).Return(&collaboration.ListReceivedSharesResponse{
@@ -241,6 +254,7 @@ var _ = Describe("The ocs API", func() {
 							Grantee: &provider.Grantee{
 								Type: provider.GranteeType_GRANTEE_TYPE_USER,
 							},
+							Creator:    user.Id,
 							ResourceId: resID,
 							Permissions: &collaboration.SharePermissions{
 								Permissions: &provider.ResourcePermissions{
@@ -250,6 +264,26 @@ var _ = Describe("The ocs API", func() {
 							},
 						},
 						MountPoint: &provider.Reference{Path: "share1"},
+					},
+				},
+			}, nil)
+
+			client.On("ListShares", mock.Anything, mock.Anything).Return(&collaboration.ListSharesResponse{
+				Status: status.NewOK(context.Background()),
+				Shares: []*collaboration.Share{
+					{
+						Id: &collaboration.ShareId{OpaqueId: "11"},
+						Grantee: &provider.Grantee{
+							Type: provider.GranteeType_GRANTEE_TYPE_USER,
+						},
+						Creator:    user.Id,
+						ResourceId: resID,
+						Permissions: &collaboration.SharePermissions{
+							Permissions: &provider.ResourcePermissions{
+								Stat:          true,
+								ListContainer: true,
+							},
+						},
 					},
 				},
 			}, nil)
@@ -268,18 +302,6 @@ var _ = Describe("The ocs API", func() {
 				},
 			}, nil)
 
-			client.On("ListContainer", mock.Anything, mock.Anything).Return(&provider.ListContainerResponse{
-				Status: status.NewOK(context.Background()),
-				Infos: []*provider.ResourceInfo{
-					{
-						Type: provider.ResourceType_RESOURCE_TYPE_CONTAINER,
-						Path: "/share1",
-						Id:   resID,
-						Size: 1,
-					},
-				},
-			}, nil)
-
 			client.On("GetUser", mock.Anything, mock.Anything).Return(&userpb.GetUserResponse{
 				Status: status.NewOK(context.Background()),
 				User:   user,
@@ -287,16 +309,6 @@ var _ = Describe("The ocs API", func() {
 		})
 
 		It("lists accepted shares", func() {
-			type share struct {
-				ID string `xml:"id"`
-			}
-			type data struct {
-				Shares []share `xml:"element"`
-			}
-			type response struct {
-				Data data `xml:"data"`
-			}
-
 			req := httptest.NewRequest("GET", "/apps/files_sharing/api/v1/shares?shared_with_me=1", nil).WithContext(ctx)
 			w := httptest.NewRecorder()
 			h.ListShares(w, req)
@@ -308,6 +320,123 @@ var _ = Describe("The ocs API", func() {
 			Expect(len(res.Data.Shares)).To(Equal(1))
 			s := res.Data.Shares[0]
 			Expect(s.ID).To(Equal("10"))
+		})
+		It("lists shares as creator", func() {
+			req := httptest.NewRequest("GET", "/apps/files_sharing/api/v1/shares?reshares=true", nil).WithContext(ctx)
+			w := httptest.NewRecorder()
+			h.ListShares(w, req)
+			Expect(w.Result().StatusCode).To(Equal(200))
+
+			res := &response{}
+			err := xml.Unmarshal(w.Body.Bytes(), res)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(len(res.Data.Shares)).To(Equal(1))
+			s := res.Data.Shares[0]
+			Expect(s.ID).To(Equal("11"))
+		})
+		It("lists shares with another user", func() {
+			user0 := &userpb.User{
+				Id: &userpb.UserId{
+					OpaqueId: helpers.User0ID,
+				},
+			}
+
+			ctx0 := ctxpkg.ContextSetUser(context.Background(), user0)
+
+			req := httptest.NewRequest("GET", "/apps/files_sharing/api/v1/shares?reshares=true", nil).WithContext(ctx0)
+			w := httptest.NewRecorder()
+			h.ListShares(w, req)
+			Expect(w.Result().StatusCode).To(Equal(200))
+
+			res := &response{}
+			err := xml.Unmarshal(w.Body.Bytes(), res)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(len(res.Data.Shares)).To(Equal(0))
+		})
+	})
+	Describe("ListShares as Space Member", func() {
+		BeforeEach(func() {
+			resID := &provider.ResourceId{
+				StorageId: "share1-storageid",
+				SpaceId:   "space-1",
+				OpaqueId:  "share1",
+			}
+			client.On("ListShares", mock.Anything, mock.Anything).Return(&collaboration.ListSharesResponse{
+				Status: status.NewOK(context.Background()),
+				Shares: []*collaboration.Share{
+					{
+						Id: &collaboration.ShareId{OpaqueId: "11"},
+						Grantee: &provider.Grantee{
+							Type: provider.GranteeType_GRANTEE_TYPE_USER,
+						},
+						Creator:    user.Id,
+						ResourceId: resID,
+						Permissions: &collaboration.SharePermissions{
+							Permissions: &provider.ResourcePermissions{
+								Stat:          true,
+								ListContainer: true,
+							},
+						},
+					},
+					{
+						Id: &collaboration.ShareId{OpaqueId: "12"},
+						Grantee: &provider.Grantee{
+							Type: provider.GranteeType_GRANTEE_TYPE_USER,
+						},
+						Creator: &userpb.UserId{
+							OpaqueId: helpers.User1ID,
+						},
+						ResourceId: resID,
+						Permissions: &collaboration.SharePermissions{
+							Permissions: &provider.ResourcePermissions{
+								Stat:          true,
+								ListContainer: true,
+							},
+						},
+					},
+				},
+			}, nil)
+
+			client.On("Stat", mock.Anything, mock.Anything).Return(&provider.StatResponse{
+				Status: status.NewOK(context.Background()),
+				Info: &provider.ResourceInfo{
+					Type:  provider.ResourceType_RESOURCE_TYPE_CONTAINER,
+					Path:  "/share1",
+					Id:    resID,
+					Owner: user.Id,
+					PermissionSet: &provider.ResourcePermissions{
+						Stat:       true,
+						ListGrants: true,
+					},
+					Size: 10,
+				},
+			}, nil)
+
+			client.On("GetUser", mock.Anything, mock.Anything).Return(&userpb.GetUserResponse{
+				Status: status.NewOK(context.Background()),
+				User:   user,
+			}, nil)
+		})
+		It("lists shares inside a space from another user", func() {
+			user0 := &userpb.User{
+				Id: &userpb.UserId{
+					OpaqueId: helpers.User0ID,
+				},
+			}
+			ctx0 := ctxpkg.ContextSetUser(context.Background(), user0)
+			req := httptest.NewRequest("GET", "/apps/files_sharing/api/v1/shares?reshares=true", nil).WithContext(ctx0)
+			w := httptest.NewRecorder()
+			h.ListShares(w, req)
+			Expect(w.Result().StatusCode).To(Equal(200))
+
+			res := &response{}
+			err := xml.Unmarshal(w.Body.Bytes(), res)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(len(res.Data.Shares)).To(Equal(2))
+			s1 := res.Data.Shares[0]
+			s2 := res.Data.Shares[1]
+			Expect(s1.ID).To(Equal("11"))
+			Expect(s2.ID).To(Equal("12"))
 		})
 	})
 })
