@@ -44,7 +44,9 @@ import (
 )
 
 /*
-  The sharded json driver splits the json file per storage space. Similar to fileids shareids are prefixed with the spaceid.
+  The sharded json driver splits the json file per storage space. Similar to fileids shareids are prefixed with the spaceid for easier lookup.
+  In addition to the space json the share manager keeps lists for users and groups to cache their lists of created and received shares
+  and to hold the state of received shares.
 
   FAQ
   Q: Why not split shares by user and have a list per user?
@@ -53,6 +55,35 @@ import (
 	 in project spaces could not be managed collaboratively.
 	 By splitting by space, we are in fact not only splitting by user, but more granular, per space.
 
+
+  File structure in the jsoncs3 space:
+
+  /storages/{storageid}/{spaceid.json} 	// contains the share information of all shares in that space
+  /users/{userid}/created.json			// points to the spaces the user created shares in including the list of shares
+  /users/{userid}/received.json			// holds the states of received shares of the users
+  /groups/{groupid}/received.json		// points to the spaces the group has received shares in including the list of shares
+
+  Example:
+  	├── groups
+  	│	└── group1
+  	│		└── received.json
+  	├── storages
+  	│	└── storageid
+  	│		└── spaceid.json
+  	└── users
+   		├── admin
+ 		│	└── created.json
+ 		└── einstein
+ 			└── received.json
+
+  Whenever a share is created, the share manager has to
+  1. update the /storages/{storageid}/{spaceid}.json file,
+  2. create /users/{userid}/created.json if it doesn't exist yet and add the space/share
+  3. create /users/{userid}/received.json or /groups/{groupid}/received.json if it doesn exist yet and add the space/share
+
+  When updating shares /storages/{storageid}/{spaceid}.json is updated accordingly. The mtime is used to invalidate in-memory caches.
+
+  When updating received shares the mountpoint and state are updated in /users/{userid}/received.json (for both user and group shares).
 */
 
 func init() {
@@ -70,14 +101,10 @@ type config struct {
 type Manager struct {
 	sync.RWMutex
 
-	// Cache holds the all shares, sharded by provider id and space id
-	Cache providercache.Cache
-	// CreatedCache holds the list of shares a user has created, sharded by user id and space id
-	CreatedCache sharecache.Cache
-	// GroupReceivedCache holds the list of shares a group has access to, sharded by group id and space id
-	GroupReceivedCache sharecache.Cache
-	// UserReceivedStates holds the state of shares a user has received, sharded by user id and space id
-	UserReceivedStates receivedsharecache.Cache
+	Cache              providercache.Cache      // holds all shares, sharded by provider id and space id
+	CreatedCache       sharecache.Cache         // holds the list of shares a user has created, sharded by user id
+	GroupReceivedCache sharecache.Cache         // holds the list of shares a group has access to, sharded by group id
+	UserReceivedStates receivedsharecache.Cache // holds the state of shares a user has received, sharded by user id
 
 	storage   metadata.Storage
 	SpaceRoot *provider.ResourceId
@@ -110,48 +137,7 @@ func New(s metadata.Storage) (*Manager, error) {
 	}, nil
 }
 
-// File structure in the jsoncs3 space:
-//
-// /storages/{storageid}/{spaceid.json}                     // contains all share information of all shares in that space
-// /users/{userid}/created/{storageid}/{spaceid}			// points to a space the user created shares in
-// /users/{userid}/received/{storageid}/{spaceid}.json		// holds the states of received shares of the users in the according space
-// /groups/{groupid}/received/{storageid}/{spaceid}			// points to a space the group has received shares in
-
-// We store the shares in the metadata storage under /{storageid}/{spaceid}.json
-
-// To persist the mountpoints of group shares the /{userid}/received/{storageid}/{spaceid}.json file is used.
-// - it allows every user to update his own mountpoint without having to update&reread the /{storageid}/{spaceid}.json file
-
-// To persist the accepted / pending state of shares the /{userid}/received/{storageid}/{spaceid}.json file is used.
-// - it allows every user to update his own mountpoint without having to update&reread the /{storageid}/{spaceid}.json file
-
-// To determine access to group shares a /{groupid}/received/{storageid}/{spaceid} file is used.
-
-// Whenever a share is created, the share manager has to
-// 1. update the /{storageid}/{spaceid}.json file,
-// 2. touch /{userid}/created/{storageid}/{spaceid} and
-// 3. touch /{userid}/received/{storageid}/{spaceid}.json or /{groupid}/received/{storageid}/{spaceid}
-// - The /{userid}/received/{storageid}/{spaceid}.json file persists mountpoints and accepted / rejected state
-// - (optional) to wrap these three steps in a transaction the share manager can create a transaction file befor the first step and clean it up when all steps succeded
-
-// To determine the spaces a user has access to we maintain an empty /{userid}/(received|created)/{storageid}/{spaceid} folder
-// that we persist when initially traversing all shares in the metadata /{storageid}/{spaceid}.json files
-// when a user creates a new share the jsoncs3 manager touches a new /{userid}/(received|created)/{storageid}/{spaceid} folder
-//  - the changed mtime can be used to determine when a space needs to be reread for redundant setups
-
-// when initializing we only initialize per user:
-//  - we list /{userid}/created/*, for every space we fetch /{storageid}/{spaceid}.json if we
-//    have not cached it yet, or if the /{userid}/created/{storageid}${spaceid} etag changed
-//  - if it does not exist we query the registry for every storage provider id, then
-//    we traverse /{storageid}/ in the metadata storage to
-//    1. create /{userid}/created
-//    2. touch /{userid}/created/{storageid}${spaceid}
-//    TODO 3. split storageid from spaceid touch /{userid}/created/{storageid} && /{userid}/created/{storageid}/{spaceid} (not needed when mtime propagation is enabled)
-
-// we need to split the two lists:
-// /{userid}/received/{storageid}/{spaceid}
-// /{userid}/created/{storageid}/{spaceid}
-
+// Share creates a new share
 func (m *Manager) Share(ctx context.Context, md *provider.ResourceInfo, g *collaboration.ShareGrant) (*collaboration.Share, error) {
 	user := ctxpkg.ContextMustGetUser(ctx)
 	now := time.Now().UnixNano()
@@ -292,6 +278,7 @@ func (m *Manager) get(ctx context.Context, ref *collaboration.ShareReference) (s
 	return
 }
 
+// GetShare gets the information for a share by the given ref.
 func (m *Manager) GetShare(ctx context.Context, ref *collaboration.ShareReference) (*collaboration.Share, error) {
 	m.Lock()
 	defer m.Unlock()
@@ -309,6 +296,7 @@ func (m *Manager) GetShare(ctx context.Context, ref *collaboration.ShareReferenc
 	return nil, errtypes.NotFound(ref.String())
 }
 
+// Unshare deletes a share
 func (m *Manager) Unshare(ctx context.Context, ref *collaboration.ShareReference) error {
 	m.Lock()
 	defer m.Unlock()
@@ -344,6 +332,7 @@ func (m *Manager) Unshare(ctx context.Context, ref *collaboration.ShareReference
 	return nil
 }
 
+// UpdateShare updates the mode of the given share.
 func (m *Manager) UpdateShare(ctx context.Context, ref *collaboration.ShareReference, p *collaboration.SharePermissions) (*collaboration.Share, error) {
 	m.Lock()
 	defer m.Unlock()
@@ -370,30 +359,15 @@ func (m *Manager) UpdateShare(ctx context.Context, ref *collaboration.ShareRefer
 	return s, nil
 }
 
-// ListShares
+// ListShares returns the shares created by the user
 func (m *Manager) ListShares(ctx context.Context, filters []*collaboration.Filter) ([]*collaboration.Share, error) {
 	m.Lock()
 	defer m.Unlock()
 
-	//log := appctx.GetLogger(ctx)
 	user := ctxpkg.ContextMustGetUser(ctx)
 	var ss []*collaboration.Share
 
-	// Q: how do we detect that a created list changed?
-	// Option 1: we rely on etag propagation on the storage to bubble up changes in any space to a single created list
-	//           - drawback should stop etag propagation at /{userid}/ to prevent further propagation to the root of the share provider space
-	//           - we could use the user.ocis.propagation xattr in decomposedfs or the eos equivalent to optimize the storage
-	//           - pro: more efficient, more elegant
-	//           - con: more complex, does not work on plain posix
-	// Option 2: we stat users/{userid}/created.json
-	//           - pro: easier to implement, works on plain posix, no folders
-	// Can this be hidden behind the metadata storage interface?
-	// Decision: use touch for now as it works withe plain posix and is easier to test
-
-	// TODO check if a created or owned filter is set
-	//  - read /users/{userid}/created.json (with If-Modified-Since header) aka read if changed
 	m.CreatedCache.Sync(ctx, user.Id.OpaqueId)
-
 	for ssid, spaceShareIDs := range m.CreatedCache.List(user.Id.OpaqueId) {
 		if time.Now().Sub(spaceShareIDs.Mtime) > time.Second*30 {
 			// TODO reread from disk
@@ -423,18 +397,13 @@ func (m *Manager) ListShares(ctx context.Context, filters []*collaboration.Filte
 	return ss, nil
 }
 
-// we list the shares that are targeted to the user in context or to the user groups.
+// ListReceivedShares returns the list of shares the user has access to.
 func (m *Manager) ListReceivedShares(ctx context.Context, filters []*collaboration.Filter) ([]*collaboration.ReceivedShare, error) {
 	m.Lock()
 	defer m.Unlock()
 
 	var rss []*collaboration.ReceivedShare
 	user := ctxpkg.ContextMustGetUser(ctx)
-
-	// Q: how do we detect that a received list changed?
-	// - similar to the created.json we stat and download a received.json
-	// con: when adding a received share we MUST have if-match for the initiate-file-upload request
-	//      to ensure consistency / prevent lost updates
 
 	ssids := map[string]*receivedsharecache.Space{}
 
@@ -534,6 +503,7 @@ func (m *Manager) convert(ctx context.Context, userID string, s *collaboration.S
 	return rs
 }
 
+// GetReceivedShare returns the information for a received share.
 func (m *Manager) GetReceivedShare(ctx context.Context, ref *collaboration.ShareReference) (*collaboration.ReceivedShare, error) {
 	return m.getReceived(ctx, ref)
 }
@@ -552,6 +522,7 @@ func (m *Manager) getReceived(ctx context.Context, ref *collaboration.ShareRefer
 	return m.convert(ctx, user.Id.GetOpaqueId(), s), nil
 }
 
+// UpdateReceivedShare updates the received share with share state.
 func (m *Manager) UpdateReceivedShare(ctx context.Context, receivedShare *collaboration.ReceivedShare, fieldMask *field_mask.FieldMask) (*collaboration.ReceivedShare, error) {
 	rs, err := m.getReceived(ctx, &collaboration.ShareReference{Spec: &collaboration.ShareReference_Id{Id: receivedShare.Share.Id}})
 	if err != nil {

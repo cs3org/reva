@@ -31,26 +31,34 @@ import (
 	"github.com/cs3org/reva/v2/pkg/utils"
 )
 
+// Cache stores the list of received shares and their states
+// It functions as an in-memory cache with a persistence layer
+// The storage is sharded by user
 type Cache struct {
 	ReceivedSpaces map[string]*Spaces
 
 	storage metadata.Storage
 }
 
+// Spaces holds the received shares of one user per space
 type Spaces struct {
 	Mtime  time.Time
 	Spaces map[string]*Space
 }
 
+// Spaces holds the received shares in one space of one user
 type Space struct {
 	Mtime  time.Time
 	States map[string]*State
 }
+
+// State holds the state information of a received share
 type State struct {
 	State      collaboration.ShareState
 	MountPoint *provider.Reference
 }
 
+// New returns a new Cache instance
 func New(s metadata.Storage) Cache {
 	return Cache{
 		ReceivedSpaces: map[string]*Spaces{},
@@ -58,6 +66,7 @@ func New(s metadata.Storage) Cache {
 	}
 }
 
+// Add adds a new entry to the cache
 func (c *Cache) Add(ctx context.Context, userID, spaceID string, rs *collaboration.ReceivedShare) error {
 	if c.ReceivedSpaces[userID] == nil {
 		c.ReceivedSpaces[userID] = &Spaces{
@@ -81,6 +90,7 @@ func (c *Cache) Add(ctx context.Context, userID, spaceID string, rs *collaborati
 	return c.Persist(ctx, userID)
 }
 
+// Get returns one entry from the cache
 func (c *Cache) Get(userID, spaceID, shareID string) *State {
 	if c.ReceivedSpaces[userID] == nil || c.ReceivedSpaces[userID].Spaces[spaceID] == nil {
 		return nil
@@ -88,6 +98,7 @@ func (c *Cache) Get(userID, spaceID, shareID string) *State {
 	return c.ReceivedSpaces[userID].Spaces[spaceID].States[shareID]
 }
 
+// Sync updates the in-memory data with the data from the storage if it is outdated
 func (c *Cache) Sync(ctx context.Context, userID string) error {
 	var mtime time.Time
 	if c.ReceivedSpaces[userID] != nil {
@@ -118,6 +129,7 @@ func (c *Cache) Sync(ctx context.Context, userID string) error {
 	return nil
 }
 
+// Persist persists the data for one user to the storage
 func (c *Cache) Persist(ctx context.Context, userID string) error {
 	if c.ReceivedSpaces[userID] == nil {
 		return nil

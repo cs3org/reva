@@ -31,25 +31,29 @@ import (
 	"github.com/cs3org/reva/v2/pkg/utils"
 )
 
+// Cache holds share information structured by provider and space
 type Cache struct {
 	Providers map[string]*Spaces
 
 	storage metadata.Storage
 }
 
+// Spaces holds the share information for provider
 type Spaces struct {
 	Spaces map[string]*Shares
 }
 
+// Shares hols the share information of one space
 type Shares struct {
 	Shares map[string]*collaboration.Share
 	Mtime  time.Time
 }
 
+// UnmarshalJSON overrides the default unmarshaling
+// Shares are tricky to unmarshal because they contain an interface (Grantee) which makes the json Unmarshal bail out
+// To work around that problem we unmarshal into json.RawMessage in a first step and then try to manually unmarshal
+// into the specific types in a second step.
 func (s *Shares) UnmarshalJSON(data []byte) error {
-	// Shares are tricky to unmarshal because the contain an interface (Grantee) which makes the json Unmarshal bail out
-	// To work around that problem we unmarshal into json.RawMessage in a first step and then try to manually unmarshal
-	// into the specific types in a second step.
 	tmp := struct {
 		Shares map[string]json.RawMessage
 		Mtime  time.Time
@@ -85,6 +89,7 @@ func (s *Shares) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// New returns a new Cache instance
 func New(s metadata.Storage) Cache {
 	return Cache{
 		Providers: map[string]*Spaces{},
@@ -92,6 +97,7 @@ func New(s metadata.Storage) Cache {
 	}
 }
 
+// Add adds a share to the cache
 func (c *Cache) Add(ctx context.Context, storageID, spaceID, shareID string, share *collaboration.Share) error {
 	c.initializeIfNeeded(storageID, spaceID)
 	c.Providers[storageID].Spaces[spaceID].Shares[shareID] = share
@@ -99,6 +105,7 @@ func (c *Cache) Add(ctx context.Context, storageID, spaceID, shareID string, sha
 	return c.Persist(ctx, storageID, spaceID)
 }
 
+// Remove removes a share from the cache
 func (c *Cache) Remove(ctx context.Context, storageID, spaceID, shareID string) error {
 	if c.Providers[storageID] == nil ||
 		c.Providers[storageID].Spaces[spaceID] == nil {
@@ -109,6 +116,7 @@ func (c *Cache) Remove(ctx context.Context, storageID, spaceID, shareID string) 
 	return c.Persist(ctx, storageID, spaceID)
 }
 
+// Get returns one entry from the cache
 func (c *Cache) Get(storageID, spaceID, shareID string) *collaboration.Share {
 	if c.Providers[storageID] == nil ||
 		c.Providers[storageID].Spaces[spaceID] == nil {
@@ -117,6 +125,7 @@ func (c *Cache) Get(storageID, spaceID, shareID string) *collaboration.Share {
 	return c.Providers[storageID].Spaces[spaceID].Shares[shareID]
 }
 
+// ListSpace returns the list of shares in a given space
 func (c *Cache) ListSpace(storageID, spaceID string) *Shares {
 	if c.Providers[storageID] == nil {
 		return &Shares{}
@@ -124,6 +133,7 @@ func (c *Cache) ListSpace(storageID, spaceID string) *Shares {
 	return c.Providers[storageID].Spaces[spaceID]
 }
 
+// Persist persists the data of one space
 func (c *Cache) Persist(ctx context.Context, storageID, spaceID string) error {
 	if c.Providers[storageID] == nil || c.Providers[storageID].Spaces[spaceID] == nil {
 		return nil
@@ -145,6 +155,7 @@ func (c *Cache) Persist(ctx context.Context, storageID, spaceID string) error {
 	return nil
 }
 
+// Sync updates the in-memory data with the data from the storage if it is outdated
 func (c *Cache) Sync(ctx context.Context, storageID, spaceID string) error {
 	var mtime time.Time
 	if c.Providers[storageID] != nil && c.Providers[storageID].Spaces[spaceID] != nil {

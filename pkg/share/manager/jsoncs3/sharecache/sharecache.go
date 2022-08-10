@@ -31,6 +31,9 @@ import (
 	"github.com/cs3org/reva/v2/pkg/utils"
 )
 
+// Cache caches the list of share ids for users/groups
+// It functions as an in-memory cache with a persistence layer
+// The storage is sharded by user/group
 type Cache struct {
 	UserShares map[string]*UserShareCache
 
@@ -39,16 +42,19 @@ type Cache struct {
 	filename  string
 }
 
+// UserShareCache holds the space/share map for one user
 type UserShareCache struct {
 	Mtime      time.Time
 	UserShares map[string]*SpaceShareIDs
 }
 
+// SpaceShareIDs holds the unique list of share ids for a space
 type SpaceShareIDs struct {
 	Mtime time.Time
 	IDs   map[string]struct{}
 }
 
+// New returns a new Cache instance
 func New(s metadata.Storage, namespace, filename string) Cache {
 	return Cache{
 		UserShares: map[string]*UserShareCache{},
@@ -58,10 +64,7 @@ func New(s metadata.Storage, namespace, filename string) Cache {
 	}
 }
 
-func (c *Cache) Has(userid string) bool {
-	return c.UserShares[userid] != nil
-}
-
+// Add adds a share to the cache
 func (c *Cache) Add(ctx context.Context, userid, shareID string) error {
 	storageid, spaceid, _, err := storagespace.SplitID(shareID)
 	if err != nil {
@@ -90,6 +93,7 @@ func (c *Cache) Add(ctx context.Context, userid, shareID string) error {
 	return c.Persist(ctx, userid)
 }
 
+// Remove removes a share for the given user
 func (c *Cache) Remove(ctx context.Context, userid, shareID string) error {
 	storageid, spaceid, _, err := storagespace.SplitID(shareID)
 	if err != nil {
@@ -113,6 +117,7 @@ func (c *Cache) Remove(ctx context.Context, userid, shareID string) error {
 	return c.Persist(ctx, userid)
 }
 
+// List return the list of spaces/shares for the given user/group
 func (c *Cache) List(userid string) map[string]SpaceShareIDs {
 	r := map[string]SpaceShareIDs{}
 	if c.UserShares[userid] == nil {
@@ -128,6 +133,7 @@ func (c *Cache) List(userid string) map[string]SpaceShareIDs {
 	return r
 }
 
+// Sync updates the in-memory data with the data from the storage if it is outdated
 func (c *Cache) Sync(ctx context.Context, userid string) error {
 	var mtime time.Time
 	//  - do we have a cached list of created shares for the user in memory?
@@ -160,6 +166,7 @@ func (c *Cache) Sync(ctx context.Context, userid string) error {
 	return nil
 }
 
+// Persist persists the data for one user/group to the storage
 func (c *Cache) Persist(ctx context.Context, userid string) error {
 	c.UserShares[userid].Mtime = time.Now()
 
