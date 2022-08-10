@@ -276,7 +276,7 @@ func (fs *Decomposedfs) GetQuota(ctx context.Context, ref *provider.Reference) (
 	switch {
 	case err != nil:
 		return 0, 0, 0, errtypes.InternalError(err.Error())
-	case !rp.GetQuota:
+	case !rp.GetQuota && !fs.canListAllSpaces(ctx):
 		return 0, 0, 0, errtypes.PermissionDenied(n.ID)
 	}
 
