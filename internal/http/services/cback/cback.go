@@ -134,6 +134,7 @@ func (s *svc) handleRestoreID(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		fmt.Print(err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
 
 	snapshotList, err := s.listSnapshots(user.Username, resp.ID)
@@ -141,6 +142,7 @@ func (s *svc) handleRestoreID(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		fmt.Print(err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
 
 	if resp.Substring != "" {
@@ -158,6 +160,7 @@ func (s *svc) handleRestoreID(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			fmt.Print(err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
 		}
 
 		resp, err := s.Request(user.Username, url, requestType, bytes.NewBuffer(jbody))
@@ -177,10 +180,12 @@ func (s *svc) handleRestoreID(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+
 	} else {
 
 		err = errors.New("path incorrect")
 		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
 }
 
