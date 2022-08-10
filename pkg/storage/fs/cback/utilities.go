@@ -114,7 +114,7 @@ func (fs *cback) getRequest(userName, url string, reqType string) (io.ReadCloser
 
 func (fs *cback) listSnapshots(userName string, backupID int) ([]snapshotResponse, error) {
 
-	url := fs.conf.APIURL + strconv.Itoa(backupID) + "/snapshots"
+	url := fs.conf.APIURL + "/backups/" + strconv.Itoa(backupID) + "/snapshots"
 	requestType := "GET"
 	responseData, err := fs.getRequest(userName, url, requestType)
 
@@ -133,7 +133,7 @@ func (fs *cback) listSnapshots(userName string, backupID int) ([]snapshotRespons
 
 func (fs *cback) matchBackups(userName, pathInput string) (*backUpResponse, error) {
 
-	url := fs.conf.APIURL
+	url := fs.conf.APIURL + "/backups/"
 	requestType := "GET"
 	responseData, err := fs.getRequest(userName, url, requestType)
 
@@ -182,7 +182,7 @@ func (fs *cback) matchBackups(userName, pathInput string) (*backUpResponse, erro
 
 func (fs *cback) statResource(backupID int, snapID, userName, path, source string) (*fsReturn, error) {
 
-	url := fs.conf.APIURL + strconv.Itoa(backupID) + "/snapshots/" + snapID + "/" + path + "?content=false"
+	url := fs.conf.APIURL + "/backups/" + strconv.Itoa(backupID) + "/snapshots/" + snapID + "/" + path + "?content=false"
 	requestType := "OPTIONS"
 
 	responseData, err := fs.getRequest(userName, url, requestType)
@@ -215,7 +215,7 @@ func (fs *cback) statResource(backupID int, snapID, userName, path, source strin
 
 func (fs *cback) fileSystem(backupID int, snapID, userName, path, source string) ([]fsReturn, error) {
 
-	url := fs.conf.APIURL + strconv.Itoa(backupID) + "/snapshots/" + snapID + "/" + path + "?content=true"
+	url := fs.conf.APIURL + "/backups/" + strconv.Itoa(backupID) + "/snapshots/" + snapID + "/" + path + "?content=true"
 	requestType := "OPTIONS"
 
 	responseData, err := fs.getRequest(userName, url, requestType)
@@ -266,7 +266,7 @@ func (fs *cback) timeConv(timeInput string) (int64, error) {
 }
 
 func (fs *cback) pathFinder(userName, path string) ([]string, error) {
-	url := fs.conf.APIURL
+	url := fs.conf.APIURL + "/backups/"
 	requestType := "GET"
 	responseData, err := fs.getRequest(userName, url, requestType)
 	matchFound := false
