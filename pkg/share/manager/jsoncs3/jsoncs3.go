@@ -492,7 +492,7 @@ func (m *Manager) ListReceivedShares(ctx context.Context, filters []*collaborati
 			if s == nil {
 				continue
 			}
-			if utils.UserEqual(user.GetId(), s.GetGrantee().GetUserId()) {
+			if share.IsGrantedToUser(s, user) {
 				if share.MatchesFilters(s, filters) {
 					rs := &collaboration.ReceivedShare{
 						Share:      s,

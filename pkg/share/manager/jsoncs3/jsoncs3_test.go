@@ -54,6 +54,7 @@ var _ = Describe("Jsoncs3", func() {
 				Idp:      "https://localhost:9200",
 				OpaqueId: "einstein",
 			},
+			Groups: []string{"group1"},
 		}
 
 		sharedResource = &providerv1beta1.ResourceInfo{
@@ -552,9 +553,6 @@ var _ = Describe("Jsoncs3", func() {
 		})
 
 		Describe("ListReceivedShares", func() {
-			PIt("filters by owner")
-			PIt("filters by creator")
-			PIt("filters by grantee type")
 			PIt("syncronizes the group received cache before listing")
 
 			It("lists the received shares", func() {
@@ -633,7 +631,29 @@ var _ = Describe("Jsoncs3", func() {
 				Expect(received[0].Share.ResourceId).To(Equal(sharedResource2.Id))
 				Expect(received[0].State).To(Equal(collaboration.ShareState_SHARE_STATE_PENDING))
 				Expect(received[0].Share.Id).To(Equal(share2.Id))
+			})
 
+			Context("with a group share", func() {
+				var (
+					gshare *collaboration.Share
+				)
+
+				BeforeEach(func() {
+					var err error
+					gshare, err = m.Share(ctx, sharedResource, groupGrant)
+					Expect(err).ToNot(HaveOccurred())
+				})
+
+				It("lists the group share", func() {
+					received, err := m.ListReceivedShares(granteeCtx, []*collaboration.Filter{})
+					Expect(err).ToNot(HaveOccurred())
+					Expect(len(received)).To(Equal(2))
+					ids := []string{}
+					for _, s := range received {
+						ids = append(ids, s.Share.Id.OpaqueId)
+					}
+					Expect(ids).To(ConsistOf(share.Id.OpaqueId, gshare.Id.OpaqueId))
+				})
 			})
 		})
 
@@ -659,6 +679,30 @@ var _ = Describe("Jsoncs3", func() {
 				})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(rs.State).To(Equal(collaboration.ShareState_SHARE_STATE_PENDING))
+			})
+
+			Context("with a group share", func() {
+				var (
+					gshare *collaboration.Share
+				)
+
+				BeforeEach(func() {
+					var err error
+					gshare, err = m.Share(ctx, sharedResource, groupGrant)
+					Expect(err).ToNot(HaveOccurred())
+				})
+
+				PIt("syncs the group cache")
+
+				It("gets the group share", func() {
+					rs, err := m.GetReceivedShare(granteeCtx, &collaboration.ShareReference{
+						Spec: &collaboration.ShareReference_Id{
+							Id: gshare.Id,
+						},
+					})
+					Expect(err).ToNot(HaveOccurred())
+					Expect(rs).ToNot(BeNil())
+				})
 			})
 		})
 
