@@ -103,9 +103,9 @@ func NewDefault(m map[string]interface{}) (share.Manager, error) {
 func New(s metadata.Storage) (*Manager, error) {
 	return &Manager{
 		Cache:              providercache.New(s),
-		CreatedCache:       sharecache.New(s),
+		CreatedCache:       sharecache.New(s, "users", "created.json"),
 		UserReceivedStates: receivedsharecache.New(s),
-		GroupReceivedCache: sharecache.New(s),
+		GroupReceivedCache: sharecache.New(s, "groups", "received.json"),
 		storage:            s,
 	}, nil
 }

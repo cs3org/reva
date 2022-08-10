@@ -34,7 +34,9 @@ import (
 type Cache struct {
 	UserShares map[string]*UserShareCache
 
-	storage metadata.Storage
+	storage   metadata.Storage
+	namespace string
+	filename  string
 }
 
 type UserShareCache struct {
@@ -47,10 +49,12 @@ type SpaceShareIDs struct {
 	IDs   map[string]struct{}
 }
 
-func New(s metadata.Storage) Cache {
+func New(s metadata.Storage, namespace, filename string) Cache {
 	return Cache{
 		UserShares: map[string]*UserShareCache{},
 		storage:    s,
+		namespace:  namespace,
+		filename:   filename,
 	}
 }
 
@@ -134,7 +138,7 @@ func (c *Cache) Sync(ctx context.Context, userid string) error {
 		mtime = time.Time{} // Set zero time so that data from storage always takes precedence
 	}
 
-	userCreatedPath := userCreatedPath(userid)
+	userCreatedPath := c.userCreatedPath(userid)
 	info, err := c.storage.Stat(ctx, userCreatedPath)
 	if err != nil {
 		return err
@@ -163,7 +167,7 @@ func (c *Cache) Persist(ctx context.Context, userid string) error {
 	if err != nil {
 		return err
 	}
-	jsonPath := userCreatedPath(userid)
+	jsonPath := c.userCreatedPath(userid)
 	if err := c.storage.MakeDirIfNotExist(ctx, path.Dir(jsonPath)); err != nil {
 		return err
 	}
@@ -174,6 +178,6 @@ func (c *Cache) Persist(ctx context.Context, userid string) error {
 	return nil
 }
 
-func userCreatedPath(userid string) string {
-	return filepath.Join("/users", userid, "created.json")
+func (c *Cache) userCreatedPath(userid string) string {
+	return filepath.Join("/", c.namespace, userid, c.filename)
 }
