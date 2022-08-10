@@ -553,8 +553,6 @@ var _ = Describe("Jsoncs3", func() {
 		})
 
 		Describe("ListReceivedShares", func() {
-			PIt("syncronizes the group received cache before listing")
-
 			It("lists the received shares", func() {
 				received, err := m.ListReceivedShares(granteeCtx, []*collaboration.Filter{})
 				Expect(err).ToNot(HaveOccurred())
@@ -645,6 +643,20 @@ var _ = Describe("Jsoncs3", func() {
 				})
 
 				It("lists the group share", func() {
+					received, err := m.ListReceivedShares(granteeCtx, []*collaboration.Filter{})
+					Expect(err).ToNot(HaveOccurred())
+					Expect(len(received)).To(Equal(2))
+					ids := []string{}
+					for _, s := range received {
+						ids = append(ids, s.Share.Id.OpaqueId)
+					}
+					Expect(ids).To(ConsistOf(share.Id.OpaqueId, gshare.Id.OpaqueId))
+				})
+
+				It("syncronizes the group received cache before listing", func() {
+					m, err := jsoncs3.New(storage) // Reset in-memory cache
+					Expect(err).ToNot(HaveOccurred())
+
 					received, err := m.ListReceivedShares(granteeCtx, []*collaboration.Filter{})
 					Expect(err).ToNot(HaveOccurred())
 					Expect(len(received)).To(Equal(2))

@@ -74,10 +74,10 @@ type Manager struct {
 	Cache providercache.Cache
 	// CreatedCache holds the list of shares a user has created, sharded by user id and space id
 	CreatedCache sharecache.Cache
-	// groupReceivedCache holds the list of shares a group has access to, sharded by group id and space id
-	groupReceivedCache sharecache.Cache
-	// userReceivedStates holds the state of shares a user has received, sharded by user id and space id
-	userReceivedStates receivedsharecache.Cache
+	// GroupReceivedCache holds the list of shares a group has access to, sharded by group id and space id
+	GroupReceivedCache sharecache.Cache
+	// UserReceivedStates holds the state of shares a user has received, sharded by user id and space id
+	UserReceivedStates receivedsharecache.Cache
 
 	storage   metadata.Storage
 	SpaceRoot *provider.ResourceId
@@ -104,8 +104,8 @@ func New(s metadata.Storage) (*Manager, error) {
 	return &Manager{
 		Cache:              providercache.New(s),
 		CreatedCache:       sharecache.New(s),
-		userReceivedStates: receivedsharecache.New(s),
-		groupReceivedCache: sharecache.New(s),
+		UserReceivedStates: receivedsharecache.New(s),
+		GroupReceivedCache: sharecache.New(s),
 		storage:            s,
 	}, nil
 }
@@ -225,10 +225,10 @@ func (m *Manager) Share(ctx context.Context, md *provider.ResourceInfo, g *colla
 			Share: s,
 			State: collaboration.ShareState_SHARE_STATE_PENDING,
 		}
-		m.userReceivedStates.Add(ctx, userid, spaceID, rs)
+		m.UserReceivedStates.Add(ctx, userid, spaceID, rs)
 	case provider.GranteeType_GRANTEE_TYPE_GROUP:
 		groupid := g.Grantee.GetGroupId().GetOpaqueId()
-		if err := m.groupReceivedCache.Add(ctx, groupid, shareID); err != nil {
+		if err := m.GroupReceivedCache.Add(ctx, groupid, shareID); err != nil {
 			return nil, err
 		}
 	}
@@ -440,7 +440,8 @@ func (m *Manager) ListReceivedShares(ctx context.Context, filters []*collaborati
 
 	// first collect all spaceids the user has access to as a group member
 	for _, group := range user.Groups {
-		for ssid, spaceShareIDs := range m.groupReceivedCache.List(group) {
+		m.GroupReceivedCache.Sync(ctx, group)
+		for ssid, spaceShareIDs := range m.GroupReceivedCache.List(group) {
 			if time.Now().Sub(spaceShareIDs.Mtime) > time.Second*30 {
 				// TODO reread from disk
 			}
@@ -461,8 +462,8 @@ func (m *Manager) ListReceivedShares(ctx context.Context, filters []*collaborati
 	}
 
 	// add all spaces the user has receved shares for, this includes mount points and share state for groups
-	m.userReceivedStates.Sync(ctx, user.Id.OpaqueId)
-	for ssid, rspace := range m.userReceivedStates.ReceivedSpaces[user.Id.OpaqueId].Spaces {
+	m.UserReceivedStates.Sync(ctx, user.Id.OpaqueId)
+	for ssid, rspace := range m.UserReceivedStates.ReceivedSpaces[user.Id.OpaqueId].Spaces {
 		if time.Now().Sub(rspace.Mtime) > time.Second*30 {
 			// TODO reread from disk
 		}
@@ -523,8 +524,8 @@ func (m *Manager) convert(ctx context.Context, userID string, s *collaboration.S
 		StorageId: providerid,
 		SpaceId:   sid,
 	})
-	m.userReceivedStates.Sync(ctx, userID)
-	state := m.userReceivedStates.Get(userID, spaceID, s.Id.GetOpaqueId())
+	m.UserReceivedStates.Sync(ctx, userID)
+	state := m.UserReceivedStates.Get(userID, spaceID, s.Id.GetOpaqueId())
 	if state != nil {
 		rs.State = state.State
 		rs.MountPoint = state.MountPoint
@@ -578,7 +579,7 @@ func (m *Manager) UpdateReceivedShare(ctx context.Context, receivedShare *collab
 		SpaceId:   rs.Share.ResourceId.SpaceId,
 	})
 
-	m.userReceivedStates.Add(ctx, userID.GetId().GetOpaqueId(), spaceID, rs)
+	m.UserReceivedStates.Add(ctx, userID.GetId().GetOpaqueId(), spaceID, rs)
 
 	return rs, nil
 }
