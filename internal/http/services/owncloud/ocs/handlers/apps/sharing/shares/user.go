@@ -29,7 +29,9 @@ import (
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocs/response"
 	"github.com/cs3org/reva/v2/pkg/appctx"
+	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/v2/pkg/utils"
 )
 
 func (h *Handler) createUserShare(w http.ResponseWriter, r *http.Request, statInfo *provider.ResourceInfo, role *conversions.Role, roleVal []byte) (*collaboration.Share, *ocsError) {
@@ -217,6 +219,12 @@ func (h *Handler) listUserShares(r *http.Request, filters []*collaboration.Filte
 			info, status, err := h.getResourceInfoByID(ctx, client, s.ResourceId)
 			if err != nil || status.Code != rpc.Code_CODE_OK {
 				log.Debug().Interface("share", s).Interface("status", status).Interface("shareData", data).Err(err).Msg("could not stat share, skipping")
+				continue
+			}
+			u := ctxpkg.ContextMustGetUser(ctx)
+			// check if the user has the permission to list all shares on the resource
+			if !utils.UserEqual(s.Creator, u.Id) && !info.GetPermissionSet().ListGrants {
+				log.Debug().Interface("share", s).Interface("user", u).Msg("user has no permission to list all grants and is not the creator of this share")
 				continue
 			}
 
