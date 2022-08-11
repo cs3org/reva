@@ -125,5 +125,4 @@ func (s *svc) statResource(backupID int, snapID, userName, path, source string) 
 	defer responseData.Close()
 
 	return nil
-
 }

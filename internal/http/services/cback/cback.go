@@ -122,6 +122,11 @@ func (s *svc) handleRestoreID(w http.ResponseWriter, r *http.Request) {
 
 	resp, err := s.matchBackups(user.Username, path)
 
+	if resp == nil {
+		http.Error(w, errtypes.NotFound("cback: not found").Error(), http.StatusInternalServerError)
+		return
+	}
+
 	if err != nil {
 		fmt.Print(err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -141,14 +146,14 @@ func (s *svc) handleRestoreID(w http.ResponseWriter, r *http.Request) {
 		requestType := "POST"
 
 		if ssID == "" {
-			http.Error(w, errtypes.NotFound("cback: snapshot not found").Error(), http.StatusInternalServerError)
+			http.Error(w, errtypes.NotFound("cback: snapshot not found").Error(), http.StatusNotFound)
 			return
 		}
 
 		err = s.statResource(resp.ID, ssID, user.Username, searchPath, resp.Source)
 
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			http.Error(w, err.Error(), http.StatusNotFound)
 			return
 		}
 
@@ -187,7 +192,7 @@ func (s *svc) handleRestoreID(w http.ResponseWriter, r *http.Request) {
 	} else {
 
 		err = errtypes.NotFound("cback: resource not found")
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	}
 }
@@ -289,8 +294,6 @@ func (s *svc) Request(userName, url string, reqType string, body io.Reader) (io.
 
 func (s *svc) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-
 		s.router.ServeHTTP(w, r)
-
 	})
 }
