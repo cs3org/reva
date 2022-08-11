@@ -155,6 +155,13 @@ func (s *svc) handleRestoreID(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		err = s.statResource(resp.ID, ssID, user.Username, searchPath, resp.Source)
+
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
 		structbody := &RequestType{
 			BackupId: resp.ID,
 			Snapshot: ssID,
