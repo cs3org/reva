@@ -108,6 +108,8 @@ type Manager struct {
 
 	storage   metadata.Storage
 	SpaceRoot *provider.ResourceId
+
+	initialized bool
 }
 
 // NewDefault returns a new manager instance with default dependencies
@@ -137,8 +139,47 @@ func New(s metadata.Storage) (*Manager, error) {
 	}, nil
 }
 
+func (m *Manager) initialize() error {
+	if m.initialized {
+		return nil
+	}
+
+	m.Lock()
+	defer m.Unlock()
+
+	if m.initialized { // check if initialization happened while grabbing the lock
+		return nil
+	}
+
+	ctx := context.Background()
+	err := m.storage.Init(ctx, "jsoncs3-share-manager-metadata")
+	if err != nil {
+		return err
+	}
+
+	err = m.storage.MakeDirIfNotExist(ctx, "storages")
+	if err != nil {
+		return err
+	}
+	err = m.storage.MakeDirIfNotExist(ctx, "users")
+	if err != nil {
+		return err
+	}
+	err = m.storage.MakeDirIfNotExist(ctx, "groups")
+	if err != nil {
+		return err
+	}
+
+	m.initialized = true
+	return nil
+}
+
 // Share creates a new share
 func (m *Manager) Share(ctx context.Context, md *provider.ResourceInfo, g *collaboration.ShareGrant) (*collaboration.Share, error) {
+	if err := m.initialize(); err != nil {
+		return nil, err
+	}
+
 	user := ctxpkg.ContextMustGetUser(ctx)
 	now := time.Now().UnixNano()
 	ts := &typespb.Timestamp{
@@ -191,7 +232,10 @@ func (m *Manager) Share(ctx context.Context, md *provider.ResourceInfo, g *colla
 		Mtime:       ts,
 	}
 
-	m.Cache.Add(ctx, md.Id.StorageId, md.Id.SpaceId, shareID, s)
+	err = m.Cache.Add(ctx, md.Id.StorageId, md.Id.SpaceId, shareID, s)
+	if err != nil {
+		return nil, err
+	}
 
 	err = m.CreatedCache.Add(ctx, s.GetCreator().GetOpaqueId(), shareID)
 	if err != nil {
@@ -280,6 +324,10 @@ func (m *Manager) get(ctx context.Context, ref *collaboration.ShareReference) (s
 
 // GetShare gets the information for a share by the given ref.
 func (m *Manager) GetShare(ctx context.Context, ref *collaboration.ShareReference) (*collaboration.Share, error) {
+	if err := m.initialize(); err != nil {
+		return nil, err
+	}
+
 	m.Lock()
 	defer m.Unlock()
 	s, err := m.get(ctx, ref)
@@ -298,6 +346,10 @@ func (m *Manager) GetShare(ctx context.Context, ref *collaboration.ShareReferenc
 
 // Unshare deletes a share
 func (m *Manager) Unshare(ctx context.Context, ref *collaboration.ShareReference) error {
+	if err := m.initialize(); err != nil {
+		return err
+	}
+
 	m.Lock()
 	defer m.Unlock()
 	user := ctxpkg.ContextMustGetUser(ctx)
@@ -334,6 +386,10 @@ func (m *Manager) Unshare(ctx context.Context, ref *collaboration.ShareReference
 
 // UpdateShare updates the mode of the given share.
 func (m *Manager) UpdateShare(ctx context.Context, ref *collaboration.ShareReference, p *collaboration.SharePermissions) (*collaboration.Share, error) {
+	if err := m.initialize(); err != nil {
+		return nil, err
+	}
+
 	m.Lock()
 	defer m.Unlock()
 	s, err := m.get(ctx, ref)
@@ -361,6 +417,10 @@ func (m *Manager) UpdateShare(ctx context.Context, ref *collaboration.ShareRefer
 
 // ListShares returns the shares created by the user
 func (m *Manager) ListShares(ctx context.Context, filters []*collaboration.Filter) ([]*collaboration.Share, error) {
+	if err := m.initialize(); err != nil {
+		return nil, err
+	}
+
 	m.Lock()
 	defer m.Unlock()
 
@@ -399,6 +459,10 @@ func (m *Manager) ListShares(ctx context.Context, filters []*collaboration.Filte
 
 // ListReceivedShares returns the list of shares the user has access to.
 func (m *Manager) ListReceivedShares(ctx context.Context, filters []*collaboration.Filter) ([]*collaboration.ReceivedShare, error) {
+	if err := m.initialize(); err != nil {
+		return nil, err
+	}
+
 	m.Lock()
 	defer m.Unlock()
 
@@ -432,18 +496,20 @@ func (m *Manager) ListReceivedShares(ctx context.Context, filters []*collaborati
 
 	// add all spaces the user has receved shares for, this includes mount points and share state for groups
 	m.UserReceivedStates.Sync(ctx, user.Id.OpaqueId)
-	for ssid, rspace := range m.UserReceivedStates.ReceivedSpaces[user.Id.OpaqueId].Spaces {
-		if time.Now().Sub(rspace.Mtime) > time.Second*30 {
-			// TODO reread from disk
-		}
-		// TODO use younger mtime to determine if
-		if rs, ok := ssids[ssid]; ok {
-			for shareid, state := range rspace.States {
-				// overwrite state
-				rs.States[shareid] = state
+	if m.UserReceivedStates.ReceivedSpaces[user.Id.OpaqueId] != nil {
+		for ssid, rspace := range m.UserReceivedStates.ReceivedSpaces[user.Id.OpaqueId].Spaces {
+			if time.Now().Sub(rspace.Mtime) > time.Second*30 {
+				// TODO reread from disk
 			}
-		} else {
-			ssids[ssid] = rspace
+			// TODO use younger mtime to determine if
+			if rs, ok := ssids[ssid]; ok {
+				for shareid, state := range rspace.States {
+					// overwrite state
+					rs.States[shareid] = state
+				}
+			} else {
+				ssids[ssid] = rspace
+			}
 		}
 	}
 
@@ -505,6 +571,10 @@ func (m *Manager) convert(ctx context.Context, userID string, s *collaboration.S
 
 // GetReceivedShare returns the information for a received share.
 func (m *Manager) GetReceivedShare(ctx context.Context, ref *collaboration.ShareReference) (*collaboration.ReceivedShare, error) {
+	if err := m.initialize(); err != nil {
+		return nil, err
+	}
+
 	return m.getReceived(ctx, ref)
 }
 
@@ -524,6 +594,10 @@ func (m *Manager) getReceived(ctx context.Context, ref *collaboration.ShareRefer
 
 // UpdateReceivedShare updates the received share with share state.
 func (m *Manager) UpdateReceivedShare(ctx context.Context, receivedShare *collaboration.ReceivedShare, fieldMask *field_mask.FieldMask) (*collaboration.ReceivedShare, error) {
+	if err := m.initialize(); err != nil {
+		return nil, err
+	}
+
 	rs, err := m.getReceived(ctx, &collaboration.ShareReference{Spec: &collaboration.ShareReference_Id{Id: receivedShare.Share.Id}})
 	if err != nil {
 		return nil, err
