@@ -45,7 +45,7 @@ func (s *svc) pathTrimmer(snapshotList []snapshotResponse, resp *backUpResponse)
 
 func (s *svc) listSnapshots(userName string, backupID int) ([]snapshotResponse, error) {
 
-	url := s.conf.APIURL + strconv.Itoa(backupID) + "/snapshots"
+	url := s.conf.APIURL + "/backups/" + strconv.Itoa(backupID) + "/snapshots"
 	requestType := "GET"
 	responseData, err := s.Request(userName, url, requestType, nil)
 
@@ -64,7 +64,7 @@ func (s *svc) listSnapshots(userName string, backupID int) ([]snapshotResponse, 
 
 func (s *svc) matchBackups(userName, pathInput string) (*backUpResponse, error) {
 
-	url := s.conf.APIURL
+	url := s.conf.APIURL + "/backups/"
 	requestType := "GET"
 	responseData, err := s.Request(userName, url, requestType, nil)
 
