@@ -27,6 +27,7 @@ import (
 	"net/http"
 
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
+	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/go-chi/chi/v5"
 	"github.com/mitchellh/mapstructure"
@@ -154,11 +155,6 @@ func (s *svc) handleRestoreID(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if searchPath == "" {
-			http.Error(w, "invalid path", http.StatusInternalServerError)
-			return
-		}
-
 		structbody := &RequestType{
 			BackupId: resp.ID,
 			Snapshot: ssID,
@@ -273,6 +269,22 @@ func (s *svc) Request(userName, url string, reqType string, body io.Reader) (io.
 
 	if err != nil {
 		return nil, err
+	}
+
+	if resp.StatusCode == 404 {
+		return nil, errtypes.NotFound("cback: resource not found")
+	}
+
+	if resp.StatusCode == 500 {
+		return nil, errtypes.InternalError("cback: internal server error")
+	}
+
+	if resp.StatusCode == 403 {
+		return nil, errtypes.PermissionDenied("cback: user has no permissions to get the backup")
+	}
+
+	if resp.StatusCode == 400 {
+		return nil, errtypes.BadRequest("cback")
 	}
 
 	return resp.Body, nil
