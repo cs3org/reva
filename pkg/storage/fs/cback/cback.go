@@ -196,6 +196,10 @@ func (fs *cback) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys
 	if resp.Substring != "" {
 		ssID, searchPath = fs.pathTrimmer(snapshotList, resp)
 
+		if ssID == "" {
+			return nil, errtypes.NotFound("cback: snapshotID invalid")
+		}
+
 		//If no match in path, therefore prints the files
 		fmt.Printf("The ssID is: %v\nThe Path is %v\n", ssID, searchPath)
 		ret, err := fs.fileSystem(resp.ID, ssID, user.Username, searchPath, resp.Source)
