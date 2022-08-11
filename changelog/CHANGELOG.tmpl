@@ -8,13 +8,13 @@ reva users. The changes are ordered by importance.
 Summary
 -------
 {{ range $entry := .Entries }}{{ with $entry }}
- * {{ .TypeShort }} #{{ .PrimaryID }}: {{ .Title }}
+*   {{ .TypeShort }} #{{ .PrimaryID }}: {{ .Title }}
 {{- end }}{{ end }}
 
 Details
 -------
 {{ range $entry := .Entries }}{{ with $entry }}
- * {{ .Type }} #{{ .PrimaryID }}: {{ .Title }}
+*   {{ .Type }} #{{ .PrimaryID }}: {{ .Title }}
 {{ range $par := .Paragraphs }}
    {{ wrapIndent $par 80 3 }}
 {{ end -}}
@@ -28,6 +28,5 @@ Details
    {{ $url -}}
 {{ end }}
 {{ end }}{{ end }}
-
 {{ end }}{{ end -}}
 
