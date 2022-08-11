@@ -119,7 +119,7 @@ func (s *svc) routerInit() error {
 func (s *svc) handleRestoreID(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	user, _ := ctxpkg.ContextGetUser(ctx)
-	url := "http://cback-portal-dev-01:8000/restores/"
+	url := s.conf.APIURL + "/restores/"
 	var ssID, searchPath string
 
 	path := r.URL.Query().Get("path")
@@ -202,7 +202,7 @@ func (s *svc) handleRestoreID(w http.ResponseWriter, r *http.Request) {
 func (s *svc) handleListJobs(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	user, _ := ctxpkg.ContextGetUser(ctx)
-	url := "http://cback-portal-dev-01:8000/restores/"
+	url := s.conf.APIURL + "/restores/"
 
 	resp, err := s.Request(user.Username, url, "GET", nil)
 
@@ -231,7 +231,7 @@ func (s *svc) handleRestoreStatus(w http.ResponseWriter, r *http.Request) {
 	restoreID := chi.URLParam(r, "restore_id")
 	fmt.Printf("The Restore_ID is: %v", restoreID)
 
-	url := "http://cback-portal-dev-01:8000/restores/" + restoreID
+	url := s.conf.APIURL + "/restores/" + restoreID
 	resp, err := s.Request(user.Username, url, "GET", nil)
 
 	if err != nil {
