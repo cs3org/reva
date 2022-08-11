@@ -18,4 +18,3 @@ Details
    set, users can list all shares in all spaces.
 
    https://github.com/cs3org/reva/pull/3141
-
