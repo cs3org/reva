@@ -21,7 +21,6 @@ package cback
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -41,15 +40,6 @@ type RequestType struct {
 	//destination string
 	//enabled     bool
 	//date        string
-}
-
-type restoreType struct {
-	Id          int    `json:"id"`
-	BackupID    int    `json:"backup_id"`
-	SnapshotID  string `json:"snapshot"`
-	Destination string `json:"destination"`
-	Pattern     string `json:"pattern"`
-	Status      int    `json:"status"`
 }
 
 func init() {
@@ -151,7 +141,7 @@ func (s *svc) handleRestoreID(w http.ResponseWriter, r *http.Request) {
 		requestType := "POST"
 
 		if ssID == "" {
-			http.Error(w, "snapshot not found", http.StatusInternalServerError)
+			http.Error(w, errtypes.NotFound("cback: snapshot not found").Error(), http.StatusInternalServerError)
 			return
 		}
 
@@ -196,7 +186,7 @@ func (s *svc) handleRestoreID(w http.ResponseWriter, r *http.Request) {
 
 	} else {
 
-		err = errors.New("path incorrect")
+		err = errtypes.NotFound("cback: resource not found")
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
