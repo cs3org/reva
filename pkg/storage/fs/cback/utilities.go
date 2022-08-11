@@ -10,6 +10,7 @@ import (
 	"time"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/pkg/errtypes"
 )
 
 type backUpResponse struct {
@@ -110,18 +111,15 @@ func (fs *cback) getRequest(userName, url string, reqType string) (io.ReadCloser
 	}
 
 	if resp.StatusCode == 404 {
-		err = errors.New("not found")
-		return nil, err
+		return nil, errtypes.NotFound("cback: resource not found")
 	}
 
 	if resp.StatusCode == 500 {
-		err = errors.New("invalid query")
-		return nil, err
+		return nil, errtypes.InternalError("cback: internal server error")
 	}
 
 	if resp.StatusCode == 403 {
-		err = errors.New("no permissions to get backup")
-		return nil, err
+		return nil, errtypes.PermissionDenied("cback: user has no permissions to get the backup")
 	}
 
 	return resp.Body, nil
@@ -317,8 +315,7 @@ func (fs *cback) pathFinder(userName, path string) ([]string, error) {
 		return returnString, nil
 	}
 
-	err = errors.New("no match found")
-	return nil, err
+	return nil, errtypes.NotFound("cback: resource not found")
 
 }
 

@@ -331,8 +331,7 @@ func (fs *cback) Download(ctx context.Context, ref *provider.Reference) (io.Read
 
 	}
 
-	err = errors.New("not found")
-	return nil, err
+	return nil, errtypes.NotFound("cback: resource not found")
 }
 
 func (fs *cback) GetHome(ctx context.Context) (string, error) {
