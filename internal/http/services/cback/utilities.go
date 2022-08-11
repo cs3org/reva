@@ -78,10 +78,10 @@ func (s *svc) matchBackups(userName, pathInput string) (*backUpResponse, error) 
 	responseObject := []backUpResponse{}
 	json.NewDecoder(responseData).Decode(&responseObject)
 
-	if len(responseObject) == 0 {
+	/*if len(responseObject) == 0 {
 		err = errors.New("no match found")
 		return nil, err
-	}
+	}*/
 
 	for i := range responseObject {
 		if responseObject[i].Detail != "" {
@@ -109,4 +109,21 @@ func (s *svc) matchBackups(userName, pathInput string) (*backUpResponse, error) 
 	}
 
 	return nil, nil
+}
+
+func (s *svc) statResource(backupID int, snapID, userName, path, source string) error {
+
+	url := s.conf.APIURL + "/backups/" + strconv.Itoa(backupID) + "/snapshots/" + snapID + "/" + path + "?content=false"
+	requestType := "OPTIONS"
+
+	responseData, err := s.Request(userName, url, requestType, nil)
+
+	if err != nil {
+		return err
+	}
+
+	defer responseData.Close()
+
+	return nil
+
 }
