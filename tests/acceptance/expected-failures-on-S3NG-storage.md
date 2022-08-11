@@ -24,24 +24,24 @@ Basic file management like up and download, move, copy, properties, quota, trash
 - [apiVersions/fileVersionAuthor.feature:223](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersionAuthor.feature#L223)
 
 #### [Getting information about a folder overwritten by a file gives 500 error instead of 404](https://github.com/owncloud/ocis/issues/1239)
-- [apiWebdavProperties1/copyFile.feature:286](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L286)
-- [apiWebdavProperties1/copyFile.feature:287](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L287)
-- [apiWebdavProperties1/copyFile.feature:309](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L309)
-- [apiWebdavProperties1/copyFile.feature:310](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L310)
-- [apiWebdavProperties1/copyFile.feature:337](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L337)
-- [apiWebdavProperties1/copyFile.feature:338](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L338)
+- [apiWebdavProperties1/copyFile.feature:276](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L276)
+- [apiWebdavProperties1/copyFile.feature:277](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L277)
+- [apiWebdavProperties1/copyFile.feature:294](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L294)
+- [apiWebdavProperties1/copyFile.feature:295](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L295)
+- [apiWebdavProperties1/copyFile.feature:317](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L317)
+- [apiWebdavProperties1/copyFile.feature:318](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L318)
+- [apiWebdavProperties1/copyFile.feature:342](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L342)
+- [apiWebdavProperties1/copyFile.feature:343](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L343)
+- [apiWebdavProperties1/copyFile.feature:366](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L366)
 - [apiWebdavProperties1/copyFile.feature:367](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L367)
-- [apiWebdavProperties1/copyFile.feature:368](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L368)
-- [apiWebdavProperties1/copyFile.feature:396](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L396)
-- [apiWebdavProperties1/copyFile.feature:397](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L397)
-- [apiWebdavProperties1/copyFile.feature:425](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L425)
-- [apiWebdavProperties1/copyFile.feature:426](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L426)
-- [apiWebdavProperties1/copyFile.feature:509](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L509)
-- [apiWebdavProperties1/copyFile.feature:542](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L542)
-- [apiWebdavProperties1/copyFile.feature:543](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L543)
-- [apiWebdavProperties1/copyFile.feature:574](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L574)
-- [apiWebdavProperties1/copyFile.feature:575](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L575)
-- [apiWebdavProperties1/copyFile.feature:606](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L606)
+- [apiWebdavProperties1/copyFile.feature:390](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L390)
+- [apiWebdavProperties1/copyFile.feature:391](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L391)
+- [apiWebdavProperties1/copyFile.feature:469](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L469)
+- [apiWebdavProperties1/copyFile.feature:497](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L497)
+- [apiWebdavProperties1/copyFile.feature:498](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L498)
+- [apiWebdavProperties1/copyFile.feature:524](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L524)
+- [apiWebdavProperties1/copyFile.feature:525](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L525)
+- [apiWebdavProperties1/copyFile.feature:551](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L551)
 
 #### [Custom dav properties with namespaces are rendered incorrectly](https://github.com/owncloud/ocis/issues/2140)
 _ocdav: double check the webdav property parsing when custom namespaces are used_
@@ -60,7 +60,7 @@ _ocdav: double check the webdav property parsing when custom namespaces are used
 Synchronization features like etag propagation, setting mtime and locking files
 
 #### [Uploading an old method chunked file with checksum should fail using new DAV path](https://github.com/owncloud/ocis/issues/2323)
-- [apiMain/checksums.feature:381](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiMain/checksums.feature#L381)
+- [apiMain/checksums.feature:371](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiMain/checksums.feature#L371)
 
 #### [Webdav LOCK operations](https://github.com/owncloud/ocis/issues/1284)
 - [apiWebdavLocks/exclusiveLocks.feature:18](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavLocks/exclusiveLocks.feature#L18)
@@ -486,8 +486,8 @@ _requires a [CS3 user provisioning api that can update the quota for a user](htt
 - [apiTrashbin/trashbinSharingToShares.feature:184](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinSharingToShares.feature#L184)
 
 #### [Folder overwrite on shared files doesn't works correctly on copying file](https://github.com/owncloud/ocis/issues/2183)
-- [apiWebdavProperties1/copyFile.feature:510](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L510)
-- [apiWebdavProperties1/copyFile.feature:607](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L607)
+- [apiWebdavProperties1/copyFile.feature:470](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L470)
+- [apiWebdavProperties1/copyFile.feature:552](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L552)
 
 #### [cannot get share-types webdav property](https://github.com/owncloud/ocis/issues/567)
 - [apiWebdavProperties2/getFileProperties.feature:238](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties2/getFileProperties.feature#L238)
@@ -500,8 +500,8 @@ _requires a [CS3 user provisioning api that can update the quota for a user](htt
 
 #### [changing user quota gives ocs status 103 / Cannot set quota](https://github.com/owncloud/product/issues/247)
 _requires a [CS3 user provisioning api that can update the quota for a user](https://github.com/cs3org/cs3apis/pull/95#issuecomment-772780683)_
-- [apiShareOperationsToShares2/uploadToShare.feature:245](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareOperationsToShares2/uploadToShare.feature#L245)
-- [apiShareOperationsToShares2/uploadToShare.feature:246](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareOperationsToShares2/uploadToShare.feature#L246)
+- [apiShareOperationsToShares2/uploadToShare.feature:210](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareOperationsToShares2/uploadToShare.feature#L210)
+- [apiShareOperationsToShares2/uploadToShare.feature:211](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareOperationsToShares2/uploadToShare.feature#L211)
 
 #### [not possible to move file into a received folder](https://github.com/owncloud/ocis/issues/764)
 
@@ -829,7 +829,7 @@ And other missing implementation of favorites
 - [apiFavorites/favoritesSharingToShares.feature:62](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiFavorites/favoritesSharingToShares.feature#L62)
 - [apiFavorites/favoritesSharingToShares.feature:102](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiFavorites/favoritesSharingToShares.feature#L102)
 - [apiFavorites/favoritesSharingToShares.feature:103](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiFavorites/favoritesSharingToShares.feature#L103)
-- [apiMain/checksums.feature:228](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiMain/checksums.feature#L228)
+- [apiMain/checksums.feature:223](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiMain/checksums.feature#L223)
 
 #### [WWW-Authenticate header for unauthenticated requests is not clear](https://github.com/owncloud/ocis/issues/2285)
 - [apiWebdavOperations/refuseAccess.feature:22](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavOperations/refuseAccess.feature#L22)
@@ -931,8 +931,8 @@ Not everything needs to be implemented for ocis. While the oc10 testsuite covers
 - [apiWebdavUpload1/uploadFileToExcludedDirectory.feature:82](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUpload1/uploadFileToExcludedDirectory.feature#L82)
 
 #### [Blacklist files extensions](https://github.com/owncloud/ocis/issues/2177)
-- [apiWebdavProperties1/copyFile.feature:132](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L132)
-- [apiWebdavProperties1/copyFile.feature:133](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L133)
+- [apiWebdavProperties1/copyFile.feature:122](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L122)
+- [apiWebdavProperties1/copyFile.feature:123](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L123)
 - [apiWebdavProperties1/createFolder.feature:95](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/createFolder.feature#L95)
 - [apiWebdavProperties1/createFolder.feature:96](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/createFolder.feature#L96)
 - [apiWebdavUpload1/uploadFile.feature:181](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUpload1/uploadFile.feature#L181)
@@ -1077,12 +1077,12 @@ _ocs: api compatibility, return correct status code_
 - [apiShareCreateSpecialToShares2/createShareReceivedInMultipleWays.feature:510](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares2/createShareReceivedInMultipleWays.feature#L510)
 
 #### [copying the file inside Shares folder returns 404](https://github.com/owncloud/ocis/issues/3874)
-- [apiWebdavProperties1/copyFile.feature:452](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L452)
-- [apiWebdavProperties1/copyFile.feature:453](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L453)
-- [apiWebdavProperties1/copyFile.feature:478](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L478)
-- [apiWebdavProperties1/copyFile.feature:479](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L479)
-- [apiWebdavProperties1/copyFile.feature:543](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L543)
-- [apiWebdavProperties1/copyFile.feature:575](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L575)
+- [apiWebdavProperties1/copyFile.feature:412](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L412)
+- [apiWebdavProperties1/copyFile.feature:413](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L413)
+- [apiWebdavProperties1/copyFile.feature:438](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L438)
+- [apiWebdavProperties1/copyFile.feature:439](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L439)
+- [apiWebdavProperties1/copyFile.feature:498](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L498)
+- [apiWebdavProperties1/copyFile.feature:525](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L525)
 
 ### [Allow public link sharing only for certain groups feature not implemented]
 - [apiSharePublicLink3/allowGroupToCreatePublicLinks.feature:35](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink3/allowGroupToCreatePublicLinks.feature#L35)
