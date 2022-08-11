@@ -109,6 +109,21 @@ func (fs *cback) getRequest(userName, url string, reqType string) (io.ReadCloser
 		return nil, err
 	}
 
+	if resp.StatusCode == 404 {
+		err = errors.New("not found")
+		return nil, err
+	}
+
+	if resp.StatusCode == 500 {
+		err = errors.New("invalid query")
+		return nil, err
+	}
+
+	if resp.StatusCode == 403 {
+		err = errors.New("no permissions to get backup")
+		return nil, err
+	}
+
 	return resp.Body, nil
 }
 
