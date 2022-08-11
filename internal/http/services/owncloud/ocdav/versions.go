@@ -20,9 +20,14 @@ package ocdav
 
 import (
 	"context"
+	"fmt"
+	"io"
 	"net/http"
 	"path"
+	"path/filepath"
 
+	"github.com/cs3org/reva/pkg/rhttp"
+	"github.com/cs3org/reva/pkg/storage/utils/downloader"
 	rtrace "github.com/cs3org/reva/pkg/trace"
 	"github.com/cs3org/reva/pkg/utils/resourceid"
 
@@ -73,6 +78,10 @@ func (h *VersionsHandler) Handler(s *svc, rid *provider.ResourceId) http.Handler
 			// TODO(jfd) cs3api has no delete file version call
 			// TODO(jfd) restore version to given Destination, but cs3api has no destination
 			h.doRestore(w, r, s, rid, key)
+			return
+		}
+		if key != "" && r.Method == http.MethodGet {
+			h.doDownload(w, r, s, rid, key)
 			return
 		}
 
@@ -211,4 +220,50 @@ func (h *VersionsHandler) doRestore(w http.ResponseWriter, r *http.Request, s *s
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *VersionsHandler) doDownload(w http.ResponseWriter, r *http.Request, s *svc, rid *provider.ResourceId, key string) {
+	ctx, span := rtrace.Provider.Tracer("ocdav").Start(r.Context(), "restore")
+	defer span.End()
+
+	sublog := appctx.GetLogger(ctx).With().Interface("resourceid", rid).Str("key", key).Logger()
+
+	client, err := s.getClient()
+	if err != nil {
+		sublog.Error().Err(err).Msg("error getting grpc client")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	resStat, err := client.Stat(ctx, &provider.StatRequest{
+		Ref: &provider.Reference{
+			ResourceId: rid,
+		},
+	})
+
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	if resStat.Status.Code != rpc.Code_CODE_OK {
+		HandleErrorStatus(&sublog, w, resStat.Status)
+		return
+	}
+
+	dir, fname := filepath.Split(resStat.GetInfo().Path)
+
+	versionFile := filepath.Join(dir, ".sys.v#."+fname, key)
+
+	down := downloader.NewDownloader(client, rhttp.Context(ctx))
+	reader, err := down.Download(ctx, versionFile)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	defer reader.Close()
+
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", fname))
+	w.Header().Set("Content-Transfer-Encoding", "binary")
+	io.Copy(w, reader)
 }
