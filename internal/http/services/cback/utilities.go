@@ -12,7 +12,7 @@ type backUpResponse struct {
 	ID        int    `json:"id"`
 	Name      string `json:"name"`
 	Source    string `json:"source"`
-	Substring string //Used in function
+	Substring string
 }
 
 type snapshotResponse struct {
@@ -77,11 +77,6 @@ func (s *svc) matchBackups(userName, pathInput string) (*backUpResponse, error) 
 	/*Unmarshalling the JSON response into the Response struct*/
 	responseObject := []backUpResponse{}
 	json.NewDecoder(responseData).Decode(&responseObject)
-
-	/*if len(responseObject) == 0 {
-		err = errors.New("no match found")
-		return nil, err
-	}*/
 
 	for i := range responseObject {
 		if responseObject[i].Detail != "" {
