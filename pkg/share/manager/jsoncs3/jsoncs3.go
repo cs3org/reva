@@ -20,6 +20,7 @@ package jsoncs3
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"time"
 
@@ -39,7 +40,6 @@ import (
 	"github.com/cs3org/reva/v2/pkg/share/manager/jsoncs3/sharecache"
 	"github.com/cs3org/reva/v2/pkg/share/manager/registry"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/metadata" // nolint:staticcheck // we need the legacy package to convert V1 to V2 messages
-	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/utils"
 )
 
@@ -174,6 +174,26 @@ func (m *Manager) initialize() error {
 	return nil
 }
 
+func encodeShareID(providerID, spaceID, shareID string) string {
+	return providerID + "^" + spaceID + "°" + shareID
+}
+
+// share ids are of the format <storageid>^<spaceid>°<shareid>
+func decodeShareID(id string) (string, string, string) {
+	parts := strings.SplitN(id, "^", 2)
+	if len(parts) == 1 {
+		return "", "", parts[0]
+	}
+
+	storageid := parts[0]
+	parts = strings.SplitN(parts[1], "°", 2)
+	if len(parts) == 1 {
+		return storageid, parts[0], ""
+	}
+
+	return storageid, parts[0], parts[1]
+}
+
 // Share creates a new share
 func (m *Manager) Share(ctx context.Context, md *provider.ResourceInfo, g *collaboration.ShareGrant) (*collaboration.Share, error) {
 	if err := m.initialize(); err != nil {
@@ -208,17 +228,8 @@ func (m *Manager) Share(ctx context.Context, md *provider.ResourceInfo, g *colla
 		// share already exists
 		return nil, errtypes.AlreadyExists(key.String())
 	}
-	shareReference := &provider.Reference{
-		ResourceId: &provider.ResourceId{
-			StorageId: md.GetId().StorageId,
-			SpaceId:   md.GetId().SpaceId,
-			OpaqueId:  uuid.NewString(),
-		},
-	}
-	shareID, err := storagespace.FormatReference(shareReference)
-	if err != nil {
-		return nil, err
-	}
+
+	shareID := encodeShareID(md.GetId().GetStorageId(), md.GetId().GetSpaceId(), uuid.NewString())
 	s := &collaboration.Share{
 		Id: &collaboration.ShareId{
 			OpaqueId: shareID,
@@ -242,10 +253,7 @@ func (m *Manager) Share(ctx context.Context, md *provider.ResourceInfo, g *colla
 		return nil, err
 	}
 
-	spaceID := storagespace.FormatResourceID(provider.ResourceId{
-		StorageId: md.Id.StorageId,
-		SpaceId:   md.Id.SpaceId,
-	})
+	spaceID := md.Id.StorageId + "^" + md.Id.SpaceId
 	// set flag for grantee to have access to share
 	switch g.Grantee.Type {
 	case provider.GranteeType_GRANTEE_TYPE_USER:
@@ -268,19 +276,14 @@ func (m *Manager) Share(ctx context.Context, md *provider.ResourceInfo, g *colla
 
 // getByID must be called in a lock-controlled block.
 func (m *Manager) getByID(id *collaboration.ShareId) (*collaboration.Share, error) {
-	shareid, err := storagespace.ParseID(id.OpaqueId)
-	if err != nil {
-		// invalid share id, does not exist
-		return nil, errtypes.NotFound(id.String())
-	}
-
+	storageID, spaceID, _ := decodeShareID(id.OpaqueId)
 	// sync cache, maybe our data is outdated
-	err = m.Cache.Sync(context.Background(), shareid.StorageId, shareid.SpaceId)
+	err := m.Cache.Sync(context.Background(), storageID, spaceID)
 	if err != nil {
 		return nil, err
 	}
 
-	share := m.Cache.Get(shareid.StorageId, shareid.SpaceId, id.OpaqueId)
+	share := m.Cache.Get(storageID, spaceID, id.OpaqueId)
 	if share == nil {
 		return nil, errtypes.NotFound(id.String())
 	}
@@ -364,11 +367,8 @@ func (m *Manager) Unshare(ctx context.Context, ref *collaboration.ShareReference
 		return errtypes.NotFound(ref.String())
 	}
 
-	shareid, err := storagespace.ParseID(s.Id.OpaqueId)
-	if err != nil {
-		return err
-	}
-	err = m.Cache.Remove(ctx, shareid.StorageId, shareid.SpaceId, s.Id.OpaqueId)
+	storageID, spaceID, _ := decodeShareID(s.Id.OpaqueId)
+	err = m.Cache.Remove(ctx, storageID, spaceID, s.Id.OpaqueId)
 	if err != nil {
 		return err
 	}
@@ -432,15 +432,12 @@ func (m *Manager) ListShares(ctx context.Context, filters []*collaboration.Filte
 		if time.Now().Sub(spaceShareIDs.Mtime) > time.Second*30 {
 			// TODO reread from disk
 		}
-		providerid, spaceid, _, err := storagespace.SplitID(ssid)
+		storageID, spaceID, _ := decodeShareID(ssid)
+		err := m.Cache.Sync(ctx, storageID, spaceID)
 		if err != nil {
 			continue
 		}
-		err = m.Cache.Sync(ctx, providerid, spaceid)
-		if err != nil {
-			continue
-		}
-		spaceShares := m.Cache.ListSpace(providerid, spaceid)
+		spaceShares := m.Cache.ListSpace(storageID, spaceID)
 		for shareid, _ := range spaceShareIDs.IDs {
 			s := spaceShares.Shares[shareid]
 			if s == nil {
@@ -514,16 +511,13 @@ func (m *Manager) ListReceivedShares(ctx context.Context, filters []*collaborati
 	}
 
 	for ssid, rspace := range ssids {
-		providerid, spaceid, _, err := storagespace.SplitID(ssid)
-		if err != nil {
-			continue
-		}
-		err = m.Cache.Sync(ctx, providerid, spaceid)
+		storageID, spaceID, _ := decodeShareID(ssid)
+		err := m.Cache.Sync(ctx, storageID, spaceID)
 		if err != nil {
 			continue
 		}
 		for shareId, state := range rspace.States {
-			s := m.Cache.Get(providerid, spaceid, shareId)
+			s := m.Cache.Get(storageID, spaceID, shareId)
 			if s == nil {
 				continue
 			}
@@ -551,17 +545,10 @@ func (m *Manager) convert(ctx context.Context, userID string, s *collaboration.S
 		State: collaboration.ShareState_SHARE_STATE_PENDING,
 	}
 
-	providerid, sid, _, err := storagespace.SplitID(s.Id.OpaqueId)
-	if err != nil {
-		return rs
-	}
-	spaceID := storagespace.FormatResourceID(provider.ResourceId{
-		StorageId: providerid,
-		SpaceId:   sid,
-	})
+	storageID, spaceID, _ := decodeShareID(s.Id.OpaqueId)
 
 	m.UserReceivedStates.Sync(ctx, userID)
-	state := m.UserReceivedStates.Get(userID, spaceID, s.Id.GetOpaqueId())
+	state := m.UserReceivedStates.Get(userID, storageID+"^"+spaceID, s.Id.GetOpaqueId())
 	if state != nil {
 		rs.State = state.State
 		rs.MountPoint = state.MountPoint
@@ -620,12 +607,8 @@ func (m *Manager) UpdateReceivedShare(ctx context.Context, receivedShare *collab
 	// write back
 
 	userID := ctxpkg.ContextMustGetUser(ctx)
-	spaceID := storagespace.FormatResourceID(provider.ResourceId{
-		StorageId: rs.Share.ResourceId.StorageId,
-		SpaceId:   rs.Share.ResourceId.SpaceId,
-	})
 
-	m.UserReceivedStates.Add(ctx, userID.GetId().GetOpaqueId(), spaceID, rs)
+	m.UserReceivedStates.Add(ctx, userID.GetId().GetOpaqueId(), rs.Share.ResourceId.StorageId+"^"+rs.Share.ResourceId.SpaceId, rs)
 
 	return rs, nil
 }
