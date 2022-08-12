@@ -41,7 +41,7 @@ type contents struct {
 }
 
 type fsReturn struct {
-	Type   int
+	Type   provider.ResourceType
 	Mtime  uint64
 	Size   uint64
 	Path   string
@@ -74,21 +74,20 @@ var checkSum = provider.ResourceChecksum{
 	Type: provider.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_UNSET,
 }
 
-func mapReturn(fileType string) (int, error) {
+func mapReturn(fileType string) (provider.ResourceType, error) {
 	/* This function can be changed accordingly, depending on the file type
 	being return by the APIs */
 
-	m := make(map[string]int)
+	switch fileType {
+	case "file":
+		return provider.ResourceType_RESOURCE_TYPE_FILE, nil
 
-	m["dir"] = 2
-	m["file"] = 1
+	case "dir":
+		return provider.ResourceType_RESOURCE_TYPE_CONTAINER, nil
 
-	if m[fileType] == 0 {
-		return 0, errors.New("FileType not recognized")
+	default:
+		return provider.ResourceType_RESOURCE_TYPE_INVALID, errtypes.NotFound("Resource type unrecognized")
 	}
-
-	return m[fileType], nil
-
 }
 
 func (fs *cback) getRequest(userName, url string, reqType string, body io.Reader) (io.ReadCloser, error) {
@@ -96,12 +95,12 @@ func (fs *cback) getRequest(userName, url string, reqType string, body io.Reader
 	req, err := http.NewRequest(reqType, url, body)
 	req.SetBasicAuth(userName, fs.conf.ImpersonatorToken)
 
-	if body != nil {
-		req.Header.Add("Content-Type", "application/json")
-	}
-
 	if err != nil {
 		return nil, err
+	}
+
+	if body != nil {
+		req.Header.Add("Content-Type", "application/json")
 	}
 
 	req.Header.Add("accept", `application/json`)

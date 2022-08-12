@@ -117,7 +117,7 @@ func (fs *cback) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []st
 		Mtime:         &setTime,
 		Id:            &ident,
 		Owner:         UID,
-		Type:          provider.ResourceType(ret.Type),
+		Type:          ret.Type,
 		Size:          ret.Size,
 		Path:          ret.Path,
 	}
@@ -230,7 +230,7 @@ func (fs *cback) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys
 				Path:          j.Path,
 				Owner:         UID,
 				PermissionSet: &permID,
-				Type:          provider.ResourceType(j.Type),
+				Type:          j.Type,
 				Size:          j.Size,
 				Etag:          "",
 			}
