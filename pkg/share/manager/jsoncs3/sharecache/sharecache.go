@@ -25,9 +25,8 @@ import (
 	"path/filepath"
 	"time"
 
-	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/v2/pkg/share/manager/jsoncs3/shareid"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/metadata"
-	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/utils"
 )
 
@@ -66,14 +65,8 @@ func New(s metadata.Storage, namespace, filename string) Cache {
 
 // Add adds a share to the cache
 func (c *Cache) Add(ctx context.Context, userid, shareID string) error {
-	storageid, spaceid, _, err := storagespace.SplitID(shareID)
-	if err != nil {
-		return err
-	}
-	ssid := storagespace.FormatResourceID(provider.ResourceId{
-		StorageId: storageid,
-		SpaceId:   spaceid,
-	})
+	storageid, spaceid, _ := shareid.Decode(shareID)
+	ssid := storageid + "^" + spaceid
 
 	now := time.Now()
 	if c.UserShares[userid] == nil {
@@ -95,14 +88,8 @@ func (c *Cache) Add(ctx context.Context, userid, shareID string) error {
 
 // Remove removes a share for the given user
 func (c *Cache) Remove(ctx context.Context, userid, shareID string) error {
-	storageid, spaceid, _, err := storagespace.SplitID(shareID)
-	if err != nil {
-		return err
-	}
-	ssid := storagespace.FormatResourceID(provider.ResourceId{
-		StorageId: storageid,
-		SpaceId:   spaceid,
-	})
+	storageid, spaceid, _ := shareid.Decode(shareID)
+	ssid := storageid + "^" + spaceid
 
 	if c.UserShares[userid] != nil {
 		if c.UserShares[userid].UserShares[ssid] != nil {

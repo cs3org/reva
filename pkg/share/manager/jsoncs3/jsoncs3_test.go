@@ -666,6 +666,23 @@ var _ = Describe("Jsoncs3", func() {
 					}
 					Expect(ids).To(ConsistOf(share.Id.OpaqueId, gshare.Id.OpaqueId))
 				})
+
+				It("merges the user state with the group share", func() {
+					rs, err := m.GetReceivedShare(granteeCtx, &collaboration.ShareReference{
+						Spec: &collaboration.ShareReference_Id{
+							Id: gshare.Id,
+						},
+					})
+					Expect(err).ToNot(HaveOccurred())
+
+					rs.State = collaboration.ShareState_SHARE_STATE_ACCEPTED
+					_, err = m.UpdateReceivedShare(granteeCtx, rs, &fieldmaskpb.FieldMask{Paths: []string{"state"}})
+					Expect(err).ToNot(HaveOccurred())
+
+					received, err := m.ListReceivedShares(granteeCtx, []*collaboration.Filter{})
+					Expect(err).ToNot(HaveOccurred())
+					Expect(len(received)).To(Equal(2))
+				})
 			})
 		})
 

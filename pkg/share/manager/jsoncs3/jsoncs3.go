@@ -20,7 +20,6 @@ package jsoncs3
 
 import (
 	"context"
-	"strings"
 	"sync"
 	"time"
 
@@ -38,6 +37,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/share/manager/jsoncs3/providercache"
 	"github.com/cs3org/reva/v2/pkg/share/manager/jsoncs3/receivedsharecache"
 	"github.com/cs3org/reva/v2/pkg/share/manager/jsoncs3/sharecache"
+	"github.com/cs3org/reva/v2/pkg/share/manager/jsoncs3/shareid"
 	"github.com/cs3org/reva/v2/pkg/share/manager/registry"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/metadata" // nolint:staticcheck // we need the legacy package to convert V1 to V2 messages
 	"github.com/cs3org/reva/v2/pkg/utils"
@@ -174,26 +174,6 @@ func (m *Manager) initialize() error {
 	return nil
 }
 
-func encodeShareID(providerID, spaceID, shareID string) string {
-	return providerID + "^" + spaceID + "°" + shareID
-}
-
-// share ids are of the format <storageid>^<spaceid>°<shareid>
-func decodeShareID(id string) (string, string, string) {
-	parts := strings.SplitN(id, "^", 2)
-	if len(parts) == 1 {
-		return "", "", parts[0]
-	}
-
-	storageid := parts[0]
-	parts = strings.SplitN(parts[1], "°", 2)
-	if len(parts) == 1 {
-		return storageid, parts[0], ""
-	}
-
-	return storageid, parts[0], parts[1]
-}
-
 // Share creates a new share
 func (m *Manager) Share(ctx context.Context, md *provider.ResourceInfo, g *collaboration.ShareGrant) (*collaboration.Share, error) {
 	if err := m.initialize(); err != nil {
@@ -229,7 +209,7 @@ func (m *Manager) Share(ctx context.Context, md *provider.ResourceInfo, g *colla
 		return nil, errtypes.AlreadyExists(key.String())
 	}
 
-	shareID := encodeShareID(md.GetId().GetStorageId(), md.GetId().GetSpaceId(), uuid.NewString())
+	shareID := shareid.Encode(md.GetId().GetStorageId(), md.GetId().GetSpaceId(), uuid.NewString())
 	s := &collaboration.Share{
 		Id: &collaboration.ShareId{
 			OpaqueId: shareID,
@@ -276,7 +256,7 @@ func (m *Manager) Share(ctx context.Context, md *provider.ResourceInfo, g *colla
 
 // getByID must be called in a lock-controlled block.
 func (m *Manager) getByID(id *collaboration.ShareId) (*collaboration.Share, error) {
-	storageID, spaceID, _ := decodeShareID(id.OpaqueId)
+	storageID, spaceID, _ := shareid.Decode(id.OpaqueId)
 	// sync cache, maybe our data is outdated
 	err := m.Cache.Sync(context.Background(), storageID, spaceID)
 	if err != nil {
@@ -367,7 +347,7 @@ func (m *Manager) Unshare(ctx context.Context, ref *collaboration.ShareReference
 		return errtypes.NotFound(ref.String())
 	}
 
-	storageID, spaceID, _ := decodeShareID(s.Id.OpaqueId)
+	storageID, spaceID, _ := shareid.Decode(s.Id.OpaqueId)
 	err = m.Cache.Remove(ctx, storageID, spaceID, s.Id.OpaqueId)
 	if err != nil {
 		return err
@@ -432,7 +412,7 @@ func (m *Manager) ListShares(ctx context.Context, filters []*collaboration.Filte
 		if time.Now().Sub(spaceShareIDs.Mtime) > time.Second*30 {
 			// TODO reread from disk
 		}
-		storageID, spaceID, _ := decodeShareID(ssid)
+		storageID, spaceID, _ := shareid.Decode(ssid)
 		err := m.Cache.Sync(ctx, storageID, spaceID)
 		if err != nil {
 			continue
@@ -511,7 +491,7 @@ func (m *Manager) ListReceivedShares(ctx context.Context, filters []*collaborati
 	}
 
 	for ssid, rspace := range ssids {
-		storageID, spaceID, _ := decodeShareID(ssid)
+		storageID, spaceID, _ := shareid.Decode(ssid)
 		err := m.Cache.Sync(ctx, storageID, spaceID)
 		if err != nil {
 			continue
@@ -545,7 +525,7 @@ func (m *Manager) convert(ctx context.Context, userID string, s *collaboration.S
 		State: collaboration.ShareState_SHARE_STATE_PENDING,
 	}
 
-	storageID, spaceID, _ := decodeShareID(s.Id.OpaqueId)
+	storageID, spaceID, _ := shareid.Decode(s.Id.OpaqueId)
 
 	m.UserReceivedStates.Sync(ctx, userID)
 	state := m.UserReceivedStates.Get(userID, storageID+"^"+spaceID, s.Id.GetOpaqueId())
