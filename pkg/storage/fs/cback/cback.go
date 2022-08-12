@@ -321,7 +321,7 @@ func (fs *cback) Download(ctx context.Context, ref *provider.Reference) (io.Read
 
 		if md.Type == provider.ResourceType_RESOURCE_TYPE_FILE {
 
-			responseData, err := fs.getRequest(user.Username, url, requestType)
+			responseData, err := fs.getRequest(user.Username, url, requestType, nil)
 
 			if err != nil {
 				return nil, err

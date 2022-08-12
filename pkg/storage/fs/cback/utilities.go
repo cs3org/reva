@@ -91,10 +91,14 @@ func mapReturn(fileType string) (int, error) {
 
 }
 
-func (fs *cback) getRequest(userName, url string, reqType string) (io.ReadCloser, error) {
+func (fs *cback) getRequest(userName, url string, reqType string, body io.Reader) (io.ReadCloser, error) {
 
-	req, err := http.NewRequest(reqType, url, nil)
+	req, err := http.NewRequest(reqType, url, body)
 	req.SetBasicAuth(userName, fs.conf.ImpersonatorToken)
+
+	if body != nil {
+		req.Header.Add("Content-Type", "application/json")
+	}
 
 	if err != nil {
 		return nil, err
@@ -122,6 +126,10 @@ func (fs *cback) getRequest(userName, url string, reqType string) (io.ReadCloser
 		return nil, errtypes.PermissionDenied("cback: user has no permissions to get the backup")
 	}
 
+	if resp.StatusCode == 400 {
+		return nil, errtypes.BadRequest("cback")
+	}
+
 	return resp.Body, nil
 }
 
@@ -129,7 +137,7 @@ func (fs *cback) listSnapshots(userName string, backupID int) ([]snapshotRespons
 
 	url := fs.conf.APIURL + "/backups/" + strconv.Itoa(backupID) + "/snapshots"
 	requestType := "GET"
-	responseData, err := fs.getRequest(userName, url, requestType)
+	responseData, err := fs.getRequest(userName, url, requestType, nil)
 
 	if err != nil {
 		return nil, err
@@ -148,7 +156,7 @@ func (fs *cback) matchBackups(userName, pathInput string) (*backUpResponse, erro
 
 	url := fs.conf.APIURL + "/backups/"
 	requestType := "GET"
-	responseData, err := fs.getRequest(userName, url, requestType)
+	responseData, err := fs.getRequest(userName, url, requestType, nil)
 
 	if err != nil {
 		return nil, err
@@ -198,7 +206,7 @@ func (fs *cback) statResource(backupID int, snapID, userName, path, source strin
 	url := fs.conf.APIURL + "/backups/" + strconv.Itoa(backupID) + "/snapshots/" + snapID + "/" + path + "?content=false"
 	requestType := "OPTIONS"
 
-	responseData, err := fs.getRequest(userName, url, requestType)
+	responseData, err := fs.getRequest(userName, url, requestType, nil)
 
 	if err != nil {
 		return nil, err
@@ -231,7 +239,7 @@ func (fs *cback) fileSystem(backupID int, snapID, userName, path, source string)
 	url := fs.conf.APIURL + "/backups/" + strconv.Itoa(backupID) + "/snapshots/" + snapID + "/" + path + "?content=true"
 	requestType := "OPTIONS"
 
-	responseData, err := fs.getRequest(userName, url, requestType)
+	responseData, err := fs.getRequest(userName, url, requestType, nil)
 
 	if err != nil {
 		return nil, err
@@ -281,7 +289,7 @@ func (fs *cback) timeConv(timeInput string) (int64, error) {
 func (fs *cback) pathFinder(userName, path string) ([]string, error) {
 	url := fs.conf.APIURL + "/backups/"
 	requestType := "GET"
-	responseData, err := fs.getRequest(userName, url, requestType)
+	responseData, err := fs.getRequest(userName, url, requestType, nil)
 	matchFound := false
 
 	if err != nil {
@@ -312,7 +320,7 @@ func (fs *cback) pathFinder(userName, path string) ([]string, error) {
 	}
 
 	if matchFound {
-		return returnString, nil
+		return duplicateRemoval(returnString), nil
 	}
 
 	return nil, errtypes.NotFound("cback: resource not found")
@@ -338,4 +346,16 @@ func (fs *cback) pathTrimmer(snapshotList []snapshotResponse, resp *backUpRespon
 	}
 
 	return ssID, searchPath
+}
+
+func duplicateRemoval(strSlice []string) []string {
+	inList := make(map[string]bool)
+	var list []string
+	for _, str := range strSlice {
+		if _, value := inList[str]; !value {
+			inList[str] = true
+			list = append(list, str)
+		}
+	}
+	return list
 }
