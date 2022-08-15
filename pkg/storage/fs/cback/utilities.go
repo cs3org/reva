@@ -178,28 +178,28 @@ func (fs *cback) matchBackups(userName, pathInput string) (*backUpResponse, erro
 		return nil, err
 	}
 
-	for i := range responseObject {
-		if responseObject[i].Detail != "" {
-			err = errors.New(responseObject[i].Detail)
+	for _, response := range responseObject {
+		if response.Detail != "" {
+			err = errors.New(response.Detail)
 			return nil, err
 		}
 
-		if strings.Compare(pathInput, responseObject[i].Source) == 0 {
-			return &responseObject[i], nil
+		if strings.Compare(pathInput, response.Source) == 0 {
+			return &response, nil
 		}
 	}
 
-	for i := range responseObject {
-		if responseObject[i].Detail != "" {
-			err = errors.New(responseObject[i].Detail)
+	for _, response := range responseObject {
+		if response.Detail != "" {
+			err = errors.New(response.Detail)
 			return nil, err
 		}
 
-		if strings.HasPrefix(pathInput, responseObject[i].Source) {
-			substr := strings.TrimPrefix(pathInput, responseObject[i].Source)
+		if strings.HasPrefix(pathInput, response.Source) {
+			substr := strings.TrimPrefix(pathInput, response.Source)
 			substr = strings.TrimLeft(substr, "/")
-			responseObject[i].Substring = substr
-			return &responseObject[i], nil
+			response.Substring = substr
+			return &response, nil
 		}
 	}
 
@@ -325,7 +325,7 @@ func (fs *cback) pathFinder(userName, path string) ([]string, error) {
 
 	returnString := make([]string, 0, len(responseObject))
 
-	for index, response := range responseObject {
+	for _, response := range responseObject {
 		if response.Detail != "" {
 			err = errors.New(response.Detail)
 			return nil, err
@@ -335,7 +335,7 @@ func (fs *cback) pathFinder(userName, path string) ([]string, error) {
 			substr := strings.TrimPrefix(response.Source, path)
 			substr = strings.TrimLeft(substr, "/")
 			temp := strings.Split(substr, "/")
-			returnString[index] = temp[0]
+			returnString = append(returnString, temp[0])
 			matchFound = true
 		}
 	}
