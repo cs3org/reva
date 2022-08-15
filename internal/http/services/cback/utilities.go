@@ -138,14 +138,14 @@ func (s *svc) getRequest(userName, url string, reqType string, body io.Reader) (
 
 	req, err := http.NewRequest(reqType, url, body)
 
+	if err != nil {
+		return nil, err
+	}
+
 	req.SetBasicAuth(userName, s.conf.ImpersonatorToken)
 
 	if body != nil {
 		req.Header.Add("Content-Type", "application/json")
-	}
-
-	if err != nil {
-		return nil, err
 	}
 
 	req.Header.Add("accept", `application/json`)
