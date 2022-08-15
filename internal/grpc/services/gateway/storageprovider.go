@@ -1089,7 +1089,7 @@ func (s *svc) getStorageProviderClient(_ context.Context, p *registry.ProviderIn
 		return nil, err
 	}
 
-	return s.cache.StorageProviderClient(c), nil
+	return c, nil
 }
 
 func (s *svc) getStorageRegistryClient(_ context.Context, address string) (registry.RegistryAPIClient, error) {
