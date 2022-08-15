@@ -359,7 +359,7 @@ func (am *mgr) resolveUser(ctx context.Context, claims map[string]interface{}) e
 	}
 
 	// take the properties of the mapped target user to override the claims
-	claims["preferred_username"] = value
+	claims["preferred_username"] = getUserByClaimResp.GetUser().Username
 	claims[am.c.IDClaim] = getUserByClaimResp.GetUser().GetId().OpaqueId
 	claims["iss"] = getUserByClaimResp.GetUser().GetId().Idp
 	claims[am.c.UIDClaim] = getUserByClaimResp.GetUser().UidNumber
