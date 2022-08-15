@@ -21,20 +21,20 @@ package cback
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/go-chi/chi/v5"
 	"github.com/mitchellh/mapstructure"
 	"github.com/rs/zerolog"
 )
 
-type RequestType struct {
-	BackupId int    `json:"backup_id"`
+type requestTemp struct {
+	BackupID int    `json:"backup_id"`
 	Pattern  string `json:"pattern"`
 	Snapshot string `json:"snapshot"`
 	//destination string
@@ -58,6 +58,7 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 	s := &svc{
 		conf:   conf,
 		router: r,
+		client: rhttp.GetHTTPClient(),
 	}
 
 	if err := s.routerInit(); err != nil {
@@ -75,8 +76,8 @@ func (s *svc) Close() error {
 
 type config struct {
 	Prefix            string `mapstructure:"prefix"`
-	ImpersonatorToken string `mapstructure:"impersonator"`
-	APIURL            string `mapstructure:"apiURL"`
+	ImpersonatorToken string `mapstructure:"token"`
+	APIURL            string `mapstructure:"api_url"`
 }
 
 func (c *config) init() {
@@ -89,6 +90,7 @@ func (c *config) init() {
 type svc struct {
 	conf   *config
 	router *chi.Mux
+	client *http.Client
 }
 
 func (s *svc) Prefix() string {
@@ -109,7 +111,13 @@ func (s *svc) routerInit() error {
 
 func (s *svc) handleRestoreID(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	user, _ := ctxpkg.ContextGetUser(ctx)
+	user, inContext := ctxpkg.ContextGetUser(ctx)
+
+	if !inContext {
+		http.Error(w, errtypes.UserRequired("no user found in context").Error(), http.StatusInternalServerError)
+		return
+	}
+
 	url := s.conf.APIURL + "/restores/"
 	var ssID, searchPath string
 
@@ -122,43 +130,40 @@ func (s *svc) handleRestoreID(w http.ResponseWriter, r *http.Request) {
 
 	resp, err := s.matchBackups(user.Username, path)
 
-	if resp == nil {
-		http.Error(w, errtypes.NotFound("cback: not found").Error(), http.StatusInternalServerError)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	if err != nil {
-		fmt.Print(err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+	if resp == nil {
+		http.Error(w, errtypes.NotFound("cback: not found").Error(), http.StatusInternalServerError)
 		return
 	}
 
 	snapshotList, err := s.listSnapshots(user.Username, resp.ID)
 
 	if err != nil {
-		fmt.Print(err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	if resp.Substring != "" {
 		ssID, searchPath = s.pathTrimmer(snapshotList, resp)
-		requestType := "POST"
 
 		if ssID == "" {
 			http.Error(w, errtypes.NotFound("cback: snapshot not found").Error(), http.StatusNotFound)
 			return
 		}
 
-		err = s.statResource(resp.ID, ssID, user.Username, searchPath, resp.Source)
+		err = s.checkFileType(resp.ID, ssID, user.Username, searchPath, resp.Source)
 
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusNotFound)
 			return
 		}
 
-		structbody := &RequestType{
-			BackupId: resp.ID,
+		structbody := &requestTemp{
+			BackupID: resp.ID,
 			Snapshot: ssID,
 			Pattern:  searchPath,
 		}
@@ -166,15 +171,13 @@ func (s *svc) handleRestoreID(w http.ResponseWriter, r *http.Request) {
 		jbody, err := json.Marshal(structbody)
 
 		if err != nil {
-			fmt.Print(err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 
-		resp, err := s.Request(user.Username, url, requestType, bytes.NewBuffer(jbody))
+		resp, err := s.getRequest(user.Username, url, http.MethodPost, bytes.NewBuffer(jbody))
 
 		if err != nil {
-			fmt.Print(err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 
@@ -182,7 +185,11 @@ func (s *svc) handleRestoreID(w http.ResponseWriter, r *http.Request) {
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
-		json.NewEncoder(w).Encode(resp)
+		err = json.NewEncoder(w).Encode(resp)
+
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
 
 		if _, err := io.Copy(w, resp); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -199,10 +206,16 @@ func (s *svc) handleRestoreID(w http.ResponseWriter, r *http.Request) {
 
 func (s *svc) handleListJobs(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	user, _ := ctxpkg.ContextGetUser(ctx)
+	user, inContext := ctxpkg.ContextGetUser(ctx)
+
+	if !inContext {
+		http.Error(w, errtypes.UserRequired("no user found in context").Error(), http.StatusInternalServerError)
+		return
+	}
+
 	url := s.conf.APIURL + "/restores/"
 
-	resp, err := s.Request(user.Username, url, "GET", nil)
+	resp, err := s.getRequest(user.Username, url, http.MethodGet, nil)
 
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -213,7 +226,11 @@ func (s *svc) handleListJobs(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(resp)
+	err = json.NewEncoder(w).Encode(resp)
+
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
 
 	if _, err := io.Copy(w, resp); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -224,13 +241,17 @@ func (s *svc) handleListJobs(w http.ResponseWriter, r *http.Request) {
 
 func (s *svc) handleRestoreStatus(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	user, _ := ctxpkg.ContextGetUser(ctx)
+	user, inContext := ctxpkg.ContextGetUser(ctx)
+
+	if !inContext {
+		http.Error(w, errtypes.UserRequired("no user found in context").Error(), http.StatusInternalServerError)
+		return
+	}
 
 	restoreID := chi.URLParam(r, "restore_id")
-	fmt.Printf("The Restore_ID is: %v", restoreID)
 
 	url := s.conf.APIURL + "/restores/" + restoreID
-	resp, err := s.Request(user.Username, url, "GET", nil)
+	resp, err := s.getRequest(user.Username, url, http.MethodGet, nil)
 
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -241,55 +262,16 @@ func (s *svc) handleRestoreStatus(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(resp)
+	err = json.NewEncoder(w).Encode(resp)
+
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
 
 	if _, err := io.Copy(w, resp); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-}
-
-func (s *svc) Request(userName, url string, reqType string, body io.Reader) (io.ReadCloser, error) {
-
-	req, err := http.NewRequest(reqType, url, body)
-
-	req.SetBasicAuth(userName, s.conf.ImpersonatorToken)
-
-	if body != nil {
-		req.Header.Add("Content-Type", "application/json")
-	}
-
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Add("accept", `application/json`)
-
-	client := &http.Client{}
-
-	resp, err := client.Do(req)
-
-	if err != nil {
-		return nil, err
-	}
-
-	if resp.StatusCode == 404 {
-		return nil, errtypes.NotFound("cback: resource not found")
-	}
-
-	if resp.StatusCode == 500 {
-		return nil, errtypes.InternalError("cback: internal server error")
-	}
-
-	if resp.StatusCode == 403 {
-		return nil, errtypes.PermissionDenied("cback: user has no permissions to get the backup")
-	}
-
-	if resp.StatusCode == 400 {
-		return nil, errtypes.BadRequest("cback")
-	}
-
-	return resp.Body, nil
 }
 
 func (s *svc) Handler() http.Handler {
