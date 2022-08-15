@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net/http"
 	"net/url"
 	"strconv"
 	"time"
@@ -13,6 +14,7 @@ import (
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/mime"
+	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
 	"github.com/mitchellh/mapstructure"
@@ -20,7 +22,8 @@ import (
 )
 
 type cback struct {
-	conf *Options
+	conf   *Options
+	client *http.Client
 }
 
 func init() {
@@ -36,8 +39,10 @@ func New(m map[string]interface{}) (fs storage.FS, err error) {
 		return nil, errors.Wrap(err, "Error Decoding Configuration")
 	}
 
+	httpClient := rhttp.GetHTTPClient()
+
 	// returns the storage.FS interface
-	return &cback{conf: c}, nil
+	return &cback{conf: c, client: httpClient}, nil
 
 }
 

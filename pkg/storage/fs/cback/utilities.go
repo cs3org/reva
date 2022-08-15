@@ -105,38 +105,35 @@ func (fs *cback) getRequest(userName, url string, reqType string, body io.Reader
 
 	req.Header.Add("accept", `application/json`)
 
-	client := &http.Client{}
-
-	resp, err := client.Do(req)
+	resp, err := fs.client.Do(req)
 
 	if err != nil {
 		return nil, err
 	}
 
-	if resp.StatusCode == 404 {
-		return nil, errtypes.NotFound("cback: resource not found")
-	}
+	if resp.StatusCode < 200 && resp.StatusCode >= 300 {
 
-	if resp.StatusCode == 500 {
-		return nil, errtypes.InternalError("cback: internal server error")
-	}
+		switch resp.StatusCode {
 
-	if resp.StatusCode == 403 {
-		return nil, errtypes.PermissionDenied("cback: user has no permissions to get the backup")
-	}
-
-	if resp.StatusCode == 400 {
-		return nil, errtypes.BadRequest("cback")
+		case http.StatusNotFound:
+			return nil, errtypes.NotFound("cback: resource not found")
+		case http.StatusForbidden:
+			return nil, errtypes.PermissionDenied("cback: user has no permissions to get the backup")
+		case http.StatusBadRequest:
+			return nil, errtypes.BadRequest("cback")
+		default:
+			return nil, errtypes.InternalError("cback: internal server error")
+		}
 	}
 
 	return resp.Body, nil
+
 }
 
 func (fs *cback) listSnapshots(userName string, backupID int) ([]snapshotResponse, error) {
 
 	url := fs.conf.APIURL + "/backups/" + strconv.Itoa(backupID) + "/snapshots"
-	requestType := "GET"
-	responseData, err := fs.getRequest(userName, url, requestType, nil)
+	responseData, err := fs.getRequest(userName, url, http.MethodGet, nil)
 
 	if err != nil {
 		return nil, err
@@ -146,7 +143,12 @@ func (fs *cback) listSnapshots(userName string, backupID int) ([]snapshotRespons
 
 	/*Unmarshalling the JSON response into the Response struct*/
 	responseObject := []snapshotResponse{}
-	json.NewDecoder(responseData).Decode(&responseObject)
+
+	err = json.NewDecoder(responseData).Decode(&responseObject)
+
+	if err != nil {
+		return nil, err
+	}
 
 	return responseObject, nil
 }
@@ -154,8 +156,7 @@ func (fs *cback) listSnapshots(userName string, backupID int) ([]snapshotRespons
 func (fs *cback) matchBackups(userName, pathInput string) (*backUpResponse, error) {
 
 	url := fs.conf.APIURL + "/backups/"
-	requestType := "GET"
-	responseData, err := fs.getRequest(userName, url, requestType, nil)
+	responseData, err := fs.getRequest(userName, url, http.MethodGet, nil)
 
 	if err != nil {
 		return nil, err
@@ -165,7 +166,12 @@ func (fs *cback) matchBackups(userName, pathInput string) (*backUpResponse, erro
 
 	/*Unmarshalling the JSON response into the Response struct*/
 	responseObject := []backUpResponse{}
-	json.NewDecoder(responseData).Decode(&responseObject)
+
+	err = json.NewDecoder(responseData).Decode(&responseObject)
+
+	if err != nil {
+		return nil, err
+	}
 
 	if len(responseObject) == 0 {
 		err = errors.New("no match found")
@@ -197,15 +203,16 @@ func (fs *cback) matchBackups(userName, pathInput string) (*backUpResponse, erro
 		}
 	}
 
+	/*If there is no error, but also no match found in the backup path the response is nil.
+	This means that the LSFolder function will know that no match has been found using the exact path,
+	and will therefore start checking if there is a substring of the backup job included in the inputted path*/
 	return nil, nil
 }
 
 func (fs *cback) statResource(backupID int, snapID, userName, path, source string) (*fsReturn, error) {
 
 	url := fs.conf.APIURL + "/backups/" + strconv.Itoa(backupID) + "/snapshots/" + snapID + "/" + path + "?content=false"
-	requestType := "OPTIONS"
-
-	responseData, err := fs.getRequest(userName, url, requestType, nil)
+	responseData, err := fs.getRequest(userName, url, http.MethodOptions, nil)
 
 	if err != nil {
 		return nil, err
@@ -214,7 +221,12 @@ func (fs *cback) statResource(backupID int, snapID, userName, path, source strin
 	defer responseData.Close()
 
 	responseObject := contents{}
-	json.NewDecoder(responseData).Decode(&responseObject)
+
+	err = json.NewDecoder(responseData).Decode(&responseObject)
+
+	if err != nil {
+		return nil, err
+	}
 
 	m, err := mapReturn(responseObject.Type)
 
@@ -233,12 +245,10 @@ func (fs *cback) statResource(backupID int, snapID, userName, path, source strin
 	return &retObject, nil
 }
 
-func (fs *cback) fileSystem(backupID int, snapID, userName, path, source string) ([]fsReturn, error) {
+func (fs *cback) fileSystem(backupID int, snapID, userName, path, source string) ([]*fsReturn, error) {
 
 	url := fs.conf.APIURL + "/backups/" + strconv.Itoa(backupID) + "/snapshots/" + snapID + "/" + path + "?content=true"
-	requestType := "OPTIONS"
-
-	responseData, err := fs.getRequest(userName, url, requestType, nil)
+	responseData, err := fs.getRequest(userName, url, http.MethodOptions, nil)
 
 	if err != nil {
 		return nil, err
@@ -248,11 +258,16 @@ func (fs *cback) fileSystem(backupID int, snapID, userName, path, source string)
 
 	/*Unmarshalling the JSON response into the Response struct*/
 	responseObject := []contents{}
-	json.NewDecoder(responseData).Decode(&responseObject)
 
-	resp := make([]fsReturn, len(responseObject))
+	err = json.NewDecoder(responseData).Decode(&responseObject)
 
-	for i, response := range responseObject {
+	if err != nil {
+		return nil, err
+	}
+
+	resp := make([]*fsReturn, 0, len(responseObject))
+
+	for _, response := range responseObject {
 
 		m, err := mapReturn(response.Type)
 
@@ -264,11 +279,14 @@ func (fs *cback) fileSystem(backupID int, snapID, userName, path, source string)
 		fmt.Printf("Time is: %v", uint64(responseObject[i].Mtime))
 		fmt.Printf("\n")*/
 
-		resp[i].Size = response.Size
-		resp[i].Type = m
-		resp[i].Mtime = uint64(response.Mtime)
-		resp[i].Path = source + "/" + snapID + strings.TrimPrefix(response.Name, source)
+		temp := fsReturn{
+			Size:  response.Size,
+			Type:  m,
+			Mtime: uint64(response.Mtime),
+			Path:  source + "/" + snapID + strings.TrimPrefix(response.Name, source),
+		}
 
+		resp = append(resp, &temp)
 	}
 
 	return resp, nil
@@ -287,8 +305,7 @@ func (fs *cback) timeConv(timeInput string) (int64, error) {
 
 func (fs *cback) pathFinder(userName, path string) ([]string, error) {
 	url := fs.conf.APIURL + "/backups/"
-	requestType := "GET"
-	responseData, err := fs.getRequest(userName, url, requestType, nil)
+	responseData, err := fs.getRequest(userName, url, http.MethodGet, nil)
 	matchFound := false
 
 	if err != nil {
@@ -299,9 +316,14 @@ func (fs *cback) pathFinder(userName, path string) ([]string, error) {
 
 	/*Unmarshalling the JSON response into the Response struct*/
 	responseObject := []backUpResponse{}
-	json.NewDecoder(responseData).Decode(&responseObject)
 
-	returnString := make([]string, len(responseObject))
+	err = json.NewDecoder(responseData).Decode(&responseObject)
+
+	if err != nil {
+		return nil, err
+	}
+
+	returnString := make([]string, 0, len(responseObject))
 
 	for index, response := range responseObject {
 		if response.Detail != "" {
@@ -329,6 +351,7 @@ func (fs *cback) pathFinder(userName, path string) ([]string, error) {
 func (fs *cback) pathTrimmer(snapshotList []snapshotResponse, resp *backUpResponse) (string, string) {
 
 	var ssID, searchPath string
+
 	for _, snapshot := range snapshotList {
 
 		if snapshot.ID == resp.Substring {
@@ -345,6 +368,7 @@ func (fs *cback) pathTrimmer(snapshotList []snapshotResponse, resp *backUpRespon
 	}
 
 	return ssID, searchPath
+
 }
 
 func duplicateRemoval(strSlice []string) []string {
