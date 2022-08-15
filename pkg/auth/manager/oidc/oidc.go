@@ -352,7 +352,7 @@ func (am *mgr) resolveUser(ctx context.Context, claims map[string]interface{}) e
 		Value: value,
 	})
 	if err != nil {
-		return errors.Wrapf(err, "error getting user by username '%v'", value)
+		return errors.Wrapf(err, "error getting user by %s '%v'", claim, value)
 	}
 	if getUserByClaimResp.Status.Code != rpc.Code_CODE_OK {
 		return status.NewErrorFromCode(getUserByClaimResp.Status.Code, "oidc")
