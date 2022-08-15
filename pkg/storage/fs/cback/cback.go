@@ -44,20 +44,21 @@ func New(m map[string]interface{}) (fs storage.FS, err error) {
 func (fs *cback) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []string) (*provider.ResourceInfo, error) {
 	var ssID, searchPath string
 
-	user, _ := ctxpkg.ContextGetUser(ctx)
-	UID, _ := ctxpkg.ContextGetUserID(ctx)
+	user, inContext := ctxpkg.ContextGetUser(ctx)
+
+	if !inContext {
+		return nil, errtypes.UserRequired("user not found in context")
+	}
 
 	resp, err := fs.matchBackups(user.Username, ref.Path)
 
 	if err != nil {
-		fmt.Print(err)
 		return nil, err
 	}
 
 	snapshotList, err := fs.listSnapshots(user.Username, resp.ID)
 
 	if err != nil {
-		fmt.Print(err)
 		return nil, err
 	}
 
@@ -82,7 +83,7 @@ func (fs *cback) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []st
 			Checksum:      &checkSum,
 			Mtime:         &setTime,
 			Id:            &ident,
-			Owner:         UID,
+			Owner:         user.Id,
 			Type:          provider.ResourceType_RESOURCE_TYPE_CONTAINER,
 			Size:          0,
 			Path:          ref.Path,
@@ -96,7 +97,6 @@ func (fs *cback) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []st
 	ret, err := fs.statResource(resp.ID, ssID, user.Username, searchPath, resp.Source)
 
 	if err != nil {
-		fmt.Print(err)
 		return nil, err
 	}
 
@@ -116,7 +116,7 @@ func (fs *cback) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []st
 		Checksum:      &checkSum,
 		Mtime:         &setTime,
 		Id:            &ident,
-		Owner:         UID,
+		Owner:         user.Id,
 		Type:          ret.Type,
 		Size:          ret.Size,
 		Path:          ret.Path,
@@ -136,27 +136,29 @@ func (fs *cback) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys
 	var path string = ref.GetPath()
 	var ssID, searchPath string
 
-	user, _ := ctxpkg.ContextGetUser(ctx)
-	UID, _ := ctxpkg.ContextGetUserID(ctx)
+	user, inContext := ctxpkg.ContextGetUser(ctx)
+
+	if !inContext {
+		return nil, errtypes.UserRequired("no user found in context")
+	}
 
 	resp, err := fs.matchBackups(user.Username, path)
 
 	if err != nil {
-		fmt.Print(err)
 		return nil, err
 	}
 
+	//code executed before snapshot being inputted
 	if resp == nil {
 		pathList, err := fs.pathFinder(user.Username, ref.Path)
 
 		if err != nil {
-			fmt.Print(err)
 			return nil, err
 		}
 
-		files := make([]*provider.ResourceInfo, len(pathList))
+		files := make([]*provider.ResourceInfo, 0, len(pathList))
 
-		for i, paths := range pathList {
+		for _, paths := range pathList {
 
 			setTime := v1beta1.Timestamp{
 				Seconds: 0,
@@ -173,14 +175,14 @@ func (fs *cback) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys
 				Id:            &ident,
 				Checksum:      &checkSum,
 				Path:          paths,
-				Owner:         UID,
+				Owner:         user.Id,
 				PermissionSet: &permID,
 				Type:          provider.ResourceType_RESOURCE_TYPE_CONTAINER,
 				Size:          0,
 				Etag:          "",
 				MimeType:      mime.Detect(true, paths),
 			}
-			files[i] = &f
+			files = append(files, &f)
 		}
 
 		return files, nil
@@ -209,9 +211,9 @@ func (fs *cback) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys
 			return nil, err
 		}
 
-		files := make([]*provider.ResourceInfo, len(ret))
+		files := make([]*provider.ResourceInfo, 0, len(ret))
 
-		for index, j := range ret {
+		for _, j := range ret {
 
 			setTime := v1beta1.Timestamp{
 				Seconds: j.Mtime,
@@ -228,7 +230,7 @@ func (fs *cback) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys
 				Id:            &ident,
 				Checksum:      &checkSum,
 				Path:          j.Path,
-				Owner:         UID,
+				Owner:         user.Id,
 				PermissionSet: &permID,
 				Type:          j.Type,
 				Size:          j.Size,
@@ -241,7 +243,7 @@ func (fs *cback) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys
 				f.MimeType = mime.Detect(false, j.Path)
 			}
 
-			files[index] = &f
+			files = append(files, &f)
 		}
 
 		return files, nil
@@ -249,9 +251,9 @@ func (fs *cback) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys
 	}
 
 	//If match in path, therefore print the Snapshot IDs
-	files := make([]*provider.ResourceInfo, len(snapshotList))
+	files := make([]*provider.ResourceInfo, 0, len(snapshotList))
 
-	for index, snapshot := range snapshotList {
+	for _, snapshot := range snapshotList {
 
 		epochTime, err := fs.timeConv(snapshot.Time)
 
@@ -273,7 +275,7 @@ func (fs *cback) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys
 			Path:          ref.Path + "/" + snapshot.ID,
 			Checksum:      &checkSum,
 			Etag:          "",
-			Owner:         UID,
+			Owner:         user.Id,
 			PermissionSet: &permID,
 			Id:            &ident,
 			MimeType:      mime.Detect(true, ref.Path+"/"+snapshot.ID),
@@ -281,7 +283,9 @@ func (fs *cback) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys
 			Mtime:         &setTime,
 			Type:          provider.ResourceType_RESOURCE_TYPE_CONTAINER,
 		}
-		files[index] = &f
+
+		files = append(files, &f)
+
 	}
 
 	return files, nil
@@ -330,8 +334,7 @@ func (fs *cback) Download(ctx context.Context, ref *provider.Reference) (io.Read
 			return responseData, nil
 		}
 
-		err = errors.New("can only download files")
-		return nil, err
+		return nil, errtypes.BadRequest("can only download files")
 
 	}
 
