@@ -57,6 +57,7 @@ type Config struct {
 	Web        Web    `mapstructure:"web"`
 }
 
+// Web holds the config options for the URL parameters for Web
 type Web struct {
 	URLParamsMapping map[string]string `mapstructure:"urlparamsmapping"`
 	StaticURLParams  map[string]string `mapstructure:"staticurlparams"`
@@ -418,14 +419,14 @@ func (s *svc) handleOpen(openMode int) http.HandlerFunc {
 			return
 		}
 
-		var payload any
+		var payload interface{}
 
 		switch openMode {
 		case openModeNormal:
 			payload = openRes.AppUrl
 
 		case openModeWeb:
-			payload, err = NewOpenInWebResponse(s.conf.WebBaseURI, s.conf.Web.URLParamsMapping, s.conf.Web.StaticURLParams, fileID, r.Form.Get("app_name"), r.Form.Get("view_mode"))
+			payload, err = newOpenInWebResponse(s.conf.WebBaseURI, s.conf.Web.URLParamsMapping, s.conf.Web.StaticURLParams, fileID, r.Form.Get("app_name"), r.Form.Get("view_mode"))
 			if err != nil {
 				writeError(w, r, appErrorServerError, "Internal error",
 					errors.Wrap(err, "error building OpenInWeb response"))
@@ -455,15 +456,15 @@ func (s *svc) handleOpen(openMode int) http.HandlerFunc {
 	}
 }
 
-type OpenInWebResponse struct {
+type openInWebResponse struct {
 	URI string `json:"uri"`
 }
 
-func NewOpenInWebResponse(baseURI string, params, staticParams map[string]string, fileID, appName, viewMode string) (OpenInWebResponse, error) {
+func newOpenInWebResponse(baseURI string, params, staticParams map[string]string, fileID, appName, viewMode string) (openInWebResponse, error) {
 
 	uri, err := url.Parse(baseURI)
 	if err != nil {
-		return OpenInWebResponse{}, err
+		return openInWebResponse{}, err
 	}
 
 	query := uri.Query()
@@ -484,7 +485,7 @@ func NewOpenInWebResponse(baseURI string, params, staticParams map[string]string
 				query.Add(key, viewMode)
 			}
 		default:
-			return OpenInWebResponse{}, errors.New("unknown parameter mapper")
+			return openInWebResponse{}, errors.New("unknown parameter mapper")
 		}
 
 	}
@@ -495,7 +496,7 @@ func NewOpenInWebResponse(baseURI string, params, staticParams map[string]string
 
 	uri.RawQuery = query.Encode()
 
-	return OpenInWebResponse{URI: uri.String()}, nil
+	return openInWebResponse{URI: uri.String()}, nil
 }
 
 func filterAppsByUserAgent(mimeTypes []*appregistry.MimeTypeInfo, userAgent string) []*appregistry.MimeTypeInfo {
