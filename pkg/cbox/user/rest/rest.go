@@ -332,7 +332,7 @@ func (m *manager) GetUserGroups(ctx context.Context, uid *userpb.UserId) ([]stri
 		}
 		name, ok := groupInfo["displayName"].(string)
 		if ok {
-			groups = append(groups, name)
+			groups = append(groups, strings.ToLower(name))
 		}
 	}
 
