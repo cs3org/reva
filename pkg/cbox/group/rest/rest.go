@@ -191,6 +191,8 @@ func (m *manager) parseAndCacheGroup(ctx context.Context, groupData map[string]i
 		return nil, errors.New("rest: missing upn in user data")
 	}
 
+	id = strings.ToLower(id)
+
 	name, _ := groupData["displayName"].(string)
 	groupID := &grouppb.GroupId{
 		OpaqueId: id,
