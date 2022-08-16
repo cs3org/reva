@@ -97,9 +97,13 @@ func (fs *localfs) Upload(ctx context.Context, ref *provider.Reference, r io.Rea
 		uff(owner.Id, uploadRef)
 	}
 
-	return provider.ResourceInfo{
-		// FIXME fill with at least fileid, mtime and etag
-	}, nil
+	// return id, etag and mtime
+	ri, err := fs.GetMD(ctx, ref, []string{}, []string{"id", "etag", "mtime"})
+	if err != nil {
+		return provider.ResourceInfo{}, err
+	}
+
+	return *ri, nil
 }
 
 // InitiateUpload returns upload ids corresponding to different protocols it supports
