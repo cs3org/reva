@@ -20,13 +20,16 @@ package metadata
 
 import (
 	"context"
+	"errors"
 	"io/fs"
 	"io/ioutil"
 	"os"
 	"path"
+	"time"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	"github.com/cs3org/reva/v2/pkg/errtypes"
 )
 
 // Disk represents a disk metadata storage
@@ -73,8 +76,40 @@ func (disk *Disk) Stat(ctx context.Context, path string) (*provider.ResourceInfo
 }
 
 // SimpleUpload stores a file on disk
-func (disk *Disk) SimpleUpload(_ context.Context, uploadpath string, content []byte) error {
-	return os.WriteFile(disk.targetPath(uploadpath), content, 0644)
+func (disk *Disk) SimpleUpload(ctx context.Context, uploadpath string, content []byte) error {
+	return disk.Upload(ctx, UploadRequest{
+		Path:    uploadpath,
+		Content: content,
+	})
+}
+
+func (disk *Disk) Upload(_ context.Context, req UploadRequest) error {
+	p := disk.targetPath(req.Path)
+	if req.IfMatchEtag != "" {
+		info, err := os.Stat(p)
+		if err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
+		} else if err == nil {
+			etag, err := calcEtag(info.ModTime(), info.Size())
+			if err != nil {
+				return err
+			}
+			if etag != req.IfMatchEtag {
+				return errtypes.PreconditionFailed("etag mismatch")
+			}
+		}
+	}
+	if req.IfUnmodifiedSince != (time.Time{}) {
+		info, err := os.Stat(p)
+		if err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
+		} else if err == nil {
+			if info.ModTime().After(req.IfUnmodifiedSince) {
+				return errtypes.PreconditionFailed("resource has been modified")
+			}
+		}
+	}
+	return os.WriteFile(p, req.Content, 0644)
 }
 
 // SimpleDownload reads a file from disk

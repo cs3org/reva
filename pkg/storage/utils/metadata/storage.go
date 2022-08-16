@@ -30,11 +30,20 @@ import (
 
 //go:generate make --no-print-directory -C ../../../.. mockery NAME=Storage
 
+type UploadRequest struct {
+	Path    string
+	Content []byte
+
+	IfMatchEtag       string
+	IfUnmodifiedSince time.Time
+}
+
 // Storage is the interface to maintain metadata in a storage
 type Storage interface {
 	Backend() string
 
 	Init(ctx context.Context, name string) (err error)
+	Upload(ctx context.Context, req UploadRequest) error
 	SimpleUpload(ctx context.Context, uploadpath string, content []byte) error
 	SimpleDownload(ctx context.Context, path string) ([]byte, error)
 	Delete(ctx context.Context, path string) error
