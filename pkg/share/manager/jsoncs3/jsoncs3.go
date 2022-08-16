@@ -410,9 +410,6 @@ func (m *Manager) ListShares(ctx context.Context, filters []*collaboration.Filte
 
 	m.CreatedCache.Sync(ctx, user.Id.OpaqueId)
 	for ssid, spaceShareIDs := range m.CreatedCache.List(user.Id.OpaqueId) {
-		if time.Now().Sub(spaceShareIDs.Mtime) > time.Second*30 {
-			// TODO reread from disk
-		}
 		storageID, spaceID, _ := shareid.Decode(ssid)
 		err := m.Cache.Sync(ctx, storageID, spaceID)
 		if err != nil {
@@ -453,9 +450,6 @@ func (m *Manager) ListReceivedShares(ctx context.Context, filters []*collaborati
 	for _, group := range user.Groups {
 		m.GroupReceivedCache.Sync(ctx, group)
 		for ssid, spaceShareIDs := range m.GroupReceivedCache.List(group) {
-			if time.Now().Sub(spaceShareIDs.Mtime) > time.Second*30 {
-				// TODO reread from disk
-			}
 			// add a pending entry, the state will be updated
 			// when reading the received shares below if they have already been accepted or denied
 			rs := receivedsharecache.Space{
@@ -476,10 +470,6 @@ func (m *Manager) ListReceivedShares(ctx context.Context, filters []*collaborati
 	m.UserReceivedStates.Sync(ctx, user.Id.OpaqueId)
 	if m.UserReceivedStates.ReceivedSpaces[user.Id.OpaqueId] != nil {
 		for ssid, rspace := range m.UserReceivedStates.ReceivedSpaces[user.Id.OpaqueId].Spaces {
-			if time.Now().Sub(rspace.Mtime) > time.Second*30 {
-				// TODO reread from disk
-			}
-			// TODO use younger mtime to determine if
 			if rs, ok := ssids[ssid]; ok {
 				for shareid, state := range rspace.States {
 					// overwrite state
