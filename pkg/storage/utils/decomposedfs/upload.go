@@ -118,11 +118,32 @@ func (fs *Decomposedfs) Upload(ctx context.Context, ref *provider.Reference, r i
 		uff(owner.Id, uploadRef)
 	}
 
-	return provider.ResourceInfo{
-		Id:    &provider.ResourceId{},
-		Etag:  "",
-		Mtime: &typespb.Timestamp{},
-	}, nil
+	ri := provider.ResourceInfo{
+		// fill with at least fileid, mtime and etag
+		Id: &provider.ResourceId{
+			StorageId: uploadInfo.info.MetaData["providerID"],
+			SpaceId:   uploadInfo.info.Storage["SpaceRoot"],
+			OpaqueId:  uploadInfo.info.Storage["NodeId"],
+		},
+		Etag: uploadInfo.info.MetaData["etag"],
+	}
+
+	if mtime, err := parseMTime(uploadInfo.info.MetaData["mtime"]); err == nil {
+		ri.Mtime = &mtime
+	}
+
+	return ri, nil
+}
+
+func parseMTime(v string) (ts typespb.Timestamp, err error) {
+	p := strings.SplitN(v, ".", 2)
+	var sec, nsec uint64
+	if sec, err = strconv.ParseUint(p[0], 10, 64); err == nil {
+		if len(p) > 1 {
+			nsec, err = strconv.ParseUint(p[1], 10, 32)
+		}
+	}
+	return typespb.Timestamp{Seconds: sec, Nanos: uint32(nsec)}, err
 }
 
 // InitiateUpload returns upload ids corresponding to different protocols it supports
@@ -582,20 +603,22 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 		return err
 	}
 
+	overwrite := n.ID != ""
 	var oldSize uint64
-	if n.ID != "" {
+	if overwrite {
+		// read size from existing node
 		old, _ := node.ReadNode(ctx, upload.fs.lu, spaceID, n.ID, false)
 		oldSize = uint64(old.Blobsize)
+	} else {
+		// create new fileid
+		n.ID = uuid.New().String()
+		upload.info.Storage["NodeId"] = n.ID
 	}
-	_, err = node.CheckQuota(n.SpaceRoot, n.ID != "", oldSize, uint64(fi.Size()))
 
-	if err != nil {
+	if _, err = node.CheckQuota(n.SpaceRoot, overwrite, oldSize, uint64(fi.Size())); err != nil {
 		return err
 	}
 
-	if n.ID == "" {
-		n.ID = uuid.New().String()
-	}
 	targetPath := n.InternalPath()
 	sublog := appctx.GetLogger(upload.ctx).
 		With().
@@ -774,6 +797,13 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 			sublog.Err(err).Interface("info", upload.info).Msg("Decomposedfs: could not set mtime metadata")
 			return err
 		}
+
+	}
+
+	// fill metadata with current mtime
+	if fi, err = os.Stat(targetPath); err == nil {
+		upload.info.MetaData["mtime"] = fmt.Sprintf("%d.%d", fi.ModTime().Unix(), fi.ModTime().Nanosecond())
+		upload.info.MetaData["etag"], _ = node.CalculateEtag(n.ID, fi.ModTime())
 	}
 
 	n.Exists = true
