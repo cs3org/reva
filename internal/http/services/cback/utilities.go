@@ -156,7 +156,7 @@ func (s *svc) getRequest(userName, url string, reqType string, body io.Reader) (
 		return nil, err
 	}
 
-	if resp.StatusCode < 200 && resp.StatusCode >= 300 {
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 
 		switch resp.StatusCode {
 		case http.StatusNotFound:
