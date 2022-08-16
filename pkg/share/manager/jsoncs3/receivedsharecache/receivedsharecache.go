@@ -46,7 +46,7 @@ type Spaces struct {
 	Spaces map[string]*Space
 }
 
-// Spaces holds the received shares in one space of one user
+// Space holds the received shares of one user in one space
 type Space struct {
 	Mtime  time.Time
 	States map[string]*State

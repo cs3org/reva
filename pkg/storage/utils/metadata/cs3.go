@@ -163,6 +163,7 @@ func (cs3 *CS3) SimpleUpload(ctx context.Context, uploadpath string, content []b
 	return resp.Body.Close()
 }
 
+// Stat returns the metadata for the given path
 func (cs3 *CS3) Stat(ctx context.Context, path string) (*provider.ResourceInfo, error) {
 	client, err := cs3.providerClient()
 	if err != nil {

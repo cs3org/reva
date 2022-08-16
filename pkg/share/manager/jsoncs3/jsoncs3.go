@@ -98,6 +98,7 @@ type config struct {
 	MachineAuthAPIKey string `mapstructure:"machine_auth_apikey"`
 }
 
+// Manager implements a share manager using a cs3 storage backend with local caching
 type Manager struct {
 	sync.RWMutex
 
@@ -418,7 +419,7 @@ func (m *Manager) ListShares(ctx context.Context, filters []*collaboration.Filte
 			continue
 		}
 		spaceShares := m.Cache.ListSpace(storageID, spaceID)
-		for shareid, _ := range spaceShareIDs.IDs {
+		for shareid := range spaceShareIDs.IDs {
 			s := spaceShares.Shares[shareid]
 			if s == nil {
 				continue
@@ -462,7 +463,7 @@ func (m *Manager) ListReceivedShares(ctx context.Context, filters []*collaborati
 				States: make(map[string]*receivedsharecache.State, len(spaceShareIDs.IDs)),
 			}
 
-			for shareid, _ := range spaceShareIDs.IDs {
+			for shareid := range spaceShareIDs.IDs {
 				rs.States[shareid] = &receivedsharecache.State{
 					State: collaboration.ShareState_SHARE_STATE_PENDING,
 				}
@@ -496,8 +497,8 @@ func (m *Manager) ListReceivedShares(ctx context.Context, filters []*collaborati
 		if err != nil {
 			continue
 		}
-		for shareId, state := range rspace.States {
-			s := m.Cache.Get(storageID, spaceID, shareId)
+		for shareID, state := range rspace.States {
+			s := m.Cache.Get(storageID, spaceID, shareID)
 			if s == nil {
 				continue
 			}

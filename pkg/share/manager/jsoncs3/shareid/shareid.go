@@ -20,10 +20,12 @@ package shareid
 
 import "strings"
 
+// Encode encodes a share id
 func Encode(providerID, spaceID, shareID string) string {
 	return providerID + "^" + spaceID + "°" + shareID
 }
 
+// Decode decodes an encoded shareid
 // share ids are of the format <storageid>^<spaceid>°<shareid>
 func Decode(id string) (string, string, string) {
 	parts := strings.SplitN(id, "^", 2)
