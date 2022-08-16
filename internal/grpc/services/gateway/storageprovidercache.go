@@ -270,7 +270,7 @@ func (c *cachedAPIClient) Stat(ctx context.Context, in *provider.StatRequest, op
 	switch {
 	case err != nil:
 		return nil, err
-	case resp.Status.Code != rpc.Code_CODE_OK && resp.Status.Code != rpc.Code_CODE_NOT_FOUND:
+	case resp.Status.Code != rpc.Code_CODE_OK:
 		return resp, nil
 	case key == "":
 		return resp, nil
