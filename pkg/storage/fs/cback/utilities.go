@@ -111,7 +111,7 @@ func (fs *cback) getRequest(userName, url string, reqType string, body io.Reader
 		return nil, err
 	}
 
-	if resp.StatusCode < 200 && resp.StatusCode >= 300 {
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 
 		switch resp.StatusCode {
 
@@ -274,10 +274,6 @@ func (fs *cback) fileSystem(backupID int, snapID, userName, path, source string)
 		if err != nil {
 			return nil, err
 		}
-		/*fmt.Printf("\nName is: %v\n", responseObject[i].Name)
-		fmt.Printf("Type is: %d\n", m)
-		fmt.Printf("Time is: %v", uint64(responseObject[i].Mtime))
-		fmt.Printf("\n")*/
 
 		temp := fsReturn{
 			Size:  response.Size,
