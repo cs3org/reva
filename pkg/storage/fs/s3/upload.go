@@ -61,9 +61,13 @@ func (fs *s3FS) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCl
 
 	log.Debug().Interface("result", result) // todo cache etag?
 
-	return provider.ResourceInfo{
-		// FIXME fill with at least fileid, mtime and etag
-	}, nil
+	// return id, etag and mtime
+	ri, err := fs.GetMD(ctx, ref, []string{}, []string{"id", "etag", "mtime"})
+	if err != nil {
+		return provider.ResourceInfo{}, err
+	}
+
+	return *ri, nil
 }
 
 // InitiateUpload returns upload ids corresponding to different protocols it supports
