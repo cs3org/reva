@@ -41,6 +41,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/chunking"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/templates"
+	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
@@ -49,10 +50,10 @@ import (
 
 var defaultFilePerm = os.FileMode(0664)
 
-func (fs *owncloudsqlfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser, _ storage.UploadFinishedFunc) error {
+func (fs *owncloudsqlfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser, uff storage.UploadFinishedFunc) (provider.ResourceInfo, error) {
 	upload, err := fs.GetUpload(ctx, ref.GetPath())
 	if err != nil {
-		return errors.Wrap(err, "owncloudsql: error retrieving upload")
+		return provider.ResourceInfo{}, errors.Wrap(err, "owncloudsql: error retrieving upload")
 	}
 
 	uploadInfo := upload.(*fileUpload)
@@ -62,18 +63,18 @@ func (fs *owncloudsqlfs) Upload(ctx context.Context, ref *provider.Reference, r 
 		var assembledFile string
 		p, assembledFile, err = fs.chunkHandler.WriteChunk(p, r)
 		if err != nil {
-			return err
+			return provider.ResourceInfo{}, err
 		}
 		if p == "" {
 			if err = uploadInfo.Terminate(ctx); err != nil {
-				return errors.Wrap(err, "owncloudsql: error removing auxiliary files")
+				return provider.ResourceInfo{}, errors.Wrap(err, "owncloudsql: error removing auxiliary files")
 			}
-			return errtypes.PartialContent(ref.String())
+			return provider.ResourceInfo{}, errtypes.PartialContent(ref.String())
 		}
 		uploadInfo.info.Storage["InternalDestination"] = p
 		fd, err := os.Open(assembledFile)
 		if err != nil {
-			return errors.Wrap(err, "owncloudsql: error opening assembled file")
+			return provider.ResourceInfo{}, errors.Wrap(err, "owncloudsql: error opening assembled file")
 		}
 		defer fd.Close()
 		defer os.RemoveAll(assembledFile)
@@ -81,10 +82,33 @@ func (fs *owncloudsqlfs) Upload(ctx context.Context, ref *provider.Reference, r 
 	}
 
 	if _, err := uploadInfo.WriteChunk(ctx, 0, r); err != nil {
-		return errors.Wrap(err, "owncloudsql: error writing to binary file")
+		return provider.ResourceInfo{}, errors.Wrap(err, "owncloudsql: error writing to binary file")
 	}
 
-	return uploadInfo.FinishUpload(ctx)
+	if err := uploadInfo.FinishUpload(ctx); err != nil {
+		return provider.ResourceInfo{}, err
+	}
+
+	if uff != nil {
+		info := uploadInfo.info
+		uploadRef := &provider.Reference{
+			ResourceId: &provider.ResourceId{
+				StorageId: info.MetaData["providerID"],
+				SpaceId:   info.Storage["SpaceRoot"],
+				OpaqueId:  info.Storage["SpaceRoot"],
+			},
+			Path: utils.MakeRelativePath(filepath.Join(info.MetaData["dir"], info.MetaData["filename"])),
+		}
+		owner, ok := ctxpkg.ContextGetUser(uploadInfo.ctx)
+		if !ok {
+			return provider.ResourceInfo{}, errtypes.PreconditionFailed("error getting user from uploadinfo context")
+		}
+		uff(owner.Id, uploadRef)
+	}
+
+	return provider.ResourceInfo{
+		// FIXME fill with at least fileid, mtime and etag
+	}, nil
 }
 
 // InitiateUpload returns upload ids corresponding to different protocols it supports

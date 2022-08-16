@@ -20,10 +20,51 @@ package s3
 
 import (
 	"context"
+	"io"
 
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/awserr"
+	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/v2/pkg/appctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
+	"github.com/cs3org/reva/v2/pkg/storage"
+	"github.com/pkg/errors"
 )
+
+func (fs *s3FS) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser, uff storage.UploadFinishedFunc) (provider.ResourceInfo, error) {
+	log := appctx.GetLogger(ctx)
+
+	fn, err := fs.resolve(ctx, ref)
+	if err != nil {
+		return provider.ResourceInfo{}, errors.Wrap(err, "error resolving ref")
+	}
+
+	upParams := &s3manager.UploadInput{
+		Bucket: aws.String(fs.config.Bucket),
+		Key:    aws.String(fn),
+		Body:   r,
+	}
+	uploader := s3manager.NewUploaderWithClient(fs.client)
+	result, err := uploader.Upload(upParams)
+
+	if err != nil {
+		log.Error().Err(err)
+		if aerr, ok := err.(awserr.Error); ok {
+			if aerr.Code() == s3.ErrCodeNoSuchBucket {
+				return provider.ResourceInfo{}, errtypes.NotFound(fn)
+			}
+		}
+		return provider.ResourceInfo{}, errors.Wrap(err, "s3fs: error creating object "+fn)
+	}
+
+	log.Debug().Interface("result", result) // todo cache etag?
+
+	return provider.ResourceInfo{
+		// FIXME fill with at least fileid, mtime and etag
+	}, nil
+}
 
 // InitiateUpload returns upload ids corresponding to different protocols it supports
 func (fs *s3FS) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64, metadata map[string]string) (map[string]string, error) {

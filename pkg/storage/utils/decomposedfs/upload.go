@@ -41,6 +41,7 @@ import (
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
@@ -61,10 +62,10 @@ var defaultFilePerm = os.FileMode(0664)
 // Upload uploads data to the given resource
 // TODO Upload (and InitiateUpload) needs a way to receive the expected checksum.
 // Maybe in metadata as 'checksum' => 'sha1 aeosvp45w5xaeoe' = lowercase, space separated?
-func (fs *Decomposedfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser, uff storage.UploadFinishedFunc) error {
+func (fs *Decomposedfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser, uff storage.UploadFinishedFunc) (provider.ResourceInfo, error) {
 	upload, err := fs.GetUpload(ctx, ref.GetPath())
 	if err != nil {
-		return errors.Wrap(err, "Decomposedfs: error retrieving upload")
+		return provider.ResourceInfo{}, errors.Wrap(err, "Decomposedfs: error retrieving upload")
 	}
 
 	uploadInfo := upload.(*fileUpload)
@@ -74,18 +75,18 @@ func (fs *Decomposedfs) Upload(ctx context.Context, ref *provider.Reference, r i
 		var assembledFile string
 		p, assembledFile, err = fs.chunkHandler.WriteChunk(p, r)
 		if err != nil {
-			return err
+			return provider.ResourceInfo{}, err
 		}
 		if p == "" {
 			if err = uploadInfo.Terminate(ctx); err != nil {
-				return errors.Wrap(err, "ocfs: error removing auxiliary files")
+				return provider.ResourceInfo{}, errors.Wrap(err, "ocfs: error removing auxiliary files")
 			}
-			return errtypes.PartialContent(ref.String())
+			return provider.ResourceInfo{}, errtypes.PartialContent(ref.String())
 		}
 		uploadInfo.info.Storage["NodeName"] = p
 		fd, err := os.Open(assembledFile)
 		if err != nil {
-			return errors.Wrap(err, "Decomposedfs: error opening assembled file")
+			return provider.ResourceInfo{}, errors.Wrap(err, "Decomposedfs: error opening assembled file")
 		}
 		defer fd.Close()
 		defer os.RemoveAll(assembledFile)
@@ -93,11 +94,11 @@ func (fs *Decomposedfs) Upload(ctx context.Context, ref *provider.Reference, r i
 	}
 
 	if _, err := uploadInfo.WriteChunk(ctx, 0, r); err != nil {
-		return errors.Wrap(err, "Decomposedfs: error writing to binary file")
+		return provider.ResourceInfo{}, errors.Wrap(err, "Decomposedfs: error writing to binary file")
 	}
 
 	if err := uploadInfo.FinishUpload(ctx); err != nil {
-		return err
+		return provider.ResourceInfo{}, err
 	}
 
 	if uff != nil {
@@ -112,12 +113,16 @@ func (fs *Decomposedfs) Upload(ctx context.Context, ref *provider.Reference, r i
 		}
 		owner, ok := ctxpkg.ContextGetUser(uploadInfo.ctx)
 		if !ok {
-			return errtypes.PreconditionFailed("error getting user from uploadinfo context")
+			return provider.ResourceInfo{}, errtypes.PreconditionFailed("error getting user from uploadinfo context")
 		}
 		uff(owner.Id, uploadRef)
 	}
 
-	return nil
+	return provider.ResourceInfo{
+		Id:    &provider.ResourceId{},
+		Etag:  "",
+		Mtime: &typespb.Timestamp{},
+	}, nil
 }
 
 // InitiateUpload returns upload ids corresponding to different protocols it supports

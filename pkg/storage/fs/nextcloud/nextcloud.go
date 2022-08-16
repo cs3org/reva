@@ -396,8 +396,10 @@ func (nc *StorageDriver) InitiateUpload(ctx context.Context, ref *provider.Refer
 }
 
 // Upload as defined in the storage.FS interface
-func (nc *StorageDriver) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser, _ storage.UploadFinishedFunc) error {
-	return nc.doUpload(ctx, ref.Path, r)
+func (nc *StorageDriver) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser, _ storage.UploadFinishedFunc) (provider.ResourceInfo, error) {
+	return provider.ResourceInfo{
+		// FIXME fill with at least fileid, mtime and etag
+	}, nc.doUpload(ctx, ref.Path, r)
 }
 
 // Download as defined in the storage.FS interface
