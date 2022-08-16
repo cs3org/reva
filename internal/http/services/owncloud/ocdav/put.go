@@ -292,9 +292,6 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// the response content type should not be set, as the response body is emty
-	// TODO does the testsuite expect a content type? isn't that against the http spec?
-	//w.Header().Add(net.HeaderContentType, newInfo.MimeType)
 	// copy headers if they are present
 	if httpRes.Header.Get(net.HeaderETag) != "" {
 		w.Header().Set(net.HeaderETag, httpRes.Header.Get(net.HeaderETag))
