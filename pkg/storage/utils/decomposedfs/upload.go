@@ -41,7 +41,6 @@ import (
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
@@ -128,22 +127,11 @@ func (fs *Decomposedfs) Upload(ctx context.Context, ref *provider.Reference, r i
 		Etag: uploadInfo.info.MetaData["etag"],
 	}
 
-	if mtime, err := parseMTime(uploadInfo.info.MetaData["mtime"]); err == nil {
+	if mtime, err := utils.MTimeToTS(uploadInfo.info.MetaData["mtime"]); err == nil {
 		ri.Mtime = &mtime
 	}
 
 	return ri, nil
-}
-
-func parseMTime(v string) (ts typespb.Timestamp, err error) {
-	p := strings.SplitN(v, ".", 2)
-	var sec, nsec uint64
-	if sec, err = strconv.ParseUint(p[0], 10, 64); err == nil {
-		if len(p) > 1 {
-			nsec, err = strconv.ParseUint(p[1], 10, 32)
-		}
-	}
-	return typespb.Timestamp{Seconds: sec, Nanos: uint32(nsec)}, err
 }
 
 // InitiateUpload returns upload ids corresponding to different protocols it supports
