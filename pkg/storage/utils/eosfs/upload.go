@@ -77,9 +77,17 @@ func (fs *eosfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadC
 		return provider.ResourceInfo{}, err
 	}
 
-	return provider.ResourceInfo{
-		// FIXME fill with at least fileid, mtime and etag
-	}, nil
+	eosFileInfo, err := fs.c.GetFileInfoByPath(ctx, auth, fn)
+	if err != nil {
+		return provider.ResourceInfo{}, err
+	}
+
+	ri, err := fs.convertToResourceInfo(ctx, eosFileInfo)
+	if err != nil {
+		return provider.ResourceInfo{}, err
+	}
+
+	return *ri, nil
 }
 
 func (fs *eosfs) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64, metadata map[string]string) (map[string]string, error) {
