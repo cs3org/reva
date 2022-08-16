@@ -89,7 +89,7 @@ func (s *svc) OpenInApp(ctx context.Context, req *gateway.OpenInAppRequest) (*pr
 		}
 		fileInfo = res.Info
 	}
-	return s.openLocalResources(ctx, fileInfo, req.ViewMode, req.App)
+	return s.openLocalResources(ctx, fileInfo, req.ViewMode, req.App, req.Opaque)
 }
 
 func (s *svc) openFederatedShares(ctx context.Context, targetURL string, vm gateway.OpenInAppRequest_ViewMode, app string,
@@ -144,7 +144,7 @@ func (s *svc) openFederatedShares(ctx context.Context, targetURL string, vm gate
 }
 
 func (s *svc) openLocalResources(ctx context.Context, ri *storageprovider.ResourceInfo,
-	vm gateway.OpenInAppRequest_ViewMode, app string) (*providerpb.OpenInAppResponse, error) {
+	vm gateway.OpenInAppRequest_ViewMode, app string, opaque *typespb.Opaque) (*providerpb.OpenInAppResponse, error) {
 
 	accessToken, ok := ctxpkg.ContextGetToken(ctx)
 	if !ok || accessToken == "" {
@@ -173,6 +173,7 @@ func (s *svc) openLocalResources(ctx context.Context, ri *storageprovider.Resour
 		ResourceInfo: ri,
 		ViewMode:     providerpb.OpenInAppRequest_ViewMode(vm),
 		AccessToken:  accessToken,
+		Opaque:       opaque,
 	}
 
 	res, err := appProviderClient.OpenInApp(ctx, appProviderReq)

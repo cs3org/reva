@@ -169,7 +169,15 @@ func getProvider(c *config) (app.Provider, error) {
 }
 
 func (s *service) OpenInApp(ctx context.Context, req *providerpb.OpenInAppRequest) (*providerpb.OpenInAppResponse, error) {
-	appURL, err := s.provider.GetAppURL(ctx, req.ResourceInfo, req.ViewMode, req.AccessToken)
+	lang := ""
+	if req.Opaque != nil {
+		if langOpaque, ok := req.Opaque.Map["lang"]; ok {
+			if langOpaque != nil {
+				lang = string(langOpaque.Value)
+			}
+		}
+	}
+	appURL, err := s.provider.GetAppURL(ctx, req.ResourceInfo, req.ViewMode, req.AccessToken, lang)
 	if err != nil {
 		res := &providerpb.OpenInAppResponse{
 			Status: status.NewInternal(ctx, err.Error()),
