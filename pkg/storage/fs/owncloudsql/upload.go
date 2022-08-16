@@ -106,9 +106,21 @@ func (fs *owncloudsqlfs) Upload(ctx context.Context, ref *provider.Reference, r 
 		uff(owner.Id, uploadRef)
 	}
 
-	return provider.ResourceInfo{
-		// FIXME fill with at least fileid, mtime and etag
-	}, nil
+	ri := provider.ResourceInfo{
+		// fill with at least fileid, mtime and etag
+		Id: &provider.ResourceId{
+			StorageId: uploadInfo.info.MetaData["providerID"],
+			SpaceId:   uploadInfo.info.Storage["StorageId"],
+			OpaqueId:  uploadInfo.info.Storage["fileid"],
+		},
+		Etag: uploadInfo.info.MetaData["etag"],
+	}
+
+	if mtime, err := utils.MTimeToTS(uploadInfo.info.MetaData["mtime"]); err == nil {
+		ri.Mtime = &mtime
+	}
+
+	return ri, nil
 }
 
 // InitiateUpload returns upload ids corresponding to different protocols it supports
@@ -426,20 +438,30 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+
+	if upload.info.MetaData["mtime"] == "" {
+		upload.info.MetaData["mtime"] = fmt.Sprintf("%d", fi.ModTime().Unix())
+	}
+	if upload.info.MetaData["etag"] == "" {
+		upload.info.MetaData["etag"] = calcEtag(upload.ctx, fi)
+	}
+
 	data := map[string]interface{}{
 		"path":          upload.fs.toDatabasePath(ip),
 		"checksum":      fmt.Sprintf("SHA1:%032x MD5:%032x ADLER32:%032x", sha1h, md5h, adler32h),
-		"etag":          calcEtag(upload.ctx, fi),
+		"etag":          upload.info.MetaData["etag"],
 		"size":          upload.info.Size,
 		"mimetype":      mime.Detect(false, ip),
 		"permissions":   perms,
 		"mtime":         upload.info.MetaData["mtime"],
 		"storage_mtime": upload.info.MetaData["mtime"],
 	}
-	_, err = upload.fs.filecache.InsertOrUpdate(ctx, upload.info.Storage["StorageId"], data, false)
+	var fileid int
+	fileid, err = upload.fs.filecache.InsertOrUpdate(ctx, upload.info.Storage["StorageId"], data, false)
 	if err != nil {
 		return err
 	}
+	upload.info.Storage["fileid"] = fmt.Sprintf("%d", fileid)
 
 	// only delete the upload if it was successfully written to the storage
 	if err := os.Remove(upload.infoPath); err != nil {
