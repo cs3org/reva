@@ -550,6 +550,23 @@ var _ = Describe("Jsoncs3", func() {
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(shares)).To(Equal(2))
 			})
+
+			It("filters by resource id", func() {
+				shares, err := m.ListShares(ctx, []*collaboration.Filter{
+					{
+						Type: collaboration.Filter_TYPE_RESOURCE_ID,
+						Term: &collaboration.Filter_ResourceId{
+							ResourceId: &providerv1beta1.ResourceId{
+								StorageId: "storageid",
+								SpaceId:   "spaceid",
+								OpaqueId:  "somethingelse",
+							},
+						},
+					},
+				})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(shares).To(HaveLen(0))
+			})
 		})
 
 		Describe("ListReceivedShares", func() {
