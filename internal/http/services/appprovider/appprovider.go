@@ -392,14 +392,7 @@ func (s *svc) handleOpen(w http.ResponseWriter, r *http.Request) {
 		Ref:      fileRef,
 		ViewMode: viewMode,
 		App:      r.Form.Get("app_name"),
-		Opaque: &typespb.Opaque{
-			Map: map[string]*typespb.OpaqueEntry{
-				"lang": &typespb.OpaqueEntry{
-					Value:   []byte(lang),
-					Decoder: "string",
-				},
-			},
-		},
+		Opaque:   utils.AppendPlainToOpaque(nil, "lang", lang),
 	}
 	openRes, err := client.OpenInApp(ctx, &openReq)
 	if err != nil {
