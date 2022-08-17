@@ -36,6 +36,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/rgrpc/status"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v2/pkg/sharedconf"
+	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/juliangruber/go-intersect"
 	"github.com/mitchellh/mapstructure"
 	"google.golang.org/grpc"
@@ -169,7 +170,7 @@ func getProvider(c *config) (app.Provider, error) {
 }
 
 func (s *service) OpenInApp(ctx context.Context, req *providerpb.OpenInAppRequest) (*providerpb.OpenInAppResponse, error) {
-	appURL, err := s.provider.GetAppURL(ctx, req.ResourceInfo, req.ViewMode, req.AccessToken)
+	appURL, err := s.provider.GetAppURL(ctx, req.ResourceInfo, req.ViewMode, req.AccessToken, utils.ReadPlainFromOpaque(req.Opaque, "lang"))
 	if err != nil {
 		res := &providerpb.OpenInAppResponse{
 			Status: status.NewInternal(ctx, err.Error()),

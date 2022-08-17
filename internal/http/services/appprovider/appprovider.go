@@ -37,6 +37,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/sharedconf"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/utils"
+	iso6391 "github.com/emvi/iso-639-1"
 	"github.com/go-chi/chi"
 	ua "github.com/mileusna/useragent"
 	"github.com/mitchellh/mapstructure"
@@ -355,6 +356,12 @@ func (s *svc) handleOpen(openMode int) http.HandlerFunc {
 			writeError(w, r, appErrorInvalidParameter, "parameters could not be parsed", nil)
 		}
 
+		lang := r.Form.Get("lang")
+		if lang != "" && !iso6391.ValidCode(lang) {
+			writeError(w, r, appErrorInvalidParameter, "lang parameter does not contain a valid ISO 639-1 language code", nil)
+			return
+		}
+
 		fileID := r.Form.Get("file_id")
 
 		if fileID == "" {
@@ -402,6 +409,7 @@ func (s *svc) handleOpen(openMode int) http.HandlerFunc {
 			Ref:      fileRef,
 			ViewMode: viewMode,
 			App:      r.Form.Get("app_name"),
+			Opaque:   utils.AppendPlainToOpaque(nil, "lang", lang),
 		}
 		openRes, err := client.OpenInApp(ctx, &openReq)
 		if err != nil {

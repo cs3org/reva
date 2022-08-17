@@ -119,7 +119,7 @@ func New(m map[string]interface{}) (app.Provider, error) {
 	}, nil
 }
 
-func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.ResourceInfo, viewMode appprovider.OpenInAppRequest_ViewMode, token string) (*appprovider.OpenInAppURL, error) {
+func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.ResourceInfo, viewMode appprovider.OpenInAppRequest_ViewMode, token, language string) (*appprovider.OpenInAppURL, error) {
 	log := appctx.GetLogger(ctx)
 
 	ext := path.Ext(resource.Path)
@@ -235,6 +235,20 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 	}
 
 	appFullURL := result["app-url"].(string)
+
+	if language != "" {
+		url, err := url.Parse(appFullURL)
+		if err != nil {
+			return nil, err
+		}
+		urlQuery := url.Query()
+		// we could improve this by using the UI_LLCC value from the wopi discovery url
+		// https://docs.microsoft.com/en-us/microsoft-365/cloud-storage-partner-program/online/discovery#ui_llcc
+		urlQuery.Set("ui", language)   // OnlyOffice
+		urlQuery.Set("lang", language) // Collabora
+		url.RawQuery = urlQuery.Encode()
+		appFullURL = url.String()
+	}
 
 	// Depending on whether wopi server returned any form parameters or not,
 	// we decide whether the request method is POST or GET
