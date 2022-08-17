@@ -37,9 +37,9 @@ type requestTemp struct {
 	BackupID int    `json:"backup_id"`
 	Pattern  string `json:"pattern"`
 	Snapshot string `json:"snapshot"`
-	//destination string
-	//enabled     bool
-	//date        string
+	// destination string
+	// enabled     bool
+	// date        string
 }
 
 func init() {
