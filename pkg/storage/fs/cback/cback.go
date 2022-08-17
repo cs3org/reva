@@ -41,7 +41,7 @@ func New(m map[string]interface{}) (fs storage.FS, err error) {
 
 	httpClient := rhttp.GetHTTPClient()
 
-	// returns the storage.FS interface
+	// Returns the storage.FS interface
 	return &cback{conf: c, client: httpClient}, nil
 
 }
@@ -68,8 +68,6 @@ func (fs *cback) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []st
 	}
 
 	ssID, searchPath = fs.pathTrimmer(snapshotList, resp)
-
-	//fmt.Printf("The ssID is: %v\nThe Path is %v\n", ssID, searchPath)
 
 	if resp.Source == ref.Path {
 		setTime := v1beta1.Timestamp{
@@ -153,7 +151,7 @@ func (fs *cback) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys
 		return nil, err
 	}
 
-	//code executed before snapshot being inputted
+	// Code executed before snapshot being inputted
 	if resp == nil {
 		pathList, err := fs.pathFinder(user.Username, ref.Path)
 
@@ -207,7 +205,7 @@ func (fs *cback) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys
 			return nil, errtypes.NotFound("cback: snapshotID invalid")
 		}
 
-		//If no match in path, therefore prints the files
+		// If no match in path, therefore prints the files
 		fmt.Printf("The ssID is: %v\nThe Path is %v\n", ssID, searchPath)
 		ret, err := fs.fileSystem(resp.ID, ssID, user.Username, searchPath, resp.Source)
 
@@ -255,7 +253,7 @@ func (fs *cback) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys
 
 	}
 
-	//If match in path, therefore print the Snapshot IDs
+	// If match in path, therefore print the Snapshot IDs
 	files := make([]*provider.ResourceInfo, 0, len(snapshotList))
 
 	for _, snapshot := range snapshotList {

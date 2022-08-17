@@ -18,7 +18,7 @@ type backUpResponse struct {
 	ID        int    `json:"id"`
 	Name      string `json:"name"`
 	Source    string `json:"source"`
-	Substring string //Used in function
+	Substring string // Used in function
 }
 
 type snapshotResponse struct {
