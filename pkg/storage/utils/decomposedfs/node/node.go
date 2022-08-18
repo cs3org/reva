@@ -643,6 +643,7 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 		PermissionSet: rp,
 		Owner:         n.Owner(),
 		ParentId:      parentID,
+		Name:          n.Name,
 	}
 
 	if nodeType == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
