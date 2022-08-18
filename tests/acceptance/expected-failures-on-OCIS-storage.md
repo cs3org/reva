@@ -377,8 +377,6 @@ File and sync features in a shared scenario
 - [apiSharePublicLink1/accessToPublicLinkShare.feature:20](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink1/accessToPublicLinkShare.feature#L20)
 - [apiSharePublicLink1/accessToPublicLinkShare.feature:30](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink1/accessToPublicLinkShare.feature#L30)
 - [apiSharePublicLink1/accessToPublicLinkShare.feature:45](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink1/accessToPublicLinkShare.feature#L45)
-- [apiSharePublicLink1/createPublicLinkShare.feature:141](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink1/createPublicLinkShare.feature#L141)
-- [apiSharePublicLink1/createPublicLinkShare.feature:142](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink1/createPublicLinkShare.feature#L142)
 - [apiSharePublicLink1/createPublicLinkShare.feature:218](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink1/createPublicLinkShare.feature#L218)
 - [apiSharePublicLink1/createPublicLinkShare.feature:219](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink1/createPublicLinkShare.feature#L219)
 - [apiSharePublicLink1/createPublicLinkShare.feature:583](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink1/createPublicLinkShare.feature#L583)
@@ -1268,6 +1266,9 @@ _ocs: api compatibility, return correct status code_
 #### [These tests pass in ocis and reva egde but fail in master with `file_target has unexpected value '/home'`]()
 - [apiSharePublicLink1/createPublicLinkShare.feature:477](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink1/createPublicLinkShare.feature#L477)
 - [apiSharePublicLink1/createPublicLinkShare.feature:478](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink1/createPublicLinkShare.feature#L478)
+
+#### [Valid requests with body must give 415 (Unsupported Media Type)](https://github.com/owncloud/ocis/issues/4332)
+- [apiAuthWebDav/webDavDELETEAuth.feature:188](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthWebDav/webDavDELETEAuth.feature#L188)
 
 Note: always have an empty line at the end of this file.
 The bash script that processes this file may not process a scenario reference on the last line.
