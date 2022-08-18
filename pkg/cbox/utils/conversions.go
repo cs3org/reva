@@ -48,6 +48,7 @@ type DBShare struct {
 	STime        int
 	FileTarget   string
 	State        int
+	Quicklink    bool
 }
 
 // FormatGrantee formats a CS3API grantee to a string
@@ -250,5 +251,6 @@ func ConvertToCS3PublicShare(s DBShare) *link.PublicShare {
 		Expiration:        expires,
 		Ctime:             ts,
 		Mtime:             ts,
+		Quicklink:         s.Quicklink,
 	}
 }
