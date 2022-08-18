@@ -117,11 +117,12 @@ type CapabilitiesArchiver struct {
 
 // CapabilitiesAppProvider holds available app provider information
 type CapabilitiesAppProvider struct {
-	Enabled bool   `json:"enabled" xml:"enabled" mapstructure:"enabled"`
-	Version string `json:"version" xml:"version" mapstructure:"version"`
-	AppsURL string `json:"apps_url" xml:"apps_url" mapstructure:"apps_url"`
-	OpenURL string `json:"open_url" xml:"open_url" mapstructure:"open_url"`
-	NewURL  string `json:"new_url" xml:"new_url" mapstructure:"new_url"`
+	Enabled    bool   `json:"enabled" xml:"enabled" mapstructure:"enabled"`
+	Version    string `json:"version" xml:"version" mapstructure:"version"`
+	AppsURL    string `json:"apps_url" xml:"apps_url" mapstructure:"apps_url"`
+	OpenURL    string `json:"open_url" xml:"open_url" mapstructure:"open_url"`
+	OpenWebURL string `json:"open_web_url" xml:"open_web_url" mapstructure:"open_web_url"`
+	NewURL     string `json:"new_url" xml:"new_url" mapstructure:"new_url"`
 }
 
 // CapabilitiesFiles TODO this is storage specific, not global. What effect do these options have on the clients?

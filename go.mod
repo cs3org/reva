@@ -21,6 +21,7 @@ require (
 	github.com/cs3org/go-cs3apis v0.0.0-20220719130120-361e9f987d64
 	github.com/cubewise-code/go-mime v0.0.0-20200519001935-8c5762b177d8
 	github.com/dgraph-io/ristretto v0.1.0
+	github.com/emvi/iso-639-1 v1.0.1
 	github.com/eventials/go-tus v0.0.0-20220610120217-05d0564bb571
 	github.com/gdexlab/go-render v1.0.1
 	github.com/go-chi/chi v4.1.2+incompatible

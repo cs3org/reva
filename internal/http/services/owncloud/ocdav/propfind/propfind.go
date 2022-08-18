@@ -987,6 +987,10 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 			)
 		}
 
+		if md.Name != "" {
+			propstatOK.Prop = append(propstatOK.Prop, prop.Raw("oc:name", md.Name))
+		}
+
 		if md.Etag != "" {
 			// etags must be enclosed in double quotes and cannot contain them.
 			// See https://tools.ietf.org/html/rfc7232#section-2.3 for details
@@ -1320,6 +1324,8 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 					if k := md.GetArbitraryMetadata().GetMetadata(); k != nil {
 						propstatOK.Prop = append(propstatOK.Prop, prop.Raw("oc:tags", k["tags"]))
 					}
+				case "name":
+					propstatOK.Prop = append(propstatOK.Prop, prop.Raw("oc:name", md.Name))
 				case "privatelink": // phoenix only
 					// <oc:privatelink>https://phoenix.owncloud.com/f/9</oc:privatelink>
 					fallthrough
