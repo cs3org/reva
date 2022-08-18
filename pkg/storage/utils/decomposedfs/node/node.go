@@ -646,6 +646,7 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 		PermissionSet: rp,
 		Owner:         n.Owner(),
 		ParentId:      parentID,
+		Name:          n.Name,
 	}
 
 	if n.IsProcessing() {

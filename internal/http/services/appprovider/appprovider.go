@@ -21,6 +21,7 @@ package appprovider
 import (
 	"encoding/json"
 	"net/http"
+	"net/url"
 	"path"
 
 	appregistry "github.com/cs3org/go-cs3apis/cs3/app/registry/v1beta1"
@@ -36,6 +37,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/sharedconf"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/utils"
+	iso6391 "github.com/emvi/iso-639-1"
 	"github.com/go-chi/chi"
 	ua "github.com/mileusna/useragent"
 	"github.com/mitchellh/mapstructure"
@@ -52,6 +54,14 @@ type Config struct {
 	Prefix     string `mapstructure:"prefix"`
 	GatewaySvc string `mapstructure:"gatewaysvc"`
 	Insecure   bool   `mapstructure:"insecure"`
+	WebBaseURI string `mapstructure:"webbaseuri"`
+	Web        Web    `mapstructure:"web"`
+}
+
+// Web holds the config options for the URL parameters for Web
+type Web struct {
+	URLParamsMapping map[string]string `mapstructure:"urlparamsmapping"`
+	StaticURLParams  map[string]string `mapstructure:"staticurlparams"`
 }
 
 func (c *Config) init() {
@@ -88,10 +98,16 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 	return s, nil
 }
 
+const (
+	openModeNormal = iota
+	openModeWeb
+)
+
 func (s *svc) routerInit() error {
 	s.router.Get("/list", s.handleList)
 	s.router.Post("/new", s.handleNew)
-	s.router.Post("/open", s.handleOpen)
+	s.router.Post("/open", s.handleOpen(openModeNormal))
+	s.router.Post("/open-with-web", s.handleOpen(openModeWeb))
 	return nil
 }
 
@@ -324,97 +340,171 @@ func (s *svc) handleList(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *svc) handleOpen(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
+func (s *svc) handleOpen(openMode int) http.HandlerFunc {
 
-	client, err := pool.GetGatewayServiceClient(s.conf.GatewaySvc)
-	if err != nil {
-		writeError(w, r, appErrorServerError, "Internal error with the gateway, please try again later", err)
-		return
-	}
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
 
-	err = r.ParseForm()
-	if err != nil {
-		writeError(w, r, appErrorInvalidParameter, "parameters could not be parsed", nil)
-	}
-
-	fileID := r.Form.Get("file_id")
-
-	if fileID == "" {
-		writeError(w, r, appErrorInvalidParameter, "missing file ID", nil)
-		return
-	}
-
-	resourceID, err := storagespace.ParseID(fileID)
-	if err != nil {
-		writeError(w, r, appErrorInvalidParameter, "invalid file ID", nil)
-		return
-	}
-
-	fileRef := &provider.Reference{
-		ResourceId: &resourceID,
-		Path:       ".",
-	}
-
-	statRes, err := client.Stat(ctx, &provider.StatRequest{Ref: fileRef})
-	if err != nil {
-		writeError(w, r, appErrorServerError, "Internal error accessing the file, please try again later", err)
-		return
-	}
-
-	if statRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
-		writeError(w, r, appErrorNotFound, "file does not exist", nil)
-		return
-	} else if statRes.Status.Code != rpc.Code_CODE_OK {
-		writeError(w, r, appErrorServerError, "failed to stat the file", nil)
-		return
-	}
-
-	if statRes.Info.Type != provider.ResourceType_RESOURCE_TYPE_FILE {
-		writeError(w, r, appErrorInvalidParameter, "the given file id does not point to a file", nil)
-		return
-	}
-
-	viewMode := getViewMode(statRes.Info, r.Form.Get("view_mode"))
-	if viewMode == gateway.OpenInAppRequest_VIEW_MODE_INVALID {
-		writeError(w, r, appErrorInvalidParameter, "invalid view mode", err)
-		return
-	}
-
-	openReq := gateway.OpenInAppRequest{
-		Ref:      fileRef,
-		ViewMode: viewMode,
-		App:      r.Form.Get("app_name"),
-	}
-	openRes, err := client.OpenInApp(ctx, &openReq)
-	if err != nil {
-		writeError(w, r, appErrorServerError,
-			"Error contacting the requested application, please use a different one or try again later", err)
-		return
-	}
-	if openRes.Status.Code != rpc.Code_CODE_OK {
-		if openRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
-			writeError(w, r, appErrorNotFound, openRes.Status.Message, nil)
+		client, err := pool.GetGatewayServiceClient(s.conf.GatewaySvc)
+		if err != nil {
+			writeError(w, r, appErrorServerError, "Internal error with the gateway, please try again later", err)
 			return
 		}
-		writeError(w, r, appErrorServerError, openRes.Status.Message,
-			status.NewErrorFromCode(openRes.Status.Code, "error calling OpenInApp"))
-		return
-	}
 
-	js, err := json.Marshal(openRes.AppUrl)
+		err = r.ParseForm()
+		if err != nil {
+			writeError(w, r, appErrorInvalidParameter, "parameters could not be parsed", nil)
+		}
+
+		lang := r.Form.Get("lang")
+		if lang != "" && !iso6391.ValidCode(lang) {
+			writeError(w, r, appErrorInvalidParameter, "lang parameter does not contain a valid ISO 639-1 language code", nil)
+			return
+		}
+
+		fileID := r.Form.Get("file_id")
+
+		if fileID == "" {
+			writeError(w, r, appErrorInvalidParameter, "missing file ID", nil)
+			return
+		}
+
+		resourceID, err := storagespace.ParseID(fileID)
+		if err != nil {
+			writeError(w, r, appErrorInvalidParameter, "invalid file ID", nil)
+			return
+		}
+
+		fileRef := &provider.Reference{
+			ResourceId: &resourceID,
+			Path:       ".",
+		}
+
+		statRes, err := client.Stat(ctx, &provider.StatRequest{Ref: fileRef})
+		if err != nil {
+			writeError(w, r, appErrorServerError, "Internal error accessing the file, please try again later", err)
+			return
+		}
+
+		if statRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
+			writeError(w, r, appErrorNotFound, "file does not exist", nil)
+			return
+		} else if statRes.Status.Code != rpc.Code_CODE_OK {
+			writeError(w, r, appErrorServerError, "failed to stat the file", nil)
+			return
+		}
+
+		if statRes.Info.Type != provider.ResourceType_RESOURCE_TYPE_FILE {
+			writeError(w, r, appErrorInvalidParameter, "the given file id does not point to a file", nil)
+			return
+		}
+
+		viewMode := getViewMode(statRes.Info, r.Form.Get("view_mode"))
+		if viewMode == gateway.OpenInAppRequest_VIEW_MODE_INVALID {
+			writeError(w, r, appErrorInvalidParameter, "invalid view mode", err)
+			return
+		}
+
+		openReq := gateway.OpenInAppRequest{
+			Ref:      fileRef,
+			ViewMode: viewMode,
+			App:      r.Form.Get("app_name"),
+			Opaque:   utils.AppendPlainToOpaque(nil, "lang", lang),
+		}
+		openRes, err := client.OpenInApp(ctx, &openReq)
+		if err != nil {
+			writeError(w, r, appErrorServerError,
+				"Error contacting the requested application, please use a different one or try again later", err)
+			return
+		}
+		if openRes.Status.Code != rpc.Code_CODE_OK {
+			if openRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
+				writeError(w, r, appErrorNotFound, openRes.Status.Message, nil)
+				return
+			}
+			writeError(w, r, appErrorServerError, openRes.Status.Message,
+				status.NewErrorFromCode(openRes.Status.Code, "error calling OpenInApp"))
+			return
+		}
+
+		var payload interface{}
+
+		switch openMode {
+		case openModeNormal:
+			payload = openRes.AppUrl
+
+		case openModeWeb:
+			payload, err = newOpenInWebResponse(s.conf.WebBaseURI, s.conf.Web.URLParamsMapping, s.conf.Web.StaticURLParams, fileID, r.Form.Get("app_name"), r.Form.Get("view_mode"))
+			if err != nil {
+				writeError(w, r, appErrorServerError, "Internal error",
+					errors.Wrap(err, "error building OpenInWeb response"))
+				return
+			}
+
+		default:
+			writeError(w, r, appErrorServerError, "Internal error with the open mode",
+				errors.New("unknown open mode"))
+			return
+
+		}
+
+		js, err := json.Marshal(payload)
+		if err != nil {
+			writeError(w, r, appErrorServerError, "Internal error with JSON payload",
+				errors.Wrap(err, "error marshalling JSON response"))
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		if _, err = w.Write(js); err != nil {
+			writeError(w, r, appErrorServerError, "Internal error with JSON payload",
+				errors.Wrap(err, "error writing JSON response"))
+			return
+		}
+	}
+}
+
+type openInWebResponse struct {
+	URI string `json:"uri"`
+}
+
+func newOpenInWebResponse(baseURI string, params, staticParams map[string]string, fileID, appName, viewMode string) (openInWebResponse, error) {
+
+	uri, err := url.Parse(baseURI)
 	if err != nil {
-		writeError(w, r, appErrorServerError, "Internal error with JSON payload",
-			errors.Wrap(err, "error marshalling JSON response"))
-		return
+		return openInWebResponse{}, err
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	if _, err = w.Write(js); err != nil {
-		writeError(w, r, appErrorServerError, "Internal error with JSON payload",
-			errors.Wrap(err, "error writing JSON response"))
-		return
+	query := uri.Query()
+
+	for key, val := range params {
+
+		switch val {
+		case "fileid":
+			if fileID != "" {
+				query.Add(key, fileID)
+			}
+		case "appname":
+			if appName != "" {
+				query.Add(key, appName)
+			}
+		case "viewmode":
+			if viewMode != "" {
+				query.Add(key, viewMode)
+			}
+		default:
+			return openInWebResponse{}, errors.New("unknown parameter mapper")
+		}
+
 	}
+
+	for key, val := range staticParams {
+		query.Add(key, val)
+	}
+
+	uri.RawQuery = query.Encode()
+
+	return openInWebResponse{URI: uri.String()}, nil
 }
 
 func filterAppsByUserAgent(mimeTypes []*appregistry.MimeTypeInfo, userAgent string) []*appregistry.MimeTypeInfo {
