@@ -28,6 +28,7 @@ import (
 	"github.com/pkg/errors"
 	"google.golang.org/genproto/protobuf/field_mask"
 
+	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
@@ -406,6 +407,48 @@ func (m *Manager) ListShares(ctx context.Context, filters []*collaboration.Filte
 	defer m.Unlock()
 
 	user := ctxpkg.ContextMustGetUser(ctx)
+	grouped := share.GroupFiltersByType(filters)
+
+	if len(grouped[collaboration.Filter_TYPE_RESOURCE_ID]) > 0 {
+		return m.listSharesByIDs(ctx, user, filters)
+	}
+
+	return m.listCreatedShares(ctx, user, filters)
+}
+
+func (m *Manager) listSharesByIDs(ctx context.Context, user *userv1beta1.User, filters []*collaboration.Filter) ([]*collaboration.Share, error) {
+	var ss []*collaboration.Share
+
+	grouped := share.GroupFiltersByType(filters)
+	providerSpaces := map[string]map[string]bool{}
+	for _, f := range grouped[collaboration.Filter_TYPE_RESOURCE_ID] {
+		storageID := f.GetResourceId().GetStorageId()
+		spaceID := f.GetResourceId().GetSpaceId()
+		if providerSpaces[storageID] == nil {
+			providerSpaces[storageID] = map[string]bool{}
+		}
+		providerSpaces[storageID][spaceID] = true
+	}
+
+	for providerID, spaces := range providerSpaces {
+		for spaceID, _ := range spaces {
+			err := m.Cache.Sync(ctx, providerID, spaceID)
+			if err != nil {
+				return nil, err
+			}
+
+			shares := m.Cache.ListSpace(providerID, spaceID)
+			for _, s := range shares.Shares {
+				if share.MatchesFilters(s, filters) {
+					ss = append(ss, s)
+				}
+			}
+		}
+	}
+	return ss, nil
+}
+
+func (m *Manager) listCreatedShares(ctx context.Context, user *userv1beta1.User, filters []*collaboration.Filter) ([]*collaboration.Share, error) {
 	var ss []*collaboration.Share
 
 	m.CreatedCache.Sync(ctx, user.Id.OpaqueId)

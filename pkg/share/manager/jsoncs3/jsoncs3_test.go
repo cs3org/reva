@@ -31,6 +31,7 @@ import (
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	providerv1beta1 "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocs/conversions"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/share/manager/jsoncs3"
 	"github.com/cs3org/reva/v2/pkg/share/manager/jsoncs3/sharecache"
@@ -188,6 +189,60 @@ var _ = Describe("Jsoncs3", func() {
 				Grantee:    grant.Grantee,
 			})
 			Expect(s).ToNot(BeNil())
+		})
+	})
+
+	Context("with a space manager", func() {
+		var (
+			share *collaboration.Share
+
+			manager = &userpb.User{
+				Id: &userpb.UserId{
+					Idp:      "https://localhost:9200",
+					OpaqueId: "spacemanager",
+				},
+			}
+			managerCtx context.Context
+		)
+
+		BeforeEach(func() {
+			managerCtx = ctxpkg.ContextSetUser(context.Background(), manager)
+
+			var err error
+			share, err = m.Share(ctx, sharedResource, grant)
+			Expect(err).ToNot(HaveOccurred())
+
+			_, err = m.Share(ctx, &providerv1beta1.ResourceInfo{
+				Id: &providerv1beta1.ResourceId{
+					StorageId: "storageid",
+					SpaceId:   "spaceid",
+					OpaqueId:  "spaceid",
+				},
+			}, &collaboration.ShareGrant{
+				Grantee: &providerv1beta1.Grantee{
+					Type: provider.GranteeType_GRANTEE_TYPE_USER,
+					Id:   &providerv1beta1.Grantee_UserId{UserId: manager.Id},
+				},
+				Permissions: &collaboration.SharePermissions{
+					Permissions: conversions.NewManagerRole().CS3ResourcePermissions(),
+				},
+			})
+		})
+
+		Describe("ListShares", func() {
+			It("returns the share requested by id even though it's not owned or created by the manager", func() {
+				shares, err := m.ListShares(managerCtx, []*collaboration.Filter{
+					{
+						Type: collaboration.Filter_TYPE_RESOURCE_ID,
+						Term: &collaboration.Filter_ResourceId{
+							ResourceId: sharedResource.Id,
+						},
+					},
+				})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(shares).To(HaveLen(1))
+				Expect(shares[0].Id).To(Equal(share.Id))
+			})
 		})
 	})
 
