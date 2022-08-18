@@ -61,10 +61,10 @@ var defaultFilePerm = os.FileMode(0664)
 // Upload uploads data to the given resource
 // TODO Upload (and InitiateUpload) needs a way to receive the expected checksum.
 // Maybe in metadata as 'checksum' => 'sha1 aeosvp45w5xaeoe' = lowercase, space separated?
-func (fs *Decomposedfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser, uff storage.UploadFinishedFunc) error {
+func (fs *Decomposedfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser, uff storage.UploadFinishedFunc) (provider.ResourceInfo, error) {
 	upload, err := fs.GetUpload(ctx, ref.GetPath())
 	if err != nil {
-		return errors.Wrap(err, "Decomposedfs: error retrieving upload")
+		return provider.ResourceInfo{}, errors.Wrap(err, "Decomposedfs: error retrieving upload")
 	}
 
 	uploadInfo := upload.(*fileUpload)
@@ -74,18 +74,18 @@ func (fs *Decomposedfs) Upload(ctx context.Context, ref *provider.Reference, r i
 		var assembledFile string
 		p, assembledFile, err = fs.chunkHandler.WriteChunk(p, r)
 		if err != nil {
-			return err
+			return provider.ResourceInfo{}, err
 		}
 		if p == "" {
 			if err = uploadInfo.Terminate(ctx); err != nil {
-				return errors.Wrap(err, "ocfs: error removing auxiliary files")
+				return provider.ResourceInfo{}, errors.Wrap(err, "ocfs: error removing auxiliary files")
 			}
-			return errtypes.PartialContent(ref.String())
+			return provider.ResourceInfo{}, errtypes.PartialContent(ref.String())
 		}
 		uploadInfo.info.Storage["NodeName"] = p
 		fd, err := os.Open(assembledFile)
 		if err != nil {
-			return errors.Wrap(err, "Decomposedfs: error opening assembled file")
+			return provider.ResourceInfo{}, errors.Wrap(err, "Decomposedfs: error opening assembled file")
 		}
 		defer fd.Close()
 		defer os.RemoveAll(assembledFile)
@@ -93,11 +93,11 @@ func (fs *Decomposedfs) Upload(ctx context.Context, ref *provider.Reference, r i
 	}
 
 	if _, err := uploadInfo.WriteChunk(ctx, 0, r); err != nil {
-		return errors.Wrap(err, "Decomposedfs: error writing to binary file")
+		return provider.ResourceInfo{}, errors.Wrap(err, "Decomposedfs: error writing to binary file")
 	}
 
 	if err := uploadInfo.FinishUpload(ctx); err != nil {
-		return err
+		return provider.ResourceInfo{}, err
 	}
 
 	if uff != nil {
@@ -112,12 +112,26 @@ func (fs *Decomposedfs) Upload(ctx context.Context, ref *provider.Reference, r i
 		}
 		owner, ok := ctxpkg.ContextGetUser(uploadInfo.ctx)
 		if !ok {
-			return errtypes.PreconditionFailed("error getting user from uploadinfo context")
+			return provider.ResourceInfo{}, errtypes.PreconditionFailed("error getting user from uploadinfo context")
 		}
 		uff(owner.Id, uploadRef)
 	}
 
-	return nil
+	ri := provider.ResourceInfo{
+		// fill with at least fileid, mtime and etag
+		Id: &provider.ResourceId{
+			StorageId: uploadInfo.info.MetaData["providerID"],
+			SpaceId:   uploadInfo.info.Storage["SpaceRoot"],
+			OpaqueId:  uploadInfo.info.Storage["NodeId"],
+		},
+		Etag: uploadInfo.info.MetaData["etag"],
+	}
+
+	if mtime, err := utils.MTimeToTS(uploadInfo.info.MetaData["mtime"]); err == nil {
+		ri.Mtime = &mtime
+	}
+
+	return ri, nil
 }
 
 // InitiateUpload returns upload ids corresponding to different protocols it supports
@@ -577,20 +591,22 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 		return err
 	}
 
+	overwrite := n.ID != ""
 	var oldSize uint64
-	if n.ID != "" {
+	if overwrite {
+		// read size from existing node
 		old, _ := node.ReadNode(ctx, upload.fs.lu, spaceID, n.ID, false)
 		oldSize = uint64(old.Blobsize)
+	} else {
+		// create new fileid
+		n.ID = uuid.New().String()
+		upload.info.Storage["NodeId"] = n.ID
 	}
-	_, err = node.CheckQuota(n.SpaceRoot, n.ID != "", oldSize, uint64(fi.Size()))
 
-	if err != nil {
+	if _, err = node.CheckQuota(n.SpaceRoot, overwrite, oldSize, uint64(fi.Size())); err != nil {
 		return err
 	}
 
-	if n.ID == "" {
-		n.ID = uuid.New().String()
-	}
 	targetPath := n.InternalPath()
 	sublog := appctx.GetLogger(upload.ctx).
 		With().
@@ -769,6 +785,13 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 			sublog.Err(err).Interface("info", upload.info).Msg("Decomposedfs: could not set mtime metadata")
 			return err
 		}
+
+	}
+
+	// fill metadata with current mtime
+	if fi, err = os.Stat(targetPath); err == nil {
+		upload.info.MetaData["mtime"] = fmt.Sprintf("%d.%d", fi.ModTime().Unix(), fi.ModTime().Nanosecond())
+		upload.info.MetaData["etag"], _ = node.CalculateEtag(n.ID, fi.ModTime())
 	}
 
 	n.Exists = true

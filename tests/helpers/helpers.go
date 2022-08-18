@@ -62,6 +62,6 @@ func Upload(ctx context.Context, fs storage.FS, ref *provider.Reference, content
 		return errors.New("simple upload method not available")
 	}
 	uploadRef := &provider.Reference{Path: "/" + uploadID}
-	err = fs.Upload(ctx, uploadRef, ioutil.NopCloser(bytes.NewReader(content)), nil)
+	_, err = fs.Upload(ctx, uploadRef, ioutil.NopCloser(bytes.NewReader(content)), nil)
 	return err
 }

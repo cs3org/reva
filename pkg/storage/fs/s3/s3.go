@@ -615,36 +615,6 @@ func (fs *s3FS) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys,
 	return finfos, nil
 }
 
-func (fs *s3FS) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser, _ storage.UploadFinishedFunc) error {
-	log := appctx.GetLogger(ctx)
-
-	fn, err := fs.resolve(ctx, ref)
-	if err != nil {
-		return errors.Wrap(err, "error resolving ref")
-	}
-
-	upParams := &s3manager.UploadInput{
-		Bucket: aws.String(fs.config.Bucket),
-		Key:    aws.String(fn),
-		Body:   r,
-	}
-	uploader := s3manager.NewUploaderWithClient(fs.client)
-	result, err := uploader.Upload(upParams)
-
-	if err != nil {
-		log.Error().Err(err)
-		if aerr, ok := err.(awserr.Error); ok {
-			if aerr.Code() == s3.ErrCodeNoSuchBucket {
-				return errtypes.NotFound(fn)
-			}
-		}
-		return errors.Wrap(err, "s3fs: error creating object "+fn)
-	}
-
-	log.Debug().Interface("result", result) // todo cache etag?
-	return nil
-}
-
 func (fs *s3FS) Download(ctx context.Context, ref *provider.Reference) (io.ReadCloser, error) {
 	log := appctx.GetLogger(ctx)
 

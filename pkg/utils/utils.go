@@ -28,6 +28,7 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -157,6 +158,18 @@ func TSNow() *types.Timestamp {
 		Seconds: uint64(t.Unix()),
 		Nanos:   uint32(t.Nanosecond()),
 	}
+}
+
+// MTimeToTS converts a string in the form "<unix>.<nanoseconds>" into a CS3 Timestamp
+func MTimeToTS(v string) (ts types.Timestamp, err error) {
+	p := strings.SplitN(v, ".", 2)
+	var sec, nsec uint64
+	if sec, err = strconv.ParseUint(p[0], 10, 64); err == nil {
+		if len(p) > 1 {
+			nsec, err = strconv.ParseUint(p[1], 10, 32)
+		}
+	}
+	return types.Timestamp{Seconds: sec, Nanos: uint32(nsec)}, err
 }
 
 // ExtractGranteeID returns the ID, user or group, set in the GranteeId object

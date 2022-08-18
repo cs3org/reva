@@ -22,9 +22,11 @@ import (
 	"net/http"
 	"path"
 	"strings"
+	"time"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/net"
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/events"
@@ -34,6 +36,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/rhttp/router"
 	"github.com/cs3org/reva/v2/pkg/storage"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
+	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )
@@ -95,13 +98,25 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 				ResourceId: &rid,
 				Path:       fn,
 			}
-			err = fs.Upload(ctx, ref, r.Body, func(owner *userpb.UserId, ref *provider.Reference) {
+			var info provider.ResourceInfo
+			info, err = fs.Upload(ctx, ref, r.Body, func(owner *userpb.UserId, ref *provider.Reference) {
 				if err := datatx.EmitFileUploadedEvent(owner, ref, m.publisher); err != nil {
 					sublog.Error().Err(err).Msg("failed to publish FileUploaded event")
 				}
 			})
 			switch v := err.(type) {
 			case nil:
+				// set etag, mtime and file id
+				w.Header().Set(net.HeaderETag, info.Etag)
+				w.Header().Set(net.HeaderOCETag, info.Etag)
+				if info.Id != nil {
+					w.Header().Set(net.HeaderOCFileID, storagespace.FormatResourceID(*info.Id))
+				}
+				if info.Mtime != nil {
+					t := utils.TSToTime(info.Mtime).UTC()
+					lastModifiedString := t.Format(time.RFC1123Z)
+					w.Header().Set(net.HeaderLastModified, lastModifiedString)
+				}
 				w.WriteHeader(http.StatusOK)
 			case errtypes.PartialContent:
 				w.WriteHeader(http.StatusPartialContent)
