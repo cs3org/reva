@@ -27,6 +27,8 @@ import (
 
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/v2/pkg/appctx"
+	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/metadata"
 	"github.com/cs3org/reva/v2/pkg/utils"
 )
@@ -100,6 +102,9 @@ func (c *Cache) Get(userID, spaceID, shareID string) *State {
 
 // Sync updates the in-memory data with the data from the storage if it is outdated
 func (c *Cache) Sync(ctx context.Context, userID string) error {
+	log := appctx.GetLogger(ctx).With().Str("userID", userID).Logger()
+	log.Debug().Msg("Syncing received share cache...")
+
 	var mtime time.Time
 	if c.ReceivedSpaces[userID] != nil {
 		mtime = c.ReceivedSpaces[userID].Mtime
@@ -110,22 +115,31 @@ func (c *Cache) Sync(ctx context.Context, userID string) error {
 	jsonPath := userJSONPath(userID)
 	info, err := c.storage.Stat(ctx, jsonPath)
 	if err != nil {
-		return err
+		if _, ok := err.(errtypes.NotFound); ok {
+			return nil // Nothing to sync against
+		} else {
+			log.Error().Err(err).Msg("Failed to stat the received share")
+			return err
+		}
 	}
 	// check mtime of /users/{userid}/created.json
 	if utils.TSToTime(info.Mtime).After(mtime) {
+		log.Debug().Msg("Updating...")
 		//  - update cached list of created shares for the user in memory if changed
 		createdBlob, err := c.storage.SimpleDownload(ctx, jsonPath)
 		if err != nil {
+			log.Error().Err(err).Msg("Failed to download the received share")
 			return err
 		}
 		newSpaces := &Spaces{}
 		err = json.Unmarshal(createdBlob, newSpaces)
 		if err != nil {
+			log.Error().Err(err).Msg("Failed to unmarshal the received share")
 			return err
 		}
 		c.ReceivedSpaces[userID] = newSpaces
 	}
+	log.Debug().Msg("Received share ist up to date")
 	return nil
 }
 

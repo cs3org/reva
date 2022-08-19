@@ -27,6 +27,8 @@ import (
 
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/v2/pkg/appctx"
+	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/metadata"
 	"github.com/cs3org/reva/v2/pkg/utils"
 )
@@ -163,6 +165,9 @@ func (c *Cache) Persist(ctx context.Context, storageID, spaceID string) error {
 
 // Sync updates the in-memory data with the data from the storage if it is outdated
 func (c *Cache) Sync(ctx context.Context, storageID, spaceID string) error {
+	log := appctx.GetLogger(ctx).With().Str("storageID", storageID).Str("spaceID", spaceID).Logger()
+	log.Debug().Msg("Syncing provider cache..")
+
 	var mtime time.Time
 	if c.Providers[storageID] != nil && c.Providers[storageID].Spaces[spaceID] != nil {
 		mtime = c.Providers[storageID].Spaces[spaceID].Mtime
@@ -174,23 +179,32 @@ func (c *Cache) Sync(ctx context.Context, storageID, spaceID string) error {
 	jsonPath := spaceJSONPath(storageID, spaceID)
 	info, err := c.storage.Stat(ctx, jsonPath)
 	if err != nil {
-		return err
+		if _, ok := err.(errtypes.NotFound); ok {
+			return nil // Nothing to sync against
+		} else {
+			log.Error().Err(err).Msg("Failed to stat the provider cache")
+			return err
+		}
 	}
 	// check mtime of /users/{userid}/created.json
 	if utils.TSToTime(info.Mtime).After(mtime) {
+		log.Error().Err(err).Msg("Updating...")
 		//  - update cached list of created shares for the user in memory if changed
 		createdBlob, err := c.storage.SimpleDownload(ctx, jsonPath)
 		if err != nil {
+			log.Error().Err(err).Msg("Failed to download the provider cache")
 			return err
 		}
 		newShares := &Shares{}
 		err = json.Unmarshal(createdBlob, newShares)
 		if err != nil {
+			log.Error().Err(err).Msg("Failed to unmarshal the provider cache")
 			return err
 		}
 		c.initializeIfNeeded(storageID, spaceID)
 		c.Providers[storageID].Spaces[spaceID] = newShares
 	}
+	log.Error().Err(err).Msg("Provider cache ist up to date")
 	return nil
 }
 

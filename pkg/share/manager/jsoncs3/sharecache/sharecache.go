@@ -25,6 +25,8 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/cs3org/reva/v2/pkg/appctx"
+	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/share/manager/jsoncs3/shareid"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/metadata"
 	"github.com/cs3org/reva/v2/pkg/utils"
@@ -121,35 +123,47 @@ func (c *Cache) List(userid string) map[string]SpaceShareIDs {
 }
 
 // Sync updates the in-memory data with the data from the storage if it is outdated
-func (c *Cache) Sync(ctx context.Context, userid string) error {
+func (c *Cache) Sync(ctx context.Context, userID string) error {
+	log := appctx.GetLogger(ctx).With().Str("userID", userID).Logger()
+	log.Debug().Msg("Syncing share cache...")
+
 	var mtime time.Time
 	//  - do we have a cached list of created shares for the user in memory?
-	if usc := c.UserShares[userid]; usc != nil {
+	if usc := c.UserShares[userID]; usc != nil {
 		mtime = usc.Mtime
 		//    - y: set If-Modified-Since header to only download if it changed
 	} else {
 		mtime = time.Time{} // Set zero time so that data from storage always takes precedence
 	}
 
-	userCreatedPath := c.userCreatedPath(userid)
+	userCreatedPath := c.userCreatedPath(userID)
 	info, err := c.storage.Stat(ctx, userCreatedPath)
 	if err != nil {
-		return err
+		if _, ok := err.(errtypes.NotFound); ok {
+			return nil // Nothing to sync against
+		} else {
+			log.Error().Err(err).Msg("Failed to stat the share cache")
+			return err
+		}
 	}
 	// check mtime of /users/{userid}/created.json
 	if utils.TSToTime(info.Mtime).After(mtime) {
+		log.Debug().Msg("Updating...")
 		//  - update cached list of created shares for the user in memory if changed
 		createdBlob, err := c.storage.SimpleDownload(ctx, userCreatedPath)
 		if err != nil {
+			log.Error().Err(err).Msg("Failed to download the share cache")
 			return err
 		}
 		newShareCache := &UserShareCache{}
 		err = json.Unmarshal(createdBlob, newShareCache)
 		if err != nil {
+			log.Error().Err(err).Msg("Failed to unmarshal the share cache")
 			return err
 		}
-		c.UserShares[userid] = newShareCache
+		c.UserShares[userID] = newShareCache
 	}
+	log.Debug().Msg("Share cache ist up to date")
 	return nil
 }
 
