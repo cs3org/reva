@@ -21,7 +21,6 @@ package jsoncs3
 import (
 	"context"
 	"sync"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/mitchellh/mapstructure"
@@ -31,7 +30,6 @@ import (
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/share"
@@ -183,11 +181,7 @@ func (m *Manager) Share(ctx context.Context, md *provider.ResourceInfo, g *colla
 	}
 
 	user := ctxpkg.ContextMustGetUser(ctx)
-	now := time.Now().UnixNano()
-	ts := &typespb.Timestamp{
-		Seconds: uint64(now / int64(time.Second)),
-		Nanos:   uint32(now % int64(time.Second)),
-	}
+	ts := utils.TSNow()
 
 	// do not allow share to myself or the owner if share is for a user
 	// TODO(labkode): should not this be caught already at the gw level?
@@ -378,12 +372,8 @@ func (m *Manager) UpdateShare(ctx context.Context, ref *collaboration.ShareRefer
 		return nil, errtypes.NotFound(ref.String())
 	}
 
-	now := time.Now().UnixNano()
 	s.Permissions = p
-	s.Mtime = &typespb.Timestamp{
-		Seconds: uint64(now / int64(time.Second)),
-		Nanos:   uint32(now % int64(time.Second)),
-	}
+	s.Mtime = utils.TSNow()
 
 	// Update provider cache
 	m.Cache.Persist(ctx, s.ResourceId.StorageId, s.ResourceId.SpaceId)
