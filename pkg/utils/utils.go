@@ -143,6 +143,14 @@ func TSToTime(ts *types.Timestamp) time.Time {
 	return time.Unix(int64(ts.Seconds), int64(ts.Nanos))
 }
 
+// TimeToTS converts Go's time.Time to a protobuf Timestamp.
+func TimeToTS(t time.Time) *types.Timestamp {
+	return &types.Timestamp{
+		Seconds: uint64(t.Unix()), // implicity returns UTC
+		Nanos:   uint32(t.Nanosecond()),
+	}
+}
+
 // LaterTS returns the timestamp which occurs later.
 func LaterTS(t1 *types.Timestamp, t2 *types.Timestamp) *types.Timestamp {
 	if TSToUnixNano(t1) > TSToUnixNano(t2) {
