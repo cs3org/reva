@@ -117,10 +117,9 @@ func (c *Cache) Sync(ctx context.Context, userID string) error {
 	if err != nil {
 		if _, ok := err.(errtypes.NotFound); ok {
 			return nil // Nothing to sync against
-		} else {
-			log.Error().Err(err).Msg("Failed to stat the received share")
-			return err
 		}
+		log.Error().Err(err).Msg("Failed to stat the received share")
+		return err
 	}
 	// check mtime of /users/{userid}/created.json
 	if utils.TSToTime(info.Mtime).After(mtime) {

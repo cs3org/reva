@@ -181,10 +181,9 @@ func (c *Cache) Sync(ctx context.Context, storageID, spaceID string) error {
 	if err != nil {
 		if _, ok := err.(errtypes.NotFound); ok {
 			return nil // Nothing to sync against
-		} else {
-			log.Error().Err(err).Msg("Failed to stat the provider cache")
-			return err
 		}
+		log.Error().Err(err).Msg("Failed to stat the provider cache")
+		return err
 	}
 	// check mtime of /users/{userid}/created.json
 	if utils.TSToTime(info.Mtime).After(mtime) {
