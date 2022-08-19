@@ -431,7 +431,7 @@ func (m *Manager) listSharesByIDs(ctx context.Context, user *userv1beta1.User, f
 	}
 
 	for providerID, spaces := range providerSpaces {
-		for spaceID, _ := range spaces {
+		for spaceID := range spaces {
 			err := m.Cache.Sync(ctx, providerID, spaceID)
 			if err != nil {
 				return nil, err

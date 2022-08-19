@@ -30,6 +30,7 @@ import (
 
 //go:generate make --no-print-directory -C ../../../.. mockery NAME=Storage
 
+// UploadRequest represents an upload request and its options
 type UploadRequest struct {
 	Path    string
 	Content []byte

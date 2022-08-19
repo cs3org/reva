@@ -54,6 +54,7 @@ func (disk *Disk) Backend() string {
 	return "disk"
 }
 
+// Stat returns the metadata for the given path
 func (disk *Disk) Stat(ctx context.Context, path string) (*provider.ResourceInfo, error) {
 	info, err := os.Stat(disk.targetPath(path))
 	if err != nil {
@@ -83,6 +84,7 @@ func (disk *Disk) SimpleUpload(ctx context.Context, uploadpath string, content [
 	})
 }
 
+// Upload stores a file on disk
 func (disk *Disk) Upload(_ context.Context, req UploadRequest) error {
 	p := disk.targetPath(req.Path)
 	if req.IfMatchEtag != "" {
