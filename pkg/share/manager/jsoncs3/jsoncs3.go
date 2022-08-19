@@ -279,12 +279,6 @@ func (m *Manager) getByKey(ctx context.Context, key *collaboration.ShareKey) (*c
 		return nil, err
 	}
 
-	// sync cache, maybe our data is outdated
-	err = m.Cache.Sync(context.Background(), key.ResourceId.StorageId, key.ResourceId.SpaceId)
-	if err != nil {
-		return nil, err
-	}
-
 	spaceShares := m.Cache.ListSpace(key.ResourceId.StorageId, key.ResourceId.SpaceId)
 	for _, share := range spaceShares.Shares {
 		if utils.GranteeEqual(key.Grantee, share.Grantee) && utils.ResourceIDEqual(share.ResourceId, key.ResourceId) {
