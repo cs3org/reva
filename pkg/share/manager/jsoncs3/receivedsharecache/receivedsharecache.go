@@ -148,6 +148,7 @@ func (c *Cache) Persist(ctx context.Context, userID string) error {
 		return nil
 	}
 
+	oldMtime := c.ReceivedSpaces[userID].Mtime
 	c.ReceivedSpaces[userID].Mtime = time.Now()
 	createdBytes, err := json.Marshal(c.ReceivedSpaces[userID])
 	if err != nil {
@@ -157,10 +158,21 @@ func (c *Cache) Persist(ctx context.Context, userID string) error {
 	if err := c.storage.MakeDirIfNotExist(ctx, path.Dir(jsonPath)); err != nil {
 		return err
 	}
-	// FIXME needs stat & upload if match combo to prevent lost update in redundant deployments
-	if err := c.storage.SimpleUpload(ctx, jsonPath, createdBytes); err != nil {
+
+	if err := c.storage.Upload(ctx, metadata.UploadRequest{
+		Path:              jsonPath,
+		Content:           createdBytes,
+		IfUnmodifiedSince: oldMtime,
+	}); err != nil {
 		return err
 	}
+
+	info, err := c.storage.Stat(ctx, jsonPath)
+	if err != nil {
+		return err
+	}
+	c.ReceivedSpaces[userID].Mtime = utils.TSToTime(info.Mtime)
+
 	return nil
 }
 

@@ -168,6 +168,7 @@ func (c *Cache) Sync(ctx context.Context, userID string) error {
 
 // Persist persists the data for one user/group to the storage
 func (c *Cache) Persist(ctx context.Context, userid string) error {
+	oldMtime := c.UserShares[userid].Mtime
 	c.UserShares[userid].Mtime = time.Now()
 
 	createdBytes, err := json.Marshal(c.UserShares[userid])
@@ -178,10 +179,21 @@ func (c *Cache) Persist(ctx context.Context, userid string) error {
 	if err := c.storage.MakeDirIfNotExist(ctx, path.Dir(jsonPath)); err != nil {
 		return err
 	}
-	// FIXME needs stat & upload if match combo to prevent lost update in redundant deployments
-	if err := c.storage.SimpleUpload(ctx, jsonPath, createdBytes); err != nil {
+
+	if err := c.storage.Upload(ctx, metadata.UploadRequest{
+		Path:              jsonPath,
+		Content:           createdBytes,
+		IfUnmodifiedSince: oldMtime,
+	}); err != nil {
 		return err
 	}
+
+	info, err := c.storage.Stat(ctx, jsonPath)
+	if err != nil {
+		return err
+	}
+	c.UserShares[userid].Mtime = utils.TSToTime(info.Mtime)
+
 	return nil
 }
 
