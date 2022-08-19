@@ -145,7 +145,7 @@ func (cs3 *CS3) Upload(ctx context.Context, req UploadRequest) error {
 	}
 	if req.IfUnmodifiedSince != (time.Time{}) {
 		ifuReq.Options = &provider.InitiateFileUploadRequest_IfUnmodifiedSince{
-			IfUnmodifiedSince: &types.Timestamp{Seconds: uint64(req.IfUnmodifiedSince.Second())},
+			IfUnmodifiedSince: utils.TimeToTS(req.IfUnmodifiedSince),
 		}
 	}
 
