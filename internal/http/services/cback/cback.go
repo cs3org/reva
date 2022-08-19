@@ -178,8 +178,20 @@ func (s *svc) handleRestoreID(w http.ResponseWriter, r *http.Request) {
 		resp, err := s.getRequest(user.Username, url, http.MethodPost, bytes.NewBuffer(jbody))
 
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
+			switch err {
+			case errtypes.NotFound("cback: resource not found"):
+				http.Error(w, err.Error(), http.StatusNotFound)
+				return
+			case errtypes.PermissionDenied("cback: user has no permissions to get the backup"):
+				http.Error(w, err.Error(), http.StatusForbidden)
+				return
+			case errtypes.BadRequest("cback"):
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			default:
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
 		}
 
 		defer resp.Close()
@@ -220,8 +232,20 @@ func (s *svc) handleListJobs(w http.ResponseWriter, r *http.Request) {
 	resp, err := s.getRequest(user.Username, url, http.MethodGet, nil)
 
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		switch err {
+		case errtypes.NotFound("cback: resource not found"):
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		case errtypes.PermissionDenied("cback: user has no permissions to get the backup"):
+			http.Error(w, err.Error(), http.StatusForbidden)
+			return
+		case errtypes.BadRequest("cback"):
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		default:
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 	}
 
 	defer resp.Close()
@@ -257,8 +281,20 @@ func (s *svc) handleRestoreStatus(w http.ResponseWriter, r *http.Request) {
 	resp, err := s.getRequest(user.Username, url, http.MethodGet, nil)
 
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		switch err {
+		case errtypes.NotFound("cback: resource not found"):
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		case errtypes.PermissionDenied("cback: user has no permissions to get the backup"):
+			http.Error(w, err.Error(), http.StatusForbidden)
+			return
+		case errtypes.BadRequest("cback"):
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		default:
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 	}
 
 	defer resp.Close()
@@ -269,7 +305,6 @@ func (s *svc) handleRestoreStatus(w http.ResponseWriter, r *http.Request) {
 
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
 	}
 
 	if _, err := io.Copy(w, resp); err != nil {
