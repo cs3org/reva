@@ -152,7 +152,7 @@ func (c *Cache) Persist(ctx context.Context, storageID, spaceID string) error {
 	if err := c.storage.MakeDirIfNotExist(ctx, path.Dir(jsonPath)); err != nil {
 		return err
 	}
-	// FIXME needs stat & upload if match combo to prevent lost update in redundant deployments
+
 	if err := c.storage.Upload(ctx, metadata.UploadRequest{
 		Path:              jsonPath,
 		Content:           createdBytes,
@@ -160,6 +160,12 @@ func (c *Cache) Persist(ctx context.Context, storageID, spaceID string) error {
 	}); err != nil {
 		return err
 	}
+
+	info, err := c.storage.Stat(ctx, jsonPath)
+	if err != nil {
+		return err
+	}
+	c.Providers[storageID].Spaces[spaceID].Mtime = utils.TSToTime(info.Mtime)
 	return nil
 }
 
