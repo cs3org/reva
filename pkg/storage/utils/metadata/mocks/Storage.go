@@ -23,6 +23,7 @@ package mocks
 import (
 	context "context"
 
+	metadata "github.com/cs3org/reva/v2/pkg/storage/utils/metadata"
 	mock "github.com/stretchr/testify/mock"
 
 	providerv1beta1 "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -230,6 +231,20 @@ func (_m *Storage) Stat(ctx context.Context, path string) (*providerv1beta1.Reso
 	}
 
 	return r0, r1
+}
+
+// Upload provides a mock function with given fields: ctx, req
+func (_m *Storage) Upload(ctx context.Context, req metadata.UploadRequest) error {
+	ret := _m.Called(ctx, req)
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, metadata.UploadRequest) error); ok {
+		r0 = rf(ctx, req)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
 }
 
 // NewStorage creates a new instance of Storage. It also registers a cleanup function to assert the mocks expectations.
