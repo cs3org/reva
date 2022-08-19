@@ -147,7 +147,7 @@ func (c *Cache) Sync(ctx context.Context, userID string) error {
 	}
 	// check mtime of /users/{userid}/created.json
 	if utils.TSToTime(info.Mtime).After(mtime) {
-		log.Debug().Msg("Updating...")
+		log.Debug().Msg("Updating share cache...")
 		//  - update cached list of created shares for the user in memory if changed
 		createdBlob, err := c.storage.SimpleDownload(ctx, userCreatedPath)
 		if err != nil {
@@ -162,7 +162,7 @@ func (c *Cache) Sync(ctx context.Context, userID string) error {
 		}
 		c.UserShares[userID] = newShareCache
 	}
-	log.Debug().Msg("Share cache ist up to date")
+	log.Debug().Msg("Share cache is up to date")
 	return nil
 }
 

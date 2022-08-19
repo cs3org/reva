@@ -166,7 +166,7 @@ func (c *Cache) Persist(ctx context.Context, storageID, spaceID string) error {
 // Sync updates the in-memory data with the data from the storage if it is outdated
 func (c *Cache) Sync(ctx context.Context, storageID, spaceID string) error {
 	log := appctx.GetLogger(ctx).With().Str("storageID", storageID).Str("spaceID", spaceID).Logger()
-	log.Debug().Msg("Syncing provider cache..")
+	log.Debug().Msg("Syncing provider cache...")
 
 	var mtime time.Time
 	if c.Providers[storageID] != nil && c.Providers[storageID].Spaces[spaceID] != nil {
@@ -187,7 +187,7 @@ func (c *Cache) Sync(ctx context.Context, storageID, spaceID string) error {
 	}
 	// check mtime of /users/{userid}/created.json
 	if utils.TSToTime(info.Mtime).After(mtime) {
-		log.Error().Err(err).Msg("Updating...")
+		log.Debug().Msg("Updating provider cache...")
 		//  - update cached list of created shares for the user in memory if changed
 		createdBlob, err := c.storage.SimpleDownload(ctx, jsonPath)
 		if err != nil {
@@ -203,7 +203,7 @@ func (c *Cache) Sync(ctx context.Context, storageID, spaceID string) error {
 		c.initializeIfNeeded(storageID, spaceID)
 		c.Providers[storageID].Spaces[spaceID] = newShares
 	}
-	log.Error().Err(err).Msg("Provider cache ist up to date")
+	log.Debug().Msg("Provider cache is up to date")
 	return nil
 }
 
