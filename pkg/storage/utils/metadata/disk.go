@@ -21,6 +21,7 @@ package metadata
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io/fs"
 	"io/ioutil"
 	"os"
@@ -107,7 +108,7 @@ func (disk *Disk) Upload(_ context.Context, req UploadRequest) error {
 			return err
 		} else if err == nil {
 			if info.ModTime().After(req.IfUnmodifiedSince) {
-				return errtypes.PreconditionFailed("resource has been modified")
+				return errtypes.PreconditionFailed(fmt.Sprintf("resource has been modified, mtime: %s > since %s", info.ModTime(), req.IfUnmodifiedSince))
 			}
 		}
 	}
