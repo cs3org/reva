@@ -1089,7 +1089,8 @@ func (s *svc) getStorageProviderClient(_ context.Context, p *registry.ProviderIn
 		return nil, err
 	}
 
-	return s.cache.StorageProviderClient(c), nil
+	// TODO: reinstate cache as soon there is a implementation for a non-in-memory cache
+	return c, nil
 }
 
 func (s *svc) getStorageRegistryClient(_ context.Context, address string) (registry.RegistryAPIClient, error) {
