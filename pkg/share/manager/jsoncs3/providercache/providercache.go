@@ -45,7 +45,7 @@ type Spaces struct {
 	Spaces map[string]*Shares
 }
 
-// Shares hols the share information of one space
+// Shares holds the share information of one space
 type Shares struct {
 	Shares map[string]*collaboration.Share
 	Mtime  time.Time
@@ -161,11 +161,15 @@ func (c *Cache) Persist(ctx context.Context, storageID, spaceID string) error {
 		return err
 	}
 
-	info, err := c.storage.Stat(ctx, jsonPath)
-	if err != nil {
-		return err
-	}
-	c.Providers[storageID].Spaces[spaceID].Mtime = utils.TSToTime(info.Mtime)
+	/*
+		FIXME stating here introduces a lost read because the file might have been overwritten written between the above upload and this stat
+		the local cache is updated with Sync during reads
+		info, err := c.storage.Stat(ctx, jsonPath)
+		if err != nil {
+			return err
+		}
+		c.Providers[storageID].Spaces[spaceID].Mtime = utils.TSToTime(info.Mtime)
+	*/
 	return nil
 }
 

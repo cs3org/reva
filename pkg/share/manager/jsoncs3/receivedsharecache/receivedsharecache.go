@@ -167,12 +167,15 @@ func (c *Cache) Persist(ctx context.Context, userID string) error {
 		return err
 	}
 
-	info, err := c.storage.Stat(ctx, jsonPath)
-	if err != nil {
-		return err
-	}
-	c.ReceivedSpaces[userID].Mtime = utils.TSToTime(info.Mtime)
-
+	/*
+		FIXME stating here introduces a lost read because the file might have been overwritten written between the above upload and this stat
+		the local cache is updated with Sync during reads
+		info, err := c.storage.Stat(ctx, jsonPath)
+		if err != nil {
+			return err
+		}
+		c.ReceivedSpaces[userID].Mtime = utils.TSToTime(info.Mtime)
+	*/
 	return nil
 }
 

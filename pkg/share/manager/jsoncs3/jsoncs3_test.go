@@ -473,7 +473,7 @@ var _ = Describe("Jsoncs3", func() {
 				})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(us).ToNot(BeNil())
-				Expect(s.GetPermissions().GetPermissions().InitiateFileUpload).To(BeTrue())
+				Expect(us.GetPermissions().GetPermissions().InitiateFileUpload).To(BeTrue())
 
 				s = shareBykey(&collaboration.ShareKey{
 					ResourceId: sharedResource.Id,
@@ -495,7 +495,7 @@ var _ = Describe("Jsoncs3", func() {
 				})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(us).ToNot(BeNil())
-				Expect(s.GetPermissions().GetPermissions().InitiateFileUpload).To(BeFalse())
+				Expect(us.GetPermissions().GetPermissions().InitiateFileUpload).To(BeFalse())
 
 				s = shareBykey(&collaboration.ShareKey{
 					ResourceId: sharedResource.Id,
@@ -525,7 +525,7 @@ var _ = Describe("Jsoncs3", func() {
 				})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(us).ToNot(BeNil())
-				Expect(s.GetPermissions().GetPermissions().InitiateFileUpload).To(BeTrue())
+				Expect(us.GetPermissions().GetPermissions().InitiateFileUpload).To(BeTrue())
 
 				m, err = jsoncs3.New(storage) // Reset in-memory cache
 				Expect(err).ToNot(HaveOccurred())

@@ -58,8 +58,8 @@ import (
   File structure in the jsoncs3 space:
 
   /storages/{storageid}/{spaceid.json} 	// contains the share information of all shares in that space
-  /users/{userid}/created.json			// points to the spaces the user created shares in including the list of shares
-  /users/{userid}/received.json			// holds the states of received shares of the users
+  /users/{userid}/created.json			// points to the spaces the user created shares in, including the list of shares
+  /users/{userid}/received.json			// holds the accepted/pending state and mount point of received shares for users
   /groups/{groupid}/received.json		// points to the spaces the group has received shares in including the list of shares
 
   Example:
@@ -80,9 +80,17 @@ import (
   2. create /users/{userid}/created.json if it doesn't exist yet and add the space/share
   3. create /users/{userid}/received.json or /groups/{groupid}/received.json if it doesn exist yet and add the space/share
 
-  When updating shares /storages/{storageid}/{spaceid}.json is updated accordingly. The mtime is used to invalidate in-memory caches.
+  When updating shares /storages/{storageid}/{spaceid}.json is updated accordingly. The mtime is used to invalidate in-memory caches:
+  - TODO the upload is tried with an if-unmodified-since header
+  - TODO when if fails, the {spaceid}.json file is downloaded, the changes are reapplied and the upload is retried with the new mtime
 
   When updating received shares the mountpoint and state are updated in /users/{userid}/received.json (for both user and group shares).
+
+  When reading the list of received shares the /users/{userid}/received.json file and the /groups/{groupid}/received.json files are statted.
+  - if the mtime changed we download the file to update the local cache
+
+  When reading the list of created shares the /users/{userid}/created.json file is statted
+  - if the mtime changed we download the file to update the local cache
 */
 
 func init() {
@@ -184,7 +192,7 @@ func (m *Manager) Share(ctx context.Context, md *provider.ResourceInfo, g *colla
 	ts := utils.TSNow()
 
 	// do not allow share to myself or the owner if share is for a user
-	// TODO(labkode): should not this be caught already at the gw level?
+	// TODO: should this not already be caught at the gw level?
 	if g.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER &&
 		(utils.UserEqual(g.Grantee.GetUserId(), user.Id) || utils.UserEqual(g.Grantee.GetUserId(), md.Owner)) {
 		return nil, errors.New("json: owner/creator and grantee are the same")
@@ -226,6 +234,7 @@ func (m *Manager) Share(ctx context.Context, md *provider.ResourceInfo, g *colla
 
 	err = m.CreatedCache.Add(ctx, s.GetCreator().GetOpaqueId(), shareID)
 	if err != nil {
+		// TODO when persisting fails, download, readd and persist again
 		return nil, err
 	}
 
@@ -240,6 +249,8 @@ func (m *Manager) Share(ctx context.Context, md *provider.ResourceInfo, g *colla
 			State: collaboration.ShareState_SHARE_STATE_PENDING,
 		}
 		m.UserReceivedStates.Add(ctx, userid, spaceID, rs)
+		// TODO check error
+		// TODO when persisting fails, download, readd and persist again
 	case provider.GranteeType_GRANTEE_TYPE_GROUP:
 		groupid := g.Grantee.GetGroupId().GetOpaqueId()
 		if err := m.GroupReceivedCache.Add(ctx, groupid, shareID); err != nil {
@@ -377,6 +388,7 @@ func (m *Manager) UpdateShare(ctx context.Context, ref *collaboration.ShareRefer
 
 	// Update provider cache
 	m.Cache.Persist(ctx, s.ResourceId.StorageId, s.ResourceId.SpaceId)
+	// TODO when persisting fails, download, readd and persist again
 
 	return s, nil
 }
@@ -607,6 +619,7 @@ func (m *Manager) UpdateReceivedShare(ctx context.Context, receivedShare *collab
 	userID := ctxpkg.ContextMustGetUser(ctx)
 
 	m.UserReceivedStates.Add(ctx, userID.GetId().GetOpaqueId(), rs.Share.ResourceId.StorageId+"^"+rs.Share.ResourceId.SpaceId, rs)
+	// TODO when persisting fails, download, readd and persist again
 
 	return rs, nil
 }
