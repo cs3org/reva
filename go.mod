@@ -9,12 +9,12 @@ require (
 	github.com/Masterminds/sprig v2.22.0+incompatible
 	github.com/ReneKroon/ttlcache/v2 v2.11.0
 	github.com/asim/go-micro/plugins/events/nats/v4 v4.0.0-20220118152736-9e0be6c85d75
-	github.com/aws/aws-sdk-go v1.44.27
+	github.com/aws/aws-sdk-go v1.44.67
 	github.com/beevik/etree v1.1.0
 	github.com/bluele/gcache v0.0.2
 	github.com/c-bata/go-prompt v0.2.5
 	github.com/cenkalti/backoff v2.2.1+incompatible
-	github.com/ceph/go-ceph v0.15.0
+	github.com/ceph/go-ceph v0.17.0
 	github.com/cheggaaa/pb v1.0.29
 	github.com/coreos/go-oidc v2.2.1+incompatible
 	github.com/cs3org/cato v0.0.0-20200828125504-e418fc54dd5e
@@ -58,7 +58,7 @@ require (
 	github.com/rs/zerolog v1.27.0
 	github.com/sciencemesh/meshdirectory-web v1.0.4
 	github.com/sethvargo/go-password v0.2.0
-	github.com/stretchr/testify v1.7.2
+	github.com/stretchr/testify v1.8.0
 	github.com/studio-b12/gowebdav v0.0.0-20210917133250-a3a86976a1df
 	github.com/thanhpk/randstr v1.0.4
 	github.com/tidwall/pretty v1.2.0 // indirect
