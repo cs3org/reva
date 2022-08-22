@@ -146,7 +146,7 @@ func TSToTime(ts *types.Timestamp) time.Time {
 // TimeToTS converts Go's time.Time to a protobuf Timestamp.
 func TimeToTS(t time.Time) *types.Timestamp {
 	return &types.Timestamp{
-		Seconds: uint64(t.Unix()), // implicity returns UTC
+		Seconds: uint64(t.Unix()), // implicitly returns UTC
 		Nanos:   uint32(t.Nanosecond()),
 	}
 }

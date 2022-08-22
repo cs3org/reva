@@ -77,7 +77,7 @@ var _ = Describe("Cache", func() {
 			s := c.Get(storageID, spaceID, shareID)
 			Expect(s).To(BeNil())
 
-			c.Add(ctx, storageID, spaceID, shareID, share1)
+			Expect(c.Add(ctx, storageID, spaceID, shareID, share1)).To(Succeed())
 
 			s = c.Get(storageID, spaceID, shareID)
 			Expect(s).ToNot(BeNil())
@@ -85,14 +85,14 @@ var _ = Describe("Cache", func() {
 		})
 
 		It("sets the mtime", func() {
-			c.Add(ctx, storageID, spaceID, shareID, share1)
+			Expect(c.Add(ctx, storageID, spaceID, shareID, share1)).To(Succeed())
 			Expect(c.Providers[storageID].Spaces[spaceID].Mtime).ToNot(Equal(time.Time{}))
 		})
 
 		It("updates the mtime", func() {
-			c.Add(ctx, storageID, spaceID, shareID, share1)
+			Expect(c.Add(ctx, storageID, spaceID, shareID, share1)).To(Succeed())
 			old := c.Providers[storageID].Spaces[spaceID].Mtime
-			c.Add(ctx, storageID, spaceID, shareID, share1)
+			Expect(c.Add(ctx, storageID, spaceID, shareID, share1)).To(Succeed())
 			Expect(c.Providers[storageID].Spaces[spaceID].Mtime).ToNot(Equal(old))
 		})
 	})
@@ -115,16 +115,16 @@ var _ = Describe("Cache", func() {
 				Expect(s).ToNot(BeNil())
 				Expect(s).To(Equal(share1))
 
-				c.Remove(ctx, storageID, spaceID, shareID)
+				Expect(c.Remove(ctx, storageID, spaceID, shareID)).To(Succeed())
 
 				s = c.Get(storageID, spaceID, shareID)
 				Expect(s).To(BeNil())
 			})
 
 			It("updates the mtime", func() {
-				c.Add(ctx, storageID, spaceID, shareID, share1)
+				Expect(c.Add(ctx, storageID, spaceID, shareID, share1)).To(Succeed())
 				old := c.Providers[storageID].Spaces[spaceID].Mtime
-				c.Remove(ctx, storageID, spaceID, shareID)
+				Expect(c.Remove(ctx, storageID, spaceID, shareID)).To(Succeed())
 				Expect(c.Providers[storageID].Spaces[spaceID].Mtime).ToNot(Equal(old))
 			})
 		})
@@ -167,7 +167,7 @@ var _ = Describe("Cache", func() {
 				s := c.Get(storageID, spaceID, shareID)
 				Expect(s).To(BeNil())
 
-				c.Sync(ctx, storageID, spaceID)
+				Expect(c.Sync(ctx, storageID, spaceID)).To(Succeed())
 
 				s = c.Get(storageID, spaceID, shareID)
 				Expect(s).ToNot(BeNil())
@@ -184,7 +184,7 @@ var _ = Describe("Cache", func() {
 						},
 					},
 				}
-				c.Sync(ctx, storageID, spaceID) // Sync from disk won't happen because in-memory mtime is later than on disk
+				Expect(c.Sync(ctx, storageID, spaceID)).To(Succeed()) // Sync from disk won't happen because in-memory mtime is later than on disk
 
 				s = c.Get(storageID, spaceID, shareID)
 				Expect(s).To(BeNil())

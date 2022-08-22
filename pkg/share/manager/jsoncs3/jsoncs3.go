@@ -434,7 +434,7 @@ func (m *Manager) UpdateShare(ctx context.Context, ref *collaboration.ShareRefer
 	// when persisting fails
 	if _, ok := err.(errtypes.IsPreconditionFailed); ok {
 		// reupdate
-		s, err := m.get(ctx, ref) // does an implicit sync
+		s, err = m.get(ctx, ref) // does an implicit sync
 		if err != nil {
 			return nil, err
 		}
@@ -506,7 +506,9 @@ func (m *Manager) listSharesByIDs(ctx context.Context, user *userv1beta1.User, f
 func (m *Manager) listCreatedShares(ctx context.Context, user *userv1beta1.User, filters []*collaboration.Filter) ([]*collaboration.Share, error) {
 	var ss []*collaboration.Share
 
-	m.CreatedCache.Sync(ctx, user.Id.OpaqueId)
+	if err := m.CreatedCache.Sync(ctx, user.Id.OpaqueId); err != nil {
+		return ss, err
+	}
 	for ssid, spaceShareIDs := range m.CreatedCache.List(user.Id.OpaqueId) {
 		storageID, spaceID, _ := shareid.Decode(ssid)
 		err := m.Cache.Sync(ctx, storageID, spaceID)
@@ -546,7 +548,9 @@ func (m *Manager) ListReceivedShares(ctx context.Context, filters []*collaborati
 
 	// first collect all spaceids the user has access to as a group member
 	for _, group := range user.Groups {
-		m.GroupReceivedCache.Sync(ctx, group)
+		if err := m.GroupReceivedCache.Sync(ctx, group); err != nil {
+			continue // ignore error, cache will be updated on next read
+		}
 		for ssid, spaceShareIDs := range m.GroupReceivedCache.List(group) {
 			// add a pending entry, the state will be updated
 			// when reading the received shares below if they have already been accepted or denied
@@ -565,7 +569,8 @@ func (m *Manager) ListReceivedShares(ctx context.Context, filters []*collaborati
 	}
 
 	// add all spaces the user has receved shares for, this includes mount points and share state for groups
-	m.UserReceivedStates.Sync(ctx, user.Id.OpaqueId)
+	_ = m.UserReceivedStates.Sync(ctx, user.Id.OpaqueId) // ignore error, cache will be updated on next read
+
 	if m.UserReceivedStates.ReceivedSpaces[user.Id.OpaqueId] != nil {
 		for ssid, rspace := range m.UserReceivedStates.ReceivedSpaces[user.Id.OpaqueId].Spaces {
 			if rs, ok := ssids[ssid]; ok {
@@ -616,7 +621,7 @@ func (m *Manager) convert(ctx context.Context, userID string, s *collaboration.S
 
 	storageID, spaceID, _ := shareid.Decode(s.Id.OpaqueId)
 
-	m.UserReceivedStates.Sync(ctx, userID)
+	_ = m.UserReceivedStates.Sync(ctx, userID) // ignore error, cache will be updated on next read
 	state := m.UserReceivedStates.Get(userID, storageID+"^"+spaceID, s.Id.GetOpaqueId())
 	if state != nil {
 		rs.State = state.State
@@ -685,6 +690,9 @@ func (m *Manager) UpdateReceivedShare(ctx context.Context, receivedShare *collab
 		}
 		err = m.UserReceivedStates.Add(ctx, userID.GetId().GetOpaqueId(), rs.Share.ResourceId.StorageId+"^"+rs.Share.ResourceId.SpaceId, rs)
 		// TODO try more often?
+	}
+	if err != nil {
+		return nil, err
 	}
 
 	return rs, nil
