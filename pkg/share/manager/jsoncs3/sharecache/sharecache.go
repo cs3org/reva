@@ -168,22 +168,29 @@ func (c *Cache) Sync(ctx context.Context, userID string) error {
 
 // Persist persists the data for one user/group to the storage
 func (c *Cache) Persist(ctx context.Context, userid string) error {
+	oldMtime := c.UserShares[userid].Mtime
 	c.UserShares[userid].Mtime = time.Now()
 
 	createdBytes, err := json.Marshal(c.UserShares[userid])
 	if err != nil {
+		c.UserShares[userid].Mtime = oldMtime
 		return err
 	}
 	jsonPath := c.userCreatedPath(userid)
 	if err := c.storage.MakeDirIfNotExist(ctx, path.Dir(jsonPath)); err != nil {
+		c.UserShares[userid].Mtime = oldMtime
 		return err
 	}
 
-	return c.storage.Upload(ctx, metadata.UploadRequest{
+	if err = c.storage.Upload(ctx, metadata.UploadRequest{
 		Path:              jsonPath,
 		Content:           createdBytes,
 		IfUnmodifiedSince: c.UserShares[userid].Mtime,
-	})
+	}); err != nil {
+		c.UserShares[userid].Mtime = oldMtime
+		return err
+	}
+	return nil
 }
 
 func (c *Cache) userCreatedPath(userid string) string {

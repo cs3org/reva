@@ -135,27 +135,41 @@ func (c *Cache) ListSpace(storageID, spaceID string) *Shares {
 	return c.Providers[storageID].Spaces[spaceID]
 }
 
-// Persist persists the data of one space
-func (c *Cache) Persist(ctx context.Context, storageID, spaceID string) error {
+// PersistWithTime persists the data of one space if it has not been modified since the given mtime
+func (c *Cache) PersistWithTime(ctx context.Context, storageID, spaceID string, mtime time.Time) error {
 	if c.Providers[storageID] == nil || c.Providers[storageID].Spaces[spaceID] == nil {
 		return nil
 	}
 
-	c.Providers[storageID].Spaces[spaceID].Mtime = time.Now()
+	oldMtime := c.Providers[storageID].Spaces[spaceID].Mtime
+	c.Providers[storageID].Spaces[spaceID].Mtime = mtime
+
+	// FIXME there is a race when between this time now and the below Uploed another process also updates the file -> we need a lock
 	createdBytes, err := json.Marshal(c.Providers[storageID].Spaces[spaceID])
 	if err != nil {
+		c.Providers[storageID].Spaces[spaceID].Mtime = oldMtime
 		return err
 	}
 	jsonPath := spaceJSONPath(storageID, spaceID)
 	if err := c.storage.MakeDirIfNotExist(ctx, path.Dir(jsonPath)); err != nil {
+		c.Providers[storageID].Spaces[spaceID].Mtime = oldMtime
 		return err
 	}
 
-	return c.storage.Upload(ctx, metadata.UploadRequest{
+	if err = c.storage.Upload(ctx, metadata.UploadRequest{
 		Path:              jsonPath,
 		Content:           createdBytes,
 		IfUnmodifiedSince: c.Providers[storageID].Spaces[spaceID].Mtime,
-	})
+	}); err != nil {
+		c.Providers[storageID].Spaces[spaceID].Mtime = oldMtime
+		return err
+	}
+	return nil
+}
+
+// Persist persists the data of one space
+func (c *Cache) Persist(ctx context.Context, storageID, spaceID string) error {
+	return c.PersistWithTime(ctx, storageID, spaceID, time.Now())
 }
 
 // Sync updates the in-memory data with the data from the storage if it is outdated

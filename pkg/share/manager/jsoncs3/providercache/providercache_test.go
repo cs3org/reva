@@ -130,10 +130,11 @@ var _ = Describe("Cache", func() {
 				Expect(c.Providers[storageID].Spaces[spaceID].Mtime).ToNot(Equal(oldMtime))
 			})
 
-			It("does not persist if the etag changed on disk", func() {
-				c.Providers[storageID].Spaces[spaceID].Mtime = time.Now().Add(-3 * time.Hour)
+		})
 
-				Expect(c.Persist(ctx, storageID, spaceID)).ToNot(Succeed())
+		Describe("PersistWithTime", func() {
+			It("does not persist if the mtime on disk is more recent", func() {
+				Expect(c.PersistWithTime(ctx, storageID, spaceID, time.Now().Add(-3*time.Hour))).ToNot(Succeed())
 			})
 		})
 

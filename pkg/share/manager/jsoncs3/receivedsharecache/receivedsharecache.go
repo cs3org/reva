@@ -148,21 +148,29 @@ func (c *Cache) Persist(ctx context.Context, userID string) error {
 		return nil
 	}
 
+	oldMtime := c.ReceivedSpaces[userID].Mtime
 	c.ReceivedSpaces[userID].Mtime = time.Now()
+
 	createdBytes, err := json.Marshal(c.ReceivedSpaces[userID])
 	if err != nil {
+		c.ReceivedSpaces[userID].Mtime = oldMtime
 		return err
 	}
 	jsonPath := userJSONPath(userID)
 	if err := c.storage.MakeDirIfNotExist(ctx, path.Dir(jsonPath)); err != nil {
+		c.ReceivedSpaces[userID].Mtime = oldMtime
 		return err
 	}
 
-	return c.storage.Upload(ctx, metadata.UploadRequest{
+	if err = c.storage.Upload(ctx, metadata.UploadRequest{
 		Path:              jsonPath,
 		Content:           createdBytes,
 		IfUnmodifiedSince: c.ReceivedSpaces[userID].Mtime,
-	})
+	}); err != nil {
+		c.ReceivedSpaces[userID].Mtime = oldMtime
+		return err
+	}
+	return nil
 }
 
 func userJSONPath(userID string) string {
