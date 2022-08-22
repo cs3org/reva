@@ -148,7 +148,6 @@ func (c *Cache) Persist(ctx context.Context, userID string) error {
 		return nil
 	}
 
-	oldMtime := c.ReceivedSpaces[userID].Mtime
 	c.ReceivedSpaces[userID].Mtime = time.Now()
 	createdBytes, err := json.Marshal(c.ReceivedSpaces[userID])
 	if err != nil {
@@ -159,24 +158,11 @@ func (c *Cache) Persist(ctx context.Context, userID string) error {
 		return err
 	}
 
-	if err := c.storage.Upload(ctx, metadata.UploadRequest{
+	return c.storage.Upload(ctx, metadata.UploadRequest{
 		Path:              jsonPath,
 		Content:           createdBytes,
-		IfUnmodifiedSince: oldMtime,
-	}); err != nil {
-		return err
-	}
-
-	/*
-		FIXME stating here introduces a lost read because the file might have been overwritten written between the above upload and this stat
-		the local cache is updated with Sync during reads
-		info, err := c.storage.Stat(ctx, jsonPath)
-		if err != nil {
-			return err
-		}
-		c.ReceivedSpaces[userID].Mtime = utils.TSToTime(info.Mtime)
-	*/
-	return nil
+		IfUnmodifiedSince: c.ReceivedSpaces[userID].Mtime,
+	})
 }
 
 func userJSONPath(userID string) string {

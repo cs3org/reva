@@ -228,13 +228,26 @@ func (m *Manager) Share(ctx context.Context, md *provider.ResourceInfo, g *colla
 	}
 
 	err = m.Cache.Add(ctx, md.Id.StorageId, md.Id.SpaceId, shareID, s)
+	if _, ok := err.(errtypes.IsPreconditionFailed); ok {
+		if err := m.Cache.Sync(ctx, md.Id.StorageId, md.Id.SpaceId); err != nil {
+			return nil, err
+		}
+		err = m.Cache.Add(ctx, md.Id.StorageId, md.Id.SpaceId, shareID, s)
+		// TODO try more often?
+	}
 	if err != nil {
 		return nil, err
 	}
 
 	err = m.CreatedCache.Add(ctx, s.GetCreator().GetOpaqueId(), shareID)
+	if _, ok := err.(errtypes.IsPreconditionFailed); ok {
+		if err := m.CreatedCache.Sync(ctx, s.GetCreator().GetOpaqueId()); err != nil {
+			return nil, err
+		}
+		err = m.CreatedCache.Add(ctx, s.GetCreator().GetOpaqueId(), shareID)
+		// TODO try more often?
+	}
 	if err != nil {
-		// TODO when persisting fails, download, readd and persist again
 		return nil, err
 	}
 
@@ -248,12 +261,28 @@ func (m *Manager) Share(ctx context.Context, md *provider.ResourceInfo, g *colla
 			Share: s,
 			State: collaboration.ShareState_SHARE_STATE_PENDING,
 		}
-		m.UserReceivedStates.Add(ctx, userid, spaceID, rs)
-		// TODO check error
-		// TODO when persisting fails, download, readd and persist again
+		err = m.UserReceivedStates.Add(ctx, userid, spaceID, rs)
+		if _, ok := err.(errtypes.IsPreconditionFailed); ok {
+			if err := m.UserReceivedStates.Sync(ctx, s.GetCreator().GetOpaqueId()); err != nil {
+				return nil, err
+			}
+			err = m.UserReceivedStates.Add(ctx, userid, spaceID, rs)
+			// TODO try more often?
+		}
+		if err != nil {
+			return nil, err
+		}
 	case provider.GranteeType_GRANTEE_TYPE_GROUP:
 		groupid := g.Grantee.GetGroupId().GetOpaqueId()
-		if err := m.GroupReceivedCache.Add(ctx, groupid, shareID); err != nil {
+		err := m.GroupReceivedCache.Add(ctx, groupid, shareID)
+		if _, ok := err.(errtypes.IsPreconditionFailed); ok {
+			if err := m.GroupReceivedCache.Sync(ctx, groupid); err != nil {
+				return nil, err
+			}
+			err = m.GroupReceivedCache.Add(ctx, groupid, shareID)
+			// TODO try more often?
+		}
+		if err != nil {
 			return nil, err
 		}
 	}
@@ -350,12 +379,26 @@ func (m *Manager) Unshare(ctx context.Context, ref *collaboration.ShareReference
 
 	storageID, spaceID, _ := shareid.Decode(s.Id.OpaqueId)
 	err = m.Cache.Remove(ctx, storageID, spaceID, s.Id.OpaqueId)
+	if _, ok := err.(errtypes.IsPreconditionFailed); ok {
+		if err := m.Cache.Sync(ctx, storageID, spaceID); err != nil {
+			return err
+		}
+		err = m.Cache.Remove(ctx, storageID, spaceID, s.Id.OpaqueId)
+		// TODO try more often?
+	}
 	if err != nil {
 		return err
 	}
 
 	// remove from created cache
 	err = m.CreatedCache.Remove(ctx, s.GetCreator().GetOpaqueId(), s.Id.OpaqueId)
+	if _, ok := err.(errtypes.IsPreconditionFailed); ok {
+		if err := m.CreatedCache.Sync(ctx, s.GetCreator().GetOpaqueId()); err != nil {
+			return err
+		}
+		err = m.CreatedCache.Remove(ctx, s.GetCreator().GetOpaqueId(), s.Id.OpaqueId)
+		// TODO try more often?
+	}
 	if err != nil {
 		return err
 	}
@@ -387,8 +430,24 @@ func (m *Manager) UpdateShare(ctx context.Context, ref *collaboration.ShareRefer
 	s.Mtime = utils.TSNow()
 
 	// Update provider cache
-	m.Cache.Persist(ctx, s.ResourceId.StorageId, s.ResourceId.SpaceId)
-	// TODO when persisting fails, download, readd and persist again
+	err = m.Cache.Persist(ctx, s.ResourceId.StorageId, s.ResourceId.SpaceId)
+	// when persisting fails
+	if _, ok := err.(errtypes.IsPreconditionFailed); ok {
+		// reupdate
+		s, err := m.get(ctx, ref) // does an implicit sync
+		if err != nil {
+			return nil, err
+		}
+		s.Permissions = p
+		s.Mtime = utils.TSNow()
+
+		// persist again
+		err = m.Cache.Persist(ctx, s.ResourceId.StorageId, s.ResourceId.SpaceId)
+		// TODO try more often?
+	}
+	if err != nil {
+		return nil, err
+	}
 
 	return s, nil
 }
@@ -618,8 +677,15 @@ func (m *Manager) UpdateReceivedShare(ctx context.Context, receivedShare *collab
 
 	userID := ctxpkg.ContextMustGetUser(ctx)
 
-	m.UserReceivedStates.Add(ctx, userID.GetId().GetOpaqueId(), rs.Share.ResourceId.StorageId+"^"+rs.Share.ResourceId.SpaceId, rs)
-	// TODO when persisting fails, download, readd and persist again
+	err = m.UserReceivedStates.Add(ctx, userID.GetId().GetOpaqueId(), rs.Share.ResourceId.StorageId+"^"+rs.Share.ResourceId.SpaceId, rs)
+	if _, ok := err.(errtypes.IsPreconditionFailed); ok {
+		// when persisting fails, download, readd and persist again
+		if err := m.UserReceivedStates.Sync(ctx, userID.GetId().GetOpaqueId()); err != nil {
+			return nil, err
+		}
+		err = m.UserReceivedStates.Add(ctx, userID.GetId().GetOpaqueId(), rs.Share.ResourceId.StorageId+"^"+rs.Share.ResourceId.SpaceId, rs)
+		// TODO try more often?
+	}
 
 	return rs, nil
 }

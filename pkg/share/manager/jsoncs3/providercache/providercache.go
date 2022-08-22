@@ -141,8 +141,6 @@ func (c *Cache) Persist(ctx context.Context, storageID, spaceID string) error {
 		return nil
 	}
 
-	oldMtime := c.Providers[storageID].Spaces[spaceID].Mtime
-
 	c.Providers[storageID].Spaces[spaceID].Mtime = time.Now()
 	createdBytes, err := json.Marshal(c.Providers[storageID].Spaces[spaceID])
 	if err != nil {
@@ -153,24 +151,11 @@ func (c *Cache) Persist(ctx context.Context, storageID, spaceID string) error {
 		return err
 	}
 
-	if err := c.storage.Upload(ctx, metadata.UploadRequest{
+	return c.storage.Upload(ctx, metadata.UploadRequest{
 		Path:              jsonPath,
 		Content:           createdBytes,
-		IfUnmodifiedSince: oldMtime,
-	}); err != nil {
-		return err
-	}
-
-	/*
-		FIXME stating here introduces a lost read because the file might have been overwritten written between the above upload and this stat
-		the local cache is updated with Sync during reads
-		info, err := c.storage.Stat(ctx, jsonPath)
-		if err != nil {
-			return err
-		}
-		c.Providers[storageID].Spaces[spaceID].Mtime = utils.TSToTime(info.Mtime)
-	*/
-	return nil
+		IfUnmodifiedSince: c.Providers[storageID].Spaces[spaceID].Mtime,
+	})
 }
 
 // Sync updates the in-memory data with the data from the storage if it is outdated
