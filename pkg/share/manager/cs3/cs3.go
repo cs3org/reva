@@ -206,6 +206,57 @@ func (m *Manager) Load(ctx context.Context, shareChan <-chan *collaboration.Shar
 	return nil
 }
 
+// Dump exports shares and received shares to channels (e.g. during migration)
+func (m *Manager) Dump(ctx context.Context, shareChan chan<- *collaboration.Share, receivedShareChan chan<- share.ReceivedShareWithUser) error {
+	log := appctx.GetLogger(ctx)
+	if err := m.initialize(); err != nil {
+		return err
+	}
+
+	shareids, err := m.storage.ReadDir(ctx, "shares")
+	if err != nil {
+		log.Error().Err(err).Msg("error fetching shares")
+	}
+	for _, shareid := range shareids {
+		if s, err := m.getShareByID(ctx, shareid); err == nil {
+			// dump share data
+			shareChan <- s
+			// dump grantee metadata that includes share state and mount path
+			grantees, err := m.storage.ReadDir(ctx, path.Join("metadata", s.Id.OpaqueId))
+			if err != nil {
+				continue
+			}
+			for _, grantee := range grantees { // use default values if the grantee didn't configure anything yet
+				metadata := ReceivedShareMetadata{
+					State: collaboration.ShareState_SHARE_STATE_PENDING,
+				}
+				data, err := m.storage.SimpleDownload(ctx, path.Join("metadata", s.Id.OpaqueId, grantee))
+				if err == nil {
+					err = json.Unmarshal(data, &metadata)
+					if err != nil {
+						continue
+					}
+				}
+				g, err := indexToGrantee(grantee)
+				if err != nil || g.Type != provider.GranteeType_GRANTEE_TYPE_USER {
+					continue
+				}
+				receivedShareChan <- share.ReceivedShareWithUser{
+					UserID: g.GetUserId(),
+					ReceivedShare: &collaboration.ReceivedShare{
+						Share:      s,
+						State:      metadata.State,
+						MountPoint: metadata.MountPoint,
+					},
+				}
+			}
+		} else {
+			log.Error().Err(err).Str("shareid", shareid).Msg("error fetching share")
+		}
+	}
+	return nil
+}
+
 // Share creates a new share
 func (m *Manager) Share(ctx context.Context, md *provider.ResourceInfo, g *collaboration.ShareGrant) (*collaboration.Share, error) {
 	if err := m.initialize(); err != nil {
@@ -753,6 +804,43 @@ func granteeToIndex(grantee *provider.Grantee) (string, error) {
 		return url.QueryEscape("group:" + grantee.GetGroupId().OpaqueId), nil
 	default:
 		return "", fmt.Errorf("unknown grantee type")
+	}
+}
+
+// indexToGrantee trues to unparse a grantee in a metadata dir
+// unfortunately, it is just concatenated by :, causing nasty corner cases
+func indexToGrantee(name string) (*provider.Grantee, error) {
+	unescaped, err := url.QueryUnescape(name)
+	if err != nil {
+		return nil, err
+	}
+	parts := strings.SplitN(unescaped, ":", 2)
+	if len(parts) != 2 {
+		return nil, fmt.Errorf("invalid grantee %s", unescaped)
+	}
+	switch parts[0] {
+	case "user":
+		lastInd := strings.LastIndex(parts[1], ":")
+		return &provider.Grantee{
+			Type: provider.GranteeType_GRANTEE_TYPE_USER,
+			Id: &provider.Grantee_UserId{
+				UserId: &userpb.UserId{
+					Idp:      parts[1][:lastInd],
+					OpaqueId: parts[1][lastInd+1:],
+				},
+			},
+		}, nil
+	case "group":
+		return &provider.Grantee{
+			Type: provider.GranteeType_GRANTEE_TYPE_GROUP,
+			Id: &provider.Grantee_GroupId{
+				GroupId: &groupv1beta1.GroupId{
+					OpaqueId: parts[1],
+				},
+			},
+		}, nil
+	default:
+		return nil, fmt.Errorf("invalid grantee %s", unescaped)
 	}
 }
 

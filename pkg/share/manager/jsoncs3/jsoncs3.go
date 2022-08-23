@@ -30,6 +30,7 @@ import (
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/v2/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/share"
@@ -696,4 +697,54 @@ func (m *Manager) UpdateReceivedShare(ctx context.Context, receivedShare *collab
 	}
 
 	return rs, nil
+}
+
+// Load imports shares and received shares from channels (e.g. during migration)
+func (m *Manager) Load(ctx context.Context, shareChan <-chan *collaboration.Share, receivedShareChan <-chan share.ReceivedShareWithUser) error {
+	log := appctx.GetLogger(ctx)
+	if err := m.initialize(); err != nil {
+		return err
+	}
+
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		for s := range shareChan {
+			if s == nil {
+				continue
+			}
+			mu.Lock()
+			if err := m.Cache.Add(context.Background(), s.ResourceId.StorageId, s.ResourceId.SpaceId, s.Id.OpaqueId, s); err != nil {
+				log.Error().Err(err).Interface("share", s).Msg("error persisting share")
+			}
+			if err := m.CreatedCache.Add(ctx, s.GetCreator().GetOpaqueId(), s.Id.OpaqueId); err != nil {
+				log.Error().Err(err).Interface("share", s).Msg("error persisting created cache")
+			}
+			mu.Unlock()
+		}
+		wg.Done()
+	}()
+	go func() {
+		for s := range receivedShareChan {
+			if s.ReceivedShare != nil {
+				mu.Lock()
+				switch s.ReceivedShare.Share.Grantee.Type {
+				case provider.GranteeType_GRANTEE_TYPE_USER:
+					if err := m.UserReceivedStates.Add(context.Background(), s.ReceivedShare.GetShare().GetGrantee().GetUserId().GetOpaqueId(), s.ReceivedShare.GetShare().GetResourceId().GetSpaceId(), s.ReceivedShare); err != nil {
+						log.Error().Err(err).Interface("received share", s).Msg("error persisting received share for user")
+					}
+				case provider.GranteeType_GRANTEE_TYPE_GROUP:
+					if err := m.GroupReceivedCache.Add(context.Background(), s.ReceivedShare.GetShare().GetGrantee().GetGroupId().GetOpaqueId(), s.ReceivedShare.GetShare().GetId().GetOpaqueId()); err != nil {
+						log.Error().Err(err).Interface("received share", s).Msg("error persisting received share to group cache")
+					}
+				}
+				mu.Unlock()
+			}
+		}
+		wg.Done()
+	}()
+	wg.Wait()
+
+	return nil
 }

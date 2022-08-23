@@ -323,7 +323,7 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 	}
 	ifUnmodifiedSince := req.GetIfUnmodifiedSince()
 	if ifUnmodifiedSince != nil {
-		if utils.LaterTS(sRes.Info.Mtime, ifUnmodifiedSince) == sRes.Info.Mtime {
+		if sRes.Info != nil && sRes.Info.Mtime != nil && utils.LaterTS(sRes.Info.Mtime, ifUnmodifiedSince) == sRes.Info.Mtime {
 			return &provider.InitiateFileUploadResponse{
 				Status: status.NewFailedPrecondition(ctx, errors.New("resource has been modified"), "resource has been modified"),
 			}, nil
