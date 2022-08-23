@@ -20,23 +20,52 @@ package metadata
 
 import (
 	"context"
+	"crypto/md5"
+	"encoding/binary"
+	"fmt"
+	"time"
+
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 )
 
 //go:generate make --no-print-directory -C ../../../.. mockery NAME=Storage
+
+// UploadRequest represents an upload request and its options
+type UploadRequest struct {
+	Path    string
+	Content []byte
+
+	IfMatchEtag       string
+	IfUnmodifiedSince time.Time
+}
 
 // Storage is the interface to maintain metadata in a storage
 type Storage interface {
 	Backend() string
 
 	Init(ctx context.Context, name string) (err error)
+	Upload(ctx context.Context, req UploadRequest) error
 	SimpleUpload(ctx context.Context, uploadpath string, content []byte) error
 	SimpleDownload(ctx context.Context, path string) ([]byte, error)
 	Delete(ctx context.Context, path string) error
+	Stat(ctx context.Context, path string) (*provider.ResourceInfo, error)
 
 	ReadDir(ctx context.Context, path string) ([]string, error)
+	ListDir(ctx context.Context, path string) ([]*provider.ResourceInfo, error)
 
 	CreateSymlink(ctx context.Context, oldname, newname string) error
 	ResolveSymlink(ctx context.Context, name string) (string, error)
 
 	MakeDirIfNotExist(ctx context.Context, name string) error
+}
+
+func calcEtag(mtime time.Time, size int64) (string, error) {
+	h := md5.New()
+	if err := binary.Write(h, binary.BigEndian, mtime.UnixNano()); err != nil {
+		return "", err
+	}
+	if err := binary.Write(h, binary.BigEndian, size); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%x", h.Sum(nil)), nil
 }

@@ -20,10 +20,17 @@ package metadata
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"io/fs"
 	"io/ioutil"
 	"os"
 	"path"
+	"time"
+
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	"github.com/cs3org/reva/v2/pkg/errtypes"
 )
 
 // Disk represents a disk metadata storage
@@ -48,9 +55,64 @@ func (disk *Disk) Backend() string {
 	return "disk"
 }
 
+// Stat returns the metadata for the given path
+func (disk *Disk) Stat(ctx context.Context, path string) (*provider.ResourceInfo, error) {
+	info, err := os.Stat(disk.targetPath(path))
+	if err != nil {
+		return nil, err
+	}
+	entry := &provider.ResourceInfo{
+		Type:  provider.ResourceType_RESOURCE_TYPE_FILE,
+		Path:  "./" + info.Name(),
+		Name:  info.Name(),
+		Mtime: &typesv1beta1.Timestamp{Seconds: uint64(info.ModTime().Unix()), Nanos: uint32(info.ModTime().Nanosecond())},
+	}
+	if info.IsDir() {
+		entry.Type = provider.ResourceType_RESOURCE_TYPE_CONTAINER
+	}
+	entry.Etag, err = calcEtag(info.ModTime(), info.Size())
+	if err != nil {
+		return nil, err
+	}
+	return entry, nil
+}
+
 // SimpleUpload stores a file on disk
-func (disk *Disk) SimpleUpload(_ context.Context, uploadpath string, content []byte) error {
-	return os.WriteFile(disk.targetPath(uploadpath), content, 0644)
+func (disk *Disk) SimpleUpload(ctx context.Context, uploadpath string, content []byte) error {
+	return disk.Upload(ctx, UploadRequest{
+		Path:    uploadpath,
+		Content: content,
+	})
+}
+
+// Upload stores a file on disk
+func (disk *Disk) Upload(_ context.Context, req UploadRequest) error {
+	p := disk.targetPath(req.Path)
+	if req.IfMatchEtag != "" {
+		info, err := os.Stat(p)
+		if err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
+		} else if err == nil {
+			etag, err := calcEtag(info.ModTime(), info.Size())
+			if err != nil {
+				return err
+			}
+			if etag != req.IfMatchEtag {
+				return errtypes.PreconditionFailed("etag mismatch")
+			}
+		}
+	}
+	if req.IfUnmodifiedSince != (time.Time{}) {
+		info, err := os.Stat(p)
+		if err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
+		} else if err == nil {
+			if info.ModTime().After(req.IfUnmodifiedSince) {
+				return errtypes.PreconditionFailed(fmt.Sprintf("resource has been modified, mtime: %s > since %s", info.ModTime(), req.IfUnmodifiedSince))
+			}
+		}
+	}
+	return os.WriteFile(p, req.Content, 0644)
 }
 
 // SimpleDownload reads a file from disk
@@ -76,6 +138,32 @@ func (disk *Disk) ReadDir(_ context.Context, p string) ([]string, error) {
 	entries := make([]string, 0, len(infos))
 	for _, entry := range infos {
 		entries = append(entries, path.Join(p, entry.Name()))
+	}
+	return entries, nil
+}
+
+// ListDir returns a list of ResourceInfos for the entries in a given directory
+func (disk *Disk) ListDir(ctx context.Context, path string) ([]*provider.ResourceInfo, error) {
+	infos, err := ioutil.ReadDir(disk.targetPath(path))
+	if err != nil {
+		if _, ok := err.(*fs.PathError); ok {
+			return []*provider.ResourceInfo{}, nil
+		}
+		return nil, err
+	}
+
+	entries := make([]*provider.ResourceInfo, 0, len(infos))
+	for _, info := range infos {
+		entry := &provider.ResourceInfo{
+			Type:  provider.ResourceType_RESOURCE_TYPE_FILE,
+			Path:  "./" + info.Name(),
+			Name:  info.Name(),
+			Mtime: &typesv1beta1.Timestamp{Seconds: uint64(info.ModTime().Unix()), Nanos: uint32(info.ModTime().Nanosecond())},
+		}
+		if info.IsDir() {
+			entry.Type = provider.ResourceType_RESOURCE_TYPE_CONTAINER
+		}
+		entries = append(entries, entry)
 	}
 	return entries, nil
 }

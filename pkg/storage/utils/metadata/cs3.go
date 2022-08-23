@@ -25,6 +25,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"time"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -113,6 +114,14 @@ func (cs3 *CS3) Init(ctx context.Context, spaceid string) (err error) {
 
 // SimpleUpload uploads a file to the metadata storage
 func (cs3 *CS3) SimpleUpload(ctx context.Context, uploadpath string, content []byte) error {
+	return cs3.Upload(ctx, UploadRequest{
+		Path:    uploadpath,
+		Content: content,
+	})
+}
+
+// Upload uploads a file to the metadata storage
+func (cs3 *CS3) Upload(ctx context.Context, req UploadRequest) error {
 	client, err := cs3.providerClient()
 	if err != nil {
 		return err
@@ -122,14 +131,25 @@ func (cs3 *CS3) SimpleUpload(ctx context.Context, uploadpath string, content []b
 		return err
 	}
 
-	ref := provider.InitiateFileUploadRequest{
+	ifuReq := &provider.InitiateFileUploadRequest{
 		Ref: &provider.Reference{
 			ResourceId: cs3.SpaceRoot,
-			Path:       utils.MakeRelativePath(uploadpath),
+			Path:       utils.MakeRelativePath(req.Path),
 		},
 	}
 
-	res, err := client.InitiateFileUpload(ctx, &ref)
+	if req.IfMatchEtag != "" {
+		ifuReq.Options = &provider.InitiateFileUploadRequest_IfMatch{
+			IfMatch: req.IfMatchEtag,
+		}
+	}
+	if req.IfUnmodifiedSince != (time.Time{}) {
+		ifuReq.Options = &provider.InitiateFileUploadRequest_IfUnmodifiedSince{
+			IfUnmodifiedSince: utils.TimeToTS(req.IfUnmodifiedSince),
+		}
+	}
+
+	res, err := client.InitiateFileUpload(ctx, ifuReq)
 	if err != nil {
 		return err
 	}
@@ -149,18 +169,47 @@ func (cs3 *CS3) SimpleUpload(ctx context.Context, uploadpath string, content []b
 		return errors.New("metadata storage doesn't support the simple upload protocol")
 	}
 
-	req, err := http.NewRequest(http.MethodPut, endpoint, bytes.NewReader(content))
+	httpReq, err := http.NewRequest(http.MethodPut, endpoint, bytes.NewReader(req.Content))
 	if err != nil {
 		return err
 	}
 
 	md, _ := metadata.FromOutgoingContext(ctx)
-	req.Header.Add(ctxpkg.TokenHeader, md.Get(ctxpkg.TokenHeader)[0])
-	resp, err := cs3.dataGatewayClient.Do(req)
+	httpReq.Header.Add(ctxpkg.TokenHeader, md.Get(ctxpkg.TokenHeader)[0])
+	resp, err := cs3.dataGatewayClient.Do(httpReq)
 	if err != nil {
 		return err
 	}
 	return resp.Body.Close()
+}
+
+// Stat returns the metadata for the given path
+func (cs3 *CS3) Stat(ctx context.Context, path string) (*provider.ResourceInfo, error) {
+	client, err := cs3.providerClient()
+	if err != nil {
+		return nil, err
+	}
+	ctx, err = cs3.getAuthContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	req := provider.StatRequest{
+		Ref: &provider.Reference{
+			ResourceId: cs3.SpaceRoot,
+			Path:       utils.MakeRelativePath(path),
+		},
+	}
+
+	res, err := client.Stat(ctx, &req)
+	if err != nil {
+		return nil, err
+	}
+	if res.Status.Code != rpc.Code_CODE_OK {
+		return nil, errtypes.NewErrtypeFromStatus(res.Status)
+	}
+
+	return res.Info, nil
 }
 
 // SimpleDownload reads a file from the metadata storage
@@ -255,6 +304,20 @@ func (cs3 *CS3) Delete(ctx context.Context, path string) error {
 
 // ReadDir returns the entries in a given directory
 func (cs3 *CS3) ReadDir(ctx context.Context, path string) ([]string, error) {
+	infos, err := cs3.ListDir(ctx, path)
+	if err != nil {
+		return nil, err
+	}
+
+	entries := []string{}
+	for _, ri := range infos {
+		entries = append(entries, ri.Path)
+	}
+	return entries, nil
+}
+
+// ListDir returns a list of ResourceInfos for the entries in a given directory
+func (cs3 *CS3) ListDir(ctx context.Context, path string) ([]*provider.ResourceInfo, error) {
 	client, err := cs3.providerClient()
 	if err != nil {
 		return nil, err
@@ -279,11 +342,7 @@ func (cs3 *CS3) ReadDir(ctx context.Context, path string) ([]string, error) {
 		return nil, errtypes.NewErrtypeFromStatus(res.Status)
 	}
 
-	entries := []string{}
-	for _, ri := range res.Infos {
-		entries = append(entries, ri.Path)
-	}
-	return entries, nil
+	return res.Infos, nil
 }
 
 // MakeDirIfNotExist will create a root node in the metadata storage. Requires an authenticated context.

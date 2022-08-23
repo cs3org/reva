@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,14 +16,16 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package loader
+package jsoncs3_test
 
 import (
-	// Load core share manager drivers.
-	_ "github.com/cs3org/reva/v2/pkg/share/manager/cs3"
-	_ "github.com/cs3org/reva/v2/pkg/share/manager/json"
-	_ "github.com/cs3org/reva/v2/pkg/share/manager/jsoncs3"
-	_ "github.com/cs3org/reva/v2/pkg/share/manager/memory"
-	_ "github.com/cs3org/reva/v2/pkg/share/manager/owncloudsql"
-	// Add your own here
+	"testing"
+
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 )
+
+func TestJson(t *testing.T) {
+	RegisterFailHandler(Fail)
+	RunSpecs(t, "Json Suite")
+}
