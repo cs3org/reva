@@ -447,9 +447,11 @@ var _ = Describe("Nextcloud", func() {
 			}
 			stringReader := strings.NewReader("shiny!")
 			stringReadCloser := io.NopCloser(stringReader)
-			err := nc.Upload(ctx, ref, stringReadCloser, nil)
+			_, err := nc.Upload(ctx, ref, stringReadCloser, nil)
 			Expect(err).ToNot(HaveOccurred())
-			checkCalled(called, `PUT /apps/sciencemesh/~tester/api/storage/Upload/some/file/path.txt shiny!`)
+			Expect(len(*called)).To(Equal(2))
+			Expect((*called)[0]).To(Equal(`PUT /apps/sciencemesh/~tester/api/storage/Upload/some/file/path.txt shiny!`))
+			Expect((*called)[1]).To(Equal(`POST /apps/sciencemesh/~tester/api/storage/GetMD {"ref":{"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"some/file/path.txt"},"mdKeys":[]}`))
 		})
 	})
 	// Download(ctx context.Context, ref *provider.Reference) (io.ReadCloser, error)

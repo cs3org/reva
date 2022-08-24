@@ -31,28 +31,28 @@ import (
 	"github.com/pkg/errors"
 )
 
-func (fs *eosfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser, _ storage.UploadFinishedFunc) error {
+func (fs *eosfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser, uff storage.UploadFinishedFunc) (provider.ResourceInfo, error) {
 	p, err := fs.resolve(ctx, ref)
 	if err != nil {
-		return errors.Wrap(err, "eos: error resolving reference")
+		return provider.ResourceInfo{}, errors.Wrap(err, "eos: error resolving reference")
 	}
 
 	if fs.isShareFolder(ctx, p) {
-		return errtypes.PermissionDenied("eos: cannot upload under the virtual share folder")
+		return provider.ResourceInfo{}, errtypes.PermissionDenied("eos: cannot upload under the virtual share folder")
 	}
 
 	if chunking.IsChunked(p) {
 		var assembledFile string
 		p, assembledFile, err = fs.chunkHandler.WriteChunk(p, r)
 		if err != nil {
-			return err
+			return provider.ResourceInfo{}, err
 		}
 		if p == "" {
-			return errtypes.PartialContent(ref.String())
+			return provider.ResourceInfo{}, errtypes.PartialContent(ref.String())
 		}
 		fd, err := os.Open(assembledFile)
 		if err != nil {
-			return errors.Wrap(err, "eos: error opening assembled file")
+			return provider.ResourceInfo{}, errors.Wrap(err, "eos: error opening assembled file")
 		}
 		defer fd.Close()
 		defer os.RemoveAll(assembledFile)
@@ -63,16 +63,31 @@ func (fs *eosfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadC
 
 	u, err := getUser(ctx)
 	if err != nil {
-		return errors.Wrap(err, "eos: no user in ctx")
+		return provider.ResourceInfo{}, errors.Wrap(err, "eos: no user in ctx")
 	}
 
 	// We need the auth corresponding to the parent directory
 	// as the file might not exist at the moment
 	auth, err := fs.getUserAuth(ctx, u, path.Dir(fn))
 	if err != nil {
-		return err
+		return provider.ResourceInfo{}, err
 	}
-	return fs.c.Write(ctx, auth, fn, r)
+
+	if err := fs.c.Write(ctx, auth, fn, r); err != nil {
+		return provider.ResourceInfo{}, err
+	}
+
+	eosFileInfo, err := fs.c.GetFileInfoByPath(ctx, auth, fn)
+	if err != nil {
+		return provider.ResourceInfo{}, err
+	}
+
+	ri, err := fs.convertToResourceInfo(ctx, eosFileInfo)
+	if err != nil {
+		return provider.ResourceInfo{}, err
+	}
+
+	return *ri, nil
 }
 
 func (fs *eosfs) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64, metadata map[string]string) (map[string]string, error) {

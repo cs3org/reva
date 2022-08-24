@@ -302,25 +302,32 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 	if err != nil {
 		return nil, err
 	}
+	switch sRes.Status.Code {
+	case rpc.Code_CODE_OK, rpc.Code_CODE_NOT_FOUND:
+		// Just continue with a normal upload
+	default:
+		return &provider.InitiateFileUploadResponse{
+			Status: sRes.Status,
+		}, nil
+	}
 
 	metadata := map[string]string{}
 	ifMatch := req.GetIfMatch()
 	if ifMatch != "" {
-		switch sRes.Status.Code {
-		case rpc.Code_CODE_OK:
-			if sRes.Info.Etag != ifMatch {
-				return &provider.InitiateFileUploadResponse{
-					Status: status.NewAborted(ctx, errors.New("etag mismatch"), "etag mismatch"),
-				}, nil
-			}
-		case rpc.Code_CODE_NOT_FOUND:
-			// Just continue with a normal upload
-		default:
+		if sRes.Info.Etag != ifMatch {
 			return &provider.InitiateFileUploadResponse{
-				Status: sRes.Status,
+				Status: status.NewFailedPrecondition(ctx, errors.New("etag mismatch"), "etag mismatch"),
 			}, nil
 		}
 		metadata["if-match"] = ifMatch
+	}
+	ifUnmodifiedSince := req.GetIfUnmodifiedSince()
+	if ifUnmodifiedSince != nil {
+		if utils.LaterTS(sRes.Info.Mtime, ifUnmodifiedSince) == sRes.Info.Mtime {
+			return &provider.InitiateFileUploadResponse{
+				Status: status.NewFailedPrecondition(ctx, errors.New("resource has been modified"), "resource has been modified"),
+			}, nil
+		}
 	}
 
 	ctx = ctxpkg.ContextSetLockID(ctx, req.LockId)

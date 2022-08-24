@@ -67,7 +67,7 @@ func (n *Node) SetLock(ctx context.Context, lock *provider.Lock) error {
 		// file not locked, continue
 	case nil:
 		if l != nil {
-			return errtypes.Aborted("already locked")
+			return errtypes.PreconditionFailed("already locked")
 		}
 	default:
 		return errors.Wrap(err, "Decomposedfs: could check if file already is locked")
@@ -165,7 +165,7 @@ func (n *Node) RefreshLock(ctx context.Context, lock *provider.Lock) error {
 	f, err := os.OpenFile(n.LockFilePath(), os.O_RDWR, os.ModeExclusive)
 	switch {
 	case errors.Is(err, fs.ErrNotExist):
-		return errtypes.Aborted("lock does not exist")
+		return errtypes.PreconditionFailed("lock does not exist")
 	case err != nil:
 		return errors.Wrap(err, "Decomposedfs: could not open lock file")
 	}
