@@ -496,6 +496,12 @@ func (upload *Upload) finishUpload() (err error) {
 		}
 	}
 
+	// fill metadata with current mtime
+	if fi, err := os.Stat(targetPath); err == nil {
+		upload.Info.MetaData["mtime"] = fmt.Sprintf("%d.%d", fi.ModTime().Unix(), fi.ModTime().Nanosecond())
+		upload.Info.MetaData["etag"], _ = node.CalculateEtag(n.ID, fi.ModTime())
+	}
+
 	n.Exists = true
 
 	return upload.tp.Propagate(upload.Ctx, n)

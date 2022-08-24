@@ -139,6 +139,10 @@ func (fs *Decomposedfs) RemoveGrant(ctx context.Context, ref *provider.Reference
 		return err
 	}
 
+	if grant == nil {
+		return errtypes.NotFound("grant not found")
+	}
+
 	// you are allowed to remove grants if you created them yourself or have the proper permission
 	if !utils.UserEqual(grant.Creator, ctxpkg.ContextMustGetUser(ctx).GetId()) {
 		ok, err := fs.p.HasPermission(ctx, node, func(rp *provider.ResourcePermissions) bool {

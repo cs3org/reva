@@ -16,14 +16,28 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package loader
+package shareid
 
-import (
-	// Load core share manager drivers.
-	_ "github.com/cs3org/reva/v2/pkg/share/manager/cs3"
-	_ "github.com/cs3org/reva/v2/pkg/share/manager/json"
-	_ "github.com/cs3org/reva/v2/pkg/share/manager/jsoncs3"
-	_ "github.com/cs3org/reva/v2/pkg/share/manager/memory"
-	_ "github.com/cs3org/reva/v2/pkg/share/manager/owncloudsql"
-	// Add your own here
-)
+import "strings"
+
+// Encode encodes a share id
+func Encode(providerID, spaceID, shareID string) string {
+	return providerID + "^" + spaceID + "°" + shareID
+}
+
+// Decode decodes an encoded shareid
+// share ids are of the format <storageid>^<spaceid>°<shareid>
+func Decode(id string) (string, string, string) {
+	parts := strings.SplitN(id, "^", 2)
+	if len(parts) == 1 {
+		return "", "", parts[0]
+	}
+
+	storageid := parts[0]
+	parts = strings.SplitN(parts[1], "°", 2)
+	if len(parts) == 1 {
+		return storageid, parts[0], ""
+	}
+
+	return storageid, parts[0], parts[1]
+}

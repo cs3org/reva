@@ -1,3 +1,12 @@
+
+---
+title: "v2.8.0"
+linkTitle: "v2.8.0"
+weight: 40
+description: >
+  Changelog for Reva v2.8.0 (2022-08-23)
+---
+
 Changelog for reva 2.8.0 (2022-08-23)
 =======================================
 

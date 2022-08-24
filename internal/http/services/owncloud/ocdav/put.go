@@ -24,7 +24,6 @@ import (
 	"path"
 	"strconv"
 	"strings"
-	"time"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -36,8 +35,6 @@ import (
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/rhttp"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/chunking"
-	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/rs/zerolog"
 )
@@ -295,41 +292,19 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	sReq := &provider.StatRequest{Ref: ref}
-	if chunking.IsChunked(ref.Path) {
-		chunk, err := chunking.GetChunkBLOBInfo(ref.Path)
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-		sReq = &provider.StatRequest{Ref: &provider.Reference{
-			ResourceId: ref.ResourceId,
-			Path:       chunk.Path,
-		}}
+	// copy headers if they are present
+	if httpRes.Header.Get(net.HeaderETag) != "" {
+		w.Header().Set(net.HeaderETag, httpRes.Header.Get(net.HeaderETag))
 	}
-
-	// stat again to check the new file's metadata
-	sRes, err := client.Stat(ctx, sReq)
-	if err != nil {
-		log.Error().Err(err).Msg("error sending grpc stat request")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
+	if httpRes.Header.Get(net.HeaderOCETag) != "" {
+		w.Header().Set(net.HeaderOCETag, httpRes.Header.Get(net.HeaderOCETag))
 	}
-
-	if sRes.Status.Code != rpc.Code_CODE_OK {
-		errors.HandleErrorStatus(&log, w, sRes.Status)
-		return
+	if httpRes.Header.Get(net.HeaderOCFileID) != "" {
+		w.Header().Set(net.HeaderOCFileID, httpRes.Header.Get(net.HeaderOCFileID))
 	}
-
-	newInfo := sRes.Info
-
-	w.Header().Add(net.HeaderContentType, newInfo.MimeType)
-	w.Header().Set(net.HeaderETag, newInfo.Etag)
-	w.Header().Set(net.HeaderOCFileID, storagespace.FormatResourceID(*newInfo.Id))
-	w.Header().Set(net.HeaderOCETag, newInfo.Etag)
-	t := utils.TSToTime(newInfo.Mtime).UTC()
-	lastModifiedString := t.Format(time.RFC1123Z)
-	w.Header().Set(net.HeaderLastModified, lastModifiedString)
+	if httpRes.Header.Get(net.HeaderLastModified) != "" {
+		w.Header().Set(net.HeaderLastModified, httpRes.Header.Get(net.HeaderLastModified))
+	}
 
 	// file was new
 	// FIXME make created flag a property on the InitiateFileUploadResponse

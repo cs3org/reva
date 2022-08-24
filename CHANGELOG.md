@@ -1,3 +1,85 @@
+Changelog for reva 2.8.0 (2022-08-23)
+=======================================
+
+The following sections list the changes in reva 2.8.0 relevant to
+reva users. The changes are ordered by importance.
+
+Summary
+-------
+
+*   Fix #3158: Add name to the propfind response
+*   Fix #3157: Fix locking response codes
+*   Fix #3152: Disable caching of not found stat responses
+*   Fix #4251: Disable caching
+*   Chg #3154: Dataproviders now return file metadata
+*   Enh #3143: Add /app/open-with-web endpoint
+*   Enh #3156: Added language option to the app provider
+*   Enh #3148: Add new jsoncs3 share manager
+
+Details
+-------
+
+*   Bugfix #3158: Add name to the propfind response
+
+   Previously the file- or foldername had to be extracted from the href. This is not nice and
+   doesn't work for alias links.
+
+   https://github.com/cs3org/reva/pull/3158
+
+*   Bugfix #3157: Fix locking response codes
+
+   We've fixed the status codes for locking a file that is already locked.
+
+   https://github.com/owncloud/ocis/issues/4366
+   https://github.com/cs3org/reva/pull/3157
+   https://github.com/cs3org/reva/pull/3003
+
+*   Bugfix #3152: Disable caching of not found stat responses
+
+   We no longer cache not found responses to prevent concurrent requests interfering with put
+   requests.
+
+   https://github.com/owncloud/ocis/issues/4251
+   https://github.com/cs3org/reva/pull/3152
+
+*   Bugfix #4251: Disable caching
+
+   We disabled the cache, because there are race condtions that cause tests to fail.
+
+   https://github.com/owncloud/ocis/issues/4251
+   https://github.com/cs3org/reva/pull/3167
+
+*   Change #3154: Dataproviders now return file metadata
+
+   Dataprovider drivers can now return file metadata. When the resource info contains a file id,
+   the mtime or an etag, these will be included in the response as the corresponding http headers.
+
+   https://github.com/cs3org/reva/pull/3154
+
+*   Enhancement #3143: Add /app/open-with-web endpoint
+
+   We've added an /app/open-with-web endpoint to the app provider, so that clients that are no
+   browser or have only limited browser access can also open apps with the help of a Web URL.
+
+   https://github.com/cs3org/reva/pull/3143
+   https://github.com/owncloud/ocis/pull/4376
+
+*   Enhancement #3156: Added language option to the app provider
+
+   We've added an language option to the app provider which will in the end be passed to the app a user
+   opens so that the web ui is displayed in the users language.
+
+   https://github.com/owncloud/ocis/issues/4367
+   https://github.com/cs3org/reva/pull/3156
+   https://github.com/owncloud/ocis/pull/4399
+
+*   Enhancement #3148: Add new jsoncs3 share manager
+
+   We've added a new jsoncs3 share manager which splits the json file per storage space and caches
+   data locally.
+
+   https://github.com/cs3org/reva/pull/3148
+
 Changelog for reva 2.7.4 (2022-08-10)
 =======================================
 
@@ -18,7 +100,6 @@ Details
    set, users can list all shares in all spaces.
 
    https://github.com/cs3org/reva/pull/3141
-
 
 Changelog for reva 2.7.3 (2022-08-09)
 =======================================
@@ -132,7 +213,6 @@ Details
    https://github.com/cs3org/reva/pull/3095
    https://github.com/owncloud/ocis/pull/4256
 
-
 Changelog for reva 2.7.2 (2022-07-18)
 =======================================
 
@@ -171,6 +251,33 @@ Details
 
    https://github.com/cs3org/reva/pull/3083
 
+Changelog for reva 2.7.1 (2022-07-15)
+=======================================
+
+The following sections list the changes in reva 2.7.1 relevant to
+reva users. The changes are ordered by importance.
+
+Summary
+-------
+
+*   Fix #3080: Make dataproviders return more headers
+*   Enh #3046: Add user filter
+
+Details
+-------
+
+*   Bugfix #3080: Make dataproviders return more headers
+
+   Instead of ocdav doing an additional Stat request we now rely on the dataprovider to return the
+   necessary metadata information as headers.
+
+   https://github.com/owncloud/reva/issues/3080
+
+*   Enhancement #3046: Add user filter
+
+   This PR adds the ability to filter spaces by user-id
+
+   https://github.com/cs3org/reva/pull/3046
 
 Changelog for reva 2.7.0 (2022-07-15)
 =======================================
@@ -304,36 +411,6 @@ Details
    https://github.com/owncloud/ocis/issues/3073
    https://github.com/cs3org/reva/pull/2977
 
-
-Changelog for reva 2.7.1 (2022-07-15)
-=======================================
-
-The following sections list the changes in reva 2.7.1 relevant to
-reva users. The changes are ordered by importance.
-
-Summary
--------
-
-*   Fix #3080: Make dataproviders return more headers
-*   Enh #3046: Add user filter
-
-Details
--------
-
-*   Bugfix #3080: Make dataproviders return more headers
-
-   Instead of ocdav doing an additional Stat request we now rely on the dataprovider to return the
-   necessary metadata information as headers.
-
-   https://github.com/owncloud/reva/issues/3080
-
-*   Enhancement #3046: Add user filter
-
-   This PR adds the ability to filter spaces by user-id
-
-   https://github.com/cs3org/reva/pull/3046
-
-
 Changelog for reva 2.6.1 (2022-06-27)
 =======================================
 
@@ -400,7 +477,6 @@ Details
    We have removed the unused HomeMapping variable from the gateway.
 
    https://github.com/cs3org/reva/pull/3005
-
 
 Changelog for reva 2.6.0 (2022-06-21)
 =======================================
@@ -562,7 +638,6 @@ Details
 
    https://github.com/cs3org/reva/pull/2938
 
-
 Changelog for reva 2.5.1 (2022-06-08)
 =======================================
 
@@ -591,7 +666,6 @@ Details
 
    https://github.com/owncloud/ocis/issues/3704
    https://github.com/cs3org/reva/pull/2918
-
 
 Changelog for reva 2.5.0 (2022-06-07)
 =======================================
@@ -703,29 +777,6 @@ Details
    We made more webdav handlers return a status code and error to unify error rendering
 
    https://github.com/cs3org/reva/pull/2922
-
-
-Changelog for reva 2.4.1 (2022-05-24)
-=======================================
-
-The following sections list the changes in reva 2.4.1 relevant to
-reva users. The changes are ordered by importance.
-
-Summary
--------
-
-*   Fix #2891: Add missing http status code
-
-Details
--------
-
-*   Bugfix #2891: Add missing http status code
-
-   This Fix adds a missing status code to the InsufficientStorage error in reva, to allow tus to
-   pass it through.
-
-   https://github.com/cs3org/reva/pull/2891
-
 
 Changelog for reva 2.4.0 (2022-05-24)
 =======================================
@@ -870,6 +921,26 @@ Details
 
    https://github.com/cs3org/reva/pull/2792
 
+Changelog for reva 2.4.1 (2022-05-24)
+=======================================
+
+The following sections list the changes in reva 2.4.1 relevant to
+reva users. The changes are ordered by importance.
+
+Summary
+-------
+
+*   Fix #2891: Add missing http status code
+
+Details
+-------
+
+*   Bugfix #2891: Add missing http status code
+
+   This Fix adds a missing status code to the InsufficientStorage error in reva, to allow tus to
+   pass it through.
+
+   https://github.com/cs3org/reva/pull/2891
 
 Changelog for reva 2.3.1 (2022-05-08)
 =======================================
@@ -923,7 +994,6 @@ Details
    version queriable by from the go-micro registry.
 
    https://github.com/cs3org/reva/pull/2832
-
 
 Changelog for reva 2.3.0 (2022-05-02)
 =======================================
@@ -1366,7 +1436,6 @@ Details
 
    https://github.com/cs3org/reva/pull/2752
 
-
 Changelog for reva 2.2.0 (2022-04-12)
 =======================================
 
@@ -1537,7 +1606,6 @@ Details
 
    https://github.com/cs3org/reva/pull/2717
    https://github.com/cs3org/reva/pull/2724
-
 
 Changelog for reva 2.1.0 (2022-03-29)
 =======================================
@@ -1739,7 +1807,6 @@ Details
    Added the webdav trash-bin endpoint for spaces.
 
    https://github.com/cs3org/reva/pull/2628
-
 
 Changelog for reva 2.0.0 (2022-03-03)
 =======================================
@@ -2485,7 +2552,6 @@ Details
 
    https://github.com/cs3org/reva/pull/2526
 
-
 Changelog for reva 1.18.0 (2022-02-11)
 =======================================
 
@@ -2620,7 +2686,6 @@ Details
 
    https://github.com/cs3org/reva/pull/2278
 
-
 Changelog for reva 1.17.0 (2021-12-09)
 =======================================
 
@@ -2740,7 +2805,6 @@ Details
    case.
 
    https://github.com/cs3org/reva/pull/2314
-
 
 Changelog for reva 1.16.0 (2021-11-19)
 =======================================
@@ -3014,7 +3078,6 @@ Details
 
    https://github.com/cs3org/reva/pull/2239
 
-
 Changelog for reva 1.15.0 (2021-10-26)
 =======================================
 
@@ -3183,7 +3246,6 @@ Details
    https://github.com/owncloud/web/issues/5926
    https://github.com/cs3org/reva/pull/2189
    https://github.com/owncloud/ocis/pull/2655
-
 
 Changelog for reva 1.14.0 (2021-10-12)
 =======================================
@@ -3534,7 +3596,6 @@ Details
    https://github.com/cs3org/reva/pull/2155
    https://github.com/cs3org/wopiserver/pull/48
 
-
 Changelog for reva 1.13.0 (2021-09-14)
 =======================================
 
@@ -3744,7 +3805,6 @@ Details
 
    https://github.com/cs3org/reva/pull/2029
 
-
 Changelog for reva 1.12.0 (2021-08-24)
 =======================================
 
@@ -3951,7 +4011,6 @@ Details
    GOCDB. More use cases for these accounts are also planned.
 
    https://github.com/cs3org/reva/pull/2008
-
 
 Changelog for reva 1.11.0 (2021-08-03)
 =======================================
@@ -4165,7 +4224,6 @@ Details
 
    https://github.com/cs3org/reva/pull/1925
 
-
 Changelog for reva 1.10.0 (2021-07-13)
 =======================================
 
@@ -4208,7 +4266,6 @@ Details
 
    https://github.com/cs3org/reva/pull/1744
    https://github.com/cs3org/cs3apis/pull/120
-
 
 Changelog for reva 1.9.1 (2021-07-09)
 =======================================
@@ -4373,7 +4430,6 @@ Details
 
    https://github.com/cs3org/reva/pull/1827
 
-
 Changelog for reva 1.9.0 (2021-06-23)
 =======================================
 
@@ -4475,7 +4531,6 @@ Details
    reference type.
 
    https://github.com/cs3org/reva/pull/1820
-
 
 Changelog for reva 1.8.0 (2021-06-09)
 =======================================
@@ -4714,7 +4769,6 @@ Details
 
    https://github.com/cs3org/reva/pull/1685
    https://github.com/cs3org/reva/pull/1724
-
 
 Changelog for reva 1.7.0 (2021-04-19)
 =======================================
@@ -5017,7 +5071,6 @@ Details
 
    https://github.com/cs3org/reva/pull/1513
 
-
 Changelog for reva 1.6.0 (2021-02-16)
 =======================================
 
@@ -5212,7 +5265,6 @@ Details
 
    https://github.com/cs3org/reva/pull/1467
 
-
 Changelog for reva 1.5.1 (2021-01-19)
 =======================================
 
@@ -5291,7 +5343,6 @@ Details
    sciencemesh apps.
 
    https://github.com/cs3org/reva/pull/1403
-
 
 Changelog for reva 1.5.0 (2021-01-12)
 =======================================
@@ -5598,7 +5649,6 @@ Details
    https://github.com/owncloud/product/issues/270
    https://github.com/cs3org/reva/pull/1368
 
-
 Changelog for reva 1.4.0 (2020-11-17)
 =======================================
 
@@ -5795,7 +5845,6 @@ Details
 
    https://github.com/cs3org/reva/pull/1233
    https://github.com/cs3org/reva/pull/1284
-
 
 Changelog for reva 1.3.0 (2020-10-08)
 =======================================
@@ -6002,7 +6051,6 @@ Details
 
    https://github.com/cs3org/reva/pull/1208
 
-
 Changelog for reva 1.2.1 (2020-09-15)
 =======================================
 
@@ -6049,7 +6097,6 @@ Details
    - Export site metrics in Prometheus #698
 
    https://github.com/cs3org/reva/pull/1118
-
 
 Changelog for reva 1.2.0 (2020-08-25)
 =======================================
@@ -6192,7 +6239,6 @@ Details
 
    https://github.com/cs3org/reva/pull/1094
 
-
 Changelog for reva 1.1.0 (2020-08-11)
 =======================================
 
@@ -6323,7 +6369,6 @@ Details
    adds methods to retrieve it.
 
    https://github.com/cs3org/reva/pull/995
-
 
 Changelog for reva 1.0.0 (2020-07-28)
 =======================================
@@ -6518,7 +6563,6 @@ Details
 
    https://github.com/cs3org/reva/pull/974
 
-
 Changelog for reva 0.1.0 (2020-03-18)
 =======================================
 
@@ -6598,7 +6642,6 @@ Details
    https://github.com/cs3org/reva/pull/436
    https://github.com/cs3org/reva/pull/571
 
-
 Changelog for reva 0.0.1 (2019-10-24)
 =======================================
 
@@ -6620,5 +6663,4 @@ Details
    from Drone into Github pages.
 
    https://github.com/cs3org/reva/pull/334
-
 

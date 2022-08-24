@@ -209,10 +209,15 @@ func (cls *cs3LS) Create(ctx context.Context, now time.Time, details LockDetails
 	if err != nil {
 		return "", err
 	}
-	if res.Status.Code != rpc.Code_CODE_OK {
+	switch res.Status.Code {
+	case rpc.Code_CODE_OK:
+		return lockTokenPrefix + token.String(), nil
+	case rpc.Code_CODE_FAILED_PRECONDITION:
+		return "", errtypes.Aborted("file is already locked")
+	default:
 		return "", errtypes.NewErrtypeFromStatus(res.Status)
 	}
-	return lockTokenPrefix + token.String(), nil
+
 }
 
 func (cls *cs3LS) Refresh(ctx context.Context, now time.Time, token string, duration time.Duration) (LockDetails, error) {
@@ -232,10 +237,14 @@ func (cls *cs3LS) Unlock(ctx context.Context, now time.Time, ref *provider.Refer
 	if err != nil {
 		return err
 	}
-	if res.Status.Code != rpc.Code_CODE_OK {
+	switch res.Status.Code {
+	case rpc.Code_CODE_OK:
+		return nil
+	case rpc.Code_CODE_FAILED_PRECONDITION:
+		return errtypes.Aborted("file is not locked")
+	default:
 		return errtypes.NewErrtypeFromStatus(res.Status)
 	}
-	return nil
 }
 
 // LockDetails are a lock's metadata.
@@ -335,10 +344,11 @@ const (
 // infiniteDepth. Parsing any other string returns invalidDepth.
 //
 // Different WebDAV methods have further constraints on valid depths:
-//	- PROPFIND has no further restrictions, as per section 9.1.
-//	- COPY accepts only "0" or "infinity", as per section 9.8.3.
-//	- MOVE accepts only "infinity", as per section 9.9.2.
-//	- LOCK accepts only "0" or "infinity", as per section 9.10.3.
+//   - PROPFIND has no further restrictions, as per section 9.1.
+//   - COPY accepts only "0" or "infinity", as per section 9.8.3.
+//   - MOVE accepts only "infinity", as per section 9.9.2.
+//   - LOCK accepts only "0" or "infinity", as per section 9.10.3.
+//
 // These constraints are enforced by the handleXxx methods.
 func parseDepth(s string) int {
 	switch s {
@@ -353,21 +363,21 @@ func parseDepth(s string) int {
 }
 
 /*
-	the oc 10 wopi app code locks like this:
+the oc 10 wopi app code locks like this:
 
-		$storage->lockNodePersistent($file->getInternalPath(), [
-			'token' => $wopiLock,
-			'owner' => "{$user->getDisplayName()} via Office Online"
-		]);
+	$storage->lockNodePersistent($file->getInternalPath(), [
+		'token' => $wopiLock,
+		'owner' => "{$user->getDisplayName()} via Office Online"
+	]);
 
-	if owner is empty it defaults to '{displayname} ({email})', which is not a url ... but ... shrug
+if owner is empty it defaults to '{displayname} ({email})', which is not a url ... but ... shrug
 
-	The LockManager also defaults to exclusive locks:
+The LockManager also defaults to exclusive locks:
 
-		$scope = ILock::LOCK_SCOPE_EXCLUSIVE;
-		if (isset($lockInfo['scope'])) {
-			$scope = $lockInfo['scope'];
-		}
+	$scope = ILock::LOCK_SCOPE_EXCLUSIVE;
+	if (isset($lockInfo['scope'])) {
+		$scope = $lockInfo['scope'];
+	}
 */
 func (s *svc) handleLock(w http.ResponseWriter, r *http.Request, ns string) (retStatus int, retErr error) {
 	ctx, span := s.tracerProvider.Tracer(tracerName).Start(r.Context(), fmt.Sprintf("%s %v", r.Method, r.URL.Path))
