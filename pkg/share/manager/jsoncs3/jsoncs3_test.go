@@ -24,6 +24,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	groupv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
@@ -33,8 +34,10 @@ import (
 	providerv1beta1 "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocs/conversions"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
+	sharespkg "github.com/cs3org/reva/v2/pkg/share"
 	"github.com/cs3org/reva/v2/pkg/share/manager/jsoncs3"
 	"github.com/cs3org/reva/v2/pkg/share/manager/jsoncs3/sharecache"
+	"github.com/cs3org/reva/v2/pkg/share/manager/jsoncs3/shareid"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/metadata"
 	"google.golang.org/protobuf/types/known/fieldmaskpb"
 
@@ -145,6 +148,58 @@ var _ = Describe("Jsoncs3", func() {
 		if tmpdir != "" {
 			os.RemoveAll(tmpdir)
 		}
+	})
+
+	Describe("Load", func() {
+		It("loads shares including state and mountpoint information", func() {
+
+			sharesChan := make(chan *collaboration.Share)
+			receivedChan := make(chan sharespkg.ReceivedShareWithUser)
+
+			share := &collaboration.Share{
+				Id: &collaboration.ShareId{OpaqueId: "1iaeiae$vlcvlcvlc!pzbpzbpzb"},
+				// FIXME we may have to deal with importing existing share ids ... without a storage or provider prefix
+				ResourceId: &provider.ResourceId{StorageId: "1iaeiae", SpaceId: "vlcvlcvlc", OpaqueId: "abcd"},
+				Creator:    user1.GetId(),
+				Grantee: &provider.Grantee{
+					Type: provider.GranteeType_GRANTEE_TYPE_USER,
+					Id:   &provider.Grantee_UserId{UserId: grantee.GetId()},
+				},
+				Permissions: &collaboration.SharePermissions{
+					Permissions: &provider.ResourcePermissions{
+						GetPath:              true,
+						InitiateFileDownload: true,
+						ListFileVersions:     true,
+						ListContainer:        true,
+						Stat:                 true,
+					},
+				},
+			}
+
+			wg := sync.WaitGroup{}
+			wg.Add(2)
+			go func() {
+				err := m.Load(ctx, sharesChan, receivedChan)
+				Expect(err).ToNot(HaveOccurred())
+				wg.Done()
+			}()
+			go func() {
+				sharesChan <- share
+				close(sharesChan)
+				close(receivedChan)
+				wg.Done()
+			}()
+			wg.Wait()
+			Eventually(sharesChan).Should(BeClosed())
+			Eventually(receivedChan).Should(BeClosed())
+
+			s, err := m.GetShare(ctx, &collaboration.ShareReference{Spec: &collaboration.ShareReference_Id{
+				Id: share.Id,
+			}})
+
+			Expect(err).ToNot(HaveOccurred())
+			Expect(s.ResourceId.OpaqueId).To(Equal(share.ResourceId.OpaqueId))
+		})
 	})
 
 	Describe("Share", func() {
@@ -580,18 +635,18 @@ var _ = Describe("Jsoncs3", func() {
 				Expect(len(shares)).To(Equal(1))
 
 				// Add a second cache to the provider cache so it can be referenced
-				Expect(m.Cache.Add(ctx, "storageid", "spaceid", "storageid^spaceid°secondshare", &collaboration.Share{
+				Expect(m.Cache.Add(ctx, "storageid", "spaceid", "storageid"+shareid.ProviderDelimiter+"spaceid"+shareid.SpaceDelimiter+"secondshare", &collaboration.Share{
 					Creator: user1.Id,
 				})).To(Succeed())
 
 				cache := sharecache.UserShareCache{
 					Mtime: time.Now(),
 					UserShares: map[string]*sharecache.SpaceShareIDs{
-						"storageid^spaceid": {
+						"storageid" + shareid.ProviderDelimiter + "spaceid": {
 							Mtime: time.Now(),
 							IDs: map[string]struct{}{
-								shares[0].Id.OpaqueId:           {},
-								"storageid^spaceid°secondshare": {},
+								shares[0].Id.OpaqueId: {},
+								"storageid" + shareid.ProviderDelimiter + "spaceid" + shareid.SpaceDelimiter + "secondshare": {},
 							},
 						},
 					},

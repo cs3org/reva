@@ -252,7 +252,7 @@ func (m *Manager) Share(ctx context.Context, md *provider.ResourceInfo, g *colla
 		return nil, err
 	}
 
-	spaceID := md.Id.StorageId + "^" + md.Id.SpaceId
+	spaceID := md.Id.StorageId + shareid.ProviderDelimiter + md.Id.SpaceId
 	// set flag for grantee to have access to share
 	switch g.Grantee.Type {
 	case provider.GranteeType_GRANTEE_TYPE_USER:
@@ -623,7 +623,7 @@ func (m *Manager) convert(ctx context.Context, userID string, s *collaboration.S
 	storageID, spaceID, _ := shareid.Decode(s.Id.OpaqueId)
 
 	_ = m.UserReceivedStates.Sync(ctx, userID) // ignore error, cache will be updated on next read
-	state := m.UserReceivedStates.Get(userID, storageID+"^"+spaceID, s.Id.GetOpaqueId())
+	state := m.UserReceivedStates.Get(userID, storageID+shareid.ProviderDelimiter+spaceID, s.Id.GetOpaqueId())
 	if state != nil {
 		rs.State = state.State
 		rs.MountPoint = state.MountPoint
@@ -683,13 +683,13 @@ func (m *Manager) UpdateReceivedShare(ctx context.Context, receivedShare *collab
 
 	userID := ctxpkg.ContextMustGetUser(ctx)
 
-	err = m.UserReceivedStates.Add(ctx, userID.GetId().GetOpaqueId(), rs.Share.ResourceId.StorageId+"^"+rs.Share.ResourceId.SpaceId, rs)
+	err = m.UserReceivedStates.Add(ctx, userID.GetId().GetOpaqueId(), rs.Share.ResourceId.StorageId+shareid.ProviderDelimiter+rs.Share.ResourceId.SpaceId, rs)
 	if _, ok := err.(errtypes.IsPreconditionFailed); ok {
 		// when persisting fails, download, readd and persist again
 		if err := m.UserReceivedStates.Sync(ctx, userID.GetId().GetOpaqueId()); err != nil {
 			return nil, err
 		}
-		err = m.UserReceivedStates.Add(ctx, userID.GetId().GetOpaqueId(), rs.Share.ResourceId.StorageId+"^"+rs.Share.ResourceId.SpaceId, rs)
+		err = m.UserReceivedStates.Add(ctx, userID.GetId().GetOpaqueId(), rs.Share.ResourceId.StorageId+shareid.ProviderDelimiter+rs.Share.ResourceId.SpaceId, rs)
 		// TODO try more often?
 	}
 	if err != nil {
@@ -715,11 +715,15 @@ func (m *Manager) Load(ctx context.Context, shareChan <-chan *collaboration.Shar
 				continue
 			}
 			mu.Lock()
-			if err := m.Cache.Add(context.Background(), s.ResourceId.StorageId, s.ResourceId.SpaceId, s.Id.OpaqueId, s); err != nil {
+			if err := m.Cache.Add(context.Background(), s.GetResourceId().GetStorageId(), s.GetResourceId().GetSpaceId(), s.Id.OpaqueId, s); err != nil {
 				log.Error().Err(err).Interface("share", s).Msg("error persisting share")
+			} else {
+				log.Info().Str("storageid", s.GetResourceId().GetStorageId()).Str("spaceid", s.GetResourceId().GetSpaceId()).Str("shareid", s.Id.OpaqueId).Msg("imported share")
 			}
 			if err := m.CreatedCache.Add(ctx, s.GetCreator().GetOpaqueId(), s.Id.OpaqueId); err != nil {
 				log.Error().Err(err).Interface("share", s).Msg("error persisting created cache")
+			} else {
+				log.Info().Str("creatorid", s.GetCreator().GetOpaqueId()).Str("shareid", s.Id.OpaqueId).Msg("updated created cache")
 			}
 			mu.Unlock()
 		}
@@ -733,10 +737,14 @@ func (m *Manager) Load(ctx context.Context, shareChan <-chan *collaboration.Shar
 				case provider.GranteeType_GRANTEE_TYPE_USER:
 					if err := m.UserReceivedStates.Add(context.Background(), s.ReceivedShare.GetShare().GetGrantee().GetUserId().GetOpaqueId(), s.ReceivedShare.GetShare().GetResourceId().GetSpaceId(), s.ReceivedShare); err != nil {
 						log.Error().Err(err).Interface("received share", s).Msg("error persisting received share for user")
+					} else {
+						log.Info().Str("userid", s.ReceivedShare.GetShare().GetGrantee().GetUserId().GetOpaqueId()).Str("spaceid", s.ReceivedShare.GetShare().GetResourceId().GetSpaceId()).Str("shareid", s.ReceivedShare.GetShare().Id.OpaqueId).Msg("updated received share userdata")
 					}
 				case provider.GranteeType_GRANTEE_TYPE_GROUP:
 					if err := m.GroupReceivedCache.Add(context.Background(), s.ReceivedShare.GetShare().GetGrantee().GetGroupId().GetOpaqueId(), s.ReceivedShare.GetShare().GetId().GetOpaqueId()); err != nil {
 						log.Error().Err(err).Interface("received share", s).Msg("error persisting received share to group cache")
+					} else {
+						log.Info().Str("groupid", s.ReceivedShare.GetShare().GetGrantee().GetGroupId().GetOpaqueId()).Str("shareid", s.ReceivedShare.GetShare().Id.OpaqueId).Msg("updated received share group cache")
 					}
 				}
 				mu.Unlock()
