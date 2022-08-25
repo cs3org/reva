@@ -20,6 +20,7 @@ package jsoncs3
 
 import (
 	"context"
+	"strings"
 	"sync"
 
 	"github.com/google/uuid"
@@ -699,6 +700,16 @@ func (m *Manager) UpdateReceivedShare(ctx context.Context, receivedShare *collab
 	return rs, nil
 }
 
+func shareIsRoutable(share *collaboration.Share) bool {
+	if strings.Contains(share.Id.OpaqueId, shareid.ProviderDelimiter) && strings.Contains(share.Id.OpaqueId, shareid.SpaceDelimiter) {
+		return true
+	}
+	return false
+}
+func updateShareID(share *collaboration.Share) {
+	share.Id.OpaqueId = shareid.Encode(share.ResourceId.StorageId, share.ResourceId.SpaceId, share.Id.OpaqueId)
+}
+
 // Load imports shares and received shares from channels (e.g. during migration)
 func (m *Manager) Load(ctx context.Context, shareChan <-chan *collaboration.Share, receivedShareChan <-chan share.ReceivedShareWithUser) error {
 	log := appctx.GetLogger(ctx)
@@ -713,6 +724,9 @@ func (m *Manager) Load(ctx context.Context, shareChan <-chan *collaboration.Shar
 		for s := range shareChan {
 			if s == nil {
 				continue
+			}
+			if !shareIsRoutable(s) {
+				updateShareID(s)
 			}
 			mu.Lock()
 			if err := m.Cache.Add(context.Background(), s.GetResourceId().GetStorageId(), s.GetResourceId().GetSpaceId(), s.Id.OpaqueId, s); err != nil {
@@ -732,6 +746,9 @@ func (m *Manager) Load(ctx context.Context, shareChan <-chan *collaboration.Shar
 	go func() {
 		for s := range receivedShareChan {
 			if s.ReceivedShare != nil {
+				if !shareIsRoutable(s.ReceivedShare.GetShare()) {
+					updateShareID(s.ReceivedShare.GetShare())
+				}
 				mu.Lock()
 				switch s.ReceivedShare.Share.Grantee.Type {
 				case provider.GranteeType_GRANTEE_TYPE_USER:
