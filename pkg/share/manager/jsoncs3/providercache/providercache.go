@@ -199,9 +199,11 @@ func (c *Cache) Sync(ctx context.Context, storageID, spaceID string) error {
 	info, err := c.storage.Stat(ctx, jsonPath)
 	if err != nil {
 		if _, ok := err.(errtypes.NotFound); ok {
+			log.Debug().Msg("no json file, nothing to sync")
 			return nil // Nothing to sync against
 		}
 		if _, ok := err.(*os.PathError); ok {
+			log.Debug().Msg("no storage dir, nothing to sync")
 			return nil // Nothing to sync against
 		}
 		log.Error().Err(err).Msg("Failed to stat the provider cache")
