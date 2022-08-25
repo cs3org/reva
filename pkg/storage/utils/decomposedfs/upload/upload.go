@@ -351,7 +351,9 @@ func (upload *Upload) finishUpload() (err error) {
 			return err
 		}
 	}
+
 	n.BlobID = upload.Info.ID // This can be changed to a content hash in the future when reference counting for the blobs was added
+	n.Blobsize = upload.Info.Size
 
 	// defer writing the checksums until the Node is in place
 
