@@ -188,7 +188,6 @@ func (upload *Upload) WriteChunk(_ context.Context, offset int64, src io.Reader)
 	}
 
 	upload.Info.Offset += n
-	upload.Info.Size = n
 	return n, upload.writeInfo()
 }
 
@@ -354,7 +353,7 @@ func (upload *Upload) finishUpload() (err error) {
 	}
 
 	n.BlobID = upload.Info.ID // This can be changed to a content hash in the future when reference counting for the blobs was added
-	n.Blobsize = upload.Info.Size
+	n.Blobsize = upload.Info.Offset
 
 	// defer writing the checksums until the Node is in place
 
