@@ -139,7 +139,7 @@ func (c *Cache) Get(storageID, spaceID, shareID string) *collaboration.Share {
 
 // ListSpace returns the list of shares in a given space
 func (c *Cache) ListSpace(storageID, spaceID string) *Shares {
-	if c.Providers[storageID] == nil {
+	if c.Providers[storageID] == nil || c.Providers[storageID].Spaces[spaceID] == nil {
 		return &Shares{}
 	}
 	return c.Providers[storageID].Spaces[spaceID]
