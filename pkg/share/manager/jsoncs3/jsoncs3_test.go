@@ -635,18 +635,18 @@ var _ = Describe("Jsoncs3", func() {
 				Expect(len(shares)).To(Equal(1))
 
 				// Add a second cache to the provider cache so it can be referenced
-				Expect(m.Cache.Add(ctx, "storageid", "spaceid", "storageid"+shareid.ProviderDelimiter+"spaceid"+shareid.SpaceDelimiter+"secondshare", &collaboration.Share{
+				Expect(m.Cache.Add(ctx, "storageid", "spaceid", "storageid"+shareid.IdDelimiter+"spaceid"+shareid.IdDelimiter+"secondshare", &collaboration.Share{
 					Creator: user1.Id,
 				})).To(Succeed())
 
 				cache := sharecache.UserShareCache{
 					Mtime: time.Now(),
 					UserShares: map[string]*sharecache.SpaceShareIDs{
-						"storageid" + shareid.ProviderDelimiter + "spaceid": {
+						"storageid" + shareid.IdDelimiter + "spaceid": {
 							Mtime: time.Now(),
 							IDs: map[string]struct{}{
 								shares[0].Id.OpaqueId: {},
-								"storageid" + shareid.ProviderDelimiter + "spaceid" + shareid.SpaceDelimiter + "secondshare": {},
+								"storageid" + shareid.IdDelimiter + "spaceid" + shareid.IdDelimiter + "secondshare": {},
 							},
 						},
 					},
