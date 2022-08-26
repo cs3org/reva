@@ -188,6 +188,7 @@ func (upload *Upload) WriteChunk(_ context.Context, offset int64, src io.Reader)
 	}
 
 	upload.Info.Offset += n
+	upload.Info.Size = n
 	return n, upload.writeInfo()
 }
 
