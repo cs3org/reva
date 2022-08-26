@@ -68,7 +68,7 @@ func New(s metadata.Storage, namespace, filename string) Cache {
 // Add adds a share to the cache
 func (c *Cache) Add(ctx context.Context, userid, shareID string) error {
 	storageid, spaceid, _ := shareid.Decode(shareID)
-	ssid := storageid + shareid.IdDelimiter + spaceid
+	ssid := storageid + shareid.IDDelimiter + spaceid
 
 	now := time.Now()
 	if c.UserShares[userid] == nil {
@@ -91,7 +91,7 @@ func (c *Cache) Add(ctx context.Context, userid, shareID string) error {
 // Remove removes a share for the given user
 func (c *Cache) Remove(ctx context.Context, userid, shareID string) error {
 	storageid, spaceid, _ := shareid.Decode(shareID)
-	ssid := storageid + shareid.IdDelimiter + spaceid
+	ssid := storageid + shareid.IDDelimiter + spaceid
 
 	if c.UserShares[userid] != nil {
 		if c.UserShares[userid].UserShares[ssid] != nil {

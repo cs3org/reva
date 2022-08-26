@@ -21,19 +21,19 @@ package shareid
 import "strings"
 
 const (
-	// IdDelimiter is used to separate the providerid, spaceid and shareid
-	IdDelimiter = ":"
+	// IDDelimiter is used to separate the providerid, spaceid and shareid
+	IDDelimiter = ":"
 )
 
 // Encode encodes a share id
 func Encode(providerID, spaceID, shareID string) string {
-	return providerID + IdDelimiter + spaceID + IdDelimiter + shareID
+	return providerID + IDDelimiter + spaceID + IDDelimiter + shareID
 }
 
 // Decode decodes an encoded shareid
 // share ids are of the format <storageid>:<spaceid>:<shareid>
 func Decode(id string) (string, string, string) {
-	parts := strings.SplitN(id, IdDelimiter, 3)
+	parts := strings.SplitN(id, IDDelimiter, 3)
 	switch len(parts) {
 	case 1:
 		return "", "", parts[0]

@@ -253,7 +253,7 @@ func (m *Manager) Share(ctx context.Context, md *provider.ResourceInfo, g *colla
 		return nil, err
 	}
 
-	spaceID := md.Id.StorageId + shareid.IdDelimiter + md.Id.SpaceId
+	spaceID := md.Id.StorageId + shareid.IDDelimiter + md.Id.SpaceId
 	// set flag for grantee to have access to share
 	switch g.Grantee.Type {
 	case provider.GranteeType_GRANTEE_TYPE_USER:
@@ -624,7 +624,7 @@ func (m *Manager) convert(ctx context.Context, userID string, s *collaboration.S
 	storageID, spaceID, _ := shareid.Decode(s.Id.OpaqueId)
 
 	_ = m.UserReceivedStates.Sync(ctx, userID) // ignore error, cache will be updated on next read
-	state := m.UserReceivedStates.Get(userID, storageID+shareid.IdDelimiter+spaceID, s.Id.GetOpaqueId())
+	state := m.UserReceivedStates.Get(userID, storageID+shareid.IDDelimiter+spaceID, s.Id.GetOpaqueId())
 	if state != nil {
 		rs.State = state.State
 		rs.MountPoint = state.MountPoint
@@ -684,13 +684,13 @@ func (m *Manager) UpdateReceivedShare(ctx context.Context, receivedShare *collab
 
 	userID := ctxpkg.ContextMustGetUser(ctx)
 
-	err = m.UserReceivedStates.Add(ctx, userID.GetId().GetOpaqueId(), rs.Share.ResourceId.StorageId+shareid.IdDelimiter+rs.Share.ResourceId.SpaceId, rs)
+	err = m.UserReceivedStates.Add(ctx, userID.GetId().GetOpaqueId(), rs.Share.ResourceId.StorageId+shareid.IDDelimiter+rs.Share.ResourceId.SpaceId, rs)
 	if _, ok := err.(errtypes.IsPreconditionFailed); ok {
 		// when persisting fails, download, readd and persist again
 		if err := m.UserReceivedStates.Sync(ctx, userID.GetId().GetOpaqueId()); err != nil {
 			return nil, err
 		}
-		err = m.UserReceivedStates.Add(ctx, userID.GetId().GetOpaqueId(), rs.Share.ResourceId.StorageId+shareid.IdDelimiter+rs.Share.ResourceId.SpaceId, rs)
+		err = m.UserReceivedStates.Add(ctx, userID.GetId().GetOpaqueId(), rs.Share.ResourceId.StorageId+shareid.IDDelimiter+rs.Share.ResourceId.SpaceId, rs)
 		// TODO try more often?
 	}
 	if err != nil {
@@ -701,10 +701,7 @@ func (m *Manager) UpdateReceivedShare(ctx context.Context, receivedShare *collab
 }
 
 func shareIsRoutable(share *collaboration.Share) bool {
-	if strings.Contains(share.Id.OpaqueId, shareid.IdDelimiter) {
-		return true
-	}
-	return false
+	return strings.Contains(share.Id.OpaqueId, shareid.IDDelimiter)
 }
 func updateShareID(share *collaboration.Share) {
 	share.Id.OpaqueId = shareid.Encode(share.ResourceId.StorageId, share.ResourceId.SpaceId, share.Id.OpaqueId)
