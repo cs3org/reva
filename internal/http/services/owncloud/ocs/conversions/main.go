@@ -175,8 +175,10 @@ type TokenInfo struct {
 	Token             string `json:"token" xml:"token"`
 	LinkURL           string `json:"link_url" xml:"link_url"`
 	PasswordProtected bool   `json:"password_protected" xml:"password_protected"`
+	Aliaslink         bool   `json:"alias_link" xml:"alias_link"`
 
 	// if not password protected
+	ID        string `json:"id" xml:"id"`
 	StorageID string `json:"storage_id" xml:"storage_id"`
 	SpaceID   string `json:"space_id" xml:"space_id"`
 	OpaqueID  string `json:"opaque_id" xml:"opaque_id"`
@@ -186,6 +188,7 @@ type TokenInfo struct {
 	SpacePath  string `json:"space_path" xml:"space_path"`
 	SpaceAlias string `json:"space_alias" xml:"space_alias"`
 	SpaceURL   string `json:"space_url" xml:"space_url"`
+	SpaceType  string `json:"space_type" xml:"space_type"`
 }
 
 // ExactMatchesData hold exact matches
