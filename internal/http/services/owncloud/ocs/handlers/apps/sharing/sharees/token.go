@@ -87,6 +87,7 @@ func handleGetToken(ctx context.Context, tkn string, pw string, c gateway.Gatewa
 			t.SpacePath = utils.ReadPlainFromOpaque(space.Opaque, "path")
 			t.SpaceAlias = utils.ReadPlainFromOpaque(space.Opaque, "spaceAlias")
 			t.SpaceURL = path.Join(t.SpaceAlias, t.OpaqueID, t.Path)
+			t.SpaceType = space.SpaceType
 		}
 
 	}
@@ -110,9 +111,13 @@ func buildTokenInfo(owner *user.User, tkn string, token string, passProtected bo
 		return t, fmt.Errorf("can't stat resource. %+v %s", sRes, err)
 	}
 
+	t.ID = storagespace.FormatResourceID(*sRes.Share.GetResourceId())
 	t.StorageID = sRes.Share.ResourceId.GetStorageId()
 	t.SpaceID = sRes.Share.ResourceId.GetSpaceId()
 	t.OpaqueID = sRes.Share.ResourceId.GetOpaqueId()
+
+	role := conversions.RoleFromResourcePermissions(sRes.Share.Permissions.GetPermissions())
+	t.Aliaslink = role.OCSPermissions() == 0
 
 	return t, nil
 }
