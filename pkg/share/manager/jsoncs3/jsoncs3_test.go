@@ -157,8 +157,7 @@ var _ = Describe("Jsoncs3", func() {
 			receivedChan := make(chan sharespkg.ReceivedShareWithUser)
 
 			share := &collaboration.Share{
-				Id: &collaboration.ShareId{OpaqueId: "1iaeiae$vlcvlcvlc!pzbpzbpzb"},
-				// FIXME we may have to deal with importing existing share ids ... without a storage or provider prefix
+				Id:         &collaboration.ShareId{OpaqueId: "1iaeiae$vlcvlcvlc!pzbpzbpzb"},
 				ResourceId: &provider.ResourceId{StorageId: "1iaeiae", SpaceId: "vlcvlcvlc", OpaqueId: "abcd"},
 				Creator:    user1.GetId(),
 				Grantee: &provider.Grantee{

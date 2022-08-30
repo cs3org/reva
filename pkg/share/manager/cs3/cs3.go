@@ -206,6 +206,22 @@ func (m *Manager) Load(ctx context.Context, shareChan <-chan *collaboration.Shar
 	return nil
 }
 
+func (m *Manager) getMetadata(ctx context.Context, shareid, grantee string) ReceivedShareMetadata {
+	// use default values if the grantee didn't configure anything yet
+	metadata := ReceivedShareMetadata{
+		State: collaboration.ShareState_SHARE_STATE_PENDING,
+	}
+	data, err := m.storage.SimpleDownload(ctx, path.Join("metadata", shareid, grantee))
+	if err != nil {
+		return metadata
+	}
+	err = json.Unmarshal(data, &metadata)
+	if err != nil {
+		appctx.GetLogger(ctx).Error().Err(err).Str("shareid", shareid).Msg("error fetching share")
+	}
+	return metadata
+}
+
 // Dump exports shares and received shares to channels (e.g. during migration)
 func (m *Manager) Dump(ctx context.Context, shareChan chan<- *collaboration.Share, receivedShareChan chan<- share.ReceivedShareWithUser) error {
 	log := appctx.GetLogger(ctx)
@@ -226,19 +242,11 @@ func (m *Manager) Dump(ctx context.Context, shareChan chan<- *collaboration.Shar
 			if err != nil {
 				continue
 			}
-			for _, grantee := range grantees { // use default values if the grantee didn't configure anything yet
-				metadata := ReceivedShareMetadata{
-					State: collaboration.ShareState_SHARE_STATE_PENDING,
-				}
-				data, err := m.storage.SimpleDownload(ctx, path.Join("metadata", s.Id.OpaqueId, grantee))
-				if err == nil {
-					err = json.Unmarshal(data, &metadata)
-					if err != nil {
-						continue
-					}
-				}
+			for _, grantee := range grantees {
+				metadata := m.getMetadata(ctx, s.GetId().GetOpaqueId(), grantee)
 				g, err := indexToGrantee(grantee)
 				if err != nil || g.Type != provider.GranteeType_GRANTEE_TYPE_USER {
+					// ignore group grants, as every user has his own received state
 					continue
 				}
 				receivedShareChan <- share.ReceivedShareWithUser{
