@@ -93,14 +93,19 @@ func (c *Cache) Remove(ctx context.Context, userid, shareID string) error {
 	storageid, spaceid, _ := shareid.Decode(shareID)
 	ssid := storageid + shareid.IDDelimiter + spaceid
 
-	if c.UserShares[userid] != nil {
-		if c.UserShares[userid].UserShares[ssid] != nil {
-			// remove share id
-			now := time.Now()
-			c.UserShares[userid].Mtime = now
-			c.UserShares[userid].UserShares[ssid].Mtime = now
-			delete(c.UserShares[userid].UserShares[ssid].IDs, shareID)
+	now := time.Now()
+	if c.UserShares[userid] == nil {
+		c.UserShares[userid] = &UserShareCache{
+			Mtime:      now,
+			UserShares: map[string]*SpaceShareIDs{},
 		}
+	}
+
+	if c.UserShares[userid].UserShares[ssid] != nil {
+		// remove share id
+		c.UserShares[userid].Mtime = now
+		c.UserShares[userid].UserShares[ssid].Mtime = now
+		delete(c.UserShares[userid].UserShares[ssid].IDs, shareID)
 	}
 
 	return c.Persist(ctx, userid)
