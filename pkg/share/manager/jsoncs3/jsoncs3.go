@@ -714,7 +714,6 @@ func (m *Manager) Load(ctx context.Context, shareChan <-chan *collaboration.Shar
 		return err
 	}
 
-	var mu sync.Mutex
 	var wg sync.WaitGroup
 	wg.Add(2)
 	go func() {
@@ -725,7 +724,6 @@ func (m *Manager) Load(ctx context.Context, shareChan <-chan *collaboration.Shar
 			if !shareIsRoutable(s) {
 				updateShareID(s)
 			}
-			mu.Lock()
 			if err := m.Cache.Add(context.Background(), s.GetResourceId().GetStorageId(), s.GetResourceId().GetSpaceId(), s.Id.OpaqueId, s); err != nil {
 				log.Error().Err(err).Interface("share", s).Msg("error persisting share")
 			} else {
@@ -736,7 +734,6 @@ func (m *Manager) Load(ctx context.Context, shareChan <-chan *collaboration.Shar
 			} else {
 				log.Info().Str("creatorid", s.GetCreator().GetOpaqueId()).Str("shareid", s.Id.OpaqueId).Msg("updated created cache")
 			}
-			mu.Unlock()
 		}
 		wg.Done()
 	}()
@@ -746,7 +743,6 @@ func (m *Manager) Load(ctx context.Context, shareChan <-chan *collaboration.Shar
 				if !shareIsRoutable(s.ReceivedShare.GetShare()) {
 					updateShareID(s.ReceivedShare.GetShare())
 				}
-				mu.Lock()
 				switch s.ReceivedShare.Share.Grantee.Type {
 				case provider.GranteeType_GRANTEE_TYPE_USER:
 					if err := m.UserReceivedStates.Add(context.Background(), s.ReceivedShare.GetShare().GetGrantee().GetUserId().GetOpaqueId(), s.ReceivedShare.GetShare().GetResourceId().GetSpaceId(), s.ReceivedShare); err != nil {
@@ -761,7 +757,6 @@ func (m *Manager) Load(ctx context.Context, shareChan <-chan *collaboration.Shar
 						log.Info().Str("groupid", s.ReceivedShare.GetShare().GetGrantee().GetGroupId().GetOpaqueId()).Str("shareid", s.ReceivedShare.GetShare().Id.OpaqueId).Msg("updated received share group cache")
 					}
 				}
-				mu.Unlock()
 			}
 		}
 		wg.Done()
