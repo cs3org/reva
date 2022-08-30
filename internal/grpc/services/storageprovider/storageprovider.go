@@ -288,6 +288,20 @@ func (s *service) InitiateFileDownload(ctx context.Context, req *provider.Initia
 	}, nil
 }
 
+func validateIfMatch(ifMatch string, info *provider.ResourceInfo) bool {
+	return ifMatch != info.GetEtag()
+}
+func validateIfUnmodifiedSince(ifUnmodifiedSince *typesv1beta1.Timestamp, info *provider.ResourceInfo) bool {
+	switch {
+	case ifUnmodifiedSince == nil || info.GetMtime() == nil:
+		return true
+	case utils.LaterTS(info.GetMtime(), ifUnmodifiedSince) == info.GetMtime():
+		return false
+	default:
+		return true
+	}
+}
+
 func (s *service) InitiateFileUpload(ctx context.Context, req *provider.InitiateFileUploadRequest) (*provider.InitiateFileUploadResponse, error) {
 	// TODO(labkode): same considerations as download
 	log := appctx.GetLogger(ctx)
@@ -314,20 +328,17 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 	metadata := map[string]string{}
 	ifMatch := req.GetIfMatch()
 	if ifMatch != "" {
-		if sRes.Info.Etag != ifMatch {
+		if !validateIfMatch(ifMatch, sRes.GetInfo()) {
 			return &provider.InitiateFileUploadResponse{
 				Status: status.NewFailedPrecondition(ctx, errors.New("etag mismatch"), "etag mismatch"),
 			}, nil
 		}
 		metadata["if-match"] = ifMatch
 	}
-	ifUnmodifiedSince := req.GetIfUnmodifiedSince()
-	if ifUnmodifiedSince != nil {
-		if utils.LaterTS(sRes.GetInfo().GetMtime(), ifUnmodifiedSince) == sRes.Info.Mtime {
-			return &provider.InitiateFileUploadResponse{
-				Status: status.NewFailedPrecondition(ctx, errors.New("resource has been modified"), "resource has been modified"),
-			}, nil
-		}
+	if !validateIfUnmodifiedSince(req.GetIfUnmodifiedSince(), sRes.GetInfo()) {
+		return &provider.InitiateFileUploadResponse{
+			Status: status.NewFailedPrecondition(ctx, errors.New("resource has been modified"), "resource has been modified"),
+		}, nil
 	}
 
 	ctx = ctxpkg.ContextSetLockID(ctx, req.LockId)
