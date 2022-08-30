@@ -81,7 +81,6 @@ func Consume(s Consumer, group string, evs ...Unmarshaller) (<-chan interface{},
 			et := e.Metadata[MetadatakeyEventType]
 			ev, ok := registeredEvents[et]
 			if !ok {
-				log.Printf("not registered: %s", et)
 				continue
 			}
 

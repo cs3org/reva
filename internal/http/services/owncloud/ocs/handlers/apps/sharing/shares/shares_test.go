@@ -145,6 +145,10 @@ var _ = Describe("The ocs API", func() {
 				Status: status.NewOK(context.Background()),
 				Share:  share,
 			}, nil)
+
+			client.On("ListShares", mock.Anything, mock.Anything).Return(&collaboration.ListSharesResponse{
+				Status: status.NewOK(context.Background()),
+			}, nil)
 		})
 
 		Context("when there are no existing shares to the resource yet", func() {
