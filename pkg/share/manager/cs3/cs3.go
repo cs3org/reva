@@ -215,7 +215,7 @@ func (m *Manager) Dump(ctx context.Context, shareChan chan<- *collaboration.Shar
 
 	shareids, err := m.storage.ReadDir(ctx, "shares")
 	if err != nil {
-		log.Error().Err(err).Msg("error fetching shares")
+		return err
 	}
 	for _, shareid := range shareids {
 		if s, err := m.getShareByID(ctx, shareid); err == nil {
@@ -807,7 +807,7 @@ func granteeToIndex(grantee *provider.Grantee) (string, error) {
 	}
 }
 
-// indexToGrantee trues to unparse a grantee in a metadata dir
+// indexToGrantee tries to unparse a grantee in a metadata dir
 // unfortunately, it is just concatenated by :, causing nasty corner cases
 func indexToGrantee(name string) (*provider.Grantee, error) {
 	unescaped, err := url.QueryUnescape(name)
