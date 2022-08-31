@@ -43,6 +43,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/publicshare"
 	"github.com/cs3org/reva/v2/pkg/publicshare/manager/json/persistence"
 	"github.com/cs3org/reva/v2/pkg/publicshare/manager/json/persistence/file"
+	"github.com/cs3org/reva/v2/pkg/publicshare/manager/json/persistence/memory"
 	"github.com/cs3org/reva/v2/pkg/publicshare/manager/registry"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v2/pkg/utils"
@@ -66,10 +67,18 @@ func New(c map[string]interface{}) (publicshare.Manager, error) {
 	m := manager{
 		gatewayAddr:                conf.GatewayAddr,
 		mutex:                      &sync.Mutex{},
-		persistence:                file.New(conf.File),
 		passwordHashCost:           conf.SharePasswordHashCost,
 		janitorRunInterval:         conf.JanitorRunInterval,
 		enableExpiredSharesCleanup: conf.EnableExpiredSharesCleanup,
+	}
+
+	switch conf.Persistence {
+	case "file":
+		m.persistence = file.New(conf.File)
+	case "memory":
+		fallthrough
+	default:
+		m.persistence = memory.New()
 	}
 
 	if err := m.persistence.InitDB(); err != nil {
@@ -83,6 +92,7 @@ func New(c map[string]interface{}) (publicshare.Manager, error) {
 
 type config struct {
 	GatewayAddr                string `mapstructure:"gateway_addr"`
+	Persistence                string `mapstructure:"persistence"`
 	File                       string `mapstructure:"file"`
 	SharePasswordHashCost      int    `mapstructure:"password_hash_cost"`
 	JanitorRunInterval         int    `mapstructure:"janitor_run_interval"`
@@ -92,6 +102,9 @@ type config struct {
 func (c *config) init() {
 	if c.File == "" {
 		c.File = "/var/tmp/reva/publicshares"
+	}
+	if c.Persistence == "" && c.File != "" {
+		c.Persistence = "file"
 	}
 	if c.SharePasswordHashCost == 0 {
 		c.SharePasswordHashCost = 11
