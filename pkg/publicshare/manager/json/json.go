@@ -22,10 +22,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -43,6 +41,8 @@ import (
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/publicshare"
+	"github.com/cs3org/reva/v2/pkg/publicshare/manager/json/persistence"
+	"github.com/cs3org/reva/v2/pkg/publicshare/manager/json/persistence/file"
 	"github.com/cs3org/reva/v2/pkg/publicshare/manager/registry"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v2/pkg/utils"
@@ -66,30 +66,14 @@ func New(c map[string]interface{}) (publicshare.Manager, error) {
 	m := manager{
 		gatewayAddr:                conf.GatewayAddr,
 		mutex:                      &sync.Mutex{},
-		file:                       conf.File,
+		persistence:                file.New(conf.File),
 		passwordHashCost:           conf.SharePasswordHashCost,
 		janitorRunInterval:         conf.JanitorRunInterval,
 		enableExpiredSharesCleanup: conf.EnableExpiredSharesCleanup,
 	}
 
-	// attempt to create the db file
-	var fi os.FileInfo
-	var err error
-	if fi, err = os.Stat(m.file); os.IsNotExist(err) {
-		folder := filepath.Dir(m.file)
-		if err := os.MkdirAll(folder, 0755); err != nil {
-			return nil, err
-		}
-		if _, err := os.Create(m.file); err != nil {
-			return nil, err
-		}
-	}
-
-	if fi == nil || fi.Size() == 0 {
-		err := ioutil.WriteFile(m.file, []byte("{}"), 0644)
-		if err != nil {
-			return nil, err
-		}
+	if err := m.persistence.InitDB(); err != nil {
+		return nil, err
 	}
 
 	go m.startJanitorRun()
@@ -120,7 +104,7 @@ func (c *config) init() {
 type manager struct {
 	gatewayAddr string
 	mutex       *sync.Mutex
-	file        string
+	persistence persistence.Persistence
 
 	passwordHashCost           int
 	janitorRunInterval         int
@@ -153,7 +137,7 @@ func (m *manager) Dump(ctx context.Context, shareChan chan<- *publicshare.WithPa
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
-	db, err := m.readDb()
+	db, err := m.persistence.ReadDB()
 	if err != nil {
 		return err
 	}
@@ -230,7 +214,7 @@ func (m *manager) CreatePublicShare(ctx context.Context, u *user.User, rInfo *pr
 		return nil, err
 	}
 
-	db, err := m.readDb()
+	db, err := m.persistence.ReadDB()
 	if err != nil {
 		return nil, err
 	}
@@ -244,7 +228,7 @@ func (m *manager) CreatePublicShare(ctx context.Context, u *user.User, rInfo *pr
 		return nil, errors.New("key already exists")
 	}
 
-	err = m.writeDb(db)
+	err = m.persistence.WriteDB(db)
 	if err != nil {
 		return nil, err
 	}
@@ -303,7 +287,7 @@ func (m *manager) UpdatePublicShare(ctx context.Context, u *user.User, req *link
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
-	db, err := m.readDb()
+	db, err := m.persistence.ReadDB()
 	if err != nil {
 		return nil, err
 	}
@@ -325,7 +309,7 @@ func (m *manager) UpdatePublicShare(ctx context.Context, u *user.User, req *link
 
 	db[share.Id.OpaqueId] = data
 
-	err = m.writeDb(db)
+	err = m.persistence.WriteDB(db)
 	if err != nil {
 		return nil, err
 	}
@@ -352,7 +336,7 @@ func (m *manager) GetPublicShare(ctx context.Context, u *user.User, ref *link.Pu
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
-	db, err := m.readDb()
+	db, err := m.persistence.ReadDB()
 	if err != nil {
 		return nil, err
 	}
@@ -393,7 +377,7 @@ func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []
 
 	log := appctx.GetLogger(ctx)
 
-	db, err := m.readDb()
+	db, err := m.persistence.ReadDB()
 	if err != nil {
 		return nil, err
 	}
@@ -458,7 +442,7 @@ func (m *manager) cleanupExpiredShares() {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
-	db, _ := m.readDb()
+	db, _ := m.persistence.ReadDB()
 
 	for _, v := range db {
 		d := v.(map[string]interface{})["share"]
@@ -498,7 +482,7 @@ func (m *manager) revokeExpiredPublicShare(ctx context.Context, s *link.PublicSh
 // RevokePublicShare undocumented.
 func (m *manager) RevokePublicShare(ctx context.Context, u *user.User, ref *link.PublicShareReference) error {
 	m.mutex.Lock()
-	db, err := m.readDb()
+	db, err := m.persistence.ReadDB()
 	if err != nil {
 		return err
 	}
@@ -523,11 +507,11 @@ func (m *manager) RevokePublicShare(ctx context.Context, u *user.User, ref *link
 
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
-	return m.writeDb(db)
+	return m.persistence.WriteDB(db)
 }
 
 func (m *manager) getByToken(ctx context.Context, token string) (*link.PublicShare, string, error) {
-	db, err := m.readDb()
+	db, err := m.persistence.ReadDB()
 	if err != nil {
 		return nil, "", err
 	}
@@ -552,7 +536,7 @@ func (m *manager) getByToken(ctx context.Context, token string) (*link.PublicSha
 
 // GetPublicShareByToken gets a public share by its opaque token.
 func (m *manager) GetPublicShareByToken(ctx context.Context, token string, auth *link.PublicShareAuthentication, sign bool) (*link.PublicShare, error) {
-	db, err := m.readDb()
+	db, err := m.persistence.ReadDB()
 	if err != nil {
 		return nil, err
 	}
@@ -594,27 +578,6 @@ func (m *manager) GetPublicShareByToken(ctx context.Context, token string, auth 
 	}
 
 	return nil, errtypes.NotFound(fmt.Sprintf("share with token: `%v` not found", token))
-}
-
-func (m *manager) readDb() (map[string]interface{}, error) {
-	db := map[string]interface{}{}
-	readBytes, err := ioutil.ReadFile(m.file)
-	if err != nil {
-		return nil, err
-	}
-	if err := json.Unmarshal(readBytes, &db); err != nil {
-		return nil, err
-	}
-	return db, nil
-}
-
-func (m *manager) writeDb(db map[string]interface{}) error {
-	dbAsJSON, err := json.Marshal(db)
-	if err != nil {
-		return err
-	}
-
-	return ioutil.WriteFile(m.file, dbAsJSON, 0644)
 }
 
 type publicShare struct {
