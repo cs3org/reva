@@ -137,7 +137,7 @@ func (panel *Panel) PreExecute(session *html.Session, path string, w http.Respon
 	return html.ContinueExecution, nil
 }
 
-// Execute generates the HTTP output of the form and writes it to the response writer.
+// Execute generates the HTTP output of the panel and writes it to the response writer.
 func (panel *Panel) Execute(w http.ResponseWriter, r *http.Request, session *html.Session) error {
 	dataProvider := func(*html.Session) interface{} {
 		flatValues := make(map[string]string, len(r.URL.Query()))
@@ -169,7 +169,7 @@ func (panel *Panel) Execute(w http.ResponseWriter, r *http.Request, session *htm
 			Titles:    []string{"Mr", "Mrs", "Ms", "Prof", "Dr"},
 		}
 		if user := session.LoggedInUser(); user != nil {
-			availSites, err := panel.fetchAvailableSites(user.Operator)
+			availSites, err := panel.FetchOperatorSites(user.Operator)
 			if err != nil {
 				return errors.Wrap(err, "unable to query available sites")
 			}
@@ -199,22 +199,6 @@ func (panel *Panel) redirect(path string, w http.ResponseWriter, r *http.Request
 	newURL.RawQuery = params.Encode()
 	http.Redirect(w, r, newURL.String(), http.StatusFound)
 	return html.AbortExecution
-}
-
-func (panel *Panel) fetchAvailableSites(op *data.Operator) (map[string]string, error) {
-	ids, err := data.QueryOperatorSites(op.ID, panel.Config().Mentix.URL, panel.Config().Mentix.DataEndpoint)
-	if err != nil {
-		return nil, err
-	}
-	sites := make(map[string]string, 10)
-	for _, id := range ids {
-		if siteName, _ := data.QuerySiteName(id, true, panel.Config().Mentix.URL, panel.Config().Mentix.DataEndpoint); err == nil {
-			sites[id] = siteName
-		} else {
-			sites[id] = id
-		}
-	}
-	return sites, nil
 }
 
 // NewPanel creates a new account panel.

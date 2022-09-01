@@ -36,6 +36,7 @@ type BasePanel struct {
 	htmlPanel *html.Panel
 }
 
+// BasePanelTemplate represents an HTML template used for initialization.
 type BasePanelTemplate struct {
 	ID       string
 	Name     string
@@ -81,8 +82,25 @@ func (panel *BasePanel) GetPathTemplate(validPaths []string, defaultTemplate str
 	return template
 }
 
+// Execute generates the HTTP output of the panel and writes it to the response writer.
 func (panel *BasePanel) Execute(w http.ResponseWriter, r *http.Request, session *html.Session, dataProvider html.PanelDataProvider) error {
 	return panel.htmlPanel.Execute(w, r, session, dataProvider)
+}
+
+func (panel *BasePanel) FetchOperatorSites(op *data.Operator) (map[string]string, error) {
+	ids, err := data.QueryOperatorSites(op.ID, panel.Config().Mentix.URL, panel.Config().Mentix.DataEndpoint)
+	if err != nil {
+		return nil, err
+	}
+	sites := make(map[string]string, 10)
+	for _, id := range ids {
+		if siteName, _ := data.QuerySiteName(id, true, panel.Config().Mentix.URL, panel.Config().Mentix.DataEndpoint); err == nil {
+			sites[id] = siteName
+		} else {
+			sites[id] = id
+		}
+	}
+	return sites, nil
 }
 
 // CloneOperator clones an operator and adds missing sites.

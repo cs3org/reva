@@ -76,18 +76,39 @@ func (panel *Panel) PreExecute(*html.Session, string, http.ResponseWriter, *http
 	return html.ContinueExecution, nil
 }
 
-// Execute generates the HTTP output of the htmlPanel and writes it to the response writer.
+// Execute generates the HTTP output of the panel and writes it to the response writer.
 func (panel *Panel) Execute(w http.ResponseWriter, r *http.Request, session *html.Session, accounts *data.Accounts, operators *data.Operators) error {
+	// Clone all operators
+	opsClone, err := panel.cloneOperators(operators)
+	if err != nil {
+		return errors.Wrap(err, "unable to clone operators")
+	}
+
 	dataProvider := func(*html.Session) interface{} {
 		type TemplateData struct {
-			Accounts *data.Accounts
+			Accounts  *data.Accounts
+			Operators *data.Operators
 		}
 
 		return TemplateData{
-			Accounts: accounts,
+			Accounts:  accounts,
+			Operators: opsClone,
 		}
 	}
 	return panel.BasePanel.Execute(w, r, session, dataProvider)
+}
+
+func (panel *Panel) cloneOperators(operators *data.Operators) (*data.Operators, error) {
+	// Clone all available operators and decrypt all credentials for the panel
+	opsClone := make(data.Operators, 0, len(*operators))
+	for _, op := range *operators {
+		availSites, err := panel.FetchOperatorSites(op)
+		if err != nil {
+			return nil, errors.Wrapf(err, "unable to query available sites of operator %v", op.ID)
+		}
+		opsClone = append(opsClone, panel.CloneOperator(op, availSites))
+	}
+	return &opsClone, nil
 }
 
 // NewPanel creates a new administration panel.
