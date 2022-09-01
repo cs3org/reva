@@ -21,6 +21,8 @@ package admin
 import (
 	"net/http"
 
+	"github.com/cs3org/reva/pkg/siteacc/admin/accounts"
+	"github.com/cs3org/reva/pkg/siteacc/admin/manage"
 	"github.com/cs3org/reva/pkg/siteacc/config"
 	"github.com/cs3org/reva/pkg/siteacc/data"
 	"github.com/cs3org/reva/pkg/siteacc/html"
@@ -31,13 +33,13 @@ import (
 // Panel represents the web interface panel of the accounts service administration.
 type Panel struct {
 	html.PanelProvider
-	html.ContentProvider
 
 	htmlPanel *html.Panel
 }
 
 const (
-	templateMain = "main"
+	templateManage   = "manage"
+	templateAccounts = "accounts"
 )
 
 func (panel *Panel) initialize(conf *config.Configuration, log *zerolog.Logger) error {
@@ -49,41 +51,31 @@ func (panel *Panel) initialize(conf *config.Configuration, log *zerolog.Logger) 
 	panel.htmlPanel = htmlPanel
 
 	// Add all templates
-	if err := panel.htmlPanel.AddTemplate(templateMain, panel); err != nil {
-		return errors.Wrap(err, "unable to create the main template")
+	if err := panel.htmlPanel.AddTemplate(templateManage, &manage.PanelTemplate{}); err != nil {
+		return errors.Wrap(err, "unable to create the mangement template")
+	}
+
+	if err := panel.htmlPanel.AddTemplate(templateAccounts, &accounts.PanelTemplate{}); err != nil {
+		return errors.Wrap(err, "unable to create the accounts template")
 	}
 
 	return nil
 }
 
 // GetActiveTemplate returns the name of the active template.
-func (panel *Panel) GetActiveTemplate(*html.Session, string) string {
-	return templateMain
-}
+func (panel *Panel) GetActiveTemplate(session *html.Session, path string) string {
+	validPaths := []string{templateAccounts}
+	template := templateManage
 
-// GetTitle returns the title of the htmlPanel.
-func (panel *Panel) GetTitle() string {
-	return "ScienceMesh Site Administrator Accounts Panel"
-}
+	// Only allow valid template paths; redirect to the management page otherwise
+	for _, valid := range validPaths {
+		if valid == path {
+			template = path
+			break
+		}
+	}
 
-// GetCaption returns the caption which is displayed on the htmlPanel.
-func (panel *Panel) GetCaption() string {
-	return "ScienceMesh Site Administrator Accounts ({{.Accounts | len}})"
-}
-
-// GetContentJavaScript delivers additional JavaScript code.
-func (panel *Panel) GetContentJavaScript() string {
-	return tplJavaScript
-}
-
-// GetContentStyleSheet delivers additional stylesheet code.
-func (panel *Panel) GetContentStyleSheet() string {
-	return tplStyleSheet
-}
-
-// GetContentBody delivers the actual body content.
-func (panel *Panel) GetContentBody() string {
-	return tplBody
+	return template
 }
 
 // PreExecute is called before the actual template is being executed.
