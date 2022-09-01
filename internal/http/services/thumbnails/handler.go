@@ -26,6 +26,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
@@ -165,10 +166,21 @@ func (s *svc) davPublicContext(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 
-		token := chi.URLParam(r, "*")
-		token, _ = url.QueryUnescape(token)
+		req := chi.URLParam(r, "*")
+		tknPath := strings.SplitN(req, "/", 2)
+		var token, path string
 
-		res, err := s.statPublicFile(ctx, token)
+		switch len(tknPath) {
+		case 2:
+			path = tknPath[1]
+			fallthrough
+		case 1:
+			token = tknPath[0]
+		default:
+			s.writeHTTPError(w, errtypes.BadRequest("no token provided"))
+		}
+
+		res, err := s.statPublicFile(ctx, token, path)
 		if err != nil {
 			s.writeHTTPError(w, err)
 			return
@@ -180,7 +192,7 @@ func (s *svc) davPublicContext(next http.Handler) http.Handler {
 	})
 }
 
-func (s *svc) statPublicFile(ctx context.Context, token string) (*provider.ResourceInfo, error) {
+func (s *svc) statPublicFile(ctx context.Context, token, path string) (*provider.ResourceInfo, error) {
 	resp, err := s.client.GetPublicShare(ctx, &share.GetPublicShareRequest{
 		Ref: &share.PublicShareReference{
 			Spec: &share.PublicShareReference_Token{
@@ -200,6 +212,7 @@ func (s *svc) statPublicFile(ctx context.Context, token string) (*provider.Resou
 
 	return s.statRes(ctx, &provider.Reference{
 		ResourceId: resp.Share.ResourceId,
+		Path:       path,
 	})
 }
 
