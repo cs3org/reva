@@ -21,20 +21,20 @@ package admin
 import (
 	"net/http"
 
-	"github.com/cs3org/reva/pkg/siteacc/admin/accounts"
-	"github.com/cs3org/reva/pkg/siteacc/admin/manage"
 	"github.com/cs3org/reva/pkg/siteacc/config"
 	"github.com/cs3org/reva/pkg/siteacc/data"
 	"github.com/cs3org/reva/pkg/siteacc/html"
+	"github.com/cs3org/reva/pkg/siteacc/panels"
+	"github.com/cs3org/reva/pkg/siteacc/panels/admin/accounts"
+	"github.com/cs3org/reva/pkg/siteacc/panels/admin/manage"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 )
 
 // Panel represents the web interface panel of the accounts service administration.
 type Panel struct {
+	panels.BasePanel
 	html.PanelProvider
-
-	htmlPanel *html.Panel
 }
 
 const (
@@ -43,20 +43,23 @@ const (
 )
 
 func (panel *Panel) initialize(conf *config.Configuration, log *zerolog.Logger) error {
-	// Create the internal HTML panel
-	htmlPanel, err := html.NewPanel("admin-panel", panel, conf, log)
-	if err != nil {
-		return errors.Wrap(err, "unable to create the administration panel")
+	// Create templates
+	templates := []panels.BasePanelTemplate{
+		{
+			ID:       templateManage,
+			Name:     "mangement",
+			Provider: &manage.PanelTemplate{},
+		},
+		{
+			ID:       templateAccounts,
+			Name:     "accounts",
+			Provider: &accounts.PanelTemplate{},
+		},
 	}
-	panel.htmlPanel = htmlPanel
 
-	// Add all templates
-	if err := panel.htmlPanel.AddTemplate(templateManage, &manage.PanelTemplate{}); err != nil {
-		return errors.Wrap(err, "unable to create the mangement template")
-	}
-
-	if err := panel.htmlPanel.AddTemplate(templateAccounts, &accounts.PanelTemplate{}); err != nil {
-		return errors.Wrap(err, "unable to create the accounts template")
+	// Initialize base
+	if err := panel.BasePanel.Initialize("admin-panel", panel, templates, conf, log); err != nil {
+		return errors.Wrap(err, "unable to create the administrator panel")
 	}
 
 	return nil
@@ -65,17 +68,7 @@ func (panel *Panel) initialize(conf *config.Configuration, log *zerolog.Logger) 
 // GetActiveTemplate returns the name of the active template.
 func (panel *Panel) GetActiveTemplate(session *html.Session, path string) string {
 	validPaths := []string{templateAccounts}
-	template := templateManage
-
-	// Only allow valid template paths; redirect to the management page otherwise
-	for _, valid := range validPaths {
-		if valid == path {
-			template = path
-			break
-		}
-	}
-
-	return template
+	return panel.GetPathTemplate(validPaths, templateManage, path)
 }
 
 // PreExecute is called before the actual template is being executed.
@@ -84,7 +77,7 @@ func (panel *Panel) PreExecute(*html.Session, string, http.ResponseWriter, *http
 }
 
 // Execute generates the HTTP output of the htmlPanel and writes it to the response writer.
-func (panel *Panel) Execute(w http.ResponseWriter, r *http.Request, session *html.Session, accounts *data.Accounts) error {
+func (panel *Panel) Execute(w http.ResponseWriter, r *http.Request, session *html.Session, accounts *data.Accounts, operators *data.Operators) error {
 	dataProvider := func(*html.Session) interface{} {
 		type TemplateData struct {
 			Accounts *data.Accounts
@@ -94,7 +87,7 @@ func (panel *Panel) Execute(w http.ResponseWriter, r *http.Request, session *htm
 			Accounts: accounts,
 		}
 	}
-	return panel.htmlPanel.Execute(w, r, session, dataProvider)
+	return panel.BasePanel.Execute(w, r, session, dataProvider)
 }
 
 // NewPanel creates a new administration panel.

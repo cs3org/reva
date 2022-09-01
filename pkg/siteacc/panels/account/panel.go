@@ -23,27 +23,25 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/cs3org/reva/pkg/siteacc/account/contact"
-	"github.com/cs3org/reva/pkg/siteacc/account/edit"
-	"github.com/cs3org/reva/pkg/siteacc/account/login"
-	"github.com/cs3org/reva/pkg/siteacc/account/manage"
-	"github.com/cs3org/reva/pkg/siteacc/account/registration"
-	"github.com/cs3org/reva/pkg/siteacc/account/settings"
-	"github.com/cs3org/reva/pkg/siteacc/account/sites"
 	"github.com/cs3org/reva/pkg/siteacc/config"
 	"github.com/cs3org/reva/pkg/siteacc/data"
 	"github.com/cs3org/reva/pkg/siteacc/html"
+	"github.com/cs3org/reva/pkg/siteacc/panels"
+	"github.com/cs3org/reva/pkg/siteacc/panels/account/contact"
+	"github.com/cs3org/reva/pkg/siteacc/panels/account/edit"
+	"github.com/cs3org/reva/pkg/siteacc/panels/account/login"
+	"github.com/cs3org/reva/pkg/siteacc/panels/account/manage"
+	"github.com/cs3org/reva/pkg/siteacc/panels/account/registration"
+	"github.com/cs3org/reva/pkg/siteacc/panels/account/settings"
+	"github.com/cs3org/reva/pkg/siteacc/panels/account/sites"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 )
 
 // Panel represents the account panel.
 type Panel struct {
+	panels.BasePanel
 	html.PanelProvider
-
-	conf *config.Configuration
-
-	htmlPanel *html.Panel
 }
 
 const (
@@ -57,45 +55,48 @@ const (
 )
 
 func (panel *Panel) initialize(conf *config.Configuration, log *zerolog.Logger) error {
-	if conf == nil {
-		return errors.Errorf("no configuration provided")
+	// Create templates
+	templates := []panels.BasePanelTemplate{
+		{
+			ID:       templateLogin,
+			Name:     "login",
+			Provider: &login.PanelTemplate{},
+		},
+		{
+			ID:       templateManage,
+			Name:     "management",
+			Provider: &manage.PanelTemplate{},
+		},
+		{
+			ID:       templateSettings,
+			Name:     "settings",
+			Provider: &settings.PanelTemplate{},
+		},
+		{
+			ID:       templateEdit,
+			Name:     "editing",
+			Provider: &edit.PanelTemplate{},
+		},
+		{
+			ID:       templateSites,
+			Name:     "sites",
+			Provider: &sites.PanelTemplate{},
+		},
+		{
+			ID:       templateContact,
+			Name:     "contact",
+			Provider: &contact.PanelTemplate{},
+		},
+		{
+			ID:       templateRegistration,
+			Name:     "registration",
+			Provider: &registration.PanelTemplate{},
+		},
 	}
-	panel.conf = conf
 
-	// Create the internal HTML panel
-	htmlPanel, err := html.NewPanel("account-panel", panel, conf, log)
-	if err != nil {
-		return errors.Wrap(err, "unable to create the account panel")
-	}
-	panel.htmlPanel = htmlPanel
-
-	// Add all templates
-	if err := panel.htmlPanel.AddTemplate(templateLogin, &login.PanelTemplate{}); err != nil {
-		return errors.Wrap(err, "unable to create the login template")
-	}
-
-	if err := panel.htmlPanel.AddTemplate(templateManage, &manage.PanelTemplate{}); err != nil {
-		return errors.Wrap(err, "unable to create the account management template")
-	}
-
-	if err := panel.htmlPanel.AddTemplate(templateSettings, &settings.PanelTemplate{}); err != nil {
-		return errors.Wrap(err, "unable to create the account settings template")
-	}
-
-	if err := panel.htmlPanel.AddTemplate(templateEdit, &edit.PanelTemplate{}); err != nil {
-		return errors.Wrap(err, "unable to create the account editing template")
-	}
-
-	if err := panel.htmlPanel.AddTemplate(templateSites, &sites.PanelTemplate{}); err != nil {
-		return errors.Wrap(err, "unable to create the sites template")
-	}
-
-	if err := panel.htmlPanel.AddTemplate(templateContact, &contact.PanelTemplate{}); err != nil {
-		return errors.Wrap(err, "unable to create the contact template")
-	}
-
-	if err := panel.htmlPanel.AddTemplate(templateRegistration, &registration.PanelTemplate{}); err != nil {
-		return errors.Wrap(err, "unable to create the registration template")
+	// Initialize base
+	if err := panel.BasePanel.Initialize("user-panel", panel, templates, conf, log); err != nil {
+		return errors.Wrap(err, "unable to create the user panel")
 	}
 
 	return nil
@@ -104,17 +105,7 @@ func (panel *Panel) initialize(conf *config.Configuration, log *zerolog.Logger) 
 // GetActiveTemplate returns the name of the active template.
 func (panel *Panel) GetActiveTemplate(session *html.Session, path string) string {
 	validPaths := []string{templateLogin, templateManage, templateSettings, templateEdit, templateSites, templateContact, templateRegistration}
-	template := templateLogin
-
-	// Only allow valid template paths; redirect to the login page otherwise
-	for _, valid := range validPaths {
-		if valid == path {
-			template = path
-			break
-		}
-	}
-
-	return template
+	return panel.GetPathTemplate(validPaths, templateLogin, path)
 }
 
 // PreExecute is called before the actual template is being executed.
@@ -154,7 +145,7 @@ func (panel *Panel) Execute(w http.ResponseWriter, r *http.Request, session *htm
 			flatValues[strings.Title(k)] = v[0]
 		}
 
-		availOps, err := data.QueryAvailableOperators(panel.conf.Mentix.URL, panel.conf.Mentix.DataEndpoint)
+		availOps, err := data.QueryAvailableOperators(panel.Config().Mentix.URL, panel.Config().Mentix.DataEndpoint)
 		if err != nil {
 			return errors.Wrap(err, "unable to query available operators")
 		}
@@ -183,13 +174,13 @@ func (panel *Panel) Execute(w http.ResponseWriter, r *http.Request, session *htm
 				return errors.Wrap(err, "unable to query available sites")
 			}
 
-			tplData.Operator = panel.cloneUserOperator(user.Operator, availSites)
+			tplData.Operator = panel.CloneOperator(user.Operator, availSites)
 			tplData.Account = user.Account
 			tplData.Sites = availSites
 		}
 		return tplData
 	}
-	return panel.htmlPanel.Execute(w, r, session, dataProvider)
+	return panel.BasePanel.Execute(w, r, session, dataProvider)
 }
 
 func (panel *Panel) redirect(path string, w http.ResponseWriter, r *http.Request) html.ExecutionResult {
@@ -211,50 +202,19 @@ func (panel *Panel) redirect(path string, w http.ResponseWriter, r *http.Request
 }
 
 func (panel *Panel) fetchAvailableSites(op *data.Operator) (map[string]string, error) {
-	ids, err := data.QueryOperatorSites(op.ID, panel.conf.Mentix.URL, panel.conf.Mentix.DataEndpoint)
+	ids, err := data.QueryOperatorSites(op.ID, panel.Config().Mentix.URL, panel.Config().Mentix.DataEndpoint)
 	if err != nil {
 		return nil, err
 	}
 	sites := make(map[string]string, 10)
 	for _, id := range ids {
-		if siteName, _ := data.QuerySiteName(id, true, panel.conf.Mentix.URL, panel.conf.Mentix.DataEndpoint); err == nil {
+		if siteName, _ := data.QuerySiteName(id, true, panel.Config().Mentix.URL, panel.Config().Mentix.DataEndpoint); err == nil {
 			sites[id] = siteName
 		} else {
 			sites[id] = id
 		}
 	}
 	return sites, nil
-}
-
-func (panel *Panel) cloneUserOperator(op *data.Operator, sites map[string]string) *data.Operator {
-	// Clone the user's operator and decrypt all credentials for the panel
-	opClone := op.Clone(false)
-	for _, site := range opClone.Sites {
-		id, secret, err := site.Config.TestClientCredentials.Get(panel.conf.Security.CredentialsPassphrase)
-		if err == nil {
-			site.Config.TestClientCredentials.ID = id
-			site.Config.TestClientCredentials.Secret = secret
-		}
-	}
-
-	// Add missing sites
-	for id := range sites {
-		siteFound := false
-		for _, site := range opClone.Sites {
-			if strings.EqualFold(site.ID, id) {
-				siteFound = true
-				break
-			}
-		}
-		if !siteFound {
-			opClone.Sites = append(opClone.Sites, &data.Site{
-				ID:     id,
-				Config: data.SiteConfiguration{},
-			})
-		}
-	}
-
-	return opClone
 }
 
 // NewPanel creates a new account panel.
