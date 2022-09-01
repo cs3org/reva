@@ -19,13 +19,13 @@
 package manage
 
 const tplJavaScript = `
-function handleEditAccounts() {
-	setState(STATE_STATUS, "Redirecting to the accounts editor...");
+function handleViewAccounts() {
+	setState(STATE_STATUS, "Redirecting to the accounts overview...");
 	window.location.replace("{{getServerAddress}}/admin/?path=accounts");
 }
 
-function handleEditSites() {
-	setState(STATE_STATUS, "Redirecting to the sites editor...");
+function handleViewSites() {
+	setState(STATE_STATUS, "Redirecting to the sites overview...");
 	window.location.replace("{{getServerAddress}}/admin/?path=sites");
 }
 `
@@ -47,8 +47,8 @@ const tplBody = `
 <div>
 	<form id="form" method="POST" class="box" style="width: 100%;">
 		<div>
-			<button type="button" onClick="handleEditAccounts();">Edit accounts</button>
-			<button type="button" onClick="handleEditSites();">Edit sites</button>	
+			<button type="button" onClick="handleViewAccounts();">View accounts</button>
+			<button type="button" onClick="handleViewSites();">View sites</button>	
 		</div>	
 	</form>
 </div>

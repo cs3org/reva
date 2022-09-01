@@ -40,7 +40,22 @@ const tplBody = `
 		<li>
 			<div>
 				<div>
-					<strong>{{.ID}}</strong><br>
+					<strong>{{.ID}}</strong> ({{.Sites | len}} site(s))<br>
+				</div>
+				<div>
+					<ul>
+					{{$parent := .}}
+					{{range .Sites}}
+						<li>
+							<strong>{{getSiteName .ID true}}</strong> ({{.ID}})<br>
+							{{if .Config.TestClientCredentials.ID}}
+							<em>Test user configured</em>
+							{{else}}
+							<em>Test user <strong>not</strong> configured</em>
+							{{end}}
+						</li>				
+					{{end}}
+					</ul>
 				</div>
 			</div>
 			<hr>
