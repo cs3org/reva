@@ -30,6 +30,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/auth"
 	"github.com/cs3org/reva/v2/pkg/auth/manager/registry"
 	"github.com/cs3org/reva/v2/pkg/auth/scope"
+	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v2/pkg/sharedconf"
 	"github.com/cs3org/reva/v2/pkg/utils"
@@ -120,7 +121,12 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 	}
 	defer la.Close()
 	err = la.Bind(userEntry.DN, clientSecret)
-	if err != nil {
+	switch {
+	case err == nil:
+		break
+	case ldap.IsErrorWithCode(err, ldap.LDAPResultInvalidCredentials):
+		return nil, nil, errtypes.InvalidCredentials(clientID)
+	default:
 		log.Debug().Err(err).Interface("userdn", userEntry.DN).Msg("bind with user credentials failed")
 		return nil, nil, err
 	}
@@ -199,7 +205,6 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 	log.Debug().Interface("entry", userEntry).Interface("user", u).Msg("authenticated user")
 
 	return u, scopes, nil
-
 }
 
 func (am *mgr) getLoginFilter(login string) string {
