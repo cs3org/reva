@@ -43,7 +43,7 @@ const tplBody = `
 					<strong>{{.ID}}</strong> ({{.Sites | len}} site(s))<br>
 				</div>
 				<div>
-					<ul style="padding-left: 20px; padding-top: 5px;">
+					<ul style="padding-left: 1em; padding-top: 5px;">
 					{{$parent := .}}
 					{{range .Sites}}
 						<li>
