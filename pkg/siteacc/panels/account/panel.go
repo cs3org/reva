@@ -20,7 +20,6 @@ package account
 
 import (
 	"net/http"
-	"net/url"
 	"strings"
 
 	"github.com/cs3org/reva/pkg/siteacc/config"
@@ -117,19 +116,19 @@ func (panel *Panel) PreExecute(session *html.Session, path string, w http.Respon
 		case templateSites:
 			// If the logged in user doesn't have sites access, redirect him back to the main account page
 			if !user.Account.Data.SitesAccess {
-				return panel.redirect(templateManage, w, r), nil
+				return panel.Redirect(templateManage, w, r), nil
 			}
 
 		case templateLogin:
 		case templateRegistration:
 			// If a user is logged in and tries to login or register again, redirect to the main account page
-			return panel.redirect(templateManage, w, r), nil
+			return panel.Redirect(templateManage, w, r), nil
 		}
 	} else {
 		// If no user is logged in, redirect protected paths to the login page
 		for _, protected := range protectedPaths {
 			if protected == path {
-				return panel.redirect(templateLogin, w, r), nil
+				return panel.Redirect(templateLogin, w, r), nil
 			}
 		}
 	}
@@ -181,24 +180,6 @@ func (panel *Panel) Execute(w http.ResponseWriter, r *http.Request, session *htm
 		return tplData
 	}
 	return panel.BasePanel.Execute(w, r, session, dataProvider)
-}
-
-func (panel *Panel) redirect(path string, w http.ResponseWriter, r *http.Request) html.ExecutionResult {
-	// Check if the original (full) URI path is stored in the request header; if not, use the request URI to get the path
-	fullPath := r.Header.Get("X-Replaced-Path")
-	if fullPath == "" {
-		uri, _ := url.Parse(r.RequestURI)
-		fullPath = uri.Path
-	}
-
-	// Modify the original request URL by replacing the path parameter
-	newURL, _ := url.Parse(fullPath)
-	params := newURL.Query()
-	params.Del("path")
-	params.Add("path", path)
-	newURL.RawQuery = params.Encode()
-	http.Redirect(w, r, newURL.String(), http.StatusFound)
-	return html.AbortExecution
 }
 
 // NewPanel creates a new account panel.

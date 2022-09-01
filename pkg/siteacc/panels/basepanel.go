@@ -20,6 +20,7 @@ package panels
 
 import (
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/cs3org/reva/pkg/siteacc/config"
@@ -85,6 +86,25 @@ func (panel *BasePanel) GetPathTemplate(validPaths []string, defaultTemplate str
 // Execute generates the HTTP output of the panel and writes it to the response writer.
 func (panel *BasePanel) Execute(w http.ResponseWriter, r *http.Request, session *html.Session, dataProvider html.PanelDataProvider) error {
 	return panel.htmlPanel.Execute(w, r, session, dataProvider)
+}
+
+// Redirect performs an HTTP redirect.
+func (panel *BasePanel) Redirect(path string, w http.ResponseWriter, r *http.Request) html.ExecutionResult {
+	// Check if the original (full) URI path is stored in the request header; if not, use the request URI to get the path
+	fullPath := r.Header.Get("X-Replaced-Path")
+	if fullPath == "" {
+		uri, _ := url.Parse(r.RequestURI)
+		fullPath = uri.Path
+	}
+
+	// Modify the original request URL by replacing the path parameter
+	newURL, _ := url.Parse(fullPath)
+	params := newURL.Query()
+	params.Del("path")
+	params.Add("path", path)
+	newURL.RawQuery = params.Encode()
+	http.Redirect(w, r, newURL.String(), http.StatusFound)
+	return html.AbortExecution
 }
 
 func (panel *BasePanel) FetchOperatorSites(op *data.Operator) (map[string]string, error) {
