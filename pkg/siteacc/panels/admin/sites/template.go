@@ -43,15 +43,13 @@ const tplBody = `
 					<strong>{{.ID}}</strong> ({{.Sites | len}} site(s))<br>
 				</div>
 				<div>
-					<ul>
+					<ul style="padding-left: 20px; padding-top: 5px;">
 					{{$parent := .}}
 					{{range .Sites}}
 						<li>
 							<strong>{{getSiteName .ID true}}</strong> ({{.ID}})<br>
-							{{if .Config.TestClientCredentials.ID}}
-							<em>Test user configured</em>
-							{{else}}
-							<em>Test user <strong>not</strong> configured</em>
+							{{if not .Config.TestClientCredentials.ID}}
+							<em>Test user <strong>not</strong> configured!</em>
 							{{end}}
 						</li>				
 					{{end}}
