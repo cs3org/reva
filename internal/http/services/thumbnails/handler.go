@@ -133,6 +133,7 @@ func New(conf map[string]interface{}, log *zerolog.Logger) (global.Service, erro
 	r.Group(func(r chi.Router) {
 		r.Use(s.davPublicContext)
 		r.Get("/public-files/*", s.Thumbnail)
+		r.Head("/public-files/*", s.Thumbnail)
 	})
 
 	return s, nil
