@@ -27,6 +27,7 @@ import (
 	"github.com/cs3org/reva/pkg/siteacc/panels"
 	"github.com/cs3org/reva/pkg/siteacc/panels/admin/accounts"
 	"github.com/cs3org/reva/pkg/siteacc/panels/admin/manage"
+	"github.com/cs3org/reva/pkg/siteacc/panels/admin/sites"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 )
@@ -40,6 +41,7 @@ type Panel struct {
 const (
 	templateManage   = "manage"
 	templateAccounts = "accounts"
+	templateSites    = "sites"
 )
 
 func (panel *Panel) initialize(conf *config.Configuration, log *zerolog.Logger) error {
@@ -55,6 +57,11 @@ func (panel *Panel) initialize(conf *config.Configuration, log *zerolog.Logger) 
 			Name:     "accounts",
 			Provider: &accounts.PanelTemplate{},
 		},
+		{
+			ID:       templateSites,
+			Name:     "sites",
+			Provider: &sites.PanelTemplate{},
+		},
 	}
 
 	// Initialize base
@@ -67,7 +74,7 @@ func (panel *Panel) initialize(conf *config.Configuration, log *zerolog.Logger) 
 
 // GetActiveTemplate returns the name of the active template.
 func (panel *Panel) GetActiveTemplate(session *html.Session, path string) string {
-	validPaths := []string{templateAccounts}
+	validPaths := []string{templateManage, templateAccounts, templateSites}
 	return panel.GetPathTemplate(validPaths, templateManage, path)
 }
 

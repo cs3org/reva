@@ -47,7 +47,6 @@ const tplStyleSheet = `
 html * {
 	font-family: arial !important;
 }
-
 li::marker {
 	font-weight: bold;
 }
