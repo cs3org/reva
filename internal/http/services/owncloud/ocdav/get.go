@@ -123,8 +123,8 @@ func (s *svc) handleGet(ctx context.Context, w http.ResponseWriter, r *http.Requ
 	info := sRes.Info
 
 	w.Header().Set(HeaderContentType, info.MimeType)
-	w.Header().Set(HeaderContentDisposistion, "attachment; filename*=UTF-8''"+
-		path.Base(r.URL.Path)+"; filename=\""+path.Base(r.URL.Path)+"\"")
+	w.Header().Set(HeaderContentDisposistion, "attachment; filename*=UTF-8\""+
+		path.Base(r.URL.Path)+"\"; filename=\""+path.Base(r.URL.Path)+"\"")
 	w.Header().Set(HeaderETag, info.Etag)
 	w.Header().Set(HeaderOCFileID, resourceid.OwnCloudResourceIDWrap(info.Id))
 	w.Header().Set(HeaderOCETag, info.Etag)
