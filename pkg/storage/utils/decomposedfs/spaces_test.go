@@ -20,15 +20,16 @@ package decomposedfs_test
 
 import (
 	"context"
+	"fmt"
 	"os"
 
 	cs3permissions "github.com/cs3org/go-cs3apis/cs3/permissions/v1beta1"
-	permissionsv1beta1 "github.com/cs3org/go-cs3apis/cs3/permissions/v1beta1"
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
-	ruser "github.com/cs3org/reva/v2/pkg/ctx"
+	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
 	helpers "github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/testhelpers"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
 	. "github.com/onsi/ginkgo/v2"
@@ -51,13 +52,25 @@ var _ = Describe("Spaces", func() {
 				func(ctx context.Context, in *cs3permissions.CheckPermissionRequest, opts ...grpc.CallOption) *cs3permissions.CheckPermissionResponse {
 					if ctxpkg.ContextMustGetUser(ctx).Id.GetOpaqueId() == "25b69780-5f39-43be-a7ac-a9b9e9fe4230" {
 						// id of owner/admin
-						return &permissionsv1beta1.CheckPermissionResponse{Status: &rpcv1beta1.Status{Code: rpcv1beta1.Code_CODE_OK}}
+						return &cs3permissions.CheckPermissionResponse{Status: &rpcv1beta1.Status{Code: rpcv1beta1.Code_CODE_OK}}
 					}
 					// id of generic user
-					return &permissionsv1beta1.CheckPermissionResponse{Status: &rpcv1beta1.Status{Code: rpcv1beta1.Code_CODE_PERMISSION_DENIED}}
+					return &cs3permissions.CheckPermissionResponse{Status: &rpcv1beta1.Status{Code: rpcv1beta1.Code_CODE_PERMISSION_DENIED}}
 				},
 				nil)
+			env.Permissions.On("HasPermission", mock.Anything, mock.Anything, mock.Anything).Return(
+				func(ctx context.Context, n *node.Node, check func(*provider.ResourcePermissions) bool) bool {
+					return ctxpkg.ContextMustGetUser(ctx).Id.GetOpaqueId() == "25b69780-5f39-43be-a7ac-a9b9e9fe4230" // id of owner/admin
+				},
+				func(ctx context.Context, n *node.Node, check func(*provider.ResourcePermissions) bool) error {
+					if ctxpkg.ContextMustGetUser(ctx).Id.GetOpaqueId() == "25b69780-5f39-43be-a7ac-a9b9e9fe4230" {
+						// id of owner/admin
+						return nil
+					}
+					// id of generic user
+					return errtypes.PermissionDenied(fmt.Sprintf("user is not allowed to delete home space %s", n.ID))
 
+				})
 		})
 
 		AfterEach(func() {
@@ -95,12 +108,12 @@ var _ = Describe("Spaces", func() {
 				Expect(resp).To(Equal(true))
 			})
 			It("returns true on requesting unrestricted as non-admin", func() {
-				ctx := ruser.ContextSetUser(context.Background(), env.Users[0])
+				ctx := ctxpkg.ContextSetUser(context.Background(), env.Users[0])
 				resp := env.Fs.MustCheckNodePermissions(ctx, true)
 				Expect(resp).To(Equal(true))
 			})
 			It("returns true on requesting for own spaces", func() {
-				ctx := ruser.ContextSetUser(context.Background(), env.Users[0])
+				ctx := ctxpkg.ContextSetUser(context.Background(), env.Users[0])
 				resp := env.Fs.MustCheckNodePermissions(ctx, false)
 				Expect(resp).To(Equal(true))
 			})
@@ -112,7 +125,7 @@ var _ = Describe("Spaces", func() {
 
 		Context("can list spaces of requested user", func() {
 			It("returns false on requesting for other user as non-admin", func() {
-				ctx := ruser.ContextSetUser(context.Background(), env.Users[0])
+				ctx := ctxpkg.ContextSetUser(context.Background(), env.Users[0])
 				res := env.Fs.CanListSpacesOfRequestedUser(ctx, helpers.User1ID)
 				Expect(res).To(Equal(false))
 			})
@@ -123,6 +136,35 @@ var _ = Describe("Spaces", func() {
 			It("returns true on requesting for own spaces", func() {
 				res := env.Fs.CanListSpacesOfRequestedUser(env.Ctx, helpers.OwnerID)
 				Expect(res).To(Equal(true))
+			})
+		})
+
+		Context("can delete homespace", func() {
+			It("fails on trying to delete a homespace as non-admin", func() {
+				ctx := ctxpkg.ContextSetUser(context.Background(), env.Users[1])
+				resp, err := env.Fs.ListStorageSpaces(env.Ctx, nil, false)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(len(resp)).To(Equal(1))
+				Expect(string(resp[0].Opaque.GetMap()["spaceAlias"].Value)).To(Equal("personal/username"))
+				Expect(resp[0].Name).To(Equal("username"))
+				Expect(resp[0].SpaceType).To(Equal("personal"))
+				err = env.Fs.DeleteStorageSpace(ctx, &provider.DeleteStorageSpaceRequest{
+					Id: resp[0].GetId(),
+				})
+				Expect(err).To(HaveOccurred())
+			})
+			It("succeeds on trying to delete homespace as admin", func() {
+				ctx := ctxpkg.ContextSetUser(context.Background(), env.Owner)
+				resp, err := env.Fs.ListStorageSpaces(env.Ctx, nil, false)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(len(resp)).To(Equal(1))
+				Expect(string(resp[0].Opaque.GetMap()["spaceAlias"].Value)).To(Equal("personal/username"))
+				Expect(resp[0].Name).To(Equal("username"))
+				Expect(resp[0].SpaceType).To(Equal("personal"))
+				err = env.Fs.DeleteStorageSpace(ctx, &provider.DeleteStorageSpaceRequest{
+					Id: resp[0].GetId(),
+				})
+				Expect(err).To(Not(HaveOccurred()))
 			})
 		})
 
@@ -138,7 +180,7 @@ var _ = Describe("Spaces", func() {
 					"generalspacealias_template":  "{{.SpaceType}}:{{.SpaceName | replace \" \" \"-\" | upper}}",
 				})
 				Expect(err).ToNot(HaveOccurred())
-				env.PermissionsClient.On("CheckPermission", mock.Anything, mock.Anything, mock.Anything).Return(&permissionsv1beta1.CheckPermissionResponse{Status: &rpcv1beta1.Status{Code: rpcv1beta1.Code_CODE_OK}}, nil)
+				env.PermissionsClient.On("CheckPermission", mock.Anything, mock.Anything, mock.Anything).Return(&cs3permissions.CheckPermissionResponse{Status: &rpcv1beta1.Status{Code: rpcv1beta1.Code_CODE_OK}}, nil)
 			})
 
 			AfterEach(func() {
@@ -220,10 +262,10 @@ var _ = Describe("Spaces", func() {
 				func(ctx context.Context, in *cs3permissions.CheckPermissionRequest, opts ...grpc.CallOption) *cs3permissions.CheckPermissionResponse {
 					if ctxpkg.ContextMustGetUser(ctx).Id.GetOpaqueId() == "25b69780-5f39-43be-a7ac-a9b9e9fe4230" {
 						// id of owner/admin
-						return &permissionsv1beta1.CheckPermissionResponse{Status: &rpcv1beta1.Status{Code: rpcv1beta1.Code_CODE_OK}}
+						return &cs3permissions.CheckPermissionResponse{Status: &rpcv1beta1.Status{Code: rpcv1beta1.Code_CODE_OK}}
 					}
 					// id of generic user
-					return &permissionsv1beta1.CheckPermissionResponse{Status: &rpcv1beta1.Status{Code: rpcv1beta1.Code_CODE_PERMISSION_DENIED}}
+					return &cs3permissions.CheckPermissionResponse{Status: &rpcv1beta1.Status{Code: rpcv1beta1.Code_CODE_PERMISSION_DENIED}}
 				},
 				nil)
 
@@ -252,7 +294,7 @@ var _ = Describe("Spaces", func() {
 				Expect(updateResp.StorageSpace.Quota.QuotaMaxBytes, uint64(1000))
 			})
 			It("try to change quota as a non admin user", func() {
-				ctx := ruser.ContextSetUser(context.Background(), env.Users[0])
+				ctx := ctxpkg.ContextSetUser(context.Background(), env.Users[0])
 				updateResp, err := env.Fs.UpdateStorageSpace(
 					ctx,
 					&provider.UpdateStorageSpaceRequest{

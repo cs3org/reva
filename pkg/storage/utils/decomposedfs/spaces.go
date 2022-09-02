@@ -196,6 +196,23 @@ func (fs *Decomposedfs) canListAllSpaces(ctx context.Context) bool {
 	return checkRes.Status.Code == v1beta11.Code_CODE_OK
 }
 
+func (fs *Decomposedfs) canDeleteAllHomeSpaces(ctx context.Context) bool {
+	user := ctxpkg.ContextMustGetUser(ctx)
+	checkRes, err := fs.permissionsClient.CheckPermission(ctx, &cs3permissions.CheckPermissionRequest{
+		Permission: "can-delete-all-home-spaces",
+		SubjectRef: &cs3permissions.SubjectReference{
+			Spec: &cs3permissions.SubjectReference_UserId{
+				UserId: user.Id,
+			},
+		},
+	})
+	if err != nil {
+		return false
+	}
+
+	return checkRes.Status.Code == v1beta11.Code_CODE_OK
+}
+
 // returns true when the user in the context can create a space / resource with storageID and nodeID set to his user opaqueID
 func (fs *Decomposedfs) canCreateSpace(ctx context.Context, spaceID string) bool {
 	user := ctxpkg.ContextMustGetUser(ctx)
@@ -611,6 +628,15 @@ func (fs *Decomposedfs) DeleteStorageSpace(ctx context.Context, req *provider.De
 	n, err := node.ReadNode(ctx, fs.lu, spaceID, spaceID, true) // permission to read disabled space is checked later
 	if err != nil {
 		return err
+	}
+
+	st, err := n.SpaceRoot.GetMetadata(xattrs.SpaceTypeAttr)
+	if err != nil {
+		return errtypes.InternalError(fmt.Sprintf("space %s does not have a spacetype, possible corrupt decompsedfs", n.ID))
+	}
+
+	if st == "personal" && !fs.canDeleteAllHomeSpaces(ctx) {
+		return errtypes.PermissionDenied(fmt.Sprintf("user is not allowed to delete home space %s", n.ID))
 	}
 
 	// only managers are allowed to disable or purge a drive
