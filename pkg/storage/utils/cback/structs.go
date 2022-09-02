@@ -1,0 +1,42 @@
+package cback
+
+import "time"
+
+type Group struct {
+	ID   int    `json:"id"`
+	Name string `json:"name"`
+}
+
+type Backup struct {
+	ID         int    `json:"id"`
+	Group      Group  `json:"group"`
+	Repository string `json:"repository"`
+	Username   string `json:"username"`
+	Name       string `json:"name"`
+	Source     string `json:"source"`
+}
+
+type Snapshot struct {
+	ID    string    `json:"id"`
+	Time  time.Time `json:"time"`
+	Paths []string  `json:"paths"`
+}
+
+type Resource struct {
+	Name  string `json:"name"`
+	Type  string `json:"type"`
+	Mode  uint64 `json:"mode"`
+	MTime uint64 `json:"mtime"`
+	ATime uint64 `json:"atime"`
+	CTime uint64 `json:"ctime"`
+	Inode uint64 `json:"inode"`
+	Size  uint64 `json:"size"`
+}
+
+func (r *Resource) IsDir() bool {
+	return r.Type == "dir"
+}
+
+func (r *Resource) IsFile() bool {
+	return r.Type == "file"
+}
