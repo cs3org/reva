@@ -60,12 +60,7 @@ var _ = Describe("Spaces", func() {
 				nil)
 			env.Permissions.On("HasPermission", mock.Anything, mock.Anything, mock.Anything).Return(
 				func(ctx context.Context, n *node.Node, check func(*provider.ResourcePermissions) bool) bool {
-					if ctxpkg.ContextMustGetUser(ctx).Id.GetOpaqueId() == "25b69780-5f39-43be-a7ac-a9b9e9fe4230" {
-						// id of owner/admin
-						return true
-					}
-					// id of generic user
-					return false
+					return ctxpkg.ContextMustGetUser(ctx).Id.GetOpaqueId() == "25b69780-5f39-43be-a7ac-a9b9e9fe4230" // id of owner/admin
 				},
 				func(ctx context.Context, n *node.Node, check func(*provider.ResourcePermissions) bool) error {
 					if ctxpkg.ContextMustGetUser(ctx).Id.GetOpaqueId() == "25b69780-5f39-43be-a7ac-a9b9e9fe4230" {
