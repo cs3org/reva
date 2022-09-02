@@ -1223,6 +1223,7 @@ _ocs: api compatibility, return correct status code_
 - [apiWebdavEtagPropagation2/restoreFromTrash.feature:71](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavEtagPropagation2/restoreFromTrash.feature#L71)
 - [apiWebdavEtagPropagation2/restoreFromTrash.feature:93](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavEtagPropagation2/restoreFromTrash.feature#L93)
 - [apiWebdavEtagPropagation2/restoreFromTrash.feature:94](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavEtagPropagation2/restoreFromTrash.feature#L94)
+- [apiVersions/fileVersions.feature:521](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersions.feature#L521)
 
 #### [`meta` requests have empty responses with master branch](https://github.com/cs3org/reva/issues/2897)
 - [apiVersions/fileVersions.feature:481](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersions.feature#L481)
