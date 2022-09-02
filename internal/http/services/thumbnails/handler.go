@@ -25,6 +25,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -208,6 +209,20 @@ func (s *svc) statPublicFile(ctx context.Context, token, path string) (*provider
 		return nil, errtypes.NotFound(token)
 	case resp.Status.Code != rpc.Code_CODE_OK:
 		return nil, errtypes.InternalError(fmt.Sprintf("error getting public share %s", token))
+	}
+
+	d := filepath.Dir(path)
+
+	res, err := s.statRes(ctx, &provider.Reference{
+		ResourceId: resp.Share.ResourceId,
+		Path:       d,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	if res.Type == provider.ResourceType_RESOURCE_TYPE_FILE {
+		return res, err
 	}
 
 	return s.statRes(ctx, &provider.Reference{
