@@ -27,6 +27,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/bluele/gcache"
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
@@ -43,6 +44,7 @@ import (
 type cbackfs struct {
 	conf   *Config
 	client *cback.Client
+	cache  gcache.Cache
 }
 
 func init() {
@@ -69,6 +71,7 @@ func New(m map[string]interface{}) (storage.FS, error) {
 	return &cbackfs{
 		conf:   c,
 		client: client,
+		cache:  gcache.New(c.Size).LRU().Build(),
 	}, nil
 }
 
@@ -196,7 +199,7 @@ func (f *cbackfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []s
 		return nil, errtypes.UserRequired("cback: user not found in context")
 	}
 
-	backups, err := f.client.ListBackups(ctx, user.Username)
+	backups, err := f.listBackups(ctx, user.Username)
 	if err != nil {
 		return nil, errors.Wrapf(err, "cback: error listing backups")
 	}
@@ -241,7 +244,7 @@ func (f *cbackfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKey
 		return nil, errtypes.UserRequired("cback: user not found in context")
 	}
 
-	backups, err := f.client.ListBackups(ctx, user.Username)
+	backups, err := f.listBackups(ctx, user.Username)
 	if err != nil {
 		return nil, errors.Wrapf(err, "cback: error listing backups")
 	}
