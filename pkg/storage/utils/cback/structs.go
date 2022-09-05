@@ -23,14 +23,14 @@ type Snapshot struct {
 }
 
 type Resource struct {
-	Name  string `json:"name"`
-	Type  string `json:"type"`
-	Mode  uint64 `json:"mode"`
-	MTime uint64 `json:"mtime"`
-	ATime uint64 `json:"atime"`
-	CTime uint64 `json:"ctime"`
-	Inode uint64 `json:"inode"`
-	Size  uint64 `json:"size"`
+	Name  string  `json:"name"`
+	Type  string  `json:"type"`
+	Mode  uint64  `json:"mode"`
+	MTime float64 `json:"mtime"`
+	ATime float64 `json:"atime"`
+	CTime float64 `json:"ctime"`
+	Inode uint64  `json:"inode"`
+	Size  uint64  `json:"size"`
 }
 
 func (r *Resource) IsDir() bool {

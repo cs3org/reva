@@ -114,7 +114,7 @@ func (c *Client) Stat(ctx context.Context, username string, backupID int, snapsh
 
 	var res *Resource
 
-	if err := json.NewDecoder(body).Decode(res); err != nil {
+	if err := json.NewDecoder(body).Decode(&res); err != nil {
 		return nil, errors.Wrap(err, "cback: error decoding response body")
 	}
 

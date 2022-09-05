@@ -110,10 +110,10 @@ func (f *cbackfs) convertToResourceInfo(r *cback.Resource, path string, resID *p
 		Checksum: &provider.ResourceChecksum{
 			Type: provider.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_UNSET,
 		},
-		Etag:     strconv.FormatUint(r.CTime, 10),
+		Etag:     strconv.FormatUint(uint64(r.CTime), 10),
 		MimeType: mime.Detect(r.IsDir(), path),
 		Mtime: &types.Timestamp{
-			Seconds: r.CTime,
+			Seconds: uint64(r.CTime),
 		},
 		Path:          path,
 		PermissionSet: perms,
@@ -177,9 +177,12 @@ func hasPrefix(lst, prefix []string) bool {
 }
 
 func (f *cbackfs) isParentOfBackup(path string, backups []*cback.Backup) bool {
-	pathSplit := filepath.SplitList(path)
+	pathSplit := []string{""}
+	if path != "/" {
+		pathSplit = strings.Split(path, "/")
+	}
 	for _, b := range backups {
-		backupSplit := filepath.SplitList(b.Source)
+		backupSplit := strings.Split(b.Source, "/")
 		if hasPrefix(backupSplit, pathSplit) {
 			return true
 		}
@@ -226,7 +229,7 @@ func (f *cbackfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []s
 	// the user's path is a parent folder of some of the backups
 
 	if f.isParentOfBackup(ref.Path, backups) {
-		return f.placeholderResourceInfo(source, user.Id), nil
+		return f.placeholderResourceInfo(ref.Path, user.Id), nil
 	}
 
 	return nil, errtypes.NotFound(fmt.Sprintf("path %s does not exist", ref.Path))
@@ -283,11 +286,14 @@ func (f *cbackfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKey
 	resSet := make(map[string]struct{}) // used to discard duplicates
 	var resources []*provider.ResourceInfo
 
-	sourceSplit := filepath.SplitList(ref.Path)
+	sourceSplit := []string{""}
+	if ref.Path != "/" {
+		sourceSplit = strings.Split(ref.Path, "/")
+	}
 	for _, b := range backups {
-		backupSplit := filepath.SplitList(b.Source)
+		backupSplit := strings.Split(b.Source, "/")
 		if hasPrefix(backupSplit, sourceSplit) {
-			base := backupSplit[len(sourceSplit)+1]
+			base := backupSplit[len(sourceSplit)]
 			path := filepath.Join(source, base)
 
 			if _, ok := resSet[path]; !ok {
