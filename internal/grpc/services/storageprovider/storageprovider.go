@@ -819,7 +819,7 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 		}, nil
 	}
 
-	if err := s.wrap(ctx, md, utils.IsAbsoluteReference(req.Ref)); err != nil {
+	if err := s.wrap(ctx, md, true); err != nil {
 		return &provider.StatResponse{
 			Status: status.NewInternal(ctx, err, "error wrapping path"),
 		}, nil

@@ -26,6 +26,7 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -1216,6 +1217,13 @@ func (fs *eosfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []st
 		eosFileInfo, err := fs.c.GetFileInfoByInode(ctx, auth, fid)
 		if err != nil {
 			return nil, err
+		}
+
+		if ref.Path != "" {
+			eosFileInfo, err = fs.c.GetFileInfoByPath(ctx, auth, filepath.Join(eosFileInfo.File, ref.Path))
+			if err != nil {
+				return nil, err
+			}
 		}
 		return fs.convertToResourceInfo(ctx, eosFileInfo)
 	}
