@@ -985,6 +985,10 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 				prop.Escaped("oc:fileid", id),
 				prop.Escaped("oc:spaceid", md.Id.SpaceId),
 			)
+
+			if md.Id.GetStorageId() == utils.ShareStorageProviderID {
+				propstatOK.Prop = append(propstatOK.Prop, prop.Raw("oc:shareid", md.Id.GetOpaqueId()))
+			}
 		}
 
 		if md.Name != "" {
@@ -1317,6 +1321,10 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 					}
 				case "name":
 					propstatOK.Prop = append(propstatOK.Prop, prop.Raw("oc:name", md.Name))
+				case "shareid":
+					if md.Id.GetStorageId() == utils.ShareStorageProviderID {
+						propstatOK.Prop = append(propstatOK.Prop, prop.Raw("oc:shareid", md.Id.GetOpaqueId()))
+					}
 				case "privatelink": // phoenix only
 					// <oc:privatelink>https://phoenix.owncloud.com/f/9</oc:privatelink>
 					fallthrough
