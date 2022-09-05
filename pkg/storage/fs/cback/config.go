@@ -22,10 +22,22 @@ import provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 
 // Config for the cback driver
 type Config struct {
-	Token    string `mapstructure:"token"`
-	APIURL   string `mapstructure:"api_url"`
-	Insecure bool   `mapstructure:"insecure"`
-	Timeout  int    `mapstructure:"timeout"`
+	Token      string `mapstructure:"token"`
+	APIURL     string `mapstructure:"api_url"`
+	Insecure   bool   `mapstructure:"insecure"`
+	Timeout    int    `mapstructure:"timeout"`
+	Size       int    `mapstructure:"size"`
+	Expiration int    `mapstructure:"expiration"`
+}
+
+func (c *Config) init() {
+	if c.Size == 0 {
+		c.Size = 1_000_000
+	}
+
+	if c.Expiration == 0 {
+		c.Expiration = 300
+	}
 }
 
 var permDir = &provider.ResourcePermissions{
