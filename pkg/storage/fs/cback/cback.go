@@ -22,476 +22,442 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"net/http"
 	"net/url"
+	"path/filepath"
 	"strconv"
-	"time"
+	"strings"
 
+	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	v1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/mime"
-	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
+	"github.com/cs3org/reva/pkg/storage/utils/cback"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )
 
-type cback struct {
-	conf   *Options
-	client *http.Client
+type cbackfs struct {
+	conf   *Config
+	client *cback.Client
 }
 
 func init() {
 	registry.Register("cback", New)
 }
 
-// New returns an implementation to the storage.FS interface that talks to
-// cback
-func New(m map[string]interface{}) (fs storage.FS, err error) {
-
-	c := &Options{}
-	if err = mapstructure.Decode(m, c); err != nil {
-		return nil, errors.Wrap(err, "Error Decoding Configuration")
+// New returns an implementation to the storage.FS interface that expose
+// the snapshots in cback
+func New(m map[string]interface{}) (storage.FS, error) {
+	c := &Config{}
+	if err := mapstructure.Decode(m, c); err != nil {
+		return nil, errors.Wrap(err, "cback: error decoding config")
 	}
 
-	httpClient := rhttp.GetHTTPClient()
+	client := cback.New(
+		&cback.Config{
+			URL:      c.APIURL,
+			Token:    c.Token,
+			Insecure: c.Insecure,
+			Timeout:  c.Timeout,
+		},
+	)
 
-	// Returns the storage.FS interface
-	return &cback{conf: c, client: httpClient}, nil
-
+	return &cbackfs{
+		conf:   c,
+		client: client,
+	}, nil
 }
 
-func (fs *cback) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []string) (*provider.ResourceInfo, error) {
-	var ssID, searchPath string
+func split(path string, backups []*cback.Backup) (string, string, string, int, bool) {
+	for _, b := range backups {
+		if strings.HasPrefix(path, b.Source) {
+			// the path could be in this form:
+			// <b.Source>/<snap_id>/<path>
+			// snap_id and path are optional
+			rel, _ := filepath.Rel(b.Source, path)
+			if rel == "." {
+				// both snap_id and path were not provided
+				return b.Source, "", "", b.ID, true
+			}
+			split := strings.SplitN(rel, "/", 2)
 
-	user, inContext := ctxpkg.ContextGetUser(ctx)
-
-	if !inContext {
-		return nil, errtypes.UserRequired("user not found in context")
-	}
-
-	resp, err := fs.matchBackups(user.Username, ref.Path)
-
-	if err != nil {
-		return nil, err
-	}
-
-	snapshotList, err := fs.listSnapshots(user.Username, resp.ID)
-
-	if err != nil {
-		return nil, err
-	}
-
-	ssID, searchPath = fs.pathTrimmer(snapshotList, resp)
-
-	if resp.Source == ref.Path {
-		setTime := v1beta1.Timestamp{
-			Seconds: uint64(time.Now().Unix()),
-			Nanos:   0,
+			var snap, p string
+			snap = split[0]
+			if len(split) == 2 {
+				p = split[1]
+			}
+			return b.Source, snap, p, b.ID, true
 		}
+	}
+	return "", "", "", 0, false
+}
 
-		ident := provider.ResourceId{
-			OpaqueId:  ref.Path,
-			StorageId: "cback",
-		}
-
-		ri := &provider.ResourceInfo{
-			Etag:          "",
-			PermissionSet: &permID,
-			Checksum:      &checkSum,
-			Mtime:         &setTime,
-			Id:            &ident,
-			Owner:         user.Id,
-			Type:          provider.ResourceType_RESOURCE_TYPE_CONTAINER,
-			Size:          0,
-			Path:          ref.Path,
-			MimeType:      mime.Detect(true, ref.Path),
-		}
-
-		return ri, nil
-
+func (f *cbackfs) convertToResourceInfo(r *cback.Resource, path string, resID *provider.ResourceId, owner *user.UserId) *provider.ResourceInfo {
+	rtype := provider.ResourceType_RESOURCE_TYPE_FILE
+	perms := permFile
+	if r.IsDir() {
+		rtype = provider.ResourceType_RESOURCE_TYPE_CONTAINER
+		perms = permDir
 	}
 
-	ret, err := fs.statResource(resp.ID, ssID, user.Username, searchPath, resp.Source)
-
-	if err != nil {
-		return nil, err
+	return &provider.ResourceInfo{
+		Type: rtype,
+		Id:   resID,
+		Checksum: &provider.ResourceChecksum{
+			Type: provider.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_UNSET,
+		},
+		Etag:     strconv.FormatUint(r.CTime, 10),
+		MimeType: mime.Detect(r.IsDir(), path),
+		Mtime: &types.Timestamp{
+			Seconds: r.CTime,
+		},
+		Path:          path,
+		PermissionSet: perms,
+		Size:          r.Size,
+		Owner:         owner,
 	}
+}
 
-	setTime := v1beta1.Timestamp{
-		Seconds: ret.Mtime,
-		Nanos:   0,
-	}
-
-	ident := provider.ResourceId{
-		OpaqueId:  ret.Path,
+func encodeBackupInResourceID(backupID int, snapshotID, path string) *provider.ResourceId {
+	opaque := fmt.Sprintf("%d#%s#%s", backupID, snapshotID, path)
+	return &provider.ResourceId{
 		StorageId: "cback",
+		OpaqueId:  opaque,
 	}
-
-	ri := &provider.ResourceInfo{
-		Etag:          "",
-		PermissionSet: &permID,
-		Checksum:      &checkSum,
-		Mtime:         &setTime,
-		Id:            &ident,
-		Owner:         user.Id,
-		Type:          ret.Type,
-		Size:          ret.Size,
-		Path:          ret.Path,
-	}
-
-	if ret.Type == 2 {
-		ri.MimeType = mime.Detect(true, ret.Path)
-	} else {
-		ri.MimeType = mime.Detect(false, ret.Path)
-	}
-
-	return ri, nil
 }
 
-func (fs *cback) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys []string) ([]*provider.ResourceInfo, error) {
-
-	var path string = ref.GetPath()
-	var ssID, searchPath string
-
-	user, inContext := ctxpkg.ContextGetUser(ctx)
-
-	if !inContext {
-		return nil, errtypes.UserRequired("no user found in context")
+func decodeResourceID(r *provider.ResourceId) (int, string, string, bool) {
+	if r == nil {
+		return 0, "", "", false
 	}
-
-	resp, err := fs.matchBackups(user.Username, path)
-
+	split := strings.SplitN(r.OpaqueId, "#", 3)
+	if len(split) != 3 {
+		return 0, "", "", false
+	}
+	backupID, err := strconv.ParseInt(split[0], 10, 64)
 	if err != nil {
-		return nil, err
+		return 0, "", "", false
 	}
+	return int(backupID), split[1], split[2], true
+}
 
-	// Code executed before snapshot being inputted
-	if resp == nil {
-		pathList, err := fs.pathFinder(user.Username, ref.Path)
-
-		if err != nil {
-			return nil, err
-		}
-
-		files := make([]*provider.ResourceInfo, 0, len(pathList))
-
-		for _, paths := range pathList {
-
-			setTime := v1beta1.Timestamp{
-				Seconds: 0,
-				Nanos:   0,
-			}
-
-			ident := provider.ResourceId{
-				OpaqueId:  paths,
-				StorageId: "cback",
-			}
-
-			f := provider.ResourceInfo{
-				Mtime:         &setTime,
-				Id:            &ident,
-				Checksum:      &checkSum,
-				Path:          paths,
-				Owner:         user.Id,
-				PermissionSet: &permID,
-				Type:          provider.ResourceType_RESOURCE_TYPE_CONTAINER,
-				Size:          0,
-				Etag:          "",
-				MimeType:      mime.Detect(true, paths),
-			}
-			files = append(files, &f)
-		}
-
-		return files, nil
-	}
-
-	snapshotList, err := fs.listSnapshots(user.Username, resp.ID)
-
-	if err != nil {
-		fmt.Print(err)
-		return nil, err
-	}
-
-	if resp.Substring != "" {
-		ssID, searchPath = fs.pathTrimmer(snapshotList, resp)
-
-		if ssID == "" {
-			return nil, errtypes.NotFound("cback: snapshotID invalid")
-		}
-
-		// If no match in path, therefore prints the files
-		fmt.Printf("The ssID is: %v\nThe Path is %v\n", ssID, searchPath)
-		ret, err := fs.fileSystem(resp.ID, ssID, user.Username, searchPath, resp.Source)
-
-		if err != nil {
-			fmt.Print(err)
-			return nil, err
-		}
-
-		files := make([]*provider.ResourceInfo, 0, len(ret))
-
-		for _, j := range ret {
-
-			setTime := v1beta1.Timestamp{
-				Seconds: j.Mtime,
-				Nanos:   0,
-			}
-
-			ident := provider.ResourceId{
-				OpaqueId:  j.Path,
-				StorageId: "cback",
-			}
-
-			f := provider.ResourceInfo{
-				Mtime:         &setTime,
-				Id:            &ident,
-				Checksum:      &checkSum,
-				Path:          j.Path,
-				Owner:         user.Id,
-				PermissionSet: &permID,
-				Type:          j.Type,
-				Size:          j.Size,
-				Etag:          "",
-			}
-
-			if j.Type == 2 {
-				f.MimeType = mime.Detect(true, j.Path)
-			} else {
-				f.MimeType = mime.Detect(false, j.Path)
-			}
-
-			files = append(files, &f)
-		}
-
-		return files, nil
-
-	}
-
-	// If match in path, therefore print the Snapshot IDs
-	files := make([]*provider.ResourceInfo, 0, len(snapshotList))
-
-	for _, snapshot := range snapshotList {
-
-		epochTime, err := fs.timeConv(snapshot.Time)
-
-		if err != nil {
-			return nil, err
-		}
-
-		ident := provider.ResourceId{
-			OpaqueId:  ref.Path + "/" + snapshot.ID,
+func (f *cbackfs) placeholderResourceInfo(path string, owner *user.UserId) *provider.ResourceInfo {
+	return &provider.ResourceInfo{
+		Type: provider.ResourceType_RESOURCE_TYPE_CONTAINER,
+		Id: &provider.ResourceId{
 			StorageId: "cback",
-		}
-
-		setTime := v1beta1.Timestamp{
-			Seconds: uint64(epochTime),
-			Nanos:   0,
-		}
-
-		f := provider.ResourceInfo{
-			Path:          ref.Path + "/" + snapshot.ID,
-			Checksum:      &checkSum,
-			Etag:          "",
-			Owner:         user.Id,
-			PermissionSet: &permID,
-			Id:            &ident,
-			MimeType:      mime.Detect(true, ref.Path+"/"+snapshot.ID),
-			Size:          0,
-			Mtime:         &setTime,
-			Type:          provider.ResourceType_RESOURCE_TYPE_CONTAINER,
-		}
-
-		files = append(files, &f)
-
+			OpaqueId:  path,
+		},
+		Checksum: &provider.ResourceChecksum{
+			Type: provider.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_UNSET,
+		},
+		Etag:     "",
+		MimeType: mime.Detect(true, path),
+		Mtime: &types.Timestamp{
+			Seconds: 0,
+		},
+		Path:          path,
+		PermissionSet: permDir,
+		Size:          0,
+		Owner:         owner,
 	}
-
-	return files, nil
-
 }
 
-func (fs *cback) Download(ctx context.Context, ref *provider.Reference) (io.ReadCloser, error) {
-	var path string = ref.GetPath()
-	var ssID, searchPath string
-	user, _ := ctxpkg.ContextGetUser(ctx)
-
-	resp, err := fs.matchBackups(user.Username, path)
-
-	if err != nil {
-		fmt.Print(err)
-		return nil, err
-	}
-
-	snapshotList, err := fs.listSnapshots(user.Username, resp.ID)
-
-	if err != nil {
-		fmt.Print(err)
-		return nil, err
-	}
-
-	if resp.Substring != "" {
-
-		ssID, searchPath = fs.pathTrimmer(snapshotList, resp)
-
-		url := fs.conf.APIURL + "/backups/" + strconv.Itoa(resp.ID) + "/snapshots/" + ssID + "/" + searchPath
-		requestType := "GET"
-		md, err := fs.GetMD(ctx, ref, nil)
-
-		if err != nil {
-			return nil, err
+func hasPrefix(lst, prefix []string) bool {
+	for i, p := range prefix {
+		if lst[i] != p {
+			return false
 		}
+	}
+	return true
+}
 
-		if md.Type == provider.ResourceType_RESOURCE_TYPE_FILE {
+func (f *cbackfs) isParentOfBackup(path string, backups []*cback.Backup) bool {
+	pathSplit := filepath.SplitList(path)
+	for _, b := range backups {
+		backupSplit := filepath.SplitList(b.Source)
+		if hasPrefix(backupSplit, pathSplit) {
+			return true
+		}
+	}
+	return false
+}
 
-			responseData, err := fs.getRequest(user.Username, url, requestType, nil)
+func (f *cbackfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []string) (*provider.ResourceInfo, error) {
+	user, ok := ctxpkg.ContextGetUser(ctx)
+	if !ok {
+		return nil, errtypes.UserRequired("cback: user not found in context")
+	}
 
+	backups, err := f.client.ListBackups(ctx, user.Username)
+	if err != nil {
+		return nil, errors.Wrapf(err, "cback: error listing backups")
+	}
+
+	source, snapshot, path, id, ok := split(ref.Path, backups)
+	if ok {
+		if snapshot != "" && path != "" {
+			// the path from the user is something like /eos/home-g/gdelmont/<snapshot_id>/rest/of/path
+			// in this case the method has to return the stat of the file /eos/home-g/gdelmont/rest/of/path
+			// in the snapshot <snapshot_id>
+			res, err := f.client.Stat(ctx, user.Username, id, snapshot, filepath.Join(source, path))
 			if err != nil {
 				return nil, err
 			}
-
-			return responseData, nil
+			return f.convertToResourceInfo(
+				res,
+				filepath.Join(source, snapshot, path),
+				encodeBackupInResourceID(id, snapshot, filepath.Join(source, path)),
+				user.Id,
+			), nil
+		} else if snapshot != "" && path == "" {
+			// the path from the user is something like /eos/home-g/gdelmont/<snapshot_id>
+			return f.placeholderResourceInfo(filepath.Join(source, snapshot), user.Id), nil
 		}
-
-		return nil, errtypes.BadRequest("can only download files")
-
+		// the path from the user is something like /eos/home-g/gdelmont
+		return f.placeholderResourceInfo(source, user.Id), nil
 	}
 
-	return nil, errtypes.NotFound("cback: resource not found")
+	// the path is not one of the backup. There is a situation in which
+	// the user's path is a parent folder of some of the backups
+
+	if f.isParentOfBackup(ref.Path, backups) {
+		return f.placeholderResourceInfo(source, user.Id), nil
+	}
+
+	return nil, errtypes.NotFound(fmt.Sprintf("path %s does not exist", ref.Path))
 }
 
-func (fs *cback) GetHome(ctx context.Context) (string, error) {
+func (f *cbackfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys []string) ([]*provider.ResourceInfo, error) {
+	user, ok := ctxpkg.ContextGetUser(ctx)
+	if !ok {
+		return nil, errtypes.UserRequired("cback: user not found in context")
+	}
+
+	backups, err := f.client.ListBackups(ctx, user.Username)
+	if err != nil {
+		return nil, errors.Wrapf(err, "cback: error listing backups")
+	}
+
+	source, snapshot, path, id, ok := split(ref.Path, backups)
+	if ok {
+		if snapshot != "" {
+			// the path from the user is something like /eos/home-g/gdelmont/<snapshot_id>/(rest/of/path)
+			// in this case the method has to return the content of the folder /eos/home-g/gdelmont/(rest/of/path)
+			// in the snapshot <snapshot_id>
+			content, err := f.client.ListFolder(ctx, user.Username, id, snapshot, filepath.Join(source, path))
+			if err != nil {
+				return nil, err
+			}
+			res := make([]*provider.ResourceInfo, 0, len(content))
+			for _, info := range content {
+				base := filepath.Base(info.Name)
+				res = append(res, f.convertToResourceInfo(
+					info,
+					filepath.Join(source, snapshot, path, base),
+					encodeBackupInResourceID(id, snapshot, filepath.Join(source, path, base)),
+					user.Id,
+				))
+			}
+			return res, nil
+		}
+		// the path from the user is something like /eos/home-g/gdelmont
+		// the method needs to return the list of snapshots as folders
+		snapshots, err := f.client.ListSnapshots(ctx, user.Username, id)
+		if err != nil {
+			return nil, err
+		}
+		res := make([]*provider.ResourceInfo, 0, len(snapshots))
+		for _, s := range snapshots {
+			res = append(res, f.placeholderResourceInfo(filepath.Join(source, s.ID), user.Id))
+		}
+		return res, nil
+	}
+
+	// the path is not one of the backup. Can happen that the
+	// user's path is a parent folder of some of the backups
+	resSet := make(map[string]struct{}) // used to discard duplicates
+	var resources []*provider.ResourceInfo
+
+	sourceSplit := filepath.SplitList(ref.Path)
+	for _, b := range backups {
+		backupSplit := filepath.SplitList(b.Source)
+		if hasPrefix(backupSplit, sourceSplit) {
+			base := backupSplit[len(sourceSplit)+1]
+			path := filepath.Join(source, base)
+
+			if _, ok := resSet[path]; !ok {
+				resources = append(resources, f.placeholderResourceInfo(path, user.Id))
+				resSet[path] = struct{}{}
+			}
+		}
+	}
+
+	if len(resources) != 0 {
+		return resources, nil
+	}
+
+	return nil, errtypes.NotFound(fmt.Sprintf("path %s does not exist", ref.Path))
+
+}
+
+func (f *cbackfs) Download(ctx context.Context, ref *provider.Reference) (io.ReadCloser, error) {
+	user, ok := ctxpkg.ContextGetUser(ctx)
+	if !ok {
+		return nil, errtypes.UserRequired("cback: user not found in context")
+	}
+
+	stat, err := f.GetMD(ctx, ref, nil)
+	if err != nil {
+		return nil, errors.Wrap(err, "cback: error statting resource")
+	}
+
+	if stat.Type != provider.ResourceType_RESOURCE_TYPE_FILE {
+		return nil, errtypes.BadRequest("cback: can only download files")
+	}
+
+	id, snapshot, path, ok := decodeResourceID(stat.Id)
+	if !ok {
+		return nil, errtypes.BadRequest("cback: can only download files")
+	}
+
+	return f.client.Download(ctx, user.Username, id, snapshot, path)
+}
+
+func (f *cbackfs) GetHome(ctx context.Context) (string, error) {
 	return "", errtypes.NotSupported("Operation Not Permitted")
 }
 
-func (fs *cback) CreateHome(ctx context.Context) (err error) {
+func (f *cbackfs) CreateHome(ctx context.Context) (err error) {
 	return errtypes.NotSupported("Operation Not Permitted")
 }
 
-func (fs *cback) CreateDir(ctx context.Context, ref *provider.Reference) error {
+func (f *cbackfs) CreateDir(ctx context.Context, ref *provider.Reference) error {
 	return errtypes.NotSupported("Operation Not Permitted")
 }
 
-func (fs *cback) TouchFile(ctx context.Context, ref *provider.Reference) (err error) {
+func (f *cbackfs) TouchFile(ctx context.Context, ref *provider.Reference) (err error) {
 	return errtypes.NotSupported("Operation Not Permitted")
 }
 
-func (fs *cback) Delete(ctx context.Context, ref *provider.Reference) (err error) {
+func (f *cbackfs) Delete(ctx context.Context, ref *provider.Reference) (err error) {
 	return errtypes.NotSupported("Operation Not Permitted")
 }
 
-func (fs *cback) Move(ctx context.Context, oldRef, newRef *provider.Reference) (err error) {
+func (f *cbackfs) Move(ctx context.Context, oldRef, newRef *provider.Reference) (err error) {
 	return errtypes.NotSupported("Operation Not Permitted")
 }
 
-func (fs *cback) ListRevisions(ctx context.Context, ref *provider.Reference) (fvs []*provider.FileVersion, err error) {
+func (f *cbackfs) ListRevisions(ctx context.Context, ref *provider.Reference) (fvs []*provider.FileVersion, err error) {
 	return nil, errtypes.NotSupported("Operation Not Permitted")
 }
 
-func (fs *cback) DownloadRevision(ctx context.Context, ref *provider.Reference, key string) (file io.ReadCloser, err error) {
+func (f *cbackfs) DownloadRevision(ctx context.Context, ref *provider.Reference, key string) (file io.ReadCloser, err error) {
 	return nil, errtypes.NotSupported("Operation Not Permitted")
 }
 
-func (fs *cback) RestoreRevision(ctx context.Context, ref *provider.Reference, key string) (err error) {
+func (f *cbackfs) RestoreRevision(ctx context.Context, ref *provider.Reference, key string) (err error) {
 	return errtypes.NotSupported("Operation Not Permitted")
 }
 
-func (fs *cback) GetPathByID(ctx context.Context, id *provider.ResourceId) (str string, err error) {
+func (f *cbackfs) GetPathByID(ctx context.Context, id *provider.ResourceId) (str string, err error) {
 	return "", errtypes.NotSupported("Operation Not Permitted")
 }
 
-func (fs *cback) AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) (err error) {
+func (f *cbackfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) (err error) {
 	return errtypes.NotSupported("Operation Not Permitted")
 }
 
-func (fs *cback) RemoveGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) (err error) {
+func (f *cbackfs) RemoveGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) (err error) {
 	return errtypes.NotSupported("Operation Not Permitted")
 }
 
-func (fs *cback) UpdateGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) (err error) {
+func (f *cbackfs) UpdateGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) (err error) {
 	return errtypes.NotSupported("Operation Not Permitted")
 }
 
-func (fs *cback) DenyGrant(ctx context.Context, ref *provider.Reference, g *provider.Grantee) (err error) {
+func (f *cbackfs) DenyGrant(ctx context.Context, ref *provider.Reference, g *provider.Grantee) (err error) {
 	return errtypes.NotSupported("Operation Not Permitted")
 }
 
-func (fs *cback) ListGrants(ctx context.Context, ref *provider.Reference) (glist []*provider.Grant, err error) {
+func (f *cbackfs) ListGrants(ctx context.Context, ref *provider.Reference) (glist []*provider.Grant, err error) {
 	return nil, errtypes.NotSupported("Operation Not Permitted")
 }
 
-func (fs *cback) GetQuota(ctx context.Context, ref *provider.Reference) (total uint64, used uint64, err error) {
+func (f *cbackfs) GetQuota(ctx context.Context, ref *provider.Reference) (total uint64, used uint64, err error) {
 	return 0, 0, errtypes.NotSupported("Operation Not Permitted")
 }
 
-func (fs *cback) CreateReference(ctx context.Context, path string, targetURI *url.URL) (err error) {
+func (f *cbackfs) CreateReference(ctx context.Context, path string, targetURI *url.URL) (err error) {
 	return errtypes.NotSupported("Operation Not Permitted")
 }
 
-func (fs *cback) Shutdown(ctx context.Context) (err error) {
+func (f *cbackfs) Shutdown(ctx context.Context) (err error) {
 	return errtypes.NotSupported("Operation Not Permitted")
 }
 
-func (fs *cback) SetArbitraryMetadata(ctx context.Context, ref *provider.Reference, md *provider.ArbitraryMetadata) (err error) {
+func (f *cbackfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Reference, md *provider.ArbitraryMetadata) (err error) {
 	return errtypes.NotSupported("Operation Not Permitted")
 }
 
-func (fs *cback) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Reference, keys []string) (err error) {
+func (f *cbackfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Reference, keys []string) (err error) {
 	return errtypes.NotSupported("Operation Not Permitted")
 }
 
-func (fs *cback) EmptyRecycle(ctx context.Context) error {
+func (f *cbackfs) EmptyRecycle(ctx context.Context) error {
 	return errtypes.NotSupported("Operation Not Permitted")
 }
 
-func (fs *cback) CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (r *provider.CreateStorageSpaceResponse, err error) {
+func (f *cbackfs) CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (r *provider.CreateStorageSpaceResponse, err error) {
 	return nil, errtypes.NotSupported("Operation Not Permitted")
 }
 
-func (fs *cback) ListRecycle(ctx context.Context, basePath, key, relativePath string) ([]*provider.RecycleItem, error) {
+func (f *cbackfs) ListRecycle(ctx context.Context, basePath, key, relativePath string) ([]*provider.RecycleItem, error) {
 	return nil, errtypes.NotSupported("Operation Not Permitted")
 }
 
-func (fs *cback) RestoreRecycleItem(ctx context.Context, basePath, key, relativePath string, restoreRef *provider.Reference) error {
+func (f *cbackfs) RestoreRecycleItem(ctx context.Context, basePath, key, relativePath string, restoreRef *provider.Reference) error {
 	return errtypes.NotSupported("Operation Not Permitted")
 }
 
-func (fs *cback) PurgeRecycleItem(ctx context.Context, basePath, key, relativePath string) error {
+func (f *cbackfs) PurgeRecycleItem(ctx context.Context, basePath, key, relativePath string) error {
 	return errtypes.NotSupported("Operation Not Permitted")
 }
 
-func (fs *cback) ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter) ([]*provider.StorageSpace, error) {
+func (f *cbackfs) ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter) ([]*provider.StorageSpace, error) {
 	return nil, errtypes.NotSupported("Operation Not Permitted")
 }
 
-func (fs *cback) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
+func (f *cbackfs) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
 	return nil, errtypes.NotSupported("Operation Not Permitted")
 }
 
-func (fs *cback) SetLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
+func (f *cbackfs) SetLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
 	return errtypes.NotSupported("Operation Not Permitted")
 }
 
-func (fs *cback) GetLock(ctx context.Context, ref *provider.Reference) (*provider.Lock, error) {
+func (f *cbackfs) GetLock(ctx context.Context, ref *provider.Reference) (*provider.Lock, error) {
 	return nil, errtypes.NotSupported("Operation Not Permitted")
 }
 
-func (fs *cback) RefreshLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
+func (f *cbackfs) RefreshLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
 	return errtypes.NotSupported("Operation Not Permitted")
 }
 
-func (fs *cback) Unlock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
+func (f *cbackfs) Unlock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
 	return errtypes.NotSupported("Operation Not Permitted")
 }
 
-func (fs *cback) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser) error {
+func (f *cbackfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser) error {
 	return errtypes.NotSupported("Operation Not Permitted")
 
 }
 
-func (fs *cback) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64, metadata map[string]string) (map[string]string, error) {
+func (f *cbackfs) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64, metadata map[string]string) (map[string]string, error) {
 	return nil, errtypes.NotSupported("Operation Not Permitted")
 
 }
