@@ -58,6 +58,7 @@ func New(m map[string]interface{}) (storage.FS, error) {
 	if err := mapstructure.Decode(m, c); err != nil {
 		return nil, errors.Wrap(err, "cback: error decoding config")
 	}
+	c.init()
 
 	client := cback.New(
 		&cback.Config{
