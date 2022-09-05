@@ -355,6 +355,13 @@ func (m *Manager) GetShare(ctx context.Context, ref *collaboration.ShareReferenc
 	if share.IsCreatedByUser(s, user) || share.IsGrantedToUser(s, user) {
 		return s, nil
 	}
+
+	shares := m.Cache.ListSpace(s.ResourceId.StorageId, s.ResourceId.SpaceId)
+	if _, ok := shares.Shares[s.GetId().GetOpaqueId()]; ok {
+		// Members of a space are also allowed to list the share.
+		return s, nil
+	}
+
 	// we return not found to not disclose information
 	return nil, errtypes.NotFound(ref.String())
 }
@@ -425,7 +432,11 @@ func (m *Manager) UpdateShare(ctx context.Context, ref *collaboration.ShareRefer
 
 	user := ctxpkg.ContextMustGetUser(ctx)
 	if !share.IsCreatedByUser(s, user) {
-		return nil, errtypes.NotFound(ref.String())
+		shares := m.Cache.ListSpace(s.ResourceId.StorageId, s.ResourceId.SpaceId)
+		// Members of a space are also allowed to list the share.
+		if _, ok := shares.Shares[s.GetId().GetOpaqueId()]; !ok {
+			return nil, errtypes.NotFound(ref.String())
+		}
 	}
 
 	s.Permissions = p
