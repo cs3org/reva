@@ -211,7 +211,7 @@ func (f *cbackfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []s
 			// the path from the user is something like /eos/home-g/gdelmont/<snapshot_id>/rest/of/path
 			// in this case the method has to return the stat of the file /eos/home-g/gdelmont/rest/of/path
 			// in the snapshot <snapshot_id>
-			res, err := f.client.Stat(ctx, user.Username, id, snapshot, filepath.Join(source, path))
+			res, err := f.stat(ctx, user.Username, id, snapshot, filepath.Join(source, path))
 			if err != nil {
 				return nil, err
 			}
@@ -256,7 +256,7 @@ func (f *cbackfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKey
 			// the path from the user is something like /eos/home-g/gdelmont/<snapshot_id>/(rest/of/path)
 			// in this case the method has to return the content of the folder /eos/home-g/gdelmont/(rest/of/path)
 			// in the snapshot <snapshot_id>
-			content, err := f.client.ListFolder(ctx, user.Username, id, snapshot, filepath.Join(source, path))
+			content, err := f.listFolder(ctx, user.Username, id, snapshot, filepath.Join(source, path))
 			if err != nil {
 				return nil, err
 			}
