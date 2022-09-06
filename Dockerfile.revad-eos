@@ -18,8 +18,6 @@
 
 FROM gitlab-registry.cern.ch/dss/eos/eos-all:4.8.91
 
-RUN yum -y update && yum clean all
-
 RUN yum -y install https://packages.endpointdev.com/rhel/7/os/x86_64/endpoint-repo.x86_64.rpm
 RUN yum install -y make git gcc libc-dev bash epel-release golang && \
   yum clean all && \
