@@ -16,7 +16,7 @@
 # granted to it by virtue of its status as an Intergovernmental Organization
 # or submit itself to any jurisdiction.
 
-FROM gitlab-registry.cern.ch/dss/eos/eos-all:4.8.66
+FROM gitlab-registry.cern.ch/dss/eos/eos-all:4.8.91
 
 RUN yum -y update && yum clean all
 
