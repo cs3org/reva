@@ -127,8 +127,8 @@ func (f *cbackfs) convertToResourceInfo(r *cback.Resource, path string, resID *p
 	}
 }
 
-func encodeBackupInResourceID(backupID int, snapshotID, path string) *provider.ResourceId {
-	id := fmt.Sprintf("%d#%s#%s", backupID, snapshotID, path)
+func encodeBackupInResourceID(backupID int, snapshotID, source, path string) *provider.ResourceId {
+	id := fmt.Sprintf("%d#%s#%s#%s", backupID, snapshotID, source, path)
 	opaque := base64.StdEncoding.EncodeToString([]byte(id))
 	return &provider.ResourceId{
 		StorageId: "cback",
@@ -136,23 +136,24 @@ func encodeBackupInResourceID(backupID int, snapshotID, path string) *provider.R
 	}
 }
 
-func decodeResourceID(r *provider.ResourceId) (int, string, string, bool) {
+// return b.Source, snap, p, b.ID, true
+func decodeResourceID(r *provider.ResourceId) (string, string, string, int, bool) {
 	if r == nil {
-		return 0, "", "", false
+		return "", "", "", 0, false
 	}
 	data, err := base64.StdEncoding.DecodeString(r.OpaqueId)
 	if err != nil {
-		return 0, "", "", false
+		return "", "", "", 0, false
 	}
-	split := strings.SplitN(string(data), "#", 3)
-	if len(split) != 3 {
-		return 0, "", "", false
+	split := strings.SplitN(string(data), "#", 4)
+	if len(split) != 4 {
+		return "", "", "", 0, false
 	}
 	backupID, err := strconv.ParseInt(split[0], 10, 64)
 	if err != nil {
-		return 0, "", "", false
+		return "", "", "", 0, false
 	}
-	return int(backupID), split[1], split[2], true
+	return split[2], split[1], split[3], int(backupID), true
 }
 
 func (f *cbackfs) placeholderResourceInfo(path string, owner *user.UserId) *provider.ResourceInfo {
@@ -206,12 +207,23 @@ func (f *cbackfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []s
 		return nil, errtypes.UserRequired("cback: user not found in context")
 	}
 
+	var (
+		source, snapshot, path string
+		id                     int
+	)
+
 	backups, err := f.listBackups(ctx, user.Username)
 	if err != nil {
 		return nil, errors.Wrapf(err, "cback: error listing backups")
 	}
 
-	source, snapshot, path, id, ok := split(ref.Path, backups)
+	if ref.ResourceId != nil {
+		source, snapshot, path, id, ok = decodeResourceID(ref.ResourceId)
+	} else {
+
+		source, snapshot, path, id, ok = split(ref.Path, backups)
+	}
+
 	if ok {
 		if snapshot != "" && path != "" {
 			// the path from the user is something like /eos/home-g/gdelmont/<snapshot_id>/rest/of/path
@@ -224,7 +236,7 @@ func (f *cbackfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []s
 			return f.convertToResourceInfo(
 				res,
 				filepath.Join(source, snapshot, path),
-				encodeBackupInResourceID(id, snapshot, filepath.Join(source, path)),
+				encodeBackupInResourceID(id, snapshot, source, path),
 				user.Id,
 			), nil
 		} else if snapshot != "" && path == "" {
@@ -272,7 +284,7 @@ func (f *cbackfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKey
 				res = append(res, f.convertToResourceInfo(
 					info,
 					filepath.Join(source, snapshot, path, base),
-					encodeBackupInResourceID(id, snapshot, filepath.Join(source, path, base)),
+					encodeBackupInResourceID(id, snapshot, source, filepath.Join(path, base)),
 					user.Id,
 				))
 			}
@@ -336,12 +348,12 @@ func (f *cbackfs) Download(ctx context.Context, ref *provider.Reference) (io.Rea
 		return nil, errtypes.BadRequest("cback: can only download files")
 	}
 
-	id, snapshot, path, ok := decodeResourceID(stat.Id)
+	source, snapshot, path, id, ok := decodeResourceID(stat.Id)
 	if !ok {
 		return nil, errtypes.BadRequest("cback: can only download files")
 	}
 
-	return f.client.Download(ctx, user.Username, id, snapshot, path)
+	return f.client.Download(ctx, user.Username, id, snapshot, filepath.Join(source, path))
 }
 
 func (f *cbackfs) GetHome(ctx context.Context) (string, error) {
