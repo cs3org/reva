@@ -902,6 +902,10 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 	if ok {
 		space.Opaque = utils.AppendPlainToOpaque(space.Opaque, "spaceAlias", spaceAlias)
 	}
+
+	// add rootinfo
+	ps := n.SpaceRoot.PermissionSet(ctx)
+	space.RootInfo, _ = n.SpaceRoot.AsResourceInfo(ctx, &ps, nil, nil, false)
 	return space, nil
 }
 
