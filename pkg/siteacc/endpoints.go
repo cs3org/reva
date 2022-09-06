@@ -71,13 +71,13 @@ func getEndpoints() []endpoint {
 		{config.EndpointList, callMethodEndpoint, createMethodCallbacks(handleList, nil), false},
 		{config.EndpointFind, callMethodEndpoint, createMethodCallbacks(handleFind, nil), false},
 		{config.EndpointCreate, callMethodEndpoint, createMethodCallbacks(nil, handleCreate), true},
-		{config.EndpointUpdate, callMethodEndpoint, createMethodCallbacks(nil, handleUpdate), false},
-		{config.EndpointConfigure, callMethodEndpoint, createMethodCallbacks(nil, handleConfigure), false},
+		{config.EndpointUpdate, callMethodEndpoint, createMethodCallbacks(nil, handleUpdate), true},
+		{config.EndpointConfigure, callMethodEndpoint, createMethodCallbacks(nil, handleConfigure), true},
 		{config.EndpointRemove, callMethodEndpoint, createMethodCallbacks(nil, handleRemove), false},
 		// Site endpoints
 		{config.EndpointSiteGet, callMethodEndpoint, createMethodCallbacks(handleSiteGet, nil), false},
 		// Sites endpoints
-		{config.EndpointSitesConfigure, callMethodEndpoint, createMethodCallbacks(nil, handleSitesConfigure), false},
+		{config.EndpointSitesConfigure, callMethodEndpoint, createMethodCallbacks(nil, handleSitesConfigure), true},
 		// Login endpoints
 		{config.EndpointLogin, callMethodEndpoint, createMethodCallbacks(nil, handleLogin), true},
 		{config.EndpointLogout, callMethodEndpoint, createMethodCallbacks(handleLogout, nil), true},
