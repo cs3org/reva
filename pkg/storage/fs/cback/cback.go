@@ -20,6 +20,7 @@ package cback
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"net/url"
@@ -127,7 +128,8 @@ func (f *cbackfs) convertToResourceInfo(r *cback.Resource, path string, resID *p
 }
 
 func encodeBackupInResourceID(backupID int, snapshotID, path string) *provider.ResourceId {
-	opaque := fmt.Sprintf("%d#%s#%s", backupID, snapshotID, path)
+	id := fmt.Sprintf("%d#%s#%s", backupID, snapshotID, path)
+	opaque := base64.StdEncoding.EncodeToString([]byte(id))
 	return &provider.ResourceId{
 		StorageId: "cback",
 		OpaqueId:  opaque,
@@ -138,7 +140,11 @@ func decodeResourceID(r *provider.ResourceId) (int, string, string, bool) {
 	if r == nil {
 		return 0, "", "", false
 	}
-	split := strings.SplitN(r.OpaqueId, "#", 3)
+	data, err := base64.StdEncoding.DecodeString(r.OpaqueId)
+	if err != nil {
+		return 0, "", "", false
+	}
+	split := strings.SplitN(string(data), "#", 3)
 	if len(split) != 3 {
 		return 0, "", "", false
 	}
@@ -298,7 +304,7 @@ func (f *cbackfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKey
 		backupSplit := strings.Split(b.Source, "/")
 		if hasPrefix(backupSplit, sourceSplit) {
 			base := backupSplit[len(sourceSplit)]
-			path := filepath.Join(source, base)
+			path := filepath.Join(ref.Path, base)
 
 			if _, ok := resSet[path]; !ok {
 				resources = append(resources, f.placeholderResourceInfo(path, user.Id))
