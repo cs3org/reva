@@ -72,6 +72,8 @@ type config struct {
 	StatCacheTTL                 int                               `mapstructure:"stat_cache_ttl"`
 	UseCommonSpaceRootShareLogic bool                              `mapstructure:"use_common_space_root_share_logic"`
 	// MountCacheTTL       int                               `mapstructure:"mount_cache_ttl"`
+	PersonalQuotaDefault string `mapstructure:"personal_quota_default"`
+	GroupQuotaPattern    string `mapstructure:"group_quota_pattern"`
 }
 
 // sets defaults
