@@ -35,12 +35,13 @@ ENV GOPATH /go
 
 WORKDIR /go/src/github/cs3org/reva
 COPY . .
-RUN make build-revad-docker && cp /go/src/github/cs3org/reva/cmd/revad/revad /usr/bin/revad
+RUN make build-revad-docker && \
+  cp /go/src/github/cs3org/reva/cmd/revad/revad /usr/bin/revad && \
+  chmod +x /usr/bin/revad
 
-RUN mkdir -p /etc/revad/ && echo "" > /etc/revad/revad.toml
+RUN mkdir -p /etc/revad/ && \
+  touch /etc/revad/revad.toml
 RUN mkdir -p /usr/local/bin
-
-RUN chmod +x /usr/bin/revad
 
 ENTRYPOINT [ "/usr/bin/revad" ]
 CMD [ "-c", "/etc/revad/revad.toml", "-p", "/var/run/revad.pid" ]
