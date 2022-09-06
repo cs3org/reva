@@ -289,8 +289,9 @@ func (s *service) InitiateFileDownload(ctx context.Context, req *provider.Initia
 }
 
 func validateIfMatch(ifMatch string, info *provider.ResourceInfo) bool {
-	return ifMatch != info.GetEtag()
+	return ifMatch == info.GetEtag()
 }
+
 func validateIfUnmodifiedSince(ifUnmodifiedSince *typesv1beta1.Timestamp, info *provider.ResourceInfo) bool {
 	switch {
 	case ifUnmodifiedSince == nil || info.GetMtime() == nil:
