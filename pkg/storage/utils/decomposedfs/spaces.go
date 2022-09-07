@@ -644,8 +644,8 @@ func (fs *Decomposedfs) DeleteStorageSpace(ctx context.Context, req *provider.De
 	}
 
 	// - a User with the "delete-all-spaces" permission can delete any space
-	// - spaces of type personal can also be delete by user with the "delete-all-home-spaces" permission
-	// - otherwise a space can be deleted by it's manager (i.e. users have the "remove" grant)
+	// - spaces of type personal can also be deleted by users with the "delete-all-home-spaces" permission
+	// - otherwise a space can be deleted by its manager (i.e. users have the "remove" grant)
 	switch {
 	case fs.canDeleteAllSpaces(ctx):
 		// We are allowed to delete any space, no further permission checks needed
