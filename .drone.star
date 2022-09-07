@@ -46,6 +46,19 @@ def cloneOc10TestReposStep():
         ],
     }
 
+def cloneOCISTestReposStep():
+    return {
+        "name": "clone-OCIS-test-repos",
+        "image": "registry.cern.ch/docker.io/owncloudci/alpine:latest",
+        "commands": [
+            "source /drone/src/.drone.env",
+            "git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing",
+            "git clone -b $OCIS_BRANCH --single-branch --no-tags https://github.com/owncloud/ocis.git /drone/src/tmp/ocistestrunner",
+            "cd /drone/src/tmp/ocistestrunner",
+            "git checkout $OCIS_COMMITID",
+        ],
+    }
+
 # Shared service definitions
 def ldapService():
     return {
@@ -1025,6 +1038,85 @@ def s3ngIntegrationTests(parallelRuns, skipExceptParts = []):
                 "services": [
                     ldapService(),
                     cephService(),
+                ],
+                "depends_on": ["changelog"],
+            },
+        )
+
+    return pipelines
+
+def ocisIntegrationTests(parallelRuns, skipExceptParts = []):
+    pipelines = []
+    debugPartsEnabled = (len(skipExceptParts) != 0)
+    for runPart in range(1, parallelRuns + 1):
+        if debugPartsEnabled and runPart not in skipExceptParts:
+            continue
+
+        pipelines.append(
+            {
+                "kind": "pipeline",
+                "type": "docker",
+                "name": "ocis-local-api-tests-%s" % runPart,
+                "platform": {
+                    "os": "linux",
+                    "arch": "amd64",
+                },
+                "trigger": {
+                    "event": {
+                        "include": [
+                            "pull_request",
+                            "tag",
+                        ],
+                    },
+                },
+                "steps": [
+                    makeStep("build-ci"),
+                    {
+                        "name": "revad-services",
+                        "image": "registry.cern.ch/docker.io/library/golang:1.18",
+                        "detach": True,
+                        "commands": [
+                            "cd /drone/src/tests/oc-integration-tests/drone/",
+                            "/drone/src/cmd/revad/revad -c frontend.toml &",
+                            "/drone/src/cmd/revad/revad -c gateway.toml &",
+                            "/drone/src/cmd/revad/revad -c shares.toml &",
+                            "/drone/src/cmd/revad/revad -c storage-shares.toml &",
+                            "/drone/src/cmd/revad/revad -c machine-auth.toml &",
+                            "/drone/src/cmd/revad/revad -c storage-users-ocis.toml &",
+                            "/drone/src/cmd/revad/revad -c storage-publiclink.toml &",
+                            "/drone/src/cmd/revad/revad -c permissions-ocis-ci.toml &",
+                            "/drone/src/cmd/revad/revad -c ldap-users.toml",
+                        ],
+                    },
+                    cloneOCISTestReposStep(),
+                    {
+                        "name": "ocisLocalAPIAcceptanceTestsOcisStorage",
+                        "image": "registry.cern.ch/docker.io/owncloudci/php:7.4",
+                        "commands": [
+                            "cd /drone/src/tmp/ocistestrunner",
+                            "composer self-update",
+                            "composer --version",
+                            "make test-acceptance-api",
+                        ],
+                        "environment": {
+                            "TEST_SERVER_URL": "http://revad-services:20080",
+                            "OCIS_REVA_DATA_ROOT": "/drone/src/tmp/reva/data/",
+                            "DELETE_USER_DATA_CMD": "rm -rf /drone/src/tmp/reva/data/spaces/* /drone/src/tmp/reva/data/blobs/* /drone/src/tmp/reva/data/indexes/by-type/*",
+                            "STORAGE_DRIVER": "OCIS",
+                            "SKELETON_DIR": "/drone/src/tmp/testing/data/apiSkeleton",
+                            "TEST_WITH_LDAP": "true",
+                            "REVA_LDAP_HOSTNAME": "ldap",
+                            "TEST_REVA": "true",
+                            "SEND_SCENARIO_LINE_REFERENCES": "true",
+                            "BEHAT_FILTER_TAGS": "~@notToImplementOnOCIS&&~@toImplementOnOCIS&&~comments-app-required&&~@federation-app-required&&~@notifications-app-required&&~systemtags-app-required&&~@provisioning_api-app-required&&~@preview-extension-required&&~@local_storage&&~@skipOnOcis-OCIS-Storage&&~@skipOnOcis&&~@skipOnGraph&&~@caldav&&~@carddav&&~@skipOnReva",
+                            "DIVIDE_INTO_NUM_PARTS": parallelRuns,
+                            "RUN_PART": runPart,
+                            "EXPECTED_FAILURES_FILE": "/drone/src/tests/acceptance/expected-failures-on-OCIS-storage.md",
+                        },
+                    },
+                ],
+                "services": [
+                    ldapService(),
                 ],
                 "depends_on": ["changelog"],
             },
