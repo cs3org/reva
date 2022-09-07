@@ -196,7 +196,6 @@ func (s *svc) davPublicContext(next http.Handler) http.Handler {
 			return
 		}
 
-		path = filepath.Join("/public", token, path)
 		ctx = metadata.AppendToOutgoingContext(ctx, ctxpkg.TokenHeader, rsp.Token)
 
 		res, err := s.statPublicFile(ctx, token, path)
