@@ -319,7 +319,7 @@ func (f *cbackfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKey
 		}
 		// the path from the user is something like /eos/home-g/gdelmont
 		// the method needs to return the list of snapshots as folders
-		snapshots, err := f.client.ListSnapshots(ctx, user.Username, id)
+		snapshots, err := f.listSnapshots(ctx, user.Username, id)
 		if err != nil {
 			return nil, err
 		}
