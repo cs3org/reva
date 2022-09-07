@@ -34,6 +34,7 @@ import (
 	share "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/thumbnails/manager"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp"
@@ -44,6 +45,7 @@ import (
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
+	"google.golang.org/grpc/metadata"
 )
 
 func init() {
@@ -180,6 +182,21 @@ func (s *svc) davPublicContext(next http.Handler) http.Handler {
 		default:
 			s.writeHTTPError(w, errtypes.BadRequest("no token provided"))
 		}
+
+		// TODO: add support for public shares with password
+		rsp, err := s.client.Authenticate(ctx, &gateway.AuthenticateRequest{
+			Type:     "publicshares",
+			ClientId: token,
+			// We pass an empty password because we expect non pre-signed public links
+			// to not be password protected
+			ClientSecret: "password|",
+		})
+		if err != nil {
+			s.writeHTTPError(w, err)
+			return
+		}
+
+		ctx = metadata.AppendToOutgoingContext(ctx, ctxpkg.TokenHeader, rsp.Token)
 
 		res, err := s.statPublicFile(ctx, token, path)
 		if err != nil {
