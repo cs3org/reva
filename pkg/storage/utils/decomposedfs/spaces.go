@@ -199,7 +199,7 @@ func (fs *Decomposedfs) canListAllSpaces(ctx context.Context) bool {
 func (fs *Decomposedfs) canDeleteAllHomeSpaces(ctx context.Context) bool {
 	user := ctxpkg.ContextMustGetUser(ctx)
 	checkRes, err := fs.permissionsClient.CheckPermission(ctx, &cs3permissions.CheckPermissionRequest{
-		Permission: "can-delete-all-home-spaces",
+		Permission: "delete-all-home-spaces",
 		SubjectRef: &cs3permissions.SubjectReference{
 			Spec: &cs3permissions.SubjectReference_UserId{
 				UserId: user.Id,
@@ -635,13 +635,16 @@ func (fs *Decomposedfs) DeleteStorageSpace(ctx context.Context, req *provider.De
 		return errtypes.InternalError(fmt.Sprintf("space %s does not have a spacetype, possible corrupt decompsedfs", n.ID))
 	}
 
-	if st == "personal" && !fs.canDeleteAllHomeSpaces(ctx) {
-		return errtypes.PermissionDenied(fmt.Sprintf("user is not allowed to delete home space %s", n.ID))
-	}
-
-	// only managers are allowed to disable or purge a drive
-	if err := fs.checkManagerPermission(ctx, n); err != nil {
-		return errtypes.PermissionDenied(fmt.Sprintf("user is not allowed to delete spaces %s", n.ID))
+	switch {
+	case st == "personal":
+		if !fs.canDeleteAllHomeSpaces(ctx) {
+			return errtypes.PermissionDenied(fmt.Sprintf("user is not allowed to delete home space %s", n.ID))
+		}
+	default:
+		// only managers are allowed to disable or purge a drive
+		if err := fs.checkManagerPermission(ctx, n); err != nil {
+			return errtypes.PermissionDenied(fmt.Sprintf("user is not allowed to delete spaces %s", n.ID))
+		}
 	}
 
 	if purge {
