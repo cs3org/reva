@@ -27,6 +27,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/bluele/gcache"
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -156,7 +157,12 @@ func decodeResourceID(r *provider.ResourceId) (string, string, string, int, bool
 	return split[2], split[1], split[3], int(backupID), true
 }
 
-func (f *cbackfs) placeholderResourceInfo(path string, owner *user.UserId) *provider.ResourceInfo {
+func (f *cbackfs) placeholderResourceInfo(path string, owner *user.UserId, mtime *types.Timestamp) *provider.ResourceInfo {
+	if mtime == nil {
+		mtime = &types.Timestamp{
+			Seconds: 0,
+		}
+	}
 	return &provider.ResourceInfo{
 		Type: provider.ResourceType_RESOURCE_TYPE_CONTAINER,
 		Id: &provider.ResourceId{
@@ -166,11 +172,9 @@ func (f *cbackfs) placeholderResourceInfo(path string, owner *user.UserId) *prov
 		Checksum: &provider.ResourceChecksum{
 			Type: provider.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_UNSET,
 		},
-		Etag:     "",
-		MimeType: mime.Detect(true, path),
-		Mtime: &types.Timestamp{
-			Seconds: 0,
-		},
+		Etag:          "",
+		MimeType:      mime.Detect(true, path),
+		Mtime:         mtime,
 		Path:          path,
 		PermissionSet: permDir,
 		Size:          0,
@@ -241,20 +245,43 @@ func (f *cbackfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []s
 			), nil
 		} else if snapshot != "" && path == "" {
 			// the path from the user is something like /eos/home-g/gdelmont/<snapshot_id>
-			return f.placeholderResourceInfo(filepath.Join(source, snapshot), user.Id), nil
+			snap, err := f.getSnapshot(ctx, user.Username, id, snapshot)
+			if err != nil {
+				return nil, errors.Wrap(err, "cback: error getting snapshot")
+			}
+			return f.placeholderResourceInfo(filepath.Join(source, snapshot), user.Id, timeToTimestamp(snap.Time)), nil
 		}
 		// the path from the user is something like /eos/home-g/gdelmont
-		return f.placeholderResourceInfo(source, user.Id), nil
+		return f.placeholderResourceInfo(source, user.Id, nil), nil
 	}
 
 	// the path is not one of the backup. There is a situation in which
 	// the user's path is a parent folder of some of the backups
 
 	if f.isParentOfBackup(ref.Path, backups) {
-		return f.placeholderResourceInfo(ref.Path, user.Id), nil
+		return f.placeholderResourceInfo(ref.Path, user.Id, nil), nil
 	}
 
 	return nil, errtypes.NotFound(fmt.Sprintf("path %s does not exist", ref.Path))
+}
+
+func timeToTimestamp(t time.Time) *types.Timestamp {
+	return &types.Timestamp{
+		Seconds: uint64(t.Unix()),
+	}
+}
+
+func (f *cbackfs) getSnapshot(ctx context.Context, username string, backupID int, snapshotID string) (*cback.Snapshot, error) {
+	snapshots, err := f.listSnapshots(ctx, username, backupID)
+	if err != nil {
+		return nil, err
+	}
+	for _, snap := range snapshots {
+		if snap.ID == snapshotID {
+			return snap, nil
+		}
+	}
+	return nil, errtypes.NotFound(fmt.Sprintf("snapshot %s from backup %d not found", snapshotID, backupID))
 }
 
 func (f *cbackfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys []string) ([]*provider.ResourceInfo, error) {
@@ -298,7 +325,7 @@ func (f *cbackfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKey
 		}
 		res := make([]*provider.ResourceInfo, 0, len(snapshots))
 		for _, s := range snapshots {
-			res = append(res, f.placeholderResourceInfo(filepath.Join(source, s.ID), user.Id))
+			res = append(res, f.placeholderResourceInfo(filepath.Join(source, s.ID), user.Id, timeToTimestamp(s.Time)))
 		}
 		return res, nil
 	}
@@ -319,7 +346,7 @@ func (f *cbackfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKey
 			path := filepath.Join(ref.Path, base)
 
 			if _, ok := resSet[path]; !ok {
-				resources = append(resources, f.placeholderResourceInfo(path, user.Id))
+				resources = append(resources, f.placeholderResourceInfo(path, user.Id, nil))
 				resSet[path] = struct{}{}
 			}
 		}
