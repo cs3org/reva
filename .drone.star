@@ -111,20 +111,20 @@ def main(ctx):
     return [
         changelog(),
         checkStarlark(),
-        checkGoGenerate(),
-        coverage(),
-        buildAndPublishDocker(),
-        buildOnly(),
-        testIntegration(),
-        release(),
-        litmusOcisOldWebdav(),
-        litmusOcisNewWebdav(),
-        litmusOcisSpacesDav(),
-        cs3ApiValidatorOcis(),
-        cs3ApiValidatorS3NG(),
+        # checkGoGenerate(),
+        # coverage(),
+        # buildAndPublishDocker(),
+        # buildOnly(),
+        # testIntegration(),
+        # release(),
+        # litmusOcisOldWebdav(),
+        # litmusOcisNewWebdav(),
+        # litmusOcisSpacesDav(),
+        # cs3ApiValidatorOcis(),
+        # cs3ApiValidatorS3NG(),
         # virtual views don't work on edge at the moment
         #virtualViews(),
-    ] + ocisIntegrationTests(6) + s3ngIntegrationTests(12) + ocisLocalApiTests(2)
+    ] + ocisLocalApiTests(2)
 
 def buildAndPublishDocker():
     return {
@@ -1108,10 +1108,11 @@ def ocisLocalApiTests(parallelRuns, skipExceptParts = []):
                             "REVA_LDAP_HOSTNAME": "ldap",
                             "TEST_REVA": "true",
                             "SEND_SCENARIO_LINE_REFERENCES": "true",
-                            "BEHAT_FILTER_TAGS": "~@notToImplementOnOCIS&&~@toImplementOnOCIS&&~comments-app-required&&~@federation-app-required&&~@notifications-app-required&&~systemtags-app-required&&~@provisioning_api-app-required&&~@preview-extension-required&&~@local_storage&&~@skipOnOcis-OCIS-Storage&&~@skipOnOcis&&~@skipOnGraph&&~@caldav&&~@carddav&&~@skipOnReva",
+                            "BEHAT_FILTER_TAGS": "~@toImplementOnOCIS&&~@skipOnOcis-OCIS-Storage&&~@skipOnOcis&&@skipOnReva",
                             "DIVIDE_INTO_NUM_PARTS": parallelRuns,
                             "RUN_PART": runPart,
-                            "EXPECTED_FAILURES_FILE": "/drone/src/tests/acceptance/expected-failures-on-OCIS-storage.md",
+                            "PATH_TO_CORE": "/drone/src/tmp/testrunner",
+                            "EXPECTED_FAILURES_FILE": "/drone/src/tests/acceptance/expected-failures-localAPI-on-OCIS-storage.md",
                         },
                     },
                 ],

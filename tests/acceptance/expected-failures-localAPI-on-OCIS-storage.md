@@ -1,10 +1,10 @@
 ## Scenarios from OCIS API tests that are expected to fail with OCIS storage
 The expected failures in this file are from features in the owncloud/ocis repo.
 
-#### [downloading an archive with invalid path returns HTTP/500](https://github.com/owncloud/ocis/issues/2768)
+### [downloading an archive with invalid path returns HTTP/500](https://github.com/owncloud/ocis/issues/2768)
 - [apiArchiver/downloadByPath.feature:69](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/apiArchiver/downloadByPath.feature#L69)
 
-#### [Hardcoded call to /home/..., but /home no longer exists](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/apiArchiver/downloadByPath.feature)
+### [Hardcoded call to /home/..., but /home no longer exists](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/apiArchiver/downloadByPath.feature)
 - [apiArchiver/downloadByPath.feature:26](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/apiArchiver/downloadByPath.feature#L26)
 - [apiArchiver/downloadByPath.feature:27](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/apiArchiver/downloadByPath.feature#L27)
 - [apiArchiver/downloadByPath.feature:44](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/apiArchiver/downloadByPath.feature#L44)
@@ -31,7 +31,7 @@ The expected failures in this file are from features in the owncloud/ocis repo.
 
 - [apiSpaces/changingFilesShare.feature:12](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/apiSpaces/changingFilesShare.feature#L12)
 
-#### [Webdav LOCK operations](https://github.com/owncloud/ocis/issues/1284)
+### [Webdav LOCK operations](https://github.com/owncloud/ocis/issues/1284)
 - [apiSpaces/lockSpaces.feature:31](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/apiSpaces/lockSpaces.feature#L31)
 - [apiSpaces/lockSpaces.feature:32](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/apiSpaces/lockSpaces.feature#L32)
 - [apiSpaces/lockSpaces.feature:50](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/apiSpaces/lockSpaces.feature#L50)
