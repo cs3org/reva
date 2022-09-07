@@ -33,6 +33,15 @@ type Resource struct {
 	Size  uint64  `json:"size"`
 }
 
+type Restore struct {
+	ID           int    `json:"id"`
+	BackupID     int    `json:"backup_id"`
+	SnapshotID   string `json:"snapshot"`
+	Destionation string `json:"destination"`
+	Pattern      string `json:"pattern"`
+	Status       int    `json:"status"`
+}
+
 func (r *Resource) IsDir() bool {
 	return r.Type == "dir"
 }
