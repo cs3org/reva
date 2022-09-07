@@ -198,35 +198,32 @@ func checkIfNestedResource(ctx context.Context, ref *provider.Reference, parent 
 	}
 	parentPath := statResponse.Info.Path
 
-	childPath := ref.GetPath()
-	if childPath == "" {
-		// We mint a token as the owner of the public share and try to stat the reference
-		// TODO(ishank011): We need to find a better alternative to this
+	// We mint a token as the owner of the public share and try to stat the reference
+	// TODO(ishank011): We need to find a better alternative to this
 
-		userResp, err := client.GetUser(ctx, &userpb.GetUserRequest{UserId: statResponse.Info.Owner, SkipFetchingUserGroups: true})
-		if err != nil || userResp.Status.Code != rpc.Code_CODE_OK {
-			return false, err
-		}
-
-		scope, err := scope.AddOwnerScope(map[string]*authpb.Scope{})
-		if err != nil {
-			return false, err
-		}
-		token, err := mgr.MintToken(ctx, userResp.User, scope)
-		if err != nil {
-			return false, err
-		}
-		ctx = metadata.AppendToOutgoingContext(context.Background(), ctxpkg.TokenHeader, token)
-
-		childStat, err := client.Stat(ctx, &provider.StatRequest{Ref: ref})
-		if err != nil {
-			return false, err
-		}
-		if childStat.Status.Code != rpc.Code_CODE_OK {
-			return false, statuspkg.NewErrorFromCode(childStat.Status.Code, "auth interceptor")
-		}
-		childPath = statResponse.Info.Path
+	userResp, err := client.GetUser(ctx, &userpb.GetUserRequest{UserId: statResponse.Info.Owner, SkipFetchingUserGroups: true})
+	if err != nil || userResp.Status.Code != rpc.Code_CODE_OK {
+		return false, err
 	}
+
+	scope, err := scope.AddOwnerScope(map[string]*authpb.Scope{})
+	if err != nil {
+		return false, err
+	}
+	token, err := mgr.MintToken(ctx, userResp.User, scope)
+	if err != nil {
+		return false, err
+	}
+	ctx = metadata.AppendToOutgoingContext(context.Background(), ctxpkg.TokenHeader, token)
+
+	childStat, err := client.Stat(ctx, &provider.StatRequest{Ref: ref})
+	if err != nil {
+		return false, err
+	}
+	if childStat.Status.Code != rpc.Code_CODE_OK {
+		return false, statuspkg.NewErrorFromCode(childStat.Status.Code, "auth interceptor")
+	}
+	childPath := childStat.Info.Path
 
 	return strings.HasPrefix(childPath, parentPath), nil
 
