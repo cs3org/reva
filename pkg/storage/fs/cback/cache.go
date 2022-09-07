@@ -46,3 +46,16 @@ func (f *cbackfs) listFolder(ctx context.Context, username string, id int, snaps
 	_ = f.cache.SetWithExpire(key, l, time.Duration(f.conf.Expiration)*time.Second)
 	return l, nil
 }
+
+func (f *cbackfs) listSnapshots(ctx context.Context, username string, id int) ([]*cback.Snapshot, error) {
+	key := fmt.Sprintf("snapshots:%s:%d", username, id)
+	if l, err := f.cache.Get(key); err == nil {
+		return l.([]*cback.Snapshot), nil
+	}
+	l, err := f.client.ListSnapshots(ctx, username, id)
+	if err != nil {
+		return nil, err
+	}
+	_ = f.cache.SetWithExpire(key, l, time.Duration(f.conf.Expiration)*time.Second)
+	return l, nil
+}
