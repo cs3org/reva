@@ -366,5 +366,5 @@ func (s *svc) Close() error {
 }
 
 func (s *svc) Unprotected() []string {
-	return nil
+	return []string{"/public-files"}
 }
