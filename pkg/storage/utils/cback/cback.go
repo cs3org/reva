@@ -142,3 +142,52 @@ func (c *Client) Download(ctx context.Context, username string, backupID int, sn
 	endpoint := fmt.Sprintf("/backups/%d/snapshots/%s/%s", backupID, snapshotsID, path)
 	return c.doHTTPRequest(ctx, username, http.MethodGet, endpoint, nil)
 }
+
+func (c *Client) ListRestores(ctx context.Context, username string) ([]*Restore, error) {
+	body, err := c.doHTTPRequest(ctx, username, http.MethodGet, "/restores/", nil)
+	if err != nil {
+		return nil, errors.Wrap(err, "cback: error getting restores")
+	}
+	defer body.Close()
+
+	var res []*Restore
+
+	if err := json.NewDecoder(body).Decode(&res); err != nil {
+		return nil, errors.Wrap(err, "cback: error decoding response body")
+	}
+
+	return res, nil
+}
+
+func (c *Client) GetRestore(ctx context.Context, username string, restoreID int) (*Restore, error) {
+	endpoint := fmt.Sprintf("/restores/%d", restoreID)
+	body, err := c.doHTTPRequest(ctx, username, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, errors.Wrap(err, "cback: error getting restores")
+	}
+	defer body.Close()
+
+	var res *Restore
+
+	if err := json.NewDecoder(body).Decode(&res); err != nil {
+		return nil, errors.Wrap(err, "cback: error decoding response body")
+	}
+
+	return res, nil
+}
+
+func (c *Client) NewRestore(ctx context.Context, username string, backupID int, pattern, snapshotID string) (*Restore, error) {
+	body, err := c.doHTTPRequest(ctx, username, http.MethodPost, "/restores/", nil)
+	if err != nil {
+		return nil, errors.Wrap(err, "cback: error getting restores")
+	}
+	defer body.Close()
+
+	var res *Restore
+
+	if err := json.NewDecoder(body).Decode(&res); err != nil {
+		return nil, errors.Wrap(err, "cback: error decoding response body")
+	}
+
+	return res, nil
+}
