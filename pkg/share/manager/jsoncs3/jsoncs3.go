@@ -28,12 +28,15 @@ import (
 	"github.com/pkg/errors"
 	"google.golang.org/genproto/protobuf/field_mask"
 
+	gatewayv1beta1 "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
+	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v2/pkg/share"
 	"github.com/cs3org/reva/v2/pkg/share/manager/jsoncs3/providercache"
 	"github.com/cs3org/reva/v2/pkg/share/manager/jsoncs3/receivedsharecache"
@@ -41,6 +44,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/share/manager/jsoncs3/shareid"
 	"github.com/cs3org/reva/v2/pkg/share/manager/registry"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/metadata" // nolint:staticcheck // we need the legacy package to convert V1 to V2 messages
+	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/utils"
 )
 
@@ -120,6 +124,8 @@ type Manager struct {
 	SpaceRoot *provider.ResourceId
 
 	initialized bool
+
+	gateway gatewayv1beta1.GatewayAPIClient
 }
 
 // NewDefault returns a new manager instance with default dependencies
@@ -130,22 +136,28 @@ func NewDefault(m map[string]interface{}) (share.Manager, error) {
 		return nil, err
 	}
 
-	s, err := metadata.NewCS3Storage(c.GatewayAddr, c.ProviderAddr, c.ServiceUserID, c.ServiceUserIdp, c.MachineAuthAPIKey)
+	s, err := metadata.NewCS3Storage(c.ProviderAddr, c.ProviderAddr, c.ServiceUserID, c.ServiceUserIdp, c.MachineAuthAPIKey)
 	if err != nil {
 		return nil, err
 	}
 
-	return New(s)
+	gc, err := pool.GetGatewayServiceClient(c.GatewayAddr)
+	if err != nil {
+		return nil, err
+	}
+
+	return New(s, gc)
 }
 
 // New returns a new manager instance.
-func New(s metadata.Storage) (*Manager, error) {
+func New(s metadata.Storage, gc gatewayv1beta1.GatewayAPIClient) (*Manager, error) {
 	return &Manager{
 		Cache:              providercache.New(s),
 		CreatedCache:       sharecache.New(s, "users", "created.json"),
 		UserReceivedStates: receivedsharecache.New(s),
 		GroupReceivedCache: sharecache.New(s, "groups", "received.json"),
 		storage:            s,
+		gateway:            gc,
 	}, nil
 }
 
@@ -356,9 +368,13 @@ func (m *Manager) GetShare(ctx context.Context, ref *collaboration.ShareReferenc
 		return s, nil
 	}
 
-	shares := m.Cache.ListSpace(s.ResourceId.StorageId, s.ResourceId.SpaceId)
-	if _, ok := shares.Shares[s.GetId().GetOpaqueId()]; ok {
-		// Members of a space are also allowed to list the share.
+	req := &provider.StatRequest{
+		Ref: &provider.Reference{ResourceId: s.ResourceId},
+	}
+	res, err := m.gateway.Stat(ctx, req)
+	if err == nil &&
+		res.Status.Code == rpcv1beta1.Code_CODE_OK &&
+		res.Info.PermissionSet.ListGrants {
 		return s, nil
 	}
 
@@ -432,9 +448,13 @@ func (m *Manager) UpdateShare(ctx context.Context, ref *collaboration.ShareRefer
 
 	user := ctxpkg.ContextMustGetUser(ctx)
 	if !share.IsCreatedByUser(s, user) {
-		shares := m.Cache.ListSpace(s.ResourceId.StorageId, s.ResourceId.SpaceId)
-		// Members of a space are also allowed to list the share.
-		if _, ok := shares.Shares[s.GetId().GetOpaqueId()]; !ok {
+		req := &provider.StatRequest{
+			Ref: &provider.Reference{ResourceId: s.ResourceId},
+		}
+		res, err := m.gateway.Stat(ctx, req)
+		if err != nil ||
+			res.Status.Code != rpcv1beta1.Code_CODE_OK ||
+			!res.Info.PermissionSet.UpdateGrant {
 			return nil, errtypes.NotFound(ref.String())
 		}
 	}
@@ -475,9 +495,8 @@ func (m *Manager) ListShares(ctx context.Context, filters []*collaboration.Filte
 	defer m.Unlock()
 
 	user := ctxpkg.ContextMustGetUser(ctx)
-	grouped := share.GroupFiltersByType(filters)
 
-	if len(grouped[collaboration.Filter_TYPE_RESOURCE_ID]) > 0 {
+	if len(share.FilterFiltersByType(filters, collaboration.Filter_TYPE_RESOURCE_ID)) > 0 {
 		return m.listSharesByIDs(ctx, user, filters)
 	}
 
@@ -485,19 +504,18 @@ func (m *Manager) ListShares(ctx context.Context, filters []*collaboration.Filte
 }
 
 func (m *Manager) listSharesByIDs(ctx context.Context, user *userv1beta1.User, filters []*collaboration.Filter) ([]*collaboration.Share, error) {
-	var ss []*collaboration.Share
-
-	grouped := share.GroupFiltersByType(filters)
-	providerSpaces := map[string]map[string]bool{}
-	for _, f := range grouped[collaboration.Filter_TYPE_RESOURCE_ID] {
+	providerSpaces := make(map[string]map[string]struct{})
+	for _, f := range share.FilterFiltersByType(filters, collaboration.Filter_TYPE_RESOURCE_ID) {
 		storageID := f.GetResourceId().GetStorageId()
 		spaceID := f.GetResourceId().GetSpaceId()
 		if providerSpaces[storageID] == nil {
-			providerSpaces[storageID] = map[string]bool{}
+			providerSpaces[storageID] = make(map[string]struct{})
 		}
-		providerSpaces[storageID][spaceID] = true
+		providerSpaces[storageID][spaceID] = struct{}{}
 	}
 
+	statCache := make(map[string]struct{})
+	var ss []*collaboration.Share
 	for providerID, spaces := range providerSpaces {
 		for spaceID := range spaces {
 			err := m.Cache.Sync(ctx, providerID, spaceID)
@@ -506,10 +524,29 @@ func (m *Manager) listSharesByIDs(ctx context.Context, user *userv1beta1.User, f
 			}
 
 			shares := m.Cache.ListSpace(providerID, spaceID)
+
 			for _, s := range shares.Shares {
-				if share.MatchesFilters(s, filters) {
-					ss = append(ss, s)
+				if !share.MatchesFilters(s, filters) {
+					continue
 				}
+
+				if !(share.IsCreatedByUser(s, user) || share.IsGrantedToUser(s, user)) {
+					key := storagespace.FormatResourceID(*s.ResourceId)
+					if _, hit := statCache[key]; !hit {
+						req := &provider.StatRequest{
+							Ref: &provider.Reference{ResourceId: s.ResourceId},
+						}
+						res, err := m.gateway.Stat(ctx, req)
+						if err != nil ||
+							res.Status.Code != rpcv1beta1.Code_CODE_OK ||
+							!res.Info.PermissionSet.ListGrants {
+							continue
+						}
+						statCache[key] = struct{}{}
+					}
+				}
+
+				ss = append(ss, s)
 			}
 		}
 	}

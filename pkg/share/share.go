@@ -204,3 +204,10 @@ func GroupFiltersByType(filters []*collaboration.Filter) map[collaboration.Filte
 	}
 	return grouped
 }
+
+// FilterFiltersByType returns a slice of filters by a given type.
+// If no filter with the given type exists within the filters, then an
+// empty slice is returned.
+func FilterFiltersByType(f []*collaboration.Filter, t collaboration.Filter_Type) []*collaboration.Filter {
+	return GroupFiltersByType(f)[t]
+}
