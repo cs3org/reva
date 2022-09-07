@@ -30,6 +30,8 @@ import (
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/publicshare"
 	"github.com/cs3org/reva/v2/pkg/publicshare/manager/json"
+	"github.com/cs3org/reva/v2/pkg/publicshare/manager/json/persistence/cs3"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/metadata"
 	"golang.org/x/crypto/bcrypt"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -62,57 +64,90 @@ var _ = Describe("Json", func() {
 		ctx     context.Context
 	)
 
-	BeforeEach(func() {
-		var err error
-		tmpFile, err = ioutil.TempFile("", "reva-unit-test-*.json")
-		Expect(err).ToNot(HaveOccurred())
-
-		config := map[string]interface{}{
-			"file":         tmpFile.Name(),
-			"gateway_addr": "https://localhost:9200",
-		}
-		m, err = json.New(config)
-		Expect(err).ToNot(HaveOccurred())
-
-		ctx = ctxpkg.ContextSetUser(context.Background(), user1)
-	})
-
-	AfterEach(func() {
-		os.Remove(tmpFile.Name())
-	})
-
-	Describe("Dump", func() {
-		JustBeforeEach(func() {
-			_, err := m.CreatePublicShare(ctx, user1, sharedResource, &link.Grant{
-				Password: "foo",
-			})
+	Context("with a file persistence layer", func() {
+		BeforeEach(func() {
+			var err error
+			tmpFile, err = ioutil.TempFile("", "reva-unit-test-*.json")
 			Expect(err).ToNot(HaveOccurred())
+
+			config := map[string]interface{}{
+				"file":         tmpFile.Name(),
+				"gateway_addr": "https://localhost:9200",
+			}
+			m, err = json.NewDefault(config)
+			Expect(err).ToNot(HaveOccurred())
+
+			ctx = ctxpkg.ContextSetUser(context.Background(), user1)
 		})
 
-		It("dumps all public shares", func() {
-			psharesChan := make(chan *publicshare.WithPassword)
-			pshares := []*publicshare.WithPassword{}
+		AfterEach(func() {
+			os.Remove(tmpFile.Name())
+		})
 
-			wg := sync.WaitGroup{}
-			wg.Add(1)
-			go func() {
-				for ps := range psharesChan {
-					if ps != nil {
-						pshares = append(pshares, ps)
+		Describe("Dump", func() {
+			JustBeforeEach(func() {
+				_, err := m.CreatePublicShare(ctx, user1, sharedResource, &link.Grant{
+					Password: "foo",
+				})
+				Expect(err).ToNot(HaveOccurred())
+			})
+
+			It("dumps all public shares", func() {
+				psharesChan := make(chan *publicshare.WithPassword)
+				pshares := []*publicshare.WithPassword{}
+
+				wg := sync.WaitGroup{}
+				wg.Add(1)
+				go func() {
+					for ps := range psharesChan {
+						if ps != nil {
+							pshares = append(pshares, ps)
+						}
 					}
-				}
-				wg.Done()
-			}()
-			err := m.(publicshare.DumpableManager).Dump(ctx, psharesChan)
-			Expect(err).ToNot(HaveOccurred())
-			close(psharesChan)
-			wg.Wait()
-			Eventually(psharesChan).Should(BeClosed())
+					wg.Done()
+				}()
+				err := m.(publicshare.DumpableManager).Dump(ctx, psharesChan)
+				Expect(err).ToNot(HaveOccurred())
+				close(psharesChan)
+				wg.Wait()
+				Eventually(psharesChan).Should(BeClosed())
 
-			Expect(len(pshares)).To(Equal(1))
-			Expect(bcrypt.CompareHashAndPassword([]byte(pshares[0].Password), []byte("foo"))).To(Succeed())
-			Expect(pshares[0].PublicShare.Creator).To(Equal(user1.Id))
-			Expect(pshares[0].PublicShare.ResourceId).To(Equal(sharedResource.Id))
+				Expect(len(pshares)).To(Equal(1))
+				Expect(bcrypt.CompareHashAndPassword([]byte(pshares[0].Password), []byte("foo"))).To(Succeed())
+				Expect(pshares[0].PublicShare.Creator).To(Equal(user1.Id))
+				Expect(pshares[0].PublicShare.ResourceId).To(Equal(sharedResource.Id))
+			})
+		})
+	})
+
+	Context("with a cs3 persistence layer", func() {
+		var (
+			tmpdir string
+		)
+
+		BeforeEach(func() {
+			var err error
+			tmpdir, err = ioutil.TempDir("", "json-publicshare-manager-test")
+			Expect(err).ToNot(HaveOccurred())
+
+			err = os.MkdirAll(tmpdir, 0755)
+			Expect(err).ToNot(HaveOccurred())
+
+			storage, err := metadata.NewDiskStorage(tmpdir)
+			Expect(err).ToNot(HaveOccurred())
+
+			p := cs3.New(storage)
+
+			m, err = json.New("https://localhost:9200", 11, 60, false, p)
+			Expect(err).ToNot(HaveOccurred())
+
+			ctx = ctxpkg.ContextSetUser(context.Background(), user1)
+		})
+
+		AfterEach(func() {
+			if tmpdir != "" {
+				os.RemoveAll(tmpdir)
+			}
 		})
 	})
 })

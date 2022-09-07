@@ -47,17 +47,18 @@ import (
 	"github.com/cs3org/reva/v2/pkg/publicshare/manager/json/persistence/memory"
 	"github.com/cs3org/reva/v2/pkg/publicshare/manager/registry"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/metadata"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )
 
 func init() {
-	registry.Register("json", New)
+	registry.Register("json", NewDefault)
 }
 
-// New returns a new filesystem public shares manager.
-func New(c map[string]interface{}) (publicshare.Manager, error) {
+// NewDefault returns a new filesystem public shares manager.
+func NewDefault(c map[string]interface{}) (publicshare.Manager, error) {
 	conf := &config{}
 	if err := mapstructure.Decode(c, conf); err != nil {
 		return nil, err
@@ -65,32 +66,41 @@ func New(c map[string]interface{}) (publicshare.Manager, error) {
 
 	conf.init()
 
-	m := manager{
-		gatewayAddr:                conf.GatewayAddr,
-		mutex:                      &sync.Mutex{},
-		passwordHashCost:           conf.SharePasswordHashCost,
-		janitorRunInterval:         conf.JanitorRunInterval,
-		enableExpiredSharesCleanup: conf.EnableExpiredSharesCleanup,
-	}
-
+	var p persistence.Persistence
 	switch conf.Persistence {
 	case "cs3":
-		m.persistence = cs3.New(conf.ProviderAddr, conf.ProviderAddr, conf.ServiceUserID, conf.ServiceUserIdp, conf.MachineAuthAPIKey)
+		s, err := metadata.NewCS3Storage(conf.ProviderAddr, conf.ProviderAddr, conf.ServiceUserID, conf.ServiceUserIdp, conf.MachineAuthAPIKey)
+		if err != nil {
+			return nil, err
+		}
+		p = cs3.New(s)
 	case "file":
-		m.persistence = file.New(conf.File)
+		p = file.New(conf.File)
 	case "memory":
 		fallthrough
 	default:
-		m.persistence = memory.New()
+		p = memory.New()
 	}
 
-	if err := m.persistence.InitDB(); err != nil {
+	if err := p.Init(); err != nil {
 		return nil, err
 	}
 
-	go m.startJanitorRun()
+	return New(conf.GatewayAddr, conf.SharePasswordHashCost, conf.JanitorRunInterval, conf.EnableExpiredSharesCleanup, p)
+}
 
-	return &m, nil
+func New(gwAddr string, pwHashCost, janitorRunInterval int, enableCleanup bool, p persistence.Persistence) (publicshare.Manager, error) {
+	m := &manager{
+		gatewayAddr:                gwAddr,
+		mutex:                      &sync.Mutex{},
+		passwordHashCost:           pwHashCost,
+		janitorRunInterval:         janitorRunInterval,
+		enableExpiredSharesCleanup: enableCleanup,
+		persistence:                p,
+	}
+
+	go m.startJanitorRun()
+	return m, nil
 }
 
 type config struct {
@@ -159,7 +169,7 @@ func (m *manager) Dump(ctx context.Context, shareChan chan<- *publicshare.WithPa
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
-	db, err := m.persistence.ReadDB()
+	db, err := m.persistence.Read()
 	if err != nil {
 		return err
 	}
@@ -236,7 +246,7 @@ func (m *manager) CreatePublicShare(ctx context.Context, u *user.User, rInfo *pr
 		return nil, err
 	}
 
-	db, err := m.persistence.ReadDB()
+	db, err := m.persistence.Read()
 	if err != nil {
 		return nil, err
 	}
@@ -250,7 +260,7 @@ func (m *manager) CreatePublicShare(ctx context.Context, u *user.User, rInfo *pr
 		return nil, errors.New("key already exists")
 	}
 
-	err = m.persistence.WriteDB(db)
+	err = m.persistence.Write(db)
 	if err != nil {
 		return nil, err
 	}
@@ -309,7 +319,7 @@ func (m *manager) UpdatePublicShare(ctx context.Context, u *user.User, req *link
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
-	db, err := m.persistence.ReadDB()
+	db, err := m.persistence.Read()
 	if err != nil {
 		return nil, err
 	}
@@ -331,7 +341,7 @@ func (m *manager) UpdatePublicShare(ctx context.Context, u *user.User, req *link
 
 	db[share.Id.OpaqueId] = data
 
-	err = m.persistence.WriteDB(db)
+	err = m.persistence.Write(db)
 	if err != nil {
 		return nil, err
 	}
@@ -358,7 +368,7 @@ func (m *manager) GetPublicShare(ctx context.Context, u *user.User, ref *link.Pu
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
-	db, err := m.persistence.ReadDB()
+	db, err := m.persistence.Read()
 	if err != nil {
 		return nil, err
 	}
@@ -399,7 +409,7 @@ func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []
 
 	log := appctx.GetLogger(ctx)
 
-	db, err := m.persistence.ReadDB()
+	db, err := m.persistence.Read()
 	if err != nil {
 		return nil, err
 	}
@@ -464,7 +474,7 @@ func (m *manager) cleanupExpiredShares() {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
-	db, _ := m.persistence.ReadDB()
+	db, _ := m.persistence.Read()
 
 	for _, v := range db {
 		d := v.(map[string]interface{})["share"]
@@ -504,7 +514,7 @@ func (m *manager) revokeExpiredPublicShare(ctx context.Context, s *link.PublicSh
 // RevokePublicShare undocumented.
 func (m *manager) RevokePublicShare(ctx context.Context, u *user.User, ref *link.PublicShareReference) error {
 	m.mutex.Lock()
-	db, err := m.persistence.ReadDB()
+	db, err := m.persistence.Read()
 	if err != nil {
 		return err
 	}
@@ -529,11 +539,11 @@ func (m *manager) RevokePublicShare(ctx context.Context, u *user.User, ref *link
 
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
-	return m.persistence.WriteDB(db)
+	return m.persistence.Write(db)
 }
 
 func (m *manager) getByToken(ctx context.Context, token string) (*link.PublicShare, string, error) {
-	db, err := m.persistence.ReadDB()
+	db, err := m.persistence.Read()
 	if err != nil {
 		return nil, "", err
 	}
@@ -558,7 +568,7 @@ func (m *manager) getByToken(ctx context.Context, token string) (*link.PublicSha
 
 // GetPublicShareByToken gets a public share by its opaque token.
 func (m *manager) GetPublicShareByToken(ctx context.Context, token string, auth *link.PublicShareAuthentication, sign bool) (*link.PublicShare, error) {
-	db, err := m.persistence.ReadDB()
+	db, err := m.persistence.Read()
 	if err != nil {
 		return nil, err
 	}

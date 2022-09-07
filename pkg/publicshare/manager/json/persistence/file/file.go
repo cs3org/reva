@@ -35,12 +35,12 @@ type file struct {
 
 // New returns a new Cache instance
 func New(path string) persistence.Persistence {
-	return file{
+	return &file{
 		path: path,
 	}
 }
 
-func (p file) InitDB() error {
+func (p *file) Init() error {
 	// attempt to create the db file
 	var fi os.FileInfo
 	var err error
@@ -64,7 +64,7 @@ func (p file) InitDB() error {
 	return nil
 }
 
-func (p file) ReadDB() (map[string]interface{}, error) {
+func (p *file) Read() (persistence.PublicShares, error) {
 	if !p.initialized {
 		return nil, fmt.Errorf("not initialized")
 	}
@@ -79,7 +79,7 @@ func (p file) ReadDB() (map[string]interface{}, error) {
 	return db, nil
 }
 
-func (p file) WriteDB(db map[string]interface{}) error {
+func (p *file) Write(db persistence.PublicShares) error {
 	if !p.initialized {
 		return fmt.Errorf("not initialized")
 	}

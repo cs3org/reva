@@ -30,22 +30,22 @@ type memory struct {
 
 // New returns a new Cache instance
 func New() persistence.Persistence {
-	return memory{
+	return &memory{
 		db: map[string]interface{}{},
 	}
 }
 
-func (p memory) InitDB() error {
+func (p *memory) Init() error {
 	return nil
 }
 
-func (p memory) ReadDB() (map[string]interface{}, error) {
+func (p *memory) Read() (persistence.PublicShares, error) {
 	if p.db == nil {
 		return nil, fmt.Errorf("not initialized")
 	}
 	return p.db, nil
 }
-func (p memory) WriteDB(db map[string]interface{}) error {
+func (p *memory) Write(db persistence.PublicShares) error {
 	if p.db == nil {
 		return fmt.Errorf("not initialized")
 	}

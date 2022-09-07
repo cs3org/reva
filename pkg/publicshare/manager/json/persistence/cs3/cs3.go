@@ -30,34 +30,24 @@ import (
 
 // FIXME the in memory data structure in the json manager is ... awkward. it does not even use a map per space ... weird
 type cs3 struct {
-	gwa, pa, suid, suidp, maak string
-	initialized                bool
-	s                          metadata.Storage
-	client                     gateway.GatewayAPIClient
+	initialized bool
+	s           metadata.Storage
+	client      gateway.GatewayAPIClient
 }
 
 // New returns a new Cache instance
-func New(gwa, pa, suid, suidp, maak string) persistence.Persistence {
+func New(s metadata.Storage) persistence.Persistence {
 	return &cs3{
-		gwa:   gwa,
-		pa:    pa,
-		suid:  suid,
-		suidp: suidp,
-		maak:  maak,
+		s: s,
 	}
 }
 
-func (p *cs3) InitDB() error {
+func (p *cs3) Init() error {
 	if p.initialized { // check if initialization happened while grabbing the lock
 		return nil
 	}
-	var err error
-	p.s, err = metadata.NewCS3Storage(p.gwa, p.pa, p.suid, p.suidp, p.maak)
-	if err != nil {
-		return err
-	}
 
-	err = p.s.Init(context.Background(), "jsoncs3-public-share-manager-metadata")
+	err := p.s.Init(context.Background(), "jsoncs3-public-share-manager-metadata")
 	if err != nil {
 		return err
 	}
@@ -79,7 +69,7 @@ func (p *cs3) InitDB() error {
 	return nil
 }
 
-func (p *cs3) ReadDB() (map[string]interface{}, error) {
+func (p *cs3) Read() (persistence.PublicShares, error) {
 	if !p.initialized {
 		return nil, fmt.Errorf("not initialized")
 	}
@@ -94,7 +84,7 @@ func (p *cs3) ReadDB() (map[string]interface{}, error) {
 	return db, nil
 }
 
-func (p *cs3) WriteDB(db map[string]interface{}) error {
+func (p *cs3) Write(db persistence.PublicShares) error {
 	if !p.initialized {
 		return fmt.Errorf("not initialized")
 	}

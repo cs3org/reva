@@ -18,8 +18,10 @@
 
 package persistence
 
+type PublicShares map[string]interface{}
+
 type Persistence interface {
-	InitDB() error
-	ReadDB() (map[string]interface{}, error)
-	WriteDB(db map[string]interface{}) error
+	Init() error
+	Read() (PublicShares, error)
+	Write(PublicShares) error
 }
