@@ -1088,6 +1088,7 @@ def ocisLocalApiTests(parallelRuns, skipExceptParts = []):
                             "/drone/src/cmd/revad/revad -c ldap-users.toml",
                         ],
                     },
+                    cloneOc10TestReposStep(),
                     cloneOCISTestReposStep(),
                     {
                         "name": "ocisLocalAPIAcceptanceTestsOcisStorage",
