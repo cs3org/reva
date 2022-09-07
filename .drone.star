@@ -107,7 +107,7 @@ def cephService():
 def main(ctx):
     # In order to run specific parts only, specify the parts as
     # ocisIntegrationTests(6, [1, 4])     - this will only run 1st and 4th parts
-    # implemented for: ocisIntegrationTests and s3ngIntegrationTests
+    # implemented for: ocisIntegrationTests and s3ngIntegrationTests and ocisLocalApiTests
     return [
         changelog(),
         checkStarlark(),
@@ -124,7 +124,7 @@ def main(ctx):
         cs3ApiValidatorS3NG(),
         # virtual views don't work on edge at the moment
         #virtualViews(),
-    ] + ocisIntegrationTests(6) + s3ngIntegrationTests(12)
+    ] + ocisIntegrationTests(6) + s3ngIntegrationTests(12) + ocisLocalApiTests(2)
 
 def buildAndPublishDocker():
     return {
@@ -1045,7 +1045,7 @@ def s3ngIntegrationTests(parallelRuns, skipExceptParts = []):
 
     return pipelines
 
-def ocisIntegrationTests(parallelRuns, skipExceptParts = []):
+def ocisLocalApiTests(parallelRuns, skipExceptParts = []):
     pipelines = []
     debugPartsEnabled = (len(skipExceptParts) != 0)
     for runPart in range(1, parallelRuns + 1):
