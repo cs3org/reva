@@ -1113,6 +1113,7 @@ def ocisLocalApiTests(parallelRuns, skipExceptParts = []):
                             "RUN_PART": runPart,
                             "TEST_OCIS": "true",
                             "PATH_TO_CORE": "/drone/src/tmp/oc10testrunner",
+                            "TEST_WITH_GRAPH_API": "true",
                             "EXPECTED_FAILURES_FILE": "/drone/src/tests/acceptance/expected-failures-localAPI-on-OCIS-storage.md",
                         },
                     },
