@@ -50,11 +50,16 @@ var _ = Describe("Spaces", func() {
 			Expect(err).ToNot(HaveOccurred())
 			env.PermissionsClient.On("CheckPermission", mock.Anything, mock.Anything, mock.Anything).Return(
 				func(ctx context.Context, in *cs3permissions.CheckPermissionRequest, opts ...grpc.CallOption) *cs3permissions.CheckPermissionResponse {
-					if ctxpkg.ContextMustGetUser(ctx).Id.GetOpaqueId() == "25b69780-5f39-43be-a7ac-a9b9e9fe4230" {
-						// id of owner/admin
+					if in.Permission == "delete-all-home-spaces" && ctxpkg.ContextMustGetUser(ctx).Id.GetOpaqueId() == env.DeleteHomeSpacesUser.Id.OpaqueId {
 						return &cs3permissions.CheckPermissionResponse{Status: &rpcv1beta1.Status{Code: rpcv1beta1.Code_CODE_OK}}
 					}
-					// id of generic user
+					if in.Permission == "delete-all-spaces" && ctxpkg.ContextMustGetUser(ctx).Id.GetOpaqueId() == env.DeleteAllSpacesUser.Id.OpaqueId {
+						return &cs3permissions.CheckPermissionResponse{Status: &rpcv1beta1.Status{Code: rpcv1beta1.Code_CODE_OK}}
+					}
+					if (in.Permission == "create-space" || in.Permission == "list-all-spaces") && ctxpkg.ContextMustGetUser(ctx).Id.GetOpaqueId() == helpers.OwnerID {
+						return &cs3permissions.CheckPermissionResponse{Status: &rpcv1beta1.Status{Code: rpcv1beta1.Code_CODE_OK}}
+					}
+					// any other user
 					return &cs3permissions.CheckPermissionResponse{Status: &rpcv1beta1.Status{Code: rpcv1beta1.Code_CODE_PERMISSION_DENIED}}
 				},
 				nil)
@@ -153,8 +158,8 @@ var _ = Describe("Spaces", func() {
 				})
 				Expect(err).To(HaveOccurred())
 			})
-			It("succeeds on trying to delete homespace as admin", func() {
-				ctx := ctxpkg.ContextSetUser(context.Background(), env.Owner)
+			It("succeeds on trying to delete homespace as user with 'delete-all-home-spaces' permission", func() {
+				ctx := ctxpkg.ContextSetUser(context.Background(), env.DeleteHomeSpacesUser)
 				resp, err := env.Fs.ListStorageSpaces(env.Ctx, nil, false)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(resp)).To(Equal(1))
@@ -163,6 +168,65 @@ var _ = Describe("Spaces", func() {
 				Expect(resp[0].SpaceType).To(Equal("personal"))
 				err = env.Fs.DeleteStorageSpace(ctx, &provider.DeleteStorageSpaceRequest{
 					Id: resp[0].GetId(),
+				})
+				Expect(err).To(Not(HaveOccurred()))
+			})
+			It("succeeds on trying to delete homespace as user with 'delete-all-spaces' permission", func() {
+				ctx := ctxpkg.ContextSetUser(context.Background(), env.DeleteAllSpacesUser)
+				resp, err := env.Fs.ListStorageSpaces(env.Ctx, nil, false)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(len(resp)).To(Equal(1))
+				Expect(string(resp[0].Opaque.GetMap()["spaceAlias"].Value)).To(Equal("personal/username"))
+				Expect(resp[0].Name).To(Equal("username"))
+				Expect(resp[0].SpaceType).To(Equal("personal"))
+				err = env.Fs.DeleteStorageSpace(ctx, &provider.DeleteStorageSpaceRequest{
+					Id: resp[0].GetId(),
+				})
+				Expect(err).To(Not(HaveOccurred()))
+			})
+		})
+
+		Context("can delete project spaces", func() {
+			It("fails as a unprivileged user", func() {
+				resp, err := env.Fs.CreateStorageSpace(env.Ctx, &provider.CreateStorageSpaceRequest{Name: "Mission to Venus", Type: "project"})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(resp.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+				Expect(resp.StorageSpace).ToNot(Equal(nil))
+				ctx := ctxpkg.ContextSetUser(context.Background(), env.Users[1])
+				err = env.Fs.DeleteStorageSpace(ctx, &provider.DeleteStorageSpaceRequest{
+					Id: resp.StorageSpace.GetId(),
+				})
+				Expect(err).To(HaveOccurred())
+			})
+			It("fails as a user with 'delete-all-home-spaces privilege", func() {
+				resp, err := env.Fs.CreateStorageSpace(env.Ctx, &provider.CreateStorageSpaceRequest{Name: "Mission to Venus", Type: "project"})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(resp.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+				Expect(resp.StorageSpace).ToNot(Equal(nil))
+				ctx := ctxpkg.ContextSetUser(context.Background(), env.DeleteHomeSpacesUser)
+				err = env.Fs.DeleteStorageSpace(ctx, &provider.DeleteStorageSpaceRequest{
+					Id: resp.StorageSpace.GetId(),
+				})
+				Expect(err).To(HaveOccurred())
+			})
+			It("succeeds as a user with 'delete-all-spaces privilege", func() {
+				resp, err := env.Fs.CreateStorageSpace(env.Ctx, &provider.CreateStorageSpaceRequest{Name: "Mission to Venus", Type: "project"})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(resp.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+				Expect(resp.StorageSpace).ToNot(Equal(nil))
+				ctx := ctxpkg.ContextSetUser(context.Background(), env.DeleteAllSpacesUser)
+				err = env.Fs.DeleteStorageSpace(ctx, &provider.DeleteStorageSpaceRequest{
+					Id: resp.StorageSpace.GetId(),
+				})
+				Expect(err).To(Not(HaveOccurred()))
+			})
+			It("succeeds as the space owner", func() {
+				resp, err := env.Fs.CreateStorageSpace(env.Ctx, &provider.CreateStorageSpaceRequest{Name: "Mission to Venus", Type: "project"})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(resp.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+				Expect(resp.StorageSpace).ToNot(Equal(nil))
+				err = env.Fs.DeleteStorageSpace(env.Ctx, &provider.DeleteStorageSpaceRequest{
+					Id: resp.StorageSpace.GetId(),
 				})
 				Expect(err).To(Not(HaveOccurred()))
 			})
