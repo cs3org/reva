@@ -42,6 +42,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/publicshare"
 	"github.com/cs3org/reva/v2/pkg/publicshare/manager/json/persistence"
+	"github.com/cs3org/reva/v2/pkg/publicshare/manager/json/persistence/cs3"
 	"github.com/cs3org/reva/v2/pkg/publicshare/manager/json/persistence/file"
 	"github.com/cs3org/reva/v2/pkg/publicshare/manager/json/persistence/memory"
 	"github.com/cs3org/reva/v2/pkg/publicshare/manager/registry"
@@ -73,6 +74,8 @@ func New(c map[string]interface{}) (publicshare.Manager, error) {
 	}
 
 	switch conf.Persistence {
+	case "cs3":
+		m.persistence = cs3.New(conf.ProviderAddr, conf.ProviderAddr, conf.ServiceUserID, conf.ServiceUserIdp, conf.MachineAuthAPIKey)
 	case "file":
 		m.persistence = file.New(conf.File)
 	case "memory":
@@ -92,11 +95,17 @@ func New(c map[string]interface{}) (publicshare.Manager, error) {
 
 type config struct {
 	GatewayAddr                string `mapstructure:"gateway_addr"`
-	Persistence                string `mapstructure:"persistence"`
-	File                       string `mapstructure:"file"`
 	SharePasswordHashCost      int    `mapstructure:"password_hash_cost"`
 	JanitorRunInterval         int    `mapstructure:"janitor_run_interval"`
 	EnableExpiredSharesCleanup bool   `mapstructure:"enable_expired_shares_cleanup"`
+	Persistence                string `mapstructure:"persistence"`
+	// file persistence
+	File string `mapstructure:"file"`
+	// cs3 persistence
+	ProviderAddr      string `mapstructure:"provider_addr"`
+	ServiceUserID     string `mapstructure:"service_user_id"`
+	ServiceUserIdp    string `mapstructure:"service_user_idp"`
+	MachineAuthAPIKey string `mapstructure:"machine_auth_apikey"`
 }
 
 func (c *config) init() {
