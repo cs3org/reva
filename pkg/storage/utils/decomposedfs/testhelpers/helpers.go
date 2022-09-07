@@ -46,24 +46,28 @@ import (
 
 // TestEnv represents a test environment for unit tests
 type TestEnv struct {
-	Root              string
-	Fs                *decomposedfs.Decomposedfs
-	Tree              *tree.Tree
-	Permissions       *mocks.PermissionsChecker
-	Blobstore         *treemocks.Blobstore
-	Owner             *userpb.User
-	Users             []*userpb.User
-	Lookup            *lookup.Lookup
-	Ctx               context.Context
-	SpaceRootRes      *providerv1beta1.ResourceId
-	PermissionsClient *mocks.CS3PermissionsClient
+	Root                 string
+	Fs                   *decomposedfs.Decomposedfs
+	Tree                 *tree.Tree
+	Permissions          *mocks.PermissionsChecker
+	Blobstore            *treemocks.Blobstore
+	Owner                *userpb.User
+	DeleteAllSpacesUser  *userpb.User
+	DeleteHomeSpacesUser *userpb.User
+	Users                []*userpb.User
+	Lookup               *lookup.Lookup
+	Ctx                  context.Context
+	SpaceRootRes         *providerv1beta1.ResourceId
+	PermissionsClient    *mocks.CS3PermissionsClient
 }
 
 // Constant UUIDs for the space users
 const (
-	OwnerID = "25b69780-5f39-43be-a7ac-a9b9e9fe4230"
-	User0ID = "824385ae-8fc6-4896-8eb2-d1d171290bd0"
-	User1ID = "693b0d96-80a2-4016-b53d-425ce4f66114"
+	OwnerID                = "25b69780-5f39-43be-a7ac-a9b9e9fe4230"
+	DeleteAllSpacesUserID  = "39885dbc-68c0-47c0-a873-9d5e5646dceb"
+	DeleteHomeSpacesUserID = "ca8c6bf1-36a7-4d10-87a5-a2806566f983"
+	User0ID                = "824385ae-8fc6-4896-8eb2-d1d171290bd0"
+	User1ID                = "693b0d96-80a2-4016-b53d-425ce4f66114"
 )
 
 // NewTestEnv prepares a test environment on disk
@@ -105,6 +109,22 @@ func NewTestEnv(config map[string]interface{}) (*TestEnv, error) {
 		},
 		Username: "username",
 	}
+	deleteHomeSpacesUser := &userpb.User{
+		Id: &userpb.UserId{
+			Idp:      "idp",
+			OpaqueId: DeleteHomeSpacesUserID,
+			Type:     userpb.UserType_USER_TYPE_PRIMARY,
+		},
+		Username: "username",
+	}
+	deleteAllSpacesUser := &userpb.User{
+		Id: &userpb.UserId{
+			Idp:      "idp",
+			OpaqueId: DeleteAllSpacesUserID,
+			Type:     userpb.UserType_USER_TYPE_PRIMARY,
+		},
+		Username: "username",
+	}
 	users := []*userpb.User{
 		{
 			Id: &userpb.UserId{
@@ -135,16 +155,18 @@ func NewTestEnv(config map[string]interface{}) (*TestEnv, error) {
 	tmpFs, _ := fs.(*decomposedfs.Decomposedfs)
 
 	env := &TestEnv{
-		Root:              tmpRoot,
-		Fs:                tmpFs,
-		Tree:              tree,
-		Lookup:            lookup,
-		Permissions:       permissions,
-		Blobstore:         bs,
-		Owner:             owner,
-		Users:             users,
-		Ctx:               ctx,
-		PermissionsClient: cs3permissionsclient,
+		Root:                 tmpRoot,
+		Fs:                   tmpFs,
+		Tree:                 tree,
+		Lookup:               lookup,
+		Permissions:          permissions,
+		Blobstore:            bs,
+		Owner:                owner,
+		DeleteAllSpacesUser:  deleteAllSpacesUser,
+		DeleteHomeSpacesUser: deleteHomeSpacesUser,
+		Users:                users,
+		Ctx:                  ctx,
+		PermissionsClient:    cs3permissionsclient,
 	}
 
 	env.SpaceRootRes, err = env.CreateTestStorageSpace("personal", nil)
