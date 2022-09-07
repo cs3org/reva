@@ -28,11 +28,13 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	share "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/thumbnails/manager"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
@@ -183,22 +185,55 @@ func (s *svc) davPublicContext(next http.Handler) http.Handler {
 			s.writeHTTPError(w, errtypes.BadRequest("no token provided"))
 		}
 
-		// TODO: add support for public shares with password
-		rsp, err := s.client.Authenticate(ctx, &gateway.AuthenticateRequest{
-			Type:     "publicshares",
-			ClientId: token,
-			// We pass an empty password because we expect non pre-signed public links
-			// to not be password protected
-			ClientSecret: "password|",
-		})
+		sig := r.URL.Query().Get("signature")
+		exp := r.URL.Query().Get("expiration")
+
+		var authReq *gateway.AuthenticateRequest
+		var auth *share.PublicShareAuthentication
+		var sign bool
+
+		if sig != "" && exp != "" {
+			authReq = &gateway.AuthenticateRequest{
+				Type:         "publicshares",
+				ClientId:     token,
+				ClientSecret: strings.Join([]string{"signature", sig, exp}, "|"),
+			}
+
+			e, _ := time.Parse(time.RFC3339, exp)
+			auth = &share.PublicShareAuthentication{
+				Spec: &share.PublicShareAuthentication_Signature{
+					Signature: &share.ShareSignature{
+						Signature: sig,
+						SignatureExpiration: &typesv1beta1.Timestamp{
+							Seconds: uint64(e.UnixNano() / 1000000000),
+							Nanos:   uint32(e.UnixNano() % 1000000000),
+						},
+					},
+				},
+			}
+			sign = false
+		} else {
+			authReq = &gateway.AuthenticateRequest{
+				Type:         "publicshares",
+				ClientId:     token,
+				ClientSecret: "password|",
+			}
+		}
+
+		rsp, err := s.client.Authenticate(ctx, authReq)
 		if err != nil {
 			s.writeHTTPError(w, err)
 			return
 		}
+		if rsp.Status.Code != rpc.Code_CODE_OK {
+			s.writeHTTPError(w, errors.New(rsp.Status.Message))
+			return
+		}
 
 		ctx = metadata.AppendToOutgoingContext(ctx, ctxpkg.TokenHeader, rsp.Token)
+		ctx = ctxpkg.ContextSetToken(ctx, rsp.Token)
 
-		res, err := s.statPublicFile(ctx, token, path)
+		res, err := s.statPublicFile(ctx, token, path, sign, auth)
 		if err != nil {
 			s.writeHTTPError(w, err)
 			return
@@ -210,13 +245,11 @@ func (s *svc) davPublicContext(next http.Handler) http.Handler {
 	})
 }
 
-func (s *svc) statPublicFile(ctx context.Context, token, path string) (*provider.ResourceInfo, error) {
-	resp, err := s.client.GetPublicShare(ctx, &share.GetPublicShareRequest{
-		Ref: &share.PublicShareReference{
-			Spec: &share.PublicShareReference_Token{
-				Token: token,
-			},
-		},
+func (s *svc) statPublicFile(ctx context.Context, token, path string, sign bool, auth *share.PublicShareAuthentication) (*provider.ResourceInfo, error) {
+	resp, err := s.client.GetPublicShareByToken(ctx, &share.GetPublicShareByTokenRequest{
+		Token:          token,
+		Sign:           sign,
+		Authentication: auth,
 	})
 
 	switch {
