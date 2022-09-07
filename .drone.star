@@ -40,8 +40,8 @@ def cloneOc10TestReposStep():
         "commands": [
             "source /drone/src/.drone.env",
             "git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing",
-            "git clone -b $CORE_BRANCH --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner",
-            "cd /drone/src/tmp/testrunner",
+            "git clone -b $CORE_BRANCH --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/oc10testrunner",
+            "cd /drone/src/tmp/oc10testrunner",
             "git checkout $CORE_COMMITID",
         ],
     }
@@ -52,7 +52,6 @@ def cloneOCISTestReposStep():
         "image": "registry.cern.ch/docker.io/owncloudci/alpine:latest",
         "commands": [
             "source /drone/src/.drone.env",
-            "git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing",
             "git clone -b $OCIS_BRANCH --single-branch --no-tags https://github.com/owncloud/ocis.git /drone/src/tmp/ocistestrunner",
             "cd /drone/src/tmp/ocistestrunner",
             "git checkout $OCIS_COMMITID",
@@ -587,7 +586,7 @@ def virtualViews():
                     "make test-acceptance-api",
                 ],
                 "environment": {
-                    "PATH_TO_CORE": "/drone/src/tmp/testrunner",
+                    "PATH_TO_CORE": "/drone/src/tmp/oc10testrunner",
                     "TEST_SERVER_URL": "http://revad-services:20180",
                     "OCIS_REVA_DATA_ROOT": "/drone/src/tmp/reva/data/",
                     "DELETE_USER_DATA_CMD": "rm -rf /drone/src/tmp/reva/data/spaces/* /drone/src/tmp/reva/data/blobs/* /drone/src/tmp/reva/data/indexes",
@@ -934,7 +933,7 @@ def ocisIntegrationTests(parallelRuns, skipExceptParts = []):
                         "name": "oC10APIAcceptanceTestsOcisStorage",
                         "image": "registry.cern.ch/docker.io/owncloudci/php:7.4",
                         "commands": [
-                            "cd /drone/src/tmp/testrunner",
+                            "cd /drone/src/tmp/oc10testrunner",
                             "composer self-update",
                             "composer --version",
                             "make test-acceptance-api",
@@ -1013,7 +1012,7 @@ def s3ngIntegrationTests(parallelRuns, skipExceptParts = []):
                         "name": "oC10APIAcceptanceTestsS3ngStorage",
                         "image": "registry.cern.ch/docker.io/owncloudci/php:7.4",
                         "commands": [
-                            "cd /drone/src/tmp/testrunner",
+                            "cd /drone/src/tmp/oc10testrunner",
                             "composer self-update",
                             "composer --version",
                             "make test-acceptance-api",
@@ -1112,7 +1111,7 @@ def ocisLocalApiTests(parallelRuns, skipExceptParts = []):
                             "BEHAT_FILTER_TAGS": "~@toImplementOnOCIS&&~@skipOnOcis-OCIS-Storage&&~@skipOnOcis&&@skipOnReva",
                             "DIVIDE_INTO_NUM_PARTS": parallelRuns,
                             "RUN_PART": runPart,
-                            "PATH_TO_CORE": "/drone/src/tmp/testrunner",
+                            "PATH_TO_CORE": "/drone/src/tmp/oc10testrunner",
                             "EXPECTED_FAILURES_FILE": "/drone/src/tests/acceptance/expected-failures-localAPI-on-OCIS-storage.md",
                         },
                     },
