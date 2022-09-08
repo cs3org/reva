@@ -1,3 +1,12 @@
+
+---
+title: "v2.9.0"
+linkTitle: "v2.9.0"
+weight: 40
+description: >
+  Changelog for Reva v2.9.0 (2022-09-08)
+---
+
 Changelog for reva 2.9.0 (2022-09-08)
 =======================================
 
@@ -127,3 +136,4 @@ Details
    Enabled space members to update shares which they have not created themselves.
 
    https://github.com/cs3org/reva/pull/3192
+
