@@ -189,7 +189,7 @@ var _ = Describe("Json", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			persistence := cs3.New(storage)
-			persistence.Init(context.Background())
+			Expect(persistence.Init(context.Background())).To(Succeed())
 
 			m, err = json.New("https://localhost:9200", 11, 60, false, persistence)
 			Expect(err).ToNot(HaveOccurred())
@@ -227,7 +227,7 @@ var _ = Describe("Json", func() {
 
 				// Reset manager
 				p := cs3.New(storage)
-				p.Init(context.Background())
+				Expect(p.Init(context.Background())).To(Succeed())
 
 				m, err = json.New("https://localhost:9200", 11, 60, false, p)
 				Expect(err).ToNot(HaveOccurred())
@@ -248,7 +248,7 @@ var _ = Describe("Json", func() {
 
 				// Purge file on storage and make sure its mtime is newer than the cache
 				path := filepath.Join(tmpdir, "publicshares.json")
-				os.WriteFile(path, []byte("{}"), 0x644)
+				Expect(os.WriteFile(path, []byte("{}"), 0x644)).To(Succeed())
 				t := time.Now().Add(5 * time.Minute)
 				Expect(os.Chtimes(path, t, t)).To(Succeed())
 
