@@ -74,6 +74,7 @@ var _ = Describe("Json", func() {
 	)
 
 	Context("with a file persistence layer", func() {
+
 		BeforeEach(func() {
 			var err error
 			tmpFile, err = ioutil.TempFile("", "reva-unit-test-*.json")
@@ -125,6 +126,46 @@ var _ = Describe("Json", func() {
 				Expect(bcrypt.CompareHashAndPassword([]byte(pshares[0].Password), []byte("foo"))).To(Succeed())
 				Expect(pshares[0].PublicShare.Creator).To(Equal(user1.Id))
 				Expect(pshares[0].PublicShare.ResourceId).To(Equal(sharedResource.Id))
+			})
+		})
+
+		Describe("Load", func() {
+			It("loads shares including state and mountpoint information", func() {
+				existingShare, err := m.CreatePublicShare(ctx, user1, sharedResource, &link.Grant{
+					Password: "foo",
+				})
+				Expect(err).ToNot(HaveOccurred())
+
+				targetManager, err := json.NewMemory(map[string]interface{}{})
+				Expect(err).ToNot(HaveOccurred())
+
+				sharesChan := make(chan *publicshare.WithPassword)
+
+				wg := sync.WaitGroup{}
+				wg.Add(2)
+				go func() {
+					err := targetManager.(publicshare.LoadableManager).Load(ctx, sharesChan)
+					Expect(err).ToNot(HaveOccurred())
+					wg.Done()
+				}()
+				go func() {
+					sharesChan <- &publicshare.WithPassword{
+						Password:    "foo",
+						PublicShare: *existingShare,
+					}
+					close(sharesChan)
+					wg.Done()
+				}()
+				wg.Wait()
+				Eventually(sharesChan).Should(BeClosed())
+
+				loadedPublicShare, err := targetManager.GetPublicShare(ctx, user1, &link.PublicShareReference{
+					Spec: &link.PublicShareReference_Token{
+						Token: existingShare.Token,
+					},
+				}, false)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(loadedPublicShare).ToNot(BeNil())
 			})
 		})
 	})

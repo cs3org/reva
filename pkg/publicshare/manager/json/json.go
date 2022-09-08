@@ -216,6 +216,27 @@ func (m *manager) Dump(ctx context.Context, shareChan chan<- *publicshare.WithPa
 	return nil
 }
 
+// Load imports public shares and received shares from channels (e.g. during migration)
+func (m *manager) Load(ctx context.Context, shareChan <-chan *publicshare.WithPassword) error {
+	db, err := m.persistence.Read(ctx)
+	if err != nil {
+		return err
+	}
+
+	for ps := range shareChan {
+		encShare, err := utils.MarshalProtoV1ToJSON(&ps.PublicShare)
+		if err != nil {
+			return err
+		}
+
+		db[ps.PublicShare.Id.GetOpaqueId()] = map[string]interface{}{
+			"share":    string(encShare),
+			"password": ps.Password,
+		}
+	}
+	return m.persistence.Write(ctx, db)
+}
+
 // CreatePublicShare adds a new entry to manager.shares
 func (m *manager) CreatePublicShare(ctx context.Context, u *user.User, rInfo *provider.ResourceInfo, g *link.Grant) (*link.PublicShare, error) {
 	id := &link.PublicShareId{
