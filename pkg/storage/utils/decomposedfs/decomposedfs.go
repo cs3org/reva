@@ -199,7 +199,7 @@ func (fs *Decomposedfs) Postprocessing(ch <-chan interface{}) {
 				failed = true
 				keepUpload = true
 			case events.PPOutcomeContinue:
-				if err := upload.Finalize(up); err != nil {
+				if err := up.Finalize(); err != nil {
 					log.Error().Err(err).Str("uploadID", ev.UploadID).Msg("could not finalize upload")
 					keepUpload = true // should we keep the upload when assembling failed?
 					failed = true
@@ -244,7 +244,8 @@ func (fs *Decomposedfs) Postprocessing(ch <-chan interface{}) {
 				log.Error().Err(err).Str("uploadID", ev.UploadID).Msg("Failed to set scan results")
 				continue
 			}
-
+		default:
+			log.Error().Interface("event", ev).Msg("Unknown event")
 		}
 	}
 
