@@ -118,6 +118,7 @@ func NewCS3(c map[string]interface{}) (publicshare.Manager, error) {
 	return New(conf.GatewayAddr, conf.SharePasswordHashCost, conf.JanitorRunInterval, conf.EnableExpiredSharesCleanup, p)
 }
 
+// New returns a new public share manager instance
 func New(gwAddr string, pwHashCost, janitorRunInterval int, enableCleanup bool, p persistence.Persistence) (publicshare.Manager, error) {
 	m := &manager{
 		gatewayAddr:                gwAddr,

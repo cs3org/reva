@@ -20,8 +20,10 @@ package persistence
 
 import "context"
 
+// PublicShares is a map indexing publicshares by their ids
 type PublicShares map[string]interface{}
 
+// Persistence defines the interface for the json publicshare manager persistence layers
 type Persistence interface {
 	Init(context.Context) error
 	Read(context.Context) (PublicShares, error)
