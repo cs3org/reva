@@ -22,7 +22,9 @@ import (
 	"context"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 	"sync"
+	"time"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
@@ -55,6 +57,13 @@ var _ = Describe("Json", func() {
 			ArbitraryMetadata: &providerv1beta1.ArbitraryMetadata{
 				Metadata: map[string]string{
 					"name": "publicshare",
+				},
+			},
+		}
+		grant = &link.Grant{
+			Permissions: &link.PublicSharePermissions{
+				Permissions: &providerv1beta1.ResourcePermissions{
+					InitiateFileUpload: false,
 				},
 			},
 		}
@@ -123,6 +132,8 @@ var _ = Describe("Json", func() {
 	Context("with a cs3 persistence layer", func() {
 		var (
 			tmpdir string
+
+			storage metadata.Storage
 		)
 
 		BeforeEach(func() {
@@ -133,12 +144,13 @@ var _ = Describe("Json", func() {
 			err = os.MkdirAll(tmpdir, 0755)
 			Expect(err).ToNot(HaveOccurred())
 
-			storage, err := metadata.NewDiskStorage(tmpdir)
+			storage, err = metadata.NewDiskStorage(tmpdir)
 			Expect(err).ToNot(HaveOccurred())
 
-			p := cs3.New(storage)
+			persistence := cs3.New(storage)
+			persistence.Init(context.Background())
 
-			m, err = json.New("https://localhost:9200", 11, 60, false, p)
+			m, err = json.New("https://localhost:9200", 11, 60, false, persistence)
 			Expect(err).ToNot(HaveOccurred())
 
 			ctx = ctxpkg.ContextSetUser(context.Background(), user1)
@@ -148,6 +160,64 @@ var _ = Describe("Json", func() {
 			if tmpdir != "" {
 				os.RemoveAll(tmpdir)
 			}
+		})
+		Describe("CreatePublicShare", func() {
+			It("creates public shares", func() {
+				ps, err := m.CreatePublicShare(ctx, user1, sharedResource, grant)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(ps).ToNot(BeNil())
+			})
+		})
+
+		Describe("PublicShares", func() {
+			It("lists public shares", func() {
+				_, err := m.CreatePublicShare(ctx, user1, sharedResource, grant)
+				Expect(err).ToNot(HaveOccurred())
+
+				ps, err := m.ListPublicShares(ctx, user1, []*link.ListPublicSharesRequest_Filter{}, false)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(len(ps)).To(Equal(1))
+				Expect(ps[0].ResourceId).To(Equal(sharedResource.Id))
+			})
+
+			It("picks up shares from the storage", func() {
+				_, err := m.CreatePublicShare(ctx, user1, sharedResource, grant)
+				Expect(err).ToNot(HaveOccurred())
+
+				// Reset manager
+				p := cs3.New(storage)
+				p.Init(context.Background())
+
+				m, err = json.New("https://localhost:9200", 11, 60, false, p)
+				Expect(err).ToNot(HaveOccurred())
+
+				ps, err := m.ListPublicShares(ctx, user1, []*link.ListPublicSharesRequest_Filter{}, false)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(len(ps)).To(Equal(1))
+				Expect(ps[0].ResourceId).To(Equal(sharedResource.Id))
+			})
+
+			It("refreshes its cache before writing new data", func() {
+				_, err := m.CreatePublicShare(ctx, user1, sharedResource, grant)
+				Expect(err).ToNot(HaveOccurred())
+
+				ps, err := m.ListPublicShares(ctx, user1, []*link.ListPublicSharesRequest_Filter{}, false)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(len(ps)).To(Equal(1))
+
+				// Purge file on storage and make sure its mtime is newer than the cache
+				path := filepath.Join(tmpdir, "publicshares.json")
+				os.WriteFile(path, []byte("{}"), 0x644)
+				t := time.Now().Add(5 * time.Minute)
+				Expect(os.Chtimes(path, t, t)).To(Succeed())
+
+				_, err = m.CreatePublicShare(ctx, user1, sharedResource, grant)
+				Expect(err).ToNot(HaveOccurred())
+
+				ps, err = m.ListPublicShares(ctx, user1, []*link.ListPublicSharesRequest_Filter{}, false)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(len(ps)).To(Equal(1)) // Make sure the first created public share is gone
+			})
 		})
 	})
 })

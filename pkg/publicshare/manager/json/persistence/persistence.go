@@ -18,10 +18,12 @@
 
 package persistence
 
+import "context"
+
 type PublicShares map[string]interface{}
 
 type Persistence interface {
-	Init() error
-	Read() (PublicShares, error)
-	Write(PublicShares) error
+	Init(context.Context) error
+	Read(context.Context) (PublicShares, error)
+	Write(context.Context, PublicShares) error
 }

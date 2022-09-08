@@ -19,6 +19,7 @@
 package memory
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/cs3org/reva/v2/pkg/publicshare/manager/json/persistence"
@@ -35,17 +36,17 @@ func New() persistence.Persistence {
 	}
 }
 
-func (p *memory) Init() error {
+func (p *memory) Init(_ context.Context) error {
 	return nil
 }
 
-func (p *memory) Read() (persistence.PublicShares, error) {
+func (p *memory) Read(_ context.Context) (persistence.PublicShares, error) {
 	if p.db == nil {
 		return nil, fmt.Errorf("not initialized")
 	}
 	return p.db, nil
 }
-func (p *memory) Write(db persistence.PublicShares) error {
+func (p *memory) Write(_ context.Context, db persistence.PublicShares) error {
 	if p.db == nil {
 		return fmt.Errorf("not initialized")
 	}

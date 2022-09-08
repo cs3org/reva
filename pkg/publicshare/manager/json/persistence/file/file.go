@@ -19,6 +19,7 @@
 package file
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -40,7 +41,7 @@ func New(path string) persistence.Persistence {
 	}
 }
 
-func (p *file) Init() error {
+func (p *file) Init(_ context.Context) error {
 	// attempt to create the db file
 	var fi os.FileInfo
 	var err error
@@ -64,7 +65,7 @@ func (p *file) Init() error {
 	return nil
 }
 
-func (p *file) Read() (persistence.PublicShares, error) {
+func (p *file) Read(_ context.Context) (persistence.PublicShares, error) {
 	if !p.initialized {
 		return nil, fmt.Errorf("not initialized")
 	}
@@ -79,7 +80,7 @@ func (p *file) Read() (persistence.PublicShares, error) {
 	return db, nil
 }
 
-func (p *file) Write(db persistence.PublicShares) error {
+func (p *file) Write(_ context.Context, db persistence.PublicShares) error {
 	if !p.initialized {
 		return fmt.Errorf("not initialized")
 	}

@@ -82,7 +82,7 @@ func NewDefault(c map[string]interface{}) (publicshare.Manager, error) {
 		p = memory.New()
 	}
 
-	if err := p.Init(); err != nil {
+	if err := p.Init(context.Background()); err != nil {
 		return nil, err
 	}
 
@@ -169,7 +169,7 @@ func (m *manager) Dump(ctx context.Context, shareChan chan<- *publicshare.WithPa
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
-	db, err := m.persistence.Read()
+	db, err := m.persistence.Read(ctx)
 	if err != nil {
 		return err
 	}
@@ -246,7 +246,7 @@ func (m *manager) CreatePublicShare(ctx context.Context, u *user.User, rInfo *pr
 		return nil, err
 	}
 
-	db, err := m.persistence.Read()
+	db, err := m.persistence.Read(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -260,7 +260,7 @@ func (m *manager) CreatePublicShare(ctx context.Context, u *user.User, rInfo *pr
 		return nil, errors.New("key already exists")
 	}
 
-	err = m.persistence.Write(db)
+	err = m.persistence.Write(ctx, db)
 	if err != nil {
 		return nil, err
 	}
@@ -319,7 +319,7 @@ func (m *manager) UpdatePublicShare(ctx context.Context, u *user.User, req *link
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
-	db, err := m.persistence.Read()
+	db, err := m.persistence.Read(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -341,7 +341,7 @@ func (m *manager) UpdatePublicShare(ctx context.Context, u *user.User, req *link
 
 	db[share.Id.OpaqueId] = data
 
-	err = m.persistence.Write(db)
+	err = m.persistence.Write(ctx, db)
 	if err != nil {
 		return nil, err
 	}
@@ -368,7 +368,7 @@ func (m *manager) GetPublicShare(ctx context.Context, u *user.User, ref *link.Pu
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
-	db, err := m.persistence.Read()
+	db, err := m.persistence.Read(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -409,7 +409,7 @@ func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []
 
 	log := appctx.GetLogger(ctx)
 
-	db, err := m.persistence.Read()
+	db, err := m.persistence.Read(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -474,7 +474,7 @@ func (m *manager) cleanupExpiredShares() {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
-	db, _ := m.persistence.Read()
+	db, _ := m.persistence.Read(context.Background())
 
 	for _, v := range db {
 		d := v.(map[string]interface{})["share"]
@@ -514,7 +514,7 @@ func (m *manager) revokeExpiredPublicShare(ctx context.Context, s *link.PublicSh
 // RevokePublicShare undocumented.
 func (m *manager) RevokePublicShare(ctx context.Context, u *user.User, ref *link.PublicShareReference) error {
 	m.mutex.Lock()
-	db, err := m.persistence.Read()
+	db, err := m.persistence.Read(ctx)
 	if err != nil {
 		return err
 	}
@@ -539,11 +539,11 @@ func (m *manager) RevokePublicShare(ctx context.Context, u *user.User, ref *link
 
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
-	return m.persistence.Write(db)
+	return m.persistence.Write(ctx, db)
 }
 
 func (m *manager) getByToken(ctx context.Context, token string) (*link.PublicShare, string, error) {
-	db, err := m.persistence.Read()
+	db, err := m.persistence.Read(ctx)
 	if err != nil {
 		return nil, "", err
 	}
@@ -568,7 +568,7 @@ func (m *manager) getByToken(ctx context.Context, token string) (*link.PublicSha
 
 // GetPublicShareByToken gets a public share by its opaque token.
 func (m *manager) GetPublicShareByToken(ctx context.Context, token string, auth *link.PublicShareAuthentication, sign bool) (*link.PublicShare, error) {
-	db, err := m.persistence.Read()
+	db, err := m.persistence.Read(ctx)
 	if err != nil {
 		return nil, err
 	}

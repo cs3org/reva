@@ -22,69 +22,78 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
-	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/publicshare/manager/json/persistence"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/metadata"
+	"github.com/cs3org/reva/v2/pkg/utils"
 )
 
-// FIXME the in memory data structure in the json manager is ... awkward. it does not even use a map per space ... weird
+type db struct {
+	mtime        time.Time
+	publicShares persistence.PublicShares
+}
+
 type cs3 struct {
 	initialized bool
 	s           metadata.Storage
-	client      gateway.GatewayAPIClient
+
+	db db
 }
 
 // New returns a new Cache instance
 func New(s metadata.Storage) persistence.Persistence {
 	return &cs3{
 		s: s,
+		db: db{
+			publicShares: persistence.PublicShares{},
+		},
 	}
 }
 
-func (p *cs3) Init() error {
-	if p.initialized { // check if initialization happened while grabbing the lock
+func (p *cs3) Init(ctx context.Context) error {
+	if p.initialized {
 		return nil
 	}
 
-	err := p.s.Init(context.Background(), "jsoncs3-public-share-manager-metadata")
+	err := p.s.Init(ctx, "jsoncs3-public-share-manager-metadata")
 	if err != nil {
 		return err
 	}
-	if err := p.s.MakeDirIfNotExist(context.Background(), "publicshares"); err != nil {
-		return err
-	}
-	// stat and create publicshares.json?
-	if _, err := p.s.Stat(context.TODO(), "publicshares.json"); err != nil {
-		/*err*/ p.s.Upload(context.TODO(), metadata.UploadRequest{
-			Path:    "publicshares.json",
-			Content: []byte("{}"),
-		})
-	}
-	// or introduce a PersistWithCTX(ctx context.Context, db map[string]interface{}, ifUnchangedSince time.Time)
-	// and ReadWithCTX(ctx context.Context, ifModifiedSince time.Time) (db map[string]interface{}, error)
-	// or go micro store interface?
 	p.initialized = true
 
 	return nil
 }
 
-func (p *cs3) Read() (persistence.PublicShares, error) {
+func (p *cs3) Read(ctx context.Context) (persistence.PublicShares, error) {
 	if !p.initialized {
 		return nil, fmt.Errorf("not initialized")
 	}
-	db := map[string]interface{}{}
-	readBytes, err := p.s.SimpleDownload(context.TODO(), "publicshares.json")
+
+	info, err := p.s.Stat(ctx, "publicshares.json")
 	if err != nil {
+		if _, ok := err.(errtypes.NotFound); ok {
+			return p.db.publicShares, nil // Nothing to sync against
+		}
 		return nil, err
 	}
-	if err := json.Unmarshal(readBytes, &db); err != nil {
-		return nil, err
+
+	if utils.TSToTime(info.Mtime).After(p.db.mtime) {
+		readBytes, err := p.s.SimpleDownload(ctx, "publicshares.json")
+		if err != nil {
+			return nil, err
+		}
+		p.db.publicShares = persistence.PublicShares{}
+		if err := json.Unmarshal(readBytes, &p.db.publicShares); err != nil {
+			return nil, err
+		}
+		p.db.mtime = utils.TSToTime(info.Mtime)
 	}
-	return db, nil
+	return p.db.publicShares, nil
 }
 
-func (p *cs3) Write(db persistence.PublicShares) error {
+func (p *cs3) Write(ctx context.Context, db persistence.PublicShares) error {
 	if !p.initialized {
 		return fmt.Errorf("not initialized")
 	}
@@ -93,5 +102,9 @@ func (p *cs3) Write(db persistence.PublicShares) error {
 		return err
 	}
 
-	return p.s.SimpleUpload(context.TODO(), "publicshares.json", dbAsJSON)
+	return p.s.Upload(ctx, metadata.UploadRequest{
+		Content:           dbAsJSON,
+		Path:              "publicshares.json",
+		IfUnmodifiedSince: p.db.mtime,
+	})
 }
