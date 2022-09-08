@@ -135,6 +135,9 @@ func RandString(n int) string {
 // TSToUnixNano converts a protobuf Timestamp to uint64
 // with nanoseconds resolution.
 func TSToUnixNano(ts *types.Timestamp) uint64 {
+	if ts == nil {
+		return 0
+	}
 	return uint64(time.Unix(int64(ts.Seconds), int64(ts.Nanos)).UnixNano())
 }
 
