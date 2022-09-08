@@ -83,7 +83,7 @@ var _ = Describe("Json", func() {
 				"file":         tmpFile.Name(),
 				"gateway_addr": "https://localhost:9200",
 			}
-			m, err = json.NewDefault(config)
+			m, err = json.NewFile(config)
 			Expect(err).ToNot(HaveOccurred())
 
 			ctx = ctxpkg.ContextSetUser(context.Background(), user1)

@@ -54,33 +54,62 @@ import (
 )
 
 func init() {
-	registry.Register("json", NewDefault)
+	registry.Register("json", NewFile)
+	registry.Register("jsoncs3", NewCS3)
+	registry.Register("jsonmemory", NewMemory)
 }
 
-// NewDefault returns a new filesystem public shares manager.
-func NewDefault(c map[string]interface{}) (publicshare.Manager, error) {
-	conf := &config{}
+// NewFile returns a new filesystem public shares manager.
+func NewFile(c map[string]interface{}) (publicshare.Manager, error) {
+	conf := &fileConfig{}
+	if err := mapstructure.Decode(c, conf); err != nil {
+		return nil, err
+	}
+
+	conf.init()
+	if conf.File == "" {
+		conf.File = "/var/tmp/reva/publicshares"
+	}
+
+	p := file.New(conf.File)
+	if err := p.Init(context.Background()); err != nil {
+		return nil, err
+	}
+
+	return New(conf.GatewayAddr, conf.SharePasswordHashCost, conf.JanitorRunInterval, conf.EnableExpiredSharesCleanup, p)
+}
+
+// NewMemory returns a new in-memory public shares manager.
+func NewMemory(c map[string]interface{}) (publicshare.Manager, error) {
+	conf := &commonConfig{}
+	if err := mapstructure.Decode(c, conf); err != nil {
+		return nil, err
+	}
+
+	conf.init()
+	p := memory.New()
+
+	if err := p.Init(context.Background()); err != nil {
+		return nil, err
+	}
+
+	return New(conf.GatewayAddr, conf.SharePasswordHashCost, conf.JanitorRunInterval, conf.EnableExpiredSharesCleanup, p)
+}
+
+// NewCS3 returns a new cs3 public shares manager.
+func NewCS3(c map[string]interface{}) (publicshare.Manager, error) {
+	conf := &cs3Config{}
 	if err := mapstructure.Decode(c, conf); err != nil {
 		return nil, err
 	}
 
 	conf.init()
 
-	var p persistence.Persistence
-	switch conf.Persistence {
-	case "cs3":
-		s, err := metadata.NewCS3Storage(conf.ProviderAddr, conf.ProviderAddr, conf.ServiceUserID, conf.ServiceUserIdp, conf.MachineAuthAPIKey)
-		if err != nil {
-			return nil, err
-		}
-		p = cs3.New(s)
-	case "file":
-		p = file.New(conf.File)
-	case "memory":
-		fallthrough
-	default:
-		p = memory.New()
+	s, err := metadata.NewCS3Storage(conf.ProviderAddr, conf.ProviderAddr, conf.ServiceUserID, conf.ServiceUserIdp, conf.MachineAuthAPIKey)
+	if err != nil {
+		return nil, err
 	}
+	p := cs3.New(s)
 
 	if err := p.Init(context.Background()); err != nil {
 		return nil, err
@@ -103,28 +132,29 @@ func New(gwAddr string, pwHashCost, janitorRunInterval int, enableCleanup bool, 
 	return m, nil
 }
 
-type config struct {
+type commonConfig struct {
 	GatewayAddr                string `mapstructure:"gateway_addr"`
 	SharePasswordHashCost      int    `mapstructure:"password_hash_cost"`
 	JanitorRunInterval         int    `mapstructure:"janitor_run_interval"`
 	EnableExpiredSharesCleanup bool   `mapstructure:"enable_expired_shares_cleanup"`
-	Persistence                string `mapstructure:"persistence"`
-	// file persistence
+}
+
+type fileConfig struct {
+	commonConfig `mapstructure:",squash"`
+
 	File string `mapstructure:"file"`
-	// cs3 persistence
+}
+
+type cs3Config struct {
+	commonConfig `mapstructure:",squash"`
+
 	ProviderAddr      string `mapstructure:"provider_addr"`
 	ServiceUserID     string `mapstructure:"service_user_id"`
 	ServiceUserIdp    string `mapstructure:"service_user_idp"`
 	MachineAuthAPIKey string `mapstructure:"machine_auth_apikey"`
 }
 
-func (c *config) init() {
-	if c.File == "" {
-		c.File = "/var/tmp/reva/publicshares"
-	}
-	if c.Persistence == "" && c.File != "" {
-		c.Persistence = "file"
-	}
+func (c *commonConfig) init() {
 	if c.SharePasswordHashCost == 0 {
 		c.SharePasswordHashCost = 11
 	}
