@@ -24,12 +24,13 @@ import (
 	"encoding/xml"
 	"fmt"
 	"net/url"
-	"strconv"
+	"os"
 	"strings"
 	"time"
 
 	"github.com/BurntSushi/toml"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+	group "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaborationv1beta1 "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	linkv1beta1 "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
@@ -39,6 +40,7 @@ import (
 	"google.golang.org/grpc/codes"
 
 	"github.com/cs3org/reva/v2/pkg/appctx"
+	"github.com/cs3org/reva/v2/pkg/bytesize"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/publicshare"
@@ -113,13 +115,30 @@ func (s *svc) CreateHome(ctx context.Context, req *provider.CreateHomeRequest) (
 
 	}
 
-	var quota *provider.Quota
-	if q := utils.ReadPlainFromOpaque(req.Opaque, "quota"); q != "" {
-		qq, err := strconv.ParseUint(q, 10, 64)
-		if err == nil {
-			quota = &provider.Quota{QuotaMaxBytes: qq}
+	// set default quota
+	q, _ := bytesize.Parse(s.c.PersonalQuotaDefault)
+	for _, g := range u.Groups {
+		r, err := s.GetGroup(ctx, &group.GetGroupRequest{
+			GroupId: &group.GroupId{
+				Idp:      u.Id.Idp,
+				OpaqueId: g,
+			},
+		})
+		if err != nil || r.Status.Code != rpc.Code_CODE_OK {
+			continue
+		}
+
+		gq, _ := bytesize.Parse(os.Getenv(fmt.Sprintf(s.c.GroupQuotaPattern, strings.ToUpper(r.Group.GroupName))))
+		if gq > q {
+			q = gq
 		}
 	}
+
+	var quota *provider.Quota
+	if q != 0 {
+		quota = &provider.Quota{QuotaMaxBytes: q.Bytes()}
+	}
+
 	createReq := &provider.CreateStorageSpaceRequest{
 		Type:  "personal",
 		Owner: u,
