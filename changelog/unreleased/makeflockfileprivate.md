@@ -1,4 +1,4 @@
-Enhancement: Make the function flockFile private.
+Enhancement: Make the function flockFile private
 
 Having that function exported is tempting people to use the func
 to get the name for calling the lock functions. That is wrong, as
