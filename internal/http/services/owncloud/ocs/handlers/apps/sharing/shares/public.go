@@ -359,7 +359,7 @@ func (h *Handler) updatePublicShare(w http.ResponseWriter, r *http.Request, shar
 	}
 
 	if !sufficientPermissions(statRes.Info.PermissionSet, newPermissions) {
-		response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "no share permission", nil)
+		response.WriteOCSError(w, r, http.StatusNotFound, "no share permission", nil)
 		return
 	}
 
