@@ -986,9 +986,11 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 				prop.Escaped("oc:spaceid", md.Id.SpaceId),
 			)
 
-			if md.Id.GetStorageId() == utils.ShareStorageProviderID {
-				propstatOK.Prop = append(propstatOK.Prop, prop.Raw("oc:shareid", md.Id.GetOpaqueId()))
-			}
+		}
+
+		// we need to add the shareid if possible - the only way to extract it here is to parse it from the path
+		if ref, err := storagespace.ParseReference(strings.TrimPrefix(md.Path, "/")); err == nil && ref.GetResourceId().GetSpaceId() == utils.ShareStorageSpaceID {
+			propstatOK.Prop = append(propstatOK.Prop, prop.Raw("oc:shareid", ref.GetResourceId().GetOpaqueId()))
 		}
 
 		if md.Name != "" {
@@ -1322,8 +1324,8 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 				case "name":
 					propstatOK.Prop = append(propstatOK.Prop, prop.Raw("oc:name", md.Name))
 				case "shareid":
-					if md.Id.GetStorageId() == utils.ShareStorageProviderID {
-						propstatOK.Prop = append(propstatOK.Prop, prop.Raw("oc:shareid", md.Id.GetOpaqueId()))
+					if ref, err := storagespace.ParseReference(strings.TrimPrefix(md.Path, "/")); err == nil && ref.GetResourceId().GetSpaceId() == utils.ShareStorageSpaceID {
+						propstatOK.Prop = append(propstatOK.Prop, prop.Raw("oc:shareid", ref.GetResourceId().GetOpaqueId()))
 					}
 				case "privatelink": // phoenix only
 					// <oc:privatelink>https://phoenix.owncloud.com/f/9</oc:privatelink>
