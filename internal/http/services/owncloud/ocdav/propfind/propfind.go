@@ -403,25 +403,8 @@ func (p *Handler) propfindResponse(ctx context.Context, w http.ResponseWriter, r
 		}
 	}
 
-	propRes, err := MultistatusResponse(ctx, &pf, resourceInfos, p.PublicURL, namespace, linkshares)
-	if err != nil {
-		log.Error().Err(err).Msg("error formatting propfind")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	w.Header().Set(net.HeaderDav, "1, 3, extended-mkcol")
-	w.Header().Set(net.HeaderContentType, "application/xml; charset=utf-8")
-	if sendTusHeaders {
-		w.Header().Add(net.HeaderAccessControlExposeHeaders, strings.Join([]string{net.HeaderTusResumable, net.HeaderTusVersion, net.HeaderTusExtension}, ", "))
-		w.Header().Set(net.HeaderTusResumable, "1.0.0")
-		w.Header().Set(net.HeaderTusVersion, "1.0.0")
-		w.Header().Set(net.HeaderTusExtension, "creation,creation-with-upload,checksum,expiration")
-	}
+	RenderMultistatusResponse(ctx, w, &pf, resourceInfos, p.PublicURL, namespace, linkshares, sendTusHeaders)
 
-	w.WriteHeader(http.StatusMultiStatus)
-	if _, err := w.Write(propRes); err != nil {
-		log.Err(err).Msg("error writing response")
-	}
 }
 
 // TODO this is just a stat -> rename
@@ -867,24 +850,49 @@ func ReadPropfind(r io.Reader) (pf XML, status int, err error) {
 	return pf, 0, nil
 }
 
-// MultistatusResponse converts a list of resource infos into a multistatus response string
-func MultistatusResponse(ctx context.Context, pf *XML, mds []*provider.ResourceInfo, publicURL, ns string, linkshares map[string]struct{}) ([]byte, error) {
-	responses := make([]*ResponseXML, 0, len(mds))
+func renderMultistatusHeader(_ context.Context, w http.ResponseWriter, sendTusHeaders bool) error {
+	// TODO transfer encoding chunked?
+	w.Header().Set(net.HeaderDav, "1, 3, extended-mkcol")
+	w.Header().Set(net.HeaderContentType, "application/xml; charset=utf-8")
+	if sendTusHeaders {
+		w.Header().Add(net.HeaderAccessControlExposeHeaders, strings.Join([]string{net.HeaderTusResumable, net.HeaderTusVersion, net.HeaderTusExtension}, ", "))
+		w.Header().Set(net.HeaderTusResumable, "1.0.0")
+		w.Header().Set(net.HeaderTusVersion, "1.0.0")
+		w.Header().Set(net.HeaderTusExtension, "creation,creation-with-upload,checksum,expiration")
+	}
+
+	w.WriteHeader(http.StatusMultiStatus)
+	_, err := w.Write([]byte(`<d:multistatus xmlns:s="http://sabredav.org/ns" xmlns:d="DAV:" xmlns:oc="http://owncloud.org/ns">`))
+	return err
+}
+func renderMultistatusFooter(_ context.Context, w http.ResponseWriter, sendTusHeaders bool) error {
+	_, err := w.Write([]byte(`</d:multistatus>`))
+	return err
+}
+
+// RenderMultistatusResponse converts a list of resource infos into a multistatus response string
+func RenderMultistatusResponse(ctx context.Context, w http.ResponseWriter, pf *XML, mds []*provider.ResourceInfo, publicURL, ns string, linkshares map[string]struct{}, sendTusHeaders bool) {
+	log := appctx.GetLogger(ctx)
+	if err := renderMultistatusHeader(ctx, w, sendTusHeaders); err != nil {
+		log.Err(err).Msg("error writing xml header")
+	}
+	enc := xml.NewEncoder(w)
 	for i := range mds {
 		res, err := mdToPropResponse(ctx, pf, mds[i], publicURL, ns, linkshares)
 		if err != nil {
-			return nil, err
+			log.Error().Err(err).Msg("error formatting resource")
+			return
 		}
-		responses = append(responses, res)
+		err = enc.Encode(res)
+		if err != nil {
+			log.Error().Err(err).Msg("error writing xml")
+			return
+		}
 	}
 
-	msr := NewMultiStatusResponseXML()
-	msr.Responses = responses
-	msg, err := xml.Marshal(msr)
-	if err != nil {
-		return nil, err
+	if err := renderMultistatusFooter(ctx, w, sendTusHeaders); err != nil {
+		log.Err(err).Msg("error writing xml footer")
 	}
-	return msg, nil
 }
 
 // mdToPropResponse converts the CS3 metadata into a webdav PropResponse

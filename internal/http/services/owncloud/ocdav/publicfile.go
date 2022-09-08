@@ -111,19 +111,8 @@ func (s *svc) handlePropfindOnToken(w http.ResponseWriter, r *http.Request, ns s
 
 	infos := s.getPublicFileInfos(onContainer, depth == net.DepthZero, tokenStatInfo)
 
-	propRes, err := propfind.MultistatusResponse(ctx, &pf, infos, s.c.PublicURL, ns, nil)
-	if err != nil {
-		sublog.Error().Err(err).Msg("error formatting propfind")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
+	propfind.RenderMultistatusResponse(ctx, w, &pf, infos, s.c.PublicURL, ns, nil, false) // TODO why not announce TUS by sending the headers?
 
-	w.Header().Set(net.HeaderDav, "1, 3, extended-mkcol")
-	w.Header().Set(net.HeaderContentType, "application/xml; charset=utf-8")
-	w.WriteHeader(http.StatusMultiStatus)
-	if _, err := w.Write(propRes); err != nil {
-		sublog.Err(err).Msg("error writing response")
-	}
 }
 
 // there are only two possible entries

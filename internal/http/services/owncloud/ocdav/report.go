@@ -26,7 +26,6 @@ import (
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	providerv1beta1 "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/net"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/propfind"
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
@@ -110,18 +109,8 @@ func (s *svc) doFilterFiles(w http.ResponseWriter, r *http.Request, ff *reportFi
 			infos = append(infos, statRes.Info)
 		}
 
-		responsesXML, err := propfind.MultistatusResponse(ctx, &propfind.XML{Prop: ff.Prop}, infos, s.c.PublicURL, namespace, nil)
-		if err != nil {
-			log.Error().Err(err).Msg("error formatting propfind")
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-		w.Header().Set(net.HeaderDav, "1, 3, extended-mkcol")
-		w.Header().Set(net.HeaderContentType, "application/xml; charset=utf-8")
-		w.WriteHeader(http.StatusMultiStatus)
-		if _, err := w.Write(responsesXML); err != nil {
-			log.Err(err).Msg("error writing response")
-		}
+		propfind.RenderMultistatusResponse(ctx, w, &propfind.XML{Prop: ff.Prop}, infos, s.c.PublicURL, namespace, nil, false) // TODO why not announce TUS by sending headers?
+
 	}
 }
 
