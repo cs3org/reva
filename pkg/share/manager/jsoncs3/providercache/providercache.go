@@ -21,6 +21,8 @@ package providercache
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"os"
 	"path"
 	"path/filepath"
 	"time"
@@ -101,6 +103,14 @@ func New(s metadata.Storage) Cache {
 
 // Add adds a share to the cache
 func (c *Cache) Add(ctx context.Context, storageID, spaceID, shareID string, share *collaboration.Share) error {
+	switch {
+	case storageID == "":
+		return fmt.Errorf("missing storage id")
+	case spaceID == "":
+		return fmt.Errorf("missing space id")
+	case shareID == "":
+		return fmt.Errorf("missing share id")
+	}
 	c.initializeIfNeeded(storageID, spaceID)
 	c.Providers[storageID].Spaces[spaceID].Shares[shareID] = share
 
@@ -129,7 +139,7 @@ func (c *Cache) Get(storageID, spaceID, shareID string) *collaboration.Share {
 
 // ListSpace returns the list of shares in a given space
 func (c *Cache) ListSpace(storageID, spaceID string) *Shares {
-	if c.Providers[storageID] == nil {
+	if c.Providers[storageID] == nil || c.Providers[storageID].Spaces[spaceID] == nil {
 		return &Shares{}
 	}
 	return c.Providers[storageID].Spaces[spaceID]
@@ -189,6 +199,11 @@ func (c *Cache) Sync(ctx context.Context, storageID, spaceID string) error {
 	info, err := c.storage.Stat(ctx, jsonPath)
 	if err != nil {
 		if _, ok := err.(errtypes.NotFound); ok {
+			log.Debug().Msg("no json file, nothing to sync")
+			return nil // Nothing to sync against
+		}
+		if _, ok := err.(*os.PathError); ok {
+			log.Debug().Msg("no storage dir, nothing to sync")
 			return nil // Nothing to sync against
 		}
 		log.Error().Err(err).Msg("Failed to stat the provider cache")

@@ -526,6 +526,30 @@ func (h *Handler) GetShare(w http.ResponseWriter, r *http.Request) {
 		resourceID = psRes.Share.ResourceId
 	}
 
+	var receivedshare *collaboration.ReceivedShare
+	if share == nil {
+		// check if we have a user share
+		sublog.Debug().Msg("get received user share by id")
+		uRes, err := client.GetReceivedShare(r.Context(), &collaboration.GetReceivedShareRequest{
+			Ref: &collaboration.ShareReference{
+				Spec: &collaboration.ShareReference_Id{
+					Id: &collaboration.ShareId{
+						OpaqueId: shareID,
+					},
+				},
+			},
+		})
+		if err == nil && uRes.GetShare() != nil {
+			receivedshare = uRes.Share
+			resourceID = uRes.Share.Share.ResourceId
+			share, err = conversions.CS3Share2ShareData(ctx, uRes.Share.Share)
+			if err != nil {
+				response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error mapping share data", err)
+				return
+			}
+		}
+	}
+
 	if share == nil {
 		// check if we have a user share
 		sublog.Debug().Msg("get user share by id")
@@ -590,6 +614,50 @@ func (h *Handler) GetShare(w http.ResponseWriter, r *http.Request) {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error mapping share data", err)
 	}
 	h.mapUserIds(ctx, client, share)
+
+	if receivedshare != nil && receivedshare.State == collaboration.ShareState_SHARE_STATE_ACCEPTED {
+		// only accepted shares can be accessed when jailing users into their home.
+		// in this case we cannot stat shared resources that are outside the users home (/home),
+		// the path (/users/u-u-i-d/foo) will not be accessible
+
+		// in a global namespace we can access the share using the full path
+		// in a jailed namespace we have to point to the mount point in the users /Shares jail
+		// - needed for oc10 hot migration
+		// or use the /dav/spaces/<space id> endpoint?
+
+		// list /Shares and match fileids with list of received shares
+		// - only works for a /Shares folder jail
+		// - does not work for freely mountable shares as in oc10 because we would need to iterate over the whole tree, there is no listing of mountpoints, yet
+
+		// can we return the mountpoint when the gateway resolves the listing of shares?
+		// - no, the gateway only sees the same list any has the same options as the ocs service
+		// - we would need to have a list of mountpoints for the shares -> owncloudstorageprovider for hot migration migration
+
+		// best we can do for now is stat the /Shares jail if it is set and return those paths
+
+		// if we are in a jail and the current share has been accepted use the stat from the share jail
+		// Needed because received shares can be jailed in a folder in the users home
+
+		if h.sharePrefix != "/" {
+			// if we have a mount point use it to build the path
+			if receivedshare.MountPoint != nil && receivedshare.MountPoint.Path != "" {
+				// override path with info from share jail
+				share.FileTarget = path.Join(h.sharePrefix, receivedshare.MountPoint.Path)
+				share.Path = path.Join(h.sharePrefix, receivedshare.MountPoint.Path)
+			} else {
+				share.FileTarget = path.Join(h.sharePrefix, path.Base(info.Path))
+				share.Path = path.Join(h.sharePrefix, path.Base(info.Path))
+			}
+		} else {
+			share.FileTarget = info.Path
+			share.Path = info.Path
+		}
+	} else {
+		// not accepted shares need their Path jailed to make the testsuite happy
+		if h.sharePrefix != "/" {
+			share.Path = path.Join("/", path.Base(info.Path))
+		}
+	}
 
 	response.WriteOCSSuccess(w, r, []*conversions.ShareData{share})
 }
