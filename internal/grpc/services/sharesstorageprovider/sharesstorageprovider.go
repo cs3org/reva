@@ -763,6 +763,7 @@ func (s *service) ListContainer(ctx context.Context, req *provider.ListContainer
 			info := statRes.Info
 			info.Id = &provider.ResourceId{
 				StorageId: utils.ShareStorageProviderID,
+				SpaceId:   utils.ShareStorageSpaceID,
 				OpaqueId:  share.Share.Id.OpaqueId,
 			}
 			info.Path = filepath.Base(share.MountPoint.Path)
