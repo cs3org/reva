@@ -224,6 +224,7 @@ func (c *Cache) Sync(ctx context.Context, storageID, spaceID string) error {
 			log.Error().Err(err).Msg("Failed to unmarshal the provider cache")
 			return err
 		}
+		newShares.Mtime = utils.TSToTime(info.Mtime)
 		c.initializeIfNeeded(storageID, spaceID)
 		c.Providers[storageID].Spaces[spaceID] = newShares
 	}

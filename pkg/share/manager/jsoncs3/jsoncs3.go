@@ -305,10 +305,10 @@ func (m *Manager) Share(ctx context.Context, md *provider.ResourceInfo, g *colla
 }
 
 // getByID must be called in a lock-controlled block.
-func (m *Manager) getByID(id *collaboration.ShareId) (*collaboration.Share, error) {
+func (m *Manager) getByID(ctx context.Context, id *collaboration.ShareId) (*collaboration.Share, error) {
 	storageID, spaceID, _ := shareid.Decode(id.OpaqueId)
 	// sync cache, maybe our data is outdated
-	err := m.Cache.Sync(context.Background(), storageID, spaceID)
+	err := m.Cache.Sync(ctx, storageID, spaceID)
 	if err != nil {
 		return nil, err
 	}
@@ -340,7 +340,7 @@ func (m *Manager) getByKey(ctx context.Context, key *collaboration.ShareKey) (*c
 func (m *Manager) get(ctx context.Context, ref *collaboration.ShareReference) (s *collaboration.Share, err error) {
 	switch {
 	case ref.GetId() != nil:
-		s, err = m.getByID(ref.GetId())
+		s, err = m.getByID(ctx, ref.GetId())
 	case ref.GetKey() != nil:
 		s, err = m.getByKey(ctx, ref.GetKey())
 	default:

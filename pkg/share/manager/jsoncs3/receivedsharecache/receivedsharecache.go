@@ -136,6 +136,7 @@ func (c *Cache) Sync(ctx context.Context, userID string) error {
 			log.Error().Err(err).Msg("Failed to unmarshal the received share")
 			return err
 		}
+		newSpaces.Mtime = utils.TSToTime(info.Mtime)
 		c.ReceivedSpaces[userID] = newSpaces
 	}
 	log.Debug().Msg("Received share cache is up to date")
