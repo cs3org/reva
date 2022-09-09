@@ -59,6 +59,10 @@ func (disk *Disk) Backend() string {
 func (disk *Disk) Stat(ctx context.Context, path string) (*provider.ResourceInfo, error) {
 	info, err := os.Stat(disk.targetPath(path))
 	if err != nil {
+		var pathError *fs.PathError
+		if errors.As(err, &pathError) {
+			return nil, errtypes.NotFound("path not found: " + path)
+		}
 		return nil, err
 	}
 	entry := &provider.ResourceInfo{
