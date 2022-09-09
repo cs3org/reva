@@ -229,8 +229,10 @@ func (f *cbackfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []s
 
 	if ref.ResourceId != nil {
 		source, snapshot, path, id, ok = decodeResourceID(ref.ResourceId)
+		if ref.Path != "" {
+			path = filepath.Join(path, ref.Path)
+		}
 	} else {
-
 		source, snapshot, path, id, ok = split(ref.Path, backups)
 	}
 
