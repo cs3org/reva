@@ -1,6 +1,7 @@
 package cback
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -176,8 +177,23 @@ func (c *Client) GetRestore(ctx context.Context, username string, restoreID int)
 	return res, nil
 }
 
+type newRestoreRequest struct {
+	BackupID int    `json:"backup_id"`
+	Pattern  string `json:"pattern"`
+	Snapshot string `json:"snapshot"`
+}
+
 func (c *Client) NewRestore(ctx context.Context, username string, backupID int, pattern, snapshotID string) (*Restore, error) {
-	body, err := c.doHTTPRequest(ctx, username, http.MethodPost, "/restores/", nil)
+	req, err := json.Marshal(newRestoreRequest{
+		BackupID: backupID,
+		Pattern:  pattern,
+		Snapshot: snapshotID,
+	})
+	if err != nil {
+		return nil, errors.Wrap(err, "cback: error marshaling new restore request")
+	}
+
+	body, err := c.doHTTPRequest(ctx, username, http.MethodPost, "/restores/", bytes.NewReader(req))
 	if err != nil {
 		return nil, errors.Wrap(err, "cback: error getting restores")
 	}
