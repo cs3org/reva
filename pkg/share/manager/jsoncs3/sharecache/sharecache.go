@@ -165,6 +165,7 @@ func (c *Cache) Sync(ctx context.Context, userID string) error {
 			log.Error().Err(err).Msg("Failed to unmarshal the share cache")
 			return err
 		}
+		newShareCache.Mtime = utils.TSToTime(info.Mtime)
 		c.UserShares[userID] = newShareCache
 	}
 	log.Debug().Msg("Share cache is up to date")
