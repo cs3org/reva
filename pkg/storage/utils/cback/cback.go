@@ -14,6 +14,7 @@ import (
 	"github.com/pkg/errors"
 )
 
+// Config is the config used by the cback client
 type Config struct {
 	URL      string
 	Token    string
@@ -21,11 +22,13 @@ type Config struct {
 	Timeout  int
 }
 
+// Client is the client to connect to cback
 type Client struct {
 	c      *Config
 	client *http.Client
 }
 
+// New creates a new cback client
 func New(c *Config) *Client {
 	return &Client{
 		c: c,
@@ -72,6 +75,7 @@ func (c *Client) doHTTPRequest(ctx context.Context, username, reqType, endpoint 
 	return resp.Body, nil
 }
 
+// ListBackups gets all the backups of a user
 func (c *Client) ListBackups(ctx context.Context, username string) ([]*Backup, error) {
 	body, err := c.doHTTPRequest(ctx, username, http.MethodGet, "/backups/", nil)
 	if err != nil {
@@ -88,6 +92,7 @@ func (c *Client) ListBackups(ctx context.Context, username string) ([]*Backup, e
 	return backups, nil
 }
 
+// ListSnapshots gets all the snapshots of a backup
 func (c *Client) ListSnapshots(ctx context.Context, username string, backupID int) ([]*Snapshot, error) {
 	endpoint := fmt.Sprintf("/backups/%d/snapshots", backupID)
 	body, err := c.doHTTPRequest(ctx, username, http.MethodGet, endpoint, nil)
@@ -105,6 +110,7 @@ func (c *Client) ListSnapshots(ctx context.Context, username string, backupID in
 	return snapshots, nil
 }
 
+// Stat gets the info of a resource stored in cback
 func (c *Client) Stat(ctx context.Context, username string, backupID int, snapshotID, path string) (*Resource, error) {
 	endpoint := fmt.Sprintf("/backups/%d/snapshots/%s/%s", backupID, snapshotID, path)
 	body, err := c.doHTTPRequest(ctx, username, http.MethodOptions, endpoint, nil)
@@ -122,6 +128,7 @@ func (c *Client) Stat(ctx context.Context, username string, backupID int, snapsh
 	return res, nil
 }
 
+// ListFolder gets the content of a folder stored in cback
 func (c *Client) ListFolder(ctx context.Context, username string, backupID int, snapshotID, path string) ([]*Resource, error) {
 	endpoint := fmt.Sprintf("/backups/%d/snapshots/%s/%s?content=true", backupID, snapshotID, path)
 	body, err := c.doHTTPRequest(ctx, username, http.MethodOptions, endpoint, nil)
@@ -139,11 +146,13 @@ func (c *Client) ListFolder(ctx context.Context, username string, backupID int, 
 	return res, nil
 }
 
+// Download gets the content of a file stored in cback
 func (c *Client) Download(ctx context.Context, username string, backupID int, snapshotsID, path string) (io.ReadCloser, error) {
 	endpoint := fmt.Sprintf("/backups/%d/snapshots/%s/%s", backupID, snapshotsID, path)
 	return c.doHTTPRequest(ctx, username, http.MethodGet, endpoint, nil)
 }
 
+// ListRestores gets the list of restore jobs created by the user
 func (c *Client) ListRestores(ctx context.Context, username string) ([]*Restore, error) {
 	body, err := c.doHTTPRequest(ctx, username, http.MethodGet, "/restores/", nil)
 	if err != nil {
@@ -160,6 +169,7 @@ func (c *Client) ListRestores(ctx context.Context, username string) ([]*Restore,
 	return res, nil
 }
 
+// GetRestore get the info of a restore job
 func (c *Client) GetRestore(ctx context.Context, username string, restoreID int) (*Restore, error) {
 	endpoint := fmt.Sprintf("/restores/%d", restoreID)
 	body, err := c.doHTTPRequest(ctx, username, http.MethodGet, endpoint, nil)
@@ -183,6 +193,7 @@ type newRestoreRequest struct {
 	Snapshot string `json:"snapshot"`
 }
 
+// NewRestore creates a new restore job in cback
 func (c *Client) NewRestore(ctx context.Context, username string, backupID int, pattern, snapshotID string) (*Restore, error) {
 	req, err := json.Marshal(newRestoreRequest{
 		BackupID: backupID,
