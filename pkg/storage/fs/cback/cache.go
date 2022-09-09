@@ -31,12 +31,15 @@ func (f *cbackfs) listBackups(ctx context.Context, username string) ([]*cback.Ba
 	if d, err := f.cache.Get(key); err == nil {
 		return d.([]*cback.Backup), nil
 	}
-	b, err := f.client.ListBackups(ctx, username)
+	backups, err := f.client.ListBackups(ctx, username)
 	if err != nil {
 		return nil, err
 	}
-	_ = f.cache.SetWithExpire(key, b, time.Duration(f.conf.Expiration)*time.Second)
-	return b, nil
+	for _, b := range backups {
+		b.Source = convertTemplate(b.Source, f.tplStorage)
+	}
+	_ = f.cache.SetWithExpire(key, backups, time.Duration(f.conf.Expiration)*time.Second)
+	return backups, nil
 }
 
 func (f *cbackfs) stat(ctx context.Context, username string, id int, snapshot, path string) (*cback.Resource, error) {
@@ -44,6 +47,7 @@ func (f *cbackfs) stat(ctx context.Context, username string, id int, snapshot, p
 	if s, err := f.cache.Get(key); err == nil {
 		return s.(*cback.Resource), nil
 	}
+	path = convertTemplate(path, f.tplCback)
 	s, err := f.client.Stat(ctx, username, id, snapshot, path)
 	if err != nil {
 		return nil, err
@@ -57,6 +61,7 @@ func (f *cbackfs) listFolder(ctx context.Context, username string, id int, snaps
 	if l, err := f.cache.Get(key); err == nil {
 		return l.([]*cback.Resource), nil
 	}
+	path = convertTemplate(path, f.tplCback)
 	l, err := f.client.ListFolder(ctx, username, id, snapshot, path)
 	if err != nil {
 		return nil, err

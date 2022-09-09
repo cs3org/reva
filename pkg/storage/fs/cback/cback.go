@@ -19,6 +19,7 @@
 package cback
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"fmt"
@@ -27,8 +28,10 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"text/template"
 	"time"
 
+	"github.com/Masterminds/sprig"
 	"github.com/bluele/gcache"
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -44,9 +47,11 @@ import (
 )
 
 type cbackfs struct {
-	conf   *Config
-	client *cback.Client
-	cache  gcache.Cache
+	conf       *Config
+	client     *cback.Client
+	cache      gcache.Cache
+	tplStorage *template.Template
+	tplCback   *template.Template
 }
 
 func init() {
@@ -62,6 +67,16 @@ func New(m map[string]interface{}) (storage.FS, error) {
 	}
 	c.init()
 
+	tplStorage, err := template.New("tpl_storage").Funcs(sprig.TxtFuncMap()).Parse(c.TemplateToStorage)
+	if err != nil {
+		return nil, errors.Wrap(err, "cback: error creating template")
+	}
+
+	tplCback, err := template.New("tpl_cback").Funcs(sprig.TxtFuncMap()).Parse(c.TemplateToCback)
+	if err != nil {
+		return nil, errors.Wrap(err, "cback: error creating template")
+	}
+
 	client := cback.New(
 		&cback.Config{
 			URL:      c.APIURL,
@@ -72,9 +87,11 @@ func New(m map[string]interface{}) (storage.FS, error) {
 	)
 
 	return &cbackfs{
-		conf:   c,
-		client: client,
-		cache:  gcache.New(c.Size).LRU().Build(),
+		conf:       c,
+		client:     client,
+		cache:      gcache.New(c.Size).LRU().Build(),
+		tplStorage: tplStorage,
+		tplCback:   tplCback,
 	}, nil
 }
 
@@ -391,8 +408,16 @@ func (f *cbackfs) Download(ctx context.Context, ref *provider.Reference) (io.Rea
 	if !ok {
 		return nil, errtypes.BadRequest("cback: can only download files")
 	}
-
+	source = convertTemplate(source, f.tplCback)
 	return f.client.Download(ctx, user.Username, id, snapshot, filepath.Join(source, path))
+}
+
+func convertTemplate(s string, t *template.Template) string {
+	var b bytes.Buffer
+	if err := t.Execute(&b, s); err != nil {
+		panic(errors.Wrap(err, "error executing template"))
+	}
+	return b.String()
 }
 
 func (f *cbackfs) GetHome(ctx context.Context) (string, error) {

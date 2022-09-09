@@ -22,12 +22,14 @@ import provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 
 // Config for the cback driver
 type Config struct {
-	Token      string `mapstructure:"token"`
-	APIURL     string `mapstructure:"api_url"`
-	Insecure   bool   `mapstructure:"insecure"`
-	Timeout    int    `mapstructure:"timeout"`
-	Size       int    `mapstructure:"size"`
-	Expiration int    `mapstructure:"expiration"`
+	Token             string `mapstructure:"token"`
+	APIURL            string `mapstructure:"api_url"`
+	Insecure          bool   `mapstructure:"insecure"`
+	Timeout           int    `mapstructure:"timeout"`
+	Size              int    `mapstructure:"size"`
+	Expiration        int    `mapstructure:"expiration"`
+	TemplateToStorage string `mapstructure:"template_to_storage"`
+	TemplateToCback   string `mapstructure:"template_to_cback"`
 }
 
 func (c *Config) init() {
