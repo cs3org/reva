@@ -157,6 +157,32 @@ func (m *Manager) initialize() error {
 	return nil
 }
 
+// Dump exports public shares to channels (e.g. during migration)
+func (m *Manager) Dump(ctx context.Context, shareChan chan<- *publicshare.WithPassword) error {
+	if err := m.initialize(); err != nil {
+		return err
+	}
+
+	pshares, err := m.storage.ListDir(ctx, "publicshares")
+	if err != nil {
+		return err
+	}
+
+	for _, v := range pshares {
+		var local publicshare.WithPassword
+		ps, err := m.getByToken(ctx, v.Name)
+		if err != nil {
+			return err
+		}
+		local.Password = ps.Password
+		local.PublicShare = ps.PublicShare
+
+		shareChan <- &local
+	}
+
+	return nil
+}
+
 // Load imports public shares and received shares from channels (e.g. during migration)
 func (m *Manager) Load(ctx context.Context, shareChan <-chan *publicshare.WithPassword) error {
 	log := appctx.GetLogger(ctx)
