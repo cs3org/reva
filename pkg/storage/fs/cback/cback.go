@@ -54,7 +54,7 @@ func init() {
 }
 
 // New returns an implementation to the storage.FS interface that expose
-// the snapshots in cback
+// the snapshots stored in cback
 func New(m map[string]interface{}) (storage.FS, error) {
 	c := &Config{}
 	if err := mapstructure.Decode(m, c); err != nil {
@@ -158,6 +158,7 @@ func decodeResourceID(r *provider.ResourceId) (string, string, string, int, bool
 	return split[2], split[1], split[3], int(backupID), true
 }
 
+// GetBackupInfo returns a tuple path, snapshot, backup id from a resource id
 func GetBackupInfo(r *provider.ResourceId) (string, string, int, bool) {
 	source, snap, path, id, ok := decodeResourceID(r)
 	return filepath.Join(source, path), snap, id, ok
