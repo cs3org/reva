@@ -114,10 +114,10 @@ func (s *svc) Unprotected() []string {
 }
 
 func (s *svc) initRouter() {
-	s.router.Get("/restore", s.getRestores)
-	s.router.Get("/restore/{id}", s.getRestoreByID)
+	s.router.Get("/restores", s.getRestores)
+	s.router.Get("/restores/{id}", s.getRestoreByID)
 
-	s.router.Post("/restore", s.createRestore)
+	s.router.Post("/restores", s.createRestore)
 }
 
 type restoreOut struct {
@@ -237,7 +237,7 @@ func (s *svc) getRestoreByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	id := r.URL.Query().Get("id")
+	id := chi.URLParam(r, "id")
 	restoreID, err := strconv.ParseInt(id, 10, 64)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
