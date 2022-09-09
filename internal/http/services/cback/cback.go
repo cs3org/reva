@@ -93,7 +93,7 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 
 }
 
-// Close clenup the cback http service
+// Close cleanup the cback http service
 func (s *svc) Close() error {
 	return nil
 }
