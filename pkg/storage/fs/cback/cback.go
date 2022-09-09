@@ -102,7 +102,7 @@ func split(path string, backups []*cback.Backup) (string, string, string, int, b
 	return "", "", "", 0, false
 }
 
-func (f *cbackfs) convertToResourceInfo(r *cback.Resource, path string, resID *provider.ResourceId, owner *user.UserId) *provider.ResourceInfo {
+func (f *cbackfs) convertToResourceInfo(r *cback.Resource, path string, resID, parentID *provider.ResourceId, owner *user.UserId) *provider.ResourceInfo {
 	rtype := provider.ResourceType_RESOURCE_TYPE_FILE
 	perms := permFile
 	if r.IsDir() {
@@ -125,6 +125,7 @@ func (f *cbackfs) convertToResourceInfo(r *cback.Resource, path string, resID *p
 		PermissionSet: perms,
 		Size:          r.Size,
 		Owner:         owner,
+		ParentId:      parentID,
 	}
 }
 
@@ -246,6 +247,7 @@ func (f *cbackfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []s
 				res,
 				filepath.Join(source, snapshot, path),
 				encodeBackupInResourceID(id, snapshot, source, path),
+				encodeBackupInResourceID(id, snapshot, source, filepath.Dir(path)),
 				user.Id,
 			), nil
 		} else if snapshot != "" && path == "" {
@@ -311,12 +313,14 @@ func (f *cbackfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKey
 				return nil, err
 			}
 			res := make([]*provider.ResourceInfo, 0, len(content))
+			parentID := encodeBackupInResourceID(id, snapshot, source, path)
 			for _, info := range content {
 				base := filepath.Base(info.Name)
 				res = append(res, f.convertToResourceInfo(
 					info,
 					filepath.Join(source, snapshot, path, base),
 					encodeBackupInResourceID(id, snapshot, source, filepath.Join(path, base)),
+					parentID,
 					user.Id,
 				))
 			}
