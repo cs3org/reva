@@ -157,6 +157,11 @@ func decodeResourceID(r *provider.ResourceId) (string, string, string, int, bool
 	return split[2], split[1], split[3], int(backupID), true
 }
 
+func GetBackupInfo(r *provider.ResourceId) (string, string, int, bool) {
+	source, snap, path, id, ok := decodeResourceID(r)
+	return filepath.Join(source, path), snap, id, ok
+}
+
 func (f *cbackfs) placeholderResourceInfo(path string, owner *user.UserId, mtime *types.Timestamp) *provider.ResourceInfo {
 	if mtime == nil {
 		mtime = &types.Timestamp{
