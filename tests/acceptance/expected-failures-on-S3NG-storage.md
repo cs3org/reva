@@ -727,10 +727,12 @@ _ocdav: api compatibility, return correct status code_
 - [apiAuthWebDav/webDavLOCKAuth.feature:58](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthWebDav/webDavLOCKAuth.feature#L58) Scenario: send LOCK requests to another user's webDav endpoints as normal user
 - [apiAuthWebDav/webDavLOCKAuth.feature:70](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthWebDav/webDavLOCKAuth.feature#L70) Scenario: send LOCK requests to another user's webDav endpoints as normal user using the spaces WebDAV API
 
-#### [send MOVE requests to another user's webDav endpoints as normal user gives 400 instead of 403](https://github.com/owncloud/ocis/issues/3882)
+#### [send (MOVE, COPY) requests to another user's webDav endpoints as normal user gives 400 instead of 403](https://github.com/owncloud/ocis/issues/3882)
 _ocdav: api compatibility, return correct status code_
 - [apiAuthWebDav/webDavMOVEAuth.feature:57](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthWebDav/webDavMOVEAuth.feature#L57) Scenario: send MOVE requests to another user's webDav endpoints as normal user
 - [apiAuthWebDav/webDavMOVEAuth.feature:66](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthWebDav/webDavMOVEAuth.feature#L66) Scenario: send MOVE requests to another user's webDav endpoints as normal user using the spaces WebDAV API
+- [apiAuthWebDav/webDavCOPYAuth.feature:59](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthWebDav/webDavCOPYAuth.feature#L59)
+- [apiAuthWebDav/webDavCOPYAuth.feature:68](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthWebDav/webDavCOPYAuth.feature#L68)
 
 #### [send POST requests to another user's webDav endpoints as normal user](https://github.com/owncloud/ocis/issues/1287)
 _ocdav: api compatibility, return correct status code_
@@ -1188,9 +1190,11 @@ _ocs: api compatibility, return correct status code_
 - [apiShareOperationsToShares1/gettingShares.feature:40](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareOperationsToShares1/gettingShares.feature#L40)
 - [apiShareOperationsToShares1/gettingShares.feature:39](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareOperationsToShares1/gettingShares.feature#L39)
 
-#### [Valid requests with body must give 415 (Unsupported Media Type)](https://github.com/owncloud/ocis/issues/4332)
+#### [valid WebDAV (DELETE, COPY or MOVE) requests with body must exit with 415](https://github.com/owncloud/ocis/issues/4332)
 - [apiAuthWebDav/webDavDELETEAuth.feature:188](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthWebDav/webDavDELETEAuth.feature#L188)
 - [apiAuthWebDav/webDavDELETEAuth.feature:199](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthWebDav/webDavDELETEAuth.feature#L199)
+- [apiAuthWebDav/webDavCOPYAuth.feature:166](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthWebDav/webDavCOPYAuth.feature#L166)
+- [apiAuthWebDav/webDavCOPYAuth.feature:178](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthWebDav/webDavCOPYAuth.feature#L178)
 
 Note: always have an empty line at the end of this file.
 The bash script that processes this file may not process a scenario reference on the last line.
