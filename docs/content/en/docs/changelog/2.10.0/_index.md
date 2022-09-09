@@ -1,3 +1,12 @@
+
+---
+title: "v2.10.0"
+linkTitle: "v2.10.0"
+weight: 40
+description: >
+  Changelog for Reva v2.10.0 (2022-09-09)
+---
+
 Changelog for reva 2.10.0 (2022-09-09)
 =======================================
 
@@ -33,3 +42,4 @@ Details
    and memory backends.
 
    https://github.com/cs3org/reva/pull/3199
+
