@@ -210,7 +210,7 @@ func (m *Manager) Share(ctx context.Context, md *provider.ResourceInfo, g *colla
 	// TODO: should this not already be caught at the gw level?
 	if g.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER &&
 		(utils.UserEqual(g.Grantee.GetUserId(), user.Id) || utils.UserEqual(g.Grantee.GetUserId(), md.Owner)) {
-		return nil, errors.New("json: owner/creator and grantee are the same")
+		return nil, errtypes.BadRequest("jsoncs3: owner/creator and grantee are the same")
 	}
 
 	// check if share already exists.
