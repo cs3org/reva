@@ -48,7 +48,7 @@ func (f *cbackfs) stat(ctx context.Context, username string, id int, snapshot, p
 		return s.(*cback.Resource), nil
 	}
 	path = convertTemplate(path, f.tplCback)
-	s, err := f.client.Stat(ctx, username, id, snapshot, path)
+	s, err := f.client.Stat(ctx, username, id, snapshot, path, true)
 	if err != nil {
 		return nil, err
 	}
@@ -62,7 +62,7 @@ func (f *cbackfs) listFolder(ctx context.Context, username string, id int, snaps
 		return l.([]*cback.Resource), nil
 	}
 	path = convertTemplate(path, f.tplCback)
-	l, err := f.client.ListFolder(ctx, username, id, snapshot, path)
+	l, err := f.client.ListFolder(ctx, username, id, snapshot, path, true)
 	if err != nil {
 		return nil, err
 	}

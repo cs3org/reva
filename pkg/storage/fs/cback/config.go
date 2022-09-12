@@ -30,6 +30,7 @@ type Config struct {
 	Expiration        int    `mapstructure:"expiration"`
 	TemplateToStorage string `mapstructure:"template_to_storage"`
 	TemplateToCback   string `mapstructure:"template_to_cback"`
+	TimestampFormat   string `mapstructure:"timestamp_format"`
 }
 
 func (c *Config) init() {
@@ -47,6 +48,10 @@ func (c *Config) init() {
 
 	if c.TemplateToStorage == "" {
 		c.TemplateToStorage = "{{ . }}"
+	}
+
+	if c.TimestampFormat == "" {
+		c.TimestampFormat = "2006-01-02T15:04:05Z07:00"
 	}
 }
 

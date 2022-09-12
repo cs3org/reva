@@ -298,17 +298,21 @@ func timeToTimestamp(t time.Time) *types.Timestamp {
 	}
 }
 
-func (f *cbackfs) getSnapshot(ctx context.Context, username string, backupID int, snapshotID string) (*cback.Snapshot, error) {
+func (f *cbackfs) getSnapshot(ctx context.Context, username string, backupID int, timestamp string) (*cback.Snapshot, error) {
 	snapshots, err := f.listSnapshots(ctx, username, backupID)
 	if err != nil {
 		return nil, err
 	}
+	t, err := time.Parse(f.conf.TimestampFormat, timestamp)
+	if err != nil {
+		return nil, err
+	}
 	for _, snap := range snapshots {
-		if snap.ID == snapshotID {
+		if snap.Time.Equal(t) {
 			return snap, nil
 		}
 	}
-	return nil, errtypes.NotFound(fmt.Sprintf("snapshot %s from backup %d not found", snapshotID, backupID))
+	return nil, errtypes.NotFound(fmt.Sprintf("snapshot %s from backup %d not found", timestamp, backupID))
 }
 
 func (f *cbackfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys []string) ([]*provider.ResourceInfo, error) {
@@ -354,7 +358,7 @@ func (f *cbackfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKey
 		}
 		res := make([]*provider.ResourceInfo, 0, len(snapshots))
 		for _, s := range snapshots {
-			res = append(res, f.placeholderResourceInfo(filepath.Join(source, s.ID), user.Id, timeToTimestamp(s.Time)))
+			res = append(res, f.placeholderResourceInfo(filepath.Join(source, s.Time.Format(f.conf.TimestampFormat)), user.Id, timeToTimestamp(s.Time)))
 		}
 		return res, nil
 	}
@@ -409,7 +413,7 @@ func (f *cbackfs) Download(ctx context.Context, ref *provider.Reference) (io.Rea
 		return nil, errtypes.BadRequest("cback: can only download files")
 	}
 	source = convertTemplate(source, f.tplCback)
-	return f.client.Download(ctx, user.Username, id, snapshot, filepath.Join(source, path))
+	return f.client.Download(ctx, user.Username, id, snapshot, filepath.Join(source, path), true)
 }
 
 func convertTemplate(s string, t *template.Template) string {
