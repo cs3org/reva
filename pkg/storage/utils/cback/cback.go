@@ -132,7 +132,7 @@ func (c *Client) ListSnapshots(ctx context.Context, username string, backupID in
 func (c *Client) Stat(ctx context.Context, username string, backupID int, snapshotID, path string, isTimestamp bool) (*Resource, error) {
 	endpoint := fmt.Sprintf("/backups/%d/snapshots/%s/%s", backupID, snapshotID, path)
 	if isTimestamp {
-		endpoint += "timestamp=true"
+		endpoint += "?timestamp=true"
 	}
 	body, err := c.doHTTPRequest(ctx, username, http.MethodOptions, endpoint, nil)
 	if err != nil {
@@ -153,7 +153,7 @@ func (c *Client) Stat(ctx context.Context, username string, backupID int, snapsh
 func (c *Client) ListFolder(ctx context.Context, username string, backupID int, snapshotID, path string, isTimestamp bool) ([]*Resource, error) {
 	endpoint := fmt.Sprintf("/backups/%d/snapshots/%s/%s?content=true", backupID, snapshotID, path)
 	if isTimestamp {
-		endpoint += "timestamp=true"
+		endpoint += "&timestamp=true"
 	}
 	body, err := c.doHTTPRequest(ctx, username, http.MethodOptions, endpoint, nil)
 	if err != nil {
@@ -174,7 +174,7 @@ func (c *Client) ListFolder(ctx context.Context, username string, backupID int, 
 func (c *Client) Download(ctx context.Context, username string, backupID int, snapshotID, path string, isTimestamp bool) (io.ReadCloser, error) {
 	endpoint := fmt.Sprintf("/backups/%d/snapshots/%s/%s", backupID, snapshotID, path)
 	if isTimestamp {
-		endpoint += "timestamp=true"
+		endpoint += "?timestamp=true"
 	}
 	return c.doHTTPRequest(ctx, username, http.MethodGet, endpoint, nil)
 }
