@@ -41,12 +41,15 @@ type Cache struct {
 	storage   metadata.Storage
 	namespace string
 	filename  string
+	ttl       time.Duration
 }
 
 // UserShareCache holds the space/share map for one user
 type UserShareCache struct {
 	Mtime      time.Time
 	UserShares map[string]*SpaceShareIDs
+
+	nextSync time.Time
 }
 
 // SpaceShareIDs holds the unique list of share ids for a space
@@ -56,12 +59,13 @@ type SpaceShareIDs struct {
 }
 
 // New returns a new Cache instance
-func New(s metadata.Storage, namespace, filename string) Cache {
+func New(s metadata.Storage, namespace, filename string, ttl time.Duration) Cache {
 	return Cache{
 		UserShares: map[string]*UserShareCache{},
 		storage:    s,
 		namespace:  namespace,
 		filename:   filename,
+		ttl:        ttl,
 	}
 }
 
@@ -135,6 +139,12 @@ func (c *Cache) Sync(ctx context.Context, userID string) error {
 	var mtime time.Time
 	//  - do we have a cached list of created shares for the user in memory?
 	if usc := c.UserShares[userID]; usc != nil {
+		if time.Now().Before(c.UserShares[userID].nextSync) {
+			log.Debug().Msg("Skipping share cache sync, it was just recently synced...")
+			return nil
+		}
+		c.UserShares[userID].nextSync = time.Now().Add(c.ttl)
+
 		mtime = usc.Mtime
 		//    - y: set If-Modified-Since header to only download if it changed
 	} else {

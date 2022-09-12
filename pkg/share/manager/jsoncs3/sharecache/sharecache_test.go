@@ -55,7 +55,7 @@ var _ = Describe("Sharecache", func() {
 		storage, err = metadata.NewDiskStorage(tmpdir)
 		Expect(err).ToNot(HaveOccurred())
 
-		c = sharecache.New(storage, "users", "created.json")
+		c = sharecache.New(storage, "users", "created.json", 0*time.Second)
 		Expect(c).ToNot(BeNil())
 	})
 

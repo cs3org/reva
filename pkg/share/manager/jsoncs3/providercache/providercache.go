@@ -40,6 +40,7 @@ type Cache struct {
 	Providers map[string]*Spaces
 
 	storage metadata.Storage
+	ttl     time.Duration
 }
 
 // Spaces holds the share information for provider
@@ -49,8 +50,9 @@ type Spaces struct {
 
 // Shares holds the share information of one space
 type Shares struct {
-	Shares map[string]*collaboration.Share
-	Mtime  time.Time
+	Shares   map[string]*collaboration.Share
+	Mtime    time.Time
+	nextSync time.Time
 }
 
 // UnmarshalJSON overrides the default unmarshaling
@@ -94,10 +96,11 @@ func (s *Shares) UnmarshalJSON(data []byte) error {
 }
 
 // New returns a new Cache instance
-func New(s metadata.Storage) Cache {
+func New(s metadata.Storage, ttl time.Duration) Cache {
 	return Cache{
 		Providers: map[string]*Spaces{},
 		storage:   s,
+		ttl:       ttl,
 	}
 }
 
@@ -190,7 +193,12 @@ func (c *Cache) Sync(ctx context.Context, storageID, spaceID string) error {
 	var mtime time.Time
 	if c.Providers[storageID] != nil && c.Providers[storageID].Spaces[spaceID] != nil {
 		mtime = c.Providers[storageID].Spaces[spaceID].Mtime
-		//    - y: set If-Modified-Since header to only download if it changed
+
+		if time.Now().Before(c.Providers[storageID].Spaces[spaceID].nextSync) {
+			log.Debug().Msg("Skipping provider cache sync, it was just recently synced...")
+			return nil
+		}
+		c.Providers[storageID].Spaces[spaceID].nextSync = time.Now().Add(c.ttl)
 	} else {
 		mtime = time.Time{} // Set zero time so that data from storage always takes precedence
 	}

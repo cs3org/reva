@@ -40,12 +40,15 @@ type Cache struct {
 	ReceivedSpaces map[string]*Spaces
 
 	storage metadata.Storage
+	ttl     time.Duration
 }
 
 // Spaces holds the received shares of one user per space
 type Spaces struct {
 	Mtime  time.Time
 	Spaces map[string]*Space
+
+	nextSync time.Time
 }
 
 // Space holds the received shares of one user in one space
@@ -61,10 +64,11 @@ type State struct {
 }
 
 // New returns a new Cache instance
-func New(s metadata.Storage) Cache {
+func New(s metadata.Storage, ttl time.Duration) Cache {
 	return Cache{
 		ReceivedSpaces: map[string]*Spaces{},
 		storage:        s,
+		ttl:            ttl,
 	}
 }
 
@@ -107,6 +111,12 @@ func (c *Cache) Sync(ctx context.Context, userID string) error {
 
 	var mtime time.Time
 	if c.ReceivedSpaces[userID] != nil {
+		if time.Now().Before(c.ReceivedSpaces[userID].nextSync) {
+			log.Debug().Msg("Skipping received share cache sync, it was just recently synced...")
+			return nil
+		}
+		c.ReceivedSpaces[userID].nextSync = time.Now().Add(c.ttl)
+
 		mtime = c.ReceivedSpaces[userID].Mtime
 	} else {
 		mtime = time.Time{} // Set zero time so that data from storage always takes precedence
