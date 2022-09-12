@@ -272,6 +272,11 @@ func (m *Manager) Share(ctx context.Context, md *provider.ResourceInfo, g *colla
 		return nil, err
 	}
 	user := ctxpkg.ContextMustGetUser(ctx)
+	// do not allow share to myself or the owner if share is for a user
+	if g.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER &&
+		(utils.UserEqual(g.Grantee.GetUserId(), user.Id) || utils.UserEqual(g.Grantee.GetUserId(), md.Owner)) {
+		return nil, errtypes.BadRequest("cs3: owner/creator and grantee are the same")
+	}
 	ts := utils.TSNow()
 
 	share := &collaboration.Share{

@@ -1410,6 +1410,7 @@ func (h *Handler) getResourceInfo(ctx context.Context, client gateway.GatewayAPI
 }
 
 func (h *Handler) createCs3Share(ctx context.Context, w http.ResponseWriter, r *http.Request, client gateway.GatewayAPIClient, req *collaboration.CreateShareRequest) (*collaboration.Share, *ocsError) {
+	logger := appctx.GetLogger(ctx)
 	exists, err := h.granteeExists(ctx, req.Grant.Grantee, req.ResourceInfo.Id)
 	if err != nil {
 		return nil, &ocsError{
@@ -1438,17 +1439,26 @@ func (h *Handler) createCs3Share(ctx context.Context, w http.ResponseWriter, r *
 		}
 	}
 	if createShareResponse.Status.Code != rpc.Code_CODE_OK {
-		if createShareResponse.Status.Code == rpc.Code_CODE_NOT_FOUND {
+		logger.Debug().Interface("Code", createShareResponse.Status.Code).Str("message", createShareResponse.Status.Message).Msg("grpc create share request failed")
+		switch createShareResponse.Status.Code {
+		case rpc.Code_CODE_NOT_FOUND:
 			return nil, &ocsError{
 				Code:    response.MetaNotFound.StatusCode,
 				Message: "not found",
 				Error:   nil,
 			}
-		}
-		return nil, &ocsError{
-			Code:    response.MetaServerError.StatusCode,
-			Message: "grpc create share request failed",
-			Error:   nil,
+		case rpc.Code_CODE_INVALID_ARGUMENT:
+			return nil, &ocsError{
+				Code:    response.MetaBadRequest.StatusCode,
+				Message: createShareResponse.Status.Message,
+				Error:   nil,
+			}
+		default:
+			return nil, &ocsError{
+				Code:    response.MetaServerError.StatusCode,
+				Message: "grpc create share request failed",
+				Error:   nil,
+			}
 		}
 	}
 	return createShareResponse.Share, nil

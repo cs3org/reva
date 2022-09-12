@@ -150,7 +150,7 @@ func (s *service) CreateShare(ctx context.Context, req *collaboration.CreateShar
 	share, err := s.sm.Share(ctx, req.ResourceInfo, req.Grant)
 	if err != nil {
 		return &collaboration.CreateShareResponse{
-			Status: status.NewInternal(ctx, "error creating share"),
+			Status: status.NewStatusFromErrType(ctx, "error creating share", err),
 		}, nil
 	}
 
