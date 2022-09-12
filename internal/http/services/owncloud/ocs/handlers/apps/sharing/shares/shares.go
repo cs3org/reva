@@ -1157,7 +1157,10 @@ func (h *Handler) addFileInfo(ctx context.Context, s *conversions.ShareData, inf
 		}
 	}
 	s.StorageID = storageIDPrefix + s.FileTarget
-	// TODO FileParent:
+
+	if info.ParentId != nil {
+		s.FileParent = storagespace.FormatResourceID(*info.ParentId)
+	}
 	// item type
 	s.ItemType = conversions.ResourceType(info.GetType()).String()
 
