@@ -1315,7 +1315,7 @@ func (h *Handler) getResourceInfoByReference(ctx context.Context, client gateway
 }
 
 func (h *Handler) getResourceInfoByID(ctx context.Context, client gateway.GatewayAPIClient, id *provider.ResourceId) (*provider.ResourceInfo, *rpc.Status, error) {
-	return h.getResourceInfo(ctx, client, storagespace.FormatResourceID(*id), &provider.Reference{ResourceId: id, Path: "."})
+	return h.getResourceInfo(ctx, client, storagespace.FormatResourceID(*id), &provider.Reference{ResourceId: id})
 }
 
 // getResourceInfo retrieves the resource info to a target.
