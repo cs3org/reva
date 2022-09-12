@@ -40,6 +40,14 @@ func (c *Config) init() {
 	if c.Expiration == 0 {
 		c.Expiration = 300
 	}
+
+	if c.TemplateToCback == "" {
+		c.TemplateToCback = "{{ . }}"
+	}
+
+	if c.TemplateToStorage == "" {
+		c.TemplateToStorage = "{{ . }}"
+	}
 }
 
 var permDir = &provider.ResourcePermissions{
