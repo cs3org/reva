@@ -110,6 +110,7 @@ type config struct {
 	ServiceUserID     string `mapstructure:"service_user_id"`
 	ServiceUserIdp    string `mapstructure:"service_user_idp"`
 	MachineAuthAPIKey string `mapstructure:"machine_auth_apikey"`
+	CacheTTL          int    `mapstructure:"ttl"`
 }
 
 // Manager implements a share manager using a cs3 storage backend with local caching
@@ -147,16 +148,17 @@ func NewDefault(m map[string]interface{}) (share.Manager, error) {
 		return nil, err
 	}
 
-	return New(s, gc)
+	return New(s, gc, c.CacheTTL)
 }
 
 // New returns a new manager instance.
-func New(s metadata.Storage, gc gatewayv1beta1.GatewayAPIClient) (*Manager, error) {
+func New(s metadata.Storage, gc gatewayv1beta1.GatewayAPIClient, ttlSeconds int) (*Manager, error) {
+	ttl := time.Duration(ttlSeconds) * time.Second
 	return &Manager{
-		Cache:              providercache.New(s, 0*time.Second),
-		CreatedCache:       sharecache.New(s, "users", "created.json", 0*time.Second),
-		UserReceivedStates: receivedsharecache.New(s, 0*time.Second),
-		GroupReceivedCache: sharecache.New(s, "groups", "received.json", 0*time.Second),
+		Cache:              providercache.New(s, ttl),
+		CreatedCache:       sharecache.New(s, "users", "created.json", ttl),
+		UserReceivedStates: receivedsharecache.New(s, ttl),
+		GroupReceivedCache: sharecache.New(s, "groups", "received.json", ttl),
 		storage:            s,
 		gateway:            gc,
 	}, nil
