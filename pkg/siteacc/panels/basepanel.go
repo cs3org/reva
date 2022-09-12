@@ -107,6 +107,7 @@ func (panel *BasePanel) Redirect(path string, w http.ResponseWriter, r *http.Req
 	return html.AbortExecution
 }
 
+// FetchOperatorSites fetches all sites for an operator using Mentix.
 func (panel *BasePanel) FetchOperatorSites(op *data.Operator) (map[string]string, error) {
 	ids, err := data.QueryOperatorSites(op.ID, panel.Config().Mentix.URL, panel.Config().Mentix.DataEndpoint)
 	if err != nil {
@@ -155,6 +156,7 @@ func (panel *BasePanel) CloneOperator(op *data.Operator, sites map[string]string
 	return opClone
 }
 
+// Config gets the configuration object.
 func (panel *BasePanel) Config() *config.Configuration {
 	return panel.conf
 }
