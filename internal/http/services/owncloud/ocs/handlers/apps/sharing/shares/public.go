@@ -219,10 +219,7 @@ func (h *Handler) listPublicShares(r *http.Request, filters []*link.ListPublicSh
 
 			sData.Name = share.DisplayName
 
-			if err := h.addFileInfo(ctx, sData, info); err != nil {
-				log.Debug().Interface("share", share).Interface("info", info).Err(err).Msg("could not add file info, skipping")
-				continue
-			}
+			h.addFileInfo(ctx, sData, info)
 			h.mapUserIds(ctx, client, sData)
 
 			log.Debug().Interface("share", share).Interface("info", info).Interface("shareData", share).Msg("mapped")
@@ -433,11 +430,7 @@ func (h *Handler) updatePublicShare(w http.ResponseWriter, r *http.Request, shar
 	}
 
 	s := conversions.PublicShare2ShareData(publicShare, r, h.publicURL)
-	err = h.addFileInfo(r.Context(), s, statRes.Info)
-	if err != nil {
-		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error enhancing response with share data", err)
-		return
-	}
+	h.addFileInfo(r.Context(), s, statRes.Info)
 	h.mapUserIds(r.Context(), gwC, s)
 
 	response.WriteOCSSuccess(w, r, s)
