@@ -79,6 +79,10 @@ func (f *cbackfs) listSnapshots(ctx context.Context, username string, id int) ([
 	if err != nil {
 		return nil, err
 	}
+	for _, snap := range l {
+		// truncate the time according to the given format
+		snap.Time, _ = time.Parse(f.conf.TimestampFormat, snap.Time.Format(f.conf.TimestampFormat))
+	}
 	_ = f.cache.SetWithExpire(key, l, time.Duration(f.conf.Expiration)*time.Second)
 	return l, nil
 }
