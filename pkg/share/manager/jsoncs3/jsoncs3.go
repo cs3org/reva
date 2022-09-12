@@ -22,6 +22,7 @@ import (
 	"context"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/mitchellh/mapstructure"
@@ -152,10 +153,10 @@ func NewDefault(m map[string]interface{}) (share.Manager, error) {
 // New returns a new manager instance.
 func New(s metadata.Storage, gc gatewayv1beta1.GatewayAPIClient) (*Manager, error) {
 	return &Manager{
-		Cache:              providercache.New(s),
-		CreatedCache:       sharecache.New(s, "users", "created.json"),
-		UserReceivedStates: receivedsharecache.New(s),
-		GroupReceivedCache: sharecache.New(s, "groups", "received.json"),
+		Cache:              providercache.New(s, 0*time.Second),
+		CreatedCache:       sharecache.New(s, "users", "created.json", 0*time.Second),
+		UserReceivedStates: receivedsharecache.New(s, 0*time.Second),
+		GroupReceivedCache: sharecache.New(s, "groups", "received.json", 0*time.Second),
 		storage:            s,
 		gateway:            gc,
 	}, nil

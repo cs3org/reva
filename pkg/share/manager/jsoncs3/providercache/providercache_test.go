@@ -62,7 +62,7 @@ var _ = Describe("Cache", func() {
 		storage, err = metadata.NewDiskStorage(tmpdir)
 		Expect(err).ToNot(HaveOccurred())
 
-		c = providercache.New(storage)
+		c = providercache.New(storage, 0*time.Second)
 		Expect(c).ToNot(BeNil())
 	})
 
@@ -160,7 +160,7 @@ var _ = Describe("Cache", func() {
 			BeforeEach(func() {
 				Expect(c.Persist(ctx, storageID, spaceID)).To(Succeed())
 				// reset in-memory cache
-				c = providercache.New(storage)
+				c = providercache.New(storage, 0*time.Second)
 			})
 
 			It("downloads if needed", func() {

@@ -22,6 +22,7 @@ import (
 	"context"
 	"io/ioutil"
 	"os"
+	"time"
 
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	collaborationv1beta1 "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
@@ -62,7 +63,7 @@ var _ = Describe("Cache", func() {
 		storage, err = metadata.NewDiskStorage(tmpdir)
 		Expect(err).ToNot(HaveOccurred())
 
-		c = receivedsharecache.New(storage)
+		c = receivedsharecache.New(storage, 0*time.Second)
 		Expect(c).ToNot(BeNil())
 	})
 
@@ -93,7 +94,7 @@ var _ = Describe("Cache", func() {
 			err := c.Add(ctx, userID, spaceID, rs)
 			Expect(err).ToNot(HaveOccurred())
 
-			c = receivedsharecache.New(storage)
+			c = receivedsharecache.New(storage, 0*time.Second)
 			Expect(c.Sync(ctx, userID)).To(Succeed())
 			s := c.Get(userID, spaceID, shareID)
 			Expect(s).ToNot(BeNil())
