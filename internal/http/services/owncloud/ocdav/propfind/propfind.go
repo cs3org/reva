@@ -403,7 +403,10 @@ func (p *Handler) propfindResponse(ctx context.Context, w http.ResponseWriter, r
 		}
 	}
 
-	propRes, err := MultistatusResponse(ctx, &pf, resourceInfos, p.PublicURL, namespace, linkshares)
+	prefer := net.ParsePrefer(r.Header.Get(net.HeaderPrefer))
+	returnMinimal := prefer[net.HeaderPreferReturn] == "minimal"
+
+	propRes, err := MultistatusResponse(ctx, &pf, resourceInfos, p.PublicURL, namespace, linkshares, returnMinimal)
 	if err != nil {
 		log.Error().Err(err).Msg("error formatting propfind")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -416,6 +419,10 @@ func (p *Handler) propfindResponse(ctx context.Context, w http.ResponseWriter, r
 		w.Header().Set(net.HeaderTusResumable, "1.0.0")
 		w.Header().Set(net.HeaderTusVersion, "1.0.0")
 		w.Header().Set(net.HeaderTusExtension, "creation,creation-with-upload,checksum,expiration")
+	}
+	w.Header().Set(net.HeaderVary, net.HeaderPrefer)
+	if returnMinimal {
+		w.Header().Set(net.HeaderPreferenceApplied, "return=minimal")
 	}
 
 	w.WriteHeader(http.StatusMultiStatus)
@@ -868,10 +875,10 @@ func ReadPropfind(r io.Reader) (pf XML, status int, err error) {
 }
 
 // MultistatusResponse converts a list of resource infos into a multistatus response string
-func MultistatusResponse(ctx context.Context, pf *XML, mds []*provider.ResourceInfo, publicURL, ns string, linkshares map[string]struct{}) ([]byte, error) {
+func MultistatusResponse(ctx context.Context, pf *XML, mds []*provider.ResourceInfo, publicURL, ns string, linkshares map[string]struct{}, returnMinimal bool) ([]byte, error) {
 	responses := make([]*ResponseXML, 0, len(mds))
 	for i := range mds {
-		res, err := mdToPropResponse(ctx, pf, mds[i], publicURL, ns, linkshares)
+		res, err := mdToPropResponse(ctx, pf, mds[i], publicURL, ns, linkshares, returnMinimal)
 		if err != nil {
 			return nil, err
 		}
@@ -890,7 +897,7 @@ func MultistatusResponse(ctx context.Context, pf *XML, mds []*provider.ResourceI
 // mdToPropResponse converts the CS3 metadata into a webdav PropResponse
 // ns is the CS3 namespace that needs to be removed from the CS3 path before
 // prefixing it with the baseURI
-func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, publicURL, ns string, linkshares map[string]struct{}) (*ResponseXML, error) {
+func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, publicURL, ns string, linkshares map[string]struct{}, returnMinimal bool) (*ResponseXML, error) {
 	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "md_to_prop_response")
 	span.SetAttributes(attribute.KeyValue{Key: "publicURL", Value: attribute.StringValue(publicURL)})
 	span.SetAttributes(attribute.KeyValue{Key: "ns", Value: attribute.StringValue(ns)})
@@ -974,64 +981,74 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 		Status: "HTTP/1.1 404 Not Found",
 		Prop:   []prop.PropertyXML{},
 	}
+
+	appendToOK := func(p ...prop.PropertyXML) {
+		propstatOK.Prop = append(propstatOK.Prop, p...)
+	}
+	appendToNotFound := func(p ...prop.PropertyXML) {
+		propstatNotFound.Prop = append(propstatNotFound.Prop, p...)
+	}
+	if returnMinimal {
+		appendToNotFound = func(p ...prop.PropertyXML) {}
+	}
+
 	// when allprops has been requested
 	if pf.Allprop != nil {
 		// return all known properties
 
 		if md.Id != nil {
 			id := storagespace.FormatResourceID(*md.Id)
-			propstatOK.Prop = append(propstatOK.Prop,
+			appendToOK(
 				prop.Escaped("oc:id", id),
 				prop.Escaped("oc:fileid", id),
 				prop.Escaped("oc:spaceid", md.Id.SpaceId),
 			)
-
 		}
 
 		// we need to add the shareid if possible - the only way to extract it here is to parse it from the path
 		if ref, err := storagespace.ParseReference(strings.TrimPrefix(md.Path, "/")); err == nil && ref.GetResourceId().GetSpaceId() == utils.ShareStorageSpaceID {
-			propstatOK.Prop = append(propstatOK.Prop, prop.Raw("oc:shareid", ref.GetResourceId().GetOpaqueId()))
+			appendToOK(prop.Raw("oc:shareid", ref.GetResourceId().GetOpaqueId()))
 		}
 
 		if md.Name != "" {
-			propstatOK.Prop = append(propstatOK.Prop, prop.Raw("oc:name", md.Name))
+			appendToOK(prop.Raw("oc:name", md.Name))
 		}
 
 		if md.Etag != "" {
 			// etags must be enclosed in double quotes and cannot contain them.
 			// See https://tools.ietf.org/html/rfc7232#section-2.3 for details
 			// TODO(jfd) handle weak tags that start with 'W/'
-			propstatOK.Prop = append(propstatOK.Prop, prop.Escaped("d:getetag", quoteEtag(md.Etag)))
+			appendToOK(prop.Escaped("d:getetag", quoteEtag(md.Etag)))
 		}
 
 		if md.PermissionSet != nil {
-			propstatOK.Prop = append(propstatOK.Prop, prop.Escaped("oc:permissions", wdp))
+			appendToOK(prop.Escaped("oc:permissions", wdp))
 		}
 
 		// always return size, well nearly always ... public link shares are a little weird
 		if md.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
-			propstatOK.Prop = append(propstatOK.Prop, prop.Raw("d:resourcetype", "<d:collection/>"))
+			appendToOK(prop.Raw("d:resourcetype", "<d:collection/>"))
 			if ls == nil {
-				propstatOK.Prop = append(propstatOK.Prop, prop.Escaped("oc:size", size))
+				appendToOK(prop.Escaped("oc:size", size))
 			}
 			// A <DAV:allprop> PROPFIND request SHOULD NOT return DAV:quota-available-bytes and DAV:quota-used-bytes
 			// from https://www.rfc-editor.org/rfc/rfc4331.html#section-2
-			// propstatOK.Prop = append(propstatOK.Prop, prop.NewProp("d:quota-used-bytes", size))
-			// propstatOK.Prop = append(propstatOK.Prop, prop.NewProp("d:quota-available-bytes", quota))
+			// appendToOK(prop.NewProp("d:quota-used-bytes", size))
+			// appendToOK(prop.NewProp("d:quota-available-bytes", quota))
 		} else {
-			propstatOK.Prop = append(propstatOK.Prop,
+			appendToOK(
 				prop.Escaped("d:resourcetype", ""),
 				prop.Escaped("d:getcontentlength", size),
 			)
 			if md.MimeType != "" {
-				propstatOK.Prop = append(propstatOK.Prop, prop.Escaped("d:getcontenttype", md.MimeType))
+				appendToOK(prop.Escaped("d:getcontenttype", md.MimeType))
 			}
 		}
 		// Finder needs the getLastModified property to work.
 		if md.Mtime != nil {
 			t := utils.TSToTime(md.Mtime).UTC()
 			lastModifiedString := t.Format(net.RFC1123)
-			propstatOK.Prop = append(propstatOK.Prop, prop.Escaped("d:getlastmodified", lastModifiedString))
+			appendToOK(prop.Escaped("d:getlastmodified", lastModifiedString))
 		}
 
 		// stay bug compatible with oc10, see https://github.com/owncloud/core/pull/38304#issuecomment-762185241
@@ -1062,25 +1079,25 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 		}
 		if checksums.Len() > 0 {
 			checksums.WriteString("</oc:checksum>")
-			propstatOK.Prop = append(propstatOK.Prop, prop.Raw("oc:checksums", checksums.String()))
+			appendToOK(prop.Raw("oc:checksums", checksums.String()))
 		}
 
 		// ls do not report any properties as missing by default
 		if ls == nil {
 			// favorites from arbitrary metadata
 			if k := md.GetArbitraryMetadata(); k == nil {
-				propstatOK.Prop = append(propstatOK.Prop, prop.Raw("oc:favorite", "0"))
+				appendToOK(prop.Raw("oc:favorite", "0"))
 			} else if amd := k.GetMetadata(); amd == nil {
-				propstatOK.Prop = append(propstatOK.Prop, prop.Raw("oc:favorite", "0"))
+				appendToOK(prop.Raw("oc:favorite", "0"))
 			} else if v, ok := amd[net.PropOcFavorite]; ok && v != "" {
-				propstatOK.Prop = append(propstatOK.Prop, prop.Escaped("oc:favorite", v))
+				appendToOK(prop.Escaped("oc:favorite", v))
 			} else {
-				propstatOK.Prop = append(propstatOK.Prop, prop.Raw("oc:favorite", "0"))
+				appendToOK(prop.Raw("oc:favorite", "0"))
 			}
 		}
 
 		if lock != nil {
-			propstatOK.Prop = append(propstatOK.Prop, prop.Raw("d:lockdiscovery", activeLocks(&sublog, lock)))
+			appendToOK(prop.Raw("d:lockdiscovery", activeLocks(&sublog, lock)))
 		}
 		// TODO return other properties ... but how do we put them in a namespace?
 	} else {
@@ -1093,21 +1110,21 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 				// I tested the desktop client and phoenix to annotate which properties are requestted, see below cases
 				case "fileid": // phoenix only
 					if md.Id != nil {
-						propstatOK.Prop = append(propstatOK.Prop, prop.Escaped("oc:fileid", storagespace.FormatResourceID(*md.Id)))
+						appendToOK(prop.Escaped("oc:fileid", storagespace.FormatResourceID(*md.Id)))
 					} else {
-						propstatNotFound.Prop = append(propstatNotFound.Prop, prop.NotFound("oc:fileid"))
+						appendToNotFound(prop.NotFound("oc:fileid"))
 					}
 				case "id": // desktop client only
 					if md.Id != nil {
-						propstatOK.Prop = append(propstatOK.Prop, prop.Escaped("oc:id", storagespace.FormatResourceID(*md.Id)))
+						appendToOK(prop.Escaped("oc:id", storagespace.FormatResourceID(*md.Id)))
 					} else {
-						propstatNotFound.Prop = append(propstatNotFound.Prop, prop.NotFound("oc:id"))
+						appendToNotFound(prop.NotFound("oc:id"))
 					}
 				case "spaceid":
 					if md.Id != nil {
-						propstatOK.Prop = append(propstatOK.Prop, prop.Escaped("oc:spaceid", md.Id.SpaceId))
+						appendToOK(prop.Escaped("oc:spaceid", md.Id.SpaceId))
 					} else {
-						propstatNotFound.Prop = append(propstatNotFound.Prop, prop.Escaped("oc:spaceid", ""))
+						appendToNotFound(prop.Escaped("oc:spaceid", ""))
 					}
 				case "permissions": // both
 					// oc:permissions take several char flags to indicate the permissions the user has on this node:
@@ -1119,78 +1136,75 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 					// R = Shareable (Reshare)
 					// M = Mounted
 					// in contrast, the ocs:share-permissions further down below indicate clients the maximum permissions that can be granted
-					propstatOK.Prop = append(propstatOK.Prop, prop.Escaped("oc:permissions", wdp))
+					appendToOK(prop.Escaped("oc:permissions", wdp))
 				case "public-link-permission": // only on a share root node
 					if ls != nil && md.PermissionSet != nil {
-						propstatOK.Prop = append(
-							propstatOK.Prop,
-							prop.Escaped("oc:public-link-permission", role.OCSPermissions().String()))
+						appendToOK(prop.Escaped("oc:public-link-permission", role.OCSPermissions().String()))
 					} else {
-						propstatNotFound.Prop = append(propstatNotFound.Prop, prop.NotFound("oc:public-link-permission"))
+						appendToNotFound(prop.NotFound("oc:public-link-permission"))
 					}
 				case "public-link-item-type": // only on a share root node
 					if ls != nil {
 						if md.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
-							propstatOK.Prop = append(propstatOK.Prop, prop.Raw("oc:public-link-item-type", "folder"))
+							appendToOK(prop.Raw("oc:public-link-item-type", "folder"))
 						} else {
-							propstatOK.Prop = append(propstatOK.Prop, prop.Raw("oc:public-link-item-type", "file"))
+							appendToOK(prop.Raw("oc:public-link-item-type", "file"))
 							// redirectref is another option
 						}
 					} else {
-						propstatNotFound.Prop = append(propstatNotFound.Prop, prop.NotFound("oc:public-link-item-type"))
+						appendToNotFound(prop.NotFound("oc:public-link-item-type"))
 					}
 				case "public-link-share-datetime":
 					if ls != nil && ls.Mtime != nil {
 						t := utils.TSToTime(ls.Mtime).UTC() // TODO or ctime?
 						shareTimeString := t.Format(net.RFC1123)
-						propstatOK.Prop = append(propstatOK.Prop, prop.Escaped("oc:public-link-share-datetime", shareTimeString))
+						appendToOK(prop.Escaped("oc:public-link-share-datetime", shareTimeString))
 					} else {
-						propstatNotFound.Prop = append(propstatNotFound.Prop, prop.NotFound("oc:public-link-share-datetime"))
+						appendToNotFound(prop.NotFound("oc:public-link-share-datetime"))
 					}
 				case "public-link-share-owner":
 					if ls != nil && ls.Owner != nil {
 						if net.IsCurrentUserOwner(ctx, ls.Owner) {
 							u := ctxpkg.ContextMustGetUser(ctx)
-							propstatOK.Prop = append(propstatOK.Prop, prop.Escaped("oc:public-link-share-owner", u.Username))
+							appendToOK(prop.Escaped("oc:public-link-share-owner", u.Username))
 						} else {
 							u, _ := ctxpkg.ContextGetUser(ctx)
 							sublog.Error().Interface("share", ls).Interface("user", u).Msg("the current user in the context should be the owner of a public link share")
-							propstatNotFound.Prop = append(propstatNotFound.Prop, prop.NotFound("oc:public-link-share-owner"))
+							appendToNotFound(prop.NotFound("oc:public-link-share-owner"))
 						}
 					} else {
-						propstatNotFound.Prop = append(propstatNotFound.Prop, prop.NotFound("oc:public-link-share-owner"))
+						appendToNotFound(prop.NotFound("oc:public-link-share-owner"))
 					}
 				case "public-link-expiration":
 					if ls != nil && ls.Expiration != nil {
 						t := utils.TSToTime(ls.Expiration).UTC()
 						expireTimeString := t.Format(net.RFC1123)
-						propstatOK.Prop = append(propstatOK.Prop, prop.Escaped("oc:public-link-expiration", expireTimeString))
+						appendToOK(prop.Escaped("oc:public-link-expiration", expireTimeString))
 					} else {
-						propstatNotFound.Prop = append(propstatNotFound.Prop, prop.NotFound("oc:public-link-expiration"))
+						appendToNotFound(prop.NotFound("oc:public-link-expiration"))
 					}
-					propstatNotFound.Prop = append(propstatNotFound.Prop, prop.NotFound("oc:public-link-expiration"))
 				case "size": // phoenix only
 					// TODO we cannot find out if md.Size is set or not because ints in go default to 0
 					// TODO what is the difference to d:quota-used-bytes (which only exists for collections)?
 					// oc:size is available on files and folders and behaves like d:getcontentlength or d:quota-used-bytes respectively
 					// The hasPrefix is a workaround to make children of the link root show a size if they have 0 bytes
 					if ls == nil || strings.HasPrefix(md.Path, "/"+ls.Token+"/") {
-						propstatOK.Prop = append(propstatOK.Prop, prop.Escaped("oc:size", size))
+						appendToOK(prop.Escaped("oc:size", size))
 					} else {
 						// link share root collection has no size
-						propstatNotFound.Prop = append(propstatNotFound.Prop, prop.NotFound("oc:size"))
+						appendToNotFound(prop.NotFound("oc:size"))
 					}
 				case "owner-id": // phoenix only
 					if md.Owner != nil {
 						if net.IsCurrentUserOwner(ctx, md.Owner) {
 							u := ctxpkg.ContextMustGetUser(ctx)
-							propstatOK.Prop = append(propstatOK.Prop, prop.Escaped("oc:owner-id", u.Username))
+							appendToOK(prop.Escaped("oc:owner-id", u.Username))
 						} else {
 							sublog.Debug().Msg("TODO fetch user username")
-							propstatNotFound.Prop = append(propstatNotFound.Prop, prop.NotFound("oc:owner-id"))
+							appendToNotFound(prop.NotFound("oc:owner-id"))
 						}
 					} else {
-						propstatNotFound.Prop = append(propstatNotFound.Prop, prop.NotFound("oc:owner-id"))
+						appendToNotFound(prop.NotFound("oc:owner-id"))
 					}
 				case "favorite": // phoenix only
 					// TODO: can be 0 or 1?, in oc10 it is present or not
@@ -1198,17 +1212,17 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 					// TODO: this boolean favorite property is so horribly wrong ... either it is presont, or it is not ... unless ... it is possible to have a non binary value ... we need to double check
 					if ls == nil {
 						if k := md.GetArbitraryMetadata(); k == nil {
-							propstatOK.Prop = append(propstatOK.Prop, prop.Raw("oc:favorite", "0"))
+							appendToOK(prop.Raw("oc:favorite", "0"))
 						} else if amd := k.GetMetadata(); amd == nil {
-							propstatOK.Prop = append(propstatOK.Prop, prop.Raw("oc:favorite", "0"))
+							appendToOK(prop.Raw("oc:favorite", "0"))
 						} else if v, ok := amd[net.PropOcFavorite]; ok && v != "" {
-							propstatOK.Prop = append(propstatOK.Prop, prop.Raw("oc:favorite", "1"))
+							appendToOK(prop.Raw("oc:favorite", "1"))
 						} else {
-							propstatOK.Prop = append(propstatOK.Prop, prop.Raw("oc:favorite", "0"))
+							appendToOK(prop.Raw("oc:favorite", "0"))
 						}
 					} else {
 						// link share root collection has no favorite
-						propstatNotFound.Prop = append(propstatNotFound.Prop, prop.NotFound("oc:favorite"))
+						appendToNotFound(prop.NotFound("oc:favorite"))
 					}
 				case "checksums": // desktop ... not really ... the desktop sends the OC-Checksum header
 
@@ -1240,9 +1254,9 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 					}
 					if checksums.Len() > 13 {
 						checksums.WriteString("</oc:checksum>")
-						propstatOK.Prop = append(propstatOK.Prop, prop.Raw("oc:checksums", checksums.String()))
+						appendToOK(prop.Raw("oc:checksums", checksums.String()))
 					} else {
-						propstatNotFound.Prop = append(propstatNotFound.Prop, prop.NotFound("oc:checksums"))
+						appendToNotFound(prop.NotFound("oc:checksums"))
 					}
 				case "share-types": // used to render share indicators to share owners
 					var types strings.Builder
@@ -1266,21 +1280,21 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 					}
 
 					if types.Len() != 0 {
-						propstatOK.Prop = append(propstatOK.Prop, prop.Raw("oc:share-types", types.String()))
+						appendToOK(prop.Raw("oc:share-types", types.String()))
 					} else {
-						propstatNotFound.Prop = append(propstatNotFound.Prop, prop.NotFound("oc:"+pf.Prop[i].Local))
+						appendToNotFound(prop.NotFound("oc:" + pf.Prop[i].Local))
 					}
 				case "owner-display-name": // phoenix only
 					if md.Owner != nil {
 						if net.IsCurrentUserOwner(ctx, md.Owner) {
 							u := ctxpkg.ContextMustGetUser(ctx)
-							propstatOK.Prop = append(propstatOK.Prop, prop.Escaped("oc:owner-display-name", u.DisplayName))
+							appendToOK(prop.Escaped("oc:owner-display-name", u.DisplayName))
 						} else {
 							sublog.Debug().Msg("TODO fetch user displayname")
-							propstatNotFound.Prop = append(propstatNotFound.Prop, prop.NotFound("oc:owner-display-name"))
+							appendToNotFound(prop.NotFound("oc:owner-display-name"))
 						}
 					} else {
-						propstatNotFound.Prop = append(propstatNotFound.Prop, prop.NotFound("oc:owner-display-name"))
+						appendToNotFound(prop.NotFound("oc:owner-display-name"))
 					}
 				case "downloadURL": // desktop
 					if isPublic && md.Type == provider.ResourceType_RESOURCE_TYPE_FILE {
@@ -1299,9 +1313,9 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 
 							path = sb.String()
 						}
-						propstatOK.Prop = append(propstatOK.Prop, prop.Escaped("oc:downloadURL", publicURL+baseURI+path))
+						appendToOK(prop.Escaped("oc:downloadURL", publicURL+baseURI+path))
 					} else {
-						propstatNotFound.Prop = append(propstatNotFound.Prop, prop.NotFound("oc:"+pf.Prop[i].Local))
+						appendToNotFound(prop.NotFound("oc:" + pf.Prop[i].Local))
 					}
 				case "signature-auth":
 					if isPublic {
@@ -1316,16 +1330,16 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 							sb.WriteString(expiration.Format(time.RFC3339))
 							sb.WriteString("</oc:expiration>")
 
-							propstatOK.Prop = append(propstatOK.Prop, prop.Raw("oc:signature-auth", sb.String()))
+							appendToOK(prop.Raw("oc:signature-auth", sb.String()))
 						} else {
-							propstatNotFound.Prop = append(propstatNotFound.Prop, prop.NotFound("oc:signature-auth"))
+							appendToNotFound(prop.NotFound("oc:signature-auth"))
 						}
 					}
 				case "name":
-					propstatOK.Prop = append(propstatOK.Prop, prop.Raw("oc:name", md.Name))
+					appendToOK(prop.Raw("oc:name", md.Name))
 				case "shareid":
 					if ref, err := storagespace.ParseReference(strings.TrimPrefix(md.Path, "/")); err == nil && ref.GetResourceId().GetSpaceId() == utils.ShareStorageSpaceID {
-						propstatOK.Prop = append(propstatOK.Prop, prop.Raw("oc:shareid", ref.GetResourceId().GetOpaqueId()))
+						appendToOK(prop.Raw("oc:shareid", ref.GetResourceId().GetOpaqueId()))
 					}
 				case "privatelink": // phoenix only
 					// <oc:privatelink>https://phoenix.owncloud.com/f/9</oc:privatelink>
@@ -1340,15 +1354,15 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 					// TODO(jfd): double check the client behavior with reva on backup restore
 					fallthrough
 				default:
-					propstatNotFound.Prop = append(propstatNotFound.Prop, prop.NotFound("oc:"+pf.Prop[i].Local))
+					appendToNotFound(prop.NotFound("oc:" + pf.Prop[i].Local))
 				}
 			case net.NsDav:
 				switch pf.Prop[i].Local {
 				case "getetag": // both
 					if md.Etag != "" {
-						propstatOK.Prop = append(propstatOK.Prop, prop.Escaped("d:getetag", quoteEtag(md.Etag)))
+						appendToOK(prop.Escaped("d:getetag", quoteEtag(md.Etag)))
 					} else {
-						propstatNotFound.Prop = append(propstatNotFound.Prop, prop.NotFound("d:getetag"))
+						appendToNotFound(prop.NotFound("d:getetag"))
 					}
 				case "getcontentlength": // both
 					// see everts stance on this https://stackoverflow.com/a/31621912, he points to http://tools.ietf.org/html/rfc4918#section-15.3
@@ -1357,57 +1371,57 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 					// which is not the case ... so we don't return it on collections. owncloud has oc:size for that
 					// TODO we cannot find out if md.Size is set or not because ints in go default to 0
 					if md.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
-						propstatNotFound.Prop = append(propstatNotFound.Prop, prop.NotFound("d:getcontentlength"))
+						appendToNotFound(prop.NotFound("d:getcontentlength"))
 					} else {
-						propstatOK.Prop = append(propstatOK.Prop, prop.Escaped("d:getcontentlength", size))
+						appendToOK(prop.Escaped("d:getcontentlength", size))
 					}
 				case "resourcetype": // both
 					if md.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
-						propstatOK.Prop = append(propstatOK.Prop, prop.Raw("d:resourcetype", "<d:collection/>"))
+						appendToOK(prop.Raw("d:resourcetype", "<d:collection/>"))
 					} else {
-						propstatOK.Prop = append(propstatOK.Prop, prop.Raw("d:resourcetype", ""))
+						appendToOK(prop.Raw("d:resourcetype", ""))
 						// redirectref is another option
 					}
 				case "getcontenttype": // phoenix
 					if md.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
 						// directories have no contenttype
-						propstatNotFound.Prop = append(propstatNotFound.Prop, prop.NotFound("d:getcontenttype"))
+						appendToNotFound(prop.NotFound("d:getcontenttype"))
 					} else if md.MimeType != "" {
-						propstatOK.Prop = append(propstatOK.Prop, prop.Escaped("d:getcontenttype", md.MimeType))
+						appendToOK(prop.Escaped("d:getcontenttype", md.MimeType))
 					}
 				case "getlastmodified": // both
 					// TODO we cannot find out if md.Mtime is set or not because ints in go default to 0
 					if md.Mtime != nil {
 						t := utils.TSToTime(md.Mtime).UTC()
 						lastModifiedString := t.Format(net.RFC1123)
-						propstatOK.Prop = append(propstatOK.Prop, prop.Escaped("d:getlastmodified", lastModifiedString))
+						appendToOK(prop.Escaped("d:getlastmodified", lastModifiedString))
 					} else {
-						propstatNotFound.Prop = append(propstatNotFound.Prop, prop.NotFound("d:getlastmodified"))
+						appendToNotFound(prop.NotFound("d:getlastmodified"))
 					}
 				case "quota-used-bytes": // RFC 4331
 					if md.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
 						// always returns the current usage,
 						// in oc10 there seems to be a bug that makes the size in webdav differ from the one in the user properties, not taking shares into account
 						// in ocis we plan to always mak the quota a property of the storage space
-						propstatOK.Prop = append(propstatOK.Prop, prop.Escaped("d:quota-used-bytes", size))
+						appendToOK(prop.Escaped("d:quota-used-bytes", size))
 					} else {
-						propstatNotFound.Prop = append(propstatNotFound.Prop, prop.NotFound("d:quota-used-bytes"))
+						appendToNotFound(prop.NotFound("d:quota-used-bytes"))
 					}
 				case "quota-available-bytes": // RFC 4331
 					if md.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
 						// oc10 returns -3 for unlimited, -2 for unknown, -1 for uncalculated
-						propstatOK.Prop = append(propstatOK.Prop, prop.Escaped("d:quota-available-bytes", quota))
+						appendToOK(prop.Escaped("d:quota-available-bytes", quota))
 					} else {
-						propstatNotFound.Prop = append(propstatNotFound.Prop, prop.NotFound("d:quota-available-bytes"))
+						appendToNotFound(prop.NotFound("d:quota-available-bytes"))
 					}
 				case "lockdiscovery": // http://www.webdav.org/specs/rfc2518.html#PROPERTY_lockdiscovery
 					if lock == nil {
-						propstatNotFound.Prop = append(propstatNotFound.Prop, prop.NotFound("d:lockdiscovery"))
+						appendToNotFound(prop.NotFound("d:lockdiscovery"))
 					} else {
-						propstatOK.Prop = append(propstatOK.Prop, prop.Raw("d:lockdiscovery", activeLocks(&sublog, lock)))
+						appendToOK(prop.Raw("d:lockdiscovery", activeLocks(&sublog, lock)))
 					}
 				default:
-					propstatNotFound.Prop = append(propstatNotFound.Prop, prop.NotFound("d:"+pf.Prop[i].Local))
+					appendToNotFound(prop.NotFound("d:" + pf.Prop[i].Local))
 				}
 			case net.NsOCS:
 				switch pf.Prop[i].Local {
@@ -1426,21 +1440,21 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 							perms &^= conversions.PermissionCreate
 							perms &^= conversions.PermissionDelete
 						}
-						propstatOK.Prop = append(propstatOK.Prop, prop.EscapedNS(pf.Prop[i].Space, pf.Prop[i].Local, perms.String()))
+						appendToOK(prop.EscapedNS(pf.Prop[i].Space, pf.Prop[i].Local, perms.String()))
 					}
 				default:
-					propstatNotFound.Prop = append(propstatNotFound.Prop, prop.NotFound("d:"+pf.Prop[i].Local))
+					appendToNotFound(prop.NotFound("d:" + pf.Prop[i].Local))
 				}
 			default:
 				// handle custom properties
 				if k := md.GetArbitraryMetadata(); k == nil {
-					propstatNotFound.Prop = append(propstatNotFound.Prop, prop.NotFoundNS(pf.Prop[i].Space, pf.Prop[i].Local))
+					appendToNotFound(prop.NotFoundNS(pf.Prop[i].Space, pf.Prop[i].Local))
 				} else if amd := k.GetMetadata(); amd == nil {
-					propstatNotFound.Prop = append(propstatNotFound.Prop, prop.NotFoundNS(pf.Prop[i].Space, pf.Prop[i].Local))
+					appendToNotFound(prop.NotFoundNS(pf.Prop[i].Space, pf.Prop[i].Local))
 				} else if v, ok := amd[metadataKeyOf(&pf.Prop[i])]; ok && v != "" {
-					propstatOK.Prop = append(propstatOK.Prop, prop.EscapedNS(pf.Prop[i].Space, pf.Prop[i].Local, v))
+					appendToOK(prop.EscapedNS(pf.Prop[i].Space, pf.Prop[i].Local, v))
 				} else {
-					propstatNotFound.Prop = append(propstatNotFound.Prop, prop.NotFoundNS(pf.Prop[i].Space, pf.Prop[i].Local))
+					appendToNotFound(prop.NotFoundNS(pf.Prop[i].Space, pf.Prop[i].Local))
 				}
 			}
 		}
