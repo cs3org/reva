@@ -129,3 +129,18 @@ func ParseDestination(baseURI, s string) (string, error) {
 
 	return urlSplit[1], nil
 }
+
+// ParsePrefer parses the prefer header value defined in https://datatracker.ietf.org/doc/html/rfc8144
+func ParsePrefer(s string) map[string]string {
+	parts := strings.Split(s, ",")
+	m := make(map[string]string, len(parts))
+	for _, part := range parts {
+		kv := strings.SplitN(strings.ToLower(strings.Trim(part, " ")), "=", 2)
+		if len(kv) == 2 {
+			m[kv[0]] = kv[1]
+		} else {
+			m[kv[0]] = "1" // mark it as set
+		}
+	}
+	return m
+}
