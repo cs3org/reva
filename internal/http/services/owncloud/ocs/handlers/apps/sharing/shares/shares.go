@@ -1122,10 +1122,10 @@ func (h *Handler) addFileInfo(ctx context.Context, s *conversions.ShareData, inf
 	// TODO Storage: int
 	s.ItemSource = storagespace.FormatResourceID(*info.Id)
 	s.FileSource = s.ItemSource
+	s.Path = path.Join("/", info.Path)
 	switch {
 	case h.sharePrefix == "/":
 		s.FileTarget = info.Path
-		s.Path = info.Path
 		client, err := pool.GetGatewayServiceClient(h.gatewayAddr)
 		if err == nil {
 			gpRes, err := client.GetPath(ctx, &provider.GetPathRequest{
@@ -1151,7 +1151,6 @@ func (h *Handler) addFileInfo(ctx context.Context, s *conversions.ShareData, inf
 		if s.ShareType == conversions.ShareTypePublicLink {
 			s.FileTarget = path.Join("/", path.Base(info.Path))
 		}
-		s.Path = info.Path
 	}
 	s.StorageID = storageIDPrefix + s.FileTarget
 	// TODO FileParent:
