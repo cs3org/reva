@@ -1133,7 +1133,6 @@ func (h *Handler) addFileInfo(ctx context.Context, s *conversions.ShareData, inf
 			})
 			if err == nil && gpRes.Status.Code == rpc.Code_CODE_OK {
 				// TODO log error?
-				s.Path = gpRes.Path
 
 				// cut off configured home namespace, paths in ocs shares are relative to it
 				identifier := h.mustGetIdentifiers(ctx, client, info.GetOwner().GetOpaqueId(), false)
@@ -1143,13 +1142,18 @@ func (h *Handler) addFileInfo(ctx context.Context, s *conversions.ShareData, inf
 					DisplayName: identifier.DisplayName,
 					Mail:        identifier.Mail,
 				}
-				s.Path = strings.TrimPrefix(s.Path, h.getHomeNamespace(u))
+				s.Path = strings.TrimPrefix(gpRes.Path, h.getHomeNamespace(u))
 			}
 		}
 	default:
-		s.FileTarget = path.Join(h.sharePrefix, path.Base(info.Path))
+		name := info.Name
+		if name == "" {
+			// fall back to basename of path
+			name = path.Base(info.Path)
+		}
+		s.FileTarget = path.Join(h.sharePrefix, name)
 		if s.ShareType == conversions.ShareTypePublicLink {
-			s.FileTarget = path.Join("/", path.Base(info.Path))
+			s.FileTarget = path.Join("/", name)
 		}
 	}
 	s.StorageID = storageIDPrefix + s.FileTarget
