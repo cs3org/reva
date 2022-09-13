@@ -1,9 +1,9 @@
-*                                     @labkode @ishank011
+*                                     @labkode @glpatcern
 .drone.env                            @labkode @ishank011 @glpatcern @cs3org/owncloud-team
 changelog                             @labkode @ishank011 @glpatcern @cs3org/owncloud-team
 examples                              @labkode @ishank011 @glpatcern @cs3org/owncloud-team
 tests                                 @labkode @ishank011 @glpatcern @cs3org/owncloud-team
-internal/http/services/owncloud       @cs3org/owncloud-team @labkode @ishank011
+internal/http/services/owncloud       @cs3org/owncloud-team @labkode @ishank011 @glpatcern
 internal/http/services/appprovider    @labkode @ishank011 @wkloucek @glpatcern
 internal/grpc/services/gateway        @labkode @ishank011 @glpatcern
 internal/grpc/services/appprovider    @labkode @ishank011 @wkloucek @glpatcern
@@ -12,7 +12,5 @@ pkg/storage/fs/owncloudsql            @cs3org/owncloud-team
 pkg/storage/fs/owncloud               @cs3org/owncloud-team
 pkg/storage/fs/ocis                   @cs3org/owncloud-team
 pkg/storage/utils/decomposedfs        @cs3org/owncloud-team
-pkg/storage/utils/eosfs               @labkode @ishank011 @glpatcern
 pkg/user/manager/owncloudsql          @cs3org/owncloud-team
-pkg/eosclient                         @labkode @ishank011 @glpatcern
-pkg/app                               @labkode @ishank011 @wkloucek @glpatcern
+pkg/app                               @labkode @wkloucek @glpatcern
