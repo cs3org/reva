@@ -41,9 +41,9 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/rhttp/global"
+	"github.com/cs3org/reva/pkg/rhttp/router"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/storage/utils/downloader"
-	"github.com/go-chi/chi/v5"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -74,7 +74,6 @@ type config struct {
 
 type svc struct {
 	c         *config
-	router    *chi.Mux
 	log       *zerolog.Logger
 	client    gateway.GatewayAPIClient
 	thumbnail *manager.Thumbnail
@@ -102,8 +101,6 @@ func New(conf map[string]interface{}, log *zerolog.Logger) (global.Service, erro
 	}
 	c.init()
 
-	r := chi.NewRouter()
-
 	gtw, err := pool.GetGatewayServiceClient(pool.Endpoint(c.GatewaySVC))
 	if err != nil {
 		return nil, errors.Wrap(err, "error getting gateway client")
@@ -124,23 +121,9 @@ func New(conf map[string]interface{}, log *zerolog.Logger) (global.Service, erro
 	s := &svc{
 		c:         c,
 		log:       log,
-		router:    r,
 		thumbnail: mgr,
 		client:    gtw,
 	}
-
-	// thumbnails for normal files
-	r.Group(func(r chi.Router) {
-		r.Use(s.davUserContext)
-		r.Get("/files/*", s.Thumbnail)
-	})
-
-	// thumbnails for public links
-	r.Group(func(r chi.Router) {
-		r.Use(s.davPublicContext)
-		r.Get("/public-files/*", s.Thumbnail)
-		r.Head("/public-files/*", s.Thumbnail)
-	})
 
 	return s, nil
 }
@@ -149,9 +132,8 @@ func (s *svc) davUserContext(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 
-		path := chi.URLParam(r, "*")
+		path := r.URL.Path
 		path, _ = url.QueryUnescape(path)
-		path = "/" + path
 
 		res, err := s.statRes(ctx, &provider.Reference{
 			Path: path,
@@ -171,7 +153,7 @@ func (s *svc) davPublicContext(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 
-		req := chi.URLParam(r, "*")
+		req := strings.TrimPrefix(r.URL.Path, "/")
 		tknPath := strings.SplitN(req, "/", 2)
 		var token, path string
 
@@ -365,27 +347,29 @@ func parseDimension(d, name string, defaultValue int) (int, error) {
 }
 
 // Thumbnail generates a thumbnail of the resource in the request
-func (s *svc) Thumbnail(w http.ResponseWriter, r *http.Request) {
-	thumbReq, err := s.parseThumbnailRequest(r)
-	if err != nil {
-		s.writeHTTPError(w, err)
-		return
-	}
+func (s *svc) Thumbnail(w http.ResponseWriter, r *http.Request) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		thumbReq, err := s.parseThumbnailRequest(r)
+		if err != nil {
+			s.writeHTTPError(w, err)
+			return
+		}
 
-	data, mimetype, err := s.thumbnail.GetThumbnail(r.Context(), thumbReq.File, thumbReq.ETag, thumbReq.Width, thumbReq.Height, thumbReq.OutputType)
-	if err != nil {
-		s.writeHTTPError(w, err)
-		return
-	}
+		data, mimetype, err := s.thumbnail.GetThumbnail(r.Context(), thumbReq.File, thumbReq.ETag, thumbReq.Width, thumbReq.Height, thumbReq.OutputType)
+		if err != nil {
+			s.writeHTTPError(w, err)
+			return
+		}
 
-	// send back the thumbnail in the body of the response
-	buf := bytes.NewBuffer(data)
-	w.WriteHeader(http.StatusOK)
-	w.Header().Set("Content-Type", mimetype)
-	_, err = io.Copy(w, buf)
-	if err != nil {
-		s.log.Error().Err(err).Msg("error writinh thumbnail into the response writer")
-	}
+		// send back the thumbnail in the body of the response
+		buf := bytes.NewBuffer(data)
+		w.WriteHeader(http.StatusOK)
+		w.Header().Set("Content-Type", mimetype)
+		_, err = io.Copy(w, buf)
+		if err != nil {
+			s.log.Error().Err(err).Msg("error writinh thumbnail into the response writer")
+		}
+	})
 }
 
 func (s *svc) writeHTTPError(w http.ResponseWriter, err error) {
@@ -404,7 +388,35 @@ func (s *svc) writeHTTPError(w http.ResponseWriter, err error) {
 }
 
 func (s *svc) Handler() http.Handler {
-	return s.router
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var head string
+
+		head, r.URL.Path = router.ShiftPath(r.URL.Path)
+		switch head {
+		case "files":
+			if !checkMethods(r, http.MethodGet) {
+				w.WriteHeader(http.StatusNotFound)
+				return
+			}
+			s.davUserContext(s.Thumbnail(w, r)).ServeHTTP(w, r)
+			return
+		case "public-files":
+			if !checkMethods(r, http.MethodGet, http.MethodHead) {
+				w.WriteHeader(http.StatusNotFound)
+				return
+			}
+			s.davPublicContext(s.Thumbnail(w, r)).ServeHTTP(w, r)
+		}
+	})
+}
+
+func checkMethods(r *http.Request, methods ...string) bool {
+	for _, m := range methods {
+		if r.Method == m {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *svc) Prefix() string {
