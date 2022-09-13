@@ -25,6 +25,7 @@ import (
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav"
 	"github.com/cs3org/reva/v2/pkg/storage/favorite"
 	"github.com/rs/zerolog"
+	"go-micro.dev/v4/broker"
 )
 
 // Option defines a single option function.
@@ -33,6 +34,7 @@ type Option func(o *Options)
 // Options defines the available options for this package.
 type Options struct {
 	TLSConfig *tls.Config
+	Broker    broker.Broker
 	Address   string
 	Logger    zerolog.Logger
 	Context   context.Context
@@ -67,6 +69,13 @@ func newOptions(opts ...Option) Options {
 func TLSConfig(config *tls.Config) Option {
 	return func(o *Options) {
 		o.TLSConfig = config
+	}
+}
+
+// Broker provides a function to set the Broker option.
+func Broker(b broker.Broker) Option {
+	return func(o *Options) {
+		o.Broker = b
 	}
 }
 
