@@ -25,6 +25,7 @@ import (
 	"io"
 	"net/url"
 	"os"
+	"os/exec"
 	"path"
 	"regexp"
 	"strconv"
@@ -1478,7 +1479,13 @@ func (fs *eosfs) createNominalHome(ctx context.Context) error {
 		return err
 	}
 
-	return err
+	if fs.conf.EnablePostCreateHomeHook {
+		if err := fs.runPostCreateHomeHook(ctx); err != nil {
+			return errors.Wrap(err, "eosfs: error running post create home hook")
+		}
+	}
+
+	return nil
 }
 
 func (fs *eosfs) CreateHome(ctx context.Context) error {
@@ -1495,6 +1502,11 @@ func (fs *eosfs) CreateHome(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+func (fs *eosfs) runPostCreateHomeHook(ctx context.Context) error {
+	user := ctxpkg.ContextMustGetUser(ctx)
+	return exec.Command(fs.conf.OnPostCreateHomeHook, user.Username).Run()
 }
 
 func (fs *eosfs) createUserDir(ctx context.Context, u *userpb.User, path string, recursiveAttr bool) error {

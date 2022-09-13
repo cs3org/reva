@@ -168,4 +168,9 @@ type Config struct {
 	// TokenExpiry stores in seconds the time after which generated tokens will expire
 	// Default is 3600
 	TokenExpiry int
+
+	// Path of the script to run after an user home folder has been created
+	OnPostCreateHomeHook string `mapstructure:"on_post_create_home_hook"`
+	// Whether to enable the post create home hook
+	EnablePostCreateHomeHook bool `mapstructure:"enable_post_create_home_hook"`
 }
