@@ -4,7 +4,7 @@
 
 Name: revad
 Summary: REVA for CERNBox
-Version: 0.0.8
+Version: 0.0.9
 Release: 1%{?dist}
 License: AGPLv3
 BuildRoot: %{_tmppath}/%{name}-buildroot
@@ -51,6 +51,8 @@ rm -rf %buildroot/
 
 
 %changelog
+* Tue Sep 13 2022 Gianmaria Del Monte <gianmaria.del.monte@cern.ch> 0.0.9
+- v0.0.9
 * Wed Sep 07 2022 Gianmaria Del Monte <gianmaria.del.monte@cern.ch> 0.0.8
 - v0.0.8
 * Wed Sep 07 2022 Gianmaria Del Monte <gianmaria.del.monte@cern.ch> 0.0.7
