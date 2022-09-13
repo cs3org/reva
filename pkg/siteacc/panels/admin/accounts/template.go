@@ -16,7 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package admin
+package accounts
 
 const tplJavaScript = `
 function handleAction(action, email) {
@@ -45,13 +45,19 @@ function handleAction(action, email) {
 
 const tplStyleSheet = `
 html * {
-	font-family: monospace !important;
+	font-family: arial !important;
+}
+li::marker {
+	font-weight: bold;
 }
 `
 
-const tplBody = `
+const tplBody = ` 
+<div>
+	<p>There are currently <strong>{{.Accounts | len}} accounts</strong> stored in the system:</p>
+</div>
 <div style="font-size: 14px;">
-	<ul>
+	<ol style="padding-left: 25px;">
 	{{range .Accounts}}
 		<li>
 			<div>
@@ -105,6 +111,9 @@ const tplBody = `
 			<hr>
 		</li>
 	{{end}}
-	</ul>
+	</ol>
+</div>
+<div>
+	<p>Go <a href="{{getServerAddress}}/admin/?path=manage">back</a> to the main page.</p>
 </div>
 `

@@ -22,13 +22,13 @@ import (
 	"fmt"
 	"net/http"
 
-	accpanel "github.com/cs3org/reva/pkg/siteacc/account"
-	"github.com/cs3org/reva/pkg/siteacc/admin"
 	"github.com/cs3org/reva/pkg/siteacc/alerting"
 	"github.com/cs3org/reva/pkg/siteacc/config"
 	"github.com/cs3org/reva/pkg/siteacc/data"
 	"github.com/cs3org/reva/pkg/siteacc/html"
 	"github.com/cs3org/reva/pkg/siteacc/manager"
+	accpanel "github.com/cs3org/reva/pkg/siteacc/panels/account"
+	"github.com/cs3org/reva/pkg/siteacc/panels/admin"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 )
@@ -154,7 +154,8 @@ func (siteacc *SiteAccounts) RequestHandler() http.Handler {
 func (siteacc *SiteAccounts) ShowAdministrationPanel(w http.ResponseWriter, r *http.Request, session *html.Session) error {
 	// The admin panel only shows the stored accounts and offers actions through links, so let it use cloned data
 	accounts := siteacc.accountsManager.CloneAccounts(true)
-	return siteacc.adminPanel.Execute(w, r, session, &accounts)
+	operators := siteacc.operatorsManager.CloneOperators(false)
+	return siteacc.adminPanel.Execute(w, r, session, &accounts, &operators)
 }
 
 // ShowAccountPanel writes the account panel HTTP output directly to the response writer.
