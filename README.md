@@ -114,7 +114,7 @@ This will require some PHP-related tools to run, for instance on Ubuntu you will
         -e LDAP_ADMIN_PASSWORD=admin \
         --name docker-slapd \
         -p 127.0.0.1:389:389 \
-        -p 636:636 -d osixia/openldap
+        -p 636:636 -d osixia/openldap:1.3.0
     ```
 
 2.  start the needed services
