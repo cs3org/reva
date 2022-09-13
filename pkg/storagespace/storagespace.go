@@ -118,12 +118,12 @@ func ParseReference(sRef string) (provider.Reference, error) {
 
 	var path string
 	if len(parts) == 2 {
-		path = parts[1]
+		path = utils.MakeRelativePath(parts[1])
 	}
 
 	return provider.Reference{
 		ResourceId: &rid,
-		Path:       utils.MakeRelativePath(path),
+		Path:       path,
 	}, nil
 }
 
