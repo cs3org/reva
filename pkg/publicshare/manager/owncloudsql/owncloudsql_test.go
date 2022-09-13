@@ -90,6 +90,7 @@ var _ = Describe("SQL manager", func() {
 				Idp:      "localhost:1111",
 				OpaqueId: "1",
 			},
+			Username: "username",
 		}
 		ctx = ctxpkg.ContextSetUser(context.Background(), user)
 
@@ -103,7 +104,7 @@ var _ = Describe("SQL manager", func() {
 		ri = &provider.ResourceInfo{
 			Type:  provider.ResourceType_RESOURCE_TYPE_CONTAINER,
 			Path:  "/share1",
-			Id:    &provider.ResourceId{OpaqueId: "sharedId"},
+			Id:    &provider.ResourceId{OpaqueId: "14"}, // matches the fileid in the oc_filecache
 			Owner: user.Id,
 			PermissionSet: &provider.ResourcePermissions{
 				Stat: true,
@@ -117,7 +118,7 @@ var _ = Describe("SQL manager", func() {
 		}
 	})
 
-	FIt("creates manager instances", func() {
+	It("creates manager instances", func() {
 		Expect(m).ToNot(BeNil())
 	})
 	Describe("CreatePublicShare", func() {

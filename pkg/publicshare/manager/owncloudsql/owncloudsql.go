@@ -22,18 +22,21 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strconv"
 	"time"
 
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
+	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/publicshare"
 	"github.com/cs3org/reva/v2/pkg/publicshare/manager/registry"
 	"github.com/cs3org/reva/v2/pkg/sharedconf"
+	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
+	"golang.org/x/crypto/bcrypt"
 
 	// Provides mysql drivers
 	_ "github.com/go-sql-driver/mysql"
@@ -55,6 +58,7 @@ type Config struct {
 	DbPort                     int    `mapstructure:"db_port"`
 	DbName                     string `mapstructure:"db_name"`
 	EnableExpiredSharesCleanup bool   `mapstructure:"enable_expired_shares_cleanup"`
+	SharePasswordHashCost      int    `mapstructure:"password_hash_cost"`
 }
 
 type mgr struct {
@@ -101,7 +105,97 @@ func parseConfig(m map[string]interface{}) (*Config, error) {
 }
 
 func (m *mgr) CreatePublicShare(ctx context.Context, u *user.User, rInfo *provider.ResourceInfo, g *link.Grant) (*link.PublicShare, error) {
-	return nil, errtypes.NotSupported("not implemented")
+
+	tkn := utils.RandString(15)
+	now := time.Now().Unix()
+
+	displayName := tkn
+	if rInfo.ArbitraryMetadata != nil && rInfo.ArbitraryMetadata.Metadata["name"] != "" {
+		displayName = rInfo.ArbitraryMetadata.Metadata["name"]
+	}
+	createdAt := &typespb.Timestamp{
+		Seconds: uint64(now),
+	}
+
+	creator := u.Username
+	owner, err := m.userConverter.UserIDToUserName(ctx, rInfo.Owner)
+	if err != nil {
+		return nil, err
+	}
+	permissions := sharePermToInt(g.Permissions.Permissions)
+	itemType := resourceTypeToItem(rInfo.Type)
+	//prefix := rInfo.Id.SpaceId
+	itemSource := rInfo.Id.OpaqueId
+	fileSource, err := strconv.ParseUint(itemSource, 10, 64)
+	if err != nil {
+		// it can be the case that the item source may be a character string
+		// we leave fileSource blank in that case
+		fileSource = 0
+	}
+
+	/*
+		query := "insert into oc_share set share_type=?,uid_owner=?,uid_initiator=?,item_type=?,fileid_prefix=?,item_source=?,file_source=?,permissions=?,stime=?,token=?,share_name=?"
+		params := []interface{}{publicShareType, owner, creator, itemType, prefix, itemSource, fileSource, permissions, now, tkn, displayName}
+	*/
+	columns := "share_type,uid_owner,uid_initiator,item_type,item_source,file_source,permissions,stime,token,share_name"
+	placeholders := "?,?,?,?,?,?,?,?,?,?"
+	params := []interface{}{publicShareType, owner, creator, itemType, itemSource, fileSource, permissions, now, tkn, displayName}
+
+	var passwordProtected bool
+	password := g.Password
+	if password != "" {
+		password, err = hashPassword(password, m.c.SharePasswordHashCost)
+		if err != nil {
+			return nil, errors.Wrap(err, "could not hash share password")
+		}
+		passwordProtected = true
+
+		columns += ",share_with"
+		placeholders += ",?"
+		params = append(params, password)
+	}
+
+	if g.Expiration != nil && g.Expiration.Seconds != 0 {
+		t := time.Unix(int64(g.Expiration.Seconds), 0)
+		columns += ",expiration"
+		placeholders += ",?"
+		params = append(params, t)
+	}
+
+	query := "INSERT INTO oc_share (" + columns + ") VALUES (" + placeholders + ")"
+	stmt, err := m.db.Prepare(query)
+	if err != nil {
+		return nil, err
+	}
+	result, err := stmt.Exec(params...)
+	if err != nil {
+		return nil, err
+	}
+	lastID, err := result.LastInsertId()
+	if err != nil {
+		return nil, err
+	}
+
+	return &link.PublicShare{
+		Id: &link.PublicShareId{
+			OpaqueId: strconv.FormatInt(lastID, 10),
+		},
+		Owner:             rInfo.GetOwner(),
+		Creator:           u.Id,
+		ResourceId:        rInfo.Id,
+		Token:             tkn,
+		Permissions:       g.Permissions,
+		Ctime:             createdAt,
+		Mtime:             createdAt,
+		PasswordProtected: passwordProtected,
+		Expiration:        g.Expiration,
+		DisplayName:       displayName,
+	}, nil
+}
+
+func hashPassword(password string, cost int) (string, error) {
+	bytes, err := bcrypt.GenerateFromPassword([]byte(password), cost)
+	return "1|" + string(bytes), err
 }
 
 // UpdatePublicShare updates the expiration date, permissions and Mtime
@@ -114,20 +208,13 @@ func (m *mgr) GetPublicShare(ctx context.Context, u *user.User, ref *link.Public
 }
 
 func (m *mgr) ListPublicShares(ctx context.Context, u *user.User, filters []*link.ListPublicSharesRequest_Filter, sign bool) ([]*link.PublicShare, error) {
-	uid := ctxpkg.ContextMustGetUser(ctx).Username
+	uid := u.Username
 	query := `SELECT
-				coalesce(uid_owner, '') as uid_owner,
-				coalesce(uid_initiator, '') as uid_initiator, 
-				coalesce(share_with, '') as share_with,
-				coalesce(file_source, '') as file_source,
-				coalesce(item_type, '') as item_type,
-				coalesce(token,'') as token,
-				coalesce(expiration, '') as expiration,
-				coalesce(share_name, '') as share_name,
-				id,
-				stime,
-				s.permissions,
-				fc.storage as storage
+				coalesce(uid_owner, '') as uid_owner, coalesce(uid_initiator, '') as uid_initiator, 
+				coalesce(share_with, '') as share_with, coalesce(file_source, '') as file_source,
+				coalesce(item_type, '') as item_type, coalesce(token,'') as token,
+				coalesce(expiration, '') as expiration, coalesce(share_name, '') as share_name,
+				s.id, s.stime, s.permissions, fc.storage as storage
 			FROM oc_share s
 			LEFT JOIN oc_filecache fc ON fc.fileid = file_source
 			WHERE (uid_owner=? or uid_initiator=?)
