@@ -49,11 +49,11 @@ func init() {
 }
 
 type config struct {
-	smtpclient.SMTPCredentials
-	Prefix           string `mapstructure:"prefix"`
-	BodyTemplatePath string `mapstructure:"body_template_path"`
-	SubjectTemplate  string `mapstructure:"subject_template"`
-	GatewaySVC       string `mapstructure:"gateway_svc"`
+	SMTP             smtpclient.SMTPCredentials `mapstructure:"smtp"`
+	Prefix           string                     `mapstructure:"prefix"`
+	BodyTemplatePath string                     `mapstructure:"body_template_path"`
+	SubjectTemplate  string                     `mapstructure:"subject_template"`
+	GatewaySVC       string                     `mapstructure:"gateway_svc"`
 }
 
 type svc struct {
@@ -126,7 +126,7 @@ func (s *svc) initSubjectTemplate() error {
 }
 
 func (c *config) init() {
-	c.SMTPCredentials = *smtpclient.NewSMTPCredentials(&c.SMTPCredentials)
+	c.SMTP = *smtpclient.NewSMTPCredentials(&c.SMTP)
 
 	if c.Prefix == "" {
 		c.Prefix = "mailer"
@@ -195,7 +195,7 @@ func (s *svc) sendMailForShare(ctx context.Context, id string) error {
 		return err
 	}
 
-	return s.conf.SMTPCredentials.SendMail(share.RecipientEmail, subj, body)
+	return s.conf.SMTP.SendMail(share.RecipientEmail, subj, body)
 }
 
 func (s *svc) getShareInfoByID(ctx context.Context, id string) (*shareInfo, error) {
