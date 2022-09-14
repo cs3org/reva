@@ -22,18 +22,22 @@ import (
 	"context"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"google.golang.org/genproto/protobuf/field_mask"
 
+	gatewayv1beta1 "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
+	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v2/pkg/share"
 	"github.com/cs3org/reva/v2/pkg/share/manager/jsoncs3/providercache"
 	"github.com/cs3org/reva/v2/pkg/share/manager/jsoncs3/receivedsharecache"
@@ -41,6 +45,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/share/manager/jsoncs3/shareid"
 	"github.com/cs3org/reva/v2/pkg/share/manager/registry"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/metadata" // nolint:staticcheck // we need the legacy package to convert V1 to V2 messages
+	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/utils"
 )
 
@@ -105,6 +110,7 @@ type config struct {
 	ServiceUserID     string `mapstructure:"service_user_id"`
 	ServiceUserIdp    string `mapstructure:"service_user_idp"`
 	MachineAuthAPIKey string `mapstructure:"machine_auth_apikey"`
+	CacheTTL          int    `mapstructure:"ttl"`
 }
 
 // Manager implements a share manager using a cs3 storage backend with local caching
@@ -120,6 +126,8 @@ type Manager struct {
 	SpaceRoot *provider.ResourceId
 
 	initialized bool
+
+	gateway gatewayv1beta1.GatewayAPIClient
 }
 
 // NewDefault returns a new manager instance with default dependencies
@@ -130,22 +138,29 @@ func NewDefault(m map[string]interface{}) (share.Manager, error) {
 		return nil, err
 	}
 
-	s, err := metadata.NewCS3Storage(c.GatewayAddr, c.ProviderAddr, c.ServiceUserID, c.ServiceUserIdp, c.MachineAuthAPIKey)
+	s, err := metadata.NewCS3Storage(c.ProviderAddr, c.ProviderAddr, c.ServiceUserID, c.ServiceUserIdp, c.MachineAuthAPIKey)
 	if err != nil {
 		return nil, err
 	}
 
-	return New(s)
+	gc, err := pool.GetGatewayServiceClient(c.GatewayAddr)
+	if err != nil {
+		return nil, err
+	}
+
+	return New(s, gc, c.CacheTTL)
 }
 
 // New returns a new manager instance.
-func New(s metadata.Storage) (*Manager, error) {
+func New(s metadata.Storage, gc gatewayv1beta1.GatewayAPIClient, ttlSeconds int) (*Manager, error) {
+	ttl := time.Duration(ttlSeconds) * time.Second
 	return &Manager{
-		Cache:              providercache.New(s),
-		CreatedCache:       sharecache.New(s, "users", "created.json"),
-		UserReceivedStates: receivedsharecache.New(s),
-		GroupReceivedCache: sharecache.New(s, "groups", "received.json"),
+		Cache:              providercache.New(s, ttl),
+		CreatedCache:       sharecache.New(s, "users", "created.json", ttl),
+		UserReceivedStates: receivedsharecache.New(s, ttl),
+		GroupReceivedCache: sharecache.New(s, "groups", "received.json", ttl),
 		storage:            s,
+		gateway:            gc,
 	}, nil
 }
 
@@ -197,7 +212,7 @@ func (m *Manager) Share(ctx context.Context, md *provider.ResourceInfo, g *colla
 	// TODO: should this not already be caught at the gw level?
 	if g.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER &&
 		(utils.UserEqual(g.Grantee.GetUserId(), user.Id) || utils.UserEqual(g.Grantee.GetUserId(), md.Owner)) {
-		return nil, errors.New("json: owner/creator and grantee are the same")
+		return nil, errtypes.BadRequest("jsoncs3: owner/creator and grantee are the same")
 	}
 
 	// check if share already exists.
@@ -293,10 +308,10 @@ func (m *Manager) Share(ctx context.Context, md *provider.ResourceInfo, g *colla
 }
 
 // getByID must be called in a lock-controlled block.
-func (m *Manager) getByID(id *collaboration.ShareId) (*collaboration.Share, error) {
+func (m *Manager) getByID(ctx context.Context, id *collaboration.ShareId) (*collaboration.Share, error) {
 	storageID, spaceID, _ := shareid.Decode(id.OpaqueId)
 	// sync cache, maybe our data is outdated
-	err := m.Cache.Sync(context.Background(), storageID, spaceID)
+	err := m.Cache.Sync(ctx, storageID, spaceID)
 	if err != nil {
 		return nil, err
 	}
@@ -328,7 +343,7 @@ func (m *Manager) getByKey(ctx context.Context, key *collaboration.ShareKey) (*c
 func (m *Manager) get(ctx context.Context, ref *collaboration.ShareReference) (s *collaboration.Share, err error) {
 	switch {
 	case ref.GetId() != nil:
-		s, err = m.getByID(ref.GetId())
+		s, err = m.getByID(ctx, ref.GetId())
 	case ref.GetKey() != nil:
 		s, err = m.getByKey(ctx, ref.GetKey())
 	default:
@@ -355,6 +370,17 @@ func (m *Manager) GetShare(ctx context.Context, ref *collaboration.ShareReferenc
 	if share.IsCreatedByUser(s, user) || share.IsGrantedToUser(s, user) {
 		return s, nil
 	}
+
+	req := &provider.StatRequest{
+		Ref: &provider.Reference{ResourceId: s.ResourceId},
+	}
+	res, err := m.gateway.Stat(ctx, req)
+	if err == nil &&
+		res.Status.Code == rpcv1beta1.Code_CODE_OK &&
+		res.Info.PermissionSet.ListGrants {
+		return s, nil
+	}
+
 	// we return not found to not disclose information
 	return nil, errtypes.NotFound(ref.String())
 }
@@ -425,7 +451,15 @@ func (m *Manager) UpdateShare(ctx context.Context, ref *collaboration.ShareRefer
 
 	user := ctxpkg.ContextMustGetUser(ctx)
 	if !share.IsCreatedByUser(s, user) {
-		return nil, errtypes.NotFound(ref.String())
+		req := &provider.StatRequest{
+			Ref: &provider.Reference{ResourceId: s.ResourceId},
+		}
+		res, err := m.gateway.Stat(ctx, req)
+		if err != nil ||
+			res.Status.Code != rpcv1beta1.Code_CODE_OK ||
+			!res.Info.PermissionSet.UpdateGrant {
+			return nil, errtypes.NotFound(ref.String())
+		}
 	}
 
 	s.Permissions = p
@@ -464,9 +498,8 @@ func (m *Manager) ListShares(ctx context.Context, filters []*collaboration.Filte
 	defer m.Unlock()
 
 	user := ctxpkg.ContextMustGetUser(ctx)
-	grouped := share.GroupFiltersByType(filters)
 
-	if len(grouped[collaboration.Filter_TYPE_RESOURCE_ID]) > 0 {
+	if len(share.FilterFiltersByType(filters, collaboration.Filter_TYPE_RESOURCE_ID)) > 0 {
 		return m.listSharesByIDs(ctx, user, filters)
 	}
 
@@ -474,19 +507,18 @@ func (m *Manager) ListShares(ctx context.Context, filters []*collaboration.Filte
 }
 
 func (m *Manager) listSharesByIDs(ctx context.Context, user *userv1beta1.User, filters []*collaboration.Filter) ([]*collaboration.Share, error) {
-	var ss []*collaboration.Share
-
-	grouped := share.GroupFiltersByType(filters)
-	providerSpaces := map[string]map[string]bool{}
-	for _, f := range grouped[collaboration.Filter_TYPE_RESOURCE_ID] {
+	providerSpaces := make(map[string]map[string]struct{})
+	for _, f := range share.FilterFiltersByType(filters, collaboration.Filter_TYPE_RESOURCE_ID) {
 		storageID := f.GetResourceId().GetStorageId()
 		spaceID := f.GetResourceId().GetSpaceId()
 		if providerSpaces[storageID] == nil {
-			providerSpaces[storageID] = map[string]bool{}
+			providerSpaces[storageID] = make(map[string]struct{})
 		}
-		providerSpaces[storageID][spaceID] = true
+		providerSpaces[storageID][spaceID] = struct{}{}
 	}
 
+	statCache := make(map[string]struct{})
+	var ss []*collaboration.Share
 	for providerID, spaces := range providerSpaces {
 		for spaceID := range spaces {
 			err := m.Cache.Sync(ctx, providerID, spaceID)
@@ -495,10 +527,29 @@ func (m *Manager) listSharesByIDs(ctx context.Context, user *userv1beta1.User, f
 			}
 
 			shares := m.Cache.ListSpace(providerID, spaceID)
+
 			for _, s := range shares.Shares {
-				if share.MatchesFilters(s, filters) {
-					ss = append(ss, s)
+				if !share.MatchesFilters(s, filters) {
+					continue
 				}
+
+				if !(share.IsCreatedByUser(s, user) || share.IsGrantedToUser(s, user)) {
+					key := storagespace.FormatResourceID(*s.ResourceId)
+					if _, hit := statCache[key]; !hit {
+						req := &provider.StatRequest{
+							Ref: &provider.Reference{ResourceId: s.ResourceId},
+						}
+						res, err := m.gateway.Stat(ctx, req)
+						if err != nil ||
+							res.Status.Code != rpcv1beta1.Code_CODE_OK ||
+							!res.Info.PermissionSet.ListGrants {
+							continue
+						}
+						statCache[key] = struct{}{}
+					}
+				}
+
+				ss = append(ss, s)
 			}
 		}
 	}

@@ -272,11 +272,7 @@ func (h *Handler) CreateShare(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		err = h.addFileInfo(ctx, s, statRes.Info)
-		if err != nil {
-			response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error adding fileinfo to share", err)
-			return
-		}
+		h.addFileInfo(ctx, s, statRes.Info)
 
 		h.mapUserIds(ctx, client, s)
 
@@ -303,11 +299,7 @@ func (h *Handler) CreateShare(w http.ResponseWriter, r *http.Request) {
 		}
 
 		s := conversions.PublicShare2ShareData(share, r, h.publicURL)
-		err = h.addFileInfo(ctx, s, statRes.Info)
-		if err != nil {
-			response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error enhancing response with share data", err)
-			return
-		}
+		h.addFileInfo(ctx, s, statRes.Info)
 		h.mapUserIds(ctx, client, s)
 
 		response.WriteOCSSuccess(w, r, s)
@@ -608,11 +600,7 @@ func (h *Handler) GetShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = h.addFileInfo(ctx, share, info)
-	if err != nil {
-		sublog.Error().Err(err).Msg("error mapping share data")
-		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error mapping share data", err)
-	}
+	h.addFileInfo(ctx, share, info)
 	h.mapUserIds(ctx, client, share)
 
 	if receivedshare != nil && receivedshare.State == collaboration.ShareState_SHARE_STATE_ACCEPTED {
@@ -776,11 +764,7 @@ func (h *Handler) updateShare(w http.ResponseWriter, r *http.Request, shareID st
 		return
 	}
 
-	err = h.addFileInfo(r.Context(), share, statRes.Info)
-	if err != nil {
-		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, err.Error(), err)
-		return
-	}
+	h.addFileInfo(r.Context(), share, statRes.Info)
 	h.mapUserIds(ctx, client, share)
 
 	response.WriteOCSSuccess(w, r, share)
@@ -928,23 +912,10 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 			info = pinfo
 		} else {
 			var status *rpc.Status
-			// FIXME the ResourceID is the id of the resource, but we want the id of the mount point so we can fetch that path, well we have the mountpoint path in the receivedshare
-			// first stat mount point, but the shares storage provider only handles accepted shares so we send the try to make the requests for only those
-			if rs.State == collaboration.ShareState_SHARE_STATE_ACCEPTED {
-				mountID := &provider.ResourceId{
-					StorageId: utils.ShareStorageProviderID,
-					SpaceId:   utils.ShareStorageSpaceID,
-					OpaqueId:  rs.Share.Id.OpaqueId,
-				}
-				info, status, err = h.getResourceInfoByID(ctx, client, mountID)
-			}
-			if rs.State != collaboration.ShareState_SHARE_STATE_ACCEPTED || err != nil || status.Code != rpc.Code_CODE_OK {
-				// fallback to unmounted resource
-				info, status, err = h.getResourceInfoByID(ctx, client, rs.Share.ResourceId)
-				if err != nil || status.Code != rpc.Code_CODE_OK {
-					h.logProblems(&sublog, status, err, "could not stat, skipping")
-					continue
-				}
+			info, status, err = h.getResourceInfoByID(ctx, client, rs.Share.ResourceId)
+			if err != nil || status.Code != rpc.Code_CODE_OK {
+				h.logProblems(&sublog, status, err, "could not stat, skipping")
+				continue
 			}
 		}
 
@@ -956,10 +927,7 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 
 		data.State = mapState(rs.GetState())
 
-		if err := h.addFileInfo(ctx, data, info); err != nil {
-			sublog.Debug().Interface("received_share", rs.Share.Id).Err(err).Msg("could not add file info, skipping")
-			continue
-		}
+		h.addFileInfo(ctx, data, info)
 		h.mapUserIds(r.Context(), client, data)
 
 		if data.State == ocsStateAccepted {
@@ -1137,89 +1105,74 @@ func (h *Handler) addFilters(w http.ResponseWriter, r *http.Request, ref *provid
 	return collaborationFilters, linkFilters, nil
 }
 
-func (h *Handler) addFileInfo(ctx context.Context, s *conversions.ShareData, info *provider.ResourceInfo) error {
+func (h *Handler) addFileInfo(ctx context.Context, s *conversions.ShareData, info *provider.ResourceInfo) {
+	if info == nil {
+		return
+	}
+
 	sublog := appctx.GetLogger(ctx)
-	if info != nil {
-		// TODO The owner is not set in the storage stat metadata ...
-		parsedMt, _, err := mime.ParseMediaType(info.MimeType)
-		if err != nil {
-			// Should never happen. We log anyways so that we know if it happens.
-			sublog.Warn().Err(err).Msg("failed to parse mimetype")
-		}
-		s.MimeType = parsedMt
-		// TODO STime:     &types.Timestamp{Seconds: info.Mtime.Seconds, Nanos: info.Mtime.Nanos},
-		// TODO Storage: int
-		s.ItemSource = storagespace.FormatResourceID(*info.Id)
-		s.FileSource = s.ItemSource
-		switch {
-		case h.sharePrefix == "/":
-			s.FileTarget = info.Path
-			s.Path = info.Path
-			client, err := pool.GetGatewayServiceClient(h.gatewayAddr)
-			if err == nil {
-				gpRes, err := client.GetPath(ctx, &provider.GetPathRequest{
-					ResourceId: info.Id,
-				})
-				if err == nil && gpRes.Status.Code == rpc.Code_CODE_OK {
-					// TODO log error?
-					s.Path = gpRes.Path
+	// TODO The owner is not set in the storage stat metadata ...
+	parsedMt, _, err := mime.ParseMediaType(info.MimeType)
+	if err != nil {
+		// Should never happen. We log anyways so that we know if it happens.
+		sublog.Warn().Err(err).Msg("failed to parse mimetype")
+	}
+	s.MimeType = parsedMt
+	// TODO STime:     &types.Timestamp{Seconds: info.Mtime.Seconds, Nanos: info.Mtime.Nanos},
+	// TODO Storage: int
+	s.ItemSource = storagespace.FormatResourceID(*info.Id)
+	s.FileSource = s.ItemSource
+	s.Path = path.Join("/", info.Path)
+	switch {
+	case h.sharePrefix == "/":
+		s.FileTarget = info.Path
+		client, err := pool.GetGatewayServiceClient(h.gatewayAddr)
+		if err == nil {
+			gpRes, err := client.GetPath(ctx, &provider.GetPathRequest{
+				ResourceId: info.Id,
+			})
+			if err == nil && gpRes.Status.Code == rpc.Code_CODE_OK {
+				// TODO log error?
 
-					// cut off configured home namespace, paths in ocs shares are relative to it
-					identifier := h.mustGetIdentifiers(ctx, client, info.GetOwner().GetOpaqueId(), false)
-					u := &userpb.User{
-						Id:          info.Owner,
-						Username:    identifier.Username,
-						DisplayName: identifier.DisplayName,
-						Mail:        identifier.Mail,
-					}
-					s.Path = strings.TrimPrefix(s.Path, h.getHomeNamespace(u))
+				// cut off configured home namespace, paths in ocs shares are relative to it
+				identifier := h.mustGetIdentifiers(ctx, client, info.GetOwner().GetOpaqueId(), false)
+				u := &userpb.User{
+					Id:          info.Owner,
+					Username:    identifier.Username,
+					DisplayName: identifier.DisplayName,
+					Mail:        identifier.Mail,
 				}
-			}
-		default:
-			s.FileTarget = path.Join(h.sharePrefix, path.Base(info.Path))
-			if s.ShareType == conversions.ShareTypePublicLink {
-				s.FileTarget = path.Join("/", path.Base(info.Path))
-			}
-			s.Path = info.Path
-			client, err := pool.GetGatewayServiceClient(h.gatewayAddr)
-			if err == nil {
-				gpRes, err := client.GetPath(ctx, &provider.GetPathRequest{
-					ResourceId: info.Id,
-				})
-				if err == nil && gpRes.Status.Code == rpc.Code_CODE_OK {
-					// TODO log error?
-					s.Path = gpRes.Path
-				}
-				// on spaces, we could have no owner set
-				if info.Owner != nil {
-					// cut off configured home namespace, paths in ocs shares are relative to it
-					identifier := h.mustGetIdentifiers(ctx, client, info.GetOwner().GetOpaqueId(), false)
-					u := &userpb.User{
-						Id:          info.Owner,
-						Username:    identifier.Username,
-						DisplayName: identifier.DisplayName,
-						Mail:        identifier.Mail,
-					}
-					s.Path = strings.TrimPrefix(s.Path, h.getHomeNamespace(u))
-				}
+				s.Path = strings.TrimPrefix(gpRes.Path, h.getHomeNamespace(u))
 			}
 		}
-		s.StorageID = storageIDPrefix + s.FileTarget
-		// TODO FileParent:
-		// item type
-		s.ItemType = conversions.ResourceType(info.GetType()).String()
-
-		owner := info.GetOwner()
-		// file owner might not yet be set. Use file info
-		if s.UIDFileOwner == "" && owner != nil {
-			s.UIDFileOwner = owner.GetOpaqueId()
+	default:
+		name := info.Name
+		if name == "" {
+			// fall back to basename of path
+			name = path.Base(info.Path)
 		}
-		// share owner might not yet be set. Use file info
-		if s.UIDOwner == "" && owner != nil {
-			s.UIDOwner = owner.GetOpaqueId()
+		s.FileTarget = path.Join(h.sharePrefix, name)
+		if s.ShareType == conversions.ShareTypePublicLink {
+			s.FileTarget = path.Join("/", name)
 		}
 	}
-	return nil
+	s.StorageID = storageIDPrefix + s.FileTarget
+
+	if info.ParentId != nil {
+		s.FileParent = storagespace.FormatResourceID(*info.ParentId)
+	}
+	// item type
+	s.ItemType = conversions.ResourceType(info.GetType()).String()
+
+	owner := info.GetOwner()
+	// file owner might not yet be set. Use file info
+	if s.UIDFileOwner == "" && owner != nil {
+		s.UIDFileOwner = owner.GetOpaqueId()
+	}
+	// share owner might not yet be set. Use file info
+	if s.UIDOwner == "" && owner != nil {
+		s.UIDOwner = owner.GetOpaqueId()
+	}
 }
 
 // mustGetIdentifiers always returns a struct with identifiers, if the user or group could not be found they will all be empty
@@ -1365,7 +1318,7 @@ func (h *Handler) getResourceInfoByReference(ctx context.Context, client gateway
 }
 
 func (h *Handler) getResourceInfoByID(ctx context.Context, client gateway.GatewayAPIClient, id *provider.ResourceId) (*provider.ResourceInfo, *rpc.Status, error) {
-	return h.getResourceInfo(ctx, client, storagespace.FormatResourceID(*id), &provider.Reference{ResourceId: id, Path: "."})
+	return h.getResourceInfo(ctx, client, storagespace.FormatResourceID(*id), &provider.Reference{ResourceId: id})
 }
 
 // getResourceInfo retrieves the resource info to a target.
@@ -1410,6 +1363,7 @@ func (h *Handler) getResourceInfo(ctx context.Context, client gateway.GatewayAPI
 }
 
 func (h *Handler) createCs3Share(ctx context.Context, w http.ResponseWriter, r *http.Request, client gateway.GatewayAPIClient, req *collaboration.CreateShareRequest) (*collaboration.Share, *ocsError) {
+	logger := appctx.GetLogger(ctx)
 	exists, err := h.granteeExists(ctx, req.Grant.Grantee, req.ResourceInfo.Id)
 	if err != nil {
 		return nil, &ocsError{
@@ -1438,17 +1392,26 @@ func (h *Handler) createCs3Share(ctx context.Context, w http.ResponseWriter, r *
 		}
 	}
 	if createShareResponse.Status.Code != rpc.Code_CODE_OK {
-		if createShareResponse.Status.Code == rpc.Code_CODE_NOT_FOUND {
+		logger.Debug().Interface("Code", createShareResponse.Status.Code).Str("message", createShareResponse.Status.Message).Msg("grpc create share request failed")
+		switch createShareResponse.Status.Code {
+		case rpc.Code_CODE_NOT_FOUND:
 			return nil, &ocsError{
 				Code:    response.MetaNotFound.StatusCode,
 				Message: "not found",
 				Error:   nil,
 			}
-		}
-		return nil, &ocsError{
-			Code:    response.MetaServerError.StatusCode,
-			Message: "grpc create share request failed",
-			Error:   nil,
+		case rpc.Code_CODE_INVALID_ARGUMENT:
+			return nil, &ocsError{
+				Code:    response.MetaBadRequest.StatusCode,
+				Message: createShareResponse.Status.Message,
+				Error:   nil,
+			}
+		default:
+			return nil, &ocsError{
+				Code:    response.MetaServerError.StatusCode,
+				Message: "grpc create share request failed",
+				Error:   nil,
+			}
 		}
 	}
 	return createShareResponse.Share, nil

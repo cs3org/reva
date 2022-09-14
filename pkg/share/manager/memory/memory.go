@@ -20,7 +20,6 @@ package memory
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sync"
 	"sync/atomic"
@@ -83,7 +82,7 @@ func (m *manager) Share(ctx context.Context, md *provider.ResourceInfo, g *colla
 
 	if g.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER &&
 		(utils.UserEqual(g.Grantee.GetUserId(), user.Id) || utils.UserEqual(g.Grantee.GetUserId(), md.Owner)) {
-		return nil, errors.New("memory: owner/creator and grantee are the same")
+		return nil, errtypes.BadRequest("memory: owner/creator and grantee are the same")
 	}
 
 	// check if share already exists.

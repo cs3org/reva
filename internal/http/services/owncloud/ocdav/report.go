@@ -110,7 +110,10 @@ func (s *svc) doFilterFiles(w http.ResponseWriter, r *http.Request, ff *reportFi
 			infos = append(infos, statRes.Info)
 		}
 
-		responsesXML, err := propfind.MultistatusResponse(ctx, &propfind.XML{Prop: ff.Prop}, infos, s.c.PublicURL, namespace, nil)
+		prefer := net.ParsePrefer(r.Header.Get("prefer"))
+		returnMinimal := prefer[net.HeaderPreferReturn] == "minimal"
+
+		responsesXML, err := propfind.MultistatusResponse(ctx, &propfind.XML{Prop: ff.Prop}, infos, s.c.PublicURL, namespace, nil, returnMinimal)
 		if err != nil {
 			log.Error().Err(err).Msg("error formatting propfind")
 			w.WriteHeader(http.StatusInternalServerError)
@@ -118,6 +121,10 @@ func (s *svc) doFilterFiles(w http.ResponseWriter, r *http.Request, ff *reportFi
 		}
 		w.Header().Set(net.HeaderDav, "1, 3, extended-mkcol")
 		w.Header().Set(net.HeaderContentType, "application/xml; charset=utf-8")
+		w.Header().Set(net.HeaderVary, net.HeaderPrefer)
+		if returnMinimal {
+			w.Header().Set(net.HeaderPreferenceApplied, "return=minimal")
+		}
 		w.WriteHeader(http.StatusMultiStatus)
 		if _, err := w.Write(responsesXML); err != nil {
 			log.Err(err).Msg("error writing response")

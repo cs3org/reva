@@ -191,7 +191,10 @@ func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request,
 		infos = append(infos, vi)
 	}
 
-	propRes, err := propfind.MultistatusResponse(ctx, &pf, infos, s.c.PublicURL, "", nil)
+	prefer := net.ParsePrefer(r.Header.Get("prefer"))
+	returnMinimal := prefer[net.HeaderPreferReturn] == "minimal"
+
+	propRes, err := propfind.MultistatusResponse(ctx, &pf, infos, s.c.PublicURL, "", nil, returnMinimal)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error formatting propfind")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -199,6 +202,10 @@ func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request,
 	}
 	w.Header().Set(net.HeaderDav, "1, 3, extended-mkcol")
 	w.Header().Set(net.HeaderContentType, "application/xml; charset=utf-8")
+	w.Header().Set(net.HeaderVary, net.HeaderPrefer)
+	if returnMinimal {
+		w.Header().Set(net.HeaderPreferenceApplied, "return=minimal")
+	}
 	w.WriteHeader(http.StatusMultiStatus)
 	_, err = w.Write(propRes)
 	if err != nil {

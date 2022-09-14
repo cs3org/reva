@@ -57,6 +57,7 @@ func Service(opts ...Option) (micro.Service, error) {
 	sopts.Logger = sopts.Logger.With().Str("name", sopts.Name).Logger()
 
 	srv := httpServer.NewServer(
+		server.Broker(sopts.Broker),
 		server.TLSConfig(sopts.TLSConfig),
 		server.Name(sopts.Name),
 		server.Address(sopts.Address), // Address defaults to ":0" and will pick any free port

@@ -53,12 +53,18 @@ build-reva: imports
 test: off
 	go test -v -coverprofile coverage.out -race $$(go list ./... | grep -v /tests/integration)
 
+# This is needed for m1 machines because bou.ke/monkey does not support arm arch.
+# Be careful, no race detection for packages using monkey!!!
+test-macos: off
+	GOARCH=amd64 go test -v -coverprofile coverage.out github.com/cs3org/reva/v2/pkg/appauth/manager/json
+	go test -v -coverprofile coverage.out -race $$(go list ./... | grep -v "/tests/integration\|/appauth/manager/json")
+
 test-integration: build-ci
 	cd tests/integration && go test -race ./...
 
-# This is needed for osx because this os does not support static linking
+# This is needed for macos because this os does not support static linking
 # Use the build target without the static flag
-test-integration-osx: off build
+test-integration-macos: off build
 	cd tests/integration && go test -race -v ./...
 
 litmus-test-old: build
