@@ -129,25 +129,10 @@ func refFromCS3(b []byte) (*provider.Reference, error) {
 
 // CopyMetadata copies all extended attributes from source to target.
 // The optional filter function can be used to filter by attribute name, e.g. by checking a prefix
-// For the source file, a shared lock is acquired. For the target, an exclusive
-// write lock is acquired.
+// For the source file, a shared lock is acquired.
+// NOTE: target resource is not locked! You need to acquire a write lock on the target additionally
 func CopyMetadata(src, target string, filter func(attributeName string) bool) (err error) {
-	var writeLock, readLock *flock.Flock
-
-	// Acquire the write log on the target node first.
-	writeLock, err = filelocks.AcquireWriteLock(target)
-
-	if err != nil {
-		return errors.Wrap(err, "xattrs: Unable to lock target to write")
-	}
-	defer func() {
-		rerr := filelocks.ReleaseLock(writeLock)
-
-		// if err is non nil we do not overwrite that
-		if err == nil {
-			err = rerr
-		}
-	}()
+	var readLock *flock.Flock
 
 	// now try to get a shared lock on the source
 	readLock, err = filelocks.AcquireReadLock(src)

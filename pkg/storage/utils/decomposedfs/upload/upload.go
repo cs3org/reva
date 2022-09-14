@@ -29,7 +29,6 @@ import (
 	"hash/adler32"
 	"io"
 	"io/fs"
-	iofs "io/fs"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -43,7 +42,6 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/lookup"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/options"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/golang-jwt/jwt"
 	"github.com/pkg/errors"
@@ -91,8 +89,8 @@ type Upload struct {
 	// lu and tp needed for file operations
 	lu *lookup.Lookup
 	tp Tree
-	// oldsize will be nil if there was no file before
-	oldsize *uint64
+	// versionsPath will be empty if there was no file before
+	versionsPath string
 	// and a logger as well
 	log zerolog.Logger
 	// publisher used to publish events
@@ -122,46 +120,15 @@ func buildUpload(ctx context.Context, info tusd.FileInfo, binPath string, infoPa
 	}
 }
 
-// Initialize initializes the node
-func Initialize(upload *Upload) error {
-	// we need the node to start processing
-	n, err := CreateNodeForUpload(upload)
-	if err != nil {
-		return err
-	}
-
-	// set processing status
-	upload.Node = n
-	return upload.Node.MarkProcessing()
-}
-
-// Finalize finalizes a upload
-func Finalize(upload *Upload) error {
-	return upload.finishUpload()
-}
-
 // Cleanup cleans the upload
 func Cleanup(upload *Upload, failure bool, keepUpload bool) {
 	upload.cleanup(failure, !keepUpload, !keepUpload)
 
 	// unset processing status
-	if err := upload.Node.UnmarkProcessing(); err != nil {
-		upload.log.Info().Str("path", upload.Node.InternalPath()).Err(err).Msg("unmarking processing failed")
-	}
-
-	if failure {
-		return
-	}
-
-	if upload.async { // updating the mtime will cause the testsuite to fail - hence we do it only in async case
-		now := utils.TSNow()
-		if err := upload.Node.SetMtime(upload.Ctx, fmt.Sprintf("%d.%d", now.Seconds, now.Nanos)); err != nil {
-			upload.log.Info().Str("path", upload.Node.InternalPath()).Err(err).Msg("could not set mtime")
+	if upload.Node != nil { // node can be nil when there was an error before it was created (eg. checksum-mismatch)
+		if err := upload.Node.UnmarkProcessing(); err != nil {
+			upload.log.Info().Str("path", upload.Node.InternalPath()).Err(err).Msg("unmarking processing failed")
 		}
-	}
-
-	if err := upload.tp.Propagate(upload.Ctx, upload.Node); err != nil {
-		upload.log.Info().Str("path", upload.Node.InternalPath()).Err(err).Msg("could not set mtime")
 	}
 }
 
@@ -208,9 +175,68 @@ func (upload *Upload) FinishUpload(_ context.Context) error {
 		upload.Ctx = ctxpkg.ContextSetLockID(upload.Ctx, upload.Info.MetaData["lockid"])
 	}
 
-	if err := Initialize(upload); err != nil {
+	log := appctx.GetLogger(upload.Ctx)
+
+	// calculate the checksum of the written bytes
+	// they will all be written to the metadata later, so we cannot omit any of them
+	// TODO only calculate the checksum in sync that was requested to match, the rest could be async ... but the tests currently expect all to be present
+	// TODO the hashes all implement BinaryMarshaler so we could try to persist the state for resumable upload. we would neet do keep track of the copied bytes ...
+	sha1h := sha1.New()
+	md5h := md5.New()
+	adler32h := adler32.New()
+	{
+		f, err := os.Open(upload.binPath)
+		if err != nil {
+			// we can continue if no oc checksum header is set
+			log.Info().Err(err).Str("binPath", upload.binPath).Msg("error opening binPath")
+		}
+		defer f.Close()
+
+		r1 := io.TeeReader(f, sha1h)
+		r2 := io.TeeReader(r1, md5h)
+
+		_, err = io.Copy(adler32h, r2)
+		if err != nil {
+			log.Info().Err(err).Msg("error copying checksums")
+		}
+	}
+
+	// compare if they match the sent checksum
+	// TODO the tus checksum extension would do this on every chunk, but I currently don't see an easy way to pass in the requested checksum. for now we do it in FinishUpload which is also called for chunked uploads
+	if upload.Info.MetaData["checksum"] != "" {
+		var err error
+		parts := strings.SplitN(upload.Info.MetaData["checksum"], " ", 2)
+		if len(parts) != 2 {
+			return errtypes.BadRequest("invalid checksum format. must be '[algorithm] [checksum]'")
+		}
+		switch parts[0] {
+		case "sha1":
+			err = upload.checkHash(parts[1], sha1h)
+		case "md5":
+			err = upload.checkHash(parts[1], md5h)
+		case "adler32":
+			err = upload.checkHash(parts[1], adler32h)
+		default:
+			err = errtypes.BadRequest("unsupported checksum algorithm: " + parts[0])
+		}
+		if err != nil {
+			Cleanup(upload, true, false)
+			return err
+		}
+	}
+
+	n, err := CreateNodeForUpload(upload)
+	if err != nil {
+		Cleanup(upload, true, false)
 		return err
 	}
+
+	upload.Node = n
+
+	// now try write all checksums
+	tryWritingChecksum(log, upload.Node, "sha1", sha1h)
+	tryWritingChecksum(log, upload.Node, "md5", md5h)
+	tryWritingChecksum(log, upload.Node, "adler32", adler32h)
 
 	if upload.pub != nil {
 		u, _ := ctxpkg.ContextGetUser(upload.Ctx)
@@ -234,7 +260,7 @@ func (upload *Upload) FinishUpload(_ context.Context) error {
 		return nil
 	}
 
-	err := Finalize(upload)
+	err = upload.Finalize()
 	Cleanup(upload, err != nil, false)
 	return err
 }
@@ -286,11 +312,16 @@ func (upload *Upload) writeInfo() error {
 	return ioutil.WriteFile(upload.infoPath, data, defaultFilePerm)
 }
 
-// finishUpload finishes an upload and moves the file to the internal destination
-func (upload *Upload) finishUpload() (err error) {
+// Finalize finalizes the upload (eg moves the file to the internal destination)
+func (upload *Upload) Finalize() (err error) {
 	n := upload.Node
 	if n == nil {
-		return errors.New("need Node to finish upload")
+		var err error
+		n, err = node.ReadNode(upload.Ctx, upload.lu, upload.Info.Storage["SpaceRoot"], upload.Info.Storage["NodeId"], false)
+		if err != nil {
+			return err
+		}
+		upload.Node = n
 	}
 
 	spaceID := upload.Info.Storage["SpaceRoot"]
@@ -303,209 +334,27 @@ func (upload *Upload) finishUpload() (err error) {
 		Str("spaceID", spaceID).
 		Logger()
 
-	// copy metadata to binpath
-	if err := xattrs.CopyMetadata(targetPath, upload.binPath, func(_ string) bool { return true }); err != nil {
-		sublog.Info().Err(err).Msg("Decomposedfs: failed to copy xattrs to binpath")
-	}
-
-	// calculate the checksum of the written bytes
-	// they will all be written to the metadata later, so we cannot omit any of them
-	// TODO only calculate the checksum in sync that was requested to match, the rest could be async ... but the tests currently expect all to be present
-	// TODO the hashes all implement BinaryMarshaler so we could try to persist the state for resumable upload. we would neet do keep track of the copied bytes ...
-	sha1h := sha1.New()
-	md5h := md5.New()
-	adler32h := adler32.New()
-	{
-		f, err := os.Open(upload.binPath)
-		if err != nil {
-			sublog.Err(err).Msg("Decomposedfs: could not open file for checksumming")
-			// we can continue if no oc checksum header is set
-		}
-		defer f.Close()
-
-		r1 := io.TeeReader(f, sha1h)
-		r2 := io.TeeReader(r1, md5h)
-
-		if _, err := io.Copy(adler32h, r2); err != nil {
-			sublog.Err(err).Msg("Decomposedfs: could not copy bytes for checksumming")
-		}
-	}
-	// compare if they match the sent checksum
-	// TODO the tus checksum extension would do this on every chunk, but I currently don't see an easy way to pass in the requested checksum. for now we do it in FinishUpload which is also called for chunked uploads
-	if upload.Info.MetaData["checksum"] != "" {
-		parts := strings.SplitN(upload.Info.MetaData["checksum"], " ", 2)
-		if len(parts) != 2 {
-			return errtypes.BadRequest("invalid checksum format. must be '[algorithm] [checksum]'")
-		}
-		switch parts[0] {
-		case "sha1":
-			err = upload.checkHash(parts[1], sha1h)
-		case "md5":
-			err = upload.checkHash(parts[1], md5h)
-		case "adler32":
-			err = upload.checkHash(parts[1], adler32h)
-		default:
-			err = errtypes.BadRequest("unsupported checksum algorithm: " + parts[0])
-		}
-		if err != nil {
-			return err
-		}
-	}
-
-	n.BlobID = upload.Info.ID // This can be changed to a content hash in the future when reference counting for the blobs was added
-	n.Blobsize = upload.Info.Offset
-
-	// defer writing the checksums until the Node is in place
-
-	// if target exists create new version
-	versionsPath := ""
-	if fi, err := os.Stat(targetPath); err == nil && upload.oldsize != nil {
-		// When the if-match header was set we need to check if the
-		// etag still matches before finishing the upload.
-		if ifMatch, ok := upload.Info.MetaData["if-match"]; ok {
-			var targetEtag string
-			targetEtag, err = node.CalculateEtag(n.ID, fi.ModTime())
-			if err != nil {
-				return errtypes.InternalError(err.Error())
-			}
-			if ifMatch != targetEtag {
-				return errtypes.Aborted("etag mismatch")
-			}
-		}
-
-		// FIXME move versioning to blobs ... no need to copy all the metadata! well ... it does if we want to version metadata...
-		// versions are stored alongside the actual file, so a rename can be efficient and does not cross storage / partition boundaries
-		versionsPath = upload.lu.InternalPath(spaceID, n.ID+node.RevisionIDDelimiter+fi.ModTime().UTC().Format(time.RFC3339Nano))
-
-		// we unset the processing flag before moving
-		// NOTE: this leads to a minimal time the node has no processing flag
-		if err := n.UnmarkProcessing(); err != nil {
-			sublog.Error().Err(err).Msg("Decomposedfs: could not unmark processing")
-			return err
-		}
-		// This move drops all metadata!!! We copy it below with CopyMetadata
-		// FIXME the node must remain the same. otherwise we might restore share metadata
-		if err = os.Rename(targetPath, versionsPath); err != nil {
-			sublog.Err(err).
-				Str("binPath", upload.binPath).
-				Str("versionsPath", versionsPath).
-				Msg("Decomposedfs: could not create version")
-			return err
-		}
-
-		// NOTE: In case there is an existing version we have no processing flag on the targetPath,
-		// as we just moved that file. We need to create an empty file again
-		// TODO: that means that there is a short amount of time when there is no targetPath or no processing flag
-		// If clients query in exactly that moment the file will be gone from their PROPFIND
-		// How can we omit this issue? How critical is it?
-		if _, err := os.Create(targetPath); err != nil {
-			sublog.Error().Err(err).Msg("Decomposedfs: could not create file")
-			return err
-		}
-		// and set the processing flag on this
-		if err := n.MarkProcessing(); err != nil {
-			sublog.Error().Err(err).Msg("Decomposedfs: could not mark processing")
-			return err
-		}
-	}
-
 	// upload the data to the blobstore
 	file, err := os.Open(upload.binPath)
 	if err != nil {
 		return err
 	}
 	defer file.Close()
-	err = upload.tp.WriteBlob(n, file)
-	if err != nil {
+
+	if err := upload.tp.WriteBlob(n, file); err != nil {
 		return errors.Wrap(err, "failed to upload file to blostore")
 	}
 
-	// now truncate the upload (the payload stays in the blobstore) and move it to the target path
-	// TODO put uploads on the same underlying storage as the destination dir?
-	if err = os.Truncate(upload.binPath, 0); err != nil {
-		sublog.Err(err).
-			Msg("Decomposedfs: could not truncate")
-		return err
-	}
-	if err = os.Rename(upload.binPath, targetPath); err != nil {
-		sublog.Error().Err(err).Msg("Decomposedfs: could not rename")
-		return err
-	}
-	if versionsPath != "" {
-		// copy grant and arbitrary metadata
-		// FIXME ... now restoring an older revision might bring back a grant that was removed!
-		err = xattrs.CopyMetadata(versionsPath, targetPath, func(attributeName string) bool {
-			return true
-			// TODO determine all attributes that must be copied, currently we just copy all and overwrite changed properties
-			/*
-				return strings.HasPrefix(attributeName, xattrs.GrantPrefix) || // for grants
-					strings.HasPrefix(attributeName, xattrs.MetadataPrefix) || // for arbitrary metadata
-					strings.HasPrefix(attributeName, xattrs.FavPrefix) || // for favorites
-					strings.HasPrefix(attributeName, xattrs.SpaceNameAttr) || // for a shared file
-			*/
-		})
-		if err != nil {
-			sublog.Info().Err(err).Msg("Decomposedfs: failed to copy xattrs")
-		}
-	}
-
-	// now try write all checksums
-	tryWritingChecksum(&sublog, n, "sha1", sha1h)
-	tryWritingChecksum(&sublog, n, "md5", md5h)
-	tryWritingChecksum(&sublog, n, "adler32", adler32h)
-
-	// who will become the owner?  the owner of the parent actually ... not the currently logged in user
-	err = n.WriteAllNodeMetadata()
-	if err != nil {
-		return errors.Wrap(err, "Decomposedfs: could not write metadata")
-	}
-
-	// link child name to parent if it is new
-	childNameLink := filepath.Join(n.ParentInternalPath(), n.Name)
-	var link string
-	link, err = os.Readlink(childNameLink)
-	if err == nil && link != "../"+n.ID {
-		sublog.Err(err).
-			Interface("node", n).
-			Str("childNameLink", childNameLink).
-			Str("link", link).
-			Msg("Decomposedfs: child name link has wrong target id, repairing")
-
-		if err = os.Remove(childNameLink); err != nil {
-			return errors.Wrap(err, "Decomposedfs: could not remove symlink child entry")
-		}
-	}
-	if errors.Is(err, iofs.ErrNotExist) || link != "../"+n.ID {
-		relativeNodePath := filepath.Join("../../../../../", lookup.Pathify(n.ID, 4, 2))
-		if err = os.Symlink(relativeNodePath, childNameLink); err != nil {
-			return errors.Wrap(err, "Decomposedfs: could not symlink child entry")
-		}
-	}
-
-	// only delete the upload if it was successfully written to the storage
-	if err = os.Remove(upload.infoPath); err != nil {
-		if !errors.Is(err, iofs.ErrNotExist) {
-			sublog.Err(err).Msg("Decomposedfs: could not delete upload info")
-			return err
-		}
-	}
 	// use set arbitrary metadata?
 	if upload.Info.MetaData["mtime"] != "" {
-		err := n.SetMtime(upload.Ctx, upload.Info.MetaData["mtime"])
-		if err != nil {
+		if err := n.SetMtime(upload.Ctx, upload.Info.MetaData["mtime"]); err != nil {
 			sublog.Err(err).Interface("info", upload.Info).Msg("Decomposedfs: could not set mtime metadata")
 			return err
 		}
 	}
 
-	// fill metadata with current mtime
-	if fi, err := os.Stat(targetPath); err == nil {
-		upload.Info.MetaData["mtime"] = fmt.Sprintf("%d.%d", fi.ModTime().Unix(), fi.ModTime().Nanosecond())
-		upload.Info.MetaData["etag"], _ = node.CalculateEtag(n.ID, fi.ModTime())
-	}
-
-	n.Exists = true
-
+	fi, _ := os.Stat(n.InternalPath())
+	upload.Info.MetaData["etag"], _ = node.CalculateEtag(n.ID, fi.ModTime())
 	return upload.tp.Propagate(upload.Ctx, n)
 }
 
@@ -518,16 +367,24 @@ func (upload *Upload) checkHash(expected string, h hash.Hash) error {
 
 // cleanup cleans up after the upload is finished
 func (upload *Upload) cleanup(cleanNode, cleanBin, cleanInfo bool) {
-	if cleanNode && upload.Node != nil && upload.oldsize == nil {
-		// remove node
-		if err := utils.RemoveItem(upload.Node.InternalPath()); err != nil {
-			upload.log.Info().Str("path", upload.Node.InternalPath()).Err(err).Msg("removing node failed")
-		}
+	if cleanNode && upload.Node != nil {
+		switch p := upload.versionsPath; p {
+		case "":
+			// remove node
+			if err := utils.RemoveItem(upload.Node.InternalPath()); err != nil {
+				upload.log.Info().Str("path", upload.Node.InternalPath()).Err(err).Msg("removing node failed")
+			}
 
-		// remove parent entry
-		src := filepath.Join(upload.Node.ParentInternalPath(), upload.Node.Name)
-		if err := os.Remove(src); err != nil {
-			upload.log.Info().Str("path", upload.Node.ParentInternalPath()).Err(err).Msg("removing node from parent failed")
+			// no old version was present - remove child entry
+			src := filepath.Join(upload.Node.ParentInternalPath(), upload.Node.Name)
+			if err := os.Remove(src); err != nil {
+				upload.log.Info().Str("path", upload.Node.ParentInternalPath()).Err(err).Msg("removing node from parent failed")
+			}
+		default:
+			// restore old version
+			if err := os.Rename(p, upload.Node.InternalPath()); err != nil {
+				upload.log.Info().Str("versionpath", p).Str("nodepath", upload.Node.InternalPath()).Err(err).Msg("renaming version node failed")
+			}
 
 		}
 	}

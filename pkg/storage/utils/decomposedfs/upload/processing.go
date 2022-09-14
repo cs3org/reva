@@ -25,7 +25,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"strconv"
+	"time"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -38,6 +38,8 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/lookup"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/options"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/filelocks"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
@@ -214,16 +216,7 @@ func Get(ctx context.Context, id string, lu *lookup.Lookup, tp Tree, fsRoot stri
 	ctx = appctx.WithLogger(ctx, &sub)
 
 	up := buildUpload(ctx, info, info.Storage["BinPath"], infoPath, lu, tp, pub, async, tknopts)
-
-	oldsize, err := strconv.ParseUint(info.MetaData["oldsize"], 10, 64)
-	if err == nil {
-		up.oldsize = &oldsize
-	}
-
-	// add node if possible - only in async case
-	if n, err := node.ReadNode(ctx, lu, info.Storage["SpaceRoot"], info.Storage["NodeId"], false); err == nil && async {
-		up.Node = n
-	}
+	up.versionsPath = info.MetaData["versionsPath"]
 	return up, nil
 }
 
@@ -242,7 +235,7 @@ func CreateNodeForUpload(upload *Upload) (*node.Node, error) {
 		upload.Info.Storage["NodeParentId"],
 		upload.Info.Storage["NodeName"],
 		fsize,
-		"",
+		upload.Info.ID,
 		nil,
 		upload.lu,
 	)
@@ -255,58 +248,125 @@ func CreateNodeForUpload(upload *Upload) (*node.Node, error) {
 
 	switch n.ID {
 	case "":
-		n.ID = uuid.New().String()
-
-		// create folder structure (if needed)
-		if err := os.MkdirAll(filepath.Dir(n.InternalPath()), 0700); err != nil {
-			return nil, err
-		}
-
-		if _, err := os.Create(n.InternalPath()); err != nil {
-			return nil, err
-		}
-
-		if _, err = node.CheckQuota(n.SpaceRoot, false, 0, uint64(fsize)); err != nil {
-			return nil, err
-		}
-
-		// link child name to parent if it is new
-		childNameLink := filepath.Join(n.ParentInternalPath(), n.Name)
-		var link string
-		link, err = os.Readlink(childNameLink)
-		if err == nil && link != "../"+n.ID {
-			if err = os.Remove(childNameLink); err != nil {
-				return nil, errors.Wrap(err, "Decomposedfs: could not remove symlink child entry")
-			}
-		}
-		if errors.Is(err, iofs.ErrNotExist) || link != "../"+n.ID {
-			relativeNodePath := filepath.Join("../../../../../", lookup.Pathify(n.ID, 4, 2))
-			if err = os.Symlink(relativeNodePath, childNameLink); err != nil {
-				return nil, errors.Wrap(err, "Decomposedfs: could not symlink child entry")
-			}
-		}
-		err = n.WriteAllNodeMetadata()
-		if err != nil {
-			return nil, errors.Wrap(err, "Decomposedfs: could not write metadata")
-		}
-
+		err = initNewNode(upload, n, uint64(fsize))
 	default:
-		old, _ := node.ReadNode(upload.Ctx, upload.lu, spaceID, n.ID, false)
-		oldsize := uint64(old.Blobsize)
-		upload.oldsize = &oldsize
+		err = updateExistingNode(upload, n, spaceID, uint64(fsize))
+	}
 
-		upload.Info.MetaData["oldsize"] = strconv.Itoa(int(old.Blobsize))
-		if _, err = node.CheckQuota(n.SpaceRoot, true, oldsize, uint64(fsize)); err != nil {
-			return nil, err
-		}
+	if err != nil {
+		return nil, err
+	}
+
+	// create/update node info
+	if err := n.WriteAllNodeMetadata(); err != nil {
+		return nil, errors.Wrap(err, "Decomposedfs: could not write metadata")
 	}
 
 	// update nodeid for later
 	upload.Info.Storage["NodeId"] = n.ID
 	if err := upload.writeInfo(); err != nil {
-		return n, err
+		return nil, err
 	}
-	return n, upload.tp.Propagate(upload.Ctx, n)
+
+	return n, n.MarkProcessing()
+}
+
+func initNewNode(upload *Upload, n *node.Node, fsize uint64) error {
+	n.ID = uuid.New().String()
+
+	// create folder structure (if needed)
+	if err := os.MkdirAll(filepath.Dir(n.InternalPath()), 0700); err != nil {
+		return err
+	}
+
+	if _, err := os.Create(n.InternalPath()); err != nil {
+		return err
+	}
+
+	if _, err := node.CheckQuota(n.SpaceRoot, false, 0, fsize); err != nil {
+		return err
+	}
+
+	// link child name to parent if it is new
+	childNameLink := filepath.Join(n.ParentInternalPath(), n.Name)
+	var link string
+	link, err := os.Readlink(childNameLink)
+	if err == nil && link != "../"+n.ID {
+		if err := os.Remove(childNameLink); err != nil {
+			return errors.Wrap(err, "Decomposedfs: could not remove symlink child entry")
+		}
+	}
+	if errors.Is(err, iofs.ErrNotExist) || link != "../"+n.ID {
+		relativeNodePath := filepath.Join("../../../../../", lookup.Pathify(n.ID, 4, 2))
+		if err = os.Symlink(relativeNodePath, childNameLink); err != nil {
+			return errors.Wrap(err, "Decomposedfs: could not symlink child entry")
+		}
+	}
+
+	return nil
+}
+
+func updateExistingNode(upload *Upload, n *node.Node, spaceID string, fsize uint64) error {
+	old, _ := node.ReadNode(upload.Ctx, upload.lu, spaceID, n.ID, false)
+	if _, err := node.CheckQuota(n.SpaceRoot, true, uint64(old.Blobsize), fsize); err != nil {
+		return err
+	}
+
+	vfi, err := os.Stat(old.InternalPath())
+	if err != nil {
+		return err
+	}
+
+	// When the if-match header was set we need to check if the
+	// etag still matches before finishing the upload.
+	if ifMatch, ok := upload.Info.MetaData["if-match"]; ok {
+		targetEtag, err := node.CalculateEtag(n.ID, vfi.ModTime())
+		switch {
+		case err != nil:
+			return errtypes.InternalError(err.Error())
+		case ifMatch != targetEtag:
+			return errtypes.Aborted("etag mismatch")
+		}
+	}
+
+	upload.versionsPath = upload.lu.InternalPath(spaceID, n.ID+node.RevisionIDDelimiter+vfi.ModTime().UTC().Format(time.RFC3339Nano))
+	upload.Info.MetaData["versionsPath"] = upload.versionsPath
+
+	targetPath := n.InternalPath()
+
+	lock, err := filelocks.AcquireWriteLock(targetPath)
+	if err != nil {
+		// we cannot acquire a lock - we error for safety
+		return err
+	}
+	defer filelocks.ReleaseLock(lock)
+
+	// This move drops all metadata!!! We copy it below with CopyMetadata
+	if err = os.Rename(targetPath, upload.versionsPath); err != nil {
+		return err
+	}
+
+	if _, err := os.Create(targetPath); err != nil {
+		return err
+	}
+
+	// copy grant and arbitrary metadata
+	// NOTE: now restoring an older revision might bring back a grant that was removed!
+	if err := xattrs.CopyMetadata(upload.versionsPath, targetPath, func(attributeName string) bool {
+		return true
+		// TODO determine all attributes that must be copied, currently we just copy all and overwrite changed properties
+		/*
+			[>
+			return strings.HasPrefix(attributeName, xattrs.GrantPrefix) || // for grants
+			strings.HasPrefix(attributeName, xattrs.MetadataPrefix) || // for arbitrary metadata
+			strings.HasPrefix(attributeName, xattrs.FavPrefix) || // for favorites
+			strings.HasPrefix(attributeName, xattrs.SpaceNameAttr) || // for a shared file
+		*/
+	}); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // lookupNode looks up nodes by path.
