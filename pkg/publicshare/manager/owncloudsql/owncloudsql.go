@@ -209,6 +209,7 @@ func (m *mgr) GetPublicShare(ctx context.Context, u *user.User, ref *link.Public
 
 func (m *mgr) ListPublicShares(ctx context.Context, u *user.User, filters []*link.ListPublicSharesRequest_Filter, sign bool) ([]*link.PublicShare, error) {
 	uid := u.Username
+	// FIXME instead of joining we may want to have to do a stat call ... if we want to store shares from other providers? or just Dump()? and be done with migration?
 	query := `SELECT
 				coalesce(uid_owner, '') as uid_owner, coalesce(uid_initiator, '') as uid_initiator, 
 				coalesce(share_with, '') as share_with, coalesce(file_source, '') as file_source,
