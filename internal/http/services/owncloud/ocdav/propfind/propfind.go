@@ -359,7 +359,6 @@ func (p *Handler) HandleSpacesPropfind(w http.ResponseWriter, r *http.Request, s
 	}
 
 	p.propfindResponse(ctx, w, r, "", pf, sendTusHeaders, resourceInfos, sublog)
-
 }
 
 func (p *Handler) propfindResponse(ctx context.Context, w http.ResponseWriter, r *http.Request, namespace string, pf XML, sendTusHeaders bool, resourceInfos []*provider.ResourceInfo, log zerolog.Logger) {
@@ -985,7 +984,6 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 				prop.Escaped("oc:fileid", id),
 				prop.Escaped("oc:spaceid", md.Id.SpaceId),
 			)
-
 		}
 
 		// we need to add the shareid if possible - the only way to extract it here is to parse it from the path
@@ -1303,6 +1301,14 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 					} else {
 						propstatNotFound.Prop = append(propstatNotFound.Prop, prop.NotFound("oc:"+pf.Prop[i].Local))
 					}
+				case "privatelink":
+					privateURL, err := url.Parse(publicURL)
+					if err == nil {
+						privateURL.Path = path.Join(privateURL.Path, "f", storagespace.FormatResourceID(*md.Id))
+						propstatOK.Prop = append(propstatOK.Prop, prop.Escaped("oc:privatelink", privateURL.String()))
+					} else {
+						propstatNotFound.Prop = append(propstatNotFound.Prop, prop.NotFound("oc:privatelink"))
+					}
 				case "signature-auth":
 					if isPublic {
 						// We only want to add the attribute to the root of the propfind.
@@ -1327,9 +1333,6 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 					if ref, err := storagespace.ParseReference(strings.TrimPrefix(md.Path, "/")); err == nil && ref.GetResourceId().GetSpaceId() == utils.ShareStorageSpaceID {
 						propstatOK.Prop = append(propstatOK.Prop, prop.Raw("oc:shareid", ref.GetResourceId().GetOpaqueId()))
 					}
-				case "privatelink": // phoenix only
-					// <oc:privatelink>https://phoenix.owncloud.com/f/9</oc:privatelink>
-					fallthrough
 				case "dDC": // desktop
 					fallthrough
 				case "data-fingerprint": // desktop
