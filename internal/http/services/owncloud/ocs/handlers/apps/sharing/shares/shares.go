@@ -318,6 +318,9 @@ func (h *Handler) CreateShare(w http.ResponseWriter, r *http.Request) {
 			reqRole = conversions.RoleSpaceEditor
 		}
 		if role, val, err := h.extractPermissions(reqRole, reqPermissions, statRes.Info, conversions.NewSpaceViewerRole()); err == nil {
+			if role.Name == conversions.RoleEditor {
+				role = conversions.NewManagerRole() // Whoa! The editor role maps to manager role in the space membership context
+			}
 			switch role.Name {
 			case conversions.RoleManager, conversions.RoleSpaceEditor, conversions.RoleSpaceViewer:
 				h.addSpaceMember(w, r, statRes.Info, role, val)
