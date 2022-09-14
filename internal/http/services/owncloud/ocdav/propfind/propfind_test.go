@@ -499,7 +499,7 @@ var _ = Describe("Propfind", func() {
 				Expect(sf.Href).To(Equal("http:/127.0.0.1:3000/foo/Shares/sharedFile"))
 				Expect(string(sf.Propstat[0].Prop[0].InnerXML)).To(ContainSubstring("<d:getcontentlength>2000</d:getcontentlength>"))
 				Expect(string(sf.Propstat[0].Prop[0].InnerXML)).To(ContainSubstring("<d:getlastmodified>Thu, 01 Jan 1970 00:00:01 GMT</d:getlastmodified>"))
-				Expect(string(sf.Propstat[0].Prop[0].InnerXML)).To(ContainSubstring("<d:getetag>&#34;1&#34;</d:getetag>"))
+				Expect(string(sf.Propstat[0].Prop[0].InnerXML)).To(ContainSubstring(`<d:getetag>"1"</d:getetag>`))
 			})
 		})
 
@@ -547,7 +547,7 @@ var _ = Describe("Propfind", func() {
 				Expect(shares.Href).To(Equal("http:/127.0.0.1:3000/foo/Shares/"))
 				Expect(string(shares.Propstat[0].Prop[0].InnerXML)).To(ContainSubstring("<oc:size>6000</oc:size>"))
 				Expect(string(shares.Propstat[0].Prop[0].InnerXML)).To(ContainSubstring("<d:getlastmodified>Thu, 01 Jan 1970 00:00:03 GMT</d:getlastmodified>"))
-				Expect(string(shares.Propstat[0].Prop[0].InnerXML)).To(ContainSubstring("<d:getetag>&#34;3&#34;</d:getetag>"))
+				Expect(string(shares.Propstat[0].Prop[0].InnerXML)).To(ContainSubstring(`<d:getetag>"3"</d:getetag>`))
 			})
 
 			It("stats the embedded space", func() {
