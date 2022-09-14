@@ -228,10 +228,7 @@ func (h *Handler) listUserShares(r *http.Request, filters []*collaboration.Filte
 				continue
 			}
 
-			if err := h.addFileInfo(ctx, data, info); err != nil {
-				log.Debug().Interface("share", s).Interface("info", info).Interface("shareData", data).Err(err).Msg("could not add file info, skipping")
-				continue
-			}
+			h.addFileInfo(ctx, data, info)
 			h.mapUserIds(ctx, client, data)
 
 			log.Debug().Interface("share", s).Interface("info", info).Interface("shareData", data).Msg("mapped")

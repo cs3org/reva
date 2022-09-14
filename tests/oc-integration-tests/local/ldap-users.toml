@@ -16,7 +16,7 @@ address = "0.0.0.0:18000"
 auth_manager = "ldap"
 
 [grpc.services.authprovider.auth_managers.ldap]
-uri="ldaps://openldap:636"
+uri="ldaps://localhost:636"
 insecure=true
 user_base_dn="ou=testusers,dc=owncloud,dc=com"
 user_filter=""
@@ -35,7 +35,7 @@ userName="cn"
 driver = "ldap"
 
 [grpc.services.userprovider.drivers.ldap]
-uri="ldaps://openldap:636"
+uri="ldaps://localhost:636"
 insecure=true
 user_base_dn="ou=testusers,dc=owncloud,dc=com"
 group_base_dn="ou=testgroups,dc=owncloud,dc=com"
@@ -62,7 +62,7 @@ member="memberUID"
 driver = "ldap"
 
 [grpc.services.groupprovider.drivers.ldap]
-uri="ldaps://openldap:636"
+uri="ldaps://localhost:636"
 insecure=true
 user_base_dn="ou=testusers,dc=owncloud,dc=com"
 group_base_dn="ou=testgroups,dc=owncloud,dc=com"

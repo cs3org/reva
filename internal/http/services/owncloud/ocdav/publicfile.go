@@ -111,7 +111,10 @@ func (s *svc) handlePropfindOnToken(w http.ResponseWriter, r *http.Request, ns s
 
 	infos := s.getPublicFileInfos(onContainer, depth == net.DepthZero, tokenStatInfo)
 
-	propRes, err := propfind.MultistatusResponse(ctx, &pf, infos, s.c.PublicURL, ns, nil)
+	prefer := net.ParsePrefer(r.Header.Get("prefer"))
+	returnMinimal := prefer[net.HeaderPreferReturn] == "minimal"
+
+	propRes, err := propfind.MultistatusResponse(ctx, &pf, infos, s.c.PublicURL, ns, nil, returnMinimal)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error formatting propfind")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -120,6 +123,10 @@ func (s *svc) handlePropfindOnToken(w http.ResponseWriter, r *http.Request, ns s
 
 	w.Header().Set(net.HeaderDav, "1, 3, extended-mkcol")
 	w.Header().Set(net.HeaderContentType, "application/xml; charset=utf-8")
+	w.Header().Set(net.HeaderVary, net.HeaderPrefer)
+	if returnMinimal {
+		w.Header().Set(net.HeaderPreferenceApplied, "return=minimal")
+	}
 	w.WriteHeader(http.StatusMultiStatus)
 	if _, err := w.Write(propRes); err != nil {
 		sublog.Err(err).Msg("error writing response")

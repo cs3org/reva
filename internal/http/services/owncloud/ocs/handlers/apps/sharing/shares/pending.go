@@ -199,9 +199,7 @@ func (h *Handler) updateReceivedShare(w http.ResponseWriter, r *http.Request, sh
 
 	data.State = mapState(rs.GetState())
 
-	if err := h.addFileInfo(ctx, data, info); err != nil {
-		logger.Debug().Interface("received_share", rs).Interface("info", info).Interface("shareData", data).Err(err).Msg("could not add file info, skipping")
-	}
+	h.addFileInfo(ctx, data, info)
 	h.mapUserIds(r.Context(), client, data)
 
 	if data.State == ocsStateAccepted {

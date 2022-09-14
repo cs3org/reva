@@ -33,6 +33,9 @@ const (
 	HeaderLocation                   = "Location"
 	HeaderRange                      = "Range"
 	HeaderIfMatch                    = "If-Match"
+	HeaderPrefer                     = "Prefer"
+	HeaderPreferenceApplied          = "Preference-Applied"
+	HeaderVary                       = "Vary"
 )
 
 // webdav headers
@@ -65,4 +68,9 @@ const (
 	HeaderExpectedEntityLength = "X-Expected-Entity-Length"
 	HeaderLitmus               = "X-Litmus"
 	HeaderTransferAuth         = "TransferHeaderAuthorization"
+)
+
+// HTTP Prefer header values
+const (
+	HeaderPreferReturn = "return" // eg. return=representation / return=minimal, depth-noroot
 )
