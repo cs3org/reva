@@ -21,6 +21,7 @@ package mailer
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -141,6 +142,10 @@ func (s *svc) Unprotected() []string {
 	return nil
 }
 
+type out struct {
+	Recipient string `json:"recipient"`
+}
+
 func (s *svc) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -156,12 +161,15 @@ func (s *svc) Handler() http.Handler {
 			return
 		}
 
-		err := s.sendMailForShare(ctx, id)
+		recipient, err := s.sendMailForShare(ctx, id)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 
+		w.WriteHeader(http.StatusOK)
+		w.Header().Add("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(out{Recipient: recipient})
 	})
 }
 
@@ -178,18 +186,18 @@ type shareInfo struct {
 	ShareID           string
 }
 
-func (s *svc) sendMailForShare(ctx context.Context, id string) error {
+func (s *svc) sendMailForShare(ctx context.Context, id string) (string, error) {
 	share, err := s.getShareInfoByID(ctx, id)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	msg, err := s.generateMsg(share.OwnerEmail, share.RecipientEmail, share)
 	if err != nil {
-		return err
+		return "", err
 	}
 
-	return smtp.SendMail(s.conf.SMTPAddress, nil, share.OwnerEmail, []string{share.RecipientEmail}, msg)
+	return share.RecipientEmail, smtp.SendMail(s.conf.SMTPAddress, nil, share.OwnerEmail, []string{share.RecipientEmail}, msg)
 }
 
 func (s *svc) generateMsg(from, to string, share *shareInfo) ([]byte, error) {
