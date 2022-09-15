@@ -271,26 +271,25 @@ func GetInt64(filePath, key string) (int64, error) {
 	return v, nil
 }
 
+// List retrieves a list of names of extended attributes associated with the
+// given path in the file system.
+func List(path string) ([]string, error) {
+	attrNames, err := xattr.List(path)
+	// Retry once on failures to work around race conditions
+	if err != nil {
+		attrNames, err = xattr.List(path)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return attrNames, nil
+}
+
 // All reads all extended attributes for a node, protected by a
 // shared file lock
 func All(filePath string) (attribs map[string]string, err error) {
-	var fileLock *flock.Flock
+	attrNames, err := List(filePath)
 
-	fileLock, err = filelocks.AcquireReadLock(filePath)
-
-	if err != nil {
-		return nil, errors.Wrap(err, "xattrs: Unable to lock file for read")
-	}
-	defer func() {
-		rerr := filelocks.ReleaseLock(fileLock)
-
-		// if err is non nil we do not overwrite that
-		if err == nil {
-			err = rerr
-		}
-	}()
-
-	attrNames, err := xattr.List(filePath)
 	if err != nil {
 		return nil, err
 	}
