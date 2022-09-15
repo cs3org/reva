@@ -636,6 +636,27 @@ var _ = Describe("Sharesstorageprovider", func() {
 			})
 		})
 
+		Describe("TouchFile", func() {
+			BeforeEach(func() {
+				gw.On("TouchFile", mock.Anything, mock.Anything).Return(
+					&sprovider.TouchFileResponse{Status: status.NewOK(ctx)}, nil)
+			})
+
+			It("touches a file", func() {
+				req := &sprovider.TouchFileRequest{
+					Ref: &sprovider.Reference{
+						ResourceId: ShareJail,
+						Path:       "./share1-shareddir/newfile.txt",
+					},
+				}
+				res, err := s.TouchFile(ctx, req)
+				gw.AssertCalled(GinkgoT(), "TouchFile", mock.Anything, mock.Anything)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(res).ToNot(BeNil())
+				Expect(res.Status.Code).To(Equal(rpc.Code_CODE_OK))
+			})
+		})
+
 		Describe("Delete", func() {
 			BeforeEach(func() {
 				gw.On("Delete", mock.Anything, mock.Anything).Return(
