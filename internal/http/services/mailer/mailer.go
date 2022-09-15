@@ -131,6 +131,10 @@ func (c *config) init() {
 		c.Prefix = "mailer"
 	}
 
+	if c.SubjectTemplate == "" {
+		c.SubjectTemplate = "{{.OwnerName}} ({{.OwnerUsername}}) shared {{if .IsDir}}folder{{else}}file{{end}} '{{.Filename}}' with you"
+	}
+
 	c.GatewaySVC = sharedconf.GetGatewaySVC(c.GatewaySVC)
 }
 
