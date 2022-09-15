@@ -885,7 +885,24 @@ func (s *service) RemoveGrant(ctx context.Context, req *provider.RemoveGrantRequ
 }
 
 func (s *service) TouchFile(ctx context.Context, req *provider.TouchFileRequest) (*provider.TouchFileResponse, error) {
-	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
+	receivedShare, rpcStatus, err := s.resolveAcceptedShare(ctx, req.Ref)
+	appctx.GetLogger(ctx).Debug().
+		Interface("ref", req.Ref).
+		Interface("received_share", receivedShare).
+		Msg("sharesstorageprovider: Got TouchFile request")
+	if err != nil {
+		return nil, err
+	}
+	if rpcStatus.Code != rpc.Code_CODE_OK {
+		return &provider.TouchFileResponse{
+			Status: rpcStatus,
+		}, nil
+	}
+
+	return s.gateway.TouchFile(ctx, &provider.TouchFileRequest{
+		Opaque: req.Opaque,
+		Ref:    buildReferenceInShare(req.Ref, receivedShare),
+	})
 }
 
 // GetQuota returns 0 free quota. It is virtual ... the shares may have a different quota ...
