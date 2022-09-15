@@ -271,6 +271,8 @@ func GetInt64(filePath, key string) (int64, error) {
 	return v, nil
 }
 
+// List retrieves a list of names of extended attributes associated with the
+// given path in the file system.
 func List(path string) ([]string, error) {
 	attrNames, err := xattr.List(path)
 	// Retry once on failures to work around race conditions
