@@ -1318,7 +1318,7 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 					}
 				case "privatelink":
 					privateURL, err := url.Parse(publicURL)
-					if err == nil {
+					if err == nil && md.Id != nil {
 						privateURL.Path = path.Join(privateURL.Path, "f", storagespace.FormatResourceID(*md.Id))
 						propstatOK.Prop = append(propstatOK.Prop, prop.Escaped("oc:privatelink", privateURL.String()))
 					} else {
