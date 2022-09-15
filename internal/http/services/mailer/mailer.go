@@ -174,6 +174,7 @@ type shareInfo struct {
 	ShareType         string
 	Filename          string
 	Path              string
+	IsDir             bool
 	ShareID           string
 }
 
@@ -277,6 +278,11 @@ func (s *svc) getShareInfoByID(ctx context.Context, id string) (*shareInfo, erro
 
 	info.Path = file.Path
 	info.Filename = filepath.Base(file.Path)
+	if file.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
+		info.IsDir = true
+	} else {
+		info.IsDir = false
+	}
 
 	info.ShareID = id
 
