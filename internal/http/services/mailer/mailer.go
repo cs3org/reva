@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/smtp"
 	"os"
 	"path/filepath"
 	"text/template"
@@ -39,7 +40,6 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/sharedconf"
-	"github.com/cs3org/reva/pkg/smtpclient"
 	"github.com/mitchellh/mapstructure"
 	"github.com/rs/zerolog"
 )
@@ -49,11 +49,11 @@ func init() {
 }
 
 type config struct {
-	SMTP             smtpclient.SMTPCredentials `mapstructure:"smtp"`
-	Prefix           string                     `mapstructure:"prefix"`
-	BodyTemplatePath string                     `mapstructure:"body_template_path"`
-	SubjectTemplate  string                     `mapstructure:"subject_template"`
-	GatewaySVC       string                     `mapstructure:"gateway_svc"`
+	SMTPAddress      string `mapstructure:"smtp_server" docs:";The hostname and port of the SMTP server."`
+	Prefix           string `mapstructure:"prefix"`
+	BodyTemplatePath string `mapstructure:"body_template_path"`
+	SubjectTemplate  string `mapstructure:"subject_template"`
+	GatewaySVC       string `mapstructure:"gateway_svc"`
 }
 
 type svc struct {
@@ -126,8 +126,6 @@ func (s *svc) initSubjectTemplate() error {
 }
 
 func (c *config) init() {
-	c.SMTP = *smtpclient.NewSMTPCredentials(&c.SMTP)
-
 	if c.Prefix == "" {
 		c.Prefix = "mailer"
 	}
@@ -185,17 +183,29 @@ func (s *svc) sendMailForShare(ctx context.Context, id string) error {
 		return err
 	}
 
-	subj, err := s.generateEmailSubject(share)
+	msg, err := s.generateMsg(share.OwnerEmail, share.RecipientEmail, share)
 	if err != nil {
 		return err
+	}
+
+	return smtp.SendMail(s.conf.SMTPAddress, nil, share.OwnerEmail, []string{share.RecipientEmail}, msg)
+}
+
+func (s *svc) generateMsg(from, to string, share *shareInfo) ([]byte, error) {
+	subj, err := s.generateEmailSubject(share)
+	if err != nil {
+		return nil, err
 	}
 
 	body, err := s.generateEmailBody(share)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	return s.conf.SMTP.SendMail(share.RecipientEmail, subj, body)
+	msg := fmt.Sprintf("From: %s\r\n"+
+		"To: %s\r\n"+
+		"Subject: %s\r\n\r\n%s\r\n", from, to, subj, body)
+	return []byte(msg), nil
 }
 
 func (s *svc) getShareInfoByID(ctx context.Context, id string) (*shareInfo, error) {
