@@ -46,7 +46,6 @@ import (
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
-	"github.com/pkg/xattr"
 )
 
 // Define keys and values used in the node metadata
@@ -777,7 +776,7 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 	}
 
 	// only read the requested metadata attributes
-	attrs, err := xattr.List(nodePath)
+	attrs, err := xattrs.List(nodePath)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error getting list of extended attributes")
 	} else {
@@ -1042,9 +1041,8 @@ func (n *Node) ReadUserPermissions(ctx context.Context, u *userpb.User) (ap prov
 // We don't want to wast time and memory by creating grantee objects.
 // The function will return a list of opaque strings that can be used to make a ReadGrant call
 func (n *Node) ListGrantees(ctx context.Context) (grantees []string, err error) {
-	var attrs []string
-
-	if attrs, err = xattr.List(n.InternalPath()); err != nil {
+	attrs, err := xattrs.List(n.InternalPath())
+	if err != nil {
 		appctx.GetLogger(ctx).Error().Err(err).Str("node", n.ID).Msg("error listing attributes")
 		return nil, err
 	}

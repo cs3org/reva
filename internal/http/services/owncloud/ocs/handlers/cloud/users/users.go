@@ -223,7 +223,7 @@ func (h Handler) fillPersonalQuota(ctx context.Context, d *User, u *cs3identity.
 	// only calculate free and relative when total is available
 	if total > 0 {
 		d.Quota.Free = int64(total - used)
-		d.Quota.Relative = float32(float64(used) / float64(total))
+		d.Quota.Relative = float32((float64(used) / float64(total)) * 100.0)
 	} else {
 		d.Quota.Definition = "none" // this indicates no quota / unlimited to the ui
 	}
