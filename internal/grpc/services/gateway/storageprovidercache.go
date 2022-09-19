@@ -21,10 +21,10 @@ package gateway
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"time"
 
-	"github.com/ReneKroon/ttlcache/v2"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -32,6 +32,11 @@ import (
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	sdk "github.com/cs3org/reva/v2/pkg/sdk/common"
 	"github.com/cs3org/reva/v2/pkg/utils"
+	natsjs "github.com/go-micro/plugins/v4/store/nats-js"
+	"github.com/go-micro/plugins/v4/store/redis"
+	"github.com/nats-io/nats.go"
+	microetcd "github.com/owncloud/ocis/v2/ocis-pkg/store/etcd"
+	microstore "go-micro.dev/v4/store"
 	"google.golang.org/grpc"
 )
 
@@ -46,24 +51,30 @@ const (
 var allCaches = []int{stat, createhome, listproviders}
 
 // Caches holds all caches used by the gateway
-type Caches []*ttlcache.Cache
+type Caches []Cache
+
+// Cache holds cache specific configuration
+type Cache struct {
+	s   microstore.Store
+	ttl time.Duration
+}
 
 // NewCaches initializes the caches. Optionally takes ttls for all caches.
 // len(ttlsSeconds) is expected to be either 0, 1 or len(allCaches). Panics if not.
-func NewCaches(ttlsSeconds ...int) Caches {
+func NewCaches(cacheStore string, cacheNodes []string, ttlsSeconds ...int) Caches {
 	numCaches := len(allCaches)
 
-	ttls := make([]int, numCaches)
+	ttls := make([]time.Duration, numCaches)
 	switch len(ttlsSeconds) {
 	case 0:
 		// already done
 	case 1:
 		for i := 0; i < numCaches; i++ {
-			ttls[i] = ttlsSeconds[0]
+			ttls[i] = time.Duration(ttlsSeconds[0]) * time.Second
 		}
 	case numCaches:
 		for i := 0; i < numCaches; i++ {
-			ttls[i] = ttlsSeconds[i]
+			ttls[i] = time.Duration(ttlsSeconds[i]) * time.Second
 		}
 	default:
 		panic("caching misconfigured - pass 0, 1 or len(allCaches) arguments to NewCaches")
@@ -71,7 +82,7 @@ func NewCaches(ttlsSeconds ...int) Caches {
 
 	c := Caches{}
 	for i := range allCaches {
-		c = append(c, initCache(ttls[i]))
+		c = append(c, Cache{s: initCache(cacheStore, cacheNodes), ttl: ttls[i]})
 	}
 	return c
 }
@@ -79,7 +90,7 @@ func NewCaches(ttlsSeconds ...int) Caches {
 // Close closes all caches - best to call it on teardown - ignores errors
 func (c Caches) Close() {
 	for _, cache := range c {
-		cache.Close()
+		cache.s.Close()
 	}
 }
 
@@ -110,19 +121,21 @@ func (c Caches) RemoveStat(user *userpb.User, res *provider.ResourceId) {
 	}
 
 	cache := c[stat]
-	for _, key := range cache.GetKeys() {
+	keys, _ := cache.s.List()
+	// FIMXE handle error
+	for _, key := range keys {
 		if strings.Contains(key, uid) {
-			_ = cache.Remove(key)
+			_ = cache.s.Delete(key)
 			continue
 		}
 
 		if sid != "" && strings.Contains(key, sid) {
-			_ = cache.Remove(key)
+			_ = cache.s.Delete(key)
 			continue
 		}
 
 		if oid != "" && strings.Contains(key, oid) {
-			_ = cache.Remove(key)
+			_ = cache.s.Delete(key)
 			continue
 		}
 	}
@@ -136,36 +149,61 @@ func (c Caches) RemoveListStorageProviders(res *provider.ResourceId) {
 	sid := res.SpaceId
 
 	cache := c[listproviders]
-	for _, key := range cache.GetKeys() {
+	keys, _ := cache.s.List()
+	// FIXME log error
+	// FIXME add context option to List, Read and Write to upstream
+	for _, key := range keys {
 		if strings.Contains(key, sid) {
-			_ = cache.Remove(key)
+			_ = cache.s.Delete(key)
 			continue
 		}
 	}
 }
 
-func initCache(ttlSeconds int) *ttlcache.Cache {
-	cache := ttlcache.NewCache()
-	_ = cache.SetTTL(time.Duration(ttlSeconds) * time.Second)
-	cache.SkipTTLExtensionOnHit(true)
-	return cache
+func initCache(store string, nodes []string) microstore.Store {
+	// TODO use config to init other types of stores
+
+	var s microstore.Store
+	switch store {
+	case "etcd":
+		s = microetcd.NewEtcdStore(microstore.Nodes(nodes...))
+	case "nats-js":
+		// TODO nats needs a DefaultTTL option as it does not support per Write TTL ...
+		// FIXME nats has restrictions on the key, we cannot use slashes AFAICT
+		// host, port, clusterid
+		s = natsjs.NewStore(microstore.Nodes(nodes...), natsjs.NatsOptions(nats.Options{Name: "TODO"})) // TODO test with ocis nats
+	case "redis":
+		// FIXME redis plugin does not support redis cluster, sentinel or ring -> needs upstream patch or our implementation
+		s = redis.NewStore(microstore.Nodes(nodes...)) // only the first node is taken into account
+	case "memory":
+		s = microstore.NewStore()
+	default:
+		s = microstore.NewNoopStore()
+	}
+
+	return s
 }
 
-func pullFromCache(cache *ttlcache.Cache, key string, dest interface{}) error {
-	r, err := cache.Get(key)
+func pullFromCache(cache Cache, key string, dest interface{}) error {
+	r, err := cache.s.Read(key, microstore.ReadLimit(1))
 	if err != nil {
 		return err
 	}
-
-	return json.Unmarshal(r.([]byte), dest)
+	if len(r) == 0 {
+		return fmt.Errorf("not found")
+	}
+	return json.Unmarshal(r[0].Value, dest)
 }
 
-func pushToCache(cache *ttlcache.Cache, key string, src interface{}) error {
+func pushToCache(cache Cache, key string, src interface{}) error {
 	b, err := json.Marshal(src)
 	if err != nil {
 		return err
 	}
-	return cache.Set(key, b)
+	return cache.s.Write(
+		&microstore.Record{Key: key, Value: b},
+		microstore.WriteTTL(cache.ttl),
+	)
 }
 
 /*
