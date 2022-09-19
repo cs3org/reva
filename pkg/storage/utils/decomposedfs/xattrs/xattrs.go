@@ -191,17 +191,42 @@ func CopyMetadata(src, target string, filter func(attributeName string) bool) (e
 // Set an extended attribute key to the given value
 // No file locking is involved here as writing a single xattr is
 // considered to be atomic.
-func Set(filePath string, key string, val string) error {
-	if err := xattr.Set(filePath, key, []byte(val)); err != nil {
-		return err
+func Set(filePath string, key string, val string) (err error) {
+	fileLock, err := filelocks.AcquireWriteLock(filePath)
+
+	if err != nil {
+		return errors.Wrap(err, "xattrs: Can not acquire write log")
 	}
-	return nil
+	defer func() {
+		rerr := filelocks.ReleaseLock(fileLock)
+
+		// if err is non nil we do not overwrite that
+		if err == nil {
+			err = rerr
+		}
+	}()
+
+	return xattr.Set(filePath, key, []byte(val))
 }
 
 // Remove an extended attribute key
 // No file locking is involved here as writing a single xattr is
 // considered to be atomic.
-func Remove(filePath string, key string) error {
+func Remove(filePath string, key string) (err error) {
+	fileLock, err := filelocks.AcquireWriteLock(filePath)
+
+	if err != nil {
+		return errors.Wrap(err, "xattrs: Can not acquire write log")
+	}
+	defer func() {
+		rerr := filelocks.ReleaseLock(fileLock)
+
+		// if err is non nil we do not overwrite that
+		if err == nil {
+			err = rerr
+		}
+	}()
+
 	return xattr.Remove(filePath, key)
 }
 
@@ -273,16 +298,23 @@ func GetInt64(filePath, key string) (int64, error) {
 
 // List retrieves a list of names of extended attributes associated with the
 // given path in the file system.
-func List(path string) ([]string, error) {
-	attrNames, err := xattr.List(path)
-	// Retry once on failures to work around race conditions
+func List(filePath string) (attribs []string, err error) {
+	// now try to get a shared lock on the source
+	readLock, err := filelocks.AcquireReadLock(filePath)
+
 	if err != nil {
-		attrNames, err = xattr.List(path)
-		if err != nil {
-			return nil, err
-		}
+		return nil, errors.Wrap(err, "xattrs: Unable to lock file for read")
 	}
-	return attrNames, nil
+	defer func() {
+		rerr := filelocks.ReleaseLock(readLock)
+
+		// if err is non nil we do not overwrite that
+		if err == nil {
+			err = rerr
+		}
+	}()
+
+	return xattr.List(filePath)
 }
 
 // All reads all extended attributes for a node, protected by a
