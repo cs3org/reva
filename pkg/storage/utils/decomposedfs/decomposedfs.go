@@ -228,6 +228,7 @@ func (fs *Decomposedfs) Postprocessing(ch <-chan interface{}) {
 			); err != nil {
 				log.Error().Err(err).Str("uploadID", ev.UploadID).Msg("Failed to publish UploadReady event")
 			}
+		/* temp deactivate ScanDate update. Will come back with on demand scanning
 		case events.VirusscanFinished:
 			if ev.Error != nil {
 				// scan failed somehow
@@ -244,6 +245,7 @@ func (fs *Decomposedfs) Postprocessing(ch <-chan interface{}) {
 				log.Error().Err(err).Str("uploadID", ev.UploadID).Msg("Failed to set scan results")
 				continue
 			}
+		*/
 		default:
 			log.Error().Interface("event", ev).Msg("Unknown event")
 		}
