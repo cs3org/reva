@@ -19,11 +19,14 @@
 package gateway
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/url"
+	"os"
 	"strings"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+	"github.com/cs3org/reva/v2/pkg/bytesize"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/rgrpc"
 	"github.com/cs3org/reva/v2/pkg/sharedconf"
@@ -73,7 +76,7 @@ type config struct {
 	UseCommonSpaceRootShareLogic bool                              `mapstructure:"use_common_space_root_share_logic"`
 	// MountCacheTTL       int                               `mapstructure:"mount_cache_ttl"`
 	PersonalQuotaDefault string `mapstructure:"personal_quota_default"`
-	GroupQuotaPattern    string `mapstructure:"group_quota_pattern"`
+	GroupQuotaFile       string `mapstructure:"group_quota_file"`
 }
 
 // sets defaults
@@ -125,6 +128,8 @@ type svc struct {
 	dataGatewayURL url.URL
 	tokenmgr       token.Manager
 	cache          Caches
+	personalQuota  uint64
+	groupQuotas    map[string]uint64
 }
 
 // New creates a new gateway svc that acts as a proxy for any grpc operation.
@@ -149,11 +154,38 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 		return nil, err
 	}
 
+	// parse group quotas
+	gqs := make(map[string]uint64)
+	if c.GroupQuotaFile != "" {
+		b, err := os.ReadFile(c.GroupQuotaFile)
+		if err != nil {
+			return nil, err
+		}
+		quotas := make(map[string]string)
+		if err := json.Unmarshal(b, &quotas); err != nil {
+			// since the file exists it needs to be json
+			return nil, err
+		}
+
+		for k, v := range quotas {
+			gq, err := bytesize.Parse(v)
+			if err != nil {
+				// since the entry exists we need to be able to parse it
+				return nil, err
+			}
+
+			gqs[k] = gq.Bytes()
+		}
+	}
+
+	pq, _ := bytesize.Parse(c.PersonalQuotaDefault)
 	s := &svc{
 		c:              c,
 		dataGatewayURL: *u,
 		tokenmgr:       tokenManager,
 		cache:          NewCaches(c.StatCacheTTL, c.CreateHomeCacheTTL, c.ProviderCacheTTL),
+		personalQuota:  pq.Bytes(),
+		groupQuotas:    gqs,
 	}
 
 	return s, nil

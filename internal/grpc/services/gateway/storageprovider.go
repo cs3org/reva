@@ -24,7 +24,6 @@ import (
 	"encoding/xml"
 	"fmt"
 	"net/url"
-	"os"
 	"strings"
 	"time"
 
@@ -40,7 +39,6 @@ import (
 	"google.golang.org/grpc/codes"
 
 	"github.com/cs3org/reva/v2/pkg/appctx"
-	"github.com/cs3org/reva/v2/pkg/bytesize"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/publicshare"
@@ -116,7 +114,7 @@ func (s *svc) CreateHome(ctx context.Context, req *provider.CreateHomeRequest) (
 	}
 
 	// set default quota
-	q, _ := bytesize.Parse(s.c.PersonalQuotaDefault)
+	var q uint64
 	for _, g := range u.Groups {
 		r, err := s.GetGroup(ctx, &group.GetGroupRequest{
 			GroupId: &group.GroupId{
@@ -125,18 +123,24 @@ func (s *svc) CreateHome(ctx context.Context, req *provider.CreateHomeRequest) (
 			},
 		})
 		if err != nil || r.Status.Code != rpc.Code_CODE_OK {
+			// should we fail when we can't get the group?
 			continue
 		}
 
-		gq, _ := bytesize.Parse(os.Getenv(fmt.Sprintf(s.c.GroupQuotaPattern, strings.ToUpper(r.Group.GroupName))))
-		if gq > q {
+		gq, ok := s.groupQuotas[r.Group.GroupName]
+		if ok && gq > q {
 			q = gq
 		}
 	}
 
+	// fallback to personal quota
+	if q == 0 {
+		q = s.personalQuota
+	}
+
 	var quota *provider.Quota
 	if q != 0 {
-		quota = &provider.Quota{QuotaMaxBytes: q.Bytes()}
+		quota = &provider.Quota{QuotaMaxBytes: q}
 	}
 
 	createReq := &provider.CreateStorageSpaceRequest{
