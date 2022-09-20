@@ -276,6 +276,18 @@ func SpaceEnabled(r *provider.UpdateStorageSpaceResponse, req *provider.UpdateSt
 	}
 }
 
+// SpaceShared converts the response to an event
+// func SpaceShared(req *provider.AddGrantRequest, executant, sharer *user.UserId, grantee *provider.Grantee) events.SpaceShared {
+func SpaceShared(r *provider.AddGrantResponse, req *provider.AddGrantRequest, executant *user.UserId) events.SpaceShared {
+	return events.SpaceShared{
+		Executant:      executant,
+		Creator:        req.Grant.Creator,
+		GranteeUserID:  req.Grant.GetGrantee().GetUserId(),
+		GranteeGroupID: req.Grant.GetGrantee().GetGroupId(),
+		ID:             req.Ref.ResourceId,
+	}
+}
+
 // SpaceDisabled converts the response to an event
 func SpaceDisabled(r *provider.DeleteStorageSpaceResponse, req *provider.DeleteStorageSpaceRequest, executant *user.UserId) events.SpaceDisabled {
 	return events.SpaceDisabled{
