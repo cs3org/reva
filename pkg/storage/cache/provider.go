@@ -22,6 +22,7 @@ import (
 	"strings"
 	"time"
 
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 )
 
@@ -54,4 +55,11 @@ func (c ProviderCache) RemoveListStorageProviders(res *provider.ResourceId) {
 			continue
 		}
 	}
+}
+
+func (c ProviderCache) GetKey(userID *userpb.UserId, spaceID string) string {
+	if key := userID.GetOpaqueId() + "!" + spaceID; key != "!" {
+		return key
+	}
+	return ""
 }

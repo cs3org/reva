@@ -22,6 +22,7 @@ import (
 	"strings"
 	"time"
 
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 )
 
@@ -54,4 +55,8 @@ func (c CreateHomeCache) RemoveCreateHome(res *provider.ResourceId) {
 			continue
 		}
 	}
+}
+
+func (c CreateHomeCache) GetKey(userID *userpb.UserId) string {
+	return userID.GetOpaqueId()
 }

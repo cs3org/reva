@@ -22,7 +22,6 @@ import (
 	"context"
 	"strings"
 
-	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	registry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
@@ -44,12 +43,10 @@ type cachedRegistryClient struct {
 
 func (c *cachedRegistryClient) ListStorageProviders(ctx context.Context, in *registry.ListStorageProvidersRequest, opts ...grpc.CallOption) (*registry.ListStorageProvidersResponse, error) {
 
-	user := ctxpkg.ContextMustGetUser(ctx)
-
 	spaceID := sdk.DecodeOpaqueMap(in.Opaque)["space_id"]
 
-	key := user.GetId().GetOpaqueId() + "!" + spaceID
-	if key != "!" {
+	key := c.caches.Provider.GetKey(ctxpkg.ContextMustGetUser(ctx).GetId(), spaceID)
+	if key != "" {
 		s := &registry.ListStorageProvidersResponse{}
 		if err := c.caches.Provider.PullFromCache(key, s); err == nil {
 			return s, nil
@@ -90,45 +87,16 @@ type cachedAPIClient struct {
 	caches cache.Caches
 }
 
-// generates a user specific key pointing to ref - used for statcache
-// a key looks like: uid:1234-1233!sid:5678-5677!oid:9923-9934!path:/path/to/source
-// as you see it adds "uid:"/"sid:"/"oid:" prefixes to the uuids so they can be differentiated
-func statKey(user *userpb.User, ref *provider.Reference, metaDataKeys, fieldMaskPaths []string) string {
-	if ref == nil || ref.ResourceId == nil || ref.ResourceId.SpaceId == "" {
-		return ""
-	}
-
-	key := strings.Builder{}
-	key.WriteString("uid:")
-	key.WriteString(user.Id.OpaqueId)
-	key.WriteString("!sid:")
-	key.WriteString(ref.ResourceId.SpaceId)
-	key.WriteString("!oid:")
-	key.WriteString(ref.ResourceId.OpaqueId)
-	key.WriteString("!path:")
-	key.WriteString(ref.Path)
-	for _, k := range metaDataKeys {
-		key.WriteString("!mdk:")
-		key.WriteString(k)
-	}
-	for _, p := range fieldMaskPaths {
-		key.WriteString("!fmp:")
-		key.WriteString(p)
-	}
-
-	return key.String()
-}
-
 // Stat looks in cache first before forwarding to storage provider
 func (c *cachedAPIClient) Stat(ctx context.Context, in *provider.StatRequest, opts ...grpc.CallOption) (*provider.StatResponse, error) {
-
-	key := statKey(ctxpkg.ContextMustGetUser(ctx), in.GetRef(), in.GetArbitraryMetadataKeys(), in.GetFieldMask().GetPaths())
+	key := c.caches.Stat.GetKey(ctxpkg.ContextMustGetUser(ctx).GetId(), in.GetRef(), in.GetArbitraryMetadataKeys(), in.GetFieldMask().GetPaths())
 	if key != "" {
 		s := &provider.StatResponse{}
 		if err := c.caches.Stat.PullFromCache(key, s); err == nil {
 			return s, nil
 		}
 	}
+
 	resp, err := c.c.Stat(ctx, in, opts...)
 	switch {
 	case err != nil:
@@ -149,13 +117,12 @@ func (c *cachedAPIClient) Stat(ctx context.Context, in *provider.StatRequest, op
 
 // CreateHome caches calls to CreateHome locally - anyways they only need to be called once per user
 func (c *cachedAPIClient) CreateHome(ctx context.Context, in *provider.CreateHomeRequest, opts ...grpc.CallOption) (*provider.CreateHomeResponse, error) {
-	key := ctxpkg.ContextMustGetUser(ctx).Id.OpaqueId
+	key := c.caches.CreateHome.GetKey(ctxpkg.ContextMustGetUser(ctx).GetId())
 	if key != "" {
 		s := &provider.CreateHomeResponse{}
 		if err := c.caches.CreateHome.PullFromCache(key, s); err == nil {
 			return s, nil
 		}
-
 	}
 	resp, err := c.c.CreateHome(ctx, in, opts...)
 	switch {
