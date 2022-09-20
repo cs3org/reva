@@ -101,7 +101,7 @@ func (SpaceDeleted) Unmarshal(v []byte) (interface{}, error) {
 	return e, err
 }
 
-// SpaceCreated is emitted when a space is shared
+// SpaceShared is emitted when a space is shared
 type SpaceShared struct {
 	Executant      *user.UserId
 	GranteeUserID  *user.UserId
