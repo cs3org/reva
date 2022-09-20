@@ -22,11 +22,13 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"time"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/rgrpc"
 	"github.com/cs3org/reva/v2/pkg/sharedconf"
+	"github.com/cs3org/reva/v2/pkg/storage/cache"
 	"github.com/cs3org/reva/v2/pkg/token"
 	"github.com/cs3org/reva/v2/pkg/token/manager/registry"
 	"github.com/mitchellh/mapstructure"
@@ -127,7 +129,7 @@ type svc struct {
 	c              *config
 	dataGatewayURL url.URL
 	tokenmgr       token.Manager
-	cache          Caches
+	caches         cache.Caches
 }
 
 // New creates a new gateway svc that acts as a proxy for any grpc operation.
@@ -156,7 +158,12 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 		c:              c,
 		dataGatewayURL: *u,
 		tokenmgr:       tokenManager,
-		cache:          NewCaches(c.CacheStore, c.CacheNodes, c.StatCacheTTL, c.CreateHomeCacheTTL, c.ProviderCacheTTL),
+		caches: cache.NewCaches(
+			c.CacheStore, c.CacheNodes,
+			time.Duration(c.StatCacheTTL)*time.Second,
+			time.Duration(c.ProviderCacheTTL)*time.Second,
+			time.Duration(c.CreateHomeCacheTTL)*time.Second,
+		),
 	}
 
 	return s, nil
@@ -167,7 +174,7 @@ func (s *svc) Register(ss *grpc.Server) {
 }
 
 func (s *svc) Close() error {
-	s.cache.Close()
+	s.caches.Close()
 	return nil
 }
 

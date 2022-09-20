@@ -20,10 +20,7 @@ package gateway
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
 	"strings"
-	"time"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
@@ -31,180 +28,10 @@ import (
 	registry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	sdk "github.com/cs3org/reva/v2/pkg/sdk/common"
+	"github.com/cs3org/reva/v2/pkg/storage/cache"
 	"github.com/cs3org/reva/v2/pkg/utils"
-	natsjs "github.com/go-micro/plugins/v4/store/nats-js"
-	"github.com/go-micro/plugins/v4/store/redis"
-	"github.com/nats-io/nats.go"
-	microetcd "github.com/owncloud/ocis/v2/ocis-pkg/store/etcd"
-	microstore "go-micro.dev/v4/store"
 	"google.golang.org/grpc"
 )
-
-// available caches
-const (
-	stat = iota
-	createhome
-	listproviders
-)
-
-// allCaches is needed for initialization
-var allCaches = []int{stat, createhome, listproviders}
-
-// Caches holds all caches used by the gateway
-type Caches []Cache
-
-// Cache holds cache specific configuration
-type Cache struct {
-	s   microstore.Store
-	ttl time.Duration
-}
-
-// NewCaches initializes the caches. Optionally takes ttls for all caches.
-// len(ttlsSeconds) is expected to be either 0, 1 or len(allCaches). Panics if not.
-func NewCaches(cacheStore string, cacheNodes []string, ttlsSeconds ...int) Caches {
-	numCaches := len(allCaches)
-
-	ttls := make([]time.Duration, numCaches)
-	switch len(ttlsSeconds) {
-	case 0:
-		// already done
-	case 1:
-		for i := 0; i < numCaches; i++ {
-			ttls[i] = time.Duration(ttlsSeconds[0]) * time.Second
-		}
-	case numCaches:
-		for i := 0; i < numCaches; i++ {
-			ttls[i] = time.Duration(ttlsSeconds[i]) * time.Second
-		}
-	default:
-		panic("caching misconfigured - pass 0, 1 or len(allCaches) arguments to NewCaches")
-	}
-
-	c := Caches{}
-	for i := range allCaches {
-		c = append(c, Cache{s: initCache(cacheStore, cacheNodes), ttl: ttls[i]})
-	}
-	return c
-}
-
-// Close closes all caches - best to call it on teardown - ignores errors
-func (c Caches) Close() {
-	for _, cache := range c {
-		cache.s.Close()
-	}
-}
-
-// StorageProviderClient returns a (cached) client pointing to the storageprovider
-func (c Caches) StorageProviderClient(p provider.ProviderAPIClient) provider.ProviderAPIClient {
-	return &cachedAPIClient{
-		c:      p,
-		caches: c,
-	}
-}
-
-// StorageRegistryClient returns a (cached) client pointing to the storageregistry
-func (c Caches) StorageRegistryClient(p registry.RegistryAPIClient) registry.RegistryAPIClient {
-	return &cachedRegistryClient{
-		c:      p,
-		caches: c,
-	}
-}
-
-// RemoveStat removes a reference from the stat cache
-func (c Caches) RemoveStat(user *userpb.User, res *provider.ResourceId) {
-	uid := "uid:" + user.Id.OpaqueId
-	sid := ""
-	oid := ""
-	if res != nil {
-		sid = "sid:" + res.SpaceId
-		oid = "oid:" + res.OpaqueId
-	}
-
-	cache := c[stat]
-	keys, _ := cache.s.List()
-	// FIMXE handle error
-	for _, key := range keys {
-		if strings.Contains(key, uid) {
-			_ = cache.s.Delete(key)
-			continue
-		}
-
-		if sid != "" && strings.Contains(key, sid) {
-			_ = cache.s.Delete(key)
-			continue
-		}
-
-		if oid != "" && strings.Contains(key, oid) {
-			_ = cache.s.Delete(key)
-			continue
-		}
-	}
-}
-
-// RemoveListStorageProviders removes a reference from the listproviders cache
-func (c Caches) RemoveListStorageProviders(res *provider.ResourceId) {
-	if res == nil {
-		return
-	}
-	sid := res.SpaceId
-
-	cache := c[listproviders]
-	keys, _ := cache.s.List()
-	// FIXME log error
-	// FIXME add context option to List, Read and Write to upstream
-	for _, key := range keys {
-		if strings.Contains(key, sid) {
-			_ = cache.s.Delete(key)
-			continue
-		}
-	}
-}
-
-func initCache(store string, nodes []string) microstore.Store {
-	// TODO use config to init other types of stores
-
-	var s microstore.Store
-	switch store {
-	case "etcd":
-		s = microetcd.NewEtcdStore(microstore.Nodes(nodes...))
-	case "nats-js":
-		// TODO nats needs a DefaultTTL option as it does not support per Write TTL ...
-		// FIXME nats has restrictions on the key, we cannot use slashes AFAICT
-		// host, port, clusterid
-		s = natsjs.NewStore(microstore.Nodes(nodes...), natsjs.NatsOptions(nats.Options{Name: "TODO"})) // TODO test with ocis nats
-	case "redis":
-		// FIXME redis plugin does not support redis cluster, sentinel or ring -> needs upstream patch or our implementation
-		s = redis.NewStore(microstore.Nodes(nodes...)) // only the first node is taken into account
-	case "memory":
-		s = microstore.NewStore()
-	default:
-		s = microstore.NewNoopStore()
-	}
-
-	return s
-}
-
-func pullFromCache(cache Cache, key string, dest interface{}) error {
-	r, err := cache.s.Read(key, microstore.ReadLimit(1))
-	if err != nil {
-		return err
-	}
-	if len(r) == 0 {
-		return fmt.Errorf("not found")
-	}
-	return json.Unmarshal(r[0].Value, dest)
-}
-
-func pushToCache(cache Cache, key string, src interface{}) error {
-	b, err := json.Marshal(src)
-	if err != nil {
-		return err
-	}
-	return cache.s.Write(
-		&microstore.Record{Key: key, Value: b},
-		microstore.WriteTTL(cache.ttl),
-	)
-}
 
 /*
    Cached Registry
@@ -212,11 +39,10 @@ func pushToCache(cache Cache, key string, src interface{}) error {
 
 type cachedRegistryClient struct {
 	c      registry.RegistryAPIClient
-	caches Caches
+	caches cache.Caches
 }
 
 func (c *cachedRegistryClient) ListStorageProviders(ctx context.Context, in *registry.ListStorageProvidersRequest, opts ...grpc.CallOption) (*registry.ListStorageProvidersResponse, error) {
-	cache := c.caches[listproviders]
 
 	user := ctxpkg.ContextMustGetUser(ctx)
 
@@ -225,7 +51,7 @@ func (c *cachedRegistryClient) ListStorageProviders(ctx context.Context, in *reg
 	key := user.GetId().GetOpaqueId() + "!" + spaceID
 	if key != "!" {
 		s := &registry.ListStorageProvidersResponse{}
-		if err := pullFromCache(cache, key, s); err == nil {
+		if err := c.caches.Provider.PullFromCache(key, s); err == nil {
 			return s, nil
 		}
 	}
@@ -241,7 +67,7 @@ func (c *cachedRegistryClient) ListStorageProviders(ctx context.Context, in *reg
 	case spaceID == utils.ShareStorageSpaceID: // TODO do we need to compare providerid and spaceid separately?
 		return resp, nil
 	default:
-		return resp, pushToCache(cache, key, resp)
+		return resp, c.caches.Provider.PushToCache(key, resp)
 	}
 }
 
@@ -261,7 +87,7 @@ func (c *cachedRegistryClient) GetHome(ctx context.Context, in *registry.GetHome
 
 type cachedAPIClient struct {
 	c      provider.ProviderAPIClient
-	caches Caches
+	caches cache.Caches
 }
 
 // generates a user specific key pointing to ref - used for statcache
@@ -295,12 +121,11 @@ func statKey(user *userpb.User, ref *provider.Reference, metaDataKeys, fieldMask
 
 // Stat looks in cache first before forwarding to storage provider
 func (c *cachedAPIClient) Stat(ctx context.Context, in *provider.StatRequest, opts ...grpc.CallOption) (*provider.StatResponse, error) {
-	cache := c.caches[stat]
 
 	key := statKey(ctxpkg.ContextMustGetUser(ctx), in.GetRef(), in.GetArbitraryMetadataKeys(), in.GetFieldMask().GetPaths())
 	if key != "" {
 		s := &provider.StatResponse{}
-		if err := pullFromCache(cache, key, s); err == nil {
+		if err := c.caches.Stat.PullFromCache(key, s); err == nil {
 			return s, nil
 		}
 	}
@@ -318,18 +143,16 @@ func (c *cachedAPIClient) Stat(ctx context.Context, in *provider.StatRequest, op
 		// FIXME: find a way to cache/invalidate them too
 		return resp, nil
 	default:
-		return resp, pushToCache(cache, key, resp)
+		return resp, c.caches.Stat.PushToCache(key, resp)
 	}
 }
 
 // CreateHome caches calls to CreateHome locally - anyways they only need to be called once per user
 func (c *cachedAPIClient) CreateHome(ctx context.Context, in *provider.CreateHomeRequest, opts ...grpc.CallOption) (*provider.CreateHomeResponse, error) {
-	cache := c.caches[createhome]
-
 	key := ctxpkg.ContextMustGetUser(ctx).Id.OpaqueId
 	if key != "" {
 		s := &provider.CreateHomeResponse{}
-		if err := pullFromCache(cache, key, s); err == nil {
+		if err := c.caches.CreateHome.PullFromCache(key, s); err == nil {
 			return s, nil
 		}
 
@@ -343,7 +166,7 @@ func (c *cachedAPIClient) CreateHome(ctx context.Context, in *provider.CreateHom
 	case key == "":
 		return resp, nil
 	default:
-		return resp, pushToCache(cache, key, resp)
+		return resp, c.caches.CreateHome.PushToCache(key, resp)
 	}
 }
 
