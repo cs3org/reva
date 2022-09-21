@@ -36,9 +36,9 @@ import (
 
 var (
 	// DefaultStatCache is the memory store.
-	statCaches       map[string]StatCache       = make(map[string]StatCache)
-	providerCaches   map[string]ProviderCache   = make(map[string]ProviderCache)
-	createHomeCaches map[string]CreateHomeCache = make(map[string]CreateHomeCache)
+	statCaches       = make(map[string]StatCache)
+	providerCaches   = make(map[string]ProviderCache)
+	createHomeCaches = make(map[string]CreateHomeCache)
 	mutex            sync.Mutex
 )
 
@@ -74,39 +74,39 @@ type CreateHomeCache interface {
 
 // GetStatCache will return an existing StatCache for the given store, nodes, database and table
 // If it does not exist yet it will be created, different TTLs are ignored
-func GetStatCache(cacheStore string, cacheNodes []string, database, table string, TTL time.Duration) StatCache {
+func GetStatCache(cacheStore string, cacheNodes []string, database, table string, ttl time.Duration) StatCache {
 	mutex.Lock()
 	defer mutex.Unlock()
 
 	key := strings.Join(append(append([]string{cacheStore}, cacheNodes...), database, table), ":")
 	if statCaches[key] == nil {
-		statCaches[key] = NewStatCache(cacheStore, cacheNodes, database, table, TTL)
+		statCaches[key] = NewStatCache(cacheStore, cacheNodes, database, table, ttl)
 	}
 	return statCaches[key]
 }
 
 // GetProviderCache will return an existing ProviderCache for the given store, nodes, database and table
 // If it does not exist yet it will be created, different TTLs are ignored
-func GetProviderCache(cacheStore string, cacheNodes []string, database, table string, TTL time.Duration) ProviderCache {
+func GetProviderCache(cacheStore string, cacheNodes []string, database, table string, ttl time.Duration) ProviderCache {
 	mutex.Lock()
 	defer mutex.Unlock()
 
 	key := strings.Join(append(append([]string{cacheStore}, cacheNodes...), database, table), ":")
 	if providerCaches[key] == nil {
-		providerCaches[key] = NewProviderCache(cacheStore, cacheNodes, database, table, TTL)
+		providerCaches[key] = NewProviderCache(cacheStore, cacheNodes, database, table, ttl)
 	}
 	return providerCaches[key]
 }
 
 // GetCreateHomeCache will return an existing CreateHomeCache for the given store, nodes, database and table
 // If it does not exist yet it will be created, different TTLs are ignored
-func GetCreateHomeCache(cacheStore string, cacheNodes []string, database, table string, TTL time.Duration) CreateHomeCache {
+func GetCreateHomeCache(cacheStore string, cacheNodes []string, database, table string, ttl time.Duration) CreateHomeCache {
 	mutex.Lock()
 	defer mutex.Unlock()
 
 	key := strings.Join(append(append([]string{cacheStore}, cacheNodes...), database, table), ":")
 	if createHomeCaches[key] == nil {
-		createHomeCaches[key] = NewCreateHomeCache(cacheStore, cacheNodes, database, table, TTL)
+		createHomeCaches[key] = NewCreateHomeCache(cacheStore, cacheNodes, database, table, ttl)
 	}
 	return createHomeCaches[key]
 }
