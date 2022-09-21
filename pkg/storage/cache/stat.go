@@ -26,21 +26,20 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 )
 
-// StatCache can invalidate all stat related cache entries
-type StatCache struct {
-	Cache
+func NewStatCache(store string, nodes []string, database, table string, ttl time.Duration) StatCache {
+	c := statCache{}
+	c.s = getStore(store, nodes, database, table, ttl)
+	c.ttl = ttl
+	return &c
 }
 
-func NewStatCache(store string, nodes []string, ttl time.Duration) StatCache {
-	c := StatCache{}
-	c.s = getStore(store, nodes, ttl)
-	c.ttl = ttl
-	return c
+type statCache struct {
+	CacheStore
 }
 
 // RemoveStat removes a reference from the stat cache
-func (c StatCache) RemoveStat(user *userpb.User, res *provider.ResourceId) {
-	uid := "uid:" + user.Id.OpaqueId
+func (c statCache) RemoveStat(userID *userpb.UserId, res *provider.ResourceId) {
+	uid := "uid:" + userID.GetOpaqueId()
 	sid := ""
 	oid := ""
 	if res != nil {
@@ -48,8 +47,11 @@ func (c StatCache) RemoveStat(user *userpb.User, res *provider.ResourceId) {
 		oid = "oid:" + res.OpaqueId
 	}
 
-	keys, _ := c.s.List()
-	// FIMXE handle error
+	keys, err := c.s.List()
+	if err != nil {
+		// FIXME handle error
+		return
+	}
 	for _, key := range keys {
 		if strings.Contains(key, uid) {
 			_ = c.s.Delete(key)
@@ -71,7 +73,7 @@ func (c StatCache) RemoveStat(user *userpb.User, res *provider.ResourceId) {
 // generates a user specific key pointing to ref - used for statcache
 // a key looks like: uid:1234-1233!sid:5678-5677!oid:9923-9934!path:/path/to/source
 // as you see it adds "uid:"/"sid:"/"oid:" prefixes to the uuids so they can be differentiated
-func (c StatCache) GetKey(userID *userpb.UserId, ref *provider.Reference, metaDataKeys, fieldMaskPaths []string) string {
+func (c statCache) GetKey(userID *userpb.UserId, ref *provider.Reference, metaDataKeys, fieldMaskPaths []string) string {
 	if ref == nil || ref.ResourceId == nil || ref.ResourceId.SpaceId == "" {
 		return ""
 	}

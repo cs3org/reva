@@ -21,8 +21,12 @@ package cache
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
+	"sync"
 	"time"
 
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	natsjs "github.com/go-micro/plugins/v4/store/nats-js"
 	"github.com/go-micro/plugins/v4/store/redis"
 	"github.com/nats-io/nats.go"
@@ -30,74 +34,93 @@ import (
 	microstore "go-micro.dev/v4/store"
 )
 
-// Caches holds all caches used by the gateway
-type Caches struct {
-	Stat       StatCache
-	Provider   ProviderCache
-	CreateHome CreateHomeCache
+var (
+	// DefaultStatCache is the memory store.
+	statCaches       map[string]StatCache       = make(map[string]StatCache)
+	providerCaches   map[string]ProviderCache   = make(map[string]ProviderCache)
+	createHomeCaches map[string]CreateHomeCache = make(map[string]CreateHomeCache)
+	mutex            sync.Mutex
+)
+
+type Cache interface {
+	PullFromCache(key string, dest interface{}) error
+	PushToCache(key string, src interface{}) error
+	List(opts ...microstore.ListOption) ([]string, error)
+	Delete(key string, opts ...microstore.DeleteOption) error
+	Close() error
+}
+type StatCache interface {
+	Cache
+	RemoveStat(userID *userpb.UserId, res *provider.ResourceId)
+	GetKey(userID *userpb.UserId, ref *provider.Reference, metaDataKeys, fieldMaskPaths []string) string
+}
+type ProviderCache interface {
+	Cache
+	RemoveListStorageProviders(res *provider.ResourceId)
+
+	GetKey(userID *userpb.UserId, spaceID string) string
 }
 
-// Close closes all caches and return only the first error
-func (caches *Caches) Close() error {
-	err1 := caches.Stat.Close()
-	err2 := caches.Provider.Close()
-	err3 := caches.CreateHome.Close()
-	switch {
-	case err1 != nil:
-		return err1
-	case err2 != nil:
-		return err2
-	case err3 != nil:
-		return err3
+type CreateHomeCache interface {
+	Cache
+	RemoveCreateHome(res *provider.ResourceId)
+	GetKey(userID *userpb.UserId) string
+}
+
+func GetStatCache(cacheStore string, cacheNodes []string, database, table string, TTL time.Duration) StatCache {
+	mutex.Lock()
+	defer mutex.Unlock()
+
+	key := strings.Join(append(append([]string{cacheStore}, cacheNodes...), database, table), ":")
+	if statCaches[key] == nil {
+		statCaches[key] = NewStatCache(cacheStore, cacheNodes, database, table, TTL)
 	}
-	return nil
+	return statCaches[key]
 }
 
-// Cache holds cache specific configuration
-type Cache struct {
+func GetProviderCache(cacheStore string, cacheNodes []string, database, table string, TTL time.Duration) ProviderCache {
+	mutex.Lock()
+	defer mutex.Unlock()
+
+	key := strings.Join(append(append([]string{cacheStore}, cacheNodes...), database, table), ":")
+	if providerCaches[key] == nil {
+		providerCaches[key] = NewProviderCache(cacheStore, cacheNodes, database, table, TTL)
+	}
+	return providerCaches[key]
+}
+
+func GetCreateHomeCache(cacheStore string, cacheNodes []string, database, table string, TTL time.Duration) CreateHomeCache {
+	mutex.Lock()
+	defer mutex.Unlock()
+
+	key := strings.Join(append(append([]string{cacheStore}, cacheNodes...), database, table), ":")
+	if createHomeCaches[key] == nil {
+		createHomeCaches[key] = NewCreateHomeCache(cacheStore, cacheNodes, database, table, TTL)
+	}
+	return createHomeCaches[key]
+}
+
+// CacheStore holds cache store specific configuration
+type CacheStore struct {
 	s   microstore.Store
 	ttl time.Duration
 }
 
-// NewCache initializes a cache
-func NewCache(store string, nodes []string, ttl time.Duration) Cache {
-	return Cache{
-		s:   getStore(store, nodes, ttl), // some stores use a default ttl so we pass it when initializing
-		ttl: ttl,                         // some stores use the ttl on every write, so we remember it here
+// NewCache initializes a new CacheStore
+func NewCache(store string, nodes []string, database, table string, ttl time.Duration) Cache {
+	return CacheStore{
+		s:   getStore(store, nodes, database, table, ttl), // some stores use a default ttl so we pass it when initializing
+		ttl: ttl,                                          // some stores use the ttl on every write, so we remember it here
 	}
 }
 
-// NewCaches initializes the caches.
-func NewCaches(cacheStore string, cacheNodes []string, statTTL, providerTTL, createHomeTTL time.Duration) Caches {
-	c := Caches{}
-
-	if statTTL > 0 {
-		c.Stat = NewStatCache(cacheStore, cacheNodes, statTTL)
-	} else {
-		c.Stat = NewStatCache("noop", []string{}, 0)
-	}
-
-	if providerTTL > 0 {
-		c.Provider = NewProviderCache(cacheStore, cacheNodes, providerTTL)
-	} else {
-		c.Provider = NewProviderCache("noop", []string{}, 0)
-	}
-
-	if createHomeTTL > 0 {
-
-		c.CreateHome = NewCreateHomeCache(cacheStore, cacheNodes, createHomeTTL)
-	} else {
-		c.CreateHome = NewCreateHomeCache("noop", []string{}, 0)
-	}
-
-	return c
-}
-
-func getStore(store string, nodes []string, ttl time.Duration) microstore.Store {
+func getStore(store string, nodes []string, database, table string, ttl time.Duration) microstore.Store {
 	switch store {
 	case "etcd":
 		return microetcd.NewEtcdStore(
 			microstore.Nodes(nodes...),
+			microstore.Database(database),
+			microstore.Table(table),
 		)
 	case "nats-js":
 		// TODO nats needs a DefaultTTL option as it does not support per Write TTL ...
@@ -105,22 +128,32 @@ func getStore(store string, nodes []string, ttl time.Duration) microstore.Store 
 		// host, port, clusterid
 		return natsjs.NewStore(
 			microstore.Nodes(nodes...),
+			microstore.Database(database),
+			microstore.Table(table),
 			natsjs.NatsOptions(nats.Options{Name: "TODO"}),
 			natsjs.DefaultTTL(ttl),
 		) // TODO test with ocis nats
 	case "redis":
 		// FIXME redis plugin does not support redis cluster, sentinel or ring -> needs upstream patch or our implementation
 		return redis.NewStore(
+			microstore.Database(database),
+			microstore.Table(table),
 			microstore.Nodes(nodes...),
 		) // only the first node is taken into account
 	case "memory":
-		return microstore.NewStore()
+		return microstore.NewStore(
+			microstore.Database(database),
+			microstore.Table(table),
+		)
 	default:
-		return microstore.NewNoopStore()
+		return microstore.NewNoopStore(
+			microstore.Database(database),
+			microstore.Table(table),
+		)
 	}
 }
 
-func (cache *Cache) PullFromCache(key string, dest interface{}) error {
+func (cache CacheStore) PullFromCache(key string, dest interface{}) error {
 	r, err := cache.s.Read(key, microstore.ReadLimit(1))
 	if err != nil {
 		return err
@@ -131,7 +164,7 @@ func (cache *Cache) PullFromCache(key string, dest interface{}) error {
 	return json.Unmarshal(r[0].Value, dest)
 }
 
-func (cache *Cache) PushToCache(key string, src interface{}) error {
+func (cache CacheStore) PushToCache(key string, src interface{}) error {
 	b, err := json.Marshal(src)
 	if err != nil {
 		return err
@@ -142,14 +175,14 @@ func (cache *Cache) PushToCache(key string, src interface{}) error {
 	)
 }
 
-func (cache *Cache) List(opts ...microstore.ListOption) ([]string, error) {
+func (cache CacheStore) List(opts ...microstore.ListOption) ([]string, error) {
 	return cache.s.List(opts...)
 }
 
-func (cache *Cache) Delete(key string, opts ...microstore.DeleteOption) error {
+func (cache CacheStore) Delete(key string, opts ...microstore.DeleteOption) error {
 	return cache.s.Delete(key, opts...)
 }
 
-func (cache *Cache) Close() error {
+func (cache CacheStore) Close() error {
 	return cache.s.Close()
 }

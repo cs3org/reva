@@ -37,18 +37,18 @@ import (
 */
 
 type cachedRegistryClient struct {
-	c      registry.RegistryAPIClient
-	caches cache.Caches
+	c     registry.RegistryAPIClient
+	cache cache.ProviderCache
 }
 
 func (c *cachedRegistryClient) ListStorageProviders(ctx context.Context, in *registry.ListStorageProvidersRequest, opts ...grpc.CallOption) (*registry.ListStorageProvidersResponse, error) {
 
 	spaceID := sdk.DecodeOpaqueMap(in.Opaque)["space_id"]
 
-	key := c.caches.Provider.GetKey(ctxpkg.ContextMustGetUser(ctx).GetId(), spaceID)
+	key := c.cache.GetKey(ctxpkg.ContextMustGetUser(ctx).GetId(), spaceID)
 	if key != "" {
 		s := &registry.ListStorageProvidersResponse{}
-		if err := c.caches.Provider.PullFromCache(key, s); err == nil {
+		if err := c.cache.PullFromCache(key, s); err == nil {
 			return s, nil
 		}
 	}
@@ -64,7 +64,7 @@ func (c *cachedRegistryClient) ListStorageProviders(ctx context.Context, in *reg
 	case spaceID == utils.ShareStorageSpaceID: // TODO do we need to compare providerid and spaceid separately?
 		return resp, nil
 	default:
-		return resp, c.caches.Provider.PushToCache(key, resp)
+		return resp, c.cache.PushToCache(key, resp)
 	}
 }
 
@@ -83,16 +83,17 @@ func (c *cachedRegistryClient) GetHome(ctx context.Context, in *registry.GetHome
 */
 
 type cachedAPIClient struct {
-	c      provider.ProviderAPIClient
-	caches cache.Caches
+	c               provider.ProviderAPIClient
+	statCache       cache.StatCache
+	createHomeCache cache.CreateHomeCache
 }
 
 // Stat looks in cache first before forwarding to storage provider
 func (c *cachedAPIClient) Stat(ctx context.Context, in *provider.StatRequest, opts ...grpc.CallOption) (*provider.StatResponse, error) {
-	key := c.caches.Stat.GetKey(ctxpkg.ContextMustGetUser(ctx).GetId(), in.GetRef(), in.GetArbitraryMetadataKeys(), in.GetFieldMask().GetPaths())
+	key := c.statCache.GetKey(ctxpkg.ContextMustGetUser(ctx).GetId(), in.GetRef(), in.GetArbitraryMetadataKeys(), in.GetFieldMask().GetPaths())
 	if key != "" {
 		s := &provider.StatResponse{}
-		if err := c.caches.Stat.PullFromCache(key, s); err == nil {
+		if err := c.statCache.PullFromCache(key, s); err == nil {
 			return s, nil
 		}
 	}
@@ -111,16 +112,16 @@ func (c *cachedAPIClient) Stat(ctx context.Context, in *provider.StatRequest, op
 		// FIXME: find a way to cache/invalidate them too
 		return resp, nil
 	default:
-		return resp, c.caches.Stat.PushToCache(key, resp)
+		return resp, c.statCache.PushToCache(key, resp)
 	}
 }
 
 // CreateHome caches calls to CreateHome locally - anyways they only need to be called once per user
 func (c *cachedAPIClient) CreateHome(ctx context.Context, in *provider.CreateHomeRequest, opts ...grpc.CallOption) (*provider.CreateHomeResponse, error) {
-	key := c.caches.CreateHome.GetKey(ctxpkg.ContextMustGetUser(ctx).GetId())
+	key := c.createHomeCache.GetKey(ctxpkg.ContextMustGetUser(ctx).GetId())
 	if key != "" {
 		s := &provider.CreateHomeResponse{}
-		if err := c.caches.CreateHome.PullFromCache(key, s); err == nil {
+		if err := c.createHomeCache.PullFromCache(key, s); err == nil {
 			return s, nil
 		}
 	}
@@ -133,7 +134,7 @@ func (c *cachedAPIClient) CreateHome(ctx context.Context, in *provider.CreateHom
 	case key == "":
 		return resp, nil
 	default:
-		return resp, c.caches.CreateHome.PushToCache(key, resp)
+		return resp, c.createHomeCache.PushToCache(key, resp)
 	}
 }
 

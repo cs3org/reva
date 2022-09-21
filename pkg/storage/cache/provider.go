@@ -27,27 +27,30 @@ import (
 )
 
 // ProviderCache can invalidate all provider related cache entries
-type ProviderCache struct {
-	Cache
+type providerCache struct {
+	CacheStore
 }
 
-func NewProviderCache(store string, nodes []string, ttl time.Duration) ProviderCache {
-	c := ProviderCache{}
+func NewProviderCache(store string, nodes []string, database, table string, ttl time.Duration) ProviderCache {
+	c := &providerCache{}
 	c.ttl = ttl
-	c.s = getStore(store, nodes, ttl)
+	c.s = getStore(store, nodes, database, table, ttl)
 
 	return c
 }
 
 // RemoveListStorageProviders removes a reference from the listproviders cache
-func (c ProviderCache) RemoveListStorageProviders(res *provider.ResourceId) {
+func (c providerCache) RemoveListStorageProviders(res *provider.ResourceId) {
 	if res == nil {
 		return
 	}
 	sid := res.SpaceId
 
-	keys, _ := c.s.List()
-	// FIXME log error
+	keys, err := c.s.List()
+	if err != nil {
+		// FIXME log error
+		return
+	}
 	// FIXME add context option to List, Read and Write to upstream
 	for _, key := range keys {
 		if strings.Contains(key, sid) {
@@ -57,7 +60,7 @@ func (c ProviderCache) RemoveListStorageProviders(res *provider.ResourceId) {
 	}
 }
 
-func (c ProviderCache) GetKey(userID *userpb.UserId, spaceID string) string {
+func (c providerCache) GetKey(userID *userpb.UserId, spaceID string) string {
 	if key := userID.GetOpaqueId() + "!" + spaceID; key != "!" {
 		return key
 	}

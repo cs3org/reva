@@ -27,27 +27,30 @@ import (
 )
 
 // CreateHomeCache can invalidate all create home related cache entries
-type CreateHomeCache struct {
-	Cache
+type createHomeCache struct {
+	CacheStore
 }
 
-func NewCreateHomeCache(store string, nodes []string, ttl time.Duration) CreateHomeCache {
-	c := CreateHomeCache{}
+func NewCreateHomeCache(store string, nodes []string, database, table string, ttl time.Duration) CreateHomeCache {
+	c := &createHomeCache{}
 	c.ttl = ttl
-	c.s = getStore(store, nodes, ttl)
+	c.s = getStore(store, nodes, database, table, ttl)
 
 	return c
 }
 
 // RemoveCreateHome removes a reference from the listproviders cache
-func (c CreateHomeCache) RemoveCreateHome(res *provider.ResourceId) {
+func (c createHomeCache) RemoveCreateHome(res *provider.ResourceId) {
 	if res == nil {
 		return
 	}
 	sid := res.SpaceId
 
-	keys, _ := c.s.List()
-	// FIXME log error
+	keys, err := c.s.List()
+	if err != nil {
+		// FIXME log error
+		return
+	}
 	// FIXME add context option to List, Read and Write to upstream
 	for _, key := range keys {
 		if strings.Contains(key, sid) {
@@ -57,6 +60,6 @@ func (c CreateHomeCache) RemoveCreateHome(res *provider.ResourceId) {
 	}
 }
 
-func (c CreateHomeCache) GetKey(userID *userpb.UserId) string {
+func (c createHomeCache) GetKey(userID *userpb.UserId) string {
 	return userID.GetOpaqueId()
 }

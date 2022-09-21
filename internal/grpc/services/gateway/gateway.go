@@ -64,17 +64,17 @@ type config struct {
 	TokenManager                  string `mapstructure:"token_manager"`
 	// ShareFolder is the location where to create shares in the recipient's storage provider.
 	// FIXME get rid of ShareFolder, there are findByPath calls in the ocmshareporvider.go and usershareprovider.go
-	ShareFolder         string                            `mapstructure:"share_folder"`
-	DataTransfersFolder string                            `mapstructure:"data_transfers_folder"`
-	TokenManagers       map[string]map[string]interface{} `mapstructure:"token_managers"`
-	AllowedUserAgents   map[string][]string               `mapstructure:"allowed_user_agents"` // map[path][]user-agent
-	CacheStore          string                            `mapstructure:"cache_store"`
-	CacheNodes          []string                          `mapstructure:"cache_nodes"`
-	// TODO add store database and table options?
-	CreateHomeCacheTTL           int  `mapstructure:"create_home_cache_ttl"`
-	ProviderCacheTTL             int  `mapstructure:"provider_cache_ttl"`
-	StatCacheTTL                 int  `mapstructure:"stat_cache_ttl"`
-	UseCommonSpaceRootShareLogic bool `mapstructure:"use_common_space_root_share_logic"`
+	ShareFolder                  string                            `mapstructure:"share_folder"`
+	DataTransfersFolder          string                            `mapstructure:"data_transfers_folder"`
+	TokenManagers                map[string]map[string]interface{} `mapstructure:"token_managers"`
+	AllowedUserAgents            map[string][]string               `mapstructure:"allowed_user_agents"` // map[path][]user-agent
+	CacheStore                   string                            `mapstructure:"cache_store"`
+	CacheNodes                   []string                          `mapstructure:"cache_nodes"`
+	CacheDatabase                string                            `mapstructure:"cache_database"`
+	CreateHomeCacheTTL           int                               `mapstructure:"create_home_cache_ttl"`
+	ProviderCacheTTL             int                               `mapstructure:"provider_cache_ttl"`
+	StatCacheTTL                 int                               `mapstructure:"stat_cache_ttl"`
+	UseCommonSpaceRootShareLogic bool                              `mapstructure:"use_common_space_root_share_logic"`
 }
 
 // sets defaults
@@ -120,16 +120,23 @@ func (c *config) init() {
 		c.TransferExpires = 100 * 60 // seconds
 	}
 
+	// caching needs to be explicitly enabled
 	if c.CacheStore == "" {
 		c.CacheStore = "noop"
+	}
+
+	if c.CacheDatabase == "" {
+		c.CacheDatabase = "reva"
 	}
 }
 
 type svc struct {
-	c              *config
-	dataGatewayURL url.URL
-	tokenmgr       token.Manager
-	caches         cache.Caches
+	c               *config
+	dataGatewayURL  url.URL
+	tokenmgr        token.Manager
+	statCache       cache.StatCache
+	providerCache   cache.ProviderCache
+	createHomeCache cache.CreateHomeCache
 }
 
 // New creates a new gateway svc that acts as a proxy for any grpc operation.
@@ -155,15 +162,12 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 	}
 
 	s := &svc{
-		c:              c,
-		dataGatewayURL: *u,
-		tokenmgr:       tokenManager,
-		caches: cache.NewCaches(
-			c.CacheStore, c.CacheNodes,
-			time.Duration(c.StatCacheTTL)*time.Second,
-			time.Duration(c.ProviderCacheTTL)*time.Second,
-			time.Duration(c.CreateHomeCacheTTL)*time.Second,
-		),
+		c:               c,
+		dataGatewayURL:  *u,
+		tokenmgr:        tokenManager,
+		statCache:       cache.GetStatCache(c.CacheStore, c.CacheNodes, c.CacheDatabase, "stat", time.Duration(c.StatCacheTTL)),
+		providerCache:   cache.GetProviderCache(c.CacheStore, c.CacheNodes, c.CacheDatabase, "provider", time.Duration(c.ProviderCacheTTL)),
+		createHomeCache: cache.GetCreateHomeCache(c.CacheStore, c.CacheNodes, c.CacheDatabase, "createHome", time.Duration(c.CreateHomeCacheTTL)),
 	}
 
 	return s, nil
@@ -174,7 +178,9 @@ func (s *svc) Register(ss *grpc.Server) {
 }
 
 func (s *svc) Close() error {
-	s.caches.Close()
+	s.statCache.Close()
+	s.providerCache.Close()
+	s.createHomeCache.Close()
 	return nil
 }
 
