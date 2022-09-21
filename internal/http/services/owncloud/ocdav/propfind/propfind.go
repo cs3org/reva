@@ -1010,7 +1010,7 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 		}
 
 		if md.Name != "" {
-			appendToOK(prop.Raw("oc:name", md.Name))
+			appendToOK(prop.Escaped("oc:name", md.Name))
 		}
 
 		if md.Etag != "" {
@@ -1343,7 +1343,7 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 						}
 					}
 				case "name":
-					appendToOK(prop.Raw("oc:name", md.Name))
+					appendToOK(prop.Escaped("oc:name", md.Name))
 				case "shareid":
 					if ref, err := storagespace.ParseReference(strings.TrimPrefix(md.Path, "/")); err == nil && ref.GetResourceId().GetSpaceId() == utils.ShareStorageSpaceID {
 						appendToOK(prop.Raw("oc:shareid", ref.GetResourceId().GetOpaqueId()))
