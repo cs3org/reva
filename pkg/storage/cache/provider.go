@@ -28,9 +28,10 @@ import (
 
 // ProviderCache can invalidate all provider related cache entries
 type providerCache struct {
-	CacheStore
+	cacheStore
 }
 
+// NewProviderCache creates a new ProviderCache
 func NewProviderCache(store string, nodes []string, database, table string, ttl time.Duration) ProviderCache {
 	c := &providerCache{}
 	c.s = getStore(store, nodes, database, table, ttl)

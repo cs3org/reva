@@ -26,6 +26,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 )
 
+// NewStatCache creates a new StatCache
 func NewStatCache(store string, nodes []string, database, table string, ttl time.Duration) StatCache {
 	c := statCache{}
 	c.s = getStore(store, nodes, database, table, ttl)
@@ -36,7 +37,7 @@ func NewStatCache(store string, nodes []string, database, table string, ttl time
 }
 
 type statCache struct {
-	CacheStore
+	cacheStore
 }
 
 // RemoveStat removes a reference from the stat cache

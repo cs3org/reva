@@ -28,9 +28,10 @@ import (
 
 // CreateHomeCache can invalidate all create home related cache entries
 type createHomeCache struct {
-	CacheStore
+	cacheStore
 }
 
+// NewCreateHomeCache creates a new CreateHomeCache
 func NewCreateHomeCache(store string, nodes []string, database, table string, ttl time.Duration) CreateHomeCache {
 	c := &createHomeCache{}
 	c.s = getStore(store, nodes, database, table, ttl)

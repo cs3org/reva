@@ -42,6 +42,7 @@ var (
 	mutex            sync.Mutex
 )
 
+// Cache handles key value operations on caches
 type Cache interface {
 	PullFromCache(key string, dest interface{}) error
 	PushToCache(key string, src interface{}) error
@@ -49,24 +50,30 @@ type Cache interface {
 	Delete(key string, opts ...microstore.DeleteOption) error
 	Close() error
 }
+
+// StatCache handles removing keys from a stat cache
 type StatCache interface {
 	Cache
 	RemoveStat(userID *userpb.UserId, res *provider.ResourceId)
 	GetKey(userID *userpb.UserId, ref *provider.Reference, metaDataKeys, fieldMaskPaths []string) string
 }
+
+// ProviderCache handles removing keys from a storage provider cache
 type ProviderCache interface {
 	Cache
 	RemoveListStorageProviders(res *provider.ResourceId)
-
 	GetKey(userID *userpb.UserId, spaceID string) string
 }
 
+// CreateHomeCache handles removing keys from a create home cache
 type CreateHomeCache interface {
 	Cache
 	RemoveCreateHome(res *provider.ResourceId)
 	GetKey(userID *userpb.UserId) string
 }
 
+// GetStatCache will return an existing StatCache for the given store, nodes, database and table
+// If it does not exist yet it will be created, different TTLs are ignored
 func GetStatCache(cacheStore string, cacheNodes []string, database, table string, TTL time.Duration) StatCache {
 	mutex.Lock()
 	defer mutex.Unlock()
@@ -78,6 +85,8 @@ func GetStatCache(cacheStore string, cacheNodes []string, database, table string
 	return statCaches[key]
 }
 
+// GetProviderCache will return an existing ProviderCache for the given store, nodes, database and table
+// If it does not exist yet it will be created, different TTLs are ignored
 func GetProviderCache(cacheStore string, cacheNodes []string, database, table string, TTL time.Duration) ProviderCache {
 	mutex.Lock()
 	defer mutex.Unlock()
@@ -89,6 +98,8 @@ func GetProviderCache(cacheStore string, cacheNodes []string, database, table st
 	return providerCaches[key]
 }
 
+// GetCreateHomeCache will return an existing CreateHomeCache for the given store, nodes, database and table
+// If it does not exist yet it will be created, different TTLs are ignored
 func GetCreateHomeCache(cacheStore string, cacheNodes []string, database, table string, TTL time.Duration) CreateHomeCache {
 	mutex.Lock()
 	defer mutex.Unlock()
@@ -101,7 +112,7 @@ func GetCreateHomeCache(cacheStore string, cacheNodes []string, database, table 
 }
 
 // CacheStore holds cache store specific configuration
-type CacheStore struct {
+type cacheStore struct {
 	s               microstore.Store
 	database, table string
 	ttl             time.Duration
@@ -109,7 +120,7 @@ type CacheStore struct {
 
 // NewCache initializes a new CacheStore
 func NewCache(store string, nodes []string, database, table string, ttl time.Duration) Cache {
-	return CacheStore{
+	return cacheStore{
 		s:        getStore(store, nodes, database, table, ttl), // some stores use a default ttl so we pass it when initializing
 		database: database,
 		table:    table,
@@ -156,7 +167,8 @@ func getStore(store string, nodes []string, database, table string, ttl time.Dur
 	}
 }
 
-func (cache CacheStore) PullFromCache(key string, dest interface{}) error {
+// PullFromCache pulls a value from the configured database and table of the underlying store using the given key
+func (cache cacheStore) PullFromCache(key string, dest interface{}) error {
 	r, err := cache.s.Read(key, microstore.ReadFrom(cache.database, cache.table), microstore.ReadLimit(1))
 	if err != nil {
 		return err
@@ -167,7 +179,8 @@ func (cache CacheStore) PullFromCache(key string, dest interface{}) error {
 	return json.Unmarshal(r[0].Value, dest)
 }
 
-func (cache CacheStore) PushToCache(key string, src interface{}) error {
+// PushToCache pushes a key and value to the configured database and table of the underlying store
+func (cache cacheStore) PushToCache(key string, src interface{}) error {
 	b, err := json.Marshal(src)
 	if err != nil {
 		return err
@@ -179,7 +192,8 @@ func (cache CacheStore) PushToCache(key string, src interface{}) error {
 	)
 }
 
-func (cache CacheStore) List(opts ...microstore.ListOption) ([]string, error) {
+// List lists the keys on the configured database and table of the underlying store
+func (cache cacheStore) List(opts ...microstore.ListOption) ([]string, error) {
 	o := []microstore.ListOption{
 		microstore.ListFrom(cache.database, cache.table),
 	}
@@ -187,7 +201,8 @@ func (cache CacheStore) List(opts ...microstore.ListOption) ([]string, error) {
 	return cache.s.List(o...)
 }
 
-func (cache CacheStore) Delete(key string, opts ...microstore.DeleteOption) error {
+// Delete deletes the given key on the configured database and table of the underlying store
+func (cache cacheStore) Delete(key string, opts ...microstore.DeleteOption) error {
 	o := []microstore.DeleteOption{
 		microstore.DeleteFrom(cache.database, cache.table),
 	}
@@ -195,6 +210,7 @@ func (cache CacheStore) Delete(key string, opts ...microstore.DeleteOption) erro
 	return cache.s.Delete(key, o...)
 }
 
-func (cache CacheStore) Close() error {
+// Close closes the underlying store
+func (cache cacheStore) Close() error {
 	return cache.s.Close()
 }
