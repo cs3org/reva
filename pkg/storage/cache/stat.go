@@ -29,6 +29,8 @@ import (
 func NewStatCache(store string, nodes []string, database, table string, ttl time.Duration) StatCache {
 	c := statCache{}
 	c.s = getStore(store, nodes, database, table, ttl)
+	c.database = database
+	c.table = table
 	c.ttl = ttl
 	return &c
 }
@@ -47,24 +49,24 @@ func (c statCache) RemoveStat(userID *userpb.UserId, res *provider.ResourceId) {
 		oid = "oid:" + res.OpaqueId
 	}
 
-	keys, err := c.s.List()
+	keys, err := c.List()
 	if err != nil {
 		// FIXME handle error
 		return
 	}
 	for _, key := range keys {
 		if strings.Contains(key, uid) {
-			_ = c.s.Delete(key)
+			_ = c.Delete(key)
 			continue
 		}
 
 		if sid != "" && strings.Contains(key, sid) {
-			_ = c.s.Delete(key)
+			_ = c.Delete(key)
 			continue
 		}
 
 		if oid != "" && strings.Contains(key, oid) {
-			_ = c.s.Delete(key)
+			_ = c.Delete(key)
 			continue
 		}
 	}

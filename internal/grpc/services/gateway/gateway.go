@@ -165,9 +165,9 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 		c:               c,
 		dataGatewayURL:  *u,
 		tokenmgr:        tokenManager,
-		statCache:       cache.GetStatCache(c.CacheStore, c.CacheNodes, c.CacheDatabase, "stat", time.Duration(c.StatCacheTTL)),
-		providerCache:   cache.GetProviderCache(c.CacheStore, c.CacheNodes, c.CacheDatabase, "provider", time.Duration(c.ProviderCacheTTL)),
-		createHomeCache: cache.GetCreateHomeCache(c.CacheStore, c.CacheNodes, c.CacheDatabase, "createHome", time.Duration(c.CreateHomeCacheTTL)),
+		statCache:       cache.GetStatCache(c.CacheStore, c.CacheNodes, c.CacheDatabase, "stat", time.Duration(c.StatCacheTTL)*time.Second),
+		providerCache:   cache.GetProviderCache(c.CacheStore, c.CacheNodes, c.CacheDatabase, "provider", time.Duration(c.ProviderCacheTTL)*time.Second),
+		createHomeCache: cache.GetCreateHomeCache(c.CacheStore, c.CacheNodes, c.CacheDatabase, "createHome", time.Duration(c.CreateHomeCacheTTL)*time.Second),
 	}
 
 	return s, nil

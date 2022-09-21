@@ -74,10 +74,6 @@ func New(m map[string]interface{}, publisher events.Publisher) (datatx.DataTX, e
 	if err != nil {
 		return nil, err
 	}
-
-	// FIXME we don't want to initialize the in memory store twice
-	// and we don't want to pass all TTLs since we only want to invalidate the cache
-
 	return &manager{
 		conf:      c,
 		publisher: publisher,

@@ -33,8 +33,10 @@ type createHomeCache struct {
 
 func NewCreateHomeCache(store string, nodes []string, database, table string, ttl time.Duration) CreateHomeCache {
 	c := &createHomeCache{}
-	c.ttl = ttl
 	c.s = getStore(store, nodes, database, table, ttl)
+	c.database = database
+	c.table = table
+	c.ttl = ttl
 
 	return c
 }
@@ -46,7 +48,7 @@ func (c createHomeCache) RemoveCreateHome(res *provider.ResourceId) {
 	}
 	sid := res.SpaceId
 
-	keys, err := c.s.List()
+	keys, err := c.List()
 	if err != nil {
 		// FIXME log error
 		return
@@ -54,7 +56,7 @@ func (c createHomeCache) RemoveCreateHome(res *provider.ResourceId) {
 	// FIXME add context option to List, Read and Write to upstream
 	for _, key := range keys {
 		if strings.Contains(key, sid) {
-			_ = c.s.Delete(key)
+			_ = c.Delete(key)
 			continue
 		}
 	}

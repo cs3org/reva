@@ -102,15 +102,18 @@ func GetCreateHomeCache(cacheStore string, cacheNodes []string, database, table 
 
 // CacheStore holds cache store specific configuration
 type CacheStore struct {
-	s   microstore.Store
-	ttl time.Duration
+	s               microstore.Store
+	database, table string
+	ttl             time.Duration
 }
 
 // NewCache initializes a new CacheStore
 func NewCache(store string, nodes []string, database, table string, ttl time.Duration) Cache {
 	return CacheStore{
-		s:   getStore(store, nodes, database, table, ttl), // some stores use a default ttl so we pass it when initializing
-		ttl: ttl,                                          // some stores use the ttl on every write, so we remember it here
+		s:        getStore(store, nodes, database, table, ttl), // some stores use a default ttl so we pass it when initializing
+		database: database,
+		table:    table,
+		ttl:      ttl, // some stores use the ttl on every write, so we remember it here
 	}
 }
 
@@ -154,7 +157,7 @@ func getStore(store string, nodes []string, database, table string, ttl time.Dur
 }
 
 func (cache CacheStore) PullFromCache(key string, dest interface{}) error {
-	r, err := cache.s.Read(key, microstore.ReadLimit(1))
+	r, err := cache.s.Read(key, microstore.ReadFrom(cache.database, cache.table), microstore.ReadLimit(1))
 	if err != nil {
 		return err
 	}
@@ -171,16 +174,25 @@ func (cache CacheStore) PushToCache(key string, src interface{}) error {
 	}
 	return cache.s.Write(
 		&microstore.Record{Key: key, Value: b},
+		microstore.WriteTo(cache.database, cache.table),
 		microstore.WriteTTL(cache.ttl),
 	)
 }
 
 func (cache CacheStore) List(opts ...microstore.ListOption) ([]string, error) {
-	return cache.s.List(opts...)
+	o := []microstore.ListOption{
+		microstore.ListFrom(cache.database, cache.table),
+	}
+	o = append(o, opts...)
+	return cache.s.List(o...)
 }
 
 func (cache CacheStore) Delete(key string, opts ...microstore.DeleteOption) error {
-	return cache.s.Delete(key, opts...)
+	o := []microstore.DeleteOption{
+		microstore.DeleteFrom(cache.database, cache.table),
+	}
+	o = append(o, opts...)
+	return cache.s.Delete(key, o...)
 }
 
 func (cache CacheStore) Close() error {
