@@ -233,6 +233,14 @@ var _ = Describe("Propfind", func() {
 				Path: "./dir",
 				Size: uint64(30),
 			})
+		mockStat(&sprovider.Reference{ResourceId: &sprovider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "root"}, Path: "./dir&dir"},
+			&sprovider.ResourceInfo{
+				Id:   &sprovider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "dir"},
+				Type: sprovider.ResourceType_RESOURCE_TYPE_CONTAINER,
+				Path: "./dir&dir",
+				Name: "dir&dir",
+				Size: uint64(30),
+			})
 		mockStat(&sprovider.Reference{ResourceId: &sprovider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "dir"}, Path: "."},
 			&sprovider.ResourceInfo{
 				Id:   &sprovider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "dir"},
@@ -241,6 +249,15 @@ var _ = Describe("Propfind", func() {
 				Size: uint64(30),
 			})
 		mockListContainer(&sprovider.Reference{ResourceId: &sprovider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "root"}, Path: "./dir"},
+			[]*sprovider.ResourceInfo{
+				{
+					Id:   &sprovider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "direntry"},
+					Type: sprovider.ResourceType_RESOURCE_TYPE_FILE,
+					Path: "entry",
+					Size: 30,
+				},
+			})
+		mockListContainer(&sprovider.Reference{ResourceId: &sprovider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "root"}, Path: "./dir&dir"},
 			[]*sprovider.ResourceInfo{
 				{
 					Id:   &sprovider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "direntry"},
@@ -790,6 +807,23 @@ var _ = Describe("Propfind", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(len(res.Responses)).To(Equal(2))
 			Expect(string(res.Responses[0].Propstat[0].Prop[0].InnerXML)).To(ContainSubstring("<oc:size>30</oc:size>"))
+			Expect(string(res.Responses[1].Propstat[0].Prop[0].InnerXML)).To(ContainSubstring("<d:getcontentlength>30</d:getcontentlength>"))
+		})
+
+		It("stats a directory with xml special characters", func() {
+			rr := httptest.NewRecorder()
+			req, err := http.NewRequest("GET", "/dir&dir", strings.NewReader(""))
+			Expect(err).ToNot(HaveOccurred())
+			req = req.WithContext(ctx)
+
+			spaceID := storagespace.FormatResourceID(sprovider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "root"})
+			handler.HandleSpacesPropfind(rr, req, spaceID)
+			Expect(rr.Code).To(Equal(http.StatusMultiStatus))
+
+			res, _, err := readResponse(rr.Result().Body)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(len(res.Responses)).To(Equal(2))
+			Expect(string(res.Responses[0].Propstat[0].Prop[0].InnerXML)).To(ContainSubstring("<oc:name>dir&amp;dir</oc:name>"))
 			Expect(string(res.Responses[1].Propstat[0].Prop[0].InnerXML)).To(ContainSubstring("<d:getcontentlength>30</d:getcontentlength>"))
 		})
 
