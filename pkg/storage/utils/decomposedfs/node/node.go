@@ -76,7 +76,7 @@ type Node struct {
 	ParentID  string
 	ID        string
 	Name      string
-	Blobsize  int64
+	Blobsize  uint64
 	BlobID    string
 	owner     *userpb.UserId
 	Exists    bool
@@ -94,7 +94,7 @@ type PathLookup interface {
 }
 
 // New returns a new instance of Node
-func New(spaceID, id, parentID, name string, blobsize int64, blobID string, owner *userpb.UserId, lu PathLookup) *Node {
+func New(spaceID, id, parentID, name string, blobsize uint64, blobID string, owner *userpb.UserId, lu PathLookup) *Node {
 	if blobID == "" {
 		blobID = uuid.New().String()
 	}
@@ -244,7 +244,7 @@ func (n *Node) WriteAllNodeMetadata() (err error) {
 	attribs[xattrs.ParentidAttr] = n.ParentID
 	attribs[xattrs.NameAttr] = n.Name
 	attribs[xattrs.BlobIDAttr] = n.BlobID
-	attribs[xattrs.BlobsizeAttr] = strconv.FormatInt(n.Blobsize, 10)
+	attribs[xattrs.BlobsizeAttr] = strconv.FormatUint(n.Blobsize, 10)
 
 	nodePath := n.InternalPath()
 	return xattrs.SetMultiple(nodePath, attribs)
@@ -1185,12 +1185,12 @@ func (n *Node) ListGrants(ctx context.Context) ([]*provider.Grant, error) {
 }
 
 // GetBlobSize reads the blobsize from the xattrs
-func (n *Node) GetBlobSize() (int64, error) {
+func (n *Node) GetBlobSize() (uint64, error) {
 	val, err := n.getMetadata(xattrs.BlobsizeAttr)
 	if err != nil {
 		return 0, err
 	}
-	blobSize, err := strconv.ParseInt(val, 10, 64)
+	blobSize, err := strconv.ParseUint(val, 10, 64)
 	if err != nil {
 		return 0, errors.Wrapf(err, "invalid blobsize xattr format")
 	}

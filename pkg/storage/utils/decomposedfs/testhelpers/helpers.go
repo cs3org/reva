@@ -196,7 +196,7 @@ func (t *TestEnv) CreateTestDir(name string, parentRef *providerv1beta1.Referenc
 }
 
 // CreateTestFile creates a new file and its metadata and returns a corresponding Node
-func (t *TestEnv) CreateTestFile(name, blobID, parentID, spaceID string, blobSize int64) (*node.Node, error) {
+func (t *TestEnv) CreateTestFile(name, blobID, parentID, spaceID string, blobSize uint64) (*node.Node, error) {
 	// Create n in dir1
 	n := node.New(
 		spaceID,

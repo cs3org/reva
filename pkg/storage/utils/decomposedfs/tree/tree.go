@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
-	iofs "io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -269,7 +268,7 @@ func (t *Tree) TouchFile(ctx context.Context, n *node.Node) error {
 			return errors.Wrap(err, "Decomposedfs: could not remove symlink child entry")
 		}
 	}
-	if errors.Is(err, iofs.ErrNotExist) || link != "../"+n.ID {
+	if errors.Is(err, fs.ErrNotExist) || link != "../"+n.ID {
 		relativeNodePath := filepath.Join("../../../../../", lookup.Pathify(n.ID, 4, 2))
 		if err = os.Symlink(relativeNodePath, childNameLink); err != nil {
 			return errors.Wrap(err, "Decomposedfs: could not symlink child entry")

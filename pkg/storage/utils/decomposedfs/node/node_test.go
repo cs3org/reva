@@ -86,10 +86,10 @@ var _ = Describe("Node", func() {
 			n, err := env.Lookup.NodeFromResource(env.Ctx, ref)
 			Expect(err).ToNot(HaveOccurred())
 
-			blobsize := 239485734
+			blobsize := uint64(239485734)
 			n.Name = "TestName"
 			n.BlobID = "TestBlobID"
-			n.Blobsize = int64(blobsize)
+			n.Blobsize = blobsize
 
 			err = n.WriteAllNodeMetadata()
 			Expect(err).ToNot(HaveOccurred())
@@ -97,7 +97,7 @@ var _ = Describe("Node", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(n2.Name).To(Equal("TestName"))
 			Expect(n2.BlobID).To(Equal("TestBlobID"))
-			Expect(n2.Blobsize).To(Equal(int64(blobsize)))
+			Expect(n2.Blobsize).To(Equal(blobsize))
 		})
 	})
 

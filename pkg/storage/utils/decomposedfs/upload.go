@@ -29,7 +29,6 @@ import (
 	"hash/adler32"
 	"io"
 	iofs "io/fs"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -358,7 +357,7 @@ func (fs *Decomposedfs) readInfo(id string) (tusd.FileInfo, error) {
 	infoPath := filepath.Join(fs.o.Root, "uploads", id+".info")
 
 	info := tusd.FileInfo{}
-	data, err := ioutil.ReadFile(infoPath)
+	data, err := os.ReadFile(infoPath)
 	if err != nil {
 		if errors.Is(err, iofs.ErrNotExist) {
 			// Interpret os.ErrNotExist as 404 Not Found
@@ -554,7 +553,7 @@ func (upload *fileUpload) writeInfo() error {
 	if err != nil {
 		return err
 	}
-	return ioutil.WriteFile(upload.infoPath, data, defaultFilePerm)
+	return os.WriteFile(upload.infoPath, data, defaultFilePerm)
 }
 
 // FinishUpload finishes an upload and moves the file to the internal destination
@@ -575,7 +574,7 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 		upload.info.Storage["NodeId"],
 		upload.info.Storage["NodeParentId"],
 		upload.info.Storage["NodeName"],
-		fi.Size(),
+		uint64(fi.Size()),
 		"",
 		nil,
 		upload.fs.lu,
@@ -680,7 +679,10 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 		// read all metadata of old version
 		metadata, err = n.GetAllMetadata()
 		if err != nil {
-			// FIXME
+			sublog.Err(err).
+				Str("binPath", upload.binPath).
+				Msg("Decomposedfs: could not read metadata")
+			return
 		}
 
 		// versions are stored alongside the actual file, so a rename can be efficient and does not cross storage / partition boundaries
