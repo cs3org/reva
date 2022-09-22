@@ -97,6 +97,73 @@ func (fs *Decomposedfs) ListRevisions(ctx context.Context, ref *provider.Referen
 
 // DownloadRevision returns a reader for the specified revision
 func (fs *Decomposedfs) DownloadRevision(ctx context.Context, ref *provider.Reference, revisionKey string) (io.ReadCloser, error) {
+	n, err := fs.getRevisionNode(ctx, ref, revisionKey, func(rp *provider.ResourcePermissions) bool {
+		// TODO add explicit permission in the CS3 api?
+		return rp.ListFileVersions && rp.RestoreFileVersion && rp.InitiateFileDownload
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	contentPath := fs.lu.InternalPath(n.SpaceID, revisionKey)
+	r, err := os.Open(contentPath)
+	if err != nil {
+		if errors.Is(err, iofs.ErrNotExist) {
+			return nil, errtypes.NotFound(contentPath)
+		}
+		return nil, errors.Wrap(err, "Decomposedfs: error opening revision "+revisionKey)
+	}
+	return r, nil
+}
+
+// RestoreRevision restores the specified revision of the resource
+func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Reference, revisionKey string) error {
+	n, err := fs.getRevisionNode(ctx, ref, revisionKey, func(rp *provider.ResourcePermissions) bool {
+		return rp.RestoreFileVersion
+	})
+	if err != nil {
+		return err
+	}
+
+	// move current version to new revision
+	nodePath := fs.lu.InternalPath(n.SpaceID, n.ID)
+	fi, err := os.Stat(nodePath)
+	if err != nil {
+		return err
+	}
+
+	// versions are stored alongside the actual file, so a rename can be efficient and does not cross storage / partition boundaries
+	versionsPath := fs.lu.InternalPath(n.SpaceID, n.ID+node.RevisionIDDelimiter+fi.ModTime().UTC().Format(time.RFC3339Nano))
+	if err := os.Rename(nodePath, versionsPath); err != nil {
+		return err
+	}
+
+	// copy old revision to current location
+	revisionPath := fs.lu.InternalPath(n.SpaceID, revisionKey)
+	if err := os.Rename(revisionPath, nodePath); err != nil {
+		return err
+	}
+
+	return fs.tp.Propagate(ctx, n)
+}
+
+// DeleteRevision deletes the specified revision of the resource
+func (fs *Decomposedfs) DeleteRevision(ctx context.Context, ref *provider.Reference, revisionKey string) error {
+	n, err := fs.getRevisionNode(ctx, ref, revisionKey, func(rp *provider.ResourcePermissions) bool {
+		return rp.RestoreFileVersion
+	})
+	if err != nil {
+		return err
+	}
+
+	if err := os.RemoveAll(fs.lu.InternalPath(n.SpaceID, revisionKey)); err != nil {
+		return err
+	}
+
+	return fs.tp.DeleteBlob(n)
+}
+
+func (fs *Decomposedfs) getRevisionNode(ctx context.Context, ref *provider.Reference, revisionKey string, permissions func(*provider.ResourcePermissions) bool) (*node.Node, error) {
 	log := appctx.GetLogger(ctx)
 
 	// verify revision key format
@@ -118,10 +185,7 @@ func (fs *Decomposedfs) DownloadRevision(ctx context.Context, ref *provider.Refe
 		return nil, err
 	}
 
-	ok, err := fs.p.HasPermission(ctx, n, func(rp *provider.ResourcePermissions) bool {
-		// TODO add explicit permission in the CS3 api?
-		return rp.ListFileVersions && rp.RestoreFileVersion && rp.InitiateFileDownload
-	})
+	ok, err := fs.p.HasPermission(ctx, n, permissions)
 	switch {
 	case err != nil:
 		return nil, errtypes.InternalError(err.Error())
@@ -129,78 +193,5 @@ func (fs *Decomposedfs) DownloadRevision(ctx context.Context, ref *provider.Refe
 		return nil, errtypes.PermissionDenied(filepath.Join(n.ParentID, n.Name))
 	}
 
-	contentPath := fs.lu.InternalPath(spaceID, revisionKey)
-
-	r, err := os.Open(contentPath)
-	if err != nil {
-		if errors.Is(err, iofs.ErrNotExist) {
-			return nil, errtypes.NotFound(contentPath)
-		}
-		return nil, errors.Wrap(err, "Decomposedfs: error opening revision "+revisionKey)
-	}
-	return r, nil
-}
-
-// RestoreRevision restores the specified revision of the resource
-func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Reference, revisionKey string) (err error) {
-	log := appctx.GetLogger(ctx)
-
-	// verify revision key format
-	kp := strings.SplitN(revisionKey, node.RevisionIDDelimiter, 2)
-	if len(kp) != 2 {
-		log.Error().Str("revisionKey", revisionKey).Msg("malformed revisionKey")
-		return errtypes.NotFound(revisionKey)
-	}
-
-	spaceID := ref.ResourceId.SpaceId
-	// check if the node is available and has not been deleted
-	n, err := node.ReadNode(ctx, fs.lu, spaceID, kp[0], false)
-	if err != nil {
-		return err
-	}
-	if !n.Exists {
-		err = errtypes.NotFound(filepath.Join(n.ParentID, n.Name))
-		return err
-	}
-
-	ok, err := fs.p.HasPermission(ctx, n, func(rp *provider.ResourcePermissions) bool {
-		return rp.RestoreFileVersion
-	})
-	switch {
-	case err != nil:
-		return errtypes.InternalError(err.Error())
-	case !ok:
-		return errtypes.PermissionDenied(filepath.Join(n.ParentID, n.Name))
-	}
-
-	// check lock
-	if err := n.CheckLock(ctx); err != nil {
-		return err
-	}
-
-	// move current version to new revision
-	nodePath := fs.lu.InternalPath(spaceID, kp[0])
-	var fi os.FileInfo
-	if fi, err = os.Stat(nodePath); err == nil {
-		// versions are stored alongside the actual file, so a rename can be efficient and does not cross storage / partition boundaries
-		versionsPath := fs.lu.InternalPath(spaceID, kp[0]+node.RevisionIDDelimiter+fi.ModTime().UTC().Format(time.RFC3339Nano))
-
-		err = os.Rename(nodePath, versionsPath)
-		if err != nil {
-			return
-		}
-
-		// copy old revision to current location
-
-		revisionPath := fs.lu.InternalPath(spaceID, revisionKey)
-
-		if err = os.Rename(revisionPath, nodePath); err != nil {
-			return
-		}
-
-		return fs.tp.Propagate(ctx, n)
-	}
-
-	log.Error().Err(err).Interface("ref", ref).Str("originalnode", kp[0]).Str("revisionKey", revisionKey).Msg("original node does not exist")
-	return
+	return n, nil
 }

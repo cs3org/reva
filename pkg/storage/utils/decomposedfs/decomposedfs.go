@@ -208,6 +208,13 @@ func (fs *Decomposedfs) Postprocessing(ch <-chan interface{}) {
 				failed = true
 			}
 
+			n, err := node.ReadNode(ctx, fs.lu, up.Info.Storage["SpaceRoot"], up.Info.Storage["NodeId"], false)
+			if err != nil {
+				log.Error().Err(err).Str("uploadID", ev.UploadID).Msg("could not read node")
+				continue
+			}
+			up.Node = n
+
 			upload.Cleanup(up, failed, keepUpload)
 
 			if err := events.Publish(
@@ -229,19 +236,106 @@ func (fs *Decomposedfs) Postprocessing(ch <-chan interface{}) {
 				log.Error().Err(err).Str("uploadID", ev.UploadID).Msg("Failed to publish UploadReady event")
 			}
 		case events.VirusscanFinished:
-			if ev.Error != nil {
+			if ev.ErrorMsg != "" {
 				// scan failed somehow
+				// Should we handle this here?
 				continue
 			}
 
-			up, err := upload.Get(ctx, ev.UploadID, fs.lu, fs.tp, fs.o.Root, fs.stream, fs.o.AsyncFileUploads, fs.o.Tokens)
-			if err != nil {
-				log.Error().Err(err).Str("uploadID", ev.UploadID).Msg("Failed to get upload")
-				continue
+			var n *node.Node
+			switch ev.UploadID {
+			case "":
+				// uploadid is empty -> this was an on-demand scan
+				ctx := ctxpkg.ContextSetUser(context.Background(), ev.ExecutingUser)
+				ref := &provider.Reference{ResourceId: ev.ResourceID}
+
+				no, err := fs.lu.NodeFromResource(ctx, ref)
+				if err != nil {
+					log.Error().Err(err).Interface("resourceID", ev.ResourceID).Msg("Failed to get node after scan")
+					continue
+
+				}
+				n = no
+
+				if ev.Outcome == events.PPOutcomeDelete {
+					// antivir wants us to delete the file. We must obey and need to
+
+					// check if there a previous versions existing
+					revs, err := fs.ListRevisions(ctx, ref)
+					if len(revs) == 0 {
+						if err != nil {
+							log.Error().Err(err).Interface("resourceID", ev.ResourceID).Msg("Failed to list revisions. Fallback to delete file")
+						}
+
+						// no versions -> trash file
+						err := fs.Delete(ctx, ref)
+						if err != nil {
+							log.Error().Err(err).Interface("resourceID", ev.ResourceID).Msg("Failed to delete infected resource")
+							continue
+						}
+
+						// now purge it from the recycle bin
+						if err := fs.PurgeRecycleItem(ctx, &provider.Reference{ResourceId: &provider.ResourceId{SpaceId: n.SpaceID, OpaqueId: n.SpaceID}}, n.ID, "/"); err != nil {
+							log.Error().Err(err).Interface("resourceID", ev.ResourceID).Msg("Failed to purge infected resource from trash")
+						}
+						continue
+					}
+
+					// we have versions - find the newest
+					versions := make(map[uint64]string) // remember all versions - we need them later
+					var nv uint64
+					for _, v := range revs {
+						versions[v.Mtime] = v.Key
+						if v.Mtime > nv {
+							nv = v.Mtime
+						}
+					}
+
+					// restore newest version
+					if err := fs.RestoreRevision(ctx, ref, versions[nv]); err != nil {
+						log.Error().Err(err).Interface("resourceID", ev.ResourceID).Str("revision", versions[nv]).Msg("Failed to restore revision")
+						continue
+					}
+
+					// now find infected version
+					revs, err = fs.ListRevisions(ctx, ref)
+					if err != nil {
+						log.Error().Err(err).Interface("resourceID", ev.ResourceID).Msg("Error listing revisions after restore")
+					}
+
+					for _, v := range revs {
+						// we looking for a version that was previously not there
+						if _, ok := versions[v.Mtime]; ok {
+							continue
+						}
+
+						if err := fs.DeleteRevision(ctx, ref, v.Key); err != nil {
+							log.Error().Err(err).Interface("resourceID", ev.ResourceID).Str("revision", v.Key).Msg("Failed to delete revision")
+						}
+					}
+
+					continue
+				}
+
+			default:
+				// uploadid is not empty -> this is an async upload
+				up, err := upload.Get(ctx, ev.UploadID, fs.lu, fs.tp, fs.o.Root, fs.stream, fs.o.AsyncFileUploads, fs.o.Tokens)
+				if err != nil {
+					log.Error().Err(err).Str("uploadID", ev.UploadID).Msg("Failed to get upload")
+					continue
+				}
+
+				no, err := node.ReadNode(up.Ctx, fs.lu, up.Info.Storage["SpaceRoot"], up.Info.Storage["NodeId"], false)
+				if err != nil {
+					log.Error().Err(err).Interface("uploadID", ev.UploadID).Msg("Failed to get node after scan")
+					continue
+				}
+
+				n = no
 			}
 
-			if err := up.Node.SetScanData(ev.Description, ev.Scandate); err != nil {
-				log.Error().Err(err).Str("uploadID", ev.UploadID).Msg("Failed to set scan results")
+			if err := n.SetScanData(ev.Description, ev.Scandate); err != nil {
+				log.Error().Err(err).Str("uploadID", ev.UploadID).Interface("resourceID", ev.ResourceID).Msg("Failed to set scan results")
 				continue
 			}
 		default:

@@ -54,6 +54,7 @@ var (
 type BytesReceived struct {
 	UploadID      string
 	ExecutingUser *user.User
+	ResourceID    *provider.ResourceId
 	Filename      string
 	URL           string
 }
@@ -74,7 +75,8 @@ type VirusscanFinished struct {
 	ExecutingUser *user.User
 	Description   string
 	Scandate      time.Time
-	Error         error
+	ResourceID    *provider.ResourceId
+	ErrorMsg      string // empty when no error
 }
 
 // Unmarshal to fulfill umarshaller interface
@@ -90,6 +92,9 @@ type StartPostprocessingStep struct {
 	URL           string
 	ExecutingUser *user.User
 	Filename      string
+	Token         string               // for file retrieval in after upload case
+	ResourceID    *provider.ResourceId // for file retrieval in after upload case
+	RevaToken     string               // for file retrieval in after upload case
 
 	StepToStart Postprocessingstep
 }

@@ -46,16 +46,17 @@ type tokenStatInfoKey struct{}
 
 // DavHandler routes to the different sub handlers
 type DavHandler struct {
-	AvatarsHandler      *AvatarsHandler
-	FilesHandler        *WebDavHandler
-	FilesHomeHandler    *WebDavHandler
-	MetaHandler         *MetaHandler
-	TrashbinHandler     *TrashbinHandler
-	SpacesHandler       *SpacesHandler
-	PublicFolderHandler *WebDavHandler
-	PublicFileHandler   *PublicFileHandler
-	SharesHandler       *WebDavHandler
-	TagHandler          *TagHandler
+	AvatarsHandler        *AvatarsHandler
+	FilesHandler          *WebDavHandler
+	FilesHomeHandler      *WebDavHandler
+	MetaHandler           *MetaHandler
+	TrashbinHandler       *TrashbinHandler
+	SpacesHandler         *SpacesHandler
+	PublicFolderHandler   *WebDavHandler
+	PublicFileHandler     *PublicFileHandler
+	SharesHandler         *WebDavHandler
+	TagHandler            *TagHandler
+	PostprocessingHandler *PostprocessingHandler
 }
 
 func (h *DavHandler) init(c *Config) error {
@@ -92,6 +93,11 @@ func (h *DavHandler) init(c *Config) error {
 
 	h.PublicFileHandler = new(PublicFileHandler)
 	if err := h.PublicFileHandler.init("public"); err != nil { // jail public file requests to /public/ prefix
+		return err
+	}
+
+	h.PostprocessingHandler = new(PostprocessingHandler)
+	if err := h.PostprocessingHandler.init(c); err != nil {
 		return err
 	}
 
@@ -186,6 +192,11 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 			ctx := context.WithValue(ctx, net.CtxKeyBaseURI, base)
 			r = r.WithContext(ctx)
 			h.TagHandler.Handler(s).ServeHTTP(w, r)
+		case "postprocessing":
+			base := path.Join(ctx.Value(net.CtxKeyBaseURI).(string), "postprocessing")
+			ctx := context.WithValue(ctx, net.CtxKeyBaseURI, base)
+			r = r.WithContext(ctx)
+			h.PostprocessingHandler.Handler(s).ServeHTTP(w, r)
 		case "public-files":
 			base := path.Join(ctx.Value(net.CtxKeyBaseURI).(string), "public-files")
 			ctx = context.WithValue(ctx, net.CtxKeyBaseURI, base)

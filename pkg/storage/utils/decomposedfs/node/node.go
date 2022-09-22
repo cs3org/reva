@@ -803,6 +803,11 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 		Metadata: metadata,
 	}
 
+	// add virusscan information
+	if scanned, _, date := n.ScanData(); scanned {
+		ri.Opaque = utils.AppendPlainToOpaque(ri.Opaque, "scantime", date.Format(time.RFC3339Nano))
+	}
+
 	sublog.Debug().
 		Interface("ri", ri).
 		Msg("AsResourceInfo")
