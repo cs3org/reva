@@ -96,10 +96,9 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 	// let the composable storage tell tus which extensions it supports
 	composable.UseIn(composer)
 
-	publishEvents := m.publisher != nil
 	config := tusd.Config{
 		StoreComposer:         composer,
-		NotifyCompleteUploads: publishEvents,
+		NotifyCompleteUploads: true,
 	}
 
 	handler, err := tusd.NewUnroutedHandler(config)
@@ -107,30 +106,30 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 		return nil, err
 	}
 
-	if publishEvents {
-		go func() {
-			for {
-				ev := <-handler.CompleteUploads
-				info := ev.Upload
-				owner := &userv1beta1.UserId{
-					Idp:      info.Storage["Idp"],
-					OpaqueId: info.Storage["UserId"],
-				}
-				ref := &provider.Reference{
-					ResourceId: &provider.ResourceId{
-						StorageId: info.MetaData["providerID"],
-						SpaceId:   info.Storage["SpaceRoot"],
-						OpaqueId:  info.Storage["SpaceRoot"],
-					},
-					Path: utils.MakeRelativePath(filepath.Join(info.MetaData["dir"], info.MetaData["filename"])),
-				}
-				datatx.InvalidateCache(owner, ref, m.statCache)
+	go func() {
+		for {
+			ev := <-handler.CompleteUploads
+			info := ev.Upload
+			owner := &userv1beta1.UserId{
+				Idp:      info.Storage["Idp"],
+				OpaqueId: info.Storage["UserId"],
+			}
+			ref := &provider.Reference{
+				ResourceId: &provider.ResourceId{
+					StorageId: info.MetaData["providerID"],
+					SpaceId:   info.Storage["SpaceRoot"],
+					OpaqueId:  info.Storage["SpaceRoot"],
+				},
+				Path: utils.MakeRelativePath(filepath.Join(info.MetaData["dir"], info.MetaData["filename"])),
+			}
+			datatx.InvalidateCache(owner, ref, m.statCache)
+			if m.publisher != nil {
 				if err := datatx.EmitFileUploadedEvent(owner, ref, m.publisher); err != nil {
 					appctx.GetLogger(context.Background()).Error().Err(err).Msg("failed to publish FileUploaded event")
 				}
 			}
-		}()
-	}
+		}
+	}()
 
 	h := handler.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		method := r.Method
