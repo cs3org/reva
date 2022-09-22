@@ -249,3 +249,11 @@ func Events(endpoint, cluster string) Option {
 		o.config.EventsCluster = cluster
 	}
 }
+
+// ForceRescan provisions forced rescan configuration
+func ForceRescan(rescanPeriod, pollTimeout string) Option {
+	return func(o *Options) {
+		o.config.ForceRescanDuration = rescanPeriod
+		o.config.StatPollingTimeout = pollTimeout
+	}
+}
