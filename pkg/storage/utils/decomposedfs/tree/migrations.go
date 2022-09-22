@@ -24,6 +24,8 @@ import (
 	"path/filepath"
 
 	"github.com/cs3org/reva/v2/pkg/logger"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs"
 )
 
 /**
@@ -120,4 +122,10 @@ func (t *Tree) migration0002SpaceTypes() error {
 		}
 	}
 	return nil
+}
+
+// isRootNode checks if a node is a space root
+func isRootNode(nodePath string) bool {
+	attr, err := xattrs.Get(nodePath, xattrs.ParentidAttr)
+	return err == nil && attr == node.RootID
 }

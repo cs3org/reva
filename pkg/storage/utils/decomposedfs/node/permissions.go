@@ -214,12 +214,11 @@ func nodeHasPermission(ctx context.Context, cn *Node, groupsMap map[string]bool,
 	}
 
 	userace := xattrs.GrantUserAcePrefix + userid
-	userFound := false
 	for i := range grantees {
 		// we only need the find the user once per node
 		var g *provider.Grant
 		switch {
-		case !userFound && grantees[i] == userace:
+		case grantees[i] == userace:
 			g, err = cn.ReadGrant(ctx, grantees[i])
 		case strings.HasPrefix(grantees[i], xattrs.GrantGroupAcePrefix):
 			gr := strings.TrimPrefix(grantees[i], xattrs.GrantGroupAcePrefix)
@@ -234,17 +233,14 @@ func nodeHasPermission(ctx context.Context, cn *Node, groupsMap map[string]bool,
 			continue
 		}
 
-		switch {
-		case err == nil:
+		if err == nil {
 			appctx.GetLogger(ctx).Debug().Interface("node", cn.ID).Str("grant", grantees[i]).Interface("permissions", g.GetPermissions()).Msg("checking permissions")
 			if check(g.GetPermissions()) {
 				return true
 			}
-		case xattrs.IsAttrUnset(err):
-			appctx.GetLogger(ctx).Error().Interface("node", cn.ID).Str("grant", grantees[i]).Interface("grantees", grantees).Msg("grant vanished from node after listing")
-		default:
-			appctx.GetLogger(ctx).Error().Err(err).Interface("node", cn.ID).Str("grant", grantees[i]).Msg("error reading permissions")
-			return false
+		} else {
+			appctx.GetLogger(ctx).Error().Err(err).Interface("node", cn.ID).Str("grant", grantees[i]).Msg("error reading grant")
+			// we can continue linting grants ...
 		}
 	}
 

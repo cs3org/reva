@@ -214,6 +214,9 @@ func Remove(filePath string, key string) (err error) {
 // the changes are protected with an file lock
 // If the file lock can not be acquired the function returns a
 // lock error.
+// TODO we should split the metadata keys into an xattr prefix "user.oc." and the actual keys
+//
+//	then SetMultiple should use an internal set method which then prefixes the canonical metadata
 func SetMultiple(filePath string, attribs map[string]string) (err error) {
 
 	// h, err := lockedfile.OpenFile(filePath, os.O_WRONLY, 0) // 0? Open File only workn for files ... but we want to lock dirs ... or symlinks

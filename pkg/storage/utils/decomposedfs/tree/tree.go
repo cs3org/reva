@@ -26,7 +26,6 @@ import (
 	iofs "io/fs"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
@@ -224,12 +223,6 @@ func (t *Tree) linkSpaceNode(spaceType, spaceID string) {
 	}
 }
 
-// isRootNode checks if a node is a space root
-func isRootNode(nodePath string) bool {
-	attr, err := xattrs.Get(nodePath, xattrs.ParentidAttr)
-	return err == nil && attr == node.RootID
-}
-
 // GetMD returns the metadata of a node in the tree
 func (t *Tree) GetMD(ctx context.Context, n *node.Node) (os.FileInfo, error) {
 	md, err := os.Stat(n.InternalPath())
@@ -344,7 +337,6 @@ func (t *Tree) Move(ctx context.Context, oldNode *node.Node, newNode *node.Node)
 	// Always target the old node ID for xattr updates.
 	// The new node id is empty if the target does not exist
 	// and we need to overwrite the new one when overwriting an existing path.
-	tgtPath := oldNode.InternalPath()
 
 	// are we just renaming (parent stays the same)?
 	if oldNode.ParentID == newNode.ParentID {
@@ -362,7 +354,7 @@ func (t *Tree) Move(ctx context.Context, oldNode *node.Node, newNode *node.Node)
 		}
 
 		// update name attribute
-		if err := xattrs.Set(tgtPath, xattrs.NameAttr, newNode.Name); err != nil {
+		if err := oldNode.SetName(newNode.Name); err != nil {
 			return errors.Wrap(err, "Decomposedfs: could not set name attribute")
 		}
 
@@ -382,10 +374,10 @@ func (t *Tree) Move(ctx context.Context, oldNode *node.Node, newNode *node.Node)
 	}
 
 	// update target parentid and name
-	if err := xattrs.Set(tgtPath, xattrs.ParentidAttr, newNode.ParentID); err != nil {
+	if err := oldNode.SetParentID(newNode.ParentID); err != nil {
 		return errors.Wrap(err, "Decomposedfs: could not set parentid attribute")
 	}
-	if err := xattrs.Set(tgtPath, xattrs.NameAttr, newNode.Name); err != nil {
+	if err := oldNode.SetName(newNode.Name); err != nil {
 		return errors.Wrap(err, "Decomposedfs: could not set name attribute")
 	}
 
@@ -620,7 +612,7 @@ func (t *Tree) PurgeRecycleItemFunc(ctx context.Context, spaceid, key string, pa
 	}
 
 	fn := func() error {
-		if err := t.removeNode(deletedNodePath, rn); err != nil {
+		if err := t.removeNode(ctx, deletedNodePath, rn); err != nil {
 			return err
 		}
 
@@ -633,7 +625,7 @@ func (t *Tree) PurgeRecycleItemFunc(ctx context.Context, spaceid, key string, pa
 		// delete children
 		for i := len(nodes) - 1; i >= 0; i-- {
 			n := nodes[i]
-			if err := t.removeNode(n.InternalPath(), n); err != nil {
+			if err := t.removeNode(ctx, n.InternalPath(), n); err != nil {
 				return err
 			}
 
@@ -645,17 +637,17 @@ func (t *Tree) PurgeRecycleItemFunc(ctx context.Context, spaceid, key string, pa
 	return rn, fn, nil
 }
 
-func (t *Tree) removeNode(path string, n *node.Node) error {
+func (t *Tree) removeNode(ctx context.Context, path string, n *node.Node) error {
 	// delete the actual node
 	if err := utils.RemoveItem(path); err != nil {
-		log.Error().Err(err).Str("path", path).Msg("error node")
+		appctx.GetLogger(ctx).Error().Err(err).Str("path", path).Msg("error node")
 		return err
 	}
 
 	// delete blob from blobstore
 	if n.BlobID != "" {
 		if err := t.DeleteBlob(n); err != nil {
-			log.Error().Err(err).Str("blobID", n.BlobID).Msg("error deleting nodes blob")
+			appctx.GetLogger(ctx).Error().Err(err).Str("blobID", n.BlobID).Msg("error deleting nodes blob")
 			return err
 		}
 	}
@@ -663,24 +655,25 @@ func (t *Tree) removeNode(path string, n *node.Node) error {
 	// delete revisions
 	revs, err := filepath.Glob(n.InternalPath() + node.RevisionIDDelimiter + "*")
 	if err != nil {
-		log.Error().Err(err).Str("path", n.InternalPath()+node.RevisionIDDelimiter+"*").Msg("glob failed badly")
+		appctx.GetLogger(ctx).Error().Err(err).Str("path", n.InternalPath()+node.RevisionIDDelimiter+"*").Msg("glob failed badly")
 		return err
 	}
 	for _, rev := range revs {
-		bID, err := node.ReadBlobIDAttr(rev)
+		revisionNode := node.New(n.SpaceID, filepath.Base(rev), n.ParentID, n.Name, 0, "", n.Owner(), t.lookup)
+		bID, err := revisionNode.GetBlobID()
 		if err != nil {
-			log.Error().Err(err).Str("revision", rev).Msg("error reading blobid attribute")
+			appctx.GetLogger(ctx).Error().Err(err).Str("revision", rev).Msg("error reading blobid attribute")
 			return err
 		}
 
 		if err := utils.RemoveItem(rev); err != nil {
-			log.Error().Err(err).Str("revision", rev).Msg("error removing revision node")
+			appctx.GetLogger(ctx).Error().Err(err).Str("revision", rev).Msg("error removing revision node")
 			return err
 		}
 
 		if bID != "" {
 			if err := t.DeleteBlob(&node.Node{SpaceID: n.SpaceID, BlobID: bID}); err != nil {
-				log.Error().Err(err).Str("revision", rev).Str("blobID", bID).Msg("error removing revision node blob")
+				appctx.GetLogger(ctx).Error().Err(err).Str("revision", rev).Str("blobID", bID).Msg("error removing revision node blob")
 				return err
 			}
 		}
@@ -717,7 +710,7 @@ func (t *Tree) Propagate(ctx context.Context, n *node.Node) (err error) {
 
 		// TODO none, sync and async?
 		if !n.HasPropagation() {
-			sublog.Debug().Str("attr", xattrs.PropagationAttr).Msg("propagation attribute not set or unreadable, not propagating")
+			sublog.Debug().Msg("propagation attribute not set or unreadable, not propagating")
 			// if the attribute is not set treat it as false / none / no propagation
 			return nil
 		}
@@ -768,7 +761,7 @@ func (t *Tree) Propagate(ctx context.Context, n *node.Node) (err error) {
 			updateTreeSize := false
 
 			var treeSize, calculatedTreeSize uint64
-			calculatedTreeSize, err = calculateTreeSize(ctx, n.InternalPath())
+			calculatedTreeSize, err = calculateTreeSize(ctx, n)
 			if err != nil {
 				continue
 			}
@@ -809,9 +802,10 @@ func (t *Tree) Propagate(ctx context.Context, n *node.Node) (err error) {
 	return
 }
 
-func calculateTreeSize(ctx context.Context, nodePath string) (uint64, error) {
+func calculateTreeSize(ctx context.Context, n *node.Node) (uint64, error) {
 	var size uint64
 
+	nodePath := n.InternalPath()
 	f, err := os.Open(nodePath)
 	if err != nil {
 		appctx.GetLogger(ctx).Error().Err(err).Str("nodepath", nodePath).Msg("could not open dir")
@@ -825,28 +819,20 @@ func calculateTreeSize(ctx context.Context, nodePath string) (uint64, error) {
 		return 0, err
 	}
 	for i := range names {
-		cPath := filepath.Join(nodePath, names[i])
-		info, err := os.Stat(cPath)
+		cNode, err := n.Child(ctx, names[i])
 		if err != nil {
-			appctx.GetLogger(ctx).Error().Err(err).Str("childpath", cPath).Msg("could not stat child entry")
 			continue // continue after an error
 		}
-		if !info.IsDir() {
-			blobSize, err := node.ReadBlobSizeAttr(cPath)
+
+		if !cNode.IsDir() {
+			blobSize, err := cNode.GetBlobSize()
 			if err != nil {
-				appctx.GetLogger(ctx).Error().Err(err).Str("childpath", cPath).Msg("could not read blobSize xattr")
 				continue // continue after an error
 			}
 			size += uint64(blobSize)
 		} else {
 			// read from attr
-			var b string
-			// xattrs.Get will follow the symlink
-			if b, err = xattrs.Get(cPath, xattrs.TreesizeAttr); err != nil {
-				// TODO recursively descend and recalculate treesize
-				continue // continue after an error
-			}
-			csize, err := strconv.ParseUint(b, 10, 64)
+			csize, err := cNode.GetTreeSize()
 			if err != nil {
 				// TODO recursively descend and recalculate treesize
 				continue // continue after an error

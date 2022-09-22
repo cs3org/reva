@@ -22,15 +22,12 @@ import (
 	"context"
 	"os"
 	"path/filepath"
-	"strings"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/ace"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs"
 	"github.com/cs3org/reva/v2/pkg/utils"
 )
 
@@ -104,21 +101,15 @@ func (fs *Decomposedfs) ListGrants(ctx context.Context, ref *provider.Reference)
 	}
 
 	log := appctx.GetLogger(ctx)
-	np := node.InternalPath()
-	var attrs []string
-	if attrs, err = xattrs.List(np); err != nil {
-		log.Error().Err(err).Msg("error listing attributes")
+	allGrants, err := node.ListGrants(ctx)
+	if err != nil {
+		log.Error().Err(err).Msg("error listing all grants")
 		return nil, err
 	}
 
-	log.Debug().Interface("attrs", attrs).Msg("read attributes")
-
-	aces := extractACEsFromAttrs(ctx, np, attrs)
-
 	uid := ctxpkg.ContextMustGetUser(ctx).GetId()
-	grants = make([]*provider.Grant, 0, len(aces))
-	for i := range aces {
-		g := aces[i].Grant()
+	grants = make([]*provider.Grant, 0, len(grants))
+	for _, g := range allGrants {
 
 		// you may list your own grants even without listgrants permission
 		if !listGrants && !utils.UserEqual(g.Creator, uid) && !utils.UserEqual(g.Grantee.GetUserId(), uid) {
@@ -160,19 +151,11 @@ func (fs *Decomposedfs) RemoveGrant(ctx context.Context, ref *provider.Reference
 		return err
 	}
 
-	spaceGrant := ctx.Value(utils.SpaceGrant)
-
-	var attr string
-	if g.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_GROUP {
-		attr = xattrs.GrantGroupAcePrefix + g.Grantee.GetGroupId().OpaqueId
-	} else {
-		attr = xattrs.GrantUserAcePrefix + g.Grantee.GetUserId().OpaqueId
-	}
-
-	if err = xattrs.Remove(node.InternalPath(), attr); err != nil {
+	if err := node.RemoveGrant(ctx, g); err != nil {
 		return err
 	}
 
+	spaceGrant := ctx.Value(utils.SpaceGrant)
 	if spaceGrant != nil {
 		// remove from user index
 		// TODO we need an index for groups
@@ -277,28 +260,4 @@ func (fs *Decomposedfs) storeGrant(ctx context.Context, n *node.Node, g *provide
 	}
 
 	return fs.tp.Propagate(ctx, n)
-}
-
-// extractACEsFromAttrs reads ACEs in the list of attrs from the node
-func extractACEsFromAttrs(ctx context.Context, fsfn string, attrs []string) (entries []*ace.ACE) {
-	log := appctx.GetLogger(ctx)
-	entries = []*ace.ACE{}
-	for i := range attrs {
-		if strings.HasPrefix(attrs[i], xattrs.GrantPrefix) {
-			var value string
-			var err error
-			if value, err = xattrs.Get(fsfn, attrs[i]); err != nil {
-				log.Error().Err(err).Str("attr", attrs[i]).Msg("could not read attribute")
-				continue
-			}
-			var e *ace.ACE
-			principal := attrs[i][len(xattrs.GrantPrefix):]
-			if e, err = ace.Unmarshal(principal, []byte(value)); err != nil {
-				log.Error().Err(err).Str("principal", principal).Str("attr", attrs[i]).Msg("could not unmarshal ace")
-				continue
-			}
-			entries = append(entries, e)
-		}
-	}
-	return
 }

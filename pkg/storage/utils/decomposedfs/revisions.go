@@ -78,9 +78,12 @@ func (fs *Decomposedfs) ListRevisions(ctx context.Context, ref *provider.Referen
 					Key:   n.ID + node.RevisionIDDelimiter + parts[1],
 					Mtime: uint64(mtime.Unix()),
 				}
-				blobSize, err := node.ReadBlobSizeAttr(items[i])
+				// TODO add revision property to node
+				// TODO add trash property to node with time and key
+				revisionNode := node.New(n.SpaceID, rev.Key, n.ParentID, n.Name, 0, "", n.Owner(), fs.lu)
+				blobSize, err := revisionNode.GetBlobSize()
 				if err != nil {
-					return nil, errors.Wrapf(err, "error reading blobsize xattr")
+					return nil, errors.Wrapf(err, "error reading blobsize")
 				}
 				rev.Size = uint64(blobSize)
 				etag, err := node.CalculateEtag(np, mtime)

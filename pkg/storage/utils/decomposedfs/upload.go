@@ -49,7 +49,6 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/chunking"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/lookup"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
@@ -663,7 +662,7 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 	// defer writing the checksums until the node is in place
 
 	// if target exists create new version
-	versionsPath := ""
+	var metadata map[string]string
 	if fi, err = os.Stat(targetPath); err == nil {
 		// When the if-match header was set we need to check if the
 		// etag still matches before finishing the upload.
@@ -678,11 +677,16 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 			}
 		}
 
-		// FIXME move versioning to blobs ... no need to copy all the metadata! well ... it does if we want to version metadata...
-		// versions are stored alongside the actual file, so a rename can be efficient and does not cross storage / partition boundaries
-		versionsPath = upload.fs.lu.InternalPath(spaceID, n.ID+node.RevisionIDDelimiter+fi.ModTime().UTC().Format(time.RFC3339Nano))
+		// read all metadata of old version
+		metadata, err = n.GetAllMetadata()
+		if err != nil {
+			// FIXME
+		}
 
-		// This move drops all metadata!!! We copy it below with CopyMetadata
+		// versions are stored alongside the actual file, so a rename can be efficient and does not cross storage / partition boundaries
+		versionsPath := upload.fs.lu.InternalPath(spaceID, n.ID+node.RevisionIDDelimiter+fi.ModTime().UTC().Format(time.RFC3339Nano))
+
+		// This move drops all metadata!!! We write it back below
 		// FIXME the node must remain the same. otherwise we might restore share metadata
 		if err = os.Rename(targetPath, versionsPath); err != nil {
 			sublog.Err(err).
@@ -720,23 +724,24 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 		sublog.Error().Err(err).Msg("Decomposedfs: could not rename")
 		return
 	}
-	if versionsPath != "" {
-		// copy grant and arbitrary metadata
+
+	// first write back metadata
+	if metadata != nil {
 		// FIXME ... now restoring an older revision might bring back a grant that was removed!
-		err = xattrs.CopyMetadata(versionsPath, targetPath, func(attributeName string) bool {
-			return true
-			// TODO determine all attributes that must be copied, currently we just copy all and overwrite changed properties
-			/*
-				return strings.HasPrefix(attributeName, xattrs.GrantPrefix) || // for grants
-					strings.HasPrefix(attributeName, xattrs.MetadataPrefix) || // for arbitrary metadata
-					strings.HasPrefix(attributeName, xattrs.FavPrefix) || // for favorites
-					strings.HasPrefix(attributeName, xattrs.SpaceNameAttr) || // for a shared file
-			*/
-		})
+		// TODO determine all attributes that must be copied, currently we just copy all and overwrite changed properties
+		/*
+			return strings.HasPrefix(attributeName, xattrs.GrantPrefix) || // for grants
+			strings.HasPrefix(attributeName, xattrs.MetadataPrefix) || // for arbitrary metadata
+				strings.HasPrefix(attributeName, xattrs.FavPrefix) || // for favorites
+				strings.HasPrefix(attributeName, xattrs.SpaceNameAttr) || // for a shared file
+		*/
+		err := n.SetMultiple(metadata)
 		if err != nil {
-			sublog.Info().Err(err).Msg("Decomposedfs: failed to copy xattrs")
+			sublog.Info().Err(err).Msg("Decomposedfs: failed to write back metadata")
 		}
 	}
+
+	// TODO instead of writing these individually, update the metadata array before writing it all back. Then we only lock the file once
 
 	// now try write all checksums
 	tryWritingChecksum(&sublog, n, "sha1", sha1h)

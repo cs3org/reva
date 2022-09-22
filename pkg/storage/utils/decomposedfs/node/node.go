@@ -127,9 +127,13 @@ func (n *Node) ChangeOwner(new *userpb.UserId) (err error) {
 }
 
 // SetArbitraryMetadata populates a given key with its value.
-// Note that consumers should be aware of the metadata options on xattrs.go.
 func (n *Node) SetArbitraryMetadata(key string, val string) error {
 	return n.setMetadata(xattrs.MetadataPrefix+key, val)
+}
+
+// UnsetArbitraryMetadata removes a given key.
+func (n *Node) UnsetArbitraryMetadata(key string) error {
+	return n.unsetMetadata(xattrs.MetadataPrefix + key)
 }
 
 // EnablePropagation enables recursive size and change time propagation
@@ -163,7 +167,7 @@ func (n *Node) GetTrashOrigin() (string, error) {
 
 // RemoveTrashOrigin unsets the original path to use for restoring
 func (n *Node) RemoveTrashOrigin() error {
-	return n.removeMetadata(xattrs.TrashOriginAttr)
+	return n.unsetMetadata(xattrs.TrashOriginAttr)
 }
 
 // SetName sets the name of a node
@@ -199,8 +203,8 @@ func (n *Node) SetGrant(g *provider.Grant) error {
 	return n.setMetadata(xattrs.GrantPrefix+principal, string(value))
 }
 
-// removeMetadata removes a given key
-func (n *Node) removeMetadata(key string) (err error) {
+// unsetMetadata removes a given key
+func (n *Node) unsetMetadata(key string) (err error) {
 	if err = xattrs.Remove(n.InternalPath(), key); err == nil || xattrs.IsAttrUnset(err) {
 		return nil
 	}
@@ -209,8 +213,7 @@ func (n *Node) removeMetadata(key string) (err error) {
 
 // setMetadata populates an xattr
 func (n *Node) setMetadata(key string, val string) error {
-	nodePath := n.InternalPath()
-	if err := xattrs.Set(nodePath, key, val); err != nil {
+	if err := xattrs.Set(n.InternalPath(), key, val); err != nil {
 		return errors.Wrapf(err, "Node %s could not set metadata '%s' to '%s'", n.ID, key, val)
 	}
 	return nil
@@ -218,11 +221,20 @@ func (n *Node) setMetadata(key string, val string) error {
 
 // getMetadata reads the metadata for the given key
 func (n *Node) getMetadata(key string) (val string, err error) {
-	nodePath := n.InternalPath()
-	if val, err = xattrs.Get(nodePath, key); err != nil {
+	if val, err = xattrs.Get(n.InternalPath(), key); err != nil {
 		return "", errors.Wrapf(err, "Node %s could not get metdadata '%s'", n.ID, key)
 	}
 	return val, nil
+}
+
+// SetMultiple sets multiple metadata properties
+// FIXME use canonical metadata
+func (n *Node) SetMultiple(metadata map[string]string) error {
+	return xattrs.SetMultiple(n.InternalPath(), metadata)
+}
+
+func (n *Node) GetAllMetadata() (map[string]string, error) {
+	return xattrs.All(n.InternalPath())
 }
 
 // WriteAllNodeMetadata writes the Node metadata to disk
@@ -318,7 +330,7 @@ func ReadNode(ctx context.Context, lu PathLookup, spaceID, nodeID string, canLis
 	}
 
 	// Lookup blobsize
-	n.Blobsize, err = ReadBlobSizeAttr(nodePath)
+	n.Blobsize, err = n.GetBlobSize()
 	switch {
 	case xattrs.IsNotExist(err):
 		return n, nil // swallow not found, the node defaults to exists = false
@@ -641,6 +653,11 @@ func (n *Node) SetFavorite(uid *userpb.UserId, val string) error {
 	// the favorite flag is specific to the user, so we need to incorporate the userid
 	fa := fmt.Sprintf("%s:%s:%s@%s", xattrs.FavPrefix, utils.UserTypeToString(uid.GetType()), uid.GetOpaqueId(), uid.GetIdp())
 	return xattrs.Set(nodePath, fa, val)
+}
+
+func (n *Node) RemoveFavorite(uid *userpb.UserId) error {
+	fa := fmt.Sprintf("%s:%s:%s@%s", xattrs.FavPrefix, utils.UserTypeToString(uid.GetType()), uid.GetOpaqueId(), uid.GetIdp())
+	return n.unsetMetadata(fa)
 }
 
 // IsDir returns true if the note is a directory
@@ -1133,6 +1150,16 @@ func (n *Node) ReadGrant(ctx context.Context, grantee string) (g *provider.Grant
 	return e.Grant(), nil
 }
 
+func (n *Node) RemoveGrant(ctx context.Context, g *provider.Grant) error {
+	var attr string
+	if g.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_GROUP {
+		attr = xattrs.GrantGroupAcePrefix + g.Grantee.GetGroupId().OpaqueId
+	} else {
+		attr = xattrs.GrantUserAcePrefix + g.Grantee.GetUserId().OpaqueId
+	}
+	return xattrs.Remove(n.InternalPath(), attr)
+}
+
 // ListGrants lists all grants of the current node.
 func (n *Node) ListGrants(ctx context.Context) ([]*provider.Grant, error) {
 	grantees, err := n.ListGrantees(ctx)
@@ -1157,26 +1184,22 @@ func (n *Node) ListGrants(ctx context.Context) ([]*provider.Grant, error) {
 	return grants, nil
 }
 
-// ReadBlobSizeAttr reads the blobsize from the xattrs
-func ReadBlobSizeAttr(path string) (int64, error) {
-	attr, err := xattrs.Get(path, xattrs.BlobsizeAttr)
+// GetBlobSize reads the blobsize from the xattrs
+func (n *Node) GetBlobSize() (int64, error) {
+	val, err := n.getMetadata(xattrs.BlobsizeAttr)
 	if err != nil {
-		return 0, errors.Wrapf(err, "error reading blobsize xattr")
+		return 0, err
 	}
-	blobSize, err := strconv.ParseInt(attr, 10, 64)
+	blobSize, err := strconv.ParseInt(val, 10, 64)
 	if err != nil {
 		return 0, errors.Wrapf(err, "invalid blobsize xattr format")
 	}
 	return blobSize, nil
 }
 
-// ReadBlobIDAttr reads the blobsize from the xattrs
-func ReadBlobIDAttr(path string) (string, error) {
-	attr, err := xattrs.Get(path, xattrs.BlobIDAttr)
-	if err != nil {
-		return "", errors.Wrapf(err, "error reading blobid xattr")
-	}
-	return attr, nil
+// GetBlobID returns the blob id
+func (n *Node) GetBlobID() (string, error) {
+	return n.getMetadata(xattrs.BlobIDAttr)
 }
 
 func (n *Node) getGranteeTypes(ctx context.Context) []provider.GranteeType {

@@ -139,7 +139,7 @@ func (fs *Decomposedfs) CreateStorageSpace(ctx context.Context, req *provider.Cr
 		metadata[xattrs.SpaceAliasAttr] = alias
 	}
 
-	if err := xattrs.SetMultiple(root.InternalPath(), metadata); err != nil {
+	if err := root.SetMultiple(metadata); err != nil {
 		return nil, err
 	}
 
@@ -597,7 +597,7 @@ func (fs *Decomposedfs) UpdateStorageSpace(ctx context.Context, req *provider.Up
 		}
 	}
 
-	err = xattrs.SetMultiple(node.InternalPath(), metadata)
+	err = node.SetMultiple(metadata)
 	if err != nil {
 		return nil, err
 	}
@@ -877,7 +877,7 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 		Value:   []byte(etag),
 	}
 
-	spaceAttributes, err := xattrs.All(n.InternalPath())
+	spaceAttributes, err := n.GetAllMetadata()
 	if err != nil {
 		return nil, err
 	}
