@@ -35,6 +35,7 @@ import (
 	"strings"
 	"time"
 
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
@@ -249,6 +250,7 @@ func (upload *Upload) FinishUpload(_ context.Context) error {
 			UploadID:      upload.Info.ID,
 			URL:           s,
 			ExecutingUser: u,
+			ResourceID:    &provider.ResourceId{SpaceId: n.SpaceID, OpaqueId: n.ID},
 			Filename:      upload.Info.Storage["NodeName"],
 		}); err != nil {
 			return err

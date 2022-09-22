@@ -20,11 +20,14 @@ package ocdav
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"path"
 	"strconv"
+	"time"
 
+	"github.com/cenkalti/backoff"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v2/internal/http/services/datagateway"
@@ -32,7 +35,9 @@ import (
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/net"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/spacelookup"
 	"github.com/cs3org/reva/v2/pkg/appctx"
+	"github.com/cs3org/reva/v2/pkg/rgrpc/status"
 	"github.com/cs3org/reva/v2/pkg/rhttp"
+	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/rs/zerolog"
 )
 
@@ -70,6 +75,72 @@ func (s *svc) handleGet(ctx context.Context, w http.ResponseWriter, r *http.Requ
 		log.Error().Err(err).Msg("error getting grpc client")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
+	}
+
+	if s.c.ForceRescanDuration != "" {
+		min := time.Now().Add(-s.forceRescan)    // min scan date
+		max := time.Now().Add(s.statPollTimeout) // max polling time
+
+		sr, err := client.Stat(ctx, &provider.StatRequest{Ref: ref})
+		if err != nil || sr.GetStatus().GetCode() != rpc.Code_CODE_OK {
+			log.Error().Err(err).Interface("ref", ref).Str("status", sr.GetStatus().GetMessage()).Msg("error stating resource")
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		info := sr.GetInfo()
+		id, etag, last := info.GetId(), info.GetEtag(), parseScanDate(info)
+		if !last.After(min) {
+			// last scan date is too old - we need to rescan the file
+			if err := s.davHandler.PostprocessingHandler.doVirusScan(r.Context(), client, id, r.Header.Get("x-access-token"), s.stream); err != nil {
+				log.Error().Err(err).Interface("ref", ref).Msg("error initiating virus scan")
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+
+			// wait for the result
+			// NOTE: returning an error in `o` will trigger a retry - we store the grpc result code to evaluate success
+			var code rpc.Code
+			o := func() error {
+				if time.Now().After(max) {
+					// we tried for too long - abort
+					code = rpc.Code_CODE_INTERNAL
+					return nil
+				}
+
+				sr, err := client.Stat(ctx, &provider.StatRequest{Ref: ref})
+				if err != nil {
+					return err
+				}
+
+				code = sr.GetStatus().GetCode()
+				if code != rpc.Code_CODE_OK {
+					// we abort when we get anything but a CODE_OK ?
+					return nil
+				}
+
+				if etag != sr.GetInfo().GetEtag() {
+					// the file changed while scanning - we abort
+					code = rpc.Code_CODE_ABORTED
+					return nil
+				}
+
+				last = parseScanDate(sr.GetInfo())
+				if !last.After(min) {
+					return fmt.Errorf("needs more retries")
+				}
+
+				return nil
+			}
+
+			backoff.Retry(o, backoff.NewExponentialBackOff())
+
+			if code != rpc.Code_CODE_OK {
+				// we errored waiting for the scan to finish
+				w.WriteHeader(status.HTTPStatusFromCode(code))
+				return
+			}
+		}
 	}
 
 	dReq := &provider.InitiateFileDownloadRequest{Ref: ref}
@@ -158,4 +229,9 @@ func (s *svc) handleSpacesGet(w http.ResponseWriter, r *http.Request, spaceID st
 	}
 
 	s.handleGet(ctx, w, r, &ref, "spaces", sublog)
+}
+
+func parseScanDate(info *provider.ResourceInfo) time.Time {
+	t, _ := time.Parse(time.RFC3339Nano, utils.ReadPlainFromOpaque(info.GetOpaque(), "scantime"))
+	return t
 }
