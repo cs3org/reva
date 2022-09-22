@@ -119,6 +119,9 @@ type Config struct {
 	EventsEndpoint         string                            `mapstructure:"events_endpoint"`
 	EventsCluster          string                            `mapstructure:"events_cluster"`
 
+	ForceRescanDuration string `mapstructure:"force_rescan_duration"`
+	StatPollingTimeout  string `mapstructure:"stat_polling_timeout"`
+
 	MachineAuthAPIKey string `mapstructure:"machine_auth_apikey"`
 }
 
@@ -166,6 +169,9 @@ type svc struct {
 	userIdentifierCache *ttlcache.Cache
 	tracerProvider      trace.TracerProvider
 	stream              events.Stream
+
+	forceRescan     time.Duration
+	statPollTimeout time.Duration
 }
 
 func (s *svc) Config() *Config {
@@ -240,6 +246,20 @@ func NewWith(conf *Config, fm favorite.Manager, ls LockSystem, _ *zerolog.Logger
 		}
 
 		s.stream = ev
+	}
+
+	if conf.ForceRescanDuration != "" {
+		t, err := time.ParseDuration(conf.ForceRescanDuration)
+		if err != nil {
+			return nil, err
+		}
+		s.forceRescan = t
+
+		tt, err := time.ParseDuration(conf.StatPollingTimeout)
+		if err != nil {
+			return nil, err
+		}
+		s.statPollTimeout = tt
 	}
 
 	return s, nil
