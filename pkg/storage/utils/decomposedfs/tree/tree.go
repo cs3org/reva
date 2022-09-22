@@ -468,7 +468,7 @@ func (t *Tree) Delete(ctx context.Context, n *node.Node) (err error) {
 
 	// set origin location in metadata
 	nodePath := n.InternalPath()
-	if err := n.SetMetadata(xattrs.TrashOriginAttr, origin); err != nil {
+	if err := n.SetTrashOrigin(origin); err != nil {
 		return err
 	}
 
@@ -478,7 +478,7 @@ func (t *Tree) Delete(ctx context.Context, n *node.Node) (err error) {
 	trashLink := filepath.Join(t.root, "spaces", lookup.Pathify(n.SpaceRoot.ID, 1, 2), "trash", lookup.Pathify(n.ID, 4, 2))
 	if err := os.MkdirAll(filepath.Dir(trashLink), 0700); err != nil {
 		// Roll back changes
-		_ = n.RemoveMetadata(xattrs.TrashOriginAttr)
+		_ = n.RemoveTrashOrigin()
 		return err
 	}
 
@@ -491,7 +491,7 @@ func (t *Tree) Delete(ctx context.Context, n *node.Node) (err error) {
 	err = os.Symlink("../../../../../nodes/"+lookup.Pathify(n.ID, 4, 2)+node.TrashIDDelimiter+deletionTime, trashLink)
 	if err != nil {
 		// Roll back changes
-		_ = n.RemoveMetadata(xattrs.TrashOriginAttr)
+		_ = n.RemoveTrashOrigin()
 		return
 	}
 
@@ -504,7 +504,7 @@ func (t *Tree) Delete(ctx context.Context, n *node.Node) (err error) {
 		// To roll back changes
 		// TODO remove symlink
 		// Roll back changes
-		_ = n.RemoveMetadata(xattrs.TrashOriginAttr)
+		_ = n.RemoveTrashOrigin()
 		return
 	}
 
@@ -519,7 +519,7 @@ func (t *Tree) Delete(ctx context.Context, n *node.Node) (err error) {
 		// TODO revert the rename
 		// TODO remove symlink
 		// Roll back changes
-		_ = n.RemoveMetadata(xattrs.TrashOriginAttr)
+		_ = n.RemoveTrashOrigin()
 		return
 	}
 
@@ -578,14 +578,14 @@ func (t *Tree) RestoreRecycleItemFunc(ctx context.Context, spaceid, key, trashPa
 
 		targetNode.Exists = true
 		// update name attribute
-		if err := recycleNode.SetMetadata(xattrs.NameAttr, targetNode.Name); err != nil {
-			return errors.Wrap(err, "Decomposedfs: could not set name attribute")
+		if err := recycleNode.SetName(targetNode.Name); err != nil {
+			return err
 		}
 
 		// set ParentidAttr to restorePath's node parent id
 		if trashPath != "" {
-			if err := recycleNode.SetMetadata(xattrs.ParentidAttr, targetNode.ParentID); err != nil {
-				return errors.Wrap(err, "Decomposedfs: could not set name attribute")
+			if err := recycleNode.SetParentID(targetNode.ParentID); err != nil {
+				return err
 			}
 		}
 

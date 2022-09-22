@@ -20,9 +20,7 @@ package xattrs
 
 import (
 	"strconv"
-	"strings"
 
-	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/filelocks"
 	"github.com/gofrs/flock"
 	"github.com/pkg/errors"
@@ -101,24 +99,6 @@ const (
 	UserAcePrefix  string = "u:"
 	GroupAcePrefix string = "g:"
 )
-
-// ReferenceFromAttr returns a CS3 reference from xattr of a node.
-// Supported formats are: "cs3:storageid/nodeid"
-func ReferenceFromAttr(b []byte) (*provider.Reference, error) {
-	return refFromCS3(b)
-}
-
-// refFromCS3 creates a CS3 reference from a set of bytes. This method should remain private
-// and only be called after validation because it can potentially panic.
-func refFromCS3(b []byte) (*provider.Reference, error) {
-	parts := string(b[4:])
-	return &provider.Reference{
-		ResourceId: &provider.ResourceId{
-			StorageId: strings.Split(parts, "/")[0],
-			OpaqueId:  strings.Split(parts, "/")[1],
-		},
-	}, nil
-}
 
 // CopyMetadata copies all extended attributes from source to target.
 // The optional filter function can be used to filter by attribute name, e.g. by checking a prefix

@@ -266,12 +266,7 @@ func (fs *Decomposedfs) storeGrant(ctx context.Context, n *node.Node, g *provide
 		spaceType = sg.SpaceType
 	}
 
-	// set the grant
-	e := ace.FromGrant(g)
-	principal, value := e.Marshal()
-	if err := n.SetMetadata(xattrs.GrantPrefix+principal, string(value)); err != nil {
-		appctx.GetLogger(ctx).Error().Err(err).
-			Str("principal", principal).Msg("Could not set grant for principal")
+	if err := n.SetGrant(g); err != nil {
 		return err
 	}
 

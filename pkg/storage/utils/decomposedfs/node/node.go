@@ -126,51 +126,101 @@ func (n *Node) ChangeOwner(new *userpb.UserId) (err error) {
 	return
 }
 
-// SetMetadata populates a given key with its value.
+// SetArbitraryMetadata populates a given key with its value.
 // Note that consumers should be aware of the metadata options on xattrs.go.
-func (n *Node) SetMetadata(key string, val string) (err error) {
-	nodePath := n.InternalPath()
-	if err := xattrs.Set(nodePath, key, val); err != nil {
-		return errors.Wrap(err, "Decomposedfs: could not set extended attribute")
-	}
-	return nil
+func (n *Node) SetArbitraryMetadata(key string, val string) error {
+	return n.setMetadata(xattrs.MetadataPrefix+key, val)
 }
 
 // EnablePropagation enables recursive size and change time propagation
-func (n *Node) EnablePropagation() (err error) {
-	nodePath := n.InternalPath()
-	if err := xattrs.Set(nodePath, xattrs.PropagationAttr, "1"); err != nil {
-		return errors.Wrap(err, "Decomposedfs: could not set extended attribute")
-	}
-	return nil
+func (n *Node) EnablePropagation() error {
+	return n.setMetadata(xattrs.PropagationAttr, "1")
 }
 
-// EnablePropagation enables recursive size and change time propagation
-func (n *Node) SetReference(targetURI *url.URL) (err error) {
-	nodePath := n.InternalPath()
-	if err := xattrs.Set(nodePath, xattrs.ReferenceAttr, targetURI.String()); err != nil {
-		// the reference could not be set - that would result in an lost reference?
-		return errors.Wrapf(err, "Decomposedfs: error setting the target %s on the reference file %s",
-			targetURI.String(),
-			nodePath,
-		)
-	}
-	return nil
+// SetReference sets a CS3 reference target URI
+func (n *Node) SetReference(targetURI *url.URL) error {
+	return n.setMetadata(xattrs.ReferenceAttr, targetURI.String())
 }
 
-// RemoveMetadata removes a given key
-func (n *Node) RemoveMetadata(key string) (err error) {
+// GetReference gets a CS3 reference target URI
+func (n *Node) GetReference() (*url.URL, error) {
+	val, err := n.getMetadata(xattrs.ReferenceAttr)
+	if err != nil {
+		return nil, err
+	}
+	return url.Parse(val)
+}
+
+// SetTrashOrigin stores the original path to use for restoring
+func (n *Node) SetTrashOrigin(origin string) error {
+	return n.setMetadata(xattrs.TrashOriginAttr, origin)
+}
+
+// GetTrashOrigin returns the original path to use for restoring
+func (n *Node) GetTrashOrigin() (string, error) {
+	return n.getMetadata(xattrs.TrashOriginAttr)
+}
+
+// RemoveTrashOrigin unsets the original path to use for restoring
+func (n *Node) RemoveTrashOrigin() error {
+	return n.removeMetadata(xattrs.TrashOriginAttr)
+}
+
+// SetName sets the name of a node
+func (n *Node) SetName(name string) error {
+	return n.setMetadata(xattrs.NameAttr, name)
+}
+
+// SetSpaceName sets the space name
+func (n *Node) SetSpaceName(spaceName string) error {
+	return n.setMetadata(xattrs.SpaceNameAttr, spaceName)
+}
+
+// GetSpaceName returns the space name
+func (n *Node) GetSpaceName() (string, error) {
+	return n.getMetadata(xattrs.SpaceNameAttr)
+}
+
+// GetSpaceType returns the space type
+func (n *Node) GetSpaceType() (string, error) {
+	return n.getMetadata(xattrs.SpaceTypeAttr)
+}
+
+// SetParentID sets the parent id of a node
+func (n *Node) SetParentID(parentid string) error {
+	return n.setMetadata(xattrs.ParentidAttr, parentid)
+}
+
+// SetGrant sets a grant
+func (n *Node) SetGrant(g *provider.Grant) error {
+	// set the grant
+	e := ace.FromGrant(g)
+	principal, value := e.Marshal()
+	return n.setMetadata(xattrs.GrantPrefix+principal, string(value))
+}
+
+// removeMetadata removes a given key
+func (n *Node) removeMetadata(key string) (err error) {
 	if err = xattrs.Remove(n.InternalPath(), key); err == nil || xattrs.IsAttrUnset(err) {
 		return nil
 	}
-	return err
+	return errors.Wrapf(err, "Node %s could not remove metadata '%s'", n.ID, key)
 }
 
-// GetMetadata reads the metadata for the given key
-func (n *Node) GetMetadata(key string) (val string, err error) {
+// setMetadata populates an xattr
+func (n *Node) setMetadata(key string, val string) error {
+	nodePath := n.InternalPath()
+	if err := xattrs.Set(nodePath, key, val); err != nil {
+		return errors.Wrapf(err, "Node %s could not set metadata '%s' to '%s'", n.ID, key, val)
+	}
+	return nil
+}
+
+// getMetadata reads the metadata for the given key
+func (n *Node) getMetadata(key string) (val string, err error) {
 	nodePath := n.InternalPath()
 	if val, err = xattrs.Get(nodePath, key); err != nil {
-		return "", errors.Wrap(err, "Decomposedfs: could not get extended attribute")
+		return "", errors.Wrapf(err, "Node %s could not get metdadata '%s'", n.ID, key)
 	}
 	return val, nil
 }
@@ -968,12 +1018,12 @@ func (n *Node) GetTreeSize() (treesize uint64, err error) {
 
 // SetTreeSize writes the treesize to the extended attributes
 func (n *Node) SetTreeSize(ts uint64) (err error) {
-	return n.SetMetadata(xattrs.TreesizeAttr, strconv.FormatUint(ts, 10))
+	return n.setMetadata(xattrs.TreesizeAttr, strconv.FormatUint(ts, 10))
 }
 
 // SetChecksum writes the checksum with the given checksum type to the extended attributes
 func (n *Node) SetChecksum(csType string, h hash.Hash) (err error) {
-	return n.SetMetadata(xattrs.ChecksumPrefix+csType, string(h.Sum(nil)))
+	return n.setMetadata(xattrs.ChecksumPrefix+csType, string(h.Sum(nil)))
 }
 
 // UnsetTempEtag removes the temporary etag attribute

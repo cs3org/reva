@@ -24,10 +24,8 @@ import (
 	"path/filepath"
 
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/lookup"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/google/uuid"
-	"github.com/pkg/xattr"
 	"github.com/stretchr/testify/mock"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -73,9 +71,9 @@ const (
 // NewTestEnv prepares a test environment on disk
 // The storage contains some directories and a file:
 //
-//  /dir1/
-//  /dir1/file1
-//  /dir1/subdir1/
+//	/dir1/
+//	/dir1/file1
+//	/dir1/subdir1/
 //
 // The default config can be overridden by providing the strings to override
 // via map as a parameter
@@ -262,7 +260,7 @@ func (t *TestEnv) CreateTestStorageSpace(typ string, quota *providerv1beta1.Quot
 	if err != nil {
 		return nil, err
 	}
-	if err = xattr.Set(h.InternalPath(), xattrs.SpaceNameAttr, []byte("username")); err != nil {
+	if err = h.SetSpaceName("username"); err != nil {
 		return nil, err
 	}
 

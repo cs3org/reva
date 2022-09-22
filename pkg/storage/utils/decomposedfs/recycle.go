@@ -32,9 +32,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/lookup"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs"
 	"github.com/pkg/errors"
-	"github.com/pkg/xattr"
 )
 
 // Recycle items are stored inside the node folder and start with the uuid of the deleted node.
@@ -79,17 +77,16 @@ func (fs *Decomposedfs) ListRecycle(ctx context.Context, ref *provider.Reference
 	items := make([]*provider.RecycleItem, 0)
 
 	trashRootPath := filepath.Join(fs.getRecycleRoot(ctx, spaceID), lookup.Pathify(key, 4, 2))
-	_, timeSuffix, err := readTrashLink(trashRootPath)
+	nodeID, timeSuffix, err := readTrashLink(trashRootPath)
 	if err != nil {
 		sublog.Error().Err(err).Str("trashRoot", trashRootPath).Msg("error reading trash link")
 		return nil, err
 	}
 
 	origin := ""
-	// lookup origin path in extended attributes
-	if attrBytes, err := xattr.Get(trashRootPath, xattrs.TrashOriginAttr); err == nil {
-		origin = string(attrBytes)
-	} else {
+	// lookup origin path
+	trashNode := node.New(spaceID, nodeID+node.TrashIDDelimiter+timeSuffix, "", "", 0, "", nil, fs.lu)
+	if origin, err = trashNode.GetTrashOrigin(); err != nil {
 		sublog.Error().Err(err).Str("space", spaceID).Msg("could not read origin path, skipping")
 		return nil, err
 	}
@@ -211,7 +208,7 @@ func (fs *Decomposedfs) listTrashRoot(ctx context.Context, spaceID string) ([]*p
 
 		item := &provider.RecycleItem{
 			Type: getResourceType(md.IsDir()),
-			Size: uint64(md.Size()),
+			Size: uint64(md.Size()), // FIXME this size should always be 0 use node.GetSize?
 			Key:  nodeID,
 		}
 		if deletionTime, err := time.Parse(time.RFC3339Nano, timeSuffix); err == nil {
@@ -224,9 +221,9 @@ func (fs *Decomposedfs) listTrashRoot(ctx context.Context, spaceID string) ([]*p
 		}
 
 		// lookup origin path in extended attributes
-		var attrBytes []byte
-		if attrBytes, err = xattr.Get(nodePath, xattrs.TrashOriginAttr); err == nil {
-			item.Ref = &provider.Reference{Path: string(attrBytes)}
+		trashNode := node.New(spaceID, nodeID+node.TrashIDDelimiter+timeSuffix, "", "", 0, "", nil, fs.lu)
+		if origin, err := trashNode.GetTrashOrigin(); err == nil {
+			item.Ref = &provider.Reference{Path: origin}
 		} else {
 			log.Error().Err(err).Str("trashRoot", trashRoot).Str("item", itemPath).Str("node", nodeID).Str("dtime", timeSuffix).Msg("could not read origin path, skipping")
 			continue

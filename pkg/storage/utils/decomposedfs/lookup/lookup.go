@@ -29,7 +29,6 @@ import (
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/options"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs"
 )
 
 // Lookup implements transformations from filepath to node and back
@@ -133,10 +132,16 @@ func (lu *Lookup) WalkPath(ctx context.Context, r *node.Node, p string, followRe
 			return r, err
 		}
 
+		// TODO I think following references is unused
 		if followReferences {
-			if attrBytes, err := r.GetMetadata(xattrs.ReferenceAttr); err == nil {
-				realNodeID := attrBytes
-				ref, err := xattrs.ReferenceFromAttr([]byte(realNodeID))
+			if targetURI, err := r.GetReference(); err == nil {
+				ref := provider.Reference{
+					ResourceId: &provider.ResourceId{
+						StorageId: targetURI.Host,
+						// TODO spaceid?
+						OpaqueId: targetURI.Path,
+					},
+				}
 				if err != nil {
 					return nil, err
 				}

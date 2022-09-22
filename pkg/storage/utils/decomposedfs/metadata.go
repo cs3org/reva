@@ -32,7 +32,6 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/pkg/errors"
-	"github.com/pkg/xattr"
 )
 
 // SetArbitraryMetadata sets the metadata on a resource
@@ -63,8 +62,6 @@ func (fs *Decomposedfs) SetArbitraryMetadata(ctx context.Context, ref *provider.
 	if err := n.CheckLock(ctx); err != nil {
 		return err
 	}
-
-	nodePath := n.InternalPath()
 
 	errs := []error{}
 	// TODO should we really continue updating when an error occurs?
@@ -109,9 +106,8 @@ func (fs *Decomposedfs) SetArbitraryMetadata(ctx context.Context, ref *provider.
 		}
 	}
 	for k, v := range md.Metadata {
-		attrName := xattrs.MetadataPrefix + k
-		if err = xattr.Set(nodePath, attrName, []byte(v)); err != nil {
-			errs = append(errs, errors.Wrap(err, "Decomposedfs: could not set metadata attribute "+attrName+" to "+k))
+		if err := n.SetArbitraryMetadata(k, v); err != nil {
+			errs = append(errs, errors.Wrap(err, "Decomposedfs: could not set arbitrary metadata "+k+" to "+v))
 		}
 	}
 
