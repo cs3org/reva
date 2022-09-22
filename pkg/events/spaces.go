@@ -21,6 +21,7 @@ package events
 import (
 	"encoding/json"
 
+	group "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
@@ -96,6 +97,22 @@ type SpaceDeleted struct {
 // Unmarshal to fulfill umarshaller interface
 func (SpaceDeleted) Unmarshal(v []byte) (interface{}, error) {
 	e := SpaceDeleted{}
+	err := json.Unmarshal(v, &e)
+	return e, err
+}
+
+// SpaceShared is emitted when a space is shared
+type SpaceShared struct {
+	Executant      *user.UserId
+	GranteeUserID  *user.UserId
+	GranteeGroupID *group.GroupId
+	Creator        *user.UserId
+	ID             *provider.ResourceId
+}
+
+// Unmarshal to fulfill umarshaller interface
+func (SpaceShared) Unmarshal(v []byte) (interface{}, error) {
+	e := SpaceShared{}
 	err := json.Unmarshal(v, &e)
 	return e, err
 }

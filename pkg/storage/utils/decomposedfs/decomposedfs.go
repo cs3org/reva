@@ -708,6 +708,11 @@ func (fs *Decomposedfs) Move(ctx context.Context, oldRef, newRef *provider.Refer
 		return errtypes.PermissionDenied(newNode.ID)
 	}
 
+	// check lock on source
+	if err := oldNode.CheckLock(ctx); err != nil {
+		return err
+	}
+
 	// check lock on target
 	if err := newNode.CheckLock(ctx); err != nil {
 		return err

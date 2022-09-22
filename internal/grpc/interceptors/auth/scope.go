@@ -159,7 +159,46 @@ func resolvePublicShare(ctx context.Context, ref *provider.Reference, scope *aut
 		return err
 	}
 
-	return checkCacheForNestedResource(ctx, ref, share.ResourceId, client, mgr)
+	if err := checkCacheForNestedResource(ctx, ref, share.ResourceId, client, mgr); err == nil {
+		return nil
+	}
+
+	// Some services like wopi don't access the shared resource relative to the
+	// share root but instead relative to the shared resources parent.
+	return checkRelativeReference(ctx, ref, share.ResourceId, client)
+}
+
+// checkRelativeReference checks if the shared resource is being accessed via a relative reference
+// e.g.:
+// storage: abcd, space: efgh
+// /root (id: efgh)
+// - New file.txt (id: ijkl) <- shared resource
+//
+// If the requested reference looks like this:
+// Reference{ResourceId: {StorageId: "abcd", SpaceId: "efgh"}, Path: "./New file.txt"}
+// then the request is considered relative and this function would return true.
+// Only references which are relative to the immediate parent of a resource are considered valid.
+func checkRelativeReference(ctx context.Context, requested *provider.Reference, sharedResourceID *provider.ResourceId, client gateway.GatewayAPIClient) error {
+	sRes, err := client.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{ResourceId: sharedResourceID}})
+	if err != nil {
+		return err
+	}
+	if sRes.Status.Code != rpc.Code_CODE_OK {
+		return statuspkg.NewErrorFromCode(sRes.Status.Code, "auth interceptor")
+	}
+
+	sharedResource := sRes.Info
+
+	parentID := sharedResource.ParentId
+	parentID.StorageId = sharedResource.Id.StorageId
+
+	if !utils.ResourceIDEqual(parentID, requested.ResourceId) && utils.MakeRelativePath(sharedResource.Path) != requested.Path {
+		return errtypes.PermissionDenied("access not allowed for via public share")
+	}
+
+	key := storagespace.FormatResourceID(*sharedResourceID) + scopeDelimiter + getRefKey(requested)
+	_ = scopeExpansionCache.SetWithExpire(key, nil, scopeCacheExpiration*time.Second)
+	return nil
 }
 
 func resolveUserShare(ctx context.Context, ref *provider.Reference, scope *authpb.Scope, client gateway.GatewayAPIClient, mgr token.Manager) error {

@@ -32,7 +32,6 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs"
 	"github.com/cs3org/reva/v2/pkg/utils"
-	"github.com/pkg/xattr"
 )
 
 // DenyGrant denies access to a resource.
@@ -107,7 +106,7 @@ func (fs *Decomposedfs) ListGrants(ctx context.Context, ref *provider.Reference)
 	log := appctx.GetLogger(ctx)
 	np := node.InternalPath()
 	var attrs []string
-	if attrs, err = xattr.List(np); err != nil {
+	if attrs, err = xattrs.List(np); err != nil {
 		log.Error().Err(err).Msg("error listing attributes")
 		return nil, err
 	}
