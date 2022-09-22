@@ -49,6 +49,7 @@ func init() {
 
 // NewUnary returns a new unary interceptor that emits events when needed
 // no lint because of the switch statement that should be extendable
+//
 //nolint:gocritic
 func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error) {
 	publisher, err := publisherFromConfig(m)
@@ -103,6 +104,14 @@ func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error
 				ev = LinkAccessed(v, executantID)
 			} else {
 				ev = LinkAccessFailed(v, req.(*link.GetPublicShareByTokenRequest), executantID)
+			}
+		case *provider.AddGrantResponse:
+			// TODO: update CS3 APIs
+			// FIXME these should be part of the RemoveGrantRequest object
+			// https://github.com/owncloud/ocis/issues/4312
+			r := req.(*provider.AddGrantRequest)
+			if isSuccess(v) && utils.ExistsInOpaque(r.Opaque, "spacegrant") {
+				ev = SpaceShared(v, r, executantID)
 			}
 		case *provider.CreateContainerResponse:
 			if isSuccess(v) {

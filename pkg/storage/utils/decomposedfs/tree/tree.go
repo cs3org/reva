@@ -230,19 +230,6 @@ func isRootNode(nodePath string) bool {
 	return err == nil && attr == node.RootID
 }
 
-/*
-func isSharedNode(nodePath string) bool {
-	if attrs, err := xattr.List(nodePath); err == nil {
-		for i := range attrs {
-			if strings.HasPrefix(attrs[i], xattrs.GrantPrefix) {
-				return true
-			}
-		}
-	}
-	return false
-}
-*/
-
 // GetMD returns the metadata of a node in the tree
 func (t *Tree) GetMD(ctx context.Context, n *node.Node) (os.FileInfo, error) {
 	md, err := os.Stat(n.InternalPath())
