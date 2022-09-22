@@ -325,8 +325,7 @@ func (fs *Decomposedfs) CreateDir(ctx context.Context, ref *provider.Reference) 
 	}
 
 	if fs.o.TreeTimeAccounting || fs.o.TreeSizeAccounting {
-		// mark the home node as the end of propagation
-		if err = n.SetMetadata(xattrs.PropagationAttr, "1"); err != nil {
+		if err = n.EnablePropagation(); err != nil {
 			appctx.GetLogger(ctx).Error().Err(err).Interface("node", n).Msg("could not mark node to propagate")
 
 			// FIXME: This does not return an error at all, but results in a severe situation that the
@@ -449,12 +448,7 @@ func (fs *Decomposedfs) CreateReference(ctx context.Context, p string, targetURI
 	}
 	childCreated = true
 
-	if err := childNode.SetMetadata(xattrs.ReferenceAttr, targetURI.String()); err != nil {
-		// the reference could not be set - that would result in an lost reference?
-		err := errors.Wrapf(err, "Decomposedfs: error setting the target %s on the reference file %s",
-			targetURI.String(),
-			childNode.InternalPath(),
-		)
+	if err := childNode.SetReference(targetURI); err != nil {
 		span.SetStatus(codes.Error, err.Error())
 		return err
 	}
