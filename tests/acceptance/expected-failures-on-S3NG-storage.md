@@ -176,10 +176,6 @@ File and sync features in a shared scenario
 - [apiShareCreateSpecialToShares2/createShareReceivedInMultipleWays.feature:45](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares2/createShareReceivedInMultipleWays.feature#L45)
 - [apiShareCreateSpecialToShares2/createShareReceivedInMultipleWays.feature:46](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares2/createShareReceivedInMultipleWays.feature#L46)
 
-
-#### [not possible to move file into a received folder](https://github.com/owncloud/ocis/issues/764)
-- [apiShareManagementBasicToShares/createShareToSharesFolder.feature:500](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L500)
-
 #### [path property in pending shares gives only filename](https://github.com/owncloud/ocis/issues/2156)
 - [apiShareManagementBasicToShares/createShareToSharesFolder.feature:727](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L727)
 - [apiShareManagementBasicToShares/createShareToSharesFolder.feature:728](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L728)
@@ -299,10 +295,6 @@ _requires a [CS3 user provisioning api that can update the quota for a user](htt
 
 #### [restoring an older version of a shared file deletes the share](https://github.com/owncloud/ocis/issues/765)
 - [apiShareManagementToShares/acceptShares.feature:588](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementToShares/acceptShares.feature#L588)
-
-#### [not possible to move file into a received folder](https://github.com/owncloud/ocis/issues/764)
-- [apiVersions/fileVersionsSharingToShares.feature:220](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersionsSharingToShares.feature#L220)
-- [apiVersions/fileVersionsSharingToShares.feature:221](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersionsSharingToShares.feature#L221)
 
 #### [Expiration date for shares is not implemented](https://github.com/owncloud/ocis/issues/1250)
 #### Expiration date of user shares
