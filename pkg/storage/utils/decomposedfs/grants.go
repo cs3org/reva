@@ -54,10 +54,6 @@ func (fs *Decomposedfs) AddGrant(ctx context.Context, ref *provider.Reference, g
 		return fs.UpdateGrant(ctx, ref, g)
 	}
 
-	// add acting user
-	u := ctxpkg.ContextMustGetUser(ctx)
-	g.Creator = u.GetId()
-
 	owner := node.Owner()
 	grants, err := node.ListGrants(ctx)
 	if err != nil {

@@ -178,8 +178,8 @@ func (s *svc) GetReceivedShare(ctx context.Context, req *collaboration.GetReceiv
 
 // When updating a received share:
 // if the update contains update for displayName:
-//   1) if received share is mounted: we also do a rename in the storage
-//   2) if received share is not mounted: we only rename in user share provider.
+//  1. if received share is mounted: we also do a rename in the storage
+//  2. if received share is not mounted: we only rename in user share provider.
 func (s *svc) UpdateReceivedShare(ctx context.Context, req *collaboration.UpdateReceivedShareRequest) (*collaboration.UpdateReceivedShareResponse, error) {
 	ctx, span := appctx.GetTracerProvider(ctx).Tracer("gateway").Start(ctx, "Gateway.UpdateReceivedShare")
 	defer span.End()
@@ -367,6 +367,7 @@ func (s *svc) denyGrant(ctx context.Context, id *provider.ResourceId, g *provide
 		Ref:     ref,
 		Grantee: g,
 		Opaque:  opaque,
+		// TODO add creator
 	}
 
 	c, _, err := s.find(ctx, ref)
@@ -393,11 +394,13 @@ func (s *svc) addGrant(ctx context.Context, id *provider.ResourceId, g *provider
 		ResourceId: id,
 	}
 
+	creator := ctxpkg.ContextMustGetUser(ctx)
 	grantReq := &provider.AddGrantRequest{
 		Ref: ref,
 		Grant: &provider.Grant{
 			Grantee:     g,
 			Permissions: p,
+			Creator:     creator.GetId(),
 		},
 		Opaque: opaque,
 	}
@@ -425,11 +428,14 @@ func (s *svc) updateGrant(ctx context.Context, id *provider.ResourceId, g *provi
 	ref := &provider.Reference{
 		ResourceId: id,
 	}
+
+	creator := ctxpkg.ContextMustGetUser(ctx)
 	grantReq := &provider.UpdateGrantRequest{
 		Ref: ref,
 		Grant: &provider.Grant{
 			Grantee:     g,
 			Permissions: p,
+			Creator:     creator.GetId(),
 		},
 	}
 
