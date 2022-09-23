@@ -63,8 +63,6 @@
 - [apiWebdavProperties1/getQuota.feature:62](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/getQuota.feature#L62)
 - [apiWebdavProperties1/getQuota.feature:77](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/getQuota.feature#L77)
 - [apiWebdavProperties1/getQuota.feature:78](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/getQuota.feature#L78)
-
-### [There is no such thing like a "super-user"](https://github.com/owncloud/ocis/issues/1319)
 ### [no command equivalent to occ](https://github.com/owncloud/ocis/issues/1317)
 - [apiMain/status.feature:5](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiMain/status.feature#L5)
 
@@ -91,7 +89,6 @@
 ### [users can access each-others data using the new webdav API](https://github.com/owncloud/ocis/issues/1347)
 - [apiAuthWebDav/webDavPUTAuth.feature:40](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthWebDav/webDavPUTAuth.feature#L40)
 
-### [Default capabilities for normal user not same as in oC-core](https://github.com/owncloud/ocis/issues/1285)
 ### [Difference in response content of status.php and default capabilities](https://github.com/owncloud/ocis/issues/1286)
 - [apiCapabilities/capabilitiesWithNormalUser.feature:11](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiCapabilities/capabilitiesWithNormalUser.feature#L11)
 
@@ -203,26 +200,17 @@
 - [apiSharees/sharees.feature:560](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharees/sharees.feature#L560)
 - [apiSharees/sharees.feature:561](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharees/sharees.feature#L561)
 
-### Accepting a share returns empty response
-- [apiShareManagement/acceptSharesToSharesFolder.feature:15](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagement/acceptSharesToSharesFolder.feature#L15)
-- [apiShareManagement/acceptSharesToSharesFolder.feature:22](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagement/acceptSharesToSharesFolder.feature#L22)
-- [apiShareManagement/acceptSharesToSharesFolder.feature:30](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagement/acceptSharesToSharesFolder.feature#L30)
-- [apiShareManagement/acceptSharesToSharesFolder.feature:52](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagement/acceptSharesToSharesFolder.feature#L52)
-
 ### [After accepting a share data in the received file cannot be downloaded](https://github.com/owncloud/product/issues/208)
 - [apiShareManagement/acceptSharesToSharesFolder.feature:15](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagement/acceptSharesToSharesFolder.feature#L15)
 
 ### [Response is empty when accepting a share](https://github.com/owncloud/product/issues/207)
 - [apiShareManagement/acceptSharesToSharesFolder.feature:30](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagement/acceptSharesToSharesFolder.feature#L30)
 - [apiShareManagement/acceptSharesToSharesFolder.feature:52](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagement/acceptSharesToSharesFolder.feature#L52)
+- [apiShareManagement/acceptSharesToSharesFolder.feature:15](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagement/acceptSharesToSharesFolder.feature#L15)
+- [apiShareManagement/acceptSharesToSharesFolder.feature:22](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagement/acceptSharesToSharesFolder.feature#L22)
+- [apiShareManagement/acceptSharesToSharesFolder.feature:30](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagement/acceptSharesToSharesFolder.feature#L30)
+- [apiShareManagement/acceptSharesToSharesFolder.feature:52](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagement/acceptSharesToSharesFolder.feature#L52)
 
-### [groups endpoint does not exist](https://github.com/owncloud/ocis-reva/issues/34)
-### [Sharing seems to work but does not work](https://github.com/owncloud/ocis/issues/1303)
-### [Listing shares via ocs API does not show path for parent folders](https://github.com/owncloud/ocis/issues/1231)
-### [Fields missing in delete share OCS response](https://github.com/owncloud/ocis-reva/issues/356)
-### [file_target in share response](https://github.com/owncloud/product/issues/203)
-### [Shares not deleted when user is deleted](hhttps://github.com/owncloud/ocis/issues/1226)
-### [EOS no displayname owner when creating share](https://github.com/owncloud/ocis/issues/1270)
 ### [EOS mime-type is not set correctly when sharing](https://github.com/owncloud/ocis/issues/1271)
 - [apiShareToSharesManagementBasic/createShareToSharesFolder.feature:36](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareToSharesManagementBasic/createShareToSharesFolder.feature#L36)
 - [apiShareToSharesManagementBasic/createShareToSharesFolder.feature:37](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareToSharesManagementBasic/createShareToSharesFolder.feature#L37)
@@ -314,7 +302,6 @@
 - [apiShareOperations/gettingShares.feature:34](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareOperations/gettingShares.feature#L34)
 - [apiShareOperations/gettingShares.feature:35](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareOperations/gettingShares.feature#L35)
 
-### [Delete shares from user when user is deleted](hhttps://github.com/owncloud/ocis/issues/1226)
 ### [no displayname_owner shown when creating a share](https://github.com/owncloud/ocis/issues/1270)
 ### [when sharing a file mime-type field is set to application/octet-stream](https://github.com/owncloud/ocis/issues/1271)
 - [apiShareOperations/gettingShares.feature:124](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareOperations/gettingShares.feature#L124)
@@ -334,7 +321,6 @@
 - [apiShareOperations/getWebDAVSharePermissions.feature:134](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareOperations/getWebDAVSharePermissions.feature#L134)
 - [apiShareOperations/getWebDAVSharePermissions.feature:135](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareOperations/getWebDAVSharePermissions.feature#L135)
 
-### [Split old public API webdav tests from new public webdav tests](https://github.com/owncloud/ocis-reva/issues/282)
 ### [Public link enforce permissions](https://github.com/owncloud/ocis/issues/1269)
 - [apiSharePublicLink1/accessToPublicLinkShare.feature:10](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink1/accessToPublicLinkShare.feature#L10)
 - [apiSharePublicLink1/accessToPublicLinkShare.feature:20](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink1/accessToPublicLinkShare.feature#L20)
@@ -429,8 +415,6 @@
 
 ### [copying a folder within a public link folder to folder with same name as an already existing file overwrites the parent file](https://github.com/owncloud/ocis/issues/1232)
 - [apiSharePublicLink2/copyFromPublicLink.feature:59](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink2/copyFromPublicLink.feature#L59)
-
-### https://github.com/owncloud/ocis/issues/1232
 - [apiSharePublicLink2/copyFromPublicLink.feature:86](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink2/copyFromPublicLink.feature#L86)
 
 ### [copying a file from within a public link folder to "/" overwrites the parent folder](https://github.com/owncloud/ocis/issues/1230)
@@ -481,7 +465,6 @@
 ### [Upload-only shares must not overwrite but create a separate file](https://github.com/owncloud/ocis/issues/1267)
 - [apiSharePublicLink2/uploadToPublicLinkShare.feature:262](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink2/uploadToPublicLinkShare.feature#L262)
 
-### [Propfind to trashbin endpoint requires UUID](https://github.com/owncloud/product/issues/179)
 ### [File deletion using dav gives unique string in filename in the trashbin](https://github.com/owncloud/product/issues/178)
 - [apiTrashbin/trashbinDelete.feature:30](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinDelete.feature#L30)
 - [apiTrashbin/trashbinDelete.feature:31](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinDelete.feature#L31)
@@ -549,7 +532,6 @@
 - [apiTrashbin/trashbinRestore.feature:343](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinRestore.feature#L343)
 - [apiTrashbin/trashbinRestore.feature:344](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinRestore.feature#L344)
 
-### [uploading with old-chunking does not work](https://github.com/owncloud/ocis/issues/1343)
 ### [remote.php/dav/uploads endpoint does not exist](https://github.com/owncloud/ocis/issues/1321)
 - [apiWebdavUpload2/uploadFileUsingNewChunking.feature:12](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUpload2/uploadFileUsingNewChunking.feature#L12)
 - [apiWebdavUpload2/uploadFileUsingNewChunking.feature:29](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUpload2/uploadFileUsingNewChunking.feature#L29)
@@ -825,7 +807,6 @@ Not everything needs to be implemented for ocis. While the oc10 testsuite covers
 * _The `OC-LazyOps` header is [no longer supported by the client](https://github.com/owncloud/client/pull/8398), implmenting this is not necessary for a first production release. We plan to have an uploed state machine to visualize the state of a file, see https://github.com/owncloud/ocis/issues/214_
 * _Blacklisted ignored files are no longer required because ocis can handle `.htaccess` files without security implications introduced by serving user provided files with apache._
 
-### [uploading with old-chunking does not work](https://github.com/owncloud/ocis/issues/1343)
 ### [remote.php/dav/uploads endpoint does not exist](https://github.com/owncloud/ocis/issues/1321)
 - [apiWebdavUpload1/uploadFileAsyncUsingNewChunking.feature:14](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUpload1/uploadFileAsyncUsingNewChunking.feature#L14)
 - [apiWebdavUpload1/uploadFileAsyncUsingNewChunking.feature:31](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUpload1/uploadFileAsyncUsingNewChunking.feature#L31)
