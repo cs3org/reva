@@ -200,6 +200,11 @@ func UserEqual(u, v *userpb.UserId) bool {
 	return u != nil && v != nil && u.Idp == v.Idp && u.OpaqueId == v.OpaqueId
 }
 
+// UserIDEqual returns whether two users have the same opaqueid values. The idp is ignored
+func UserIDEqual(u, v *userpb.UserId) bool {
+	return u != nil && v != nil && u.OpaqueId == v.OpaqueId
+}
+
 // GroupEqual returns whether two groups have the same field values.
 func GroupEqual(u, v *grouppb.GroupId) bool {
 	return u != nil && v != nil && u.Idp == v.Idp && u.OpaqueId == v.OpaqueId
