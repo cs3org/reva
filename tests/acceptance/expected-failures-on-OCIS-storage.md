@@ -131,7 +131,7 @@ File and sync features in a shared scenario
 - [apiSharees/sharees.feature:430](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharees/sharees.feature#L430)
 - [apiSharees/sharees.feature:431](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharees/sharees.feature#L431)
 
-#### User cannot create a folder named Share
+#### [accepting matching name shared resources from different users/groups sets no serial identifiers on the resource name for the receiver](https://github.com/owncloud/ocis/issues/4289)
 - [apiShareManagementToShares/acceptShares.feature:366](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementToShares/acceptShares.feature#L366)
 - [apiShareManagementToShares/acceptShares.feature:402](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementToShares/acceptShares.feature#L402)
 
@@ -279,7 +279,6 @@ _requires a [CS3 user provisioning api that can update the quota for a user](htt
 - [apiWebdavProperties2/getFileProperties.feature:238](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties2/getFileProperties.feature#L238)
 - [apiWebdavProperties2/getFileProperties.feature:239](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties2/getFileProperties.feature#L239)
 
-#### [Scoped links](https://github.com/owncloud/ocis/issues/2809)
 #### [oc:privatelink property not returned in webdav responses](https://github.com/owncloud/product/issues/262)
 - [apiWebdavProperties2/getFileProperties.feature:306](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties2/getFileProperties.feature#L306)
 - [apiWebdavProperties2/getFileProperties.feature:307](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties2/getFileProperties.feature#L307)
@@ -492,7 +491,6 @@ _requires a [CS3 user provisioning api that can update the quota for a user](htt
 - [apiShareUpdateToShares/updateShare.feature:159](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareUpdateToShares/updateShare.feature#L159)
 - [apiShareUpdateToShares/updateShare.feature:160](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareUpdateToShares/updateShare.feature#L160)
 
-#### [Share additional info](https://github.com/owncloud/ocis/issues/1253)
 #### [Edit user share response has an "name" field](https://github.com/owncloud/ocis/issues/1225)
 - [apiShareUpdateToShares/updateShare.feature:288](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareUpdateToShares/updateShare.feature#L288)
 - [apiShareUpdateToShares/updateShare.feature:289](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareUpdateToShares/updateShare.feature#L289)
@@ -518,46 +516,45 @@ User and group management features
 API, search, favorites, config, capabilities, not existing endpoints, CORS and others
 
 #### [no robots.txt available](https://github.com/owncloud/ocis/issues/1314)
-- [apiMain/main.feature:5](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiMain/main.feature#L5) Scenario: robots.txt file should be accessible
+- [apiMain/main.feature:5](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiMain/main.feature#L5)
 
 #### [Ability to return error messages in Webdav response bodies](https://github.com/owncloud/ocis/issues/1293)
-- [apiAuthOcs/ocsDELETEAuth.feature:10](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthOcs/ocsDELETEAuth.feature#L10) Scenario: send DELETE requests to OCS endpoints as admin with wrong password
-- [apiAuthOcs/ocsGETAuth.feature:10](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthOcs/ocsGETAuth.feature#L10) Scenario: using OCS anonymously
-- [apiAuthOcs/ocsGETAuth.feature:31](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthOcs/ocsGETAuth.feature#L31) Scenario: ocs config end point accessible by unauthorized users
-- [apiAuthOcs/ocsGETAuth.feature:51](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthOcs/ocsGETAuth.feature#L51) Scenario: using OCS with non-admin basic auth
-- [apiAuthOcs/ocsGETAuth.feature:84](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthOcs/ocsGETAuth.feature#L84) Scenario: using OCS as normal user with wrong password
-- [apiAuthOcs/ocsGETAuth.feature:115](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthOcs/ocsGETAuth.feature#L115) Scenario:using OCS with admin basic auth
-- [apiAuthOcs/ocsGETAuth.feature:133](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthOcs/ocsGETAuth.feature#L133) Scenario: using OCS as admin user with wrong password
-- [apiAuthOcs/ocsPOSTAuth.feature:10](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthOcs/ocsPOSTAuth.feature#L10) Scenario: send POST requests to OCS endpoints as normal user with wrong password
-- [apiAuthOcs/ocsPUTAuth.feature:10](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthOcs/ocsPUTAuth.feature#L10) Scenario: send PUT request to OCS endpoints as admin with wrong password
+- [apiAuthOcs/ocsDELETEAuth.feature:10](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthOcs/ocsDELETEAuth.feature#L10)
+- [apiAuthOcs/ocsGETAuth.feature:10](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthOcs/ocsGETAuth.feature#L10)
+- [apiAuthOcs/ocsGETAuth.feature:31](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthOcs/ocsGETAuth.feature#L31)
+- [apiAuthOcs/ocsGETAuth.feature:51](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthOcs/ocsGETAuth.feature#L51)
+- [apiAuthOcs/ocsGETAuth.feature:84](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthOcs/ocsGETAuth.feature#L84)
+- [apiAuthOcs/ocsGETAuth.feature:115](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthOcs/ocsGETAuth.feature#L115)
+- [apiAuthOcs/ocsGETAuth.feature:133](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthOcs/ocsGETAuth.feature#L133)
+- [apiAuthOcs/ocsPOSTAuth.feature:10](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthOcs/ocsPOSTAuth.feature#L10)
+- [apiAuthOcs/ocsPUTAuth.feature:10](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthOcs/ocsPUTAuth.feature#L10)
 
 #### [sending MKCOL requests to another user's webDav endpoints as normal user gives 404 instead of 403 ](https://github.com/owncloud/ocis/issues/3872)
 _ocdav: api compatibility, return correct status code_
-- [apiAuthWebDav/webDavDELETEAuth.feature:58](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthWebDav/webDavDELETEAuth.feature#L58) Scenario: send DELETE requests to another user's webDav endpoints as normal user
-- [apiAuthWebDav/webDavPROPFINDAuth.feature:57](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthWebDav/webDavPROPFINDAuth.feature#L57)  Scenario: send PROPFIND requests to another user's webDav endpoints as normal user
-- [apiAuthWebDav/webDavPROPPATCHAuth.feature:58](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthWebDav/webDavPROPPATCHAuth.feature#L58) Scenario: send PROPPATCH requests to another user's webDav endpoints as normal user
-- [apiAuthWebDav/webDavMKCOLAuth.feature:54](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthWebDav/webDavMKCOLAuth.feature#L54) Scenario: send MKCOL requests to another user's webDav endpoints as normal user
+- [apiAuthWebDav/webDavDELETEAuth.feature:58](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthWebDav/webDavDELETEAuth.feature#L58)
+- [apiAuthWebDav/webDavPROPFINDAuth.feature:57](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthWebDav/webDavPROPFINDAuth.feature#L57)
+- [apiAuthWebDav/webDavPROPPATCHAuth.feature:58](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthWebDav/webDavPROPPATCHAuth.feature#L58)
+- [apiAuthWebDav/webDavMKCOLAuth.feature:54](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthWebDav/webDavMKCOLAuth.feature#L54)
 
 #### [trying to lock file of another user gives http 200](https://github.com/owncloud/ocis/issues/2176)
-- [apiAuthWebDav/webDavLOCKAuth.feature:58](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthWebDav/webDavLOCKAuth.feature#L58) Scenario: send LOCK requests to another user's webDav endpoints as normal user
+- [apiAuthWebDav/webDavLOCKAuth.feature:58](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthWebDav/webDavLOCKAuth.feature#L58)
 
 #### [send (MOVE, COPY) requests to another user's webDav endpoints as normal user gives 400 instead of 403](https://github.com/owncloud/ocis/issues/3882)
 _ocdav: api compatibility, return correct status code_
-- [apiAuthWebDav/webDavMOVEAuth.feature:57](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthWebDav/webDavMOVEAuth.feature#L57) Scenario: send MOVE requests to another user's webDav endpoints as normal user
+- [apiAuthWebDav/webDavMOVEAuth.feature:57](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthWebDav/webDavMOVEAuth.feature#L57)
 - [apiAuthWebDav/webDavCOPYAuth.feature:59](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthWebDav/webDavCOPYAuth.feature#L59)
 
 #### [send POST requests to another user's webDav endpoints as normal user](https://github.com/owncloud/ocis/issues/1287)
 _ocdav: api compatibility, return correct status code_
-- [apiAuthWebDav/webDavPOSTAuth.feature:58](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthWebDav/webDavPOSTAuth.feature#L58)  Scenario: send POST requests to another user's webDav endpoints as normal user
+- [apiAuthWebDav/webDavPOSTAuth.feature:58](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthWebDav/webDavPOSTAuth.feature#L58)
 
 #### [Using double slash in URL to access a folder gives 501 and other status codes](https://github.com/owncloud/ocis/issues/1667)
 - [apiAuthWebDav/webDavSpecialURLs.feature:34](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthWebDav/webDavSpecialURLs.feature#L34)
 - [apiAuthWebDav/webDavSpecialURLs.feature:121](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthWebDav/webDavSpecialURLs.feature#L121)
 - [apiAuthWebDav/webDavSpecialURLs.feature:163](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthWebDav/webDavSpecialURLs.feature#L163)
 
-#### [Default capabilities for normal user not same as in oC-core](https://github.com/owncloud/ocis/issues/1285)
 #### [Difference in response content of status.php and default capabilities](https://github.com/owncloud/ocis/issues/1286)
-- [apiCapabilities/capabilitiesWithNormalUser.feature:11](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiCapabilities/capabilitiesWithNormalUser.feature#L11) Scenario: getting default capabilities with normal user
+- [apiCapabilities/capabilitiesWithNormalUser.feature:11](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiCapabilities/capabilitiesWithNormalUser.feature#L11)
 
 #### [spaces endpoint does not allow REPORT requests](https://github.com/owncloud/ocis/issues/4034)
 - [apiWebdavOperations/search.feature:42](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavOperations/search.feature#L42)
@@ -581,7 +578,7 @@ _ocdav: api compatibility, return correct status code_
 - [apiWebdavOperations/search.feature:264](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavOperations/search.feature#L264)
 - [apiWebdavOperations/search.feature:265](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavOperations/search.feature#L265)
 
-And other missing implementation of favorites
+#### [Support for favorites](https://github.com/owncloud/ocis/issues/1228)
 - [apiFavorites/favorites.feature:182](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiFavorites/favorites.feature#L182)
 - [apiFavorites/favorites.feature:183](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiFavorites/favorites.feature#L183)
 - [apiFavorites/favorites.feature:215](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiFavorites/favorites.feature#L215)
@@ -690,7 +687,6 @@ Not everything needs to be implemented for ocis. While the oc10 testsuite covers
 * _The `OC-LazyOps` header is [no longer supported by the client](https://github.com/owncloud/client/pull/8398), implmenting this is not necessary for a first production release. We plan to have an uploed state machine to visualize the state of a file, see https://github.com/owncloud/ocis/issues/214_
 * _Blacklisted ignored files are no longer required because ocis can handle `.htaccess` files without security implications introduced by serving user provided files with apache._
 
-#### [uploading with old-chunking does not work](https://github.com/owncloud/ocis/issues/1343)
 #### [remote.php/dav/uploads endpoint does not exist](https://github.com/owncloud/ocis/issues/1321)
 - [apiWebdavUpload1/uploadFileToExcludedDirectory.feature:20](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUpload1/uploadFileToExcludedDirectory.feature#L20)
 - [apiWebdavUpload1/uploadFileToExcludedDirectory.feature:21](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUpload1/uploadFileToExcludedDirectory.feature#L21)
@@ -868,7 +864,7 @@ _ocs: api compatibility, return correct status code_
 - [apiVersions/fileVersionAuthor.feature:180](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersionAuthor.feature#L180)
 - [apiVersions/fileVersionAuthor.feature:223](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersionAuthor.feature#L223)
 
-### [Allow public link sharing only for certain groups feature not implemented]
+#### [Allow public link sharing only for certain groups feature not implemented](https://github.com/owncloud/ocis/issues/4623)
 - [apiSharePublicLink3/allowGroupToCreatePublicLinks.feature:35](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink3/allowGroupToCreatePublicLinks.feature#L35)
 - [apiSharePublicLink3/allowGroupToCreatePublicLinks.feature:91](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink3/allowGroupToCreatePublicLinks.feature#L91)
 
@@ -1056,7 +1052,7 @@ _ocs: api compatibility, return correct status code_
 - [apiShareOperationsToShares1/gettingShares.feature:40](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareOperationsToShares1/gettingShares.feature#L40)
 - [apiShareOperationsToShares1/gettingShares.feature:39](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareOperationsToShares1/gettingShares.feature#L39)
 
-#### [These tests pass in ocis and reva egde but fail in master with `file_target has unexpected value '/home'`]()
+#### [These tests pass in ocis and reva egde but fail in master with `file_target has unexpected value '/home'`](https://github.com/owncloud/ocis/issues/2113)
 - [apiSharePublicLink1/createPublicLinkShare.feature:477](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink1/createPublicLinkShare.feature#L477)
 - [apiSharePublicLink1/createPublicLinkShare.feature:478](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink1/createPublicLinkShare.feature#L478)
 
