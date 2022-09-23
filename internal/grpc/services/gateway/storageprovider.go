@@ -306,8 +306,8 @@ func (s *svc) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorag
 
 	if res.Status.Code == rpc.Code_CODE_OK {
 		id := res.StorageSpace.Root
-		s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), id)
-		s.cache.RemoveListStorageProviders(id)
+		s.statCache.RemoveStat(ctxpkg.ContextMustGetUser(ctx).GetId(), id)
+		s.providerCache.RemoveListStorageProviders(id)
 	}
 	return res, nil
 }
@@ -343,8 +343,8 @@ func (s *svc) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorag
 	}
 
 	id := &provider.ResourceId{OpaqueId: req.Id.OpaqueId}
-	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), id)
-	s.cache.RemoveListStorageProviders(id)
+	s.statCache.RemoveStat(ctxpkg.ContextMustGetUser(ctx).GetId(), id)
+	s.providerCache.RemoveListStorageProviders(id)
 
 	if dsRes.Status.Code != rpc.Code_CODE_OK {
 		return dsRes, nil
@@ -588,7 +588,7 @@ func (s *svc) InitiateFileUpload(ctx context.Context, req *provider.InitiateFile
 		}
 	}
 
-	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), req.Ref.ResourceId)
+	s.statCache.RemoveStat(ctxpkg.ContextMustGetUser(ctx).GetId(), req.Ref.ResourceId)
 	return &gateway.InitiateFileUploadResponse{
 		Opaque:    storageRes.Opaque,
 		Status:    storageRes.Status,
@@ -625,7 +625,7 @@ func (s *svc) CreateContainer(ctx context.Context, req *provider.CreateContainer
 		}, nil
 	}
 
-	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), req.Ref.ResourceId)
+	s.statCache.RemoveStat(ctxpkg.ContextMustGetUser(ctx).GetId(), req.Ref.ResourceId)
 	return res, nil
 }
 
@@ -668,7 +668,7 @@ func (s *svc) Delete(ctx context.Context, req *provider.DeleteRequest) (*provide
 		}, nil
 	}
 
-	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), req.Ref.ResourceId)
+	s.statCache.RemoveStat(ctxpkg.ContextMustGetUser(ctx).GetId(), req.Ref.ResourceId)
 	return res, nil
 }
 
@@ -695,8 +695,8 @@ func (s *svc) Move(ctx context.Context, req *provider.MoveRequest) (*provider.Mo
 
 	req.Source = sref
 	req.Destination = dref
-	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), req.Source.ResourceId)
-	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), req.Destination.ResourceId)
+	s.statCache.RemoveStat(ctxpkg.ContextMustGetUser(ctx).GetId(), req.Source.ResourceId)
+	s.statCache.RemoveStat(ctxpkg.ContextMustGetUser(ctx).GetId(), req.Destination.ResourceId)
 	return c.Move(ctx, req)
 }
 
@@ -719,7 +719,7 @@ func (s *svc) SetArbitraryMetadata(ctx context.Context, req *provider.SetArbitra
 		return nil, errors.Wrap(err, "gateway: error calling SetArbitraryMetadata")
 	}
 
-	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), req.Ref.ResourceId)
+	s.statCache.RemoveStat(ctxpkg.ContextMustGetUser(ctx).GetId(), req.Ref.ResourceId)
 	return res, nil
 }
 
@@ -741,7 +741,7 @@ func (s *svc) UnsetArbitraryMetadata(ctx context.Context, req *provider.UnsetArb
 		}
 		return nil, errors.Wrap(err, "gateway: error calling UnsetArbitraryMetadata")
 	}
-	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), req.Ref.ResourceId)
+	s.statCache.RemoveStat(ctxpkg.ContextMustGetUser(ctx).GetId(), req.Ref.ResourceId)
 
 	return res, nil
 }
@@ -765,7 +765,7 @@ func (s *svc) SetLock(ctx context.Context, req *provider.SetLockRequest) (*provi
 		return nil, errors.Wrap(err, "gateway: error calling SetLock")
 	}
 
-	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), req.Ref.ResourceId)
+	s.statCache.RemoveStat(ctxpkg.ContextMustGetUser(ctx).GetId(), req.Ref.ResourceId)
 	return res, nil
 }
 
@@ -806,7 +806,7 @@ func (s *svc) RefreshLock(ctx context.Context, req *provider.RefreshLockRequest)
 		return nil, errors.Wrap(err, "gateway: error calling RefreshLock")
 	}
 
-	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), req.Ref.ResourceId)
+	s.statCache.RemoveStat(ctxpkg.ContextMustGetUser(ctx).GetId(), req.Ref.ResourceId)
 	return res, nil
 }
 
@@ -827,7 +827,7 @@ func (s *svc) Unlock(ctx context.Context, req *provider.UnlockRequest) (*provide
 		return nil, errors.Wrap(err, "gateway: error calling Unlock")
 	}
 
-	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), req.Ref.ResourceId)
+	s.statCache.RemoveStat(ctxpkg.ContextMustGetUser(ctx).GetId(), req.Ref.ResourceId)
 	return res, nil
 }
 
@@ -907,7 +907,7 @@ func (s *svc) RestoreFileVersion(ctx context.Context, req *provider.RestoreFileV
 		}, nil
 	}
 
-	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), req.Ref.ResourceId)
+	s.statCache.RemoveStat(ctxpkg.ContextMustGetUser(ctx).GetId(), req.Ref.ResourceId)
 	return res, nil
 }
 
@@ -963,7 +963,7 @@ func (s *svc) RestoreRecycleItem(ctx context.Context, req *provider.RestoreRecyc
 		}, nil
 	}
 
-	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), req.Ref.ResourceId)
+	s.statCache.RemoveStat(ctxpkg.ContextMustGetUser(ctx).GetId(), req.Ref.ResourceId)
 	return res, nil
 }
 
@@ -986,7 +986,7 @@ func (s *svc) PurgeRecycle(ctx context.Context, req *provider.PurgeRecycleReques
 		}, nil
 	}
 
-	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), req.Ref.ResourceId)
+	s.statCache.RemoveStat(ctxpkg.ContextMustGetUser(ctx).GetId(), req.Ref.ResourceId)
 	return res, nil
 }
 
@@ -1089,8 +1089,11 @@ func (s *svc) getStorageProviderClient(_ context.Context, p *registry.ProviderIn
 		return nil, err
 	}
 
-	// TODO: reinstate cache as soon there is a implementation for a non-in-memory cache
-	return c, nil
+	return &cachedAPIClient{
+		c:               c,
+		statCache:       s.statCache,
+		createHomeCache: s.createHomeCache,
+	}, nil
 }
 
 func (s *svc) getStorageRegistryClient(_ context.Context, address string) (registry.RegistryAPIClient, error) {
@@ -1098,8 +1101,10 @@ func (s *svc) getStorageRegistryClient(_ context.Context, address string) (regis
 	if err != nil {
 		return nil, err
 	}
-
-	return s.cache.StorageRegistryClient(c), nil
+	return &cachedRegistryClient{
+		c:     c,
+		cache: s.providerCache,
+	}, nil
 }
 
 func (s *svc) findSpaces(ctx context.Context, ref *provider.Reference) ([]*registry.ProviderInfo, error) {

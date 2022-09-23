@@ -27,6 +27,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v2/pkg/events"
 	"github.com/cs3org/reva/v2/pkg/storage"
+	"github.com/cs3org/reva/v2/pkg/storage/cache"
 )
 
 // DataTX provides an abstraction around various data transfer protocols.
@@ -47,4 +48,9 @@ func EmitFileUploadedEvent(owner *userv1beta1.UserId, ref *provider.Reference, p
 	}
 
 	return events.Publish(publisher, uploadedEv)
+}
+
+// InvalidateCache is a helper function which invalidates the stat cache
+func InvalidateCache(owner *userv1beta1.UserId, ref *provider.Reference, statCache cache.StatCache) {
+	statCache.RemoveStat(owner, ref.GetResourceId())
 }

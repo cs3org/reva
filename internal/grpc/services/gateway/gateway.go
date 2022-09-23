@@ -22,11 +22,13 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"time"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/rgrpc"
 	"github.com/cs3org/reva/v2/pkg/sharedconf"
+	"github.com/cs3org/reva/v2/pkg/storage/cache"
 	"github.com/cs3org/reva/v2/pkg/token"
 	"github.com/cs3org/reva/v2/pkg/token/manager/registry"
 	"github.com/mitchellh/mapstructure"
@@ -65,13 +67,14 @@ type config struct {
 	ShareFolder                  string                            `mapstructure:"share_folder"`
 	DataTransfersFolder          string                            `mapstructure:"data_transfers_folder"`
 	TokenManagers                map[string]map[string]interface{} `mapstructure:"token_managers"`
-	EtagCacheTTL                 int                               `mapstructure:"etag_cache_ttl"`
 	AllowedUserAgents            map[string][]string               `mapstructure:"allowed_user_agents"` // map[path][]user-agent
+	CacheStore                   string                            `mapstructure:"cache_store"`
+	CacheNodes                   []string                          `mapstructure:"cache_nodes"`
+	CacheDatabase                string                            `mapstructure:"cache_database"`
 	CreateHomeCacheTTL           int                               `mapstructure:"create_home_cache_ttl"`
 	ProviderCacheTTL             int                               `mapstructure:"provider_cache_ttl"`
 	StatCacheTTL                 int                               `mapstructure:"stat_cache_ttl"`
 	UseCommonSpaceRootShareLogic bool                              `mapstructure:"use_common_space_root_share_logic"`
-	// MountCacheTTL       int                               `mapstructure:"mount_cache_ttl"`
 }
 
 // sets defaults
@@ -116,13 +119,24 @@ func (c *config) init() {
 	if c.TransferExpires == 0 {
 		c.TransferExpires = 100 * 60 // seconds
 	}
+
+	// caching needs to be explicitly enabled
+	if c.CacheStore == "" {
+		c.CacheStore = "noop"
+	}
+
+	if c.CacheDatabase == "" {
+		c.CacheDatabase = "reva"
+	}
 }
 
 type svc struct {
-	c              *config
-	dataGatewayURL url.URL
-	tokenmgr       token.Manager
-	cache          Caches
+	c               *config
+	dataGatewayURL  url.URL
+	tokenmgr        token.Manager
+	statCache       cache.StatCache
+	providerCache   cache.ProviderCache
+	createHomeCache cache.CreateHomeCache
 }
 
 // New creates a new gateway svc that acts as a proxy for any grpc operation.
@@ -148,10 +162,12 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 	}
 
 	s := &svc{
-		c:              c,
-		dataGatewayURL: *u,
-		tokenmgr:       tokenManager,
-		cache:          NewCaches(c.StatCacheTTL, c.CreateHomeCacheTTL, c.ProviderCacheTTL),
+		c:               c,
+		dataGatewayURL:  *u,
+		tokenmgr:        tokenManager,
+		statCache:       cache.GetStatCache(c.CacheStore, c.CacheNodes, c.CacheDatabase, "stat", time.Duration(c.StatCacheTTL)*time.Second),
+		providerCache:   cache.GetProviderCache(c.CacheStore, c.CacheNodes, c.CacheDatabase, "provider", time.Duration(c.ProviderCacheTTL)*time.Second),
+		createHomeCache: cache.GetCreateHomeCache(c.CacheStore, c.CacheNodes, c.CacheDatabase, "createHome", time.Duration(c.CreateHomeCacheTTL)*time.Second),
 	}
 
 	return s, nil
@@ -162,7 +178,9 @@ func (s *svc) Register(ss *grpc.Server) {
 }
 
 func (s *svc) Close() error {
-	s.cache.Close()
+	s.statCache.Close()
+	s.providerCache.Close()
+	s.createHomeCache.Close()
 	return nil
 }
 
