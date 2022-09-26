@@ -113,7 +113,7 @@ check-changelog: release-deps
 	go run tools/check-changelog/main.go -branch edge
 
 check-changelog-drone:
-	go run tools/check-changelog/main.go -repo origin -branch edge -pr "$(PR)"
+	go run tools/check-changelog/main.go -repo origin -branch experimental -pr "$(PR)"
 
 # to be run in CI platform
 ci: build-ci test  lint-ci
