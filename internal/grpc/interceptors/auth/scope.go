@@ -440,8 +440,15 @@ func extractShareRef(req interface{}) (*collaboration.ShareReference, bool) {
 }
 
 func getRefKey(ref *provider.Reference) string {
-	if ref.Path != "" {
+	if ref.GetPath() != "" {
 		return ref.Path
 	}
-	return storagespace.FormatResourceID(*ref.ResourceId)
+
+	if ref.GetResourceId() != nil {
+		return storagespace.FormatResourceID(*ref.ResourceId)
+	}
+
+	// on malicious request both path and rid could be empty
+	// we still should not panic
+	return ""
 }
