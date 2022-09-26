@@ -40,7 +40,7 @@ type Blobstore struct {
 	bucket string
 }
 
-// PrometheusAwareReader provides an interface to an prometheus aweare Reader
+// PrometheusAwareReader provides an interface to an prometheus aware Reader
 type PrometheusAwareReader struct {
 	r io.Reader
 	m *prometheus.CounterVec
