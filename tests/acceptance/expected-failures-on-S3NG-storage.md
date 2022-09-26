@@ -757,10 +757,6 @@ Not everything needs to be implemented for ocis. While the oc10 testsuite covers
 - [apiWebdavMove2/moveFileToExcludedDirectory.feature:38](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove2/moveFileToExcludedDirectory.feature#L38)
 - [apiWebdavMove2/moveFileToExcludedDirectory.feature:78](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove2/moveFileToExcludedDirectory.feature#L78)
 - [apiWebdavMove2/moveFileToExcludedDirectory.feature:79](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove2/moveFileToExcludedDirectory.feature#L79)
-- [apiWebdavMove2/moveFileToBlacklistedName.feature:35](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove2/moveFileToBlacklistedName.feature#L35)
-- [apiWebdavMove2/moveFileToBlacklistedName.feature:36](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove2/moveFileToBlacklistedName.feature#L36)
-- [apiWebdavMove2/moveFileToBlacklistedName.feature:74](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove2/moveFileToBlacklistedName.feature#L74)
-- [apiWebdavMove2/moveFileToBlacklistedName.feature:75](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove2/moveFileToBlacklistedName.feature#L75)
 
 #### [system configuration options missing](https://github.com/owncloud/ocis/issues/1323)
 - [apiWebdavUpload1/uploadFileToBlacklistedName.feature:31](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUpload1/uploadFileToBlacklistedName.feature#L31)
@@ -863,8 +859,6 @@ _ocs: api compatibility, return correct status code_
 - [apiWebdavProperties1/copyFile.feature:413](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L413)
 - [apiWebdavProperties1/copyFile.feature:438](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L438)
 - [apiWebdavProperties1/copyFile.feature:439](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L439)
-- [apiWebdavProperties1/copyFile.feature:498](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L498)
-- [apiWebdavProperties1/copyFile.feature:525](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L525)
 
 ### [Allow public link sharing only for certain groups feature not implemented](https://github.com/owncloud/ocis/issues/4623)
 - [apiSharePublicLink3/allowGroupToCreatePublicLinks.feature:35](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink3/allowGroupToCreatePublicLinks.feature#L35)
