@@ -91,11 +91,9 @@ func (h *PostprocessingHandler) handleVirusScan(w http.ResponseWriter, r *http.R
 }
 
 func (h *PostprocessingHandler) doVirusScan(ctx context.Context, client gateway.GatewayAPIClient, rid *provider.ResourceId, revatoken string, pub events.Publisher) error {
-	dReq := &provider.InitiateFileDownloadRequest{
-		Ref: &provider.Reference{ResourceId: rid, Path: "."},
-	}
+	ref := &provider.Reference{ResourceId: rid, Path: "."}
 
-	dRes, err := client.InitiateFileDownload(ctx, dReq)
+	dRes, err := client.InitiateFileDownload(ctx, &provider.InitiateFileDownloadRequest{Ref: ref})
 	if err != nil {
 		return err
 	}
@@ -111,6 +109,13 @@ func (h *PostprocessingHandler) doVirusScan(ctx context.Context, client gateway.
 		}
 	}
 
+	// we need to add the filename for other services
+	// or do we? Other services could stat themselves...
+	var filename string
+	if res, err := client.Stat(ctx, &provider.StatRequest{Ref: ref}); err == nil && res.GetStatus().GetCode() == rpc.Code_CODE_OK {
+		filename = res.GetInfo().GetName()
+	}
+
 	return events.Publish(pub, events.StartPostprocessingStep{
 		StepToStart:   events.PPStepAntivirus,
 		URL:           downloadEP,
@@ -118,5 +123,6 @@ func (h *PostprocessingHandler) doVirusScan(ctx context.Context, client gateway.
 		ResourceID:    rid,
 		RevaToken:     revatoken,
 		ExecutingUser: ctxpkg.ContextMustGetUser(ctx),
+		Filename:      filename,
 	})
 }
