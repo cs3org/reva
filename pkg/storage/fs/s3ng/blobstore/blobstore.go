@@ -92,7 +92,6 @@ func (p *PrometheusAwareReadCloser) Read(b []byte) (n int, err error) {
 }
 
 // Close implements the close function of the PrometheusAwareReadCloser
-
 func (p *PrometheusAwareReadCloser) Close() error {
 	return p.r.Close()
 }
