@@ -48,7 +48,7 @@ func New(m map[string]interface{}) (cache.ResourceInfoCache, error) {
 		return nil, errors.Wrap(err, "error decoding conf")
 	}
 	if c.CacheSize == 0 {
-		c.CacheSize = 1000000
+		c.CacheSize = 10000
 	}
 
 	return &manager{

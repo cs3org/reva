@@ -20,6 +20,7 @@ package auth
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"github.com/bluele/gcache"
@@ -47,15 +48,20 @@ import (
 // name is the Tracer name used to identify this instrumentation library.
 const tracerName = "auth"
 
-var userGroupsCache gcache.Cache
-var scopeExpansionCache gcache.Cache
+var (
+	userGroupsCache     gcache.Cache
+	scopeExpansionCache gcache.Cache
+	cacheOnce           sync.Once
+)
 
 type config struct {
 	// TODO(labkode): access a map is more performant as uri as fixed in length
 	// for SkipMethods.
-	TokenManager  string                            `mapstructure:"token_manager"`
-	TokenManagers map[string]map[string]interface{} `mapstructure:"token_managers"`
-	GatewayAddr   string                            `mapstructure:"gateway_addr"`
+	TokenManager            string                            `mapstructure:"token_manager"`
+	TokenManagers           map[string]map[string]interface{} `mapstructure:"token_managers"`
+	GatewayAddr             string                            `mapstructure:"gateway_addr"`
+	UserGroupsCacheSize     int                               `mapstructure:"usergroups_cache_size"`
+	ScopeExpansionCacheSize int                               `mapstructure:"scope_expansion_cache_size"`
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -81,8 +87,17 @@ func NewUnary(m map[string]interface{}, unprotected []string, tp trace.TracerPro
 	}
 	conf.GatewayAddr = sharedconf.GetGatewaySVC(conf.GatewayAddr)
 
-	userGroupsCache = gcache.New(1000000).LFU().Build()
-	scopeExpansionCache = gcache.New(1000000).LFU().Build()
+	if conf.UserGroupsCacheSize == 0 {
+		conf.UserGroupsCacheSize = 5000
+	}
+	if conf.ScopeExpansionCacheSize == 0 {
+		conf.ScopeExpansionCacheSize = 5000
+	}
+
+	cacheOnce.Do(func() {
+		userGroupsCache = gcache.New(conf.UserGroupsCacheSize).LFU().Build()
+		scopeExpansionCache = gcache.New(conf.ScopeExpansionCacheSize).LFU().Build()
+	})
 
 	h, ok := tokenmgr.NewFuncs[conf.TokenManager]
 	if !ok {
@@ -159,8 +174,16 @@ func NewStream(m map[string]interface{}, unprotected []string, tp trace.TracerPr
 		conf.TokenManager = "jwt"
 	}
 
-	userGroupsCache = gcache.New(1000000).LFU().Build()
-	scopeExpansionCache = gcache.New(1000000).LFU().Build()
+	if conf.UserGroupsCacheSize == 0 {
+		conf.UserGroupsCacheSize = 10000
+	}
+	if conf.ScopeExpansionCacheSize == 0 {
+		conf.ScopeExpansionCacheSize = 10000
+	}
+	cacheOnce.Do(func() {
+		userGroupsCache = gcache.New(conf.UserGroupsCacheSize).LFU().Build()
+		scopeExpansionCache = gcache.New(conf.ScopeExpansionCacheSize).LFU().Build()
+	})
 
 	h, ok := tokenmgr.NewFuncs[conf.TokenManager]
 	if !ok {
