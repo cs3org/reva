@@ -30,6 +30,7 @@ import (
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/pkg/errors"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 // Blobstore provides an interface to an s3 compatible blobstore
@@ -38,6 +39,20 @@ type Blobstore struct {
 
 	bucket string
 }
+
+// PrometheusAwareReader provides an interace to an prometheus aweare Reader
+type PrometheusAwareReader struct {
+	r io.Reader
+	m *prometheus.CounterVec
+}
+
+// PrometheusAwareReadCloser provides an interface to a prometheus aware ReadCloser
+type PrometheusAwareReadCloser struct {
+	r io.ReadCloser
+	m *prometheus.CounterVec
+}
+
+var metrics = NewMetrics()
 
 // New returns a new Blobstore
 func New(endpoint, region, bucket, accessKey, secretKey string) (*Blobstore, error) {
@@ -62,8 +77,32 @@ func New(endpoint, region, bucket, accessKey, secretKey string) (*Blobstore, err
 	}, nil
 }
 
+// Read implements the read function of the PrometheusAwareReader
+func (p *PrometheusAwareReader) Read(b []byte) (n int, err error) {
+	n, err = p.r.Read(b)
+	p.m.WithLabelValues().Add(float64(n))
+	return
+}
+
+// Read implements the read function of the PrometheusAwareReadCloser
+func (p *PrometheusAwareReadCloser) Read(b []byte) (n int, err error) {
+	n, err = p.r.Read(b)
+	p.m.WithLabelValues().Add(float64(n))
+	return
+}
+
+// Close implements the close function of the PrometheusAwareReadCloser
+
+func (p *PrometheusAwareReadCloser) Close() error {
+	return p.r.Close()
+}
+
 // Upload stores some data in the blobstore under the given key
 func (bs *Blobstore) Upload(node *node.Node, reader io.Reader) error {
+	reader = &PrometheusAwareReader{
+		r: reader,
+		m: metrics.Tx,
+	}
 	size := int64(-1)
 	if file, ok := reader.(*os.File); ok {
 		info, err := file.Stat()
@@ -87,7 +126,10 @@ func (bs *Blobstore) Download(node *node.Node) (io.ReadCloser, error) {
 	if err != nil {
 		return nil, errors.Wrapf(err, "could not download object '%s' from bucket '%s'", bs.path(node), bs.bucket)
 	}
-	return reader, nil
+	return &PrometheusAwareReadCloser{
+		r: reader,
+		m: metrics.Rx,
+	}, nil
 }
 
 // Delete deletes a blob from the blobstore
