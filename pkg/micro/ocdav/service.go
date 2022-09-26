@@ -32,8 +32,8 @@ import (
 	rtrace "github.com/cs3org/reva/v2/pkg/trace"
 	"github.com/go-chi/chi/v5"
 	httpServer "github.com/go-micro/plugins/v4/server/http"
+	"github.com/owncloud/ocis/v2/ocis-pkg/registry"
 	"go-micro.dev/v4"
-	"go-micro.dev/v4/registry"
 	"go-micro.dev/v4/server"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/trace"
@@ -100,7 +100,7 @@ func Service(opts ...Option) (micro.Service, error) {
 
 	service := micro.NewService(
 		micro.Server(srv),
-		micro.Registry(registry.NewRegistry()),
+		micro.Registry(registry.GetRegistry()),
 	)
 
 	// Init the service? make that optional?

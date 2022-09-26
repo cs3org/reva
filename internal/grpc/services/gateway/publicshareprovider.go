@@ -44,7 +44,7 @@ func (s *svc) CreatePublicShare(ctx context.Context, req *link.CreatePublicShare
 		return nil, err
 	}
 
-	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), res.Share.ResourceId)
+	s.statCache.RemoveStat(ctxpkg.ContextMustGetUser(ctx).GetId(), res.Share.ResourceId)
 	return res, nil
 }
 
@@ -60,8 +60,8 @@ func (s *svc) RemovePublicShare(ctx context.Context, req *link.RemovePublicShare
 	if err != nil {
 		return nil, err
 	}
-	// TODO: How to find out the resourceId?
-	s.cache.RemoveStat(ctxpkg.ContextMustGetUser(ctx), nil)
+	// TODO: How to find out the resourceId? -> get public share first, then delete
+	s.statCache.RemoveStat(ctxpkg.ContextMustGetUser(ctx).GetId(), nil)
 	return res, nil
 }
 
@@ -139,11 +139,9 @@ func (s *svc) UpdatePublicShare(ctx context.Context, req *link.UpdatePublicShare
 	if err != nil {
 		return nil, errors.Wrap(err, "error updating share")
 	}
-	s.cache.RemoveStat(
-		&userprovider.User{
-			Id: &userprovider.UserId{
-				OpaqueId: res.Share.Owner.GetOpaqueId(),
-			},
+	s.statCache.RemoveStat(
+		&userprovider.UserId{
+			OpaqueId: res.Share.Owner.GetOpaqueId(),
 		},
 		res.Share.ResourceId,
 	)

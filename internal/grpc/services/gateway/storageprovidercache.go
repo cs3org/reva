@@ -20,174 +20,35 @@ package gateway
 
 import (
 	"context"
-	"encoding/json"
 	"strings"
-	"time"
 
-	"github.com/ReneKroon/ttlcache/v2"
-	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	registry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	sdk "github.com/cs3org/reva/v2/pkg/sdk/common"
+	"github.com/cs3org/reva/v2/pkg/storage/cache"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"google.golang.org/grpc"
 )
-
-// available caches
-const (
-	stat = iota
-	createhome
-	listproviders
-)
-
-// allCaches is needed for initialization
-var allCaches = []int{stat, createhome, listproviders}
-
-// Caches holds all caches used by the gateway
-type Caches []*ttlcache.Cache
-
-// NewCaches initializes the caches. Optionally takes ttls for all caches.
-// len(ttlsSeconds) is expected to be either 0, 1 or len(allCaches). Panics if not.
-func NewCaches(ttlsSeconds ...int) Caches {
-	numCaches := len(allCaches)
-
-	ttls := make([]int, numCaches)
-	switch len(ttlsSeconds) {
-	case 0:
-		// already done
-	case 1:
-		for i := 0; i < numCaches; i++ {
-			ttls[i] = ttlsSeconds[0]
-		}
-	case numCaches:
-		for i := 0; i < numCaches; i++ {
-			ttls[i] = ttlsSeconds[i]
-		}
-	default:
-		panic("caching misconfigured - pass 0, 1 or len(allCaches) arguments to NewCaches")
-	}
-
-	c := Caches{}
-	for i := range allCaches {
-		c = append(c, initCache(ttls[i]))
-	}
-	return c
-}
-
-// Close closes all caches - best to call it on teardown - ignores errors
-func (c Caches) Close() {
-	for _, cache := range c {
-		cache.Close()
-	}
-}
-
-// StorageProviderClient returns a (cached) client pointing to the storageprovider
-func (c Caches) StorageProviderClient(p provider.ProviderAPIClient) provider.ProviderAPIClient {
-	return &cachedAPIClient{
-		c:      p,
-		caches: c,
-	}
-}
-
-// StorageRegistryClient returns a (cached) client pointing to the storageregistry
-func (c Caches) StorageRegistryClient(p registry.RegistryAPIClient) registry.RegistryAPIClient {
-	return &cachedRegistryClient{
-		c:      p,
-		caches: c,
-	}
-}
-
-// RemoveStat removes a reference from the stat cache
-func (c Caches) RemoveStat(user *userpb.User, res *provider.ResourceId) {
-	uid := "uid:" + user.Id.OpaqueId
-	sid := ""
-	oid := ""
-	if res != nil {
-		sid = "sid:" + res.SpaceId
-		oid = "oid:" + res.OpaqueId
-	}
-
-	cache := c[stat]
-	for _, key := range cache.GetKeys() {
-		if strings.Contains(key, uid) {
-			_ = cache.Remove(key)
-			continue
-		}
-
-		if sid != "" && strings.Contains(key, sid) {
-			_ = cache.Remove(key)
-			continue
-		}
-
-		if oid != "" && strings.Contains(key, oid) {
-			_ = cache.Remove(key)
-			continue
-		}
-	}
-}
-
-// RemoveListStorageProviders removes a reference from the listproviders cache
-func (c Caches) RemoveListStorageProviders(res *provider.ResourceId) {
-	if res == nil {
-		return
-	}
-	sid := res.SpaceId
-
-	cache := c[listproviders]
-	for _, key := range cache.GetKeys() {
-		if strings.Contains(key, sid) {
-			_ = cache.Remove(key)
-			continue
-		}
-	}
-}
-
-func initCache(ttlSeconds int) *ttlcache.Cache {
-	cache := ttlcache.NewCache()
-	_ = cache.SetTTL(time.Duration(ttlSeconds) * time.Second)
-	cache.SkipTTLExtensionOnHit(true)
-	return cache
-}
-
-func pullFromCache(cache *ttlcache.Cache, key string, dest interface{}) error {
-	r, err := cache.Get(key)
-	if err != nil {
-		return err
-	}
-
-	return json.Unmarshal(r.([]byte), dest)
-}
-
-func pushToCache(cache *ttlcache.Cache, key string, src interface{}) error {
-	b, err := json.Marshal(src)
-	if err != nil {
-		return err
-	}
-	return cache.Set(key, b)
-}
 
 /*
    Cached Registry
 */
 
 type cachedRegistryClient struct {
-	c      registry.RegistryAPIClient
-	caches Caches
+	c     registry.RegistryAPIClient
+	cache cache.ProviderCache
 }
 
 func (c *cachedRegistryClient) ListStorageProviders(ctx context.Context, in *registry.ListStorageProvidersRequest, opts ...grpc.CallOption) (*registry.ListStorageProvidersResponse, error) {
-	cache := c.caches[listproviders]
-
-	user := ctxpkg.ContextMustGetUser(ctx)
 
 	spaceID := sdk.DecodeOpaqueMap(in.Opaque)["space_id"]
 
-	key := user.GetId().GetOpaqueId() + "!" + spaceID
-	if key != "!" {
+	key := c.cache.GetKey(ctxpkg.ContextMustGetUser(ctx).GetId(), spaceID)
+	if key != "" {
 		s := &registry.ListStorageProvidersResponse{}
-		if err := pullFromCache(cache, key, s); err == nil {
+		if err := c.cache.PullFromCache(key, s); err == nil {
 			return s, nil
 		}
 	}
@@ -203,7 +64,7 @@ func (c *cachedRegistryClient) ListStorageProviders(ctx context.Context, in *reg
 	case spaceID == utils.ShareStorageSpaceID: // TODO do we need to compare providerid and spaceid separately?
 		return resp, nil
 	default:
-		return resp, pushToCache(cache, key, resp)
+		return resp, c.cache.PushToCache(key, resp)
 	}
 }
 
@@ -222,50 +83,21 @@ func (c *cachedRegistryClient) GetHome(ctx context.Context, in *registry.GetHome
 */
 
 type cachedAPIClient struct {
-	c      provider.ProviderAPIClient
-	caches Caches
-}
-
-// generates a user specific key pointing to ref - used for statcache
-// a key looks like: uid:1234-1233!sid:5678-5677!oid:9923-9934!path:/path/to/source
-// as you see it adds "uid:"/"sid:"/"oid:" prefixes to the uuids so they can be differentiated
-func statKey(user *userpb.User, ref *provider.Reference, metaDataKeys, fieldMaskPaths []string) string {
-	if ref == nil || ref.ResourceId == nil || ref.ResourceId.SpaceId == "" {
-		return ""
-	}
-
-	key := strings.Builder{}
-	key.WriteString("uid:")
-	key.WriteString(user.Id.OpaqueId)
-	key.WriteString("!sid:")
-	key.WriteString(ref.ResourceId.SpaceId)
-	key.WriteString("!oid:")
-	key.WriteString(ref.ResourceId.OpaqueId)
-	key.WriteString("!path:")
-	key.WriteString(ref.Path)
-	for _, k := range metaDataKeys {
-		key.WriteString("!mdk:")
-		key.WriteString(k)
-	}
-	for _, p := range fieldMaskPaths {
-		key.WriteString("!fmp:")
-		key.WriteString(p)
-	}
-
-	return key.String()
+	c               provider.ProviderAPIClient
+	statCache       cache.StatCache
+	createHomeCache cache.CreateHomeCache
 }
 
 // Stat looks in cache first before forwarding to storage provider
 func (c *cachedAPIClient) Stat(ctx context.Context, in *provider.StatRequest, opts ...grpc.CallOption) (*provider.StatResponse, error) {
-	cache := c.caches[stat]
-
-	key := statKey(ctxpkg.ContextMustGetUser(ctx), in.GetRef(), in.GetArbitraryMetadataKeys(), in.GetFieldMask().GetPaths())
+	key := c.statCache.GetKey(ctxpkg.ContextMustGetUser(ctx).GetId(), in.GetRef(), in.GetArbitraryMetadataKeys(), in.GetFieldMask().GetPaths())
 	if key != "" {
 		s := &provider.StatResponse{}
-		if err := pullFromCache(cache, key, s); err == nil {
+		if err := c.statCache.PullFromCache(key, s); err == nil {
 			return s, nil
 		}
 	}
+
 	resp, err := c.c.Stat(ctx, in, opts...)
 	switch {
 	case err != nil:
@@ -280,21 +112,18 @@ func (c *cachedAPIClient) Stat(ctx context.Context, in *provider.StatRequest, op
 		// FIXME: find a way to cache/invalidate them too
 		return resp, nil
 	default:
-		return resp, pushToCache(cache, key, resp)
+		return resp, c.statCache.PushToCache(key, resp)
 	}
 }
 
 // CreateHome caches calls to CreateHome locally - anyways they only need to be called once per user
 func (c *cachedAPIClient) CreateHome(ctx context.Context, in *provider.CreateHomeRequest, opts ...grpc.CallOption) (*provider.CreateHomeResponse, error) {
-	cache := c.caches[createhome]
-
-	key := ctxpkg.ContextMustGetUser(ctx).Id.OpaqueId
+	key := c.createHomeCache.GetKey(ctxpkg.ContextMustGetUser(ctx).GetId())
 	if key != "" {
 		s := &provider.CreateHomeResponse{}
-		if err := pullFromCache(cache, key, s); err == nil {
+		if err := c.createHomeCache.PullFromCache(key, s); err == nil {
 			return s, nil
 		}
-
 	}
 	resp, err := c.c.CreateHome(ctx, in, opts...)
 	switch {
@@ -305,7 +134,7 @@ func (c *cachedAPIClient) CreateHome(ctx context.Context, in *provider.CreateHom
 	case key == "":
 		return resp, nil
 	default:
-		return resp, pushToCache(cache, key, resp)
+		return resp, c.createHomeCache.PushToCache(key, resp)
 	}
 }
 
