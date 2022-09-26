@@ -267,7 +267,6 @@ func NewUploaderRole() *Role {
 		Name: RoleUploader,
 		cS3ResourcePermissions: &provider.ResourcePermissions{
 			Stat:               true,
-			ListContainer:      true,
 			GetPath:            true,
 			CreateContainer:    true,
 			InitiateFileUpload: true,
@@ -368,7 +367,6 @@ func NewLegacyRoleFromOCSPermissions(p Permissions) *Role {
 	}
 	if p.Contain(PermissionCreate) {
 		r.cS3ResourcePermissions.Stat = true
-		r.cS3ResourcePermissions.ListContainer = true
 		r.cS3ResourcePermissions.CreateContainer = true
 		// FIXME permissions mismatch: double check ocs create vs update file
 		// - if the file exists the ocs api needs to check update permission,
@@ -414,8 +412,7 @@ func RoleFromResourcePermissions(rp *provider.ResourcePermissions) *Role {
 		rp.RestoreRecycleItem {
 		r.ocsPermissions |= PermissionWrite
 	}
-	if rp.ListContainer &&
-		rp.Stat &&
+	if rp.Stat &&
 		rp.CreateContainer &&
 		rp.InitiateFileUpload {
 		r.ocsPermissions |= PermissionCreate
