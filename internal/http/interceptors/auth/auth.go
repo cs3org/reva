@@ -71,6 +71,7 @@ type config struct {
 	TokenManagers          map[string]map[string]interface{} `mapstructure:"token_managers"`
 	TokenWriter            string                            `mapstructure:"token_writer"`
 	TokenWriters           map[string]map[string]interface{} `mapstructure:"token_writers"`
+	UserGroupsCacheSize    int                               `mapstructure:"usergroups_cache_size"`
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -112,7 +113,10 @@ func New(m map[string]interface{}, unprotected []string, tp trace.TracerProvider
 		conf.CredentialsByUserAgent = map[string]string{}
 	}
 
-	userGroupsCache = gcache.New(1000000).LFU().Build()
+	if conf.UserGroupsCacheSize == 0 {
+		conf.UserGroupsCacheSize = 5000
+	}
+	userGroupsCache = gcache.New(conf.UserGroupsCacheSize).LFU().Build()
 
 	credChain := map[string]auth.CredentialStrategy{}
 	for i, key := range conf.CredentialChain {

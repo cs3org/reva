@@ -35,6 +35,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/rhttp/datatx/manager/registry"
 	"github.com/cs3org/reva/v2/pkg/rhttp/datatx/utils/download"
 	"github.com/cs3org/reva/v2/pkg/storage"
+	"github.com/cs3org/reva/v2/pkg/storage/cache"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/utils"
 )
@@ -43,11 +44,17 @@ func init() {
 	registry.Register("simple", New)
 }
 
-type config struct{}
+type config struct {
+	CacheStore    string   `mapstructure:"cache_store"`
+	CacheNodes    []string `mapstructure:"cache_nodes"`
+	CacheDatabase string   `mapstructure:"cache_database"`
+	CacheTable    string   `mapstructure:"cache_table"`
+}
 
 type manager struct {
 	conf      *config
 	publisher events.Publisher
+	statCache cache.StatCache
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -69,6 +76,7 @@ func New(m map[string]interface{}, publisher events.Publisher) (datatx.DataTX, e
 	return &manager{
 		conf:      c,
 		publisher: publisher,
+		statCache: cache.GetStatCache(c.CacheStore, c.CacheNodes, c.CacheDatabase, c.CacheTable, 0),
 	}, nil
 }
 
@@ -86,6 +94,7 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 
 			ref := &provider.Reference{Path: fn}
 			info, err := fs.Upload(ctx, ref, r.Body, func(owner *userpb.UserId, ref *provider.Reference) {
+				datatx.InvalidateCache(owner, ref, m.statCache)
 				if err := datatx.EmitFileUploadedEvent(owner, ref, m.publisher); err != nil {
 					sublog.Error().Err(err).Msg("failed to publish FileUploaded event")
 				}

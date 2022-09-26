@@ -117,8 +117,14 @@ func getDataTXs(c *config, fs storage.FS, publisher events.Publisher) (map[strin
 	}
 	if len(c.DataTXs) == 0 {
 		c.DataTXs["simple"] = make(map[string]interface{})
+		c.DataTXs["simple"]["cache_store"] = "noop"
+		c.DataTXs["simple"]["cache_database"] = "reva"
 		c.DataTXs["spaces"] = make(map[string]interface{})
+		c.DataTXs["spaces"]["cache_store"] = "noop"
+		c.DataTXs["spaces"]["cache_database"] = "reva"
 		c.DataTXs["tus"] = make(map[string]interface{})
+		c.DataTXs["tus"]["cache_store"] = "noop"
+		c.DataTXs["tus"]["cache_database"] = "reva"
 	}
 
 	txs := make(map[string]http.Handler)

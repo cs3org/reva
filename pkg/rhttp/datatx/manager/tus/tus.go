@@ -36,6 +36,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/rhttp/datatx"
 	"github.com/cs3org/reva/v2/pkg/rhttp/datatx/manager/registry"
 	"github.com/cs3org/reva/v2/pkg/storage"
+	"github.com/cs3org/reva/v2/pkg/storage/cache"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/mitchellh/mapstructure"
 )
@@ -44,11 +45,17 @@ func init() {
 	registry.Register("tus", New)
 }
 
-type config struct{}
+type config struct {
+	CacheStore    string   `mapstructure:"cache_store"`
+	CacheNodes    []string `mapstructure:"cache_nodes"`
+	CacheDatabase string   `mapstructure:"cache_database"`
+	CacheTable    string   `mapstructure:"cache_table"`
+}
 
 type manager struct {
 	conf      *config
 	publisher events.Publisher
+	statCache cache.StatCache
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -66,10 +73,10 @@ func New(m map[string]interface{}, publisher events.Publisher) (datatx.DataTX, e
 	if err != nil {
 		return nil, err
 	}
-
 	return &manager{
 		conf:      c,
 		publisher: publisher,
+		statCache: cache.GetStatCache(c.CacheStore, c.CacheNodes, c.CacheDatabase, c.CacheTable, 0),
 	}, nil
 }
 
@@ -88,10 +95,9 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 	// let the composable storage tell tus which extensions it supports
 	composable.UseIn(composer)
 
-	publishEvents := m.publisher != nil
 	config := tusd.Config{
 		StoreComposer:         composer,
-		NotifyCompleteUploads: publishEvents,
+		NotifyCompleteUploads: true,
 	}
 
 	handler, err := tusd.NewUnroutedHandler(config)
@@ -99,29 +105,30 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 		return nil, err
 	}
 
-	if publishEvents {
-		go func() {
-			for {
-				ev := <-handler.CompleteUploads
-				info := ev.Upload
-				owner := &userv1beta1.UserId{
-					Idp:      info.Storage["Idp"],
-					OpaqueId: info.Storage["UserId"],
-				}
-				ref := &provider.Reference{
-					ResourceId: &provider.ResourceId{
-						StorageId: info.MetaData["providerID"],
-						SpaceId:   info.Storage["SpaceRoot"],
-						OpaqueId:  info.Storage["SpaceRoot"],
-					},
-					Path: utils.MakeRelativePath(filepath.Join(info.MetaData["dir"], info.MetaData["filename"])),
-				}
+	go func() {
+		for {
+			ev := <-handler.CompleteUploads
+			info := ev.Upload
+			owner := &userv1beta1.UserId{
+				Idp:      info.Storage["Idp"],
+				OpaqueId: info.Storage["UserId"],
+			}
+			ref := &provider.Reference{
+				ResourceId: &provider.ResourceId{
+					StorageId: info.MetaData["providerID"],
+					SpaceId:   info.Storage["SpaceRoot"],
+					OpaqueId:  info.Storage["SpaceRoot"],
+				},
+				Path: utils.MakeRelativePath(filepath.Join(info.MetaData["dir"], info.MetaData["filename"])),
+			}
+			datatx.InvalidateCache(owner, ref, m.statCache)
+			if m.publisher != nil {
 				if err := datatx.EmitFileUploadedEvent(owner, ref, m.publisher); err != nil {
 					appctx.GetLogger(context.Background()).Error().Err(err).Msg("failed to publish FileUploaded event")
 				}
 			}
-		}()
-	}
+		}
+	}()
 
 	h := handler.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		method := r.Method
