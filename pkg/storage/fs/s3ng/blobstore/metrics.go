@@ -18,7 +18,10 @@
 
 package blobstore
 
-import "github.com/prometheus/client_golang/prometheus"
+import (
+	"github.com/prometheus/client_golang/prometheus"
+	"go-micro.dev/v4/util/log"
+)
 
 var (
 	// Namespace defines the namespace for the defines metrics.
@@ -50,8 +53,14 @@ func NewMetrics() *Metrics {
 			Help:      "Storage access tx",
 		}, []string{}),
 	}
-	_ = prometheus.Register(m.Rx)
-	_ = prometheus.Register(m.Tx)
+	err := prometheus.Register(m.Rx)
+	if err != nil {
+		log.Errorf("Failed to register prometheus storage rx Counter (%s)", err)
+	}
+	err = prometheus.Register(m.Tx)
+	if err != nil {
+		log.Errorf("Failed to register prometheus storage tx Counter (%s)", err)
+	}
 
 	return m
 }
