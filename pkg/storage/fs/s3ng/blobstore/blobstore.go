@@ -30,7 +30,6 @@ import (
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/pkg/errors"
-	"github.com/prometheus/client_golang/prometheus"
 )
 
 // Blobstore provides an interface to an s3 compatible blobstore
@@ -38,18 +37,6 @@ type Blobstore struct {
 	client *minio.Client
 
 	bucket string
-}
-
-// PrometheusAwareReader provides an interface to an prometheus aware Reader
-type PrometheusAwareReader struct {
-	r io.Reader
-	m *prometheus.CounterVec
-}
-
-// PrometheusAwareReadCloser provides an interface to a prometheus aware ReadCloser
-type PrometheusAwareReadCloser struct {
-	r io.ReadCloser
-	m *prometheus.CounterVec
 }
 
 var metrics = NewMetrics()
@@ -75,25 +62,6 @@ func New(endpoint, region, bucket, accessKey, secretKey string) (*Blobstore, err
 		client: client,
 		bucket: bucket,
 	}, nil
-}
-
-// Read implements the read function of the PrometheusAwareReader
-func (p *PrometheusAwareReader) Read(b []byte) (n int, err error) {
-	n, err = p.r.Read(b)
-	p.m.WithLabelValues().Add(float64(n))
-	return
-}
-
-// Read implements the read function of the PrometheusAwareReadCloser
-func (p *PrometheusAwareReadCloser) Read(b []byte) (n int, err error) {
-	n, err = p.r.Read(b)
-	p.m.WithLabelValues().Add(float64(n))
-	return
-}
-
-// Close implements the close function of the PrometheusAwareReadCloser
-func (p *PrometheusAwareReadCloser) Close() error {
-	return p.r.Close()
 }
 
 // Upload stores some data in the blobstore under the given key
