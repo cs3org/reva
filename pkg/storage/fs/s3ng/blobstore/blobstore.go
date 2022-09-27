@@ -66,10 +66,10 @@ func New(endpoint, region, bucket, accessKey, secretKey string) (*Blobstore, err
 
 // Upload stores some data in the blobstore under the given key
 func (bs *Blobstore) Upload(node *node.Node, reader io.Reader) error {
-	// reader = &PrometheusAwareReader{
-	// 	r: reader,
-	// 	m: metrics.Tx,
-	// }
+	reader = &PrometheusAwareReader{
+		r: reader,
+		m: metrics.Tx,
+	}
 	size := int64(-1)
 	if file, ok := reader.(*os.File); ok {
 		info, err := file.Stat()

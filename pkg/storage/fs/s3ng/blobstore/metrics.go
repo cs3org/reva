@@ -76,7 +76,7 @@ type PrometheusAwareReader struct {
 // Read implements the read function of the PrometheusAwareReader
 func (p *PrometheusAwareReader) Read(b []byte) (n int, err error) {
 	n, err = p.r.Read(b)
-	go p.m.WithLabelValues().Add(float64(n))
+	p.m.WithLabelValues().Add(float64(n))
 	return
 }
 
@@ -89,7 +89,7 @@ type PrometheusAwareReadCloser struct {
 // Read implements the read function of the PrometheusAwareReadCloser
 func (p *PrometheusAwareReadCloser) Read(b []byte) (n int, err error) {
 	n, err = p.r.Read(b)
-	go p.m.WithLabelValues().Add(float64(n))
+	p.m.WithLabelValues().Add(float64(n))
 	return
 }
 
