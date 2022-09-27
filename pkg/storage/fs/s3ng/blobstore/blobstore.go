@@ -93,11 +93,10 @@ func (bs *Blobstore) Download(node *node.Node) (io.ReadCloser, error) {
 	if err != nil {
 		return nil, errors.Wrapf(err, "could not download object '%s' from bucket '%s'", bs.path(node), bs.bucket)
 	}
-	return reader, nil
-	// return &PrometheusAwareReadCloser{
-	// 	r: reader,
-	// 	m: metrics.Rx,
-	// }, nil
+	return &PrometheusAwareReadCloser{
+		r: reader,
+		m: metrics.Rx,
+	}, err
 }
 
 // Delete deletes a blob from the blobstore

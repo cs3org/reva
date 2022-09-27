@@ -90,7 +90,7 @@ type PrometheusAwareReadCloser struct {
 func (p *PrometheusAwareReadCloser) Read(b []byte) (n int, err error) {
 	n, err = p.r.Read(b)
 	p.m.WithLabelValues().Add(float64(n))
-	return
+	return n, err
 }
 
 // Close implements the close function of the PrometheusAwareReadCloser
