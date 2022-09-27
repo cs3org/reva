@@ -112,6 +112,15 @@ type Meta struct {
 // MetaOK is the default ok response
 var MetaOK = Meta{Status: "ok", StatusCode: 100, Message: "OK"}
 
+// MetaFailure is a failure response with code 101
+var MetaFailure = Meta{Status: "", StatusCode: 101, Message: "Failure"}
+
+// MetaInvalidInput is an error response with code 102
+var MetaInvalidInput = Meta{Status: "", StatusCode: 102, Message: "Invalid Input"}
+
+// MetaForbidden is an error response with code 104
+var MetaForbidden = Meta{Status: "", StatusCode: 104, Message: "Forbidden"}
+
 // MetaBadRequest is used for unknown errors
 var MetaBadRequest = Meta{Status: "error", StatusCode: 400, Message: "Bad Request"}
 
@@ -124,8 +133,20 @@ var MetaUnauthorized = Meta{Status: "error", StatusCode: 997, Message: "Unauthor
 // MetaNotFound is returned when trying to access not existing resources
 var MetaNotFound = Meta{Status: "error", StatusCode: 998, Message: "Not Found"}
 
+// MetaPathNotFound is returned when trying to share not existing resources
+var MetaPathNotFound = Meta{Status: "failure", StatusCode: 404, Message: MessagePathNotFound}
+
 // MetaUnknownError is used for unknown errors
 var MetaUnknownError = Meta{Status: "error", StatusCode: 999, Message: "Unknown Error"}
+
+// MessageUserNotFound is  used when a user can not be found
+var MessageUserNotFound = "The requested user could not be found"
+
+// MessageGroupNotFound is used when a group can not be found
+var MessageGroupNotFound = "The requested group could not be found"
+
+// MessagePathNotFound is used when a file or folder can not be found
+var MessagePathNotFound = "Wrong path, file/folder doesn't exist"
 
 // WriteOCSSuccess handles writing successful ocs response data
 func WriteOCSSuccess(w http.ResponseWriter, r *http.Request, d interface{}) {
