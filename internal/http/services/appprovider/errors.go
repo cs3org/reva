@@ -32,6 +32,7 @@ const (
 	appErrorNotFound         appErrorCode = "RESOURCE_NOT_FOUND"
 	appErrorAlreadyExists    appErrorCode = "RESOURCE_ALREADY_EXISTS"
 	appErrorUnauthenticated  appErrorCode = "UNAUTHENTICATED"
+	appErrorPermissionDenied appErrorCode = "PERMISSION_DENIED"
 	appErrorUnimplemented    appErrorCode = "NOT_IMPLEMENTED"
 	appErrorInvalidParameter appErrorCode = "INVALID_PARAMETER"
 	appErrorServerError      appErrorCode = "SERVER_ERROR"
@@ -45,6 +46,7 @@ var appErrorCodeMapping = map[appErrorCode]int{
 	appErrorUnimplemented:    http.StatusNotImplemented,
 	appErrorInvalidParameter: http.StatusBadRequest,
 	appErrorServerError:      http.StatusInternalServerError,
+	appErrorPermissionDenied: http.StatusForbidden,
 }
 
 // APIError encompasses the error type and message
