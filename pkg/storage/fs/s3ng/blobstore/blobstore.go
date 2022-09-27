@@ -66,10 +66,10 @@ func New(endpoint, region, bucket, accessKey, secretKey string) (*Blobstore, err
 
 // Upload stores some data in the blobstore under the given key
 func (bs *Blobstore) Upload(node *node.Node, reader io.Reader) error {
-	reader = &PrometheusAwareReader{
-		r: reader,
-		m: metrics.Tx,
-	}
+	// reader = &PrometheusAwareReader{
+	// 	r: reader,
+	// 	m: metrics.Tx,
+	// }
 	size := int64(-1)
 	if file, ok := reader.(*os.File); ok {
 		info, err := file.Stat()
@@ -93,10 +93,11 @@ func (bs *Blobstore) Download(node *node.Node) (io.ReadCloser, error) {
 	if err != nil {
 		return nil, errors.Wrapf(err, "could not download object '%s' from bucket '%s'", bs.path(node), bs.bucket)
 	}
-	return &PrometheusAwareReadCloser{
-		r: reader,
-		m: metrics.Rx,
-	}, nil
+	return reader, nil
+	// return &PrometheusAwareReadCloser{
+	// 	r: reader,
+	// 	m: metrics.Rx,
+	// }, nil
 }
 
 // Delete deletes a blob from the blobstore
