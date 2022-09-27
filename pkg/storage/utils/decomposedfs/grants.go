@@ -54,10 +54,6 @@ func (fs *Decomposedfs) AddGrant(ctx context.Context, ref *provider.Reference, g
 		return fs.UpdateGrant(ctx, ref, g)
 	}
 
-	// add acting user
-	u := ctxpkg.ContextMustGetUser(ctx)
-	g.Creator = u.GetId()
-
 	owner := node.Owner()
 	grants, err := node.ListGrants(ctx)
 	if err != nil {
@@ -121,7 +117,7 @@ func (fs *Decomposedfs) ListGrants(ctx context.Context, ref *provider.Reference)
 		g := aces[i].Grant()
 
 		// you may list your own grants even without listgrants permission
-		if !listGrants && !utils.UserEqual(g.Creator, uid) && !utils.UserEqual(g.Grantee.GetUserId(), uid) {
+		if !listGrants && !utils.UserIDEqual(g.Creator, uid) && !utils.UserIDEqual(g.Grantee.GetUserId(), uid) {
 			continue
 		}
 
@@ -143,7 +139,7 @@ func (fs *Decomposedfs) RemoveGrant(ctx context.Context, ref *provider.Reference
 	}
 
 	// you are allowed to remove grants if you created them yourself or have the proper permission
-	if !utils.UserEqual(grant.Creator, ctxpkg.ContextMustGetUser(ctx).GetId()) {
+	if !utils.UserIDEqual(grant.Creator, ctxpkg.ContextMustGetUser(ctx).GetId()) {
 		ok, err := fs.p.HasPermission(ctx, node, func(rp *provider.ResourcePermissions) bool {
 			return rp.RemoveGrant
 		})
@@ -203,7 +199,7 @@ func (fs *Decomposedfs) UpdateGrant(ctx context.Context, ref *provider.Reference
 	}
 
 	// You may update a grant when you have the UpdateGrant permission or created the grant (regardless what your permissions are now)
-	if !utils.UserEqual(grant.Creator, ctxpkg.ContextMustGetUser(ctx).GetId()) {
+	if !utils.UserIDEqual(grant.Creator, ctxpkg.ContextMustGetUser(ctx).GetId()) {
 		ok, err := fs.p.HasPermission(ctx, node, func(rp *provider.ResourcePermissions) bool {
 			return rp.UpdateGrant
 		})

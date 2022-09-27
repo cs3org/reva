@@ -334,13 +334,13 @@ func isLockModificationAllowed(ctx context.Context, oldLock *provider.Lock, newL
 		lockUserEquals = true
 		contextUserEquals = true
 	} else {
-		lockUserEquals = utils.UserEqual(oldLock.User, newLock.GetUser())
+		lockUserEquals = utils.UserIDEqual(oldLock.User, newLock.GetUser())
 		if !lockUserEquals {
 			return false, errtypes.PermissionDenied("users of the locks are mismatching")
 		}
 
 		u := ctxpkg.ContextMustGetUser(ctx)
-		contextUserEquals = utils.UserEqual(oldLock.User, u.Id)
+		contextUserEquals = utils.UserIDEqual(oldLock.User, u.Id)
 		if !contextUserEquals {
 			return false, errtypes.PermissionDenied("lock holder and current user are mismatching")
 		}
