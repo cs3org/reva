@@ -45,7 +45,6 @@ var _ = Describe("ACE", func() {
 			Permissions: &provider.ResourcePermissions{},
 			Creator: &userpb.UserId{
 				OpaqueId: "baz",
-				Idp:      "idp",
 			},
 		}
 

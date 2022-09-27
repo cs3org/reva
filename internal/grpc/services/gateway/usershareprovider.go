@@ -367,6 +367,7 @@ func (s *svc) denyGrant(ctx context.Context, id *provider.ResourceId, g *provide
 		Ref:     ref,
 		Grantee: g,
 		Opaque:  opaque,
+		// TODO add creator
 	}
 
 	c, _, err := s.find(ctx, ref)
@@ -393,11 +394,13 @@ func (s *svc) addGrant(ctx context.Context, id *provider.ResourceId, g *provider
 		ResourceId: id,
 	}
 
+	creator := ctxpkg.ContextMustGetUser(ctx)
 	grantReq := &provider.AddGrantRequest{
 		Ref: ref,
 		Grant: &provider.Grant{
 			Grantee:     g,
 			Permissions: p,
+			Creator:     creator.GetId(),
 		},
 		Opaque: opaque,
 	}
@@ -425,11 +428,14 @@ func (s *svc) updateGrant(ctx context.Context, id *provider.ResourceId, g *provi
 	ref := &provider.Reference{
 		ResourceId: id,
 	}
+
+	creator := ctxpkg.ContextMustGetUser(ctx)
 	grantReq := &provider.UpdateGrantRequest{
 		Ref: ref,
 		Grant: &provider.Grant{
 			Grantee:     g,
 			Permissions: p,
+			Creator:     creator.GetId(),
 		},
 	}
 
