@@ -46,9 +46,9 @@ type PrometheusAwareReader struct {
 	m *prometheus.CounterVec
 }
 
-// PrometheusAwareReadCloser provides an interface to a prometheus aware ReadCloser
-type PrometheusAwareReadCloser struct {
-	r io.ReadCloser
+// PrometheusAwareReadSeekCloser provides an interface to a prometheus aware ReadCloser
+type PrometheusAwareReadSeekCloser struct {
+	r io.ReadSeekCloser
 	m *prometheus.CounterVec
 }
 
@@ -84,15 +84,21 @@ func (p *PrometheusAwareReader) Read(b []byte) (n int, err error) {
 	return
 }
 
-// Read implements the read function of the PrometheusAwareReadCloser
-func (p *PrometheusAwareReadCloser) Read(b []byte) (n int, err error) {
+// Read implements the read function of the PrometheusAwareReadSeekCloser
+func (p *PrometheusAwareReadSeekCloser) Read(b []byte) (n int, err error) {
 	n, err = p.r.Read(b)
 	p.m.WithLabelValues().Add(float64(n))
 	return
 }
 
+// Seek implements the seek function of the PrometheusAwareReadSeekCloser
+func (p *PrometheusAwareReadSeekCloser) Seek(offset int64, whence int) (int64, error) {
+	return p.r.Seek(offset, whence)
+
+}
+
 // Close implements the close function of the PrometheusAwareReadCloser
-func (p *PrometheusAwareReadCloser) Close() error {
+func (p *PrometheusAwareReadSeekCloser) Close() error {
 	return p.r.Close()
 }
 
@@ -125,7 +131,7 @@ func (bs *Blobstore) Download(node *node.Node) (io.ReadCloser, error) {
 	if err != nil {
 		return nil, errors.Wrapf(err, "could not download object '%s' from bucket '%s'", bs.path(node), bs.bucket)
 	}
-	return &PrometheusAwareReadCloser{
+	return &PrometheusAwareReadSeekCloser{
 		r: reader,
 		m: metrics.Rx,
 	}, nil
