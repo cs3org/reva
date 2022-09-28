@@ -58,12 +58,14 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/pkg/xattr v0.4.7
 	github.com/prometheus/alertmanager v0.24.0
+	github.com/prometheus/client_golang v1.13.0
 	github.com/rs/cors v1.8.2
 	github.com/rs/zerolog v1.28.0
 	github.com/sciencemesh/meshdirectory-web v1.0.4
 	github.com/sethvargo/go-password v0.2.0
 	github.com/stretchr/testify v1.8.0
 	github.com/studio-b12/gowebdav v0.0.0-20220128162035-c7b1ff8a5e62
+	github.com/test-go/testify v1.1.4
 	github.com/thanhpk/randstr v1.0.4
 	github.com/tus/tusd v1.9.2
 	github.com/wk8/go-ordered-map v1.0.0
@@ -171,7 +173,6 @@ require (
 	github.com/pkg/term v1.1.0 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/pquerna/cachecontrol v0.1.0 // indirect
-	github.com/prometheus/client_golang v1.13.0 // indirect
 	github.com/prometheus/client_model v0.2.0 // indirect
 	github.com/prometheus/common v0.37.0 // indirect
 	github.com/prometheus/procfs v0.8.0 // indirect
@@ -184,7 +185,6 @@ require (
 	github.com/shurcooL/vfsgen v0.0.0-20200824052919-0d455de96546 // indirect
 	github.com/sirupsen/logrus v1.9.0 // indirect
 	github.com/stretchr/objx v0.4.0 // indirect
-	github.com/test-go/testify v1.1.4 // indirect
 	github.com/tidwall/pretty v1.2.0 // indirect
 	github.com/urfave/cli/v2 v2.16.3 // indirect
 	github.com/xanzy/ssh-agent v0.3.2 // indirect
