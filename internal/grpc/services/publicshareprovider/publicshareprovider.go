@@ -136,7 +136,7 @@ func (s *service) CreatePublicShare(ctx context.Context, req *link.CreatePublicS
 
 	if !s.isPathAllowed(req.ResourceInfo.Path) {
 		return &link.CreatePublicShareResponse{
-			Status: status.NewInvalidArg(ctx, "share creation is not allowed for the specified path"),
+			Status: status.NewInvalid(ctx, "share creation is not allowed for the specified path"),
 		}, nil
 	}
 

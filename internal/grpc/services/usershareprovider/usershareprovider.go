@@ -143,7 +143,7 @@ func (s *service) CreateShare(ctx context.Context, req *collaboration.CreateShar
 
 	if !s.isPathAllowed(req.ResourceInfo.Path) {
 		return &collaboration.CreateShareResponse{
-			Status: status.NewInvalidArg(ctx, "share creation is not allowed for the specified path"),
+			Status: status.NewInvalid(ctx, "share creation is not allowed for the specified path"),
 		}, nil
 	}
 
@@ -266,22 +266,22 @@ func (s *service) UpdateReceivedShare(ctx context.Context, req *collaboration.Up
 
 	if req.Share == nil {
 		return &collaboration.UpdateReceivedShareResponse{
-			Status: status.NewInvalidArg(ctx, "updating requires a received share object"),
+			Status: status.NewInvalid(ctx, "updating requires a received share object"),
 		}, nil
 	}
 	if req.Share.Share == nil {
 		return &collaboration.UpdateReceivedShareResponse{
-			Status: status.NewInvalidArg(ctx, "share missing"),
+			Status: status.NewInvalid(ctx, "share missing"),
 		}, nil
 	}
 	if req.Share.Share.Id == nil {
 		return &collaboration.UpdateReceivedShareResponse{
-			Status: status.NewInvalidArg(ctx, "share id missing"),
+			Status: status.NewInvalid(ctx, "share id missing"),
 		}, nil
 	}
 	if req.Share.Share.Id.OpaqueId == "" {
 		return &collaboration.UpdateReceivedShareResponse{
-			Status: status.NewInvalidArg(ctx, "share id empty"),
+			Status: status.NewInvalid(ctx, "share id empty"),
 		}, nil
 	}
 
