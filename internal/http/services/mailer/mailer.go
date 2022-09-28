@@ -155,7 +155,18 @@ func getIDsFromRequest(r *http.Request) ([]string, error) {
 		return nil, err
 	}
 
-	return r.Form["id"], nil
+	var ids []string
+	idsSet := make(map[string]struct{})
+
+	for _, id := range r.Form["id"] {
+		if _, ok := idsSet[id]; ok {
+			continue
+		}
+		idsSet[id] = struct{}{}
+		ids = append(ids, id)
+	}
+
+	return ids, nil
 }
 
 func (s *svc) Handler() http.Handler {
