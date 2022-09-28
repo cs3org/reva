@@ -147,7 +147,15 @@ func (s *svc) Unprotected() []string {
 }
 
 type out struct {
-	Recipient string `json:"recipient"`
+	Recipients []string `json:"recipients"`
+}
+
+func getIDsFromRequest(r *http.Request) ([]string, error) {
+	if err := r.ParseForm(); err != nil {
+		return nil, err
+	}
+
+	return r.Form["id"], nil
 }
 
 func (s *svc) Handler() http.Handler {
@@ -159,21 +167,29 @@ func (s *svc) Handler() http.Handler {
 
 		ctx := r.Context()
 
-		id := r.PostFormValue("id")
-		if id == "" {
+		ids, err := getIDsFromRequest(r)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+		}
+
+		if len(ids) == 0 {
 			http.Error(w, "share id not provided", http.StatusBadRequest)
 			return
 		}
 
-		recipient, err := s.sendMailForShare(ctx, id)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
+		var recipients []string
+		for _, id := range ids {
+			recipient, err := s.sendMailForShare(ctx, id)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			recipients = append(recipients, recipient)
 		}
 
 		w.WriteHeader(http.StatusOK)
 		w.Header().Add("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(out{Recipient: recipient})
+		_ = json.NewEncoder(w).Encode(out{Recipients: recipients})
 	})
 }
 
