@@ -101,6 +101,12 @@ func (s *service) Register(ss *grpc.Server) {
 }
 
 func (s *service) GetGroup(ctx context.Context, req *grouppb.GetGroupRequest) (*grouppb.GetGroupResponse, error) {
+	if req.GroupId == nil {
+		res := &grouppb.GetGroupResponse{
+			Status: status.NewInvalid(ctx, "groupid missing"),
+		}
+		return res, nil
+	}
 	group, err := s.groupmgr.GetGroup(ctx, req.GroupId, req.SkipFetchingMembers)
 	if err != nil {
 		res := &grouppb.GetGroupResponse{}
@@ -156,6 +162,12 @@ func (s *service) FindGroups(ctx context.Context, req *grouppb.FindGroupsRequest
 }
 
 func (s *service) GetMembers(ctx context.Context, req *grouppb.GetMembersRequest) (*grouppb.GetMembersResponse, error) {
+	if req.GroupId == nil {
+		res := &grouppb.GetMembersResponse{
+			Status: status.NewInvalid(ctx, "groupid missing"),
+		}
+		return res, nil
+	}
 	members, err := s.groupmgr.GetMembers(ctx, req.GroupId)
 	if err != nil {
 		return &grouppb.GetMembersResponse{
@@ -170,6 +182,12 @@ func (s *service) GetMembers(ctx context.Context, req *grouppb.GetMembersRequest
 }
 
 func (s *service) HasMember(ctx context.Context, req *grouppb.HasMemberRequest) (*grouppb.HasMemberResponse, error) {
+	if req.GroupId == nil || req.UserId == nil {
+		res := &grouppb.HasMemberResponse{
+			Status: status.NewInvalid(ctx, "groupid or userid missing"),
+		}
+		return res, nil
+	}
 	ok, err := s.groupmgr.HasMember(ctx, req.GroupId, req.UserId)
 	if err != nil {
 		return &grouppb.HasMemberResponse{
