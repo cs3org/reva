@@ -226,6 +226,12 @@ func (s *service) ListPublicShares(ctx context.Context, req *link.ListPublicShar
 	log.Info().Str("publicshareprovider", "list").Msg("list public share")
 	user, _ := ctxpkg.ContextGetUser(ctx)
 
+	if req.Opaque != nil {
+		if v, ok := req.Opaque.Map[ctxpkg.ResoucePathCtx]; ok {
+			ctx = ctxpkg.ContextSetResourcePath(ctx, string(v.Value))
+		}
+	}
+
 	shares, err := s.sm.ListPublicShares(ctx, user, req.Filters, &provider.ResourceInfo{}, req.GetSign())
 	if err != nil {
 		log.Err(err).Msg("error listing shares")

@@ -4,6 +4,9 @@ import (
 	"context"
 )
 
+// ResoucePathCtx is the key used in the opaque id for passing the resource path.
+const ResoucePathCtx = "resource_path"
+
 // ContextGetResourcePath returns the resource path if set in the given context.
 func ContextGetResourcePath(ctx context.Context) (string, bool) {
 	p, ok := ctx.Value(pathKey).(string)
