@@ -19,17 +19,21 @@
 package appprovider
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/url"
 	"path"
+	"strings"
 
 	appregistry "github.com/cs3org/go-cs3apis/cs3/app/registry/v1beta1"
+	providerv1beta1 "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v2/internal/http/services/datagateway"
+	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/status"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v2/pkg/rhttp"
@@ -380,29 +384,40 @@ func (s *svc) handleOpen(openMode int) http.HandlerFunc {
 			Path:       ".",
 		}
 
-		statRes, err := client.Stat(ctx, &provider.StatRequest{Ref: fileRef})
+		viewMode, err := getViewModeFromPublicScope(ctx)
 		if err != nil {
-			writeError(w, r, appErrorServerError, "Internal error accessing the file, please try again later", err)
+			writeError(w, r, appErrorPermissionDenied, "permission denied to open the application", err)
 			return
 		}
 
-		if statRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
-			writeError(w, r, appErrorNotFound, "file does not exist", nil)
-			return
-		} else if statRes.Status.Code != rpc.Code_CODE_OK {
-			writeError(w, r, appErrorServerError, "failed to stat the file", nil)
-			return
-		}
-
-		if statRes.Info.Type != provider.ResourceType_RESOURCE_TYPE_FILE {
-			writeError(w, r, appErrorInvalidParameter, "the given file id does not point to a file", nil)
-			return
-		}
-
-		viewMode := getViewMode(statRes.Info, r.Form.Get("view_mode"))
 		if viewMode == gateway.OpenInAppRequest_VIEW_MODE_INVALID {
-			writeError(w, r, appErrorInvalidParameter, "invalid view mode", err)
-			return
+			// we have no publicshare Role in the token scope
+			// do a stat request to assemble the permissions for this user
+			statRes, err := client.Stat(ctx, &provider.StatRequest{Ref: fileRef})
+			if err != nil {
+				writeError(w, r, appErrorServerError, "Internal error accessing the file, please try again later", err)
+				return
+			}
+
+			if statRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
+				writeError(w, r, appErrorNotFound, "file does not exist", nil)
+				return
+			} else if statRes.Status.Code != rpc.Code_CODE_OK {
+				writeError(w, r, appErrorServerError, "failed to stat the file", nil)
+				return
+			}
+
+			if statRes.Info.Type != provider.ResourceType_RESOURCE_TYPE_FILE {
+				writeError(w, r, appErrorInvalidParameter, "the given file id does not point to a file", nil)
+				return
+			}
+
+			// Calculate the view mode from the resource permissions
+			viewMode = getViewMode(statRes.Info, r.Form.Get("view_mode"))
+			if viewMode == gateway.OpenInAppRequest_VIEW_MODE_INVALID {
+				writeError(w, r, appErrorInvalidParameter, "invalid view mode", err)
+				return
+			}
 		}
 
 		openReq := gateway.OpenInAppRequest{
@@ -546,4 +561,24 @@ func getViewMode(res *provider.ResourceInfo, vm string) gateway.OpenInAppRequest
 		viewMode = gateway.OpenInAppRequest_VIEW_MODE_INVALID
 	}
 	return viewMode
+}
+
+// try to get the view mode from a publicshare scope
+func getViewModeFromPublicScope(ctx context.Context) (gateway.OpenInAppRequest_ViewMode, error) {
+	scopes, ok := ctxpkg.ContextGetScopes(ctx)
+	if ok {
+		for key, scope := range scopes {
+			if strings.HasPrefix(key, "publicshare:") {
+				switch scope.GetRole() {
+				case providerv1beta1.Role_ROLE_VIEWER:
+					return gateway.OpenInAppRequest_VIEW_MODE_VIEW_ONLY, nil
+				case providerv1beta1.Role_ROLE_EDITOR:
+					return gateway.OpenInAppRequest_VIEW_MODE_READ_WRITE, nil
+				default:
+					return gateway.OpenInAppRequest_VIEW_MODE_INVALID, errors.New("invalid view mode in publicshare scope")
+				}
+			}
+		}
+	}
+	return gateway.OpenInAppRequest_VIEW_MODE_INVALID, nil
 }
