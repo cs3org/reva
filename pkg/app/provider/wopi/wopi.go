@@ -155,7 +155,7 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 		}
 
 		if !isPublicShare {
-			q.Add("username", u.Username)
+			q.Add("username", u.DisplayName)
 		}
 	}
 
