@@ -354,7 +354,7 @@ func (s *service) RefreshLock(ctx context.Context, req *provider.RefreshLockRequ
 		}, nil
 	}
 
-	if err = s.storage.RefreshLock(ctx, newRef, req.Lock); err != nil {
+	if err = s.storage.RefreshLock(ctx, newRef, req.Lock, req.ExistingLockId); err != nil {
 		var st *rpc.Status
 		switch err.(type) {
 		case errtypes.IsNotFound:
