@@ -49,6 +49,10 @@ type Options struct {
 	TracingCollector string
 	TracingEndpoint  string
 
+	MetricsEnabled   bool
+	MetricsNamespace string
+	MetricsSubsystem string
+
 	// ocdav.* is internal so we need to set config options individually
 	config     ocdav.Config
 	lockSystem ocdav.LockSystem
@@ -239,5 +243,26 @@ func ProductName(val string) Option {
 func ProductVersion(val string) Option {
 	return func(o *Options) {
 		o.config.ProductVersion = val
+	}
+}
+
+// MetricsEnabled provides a function to set the MetricsEnabled config option.
+func MetricsEnabled(val bool) Option {
+	return func(o *Options) {
+		o.MetricsEnabled = val
+	}
+}
+
+// MetricsNamespace provides a function to set the MetricsNamespace config option.
+func MetricsNamespace(val string) Option {
+	return func(o *Options) {
+		o.MetricsNamespace = val
+	}
+}
+
+// MetricsSubsystem provides a function to set the MetricsSubsystem config option.
+func MetricsSubsystem(val string) Option {
+	return func(o *Options) {
+		o.MetricsSubsystem = val
 	}
 }
