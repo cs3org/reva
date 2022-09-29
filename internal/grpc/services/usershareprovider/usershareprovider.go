@@ -189,6 +189,12 @@ func (s *service) GetShare(ctx context.Context, req *collaboration.GetShareReque
 }
 
 func (s *service) ListShares(ctx context.Context, req *collaboration.ListSharesRequest) (*collaboration.ListSharesResponse, error) {
+	if req.Opaque != nil {
+		if v, ok := req.Opaque.Map[ctxpkg.ResoucePathCtx]; ok {
+			ctx = ctxpkg.ContextSetResourcePath(ctx, string(v.Value))
+		}
+	}
+
 	shares, err := s.sm.ListShares(ctx, req.Filters) // TODO(labkode): add filter to share manager
 	if err != nil {
 		return &collaboration.ListSharesResponse{

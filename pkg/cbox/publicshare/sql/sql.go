@@ -32,15 +32,14 @@ import (
 	"golang.org/x/crypto/bcrypt"
 
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	conversions "github.com/cs3org/reva/pkg/cbox/utils"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/publicshare"
 	"github.com/cs3org/reva/pkg/publicshare/manager/registry"
-	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/mitchellh/mapstructure"
@@ -53,6 +52,7 @@ const (
 	projectInstancesPrefix        = "newproject"
 	projectSpaceGroupsPrefix      = "cernbox-project-"
 	projectSpaceAdminGroupsSuffix = "-admins"
+	projectPathPrefix             = "/eos/project/"
 )
 
 func init() {
@@ -323,6 +323,39 @@ func (m *manager) GetPublicShare(ctx context.Context, u *user.User, ref *link.Pu
 	return s, nil
 }
 
+func (m *manager) isProjectAdmin(ctx context.Context, u *user.User) bool {
+	path, ok := ctxpkg.ContextGetResourcePath(ctx)
+	if !ok {
+		return false
+	}
+
+	if strings.HasPrefix(path, projectPathPrefix) {
+		// The path will look like /eos/project/c/cernbox, we need to extract the project name
+		parts := strings.SplitN(path, "/", 6)
+		if len(parts) < 5 {
+			return false
+		}
+
+		adminGroup := projectSpaceGroupsPrefix + parts[4] + projectSpaceAdminGroupsSuffix
+		for _, g := range u.Groups {
+			if g == adminGroup {
+				// User belongs to the admin group, list all shares for the resource
+
+				// TODO: this only works if shares for a single project are requested.
+				// If shares for multiple projects are requested, then we're not checking if the
+				// user is an admin for all of those. We can append the query ` or uid_owner=?`
+				// for all the project owners, which works fine for new reva
+				// but won't work for revaold since there, we store the uid of the share creator as uid_owner.
+				// For this to work across the two versions, this change would have to be made in revaold
+				// but it won't be straightforward as there, the storage provider doesn't return the
+				// resource owners.
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []*link.ListPublicSharesRequest_Filter, md *provider.ResourceInfo, sign bool) ([]*link.PublicShare, error) {
 	query := "select coalesce(uid_owner, '') as uid_owner, coalesce(uid_initiator, '') as uid_initiator, coalesce(share_with, '') as share_with, coalesce(fileid_prefix, '') as fileid_prefix, coalesce(item_source, '') as item_source, coalesce(item_type, '') as item_type, coalesce(token,'') as token, coalesce(expiration, '') as expiration, coalesce(share_name, '') as share_name, id, stime, permissions, quicklink FROM oc_share WHERE (orphan = 0 or orphan IS NULL) AND (share_type=?)"
 	var resourceFilters, ownerFilters, creatorFilters string
@@ -496,44 +529,8 @@ func (m *manager) uidOwnerFilters(ctx context.Context, u *user.User, filters []*
 	query := "uid_owner=? or uid_initiator=?"
 	params := []interface{}{uid, uid}
 
-	client, err := pool.GetGatewayServiceClient(pool.Endpoint(m.c.GatewaySvc))
-	if err != nil {
-		return "", nil, err
-	}
-
-	for _, f := range filters {
-		if f.Type == link.ListPublicSharesRequest_Filter_TYPE_RESOURCE_ID {
-			// For shares inside project spaces, if the user is an admin, we try to list all shares created by other admins
-			if strings.HasPrefix(f.GetResourceId().GetStorageId(), projectInstancesPrefix) {
-				res, err := client.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{ResourceId: f.GetResourceId()}})
-				if err != nil || res.Status.Code != rpc.Code_CODE_OK {
-					continue
-				}
-
-				// The path will look like /eos/project/c/cernbox, we need to extract the project name
-				parts := strings.SplitN(res.Info.Path, "/", 6)
-				if len(parts) < 5 {
-					continue
-				}
-
-				adminGroup := projectSpaceGroupsPrefix + parts[4] + projectSpaceAdminGroupsSuffix
-				for _, g := range u.Groups {
-					if g == adminGroup {
-						// User belongs to the admin group, list all shares for the resource
-
-						// TODO: this only works if shares for a single project are requested.
-						// If shares for multiple projects are requested, then we're not checking if the
-						// user is an admin for all of those. We can append the query ` or uid_owner=?`
-						// for all the project owners, which works fine for new reva
-						// but won't work for revaold since there, we store the uid of the share creator as uid_owner.
-						// For this to work across the two versions, this change would have to be made in revaold
-						// but it won't be straightforward as there, the storage provider doesn't return the
-						// resource owners.
-						return "", []interface{}{}, nil
-					}
-				}
-			}
-		}
+	if m.isProjectAdmin(ctx, u) {
+		return "", []interface{}{}, nil
 	}
 
 	return query, params, nil

@@ -30,6 +30,7 @@ const (
 	userKey key = iota
 	tokenKey
 	idKey
+	pathKey
 )
 
 // ContextGetUser returns the user if set in the given context.
