@@ -217,7 +217,7 @@ func (m *Manager) Share(ctx context.Context, md *provider.ResourceInfo, g *colla
 
 	// check if share already exists.
 	key := &collaboration.ShareKey{
-		//Owner:      md.Owner, owner not longer matters as it belongs to the space
+		//Owner:      md.Owner, owner no longer matters as it belongs to the space
 		ResourceId: md.Id,
 		Grantee:    g.Grantee,
 	}
