@@ -46,6 +46,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/mime"
 	"github.com/cs3org/reva/v2/pkg/rhttp"
 	"github.com/cs3org/reva/v2/pkg/sharedconf"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/templates"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/golang-jwt/jwt"
 	"github.com/mitchellh/mapstructure"
@@ -57,16 +58,18 @@ func init() {
 }
 
 type config struct {
-	IOPSecret           string `mapstructure:"iop_secret" docs:";The IOP secret used to connect to the wopiserver."`
-	WopiURL             string `mapstructure:"wopi_url" docs:";The wopiserver's URL."`
-	AppName             string `mapstructure:"app_name" docs:";The App user-friendly name."`
-	AppIconURI          string `mapstructure:"app_icon_uri" docs:";A URI to a static asset which represents the app icon."`
-	AppURL              string `mapstructure:"app_url" docs:";The App URL."`
-	AppIntURL           string `mapstructure:"app_int_url" docs:";The internal app URL in case of dockerized deployments. Defaults to AppURL"`
-	AppAPIKey           string `mapstructure:"app_api_key" docs:";The API key used by the app, if applicable."`
-	JWTSecret           string `mapstructure:"jwt_secret" docs:";The JWT secret to be used to retrieve the token TTL."`
-	AppDesktopOnly      bool   `mapstructure:"app_desktop_only" docs:"false;Specifies if the app can be opened only on desktop."`
-	InsecureConnections bool   `mapstructure:"insecure_connections"`
+	IOPSecret                 string `mapstructure:"iop_secret" docs:";The IOP secret used to connect to the wopiserver."`
+	WopiURL                   string `mapstructure:"wopi_url" docs:";The wopiserver's URL."`
+	WopiFolderURLBaseURL      string `mapstructure:"wopi_folder_url_base_url" docs:";The base URL to generate links to navigate back to the containing folder."`
+	WopiFolderURLPathTemplate string `mapstructure:"wopi_folder_url_path_template" docs:";The template to generate the folderurl path segments."`
+	AppName                   string `mapstructure:"app_name" docs:";The App user-friendly name."`
+	AppIconURI                string `mapstructure:"app_icon_uri" docs:";A URI to a static asset which represents the app icon."`
+	AppURL                    string `mapstructure:"app_url" docs:";The App URL."`
+	AppIntURL                 string `mapstructure:"app_int_url" docs:";The internal app URL in case of dockerized deployments. Defaults to AppURL"`
+	AppAPIKey                 string `mapstructure:"app_api_key" docs:";The API key used by the app, if applicable."`
+	JWTSecret                 string `mapstructure:"jwt_secret" docs:";The JWT secret to be used to retrieve the token TTL."`
+	AppDesktopOnly            bool   `mapstructure:"app_desktop_only" docs:"false;Specifies if the app can be opened only on desktop."`
+	InsecureConnections       bool   `mapstructure:"insecure_connections"`
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -139,6 +142,16 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 	q.Add("endpoint", storagespace.FormatStorageID(resource.GetId().GetStorageId(), resource.GetId().GetSpaceId()))
 	q.Add("fileid", resource.GetId().OpaqueId)
 	q.Add("viewmode", viewMode.String())
+
+	folderURLPath := templates.WithResourceInfo(resource, p.conf.WopiFolderURLPathTemplate)
+	folderURLBaseURL, err := url.Parse(p.conf.WopiFolderURLBaseURL)
+	if err != nil {
+		return nil, err
+	}
+	if folderURLPath != "" {
+		folderURLBaseURL.Path = path.Join(folderURLBaseURL.Path, folderURLPath)
+		q.Add("folderurl", folderURLBaseURL.String())
+	}
 
 	u, ok := ctxpkg.ContextGetUser(ctx)
 	if ok { // else defaults to "Guest xyz"
@@ -242,10 +255,9 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 			return nil, err
 		}
 		urlQuery := url.Query()
-		// we could improve this by using the UI_LLCC value from the wopi discovery url
-		// https://docs.microsoft.com/en-us/microsoft-365/cloud-storage-partner-program/online/discovery#ui_llcc
-		urlQuery.Set("ui", language)   // OnlyOffice
-		urlQuery.Set("lang", language) // Collabora
+		urlQuery.Set("ui", language)      // OnlyOffice
+		urlQuery.Set("lang", language)    // Collabora
+		urlQuery.Set("UI_LLCC", language) // Office365
 		url.RawQuery = urlQuery.Encode()
 		appFullURL = url.String()
 	}
