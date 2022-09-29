@@ -137,8 +137,9 @@ func (h *Handler) createPublicLinkShare(w http.ResponseWriter, r *http.Request, 
 	// set displayname and password protected as arbitrary metadata
 	req.ResourceInfo.ArbitraryMetadata = &provider.ArbitraryMetadata{
 		Metadata: map[string]string{
-			"name":      r.FormValue("name"),
-			"quicklink": r.FormValue("quicklink"),
+			"name":        r.FormValue("name"),
+			"quicklink":   r.FormValue("quicklink"),
+			"description": r.FormValue("description"),
 			// "password": r.FormValue("password"),
 		},
 	}
@@ -356,6 +357,17 @@ func (h *Handler) updatePublicShare(w http.ResponseWriter, r *http.Request, shar
 			Grant: &link.Grant{
 				Password: newPassword[0],
 			},
+		})
+	}
+
+	// Description
+	description, ok := r.Form["description"]
+	if ok {
+		updatesFound = true
+		logger.Info().Str("shares", "update").Msg("description updated")
+		updates = append(updates, &link.UpdatePublicShareRequest_Update{
+			Type:        link.UpdatePublicShareRequest_Update_TYPE_DESCRIPTION,
+			Description: description[0],
 		})
 	}
 
