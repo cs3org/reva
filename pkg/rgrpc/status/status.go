@@ -131,14 +131,6 @@ func NewAlreadyExists(ctx context.Context, err error, msg string) *rpc.Status {
 	}
 }
 
-// NewInvalidArg returns a Status with CODE_INVALID_ARGUMENT.
-func NewInvalidArg(ctx context.Context, msg string) *rpc.Status {
-	return &rpc.Status{Code: rpc.Code_CODE_INVALID_ARGUMENT,
-		Message: msg,
-		Trace:   getTrace(ctx),
-	}
-}
-
 // NewConflict returns a Status with Code_CODE_ABORTED.
 //
 // Deprecated: NewConflict exists for historical compatibility
@@ -177,7 +169,7 @@ func NewStatusFromErrType(ctx context.Context, msg string, err error) *rpc.Statu
 	case errtypes.IsNotSupported:
 		return NewUnimplemented(ctx, err, msg+":"+err.Error())
 	case errtypes.BadRequest:
-		return NewInvalidArg(ctx, msg+":"+err.Error())
+		return NewInvalid(ctx, msg+":"+err.Error())
 	}
 
 	// map GRPC status codes coming from the auth middleware

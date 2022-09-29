@@ -383,7 +383,7 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 		case errtypes.IsNotFound:
 			st = status.NewNotFound(ctx, "path not found when initiating upload")
 		case errtypes.IsBadRequest, errtypes.IsChecksumMismatch:
-			st = status.NewInvalidArg(ctx, err.Error())
+			st = status.NewInvalid(ctx, err.Error())
 			// TODO TUS uses a custom ChecksumMismatch 460 http status which is in an unassigned range in
 			// https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml
 			// maybe 409 conflict is good enough
@@ -582,7 +582,7 @@ func (s *service) DeleteStorageSpace(ctx context.Context, req *provider.DeleteSt
 		case errtypes.PermissionDenied:
 			st = status.NewPermissionDenied(ctx, err, "permission denied")
 		case errtypes.BadRequest:
-			st = status.NewInvalidArg(ctx, err.Error())
+			st = status.NewInvalid(ctx, err.Error())
 		default:
 			st = status.NewInternal(ctx, "error deleting space: "+req.Id.String())
 		}
@@ -1088,7 +1088,7 @@ func (s *service) CreateReference(ctx context.Context, req *provider.CreateRefer
 	if err != nil {
 		log.Error().Err(err).Msg("invalid target uri")
 		return &provider.CreateReferenceResponse{
-			Status: status.NewInvalidArg(ctx, "target uri is invalid: "+err.Error()),
+			Status: status.NewInvalid(ctx, "target uri is invalid: "+err.Error()),
 		}, nil
 	}
 

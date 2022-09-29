@@ -188,19 +188,19 @@ func (s *svc) UpdateReceivedShare(ctx context.Context, req *collaboration.Update
 	switch {
 	case req.GetShare() == nil:
 		return &collaboration.UpdateReceivedShareResponse{
-			Status: status.NewInvalidArg(ctx, "updating requires a received share object"),
+			Status: status.NewInvalid(ctx, "updating requires a received share object"),
 		}, nil
 	case req.GetShare().GetShare() == nil:
 		return &collaboration.UpdateReceivedShareResponse{
-			Status: status.NewInvalidArg(ctx, "share missing"),
+			Status: status.NewInvalid(ctx, "share missing"),
 		}, nil
 	case req.GetShare().GetShare().GetId() == nil:
 		return &collaboration.UpdateReceivedShareResponse{
-			Status: status.NewInvalidArg(ctx, "share id missing"),
+			Status: status.NewInvalid(ctx, "share id missing"),
 		}, nil
 	case req.GetShare().GetShare().GetId().GetOpaqueId() == "":
 		return &collaboration.UpdateReceivedShareResponse{
-			Status: status.NewInvalidArg(ctx, "share id empty"),
+			Status: status.NewInvalid(ctx, "share id empty"),
 		}, nil
 	}
 

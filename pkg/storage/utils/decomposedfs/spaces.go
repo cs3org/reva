@@ -663,7 +663,7 @@ func (fs *Decomposedfs) DeleteStorageSpace(ctx context.Context, req *provider.De
 
 	if purge {
 		if !n.IsDisabled() {
-			return errtypes.NewErrtypeFromStatus(status.NewInvalidArg(ctx, "can't purge enabled space"))
+			return errtypes.NewErrtypeFromStatus(status.NewInvalid(ctx, "can't purge enabled space"))
 		}
 
 		spaceType, err := n.GetMetadata(xattrs.SpaceTypeAttr)
