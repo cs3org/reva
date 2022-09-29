@@ -478,7 +478,7 @@ func (fs *cback) GetLock(ctx context.Context, ref *provider.Reference) (*provide
 	return nil, errtypes.NotSupported("Operation Not Permitted")
 }
 
-func (fs *cback) RefreshLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
+func (fs *cback) RefreshLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock, existingLockID string) error {
 	return errtypes.NotSupported("Operation Not Permitted")
 }
 

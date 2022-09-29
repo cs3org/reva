@@ -291,7 +291,7 @@ func (fs *s3FS) SetLock(ctx context.Context, ref *provider.Reference, lock *prov
 }
 
 // RefreshLock refreshes an existing lock on the given reference
-func (fs *s3FS) RefreshLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
+func (fs *s3FS) RefreshLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock, existingLockID string) error {
 	return errtypes.NotSupported("unimplemented")
 }
 
