@@ -705,7 +705,7 @@ func (fs *Decomposedfs) SetLock(ctx context.Context, ref *provider.Reference, lo
 }
 
 // RefreshLock refreshes an existing lock on the given reference
-func (fs *Decomposedfs) RefreshLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
+func (fs *Decomposedfs) RefreshLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock, existingLockID string) error {
 	if lock.LockId == "" {
 		return errtypes.BadRequest("missing lockid")
 	}
@@ -729,7 +729,7 @@ func (fs *Decomposedfs) RefreshLock(ctx context.Context, ref *provider.Reference
 		return errtypes.PermissionDenied(filepath.Join(node.ParentID, node.Name))
 	}
 
-	return node.RefreshLock(ctx, lock)
+	return node.RefreshLock(ctx, lock, existingLockID)
 }
 
 // Unlock removes an existing lock from the given reference
