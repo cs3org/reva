@@ -238,7 +238,7 @@ func (s *service) GetLock(ctx context.Context, req *provider.GetLockRequest) (*p
 
 // RefreshLock refreshes an existing lock on the given reference
 func (s *service) RefreshLock(ctx context.Context, req *provider.RefreshLockRequest) (*provider.RefreshLockResponse, error) {
-	err := s.storage.RefreshLock(ctx, req.Ref, req.Lock)
+	err := s.storage.RefreshLock(ctx, req.Ref, req.Lock, req.ExistingLockId)
 
 	return &provider.RefreshLockResponse{
 		Status: status.NewStatusFromErrType(ctx, "refresh lock", err),

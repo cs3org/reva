@@ -172,33 +172,46 @@ var _ = Describe("Node locks", func() {
 			})
 
 			It("fails when the node is unlocked", func() {
-				err := n2.RefreshLock(env.Ctx, lockByUser)
+				err := n2.RefreshLock(env.Ctx, lockByUser, "")
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("precondition failed"))
 			})
 
 			It("refuses to refresh the lock without holding the lock", func() {
 				newLock.LockId = "somethingsomething"
-				err := n.RefreshLock(env.Ctx, newLock)
+				err := n.RefreshLock(env.Ctx, newLock, "")
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("mismatching"))
 			})
 
 			It("refuses to refresh the lock for other users than the lock holder", func() {
-				err := n.RefreshLock(otherCtx, newLock)
+				err := n.RefreshLock(otherCtx, newLock, "")
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("permission denied"))
 			})
 
 			It("refuses to change the lock holder", func() {
 				newLock.User = otherUser.Id
-				err := n.RefreshLock(env.Ctx, newLock)
+				err := n.RefreshLock(env.Ctx, newLock, "")
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("permission denied"))
 			})
 
+			It("refuses to change the lock when we do not send the correct lock id for the old lock", func() {
+				newLock.LockId = "somethingsomething"
+				err := n.RefreshLock(env.Ctx, newLock, "somethingdifferent")
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("mismatching"))
+			})
+
+			It("refreshes the lock when we send a new lock and the correct lock id for the old lock", func() {
+				newLock.LockId = "somethingsomething"
+				err := n.RefreshLock(env.Ctx, newLock, lockByUser.LockId)
+				Expect(err).ToNot(HaveOccurred())
+			})
+
 			It("refreshes the lock", func() {
-				err := n.RefreshLock(env.Ctx, newLock)
+				err := n.RefreshLock(env.Ctx, newLock, "")
 				Expect(err).ToNot(HaveOccurred())
 			})
 		})
@@ -276,32 +289,45 @@ var _ = Describe("Node locks", func() {
 			})
 
 			It("fails when the node is unlocked", func() {
-				err := n2.RefreshLock(env.Ctx, lockByApp)
+				err := n2.RefreshLock(env.Ctx, lockByApp, "")
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("precondition failed"))
 			})
 
 			It("refuses to refresh the lock without holding the lock", func() {
 				newLock.LockId = "somethingsomething"
-				err := n.RefreshLock(env.Ctx, newLock)
+				err := n.RefreshLock(env.Ctx, newLock, "")
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("mismatching"))
 			})
 
 			It("refreshes the lock for other users", func() {
-				err := n.RefreshLock(otherCtx, lockByApp)
+				err := n.RefreshLock(otherCtx, lockByApp, "")
 				Expect(err).ToNot(HaveOccurred())
 			})
 
 			It("refuses to change the lock holder", func() {
 				newLock.AppName = wrongLockByApp.AppName
-				err := n.RefreshLock(env.Ctx, newLock)
+				err := n.RefreshLock(env.Ctx, newLock, "")
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("permission denied"))
 			})
 
+			It("refuses to change the lock when we do not send the correct lock id for the old lock", func() {
+				newLock.LockId = "somethingsomething"
+				err := n.RefreshLock(env.Ctx, newLock, "somethingdifferent")
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("mismatching"))
+			})
+
+			It("refreshes the lock when we send a new lock and the correct lock id for the old lock", func() {
+				newLock.LockId = "somethingsomething"
+				err := n.RefreshLock(env.Ctx, newLock, lockByApp.LockId)
+				Expect(err).ToNot(HaveOccurred())
+			})
+
 			It("refreshes the lock", func() {
-				err := n.RefreshLock(env.Ctx, newLock)
+				err := n.RefreshLock(env.Ctx, newLock, "")
 				Expect(err).ToNot(HaveOccurred())
 			})
 		})
