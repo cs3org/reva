@@ -25,7 +25,7 @@ import (
 	"io/fs"
 	"io/ioutil"
 	"os"
-	"path"
+	"path/filepath"
 	"time"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -141,7 +141,7 @@ func (disk *Disk) ReadDir(_ context.Context, p string) ([]string, error) {
 
 	entries := make([]string, 0, len(infos))
 	for _, entry := range infos {
-		entries = append(entries, path.Join(p, entry.Name()))
+		entries = append(entries, filepath.Join(p, entry.Name()))
 	}
 	return entries, nil
 }
@@ -188,5 +188,5 @@ func (disk *Disk) ResolveSymlink(_ context.Context, path string) (string, error)
 }
 
 func (disk *Disk) targetPath(p string) string {
-	return path.Join(disk.dataDir, p)
+	return filepath.Join(disk.dataDir, filepath.Join("/", p))
 }
