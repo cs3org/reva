@@ -124,6 +124,9 @@ var MetaForbidden = Meta{Status: "", StatusCode: 104, Message: "Forbidden"}
 // MetaBadRequest is used for unknown errors
 var MetaBadRequest = Meta{Status: "error", StatusCode: 400, Message: "Bad Request"}
 
+// MetaPathNotFound is returned when trying to share not existing resources
+var MetaPathNotFound = Meta{Status: "failure", StatusCode: 404, Message: MessagePathNotFound}
+
 // MetaServerError is returned on server errors
 var MetaServerError = Meta{Status: "error", StatusCode: 996, Message: "Server Error"}
 
@@ -132,9 +135,6 @@ var MetaUnauthorized = Meta{Status: "error", StatusCode: 997, Message: "Unauthor
 
 // MetaNotFound is returned when trying to access not existing resources
 var MetaNotFound = Meta{Status: "error", StatusCode: 998, Message: "Not Found"}
-
-// MetaPathNotFound is returned when trying to share not existing resources
-var MetaPathNotFound = Meta{Status: "failure", StatusCode: 404, Message: MessagePathNotFound}
 
 // MetaUnknownError is used for unknown errors
 var MetaUnknownError = Meta{Status: "error", StatusCode: 999, Message: "Unknown Error"}
@@ -147,6 +147,9 @@ var MessageGroupNotFound = "The requested group could not be found"
 
 // MessagePathNotFound is used when a file or folder can not be found
 var MessagePathNotFound = "Wrong path, file/folder doesn't exist"
+
+// MessageShareExists is used when a user tries to create a new share for the same user
+var MessageShareExists = "A share for the recipient already exists"
 
 // WriteOCSSuccess handles writing successful ocs response data
 func WriteOCSSuccess(w http.ResponseWriter, r *http.Request, d interface{}) {
@@ -240,9 +243,11 @@ func OcsV2StatusCodes(meta Meta) int {
 		return http.StatusInternalServerError
 	case MetaUnauthorized.StatusCode:
 		return http.StatusUnauthorized
-	case 100:
+	case MetaOK.StatusCode:
 		meta.StatusCode = http.StatusOK
 		return http.StatusOK
+	case MetaForbidden.StatusCode:
+		return http.StatusForbidden
 	}
 	// any 2xx, 4xx and 5xx will be used as is
 	if sc >= 200 && sc < 600 {

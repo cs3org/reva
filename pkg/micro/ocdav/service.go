@@ -33,6 +33,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	httpServer "github.com/go-micro/plugins/v4/server/http"
 	"github.com/owncloud/ocis/v2/ocis-pkg/registry"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 	"go-micro.dev/v4"
 	"go-micro.dev/v4/server"
 	"go.opentelemetry.io/otel/propagation"
@@ -161,11 +163,36 @@ func useMiddlewares(r *chi.Mux, sopts *Options, svc global.Service, tp trace.Tra
 		tm = traceHandler(tp, "ocdav")
 	}
 
+	// metrics
+	pm := func(h http.Handler) http.Handler { return h }
+	if sopts.MetricsEnabled {
+		namespace := sopts.MetricsNamespace
+		if namespace == "" {
+			namespace = "reva"
+		}
+		subsystem := sopts.MetricsSubsystem
+		if subsystem == "" {
+			subsystem = "ocdav"
+		}
+		counter := promauto.NewCounter(prometheus.CounterOpts{
+			Namespace: namespace,
+			Subsystem: subsystem,
+			Name:      "http_requests_total",
+			Help:      "The total number of processed " + subsystem + " HTTP requests for " + namespace,
+		})
+		pm = func(h http.Handler) http.Handler {
+			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				h.ServeHTTP(w, r)
+				counter.Inc()
+			})
+		}
+	}
+
 	// ctx
 	cm := appctx.New(sopts.Logger, tp)
 
 	// actually register
-	r.Use(tm, lm, authMiddle, cm)
+	r.Use(pm, tm, lm, authMiddle, cm)
 	return nil
 }
 

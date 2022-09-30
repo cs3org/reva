@@ -652,7 +652,7 @@ func (s *service) Move(ctx context.Context, req *provider.MoveRequest) (*provide
 
 	if tknSource != tknDest {
 		return &provider.MoveResponse{
-			Status: status.NewInvalidArg(ctx, "Source and destination token must be the same"),
+			Status: status.NewInvalid(ctx, "Source and destination token must be the same"),
 		}, nil
 	}
 

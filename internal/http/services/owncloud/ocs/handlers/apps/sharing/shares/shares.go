@@ -1398,6 +1398,12 @@ func (h *Handler) createCs3Share(ctx context.Context, w http.ResponseWriter, r *
 				Message: "not found",
 				Error:   nil,
 			}
+		case rpc.Code_CODE_ALREADY_EXISTS:
+			return nil, &ocsError{
+				Code:    response.MetaForbidden.StatusCode,
+				Message: response.MessageShareExists,
+				Error:   nil,
+			}
 		case rpc.Code_CODE_INVALID_ARGUMENT:
 			return nil, &ocsError{
 				Code:    response.MetaBadRequest.StatusCode,

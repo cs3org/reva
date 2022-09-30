@@ -919,7 +919,7 @@ func (s *service) resolveAcceptedShare(ctx context.Context, ref *provider.Refere
 		ref.Path = "."
 	}
 	if !utils.IsRelativeReference(ref) {
-		return nil, status.NewInvalidArg(ctx, "sharesstorageprovider: can only handle relative references"), nil
+		return nil, status.NewInvalid(ctx, "sharesstorageprovider: can only handle relative references"), nil
 	}
 
 	if ref.ResourceId.SpaceId != utils.ShareStorageSpaceID {

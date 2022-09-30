@@ -141,7 +141,7 @@ func (n Node) ReadLock(ctx context.Context, skipFileLock bool) (*provider.Lock, 
 }
 
 // RefreshLock refreshes the node's lock
-func (n *Node) RefreshLock(ctx context.Context, lock *provider.Lock) error {
+func (n *Node) RefreshLock(ctx context.Context, lock *provider.Lock, existingLockID string) error {
 
 	// ensure parent path exists
 	if err := os.MkdirAll(filepath.Dir(n.InternalPath()), 0700); err != nil {
@@ -171,17 +171,22 @@ func (n *Node) RefreshLock(ctx context.Context, lock *provider.Lock) error {
 	}
 	defer f.Close()
 
-	oldLock := &provider.Lock{}
-	if err := json.NewDecoder(f).Decode(oldLock); err != nil {
+	readLock := &provider.Lock{}
+	if err := json.NewDecoder(f).Decode(readLock); err != nil {
 		return errors.Wrap(err, "Decomposedfs: could not read lock")
 	}
 
-	// check lock
-	if oldLock.LockId != lock.LockId {
-		return errtypes.Aborted("mismatching lock")
+	// check refresh lockID match
+	if existingLockID == "" && readLock.LockId != lock.LockId {
+		return errtypes.Aborted("mismatching lock ID")
 	}
 
-	if ok, err := isLockModificationAllowed(ctx, oldLock, lock); !ok {
+	// check if UnlockAndRelock sends the correct lockID
+	if existingLockID != "" && readLock.LockId != existingLockID {
+		return errtypes.Aborted("mismatching existing lock ID")
+	}
+
+	if ok, err := isLockModificationAllowed(ctx, readLock, lock); !ok {
 		return err
 	}
 

@@ -588,7 +588,7 @@ func (fs *eosfs) SetLock(ctx context.Context, ref *provider.Reference, lock *pro
 }
 
 // RefreshLock refreshes an existing lock on the given reference
-func (fs *eosfs) RefreshLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
+func (fs *eosfs) RefreshLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock, existingLockID string) error {
 	return errtypes.NotSupported("unimplemented")
 }
 

@@ -124,7 +124,7 @@ func (s *service) GetStorageProviders(ctx context.Context, req *registrypb.GetSt
 	space, err := decodeSpace(req.Opaque)
 	if err != nil {
 		return &registrypb.GetStorageProvidersResponse{
-			Status: status.NewInvalidArg(ctx, err.Error()),
+			Status: status.NewInvalid(ctx, err.Error()),
 		}, nil
 	}
 	p, err := s.reg.GetProvider(ctx, space)
