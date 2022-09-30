@@ -60,20 +60,25 @@ func init() {
 }
 
 type config struct {
-	SharePasswordHashCost      int    `mapstructure:"password_hash_cost"`
-	JanitorRunInterval         int    `mapstructure:"janitor_run_interval"`
-	EnableExpiredSharesCleanup bool   `mapstructure:"enable_expired_shares_cleanup"`
-	DbUsername                 string `mapstructure:"db_username"`
-	DbPassword                 string `mapstructure:"db_password"`
-	DbHost                     string `mapstructure:"db_host"`
-	DbPort                     int    `mapstructure:"db_port"`
-	DbName                     string `mapstructure:"db_name"`
-	GatewaySvc                 string `mapstructure:"gatewaysvc"`
+	SharePasswordHashCost      int      `mapstructure:"password_hash_cost"`
+	JanitorRunInterval         int      `mapstructure:"janitor_run_interval"`
+	EnableExpiredSharesCleanup bool     `mapstructure:"enable_expired_shares_cleanup"`
+	DbUsername                 string   `mapstructure:"db_username"`
+	DbPassword                 string   `mapstructure:"db_password"`
+	DbHost                     string   `mapstructure:"db_host"`
+	DbPort                     int      `mapstructure:"db_port"`
+	DbName                     string   `mapstructure:"db_name"`
+	GatewaySvc                 string   `mapstructure:"gatewaysvc"`
+	HiddenTags                 []string `mapstructure:"hidden_tags"`
 }
 
 type manager struct {
-	c  *config
-	db *sql.DB
+	c          *config
+	db         *sql.DB
+	hiddenTags struct {
+		query  string
+		params []interface{}
+	}
 }
 
 func (c *config) init() {
@@ -119,13 +124,40 @@ func New(m map[string]interface{}) (publicshare.Manager, error) {
 		return nil, err
 	}
 
+	hdnQuery, hdnParams := hiddenTagsQuery(c.HiddenTags)
+
 	mgr := manager{
 		c:  c,
 		db: db,
+		hiddenTags: struct {
+			query  string
+			params []interface{}
+		}{
+			query:  hdnQuery,
+			params: hdnParams,
+		},
 	}
 	go mgr.startJanitorRun()
 
 	return &mgr, nil
+}
+
+func hiddenTagsQuery(hiddenTags []string) (string, []interface{}) {
+	query := ""
+	for _ = range hiddenTags {
+		query += "?,"
+	}
+	if query != "" {
+		// remove last ,
+		query = query[:len(query)-1]
+	}
+
+	params := make([]interface{}, 0, len(hiddenTags))
+	for _, t := range hiddenTags {
+		params = append(params, t)
+	}
+	query = fmt.Sprintf(" AND description NOT IN (%s)", query)
+	return query, params
 }
 
 func (m *manager) CreatePublicShare(ctx context.Context, u *user.User, rInfo *provider.ResourceInfo, g *link.Grant) (*link.PublicShare, error) {
@@ -331,6 +363,14 @@ func (m *manager) GetPublicShare(ctx context.Context, u *user.User, ref *link.Pu
 	return s, nil
 }
 
+func (m *manager) filterHiddenTagsQuery(query string, params []interface{}) (string, []interface{}) {
+	if len(m.hiddenTags.params) != 0 {
+		query = query + m.hiddenTags.query
+		params = append(params, m.hiddenTags.params...)
+	}
+	return query, params
+}
+
 func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []*link.ListPublicSharesRequest_Filter, md *provider.ResourceInfo, sign bool) ([]*link.PublicShare, error) {
 	query := "select coalesce(uid_owner, '') as uid_owner, coalesce(uid_initiator, '') as uid_initiator, coalesce(share_with, '') as share_with, coalesce(fileid_prefix, '') as fileid_prefix, coalesce(item_source, '') as item_source, coalesce(item_type, '') as item_type, coalesce(token,'') as token, coalesce(expiration, '') as expiration, coalesce(share_name, '') as share_name, id, stime, permissions, quicklink, description FROM oc_share WHERE (orphan = 0 or orphan IS NULL) AND (share_type=?)"
 	var resourceFilters, ownerFilters, creatorFilters string
@@ -380,6 +420,8 @@ func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []
 	if uidOwnersQuery != "" {
 		query = fmt.Sprintf("%s AND (%s)", query, uidOwnersQuery)
 	}
+
+	query, params = m.filterHiddenTagsQuery(query, params)
 
 	rows, err := m.db.Query(query, params...)
 	if err != nil {
