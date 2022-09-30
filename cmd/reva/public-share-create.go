@@ -35,9 +35,10 @@ func publicShareCreateCommand() *command {
 	cmd.Description = func() string { return "create a public share" }
 	cmd.Usage = func() string { return "Usage: public-share-create [-flags] <path>" }
 	rol := cmd.String("rol", "viewer", "the permission for the share (viewer or editor)")
+	description := cmd.String("description", "", "the description for the share")
 
 	cmd.ResetFlags = func() {
-		*rol = "viewer"
+		*rol, *description = "viewer", ""
 	}
 
 	cmd.Action = func(w ...io.Writer) error {
@@ -78,6 +79,7 @@ func publicShareCreateCommand() *command {
 		shareRequest := &link.CreatePublicShareRequest{
 			ResourceInfo: res.Info,
 			Grant:        grant,
+			Description:  *description,
 		}
 
 		shareRes, err := client.CreatePublicShare(ctx, shareRequest)
@@ -91,11 +93,11 @@ func publicShareCreateCommand() *command {
 
 		t := table.NewWriter()
 		t.SetOutputMirror(os.Stdout)
-		t.AppendHeader(table.Row{"#", "Owner.Idp", "Owner.OpaqueId", "ResourceId", "Permissions", "Token", "Expiration", "Created", "Updated"})
+		t.AppendHeader(table.Row{"#", "Owner.Idp", "Owner.OpaqueId", "ResourceId", "Permissions", "Token", "Expiration", "Created", "Updated", "Description"})
 
 		s := shareRes.Share
 		t.AppendRows([]table.Row{
-			{s.Id.OpaqueId, s.Owner.Idp, s.Owner.OpaqueId, s.ResourceId.String(), s.Permissions.String(), s.Token, s.Expiration.String(), time.Unix(int64(s.Ctime.Seconds), 0), time.Unix(int64(s.Mtime.Seconds), 0)},
+			{s.Id.OpaqueId, s.Owner.Idp, s.Owner.OpaqueId, s.ResourceId.String(), s.Permissions.String(), s.Token, s.Expiration.String(), time.Unix(int64(s.Ctime.Seconds), 0), time.Unix(int64(s.Mtime.Seconds), 0), s.Description},
 		})
 		t.Render()
 
