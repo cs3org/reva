@@ -358,12 +358,11 @@ func (m *manager) GetPublicShare(ctx context.Context, u *user.User, ref *link.Pu
 	return s, nil
 }
 
-func (m *manager) filterHiddenTagsQuery(query string, params []interface{}) (string, []interface{}) {
+func (m *manager) filterHiddenTagsQuery(query *string, params *[]interface{}) {
 	if len(m.hiddenTags.params) != 0 {
-		query = query + m.hiddenTags.query
-		params = append(params, m.hiddenTags.params...)
+		*query += m.hiddenTags.query
+		*params = append(*params, m.hiddenTags.params...)
 	}
-	return query, params
 }
 
 func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []*link.ListPublicSharesRequest_Filter, md *provider.ResourceInfo, sign bool) ([]*link.PublicShare, error) {
@@ -416,7 +415,7 @@ func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []
 		query = fmt.Sprintf("%s AND (%s)", query, uidOwnersQuery)
 	}
 
-	query, params = m.filterHiddenTagsQuery(query, params)
+	m.filterHiddenTagsQuery(&query, &params)
 
 	rows, err := m.db.Query(query, params...)
 	if err != nil {
