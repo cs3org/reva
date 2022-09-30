@@ -85,7 +85,7 @@ func (idx *NonUnique) Lookup(v string) ([]string, error) {
 // LookupCtx retieves multiple exact values and allows passing in a context
 func (idx *NonUnique) LookupCtx(ctx context.Context, values ...string) ([]string, error) {
 	// prefetch all values with one request
-	entries, err := idx.storage.ReadDir(context.Background(), path.Join("/", idx.indexRootDir))
+	entries, err := idx.storage.ReadDir(context.Background(), idx.indexRootDir)
 	if err != nil {
 		return nil, err
 	}
@@ -110,7 +110,7 @@ func (idx *NonUnique) LookupCtx(ctx context.Context, values ...string) ([]string
 	var matches = map[string]struct{}{}
 	for v := range valueSet {
 		if _, ok := allValues[v]; ok {
-			children, err := idx.storage.ReadDir(context.Background(), path.Join("/", idx.indexRootDir, v))
+			children, err := idx.storage.ReadDir(context.Background(), filepath.Join(idx.indexRootDir, v))
 			if err != nil {
 				continue
 			}
@@ -174,20 +174,20 @@ func (idx *NonUnique) Remove(id string, v string) error {
 		v = strings.ToLower(v)
 	}
 
-	deletePath := path.Join("/", idx.indexRootDir, v, id)
+	deletePath := path.Join(idx.indexRootDir, v, id)
 	err := idx.storage.Delete(context.Background(), deletePath)
 	if err != nil {
 		return err
 	}
 
-	toStat := path.Join("/", idx.indexRootDir, v)
+	toStat := path.Join(idx.indexRootDir, v)
 	infos, err := idx.storage.ReadDir(context.Background(), toStat)
 	if err != nil {
 		return err
 	}
 
 	if len(infos) == 0 {
-		deletePath = path.Join("/", idx.indexRootDir, v)
+		deletePath = path.Join(idx.indexRootDir, v)
 		err := idx.storage.Delete(context.Background(), deletePath)
 		if err != nil {
 			return err

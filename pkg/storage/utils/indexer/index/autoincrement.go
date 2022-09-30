@@ -83,7 +83,7 @@ func (idx *Autoincrement) LookupCtx(ctx context.Context, values ...string) ([]st
 	var allValues map[string]struct{}
 	if len(values) != 1 {
 		// prefetch all values with one request
-		entries, err := idx.storage.ReadDir(context.Background(), path.Join("/", idx.indexRootDir))
+		entries, err := idx.storage.ReadDir(context.Background(), idx.indexRootDir)
 		if err != nil {
 			return nil, err
 		}
@@ -103,7 +103,7 @@ func (idx *Autoincrement) LookupCtx(ctx context.Context, values ...string) ([]st
 	var matches = []string{}
 	for v := range valueSet {
 		if _, ok := allValues[v]; ok || len(allValues) == 0 {
-			oldname, err := idx.storage.ResolveSymlink(context.Background(), path.Join("/", idx.indexRootDir, v))
+			oldname, err := idx.storage.ResolveSymlink(context.Background(), path.Join(idx.indexRootDir, v))
 			if err != nil {
 				continue
 			}
@@ -165,7 +165,7 @@ func (idx *Autoincrement) Remove(_ string, v string) error {
 		return err
 	}
 
-	deletePath := path.Join("/", idx.indexRootDir, v)
+	deletePath := path.Join(idx.indexRootDir, v)
 	return idx.storage.Delete(context.Background(), deletePath)
 }
 
