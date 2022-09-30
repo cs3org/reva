@@ -144,7 +144,7 @@ func New(m map[string]interface{}) (publicshare.Manager, error) {
 
 func hiddenTagsQuery(hiddenTags []string) (string, []interface{}) {
 	query := ""
-	for _ = range hiddenTags {
+	for range hiddenTags {
 		query += "?,"
 	}
 	if query != "" {
