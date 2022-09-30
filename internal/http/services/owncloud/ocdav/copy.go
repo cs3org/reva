@@ -541,32 +541,31 @@ func (s *svc) prepareCopy(ctx context.Context, w http.ResponseWriter, r *http.Re
 
 	srcStatReq := &provider.StatRequest{Ref: srcRef}
 	srcStatRes, err := client.Stat(ctx, srcStatReq)
-	if err != nil {
+	switch {
+	case err != nil:
 		log.Error().Err(err).Msg("error sending grpc stat request")
 		w.WriteHeader(http.StatusInternalServerError)
 		return nil
-	}
-
-	if srcStatRes.Status.Code != rpc.Code_CODE_OK {
-		if srcStatRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
-			w.WriteHeader(http.StatusNotFound)
-			m := fmt.Sprintf("Resource %v not found", srcStatReq.Ref.Path)
-			b, err := errors.Marshal(http.StatusNotFound, m, "")
-			errors.HandleWebdavError(log, w, b, err)
-		}
+	case srcStatRes.Status.Code == rpc.Code_CODE_NOT_FOUND:
+		errors.HandleErrorStatus(log, w, srcStatRes.Status)
+		m := fmt.Sprintf("Resource %v not found", srcStatReq.Ref.Path)
+		b, err := errors.Marshal(http.StatusNotFound, m, "")
+		errors.HandleWebdavError(log, w, b, err)
+		return nil
+	case srcStatRes.Status.Code != rpc.Code_CODE_OK:
 		errors.HandleErrorStatus(log, w, srcStatRes.Status)
 		return nil
 	}
 
 	dstStatReq := &provider.StatRequest{Ref: dstRef}
 	dstStatRes, err := client.Stat(ctx, dstStatReq)
-	if err != nil {
+	switch {
+	case err != nil:
 		log.Error().Err(err).Msg("error sending grpc stat request")
 		w.WriteHeader(http.StatusInternalServerError)
 		return nil
-	}
-	if dstStatRes.Status.Code != rpc.Code_CODE_OK && dstStatRes.Status.Code != rpc.Code_CODE_NOT_FOUND {
-		errors.HandleErrorStatus(log, w, srcStatRes.Status)
+	case dstStatRes.Status.Code != rpc.Code_CODE_OK && dstStatRes.Status.Code != rpc.Code_CODE_NOT_FOUND:
+		errors.HandleErrorStatus(log, w, dstStatRes.Status)
 		return nil
 	}
 

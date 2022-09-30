@@ -83,8 +83,9 @@ func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 		if user.Username != username {
 			log.Debug().Str("username", username).Interface("user", user).Msg("trying to read another users trash")
 			// listing other users trash is forbidden, no auth will change that
-			w.WriteHeader(http.StatusUnauthorized)
-			b, err := errors.Marshal(http.StatusUnauthorized, "", "")
+			// do not leak existence of space and return 404
+			w.WriteHeader(http.StatusNotFound)
+			b, err := errors.Marshal(http.StatusNotFound, "not found", "")
 			if err != nil {
 				log.Error().Msgf("error marshaling xml response: %s", b)
 				w.WriteHeader(http.StatusInternalServerError)
@@ -117,12 +118,12 @@ func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 
 		basePath := path.Join(ns, newPath)
 		space, rpcstatus, err := spacelookup.LookUpStorageSpaceForPath(ctx, client, basePath)
-		if err != nil {
+		switch {
+		case err != nil:
 			log.Error().Err(err).Str("path", basePath).Msg("failed to look up storage space")
 			w.WriteHeader(http.StatusInternalServerError)
 			return
-		}
-		if rpcstatus.Code != rpc.Code_CODE_OK {
+		case rpcstatus.Code != rpc.Code_CODE_OK:
 			errors.HandleErrorStatus(log, w, rpcstatus)
 			return
 		}
