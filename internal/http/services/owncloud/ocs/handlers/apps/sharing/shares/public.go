@@ -118,6 +118,7 @@ func (h *Handler) createPublicLinkShare(w http.ResponseWriter, r *http.Request, 
 			},
 			Password: r.FormValue("password"),
 		},
+		Description: r.FormValue("description"),
 	}
 
 	expireTimeString, ok := r.Form["expireDate"]
@@ -137,9 +138,8 @@ func (h *Handler) createPublicLinkShare(w http.ResponseWriter, r *http.Request, 
 	// set displayname and password protected as arbitrary metadata
 	req.ResourceInfo.ArbitraryMetadata = &provider.ArbitraryMetadata{
 		Metadata: map[string]string{
-			"name":        r.FormValue("name"),
-			"quicklink":   r.FormValue("quicklink"),
-			"description": r.FormValue("description"),
+			"name":      r.FormValue("name"),
+			"quicklink": r.FormValue("quicklink"),
 			// "password": r.FormValue("password"),
 		},
 	}

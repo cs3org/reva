@@ -160,7 +160,7 @@ func hiddenTagsQuery(hiddenTags []string) (string, []interface{}) {
 	return query, params
 }
 
-func (m *manager) CreatePublicShare(ctx context.Context, u *user.User, rInfo *provider.ResourceInfo, g *link.Grant) (*link.PublicShare, error) {
+func (m *manager) CreatePublicShare(ctx context.Context, u *user.User, rInfo *provider.ResourceInfo, g *link.Grant, description string) (*link.PublicShare, error) {
 
 	tkn := utils.RandString(15)
 	now := time.Now().Unix()
@@ -173,11 +173,6 @@ func (m *manager) CreatePublicShare(ctx context.Context, u *user.User, rInfo *pr
 	}
 	createdAt := &typespb.Timestamp{
 		Seconds: uint64(now),
-	}
-
-	description, ok := rInfo.ArbitraryMetadata.Metadata["description"]
-	if !ok {
-		description = ""
 	}
 
 	creator := conversions.FormatUserID(u.Id)
