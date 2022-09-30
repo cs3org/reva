@@ -143,8 +143,8 @@ func (h *Handler) createPublicLinkShare(w http.ResponseWriter, r *http.Request, 
 			expireTime, err := conversions.ParseTimestamp(expireTimeString[0])
 			if err != nil {
 				return nil, &ocsError{
-					Code:    response.MetaServerError.StatusCode,
-					Message: "invalid datetime format",
+					Code:    response.MetaBadRequest.StatusCode,
+					Message: err.Error(),
 					Error:   err,
 				}
 			}
