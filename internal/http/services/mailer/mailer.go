@@ -160,7 +160,6 @@ func getIDsFromRequest(r *http.Request) ([]string, error) {
 		return nil, err
 	}
 
-	var ids []string
 	idsSet := make(map[string]struct{})
 
 	for _, id := range r.Form["id"] {
@@ -168,6 +167,10 @@ func getIDsFromRequest(r *http.Request) ([]string, error) {
 			continue
 		}
 		idsSet[id] = struct{}{}
+	}
+
+	ids := make([]string, 0, len(idsSet))
+	for id := range idsSet {
 		ids = append(ids, id)
 	}
 
