@@ -28,6 +28,7 @@ import (
 	"net/smtp"
 	"os"
 	"path/filepath"
+	"strings"
 	"text/template"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
@@ -51,6 +52,9 @@ func init() {
 
 type config struct {
 	SMTPAddress      string `mapstructure:"smtp_server" docs:";The hostname and port of the SMTP server."`
+	SenderLogin      string `mapstructure:"sender_login" docs:";The email to be used to send mails."`
+	SenderPassword   string `mapstructure:"sender_password" docs:";The sender's password."`
+	DisableAuth      bool   `mapstructure:"disable_auth" docs:"false;Whether to disable SMTP auth."`
 	Prefix           string `mapstructure:"prefix"`
 	BodyTemplatePath string `mapstructure:"body_template_path"`
 	SubjectTemplate  string `mapstructure:"subject_template"`
@@ -217,6 +221,13 @@ type shareInfo struct {
 	ShareID           string
 }
 
+func (s *svc) getAuth() smtp.Auth {
+	if s.conf.DisableAuth {
+		return nil
+	}
+	return smtp.PlainAuth("", s.conf.SenderLogin, s.conf.SenderPassword, strings.SplitN(s.conf.SMTPAddress, ":", 2)[0])
+}
+
 func (s *svc) sendMailForShare(ctx context.Context, id string) (string, error) {
 	share, err := s.getShareInfoByID(ctx, id)
 	if err != nil {
@@ -228,7 +239,7 @@ func (s *svc) sendMailForShare(ctx context.Context, id string) (string, error) {
 		return "", err
 	}
 
-	return share.RecipientEmail, smtp.SendMail(s.conf.SMTPAddress, nil, share.OwnerEmail, []string{share.RecipientEmail}, msg)
+	return share.RecipientEmail, smtp.SendMail(s.conf.SMTPAddress, s.getAuth(), share.OwnerEmail, []string{share.RecipientEmail}, msg)
 }
 
 func (s *svc) generateMsg(from, to string, share *shareInfo) ([]byte, error) {
