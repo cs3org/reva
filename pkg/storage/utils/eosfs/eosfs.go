@@ -869,9 +869,7 @@ func encodeLock(l *provider.Lock) (string, error) {
 }
 
 // RefreshLock refreshes an existing lock on the given reference
-func (fs *eosfs) RefreshLock(ctx context.Context, ref *provider.Reference, newLock *provider.Lock) error {
-	// TODO (gdelmont): check if the new lock is already expired?
-
+func (fs *eosfs) RefreshLock(ctx context.Context, ref *provider.Reference, newLock *provider.Lock, existingLockID string) error {
 	if newLock.Type == provider.LockType_LOCK_TYPE_SHARED {
 		return errtypes.NotSupported("shared lock not yet implemented")
 	}
@@ -895,6 +893,10 @@ func (fs *eosfs) RefreshLock(ctx context.Context, ref *provider.Reference, newLo
 	// check if the holder is the same of the new lock
 	if !sameHolder(oldLock, newLock) {
 		return errtypes.BadRequest("caller does not hold the lock")
+	}
+
+	if existingLockID != "" && oldLock.LockId != existingLockID {
+		return errtypes.BadRequest("mismatching existing lock id")
 	}
 
 	path, err := fs.resolve(ctx, ref)

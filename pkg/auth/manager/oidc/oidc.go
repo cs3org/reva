@@ -247,6 +247,10 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 		if err != nil {
 			return nil, nil, err
 		}
+		// strip the `guest:` prefix if present in the email claim (appears to come from LDAP at CERN?)
+		u.Mail = strings.Replace(u.Mail, "guest: ", "", 1)
+		// and decorate the display name with the email domain to make it different from a primary account
+		u.DisplayName = u.DisplayName + " (" + strings.Split(u.Mail, "@")[1] + ")"
 	} else {
 		scopes, err = scope.AddOwnerScope(nil)
 		if err != nil {
