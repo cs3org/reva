@@ -68,6 +68,7 @@ type svc struct {
 	tplSubj *template.Template
 }
 
+// New creates a new mailer service
 func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) {
 	conf := &config{}
 	if err := mapstructure.Decode(m, conf); err != nil {
