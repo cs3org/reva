@@ -23,22 +23,19 @@ import (
 	"github.com/pkg/errors"
 )
 
-// Site represents the global site-specific settings stored in the service.
+// Site represents the global sites-specific settings stored in the service.
 type Site struct {
 	ID string `json:"id"`
 
 	Config SiteConfiguration `json:"config"`
 }
 
-// SiteConfiguration stores the global configuration of a site.
+// SiteConfiguration stores the global configuration of a sites.
 type SiteConfiguration struct {
 	TestClientCredentials credentials.Credentials `json:"testClientCredentials"`
 }
 
-// Sites holds an array of sites.
-type Sites = []*Site
-
-// Update copies the data of the given site to this site.
+// Update copies the data of the given sites to this sites.
 func (site *Site) Update(other *Site, credsPassphrase string) error {
 	if other.Config.TestClientCredentials.IsValid() {
 		// If credentials were provided, use those as the new ones
@@ -58,7 +55,7 @@ func (site *Site) UpdateTestClientCredentials(id, secret string, passphrase stri
 	return nil
 }
 
-// Clone creates a copy of the site; if eraseCredentials is set to true, the (test user) credentials will be cleared in the cloned object.
+// Clone creates a copy of the sites; if eraseCredentials is set to true, the (test user) credentials will be cleared in the cloned object.
 func (site *Site) Clone(eraseCredentials bool) *Site {
 	clone := *site
 
@@ -69,7 +66,7 @@ func (site *Site) Clone(eraseCredentials bool) *Site {
 	return &clone
 }
 
-// NewSite creates a new site.
+// NewSite creates a new sites.
 func NewSite(id string) (*Site, error) {
 	site := &Site{
 		ID: id,

@@ -38,7 +38,7 @@ const (
 	FindByEmail = "email"
 )
 
-// AccountsManager is responsible for all site account related tasks.
+// AccountsManager is responsible for all sites account related tasks.
 type AccountsManager struct {
 	conf *config.Configuration
 	log  *zerolog.Logger
@@ -143,7 +143,7 @@ func (mngr *AccountsManager) CreateAccount(accountData *data.Account) error {
 		return errors.Errorf("an account with the specified email address already exists")
 	}
 
-	if account, err := data.NewAccount(accountData.Email, accountData.Title, accountData.FirstName, accountData.LastName, accountData.Site, accountData.Role, accountData.PhoneNumber, accountData.Password.Value); err == nil {
+	if account, err := data.NewAccount(accountData.Email, accountData.Title, accountData.FirstName, accountData.LastName, accountData.Operator, accountData.Role, accountData.PhoneNumber, accountData.Password.Value); err == nil {
 		mngr.accounts = append(mngr.accounts, account)
 		mngr.storage.AccountAdded(account)
 		mngr.writeAllAccounts()
@@ -244,8 +244,8 @@ func (mngr *AccountsManager) FindAccountEx(by string, value string, cloneAccount
 	return account, nil
 }
 
-// GrantSiteAccess sets the Site access status of the account identified by the account email; if no such account exists, an error is returned.
-func (mngr *AccountsManager) GrantSiteAccess(accountData *data.Account, grantAccess bool) error {
+// GrantSitesAccess sets the Sites access status of the account identified by the account email; if no such account exists, an error is returned.
+func (mngr *AccountsManager) GrantSitesAccess(accountData *data.Account, grantAccess bool) error {
 	mngr.mutex.Lock()
 	defer mngr.mutex.Unlock()
 
@@ -254,7 +254,7 @@ func (mngr *AccountsManager) GrantSiteAccess(accountData *data.Account, grantAcc
 		return errors.Wrap(err, "no account with the specified email exists")
 	}
 
-	return mngr.grantAccess(account, &account.Data.SiteAccess, grantAccess, email.SendSiteAccessGranted)
+	return mngr.grantAccess(account, &account.Data.SitesAccess, grantAccess, email.SendSitesAccessGranted)
 }
 
 // GrantGOCDBAccess sets the GOCDB access status of the account identified by the account email; if no such account exists, an error is returned.

@@ -36,8 +36,8 @@ type FileStorage struct {
 	conf *config.Configuration
 	log  *zerolog.Logger
 
-	sitesFilePath    string
-	accountsFilePath string
+	operatorsFilePath string
+	accountsFilePath  string
 }
 
 func (storage *FileStorage) initialize(conf *config.Configuration, log *zerolog.Logger) error {
@@ -51,10 +51,10 @@ func (storage *FileStorage) initialize(conf *config.Configuration, log *zerolog.
 	}
 	storage.log = log
 
-	if conf.Storage.File.SitesFile == "" {
-		return errors.Errorf("no sites file set in the configuration")
+	if conf.Storage.File.OperatorsFile == "" {
+		return errors.Errorf("no operators file set in the configuration")
 	}
-	storage.sitesFilePath = conf.Storage.File.SitesFile
+	storage.operatorsFilePath = conf.Storage.File.OperatorsFile
 
 	if conf.Storage.File.AccountsFile == "" {
 		return errors.Errorf("no accounts file set in the configuration")
@@ -62,7 +62,7 @@ func (storage *FileStorage) initialize(conf *config.Configuration, log *zerolog.
 	storage.accountsFilePath = conf.Storage.File.AccountsFile
 
 	// Create the file directories if necessary
-	_ = os.MkdirAll(filepath.Dir(storage.sitesFilePath), 0755)
+	_ = os.MkdirAll(filepath.Dir(storage.operatorsFilePath), 0755)
 	_ = os.MkdirAll(filepath.Dir(storage.accountsFilePath), 0755)
 
 	return nil
@@ -82,13 +82,13 @@ func (storage *FileStorage) readData(file string, obj interface{}) error {
 	return nil
 }
 
-// ReadSites reads all stored sites into the given data object.
-func (storage *FileStorage) ReadSites() (*Sites, error) {
-	sites := &Sites{}
-	if err := storage.readData(storage.sitesFilePath, sites); err != nil {
-		return nil, errors.Wrap(err, "error reading sites")
+// ReadOperators reads all stored operators into the given data object.
+func (storage *FileStorage) ReadOperators() (*Operators, error) {
+	operators := &Operators{}
+	if err := storage.readData(storage.operatorsFilePath, operators); err != nil {
+		return nil, errors.Wrap(err, "error reading operators")
 	}
-	return sites, nil
+	return operators, nil
 }
 
 // ReadAccounts reads all stored accounts into the given data object.
@@ -109,10 +109,10 @@ func (storage *FileStorage) writeData(file string, obj interface{}) error {
 	return nil
 }
 
-// WriteSites writes all stored sites from the given data object.
-func (storage *FileStorage) WriteSites(sites *Sites) error {
-	if err := storage.writeData(storage.sitesFilePath, sites); err != nil {
-		return errors.Wrap(err, "error writing sites")
+// WriteOperators writes all stored operators from the given data object.
+func (storage *FileStorage) WriteOperators(ops *Operators) error {
+	if err := storage.writeData(storage.operatorsFilePath, ops); err != nil {
+		return errors.Wrap(err, "error writing operators")
 	}
 	return nil
 }
@@ -125,18 +125,18 @@ func (storage *FileStorage) WriteAccounts(accounts *Accounts) error {
 	return nil
 }
 
-// SiteAdded is called when a site has been added.
-func (storage *FileStorage) SiteAdded(site *Site) {
+// OperatorAdded is called when a sites has been added.
+func (storage *FileStorage) OperatorAdded(op *Operator) {
 	// Simply skip this action; all data is saved solely in WriteSites
 }
 
-// SiteUpdated is called when a site has been updated.
-func (storage *FileStorage) SiteUpdated(site *Site) {
+// OperatorUpdated is called when a sites has been updated.
+func (storage *FileStorage) OperatorUpdated(op *Operator) {
 	// Simply skip this action; all data is saved solely in WriteSites
 }
 
-// SiteRemoved is called when a site has been removed.
-func (storage *FileStorage) SiteRemoved(site *Site) {
+// OperatorRemoved is called when a sites has been removed.
+func (storage *FileStorage) OperatorRemoved(op *Operator) {
 	// Simply skip this action; all data is saved solely in WriteSites
 }
 

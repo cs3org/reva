@@ -60,14 +60,14 @@ func (dispatcher *Dispatcher) initialize(conf *config.Configuration, log *zerolo
 // DispatchAlerts sends the provided alert(s) via email to the appropriate recipients.
 func (dispatcher *Dispatcher) DispatchAlerts(alerts *template.Data, accounts data.Accounts) error {
 	for _, alert := range alerts.Alerts {
-		siteID, ok := alert.Labels["site_id"]
+		opID, ok := alert.Labels["operator_id"]
 		if !ok {
 			continue
 		}
 
 		// Dispatch the alert to all accounts configured to receive it
 		for _, account := range accounts {
-			if strings.EqualFold(account.Site, siteID) /* && account.Settings.ReceiveAlerts */ { // TODO: Uncomment if alert notifications aren't mandatory anymore
+			if strings.EqualFold(account.Operator, opID) /* && account.Settings.ReceiveAlerts */ { // TODO: Uncomment if alert notifications aren't mandatory anymore
 				if err := dispatcher.dispatchAlert(alert, account); err != nil {
 					// Log errors only
 					dispatcher.log.Err(err).Str("id", alert.Fingerprint).Str("recipient", account.Email).Msg("unable to dispatch alert to user")
@@ -81,7 +81,7 @@ func (dispatcher *Dispatcher) DispatchAlerts(alerts *template.Data, accounts dat
 				Email:     dispatcher.conf.Email.NotificationsMail,
 				FirstName: "ScienceMesh",
 				LastName:  "Global Alerts receiver",
-				Site:      "Global",
+				Operator:  "Global",
 				Role:      "Alerts receiver",
 				Settings: data.AccountSettings{
 					ReceiveAlerts: true,
@@ -102,13 +102,15 @@ func (dispatcher *Dispatcher) dispatchAlert(alert template.Alert, account *data.
 		"EndDate":     alert.EndsAt.String(),
 		"Fingerprint": alert.Fingerprint,
 
-		"Name":     alert.Labels["alertname"],
-		"Service":  alert.Labels["service_type"],
-		"Instance": alert.Labels["instance"],
-		"Job":      alert.Labels["job"],
-		"Severity": alert.Labels["severity"],
-		"Site":     alert.Labels["site"],
-		"SiteID":   alert.Labels["site_id"],
+		"Name":       alert.Labels["alertname"],
+		"Service":    alert.Labels["service_type"],
+		"Instance":   alert.Labels["instance"],
+		"Job":        alert.Labels["job"],
+		"Severity":   alert.Labels["severity"],
+		"Operator":   alert.Labels["operator"],
+		"OperatorID": alert.Labels["operator_id"],
+		"Site":       alert.Labels["site"],
+		"SiteID":     alert.Labels["site_id"],
 
 		"Description": alert.Annotations["description"],
 		"Summary":     alert.Annotations["summary"],

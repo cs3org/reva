@@ -279,22 +279,31 @@ func (s *svc) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateReceive
 							Status: &rpc.Status{Code: rpc.Code_CODE_INTERNAL},
 						}, nil
 					}
-					var srcEndpoint string
-					var srcEndpointBaseURI string
+					var srcServiceHost string
+					var srcEndpointPath string
 					// target URI scheme will be the webdav endpoint scheme
 					var srcEndpointScheme string
 					for _, s := range meshProvider.ProviderInfo.Services {
 						if strings.ToLower(s.Endpoint.Type.Name) == "webdav" {
-							url, err := url.Parse(s.Endpoint.Path)
+							endpointURL, err := url.Parse(s.Endpoint.Path)
 							if err != nil {
 								log.Err(err).Msg("gateway: error calling UpdateReceivedShare: unable to parse webdav endpoint " + s.Endpoint.Path)
 								return &ocm.UpdateReceivedOCMShareResponse{
 									Status: &rpc.Status{Code: rpc.Code_CODE_INTERNAL},
 								}, nil
 							}
-							srcEndpoint = url.Host
-							srcEndpointBaseURI = url.Path
-							srcEndpointScheme = url.Scheme
+							urlServiceHostFull, err := url.Parse(s.Host)
+							if err != nil {
+								log.Err(err).Msg("gateway: error calling UpdateReceivedShare: unable to parse webdav service host " + s.Host)
+								return &ocm.UpdateReceivedOCMShareResponse{
+									Status: &rpc.Status{Code: rpc.Code_CODE_INTERNAL},
+								}, nil
+							}
+							srcServiceHost = urlServiceHostFull.Host + urlServiceHostFull.Path
+							// optional prefix must only appear in target url path:
+							// http://...token...@reva.eu/prefix/?name=remote.php/webdav/home/...
+							srcEndpointPath = strings.TrimPrefix(endpointURL.Path, urlServiceHostFull.Path)
+							srcEndpointScheme = endpointURL.Scheme
 							break
 						}
 					}
@@ -316,8 +325,8 @@ func (s *svc) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateReceive
 						}, nil
 					}
 
-					srcPath := path.Join(srcEndpointBaseURI, share.GetShare().Name)
-					srcTargetURI := fmt.Sprintf("%s://%s@%s?name=%s", srcEndpointScheme, srcToken, srcEndpoint, srcPath)
+					srcPath := path.Join(srcEndpointPath, share.GetShare().Name)
+					srcTargetURI := fmt.Sprintf("%s://%s@%s?name=%s", srcEndpointScheme, srcToken, srcServiceHost, srcPath)
 
 					// get the webdav endpoint of the grantee's idp
 					var granteeIdp string
@@ -334,16 +343,32 @@ func (s *svc) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateReceive
 							Status: &rpc.Status{Code: rpc.Code_CODE_INTERNAL},
 						}, nil
 					}
-					url, err := url.Parse(destWebdavEndpoint)
+					destWebdavEndpointURL, err := url.Parse(destWebdavEndpoint)
 					if err != nil {
 						log.Err(err).Msg("gateway: error calling UpdateReceivedShare: unable to parse webdav endpoint " + destWebdavEndpoint)
 						return &ocm.UpdateReceivedOCMShareResponse{
 							Status: &rpc.Status{Code: rpc.Code_CODE_INTERNAL},
 						}, nil
 					}
-					destEndpoint := url.Host
-					destEndpointBaseURI := url.Path
-					destEndpointScheme := url.Scheme
+					destWebdavHost, err := s.getWebdavHost(ctx, granteeIdp)
+					if err != nil {
+						log.Err(err).Msg("gateway: error calling UpdateReceivedShare")
+						return &ocm.UpdateReceivedOCMShareResponse{
+							Status: &rpc.Status{Code: rpc.Code_CODE_INTERNAL},
+						}, nil
+					}
+					urlServiceHostFull, err := url.Parse(destWebdavHost)
+					if err != nil {
+						log.Err(err).Msg("gateway: error calling UpdateReceivedShare: unable to parse webdav service host " + destWebdavHost)
+						return &ocm.UpdateReceivedOCMShareResponse{
+							Status: &rpc.Status{Code: rpc.Code_CODE_INTERNAL},
+						}, nil
+					}
+					destServiceHost := urlServiceHostFull.Host + urlServiceHostFull.Path
+					// optional prefix must only appear in target url path:
+					// http://...token...@reva.eu/prefix/?name=remote.php/webdav/home/...
+					destEndpointPath := strings.TrimPrefix(destWebdavEndpointURL.Path, urlServiceHostFull.Path)
+					destEndpointScheme := destWebdavEndpointURL.Scheme
 					destToken := ctxpkg.ContextMustGetToken(ctx)
 					homeRes, err := s.GetHome(ctx, &provider.GetHomeRequest{})
 					if err != nil {
@@ -352,8 +377,8 @@ func (s *svc) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateReceive
 							Status: &rpc.Status{Code: rpc.Code_CODE_INTERNAL},
 						}, nil
 					}
-					destPath := path.Join(destEndpointBaseURI, homeRes.Path, s.c.DataTransfersFolder, path.Base(share.GetShare().Name))
-					destTargetURI := fmt.Sprintf("%s://%s@%s?name=%s", destEndpointScheme, destToken, destEndpoint, destPath)
+					destPath := path.Join(destEndpointPath, homeRes.Path, s.c.DataTransfersFolder, path.Base(share.GetShare().Name))
+					destTargetURI := fmt.Sprintf("%s://%s@%s?name=%s", destEndpointScheme, destToken, destServiceHost, destPath)
 
 					opaqueObj := &types.Opaque{
 						Map: map[string]*types.OpaqueEntry{
@@ -520,31 +545,13 @@ func (s *svc) createOCMReference(ctx context.Context, share *ocm.Share) (*rpc.St
 	}
 
 	var refPath, targetURI string
-	if share.ShareType == ocm.Share_SHARE_TYPE_TRANSFER {
-		createTransferDir, err := s.CreateContainer(ctx, &provider.CreateContainerRequest{
-			Ref: &provider.Reference{
-				Path: path.Join(homeRes.Path, s.c.DataTransfersFolder),
-			},
-		})
-		if err != nil {
-			return status.NewInternal(ctx, err, "error creating transfers directory"), nil
-		}
-		if createTransferDir.Status.Code != rpc.Code_CODE_OK && createTransferDir.Status.Code != rpc.Code_CODE_ALREADY_EXISTS {
-			err := status.NewErrorFromCode(createTransferDir.Status.GetCode(), "gateway")
-			return status.NewInternal(ctx, err, "error creating transfers directory"), nil
-		}
-
-		refPath = path.Join(homeRes.Path, s.c.DataTransfersFolder, path.Base(share.Name))
-		targetURI = fmt.Sprintf("datatx://%s@%s?name=%s", token, share.Creator.Idp, share.Name)
-	} else {
-		// reference path is the home path + some name on the corresponding
-		// mesh provider (/home/MyShares/x)
-		// It is the responsibility of the gateway to resolve these references and merge the response back
-		// from the main request.
-		refPath = path.Join(homeRes.Path, s.c.ShareFolder, path.Base(share.Name))
-		// webdav is the scheme, token@host the opaque part and the share name the query of the URL.
-		targetURI = fmt.Sprintf("webdav://%s@%s?name=%s", token, share.Creator.Idp, share.Name)
-	}
+	// reference path is the home path + some name on the corresponding
+	// mesh provider (/home/MyShares/x)
+	// It is the responsibility of the gateway to resolve these references and merge the response back
+	// from the main request.
+	refPath = path.Join(homeRes.Path, s.c.ShareFolder, path.Base(share.Name))
+	// webdav is the scheme, token@host the opaque part and the share name the query of the URL.
+	targetURI = fmt.Sprintf("webdav://%s@%s?name=%s", token, share.Creator.Idp, share.Name)
 
 	log.Info().Msg("mount path will be:" + refPath)
 	createRefReq := &provider.CreateReferenceRequest{

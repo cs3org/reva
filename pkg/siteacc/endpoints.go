@@ -71,12 +71,13 @@ func getEndpoints() []endpoint {
 		{config.EndpointList, callMethodEndpoint, createMethodCallbacks(handleList, nil), false},
 		{config.EndpointFind, callMethodEndpoint, createMethodCallbacks(handleFind, nil), false},
 		{config.EndpointCreate, callMethodEndpoint, createMethodCallbacks(nil, handleCreate), true},
-		{config.EndpointUpdate, callMethodEndpoint, createMethodCallbacks(nil, handleUpdate), false},
-		{config.EndpointConfigure, callMethodEndpoint, createMethodCallbacks(nil, handleConfigure), false},
+		{config.EndpointUpdate, callMethodEndpoint, createMethodCallbacks(nil, handleUpdate), true},
+		{config.EndpointConfigure, callMethodEndpoint, createMethodCallbacks(nil, handleConfigure), true},
 		{config.EndpointRemove, callMethodEndpoint, createMethodCallbacks(nil, handleRemove), false},
 		// Site endpoints
 		{config.EndpointSiteGet, callMethodEndpoint, createMethodCallbacks(handleSiteGet, nil), false},
-		{config.EndpointSiteConfigure, callMethodEndpoint, createMethodCallbacks(nil, handleSiteConfigure), false},
+		// Sites endpoints
+		{config.EndpointSitesConfigure, callMethodEndpoint, createMethodCallbacks(nil, handleSitesConfigure), true},
 		// Login endpoints
 		{config.EndpointLogin, callMethodEndpoint, createMethodCallbacks(nil, handleLogin), true},
 		{config.EndpointLogout, callMethodEndpoint, createMethodCallbacks(handleLogout, nil), true},
@@ -85,7 +86,7 @@ func getEndpoints() []endpoint {
 		// Authentication endpoints
 		{config.EndpointVerifyUserToken, callMethodEndpoint, createMethodCallbacks(handleVerifyUserToken, nil), true},
 		// Access management endpoints
-		{config.EndpointGrantSiteAccess, callMethodEndpoint, createMethodCallbacks(nil, handleGrantSiteAccess), false},
+		{config.EndpointGrantSitesAccess, callMethodEndpoint, createMethodCallbacks(nil, handleGrantSitesAccess), false},
 		{config.EndpointGrantGOCDBAccess, callMethodEndpoint, createMethodCallbacks(nil, handleGrantGOCDBAccess), false},
 		// Alerting endpoints
 		{config.EndpointDispatchAlert, callMethodEndpoint, createMethodCallbacks(nil, handleDispatchAlert), false},
@@ -239,14 +240,14 @@ func handleSiteGet(siteacc *SiteAccounts, values url.Values, body []byte, sessio
 	if siteID == "" {
 		return nil, errors.Errorf("no site specified")
 	}
-	site := siteacc.SitesManager().FindSite(siteID)
+	_, site := siteacc.OperatorsManager().FindSite(siteID)
 	if site == nil {
 		return nil, errors.Errorf("no site with ID %v exists", siteID)
 	}
 	return map[string]interface{}{"site": site.Clone(false)}, nil
 }
 
-func handleSiteConfigure(siteacc *SiteAccounts, values url.Values, body []byte, session *html.Session) (interface{}, error) {
+func handleSitesConfigure(siteacc *SiteAccounts, values url.Values, body []byte, session *html.Session) (interface{}, error) {
 	email, _, err := processInvoker(siteacc, values, session)
 	if err != nil {
 		return nil, err
@@ -256,15 +257,18 @@ func handleSiteConfigure(siteacc *SiteAccounts, values url.Values, body []byte, 
 		return nil, err
 	}
 
-	siteData := &data.Site{}
-	if err := json.Unmarshal(body, siteData); err != nil {
+	sitesData := &[]*data.Site{}
+	if err := json.Unmarshal(body, sitesData); err != nil {
 		return nil, errors.Wrap(err, "invalid form data")
 	}
-	siteData.ID = account.Site
 
-	// Configure the site through the sites manager
-	if err := siteacc.SitesManager().UpdateSite(siteData); err != nil {
-		return nil, errors.Wrap(err, "unable to configure site")
+	// Configure the sites through the operators manager
+	opData := &data.Operator{
+		ID:    account.Operator,
+		Sites: *sitesData,
+	}
+	if err := siteacc.OperatorsManager().UpdateOperator(opData); err != nil {
+		return nil, errors.Wrap(err, "unable to configure operator")
 	}
 
 	return nil, nil
@@ -358,8 +362,8 @@ func handleDispatchAlert(siteacc *SiteAccounts, values url.Values, body []byte, 
 	return nil, nil
 }
 
-func handleGrantSiteAccess(siteacc *SiteAccounts, values url.Values, body []byte, session *html.Session) (interface{}, error) {
-	return handleGrantAccess((*manager.AccountsManager).GrantSiteAccess, siteacc, values, body, session)
+func handleGrantSitesAccess(siteacc *SiteAccounts, values url.Values, body []byte, session *html.Session) (interface{}, error) {
+	return handleGrantAccess((*manager.AccountsManager).GrantSitesAccess, siteacc, values, body, session)
 }
 
 func handleGrantGOCDBAccess(siteacc *SiteAccounts, values url.Values, body []byte, session *html.Session) (interface{}, error) {

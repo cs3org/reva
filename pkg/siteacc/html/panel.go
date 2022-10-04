@@ -19,6 +19,7 @@
 package html
 
 import (
+	"fmt"
 	"html/template"
 	"net/http"
 	"strings"
@@ -146,8 +147,28 @@ func (panel *Panel) Execute(w http.ResponseWriter, r *http.Request, session *Ses
 func (panel *Panel) prepareTemplate(tpl *template.Template) {
 	// Add some custom helper functions to the template
 	tpl.Funcs(template.FuncMap{
+		"add": func(x, y int) int {
+			return x + y
+		},
 		"getServerAddress": func() string {
 			return strings.TrimRight(panel.conf.Webserver.URL, "/")
+		},
+		"getOperatorName": func(opID string) string {
+			opName, _ := data.QueryOperatorName(opID, panel.conf.Mentix.URL, panel.conf.Mentix.DataEndpoint)
+			return opName
+		},
+		"getOperatorSites": func(opID string, fullNames bool) string {
+			sites, _ := data.QueryOperatorSites(opID, panel.conf.Mentix.URL, panel.conf.Mentix.DataEndpoint)
+			for i, s := range sites {
+				longName, _ := data.QuerySiteName(s, true, panel.conf.Mentix.URL, panel.conf.Mentix.DataEndpoint)
+				if fullNames {
+					shortName, _ := data.QuerySiteName(s, false, panel.conf.Mentix.URL, panel.conf.Mentix.DataEndpoint)
+					sites[i] = fmt.Sprintf("%v (%v)", longName, shortName)
+				} else {
+					sites[i] = longName
+				}
+			}
+			return strings.Join(sites, ", ")
 		},
 		"getSiteName": func(siteID string, fullName bool) string {
 			siteName, _ := data.QuerySiteName(siteID, fullName, panel.conf.Mentix.URL, panel.conf.Mentix.DataEndpoint)

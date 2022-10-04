@@ -35,6 +35,16 @@ type FileOperationsAction struct {
 	action
 }
 
+// GetHome retrieves the home directory path of the current user.
+func (action *FileOperationsAction) GetHome() (string, error) {
+	req := &provider.GetHomeRequest{}
+	res, err := action.session.Client().GetHome(action.session.Context(), req)
+	if err := net.CheckRPCInvocation("querying home directory", res, err); err != nil {
+		return "", err
+	}
+	return res.Path, nil
+}
+
 // Stat queries the file information of the specified remote resource.
 func (action *FileOperationsAction) Stat(path string) (*storage.ResourceInfo, error) {
 	ref := &provider.Reference{Path: path}

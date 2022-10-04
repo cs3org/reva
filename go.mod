@@ -18,7 +18,7 @@ require (
 	github.com/cheggaaa/pb v1.0.29
 	github.com/coreos/go-oidc v2.2.1+incompatible
 	github.com/cs3org/cato v0.0.0-20200828125504-e418fc54dd5e
-	github.com/cs3org/go-cs3apis v0.0.0-20220719130120-361e9f987d64
+	github.com/cs3org/go-cs3apis v0.0.0-20220929083235-bb0b1a236d6c
 	github.com/cubewise-code/go-mime v0.0.0-20200519001935-8c5762b177d8
 	github.com/dgraph-io/ristretto v0.1.0
 	github.com/disintegration/imaging v1.6.2

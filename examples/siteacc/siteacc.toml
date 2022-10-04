@@ -15,7 +15,7 @@ apikey = "verysecret"
 [http.services.siteacc.storage]
 driver = "file"
 [http.services.siteacc.storage.file]
-sites_file = "/var/revad/sites.json"
+operators_file = "/var/revad/operators.json"
 accounts_file = "/var/revad/accounts.json"
 
 # Email related settings

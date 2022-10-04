@@ -21,6 +21,8 @@ package meshdata
 import "strings"
 
 const (
+	// PropertyOperator identifies the operator property.
+	PropertyOperator = "operator"
 	// PropertySiteID identifies the site ID property.
 	PropertySiteID = "site_id"
 	// PropertyOrganization identifies the organization property.
