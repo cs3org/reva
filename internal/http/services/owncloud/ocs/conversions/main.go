@@ -322,14 +322,18 @@ func timestampToExpiration(t *types.Timestamp) string {
 	return time.Unix(int64(t.Seconds), int64(t.Nanos)).UTC().Format("2006-01-02 15:05:05")
 }
 
-// ParseTimestamp tries to parses the ocs expiry into a CS3 Timestamp
+// ParseTimestamp tries to parse the ocs expiry into a CS3 Timestamp
 func ParseTimestamp(timestampString string) (*types.Timestamp, error) {
 	parsedTime, err := time.Parse("2006-01-02T15:04:05Z0700", timestampString)
 	if err != nil {
 		parsedTime, err = time.Parse("2006-01-02", timestampString)
+		if err == nil {
+			// the link needs to be valid for the whole day
+			parsedTime.Add(23*time.Hour + 59*time.Minute + 59*time.Second)
+		}
 	}
 	if err != nil {
-		return nil, fmt.Errorf("datetime format invalid: %v", timestampString)
+		return nil, fmt.Errorf("datetime format invalid: %v, %s", timestampString, err.Error())
 	}
 	final := parsedTime.UnixNano()
 
