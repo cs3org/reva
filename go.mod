@@ -8,7 +8,6 @@ require (
 	github.com/BurntSushi/toml v1.2.0
 	github.com/CiscoM31/godata v1.0.5
 	github.com/Masterminds/sprig v2.22.0+incompatible
-	github.com/ReneKroon/ttlcache/v2 v2.11.0
 	github.com/aws/aws-sdk-go v1.44.94
 	github.com/beevik/etree v1.1.0
 	github.com/bluele/gcache v0.0.2
@@ -44,6 +43,7 @@ require (
 	github.com/hashicorp/go-plugin v1.4.4
 	github.com/iancoleman/strcase v0.2.0
 	github.com/jedib0t/go-pretty v4.3.0+incompatible
+	github.com/jellydator/ttlcache/v2 v2.11.1
 	github.com/juliangruber/go-intersect v1.1.0
 	github.com/mattn/go-sqlite3 v2.0.3+incompatible
 	github.com/maxymania/go-system v0.0.0-20170110133659-647cc364bf0b
