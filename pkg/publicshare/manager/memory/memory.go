@@ -58,7 +58,7 @@ var (
 )
 
 // CreatePublicShare adds a new entry to manager.shares
-func (m *manager) CreatePublicShare(ctx context.Context, u *user.User, rInfo *provider.ResourceInfo, g *link.Grant, description string) (*link.PublicShare, error) {
+func (m *manager) CreatePublicShare(ctx context.Context, u *user.User, rInfo *provider.ResourceInfo, g *link.Grant, description string, internal bool) (*link.PublicShare, error) {
 	id := &link.PublicShareId{
 		OpaqueId: randString(15),
 	}

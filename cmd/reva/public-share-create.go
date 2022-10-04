@@ -36,9 +36,10 @@ func publicShareCreateCommand() *command {
 	cmd.Usage = func() string { return "Usage: public-share-create [-flags] <path>" }
 	rol := cmd.String("rol", "viewer", "the permission for the share (viewer or editor)")
 	description := cmd.String("description", "", "the description for the share")
+	internal := cmd.Bool("internal", false, "mark the public share as internal")
 
 	cmd.ResetFlags = func() {
-		*rol, *description = "viewer", ""
+		*rol, *description, *internal = "viewer", "", false
 	}
 
 	cmd.Action = func(w ...io.Writer) error {
@@ -80,6 +81,7 @@ func publicShareCreateCommand() *command {
 			ResourceInfo: res.Info,
 			Grant:        grant,
 			Description:  *description,
+			Internal:     *internal,
 		}
 
 		shareRes, err := client.CreatePublicShare(ctx, shareRequest)
