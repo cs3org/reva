@@ -214,6 +214,13 @@ var _ = Describe("Node locks", func() {
 				err := n.RefreshLock(env.Ctx, newLock, "")
 				Expect(err).ToNot(HaveOccurred())
 			})
+
+			It("refreshes the lock and unlocks with the new lock", func() {
+				err := n.RefreshLock(env.Ctx, newLock, lockByUser.LockId)
+				Expect(err).ToNot(HaveOccurred())
+				err = n.Unlock(env.Ctx, newLock)
+				Expect(err).ToNot(HaveOccurred())
+			})
 		})
 
 		Describe("Unlock", func() {
@@ -328,6 +335,13 @@ var _ = Describe("Node locks", func() {
 
 			It("refreshes the lock", func() {
 				err := n.RefreshLock(env.Ctx, newLock, "")
+				Expect(err).ToNot(HaveOccurred())
+			})
+			It("refreshes the lock and unlocks it with the new lock", func() {
+				newLock.LockId = "somethingnew"
+				err := n.RefreshLock(env.Ctx, newLock, lockByApp.LockId)
+				Expect(err).ToNot(HaveOccurred())
+				err = n.Unlock(env.Ctx, newLock)
 				Expect(err).ToNot(HaveOccurred())
 			})
 		})
