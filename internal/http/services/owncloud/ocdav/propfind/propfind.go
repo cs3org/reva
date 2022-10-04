@@ -365,7 +365,14 @@ func (p *Handler) propfindResponse(ctx context.Context, w http.ResponseWriter, r
 	ctx, span := appctx.GetTracerProvider(r.Context()).Tracer(tracerName).Start(ctx, "propfind_response")
 	defer span.End()
 
-	var linkshares map[string]struct{}
+	client, err := p.getClient()
+	if err != nil {
+		log.Error().Err(err).Msg("error getting grpc client")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	linkshares := make(map[string]struct{})
 	// public link access does not show share-types
 	// oc:share-type is not part of an allprops response
 	if namespace != "/public" {
@@ -381,12 +388,6 @@ func (p *Handler) propfindResponse(ctx context.Context, w http.ResponseWriter, r
 					// same as user / group shares for share indicators
 					filters = append(filters, publicshare.ResourceIDFilter(resourceInfos[i].Id))
 				}
-				client, err := p.getClient()
-				if err != nil {
-					log.Error().Err(err).Msg("error getting grpc client")
-					w.WriteHeader(http.StatusInternalServerError)
-					return
-				}
 				listResp, err := client.ListPublicShares(ctx, &link.ListPublicSharesRequest{Filters: filters})
 				if err == nil {
 					linkshares = make(map[string]struct{}, len(listResp.Share))
@@ -401,6 +402,19 @@ func (p *Handler) propfindResponse(ctx context.Context, w http.ResponseWriter, r
 			}
 		}
 	}
+
+	for _, md := range resourceInfos {
+		p, err := client.GetPath(ctx, &provider.GetPathRequest{ResourceId: md.Id})
+		fmt.Println("PATH FOR RERSOURCE", p, err)
+	}
+
+	// TODO: when to do this?
+	//res, err := client.ListReceivedShares(ctx, &collaboration.ListReceivedSharesRequest{})
+	//if err != nil || res.GetStatus().GetCode() != rpc.Code_CODE_OK {
+	//log.Error().Err(err).Msg("propfindResponse: couldn't list received shares")
+	//} else {
+	//fmt.Println("Shares", res.Shares)
+	//}
 
 	prefer := net.ParsePrefer(r.Header.Get(net.HeaderPrefer))
 	returnMinimal := prefer[net.HeaderPreferReturn] == "minimal"

@@ -460,21 +460,26 @@ func (fs *Decomposedfs) GetHome(ctx context.Context) (string, error) {
 
 // GetPathByID returns the fn pointed by the file id, without the internal namespace
 func (fs *Decomposedfs) GetPathByID(ctx context.Context, id *provider.ResourceId) (string, error) {
-	node, err := fs.lu.NodeFromID(ctx, id)
+	n, err := fs.lu.NodeFromID(ctx, id)
 	if err != nil {
 		return "", err
 	}
-	ok, err := fs.p.HasPermission(ctx, node, func(rp *provider.ResourcePermissions) bool {
+	ok, err := fs.p.HasPermission(ctx, n, func(rp *provider.ResourcePermissions) bool {
 		return rp.GetPath
 	})
 	switch {
 	case err != nil:
 		return "", errtypes.InternalError(err.Error())
 	case !ok:
-		return "", errtypes.PermissionDenied(filepath.Join(node.ParentID, node.Name))
+		return "", errtypes.PermissionDenied(filepath.Join(n.ParentID, n.Name))
 	}
 
-	return fs.lu.Path(ctx, node)
+	return fs.lu.Path(ctx, n, func(n *node.Node) bool {
+		ok, _ := fs.p.HasPermission(ctx, n, func(rp *provider.ResourcePermissions) bool {
+			return rp.GetPath
+		})
+		return ok
+	})
 }
 
 // CreateDir creates the specified directory
