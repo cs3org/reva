@@ -82,7 +82,7 @@ func (idx *Unique) LookupCtx(ctx context.Context, values ...string) ([]string, e
 	var allValues map[string]struct{}
 	if len(values) != 1 {
 		// prefetch all values with one request
-		entries, err := idx.storage.ReadDir(context.Background(), path.Join("/", idx.indexRootDir))
+		entries, err := idx.storage.ReadDir(context.Background(), idx.indexRootDir)
 		if err != nil {
 			return nil, err
 		}
@@ -171,7 +171,7 @@ func (idx *Unique) Remove(_ string, v string) error {
 		return err
 	}
 
-	deletePath := path.Join("/", idx.indexRootDir, v)
+	deletePath := path.Join(idx.indexRootDir, v)
 	return idx.storage.Delete(context.Background(), deletePath)
 }
 

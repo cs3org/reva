@@ -278,7 +278,7 @@ func (s *svc) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSp
 			filters["user_id"] = f.GetUser().GetOpaqueId()
 		default:
 			return &provider.ListStorageSpacesResponse{
-				Status: status.NewInvalidArg(ctx, fmt.Sprintf("unknown filter %v", f.Type)),
+				Status: status.NewInvalid(ctx, fmt.Sprintf("unknown filter %v", f.Type)),
 			}, nil
 		}
 	}

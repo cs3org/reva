@@ -126,6 +126,13 @@ func (s *service) Register(ss *grpc.Server) {
 }
 
 func (s *service) GetUser(ctx context.Context, req *userpb.GetUserRequest) (*userpb.GetUserResponse, error) {
+	if req.UserId == nil {
+		res := &userpb.GetUserResponse{
+			Status: status.NewInvalid(ctx, "userid missing"),
+		}
+		return res, nil
+	}
+
 	user, err := s.usermgr.GetUser(ctx, req.UserId, req.SkipFetchingUserGroups)
 	if err != nil {
 		res := &userpb.GetUserResponse{}
@@ -186,6 +193,12 @@ func (s *service) FindUsers(ctx context.Context, req *userpb.FindUsersRequest) (
 
 func (s *service) GetUserGroups(ctx context.Context, req *userpb.GetUserGroupsRequest) (*userpb.GetUserGroupsResponse, error) {
 	log := appctx.GetLogger(ctx)
+	if req.UserId == nil {
+		res := &userpb.GetUserGroupsResponse{
+			Status: status.NewInvalid(ctx, "userid missing"),
+		}
+		return res, nil
+	}
 	groups, err := s.usermgr.GetUserGroups(ctx, req.UserId)
 	if err != nil {
 		log.Warn().Err(err).Interface("userid", req.UserId).Msg("error getting user groups")

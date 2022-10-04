@@ -21,6 +21,7 @@ package loader
 import (
 	// Load core GRPC services
 	_ "github.com/cs3org/reva/v2/internal/grpc/interceptors/eventsmiddleware"
+	_ "github.com/cs3org/reva/v2/internal/grpc/interceptors/prometheus"
 	_ "github.com/cs3org/reva/v2/internal/grpc/interceptors/readonly"
 	// Add your own service here
 )
