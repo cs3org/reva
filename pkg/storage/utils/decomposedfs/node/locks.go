@@ -190,6 +190,11 @@ func (n *Node) RefreshLock(ctx context.Context, lock *provider.Lock, existingLoc
 		return err
 	}
 
+	// Rewind to the beginning of the file before writing a refreshed lock
+	_, err = f.Seek(0, 0)
+	if err != nil {
+		return errors.Wrap(err, "could not seek to the beginning of the lock file")
+	}
 	if err := json.NewEncoder(f).Encode(lock); err != nil {
 		return errors.Wrap(err, "Decomposedfs: could not write lock file")
 	}
