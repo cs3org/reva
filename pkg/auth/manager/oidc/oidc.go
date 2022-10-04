@@ -343,7 +343,7 @@ func (am *mgr) resolveUser(ctx context.Context, claims map[string]interface{}) e
 		return nil
 	}
 
-	upsc, err := pool.GetUserProviderServiceClient(pool.Endpoint(am.c.GatewaySvc))
+	upsc, err := pool.GetGatewayServiceClient(pool.Endpoint(am.c.GatewaySvc))
 	if err != nil {
 		return errors.Wrap(err, "error getting user provider grpc client")
 	}
