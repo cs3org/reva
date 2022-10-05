@@ -1,4 +1,4 @@
-Fix: Remove FIXME
+Bugfix: Remove FIXME
 
 Issue https://github.com/cs3org/reva/issues/2402 is closed.
 
