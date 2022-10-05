@@ -29,6 +29,7 @@ import (
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
@@ -169,12 +170,17 @@ func (h *Handler) removeUserShare(w http.ResponseWriter, r *http.Request, shareI
 	response.WriteOCSSuccess(w, r, data)
 }
 
-func (h *Handler) listUserShares(r *http.Request, filters []*collaboration.Filter) ([]*conversions.ShareData, *rpc.Status, error) {
+func (h *Handler) listUserShares(r *http.Request, filters []*collaboration.Filter, ctxPath string) ([]*conversions.ShareData, *rpc.Status, error) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
 	lsUserSharesRequest := collaboration.ListSharesRequest{
 		Filters: filters,
+		Opaque: &types.Opaque{
+			Map: map[string]*types.OpaqueEntry{
+				ctxpkg.ResoucePathCtx: {Decoder: "plain", Value: []byte(ctxPath)},
+			},
+		},
 	}
 
 	ocsDataPayload := make([]*conversions.ShareData, 0)
