@@ -68,7 +68,7 @@ func Send(requestBodyMap map[string]interface{}, pi *ocmprovider.ProviderInfo) e
 	if err != nil {
 		return errors.Wrap(err, "sender: error framing post request")
 	}
-	req.Header.Set("Content-Type", "application/json; param=value")
+	req.Header.Set("Content-Type", "application/json")
 	client := rhttp.GetHTTPClient(
 		rhttp.Timeout(5 * time.Second),
 	)
