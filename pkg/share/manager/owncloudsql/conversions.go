@@ -23,7 +23,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ReneKroon/ttlcache/v2"
 	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	userprovider "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -34,6 +33,7 @@ import (
 	conversions "github.com/cs3org/reva/v2/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/status"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
+	"github.com/jellydator/ttlcache/v2"
 )
 
 //go:generate make --no-print-directory -C ../../../.. mockery NAME=UserConverter
