@@ -835,7 +835,7 @@ func (h *Handler) listSharesWithOthers(w http.ResponseWriter, r *http.Request) {
 		shares = append(shares, publicShares...)
 	}
 	if listUserShares {
-		userShares, status, err := h.listUserShares(r, filters)
+		userShares, status, err := h.listUserShares(r, filters, p)
 		h.logProblems(status, err, "could not listUserShares")
 		shares = append(shares, userShares...)
 	}
