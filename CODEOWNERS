@@ -1,16 +1,16 @@
-*                                     @labkode @glpatcern
-.drone.env                            @labkode @ishank011 @glpatcern @cs3org/owncloud-team
-changelog                             @labkode @ishank011 @glpatcern @cs3org/owncloud-team
-examples                              @labkode @ishank011 @glpatcern @cs3org/owncloud-team
-tests                                 @labkode @ishank011 @glpatcern @cs3org/owncloud-team
-internal/http/services/owncloud       @cs3org/owncloud-team @labkode @ishank011 @glpatcern
-internal/http/services/appprovider    @labkode @ishank011 @wkloucek @glpatcern
-internal/grpc/services/gateway        @labkode @ishank011 @glpatcern
-internal/grpc/services/appprovider    @labkode @ishank011 @wkloucek @glpatcern
+*                                     @labkode @glpatcern @gmgigi96
+.drone.env                            @labkode @ishank011 @glpatcern @cs3org/owncloud-team @gmgigi96
+changelog                             @labkode @ishank011 @glpatcern @cs3org/owncloud-team @gmgigi96
+examples                              @labkode @ishank011 @glpatcern @cs3org/owncloud-team @gmgigi96
+tests                                 @labkode @ishank011 @glpatcern @cs3org/owncloud-team @gmgigi96
+internal/http/services/owncloud       @cs3org/owncloud-team @labkode @ishank011 @glpatcern @gmgigi96
+internal/http/services/appprovider    @labkode @ishank011 @wkloucek @glpatcern @gmgigi96
+internal/grpc/services/gateway        @labkode @ishank011 @glpatcern @gmgigi96
+internal/grpc/services/appprovider    @labkode @ishank011 @wkloucek @glpatcern @gmgigi96
 pkg/auth/manager/owncloudsql          @cs3org/owncloud-team
-pkg/storage/fs/owncloudsql            @cs3org/owncloud-team
+pkg/storage/fs/owncloudsql            @cs3org/owncloud-team 
 pkg/storage/fs/owncloud               @cs3org/owncloud-team
 pkg/storage/fs/ocis                   @cs3org/owncloud-team
 pkg/storage/utils/decomposedfs        @cs3org/owncloud-team
 pkg/user/manager/owncloudsql          @cs3org/owncloud-team
-pkg/app                               @labkode @wkloucek @glpatcern
+pkg/app                               @labkode @wkloucek @glpatcern @gmgigi96
