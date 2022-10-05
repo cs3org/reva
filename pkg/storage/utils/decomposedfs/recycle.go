@@ -66,7 +66,7 @@ func (fs *Decomposedfs) ListRecycle(ctx context.Context, ref *provider.Reference
 	switch {
 	case err != nil:
 		return nil, errtypes.InternalError(err.Error())
-	case !rp.InitiateFileUpload:
+	case !rp.ListRecycle:
 		if rp.Stat {
 			return nil, errtypes.PermissionDenied(key)
 		}

@@ -92,12 +92,12 @@ var _ = Describe("Decomposed", func() {
 
 		Describe("CreateDir", func() {
 			JustBeforeEach(func() {
-				env.Permissions.On("HasPermission", mock.Anything, mock.Anything, mock.Anything).Return(true, nil)
 				env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(provider.ResourcePermissions{
-					Stat: true,
+					Stat:            true,
+					CreateContainer: true,
 				}, nil)
 			})
-			It("handle already existing directories", func() {
+			It("handles already existing directories", func() {
 				var numIterations = 10
 				wg := &sync.WaitGroup{}
 				wg.Add(numIterations)

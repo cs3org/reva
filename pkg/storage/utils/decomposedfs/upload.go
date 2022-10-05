@@ -266,7 +266,6 @@ func (fs *Decomposedfs) NewUpload(ctx context.Context, info tusd.FileInfo) (uplo
 	}
 
 	// check permissions
-	var ok bool
 	var checkNode *node.Node
 	var f string
 	if n.Exists {
@@ -294,12 +293,6 @@ func (fs *Decomposedfs) NewUpload(ctx context.Context, info tusd.FileInfo) (uplo
 		}
 		return nil, errtypes.NotFound(f)
 	}
-	switch {
-	case err != nil:
-		return nil, errtypes.InternalError(err.Error())
-	case !ok:
-		return nil, errtypes.PermissionDenied(filepath.Join(n.ParentID, n.Name))
-	}
 
 	// if we are trying to overwriting a folder with a file
 	if n.Exists && n.IsDir() {
@@ -322,13 +315,9 @@ func (fs *Decomposedfs) NewUpload(ctx context.Context, info tusd.FileInfo) (uplo
 	}
 	usr := ctxpkg.ContextMustGetUser(ctx)
 
-	var spaceRoot string
-	if info.Storage != nil {
-		if spaceRoot, ok = info.Storage["SpaceRoot"]; !ok {
-			spaceRoot = n.SpaceRoot.ID
-		}
-	} else {
-		spaceRoot = n.SpaceRoot.ID
+	spaceRoot := n.SpaceRoot.ID
+	if info.Storage != nil && info.Storage["SpaceRoot"] != "" {
+		spaceRoot = info.Storage["SpaceRoot"]
 	}
 
 	info.Storage = map[string]string{
