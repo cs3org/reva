@@ -34,6 +34,7 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/storage/utils/grants"
+	"github.com/cs3org/reva/pkg/utils"
 	"github.com/pkg/errors"
 )
 
@@ -129,8 +130,6 @@ func (s *svc) RemoveShare(ctx context.Context, req *collaboration.RemoveShareReq
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error calling RemoveShare")
 	}
-
-	s.removeReference(ctx, share.ResourceId)
 
 	// if we don't need to commit we return earlier
 	if !s.c.CommitShareToStorageGrant && !s.c.CommitShareToStorageRef {
@@ -346,12 +345,12 @@ func (s *svc) UpdateReceivedShare(ctx context.Context, req *collaboration.Update
 		case "state":
 			switch req.GetShare().GetState() {
 			case collaboration.ShareState_SHARE_STATE_ACCEPTED:
-				rpcStatus := s.createReference(ctx, res.GetShare().GetShare().GetResourceId())
+				rpcStatus := s.createReference(ctx, res.GetShare().GetShare())
 				if rpcStatus.Code != rpc.Code_CODE_OK {
 					return &collaboration.UpdateReceivedShareResponse{Status: rpcStatus}, nil
 				}
 			case collaboration.ShareState_SHARE_STATE_REJECTED:
-				rpcStatus := s.removeReference(ctx, res.GetShare().GetShare().ResourceId)
+				rpcStatus := s.removeReference(ctx, res.GetShare().GetShare())
 				if rpcStatus.Code != rpc.Code_CODE_OK && rpcStatus.Code != rpc.Code_CODE_NOT_FOUND {
 					return &collaboration.UpdateReceivedShareResponse{Status: rpcStatus}, nil
 				}
@@ -369,10 +368,10 @@ func (s *svc) UpdateReceivedShare(ctx context.Context, req *collaboration.Update
 	return res, nil
 }
 
-func (s *svc) removeReference(ctx context.Context, resourceID *provider.ResourceId) *rpc.Status {
+func (s *svc) removeReference(ctx context.Context, share *collaboration.Share) *rpc.Status {
 	log := appctx.GetLogger(ctx)
 
-	idReference := &provider.Reference{ResourceId: resourceID}
+	idReference := &provider.Reference{ResourceId: share.ResourceId}
 	storageProvider, err := s.find(ctx, idReference)
 	if err != nil {
 		if _, ok := err.(errtypes.IsNotFound); ok {
@@ -383,7 +382,7 @@ func (s *svc) removeReference(ctx context.Context, resourceID *provider.Resource
 
 	statRes, err := storageProvider.Stat(ctx, &provider.StatRequest{Ref: idReference})
 	if err != nil {
-		return status.NewInternal(ctx, err, "gateway: error calling Stat for the share resource id: "+resourceID.String())
+		return status.NewInternal(ctx, err, "gateway: error calling Stat for the share resource id: "+share.ResourceId.String())
 	}
 
 	// FIXME how can we delete a reference if the original resource was deleted?
@@ -398,51 +397,68 @@ func (s *svc) removeReference(ctx context.Context, resourceID *provider.Resource
 		return status.NewInternal(ctx, err, "could not delete share reference")
 	}
 
-	sharePath := path.Join(homeRes.Path, s.c.ShareFolder, path.Base(statRes.Info.Path))
-	log.Debug().Str("share_path", sharePath).Msg("remove reference of share")
+	// We list the shares folder and delete references corresponding to this share
+	// TODO: We need to maintain a DB of these
+	shareFolderPath := path.Join(homeRes.Path, s.c.ShareFolder)
 
-	homeProvider, err := s.find(ctx, &provider.Reference{Path: sharePath})
+	homeProvider, err := s.find(ctx, &provider.Reference{Path: shareFolderPath})
 	if err != nil {
 		if _, ok := err.(errtypes.IsNotFound); ok {
 			return status.NewNotFound(ctx, "storage provider not found")
 		}
 		return status.NewInternal(ctx, err, "error finding storage provider")
 	}
-
-	deleteReq := &provider.DeleteRequest{
-		Opaque: &typesv1beta1.Opaque{
-			Map: map[string]*typesv1beta1.OpaqueEntry{
-				// This signals the storageprovider that we want to delete the share reference and not the underlying file.
-				"deleting_shared_resource": {},
-			},
-		},
-		Ref: &provider.Reference{Path: sharePath},
-	}
-
-	deleteResp, err := homeProvider.Delete(ctx, deleteReq)
+	shareRefs, err := homeProvider.ListContainer(ctx, &provider.ListContainerRequest{
+		Ref: &provider.Reference{Path: shareFolderPath},
+	})
 	if err != nil {
-		return status.NewInternal(ctx, err, "could not delete share reference")
+		return status.NewInternal(ctx, err, "gateway: error listing shares folder")
+	}
+	if shareRefs.Status.Code != rpc.Code_CODE_OK {
+		err := status.NewErrorFromCode(shareRefs.Status.GetCode(), "gateway")
+		return status.NewInternal(ctx, err, "could not list shares folder")
 	}
 
-	switch deleteResp.Status.Code {
-	case rpc.Code_CODE_OK:
-		// we can continue deleting the reference
-	case rpc.Code_CODE_NOT_FOUND:
-		// This is fine, we wanted to delete it anyway
-		return status.NewOK(ctx)
-	default:
-		err := status.NewErrorFromCode(deleteResp.Status.GetCode(), "gateway")
-		return status.NewInternal(ctx, err, "could not delete share reference")
+	target := fmt.Sprintf("cs3:%s/%s", share.ResourceId.GetStorageId(), share.ResourceId.GetOpaqueId())
+	for _, s := range shareRefs.Infos {
+		if s.Target == target {
+			log.Debug().Str("share_path", s.Path).Msg("remove reference of share")
+
+			deleteReq := &provider.DeleteRequest{
+				Opaque: &typesv1beta1.Opaque{
+					Map: map[string]*typesv1beta1.OpaqueEntry{
+						// This signals the storageprovider that we want to delete the share reference and not the underlying file.
+						"deleting_shared_resource": {},
+					},
+				},
+				Ref: &provider.Reference{Path: s.Path},
+			}
+
+			deleteResp, err := homeProvider.Delete(ctx, deleteReq)
+			if err != nil {
+				return status.NewInternal(ctx, err, "could not delete share reference")
+			}
+
+			switch deleteResp.Status.Code {
+			case rpc.Code_CODE_OK:
+				// we can continue deleting the reference
+			case rpc.Code_CODE_NOT_FOUND:
+				// This is fine, we wanted to delete it anyway
+				return status.NewOK(ctx)
+			default:
+				err := status.NewErrorFromCode(deleteResp.Status.GetCode(), "gateway")
+				return status.NewInternal(ctx, err, "could not delete share reference")
+			}
+
+			log.Debug().Str("share_path", s.Path).Msg("share reference successfully removed")
+		}
 	}
-
-	log.Debug().Str("share_path", sharePath).Msg("share reference successfully removed")
-
 	return status.NewOK(ctx)
 }
 
-func (s *svc) createReference(ctx context.Context, resourceID *provider.ResourceId) *rpc.Status {
+func (s *svc) createReference(ctx context.Context, share *collaboration.Share) *rpc.Status {
 	ref := &provider.Reference{
-		ResourceId: resourceID,
+		ResourceId: share.ResourceId,
 	}
 	log := appctx.GetLogger(ctx)
 
@@ -461,12 +477,12 @@ func (s *svc) createReference(ctx context.Context, resourceID *provider.Resource
 
 	statRes, err := c.Stat(ctx, statReq)
 	if err != nil {
-		return status.NewInternal(ctx, err, "gateway: error calling Stat for the share resource id: "+resourceID.String())
+		return status.NewInternal(ctx, err, "gateway: error calling Stat for the share resource id: "+share.ResourceId.String())
 	}
 
 	if statRes.Status.Code != rpc.Code_CODE_OK {
 		err := status.NewErrorFromCode(statRes.Status.GetCode(), "gateway")
-		log.Err(err).Msg("gateway: Stat failed on the share resource id: " + resourceID.String())
+		log.Err(err).Msg("gateway: Stat failed on the share resource id: " + share.ResourceId.String())
 		return status.NewInternal(ctx, err, "error updating received share")
 	}
 
@@ -486,21 +502,31 @@ func (s *svc) createReference(ctx context.Context, resourceID *provider.Resource
 	// It is the responsibility of the gateway to resolve these references and merge the response back
 	// from the main request.
 	// TODO(labkode): the name of the share should be the filename it points to by default.
-	refPath := path.Join(homeRes.Path, s.c.ShareFolder, path.Base(statRes.Info.Path))
-	log.Info().Msg("mount path will be:" + refPath)
-
-	createRefReq := &provider.CreateReferenceRequest{
-		Ref: &provider.Reference{Path: refPath},
-		// cs3 is the Scheme and %s/%s is the Opaque parts of a net.URL.
-		TargetUri: fmt.Sprintf("cs3:%s/%s", resourceID.GetStorageId(), resourceID.GetOpaqueId()),
-	}
-
-	c, err = s.findByPath(ctx, refPath)
+	refPath := &provider.Reference{Path: path.Join(homeRes.Path, s.c.ShareFolder, path.Base(statRes.Info.Path))}
+	c, err = s.findByPath(ctx, refPath.Path)
 	if err != nil {
 		if _, ok := err.(errtypes.IsNotFound); ok {
 			return status.NewNotFound(ctx, "storage provider not found")
 		}
 		return status.NewInternal(ctx, err, "error finding storage provider")
+	}
+
+	refPathStat, err := c.Stat(ctx, &provider.StatRequest{
+		Ref: refPath,
+	})
+	if err == nil && refPathStat.Status.Code == rpc.Code_CODE_OK {
+		// This reference already exists, add extra metadata to avoid conflicts
+		name := fmt.Sprintf("%s_%s_%s", path.Base(statRes.Info.Path), share.Owner.OpaqueId, utils.TSToTime(share.Ctime).Format("2006-01-02_15-04-05"))
+		refPath = &provider.Reference{Path: path.Join(homeRes.Path, s.c.ShareFolder, name)}
+	}
+
+	log.Info().Msgf("refPathStat %+v %+v", refPathStat.Status, err)
+	log.Info().Msg("mount path will be:" + refPath.Path)
+
+	createRefReq := &provider.CreateReferenceRequest{
+		Ref: refPath,
+		// cs3 is the Scheme and %s/%s is the Opaque parts of a net.URL.
+		TargetUri: fmt.Sprintf("cs3:%s/%s", share.ResourceId.GetStorageId(), share.ResourceId.GetOpaqueId()),
 	}
 
 	createRefRes, err := c.CreateReference(ctx, createRefReq)
