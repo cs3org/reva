@@ -158,7 +158,6 @@ func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareReq
 
 	// discover share type
 	sharetype := ocm.Share_SHARE_TYPE_REGULAR
-	// FIXME: https://github.com/cs3org/reva/issues/2402
 	protocol, ok := req.Opaque.Map["protocol"]
 	if ok {
 		switch protocol.Decoder {
@@ -172,7 +171,6 @@ func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareReq
 				Status: status.NewInternal(ctx, err, "error creating share"),
 			}, nil
 		}
-		// token = protocol FIXME!
 	}
 
 	var sharedSecret string
