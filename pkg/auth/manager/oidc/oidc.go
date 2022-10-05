@@ -199,12 +199,6 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 		return nil, nil, fmt.Errorf("no \"email\" attribute found in userinfo: maybe the client did not request the oidc \"email\"-scope")
 	}
 
-	uid, _ := claims[am.c.UIDClaim].(float64)
-	claims[am.c.UIDClaim] = int64(uid) // in case the uid claim is missing and a mapping is to be performed, resolveUser() will populate it
-	// Note that if not, will silently carry a user with 0 uid, potentially problematic with storage providers
-	gid, _ := claims[am.c.GIDClaim].(float64)
-	claims[am.c.GIDClaim] = int64(gid)
-
 	err = am.resolveUser(ctx, claims)
 	if err != nil {
 		return nil, nil, errors.Wrapf(err, "oidc: error resolving username for external user '%v'", claims["email"])
@@ -247,6 +241,10 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 		if err != nil {
 			return nil, nil, err
 		}
+		// strip the `guest:` prefix if present in the email claim (appears to come from LDAP at CERN?)
+		u.Mail = strings.Replace(u.Mail, "guest: ", "", 1)
+		// and decorate the display name with the email domain to make it different from a primary account
+		u.DisplayName = u.DisplayName + " (" + strings.Split(u.Mail, "@")[1] + ")"
 	} else {
 		scopes, err = scope.AddOwnerScope(nil)
 		if err != nil {
@@ -255,6 +253,15 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 	}
 
 	return u, scopes, nil
+}
+
+func (am *mgr) getUserID(claims map[string]interface{}) (int64, int64) {
+	uidf, _ := claims[am.c.UIDClaim].(float64)
+	uid := int64(uidf)
+
+	gidf, _ := claims[am.c.GIDClaim].(float64)
+	gid := int64(gidf)
+	return uid, gid
 }
 
 func (am *mgr) getOAuthCtx(ctx context.Context) context.Context {
@@ -296,9 +303,16 @@ func (am *mgr) getOIDCProvider(ctx context.Context) (*oidc.Provider, error) {
 }
 
 func (am *mgr) resolveUser(ctx context.Context, claims map[string]interface{}) error {
-	if len(am.oidcUsersMapping) > 0 {
-		var username string
+	var (
+		claim   string
+		value   string
+		resolve bool
+	)
 
+	uid, gid := am.getUserID(claims)
+
+	if len(am.oidcUsersMapping) > 0 {
+		claim = "username"
 		// map and discover the user's username when a mapping is defined
 		if claims[am.c.GroupClaim] == nil {
 			// we are required to perform a user mapping but the group claim is not available
@@ -320,32 +334,41 @@ func (am *mgr) resolveUser(ctx context.Context, claims map[string]interface{}) e
 			return errtypes.PermissionDenied("no user mapping found for the given group claim(s)")
 		}
 		for _, m := range intersection {
-			username = am.oidcUsersMapping[m.(string)].Username
+			value = am.oidcUsersMapping[m.(string)].Username
 		}
-
-		upsc, err := pool.GetUserProviderServiceClient(pool.Endpoint(am.c.GatewaySvc))
-		if err != nil {
-			return errors.Wrap(err, "error getting user provider grpc client")
-		}
-		getUserByClaimResp, err := upsc.GetUserByClaim(ctx, &user.GetUserByClaimRequest{
-			Claim: "username",
-			Value: username,
-		})
-		if err != nil {
-			return errors.Wrapf(err, "error getting user by username '%v'", username)
-		}
-		if getUserByClaimResp.Status.Code != rpc.Code_CODE_OK {
-			return status.NewErrorFromCode(getUserByClaimResp.Status.Code, "oidc")
-		}
-
-		// take the properties of the mapped target user to override the claims
-		claims["preferred_username"] = username
-		claims[am.c.IDClaim] = getUserByClaimResp.GetUser().GetId().OpaqueId
-		claims["iss"] = getUserByClaimResp.GetUser().GetId().Idp
-		claims[am.c.UIDClaim] = getUserByClaimResp.GetUser().UidNumber
-		claims[am.c.GIDClaim] = getUserByClaimResp.GetUser().GidNumber
-		appctx.GetLogger(ctx).Debug().Str("username", username).Interface("claims", claims).Msg("resolveUser: claims overridden from mapped user")
+		resolve = true
+	} else if uid == 0 || gid == 0 {
+		claim = "mail"
+		value = claims["email"].(string)
+		resolve = true
 	}
+
+	if !resolve {
+		return nil
+	}
+
+	upsc, err := pool.GetGatewayServiceClient(pool.Endpoint(am.c.GatewaySvc))
+	if err != nil {
+		return errors.Wrap(err, "error getting user provider grpc client")
+	}
+	getUserByClaimResp, err := upsc.GetUserByClaim(ctx, &user.GetUserByClaimRequest{
+		Claim: claim,
+		Value: value,
+	})
+	if err != nil {
+		return errors.Wrapf(err, "error getting user by %s '%v'", claim, value)
+	}
+	if getUserByClaimResp.Status.Code != rpc.Code_CODE_OK {
+		return status.NewErrorFromCode(getUserByClaimResp.Status.Code, "oidc")
+	}
+
+	// take the properties of the mapped target user to override the claims
+	claims["preferred_username"] = getUserByClaimResp.GetUser().Username
+	claims[am.c.IDClaim] = getUserByClaimResp.GetUser().GetId().OpaqueId
+	claims["iss"] = getUserByClaimResp.GetUser().GetId().Idp
+	claims[am.c.UIDClaim] = getUserByClaimResp.GetUser().UidNumber
+	claims[am.c.GIDClaim] = getUserByClaimResp.GetUser().GidNumber
+	appctx.GetLogger(ctx).Debug().Str("username", value).Interface("claims", claims).Msg("resolveUser: claims overridden from mapped user")
 	return nil
 }
 
