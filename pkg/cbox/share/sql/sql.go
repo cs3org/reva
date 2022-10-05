@@ -227,16 +227,21 @@ func (m *mgr) Unshare(ctx context.Context, ref *collaboration.ShareReference) er
 	params := []interface{}{}
 	switch {
 	case ref.GetId() != nil:
-		query = "delete from oc_share where id=? AND (uid_owner=? or uid_initiator=?)"
+		query = "delete from oc_share where id=?"
 		params = append(params, ref.GetId().OpaqueId, uid, uid)
 	case ref.GetKey() != nil:
 		key := ref.GetKey()
 		shareType, shareWith := conversions.FormatGrantee(key.Grantee)
 		owner := conversions.FormatUserID(key.Owner)
-		query = "delete from oc_share where uid_owner=? AND fileid_prefix=? AND item_source=? AND share_type=? AND lower(share_with)=lower(?) AND (uid_owner=? or uid_initiator=?)"
+		query = "delete from oc_share where uid_owner=? AND fileid_prefix=? AND item_source=? AND share_type=? AND lower(share_with)=lower(?)"
 		params = append(params, owner, key.ResourceId.StorageId, key.ResourceId.OpaqueId, shareType, shareWith, uid, uid)
 	default:
 		return errtypes.NotFound(ref.String())
+	}
+
+	query, params, err := m.appendUidOwnerFilters(ctx, query, params)
+	if err != nil {
+		return err
 	}
 
 	stmt, err := m.db.Prepare(query)
@@ -266,16 +271,21 @@ func (m *mgr) UpdateShare(ctx context.Context, ref *collaboration.ShareReference
 	params := []interface{}{}
 	switch {
 	case ref.GetId() != nil:
-		query = "update oc_share set permissions=?,stime=? where id=? AND (uid_owner=? or uid_initiator=?)"
+		query = "update oc_share set permissions=?,stime=? where id=?"
 		params = append(params, permissions, time.Now().Unix(), ref.GetId().OpaqueId, uid, uid)
 	case ref.GetKey() != nil:
 		key := ref.GetKey()
 		shareType, shareWith := conversions.FormatGrantee(key.Grantee)
 		owner := conversions.FormatUserID(key.Owner)
-		query = "update oc_share set permissions=?,stime=? where (uid_owner=? or uid_initiator=?) AND fileid_prefix=? AND item_source=? AND share_type=? AND lower(share_with)=lower(?) AND (uid_owner=? or uid_initiator=?)"
+		query = "update oc_share set permissions=?,stime=? where (uid_owner=? or uid_initiator=?) AND fileid_prefix=? AND item_source=? AND share_type=? AND lower(share_with)=lower(?)"
 		params = append(params, permissions, time.Now().Unix(), owner, owner, key.ResourceId.StorageId, key.ResourceId.OpaqueId, shareType, shareWith, uid, uid)
 	default:
 		return nil, errtypes.NotFound(ref.String())
+	}
+
+	query, params, err := m.appendUidOwnerFilters(ctx, query, params)
+	if err != nil {
+		return nil, err
 	}
 
 	stmt, err := m.db.Prepare(query)
@@ -341,13 +351,9 @@ func (m *mgr) ListShares(ctx context.Context, filters []*collaboration.Filter) (
 		}
 	}
 
-	uidOwnersQuery, uidOwnersParams, err := m.uidOwnerFilters(ctx, groupedFilters)
+	query, params, err := m.appendUidOwnerFilters(ctx, query, params)
 	if err != nil {
 		return nil, err
-	}
-	params = append(params, uidOwnersParams...)
-	if uidOwnersQuery != "" {
-		query = fmt.Sprintf("%s AND (%s)", query, uidOwnersQuery)
 	}
 
 	rows, err := m.db.Query(query, params...)
@@ -544,7 +550,21 @@ func (m *mgr) UpdateReceivedShare(ctx context.Context, share *collaboration.Rece
 	return rs, nil
 }
 
-func (m *mgr) uidOwnerFilters(ctx context.Context, filters map[collaboration.Filter_Type][]*collaboration.Filter) (string, []interface{}, error) {
+func (m *mgr) appendUidOwnerFilters(ctx context.Context, query string, params []interface{}) (string, []interface{}, error) {
+	uidOwnersQuery, uidOwnersParams, err := m.uidOwnerFilters(ctx)
+	if err != nil {
+		return "", nil, err
+	}
+
+	params = append(params, uidOwnersParams...)
+	if uidOwnersQuery != "" {
+		query = fmt.Sprintf("%s AND (%s)", query, uidOwnersQuery)
+	}
+
+	return query, params, nil
+}
+
+func (m *mgr) uidOwnerFilters(ctx context.Context) (string, []interface{}, error) {
 	user := ctxpkg.ContextMustGetUser(ctx)
 	uid := conversions.FormatUserID(user.Id)
 
