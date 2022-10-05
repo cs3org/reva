@@ -213,27 +213,41 @@ func (m *mgr) getByKey(ctx context.Context, key *collaboration.ShareKey, checkOw
 	return conversions.ConvertToCS3Share(s), nil
 }
 
-func (m *mgr) getShare(ctx context.Context, ref *collaboration.ShareReference, checkOwner bool) (*collaboration.Share, error) {
+func (m *mgr) GetShare(ctx context.Context, ref *collaboration.ShareReference) (*collaboration.Share, error) {
+
 	var s *collaboration.Share
 	var err error
 	switch {
 	case ref.GetId() != nil:
-		s, err = m.getByID(ctx, ref.GetId(), checkOwner)
+		s, err = m.getByID(ctx, ref.GetId(), false)
+		if err != nil {
+			return nil, err
+		}
 	case ref.GetKey() != nil:
-		s, err = m.getByKey(ctx, ref.GetKey(), checkOwner)
+		s, err = m.getByKey(ctx, ref.GetKey(), false)
+		if err != nil {
+			return nil, err
+		}
 	default:
 		err = errtypes.NotFound(ref.String())
 	}
 
+	path, err := m.getPath(ctx, s.ResourceId)
 	if err != nil {
 		return nil, err
 	}
 
-	return s, nil
-}
+	user := ctxpkg.ContextMustGetUser(ctx)
 
-func (m *mgr) GetShare(ctx context.Context, ref *collaboration.ShareReference) (*collaboration.Share, error) {
-	return m.getShare(ctx, ref, true)
+	if m.isProjectAdmin(user, path) {
+		return s, nil
+	}
+
+	if s.Owner.OpaqueId == user.Id.OpaqueId && s.Creator.OpaqueId == user.Id.OpaqueId {
+		return s, nil
+	}
+
+	return s, errtypes.NotFound("share not found")
 }
 
 func (m *mgr) Unshare(ctx context.Context, ref *collaboration.ShareReference) error {
@@ -319,7 +333,7 @@ func (m *mgr) UpdateShare(ctx context.Context, ref *collaboration.ShareReference
 		return nil, err
 	}
 
-	return m.getShare(ctx, ref, false)
+	return m.GetShare(ctx, ref)
 }
 
 func (m *mgr) getPath(ctx context.Context, resID *provider.ResourceId) (string, error) {
@@ -364,12 +378,15 @@ func (m *mgr) addPathIntoCtx(ctx context.Context, ref *collaboration.ShareRefere
 	return ctxpkg.ContextSetResourcePath(ctx, path), nil
 }
 
-func (m *mgr) isProjectAdmin(ctx context.Context, u *user.User) bool {
+func (m *mgr) isProjectAdminFromCtx(ctx context.Context, u *user.User) bool {
 	path, ok := ctxpkg.ContextGetResourcePath(ctx)
 	if !ok {
 		return false
 	}
+	return m.isProjectAdmin(u, path)
+}
 
+func (m *mgr) isProjectAdmin(u *user.User, path string) bool {
 	if strings.HasPrefix(path, projectPathPrefix) {
 		// The path will look like /eos/project/c/cernbox, we need to extract the project name
 		parts := strings.SplitN(path, "/", 6)
@@ -636,7 +653,7 @@ func (m *mgr) uidOwnerFilters(ctx context.Context) (string, []interface{}, error
 	query := "uid_owner=? or uid_initiator=?"
 	params := []interface{}{uid, uid}
 
-	if m.isProjectAdmin(ctx, user) {
+	if m.isProjectAdminFromCtx(ctx, user) {
 		return "", []interface{}{}, nil
 	}
 
