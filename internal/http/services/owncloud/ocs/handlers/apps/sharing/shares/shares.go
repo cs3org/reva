@@ -39,6 +39,7 @@ import (
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog/log"
 
@@ -835,6 +836,7 @@ func (h *Handler) listSharesWithOthers(w http.ResponseWriter, r *http.Request) {
 		shares = append(shares, publicShares...)
 	}
 	if listUserShares {
+		r = r.WithContext(ctxpkg.ContextSetResourcePath(r.Context(), p))
 		userShares, status, err := h.listUserShares(r, filters)
 		h.logProblems(status, err, "could not listUserShares")
 		shares = append(shares, userShares...)
