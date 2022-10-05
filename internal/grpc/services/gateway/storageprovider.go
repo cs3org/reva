@@ -358,7 +358,7 @@ func (s *svc) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorag
 	log.Debug().Msg("purging storage space")
 	// List all shares in this storage space
 	lsRes, err := s.ListShares(ctx, &collaborationv1beta1.ListSharesRequest{
-		Filters: []*collaborationv1beta1.Filter{share.SpaceIDFilter(id.SpaceId)}, // FIXME rename the filter? @c0rby
+		Filters: []*collaborationv1beta1.Filter{share.SpaceIDFilter(id.SpaceId)},
 	})
 	switch {
 	case err != nil:
