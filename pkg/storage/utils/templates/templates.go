@@ -33,31 +33,42 @@ import (
 
 	"github.com/Masterminds/sprig"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	providerv1beta1 "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/pkg/errors"
 )
 
 // UserData contains the template placeholders for a user.
 // For example {{.Username}} or {{.Id.Idp}}
-type UserData struct {
-	*userpb.User
-	Email EmailData
-}
+type (
+	UserData struct {
+		*userpb.User
+		Email EmailData
+	}
 
-// SpaceData contains the templace placeholders for a space.
-// For example {{.SpaceName}} {{.SpaceType}} or {{.User.Id.OpaqueId}}
-type SpaceData struct {
-	*UserData
-	SpaceType string
-	SpaceName string
-}
+	// SpaceData contains the templace placeholders for a space.
+	// For example {{.SpaceName}} {{.SpaceType}} or {{.User.Id.OpaqueId}}
+	SpaceData struct {
+		*UserData
+		SpaceType string
+		SpaceName string
+	}
 
-// EmailData contains mail data
-// split into local and domain part.
-// It is extracted from splitting the username by @.
-type EmailData struct {
-	Local  string
-	Domain string
-}
+	// EmailData contains mail data
+	// split into local and domain part.
+	// It is extracted from splitting the username by @.
+	EmailData struct {
+		Local  string
+		Domain string
+	}
+
+	// ResourceData contains the ResourceInfo
+	// ResourceData.ResourceID is a stringified form of ResourceInfo.Id
+	ResourceData struct {
+		ResourceInfo *providerv1beta1.ResourceInfo
+		ResourceID   string
+	}
+)
 
 // WithUser generates a layout based on user data.
 func WithUser(u *userpb.User, tpl string) string {
@@ -95,6 +106,24 @@ func WithSpacePropertiesAndUser(u *userpb.User, spaceType string, spaceName stri
 	return b.String()
 }
 
+// WithResourceInfo renders template stings with ResourceInfo variables
+func WithResourceInfo(i *providerv1beta1.ResourceInfo, tpl string) string {
+	tpl = clean(tpl)
+	data := newResourceData(i)
+	// compile given template tpl
+	t, err := template.New("tpl").Funcs(sprig.TxtFuncMap()).Parse(tpl)
+	if err != nil {
+		err := errors.Wrap(err, fmt.Sprintf("error parsing template: fileinfoandresourceid_template:%+v tpl:%s", data, tpl))
+		panic(err)
+	}
+	b := bytes.Buffer{}
+	if err := t.Execute(&b, data); err != nil {
+		err := errors.Wrap(err, fmt.Sprintf("error executing template: fileinfoandresourceid_template:%+v tpl:%s", data, tpl))
+		panic(err)
+	}
+	return b.String()
+}
+
 func newUserData(u *userpb.User) *UserData {
 	usernameSplit := strings.Split(u.Username, "@")
 	if u.Mail != "" {
@@ -126,6 +155,14 @@ func newSpaceData(u *userpb.User, st string, n string) *SpaceData {
 		n,
 	}
 	return sd
+}
+
+func newResourceData(i *providerv1beta1.ResourceInfo) *ResourceData {
+	rd := &ResourceData{
+		ResourceInfo: i,
+		ResourceID:   storagespace.FormatResourceID(*i.Id),
+	}
+	return rd
 }
 
 func clean(a string) string {
