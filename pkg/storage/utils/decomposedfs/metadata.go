@@ -49,15 +49,16 @@ func (fs *Decomposedfs) SetArbitraryMetadata(ctx context.Context, ref *provider.
 		return err
 	}
 
-	ok, err := fs.p.HasPermission(ctx, n, func(rp *provider.ResourcePermissions) bool {
-		// TODO add explicit SetArbitraryMetadata grant to CS3 api, tracked in https://github.com/cs3org/cs3apis/issues/91
-		return rp.InitiateFileUpload
-	})
+	rp, err := fs.p.AssemblePermissions(ctx, n)
 	switch {
 	case err != nil:
 		return errtypes.InternalError(err.Error())
-	case !ok:
-		return errtypes.PermissionDenied(filepath.Join(n.ParentID, n.Name))
+	case !rp.InitiateFileUpload: // TODO add explicit SetArbitraryMetadata grant to CS3 api, tracked in https://github.com/cs3org/cs3apis/issues/91
+		f, _ := storagespace.FormatReference(ref)
+		if rp.Stat {
+			return errtypes.PermissionDenied(f)
+		}
+		return errtypes.NotFound(f)
 	}
 
 	// Set space owner in context
@@ -145,15 +146,16 @@ func (fs *Decomposedfs) UnsetArbitraryMetadata(ctx context.Context, ref *provide
 		return err
 	}
 
-	ok, err := fs.p.HasPermission(ctx, n, func(rp *provider.ResourcePermissions) bool {
-		// TODO use SetArbitraryMetadata grant to CS3 api, tracked in https://github.com/cs3org/cs3apis/issues/91
-		return rp.InitiateFileUpload
-	})
+	rp, err := fs.p.AssemblePermissions(ctx, n)
 	switch {
 	case err != nil:
 		return errtypes.InternalError(err.Error())
-	case !ok:
-		return errtypes.PermissionDenied(filepath.Join(n.ParentID, n.Name))
+	case !rp.InitiateFileUpload: // TODO use SetArbitraryMetadata grant to CS3 api, tracked in https://github.com/cs3org/cs3apis/issues/91
+		f, _ := storagespace.FormatReference(ref)
+		if rp.Stat {
+			return errtypes.PermissionDenied(f)
+		}
+		return errtypes.NotFound(f)
 	}
 
 	// Set space owner in context
@@ -170,8 +172,8 @@ func (fs *Decomposedfs) UnsetArbitraryMetadata(ctx context.Context, ref *provide
 		switch k {
 		case node.FavoriteKey:
 			// the favorite flag is specific to the user, so we need to incorporate the userid
-			var u *userpb.User
-			if u, ok = ctxpkg.ContextGetUser(ctx); !ok {
+			u, ok := ctxpkg.ContextGetUser(ctx)
+			if !ok {
 				sublog.Error().
 					Interface("user", u).
 					Msg("error getting user from ctx")

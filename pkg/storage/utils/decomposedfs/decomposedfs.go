@@ -62,7 +62,6 @@ const tracerName = "decomposedfs"
 // PermissionsChecker defines an interface for checking permissions on a Node
 type PermissionsChecker interface {
 	AssemblePermissions(ctx context.Context, n *node.Node) (ap provider.ResourcePermissions, err error)
-	HasPermission(ctx context.Context, n *node.Node, check func(*provider.ResourcePermissions) bool) (can bool, err error)
 }
 
 // CS3PermissionsClient defines an interface for checking permissions against the CS3 permissions service
@@ -171,7 +170,11 @@ func (fs *Decomposedfs) GetQuota(ctx context.Context, ref *provider.Reference) (
 	case err != nil:
 		return 0, 0, 0, errtypes.InternalError(err.Error())
 	case !rp.GetQuota && !fs.canListAllSpaces(ctx):
-		return 0, 0, 0, errtypes.PermissionDenied(n.ID)
+		f, _ := storagespace.FormatReference(ref)
+		if rp.Stat {
+			return 0, 0, 0, errtypes.PermissionDenied(f)
+		}
+		return 0, 0, 0, errtypes.NotFound(f)
 	}
 
 	// FIXME move treesize & quota to fieldmask
@@ -263,14 +266,17 @@ func (fs *Decomposedfs) GetPathByID(ctx context.Context, id *provider.ResourceId
 	if err != nil {
 		return "", err
 	}
-	ok, err := fs.p.HasPermission(ctx, node, func(rp *provider.ResourcePermissions) bool {
-		return rp.GetPath
-	})
+
+	rp, err := fs.p.AssemblePermissions(ctx, node)
 	switch {
 	case err != nil:
 		return "", errtypes.InternalError(err.Error())
-	case !ok:
-		return "", errtypes.PermissionDenied(filepath.Join(node.ParentID, node.Name))
+	case !rp.GetPath:
+		f := storagespace.FormatResourceID(*id)
+		if rp.Stat {
+			return "", errtypes.PermissionDenied(f)
+		}
+		return "", errtypes.NotFound(f)
 	}
 
 	return fs.lu.Path(ctx, node)
@@ -298,14 +304,16 @@ func (fs *Decomposedfs) CreateDir(ctx context.Context, ref *provider.Reference) 
 		return errtypes.PreconditionFailed(parentRef.Path)
 	}
 
-	ok, err := fs.p.HasPermission(ctx, n, func(rp *provider.ResourcePermissions) bool {
-		return rp.CreateContainer
-	})
+	rp, err := fs.p.AssemblePermissions(ctx, n)
 	switch {
 	case err != nil:
 		return errtypes.InternalError(err.Error())
-	case !ok:
-		return errtypes.PermissionDenied(filepath.Join(n.ParentID, n.Name))
+	case !rp.CreateContainer:
+		f, _ := storagespace.FormatReference(ref)
+		if rp.Stat {
+			return errtypes.PermissionDenied(f)
+		}
+		return errtypes.NotFound(f)
 	}
 
 	// Set space owner in context
@@ -361,14 +369,17 @@ func (fs *Decomposedfs) TouchFile(ctx context.Context, ref *provider.Reference) 
 	if err != nil {
 		return errtypes.InternalError(err.Error())
 	}
-	ok, err := fs.p.HasPermission(ctx, n, func(rp *provider.ResourcePermissions) bool {
-		return rp.InitiateFileUpload
-	})
+
+	rp, err := fs.p.AssemblePermissions(ctx, n)
 	switch {
 	case err != nil:
 		return errtypes.InternalError(err.Error())
-	case !ok:
-		return errtypes.PermissionDenied(filepath.Join(n.ParentID, n.Name))
+	case !rp.InitiateFileUpload:
+		f, _ := storagespace.FormatReference(ref)
+		if rp.Stat {
+			return errtypes.PermissionDenied(f)
+		}
+		return errtypes.NotFound(f)
 	}
 
 	// Set space owner in context
@@ -480,14 +491,16 @@ func (fs *Decomposedfs) Move(ctx context.Context, oldRef, newRef *provider.Refer
 		return
 	}
 
-	ok, err := fs.p.HasPermission(ctx, oldNode, func(rp *provider.ResourcePermissions) bool {
-		return rp.Move
-	})
+	rp, err := fs.p.AssemblePermissions(ctx, oldNode)
 	switch {
 	case err != nil:
 		return errtypes.InternalError(err.Error())
-	case !ok:
-		return errtypes.PermissionDenied(oldNode.ID)
+	case !rp.Move:
+		f, _ := storagespace.FormatReference(oldRef)
+		if rp.Stat {
+			return errtypes.PermissionDenied(f)
+		}
+		return errtypes.NotFound(f)
 	}
 
 	if newNode, err = fs.lu.NodeFromResource(ctx, newRef); err != nil {
@@ -498,17 +511,22 @@ func (fs *Decomposedfs) Move(ctx context.Context, oldRef, newRef *provider.Refer
 		return
 	}
 
-	ok, err = fs.p.HasPermission(ctx, newNode, func(rp *provider.ResourcePermissions) bool {
-		if oldNode.IsDir() {
-			return rp.CreateContainer
-		}
-		return rp.InitiateFileUpload
-	})
+	rp, err = fs.p.AssemblePermissions(ctx, newNode)
 	switch {
 	case err != nil:
 		return errtypes.InternalError(err.Error())
-	case !ok:
-		return errtypes.PermissionDenied(newNode.ID)
+	case oldNode.IsDir() && !rp.CreateContainer:
+		f, _ := storagespace.FormatReference(newRef)
+		if rp.Stat {
+			return errtypes.PermissionDenied(f)
+		}
+		return errtypes.NotFound(f)
+	case !oldNode.IsDir() && !rp.InitiateFileUpload:
+		f, _ := storagespace.FormatReference(newRef)
+		if rp.Stat {
+			return errtypes.PermissionDenied(f)
+		}
+		return errtypes.NotFound(f)
 	}
 
 	// Set space owner in context
@@ -544,7 +562,8 @@ func (fs *Decomposedfs) GetMD(ctx context.Context, ref *provider.Reference, mdKe
 	case err != nil:
 		return nil, errtypes.InternalError(err.Error())
 	case !rp.Stat:
-		return nil, errtypes.PermissionDenied(node.ID)
+		f, _ := storagespace.FormatReference(ref)
+		return nil, errtypes.NotFound(f)
 	}
 
 	md, err := node.AsResourceInfo(ctx, &rp, mdKeys, fieldMask, utils.IsRelativeReference(ref))
@@ -588,7 +607,11 @@ func (fs *Decomposedfs) ListFolder(ctx context.Context, ref *provider.Reference,
 	case err != nil:
 		return nil, errtypes.InternalError(err.Error())
 	case !rp.ListContainer:
-		return nil, errtypes.PermissionDenied(n.ID)
+		f, _ := storagespace.FormatReference(ref)
+		if rp.Stat {
+			return nil, errtypes.PermissionDenied(f)
+		}
+		return nil, errtypes.NotFound(f)
 	}
 
 	var children []*node.Node
@@ -616,18 +639,19 @@ func (fs *Decomposedfs) Delete(ctx context.Context, ref *provider.Reference) (er
 		return
 	}
 	if !node.Exists {
-		err = errtypes.NotFound(filepath.Join(node.ParentID, node.Name))
-		return
+		return errtypes.NotFound(filepath.Join(node.ParentID, node.Name))
 	}
 
-	ok, err := fs.p.HasPermission(ctx, node, func(rp *provider.ResourcePermissions) bool {
-		return rp.Delete
-	})
+	rp, err := fs.p.AssemblePermissions(ctx, node)
 	switch {
 	case err != nil:
 		return errtypes.InternalError(err.Error())
-	case !ok:
-		return errtypes.PermissionDenied(filepath.Join(node.ParentID, node.Name))
+	case !rp.Delete:
+		f, _ := storagespace.FormatReference(ref)
+		if rp.Stat {
+			return errtypes.PermissionDenied(f)
+		}
+		return errtypes.NotFound(f)
 	}
 
 	// Set space owner in context
@@ -652,14 +676,16 @@ func (fs *Decomposedfs) Download(ctx context.Context, ref *provider.Reference) (
 		return nil, err
 	}
 
-	ok, err := fs.p.HasPermission(ctx, node, func(rp *provider.ResourcePermissions) bool {
-		return rp.InitiateFileDownload
-	})
+	rp, err := fs.p.AssemblePermissions(ctx, node)
 	switch {
 	case err != nil:
 		return nil, errtypes.InternalError(err.Error())
-	case !ok:
-		return nil, errtypes.PermissionDenied(filepath.Join(node.ParentID, node.Name))
+	case !rp.InitiateFileDownload:
+		f, _ := storagespace.FormatReference(ref)
+		if rp.Stat {
+			return nil, errtypes.PermissionDenied(f)
+		}
+		return nil, errtypes.NotFound(f)
 	}
 
 	reader, err := fs.tp.ReadBlob(node)
@@ -681,15 +707,18 @@ func (fs *Decomposedfs) GetLock(ctx context.Context, ref *provider.Reference) (*
 		return nil, err
 	}
 
-	ok, err := fs.p.HasPermission(ctx, node, func(rp *provider.ResourcePermissions) bool {
-		return rp.InitiateFileDownload
-	})
+	rp, err := fs.p.AssemblePermissions(ctx, node)
 	switch {
 	case err != nil:
 		return nil, errtypes.InternalError(err.Error())
-	case !ok:
-		return nil, errtypes.PermissionDenied(filepath.Join(node.ParentID, node.Name))
+	case !rp.InitiateFileDownload:
+		f, _ := storagespace.FormatReference(ref)
+		if rp.Stat {
+			return nil, errtypes.PermissionDenied(f)
+		}
+		return nil, errtypes.NotFound(f)
 	}
+
 	return node.ReadLock(ctx, false)
 }
 
@@ -704,14 +733,16 @@ func (fs *Decomposedfs) SetLock(ctx context.Context, ref *provider.Reference, lo
 		return errtypes.NotFound(filepath.Join(node.ParentID, node.Name))
 	}
 
-	ok, err := fs.p.HasPermission(ctx, node, func(rp *provider.ResourcePermissions) bool {
-		return rp.InitiateFileUpload
-	})
+	rp, err := fs.p.AssemblePermissions(ctx, node)
 	switch {
 	case err != nil:
 		return errtypes.InternalError(err.Error())
-	case !ok:
-		return errtypes.PermissionDenied(filepath.Join(node.ParentID, node.Name))
+	case !rp.InitiateFileUpload:
+		f, _ := storagespace.FormatReference(ref)
+		if rp.Stat {
+			return errtypes.PermissionDenied(f)
+		}
+		return errtypes.NotFound(f)
 	}
 
 	return node.SetLock(ctx, lock)
@@ -732,14 +763,16 @@ func (fs *Decomposedfs) RefreshLock(ctx context.Context, ref *provider.Reference
 		return errtypes.NotFound(filepath.Join(node.ParentID, node.Name))
 	}
 
-	ok, err := fs.p.HasPermission(ctx, node, func(rp *provider.ResourcePermissions) bool {
-		return rp.InitiateFileUpload
-	})
+	rp, err := fs.p.AssemblePermissions(ctx, node)
 	switch {
 	case err != nil:
 		return errtypes.InternalError(err.Error())
-	case !ok:
-		return errtypes.PermissionDenied(filepath.Join(node.ParentID, node.Name))
+	case !rp.InitiateFileUpload:
+		f, _ := storagespace.FormatReference(ref)
+		if rp.Stat {
+			return errtypes.PermissionDenied(f)
+		}
+		return errtypes.NotFound(f)
 	}
 
 	return node.RefreshLock(ctx, lock, existingLockID)
@@ -760,14 +793,16 @@ func (fs *Decomposedfs) Unlock(ctx context.Context, ref *provider.Reference, loc
 		return errtypes.NotFound(filepath.Join(node.ParentID, node.Name))
 	}
 
-	ok, err := fs.p.HasPermission(ctx, node, func(rp *provider.ResourcePermissions) bool {
-		return rp.InitiateFileUpload // TODO do we need a dedicated permission?
-	})
+	rp, err := fs.p.AssemblePermissions(ctx, node)
 	switch {
 	case err != nil:
 		return errtypes.InternalError(err.Error())
-	case !ok:
-		return errtypes.PermissionDenied(filepath.Join(node.ParentID, node.Name))
+	case !rp.InitiateFileUpload: // TODO do we need a dedicated permission?
+		f, _ := storagespace.FormatReference(ref)
+		if rp.Stat {
+			return errtypes.PermissionDenied(f)
+		}
+		return errtypes.NotFound(f)
 	}
 
 	return node.Unlock(ctx, lock)
