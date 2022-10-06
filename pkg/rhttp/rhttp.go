@@ -351,7 +351,11 @@ func (s *Server) getHandler() (http.Handler, error) {
 		handler = triple.Middleware(traceHandler(triple.Name, handler))
 	}
 
-	return handler, nil
+	// we implement our own routing with a http.Handler but we need ServeMux to sanitize the requests and avoid XSS
+	mux := http.NewServeMux()
+	mux.Handle("/", handler)
+
+	return mux, nil
 }
 
 func traceHandler(name string, h http.Handler) http.Handler {
