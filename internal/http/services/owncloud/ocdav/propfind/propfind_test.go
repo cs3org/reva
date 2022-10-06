@@ -180,99 +180,112 @@ var _ = Describe("Propfind", func() {
 		mockListContainer(&sprovider.Reference{ResourceId: &sprovider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "root"}, Path: "."},
 			[]*sprovider.ResourceInfo{
 				{
-					Type: sprovider.ResourceType_RESOURCE_TYPE_FILE,
-					Id:   &sprovider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "bar"},
-					Path: "bar",
-					Size: 100,
+					Type:     sprovider.ResourceType_RESOURCE_TYPE_FILE,
+					Id:       &sprovider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "bar"},
+					Path:     "bar",
+					Size:     100,
+					ParentId: &sprovider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "foospace"},
 				},
 				{
-					Type: sprovider.ResourceType_RESOURCE_TYPE_FILE,
-					Id:   &sprovider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "baz"},
-					Path: "baz",
-					Size: 1,
+					Type:     sprovider.ResourceType_RESOURCE_TYPE_FILE,
+					Id:       &sprovider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "baz"},
+					Path:     "baz",
+					Size:     1,
+					ParentId: &sprovider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "foospace"},
 				},
 				{
-					Type: sprovider.ResourceType_RESOURCE_TYPE_CONTAINER,
-					Id:   &sprovider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "dir"},
-					Path: "dir",
-					Size: 30,
+					Type:     sprovider.ResourceType_RESOURCE_TYPE_CONTAINER,
+					Id:       &sprovider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "dir"},
+					Path:     "dir",
+					Size:     30,
+					ParentId: &sprovider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "foospace"},
 				},
 			})
 		mockStat(&sprovider.Reference{ResourceId: &sprovider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "root"}, Path: "./bar"},
 			&sprovider.ResourceInfo{
-				Id:   &sprovider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "bar"},
-				Type: sprovider.ResourceType_RESOURCE_TYPE_FILE,
-				Path: "./bar",
-				Size: uint64(100),
+				Id:       &sprovider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "bar"},
+				Type:     sprovider.ResourceType_RESOURCE_TYPE_FILE,
+				Path:     "./bar",
+				Size:     uint64(100),
+				ParentId: &sprovider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "foospace"},
 			})
 		mockStat(&sprovider.Reference{ResourceId: &sprovider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "bar"}, Path: "."},
 			&sprovider.ResourceInfo{
-				Id:   &sprovider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "bar"},
-				Type: sprovider.ResourceType_RESOURCE_TYPE_FILE,
-				Path: "./bar",
-				Size: uint64(100),
+				Id:       &sprovider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "bar"},
+				Type:     sprovider.ResourceType_RESOURCE_TYPE_FILE,
+				Path:     "./bar",
+				Size:     uint64(100),
+				ParentId: &sprovider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "foospace"},
 			})
 		mockStat(&sprovider.Reference{ResourceId: &sprovider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "root"}, Path: "./baz"},
 			&sprovider.ResourceInfo{
-				Id:   &sprovider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "baz"},
-				Type: sprovider.ResourceType_RESOURCE_TYPE_FILE,
-				Path: "./baz",
-				Size: uint64(1),
+				Id:       &sprovider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "baz"},
+				Type:     sprovider.ResourceType_RESOURCE_TYPE_FILE,
+				Path:     "./baz",
+				Size:     uint64(1),
+				ParentId: &sprovider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "foospace"},
 			})
 		mockStat(&sprovider.Reference{ResourceId: &sprovider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "baz"}, Path: "."},
 			&sprovider.ResourceInfo{
-				Id:   &sprovider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "baz"},
-				Type: sprovider.ResourceType_RESOURCE_TYPE_FILE,
-				Path: "./baz",
-				Size: uint64(1),
+				Id:       &sprovider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "baz"},
+				Type:     sprovider.ResourceType_RESOURCE_TYPE_FILE,
+				Path:     "./baz",
+				Size:     uint64(1),
+				ParentId: &sprovider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "foospace"},
 			})
 		mockStat(&sprovider.Reference{ResourceId: &sprovider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "root"}, Path: "./dir"},
 			&sprovider.ResourceInfo{
-				Id:   &sprovider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "dir"},
-				Type: sprovider.ResourceType_RESOURCE_TYPE_CONTAINER,
-				Path: "./dir",
-				Size: uint64(30),
+				Id:       &sprovider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "dir"},
+				Type:     sprovider.ResourceType_RESOURCE_TYPE_CONTAINER,
+				Path:     "./dir",
+				Size:     uint64(30),
+				ParentId: &sprovider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "foospace"},
 			})
 		mockStat(&sprovider.Reference{ResourceId: &sprovider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "root"}, Path: "./dir&dir"},
 			&sprovider.ResourceInfo{
-				Id:   &sprovider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "dir"},
-				Type: sprovider.ResourceType_RESOURCE_TYPE_CONTAINER,
-				Path: "./dir&dir",
-				Name: "dir&dir",
-				Size: uint64(30),
+				Id:       &sprovider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "dir"},
+				Type:     sprovider.ResourceType_RESOURCE_TYPE_CONTAINER,
+				Path:     "./dir&dir",
+				Name:     "dir&dir",
+				Size:     uint64(30),
+				ParentId: &sprovider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "foospace"},
 			})
 		mockStat(&sprovider.Reference{ResourceId: &sprovider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "dir"}, Path: "."},
 			&sprovider.ResourceInfo{
-				Id:   &sprovider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "dir"},
-				Type: sprovider.ResourceType_RESOURCE_TYPE_CONTAINER,
-				Path: "./dir",
-				Size: uint64(30),
+				Id:       &sprovider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "dir"},
+				Type:     sprovider.ResourceType_RESOURCE_TYPE_CONTAINER,
+				Path:     "./dir",
+				Size:     uint64(30),
+				ParentId: &sprovider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "foospace"},
 			})
 		mockListContainer(&sprovider.Reference{ResourceId: &sprovider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "root"}, Path: "./dir"},
 			[]*sprovider.ResourceInfo{
 				{
-					Id:   &sprovider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "direntry"},
-					Type: sprovider.ResourceType_RESOURCE_TYPE_FILE,
-					Path: "entry",
-					Size: 30,
+					Id:       &sprovider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "direntry"},
+					Type:     sprovider.ResourceType_RESOURCE_TYPE_FILE,
+					Path:     "entry",
+					Size:     30,
+					ParentId: &sprovider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "foospace"},
 				},
 			})
 		mockListContainer(&sprovider.Reference{ResourceId: &sprovider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "root"}, Path: "./dir&dir"},
 			[]*sprovider.ResourceInfo{
 				{
-					Id:   &sprovider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "direntry"},
-					Type: sprovider.ResourceType_RESOURCE_TYPE_FILE,
-					Path: "entry",
-					Size: 30,
+					Id:       &sprovider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "direntry"},
+					Type:     sprovider.ResourceType_RESOURCE_TYPE_FILE,
+					Path:     "entry",
+					Size:     30,
+					ParentId: &sprovider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "foospace"},
 				},
 			})
 		mockListContainer(&sprovider.Reference{ResourceId: &sprovider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "dir"}, Path: "."},
 			[]*sprovider.ResourceInfo{
 				{
-					Id:   &sprovider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "direntry"},
-					Type: sprovider.ResourceType_RESOURCE_TYPE_FILE,
-					Path: "entry",
-					Size: 30,
+					Id:       &sprovider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "direntry"},
+					Type:     sprovider.ResourceType_RESOURCE_TYPE_FILE,
+					Path:     "entry",
+					Size:     30,
+					ParentId: &sprovider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "foospace"},
 				},
 			})
 
@@ -289,10 +302,11 @@ var _ = Describe("Propfind", func() {
 		mockListContainer(&sprovider.Reference{ResourceId: &sprovider.ResourceId{StorageId: "provider-1", SpaceId: "fooquxspace", OpaqueId: "root"}, Path: "."},
 			[]*sprovider.ResourceInfo{
 				{
-					Id:   &sprovider.ResourceId{StorageId: "provider-1", SpaceId: "fooquxspace", OpaqueId: "quux"},
-					Type: sprovider.ResourceType_RESOURCE_TYPE_FILE,
-					Path: "./quux",
-					Size: 1000,
+					Id:       &sprovider.ResourceId{StorageId: "provider-1", SpaceId: "fooquxspace", OpaqueId: "quux"},
+					Type:     sprovider.ResourceType_RESOURCE_TYPE_FILE,
+					Path:     "./quux",
+					Size:     1000,
+					ParentId: &sprovider.ResourceId{StorageId: "provider-1", SpaceId: "fooquxspace", OpaqueId: "fooquxspace"},
 				},
 			})
 
@@ -335,10 +349,11 @@ var _ = Describe("Propfind", func() {
 		mockListContainer(&sprovider.Reference{ResourceId: &sprovider.ResourceId{StorageId: "provider-1", SpaceId: "fooDirShareSpace", OpaqueId: "shareddir"}, Path: "."},
 			[]*sprovider.ResourceInfo{
 				{
-					Id:   &sprovider.ResourceId{StorageId: "provider-1", SpaceId: "fooDirShareSpace", OpaqueId: "shareddirsomething"},
-					Type: sprovider.ResourceType_RESOURCE_TYPE_FILE,
-					Path: "something",
-					Size: 1500,
+					Id:       &sprovider.ResourceId{StorageId: "provider-1", SpaceId: "fooDirShareSpace", OpaqueId: "shareddirsomething"},
+					Type:     sprovider.ResourceType_RESOURCE_TYPE_FILE,
+					Path:     "something",
+					Size:     1500,
+					ParentId: &sprovider.ResourceId{StorageId: "provider-1", SpaceId: "fooDirShareSpace", OpaqueId: "fooDirShareSpace"},
 				},
 			})
 
@@ -767,14 +782,17 @@ var _ = Describe("Propfind", func() {
 			bar := res.Responses[1]
 			Expect(bar.Href).To(Equal("http:/127.0.0.1:3000/" + spaceIDUrl + "/bar"))
 			Expect(string(bar.Propstat[0].Prop[0].InnerXML)).To(ContainSubstring("<d:getcontentlength>100</d:getcontentlength>"))
+			Expect(string(bar.Propstat[0].Prop[0].InnerXML)).To(ContainSubstring("<oc:file-parent>provider-1$foospace!foospace</oc:file-parent>"))
 
 			baz := res.Responses[2]
 			Expect(baz.Href).To(Equal("http:/127.0.0.1:3000/" + spaceIDUrl + "/baz"))
 			Expect(string(baz.Propstat[0].Prop[0].InnerXML)).To(ContainSubstring("<d:getcontentlength>1</d:getcontentlength>"))
+			Expect(string(baz.Propstat[0].Prop[0].InnerXML)).To(ContainSubstring("<oc:file-parent>provider-1$foospace!foospace</oc:file-parent>"))
 
 			dir := res.Responses[3]
 			Expect(dir.Href).To(Equal("http:/127.0.0.1:3000/" + spaceIDUrl + "/dir/"))
 			Expect(string(dir.Propstat[0].Prop[0].InnerXML)).To(ContainSubstring("<oc:size>30</oc:size>"))
+			Expect(string(dir.Propstat[0].Prop[0].InnerXML)).To(ContainSubstring("<oc:file-parent>provider-1$foospace!foospace</oc:file-parent>"))
 		})
 
 		It("stats a file", func() {

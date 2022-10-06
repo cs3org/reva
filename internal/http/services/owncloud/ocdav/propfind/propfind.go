@@ -1004,6 +1004,12 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 			)
 		}
 
+		if md.ParentId != nil {
+			appendToOK(prop.Escaped("oc:file-parent", storagespace.FormatResourceID(*md.ParentId)))
+		} else {
+			appendToNotFound(prop.NotFound("oc:file-parent"))
+		}
+
 		// we need to add the shareid if possible - the only way to extract it here is to parse it from the path
 		if ref, err := storagespace.ParseReference(strings.TrimPrefix(md.Path, "/")); err == nil && ref.GetResourceId().GetSpaceId() == utils.ShareStorageSpaceID {
 			appendToOK(prop.Raw("oc:shareid", ref.GetResourceId().GetOpaqueId()))
@@ -1118,6 +1124,12 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 						appendToOK(prop.Escaped("oc:id", storagespace.FormatResourceID(*md.Id)))
 					} else {
 						appendToNotFound(prop.NotFound("oc:id"))
+					}
+				case "file-parent":
+					if md.ParentId != nil {
+						appendToOK(prop.Escaped("oc:file-parent", storagespace.FormatResourceID(*md.ParentId)))
+					} else {
+						appendToNotFound(prop.NotFound("oc:file-parent"))
 					}
 				case "spaceid":
 					if md.Id != nil {
