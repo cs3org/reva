@@ -19,6 +19,7 @@
 package header
 
 import (
+	"mime"
 	"net/http"
 	"strings"
 
@@ -38,6 +39,46 @@ func New(m map[string]interface{}) (auth.TokenStrategy, error) {
 }
 
 func (b) GetToken(r *http.Request) string {
+	// Authorization Request Header Field: https://www.rfc-editor.org/rfc/rfc6750#section-2.1
+	if tkn, ok := getFromAuthorizationHeader(r); ok {
+		return tkn
+	}
+
+	// Form-Encoded Body Parameter: https://www.rfc-editor.org/rfc/rfc6750#section-2.2
+	if tkn, ok := getFromBody(r); ok {
+		return tkn
+	}
+
+	// URI Query Parameter: https://www.rfc-editor.org/rfc/rfc6750#section-2.3
+	if tkn, ok := getFromQueryParam(r); ok {
+		return tkn
+	}
+
+	return ""
+}
+
+func getFromAuthorizationHeader(r *http.Request) (string, bool) {
 	auth := r.Header.Get("Authorization")
-	return strings.TrimPrefix(auth, "Bearer ")
+	tkn := strings.TrimPrefix(auth, "Bearer ")
+	return tkn, tkn != ""
+}
+
+func getFromBody(r *http.Request) (string, bool) {
+	mediatype, _, err := mime.ParseMediaType(r.Header.Get("content-type"))
+	if err != nil {
+		return "", false
+	}
+	if mediatype != "application/x-www-form-urlencoded" {
+		return "", false
+	}
+	if err = r.ParseForm(); err != nil {
+		return "", false
+	}
+	tkn := r.Form.Get("access-token")
+	return tkn, tkn != ""
+}
+
+func getFromQueryParam(r *http.Request) (string, bool) {
+	tkn := r.URL.Query().Get("access_token")
+	return tkn, tkn != ""
 }
