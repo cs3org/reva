@@ -32,6 +32,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	cs3permissions "github.com/cs3org/go-cs3apis/cs3/permissions/v1beta1"
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
@@ -44,6 +45,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/logger"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v2/pkg/storage"
+	"github.com/cs3org/reva/v2/pkg/storage/cache"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/chunking"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/lookup"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
@@ -104,6 +106,7 @@ type Decomposedfs struct {
 	chunkHandler      *chunking.ChunkHandler
 	permissionsClient CS3PermissionsClient
 	stream            events.Stream
+	cache             cache.StatCache
 }
 
 // NewDefault returns an instance with default components
@@ -154,6 +157,7 @@ func New(o *options.Options, lu *lookup.Lookup, p PermissionsChecker, tp Tree, p
 		chunkHandler:      chunking.NewChunkHandler(filepath.Join(o.Root, "uploads")),
 		permissionsClient: permissionsClient,
 		stream:            ev,
+		cache:             cache.GetStatCache(o.StatCache.CacheStore, o.StatCache.CacheNodes, o.StatCache.CacheDatabase, "stat", 0),
 	}
 
 	if o.AsyncFileUploads {
@@ -214,6 +218,20 @@ func (fs *Decomposedfs) Postprocessing(ch <-chan interface{}) {
 				continue
 			}
 			up.Node = n
+
+			if p, err := node.ReadNode(ctx, fs.lu, up.Info.Storage["SpaceRoot"], n.ParentID, false); err != nil {
+				log.Error().Err(err).Str("uploadID", ev.UploadID).Msg("could not read parent")
+			} else {
+				// update parent tmtime to propagate etag change
+				now := time.Now()
+				p.SetTMTime(&now)
+				if err := fs.tp.Propagate(ctx, p); err != nil {
+					log.Error().Err(err).Str("uploadID", ev.UploadID).Msg("could not propagate etag change")
+				}
+			}
+
+			// remove cache entry in gateway
+			fs.cache.RemoveStat(ev.ExecutingUser.GetId(), &provider.ResourceId{SpaceId: n.SpaceID, OpaqueId: n.ID})
 
 			upload.Cleanup(up, failed, keepUpload)
 

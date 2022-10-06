@@ -57,6 +57,8 @@ type Options struct {
 	Events EventOptions `mapstructure:"events"`
 
 	Tokens TokenOptions `mapstructure:"tokens"`
+
+	StatCache CacheOptions `mapstructure:"statcache"`
 }
 
 // EventOptions are the configurable options for events
@@ -71,6 +73,13 @@ type TokenOptions struct {
 	DataGatewayEndpoint  string `mapstructure:"datagateway_endpoint"`
 	TransferSharedSecret string `mapstructure:"transfer_shared_secret"`
 	TransferExpires      int64  `mapstructure:"transfer_expires"`
+}
+
+// CacheOptions contains options of configuring a cache
+type CacheOptions struct {
+	CacheStore    string   `mapstructure:"cache_store"`
+	CacheNodes    []string `mapstructure:"cache_nodes"`
+	CacheDatabase string   `mapstructure:"cache_database"`
 }
 
 // New returns a new Options instance for the given configuration
