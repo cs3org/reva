@@ -80,7 +80,7 @@ func (s *svc) handleGet(ctx context.Context, w http.ResponseWriter, r *http.Requ
 	sr, err := client.Stat(ctx, &provider.StatRequest{Ref: ref})
 	if err != nil || sr.GetStatus().GetCode() != rpc.Code_CODE_OK {
 		log.Error().Err(err).Interface("ref", ref).Str("status", sr.GetStatus().GetMessage()).Msg("error stating resource")
-		w.WriteHeader(http.StatusInternalServerError)
+		w.WriteHeader(http.StatusForbidden)
 		return
 	}
 
