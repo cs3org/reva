@@ -258,13 +258,17 @@ func (upload *Upload) FinishUpload(_ context.Context) error {
 	}
 
 	if upload.async {
-		// handle postprocessing asynchronously
-		return nil
+		// handle postprocessing asynchronously but inform there is something in progress
+		return upload.tp.Propagate(upload.Ctx, n)
 	}
 
 	err = upload.Finalize()
 	Cleanup(upload, err != nil, false)
-	return err
+	if err != nil {
+		return err
+	}
+
+	return upload.tp.Propagate(upload.Ctx, n)
 }
 
 // Terminate terminates the upload
@@ -357,7 +361,7 @@ func (upload *Upload) Finalize() (err error) {
 
 	fi, _ := os.Stat(n.InternalPath())
 	upload.Info.MetaData["etag"], _ = node.CalculateEtag(n.ID, fi.ModTime())
-	return upload.tp.Propagate(upload.Ctx, n)
+	return nil
 }
 
 func (upload *Upload) checkHash(expected string, h hash.Hash) error {
