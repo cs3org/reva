@@ -701,6 +701,11 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 		md.Id.StorageId = s.conf.MountID
 	}
 
+	// The storage driver might set the mount ID by itself, in which case skip this step
+	if md.ParentId != nil && md.ParentId.GetStorageId() == "" {
+		md.ParentId.StorageId = s.conf.MountID
+	}
+
 	return &provider.StatResponse{
 		Status: status.NewOK(ctx),
 		Info:   md,
@@ -764,6 +769,9 @@ func (s *service) ListContainer(ctx context.Context, req *provider.ListContainer
 
 	for _, i := range res.Infos {
 		s.addMissingStorageProviderID(i.Id, nil)
+		if i.ParentId != nil {
+			s.addMissingStorageProviderID(i.ParentId, nil)
+		}
 	}
 	return res, nil
 }
