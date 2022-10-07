@@ -146,7 +146,7 @@ func (s *service) CreatePublicShare(ctx context.Context, req *link.CreatePublicS
 		log.Error().Msg("error getting user from context")
 	}
 
-	share, err := s.sm.CreatePublicShare(ctx, u, req.ResourceInfo, req.Grant)
+	share, err := s.sm.CreatePublicShare(ctx, u, req.ResourceInfo, req.Grant, req.Description, req.Internal)
 	if err != nil {
 		log.Debug().Err(err).Str("createShare", "shares").Msg("error connecting to storage provider")
 	}

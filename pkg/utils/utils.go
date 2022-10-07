@@ -348,6 +348,8 @@ func GetViewMode(viewMode string) gateway.OpenInAppRequest_ViewMode {
 		return gateway.OpenInAppRequest_VIEW_MODE_READ_ONLY
 	case "write":
 		return gateway.OpenInAppRequest_VIEW_MODE_READ_WRITE
+	case "preview":
+		return gateway.OpenInAppRequest_VIEW_MODE_PREVIEW
 	default:
 		return gateway.OpenInAppRequest_VIEW_MODE_INVALID
 	}
