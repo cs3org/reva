@@ -330,16 +330,6 @@ func (upload *Upload) Finalize() (err error) {
 		upload.Node = n
 	}
 
-	spaceID := upload.Info.Storage["SpaceRoot"]
-	targetPath := n.InternalPath()
-	sublog := appctx.GetLogger(upload.Ctx).
-		With().
-		Interface("info", upload.Info).
-		Str("binPath", upload.binPath).
-		Str("targetPath", targetPath).
-		Str("spaceID", spaceID).
-		Logger()
-
 	// upload the data to the blobstore
 	file, err := os.Open(upload.binPath)
 	if err != nil {
@@ -352,7 +342,17 @@ func (upload *Upload) Finalize() (err error) {
 	}
 
 	// use set arbitrary metadata?
-	if upload.Info.MetaData["mtime"] != "" {
+	if upload.Info.MetaData["mtime"] != "" && !upload.async {
+		spaceID := upload.Info.Storage["SpaceRoot"]
+		targetPath := n.InternalPath()
+		sublog := appctx.GetLogger(upload.Ctx).
+			With().
+			Interface("info", upload.Info).
+			Str("binPath", upload.binPath).
+			Str("targetPath", targetPath).
+			Str("spaceID", spaceID).
+			Logger()
+
 		if err := n.SetMtime(upload.Ctx, upload.Info.MetaData["mtime"]); err != nil {
 			sublog.Err(err).Interface("info", upload.Info).Msg("Decomposedfs: could not set mtime metadata")
 			return err
