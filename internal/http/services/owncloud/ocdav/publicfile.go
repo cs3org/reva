@@ -19,9 +19,9 @@
 package ocdav
 
 import (
+	"context"
 	"net/http"
 	"path"
-	"path/filepath"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
@@ -44,8 +44,13 @@ func (h *PublicFileHandler) init(ns string) error {
 // Handler handles requests
 func (h *PublicFileHandler) Handler(s *svc) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		log := appctx.GetLogger(r.Context())
-		_, relativePath := router.ShiftPath(r.URL.Path)
+		ctx := r.Context()
+		log := appctx.GetLogger(ctx)
+		token, relativePath := router.ShiftPath(r.URL.Path)
+
+		base := path.Join(ctx.Value(net.CtxKeyBaseURI).(string), token)
+		ctx = context.WithValue(ctx, net.CtxKeyBaseURI, base)
+		r = r.WithContext(ctx)
 
 		log.Debug().Str("relativePath", relativePath).Msg("PublicFileHandler func")
 
@@ -105,9 +110,6 @@ func (s *svc) handlePropfindOnToken(w http.ResponseWriter, r *http.Request, ns s
 		w.WriteHeader(status)
 		return
 	}
-
-	// prefix tokenStatInfo.Path with token
-	tokenStatInfo.Path = filepath.Join(r.URL.Path, tokenStatInfo.Path)
 
 	infos := s.getPublicFileInfos(onContainer, depth == net.DepthZero, tokenStatInfo)
 
