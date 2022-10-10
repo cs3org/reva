@@ -2079,23 +2079,17 @@ func (fs *eosfs) permissionSet(ctx context.Context, eosFileInfo *eosclient.FileI
 		}
 	}
 
-	if owner != nil && u.Id.OpaqueId == owner.OpaqueId && u.Id.Idp == owner.Idp {
-		// The logged-in user is the owner but we may be impersonating them
-		// on behalf of a public share accessor.
-
-		if u.Opaque != nil {
-			if publicShare, ok := u.Opaque.Map["public-share-role"]; ok {
-				if string(publicShare.Value) == "editor" {
-					return conversions.NewEditorRole().CS3ResourcePermissions()
-				} else if string(publicShare.Value) == "uploader" {
-					return conversions.NewUploaderRole().CS3ResourcePermissions()
-				}
-				// Default to viewer role
-				return conversions.NewViewerRole().CS3ResourcePermissions()
-			}
+	if role, ok := utils.HasPublicShareRole(u); ok {
+		switch role {
+		case "editor":
+			return conversions.NewEditorRole().CS3ResourcePermissions()
+		case "uploader":
+			return conversions.NewUploaderRole().CS3ResourcePermissions()
 		}
+		return conversions.NewViewerRole().CS3ResourcePermissions()
+	}
 
-		// owner has all permissions
+	if utils.UserEqual(u.Id, owner) {
 		return conversions.NewManagerRole().CS3ResourcePermissions()
 	}
 
@@ -2113,16 +2107,19 @@ func (fs *eosfs) permissionSet(ctx context.Context, eosFileInfo *eosclient.FileI
 	}
 	var perm provider.ResourcePermissions
 
-	for _, e := range eosFileInfo.SysACL.Entries {
-		var userInGroup bool
-		if e.Type == acl.TypeGroup {
-			for _, g := range u.Groups {
-				if e.Qualifier == g {
-					userInGroup = true
-					break
-				}
-			}
+	// as the lightweight acl are stored as normal attrs,
+	// we need to add them in the sysacl entries
+
+	for k, v := range eosFileInfo.Attrs {
+		if e, ok := attrForLightweightACL(k, v); ok {
+			eosFileInfo.SysACL.Entries = append(eosFileInfo.SysACL.Entries, e)
 		}
+	}
+
+	userGroupsSet := makeSet(u.Groups)
+
+	for _, e := range eosFileInfo.SysACL.Entries {
+		userInGroup := e.Type == acl.TypeGroup && userGroupsSet.in(strings.ToLower(e.Qualifier))
 
 		if (e.Type == acl.TypeUser && e.Qualifier == auth.Role.UID) || (e.Type == acl.TypeLightweight && e.Qualifier == u.Id.OpaqueId) || userInGroup {
 			mergePermissions(&perm, grants.GetGrantPermissionSet(e.Permissions))
@@ -2130,6 +2127,37 @@ func (fs *eosfs) permissionSet(ctx context.Context, eosFileInfo *eosclient.FileI
 	}
 
 	return &perm
+}
+
+func attrForLightweightACL(k, v string) (*acl.Entry, bool) {
+	ok := strings.HasPrefix(k, "sys."+lwShareAttrKey)
+	if !ok {
+		return nil, false
+	}
+
+	qualifier := strings.TrimPrefix(k, fmt.Sprintf("sys.%s.", lwShareAttrKey))
+
+	attr := &acl.Entry{
+		Type:        acl.TypeLightweight,
+		Qualifier:   qualifier,
+		Permissions: v,
+	}
+	return attr, true
+}
+
+type groupSet map[string]struct{}
+
+func makeSet(lst []string) groupSet {
+	s := make(map[string]struct{}, len(lst))
+	for _, e := range lst {
+		s[e] = struct{}{}
+	}
+	return s
+}
+
+func (s groupSet) in(group string) bool {
+	_, ok := s[group]
+	return ok
 }
 
 func mergePermissions(l *provider.ResourcePermissions, r *provider.ResourcePermissions) {
