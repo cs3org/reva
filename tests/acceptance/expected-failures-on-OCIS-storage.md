@@ -233,12 +233,12 @@ _requires a [CS3 user provisioning api that can update the quota for a user](htt
 
 
 #### [path property in pending shares gives only filename](https://github.com/owncloud/ocis/issues/2156)
-- [apiShareManagementBasicToShares/createShareToSharesFolder.feature:727](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L727)
-- [apiShareManagementBasicToShares/createShareToSharesFolder.feature:728](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L728)
-- [apiShareManagementBasicToShares/createShareToSharesFolder.feature:746](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L746)
-- [apiShareManagementBasicToShares/createShareToSharesFolder.feature:747](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L747)
-- [apiShareManagementBasicToShares/createShareToSharesFolder.feature:762](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L762)
-- [apiShareManagementBasicToShares/createShareToSharesFolder.feature:763](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L763)
+- [apiShareManagementBasicToShares/createShareToSharesFolder.feature:767](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L767)
+- [apiShareManagementBasicToShares/createShareToSharesFolder.feature:768](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L768)
+- [apiShareManagementBasicToShares/createShareToSharesFolder.feature:786](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L786)
+- [apiShareManagementBasicToShares/createShareToSharesFolder.feature:787](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L787)
+- [apiShareManagementBasicToShares/createShareToSharesFolder.feature:802](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L802)
+- [apiShareManagementBasicToShares/createShareToSharesFolder.feature:803](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L803)
 
 #### [deleting a file inside a received shared folder is moved to the trash-bin of the sharer not the receiver](https://github.com/owncloud/ocis/issues/1124)
 - [apiTrashbin/trashbinSharingToShares.feature:29](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinSharingToShares.feature#L29)
@@ -276,7 +276,7 @@ _requires a [CS3 user provisioning api that can update the quota for a user](htt
 - [apiShareOperationsToShares1/changingFilesShare.feature:132](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareOperationsToShares1/changingFilesShare.feature#L132)
 - [apiVersions/fileVersionsSharingToShares.feature:220](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersionsSharingToShares.feature#L220)
 - [apiVersions/fileVersionsSharingToShares.feature:221](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersionsSharingToShares.feature#L221)
-- [apiShareManagementBasicToShares/createShareToSharesFolder.feature:500](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L500)
+- [apiShareManagementBasicToShares/createShareToSharesFolder.feature:540](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L540)
 - [apiWebdavMove2/moveShareOnOcis.feature:30](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove2/moveShareOnOcis.feature#L30)
 - [apiWebdavMove2/moveShareOnOcis.feature:32](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove2/moveShareOnOcis.feature#L32)
 - [apiWebdavMove2/moveShareOnOcis.feature:98](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove2/moveShareOnOcis.feature#L98)
@@ -424,8 +424,8 @@ _requires a [CS3 user provisioning api that can update the quota for a user](htt
 - [apiVersions/fileVersionsSharingToShares.feature:283](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersionsSharingToShares.feature#L283)
 
 #### [Share lists deleted user as 'user'](https://github.com/owncloud/ocis/issues/903)
-- [apiShareManagementBasicToShares/createShareToSharesFolder.feature:662](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L662)
-- [apiShareManagementBasicToShares/createShareToSharesFolder.feature:663](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L663)
+- [apiShareManagementBasicToShares/createShareToSharesFolder.feature:702](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L702)
+- [apiShareManagementBasicToShares/createShareToSharesFolder.feature:703](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L703)
 
 #### [deleting a share with wrong authentication returns OCS status 996 / HTTP 500](https://github.com/owncloud/ocis/issues/1229)
 - [apiShareManagementBasicToShares/deleteShareFromShares.feature:250](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/deleteShareFromShares.feature#L250)
@@ -606,8 +606,8 @@ _ocdav: api compatibility, return correct status code_
 - [apiAuthWebDav/webDavDELETEAuth.feature:176](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthWebDav/webDavDELETEAuth.feature#L176)
 
 #### [Sharing a same file twice to the same group](https://github.com/owncloud/ocis/issues/1710)
-- [apiShareManagementBasicToShares/createShareToSharesFolder.feature:710](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L710)
-- [apiShareManagementBasicToShares/createShareToSharesFolder.feature:711](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L711)
+- [apiShareManagementBasicToShares/createShareToSharesFolder.feature:750](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L750)
+- [apiShareManagementBasicToShares/createShareToSharesFolder.feature:751](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L751)
 
 #### [Request to edit non-existing user by authorized admin gets unauthorized in http response](https://github.com/owncloud/core/issues/38423)
 - [apiAuthOcs/ocsPUTAuth.feature:26](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthOcs/ocsPUTAuth.feature#L26)
@@ -812,8 +812,8 @@ moving outside of the Shares folder gives 501 Not Implemented.
 - [apiSharePublicLink3/allowGroupToCreatePublicLinks.feature:91](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink3/allowGroupToCreatePublicLinks.feature#L91)
 
 #### [Shares to deleted group listed in the response](https://github.com/owncloud/ocis/issues/2441)
-- [apiShareManagementBasicToShares/createShareToSharesFolder.feature:495](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L495)
-- [apiShareManagementBasicToShares/createShareToSharesFolder.feature:496](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L496)
+- [apiShareManagementBasicToShares/createShareToSharesFolder.feature:535](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L535)
+- [apiShareManagementBasicToShares/createShareToSharesFolder.feature:536](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementBasicToShares/createShareToSharesFolder.feature#L536)
 
 ### [Share path in the response is different between share states](https://github.com/owncloud/ocis/issues/2540)
 - [apiShareManagementToShares/acceptShares.feature:65](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementToShares/acceptShares.feature#L65)
