@@ -45,7 +45,6 @@ import (
 
 const (
 	versionPrefix  = ".sys.v#."
-	lwShareAttrKey = "reva.lwshare"
 	userACLEvalKey = "eval.useracl"
 	favoritesKey   = "http://owncloud.org/ns/favorite"
 )
@@ -280,30 +279,6 @@ func (c *Client) AddACL(ctx context.Context, auth, rootAuth eosclient.Authorizat
 		return err
 	}
 
-	if a.Type == acl.TypeLightweight {
-		sysACL := ""
-		aclStr, ok := finfo.Attrs["sys."+lwShareAttrKey]
-		if ok {
-			acls, err := acl.Parse(aclStr, acl.ShortTextForm)
-			if err != nil {
-				return err
-			}
-			err = acls.SetEntry(a.Type, a.Qualifier, a.Permissions)
-			if err != nil {
-				return err
-			}
-			sysACL = acls.Serialize()
-		} else {
-			sysACL = a.CitrineSerialize()
-		}
-		sysACLAttr := &eosclient.Attribute{
-			Type: eosclient.SystemAttr,
-			Key:  lwShareAttrKey,
-			Val:  sysACL,
-		}
-		return c.SetAttr(ctx, auth, sysACLAttr, false, finfo.IsDir, path)
-	}
-
 	sysACL := a.CitrineSerialize()
 	args := []string{"acl", "--sys"}
 	if finfo.IsDir {
@@ -328,30 +303,6 @@ func (c *Client) RemoveACL(ctx context.Context, auth, rootAuth eosclient.Authori
 	finfo, err := c.getRawFileInfoByPath(ctx, auth, path)
 	if err != nil {
 		return err
-	}
-
-	if a.Type == acl.TypeLightweight {
-		sysACL := ""
-		aclStr, ok := finfo.Attrs["sys."+lwShareAttrKey]
-		if ok {
-			acls, err := acl.Parse(aclStr, acl.ShortTextForm)
-			if err != nil {
-				return err
-			}
-			acls.DeleteEntry(a.Type, a.Qualifier)
-			if err != nil {
-				return err
-			}
-			sysACL = acls.Serialize()
-		} else {
-			sysACL = a.CitrineSerialize()
-		}
-		sysACLAttr := &eosclient.Attribute{
-			Type: eosclient.SystemAttr,
-			Key:  lwShareAttrKey,
-			Val:  sysACL,
-		}
-		return c.SetAttr(ctx, auth, sysACLAttr, false, finfo.IsDir, path)
 	}
 
 	sysACL := a.CitrineSerialize()
@@ -643,6 +594,33 @@ func (c *Client) GetAttr(ctx context.Context, auth eosclient.Authorization, key,
 		return nil, err
 	}
 	return attr, nil
+}
+
+func (c *Client) GetAttrs(ctx context.Context, auth eosclient.Authorization, path string) ([]*eosclient.Attribute, error) {
+	info, err := c.getRawFileInfoByPath(ctx, auth, path)
+	if err != nil {
+		return nil, err
+	}
+	if !info.IsDir {
+		path = getVersionFolder(path)
+	}
+
+	args := []string{"attr", "ls", path}
+	attrOut, _, err := c.executeEOS(ctx, args, auth)
+	if err != nil {
+		return nil, err
+	}
+
+	attrsStr := strings.Split(attrOut, "\n")
+	attrs := make([]*eosclient.Attribute, 0, len(attrsStr))
+	for _, line := range attrsStr {
+		attr, err := deserializeAttribute(line)
+		if err != nil {
+			return nil, err
+		}
+		attrs = append(attrs, attr)
+	}
+	return attrs, nil
 }
 
 func deserializeAttribute(attrStr string) (*eosclient.Attribute, error) {
@@ -1218,20 +1196,6 @@ func (c *Client) mapToFileInfo(ctx context.Context, kv, attrs map[string]string,
 				if err != nil {
 					return nil, err
 				}
-			}
-		}
-	}
-
-	// Read lightweight ACLs recognized by the sys.reva.lwshare attr
-	if lwACLStr, ok := attrs["sys."+lwShareAttrKey]; ok {
-		lwAcls, err := acl.Parse(lwACLStr, acl.ShortTextForm)
-		if err != nil {
-			return nil, err
-		}
-		for _, e := range lwAcls.Entries {
-			err = sysACL.SetEntry(e.Type, e.Qualifier, e.Permissions)
-			if err != nil {
-				return nil, err
 			}
 		}
 	}
