@@ -19,8 +19,13 @@
 package dataprovider
 
 import (
+	"bytes"
+	"crypto/tls"
+	"crypto/x509"
 	"fmt"
+	"io"
 	"net/http"
+	"os"
 
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	"github.com/cs3org/reva/v2/pkg/events"
@@ -40,12 +45,14 @@ func init() {
 }
 
 type config struct {
-	Prefix        string                            `mapstructure:"prefix" docs:"data;The prefix to be used for this HTTP service"`
-	Driver        string                            `mapstructure:"driver" docs:"localhome;The storage driver to be used."`
-	Drivers       map[string]map[string]interface{} `mapstructure:"drivers" docs:"url:pkg/storage/fs/localhome/localhome.go;The configuration for the storage driver"`
-	DataTXs       map[string]map[string]interface{} `mapstructure:"data_txs" docs:"url:pkg/rhttp/datatx/manager/simple/simple.go;The configuration for the data tx protocols"`
-	NatsAddress   string                            `mapstructure:"nats_address"`
-	NatsClusterID string                            `mapstructure:"nats_clusterID"`
+	Prefix             string                            `mapstructure:"prefix" docs:"data;The prefix to be used for this HTTP service"`
+	Driver             string                            `mapstructure:"driver" docs:"localhome;The storage driver to be used."`
+	Drivers            map[string]map[string]interface{} `mapstructure:"drivers" docs:"url:pkg/storage/fs/localhome/localhome.go;The configuration for the storage driver"`
+	DataTXs            map[string]map[string]interface{} `mapstructure:"data_txs" docs:"url:pkg/rhttp/datatx/manager/simple/simple.go;The configuration for the data tx protocols"`
+	NatsAddress        string                            `mapstructure:"nats_address"`
+	NatsClusterID      string                            `mapstructure:"nats_clusterID"`
+	NatsTLSInsecure    bool                              `mapstructure:"nats_tls_insecure"`
+	NatsRootCACertPath string                            `mapstructure:"nats_root_ca_cert_path"`
 }
 
 func (c *config) init() {
@@ -83,7 +90,27 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 	if conf.NatsAddress == "" || conf.NatsClusterID == "" {
 		log.Warn().Msg("missing or incomplete nats configuration. Events will not be published.")
 	} else {
-		publisher, err = server.NewNatsStream(natsjs.Address(conf.NatsAddress), natsjs.ClusterID(conf.NatsClusterID))
+		var rootCAPool *x509.CertPool
+		if conf.NatsRootCACertPath != "" {
+			f, err := os.Open(conf.NatsRootCACertPath)
+			if err != nil {
+				return nil, err
+			}
+
+			var certBytes bytes.Buffer
+			if _, err := io.Copy(&certBytes, f); err != nil {
+				return nil, err
+			}
+
+			rootCAPool = x509.NewCertPool()
+			rootCAPool.AppendCertsFromPEM(certBytes.Bytes())
+			conf.NatsTLSInsecure = false
+		}
+		tlsConf := &tls.Config{
+			InsecureSkipVerify: conf.NatsTLSInsecure,
+			RootCAs:            rootCAPool,
+		}
+		publisher, err = server.NewNatsStream(natsjs.TLSConfig(tlsConf), natsjs.Address(conf.NatsAddress), natsjs.ClusterID(conf.NatsClusterID))
 		if err != nil {
 			return nil, err
 		}
