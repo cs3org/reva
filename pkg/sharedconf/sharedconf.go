@@ -27,11 +27,18 @@ import (
 
 var sharedConf = &conf{}
 
+// ClientOptions represent additional options (e.g. tls settings) for the grpc clients
+type ClientOptions struct {
+	TLSMode    string `mapstructure:"tls_mode"`
+	CACertFile string `mapstructure:"cacert"`
+}
+
 type conf struct {
-	JWTSecret             string `mapstructure:"jwt_secret"`
-	GatewaySVC            string `mapstructure:"gatewaysvc"`
-	DataGateway           string `mapstructure:"datagateway"`
-	SkipUserGroupsInToken bool   `mapstructure:"skip_user_groups_in_token"`
+	JWTSecret             string        `mapstructure:"jwt_secret"`
+	GatewaySVC            string        `mapstructure:"gatewaysvc"`
+	DataGateway           string        `mapstructure:"datagateway"`
+	SkipUserGroupsInToken bool          `mapstructure:"skip_user_groups_in_token"`
+	GRPCClientOptions     ClientOptions `mapstructure:"grpc_client_options"`
 }
 
 // Decode decodes the configuration.
@@ -91,4 +98,9 @@ func GetDataGateway(val string) string {
 // SkipUserGroupsInToken returns whether to skip encoding user groups in the access tokens.
 func SkipUserGroupsInToken() bool {
 	return sharedConf.SkipUserGroupsInToken
+}
+
+// GRPCClientOptions returns the global grpc client options
+func GRPCClientOptions() ClientOptions {
+	return sharedConf.GRPCClientOptions
 }
