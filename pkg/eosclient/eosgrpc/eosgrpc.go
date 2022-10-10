@@ -49,7 +49,6 @@ import (
 
 const (
 	versionPrefix = ".sys.v#."
-	// lwShareAttrKey = "reva.lwshare"
 )
 
 const (
@@ -627,6 +626,24 @@ func (c *Client) GetAttr(ctx context.Context, auth eosclient.Authorization, key,
 		}
 	}
 	return nil, errtypes.NotFound(fmt.Sprintf("key %s not found", key))
+}
+
+func (c *Client) GetAttrs(ctx context.Context, auth eosclient.Authorization, path string) ([]*eosclient.Attribute, error) {
+	info, err := c.GetFileInfoByPath(ctx, auth, path)
+	if err != nil {
+		return nil, err
+	}
+
+	attrs := make([]*eosclient.Attribute, 0, len(info.Attrs))
+	for k, v := range info.Attrs {
+		attr, err := getAttribute(k, v)
+		if err != nil {
+			return nil, errors.Wrap(err, fmt.Sprintf("eosgrpc: cannot parse attribute key=%s value=%s", k, v))
+		}
+		attrs = append(attrs, attr)
+	}
+
+	return attrs, nil
 }
 
 func getAttribute(key, val string) (*eosclient.Attribute, error) {
@@ -1238,8 +1255,10 @@ func (c *Client) List(ctx context.Context, auth eosclient.Authorization, dpath s
 
 // Read reads a file from the mgm and returns a handle to read it
 // This handle could be directly the body of the response or a local tmp file
-//  returning a handle to the body is nice, yet it gives less control on the transaction
-//  itself, e.g. strange timeouts or TCP issues may be more difficult to trace
+//
+//	returning a handle to the body is nice, yet it gives less control on the transaction
+//	itself, e.g. strange timeouts or TCP issues may be more difficult to trace
+//
 // Let's consider this experimental for the moment, maybe I'll like to add a config
 // parameter to choose between the two behaviours
 func (c *Client) Read(ctx context.Context, auth eosclient.Authorization, path string) (io.ReadCloser, error) {
