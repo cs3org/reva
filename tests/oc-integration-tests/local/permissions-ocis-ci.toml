@@ -3,8 +3,14 @@
 [shared]
 jwt_secret = "Pive-Fumkiu4"
 
+[shared.grpc_client_options]
+tls_mode = "insecure"
+
 [grpc]
 address = "0.0.0.0:10000"
+
+[grpc.tls_settings]
+enabled = true
 
 [grpc.services.permissions]
 driver = "demo"

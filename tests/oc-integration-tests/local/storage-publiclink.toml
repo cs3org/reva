@@ -5,12 +5,18 @@
 jwt_secret = "Pive-Fumkiu4"
 gatewaysvc = "localhost:19000"
 
+[shared.grpc_client_options]
+tls_mode = "insecure"
+
 [log]
 #level = "warn"
 #mode = "json"
 
 [grpc]
 address = "0.0.0.0:13000"
+
+[grpc.tls_settings]
+enabled = true
 
 # This is a storage provider that grants direct access to the wrapped storage
 # we have a locally running dataprovider

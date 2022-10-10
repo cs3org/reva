@@ -9,6 +9,9 @@
 jwt_secret = "Pive-Fumkiu4"
 gatewaysvc = "localhost:19000"
 
+[shared.grpc_client_options]
+tls_mode = "insecure"
+
 [log]
 #level = "warn"
 #mode = "json"

@@ -15,6 +15,9 @@ gatewaysvc = "localhost:19000"
 [grpc]
 address = "0.0.0.0:11010"
 
+[grpc.tls_settings]
+enabled = true
+
 # This is a storage provider that grants direct access to the wrapped storage
 # we have a locally running dataprovider
 [grpc.services.storageprovider]

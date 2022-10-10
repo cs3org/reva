@@ -1,6 +1,9 @@
 [shared]
 jwt_secret = "Pive-Fumkiu4"
 
+[shared.grpc_client_options]
+tls_mode = "insecure"
+
 [log]
 #level = "warn"
 #mode = "json"
@@ -16,6 +19,10 @@ jwt_secret = "Pive-Fumkiu4"
 # - authenticates requests using oidc bearer auth and basic auth as fallback
 # - serves the grpc services on port 20199
 [grpc]
+
+[grpc.tls_settings]
+enabled = true
+
 [grpc.services.gateway]
 #preferencessvc = "localhost:18000"
 #userprovidersvc = "localhost:18000"

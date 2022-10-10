@@ -17,6 +17,9 @@ gatewaysvc = "localhost:19000"
 [grpc]
 address = "0.0.0.0:19000"
 
+[grpc.tls_settings]
+enabled = true
+
 [grpc.services.gateway]
 # registries
 authregistrysvc = "localhost:19000"

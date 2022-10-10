@@ -12,6 +12,9 @@ jwt_secret = "Pive-Fumkiu4"
 [grpc]
 address = "0.0.0.0:18000"
 
+[grpc.tls_settings]
+enabled = true
+
 [grpc.services.authprovider]
 auth_manager = "json"
 
