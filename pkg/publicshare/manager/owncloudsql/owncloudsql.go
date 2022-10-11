@@ -289,8 +289,16 @@ func (m *mgr) GetPublicShare(ctx context.Context, u *user.User, ref *link.Public
 
 func (m *mgr) getByToken(ctx context.Context, token string) (*link.PublicShare, string, error) {
 	s := DBShare{Token: token}
-	query := "select coalesce(uid_owner, '') as uid_owner, coalesce(uid_initiator, '') as uid_initiator, coalesce(share_with, '') as share_with, coalesce(item_type, '') as item_type, coalesce(expiration, '') as expiration, coalesce(share_name, '') as share_name, id, stime, permissions FROM oc_share WHERE share_type=? AND token=?"
-	if err := m.db.QueryRow(query, publicShareType, token).Scan(&s.UIDOwner, &s.UIDInitiator, &s.ShareWith, &s.ItemType, &s.Expiration, &s.ShareName, &s.ID, &s.STime, &s.Permissions); err != nil {
+	query := `SELECT
+				coalesce(uid_owner, '') as uid_owner, coalesce(uid_initiator, '') as uid_initiator,
+				coalesce(share_with, '') as share_with, coalesce(file_source, '') as file_source,
+				coalesce(item_type, '') as item_type, coalesce(token,'') as token,
+				coalesce(expiration, '') as expiration, coalesce(share_name, '') as share_name,
+				s.stime, s.permissions, fc.storage as storage
+			FROM oc_share s
+			LEFT JOIN oc_filecache fc ON fc.fileid = file_source
+			WHERE share_type=? AND token=?`
+	if err := m.db.QueryRow(query, publicShareType, token).Scan(&s.UIDOwner, &s.UIDInitiator, &s.ShareWith, &s.FileSource, &s.ItemType, &s.Expiration, &s.ShareName, &s.ID, &s.STime, &s.Permissions, &s.ItemStorage); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, "", errtypes.NotFound(token)
 		}
@@ -303,8 +311,17 @@ func (m *mgr) getByToken(ctx context.Context, token string) (*link.PublicShare, 
 func (m *mgr) getByID(ctx context.Context, id *link.PublicShareId, u *user.User) (*link.PublicShare, string, error) {
 	uid := u.Username
 	s := DBShare{ID: id.OpaqueId}
-	query := "select coalesce(uid_owner, '') as uid_owner, coalesce(uid_initiator, '') as uid_initiator, coalesce(share_with, '') as share_with, coalesce(item_type, '') as item_type, coalesce(token,'') as token, coalesce(expiration, '') as expiration, coalesce(share_name, '') as share_name, stime, permissions FROM oc_share WHERE share_type=? AND id=? AND (uid_owner=? OR uid_initiator=?)"
-	if err := m.db.QueryRow(query, publicShareType, id.OpaqueId, uid, uid).Scan(&s.UIDOwner, &s.UIDInitiator, &s.ShareWith, &s.ItemType, &s.Token, &s.Expiration, &s.ShareName, &s.STime, &s.Permissions); err != nil {
+	query := `SELECT
+				coalesce(uid_owner, '') as uid_owner, coalesce(uid_initiator, '') as uid_initiator,
+				coalesce(share_with, '') as share_with, coalesce(file_source, '') as file_source,
+				coalesce(item_type, '') as item_type, coalesce(token,'') as token,
+				coalesce(expiration, '') as expiration, coalesce(share_name, '') as share_name,
+				s.stime, s.permissions, fc.storage as storage
+			FROM oc_share s
+			LEFT JOIN oc_filecache fc ON fc.fileid = file_source
+			WHERE share_type=? AND id=?
+			AND (uid_owner=? or uid_initiator=?)`
+	if err := m.db.QueryRow(query, publicShareType, id.OpaqueId, uid, uid).Scan(&s.UIDOwner, &s.UIDInitiator, &s.ShareWith, &s.FileSource, &s.ItemType, &s.Token, &s.Expiration, &s.ShareName, &s.STime, &s.Permissions, &s.ItemStorage); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, "", errtypes.NotFound(id.OpaqueId)
 		}
