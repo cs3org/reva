@@ -27,6 +27,7 @@ import (
 	"os/user"
 	"path"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"strings"
 	"time"
@@ -365,4 +366,17 @@ func HasPublicShareRole(u *userpb.User) (string, bool) {
 		return string(publicShare.Value), true
 	}
 	return "", false
+}
+
+func HasPermissions(target, toCheck *provider.ResourcePermissions) bool {
+	targetStruct := reflect.ValueOf(target).Elem()
+	toCheckStruct := reflect.ValueOf(toCheck).Elem()
+
+	for i := 0; i < toCheckStruct.NumField(); i++ {
+		fieldToCheck := toCheckStruct.Field(i)
+		if fieldToCheck.Kind() == reflect.Bool && fieldToCheck.Bool() && !targetStruct.Field(i).Bool() {
+			return false
+		}
+	}
+	return true
 }
