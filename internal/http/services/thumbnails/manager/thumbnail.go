@@ -51,32 +51,32 @@ const (
 
 // Config is the config for the Thumbnail service
 type Config struct {
-	Quality      int
-	Resolutions  []string
-	Cache        string
-	CacheDrivers map[string]map[string]interface{}
+	Quality          int
+	FixedResolutions []string
+	Cache            string
+	CacheDrivers     map[string]map[string]interface{}
 }
 
 // Thumbnail is the service that generates thumbnails
 type Thumbnail struct {
-	c           *Config
-	downloader  downloader.Downloader
-	cache       cache.Cache
-	log         *zerolog.Logger
-	resolutions Resolutions
+	c                *Config
+	downloader       downloader.Downloader
+	cache            cache.Cache
+	log              *zerolog.Logger
+	fixedResolutions Resolutions
 }
 
 // NewThumbnail creates a new Thumbnail service that generates thumbnails
 func NewThumbnail(d downloader.Downloader, c *Config, log *zerolog.Logger) (*Thumbnail, error) {
-	res, err := ParseResolutions(c.Resolutions)
+	res, err := ParseResolutions(c.FixedResolutions)
 	if err != nil {
 		return nil, errors.Wrap(err, "thumbnails: error parsing resolutions")
 	}
 	t := &Thumbnail{
-		c:           c,
-		downloader:  d,
-		log:         log,
-		resolutions: res,
+		c:                c,
+		downloader:       d,
+		log:              log,
+		fixedResolutions: res,
 	}
 	err = t.initCache()
 	if err != nil {
@@ -111,7 +111,7 @@ func (t *Thumbnail) GetThumbnail(ctx context.Context, file, etag string, width, 
 	}
 
 	resolution := image.Rect(0, 0, width, height)
-	match := t.resolutions.ClosestMatch(resolution, img.Bounds())
+	match := t.fixedResolutions.MatchOrResize(resolution, img.Bounds())
 	thumb := imaging.Thumbnail(img, match.Dx(), match.Dy(), imaging.Linear)
 
 	var buf bytes.Buffer

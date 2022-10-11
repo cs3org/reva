@@ -62,14 +62,14 @@ const (
 )
 
 type config struct {
-	GatewaySVC   string                            `mapstructure:"gateway_svc"`
-	Quality      int                               `mapstructure:"quality"`
-	Resolutions  []string                          `mapstructure:"quality"`
-	Cache        string                            `mapstructure:"cache"`
-	CacheDrivers map[string]map[string]interface{} `mapstructure:"cache_drivers"`
-	OutputType   string                            `mapstructure:"output_type"`
-	Prefix       string                            `mapstructure:"prefix"`
-	Insecure     bool                              `mapstructure:"insecure"`
+	GatewaySVC       string                            `mapstructure:"gateway_svc"`
+	Quality          int                               `mapstructure:"quality"`
+	FixedResolutions []string                          `mapstructure:"fixed_resolutions"`
+	Cache            string                            `mapstructure:"cache"`
+	CacheDrivers     map[string]map[string]interface{} `mapstructure:"cache_drivers"`
+	OutputType       string                            `mapstructure:"output_type"`
+	Prefix           string                            `mapstructure:"prefix"`
+	Insecure         bool                              `mapstructure:"insecure"`
 }
 
 type svc struct {
@@ -109,10 +109,10 @@ func New(conf map[string]interface{}, log *zerolog.Logger) (global.Service, erro
 	d := downloader.NewDownloader(gtw, rhttp.Insecure(c.Insecure))
 
 	mgr, err := manager.NewThumbnail(d, &manager.Config{
-		Quality:      c.Quality,
-		Resolutions:  c.Resolutions,
-		Cache:        c.Cache,
-		CacheDrivers: c.CacheDrivers,
+		Quality:          c.Quality,
+		FixedResolutions: c.FixedResolutions,
+		Cache:            c.Cache,
+		CacheDrivers:     c.CacheDrivers,
 	}, log)
 	if err != nil {
 		return nil, err
