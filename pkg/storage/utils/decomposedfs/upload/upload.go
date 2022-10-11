@@ -341,25 +341,32 @@ func (upload *Upload) Finalize() (err error) {
 		return errors.Wrap(err, "failed to upload file to blostore")
 	}
 
-	// use set arbitrary metadata?
-	if upload.Info.MetaData["mtime"] != "" && !upload.async {
-		spaceID := upload.Info.Storage["SpaceRoot"]
-		targetPath := n.InternalPath()
-		sublog := appctx.GetLogger(upload.Ctx).
-			With().
-			Interface("info", upload.Info).
-			Str("binPath", upload.binPath).
-			Str("targetPath", targetPath).
-			Str("spaceID", spaceID).
-			Logger()
+	if upload.async {
+		return nil
+	}
 
+	sublog := appctx.GetLogger(upload.Ctx).
+		With().
+		Interface("info", upload.Info).
+		Str("binPath", upload.binPath).
+		Str("targetPath", n.InternalPath()).
+		Str("spaceID", upload.Info.Storage["SpaceRoot"]).
+		Logger()
+
+	// tests sometimes set the mtime
+	if upload.Info.MetaData["mtime"] != "" {
 		if err := n.SetMtime(upload.Ctx, upload.Info.MetaData["mtime"]); err != nil {
 			sublog.Err(err).Interface("info", upload.Info).Msg("Decomposedfs: could not set mtime metadata")
 			return err
 		}
 	}
 
-	fi, _ := os.Stat(n.InternalPath())
+	// some clients need the etag in the upload metadata
+	fi, err := os.Stat(n.InternalPath())
+	if err != nil {
+		sublog.Err(err).Interface("info", upload.Info).Str("path", n.InternalPath()).Msg("Decomposedfs: could not stat file")
+		return err
+	}
 	upload.Info.MetaData["etag"], _ = node.CalculateEtag(n.ID, fi.ModTime())
 	return nil
 }
