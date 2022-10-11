@@ -78,77 +78,94 @@ func expandAndVerifyScope(ctx context.Context, req interface{}, tokenScope map[s
 					return nil
 				}
 
-			case strings.HasPrefix(k, "lightweight"):
-				if err = resolveLightweightScope(ctx, ref, tokenScope[k], user, client, mgr); err == nil {
-					return nil
-				}
 			}
 			log.Err(err).Msgf("error resolving reference %s under scope %+v", ref.String(), k)
 		}
 
-	} else if ref, ok := extractShareRef(req); ok {
-		// It's a share ref
-		// The request might be coming from a share created for a lightweight account
-		// after the token was minted.
-		log.Info().Msgf("resolving share reference against received shares to verify token scope %+v", ref.String())
-		for k := range tokenScope {
-			if strings.HasPrefix(k, "lightweight") {
-				// Check if this ID is cached
-				key := "lw:" + user.Id.OpaqueId + scopeDelimiter + ref.GetId().OpaqueId
-				if _, err := scopeExpansionCache.Get(key); err == nil {
-					return nil
-				}
+	}
 
-				shares, err := client.ListReceivedShares(ctx, &collaboration.ListReceivedSharesRequest{})
-				if err != nil || shares.Status.Code != rpc.Code_CODE_OK {
-					log.Warn().Err(err).Msg("error listing received shares")
-					continue
-				}
-				for _, s := range shares.Shares {
-					shareKey := "lw:" + user.Id.OpaqueId + scopeDelimiter + s.Share.Id.OpaqueId
-					_ = scopeExpansionCache.SetWithExpire(shareKey, nil, scopeCacheExpiration*time.Second)
-
-					if ref.GetId() != nil && ref.GetId().OpaqueId == s.Share.Id.OpaqueId {
-						return nil
-					}
-					if key := ref.GetKey(); key != nil && (utils.UserEqual(key.Owner, s.Share.Owner) || utils.UserEqual(key.Owner, s.Share.Creator)) &&
-						utils.ResourceIDEqual(key.ResourceId, s.Share.ResourceId) && utils.GranteeEqual(key.Grantee, s.Share.Grantee) {
-						return nil
-					}
-				}
-			}
-		}
+	if checkLightweightScope(ctx, req, tokenScope, client) {
+		return nil
 	}
 
 	return errtypes.PermissionDenied("access to resource not allowed within the assigned scope")
 }
 
-func resolveLightweightScope(ctx context.Context, ref *provider.Reference, scope *authpb.Scope, user *userpb.User, client gateway.GatewayAPIClient, mgr token.Manager) error {
-	// Check if this ref is cached
-	key := "lw:" + user.Id.OpaqueId + scopeDelimiter + getRefKey(ref)
-	if _, err := scopeExpansionCache.Get(key); err == nil {
-		return nil
-	}
-
-	shares, err := client.ListReceivedShares(ctx, &collaboration.ListReceivedSharesRequest{})
-	if err != nil || shares.Status.Code != rpc.Code_CODE_OK {
-		return errtypes.InternalError("error listing received shares")
-	}
-
-	for _, share := range shares.Shares {
-		shareKey := "lw:" + user.Id.OpaqueId + scopeDelimiter + resourceid.OwnCloudResourceIDWrap(share.Share.ResourceId)
-		_ = scopeExpansionCache.SetWithExpire(shareKey, nil, scopeCacheExpiration*time.Second)
-
-		if ref.ResourceId != nil && utils.ResourceIDEqual(share.Share.ResourceId, ref.ResourceId) {
-			return nil
-		}
-		if ok, err := checkIfNestedResource(ctx, ref, share.Share.ResourceId, client, mgr); err == nil && ok {
-			_ = scopeExpansionCache.SetWithExpire(key, nil, scopeCacheExpiration*time.Second)
-			return nil
+func hasLightweightScope(tokenScope map[string]*authpb.Scope) bool {
+	for scope := range tokenScope {
+		if strings.HasPrefix(scope, "lightweight") {
+			return true
 		}
 	}
+	return false
+}
 
-	return errtypes.PermissionDenied("request is not for a nested resource")
+func checkLightweightScope(ctx context.Context, req interface{}, tokenScope map[string]*authpb.Scope, client gateway.GatewayAPIClient) bool {
+	if !hasLightweightScope(tokenScope) {
+		return false
+	}
+
+	switch r := req.(type) {
+	// Viewer role
+	case *registry.GetStorageProvidersRequest:
+		return true
+	case *provider.StatRequest:
+		return true
+	case *provider.ListContainerRequest:
+		return hasPermissions(ctx, client, r.GetRef(), &provider.ResourcePermissions{
+			ListContainer: true,
+		})
+	case *provider.InitiateFileDownloadRequest:
+		return hasPermissions(ctx, client, r.GetRef(), &provider.ResourcePermissions{
+			InitiateFileDownload: true,
+		})
+	case *appprovider.OpenInAppRequest:
+		return hasPermissions(ctx, client, &provider.Reference{ResourceId: r.ResourceInfo.Id}, &provider.ResourcePermissions{
+			InitiateFileDownload: true,
+		})
+	case *gateway.OpenInAppRequest:
+		return hasPermissions(ctx, client, r.GetRef(), &provider.ResourcePermissions{
+			InitiateFileDownload: true,
+		})
+
+	// Editor role
+	case *provider.CreateContainerRequest:
+		return hasPermissions(ctx, client, r.GetRef(), &provider.ResourcePermissions{
+			CreateContainer: true,
+		})
+	case *provider.TouchFileRequest:
+		return hasPermissions(ctx, client, r.GetRef(), &provider.ResourcePermissions{
+			InitiateFileDownload: true,
+		})
+	case *provider.DeleteRequest:
+		return hasPermissions(ctx, client, r.GetRef(), &provider.ResourcePermissions{
+			InitiateFileDownload: true,
+		})
+	case *provider.MoveRequest:
+		return hasPermissions(ctx, client, r.Source, &provider.ResourcePermissions{
+			InitiateFileDownload: true,
+		}) && hasPermissions(ctx, client, r.Destination, &provider.ResourcePermissions{
+			InitiateFileUpload: true,
+		})
+	case *provider.InitiateFileUploadRequest:
+		return hasPermissions(ctx, client, r.GetRef(), &provider.ResourcePermissions{
+			InitiateFileUpload: true,
+		})
+	}
+
+	return false
+}
+
+func hasPermissions(ctx context.Context, client gateway.GatewayAPIClient, ref *provider.Reference, permissionSet *provider.ResourcePermissions) bool {
+	statRes, err := client.Stat(ctx, &provider.StatRequest{
+		Ref: ref,
+	})
+
+	if err != nil || statRes.Status.Code != rpc.Code_CODE_OK {
+		return false
+	}
+
+	return utils.HasPermissions(statRes.Info.PermissionSet, permissionSet)
 }
 
 func resolvePublicShare(ctx context.Context, ref *provider.Reference, scope *authpb.Scope, client gateway.GatewayAPIClient, mgr token.Manager) error {
