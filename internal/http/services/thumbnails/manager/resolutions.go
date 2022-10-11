@@ -21,14 +21,13 @@ package manager
 import (
 	"fmt"
 	"image"
-	"math"
 	"strconv"
 	"strings"
 
 	"github.com/pkg/errors"
 )
 
-// https://github.com/owncloud/ocis/blob/master/services/thumbnails/pkg/thumbnail/resolutions.go
+// inspired by https://github.com/owncloud/ocis/blob/master/services/thumbnails/pkg/thumbnail/resolutions.go
 
 const (
 	_resolutionSeparator = "x"
@@ -67,55 +66,43 @@ func ParseResolutions(strs []string) (Resolutions, error) {
 	return rs, nil
 }
 
-// ClosestMatch returns the resolution which is closest to the provided resolution.
-// If there is no exact match the resolution will be the next higher one.
-// If the given resolution is bigger than all available resolutions the biggest available one is used.
-func (rs Resolutions) ClosestMatch(requested image.Rectangle, sourceSize image.Rectangle) image.Rectangle {
-	isLandscape := sourceSize.Dx() > sourceSize.Dy()
-	sourceLen := dimensionLength(sourceSize, isLandscape)
-	requestedLen := dimensionLength(requested, isLandscape)
-	isSourceSmaller := sourceLen < requestedLen
-
-	// We don't want to scale images up.
-	if isSourceSmaller {
-		return sourceSize
+// MatchOrResize returns the resolution which match one of the resolution, or
+// a resolution that fits in the requested resolution, keeping the ratio of
+// the source image.
+func (rs Resolutions) MatchOrResize(requested, source image.Rectangle) image.Rectangle {
+	if r, ok := rs.match(requested); ok {
+		return r
 	}
 
-	if len(rs) == 0 {
-		return requested
+	resized := resize(requested, source)
+	if isSmaller(resized, source) {
+		return resized
 	}
-
-	var match image.Rectangle
-	// Since we want to search for the smallest difference we start with the highest possible number
-	minDiff := math.MaxInt32
-
-	for _, current := range rs {
-		cLen := dimensionLength(current, isLandscape)
-		diff := requestedLen - cLen
-		if diff > 0 {
-			// current is smaller
-			continue
-		}
-
-		// Convert diff to positive value
-		// Multiplying by -1 is safe since we aren't getting positive numbers here
-		// because of the check above
-		absDiff := diff * -1
-		if absDiff < minDiff {
-			minDiff = absDiff
-			match = current
-		}
-	}
-
-	if (match == image.Rectangle{}) {
-		match = rs[len(rs)-1]
-	}
-	return match
+	return source
 }
 
-func dimensionLength(rect image.Rectangle, isLandscape bool) int {
-	if isLandscape {
-		return rect.Dx()
+func isSmaller(r1, r2 image.Rectangle) bool {
+	return r1.Dx() <= r2.Dx() && r1.Dy() <= r2.Dy()
+}
+
+func resize(requested, source image.Rectangle) image.Rectangle {
+	r := float64(requested.Dx()) / float64(source.Dx())
+	dx, dy := requested.Dx(), int(float64(source.Dy())*r)
+
+	if dy <= requested.Dy() {
+		return image.Rect(0, 0, dx, dy)
 	}
-	return rect.Dy()
+
+	r = float64(requested.Dy()) / float64(source.Dy())
+	dx, dy = int(float64(source.Dx())*r), requested.Dy()
+	return image.Rect(0, 0, dx, dy)
+}
+
+func (rs Resolutions) match(requested image.Rectangle) (image.Rectangle, bool) {
+	for _, r := range rs {
+		if r.Dx() == requested.Dx() && r.Dy() == requested.Dy() {
+			return r, true
+		}
+	}
+	return image.Rectangle{}, false
 }
