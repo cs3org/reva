@@ -22,12 +22,9 @@ import (
 	"context"
 	"strings"
 
-	appprovider "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
-	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	registry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/rs/zerolog"
@@ -36,23 +33,6 @@ import (
 func lightweightAccountScope(_ context.Context, scope *authpb.Scope, resource interface{}, _ *zerolog.Logger) (bool, error) {
 	switch v := resource.(type) {
 	case *collaboration.ListReceivedSharesRequest:
-		return true, nil
-	// Editing role for shares
-	case *provider.CreateContainerRequest,
-		*provider.TouchFileRequest,
-		*provider.DeleteRequest,
-		*provider.MoveRequest,
-		*provider.InitiateFileUploadRequest,
-		*provider.SetArbitraryMetadataRequest,
-		*provider.UnsetArbitraryMetadataRequest:
-		return true, nil
-	// Viewer role for shares
-	case *registry.GetStorageProvidersRequest,
-		*provider.StatRequest,
-		*provider.ListContainerRequest,
-		*provider.InitiateFileDownloadRequest,
-		*appprovider.OpenInAppRequest,
-		*gateway.OpenInAppRequest:
 		return true, nil
 	case string:
 		return checkLightweightPath(v), nil
