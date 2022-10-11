@@ -31,6 +31,10 @@ import (
 )
 
 func lightweightAccountScope(_ context.Context, scope *authpb.Scope, resource interface{}, _ *zerolog.Logger) (bool, error) {
+	// Lightweight accounts have access to resources shared with them.
+	// These cannot be resolved from here, but need to be added to the scope from
+	// where the call to mint tokens is made.
+	// From here, we only allow ListReceivedShares calls
 	switch v := resource.(type) {
 	case *collaboration.ListReceivedSharesRequest:
 		return true, nil
