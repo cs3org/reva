@@ -19,7 +19,6 @@
 package utils
 
 import (
-	"context"
 	"fmt"
 	"math/rand"
 	"net"
@@ -37,7 +36,6 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/registry"
 	"github.com/cs3org/reva/pkg/registry/memory"
 	"github.com/golang/protobuf/proto"
@@ -367,10 +365,4 @@ func HasPublicShareRole(u *userpb.User) (string, bool) {
 		return string(publicShare.Value), true
 	}
 	return "", false
-}
-
-func IsLightweithAccountInCtx(ctx context.Context) bool {
-	user := ctxpkg.ContextMustGetUser(ctx)
-	return user.Id.Type == userpb.UserType_USER_TYPE_FEDERATED ||
-		user.Id.Type == userpb.UserType_USER_TYPE_LIGHTWEIGHT
 }
