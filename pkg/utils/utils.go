@@ -19,6 +19,7 @@
 package utils
 
 import (
+	"context"
 	"fmt"
 	"math/rand"
 	"net"
@@ -36,6 +37,7 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/registry"
 	"github.com/cs3org/reva/pkg/registry/memory"
 	"github.com/golang/protobuf/proto"
@@ -353,4 +355,22 @@ func GetViewMode(viewMode string) gateway.OpenInAppRequest_ViewMode {
 	default:
 		return gateway.OpenInAppRequest_VIEW_MODE_INVALID
 	}
+}
+
+// HasPublicShareRole return true if the user has a public share role.
+// If yes, the string is the type of role, viewer, editor or uploader
+func HasPublicShareRole(u *userpb.User) (string, bool) {
+	if u.Opaque == nil {
+		return "", false
+	}
+	if publicShare, ok := u.Opaque.Map["public-share-role"]; ok {
+		return string(publicShare.Value), true
+	}
+	return "", false
+}
+
+func IsLightweithAccountInCtx(ctx context.Context) bool {
+	user := ctxpkg.ContextMustGetUser(ctx)
+	return user.Id.Type == userpb.UserType_USER_TYPE_FEDERATED ||
+		user.Id.Type == userpb.UserType_USER_TYPE_LIGHTWEIGHT
 }
