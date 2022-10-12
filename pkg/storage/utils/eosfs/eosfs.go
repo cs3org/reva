@@ -2126,6 +2126,18 @@ func (fs *eosfs) permissionSet(ctx context.Context, eosFileInfo *eosclient.FileI
 		}
 	}
 
+	// for normal files, we need to inherit also the lw acls
+	// from the parent folder, as these, when creating a new
+	// file are not inherited
+
+	if utils.UserIsLightweight(u) && !eosFileInfo.IsDir {
+		if parentPath, err := fs.unwrap(ctx, filepath.Dir(eosFileInfo.File)); err == nil {
+			if parent, err := fs.GetMD(ctx, &provider.Reference{Path: parentPath}, nil); err == nil {
+				mergePermissions(&perm, parent.PermissionSet)
+			}
+		}
+	}
+
 	return &perm
 }
 

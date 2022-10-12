@@ -380,3 +380,8 @@ func HasPermissions(target, toCheck *provider.ResourcePermissions) bool {
 	}
 	return true
 }
+
+func UserIsLightweight(u *userpb.User) bool {
+	return u.Id.Type == userpb.UserType_USER_TYPE_FEDERATED ||
+		u.Id.Type == userpb.UserType_USER_TYPE_LIGHTWEIGHT
+}
