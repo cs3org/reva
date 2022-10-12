@@ -28,10 +28,11 @@ import (
 )
 
 // ContainerCreated converts the response to an event
-func ContainerCreated(r *provider.CreateContainerResponse, req *provider.CreateContainerRequest, executant *user.UserId) events.ContainerCreated {
+func ContainerCreated(r *provider.CreateContainerResponse, req *provider.CreateContainerRequest, spaceOwner, executant *user.UserId) events.ContainerCreated {
 	return events.ContainerCreated{
-		Executant: executant,
-		Ref:       req.Ref,
+		SpaceOwner: spaceOwner,
+		Executant:  executant,
+		Ref:        req.Ref,
 	}
 }
 
@@ -166,18 +167,20 @@ func LinkRemoved(r *link.RemovePublicShareResponse, req *link.RemovePublicShareR
 }
 
 // FileTouched converts the response to an event
-func FileTouched(r *provider.TouchFileResponse, req *provider.TouchFileRequest, executant *user.UserId) events.FileTouched {
+func FileTouched(r *provider.TouchFileResponse, req *provider.TouchFileRequest, spaceOwner, executant *user.UserId) events.FileTouched {
 	return events.FileTouched{
-		Executant: executant,
-		Ref:       req.Ref,
+		SpaceOwner: spaceOwner,
+		Executant:  executant,
+		Ref:        req.Ref,
 	}
 }
 
 // FileUploaded converts the response to an event
-func FileUploaded(r *provider.InitiateFileUploadResponse, req *provider.InitiateFileUploadRequest, executant *user.UserId) events.FileUploaded {
+func FileUploaded(r *provider.InitiateFileUploadResponse, req *provider.InitiateFileUploadRequest, spaceOwner, executant *user.UserId) events.FileUploaded {
 	return events.FileUploaded{
-		Executant: executant,
-		Ref:       req.Ref,
+		SpaceOwner: spaceOwner,
+		Executant:  executant,
+		Ref:        req.Ref,
 	}
 }
 
@@ -190,11 +193,12 @@ func FileDownloaded(r *provider.InitiateFileDownloadResponse, req *provider.Init
 }
 
 // ItemTrashed converts the response to an event
-func ItemTrashed(r *provider.DeleteResponse, req *provider.DeleteRequest, executant *user.UserId) events.ItemTrashed {
+func ItemTrashed(r *provider.DeleteResponse, req *provider.DeleteRequest, spaceOwner, executant *user.UserId) events.ItemTrashed {
 	opaqueID := utils.ReadPlainFromOpaque(r.Opaque, "opaque_id")
 	return events.ItemTrashed{
-		Executant: executant,
-		Ref:       req.Ref,
+		SpaceOwner: spaceOwner,
+		Executant:  executant,
+		Ref:        req.Ref,
 		ID: &provider.ResourceId{
 			StorageId: req.Ref.GetResourceId().GetStorageId(),
 			SpaceId:   req.Ref.GetResourceId().GetSpaceId(),
@@ -204,8 +208,9 @@ func ItemTrashed(r *provider.DeleteResponse, req *provider.DeleteRequest, execut
 }
 
 // ItemMoved converts the response to an event
-func ItemMoved(r *provider.MoveResponse, req *provider.MoveRequest, executant *user.UserId) events.ItemMoved {
+func ItemMoved(r *provider.MoveResponse, req *provider.MoveRequest, spaceOwner, executant *user.UserId) events.ItemMoved {
 	return events.ItemMoved{
+		SpaceOwner:   spaceOwner,
 		Executant:    executant,
 		Ref:          req.Destination,
 		OldReference: req.Source,
@@ -221,12 +226,13 @@ func ItemPurged(r *provider.PurgeRecycleResponse, req *provider.PurgeRecycleRequ
 }
 
 // ItemRestored converts the response to an event
-func ItemRestored(r *provider.RestoreRecycleItemResponse, req *provider.RestoreRecycleItemRequest, executant *user.UserId) events.ItemRestored {
+func ItemRestored(r *provider.RestoreRecycleItemResponse, req *provider.RestoreRecycleItemRequest, spaceOwner, executant *user.UserId) events.ItemRestored {
 	ref := req.Ref
 	if req.RestoreRef != nil {
 		ref = req.RestoreRef
 	}
 	return events.ItemRestored{
+		SpaceOwner:   spaceOwner,
 		Executant:    executant,
 		Ref:          ref,
 		OldReference: req.Ref,
@@ -235,11 +241,12 @@ func ItemRestored(r *provider.RestoreRecycleItemResponse, req *provider.RestoreR
 }
 
 // FileVersionRestored converts the response to an event
-func FileVersionRestored(r *provider.RestoreFileVersionResponse, req *provider.RestoreFileVersionRequest, executant *user.UserId) events.FileVersionRestored {
+func FileVersionRestored(r *provider.RestoreFileVersionResponse, req *provider.RestoreFileVersionRequest, spaceOwner, executant *user.UserId) events.FileVersionRestored {
 	return events.FileVersionRestored{
-		Executant: executant,
-		Ref:       req.Ref,
-		Key:       req.Key,
+		SpaceOwner: spaceOwner,
+		Executant:  executant,
+		Ref:        req.Ref,
+		Key:        req.Key,
 	}
 }
 
