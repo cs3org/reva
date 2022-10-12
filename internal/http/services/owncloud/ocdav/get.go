@@ -72,6 +72,25 @@ func (s *svc) handleGet(ctx context.Context, w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	sReq := &provider.StatRequest{
+		Ref: ref,
+	}
+	sRes, err := client.Stat(ctx, sReq)
+	if err != nil {
+		log.Error().Err(err).Msg("error stat resource")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	} else if sRes.Status.Code != rpc.Code_CODE_OK {
+		errors.HandleErrorStatus(&log, w, sRes.Status)
+		return
+	}
+
+	if sRes.Info.Type != provider.ResourceType_RESOURCE_TYPE_FILE {
+		w.Header().Set("Content-Length", "0")
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
 	dReq := &provider.InitiateFileDownloadRequest{Ref: ref}
 	dRes, err := client.InitiateFileDownload(ctx, dReq)
 	if err != nil {
