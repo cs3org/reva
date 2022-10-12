@@ -115,7 +115,7 @@ func NewDefault(m map[string]interface{}, bs tree.Blobstore) (storage.FS, error)
 
 	tp := tree.New(o.Root, o.TreeTimeAccounting, o.TreeSizeAccounting, lu, bs)
 
-	permissionsClient, err := pool.GetPermissionsClient(o.PermissionsSVC)
+	permissionsClient, err := pool.GetPermissionsClient(o.PermissionsSVC, pool.WithTLSMode(o.PermTLSMode))
 	if err != nil {
 		return nil, err
 	}

@@ -22,6 +22,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/v2/pkg/sharedconf"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )
@@ -47,7 +49,9 @@ type Options struct {
 	TreeSizeAccounting bool `mapstructure:"treesize_accounting"`
 
 	// permissions service to use when checking permissions
-	PermissionsSVC string `mapstructure:"permissionssvc"`
+	PermissionsSVC           string `mapstructure:"permissionssvc"`
+	PermissionsClientTLSMode string `mapstructure:"permissionssvc_tls_mode"`
+	PermTLSMode              pool.TLSMode
 
 	PersonalSpaceAliasTemplate string `mapstructure:"personalspacealias_template"`
 	GeneralSpaceAliasTemplate  string `mapstructure:"generalspacealias_template"`
@@ -82,6 +86,21 @@ func New(m map[string]interface{}) (*Options, error) {
 
 	if o.GeneralSpaceAliasTemplate == "" {
 		o.GeneralSpaceAliasTemplate = "{{.SpaceType}}/{{.SpaceName | replace \" \" \"-\" | lower}}"
+	}
+
+	if o.PermissionsClientTLSMode != "" {
+		var err error
+		o.PermTLSMode, err = pool.StringToTLSMode(o.PermissionsClientTLSMode)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		sharedOpt := sharedconf.GRPCClientOptions()
+		var err error
+
+		if o.PermTLSMode, err = pool.StringToTLSMode(sharedOpt.TLSMode); err != nil {
+			return nil, err
+		}
 	}
 
 	return o, nil
