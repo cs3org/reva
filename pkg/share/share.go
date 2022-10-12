@@ -31,9 +31,8 @@ import (
 )
 
 const (
-	// SpaceIDFilterType defines a new filter type for space id.
-	// TODO: Remove once this filter type is in the CS3 API.
-	SpaceIDFilterType collaboration.Filter_Type = 7
+	// NoState can be used to signal the filter matching functions to ignore the share state.
+	NoState collaboration.ShareState = -1
 )
 
 //go:generate make --no-print-directory -C ../.. mockery NAME=Manager
@@ -121,11 +120,19 @@ func ResourceIDFilter(id *provider.ResourceId) *collaboration.Filter {
 // SpaceIDFilter is an abstraction for creating filter by space id.
 func SpaceIDFilter(id string) *collaboration.Filter {
 	return &collaboration.Filter{
-		Type: SpaceIDFilterType,
-		Term: &collaboration.Filter_ResourceId{
-			ResourceId: &provider.ResourceId{
-				SpaceId: id,
-			},
+		Type: collaboration.Filter_TYPE_SPACE_ID,
+		Term: &collaboration.Filter_SpaceId{
+			SpaceId: id,
+		},
+	}
+}
+
+// StateFilter is an abstraction for creating filter by share state.
+func StateFilter(state collaboration.ShareState) *collaboration.Filter {
+	return &collaboration.Filter{
+		Type: collaboration.Filter_TYPE_STATE,
+		Term: &collaboration.Filter_State{
+			State: state,
 		},
 	}
 }
@@ -152,7 +159,7 @@ func IsGrantedToUser(share *collaboration.Share, user *userv1beta1.User) bool {
 }
 
 // MatchesFilter tests if the share passes the filter.
-func MatchesFilter(share *collaboration.Share, filter *collaboration.Filter) bool {
+func MatchesFilter(share *collaboration.Share, state collaboration.ShareState, filter *collaboration.Filter) bool {
 	switch filter.Type {
 	case collaboration.Filter_TYPE_RESOURCE_ID:
 		return utils.ResourceIDEqual(share.ResourceId, filter.GetResourceId())
@@ -162,17 +169,19 @@ func MatchesFilter(share *collaboration.Share, filter *collaboration.Filter) boo
 		// This filter type is used to filter out "denial shares". These are currently implemented by having the permission "0".
 		// I.e. if the permission is 0 we don't want to show it.
 		return int(conversions.RoleFromResourcePermissions(share.Permissions.Permissions).OCSPermissions()) != 0
-	case SpaceIDFilterType:
-		return share.ResourceId.SpaceId == filter.GetResourceId().GetSpaceId()
+	case collaboration.Filter_TYPE_SPACE_ID:
+		return share.ResourceId.SpaceId == filter.GetSpaceId()
+	case collaboration.Filter_TYPE_STATE:
+		return state == filter.GetState()
 	default:
 		return false
 	}
 }
 
 // MatchesAnyFilter checks if the share passes at least one of the given filters.
-func MatchesAnyFilter(share *collaboration.Share, filters []*collaboration.Filter) bool {
+func MatchesAnyFilter(share *collaboration.Share, state collaboration.ShareState, filters []*collaboration.Filter) bool {
 	for _, f := range filters {
-		if MatchesFilter(share, f) {
+		if MatchesFilter(share, state, f) {
 			return true
 		}
 	}
@@ -189,7 +198,25 @@ func MatchesFilters(share *collaboration.Share, filters []*collaboration.Filter)
 	}
 	grouped := GroupFiltersByType(filters)
 	for _, f := range grouped {
-		if !MatchesAnyFilter(share, f) {
+		if !MatchesAnyFilter(share, NoState, f) {
+			return false
+		}
+	}
+	return true
+}
+
+// MatchesFiltersWithState checks if the share passes the given filters.
+// This can check filter by share state
+// Filters of the same type form a disjuntion, a logical OR. Filters of separate type form a conjunction, a logical AND.
+// Here is an example:
+// (resource_id=1 OR resource_id=2) AND (grantee_type=USER OR grantee_type=GROUP)
+func MatchesFiltersWithState(share *collaboration.Share, state collaboration.ShareState, filters []*collaboration.Filter) bool {
+	if len(filters) == 0 {
+		return true
+	}
+	grouped := GroupFiltersByType(filters)
+	for _, f := range grouped {
+		if !MatchesAnyFilter(share, state, f) {
 			return false
 		}
 	}

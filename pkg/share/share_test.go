@@ -128,16 +128,16 @@ func TestMatchesFilter(t *testing.T) {
 		Permissions: &collaboration.SharePermissions{Permissions: &provider.ResourcePermissions{}},
 	}
 
-	if !MatchesFilter(share, ResourceIDFilter(id)) {
+	if !MatchesFilter(share, NoState, ResourceIDFilter(id)) {
 		t.Errorf("Expected share to pass the id filter. Share: %v", share)
 	}
-	if MatchesFilter(share, GroupGranteeFilter()) {
+	if MatchesFilter(share, NoState, GroupGranteeFilter()) {
 		t.Errorf("Expected share to not pass the grantee type filter. Share: %v", share)
 	}
-	if MatchesFilter(share, &collaboration.Filter{Type: collaboration.Filter_TYPE_EXCLUDE_DENIALS}) {
+	if MatchesFilter(share, NoState, &collaboration.Filter{Type: collaboration.Filter_TYPE_EXCLUDE_DENIALS}) {
 		t.Errorf("Expected share to not pass the exclude denials filter. Share: %v", share)
 	}
-	if MatchesFilter(share, &collaboration.Filter{Type: collaboration.Filter_TYPE_INVALID}) {
+	if MatchesFilter(share, NoState, &collaboration.Filter{Type: collaboration.Filter_TYPE_INVALID}) {
 		t.Errorf("Expected share to not pass an invalid filter. Share: %v", share)
 	}
 }
@@ -153,12 +153,12 @@ func TestMatchesAnyFilter(t *testing.T) {
 	}
 
 	f1 := []*collaboration.Filter{UserGranteeFilter(), GroupGranteeFilter()}
-	if !MatchesAnyFilter(share, f1) {
+	if !MatchesAnyFilter(share, NoState, f1) {
 		t.Errorf("Expected share to match any of the given filters. Share: %v, Filters: %v", share, f1)
 	}
 
 	f2 := []*collaboration.Filter{ResourceIDFilter(&provider.ResourceId{StorageId: "something", OpaqueId: "different"}), GroupGranteeFilter()}
-	if MatchesAnyFilter(share, f2) {
+	if MatchesAnyFilter(share, NoState, f2) {
 		t.Errorf("Expected share to not match any of the given filters. Share: %v, Filters: %v", share, f2)
 	}
 }
