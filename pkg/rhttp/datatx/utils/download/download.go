@@ -206,7 +206,7 @@ func GetOrHeadFile(w http.ResponseWriter, r *http.Request, fs storage.FS, spaceI
 		var c int64
 		c, err = io.CopyN(w, sendContent, sendSize)
 		if err != nil {
-			sublog.Error().Err(err).Msg("error copying data to response")
+			sublog.Error().Err(err).Interface("resourceid", md.Id).Msg("error copying data to response")
 			return
 		}
 		if c != sendSize {
