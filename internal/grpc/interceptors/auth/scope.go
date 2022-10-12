@@ -20,6 +20,7 @@ package auth
 
 import (
 	"context"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -130,11 +131,19 @@ func checkLightweightScope(ctx context.Context, req interface{}, tokenScope map[
 
 	// Editor role
 	case *provider.CreateContainerRequest:
-		return hasPermissions(ctx, client, r.GetRef(), &provider.ResourcePermissions{
+		parent, err := parentOfResource(ctx, client, r.GetRef())
+		if err != nil {
+			return false
+		}
+		return hasPermissions(ctx, client, parent, &provider.ResourcePermissions{
 			CreateContainer: true,
 		})
 	case *provider.TouchFileRequest:
-		return hasPermissions(ctx, client, r.GetRef(), &provider.ResourcePermissions{
+		parent, err := parentOfResource(ctx, client, r.GetRef())
+		if err != nil {
+			return false
+		}
+		return hasPermissions(ctx, client, parent, &provider.ResourcePermissions{
 			InitiateFileDownload: true,
 		})
 	case *provider.DeleteRequest:
@@ -148,7 +157,11 @@ func checkLightweightScope(ctx context.Context, req interface{}, tokenScope map[
 			InitiateFileUpload: true,
 		})
 	case *provider.InitiateFileUploadRequest:
-		return hasPermissions(ctx, client, r.GetRef(), &provider.ResourcePermissions{
+		parent, err := parentOfResource(ctx, client, r.GetRef())
+		if err != nil {
+			return false
+		}
+		return hasPermissions(ctx, client, parent, &provider.ResourcePermissions{
 			InitiateFileUpload: true,
 		})
 	}
@@ -156,16 +169,46 @@ func checkLightweightScope(ctx context.Context, req interface{}, tokenScope map[
 	return false
 }
 
-func hasPermissions(ctx context.Context, client gateway.GatewayAPIClient, ref *provider.Reference, permissionSet *provider.ResourcePermissions) bool {
+func parentOfResource(ctx context.Context, client gateway.GatewayAPIClient, ref *provider.Reference) (*provider.Reference, error) {
+	if utils.IsAbsolutePathReference(ref) {
+		parent := filepath.Dir(ref.GetPath())
+		info, err := stat(ctx, client, &provider.Reference{Path: parent})
+		if err != nil {
+			return nil, err
+		}
+		return &provider.Reference{ResourceId: info.Id}, nil
+	}
+
+	info, err := stat(ctx, client, ref)
+	if err != nil {
+		return nil, err
+	}
+	return &provider.Reference{ResourceId: info.ParentId}, nil
+}
+
+func stat(ctx context.Context, client gateway.GatewayAPIClient, ref *provider.Reference) (*provider.ResourceInfo, error) {
 	statRes, err := client.Stat(ctx, &provider.StatRequest{
 		Ref: ref,
 	})
 
-	if err != nil || statRes.Status.Code != rpc.Code_CODE_OK {
-		return false
+	switch {
+	case err != nil:
+		return nil, err
+	case statRes.Status.Code == rpc.Code_CODE_NOT_FOUND:
+		return nil, errtypes.NotFound(statRes.Status.Message)
+	case statRes.Status.Code != rpc.Code_CODE_OK:
+		return nil, errtypes.InternalError(statRes.Status.Message)
 	}
 
-	return utils.HasPermissions(statRes.Info.PermissionSet, permissionSet)
+	return statRes.Info, nil
+}
+
+func hasPermissions(ctx context.Context, client gateway.GatewayAPIClient, ref *provider.Reference, permissionSet *provider.ResourcePermissions) bool {
+	info, err := stat(ctx, client, ref)
+	if err != nil {
+		return false
+	}
+	return utils.HasPermissions(info.PermissionSet, permissionSet)
 }
 
 func resolvePublicShare(ctx context.Context, ref *provider.Reference, scope *authpb.Scope, client gateway.GatewayAPIClient, mgr token.Manager) error {
