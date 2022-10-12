@@ -434,14 +434,12 @@ func (t *Tree) ListFolder(ctx context.Context, n *node.Node) ([]*node.Node, erro
 	for i := range names {
 		nodeID, err := readChildNodeFromLink(filepath.Join(dir, names[i]))
 		if err != nil {
-			// TODO log
-			continue
+			return nil, err
 		}
 
 		child, err := node.ReadNode(ctx, t.lookup, n.SpaceID, nodeID, false)
 		if err != nil {
-			// TODO log
-			continue
+			return nil, err
 		}
 		if child.SpaceRoot == nil {
 			child.SpaceRoot = n.SpaceRoot
