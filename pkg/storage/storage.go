@@ -31,7 +31,7 @@ import (
 )
 
 // UploadFinishedFunc is a callback function used in storage drivers to indicate that an upload has finished
-type UploadFinishedFunc func(owner *userpb.UserId, ref *provider.Reference)
+type UploadFinishedFunc func(spaceOwner, owner *userpb.UserId, ref *provider.Reference)
 
 // FS is the interface to implement access to the storage.
 type FS interface {

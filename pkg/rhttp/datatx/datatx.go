@@ -36,15 +36,16 @@ type DataTX interface {
 }
 
 // EmitFileUploadedEvent is a helper function which publishes a FileUploaded event
-func EmitFileUploadedEvent(owner *userv1beta1.UserId, ref *provider.Reference, publisher events.Publisher) error {
+func EmitFileUploadedEvent(spaceOwnerOrManager, executant *userv1beta1.UserId, ref *provider.Reference, publisher events.Publisher) error {
 	if ref == nil || publisher == nil {
 		return nil
 	}
 
 	uploadedEv := events.FileUploaded{
-		Owner:     owner,
-		Executant: owner,
-		Ref:       ref,
+		SpaceOwner: spaceOwnerOrManager,
+		Owner:      spaceOwnerOrManager,
+		Executant:  executant,
+		Ref:        ref,
 	}
 
 	return events.Publish(publisher, uploadedEv)
