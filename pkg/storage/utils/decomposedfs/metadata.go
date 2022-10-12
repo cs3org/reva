@@ -30,6 +30,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs"
+	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/pkg/errors"
 	"github.com/pkg/xattr"
@@ -58,6 +59,9 @@ func (fs *Decomposedfs) SetArbitraryMetadata(ctx context.Context, ref *provider.
 	case !ok:
 		return errtypes.PermissionDenied(filepath.Join(n.ParentID, n.Name))
 	}
+
+	// Set space owner in context
+	storagespace.ContextSendSpaceOwnerID(ctx, n.SpaceOwnerOrManager(ctx))
 
 	// check lock
 	if err := n.CheckLock(ctx); err != nil {
@@ -151,6 +155,9 @@ func (fs *Decomposedfs) UnsetArbitraryMetadata(ctx context.Context, ref *provide
 	case !ok:
 		return errtypes.PermissionDenied(filepath.Join(n.ParentID, n.Name))
 	}
+
+	// Set space owner in context
+	storagespace.ContextSendSpaceOwnerID(ctx, n.SpaceOwnerOrManager(ctx))
 
 	// check lock
 	if err := n.CheckLock(ctx); err != nil {

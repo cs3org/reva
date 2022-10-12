@@ -33,6 +33,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/lookup"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs"
+	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/pkg/errors"
 	"github.com/pkg/xattr"
 )
@@ -272,6 +273,9 @@ func (fs *Decomposedfs) RestoreRecycleItem(ctx context.Context, ref *provider.Re
 	case !ok:
 		return errtypes.PermissionDenied(key)
 	}
+
+	// Set space owner in context
+	storagespace.ContextSendSpaceOwnerID(ctx, rn.SpaceOwnerOrManager(ctx))
 
 	// check we can write to the parent of the restore reference
 	ps, err := fs.p.AssemblePermissions(ctx, parent)
