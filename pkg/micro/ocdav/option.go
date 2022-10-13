@@ -247,10 +247,12 @@ func ProductVersion(val string) Option {
 }
 
 // Events provisions events config
-func Events(endpoint, cluster string) Option {
+func Events(endpoint, cluster, cert string, insecure bool) Option {
 	return func(o *Options) {
-		o.config.EventsEndpoint = endpoint
-		o.config.EventsCluster = cluster
+		o.config.Events.NatsAddress = endpoint
+		o.config.Events.NatsClusterID = cluster
+		o.config.Events.TLSInsecure = insecure
+		o.config.Events.TLSRootCACertificate = cert
 	}
 }
 
