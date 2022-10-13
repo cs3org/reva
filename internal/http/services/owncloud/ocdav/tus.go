@@ -170,7 +170,7 @@ func (s *svc) handleTusPost(ctx context.Context, w http.ResponseWriter, r *http.
 			Ref: ref,
 		})
 		if err != nil {
-			log.Error().Err(err).Msg("error sending grpc stat request")
+			log.Error().Err(err).Msg("error sending grpc touch file request")
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}

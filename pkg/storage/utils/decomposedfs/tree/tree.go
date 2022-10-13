@@ -19,6 +19,7 @@
 package tree
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -863,6 +864,10 @@ func (t *Tree) WriteBlob(node *node.Node, reader io.Reader) error {
 
 // ReadBlob reads a blob from the blobstore
 func (t *Tree) ReadBlob(node *node.Node) (io.ReadCloser, error) {
+	if node.BlobID == "" {
+		// there is no blob yet - we are dealing with a 0 byte file
+		return io.NopCloser(bytes.NewReader([]byte{})), nil
+	}
 	return t.blobstore.Download(node)
 }
 
