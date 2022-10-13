@@ -8,12 +8,15 @@ import (
 	"net/http"
 	"regexp"
 
+	group "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/sharedconf"
+	"github.com/go-chi/chi/v5"
 	"github.com/juliangruber/go-intersect"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
@@ -25,9 +28,10 @@ func init() {
 }
 
 type eosProj struct {
-	log *zerolog.Logger
-	c   *config
-	db  *sql.DB
+	log    *zerolog.Logger
+	c      *config
+	db     *sql.DB
+	router *chi.Mux
 }
 
 type config struct {
@@ -83,35 +87,28 @@ func New(conf map[string]interface{}, log *zerolog.Logger) (global.Service, erro
 		return nil, errors.Wrap(err, "error creating open sql connection")
 	}
 
+	r := chi.NewRouter()
+
 	e := &eosProj{
-		log: log,
-		c:   c,
-		db:  db,
+		log:    log,
+		c:      c,
+		db:     db,
+		router: r,
 	}
+
+	e.initRouter()
 
 	return e, nil
 }
 
+func (e *eosProj) initRouter() {
+	e.router.Get("/{project}/admins", e.GetProjectAdmins)
+	e.router.Get("/", e.GetProjectsHandler)
+}
+
 func (e *eosProj) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ctx := r.Context()
-
-		projects, err := e.getProjects(ctx)
-		if err != nil {
-			if errors.Is(err, errtypes.UserRequired("")) {
-				w.WriteHeader(http.StatusUnauthorized)
-				return
-			}
-			w.WriteHeader(http.StatusInternalServerError)
-		}
-
-		data, err := encodeProjectsInJSON(projects)
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-
-		w.Write(data)
+		e.router.ServeHTTP(w, r)
 	})
 }
 
@@ -136,9 +133,127 @@ func (e *eosProj) Unprotected() []string {
 	return nil
 }
 
-// Prefix     string `mapstructure:"prefix"`
-// GatewaySvc string `mapstructure:"gatewaysvc"`
-// Insecure   bool   `mapstructure:"insecure" docs:"false;Whether to skip certificate checks when sending requests."`
+func (e *eosProj) GetProjectsHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	projects, err := e.getProjects(ctx)
+	if err != nil {
+		if errors.Is(err, errtypes.UserRequired("")) {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		w.WriteHeader(http.StatusInternalServerError)
+	}
+
+	data, err := encodeProjectsInJSON(projects)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	w.Write(data)
+}
+
+func (e *eosProj) GetProjectAdmins(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	user, ok := ctxpkg.ContextGetUser(ctx)
+	if !ok {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	project := chi.URLParam(r, "project")
+
+	if !e.userHasAccessToProject(ctx, user, project) {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	admins, err := e.getProjectAdmins(ctx, project)
+	if err != nil {
+		// TODO: better error handling
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	d, err := json.Marshal(admins)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	w.Write(d)
+}
+
+type user struct {
+	Username    string `json:"username"`
+	Mail        string `json:"mail"`
+	DisplayName string `json:"display_name"`
+}
+
+func (e *eosProj) userHasAccessToProject(ctx context.Context, user *userpb.User, project string) bool {
+	projects, err := e.getProjects(ctx)
+	if err != nil {
+		return false
+	}
+
+	for _, p := range projects {
+		if p.Name == project {
+			return true
+		}
+	}
+	return false
+}
+
+func (e *eosProj) getProjectAdmins(ctx context.Context, project string) ([]user, error) {
+	client, err := pool.GetGatewayServiceClient(pool.Endpoint(e.c.GatewaySvc))
+	if err != nil {
+		return nil, err
+	}
+
+	g := fmt.Sprintf("cernbox-project-%s-admins", project)
+
+	res, err := client.GetMembers(ctx, &group.GetMembersRequest{
+		GroupId: &group.GroupId{
+			OpaqueId: g,
+		},
+	})
+
+	switch {
+	case err != nil:
+		return nil, err
+	case res.Status.Code == rpc.Code_CODE_NOT_FOUND:
+		return nil, errtypes.NotFound(fmt.Sprintf("group %s not found", g))
+	case res.Status.Code != rpc.Code_CODE_OK:
+		return nil, errtypes.InternalError(res.Status.Message)
+	}
+
+	users := make([]user, 0, len(res.Members))
+	for _, m := range res.Members {
+		resUser, err := client.GetUser(ctx, &userpb.GetUserRequest{
+			UserId: m,
+		})
+
+		switch {
+		case err != nil:
+			return nil, err
+		case res.Status.Code == rpc.Code_CODE_NOT_FOUND:
+			return nil, errtypes.NotFound(fmt.Sprintf("user %s not found", m.OpaqueId))
+		case res.Status.Code != rpc.Code_CODE_OK:
+			return nil, errtypes.InternalError(res.Status.Message)
+		}
+
+		if u := resUser.GetUser(); u != nil {
+			users = append(users, user{
+				Username:    u.Username,
+				Mail:        u.Mail,
+				DisplayName: u.DisplayName,
+			})
+		}
+	}
+
+	return users, nil
+}
 
 func (e *eosProj) getProjects(ctx context.Context) ([]*project, error) {
 	user, ok := ctxpkg.ContextGetUser(ctx)
