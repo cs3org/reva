@@ -5,10 +5,10 @@ Basic file management like up and download, move, copy, properties, quota, trash
 
 #### [invalid webdav responses for unauthorized requests.](https://github.com/owncloud/product/issues/273)
 These tests succeed when running against ocis because there we handle the relevant authentication in the proxy.
--   [apiTrashbin/trashbinFilesFolders.feature:299](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L299)
--   [apiTrashbin/trashbinFilesFolders.feature:304](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L304)
--   [apiTrashbin/trashbinFilesFolders.feature:318](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L318)
--   [apiTrashbin/trashbinFilesFolders.feature:323](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L323)
+-   [apiTrashbin/trashbinFilesFolders.feature:302](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L302)
+-   [apiTrashbin/trashbinFilesFolders.feature:307](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L307)
+-   [apiTrashbin/trashbinFilesFolders.feature:321](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L321)
+-   [apiTrashbin/trashbinFilesFolders.feature:326](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L326)
 
 #### [Getting information about a folder overwritten by a file gives 500 error instead of 404](https://github.com/owncloud/ocis/issues/1239)
 These tests are about overwriting files or folders in the `Shares` folder of a user.
@@ -611,7 +611,6 @@ _ocdav: api compatibility, return correct status code_
 #### [Request to edit non-existing user by authorized admin gets unauthorized in http response](https://github.com/owncloud/core/issues/38423)
 -   [apiAuthOcs/ocsPUTAuth.feature:26](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthOcs/ocsPUTAuth.feature#L26)
 
-
 ### Won't fix
 Not everything needs to be implemented for ocis. While the oc10 testsuite covers these things we are not looking at them right now.
 
@@ -894,13 +893,14 @@ moving outside of the Shares folder gives 501 Not Implemented.
 -   [apiTrashbin/trashbinDelete.feature:36](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinDelete.feature#L36)
 -   [apiTrashbin/trashbinDelete.feature:58](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinDelete.feature#L58)
 -   [apiTrashbin/trashbinDelete.feature:85](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinDelete.feature#L85)
--   [apiTrashbin/trashbinDelete.feature:130](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinDelete.feature#L130)
--   [apiTrashbin/trashbinDelete.feature:152](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinDelete.feature#L152)
--   [apiTrashbin/trashbinDelete.feature:177](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinDelete.feature#L177)
--   [apiTrashbin/trashbinDelete.feature:202](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinDelete.feature#L202)
--   [apiTrashbin/trashbinDelete.feature:239](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinDelete.feature#L239)
--   [apiTrashbin/trashbinDelete.feature:276](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinDelete.feature#L276)
--   [apiTrashbin/trashbinDelete.feature:324](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinDelete.feature#L324)
+-   [apiTrashbin/trashbinDelete.feature:109](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinDelete.feature#L109)
+-   [apiTrashbin/trashbinDelete.feature:131](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinDelete.feature#L131)
+-   [apiTrashbin/trashbinDelete.feature:153](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinDelete.feature#L153)
+-   [apiTrashbin/trashbinDelete.feature:178](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinDelete.feature#L178)
+-   [apiTrashbin/trashbinDelete.feature:203](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinDelete.feature#L203)
+-   [apiTrashbin/trashbinDelete.feature:240](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinDelete.feature#L240)
+-   [apiTrashbin/trashbinDelete.feature:277](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinDelete.feature#L277)
+-   [apiTrashbin/trashbinDelete.feature:325](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinDelete.feature#L325)
 -   [apiTrashbin/trashbinFilesFolders.feature:25](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L25)
 -   [apiTrashbin/trashbinFilesFolders.feature:41](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L41)
 -   [apiTrashbin/trashbinFilesFolders.feature:59](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L59)
