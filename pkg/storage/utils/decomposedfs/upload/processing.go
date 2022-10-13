@@ -139,10 +139,11 @@ func New(ctx context.Context, info tusd.FileInfo, lu *lookup.Lookup, tp Tree, p 
 		"Type":    "OCISStore",
 		"BinPath": binPath,
 
-		"NodeId":       n.ID,
-		"NodeParentId": n.ParentID,
-		"NodeName":     n.Name,
-		"SpaceRoot":    spaceRoot,
+		"NodeId":              n.ID,
+		"NodeParentId":        n.ParentID,
+		"NodeName":            n.Name,
+		"SpaceRoot":           spaceRoot,
+		"SpaceOwnerOrManager": info.Storage["SpaceOwnerOrManager"],
 
 		"Idp":      usr.Id.Idp,
 		"UserId":   usr.Id.OpaqueId,

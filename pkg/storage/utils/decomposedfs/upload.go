@@ -30,6 +30,7 @@ import (
 
 	tusd "github.com/tus/tusd/pkg/handler"
 
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
@@ -98,7 +99,10 @@ func (fs *Decomposedfs) Upload(ctx context.Context, ref *provider.Reference, r i
 		if !ok {
 			return provider.ResourceInfo{}, errtypes.PreconditionFailed("error getting user from uploadinfo context")
 		}
-		uff(owner.Id, uploadRef)
+		spaceOwner := &userpb.UserId{
+			OpaqueId: info.Storage["SpaceOwnerOrManager"],
+		}
+		uff(spaceOwner, owner.Id, uploadRef)
 	}
 
 	ri := provider.ResourceInfo{
@@ -146,7 +150,8 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 		},
 		Size: uploadLength,
 		Storage: map[string]string{
-			"SpaceRoot": n.SpaceRoot.ID,
+			"SpaceRoot":           n.SpaceRoot.ID,
+			"SpaceOwnerOrManager": n.SpaceOwnerOrManager(ctx).GetOpaqueId(),
 		},
 	}
 
