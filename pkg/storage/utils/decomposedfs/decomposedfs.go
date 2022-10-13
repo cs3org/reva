@@ -54,6 +54,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/upload"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/templates"
+	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/go-micro/plugins/v4/events/natsjs"
 	"github.com/pkg/errors"
@@ -527,6 +528,9 @@ func (fs *Decomposedfs) CreateDir(ctx context.Context, ref *provider.Reference) 
 		return errtypes.PermissionDenied(filepath.Join(n.ParentID, n.Name))
 	}
 
+	// Set space owner in context
+	storagespace.ContextSendSpaceOwnerID(ctx, n.SpaceOwnerOrManager(ctx))
+
 	// check lock
 	if err := n.CheckLock(ctx); err != nil {
 		return err
@@ -586,6 +590,9 @@ func (fs *Decomposedfs) TouchFile(ctx context.Context, ref *provider.Reference) 
 	case !ok:
 		return errtypes.PermissionDenied(filepath.Join(n.ParentID, n.Name))
 	}
+
+	// Set space owner in context
+	storagespace.ContextSendSpaceOwnerID(ctx, n.SpaceOwnerOrManager(ctx))
 
 	// check lock
 	if err := n.CheckLock(ctx); err != nil {
@@ -724,6 +731,9 @@ func (fs *Decomposedfs) Move(ctx context.Context, oldRef, newRef *provider.Refer
 		return errtypes.PermissionDenied(newNode.ID)
 	}
 
+	// Set space owner in context
+	storagespace.ContextSendSpaceOwnerID(ctx, newNode.SpaceOwnerOrManager(ctx))
+
 	// check lock on source
 	if err := oldNode.CheckLock(ctx); err != nil {
 		return err
@@ -839,6 +849,9 @@ func (fs *Decomposedfs) Delete(ctx context.Context, ref *provider.Reference) (er
 	case !ok:
 		return errtypes.PermissionDenied(filepath.Join(node.ParentID, node.Name))
 	}
+
+	// Set space owner in context
+	storagespace.ContextSendSpaceOwnerID(ctx, node.SpaceOwnerOrManager(ctx))
 
 	if err := node.CheckLock(ctx); err != nil {
 		return err

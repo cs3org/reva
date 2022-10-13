@@ -227,4 +227,19 @@ var _ = Describe("Node", func() {
 			})
 		})
 	})
+
+	Describe("SpaceOwnerOrManager", func() {
+		It("returns the space owner", func() {
+			n, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{
+				ResourceId: env.SpaceRootRes,
+				Path:       "dir1/file1",
+			})
+			Expect(err).ToNot(HaveOccurred())
+
+			o := n.SpaceOwnerOrManager(env.Ctx)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(o).To(Equal(env.Owner.Id))
+		})
+
+	})
 })

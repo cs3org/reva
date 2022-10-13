@@ -31,6 +31,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
+	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/pkg/errors"
 )
 
@@ -192,6 +193,9 @@ func (fs *Decomposedfs) getRevisionNode(ctx context.Context, ref *provider.Refer
 	case !ok:
 		return nil, errtypes.PermissionDenied(filepath.Join(n.ParentID, n.Name))
 	}
+
+	// Set space owner in context
+	storagespace.ContextSendSpaceOwnerID(ctx, n.SpaceOwnerOrManager(ctx))
 
 	return n, nil
 }
