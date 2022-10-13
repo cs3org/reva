@@ -23,7 +23,10 @@ package decomposedfs
 //go:generate make --no-print-directory -C ../../../.. mockery NAME=Tree
 
 import (
+	"bytes"
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"io"
 	"net/url"
 	"os"
@@ -143,7 +146,33 @@ func New(o *options.Options, lu *lookup.Lookup, p PermissionsChecker, tp Tree, p
 
 	var ev events.Stream
 	if o.Events.NatsAddress != "" {
-		ev, err = server.NewNatsStream(natsjs.Address(o.Events.NatsAddress), natsjs.ClusterID(o.Events.NatsClusterID))
+		evtsCfg := o.Events
+		var rootCAPool *x509.CertPool
+		if evtsCfg.TLSRootCACertificate != "" {
+			rootCrtFile, err := os.Open(evtsCfg.TLSRootCACertificate)
+			if err != nil {
+				return nil, err
+			}
+
+			var certBytes bytes.Buffer
+			if _, err := io.Copy(&certBytes, rootCrtFile); err != nil {
+				return nil, err
+			}
+
+			rootCAPool = x509.NewCertPool()
+			rootCAPool.AppendCertsFromPEM(certBytes.Bytes())
+			evtsCfg.TLSInsecure = false
+		}
+
+		tlsConf := &tls.Config{
+			InsecureSkipVerify: evtsCfg.TLSInsecure, //nolint:gosec
+			RootCAs:            rootCAPool,
+		}
+		ev, err = server.NewNatsStream(
+			natsjs.TLSConfig(tlsConf),
+			natsjs.Address(evtsCfg.NatsAddress),
+			natsjs.ClusterID(evtsCfg.NatsClusterID),
+		)
 		if err != nil {
 			return nil, err
 		}
