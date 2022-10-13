@@ -301,6 +301,10 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 	resourceInfos := []*provider.ResourceInfo{parentInfo}
 
 	switch {
+	case depth == "0":
+		// https://www.ietf.org/rfc/rfc2518.txt:
+		// the method is to be applied only to the resource
+		return parentInfo, resourceInfos, true
 	case !spacesPropfind && parentInfo.Type != provider.ResourceType_RESOURCE_TYPE_CONTAINER:
 		// The propfind is requested for a file that exists
 		// In this case, we can stat the parent directory and return both
