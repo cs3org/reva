@@ -5,10 +5,10 @@ Basic file management like up and download, move, copy, properties, quota, trash
 
 #### [invalid webdav responses for unauthorized requests.](https://github.com/owncloud/product/issues/273)
 These tests succeed when running against ocis because there we handle the relevant authentication in the proxy.
--   [apiTrashbin/trashbinFilesFolders.feature:298](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L298)
--   [apiTrashbin/trashbinFilesFolders.feature:303](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L303)
--   [apiTrashbin/trashbinFilesFolders.feature:317](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L317)
--   [apiTrashbin/trashbinFilesFolders.feature:322](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L322)
+-   [apiTrashbin/trashbinFilesFolders.feature:299](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L299)
+-   [apiTrashbin/trashbinFilesFolders.feature:304](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L304)
+-   [apiTrashbin/trashbinFilesFolders.feature:318](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L318)
+-   [apiTrashbin/trashbinFilesFolders.feature:323](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L323)
 
 #### [Getting information about a folder overwritten by a file gives 500 error instead of 404](https://github.com/owncloud/ocis/issues/1239)
 These tests are about overwriting files or folders in the `Shares` folder of a user.
@@ -889,18 +889,6 @@ moving outside of the Shares folder gives 501 Not Implemented.
 #### [OCS status code zero](https://github.com/owncloud/ocis/issues/3621)
 -   [apiShareManagementToShares/moveReceivedShare.feature:32](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementToShares/moveReceivedShare.feature#L32)
 
-#### [HTTP status code differ while listing the contents of another user's trash bin](https://github.com/owncloud/ocis/issues/3561)
--   [apiTrashbin/trashbinFilesFolders.feature:199](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L199)
--   [apiTrashbin/trashbinFilesFolders.feature:223](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L223)
--   [apiTrashbin/trashbinFilesFolders.feature:249](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L249)
--   [apiTrashbin/trashbinFilesFolders.feature:254](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L254)
--   [apiTrashbin/trashbinFilesFolders.feature:270](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L270)
--   [apiTrashbin/trashbinFilesFolders.feature:279](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L279)
--   [apiTrashbin/trashbinFilesFolders.feature:284](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L284)
-
-#### [HTTP status code differ while deleting file of another user's trash bin](https://github.com/owncloud/ocis/issues/3544)
--   [apiTrashbin/trashbinDelete.feature:108](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinDelete.feature#L108)
-
 #### [Problem accessing trashbin with personal space id](https://github.com/owncloud/ocis/issues/3639)
 -   [apiTrashbin/trashbinDelete.feature:35](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinDelete.feature#L35)
 -   [apiTrashbin/trashbinDelete.feature:36](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinDelete.feature#L36)
@@ -920,16 +908,16 @@ moving outside of the Shares folder gives 501 Not Implemented.
 -   [apiTrashbin/trashbinFilesFolders.feature:99](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L99)
 -   [apiTrashbin/trashbinFilesFolders.feature:135](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L135)
 -   [apiTrashbin/trashbinFilesFolders.feature:158](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L158)
--   [apiTrashbin/trashbinFilesFolders.feature:344](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L344)
--   [apiTrashbin/trashbinFilesFolders.feature:345](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L345)
--   [apiTrashbin/trashbinFilesFolders.feature:346](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L346)
--   [apiTrashbin/trashbinFilesFolders.feature:347](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L347)
 -   [apiTrashbin/trashbinFilesFolders.feature:348](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L348)
 -   [apiTrashbin/trashbinFilesFolders.feature:349](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L349)
--   [apiTrashbin/trashbinFilesFolders.feature:365](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L365)
--   [apiTrashbin/trashbinFilesFolders.feature:385](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L385)
--   [apiTrashbin/trashbinFilesFolders.feature:439](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L439)
--   [apiTrashbin/trashbinFilesFolders.feature:476](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L476)
+-   [apiTrashbin/trashbinFilesFolders.feature:350](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L350)
+-   [apiTrashbin/trashbinFilesFolders.feature:351](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L351)
+-   [apiTrashbin/trashbinFilesFolders.feature:352](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L352)
+-   [apiTrashbin/trashbinFilesFolders.feature:353](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L353)
+-   [apiTrashbin/trashbinFilesFolders.feature:369](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L369)
+-   [apiTrashbin/trashbinFilesFolders.feature:389](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L389)
+-   [apiTrashbin/trashbinFilesFolders.feature:443](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L443)
+-   [apiTrashbin/trashbinFilesFolders.feature:480](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L480)
 
 #### [apiShareOperationsToShares1/gettingShares.feature:28 fails in CI](https://github.com/cs3org/reva/issues/2926)
 -   [apiShareOperationsToShares1/gettingShares.feature:40](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareOperationsToShares1/gettingShares.feature#L40)
