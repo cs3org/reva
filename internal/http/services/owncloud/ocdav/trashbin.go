@@ -40,6 +40,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
+	rstatus "github.com/cs3org/reva/v2/pkg/rgrpc/status"
 	"github.com/cs3org/reva/v2/pkg/rhttp/router"
 	"github.com/cs3org/reva/v2/pkg/utils"
 )
@@ -124,7 +125,10 @@ func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		case rpcstatus.Code != rpc.Code_CODE_OK:
-			errors.HandleErrorStatus(log, w, rpcstatus)
+			httpStatus := rstatus.HTTPStatusFromCode(rpcstatus.Code)
+			w.WriteHeader(httpStatus)
+			b, err := errors.Marshal(httpStatus, rpcstatus.Message, "")
+			errors.HandleWebdavError(log, w, b, err)
 			return
 		}
 		ref := spacelookup.MakeRelativeReference(space, ".", false)
@@ -161,7 +165,10 @@ func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 				return
 			}
 			if rpcstatus.Code != rpc.Code_CODE_OK {
-				errors.HandleErrorStatus(log, w, rpcstatus)
+				httpStatus := rstatus.HTTPStatusFromCode(rpcstatus.Code)
+				w.WriteHeader(httpStatus)
+				b, err := errors.Marshal(httpStatus, rpcstatus.Message, "")
+				errors.HandleWebdavError(log, w, b, err)
 				return
 			}
 			dstRef := spacelookup.MakeRelativeReference(space, p, false)
@@ -232,7 +239,10 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 	}
 
 	if getRecycleRes.Status.Code != rpc.Code_CODE_OK {
-		errors.HandleErrorStatus(&sublog, w, getRecycleRes.Status)
+		httpStatus := rstatus.HTTPStatusFromCode(getRecycleRes.Status.Code)
+		w.WriteHeader(httpStatus)
+		b, err := errors.Marshal(httpStatus, getRecycleRes.Status.Message, "")
+		errors.HandleWebdavError(&sublog, w, b, err)
 		return
 	}
 
@@ -259,7 +269,10 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 			}
 
 			if getRecycleRes.Status.Code != rpc.Code_CODE_OK {
-				errors.HandleErrorStatus(&sublog, w, getRecycleRes.Status)
+				httpStatus := rstatus.HTTPStatusFromCode(getRecycleRes.Status.Code)
+				w.WriteHeader(httpStatus)
+				b, err := errors.Marshal(httpStatus, getRecycleRes.Status.Message, "")
+				errors.HandleWebdavError(&sublog, w, b, err)
 				return
 			}
 			items = append(items, getRecycleRes.RecycleItems...)
