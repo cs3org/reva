@@ -20,6 +20,7 @@ package blobstore
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net/url"
 	"os"
@@ -87,6 +88,16 @@ func (bs *Blobstore) Download(node *node.Node) (io.ReadCloser, error) {
 	if err != nil {
 		return nil, errors.Wrapf(err, "could not download object '%s' from bucket '%s'", bs.path(node), bs.bucket)
 	}
+
+	stat, err := reader.Stat()
+	if err != nil {
+		return nil, errors.Wrapf(err, "blob path: %s", bs.path(node))
+	}
+
+	if node.Blobsize != stat.Size {
+		return nil, fmt.Errorf("blob has unexpected size. %d bytes expected, got %d bytes", node.Blobsize, stat.Size)
+	}
+
 	return reader, nil
 }
 
