@@ -114,7 +114,10 @@ func (fs *Decomposedfs) Upload(ctx context.Context, ref *provider.Reference, r i
 		if !ok {
 			return provider.ResourceInfo{}, errtypes.PreconditionFailed("error getting user from uploadinfo context")
 		}
-		uff(owner.Id, uploadRef)
+		spaceOwner := &userpb.UserId{
+			OpaqueId: info.Storage["SpaceOwnerOrManager"],
+		}
+		uff(spaceOwner, owner.Id, uploadRef)
 	}
 
 	ri := provider.ResourceInfo{
@@ -162,7 +165,8 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 		},
 		Size: uploadLength,
 		Storage: map[string]string{
-			"SpaceRoot": n.SpaceRoot.ID,
+			"SpaceRoot":           n.SpaceRoot.ID,
+			"SpaceOwnerOrManager": n.SpaceOwnerOrManager(ctx).GetOpaqueId(),
 		},
 	}
 
@@ -314,10 +318,11 @@ func (fs *Decomposedfs) NewUpload(ctx context.Context, info tusd.FileInfo) (uplo
 		"Type":    "OCISStore",
 		"BinPath": binPath,
 
-		"NodeId":       n.ID,
-		"NodeParentId": n.ParentID,
-		"NodeName":     n.Name,
-		"SpaceRoot":    spaceRoot,
+		"NodeId":              n.ID,
+		"NodeParentId":        n.ParentID,
+		"NodeName":            n.Name,
+		"SpaceRoot":           spaceRoot,
+		"SpaceOwnerOrManager": info.Storage["SpaceOwnerOrManager"],
 
 		"Idp":      usr.Id.Idp,
 		"UserId":   usr.Id.OpaqueId,

@@ -181,6 +181,27 @@ func (n *Node) WriteOwner(owner *userpb.UserId) error {
 	return nil
 }
 
+// SpaceOwnerOrManager returns the space owner of the space. If no owner is set
+// one of the space managers is returned instead.
+func (n *Node) SpaceOwnerOrManager(ctx context.Context) *userpb.UserId {
+	if n.Owner() != nil {
+		return n.Owner()
+	}
+
+	// We don't have an owner set. Find a manager instead.
+	grants, err := n.SpaceRoot.ListGrants(ctx)
+	if err != nil {
+		return nil
+	}
+	for _, grant := range grants {
+		if grant.Permissions.Stat && grant.Permissions.ListContainer && grant.Permissions.InitiateFileDownload {
+			return grant.GetGrantee().GetUserId()
+		}
+	}
+
+	return nil
+}
+
 // ReadNode creates a new instance from an id and checks if it exists
 func ReadNode(ctx context.Context, lu PathLookup, spaceID, nodeID string, canListDisabledSpace bool) (n *Node, err error) {
 

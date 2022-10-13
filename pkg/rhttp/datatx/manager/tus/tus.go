@@ -110,6 +110,9 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 		for {
 			ev := <-handler.CompleteUploads
 			info := ev.Upload
+			spaceOwner := &userv1beta1.UserId{
+				OpaqueId: info.Storage["SpaceOwnerOrManager"],
+			}
 			owner := &userv1beta1.UserId{
 				Idp:      info.Storage["Idp"],
 				OpaqueId: info.Storage["UserId"],
@@ -124,7 +127,7 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 			}
 			datatx.InvalidateCache(owner, ref, m.statCache)
 			if m.publisher != nil {
-				if err := datatx.EmitFileUploadedEvent(owner, ref, m.publisher); err != nil {
+				if err := datatx.EmitFileUploadedEvent(spaceOwner, owner, ref, m.publisher); err != nil {
 					appctx.GetLogger(context.Background()).Error().Err(err).Msg("failed to publish FileUploaded event")
 				}
 			}

@@ -40,6 +40,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/events"
 	"github.com/cs3org/reva/v2/pkg/events/server"
 	"github.com/cs3org/reva/v2/pkg/rgrpc"
+	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/go-micro/plugins/v4/events/natsjs"
 )
@@ -63,9 +64,20 @@ func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error
 	}
 
 	interceptor := func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+		// Register a channel in the context to receive the space owner id from the handler(s) further down the stack
+		var ownerID *user.UserId
+		sendOwnerChan := make(chan *user.UserId)
+		ctx = storagespace.ContextRegisterSendOwnerChan(ctx, sendOwnerChan)
+
 		res, err := handler(ctx, req)
 		if err != nil {
 			return res, err
+		}
+
+		// Read the space owner id from the channel
+		select {
+		case ownerID = <-sendOwnerChan:
+		default:
 		}
 
 		var executantID *user.UserId
@@ -120,7 +132,7 @@ func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error
 			}
 		case *provider.CreateContainerResponse:
 			if isSuccess(v) {
-				ev = ContainerCreated(v, req.(*provider.CreateContainerRequest), executantID)
+				ev = ContainerCreated(v, req.(*provider.CreateContainerRequest), ownerID, executantID)
 			}
 		case *provider.InitiateFileDownloadResponse:
 			if isSuccess(v) {
@@ -128,11 +140,11 @@ func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error
 			}
 		case *provider.DeleteResponse:
 			if isSuccess(v) {
-				ev = ItemTrashed(v, req.(*provider.DeleteRequest), executantID)
+				ev = ItemTrashed(v, req.(*provider.DeleteRequest), ownerID, executantID)
 			}
 		case *provider.MoveResponse:
 			if isSuccess(v) {
-				ev = ItemMoved(v, req.(*provider.MoveRequest), executantID)
+				ev = ItemMoved(v, req.(*provider.MoveRequest), ownerID, executantID)
 			}
 		case *provider.PurgeRecycleResponse:
 			if isSuccess(v) {
@@ -140,11 +152,11 @@ func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error
 			}
 		case *provider.RestoreRecycleItemResponse:
 			if isSuccess(v) {
-				ev = ItemRestored(v, req.(*provider.RestoreRecycleItemRequest), executantID)
+				ev = ItemRestored(v, req.(*provider.RestoreRecycleItemRequest), ownerID, executantID)
 			}
 		case *provider.RestoreFileVersionResponse:
 			if isSuccess(v) {
-				ev = FileVersionRestored(v, req.(*provider.RestoreFileVersionRequest), executantID)
+				ev = FileVersionRestored(v, req.(*provider.RestoreFileVersionRequest), ownerID, executantID)
 			}
 		case *provider.CreateStorageSpaceResponse:
 			if isSuccess(v) && v.StorageSpace != nil { // TODO: Why are there CreateStorageSpaceResponses with nil StorageSpace?
@@ -172,7 +184,7 @@ func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error
 			}
 		case *provider.TouchFileResponse:
 			if isSuccess(v) {
-				ev = FileTouched(v, req.(*provider.TouchFileRequest), executantID)
+				ev = FileTouched(v, req.(*provider.TouchFileRequest), ownerID, executantID)
 			}
 		}
 

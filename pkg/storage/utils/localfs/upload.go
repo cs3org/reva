@@ -94,7 +94,10 @@ func (fs *localfs) Upload(ctx context.Context, ref *provider.Reference, r io.Rea
 		if !ok {
 			return provider.ResourceInfo{}, errtypes.PreconditionFailed("error getting user from uploadinfo context")
 		}
-		uff(owner.Id, uploadRef)
+		// spaces support in localfs needs to be revisited:
+		// * info.Storage["SpaceRoot"] is never set
+		// * there is no space owner or manager that could be passed to the UploadFinishedFunc
+		uff(owner.Id, owner.Id, uploadRef)
 	}
 
 	// return id, etag and mtime
