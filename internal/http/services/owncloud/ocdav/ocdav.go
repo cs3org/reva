@@ -19,8 +19,13 @@
 package ocdav
 
 import (
+	"bytes"
 	"context"
+	"crypto/tls"
+	"crypto/x509"
+	"io"
 	"net/http"
+	"os"
 	"path"
 	"strings"
 	"time"
@@ -116,13 +121,20 @@ type Config struct {
 	Product                string                            `mapstructure:"product"`
 	ProductName            string                            `mapstructure:"product_name"`
 	ProductVersion         string                            `mapstructure:"product_version"`
-	EventsEndpoint         string                            `mapstructure:"events_endpoint"`
-	EventsCluster          string                            `mapstructure:"events_cluster"`
+	Events                 EventsConfig                      `mapstructure:"events"`
 
 	ForceRescanDuration string `mapstructure:"force_rescan_duration"`
 	StatPollingTimeout  string `mapstructure:"stat_polling_timeout"`
 
 	MachineAuthAPIKey string `mapstructure:"machine_auth_apikey"`
+}
+
+// EventsConfig are the configurable options for events
+type EventsConfig struct {
+	NatsAddress          string `mapstructure:"natsaddress"`
+	NatsClusterID        string `mapstructure:"natsclusterid"`
+	TLSInsecure          bool   `mapstructure:"tlsinsecure"`
+	TLSRootCACertificate string `mapstructure:"tlsrootcacertificate"`
 }
 
 func (c *Config) init() {
@@ -239,12 +251,37 @@ func NewWith(conf *Config, fm favorite.Manager, ls LockSystem, _ *zerolog.Logger
 		return nil, err
 	}
 
-	if conf.EventsEndpoint != "" {
-		ev, err := server.NewNatsStream(natsjs.Address(conf.EventsEndpoint), natsjs.ClusterID(conf.EventsCluster))
+	if conf.Events.NatsAddress != "" {
+		evtsCfg := conf.Events
+		var rootCAPool *x509.CertPool
+		if evtsCfg.TLSRootCACertificate != "" {
+			rootCrtFile, err := os.Open(evtsCfg.TLSRootCACertificate)
+			if err != nil {
+				return nil, err
+			}
+
+			var certBytes bytes.Buffer
+			if _, err := io.Copy(&certBytes, rootCrtFile); err != nil {
+				return nil, err
+			}
+
+			rootCAPool = x509.NewCertPool()
+			rootCAPool.AppendCertsFromPEM(certBytes.Bytes())
+			evtsCfg.TLSInsecure = false
+		}
+
+		tlsConf := &tls.Config{
+			InsecureSkipVerify: evtsCfg.TLSInsecure, //nolint:gosec
+			RootCAs:            rootCAPool,
+		}
+		ev, err := server.NewNatsStream(
+			natsjs.TLSConfig(tlsConf),
+			natsjs.Address(evtsCfg.NatsAddress),
+			natsjs.ClusterID(evtsCfg.NatsClusterID),
+		)
 		if err != nil {
 			return nil, err
 		}
-
 		s.stream = ev
 	}
 
