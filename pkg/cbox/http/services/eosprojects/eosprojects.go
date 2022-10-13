@@ -156,10 +156,18 @@ func (e *eosProj) GetProjectsHandler(w http.ResponseWriter, r *http.Request) {
 
 func (e *eosProj) GetProjectAdmins(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	user, ok := ctxpkg.ContextGetUser(ctx)
+	if !ok {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
 
 	project := chi.URLParam(r, "project")
 
-	// TODO: check that user in the context has at least read access to the project
+	if !e.userHasAccessToProject(ctx, user, project) {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
 
 	admins, err := e.getProjectAdmins(ctx, project)
 	if err != nil {
@@ -181,6 +189,20 @@ type user struct {
 	Username    string `json:"username"`
 	Mail        string `json:"mail"`
 	DisplayName string `json:"display_name"`
+}
+
+func (e *eosProj) userHasAccessToProject(ctx context.Context, user *userpb.User, project string) bool {
+	projects, err := e.getProjects(ctx)
+	if err != nil {
+		return false
+	}
+
+	for _, p := range projects {
+		if p.Name == project {
+			return true
+		}
+	}
+	return false
 }
 
 func (e *eosProj) getProjectAdmins(ctx context.Context, project string) ([]user, error) {
