@@ -252,6 +252,7 @@ func (upload *Upload) FinishUpload(_ context.Context) error {
 			ExecutingUser: u,
 			ResourceID:    &provider.ResourceId{SpaceId: n.SpaceID, OpaqueId: n.ID},
 			Filename:      upload.Info.Storage["NodeName"],
+			Filesize:      uint64(upload.Info.Size),
 		}); err != nil {
 			return err
 		}

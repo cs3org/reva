@@ -112,8 +112,10 @@ func (h *PostprocessingHandler) doVirusScan(ctx context.Context, client gateway.
 	// we need to add the filename for other services
 	// or do we? Other services could stat themselves...
 	var filename string
+	var filesize uint64
 	if res, err := client.Stat(ctx, &provider.StatRequest{Ref: ref}); err == nil && res.GetStatus().GetCode() == rpc.Code_CODE_OK {
 		filename = res.GetInfo().GetName()
+		filesize = res.GetInfo().GetSize()
 	}
 
 	return events.Publish(pub, events.StartPostprocessingStep{
@@ -121,6 +123,7 @@ func (h *PostprocessingHandler) doVirusScan(ctx context.Context, client gateway.
 		URL:           downloadEP,
 		Token:         downloadToken,
 		ResourceID:    rid,
+		Filesize:      filesize,
 		RevaToken:     revatoken,
 		ExecutingUser: ctxpkg.ContextMustGetUser(ctx),
 		Filename:      filename,

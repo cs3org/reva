@@ -56,6 +56,7 @@ type BytesReceived struct {
 	ExecutingUser *user.User
 	ResourceID    *provider.ResourceId
 	Filename      string
+	Filesize      uint64
 	URL           string
 }
 
@@ -92,6 +93,7 @@ type StartPostprocessingStep struct {
 	URL           string
 	ExecutingUser *user.User
 	Filename      string
+	Filesize      uint64
 	Token         string               // for file retrieval in after upload case
 	ResourceID    *provider.ResourceId // for file retrieval in after upload case
 	RevaToken     string               // for file retrieval in after upload case
