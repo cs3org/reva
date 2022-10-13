@@ -19,8 +19,13 @@
 package eventsmiddleware
 
 import (
+	"bytes"
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"fmt"
+	"io"
+	"os"
 
 	"go-micro.dev/v4/util/log"
 	"google.golang.org/grpc"
@@ -209,6 +214,32 @@ func publisherFromConfig(m map[string]interface{}) (events.Publisher, error) {
 	case "nats":
 		address := m["address"].(string)
 		cid := m["clusterID"].(string)
-		return server.NewNatsStream(natsjs.Address(address), natsjs.ClusterID(cid))
+
+		skipVerify := m["tls-insecure"].(bool)
+		var rootCAPool *x509.CertPool
+		if val, ok := m["tls-root-ca-cert"]; ok {
+			rootCACertPath := val.(string)
+			if rootCACertPath != "" {
+				f, err := os.Open(rootCACertPath)
+				if err != nil {
+					return nil, err
+				}
+
+				var certBytes bytes.Buffer
+				if _, err := io.Copy(&certBytes, f); err != nil {
+					return nil, err
+				}
+
+				rootCAPool = x509.NewCertPool()
+				rootCAPool.AppendCertsFromPEM(certBytes.Bytes())
+				skipVerify = false
+			}
+		}
+
+		tlsConf := &tls.Config{
+			InsecureSkipVerify: skipVerify,
+			RootCAs:            rootCAPool,
+		}
+		return server.NewNatsStream(natsjs.TLSConfig(tlsConf), natsjs.Address(address), natsjs.ClusterID(cid))
 	}
 }

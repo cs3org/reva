@@ -198,7 +198,14 @@ func (cache cacheStore) List(opts ...microstore.ListOption) ([]string, error) {
 		microstore.ListFrom(cache.database, cache.table),
 	}
 	o = append(o, opts...)
-	return cache.s.List(o...)
+	keys, err := cache.s.List(o...)
+	if err != nil {
+		return nil, err
+	}
+	for i, key := range keys {
+		keys[i] = strings.TrimPrefix(key, cache.table)
+	}
+	return keys, nil
 }
 
 // Delete deletes the given key on the configured database and table of the underlying store
