@@ -84,6 +84,12 @@ func (s *svc) handleGet(ctx context.Context, w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	if sr.GetInfo().GetType() != provider.ResourceType_RESOURCE_TYPE_FILE {
+		w.Header().Set("Content-Length", "0")
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
 	info := sr.GetInfo()
 	if utils.ReadPlainFromOpaque(info.GetOpaque(), "status") == "processing" {
 		w.WriteHeader(http.StatusTooEarly)
