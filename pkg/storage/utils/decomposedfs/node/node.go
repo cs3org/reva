@@ -184,8 +184,9 @@ func (n *Node) WriteOwner(owner *userpb.UserId) error {
 // SpaceOwnerOrManager returns the space owner of the space. If no owner is set
 // one of the space managers is returned instead.
 func (n *Node) SpaceOwnerOrManager(ctx context.Context) *userpb.UserId {
-	if n.Owner() != nil {
-		return n.Owner()
+	owner := n.Owner()
+	if owner != nil && owner.Type != userpb.UserType_USER_TYPE_SPACE_OWNER {
+		return owner
 	}
 
 	// We don't have an owner set. Find a manager instead.
