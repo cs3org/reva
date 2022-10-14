@@ -104,7 +104,7 @@ func (fs *Decomposedfs) CreateStorageSpace(ctx context.Context, req *provider.Cr
 	if req.GetOwner() != nil && req.GetOwner().GetId() != nil {
 		owner = req.GetOwner().GetId()
 	} else {
-		owner = &userv1beta1.UserId{OpaqueId: spaceID, Type: 8}
+		owner = &userv1beta1.UserId{OpaqueId: spaceID, Type: userv1beta1.UserType_USER_TYPE_SPACE_OWNER}
 	}
 	if err := root.WriteOwner(owner); err != nil {
 		return nil, err
