@@ -911,6 +911,8 @@ _ocs: api compatibility, return correct status code_
 -   [apiTrashbin/trashbinFilesFolders.feature:389](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L389)
 -   [apiTrashbin/trashbinFilesFolders.feature:443](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L443)
 -   [apiTrashbin/trashbinFilesFolders.feature:480](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L480)
+#### [Cannot test trashbin of non existing user via spaces](https://github.com/owncloud/ocis/issues/4820)
+-   [apiTrashbin/trashbinFilesFolders.feature:288](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L288)
 
 #### [apiShareOperationsToShares1/gettingShares.feature:28 fails in CI](https://github.com/cs3org/reva/issues/2926)
 -   [apiShareOperationsToShares1/gettingShares.feature:40](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareOperationsToShares1/gettingShares.feature#L40)
