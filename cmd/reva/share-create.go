@@ -163,7 +163,7 @@ func getSharePerm(p string) (*provider.ResourcePermissions, error) {
 	case editorPermission:
 		return conversions.NewEditorRole().CS3ResourcePermissions(), nil
 	case collabPermission:
-		return conversions.NewCoownerRole().CS3ResourcePermissions(), nil
+		return conversions.NewCollaboratorRole().CS3ResourcePermissions(), nil
 	case denyPermission:
 		return &provider.ResourcePermissions{}, nil
 	default:
