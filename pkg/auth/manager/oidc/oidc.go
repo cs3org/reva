@@ -310,6 +310,10 @@ func (am *mgr) resolveUser(ctx context.Context, claims map[string]interface{}) e
 	)
 
 	uid, gid := am.getUserID(claims)
+	if uid != 0 && gid != 0 {
+		claims[am.c.UIDClaim] = uid
+		claims[am.c.GIDClaim] = gid
+	}
 
 	if len(am.oidcUsersMapping) > 0 {
 		claim = "username"

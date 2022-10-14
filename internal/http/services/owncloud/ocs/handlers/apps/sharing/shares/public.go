@@ -110,6 +110,8 @@ func (h *Handler) createPublicLinkShare(w http.ResponseWriter, r *http.Request, 
 		newPermissions = conversions.RoleFromOCSPermissions(permissions).CS3ResourcePermissions()
 	}
 
+	internal, _ := strconv.ParseBool(r.FormValue("internal"))
+
 	req := link.CreatePublicShareRequest{
 		ResourceInfo: statInfo,
 		Grant: &link.Grant{
@@ -118,6 +120,8 @@ func (h *Handler) createPublicLinkShare(w http.ResponseWriter, r *http.Request, 
 			},
 			Password: r.FormValue("password"),
 		},
+		Description: r.FormValue("description"),
+		Internal:    internal,
 	}
 
 	expireTimeString, ok := r.Form["expireDate"]
@@ -356,6 +360,17 @@ func (h *Handler) updatePublicShare(w http.ResponseWriter, r *http.Request, shar
 			Grant: &link.Grant{
 				Password: newPassword[0],
 			},
+		})
+	}
+
+	// Description
+	description, ok := r.Form["description"]
+	if ok {
+		updatesFound = true
+		logger.Info().Str("shares", "update").Msg("description updated")
+		updates = append(updates, &link.UpdatePublicShareRequest_Update{
+			Type:        link.UpdatePublicShareRequest_Update_TYPE_DESCRIPTION,
+			Description: description[0],
 		})
 	}
 

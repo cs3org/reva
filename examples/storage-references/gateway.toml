@@ -46,6 +46,7 @@ mime_types = [
 
 [grpc.services.appprovider]
 mime_types = ["text/plain"]
+language = "en-GB"
 
 [http.services.datagateway]
 [http.services.prometheus]
