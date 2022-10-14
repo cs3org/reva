@@ -881,6 +881,10 @@ _ocs: api compatibility, return correct status code_
 #### [OCS status code zero](https://github.com/owncloud/ocis/issues/3621)
 -   [apiShareManagementToShares/moveReceivedShare.feature:32](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementToShares/moveReceivedShare.feature#L32)
 
+#### [A test requites provisioning API but is not annotated as such](https://github.com/owncloud/ocis/issues/4824)
+-   [apiTrashbin/trashbinFilesFolders.feature:256](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L256)
+-   [apiTrashbin/trashbinFilesFolders.feature:257](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L257)
+
 #### [Problem accessing trashbin with personal space id](https://github.com/owncloud/ocis/issues/3639)
 -   [apiTrashbin/trashbinDelete.feature:35](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinDelete.feature#L35)
 -   [apiTrashbin/trashbinDelete.feature:36](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinDelete.feature#L36)
@@ -911,6 +915,7 @@ _ocs: api compatibility, return correct status code_
 -   [apiTrashbin/trashbinFilesFolders.feature:389](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L389)
 -   [apiTrashbin/trashbinFilesFolders.feature:443](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L443)
 -   [apiTrashbin/trashbinFilesFolders.feature:480](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L480)
+
 #### [Cannot test trashbin of non existing user via spaces](https://github.com/owncloud/ocis/issues/4820)
 -   [apiTrashbin/trashbinFilesFolders.feature:288](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L288)
 
