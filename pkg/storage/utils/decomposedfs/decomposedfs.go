@@ -304,7 +304,6 @@ func (fs *Decomposedfs) Postprocessing(ch <-chan interface{}) {
 
 				}
 				n = no
-
 				if ev.Outcome == events.PPOutcomeDelete {
 					// antivir wants us to delete the file. We must obey and need to
 
@@ -326,6 +325,9 @@ func (fs *Decomposedfs) Postprocessing(ch <-chan interface{}) {
 						if err := fs.PurgeRecycleItem(ctx, &provider.Reference{ResourceId: &provider.ResourceId{SpaceId: n.SpaceID, OpaqueId: n.SpaceID}}, n.ID, "/"); err != nil {
 							log.Error().Err(err).Interface("resourceID", ev.ResourceID).Msg("Failed to purge infected resource from trash")
 						}
+
+						// remove cache entry in gateway
+						fs.cache.RemoveStat(ev.ExecutingUser.GetId(), &provider.ResourceId{SpaceId: n.SpaceID, OpaqueId: n.ID})
 						continue
 					}
 
@@ -362,6 +364,8 @@ func (fs *Decomposedfs) Postprocessing(ch <-chan interface{}) {
 						}
 					}
 
+					// remove cache entry in gateway
+					fs.cache.RemoveStat(ev.ExecutingUser.GetId(), &provider.ResourceId{SpaceId: n.SpaceID, OpaqueId: n.ID})
 					continue
 				}
 
@@ -386,6 +390,10 @@ func (fs *Decomposedfs) Postprocessing(ch <-chan interface{}) {
 				log.Error().Err(err).Str("uploadID", ev.UploadID).Interface("resourceID", ev.ResourceID).Msg("Failed to set scan results")
 				continue
 			}
+
+			// remove cache entry in gateway
+			fs.cache.RemoveStat(ev.ExecutingUser.GetId(), &provider.ResourceId{SpaceId: n.SpaceID, OpaqueId: n.ID})
+
 		default:
 			log.Error().Interface("event", ev).Msg("Unknown event")
 		}
