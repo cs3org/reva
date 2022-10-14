@@ -96,7 +96,7 @@ func (s *svc) handleGet(ctx context.Context, w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	if s.c.ForceRescanDuration != "" {
+	if s.c.ForceRescanDuration != "" && info.Size != 0 {
 		min := time.Now().Add(-s.forceRescan)    // min scan date
 		max := time.Now().Add(s.statPollTimeout) // max polling time
 
