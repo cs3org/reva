@@ -753,11 +753,12 @@ func (fs *Decomposedfs) linkStorageSpaceType(ctx context.Context, spaceType stri
 func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, checkPermissions bool) (*provider.StorageSpace, error) {
 	user := ctxpkg.ContextMustGetUser(ctx)
 	if checkPermissions {
-		ok, err := node.NewPermissions(fs.lu).HasPermission(ctx, n, func(p *provider.ResourcePermissions) bool {
-			return p.Stat
-		})
-		if err != nil || !ok {
-			return nil, errtypes.PermissionDenied(fmt.Sprintf("user %s is not allowed to Stat the space %s", user.Username, n.ID))
+		rp, err := fs.p.AssemblePermissions(ctx, n)
+		switch {
+		case err != nil:
+			return nil, errtypes.InternalError(err.Error())
+		case !rp.Stat:
+			return nil, errtypes.NotFound(fmt.Sprintf("space %s not found", n.ID))
 		}
 
 		if n.SpaceRoot.IsDisabled() {
@@ -929,30 +930,32 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 func (fs *Decomposedfs) checkManagerPermission(ctx context.Context, n *node.Node) error {
 	// to update the space name or short description we need the manager role
 	// current workaround: check if RemoveGrant Permission exists
-	managerPerm, err := fs.p.HasPermission(ctx, n, func(rp *provider.ResourcePermissions) bool {
-		return rp.RemoveGrant
-	})
+	rp, err := fs.p.AssemblePermissions(ctx, n)
 	switch {
 	case err != nil:
 		return errtypes.InternalError(err.Error())
-	case !managerPerm:
-		msg := fmt.Sprintf("not enough permissions to change attributes on %s", filepath.Join(n.ParentID, n.Name))
-		return errtypes.PermissionDenied(msg)
+	case !rp.RemoveGrant:
+		if rp.Stat {
+			msg := fmt.Sprintf("not enough permissions to change attributes on %s", filepath.Join(n.ParentID, n.Name))
+			return errtypes.PermissionDenied(msg)
+		}
+		return errtypes.NotFound(filepath.Join(n.ParentID, n.Name))
 	}
 	return nil
 }
 
 func (fs *Decomposedfs) checkEditorPermission(ctx context.Context, n *node.Node) error {
 	// current workaround: check if InitiateFileUpload Permission exists
-	editorPerm, err := fs.p.HasPermission(ctx, n, func(rp *provider.ResourcePermissions) bool {
-		return rp.InitiateFileUpload
-	})
+	rp, err := fs.p.AssemblePermissions(ctx, n)
 	switch {
 	case err != nil:
 		return errtypes.InternalError(err.Error())
-	case !editorPerm:
-		msg := fmt.Sprintf("not enough permissions to change attributes on %s", filepath.Join(n.ParentID, n.Name))
-		return errtypes.PermissionDenied(msg)
+	case !rp.InitiateFileUpload:
+		if rp.Stat {
+			msg := fmt.Sprintf("not enough permissions to change attributes on %s", filepath.Join(n.ParentID, n.Name))
+			return errtypes.PermissionDenied(msg)
+		}
+		return errtypes.NotFound(filepath.Join(n.ParentID, n.Name))
 	}
 	return nil
 }

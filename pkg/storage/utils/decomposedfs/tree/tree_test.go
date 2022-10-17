@@ -288,7 +288,10 @@ var _ = Describe("Tree", func() {
 		var dir *node.Node
 
 		JustBeforeEach(func() {
-			env.Permissions.On("HasPermission", mock.Anything, mock.Anything, mock.Anything).Return(true, nil)
+			env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(provider.ResourcePermissions{
+				CreateContainer: true,
+				Stat:            true,
+			}, nil)
 
 			// Create test dir
 			var err error

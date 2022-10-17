@@ -93,11 +93,12 @@ func (s *svc) handleGet(ctx context.Context, w http.ResponseWriter, r *http.Requ
 
 	dReq := &provider.InitiateFileDownloadRequest{Ref: ref}
 	dRes, err := client.InitiateFileDownload(ctx, dReq)
-	if err != nil {
+	switch {
+	case err != nil:
 		log.Error().Err(err).Msg("error initiating file download")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
-	} else if dRes.Status.Code != rpc.Code_CODE_OK {
+	case dRes.Status.Code != rpc.Code_CODE_OK:
 		errors.HandleErrorStatus(&log, w, dRes.Status)
 		return
 	}

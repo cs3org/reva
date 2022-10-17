@@ -54,14 +54,16 @@ func (fs *Decomposedfs) ListRevisions(ctx context.Context, ref *provider.Referen
 		return
 	}
 
-	ok, err := fs.p.HasPermission(ctx, n, func(rp *provider.ResourcePermissions) bool {
-		return rp.ListFileVersions
-	})
+	rp, err := fs.p.AssemblePermissions(ctx, n)
 	switch {
 	case err != nil:
 		return nil, errtypes.InternalError(err.Error())
-	case !ok:
-		return nil, errtypes.PermissionDenied(filepath.Join(n.ParentID, n.Name))
+	case !rp.ListFileVersions:
+		f, _ := storagespace.FormatReference(ref)
+		if rp.Stat {
+			return nil, errtypes.PermissionDenied(f)
+		}
+		return nil, errtypes.NotFound(f)
 	}
 
 	revisions = []*provider.FileVersion{}
@@ -119,15 +121,16 @@ func (fs *Decomposedfs) DownloadRevision(ctx context.Context, ref *provider.Refe
 		return nil, err
 	}
 
-	ok, err := fs.p.HasPermission(ctx, n, func(rp *provider.ResourcePermissions) bool {
-		// TODO add explicit permission in the CS3 api?
-		return rp.ListFileVersions && rp.RestoreFileVersion && rp.InitiateFileDownload
-	})
+	rp, err := fs.p.AssemblePermissions(ctx, n)
 	switch {
 	case err != nil:
 		return nil, errtypes.InternalError(err.Error())
-	case !ok:
-		return nil, errtypes.PermissionDenied(filepath.Join(n.ParentID, n.Name))
+	case !rp.ListFileVersions || !rp.RestoreFileVersion || !rp.InitiateFileDownload: // TODO add explicit permission in the CS3 api?
+		f, _ := storagespace.FormatReference(ref)
+		if rp.Stat {
+			return nil, errtypes.PermissionDenied(f)
+		}
+		return nil, errtypes.NotFound(f)
 	}
 
 	contentPath := fs.lu.InternalPath(spaceID, revisionKey)
@@ -164,14 +167,16 @@ func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Refer
 		return err
 	}
 
-	ok, err := fs.p.HasPermission(ctx, n, func(rp *provider.ResourcePermissions) bool {
-		return rp.RestoreFileVersion
-	})
+	rp, err := fs.p.AssemblePermissions(ctx, n)
 	switch {
 	case err != nil:
 		return errtypes.InternalError(err.Error())
-	case !ok:
-		return errtypes.PermissionDenied(filepath.Join(n.ParentID, n.Name))
+	case !rp.RestoreFileVersion:
+		f, _ := storagespace.FormatReference(ref)
+		if rp.Stat {
+			return errtypes.PermissionDenied(f)
+		}
+		return errtypes.NotFound(f)
 	}
 
 	// Set space owner in context

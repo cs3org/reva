@@ -85,21 +85,20 @@ func (s *svc) handleDelete(ctx context.Context, w http.ResponseWriter, r *http.R
 		return
 	}
 	res, err := client.Delete(ctx, req)
-	if err != nil {
+	switch {
+	case err != nil:
 		span.RecordError(err)
 		log.Error().Err(err).Msg("error performing delete grpc request")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
-	}
-	switch res.Status.Code {
-	case rpc.Code_CODE_OK:
+	case res.Status.Code == rpc.Code_CODE_OK:
 		w.WriteHeader(http.StatusNoContent)
-	case rpc.Code_CODE_NOT_FOUND:
+	case res.Status.Code == rpc.Code_CODE_NOT_FOUND:
 		w.WriteHeader(http.StatusNotFound)
 		m := "Resource not found" // mimic the oc10 error message
 		b, err := errors.Marshal(http.StatusNotFound, m, "")
 		errors.HandleWebdavError(&log, w, b, err)
-	case rpc.Code_CODE_PERMISSION_DENIED:
+	case res.Status.Code == rpc.Code_CODE_PERMISSION_DENIED:
 		status := http.StatusForbidden
 		if lockID := utils.ReadPlainFromOpaque(res.Opaque, "lockid"); lockID != "" {
 			// http://www.webdav.org/specs/rfc4918.html#HEADER_Lock-Token says that the
@@ -127,12 +126,10 @@ func (s *svc) handleDelete(ctx context.Context, w http.ResponseWriter, r *http.R
 		w.WriteHeader(status)
 		b, err := errors.Marshal(status, m, "")
 		errors.HandleWebdavError(&log, w, b, err)
-	case rpc.Code_CODE_INTERNAL:
-		if res.Status.Message == "can't delete mount path" {
-			w.WriteHeader(http.StatusForbidden)
-			b, err := errors.Marshal(http.StatusForbidden, res.Status.Message, "")
-			errors.HandleWebdavError(&log, w, b, err)
-		}
+	case res.Status.Code == rpc.Code_CODE_INTERNAL && res.Status.Message == "can't delete mount path":
+		w.WriteHeader(http.StatusForbidden)
+		b, err := errors.Marshal(http.StatusForbidden, res.Status.Message, "")
+		errors.HandleWebdavError(&log, w, b, err)
 	default:
 		status := status.HTTPStatusFromCode(res.Status.Code)
 		w.WriteHeader(status)

@@ -50,6 +50,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/lookup"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs"
+	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
@@ -265,23 +266,32 @@ func (fs *Decomposedfs) NewUpload(ctx context.Context, info tusd.FileInfo) (uplo
 	}
 
 	// check permissions
-	var ok bool
+	var checkNode *node.Node
+	var f string
 	if n.Exists {
 		// check permissions of file to be overwritten
-		ok, err = fs.p.HasPermission(ctx, n, func(rp *provider.ResourcePermissions) bool {
-			return rp.InitiateFileUpload
-		})
+		checkNode = n
+		f, _ = storagespace.FormatReference(&provider.Reference{ResourceId: &provider.ResourceId{
+			SpaceId:  n.SpaceID,
+			OpaqueId: n.ID,
+		}})
 	} else {
 		// check permissions of parent
-		ok, err = fs.p.HasPermission(ctx, p, func(rp *provider.ResourcePermissions) bool {
-			return rp.InitiateFileUpload
-		})
+		checkNode = p
+		f, _ = storagespace.FormatReference(&provider.Reference{ResourceId: &provider.ResourceId{
+			SpaceId:  p.SpaceID,
+			OpaqueId: p.ID,
+		}, Path: n.Name})
 	}
+	rp, err := fs.p.AssemblePermissions(ctx, checkNode)
 	switch {
 	case err != nil:
 		return nil, errtypes.InternalError(err.Error())
-	case !ok:
-		return nil, errtypes.PermissionDenied(filepath.Join(n.ParentID, n.Name))
+	case !rp.InitiateFileUpload:
+		if rp.Stat {
+			return nil, errtypes.PermissionDenied(f)
+		}
+		return nil, errtypes.NotFound(f)
 	}
 
 	// if we are trying to overwriting a folder with a file
@@ -305,13 +315,9 @@ func (fs *Decomposedfs) NewUpload(ctx context.Context, info tusd.FileInfo) (uplo
 	}
 	usr := ctxpkg.ContextMustGetUser(ctx)
 
-	var spaceRoot string
-	if info.Storage != nil {
-		if spaceRoot, ok = info.Storage["SpaceRoot"]; !ok {
-			spaceRoot = n.SpaceRoot.ID
-		}
-	} else {
-		spaceRoot = n.SpaceRoot.ID
+	spaceRoot := n.SpaceRoot.ID
+	if info.Storage != nil && info.Storage["SpaceRoot"] != "" {
+		spaceRoot = info.Storage["SpaceRoot"]
 	}
 
 	info.Storage = map[string]string{

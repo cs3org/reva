@@ -58,27 +58,6 @@ func (_m *PermissionsChecker) AssemblePermissions(ctx context.Context, n *node.N
 	return r0, r1
 }
 
-// HasPermission provides a mock function with given fields: ctx, n, check
-func (_m *PermissionsChecker) HasPermission(ctx context.Context, n *node.Node, check func(*providerv1beta1.ResourcePermissions) bool) (bool, error) {
-	ret := _m.Called(ctx, n, check)
-
-	var r0 bool
-	if rf, ok := ret.Get(0).(func(context.Context, *node.Node, func(*providerv1beta1.ResourcePermissions) bool) bool); ok {
-		r0 = rf(ctx, n, check)
-	} else {
-		r0 = ret.Get(0).(bool)
-	}
-
-	var r1 error
-	if rf, ok := ret.Get(1).(func(context.Context, *node.Node, func(*providerv1beta1.ResourcePermissions) bool) error); ok {
-		r1 = rf(ctx, n, check)
-	} else {
-		r1 = ret.Error(1)
-	}
-
-	return r0, r1
-}
-
 // NewPermissionsChecker creates a new instance of PermissionsChecker. It also registers a cleanup function to assert the mocks expectations.
 func NewPermissionsChecker(t testing.TB) *PermissionsChecker {
 	mock := &PermissionsChecker{}

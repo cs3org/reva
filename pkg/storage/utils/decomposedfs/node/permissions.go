@@ -20,13 +20,10 @@ package node
 
 import (
 	"context"
-	"strings"
 
-	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/pkg/errors"
 )
@@ -34,13 +31,6 @@ import (
 // NoPermissions represents an empty set of permissions
 func NoPermissions() provider.ResourcePermissions {
 	return provider.ResourcePermissions{}
-}
-
-// NoOwnerPermissions defines permissions for nodes that don't have an owner set, eg the root node
-func NoOwnerPermissions() provider.ResourcePermissions {
-	return provider.ResourcePermissions{
-		Stat: true,
-	}
 }
 
 // ShareFolderPermissions defines permissions for the shared jail
@@ -170,99 +160,4 @@ func AddPermissions(l *provider.ResourcePermissions, r *provider.ResourcePermiss
 	l.RestoreRecycleItem = l.RestoreRecycleItem || r.RestoreRecycleItem
 	l.Stat = l.Stat || r.Stat
 	l.UpdateGrant = l.UpdateGrant || r.UpdateGrant
-}
-
-// HasPermission call check() for every node up to the root until check returns true
-func (p *Permissions) HasPermission(ctx context.Context, n *Node, check func(*provider.ResourcePermissions) bool) (can bool, err error) {
-
-	var u *userv1beta1.User
-	var perms *provider.ResourcePermissions
-	if u, perms = p.getUserAndPermissions(ctx, n); perms != nil {
-		return check(perms), nil
-	}
-
-	// for an efficient group lookup convert the list of groups to a map
-	// groups are just strings ... groupnames ... or group ids ??? AAARGH !!!
-	groupsMap := make(map[string]bool, len(u.Groups))
-	for i := range u.Groups {
-		groupsMap[u.Groups[i]] = true
-	}
-
-	// for all segments, starting at the leaf
-	cn := n
-	for cn.ID != n.SpaceRoot.ID {
-		if ok := nodeHasPermission(ctx, cn, groupsMap, u.Id.OpaqueId, check); ok {
-			return true, nil
-		}
-
-		if cn, err = cn.Parent(); err != nil {
-			return false, errors.Wrap(err, "Decomposedfs: error getting parent "+cn.ParentID)
-		}
-	}
-
-	// also check permissions on root, eg. for project spaces
-	return nodeHasPermission(ctx, cn, groupsMap, u.Id.OpaqueId, check), nil
-}
-
-func nodeHasPermission(ctx context.Context, cn *Node, groupsMap map[string]bool, userid string, check func(*provider.ResourcePermissions) bool) (ok bool) {
-
-	var grantees []string
-	var err error
-	if grantees, err = cn.ListGrantees(ctx); err != nil {
-		appctx.GetLogger(ctx).Error().Err(err).Interface("node", cn.ID).Msg("error listing grantees")
-		return false
-	}
-
-	userace := xattrs.GrantUserAcePrefix + userid
-	userFound := false
-	for i := range grantees {
-		// we only need the find the user once per node
-		var g *provider.Grant
-		switch {
-		case !userFound && grantees[i] == userace:
-			g, err = cn.ReadGrant(ctx, grantees[i])
-		case strings.HasPrefix(grantees[i], xattrs.GrantGroupAcePrefix):
-			gr := strings.TrimPrefix(grantees[i], xattrs.GrantGroupAcePrefix)
-			if groupsMap[gr] {
-				g, err = cn.ReadGrant(ctx, grantees[i])
-			} else {
-				// no need to check attribute
-				continue
-			}
-		default:
-			// no need to check attribute
-			continue
-		}
-
-		switch {
-		case err == nil:
-			appctx.GetLogger(ctx).Debug().Interface("node", cn.ID).Str("grant", grantees[i]).Interface("permissions", g.GetPermissions()).Msg("checking permissions")
-			if check(g.GetPermissions()) {
-				return true
-			}
-		case xattrs.IsAttrUnset(err):
-			appctx.GetLogger(ctx).Error().Interface("node", cn.ID).Str("grant", grantees[i]).Interface("grantees", grantees).Msg("grant vanished from node after listing")
-		default:
-			appctx.GetLogger(ctx).Error().Err(err).Interface("node", cn.ID).Str("grant", grantees[i]).Msg("error reading permissions")
-			return false
-		}
-	}
-
-	return false
-}
-
-func (p *Permissions) getUserAndPermissions(ctx context.Context, n *Node) (*userv1beta1.User, *provider.ResourcePermissions) {
-	u, ok := ctxpkg.ContextGetUser(ctx)
-	if !ok {
-		appctx.GetLogger(ctx).Debug().Interface("node", n.ID).Msg("no user in context, returning default permissions")
-		perms := NoPermissions()
-		return nil, &perms
-	}
-	// check if the current user is the owner
-	if utils.UserIDEqual(u.Id, n.Owner()) {
-		appctx.GetLogger(ctx).Debug().Str("node", n.ID).Msg("user is owner, returning owner permissions")
-		perms := OwnerPermissions()
-		return u, &perms
-	}
-	return u, nil
 }
