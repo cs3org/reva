@@ -245,7 +245,7 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 		case rpc.Code_CODE_FAILED_PRECONDITION:
 			w.WriteHeader(http.StatusConflict)
 		case rpc.Code_CODE_NOT_FOUND:
-			w.WriteHeader(http.StatusConflict)
+			w.WriteHeader(http.StatusNotFound)
 		default:
 			errors.HandleErrorStatus(&log, w, uRes.Status)
 		}
