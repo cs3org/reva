@@ -124,7 +124,7 @@ func GetACLType(gt provider.GranteeType) (string, error) {
 // GetGranteeType returns the grantee type from a char
 func GetGranteeType(aclType string) provider.GranteeType {
 	switch aclType {
-	case acl.TypeUser:
+	case acl.TypeUser, acl.TypeLightweight:
 		return provider.GranteeType_GRANTEE_TYPE_USER
 	case acl.TypeGroup:
 		return provider.GranteeType_GRANTEE_TYPE_GROUP
