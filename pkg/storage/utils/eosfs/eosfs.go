@@ -1008,7 +1008,7 @@ func (fs *eosfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provi
 	}
 
 	if eosACL.Type == acl.TypeLightweight {
-		// The ACLs for a lightweight is understandable by EOS
+		// The ACLs for a lightweight are not understandable by EOS
 		// directly, but only from reva. So we have to store them
 		// in an xattr named sys.reva.lwshare.<lw_account>, with value
 		// the permissions.
