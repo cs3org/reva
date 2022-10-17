@@ -389,16 +389,6 @@ func extractRef(req interface{}, tokenScope map[string]*authpb.Scope) (*provider
 	return nil, false
 }
 
-func extractShareRef(req interface{}) (*collaboration.ShareReference, bool) {
-	switch v := req.(type) {
-	case *collaboration.GetReceivedShareRequest:
-		return v.GetRef(), true
-	case *collaboration.UpdateReceivedShareRequest:
-		return &collaboration.ShareReference{Spec: &collaboration.ShareReference_Id{Id: v.GetShare().GetShare().GetId()}}, true
-	}
-	return nil, false
-}
-
 func getRefKey(ref *provider.Reference) string {
 	if ref.Path != "" {
 		return ref.Path
