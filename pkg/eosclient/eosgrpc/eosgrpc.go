@@ -628,6 +628,7 @@ func (c *Client) GetAttr(ctx context.Context, auth eosclient.Authorization, key,
 	return nil, errtypes.NotFound(fmt.Sprintf("key %s not found", key))
 }
 
+// GetAttrs returns all the attributes of a resource
 func (c *Client) GetAttrs(ctx context.Context, auth eosclient.Authorization, path string) ([]*eosclient.Attribute, error) {
 	info, err := c.GetFileInfoByPath(ctx, auth, path)
 	if err != nil {

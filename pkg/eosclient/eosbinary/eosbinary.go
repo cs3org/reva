@@ -596,6 +596,7 @@ func (c *Client) GetAttr(ctx context.Context, auth eosclient.Authorization, key,
 	return attr, nil
 }
 
+// GetAttrs returns all the attributes of a resource
 func (c *Client) GetAttrs(ctx context.Context, auth eosclient.Authorization, path string) ([]*eosclient.Attribute, error) {
 	info, err := c.getRawFileInfoByPath(ctx, auth, path)
 	if err != nil {
