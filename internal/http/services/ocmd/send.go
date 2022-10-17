@@ -110,13 +110,13 @@ func (h *sendHandler) Handler() http.Handler {
 		req := &provider.StatRequest{Ref: ref}
 		res2, err := gatewayClient.Stat(authCtx, req)
 		if err != nil {
-			log.Error().Msg("error sending: stat file/folder to share")
+			log.Error().Msg("gatewayClient.Stat operation failed; is the storage backend reachable?")
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 
 		if res2.Status.Code != rpc.Code_CODE_OK {
-			log.Error().Msg("error returned: stat file/folder to share")
+			log.Error().Msgf("sourcePath %s does not exist on the storage backend", sourcePath)
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
