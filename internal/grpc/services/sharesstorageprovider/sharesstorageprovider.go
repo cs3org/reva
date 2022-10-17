@@ -206,10 +206,15 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 		Interface("ref", req.Ref).
 		Interface("received_share", receivedShare).
 		Msg("sharesstorageprovider: Got InitiateFileUpload request")
-	if err != nil {
+	switch {
+	case err != nil:
 		return nil, err
-	}
-	if rpcStatus.Code != rpc.Code_CODE_OK {
+	case rpcStatus.Code == rpc.Code_CODE_NOT_FOUND:
+		// the user has access (it showed up in the clist of shares), but we cannot write here
+		return &provider.InitiateFileUploadResponse{
+			Status: status.NewFailedPrecondition(ctx, nil, rpcStatus.GetMessage()),
+		}, nil
+	case rpcStatus.Code != rpc.Code_CODE_OK:
 		return &provider.InitiateFileUploadResponse{
 			Status: rpcStatus,
 		}, nil
