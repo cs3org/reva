@@ -71,12 +71,10 @@ func (s *strategy) GetCredentials(w http.ResponseWriter, r *http.Request) (*auth
 
 	sharePassword := basicAuthPasswordPrefix
 	if s.c.UseCookies {
-		password, err := r.Cookie("password")
-		if err != nil {
-			return nil, errors.Wrap(err, "error getting password from cookie")
+		if password, err := r.Cookie("password"); err == nil {
+			sharePassword += password.Value
+			return &auth.Credentials{Type: "publicshares", ClientID: token, ClientSecret: sharePassword}, nil
 		}
-		sharePassword += password.Value
-		return &auth.Credentials{Type: "publicshares", ClientID: token, ClientSecret: sharePassword}, nil
 	}
 
 	// We can ignore the username since it is always set to "public" in public shares.
