@@ -883,9 +883,6 @@ moving outside of the Shares folder gives 501 Not Implemented.
 #### [OCS status code zero](https://github.com/owncloud/ocis/issues/3621)
 -   [apiShareManagementToShares/moveReceivedShare.feature:32](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementToShares/moveReceivedShare.feature#L32)
 
-#### [A test requites provisioning API but is not annotated as such](https://github.com/owncloud/ocis/issues/4824)
--   [apiTrashbin/trashbinFilesFolders.feature:256](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L256)
--   [apiTrashbin/trashbinFilesFolders.feature:257](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L257)
 
 #### [Problem accessing trashbin with personal space id](https://github.com/owncloud/ocis/issues/3639)
 -   [apiTrashbin/trashbinDelete.feature:35](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinDelete.feature#L35)
