@@ -118,8 +118,9 @@ func (s *service) GenerateInviteToken(ctx context.Context, req *invitepb.Generat
 func (s *service) ForwardInvite(ctx context.Context, req *invitepb.ForwardInviteRequest) (*invitepb.ForwardInviteResponse, error) {
 	err := s.im.ForwardInvite(ctx, req.InviteToken, req.OriginSystemProvider)
 	if err != nil {
+		message := err.Error()
 		return &invitepb.ForwardInviteResponse{
-			Status: status.NewInternal(ctx, "error forwarding invite"),
+			Status: status.NewInternal(ctx, "error forwarding invite:"+message),
 		}, nil
 	}
 
