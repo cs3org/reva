@@ -83,7 +83,7 @@ require (
 	gotest.tools v2.2.0+incompatible
 )
 
-go 1.16
+go 1.19
 
 replace (
 	github.com/eventials/go-tus => github.com/andrewmostello/go-tus v0.0.0-20200314041820-904a9904af9a
