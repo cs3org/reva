@@ -201,7 +201,13 @@ func New(o *options.Options, lu *lookup.Lookup, p PermissionsChecker, tp Tree, p
 			return nil, err
 		}
 
-		go fs.Postprocessing(ch)
+		if o.Events.NumConsumers <= 0 {
+			o.Events.NumConsumers = 1
+		}
+
+		for i := 0; i < o.Events.NumConsumers; i++ {
+			go fs.Postprocessing(ch)
+		}
 	}
 
 	return fs, nil
