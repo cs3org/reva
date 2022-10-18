@@ -160,7 +160,7 @@ func (s *service) FindAcceptedUsers(ctx context.Context, req *invitepb.FindAccep
 	acceptedUsers, err := s.im.FindAcceptedUsers(ctx, req.Filter)
 	if err != nil {
 		return &invitepb.FindAcceptedUsersResponse{
-			Status: status.NewInternal(ctx, "error finding remote users: " + err.Error()),
+			Status: status.NewInternal(ctx, "error finding remote users: "+err.Error()),
 		}, nil
 	}
 
