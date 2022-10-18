@@ -44,7 +44,6 @@ import (
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
-	"github.com/cs3org/reva/v2/pkg/logger"
 	"github.com/cs3org/reva/v2/pkg/storage"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/chunking"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/lookup"
@@ -398,6 +397,8 @@ func (fs *Decomposedfs) readInfo(id string) (tusd.FileInfo, error) {
 
 // GetUpload returns the Upload for the given upload id
 func (fs *Decomposedfs) GetUpload(ctx context.Context, id string) (tusd.Upload, error) {
+	l := appctx.GetLogger(ctx)
+	sub := l.With().Int("pid", os.Getpid()).Logger()
 	info, err := fs.readInfo(id)
 	if err != nil {
 		return nil, err
@@ -413,15 +414,6 @@ func (fs *Decomposedfs) GetUpload(ctx context.Context, id string) (tusd.Upload, 
 	}
 
 	ctx = ctxpkg.ContextSetUser(ctx, u)
-	// TODO configure the logger the same way ... store and add traceid in file info
-
-	var opts []logger.Option
-	opts = append(opts, logger.WithLevel(info.Storage["LogLevel"]))
-	opts = append(opts, logger.WithWriter(os.Stderr, logger.ConsoleMode))
-	l := logger.New(opts...)
-
-	sub := l.With().Int("pid", os.Getpid()).Logger()
-
 	ctx = appctx.WithLogger(ctx, &sub)
 
 	return &fileUpload{

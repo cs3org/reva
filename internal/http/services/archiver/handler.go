@@ -25,11 +25,11 @@ import (
 	"net/http"
 	"time"
 
+	"regexp"
+
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-
-	"regexp"
 
 	"github.com/cs3org/reva/v2/internal/http/services/archiver/manager"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
