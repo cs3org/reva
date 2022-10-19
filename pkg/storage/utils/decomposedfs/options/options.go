@@ -67,6 +67,7 @@ type EventOptions struct {
 	NatsClusterID        string `mapstructure:"natsclusterid"`
 	TLSInsecure          bool   `mapstructure:"tlsinsecure"`
 	TLSRootCACertificate string `mapstructure:"tlsrootcacertificate"`
+	NumConsumers         int    `mapstructure:"numconsumers"`
 }
 
 // TokenOptions are the configurable option for tokens
