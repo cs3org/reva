@@ -240,7 +240,10 @@ func CreateNodeForUpload(upload *Upload) (*node.Node, error) {
 		nil,
 		upload.lu,
 	)
-	n.SpaceRoot = node.New(spaceID, spaceID, "", "", 0, "", nil, upload.lu)
+	n.SpaceRoot, err = node.ReadNode(upload.Ctx, upload.lu, spaceID, spaceID, false)
+	if err != nil {
+		return nil, err
+	}
 
 	// check lock
 	if err := n.CheckLock(upload.Ctx); err != nil {
