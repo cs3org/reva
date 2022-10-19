@@ -249,6 +249,7 @@ func (upload *Upload) FinishUpload(_ context.Context) error {
 		if err := events.Publish(upload.pub, events.BytesReceived{
 			UploadID:      upload.Info.ID,
 			URL:           s,
+			SpaceOwner:    n.SpaceOwnerOrManager(upload.Ctx),
 			ExecutingUser: u,
 			ResourceID:    &provider.ResourceId{SpaceId: n.SpaceID, OpaqueId: n.ID},
 			Filename:      upload.Info.Storage["NodeName"],

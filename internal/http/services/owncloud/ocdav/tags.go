@@ -87,7 +87,8 @@ func (h *TagHandler) handleCreateTags(w http.ResponseWriter, r *http.Request, s 
 				ResourceId: rid,
 				Path:       ".",
 			},
-			Executant: info.Owner,
+			SpaceOwner: info.Owner,
+			Executant:  info.Owner,
 		}
 	})
 }
@@ -108,7 +109,8 @@ func (h *TagHandler) handleDeleteTags(w http.ResponseWriter, r *http.Request, s 
 				ResourceId: rid,
 				Path:       ".",
 			},
-			Executant: info.Owner,
+			SpaceOwner: info.Owner,
+			Executant:  info.Owner,
 		}
 	})
 }

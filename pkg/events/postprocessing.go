@@ -53,6 +53,7 @@ var (
 // BytesReceived is emitted by the server when it received all bytes of an upload
 type BytesReceived struct {
 	UploadID      string
+	SpaceOwner    *user.UserId
 	ExecutingUser *user.User
 	ResourceID    *provider.ResourceId
 	Filename      string
@@ -131,6 +132,7 @@ func (PostprocessingStepFinished) Unmarshal(v []byte) (interface{}, error) {
 type PostprocessingFinished struct {
 	UploadID      string
 	Filename      string
+	SpaceOwner    *user.UserId
 	ExecutingUser *user.User
 	Result        map[Postprocessingstep]interface{} // it is a map[step]Event
 	Outcome       PostprocessingOutcome
@@ -147,6 +149,7 @@ func (PostprocessingFinished) Unmarshal(v []byte) (interface{}, error) {
 type UploadReady struct {
 	UploadID      string
 	Filename      string
+	SpaceOwner    *user.UserId
 	ExecutingUser *user.User
 	FileRef       *provider.Reference
 	Failed        bool
