@@ -105,10 +105,6 @@ func (p *PrometheusAwareReadSeekCloser) Close() error {
 
 // Upload stores some data in the blobstore under the given key
 func (bs *Blobstore) Upload(node *node.Node, reader io.Reader) error {
-	reader = &PrometheusAwareReader{
-		r: reader,
-		m: metrics.Tx,
-	}
 	size := int64(-1)
 	if file, ok := reader.(*os.File); ok {
 		info, err := file.Stat()
@@ -116,6 +112,11 @@ func (bs *Blobstore) Upload(node *node.Node, reader io.Reader) error {
 			return errors.Wrapf(err, "could not determine file size for object '%s'", bs.path(node))
 		}
 		size = info.Size()
+	}
+
+	reader = &PrometheusAwareReader{
+		r: reader,
+		m: metrics.Tx,
 	}
 
 	_, err := bs.client.PutObject(context.Background(), bs.bucket, bs.path(node), reader, size, minio.PutObjectOptions{ContentType: "application/octet-stream"})
