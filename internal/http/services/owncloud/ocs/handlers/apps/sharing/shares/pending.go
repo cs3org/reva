@@ -87,7 +87,7 @@ func (h *Handler) updateReceivedShare(w http.ResponseWriter, r *http.Request, sh
 
 	info, status, err := h.getResourceInfoByID(ctx, client, rs.Share.ResourceId)
 	if err != nil || status.Code != rpc.Code_CODE_OK {
-		h.logProblems(status, err, "could not stat, skipping")
+		h.logProblems(status, err, "could not stat, skipping", logger)
 	}
 
 	data, err := conversions.CS3Share2ShareData(r.Context(), rs.Share)

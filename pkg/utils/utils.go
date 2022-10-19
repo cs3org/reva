@@ -27,6 +27,7 @@ import (
 	"os/user"
 	"path"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"strings"
 	"time"
@@ -365,4 +366,26 @@ func HasPublicShareRole(u *userpb.User) (string, bool) {
 		return string(publicShare.Value), true
 	}
 	return "", false
+}
+
+// HasPermissions returns true if all permissions defined in the stuict toCheck
+// are set in the target
+func HasPermissions(target, toCheck *provider.ResourcePermissions) bool {
+	targetStruct := reflect.ValueOf(target).Elem()
+	toCheckStruct := reflect.ValueOf(toCheck).Elem()
+
+	for i := 0; i < toCheckStruct.NumField(); i++ {
+		fieldToCheck := toCheckStruct.Field(i)
+		if fieldToCheck.Kind() == reflect.Bool && fieldToCheck.Bool() && !targetStruct.Field(i).Bool() {
+			return false
+		}
+	}
+	return true
+}
+
+// UserIsLightweight returns true if the user is a lightweith
+// or federated account
+func UserIsLightweight(u *userpb.User) bool {
+	return u.Id.Type == userpb.UserType_USER_TYPE_FEDERATED ||
+		u.Id.Type == userpb.UserType_USER_TYPE_LIGHTWEIGHT
 }

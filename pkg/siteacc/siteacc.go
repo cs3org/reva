@@ -20,12 +20,13 @@ package siteacc
 
 import (
 	"fmt"
+	"html"
 	"net/http"
 
 	"github.com/cs3org/reva/pkg/siteacc/alerting"
 	"github.com/cs3org/reva/pkg/siteacc/config"
 	"github.com/cs3org/reva/pkg/siteacc/data"
-	"github.com/cs3org/reva/pkg/siteacc/html"
+	acchtml "github.com/cs3org/reva/pkg/siteacc/html"
 	"github.com/cs3org/reva/pkg/siteacc/manager"
 	accpanel "github.com/cs3org/reva/pkg/siteacc/panels/account"
 	"github.com/cs3org/reva/pkg/siteacc/panels/admin"
@@ -38,7 +39,7 @@ type SiteAccounts struct {
 	conf *config.Configuration
 	log  *zerolog.Logger
 
-	sessions *html.SessionManager
+	sessions *acchtml.SessionManager
 
 	storage data.Storage
 
@@ -64,7 +65,7 @@ func (siteacc *SiteAccounts) initialize(conf *config.Configuration, log *zerolog
 	siteacc.log = log
 
 	// Create the session mananger
-	sessions, err := html.NewSessionManager("siteacc_session", conf, log)
+	sessions, err := acchtml.NewSessionManager("siteacc_session", conf, log)
 	if err != nil {
 		return errors.Wrap(err, "error while creating the session manager")
 	}
@@ -145,13 +146,13 @@ func (siteacc *SiteAccounts) RequestHandler() http.Handler {
 
 		if !epHandled {
 			w.WriteHeader(http.StatusBadRequest)
-			_, _ = w.Write([]byte(fmt.Sprintf("Unknown endpoint %v", r.URL.Path)))
+			_, _ = w.Write([]byte(fmt.Sprintf("Unknown endpoint %v", html.EscapeString(r.URL.Path))))
 		}
 	})
 }
 
 // ShowAdministrationPanel writes the administration panel HTTP output directly to the response writer.
-func (siteacc *SiteAccounts) ShowAdministrationPanel(w http.ResponseWriter, r *http.Request, session *html.Session) error {
+func (siteacc *SiteAccounts) ShowAdministrationPanel(w http.ResponseWriter, r *http.Request, session *acchtml.Session) error {
 	// The admin panel only shows the stored accounts and offers actions through links, so let it use cloned data
 	accounts := siteacc.accountsManager.CloneAccounts(true)
 	operators := siteacc.operatorsManager.CloneOperators(false)
@@ -159,7 +160,7 @@ func (siteacc *SiteAccounts) ShowAdministrationPanel(w http.ResponseWriter, r *h
 }
 
 // ShowAccountPanel writes the account panel HTTP output directly to the response writer.
-func (siteacc *SiteAccounts) ShowAccountPanel(w http.ResponseWriter, r *http.Request, session *html.Session) error {
+func (siteacc *SiteAccounts) ShowAccountPanel(w http.ResponseWriter, r *http.Request, session *acchtml.Session) error {
 	return siteacc.accountPanel.Execute(w, r, session)
 }
 

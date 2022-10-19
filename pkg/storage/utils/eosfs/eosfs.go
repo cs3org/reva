@@ -25,6 +25,7 @@ import (
 	"io"
 	"net/url"
 	"os"
+	"os/exec"
 	"path"
 	"path/filepath"
 	"regexp"
@@ -63,6 +64,7 @@ import (
 
 const (
 	refTargetAttrKey = "reva.target"
+	lwShareAttrKey   = "reva.lwshare"
 )
 
 const (
@@ -1001,15 +1003,28 @@ func (fs *eosfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provi
 		return err
 	}
 
-	// position where put the ACL
-	position := eosclient.StartPosition
-
 	eosACL, err := fs.getEosACL(ctx, g)
 	if err != nil {
 		return err
 	}
 
-	err = fs.c.AddACL(ctx, auth, rootAuth, fn, position, eosACL)
+	if eosACL.Type == acl.TypeLightweight {
+		// The ACLs for a lightweight are not understandable by EOS
+		// directly, but only from reva. So we have to store them
+		// in an xattr named sys.reva.lwshare.<lw_account>, with value
+		// the permissions.
+		attr := &eosclient.Attribute{
+			Type: SystemAttr,
+			Key:  fmt.Sprintf("%s.%s", lwShareAttrKey, eosACL.Qualifier),
+			Val:  eosACL.Permissions,
+		}
+		if err := fs.c.SetAttr(ctx, rootAuth, attr, false, true, fn); err != nil {
+			return errors.Wrap(err, "eosfs: error adding acl for lightweight account")
+		}
+		return nil
+	}
+
+	err = fs.c.AddACL(ctx, auth, rootAuth, fn, eosclient.StartPosition, eosACL)
 	if err != nil {
 		return errors.Wrap(err, "eosfs: error adding acl")
 	}
@@ -1087,35 +1102,6 @@ func (fs *eosfs) getEosACL(ctx context.Context, g *provider.Grant) (*acl.Entry, 
 }
 
 func (fs *eosfs) RemoveGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
-	eosACLType, err := grants.GetACLType(g.Grantee.Type)
-	if err != nil {
-		return err
-	}
-
-	var recipient string
-	if eosACLType == acl.TypeUser {
-		// if the grantee is a lightweight account, we need to set it accordingly
-		if g.Grantee.GetUserId().Type == userpb.UserType_USER_TYPE_LIGHTWEIGHT ||
-			g.Grantee.GetUserId().Type == userpb.UserType_USER_TYPE_FEDERATED {
-			eosACLType = acl.TypeLightweight
-			recipient = g.Grantee.GetUserId().OpaqueId
-		} else {
-			// since EOS Citrine ACLs are stored with uid, we need to convert username to uid
-			auth, err := fs.getUIDGateway(ctx, g.Grantee.GetUserId())
-			if err != nil {
-				return err
-			}
-			recipient = auth.Role.UID
-		}
-	} else {
-		recipient = g.Grantee.GetGroupId().OpaqueId
-	}
-
-	eosACL := &acl.Entry{
-		Qualifier: recipient,
-		Type:      eosACLType,
-	}
-
 	fn, auth, err := fs.resolveRefAndGetAuth(ctx, ref)
 	if err != nil {
 		return err
@@ -1124,6 +1110,19 @@ func (fs *eosfs) RemoveGrant(ctx context.Context, ref *provider.Reference, g *pr
 	rootAuth, err := fs.getRootAuth(ctx)
 	if err != nil {
 		return err
+	}
+
+	eosACL, err := fs.getEosACL(ctx, g)
+	if err != nil {
+		return err
+	}
+
+	if eosACL.Type == acl.TypeLightweight {
+		attr := &eosclient.Attribute{}
+		if err := fs.c.UnsetAttr(ctx, rootAuth, attr, true, fn); err != nil {
+			return errors.Wrap(err, "eosfs: error removing acl for lightweight account")
+		}
+		return nil
 	}
 
 	err = fs.c.RemoveACL(ctx, auth, rootAuth, fn, eosACL)
@@ -1137,19 +1136,9 @@ func (fs *eosfs) UpdateGrant(ctx context.Context, ref *provider.Reference, g *pr
 	return fs.AddGrant(ctx, ref, g)
 }
 
-func (fs *eosfs) ListGrants(ctx context.Context, ref *provider.Reference) ([]*provider.Grant, error) {
-	fn, auth, err := fs.resolveRefAndGetAuth(ctx, ref)
-	if err != nil {
-		return nil, err
-	}
-
-	acls, err := fs.c.ListACLs(ctx, auth, fn)
-	if err != nil {
-		return nil, err
-	}
-
-	grantList := []*provider.Grant{}
-	for _, a := range acls {
+func (fs *eosfs) convertACLsToGrants(ctx context.Context, acls *acl.ACLs) ([]*provider.Grant, error) {
+	res := make([]*provider.Grant, 0, len(acls.Entries))
+	for _, a := range acls.Entries {
 		var grantee *provider.Grantee
 		switch {
 		case a.Type == acl.TypeUser:
@@ -1163,23 +1152,73 @@ func (fs *eosfs) ListGrants(ctx context.Context, ref *provider.Reference) ([]*pr
 				Id:   &provider.Grantee_UserId{UserId: qualifier},
 				Type: grants.GetGranteeType(a.Type),
 			}
-		case a.Type == acl.TypeLightweight:
-			a.Type = acl.TypeUser
-			grantee = &provider.Grantee{
-				Id:   &provider.Grantee_UserId{UserId: &userpb.UserId{OpaqueId: a.Qualifier}},
-				Type: grants.GetGranteeType(a.Type),
-			}
-		default:
+		case a.Type == acl.TypeGroup:
 			grantee = &provider.Grantee{
 				Id:   &provider.Grantee_GroupId{GroupId: &grouppb.GroupId{OpaqueId: a.Qualifier}},
 				Type: grants.GetGranteeType(a.Type),
 			}
+		default:
+			return nil, errtypes.InternalError(fmt.Sprintf("eosfs: acl type %s not recognised", a.Type))
 		}
-
-		grantList = append(grantList, &provider.Grant{
+		res = append(res, &provider.Grant{
 			Grantee:     grantee,
 			Permissions: grants.GetGrantPermissionSet(a.Permissions),
 		})
+	}
+	return res, nil
+}
+
+func isSysACLs(a *eosclient.Attribute) bool {
+	return a.Type == SystemAttr && a.Key == "sys"
+}
+
+func isLightweightACL(a *eosclient.Attribute) bool {
+	return a.Type == SystemAttr && strings.HasPrefix(a.Key, lwShareAttrKey)
+}
+
+func parseLightweightACL(a *eosclient.Attribute) *provider.Grant {
+	qualifier := strings.TrimPrefix(a.Key, lwShareAttrKey+".")
+	return &provider.Grant{
+		Grantee: &provider.Grantee{
+			Id: &provider.Grantee_UserId{UserId: &userpb.UserId{
+				// FIXME: idp missing, maybe get the user_id from the user provider?
+				Type:     userpb.UserType_USER_TYPE_LIGHTWEIGHT,
+				OpaqueId: qualifier,
+			}},
+			Type: grants.GetGranteeType(acl.TypeLightweight),
+		},
+		Permissions: grants.GetGrantPermissionSet(a.Val),
+	}
+}
+
+func (fs *eosfs) ListGrants(ctx context.Context, ref *provider.Reference) ([]*provider.Grant, error) {
+	fn, auth, err := fs.resolveRefAndGetAuth(ctx, ref)
+	if err != nil {
+		return nil, err
+	}
+
+	attrs, err := fs.c.GetAttrs(ctx, auth, fn)
+	if err != nil {
+		return nil, err
+	}
+
+	grantList := []*provider.Grant{}
+	for _, a := range attrs {
+		switch {
+		case isSysACLs(a):
+			// EOS ACLs
+			acls, err := acl.Parse(a.Val, acl.ShortTextForm)
+			if err != nil {
+				return nil, err
+			}
+			grants, err := fs.convertACLsToGrants(ctx, acls)
+			if err != nil {
+				return nil, err
+			}
+			grantList = append(grantList, grants...)
+		case isLightweightACL(a):
+			grantList = append(grantList, parseLightweightACL(a))
+		}
 	}
 
 	return grantList, nil
@@ -1488,7 +1527,13 @@ func (fs *eosfs) createNominalHome(ctx context.Context) error {
 		return err
 	}
 
-	return err
+	if fs.conf.EnablePostCreateHomeHook {
+		if err := fs.runPostCreateHomeHook(ctx); err != nil {
+			return errors.Wrap(err, "eosfs: error running post create home hook")
+		}
+	}
+
+	return nil
 }
 
 func (fs *eosfs) CreateHome(ctx context.Context) error {
@@ -1505,6 +1550,11 @@ func (fs *eosfs) CreateHome(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+func (fs *eosfs) runPostCreateHomeHook(ctx context.Context) error {
+	user := ctxpkg.ContextMustGetUser(ctx)
+	return exec.Command(fs.conf.OnPostCreateHomeHook, user.Username).Run()
 }
 
 func (fs *eosfs) createUserDir(ctx context.Context, u *userpb.User, path string, recursiveAttr bool) error {
@@ -2077,25 +2127,69 @@ func (fs *eosfs) permissionSet(ctx context.Context, eosFileInfo *eosclient.FileI
 	}
 	var perm provider.ResourcePermissions
 
-	for _, e := range eosFileInfo.SysACL.Entries {
-		var userInGroup bool
-		if e.Type == acl.TypeGroup {
-			for _, g := range u.Groups {
-				// workaround as groups are case insensitive
-				group := strings.ToLower(e.Qualifier)
-				if group == g {
-					userInGroup = true
-					break
-				}
-			}
+	// as the lightweight acl are stored as normal attrs,
+	// we need to add them in the sysacl entries
+
+	for k, v := range eosFileInfo.Attrs {
+		if e, ok := attrForLightweightACL(k, v); ok {
+			eosFileInfo.SysACL.Entries = append(eosFileInfo.SysACL.Entries, e)
 		}
+	}
+
+	userGroupsSet := makeSet(u.Groups)
+
+	for _, e := range eosFileInfo.SysACL.Entries {
+		userInGroup := e.Type == acl.TypeGroup && userGroupsSet.in(strings.ToLower(e.Qualifier))
 
 		if (e.Type == acl.TypeUser && e.Qualifier == auth.Role.UID) || (e.Type == acl.TypeLightweight && e.Qualifier == u.Id.OpaqueId) || userInGroup {
 			mergePermissions(&perm, grants.GetGrantPermissionSet(e.Permissions))
 		}
 	}
 
+	// for normal files, we need to inherit also the lw acls
+	// from the parent folder, as these, when creating a new
+	// file are not inherited
+
+	if utils.UserIsLightweight(u) && !eosFileInfo.IsDir {
+		if parentPath, err := fs.unwrap(ctx, filepath.Dir(eosFileInfo.File)); err == nil {
+			if parent, err := fs.GetMD(ctx, &provider.Reference{Path: parentPath}, nil); err == nil {
+				mergePermissions(&perm, parent.PermissionSet)
+			}
+		}
+	}
+
 	return &perm
+}
+
+func attrForLightweightACL(k, v string) (*acl.Entry, bool) {
+	ok := strings.HasPrefix(k, "sys."+lwShareAttrKey)
+	if !ok {
+		return nil, false
+	}
+
+	qualifier := strings.TrimPrefix(k, fmt.Sprintf("sys.%s.", lwShareAttrKey))
+
+	attr := &acl.Entry{
+		Type:        acl.TypeLightweight,
+		Qualifier:   qualifier,
+		Permissions: v,
+	}
+	return attr, true
+}
+
+type groupSet map[string]struct{}
+
+func makeSet(lst []string) groupSet {
+	s := make(map[string]struct{}, len(lst))
+	for _, e := range lst {
+		s[e] = struct{}{}
+	}
+	return s
+}
+
+func (s groupSet) in(group string) bool {
+	_, ok := s[group]
+	return ok
 }
 
 func mergePermissions(l *provider.ResourcePermissions, r *provider.ResourcePermissions) {
