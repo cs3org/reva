@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/bluele/gcache"
@@ -55,7 +56,10 @@ import (
 // name is the Tracer name used to identify this instrumentation library.
 const tracerName = "auth"
 
-var userGroupsCache gcache.Cache
+var (
+	cacheOnce       sync.Once
+	userGroupsCache gcache.Cache
+)
 
 type config struct {
 	Priority   int    `mapstructure:"priority"`
@@ -116,7 +120,10 @@ func New(m map[string]interface{}, unprotected []string, tp trace.TracerProvider
 	if conf.UserGroupsCacheSize == 0 {
 		conf.UserGroupsCacheSize = 5000
 	}
-	userGroupsCache = gcache.New(conf.UserGroupsCacheSize).LFU().Build()
+
+	cacheOnce.Do(func() {
+		userGroupsCache = gcache.New(conf.UserGroupsCacheSize).LFU().Build()
+	})
 
 	credChain := map[string]auth.CredentialStrategy{}
 	for i, key := range conf.CredentialChain {
