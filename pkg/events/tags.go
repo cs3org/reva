@@ -27,9 +27,10 @@ import (
 
 // TagsAdded is emitted when a Tag has been added
 type TagsAdded struct {
-	Tags      string
-	Ref       *provider.Reference
-	Executant *user.UserId
+	SpaceOwner *user.UserId
+	Tags       string
+	Ref        *provider.Reference
+	Executant  *user.UserId
 }
 
 // Unmarshal to fulfill umarshaller interface
@@ -41,9 +42,10 @@ func (TagsAdded) Unmarshal(v []byte) (interface{}, error) {
 
 // TagsRemoved is emitted when a Tag has been added
 type TagsRemoved struct {
-	Tags      string
-	Ref       *provider.Reference
-	Executant *user.UserId
+	SpaceOwner *user.UserId
+	Tags       string
+	Ref        *provider.Reference
+	Executant  *user.UserId
 }
 
 // Unmarshal to fulfill umarshaller interface
