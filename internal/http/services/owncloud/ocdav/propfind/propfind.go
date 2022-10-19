@@ -695,6 +695,7 @@ func (p *Handler) getSpaceResourceInfos(ctx context.Context, w http.ResponseWrit
 
 	if res.Status.Code != rpc.Code_CODE_OK {
 		log.Debug().Interface("status", res.Status).Msg("List Container not ok, skipping")
+		w.WriteHeader(http.StatusInternalServerError)
 		return nil, false
 	}
 	for _, info := range res.Infos {
