@@ -865,10 +865,13 @@ func (fs *Decomposedfs) ListFolder(ctx context.Context, ref *provider.Reference,
 		// add this childs permissions
 		pset := n.PermissionSet(ctx)
 		node.AddPermissions(&np, &pset)
-		if ri, err := children[i].AsResourceInfo(ctx, &np, mdKeys, fieldMask, utils.IsRelativeReference(ref)); err == nil {
-			finfos = append(finfos, ri)
+		ri, err := children[i].AsResourceInfo(ctx, &np, mdKeys, fieldMask, utils.IsRelativeReference(ref))
+		if err != nil {
+			return nil, errtypes.InternalError(err.Error())
 		}
+		finfos = append(finfos, ri)
 	}
+
 	return
 }
 
