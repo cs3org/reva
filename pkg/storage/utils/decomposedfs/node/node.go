@@ -91,7 +91,7 @@ type Node struct {
 type PathLookup interface {
 	InternalRoot() string
 	InternalPath(spaceID, nodeID string) string
-	Path(ctx context.Context, n *Node) (path string, err error)
+	Path(ctx context.Context, n *Node, hasPermission func(*Node) bool) (path string, err error)
 	ShareFolder() string
 }
 
@@ -643,7 +643,7 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 	if returnBasename {
 		fn = n.Name
 	} else {
-		fn, err = n.lu.Path(ctx, n)
+		fn, err = n.lu.Path(ctx, n, func(*Node) bool { return true })
 		if err != nil {
 			return nil, err
 		}

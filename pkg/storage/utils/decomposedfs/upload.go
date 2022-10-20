@@ -135,7 +135,7 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 
 	// permissions are checked in NewUpload below
 
-	relative, err := fs.lu.Path(ctx, n)
+	relative, err := fs.lu.Path(ctx, n, func(*node.Node) bool { return true })
 	if err != nil {
 		return nil, err
 	}

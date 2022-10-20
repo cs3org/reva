@@ -60,7 +60,7 @@ type PathLookup interface {
 
 	InternalRoot() string
 	InternalPath(spaceID, nodeID string) string
-	Path(ctx context.Context, n *node.Node) (path string, err error)
+	Path(ctx context.Context, n *node.Node, hasPermission func(*node.Node) bool) (path string, err error)
 	ShareFolder() string
 }
 
@@ -460,7 +460,7 @@ func (t *Tree) Delete(ctx context.Context, n *node.Node) (err error) {
 	}
 
 	// get the original path
-	origin, err := t.lookup.Path(ctx, n)
+	origin, err := t.lookup.Path(ctx, n, func(*node.Node) bool { return true })
 	if err != nil {
 		return
 	}
