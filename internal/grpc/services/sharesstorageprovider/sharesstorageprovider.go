@@ -391,7 +391,7 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 						//Owner:     &userv1beta1.User{Id: receivedShare.Share.Owner}, // FIXME actually, the mount point belongs to the recipient
 						// the sharesstorageprovider keeps track of mount points
 						Root:  virtualRootID,
-						Name:  "Shares Jail",
+						Name:  "Shares",
 						Mtime: mtime,
 					}
 					res.StorageSpaces = append(res.StorageSpaces, space)
