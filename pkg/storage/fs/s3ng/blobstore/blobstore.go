@@ -136,10 +136,12 @@ func (bs *Blobstore) Download(node *node.Node) (io.ReadCloser, error) {
 
 	stat, err := reader.Stat()
 	if err != nil {
+		reader.Close()
 		return nil, errors.Wrapf(err, "blob path: %s", bs.path(node))
 	}
 
 	if node.Blobsize != stat.Size {
+		reader.Close()
 		return nil, fmt.Errorf("blob has unexpected size. %d bytes expected, got %d bytes", node.Blobsize, stat.Size)
 	}
 
