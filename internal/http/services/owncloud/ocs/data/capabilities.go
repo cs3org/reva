@@ -151,6 +151,7 @@ type CapabilitiesFilesSharing struct {
 	APIEnabled                    ocsBool                                  `json:"api_enabled" xml:"api_enabled" mapstructure:"api_enabled"`
 	Resharing                     ocsBool                                  `json:"resharing" xml:"resharing"`
 	GroupSharing                  ocsBool                                  `json:"group_sharing" xml:"group_sharing" mapstructure:"group_sharing"`
+	SharingRoles                  ocsBool                                  `json:"sharing_roles" xml:"sharing_roles" mapstructure:"sharing_roles"`
 	AutoAcceptShare               ocsBool                                  `json:"auto_accept_share" xml:"auto_accept_share" mapstructure:"auto_accept_share"`
 	ShareWithGroupMembersOnly     ocsBool                                  `json:"share_with_group_members_only" xml:"share_with_group_members_only" mapstructure:"share_with_group_members_only"`
 	ShareWithMembershipGroupsOnly ocsBool                                  `json:"share_with_membership_groups_only" xml:"share_with_membership_groups_only" mapstructure:"share_with_membership_groups_only"`
