@@ -64,8 +64,9 @@ type Capabilities struct {
 
 // Spaces lets a service configure its advertised options related to Storage Spaces.
 type Spaces struct {
-	Version string `json:"version" xml:"version" mapstructure:"version"`
-	Enabled bool   `json:"enabled" xml:"enabled" mapstructure:"enabled"`
+	Version  string  `json:"version" xml:"version" mapstructure:"version"`
+	Enabled  ocsBool `json:"enabled" xml:"enabled" mapstructure:"enabled"`
+	Projects ocsBool `json:"projects" xml:"projects" mapstructure:"projects"`
 }
 
 // CapabilitiesCore holds webdav config
@@ -149,6 +150,7 @@ type CapabilitiesDav struct {
 type CapabilitiesFilesSharing struct {
 	APIEnabled                    ocsBool                                  `json:"api_enabled" xml:"api_enabled" mapstructure:"api_enabled"`
 	Resharing                     ocsBool                                  `json:"resharing" xml:"resharing"`
+	ResharingDefault              ocsBool                                  `json:"resharing_default" xml:"resharing_default"`
 	GroupSharing                  ocsBool                                  `json:"group_sharing" xml:"group_sharing" mapstructure:"group_sharing"`
 	AutoAcceptShare               ocsBool                                  `json:"auto_accept_share" xml:"auto_accept_share" mapstructure:"auto_accept_share"`
 	ShareWithGroupMembersOnly     ocsBool                                  `json:"share_with_group_members_only" xml:"share_with_group_members_only" mapstructure:"share_with_group_members_only"`
@@ -172,6 +174,7 @@ type CapabilitiesFilesSharingPublic struct {
 	Multiple           ocsBool                                   `json:"multiple" xml:"multiple"`
 	SupportsUploadOnly ocsBool                                   `json:"supports_upload_only" xml:"supports_upload_only" mapstructure:"supports_upload_only"`
 	CanEdit            ocsBool                                   `json:"can_edit" xml:"can_edit" mapstructure:"can_edit"`
+	Contribute         ocsBool                                   `json:"contribute" xml:"contribute"`
 	Password           *CapabilitiesFilesSharingPublicPassword   `json:"password" xml:"password"`
 	ExpireDate         *CapabilitiesFilesSharingPublicExpireDate `json:"expire_date" xml:"expire_date" mapstructure:"expire_date"`
 }
