@@ -170,6 +170,10 @@ func (panel *Panel) prepareTemplate(tpl *template.Template) {
 			}
 			return strings.Join(sites, ", ")
 		},
+		"getSiteName": func(siteID string, fullName bool) string {
+			siteName, _ := data.QuerySiteName(siteID, fullName, panel.conf.Mentix.URL, panel.conf.Mentix.DataEndpoint)
+			return siteName
+		},
 	})
 }
 

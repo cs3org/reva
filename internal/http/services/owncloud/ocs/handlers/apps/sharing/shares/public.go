@@ -33,6 +33,7 @@ import (
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/publicshare"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/pkg/errors"
 )
@@ -51,6 +52,37 @@ func (h *Handler) createPublicLinkShare(w http.ResponseWriter, r *http.Request, 
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "Could not parse form from request", err)
 		return
+	}
+
+	if quicklink, _ := strconv.ParseBool(r.FormValue("quicklink")); quicklink {
+		res, err := c.ListPublicShares(ctx, &link.ListPublicSharesRequest{
+			Filters: []*link.ListPublicSharesRequest_Filter{
+				publicshare.ResourceIDFilter(statInfo.Id),
+			},
+		})
+		if err != nil {
+			response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "could not list public links", err)
+			return
+		}
+		if res.Status.Code != rpc.Code_CODE_OK {
+			response.WriteOCSError(w, r, int(res.Status.GetCode()), "could not list public links", nil)
+			return
+		}
+
+		for _, l := range res.GetShare() {
+			if l.Quicklink {
+				s := conversions.PublicShare2ShareData(l, r, h.publicURL)
+				err = h.addFileInfo(ctx, s, statInfo)
+				if err != nil {
+					response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error enhancing response with share data", err)
+					return
+				}
+				h.mapUserIds(ctx, c, s)
+				response.WriteOCSSuccess(w, r, s)
+				return
+			}
+		}
+
 	}
 
 	newPermissions, err := permissionFromRequest(r, h)
@@ -78,6 +110,8 @@ func (h *Handler) createPublicLinkShare(w http.ResponseWriter, r *http.Request, 
 		newPermissions = conversions.RoleFromOCSPermissions(permissions).CS3ResourcePermissions()
 	}
 
+	internal, _ := strconv.ParseBool(r.FormValue("internal"))
+
 	req := link.CreatePublicShareRequest{
 		ResourceInfo: statInfo,
 		Grant: &link.Grant{
@@ -86,6 +120,8 @@ func (h *Handler) createPublicLinkShare(w http.ResponseWriter, r *http.Request, 
 			},
 			Password: r.FormValue("password"),
 		},
+		Description: r.FormValue("description"),
+		Internal:    internal,
 	}
 
 	expireTimeString, ok := r.Form["expireDate"]
@@ -105,7 +141,8 @@ func (h *Handler) createPublicLinkShare(w http.ResponseWriter, r *http.Request, 
 	// set displayname and password protected as arbitrary metadata
 	req.ResourceInfo.ArbitraryMetadata = &provider.ArbitraryMetadata{
 		Metadata: map[string]string{
-			"name": r.FormValue("name"),
+			"name":      r.FormValue("name"),
+			"quicklink": r.FormValue("quicklink"),
 			// "password": r.FormValue("password"),
 		},
 	}
@@ -323,6 +360,17 @@ func (h *Handler) updatePublicShare(w http.ResponseWriter, r *http.Request, shar
 			Grant: &link.Grant{
 				Password: newPassword[0],
 			},
+		})
+	}
+
+	// Description
+	description, ok := r.Form["description"]
+	if ok {
+		updatesFound = true
+		logger.Info().Str("shares", "update").Msg("description updated")
+		updates = append(updates, &link.UpdatePublicShareRequest_Update{
+			Type:        link.UpdatePublicShareRequest_Update_TYPE_DESCRIPTION,
+			Description: description[0],
 		})
 	}
 
