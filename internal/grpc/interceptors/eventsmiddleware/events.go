@@ -227,30 +227,34 @@ func publisherFromConfig(m map[string]interface{}) (events.Publisher, error) {
 		address := m["address"].(string)
 		cid := m["clusterID"].(string)
 
-		skipVerify := m["tls-insecure"].(bool)
-		var rootCAPool *x509.CertPool
-		if val, ok := m["tls-root-ca-cert"]; ok {
-			rootCACertPath := val.(string)
-			if rootCACertPath != "" {
-				f, err := os.Open(rootCACertPath)
-				if err != nil {
-					return nil, err
-				}
+		enableTLS := m["enable-tls"].(bool)
+		var tlsConf *tls.Config
+		if enableTLS {
+			skipVerify := m["tls-insecure"].(bool)
+			var rootCAPool *x509.CertPool
+			if val, ok := m["tls-root-ca-cert"]; ok {
+				rootCACertPath := val.(string)
+				if rootCACertPath != "" {
+					f, err := os.Open(rootCACertPath)
+					if err != nil {
+						return nil, err
+					}
 
-				var certBytes bytes.Buffer
-				if _, err := io.Copy(&certBytes, f); err != nil {
-					return nil, err
-				}
+					var certBytes bytes.Buffer
+					if _, err := io.Copy(&certBytes, f); err != nil {
+						return nil, err
+					}
 
-				rootCAPool = x509.NewCertPool()
-				rootCAPool.AppendCertsFromPEM(certBytes.Bytes())
-				skipVerify = false
+					rootCAPool = x509.NewCertPool()
+					rootCAPool.AppendCertsFromPEM(certBytes.Bytes())
+					skipVerify = false
+				}
 			}
-		}
 
-		tlsConf := &tls.Config{
-			InsecureSkipVerify: skipVerify,
-			RootCAs:            rootCAPool,
+			tlsConf = &tls.Config{
+				InsecureSkipVerify: skipVerify,
+				RootCAs:            rootCAPool,
+			}
 		}
 		return server.NewNatsStream(natsjs.TLSConfig(tlsConf), natsjs.Address(address), natsjs.ClusterID(cid))
 	}
