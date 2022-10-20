@@ -472,7 +472,6 @@
 -   [apiTrashbin/trashbinFilesFolders.feature:261](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L261)
 -   [apiTrashbin/trashbinFilesFolders.feature:280](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L280)
 -   [apiTrashbin/trashbinFilesFolders.feature:275](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L275)
--   [apiTrashbin/trashbinFilesFolders.feature:288](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L288)
 -   [apiTrashbin/trashbinFilesFolders.feature:289](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L289)
 -   [apiTrashbin/trashbinFilesFolders.feature:303](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L303)
 -   [apiTrashbin/trashbinFilesFolders.feature:304](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L304)
