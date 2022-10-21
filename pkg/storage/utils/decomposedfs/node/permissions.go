@@ -103,7 +103,7 @@ func (p *Permissions) AssemblePermissions(ctx context.Context, n *Node) (ap prov
 
 	// check if the current user is the owner
 	if utils.UserIDEqual(u.Id, n.Owner()) {
-		lp, err := n.lu.Path(ctx, n)
+		lp, err := n.lu.Path(ctx, n, func(*Node) bool { return true })
 		if err == nil && lp == n.lu.ShareFolder() {
 			return ShareFolderPermissions(), nil
 		}
