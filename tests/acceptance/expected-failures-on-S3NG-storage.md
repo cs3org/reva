@@ -863,20 +863,14 @@ _ocs: api compatibility, return correct status code_
 -   [apiWebdavOperations/search.feature:314](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavOperations/search.feature#L314)
 
 #### [Cannot disable the dav propfind depth infinity for resources](https://github.com/owncloud/ocis/issues/3720)
--   [apiWebdavOperations/listFiles.feature:398](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavOperations/listFiles.feature#L398)
--   [apiWebdavOperations/listFiles.feature:399](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavOperations/listFiles.feature#L399)
--   [apiWebdavOperations/listFiles.feature:404](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavOperations/listFiles.feature#L404)
--   [apiWebdavOperations/listFiles.feature:423](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavOperations/listFiles.feature#L423)
+-   [apiWebdavOperations/listFiles.feature:384](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavOperations/listFiles.feature#L384)
+-   [apiWebdavOperations/listFiles.feature:385](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavOperations/listFiles.feature#L385)
+-   [apiWebdavOperations/listFiles.feature:390](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavOperations/listFiles.feature#L390)
+-   [apiWebdavOperations/listFiles.feature:409](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavOperations/listFiles.feature#L409)
+-   [apiWebdavOperations/listFiles.feature:414](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavOperations/listFiles.feature#L414)
+-   [apiWebdavOperations/listFiles.feature:429](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavOperations/listFiles.feature#L429)
 -   [apiWebdavOperations/listFiles.feature:428](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavOperations/listFiles.feature#L428)
--   [apiWebdavOperations/listFiles.feature:443](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavOperations/listFiles.feature#L443)
--   [apiWebdavOperations/listFiles.feature:442](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavOperations/listFiles.feature#L442)
--   [apiWebdavOperations/listFiles.feature:448](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavOperations/listFiles.feature#L448)
-
-#### [can't access public link resources with spaces webdav API](https://github.com/owncloud/ocis/issues/3085)
-
--   [apiWebdavOperations/listFiles.feature:218](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavOperations/listFiles.feature#L218)
--   [apiWebdavOperations/listFiles.feature:256](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavOperations/listFiles.feature#L256)
--   [apiWebdavOperations/listFiles.feature:293](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavOperations/listFiles.feature#L293)
+-   [apiWebdavOperations/listFiles.feature:434](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavOperations/listFiles.feature#L434)
 
 #### [OCS status code zero](https://github.com/owncloud/ocis/issues/3621)
 -   [apiShareManagementToShares/moveReceivedShare.feature:32](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementToShares/moveReceivedShare.feature#L32)
@@ -915,9 +909,6 @@ _ocs: api compatibility, return correct status code_
 -   [apiTrashbin/trashbinFilesFolders.feature:389](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L389)
 -   [apiTrashbin/trashbinFilesFolders.feature:443](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L443)
 -   [apiTrashbin/trashbinFilesFolders.feature:480](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L480)
-
-#### [Cannot test trashbin of non existing user via spaces](https://github.com/owncloud/ocis/issues/4820)
--   [apiTrashbin/trashbinFilesFolders.feature:288](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiTrashbin/trashbinFilesFolders.feature#L288)
 
 #### [apiShareOperationsToShares1/gettingShares.feature:28 fails in CI](https://github.com/cs3org/reva/issues/2926)
 -   [apiShareOperationsToShares1/gettingShares.feature:40](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareOperationsToShares1/gettingShares.feature#L40)
