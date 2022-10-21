@@ -384,6 +384,17 @@ func (s *svc) handleOpen(openMode int) http.HandlerFunc {
 			Path:       ".",
 		}
 
+		statRes, err := client.Stat(ctx, &provider.StatRequest{Ref: fileRef})
+		if err != nil {
+			writeError(w, r, appErrorServerError, "Internal error accessing the file, please try again later", err)
+			return
+		}
+
+		if status := utils.ReadPlainFromOpaque(statRes.Opaque, "status"); status == "processing" {
+			writeError(w, r, appErrorTooEarly, "The requested file is not yet available, please try again later", nil)
+			return
+		}
+
 		viewMode, err := getViewModeFromPublicScope(ctx)
 		if err != nil {
 			writeError(w, r, appErrorPermissionDenied, "permission denied to open the application", err)
