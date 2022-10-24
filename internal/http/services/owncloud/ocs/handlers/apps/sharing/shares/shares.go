@@ -607,7 +607,7 @@ func (h *Handler) GetShare(w http.ResponseWriter, r *http.Request) {
 		// the path (/users/u-u-i-d/foo) will not be accessible
 
 		// in a global namespace we can access the share using the full path
-		// in a jailed namespace we have to point to the mount point in the users /Shares jail
+		// in a jailed namespace we have to point to the mount point in the users /Shares Jail
 		// - needed for oc10 hot migration
 		// or use the /dav/spaces/<space id> endpoint?
 
@@ -619,7 +619,7 @@ func (h *Handler) GetShare(w http.ResponseWriter, r *http.Request) {
 		// - no, the gateway only sees the same list any has the same options as the ocs service
 		// - we would need to have a list of mountpoints for the shares -> owncloudstorageprovider for hot migration migration
 
-		// best we can do for now is stat the /Shares jail if it is set and return those paths
+		// best we can do for now is stat the /Shares Jail if it is set and return those paths
 
 		// if we are in a jail and the current share has been accepted use the stat from the share jail
 		// Needed because received shares can be jailed in a folder in the users home
@@ -934,7 +934,7 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 			// the path (/users/u-u-i-d/foo) will not be accessible
 
 			// in a global namespace we can access the share using the full path
-			// in a jailed namespace we have to point to the mount point in the users /Shares jail
+			// in a jailed namespace we have to point to the mount point in the users /Shares Jail
 			// - needed for oc10 hot migration
 			// or use the /dav/spaces/<space id> endpoint?
 
@@ -946,7 +946,7 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 			// - no, the gateway only sees the same list any has the same options as the ocs service
 			// - we would need to have a list of mountpoints for the shares -> owncloudstorageprovider for hot migration migration
 
-			// best we can do for now is stat the /Shares jail if it is set and return those paths
+			// best we can do for now is stat the /Shares Jail if it is set and return those paths
 
 			// if we are in a jail and the current share has been accepted use the stat from the share jail
 			// Needed because received shares can be jailed in a folder in the users home

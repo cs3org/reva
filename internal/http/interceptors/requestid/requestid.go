@@ -16,13 +16,39 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package loader
+package requestid
 
 import (
-	// Load core HTTP middlewares.
-	_ "github.com/cs3org/reva/v2/internal/http/interceptors/cors"
-	_ "github.com/cs3org/reva/v2/internal/http/interceptors/prometheus"
-	_ "github.com/cs3org/reva/v2/internal/http/interceptors/providerauthorizer"
-	_ "github.com/cs3org/reva/v2/internal/http/interceptors/requestid"
-	// Add your own middleware.
+	"net/http"
+
+	"github.com/cs3org/reva/v2/pkg/rhttp/global"
+	"github.com/go-chi/chi/v5/middleware"
 )
+
+const (
+	defaultPriority = 100
+)
+
+func init() {
+	global.RegisterMiddleware("requestid", New)
+}
+
+// New returns a new HTTP middleware that adds the X-Request-ID to the context
+func New(m map[string]interface{}) (global.Middleware, int, error) {
+	rh := requestIDHandler{}
+	return rh.handler, defaultPriority, nil
+}
+
+type requestIDHandler struct {
+	h http.Handler
+}
+
+// handler is a request id middleware
+func (rh requestIDHandler) handler(h http.Handler) http.Handler {
+	rh.h = middleware.RequestID(h)
+	return rh
+}
+
+func (rh requestIDHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	rh.h.ServeHTTP(w, r)
+}

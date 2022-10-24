@@ -23,7 +23,6 @@ require (
 	github.com/emvi/iso-639-1 v1.0.1
 	github.com/eventials/go-tus v0.0.0-20220610120217-05d0564bb571
 	github.com/gdexlab/go-render v1.0.1
-	github.com/go-chi/chi v4.1.2+incompatible
 	github.com/go-chi/chi/v5 v5.0.7
 	github.com/go-ldap/ldap/v3 v3.4.4
 	github.com/go-micro/plugins/v4/events/natsjs v1.1.0

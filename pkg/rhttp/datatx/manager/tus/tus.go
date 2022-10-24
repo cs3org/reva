@@ -170,14 +170,14 @@ type composable interface {
 }
 
 func setExpiresHeader(fs storage.FS, w http.ResponseWriter, r *http.Request) {
-	ctx := context.Background()
+	ctx := r.Context()
 	id := path.Base(r.URL.Path)
 	datastore, ok := fs.(tusd.DataStore)
 	if !ok {
 		appctx.GetLogger(ctx).Error().Interface("fs", fs).Msg("storage is not a tus datastore")
 		return
 	}
-	upload, err := datastore.GetUpload(context.Background(), id)
+	upload, err := datastore.GetUpload(ctx, id)
 	if err != nil {
 		appctx.GetLogger(ctx).Error().Err(err).Msg("could not get upload from storage")
 		return

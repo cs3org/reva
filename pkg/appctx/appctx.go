@@ -22,6 +22,7 @@ import (
 	"context"
 
 	rtrace "github.com/cs3org/reva/v2/pkg/trace"
+	"github.com/go-chi/chi/v5/middleware"
 	"github.com/rs/zerolog"
 	"go.opentelemetry.io/otel/trace"
 )
@@ -37,7 +38,15 @@ func WithLogger(ctx context.Context, l *zerolog.Logger) context.Context {
 // GetLogger returns the logger associated with the given context
 // or a disabled logger in case no logger is stored inside the context.
 func GetLogger(ctx context.Context) *zerolog.Logger {
-	return zerolog.Ctx(ctx)
+	logger := zerolog.Ctx(ctx)
+	reqID := middleware.GetReqID(ctx)
+
+	if reqID != "" {
+		sublogger := logger.With().Str("request-id", reqID).Logger()
+		logger = &sublogger
+	}
+
+	return logger
 }
 
 // WithTracerProvider returns a context with an associated TracerProvider
