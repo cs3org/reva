@@ -390,7 +390,7 @@ func (s *svc) handleOpen(openMode int) http.HandlerFunc {
 			return
 		}
 
-		if status := utils.ReadPlainFromOpaque(statRes.Opaque, "status"); status == "processing" {
+		if status := utils.ReadPlainFromOpaque(statRes.Info.Opaque, "status"); status == "processing" {
 			writeError(w, r, appErrorTooEarly, "The requested file is not yet available, please try again later", nil)
 			return
 		}
