@@ -1562,10 +1562,29 @@ func (c *Client) grpcMDResponseToFileInfo(st *erpc.MDResponse, namepfx string) (
 	}
 	fi := new(eosclient.FileInfo)
 
-	if st.Type != 0 {
+	if st.Type == erpc.TYPE_CONTAINER {
 		fi.IsDir = true
-	}
-	if st.Fmd != nil {
+		fi.Inode = st.Cmd.Inode
+		fi.FID = st.Cmd.ParentId
+		fi.UID = st.Cmd.Uid
+		fi.GID = st.Cmd.Gid
+		fi.MTimeSec = st.Cmd.Mtime.Sec
+		fi.ETag = st.Cmd.Etag
+		if namepfx == "" {
+			fi.File = string(st.Cmd.Name)
+		} else {
+			fi.File = namepfx + "/" + string(st.Cmd.Name)
+		}
+
+		fi.Attrs = make(map[string]string)
+		for k, v := range st.Cmd.Xattrs {
+			fi.Attrs[k] = string(v)
+		}
+
+		fi.Size = uint64(st.Cmd.TreeSize)
+
+		log.Debug().Str("stat info - path", fi.File).Uint64("inode", fi.Inode).Uint64("uid", fi.UID).Uint64("gid", fi.GID).Str("etag", fi.ETag).Msg("grpc response")
+	} else {
 		fi.Inode = st.Fmd.Inode
 		fi.FID = st.Fmd.ContId
 		fi.UID = st.Fmd.Uid
@@ -1592,27 +1611,6 @@ func (c *Client) grpcMDResponseToFileInfo(st *erpc.MDResponse, namepfx string) (
 		fi.XS = xs
 
 		log.Debug().Str("stat info - path", fi.File).Uint64("inode", fi.Inode).Uint64("uid", fi.UID).Uint64("gid", fi.GID).Str("etag", fi.ETag).Str("checksum", fi.XS.XSType+":"+fi.XS.XSSum).Msg("grpc response")
-	} else {
-		fi.Inode = st.Cmd.Inode
-		fi.FID = st.Fmd.ContId
-		fi.UID = st.Cmd.Uid
-		fi.GID = st.Cmd.Gid
-		fi.MTimeSec = st.Cmd.Mtime.Sec
-		fi.ETag = st.Cmd.Etag
-		if namepfx == "" {
-			fi.File = string(st.Cmd.Name)
-		} else {
-			fi.File = namepfx + "/" + string(st.Cmd.Name)
-		}
-
-		fi.Attrs = make(map[string]string)
-		for k, v := range st.Cmd.Xattrs {
-			fi.Attrs[k] = string(v)
-		}
-
-		fi.Size = 0
-
-		log.Debug().Str("stat info - path", fi.File).Uint64("inode", fi.Inode).Uint64("uid", fi.UID).Uint64("gid", fi.GID).Str("etag", fi.ETag).Msg("grpc response")
 	}
 
 	return fi, nil
