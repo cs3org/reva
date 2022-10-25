@@ -568,7 +568,12 @@ var _ = Describe("storage providers", func() {
 			})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(getRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
-			Expect(getRes.Lock).To(Equal(lock))
+			Expect(getRes.Lock.Type).To(Equal(lock.Type))
+			Expect(getRes.Lock.User).To(Equal(lock.User))
+			Expect(getRes.Lock.LockId).To(Equal(lock.LockId))
+			Expect(getRes.Lock.AppName).To(Equal(lock.AppName))
+			Expect(getRes.Lock.Expiration).To(Equal(lock.Expiration))
+			Expect(getRes.Lock.Opaque).To(Equal(lock.Opaque))
 
 			refreshRes, err := serviceClient.RefreshLock(ctx, &storagep.RefreshLockRequest{
 				Ref:  subdirRef,
