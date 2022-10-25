@@ -1564,7 +1564,7 @@ func (c *Client) grpcMDResponseToFileInfo(st *erpc.MDResponse, namepfx string) (
 
 	if st.Type == erpc.TYPE_CONTAINER {
 		fi.IsDir = true
-		fi.Inode = st.Cmd.Inode
+		fi.Inode = st.Fmd.Inode
 		fi.FID = st.Cmd.ParentId
 		fi.UID = st.Cmd.Uid
 		fi.GID = st.Cmd.Gid
