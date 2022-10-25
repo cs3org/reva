@@ -1223,7 +1223,23 @@ func (fs *eosfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []st
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("eosfs: get md for ref:" + ref.String())
 
-	auth, err := fs.getRootAuth(ctx)
+	u, err := getUser(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	fn := ""
+	if u.Id.Type == userpb.UserType_USER_TYPE_LIGHTWEIGHT ||
+		u.Id.Type == userpb.UserType_USER_TYPE_FEDERATED {
+		p, err := fs.resolve(ctx, ref)
+		if err != nil {
+			return nil, errors.Wrap(err, "eosfs: error resolving reference")
+		}
+
+		fn = fs.wrap(ctx, p)
+	}
+
+	auth, err := fs.getUserAuth(ctx, u, fn)
 	if err != nil {
 		return nil, err
 	}
@@ -1250,7 +1266,7 @@ func (fs *eosfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []st
 		}
 	}
 
-	fn := fs.wrap(ctx, p)
+	fn = fs.wrap(ctx, p)
 	eosFileInfo, err := fs.c.GetFileInfoByPath(ctx, auth, fn)
 	if err != nil {
 		return nil, err
