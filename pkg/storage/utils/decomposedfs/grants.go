@@ -41,7 +41,6 @@ func (fs *Decomposedfs) DenyGrant(ctx context.Context, ref *provider.Reference, 
 
 	log.Debug().Interface("ref", ref).Interface("grantee", grantee).Msg("DenyGrant()")
 
-	// f
 	node, err := fs.lu.NodeFromResource(ctx, ref)
 	if err != nil {
 		return err

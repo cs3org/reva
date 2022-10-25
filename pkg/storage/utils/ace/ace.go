@@ -192,27 +192,6 @@ func FromGrant(g *provider.Grant) *ACE {
 	// Currently we only deny the full permission set
 	if grants.PermissionsEqual(&provider.ResourcePermissions{}, g.Permissions) {
 		t = "D"
-		g.Permissions = &provider.ResourcePermissions{
-			AddGrant:             true,
-			Delete:               true,
-			CreateContainer:      true,
-			GetPath:              true,
-			GetQuota:             true,
-			InitiateFileDownload: true,
-			InitiateFileUpload:   true,
-			ListGrants:           true,
-			ListContainer:        true,
-			ListFileVersions:     true,
-			ListRecycle:          true,
-			Move:                 true,
-			RemoveGrant:          true,
-			PurgeRecycle:         true,
-			RestoreFileVersion:   true,
-			RestoreRecycleItem:   true,
-			Stat:                 true,
-			UpdateGrant:          true,
-			DenyGrant:            true,
-		}
 	}
 	e := &ACE{
 		_type:       t,
@@ -281,6 +260,7 @@ func Unmarshal(principal string, v []byte) (e *ACE, err error) {
 
 // Grant returns a CS3 grant
 func (e *ACE) Grant() *provider.Grant {
+	// if type equals "D" we have a full denial which means an empty permission set
 	permissions := &provider.ResourcePermissions{}
 	if e._type == "A" {
 		permissions = e.grantPermissionSet()

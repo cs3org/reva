@@ -82,6 +82,7 @@ type Handler struct {
 	userIdentifierCache                   *ttlcache.Cache
 	resourceInfoCache                     cache.ResourceInfoCache
 	resourceInfoCacheTTL                  time.Duration
+	deniable                              bool
 
 	getClient GatewayClientGetter
 }
@@ -131,6 +132,7 @@ func (h *Handler) Init(c *config.Config) {
 
 	h.userIdentifierCache = ttlcache.NewCache()
 	_ = h.userIdentifierCache.SetTTL(time.Second * time.Duration(c.UserIdentifierCacheTTL))
+	h.deniable = c.EnableDenials
 
 	cache, err := getCacheManager(c)
 	if err == nil {
@@ -452,12 +454,28 @@ func (h *Handler) extractPermissions(reqRole string, reqPermissions string, ri *
 			Error:   errors.New("cannot set the requested share permissions"),
 		}
 	}
-	// add a deny permission only if the user has the grant to deny (ResourcePermissions.DenyGrant == true)
-	if role.Name == conversions.RoleDenied && !ri.PermissionSet.DenyGrant {
-		return nil, nil, &ocsError{
-			Code:    http.StatusNotFound,
-			Message: "Cannot set the requested share permissions: no deny grant on resource",
-			Error:   errors.New("Cannot set the requested share permissions: no deny grant on resource"),
+
+	if role.Name == conversions.RoleDenied {
+		switch {
+		case !h.deniable:
+			return nil, nil, &ocsError{
+				Code:    http.StatusBadRequest,
+				Message: "Cannot set the requested share permissions: denials are not enabled on this api",
+				Error:   errors.New("Cannot set the requested share permissions: denials are not enabled on this api"),
+			}
+		case ri.Type != provider.ResourceType_RESOURCE_TYPE_CONTAINER:
+			return nil, nil, &ocsError{
+				Code:    http.StatusBadRequest,
+				Message: "Cannot set the requested share permissions: deny access only works on folders",
+				Error:   errors.New("Cannot set the requested share permissions: deny access only works on folders"),
+			}
+		case !ri.PermissionSet.DenyGrant:
+			// add a deny permission only if the user has the grant to deny (ResourcePermissions.DenyGrant == true)
+			return nil, nil, &ocsError{
+				Code:    http.StatusForbidden,
+				Message: "Cannot set the requested share permissions: no deny grant on resource",
+				Error:   errors.New("Cannot set the requested share permissions: no deny grant on resource"),
+			}
 		}
 	}
 
