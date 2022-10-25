@@ -1559,6 +1559,9 @@ func (s *service) wrap(ctx context.Context, ri *provider.ResourceInfo, prefixMou
 		// For wrapper drivers, the storage ID might already be set. In that case, skip setting it
 		ri.Id.StorageId = s.mountID
 	}
+	if ri.ParentId != nil && ri.ParentId.StorageId == "" {
+		ri.ParentId.StorageId = s.mountID
+	}
 	if prefixMountpoint {
 		// TODO move mount path prefixing to the gateway
 		ri.Path = path.Join(s.mountPath, ri.Path)
