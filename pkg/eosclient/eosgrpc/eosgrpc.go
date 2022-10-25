@@ -27,7 +27,6 @@ import (
 	"os"
 	"os/exec"
 	"path"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -462,7 +461,7 @@ func (c *Client) GetFileInfoByInode(ctx context.Context, auth eosclient.Authoriz
 
 	log.Debug().Uint64("inode", inode).Str("rsp:", fmt.Sprintf("%#v", rsp)).Msg("grpc response")
 
-	info, err := c.grpcMDResponseToFileInfo(rsp, "")
+	info, err := c.grpcMDResponseToFileInfo(rsp)
 	if err != nil {
 		return nil, err
 	}
@@ -692,7 +691,7 @@ func (c *Client) GetFileInfoByPath(ctx context.Context, auth eosclient.Authoriza
 
 	log.Debug().Str("func", "GetFileInfoByPath").Str("path", path).Str("rsp:", fmt.Sprintf("%#v", rsp)).Msg("grpc response")
 
-	info, err := c.grpcMDResponseToFileInfo(rsp, filepath.Dir(path))
+	info, err := c.grpcMDResponseToFileInfo(rsp)
 	if err != nil {
 		return nil, err
 	}
@@ -1196,7 +1195,7 @@ func (c *Client) List(ctx context.Context, auth eosclient.Authorization, dpath s
 
 		log.Debug().Str("func", "List").Str("path", dpath).Str("item resp:", fmt.Sprintf("%#v", rsp)).Msg("grpc response")
 
-		myitem, err := c.grpcMDResponseToFileInfo(rsp, dpath)
+		myitem, err := c.grpcMDResponseToFileInfo(rsp)
 		if err != nil {
 			log.Error().Err(err).Str("func", "List").Str("path", dpath).Str("could not convert item:", fmt.Sprintf("%#v", rsp)).Str("err", err.Error()).Msg("")
 
@@ -1556,7 +1555,7 @@ func getFileFromVersionFolder(p string) string {
 	return path.Join(path.Dir(p), strings.TrimPrefix(path.Base(p), versionPrefix))
 }
 
-func (c *Client) grpcMDResponseToFileInfo(st *erpc.MDResponse, namepfx string) (*eosclient.FileInfo, error) {
+func (c *Client) grpcMDResponseToFileInfo(st *erpc.MDResponse) (*eosclient.FileInfo, error) {
 	if st.Cmd == nil && st.Fmd == nil {
 		return nil, errors.Wrap(errtypes.NotSupported(""), "Invalid response (st.Cmd and st.Fmd are nil)")
 	}
@@ -1570,11 +1569,7 @@ func (c *Client) grpcMDResponseToFileInfo(st *erpc.MDResponse, namepfx string) (
 		fi.GID = st.Cmd.Gid
 		fi.MTimeSec = st.Cmd.Mtime.Sec
 		fi.ETag = st.Cmd.Etag
-		if namepfx == "" {
-			fi.File = string(st.Cmd.Name)
-		} else {
-			fi.File = namepfx + "/" + string(st.Cmd.Name)
-		}
+		fi.File = string(st.Cmd.Path)
 
 		fi.Attrs = make(map[string]string)
 		for k, v := range st.Cmd.Xattrs {
@@ -1591,11 +1586,7 @@ func (c *Client) grpcMDResponseToFileInfo(st *erpc.MDResponse, namepfx string) (
 		fi.GID = st.Fmd.Gid
 		fi.MTimeSec = st.Fmd.Mtime.Sec
 		fi.ETag = st.Fmd.Etag
-		if namepfx == "" {
-			fi.File = string(st.Fmd.Name)
-		} else {
-			fi.File = namepfx + "/" + string(st.Fmd.Name)
-		}
+		fi.File = string(st.Fmd.Path)
 
 		fi.Attrs = make(map[string]string)
 		for k, v := range st.Fmd.Xattrs {
