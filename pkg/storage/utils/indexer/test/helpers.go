@@ -20,7 +20,7 @@ package test
 
 import (
 	"errors"
-	"io/ioutil"
+	"os"
 	"path"
 	"reflect"
 	"strings"
@@ -28,7 +28,7 @@ import (
 
 // CreateTmpDir creates a temporary dir for tests data.
 func CreateTmpDir() (string, error) {
-	name, err := ioutil.TempDir("/tmp", "testfiles-")
+	name, err := os.MkdirTemp("/tmp", "testfiles-")
 	if err != nil {
 		return "", err
 	}

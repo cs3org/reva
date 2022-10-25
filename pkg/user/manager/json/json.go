@@ -21,7 +21,7 @@ package json
 import (
 	"context"
 	"encoding/json"
-	"io/ioutil"
+	"os"
 	"strconv"
 	"strings"
 
@@ -79,7 +79,7 @@ func (m *manager) Configure(ml map[string]interface{}) error {
 		return err
 	}
 
-	f, err := ioutil.ReadFile(c.Users)
+	f, err := os.ReadFile(c.Users)
 	if err != nil {
 		return err
 	}

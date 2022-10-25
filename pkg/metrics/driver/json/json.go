@@ -21,7 +21,6 @@ package json
 import (
 	"encoding/json"
 	"errors"
-	"io/ioutil"
 	"os"
 
 	"github.com/cs3org/reva/v2/pkg/metrics/driver/registry"
@@ -47,7 +46,7 @@ func driverName() string {
 func readJSON(driver *MetricsJSONDriver) *data {
 	data := &data{}
 
-	file, err := ioutil.ReadFile(driver.metricsDataLocation)
+	file, err := os.ReadFile(driver.metricsDataLocation)
 	if err != nil {
 		log.Error().Err(err).Str("location", driver.metricsDataLocation).Msg("Unable to read json file from location.")
 	}

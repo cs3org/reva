@@ -26,7 +26,6 @@ import (
 	"fmt"
 	"hash/adler32"
 	"io"
-	"io/ioutil"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -1825,7 +1824,7 @@ func (fs *owncloudsqlfs) ListRecycle(ctx context.Context, ref *provider.Referenc
 	}
 
 	// list files folder
-	mds, err := ioutil.ReadDir(rp)
+	mds, err := os.ReadDir(rp)
 	if err != nil {
 		log := appctx.GetLogger(ctx)
 		log.Debug().Err(err).Str("path", rp).Msg("trash not readable")
@@ -1835,7 +1834,8 @@ func (fs *owncloudsqlfs) ListRecycle(ctx context.Context, ref *provider.Referenc
 	// TODO (jfd) limit and offset
 	items := []*provider.RecycleItem{}
 	for i := range mds {
-		ri := fs.convertToRecycleItem(ctx, mds[i])
+		mdsInfo, _ := mds[i].Info()
+		ri := fs.convertToRecycleItem(ctx, mdsInfo)
 		if ri != nil {
 			items = append(items, ri)
 		}

@@ -24,7 +24,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path"
@@ -1192,8 +1191,8 @@ func (c *Client) List(ctx context.Context, auth eosclient.Authorization, dpath s
 
 // Read reads a file from the mgm and returns a handle to read it
 // This handle could be directly the body of the response or a local tmp file
-//  returning a handle to the body is nice, yet it gives less control on the transaction
-//  itself, e.g. strange timeouts or TCP issues may be more difficult to trace
+// returning a handle to the body is nice, yet it gives less control on the transaction
+// itself, e.g. strange timeouts or TCP issues may be more difficult to trace
 // Let's consider this experimental for the moment, maybe I'll like to add a config
 // parameter to choose between the two behaviours
 func (c *Client) Read(ctx context.Context, auth eosclient.Authorization, path string) (io.ReadCloser, error) {
@@ -1237,7 +1236,7 @@ func (c *Client) Write(ctx context.Context, auth eosclient.Authorization, path s
 	length = -1
 
 	if c.opt.WriteUsesLocalTemp {
-		fd, err := ioutil.TempFile(c.opt.CacheDirectory, "eoswrite-")
+		fd, err := os.CreateTemp(c.opt.CacheDirectory, "eoswrite-")
 		if err != nil {
 			return err
 		}

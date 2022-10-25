@@ -20,7 +20,6 @@ package json_test
 
 import (
 	"context"
-	"io/ioutil"
 	"os"
 	"sync"
 
@@ -66,7 +65,7 @@ var _ = Describe("Json", func() {
 
 	BeforeEach(func() {
 		var err error
-		tmpFile, err = ioutil.TempFile("", "reva-unit-test-*.json")
+		tmpFile, err = os.CreateTemp("", "reva-unit-test-*.json")
 		Expect(err).ToNot(HaveOccurred())
 
 		config := map[string]interface{}{

@@ -936,7 +936,7 @@ func (t *Tree) readRecycleItem(ctx context.Context, spaceID, key, path string) (
 			appctx.GetLogger(ctx).Error().Err(err).Str("trashItem", trashItem).Msg("error reading trash link")
 			return
 		}
-		deletedNodePath = filepath.Join(t.lookup.InternalPath(spaceID, nodeID) + node.TrashIDDelimiter + timeSuffix)
+		deletedNodePath = t.lookup.InternalPath(spaceID, nodeID) + node.TrashIDDelimiter + timeSuffix
 	} else {
 		// children of a trashed node are in the nodes folder
 		nodeID, err = readTrashChildLink(trashItem)

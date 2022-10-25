@@ -21,7 +21,7 @@ package utils
 import (
 	"crypto/tls"
 	"crypto/x509"
-	"io/ioutil"
+	"os"
 
 	"github.com/cs3org/reva/v2/pkg/logger"
 	ldapReconnect "github.com/cs3org/reva/v2/pkg/utils/ldap"
@@ -52,7 +52,7 @@ func GetLDAPClientWithReconnect(c *LDAPConn) (ldap.Client, error) {
 		}
 	}
 	if !c.Insecure && c.CACert != "" {
-		if pemBytes, err := ioutil.ReadFile(c.CACert); err == nil {
+		if pemBytes, err := os.ReadFile(c.CACert); err == nil {
 			rpool, _ := x509.SystemCertPool()
 			rpool.AppendCertsFromPEM(pemBytes)
 			tlsConf = &tls.Config{
@@ -87,7 +87,7 @@ func GetLDAPClientForAuth(c *LDAPConn) (ldap.Client, error) {
 		}
 	}
 	if !c.Insecure && c.CACert != "" {
-		if pemBytes, err := ioutil.ReadFile(c.CACert); err == nil {
+		if pemBytes, err := os.ReadFile(c.CACert); err == nil {
 			rpool, _ := x509.SystemCertPool()
 			rpool.AppendCertsFromPEM(pemBytes)
 			tlsConf = &tls.Config{

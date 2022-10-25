@@ -20,7 +20,6 @@ package providercache_test
 
 import (
 	"context"
-	"io/ioutil"
 	"os"
 	"time"
 
@@ -53,7 +52,7 @@ var _ = Describe("Cache", func() {
 		ctx = context.Background()
 
 		var err error
-		tmpdir, err = ioutil.TempDir("", "providercache-test")
+		tmpdir, err = os.MkdirTemp("", "providercache-test")
 		Expect(err).ToNot(HaveOccurred())
 
 		err = os.MkdirAll(tmpdir, 0755)

@@ -22,7 +22,6 @@ import (
 	"context"
 	"encoding/xml"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -51,7 +50,7 @@ var _ = Describe("Propfind", func() {
 		ctx     context.Context
 
 		readResponse = func(r io.Reader) (*propfind.MultiStatusResponseUnmarshalXML, string, error) {
-			buf, err := ioutil.ReadAll(r)
+			buf, err := io.ReadAll(r)
 			if err != nil {
 				return nil, "", err
 			}

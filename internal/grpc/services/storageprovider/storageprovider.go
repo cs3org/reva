@@ -22,7 +22,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"net/url"
 	"os"
 	"path"
@@ -133,7 +132,7 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 
 func registerMimeTypes(mappingFile string) error {
 	if mappingFile != "" {
-		f, err := ioutil.ReadFile(mappingFile)
+		f, err := os.ReadFile(mappingFile)
 		if err != nil {
 			return fmt.Errorf("storageprovider: error reading the custom mime types file: +%v", err)
 		}

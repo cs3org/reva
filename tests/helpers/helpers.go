@@ -22,7 +22,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"io/ioutil"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -43,7 +43,7 @@ func TempDir(name string) (string, error) {
 	if err != nil {
 		return "nil", err
 	}
-	tmpRoot, err := ioutil.TempDir(tmpDir, "reva-unit-tests-*-root")
+	tmpRoot, err := os.MkdirTemp(tmpDir, "reva-unit-tests-*-root")
 	if err != nil {
 		return "nil", err
 	}
@@ -62,6 +62,6 @@ func Upload(ctx context.Context, fs storage.FS, ref *provider.Reference, content
 		return errors.New("simple upload method not available")
 	}
 	uploadRef := &provider.Reference{Path: "/" + uploadID}
-	_, err = fs.Upload(ctx, uploadRef, ioutil.NopCloser(bytes.NewReader(content)), nil)
+	_, err = fs.Upload(ctx, uploadRef, io.NopCloser(bytes.NewReader(content)), nil)
 	return err
 }

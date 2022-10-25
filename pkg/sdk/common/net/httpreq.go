@@ -22,7 +22,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"time"
 )
@@ -93,7 +92,7 @@ func (request *HTTPRequest) Do(checkStatus bool) ([]byte, error) {
 		return nil, fmt.Errorf("received invalid response from '%v': %s", request.endpoint, httpRes.Status)
 	}
 
-	data, err := ioutil.ReadAll(httpRes.Body)
+	data, err := io.ReadAll(httpRes.Body)
 	if err != nil {
 		return nil, fmt.Errorf("reading response data from '%v' failed: %v", request.endpoint, err)
 	}
