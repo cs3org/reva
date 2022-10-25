@@ -1567,7 +1567,8 @@ func (c *Client) grpcMDResponseToFileInfo(st *erpc.MDResponse, namepfx string) (
 		fi.IsDir = true
 	}
 	if st.Fmd != nil {
-		fi.Inode = st.Fmd.Id
+		fi.Inode = st.Fmd.Inode
+		fi.FID = st.Fmd.ContId
 		fi.UID = st.Fmd.Uid
 		fi.GID = st.Fmd.Gid
 		fi.MTimeSec = st.Fmd.Mtime.Sec
@@ -1578,10 +1579,8 @@ func (c *Client) grpcMDResponseToFileInfo(st *erpc.MDResponse, namepfx string) (
 			fi.File = namepfx + "/" + string(st.Fmd.Name)
 		}
 
+		fi.Attrs = make(map[string]string)
 		for k, v := range st.Fmd.Xattrs {
-			if fi.Attrs == nil {
-				fi.Attrs = make(map[string]string)
-			}
 			fi.Attrs[k] = string(v)
 		}
 
@@ -1595,7 +1594,8 @@ func (c *Client) grpcMDResponseToFileInfo(st *erpc.MDResponse, namepfx string) (
 
 		log.Debug().Str("stat info - path", fi.File).Uint64("inode", fi.Inode).Uint64("uid", fi.UID).Uint64("gid", fi.GID).Str("etag", fi.ETag).Str("checksum", fi.XS.XSType+":"+fi.XS.XSSum).Msg("grpc response")
 	} else {
-		fi.Inode = st.Cmd.Id
+		fi.Inode = st.Cmd.Inode
+		fi.FID = st.Fmd.ContId
 		fi.UID = st.Cmd.Uid
 		fi.GID = st.Cmd.Gid
 		fi.MTimeSec = st.Cmd.Mtime.Sec
@@ -1606,14 +1606,9 @@ func (c *Client) grpcMDResponseToFileInfo(st *erpc.MDResponse, namepfx string) (
 			fi.File = namepfx + "/" + string(st.Cmd.Name)
 		}
 
-		var allattrs = ""
+		fi.Attrs = make(map[string]string)
 		for k, v := range st.Cmd.Xattrs {
-			if fi.Attrs == nil {
-				fi.Attrs = make(map[string]string)
-			}
 			fi.Attrs[k] = string(v)
-			allattrs += string(v)
-			allattrs += ","
 		}
 
 		fi.Size = 0
