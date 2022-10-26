@@ -16,7 +16,7 @@
 # granted to it by virtue of its status as an Intergovernmental Organization
 # or submit itself to any jurisdiction.
 
-FROM quay.ceph.io/ceph-ci/ceph:pacific
+FROM quay.io/ceph/ceph:v16
 
 RUN dnf update -y && dnf install -y \
   git \
