@@ -1573,7 +1573,9 @@ func (c *Client) grpcMDResponseToFileInfo(st *erpc.MDResponse) (*eosclient.FileI
 
 		fi.Attrs = make(map[string]string)
 		for k, v := range st.Cmd.Xattrs {
-			fi.Attrs[k] = string(v)
+			if !strings.HasPrefix(k, "sys.") {
+				fi.Attrs[strings.TrimPrefix(k, "user.")] = string(v)
+			}
 		}
 
 		fi.Size = uint64(st.Cmd.TreeSize)
@@ -1590,7 +1592,9 @@ func (c *Client) grpcMDResponseToFileInfo(st *erpc.MDResponse) (*eosclient.FileI
 
 		fi.Attrs = make(map[string]string)
 		for k, v := range st.Fmd.Xattrs {
-			fi.Attrs[k] = string(v)
+			if !strings.HasPrefix(k, "sys.") {
+				fi.Attrs[strings.TrimPrefix(k, "user.")] = string(v)
+			}
 		}
 
 		fi.Size = st.Fmd.Size
