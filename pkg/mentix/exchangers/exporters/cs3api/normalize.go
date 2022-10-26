@@ -25,38 +25,37 @@ import (
 	"github.com/rs/zerolog"
 )
 
-func normalizeHost(domain string, log *zerolog.Logger) string {
-	domainAddress := domain
+func _normalizeAddress(addr string) (*url.URL, error) {
+	address := addr
 
-	// See if the domain includes a protocol; if not, add one for easy parsing
-	re := regexp.MustCompile(".*https?://.+")
-	if !re.MatchString(domainAddress) {
-		domainAddress = "https://" + domainAddress
+	// See if the address includes a protocol; if not, add a default one
+	re := regexp.MustCompile(".+://.+")
+	if !re.MatchString(address) {
+		address = "https://" + address
 	}
 
-	// Parse the domain as a URL, ignoring errors
-	domainURL, err := url.Parse(domainAddress)
+	// Parse the address as a URL
+	addressURL, err := url.Parse(address)
+	if err != nil {
+		return nil, err
+	}
+	return addressURL, nil
+}
+
+func normalizeHost(domain string, log *zerolog.Logger) string {
+	address, err := _normalizeAddress(domain)
 	if err != nil {
 		log.Error().Msgf("unable to parse host %v", domain)
 		return domain
 	}
-	return domainURL.Hostname()
+	return address.Hostname()
 }
 
 func normalizeURLPath(path string, log *zerolog.Logger) string {
-	pathAddress := path
-
-	// See if the path includes a protocol; if not, add a default one
-	re := regexp.MustCompile(".*https?://.+")
-	if !re.MatchString(pathAddress) {
-		pathAddress = "https://" + pathAddress
-	}
-
-	// Try to parse the path
-	pathURL, err := url.Parse(pathAddress)
+	address, err := _normalizeAddress(path)
 	if err != nil {
 		log.Error().Msgf("unable to parse URL %v", path)
 		return path
 	}
-	return pathURL.String()
+	return address.String()
 }
