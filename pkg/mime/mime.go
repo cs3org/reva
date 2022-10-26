@@ -20,9 +20,10 @@ package mime
 
 import (
 	"path"
+	"strings"
 	"sync"
 
-	gomime "github.com/cubewise-code/go-mime"
+	gomime "github.com/glpatcern/go-mime" // hopefully temporary
 )
 
 const defaultMimeDir = "httpd/unix-directory"
@@ -47,11 +48,15 @@ func Detect(isDir bool, fn string) string {
 	}
 
 	ext := path.Ext(fn)
+	ext = strings.TrimPrefix(ext, ".")
 
 	mimeType := getCustomMime(ext)
 
 	if mimeType == "" {
 		mimeType = gomime.TypeByExtension(ext)
+		if mimeType != "" {
+			mimes.Store(ext, mimeType)
+		}
 	}
 
 	if mimeType == "" {
@@ -59,6 +64,24 @@ func Detect(isDir bool, fn string) string {
 	}
 
 	return mimeType
+}
+
+// GetFileExt performs the inverse resolution from mimetype to file extension
+func GetFileExt(mime string) []string {
+	var found []string
+	// first look in our cache
+	mimes.Range(func(e, m interface{}) bool {
+		if m.(string) == mime {
+			found = append(found, e.(string))
+		}
+		return true
+	})
+	if len(found) > 0 {
+		return found
+	}
+
+	// then use the gomime package
+	return gomime.ExtensionsByType(mime)
 }
 
 func getCustomMime(ext string) string {

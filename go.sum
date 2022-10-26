@@ -282,6 +282,8 @@ github.com/gdexlab/go-render v1.0.1/go.mod h1:wRi5nW2qfjiGj4mPukH4UV0IknS1cHD4Vg
 github.com/getkin/kin-openapi v0.13.0/go.mod h1:WGRs2ZMM1Q8LR1QBEwUxC6RJEfaBcD0s+pcEVXFuAjw=
 github.com/ghodss/yaml v1.0.0/go.mod h1:4dBDuWmgqj2HViK6kFavaiC9ZROes6MMH2rRYeMEF04=
 github.com/gliderlabs/ssh v0.2.2/go.mod h1:U7qILu1NlMHj9FlMhZLlkCdDnU1DBEAqr0aevW3Awn0=
+github.com/glpatcern/go-mime v0.0.0-20221026162842-2a8d71ad17a9 h1:3um08ooi0/lyRmK2eE1XTKmRQHDzPu0IvpCPMljyMZ8=
+github.com/glpatcern/go-mime v0.0.0-20221026162842-2a8d71ad17a9/go.mod h1:EJaddanP+JfU3UkVvn0rYYF3b/gD7eZRejbTHqiQExA=
 github.com/go-acme/lego/v4 v4.4.0/go.mod h1:l3+tFUFZb590dWcqhWZegynUthtaHJbG2fevUpoOOE0=
 github.com/go-asn1-ber/asn1-ber v1.5.4 h1:vXT6d/FNDiELJnLb6hGNa309LMsrCoYFvpwHDF0+Y1A=
 github.com/go-asn1-ber/asn1-ber v1.5.4/go.mod h1:hEBeB/ic+5LoWskz+yKT7vGhhPYkProFKoKdwZRWMe0=
