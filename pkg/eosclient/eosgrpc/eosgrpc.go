@@ -513,7 +513,7 @@ func (c *Client) SetAttr(ctx context.Context, auth eosclient.Authorization, attr
 
 	msg := new(erpc.NSRequest_SetXAttrRequest)
 
-	var m = map[string][]byte{attr.Key: []byte(attr.Val)}
+	var m = map[string][]byte{attr.GetKey(): []byte(attr.Val)}
 	msg.Xattrs = m
 	msg.Recursive = recursive
 
