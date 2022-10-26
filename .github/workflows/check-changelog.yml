@@ -1,7 +1,7 @@
 name: Check Changelog
 on:
   pull_request:
-    paths-ignore: [".github/**", "Makefile", "tools/**", "docs/**", "tests/**", ".drone.star", ".drone.env", "go.mod", "go.sum"]
+    paths-ignore: [".github/**", "Makefile", "tools/**", "docs/**", "tests/**", ".drone.star", ".drone.env", ".fossa.yml", "go.mod", "go.sum"]
 
 jobs:
   check-changelog:
@@ -12,7 +12,7 @@ jobs:
       - name: Setup Go environment
         uses: actions/setup-go@v3.3.0
         with:
-          go-version-file: ${{ github.workspace }}/go.mod
+          go-version-file: go.mod
       - name: Setup Golang caches
         uses: actions/cache@v3
         with:
@@ -38,8 +38,7 @@ jobs:
           ref: v0.2.0
       - name: Install calens
         if: steps.cache-calens.outputs.cache-hit != 'true'
-        run: cd ${{ github.workspace }}/calens && go install
-
+        run: cd calens && go install
       - name: Check if changelog exists
         run: |
           $(go env GOPATH)/bin/calens | \

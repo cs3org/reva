@@ -1,20 +1,3 @@
-# Shared step definitions
-def licenseScanStep():
-    return {
-        "name": "license-scan",
-        "image": "registry.cern.ch/docker.io/library/golang:1.19",
-        "environment": {
-            "FOSSA_API_KEY": {
-                "from_secret": "fossa_api_key",
-            },
-        },
-        "detach": True,
-        "commands": [
-            "wget -qO- https://github.com/fossas/fossa-cli/releases/download/v1.0.11/fossa-cli_1.0.11_linux_amd64.tar.gz | tar xvz -C /go/bin/",
-            "/go/bin/fossa analyze",
-        ],
-    }
-
 def makeStep(target):
     return {
         "name": "build",
@@ -151,23 +134,8 @@ def buildAndPublishDocker():
                     "for i in $(ls /drone/src/dist);do curl --fail -X PUT -u $${USERNAME}:$${PASSWORD} https://cernbox.cern.ch/cernbox/desktop/remote.php/webdav/eos/project/r/reva/www/daily/$(date +%Y-%m-%d)/${DRONE_COMMIT}/$${i} --data-binary @./dist/$${i} ; done",
                 ],
             },
-            licenseScanStep(),
             makeStep("ci"),
             lintStep(),
-            {
-                "name": "license-check",
-                "image": "registry.cern.ch/docker.io/library/golang:1.19",
-                "failure": "ignore",
-                "environment": {
-                    "FOSSA_API_KEY": {
-                        "from_secret": "fossa_api_key",
-                    },
-                },
-                "commands": [
-                    "wget -qO- https://github.com/fossas/fossa-cli/releases/download/v1.0.11/fossa-cli_1.0.11_linux_amd64.tar.gz | tar xvz -C /go/bin/",
-                    "/go/bin/fossa test --timeout 900",
-                ],
-            },
             {
                 "name": "publish-docker-reva-latest",
                 "pull": "always",
@@ -304,7 +272,6 @@ def buildOnly():
             },
         },
         "steps": [
-            licenseScanStep(),
             makeStep("ci"),
             {
                 "name": "Docker build",
@@ -316,20 +283,6 @@ def buildOnly():
                 },
             },
             lintStep(),
-            {
-                "name": "license-check",
-                "image": "registry.cern.ch/docker.io/library/golang:1.19",
-                "failure": "ignore",
-                "environment": {
-                    "FOSSA_API_KEY": {
-                        "from_secret": "fossa_api_key",
-                    },
-                },
-                "commands": [
-                    "wget -qO- https://github.com/fossas/fossa-cli/releases/download/v1.0.11/fossa-cli_1.0.11_linux_amd64.tar.gz | tar xvz -C /go/bin/",
-                    "/go/bin/fossa test --timeout 900",
-                ],
-            },
         ],
     }
 
@@ -383,7 +336,6 @@ def release():
             },
         },
         "steps": [
-            licenseScanStep(),
             makeStep("ci"),
             lintStep(),
             {
