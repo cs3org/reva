@@ -296,7 +296,12 @@ func GetInt64(filePath, key string) (int64, error) {
 // List retrieves a list of names of extended attributes associated with the
 // given path in the file system.
 func List(filePath string) (attribs []string, err error) {
-	// now try to get a shared lock on the source
+	attrs, err := xattr.List(filePath)
+	if err == nil {
+		return attrs, nil
+	}
+
+	// listing the attributes failed. lock the file and try again
 	readLock, err := filelocks.AcquireReadLock(filePath)
 
 	if err != nil {
