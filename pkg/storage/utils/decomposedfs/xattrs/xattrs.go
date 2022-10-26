@@ -235,9 +235,6 @@ func Remove(filePath string, key string) (err error) {
 // If the file lock can not be acquired the function returns a
 // lock error.
 func SetMultiple(filePath string, attribs map[string]string) (err error) {
-
-	// h, err := lockedfile.OpenFile(filePath, os.O_WRONLY, 0) // 0? Open File only workn for files ... but we want to lock dirs ... or symlinks
-	// or we append .lock to the file and use https://github.com/gofrs/flock
 	var fileLock *flock.Flock
 	fileLock, err = filelocks.AcquireWriteLock(filePath)
 
