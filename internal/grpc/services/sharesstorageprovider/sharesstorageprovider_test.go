@@ -20,7 +20,6 @@ package sharesstorageprovider_test
 
 import (
 	"context"
-	"io/ioutil"
 	"os"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
@@ -303,7 +302,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 
 	Describe("NewDefault", func() {
 		It("returns a new service instance", func() {
-			tmpfile, err := ioutil.TempFile("", "eos-unit-test-shares-*.json")
+			tmpfile, err := os.CreateTemp("", "eos-unit-test-shares-*.json")
 			Expect(err).ToNot(HaveOccurred())
 			defer os.Remove(tmpfile.Name())
 

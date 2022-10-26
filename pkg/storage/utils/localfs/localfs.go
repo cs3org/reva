@@ -23,7 +23,6 @@ import (
 	"database/sql"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/url"
 	"os"
 	"path"
@@ -997,7 +996,7 @@ func (fs *localfs) listFolder(ctx context.Context, fn string, mdKeys []string) (
 
 	fn = fs.wrap(ctx, fn)
 
-	mds, err := ioutil.ReadDir(fn)
+	mds, err := os.ReadDir(fn)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, errtypes.NotFound(fn)
@@ -1007,7 +1006,8 @@ func (fs *localfs) listFolder(ctx context.Context, fn string, mdKeys []string) (
 
 	finfos := []*provider.ResourceInfo{}
 	for _, md := range mds {
-		info, err := fs.normalize(ctx, md, path.Join(fn, md.Name()), mdKeys)
+		mdInfo, _ := md.Info()
+		info, err := fs.normalize(ctx, mdInfo, path.Join(fn, md.Name()), mdKeys)
 		if err == nil {
 			finfos = append(finfos, info)
 		}
@@ -1019,7 +1019,7 @@ func (fs *localfs) listShareFolderRoot(ctx context.Context, home string, mdKeys 
 
 	fn := fs.wrapReferences(ctx, home)
 
-	mds, err := ioutil.ReadDir(fn)
+	mds, err := os.ReadDir(fn)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, errtypes.NotFound(fn)
@@ -1032,9 +1032,11 @@ func (fs *localfs) listShareFolderRoot(ctx context.Context, home string, mdKeys 
 		var info *provider.ResourceInfo
 		var err error
 		if fs.isShareFolderRoot(ctx, path.Join("/", md.Name())) {
-			info, err = fs.normalize(ctx, md, path.Join(fn, md.Name()), mdKeys)
+			mdInfo, _ := md.Info()
+			info, err = fs.normalize(ctx, mdInfo, path.Join(fn, md.Name()), mdKeys)
 		} else {
-			info, err = fs.convertToFileReference(ctx, md, path.Join(fn, md.Name()), mdKeys)
+			mdInfo, _ := md.Info()
+			info, err = fs.convertToFileReference(ctx, mdInfo, path.Join(fn, md.Name()), mdKeys)
 		}
 		if err == nil {
 			finfos = append(finfos, info)
@@ -1091,7 +1093,7 @@ func (fs *localfs) ListRevisions(ctx context.Context, ref *provider.Reference) (
 
 	versionsDir := fs.wrapVersions(ctx, np)
 	revisions := []*provider.FileVersion{}
-	mds, err := ioutil.ReadDir(versionsDir)
+	mds, err := os.ReadDir(versionsDir)
 	if err != nil {
 		return nil, errors.Wrap(err, "localfs: error reading"+versionsDir)
 	}
@@ -1104,11 +1106,12 @@ func (fs *localfs) ListRevisions(ctx context.Context, ref *provider.Reference) (
 		if err != nil {
 			continue
 		}
+		mdsInfo, _ := mds[i].Info()
 		revisions = append(revisions, &provider.FileVersion{
 			Key:   version,
-			Size:  uint64(mds[i].Size()),
+			Size:  uint64(mdsInfo.Size()),
 			Mtime: uint64(mtime),
-			Etag:  calcEtag(ctx, mds[i]),
+			Etag:  calcEtag(ctx, mdsInfo),
 		})
 	}
 	return revisions, nil
@@ -1230,13 +1233,14 @@ func (fs *localfs) ListRecycle(ctx context.Context, ref *provider.Reference, key
 
 	rp := fs.wrapRecycleBin(ctx, "/")
 
-	mds, err := ioutil.ReadDir(rp)
+	mds, err := os.ReadDir(rp)
 	if err != nil {
 		return nil, errors.Wrap(err, "localfs: error listing deleted files")
 	}
 	items := []*provider.RecycleItem{}
 	for i := range mds {
-		ri := fs.convertToRecycleItem(ctx, rp, mds[i])
+		mdsInfo, _ := mds[i].Info()
+		ri := fs.convertToRecycleItem(ctx, rp, mdsInfo)
 		if ri != nil {
 			items = append(items, ri)
 		}

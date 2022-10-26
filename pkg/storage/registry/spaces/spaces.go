@@ -259,7 +259,7 @@ func (r *registry) GetProvider(ctx context.Context, space *providerpb.StorageSpa
 // Then the gateway needs all providers below /foo/sub
 // -> only the /foo/sub provider
 //
-//           requested path   provider path
+// requested path   provider path
 // above   = /foo           <=> /foo/bar        -> stat(spaceid, .)    -> add metadata for /foo/bar
 // above   = /foo           <=> /foo/bar/bif    -> stat(spaceid, .)    -> add metadata for /foo/bar
 // matches = /foo/bar       <=> /foo/bar        -> list(spaceid, .)

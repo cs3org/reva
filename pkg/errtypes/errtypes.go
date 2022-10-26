@@ -85,7 +85,7 @@ func (e Aborted) IsAborted() {}
 // the files are deleted from the directory. ProconditionFailed should also be
 // returned when an intermediate directory for an MKCOL or PUT is missing.
 //
-// FIXME rename to FailedProcondition to make it less confusable with the http status Precondition Failed
+// # FIXME rename to FailedProcondition to make it less confusable with the http status Precondition Failed
 //
 // HTTP Mapping: 400 Bad Request, 405 Method Not Allowed, 409 Conflict
 type PreconditionFailed string

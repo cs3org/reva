@@ -21,9 +21,9 @@ package json
 import (
 	"context"
 	"encoding/json"
-	"io/ioutil"
 	"net"
 	"net/url"
+	"os"
 	"strings"
 	"sync"
 
@@ -48,7 +48,7 @@ func New(m map[string]interface{}) (provider.Authorizer, error) {
 	}
 	c.init()
 
-	f, err := ioutil.ReadFile(c.Providers)
+	f, err := os.ReadFile(c.Providers)
 	if err != nil {
 		return nil, err
 	}

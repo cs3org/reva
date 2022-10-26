@@ -21,7 +21,7 @@ package gocdb
 import (
 	"bytes"
 	"encoding/json"
-	"io/ioutil"
+	"io"
 	"net/http"
 
 	"github.com/cs3org/reva/v2/pkg/mentix/utils/network"
@@ -78,7 +78,7 @@ func writeAccount(account *data.Account, operation string, address string, apiKe
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 400 {
-		msg, _ := ioutil.ReadAll(resp.Body)
+		msg, _ := io.ReadAll(resp.Body)
 		return errors.Errorf("unable to perform request: %v", string(msg))
 	}
 

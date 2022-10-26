@@ -22,7 +22,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"os"
 	"time"
@@ -263,7 +263,7 @@ func (cs3 *CS3) SimpleDownload(ctx context.Context, downloadpath string) (conten
 		return []byte{}, errtypes.NotFound(dreq.Ref.Path)
 	}
 
-	b, err := ioutil.ReadAll(resp.Body)
+	b, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return []byte{}, err
 	}
