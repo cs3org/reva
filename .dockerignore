@@ -6,3 +6,4 @@ tests
 tools
 vendor-bin
 *.md
+test
