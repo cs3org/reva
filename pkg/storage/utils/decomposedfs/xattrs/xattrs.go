@@ -189,8 +189,6 @@ func CopyMetadata(src, target string, filter func(attributeName string) bool) (e
 }
 
 // Set an extended attribute key to the given value
-// No file locking is involved here as writing a single xattr is
-// considered to be atomic.
 func Set(filePath string, key string, val string) (err error) {
 	fileLock, err := filelocks.AcquireWriteLock(filePath)
 
@@ -210,8 +208,6 @@ func Set(filePath string, key string, val string) (err error) {
 }
 
 // Remove an extended attribute key
-// No file locking is involved here as writing a single xattr is
-// considered to be atomic.
 func Remove(filePath string, key string) (err error) {
 	fileLock, err := filelocks.AcquireWriteLock(filePath)
 
