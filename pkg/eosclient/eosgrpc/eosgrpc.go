@@ -1569,7 +1569,7 @@ func (c *Client) grpcMDResponseToFileInfo(st *erpc.MDResponse) (*eosclient.FileI
 		fi.GID = st.Cmd.Gid
 		fi.MTimeSec = st.Cmd.Mtime.Sec
 		fi.ETag = st.Cmd.Etag
-		fi.File = string(st.Cmd.Path)
+		fi.File = path.Clean(string(st.Cmd.Path))
 
 		fi.Attrs = make(map[string]string)
 		for k, v := range st.Cmd.Xattrs {
@@ -1586,7 +1586,7 @@ func (c *Client) grpcMDResponseToFileInfo(st *erpc.MDResponse) (*eosclient.FileI
 		fi.GID = st.Fmd.Gid
 		fi.MTimeSec = st.Fmd.Mtime.Sec
 		fi.ETag = st.Fmd.Etag
-		fi.File = string(st.Fmd.Path)
+		fi.File = path.Clean(string(st.Fmd.Path))
 
 		fi.Attrs = make(map[string]string)
 		for k, v := range st.Fmd.Xattrs {
