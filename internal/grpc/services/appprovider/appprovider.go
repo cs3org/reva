@@ -152,7 +152,7 @@ func (s *service) registerProvider() {
 			mimeTypes = append(mimeTypes, m.(string))
 		}
 		pInfo.MimeTypes = mimeTypes
-		log.Info().Msgf("appprovider: %s will support %+v", s.conf.AppProviderURL, mimeTypes)
+		log.Info().Str("appprovider", s.conf.AppProviderURL).Interface("mimetypes", mimeTypes).Msg("appprovider supported mimetypes")
 	}
 
 	client, err := pool.GetGatewayServiceClient(pool.Endpoint(s.conf.GatewaySvc))

@@ -197,11 +197,11 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 	httpReq.Header.Set("Authorization", "Bearer "+p.conf.IOPSecret)
 	httpReq.Header.Set("TokenHeader", token)
 
-	log.Debug().Str("url", httpReq.URL.String()).Msg("Sending request to wopi server")
+	log.Debug().Str("url", httpReq.URL.String()).Msg("Sending request to wopiserver")
 	// Call the WOPI server and parse the response (body will always contain a payload)
 	openRes, err := p.wopiClient.Do(httpReq)
 	if err != nil {
-		return nil, errors.Wrap(err, "wopi: error performing open request to WOPI server")
+		return nil, errors.Wrap(err, "wopi: error performing open request to wopiserver")
 	}
 	defer openRes.Body.Close()
 
@@ -215,7 +215,7 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 		if body != nil {
 			sbody = string(body)
 		}
-		log.Warn().Msg(fmt.Sprintf("wopi: WOPI server returned HTTP %s to request %s, error was: %s", openRes.Status, httpReq.URL.String(), sbody))
+		log.Warn().Str("status", openRes.Status).Str("error", sbody).Msg("wopi: wopiserver returned error")
 		return nil, errors.New(sbody)
 	}
 
@@ -245,7 +245,7 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 		appFullURL = url.String()
 	}
 
-	// Depending on whether wopi server returned any form parameters or not,
+	// Depending on whether the WOPI server returned any form parameters or not,
 	// we decide whether the request method is POST or GET
 	var formParams map[string]string
 	method := "GET"
@@ -259,7 +259,7 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 		}
 	}
 
-	log.Info().Msgf("wopi: returning app URL %s", appFullURL)
+	log.Info().Str("url", appFullURL).Str("resource", resource.Path).Msg("wopi: returning URL for file")
 	return &appprovider.OpenInAppURL{
 		AppUrl:         appFullURL,
 		Method:         method,
@@ -340,7 +340,7 @@ func getAppURLs(c *config) (map[string]map[string]string, error) {
 
 		// scrape app's home page to find the appname
 		if !strings.Contains(buf.String(), c.AppName) {
-			return nil, errors.New("Application server at " + c.AppURL + " does not match this AppProvider for " + c.AppName)
+			return nil, errors.New(fmt.Sprintf("wopi: application server at %s does not match this AppProvider for %s", c.AppURL, c.AppName))
 		}
 
 		// TODO(lopresti) we don't know if the app is not supported/configured in WOPI
