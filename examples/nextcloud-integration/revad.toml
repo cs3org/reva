@@ -67,13 +67,13 @@ driver = "memory"
 
 [grpc.services.appprovider]
 driver = "wopi"
+custom_mime_types_json = "custom-mime-types-demo.json"
 
 [grpc.services.appprovider.drivers.wopi]
 iop_secret = "hello"
 wopi_url = "http://0.0.0.0:8880/"
 app_name = "Collabora"
 app_url = "https://your-collabora-server.org:9980"
-custom_mime_types_json = "custom-mime-types-demo.json"
 
 [grpc.services.appregistry]
 driver = "static"

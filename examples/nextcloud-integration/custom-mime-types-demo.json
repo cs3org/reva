@@ -1,4 +1,4 @@
 {
-    ".zmd": "application/compressed-markdown",
-    ".zep": "application/compressed-etherpad"
+    "zmd": "application/compressed-markdown",
+    "zep": "application/compressed-etherpad"
 }
