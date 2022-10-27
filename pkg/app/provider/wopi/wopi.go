@@ -340,7 +340,7 @@ func getAppURLs(c *config) (map[string]map[string]string, error) {
 
 		// scrape app's home page to find the appname
 		if !strings.Contains(buf.String(), c.AppName) {
-			return nil, errors.New(fmt.Sprintf("wopi: application server at %s does not match this AppProvider for %s", c.AppURL, c.AppName))
+			return nil, fmt.Errorf("wopi: application server at %s does not match this AppProvider for %s", c.AppURL, c.AppName)
 		}
 
 		// TODO(lopresti) we don't know if the app is not supported/configured in WOPI
