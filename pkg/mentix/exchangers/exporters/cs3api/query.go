@@ -34,9 +34,9 @@ import (
 )
 
 // HandleDefaultQuery processes a basic query.
-func HandleDefaultQuery(meshData *meshdata.MeshData, params url.Values, conf *config.Configuration, _ *zerolog.Logger) (int, []byte, error) {
+func HandleDefaultQuery(meshData *meshdata.MeshData, params url.Values, conf *config.Configuration, log *zerolog.Logger) (int, []byte, error) {
 	// Convert the mesh data
-	ocmData, err := convertMeshDataToOCMData(meshData, conf.Exporters.CS3API.ElevatedServiceTypes)
+	ocmData, err := convertMeshDataToOCMData(meshData, conf.Exporters.CS3API.ElevatedServiceTypes, log)
 	if err != nil {
 		return http.StatusBadRequest, []byte{}, fmt.Errorf("unable to convert the mesh data to OCM data structures: %v", err)
 	}
@@ -50,7 +50,7 @@ func HandleDefaultQuery(meshData *meshdata.MeshData, params url.Values, conf *co
 	return http.StatusOK, data, nil
 }
 
-func convertMeshDataToOCMData(meshData *meshdata.MeshData, elevatedServiceTypes []string) ([]*ocmprovider.ProviderInfo, error) {
+func convertMeshDataToOCMData(meshData *meshdata.MeshData, elevatedServiceTypes []string, log *zerolog.Logger) ([]*ocmprovider.ProviderInfo, error) {
 	// Convert the mesh data into the corresponding OCM data structures
 	providers := make([]*ocmprovider.ProviderInfo, 0, len(meshData.Operators)*3)
 	for _, op := range meshData.Operators {
@@ -60,8 +60,8 @@ func convertMeshDataToOCMData(meshData *meshdata.MeshData, elevatedServiceTypes 
 
 			addService := func(host string, endpoint *meshdata.ServiceEndpoint, addEndpoints []*ocmprovider.ServiceEndpoint, apiVersion string) {
 				services = append(services, &ocmprovider.Service{
-					Host:                host,
-					Endpoint:            convertServiceEndpointToOCMData(endpoint),
+					Host:                normalizeHost(host, log),
+					Endpoint:            convertServiceEndpointToOCMData(endpoint, log),
 					AdditionalEndpoints: addEndpoints,
 					ApiVersion:          apiVersion,
 				})
@@ -77,7 +77,7 @@ func convertMeshDataToOCMData(meshData *meshdata.MeshData, elevatedServiceTypes 
 						endpointURL, _ := url.Parse(endpoint.URL)
 						addService(endpointURL.Host, endpoint, nil, apiVersion)
 					} else {
-						addEndpoints = append(addEndpoints, convertServiceEndpointToOCMData(endpoint))
+						addEndpoints = append(addEndpoints, convertServiceEndpointToOCMData(endpoint, log))
 					}
 				}
 
@@ -90,7 +90,7 @@ func convertMeshDataToOCMData(meshData *meshdata.MeshData, elevatedServiceTypes 
 				FullName:     site.FullName,
 				Description:  site.Description,
 				Organization: site.Organization,
-				Domain:       site.Domain,
+				Domain:       normalizeHost(site.Domain, log),
 				Homepage:     site.Homepage,
 				Email:        site.Email,
 				Services:     services,
@@ -103,14 +103,14 @@ func convertMeshDataToOCMData(meshData *meshdata.MeshData, elevatedServiceTypes 
 	return providers, nil
 }
 
-func convertServiceEndpointToOCMData(endpoint *meshdata.ServiceEndpoint) *ocmprovider.ServiceEndpoint {
+func convertServiceEndpointToOCMData(endpoint *meshdata.ServiceEndpoint, log *zerolog.Logger) *ocmprovider.ServiceEndpoint {
 	return &ocmprovider.ServiceEndpoint{
 		Type: &ocmprovider.ServiceType{
 			Name:        endpoint.Type.Name,
 			Description: endpoint.Type.Description,
 		},
 		Name:        endpoint.Name,
-		Path:        endpoint.URL,
+		Path:        normalizeURLPath(endpoint.URL, log),
 		IsMonitored: endpoint.IsMonitored,
 		Properties:  endpoint.Properties,
 	}
