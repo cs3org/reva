@@ -11,6 +11,7 @@ on:
       - ".drone.env"
       - "go.mod"
       - "go.sum"
+  workflow_dispatch:
 
 jobs:
   check-license:
@@ -19,8 +20,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3.1.0
       - name: Install Fossa CLI
-        run: wget -c https://github.com/fossas/fossa-cli/releases/download/v1.0.11/fossa-cli_1.0.11_linux_amd64.tar.gz -O - | tar -xz fossa
+        run: curl -H 'Cache-Control:\ no-cache' https://raw.githubusercontent.com/fossas/fossa-cli/master/install-latest.sh | bash
       - name: Run and Upload Build Analysis
         env:
           FOSSA_API_KEY: ${{ secrets.FossaApiKey }}
-        run: ./fossa analyze
+        run: fossa analyze
