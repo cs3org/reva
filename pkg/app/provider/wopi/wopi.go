@@ -351,7 +351,7 @@ func getAppURLs(c *config) (map[string]map[string]string, error) {
 		appURLs["view"] = make(map[string]string)
 		appURLs["edit"] = make(map[string]string)
 		for _, m := range c.MimeTypes {
-			exts := mime.GetFileExt(m)
+			exts := mime.GetFileExts(m)
 			for _, e := range exts {
 				appURLs["view"]["."+e] = c.AppURL
 				appURLs["edit"]["."+e] = c.AppURL
