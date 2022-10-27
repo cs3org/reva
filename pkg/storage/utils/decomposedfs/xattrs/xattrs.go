@@ -189,8 +189,6 @@ func CopyMetadata(src, target string, filter func(attributeName string) bool) (e
 }
 
 // Set an extended attribute key to the given value
-// No file locking is involved here as writing a single xattr is
-// considered to be atomic.
 func Set(filePath string, key string, val string) (err error) {
 	fileLock, err := filelocks.AcquireWriteLock(filePath)
 
@@ -210,8 +208,6 @@ func Set(filePath string, key string, val string) (err error) {
 }
 
 // Remove an extended attribute key
-// No file locking is involved here as writing a single xattr is
-// considered to be atomic.
 func Remove(filePath string, key string) (err error) {
 	fileLock, err := filelocks.AcquireWriteLock(filePath)
 
@@ -235,9 +231,6 @@ func Remove(filePath string, key string) (err error) {
 // If the file lock can not be acquired the function returns a
 // lock error.
 func SetMultiple(filePath string, attribs map[string]string) (err error) {
-
-	// h, err := lockedfile.OpenFile(filePath, os.O_WRONLY, 0) // 0? Open File only workn for files ... but we want to lock dirs ... or symlinks
-	// or we append .lock to the file and use https://github.com/gofrs/flock
 	var fileLock *flock.Flock
 	fileLock, err = filelocks.AcquireWriteLock(filePath)
 
@@ -299,7 +292,12 @@ func GetInt64(filePath, key string) (int64, error) {
 // List retrieves a list of names of extended attributes associated with the
 // given path in the file system.
 func List(filePath string) (attribs []string, err error) {
-	// now try to get a shared lock on the source
+	attrs, err := xattr.List(filePath)
+	if err == nil {
+		return attrs, nil
+	}
+
+	// listing the attributes failed. lock the file and try again
 	readLock, err := filelocks.AcquireReadLock(filePath)
 
 	if err != nil {
