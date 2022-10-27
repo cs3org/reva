@@ -126,7 +126,6 @@ const tplBody = `
 			Fields marked with <span class="mandatory">*</span> are mandatory.
 		</div>
 		<div style="grid-row: 4; grid-column: 2; text-align: right;">
-			<button type="reset">Reset</button>
 			<button type="submit" style="font-weight: bold;">Login</button>
 		</div>	
 	</form>	

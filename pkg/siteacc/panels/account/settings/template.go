@@ -82,7 +82,6 @@ const tplBody = `
 		</div>
 
 		<div style="grid-row: 3; grid-column: 2; text-align: right;">
-			<button type="reset">Reset</button>
 			<button type="submit" style="font-weight: bold;">Save</button>
 		</div>
 	</form>
