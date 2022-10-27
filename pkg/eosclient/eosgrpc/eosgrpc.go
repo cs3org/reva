@@ -246,17 +246,6 @@ func (c *Client) AddACL(ctx context.Context, auth, rootAuth eosclient.Authorizat
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("func", "AddACL").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Msg("")
 
-	acls, err := c.getACLForPath(ctx, auth, path)
-	if err != nil {
-		return err
-	}
-
-	err = acls.SetEntry(a.Type, a.Qualifier, a.Permissions)
-	if err != nil {
-		return err
-	}
-	sysACL := acls.Serialize()
-
 	// Init a new NSRequest
 	rq, err := c.initNSRequest(ctx, auth)
 	if err != nil {
@@ -267,7 +256,7 @@ func (c *Client) AddACL(ctx context.Context, auth, rootAuth eosclient.Authorizat
 	msg.Cmd = erpc.NSRequest_AclRequest_ACL_COMMAND(erpc.NSRequest_AclRequest_ACL_COMMAND_value["MODIFY"])
 	msg.Type = erpc.NSRequest_AclRequest_ACL_TYPE(erpc.NSRequest_AclRequest_ACL_TYPE_value["SYS_ACL"])
 	msg.Recursive = true
-	msg.Rule = sysACL
+	msg.Rule = a.CitrineSerialize()
 
 	msg.Id = new(erpc.MDId)
 	msg.Id.Path = []byte(path)
