@@ -94,6 +94,7 @@ func SkipUserGroupsInToken() bool {
 	return sharedConf.SkipUserGroupsInToken
 }
 
+// GetBlockedUsers returns a list of blocked users
 func GetBlockedUsers() []string {
 	return sharedConf.BlockedUsers
 }
