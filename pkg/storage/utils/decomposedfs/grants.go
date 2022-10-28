@@ -36,8 +36,39 @@ import (
 )
 
 // DenyGrant denies access to a resource.
-func (fs *Decomposedfs) DenyGrant(ctx context.Context, ref *provider.Reference, g *provider.Grantee) error {
-	return errtypes.NotSupported("decomposedfs: not supported")
+func (fs *Decomposedfs) DenyGrant(ctx context.Context, ref *provider.Reference, grantee *provider.Grantee) error {
+	log := appctx.GetLogger(ctx)
+
+	log.Debug().Interface("ref", ref).Interface("grantee", grantee).Msg("DenyGrant()")
+
+	node, err := fs.lu.NodeFromResource(ctx, ref)
+	if err != nil {
+		return err
+	}
+	if !node.Exists {
+		return errtypes.NotFound(filepath.Join(node.ParentID, node.Name))
+	}
+
+	// set all permissions to false
+	grant := &provider.Grant{
+		Grantee:     grantee,
+		Permissions: &provider.ResourcePermissions{},
+	}
+
+	// add acting user
+	u := ctxpkg.ContextMustGetUser(ctx)
+	grant.Creator = u.GetId()
+
+	rp, err := fs.p.AssemblePermissions(ctx, node)
+
+	switch {
+	case err != nil:
+		return errtypes.InternalError(err.Error())
+	case !rp.DenyGrant:
+		return errtypes.PermissionDenied(filepath.Join(node.ParentID, node.Name))
+	}
+
+	return fs.storeGrant(ctx, node, grant)
 }
 
 // AddGrant adds a grant to a resource

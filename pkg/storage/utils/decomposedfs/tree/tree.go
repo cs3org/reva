@@ -441,6 +441,11 @@ func (t *Tree) ListFolder(ctx context.Context, n *node.Node) ([]*node.Node, erro
 		if err != nil {
 			return nil, err
 		}
+
+		// prevent listing denied resources
+		if child.IsDenied(ctx) {
+			continue
+		}
 		if child.SpaceRoot == nil {
 			child.SpaceRoot = n.SpaceRoot
 		}

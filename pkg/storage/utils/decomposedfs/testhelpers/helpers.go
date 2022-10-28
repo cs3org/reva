@@ -242,12 +242,18 @@ func (t *TestEnv) CreateTestStorageSpace(typ string, quota *providerv1beta1.Quot
 	t.PermissionsClient.On("CheckPermission", mock.Anything, mock.Anything, mock.Anything).Times(1).Return(&cs3permissions.CheckPermissionResponse{
 		Status: &v1beta11.Status{Code: v1beta11.Code_CODE_OK},
 	}, nil)
+	// Permissions required for setup below
 	t.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(providerv1beta1.ResourcePermissions{
 		Stat:     true,
 		AddGrant: true,
-	}, nil).Times(1) // Permissions required for setup below
+	}, nil).Times(1) //
+
+	var owner *userpb.User
+	if typ == "personal" {
+		owner = t.Owner
+	}
 	space, err := t.Fs.CreateStorageSpace(t.Ctx, &providerv1beta1.CreateStorageSpaceRequest{
-		Owner: t.Owner,
+		Owner: owner,
 		Type:  typ,
 		Quota: quota,
 	})

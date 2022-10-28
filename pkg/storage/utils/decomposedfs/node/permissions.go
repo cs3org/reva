@@ -68,6 +68,7 @@ func OwnerPermissions() provider.ResourcePermissions {
 		RestoreRecycleItem:   true,
 		Stat:                 true,
 		UpdateGrant:          true,
+		DenyGrant:            true,
 	}
 }
 
@@ -117,7 +118,11 @@ func (p *Permissions) AssemblePermissions(ctx context.Context, n *Node) (ap prov
 
 	// for all segments, starting at the leaf
 	for cn.ID != rn.ID {
-		if np, err := cn.ReadUserPermissions(ctx, u); err == nil {
+		if np, accessDenied, err := cn.ReadUserPermissions(ctx, u); err == nil {
+			// check if we have a denial on this node
+			if accessDenied {
+				return np, nil
+			}
 			AddPermissions(&ap, &np)
 		} else {
 			appctx.GetLogger(ctx).Error().Err(err).Interface("node", cn.ID).Msg("error reading permissions")
@@ -129,7 +134,11 @@ func (p *Permissions) AssemblePermissions(ctx context.Context, n *Node) (ap prov
 	}
 
 	// for the root node
-	if np, err := cn.ReadUserPermissions(ctx, u); err == nil {
+	if np, accessDenied, err := cn.ReadUserPermissions(ctx, u); err == nil {
+		// check if we have a denial on this node
+		if accessDenied {
+			return np, nil
+		}
 		AddPermissions(&ap, &np)
 	} else {
 		appctx.GetLogger(ctx).Error().Err(err).Interface("node", cn.ID).Msg("error reading root node permissions")
@@ -160,4 +169,5 @@ func AddPermissions(l *provider.ResourcePermissions, r *provider.ResourcePermiss
 	l.RestoreRecycleItem = l.RestoreRecycleItem || r.RestoreRecycleItem
 	l.Stat = l.Stat || r.Stat
 	l.UpdateGrant = l.UpdateGrant || r.UpdateGrant
+	l.DenyGrant = l.DenyGrant || r.DenyGrant
 }

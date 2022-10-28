@@ -24,6 +24,7 @@ import (
 	"strings"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/grants"
 )
 
 // Role is a set of ocs permissions and cs3 resource permissions under a common name.
@@ -53,6 +54,8 @@ const (
 	RoleUnknown = "unknown"
 	// RoleLegacy provides backwards compatibility.
 	RoleLegacy = "legacy"
+	// RoleDenied grants no permission at all on a resource
+	RoleDenied = "denied"
 )
 
 // CS3ResourcePermissions for the role
@@ -94,6 +97,7 @@ func (r *Role) OCSPermissions() Permissions {
 // S = Shared
 // R = Shareable
 // M = Mounted
+// Z = Deniable (NEW)
 func (r *Role) WebDAVPermissions(isDir, isShared, isMountpoint, isPublic bool) string {
 	var b strings.Builder
 	if !isPublic && isShared {
@@ -120,12 +124,19 @@ func (r *Role) WebDAVPermissions(isDir, isShared, isMountpoint, isPublic bool) s
 	if isDir && r.ocsPermissions.Contain(PermissionCreate) {
 		fmt.Fprintf(&b, "CK")
 	}
+
+	if r.CS3ResourcePermissions().DenyGrant {
+		fmt.Fprintf(&b, "Z")
+	}
+
 	return b.String()
 }
 
 // RoleFromName creates a role from the name
 func RoleFromName(name string) *Role {
 	switch name {
+	case RoleDenied:
+		return NewDeniedRole()
 	case RoleViewer:
 		return NewViewerRole()
 	case RoleSpaceViewer:
@@ -151,6 +162,15 @@ func NewUnknownRole() *Role {
 		Name:                   RoleUnknown,
 		cS3ResourcePermissions: &provider.ResourcePermissions{},
 		ocsPermissions:         PermissionInvalid,
+	}
+}
+
+// NewDeniedRole creates a fully denied role
+func NewDeniedRole() *Role {
+	return &Role{
+		Name:                   RoleDenied,
+		cS3ResourcePermissions: &provider.ResourcePermissions{},
+		ocsPermissions:         PermissionsNone,
 	}
 }
 
@@ -309,6 +329,7 @@ func NewManagerRole() *Role {
 			AddGrant:    true, // managers can add users to the space
 			RemoveGrant: true, // managers can remove users from the space
 			UpdateGrant: true,
+			DenyGrant:   true, // managers can deny access to sub folders
 		},
 		ocsPermissions: PermissionAll,
 	}
@@ -398,6 +419,11 @@ func RoleFromResourcePermissions(rp *provider.ResourcePermissions) *Role {
 	if rp == nil {
 		return r
 	}
+	if grants.PermissionsEqual(rp, &provider.ResourcePermissions{}) {
+		r.ocsPermissions = PermissionsNone
+		r.Name = RoleDenied
+		return r
+	}
 	if rp.ListContainer &&
 		rp.ListFileVersions &&
 		rp.ListRecycle &&
@@ -424,6 +450,7 @@ func RoleFromResourcePermissions(rp *provider.ResourcePermissions) *Role {
 	if rp.AddGrant {
 		r.ocsPermissions |= PermissionShare
 	}
+
 	if r.ocsPermissions.Contain(PermissionRead) {
 		if r.ocsPermissions.Contain(PermissionWrite) && r.ocsPermissions.Contain(PermissionCreate) && r.ocsPermissions.Contain(PermissionDelete) && r.ocsPermissions.Contain(PermissionShare) {
 			r.Name = RoleEditor

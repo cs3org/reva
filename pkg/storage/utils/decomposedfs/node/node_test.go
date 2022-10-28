@@ -23,11 +23,14 @@ import (
 	"time"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	ocsconv "github.com/cs3org/reva/v2/internal/http/services/owncloud/ocs/conversions"
+	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
 	helpers "github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/testhelpers"
-
+	"github.com/cs3org/reva/v2/pkg/storage/utils/grants"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/stretchr/testify/mock"
 )
 
 var _ = Describe("Node", func() {
@@ -116,7 +119,6 @@ var _ = Describe("Node", func() {
 			Expect(parent.ID).To(Equal(child.ParentID))
 		})
 	})
-
 	Describe("Child", func() {
 		var (
 			parent *node.Node
@@ -225,6 +227,110 @@ var _ = Describe("Node", func() {
 				Expect(err).ToNot(HaveOccurred())
 				Expect(storedLock).To(Equal(lock))
 			})
+		})
+	})
+	Describe("Permissions", func() {
+		It("Checks the owner permissions on a personal space", func() {
+			node1, err := env.Lookup.NodeFromSpaceID(env.Ctx, env.SpaceRootRes)
+			Expect(err).ToNot(HaveOccurred())
+			perms, _ := node1.PermissionSet(env.Ctx)
+			Expect(perms).To(Equal(node.OwnerPermissions()))
+		})
+		It("Checks the manager permissions on a project space", func() {
+			pSpace, err := env.CreateTestStorageSpace("project", &provider.Quota{QuotaMaxBytes: 2000})
+			Expect(err).ToNot(HaveOccurred())
+			nodePSpace, err := env.Lookup.NodeFromSpaceID(env.Ctx, pSpace)
+			Expect(err).ToNot(HaveOccurred())
+			u := ctxpkg.ContextMustGetUser(env.Ctx)
+			env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(provider.ResourcePermissions{
+				UpdateGrant: true,
+				Stat:        true,
+			}, nil).Times(1)
+			err = env.Fs.AddGrant(env.Ctx, &provider.Reference{
+				ResourceId: &provider.ResourceId{
+					SpaceId:  pSpace.SpaceId,
+					OpaqueId: pSpace.OpaqueId,
+				},
+			}, &provider.Grant{
+				Grantee: &provider.Grantee{
+					Type: provider.GranteeType_GRANTEE_TYPE_USER,
+					Id: &provider.Grantee_UserId{
+						UserId: u.Id,
+					},
+				},
+				Permissions: ocsconv.NewManagerRole().CS3ResourcePermissions(),
+			})
+			Expect(err).ToNot(HaveOccurred())
+			perms, _ := nodePSpace.PermissionSet(env.Ctx)
+			expected := ocsconv.NewManagerRole().CS3ResourcePermissions()
+			Expect(grants.PermissionsEqual(&perms, expected)).To(BeTrue())
+		})
+		It("Checks the Editor permissions on a project space and a denial", func() {
+			storageSpace, err := env.CreateTestStorageSpace("project", &provider.Quota{QuotaMaxBytes: 2000})
+			Expect(err).ToNot(HaveOccurred())
+			spaceRoot, err := env.Lookup.NodeFromSpaceID(env.Ctx, storageSpace)
+			Expect(err).ToNot(HaveOccurred())
+			u := ctxpkg.ContextMustGetUser(env.Ctx)
+			env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(provider.ResourcePermissions{
+				UpdateGrant: true,
+				Stat:        true,
+			}, nil).Times(1)
+			err = env.Fs.AddGrant(env.Ctx, &provider.Reference{
+				ResourceId: &provider.ResourceId{
+					SpaceId:  storageSpace.SpaceId,
+					OpaqueId: storageSpace.OpaqueId,
+				},
+			}, &provider.Grant{
+				Grantee: &provider.Grantee{
+					Type: provider.GranteeType_GRANTEE_TYPE_USER,
+					Id: &provider.Grantee_UserId{
+						UserId: u.Id,
+					},
+				},
+				Permissions: ocsconv.NewEditorRole().CS3ResourcePermissions(),
+			})
+			Expect(err).ToNot(HaveOccurred())
+			permissionsActual, _ := spaceRoot.PermissionSet(env.Ctx)
+			permissionsExpected := ocsconv.NewEditorRole().CS3ResourcePermissions()
+			Expect(grants.PermissionsEqual(&permissionsActual, permissionsExpected)).To(BeTrue())
+			env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(provider.ResourcePermissions{
+				Stat:            true,
+				CreateContainer: true,
+			}, nil).Times(1)
+			subfolder, err := env.CreateTestDir("subpath", &provider.Reference{
+				ResourceId: &provider.ResourceId{
+					SpaceId:  storageSpace.SpaceId,
+					OpaqueId: storageSpace.OpaqueId,
+				},
+				Path: ""},
+			)
+			Expect(err).ToNot(HaveOccurred())
+			// adding a denial on the subpath
+			env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(provider.ResourcePermissions{
+				DenyGrant: true,
+				Stat:      true,
+			}, nil).Times(1)
+			err = env.Fs.AddGrant(env.Ctx, &provider.Reference{
+				ResourceId: &provider.ResourceId{
+					SpaceId:  storageSpace.SpaceId,
+					OpaqueId: storageSpace.OpaqueId,
+				},
+				Path: "subpath",
+			}, &provider.Grant{
+				Grantee: &provider.Grantee{
+					Type: provider.GranteeType_GRANTEE_TYPE_USER,
+					Id: &provider.Grantee_UserId{
+						UserId: u.Id,
+					},
+				},
+				Permissions: ocsconv.NewDeniedRole().CS3ResourcePermissions(),
+			})
+			Expect(err).ToNot(HaveOccurred())
+			// checking that the path "subpath" is denied properly
+			subfolderActual, denied := subfolder.PermissionSet(env.Ctx)
+			subfolderExpected := ocsconv.NewDeniedRole().CS3ResourcePermissions()
+			Expect(grants.PermissionsEqual(&subfolderActual, subfolderExpected)).To(BeTrue())
+			Expect(denied).To(BeTrue())
 		})
 	})
 
