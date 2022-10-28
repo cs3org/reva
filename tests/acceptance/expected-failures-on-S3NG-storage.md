@@ -699,11 +699,8 @@ Not everything needs to be implemented for ocis. While the oc10 testsuite covers
 -   [apiWebdavUpload1/uploadFileToBlacklistedName.feature:72](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUpload1/uploadFileToBlacklistedName.feature#L72)
 -   [apiWebdavUpload1/uploadFileToBlacklistedName.feature:77](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavUpload1/uploadFileToBlacklistedName.feature#L77)
 
-#### [different webdav permissions in ocis](https://github.com/owncloud/ocis/issues/4929)
--   [apiShareManagementToShares/mergeShare.feature:93](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementToShares/mergeShare.feature#L93)
-
 #### [file_target of a auto-renamed file is not correct directly after sharing](https://github.com/owncloud/core/issues/32322)
--   [apiShareManagementToShares/mergeShare.feature:105](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementToShares/mergeShare.feature#L105)
+-   [apiShareManagementToShares/mergeShare.feature:113](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementToShares/mergeShare.feature#L113)
 
 ### To triage
 _The below features have been added after I last categorized them. AFAICT they are bugs. @jfd_
@@ -787,7 +784,7 @@ _ocs: api compatibility, return correct status code_
 #### [Cannot move folder/file from one received share to another](https://github.com/owncloud/ocis/issues/2442)
 -   [apiShareUpdateToShares/updateShare.feature:242](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareUpdateToShares/updateShare.feature#L242)
 -   [apiShareUpdateToShares/updateShare.feature:196](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareUpdateToShares/updateShare.feature#L196)
--   [apiShareManagementToShares/mergeShare.feature:124](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementToShares/mergeShare.feature#L124)
+-   [apiShareManagementToShares/mergeShare.feature:132](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementToShares/mergeShare.feature#L132)
 
 #### [Sharing folder and sub-folder with same user but different permission,the permission of sub-folder is not obeyed ](https://github.com/owncloud/ocis/issues/2440)
 -   [apiShareCreateSpecialToShares2/createShareReceivedInMultipleWays.feature:304](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares2/createShareReceivedInMultipleWays.feature#L304)
