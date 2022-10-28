@@ -79,7 +79,11 @@ func (fs *eosfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadC
 }
 
 func (fs *eosfs) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64, metadata map[string]string) (map[string]string, error) {
+	p, err := fs.resolve(ctx, ref)
+	if err != nil {
+		return nil, err
+	}
 	return map[string]string{
-		"simple": ref.GetPath(),
+		"simple": p,
 	}, nil
 }
