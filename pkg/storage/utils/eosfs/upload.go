@@ -83,6 +83,7 @@ func (fs *eosfs) InitiateUpload(ctx context.Context, ref *provider.Reference, up
 	if err != nil {
 		return nil, err
 	}
+	p = fs.wrap(ctx, p)
 	return map[string]string{
 		"simple": p,
 	}, nil
