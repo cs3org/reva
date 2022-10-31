@@ -247,7 +247,7 @@ func (c *Client) AddACL(ctx context.Context, auth, rootAuth eosclient.Authorizat
 	log.Info().Str("func", "AddACL").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Msg("")
 
 	// Init a new NSRequest
-	rq, err := c.initNSRequest(ctx, auth)
+	rq, err := c.initNSRequest(ctx, rootAuth)
 	if err != nil {
 		return err
 	}
