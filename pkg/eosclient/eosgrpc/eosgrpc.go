@@ -252,6 +252,10 @@ func (c *Client) AddACL(ctx context.Context, auth, rootAuth eosclient.Authorizat
 		return err
 	}
 
+	// workaround to be root
+	// TODO: removed once fixed in eos grpc
+	rq.Role.Gid = 1
+
 	msg := new(erpc.NSRequest_AclRequest)
 	msg.Cmd = erpc.NSRequest_AclRequest_ACL_COMMAND(erpc.NSRequest_AclRequest_ACL_COMMAND_value["MODIFY"])
 	msg.Type = erpc.NSRequest_AclRequest_ACL_TYPE(erpc.NSRequest_AclRequest_ACL_TYPE_value["SYS_ACL"])
