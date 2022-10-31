@@ -556,7 +556,7 @@ func (c *Client) UnsetAttr(ctx context.Context, auth eosclient.Authorization, at
 
 	msg := new(erpc.NSRequest_SetXAttrRequest)
 
-	var ktd = []string{attr.Key}
+	var ktd = []string{attr.GetKey()}
 	msg.Keystodelete = ktd
 	msg.Recursive = recursive
 
