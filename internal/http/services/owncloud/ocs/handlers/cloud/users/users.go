@@ -104,20 +104,21 @@ func (h *Handler) GetUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	getHomeRes, err := gc.GetHome(ctx, &provider.GetHomeRequest{})
-	if err != nil {
-		sublog.Error().Err(err).Msg("error calling GetHome")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	if getHomeRes.Status.Code != rpc.Code_CODE_OK {
-		ocdav.HandleErrorStatus(sublog, w, getHomeRes.Status)
-		return
-	}
 	var total, used uint64 = 2, 1
 	var relative float32
 	// lightweight and federated accounts don't have access to their storage space
 	if u.Id.Type != userpb.UserType_USER_TYPE_LIGHTWEIGHT && u.Id.Type != userpb.UserType_USER_TYPE_FEDERATED {
+		getHomeRes, err := gc.GetHome(ctx, &provider.GetHomeRequest{})
+		if err != nil {
+			sublog.Error().Err(err).Msg("error calling GetHome")
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		if getHomeRes.Status.Code != rpc.Code_CODE_OK {
+			ocdav.HandleErrorStatus(sublog, w, getHomeRes.Status)
+			return
+		}
+
 		getQuotaRes, err := gc.GetQuota(ctx, &gateway.GetQuotaRequest{Ref: &provider.Reference{Path: getHomeRes.Path}})
 		if err != nil {
 			sublog.Error().Err(err).Msg("error calling GetQuota")
@@ -131,7 +132,7 @@ func (h *Handler) GetUsers(w http.ResponseWriter, r *http.Request) {
 		}
 		total = getQuotaRes.TotalBytes
 		used = getQuotaRes.UsedBytes
-		relative = float32(float64(used) / float64(total))
+		relative = float32(float64(used)/float64(total)) * 100
 	}
 
 	response.WriteOCSSuccess(w, r, &Users{

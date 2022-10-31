@@ -60,7 +60,7 @@ type FS interface {
 	UnsetArbitraryMetadata(ctx context.Context, ref *provider.Reference, keys []string) error
 	SetLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error
 	GetLock(ctx context.Context, ref *provider.Reference) (*provider.Lock, error)
-	RefreshLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error
+	RefreshLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock, existingLockID string) error
 	Unlock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error
 	ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter) ([]*provider.StorageSpace, error)
 	CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error)

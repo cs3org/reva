@@ -16,7 +16,7 @@ LITMUS_USERNAME="einstein"
 LITMUS_PASSWORD="relativity"
 TESTS="basic http copymove props"
 
-default: build test lint gen-doc check-changelog
+default: build test lint gen-doc
 release: deps build test lint gen-doc
 
 off:
@@ -70,7 +70,7 @@ litmus-test-new: build
 	pkill revad
 lint:
 	go run tools/check-license/check-license.go
-	`go env GOPATH`/bin/golangci-lint run --timeout 3m0s
+	go vet ./...
 
 contrib:
 	git shortlog -se | cut -c8- | sort -u | awk '{print "-", $$0}' | grep -v 'users.noreply.github.com' > CONTRIBUTORS.md
@@ -93,13 +93,6 @@ lint-ci:
 gen-doc:
 	go run tools/generate-documentation/main.go
 
-check-changelog: release-deps
-	`go env GOPATH`/bin/calens > /dev/null
-	go run tools/check-changelog/main.go
-
-check-changelog-drone:
-	go run tools/check-changelog/main.go -repo origin -pr "$(PR)"
-
 # to be run in CI platform
 ci: build-ci test  lint-ci
 
@@ -112,11 +105,6 @@ build-reva-docker: off
 	go build -ldflags ${BUILD_FLAGS} -o ./cmd/reva/reva ./cmd/reva
 clean:
 	rm -rf dist
-
-# for releasing you need to run: go run tools/prepare-release/main.go
-# $ go run tools/prepare-release/main.go -version 0.0.1 -commit -tag
-release-deps:
-	cd /tmp && rm -rf calens &&  git clone --quiet -b 'v0.2.0' --single-branch --depth 1 https://github.com/restic/calens &> /dev/null && cd calens && go install
 
 # create local build versions
 dist: default

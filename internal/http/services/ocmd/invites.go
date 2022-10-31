@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"html"
 	"io"
 	"mime"
 	"net/http"
@@ -191,7 +192,7 @@ func (h *invitesHandler) forwardInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err = w.Write([]byte("Accepted invite from: " + providerDomain))
+	_, err = w.Write([]byte("Accepted invite from: " + html.EscapeString(providerDomain)))
 	if err != nil {
 		WriteError(w, r, APIErrorServerError, "error writing token data", err)
 		return

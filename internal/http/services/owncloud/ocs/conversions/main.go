@@ -145,6 +145,8 @@ type ShareData struct {
 	// PasswordProtected represents a public share is password protected
 	// PasswordProtected bool `json:"password_protected,omitempty" xml:"password_protected,omitempty"`
 	Quicklink bool `json:"quicklink,omitempty" xml:"quicklink,omitempty"`
+	// Description of the public share
+	Description string `json:"description" xml:"description"`
 }
 
 // ShareeData holds share recipient search results
@@ -217,6 +219,7 @@ func PublicShare2ShareData(share *link.PublicShare, r *http.Request, publicURL s
 		UIDOwner:     LocalUserIDToString(share.Creator),
 		UIDFileOwner: LocalUserIDToString(share.Owner),
 		Quicklink:    share.Quicklink,
+		Description:  share.Description,
 	}
 	if share.Id != nil {
 		sd.ID = share.Id.OpaqueId

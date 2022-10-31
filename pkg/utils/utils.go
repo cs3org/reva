@@ -27,6 +27,7 @@ import (
 	"os/user"
 	"path"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"strings"
 	"time"
@@ -348,7 +349,43 @@ func GetViewMode(viewMode string) gateway.OpenInAppRequest_ViewMode {
 		return gateway.OpenInAppRequest_VIEW_MODE_READ_ONLY
 	case "write":
 		return gateway.OpenInAppRequest_VIEW_MODE_READ_WRITE
+	case "preview":
+		return gateway.OpenInAppRequest_VIEW_MODE_PREVIEW
 	default:
 		return gateway.OpenInAppRequest_VIEW_MODE_INVALID
 	}
+}
+
+// HasPublicShareRole return true if the user has a public share role.
+// If yes, the string is the type of role, viewer, editor or uploader
+func HasPublicShareRole(u *userpb.User) (string, bool) {
+	if u.Opaque == nil {
+		return "", false
+	}
+	if publicShare, ok := u.Opaque.Map["public-share-role"]; ok {
+		return string(publicShare.Value), true
+	}
+	return "", false
+}
+
+// HasPermissions returns true if all permissions defined in the stuict toCheck
+// are set in the target
+func HasPermissions(target, toCheck *provider.ResourcePermissions) bool {
+	targetStruct := reflect.ValueOf(target).Elem()
+	toCheckStruct := reflect.ValueOf(toCheck).Elem()
+
+	for i := 0; i < toCheckStruct.NumField(); i++ {
+		fieldToCheck := toCheckStruct.Field(i)
+		if fieldToCheck.Kind() == reflect.Bool && fieldToCheck.Bool() && !targetStruct.Field(i).Bool() {
+			return false
+		}
+	}
+	return true
+}
+
+// UserIsLightweight returns true if the user is a lightweith
+// or federated account
+func UserIsLightweight(u *userpb.User) bool {
+	return u.Id.Type == userpb.UserType_USER_TYPE_FEDERATED ||
+		u.Id.Type == userpb.UserType_USER_TYPE_LIGHTWEIGHT
 }

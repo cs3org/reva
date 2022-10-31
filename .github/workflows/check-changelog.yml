@@ -1,0 +1,56 @@
+name: Check Changelog
+on:
+  pull_request:
+    paths-ignore:
+      - ".github/**"
+      - "Makefile"
+      - "tools/**"
+      - "docs/**"
+      - "tests/**"
+      - ".drone.star"
+      - ".drone.env"
+      - ".fossa.yml"
+      - "go.mod"
+      - "go.sum"
+
+jobs:
+  check-changelog:
+    runs-on: self-hosted
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3.1.0
+      - name: Setup Go environment
+        uses: actions/setup-go@v3.3.0
+        with:
+          go-version-file: go.mod
+      - name: Setup Golang caches
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+      - name: Cache calens
+        id: cache-calens
+        uses: actions/cache@v3
+        with:
+          path: $(go env GOPATH)/bin/calens
+          key: ${{ runner.os }}-calens
+      - name: clone calens
+        if: steps.cache-calens.outputs.cache-hit != 'true'
+        uses: actions/checkout@v3
+        with:
+          repository: restic/calens
+          path: calens
+          fetch-depth: 0
+          ref: v0.2.0
+      - name: Install calens
+        if: steps.cache-calens.outputs.cache-hit != 'true'
+        run: cd calens && go install
+      - name: Check if changelog exists
+        run: |
+          $(go env GOPATH)/bin/calens | \
+          sed -n '/^Changelog for reva unreleased (UNRELEASED)/,/^Details/p' | \
+          grep -E '^ \* [[:alpha:]]{3} #${{ github.event.pull_request.number }}: '
