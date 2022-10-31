@@ -122,7 +122,7 @@ func (s *service) IsProviderAllowed(ctx context.Context, req *ocmprovider.IsProv
 	err := s.pa.IsProviderAllowed(ctx, req.Provider)
 	if err != nil {
 		return &ocmprovider.IsProviderAllowedResponse{
-			Status: status.NewInternal(ctx, "error verifying mesh provider"),
+			Status: status.NewInternal(ctx, "error verifying mesh provider"+err.Error()),
 		}, nil
 	}
 

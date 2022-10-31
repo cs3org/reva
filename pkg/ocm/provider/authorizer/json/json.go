@@ -28,6 +28,7 @@ import (
 	"sync"
 
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
+	"github.com/cs3org/reva/v2/pkg/appctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/ocm/provider"
 	"github.com/cs3org/reva/v2/pkg/ocm/provider/authorizer/registry"
@@ -115,13 +116,17 @@ func (a *authorizer) GetInfoByDomain(ctx context.Context, domain string) (*ocmpr
 
 func (a *authorizer) IsProviderAllowed(ctx context.Context, provider *ocmprovider.ProviderInfo) error {
 	var err error
+	log := appctx.GetLogger(ctx)
+
 	normalizedDomain, err := normalizeDomain(provider.Domain)
+	log.Info().Msgf("Checking if provider is allowed: %s", normalizedDomain)
 	if err != nil {
 		return err
 	}
 	var providerAuthorized bool
 	if normalizedDomain != "" {
 		for _, p := range a.providers {
+			log.Info().Msgf("Trying %s", p.Domain)
 			if p.Domain == normalizedDomain {
 				providerAuthorized = true
 				break
