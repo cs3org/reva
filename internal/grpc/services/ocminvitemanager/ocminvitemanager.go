@@ -119,7 +119,7 @@ func (s *service) ForwardInvite(ctx context.Context, req *invitepb.ForwardInvite
 	err := s.im.ForwardInvite(ctx, req.InviteToken, req.OriginSystemProvider)
 	if err != nil {
 		return &invitepb.ForwardInviteResponse{
-			Status: status.NewInternal(ctx, err, "error forwarding invite:"+err.Error().message),
+			Status: status.NewInternal(ctx, err, "error forwarding invite:"+err.Error()),
 		}, nil
 	}
 
