@@ -28,7 +28,11 @@ import (
 	"github.com/gofrs/flock"
 )
 
-var _localLocks sync.Map
+var (
+	localLocks           sync.Map
+	ErrPathEmpty         = errors.New("lock path is empty")
+	ErrAcquireLockFailed = errors.New("unable to acquire a lock on the file")
+)
 
 // getMutexedFlock returns a new Flock struct for the given file.
 // If there is already one in the local store, it returns nil.
@@ -37,14 +41,14 @@ var _localLocks sync.Map
 func getMutexedFlock(file string) *flock.Flock {
 
 	// Is there lock already?
-	if _, ok := _localLocks.Load(file); ok {
+	if _, ok := localLocks.Load(file); ok {
 		// There is already a lock for this file, another can not be acquired
 		return nil
 	}
 
 	// Acquire the write log on the target node first.
 	l := flock.New(file)
-	_localLocks.Store(file, l)
+	localLocks.Store(file, l)
 	return l
 
 }
@@ -53,11 +57,11 @@ func getMutexedFlock(file string) *flock.Flock {
 // before by the getMutexedFlock function.
 func releaseMutexedFlock(file string) {
 	if len(file) > 0 {
-		_localLocks.Delete(file)
+		localLocks.Delete(file)
 	}
 }
 
-// acquireWriteLog acquires a lock on a file or directory.
+// acquireLock acquires a lock on a file or directory.
 // if the parameter write is true, it gets an exclusive write lock, otherwise a shared read lock.
 // The function returns a Flock object, unlocking has to be done in the calling function.
 func acquireLock(file string, write bool) (*flock.Flock, error) {
@@ -66,28 +70,28 @@ func acquireLock(file string, write bool) (*flock.Flock, error) {
 	// Create a file to carry the log
 	n := flockFile(file)
 	if len(n) == 0 {
-		return nil, errors.New("lock path is empty")
+		return nil, ErrPathEmpty
 	}
 
-	var flock *flock.Flock
-	for i := 1; i <= 10; i++ {
-		if flock = getMutexedFlock(n); flock != nil {
+	var lock *flock.Flock
+	for i := 1; i <= 60; i++ {
+		if lock = getMutexedFlock(n); lock != nil {
 			break
 		}
 		w := time.Duration(i*3) * time.Millisecond
 
 		time.Sleep(w)
 	}
-	if flock == nil {
-		return nil, errors.New("unable to acquire a lock on the file")
+	if lock == nil {
+		return nil, ErrAcquireLockFailed
 	}
 
 	var ok bool
 	for i := 1; i <= 10; i++ {
 		if write {
-			ok, err = flock.TryLock()
+			ok, err = lock.TryLock()
 		} else {
-			ok, err = flock.TryRLock()
+			ok, err = lock.TryRLock()
 		}
 
 		if ok {
@@ -98,13 +102,14 @@ func acquireLock(file string, write bool) (*flock.Flock, error) {
 	}
 
 	if !ok {
-		err = errors.New("could not acquire lock after wait")
+		err = ErrAcquireLockFailed
 	}
 
 	if err != nil {
 		return nil, err
 	}
-	return flock, nil
+
+	return lock, nil
 }
 
 // flockFile returns the flock filename for a given file name
