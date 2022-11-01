@@ -71,7 +71,7 @@ func TestSetTi(t *testing.T) {
 			sec:      10,
 			expected: time.Date(2022, time.December, 12, 23, 34, 10, 0, time.UTC),
 		},
-				{
+		{
 			t:        time.Date(2022, time.December, 12, 20, 19, 10, 0, time.UTC),
 			hour:     23,
 			min:      34,

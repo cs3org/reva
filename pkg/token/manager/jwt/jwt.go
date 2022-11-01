@@ -121,8 +121,7 @@ func getNextWeekend(now time.Time) time.Time {
 }
 
 func setTime(t time.Time, hour, min, sec int) time.Time {
-	t = t.Truncate(24 * time.Hour)
-	return t.Add(time.Duration(hour)*time.Hour + time.Duration(min)*time.Minute + time.Duration(sec)*time.Second)
+	return time.Date(t.Year(), t.Month(), t.Day(), hour, min, sec, 0, t.Location())
 }
 
 func (m *manager) DismantleToken(ctx context.Context, tkn string) (*user.User, map[string]*auth.Scope, error) {
