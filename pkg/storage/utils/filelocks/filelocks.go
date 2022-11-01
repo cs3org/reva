@@ -29,8 +29,10 @@ import (
 )
 
 var (
-	localLocks           sync.Map
-	ErrPathEmpty         = errors.New("lock path is empty")
+	localLocks sync.Map
+	// ErrPathEmpty indicates that no path was specified
+	ErrPathEmpty = errors.New("lock path is empty")
+	// ErrAcquireLockFailed indicates that it was not possible to lock the resource.
 	ErrAcquireLockFailed = errors.New("unable to acquire a lock on the file")
 )
 
