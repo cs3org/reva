@@ -40,8 +40,9 @@ func init() {
 }
 
 type config struct {
-	Secret  string `mapstructure:"secret"`
-	Expires int64  `mapstructure:"expires"`
+	Secret             string `mapstructure:"secret"`
+	Expires            int64  `mapstructure:"expires"`
+	ExpiresNextWeekend bool   `mapstructure:"expires_next_weekend"`
 }
 
 type manager struct {
@@ -86,10 +87,9 @@ func New(value map[string]interface{}) (token.Manager, error) {
 }
 
 func (m *manager) MintToken(ctx context.Context, u *user.User, scope map[string]*auth.Scope) (string, error) {
-	ttl := time.Duration(m.conf.Expires) * time.Second
 	claims := claims{
 		StandardClaims: jwt.StandardClaims{
-			ExpiresAt: time.Now().Add(ttl).Unix(),
+			ExpiresAt: getExpirationDate(m.conf.ExpiresNextWeekend, time.Duration(m.conf.Expires)*time.Second).Unix(),
 			Issuer:    u.Id.Idp,
 			Audience:  "reva",
 			IssuedAt:  time.Now().Unix(),
@@ -106,6 +106,23 @@ func (m *manager) MintToken(ctx context.Context, u *user.User, scope map[string]
 	}
 
 	return tkn, nil
+}
+
+func getExpirationDate(expiresOnNextWeekend bool, expiration time.Duration) time.Time {
+	if expiresOnNextWeekend {
+		nextWeekend := getNextWeekend(time.Now())
+		return setTime(nextWeekend, 23, 59, 59)
+	}
+	return time.Now().Add(expiration)
+}
+
+func getNextWeekend(now time.Time) time.Time {
+	return now.Truncate(24 * time.Hour).Add(time.Duration(7-now.Weekday()) * 24 * time.Hour)
+}
+
+func setTime(t time.Time, hour, min, sec int) time.Time {
+	t = t.Truncate(24 * time.Hour)
+	return t.Add(time.Duration(hour)*time.Hour + time.Duration(min)*time.Minute + time.Duration(sec)*time.Second)
 }
 
 func (m *manager) DismantleToken(ctx context.Context, tkn string) (*user.User, map[string]*auth.Scope, error) {
