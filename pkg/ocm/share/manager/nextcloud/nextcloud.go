@@ -22,9 +22,11 @@ package nextcloud
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"math/rand"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -211,7 +213,7 @@ func (sm *Manager) do(ctx context.Context, a Action, username string) (int, []by
 
 	log.Info().Msgf("am.do response %d %s", resp.StatusCode, body)
 
-	if (resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated) {
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 		return 0, nil, fmt.Errorf("Unexpected response code from EFSS API: " + strconv.Itoa(resp.StatusCode))
 	}
 	return resp.StatusCode, body, nil

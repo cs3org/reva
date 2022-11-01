@@ -22,8 +22,10 @@ package nextcloud
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
@@ -141,7 +143,7 @@ func (am *Manager) do(ctx context.Context, a Action) (int, []byte, error) {
 	}
 
 	log.Info().Msgf("am.do response %d %s", resp.StatusCode, body)
-	if (resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated) {
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 		return 0, nil, fmt.Errorf("Unexpected response code from EFSS API: " + strconv.Itoa(resp.StatusCode))
 	}
 	return resp.StatusCode, body, nil

@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
@@ -141,7 +142,7 @@ func (um *Manager) do(ctx context.Context, a Action, username string) (int, []by
 
 	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)
-	if (resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated) {
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 		return 0, nil, fmt.Errorf("Unexpected response code from EFSS API: " + strconv.Itoa(resp.StatusCode))
 	}
 	return resp.StatusCode, body, err
