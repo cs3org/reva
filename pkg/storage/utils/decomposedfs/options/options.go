@@ -55,6 +55,8 @@ type Options struct {
 
 	PersonalSpaceAliasTemplate string `mapstructure:"personalspacealias_template"`
 	GeneralSpaceAliasTemplate  string `mapstructure:"generalspacealias_template"`
+
+	MaxAcquireLockCycles int `mapstructure:"max_acquire_lock_cycles"`
 }
 
 // New returns a new Options instance for the given configuration

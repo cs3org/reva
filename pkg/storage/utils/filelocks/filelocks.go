@@ -28,7 +28,18 @@ import (
 	"github.com/gofrs/flock"
 )
 
-var _localLocks sync.Map
+var (
+	_localLocks      sync.Map
+	_lockCycles      sync.Once
+	_lockCyclesValue = 25
+)
+
+// SetMaxLockCycles configures the maximum amount of lock cycles. Subsequent calls to SetMaxLockCycles have no effect
+func SetMaxLockCycles(v int) {
+	_lockCycles.Do(func() {
+		_lockCyclesValue = v
+	})
+}
 
 // getMutexedFlock returns a new Flock struct for the given file.
 // If there is already one in the local store, it returns nil.
@@ -83,7 +94,7 @@ func acquireLock(file string, write bool) (*flock.Flock, error) {
 	}
 
 	var ok bool
-	for i := 1; i <= 10; i++ {
+	for i := 1; i <= _lockCyclesValue; i++ {
 		if write {
 			ok, err = flock.TryLock()
 		} else {
