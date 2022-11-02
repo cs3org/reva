@@ -28,7 +28,11 @@ import (
 	"github.com/gofrs/flock"
 )
 
-var _localLocks sync.Map
+var (
+	_localLocks sync.Map
+	// MaxAcquireLockCycles defines how often the system tries to acquire a lock before failing.
+	MaxAcquireLockCycles = 25
+)
 
 // getMutexedFlock returns a new Flock struct for the given file.
 // If there is already one in the local store, it returns nil.
@@ -70,7 +74,7 @@ func acquireLock(file string, write bool) (*flock.Flock, error) {
 	}
 
 	var flock *flock.Flock
-	for i := 1; i <= 10; i++ {
+	for i := 1; i <= MaxAcquireLockCycles; i++ {
 		if flock = getMutexedFlock(n); flock != nil {
 			break
 		}
