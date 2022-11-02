@@ -59,6 +59,8 @@ type Options struct {
 	Tokens TokenOptions `mapstructure:"tokens"`
 
 	StatCache CacheOptions `mapstructure:"statcache"`
+
+	MaxAcquireLockCycles int `mapstructure:"max_acquire_lock_cycles"`
 }
 
 // EventOptions are the configurable options for events

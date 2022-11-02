@@ -56,6 +56,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/tree"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/upload"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/filelocks"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/templates"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/utils"
@@ -143,6 +144,11 @@ func New(o *options.Options, lu *lookup.Lookup, p PermissionsChecker, tp Tree, p
 	if err != nil {
 		log.Error().Err(err).Msg("could not setup tree")
 		return nil, errors.Wrap(err, "could not setup tree")
+	}
+
+	// Fixme: temporary workaround to make MaxAcquireLockCycles configurable.
+	if o.MaxAcquireLockCycles != 0 {
+		filelocks.MaxAcquireLockCycles = o.MaxAcquireLockCycles
 	}
 
 	var ev events.Stream
