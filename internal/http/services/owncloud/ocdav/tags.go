@@ -28,6 +28,7 @@ import (
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/errors"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/net"
 	"github.com/cs3org/reva/v2/pkg/appctx"
+	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/events"
 	"github.com/cs3org/reva/v2/pkg/rhttp/router"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
@@ -88,7 +89,7 @@ func (h *TagHandler) handleCreateTags(w http.ResponseWriter, r *http.Request, s 
 				Path:       ".",
 			},
 			SpaceOwner: info.Owner,
-			Executant:  info.Owner,
+			Executant:  ctxpkg.ContextMustGetUser(r.Context()).Id,
 		}
 	})
 }
@@ -110,7 +111,7 @@ func (h *TagHandler) handleDeleteTags(w http.ResponseWriter, r *http.Request, s 
 				Path:       ".",
 			},
 			SpaceOwner: info.Owner,
-			Executant:  info.Owner,
+			Executant:  ctxpkg.ContextMustGetUser(r.Context()).Id,
 		}
 	})
 }
