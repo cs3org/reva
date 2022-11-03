@@ -33,6 +33,7 @@ import (
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/token"
 	tokenmgr "github.com/cs3org/reva/pkg/token/manager/registry"
+	"github.com/cs3org/reva/pkg/user"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
@@ -50,6 +51,7 @@ type config struct {
 	TokenManager  string                            `mapstructure:"token_manager"`
 	TokenManagers map[string]map[string]interface{} `mapstructure:"token_managers"`
 	GatewayAddr   string                            `mapstructure:"gateway_addr"`
+	blockedUsers  []string
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -58,6 +60,7 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 		err = errors.Wrap(err, "auth: error decoding conf")
 		return nil, err
 	}
+	c.blockedUsers = sharedconf.GetBlockedUsers()
 	return c, nil
 }
 
@@ -69,6 +72,8 @@ func NewUnary(m map[string]interface{}, unprotected []string) (grpc.UnaryServerI
 		err = errors.Wrap(err, "auth: error parsing config")
 		return nil, err
 	}
+
+	blockedUsers := user.NewBlockedUsersSet(conf.blockedUsers)
 
 	if conf.TokenManager == "" {
 		conf.TokenManager = "jwt"
@@ -99,6 +104,9 @@ func NewUnary(m map[string]interface{}, unprotected []string) (grpc.UnaryServerI
 			if ok {
 				u, err := dismantleToken(ctx, tkn, req, tokenManager, conf.GatewayAddr, true)
 				if err == nil {
+					if blockedUsers.IsBlocked(u.Username) {
+						return nil, status.Errorf(codes.PermissionDenied, "user %s blocked", u.Username)
+					}
 					ctx = ctxpkg.ContextSetUser(ctx, u)
 				}
 			}
@@ -117,6 +125,10 @@ func NewUnary(m map[string]interface{}, unprotected []string) (grpc.UnaryServerI
 		if err != nil {
 			log.Warn().Err(err).Msg("access token is invalid")
 			return nil, status.Errorf(codes.PermissionDenied, "auth: core access token is invalid")
+		}
+
+		if blockedUsers.IsBlocked(u.Username) {
+			return nil, status.Errorf(codes.PermissionDenied, "user %s blocked", u.Username)
 		}
 
 		ctx = ctxpkg.ContextSetUser(ctx, u)
