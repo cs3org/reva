@@ -83,11 +83,12 @@ func (fs *Decomposedfs) CreateStorageSpace(ctx context.Context, req *provider.Cr
 	}
 
 	root, err := node.ReadNode(ctx, fs.lu, spaceID, spaceID, true) // will fall into `Exists` case below
-	if err == nil && root.Exists {
+	switch {
+	case err != nil:
+		return nil, err
+	case root.Exists:
 		return nil, errtypes.AlreadyExists("decomposedfs: spaces: space already exists")
-	}
-
-	if !fs.canCreateSpace(ctx, spaceID) {
+	case !fs.canCreateSpace(ctx, spaceID):
 		return nil, errtypes.PermissionDenied(spaceID)
 	}
 
