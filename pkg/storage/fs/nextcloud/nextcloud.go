@@ -127,15 +127,21 @@ func (nc *StorageDriver) SetHTTPClient(c *http.Client) {
 
 func (nc *StorageDriver) doUpload(ctx context.Context, filePath string, r io.ReadCloser) error {
 	// log := appctx.GetLogger(ctx)
+	// log.Error().Msgf("in doUpload!  %s", filePath)
 	user, err := getUser(ctx)
 	if err != nil {
+		// log.Error().Msg("error getting user!")
 		return err
 	}
+	// log.Error().Msgf("got user! %+v", user)
+
 	// See https://github.com/pondersource/nc-sciencemesh/issues/5
 	// url := nc.endPoint + "~" + user.Username + "/files/" + filePath
-	url := nc.endPoint + "~" + user.Username + "/api/storage/Upload/" + filePath
+	url := nc.endPoint + "~" + user.Id.OpaqueId + "/api/storage/Upload/home" + filePath
+	// log.Error().Msgf("sending PUT to NC/OC!  %s", url)
 	req, err := http.NewRequest(http.MethodPut, url, r)
 	if err != nil {
+		// log.Error().Msgf("error!  %s", err.Error())
 		panic(err)
 	}
 
@@ -143,8 +149,10 @@ func (nc *StorageDriver) doUpload(ctx context.Context, filePath string, r io.Rea
 	// set the request header Content-Type for the upload
 	// FIXME: get the actual content type from somewhere
 	req.Header.Set("Content-Type", "text/plain")
+	// log.Error().Msg("client req")
 	resp, err := nc.client.Do(req)
 	if err != nil {
+		// log.Error().Msgf("error!  %s", err.Error())
 		panic(err)
 	}
 
