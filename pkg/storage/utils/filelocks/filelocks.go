@@ -32,6 +32,11 @@ var (
 	_localLocks      sync.Map
 	_lockCycles      sync.Once
 	_lockCyclesValue = 25
+
+	// ErrPathEmpty indicates that no path was specified
+	ErrPathEmpty = errors.New("lock path is empty")
+	// ErrAcquireLockFailed indicates that it was not possible to lock the resource.
+	ErrAcquireLockFailed = errors.New("unable to acquire a lock on the file")
 )
 
 // SetMaxLockCycles configures the maximum amount of lock cycles. Subsequent calls to SetMaxLockCycles have no effect
@@ -77,7 +82,7 @@ func acquireLock(file string, write bool) (*flock.Flock, error) {
 	// Create a file to carry the log
 	n := flockFile(file)
 	if len(n) == 0 {
-		return nil, errors.New("lock path is empty")
+		return nil, ErrPathEmpty
 	}
 
 	var flock *flock.Flock
@@ -90,7 +95,7 @@ func acquireLock(file string, write bool) (*flock.Flock, error) {
 		time.Sleep(w)
 	}
 	if flock == nil {
-		return nil, errors.New("unable to acquire a lock on the file")
+		return nil, ErrAcquireLockFailed
 	}
 
 	var ok bool
@@ -109,7 +114,7 @@ func acquireLock(file string, write bool) (*flock.Flock, error) {
 	}
 
 	if !ok {
-		err = errors.New("could not acquire lock after wait")
+		err = ErrAcquireLockFailed
 	}
 
 	if err != nil {
