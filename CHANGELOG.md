@@ -36,9 +36,9 @@ Summary
 *   Enh #3320: Add the parentID to the ocs and dav responses
 *   Enh #3239: Add privatelink to PROPFIND response
 *   Enh #3340: Add SpaceOwner to some event
-*   Enh #4564: Add SpaceShared event
+*   Enh #3252: Add SpaceShared event
 *   Enh #3297: Update dependencies
-*   Enh #4959: Make max lock cycles configurable
+*   Enh #3429: Make max lock cycles configurable
 *   Enh #1949: Add support for denying access in OCS layer
 *   Enh #3224: Make the jsoncs3 share manager cache ttl configurable
 *   Enh #3290: Harden file system accesses
@@ -283,13 +283,13 @@ Details
    https://github.com/cs3org/reva/pull/3340
    https://github.com/cs3org/reva/pull/3350
 
-*   Enhancement #4564: Add SpaceShared event
+*   Enhancement #3252: Add SpaceShared event
 
    We added an event that is emmitted when somebody shares a space.
 
    https://github.com/owncloud/ocis/issues/4303
-   https://github.com/owncloud/ocis/pull/4564
    https://github.com/cs3org/reva/pull/3252
+   https://github.com/owncloud/ocis/pull/4564
 
 *   Enhancement #3297: Update dependencies
 
@@ -297,12 +297,13 @@ Details
 
    https://github.com/cs3org/reva/pull/3297
 
-*   Enhancement #4959: Make max lock cycles configurable
+*   Enhancement #3429: Make max lock cycles configurable
 
    When a file is locked the flock library will retry a given amount of times (with a increasing
    sleep time inbetween each round) Until now the max amount of such rounds was hardcoded to `10`.
    Now it is configurable, falling back to a default of `25`
 
+   https://github.com/cs3org/reva/pull/3429
    https://github.com/owncloud/ocis/pull/4959
 
 *   Enhancement #1949: Add support for denying access in OCS layer
