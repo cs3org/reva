@@ -64,6 +64,7 @@ require (
 	github.com/sethvargo/go-password v0.2.0
 	github.com/stretchr/testify v1.8.1
 	github.com/studio-b12/gowebdav v0.0.0-20221015232716-17255f2e7423
+	github.com/test-go/testify v1.1.4
 	github.com/thanhpk/randstr v1.0.4
 	github.com/tus/tusd v1.10.0
 	github.com/wk8/go-ordered-map v1.0.0
@@ -79,6 +80,7 @@ require (
 	golang.org/x/sync v0.1.0
 	golang.org/x/sys v0.1.0
 	golang.org/x/term v0.1.0
+	golang.org/x/text v0.4.0
 	google.golang.org/genproto v0.0.0-20221024183307-1bc688fe9f3e
 	google.golang.org/grpc v1.50.1
 	google.golang.org/protobuf v1.28.1
@@ -196,7 +198,6 @@ require (
 	go.uber.org/zap v1.23.0 // indirect
 	golang.org/x/mod v0.6.0 // indirect
 	golang.org/x/net v0.1.0 // indirect
-	golang.org/x/text v0.4.0 // indirect
 	golang.org/x/time v0.1.0 // indirect
 	golang.org/x/tools v0.2.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
