@@ -19,7 +19,6 @@
 package filelocks_test
 
 import (
-	"os"
 	"sync"
 	"testing"
 
@@ -29,7 +28,7 @@ import (
 )
 
 func TestAcquireWriteLock(t *testing.T) {
-	file, fin, _ := fileFactory()
+	file, fin, _ := filelocks.FileFactory()
 	defer fin()
 
 	var wg sync.WaitGroup
@@ -53,7 +52,7 @@ func TestAcquireWriteLock(t *testing.T) {
 }
 
 func TestAcquireReadLock(t *testing.T) {
-	file, fin, _ := fileFactory()
+	file, fin, _ := filelocks.FileFactory()
 	defer fin()
 
 	var wg sync.WaitGroup
@@ -77,7 +76,7 @@ func TestAcquireReadLock(t *testing.T) {
 }
 
 func TestReleaseLock(t *testing.T) {
-	file, fin, _ := fileFactory()
+	file, fin, _ := filelocks.FileFactory()
 	defer fin()
 
 	l1, err := filelocks.AcquireWriteLock(file)
@@ -86,44 +85,4 @@ func TestReleaseLock(t *testing.T) {
 	err = filelocks.ReleaseLock(l1)
 	assert.Nil(t, err)
 	assert.Equal(t, false, l1.Locked())
-}
-
-// test unexported
-
-func TestAcquireLock(t *testing.T) {
-	l1, err := filelocks.AcquireLock("", false)
-	assert.Nil(t, l1)
-	assert.Equal(t, err, filelocks.ErrPathEmpty)
-
-	file, fin, _ := fileFactory()
-	defer fin()
-
-	l2, err := filelocks.AcquireLock(file, false)
-	assert.NotNil(t, l2)
-	assert.Nil(t, err)
-
-	l3, err := filelocks.AcquireLock(file, false)
-	assert.Nil(t, l3)
-	assert.Equal(t, err, filelocks.ErrAcquireLockFailed)
-}
-
-// utils
-
-func fileFactory() (string, func(), error) {
-	fu := func() {}
-	tmpFile, err := os.CreateTemp(os.TempDir(), "flock")
-	if err != nil {
-		return "", fu, err
-	}
-
-	fu = func() {
-		_ = os.Remove(tmpFile.Name())
-	}
-
-	err = tmpFile.Close()
-	if err != nil {
-		return "", fu, err
-	}
-
-	return tmpFile.Name(), fu, err
 }
