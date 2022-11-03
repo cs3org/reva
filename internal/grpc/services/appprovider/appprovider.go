@@ -20,7 +20,10 @@ package appprovider
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"io/ioutil"
 	"os"
 	"strconv"
 	"time"
@@ -33,6 +36,7 @@ import (
 	"github.com/cs3org/reva/pkg/app/provider/registry"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/logger"
+	"github.com/cs3org/reva/pkg/mime"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
@@ -52,13 +56,14 @@ type service struct {
 }
 
 type config struct {
-	Driver         string                            `mapstructure:"driver"`
-	Drivers        map[string]map[string]interface{} `mapstructure:"drivers"`
-	AppProviderURL string                            `mapstructure:"app_provider_url"`
-	GatewaySvc     string                            `mapstructure:"gatewaysvc"`
-	MimeTypes      []string                          `mapstructure:"mime_types"`
-	Priority       uint64                            `mapstructure:"priority"`
-	Language       string                            `mapstructure:"language"`
+	Driver              string                            `mapstructure:"driver"`
+	Drivers             map[string]map[string]interface{} `mapstructure:"drivers"`
+	AppProviderURL      string                            `mapstructure:"app_provider_url"`
+	GatewaySvc          string                            `mapstructure:"gatewaysvc"`
+	MimeTypes           []string                          `mapstructure:"mime_types" docs:"nil;A list of mime types supported by this app."`
+	CustomMimeTypesJSON string                            `mapstructure:"custom_mime_types_json" docs:"nil;An optional mapping file with the list of supported custom file extensions and corresponding mime types."`
+	Priority            uint64                            `mapstructure:"priority"`
+	Language            string                            `mapstructure:"language"`
 }
 
 func (c *config) init() {
@@ -85,6 +90,12 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 		return nil, err
 	}
 
+	// read and register custom mime types if configured
+	err = registerMimeTypes(c.CustomMimeTypesJSON)
+	if err != nil {
+		return nil, err
+	}
+
 	provider, err := getProvider(c)
 	if err != nil {
 		return nil, err
@@ -99,9 +110,31 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 	return service, nil
 }
 
+func registerMimeTypes(mappingFile string) error {
+	// TODO(lopresti) this function also exists in the storage provider, to be seen if we want to factor it out, though a
+	// fileext <-> mimetype "service" would have to be served by the gateway for it to be accessible both by storage providers and app providers.
+	if mappingFile != "" {
+		f, err := ioutil.ReadFile(mappingFile)
+		if err != nil {
+			return fmt.Errorf("appprovider: error reading the custom mime types file: +%v", err)
+		}
+		mimeTypes := map[string]string{}
+		err = json.Unmarshal(f, &mimeTypes)
+		if err != nil {
+			return fmt.Errorf("appprovider: error unmarshalling the custom mime types file: +%v", err)
+		}
+		// register all mime types that were read
+		for e, m := range mimeTypes {
+			mime.RegisterMime(e, m)
+		}
+	}
+	return nil
+}
+
 func (s *service) registerProvider() {
 	// Give the appregistry service time to come up
-	time.Sleep(2 * time.Second)
+	// TODO(lopresti) we should register the appproviders after all other microservices
+	time.Sleep(3 * time.Second)
 
 	ctx := context.Background()
 	log := logger.New().With().Int("pid", os.Getpid()).Logger()
@@ -119,6 +152,7 @@ func (s *service) registerProvider() {
 			mimeTypes = append(mimeTypes, m.(string))
 		}
 		pInfo.MimeTypes = mimeTypes
+		log.Info().Str("appprovider", s.conf.AppProviderURL).Interface("mimetypes", mimeTypes).Msg("appprovider supported mimetypes")
 	}
 
 	client, err := pool.GetGatewayServiceClient(pool.Endpoint(s.conf.GatewaySvc))
@@ -165,7 +199,10 @@ func (s *service) Register(ss *grpc.Server) {
 
 func getProvider(c *config) (app.Provider, error) {
 	if f, ok := registry.NewFuncs[c.Driver]; ok {
-		return f(c.Drivers[c.Driver])
+		driverConf := c.Drivers[c.Driver]
+		// share the mime_types config entry to the drivers
+		driverConf["mime_types"] = c.MimeTypes
+		return f(driverConf)
 	}
 	return nil, errtypes.NotFound("driver not found: " + c.Driver)
 }
@@ -183,5 +220,4 @@ func (s *service) OpenInApp(ctx context.Context, req *providerpb.OpenInAppReques
 		AppUrl: appURL,
 	}
 	return res, nil
-
 }
