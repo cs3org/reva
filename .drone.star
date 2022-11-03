@@ -313,16 +313,6 @@ def coverage():
                     "make test",
                 ],
             },
-            {
-                "name": "codacy",
-                "image": "plugins/codacy:1",
-                "pull": "always",
-                "settings": {
-                    "token": {
-                        "from_secret": "codacy_token",
-                    },
-                },
-            },
         ],
         "depends_on": ["changelog"],
     }
