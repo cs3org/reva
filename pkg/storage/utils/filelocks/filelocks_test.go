@@ -81,6 +81,7 @@ func TestReleaseLock(t *testing.T) {
 
 	l1, err := filelocks.AcquireWriteLock(file)
 	assert.Equal(t, true, l1.Locked())
+	assert.Nil(t, err)
 
 	err = filelocks.ReleaseLock(l1)
 	assert.Nil(t, err)
