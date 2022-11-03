@@ -39,7 +39,7 @@ Summary
 *   Enh #3252: Add SpaceShared event
 *   Enh #3297: Update dependencies
 *   Enh #3429: Make max lock cycles configurable
-*   Enh #1949: Add support for denying access in OCS layer
+*   Enh #3011: Expose capability to deny access in OCS API
 *   Enh #3224: Make the jsoncs3 share manager cache ttl configurable
 *   Enh #3290: Harden file system accesses
 *   Enh #3332: Allow to enable TLS for grpc service
@@ -306,9 +306,9 @@ Details
    https://github.com/cs3org/reva/pull/3429
    https://github.com/owncloud/ocis/pull/4959
 
-*   Enhancement #1949: Add support for denying access in OCS layer
+*   Enhancement #3011: Expose capability to deny access in OCS API
 
-   http://github.com/cs3org/reva/pull/1949
+   http://github.com/cs3org/reva/pull/3011
 
 *   Enhancement #3224: Make the jsoncs3 share manager cache ttl configurable
 
