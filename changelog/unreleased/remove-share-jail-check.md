@@ -1,4 +1,4 @@
-Bug: Remove share jail fix
+Bugfix: Remove share jail fix
 
 We have removed the share jail check.
 
