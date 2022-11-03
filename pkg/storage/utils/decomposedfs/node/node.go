@@ -90,7 +90,6 @@ type PathLookup interface {
 	InternalRoot() string
 	InternalPath(spaceID, nodeID string) string
 	Path(ctx context.Context, n *Node) (path string, err error)
-	ShareFolder() string
 }
 
 // New returns a new instance of Node
