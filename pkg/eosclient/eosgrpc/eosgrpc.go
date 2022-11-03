@@ -1587,11 +1587,12 @@ func (c *Client) grpcMDResponseToFileInfo(st *erpc.MDResponse) (*eosclient.FileI
 		}
 
 		fi.Size = st.Fmd.Size
-
-		xs := &eosclient.Checksum{
-			XSSum:  hex.EncodeToString(st.Fmd.Checksum.Value),
-			XSType: st.Fmd.Checksum.Type,
-		}
+		
+		if st.Fmd.Checksum != nil {
+			xs := &eosclient.Checksum{
+				XSSum:  hex.EncodeToString(st.Fmd.Checksum.Value),
+				XSType: st.Fmd.Checksum.Type,
+			}
 		fi.XS = xs
 
 		log.Debug().Str("stat info - path", fi.File).Uint64("inode", fi.Inode).Uint64("uid", fi.UID).Uint64("gid", fi.GID).Str("etag", fi.ETag).Str("checksum", fi.XS.XSType+":"+fi.XS.XSSum).Msg("grpc response")
