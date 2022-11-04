@@ -86,7 +86,7 @@ func Send(requestBodyMap map[string]interface{}, pi *ocmprovider.ProviderInfo) e
 			e = errors.Wrap(e, "sender: error reading request body")
 			return e
 		}
-		err = errors.Wrap(fmt.Errorf("%s: %s", resp.Status, string(respBody)), "sender: error sending create ocm core share post request")
+		err = errors.Wrap(fmt.Errorf("%s: %s", resp.Status, string(respBody)), "sender: error from "+ocmEndpoint)
 		return err
 	}
 	return nil

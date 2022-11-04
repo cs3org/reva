@@ -178,7 +178,7 @@ func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareReq
 
 	if err != nil {
 		return &ocm.CreateOCMShareResponse{
-			Status: status.NewInternal(ctx, err, "error creating share"),
+			Status: status.NewInternal(ctx, err, "error creating share: "+err.Error()),
 		}, nil
 	}
 
