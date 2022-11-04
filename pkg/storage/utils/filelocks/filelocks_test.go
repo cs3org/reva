@@ -31,20 +31,25 @@ func TestAcquireWriteLock(t *testing.T) {
 	file, fin, _ := filelocks.FileFactory()
 	defer fin()
 
+	filelocks.SetMaxLockCycles(90)
+
 	var wg sync.WaitGroup
 	for i := 0; i < 10; i++ {
 		wg.Add(1)
 		go func() {
+			defer wg.Done()
+
 			l, err := filelocks.AcquireWriteLock(file)
 			assert.Nil(t, err)
 			require.NotNil(t, l)
+
+			defer func() {
+				err = filelocks.ReleaseLock(l)
+				assert.Nil(t, err)
+			}()
+
 			assert.Equal(t, true, l.Locked())
 			assert.Equal(t, false, l.RLocked())
-
-			err = filelocks.ReleaseLock(l)
-			assert.Nil(t, err)
-
-			wg.Done()
 		}()
 	}
 
@@ -55,20 +60,26 @@ func TestAcquireReadLock(t *testing.T) {
 	file, fin, _ := filelocks.FileFactory()
 	defer fin()
 
+	filelocks.SetMaxLockCycles(90)
+
 	var wg sync.WaitGroup
 	for i := 0; i < 10; i++ {
 		wg.Add(1)
 		go func() {
+			defer wg.Done()
+
 			l, err := filelocks.AcquireReadLock(file)
 			assert.Nil(t, err)
 			require.NotNil(t, l)
+
+			defer func() {
+				err = filelocks.ReleaseLock(l)
+				assert.Nil(t, err)
+			}()
+
 			assert.Equal(t, false, l.Locked())
 			assert.Equal(t, true, l.RLocked())
 
-			err = filelocks.ReleaseLock(l)
-			assert.Nil(t, err)
-
-			wg.Done()
 		}()
 	}
 
