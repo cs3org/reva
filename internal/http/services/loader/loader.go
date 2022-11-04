@@ -40,5 +40,6 @@ import (
 	_ "github.com/cs3org/reva/internal/http/services/thumbnails"
 	_ "github.com/cs3org/reva/internal/http/services/wellknown"
 	_ "github.com/cs3org/reva/pkg/cbox/http/services/eosprojects"
+	_ "github.com/cs3org/reva/pkg/cbox/http/services/otg"
 	// Add your own service here
 )
