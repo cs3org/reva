@@ -88,17 +88,11 @@ func NewPermissions(lu PathLookup) *Permissions {
 func (p *Permissions) AssemblePermissions(ctx context.Context, n *Node) (ap provider.ResourcePermissions, err error) {
 	u, ok := ctxpkg.ContextGetUser(ctx)
 	if !ok {
-		appctx.GetLogger(ctx).Debug().Interface("node", n.ID).Msg("no user in context, returning default permissions")
 		return NoPermissions(), nil
 	}
 
 	// check if the current user is the owner
 	if utils.UserIDEqual(u.Id, n.Owner()) {
-		lp, err := n.lu.Path(ctx, n)
-		if err == nil && lp == n.lu.ShareFolder() {
-			return ShareFolderPermissions(), nil
-		}
-		appctx.GetLogger(ctx).Debug().Str("node", n.ID).Msg("user is owner, returning owner permissions")
 		return OwnerPermissions(), nil
 	}
 	// determine root

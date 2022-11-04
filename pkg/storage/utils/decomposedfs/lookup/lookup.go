@@ -172,8 +172,3 @@ func (lu *Lookup) InternalRoot() string {
 func (lu *Lookup) InternalPath(spaceID, nodeID string) string {
 	return filepath.Join(lu.Options.Root, "spaces", Pathify(spaceID, 1, 2), "nodes", Pathify(nodeID, 4, 2))
 }
-
-// ShareFolder returns the internal storage root directory
-func (lu *Lookup) ShareFolder() string {
-	return lu.Options.ShareFolder
-}

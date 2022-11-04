@@ -30,7 +30,6 @@ import (
 	"path"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"syscall"
 
 	cs3permissions "github.com/cs3org/go-cs3apis/cs3/permissions/v1beta1"
@@ -53,7 +52,6 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/pkg/errors"
-	"go.opentelemetry.io/otel/codes"
 	"google.golang.org/grpc"
 )
 
@@ -403,85 +401,7 @@ func (fs *Decomposedfs) TouchFile(ctx context.Context, ref *provider.Reference) 
 // To mimic the eos and owncloud driver we only allow references as children of the "/Shares" folder
 // FIXME: This comment should explain briefly what a reference is in this context.
 func (fs *Decomposedfs) CreateReference(ctx context.Context, p string, targetURI *url.URL) (err error) {
-	ctx, span := appctx.GetTracerProvider(ctx).Tracer("reva").Start(ctx, "CreateReference")
-	defer span.End()
-
-	p = strings.Trim(p, "/")
-	parts := strings.Split(p, "/")
-
-	if len(parts) != 2 {
-		err := errtypes.PermissionDenied("Decomposedfs: references must be a child of the share folder: share_folder=" + fs.o.ShareFolder + " path=" + p)
-		span.SetStatus(codes.Error, err.Error())
-		return err
-	}
-
-	if parts[0] != strings.Trim(fs.o.ShareFolder, "/") {
-		err := errtypes.PermissionDenied("Decomposedfs: cannot create references outside the share folder: share_folder=" + fs.o.ShareFolder + " path=" + p)
-		span.SetStatus(codes.Error, err.Error())
-		return err
-	}
-
-	// create Shares folder if it does not exist
-	var parentNode *node.Node
-	var parentCreated, childCreated bool // defaults to false
-	if parentNode, err = fs.lu.NodeFromResource(ctx, &provider.Reference{Path: fs.o.ShareFolder}); err != nil {
-		err := errtypes.InternalError(err.Error())
-		span.SetStatus(codes.Error, err.Error())
-		return err
-	} else if !parentNode.Exists {
-		if err = fs.tp.CreateDir(ctx, parentNode); err != nil {
-			span.SetStatus(codes.Error, err.Error())
-			return err
-		}
-		parentCreated = true
-	}
-
-	var childNode *node.Node
-	// clean up directories created here on error
-	defer func() {
-		if err != nil {
-			// do not catch the error to not shadow the original error
-			if childCreated && childNode != nil {
-				if tmpErr := fs.tp.Delete(ctx, childNode); tmpErr != nil {
-					appctx.GetLogger(ctx).Error().Err(tmpErr).Str("node_id", childNode.ID).Msg("Can not clean up child node after error")
-				}
-			}
-			if parentCreated && parentNode != nil {
-				if tmpErr := fs.tp.Delete(ctx, parentNode); tmpErr != nil {
-					appctx.GetLogger(ctx).Error().Err(tmpErr).Str("node_id", parentNode.ID).Msg("Can not clean up parent node after error")
-				}
-
-			}
-		}
-	}()
-
-	if childNode, err = parentNode.Child(ctx, parts[1]); err != nil {
-		return errtypes.InternalError(err.Error())
-	}
-
-	if childNode.Exists {
-		// TODO append increasing number to mountpoint name
-		err := errtypes.AlreadyExists(p)
-		span.SetStatus(codes.Error, err.Error())
-		return err
-	}
-
-	if err := fs.tp.CreateDir(ctx, childNode); err != nil {
-		span.SetStatus(codes.Error, err.Error())
-		return err
-	}
-	childCreated = true
-
-	if err := childNode.SetMetadata(xattrs.ReferenceAttr, targetURI.String()); err != nil {
-		// the reference could not be set - that would result in an lost reference?
-		err := errors.Wrapf(err, "Decomposedfs: error setting the target %s on the reference file %s",
-			targetURI.String(),
-			childNode.InternalPath(),
-		)
-		span.SetStatus(codes.Error, err.Error())
-		return err
-	}
-	return nil
+	return errtypes.NotSupported("not implemented")
 }
 
 // Move moves a resource from one reference to another
