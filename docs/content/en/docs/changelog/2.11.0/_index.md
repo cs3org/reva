@@ -1,3 +1,12 @@
+
+---
+title: "v2.11.0"
+linkTitle: "v2.11.0"
+weight: 40
+description: >
+  Changelog for Reva v2.11.0 (2022-11-03)
+---
+
 Changelog for reva 2.11.0 (2022-11-03)
 =======================================
 
@@ -293,7 +302,7 @@ Details
 
 *   Enhancement #3297: Update dependencies
 
-   github.com/mileusna/useragent v1.2.0
+   * github.com/mileusna/useragent v1.2.0
 
    https://github.com/cs3org/reva/pull/3297
 
