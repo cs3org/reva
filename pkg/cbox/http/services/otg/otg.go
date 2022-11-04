@@ -45,7 +45,7 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 
 // Close performs cleanup.
 func (s *svc) Close() error {
-	return nil
+	return s.db.Close()
 }
 
 func (c *config) init() {
