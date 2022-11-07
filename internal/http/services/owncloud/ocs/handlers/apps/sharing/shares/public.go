@@ -36,6 +36,7 @@ import (
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/publicshare"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/grants"
 	"github.com/pkg/errors"
 )
 
@@ -355,9 +356,17 @@ func (h *Handler) updatePublicShare(w http.ResponseWriter, r *http.Request, shar
 		return
 	}
 
-	if !sufficientPermissions(statRes.Info.PermissionSet, newPermissions) {
-		response.WriteOCSError(w, r, http.StatusNotFound, "no share permission", nil)
-		return
+	// empty permissions mean internal link here - NOT denial. Hence we need an extra check
+	if grants.PermissionsEqual(newPermissions, &provider.ResourcePermissions{}) {
+		if !statRes.Info.PermissionSet.UpdateGrant {
+			response.WriteOCSError(w, r, http.StatusNotFound, "no share permission", nil)
+			return
+		}
+	} else {
+		if !sufficientPermissions(statRes.Info.PermissionSet, newPermissions) {
+			response.WriteOCSError(w, r, http.StatusNotFound, "no share permission", nil)
+			return
+		}
 	}
 
 	// ExpireDate
