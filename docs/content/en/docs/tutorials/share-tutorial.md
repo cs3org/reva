@@ -28,7 +28,7 @@ Follow the instructions in https://reva.link/docs/getting-started/install-reva/ 
 Now we need to start two Reva daemons corresponding to two different mesh providers, thus enabling sharing of files between users belonging to these two providers. For our example,  we consider the example of CERNBox deployed at localhost:19000 and the CESNET owncloud at localhost:17000. Follow these steps:
 
 ```
-cd examples/ocmd/ && mkdir -p /var/tmp/reva
+cd examples/ocmd/ && mkdir -p /var/tmp/reva/data/einstein/home
 ../../cmd/revad/revad -c ocmd-server-1.toml & ../../cmd/revad/revad -c ocmd-server-2.toml &
 ```
 
