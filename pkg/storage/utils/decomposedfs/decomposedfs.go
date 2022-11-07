@@ -341,7 +341,7 @@ func (fs *Decomposedfs) CreateDir(ctx context.Context, ref *provider.Reference) 
 
 	if fs.o.TreeTimeAccounting || fs.o.TreeSizeAccounting {
 		// mark the home node as the end of propagation
-		if err = n.SetMetadata(xattrs.PropagationAttr, "1"); err != nil {
+		if err = n.SetXattr(xattrs.PropagationAttr, "1"); err != nil {
 			appctx.GetLogger(ctx).Error().Err(err).Interface("node", n).Msg("could not mark node to propagate")
 
 			// FIXME: This does not return an error at all, but results in a severe situation that the

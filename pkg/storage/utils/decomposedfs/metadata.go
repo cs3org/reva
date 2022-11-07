@@ -33,7 +33,6 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/pkg/errors"
-	"github.com/pkg/xattr"
 )
 
 // SetArbitraryMetadata sets the metadata on a resource
@@ -68,8 +67,6 @@ func (fs *Decomposedfs) SetArbitraryMetadata(ctx context.Context, ref *provider.
 	if err := n.CheckLock(ctx); err != nil {
 		return err
 	}
-
-	nodePath := n.InternalPath()
 
 	errs := []error{}
 	// TODO should we really continue updating when an error occurs?
@@ -115,7 +112,7 @@ func (fs *Decomposedfs) SetArbitraryMetadata(ctx context.Context, ref *provider.
 	}
 	for k, v := range md.Metadata {
 		attrName := xattrs.MetadataPrefix + k
-		if err = xattr.Set(nodePath, attrName, []byte(v)); err != nil {
+		if err = n.SetXattr(attrName, v); err != nil {
 			errs = append(errs, errors.Wrap(err, "Decomposedfs: could not set metadata attribute "+attrName+" to "+k))
 		}
 	}
@@ -166,7 +163,6 @@ func (fs *Decomposedfs) UnsetArbitraryMetadata(ctx context.Context, ref *provide
 		return err
 	}
 
-	nodePath := n.InternalPath()
 	errs := []error{}
 	for _, k := range keys {
 		switch k {
@@ -189,7 +185,7 @@ func (fs *Decomposedfs) UnsetArbitraryMetadata(ctx context.Context, ref *provide
 				continue
 			}
 			fa := fmt.Sprintf("%s:%s:%s@%s", xattrs.FavPrefix, utils.UserTypeToString(uid.GetType()), uid.GetOpaqueId(), uid.GetIdp())
-			if err := xattrs.Remove(nodePath, fa); err != nil {
+			if err := n.RemoveXattr(fa); err != nil {
 				if xattrs.IsAttrUnset(err) {
 					continue // already gone, ignore
 				}
@@ -200,7 +196,7 @@ func (fs *Decomposedfs) UnsetArbitraryMetadata(ctx context.Context, ref *provide
 				errs = append(errs, errors.Wrap(err, "could not unset favorite flag"))
 			}
 		default:
-			if err = xattrs.Remove(nodePath, xattrs.MetadataPrefix+k); err != nil {
+			if err = n.RemoveXattr(xattrs.MetadataPrefix + k); err != nil {
 				if xattrs.IsAttrUnset(err) {
 					continue // already gone, ignore
 				}

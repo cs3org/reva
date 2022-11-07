@@ -134,7 +134,7 @@ func (lu *Lookup) WalkPath(ctx context.Context, r *node.Node, p string, followRe
 		}
 
 		if followReferences {
-			if attrBytes, err := r.GetMetadata(xattrs.ReferenceAttr); err == nil {
+			if attrBytes, err := r.Xattr(xattrs.ReferenceAttr); err == nil {
 				realNodeID := attrBytes
 				ref, err := xattrs.ReferenceFromAttr([]byte(realNodeID))
 				if err != nil {
@@ -147,7 +147,7 @@ func (lu *Lookup) WalkPath(ctx context.Context, r *node.Node, p string, followRe
 				}
 			}
 		}
-		if node.IsSpaceRoot(r) {
+		if r.IsSpaceRoot() {
 			r.SpaceRoot = r
 		}
 
