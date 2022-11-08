@@ -1074,7 +1074,7 @@ func (c *Client) parseFileInfo(ctx context.Context, raw string, parseFavoriteKey
 					previousXAttr = strings.Replace(previousXAttr, "user.", "", 1)
 				}
 			case partsByEqual[0] == "xattrv":
-				attrs[previousXAttr] = partsByEqual[1]
+				attrs[previousXAttr] = strings.ToValidUTF8(partsByEqual[1], "")
 				previousXAttr = ""
 			default:
 				kv[partsByEqual[0]] = partsByEqual[1]
