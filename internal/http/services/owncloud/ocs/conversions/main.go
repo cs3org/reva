@@ -236,8 +236,8 @@ func CS3Share2ShareData(ctx context.Context, share *collaboration.Share) (*Share
 	if share.Id != nil {
 		sd.ID = share.Id.OpaqueId
 	}
-	if share.GetPermissions() != nil && share.GetPermissions().GetPermissions() != nil {
-		sd.Permissions = RoleFromResourcePermissions(share.GetPermissions().GetPermissions()).OCSPermissions()
+	if share.GetPermissions().GetPermissions() != nil {
+		sd.Permissions = RoleFromResourcePermissions(share.GetPermissions().GetPermissions(), false).OCSPermissions()
 	}
 	if share.Ctime != nil {
 		sd.STime = share.Ctime.Seconds // TODO CS3 api birth time = btime
@@ -262,9 +262,11 @@ func PublicShare2ShareData(share *link.PublicShare, r *http.Request, publicURL s
 	if share.Id != nil {
 		sd.ID = share.Id.OpaqueId
 	}
-	if share.GetPermissions() != nil && share.GetPermissions().GetPermissions() != nil {
-		sd.Permissions = RoleFromResourcePermissions(share.GetPermissions().GetPermissions()).OCSPermissions()
+
+	if s := share.GetPermissions().GetPermissions(); s != nil {
+		sd.Permissions = RoleFromResourcePermissions(share.GetPermissions().GetPermissions(), true).OCSPermissions()
 	}
+
 	if share.Expiration != nil {
 		sd.Expiration = timestampToExpiration(share.Expiration)
 	}

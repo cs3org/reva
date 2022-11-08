@@ -240,7 +240,7 @@ func (h *Handler) CreateShare(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// check user has share permissions
-	if !conversions.RoleFromResourcePermissions(statRes.Info.PermissionSet).OCSPermissions().Contain(conversions.PermissionShare) {
+	if !conversions.RoleFromResourcePermissions(statRes.Info.PermissionSet, false).OCSPermissions().Contain(conversions.PermissionShare) {
 		response.WriteOCSError(w, r, http.StatusNotFound, "No share permission", nil)
 		return
 	}
@@ -447,7 +447,7 @@ func (h *Handler) extractPermissions(reqRole string, reqPermissions string, ri *
 		role = conversions.RoleFromOCSPermissions(permissions)
 	}
 
-	if !sufficientPermissions(ri.PermissionSet, role.CS3ResourcePermissions()) && role.Name != conversions.RoleDenied {
+	if !sufficientPermissions(ri.PermissionSet, role.CS3ResourcePermissions(), false) && role.Name != conversions.RoleDenied {
 		return nil, nil, &ocsError{
 			Code:    http.StatusNotFound,
 			Message: "Cannot set the requested share permissions",
@@ -1521,8 +1521,8 @@ func (h *Handler) granteeExists(ctx context.Context, g *provider.Grantee, rid *p
 }
 
 // sufficientPermissions returns true if the `existing` permissions contain the `requested` permissions
-func sufficientPermissions(existing, requested *provider.ResourcePermissions) bool {
-	ep := conversions.RoleFromResourcePermissions(existing).OCSPermissions()
-	rp := conversions.RoleFromResourcePermissions(requested).OCSPermissions()
+func sufficientPermissions(existing, requested *provider.ResourcePermissions, islink bool) bool {
+	ep := conversions.RoleFromResourcePermissions(existing, islink).OCSPermissions()
+	rp := conversions.RoleFromResourcePermissions(requested, islink).OCSPermissions()
 	return ep.Contain(rp)
 }

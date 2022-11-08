@@ -244,7 +244,7 @@ func (fs *owncloudsqlfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upl
 		"Type":                "OwnCloudStore",
 		"BinPath":             binPath,
 		"InternalDestination": ip,
-		"Permissions":         strconv.Itoa((int)(conversions.RoleFromResourcePermissions(perm).OCSPermissions())),
+		"Permissions":         strconv.Itoa((int)(conversions.RoleFromResourcePermissions(perm, false).OCSPermissions())),
 
 		"Idp":      usr.Id.Idp,
 		"UserId":   usr.Id.OpaqueId,

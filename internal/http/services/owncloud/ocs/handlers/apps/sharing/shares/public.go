@@ -36,7 +36,6 @@ import (
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/publicshare"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/grants"
 	"github.com/pkg/errors"
 )
 
@@ -113,14 +112,15 @@ func (h *Handler) createPublicLinkShare(w http.ResponseWriter, r *http.Request, 
 
 	if statInfo != nil && statInfo.Type == provider.ResourceType_RESOURCE_TYPE_FILE {
 		// Single file shares should never have delete or create permissions
-		role := conversions.RoleFromResourcePermissions(newPermissions)
+		role := conversions.RoleFromResourcePermissions(newPermissions, true)
 		permissions := role.OCSPermissions()
 		permissions &^= conversions.PermissionCreate
 		permissions &^= conversions.PermissionDelete
 		newPermissions = conversions.RoleFromOCSPermissions(permissions).CS3ResourcePermissions()
 	}
 
-	if !sufficientPermissions(statInfo.PermissionSet, newPermissions) {
+	if !sufficientPermissions(statInfo.PermissionSet, newPermissions, true) {
+		response.WriteOCSError(w, r, http.StatusNotFound, "no share permission", nil)
 		return nil, &ocsError{
 			Code:    http.StatusNotFound,
 			Message: "Cannot set the requested share permissions",
@@ -357,16 +357,9 @@ func (h *Handler) updatePublicShare(w http.ResponseWriter, r *http.Request, shar
 	}
 
 	// empty permissions mean internal link here - NOT denial. Hence we need an extra check
-	if grants.PermissionsEqual(newPermissions, &provider.ResourcePermissions{}) {
-		if !statRes.Info.PermissionSet.UpdateGrant {
-			response.WriteOCSError(w, r, http.StatusNotFound, "no share permission", nil)
-			return
-		}
-	} else {
-		if !sufficientPermissions(statRes.Info.PermissionSet, newPermissions) {
-			response.WriteOCSError(w, r, http.StatusNotFound, "no share permission", nil)
-			return
-		}
+	if !sufficientPermissions(statRes.Info.PermissionSet, newPermissions, true) {
+		response.WriteOCSError(w, r, http.StatusNotFound, "no share permission", nil)
+		return
 	}
 
 	// ExpireDate
