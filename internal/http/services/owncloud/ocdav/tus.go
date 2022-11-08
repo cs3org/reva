@@ -327,7 +327,7 @@ func (s *svc) handleTusPost(ctx context.Context, w http.ResponseWriter, r *http.
 				}
 			}
 			isShared := !net.IsCurrentUserOwner(ctx, info.Owner)
-			role := conversions.RoleFromResourcePermissions(info.PermissionSet)
+			role := conversions.RoleFromResourcePermissions(info.PermissionSet, isPublic)
 			permissions := role.WebDAVPermissions(
 				info.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER,
 				isShared,
