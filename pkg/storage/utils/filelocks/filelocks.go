@@ -85,6 +85,10 @@ func acquireLock(file string, write bool) (*flock.Flock, error) {
 		return nil, ErrPathEmpty
 	}
 
+	if _, err = os.Stat(file); err != nil {
+		return nil, err
+	}
+
 	var flock *flock.Flock
 	for i := 1; i <= _lockCyclesValue; i++ {
 		if flock = getMutexedFlock(n); flock != nil {
