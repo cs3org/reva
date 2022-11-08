@@ -86,7 +86,7 @@ func (h *WebDavHandler) Handler(s *svc) http.Handler {
 		case MethodMkcol:
 			status, err = s.handlePathMkcol(w, r, ns)
 		case MethodMove:
-			s.handlePathMove(w, r, ns)
+			status, err = s.handlePathMove(w, r, ns)
 		case MethodCopy:
 			s.handlePathCopy(w, r, ns)
 		case MethodReport:
@@ -107,17 +107,34 @@ func (h *WebDavHandler) Handler(s *svc) http.Handler {
 			w.WriteHeader(http.StatusNotFound)
 		}
 
-		if status != 0 { // 0 means the handler already sent the response
+		switch status {
+		case statusSentByHandler:
+			// nothing left to do
+			return
+		case http.StatusCreated, http.StatusNoContent:
 			w.WriteHeader(status)
-			if status != http.StatusNoContent {
-				var b []byte
-				if b, err = errors.Marshal(status, err.Error(), ""); err == nil {
-					_, err = w.Write(b)
-				}
+			// no body
+			return
+		case http.StatusInternalServerError:
+			// log an error on the server side
+			if err != nil {
+				appctx.GetLogger(r.Context()).Error().Err(err).Msg(err.Error())
 			}
-		}
-		if err != nil {
-			appctx.GetLogger(r.Context()).Error().Err(err).Msg(err.Error())
+			fallthrough
+		default:
+			w.WriteHeader(status)
+			// recreate oc10 like sabredav exception body
+			message := ""
+			if err != nil {
+				message = err.Error()
+			}
+			var b []byte
+			if b, err = errors.Marshal(status, message, ""); err == nil {
+				_, err = w.Write(b)
+			}
+			if err != nil {
+				appctx.GetLogger(r.Context()).Error().Err(err).Msg(err.Error())
+			}
 		}
 	})
 }

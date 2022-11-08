@@ -54,6 +54,7 @@ import (
 
 // name is the Tracer name used to identify this instrumentation library.
 const tracerName = "ocdav"
+const statusSentByHandler = 0
 
 var (
 	nameRules = [...]nameRule{
