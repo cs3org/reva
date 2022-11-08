@@ -386,12 +386,11 @@ func (n *Node) Owner() *userpb.UserId {
 func (n *Node) readOwner() (*userpb.UserId, error) {
 	owner := &userpb.UserId{}
 
-	rootNodePath := n.SpaceRoot.InternalPath()
 	// lookup parent id in extended attributes
 	var attr string
 	var err error
 	// lookup ID in extended attributes
-	attr, err = xattrs.Get(rootNodePath, xattrs.OwnerIDAttr)
+	attr, err = n.SpaceRoot.Xattr(xattrs.OwnerIDAttr)
 	switch {
 	case err == nil:
 		owner.OpaqueId = attr
@@ -402,17 +401,26 @@ func (n *Node) readOwner() (*userpb.UserId, error) {
 	}
 
 	// lookup IDP in extended attributes
-	owner.Idp, err = n.SpaceRoot.Xattr(xattrs.OwnerIDPAttr)
-	if err != nil {
+	attr, err = n.SpaceRoot.Xattr(xattrs.OwnerIDPAttr)
+	switch {
+	case err == nil:
+		owner.Idp = attr
+	case xattrs.IsAttrUnset(err):
+		// ignore
+	default:
 		return nil, err
 	}
 
 	// lookup type in extended attributes
 	attr, err = n.SpaceRoot.Xattr(xattrs.OwnerTypeAttr)
-	if err != nil {
+	switch {
+	case err == nil:
+		owner.Type = utils.UserTypeMap(attr)
+	case xattrs.IsAttrUnset(err):
+		// ignore
+	default:
 		return nil, err
 	}
-	owner.Type = utils.UserTypeMap(attr)
 
 	// owner is an optional property
 	if owner.Idp == "" && owner.OpaqueId == "" {
