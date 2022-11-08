@@ -19,6 +19,7 @@
 package sender
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -29,6 +30,7 @@ import (
 	"time"
 
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp"
 
 	"github.com/pkg/errors"
@@ -47,7 +49,8 @@ func getOCMEndpoint(originProvider *ocmprovider.ProviderInfo) (string, error) {
 
 // Send executes the POST to the OCM shares endpoint to create the share at the
 // remote site.
-func Send(requestBodyMap map[string]interface{}, pi *ocmprovider.ProviderInfo) error {
+func Send(ctx context.Context, requestBodyMap map[string]interface{}, pi *ocmprovider.ProviderInfo) error {
+
 	requestBody, err := json.Marshal(requestBodyMap)
 	if err != nil {
 		err = errors.Wrap(err, "error marshalling request body")
@@ -63,6 +66,9 @@ func Send(requestBodyMap map[string]interface{}, pi *ocmprovider.ProviderInfo) e
 	}
 	u.Path = path.Join(u.Path, createOCMCoreShareEndpoint)
 	recipientURL := u.String()
+
+	log := appctx.GetLogger(ctx)
+	log.Error().Msgf("in OCM Send! %s %s", recipientURL, requestBody)
 
 	req, err := http.NewRequest("POST", recipientURL, strings.NewReader(string(requestBody)))
 	if err != nil {
