@@ -109,7 +109,7 @@ func (h *SpacesHandler) Handler(s *svc, trashbinHandler *TrashbinHandler) http.H
 		case http.MethodHead:
 			s.handleSpacesHead(w, r, spaceID)
 		case http.MethodDelete:
-			s.handleSpacesDelete(w, r, spaceID)
+			status, err = s.handleSpacesDelete(w, r, spaceID)
 		default:
 			http.Error(w, http.StatusText(http.StatusNotImplemented), http.StatusNotImplemented)
 		}
