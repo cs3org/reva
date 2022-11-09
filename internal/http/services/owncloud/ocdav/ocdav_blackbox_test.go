@@ -23,11 +23,12 @@ import (
 	"net/http/httptest"
 	"strings"
 
+	cs3gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	cs3user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	cs3storageprovider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav"
-	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/net"
+	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/status"
 	"github.com/cs3org/reva/v2/pkg/rhttp/global"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
@@ -48,29 +49,35 @@ var _ = Describe("ocdav", func() {
 		client  *mocks.GatewayAPIClient
 		ctx     context.Context
 
-		foospace *cs3storageprovider.StorageSpace
+		userspace *cs3storageprovider.StorageSpace
+		user      *cs3user.User
 	)
 
-	JustBeforeEach(func() {
-		ctx = context.WithValue(context.Background(), net.CtxKeyBaseURI, "http://127.0.0.1:3000")
+	BeforeEach(func() {
+		user = &cs3user.User{Id: &cs3user.UserId{OpaqueId: "username"}, Username: "username"}
+
+		ctx = ctxpkg.ContextSetUser(context.Background(), user)
 		client = &mocks.GatewayAPIClient{}
 
 		var err error
-		handler, err = ocdav.NewWith(&ocdav.Config{}, nil, ocdav.NewCS3LS(client), nil, trace.NewNoopTracerProvider(), client)
+		handler, err = ocdav.NewWith(&ocdav.Config{
+			FilesNamespace:  "/users/{{.Username}}",
+			WebdavNamespace: "/users/{{.Username}}",
+		}, nil, ocdav.NewCS3LS(client), nil, trace.NewNoopTracerProvider(), client)
 		Expect(err).ToNot(HaveOccurred())
 
-		foospace = &cs3storageprovider.StorageSpace{
+		userspace = &cs3storageprovider.StorageSpace{
 			Opaque: &typesv1beta1.Opaque{
 				Map: map[string]*typesv1beta1.OpaqueEntry{
 					"path": {
 						Decoder: "plain",
-						Value:   []byte("/foospace/"),
+						Value:   []byte("/users/username/"),
 					},
 				},
 			},
 			Id:   &cs3storageprovider.StorageSpaceId{OpaqueId: storagespace.FormatResourceID(cs3storageprovider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "root"})},
-			Root: &cs3storageprovider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "root"},
-			Name: "foospace",
+			Root: &cs3storageprovider.ResourceId{StorageId: "provider-1", SpaceId: "userspace", OpaqueId: "root"},
+			Name: "username",
 		}
 
 		client.On("GetUser", mock.Anything, mock.Anything).Return(&cs3user.GetUserResponse{
@@ -78,6 +85,37 @@ var _ = Describe("ocdav", func() {
 		}, nil)
 		client.On("GetUserByClaim", mock.Anything, mock.Anything).Return(&cs3user.GetUserByClaimResponse{
 			Status: status.NewNotFound(ctx, "not found"),
+		}, nil)
+
+		// for public access
+		client.On("Authenticate", mock.Anything, mock.MatchedBy(func(req *cs3gateway.AuthenticateRequest) bool {
+			return req.Type == "publicshares" &&
+				strings.HasPrefix(req.ClientId, "tokenfor") &&
+				strings.HasPrefix(req.ClientSecret, "signature||")
+		})).Return(&cs3gateway.AuthenticateResponse{
+			Status: status.NewOK(ctx),
+			User:   user,
+			Token:  "jwt",
+		}, nil)
+		client.On("Stat", mock.Anything, mock.MatchedBy(func(req *cs3storageprovider.StatRequest) bool {
+			return req.Ref.ResourceId.StorageId == utils.PublicStorageProviderID &&
+				req.Ref.ResourceId.SpaceId == utils.PublicStorageSpaceID &&
+				req.Ref.ResourceId.OpaqueId == "tokenforfile"
+		})).Return(&cs3storageprovider.StatResponse{
+			Status: status.NewOK(ctx),
+			Info: &cs3storageprovider.ResourceInfo{
+				Type: cs3storageprovider.ResourceType_RESOURCE_TYPE_FILE,
+			},
+		}, nil)
+		client.On("Stat", mock.Anything, mock.MatchedBy(func(req *cs3storageprovider.StatRequest) bool {
+			return req.Ref.ResourceId.StorageId == utils.PublicStorageProviderID &&
+				req.Ref.ResourceId.SpaceId == utils.PublicStorageSpaceID &&
+				req.Ref.ResourceId.OpaqueId == "tokenforfolder"
+		})).Return(&cs3storageprovider.StatResponse{
+			Status: status.NewOK(ctx),
+			Info: &cs3storageprovider.ResourceInfo{
+				Type: cs3storageprovider.ResourceType_RESOURCE_TYPE_CONTAINER,
+			},
 		}, nil)
 	})
 
@@ -87,68 +125,45 @@ var _ = Describe("ocdav", func() {
 		})
 	})
 
-	Describe("HandlePathDelete", func() {
-		It("deletes the given path", func() {
-			client.On("ListStorageSpaces", mock.Anything, mock.MatchedBy(func(req *cs3storageprovider.ListStorageSpacesRequest) bool {
-				p := string(req.Opaque.Map["path"].Value)
-				return p == "/" || strings.HasPrefix(p, "/foospace")
-			})).Return(&cs3storageprovider.ListStorageSpacesResponse{
-				Status:        status.NewOK(ctx),
-				StorageSpaces: []*cs3storageprovider.StorageSpace{foospace},
-			}, nil)
+	Context("When a default space is used", func() {
 
-			ref := cs3storageprovider.Reference{
-				ResourceId: foospace.Root,
-				Path:       "./foo",
-			}
+		DescribeTable("HandleDelete",
+			func(endpoint string, expectedPathPrefix string, expectedPath string, expectedStatus int) {
 
-			client.On("Delete", mock.Anything, mock.MatchedBy(func(req *cs3storageprovider.DeleteRequest) bool {
-				return utils.ResourceEqual(req.Ref, &ref)
-			})).Return(&cs3storageprovider.DeleteResponse{
-				Status: status.NewOK(ctx),
-			}, nil)
+				client.On("ListStorageSpaces", mock.Anything, mock.MatchedBy(func(req *cs3storageprovider.ListStorageSpacesRequest) bool {
+					p := string(req.Opaque.Map["path"].Value)
+					return p == "/" || strings.HasPrefix(p, expectedPathPrefix)
+				})).Return(&cs3storageprovider.ListStorageSpacesResponse{
+					Status:        status.NewOK(ctx),
+					StorageSpaces: []*cs3storageprovider.StorageSpace{userspace},
+				}, nil)
 
-			rr := httptest.NewRecorder()
-			req, err := http.NewRequest("DELETE", "/dav/files/username/foospace/foo", strings.NewReader(""))
-			Expect(err).ToNot(HaveOccurred())
-			req = req.WithContext(ctx)
+				ref := cs3storageprovider.Reference{
+					ResourceId: userspace.Root,
+					Path:       expectedPath,
+				}
 
-			handler.Handler().ServeHTTP(rr, req)
-			Expect(rr).To(HaveHTTPStatus(http.StatusNoContent), "WebDAV DELETE must return 204")
-			Expect(rr).To(HaveHTTPBody(""), "Body must be empty")
-		})
-	})
+				client.On("Delete", mock.Anything, mock.MatchedBy(func(req *cs3storageprovider.DeleteRequest) bool {
+					return utils.ResourceEqual(req.Ref, &ref)
+				})).Return(&cs3storageprovider.DeleteResponse{
+					Status: status.NewOK(ctx),
+				}, nil)
 
-	Describe("HandleSpacesDelete", func() {
-		It("deletes the given path", func() {
-			client.On("ListStorageSpaces", mock.Anything, mock.MatchedBy(func(req *cs3storageprovider.ListStorageSpacesRequest) bool {
-				p := string(req.Opaque.Map["path"].Value)
-				return p == "/" || strings.HasPrefix(p, "/foospace")
-			})).Return(&cs3storageprovider.ListStorageSpacesResponse{
-				Status:        status.NewOK(ctx),
-				StorageSpaces: []*cs3storageprovider.StorageSpace{foospace},
-			}, nil)
+				rr := httptest.NewRecorder()
+				req, err := http.NewRequest("DELETE", endpoint+"/foo", strings.NewReader(""))
+				Expect(err).ToNot(HaveOccurred())
+				req = req.WithContext(ctx)
 
-			ref := cs3storageprovider.Reference{
-				ResourceId: foospace.Root,
-				Path:       "./foo",
-			}
+				handler.Handler().ServeHTTP(rr, req)
+				Expect(rr).To(HaveHTTPStatus(expectedStatus))
+				Expect(rr).To(HaveHTTPBody(""), "Body must be empty")
 
-			client.On("Delete", mock.Anything, mock.MatchedBy(func(req *cs3storageprovider.DeleteRequest) bool {
-				return utils.ResourceEqual(req.Ref, &ref)
-			})).Return(&cs3storageprovider.DeleteResponse{
-				Status: status.NewOK(ctx),
-			}, nil)
-
-			rr := httptest.NewRecorder()
-			req, err := http.NewRequest("DELETE", "/dav/spaces/provider-1$foospace!root/foo", strings.NewReader(""))
-			Expect(err).ToNot(HaveOccurred())
-			req = req.WithContext(ctx)
-
-			handler.Handler().ServeHTTP(rr, req)
-			Expect(rr).To(HaveHTTPStatus(http.StatusNoContent), "WebDAV DELETE must return 204")
-			Expect(rr).To(HaveHTTPBody(""), "Body must be empty")
-		})
-
+			},
+			Entry("at the /webdav endpoint", "/webdav", "/users", "./foo", http.StatusNoContent),
+			Entry("at the /dav/files endpoint", "/dav/files/username", "/users/username", "./foo", http.StatusNoContent),
+			Entry("at the /dav/spaces endpoint", "/dav/spaces/provider-1$userspace!root", "/users/username", "./foo", http.StatusNoContent),
+			Entry("at the /dav/public-files endpoint for a file", "/dav/public-files/tokenforfile", "", "", http.StatusMethodNotAllowed),
+			Entry("at the /dav/public-files endpoint for a folder", "/dav/public-files/tokenforfolder", "/public/tokenforfolder", ".", http.StatusNoContent),
+		)
 	})
 })
