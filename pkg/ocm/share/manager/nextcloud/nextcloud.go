@@ -33,6 +33,7 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/utils"
+	"github.com/google/uuid"
 
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
@@ -102,6 +103,10 @@ type ShareAltMap struct {
 	Creator     *userpb.UserId        `json:"creator"`
 	Ctime       *typespb.Timestamp    `json:"ctime"`
 	Mtime       *typespb.Timestamp    `json:"mtime"`
+}
+
+func genID() string {
+	return uuid.New().String()
 }
 
 // ReceivedShareAltMap is an alternative map to JSON-unmarshal a ReceivedShare
@@ -261,13 +266,25 @@ func (sm *Manager) Share(ctx context.Context, md *provider.ResourceId, g *ocm.Sh
 		return nil, errors.New("nextcloud: user and grantee are the same")
 	}
 
+	id := genID()
+	now := time.Now().UnixNano()
+	ts := &typespb.Timestamp{
+		Seconds: uint64(now / 1000000000),
+		Nanos:   uint32(now % 1000000000),
+	}
+
 	s := &ocm.Share{
+		Id: &ocm.ShareId{
+			OpaqueId: id,
+		},
 		Name:        name,
 		ResourceId:  md,
 		Permissions: g.Permissions,
 		Grantee:     g.Grantee,
 		Owner:       userID,
 		Creator:     userID,
+		Ctime:       ts,
+		Mtime:       ts,
 		ShareType:   st,
 	}
 
@@ -317,19 +334,16 @@ func (sm *Manager) Share(ctx context.Context, md *provider.ResourceId, g *ocm.Sh
 		}
 	}
 
-	_, body, err := sm.do(ctx, Action{apiMethod, string(encShare)}, username)
+	_, _, err = sm.do(ctx, Action{apiMethod, string(encShare)}, username)
 
-	s.Id = &ocm.ShareId{
-		OpaqueId: string(body),
-	}
-	now := time.Now().UnixNano()
-	s.Ctime = &typespb.Timestamp{
-		Seconds: uint64(now / 1000000000),
-		Nanos:   uint32(now % 1000000000),
-	}
-	if err != nil {
-		return nil, err
-	}
+	// FIXME: the Nextcloud backend should return an id but we already generated one
+	// _, body, err := sm.do(ctx, Action{apiMethod, string(encShare)}, username)
+	// s.Id = &ocm.ShareId{
+	// 	OpaqueId: string(body),
+	// }
+	// if err != nil {
+	// 	return nil, err
+	// }
 
 	if isOwnersMeshProvider {
 		// token, ok := ctxpkg.ContextGetToken(ctx)
@@ -354,6 +368,16 @@ func (sm *Manager) Share(ctx context.Context, md *provider.ResourceId, g *ocm.Sh
 				},
 			}
 		}
+
+		log := appctx.GetLogger(ctx)
+		log.Info().Msg("pkg/ocm/share/manager/nextcloud calls sender.Send")
+		log.Info().Msgf("pkg/ocm/share/manager/nextcloud shareWith: %s", g.Grantee.GetUserId().OpaqueId)
+		log.Info().Msgf("pkg/ocm/share/manager/nextcloud name: %s", name)
+		log.Info().Msgf("pkg/ocm/share/manager/nextcloud providerId: %s", s.Id.OpaqueId)
+		log.Info().Msgf("pkg/ocm/share/manager/nextcloud owner: %s", userID.OpaqueId)
+		log.Info().Msgf("pkg/ocm/share/manager/nextcloud protocol: %s", protocol)
+		log.Info().Msgf("pkg/ocm/share/manager/nextcloud meshProvider: %s", userID.Idp)
+
 		requestBodyMap := map[string]interface{}{
 			"shareWith":    g.Grantee.GetUserId().OpaqueId,
 			"name":         name,
