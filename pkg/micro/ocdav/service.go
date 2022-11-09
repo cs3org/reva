@@ -68,7 +68,7 @@ func Service(opts ...Option) (micro.Service, error) {
 	)
 
 	tp := rtrace.GetTracerProvider(sopts.TracingEnabled, sopts.TracingCollector, sopts.TracingEndpoint, sopts.Name)
-	revaService, err := ocdav.NewWith(&sopts.config, sopts.FavoriteManager, sopts.lockSystem, &sopts.Logger, tp)
+	revaService, err := ocdav.NewWith(&sopts.config, sopts.FavoriteManager, sopts.lockSystem, &sopts.Logger, tp, sopts.GatewayClient)
 	if err != nil {
 		return nil, err
 	}

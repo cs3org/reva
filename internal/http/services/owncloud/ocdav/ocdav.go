@@ -26,7 +26,6 @@ import (
 	"time"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
-	gatewayv1beta1 "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -156,6 +155,7 @@ type svc struct {
 	davHandler       *DavHandler
 	favoritesManager favorite.Manager
 	client           *http.Client
+	gwClient         gateway.GatewayAPIClient
 	// LockSystem is the lock management system.
 	LockSystem          LockSystem
 	userIdentifierCache *ttlcache.Cache
@@ -199,11 +199,11 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 		return nil, err
 	}
 
-	return NewWith(conf, fm, ls, log, rtrace.DefaultProvider())
+	return NewWith(conf, fm, ls, log, rtrace.DefaultProvider(), nil)
 }
 
 // NewWith returns a new ocdav service
-func NewWith(conf *Config, fm favorite.Manager, ls LockSystem, _ *zerolog.Logger, tp trace.TracerProvider) (global.Service, error) {
+func NewWith(conf *Config, fm favorite.Manager, ls LockSystem, _ *zerolog.Logger, tp trace.TracerProvider, gwc gateway.GatewayAPIClient) (global.Service, error) {
 	s := &svc{
 		c:             conf,
 		webDavHandler: new(WebDavHandler),
@@ -212,6 +212,7 @@ func NewWith(conf *Config, fm favorite.Manager, ls LockSystem, _ *zerolog.Logger
 			rhttp.Timeout(time.Duration(conf.Timeout*int64(time.Second))),
 			rhttp.Insecure(conf.Insecure),
 		),
+		gwClient:            gwc,
 		favoritesManager:    fm,
 		LockSystem:          ls,
 		userIdentifierCache: ttlcache.NewCache(),
@@ -225,6 +226,13 @@ func NewWith(conf *Config, fm favorite.Manager, ls LockSystem, _ *zerolog.Logger
 	}
 	if err := s.davHandler.init(conf); err != nil {
 		return nil, err
+	}
+	if gwc == nil {
+		var err error
+		s.gwClient, err = pool.GetGatewayServiceClient(s.c.GatewaySvc)
+		if err != nil {
+			return nil, err
+		}
 	}
 	return s, nil
 }
@@ -315,7 +323,7 @@ func (s *svc) Handler() http.Handler {
 }
 
 func (s *svc) getClient() (gateway.GatewayAPIClient, error) {
-	return pool.GetGatewayServiceClient(s.c.GatewaySvc)
+	return s.gwClient, nil
 }
 
 func (s *svc) ApplyLayout(ctx context.Context, ns string, useLoggedInUserNS bool, requestPath string) (string, string, error) {
@@ -393,7 +401,7 @@ func addAccessHeaders(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func authContextForUser(client gatewayv1beta1.GatewayAPIClient, userID *userpb.UserId, machineAuthAPIKey string) (context.Context, error) {
+func authContextForUser(client gateway.GatewayAPIClient, userID *userpb.UserId, machineAuthAPIKey string) (context.Context, error) {
 	if machineAuthAPIKey == "" {
 		return nil, errtypes.NotSupported("machine auth not configured")
 	}
@@ -415,7 +423,7 @@ func authContextForUser(client gatewayv1beta1.GatewayAPIClient, userID *userpb.U
 	return granteeCtx, nil
 }
 
-func (s *svc) sspReferenceIsChildOf(ctx context.Context, client gatewayv1beta1.GatewayAPIClient, child, parent *provider.Reference) (bool, error) {
+func (s *svc) sspReferenceIsChildOf(ctx context.Context, client gateway.GatewayAPIClient, child, parent *provider.Reference) (bool, error) {
 	parentStatRes, err := client.Stat(ctx, &provider.StatRequest{Ref: parent})
 	if err != nil {
 		return false, err
@@ -457,7 +465,7 @@ func (s *svc) sspReferenceIsChildOf(ctx context.Context, client gatewayv1beta1.G
 	return strings.HasPrefix(cp, pp), nil
 }
 
-func (s *svc) referenceIsChildOf(ctx context.Context, client gatewayv1beta1.GatewayAPIClient, child, parent *provider.Reference) (bool, error) {
+func (s *svc) referenceIsChildOf(ctx context.Context, client gateway.GatewayAPIClient, child, parent *provider.Reference) (bool, error) {
 	if child.ResourceId.SpaceId != parent.ResourceId.SpaceId {
 		return false, nil // Not on the same storage -> not a child
 	}
