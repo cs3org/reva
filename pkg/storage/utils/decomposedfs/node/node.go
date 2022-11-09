@@ -191,6 +191,14 @@ func ReadNode(ctx context.Context, lu PathLookup, spaceID, nodeID string, canLis
 	case err != nil:
 		return nil, err
 	}
+	// lookup name in extended attributes
+	r.Name, err = r.Xattr(xattrs.NameAttr)
+	switch {
+	case xattrs.IsNotExist(err):
+		return r, nil // swallow not found, the node defaults to exists = false
+	case err != nil:
+		return nil, err
+	}
 	r.Exists = true
 
 	// TODO ReadNode should not check permissions
