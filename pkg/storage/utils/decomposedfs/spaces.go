@@ -121,6 +121,7 @@ func (fs *Decomposedfs) CreateStorageSpace(ctx context.Context, req *provider.Cr
 	// always enable propagation on the storage space root
 	// mark the space root node as the end of propagation
 	metadata[xattrs.PropagationAttr] = "1"
+	metadata[xattrs.NameAttr] = req.Name
 	metadata[xattrs.SpaceNameAttr] = req.Name
 
 	if req.Type != "" {
@@ -528,6 +529,7 @@ func (fs *Decomposedfs) UpdateStorageSpace(ctx context.Context, req *provider.Up
 
 	metadata := make(map[string]string, 5)
 	if space.Name != "" {
+		metadata[xattrs.NameAttr] = space.Name
 		metadata[xattrs.SpaceNameAttr] = space.Name
 	}
 

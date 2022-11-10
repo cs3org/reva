@@ -1178,6 +1178,9 @@ func (h *Handler) addFileInfo(ctx context.Context, s *conversions.ShareData, inf
 		s.FileTarget = path.Join(h.sharePrefix, name)
 		if s.ShareType == conversions.ShareTypePublicLink {
 			s.FileTarget = path.Join("/", name)
+			if info.Id.OpaqueId == info.Id.SpaceId { // we unfortunately have to special case space roots and not append their name here
+				s.FileTarget = "/"
+			}
 		}
 	}
 	s.StorageID = storageIDPrefix + s.FileTarget

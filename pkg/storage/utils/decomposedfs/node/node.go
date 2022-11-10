@@ -191,6 +191,14 @@ func ReadNode(ctx context.Context, lu PathLookup, spaceID, nodeID string, canLis
 	case err != nil:
 		return nil, err
 	}
+	// lookup name in extended attributes
+	r.Name, err = r.Xattr(xattrs.NameAttr)
+	switch {
+	case xattrs.IsNotExist(err):
+		return r, nil // swallow not found, the node defaults to exists = false
+	case err != nil:
+		return nil, err
+	}
 	r.Exists = true
 
 	// TODO ReadNode should not check permissions
@@ -605,9 +613,12 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 
 	id := &provider.ResourceId{SpaceId: n.SpaceID, OpaqueId: n.ID}
 
-	if returnBasename {
+	switch {
+	case n.IsSpaceRoot():
+		fn = "." // space roots do not have a path as they are referencing themselves
+	case returnBasename:
 		fn = n.Name
-	} else {
+	default:
 		fn, err = n.lu.Path(ctx, n)
 		if err != nil {
 			return nil, err
