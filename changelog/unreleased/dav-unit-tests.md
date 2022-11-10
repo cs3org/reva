@@ -5,3 +5,4 @@ We added unit tests to cover more ocdav handlers:
 
 https://github.com/cs3org/reva/pull/3441
 https://github.com/cs3org/reva/pull/3443
+https://github.com/cs3org/reva/pull/3445
