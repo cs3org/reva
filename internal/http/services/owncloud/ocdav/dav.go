@@ -32,7 +32,6 @@ import (
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/net"
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
-	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v2/pkg/rhttp/router"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"google.golang.org/grpc/metadata"
@@ -182,9 +181,10 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 		case "public-files":
 			base := path.Join(ctx.Value(net.CtxKeyBaseURI).(string), "public-files")
 			ctx = context.WithValue(ctx, net.CtxKeyBaseURI, base)
-			c, err := pool.GetGatewayServiceClient(s.c.GatewaySvc)
+			c, err := s.getClient()
 			if err != nil {
 				w.WriteHeader(http.StatusNotFound)
+				return
 			}
 
 			var res *gatewayv1beta1.AuthenticateResponse
