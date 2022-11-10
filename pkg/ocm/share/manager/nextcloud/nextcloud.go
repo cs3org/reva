@@ -65,6 +65,10 @@ func init() {
 	registry.Register("nextcloud", New)
 }
 
+func genID() string {
+	return uuid.New().String()
+}
+
 // Manager is the Nextcloud-based implementation of the share.Manager interface
 // see https://github.com/cs3org/reva/blob/v1.13.0/pkg/ocm/share/share.go#L30-L57
 type Manager struct {
@@ -266,6 +270,7 @@ func (sm *Manager) Share(ctx context.Context, md *provider.ResourceId, g *ocm.Sh
 		return nil, errors.New("nextcloud: user and grantee are the same")
 	}
 
+	// fixme: this should come from the EFSS backend
 	id := genID()
 	now := time.Now().UnixNano()
 	ts := &typespb.Timestamp{
@@ -341,9 +346,9 @@ func (sm *Manager) Share(ctx context.Context, md *provider.ResourceId, g *ocm.Sh
 	// s.Id = &ocm.ShareId{
 	// 	OpaqueId: string(body),
 	// }
-	// if err != nil {
-	// 	return nil, err
-	// }
+	if err != nil {
+		return nil, err
+	}
 
 	if isOwnersMeshProvider {
 		// token, ok := ctxpkg.ContextGetToken(ctx)
