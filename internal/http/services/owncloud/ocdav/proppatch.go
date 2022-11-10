@@ -55,12 +55,7 @@ func (s *svc) handlePathProppatch(w http.ResponseWriter, r *http.Request, ns str
 		return status, err
 	}
 
-	c, err := s.getClient()
-	if err != nil {
-		return http.StatusInternalServerError, err
-	}
-
-	space, rpcStatus, err := spacelookup.LookUpStorageSpaceForPath(ctx, c, fn)
+	space, rpcStatus, err := spacelookup.LookUpStorageSpaceForPath(ctx, s.gwClient, fn)
 	switch {
 	case err != nil:
 		return http.StatusInternalServerError, err
@@ -71,7 +66,7 @@ func (s *svc) handlePathProppatch(w http.ResponseWriter, r *http.Request, ns str
 	}
 	// check if resource exists
 	statReq := &provider.StatRequest{Ref: spacelookup.MakeRelativeReference(space, fn, false)}
-	statRes, err := c.Stat(ctx, statReq)
+	statRes, err := s.gwClient.Stat(ctx, statReq)
 	switch {
 	case err != nil:
 		return http.StatusInternalServerError, err
@@ -127,12 +122,6 @@ func (s *svc) handleSpacesProppatch(w http.ResponseWriter, r *http.Request, spac
 }
 
 func (s *svc) handleProppatch(ctx context.Context, w http.ResponseWriter, r *http.Request, ref *provider.Reference, patches []Proppatch, log zerolog.Logger) ([]xml.Name, []xml.Name, bool) {
-	c, err := s.getClient()
-	if err != nil {
-		log.Error().Err(err).Msg("error getting grpc client")
-		w.WriteHeader(http.StatusInternalServerError)
-		return nil, nil, false
-	}
 
 	rreq := &provider.UnsetArbitraryMetadataRequest{
 		Ref:                   ref,
@@ -172,7 +161,7 @@ func (s *svc) handleProppatch(ctx context.Context, w http.ResponseWriter, r *htt
 			// FIXME: batch this somehow
 			if remove {
 				rreq.ArbitraryMetadataKeys[0] = key
-				res, err := c.UnsetArbitraryMetadata(ctx, rreq)
+				res, err := s.gwClient.UnsetArbitraryMetadata(ctx, rreq)
 				if err != nil {
 					log.Error().Err(err).Msg("error sending a grpc UnsetArbitraryMetadata request")
 					w.WriteHeader(http.StatusInternalServerError)
@@ -189,7 +178,7 @@ func (s *svc) handleProppatch(ctx context.Context, w http.ResponseWriter, r *htt
 					m := res.Status.Message
 					if res.Status.Code == rpc.Code_CODE_PERMISSION_DENIED {
 						// check if user has access to resource
-						sRes, err := c.Stat(ctx, &provider.StatRequest{Ref: ref})
+						sRes, err := s.gwClient.Stat(ctx, &provider.StatRequest{Ref: ref})
 						if err != nil {
 							log.Error().Err(err).Msg("error performing stat grpc request")
 							w.WriteHeader(http.StatusInternalServerError)
@@ -211,7 +200,7 @@ func (s *svc) handleProppatch(ctx context.Context, w http.ResponseWriter, r *htt
 					return nil, nil, false
 				}
 				if key == "http://owncloud.org/ns/favorite" {
-					statRes, err := c.Stat(ctx, &provider.StatRequest{Ref: ref})
+					statRes, err := s.gwClient.Stat(ctx, &provider.StatRequest{Ref: ref})
 					if err != nil {
 						w.WriteHeader(http.StatusInternalServerError)
 						return nil, nil, false
@@ -226,7 +215,7 @@ func (s *svc) handleProppatch(ctx context.Context, w http.ResponseWriter, r *htt
 				removedProps = append(removedProps, propNameXML)
 			} else {
 				sreq.ArbitraryMetadata.Metadata[key] = value
-				res, err := c.SetArbitraryMetadata(ctx, sreq)
+				res, err := s.gwClient.SetArbitraryMetadata(ctx, sreq)
 				if err != nil {
 					log.Error().Err(err).Str("key", key).Str("value", value).Msg("error sending a grpc SetArbitraryMetadata request")
 					w.WriteHeader(http.StatusInternalServerError)
@@ -243,7 +232,7 @@ func (s *svc) handleProppatch(ctx context.Context, w http.ResponseWriter, r *htt
 					m := res.Status.Message
 					if res.Status.Code == rpc.Code_CODE_PERMISSION_DENIED {
 						// check if user has access to resource
-						sRes, err := c.Stat(ctx, &provider.StatRequest{Ref: ref})
+						sRes, err := s.gwClient.Stat(ctx, &provider.StatRequest{Ref: ref})
 						if err != nil {
 							log.Error().Err(err).Msg("error performing stat grpc request")
 							w.WriteHeader(http.StatusInternalServerError)
@@ -269,7 +258,7 @@ func (s *svc) handleProppatch(ctx context.Context, w http.ResponseWriter, r *htt
 				delete(sreq.ArbitraryMetadata.Metadata, key)
 
 				if key == "http://owncloud.org/ns/favorite" {
-					statRes, err := c.Stat(ctx, &provider.StatRequest{Ref: ref})
+					statRes, err := s.gwClient.Stat(ctx, &provider.StatRequest{Ref: ref})
 					if err != nil || statRes.Info == nil {
 						w.WriteHeader(http.StatusInternalServerError)
 						return nil, nil, false

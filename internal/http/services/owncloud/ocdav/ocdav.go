@@ -322,10 +322,6 @@ func (s *svc) Handler() http.Handler {
 	})
 }
 
-func (s *svc) getClient() (gateway.GatewayAPIClient, error) {
-	return s.gwClient, nil
-}
-
 func (s *svc) ApplyLayout(ctx context.Context, ns string, useLoggedInUserNS bool, requestPath string) (string, string, error) {
 	// If useLoggedInUserNS is false, that implies that the request is coming from
 	// the FilesHandler method invoked by a /dav/files/fileOwner where fileOwner
@@ -337,13 +333,8 @@ func (s *svc) ApplyLayout(ctx context.Context, ns string, useLoggedInUserNS bool
 		var requestUsernameOrID string
 		requestUsernameOrID, requestPath = router.ShiftPath(requestPath)
 
-		gatewayClient, err := s.getClient()
-		if err != nil {
-			return "", "", err
-		}
-
 		// Check if this is a Userid
-		userRes, err := gatewayClient.GetUser(ctx, &userpb.GetUserRequest{
+		userRes, err := s.gwClient.GetUser(ctx, &userpb.GetUserRequest{
 			UserId: &userpb.UserId{OpaqueId: requestUsernameOrID},
 		})
 		if err != nil {
@@ -352,7 +343,7 @@ func (s *svc) ApplyLayout(ctx context.Context, ns string, useLoggedInUserNS bool
 
 		// If it's not a userid try if it is a user name
 		if userRes.Status.Code != rpc.Code_CODE_OK {
-			res, err := gatewayClient.GetUserByClaim(ctx, &userpb.GetUserByClaimRequest{
+			res, err := s.gwClient.GetUserByClaim(ctx, &userpb.GetUserByClaimRequest{
 				Claim: "username",
 				Value: requestUsernameOrID,
 			})

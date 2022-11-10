@@ -66,14 +66,8 @@ func (s *svc) handlePathMove(w http.ResponseWriter, r *http.Request, ns string) 
 	dstPath = path.Join(ns, dstPath)
 
 	sublog := appctx.GetLogger(ctx).With().Str("src", srcPath).Str("dst", dstPath).Logger()
-	client, err := s.getClient()
-	if err != nil {
-		sublog.Error().Err(err).Msg("error getting grpc client")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
 
-	srcSpace, status, err := spacelookup.LookUpStorageSpaceForPath(ctx, client, srcPath)
+	srcSpace, status, err := spacelookup.LookUpStorageSpaceForPath(ctx, s.gwClient, srcPath)
 	if err != nil {
 		sublog.Error().Err(err).Str("path", srcPath).Msg("failed to look up source storage space")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -83,7 +77,7 @@ func (s *svc) handlePathMove(w http.ResponseWriter, r *http.Request, ns string) 
 		errors.HandleErrorStatus(&sublog, w, status)
 		return
 	}
-	dstSpace, status, err := spacelookup.LookUpStorageSpaceForPath(ctx, client, dstPath)
+	dstSpace, status, err := spacelookup.LookUpStorageSpaceForPath(ctx, s.gwClient, dstPath)
 	if err != nil {
 		sublog.Error().Err(err).Str("path", dstPath).Msg("failed to look up destination storage space")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -134,14 +128,7 @@ func (s *svc) handleSpacesMove(w http.ResponseWriter, r *http.Request, srcSpaceI
 }
 
 func (s *svc) handleMove(ctx context.Context, w http.ResponseWriter, r *http.Request, src, dst *provider.Reference, log zerolog.Logger) {
-	client, err := s.getClient()
-	if err != nil {
-		log.Error().Err(err).Msg("error getting grpc client")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	isChild, err := s.referenceIsChildOf(ctx, client, dst, src)
+	isChild, err := s.referenceIsChildOf(ctx, s.gwClient, dst, src)
 	if err != nil {
 		switch err.(type) {
 		case errtypes.IsNotSupported:
@@ -171,7 +158,7 @@ func (s *svc) handleMove(ctx context.Context, w http.ResponseWriter, r *http.Req
 
 	// check src exists
 	srcStatReq := &provider.StatRequest{Ref: src}
-	srcStatRes, err := client.Stat(ctx, srcStatReq)
+	srcStatRes, err := s.gwClient.Stat(ctx, srcStatReq)
 	if err != nil {
 		log.Error().Err(err).Msg("error sending grpc stat request")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -190,9 +177,9 @@ func (s *svc) handleMove(ctx context.Context, w http.ResponseWriter, r *http.Req
 
 	// check dst exists
 	dstStatReq := &provider.StatRequest{Ref: dst}
-	dstStatRes, err := client.Stat(ctx, dstStatReq)
+	dstStatRes, err := s.gwClient.Stat(ctx, dstStatReq)
 	if err != nil {
-		log.Error().Err(err).Msg("error getting grpc client")
+		log.Error().Err(err).Msg("error sending grpc stat request")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -213,7 +200,7 @@ func (s *svc) handleMove(ctx context.Context, w http.ResponseWriter, r *http.Req
 
 		// delete existing tree
 		delReq := &provider.DeleteRequest{Ref: dst}
-		delRes, err := client.Delete(ctx, delReq)
+		delRes, err := s.gwClient.Delete(ctx, delReq)
 		if err != nil {
 			log.Error().Err(err).Msg("error sending grpc delete request")
 			w.WriteHeader(http.StatusInternalServerError)
@@ -230,7 +217,7 @@ func (s *svc) handleMove(ctx context.Context, w http.ResponseWriter, r *http.Req
 			ResourceId: dst.ResourceId,
 			Path:       utils.MakeRelativePath(path.Dir(dst.Path)),
 		}}
-		intStatRes, err := client.Stat(ctx, intStatReq)
+		intStatRes, err := s.gwClient.Stat(ctx, intStatReq)
 		if err != nil {
 			log.Error().Err(err).Msg("error sending grpc stat request")
 			w.WriteHeader(http.StatusInternalServerError)
@@ -250,7 +237,7 @@ func (s *svc) handleMove(ctx context.Context, w http.ResponseWriter, r *http.Req
 	}
 
 	mReq := &provider.MoveRequest{Source: src, Destination: dst}
-	mRes, err := client.Move(ctx, mReq)
+	mRes, err := s.gwClient.Move(ctx, mReq)
 	if err != nil {
 		log.Error().Err(err).Msg("error sending move grpc request")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -279,7 +266,7 @@ func (s *svc) handleMove(ctx context.Context, w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	dstStatRes, err = client.Stat(ctx, dstStatReq)
+	dstStatRes, err = s.gwClient.Stat(ctx, dstStatReq)
 	if err != nil {
 		log.Error().Err(err).Msg("error sending grpc stat request")
 		w.WriteHeader(http.StatusInternalServerError)

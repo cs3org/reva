@@ -40,13 +40,7 @@ func (s *svc) handlePathDelete(w http.ResponseWriter, r *http.Request, ns string
 
 	fn := path.Join(ns, r.URL.Path)
 
-	client, err := s.getClient()
-	if err != nil {
-		span.RecordError(err)
-		return http.StatusInternalServerError, err
-	}
-
-	space, rpcStatus, err := spacelookup.LookUpStorageSpaceForPath(ctx, client, fn)
+	space, rpcStatus, err := spacelookup.LookUpStorageSpaceForPath(ctx, s.gwClient, fn)
 	switch {
 	case err != nil:
 		span.RecordError(err)
@@ -74,13 +68,7 @@ func (s *svc) handleDelete(ctx context.Context, w http.ResponseWriter, r *http.R
 		return http.StatusBadRequest, errtypes.BadRequest("invalid if header")
 	}
 
-	client, err := s.getClient()
-	if err != nil {
-		span.RecordError(err)
-		return http.StatusInternalServerError, err
-	}
-
-	res, err := client.Delete(ctx, req)
+	res, err := s.gwClient.Delete(ctx, req)
 	switch {
 	case err != nil:
 		span.RecordError(err)
@@ -98,7 +86,7 @@ func (s *svc) handleDelete(ctx context.Context, w http.ResponseWriter, r *http.R
 			status = http.StatusLocked
 		}
 		// check if user has access to resource
-		sRes, err := client.Stat(ctx, &provider.StatRequest{Ref: ref})
+		sRes, err := s.gwClient.Stat(ctx, &provider.StatRequest{Ref: ref})
 		if err != nil {
 			span.RecordError(err)
 			return http.StatusInternalServerError, err
