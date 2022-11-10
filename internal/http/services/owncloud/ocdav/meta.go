@@ -96,12 +96,6 @@ func (h *MetaHandler) handlePathForUser(w http.ResponseWriter, r *http.Request, 
 	id := storagespace.FormatResourceID(*rid)
 	sublog := appctx.GetLogger(ctx).With().Str("path", r.URL.Path).Str("resourceid", id).Logger()
 	sublog.Info().Msg("calling get path for user")
-	client, err := s.getClient()
-	if err != nil {
-		sublog.Error().Err(err).Msg("error getting grpc client")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
 
 	pf, status, err := propfind.ReadPropfind(r.Body)
 	if err != nil {
@@ -117,7 +111,7 @@ func (h *MetaHandler) handlePathForUser(w http.ResponseWriter, r *http.Request, 
 	}
 
 	pathReq := &provider.GetPathRequest{ResourceId: rid}
-	pathRes, err := client.GetPath(ctx, pathReq)
+	pathRes, err := s.gwClient.GetPath(ctx, pathReq)
 	if err != nil {
 		sublog.Error().Err(err).Msg("could not send GetPath grpc request: transport error")
 		w.WriteHeader(http.StatusInternalServerError)
