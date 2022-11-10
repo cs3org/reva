@@ -33,6 +33,7 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/utils"
+	"github.com/google/uuid"
 
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
@@ -62,6 +63,10 @@ func randSeq(n int) string {
 func init() {
 	rand.Seed(time.Now().UnixNano())
 	registry.Register("nextcloud", New)
+}
+
+func genID() string {
+	return uuid.New().String()
 }
 
 // Manager is the Nextcloud-based implementation of the share.Manager interface
@@ -261,13 +266,26 @@ func (sm *Manager) Share(ctx context.Context, md *provider.ResourceId, g *ocm.Sh
 		return nil, errors.New("nextcloud: user and grantee are the same")
 	}
 
+	// fixme: this should come from the EFSS backend
+	id := genID()
+	now := time.Now().UnixNano()
+	ts := &typespb.Timestamp{
+		Seconds: uint64(now / 1000000000),
+		Nanos:   uint32(now % 1000000000),
+	}
+
 	s := &ocm.Share{
+		Id: &ocm.ShareId{
+			OpaqueId: id,
+		},
 		Name:        name,
 		ResourceId:  md,
 		Permissions: g.Permissions,
 		Grantee:     g.Grantee,
 		Owner:       userID,
 		Creator:     userID,
+		Ctime:       ts,
+		Mtime:       ts,
 		ShareType:   st,
 	}
 
@@ -317,16 +335,13 @@ func (sm *Manager) Share(ctx context.Context, md *provider.ResourceId, g *ocm.Sh
 		}
 	}
 
-	_, body, err := sm.do(ctx, Action{apiMethod, string(encShare)}, username)
+	_, _, err = sm.do(ctx, Action{apiMethod, string(encShare)}, username)
+	// FIXME: this should set the id of the share
+	// _, body, err := sm.do(ctx, Action{apiMethod, string(encShare)}, username)
 
-	s.Id = &ocm.ShareId{
-		OpaqueId: string(body),
-	}
-	now := time.Now().UnixNano()
-	s.Ctime = &typespb.Timestamp{
-		Seconds: uint64(now / 1000000000),
-		Nanos:   uint32(now % 1000000000),
-	}
+	// s.Id = &ocm.ShareId{
+	// 	OpaqueId: string(body),
+	// }
 	if err != nil {
 		return nil, err
 	}
