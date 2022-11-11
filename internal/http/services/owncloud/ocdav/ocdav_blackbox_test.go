@@ -248,6 +248,54 @@ var _ = Describe("ocdav", func() {
 			Entry("at the /dav/public-files endpoint for a folder", "/dav/public-files/tokenforfolder", "/public/tokenforfolder", ".", http.StatusInternalServerError),
 		)
 
+		DescribeTable("HandleMkcol",
+			func(endpoint string, expectedPathPrefix string, expectedStatPath string, expectedCreatePath string, expectedStatus int) {
+
+				client.On("ListStorageSpaces", mock.Anything, mock.MatchedBy(func(req *cs3storageprovider.ListStorageSpacesRequest) bool {
+					p := string(req.Opaque.Map["path"].Value)
+					return p == "/" || strings.HasPrefix(p, expectedPathPrefix)
+				})).Return(&cs3storageprovider.ListStorageSpacesResponse{
+					Status:        status.NewOK(ctx),
+					StorageSpaces: []*cs3storageprovider.StorageSpace{userspace}, // FIXME we may need to return the /public storage provider id and mock it
+				}, nil)
+
+				// path based requests need to check if the resource already exists
+				client.On("Stat", mock.Anything, mock.MatchedBy(func(req *cs3storageprovider.StatRequest) bool {
+					return req.Ref.Path == expectedStatPath
+				})).Return(&cs3storageprovider.StatResponse{
+					Status: status.NewNotFound(ctx, "not found"),
+				}, nil)
+
+				ref := cs3storageprovider.Reference{
+					ResourceId: userspace.Root,
+					Path:       expectedCreatePath,
+				}
+
+				client.On("CreateContainer", mock.Anything, mock.MatchedBy(func(req *cs3storageprovider.CreateContainerRequest) bool {
+					return utils.ResourceEqual(req.Ref, &ref)
+				})).Return(nil, fmt.Errorf("unexpected io error"))
+
+				rr := httptest.NewRecorder()
+				req, err := http.NewRequest("MKCOL", endpoint+"/foo", strings.NewReader(""))
+				Expect(err).ToNot(HaveOccurred())
+				req = req.WithContext(ctx)
+
+				handler.Handler().ServeHTTP(rr, req)
+				Expect(rr).To(HaveHTTPStatus(expectedStatus))
+				if expectedStatus == http.StatusInternalServerError {
+					Expect(rr).To(HaveHTTPBody("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<d:error xmlns:d=\"DAV\" xmlns:s=\"http://sabredav.org/ns\"><s:exception></s:exception><s:message>unexpected io error</s:message></d:error>"), "Body must have a sabredav exception")
+				} else {
+					Expect(rr).To(HaveHTTPBody(""), "Body must be empty")
+				}
+
+			},
+			Entry("at the /webdav endpoint", "/webdav", "/users", "/users/username/foo", "./foo", http.StatusInternalServerError),
+			Entry("at the /dav/files endpoint", "/dav/files/username", "/users/username", "/users/username/foo", "./foo", http.StatusInternalServerError),
+			Entry("at the /dav/spaces endpoint", "/dav/spaces/provider-1$userspace!root", "/users/username", "/users/username/foo", "./foo", http.StatusInternalServerError),
+			Entry("at the /dav/public-files endpoint for a file", "/dav/public-files/tokenforfile", "", "/public/tokenforfolder/foo", "./foo", http.StatusMethodNotAllowed),
+			Entry("at the /dav/public-files endpoint for a folder", "/dav/public-files/tokenforfolder", "/public/tokenforfolder", "/public/tokenforfolder/foo", ".", http.StatusInternalServerError),
+		)
+
 	})
 
 	Context("When calls return ok", func() {
@@ -289,6 +337,52 @@ var _ = Describe("ocdav", func() {
 			Entry("at the /dav/spaces endpoint", "/dav/spaces/provider-1$userspace!root", "/users/username", "./foo", http.StatusNoContent),
 			Entry("at the /dav/public-files endpoint for a file", "/dav/public-files/tokenforfile", "", "", http.StatusMethodNotAllowed),
 			Entry("at the /dav/public-files endpoint for a folder", "/dav/public-files/tokenforfolder", "/public/tokenforfolder", ".", http.StatusNoContent),
+		)
+
+		DescribeTable("HandleMkcol",
+			func(endpoint string, expectedPathPrefix string, expectedStatPath string, expectedCreatePath string, expectedStatus int) {
+
+				client.On("ListStorageSpaces", mock.Anything, mock.MatchedBy(func(req *cs3storageprovider.ListStorageSpacesRequest) bool {
+					p := string(req.Opaque.Map["path"].Value)
+					return p == "/" || strings.HasPrefix(p, expectedPathPrefix)
+				})).Return(&cs3storageprovider.ListStorageSpacesResponse{
+					Status:        status.NewOK(ctx),
+					StorageSpaces: []*cs3storageprovider.StorageSpace{userspace}, // FIXME we may need to return the /public storage provider id and mock it
+				}, nil)
+
+				// path based requests need to check if the resource already exists
+				client.On("Stat", mock.Anything, mock.MatchedBy(func(req *cs3storageprovider.StatRequest) bool {
+					return req.Ref.Path == expectedStatPath
+				})).Return(&cs3storageprovider.StatResponse{
+					Status: status.NewNotFound(ctx, "not found"),
+				}, nil)
+
+				ref := cs3storageprovider.Reference{
+					ResourceId: userspace.Root,
+					Path:       expectedCreatePath,
+				}
+
+				client.On("CreateContainer", mock.Anything, mock.MatchedBy(func(req *cs3storageprovider.CreateContainerRequest) bool {
+					return utils.ResourceEqual(req.Ref, &ref)
+				})).Return(&cs3storageprovider.CreateContainerResponse{
+					Status: status.NewOK(ctx),
+				}, nil)
+
+				rr := httptest.NewRecorder()
+				req, err := http.NewRequest("MKCOL", endpoint+"/foo", strings.NewReader(""))
+				Expect(err).ToNot(HaveOccurred())
+				req = req.WithContext(ctx)
+
+				handler.Handler().ServeHTTP(rr, req)
+				Expect(rr).To(HaveHTTPStatus(expectedStatus))
+				Expect(rr).To(HaveHTTPBody(""), "Body must be empty")
+
+			},
+			Entry("at the /webdav endpoint", "/webdav", "/users", "/users/username/foo", "./foo", http.StatusCreated),
+			Entry("at the /dav/files endpoint", "/dav/files/username", "/users/username", "/users/username/foo", "./foo", http.StatusCreated),
+			Entry("at the /dav/spaces endpoint", "/dav/spaces/provider-1$userspace!root", "/users/username", "/users/username/foo", "./foo", http.StatusCreated),
+			Entry("at the /dav/public-files endpoint for a file", "/dav/public-files/tokenforfile", "", "/public/tokenforfolder/foo", "./foo", http.StatusMethodNotAllowed),
+			Entry("at the /dav/public-files endpoint for a folder", "/dav/public-files/tokenforfolder", "/public/tokenforfolder", "/public/tokenforfolder/foo", ".", http.StatusCreated),
 		)
 
 	})
