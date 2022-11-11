@@ -134,18 +134,10 @@ func (s *svc) handleTPCPull(ctx context.Context, w http.ResponseWriter, r *http.
 	}
 	sublog.Debug().Bool("overwrite", overwrite).Msg("TPC Pull")
 
-	// get Gateway client
-	client, err := s.getClient()
-	if err != nil {
-		sublog.Error().Err(err).Msg("error getting grpc client")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
 	// check if destination exists
 	ref := &provider.Reference{Path: dst}
 	dstStatReq := &provider.StatRequest{Ref: ref}
-	dstStatRes, err := client.Stat(ctx, dstStatReq)
+	dstStatRes, err := s.gwClient.Stat(ctx, dstStatReq)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error sending grpc stat request")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -161,7 +153,7 @@ func (s *svc) handleTPCPull(ctx context.Context, w http.ResponseWriter, r *http.
 		return
 	}
 
-	err = s.performHTTPPull(ctx, client, r, w, ns)
+	err = s.performHTTPPull(ctx, s.gwClient, r, w, ns)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error performing TPC Pull")
 		return
@@ -295,17 +287,9 @@ func (s *svc) handleTPCPush(ctx context.Context, w http.ResponseWriter, r *http.
 
 	sublog.Debug().Bool("overwrite", overwrite).Msg("TPC Push")
 
-	// get Gateway client
-	client, err := s.getClient()
-	if err != nil {
-		sublog.Error().Err(err).Msg("error getting grpc client")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
 	ref := &provider.Reference{Path: src}
 	srcStatReq := &provider.StatRequest{Ref: ref}
-	srcStatRes, err := client.Stat(ctx, srcStatReq)
+	srcStatRes, err := s.gwClient.Stat(ctx, srcStatReq)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error sending grpc stat request")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -321,7 +305,7 @@ func (s *svc) handleTPCPush(ctx context.Context, w http.ResponseWriter, r *http.
 		return
 	}
 
-	err = s.performHTTPPush(ctx, client, r, w, srcStatRes.Info, ns)
+	err = s.performHTTPPush(ctx, s.gwClient, r, w, srcStatRes.Info, ns)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error performing TPC Push")
 		return

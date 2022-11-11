@@ -39,9 +39,6 @@ type Options struct {
 	// UserLayout describes the relative path from the storage's root node to the users home node.
 	UserLayout string `mapstructure:"user_layout"`
 
-	// TODO NodeLayout option to save nodes as eg. nodes/1d/d8/1dd84abf-9466-4e14-bb86-02fc4ea3abcf
-	ShareFolder string `mapstructure:"share_folder"`
-
 	// propagate mtime changes as tmtime (tree modification time) to the parent directory when user.ocis.propagation=1 is set on a node
 	TreeTimeAccounting bool `mapstructure:"treetime_accounting"`
 
@@ -72,12 +69,6 @@ func New(m map[string]interface{}) (*Options, error) {
 	}
 	// ensure user layout has no starting or trailing /
 	o.UserLayout = strings.Trim(o.UserLayout, "/")
-
-	if o.ShareFolder == "" {
-		o.ShareFolder = "/Shares"
-	}
-	// ensure share folder always starts with slash
-	o.ShareFolder = filepath.Join("/", o.ShareFolder)
 
 	// c.DataDirectory should never end in / unless it is the root
 	o.Root = filepath.Clean(o.Root)

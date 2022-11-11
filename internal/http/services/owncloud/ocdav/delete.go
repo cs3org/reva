@@ -20,46 +20,39 @@ package ocdav
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"net/http"
 	"path"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/errors"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/net"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/spacelookup"
-	"github.com/cs3org/reva/v2/pkg/appctx"
-	"github.com/cs3org/reva/v2/pkg/rgrpc/status"
+	"github.com/cs3org/reva/v2/pkg/errtypes"
+	rstatus "github.com/cs3org/reva/v2/pkg/rgrpc/status"
 	"github.com/cs3org/reva/v2/pkg/utils"
-	"github.com/rs/zerolog"
 )
 
-func (s *svc) handlePathDelete(w http.ResponseWriter, r *http.Request, ns string) {
+func (s *svc) handlePathDelete(w http.ResponseWriter, r *http.Request, ns string) (status int, err error) {
+	ctx := r.Context()
+	ctx, span := s.tracerProvider.Tracer(tracerName).Start(ctx, "path_delete")
+	defer span.End()
+
 	fn := path.Join(ns, r.URL.Path)
 
-	sublog := appctx.GetLogger(r.Context()).With().Str("path", fn).Logger()
-	client, err := s.getClient()
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		return
+	space, rpcStatus, err := spacelookup.LookUpStorageSpaceForPath(ctx, s.gwClient, fn)
+	switch {
+	case err != nil:
+		span.RecordError(err)
+		return http.StatusInternalServerError, err
+	case rpcStatus.Code != rpc.Code_CODE_OK:
+		return rstatus.HTTPStatusFromCode(rpcStatus.Code), errtypes.NewErrtypeFromStatus(rpcStatus)
 	}
 
-	space, status, err := spacelookup.LookUpStorageSpaceForPath(r.Context(), client, fn)
-	if err != nil {
-		sublog.Error().Err(err).Msg("error sending a grpc request")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	if status.Code != rpc.Code_CODE_OK {
-		errors.HandleErrorStatus(&sublog, w, status)
-		return
-	}
-
-	s.handleDelete(r.Context(), w, r, spacelookup.MakeRelativeReference(space, fn, false), sublog)
+	return s.handleDelete(ctx, w, r, spacelookup.MakeRelativeReference(space, fn, false))
 }
 
-func (s *svc) handleDelete(ctx context.Context, w http.ResponseWriter, r *http.Request, ref *provider.Reference, log zerolog.Logger) {
+func (s *svc) handleDelete(ctx context.Context, w http.ResponseWriter, r *http.Request, ref *provider.Reference) (status int, err error) {
 	ctx, span := s.tracerProvider.Tracer(tracerName).Start(ctx, "delete")
 	defer span.End()
 
@@ -72,93 +65,65 @@ func (s *svc) handleDelete(ctx context.Context, w http.ResponseWriter, r *http.R
 			req.Opaque = utils.AppendPlainToOpaque(req.Opaque, "lockid", ih.lists[0].conditions[0].Token)
 		}
 	} else if r.Header.Get(net.HeaderIf) != "" {
-		w.WriteHeader(http.StatusBadRequest)
-		b, err := errors.Marshal(http.StatusBadRequest, "invalid if header", "")
-		errors.HandleWebdavError(&log, w, b, err)
-		return
+		return http.StatusBadRequest, errtypes.BadRequest("invalid if header")
 	}
 
-	client, err := s.getClient()
-	if err != nil {
-		log.Error().Err(err).Msg("error getting grpc client")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	res, err := client.Delete(ctx, req)
+	res, err := s.gwClient.Delete(ctx, req)
 	switch {
 	case err != nil:
 		span.RecordError(err)
-		log.Error().Err(err).Msg("error performing delete grpc request")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
+		return http.StatusInternalServerError, err
 	case res.Status.Code == rpc.Code_CODE_OK:
-		w.WriteHeader(http.StatusNoContent)
+		return http.StatusNoContent, nil
 	case res.Status.Code == rpc.Code_CODE_NOT_FOUND:
-		w.WriteHeader(http.StatusNotFound)
-		m := "Resource not found" // mimic the oc10 error message
-		b, err := errors.Marshal(http.StatusNotFound, m, "")
-		errors.HandleWebdavError(&log, w, b, err)
+		//lint:ignore ST1005 mimic the exact oc10 error message
+		return http.StatusNotFound, errors.New("Resource not found")
 	case res.Status.Code == rpc.Code_CODE_PERMISSION_DENIED:
-		status := http.StatusForbidden
+		status = http.StatusForbidden
 		if lockID := utils.ReadPlainFromOpaque(res.Opaque, "lockid"); lockID != "" {
 			// http://www.webdav.org/specs/rfc4918.html#HEADER_Lock-Token says that the
 			// Lock-Token value is a Coded-URL. We add angle brackets.
 			w.Header().Set("Lock-Token", "<"+lockID+">")
 			status = http.StatusLocked
 		}
-		// TODO path might be empty or relative...
-		m := fmt.Sprintf("Permission denied to delete %v", ref.Path)
 		// check if user has access to resource
-		sRes, err := client.Stat(ctx, &provider.StatRequest{Ref: ref})
+		sRes, err := s.gwClient.Stat(ctx, &provider.StatRequest{Ref: ref})
 		if err != nil {
 			span.RecordError(err)
-			log.Error().Err(err).Msg("error performing stat grpc request")
-			w.WriteHeader(http.StatusInternalServerError)
-			return
+			return http.StatusInternalServerError, err
 		}
 		if sRes.Status.Code != rpc.Code_CODE_OK {
 			// return not found error so we do not leak existence of a file
 			// TODO hide permission failed for users without access in every kind of request
 			// TODO should this be done in the driver?
-			status = http.StatusNotFound
-			m = "Resource not found" // mimic the oc10 error message
+			//lint:ignore ST1005 mimic the exact oc10 error message
+			return http.StatusNotFound, errors.New("Resource not found")
 		}
-		w.WriteHeader(status)
-		b, err := errors.Marshal(status, m, "")
-		errors.HandleWebdavError(&log, w, b, err)
+		return status, errors.New("") // mimic the oc10 error messages which have an empty message in this case
 	case res.Status.Code == rpc.Code_CODE_INTERNAL && res.Status.Message == "can't delete mount path":
-		w.WriteHeader(http.StatusForbidden)
-		b, err := errors.Marshal(http.StatusForbidden, res.Status.Message, "")
-		errors.HandleWebdavError(&log, w, b, err)
-	default:
-		status := status.HTTPStatusFromCode(res.Status.Code)
-		w.WriteHeader(status)
-		b, err := errors.Marshal(status, res.Status.Message, "")
-		errors.HandleWebdavError(&log, w, b, err)
+		// 405 must generate an Allow header
+		w.Header().Set("Allow", "PROPFIND, MOVE, COPY, POST, PROPPATCH, HEAD, GET, OPTIONS, LOCK, UNLOCK, REPORT, SEARCH, PUT")
+		return http.StatusMethodNotAllowed, errtypes.PermissionDenied(res.Status.Message)
 	}
+	return rstatus.HTTPStatusFromCode(res.Status.Code), errtypes.NewErrtypeFromStatus(res.Status)
 }
 
-func (s *svc) handleSpacesDelete(w http.ResponseWriter, r *http.Request, spaceID string) {
+func (s *svc) handleSpacesDelete(w http.ResponseWriter, r *http.Request, spaceID string) (status int, err error) {
 	ctx := r.Context()
 	ctx, span := s.tracerProvider.Tracer(tracerName).Start(ctx, "spaces_delete")
 	defer span.End()
 
-	sublog := appctx.GetLogger(ctx).With().Logger()
-
 	ref, err := spacelookup.MakeStorageSpaceReference(spaceID, r.URL.Path)
 	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		return
+		return http.StatusBadRequest, err
 	}
 
 	// do not allow deleting spaces via dav endpoint - use graph endpoint instead
 	// we get a relative reference coming from the space root
 	// so if the path is "empty" we a referencing the space
 	if ref.GetPath() == "." {
-		sublog.Info().Msg("deleting spaces via dav is not allowed")
-		w.WriteHeader(http.StatusBadRequest)
-		return
+		return http.StatusMethodNotAllowed, errors.New("deleting spaces via dav is not allowed")
 	}
 
-	s.handleDelete(ctx, w, r, &ref, sublog)
+	return s.handleDelete(ctx, w, r, &ref)
 }

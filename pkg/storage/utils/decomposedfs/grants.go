@@ -135,15 +135,21 @@ func (fs *Decomposedfs) ListGrants(ctx context.Context, ref *provider.Reference)
 	}
 	log := appctx.GetLogger(ctx)
 	np := node.InternalPath()
-	var attrs []string
-	if attrs, err = xattrs.List(np); err != nil {
+	var attrs map[string]string
+	if attrs, err = node.Xattrs(); err != nil {
 		log.Error().Err(err).Msg("error listing attributes")
 		return nil, err
 	}
+	attrNames := make([]string, len(attrs))
+	i := 0
+	for attr := range attrs {
+		attrNames[i] = attr
+		i++
+	}
 
-	log.Debug().Interface("attrs", attrs).Msg("read attributes")
+	log.Debug().Interface("attrs", attrNames).Msg("read attributes")
 
-	aces := extractACEsFromAttrs(ctx, np, attrs)
+	aces := extractACEsFromAttrs(ctx, np, attrNames)
 
 	uid := ctxpkg.ContextMustGetUser(ctx).GetId()
 	grants = make([]*provider.Grant, 0, len(aces))
@@ -303,7 +309,7 @@ func (fs *Decomposedfs) storeGrant(ctx context.Context, n *node.Node, g *provide
 	// set the grant
 	e := ace.FromGrant(g)
 	principal, value := e.Marshal()
-	if err := n.SetMetadata(xattrs.GrantPrefix+principal, string(value)); err != nil {
+	if err := n.SetXattr(xattrs.GrantPrefix+principal, string(value)); err != nil {
 		appctx.GetLogger(ctx).Error().Err(err).
 			Str("principal", principal).Msg("Could not set grant for principal")
 		return err

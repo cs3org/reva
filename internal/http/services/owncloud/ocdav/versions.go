@@ -122,15 +122,8 @@ func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request,
 		return
 	}
 
-	client, err := s.getClient()
-	if err != nil {
-		sublog.Error().Err(err).Msg("error getting grpc client")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
 	ref := &provider.Reference{ResourceId: rid}
-	res, err := client.Stat(ctx, &provider.StatRequest{Ref: ref})
+	res, err := s.gwClient.Stat(ctx, &provider.StatRequest{Ref: ref})
 	if err != nil {
 		sublog.Error().Err(err).Msg("error sending a grpc stat request")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -149,7 +142,7 @@ func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request,
 
 	info := res.Info
 
-	lvRes, err := client.ListFileVersions(ctx, &provider.ListFileVersionsRequest{Ref: ref})
+	lvRes, err := s.gwClient.ListFileVersions(ctx, &provider.ListFileVersionsRequest{Ref: ref})
 	if err != nil {
 		sublog.Error().Err(err).Msg("error sending list container grpc request")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -221,19 +214,12 @@ func (h *VersionsHandler) doRestore(w http.ResponseWriter, r *http.Request, s *s
 
 	sublog := appctx.GetLogger(ctx).With().Interface("resourceid", rid).Str("key", key).Logger()
 
-	client, err := s.getClient()
-	if err != nil {
-		sublog.Error().Err(err).Msg("error getting grpc client")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
 	req := &provider.RestoreFileVersionRequest{
 		Ref: &provider.Reference{ResourceId: rid},
 		Key: key,
 	}
 
-	res, err := client.RestoreFileVersion(ctx, req)
+	res, err := s.gwClient.RestoreFileVersion(ctx, req)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error sending a grpc restore version request")
 		w.WriteHeader(http.StatusInternalServerError)

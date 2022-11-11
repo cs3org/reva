@@ -768,7 +768,7 @@ func (fs *owncloudsqlfs) CreateDir(ctx context.Context, ref *provider.Reference)
 
 	permissions := 31 // 1: READ, 2: UPDATE, 4: CREATE, 8: DELETE, 16: SHARE
 	if perm, err := fs.readPermissions(ctx, filepath.Dir(ip)); err == nil {
-		permissions = int(conversions.RoleFromResourcePermissions(perm).OCSPermissions()) // inherit permissions of parent
+		permissions = int(conversions.RoleFromResourcePermissions(perm, false).OCSPermissions()) // inherit permissions of parent
 	}
 	data := map[string]interface{}{
 		"path":          fs.toDatabasePath(ip),
@@ -835,7 +835,7 @@ func (fs *owncloudsqlfs) TouchFile(ctx context.Context, ref *provider.Reference)
 		"path":          fs.toDatabasePath(ip),
 		"etag":          calcEtag(ctx, fi),
 		"mimetype":      mime.Detect(false, ip),
-		"permissions":   int(conversions.RoleFromResourcePermissions(parentPerms).OCSPermissions()), // inherit permissions of parent
+		"permissions":   int(conversions.RoleFromResourcePermissions(parentPerms, false).OCSPermissions()), // inherit permissions of parent
 		"mtime":         mtime,
 		"storage_mtime": mtime,
 	}

@@ -90,14 +90,7 @@ func (s *svc) handlePathCopy(w http.ResponseWriter, r *http.Request, ns string) 
 
 	sublog := appctx.GetLogger(ctx).With().Str("src", src).Str("dst", dst).Logger()
 
-	client, err := s.getClient()
-	if err != nil {
-		sublog.Error().Err(err).Msg("error getting grpc client")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	srcSpace, status, err := spacelookup.LookUpStorageSpaceForPath(ctx, client, src)
+	srcSpace, status, err := spacelookup.LookUpStorageSpaceForPath(ctx, s.gwClient, src)
 	if err != nil {
 		sublog.Error().Err(err).Str("path", src).Msg("failed to look up storage space")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -107,7 +100,7 @@ func (s *svc) handlePathCopy(w http.ResponseWriter, r *http.Request, ns string) 
 		errors.HandleErrorStatus(&sublog, w, status)
 		return
 	}
-	dstSpace, status, err := spacelookup.LookUpStorageSpaceForPath(ctx, client, dst)
+	dstSpace, status, err := spacelookup.LookUpStorageSpaceForPath(ctx, s.gwClient, dst)
 	if err != nil {
 		sublog.Error().Err(err).Str("path", dst).Msg("failed to look up storage space")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -123,7 +116,7 @@ func (s *svc) handlePathCopy(w http.ResponseWriter, r *http.Request, ns string) 
 		return
 	}
 
-	if err := s.executePathCopy(ctx, client, w, r, cp); err != nil {
+	if err := s.executePathCopy(ctx, s.gwClient, w, r, cp); err != nil {
 		sublog.Error().Err(err).Str("depth", cp.depth.String()).Msg("error executing path copy")
 		w.WriteHeader(http.StatusInternalServerError)
 	}
@@ -304,13 +297,6 @@ func (s *svc) handleSpacesCopy(w http.ResponseWriter, r *http.Request, spaceID s
 
 	sublog := appctx.GetLogger(ctx).With().Str("spaceid", spaceID).Str("path", r.URL.Path).Str("destination", dst).Logger()
 
-	client, err := s.getClient()
-	if err != nil {
-		sublog.Error().Err(err).Msg("error getting grpc client")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
 	srcRef, err := spacelookup.MakeStorageSpaceReference(spaceID, r.URL.Path)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
@@ -330,7 +316,7 @@ func (s *svc) handleSpacesCopy(w http.ResponseWriter, r *http.Request, spaceID s
 		return
 	}
 
-	err = s.executeSpacesCopy(ctx, w, client, cp)
+	err = s.executeSpacesCopy(ctx, w, s.gwClient, cp)
 	if err != nil {
 		sublog.Error().Err(err).Str("depth", cp.depth.String()).Msg("error descending directory")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -487,14 +473,7 @@ func (s *svc) executeSpacesCopy(ctx context.Context, w http.ResponseWriter, clie
 }
 
 func (s *svc) prepareCopy(ctx context.Context, w http.ResponseWriter, r *http.Request, srcRef, dstRef *provider.Reference, log *zerolog.Logger) *copy {
-	client, err := s.getClient()
-	if err != nil {
-		log.Error().Err(err).Msg("error getting grpc client")
-		w.WriteHeader(http.StatusInternalServerError)
-		return nil
-	}
-
-	isChild, err := s.referenceIsChildOf(ctx, client, dstRef, srcRef)
+	isChild, err := s.referenceIsChildOf(ctx, s.gwClient, dstRef, srcRef)
 	if err != nil {
 		switch err.(type) {
 		case errtypes.IsNotSupported:
@@ -540,7 +519,7 @@ func (s *svc) prepareCopy(ctx context.Context, w http.ResponseWriter, r *http.Re
 	log.Debug().Bool("overwrite", overwrite).Str("depth", depth.String()).Msg("copy")
 
 	srcStatReq := &provider.StatRequest{Ref: srcRef}
-	srcStatRes, err := client.Stat(ctx, srcStatReq)
+	srcStatRes, err := s.gwClient.Stat(ctx, srcStatReq)
 	switch {
 	case err != nil:
 		log.Error().Err(err).Msg("error sending grpc stat request")
@@ -558,7 +537,7 @@ func (s *svc) prepareCopy(ctx context.Context, w http.ResponseWriter, r *http.Re
 	}
 
 	dstStatReq := &provider.StatRequest{Ref: dstRef}
-	dstStatRes, err := client.Stat(ctx, dstStatReq)
+	dstStatRes, err := s.gwClient.Stat(ctx, dstStatReq)
 	switch {
 	case err != nil:
 		log.Error().Err(err).Msg("error sending grpc stat request")
@@ -584,7 +563,7 @@ func (s *svc) prepareCopy(ctx context.Context, w http.ResponseWriter, r *http.Re
 
 		// delete existing tree
 		delReq := &provider.DeleteRequest{Ref: dstRef}
-		delRes, err := client.Delete(ctx, delReq)
+		delRes, err := s.gwClient.Delete(ctx, delReq)
 		if err != nil {
 			log.Error().Err(err).Msg("error sending grpc delete request")
 			w.WriteHeader(http.StatusInternalServerError)
@@ -602,7 +581,7 @@ func (s *svc) prepareCopy(ctx context.Context, w http.ResponseWriter, r *http.Re
 			Path:       utils.MakeRelativePath(p),
 		}
 		intStatReq := &provider.StatRequest{Ref: pRef}
-		intStatRes, err := client.Stat(ctx, intStatReq)
+		intStatRes, err := s.gwClient.Stat(ctx, intStatReq)
 		if err != nil {
 			log.Error().Err(err).Msg("error sending grpc stat request")
 			w.WriteHeader(http.StatusInternalServerError)

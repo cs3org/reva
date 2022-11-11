@@ -117,18 +117,10 @@ func (s *svc) handleTusPost(ctx context.Context, w http.ResponseWriter, r *http.
 
 	// TODO check Expect: 100-continue
 
-	// check if destination exists or is a file
-	client, err := s.getClient()
-	if err != nil {
-		log.Error().Err(err).Msg("error getting grpc client")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
 	sReq := &provider.StatRequest{
 		Ref: ref,
 	}
-	sRes, err := client.Stat(ctx, sReq)
+	sRes, err := s.gwClient.Stat(ctx, sReq)
 	if err != nil {
 		log.Error().Err(err).Msg("error sending grpc stat request")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -166,7 +158,7 @@ func (s *svc) handleTusPost(ctx context.Context, w http.ResponseWriter, r *http.
 		return
 	}
 	if uploadLength == 0 {
-		tfRes, err := client.TouchFile(ctx, &provider.TouchFileRequest{
+		tfRes, err := s.gwClient.TouchFile(ctx, &provider.TouchFileRequest{
 			Ref: ref,
 		})
 		if err != nil {
@@ -204,7 +196,7 @@ func (s *svc) handleTusPost(ctx context.Context, w http.ResponseWriter, r *http.
 		},
 	}
 
-	uRes, err := client.InitiateFileUpload(ctx, uReq)
+	uRes, err := s.gwClient.InitiateFileUpload(ctx, uReq)
 	if err != nil {
 		log.Error().Err(err).Msg("error initiating file upload")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -285,7 +277,7 @@ func (s *svc) handleTusPost(ctx context.Context, w http.ResponseWriter, r *http.
 		if length == 0 || httpRes.Header.Get(net.HeaderUploadOffset) == r.Header.Get(net.HeaderUploadLength) {
 			// get uploaded file metadata
 
-			sRes, err := client.Stat(ctx, sReq)
+			sRes, err := s.gwClient.Stat(ctx, sReq)
 			if err != nil {
 				log.Error().Err(err).Msg("error sending grpc stat request")
 				w.WriteHeader(http.StatusInternalServerError)
@@ -327,7 +319,7 @@ func (s *svc) handleTusPost(ctx context.Context, w http.ResponseWriter, r *http.
 				}
 			}
 			isShared := !net.IsCurrentUserOwner(ctx, info.Owner)
-			role := conversions.RoleFromResourcePermissions(info.PermissionSet)
+			role := conversions.RoleFromResourcePermissions(info.PermissionSet, isPublic)
 			permissions := role.WebDAVPermissions(
 				info.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER,
 				isShared,

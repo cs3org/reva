@@ -116,7 +116,7 @@ func buildTokenInfo(owner *user.User, tkn string, token string, passProtected bo
 	t.SpaceID = sRes.Share.ResourceId.GetSpaceId()
 	t.OpaqueID = sRes.Share.ResourceId.GetOpaqueId()
 
-	role := conversions.RoleFromResourcePermissions(sRes.Share.Permissions.GetPermissions())
+	role := conversions.RoleFromResourcePermissions(sRes.Share.Permissions.GetPermissions(), true)
 	t.Aliaslink = role.OCSPermissions() == 0
 
 	return t, nil

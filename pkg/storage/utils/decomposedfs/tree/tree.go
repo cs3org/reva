@@ -60,7 +60,6 @@ type PathLookup interface {
 	InternalRoot() string
 	InternalPath(spaceID, nodeID string) string
 	Path(ctx context.Context, n *node.Node) (path string, err error)
-	ShareFolder() string
 }
 
 // Tree manages a hierarchical tree
@@ -344,8 +343,6 @@ func (t *Tree) Move(ctx context.Context, oldNode *node.Node, newNode *node.Node)
 	// Always target the old node ID for xattr updates.
 	// The new node id is empty if the target does not exist
 	// and we need to overwrite the new one when overwriting an existing path.
-	tgtPath := oldNode.InternalPath()
-
 	// are we just renaming (parent stays the same)?
 	if oldNode.ParentID == newNode.ParentID {
 
@@ -362,7 +359,7 @@ func (t *Tree) Move(ctx context.Context, oldNode *node.Node, newNode *node.Node)
 		}
 
 		// update name attribute
-		if err := xattrs.Set(tgtPath, xattrs.NameAttr, newNode.Name); err != nil {
+		if err := oldNode.SetXattr(xattrs.NameAttr, newNode.Name); err != nil {
 			return errors.Wrap(err, "Decomposedfs: could not set name attribute")
 		}
 
@@ -382,10 +379,10 @@ func (t *Tree) Move(ctx context.Context, oldNode *node.Node, newNode *node.Node)
 	}
 
 	// update target parentid and name
-	if err := xattrs.Set(tgtPath, xattrs.ParentidAttr, newNode.ParentID); err != nil {
+	if err := oldNode.SetXattr(xattrs.ParentidAttr, newNode.ParentID); err != nil {
 		return errors.Wrap(err, "Decomposedfs: could not set parentid attribute")
 	}
-	if err := xattrs.Set(tgtPath, xattrs.NameAttr, newNode.Name); err != nil {
+	if err := oldNode.SetXattr(xattrs.NameAttr, newNode.Name); err != nil {
 		return errors.Wrap(err, "Decomposedfs: could not set name attribute")
 	}
 
@@ -471,7 +468,7 @@ func (t *Tree) Delete(ctx context.Context, n *node.Node) (err error) {
 
 	// set origin location in metadata
 	nodePath := n.InternalPath()
-	if err := n.SetMetadata(xattrs.TrashOriginAttr, origin); err != nil {
+	if err := n.SetXattr(xattrs.TrashOriginAttr, origin); err != nil {
 		return err
 	}
 
@@ -481,7 +478,7 @@ func (t *Tree) Delete(ctx context.Context, n *node.Node) (err error) {
 	trashLink := filepath.Join(t.root, "spaces", lookup.Pathify(n.SpaceRoot.ID, 1, 2), "trash", lookup.Pathify(n.ID, 4, 2))
 	if err := os.MkdirAll(filepath.Dir(trashLink), 0700); err != nil {
 		// Roll back changes
-		_ = n.RemoveMetadata(xattrs.TrashOriginAttr)
+		_ = n.RemoveXattr(xattrs.TrashOriginAttr)
 		return err
 	}
 
@@ -494,7 +491,7 @@ func (t *Tree) Delete(ctx context.Context, n *node.Node) (err error) {
 	err = os.Symlink("../../../../../nodes/"+lookup.Pathify(n.ID, 4, 2)+node.TrashIDDelimiter+deletionTime, trashLink)
 	if err != nil {
 		// Roll back changes
-		_ = n.RemoveMetadata(xattrs.TrashOriginAttr)
+		_ = n.RemoveXattr(xattrs.TrashOriginAttr)
 		return
 	}
 
@@ -507,7 +504,7 @@ func (t *Tree) Delete(ctx context.Context, n *node.Node) (err error) {
 		// To roll back changes
 		// TODO remove symlink
 		// Roll back changes
-		_ = n.RemoveMetadata(xattrs.TrashOriginAttr)
+		_ = n.RemoveXattr(xattrs.TrashOriginAttr)
 		return
 	}
 
@@ -522,7 +519,7 @@ func (t *Tree) Delete(ctx context.Context, n *node.Node) (err error) {
 		// TODO revert the rename
 		// TODO remove symlink
 		// Roll back changes
-		_ = n.RemoveMetadata(xattrs.TrashOriginAttr)
+		_ = n.RemoveXattr(xattrs.TrashOriginAttr)
 		return
 	}
 
@@ -581,13 +578,13 @@ func (t *Tree) RestoreRecycleItemFunc(ctx context.Context, spaceid, key, trashPa
 
 		targetNode.Exists = true
 		// update name attribute
-		if err := recycleNode.SetMetadata(xattrs.NameAttr, targetNode.Name); err != nil {
+		if err := recycleNode.SetXattr(xattrs.NameAttr, targetNode.Name); err != nil {
 			return errors.Wrap(err, "Decomposedfs: could not set name attribute")
 		}
 
 		// set ParentidAttr to restorePath's node parent id
 		if trashPath != "" {
-			if err := recycleNode.SetMetadata(xattrs.ParentidAttr, targetNode.ParentID); err != nil {
+			if err := recycleNode.SetXattr(xattrs.ParentidAttr, targetNode.ParentID); err != nil {
 				return errors.Wrap(err, "Decomposedfs: could not set name attribute")
 			}
 		}

@@ -410,7 +410,9 @@ func NewLegacyRoleFromOCSPermissions(p Permissions) *Role {
 }
 
 // RoleFromResourcePermissions tries to map cs3 resource permissions to a role
-func RoleFromResourcePermissions(rp *provider.ResourcePermissions) *Role {
+// It needs to know whether this is a link or not, because empty permissions on links mean "INTERNAL LINK"
+// while empty permissions on other resources mean "DENIAL". Obviously this is not optimal.
+func RoleFromResourcePermissions(rp *provider.ResourcePermissions, islink bool) *Role {
 	r := &Role{
 		Name:                   RoleUnknown,
 		ocsPermissions:         PermissionInvalid,
@@ -420,8 +422,10 @@ func RoleFromResourcePermissions(rp *provider.ResourcePermissions) *Role {
 		return r
 	}
 	if grants.PermissionsEqual(rp, &provider.ResourcePermissions{}) {
-		r.ocsPermissions = PermissionsNone
-		r.Name = RoleDenied
+		if !islink {
+			r.ocsPermissions = PermissionsNone
+			r.Name = RoleDenied
+		}
 		return r
 	}
 	if rp.ListContainer &&

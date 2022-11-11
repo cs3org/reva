@@ -373,7 +373,7 @@ var _ = Describe("Spaces", func() {
 					},
 				)
 				Expect(err).ToNot(HaveOccurred())
-				Expect(updateResp.Status.Code, rpcv1beta1.Code_CODE_PERMISSION_DENIED)
+				Expect(updateResp.Status.Code).To(Equal(rpcv1beta1.Code_CODE_NOT_FOUND))
 			})
 		})
 	})

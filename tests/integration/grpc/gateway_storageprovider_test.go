@@ -477,7 +477,7 @@ var _ = Describe("gateway", func() {
 				info := statRes.Info
 				Expect(info.Type).To(Equal(storagep.ResourceType_RESOURCE_TYPE_CONTAINER))
 				Expect(utils.ResourceIDEqual(info.Id, homeRef.ResourceId)).To(BeTrue())
-				Expect(info.Path).To(Equal("")) // path of a root node of a space is always ""
+				Expect(info.Path).To(Equal(".")) // path of a root node of a space is always "."
 				Expect(info.Owner.OpaqueId).To(Equal(user.Id.OpaqueId))
 
 				// TODO: size aggregating is done by the client now - so no chance testing that here
@@ -492,7 +492,7 @@ var _ = Describe("gateway", func() {
 				info := statRes.Info
 				Expect(info.Type).To(Equal(storagep.ResourceType_RESOURCE_TYPE_CONTAINER))
 				Expect(utils.ResourceIDEqual(info.Id, embeddedRef.ResourceId)).To(BeTrue())
-				Expect(info.Path).To(Equal("")) // path of a root node of a space is always ""
+				Expect(info.Path).To(Equal(".")) // path of a root node of a space is always "."
 				Expect(info.Size).To(Equal(uint64(2)))
 			})
 

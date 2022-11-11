@@ -45,14 +45,10 @@ func (s *svc) handlePathMkcol(w http.ResponseWriter, r *http.Request, ns string)
 		}
 	}
 	sublog := appctx.GetLogger(ctx).With().Str("path", fn).Logger()
-	client, err := s.getClient()
-	if err != nil {
-		return http.StatusInternalServerError, err
-	}
 
 	// stat requested path to make sure it isn't existing yet
 	// NOTE: It could be on another storage provider than the 'parent' of it
-	sr, err := client.Stat(ctx, &provider.StatRequest{
+	sr, err := s.gwClient.Stat(ctx, &provider.StatRequest{
 		Ref: &provider.Reference{
 			Path: fn,
 		},
@@ -72,7 +68,7 @@ func (s *svc) handlePathMkcol(w http.ResponseWriter, r *http.Request, ns string)
 
 	parentPath := path.Dir(fn)
 
-	space, rpcStatus, err := spacelookup.LookUpStorageSpaceForPath(ctx, client, parentPath)
+	space, rpcStatus, err := spacelookup.LookUpStorageSpaceForPath(ctx, s.gwClient, parentPath)
 	switch {
 	case err != nil:
 		return http.StatusInternalServerError, err
@@ -113,13 +109,8 @@ func (s *svc) handleMkcol(ctx context.Context, w http.ResponseWriter, r *http.Re
 		return http.StatusUnsupportedMediaType, fmt.Errorf("extended-mkcol not supported")
 	}
 
-	client, err := s.getClient()
-	if err != nil {
-		return http.StatusInternalServerError, err
-	}
-
 	req := &provider.CreateContainerRequest{Ref: childRef}
-	res, err := client.CreateContainer(ctx, req)
+	res, err := s.gwClient.CreateContainer(ctx, req)
 	switch {
 	case err != nil:
 		return http.StatusInternalServerError, err
@@ -128,7 +119,7 @@ func (s *svc) handleMkcol(ctx context.Context, w http.ResponseWriter, r *http.Re
 		return 0, nil
 	case res.Status.Code == rpc.Code_CODE_PERMISSION_DENIED:
 		// check if user has access to parent
-		sRes, err := client.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{
+		sRes, err := s.gwClient.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{
 			ResourceId: childRef.GetResourceId(),
 			Path:       utils.MakeRelativePath(path.Dir(childRef.Path)),
 		}})
