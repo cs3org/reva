@@ -165,7 +165,7 @@ var _ = Describe("ocdav", func() {
 	Context("When listing spaces fails with an error", func() {
 
 		DescribeTable("HandleDelete",
-			func(endpoint string, expectedPathPrefix string, expectedStatus int, expectBody bool) {
+			func(endpoint string, expectedPathPrefix string, expectedStatus int) {
 
 				client.On("ListStorageSpaces", mock.Anything, mock.MatchedBy(func(req *cs3storageprovider.ListStorageSpacesRequest) bool {
 					p := string(req.Opaque.Map["path"].Value)
@@ -189,18 +189,18 @@ var _ = Describe("ocdav", func() {
 
 				handler.Handler().ServeHTTP(rr, req)
 				Expect(rr).To(HaveHTTPStatus(expectedStatus))
-				if expectBody {
+				if expectedStatus == http.StatusInternalServerError {
 					Expect(rr).To(HaveHTTPBody("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<d:error xmlns:d=\"DAV\" xmlns:s=\"http://sabredav.org/ns\"><s:exception></s:exception><s:message>unexpected io error</s:message></d:error>"), "Body must have a sabredav exception")
 				} else {
 					Expect(rr).To(HaveHTTPBody(""), "Body must be empty")
 				}
 
 			},
-			Entry("at the /webdav endpoint", "/webdav", "/users", http.StatusInternalServerError, true),
-			Entry("at the /dav/files endpoint", "/dav/files/username", "/users/username", http.StatusInternalServerError, true),
-			Entry("at the /dav/spaces endpoint", "/dav/spaces/provider-1$userspace!root", "/users/username", http.StatusNoContent, false),
-			Entry("at the /dav/public-files endpoint for a file", "/dav/public-files/tokenforfile", "", http.StatusMethodNotAllowed, false),
-			Entry("at the /dav/public-files endpoint for a folder", "/dav/public-files/tokenforfolder", "/public/tokenforfolder", http.StatusInternalServerError, true),
+			Entry("at the /webdav endpoint", "/webdav", "/users", http.StatusInternalServerError),
+			Entry("at the /dav/files endpoint", "/dav/files/username", "/users/username", http.StatusInternalServerError),
+			Entry("at the /dav/spaces endpoint", "/dav/spaces/provider-1$userspace!root", "/users/username", http.StatusNoContent),
+			Entry("at the /dav/public-files endpoint for a file", "/dav/public-files/tokenforfile", "", http.StatusMethodNotAllowed),
+			Entry("at the /dav/public-files endpoint for a folder", "/dav/public-files/tokenforfolder", "/public/tokenforfolder", http.StatusInternalServerError),
 		)
 
 	})
@@ -208,7 +208,7 @@ var _ = Describe("ocdav", func() {
 	Context("When calls fail with an error", func() {
 
 		DescribeTable("HandleDelete",
-			func(endpoint string, expectedPathPrefix string, expectedPath string, expectedStatus int, expectBody bool) {
+			func(endpoint string, expectedPathPrefix string, expectedPath string, expectedStatus int) {
 
 				client.On("ListStorageSpaces", mock.Anything, mock.MatchedBy(func(req *cs3storageprovider.ListStorageSpacesRequest) bool {
 					p := string(req.Opaque.Map["path"].Value)
@@ -234,18 +234,18 @@ var _ = Describe("ocdav", func() {
 
 				handler.Handler().ServeHTTP(rr, req)
 				Expect(rr).To(HaveHTTPStatus(expectedStatus))
-				if expectBody {
+				if expectedStatus == http.StatusInternalServerError {
 					Expect(rr).To(HaveHTTPBody("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<d:error xmlns:d=\"DAV\" xmlns:s=\"http://sabredav.org/ns\"><s:exception></s:exception><s:message>unexpected io error</s:message></d:error>"), "Body must have a sabredav exception")
 				} else {
 					Expect(rr).To(HaveHTTPBody(""), "Body must be empty")
 				}
 
 			},
-			Entry("at the /webdav endpoint", "/webdav", "/users", "./foo", http.StatusInternalServerError, true),
-			Entry("at the /dav/files endpoint", "/dav/files/username", "/users/username", "./foo", http.StatusInternalServerError, true),
-			Entry("at the /dav/spaces endpoint", "/dav/spaces/provider-1$userspace!root", "/users/username", "./foo", http.StatusInternalServerError, true),
-			Entry("at the /dav/public-files endpoint for a file", "/dav/public-files/tokenforfile", "", "", http.StatusMethodNotAllowed, false),
-			Entry("at the /dav/public-files endpoint for a folder", "/dav/public-files/tokenforfolder", "/public/tokenforfolder", ".", http.StatusInternalServerError, true),
+			Entry("at the /webdav endpoint", "/webdav", "/users", "./foo", http.StatusInternalServerError),
+			Entry("at the /dav/files endpoint", "/dav/files/username", "/users/username", "./foo", http.StatusInternalServerError),
+			Entry("at the /dav/spaces endpoint", "/dav/spaces/provider-1$userspace!root", "/users/username", "./foo", http.StatusInternalServerError),
+			Entry("at the /dav/public-files endpoint for a file", "/dav/public-files/tokenforfile", "", "", http.StatusMethodNotAllowed),
+			Entry("at the /dav/public-files endpoint for a folder", "/dav/public-files/tokenforfolder", "/public/tokenforfolder", ".", http.StatusInternalServerError),
 		)
 
 	})
@@ -296,7 +296,7 @@ var _ = Describe("ocdav", func() {
 	Context("When the resource is not found", func() {
 
 		DescribeTable("HandleDelete",
-			func(endpoint string, expectedPathPrefix string, expectedPath string, expectedStatus int, expectBody bool) {
+			func(endpoint string, expectedPathPrefix string, expectedPath string, expectedStatus int) {
 
 				client.On("ListStorageSpaces", mock.Anything, mock.MatchedBy(func(req *cs3storageprovider.ListStorageSpacesRequest) bool {
 					p := string(req.Opaque.Map["path"].Value)
@@ -324,17 +324,17 @@ var _ = Describe("ocdav", func() {
 
 				handler.Handler().ServeHTTP(rr, req)
 				Expect(rr).To(HaveHTTPStatus(expectedStatus))
-				if expectBody {
+				if expectedStatus == http.StatusNotFound {
 					Expect(rr).To(HaveHTTPBody("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<d:error xmlns:d=\"DAV\" xmlns:s=\"http://sabredav.org/ns\"><s:exception>Sabre\\DAV\\Exception\\NotFound</s:exception><s:message>Resource not found</s:message></d:error>"), "Body must have a not found sabredav exception")
 				} else {
 					Expect(rr).To(HaveHTTPBody(""), "Body must be empty")
 				}
 			},
-			Entry("at the /webdav endpoint", "/webdav", "/users", "./foo", http.StatusNotFound, true),
-			Entry("at the /dav/files endpoint", "/dav/files/username", "/users/username", "./foo", http.StatusNotFound, true),
-			Entry("at the /dav/spaces endpoint", "/dav/spaces/provider-1$userspace!root", "/users/username", "./foo", http.StatusNotFound, true),
-			Entry("at the /dav/public-files endpoint for a file", "/dav/public-files/tokenforfile", "", "", http.StatusMethodNotAllowed, false),
-			Entry("at the /dav/public-files endpoint for a folder", "/dav/public-files/tokenforfolder", "/public/tokenforfolder", ".", http.StatusNotFound, true),
+			Entry("at the /webdav endpoint", "/webdav", "/users", "./foo", http.StatusNotFound),
+			Entry("at the /dav/files endpoint", "/dav/files/username", "/users/username", "./foo", http.StatusNotFound),
+			Entry("at the /dav/spaces endpoint", "/dav/spaces/provider-1$userspace!root", "/users/username", "./foo", http.StatusNotFound),
+			Entry("at the /dav/public-files endpoint for a file", "/dav/public-files/tokenforfile", "", "", http.StatusMethodNotAllowed),
+			Entry("at the /dav/public-files endpoint for a folder", "/dav/public-files/tokenforfolder", "/public/tokenforfolder", ".", http.StatusNotFound),
 		)
 
 	})
@@ -342,7 +342,7 @@ var _ = Describe("ocdav", func() {
 	Context("When the operation is forbidden", func() {
 
 		DescribeTable("HandleDelete",
-			func(endpoint string, expectedPathPrefix string, expectedPath string, locked, userHasAccess bool, expectedStatus int, expectBody bool) {
+			func(endpoint string, expectedPathPrefix string, expectedPath string, locked, userHasAccess bool, expectedStatus int) {
 
 				client.On("ListStorageSpaces", mock.Anything, mock.MatchedBy(func(req *cs3storageprovider.ListStorageSpacesRequest) bool {
 					p := string(req.Opaque.Map["path"].Value)
@@ -374,8 +374,6 @@ var _ = Describe("ocdav", func() {
 					}, nil)
 				}
 
-				// we check if the user has access
-				// TODO make configurable
 				if userHasAccess {
 					client.On("Stat", mock.Anything, mock.MatchedBy(func(req *cs3storageprovider.StatRequest) bool {
 						return utils.ResourceEqual(req.Ref, &ref)
@@ -400,7 +398,9 @@ var _ = Describe("ocdav", func() {
 
 				handler.Handler().ServeHTTP(rr, req)
 				Expect(rr).To(HaveHTTPStatus(expectedStatus))
-				if expectBody {
+				if expectedStatus == http.StatusMethodNotAllowed {
+					Expect(rr).To(HaveHTTPBody(""), "Body must be empty")
+				} else {
 					if userHasAccess {
 						if locked {
 							Expect(rr).To(HaveHTTPBody("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<d:error xmlns:d=\"DAV\" xmlns:s=\"http://sabredav.org/ns\"><s:exception>Sabre\\DAV\\Exception\\Locked</s:exception><s:message></s:message></d:error>"), "Body must have a locked sabredav exception")
@@ -411,40 +411,38 @@ var _ = Describe("ocdav", func() {
 					} else {
 						Expect(rr).To(HaveHTTPBody("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<d:error xmlns:d=\"DAV\" xmlns:s=\"http://sabredav.org/ns\"><s:exception>Sabre\\DAV\\Exception\\NotFound</s:exception><s:message>Resource not found</s:message></d:error>"), "Body must have a not found sabredav exception")
 					}
-				} else {
-					Expect(rr).To(HaveHTTPBody(""), "Body must be empty")
 				}
 			},
 
 			// without lock
 
 			// when user has access he should see forbidden status
-			Entry("at the /webdav endpoint", "/webdav", "/users", "./foo", false, true, http.StatusForbidden, true),
-			Entry("at the /dav/files endpoint", "/dav/files/username", "/users/username", "./foo", false, true, http.StatusForbidden, true),
-			Entry("at the /dav/spaces endpoint", "/dav/spaces/provider-1$userspace!root", "/users/username", "./foo", false, true, http.StatusForbidden, true),
-			Entry("at the /dav/public-files endpoint for a file", "/dav/public-files/tokenforfile", "", "", false, true, http.StatusMethodNotAllowed, false),
-			Entry("at the /dav/public-files endpoint for a folder", "/dav/public-files/tokenforfolder", "/public/tokenforfolder", ".", false, true, http.StatusForbidden, true),
+			Entry("at the /webdav endpoint", "/webdav", "/users", "./foo", false, true, http.StatusForbidden),
+			Entry("at the /dav/files endpoint", "/dav/files/username", "/users/username", "./foo", false, true, http.StatusForbidden),
+			Entry("at the /dav/spaces endpoint", "/dav/spaces/provider-1$userspace!root", "/users/username", "./foo", false, true, http.StatusForbidden),
+			Entry("at the /dav/public-files endpoint for a file", "/dav/public-files/tokenforfile", "", "", false, true, http.StatusMethodNotAllowed),
+			Entry("at the /dav/public-files endpoint for a folder", "/dav/public-files/tokenforfolder", "/public/tokenforfolder", ".", false, true, http.StatusForbidden),
 			// when user does not have access he should get not found status
-			Entry("at the /webdav endpoint", "/webdav", "/users", "./foo", false, false, http.StatusNotFound, true),
-			Entry("at the /dav/files endpoint", "/dav/files/username", "/users/username", "./foo", false, false, http.StatusNotFound, true),
-			Entry("at the /dav/spaces endpoint", "/dav/spaces/provider-1$userspace!root", "/users/username", "./foo", false, false, http.StatusNotFound, true),
-			Entry("at the /dav/public-files endpoint for a file", "/dav/public-files/tokenforfile", "", "", false, false, http.StatusMethodNotAllowed, false),
-			Entry("at the /dav/public-files endpoint for a folder", "/dav/public-files/tokenforfolder", "/public/tokenforfolder", ".", false, false, http.StatusNotFound, true),
+			Entry("at the /webdav endpoint", "/webdav", "/users", "./foo", false, false, http.StatusNotFound),
+			Entry("at the /dav/files endpoint", "/dav/files/username", "/users/username", "./foo", false, false, http.StatusNotFound),
+			Entry("at the /dav/spaces endpoint", "/dav/spaces/provider-1$userspace!root", "/users/username", "./foo", false, false, http.StatusNotFound),
+			Entry("at the /dav/public-files endpoint for a file", "/dav/public-files/tokenforfile", "", "", false, false, http.StatusMethodNotAllowed),
+			Entry("at the /dav/public-files endpoint for a folder", "/dav/public-files/tokenforfolder", "/public/tokenforfolder", ".", false, false, http.StatusNotFound),
 
 			// With lock
 
 			// when user has access he should see forbidden status
-			Entry("at the /webdav endpoint", "/webdav", "/users", "./foo", true, true, http.StatusLocked, true),
-			Entry("at the /dav/files endpoint", "/dav/files/username", "/users/username", "./foo", true, true, http.StatusLocked, true),
-			Entry("at the /dav/spaces endpoint", "/dav/spaces/provider-1$userspace!root", "/users/username", "./foo", true, true, http.StatusLocked, true),
-			Entry("at the /dav/public-files endpoint for a file", "/dav/public-files/tokenforfile", "", "", true, true, http.StatusMethodNotAllowed, false),
-			Entry("at the /dav/public-files endpoint for a folder", "/dav/public-files/tokenforfolder", "/public/tokenforfolder", ".", true, true, http.StatusLocked, true),
+			Entry("at the /webdav endpoint", "/webdav", "/users", "./foo", true, true, http.StatusLocked),
+			Entry("at the /dav/files endpoint", "/dav/files/username", "/users/username", "./foo", true, true, http.StatusLocked),
+			Entry("at the /dav/spaces endpoint", "/dav/spaces/provider-1$userspace!root", "/users/username", "./foo", true, true, http.StatusLocked),
+			Entry("at the /dav/public-files endpoint for a file", "/dav/public-files/tokenforfile", "", "", true, true, http.StatusMethodNotAllowed),
+			Entry("at the /dav/public-files endpoint for a folder", "/dav/public-files/tokenforfolder", "/public/tokenforfolder", ".", true, true, http.StatusLocked),
 			// when user does not have access he should get not found status
-			Entry("at the /webdav endpoint", "/webdav", "/users", "./foo", true, false, http.StatusNotFound, true),
-			Entry("at the /dav/files endpoint", "/dav/files/username", "/users/username", "./foo", true, false, http.StatusNotFound, true),
-			Entry("at the /dav/spaces endpoint", "/dav/spaces/provider-1$userspace!root", "/users/username", "./foo", true, false, http.StatusNotFound, true),
-			Entry("at the /dav/public-files endpoint for a file", "/dav/public-files/tokenforfile", "", "", true, false, http.StatusMethodNotAllowed, false),
-			Entry("at the /dav/public-files endpoint for a folder", "/dav/public-files/tokenforfolder", "/public/tokenforfolder", ".", true, false, http.StatusNotFound, true),
+			Entry("at the /webdav endpoint", "/webdav", "/users", "./foo", true, false, http.StatusNotFound),
+			Entry("at the /dav/files endpoint", "/dav/files/username", "/users/username", "./foo", true, false, http.StatusNotFound),
+			Entry("at the /dav/spaces endpoint", "/dav/spaces/provider-1$userspace!root", "/users/username", "./foo", true, false, http.StatusNotFound),
+			Entry("at the /dav/public-files endpoint for a file", "/dav/public-files/tokenforfile", "", "", true, false, http.StatusMethodNotAllowed),
+			Entry("at the /dav/public-files endpoint for a folder", "/dav/public-files/tokenforfolder", "/public/tokenforfolder", ".", true, false, http.StatusNotFound),
 		)
 
 	})
@@ -452,7 +450,7 @@ var _ = Describe("ocdav", func() {
 	Context("locks are forwarded", func() {
 
 		DescribeTable("HandleDelete",
-			func(endpoint string, expectedPathPrefix string, expectedPath string, expectedStatus int, expectBody bool) {
+			func(endpoint string, expectedPathPrefix string, expectedPath string, expectedStatus int) {
 
 				client.On("ListStorageSpaces", mock.Anything, mock.MatchedBy(func(req *cs3storageprovider.ListStorageSpacesRequest) bool {
 					p := string(req.Opaque.Map["path"].Value)
@@ -483,11 +481,11 @@ var _ = Describe("ocdav", func() {
 				handler.Handler().ServeHTTP(rr, req)
 				Expect(rr).To(HaveHTTPStatus(expectedStatus))
 			},
-			Entry("at the /webdav endpoint", "/webdav", "/users", "./foo", http.StatusNoContent, true),
-			Entry("at the /dav/files endpoint", "/dav/files/username", "/users/username", "./foo", http.StatusNoContent, true),
-			Entry("at the /dav/spaces endpoint", "/dav/spaces/provider-1$userspace!root", "/users/username", "./foo", http.StatusNoContent, true),
-			Entry("at the /dav/public-files endpoint for a file", "/dav/public-files/tokenforfile", "", "", http.StatusMethodNotAllowed, false),
-			Entry("at the /dav/public-files endpoint for a folder", "/dav/public-files/tokenforfolder", "/public/tokenforfolder", ".", http.StatusNoContent, true),
+			Entry("at the /webdav endpoint", "/webdav", "/users", "./foo", http.StatusNoContent),
+			Entry("at the /dav/files endpoint", "/dav/files/username", "/users/username", "./foo", http.StatusNoContent),
+			Entry("at the /dav/spaces endpoint", "/dav/spaces/provider-1$userspace!root", "/users/username", "./foo", http.StatusNoContent),
+			Entry("at the /dav/public-files endpoint for a file", "/dav/public-files/tokenforfile", "", "", http.StatusMethodNotAllowed),
+			Entry("at the /dav/public-files endpoint for a folder", "/dav/public-files/tokenforfolder", "/public/tokenforfolder", ".", http.StatusNoContent),
 		)
 	})
 
