@@ -19,11 +19,14 @@
 package cback
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
+	"text/template"
 
+	"github.com/Masterminds/sprig"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	storage "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -44,13 +47,14 @@ func init() {
 }
 
 type config struct {
-	Prefix     string `mapstructure:"prefix"`
-	Token      string `mapstructure:"token"`
-	URL        string `mapstructure:"url"`
-	Insecure   bool   `mapstructure:"insecure"`
-	Timeout    int    `mapstructure:"timeout"`
-	GatewaySvc string `mapstructure:"gatewaysvc"`
-	StorageID  string `mapstructure:"storage_id"`
+	Prefix            string `mapstructure:"prefix"`
+	Token             string `mapstructure:"token"`
+	URL               string `mapstructure:"url"`
+	Insecure          bool   `mapstructure:"insecure"`
+	Timeout           int    `mapstructure:"timeout"`
+	GatewaySvc        string `mapstructure:"gatewaysvc"`
+	StorageID         string `mapstructure:"storage_id"`
+	TemplateToStorage string `mapstructure:"template_to_storage"`
 }
 
 type svc struct {
@@ -58,6 +62,7 @@ type svc struct {
 	router *chi.Mux
 	client *cback.Client
 	gw     gateway.GatewayAPIClient
+	tpl    *template.Template
 }
 
 // New returns a new cback http service
@@ -74,6 +79,11 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 		return nil, errors.Wrap(err, "cback: error getting gateway client")
 	}
 
+	tplStorage, err := template.New("tpl_storage").Funcs(sprig.TxtFuncMap()).Parse(c.TemplateToStorage)
+	if err != nil {
+		return nil, errors.Wrap(err, "cback: error creating template")
+	}
+
 	r := chi.NewRouter()
 	s := &svc{
 		config: c,
@@ -85,6 +95,7 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 			Insecure: c.Insecure,
 			Timeout:  c.Timeout,
 		}),
+		tpl: tplStorage,
 	}
 
 	s.initRouter()
@@ -116,8 +127,9 @@ func (s *svc) Unprotected() []string {
 func (s *svc) initRouter() {
 	s.router.Get("/restores", s.getRestores)
 	s.router.Get("/restores/{id}", s.getRestoreByID)
-
 	s.router.Post("/restores", s.createRestore)
+
+	s.router.Get("/backups", s.getBackups)
 }
 
 type restoreOut struct {
@@ -251,6 +263,50 @@ func (s *svc) getRestoreByID(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data, err := json.Marshal(convertToRestoureOut(restore))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	w.Header().Add("Content-Type", "application/json")
+	_, _ = w.Write(data)
+}
+
+func getPath(backup *cback.Backup, tpl *template.Template) (string, error) {
+	var b bytes.Buffer
+	if err := tpl.Execute(&b, backup.Source); err != nil {
+		return "", err
+	}
+	return b.String(), nil
+}
+
+func (s *svc) getBackups(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	user, ok := ctxpkg.ContextGetUser(ctx)
+	if !ok {
+		http.Error(w, "user not authenticated", http.StatusUnauthorized)
+		return
+	}
+
+	list, err := s.client.ListBackups(ctx, user.Username)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	paths := make([]string, 0, len(list))
+	for _, b := range list {
+		p, err := getPath(b, s.tpl)
+		if err != nil {
+			http.Error(w, "user not authenticated", http.StatusUnauthorized)
+			return
+		}
+		paths = append(paths, p)
+	}
+
+	data, err := json.Marshal(paths)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
