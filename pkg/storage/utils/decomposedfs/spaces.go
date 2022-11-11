@@ -527,6 +527,13 @@ func (fs *Decomposedfs) UpdateStorageSpace(ctx context.Context, req *provider.Up
 		return nil, err
 	}
 
+	// check if user has access to the drive before continuing
+	if err := fs.checkViewerPermission(ctx, node); err != nil {
+		return &provider.UpdateStorageSpaceResponse{
+			Status: &v1beta11.Status{Code: v1beta11.Code_CODE_NOT_FOUND, Message: err.Error()},
+		}, nil
+	}
+
 	metadata := make(map[string]string, 5)
 	if space.Name != "" {
 		metadata[xattrs.NameAttr] = space.Name
@@ -958,7 +965,20 @@ func (fs *Decomposedfs) checkEditorPermission(ctx context.Context, n *node.Node)
 			msg := fmt.Sprintf("not enough permissions to change attributes on %s", filepath.Join(n.ParentID, n.Name))
 			return errtypes.PermissionDenied(msg)
 		}
-		return errtypes.NotFound(filepath.Join(n.ParentID, n.Name))
+		return errtypes.NotFound(n.ID)
+	}
+	return nil
+}
+
+func (fs *Decomposedfs) checkViewerPermission(ctx context.Context, n *node.Node) error {
+	// to update the space name or short description we need the manager role
+	// current workaround: check if RemoveGrant Permission exists
+	rp, err := fs.p.AssemblePermissions(ctx, n)
+	switch {
+	case err != nil:
+		return errtypes.InternalError(err.Error())
+	case !rp.Stat:
+		return errtypes.NotFound(n.ID)
 	}
 	return nil
 }
