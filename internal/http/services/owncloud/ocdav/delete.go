@@ -20,7 +20,7 @@ package ocdav
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"net/http"
 	"path"
 
@@ -77,7 +77,7 @@ func (s *svc) handleDelete(ctx context.Context, w http.ResponseWriter, r *http.R
 		return http.StatusNoContent, nil
 	case res.Status.Code == rpc.Code_CODE_NOT_FOUND:
 		//lint:ignore ST1005 mimic the exact oc10 error message
-		return http.StatusNotFound, fmt.Errorf("Resource not found")
+		return http.StatusNotFound, errors.New("Resource not found")
 	case res.Status.Code == rpc.Code_CODE_PERMISSION_DENIED:
 		status = http.StatusForbidden
 		if lockID := utils.ReadPlainFromOpaque(res.Opaque, "lockid"); lockID != "" {
@@ -97,9 +97,9 @@ func (s *svc) handleDelete(ctx context.Context, w http.ResponseWriter, r *http.R
 			// TODO hide permission failed for users without access in every kind of request
 			// TODO should this be done in the driver?
 			//lint:ignore ST1005 mimic the exact oc10 error message
-			return http.StatusNotFound, fmt.Errorf("Resource not found")
+			return http.StatusNotFound, errors.New("Resource not found")
 		}
-		return status, fmt.Errorf("") // mimic the oc10 error messages which have an empty message in this case
+		return status, errors.New("") // mimic the oc10 error messages which have an empty message in this case
 	case res.Status.Code == rpc.Code_CODE_INTERNAL && res.Status.Message == "can't delete mount path":
 		// 405 must generate an Allow header
 		w.Header().Set("Allow", "PROPFIND, MOVE, COPY, POST, PROPPATCH, HEAD, GET, OPTIONS, LOCK, UNLOCK, REPORT, SEARCH, PUT")
@@ -122,7 +122,7 @@ func (s *svc) handleSpacesDelete(w http.ResponseWriter, r *http.Request, spaceID
 	// we get a relative reference coming from the space root
 	// so if the path is "empty" we a referencing the space
 	if ref.GetPath() == "." {
-		return http.StatusMethodNotAllowed, fmt.Errorf("deleting spaces via dav is not allowed")
+		return http.StatusMethodNotAllowed, errors.New("deleting spaces via dav is not allowed")
 	}
 
 	return s.handleDelete(ctx, w, r, &ref)
