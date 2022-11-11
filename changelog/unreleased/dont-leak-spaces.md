@@ -4,4 +4,5 @@ There were some problems with the `UpdateDrive` func in decomposedfs when it is 
 -   When calling with empty request it would leak the complete drive info
 -   When calling with non-empty request it would leak the drive name
 
-https://github.com/cs3org/reva/pull/3447
+https://github.com/cs3org/reva/pull/3449
+https://github.com/cs3org/reva/pull/3453

@@ -527,13 +527,6 @@ func (fs *Decomposedfs) UpdateStorageSpace(ctx context.Context, req *provider.Up
 		return nil, err
 	}
 
-	// check if user has access to the drive before continuing
-	if err := fs.checkViewerPermission(ctx, node); err != nil {
-		return &provider.UpdateStorageSpaceResponse{
-			Status: &v1beta11.Status{Code: v1beta11.Code_CODE_NOT_FOUND, Message: err.Error()},
-		}, nil
-	}
-
 	metadata := make(map[string]string, 5)
 	if space.Name != "" {
 		metadata[xattrs.NameAttr] = space.Name
@@ -573,36 +566,42 @@ func (fs *Decomposedfs) UpdateStorageSpace(ctx context.Context, req *provider.Up
 	}
 
 	// TODO change the permission handling
-	// these three attributes need manager permissions
-	if space.Name != "" || mapHasKey(metadata, xattrs.SpaceDescriptionAttr) || restore {
+	switch {
+	case space.Name != "", mapHasKey(metadata, xattrs.SpaceDescriptionAttr), restore:
+		// these three attributes need manager permissions
 		err = fs.checkManagerPermission(ctx, node)
-	}
-	if err != nil {
-		if restore {
-			// a disabled space is invisible to non admins
+		if err != nil {
+			if restore {
+				// a disabled space is invisible to non admins
+				return &provider.UpdateStorageSpaceResponse{
+					Status: &v1beta11.Status{Code: v1beta11.Code_CODE_NOT_FOUND, Message: err.Error()},
+				}, nil
+			}
 			return &provider.UpdateStorageSpaceResponse{
-				Status: &v1beta11.Status{Code: v1beta11.Code_CODE_NOT_FOUND, Message: err.Error()},
+				Status: &v1beta11.Status{Code: v1beta11.Code_CODE_PERMISSION_DENIED, Message: err.Error()},
 			}, nil
 		}
-		return &provider.UpdateStorageSpaceResponse{
-			Status: &v1beta11.Status{Code: v1beta11.Code_CODE_PERMISSION_DENIED, Message: err.Error()},
-		}, nil
-	}
-	// these three attributes need editor permissions
-	if mapHasKey(metadata, xattrs.SpaceReadmeAttr) || mapHasKey(metadata, xattrs.SpaceAliasAttr) || mapHasKey(metadata, xattrs.SpaceImageAttr) {
+	case mapHasKey(metadata, xattrs.SpaceReadmeAttr), mapHasKey(metadata, xattrs.SpaceAliasAttr), mapHasKey(metadata, xattrs.SpaceImageAttr):
+		// these three attributes need editor permissions
 		err = fs.checkEditorPermission(ctx, node)
-	}
-	if err != nil {
-		return &provider.UpdateStorageSpaceResponse{
-			Status: &v1beta11.Status{Code: v1beta11.Code_CODE_PERMISSION_DENIED, Message: err.Error()},
-		}, nil
-	}
-
-	// this attribute needs a permission on the user role
-	if mapHasKey(metadata, xattrs.QuotaAttr) {
+		if err != nil {
+			return &provider.UpdateStorageSpaceResponse{
+				Status: &v1beta11.Status{Code: v1beta11.Code_CODE_PERMISSION_DENIED, Message: err.Error()},
+			}, nil
+		}
+	case mapHasKey(metadata, xattrs.QuotaAttr):
+		// this attribute needs a permission on the user role
 		if !fs.canSetSpaceQuota(ctx, spaceID) {
 			return &provider.UpdateStorageSpaceResponse{
 				Status: &v1beta11.Status{Code: v1beta11.Code_CODE_PERMISSION_DENIED, Message: errors.New("No permission to set space quota").Error()},
+			}, nil
+		}
+	default:
+		// you may land here when making an update request without changes
+		// check if user has access to the drive before continuing
+		if err := fs.checkViewerPermission(ctx, node); err != nil {
+			return &provider.UpdateStorageSpaceResponse{
+				Status: &v1beta11.Status{Code: v1beta11.Code_CODE_NOT_FOUND},
 			}, nil
 		}
 	}
