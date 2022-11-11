@@ -20,6 +20,7 @@ package ocdav
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"path"
@@ -117,6 +118,11 @@ func (s *svc) handleMkcol(ctx context.Context, w http.ResponseWriter, r *http.Re
 	case res.Status.Code == rpc.Code_CODE_OK:
 		w.WriteHeader(http.StatusCreated)
 		return 0, nil
+	case res.Status.Code == rpc.Code_CODE_NOT_FOUND:
+		// This should never happen because if the parent collection does not exist we should
+		// get a Code_CODE_FAILED_PRECONDITION. We play stupid and return what the response gave us
+		//lint:ignore ST1005 mimic the exact oc10 error message
+		return http.StatusNotFound, errors.New("Resource not found")
 	case res.Status.Code == rpc.Code_CODE_PERMISSION_DENIED:
 		// check if user has access to parent
 		sRes, err := s.gwClient.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{
@@ -130,9 +136,10 @@ func (s *svc) handleMkcol(ctx context.Context, w http.ResponseWriter, r *http.Re
 			// return not found error so we do not leak existence of a file
 			// TODO hide permission failed for users without access in every kind of request
 			// TODO should this be done in the driver?
-			return http.StatusNotFound, fmt.Errorf("Resource not found")
+			//lint:ignore ST1005 mimic the exact oc10 error message
+			return http.StatusNotFound, errors.New("Resource not found")
 		}
-		return http.StatusForbidden, fmt.Errorf(sRes.Status.Message)
+		return http.StatusForbidden, errors.New(sRes.Status.Message)
 	case res.Status.Code == rpc.Code_CODE_ABORTED:
 		return http.StatusPreconditionFailed, fmt.Errorf(res.Status.Message)
 	case res.Status.Code == rpc.Code_CODE_FAILED_PRECONDITION:
@@ -144,7 +151,8 @@ func (s *svc) handleMkcol(ctx context.Context, w http.ResponseWriter, r *http.Re
 	case res.Status.Code == rpc.Code_CODE_ALREADY_EXISTS:
 		// https://www.rfc-editor.org/rfc/rfc4918#section-9.3.1:
 		// 405 (Method Not Allowed) - MKCOL can only be executed on an unmapped URL.
-		return http.StatusMethodNotAllowed, fmt.Errorf("The resource you tried to create already exists")
+		//lint:ignore ST1005 mimic the exact oc10 error message
+		return http.StatusMethodNotAllowed, errors.New("The resource you tried to create already exists")
 	}
 	return rstatus.HTTPStatusFromCode(res.Status.Code), errtypes.NewErrtypeFromStatus(res.Status)
 }
