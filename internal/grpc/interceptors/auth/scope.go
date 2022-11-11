@@ -189,11 +189,19 @@ func checkRelativeReference(ctx context.Context, requested *provider.Reference, 
 
 	sharedResource := sRes.Info
 
-	parentID := sharedResource.ParentId
-	parentID.StorageId = sharedResource.Id.StorageId
+	// Is this a shared space
+	if sharedResource.ParentId == nil {
+		// Is the requested resource part of the shared space?
+		if requested.ResourceId.StorageId != sharedResource.Id.StorageId || requested.ResourceId.SpaceId != sharedResource.Id.SpaceId {
+			return errtypes.PermissionDenied("access forbidden via public link")
+		}
+	} else {
+		parentID := sharedResource.ParentId
+		parentID.StorageId = sharedResource.Id.StorageId
 
-	if !utils.ResourceIDEqual(parentID, requested.ResourceId) && utils.MakeRelativePath(sharedResource.Path) != requested.Path {
-		return errtypes.PermissionDenied("access not allowed for via public share")
+		if !utils.ResourceIDEqual(parentID, requested.ResourceId) && utils.MakeRelativePath(sharedResource.Path) != requested.Path {
+			return errtypes.PermissionDenied("access forbidden via public link")
+		}
 	}
 
 	key := storagespace.FormatResourceID(*sharedResourceID) + scopeDelimiter + getRefKey(requested)
