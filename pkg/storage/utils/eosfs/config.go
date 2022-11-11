@@ -144,6 +144,9 @@ type Config struct {
 	// revisions-related operations.
 	ImpersonateOwnerforRevisions bool `mapstructure:"impersonate_owner_for_revisions"`
 
+	// Whether to enable the post create home hook
+	EnablePostCreateHomeHook bool `mapstructure:"enable_post_create_home_hook"`
+
 	// HTTP connections to EOS: max number of idle conns
 	MaxIdleConns int `mapstructure:"max_idle_conns"`
 
@@ -168,4 +171,7 @@ type Config struct {
 	// TokenExpiry stores in seconds the time after which generated tokens will expire
 	// Default is 3600
 	TokenExpiry int
+
+	// Path of the script to run after an user home folder has been created
+	OnPostCreateHomeHook string `mapstructure:"on_post_create_home_hook"`
 }

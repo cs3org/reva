@@ -373,9 +373,9 @@ func (s *svc) handleOpen(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	viewMode := getViewMode(statRes.Info, r.Form.Get("view_mode"))
+	viewMode := resolveViewMode(statRes.Info, r.Form.Get("view_mode"))
 	if viewMode == gateway.OpenInAppRequest_VIEW_MODE_INVALID {
-		writeError(w, r, appErrorInvalidParameter, "invalid view mode", err)
+		writeError(w, r, appErrorUnauthenticated, "permission denied when accessing the file", err)
 		return
 	}
 
@@ -436,7 +436,7 @@ func filterAppsByUserAgent(mimeTypes []*appregistry.MimeTypeInfo, userAgent stri
 	return res
 }
 
-func getViewMode(res *provider.ResourceInfo, vm string) gateway.OpenInAppRequest_ViewMode {
+func resolveViewMode(res *provider.ResourceInfo, vm string) gateway.OpenInAppRequest_ViewMode {
 	if vm != "" {
 		return utils.GetViewMode(vm)
 	}
@@ -451,6 +451,7 @@ func getViewMode(res *provider.ResourceInfo, vm string) gateway.OpenInAppRequest
 	case canView:
 		viewMode = gateway.OpenInAppRequest_VIEW_MODE_READ_ONLY
 	default:
+		// no permissions, will return access denied
 		viewMode = gateway.OpenInAppRequest_VIEW_MODE_INVALID
 	}
 	return viewMode

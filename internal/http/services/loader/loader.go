@@ -26,6 +26,7 @@ import (
 	_ "github.com/cs3org/reva/internal/http/services/datagateway"
 	_ "github.com/cs3org/reva/internal/http/services/dataprovider"
 	_ "github.com/cs3org/reva/internal/http/services/helloworld"
+	_ "github.com/cs3org/reva/internal/http/services/mailer"
 	_ "github.com/cs3org/reva/internal/http/services/mentix"
 	_ "github.com/cs3org/reva/internal/http/services/meshdirectory"
 	_ "github.com/cs3org/reva/internal/http/services/metrics"

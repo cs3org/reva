@@ -474,31 +474,13 @@ func (s *svc) createOCMReference(ctx context.Context, share *ocm.Share) (*rpc.St
 	}
 
 	var refPath, targetURI string
-	if share.ShareType == ocm.Share_SHARE_TYPE_TRANSFER {
-		createTransferDir, err := s.CreateContainer(ctx, &provider.CreateContainerRequest{
-			Ref: &provider.Reference{
-				Path: path.Join(homeRes.Path, s.c.DataTransfersFolder),
-			},
-		})
-		if err != nil {
-			return status.NewInternal(ctx, err, "error creating transfers directory"), nil
-		}
-		if createTransferDir.Status.Code != rpc.Code_CODE_OK && createTransferDir.Status.Code != rpc.Code_CODE_ALREADY_EXISTS {
-			err := status.NewErrorFromCode(createTransferDir.Status.GetCode(), "gateway")
-			return status.NewInternal(ctx, err, "error creating transfers directory"), nil
-		}
-
-		refPath = path.Join(homeRes.Path, s.c.DataTransfersFolder, path.Base(share.Name))
-		targetURI = fmt.Sprintf("datatx://%s@%s?name=%s", token, share.Creator.Idp, share.Name)
-	} else {
-		// reference path is the home path + some name on the corresponding
-		// mesh provider (/home/MyShares/x)
-		// It is the responsibility of the gateway to resolve these references and merge the response back
-		// from the main request.
-		refPath = path.Join(homeRes.Path, s.c.ShareFolder, path.Base(share.Name))
-		// webdav is the scheme, token@host the opaque part and the share name the query of the URL.
-		targetURI = fmt.Sprintf("webdav://%s@%s?name=%s", token, share.Creator.Idp, share.Name)
-	}
+	// reference path is the home path + some name on the corresponding
+	// mesh provider (/home/MyShares/x)
+	// It is the responsibility of the gateway to resolve these references and merge the response back
+	// from the main request.
+	refPath = path.Join(homeRes.Path, s.c.ShareFolder, path.Base(share.Name))
+	// webdav is the scheme, token@host the opaque part and the share name the query of the URL.
+	targetURI = fmt.Sprintf("webdav://%s@%s?name=%s", token, share.Creator.Idp, share.Name)
 
 	log.Info().Msg("mount path will be:" + refPath)
 	createRefReq := &provider.CreateReferenceRequest{

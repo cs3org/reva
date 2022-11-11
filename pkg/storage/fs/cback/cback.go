@@ -428,7 +428,7 @@ func (f *cbackfs) GetHome(ctx context.Context) (string, error) {
 	return "", errtypes.NotSupported("Operation Not Permitted")
 }
 
-func (f *cbackfs) CreateHome(ctx context.Context) (err error) {
+func (f *cbackfs) CreateHome(ctx context.Context) error {
 	return errtypes.NotSupported("Operation Not Permitted")
 }
 
@@ -436,71 +436,71 @@ func (f *cbackfs) CreateDir(ctx context.Context, ref *provider.Reference) error 
 	return errtypes.NotSupported("Operation Not Permitted")
 }
 
-func (f *cbackfs) TouchFile(ctx context.Context, ref *provider.Reference) (err error) {
+func (f *cbackfs) TouchFile(ctx context.Context, ref *provider.Reference) error {
 	return errtypes.NotSupported("Operation Not Permitted")
 }
 
-func (f *cbackfs) Delete(ctx context.Context, ref *provider.Reference) (err error) {
+func (f *cbackfs) Delete(ctx context.Context, ref *provider.Reference) error {
 	return errtypes.NotSupported("Operation Not Permitted")
 }
 
-func (f *cbackfs) Move(ctx context.Context, oldRef, newRef *provider.Reference) (err error) {
+func (f *cbackfs) Move(ctx context.Context, oldRef, newRef *provider.Reference) error {
 	return errtypes.NotSupported("Operation Not Permitted")
 }
 
-func (f *cbackfs) ListRevisions(ctx context.Context, ref *provider.Reference) (fvs []*provider.FileVersion, err error) {
+func (f *cbackfs) ListRevisions(ctx context.Context, ref *provider.Reference) ([]*provider.FileVersion, error) {
 	return nil, errtypes.NotSupported("Operation Not Permitted")
 }
 
-func (f *cbackfs) DownloadRevision(ctx context.Context, ref *provider.Reference, key string) (file io.ReadCloser, err error) {
+func (f *cbackfs) DownloadRevision(ctx context.Context, ref *provider.Reference, key string) (io.ReadCloser, error) {
 	return nil, errtypes.NotSupported("Operation Not Permitted")
 }
 
-func (f *cbackfs) RestoreRevision(ctx context.Context, ref *provider.Reference, key string) (err error) {
+func (f *cbackfs) RestoreRevision(ctx context.Context, ref *provider.Reference, key string) error {
 	return errtypes.NotSupported("Operation Not Permitted")
 }
 
-func (f *cbackfs) GetPathByID(ctx context.Context, id *provider.ResourceId) (str string, err error) {
+func (f *cbackfs) GetPathByID(ctx context.Context, id *provider.ResourceId) (string, error) {
 	return "", errtypes.NotSupported("Operation Not Permitted")
 }
 
-func (f *cbackfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) (err error) {
+func (f *cbackfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
 	return errtypes.NotSupported("Operation Not Permitted")
 }
 
-func (f *cbackfs) RemoveGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) (err error) {
+func (f *cbackfs) RemoveGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
 	return errtypes.NotSupported("Operation Not Permitted")
 }
 
-func (f *cbackfs) UpdateGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) (err error) {
+func (f *cbackfs) UpdateGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
 	return errtypes.NotSupported("Operation Not Permitted")
 }
 
-func (f *cbackfs) DenyGrant(ctx context.Context, ref *provider.Reference, g *provider.Grantee) (err error) {
+func (f *cbackfs) DenyGrant(ctx context.Context, ref *provider.Reference, g *provider.Grantee) error {
 	return errtypes.NotSupported("Operation Not Permitted")
 }
 
-func (f *cbackfs) ListGrants(ctx context.Context, ref *provider.Reference) (glist []*provider.Grant, err error) {
+func (f *cbackfs) ListGrants(ctx context.Context, ref *provider.Reference) ([]*provider.Grant, error) {
 	return nil, errtypes.NotSupported("Operation Not Permitted")
 }
 
-func (f *cbackfs) GetQuota(ctx context.Context, ref *provider.Reference) (total uint64, used uint64, err error) {
+func (f *cbackfs) GetQuota(ctx context.Context, ref *provider.Reference) (uint64, uint64, error) {
 	return 0, 0, errtypes.NotSupported("Operation Not Permitted")
 }
 
-func (f *cbackfs) CreateReference(ctx context.Context, path string, targetURI *url.URL) (err error) {
+func (f *cbackfs) CreateReference(ctx context.Context, path string, targetURI *url.URL) error {
 	return errtypes.NotSupported("Operation Not Permitted")
 }
 
-func (f *cbackfs) Shutdown(ctx context.Context) (err error) {
+func (f *cbackfs) Shutdown(ctx context.Context) error {
 	return errtypes.NotSupported("Operation Not Permitted")
 }
 
-func (f *cbackfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Reference, md *provider.ArbitraryMetadata) (err error) {
+func (f *cbackfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Reference, md *provider.ArbitraryMetadata) error {
 	return errtypes.NotSupported("Operation Not Permitted")
 }
 
-func (f *cbackfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Reference, keys []string) (err error) {
+func (f *cbackfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Reference, keys []string) error {
 	return errtypes.NotSupported("Operation Not Permitted")
 }
 
@@ -508,7 +508,7 @@ func (f *cbackfs) EmptyRecycle(ctx context.Context) error {
 	return errtypes.NotSupported("Operation Not Permitted")
 }
 
-func (f *cbackfs) CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (r *provider.CreateStorageSpaceResponse, err error) {
+func (f *cbackfs) CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error) {
 	return nil, errtypes.NotSupported("Operation Not Permitted")
 }
 
@@ -540,7 +540,7 @@ func (f *cbackfs) GetLock(ctx context.Context, ref *provider.Reference) (*provid
 	return nil, errtypes.NotSupported("Operation Not Permitted")
 }
 
-func (f *cbackfs) RefreshLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
+func (fs *cbackfs) RefreshLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock, existingLockID string) error {
 	return errtypes.NotSupported("Operation Not Permitted")
 }
 
@@ -550,10 +550,8 @@ func (f *cbackfs) Unlock(ctx context.Context, ref *provider.Reference, lock *pro
 
 func (f *cbackfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser) error {
 	return errtypes.NotSupported("Operation Not Permitted")
-
 }
 
 func (f *cbackfs) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64, metadata map[string]string) (map[string]string, error) {
 	return nil, errtypes.NotSupported("Operation Not Permitted")
-
 }
