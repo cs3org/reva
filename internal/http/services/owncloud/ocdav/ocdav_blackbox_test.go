@@ -176,6 +176,7 @@ var _ = Describe("ocdav", func() {
 			Entry("MOVE", "MOVE", "/webdav/source"),
 			Entry("COPY", "COPY", "/webdav/source"),
 			Entry("DELETE", "DELETE", "/webdav/source"),
+			PEntry("MKCOL", "MKCOL", "/webdav/source"),
 		)
 
 		DescribeTable("check naming rules",
