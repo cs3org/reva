@@ -19,6 +19,7 @@ package ocdav_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -54,10 +55,18 @@ var _ = Describe("ocdav", func() {
 
 		userspace *cs3storageprovider.StorageSpace
 		user      *cs3user.User
+
+		dataSvr *httptest.Server
+
+		basePath string
 	)
 
 	BeforeEach(func() {
 		user = &cs3user.User{Id: &cs3user.UserId{OpaqueId: "username"}, Username: "username"}
+
+		dataSvr = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusCreated)
+		}))
 
 		ctx = ctxpkg.ContextSetUser(context.Background(), user)
 		client = &mocks.GatewayAPIClient{}
@@ -81,6 +90,10 @@ var _ = Describe("ocdav", func() {
 			Id:   &cs3storageprovider.StorageSpaceId{OpaqueId: storagespace.FormatResourceID(cs3storageprovider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "root"})},
 			Root: &cs3storageprovider.ResourceId{StorageId: "provider-1", SpaceId: "userspace", OpaqueId: "root"},
 			Name: "username",
+			RootInfo: &cs3storageprovider.ResourceInfo{
+				Name: "username",
+				Path: "/users/username",
+			},
 		}
 
 		client.On("GetUser", mock.Anything, mock.Anything).Return(&cs3user.GetUserResponse{
@@ -121,12 +134,382 @@ var _ = Describe("ocdav", func() {
 			},
 		}, nil)
 	})
+	AfterEach(func() {
+		dataSvr.Close()
+	})
 
 	Describe("NewHandler", func() {
 		It("returns a handler", func() {
 			Expect(handler).ToNot(BeNil())
 		})
 	})
+
+	// TODO for every endpoint test the different WebDAV Methods
+
+	// basic metadata
+	// PROPFIND
+	// MKCOL
+	// DELETE
+
+	// basic data
+	// PUT
+	// GET
+	// HEAD
+
+	// move & copy
+	// MOVE
+	// COPY
+
+	// additional methods
+	// PROPPATCH
+	// LOCK
+	// UNLOCK
+	// REPORT
+	// POST (Tus)
+	// OPTIONS?
+
+	Context("at the very legacy /webdav endpoint", func() {
+
+		BeforeEach(func() {
+			// set the webdav endpoint to test
+			basePath = "/webdav"
+
+			// path based requests at the /webdav endpoint first look up the storage space
+			client.On("ListStorageSpaces", mock.Anything, mock.MatchedBy(func(req *cs3storageprovider.ListStorageSpacesRequest) bool {
+				p := string(req.Opaque.Map["path"].Value)
+				return p == "/" || strings.HasPrefix(p, "/users")
+			})).Return(&cs3storageprovider.ListStorageSpacesResponse{
+				Status:        status.NewOK(ctx),
+				StorageSpaces: []*cs3storageprovider.StorageSpace{userspace},
+			}, nil)
+		})
+
+		Describe("PROPFIND", func() {
+
+			var rr *httptest.ResponseRecorder
+			var req *http.Request
+			var err error
+
+			BeforeEach(func() {
+				// setup the request
+				rr = httptest.NewRecorder()
+				req, err = http.NewRequest("PROPFIND", basePath, strings.NewReader(""))
+				Expect(err).ToNot(HaveOccurred())
+				req = req.WithContext(ctx)
+
+			})
+			When("the gateway returns a file list", func() {
+				It("returns a multistatus with the file info", func() {
+
+					client.On("Stat", mock.Anything, mock.MatchedBy(func(req *cs3storageprovider.StatRequest) bool {
+						return req.Ref.Path == "/users/username"
+					})).Return(&cs3storageprovider.StatResponse{
+						Status: status.NewOK(ctx),
+						Info:   userspace.RootInfo,
+					}, nil)
+
+					handler.Handler().ServeHTTP(rr, req)
+					Expect(rr).To(HaveHTTPStatus(http.StatusMultiStatus))
+					Expect(rr).To(HaveHTTPBody(Not(BeEmpty())), "Body must not be empty")
+					// TODO test listing more thoroughly
+				})
+
+			})
+
+			When("the gateway returns not found", func() {
+				It("returns a not found status", func() {
+
+					client.On("Stat", mock.Anything, mock.MatchedBy(func(req *cs3storageprovider.StatRequest) bool {
+						return req.Ref.Path == "/users/username"
+					})).Return(&cs3storageprovider.StatResponse{
+						Status: status.NewNotFound(ctx, "resource not found"),
+					}, nil)
+
+					handler.Handler().ServeHTTP(rr, req)
+					Expect(rr).To(HaveHTTPStatus(http.StatusMultiStatus))
+					Expect(rr).To(HaveHTTPBody("<d:multistatus xmlns:s=\"http://sabredav.org/ns\" xmlns:d=\"DAV:\" xmlns:oc=\"http://owncloud.org/ns\"><d:response><d:href>/webdav</d:href><d:propstat><d:prop><oc:name>username</oc:name><d:resourcetype></d:resourcetype><d:getcontentlength>0</d:getcontentlength><oc:favorite>0</oc:favorite></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat><d:propstat><d:prop><oc:file-parent></oc:file-parent></d:prop><d:status>HTTP/1.1 404 Not Found</d:status></d:propstat></d:response></d:multistatus>"), "Body must not be empty")
+					// TODO test listing more thoroughly
+
+				})
+			})
+		})
+
+		Describe("MKCOL", func() {
+
+			var rr *httptest.ResponseRecorder
+			var req *http.Request
+			var err error
+
+			BeforeEach(func() {
+				// setup the request
+				rr = httptest.NewRecorder()
+				req, err = http.NewRequest("MKCOL", basePath+"/newfolder", strings.NewReader(""))
+				Expect(err).ToNot(HaveOccurred())
+				req = req.WithContext(ctx)
+
+			})
+
+			When("the gateway returns OK", func() {
+				It("returns a created status", func() {
+
+					// MKCOL needs to check if the resource already exists to return the correct status
+					client.On("Stat", mock.Anything, mock.MatchedBy(func(req *cs3storageprovider.StatRequest) bool {
+						return req.Ref.Path == "/users/username/newfolder"
+					})).Return(&cs3storageprovider.StatResponse{
+						Status: status.NewNotFound(ctx, "not found"),
+					}, nil)
+
+					client.On("CreateContainer", mock.Anything, mock.MatchedBy(func(req *cs3storageprovider.CreateContainerRequest) bool {
+						return utils.ResourceEqual(req.Ref, &cs3storageprovider.Reference{
+							ResourceId: userspace.Root,
+							Path:       "./newfolder",
+						})
+					})).Return(&cs3storageprovider.CreateContainerResponse{
+						Status: status.NewOK(ctx),
+					}, nil)
+
+					handler.Handler().ServeHTTP(rr, req)
+					Expect(rr).To(HaveHTTPStatus(http.StatusCreated))
+					Expect(rr).To(HaveHTTPBody(BeEmpty()), "Body must be empty")
+					// TODO expect fileid and etag header?
+				})
+
+			})
+
+			When("the parent does not exist", func() {
+				It("returns a conflict status", func() {
+
+					// MKCOL needs to check if the resource already exists to return the correct status
+					client.On("Stat", mock.Anything, mock.MatchedBy(func(req *cs3storageprovider.StatRequest) bool {
+						return req.Ref.Path == "/users/username/newfolder"
+					})).Return(&cs3storageprovider.StatResponse{
+						Status: status.NewAborted(ctx, errors.New("parent does not exist"), ""),
+					}, nil)
+
+					handler.Handler().ServeHTTP(rr, req)
+					Expect(rr).To(HaveHTTPStatus(http.StatusPreconditionFailed))
+					// TODO what message does oc10 return? "error: aborted:" is probably not it
+					Expect(rr).To(HaveHTTPBody("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<d:error xmlns:d=\"DAV\" xmlns:s=\"http://sabredav.org/ns\"><s:exception>Sabre\\DAV\\Exception\\PreconditionFailed</s:exception><s:message>error: aborted: </s:message></d:error>"), "Body must have a precondition failed sabredav exception")
+
+				})
+			})
+
+			When("the resource already exists", func() {
+				It("returns a method not allowed status", func() {
+
+					// MKCOL needs to check if the resource already exists to return the correct status
+					client.On("Stat", mock.Anything, mock.MatchedBy(func(req *cs3storageprovider.StatRequest) bool {
+						return req.Ref.Path == "/users/username/newfolder"
+					})).Return(&cs3storageprovider.StatResponse{
+						Status: status.NewOK(ctx),
+						Info:   &cs3storageprovider.ResourceInfo{},
+					}, nil)
+
+					handler.Handler().ServeHTTP(rr, req)
+					Expect(rr).To(HaveHTTPStatus(http.StatusMethodNotAllowed))
+					Expect(rr).To(HaveHTTPBody("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<d:error xmlns:d=\"DAV\" xmlns:s=\"http://sabredav.org/ns\"><s:exception>Sabre\\DAV\\Exception\\MethodNotAllowed</s:exception><s:message>The resource you tried to create already exists</s:message></d:error>"), "Body must have a method not allowed sabredav exception")
+
+				})
+			})
+		})
+
+		Describe("DELETE", func() {
+
+			var rr *httptest.ResponseRecorder
+			var req *http.Request
+			var err error
+
+			BeforeEach(func() {
+				// setup the request
+				rr = httptest.NewRecorder()
+				req, err = http.NewRequest("DELETE", basePath+"/existingfolder", strings.NewReader(""))
+				Expect(err).ToNot(HaveOccurred())
+				req = req.WithContext(ctx)
+
+			})
+
+			When("the gateway returns OK", func() {
+				It("returns a created status", func() {
+
+					client.On("Delete", mock.Anything, mock.MatchedBy(func(req *cs3storageprovider.DeleteRequest) bool {
+						return utils.ResourceEqual(req.Ref, &cs3storageprovider.Reference{
+							ResourceId: userspace.Root,
+							Path:       "./existingfolder",
+						})
+					})).Return(&cs3storageprovider.DeleteResponse{
+						Status: status.NewOK(ctx),
+					}, nil)
+
+					handler.Handler().ServeHTTP(rr, req)
+					Expect(rr).To(HaveHTTPStatus(http.StatusNoContent))
+					Expect(rr).To(HaveHTTPBody(BeEmpty()), "Body must be empty")
+					// TODO expect fileid and etag header?
+				})
+
+			})
+
+			When("the gateway returns not found", func() {
+				It("returns a method not found status", func() {
+
+					client.On("Delete", mock.Anything, mock.MatchedBy(func(req *cs3storageprovider.DeleteRequest) bool {
+						return utils.ResourceEqual(req.Ref, &cs3storageprovider.Reference{
+							ResourceId: userspace.Root,
+							Path:       "./existingfolder",
+						})
+					})).Return(&cs3storageprovider.DeleteResponse{
+						Status: status.NewNotFound(ctx, "not found"),
+					}, nil)
+
+					handler.Handler().ServeHTTP(rr, req)
+					Expect(rr).To(HaveHTTPStatus(http.StatusNotFound))
+					Expect(rr).To(HaveHTTPBody("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<d:error xmlns:d=\"DAV\" xmlns:s=\"http://sabredav.org/ns\"><s:exception>Sabre\\DAV\\Exception\\NotFound</s:exception><s:message>Resource not found</s:message></d:error>"), "Body must have a not found sabredav exception")
+
+				})
+			})
+		})
+
+		Describe("PUT", func() {
+
+			var rr *httptest.ResponseRecorder
+			var req *http.Request
+			var err error
+
+			BeforeEach(func() {
+				// setup the request
+				rr = httptest.NewRecorder()
+				req, err = http.NewRequest("PUT", basePath+"/newfile", strings.NewReader("new content"))
+				Expect(err).ToNot(HaveOccurred())
+				req.Header.Set(net.HeaderContentLength, "10")
+				req = req.WithContext(ctx)
+
+			})
+
+			When("the gateway returns OK", func() {
+				It("returns a created status", func() {
+
+					client.On("InitiateFileUpload", mock.Anything, mock.MatchedBy(func(req *cs3storageprovider.InitiateFileUploadRequest) bool {
+						return utils.ResourceEqual(req.Ref, &cs3storageprovider.Reference{
+							ResourceId: userspace.Root,
+							Path:       "./newfile",
+						})
+					})).Return(&cs3gateway.InitiateFileUploadResponse{
+						Status: status.NewOK(ctx),
+						Protocols: []*cs3gateway.FileUploadProtocol{
+							{
+								Protocol:       "simple",
+								UploadEndpoint: dataSvr.URL,
+							},
+						},
+					}, nil)
+
+					handler.Handler().ServeHTTP(rr, req)
+					Expect(rr).To(HaveHTTPStatus(http.StatusCreated))
+					Expect(rr).To(HaveHTTPBody(BeEmpty()), "Body must be empty")
+					// TODO expect fileid and etag header?
+				})
+			})
+
+			When("the gateway returns aborted", func() {
+				It("returns a precondition failed status", func() {
+
+					client.On("InitiateFileUpload", mock.Anything, mock.MatchedBy(func(req *cs3storageprovider.InitiateFileUploadRequest) bool {
+						return utils.ResourceEqual(req.Ref, &cs3storageprovider.Reference{
+							ResourceId: userspace.Root,
+							Path:       "./newfile",
+						})
+					})).Return(&cs3gateway.InitiateFileUploadResponse{
+						Status: status.NewAborted(ctx, errors.New("parent does not exist"), "parent does not exist"),
+					}, nil)
+
+					handler.Handler().ServeHTTP(rr, req)
+					Expect(rr).To(HaveHTTPStatus(http.StatusPreconditionFailed))
+					// TODO Expect(rr).To(HaveHTTPBody(BeEmpty()), "Body must be a sabredav exception")
+				})
+			})
+
+			When("the resource already exists", func() {
+				It("returns a conflict status", func() {
+
+					client.On("InitiateFileUpload", mock.Anything, mock.MatchedBy(func(req *cs3storageprovider.InitiateFileUploadRequest) bool {
+						return utils.ResourceEqual(req.Ref, &cs3storageprovider.Reference{
+							ResourceId: userspace.Root,
+							Path:       "./newfile",
+						})
+					})).Return(&cs3gateway.InitiateFileUploadResponse{
+						Status: status.NewFailedPrecondition(ctx, errors.New("precondition failed"), "precondition failed"),
+					}, nil)
+
+					handler.Handler().ServeHTTP(rr, req)
+					Expect(rr).To(HaveHTTPStatus(http.StatusConflict))
+					// TODO Expect(rr).To(HaveHTTPBody(BeEmpty()), "Body must be a sabredav exception")
+				})
+			})
+
+			When("the gateway returns not found", func() {
+				It("returns a not found", func() {
+
+					client.On("InitiateFileUpload", mock.Anything, mock.MatchedBy(func(req *cs3storageprovider.InitiateFileUploadRequest) bool {
+						return utils.ResourceEqual(req.Ref, &cs3storageprovider.Reference{
+							ResourceId: userspace.Root,
+							Path:       "./newfile",
+						})
+					})).Return(&cs3gateway.InitiateFileUploadResponse{
+						Status: status.NewNotFound(ctx, "not found"),
+					}, nil)
+
+					handler.Handler().ServeHTTP(rr, req)
+					Expect(rr).To(HaveHTTPStatus(http.StatusNotFound))
+					// TODO Expect(rr).To(HaveHTTPBody(BeEmpty()), "Body must be a sabredav exception")
+				})
+			})
+
+		})
+	})
+	Context("at the /dav/avatars endpoint", func() {
+
+		BeforeEach(func() {
+			basePath = "/dav/avatars"
+		})
+
+	})
+	Context("at the legacy /dav/files endpoint", func() {
+
+		BeforeEach(func() {
+			basePath = "/dav/files"
+		})
+
+	})
+	Context("at the /dav/meta endpoint", func() {
+
+		BeforeEach(func() {
+			basePath = "/dav/meta"
+		})
+
+	})
+	Context("at the /dav/trash-bin endpoint", func() {
+
+		BeforeEach(func() {
+			basePath = "/dav/trash-bin"
+		})
+
+	})
+	Context("at the /dav/spaces endpoint", func() {
+
+		BeforeEach(func() {
+			basePath = "/dav/spaces"
+		})
+
+	})
+	Context("at the /dav/public-files endpoint", func() {
+
+		BeforeEach(func() {
+			basePath = "/dav/public-files"
+		})
+
+	})
+
+	// TODO restructure the tests and split them up by endpoint?
+	// - that should allow reusing the set up of expected requests to the gateway
 
 	// listing spaces is a precondition for path based requests, what if listing spaces currently is broken?
 	Context("bad requests", func() {
