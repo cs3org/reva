@@ -73,15 +73,23 @@ func (s *svc) handlePathCopy(w http.ResponseWriter, r *http.Request, ns string) 
 	baseURI := r.Context().Value(net.CtxKeyBaseURI).(string)
 	dst, err := net.ParseDestination(baseURI, dh)
 	if err != nil {
-		appctx.GetLogger(ctx).Warn().Msg("HTTP COPY: failed to extract destination")
 		w.WriteHeader(http.StatusBadRequest)
+		b, err := errors.Marshal(http.StatusBadRequest, "failed to extract destination", "")
+		errors.HandleWebdavError(appctx.GetLogger(ctx), w, b, err)
 		return
 	}
 
 	for _, r := range nameRules {
-		if !r.Test(dst) {
-			appctx.GetLogger(ctx).Warn().Msgf("HTTP COPY: destination %s failed validation", dst)
+		if !r.Test(src) {
 			w.WriteHeader(http.StatusBadRequest)
+			b, err := errors.Marshal(http.StatusBadRequest, "source failed naming rules", "")
+			errors.HandleWebdavError(appctx.GetLogger(ctx), w, b, err)
+			return
+		}
+		if !r.Test(dst) {
+			w.WriteHeader(http.StatusBadRequest)
+			b, err := errors.Marshal(http.StatusBadRequest, "destination failed naming rules", "")
+			errors.HandleWebdavError(appctx.GetLogger(ctx), w, b, err)
 			return
 		}
 	}

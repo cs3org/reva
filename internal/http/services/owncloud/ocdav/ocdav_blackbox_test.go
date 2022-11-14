@@ -30,6 +30,7 @@ import (
 	cs3storageprovider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav"
+	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/net"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/status"
 	"github.com/cs3org/reva/v2/pkg/rhttp/global"
@@ -159,6 +160,66 @@ var _ = Describe("ocdav", func() {
 			handler.Handler().ServeHTTP(rr, req)
 			Expect(rr).To(HaveHTTPStatus(http.StatusBadRequest))
 		})
+
+		DescribeTable("check naming rules",
+			func(method string, path string, expectedStatus int) {
+				rr := httptest.NewRecorder()
+				req, err := http.NewRequest(method, "", strings.NewReader(""))
+				Expect(err).ToNot(HaveOccurred())
+				req.URL.Path = path // we need to overwrite the path here to send invalid chars
+
+				if method == "COPY" || method == "MOVE" {
+					req.Header.Set(net.HeaderDestination, path+".bak")
+				}
+
+				handler.Handler().ServeHTTP(rr, req)
+				Expect(rr).To(HaveHTTPStatus(expectedStatus))
+
+				Expect(rr).To(HaveHTTPBody(HavePrefix("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<d:error xmlns:d=\"DAV\" xmlns:s=\"http://sabredav.org/ns\"><s:exception>Sabre\\DAV\\Exception\\BadRequest</s:exception><s:message>")), "Body must have a sabredav exception")
+			},
+			Entry("MKCOL no \\f", "MKCOL", "/webdav/forbidden \f char", http.StatusBadRequest),
+			Entry("MKCOL no \\r", "MKCOL", "/webdav/forbidden \r char", http.StatusBadRequest),
+			Entry("MKCOL no \\n", "MKCOL", "/webdav/forbidden \n char", http.StatusBadRequest),
+			Entry("MKCOL no \\\\", "MKCOL", "/webdav/forbidden \\ char", http.StatusBadRequest),
+
+			// COPY source path
+			Entry("COPY no \\f", "COPY", "/webdav/forbidden \f char", http.StatusBadRequest),
+			Entry("COPY no \\r", "COPY", "/webdav/forbidden \r char", http.StatusBadRequest),
+			Entry("COPY no \\n", "COPY", "/webdav/forbidden \n char", http.StatusBadRequest),
+			Entry("COPY no \\\\", "COPY", "/webdav/forbidden \\ char", http.StatusBadRequest),
+
+			// MOVE source path
+			Entry("MOVE no \\f", "MOVE", "/webdav/forbidden \f char", http.StatusBadRequest),
+			Entry("MOVE no \\r", "MOVE", "/webdav/forbidden \r char", http.StatusBadRequest),
+			Entry("MOVE no \\n", "MOVE", "/webdav/forbidden \n char", http.StatusBadRequest),
+			Entry("MOVE no \\\\", "MOVE", "/webdav/forbidden \\ char", http.StatusBadRequest),
+		)
+
+		DescribeTable("check naming rules",
+			func(method string, path string, expectedStatus int) {
+				rr := httptest.NewRecorder()
+				req, err := http.NewRequest(method, "/webdav/safe path", strings.NewReader(""))
+				Expect(err).ToNot(HaveOccurred())
+
+				req.Header.Set(net.HeaderDestination, path+".bak")
+
+				handler.Handler().ServeHTTP(rr, req)
+				Expect(rr).To(HaveHTTPStatus(expectedStatus))
+
+				Expect(rr).To(HaveHTTPBody(HavePrefix("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<d:error xmlns:d=\"DAV\" xmlns:s=\"http://sabredav.org/ns\"><s:exception>Sabre\\DAV\\Exception\\BadRequest</s:exception><s:message>")), "Body must have a sabredav exception")
+			},
+			// COPY
+			Entry("COPY no \\f", "COPY", "/webdav/forbidden \f char", http.StatusBadRequest),
+			Entry("COPY no \\r", "COPY", "/webdav/forbidden \r char", http.StatusBadRequest),
+			Entry("COPY no \\n", "COPY", "/webdav/forbidden \n char", http.StatusBadRequest),
+			Entry("COPY no \\\\", "COPY", "/webdav/forbidden \\ char", http.StatusBadRequest),
+
+			// MOVE
+			Entry("MOVE no \\f", "MOVE", "/webdav/forbidden \f char", http.StatusBadRequest),
+			Entry("MOVE no \\r", "MOVE", "/webdav/forbidden \r char", http.StatusBadRequest),
+			Entry("MOVE no \\n", "MOVE", "/webdav/forbidden \n char", http.StatusBadRequest),
+			Entry("MOVE no \\\\", "MOVE", "/webdav/forbidden \\ char", http.StatusBadRequest),
+		)
 
 	})
 

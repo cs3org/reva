@@ -53,12 +53,22 @@ func (s *svc) handlePathMove(w http.ResponseWriter, r *http.Request, ns string) 
 	dstPath, err := net.ParseDestination(baseURI, dh)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
+		b, err := errors.Marshal(http.StatusBadRequest, "failed to extract destination", "")
+		errors.HandleWebdavError(appctx.GetLogger(ctx), w, b, err)
 		return
 	}
 
 	for _, r := range nameRules {
+		if !r.Test(srcPath) {
+			w.WriteHeader(http.StatusBadRequest)
+			b, err := errors.Marshal(http.StatusBadRequest, "source failed naming rules", "")
+			errors.HandleWebdavError(appctx.GetLogger(ctx), w, b, err)
+			return
+		}
 		if !r.Test(dstPath) {
 			w.WriteHeader(http.StatusBadRequest)
+			b, err := errors.Marshal(http.StatusBadRequest, "destination naming rules", "")
+			errors.HandleWebdavError(appctx.GetLogger(ctx), w, b, err)
 			return
 		}
 	}
