@@ -9,3 +9,4 @@ https://github.com/cs3org/reva/pull/3443
 https://github.com/cs3org/reva/pull/3445
 https://github.com/cs3org/reva/pull/3447
 https://github.com/cs3org/reva/pull/3454
+https://github.com/cs3org/reva/pull/3461
