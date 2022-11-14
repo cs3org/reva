@@ -279,6 +279,9 @@ func (s *svc) executePathCopy(ctx context.Context, client gateway.GatewayAPIClie
 			return err
 		}
 
+		if fileid := httpUploadRes.Header.Get(net.HeaderOCFileID); fileid != "" {
+			w.Header().Set(net.HeaderOCFileID, fileid)
+		}
 	}
 	return nil
 }
@@ -467,6 +470,10 @@ func (s *svc) executeSpacesCopy(ctx context.Context, w http.ResponseWriter, clie
 		defer httpUploadRes.Body.Close()
 		if httpUploadRes.StatusCode != http.StatusOK {
 			return err
+		}
+
+		if fileid := httpUploadRes.Header.Get(net.HeaderOCFileID); fileid != "" {
+			w.Header().Set(net.HeaderOCFileID, fileid)
 		}
 	}
 	return nil
