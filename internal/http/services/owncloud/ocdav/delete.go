@@ -38,6 +38,10 @@ func (s *svc) handlePathDelete(w http.ResponseWriter, r *http.Request, ns string
 	ctx, span := s.tracerProvider.Tracer(tracerName).Start(ctx, "path_delete")
 	defer span.End()
 
+	if r.Body != http.NoBody {
+		return http.StatusUnsupportedMediaType, errors.New("body must be empty")
+	}
+
 	fn := path.Join(ns, r.URL.Path)
 
 	space, rpcStatus, err := spacelookup.LookUpStorageSpaceForPath(ctx, s.gwClient, fn)
@@ -112,6 +116,10 @@ func (s *svc) handleSpacesDelete(w http.ResponseWriter, r *http.Request, spaceID
 	ctx := r.Context()
 	ctx, span := s.tracerProvider.Tracer(tracerName).Start(ctx, "spaces_delete")
 	defer span.End()
+
+	if r.Body != http.NoBody {
+		return http.StatusUnsupportedMediaType, errors.New("body must be empty")
+	}
 
 	ref, err := spacelookup.MakeStorageSpaceReference(spaceID, r.URL.Path)
 	if err != nil {

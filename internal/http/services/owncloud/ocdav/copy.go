@@ -54,6 +54,13 @@ func (s *svc) handlePathCopy(w http.ResponseWriter, r *http.Request, ns string) 
 	ctx, span := s.tracerProvider.Tracer(tracerName).Start(r.Context(), "copy")
 	defer span.End()
 
+	if r.Body != http.NoBody {
+		w.WriteHeader(http.StatusUnsupportedMediaType)
+		b, err := errors.Marshal(http.StatusUnsupportedMediaType, "body must be empty", "")
+		errors.HandleWebdavError(appctx.GetLogger(ctx), w, b, err)
+		return
+	}
+
 	if s.c.EnableHTTPTpc {
 		if r.Header.Get("Source") != "" {
 			// HTTP Third-Party Copy Pull mode
@@ -297,6 +304,13 @@ func (s *svc) executePathCopy(ctx context.Context, client gateway.GatewayAPIClie
 func (s *svc) handleSpacesCopy(w http.ResponseWriter, r *http.Request, spaceID string) {
 	ctx, span := s.tracerProvider.Tracer(tracerName).Start(r.Context(), "spaces_copy")
 	defer span.End()
+
+	if r.Body != http.NoBody {
+		w.WriteHeader(http.StatusUnsupportedMediaType)
+		b, err := errors.Marshal(http.StatusUnsupportedMediaType, "body must be empty", "")
+		errors.HandleWebdavError(appctx.GetLogger(ctx), w, b, err)
+		return
+	}
 
 	dh := r.Header.Get(net.HeaderDestination)
 	baseURI := r.Context().Value(net.CtxKeyBaseURI).(string)

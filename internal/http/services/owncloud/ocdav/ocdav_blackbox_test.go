@@ -161,6 +161,23 @@ var _ = Describe("ocdav", func() {
 			Expect(rr).To(HaveHTTPStatus(http.StatusBadRequest))
 		})
 
+		DescribeTable("returns 415 when no body was expected",
+			func(method string, path string) {
+				// as per https://www.rfc-editor.org/rfc/rfc4918#section-8.4
+				rr := httptest.NewRecorder()
+				req, err := http.NewRequest(method, path, strings.NewReader("should be empty"))
+				Expect(err).ToNot(HaveOccurred())
+				req = req.WithContext(ctx)
+
+				handler.Handler().ServeHTTP(rr, req)
+				Expect(rr).To(HaveHTTPStatus(http.StatusUnsupportedMediaType))
+				Expect(rr).To(HaveHTTPBody("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<d:error xmlns:d=\"DAV\" xmlns:s=\"http://sabredav.org/ns\"><s:exception>Sabre\\DAV\\Exception\\UnsupportedMediaType</s:exception><s:message>body must be empty</s:message></d:error>"), "Body must have a sabredav exception")
+			},
+			Entry("MOVE", "MOVE", "/webdav/source"),
+			Entry("COPY", "COPY", "/webdav/source"),
+			Entry("DELETE", "DELETE", "/webdav/source"),
+		)
+
 		DescribeTable("check naming rules",
 			func(method string, path string, expectedStatus int) {
 				rr := httptest.NewRecorder()
