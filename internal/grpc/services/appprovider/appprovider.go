@@ -200,8 +200,13 @@ func (s *service) Register(ss *grpc.Server) {
 func getProvider(c *config) (app.Provider, error) {
 	if f, ok := registry.NewFuncs[c.Driver]; ok {
 		driverConf := c.Drivers[c.Driver]
-		// share the mime_types config entry to the drivers
-		driverConf["mime_types"] = c.MimeTypes
+		if c.MimeTypes != nil {
+			// share the mime_types config entry to the drivers
+			if driverConf == nil {
+				driverConf = make(map[string]interface{})
+			}
+			driverConf["mime_types"] = c.MimeTypes
+		}
 		return f(driverConf)
 	}
 	return nil, errtypes.NotFound("driver not found: " + c.Driver)
