@@ -46,18 +46,6 @@ func Test_parseConfig(t *testing.T) {
 			wantErr: nil,
 		},
 		{
-			name: "all configurations set for wopi driver",
-			m: map[string]interface{}{
-				"Driver":  "wopi",
-				"Drivers": map[string]map[string]interface{}{"wopi": {"iop_secret": "very-secret", "wopi_url": "https://my.wopi:9871"}},
-			},
-			want: &config{
-				Driver:  "wopi",
-				Drivers: map[string]map[string]interface{}{"wopi": {"iop_secret": "very-secret", "wopi_url": "https://my.wopi:9871"}},
-			},
-			wantErr: nil,
-		},
-		{
 			name: "wrong type of setting",
 			m:    map[string]interface{}{"Driver": 123, "NonExistentField": 456},
 			want: nil,
