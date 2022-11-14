@@ -68,7 +68,7 @@ func Send(ctx context.Context, requestBodyMap map[string]interface{}, pi *ocmpro
 	recipientURL := u.String()
 
 	log := appctx.GetLogger(ctx)
-	log.Error().Msgf("in OCM Send! %s %s", recipientURL, requestBody)
+	log.Info().Msgf("in OCM Send! %s %s", recipientURL, requestBody)
 
 	req, err := http.NewRequest("POST", recipientURL, strings.NewReader(string(requestBody)))
 	if err != nil {

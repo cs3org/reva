@@ -34,6 +34,7 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
+	"github.com/cs3org/reva/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/ocm/invite"
@@ -278,7 +279,14 @@ func (m *manager) AcceptInvite(ctx context.Context, invite *invitepb.InviteToken
 func (m *manager) GetAcceptedUser(ctx context.Context, remoteUserID *userpb.UserId) (*userpb.User, error) {
 
 	userKey := ctxpkg.ContextMustGetUser(ctx).GetId().GetOpaqueId()
+	log := appctx.GetLogger(ctx)
 	for _, acceptedUser := range m.model.AcceptedUsers[userKey] {
+		log.Info().Msgf("looking for '%s' at '%s' - considering '%s' at '%s'",
+			remoteUserID.OpaqueId,
+			remoteUserID.Idp,
+			acceptedUser.Id.GetOpaqueId(),
+			acceptedUser.Id.GetIdp()
+		)
 		if (acceptedUser.Id.GetOpaqueId() == remoteUserID.OpaqueId) && (remoteUserID.Idp == "" || acceptedUser.Id.GetIdp() == remoteUserID.Idp) {
 			return acceptedUser, nil
 		}
