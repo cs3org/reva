@@ -65,10 +65,6 @@ func init() {
 	registry.Register("nextcloud", New)
 }
 
-func genID() string {
-	return uuid.New().String()
-}
-
 // Manager is the Nextcloud-based implementation of the share.Manager interface
 // see https://github.com/cs3org/reva/blob/v1.13.0/pkg/ocm/share/share.go#L30-L57
 type Manager struct {
