@@ -219,7 +219,7 @@ var _ = Describe("ocdav", func() {
 					Status: status.NewNotFound(ctx, "not found"),
 				}, nil)
 
-				// the spaces endpoint omits the list storage spaces call, it directly executes the delete call
+				// the spaces endpoint omits the list storage spaces call, it directly executes the create container call
 				client.On("CreateContainer", mock.Anything, mock.MatchedBy(func(req *cs3storageprovider.CreateContainerRequest) bool {
 					return utils.ResourceEqual(req.Ref, &cs3storageprovider.Reference{
 						ResourceId: userspace.Root,
