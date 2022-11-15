@@ -107,7 +107,7 @@ type SpaceShared struct {
 	GranteeUserID  *user.UserId
 	GranteeGroupID *group.GroupId
 	Creator        *user.UserId
-	ID             *provider.ResourceId
+	ID             *provider.StorageSpaceId
 }
 
 // Unmarshal to fulfill umarshaller interface
