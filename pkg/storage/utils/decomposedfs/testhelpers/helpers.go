@@ -56,9 +56,9 @@ type TestEnv struct {
 // NewTestEnv prepares a test environment on disk
 // The storage contains some directories and a file:
 //
-//  /dir1/
-//  /dir1/file1
-//  /dir1/subdir1/
+//	/dir1/
+//	/dir1/file1
+//	/dir1/subdir1/
 func NewTestEnv() (*TestEnv, error) {
 	tmpRoot, err := helpers.TempDir("reva-unit-tests-*-root")
 	if err != nil {

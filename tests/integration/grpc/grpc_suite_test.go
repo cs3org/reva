@@ -62,15 +62,15 @@ type Revad struct {
 // Placeholders in the config files can be replaced the variables from the
 // `variables` map, e.g. the config
 //
-//   redis = "{{redis_address}}"
+//	redis = "{{redis_address}}"
 //
 // and the variables map
 //
-//   variables = map[string]string{"redis_address": "localhost:6379"}
+//	variables = map[string]string{"redis_address": "localhost:6379"}
 //
 // will result in the config
 //
-//   redis = "localhost:6379"
+//	redis = "localhost:6379"
 //
 // Special variables are created for the revad addresses, e.g. having a
 // `storage` and a `users` revad will make `storage_address` and
