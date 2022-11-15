@@ -130,6 +130,10 @@ func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error
 			if isSuccess(v) && utils.ExistsInOpaque(r.Opaque, "spacegrant") {
 				ev = SpaceShared(v, r, executantID)
 			}
+		case *provider.RemoveGrantResponse:
+			if isSuccess(v) {
+				ev = SpaceUnshared(v, req.(*provider.RemoveGrantRequest), executantID)
+			}
 		case *provider.CreateContainerResponse:
 			if isSuccess(v) {
 				ev = ContainerCreated(v, req.(*provider.CreateContainerRequest), ownerID, executantID)
