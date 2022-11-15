@@ -1,0 +1,45 @@
+name: golangci-lint
+on:
+  pull_request:
+    paths-ignore:
+      - ".github/**"
+      - "Makefile"
+      - "tools/**"
+      - "docs/**"
+      - "tests/**"
+      - ".drone.star"
+      - ".drone.env"
+      - ".fossa.yml"
+  workflow_dispatch:
+
+jobs:
+  golangci:
+    name: lint
+    runs-on: self-hosted
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3.1.0
+      - name: Setup Go environment
+        uses: actions/setup-go@v3.3.0
+        with:
+          go-version-file: go.mod
+      - name: Setup Golang caches
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+      - name: Cache golangci-lint
+        id: cache-golangci-lint
+        uses: actions/cache@v3
+        with:
+          path: $(go env GOPATH)/bin/golangci-lint
+          key: ${{ runner.os }}-golangci-lint
+      - name: Install golangci-lint
+        if: steps.cache-golangci-lint.outputs.cache-hit != 'true'
+        run: curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.50.1
+      - name: Run golangci-lint
+        run: $(go env GOPATH)/bin/golangci-lint run
