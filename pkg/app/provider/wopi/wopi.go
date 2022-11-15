@@ -24,7 +24,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
@@ -205,7 +204,7 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 	}
 	defer openRes.Body.Close()
 
-	body, err := ioutil.ReadAll(openRes.Body)
+	body, err := io.ReadAll(openRes.Body)
 	if err != nil {
 		return nil, err
 	}

@@ -63,13 +63,9 @@ func makeLogger(w http.ResponseWriter) loggingResponseWriter {
 	if _, ok := w.(http.Hijacker); ok {
 		logger = &hijackLogger{responseLogger{w: w, status: http.StatusOK}}
 	}
-	h, ok1 := logger.(http.Hijacker)
-	c, ok2 := w.(http.CloseNotifier)
-	if ok1 && ok2 {
-		return hijackCloseNotifier{logger, h, c}
-	}
-	if ok2 {
-		return &closeNotifyWriter{logger, c}
+	h, ok := logger.(http.Hijacker)
+	if ok {
+		return hijackCloseNotifier{logger, h}
 	}
 	return logger
 }
@@ -183,13 +179,7 @@ func (l *hijackLogger) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 	return conn, rw, err
 }
 
-type closeNotifyWriter struct {
-	loggingResponseWriter
-	http.CloseNotifier
-}
-
 type hijackCloseNotifier struct {
 	loggingResponseWriter
 	http.Hijacker
-	http.CloseNotifier
 }
