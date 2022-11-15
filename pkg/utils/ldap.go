@@ -22,7 +22,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
-	"io/ioutil"
+	"os"
 
 	"github.com/go-ldap/ldap/v3"
 	"github.com/pkg/errors"
@@ -46,7 +46,7 @@ func GetLDAPConnection(c *LDAPConn) (*ldap.Conn, error) {
 	tlsconfig := &tls.Config{InsecureSkipVerify: c.Insecure}
 
 	if !c.Insecure && c.CACert != "" {
-		if pemBytes, err := ioutil.ReadFile(c.CACert); err == nil {
+		if pemBytes, err := os.ReadFile(c.CACert); err == nil {
 			rpool, _ := x509.SystemCertPool()
 			rpool.AppendCertsFromPEM(pemBytes)
 			tlsconfig.RootCAs = rpool

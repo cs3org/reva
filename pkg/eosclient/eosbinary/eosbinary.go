@@ -23,7 +23,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path"
@@ -745,7 +744,7 @@ func (c *Client) Read(ctx context.Context, auth eosclient.Authorization, path st
 
 // Write writes a stream to the mgm
 func (c *Client) Write(ctx context.Context, auth eosclient.Authorization, path string, stream io.ReadCloser) error {
-	fd, err := ioutil.TempFile(c.opt.CacheDirectory, "eoswrite-")
+	fd, err := os.CreateTemp(c.opt.CacheDirectory, "eoswrite-")
 	if err != nil {
 		return err
 	}

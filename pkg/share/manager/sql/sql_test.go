@@ -21,7 +21,6 @@ package sql_test
 import (
 	"context"
 	"database/sql"
-	"io/ioutil"
 	"os"
 
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -80,10 +79,10 @@ var _ = Describe("SQL manager", func() {
 
 	BeforeEach(func() {
 		var err error
-		testDbFile, err = ioutil.TempFile("", "example")
+		testDbFile, err = os.CreateTemp("", "example")
 		Expect(err).ToNot(HaveOccurred())
 
-		dbData, err := ioutil.ReadFile("test.db")
+		dbData, err := os.ReadFile("test.db")
 		Expect(err).ToNot(HaveOccurred())
 
 		_, err = testDbFile.Write(dbData)

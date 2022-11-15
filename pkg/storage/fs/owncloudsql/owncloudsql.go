@@ -26,7 +26,7 @@ import (
 	"fmt"
 	"hash/adler32"
 	"io"
-	"io/ioutil"
+	iofs "io/fs"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -1744,12 +1744,23 @@ func (fs *owncloudsqlfs) ListRecycle(ctx context.Context, basePath, key, relativ
 	}
 
 	// list files folder
-	mds, err := ioutil.ReadDir(rp)
+	entries, err := os.ReadDir(rp)
 	if err != nil {
 		log := appctx.GetLogger(ctx)
 		log.Debug().Err(err).Str("path", rp).Msg("trash not readable")
 		// TODO jfd only ignore not found errors
 		return []*provider.RecycleItem{}, nil
+	}
+	mds := make([]iofs.FileInfo, 0, len(entries))
+	for _, entry := range entries {
+		info, err := entry.Info()
+		if err != nil {
+			log := appctx.GetLogger(ctx)
+			log.Debug().Err(err).Str("path", rp).Msg("trash not readable")
+			// TODO jfd only ignore not found errors
+			return []*provider.RecycleItem{}, nil
+		}
+		mds = append(mds, info)
 	}
 	// TODO (jfd) limit and offset
 	items := []*provider.RecycleItem{}

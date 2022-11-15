@@ -23,7 +23,7 @@ import (
 	"database/sql"
 	"fmt"
 	"io"
-	"io/ioutil"
+	iofs "io/fs"
 	"net/url"
 	"os"
 	"path"
@@ -993,12 +993,21 @@ func (fs *localfs) listFolder(ctx context.Context, fn string, mdKeys []string) (
 
 	fn = fs.wrap(ctx, fn)
 
-	mds, err := ioutil.ReadDir(fn)
+	entries, err := os.ReadDir(fn)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, errtypes.NotFound(fn)
 		}
 		return nil, errors.Wrap(err, "localfs: error listing "+fn)
+	}
+
+	mds := make([]iofs.FileInfo, 0, len(entries))
+	for _, entry := range entries {
+		info, err := entry.Info()
+		if err != nil {
+			return nil, err
+		}
+		mds = append(mds, info)
 	}
 
 	finfos := []*provider.ResourceInfo{}
@@ -1015,12 +1024,20 @@ func (fs *localfs) listShareFolderRoot(ctx context.Context, home string, mdKeys 
 
 	fn := fs.wrapReferences(ctx, home)
 
-	mds, err := ioutil.ReadDir(fn)
+	entries, err := os.ReadDir(fn)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, errtypes.NotFound(fn)
 		}
 		return nil, errors.Wrap(err, "localfs: error listing "+fn)
+	}
+	mds := make([]iofs.FileInfo, 0, len(entries))
+	for _, entry := range entries {
+		info, err := entry.Info()
+		if err != nil {
+			return nil, err
+		}
+		mds = append(mds, info)
 	}
 
 	finfos := []*provider.ResourceInfo{}
@@ -1087,9 +1104,17 @@ func (fs *localfs) ListRevisions(ctx context.Context, ref *provider.Reference) (
 
 	versionsDir := fs.wrapVersions(ctx, np)
 	revisions := []*provider.FileVersion{}
-	mds, err := ioutil.ReadDir(versionsDir)
+	entries, err := os.ReadDir(versionsDir)
 	if err != nil {
 		return nil, errors.Wrap(err, "localfs: error reading"+versionsDir)
+	}
+	mds := make([]iofs.FileInfo, 0, len(entries))
+	for _, entry := range entries {
+		info, err := entry.Info()
+		if err != nil {
+			return nil, err
+		}
+		mds = append(mds, info)
 	}
 
 	for i := range mds {
@@ -1226,9 +1251,17 @@ func (fs *localfs) ListRecycle(ctx context.Context, basePath, key, relativePath 
 
 	rp := fs.wrapRecycleBin(ctx, "/")
 
-	mds, err := ioutil.ReadDir(rp)
+	entries, err := os.ReadDir(rp)
 	if err != nil {
 		return nil, errors.Wrap(err, "localfs: error listing deleted files")
+	}
+	mds := make([]iofs.FileInfo, 0, len(entries))
+	for _, entry := range entries {
+		info, err := entry.Info()
+		if err != nil {
+			return nil, err
+		}
+		mds = append(mds, info)
 	}
 	items := []*provider.RecycleItem{}
 	for i := range mds {

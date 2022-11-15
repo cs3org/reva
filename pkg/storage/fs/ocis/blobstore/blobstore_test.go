@@ -20,7 +20,7 @@ package blobstore_test
 
 import (
 	"bytes"
-	"io/ioutil"
+	"io"
 	"os"
 	"path"
 
@@ -70,7 +70,7 @@ var _ = Describe("Blobstore", func() {
 			err := bs.Upload(key, bytes.NewReader(data))
 			Expect(err).ToNot(HaveOccurred())
 
-			writtenBytes, err := ioutil.ReadFile(blobPath)
+			writtenBytes, err := os.ReadFile(blobPath)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(writtenBytes).To(Equal(data))
 		})
@@ -78,7 +78,7 @@ var _ = Describe("Blobstore", func() {
 
 	Context("with an existing blob", func() {
 		BeforeEach(func() {
-			Expect(ioutil.WriteFile(blobPath, data, 0700)).To(Succeed())
+			Expect(os.WriteFile(blobPath, data, 0700)).To(Succeed())
 		})
 
 		Describe("Download", func() {
@@ -86,7 +86,7 @@ var _ = Describe("Blobstore", func() {
 				reader, err := bs.Download("../" + key)
 				Expect(err).ToNot(HaveOccurred())
 
-				readData, err := ioutil.ReadAll(reader)
+				readData, err := io.ReadAll(reader)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(readData).To(Equal(data))
 			})
@@ -95,7 +95,7 @@ var _ = Describe("Blobstore", func() {
 				reader, err := bs.Download(key)
 				Expect(err).ToNot(HaveOccurred())
 
-				readData, err := ioutil.ReadAll(reader)
+				readData, err := io.ReadAll(reader)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(readData).To(Equal(data))
 			})
