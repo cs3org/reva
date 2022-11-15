@@ -22,7 +22,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -125,7 +125,7 @@ func loadOrCreate(file string) (*inviteModel, error) {
 
 	_, err := os.Stat(file)
 	if os.IsNotExist(err) {
-		if err := ioutil.WriteFile(file, []byte("{}"), 0700); err != nil {
+		if err := os.WriteFile(file, []byte("{}"), 0700); err != nil {
 			err = errors.Wrap(err, "error creating the invite storage file: "+file)
 			return nil, err
 		}
@@ -138,7 +138,7 @@ func loadOrCreate(file string) (*inviteModel, error) {
 	}
 	defer fd.Close()
 
-	data, err := ioutil.ReadAll(fd)
+	data, err := io.ReadAll(fd)
 	if err != nil {
 		err = errors.Wrap(err, "error reading the data")
 		return nil, err
@@ -168,7 +168,7 @@ func (model *inviteModel) Save() error {
 		return err
 	}
 
-	if err := ioutil.WriteFile(model.File, data, 0644); err != nil {
+	if err := os.WriteFile(model.File, data, 0644); err != nil {
 		err = errors.Wrap(err, "error writing invite data to file: "+model.File)
 		return err
 	}
@@ -235,7 +235,7 @@ func (m *manager) ForwardInvite(ctx context.Context, invite *invitepb.InviteToke
 
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		respBody, e := ioutil.ReadAll(resp.Body)
+		respBody, e := io.ReadAll(resp.Body)
 		if e != nil {
 			return errors.Wrap(e, "json: error reading request body")
 		}

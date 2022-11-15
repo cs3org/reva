@@ -22,7 +22,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -109,7 +109,7 @@ func (a *APITokenManager) getAPIToken(ctx context.Context) (string, time.Time, e
 	}
 	defer httpRes.Body.Close()
 
-	body, err := ioutil.ReadAll(httpRes.Body)
+	body, err := io.ReadAll(httpRes.Body)
 	if err != nil {
 		return "", time.Time{}, err
 	}
@@ -159,7 +159,7 @@ func (a *APITokenManager) SendAPIGetRequest(ctx context.Context, url string, for
 		return nil, errors.New("rest: API request returned " + httpRes.Status)
 	}
 
-	body, err := ioutil.ReadAll(httpRes.Body)
+	body, err := io.ReadAll(httpRes.Body)
 	if err != nil {
 		return nil, err
 	}

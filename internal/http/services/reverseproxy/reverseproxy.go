@@ -20,10 +20,10 @@ package reverseproxy
 
 import (
 	"encoding/json"
-	"io/ioutil"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"os"
 
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/rhttp/global"
@@ -63,7 +63,7 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 	}
 	conf.init()
 
-	f, err := ioutil.ReadFile(conf.ProxyRulesJSON)
+	f, err := os.ReadFile(conf.ProxyRulesJSON)
 	if err != nil {
 		return nil, err
 	}
