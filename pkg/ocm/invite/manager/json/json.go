@@ -285,7 +285,7 @@ func (m *manager) GetAcceptedUser(ctx context.Context, remoteUserID *userpb.User
 			remoteUserID.OpaqueId,
 			remoteUserID.Idp,
 			acceptedUser.Id.GetOpaqueId(),
-			acceptedUser.Id.GetIdp()
+			acceptedUser.Id.GetIdp(),
 		)
 		if (acceptedUser.Id.GetOpaqueId() == remoteUserID.OpaqueId) && (remoteUserID.Idp == "" || acceptedUser.Id.GetIdp() == remoteUserID.Idp) {
 			return acceptedUser, nil

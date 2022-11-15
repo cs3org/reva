@@ -34,6 +34,7 @@ import (
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/google/uuid"
+	"go-micro.dev/v4/util/log"
 
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
@@ -521,6 +522,8 @@ func (sm *Manager) ListShares(ctx context.Context, filters []*ocm.ListOCMSharesR
 
 // ListReceivedShares as defined in the ocm.share.Manager interface
 // https://github.com/cs3org/reva/blob/v1.13.0/pkg/ocm/share/share.go#L30-L57
+// returns a list of these:
+// https://github.com/cs3org/go-cs3apis/blob/d297419/cs3/sharing/ocm/v1beta1/resources.pb.go#L290-L302
 func (sm *Manager) ListReceivedShares(ctx context.Context) ([]*ocm.ReceivedShare, error) {
 	_, respBody, err := sm.do(ctx, Action{"ListReceivedShares", string("")}, getUsername(ctx))
 	if err != nil {
@@ -532,33 +535,33 @@ func (sm *Manager) ListReceivedShares(ctx context.Context) ([]*ocm.ReceivedShare
 	if err != nil {
 		return nil, err
 	}
-	var pointers = make([]*ocm.ReceivedShare, len(respArr))
+	var pointersBaseShare = make([]*ocm.Share, len(respArr))
+	var pointersReceivedShare = make([]*ocm.ReceivedShare, len(respArr))
 	for i := 0; i < len(respArr); i++ {
+		log.Info().Msgf("Unpacking share object %+v\n", respArr[i].Share)
 		altResultShare := respArr[i].Share
 		if altResultShare == nil {
-			pointers[i] = &ocm.ReceivedShare{
-				Share: nil,
-				State: respArr[i].State,
-			}
+			return nil, errors.New("received an unreadable share object from the EFSS backend")
 		} else {
-			pointers[i] = &ocm.ReceivedShare{
-				Share: &ocm.Share{
-					Id:          altResultShare.ID,
-					ResourceId:  altResultShare.ResourceID,
-					Permissions: altResultShare.Permissions,
-					Grantee: &provider.Grantee{
-						Id: altResultShare.Grantee.ID,
-					},
-					Owner:   altResultShare.Owner,
-					Creator: altResultShare.Creator,
-					Ctime:   altResultShare.Ctime,
-					Mtime:   altResultShare.Mtime,
+			pointersBaseShare[i] = &ocm.Share{
+				Id:          altResultShare.ID,
+				ResourceId:  altResultShare.ResourceID,
+				Permissions: altResultShare.Permissions,
+				Grantee: &provider.Grantee{
+					Id: altResultShare.Grantee.ID,
 				},
+				Owner:   altResultShare.Owner,
+				Creator: altResultShare.Creator,
+				Ctime:   altResultShare.Ctime,
+				Mtime:   altResultShare.Mtime,
+			}
+			pointersReceivedShare[i] = &ocm.ReceivedShare{
+				Share: pointersBaseShare[i],
 				State: respArr[i].State,
 			}
 		}
 	}
-	return pointers, err
+	return pointersReceivedShare, err
 
 }
 
