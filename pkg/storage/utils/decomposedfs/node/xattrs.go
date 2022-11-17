@@ -93,5 +93,6 @@ func (n *Node) Xattr(key string) (string, error) {
 	if val, ok := n.xattrsCache[key]; ok {
 		return val, nil
 	}
-	return "", xattr.ENOATTR
+	// wrap the error as xattr does
+	return "", &xattr.Error{Op: "xattr.get", Path: n.InternalPath(), Name: key, Err: xattr.ENOATTR}
 }
