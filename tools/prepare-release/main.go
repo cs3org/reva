@@ -194,12 +194,6 @@ func createCommit(msg string) {
 }
 
 func createTag(version string) {
-	// check if repo is dirty
-	if isRepoDirty() {
-		fmt.Fprintf(os.Stderr, "repo is dirty when creating a new tag for version %s", version)
-		os.Exit(1)
-	}
-
 	cmd := exec.Command("git", "tag", "-a", "v"+version, "-m", "v"+version)
 	run(cmd)
 }
