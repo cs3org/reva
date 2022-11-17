@@ -83,6 +83,11 @@ func init() {
 	global.Register("ocdav", New)
 }
 
+type ConfigPublicLinkDownload struct {
+	ArchiverEndpoint string `mapstructure:"archiver_endpoint"`
+	PublicFolder     string `mapstructure:"public_folder"`
+}
+
 // Config holds the config options that need to be passed down to all ocdav handlers
 type Config struct {
 	Prefix string `mapstructure:"prefix"`
@@ -104,6 +109,7 @@ type Config struct {
 	PublicURL              string                            `mapstructure:"public_url"`
 	FavoriteStorageDriver  string                            `mapstructure:"favorite_storage_driver"`
 	FavoriteStorageDrivers map[string]map[string]interface{} `mapstructure:"favorite_storage_drivers"`
+	PublicLinkDownload     ConfigPublicLinkDownload          `mapstructure:"publiclink_download"`
 }
 
 func (c *Config) init() {
@@ -216,6 +222,12 @@ func (s *svc) Handler() http.Handler {
 		case "index.php":
 			head, r.URL.Path = router.ShiftPath(r.URL.Path)
 			if head == "s" {
+				if strings.HasSuffix(r.URL.Path, "/download") {
+					r.URL.Path = strings.TrimSuffix(r.URL.Path, "/download")
+					s.handleLegacyPublicLinkDownload(w, r)
+					return
+				}
+
 				token := r.URL.Path
 				rURL := s.c.PublicURL + path.Join(head, token)
 
