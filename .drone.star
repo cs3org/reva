@@ -19,7 +19,12 @@ def lintStep():
 def cloneOc10TestReposStep():
     return {
         "name": "clone-oC10-test-repos",
-        "image": "registry.cern.ch/docker.io/owncloudci/alpine:latest",
+        "image": "owncloudci/alpine:latest",
+        "environment": {
+            "GIT_TRACE_PACKET": "1",
+            "GIT_TRACE": "1",
+            "GIT_CURL_VERBOSE": "1",
+        },
         "commands": [
             "source /drone/src/.drone.env",
             "git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing",
