@@ -929,6 +929,15 @@ func (n *Node) SetTreeSize(ts uint64) (err error) {
 	return n.SetXattr(xattrs.TreesizeAttr, strconv.FormatUint(ts, 10))
 }
 
+// GetBlobSize reads the blobsize from the extended attributes
+func (n *Node) GetBlobSize() (treesize uint64, err error) {
+	var b string
+	if b, err = n.Xattr(xattrs.TreesizeAttr); err != nil {
+		return
+	}
+	return strconv.ParseUint(b, 10, 64)
+}
+
 // SetChecksum writes the checksum with the given checksum type to the extended attributes
 func (n *Node) SetChecksum(csType string, h hash.Hash) (err error) {
 	return n.SetXattr(xattrs.ChecksumPrefix+csType, string(h.Sum(nil)))

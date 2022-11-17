@@ -20,6 +20,7 @@ package node
 
 import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs"
+	"github.com/gofrs/flock"
 	"github.com/pkg/xattr"
 )
 
@@ -32,6 +33,18 @@ func (n *Node) SetXattrs(attribs map[string]string) (err error) {
 	}
 
 	return xattrs.SetMultiple(n.InternalPath(), attribs)
+}
+
+// SetXattrsWithLock sets multiple extended attributes on the write-through cache/node with a given lock
+func (n *Node) SetXattrsWithLock(attribs map[string]string, fileLock *flock.Flock) (err error) {
+	// TODO what if writing the lock fails?
+	if n.xattrsCache != nil {
+		for k, v := range attribs {
+			n.xattrsCache[k] = v
+		}
+	}
+
+	return xattrs.SetMultipleWithLock(n.InternalPath(), attribs, fileLock)
 }
 
 // SetXattr sets an extended attribute on the write-through cache/node

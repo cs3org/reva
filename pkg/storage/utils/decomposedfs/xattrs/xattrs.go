@@ -142,14 +142,24 @@ func CopyMetadata(src, target string, filter func(attributeName string) bool) (e
 		}
 	}()
 
-	// now try to get a shared lock on the source
-	readLock, err = filelocks.AcquireReadLock(src)
+	return CopyMetadataWithSourceLock(src, target, filter, readLock)
+}
+
+// CopyMetadataWithSourceLock copies all extended attributes from source to target.
+// The optional filter function can be used to filter by attribute name, e.g. by checking a prefix
+// For the source file, a shared lock is acquired. For the target, an exclusive
+// write lock is acquired.
+func CopyMetadataWithSourceLock(src, target string, filter func(attributeName string) bool, readLock *flock.Flock) (err error) {
+	var writeLock *flock.Flock
+
+	// Acquire the write log on the target node first.
+	writeLock, err = filelocks.AcquireWriteLock(target)
 
 	if err != nil {
-		return errors.Wrap(err, "xattrs: Unable to lock file for read")
+		return errors.Wrap(err, "xattrs: Unable to lock target to write")
 	}
 	defer func() {
-		rerr := filelocks.ReleaseLock(readLock)
+		rerr := filelocks.ReleaseLock(writeLock)
 
 		// if err is non nil we do not overwrite that
 		if err == nil {
@@ -245,6 +255,23 @@ func SetMultiple(filePath string, attribs map[string]string) (err error) {
 			err = rerr
 		}
 	}()
+
+	return SetMultipleWithLock(filePath, attribs, fileLock)
+}
+
+// SetMultiple allows setting multiple key value pairs at once
+// the changes are protected with an file lock
+// If the file lock can not be acquired the function returns a
+// lock error.
+func SetMultipleWithLock(filePath string, attribs map[string]string, fileLock *flock.Flock) (err error) {
+	switch {
+	case fileLock != nil:
+		return errors.Wrap(err, "no lock provided")
+	case fileLock.Path() != filePath+".lock":
+		return errors.Wrap(err, "lockpath does not match filepath")
+	case !fileLock.Locked():
+		return errors.Wrap(err, "not locked provided")
+	}
 
 	// error handling: Count if there are errors while setting the attribs.
 	// if there were any, return an error.
