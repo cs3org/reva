@@ -854,9 +854,9 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 
 	// link child name to parent if it is new
 	childNameLink := filepath.Join(n.ParentInternalPath(), n.Name)
+	relativeNodePath := filepath.Join("../../../../../", lookup.Pathify(n.ID, 4, 2))
 	var link string
 	link, err = os.Readlink(childNameLink)
-	relativeNodePath := filepath.Join("../../../../../", lookup.Pathify(n.ID, 4, 2))
 	if err == nil && link != relativeNodePath {
 		sublog.Err(err).
 			Interface("node", n).
@@ -868,7 +868,7 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 			return errors.Wrap(err, "Decomposedfs: could not remove symlink child entry")
 		}
 	}
-	if errors.Is(err, iofs.ErrNotExist) || link != "../"+n.ID {
+	if errors.Is(err, iofs.ErrNotExist) || link != relativeNodePath {
 		if err = os.Symlink(relativeNodePath, childNameLink); err != nil {
 			return errors.Wrap(err, "Decomposedfs: could not symlink child entry")
 		}
