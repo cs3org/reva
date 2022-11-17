@@ -275,6 +275,15 @@ func SpaceRenamed(r *provider.UpdateStorageSpaceResponse, req *provider.UpdateSt
 	}
 }
 
+// SpaceUpdated converts the response to an event
+func SpaceUpdated(r *provider.UpdateStorageSpaceResponse, req *provider.UpdateStorageSpaceRequest, executant *user.UserId) events.SpaceUpdated {
+	return events.SpaceUpdated{
+		Executant: executant,
+		ID:        r.StorageSpace.Id,
+		Space:     r.StorageSpace,
+	}
+}
+
 // SpaceEnabled converts the response to an event
 func SpaceEnabled(r *provider.UpdateStorageSpaceResponse, req *provider.UpdateStorageSpaceRequest, executant *user.UserId) events.SpaceEnabled {
 	return events.SpaceEnabled{
