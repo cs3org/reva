@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"strings"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
@@ -17,7 +18,7 @@ import (
 
 // index.php/s/jIKrtrkXCIXwg1y/download?path=%2FHugo&files=Intrinsico
 func (s *svc) handleLegacyPublicLinkDownload(w http.ResponseWriter, r *http.Request) {
-	token := r.URL.Path
+	token := strings.TrimPrefix(r.URL.Path, "/")
 	files := getFilesFromRequest(r)
 	s.downloadFiles(r.Context(), w, token, files)
 }
