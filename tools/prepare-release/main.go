@@ -72,10 +72,6 @@ func main() {
 	cmd = exec.Command("mv", "changelog/unreleased", newChangelog)
 	run(cmd)
 
-	// install release-deps: calens
-	cmd = exec.Command("make", "release-deps")
-	run(cmd)
-
 	// create new changelog
 	cmd = exec.Command(getGoBin("calens"), "-o", "CHANGELOG.md")
 	run(cmd)
