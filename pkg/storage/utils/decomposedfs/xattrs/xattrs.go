@@ -150,6 +150,15 @@ func CopyMetadata(src, target string, filter func(attributeName string) bool) (e
 // For the source file, a shared lock is acquired. For the target, an exclusive
 // write lock is acquired.
 func CopyMetadataWithSourceLock(src, target string, filter func(attributeName string) bool, readLock *flock.Flock) (err error) {
+	switch {
+	case readLock == nil:
+		return errors.New("no lock provided")
+	case readLock.Path() != src+".flock":
+		return errors.New("lockpath does not match filepath")
+	case !readLock.Locked():
+		return errors.New("not locked")
+	}
+
 	var writeLock *flock.Flock
 
 	// Acquire the write log on the target node first.
@@ -259,18 +268,15 @@ func SetMultiple(filePath string, attribs map[string]string) (err error) {
 	return SetMultipleWithLock(filePath, attribs, fileLock)
 }
 
-// SetMultiple allows setting multiple key value pairs at once
-// the changes are protected with an file lock
-// If the file lock can not be acquired the function returns a
-// lock error.
+// SetMultipleWithLock allows setting multiple key value pairs at once with an existing lock
 func SetMultipleWithLock(filePath string, attribs map[string]string, fileLock *flock.Flock) (err error) {
 	switch {
-	case fileLock != nil:
-		return errors.Wrap(err, "no lock provided")
-	case fileLock.Path() != filePath+".lock":
-		return errors.Wrap(err, "lockpath does not match filepath")
+	case fileLock == nil:
+		return errors.New("no lock provided")
+	case fileLock.Path() != filePath+".flock":
+		return errors.New("lockpath does not match filepath")
 	case !fileLock.Locked():
-		return errors.Wrap(err, "not locked provided")
+		return errors.New("not locked")
 	}
 
 	// error handling: Count if there are errors while setting the attribs.

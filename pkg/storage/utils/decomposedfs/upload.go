@@ -701,6 +701,12 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 				return errtypes.Aborted("etag mismatch")
 			}
 		}
+	} else {
+		// create dir to node
+		if err := os.MkdirAll(filepath.Dir(targetPath), 0700); err != nil {
+			sublog.Err(err).Msg("could not create node dir")
+			return errtypes.InternalError("could not create node dir")
+		}
 	}
 
 	// copy blob
@@ -726,10 +732,11 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 	// lock metadata node
 	lock, err := filelocks.AcquireWriteLock(targetPath)
 	if err != nil {
+		discardBlob()
 		return errtypes.InternalError(err.Error())
 	}
 
-	// check if match header again as safequard
+	// check if match header again as safeguard
 	versionsPath := ""
 	if fi, err = os.Stat(targetPath); err == nil {
 		// When the if-match header was set we need to check if the
@@ -805,12 +812,6 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 		}
 
 	} else {
-		// create dir to node
-		if err := os.MkdirAll(filepath.Dir(targetPath), 0700); err != nil {
-			discardBlob()
-			sublog.Err(err).Msg("could not create node dir")
-			return errtypes.InternalError("could not create node dir")
-		}
 		// touch metadata node
 		file, err := os.Create(targetPath)
 		if err != nil {
@@ -855,7 +856,8 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 	childNameLink := filepath.Join(n.ParentInternalPath(), n.Name)
 	var link string
 	link, err = os.Readlink(childNameLink)
-	if err == nil && link != "../"+n.ID {
+	relativeNodePath := filepath.Join("../../../../../", lookup.Pathify(n.ID, 4, 2))
+	if err == nil && link != relativeNodePath {
 		sublog.Err(err).
 			Interface("node", n).
 			Str("childNameLink", childNameLink).
@@ -867,7 +869,6 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 		}
 	}
 	if errors.Is(err, iofs.ErrNotExist) || link != "../"+n.ID {
-		relativeNodePath := filepath.Join("../../../../../", lookup.Pathify(n.ID, 4, 2))
 		if err = os.Symlink(relativeNodePath, childNameLink); err != nil {
 			return errors.Wrap(err, "Decomposedfs: could not symlink child entry")
 		}

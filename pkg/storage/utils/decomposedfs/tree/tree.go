@@ -692,7 +692,7 @@ func (t *Tree) removeNode(path string, n *node.Node) error {
 
 // Propagate propagates changes to the root of the tree
 func (t *Tree) Propagate(ctx context.Context, n *node.Node) (err error) {
-	sublog := appctx.GetLogger(ctx).With().Interface("node", n).Logger()
+	sublog := appctx.GetLogger(ctx).With().Str("spaceid", n.SpaceID).Str("nodeid", n.ID).Logger()
 	if !t.treeTimeAccounting && !t.treeSizeAccounting {
 		// no propagation enabled
 		sublog.Debug().Msg("propagation disabled")
@@ -713,7 +713,7 @@ func (t *Tree) Propagate(ctx context.Context, n *node.Node) (err error) {
 			break
 		}
 
-		sublog = sublog.With().Interface("node", n).Logger()
+		sublog = sublog.With().Str("spaceid", n.SpaceID).Str("nodeid", n.ID).Logger()
 
 		// TODO none, sync and async?
 		if !n.HasPropagation() {
@@ -757,7 +757,7 @@ func (t *Tree) Propagate(ctx context.Context, n *node.Node) (err error) {
 				}
 			}
 
-			if err := n.UnsetTempEtag(); err != nil {
+			if err := n.UnsetTempEtag(); !xattrs.IsAttrUnset(err) {
 				sublog.Error().Err(err).Msg("could not remove temporary etag attribute")
 			}
 		}
