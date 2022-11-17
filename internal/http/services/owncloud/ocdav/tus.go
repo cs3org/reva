@@ -259,7 +259,7 @@ func (s *svc) handleTusPost(ctx context.Context, w http.ResponseWriter, r *http.
 
 		httpRes, err = s.client.Do(httpReq)
 		if err != nil {
-			log.Error().Err(err).Msg("error doing GET request to data service")
+			log.Error().Err(err).Msg("error doing PATCH request to data gateway")
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
