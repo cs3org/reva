@@ -734,6 +734,13 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 		discardBlob()
 		return errtypes.InternalError(err.Error())
 	}
+	releaseLock := func() {
+		// ReleaseLock returns nil if already unlocked
+		if err := filelocks.ReleaseLock(lock); err != nil {
+			sublog.Err(err).Msg("Decomposedfs:could not unlock node")
+		}
+	}
+	defer releaseLock()
 
 	// check if match header again as safeguard
 	versionsPath := ""
@@ -843,7 +850,7 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 	}
 
 	// remember size diff
-	//sizeDiff := oldSize - n.Blobsize
+	sizeDiff := oldSize - n.Blobsize
 
 	// unlock metadata
 	err = filelocks.ReleaseLock(lock)
@@ -886,6 +893,7 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 	//   propagation needs to propagate the diff
 
 	//return upload.fs.tp.Propagate(upload.ctx, n, sizeDiff)
+	sublog.Debug().Int64("sizediff", sizeDiff).Msg("Decomposedfs: propagating size diff")
 	return upload.fs.tp.Propagate(upload.ctx, n)
 }
 
