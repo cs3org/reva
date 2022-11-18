@@ -78,6 +78,8 @@ func (s *svc) handleHttpError(w http.ResponseWriter, err error, log *zerolog.Log
 	switch err.(type) {
 	case errtypes.NotFound:
 		http.Error(w, "Resource not found", http.StatusNotFound)
+	case manager.ErrMaxSize, manager.ErrMaxFileCount:
+		http.Error(w, err.Error(), http.StatusRequestEntityTooLarge)
 	default:
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
@@ -214,8 +216,6 @@ func (s *svc) downloadArchive(ctx context.Context, w http.ResponseWriter, token 
 		s.handleHttpError(w, err, log)
 		return
 	}
-
-	w.WriteHeader(http.StatusOK)
 
 	if err := archiver.CreateTar(ctx, w); err != nil {
 		s.handleHttpError(w, err, log)
