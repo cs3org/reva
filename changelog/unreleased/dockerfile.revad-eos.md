@@ -1,4 +1,4 @@
-Improvement: Bring back multi-stage build to save on image size
+Enhancement: Bring back multi-stage build to save on image size
 
 * Use EOS 4.8.91 as base image
 * Bring back multi-stage build
