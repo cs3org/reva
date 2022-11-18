@@ -4,7 +4,6 @@ import (
 	"context"
 	"io"
 	"net/http"
-	"net/url"
 	"path"
 	"strings"
 
@@ -12,11 +11,13 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/internal/http/services/archiver/manager"
 	"github.com/cs3org/reva/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/storage/utils/downloader"
+	"github.com/cs3org/reva/pkg/storage/utils/walker"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	"google.golang.org/grpc/metadata"
@@ -192,54 +193,32 @@ func getPublicLinkResources(rootFolder, token string, files []string) []string {
 	return r
 }
 
-func prepareArchiverURL(endpoint string, files []string) string {
-	q := url.Values{}
-	for _, f := range files {
-		q.Add("path", f)
-	}
-	u, _ := url.Parse(endpoint)
-	u.RawQuery = q.Encode()
-	return u.String()
-}
-
 func (s *svc) downloadArchive(ctx context.Context, w http.ResponseWriter, token string, files []string) {
 	log := appctx.GetLogger(ctx)
 	resources := getPublicLinkResources(s.c.PublicLinkDownload.PublicFolder, token, files)
-	url := prepareArchiverURL(s.c.PublicLinkDownload.ArchiverEndpoint, resources)
 
-	req, err := rhttp.NewRequest(ctx, http.MethodGet, url, nil)
+	gtw, err := s.getClient()
 	if err != nil {
 		s.handleHttpError(w, err, log)
 		return
 	}
 
-	// FIXME: this only works for CERNBox config,
-	// as the bearer authentication is used to set the reva token
-	authtkn := ctxpkg.ContextMustGetToken(ctx)
-	req.Header.Add("Authorization", "Bearer "+authtkn)
+	downloader := downloader.NewDownloader(gtw, rhttp.Context(ctx))
+	walker := walker.NewWalker(gtw)
 
-	res, err := s.client.Do(req)
+	archiver, err := manager.NewArchiver(resources, walker, downloader, manager.Config{
+		MaxNumFiles: s.c.PublicLinkDownload.MaxNumFiles,
+		MaxSize:     s.c.PublicLinkDownload.MaxSize,
+	})
 	if err != nil {
 		s.handleHttpError(w, err, log)
-		return
-	}
-	defer res.Body.Close()
-
-	if res.StatusCode != http.StatusOK {
-		s.handleArchiveError(w, res.StatusCode, log)
 		return
 	}
 
 	w.WriteHeader(http.StatusOK)
 
-	_, err = io.Copy(w, res.Body)
-	if err != nil {
+	if err := archiver.CreateTar(ctx, w); err != nil {
 		s.handleHttpError(w, err, log)
 		return
 	}
-}
-
-func (s *svc) handleArchiveError(w http.ResponseWriter, code int, log *zerolog.Logger) {
-	log.Error().Int("code", code).Msg("ocdav: got error code from archiver")
-	w.WriteHeader(code)
 }

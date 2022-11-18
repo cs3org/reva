@@ -84,8 +84,9 @@ func init() {
 }
 
 type ConfigPublicLinkDownload struct {
-	ArchiverEndpoint string `mapstructure:"archiver_endpoint"`
-	PublicFolder     string `mapstructure:"public_folder"`
+	MaxNumFiles  int64  `mapstructure:"max_num_files"`
+	MaxSize      int64  `mapstructure:"max_size"`
+	PublicFolder string `mapstructure:"public_folder"`
 }
 
 // Config holds the config options that need to be passed down to all ocdav handlers
