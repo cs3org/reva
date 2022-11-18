@@ -186,6 +186,9 @@ func getPublicLinkResources(rootFolder, token string, files []string) []string {
 	for _, f := range files {
 		r = append(r, path.Join(rootFolder, token, f))
 	}
+	if len(r) == 0 {
+		r = []string{path.Join(rootFolder, token)}
+	}
 	return r
 }
 
