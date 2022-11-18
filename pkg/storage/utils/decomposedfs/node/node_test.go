@@ -100,7 +100,7 @@ var _ = Describe("Node", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(n2.Name).To(Equal("TestName"))
 			Expect(n2.BlobID).To(Equal("TestBlobID"))
-			Expect(n2.Blobsize).To(Equal(int64(blobsize)))
+			Expect(n2.Blobsize).To(Equal(blobsize))
 		})
 	})
 

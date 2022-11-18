@@ -918,7 +918,7 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 	//   propagation can happen outside the metadata lock because diff calculation happens inside the lock and the order in which diffs are applied to the parent is irrelvevant
 	//   propagation needs to propagate the diff
 
-	//return upload.fs.tp.Propagate(upload.ctx, n, sizeDiff)
+	// return upload.fs.tp.Propagate(upload.ctx, n, sizeDiff)
 	sublog.Debug().Int64("sizediff", sizeDiff).Msg("Decomposedfs: propagating size diff")
 	return upload.fs.tp.Propagate(upload.ctx, n)
 }

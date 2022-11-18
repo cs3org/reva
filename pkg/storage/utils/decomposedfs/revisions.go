@@ -135,6 +135,9 @@ func (fs *Decomposedfs) DownloadRevision(ctx context.Context, ref *provider.Refe
 
 	contentPath := fs.lu.InternalPath(spaceID, revisionKey)
 
+	// FIXME this will always be an empty file ... actuallyd DownloadRevision is never called ... the CS3 api has no way to initiate a file revision download
+	// it all just magically works by accident ... and only partly ...
+	// see also https://github.com/cs3org/reva/issues/1813
 	r, err := os.Open(contentPath)
 	if err != nil {
 		if errors.Is(err, iofs.ErrNotExist) {
