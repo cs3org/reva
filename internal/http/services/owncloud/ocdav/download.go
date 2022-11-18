@@ -195,7 +195,7 @@ func getPublicLinkResources(rootFolder, token string, files []string) []string {
 func prepareArchiverURL(endpoint string, files []string) string {
 	q := url.Values{}
 	for _, f := range files {
-		q.Add("file", f)
+		q.Add("path", f)
 	}
 	u, _ := url.Parse(endpoint)
 	u.RawQuery = q.Encode()
