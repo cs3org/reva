@@ -179,7 +179,7 @@ func (s *svc) Close() error {
 }
 
 func (s *svc) Unprotected() []string {
-	return []string{"/status.php", "/remote.php/dav/public-files/", "/apps/files/", "/index.php/f/", "/index.php/s/"}
+	return []string{"/status.php", "/remote.php/dav/public-files/", "/apps/files/", "/index.php/f/", "/index.php/s/", "/s/"}
 }
 
 func (s *svc) Handler() http.Handler {
@@ -204,6 +204,14 @@ func (s *svc) Handler() http.Handler {
 		head, r.URL.Path = router.ShiftPath(r.URL.Path)
 		log.Debug().Str("head", head).Str("tail", r.URL.Path).Msg("http routing")
 		switch head {
+		case "s":
+			if strings.HasSuffix(r.URL.Path, "/download") {
+				r.URL.Path = strings.TrimSuffix(r.URL.Path, "/download")
+				s.handleLegacyPublicLinkDownload(w, r)
+				return
+			}
+			http.Error(w, "Not Yet Implemented", http.StatusNotImplemented)
+			return
 		case "status.php":
 			s.doStatus(w, r)
 			return
@@ -222,12 +230,6 @@ func (s *svc) Handler() http.Handler {
 		case "index.php":
 			head, r.URL.Path = router.ShiftPath(r.URL.Path)
 			if head == "s" {
-				if strings.HasSuffix(r.URL.Path, "/download") {
-					r.URL.Path = strings.TrimSuffix(r.URL.Path, "/download")
-					s.handleLegacyPublicLinkDownload(w, r)
-					return
-				}
-
 				token := r.URL.Path
 				rURL := s.c.PublicURL + path.Join(head, token)
 
