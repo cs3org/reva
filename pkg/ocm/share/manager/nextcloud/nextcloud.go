@@ -525,6 +525,7 @@ func (sm *Manager) ListShares(ctx context.Context, filters []*ocm.ListOCMSharesR
 // returns a list of these:
 // https://github.com/cs3org/go-cs3apis/blob/d297419/cs3/sharing/ocm/v1beta1/resources.pb.go#L290-L302
 func (sm *Manager) ListReceivedShares(ctx context.Context) ([]*ocm.ReceivedShare, error) {
+	log := appctx.GetLogger(ctx)
 	_, respBody, err := sm.do(ctx, Action{"ListReceivedShares", string("")}, getUsername(ctx))
 	if err != nil {
 		return nil, err
