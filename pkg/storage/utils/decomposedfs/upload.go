@@ -777,9 +777,9 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 		xattrs.BlobsizeAttr: strconv.FormatInt(n.Blobsize, 10),
 
 		// update checksums
-		xattrs.ChecksumPrefix + "sha1":        string(sha1h.Sum(nil)),
-		xattrs.ChecksumPrefix + "md5":         string(md5h.Sum(nil)),
-		xattrs.ChecksumPrefix + "shadler32a1": string(adler32h.Sum(nil)),
+		xattrs.ChecksumPrefix + "sha1":    string(sha1h.Sum(nil)),
+		xattrs.ChecksumPrefix + "md5":     string(md5h.Sum(nil)),
+		xattrs.ChecksumPrefix + "adler32": string(adler32h.Sum(nil)),
 	}
 
 	// create version node with current metadata
