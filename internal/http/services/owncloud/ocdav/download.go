@@ -8,12 +8,16 @@ import (
 	"path"
 	"strings"
 
+	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/storage/utils/downloader"
+	"github.com/pkg/errors"
+	"google.golang.org/grpc/metadata"
 )
 
 // index.php/s/jIKrtrkXCIXwg1y/download?path=%2FHugo&files=Intrinsico
@@ -38,7 +42,38 @@ func getFilesFromRequest(r *http.Request) []string {
 	return files
 }
 
+func (s *svc) authenticate(ctx context.Context, token string) (context.Context, error) {
+	// TODO (gdelmont): support password protected public links
+	c, err := s.getClient()
+	if err != nil {
+		return nil, err
+	}
+	res, err := c.Authenticate(ctx, &gateway.AuthenticateRequest{
+		Type:         "publicshares",
+		ClientId:     token,
+		ClientSecret: "password|",
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	// TODO: status check
+	if res.Status.Code != rpc.Code_CODE_OK {
+		return nil, errors.New(res.Status.Message)
+	}
+
+	ctx = metadata.AppendToOutgoingContext(ctx, ctxpkg.TokenHeader, res.Token)
+	ctx = ctxpkg.ContextSetToken(ctx, res.Token)
+
+	return ctx, nil
+}
+
 func (s *svc) downloadFiles(ctx context.Context, w http.ResponseWriter, token string, files []string) {
+	ctx, err := s.authenticate(ctx, token)
+	if err != nil {
+		// TODO
+		return
+	}
 	isSingleFileShare, res, err := s.isSingleFileShare(ctx, token, files)
 	if err != nil {
 		// TODO
