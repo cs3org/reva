@@ -794,15 +794,17 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 			sublog.Err(err).Str("version", versionsPath).Msg("could not create version node")
 			return errtypes.InternalError("could not create version node")
 		}
-		file.Close()
 		fi, err := file.Stat()
 		if err != nil {
+			file.Close()
 			discardBlob()
 			sublog.Err(err).Str("version", versionsPath).Msg("could not stat version node")
 			return errtypes.InternalError("could not stat version node")
 		}
 		newMtime = fi.ModTime()
+		file.Close()
 
+		// FIXME the copying might not be necessary when we are leaving the node in place since we only need the blobsize and the blobid in the extended attributes for a revision
 		// copy grant and arbitrary metadata to version node
 		// FIXME ... now restoring an older revision might bring back a grant that was removed!
 		err = xattrs.CopyMetadataWithSourceLock(targetPath, versionsPath, func(attributeName string) bool {
