@@ -73,7 +73,7 @@ func (s *svc) authenticate(ctx context.Context, token string) (context.Context, 
 }
 
 func (s *svc) handleHttpError(w http.ResponseWriter, err error, log *zerolog.Logger) {
-	log.Err(err).Msg("ocdav: got error")
+	log.Error().Err(err).Msg("ocdav: got error")
 	switch err.(type) {
 	case errtypes.NotFound:
 		http.Error(w, "Resource not found", http.StatusNotFound)
@@ -220,6 +220,11 @@ func (s *svc) downloadArchive(ctx context.Context, w http.ResponseWriter, token 
 	}
 	defer res.Body.Close()
 
+	if res.StatusCode != http.StatusOK {
+		s.handleArchiveError(w, res.StatusCode, log)
+		return
+	}
+
 	w.WriteHeader(http.StatusOK)
 
 	_, err = io.Copy(w, res.Body)
@@ -227,4 +232,9 @@ func (s *svc) downloadArchive(ctx context.Context, w http.ResponseWriter, token 
 		s.handleHttpError(w, err, log)
 		return
 	}
+}
+
+func (s *svc) handleArchiveError(w http.ResponseWriter, code int, log *zerolog.Logger) {
+	log.Error().Int("code", code).Msg("ocdav: got error code from archiver")
+	w.WriteHeader(code)
 }
