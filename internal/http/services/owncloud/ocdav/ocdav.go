@@ -232,7 +232,7 @@ func (s *svc) Handler() http.Handler {
 			if head == "s" {
 				token := r.URL.Path
 				rURL := s.c.PublicURL + path.Join(head, token)
-				log.Debug().Msgf("%s redirected to %s", path.Join(head, r.URL.Path), rURL)
+				r.URL.Path = "/" // reset old path for redirection
 				http.Redirect(w, r, rURL, http.StatusMovedPermanently)
 				return
 			}
