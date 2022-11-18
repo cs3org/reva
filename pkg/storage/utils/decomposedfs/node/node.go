@@ -495,25 +495,20 @@ func calculateEtag(nodeID string, tmTime time.Time) (string, error) {
 	return fmt.Sprintf(`"%x"`, h.Sum(nil)), nil
 }
 
-// SetMtime sets the mtime and atime of a node
-func (n *Node) SetMtime(ctx context.Context, mtime string) error {
-	sublog := appctx.GetLogger(ctx).With().Interface("node", n).Logger()
-	if mt, err := parseMTime(mtime); err == nil {
-		nodePath := n.InternalPath()
-		// updating mtime also updates atime
-		if err := os.Chtimes(nodePath, mt, mt); err != nil {
-			sublog.Error().Err(err).
-				Time("mtime", mt).
-				Msg("could not set mtime")
-			return errors.Wrap(err, "could not set mtime")
-		}
-	} else {
-		sublog.Error().Err(err).
-			Str("mtime", mtime).
-			Msg("could not parse mtime")
-		return errors.Wrap(err, "could not parse mtime")
+// SetMtimeString sets the mtime and atime of a node to the unixtime parsed from the given string
+func (n *Node) SetMtimeString(mtime string) error {
+	mt, err := parseMTime(mtime)
+	if err != nil {
+		return err
 	}
-	return nil
+	return n.SetMtime(mt)
+}
+
+// SetMtime sets the mtime and atime of a node
+func (n *Node) SetMtime(mtime time.Time) error {
+	nodePath := n.InternalPath()
+	// updating mtime also updates atime
+	return os.Chtimes(nodePath, mtime, mtime)
 }
 
 // SetEtag sets the temporary etag of a node if it differs from the current etag

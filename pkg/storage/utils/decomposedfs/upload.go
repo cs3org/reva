@@ -743,6 +743,7 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 	defer releaseLock()
 
 	// check if match header again as safeguard
+	var oldMtime time.Time
 	versionsPath := ""
 	if fi, err = os.Stat(targetPath); err == nil {
 		// When the if-match header was set we need to check if the
@@ -763,6 +764,9 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 		// FIXME move versioning to blobs ... no need to copy all the metadata! well ... it does if we want to version metadata...
 		// versions are stored alongside the actual file, so a rename can be efficient and does not cross storage / partition boundaries
 		versionsPath = upload.fs.lu.InternalPath(spaceID, n.ID+node.RevisionIDDelimiter+fi.ModTime().UTC().Format(time.RFC3339Nano))
+
+		// remember mtime of existing file so we can apply it to the version
+		oldMtime = fi.ModTime()
 	}
 
 	// read metadata
@@ -780,16 +784,24 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 
 	// create version node with current metadata
 
+	var newMtime time.Time
 	// if file already exists
 	if versionsPath != "" {
 		// touch version node
 		file, err := os.Create(versionsPath)
 		if err != nil {
 			discardBlob()
-			sublog.Err(err).Str("version", versionsPath).Msg("could not create version")
-			return errtypes.InternalError("could not create version")
+			sublog.Err(err).Str("version", versionsPath).Msg("could not create version node")
+			return errtypes.InternalError("could not create version node")
 		}
 		file.Close()
+		fi, err := file.Stat()
+		if err != nil {
+			discardBlob()
+			sublog.Err(err).Str("version", versionsPath).Msg("could not stat version node")
+			return errtypes.InternalError("could not stat version node")
+		}
+		newMtime = fi.ModTime()
 
 		// copy grant and arbitrary metadata to version node
 		// FIXME ... now restoring an older revision might bring back a grant that was removed!
@@ -809,21 +821,27 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 			return errtypes.InternalError("failed to copy xattrs to version node")
 		}
 
+		// keep mtime from previous version
+		if err := os.Chtimes(versionsPath, oldMtime, oldMtime); err != nil {
+			discardBlob()
+			sublog.Err(err).Str("version", versionsPath).Msg("failed to change mtime of version node")
+			return errtypes.InternalError("failed to change mtime of version node")
+		}
+
 		// we MUST bypass any cache here as we have to calculate the size diff atomically
 		oldSize, err = node.ReadBlobSizeAttr(targetPath)
 		if err != nil {
 			discardBlob()
-			sublog.Err(err).Str("version", versionsPath).Msg("failed to copy xattrs to version node")
-			return errtypes.InternalError("failed to copy xattrs to version node")
+			sublog.Err(err).Str("version", versionsPath).Msg("failed to read old blobsize")
+			return errtypes.InternalError("failed to read old blobsize")
 		}
-
 	} else {
 		// touch metadata node
 		file, err := os.Create(targetPath)
 		if err != nil {
 			discardBlob()
-			sublog.Err(err).Msg("could not create metadata node")
-			return errtypes.InternalError("could not create version")
+			sublog.Err(err).Msg("could not create node")
+			return errtypes.InternalError("could not create node")
 		}
 		file.Close()
 
@@ -840,11 +858,17 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 		return errors.Wrap(err, "Decomposedfs: could not write metadata")
 	}
 
-	// use set arbitrary metadata?
-	if upload.info.MetaData["mtime"] != "" {
-		err := n.SetMtime(ctx, upload.info.MetaData["mtime"])
-		if err != nil {
-			sublog.Err(err).Interface("info", upload.info).Msg("Decomposedfs: could not set mtime metadata")
+	// update mtime
+	switch {
+	case upload.info.MetaData["mtime"] != "":
+		if err := n.SetMtimeString(upload.info.MetaData["mtime"]); err != nil {
+			sublog.Err(err).Interface("info", upload.info).Msg("Decomposedfs: could not apply mtime from metadata")
+			return err
+		}
+	case newMtime != time.Time{}:
+		// we are creating a version
+		if err := n.SetMtime(newMtime); err != nil {
+			sublog.Err(err).Interface("info", upload.info).Msg("Decomposedfs: could not change mtime of node")
 			return err
 		}
 	}
