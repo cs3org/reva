@@ -718,13 +718,13 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 	defer file.Close()
 	err = upload.fs.tp.WriteBlob(n, file)
 	if err != nil {
-		return errors.Wrap(err, "failed to upload file to blostore")
+		return errors.Wrap(err, "failed to upload file to blobstore")
 	}
 
 	// prepare discarding the blob if something changed while writing it
 	discardBlob := func() {
 		if err := upload.fs.tp.DeleteBlob(n); err != nil {
-			sublog.Err(err).Str("blobid", n.BlobID).Msg("Decomposedfs: failed to discard blob in blostore")
+			sublog.Err(err).Str("blobid", n.BlobID).Msg("Decomposedfs: failed to discard blob in blobstore")
 		}
 	}
 
@@ -761,7 +761,6 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 			}
 		}
 
-		// FIXME move versioning to blobs ... no need to copy all the metadata! well ... it does if we want to version metadata...
 		// versions are stored alongside the actual file, so a rename can be efficient and does not cross storage / partition boundaries
 		versionsPath = upload.fs.lu.InternalPath(spaceID, n.ID+node.RevisionIDDelimiter+fi.ModTime().UTC().Format(time.RFC3339Nano))
 
