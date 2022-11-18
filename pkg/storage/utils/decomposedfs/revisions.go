@@ -126,7 +126,7 @@ func (fs *Decomposedfs) DownloadRevision(ctx context.Context, ref *provider.Refe
 	switch {
 	case err != nil:
 		return nil, errtypes.InternalError(err.Error())
-	case !rp.ListFileVersions || !rp.RestoreFileVersion || !rp.InitiateFileDownload: // TODO add explicit permission in the CS3 api?
+	case !rp.ListFileVersions || !rp.InitiateFileDownload: // TODO add explicit permission in the CS3 api?
 		f, _ := storagespace.FormatReference(ref)
 		if rp.Stat {
 			return nil, errtypes.PermissionDenied(f)

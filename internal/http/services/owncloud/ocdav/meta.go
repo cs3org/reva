@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"net/http"
 	"path"
+	"strings"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -69,6 +70,15 @@ func (h *MetaHandler) Handler(s *svc) http.Handler {
 			b, err := errors.Marshal(http.StatusBadRequest, m, "")
 			errors.HandleWebdavError(logger, w, b, err)
 			return
+		}
+		if did.StorageId == "" && did.OpaqueId == "" && strings.Count(id, ":") >= 2 {
+			logger := appctx.GetLogger(r.Context())
+			logger.Warn().Str("id", id).Msg("detected invalid : separted resourceid id, trying to split it ... but fix the client that made the request")
+			// try splitting with :
+			parts := strings.SplitN(id, ":", 3)
+			did.StorageId = parts[0]
+			did.SpaceId = parts[1]
+			did.OpaqueId = parts[2]
 		}
 
 		var head string
