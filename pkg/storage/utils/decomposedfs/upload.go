@@ -806,14 +806,14 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 
 		// copy blob metadata to version node
 		err = xattrs.CopyMetadataWithSourceLock(targetPath, versionsPath, func(attributeName string) bool {
-			return strings.HasPrefix(attributeName, xattrs.ChecksumPrefix) || // for checksums
+			return strings.HasPrefix(attributeName, xattrs.ChecksumPrefix) ||
 				attributeName == xattrs.BlobIDAttr ||
 				attributeName == xattrs.BlobsizeAttr
 		}, lock)
 		if err != nil {
 			discardBlob()
 			sublog.Err(err).Str("version", versionsPath).Msg("failed to copy xattrs to version node")
-			return errtypes.InternalError("failed to copy xattrs to version node")
+			return errtypes.InternalError("failed to copy blob xattrs to version node")
 		}
 
 		// keep mtime from previous version

@@ -125,16 +125,16 @@ func refFromCS3(b []byte) (*provider.Reference, error) {
 // For the source file, a shared lock is acquired. For the target, an exclusive
 // write lock is acquired.
 func CopyMetadata(src, target string, filter func(attributeName string) bool) (err error) {
-	var writeLock, readLock *flock.Flock
+	var readLock *flock.Flock
 
-	// Acquire the write log on the target node first.
-	writeLock, err = filelocks.AcquireWriteLock(target)
+	// Acquire a read log on the source node
+	readLock, err = filelocks.AcquireReadLock(src)
 
 	if err != nil {
-		return errors.Wrap(err, "xattrs: Unable to lock target to write")
+		return errors.Wrap(err, "xattrs: Unable to lock source to read")
 	}
 	defer func() {
-		rerr := filelocks.ReleaseLock(writeLock)
+		rerr := filelocks.ReleaseLock(readLock)
 
 		// if err is non nil we do not overwrite that
 		if err == nil {
@@ -155,13 +155,13 @@ func CopyMetadataWithSourceLock(src, target string, filter func(attributeName st
 		return errors.New("no lock provided")
 	case readLock.Path() != src+".flock":
 		return errors.New("lockpath does not match filepath")
-	case !readLock.Locked():
+	case !readLock.Locked() && !readLock.RLocked(): // we need either a read or a write lock
 		return errors.New("not locked")
 	}
 
 	var writeLock *flock.Flock
 
-	// Acquire the write log on the target node first.
+	// Acquire the write log on the target node
 	writeLock, err = filelocks.AcquireWriteLock(target)
 
 	if err != nil {

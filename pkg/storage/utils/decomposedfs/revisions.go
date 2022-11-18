@@ -30,6 +30,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/pkg/errors"
 )
@@ -82,7 +83,7 @@ func (fs *Decomposedfs) ListRevisions(ctx context.Context, ref *provider.Referen
 				}
 				blobSize, err := node.ReadBlobSizeAttr(items[i])
 				if err != nil {
-					return nil, errors.Wrapf(err, "error reading blobsize xattr")
+					appctx.GetLogger(ctx).Error().Err(err).Str("name", fi.Name()).Msg("error reading blobsize xattr, using 0")
 				}
 				rev.Size = uint64(blobSize)
 				etag, err := node.CalculateEtag(np, mtime)
@@ -198,17 +199,45 @@ func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Refer
 		// versions are stored alongside the actual file, so a rename can be efficient and does not cross storage / partition boundaries
 		versionsPath := fs.lu.InternalPath(spaceID, kp[0]+node.RevisionIDDelimiter+fi.ModTime().UTC().Format(time.RFC3339Nano))
 
-		err = os.Rename(nodePath, versionsPath)
-		if err != nil {
-			return
+		// touch version node
+		if file, err := os.Create(versionsPath); err != nil {
+			return err
+		} else if err := file.Close(); err != nil {
+			return err
 		}
 
-		// copy old revision to current location
+		// copy blob metadata to version node
+		err = xattrs.CopyMetadata(nodePath, versionsPath, func(attributeName string) bool {
+			return strings.HasPrefix(attributeName, xattrs.ChecksumPrefix) || // for checksums
+				attributeName == xattrs.BlobIDAttr ||
+				attributeName == xattrs.BlobsizeAttr
+		})
+		if err != nil {
+			return errtypes.InternalError("failed to copy blob xattrs to version node")
+		}
 
+		// keep mtime from previous version
+		if err := os.Chtimes(versionsPath, fi.ModTime(), fi.ModTime()); err != nil {
+			return errtypes.InternalError("failed to change mtime of version node")
+		}
+
+		// update blob id in node
+
+		// copy blob metadata from revision to node
 		revisionPath := fs.lu.InternalPath(spaceID, revisionKey)
+		err = xattrs.CopyMetadata(revisionPath, nodePath, func(attributeName string) bool {
+			return strings.HasPrefix(attributeName, xattrs.ChecksumPrefix) ||
+				attributeName == xattrs.BlobIDAttr ||
+				attributeName == xattrs.BlobsizeAttr
+		})
+		if err != nil {
+			return errtypes.InternalError("failed to copy blob xattrs to version node")
+		}
 
-		if err = os.Rename(revisionPath, nodePath); err != nil {
-			return
+		// explicitly update mtime of node as writing xattrs does not change mtime
+		now := time.Now()
+		if err := os.Chtimes(nodePath, now, now); err != nil {
+			return errtypes.InternalError("failed to change mtime of version node")
 		}
 
 		return fs.tp.Propagate(ctx, n)
