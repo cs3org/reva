@@ -23,7 +23,7 @@ def cloneOc10TestReposStep():
         "commands": [
             "source /drone/src/.drone.env",
             "git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing",
-            "git clone -b $CORE_BRANCH --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner",
+            "git clone -b $CORE_BRANCH --depth=1 --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner",
             "cd /drone/src/tmp/testrunner",
             "git checkout $CORE_COMMITID",
         ],
