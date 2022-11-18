@@ -194,10 +194,8 @@ func prepareArchiverURL(endpoint string, files []string) string {
 	for _, f := range files {
 		q.Add("file", f)
 	}
-	u := url.URL{
-		RawPath:  endpoint,
-		RawQuery: q.Encode(),
-	}
+	u, _ := url.Parse(endpoint)
+	u.RawQuery = q.Encode()
 	return u.String()
 }
 
@@ -208,7 +206,7 @@ func (s *svc) downloadArchive(ctx context.Context, w http.ResponseWriter, token 
 
 	req, err := rhttp.NewRequest(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		http.Error(w, "", http.StatusInternalServerError)
+		s.handleHttpError(w, err, log)
 		return
 	}
 
