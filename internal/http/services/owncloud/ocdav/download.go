@@ -12,11 +12,13 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/storage/utils/downloader"
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -57,8 +59,10 @@ func (s *svc) authenticate(ctx context.Context, token string) (context.Context, 
 		return nil, err
 	}
 
-	// TODO: status check
 	if res.Status.Code != rpc.Code_CODE_OK {
+		if res.Status.Code == rpc.Code_CODE_NOT_FOUND {
+			return nil, errtypes.NotFound(token)
+		}
 		return nil, errors.New(res.Status.Message)
 	}
 
@@ -68,15 +72,26 @@ func (s *svc) authenticate(ctx context.Context, token string) (context.Context, 
 	return ctx, nil
 }
 
+func (s *svc) handleHttpError(w http.ResponseWriter, err error, log *zerolog.Logger) {
+	log.Err(err).Msg("ocdav: got error")
+	switch err.(type) {
+	case errtypes.NotFound:
+		http.Error(w, "Resource not found", http.StatusNotFound)
+	default:
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
 func (s *svc) downloadFiles(ctx context.Context, w http.ResponseWriter, token string, files []string) {
+	log := appctx.GetLogger(ctx)
 	ctx, err := s.authenticate(ctx, token)
 	if err != nil {
-		// TODO
+		s.handleHttpError(w, err, log)
 		return
 	}
 	isSingleFileShare, res, err := s.isSingleFileShare(ctx, token, files)
 	if err != nil {
-		// TODO
+		s.handleHttpError(w, err, log)
 		return
 	}
 	if isSingleFileShare {
@@ -143,15 +158,16 @@ func (s *svc) getResourceFromPublicLinkToken(ctx context.Context, token, file st
 }
 
 func (s *svc) downloadFile(ctx context.Context, w http.ResponseWriter, res *provider.ResourceInfo) {
+	log := appctx.GetLogger(ctx)
 	c, err := s.getClient()
 	if err != nil {
-		// TODO
+		s.handleHttpError(w, err, log)
 		return
 	}
 	d := downloader.NewDownloader(c)
 	r, err := d.Download(ctx, res.Path)
 	if err != nil {
-		// TODO
+		s.handleHttpError(w, err, log)
 		return
 	}
 	defer r.Close()
@@ -160,7 +176,7 @@ func (s *svc) downloadFile(ctx context.Context, w http.ResponseWriter, res *prov
 
 	_, err = io.Copy(w, r)
 	if err != nil {
-		http.Error(w, "", http.StatusInternalServerError)
+		s.handleHttpError(w, err, log)
 		return
 	}
 }
@@ -186,6 +202,7 @@ func prepareArchiverURL(endpoint string, files []string) string {
 }
 
 func (s *svc) downloadArchive(ctx context.Context, w http.ResponseWriter, token string, files []string) {
+	log := appctx.GetLogger(ctx)
 	resources := getPublicLinkResources(s.c.PublicLinkDownload.PublicFolder, token, files)
 	url := prepareArchiverURL(s.c.PublicLinkDownload.ArchiverEndpoint, resources)
 
@@ -197,8 +214,7 @@ func (s *svc) downloadArchive(ctx context.Context, w http.ResponseWriter, token 
 
 	res, err := s.client.Do(req)
 	if err != nil {
-		// TODO
-		http.Error(w, "", http.StatusInternalServerError)
+		s.handleHttpError(w, err, log)
 		return
 	}
 	defer res.Body.Close()
@@ -207,7 +223,7 @@ func (s *svc) downloadArchive(ctx context.Context, w http.ResponseWriter, token 
 
 	_, err = io.Copy(w, res.Body)
 	if err != nil {
-		http.Error(w, "", http.StatusInternalServerError)
+		s.handleHttpError(w, err, log)
 		return
 	}
 }
