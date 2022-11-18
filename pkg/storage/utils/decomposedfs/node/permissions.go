@@ -20,10 +20,12 @@ package node
 
 import (
 	"context"
+	"strings"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
+	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/pkg/errors"
 )
@@ -89,6 +91,16 @@ func (p *Permissions) AssemblePermissions(ctx context.Context, n *Node) (ap prov
 	u, ok := ctxpkg.ContextGetUser(ctx)
 	if !ok {
 		return NoPermissions(), nil
+	}
+
+	if strings.Contains(n.ID, RevisionIDDelimiter) {
+		// verify revision key format
+		kp := strings.SplitN(n.ID, RevisionIDDelimiter, 2)
+		if len(kp) != 2 {
+			return NoPermissions(), errtypes.NotFound(n.ID)
+		}
+		// use the actual node for the permission assembly
+		n.ID = kp[0]
 	}
 
 	// check if the current user is the owner
