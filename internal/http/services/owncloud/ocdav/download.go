@@ -213,6 +213,11 @@ func (s *svc) downloadArchive(ctx context.Context, w http.ResponseWriter, token 
 		return
 	}
 
+	// FIXME: this only works for CERNBox config,
+	// as the bearer authentication is used to set the reva token
+	authtkn := ctxpkg.ContextMustGetToken(ctx)
+	req.Header.Add("Authorization", "Bearer "+authtkn)
+
 	res, err := s.client.Do(req)
 	if err != nil {
 		s.handleHttpError(w, err, log)
