@@ -757,7 +757,7 @@ func (t *Tree) Propagate(ctx context.Context, n *node.Node) (err error) {
 				}
 			}
 
-			if err := n.UnsetTempEtag(); !xattrs.IsAttrUnset(err) {
+			if err := n.UnsetTempEtag(); err != nil && !xattrs.IsAttrUnset(err) {
 				sublog.Error().Err(err).Msg("could not remove temporary etag attribute")
 			}
 		}
