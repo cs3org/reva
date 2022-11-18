@@ -804,18 +804,11 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 		newMtime = fi.ModTime()
 		file.Close()
 
-		// FIXME the copying might not be necessary when we are leaving the node in place since we only need the blobsize and the blobid in the extended attributes for a revision
-		// copy grant and arbitrary metadata to version node
-		// FIXME ... now restoring an older revision might bring back a grant that was removed!
+		// copy blob metadata to version node
 		err = xattrs.CopyMetadataWithSourceLock(targetPath, versionsPath, func(attributeName string) bool {
-			return true
-			// TODO determine all attributes that must be copied, currently we just copy all and overwrite changed properties
-			/*
-				return strings.HasPrefix(attributeName, xattrs.GrantPrefix) || // for grants
-					strings.HasPrefix(attributeName, xattrs.MetadataPrefix) || // for arbitrary metadata
-					strings.HasPrefix(attributeName, xattrs.FavPrefix) || // for favorites
-					strings.HasPrefix(attributeName, xattrs.SpaceNameAttr) || // for a shared file
-			*/
+			return strings.HasPrefix(attributeName, xattrs.ChecksumPrefix) || // for checksums
+				attributeName == xattrs.BlobIDAttr ||
+				attributeName == xattrs.BlobsizeAttr
 		}, lock)
 		if err != nil {
 			discardBlob()

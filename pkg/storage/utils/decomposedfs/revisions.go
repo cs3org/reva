@@ -21,7 +21,6 @@ package decomposedfs
 import (
 	"context"
 	"io"
-	iofs "io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -99,6 +98,7 @@ func (fs *Decomposedfs) ListRevisions(ctx context.Context, ref *provider.Referen
 }
 
 // DownloadRevision returns a reader for the specified revision
+// FIXME the CS3 api should explicitly allow initiating revision and trash download, a related issue is https://github.com/cs3org/reva/issues/1813
 func (fs *Decomposedfs) DownloadRevision(ctx context.Context, ref *provider.Reference, revisionKey string) (io.ReadCloser, error) {
 	log := appctx.GetLogger(ctx)
 
@@ -135,17 +135,18 @@ func (fs *Decomposedfs) DownloadRevision(ctx context.Context, ref *provider.Refe
 
 	contentPath := fs.lu.InternalPath(spaceID, revisionKey)
 
-	// FIXME this will always be an empty file ... actuallyd DownloadRevision is never called ... the CS3 api has no way to initiate a file revision download
-	// it all just magically works by accident ... and only partly ...
-	// see also https://github.com/cs3org/reva/issues/1813
-	r, err := os.Open(contentPath)
+	blobid, err := node.ReadBlobIDAttr(contentPath)
 	if err != nil {
-		if errors.Is(err, iofs.ErrNotExist) {
-			return nil, errtypes.NotFound(contentPath)
-		}
-		return nil, errors.Wrap(err, "Decomposedfs: error opening revision "+revisionKey)
+		return nil, errors.Wrapf(err, "Decomposedfs: could not read blob id of revision '%s' for node '%s'", n.ID, revisionKey)
 	}
-	return r, nil
+
+	revisionNode := node.Node{SpaceID: spaceID, BlobID: blobid}
+
+	reader, err := fs.tp.ReadBlob(&revisionNode)
+	if err != nil {
+		return nil, errors.Wrapf(err, "Decomposedfs: could not download blob of revision '%s' for node '%s'", n.ID, revisionKey)
+	}
+	return reader, nil
 }
 
 // RestoreRevision restores the specified revision of the resource
