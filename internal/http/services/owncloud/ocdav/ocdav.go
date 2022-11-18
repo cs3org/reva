@@ -109,7 +109,7 @@ type Config struct {
 	PublicURL              string                            `mapstructure:"public_url"`
 	FavoriteStorageDriver  string                            `mapstructure:"favorite_storage_driver"`
 	FavoriteStorageDrivers map[string]map[string]interface{} `mapstructure:"favorite_storage_drivers"`
-	PublicLinkDownload     ConfigPublicLinkDownload          `mapstructure:"publiclink_download"`
+	PublicLinkDownload     *ConfigPublicLinkDownload         `mapstructure:"publiclink_download"`
 }
 
 func (c *Config) init() {
