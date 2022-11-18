@@ -723,8 +723,7 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 
 	// prepare discarding the blob if something changed while writing it
 	discardBlob := func() {
-		err = upload.fs.tp.DeleteBlob(n)
-		if err != nil {
+		if err := upload.fs.tp.DeleteBlob(n); err != nil {
 			sublog.Err(err).Str("blobid", n.BlobID).Msg("Decomposedfs: failed to discard blob in blostore")
 		}
 	}
