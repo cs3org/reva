@@ -784,9 +784,6 @@ moving outside of the Shares folder gives 501 Not Implemented.
 -   [apiWebdavProperties1/copyFile.feature:437](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L437)
 -   [apiWebdavProperties1/copyFile.feature:442](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavProperties1/copyFile.feature#L442)
 
-#### [Downloading the older version of shared file gives 404](https://github.com/owncloud/ocis/issues/3868)
--   [apiVersions/fileVersionsSharingToShares.feature:306](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersionsSharingToShares.feature#L306)
-
 #### [file versions do not report the version author](https://github.com/owncloud/ocis/issues/2914)
 -   [apiVersions/fileVersionAuthor.feature:14](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersionAuthor.feature#L14)
 -   [apiVersions/fileVersionAuthor.feature:37](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiVersions/fileVersionAuthor.feature#L37)
