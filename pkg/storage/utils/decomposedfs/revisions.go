@@ -234,6 +234,11 @@ func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Refer
 			return errtypes.InternalError("failed to copy blob xattrs to version node")
 		}
 
+		// drop old revision
+		if err := os.Remove(revisionPath); err != nil {
+			log.Warn().Err(err).Interface("ref", ref).Str("originalnode", kp[0]).Str("revisionKey", revisionKey).Msg("could not delete old revision, continuing")
+		}
+
 		// explicitly update mtime of node as writing xattrs does not change mtime
 		now := time.Now()
 		if err := os.Chtimes(nodePath, now, now); err != nil {
