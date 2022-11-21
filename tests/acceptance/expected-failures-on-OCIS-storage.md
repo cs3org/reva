@@ -284,10 +284,6 @@ _requires a [CS3 user provisioning api that can update the quota for a user](htt
 -   [apiWebdavMove2/moveShareOnOcis.feature:169](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove2/moveShareOnOcis.feature#L169)
 -   [apiWebdavMove2/moveShareOnOcis.feature:170](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavMove2/moveShareOnOcis.feature#L170)
 
-
-#### [restoring an older version of a shared file deletes the share](https://github.com/owncloud/ocis/issues/765)
--   [apiShareManagementToShares/acceptShares.feature:579](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareManagementToShares/acceptShares.feature#L579)
-
 #### [Expiration date for shares is not implemented](https://github.com/owncloud/ocis/issues/1250)
 #### Expiration date of user shares
 -   [apiShareCreateSpecialToShares1/createShareExpirationDate.feature:52](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareCreateSpecialToShares1/createShareExpirationDate.feature#L52)
