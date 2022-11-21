@@ -210,7 +210,6 @@ func CopyMetadataWithSourceLock(src, target string, filter func(attributeName st
 // Set an extended attribute key to the given value
 func Set(filePath string, key string, val string) (err error) {
 	fileLock, err := filelocks.AcquireWriteLock(filePath)
-
 	if err != nil {
 		return errors.Wrap(err, "xattrs: Can not acquire write log")
 	}
@@ -222,6 +221,21 @@ func Set(filePath string, key string, val string) (err error) {
 			err = rerr
 		}
 	}()
+
+	return xattr.Set(filePath, key, []byte(val))
+}
+
+// SetWithLock an extended attribute key to the given value with an existing lock
+func SetWithLock(filePath string, key string, val string, fileLock *flock.Flock) (err error) {
+	// check the file is write locked
+	switch {
+	case fileLock == nil:
+		return errors.New("no lock provided")
+	case fileLock.Path() != filePath+".flock":
+		return errors.New("lockpath does not match filepath")
+	case !fileLock.Locked():
+		return errors.New("not write locked")
+	}
 
 	return xattr.Set(filePath, key, []byte(val))
 }

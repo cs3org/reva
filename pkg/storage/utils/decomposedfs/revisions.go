@@ -245,7 +245,14 @@ func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Refer
 			return errtypes.InternalError("failed to change mtime of version node")
 		}
 
-		return fs.tp.Propagate(ctx, n)
+		currentSize := n.Blobsize
+		revisionSize, err := xattrs.GetInt64(revisionPath, xattrs.BlobsizeAttr)
+		if err != nil {
+			return errtypes.InternalError("failed to read blob size xattr from version node")
+		}
+		sizeDiff := revisionSize - currentSize
+
+		return fs.tp.Propagate(ctx, n, sizeDiff)
 	}
 
 	log.Error().Err(err).Interface("ref", ref).Str("originalnode", kp[0]).Str("revisionKey", revisionKey).Msg("original node does not exist")

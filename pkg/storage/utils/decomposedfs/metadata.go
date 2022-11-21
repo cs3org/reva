@@ -117,7 +117,7 @@ func (fs *Decomposedfs) SetArbitraryMetadata(ctx context.Context, ref *provider.
 
 	switch len(errs) {
 	case 0:
-		return fs.tp.Propagate(ctx, n)
+		return fs.tp.Propagate(ctx, n, 0)
 	case 1:
 		// TODO Propagate if anything changed
 		return errs[0]
@@ -207,7 +207,7 @@ func (fs *Decomposedfs) UnsetArbitraryMetadata(ctx context.Context, ref *provide
 	}
 	switch len(errs) {
 	case 0:
-		return fs.tp.Propagate(ctx, n)
+		return fs.tp.Propagate(ctx, n, 0)
 	case 1:
 		// TODO Propagate if anything changed
 		return errs[0]

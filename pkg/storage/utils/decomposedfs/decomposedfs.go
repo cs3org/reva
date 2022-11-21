@@ -88,7 +88,7 @@ type Tree interface {
 	ReadBlob(node *node.Node) (io.ReadCloser, error)
 	DeleteBlob(node *node.Node) error
 
-	Propagate(ctx context.Context, node *node.Node) (err error)
+	Propagate(ctx context.Context, node *node.Node, sizeDiff int64) (err error)
 }
 
 // Decomposedfs provides the base for decomposed filesystem implementations

@@ -220,7 +220,7 @@ func (fs *Decomposedfs) RemoveGrant(ctx context.Context, ref *provider.Reference
 		}
 	}
 
-	return fs.tp.Propagate(ctx, node)
+	return fs.tp.Propagate(ctx, node, 0)
 }
 
 // UpdateGrant updates a grant on a resource
@@ -321,7 +321,7 @@ func (fs *Decomposedfs) storeGrant(ctx context.Context, n *node.Node, g *provide
 		return err
 	}
 
-	return fs.tp.Propagate(ctx, n)
+	return fs.tp.Propagate(ctx, n, 0)
 }
 
 // extractACEsFromAttrs reads ACEs in the list of attrs from the node
