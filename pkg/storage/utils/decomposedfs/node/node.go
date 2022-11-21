@@ -215,6 +215,19 @@ func ReadNode(ctx context.Context, lu PathLookup, spaceID, nodeID string, canLis
 		return r, nil
 	}
 
+	// are we reading a revision?
+	revision := ""
+	if strings.Contains(nodeID, RevisionIDDelimiter) {
+		// verify revision key format
+		kp := strings.SplitN(nodeID, RevisionIDDelimiter, 2)
+		if len(kp) == 2 {
+			// use the actual node for the metadata lookup
+			nodeID = kp[0]
+			// remember revision for blob metadata
+			revision = kp[1]
+		}
+	}
+
 	// read node
 	n = &Node{
 		SpaceID:   spaceID,
@@ -237,7 +250,7 @@ func ReadNode(ctx context.Context, lu PathLookup, spaceID, nodeID string, canLis
 	n.Exists = true
 
 	// lookup blobID in extended attributes
-	n.BlobID, err = n.Xattr(xattrs.BlobIDAttr)
+	n.BlobID, err = ReadBlobIDAttr(nodePath + revision)
 	switch {
 	case xattrs.IsNotExist(err):
 		return n, nil // swallow not found, the node defaults to exists = false
@@ -246,7 +259,7 @@ func ReadNode(ctx context.Context, lu PathLookup, spaceID, nodeID string, canLis
 	}
 
 	// Lookup blobsize
-	n.Blobsize, err = ReadBlobSizeAttr(nodePath)
+	n.Blobsize, err = ReadBlobSizeAttr(nodePath + revision)
 	switch {
 	case xattrs.IsNotExist(err):
 		return n, nil // swallow not found, the node defaults to exists = false
@@ -264,6 +277,9 @@ func ReadNode(ctx context.Context, lu PathLookup, spaceID, nodeID string, canLis
 	case err != nil:
 		return nil, errtypes.InternalError(err.Error())
 	}
+
+	// append back revision to nodeid
+	n.ID += revision
 
 	// TODO why do we stat the parent? to determine if the current node is in the trash we would need to traverse all parents...
 	// we need to traverse all parents for permissions anyway ...

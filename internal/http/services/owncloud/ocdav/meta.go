@@ -73,7 +73,7 @@ func (h *MetaHandler) Handler(s *svc) http.Handler {
 		}
 		if did.StorageId == "" && did.OpaqueId == "" && strings.Count(id, ":") >= 2 {
 			logger := appctx.GetLogger(r.Context())
-			logger.Warn().Str("id", id).Msg("detected invalid : separted resourceid id, trying to split it ... but fix the client that made the request")
+			logger.Warn().Str("id", id).Msg("detected invalid : separated resourceid id, trying to split it ... but fix the client that made the request")
 			// try splitting with :
 			parts := strings.SplitN(id, ":", 3)
 			did.StorageId = parts[0]

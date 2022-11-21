@@ -93,6 +93,7 @@ func (p *Permissions) AssemblePermissions(ctx context.Context, n *Node) (ap prov
 		return NoPermissions(), nil
 	}
 
+	// are we reading a revision?
 	if strings.Contains(n.ID, RevisionIDDelimiter) {
 		// verify revision key format
 		kp := strings.SplitN(n.ID, RevisionIDDelimiter, 2)
