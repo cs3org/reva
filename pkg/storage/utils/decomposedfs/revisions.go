@@ -147,8 +147,12 @@ func (fs *Decomposedfs) DownloadRevision(ctx context.Context, ref *provider.Refe
 	if err != nil {
 		return nil, errors.Wrapf(err, "Decomposedfs: could not read blob id of revision '%s' for node '%s'", n.ID, revisionKey)
 	}
+	blobsize, err := node.ReadBlobSizeAttr(contentPath)
+	if err != nil {
+		return nil, errors.Wrapf(err, "Decomposedfs: could not read blob size of revision '%s' for node '%s'", n.ID, revisionKey)
+	}
 
-	revisionNode := node.Node{SpaceID: spaceID, BlobID: blobid}
+	revisionNode := node.Node{SpaceID: spaceID, BlobID: blobid, Blobsize: blobsize} // blobsize is needed for the s3ng blobstore
 
 	reader, err := fs.tp.ReadBlob(&revisionNode)
 	if err != nil {
