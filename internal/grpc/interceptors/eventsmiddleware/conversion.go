@@ -24,6 +24,7 @@ import (
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v2/pkg/events"
+	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/utils"
 )
 
@@ -274,6 +275,15 @@ func SpaceRenamed(r *provider.UpdateStorageSpaceResponse, req *provider.UpdateSt
 	}
 }
 
+// SpaceUpdated converts the response to an event
+func SpaceUpdated(r *provider.UpdateStorageSpaceResponse, req *provider.UpdateStorageSpaceRequest, executant *user.UserId) events.SpaceUpdated {
+	return events.SpaceUpdated{
+		Executant: executant,
+		ID:        r.StorageSpace.Id,
+		Space:     r.StorageSpace,
+	}
+}
+
 // SpaceEnabled converts the response to an event
 func SpaceEnabled(r *provider.UpdateStorageSpaceResponse, req *provider.UpdateStorageSpaceRequest, executant *user.UserId) events.SpaceEnabled {
 	return events.SpaceEnabled{
@@ -286,12 +296,24 @@ func SpaceEnabled(r *provider.UpdateStorageSpaceResponse, req *provider.UpdateSt
 // SpaceShared converts the response to an event
 // func SpaceShared(req *provider.AddGrantRequest, executant, sharer *user.UserId, grantee *provider.Grantee) events.SpaceShared {
 func SpaceShared(r *provider.AddGrantResponse, req *provider.AddGrantRequest, executant *user.UserId) events.SpaceShared {
+	id := storagespace.FormatStorageID(req.Ref.ResourceId.StorageId, req.Ref.ResourceId.SpaceId)
 	return events.SpaceShared{
 		Executant:      executant,
 		Creator:        req.Grant.Creator,
 		GranteeUserID:  req.Grant.GetGrantee().GetUserId(),
 		GranteeGroupID: req.Grant.GetGrantee().GetGroupId(),
-		ID:             req.Ref.ResourceId,
+		ID:             &provider.StorageSpaceId{OpaqueId: id},
+	}
+}
+
+// SpaceUnshared  converts the response to an event
+func SpaceUnshared(r *provider.RemoveGrantResponse, req *provider.RemoveGrantRequest, executant *user.UserId) events.SpaceUnshared {
+	id := storagespace.FormatStorageID(req.Ref.ResourceId.StorageId, req.Ref.ResourceId.SpaceId)
+	return events.SpaceUnshared{
+		Executant:      executant,
+		GranteeUserID:  req.Grant.GetGrantee().GetUserId(),
+		GranteeGroupID: req.Grant.GetGrantee().GetGroupId(),
+		ID:             &provider.StorageSpaceId{OpaqueId: id},
 	}
 }
 

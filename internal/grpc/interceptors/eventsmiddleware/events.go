@@ -130,6 +130,10 @@ func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error
 			if isSuccess(v) && utils.ExistsInOpaque(r.Opaque, "spacegrant") {
 				ev = SpaceShared(v, r, executantID)
 			}
+		case *provider.RemoveGrantResponse:
+			if isSuccess(v) {
+				ev = SpaceUnshared(v, req.(*provider.RemoveGrantRequest), executantID)
+			}
 		case *provider.CreateContainerResponse:
 			if isSuccess(v) {
 				ev = ContainerCreated(v, req.(*provider.CreateContainerRequest), ownerID, executantID)
@@ -167,10 +171,10 @@ func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error
 				r := req.(*provider.UpdateStorageSpaceRequest)
 				if r.StorageSpace.Name != "" {
 					ev = SpaceRenamed(v, r, executantID)
-				}
-
-				if utils.ExistsInOpaque(r.Opaque, "restore") {
+				} else if utils.ExistsInOpaque(r.Opaque, "restore") {
 					ev = SpaceEnabled(v, r, executantID)
+				} else {
+					ev = SpaceUpdated(v, r, executantID)
 				}
 			}
 		case *provider.DeleteStorageSpaceResponse:
