@@ -808,7 +808,7 @@ func (t *Tree) Propagate(ctx context.Context, n *node.Node, sizeDiff int64) (err
 				if sizeDiff > 0 {
 					newSize = treeSize + uint64(sizeDiff)
 				} else {
-					newSize = treeSize - uint64(sizeDiff)
+					newSize = treeSize - uint64(-sizeDiff)
 				}
 			}
 
