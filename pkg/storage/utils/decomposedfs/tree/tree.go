@@ -303,6 +303,10 @@ func (t *Tree) CreateDir(ctx context.Context, n *node.Node) (err error) {
 		return
 	}
 
+	if err := n.SetTreeSize(0); err != nil {
+		return err
+	}
+
 	// make child appear in listings
 	relativeNodePath := filepath.Join("../../../../../", lookup.Pathify(n.ID, 4, 2))
 	err = os.Symlink(relativeNodePath, filepath.Join(n.ParentInternalPath(), n.Name))
@@ -536,7 +540,18 @@ func (t *Tree) Delete(ctx context.Context, n *node.Node) (err error) {
 		return
 	}
 
-	return t.Propagate(ctx, n, n.Blobsize)
+	var sizeDiff int64
+	if n.IsDir() {
+		treesize, err := n.GetTreeSize()
+		if err != nil {
+			return err // TODO calculate treesize if it is not set
+		}
+		sizeDiff = -int64(treesize)
+	} else {
+		sizeDiff = -n.Blobsize
+	}
+
+	return t.Propagate(ctx, n, sizeDiff)
 }
 
 // RestoreRecycleItemFunc returns a node and a function to restore it from the trash.
@@ -606,7 +621,18 @@ func (t *Tree) RestoreRecycleItemFunc(ctx context.Context, spaceid, key, trashPa
 		if err = os.Remove(trashItem); err != nil {
 			log.Error().Err(err).Str("trashItem", trashItem).Msg("error deleting trash item")
 		}
-		return t.Propagate(ctx, targetNode, targetNode.Blobsize)
+
+		var sizeDiff int64
+		if recycleNode.IsDir() {
+			treeSize, err := recycleNode.GetTreeSize()
+			if err != nil {
+				return err
+			}
+			sizeDiff = int64(treeSize)
+		} else {
+			sizeDiff = recycleNode.Blobsize
+		}
+		return t.Propagate(ctx, targetNode, sizeDiff)
 	}
 	return recycleNode, parent, fn, nil
 }
@@ -984,6 +1010,11 @@ func (t *Tree) readRecycleItem(ctx context.Context, spaceID, key, path string) (
 	if attrStr, err = xattrs.Get(deletedNodePath, xattrs.BlobIDAttr); err == nil {
 		recycleNode.BlobID = attrStr
 	} else {
+		return
+	}
+
+	// lookup blobSize in extended attributes
+	if recycleNode.Blobsize, err = xattrs.GetInt64(deletedNodePath, xattrs.BlobsizeAttr); err != nil {
 		return
 	}
 
