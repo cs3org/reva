@@ -868,7 +868,9 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 	}
 
 	// remember size diff
-	sizeDiff := oldSize - n.Blobsize
+	// old 10, new 5 (upload a smaller file) -> 5-10 = -5
+	// old 5, new 10 (upload a bigger file) -> 10-5 = +5
+	sizeDiff := n.Blobsize - oldSize
 
 	// unlock metadata
 	err = filelocks.ReleaseLock(lock)
