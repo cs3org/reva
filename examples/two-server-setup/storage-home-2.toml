@@ -4,7 +4,7 @@ address = "0.0.0.0:27000"
 [grpc.services.storageprovider]
 driver = "localhome"
 mount_path = "/home"
-mount_id = "123e4567-e89b-12d3-a456-426655440000"
+mount_id = "44aba51f-a122-48b0-9e86-e32e076b1a34"
 data_server_url = "http://localhost:27001/data"
 
 [http]

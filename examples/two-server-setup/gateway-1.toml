@@ -12,6 +12,7 @@ home_provider = "/home"
 [grpc.services.storageregistry.drivers.static.rules]
 "/home" = {"address" = "localhost:17000"}
 "/reva" = {"address" = "localhost:18000"}
+"44aba51f-a122-48b0-9e86-e32e076b1a34" = {"address" = "localhost:17000"}
 "123e4567-e89b-12d3-a456-426655440000" = {"address" = "localhost:18000"}
 
 [grpc.services.authregistry]
