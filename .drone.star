@@ -67,7 +67,7 @@ def cephService():
 # Pipeline definitions
 def main(ctx):
     # In order to run specific parts only, specify the parts as
-    # ocisIntegrationTests(6, [1, 4])     - this will only run 1st and 4th parts
+    # ocisIntegrationTests(1, [1, 4])     - this will only run 1st and 4th parts
     # implemented for: ocisIntegrationTests and s3ngIntegrationTests
     return [
         checkStarlark(),
@@ -79,7 +79,7 @@ def main(ctx):
         litmusOcisNewWebdav(),
         litmusOcisSpacesDav(),
         virtualViews(),
-    ] + ocisIntegrationTests(6) + s3ngIntegrationTests(12)
+    ] + ocisIntegrationTests(1) + s3ngIntegrationTests(1)
 
 def buildAndPublishDocker():
     return {
