@@ -443,8 +443,13 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 
 		space, err := fs.storageSpaceFromNode(ctx, n, checkNodePermissions)
 		if err != nil {
-			if _, ok := err.(errtypes.IsPermissionDenied); !ok {
-				appctx.GetLogger(ctx).Error().Err(err).Interface("node", n).Msg("could not convert to storage space")
+			switch err.(type) {
+			case errtypes.IsPermissionDenied:
+				// ok
+			case errtypes.NotFound:
+				// ok
+			default:
+				appctx.GetLogger(ctx).Error().Err(err).Str("id", nodeID).Msg("could not convert to storage space")
 			}
 			continue
 		}
