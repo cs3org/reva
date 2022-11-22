@@ -150,7 +150,7 @@ func (s *service) Authenticate(ctx context.Context, req *provider.AuthenticateRe
 	u, scope, err := s.authmgr.Authenticate(ctx, username, password)
 	switch v := err.(type) {
 	case nil:
-		log.Info().Msgf("user %s authenticated", u.Id)
+		log.Info().Interface("userId", u.Id).Msg("user authenticated")
 		return &provider.AuthenticateResponse{
 			Status:     status.NewOK(ctx),
 			User:       u,
