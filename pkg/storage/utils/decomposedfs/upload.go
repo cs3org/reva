@@ -793,15 +793,15 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 			sublog.Err(err).Str("version", versionsPath).Msg("could not create version node")
 			return errtypes.InternalError("could not create version node")
 		}
+		defer file.Close()
+
 		fi, err := file.Stat()
 		if err != nil {
-			file.Close()
 			discardBlob()
 			sublog.Err(err).Str("version", versionsPath).Msg("could not stat version node")
 			return errtypes.InternalError("could not stat version node")
 		}
 		newMtime = fi.ModTime()
-		file.Close()
 
 		// copy blob metadata to version node
 		err = xattrs.CopyMetadataWithSourceLock(targetPath, versionsPath, func(attributeName string) bool {

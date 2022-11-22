@@ -56,7 +56,7 @@ func (n *Node) SetXattr(key, val string) (err error) {
 	return xattrs.Set(n.InternalPath(), key, val)
 }
 
-// SetXattr sets an extended attribute on the write-through cache/node
+// SetXattrWithLock sets an extended attribute on the write-through cache/node with the given lock
 func (n *Node) SetXattrWithLock(key, val string, fileLock *flock.Flock) (err error) {
 	if n.xattrsCache != nil {
 		n.xattrsCache[key] = val
