@@ -95,6 +95,13 @@ func (fs *Decomposedfs) ListRevisions(ctx context.Context, ref *provider.Referen
 			}
 		}
 	}
+	// maybe we need to sort the list by key
+	/*
+		sort.Slice(revisions, func(i, j int) bool {
+			return revisions[i].Key > revisions[j].Key
+		})
+	*/
+
 	return
 }
 
@@ -196,18 +203,18 @@ func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Refer
 	nodePath := fs.lu.InternalPath(spaceID, kp[0])
 	var fi os.FileInfo
 	if fi, err = os.Stat(nodePath); err == nil {
-		// versions are stored alongside the actual file, so a rename can be efficient and does not cross storage / partition boundaries
-		versionsPath := fs.lu.InternalPath(spaceID, kp[0]+node.RevisionIDDelimiter+fi.ModTime().UTC().Format(time.RFC3339Nano))
+		// revisions are stored alongside the actual file, so a rename can be efficient and does not cross storage / partition boundaries
+		newRevisionPath := fs.lu.InternalPath(spaceID, kp[0]+node.RevisionIDDelimiter+fi.ModTime().UTC().Format(time.RFC3339Nano))
 
-		// touch version node
-		if file, err := os.Create(versionsPath); err != nil {
+		// touch new revision
+		if file, err := os.Create(newRevisionPath); err != nil {
 			return err
 		} else if err := file.Close(); err != nil {
 			return err
 		}
 
-		// copy blob metadata to version node
-		err = xattrs.CopyMetadata(nodePath, versionsPath, func(attributeName string) bool {
+		// copy blob metadata from node to new revision node
+		err = xattrs.CopyMetadata(nodePath, newRevisionPath, func(attributeName string) bool {
 			return strings.HasPrefix(attributeName, xattrs.ChecksumPrefix) || // for checksums
 				attributeName == xattrs.BlobIDAttr ||
 				attributeName == xattrs.BlobsizeAttr
@@ -216,26 +223,31 @@ func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Refer
 			return errtypes.InternalError("failed to copy blob xattrs to version node")
 		}
 
-		// keep mtime from previous version
-		if err := os.Chtimes(versionsPath, fi.ModTime(), fi.ModTime()); err != nil {
+		// remember mtime from node as new revision mtime
+		if err := os.Chtimes(newRevisionPath, fi.ModTime(), fi.ModTime()); err != nil {
 			return errtypes.InternalError("failed to change mtime of version node")
 		}
 
 		// update blob id in node
 
-		// copy blob metadata from revision to node
-		revisionPath := fs.lu.InternalPath(spaceID, revisionKey)
-		err = xattrs.CopyMetadata(revisionPath, nodePath, func(attributeName string) bool {
+		// copy blob metadata from restored revision to node
+		restoredRevisionPath := fs.lu.InternalPath(spaceID, revisionKey)
+		err = xattrs.CopyMetadata(restoredRevisionPath, nodePath, func(attributeName string) bool {
 			return strings.HasPrefix(attributeName, xattrs.ChecksumPrefix) ||
 				attributeName == xattrs.BlobIDAttr ||
 				attributeName == xattrs.BlobsizeAttr
 		})
 		if err != nil {
-			return errtypes.InternalError("failed to copy blob xattrs to version node")
+			return errtypes.InternalError("failed to copy blob xattrs to old revision to node")
+		}
+
+		revisionSize, err := xattrs.GetInt64(restoredRevisionPath, xattrs.BlobsizeAttr)
+		if err != nil {
+			return errtypes.InternalError("failed to read blob size xattr from old revision")
 		}
 
 		// drop old revision
-		if err := os.Remove(revisionPath); err != nil {
+		if err := os.Remove(restoredRevisionPath); err != nil {
 			log.Warn().Err(err).Interface("ref", ref).Str("originalnode", kp[0]).Str("revisionKey", revisionKey).Msg("could not delete old revision, continuing")
 		}
 
@@ -245,12 +257,9 @@ func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Refer
 			return errtypes.InternalError("failed to change mtime of version node")
 		}
 
-		currentSize := n.Blobsize
-		revisionSize, err := xattrs.GetInt64(revisionPath, xattrs.BlobsizeAttr)
-		if err != nil {
-			return errtypes.InternalError("failed to read blob size xattr from version node")
-		}
-		sizeDiff := revisionSize - currentSize
+		// revision 5, current 10 (restore a smaller blob) -> 5-10 = -5
+		// revision 10, current 5 (restore a bigger blob) -> 10-5 = +5
+		sizeDiff := revisionSize - n.Blobsize
 
 		return fs.tp.Propagate(ctx, n, sizeDiff)
 	}
