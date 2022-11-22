@@ -13,7 +13,6 @@ linters:
     - gosec             # TODO: consider enabling the 'gosec' linter to inspect source code for security problems.
     - tagliatelle       # TODO: consider enabling the 'tagliatelle' linter to check the struct tags.
     - stylecheck        # TODO: consider enabling the 'stylecheck' linter to enforce style rules.
-    - gofmt             # TODO: consider enabling the 'gofmt' linter to check whether code was gofmt-ed.
     - usestdlibvars     # TODO: consider enabling the 'usestdlibvars' linter to detect the possibility to use variables/constants from the Go standard library.
     - thelper           # TODO: consider enabling the 'thelper' linter to detect golang test helpers without t.Helper() call and check the consistency of test helpers.
     - staticcheck       # TODO: consider enabling the 'staticcheck' linter to find bugs and performance issues, offer simplifications, and enforce style rules.

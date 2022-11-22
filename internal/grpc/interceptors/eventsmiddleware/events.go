@@ -42,6 +42,7 @@ func init() {
 
 // NewUnary returns a new unary interceptor that emits events when needed
 // no lint because of the switch statement that should be extendable
+//
 //nolint:gocritic
 func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error) {
 	publisher, err := publisherFromConfig(m)
