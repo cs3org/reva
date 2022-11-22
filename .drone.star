@@ -7,15 +7,6 @@ def makeStep(target):
         ],
     }
 
-def lintStep():
-    return {
-        "name": "lint",
-        "image": "registry.cern.ch/docker.io/golangci/golangci-lint:v1.42.1",
-        "commands": [
-            "golangci-lint run --timeout 3m0s",
-        ],
-    }
-
 def cloneOc10TestReposStep():
     return {
         "name": "clone-oC10-test-repos",
@@ -134,7 +125,6 @@ def buildAndPublishDocker():
                 ],
             },
             makeStep("ci"),
-            lintStep(),
             {
                 "name": "publish-docker-reva-latest",
                 "pull": "always",
@@ -245,7 +235,6 @@ def buildOnly():
                     "dockerfile": "Dockerfile.revad",
                 },
             },
-            lintStep(),
         ],
     }
 
@@ -300,7 +289,6 @@ def release():
         },
         "steps": [
             makeStep("ci"),
-            lintStep(),
             {
                 "name": "create-dist",
                 "image": "registry.cern.ch/docker.io/library/golang:1.19",
