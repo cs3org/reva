@@ -489,6 +489,17 @@ func (t *Tree) Delete(ctx context.Context, n *node.Node) (err error) {
 		return err
 	}
 
+	var sizeDiff int64
+	if n.IsDir() {
+		treesize, err := n.GetTreeSize()
+		if err != nil {
+			return err // TODO calculate treesize if it is not set
+		}
+		sizeDiff = -int64(treesize)
+	} else {
+		sizeDiff = -n.Blobsize
+	}
+
 	deletionTime := time.Now().UTC().Format(time.RFC3339Nano)
 
 	// Prepare the trash
@@ -538,17 +549,6 @@ func (t *Tree) Delete(ctx context.Context, n *node.Node) (err error) {
 		// Roll back changes
 		_ = n.RemoveXattr(xattrs.TrashOriginAttr)
 		return
-	}
-
-	var sizeDiff int64
-	if n.IsDir() {
-		treesize, err := n.GetTreeSize()
-		if err != nil {
-			return err // TODO calculate treesize if it is not set
-		}
-		sizeDiff = -int64(treesize)
-	} else {
-		sizeDiff = -n.Blobsize
 	}
 
 	return t.Propagate(ctx, n, sizeDiff)
