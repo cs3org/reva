@@ -39,6 +39,8 @@ import (
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/registry"
 	"github.com/cs3org/reva/pkg/registry/memory"
+
+	// gocritic is disabled because google.golang.org/protobuf/proto does not provide a method to convert MessageV1 to MessageV2
 	"github.com/golang/protobuf/proto" //nolint:staticcheck
 	"google.golang.org/protobuf/encoding/protojson"
 )

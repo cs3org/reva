@@ -43,7 +43,7 @@ func init() {
 // NewUnary returns a new unary interceptor that emits events when needed
 // no lint because of the switch statement that should be extendable
 //
-//nolint:gocritic
+
 func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error) {
 	publisher, err := publisherFromConfig(m)
 	if err != nil {
@@ -57,7 +57,9 @@ func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error
 		}
 
 		var ev interface{}
-		switch v := res.(type) {
+
+		// gocritic is disabled because the use of .(type) outside type switch is forbidden
+		switch v := res.(type) { //nolint:gocritic
 		case *collaboration.CreateShareResponse:
 			ev = ShareCreated(v)
 		}
