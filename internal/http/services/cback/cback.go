@@ -61,14 +61,16 @@ type config struct {
 	GatewaySvc        string `mapstructure:"gatewaysvc"`
 	StorageID         string `mapstructure:"storage_id"`
 	TemplateToStorage string `mapstructure:"template_to_storage"`
+	TemplateToCback   string `mapstructure:"template_to_cback"`
 }
 
 type svc struct {
-	config *config
-	router *chi.Mux
-	client *cback.Client
-	gw     gateway.GatewayAPIClient
-	tpl    *template.Template
+	config     *config
+	router     *chi.Mux
+	client     *cback.Client
+	gw         gateway.GatewayAPIClient
+	tplStorage *template.Template
+	tplCback   *template.Template
 }
 
 // New returns a new cback http service
@@ -90,6 +92,11 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 		return nil, errors.Wrap(err, "cback: error creating template")
 	}
 
+	tplCback, err := template.New("tpl_cback").Funcs(sprig.TxtFuncMap()).Parse(c.TemplateToCback)
+	if err != nil {
+		return nil, errors.Wrap(err, "cback: error creating template")
+	}
+
 	r := chi.NewRouter()
 	s := &svc{
 		config: c,
@@ -101,7 +108,8 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 			Insecure: c.Insecure,
 			Timeout:  c.Timeout,
 		}),
-		tpl: tplStorage,
+		tplStorage: tplStorage,
+		tplCback:   tplCback,
 	}
 
 	s.initRouter()
@@ -121,6 +129,9 @@ func (c *config) init() {
 	}
 	if c.TemplateToStorage == "" {
 		c.TemplateToStorage = "{{.}}"
+	}
+	if c.TemplateToCback == "" {
+		c.TemplateToCback = "{{.}}"
 	}
 	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
 }
@@ -208,13 +219,17 @@ func (s *svc) createRestore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	restore, err := s.client.NewRestore(ctx, user.Username, backupID, path, snapshotID, true)
+	restore, err := s.client.NewRestore(ctx, user.Username, backupID, s.cbackPath(path), snapshotID, true)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	s.writeJSON(w, s.convertToRestoureOut(user, restore))
+}
+
+func (s *svc) cbackPath(p string) string {
+	return utils.Must(getPath(p, s.tplCback))
 }
 
 func (s *svc) getRestores(w http.ResponseWriter, r *http.Request) {
@@ -313,7 +328,7 @@ func (s *svc) Handler() http.Handler {
 }
 
 func (s *svc) toDestination(username, p string) (destination, error) {
-	p, err := getPath(p, s.tpl)
+	p, err := getPath(p, s.tplStorage)
 	if err != nil {
 		return destination{}, err
 	}
