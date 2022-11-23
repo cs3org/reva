@@ -181,18 +181,21 @@ func GetBackupInfo(r *provider.ResourceId) (string, string, int, bool) {
 	return filepath.Join(source, path), snap, id, ok
 }
 
-func (f *cbackfs) placeholderResourceInfo(path string, owner *user.UserId, mtime *types.Timestamp) *provider.ResourceInfo {
+func (f *cbackfs) placeholderResourceInfo(path string, owner *user.UserId, mtime *types.Timestamp, resId *provider.ResourceId) *provider.ResourceInfo {
 	if mtime == nil {
 		mtime = &types.Timestamp{
 			Seconds: 0,
 		}
 	}
-	return &provider.ResourceInfo{
-		Type: provider.ResourceType_RESOURCE_TYPE_CONTAINER,
-		Id: &provider.ResourceId{
+	if resId == nil {
+		resId = &provider.ResourceId{
 			StorageId: "cback",
 			OpaqueId:  path,
-		},
+		}
+	}
+	return &provider.ResourceInfo{
+		Type: provider.ResourceType_RESOURCE_TYPE_CONTAINER,
+		Id:   resId,
 		Checksum: &provider.ResourceChecksum{
 			Type: provider.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_UNSET,
 		},
@@ -276,17 +279,17 @@ func (f *cbackfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []s
 			if err != nil {
 				return nil, errors.Wrap(err, "cback: error getting snapshot")
 			}
-			return f.placeholderResourceInfo(filepath.Join(source, snapshot), user.Id, timeToTimestamp(snap.Time)), nil
+			return f.placeholderResourceInfo(filepath.Join(source, snapshot), user.Id, timeToTimestamp(snap.Time), encodeBackupInResourceID(id, snapshot, source, "")), nil
 		}
 		// the path from the user is something like /eos/home-g/gdelmont
-		return f.placeholderResourceInfo(source, user.Id, nil), nil
+		return f.placeholderResourceInfo(source, user.Id, nil, nil), nil
 	}
 
 	// the path is not one of the backup. There is a situation in which
 	// the user's path is a parent folder of some of the backups
 
 	if f.isParentOfBackup(ref.Path, backups) {
-		return f.placeholderResourceInfo(ref.Path, user.Id, nil), nil
+		return f.placeholderResourceInfo(ref.Path, user.Id, nil, nil), nil
 	}
 
 	return nil, errtypes.NotFound(fmt.Sprintf("path %s does not exist", ref.Path))
@@ -358,7 +361,7 @@ func (f *cbackfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKey
 		}
 		res := make([]*provider.ResourceInfo, 0, len(snapshots))
 		for _, s := range snapshots {
-			res = append(res, f.placeholderResourceInfo(filepath.Join(source, s.Time.Format(f.conf.TimestampFormat)), user.Id, timeToTimestamp(s.Time)))
+			res = append(res, f.placeholderResourceInfo(filepath.Join(source, s.Time.Format(f.conf.TimestampFormat)), user.Id, timeToTimestamp(s.Time), nil))
 		}
 		return res, nil
 	}
@@ -379,7 +382,7 @@ func (f *cbackfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKey
 			path := filepath.Join(ref.Path, base)
 
 			if _, ok := resSet[path]; !ok {
-				resources = append(resources, f.placeholderResourceInfo(path, user.Id, nil))
+				resources = append(resources, f.placeholderResourceInfo(path, user.Id, nil, nil))
 				resSet[path] = struct{}{}
 			}
 		}
