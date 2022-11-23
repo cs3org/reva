@@ -292,7 +292,7 @@ func (fs *ocfs) toInternalPath(ctx context.Context, sp string) (ip string) {
 			ip = filepath.Join(fs.c.DataDirectory, layout, "files")
 		} else {
 			// parts = "<username>", "foo/bar.txt"
-			ip = filepath.Join(fs.c.DataDirectory, layout, "files", filepath.Join(segments[1]))
+			ip = filepath.Join(fs.c.DataDirectory, layout, "files", segments[1])
 		}
 
 	}
@@ -2349,7 +2349,7 @@ func (fs *ocfs) propagate(ctx context.Context, leafPath string) error {
 			Int("i", i).
 			Interface("parts", parts).
 			Msg("propagating change")
-		if err := os.Chtimes(filepath.Join(root), fi.ModTime(), fi.ModTime()); err != nil {
+		if err := os.Chtimes(root, fi.ModTime(), fi.ModTime()); err != nil {
 			appctx.GetLogger(ctx).Error().
 				Err(err).
 				Str("leafPath", leafPath).

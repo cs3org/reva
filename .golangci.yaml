@@ -49,7 +49,6 @@ linters:
     - gofumpt           # TODO: consider enabling the 'gofumpt' linter to check whether code was gofumpt-ed.
     - godox             # TODO: consider enabling the 'godox' linter to detect FIXME, TODO and other comment keywords.
     - godot             # TODO: consider enabling the 'godot' linter to if comments end in a period.
-    - gocritic          # TODO: consider enabling the 'gocritic' linter to check for bugs, performance and style issues.
     - goconst           # TODO: consider enabling the 'goconst' linter to find repeated strings that could be replaced by a constant.
     - gocognit          # TODO: consider enabling the 'gocognit' linter to compute and check the cognitive complexity of functions.
     - gochecknoinits    # TODO: consider enabling the 'gochecknoinits' linter to check that no init functions are present in Go code.

@@ -1906,12 +1906,12 @@ func (fs *owncloudsqlfs) propagate(ctx context.Context, leafPath string) error {
 			Str("leafPath", leafPath).
 			Str("currentPath", currentPath).
 			Msg("propagating change")
-		parentFi, err := os.Stat(filepath.Join(currentPath))
+		parentFi, err := os.Stat(currentPath)
 		if err != nil {
 			return err
 		}
 		if fi.ModTime().UnixNano() > parentFi.ModTime().UnixNano() {
-			if err := os.Chtimes(filepath.Join(currentPath), fi.ModTime(), fi.ModTime()); err != nil {
+			if err := os.Chtimes(currentPath, fi.ModTime(), fi.ModTime()); err != nil {
 				appctx.GetLogger(ctx).Error().
 					Err(err).
 					Str("leafPath", leafPath).
@@ -1920,7 +1920,7 @@ func (fs *owncloudsqlfs) propagate(ctx context.Context, leafPath string) error {
 				return err
 			}
 		}
-		fi, err = os.Stat(filepath.Join(currentPath))
+		fi, err = os.Stat(currentPath)
 		if err != nil {
 			return err
 		}
