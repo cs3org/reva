@@ -119,6 +119,9 @@ func (c *config) init() {
 	if c.Prefix == "" {
 		c.Prefix = "cback"
 	}
+	if c.StorageMount == "" {
+		c.StorageMount = "/cback"
+	}
 	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
 }
 
