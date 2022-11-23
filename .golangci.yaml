@@ -41,7 +41,6 @@ linters:
     - containedctx      # TODO: consider enabling the 'containedctx' linter to detect struct contained context.Context field.
     - whitespace        # TODO: consider enabling the 'whitespace' linter to detect leading and trailing whitespaces.
     - unparam           # TODO: consider enabling the 'unparam' linter to report unused function parameters.
-    - revive            # TODO: consider enabling the 'revive' linter to configure custom rules and define a strict preset for enhancing development & code review processes.
     - nakedret          # TODO: consider enabling the 'nakedret' linter to find naked returns in functions greater than a specified function length.
     - dupword           # TODO: consider enabling the 'dupword' linter to check for duplicate words in the source code.
     - makezero          # TODO: consider enabling the 'makezero' linter to find slice declarations with non-zero initial length.
