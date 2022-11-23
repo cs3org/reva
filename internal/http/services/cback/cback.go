@@ -59,7 +59,7 @@ type config struct {
 	Timeout           int    `mapstructure:"timeout"`
 	GatewaySvc        string `mapstructure:"gatewaysvc"`
 	StorageID         string `mapstructure:"storage_id"`
-	StorageMount      string `mapstructure:"storage_id"`
+	StorageMount      string `mapstructure:"storage_mount"`
 	TemplateToStorage string `mapstructure:"template_to_storage"`
 }
 
