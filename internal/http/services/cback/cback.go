@@ -145,8 +145,8 @@ func (s *svc) initRouter() {
 }
 
 type destination struct {
-	Path   string `mapstructure:"path"`
-	Webdav string `mapstructure:"webdav"`
+	Path   string `json:"path"`
+	Webdav string `json:"webdav"`
 }
 
 type restoreOut struct {
