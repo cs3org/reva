@@ -80,7 +80,7 @@ func acquireLock(file string, write bool) (*flock.Flock, error) {
 	var err error
 
 	// Create a file to carry the log
-	n := flockFile(file)
+	n := FlockFile(file)
 	if len(n) == 0 {
 		return nil, ErrPathEmpty
 	}
@@ -123,14 +123,13 @@ func acquireLock(file string, write bool) (*flock.Flock, error) {
 	return flock, nil
 }
 
-// flockFile returns the flock filename for a given file name
+// FlockFile returns the flock filename for a given file name
 // it returns an empty string if the input is empty
-func flockFile(file string) string {
-	var n string
-	if len(file) > 0 {
-		n = file + ".flock"
+func FlockFile(file string) string {
+	if file == "" {
+		return ""
 	}
-	return n
+	return file + ".flock"
 }
 
 // AcquireReadLock tries to acquire a shared lock to read from the
