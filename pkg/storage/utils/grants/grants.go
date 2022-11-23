@@ -109,7 +109,7 @@ func GetGrantPermissionSet(perm string) *provider.ResourcePermissions {
 	return &rp
 }
 
-// GetACLType returns a char representation of the type of grantee
+// GetACLType returns a char representation of the type of grantee.
 func GetACLType(gt provider.GranteeType) (string, error) {
 	switch gt {
 	case provider.GranteeType_GRANTEE_TYPE_USER:
@@ -121,7 +121,7 @@ func GetACLType(gt provider.GranteeType) (string, error) {
 	}
 }
 
-// GetGranteeType returns the grantee type from a char
+// GetGranteeType returns the grantee type from a char.
 func GetGranteeType(aclType string) provider.GranteeType {
 	switch aclType {
 	case acl.TypeUser, acl.TypeLightweight:
@@ -133,12 +133,12 @@ func GetGranteeType(aclType string) provider.GranteeType {
 	}
 }
 
-// PermissionsEqual returns true if the permissions are equal
+// PermissionsEqual returns true if the permissions are equal.
 func PermissionsEqual(p1, p2 *provider.ResourcePermissions) bool {
 	return p1 != nil && p2 != nil && cmp.Equal(*p1, *p2)
 }
 
-// GranteeEqual returns true if the grantee are equal
+// GranteeEqual returns true if the grantee are equal.
 func GranteeEqual(g1, g2 *provider.Grantee) bool {
 	return g1 != nil && g2 != nil && cmp.Equal(*g1, *g2)
 }

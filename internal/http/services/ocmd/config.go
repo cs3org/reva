@@ -85,6 +85,5 @@ func (h *configHandler) Handler() http.Handler {
 		if _, err := w.Write(indentedConf); err != nil {
 			log.Err(err).Msg("Error writing to ResponseWriter")
 		}
-
 	})
 }

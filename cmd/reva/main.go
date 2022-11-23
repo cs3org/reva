@@ -115,7 +115,6 @@ func init() {
 }
 
 func main() {
-
 	if host != "" {
 		conf = &config{host}
 		if err := writeConfig(conf); err != nil {

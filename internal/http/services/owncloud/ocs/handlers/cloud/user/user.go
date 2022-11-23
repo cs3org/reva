@@ -27,11 +27,11 @@ import (
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 )
 
-// The Handler renders the user endpoint
+// The Handler renders the user endpoint.
 type Handler struct {
 }
 
-// GetSelf handles GET requests on /cloud/user
+// GetSelf handles GET requests on /cloud/user.
 func (h *Handler) GetSelf(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -50,7 +50,7 @@ func (h *Handler) GetSelf(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// User holds user data
+// User holds user data.
 type User struct {
 	// TODO needs better naming, clarify if we need a userid, a username or both
 	ID          string `json:"id" xml:"id"`

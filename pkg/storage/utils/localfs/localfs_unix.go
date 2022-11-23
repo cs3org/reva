@@ -39,7 +39,7 @@ import (
 // - inode (if available),
 // - device (if available) and
 // - size.
-// errors are logged, but an etag will still be returned
+// errors are logged, but an etag will still be returned.
 func calcEtag(ctx context.Context, fi os.FileInfo) string {
 	log := appctx.GetLogger(ctx)
 	h := md5.New()

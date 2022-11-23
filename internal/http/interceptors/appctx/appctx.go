@@ -40,7 +40,6 @@ func New(log zerolog.Logger) func(http.Handler) http.Handler {
 }
 
 func handler(log zerolog.Logger, h http.Handler) http.Handler {
-
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		span := trace.SpanFromContext(ctx)

@@ -390,7 +390,6 @@ func parseWopiDiscovery(body io.Reader) (map[string]map[string]string, error) {
 	}
 
 	for _, netzone := range root.SelectElements("net-zone") {
-
 		if strings.Contains(netzone.SelectAttrValue("name", ""), "external") {
 			for _, app := range netzone.SelectElements("app") {
 				for _, action := range app.SelectElements("action") {

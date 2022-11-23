@@ -160,9 +160,8 @@ func registerMimeTypes(mappingFile string) error {
 	return nil
 }
 
-// New creates a new storage provider svc
+// New creates a new storage provider svc.
 func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
-
 	c, err := parseConfig(m)
 	if err != nil {
 		return nil, err
@@ -277,7 +276,7 @@ func (s *service) UnsetArbitraryMetadata(ctx context.Context, req *provider.Unse
 	return res, nil
 }
 
-// SetLock puts a lock on the given reference
+// SetLock puts a lock on the given reference.
 func (s *service) SetLock(ctx context.Context, req *provider.SetLockRequest) (*provider.SetLockResponse, error) {
 	newRef, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
@@ -310,7 +309,7 @@ func (s *service) SetLock(ctx context.Context, req *provider.SetLockRequest) (*p
 	return res, nil
 }
 
-// GetLock returns an existing lock on the given reference
+// GetLock returns an existing lock on the given reference.
 func (s *service) GetLock(ctx context.Context, req *provider.GetLockRequest) (*provider.GetLockResponse, error) {
 	newRef, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
@@ -343,7 +342,7 @@ func (s *service) GetLock(ctx context.Context, req *provider.GetLockRequest) (*p
 	return res, nil
 }
 
-// RefreshLock refreshes an existing lock on the given reference
+// RefreshLock refreshes an existing lock on the given reference.
 func (s *service) RefreshLock(ctx context.Context, req *provider.RefreshLockRequest) (*provider.RefreshLockResponse, error) {
 	newRef, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
@@ -376,7 +375,7 @@ func (s *service) RefreshLock(ctx context.Context, req *provider.RefreshLockRequ
 	return res, nil
 }
 
-// Unlock removes an existing lock from the given reference
+// Unlock removes an existing lock from the given reference.
 func (s *service) Unlock(ctx context.Context, req *provider.UnlockRequest) (*provider.UnlockResponse, error) {
 	newRef, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
@@ -579,7 +578,7 @@ func (s *service) CreateHome(ctx context.Context, req *provider.CreateHomeReques
 	return res, nil
 }
 
-// CreateStorageSpace creates a storage space
+// CreateStorageSpace creates a storage space.
 func (s *service) CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error) {
 	resp, err := s.storage.CreateStorageSpace(ctx, req)
 	if err != nil {

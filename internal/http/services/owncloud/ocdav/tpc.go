@@ -39,11 +39,11 @@ import (
 )
 
 const (
-	// PerfMarkerResponseTime corresponds to the interval at which a performance marker is sent back to the TPC client
+	// PerfMarkerResponseTime corresponds to the interval at which a performance marker is sent back to the TPC client.
 	PerfMarkerResponseTime float64 = 5
 )
 
-// PerfResponse provides a single chunk of permormance marker response
+// PerfResponse provides a single chunk of permormance marker response.
 type PerfResponse struct {
 	Timestamp time.Time
 	Bytes     uint64
@@ -85,7 +85,6 @@ func (wc *WriteCounter) SendPerfMarker(size uint64) {
 }
 
 func (wc *WriteCounter) Write(p []byte) (int, error) {
-
 	n := len(p)
 	wc.Total += uint64(n)
 	NowTime := time.Now()
@@ -377,7 +376,7 @@ func (s *svc) performHTTPPush(ctx context.Context, client gateway.GatewayAPIClie
 	defer httpDownloadRes.Body.Close()
 	if httpDownloadRes.StatusCode != http.StatusOK {
 		w.WriteHeader(httpDownloadRes.StatusCode)
-		return fmt.Errorf("Remote PUT returned status code %d", httpDownloadRes.StatusCode)
+		return fmt.Errorf("remote PUT returned status code %d", httpDownloadRes.StatusCode)
 	}
 
 	// send performance markers periodically every PerfMarkerResponseTime (5 seconds unless configured)

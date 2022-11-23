@@ -157,5 +157,4 @@ func TestNameDoesNotContainRule(t *testing.T) {
 			}
 		}
 	}
-
 }

@@ -27,12 +27,11 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/cs3org/reva/pkg/mentix/utils"
-	"github.com/rs/zerolog"
-
 	"github.com/cs3org/reva/pkg/mentix/config"
 	"github.com/cs3org/reva/pkg/mentix/exchangers/exporters/prometheus"
 	"github.com/cs3org/reva/pkg/mentix/meshdata"
+	"github.com/cs3org/reva/pkg/mentix/utils"
+	"github.com/rs/zerolog"
 )
 
 type prometheusSDScrapeCreatorCallback = func(op *meshdata.Operator, site *meshdata.Site, service *meshdata.Service, endpoint *meshdata.ServiceEndpoint) *prometheus.ScrapeConfig

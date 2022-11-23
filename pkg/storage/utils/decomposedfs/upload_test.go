@@ -38,11 +38,10 @@ import (
 	treemocks "github.com/cs3org/reva/pkg/storage/utils/decomposedfs/tree/mocks"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/xattrs"
 	"github.com/cs3org/reva/tests/helpers"
-	"github.com/pkg/xattr"
-	"github.com/stretchr/testify/mock"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/pkg/xattr"
+	"github.com/stretchr/testify/mock"
 )
 
 var _ = Describe("File uploads", func() {

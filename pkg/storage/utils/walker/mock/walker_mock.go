@@ -31,12 +31,12 @@ import (
 type mockWalker struct{}
 
 // NewWalker creates a mock walker that implements the Walk interface
-// supposed to be used for testing
+// supposed to be used for testing.
 func NewWalker() walker.Walker {
 	return &mockWalker{}
 }
 
-// converts a FileInfo to a reva ResourceInfo
+// converts a FileInfo to a reva ResourceInfo.
 func convertFileInfoToResourceInfo(path string, f fs.FileInfo) *provider.ResourceInfo {
 	if f == nil {
 		return nil
@@ -62,7 +62,7 @@ func mockWalkFunc(fn walker.WalkFunc) filepath.WalkFunc {
 	}
 }
 
-// Walk walks into the local file system using the built-in filepath.Walk go function
+// Walk walks into the local file system using the built-in filepath.Walk go function.
 func (m *mockWalker) Walk(_ context.Context, root string, fn walker.WalkFunc) error {
 	return filepath.Walk(root, mockWalkFunc(fn))
 }

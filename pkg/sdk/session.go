@@ -26,13 +26,12 @@ import (
 
 	registry "github.com/cs3org/go-cs3apis/cs3/auth/registry/v1beta1"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+	"github.com/cs3org/reva/pkg/sdk/common"
+	"github.com/cs3org/reva/pkg/sdk/common/net"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
-
-	"github.com/cs3org/reva/pkg/sdk/common"
-	"github.com/cs3org/reva/pkg/sdk/common/net"
 )
 
 // Session stores information about a Reva session.

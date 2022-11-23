@@ -23,5 +23,5 @@ import (
 	_ "github.com/cs3org/reva/pkg/metrics/driver/dummy"
 	_ "github.com/cs3org/reva/pkg/metrics/driver/json"
 	_ "github.com/cs3org/reva/pkg/metrics/driver/xcloud"
-	// Add your own here
+	// Add your own here.
 )

@@ -56,7 +56,6 @@ func getDriver(c *config) (provider.Authorizer, error) {
 
 // New returns a new HTTP middleware that verifies that the provider is registered in OCM.
 func New(m map[string]interface{}, unprotected []string, ocmPrefix string) (global.Middleware, error) {
-
 	if ocmPrefix == "" {
 		ocmPrefix = "ocm"
 	}
@@ -74,7 +73,6 @@ func New(m map[string]interface{}, unprotected []string, ocmPrefix string) (glob
 
 	handler := func(h http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-
 			ctx := r.Context()
 			log := appctx.GetLogger(ctx)
 			head, _ := router.ShiftPath(r.URL.Path)
@@ -110,5 +108,4 @@ func New(m map[string]interface{}, unprotected []string, ocmPrefix string) (glob
 	}
 
 	return handler, nil
-
 }

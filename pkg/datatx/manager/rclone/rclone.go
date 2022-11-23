@@ -88,7 +88,7 @@ type transferModel struct {
 	Transfers map[string]*transfer `json:"transfers"`
 }
 
-// persistency driver
+// persistency driver.
 type pDriver struct {
 	sync.Mutex // concurrent access to the file
 	model      *transferModel
@@ -107,7 +107,7 @@ type transfer struct {
 	Ctime          string
 }
 
-// txEndStatuses final statuses that cannot be changed anymore
+// txEndStatuses final statuses that cannot be changed anymore.
 var txEndStatuses = map[string]int32{
 	"STATUS_INVALID":                0,
 	"STATUS_DESTINATION_NOT_FOUND":  1,
@@ -118,7 +118,7 @@ var txEndStatuses = map[string]int32{
 	"STATUS_TRANSFER_EXPIRED":       10,
 }
 
-// New returns a new rclone driver
+// New returns a new rclone driver.
 func New(m map[string]interface{}) (txdriver.Manager, error) {
 	c, err := parseConfig(m)
 	if err != nil {
@@ -582,7 +582,7 @@ func (driver *rclone) startJob(ctx context.Context, transferID string, srcRemote
 	}, nil
 }
 
-// GetTransferStatus returns the status of the transfer with the specified job id
+// GetTransferStatus returns the status of the transfer with the specified job id.
 func (driver *rclone) GetTransferStatus(ctx context.Context, transferID string) (*datatx.TxInfo, error) {
 	transfer, err := driver.pDriver.model.getTransfer(transferID)
 	if err != nil {
@@ -600,7 +600,7 @@ func (driver *rclone) GetTransferStatus(ctx context.Context, transferID string) 
 	}, nil
 }
 
-// CancelTransfer cancels the transfer with the specified transfer id
+// CancelTransfer cancels the transfer with the specified transfer id.
 func (driver *rclone) CancelTransfer(ctx context.Context, transferID string) (*datatx.TxInfo, error) {
 	transfer, err := driver.pDriver.model.getTransfer(transferID)
 	if err != nil {
@@ -748,7 +748,7 @@ func (driver *rclone) RetryTransfer(ctx context.Context, transferID string) (*da
 	return driver.startJob(ctx, transferID, "", "", "", "", "", "")
 }
 
-// getTransfer returns the transfer with the specified transfer ID
+// getTransfer returns the transfer with the specified transfer ID.
 func (m *transferModel) getTransfer(transferID string) (*transfer, error) {
 	transfer, ok := m.Transfers[transferID]
 	if !ok {

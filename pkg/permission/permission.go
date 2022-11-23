@@ -22,7 +22,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 )
 
-// Manager defines the interface for the permission service driver
+// Manager defines the interface for the permission service driver.
 type Manager interface {
 	CheckPermission(permission string, subject string, ref *provider.Reference) bool
 }

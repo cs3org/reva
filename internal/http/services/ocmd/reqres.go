@@ -25,10 +25,10 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 )
 
-// APIErrorCode stores the type of error encountered
+// APIErrorCode stores the type of error encountered.
 type APIErrorCode string
 
-// The various types of errors that can be expected to occur
+// The various types of errors that can be expected to occur.
 const (
 	APIErrorNotFound         APIErrorCode = "RESOURCE_NOT_FOUND"
 	APIErrorUnauthenticated  APIErrorCode = "UNAUTHENTICATED"
@@ -39,7 +39,7 @@ const (
 	APIErrorServerError      APIErrorCode = "SERVER_ERROR"
 )
 
-// APIErrorCodeMapping stores the HTTP error code mapping for various APIErrorCodes
+// APIErrorCodeMapping stores the HTTP error code mapping for various APIErrorCodes.
 var APIErrorCodeMapping = map[APIErrorCode]int{
 	APIErrorNotFound:         http.StatusNotFound,
 	APIErrorUnauthenticated:  http.StatusUnauthorized,
@@ -50,13 +50,13 @@ var APIErrorCodeMapping = map[APIErrorCode]int{
 	APIErrorServerError:      http.StatusInternalServerError,
 }
 
-// APIError encompasses the error type and message
+// APIError encompasses the error type and message.
 type APIError struct {
 	Code    APIErrorCode `json:"code"`
 	Message string       `json:"message"`
 }
 
-// WriteError handles writing error responses
+// WriteError handles writing error responses.
 func WriteError(w http.ResponseWriter, r *http.Request, code APIErrorCode, message string, e error) {
 	if e != nil {
 		appctx.GetLogger(r.Context()).Error().Err(e).Msg(message)

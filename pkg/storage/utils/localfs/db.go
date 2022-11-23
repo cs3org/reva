@@ -23,10 +23,9 @@ import (
 	"database/sql"
 	"path"
 
-	"github.com/pkg/errors"
-
-	// Provides sqlite drivers
+	// Provides sqlite drivers.
 	_ "github.com/mattn/go-sqlite3"
+	"github.com/pkg/errors"
 )
 
 func initializeDB(root, dbName string) (*sql.DB, error) {

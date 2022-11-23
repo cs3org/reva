@@ -41,7 +41,7 @@ type LDAPConn struct {
 
 // GetLDAPConnection initializes an LDAPS connection and allows
 // to set TLS options e.g. to add trusted Certificates or disable
-// Certificate verification
+// Certificate verification.
 func GetLDAPConnection(c *LDAPConn) (*ldap.Conn, error) {
 	tlsconfig := &tls.Config{InsecureSkipVerify: c.Insecure}
 

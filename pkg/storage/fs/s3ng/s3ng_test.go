@@ -23,7 +23,6 @@ import (
 
 	"github.com/cs3org/reva/pkg/storage/fs/s3ng"
 	"github.com/cs3org/reva/tests/helpers"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
@@ -59,7 +58,7 @@ var _ = Describe("S3ng", func() {
 	Describe("New", func() {
 		It("fails on missing s3 configuration", func() {
 			_, err := s3ng.New(map[string]interface{}{})
-			Expect(err).To(MatchError("S3 configuration incomplete"))
+			Expect(err).To(MatchError("s3 configuration incomplete"))
 		})
 
 		It("works with complete configuration", func() {

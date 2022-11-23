@@ -41,7 +41,7 @@ import (
 // We can add a background process to move old revisions to a slower storage
 // and replace the revision file with a symbolic link in the future, if necessary.
 
-// ListRevisions lists the revisions of the given resource
+// ListRevisions lists the revisions of the given resource.
 func (fs *Decomposedfs) ListRevisions(ctx context.Context, ref *provider.Reference) (revisions []*provider.FileVersion, err error) {
 	var n *node.Node
 	if n, err = fs.lu.NodeFromResource(ctx, ref); err != nil {
@@ -89,7 +89,7 @@ func (fs *Decomposedfs) ListRevisions(ctx context.Context, ref *provider.Referen
 	return
 }
 
-// DownloadRevision returns a reader for the specified revision
+// DownloadRevision returns a reader for the specified revision.
 func (fs *Decomposedfs) DownloadRevision(ctx context.Context, ref *provider.Reference, revisionKey string) (io.ReadCloser, error) {
 	log := appctx.GetLogger(ctx)
 
@@ -129,12 +129,12 @@ func (fs *Decomposedfs) DownloadRevision(ctx context.Context, ref *provider.Refe
 		if os.IsNotExist(err) {
 			return nil, errtypes.NotFound(contentPath)
 		}
-		return nil, errors.Wrap(err, "Decomposedfs: error opening revision "+revisionKey)
+		return nil, errors.Wrap(err, "decomposedfs: error opening revision "+revisionKey)
 	}
 	return r, nil
 }
 
-// RestoreRevision restores the specified revision of the resource
+// RestoreRevision restores the specified revision of the resource.
 func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Reference, revisionKey string) (err error) {
 	log := appctx.GetLogger(ctx)
 

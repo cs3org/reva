@@ -23,20 +23,17 @@ import (
 	"fmt"
 	"net/http"
 
-	meshdirectoryweb "github.com/sciencemesh/meshdirectory-web"
-
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	providerv1beta1 "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
-
 	"github.com/cs3org/reva/internal/http/services/ocmd"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/rhttp/router"
 	"github.com/cs3org/reva/pkg/sharedconf"
+	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
-
-	"github.com/cs3org/reva/pkg/rhttp/global"
-	"github.com/mitchellh/mapstructure"
+	meshdirectoryweb "github.com/sciencemesh/meshdirectory-web"
 )
 
 func init() {
@@ -69,7 +66,7 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 	return c, nil
 }
 
-// New returns a new Mesh Directory HTTP service
+// New returns a new Mesh Directory HTTP service.
 func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) {
 	c, err := parseConfig(m)
 	if err != nil {
@@ -84,12 +81,12 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 	return service, nil
 }
 
-// Service prefix
+// Service prefix.
 func (s *svc) Prefix() string {
 	return s.conf.Prefix
 }
 
-// Unprotected endpoints
+// Unprotected endpoints.
 func (s *svc) Unprotected() []string {
 	return []string{"/"}
 }
@@ -137,7 +134,7 @@ func (s *svc) serveJSON(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-// HTTP service handler
+// HTTP service handler.
 func (s *svc) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var head string

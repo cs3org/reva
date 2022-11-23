@@ -23,7 +23,7 @@ import (
 	"github.com/cs3org/reva/pkg/sharedconf"
 )
 
-// Config holds the config options that need to be passed down to all ocs handlers
+// Config holds the config options that need to be passed down to all ocs handlers.
 type Config struct {
 	Prefix                   string                            `mapstructure:"prefix"`
 	Config                   data.ConfigData                   `mapstructure:"config"`
@@ -44,7 +44,7 @@ type Config struct {
 	UserIdentifierCacheTTL   int                               `mapstructure:"user_identifier_cache_ttl"`
 }
 
-// Init sets sane defaults
+// Init sets sane defaults.
 func (c *Config) Init() {
 	if c.Prefix == "" {
 		c.Prefix = "ocs"

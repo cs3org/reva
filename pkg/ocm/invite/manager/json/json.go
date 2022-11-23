@@ -82,7 +82,6 @@ func (c *config) init() error {
 
 // New returns a new invite manager object.
 func New(m map[string]interface{}) (invite.Manager, error) {
-
 	config, err := parseConfig(m)
 	if err != nil {
 		err = errors.Wrap(err, "error parsing config for json invite manager")
@@ -122,7 +121,6 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 }
 
 func loadOrCreate(file string) (*inviteModel, error) {
-
 	_, err := os.Stat(file)
 	if os.IsNotExist(err) {
 		if err := os.WriteFile(file, []byte("{}"), 0700); err != nil {
@@ -177,7 +175,6 @@ func (model *inviteModel) Save() error {
 }
 
 func (m *manager) GenerateToken(ctx context.Context) (*invitepb.InviteToken, error) {
-
 	contexUser := ctxpkg.ContextMustGetUser(ctx)
 	inviteToken, err := token.CreateToken(m.config.Expiration, contexUser.GetId())
 	if err != nil {
@@ -198,7 +195,6 @@ func (m *manager) GenerateToken(ctx context.Context) (*invitepb.InviteToken, err
 }
 
 func (m *manager) ForwardInvite(ctx context.Context, invite *invitepb.InviteToken, originProvider *ocmprovider.ProviderInfo) error {
-
 	contextUser := ctxpkg.ContextMustGetUser(ctx)
 	recipientProvider := contextUser.GetId().GetIdp()
 
@@ -246,7 +242,6 @@ func (m *manager) ForwardInvite(ctx context.Context, invite *invitepb.InviteToke
 }
 
 func (m *manager) AcceptInvite(ctx context.Context, invite *invitepb.InviteToken, remoteUser *userpb.User) error {
-
 	m.Lock()
 	defer m.Unlock()
 
@@ -276,7 +271,6 @@ func (m *manager) AcceptInvite(ctx context.Context, invite *invitepb.InviteToken
 }
 
 func (m *manager) GetAcceptedUser(ctx context.Context, remoteUserID *userpb.UserId) (*userpb.User, error) {
-
 	userKey := ctxpkg.ContextMustGetUser(ctx).GetId().GetOpaqueId()
 	for _, acceptedUser := range m.model.AcceptedUsers[userKey] {
 		if (acceptedUser.Id.GetOpaqueId() == remoteUserID.OpaqueId) && (remoteUserID.Idp == "" || acceptedUser.Id.GetIdp() == remoteUserID.Idp) {

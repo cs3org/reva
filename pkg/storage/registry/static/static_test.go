@@ -26,7 +26,6 @@ import (
 	registrypb "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/storage/registry/static"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )

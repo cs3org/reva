@@ -21,5 +21,5 @@ package loader
 import (
 	// Load preferences drivers.
 	_ "github.com/cs3org/reva/pkg/preferences/memory"
-	// Add your own here
+	// Add your own here.
 )

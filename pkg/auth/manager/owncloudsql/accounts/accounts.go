@@ -28,7 +28,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-// Accounts represents oc10-style Accounts
+// Accounts represents oc10-style Accounts.
 type Accounts struct {
 	driver                                     string
 	db                                         *sql.DB
@@ -36,7 +36,7 @@ type Accounts struct {
 	selectSQL                                  string
 }
 
-// NewMysql returns a new accounts instance connecting to a MySQL database
+// NewMysql returns a new accounts instance connecting to a MySQL database.
 func NewMysql(dsn string, joinUsername, joinUUID, enableMedialSearch bool) (*Accounts, error) {
 	sqldb, err := sql.Open("mysql", dsn)
 	if err != nil {
@@ -54,9 +54,8 @@ func NewMysql(dsn string, joinUsername, joinUUID, enableMedialSearch bool) (*Acc
 	return New("mysql", sqldb, joinUsername, joinUUID, enableMedialSearch)
 }
 
-// New returns a new accounts instance connecting to the given sql.DB
+// New returns a new accounts instance connecting to the given sql.DB.
 func New(driver string, sqldb *sql.DB, joinUsername, joinUUID, enableMedialSearch bool) (*Accounts, error) {
-
 	sel := "SELECT id, email, user_id, display_name, quota, last_login, backend, home, state, password"
 	from := `
 		FROM oc_accounts a
@@ -120,12 +119,12 @@ func (as *Accounts) rowToAccount(ctx context.Context, row Scannable) (*Account, 
 	return &a, nil
 }
 
-// Scannable describes the interface providing a Scan method
+// Scannable describes the interface providing a Scan method.
 type Scannable interface {
 	Scan(...interface{}) error
 }
 
-// GetAccountByLogin fetches an account by mail or username
+// GetAccountByLogin fetches an account by mail or username.
 func (as *Accounts) GetAccountByLogin(ctx context.Context, login string) (*Account, error) {
 	var row *sql.Row
 	username := strings.ToLower(login) // usernames are lowercased in owncloud classic
@@ -138,7 +137,7 @@ func (as *Accounts) GetAccountByLogin(ctx context.Context, login string) (*Accou
 	return as.rowToAccount(ctx, row)
 }
 
-// GetAccountGroups reads the groups for an account
+// GetAccountGroups reads the groups for an account.
 func (as *Accounts) GetAccountGroups(ctx context.Context, uid string) ([]string, error) {
 	rows, err := as.db.QueryContext(ctx, "SELECT gid FROM oc_group_user WHERE uid=?", uid)
 	if err != nil {

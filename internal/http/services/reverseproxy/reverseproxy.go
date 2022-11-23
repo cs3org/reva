@@ -55,7 +55,7 @@ type svc struct {
 	router *chi.Mux
 }
 
-// New returns an instance of the reverse proxy service
+// New returns an instance of the reverse proxy service.
 func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) {
 	conf := &config{}
 	if err := mapstructure.Decode(m, conf); err != nil {

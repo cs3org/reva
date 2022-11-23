@@ -29,12 +29,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cs3org/reva/pkg/metrics/driver/registry"
-
-	"github.com/rs/zerolog"
-
 	"github.com/cs3org/reva/pkg/logger"
 	"github.com/cs3org/reva/pkg/metrics/config"
+	"github.com/cs3org/reva/pkg/metrics/driver/registry"
+	"github.com/rs/zerolog"
 )
 
 var log zerolog.Logger
@@ -49,7 +47,7 @@ func driverName() string {
 	return "xcloud"
 }
 
-// CloudDriver is the driver to use for Sciencemesh apps
+// CloudDriver is the driver to use for Sciencemesh apps.
 type CloudDriver struct {
 	instance     string
 	pullInterval int
@@ -102,7 +100,7 @@ func (d *CloudDriver) refresh() error {
 	return nil
 }
 
-// Configure configures this driver
+// Configure configures this driver.
 func (d *CloudDriver) Configure(c *config.Config) error {
 	if c.XcloudInstance == "" {
 		err := errors.New("xcloud: missing xcloud_instance config parameter")
@@ -143,35 +141,35 @@ func (d *CloudDriver) Configure(c *config.Config) error {
 	return nil
 }
 
-// GetNumUsers returns the number of site users
+// GetNumUsers returns the number of site users.
 func (d *CloudDriver) GetNumUsers() int64 {
 	return d.CloudData.Metrics.TotalUsers
 }
 
-// GetNumGroups returns the number of site groups
+// GetNumGroups returns the number of site groups.
 func (d *CloudDriver) GetNumGroups() int64 {
 	return d.CloudData.Metrics.TotalGroups
 }
 
-// GetAmountStorage returns the amount of site storage used
+// GetAmountStorage returns the amount of site storage used.
 func (d *CloudDriver) GetAmountStorage() int64 {
 	return d.CloudData.Metrics.TotalStorage
 }
 
-// CloudData represents the information obtained from the sciencemesh app
+// CloudData represents the information obtained from the sciencemesh app.
 type CloudData struct {
 	Metrics  CloudDataMetrics  `json:"metrics"`
 	Settings CloudDataSettings `json:"settings"`
 }
 
-// CloudDataMetrics reprents the metrics gathered from the sciencemesh app
+// CloudDataMetrics reprents the metrics gathered from the sciencemesh app.
 type CloudDataMetrics struct {
 	TotalUsers   int64 `json:"numusers"`
 	TotalGroups  int64 `json:"numgroups"`
 	TotalStorage int64 `json:"numstorage"`
 }
 
-// CloudDataSettings represents the metrics gathered
+// CloudDataSettings represents the metrics gathered.
 type CloudDataSettings struct {
 	IOPUrl   string `json:"iopurl"`
 	Sitename string `json:"sitename"`

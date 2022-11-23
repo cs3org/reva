@@ -79,7 +79,6 @@ func (h *invitesHandler) Handler() http.Handler {
 }
 
 func (h *invitesHandler) generateInviteToken(w http.ResponseWriter, r *http.Request) {
-
 	ctx := r.Context()
 
 	gatewayClient, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
@@ -95,7 +94,6 @@ func (h *invitesHandler) generateInviteToken(w http.ResponseWriter, r *http.Requ
 	}
 
 	if r.FormValue("recipient") != "" && h.smtpCredentials != nil {
-
 		usr := ctxpkg.ContextMustGetUser(ctx)
 
 		// TODO: the message body needs to point to the meshdirectory service

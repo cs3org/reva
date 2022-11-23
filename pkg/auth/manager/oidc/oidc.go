@@ -278,7 +278,7 @@ func (am *mgr) getOAuthCtx(ctx context.Context) context.Context {
 	return ctx
 }
 
-// getOIDCProvider returns a singleton OIDC provider
+// getOIDCProvider returns a singleton OIDC provider.
 func (am *mgr) getOIDCProvider(ctx context.Context) (*oidc.Provider, error) {
 	ctx = am.getOAuthCtx(ctx)
 	log := appctx.GetLogger(ctx)

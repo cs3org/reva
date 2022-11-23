@@ -31,7 +31,7 @@ import (
 	"github.com/hashicorp/go-plugin"
 )
 
-// RevaPlugin represents the runtime plugin
+// RevaPlugin represents the runtime plugin.
 type RevaPlugin struct {
 	Plugin interface{}
 	Client *plugin.Client
@@ -41,7 +41,7 @@ const dirname = "/var/tmp/reva"
 
 var isAlphaNum = regexp.MustCompile(`^[A-Za-z0-9]+$`).MatchString
 
-// Kill kills the plugin process
+// Kill kills the plugin process.
 func (plug *RevaPlugin) Kill() {
 	plug.Client.Kill()
 }
@@ -82,7 +82,7 @@ func checkDirAndCompile(pluginType, driver string) (string, error) {
 	return bin, nil
 }
 
-// Load loads the plugin using the hashicorp go-plugin system
+// Load loads the plugin using the hashicorp go-plugin system.
 func Load(pluginType, driver string) (*RevaPlugin, error) {
 	if isAlphaNum(driver) {
 		return nil, errtypes.NotFound(driver)

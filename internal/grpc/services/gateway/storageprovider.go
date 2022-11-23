@@ -27,29 +27,26 @@ import (
 	"sync"
 	"time"
 
-	"google.golang.org/protobuf/types/known/fieldmaskpb"
-
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	registry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
-	rtrace "github.com/cs3org/reva/pkg/trace"
-
 	"github.com/cs3org/reva/pkg/appctx"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/storage/utils/etag"
+	rtrace "github.com/cs3org/reva/pkg/trace"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/golang-jwt/jwt"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
-
 	"google.golang.org/grpc/codes"
 	gstatus "google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/fieldmaskpb"
 )
 
 // transferClaims are custom claims for a JWT token to be used between the metadata and data gateways.
@@ -348,7 +345,6 @@ func (s *svc) InitiateFileDownload(ctx context.Context, req *provider.InitiateFi
 		return &gateway.InitiateFileDownloadResponse{
 			Status: status.NewInvalidArg(ctx, "path points to share folder"),
 		}, nil
-
 	}
 
 	if s.isShareName(ctx, p) {
@@ -552,7 +548,6 @@ func (s *svc) InitiateFileUpload(ctx context.Context, req *provider.InitiateFile
 		return &gateway.InitiateFileUploadResponse{
 			Status: status.NewInvalidArg(ctx, "path points to share folder"),
 		}, nil
-
 	}
 
 	if s.isShareName(ctx, p) {
@@ -619,7 +614,6 @@ func (s *svc) InitiateFileUpload(ctx context.Context, req *provider.InitiateFile
 		return &gateway.InitiateFileUploadResponse{
 			Status: status.NewInvalidArg(ctx, "path points to share name"),
 		}, nil
-
 	}
 
 	if s.isShareChild(ctx, p) {
@@ -782,7 +776,6 @@ func (s *svc) CreateContainer(ctx context.Context, req *provider.CreateContainer
 		return &provider.CreateContainerResponse{
 			Status: status.NewInvalidArg(ctx, "path points to share folder or share name"),
 		}, nil
-
 	}
 
 	if s.isShareChild(ctx, p) {
@@ -868,7 +861,7 @@ func (s *svc) TouchFile(ctx context.Context, req *provider.TouchFileRequest) (*p
 	return res, nil
 }
 
-// check if the path contains the prefix of the shared folder
+// check if the path contains the prefix of the shared folder.
 func (s *svc) inSharedFolder(ctx context.Context, p string) bool {
 	sharedFolder := s.getSharedFolder(ctx)
 	return strings.HasPrefix(p, sharedFolder)
@@ -897,7 +890,6 @@ func (s *svc) Delete(ctx context.Context, req *provider.DeleteRequest) (*provide
 		return &provider.DeleteResponse{
 			Status: status.NewInvalidArg(ctx, "path points to share folder or share name"),
 		}, nil
-
 	}
 
 	if s.isShareName(ctx, p) {
@@ -1225,7 +1217,7 @@ func (s *svc) UnsetArbitraryMetadata(ctx context.Context, req *provider.UnsetArb
 	return res, nil
 }
 
-// SetLock puts a lock on the given reference
+// SetLock puts a lock on the given reference.
 func (s *svc) SetLock(ctx context.Context, req *provider.SetLockRequest) (*provider.SetLockResponse, error) {
 	c, err := s.find(ctx, req.Ref)
 	if err != nil {
@@ -1245,7 +1237,7 @@ func (s *svc) SetLock(ctx context.Context, req *provider.SetLockRequest) (*provi
 	return res, nil
 }
 
-// GetLock returns an existing lock on the given reference
+// GetLock returns an existing lock on the given reference.
 func (s *svc) GetLock(ctx context.Context, req *provider.GetLockRequest) (*provider.GetLockResponse, error) {
 	c, err := s.find(ctx, req.Ref)
 	if err != nil {
@@ -1265,7 +1257,7 @@ func (s *svc) GetLock(ctx context.Context, req *provider.GetLockRequest) (*provi
 	return res, nil
 }
 
-// RefreshLock refreshes an existing lock on the given reference
+// RefreshLock refreshes an existing lock on the given reference.
 func (s *svc) RefreshLock(ctx context.Context, req *provider.RefreshLockRequest) (*provider.RefreshLockResponse, error) {
 	c, err := s.find(ctx, req.Ref)
 	if err != nil {
@@ -1285,7 +1277,7 @@ func (s *svc) RefreshLock(ctx context.Context, req *provider.RefreshLockRequest)
 	return res, nil
 }
 
-// Unlock removes an existing lock from the given reference
+// Unlock removes an existing lock from the given reference.
 func (s *svc) Unlock(ctx context.Context, req *provider.UnlockRequest) (*provider.UnlockResponse, error) {
 	c, err := s.find(ctx, req.Ref)
 	if err != nil {
@@ -1556,7 +1548,6 @@ func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 		res.Info = ri
 		res.Info.Path = orgPath
 		return res, nil
-
 	}
 
 	if s.isShareChild(ctx, p) {
@@ -1990,7 +1981,6 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 		}
 
 		return newRes, nil
-
 	}
 
 	if s.isShareChild(ctx, p) {
@@ -2067,14 +2057,12 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 		}
 
 		return newRes, nil
-
 	}
 
 	panic("gateway: stating an unknown path:" + p)
 }
 
 func (s *svc) getPath(ctx context.Context, ref *provider.Reference, keys ...string) (string, *rpc.Status) {
-
 	// check if it is an id based or combined reference first
 	if ref.ResourceId != nil {
 		req := &provider.StatRequest{Ref: ref, ArbitraryMetadataKeys: keys}
@@ -2095,23 +2083,23 @@ func (s *svc) getPath(ctx context.Context, ref *provider.Reference, keys ...stri
 	return "", &rpc.Status{Code: rpc.Code_CODE_INTERNAL}
 }
 
-// /home/MyShares/
+// /home/MyShares/.
 func (s *svc) isSharedFolder(ctx context.Context, p string) bool {
 	return s.split(ctx, p, 2)
 }
 
-// /home/MyShares/photos/
+// /home/MyShares/photos/.
 func (s *svc) isShareName(ctx context.Context, p string) bool {
 	return s.split(ctx, p, 3)
 }
 
-// /home/MyShares/photos/Ibiza/beach.png
+// /home/MyShares/photos/Ibiza/beach.png.
 func (s *svc) isShareChild(ctx context.Context, p string) bool {
 	return s.split(ctx, p, 4)
 }
 
 // always validate that the path contains the share folder
-// split cannot be called with i<2
+// split cannot be called with i<2.
 func (s *svc) split(ctx context.Context, p string, i int) bool {
 	log := appctx.GetLogger(ctx)
 	if i < 2 {
@@ -2141,7 +2129,7 @@ func (s *svc) split(ctx context.Context, p string, i int) bool {
 }
 
 // path must contain a share path with share children, if not it will panic.
-// should be called after checking isShareChild == true
+// should be called after checking isShareChild == true.
 func (s *svc) splitShare(ctx context.Context, p string) (string, string) {
 	parts := s.splitPath(ctx, p)
 	if len(parts) != 4 {
@@ -2206,7 +2194,7 @@ func (s *svc) ListRecycleStream(_ *provider.ListRecycleStreamRequest, _ gateway.
 	return errtypes.NotSupported("ListRecycleStream unimplemented")
 }
 
-// TODO use the ListRecycleRequest.Ref to only list the trash of a specific storage
+// TODO use the ListRecycleRequest.Ref to only list the trash of a specific storage.
 func (s *svc) ListRecycle(ctx context.Context, req *provider.ListRecycleRequest) (*provider.ListRecycleResponse, error) {
 	c, err := s.find(ctx, req.GetRef())
 	if err != nil {

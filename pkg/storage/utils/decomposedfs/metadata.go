@@ -34,11 +34,11 @@ import (
 	"github.com/pkg/xattr"
 )
 
-// SetArbitraryMetadata sets the metadata on a resource
+// SetArbitraryMetadata sets the metadata on a resource.
 func (fs *Decomposedfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Reference, md *provider.ArbitraryMetadata) (err error) {
 	n, err := fs.lu.NodeFromResource(ctx, ref)
 	if err != nil {
-		return errors.Wrap(err, "Decomposedfs: error resolving ref")
+		return errors.Wrap(err, "decomposedfs: error resolving ref")
 	}
 	sublog := appctx.GetLogger(ctx).With().Interface("node", n).Logger()
 
@@ -105,7 +105,7 @@ func (fs *Decomposedfs) SetArbitraryMetadata(ctx context.Context, ref *provider.
 	for k, v := range md.Metadata {
 		attrName := xattrs.MetadataPrefix + k
 		if err = xattr.Set(nodePath, attrName, []byte(v)); err != nil {
-			errs = append(errs, errors.Wrap(err, "Decomposedfs: could not set metadata attribute "+attrName+" to "+k))
+			errs = append(errs, errors.Wrap(err, "decomposedfs: could not set metadata attribute "+attrName+" to "+k))
 		}
 	}
 
@@ -122,11 +122,11 @@ func (fs *Decomposedfs) SetArbitraryMetadata(ctx context.Context, ref *provider.
 	}
 }
 
-// UnsetArbitraryMetadata unsets the metadata on the given resource
+// UnsetArbitraryMetadata unsets the metadata on the given resource.
 func (fs *Decomposedfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Reference, keys []string) (err error) {
 	n, err := fs.lu.NodeFromResource(ctx, ref)
 	if err != nil {
-		return errors.Wrap(err, "Decomposedfs: error resolving ref")
+		return errors.Wrap(err, "decomposedfs: error resolving ref")
 	}
 	sublog := appctx.GetLogger(ctx).With().Interface("node", n).Logger()
 

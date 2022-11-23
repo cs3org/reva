@@ -18,7 +18,7 @@
 
 package config
 
-// Config holds the config options that need to be passed down to the metrics reader(driver)
+// Config holds the config options that need to be passed down to the metrics reader(driver).
 type Config struct {
 	MetricsDataDriverType string `mapstructure:"metrics_data_driver_type"`
 	MetricsDataLocation   string `mapstructure:"metrics_data_location"`
@@ -28,7 +28,7 @@ type Config struct {
 	InsecureSkipVerify    bool   `mapstructure:"insecure_skip_verify"`
 }
 
-// Init sets sane defaults
+// Init sets sane defaults.
 func (c *Config) Init() {
 	if c.MetricsDataDriverType == "json" {
 		// default values

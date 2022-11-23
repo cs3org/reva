@@ -77,9 +77,8 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 	return c, nil
 }
 
-// New creates a new ocm core svc
+// New creates a new ocm core svc.
 func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
-
 	c, err := parseConfig(m)
 	if err != nil {
 		return nil, err
@@ -107,7 +106,7 @@ func (s *service) UnprotectedEndpoints() []string {
 	return []string{"/cs3.ocm.core.v1beta1.OcmCoreAPI/CreateOCMCoreShare"}
 }
 
-// CreateOCMCoreShare is called when an OCM request comes into this reva instance from
+// CreateOCMCoreShare is called when an OCM request comes into this reva instance from.
 func (s *service) CreateOCMCoreShare(ctx context.Context, req *ocmcore.CreateOCMCoreShareRequest) (*ocmcore.CreateOCMCoreShareResponse, error) {
 	resource := &provider.ResourceId{
 		StorageId: "remote",

@@ -22,7 +22,7 @@ import (
 	"github.com/mitchellh/mapstructure"
 )
 
-// Config configures a registry
+// Config configures a registry.
 type Config struct {
 	Services map[string]map[string]*service `mapstructure:"services"`
 }

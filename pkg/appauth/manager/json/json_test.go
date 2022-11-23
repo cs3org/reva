@@ -136,7 +136,6 @@ func TestNewManager(t *testing.T) {
 			}
 		})
 	}
-
 }
 
 func TestGenerateAppPassword(t *testing.T) {
@@ -284,10 +283,8 @@ func TestGenerateAppPassword(t *testing.T) {
 			if !reflect.DeepEqual(jsonState, test.expectedState) {
 				t.Fatalf("json state differ: expected=%v got=%v", render.AsCode(jsonState), render.AsCode(test.expectedState))
 			}
-
 		})
 	}
-
 }
 
 func TestListAppPasswords(t *testing.T) {
@@ -412,10 +409,8 @@ func TestListAppPasswords(t *testing.T) {
 			if !reflect.DeepEqual(pws, test.expectedState) {
 				t.Fatalf("list passwords differ: expected=%v got=%v", test.expectedState, pws)
 			}
-
 		})
 	}
-
 }
 
 func TestInvalidateAppPassword(t *testing.T) {
@@ -538,10 +533,8 @@ func TestInvalidateAppPassword(t *testing.T) {
 			if !reflect.DeepEqual(test.expectedState, manager.(*jsonManager).passwords) {
 				t.Fatalf("apppauth state differ: expected=%v got=%v", render.AsCode(test.expectedState), render.AsCode(manager.(*jsonManager).passwords))
 			}
-
 		})
 	}
-
 }
 
 func TestGetAppPassword(t *testing.T) {
@@ -695,7 +688,6 @@ func TestGetAppPassword(t *testing.T) {
 			if !reflect.DeepEqual(test.expectedState, pw) {
 				t.Fatalf("apppauth state differ: expected=%v got=%v", render.AsCode(test.expectedState), render.AsCode(pw))
 			}
-
 		})
 	}
 }

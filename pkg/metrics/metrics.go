@@ -27,16 +27,15 @@ import (
 	"os"
 	"time"
 
+	"github.com/cs3org/reva/pkg/logger"
 	"github.com/cs3org/reva/pkg/metrics/config"
 	"github.com/cs3org/reva/pkg/metrics/driver/registry"
 	"github.com/cs3org/reva/pkg/metrics/reader"
-
-	"github.com/cs3org/reva/pkg/logger"
 	"go.opencensus.io/stats"
 	"go.opencensus.io/stats/view"
 )
 
-// Init intializes metrics according to the specified configuration
+// Init intializes metrics according to the specified configuration.
 func Init(conf *config.Config) error {
 	log := logger.New().With().Int("pid", os.Getpid()).Logger()
 
@@ -82,7 +81,7 @@ func Init(conf *config.Config) error {
 	return nil
 }
 
-// Metrics the metrics struct
+// Metrics the metrics struct.
 type Metrics struct {
 	dataDriver           reader.Reader // the metrics data driver is an implemention of Reader
 	NumUsersMeasure      *stats.Int64Measure
@@ -101,7 +100,7 @@ func (m *Metrics) recordMetrics() error {
 	return nil
 }
 
-// recordNumUsers records the latest number of site users figure
+// recordNumUsers records the latest number of site users figure.
 func (m *Metrics) recordNumUsers() {
 	ctx := context.Background()
 	stats.Record(ctx, m.NumUsersMeasure.M(m.dataDriver.GetNumUsers()))
@@ -116,7 +115,7 @@ func (m *Metrics) getNumUsersView() *view.View {
 	}
 }
 
-// recordNumGroups records the latest number of site groups figure
+// recordNumGroups records the latest number of site groups figure.
 func (m *Metrics) recordNumGroups() {
 	ctx := context.Background()
 	stats.Record(ctx, m.NumGroupsMeasure.M(m.dataDriver.GetNumGroups()))
@@ -131,7 +130,7 @@ func (m *Metrics) getNumGroupsView() *view.View {
 	}
 }
 
-// recordAmountStorage records the latest amount storage figure
+// recordAmountStorage records the latest amount storage figure.
 func (m *Metrics) recordAmountStorage() {
 	ctx := context.Background()
 	stats.Record(ctx, m.AmountStorageMeasure.M(m.dataDriver.GetAmountStorage()))

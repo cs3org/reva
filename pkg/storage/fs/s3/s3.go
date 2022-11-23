@@ -142,7 +142,7 @@ type s3FS struct {
 	config *config
 }
 
-// permissionSet returns the permission set for the current user
+// permissionSet returns the permission set for the current user.
 func (fs *s3FS) permissionSet(ctx context.Context) *provider.ResourcePermissions {
 	// TODO fix permissions for share recipients by traversing reading acls up to the root? cache acls for the parent node and reuse it
 	return &provider.ResourcePermissions{
@@ -243,7 +243,7 @@ func (fs *s3FS) normalizeCommonPrefix(ctx context.Context, p *s3.CommonPrefix) *
 
 // GetPathByID returns the path pointed by the file id
 // In this implementation the file id is that path of the file without the first slash
-// thus the file id always points to the filename
+// thus the file id always points to the filename.
 func (fs *s3FS) GetPathByID(ctx context.Context, id *provider.ResourceId) (string, error) {
 	return path.Join("/", strings.TrimPrefix(id.OpaqueId, "fileid-")), nil
 }
@@ -280,22 +280,22 @@ func (fs *s3FS) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Refere
 	return errtypes.NotSupported("s3: operation not supported")
 }
 
-// GetLock returns an existing lock on the given reference
+// GetLock returns an existing lock on the given reference.
 func (fs *s3FS) GetLock(ctx context.Context, ref *provider.Reference) (*provider.Lock, error) {
 	return nil, errtypes.NotSupported("unimplemented")
 }
 
-// SetLock puts a lock on the given reference
+// SetLock puts a lock on the given reference.
 func (fs *s3FS) SetLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
 	return errtypes.NotSupported("unimplemented")
 }
 
-// RefreshLock refreshes an existing lock on the given reference
+// RefreshLock refreshes an existing lock on the given reference.
 func (fs *s3FS) RefreshLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock, existingLockID string) error {
 	return errtypes.NotSupported("unimplemented")
 }
 
-// Unlock removes an existing lock from the given reference
+// Unlock removes an existing lock from the given reference.
 func (fs *s3FS) Unlock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
 	return errtypes.NotSupported("unimplemented")
 }
@@ -346,7 +346,7 @@ func (fs *s3FS) CreateDir(ctx context.Context, ref *provider.Reference) error {
 	return nil
 }
 
-// TouchFile as defined in the storage.FS interface
+// TouchFile as defined in the storage.FS interface.
 func (fs *s3FS) TouchFile(ctx context.Context, ref *provider.Reference) error {
 	return fmt.Errorf("unimplemented: TouchFile")
 }
@@ -408,13 +408,12 @@ func (fs *s3FS) Delete(ctx context.Context, ref *provider.Reference) error {
 	return nil
 }
 
-// CreateStorageSpace creates a storage space
+// CreateStorageSpace creates a storage space.
 func (fs *s3FS) CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error) {
 	return nil, fmt.Errorf("unimplemented: CreateStorageSpace")
 }
 
 func (fs *s3FS) moveObject(ctx context.Context, oldKey string, newKey string) error {
-
 	// Copy
 	// TODO double check CopyObject can deal with >5GB files.
 	// Docs say we need to use multipart upload: https://docs.aws.amazon.com/AmazonS3/latest/API/RESTObjectCOPY.html
@@ -706,7 +705,7 @@ func (fs *s3FS) ListStorageSpaces(ctx context.Context, filter []*provider.ListSt
 	return nil, errtypes.NotSupported("list storage spaces")
 }
 
-// UpdateStorageSpace updates a storage space
+// UpdateStorageSpace updates a storage space.
 func (fs *s3FS) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
 	return nil, errtypes.NotSupported("update storage space")
 }

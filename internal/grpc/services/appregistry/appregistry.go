@@ -21,8 +21,6 @@ package appregistry
 import (
 	"context"
 
-	"google.golang.org/grpc"
-
 	registrypb "github.com/cs3org/go-cs3apis/cs3/app/registry/v1beta1"
 	"github.com/cs3org/reva/pkg/app"
 	"github.com/cs3org/reva/pkg/app/registry/registry"
@@ -30,6 +28,7 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/mitchellh/mapstructure"
+	"google.golang.org/grpc"
 )
 
 func init() {
@@ -63,9 +62,8 @@ func (c *config) init() {
 	}
 }
 
-// New creates a new StorageRegistryService
+// New creates a new StorageRegistryService.
 func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
-
 	c, err := parseConfig(m)
 	if err != nil {
 		return nil, err

@@ -35,7 +35,6 @@ import (
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/ocm/share"
-
 	"github.com/cs3org/reva/pkg/ocm/share/manager/registry"
 	"github.com/cs3org/reva/pkg/ocm/share/sender"
 	"github.com/cs3org/reva/pkg/utils"
@@ -180,7 +179,7 @@ func genID() string {
 // Called from both grpc CreateOCMShare for outgoing
 // and http /ocm/shares for incoming
 // pi is provider info
-// pm is permissions
+// pm is permissions.
 func (m *mgr) Share(ctx context.Context, md *provider.ResourceId, g *ocm.ShareGrant, name string,
 	pi *ocmprovider.ProviderInfo, pm string, owner *userpb.UserId, token string, st ocm.Share_ShareType) (*ocm.Share, error) {
 	id := genID()
@@ -278,7 +277,6 @@ func (m *mgr) Share(ctx context.Context, md *provider.ResourceId, g *ocm.ShareGr
 			err = errors.Wrap(err, "error sending OCM POST")
 			return nil, err
 		}
-
 	}
 
 	m.Lock()

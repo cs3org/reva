@@ -36,7 +36,7 @@ func New() func(http.Handler) http.Handler {
 	return handler
 }
 
-// handler is a logging middleware
+// handler is a logging middleware.
 func handler(h http.Handler) http.Handler {
 	return newLoggingHandler(h)
 }
@@ -129,7 +129,7 @@ type commonLoggingResponseWriter interface {
 }
 
 // responseLogger is wrapper of http.ResponseWriter that keeps track of its HTTP
-// status code and body size
+// status code and body size.
 type responseLogger struct {
 	w      http.ResponseWriter
 	status int

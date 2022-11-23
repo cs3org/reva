@@ -55,7 +55,7 @@ type svc struct {
 	handler http.Handler
 }
 
-// New returns a new webuisvc
+// New returns a new webuisvc.
 func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) {
 	conf := &config{}
 	if err := mapstructure.Decode(m, conf); err != nil {

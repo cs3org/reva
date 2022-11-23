@@ -38,7 +38,7 @@ import (
 // To impersonate the given user it's only needed an api-key, saved
 // in a config file.
 
-// supported claims
+// supported claims.
 var claims = []string{"mail", "uid", "username", "gid", "userid"}
 
 type manager struct {
@@ -50,7 +50,7 @@ func init() {
 	registry.Register("machine", New)
 }
 
-// Configure parses the map conf
+// Configure parses the map conf.
 func (m *manager) Configure(conf map[string]interface{}) error {
 	err := mapstructure.Decode(conf, m)
 	if err != nil {
@@ -59,7 +59,7 @@ func (m *manager) Configure(conf map[string]interface{}) error {
 	return nil
 }
 
-// New creates a new manager for the 'machine' authentication
+// New creates a new manager for the 'machine' authentication.
 func New(conf map[string]interface{}) (auth.Manager, error) {
 	m := &manager{}
 	err := m.Configure(conf)
@@ -69,7 +69,7 @@ func New(conf map[string]interface{}) (auth.Manager, error) {
 	return m, nil
 }
 
-// Authenticate impersonate an user if the provided secret is equal to the api-key
+// Authenticate impersonate an user if the provided secret is equal to the api-key.
 func (m *manager) Authenticate(ctx context.Context, user, secret string) (*userpb.User, map[string]*authpb.Scope, error) {
 	if m.APIKey != secret {
 		return nil, nil, errtypes.InvalidCredentials("")
@@ -104,7 +104,6 @@ func (m *manager) Authenticate(ctx context.Context, user, secret string) (*userp
 	}
 
 	return userResponse.GetUser(), scope, nil
-
 }
 
 func contains(lst []string, s string) bool {

@@ -51,7 +51,6 @@ func (h *sharesHandler) init(c *Config) {
 
 func (h *sharesHandler) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-
 		switch r.Method {
 		case http.MethodPost:
 			h.createShare(w, r)

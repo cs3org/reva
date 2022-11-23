@@ -29,10 +29,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/pkg/errors"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/pkg/errors"
 )
 
 const timeoutMs = 30000
@@ -47,7 +46,7 @@ func TestGrpc(t *testing.T) {
 
 type cleanupFunc func(bool) error
 
-// Revad represents a running revad process
+// Revad represents a running revad process.
 type Revad struct {
 	TmpRoot     string      // Temporary directory on disk. Will be cleaned up by the Cleanup func.
 	GrpcAddress string      // Address of the grpc service
