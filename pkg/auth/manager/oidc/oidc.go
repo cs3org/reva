@@ -24,7 +24,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"strings"
 	"time"
 
@@ -125,7 +125,7 @@ func (am *mgr) Configure(m map[string]interface{}) error {
 		return nil
 	}
 
-	f, err := ioutil.ReadFile(c.UsersMapping)
+	f, err := os.ReadFile(c.UsersMapping)
 	if err != nil {
 		return fmt.Errorf("oidc: error reading the users mapping file: +%v", err)
 	}

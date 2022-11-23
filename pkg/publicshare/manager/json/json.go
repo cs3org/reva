@@ -22,7 +22,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -81,7 +80,7 @@ func New(c map[string]interface{}) (publicshare.Manager, error) {
 	}
 
 	if fi == nil || fi.Size() == 0 {
-		err := ioutil.WriteFile(m.file, []byte("{}"), 0644)
+		err := os.WriteFile(m.file, []byte("{}"), 0644)
 		if err != nil {
 			return nil, err
 		}
@@ -543,7 +542,7 @@ func (m *manager) GetPublicShareByToken(ctx context.Context, token string, auth 
 
 func (m *manager) readDb() (map[string]interface{}, error) {
 	db := map[string]interface{}{}
-	readBytes, err := ioutil.ReadFile(m.file)
+	readBytes, err := os.ReadFile(m.file)
 	if err != nil {
 		return nil, err
 	}
@@ -559,11 +558,7 @@ func (m *manager) writeDb(db map[string]interface{}) error {
 		return err
 	}
 
-	if err := ioutil.WriteFile(m.file, dbAsJSON, 0644); err != nil {
-		return err
-	}
-
-	return nil
+	return os.WriteFile(m.file, dbAsJSON, 0644)
 }
 
 func authenticate(share *link.PublicShare, pw string, auth *link.PublicShareAuthentication) bool {

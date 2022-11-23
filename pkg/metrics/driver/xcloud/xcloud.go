@@ -23,7 +23,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"os"
 	"sync"
@@ -82,7 +82,7 @@ func (d *CloudDriver) refresh() error {
 	defer resp.Body.Close()
 
 	// read response body
-	data, err := ioutil.ReadAll(resp.Body)
+	data, err := io.ReadAll(resp.Body)
 	if err != nil {
 		log.Err(err).Msgf("xcloud: error reading resp body from internal metrics from %s", d.instance)
 		return err

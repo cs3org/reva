@@ -23,7 +23,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"io/ioutil"
+	iofs "io/fs"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -1789,9 +1789,17 @@ func (fs *ocfs) listWithNominalHome(ctx context.Context, ip string, mdKeys []str
 		return nil, errors.Wrap(err, "ocfs: error reading permissions")
 	}
 
-	mds, err := ioutil.ReadDir(ip)
+	entries, err := os.ReadDir(ip)
 	if err != nil {
 		return nil, errors.Wrapf(err, "ocfs: error listing %s", ip)
+	}
+	mds := make([]iofs.FileInfo, 0, len(entries))
+	for _, entry := range entries {
+		info, err := entry.Info()
+		if err != nil {
+			return nil, err
+		}
+		mds = append(mds, info)
 	}
 	c := fs.pool.Get()
 	defer c.Close()
@@ -1840,11 +1848,18 @@ func (fs *ocfs) listHome(ctx context.Context, home string, mdKeys []string) ([]*
 		return nil, errors.Wrap(err, "ocfs: error reading permissions")
 	}
 
-	mds, err := ioutil.ReadDir(ip)
+	entries, err := os.ReadDir(ip)
 	if err != nil {
 		return nil, errors.Wrap(err, "ocfs: error listing files")
 	}
-
+	mds := make([]iofs.FileInfo, 0, len(entries))
+	for _, entry := range entries {
+		info, err := entry.Info()
+		if err != nil {
+			return nil, err
+		}
+		mds = append(mds, info)
+	}
 	c := fs.pool.Get()
 	defer c.Close()
 
@@ -1857,9 +1872,17 @@ func (fs *ocfs) listHome(ctx context.Context, home string, mdKeys []string) ([]*
 
 	// list shadow_files
 	ip = fs.toInternalShadowPath(ctx, home)
-	mds, err = ioutil.ReadDir(ip)
+	entries, err = os.ReadDir(ip)
 	if err != nil {
 		return nil, errors.Wrap(err, "ocfs: error listing shadow_files")
+	}
+	mds = make([]iofs.FileInfo, 0, len(entries))
+	for _, entry := range entries {
+		info, err := entry.Info()
+		if err != nil {
+			return nil, err
+		}
+		mds = append(mds, info)
 	}
 	for _, md := range mds {
 		cp := filepath.Join(ip, md.Name())
@@ -1884,14 +1907,21 @@ func (fs *ocfs) listShareFolderRoot(ctx context.Context, sp string, mdKeys []str
 		return nil, errors.Wrap(err, "ocfs: error reading permissions")
 	}
 
-	mds, err := ioutil.ReadDir(ip)
+	entries, err := os.ReadDir(ip)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, errtypes.NotFound(fs.toStoragePath(ctx, filepath.Dir(ip)))
 		}
 		return nil, errors.Wrap(err, "ocfs: error listing shadow_files")
 	}
-
+	mds := make([]iofs.FileInfo, 0, len(entries))
+	for _, entry := range entries {
+		info, err := entry.Info()
+		if err != nil {
+			return nil, err
+		}
+		mds = append(mds, info)
+	}
 	c := fs.pool.Get()
 	defer c.Close()
 
@@ -1996,9 +2026,17 @@ func (fs *ocfs) ListRevisions(ctx context.Context, ref *provider.Reference) ([]*
 	bn := filepath.Base(ip)
 
 	revisions := []*provider.FileVersion{}
-	mds, err := ioutil.ReadDir(filepath.Dir(vp))
+	entries, err := os.ReadDir(filepath.Dir(vp))
 	if err != nil {
 		return nil, errors.Wrap(err, "ocfs: error reading"+filepath.Dir(vp))
+	}
+	mds := make([]iofs.FileInfo, 0, len(entries))
+	for _, entry := range entries {
+		info, err := entry.Info()
+		if err != nil {
+			return nil, err
+		}
+		mds = append(mds, info)
 	}
 	for i := range mds {
 		rev := fs.filterAsRevision(ctx, bn, mds[i])
@@ -2195,12 +2233,21 @@ func (fs *ocfs) ListRecycle(ctx context.Context, basePath, key, relativePath str
 	}
 
 	// list files folder
-	mds, err := ioutil.ReadDir(filepath.Join(rp, key))
+	entries, err := os.ReadDir(filepath.Join(rp, key))
 	if err != nil {
 		log := appctx.GetLogger(ctx)
 		log.Debug().Err(err).Str("path", rp).Msg("trash not readable")
 		// TODO jfd only ignore not found errors
 		return []*provider.RecycleItem{}, nil
+	}
+	mds := make([]iofs.FileInfo, 0, len(entries))
+	for _, entry := range entries {
+		info, err := entry.Info()
+		if err != nil {
+			// TODO jfd only ignore not found errors
+			return []*provider.RecycleItem{}, nil
+		}
+		mds = append(mds, info)
 	}
 	// TODO (jfd) limit and offset
 	items := []*provider.RecycleItem{}

@@ -15,7 +15,6 @@ linters:
     - stylecheck        # TODO: consider enabling the 'stylecheck' linter to enforce style rules.
     - usestdlibvars     # TODO: consider enabling the 'usestdlibvars' linter to detect the possibility to use variables/constants from the Go standard library.
     - thelper           # TODO: consider enabling the 'thelper' linter to detect golang test helpers without t.Helper() call and check the consistency of test helpers.
-    - staticcheck       # TODO: consider enabling the 'staticcheck' linter to find bugs and performance issues, offer simplifications, and enforce style rules.
     - predeclared       # TODO: consider enabling the 'predeclared' linter to find code that shadows one of Go's predeclared identifiers.
     - paralleltest      # TODO: consider enabling the 'paralleltest' linter to detect missing usage of t.Parallel() method in Go test.
     - ireturn           # TODO: consider enabling the 'ireturn' linter to accept interfaces and return concrete types.
