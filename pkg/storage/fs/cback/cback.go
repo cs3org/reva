@@ -361,7 +361,8 @@ func (f *cbackfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKey
 		}
 		res := make([]*provider.ResourceInfo, 0, len(snapshots))
 		for _, s := range snapshots {
-			res = append(res, f.placeholderResourceInfo(filepath.Join(source, s.Time.Format(f.conf.TimestampFormat)), user.Id, timeToTimestamp(s.Time), nil))
+			snapTime := s.Time.Format(f.conf.TimestampFormat)
+			res = append(res, f.placeholderResourceInfo(filepath.Join(source, snapTime), user.Id, timeToTimestamp(s.Time), encodeBackupInResourceID(id, snapTime, source, "")))
 		}
 		return res, nil
 	}
