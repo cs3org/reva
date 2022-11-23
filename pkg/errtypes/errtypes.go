@@ -70,7 +70,7 @@ func (e Locked) IsLocked() {}
 // client should restart a read-modify-write sequence) request fails
 // because a requested etag or lock ID mismatches.
 //
-// HTTP Mapping: 409 Conflict, 412 Precondition Failed
+// HTTP Mapping: 412 Precondition Failed
 type Aborted string
 
 func (e Aborted) Error() string { return "error: aborted: " + string(e) }
@@ -82,10 +82,10 @@ func (e Aborted) IsAborted() {}
 // the system state has been explicitly fixed.  E.g., if an "rmdir"
 // fails because the directory is non-empty, PreconditionFailed
 // should be returned since the client should not retry unless
-// the files are deleted from the directory. ProconditionFailed should also be
+// the files are deleted from the directory. PreconditionFailed should also be
 // returned when an intermediate directory for an MKCOL or PUT is missing.
 //
-// # FIXME rename to FailedProcondition to make it less confusable with the http status Precondition Failed
+// # FIXME rename to FailedPrecondition to make it less confusable with the http status Precondition Failed
 //
 // HTTP Mapping: 400 Bad Request, 405 Method Not Allowed, 409 Conflict
 type PreconditionFailed string

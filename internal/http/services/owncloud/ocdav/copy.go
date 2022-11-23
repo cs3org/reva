@@ -54,6 +54,13 @@ func (s *svc) handlePathCopy(w http.ResponseWriter, r *http.Request, ns string) 
 	ctx, span := s.tracerProvider.Tracer(tracerName).Start(r.Context(), "copy")
 	defer span.End()
 
+	if r.Body != http.NoBody {
+		w.WriteHeader(http.StatusUnsupportedMediaType)
+		b, err := errors.Marshal(http.StatusUnsupportedMediaType, "body must be empty", "")
+		errors.HandleWebdavError(appctx.GetLogger(ctx), w, b, err)
+		return
+	}
+
 	if s.c.EnableHTTPTpc {
 		if r.Header.Get("Source") != "" {
 			// HTTP Third-Party Copy Pull mode
@@ -73,15 +80,23 @@ func (s *svc) handlePathCopy(w http.ResponseWriter, r *http.Request, ns string) 
 	baseURI := r.Context().Value(net.CtxKeyBaseURI).(string)
 	dst, err := net.ParseDestination(baseURI, dh)
 	if err != nil {
-		appctx.GetLogger(ctx).Warn().Msg("HTTP COPY: failed to extract destination")
 		w.WriteHeader(http.StatusBadRequest)
+		b, err := errors.Marshal(http.StatusBadRequest, "failed to extract destination", "")
+		errors.HandleWebdavError(appctx.GetLogger(ctx), w, b, err)
 		return
 	}
 
 	for _, r := range nameRules {
-		if !r.Test(dst) {
-			appctx.GetLogger(ctx).Warn().Msgf("HTTP COPY: destination %s failed validation", dst)
+		if !r.Test(src) {
 			w.WriteHeader(http.StatusBadRequest)
+			b, err := errors.Marshal(http.StatusBadRequest, "source failed naming rules", "")
+			errors.HandleWebdavError(appctx.GetLogger(ctx), w, b, err)
+			return
+		}
+		if !r.Test(dst) {
+			w.WriteHeader(http.StatusBadRequest)
+			b, err := errors.Marshal(http.StatusBadRequest, "destination failed naming rules", "")
+			errors.HandleWebdavError(appctx.GetLogger(ctx), w, b, err)
 			return
 		}
 	}
@@ -289,6 +304,13 @@ func (s *svc) executePathCopy(ctx context.Context, client gateway.GatewayAPIClie
 func (s *svc) handleSpacesCopy(w http.ResponseWriter, r *http.Request, spaceID string) {
 	ctx, span := s.tracerProvider.Tracer(tracerName).Start(r.Context(), "spaces_copy")
 	defer span.End()
+
+	if r.Body != http.NoBody {
+		w.WriteHeader(http.StatusUnsupportedMediaType)
+		b, err := errors.Marshal(http.StatusUnsupportedMediaType, "body must be empty", "")
+		errors.HandleWebdavError(appctx.GetLogger(ctx), w, b, err)
+		return
+	}
 
 	dh := r.Header.Get(net.HeaderDestination)
 	baseURI := r.Context().Value(net.CtxKeyBaseURI).(string)
