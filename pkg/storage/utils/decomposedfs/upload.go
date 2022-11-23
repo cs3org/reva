@@ -592,7 +592,7 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 	}
 
 	spaceID := upload.info.Storage["SpaceRoot"]
-	n := node.New(
+	newNode := node.New(
 		spaceID,
 		upload.info.Storage["NodeId"],
 		upload.info.Storage["NodeParentId"],
@@ -602,38 +602,38 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 		nil,
 		upload.fs.lu,
 	)
-	n.SpaceRoot = node.New(spaceID, spaceID, "", "", 0, "", nil, upload.fs.lu)
+	newNode.SpaceRoot = node.New(spaceID, spaceID, "", "", 0, "", nil, upload.fs.lu)
 
 	// check lock
 	if upload.info.MetaData["lockid"] != "" {
 		ctx = ctxpkg.ContextSetLockID(ctx, upload.info.MetaData["lockid"])
 	}
-	if err := n.CheckLock(ctx); err != nil {
+	if err := newNode.CheckLock(ctx); err != nil {
 		return err
 	}
 
-	overwrite := n.ID != ""
+	overwrite := newNode.ID != ""
 	var oldSize int64
 	if overwrite {
 		// read size from existing node
-		old, _ := node.ReadNode(ctx, upload.fs.lu, spaceID, n.ID, false)
+		old, _ := node.ReadNode(ctx, upload.fs.lu, spaceID, newNode.ID, false)
 		oldSize = old.Blobsize
 	} else {
 		// create new fileid
-		n.ID = uuid.New().String()
-		upload.info.Storage["NodeId"] = n.ID
+		newNode.ID = uuid.New().String()
+		upload.info.Storage["NodeId"] = newNode.ID
 	}
 
-	if _, err = node.CheckQuota(n.SpaceRoot, overwrite, uint64(oldSize), uint64(fi.Size())); err != nil {
+	if _, err = node.CheckQuota(newNode.SpaceRoot, overwrite, uint64(oldSize), uint64(fi.Size())); err != nil {
 		return err
 	}
 
-	targetPath := n.InternalPath()
+	targetPath := newNode.InternalPath()
 	sublog := appctx.GetLogger(upload.ctx).
 		With().
 		Interface("info", upload.info).
 		Str("spaceid", spaceID).
-		Str("nodeid", n.ID).
+		Str("nodeid", newNode.ID).
 		Str("binPath", upload.binPath).
 		Str("targetPath", targetPath).
 		Logger()
@@ -681,7 +681,7 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 			return err
 		}
 	}
-	n.BlobID = upload.info.ID // This can be changed to a content hash in the future when reference counting for the blobs was added
+	newNode.BlobID = upload.info.ID // This can be changed to a content hash in the future when reference counting for the blobs was added
 
 	// defer writing the checksums until the node is in place
 
@@ -693,7 +693,7 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 		// etag still matches before finishing the upload.
 		if ifMatch, ok := upload.info.MetaData["if-match"]; ok {
 			var targetEtag string
-			targetEtag, err = node.CalculateEtag(n.ID, fi.ModTime())
+			targetEtag, err = node.CalculateEtag(newNode.ID, fi.ModTime())
 			if err != nil {
 				return errtypes.InternalError(err.Error())
 			}
@@ -716,15 +716,15 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 		return err
 	}
 	defer file.Close()
-	err = upload.fs.tp.WriteBlob(n, file)
+	err = upload.fs.tp.WriteBlob(newNode, file)
 	if err != nil {
 		return errors.Wrap(err, "failed to upload file to blobstore")
 	}
 
 	// prepare discarding the blob if something changed while writing it
 	discardBlob := func() {
-		if err := upload.fs.tp.DeleteBlob(n); err != nil {
-			sublog.Err(err).Str("blobid", n.BlobID).Msg("Decomposedfs: failed to discard blob in blobstore")
+		if err := upload.fs.tp.DeleteBlob(newNode); err != nil {
+			sublog.Err(err).Str("blobid", newNode.BlobID).Msg("Decomposedfs: failed to discard blob in blobstore")
 		}
 	}
 
@@ -750,7 +750,7 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 		// etag still matches before finishing the upload.
 		if ifMatch, ok := upload.info.MetaData["if-match"]; ok {
 			var targetEtag string
-			targetEtag, err = node.CalculateEtag(n.ID, fi.ModTime())
+			targetEtag, err = node.CalculateEtag(newNode.ID, fi.ModTime())
 			if err != nil {
 				discardBlob()
 				return errtypes.InternalError(err.Error())
@@ -762,7 +762,7 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 		}
 
 		// versions are stored alongside the actual file, so a rename can be efficient and does not cross storage / partition boundaries
-		versionsPath = upload.fs.lu.InternalPath(spaceID, n.ID+node.RevisionIDDelimiter+fi.ModTime().UTC().Format(time.RFC3339Nano))
+		versionsPath = upload.fs.lu.InternalPath(spaceID, newNode.ID+node.RevisionIDDelimiter+fi.ModTime().UTC().Format(time.RFC3339Nano))
 
 		// remember mtime of existing file so we can apply it to the version
 		oldMtime = fi.ModTime()
@@ -772,8 +772,8 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 
 	// attributes that will change
 	attrs := map[string]string{
-		xattrs.BlobIDAttr:   n.BlobID,
-		xattrs.BlobsizeAttr: strconv.FormatInt(n.Blobsize, 10),
+		xattrs.BlobIDAttr:   newNode.BlobID,
+		xattrs.BlobsizeAttr: strconv.FormatInt(newNode.Blobsize, 10),
 
 		// update checksums
 		xattrs.ChecksumPrefix + "sha1":    string(sha1h.Sum(nil)),
@@ -840,13 +840,13 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 		file.Close()
 
 		// basic node metadata
-		attrs[xattrs.ParentidAttr] = n.ParentID
-		attrs[xattrs.NameAttr] = n.Name
+		attrs[xattrs.ParentidAttr] = newNode.ParentID
+		attrs[xattrs.NameAttr] = newNode.Name
 		oldSize = 0
 	}
 
 	// update node metadata with new blobid etc
-	err = n.SetXattrsWithLock(attrs, lock)
+	err = newNode.SetXattrsWithLock(attrs, lock)
 	if err != nil {
 		discardBlob()
 		return errors.Wrap(err, "Decomposedfs: could not write metadata")
@@ -855,13 +855,13 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 	// update mtime
 	switch {
 	case upload.info.MetaData["mtime"] != "":
-		if err := n.SetMtimeString(upload.info.MetaData["mtime"]); err != nil {
+		if err := newNode.SetMtimeString(upload.info.MetaData["mtime"]); err != nil {
 			sublog.Err(err).Interface("info", upload.info).Msg("Decomposedfs: could not apply mtime from metadata")
 			return err
 		}
 	case newMtime != time.Time{}:
 		// we are creating a version
-		if err := n.SetMtime(newMtime); err != nil {
+		if err := newNode.SetMtime(newMtime); err != nil {
 			sublog.Err(err).Interface("info", upload.info).Msg("Decomposedfs: could not change mtime of node")
 			return err
 		}
@@ -870,7 +870,7 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 	// remember size diff
 	// old 10, new 5 (upload a smaller file) -> 5-10 = -5
 	// old 5, new 10 (upload a bigger file) -> 10-5 = +5
-	sizeDiff := n.Blobsize - oldSize
+	sizeDiff := newNode.Blobsize - oldSize
 
 	// unlock metadata
 	err = filelocks.ReleaseLock(lock)
@@ -879,13 +879,13 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 	}
 
 	// link child name to parent if it is new
-	childNameLink := filepath.Join(n.ParentInternalPath(), n.Name)
-	relativeNodePath := filepath.Join("../../../../../", lookup.Pathify(n.ID, 4, 2))
+	childNameLink := filepath.Join(newNode.ParentInternalPath(), newNode.Name)
+	relativeNodePath := filepath.Join("../../../../../", lookup.Pathify(newNode.ID, 4, 2))
 	var link string
 	link, err = os.Readlink(childNameLink)
 	if err == nil && link != relativeNodePath {
 		sublog.Err(err).
-			Interface("node", n).
+			Interface("node", newNode).
 			Str("childNameLink", childNameLink).
 			Str("link", link).
 			Msg("Decomposedfs: child name link has wrong target id, repairing")
@@ -903,15 +903,15 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 	// fill metadata with current mtime
 	if fi, err = os.Stat(targetPath); err == nil {
 		upload.info.MetaData["mtime"] = fmt.Sprintf("%d.%d", fi.ModTime().Unix(), fi.ModTime().Nanosecond())
-		upload.info.MetaData["etag"], _ = node.CalculateEtag(n.ID, fi.ModTime())
+		upload.info.MetaData["etag"], _ = node.CalculateEtag(newNode.ID, fi.ModTime())
 	}
 
-	n.Exists = true
+	newNode.Exists = true
 
 	// propagate size diff and new etag
 	//   propagation can happen outside the metadata lock because diff calculation happens inside the lock and the order in which diffs are applied to the parent is irrelvevant
 	sublog.Debug().Int64("sizediff", sizeDiff).Msg("Decomposedfs: propagating size diff")
-	return upload.fs.tp.Propagate(upload.ctx, n, sizeDiff)
+	return upload.fs.tp.Propagate(upload.ctx, newNode, sizeDiff)
 }
 
 func (upload *fileUpload) checkHash(expected string, h hash.Hash) error {
