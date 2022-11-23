@@ -63,7 +63,7 @@ func (c *config) init() {
 	}
 }
 
-// New creates a new StorageBrokerService
+// New creates a new StorageBrokerService.
 func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 	c, err := parseConfig(m)
 	if err != nil {

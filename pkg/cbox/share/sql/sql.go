@@ -39,12 +39,12 @@ import (
 	"github.com/cs3org/reva/pkg/share/manager/registry"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/utils"
+
+	// Provides mysql drivers.
+	_ "github.com/go-sql-driver/mysql"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"google.golang.org/genproto/protobuf/field_mask"
-
-	// Provides mysql drivers
-	_ "github.com/go-sql-driver/mysql"
 )
 
 const (
@@ -61,11 +61,11 @@ func init() {
 }
 
 type config struct {
-	DbUsername string `mapstructure:"db_username"`
-	DbPassword string `mapstructure:"db_password"`
-	DbHost     string `mapstructure:"db_host"`
-	DbPort     int    `mapstructure:"db_port"`
-	DbName     string `mapstructure:"db_name"`
+	DBUsername string `mapstructure:"db_username"`
+	DBPassword string `mapstructure:"db_password"`
+	DBHost     string `mapstructure:"db_host"`
+	DBPort     int    `mapstructure:"db_port"`
+	DBName     string `mapstructure:"db_name"`
 	GatewaySvc string `mapstructure:"gatewaysvc"`
 }
 
@@ -82,7 +82,7 @@ func New(m map[string]interface{}) (share.Manager, error) {
 		return nil, err
 	}
 
-	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%d)/%s", c.DbUsername, c.DbPassword, c.DbHost, c.DbPort, c.DbName))
+	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%d)/%s", c.DBUsername, c.DBPassword, c.DBHost, c.DBPort, c.DBName))
 	if err != nil {
 		return nil, err
 	}
@@ -468,7 +468,6 @@ func (m *mgr) GetReceivedShare(ctx context.Context, ref *collaboration.ShareRefe
 	}
 
 	return s, nil
-
 }
 
 func (m *mgr) UpdateReceivedShare(ctx context.Context, share *collaboration.ReceivedShare, fieldMask *field_mask.FieldMask) (*collaboration.ReceivedShare, error) {
@@ -571,7 +570,7 @@ func granteeTypeToShareType(granteeType provider.GranteeType) int {
 	return -1
 }
 
-// translateFilters translates the filters to sql queries
+// translateFilters translates the filters to sql queries.
 func translateFilters(filters map[collaboration.Filter_Type][]*collaboration.Filter) (string, []interface{}, error) {
 	var (
 		filterQuery string

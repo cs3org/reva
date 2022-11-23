@@ -38,7 +38,7 @@ func NewService(name string, nodes []interface{}) registry.Service {
 	}
 }
 
-// service implements the Service interface
+// service implements the Service interface.
 type service struct {
 	name  string
 	nodes []node

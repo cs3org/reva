@@ -362,7 +362,6 @@ func getCredsForUserAgent(ua string, uam map[string]string, creds []string) []st
 				}
 			}
 			return creds
-
 		}
 	}
 

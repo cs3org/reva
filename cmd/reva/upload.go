@@ -27,24 +27,23 @@ import (
 	"path/filepath"
 	"strconv"
 
-	"github.com/cs3org/reva/internal/http/services/datagateway"
-	"github.com/pkg/errors"
-
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
-	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/eventials/go-tus"
-	"github.com/eventials/go-tus/memorystore"
-	"github.com/studio-b12/gowebdav"
 
 	// TODO(labkode): this should not come from this package.
 	"github.com/cs3org/reva/internal/grpc/services/storageprovider"
+	"github.com/cs3org/reva/internal/http/services/datagateway"
 	"github.com/cs3org/reva/pkg/crypto"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
+	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/utils"
+	"github.com/eventials/go-tus"
+	"github.com/eventials/go-tus/memorystore"
+	"github.com/pkg/errors"
+	"github.com/studio-b12/gowebdav"
 )
 
 func uploadCommand() *command {
@@ -292,7 +291,6 @@ func computeXS(t provider.ResourceChecksumType, r io.Reader) (string, error) {
 		return "", nil
 	default:
 		return "", fmt.Errorf("invalid checksum: %s", t)
-
 	}
 }
 

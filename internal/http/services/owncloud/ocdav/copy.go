@@ -167,7 +167,6 @@ func (s *svc) executePathCopy(ctx context.Context, client gateway.GatewayAPIClie
 				return err
 			}
 		}
-
 	} else {
 		// copy file
 
@@ -268,7 +267,6 @@ func (s *svc) executePathCopy(ctx context.Context, client gateway.GatewayAPIClie
 		if httpUploadRes.StatusCode != http.StatusOK {
 			return err
 		}
-
 	}
 	return nil
 }

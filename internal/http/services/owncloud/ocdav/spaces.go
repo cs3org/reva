@@ -29,7 +29,7 @@ import (
 	"github.com/cs3org/reva/pkg/utils"
 )
 
-// SpacesHandler handles trashbin requests
+// SpacesHandler handles trashbin requests.
 type SpacesHandler struct {
 	gatewaySvc string
 }
@@ -39,7 +39,7 @@ func (h *SpacesHandler) init(c *Config) error {
 	return nil
 }
 
-// Handler handles requests
+// Handler handles requests.
 func (h *SpacesHandler) Handler(s *svc) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// ctx := r.Context()

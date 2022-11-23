@@ -22,29 +22,29 @@ import (
 	"fmt"
 )
 
-// Permissions reflects the CRUD permissions used in the OCS sharing API
+// Permissions reflects the CRUD permissions used in the OCS sharing API.
 type Permissions uint
 
 const (
-	// PermissionInvalid grants no permissions on a resource
+	// PermissionInvalid grants no permissions on a resource.
 	PermissionInvalid Permissions = 0
-	// PermissionRead grants read permissions on a resource
+	// PermissionRead grants read permissions on a resource.
 	PermissionRead Permissions = 1 << (iota - 1)
-	// PermissionWrite grants write permissions on a resource
+	// PermissionWrite grants write permissions on a resource.
 	PermissionWrite
-	// PermissionCreate grants create permissions on a resource
+	// PermissionCreate grants create permissions on a resource.
 	PermissionCreate
-	// PermissionDelete grants delete permissions on a resource
+	// PermissionDelete grants delete permissions on a resource.
 	PermissionDelete
-	// PermissionShare grants share permissions on a resource
+	// PermissionShare grants share permissions on a resource.
 	PermissionShare
-	// PermissionAll grants all permissions on a resource
+	// PermissionAll grants all permissions on a resource.
 	PermissionAll Permissions = (1 << (iota - 1)) - 1
 )
 
 var (
 	// ErrPermissionNotInRange defines a permission specific error.
-	ErrPermissionNotInRange = fmt.Errorf("The provided permission is not between %d and %d", PermissionInvalid, PermissionAll)
+	ErrPermissionNotInRange = fmt.Errorf("the provided permission is not between %d and %d", PermissionInvalid, PermissionAll)
 )
 
 // NewPermissions creates a new Permissions instance.

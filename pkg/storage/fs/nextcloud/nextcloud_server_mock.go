@@ -29,7 +29,7 @@ import (
 )
 
 // Response contains data for the Nextcloud mock server to respond
-// and to switch to a new server state
+// and to switch to a new server state.
 type Response struct {
 	code           int
 	body           string
@@ -171,7 +171,7 @@ var responses = map[string]Response{
 	`POST /apps/sciencemesh/~tester/api/storage/CreateStorageSpace {"opaque":{"map":{"bar":{"value":"c2FtYQ=="},"foo":{"value":"c2FtYQ=="}}},"owner":{"id":{"idp":"some-idp","opaque_id":"some-opaque-user-id","type":1}},"type":"home","name":"My Storage Space","quota":{"quota_max_bytes":456,"quota_max_files":123}}`: {200, `{"storage_space":{"opaque":{"map":{"bar":{"value":"c2FtYQ=="},"foo":{"value":"c2FtYQ=="}}},"id":{"opaque_id":"some-opaque-storage-space-id"},"owner":{"id":{"idp":"some-idp","opaque_id":"some-opaque-user-id","type":1}},"root":{"storage_id":"some-storage-ud","opaque_id":"some-opaque-root-id"},"name":"My Storage Space","quota":{"quota_max_bytes":456,"quota_max_files":123},"space_type":"home","mtime":{"seconds":1234567890}}}`, serverStateEmpty},
 }
 
-// GetNextcloudServerMock returns a handler that pretends to be a remote Nextcloud server
+// GetNextcloudServerMock returns a handler that pretends to be a remote Nextcloud server.
 func GetNextcloudServerMock(called *[]string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		buf := new(strings.Builder)

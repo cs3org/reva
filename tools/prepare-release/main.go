@@ -187,7 +187,6 @@ func add(msg string, files ...string) {
 		cmd.Dir = "."
 		run(cmd)
 	}
-
 }
 
 func createCommit(msg string) {

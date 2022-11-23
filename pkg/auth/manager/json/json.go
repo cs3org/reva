@@ -38,7 +38,7 @@ func init() {
 	registry.Register("json", New)
 }
 
-// Credentials holds a pair of secret and userid
+// Credentials holds a pair of secret and userid.
 type Credentials struct {
 	ID           *user.UserId    `mapstructure:"id" json:"id"`
 	Username     string          `mapstructure:"username" json:"username"`

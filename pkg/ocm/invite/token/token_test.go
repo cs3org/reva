@@ -26,7 +26,6 @@ import (
 )
 
 func TestCreateToken(t *testing.T) {
-
 	user := userpb.User{
 		Id: &userpb.UserId{
 			Idp:      "http://localhost:20080",
@@ -57,7 +56,6 @@ func TestCreateToken(t *testing.T) {
 }
 
 func TestCreateTokenCollision(t *testing.T) {
-
 	tokens := sync.Map{}
 
 	user := userpb.User{

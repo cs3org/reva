@@ -30,9 +30,7 @@ import (
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	storage "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/sdk"
 	"github.com/cs3org/reva/pkg/sdk/common"
@@ -49,7 +47,7 @@ type UploadAction struct {
 }
 
 // UploadFile uploads the provided file to the target.
-func (action *UploadAction) UploadFile(file *os.File, target string) (*storage.ResourceInfo, error) {
+func (action *UploadAction) UploadFile(file *os.File, target string) (*provider.ResourceInfo, error) {
 	fileInfo, err := file.Stat()
 	if err != nil {
 		return nil, fmt.Errorf("unable to stat the specified file: %v", err)
@@ -59,22 +57,22 @@ func (action *UploadAction) UploadFile(file *os.File, target string) (*storage.R
 }
 
 // UploadFileTo uploads the provided file to the target directory, keeping the original file name.
-func (action *UploadAction) UploadFileTo(file *os.File, path string) (*storage.ResourceInfo, error) {
+func (action *UploadAction) UploadFileTo(file *os.File, path string) (*provider.ResourceInfo, error) {
 	return action.UploadFile(file, p.Join(path, p.Base(file.Name())))
 }
 
 // UploadBytes uploads the provided byte data to the target.
-func (action *UploadAction) UploadBytes(data []byte, target string) (*storage.ResourceInfo, error) {
+func (action *UploadAction) UploadBytes(data []byte, target string) (*provider.ResourceInfo, error) {
 	return action.Upload(bytes.NewReader(data), int64(len(data)), target)
 }
 
 // Upload uploads data from the provided reader to the target.
-func (action *UploadAction) Upload(data io.Reader, size int64, target string) (*storage.ResourceInfo, error) {
+func (action *UploadAction) Upload(data io.Reader, size int64, target string) (*provider.ResourceInfo, error) {
 	dataDesc := common.CreateDataDescriptor(p.Base(target), size)
 	return action.upload(data, &dataDesc, target)
 }
 
-func (action *UploadAction) upload(data io.Reader, dataInfo os.FileInfo, target string) (*storage.ResourceInfo, error) {
+func (action *UploadAction) upload(data io.Reader, dataInfo os.FileInfo, target string) (*provider.ResourceInfo, error) {
 	fileOpsAct := MustNewFileOperationsAction(action.session)
 
 	dir := p.Dir(target)

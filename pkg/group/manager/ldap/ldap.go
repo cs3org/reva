@@ -76,7 +76,7 @@ type attributes struct {
 	GIDNumber string `mapstructure:"gidNumber"`
 }
 
-// Default attributes (Active Directory)
+// Default attributes (Active Directory).
 var ldapDefaults = attributes{
 	DN:          "dn",
 	GID:         "objectGUID", // you can fall back to samaccountname but you will run into trouble when group names change. You have been warned.

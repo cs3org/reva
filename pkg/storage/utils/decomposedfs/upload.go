@@ -56,7 +56,7 @@ var defaultFilePerm = os.FileMode(0664)
 func (fs *Decomposedfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser) (err error) {
 	upload, err := fs.GetUpload(ctx, ref.GetPath())
 	if err != nil {
-		return errors.Wrap(err, "Decomposedfs: error retrieving upload")
+		return errors.Wrap(err, "decomposedfs: error retrieving upload")
 	}
 
 	uploadInfo := upload.(*fileUpload)
@@ -64,7 +64,7 @@ func (fs *Decomposedfs) Upload(ctx context.Context, ref *provider.Reference, r i
 	p := uploadInfo.info.Storage["NodeName"]
 	ok, err := chunking.IsChunked(p) // check chunking v1
 	if err != nil {
-		return errors.Wrap(err, "Decomposedfs: error checking path")
+		return errors.Wrap(err, "decomposedfs: error checking path")
 	}
 	if ok {
 		var assembledFile string
@@ -81,7 +81,7 @@ func (fs *Decomposedfs) Upload(ctx context.Context, ref *provider.Reference, r i
 		uploadInfo.info.Storage["NodeName"] = p
 		fd, err := os.Open(assembledFile)
 		if err != nil {
-			return errors.Wrap(err, "Decomposedfs: error opening assembled file")
+			return errors.Wrap(err, "decomposedfs: error opening assembled file")
 		}
 		defer fd.Close()
 		defer os.RemoveAll(assembledFile)
@@ -89,7 +89,7 @@ func (fs *Decomposedfs) Upload(ctx context.Context, ref *provider.Reference, r i
 	}
 
 	if _, err := uploadInfo.WriteChunk(ctx, 0, r); err != nil {
-		return errors.Wrap(err, "Decomposedfs: error writing to binary file")
+		return errors.Wrap(err, "decomposedfs: error writing to binary file")
 	}
 
 	return uploadInfo.FinishUpload(ctx)
@@ -99,7 +99,6 @@ func (fs *Decomposedfs) Upload(ctx context.Context, ref *provider.Reference, r i
 // TODO read optional content for small files in this request
 // TODO InitiateUpload (and Upload) needs a way to receive the expected checksum. Maybe in metadata as 'checksum' => 'sha1 aeosvp45w5xaeoe' = lowercase, space separated?
 func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64, metadata map[string]string) (map[string]string, error) {
-
 	log := appctx.GetLogger(ctx)
 
 	n, err := fs.lu.NodeFromResource(ctx, ref)
@@ -178,9 +177,8 @@ func (fs *Decomposedfs) UseIn(composer *tusd.StoreComposer) {
 // - the storage needs to implement NewUpload and GetUpload
 // - the upload needs to implement the tusd.Upload interface: WriteChunk, GetInfo, GetReader and FinishUpload
 
-// NewUpload returns a new tus Upload instance
+// NewUpload returns a new tus Upload instance.
 func (fs *Decomposedfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tusd.Upload, err error) {
-
 	log := appctx.GetLogger(ctx)
 	log.Debug().Interface("info", info).Msg("Decomposedfs: NewUpload")
 
@@ -198,7 +196,7 @@ func (fs *Decomposedfs) NewUpload(ctx context.Context, info tusd.FileInfo) (uplo
 
 	n, err := fs.lookupNode(ctx, filepath.Join(info.MetaData["dir"], info.MetaData["filename"]))
 	if err != nil {
-		return nil, errors.Wrap(err, "Decomposedfs: error wrapping filename")
+		return nil, errors.Wrap(err, "decomposedfs: error wrapping filename")
 	}
 
 	log.Debug().Interface("info", info).Interface("node", n).Msg("Decomposedfs: resolved filename")
@@ -233,13 +231,13 @@ func (fs *Decomposedfs) NewUpload(ctx context.Context, info tusd.FileInfo) (uplo
 
 	binPath, err := fs.getUploadPath(ctx, info.ID)
 	if err != nil {
-		return nil, errors.Wrap(err, "Decomposedfs: error resolving upload path")
+		return nil, errors.Wrap(err, "decomposedfs: error resolving upload path")
 	}
 	usr := ctxpkg.ContextMustGetUser(ctx)
 
 	owner, err := p.Owner()
 	if err != nil {
-		return nil, errors.Wrap(err, "Decomposedfs: error determining owner")
+		return nil, errors.Wrap(err, "decomposedfs: error determining owner")
 	}
 	var spaceRoot string
 	if info.Storage != nil {
@@ -298,7 +296,7 @@ func (fs *Decomposedfs) getUploadPath(ctx context.Context, uploadID string) (str
 	return filepath.Join(fs.o.Root, "uploads", uploadID), nil
 }
 
-// GetUpload returns the Upload for the given upload id
+// GetUpload returns the Upload for the given upload id.
 func (fs *Decomposedfs) GetUpload(ctx context.Context, id string) (tusd.Upload, error) {
 	infoPath := filepath.Join(fs.o.Root, "uploads", id+".info")
 
@@ -393,12 +391,12 @@ type fileUpload struct {
 	ctx context.Context
 }
 
-// GetInfo returns the FileInfo
+// GetInfo returns the FileInfo.
 func (upload *fileUpload) GetInfo(ctx context.Context) (tusd.FileInfo, error) {
 	return upload.info, nil
 }
 
-// WriteChunk writes the stream from the reader to the given offset of the upload
+// WriteChunk writes the stream from the reader to the given offset of the upload.
 func (upload *fileUpload) WriteChunk(ctx context.Context, offset int64, src io.Reader) (int64, error) {
 	file, err := os.OpenFile(upload.binPath, os.O_WRONLY|os.O_APPEND, defaultFilePerm)
 	if err != nil {
@@ -428,7 +426,7 @@ func (upload *fileUpload) WriteChunk(ctx context.Context, offset int64, src io.R
 	return n, err
 }
 
-// GetReader returns an io.Reader for the upload
+// GetReader returns an io.Reader for the upload.
 func (upload *fileUpload) GetReader(ctx context.Context) (io.Reader, error) {
 	return os.Open(upload.binPath)
 }
@@ -442,9 +440,8 @@ func (upload *fileUpload) writeInfo() error {
 	return os.WriteFile(upload.infoPath, data, defaultFilePerm)
 }
 
-// FinishUpload finishes an upload and moves the file to the internal destination
+// FinishUpload finishes an upload and moves the file to the internal destination.
 func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
-
 	// ensure cleanup
 	defer upload.discardChunk()
 
@@ -578,7 +575,7 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 		OpaqueId: upload.info.Storage["OwnerId"],
 	})
 	if err != nil {
-		return errors.Wrap(err, "Decomposedfs: could not write metadata")
+		return errors.Wrap(err, "decomposedfs: could not write metadata")
 	}
 
 	// link child name to parent if it is new
@@ -593,12 +590,12 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) (err error) {
 			Msg("Decomposedfs: child name link has wrong target id, repairing")
 
 		if err = os.Remove(childNameLink); err != nil {
-			return errors.Wrap(err, "Decomposedfs: could not remove symlink child entry")
+			return errors.Wrap(err, "decomposedfs: could not remove symlink child entry")
 		}
 	}
 	if os.IsNotExist(err) || link != "../"+n.ID {
 		if err = os.Symlink("../"+n.ID, childNameLink); err != nil {
-			return errors.Wrap(err, "Decomposedfs: could not symlink child entry")
+			return errors.Wrap(err, "decomposedfs: could not symlink child entry")
 		}
 	}
 
@@ -659,12 +656,12 @@ func (upload *fileUpload) discardChunk() {
 // - the storage needs to implement AsTerminatableUpload
 // - the upload needs to implement Terminate
 
-// AsTerminatableUpload returns a TerminatableUpload
+// AsTerminatableUpload returns a TerminatableUpload.
 func (fs *Decomposedfs) AsTerminatableUpload(upload tusd.Upload) tusd.TerminatableUpload {
 	return upload.(*fileUpload)
 }
 
-// Terminate terminates the upload
+// Terminate terminates the upload.
 func (upload *fileUpload) Terminate(ctx context.Context) error {
 	if err := os.Remove(upload.infoPath); err != nil {
 		if !os.IsNotExist(err) {
@@ -683,12 +680,12 @@ func (upload *fileUpload) Terminate(ctx context.Context) error {
 // - the storage needs to implement AsLengthDeclarableUpload
 // - the upload needs to implement DeclareLength
 
-// AsLengthDeclarableUpload returns a LengthDeclarableUpload
+// AsLengthDeclarableUpload returns a LengthDeclarableUpload.
 func (fs *Decomposedfs) AsLengthDeclarableUpload(upload tusd.Upload) tusd.LengthDeclarableUpload {
 	return upload.(*fileUpload)
 }
 
-// DeclareLength updates the upload length information
+// DeclareLength updates the upload length information.
 func (upload *fileUpload) DeclareLength(ctx context.Context, length int64) error {
 	upload.info.Size = length
 	upload.info.SizeIsDeferred = false
@@ -699,12 +696,12 @@ func (upload *fileUpload) DeclareLength(ctx context.Context, length int64) error
 // - the storage needs to implement AsConcatableUpload
 // - the upload needs to implement ConcatUploads
 
-// AsConcatableUpload returns a ConcatableUpload
+// AsConcatableUpload returns a ConcatableUpload.
 func (fs *Decomposedfs) AsConcatableUpload(upload tusd.Upload) tusd.ConcatableUpload {
 	return upload.(*fileUpload)
 }
 
-// ConcatUploads concatenates multiple uploads
+// ConcatUploads concatenates multiple uploads.
 func (upload *fileUpload) ConcatUploads(ctx context.Context, uploads []tusd.Upload) (err error) {
 	file, err := os.OpenFile(upload.binPath, os.O_WRONLY|os.O_APPEND, defaultFilePerm)
 	if err != nil {

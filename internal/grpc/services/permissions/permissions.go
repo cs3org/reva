@@ -54,7 +54,7 @@ type service struct {
 	manager permission.Manager
 }
 
-// New returns a new PermissionsServiceServer
+// New returns a new PermissionsServiceServer.
 func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 	c, err := parseConfig(m)
 	if err != nil {

@@ -29,19 +29,17 @@ import (
 	"time"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
-	"github.com/cs3org/reva/pkg/utils"
-
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/ocm/share"
 	"github.com/cs3org/reva/pkg/ocm/share/manager/registry"
 	"github.com/cs3org/reva/pkg/ocm/share/sender"
+	"github.com/cs3org/reva/pkg/utils"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"google.golang.org/genproto/protobuf/field_mask"
@@ -70,14 +68,14 @@ type Manager struct {
 	endPoint     string
 }
 
-// ShareManagerConfig contains config for a Nextcloud-based ShareManager
+// ShareManagerConfig contains config for a Nextcloud-based ShareManager.
 type ShareManagerConfig struct {
 	EndPoint     string `mapstructure:"endpoint" docs:";The Nextcloud backend endpoint for user check"`
 	SharedSecret string `mapstructure:"shared_secret"`
 	MockHTTP     bool   `mapstructure:"mock_http"`
 }
 
-// Action describes a REST request to forward to the Nextcloud backend
+// Action describes a REST request to forward to the Nextcloud backend.
 type Action struct {
 	verb string
 	argS string
@@ -90,7 +88,7 @@ type GranteeAltMap struct {
 	ID *provider.Grantee_UserId `json:"id"`
 }
 
-// ShareAltMap is an alternative map to JSON-unmarshal a Share
+// ShareAltMap is an alternative map to JSON-unmarshal a Share.
 type ShareAltMap struct {
 	ID          *ocm.ShareId          `json:"id"`
 	ResourceID  *provider.ResourceId  `json:"resource_id"`
@@ -102,7 +100,7 @@ type ShareAltMap struct {
 	Mtime       *typespb.Timestamp    `json:"mtime"`
 }
 
-// ReceivedShareAltMap is an alternative map to JSON-unmarshal a ReceivedShare
+// ReceivedShareAltMap is an alternative map to JSON-unmarshal a ReceivedShare.
 type ReceivedShareAltMap struct {
 	Share *ShareAltMap   `json:"share"`
 	State ocm.ShareState `json:"state"`
@@ -140,7 +138,7 @@ func New(m map[string]interface{}) (share.Manager, error) {
 	return NewShareManager(c)
 }
 
-// NewShareManager returns a new Nextcloud-based ShareManager
+// NewShareManager returns a new Nextcloud-based ShareManager.
 func NewShareManager(c *ShareManagerConfig) (*Manager, error) {
 	var client *http.Client
 	if c.MockHTTP {
@@ -164,7 +162,7 @@ func NewShareManager(c *ShareManagerConfig) (*Manager, error) {
 	}, nil
 }
 
-// SetHTTPClient sets the HTTP client
+// SetHTTPClient sets the HTTP client.
 func (sm *Manager) SetHTTPClient(c *http.Client) {
 	sm.client = c
 }
@@ -216,10 +214,9 @@ func (sm *Manager) do(ctx context.Context, a Action, username string) (int, []by
 // Share is called from both grpc CreateOCMShare for outgoing
 // and http /ocm/shares for incoming
 // pi is provider info
-// pm is permissions
+// pm is permissions.
 func (sm *Manager) Share(ctx context.Context, md *provider.ResourceId, g *ocm.ShareGrant, name string,
 	pi *ocmprovider.ProviderInfo, pm string, owner *userpb.UserId, token string, st ocm.Share_ShareType) (*ocm.Share, error) {
-
 	// Since both OCMCore and OCMShareProvider use the same package, we distinguish
 	// between calls received from them on the basis of whether they provide info
 	// about the remote provider on which the share is to be created.
@@ -528,7 +525,6 @@ func (sm *Manager) ListReceivedShares(ctx context.Context) ([]*ocm.ReceivedShare
 		}
 	}
 	return pointers, err
-
 }
 
 // GetReceivedShare as defined in the ocm.share.Manager interface

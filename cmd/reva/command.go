@@ -24,7 +24,7 @@ import (
 	"io"
 )
 
-// Command is the representation to create commands
+// Command is the representation to create commands.
 type command struct {
 	*flag.FlagSet
 	Name        string
@@ -34,7 +34,7 @@ type command struct {
 	ResetFlags  func()
 }
 
-// newCommand creates a new command
+// newCommand creates a new command.
 func newCommand(name string) *command {
 	fs := flag.NewFlagSet(name, flag.ExitOnError)
 	cmd := &command{

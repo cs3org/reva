@@ -37,7 +37,10 @@ import (
 // /tmp directories are often tmpfs mounts which do not support user
 // extended attributes.
 func TempDir(name string) (string, error) {
-	_, currentFileName, _, _ := runtime.Caller(0)
+	_, currentFileName, _, ok := runtime.Caller(0)
+	if !ok {
+		return "nil", errors.New("failed to retrieve currentFileName")
+	}
 	tmpDir := filepath.Join(filepath.Dir(currentFileName), "../../tmp")
 	err := os.MkdirAll(tmpDir, 0755)
 	if err != nil {
@@ -51,7 +54,7 @@ func TempDir(name string) (string, error) {
 	return tmpRoot, nil
 }
 
-// Upload can be used to initiate an upload and do the upload to a storage.FS in one step
+// Upload can be used to initiate an upload and do the upload to a storage.FS in one step.
 func Upload(ctx context.Context, fs storage.FS, ref *provider.Reference, content []byte) error {
 	uploadIds, err := fs.InitiateUpload(ctx, ref, 0, map[string]string{})
 	if err != nil {

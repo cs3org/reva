@@ -127,7 +127,7 @@ type ACE struct {
 	label     string // l
 }
 
-// FromGrant creates an ACE from a CS3 grant
+// FromGrant creates an ACE from a CS3 grant.
 func FromGrant(g *provider.Grant) *ACE {
 	e := &ACE{
 		_type:       "A",
@@ -143,12 +143,12 @@ func FromGrant(g *provider.Grant) *ACE {
 	return e
 }
 
-// Principal returns the principal of the ACE, eg. `u:<userid>` or `g:<groupid>`
+// Principal returns the principal of the ACE, eg. `u:<userid>` or `g:<groupid>`.
 func (e *ACE) Principal() string {
 	return e.principal
 }
 
-// Marshal renders a principal and byte[] that can be used to persist the ACE as an extended attribute
+// Marshal renders a principal and byte[] that can be used to persist the ACE as an extended attribute.
 func (e *ACE) Marshal() (string, []byte) {
 	// first byte will be replaced after converting to byte array
 	val := fmt.Sprintf("_t=%s:f=%s:p=%s", e._type, e.flags, e.permissions)
@@ -157,7 +157,7 @@ func (e *ACE) Marshal() (string, []byte) {
 	return e.principal, b
 }
 
-// Unmarshal parses a principal string and byte[] into an ACE
+// Unmarshal parses a principal string and byte[] into an ACE.
 func Unmarshal(principal string, v []byte) (e *ACE, err error) {
 	// first byte indicates type of value
 	switch v[0] {
@@ -182,7 +182,7 @@ func Unmarshal(principal string, v []byte) (e *ACE, err error) {
 	return
 }
 
-// Grant returns a CS3 grant
+// Grant returns a CS3 grant.
 func (e *ACE) Grant() *provider.Grant {
 	g := &provider.Grant{
 		Grantee: &provider.Grantee{
@@ -199,7 +199,7 @@ func (e *ACE) Grant() *provider.Grant {
 	return g
 }
 
-// granteeType returns the CS3 grantee type
+// granteeType returns the CS3 grantee type.
 func (e *ACE) granteeType() provider.GranteeType {
 	if strings.Contains(e.flags, "g") {
 		return provider.GranteeType_GRANTEE_TYPE_GROUP
@@ -207,7 +207,7 @@ func (e *ACE) granteeType() provider.GranteeType {
 	return provider.GranteeType_GRANTEE_TYPE_USER
 }
 
-// grantPermissionSet returns the set of CS3 resource permissions representing the ACE
+// grantPermissionSet returns the set of CS3 resource permissions representing the ACE.
 func (e *ACE) grantPermissionSet() *provider.ResourcePermissions {
 	p := &provider.ResourcePermissions{}
 	// r

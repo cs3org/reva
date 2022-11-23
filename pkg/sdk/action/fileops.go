@@ -24,8 +24,6 @@ import (
 	"strings"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	storage "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-
 	"github.com/cs3org/reva/pkg/sdk"
 	"github.com/cs3org/reva/pkg/sdk/common/net"
 )
@@ -46,7 +44,7 @@ func (action *FileOperationsAction) GetHome() (string, error) {
 }
 
 // Stat queries the file information of the specified remote resource.
-func (action *FileOperationsAction) Stat(path string) (*storage.ResourceInfo, error) {
+func (action *FileOperationsAction) Stat(path string) (*provider.ResourceInfo, error) {
 	ref := &provider.Reference{Path: path}
 	req := &provider.StatRequest{Ref: ref}
 	res, err := action.session.Client().Stat(action.session.Context(), req)

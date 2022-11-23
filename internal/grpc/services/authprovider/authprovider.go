@@ -170,5 +170,4 @@ func (s *service) Authenticate(ctx context.Context, req *provider.AuthenticateRe
 			Status: status.NewUnauthenticated(ctx, err, "error authenticating user"),
 		}, nil
 	}
-
 }

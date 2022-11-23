@@ -25,7 +25,7 @@ import (
 	"github.com/cs3org/reva/pkg/utils/resourceid"
 )
 
-// MetaHandler handles meta requests
+// MetaHandler handles meta requests.
 type MetaHandler struct {
 	VersionsHandler *VersionsHandler
 }
@@ -35,10 +35,9 @@ func (h *MetaHandler) init(c *Config) error {
 	return h.VersionsHandler.init(c)
 }
 
-// Handler handles requests
+// Handler handles requests.
 func (h *MetaHandler) Handler(s *svc) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-
 		var id string
 		id, r.URL.Path = router.ShiftPath(r.URL.Path)
 		if id == "" {
@@ -56,6 +55,5 @@ func (h *MetaHandler) Handler(s *svc) http.Handler {
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}
-
 	})
 }

@@ -32,12 +32,12 @@ import (
 	"github.com/cs3org/reva/pkg/share/cache"
 	"github.com/cs3org/reva/pkg/share/cache/warmup/registry"
 	"github.com/cs3org/reva/pkg/token/manager/jwt"
+
+	// Provides mysql drivers.
+	_ "github.com/go-sql-driver/mysql"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc/metadata"
-
-	// Provides mysql drivers
-	_ "github.com/go-sql-driver/mysql"
 )
 
 func init() {
@@ -45,11 +45,11 @@ func init() {
 }
 
 type config struct {
-	DbUsername   string `mapstructure:"db_username"`
-	DbPassword   string `mapstructure:"db_password"`
-	DbHost       string `mapstructure:"db_host"`
-	DbPort       int    `mapstructure:"db_port"`
-	DbName       string `mapstructure:"db_name"`
+	DBUsername   string `mapstructure:"db_username"`
+	DBPassword   string `mapstructure:"db_password"`
+	DBHost       string `mapstructure:"db_host"`
+	DBPort       int    `mapstructure:"db_port"`
+	DBName       string `mapstructure:"db_name"`
 	EOSNamespace string `mapstructure:"namespace"`
 	GatewaySvc   string `mapstructure:"gatewaysvc"`
 	JWTSecret    string `mapstructure:"jwt_secret"`
@@ -69,13 +69,13 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 	return c, nil
 }
 
-// New returns an implementation of cache warmup that connects to the cbox share db and stats resources on EOS
+// New returns an implementation of cache warmup that connects to the cbox share db and stats resources on EOS.
 func New(m map[string]interface{}) (cache.Warmup, error) {
 	c, err := parseConfig(m)
 	if err != nil {
 		return nil, err
 	}
-	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%d)/%s", c.DbUsername, c.DbPassword, c.DbHost, c.DbPort, c.DbName))
+	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%d)/%s", c.DBUsername, c.DBPassword, c.DBHost, c.DBPort, c.DBName))
 	if err != nil {
 		return nil, err
 	}
@@ -151,5 +151,4 @@ func (m *manager) GetResourceInfos() ([]*provider.ResourceInfo, error) {
 	}
 
 	return infos, nil
-
 }

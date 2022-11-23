@@ -32,13 +32,12 @@ import (
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/share"
+	"github.com/cs3org/reva/pkg/share/manager/registry"
+	"github.com/cs3org/reva/pkg/utils"
 	"github.com/google/uuid"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"google.golang.org/genproto/protobuf/field_mask"
-
-	"github.com/cs3org/reva/pkg/share/manager/registry"
-	"github.com/cs3org/reva/pkg/utils"
 )
 
 func init() {

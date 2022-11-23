@@ -324,7 +324,6 @@ func Test_GetAppProviders(t *testing.T) {
 }
 
 func TestNew(t *testing.T) {
-
 	tests := []struct {
 		name      string
 		m         map[string]interface{}

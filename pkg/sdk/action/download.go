@@ -24,7 +24,6 @@ import (
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	storage "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/sdk"
 	"github.com/cs3org/reva/pkg/sdk/common/net"
@@ -50,8 +49,8 @@ func (action *DownloadAction) DownloadFile(path string) ([]byte, error) {
 }
 
 // Download retrieves the data of the provided resource.
-func (action *DownloadAction) Download(fileInfo *storage.ResourceInfo) ([]byte, error) {
-	if fileInfo.Type != storage.ResourceType_RESOURCE_TYPE_FILE {
+func (action *DownloadAction) Download(fileInfo *provider.ResourceInfo) ([]byte, error) {
+	if fileInfo.Type != provider.ResourceType_RESOURCE_TYPE_FILE {
 		return nil, fmt.Errorf("resource is not a file")
 	}
 
@@ -88,7 +87,7 @@ func (action *DownloadAction) Download(fileInfo *storage.ResourceInfo) ([]byte, 
 	return data, nil
 }
 
-func (action *DownloadAction) initiateDownload(fileInfo *storage.ResourceInfo) (*gateway.InitiateFileDownloadResponse, error) {
+func (action *DownloadAction) initiateDownload(fileInfo *provider.ResourceInfo) (*gateway.InitiateFileDownloadResponse, error) {
 	// Initiating a download request gets us the download endpoint for the specified resource
 	req := &provider.InitiateFileDownloadRequest{Ref: &provider.Reference{Path: fileInfo.Path}}
 	res, err := action.session.Client().InitiateFileDownload(action.session.Context(), req)

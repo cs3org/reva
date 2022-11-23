@@ -33,10 +33,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/google/uuid"
-	"github.com/pkg/errors"
-	"github.com/pkg/xattr"
-
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
@@ -48,9 +44,12 @@ import (
 	"github.com/cs3org/reva/pkg/storage/utils/ace"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/xattrs"
 	"github.com/cs3org/reva/pkg/utils"
+	"github.com/google/uuid"
+	"github.com/pkg/errors"
+	"github.com/pkg/xattr"
 )
 
-// Define keys and values used in the node metadata
+// Define keys and values used in the node metadata.
 const (
 	FavoriteKey   = "http://owncloud.org/ns/favorite"
 	ShareTypesKey = "http://owncloud.org/ns/share-types"
@@ -63,7 +62,7 @@ const (
 	QuotaUnlimited    = "-3"
 )
 
-// Node represents a node in the tree and provides methods to get a Parent or Child instance
+// Node represents a node in the tree and provides methods to get a Parent or Child instance.
 type Node struct {
 	ParentID  string
 	ID        string
@@ -77,7 +76,7 @@ type Node struct {
 	lu PathLookup
 }
 
-// PathLookup defines the interface for the lookup component
+// PathLookup defines the interface for the lookup component.
 type PathLookup interface {
 	RootNode(ctx context.Context) (node *Node, err error)
 	HomeOrRootNode(ctx context.Context) (node *Node, err error)
@@ -88,7 +87,7 @@ type PathLookup interface {
 	ShareFolder() string
 }
 
-// New returns a new instance of Node
+// New returns a new instance of Node.
 func New(id, parentID, name string, blobsize int64, blobID string, owner *userpb.UserId, lu PathLookup) *Node {
 	if blobID == "" {
 		blobID = uuid.New().String()
@@ -104,18 +103,18 @@ func New(id, parentID, name string, blobsize int64, blobID string, owner *userpb
 	}
 }
 
-// ChangeOwner sets the owner of n to newOwner
+// ChangeOwner sets the owner of n to newOwner.
 func (n *Node) ChangeOwner(new *userpb.UserId) (err error) {
 	nodePath := n.InternalPath()
 	n.owner = new
 	if err = xattr.Set(nodePath, xattrs.OwnerIDAttr, []byte(new.OpaqueId)); err != nil {
-		return errors.Wrap(err, "Decomposedfs: could not reset owner id attribute")
+		return errors.Wrap(err, "decomposedfs: could not reset owner id attribute")
 	}
 	if err = xattr.Set(nodePath, xattrs.OwnerIDPAttr, []byte(new.Idp)); err != nil {
-		return errors.Wrap(err, "Decomposedfs: could not reset owner idp attribute")
+		return errors.Wrap(err, "decomposedfs: could not reset owner idp attribute")
 	}
 	if err = xattr.Set(nodePath, xattrs.OwnerTypeAttr, []byte(utils.UserTypeToString(new.Type))); err != nil {
-		return errors.Wrap(err, "Decomposedfs: could not reset owner idp attribute")
+		return errors.Wrap(err, "decomposedfs: could not reset owner idp attribute")
 	}
 
 	return
@@ -126,51 +125,51 @@ func (n *Node) ChangeOwner(new *userpb.UserId) (err error) {
 func (n *Node) SetMetadata(key string, val string) (err error) {
 	nodePath := n.InternalPath()
 	if err := xattr.Set(nodePath, key, []byte(val)); err != nil {
-		return errors.Wrap(err, "Decomposedfs: could not set parentid attribute")
+		return errors.Wrap(err, "decomposedfs: could not set parentid attribute")
 	}
 	return nil
 }
 
-// WriteMetadata writes the Node metadata to disk
+// WriteMetadata writes the Node metadata to disk.
 func (n *Node) WriteMetadata(owner *userpb.UserId) (err error) {
 	nodePath := n.InternalPath()
 	if err = xattr.Set(nodePath, xattrs.ParentidAttr, []byte(n.ParentID)); err != nil {
-		return errors.Wrap(err, "Decomposedfs: could not set parentid attribute")
+		return errors.Wrap(err, "decomposedfs: could not set parentid attribute")
 	}
 	if err = xattr.Set(nodePath, xattrs.NameAttr, []byte(n.Name)); err != nil {
-		return errors.Wrap(err, "Decomposedfs: could not set name attribute")
+		return errors.Wrap(err, "decomposedfs: could not set name attribute")
 	}
 	if err = xattr.Set(nodePath, xattrs.BlobIDAttr, []byte(n.BlobID)); err != nil {
-		return errors.Wrap(err, "Decomposedfs: could not set blobid attribute")
+		return errors.Wrap(err, "decomposedfs: could not set blobid attribute")
 	}
 	if err = xattr.Set(nodePath, xattrs.BlobsizeAttr, []byte(fmt.Sprintf("%d", n.Blobsize))); err != nil {
-		return errors.Wrap(err, "Decomposedfs: could not set blobsize attribute")
+		return errors.Wrap(err, "decomposedfs: could not set blobsize attribute")
 	}
 	if owner == nil {
 		if err = xattr.Set(nodePath, xattrs.OwnerIDAttr, []byte("")); err != nil {
-			return errors.Wrap(err, "Decomposedfs: could not set empty owner id attribute")
+			return errors.Wrap(err, "decomposedfs: could not set empty owner id attribute")
 		}
 		if err = xattr.Set(nodePath, xattrs.OwnerIDPAttr, []byte("")); err != nil {
-			return errors.Wrap(err, "Decomposedfs: could not set empty owner idp attribute")
+			return errors.Wrap(err, "decomposedfs: could not set empty owner idp attribute")
 		}
 		if err = xattr.Set(nodePath, xattrs.OwnerTypeAttr, []byte("")); err != nil {
-			return errors.Wrap(err, "Decomposedfs: could not set empty owner type attribute")
+			return errors.Wrap(err, "decomposedfs: could not set empty owner type attribute")
 		}
 	} else {
 		if err = xattr.Set(nodePath, xattrs.OwnerIDAttr, []byte(owner.OpaqueId)); err != nil {
-			return errors.Wrap(err, "Decomposedfs: could not set owner id attribute")
+			return errors.Wrap(err, "decomposedfs: could not set owner id attribute")
 		}
 		if err = xattr.Set(nodePath, xattrs.OwnerIDPAttr, []byte(owner.Idp)); err != nil {
-			return errors.Wrap(err, "Decomposedfs: could not set owner idp attribute")
+			return errors.Wrap(err, "decomposedfs: could not set owner idp attribute")
 		}
 		if err = xattr.Set(nodePath, xattrs.OwnerTypeAttr, []byte(utils.UserTypeToString(owner.Type))); err != nil {
-			return errors.Wrap(err, "Decomposedfs: could not set owner idp attribute")
+			return errors.Wrap(err, "decomposedfs: could not set owner idp attribute")
 		}
 	}
 	return
 }
 
-// ReadNode creates a new instance from an id and checks if it exists
+// ReadNode creates a new instance from an id and checks if it exists.
 func ReadNode(ctx context.Context, lu PathLookup, id string) (n *Node, err error) {
 	n = &Node{
 		lu: lu,
@@ -229,7 +228,7 @@ func ReadNode(ctx context.Context, lu PathLookup, id string) (n *Node, err error
 	return
 }
 
-// The os error is buried inside the fs.PathError error
+// The os error is buried inside the fs.PathError error.
 func isNotDir(err error) bool {
 	if perr, ok := err.(*fs.PathError); ok {
 		if serr, ok2 := perr.Err.(syscall.Errno); ok2 {
@@ -239,7 +238,7 @@ func isNotDir(err error) bool {
 	return false
 }
 
-// Child returns the child node with the given name
+// Child returns the child node with the given name.
 func (n *Node) Child(ctx context.Context, name string) (*Node, error) {
 	link, err := os.Readlink(filepath.Join(n.InternalPath(), filepath.Join("/", name)))
 	if err != nil {
@@ -253,7 +252,7 @@ func (n *Node) Child(ctx context.Context, name string) (*Node, error) {
 			return c, nil // if the file does not exist we return a node that has Exists = false
 		}
 
-		return nil, errors.Wrap(err, "Decomposedfs: Wrap: readlink error")
+		return nil, errors.Wrap(err, "decomposedfs: Wrap: readlink error")
 	}
 
 	var c *Node
@@ -264,16 +263,16 @@ func (n *Node) Child(ctx context.Context, name string) (*Node, error) {
 		}
 		c.SpaceRoot = n.SpaceRoot
 	} else {
-		return nil, fmt.Errorf("Decomposedfs: expected '../ prefix, got' %+v", link)
+		return nil, fmt.Errorf("decomposedfs: expected '../ prefix, got' %+v", link)
 	}
 
 	return c, nil
 }
 
-// Parent returns the parent node
+// Parent returns the parent node.
 func (n *Node) Parent() (p *Node, err error) {
 	if n.ParentID == "" {
-		return nil, fmt.Errorf("Decomposedfs: root has no parent")
+		return nil, fmt.Errorf("decomposedfs: root has no parent")
 	}
 	p = &Node{
 		lu:        n.lu,
@@ -305,7 +304,7 @@ func (n *Node) Parent() (p *Node, err error) {
 }
 
 // Owner returns the cached owner id or reads it from the extended attributes
-// TODO can be private as only the AsResourceInfo uses it
+// TODO can be private as only the AsResourceInfo uses it.
 func (n *Node) Owner() (*userpb.UserId, error) {
 	if n.owner != nil {
 		return n.owner, nil
@@ -360,7 +359,7 @@ func (n *Node) Owner() (*userpb.UserId, error) {
 }
 
 // PermissionSet returns the permission set for the current user
-// the parent nodes are not taken into account
+// the parent nodes are not taken into account.
 func (n *Node) PermissionSet(ctx context.Context) provider.ResourcePermissions {
 	u, ok := ctxpkg.ContextGetUser(ctx)
 	if !ok {
@@ -377,17 +376,17 @@ func (n *Node) PermissionSet(ctx context.Context) provider.ResourcePermissions {
 	return NoPermissions()
 }
 
-// InternalPath returns the internal path of the Node
+// InternalPath returns the internal path of the Node.
 func (n *Node) InternalPath() string {
 	return n.lu.InternalPath(n.ID)
 }
 
-// CalculateEtag returns a hash of fileid + tmtime (or mtime)
+// CalculateEtag returns a hash of fileid + tmtime (or mtime).
 func CalculateEtag(nodeID string, tmTime time.Time) (string, error) {
 	return calculateEtag(nodeID, tmTime)
 }
 
-// calculateEtag returns a hash of fileid + tmtime (or mtime)
+// calculateEtag returns a hash of fileid + tmtime (or mtime).
 func calculateEtag(nodeID string, tmTime time.Time) (string, error) {
 	h := md5.New()
 	if _, err := io.WriteString(h, nodeID); err != nil {
@@ -403,7 +402,7 @@ func calculateEtag(nodeID string, tmTime time.Time) (string, error) {
 	return fmt.Sprintf(`"%x"`, h.Sum(nil)), nil
 }
 
-// SetMtime sets the mtime and atime of a node
+// SetMtime sets the mtime and atime of a node.
 func (n *Node) SetMtime(ctx context.Context, mtime string) error {
 	sublog := appctx.GetLogger(ctx).With().Interface("node", n).Logger()
 	if mt, err := parseMTime(mtime); err == nil {
@@ -424,7 +423,7 @@ func (n *Node) SetMtime(ctx context.Context, mtime string) error {
 	return nil
 }
 
-// SetEtag sets the temporary etag of a node if it differs from the current etag
+// SetEtag sets the temporary etag of a node if it differs from the current etag.
 func (n *Node) SetEtag(ctx context.Context, val string) (err error) {
 	sublog := appctx.GetLogger(ctx).With().Interface("node", n).Logger()
 	nodePath := n.lu.InternalPath(n.ID)
@@ -470,7 +469,7 @@ func (n *Node) SetEtag(ctx context.Context, val string) (err error) {
 // 4. group = g:<gid>:
 // 5. app? = a:<aid>: for apps?
 // obviously this only is secure when the u/s/g/a namespaces are not accessible by users in the filesystem
-// public tags can be mapped to extended attributes
+// public tags can be mapped to extended attributes.
 func (n *Node) SetFavorite(uid *userpb.UserId, val string) error {
 	nodePath := n.lu.InternalPath(n.ID)
 	// the favorite flag is specific to the user, so we need to incorporate the userid
@@ -478,7 +477,7 @@ func (n *Node) SetFavorite(uid *userpb.UserId, val string) error {
 	return xattr.Set(nodePath, fa, []byte(val))
 }
 
-// AsResourceInfo return the node as CS3 ResourceInfo
+// AsResourceInfo return the node as CS3 ResourceInfo.
 func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissions, mdKeys []string, returnBasename bool) (ri *provider.ResourceInfo, err error) {
 	sublog := appctx.GetLogger(ctx).With().Interface("node", n).Logger()
 
@@ -653,7 +652,6 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 						Msg("error retrieving xattr metadata")
 				}
 			}
-
 		}
 	}
 	ri.ArbitraryMetadata = &provider.ArbitraryMetadata{
@@ -706,7 +704,7 @@ func readChecksumIntoOpaque(ctx context.Context, nodePath, algo string, ri *prov
 	}
 }
 
-// quota is always stored on the root node
+// quota is always stored on the root node.
 func readQuotaIntoOpaque(ctx context.Context, nodePath string, ri *provider.ResourceInfo) {
 	v, err := xattr.Get(nodePath, xattrs.QuotaAttr)
 	switch {
@@ -738,7 +736,7 @@ func readQuotaIntoOpaque(ctx context.Context, nodePath string, ri *provider.Reso
 	}
 }
 
-// HasPropagation checks if the propagation attribute exists and is set to "1"
+// HasPropagation checks if the propagation attribute exists and is set to "1".
 func (n *Node) HasPropagation() (propagation bool) {
 	if b, err := xattr.Get(n.lu.InternalPath(n.ID), xattrs.PropagationAttr); err == nil {
 		return string(b) == "1"
@@ -746,7 +744,7 @@ func (n *Node) HasPropagation() (propagation bool) {
 	return false
 }
 
-// GetTMTime reads the tmtime from the extended attributes
+// GetTMTime reads the tmtime from the extended attributes.
 func (n *Node) GetTMTime() (tmTime time.Time, err error) {
 	var b []byte
 	if b, err = xattr.Get(n.lu.InternalPath(n.ID), xattrs.TreeMTimeAttr); err != nil {
@@ -755,12 +753,12 @@ func (n *Node) GetTMTime() (tmTime time.Time, err error) {
 	return time.Parse(time.RFC3339Nano, string(b))
 }
 
-// SetTMTime writes the tmtime to the extended attributes
+// SetTMTime writes the tmtime to the extended attributes.
 func (n *Node) SetTMTime(t time.Time) (err error) {
 	return xattr.Set(n.lu.InternalPath(n.ID), xattrs.TreeMTimeAttr, []byte(t.UTC().Format(time.RFC3339Nano)))
 }
 
-// GetTreeSize reads the treesize from the extended attributes
+// GetTreeSize reads the treesize from the extended attributes.
 func (n *Node) GetTreeSize() (treesize uint64, err error) {
 	var b []byte
 	if b, err = xattr.Get(n.InternalPath(), xattrs.TreesizeAttr); err != nil {
@@ -769,17 +767,17 @@ func (n *Node) GetTreeSize() (treesize uint64, err error) {
 	return strconv.ParseUint(string(b), 10, 64)
 }
 
-// SetTreeSize writes the treesize to the extended attributes
+// SetTreeSize writes the treesize to the extended attributes.
 func (n *Node) SetTreeSize(ts uint64) (err error) {
 	return xattr.Set(n.InternalPath(), xattrs.TreesizeAttr, []byte(strconv.FormatUint(ts, 10)))
 }
 
-// SetChecksum writes the checksum with the given checksum type to the extended attributes
+// SetChecksum writes the checksum with the given checksum type to the extended attributes.
 func (n *Node) SetChecksum(csType string, h hash.Hash) (err error) {
 	return xattr.Set(n.lu.InternalPath(n.ID), xattrs.ChecksumPrefix+csType, h.Sum(nil))
 }
 
-// UnsetTempEtag removes the temporary etag attribute
+// UnsetTempEtag removes the temporary etag attribute.
 func (n *Node) UnsetTempEtag() (err error) {
 	if err = xattr.Remove(n.lu.InternalPath(n.ID), xattrs.TmpEtagAttr); err != nil {
 		if e, ok := err.(*xattr.Error); ok && (e.Err.Error() == "no data available" ||
@@ -791,7 +789,7 @@ func (n *Node) UnsetTempEtag() (err error) {
 	return err
 }
 
-// ReadUserPermissions will assemble the permissions for the current user on the given node without parent nodes
+// ReadUserPermissions will assemble the permissions for the current user on the given node without parent nodes.
 func (n *Node) ReadUserPermissions(ctx context.Context, u *userpb.User) (ap provider.ResourcePermissions, err error) {
 	// check if the current user is the owner
 	o, err := n.Owner()
@@ -872,7 +870,7 @@ func (n *Node) ReadUserPermissions(ctx context.Context, u *userpb.User) (ap prov
 
 // ListGrantees lists the grantees of the current node
 // We don't want to wast time and memory by creating grantee objects.
-// The function will return a list of opaque strings that can be used to make a ReadGrant call
+// The function will return a list of opaque strings that can be used to make a ReadGrant call.
 func (n *Node) ListGrantees(ctx context.Context) (grantees []string, err error) {
 	var attrs []string
 	if attrs, err = xattr.List(n.InternalPath()); err != nil {
@@ -887,7 +885,7 @@ func (n *Node) ListGrantees(ctx context.Context) (grantees []string, err error) 
 	return
 }
 
-// ReadGrant reads a CS3 grant
+// ReadGrant reads a CS3 grant.
 func (n *Node) ReadGrant(ctx context.Context, grantee string) (g *provider.Grant, err error) {
 	var b []byte
 	if b, err = xattr.Get(n.InternalPath(), grantee); err != nil {
@@ -900,7 +898,7 @@ func (n *Node) ReadGrant(ctx context.Context, grantee string) (g *provider.Grant
 	return e.Grant(), nil
 }
 
-// ReadBlobSizeAttr reads the blobsize from the xattrs
+// ReadBlobSizeAttr reads the blobsize from the xattrs.
 func ReadBlobSizeAttr(path string) (int64, error) {
 	attrBytes, err := xattr.Get(path, xattrs.BlobsizeAttr)
 	if err != nil {
@@ -940,7 +938,7 @@ func parseMTime(v string) (t time.Time, err error) {
 }
 
 // FindStorageSpaceRoot calls n.Parent() and climbs the tree
-// until it finds the space root node and adds it to the node
+// until it finds the space root node and adds it to the node.
 func (n *Node) FindStorageSpaceRoot() error {
 	var err error
 	// remember the node we ask for and use parent to climb the tree
@@ -957,7 +955,7 @@ func (n *Node) FindStorageSpaceRoot() error {
 	return nil
 }
 
-// IsSpaceRoot checks if the node is a space root
+// IsSpaceRoot checks if the node is a space root.
 func IsSpaceRoot(r *Node) bool {
 	path := r.InternalPath()
 	if spaceNameBytes, err := xattr.Get(path, xattrs.SpaceNameAttr); err == nil {
@@ -968,7 +966,7 @@ func IsSpaceRoot(r *Node) bool {
 	return false
 }
 
-// CheckQuota checks if both disk space and available quota are sufficient
+// CheckQuota checks if both disk space and available quota are sufficient.
 var CheckQuota = func(spaceRoot *Node, fileSize uint64) (quotaSufficient bool, err error) {
 	used, _ := spaceRoot.GetTreeSize()
 	if !enoughDiskSpace(spaceRoot.InternalPath(), fileSize) {

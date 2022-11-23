@@ -28,12 +28,12 @@ import (
 	"time"
 )
 
-// Executor provides exec command handler
+// Executor provides exec command handler.
 type Executor struct {
 	Timeout int64
 }
 
-// Execute provides execute commands
+// Execute provides execute commands.
 func (e *Executor) Execute(s string) {
 	s = strings.TrimSpace(s)
 	switch s {
@@ -109,7 +109,7 @@ func executeWithContext(ctx context.Context, cmd *command) error {
 	}()
 	select {
 	case <-ctx.Done():
-		return errors.New("Cancelled by user")
+		return errors.New("cancelled by user")
 	case err := <-c:
 		return err
 	}

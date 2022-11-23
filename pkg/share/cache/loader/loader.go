@@ -22,5 +22,5 @@ import (
 	// Load share cache drivers.
 	_ "github.com/cs3org/reva/pkg/share/cache/memory"
 	_ "github.com/cs3org/reva/pkg/share/cache/redis"
-	// Add your own here
+	// Add your own here.
 )

@@ -23,11 +23,6 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/xattrs"
-	"github.com/google/uuid"
-	"github.com/pkg/xattr"
-	"github.com/stretchr/testify/mock"
-
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	providerv1beta1 "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	ruser "github.com/cs3org/reva/pkg/ctx"
@@ -38,10 +33,14 @@ import (
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/options"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/tree"
 	treemocks "github.com/cs3org/reva/pkg/storage/utils/decomposedfs/tree/mocks"
+	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/xattrs"
 	"github.com/cs3org/reva/tests/helpers"
+	"github.com/google/uuid"
+	"github.com/pkg/xattr"
+	"github.com/stretchr/testify/mock"
 )
 
-// TestEnv represents a test environment for unit tests
+// TestEnv represents a test environment for unit tests.
 type TestEnv struct {
 	Root        string
 	Fs          storage.FS
@@ -160,12 +159,12 @@ func NewTestEnv() (*TestEnv, error) {
 	return env, nil
 }
 
-// Cleanup removes all files from disk
+// Cleanup removes all files from disk.
 func (t *TestEnv) Cleanup() {
 	os.RemoveAll(t.Root)
 }
 
-// CreateTestDir create a directory and returns a corresponding Node
+// CreateTestDir create a directory and returns a corresponding Node.
 func (t *TestEnv) CreateTestDir(name string) (*node.Node, error) {
 	err := t.Fs.CreateDir(t.Ctx, &providerv1beta1.Reference{Path: name})
 	if err != nil {
@@ -179,7 +178,7 @@ func (t *TestEnv) CreateTestDir(name string) (*node.Node, error) {
 	return n, nil
 }
 
-// CreateTestFile creates a new file and its metadata and returns a corresponding Node
+// CreateTestFile creates a new file and its metadata and returns a corresponding Node.
 func (t *TestEnv) CreateTestFile(name, blobID string, blobSize int64, parentID string) (*node.Node, error) {
 	// Create file in dir1
 	file := node.New(

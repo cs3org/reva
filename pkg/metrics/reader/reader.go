@@ -26,7 +26,7 @@ Each metric function should return the current/latest available metrics figure r
 
 import "github.com/cs3org/reva/pkg/metrics/config"
 
-// Reader the Reader interface
+// Reader the Reader interface.
 type Reader interface {
 
 	// Configure configures the reader according to the specified configuration

@@ -195,7 +195,6 @@ func (c *Completer) shareReceivedArgumentCompleter() []prompt.Suggest {
 }
 
 func executeCommand(cmd *command, args ...string) (bytes.Buffer, error) {
-
 	var b bytes.Buffer
 	var err error
 

@@ -57,7 +57,7 @@ type Options struct {
 	GatewayAddr string `mapstructure:"gateway_addr"`
 }
 
-// New returns a new Options instance for the given configuration
+// New returns a new Options instance for the given configuration.
 func New(m map[string]interface{}) (*Options, error) {
 	o := &Options{}
 	if err := mapstructure.Decode(m, o); err != nil {

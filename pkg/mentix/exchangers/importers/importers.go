@@ -19,11 +19,10 @@
 package importers
 
 import (
-	"github.com/rs/zerolog"
-
 	"github.com/cs3org/reva/pkg/mentix/config"
 	"github.com/cs3org/reva/pkg/mentix/entity"
 	"github.com/cs3org/reva/pkg/mentix/exchangers"
+	"github.com/rs/zerolog"
 )
 
 // Collection represents a collection of importers.

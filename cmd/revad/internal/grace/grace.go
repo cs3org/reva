@@ -171,7 +171,7 @@ func (w *Watcher) WritePID() error {
 	// w.log.Info().Msg("error reading pidfile")
 	//}
 
-	// If we get here, then the pidfile didn't exist or we are are in graceful reload and thus we overwrite
+	// If we get here, then the pidfile didn't exist or we are in graceful reload and thus we overwrite
 	// or the pid in it doesn't belong to the user running this app.
 	err := os.WriteFile(w.pidFile, []byte(fmt.Sprintf("%d", os.Getpid())), 0664)
 	if err != nil {
@@ -208,7 +208,6 @@ func (w *Watcher) GetListeners(servers map[string]Server) (map[string]net.Listen
 			} else {
 				lns[k] = ln
 			}
-
 		}
 
 		// kill parent
@@ -241,7 +240,6 @@ func (w *Watcher) GetListeners(servers map[string]Server) (map[string]net.Listen
 			return nil, err
 		}
 		lns[k] = ln
-
 	}
 	w.lns = lns
 	return lns, nil

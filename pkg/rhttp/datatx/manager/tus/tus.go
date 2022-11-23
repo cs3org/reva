@@ -21,14 +21,13 @@ package tus
 import (
 	"net/http"
 
-	"github.com/pkg/errors"
-
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rhttp/datatx"
 	"github.com/cs3org/reva/pkg/rhttp/datatx/manager/registry"
 	"github.com/cs3org/reva/pkg/rhttp/datatx/utils/download"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/mitchellh/mapstructure"
+	"github.com/pkg/errors"
 	tusd "github.com/tus/tusd/pkg/handler"
 )
 
@@ -86,7 +85,6 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 	}
 
 	h := handler.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-
 		method := r.Method
 		// https://github.com/tus/tus-resumable-upload-protocol/blob/master/protocol.md#x-http-method-override
 		if r.Header.Get("X-HTTP-Method-Override") != "" {
@@ -113,7 +111,7 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 }
 
 // Composable is the interface that a struct needs to implement
-// to be composable, so that it can support the TUS methods
+// to be composable, so that it can support the TUS methods.
 type composable interface {
 	UseIn(composer *tusd.StoreComposer)
 }

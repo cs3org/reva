@@ -18,10 +18,10 @@
 
 package user
 
-// BlockedUsers is a set containing all the blocked users
+// BlockedUsers is a set containing all the blocked users.
 type BlockedUsers map[string]struct{}
 
-// NewBlockedUsersSet creates a new set of blocked users from a list
+// NewBlockedUsersSet creates a new set of blocked users from a list.
 func NewBlockedUsersSet(users []string) BlockedUsers {
 	s := make(map[string]struct{})
 	for _, u := range users {
@@ -30,7 +30,7 @@ func NewBlockedUsersSet(users []string) BlockedUsers {
 	return s
 }
 
-// IsBlocked returns true if the user is blocked
+// IsBlocked returns true if the user is blocked.
 func (b BlockedUsers) IsBlocked(user string) bool {
 	_, ok := b[user]
 	return ok

@@ -54,7 +54,6 @@ func (s *strategy) GetCredentials(w http.ResponseWriter, r *http.Request) (*auth
 		return nil, fmt.Errorf("no bearer auth provided")
 	}
 	return &auth.Credentials{Type: "bearer", ClientSecret: tokens[0]}, nil
-
 }
 
 func (s *strategy) AddWWWAuthenticate(w http.ResponseWriter, r *http.Request, realm string) {

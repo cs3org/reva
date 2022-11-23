@@ -43,7 +43,7 @@ func init() {
 const (
 	eosProjectsNamespace = "/eos/project"
 
-	// We can use a regex for these, but that might have inferior performance
+	// We can use a regex for these, but that might have inferior performance.
 	projectSpaceGroupsPrefix      = "cernbox-project-"
 	projectSpaceAdminGroupsSuffix = "-admins"
 )
@@ -121,7 +121,6 @@ func (w *wrapper) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []s
 	}
 
 	return res, nil
-
 }
 
 func (w *wrapper) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys []string) ([]*provider.ResourceInfo, error) {
@@ -188,7 +187,6 @@ func (w *wrapper) getMountID(ctx context.Context, r *provider.ResourceInfo) stri
 func (w *wrapper) setProjectSharingPermissions(ctx context.Context, r *provider.ResourceInfo) error {
 	// Check if this storage provider corresponds to a project spaces instance
 	if strings.HasPrefix(w.conf.Namespace, eosProjectsNamespace) {
-
 		// Extract project name from the path resembling /c/cernbox or /c/cernbox/minutes/..
 		parts := strings.SplitN(r.Path, "/", 4)
 		if len(parts) != 4 && len(parts) != 3 {

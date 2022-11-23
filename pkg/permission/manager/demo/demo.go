@@ -28,7 +28,7 @@ func init() {
 	registry.Register("demo", New)
 }
 
-// New returns a new demo permission manager
+// New returns a new demo permission manager.
 func New(c map[string]interface{}) (permission.Manager, error) {
 	return manager{}, nil
 }

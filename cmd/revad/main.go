@@ -32,7 +32,6 @@ import (
 	"github.com/cs3org/reva/cmd/revad/internal/grace"
 	"github.com/cs3org/reva/cmd/revad/runtime"
 	"github.com/cs3org/reva/pkg/sysinfo"
-
 	"github.com/google/uuid"
 )
 
@@ -71,7 +70,7 @@ func main() {
 	// the pid flag has been set we abort as the pid flag
 	// is meant to work only with one main configuration.
 	if len(confs) != 1 && *pidFlag != "" {
-		fmt.Fprintf(os.Stderr, "cannot run with with multiple configurations and one pid file, remote the -p flag\n")
+		fmt.Fprintf(os.Stderr, "cannot run with multiple configurations and one pid file, remote the -p flag\n")
 		os.Exit(1)
 	}
 

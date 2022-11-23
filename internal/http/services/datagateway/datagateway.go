@@ -39,7 +39,7 @@ import (
 )
 
 const (
-	// TokenTransportHeader holds the header key for the reva transfer token
+	// TokenTransportHeader holds the header key for the reva transfer token.
 	TokenTransportHeader = "X-Reva-Transfer"
 	// UploadExpiresHeader holds the timestamp for the transport token expiry, defined in https://tus.io/protocols/resumable-upload.html#expiration
 	UploadExpiresHeader = "Upload-Expires"
@@ -75,7 +75,7 @@ type svc struct {
 	client  *http.Client
 }
 
-// New returns a new datagateway
+// New returns a new datagateway.
 func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) {
 	conf := &config{}
 	if err := mapstructure.Decode(m, conf); err != nil {

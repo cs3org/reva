@@ -22,7 +22,7 @@ import (
 	"net/http"
 )
 
-// TODO(jfd): implement unlock
+// TODO(jfd): implement unlock.
 func (s *svc) handleUnlock(w http.ResponseWriter, r *http.Request, ns string) {
 	w.WriteHeader(http.StatusNotImplemented)
 }

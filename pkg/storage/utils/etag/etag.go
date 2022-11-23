@@ -49,7 +49,7 @@ var (
 // clients such as S3 expect these to follow the specified format.
 
 // GenerateEtagFromResources creates a unique etag for the root folder deriving
-// information from its multiple children
+// information from its multiple children.
 func GenerateEtagFromResources(root *provider.ResourceInfo, children []*provider.ResourceInfo) string {
 	if root != nil {
 		if params := getEtagParams(eosMtimeEtag, root.Etag); len(params) > 0 {

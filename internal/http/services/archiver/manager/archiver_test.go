@@ -95,14 +95,11 @@ func TestGetDeepestCommonDir(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-
 			res := getDeepestCommonDir(tt.paths)
 			if res != tt.expected {
 				t.Fatalf("getDeepestCommondDir() failed: paths=%+v expected=%s got=%s", tt.paths, tt.expected, res)
 			}
-
 		})
-
 	}
 }
 
@@ -147,7 +144,6 @@ func UnTar(dir string, r io.Reader) error {
 }
 
 func TestCreateTar(t *testing.T) {
-
 	tests := []struct {
 		name     string
 		src      test.Dir
@@ -471,9 +467,7 @@ func TestCreateTar(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-
 		t.Run(tt.name, func(t *testing.T) {
-
 			ctx := context.TODO()
 
 			tmpdir, cleanup, err := test.NewTestDir(tt.src)
@@ -523,11 +517,8 @@ func TestCreateTar(t *testing.T) {
 					t.Fatalf("untar dir different from expected")
 				}
 			}
-
 		})
-
 	}
-
 }
 
 func UnZip(dir string, r io.Reader) error {
@@ -558,7 +549,6 @@ func UnZip(dir string, r io.Reader) error {
 	defer zr.Close()
 
 	for _, f := range zr.File {
-
 		p := path.Join(dir, f.Name)
 
 		d := path.Dir(p)
@@ -595,7 +585,6 @@ func UnZip(dir string, r io.Reader) error {
 }
 
 func TestCreateZip(t *testing.T) {
-
 	tests := []struct {
 		name     string
 		src      test.Dir
@@ -919,9 +908,7 @@ func TestCreateZip(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-
 		t.Run(tt.name, func(t *testing.T) {
-
 			ctx := context.TODO()
 
 			tmpdir, cleanup, err := test.NewTestDir(tt.src)
@@ -971,9 +958,6 @@ func TestCreateZip(t *testing.T) {
 					t.Fatalf("unzip dir different from expected")
 				}
 			}
-
 		})
-
 	}
-
 }

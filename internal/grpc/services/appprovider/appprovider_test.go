@@ -26,7 +26,6 @@ import (
 )
 
 func Test_parseConfig(t *testing.T) {
-
 	tests := []struct {
 		name    string
 		m       map[string]interface{}

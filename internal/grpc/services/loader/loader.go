@@ -41,5 +41,5 @@ import (
 	_ "github.com/cs3org/reva/internal/grpc/services/storageregistry"
 	_ "github.com/cs3org/reva/internal/grpc/services/userprovider"
 	_ "github.com/cs3org/reva/internal/grpc/services/usershareprovider"
-	// Add your own service here
+	// Add your own service here.
 )

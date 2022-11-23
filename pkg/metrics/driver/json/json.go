@@ -23,10 +23,9 @@ import (
 	"errors"
 	"os"
 
-	"github.com/cs3org/reva/pkg/metrics/driver/registry"
-
 	"github.com/cs3org/reva/pkg/logger"
 	"github.com/cs3org/reva/pkg/metrics/config"
+	"github.com/cs3org/reva/pkg/metrics/driver/registry"
 	"github.com/rs/zerolog"
 )
 
@@ -64,15 +63,15 @@ type data struct {
 	AmountStorage int64 `json:"cs3_org_sciencemesh_site_total_amount_storage"`
 }
 
-// MetricsJSONDriver the JsonDriver struct
+// MetricsJSONDriver the JsonDriver struct.
 type MetricsJSONDriver struct {
 	metricsDataLocation string
 }
 
-// Configure configures this driver
+// Configure configures this driver.
 func (d *MetricsJSONDriver) Configure(c *config.Config) error {
 	if c.MetricsDataLocation == "" {
-		err := errors.New("Unable to initialize a metrics data driver, has the data location (metrics_data_location) been configured?")
+		err := errors.New("unable to initialize a metrics data driver, has the data location (metrics_data_location) been configured?")
 		return err
 	}
 
@@ -81,17 +80,17 @@ func (d *MetricsJSONDriver) Configure(c *config.Config) error {
 	return nil
 }
 
-// GetNumUsers returns the number of site users
+// GetNumUsers returns the number of site users.
 func (d *MetricsJSONDriver) GetNumUsers() int64 {
 	return readJSON(d).NumUsers
 }
 
-// GetNumGroups returns the number of site groups
+// GetNumGroups returns the number of site groups.
 func (d *MetricsJSONDriver) GetNumGroups() int64 {
 	return readJSON(d).NumGroups
 }
 
-// GetAmountStorage returns the amount of site storage used
+// GetAmountStorage returns the amount of site storage used.
 func (d *MetricsJSONDriver) GetAmountStorage() int64 {
 	return readJSON(d).AmountStorage
 }

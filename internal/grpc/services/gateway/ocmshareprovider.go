@@ -451,7 +451,6 @@ func (s *svc) GetReceivedOCMShare(ctx context.Context, req *ocm.GetReceivedOCMSh
 }
 
 func (s *svc) createOCMReference(ctx context.Context, share *ocm.Share) (*rpc.Status, error) {
-
 	log := appctx.GetLogger(ctx)
 
 	var token string

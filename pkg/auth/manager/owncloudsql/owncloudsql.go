@@ -26,8 +26,6 @@ import (
 	"fmt"
 	"strings"
 
-	"golang.org/x/crypto/bcrypt"
-
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
@@ -36,11 +34,12 @@ import (
 	"github.com/cs3org/reva/pkg/auth/manager/registry"
 	"github.com/cs3org/reva/pkg/auth/scope"
 	"github.com/cs3org/reva/pkg/errtypes"
+
+	// Provides mysql drivers.
+	_ "github.com/go-sql-driver/mysql"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
-
-	// Provides mysql drivers
-	_ "github.com/go-sql-driver/mysql"
+	"golang.org/x/crypto/bcrypt"
 )
 
 func init() {
@@ -53,11 +52,11 @@ type manager struct {
 }
 
 type config struct {
-	DbUsername       string `mapstructure:"dbusername"`
-	DbPassword       string `mapstructure:"dbpassword"`
-	DbHost           string `mapstructure:"dbhost"`
-	DbPort           int    `mapstructure:"dbport"`
-	DbName           string `mapstructure:"dbname"`
+	DBUsername       string `mapstructure:"dbusername"`
+	DBPassword       string `mapstructure:"dbpassword"`
+	DBHost           string `mapstructure:"dbhost"`
+	DBPort           int    `mapstructure:"dbport"`
+	DBName           string `mapstructure:"dbname"`
 	Idp              string `mapstructure:"idp"`
 	Nobody           int64  `mapstructure:"nobody"`
 	LegacySalt       string `mapstructure:"legacy_salt"`
@@ -65,7 +64,7 @@ type config struct {
 	JoinOwnCloudUUID bool   `mapstructure:"join_ownclouduuid"`
 }
 
-// NewMysql returns a new auth manager connection to an owncloud mysql database
+// NewMysql returns a new auth manager connection to an owncloud mysql database.
 func NewMysql(m map[string]interface{}) (auth.Manager, error) {
 	mgr := &manager{}
 	err := mgr.Configure(m)
@@ -75,7 +74,7 @@ func NewMysql(m map[string]interface{}) (auth.Manager, error) {
 	}
 
 	mgr.db, err = accounts.NewMysql(
-		fmt.Sprintf("%s:%s@tcp(%s:%d)/%s", mgr.c.DbUsername, mgr.c.DbPassword, mgr.c.DbHost, mgr.c.DbPort, mgr.c.DbName),
+		fmt.Sprintf("%s:%s@tcp(%s:%d)/%s", mgr.c.DBUsername, mgr.c.DBPassword, mgr.c.DBHost, mgr.c.DBPort, mgr.c.DBName),
 		mgr.c.JoinUsername,
 		mgr.c.JoinOwnCloudUUID,
 		false,

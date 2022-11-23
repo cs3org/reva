@@ -25,7 +25,6 @@ import (
 
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-	userprovider "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
@@ -127,7 +126,7 @@ func (m *manager) Authenticate(ctx context.Context, token, secret string) (*user
 		return nil, nil, errtypes.InternalError(publicShareResponse.Status.Message)
 	}
 
-	getUserResponse, err := gwConn.GetUser(ctx, &userprovider.GetUserRequest{
+	getUserResponse, err := gwConn.GetUser(ctx, &user.GetUserRequest{
 		UserId: publicShareResponse.GetShare().GetCreator(),
 	})
 	if err != nil {
@@ -163,5 +162,5 @@ func (m *manager) Authenticate(ctx context.Context, token, secret string) (*user
 	return u, scope, nil
 }
 
-// ErrPasswordNotProvided is returned when the public share is password protected, but there was no password on the request
+// ErrPasswordNotProvided is returned when the public share is password protected, but there was no password on the request.
 var ErrPasswordNotProvided = errors.New("public share is password protected, but password was not provided")

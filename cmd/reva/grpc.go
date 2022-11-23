@@ -24,12 +24,11 @@ import (
 	"fmt"
 	"log"
 
-	"google.golang.org/grpc/credentials"
-
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 	ins "google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
 )

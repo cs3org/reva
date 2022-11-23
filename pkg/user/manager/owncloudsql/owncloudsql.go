@@ -29,11 +29,11 @@ import (
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/cs3org/reva/pkg/user/manager/owncloudsql/accounts"
 	"github.com/cs3org/reva/pkg/user/manager/registry"
+
+	// Provides mysql drivers.
+	_ "github.com/go-sql-driver/mysql"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
-
-	// Provides mysql drivers
-	_ "github.com/go-sql-driver/mysql"
 )
 
 func init() {
@@ -46,11 +46,11 @@ type manager struct {
 }
 
 type config struct {
-	DbUsername         string `mapstructure:"dbusername"`
-	DbPassword         string `mapstructure:"dbpassword"`
-	DbHost             string `mapstructure:"dbhost"`
-	DbPort             int    `mapstructure:"dbport"`
-	DbName             string `mapstructure:"dbname"`
+	DBUsername         string `mapstructure:"dbusername"`
+	DBPassword         string `mapstructure:"dbpassword"`
+	DBHost             string `mapstructure:"dbhost"`
+	DBPort             int    `mapstructure:"dbport"`
+	DBName             string `mapstructure:"dbname"`
 	Idp                string `mapstructure:"idp"`
 	Nobody             int64  `mapstructure:"nobody"`
 	JoinUsername       bool   `mapstructure:"join_username"`
@@ -58,7 +58,7 @@ type config struct {
 	EnableMedialSearch bool   `mapstructure:"enable_medial_search"`
 }
 
-// NewMysql returns a new user manager connection to an owncloud mysql database
+// NewMysql returns a new user manager connection to an owncloud mysql database.
 func NewMysql(m map[string]interface{}) (user.Manager, error) {
 	mgr := &manager{}
 	err := mgr.Configure(m)
@@ -68,7 +68,7 @@ func NewMysql(m map[string]interface{}) (user.Manager, error) {
 	}
 
 	mgr.db, err = accounts.NewMysql(
-		fmt.Sprintf("%s:%s@tcp(%s:%d)/%s", mgr.c.DbUsername, mgr.c.DbPassword, mgr.c.DbHost, mgr.c.DbPort, mgr.c.DbName),
+		fmt.Sprintf("%s:%s@tcp(%s:%d)/%s", mgr.c.DBUsername, mgr.c.DBPassword, mgr.c.DBHost, mgr.c.DBPort, mgr.c.DBName),
 		mgr.c.JoinUsername,
 		mgr.c.JoinOwnCloudUUID,
 		mgr.c.EnableMedialSearch,
@@ -122,7 +122,6 @@ func (m *manager) GetUserByClaim(ctx context.Context, claim, value string, skipF
 }
 
 func (m *manager) FindUsers(ctx context.Context, query string, skipFetchingGroups bool) ([]*userpb.User, error) {
-
 	accounts, err := m.db.FindAccounts(ctx, query)
 	if err == sql.ErrNoRows {
 		return nil, errtypes.NotFound("no users found for " + query)

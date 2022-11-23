@@ -19,10 +19,9 @@
 package exporters
 
 import (
-	"github.com/rs/zerolog"
-
 	"github.com/cs3org/reva/pkg/mentix/config"
 	"github.com/cs3org/reva/pkg/mentix/exchangers/exporters/webapi"
+	"github.com/rs/zerolog"
 )
 
 // WebAPIExporter implements the generic Web API exporter.

@@ -78,11 +78,9 @@ func expandAndVerifyScope(ctx context.Context, req interface{}, tokenScope map[s
 				if err = resolveUserShare(ctx, ref, tokenScope[k], client, mgr); err == nil {
 					return nil
 				}
-
 			}
 			log.Err(err).Msgf("error resolving reference %s under scope %+v", ref.String(), k)
 		}
-
 	}
 
 	if checkLightweightScope(ctx, req, tokenScope, client) {
@@ -289,7 +287,6 @@ func checkIfNestedResource(ctx context.Context, ref *provider.Reference, parent 
 	}
 
 	return strings.HasPrefix(childPath, parentPath), nil
-
 }
 
 func extractRefForReaderRole(req interface{}) (*provider.Reference, bool) {
@@ -314,7 +311,6 @@ func extractRefForReaderRole(req interface{}) (*provider.Reference, bool) {
 	}
 
 	return nil, false
-
 }
 
 func extractRefForUploaderRole(req interface{}) (*provider.Reference, bool) {
@@ -333,7 +329,6 @@ func extractRefForUploaderRole(req interface{}) (*provider.Reference, bool) {
 	}
 
 	return nil, false
-
 }
 
 func extractRefForEditorRole(req interface{}) (*provider.Reference, bool) {
@@ -350,7 +345,6 @@ func extractRefForEditorRole(req interface{}) (*provider.Reference, bool) {
 	}
 
 	return nil, false
-
 }
 
 func extractRef(req interface{}, tokenScope map[string]*authpb.Scope) (*provider.Reference, bool) {

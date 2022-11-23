@@ -33,7 +33,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 )
 
-// share representation in the import metadata
+// share representation in the import metadata.
 type share struct {
 	Path           string `json:"path"`
 	ShareType      string `json:"shareType"`
@@ -48,9 +48,8 @@ type share struct {
 	Token          string `json:"token"`
 }
 
-// ImportShares from a shares.jsonl file in exportPath. The files must already be present on the storage
+// ImportShares from a shares.jsonl file in exportPath. The files must already be present on the storage.
 func ImportShares(ctx context.Context, client gateway.GatewayAPIClient, exportPath string, ns string) error {
-
 	sharesJSONL, err := os.Open(path.Join(exportPath, "shares.jsonl"))
 	if err != nil {
 		return err
@@ -104,14 +103,14 @@ func shareReq(info *provider.ResourceInfo, share *share) *collaboration.CreateSh
 	}
 }
 
-// Maps oc10 permissions to roles
+// Maps oc10 permissions to roles.
 var ocPermToRole = map[int]string{
 	1:  "viewer",
 	15: "co-owner",
 	31: "editor",
 }
 
-// Create resource permission-set from ownCloud permissions int
+// Create resource permission-set from ownCloud permissions int.
 func convertPermissions(ocPermissions int) *provider.ResourcePermissions {
 	perms := &provider.ResourcePermissions{}
 	switch ocPermToRole[ocPermissions] {

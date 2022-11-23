@@ -23,7 +23,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-// Credentials stores and en-/decrypts credentials
+// Credentials stores and en-/decrypts credentials.
 type Credentials struct {
 	ID     string `json:"id"`
 	Secret string `json:"secret"`

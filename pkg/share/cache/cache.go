@@ -29,7 +29,7 @@ type Warmup interface {
 	GetResourceInfos() ([]*provider.ResourceInfo, error)
 }
 
-// ResourceInfoCache is the interface to implement caches for resource infos
+// ResourceInfoCache is the interface to implement caches for resource infos.
 type ResourceInfoCache interface {
 	Get(key string) (*provider.ResourceInfo, error)
 	GetKeys(keys []string) ([]*provider.ResourceInfo, error)

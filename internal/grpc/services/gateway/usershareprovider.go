@@ -39,7 +39,6 @@ import (
 
 // TODO(labkode): add multi-phase commit logic when commit share or commit ref is enabled.
 func (s *svc) CreateShare(ctx context.Context, req *collaboration.CreateShareRequest) (*collaboration.CreateShareResponse, error) {
-
 	if s.isSharedFolder(ctx, req.ResourceInfo.GetPath()) {
 		return nil, errtypes.AlreadyExists("gateway: can't share the share folder itself")
 	}

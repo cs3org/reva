@@ -58,7 +58,6 @@ func init() {
 }
 
 func main() {
-
 	if err := os.RemoveAll("dist"); err != nil {
 		fmt.Fprintf(os.Stderr, "error removing dist folder: %s", err)
 		os.Exit(1)

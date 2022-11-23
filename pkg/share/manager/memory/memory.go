@@ -26,16 +26,15 @@ import (
 	"sync/atomic"
 	"time"
 
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
-	"github.com/cs3org/reva/pkg/share"
-	"google.golang.org/genproto/protobuf/field_mask"
-
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/share"
 	"github.com/cs3org/reva/pkg/share/manager/registry"
 	"github.com/cs3org/reva/pkg/utils"
+	"google.golang.org/genproto/protobuf/field_mask"
 )
 
 var counter uint64

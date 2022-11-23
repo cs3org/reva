@@ -21,5 +21,5 @@ package loader
 import (
 	// Load storage favorite drivers.
 	_ "github.com/cs3org/reva/pkg/storage/favorite/memory"
-	// Add your own here
+	// Add your own here.
 )

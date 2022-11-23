@@ -30,5 +30,5 @@ import (
 	_ "github.com/cs3org/reva/pkg/auth/manager/oidc"
 	_ "github.com/cs3org/reva/pkg/auth/manager/owncloudsql"
 	_ "github.com/cs3org/reva/pkg/auth/manager/publicshares"
-	// Add your own here
+	// Add your own here.
 )

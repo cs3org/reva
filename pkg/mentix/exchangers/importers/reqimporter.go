@@ -23,11 +23,10 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/rs/zerolog"
-
 	"github.com/cs3org/reva/pkg/mentix/config"
 	"github.com/cs3org/reva/pkg/mentix/exchangers"
 	"github.com/cs3org/reva/pkg/mentix/meshdata"
+	"github.com/rs/zerolog"
 )
 
 // BaseRequestImporter implements basic importer functionality common to all request importers.

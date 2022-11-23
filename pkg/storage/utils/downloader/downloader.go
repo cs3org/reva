@@ -33,7 +33,7 @@ import (
 )
 
 // Downloader is the interface implemented by the objects that are able to
-// download a path into a destination Writer
+// download a path into a destination Writer.
 type Downloader interface {
 	Download(context.Context, string, io.Writer) error
 }
@@ -43,7 +43,7 @@ type revaDownloader struct {
 	httpClient *http.Client
 }
 
-// NewDownloader creates a Downloader from the reva gateway
+// NewDownloader creates a Downloader from the reva gateway.
 func NewDownloader(gtw gateway.GatewayAPIClient, options ...rhttp.Option) Downloader {
 	return &revaDownloader{
 		gtw:        gtw,
@@ -60,7 +60,7 @@ func getDownloadProtocol(protocols []*gateway.FileDownloadProtocol, prot string)
 	return nil, errtypes.InternalError(fmt.Sprintf("protocol %s not supported for downloading", prot))
 }
 
-// Download downloads a resource given the path to the dst Writer
+// Download downloads a resource given the path to the dst Writer.
 func (r *revaDownloader) Download(ctx context.Context, path string, dst io.Writer) error {
 	downResp, err := r.gtw.InitiateFileDownload(ctx, &provider.InitiateFileDownloadRequest{
 		Ref: &provider.Reference{

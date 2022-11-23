@@ -23,7 +23,7 @@ package node
 
 import "syscall"
 
-// GetAvailableSize stats the filesystem and return the available bytes
+// GetAvailableSize stats the filesystem and return the available bytes.
 func GetAvailableSize(path string) (uint64, error) {
 	stat := syscall.Statfs_t{}
 	err := syscall.Statfs(path, &stat)

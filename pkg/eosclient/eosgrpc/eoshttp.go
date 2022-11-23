@@ -78,9 +78,8 @@ type HTTPOptions struct {
 	ClientCAFiles string
 }
 
-// Init fills the basic fields
+// Init fills the basic fields.
 func (opt *HTTPOptions) init() {
-
 	if opt.BaseURL == "" {
 		opt.BaseURL = "https://eos-example.org"
 	}
@@ -127,7 +126,7 @@ func (opt *HTTPOptions) init() {
 // EOSHTTPClient performs HTTP-based tasks (e.g. upload, download)
 // against a EOS management node (MGM)
 // using the EOS XrdHTTP interface.
-// In this module we wrap eos-related behaviour, e.g. headers or r/w retries
+// In this module we wrap eos-related behaviour, e.g. headers or r/w retries.
 type EOSHTTPClient struct {
 	opt *HTTPOptions
 	cl  *http.Client
@@ -177,7 +176,7 @@ func NewEOSHTTPClient(opt *HTTPOptions) (*EOSHTTPClient, error) {
 	}, nil
 }
 
-// Format a human readable line that describes a response
+// Format a human readable line that describes a response.
 func rspdesc(rsp *http.Response) string {
 	desc := "'" + fmt.Sprintf("%d", rsp.StatusCode) + "'" + ": '" + rsp.Status + "'"
 
@@ -197,7 +196,7 @@ func rspdesc(rsp *http.Response) string {
 }
 
 // If the error is not nil, take that
-// If there is an error coming from EOS, erturn a descriptive error
+// If there is an error coming from EOS, erturn a descriptive error.
 func (c *EOSHTTPClient) getRespError(rsp *http.Response, err error) error {
 	if err != nil {
 		return err
@@ -219,9 +218,8 @@ func (c *EOSHTTPClient) getRespError(rsp *http.Response, err error) error {
 	return errtypes.InternalError("Err from EOS: " + rspdesc(rsp))
 }
 
-// From the basepath and the file path... build an url
+// From the basepath and the file path... build an url.
 func (c *EOSHTTPClient) buildFullURL(urlpath string, auth eosclient.Authorization) (string, error) {
-
 	u, err := url.Parse(c.opt.BaseURL)
 	if err != nil {
 		return "", err
@@ -249,9 +247,8 @@ func (c *EOSHTTPClient) buildFullURL(urlpath string, auth eosclient.Authorizatio
 	return u.String(), nil
 }
 
-// GETFile does an entire GET to download a full file. Returns a stream to read the content from
+// GETFile does an entire GET to download a full file. Returns a stream to read the content from.
 func (c *EOSHTTPClient) GETFile(ctx context.Context, remoteuser string, auth eosclient.Authorization, urlpath string, stream io.WriteCloser) (io.ReadCloser, error) {
-
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("func", "GETFile").Str("remoteuser", remoteuser).Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", urlpath).Msg("")
 
@@ -287,7 +284,6 @@ func (c *EOSHTTPClient) GETFile(ctx context.Context, remoteuser string, auth eos
 
 		// Let's support redirections... and if we retry we have to retry at the same FST, avoid going back to the MGM
 		if resp != nil && (resp.StatusCode == http.StatusFound || resp.StatusCode == http.StatusTemporaryRedirect) {
-
 			// io.Copy(ioutil.Discard, resp.Body)
 			// resp.Body.Close()
 
@@ -338,12 +334,10 @@ func (c *EOSHTTPClient) GETFile(ctx context.Context, remoteuser string, auth eos
 		// If we have not been given a stream to write into then return our stream to read from
 		return resp.Body, nil
 	}
-
 }
 
-// PUTFile does an entire PUT to upload a full file, taking the data from a stream
+// PUTFile does an entire PUT to upload a full file, taking the data from a stream.
 func (c *EOSHTTPClient) PUTFile(ctx context.Context, remoteuser string, auth eosclient.Authorization, urlpath string, stream io.ReadCloser, length int64) error {
-
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("func", "PUTFile").Str("remoteuser", remoteuser).Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", urlpath).Int64("length", length).Msg("")
 
@@ -381,7 +375,6 @@ func (c *EOSHTTPClient) PUTFile(ctx context.Context, remoteuser string, auth eos
 
 		// Let's support redirections... and if we retry we retry at the same FST
 		if resp != nil && resp.StatusCode == 307 {
-
 			// io.Copy(ioutil.Discard, resp.Body)
 			// resp.Body.Close()
 
@@ -399,7 +392,6 @@ func (c *EOSHTTPClient) PUTFile(ctx context.Context, remoteuser string, auth eos
 			if length >= 0 {
 				log.Debug().Str("func", "PUTFile").Int64("Content-Length", length).Msg("setting header")
 				req.Header.Set("Content-Length", strconv.FormatInt(length, 10))
-
 			}
 			if err != nil {
 				log.Error().Str("func", "PUTFile").Str("url", loc.String()).Str("err", err.Error()).Msg("can't create redirected request")
@@ -408,7 +400,6 @@ func (c *EOSHTTPClient) PUTFile(ctx context.Context, remoteuser string, auth eos
 			if length >= 0 {
 				log.Debug().Str("func", "PUTFile").Int64("Content-Length", length).Msg("setting header")
 				req.Header.Set("Content-Length", strconv.FormatInt(length, 10))
-
 			}
 
 			log.Debug().Str("func", "PUTFile").Str("location", loc.String()).Msg("redirection")
@@ -437,12 +428,10 @@ func (c *EOSHTTPClient) PUTFile(ctx context.Context, remoteuser string, auth eos
 
 		return nil
 	}
-
 }
 
-// Head performs a HEAD req. Useful to check the server
+// Head performs a HEAD req. Useful to check the server.
 func (c *EOSHTTPClient) Head(ctx context.Context, remoteuser string, auth eosclient.Authorization, urlpath string) error {
-
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("func", "Head").Str("remoteuser", remoteuser).Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", urlpath).Msg("")
 
@@ -489,5 +478,4 @@ func (c *EOSHTTPClient) Head(ctx context.Context, remoteuser string, auth eoscli
 		}
 	}
 	// return nil
-
 }

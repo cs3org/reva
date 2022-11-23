@@ -21,5 +21,5 @@ package loader
 import (
 	// Load core app registry drivers.
 	_ "github.com/cs3org/reva/pkg/app/registry/static"
-	// Add your own here
+	// Add your own here.
 )
