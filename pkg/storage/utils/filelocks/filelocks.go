@@ -28,6 +28,7 @@ import (
 	"github.com/gofrs/flock"
 )
 
+// LockFileSuffix to use for lock files
 const LockFileSuffix = ".flock"
 
 var (
