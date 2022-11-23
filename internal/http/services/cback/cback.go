@@ -26,6 +26,7 @@ import (
 	"path"
 	"strconv"
 	"text/template"
+	"time"
 
 	"github.com/Masterminds/sprig"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
@@ -154,6 +155,7 @@ type restoreOut struct {
 	Path        string      `json:"path"`
 	Destination destination `json:"destination"`
 	Status      int         `json:"status"`
+	Created     time.Time   `json:"created"`
 }
 
 func (s *svc) convertToRestoureOut(user *userpb.User, r *cback.Restore) *restoreOut {
@@ -162,6 +164,7 @@ func (s *svc) convertToRestoureOut(user *userpb.User, r *cback.Restore) *restore
 		Path:        r.Pattern,
 		Destination: utils.Must(s.toDestination(user.Username, r.Destionation)),
 		Status:      r.Status,
+		Created:     r.Created,
 	}
 }
 

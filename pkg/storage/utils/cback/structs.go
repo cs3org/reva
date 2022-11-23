@@ -57,12 +57,13 @@ type Resource struct {
 
 // Restore represents the metadata information of a restore job
 type Restore struct {
-	ID           int    `json:"id"`
-	BackupID     int    `json:"backup_id"`
-	SnapshotID   string `json:"snapshot"`
-	Destionation string `json:"destination"`
-	Pattern      string `json:"pattern"`
-	Status       int    `json:"status"`
+	ID           int       `json:"id"`
+	BackupID     int       `json:"backup_id"`
+	SnapshotID   string    `json:"snapshot"`
+	Destionation string    `json:"destination"`
+	Pattern      string    `json:"pattern"`
+	Status       int       `json:"status"`
+	Created      time.Time `json:"created"`
 }
 
 // IsDir returns true if the resoure is a directory
