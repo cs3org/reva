@@ -162,7 +162,7 @@ func (fs *Decomposedfs) DownloadRevision(ctx context.Context, ref *provider.Refe
 }
 
 // RestoreRevision restores the specified revision of the resource
-func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Reference, revisionKey string) (err error) {
+func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Reference, revisionKey string) (returnErr error) {
 	log := appctx.GetLogger(ctx)
 
 	// verify revision key format
@@ -216,6 +216,13 @@ func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Refer
 		} else if err := file.Close(); err != nil {
 			return err
 		}
+		defer func() {
+			if returnErr != nil {
+				if err := os.Remove(newRevisionPath); err != nil {
+					log.Error().Err(err).Str("revision", filepath.Base(newRevisionPath)).Msg("could not clean up revision node")
+				}
+			}
+		}()
 
 		// copy blob metadata from node to new revision node
 		err = xattrs.CopyMetadata(nodePath, newRevisionPath, func(attributeName string) bool {
@@ -228,7 +235,7 @@ func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Refer
 		}
 
 		// remember mtime from node as new revision mtime
-		if err := os.Chtimes(newRevisionPath, fi.ModTime(), fi.ModTime()); err != nil {
+		if err = os.Chtimes(newRevisionPath, fi.ModTime(), fi.ModTime()); err != nil {
 			return errtypes.InternalError("failed to change mtime of version node")
 		}
 
@@ -269,5 +276,5 @@ func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Refer
 	}
 
 	log.Error().Err(err).Interface("ref", ref).Str("originalnode", kp[0]).Str("revisionKey", revisionKey).Msg("original node does not exist")
-	return
+	return nil
 }
