@@ -141,7 +141,7 @@ func (h *sharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var shareWithParts []string = strings.Split(shareWith, "@")
+	var shareWithParts = strings.Split(shareWith, "@")
 	userRes, err := gatewayClient.GetUser(ctx, &userpb.GetUserRequest{
 		UserId: &userpb.UserId{OpaqueId: shareWithParts[0]}, SkipFetchingUserGroups: true,
 	})

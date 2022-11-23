@@ -161,7 +161,7 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 			q.Add("appviewurl", viewAppURL)
 		}
 	}
-	var access string = "edit"
+	var access = "edit"
 	if resource.GetSize() == 0 {
 		if _, ok := p.appURLs["editnew"]; ok {
 			access = "editnew"

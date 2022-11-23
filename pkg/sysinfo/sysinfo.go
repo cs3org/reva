@@ -34,7 +34,7 @@ type SystemInformation struct {
 
 var (
 	// SysInfo provides global system information.
-	SysInfo *SystemInformation = &SystemInformation{}
+	SysInfo = &SystemInformation{}
 )
 
 // ToJSON converts the system information to JSON.
