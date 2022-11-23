@@ -308,7 +308,7 @@ var _ = Describe("Tree", func() {
 				riBefore, err := dir.AsResourceInfo(env.Ctx, &perms, []string{}, []string{}, false)
 				Expect(err).ToNot(HaveOccurred())
 
-				err = env.Tree.Propagate(env.Ctx, file)
+				err = env.Tree.Propagate(env.Ctx, file, 0)
 				Expect(err).ToNot(HaveOccurred())
 
 				dir, err := env.Lookup.NodeFromID(env.Ctx, &provider.ResourceId{
@@ -325,10 +325,7 @@ var _ = Describe("Tree", func() {
 
 		Describe("with TreeSizeAccounting enabled", func() {
 			It("calculates the size", func() {
-				file, err := env.CreateTestFile("file1", "", dir.ID, dir.SpaceID, 1)
-				Expect(err).ToNot(HaveOccurred())
-
-				err = env.Tree.Propagate(env.Ctx, file)
+				_, err := env.CreateTestFile("file1", "", dir.ID, dir.SpaceID, 1)
 				Expect(err).ToNot(HaveOccurred())
 
 				dir, err := env.Lookup.NodeFromID(env.Ctx, &provider.ResourceId{
@@ -345,10 +342,7 @@ var _ = Describe("Tree", func() {
 			It("considers all files", func() {
 				_, err := env.CreateTestFile("file1", "", dir.ID, dir.SpaceID, 1)
 				Expect(err).ToNot(HaveOccurred())
-				file2, err := env.CreateTestFile("file2", "", dir.ID, dir.SpaceID, 100)
-				Expect(err).ToNot(HaveOccurred())
-
-				err = env.Tree.Propagate(env.Ctx, file2)
+				_, err = env.CreateTestFile("file2", "", dir.ID, dir.SpaceID, 100)
 				Expect(err).ToNot(HaveOccurred())
 
 				dir, err := env.Lookup.NodeFromID(env.Ctx, &provider.ResourceId{
@@ -367,11 +361,10 @@ var _ = Describe("Tree", func() {
 				Expect(err).ToNot(HaveOccurred())
 				err = subdir.SetTreeSize(uint64(200))
 				Expect(err).ToNot(HaveOccurred())
-
-				file, err := env.CreateTestFile("file1", "", dir.ID, dir.SpaceID, 1)
+				err = env.Tree.Propagate(env.Ctx, subdir, 200)
 				Expect(err).ToNot(HaveOccurred())
 
-				err = env.Tree.Propagate(env.Ctx, file)
+				_, err = env.CreateTestFile("file1", "", dir.ID, dir.SpaceID, 1)
 				Expect(err).ToNot(HaveOccurred())
 
 				dir, err := env.Lookup.NodeFromID(env.Ctx, &provider.ResourceId{
@@ -390,8 +383,7 @@ var _ = Describe("Tree", func() {
 				Expect(err).ToNot(HaveOccurred())
 				err = subdir.SetTreeSize(uint64(200))
 				Expect(err).ToNot(HaveOccurred())
-
-				err = env.Tree.Propagate(env.Ctx, subdir)
+				err = env.Tree.Propagate(env.Ctx, subdir, 200)
 				Expect(err).ToNot(HaveOccurred())
 
 				dir, err := env.Lookup.NodeFromID(env.Ctx, &provider.ResourceId{
@@ -412,7 +404,7 @@ var _ = Describe("Tree", func() {
 				Expect(err).ToNot(HaveOccurred())
 				err = otherdir.SetTreeSize(uint64(100000))
 				Expect(err).ToNot(HaveOccurred())
-				err = env.Tree.Propagate(env.Ctx, otherdir)
+				err = env.Tree.Propagate(env.Ctx, otherdir, 100000)
 				Expect(err).ToNot(HaveOccurred())
 
 				dir, err = env.Lookup.NodeFromID(env.Ctx, &provider.ResourceId{

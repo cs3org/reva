@@ -228,8 +228,12 @@ func (t *TestEnv) CreateTestFile(name, blobID, parentID, spaceID string, blobSiz
 	if err != nil {
 		return nil, err
 	}
+	if err := n.FindStorageSpaceRoot(); err != nil {
+		return nil, err
+	}
 
-	return n, n.FindStorageSpaceRoot()
+	return n, t.Tree.Propagate(context.Background(), n, blobSize)
+
 }
 
 // CreateTestStorageSpace will create a storage space with some directories and files

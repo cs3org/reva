@@ -73,8 +73,7 @@ func (fs *Decomposedfs) SetArbitraryMetadata(ctx context.Context, ref *provider.
 	if md.Metadata != nil {
 		if val, ok := md.Metadata["mtime"]; ok {
 			delete(md.Metadata, "mtime")
-			err := n.SetMtime(ctx, val)
-			if err != nil {
+			if err := n.SetMtimeString(val); err != nil {
 				errs = append(errs, errors.Wrap(err, "could not set mtime"))
 			}
 		}
@@ -85,8 +84,7 @@ func (fs *Decomposedfs) SetArbitraryMetadata(ctx context.Context, ref *provider.
 		// TODO unset when folder is updated or add timestamp to etag?
 		if val, ok := md.Metadata["etag"]; ok {
 			delete(md.Metadata, "etag")
-			err := n.SetEtag(ctx, val)
-			if err != nil {
+			if err := n.SetEtag(ctx, val); err != nil {
 				errs = append(errs, errors.Wrap(err, "could not set etag"))
 			}
 		}
@@ -119,7 +117,7 @@ func (fs *Decomposedfs) SetArbitraryMetadata(ctx context.Context, ref *provider.
 
 	switch len(errs) {
 	case 0:
-		return fs.tp.Propagate(ctx, n)
+		return fs.tp.Propagate(ctx, n, 0)
 	case 1:
 		// TODO Propagate if anything changed
 		return errs[0]
@@ -209,7 +207,7 @@ func (fs *Decomposedfs) UnsetArbitraryMetadata(ctx context.Context, ref *provide
 	}
 	switch len(errs) {
 	case 0:
-		return fs.tp.Propagate(ctx, n)
+		return fs.tp.Propagate(ctx, n, 0)
 	case 1:
 		// TODO Propagate if anything changed
 		return errs[0]

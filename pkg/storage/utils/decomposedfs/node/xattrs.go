@@ -20,6 +20,7 @@ package node
 
 import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs"
+	"github.com/gofrs/flock"
 	"github.com/pkg/xattr"
 )
 
@@ -34,6 +35,18 @@ func (n *Node) SetXattrs(attribs map[string]string) (err error) {
 	return xattrs.SetMultiple(n.InternalPath(), attribs)
 }
 
+// SetXattrsWithLock sets multiple extended attributes on the write-through cache/node with a given lock
+func (n *Node) SetXattrsWithLock(attribs map[string]string, fileLock *flock.Flock) (err error) {
+	// TODO what if writing the lock fails?
+	if n.xattrsCache != nil {
+		for k, v := range attribs {
+			n.xattrsCache[k] = v
+		}
+	}
+
+	return xattrs.SetMultipleWithLock(n.InternalPath(), attribs, fileLock)
+}
+
 // SetXattr sets an extended attribute on the write-through cache/node
 func (n *Node) SetXattr(key, val string) (err error) {
 	if n.xattrsCache != nil {
@@ -41,6 +54,15 @@ func (n *Node) SetXattr(key, val string) (err error) {
 	}
 
 	return xattrs.Set(n.InternalPath(), key, val)
+}
+
+// SetXattrWithLock sets an extended attribute on the write-through cache/node with the given lock
+func (n *Node) SetXattrWithLock(key, val string, fileLock *flock.Flock) (err error) {
+	if n.xattrsCache != nil {
+		n.xattrsCache[key] = val
+	}
+
+	return xattrs.SetWithLock(n.InternalPath(), key, val, fileLock)
 }
 
 // RemoveXattr removes an extended attribute from the write-through cache/node
@@ -80,5 +102,6 @@ func (n *Node) Xattr(key string) (string, error) {
 	if val, ok := n.xattrsCache[key]; ok {
 		return val, nil
 	}
-	return "", xattr.ENOATTR
+	// wrap the error as xattr does
+	return "", &xattr.Error{Op: "xattr.get", Path: n.InternalPath(), Name: key, Err: xattr.ENOATTR}
 }

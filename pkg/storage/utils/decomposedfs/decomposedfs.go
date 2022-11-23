@@ -30,6 +30,7 @@ import (
 	"path"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"syscall"
 
 	cs3permissions "github.com/cs3org/go-cs3apis/cs3/permissions/v1beta1"
@@ -87,7 +88,7 @@ type Tree interface {
 	ReadBlob(node *node.Node) (io.ReadCloser, error)
 	DeleteBlob(node *node.Node) error
 
-	Propagate(ctx context.Context, node *node.Node) (err error)
+	Propagate(ctx context.Context, node *node.Node, sizeDiff int64) (err error)
 }
 
 // Decomposedfs provides the base for decomposed filesystem implementations
@@ -591,6 +592,12 @@ func (fs *Decomposedfs) Delete(ctx context.Context, ref *provider.Reference) (er
 
 // Download returns a reader to the specified resource
 func (fs *Decomposedfs) Download(ctx context.Context, ref *provider.Reference) (io.ReadCloser, error) {
+	// check if we are trying to download a revision
+	// TODO the CS3 api should allow initiating a revision download
+	if ref.ResourceId != nil && strings.Contains(ref.ResourceId.OpaqueId, node.RevisionIDDelimiter) {
+		return fs.DownloadRevision(ctx, ref, ref.ResourceId.OpaqueId)
+	}
+
 	node, err := fs.lu.NodeFromResource(ctx, ref)
 	if err != nil {
 		return nil, errors.Wrap(err, "Decomposedfs: error resolving ref")

@@ -139,13 +139,13 @@ func (_m *Tree) Move(ctx context.Context, oldNode *node.Node, newNode *node.Node
 	return r0
 }
 
-// Propagate provides a mock function with given fields: ctx, _a1
-func (_m *Tree) Propagate(ctx context.Context, _a1 *node.Node) error {
-	ret := _m.Called(ctx, _a1)
+// Propagate provides a mock function with given fields: ctx, _a1, sizeDiff
+func (_m *Tree) Propagate(ctx context.Context, _a1 *node.Node, sizeDiff int64) error {
+	ret := _m.Called(ctx, _a1, sizeDiff)
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, *node.Node) error); ok {
-		r0 = rf(ctx, _a1)
+	if rf, ok := ret.Get(0).(func(context.Context, *node.Node, int64) error); ok {
+		r0 = rf(ctx, _a1, sizeDiff)
 	} else {
 		r0 = ret.Error(0)
 	}

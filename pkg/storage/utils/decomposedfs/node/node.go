@@ -215,6 +215,19 @@ func ReadNode(ctx context.Context, lu PathLookup, spaceID, nodeID string, canLis
 		return r, nil
 	}
 
+	// are we reading a revision?
+	revisionSuffix := ""
+	if strings.Contains(nodeID, RevisionIDDelimiter) {
+		// verify revision key format
+		kp := strings.SplitN(nodeID, RevisionIDDelimiter, 2)
+		if len(kp) == 2 {
+			// use the actual node for the metadata lookup
+			nodeID = kp[0]
+			// remember revision for blob metadata
+			revisionSuffix = RevisionIDDelimiter + kp[1]
+		}
+	}
+
 	// read node
 	n = &Node{
 		SpaceID:   spaceID,
@@ -222,6 +235,11 @@ func ReadNode(ctx context.Context, lu PathLookup, spaceID, nodeID string, canLis
 		ID:        nodeID,
 		SpaceRoot: r,
 	}
+
+	// append back revision to nodeid, even when returning a not existing node
+	defer func() {
+		n.ID += revisionSuffix
+	}()
 
 	nodePath := n.InternalPath()
 
@@ -237,7 +255,7 @@ func ReadNode(ctx context.Context, lu PathLookup, spaceID, nodeID string, canLis
 	n.Exists = true
 
 	// lookup blobID in extended attributes
-	n.BlobID, err = n.Xattr(xattrs.BlobIDAttr)
+	n.BlobID, err = ReadBlobIDAttr(nodePath + revisionSuffix)
 	switch {
 	case xattrs.IsNotExist(err):
 		return n, nil // swallow not found, the node defaults to exists = false
@@ -246,7 +264,7 @@ func ReadNode(ctx context.Context, lu PathLookup, spaceID, nodeID string, canLis
 	}
 
 	// Lookup blobsize
-	n.Blobsize, err = ReadBlobSizeAttr(nodePath)
+	n.Blobsize, err = ReadBlobSizeAttr(nodePath + revisionSuffix)
 	switch {
 	case xattrs.IsNotExist(err):
 		return n, nil // swallow not found, the node defaults to exists = false
@@ -495,25 +513,20 @@ func calculateEtag(nodeID string, tmTime time.Time) (string, error) {
 	return fmt.Sprintf(`"%x"`, h.Sum(nil)), nil
 }
 
-// SetMtime sets the mtime and atime of a node
-func (n *Node) SetMtime(ctx context.Context, mtime string) error {
-	sublog := appctx.GetLogger(ctx).With().Interface("node", n).Logger()
-	if mt, err := parseMTime(mtime); err == nil {
-		nodePath := n.InternalPath()
-		// updating mtime also updates atime
-		if err := os.Chtimes(nodePath, mt, mt); err != nil {
-			sublog.Error().Err(err).
-				Time("mtime", mt).
-				Msg("could not set mtime")
-			return errors.Wrap(err, "could not set mtime")
-		}
-	} else {
-		sublog.Error().Err(err).
-			Str("mtime", mtime).
-			Msg("could not parse mtime")
-		return errors.Wrap(err, "could not parse mtime")
+// SetMtimeString sets the mtime and atime of a node to the unixtime parsed from the given string
+func (n *Node) SetMtimeString(mtime string) error {
+	mt, err := parseMTime(mtime)
+	if err != nil {
+		return err
 	}
-	return nil
+	return n.SetMtime(mt)
+}
+
+// SetMtime sets the mtime and atime of a node
+func (n *Node) SetMtime(mtime time.Time) error {
+	nodePath := n.InternalPath()
+	// updating mtime also updates atime
+	return os.Chtimes(nodePath, mtime, mtime)
 }
 
 // SetEtag sets the temporary etag of a node if it differs from the current etag
@@ -927,6 +940,15 @@ func (n *Node) GetTreeSize() (treesize uint64, err error) {
 // SetTreeSize writes the treesize to the extended attributes
 func (n *Node) SetTreeSize(ts uint64) (err error) {
 	return n.SetXattr(xattrs.TreesizeAttr, strconv.FormatUint(ts, 10))
+}
+
+// GetBlobSize reads the blobsize from the extended attributes
+func (n *Node) GetBlobSize() (treesize uint64, err error) {
+	var b string
+	if b, err = n.Xattr(xattrs.BlobsizeAttr); err != nil {
+		return
+	}
+	return strconv.ParseUint(b, 10, 64)
 }
 
 // SetChecksum writes the checksum with the given checksum type to the extended attributes
