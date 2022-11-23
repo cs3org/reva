@@ -122,6 +122,9 @@ func (c *config) init() {
 	if c.StorageMount == "" {
 		c.StorageMount = "/cback"
 	}
+	if c.TemplateToStorage == "" {
+		c.TemplateToStorage = "{{.}}"
+	}
 	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
 }
 
