@@ -20,6 +20,7 @@ package action
 
 import (
 	"fmt"
+	"net/http"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -75,7 +76,7 @@ func (action *DownloadAction) Download(fileInfo *storage.ResourceInfo) ([]byte, 
 	}
 
 	// WebDAV is not supported, so directly read the HTTP endpoint
-	request, err := action.session.NewHTTPRequest(p.DownloadEndpoint, "GET", p.Token, nil)
+	request, err := action.session.NewHTTPRequest(p.DownloadEndpoint, http.MethodGet, p.Token, nil)
 	if err != nil {
 		return nil, fmt.Errorf("unable to create an HTTP request for '%v': %v", p.DownloadEndpoint, err)
 	}

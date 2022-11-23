@@ -208,16 +208,15 @@ func (c *EOSHTTPClient) getRespError(rsp *http.Response, err error) error {
 	}
 
 	switch rsp.StatusCode {
-	case 0, 200, 201:
+	case 0, http.StatusOK, http.StatusCreated:
 		return nil
-	case 403:
+	case http.StatusForbidden:
 		return errtypes.PermissionDenied(rspdesc(rsp))
-	case 404:
+	case http.StatusNotFound:
 		return errtypes.NotFound(rspdesc(rsp))
 	}
 
-	err2 := errtypes.InternalError("Err from EOS: " + rspdesc(rsp))
-	return err2
+	return errtypes.InternalError("Err from EOS: " + rspdesc(rsp))
 }
 
 // From the basepath and the file path... build an url
@@ -262,7 +261,7 @@ func (c *EOSHTTPClient) GETFile(ctx context.Context, remoteuser string, auth eos
 		log.Error().Str("func", "GETFile").Str("url", finalurl).Str("err", err.Error()).Msg("can't create request")
 		return nil, err
 	}
-	req, err := http.NewRequestWithContext(ctx, "GET", finalurl, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, finalurl, nil)
 	if err != nil {
 		log.Error().Str("func", "GETFile").Str("url", finalurl).Str("err", err.Error()).Msg("can't create request")
 		return nil, err
@@ -298,7 +297,7 @@ func (c *EOSHTTPClient) GETFile(ctx context.Context, remoteuser string, auth eos
 				return nil, err
 			}
 
-			req, err = http.NewRequestWithContext(ctx, "GET", loc.String(), nil)
+			req, err = http.NewRequestWithContext(ctx, http.MethodGet, loc.String(), nil)
 			if err != nil {
 				log.Error().Str("func", "GETFile").Str("url", loc.String()).Str("err", err.Error()).Msg("can't create redirected request")
 				return nil, err
@@ -354,7 +353,7 @@ func (c *EOSHTTPClient) PUTFile(ctx context.Context, remoteuser string, auth eos
 		log.Error().Str("func", "PUTFile").Str("url", finalurl).Str("err", err.Error()).Msg("can't create request")
 		return err
 	}
-	req, err := http.NewRequestWithContext(ctx, "PUT", finalurl, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, finalurl, nil)
 	if err != nil {
 		log.Error().Str("func", "PUTFile").Str("url", finalurl).Str("err", err.Error()).Msg("can't create request")
 		return err
@@ -392,7 +391,7 @@ func (c *EOSHTTPClient) PUTFile(ctx context.Context, remoteuser string, auth eos
 				return err
 			}
 
-			req, err = http.NewRequestWithContext(ctx, "PUT", loc.String(), stream)
+			req, err = http.NewRequestWithContext(ctx, http.MethodPut, loc.String(), stream)
 			if err != nil {
 				log.Error().Str("func", "PUTFile").Str("url", loc.String()).Str("err", err.Error()).Msg("can't create redirected request")
 				return err
@@ -454,7 +453,7 @@ func (c *EOSHTTPClient) Head(ctx context.Context, remoteuser string, auth eoscli
 		return err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "HEAD", finalurl, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodHead, finalurl, nil)
 	if err != nil {
 		log.Error().Str("func", "Head").Str("remoteuser", remoteuser).Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("url", finalurl).Str("err", err.Error()).Msg("can't create request")
 		return err

@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"net/http"
 	"os"
 	p "path"
 	"strconv"
@@ -171,7 +172,7 @@ func (action *UploadAction) selectChecksumType(checksumTypes []*provider.Resourc
 }
 
 func (action *UploadAction) uploadFilePUT(upload *gateway.FileUploadProtocol, data io.Reader, checksum string, checksumType string) error {
-	request, err := action.session.NewHTTPRequest(upload.UploadEndpoint, "PUT", upload.Token, data)
+	request, err := action.session.NewHTTPRequest(upload.UploadEndpoint, http.MethodPut, upload.Token, data)
 	if err != nil {
 		return fmt.Errorf("unable to create HTTP request for '%v': %v", upload.UploadEndpoint, err)
 	}

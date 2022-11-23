@@ -332,7 +332,7 @@ func (driver *rclone) startJob(ctx context.Context, transferID string, srcRemote
 	}
 	u.Path = path.Join(u.Path, transferFileMethod)
 	requestURL := u.String()
-	req, err := http.NewRequest("POST", requestURL, bytes.NewReader(data))
+	req, err := http.NewRequest(http.MethodPost, requestURL, bytes.NewReader(data))
 	if err != nil {
 		err = errors.Wrap(err, "rclone: error pulling transfer: error framing post request")
 		transfer.TransferStatus = datatx.Status_STATUS_TRANSFER_FAILED
@@ -474,7 +474,7 @@ func (driver *rclone) startJob(ctx context.Context, transferID string, srcRemote
 			u.Path = path.Join(u.Path, transferFileMethod)
 			requestURL := u.String()
 
-			req, err := http.NewRequest("POST", requestURL, bytes.NewReader(data))
+			req, err := http.NewRequest(http.MethodPost, requestURL, bytes.NewReader(data))
 			if err != nil {
 				logger.Error().Err(err).Msgf("rclone driver: error framing post request: %v", err)
 				transfer.TransferStatus = datatx.Status_STATUS_INVALID
@@ -653,7 +653,7 @@ func (driver *rclone) CancelTransfer(ctx context.Context, transferID string) (*d
 	u.Path = path.Join(u.Path, transferFileMethod)
 	requestURL := u.String()
 
-	req, err := http.NewRequest("POST", requestURL, bytes.NewReader(data))
+	req, err := http.NewRequest(http.MethodPost, requestURL, bytes.NewReader(data))
 	if err != nil {
 		err = errors.Wrap(err, "rclone driver: error framing post request")
 		return &datatx.TxInfo{
@@ -781,7 +781,7 @@ func (driver *rclone) remotePathIsFolder(remote string, remotePath string, remot
 	u.Path = path.Join(u.Path, listMethod)
 	requestURL := u.String()
 
-	req, err := http.NewRequest("POST", requestURL, bytes.NewReader(data))
+	req, err := http.NewRequest(http.MethodPost, requestURL, bytes.NewReader(data))
 	if err != nil {
 		return false, errors.Wrap(err, "rclone driver: error framing post request")
 	}

@@ -184,7 +184,7 @@ func GetOrHeadFile(w http.ResponseWriter, r *http.Request, fs storage.FS, spaceI
 
 	w.WriteHeader(code)
 
-	if r.Method != "HEAD" {
+	if r.Method != http.MethodHead {
 		var c int64
 		c, err = io.CopyN(w, sendContent, sendSize)
 		if err != nil {

@@ -77,7 +77,7 @@ func writeAccount(account *data.Account, operation string, address string, apiKe
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode >= 400 {
+	if resp.StatusCode >= http.StatusBadRequest {
 		msg, _ := io.ReadAll(resp.Body)
 		return errors.Errorf("unable to perform request: %v", string(msg))
 	}

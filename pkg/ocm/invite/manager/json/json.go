@@ -221,7 +221,7 @@ func (m *manager) ForwardInvite(ctx context.Context, invite *invitepb.InviteToke
 	u.Path = path.Join(u.Path, acceptInviteEndpoint)
 	recipientURL := u.String()
 
-	req, err := http.NewRequest("POST", recipientURL, strings.NewReader(requestBody.Encode()))
+	req, err := http.NewRequest(http.MethodPost, recipientURL, strings.NewReader(requestBody.Encode()))
 	if err != nil {
 		return errors.Wrap(err, "json: error framing post request")
 	}

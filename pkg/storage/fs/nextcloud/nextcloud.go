@@ -169,7 +169,7 @@ func (nc *StorageDriver) doDownload(ctx context.Context, filePath string) (io.Re
 	if err != nil {
 		panic(err)
 	}
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		panic("No 200 response code in download request")
 	}
 
@@ -193,7 +193,7 @@ func (nc *StorageDriver) doDownloadRevision(ctx context.Context, filePath string
 	if err != nil {
 		panic(err)
 	}
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		panic("No 200 response code in download request")
 	}
 

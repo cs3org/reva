@@ -237,7 +237,7 @@ func (s *svc) executePathCopy(ctx context.Context, client gateway.GatewayAPIClie
 
 		// 3. do download
 
-		httpDownloadReq, err := rhttp.NewRequest(ctx, "GET", downloadEP, nil)
+		httpDownloadReq, err := rhttp.NewRequest(ctx, http.MethodGet, downloadEP, nil)
 		if err != nil {
 			return err
 		}
@@ -254,7 +254,7 @@ func (s *svc) executePathCopy(ctx context.Context, client gateway.GatewayAPIClie
 
 		// 4. do upload
 
-		httpUploadReq, err := rhttp.NewRequest(ctx, "PUT", uploadEP, httpDownloadRes.Body)
+		httpUploadReq, err := rhttp.NewRequest(ctx, http.MethodPut, uploadEP, httpDownloadRes.Body)
 		if err != nil {
 			return err
 		}
