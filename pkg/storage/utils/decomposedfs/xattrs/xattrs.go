@@ -153,7 +153,7 @@ func CopyMetadataWithSourceLock(src, target string, filter func(attributeName st
 	switch {
 	case readLock == nil:
 		return errors.New("no lock provided")
-	case readLock.Path() != src+".flock":
+	case readLock.Path() != filelocks.FlockFile(src):
 		return errors.New("lockpath does not match filepath")
 	case !readLock.Locked() && !readLock.RLocked(): // we need either a read or a write lock
 		return errors.New("not locked")
@@ -231,7 +231,7 @@ func SetWithLock(filePath string, key string, val string, fileLock *flock.Flock)
 	switch {
 	case fileLock == nil:
 		return errors.New("no lock provided")
-	case fileLock.Path() != filePath+".flock":
+	case fileLock.Path() != filelocks.FlockFile(filePath):
 		return errors.New("lockpath does not match filepath")
 	case !fileLock.Locked():
 		return errors.New("not write locked")
@@ -287,7 +287,7 @@ func SetMultipleWithLock(filePath string, attribs map[string]string, fileLock *f
 	switch {
 	case fileLock == nil:
 		return errors.New("no lock provided")
-	case fileLock.Path() != filePath+".flock":
+	case fileLock.Path() != filelocks.FlockFile(filePath):
 		return errors.New("lockpath does not match filepath")
 	case !fileLock.Locked():
 		return errors.New("not locked")

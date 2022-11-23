@@ -42,6 +42,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/lookup"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/filelocks"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/templates"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/utils"
@@ -421,7 +422,7 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 	for match := range matches {
 		var err error
 		// do not investigate flock files any further. They indicate file locks but are not relevant here.
-		if strings.HasSuffix(match, ".flock") {
+		if strings.HasSuffix(match, filelocks.LockFileSuffix) {
 			continue
 		}
 		// always read link in case storage space id != node id
