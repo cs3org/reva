@@ -192,7 +192,7 @@ func (s *svc) createRestore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	restore, err := s.client.NewRestore(ctx, user.Username, backupID, path, snapshotID)
+	restore, err := s.client.NewRestore(ctx, user.Username, backupID, path, snapshotID, true)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

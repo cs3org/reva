@@ -216,17 +216,24 @@ func (c *Client) GetRestore(ctx context.Context, username string, restoreID int)
 
 type newRestoreRequest struct {
 	BackupID int    `json:"backup_id"`
-	Pattern  string `json:"pattern"`
+	Pattern  string `json:"pattern,omitempty"`
+	Date     string `json:"date,omitempty"`
 	Snapshot string `json:"snapshot"`
 }
 
 // NewRestore creates a new restore job in cback
-func (c *Client) NewRestore(ctx context.Context, username string, backupID int, pattern, snapshotID string) (*Restore, error) {
-	req, err := json.Marshal(newRestoreRequest{
+func (c *Client) NewRestore(ctx context.Context, username string, backupID int, pattern, snapshotID string, timestamp bool) (*Restore, error) {
+	r := newRestoreRequest{
 		BackupID: backupID,
 		Pattern:  pattern,
-		Snapshot: snapshotID,
-	})
+	}
+	if timestamp {
+		r.Date = snapshotID
+	} else {
+		r.Snapshot = snapshotID
+	}
+
+	req, err := json.Marshal(r)
 	if err != nil {
 		return nil, errors.Wrap(err, "cback: error marshaling new restore request")
 	}
