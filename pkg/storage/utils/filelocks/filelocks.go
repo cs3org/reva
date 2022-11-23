@@ -28,6 +28,8 @@ import (
 	"github.com/gofrs/flock"
 )
 
+const LockFileSuffix = ".flock"
+
 var (
 	_localLocks      sync.Map
 	_lockCycles      sync.Once
@@ -129,7 +131,7 @@ func FlockFile(file string) string {
 	if file == "" {
 		return ""
 	}
-	return file + ".flock"
+	return file + LockFileSuffix
 }
 
 // AcquireReadLock tries to acquire a shared lock to read from the
