@@ -337,7 +337,7 @@ func (fs *cback) Download(ctx context.Context, ref *provider.Reference) (io.Read
 		ssID, searchPath = fs.pathTrimmer(snapshotList, resp)
 
 		url := fs.conf.APIURL + "/backups/" + strconv.Itoa(resp.ID) + "/snapshots/" + ssID + "/" + searchPath
-		requestType := "GET"
+		requestType := http.MethodGet
 		md, err := fs.GetMD(ctx, ref, nil)
 
 		if err != nil {

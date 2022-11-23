@@ -94,15 +94,15 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 		}
 
 		switch method {
-		case "POST":
+		case http.MethodPost:
 			handler.PostFile(w, r)
-		case "HEAD":
+		case http.MethodHead:
 			handler.HeadFile(w, r)
-		case "PATCH":
+		case http.MethodPatch:
 			handler.PatchFile(w, r)
 		case "DELETE":
 			handler.DelFile(w, r)
-		case "GET":
+		case http.MethodGet:
 			download.GetOrHeadFile(w, r, fs, "")
 		default:
 			w.WriteHeader(http.StatusNotImplemented)

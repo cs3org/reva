@@ -178,7 +178,7 @@ func (s *svc) performHTTPPull(ctx context.Context, client gateway.GatewayAPIClie
 	// get http client for remote
 	httpClient := &http.Client{}
 
-	req, err := http.NewRequest("GET", src, nil)
+	req, err := http.NewRequest(http.MethodGet, src, nil)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return err
@@ -240,7 +240,7 @@ func (s *svc) performHTTPPull(ctx context.Context, client gateway.GatewayAPIClie
 	tempReader := io.TeeReader(httpDownloadRes.Body, &wc)
 
 	// do Upload
-	httpUploadReq, err := rhttp.NewRequest(ctx, "PUT", uploadEP, tempReader)
+	httpUploadReq, err := rhttp.NewRequest(ctx, http.MethodPut, uploadEP, tempReader)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return err
@@ -362,7 +362,7 @@ func (s *svc) performHTTPPush(ctx context.Context, client gateway.GatewayAPIClie
 	}
 
 	// do download
-	httpDownloadReq, err := rhttp.NewRequest(ctx, "GET", downloadEP, nil)
+	httpDownloadReq, err := rhttp.NewRequest(ctx, http.MethodGet, downloadEP, nil)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return err
@@ -387,7 +387,7 @@ func (s *svc) performHTTPPush(ctx context.Context, client gateway.GatewayAPIClie
 
 	// get http client for a remote call
 	httpClient := &http.Client{}
-	req, err := http.NewRequest("PUT", dst, tempReader)
+	req, err := http.NewRequest(http.MethodPut, dst, tempReader)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return err

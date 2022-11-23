@@ -148,7 +148,7 @@ func uploadCommand() *command {
 		dataServerURL := p.UploadEndpoint
 
 		if *protocolFlag == "simple" {
-			httpReq, err := rhttp.NewRequest(ctx, "PUT", dataServerURL, fd)
+			httpReq, err := rhttp.NewRequest(ctx, http.MethodPut, dataServerURL, fd)
 			if err != nil {
 				return err
 			}

@@ -96,7 +96,7 @@ func (a *APITokenManager) getAPIToken(ctx context.Context) (string, time.Time, e
 		"audience":   {a.conf.TargetAPI},
 	}
 
-	httpReq, err := http.NewRequest("POST", a.conf.OIDCTokenEndpoint, strings.NewReader(params.Encode()))
+	httpReq, err := http.NewRequest(http.MethodPost, a.conf.OIDCTokenEndpoint, strings.NewReader(params.Encode()))
 	if err != nil {
 		return "", time.Time{}, err
 	}
@@ -135,7 +135,7 @@ func (a *APITokenManager) SendAPIGetRequest(ctx context.Context, url string, for
 		return nil, err
 	}
 
-	httpReq, err := http.NewRequest("GET", url, nil)
+	httpReq, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
 	}

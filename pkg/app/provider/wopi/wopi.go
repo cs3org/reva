@@ -128,7 +128,7 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 	}
 	wopiurl.Path = path.Join(wopiurl.Path, "/wopi/iop/openinapp")
 
-	httpReq, err := rhttp.NewRequest(ctx, "GET", wopiurl.String(), nil)
+	httpReq, err := rhttp.NewRequest(ctx, http.MethodGet, wopiurl.String(), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -247,14 +247,14 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 	// Depending on whether the WOPI server returned any form parameters or not,
 	// we decide whether the request method is POST or GET
 	var formParams map[string]string
-	method := "GET"
+	method := http.MethodGet
 	if form, ok := result["form-parameters"].(map[string]interface{}); ok {
 		if tkn, ok := form["access_token"].(string); ok {
 			formParams = map[string]string{
 				"access_token":     tkn,
 				"access_token_ttl": tokenTTL,
 			}
-			method = "POST"
+			method = http.MethodPost
 		}
 	}
 
@@ -302,7 +302,7 @@ func getAppURLs(c *config) (map[string]map[string]string, error) {
 	}
 	appurl.Path = path.Join(appurl.Path, "/hosting/discovery")
 
-	discReq, err := http.NewRequest("GET", appurl.String(), nil)
+	discReq, err := http.NewRequest(http.MethodGet, appurl.String(), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -321,7 +321,7 @@ func getAppURLs(c *config) (map[string]map[string]string, error) {
 		}
 	} else if discRes.StatusCode == http.StatusNotFound {
 		// this may be a bridge-supported app
-		discReq, err = http.NewRequest("GET", c.AppIntURL, nil)
+		discReq, err = http.NewRequest(http.MethodGet, c.AppIntURL, nil)
 		if err != nil {
 			return nil, err
 		}

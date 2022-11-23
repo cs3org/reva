@@ -95,7 +95,7 @@ func downloadCommand() *command {
 
 			dataServerURL := p.DownloadEndpoint
 			// TODO(labkode): do a protocol switch
-			httpReq, err := rhttp.NewRequest(ctx, "GET", dataServerURL, nil)
+			httpReq, err := rhttp.NewRequest(ctx, http.MethodGet, dataServerURL, nil)
 			if err != nil {
 				return err
 			}

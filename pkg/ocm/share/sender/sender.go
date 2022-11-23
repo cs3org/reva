@@ -64,7 +64,7 @@ func Send(requestBodyMap map[string]interface{}, pi *ocmprovider.ProviderInfo) e
 	u.Path = path.Join(u.Path, createOCMCoreShareEndpoint)
 	recipientURL := u.String()
 
-	req, err := http.NewRequest("POST", recipientURL, strings.NewReader(string(requestBody)))
+	req, err := http.NewRequest(http.MethodPost, recipientURL, strings.NewReader(string(requestBody)))
 	if err != nil {
 		return errors.Wrap(err, "sender: error framing post request")
 	}

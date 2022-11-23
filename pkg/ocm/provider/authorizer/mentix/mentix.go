@@ -101,7 +101,7 @@ func (a *authorizer) fetchProviders() ([]*ocmprovider.ProviderInfo, error) {
 		return a.providers, nil
 	}
 
-	req, err := http.NewRequest("GET", a.client.BaseURL, nil)
+	req, err := http.NewRequest(http.MethodGet, a.client.BaseURL, nil)
 	if err != nil {
 		return nil, err
 	}

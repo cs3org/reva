@@ -79,7 +79,7 @@ func New(m map[string]interface{}, unprotected []string, ocmPrefix string) (glob
 			log := appctx.GetLogger(ctx)
 			head, _ := router.ShiftPath(r.URL.Path)
 
-			if r.Method == "OPTIONS" || head != ocmPrefix || utils.Skip(r.URL.Path, unprotected) {
+			if r.Method == http.MethodOptions || head != ocmPrefix || utils.Skip(r.URL.Path, unprotected) {
 				log.Info().Msg("skipping provider authorizer check for: " + r.URL.Path)
 				h.ServeHTTP(w, r)
 				return

@@ -67,9 +67,9 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 		sublog := appctx.GetLogger(ctx).With().Str("datatx", "simple").Logger()
 
 		switch r.Method {
-		case "GET", "HEAD":
+		case http.MethodGet, http.MethodHead:
 			download.GetOrHeadFile(w, r, fs, "")
-		case "PUT":
+		case http.MethodPut:
 			fn := r.URL.Path
 			defer r.Body.Close()
 

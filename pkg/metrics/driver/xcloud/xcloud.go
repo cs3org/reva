@@ -62,7 +62,7 @@ func (d *CloudDriver) refresh() error {
 	// endpoint example: https://mybox.com or https://mybox.com/owncloud
 	endpoint := fmt.Sprintf("%s/index.php/apps/sciencemesh/internal_metrics", d.instance)
 
-	req, err := http.NewRequest("GET", endpoint, nil)
+	req, err := http.NewRequest(http.MethodGet, endpoint, nil)
 	if err != nil {
 		log.Err(err).Msgf("xcloud: error creating request to %s", d.instance)
 		return err
