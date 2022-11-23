@@ -23,7 +23,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"strconv"
 	"time"
@@ -114,7 +113,7 @@ func registerMimeTypes(mappingFile string) error {
 	// TODO(lopresti) this function also exists in the storage provider, to be seen if we want to factor it out, though a
 	// fileext <-> mimetype "service" would have to be served by the gateway for it to be accessible both by storage providers and app providers.
 	if mappingFile != "" {
-		f, err := ioutil.ReadFile(mappingFile)
+		f, err := os.ReadFile(mappingFile)
 		if err != nil {
 			return fmt.Errorf("appprovider: error reading the custom mime types file: +%v", err)
 		}

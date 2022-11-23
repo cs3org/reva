@@ -21,7 +21,7 @@ package main
 import (
 	"flag"
 	"fmt"
-	"io/ioutil"
+	"io/fs"
 	"os"
 	"path"
 	"regexp"
@@ -163,9 +163,17 @@ func getConfigs() ([]map[string]interface{}, error) {
 }
 
 func getConfigsFromDir(dir string) (confs []string, err error) {
-	files, err := ioutil.ReadDir(*dirFlag)
+	entries, err := os.ReadDir(*dirFlag)
 	if err != nil {
 		return nil, err
+	}
+	files := make([]fs.FileInfo, 0, len(entries))
+	for _, entry := range entries {
+		info, err := entry.Info()
+		if err != nil {
+			return nil, err
+		}
+		files = append(files, info)
 	}
 
 	for _, value := range files {

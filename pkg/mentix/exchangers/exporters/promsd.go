@@ -21,7 +21,6 @@ package exporters
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"net/url"
 	"os"
 	"path"
@@ -222,7 +221,7 @@ func (exporter *PrometheusSDExporter) exportScrapeConfig(outputFilename string, 
 	}
 
 	// Write the data to disk
-	if err := ioutil.WriteFile(outputFilename, data, 0755); err != nil {
+	if err := os.WriteFile(outputFilename, data, 0755); err != nil {
 		return fmt.Errorf("unable to write scrape config '%v': %v", outputFilename, err)
 	}
 

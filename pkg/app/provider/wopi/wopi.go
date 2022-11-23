@@ -24,7 +24,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
@@ -56,7 +55,7 @@ func init() {
 }
 
 type config struct {
-	MimeTypes           []string `mapstructure:"mime_types" docs:";Inherited from the appprovider."`
+	MimeTypes           []string `mapstructure:"mime_types" docs:"nil;Inherited from the appprovider."`
 	IOPSecret           string   `mapstructure:"iop_secret" docs:";The IOP secret used to connect to the wopiserver."`
 	WopiURL             string   `mapstructure:"wopi_url" docs:";The wopiserver's URL."`
 	AppName             string   `mapstructure:"app_name" docs:";The App user-friendly name."`
@@ -205,7 +204,7 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 	}
 	defer openRes.Body.Close()
 
-	body, err := ioutil.ReadAll(openRes.Body)
+	body, err := io.ReadAll(openRes.Body)
 	if err != nil {
 		return nil, err
 	}
