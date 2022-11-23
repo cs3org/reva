@@ -60,7 +60,6 @@ type config struct {
 	Timeout           int    `mapstructure:"timeout"`
 	GatewaySvc        string `mapstructure:"gatewaysvc"`
 	StorageID         string `mapstructure:"storage_id"`
-	StorageMount      string `mapstructure:"storage_mount"`
 	TemplateToStorage string `mapstructure:"template_to_storage"`
 }
 
@@ -119,9 +118,6 @@ func (s *svc) Close() error {
 func (c *config) init() {
 	if c.Prefix == "" {
 		c.Prefix = "cback"
-	}
-	if c.StorageMount == "" {
-		c.StorageMount = "/cback"
 	}
 	if c.TemplateToStorage == "" {
 		c.TemplateToStorage = "{{.}}"
@@ -321,7 +317,6 @@ func (s *svc) toDestination(username, p string) (destination, error) {
 	if err != nil {
 		return destination{}, err
 	}
-	p = path.Join(s.config.StorageMount, p)
 	return destination{
 		Path:   p,
 		Webdav: getWebdavPath(username, p),
