@@ -23,11 +23,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"path"
 	"strconv"
 	"text/template"
 
 	"github.com/Masterminds/sprig"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	storage "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
@@ -36,6 +38,7 @@ import (
 	"github.com/cs3org/reva/pkg/sharedconf"
 	cbackfs "github.com/cs3org/reva/pkg/storage/fs/cback"
 	"github.com/cs3org/reva/pkg/storage/utils/cback"
+	"github.com/cs3org/reva/pkg/utils"
 	"github.com/go-chi/chi/v5"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
@@ -46,6 +49,8 @@ func init() {
 	global.Register("cback", New)
 }
 
+const webdavPrefix = "/remote.php/dav/files/"
+
 type config struct {
 	Prefix            string `mapstructure:"prefix"`
 	Token             string `mapstructure:"token"`
@@ -54,6 +59,7 @@ type config struct {
 	Timeout           int    `mapstructure:"timeout"`
 	GatewaySvc        string `mapstructure:"gatewaysvc"`
 	StorageID         string `mapstructure:"storage_id"`
+	StorageMount      string `mapstructure:"storage_id"`
 	TemplateToStorage string `mapstructure:"template_to_storage"`
 }
 
@@ -132,18 +138,23 @@ func (s *svc) initRouter() {
 	s.router.Get("/backups", s.getBackups)
 }
 
-type restoreOut struct {
-	ID          int    `json:"id"`
-	Path        string `json:"path"`
-	Destination string `json:"destination"`
-	Status      int    `json:"status"`
+type destination struct {
+	Path   string `mapstructure:"path"`
+	Webdav string `mapstructure:"webdav"`
 }
 
-func convertToRestoureOut(r *cback.Restore) *restoreOut {
+type restoreOut struct {
+	ID          int         `json:"id"`
+	Path        string      `json:"path"`
+	Destination destination `json:"destination"`
+	Status      int         `json:"status"`
+}
+
+func (s *svc) convertToRestoureOut(user *userpb.User, r *cback.Restore) *restoreOut {
 	return &restoreOut{
 		ID:          r.ID,
 		Path:        r.Pattern,
-		Destination: r.Destionation,
+		Destination: utils.Must(s.toDestination(user.Username, r.Destionation)),
 		Status:      r.Status,
 	}
 }
@@ -198,15 +209,7 @@ func (s *svc) createRestore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data, err := json.Marshal(convertToRestoureOut(restore))
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	w.WriteHeader(http.StatusOK)
-	w.Header().Add("Content-Type", "application/json")
-	_, _ = w.Write(data)
+	s.writeJSON(w, s.convertToRestoureOut(user, restore))
 }
 
 func (s *svc) getRestores(w http.ResponseWriter, r *http.Request) {
@@ -226,18 +229,16 @@ func (s *svc) getRestores(w http.ResponseWriter, r *http.Request) {
 
 	res := make([]*restoreOut, 0, len(list))
 	for _, r := range list {
-		res = append(res, convertToRestoureOut(r))
+		res = append(res, s.convertToRestoureOut(user, r))
 	}
 
-	data, err := json.Marshal(res)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
+	s.writeJSON(w, res)
+}
 
+func (s *svc) writeJSON(w http.ResponseWriter, r any) {
 	w.WriteHeader(http.StatusOK)
 	w.Header().Add("Content-Type", "application/json")
-	_, _ = w.Write(data)
+	_ = json.NewEncoder(w).Encode(r)
 }
 
 func (s *svc) getRestoreByID(w http.ResponseWriter, r *http.Request) {
@@ -262,20 +263,12 @@ func (s *svc) getRestoreByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data, err := json.Marshal(convertToRestoureOut(restore))
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	w.WriteHeader(http.StatusOK)
-	w.Header().Add("Content-Type", "application/json")
-	_, _ = w.Write(data)
+	s.writeJSON(w, s.convertToRestoureOut(user, restore))
 }
 
-func getPath(backup *cback.Backup, tpl *template.Template) (string, error) {
+func getPath(p string, tpl *template.Template) (string, error) {
 	var b bytes.Buffer
-	if err := tpl.Execute(&b, backup.Source); err != nil {
+	if err := tpl.Execute(&b, p); err != nil {
 		return "", err
 	}
 	return b.String(), nil
@@ -296,29 +289,36 @@ func (s *svc) getBackups(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	paths := make([]string, 0, len(list))
+	paths := make([]destination, 0, len(list))
 	for _, b := range list {
-		p, err := getPath(b, s.tpl)
+		d, err := s.toDestination(user.Username, b.Source)
 		if err != nil {
-			http.Error(w, "user not authenticated", http.StatusUnauthorized)
-			return
+			continue
 		}
-		paths = append(paths, p)
+		paths = append(paths, d)
 	}
 
-	data, err := json.Marshal(paths)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	w.WriteHeader(http.StatusOK)
-	w.Header().Add("Content-Type", "application/json")
-	_, _ = w.Write(data)
+	s.writeJSON(w, paths)
 }
 
 func (s *svc) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		s.router.ServeHTTP(w, r)
 	})
+}
+
+func (s *svc) toDestination(username, p string) (destination, error) {
+	p, err := getPath(p, s.tpl)
+	if err != nil {
+		return destination{}, err
+	}
+	p = path.Join(s.config.StorageMount, p)
+	return destination{
+		Path:   p,
+		Webdav: getWebdavPath(username, p),
+	}, nil
+}
+
+func getWebdavPath(username, p string) string {
+	return path.Join(webdavPrefix, username, p)
 }
