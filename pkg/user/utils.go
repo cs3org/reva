@@ -20,7 +20,7 @@ package user
 
 import userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 
-// HasUploaderRole returns true if the user has uploader role
+// HasUploaderRole returns true if the user has uploader role.
 func HasUploaderRole(user *userpb.User) bool {
 	if user.Opaque == nil {
 		return false
