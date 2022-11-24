@@ -127,7 +127,7 @@ type endpoint struct {
 	token          string
 }
 
-// New returns a new rclone driver
+// New returns a new rclone driver.
 func New(m map[string]interface{}) (txdriver.Manager, error) {
 	c, err := parseConfig(m)
 	if err != nil {
