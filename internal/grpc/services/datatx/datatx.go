@@ -21,9 +21,7 @@ package datatx
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"io"
-	"net/url"
 	"os"
 	"sync"
 
@@ -75,13 +73,6 @@ type txShare struct {
 	SrcTargetURI  string
 	DestTargetURI string
 	Opaque        *types.Opaque `json:"opaque"`
-}
-
-type webdavEndpoint struct {
-	filePath       string
-	endpoint       string
-	endpointScheme string
-	token          string
 }
 
 func (c *config) init() {
@@ -156,23 +147,7 @@ func (s *service) UnprotectedEndpoints() []string {
 }
 
 func (s *service) PullTransfer(ctx context.Context, req *datatx.PullTransferRequest) (*datatx.PullTransferResponse, error) {
-	srcEp, err := s.extractEndpointInfo(ctx, req.SrcTargetUri)
-	if err != nil {
-		return nil, err
-	}
-	srcRemote := fmt.Sprintf("%s://%s", srcEp.endpointScheme, srcEp.endpoint)
-	srcPath := srcEp.filePath
-	srcToken := srcEp.token
-
-	destEp, err := s.extractEndpointInfo(ctx, req.DestTargetUri)
-	if err != nil {
-		return nil, err
-	}
-	dstRemote := fmt.Sprintf("%s://%s", destEp.endpointScheme, destEp.endpoint)
-	dstPath := destEp.filePath
-	dstToken := destEp.token
-
-	txInfo, startTransferErr := s.txManager.StartTransfer(ctx, srcRemote, srcPath, srcToken, dstRemote, dstPath, dstToken)
+	txInfo, startTransferErr := s.txManager.Transfer(ctx, req.SrcTargetUri, req.DestTargetUri)
 
 	// we always save the transfer regardless of start transfer outcome
 	// only then, if starting fails, can we try to restart it
@@ -205,7 +180,7 @@ func (s *service) PullTransfer(ctx context.Context, req *datatx.PullTransferRequ
 	return &datatx.PullTransferResponse{
 		Status: status.NewOK(ctx),
 		TxInfo: txInfo,
-	}, err
+	}, nil
 }
 
 func (s *service) GetTransferStatus(ctx context.Context, req *datatx.GetTransferStatusRequest) (*datatx.GetTransferStatusResponse, error) {
@@ -304,29 +279,6 @@ func (s *service) RetryTransfer(ctx context.Context, req *datatx.RetryTransferRe
 	return &datatx.RetryTransferResponse{
 		Status: status.NewOK(ctx),
 		TxInfo: txInfo,
-	}, nil
-}
-
-func (s *service) extractEndpointInfo(ctx context.Context, targetURL string) (*webdavEndpoint, error) {
-	if targetURL == "" {
-		return nil, errtypes.BadRequest("datatx service: ref target is an empty uri")
-	}
-
-	uri, err := url.Parse(targetURL)
-	if err != nil {
-		return nil, errors.Wrap(err, "datatx service: error parsing target uri: "+targetURL)
-	}
-
-	m, err := url.ParseQuery(uri.RawQuery)
-	if err != nil {
-		return nil, errors.Wrap(err, "datatx service: error parsing target resource name")
-	}
-
-	return &webdavEndpoint{
-		filePath:       m["name"][0],
-		endpoint:       uri.Host + uri.Path,
-		endpointScheme: uri.Scheme,
-		token:          uri.User.String(),
 	}, nil
 }
 
