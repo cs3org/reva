@@ -100,7 +100,7 @@ func (c *Config) init() {
 	}
 
 	if c.DefaultQuotaBytes == 0 {
-		c.DefaultQuotaBytes = 1000000000000 // 1 TB
+		c.DefaultQuotaBytes = 2000000000000 // 1 TB logical
 	}
 	if c.DefaultQuotaFiles == 0 {
 		c.DefaultQuotaFiles = 1000000 // 1 Million
