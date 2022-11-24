@@ -39,7 +39,7 @@ import (
 )
 
 const (
-	// TokenTransportHeader holds the header key for the reva transfer token
+	// TokenTransportHeader holds the header key for the reva transfer token.
 	TokenTransportHeader = "X-Reva-Transfer"
 	// UploadExpiresHeader holds the timestamp for the transport token expiry, defined in https://tus.io/protocols/resumable-upload.html#expiration
 	UploadExpiresHeader = "Upload-Expires"
@@ -75,7 +75,7 @@ type svc struct {
 	client  *http.Client
 }
 
-// New returns a new datagateway
+// New returns a new datagateway.
 func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) {
 	conf := &config{}
 	if err := mapstructure.Decode(m, conf); err != nil {
@@ -117,17 +117,17 @@ func (s *svc) Unprotected() []string {
 func (s *svc) setHandler() {
 	s.handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
-		case "HEAD":
+		case http.MethodHead:
 			addCorsHeader(w)
 			s.doHead(w, r)
 			return
-		case "GET":
+		case http.MethodGet:
 			s.doGet(w, r)
 			return
-		case "PUT":
+		case http.MethodPut:
 			s.doPut(w, r)
 			return
-		case "PATCH":
+		case http.MethodPatch:
 			s.doPatch(w, r)
 			return
 		default:
@@ -183,7 +183,7 @@ func (s *svc) doHead(w http.ResponseWriter, r *http.Request) {
 	log.Debug().Str("target", claims.Target).Msg("sending request to internal data server")
 
 	httpClient := s.client
-	httpReq, err := rhttp.NewRequest(ctx, "HEAD", claims.Target, nil)
+	httpReq, err := rhttp.NewRequest(ctx, http.MethodHead, claims.Target, nil)
 	if err != nil {
 		log.Error().Err(err).Msg("wrong request")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -229,7 +229,7 @@ func (s *svc) doGet(w http.ResponseWriter, r *http.Request) {
 	log.Debug().Str("target", claims.Target).Msg("sending request to internal data server")
 
 	httpClient := s.client
-	httpReq, err := rhttp.NewRequest(ctx, "GET", claims.Target, nil)
+	httpReq, err := rhttp.NewRequest(ctx, http.MethodGet, claims.Target, nil)
 	if err != nil {
 		log.Error().Err(err).Msg("wrong request")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -300,7 +300,7 @@ func (s *svc) doPut(w http.ResponseWriter, r *http.Request) {
 	log.Debug().Str("target", claims.Target).Msg("sending request to internal data server")
 
 	httpClient := s.client
-	httpReq, err := rhttp.NewRequest(ctx, "PUT", target, r.Body)
+	httpReq, err := rhttp.NewRequest(ctx, http.MethodPut, target, r.Body)
 	if err != nil {
 		log.Err(err).Msg("wrong request")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -359,7 +359,7 @@ func (s *svc) doPatch(w http.ResponseWriter, r *http.Request) {
 	log.Debug().Str("target", claims.Target).Msg("sending request to internal data server")
 
 	httpClient := s.client
-	httpReq, err := rhttp.NewRequest(ctx, "PATCH", target, r.Body)
+	httpReq, err := rhttp.NewRequest(ctx, http.MethodPatch, target, r.Body)
 	if err != nil {
 		log.Err(err).Msg("wrong request")
 		w.WriteHeader(http.StatusInternalServerError)

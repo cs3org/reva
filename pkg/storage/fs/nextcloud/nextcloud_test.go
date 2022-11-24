@@ -20,14 +20,11 @@ package nextcloud_test
 
 import (
 	"context"
-
-	// "fmt"
+	// "fmt".
 	"io"
 	"net/url"
 	"os"
 	"strings"
-
-	"google.golang.org/grpc/metadata"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -36,9 +33,9 @@ import (
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/storage/fs/nextcloud"
 	jwt "github.com/cs3org/reva/pkg/token/manager/jwt"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"google.golang.org/grpc/metadata"
 )
 
 func setUpNextcloudServer() (*nextcloud.StorageDriver, *[]string, func()) {

@@ -40,15 +40,15 @@ const (
 	// ShortTextForm is a sequence of ACL entries separated by commas, and is used for input.
 	ShortTextForm = ","
 
-	// TypeUser indicates the qualifier identifies a user
+	// TypeUser indicates the qualifier identifies a user.
 	TypeUser = "u"
-	// TypeLightweight indicates the qualifier identifies a lightweight user
+	// TypeLightweight indicates the qualifier identifies a lightweight user.
 	TypeLightweight = "lw"
-	// TypeGroup indicates the qualifier identifies a group
+	// TypeGroup indicates the qualifier identifies a group.
 	TypeGroup = "egroup"
 )
 
-// Parse parses an acl string with the given delimiter (LongTextForm or ShortTextForm)
+// Parse parses an acl string with the given delimiter (LongTextForm or ShortTextForm).
 func Parse(acls string, delimiter string) (*ACLs, error) {
 	tokens := strings.Split(acls, delimiter)
 	entries := []*Entry{}
@@ -77,7 +77,7 @@ func isComment(line string) bool {
 	return strings.HasPrefix(line, "#")
 }
 
-// Serialize always serializes to short text form
+// Serialize always serializes to short text form.
 func (m *ACLs) Serialize() string {
 	sysACL := []string{}
 	for _, e := range m.Entries {
@@ -86,7 +86,7 @@ func (m *ACLs) Serialize() string {
 	return strings.Join(sysACL, ShortTextForm)
 }
 
-// DeleteEntry removes an entry uniquely identified by acl type and qualifier
+// DeleteEntry removes an entry uniquely identified by acl type and qualifier.
 func (m *ACLs) DeleteEntry(aclType string, qualifier string) {
 	for i, e := range m.Entries {
 		if e.Qualifier == qualifier && e.Type == aclType {
@@ -96,7 +96,7 @@ func (m *ACLs) DeleteEntry(aclType string, qualifier string) {
 	}
 }
 
-// SetEntry replaces the permissions of an entry with the given set
+// SetEntry replaces the permissions of an entry with the given set.
 func (m *ACLs) SetEntry(aclType string, qualifier string, permissions string) error {
 	if aclType == "" || permissions == "" {
 		return errInvalidACL
@@ -111,7 +111,7 @@ func (m *ACLs) SetEntry(aclType string, qualifier string, permissions string) er
 	return nil
 }
 
-// The Entry of an ACL is represented as three colon separated fields:
+// The Entry of an ACL is represented as three colon separated fields:.
 type Entry struct {
 	// an ACL entry tag type: user, group, mask or other. comments start with #
 	Type string
@@ -121,7 +121,7 @@ type Entry struct {
 	Permissions string
 }
 
-// ParseEntry parses a single ACL
+// ParseEntry parses a single ACL.
 func ParseEntry(singleSysACL string) (*Entry, error) {
 	tokens := strings.Split(singleSysACL, ":")
 	switch len(tokens) {
@@ -146,7 +146,7 @@ func ParseEntry(singleSysACL string) (*Entry, error) {
 	return nil, errInvalidACL
 }
 
-// ParseLWEntry parses a single lightweight ACL
+// ParseLWEntry parses a single lightweight ACL.
 func ParseLWEntry(singleSysACL string) (*Entry, error) {
 	if !strings.HasPrefix(singleSysACL, TypeLightweight+":") {
 		return nil, errInvalidACL
@@ -164,7 +164,7 @@ func ParseLWEntry(singleSysACL string) (*Entry, error) {
 	}, nil
 }
 
-// CitrineSerialize serializes an ACL entry for citrine EOS ACLs
+// CitrineSerialize serializes an ACL entry for citrine EOS ACLs.
 func (a *Entry) CitrineSerialize() string {
 	return fmt.Sprintf("%s:%s=%s", a.Type, a.Qualifier, a.Permissions)
 }

@@ -21,11 +21,10 @@ package connectors
 import (
 	"fmt"
 
-	"github.com/rs/zerolog"
-
 	"github.com/cs3org/reva/pkg/mentix/config"
 	"github.com/cs3org/reva/pkg/mentix/entity"
 	"github.com/cs3org/reva/pkg/mentix/meshdata"
+	"github.com/rs/zerolog"
 )
 
 // Connector is the interface that all connectors must implement.

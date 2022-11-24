@@ -66,7 +66,7 @@ func Detect(isDir bool, fn string) string {
 	return mimeType
 }
 
-// GetFileExts performs the inverse resolution from mimetype to file extensions
+// GetFileExts performs the inverse resolution from mimetype to file extensions.
 func GetFileExts(mime string) []string {
 	var found []string
 	// first look in our cache

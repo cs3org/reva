@@ -47,7 +47,7 @@ type Session struct {
 	sessionCookieName string
 }
 
-// SessionUser holds information about the logged in user
+// SessionUser holds information about the logged in user.
 type SessionUser struct {
 	Account  *data.Account
 	Operator *data.Operator

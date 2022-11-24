@@ -48,7 +48,7 @@ func (s *svc) cacheWarmup(w http.ResponseWriter, r *http.Request) {
 		ctx = ctxpkg.ContextSetToken(ctx, tkn)
 		ctx = metadata.AppendToOutgoingContext(ctx, ctxpkg.TokenHeader, tkn)
 
-		req, _ := http.NewRequest("GET", "", nil)
+		req, _ := http.NewRequest(http.MethodGet, "", nil)
 		req = req.WithContext(ctx)
 		req.URL = r.URL
 

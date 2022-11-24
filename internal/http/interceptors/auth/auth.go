@@ -158,7 +158,7 @@ func New(m map[string]interface{}, unprotected []string) (global.Middleware, err
 			// OPTION requests need to pass for preflight requests
 			// TODO(labkode): this will break options for auth protected routes.
 			// Maybe running the CORS middleware before auth kicks in is enough.
-			if r.Method == "OPTIONS" {
+			if r.Method == http.MethodOptions {
 				h.ServeHTTP(w, r)
 				return
 			}
@@ -362,7 +362,6 @@ func getCredsForUserAgent(ua string, uam map[string]string, creds []string) []st
 				}
 			}
 			return creds
-
 		}
 	}
 

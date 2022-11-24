@@ -260,7 +260,6 @@ func (m *manager) GetUserByClaim(ctx context.Context, claim, value string, skipF
 }
 
 func (m *manager) FindUsers(ctx context.Context, query string, skipFetchingGroups bool) ([]*userpb.User, error) {
-
 	// Look at namespaces filters. If the query starts with:
 	// "a" => look into primary/secondary/service accounts
 	// "l" => look into lightweight/federated accounts
@@ -300,7 +299,7 @@ func (m *manager) FindUsers(ctx context.Context, query string, skipFetchingGroup
 	return userSlice, nil
 }
 
-// isUserAnyType returns true if the user's type is one of types list
+// isUserAnyType returns true if the user's type is one of types list.
 func isUserAnyType(user *userpb.User, types []userpb.UserType) bool {
 	for _, t := range types {
 		if user.GetId().Type == t {
@@ -380,5 +379,4 @@ func getUserType(userType, upn string) userpb.UserType {
 		t = userpb.UserType_USER_TYPE_INVALID
 	}
 	return t
-
 }

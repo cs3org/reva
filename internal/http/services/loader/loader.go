@@ -19,7 +19,7 @@
 package loader
 
 import (
-	// Load core HTTP services
+	// Load core HTTP services.
 	_ "github.com/cs3org/reva/internal/http/services/appprovider"
 	_ "github.com/cs3org/reva/internal/http/services/archiver"
 	_ "github.com/cs3org/reva/internal/http/services/cback"
@@ -39,5 +39,5 @@ import (
 	_ "github.com/cs3org/reva/internal/http/services/siteacc"
 	_ "github.com/cs3org/reva/internal/http/services/sysinfo"
 	_ "github.com/cs3org/reva/internal/http/services/wellknown"
-	// Add your own service here
+	// Add your own service here.
 )

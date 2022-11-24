@@ -25,7 +25,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-// new returns a dummy auth manager for testing
+// new returns a dummy auth manager for testing.
 func new(m map[string]interface{}) (*manager, error) {
 	mgr := &manager{}
 	err := mgr.Configure(m)

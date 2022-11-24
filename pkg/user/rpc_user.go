@@ -39,12 +39,12 @@ type ProviderPlugin struct {
 	Impl Manager
 }
 
-// Server returns the RPC Server which serves the methods that the Client calls over net/rpc
+// Server returns the RPC Server which serves the methods that the Client calls over net/rpc.
 func (p *ProviderPlugin) Server(*hcplugin.MuxBroker) (interface{}, error) {
 	return &RPCServer{Impl: p.Impl}, nil
 }
 
-// Client returns interface implementation for the plugin that communicates to the server end of the plugin
+// Client returns interface implementation for the plugin that communicates to the server end of the plugin.
 func (p *ProviderPlugin) Client(b *hcplugin.MuxBroker, c *rpc.Client) (interface{}, error) {
 	return &RPCClient{Client: c}, nil
 }
@@ -52,17 +52,17 @@ func (p *ProviderPlugin) Client(b *hcplugin.MuxBroker, c *rpc.Client) (interface
 // RPCClient is an implementation of Manager that talks over RPC.
 type RPCClient struct{ Client *rpc.Client }
 
-// ConfigureArg for RPC
+// ConfigureArg for RPC.
 type ConfigureArg struct {
 	Ml map[string]interface{}
 }
 
-// ConfigureReply for RPC
+// ConfigureReply for RPC.
 type ConfigureReply struct {
 	Err error
 }
 
-// Configure RPCClient configure method
+// Configure RPCClient configure method.
 func (m *RPCClient) Configure(ml map[string]interface{}) error {
 	args := ConfigureArg{Ml: ml}
 	resp := ConfigureReply{}
@@ -73,20 +73,20 @@ func (m *RPCClient) Configure(ml map[string]interface{}) error {
 	return resp.Err
 }
 
-// GetUserArg for RPC
+// GetUserArg for RPC.
 type GetUserArg struct {
 	Ctx                map[interface{}]interface{}
 	UID                *userpb.UserId
 	SkipFetchingGroups bool
 }
 
-// GetUserReply for RPC
+// GetUserReply for RPC.
 type GetUserReply struct {
 	User *userpb.User
 	Err  error
 }
 
-// GetUser RPCClient GetUser method
+// GetUser RPCClient GetUser method.
 func (m *RPCClient) GetUser(ctx context.Context, uid *userpb.UserId, skipFetchingGroups bool) (*userpb.User, error) {
 	ctxVal := appctx.GetKeyValuesFromCtx(ctx)
 	args := GetUserArg{Ctx: ctxVal, UID: uid, SkipFetchingGroups: skipFetchingGroups}
@@ -98,7 +98,7 @@ func (m *RPCClient) GetUser(ctx context.Context, uid *userpb.UserId, skipFetchin
 	return resp.User, resp.Err
 }
 
-// GetUserByClaimArg for RPC
+// GetUserByClaimArg for RPC.
 type GetUserByClaimArg struct {
 	Ctx                map[interface{}]interface{}
 	Claim              string
@@ -106,13 +106,13 @@ type GetUserByClaimArg struct {
 	SkipFetchingGroups bool
 }
 
-// GetUserByClaimReply for RPC
+// GetUserByClaimReply for RPC.
 type GetUserByClaimReply struct {
 	User *userpb.User
 	Err  error
 }
 
-// GetUserByClaim RPCClient GetUserByClaim method
+// GetUserByClaim RPCClient GetUserByClaim method.
 func (m *RPCClient) GetUserByClaim(ctx context.Context, claim, value string, skipFetchingGroups bool) (*userpb.User, error) {
 	ctxVal := appctx.GetKeyValuesFromCtx(ctx)
 	args := GetUserByClaimArg{Ctx: ctxVal, Claim: claim, Value: value, SkipFetchingGroups: skipFetchingGroups}
@@ -124,19 +124,19 @@ func (m *RPCClient) GetUserByClaim(ctx context.Context, claim, value string, ski
 	return resp.User, resp.Err
 }
 
-// GetUserGroupsArg for RPC
+// GetUserGroupsArg for RPC.
 type GetUserGroupsArg struct {
 	Ctx  map[interface{}]interface{}
 	User *userpb.UserId
 }
 
-// GetUserGroupsReply for RPC
+// GetUserGroupsReply for RPC.
 type GetUserGroupsReply struct {
 	Group []string
 	Err   error
 }
 
-// GetUserGroups RPCClient GetUserGroups method
+// GetUserGroups RPCClient GetUserGroups method.
 func (m *RPCClient) GetUserGroups(ctx context.Context, user *userpb.UserId) ([]string, error) {
 	ctxVal := appctx.GetKeyValuesFromCtx(ctx)
 	args := GetUserGroupsArg{Ctx: ctxVal, User: user}
@@ -148,20 +148,20 @@ func (m *RPCClient) GetUserGroups(ctx context.Context, user *userpb.UserId) ([]s
 	return resp.Group, resp.Err
 }
 
-// FindUsersArg for RPC
+// FindUsersArg for RPC.
 type FindUsersArg struct {
 	Ctx                map[interface{}]interface{}
 	Query              string
 	SkipFetchingGroups bool
 }
 
-// FindUsersReply for RPC
+// FindUsersReply for RPC.
 type FindUsersReply struct {
 	User []*userpb.User
 	Err  error
 }
 
-// FindUsers RPCClient FindUsers method
+// FindUsers RPCClient FindUsers method.
 func (m *RPCClient) FindUsers(ctx context.Context, query string, skipFetchingGroups bool) ([]*userpb.User, error) {
 	ctxVal := appctx.GetKeyValuesFromCtx(ctx)
 	args := FindUsersArg{Ctx: ctxVal, Query: query, SkipFetchingGroups: skipFetchingGroups}
@@ -173,40 +173,40 @@ func (m *RPCClient) FindUsers(ctx context.Context, query string, skipFetchingGro
 	return resp.User, resp.Err
 }
 
-// RPCServer is the server that RPCClient talks to, conforming to the requirements of net/rpc
+// RPCServer is the server that RPCClient talks to, conforming to the requirements of net/rpc.
 type RPCServer struct {
 	// This is the real implementation
 	Impl Manager
 }
 
-// Configure RPCServer Configure method
+// Configure RPCServer Configure method.
 func (m *RPCServer) Configure(args ConfigureArg, resp *ConfigureReply) error {
 	resp.Err = m.Impl.Configure(args.Ml)
 	return nil
 }
 
-// GetUser RPCServer GetUser method
+// GetUser RPCServer GetUser method.
 func (m *RPCServer) GetUser(args GetUserArg, resp *GetUserReply) error {
 	ctx := appctx.PutKeyValuesToCtx(args.Ctx)
 	resp.User, resp.Err = m.Impl.GetUser(ctx, args.UID, args.SkipFetchingGroups)
 	return nil
 }
 
-// GetUserByClaim RPCServer GetUserByClaim method
+// GetUserByClaim RPCServer GetUserByClaim method.
 func (m *RPCServer) GetUserByClaim(args GetUserByClaimArg, resp *GetUserByClaimReply) error {
 	ctx := appctx.PutKeyValuesToCtx(args.Ctx)
 	resp.User, resp.Err = m.Impl.GetUserByClaim(ctx, args.Claim, args.Value, args.SkipFetchingGroups)
 	return nil
 }
 
-// GetUserGroups RPCServer GetUserGroups method
+// GetUserGroups RPCServer GetUserGroups method.
 func (m *RPCServer) GetUserGroups(args GetUserGroupsArg, resp *GetUserGroupsReply) error {
 	ctx := appctx.PutKeyValuesToCtx(args.Ctx)
 	resp.Group, resp.Err = m.Impl.GetUserGroups(ctx, args.User)
 	return nil
 }
 
-// FindUsers RPCServer FindUsers method
+// FindUsers RPCServer FindUsers method.
 func (m *RPCServer) FindUsers(args FindUsersArg, resp *FindUsersReply) error {
 	ctx := appctx.PutKeyValuesToCtx(args.Ctx)
 	resp.User, resp.Err = m.Impl.FindUsers(ctx, args.Query, args.SkipFetchingGroups)

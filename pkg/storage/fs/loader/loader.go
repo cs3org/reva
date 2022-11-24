@@ -34,5 +34,5 @@ import (
 	_ "github.com/cs3org/reva/pkg/storage/fs/owncloudsql"
 	_ "github.com/cs3org/reva/pkg/storage/fs/s3"
 	_ "github.com/cs3org/reva/pkg/storage/fs/s3ng"
-	// Add your own here
+	// Add your own here.
 )

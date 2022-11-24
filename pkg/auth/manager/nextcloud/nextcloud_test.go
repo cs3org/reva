@@ -23,19 +23,16 @@ import (
 	"fmt"
 	"os"
 
-	"google.golang.org/grpc/metadata"
-
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-
 	"github.com/cs3org/reva/pkg/auth/manager/nextcloud"
 	"github.com/cs3org/reva/pkg/auth/scope"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	jwt "github.com/cs3org/reva/pkg/token/manager/jwt"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"google.golang.org/grpc/metadata"
 )
 
 func setUpNextcloudServer() (*nextcloud.Manager, *[]string, func()) {

@@ -20,7 +20,6 @@ package grace
 
 import (
 	"fmt"
-	"io/ioutil"
 	"net"
 	"os"
 	"os/signal"
@@ -108,7 +107,7 @@ func (w *Watcher) clean() error {
 }
 
 func (w *Watcher) readPID() (int, error) {
-	piddata, err := ioutil.ReadFile(w.pidFile)
+	piddata, err := os.ReadFile(w.pidFile)
 	if err != nil {
 		return 0, err
 	}
@@ -123,7 +122,7 @@ func (w *Watcher) readPID() (int, error) {
 // GetProcessFromFile reads the pidfile and returns the running process or error if the process or file
 // are not available.
 func GetProcessFromFile(pfile string) (*os.Process, error) {
-	data, err := ioutil.ReadFile(pfile)
+	data, err := os.ReadFile(pfile)
 	if err != nil {
 		return nil, err
 	}
@@ -144,7 +143,7 @@ func GetProcessFromFile(pfile string) (*os.Process, error) {
 // WritePID writes the pid to the configured pid file.
 func (w *Watcher) WritePID() error {
 	// Read in the pid file as a slice of bytes.
-	if piddata, err := ioutil.ReadFile(w.pidFile); err == nil {
+	if piddata, err := os.ReadFile(w.pidFile); err == nil {
 		// Convert the file contents to an integer.
 		if pid, err := strconv.Atoi(string(piddata)); err == nil {
 			// Look for the pid in the process list.
@@ -172,9 +171,9 @@ func (w *Watcher) WritePID() error {
 	// w.log.Info().Msg("error reading pidfile")
 	//}
 
-	// If we get here, then the pidfile didn't exist or we are are in graceful reload and thus we overwrite
+	// If we get here, then the pidfile didn't exist or we are in graceful reload and thus we overwrite
 	// or the pid in it doesn't belong to the user running this app.
-	err := ioutil.WriteFile(w.pidFile, []byte(fmt.Sprintf("%d", os.Getpid())), 0664)
+	err := os.WriteFile(w.pidFile, []byte(fmt.Sprintf("%d", os.Getpid())), 0664)
 	if err != nil {
 		return err
 	}
@@ -209,7 +208,6 @@ func (w *Watcher) GetListeners(servers map[string]Server) (map[string]net.Listen
 			} else {
 				lns[k] = ln
 			}
-
 		}
 
 		// kill parent
@@ -242,7 +240,6 @@ func (w *Watcher) GetListeners(servers map[string]Server) (map[string]net.Listen
 			return nil, err
 		}
 		lns[k] = ln
-
 	}
 	w.lns = lns
 	return lns, nil

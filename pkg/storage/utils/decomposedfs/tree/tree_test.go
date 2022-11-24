@@ -26,11 +26,10 @@ import (
 	helpers "github.com/cs3org/reva/pkg/storage/utils/decomposedfs/testhelpers"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/tree"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/xattrs"
-	"github.com/pkg/xattr"
-	"github.com/stretchr/testify/mock"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/pkg/xattr"
+	"github.com/stretchr/testify/mock"
 )
 
 var _ = Describe("Tree", func() {

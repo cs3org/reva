@@ -21,5 +21,5 @@ package loader
 import (
 	// Load core application auth manager drivers.
 	_ "github.com/cs3org/reva/pkg/appauth/manager/json"
-	// Add your own here
+	// Add your own here.
 )

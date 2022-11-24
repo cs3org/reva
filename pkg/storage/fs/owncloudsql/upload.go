@@ -23,7 +23,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -89,7 +88,7 @@ func (fs *owncloudsqlfs) Upload(ctx context.Context, ref *provider.Reference, r 
 }
 
 // InitiateUpload returns upload ids corresponding to different protocols it supports
-// TODO read optional content for small files in this request
+// TODO read optional content for small files in this request.
 func (fs *owncloudsqlfs) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64, metadata map[string]string) (map[string]string, error) {
 	ip, err := fs.resolve(ctx, ref)
 	if err != nil {
@@ -143,7 +142,6 @@ func (fs *owncloudsqlfs) UseIn(composer *tusd.StoreComposer) {
 // - the upload needs to implement the tusd.Upload interface: WriteChunk, GetInfo, GetReader and FinishUpload
 
 func (fs *owncloudsqlfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tusd.Upload, err error) {
-
 	log := appctx.GetLogger(ctx)
 	log.Debug().Interface("info", info).Msg("owncloudsql: NewUpload")
 
@@ -244,12 +242,12 @@ func (fs *owncloudsqlfs) getUploadPath(ctx context.Context, uploadID string) (st
 	return filepath.Join(fs.c.DataDirectory, layout, "uploads", uploadID), nil
 }
 
-// GetUpload returns the Upload for the given upload id
+// GetUpload returns the Upload for the given upload id.
 func (fs *owncloudsqlfs) GetUpload(ctx context.Context, id string) (tusd.Upload, error) {
 	infoPath := filepath.Join(fs.c.UploadInfoDir, id+".info")
 
 	info := tusd.FileInfo{}
-	data, err := ioutil.ReadFile(infoPath)
+	data, err := os.ReadFile(infoPath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			// Interpret os.ErrNotExist as 404 Not Found
@@ -311,12 +309,12 @@ type fileUpload struct {
 	ctx context.Context
 }
 
-// GetInfo returns the FileInfo
+// GetInfo returns the FileInfo.
 func (upload *fileUpload) GetInfo(ctx context.Context) (tusd.FileInfo, error) {
 	return upload.info, nil
 }
 
-// WriteChunk writes the stream from the reader to the given offset of the upload
+// WriteChunk writes the stream from the reader to the given offset of the upload.
 func (upload *fileUpload) WriteChunk(ctx context.Context, offset int64, src io.Reader) (int64, error) {
 	file, err := os.OpenFile(upload.binPath, os.O_WRONLY|os.O_APPEND, defaultFilePerm)
 	if err != nil {
@@ -342,7 +340,7 @@ func (upload *fileUpload) WriteChunk(ctx context.Context, offset int64, src io.R
 	return n, err
 }
 
-// GetReader returns an io.Reader for the upload
+// GetReader returns an io.Reader for the upload.
 func (upload *fileUpload) GetReader(ctx context.Context) (io.Reader, error) {
 	return os.Open(upload.binPath)
 }
@@ -354,12 +352,11 @@ func (upload *fileUpload) writeInfo() error {
 	if err != nil {
 		return err
 	}
-	return ioutil.WriteFile(upload.infoPath, data, defaultFilePerm)
+	return os.WriteFile(upload.infoPath, data, defaultFilePerm)
 }
 
-// FinishUpload finishes an upload and moves the file to the internal destination
+// FinishUpload finishes an upload and moves the file to the internal destination.
 func (upload *fileUpload) FinishUpload(ctx context.Context) error {
-
 	ip := upload.info.Storage["InternalDestination"]
 
 	// if destination exists
@@ -425,12 +422,12 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) error {
 // - the storage needs to implement AsTerminatableUpload
 // - the upload needs to implement Terminate
 
-// AsTerminatableUpload returns a TerminatableUpload
+// AsTerminatableUpload returns a TerminatableUpload.
 func (fs *owncloudsqlfs) AsTerminatableUpload(upload tusd.Upload) tusd.TerminatableUpload {
 	return upload.(*fileUpload)
 }
 
-// Terminate terminates the upload
+// Terminate terminates the upload.
 func (upload *fileUpload) Terminate(ctx context.Context) error {
 	if err := os.Remove(upload.infoPath); err != nil {
 		if !os.IsNotExist(err) {
@@ -449,12 +446,12 @@ func (upload *fileUpload) Terminate(ctx context.Context) error {
 // - the storage needs to implement AsLengthDeclarableUpload
 // - the upload needs to implement DeclareLength
 
-// AsLengthDeclarableUpload returns a LengthDeclarableUpload
+// AsLengthDeclarableUpload returns a LengthDeclarableUpload.
 func (fs *owncloudsqlfs) AsLengthDeclarableUpload(upload tusd.Upload) tusd.LengthDeclarableUpload {
 	return upload.(*fileUpload)
 }
 
-// DeclareLength updates the upload length information
+// DeclareLength updates the upload length information.
 func (upload *fileUpload) DeclareLength(ctx context.Context, length int64) error {
 	upload.info.Size = length
 	upload.info.SizeIsDeferred = false
@@ -465,12 +462,12 @@ func (upload *fileUpload) DeclareLength(ctx context.Context, length int64) error
 // - the storage needs to implement AsConcatableUpload
 // - the upload needs to implement ConcatUploads
 
-// AsConcatableUpload returns a ConcatableUpload
+// AsConcatableUpload returns a ConcatableUpload.
 func (fs *owncloudsqlfs) AsConcatableUpload(upload tusd.Upload) tusd.ConcatableUpload {
 	return upload.(*fileUpload)
 }
 
-// ConcatUploads concatenates multiple uploads
+// ConcatUploads concatenates multiple uploads.
 func (upload *fileUpload) ConcatUploads(ctx context.Context, uploads []tusd.Upload) (err error) {
 	file, err := os.OpenFile(upload.binPath, os.O_WRONLY|os.O_APPEND, defaultFilePerm)
 	if err != nil {

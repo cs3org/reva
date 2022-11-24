@@ -22,7 +22,6 @@ import (
 	"fmt"
 
 	"github.com/cs3org/reva/pkg/mentix/config"
-
 	"github.com/rs/zerolog"
 )
 

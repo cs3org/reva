@@ -23,7 +23,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"strconv"
 	"time"
@@ -83,7 +82,7 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 	return c, nil
 }
 
-// New creates a new AppProviderService
+// New creates a new AppProviderService.
 func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 	c, err := parseConfig(m)
 	if err != nil {
@@ -114,7 +113,7 @@ func registerMimeTypes(mappingFile string) error {
 	// TODO(lopresti) this function also exists in the storage provider, to be seen if we want to factor it out, though a
 	// fileext <-> mimetype "service" would have to be served by the gateway for it to be accessible both by storage providers and app providers.
 	if mappingFile != "" {
-		f, err := ioutil.ReadFile(mappingFile)
+		f, err := os.ReadFile(mappingFile)
 		if err != nil {
 			return fmt.Errorf("appprovider: error reading the custom mime types file: +%v", err)
 		}
@@ -200,8 +199,13 @@ func (s *service) Register(ss *grpc.Server) {
 func getProvider(c *config) (app.Provider, error) {
 	if f, ok := registry.NewFuncs[c.Driver]; ok {
 		driverConf := c.Drivers[c.Driver]
-		// share the mime_types config entry to the drivers
-		driverConf["mime_types"] = c.MimeTypes
+		if c.MimeTypes != nil {
+			// share the mime_types config entry to the drivers
+			if driverConf == nil {
+				driverConf = make(map[string]interface{})
+			}
+			driverConf["mime_types"] = c.MimeTypes
+		}
 		return f(driverConf)
 	}
 	return nil, errtypes.NotFound("driver not found: " + c.Driver)

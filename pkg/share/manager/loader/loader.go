@@ -23,5 +23,5 @@ import (
 	_ "github.com/cs3org/reva/pkg/share/manager/json"
 	_ "github.com/cs3org/reva/pkg/share/manager/memory"
 	_ "github.com/cs3org/reva/pkg/share/manager/sql"
-	// Add your own here
+	// Add your own here.
 )

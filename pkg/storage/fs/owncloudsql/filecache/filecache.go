@@ -31,18 +31,17 @@ import (
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	conversions "github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
-
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 )
 
-// Cache represents a oc10-style file cache
+// Cache represents a oc10-style file cache.
 type Cache struct {
 	driver string
 	db     *sql.DB
 }
 
-// NewMysql returns a new Cache instance connecting to a MySQL database
+// NewMysql returns a new Cache instance connecting to a MySQL database.
 func NewMysql(dsn string) (*Cache, error) {
 	sqldb, err := sql.Open("mysql", dsn)
 	if err != nil {
@@ -60,7 +59,7 @@ func NewMysql(dsn string) (*Cache, error) {
 	return New("mysql", sqldb)
 }
 
-// New returns a new Cache instance connecting to the given sql.DB
+// New returns a new Cache instance connecting to the given sql.DB.
 func New(driver string, sqldb *sql.DB) (*Cache, error) {
 	return &Cache{
 		driver: driver,
@@ -68,7 +67,7 @@ func New(driver string, sqldb *sql.DB) (*Cache, error) {
 	}, nil
 }
 
-// GetNumericStorageID returns the database id for the given storage
+// GetNumericStorageID returns the database id for the given storage.
 func (c *Cache) GetNumericStorageID(id string) (int, error) {
 	row := c.db.QueryRow("SELECT numeric_id FROM oc_storages WHERE id = ?", id)
 	var nid int
@@ -80,7 +79,7 @@ func (c *Cache) GetNumericStorageID(id string) (int, error) {
 	}
 }
 
-// CreateStorage creates a new storage and returns its numeric id
+// CreateStorage creates a new storage and returns its numeric id.
 func (c *Cache) CreateStorage(id string) (int, error) {
 	tx, err := c.db.Begin()
 	if err != nil {
@@ -121,7 +120,7 @@ func (c *Cache) CreateStorage(id string) (int, error) {
 	return int(insertedID), err
 }
 
-// GetStorageOwner returns the username of the owner of the given storage
+// GetStorageOwner returns the username of the owner of the given storage.
 func (c *Cache) GetStorageOwner(numericID interface{}) (string, error) {
 	numericID, err := toIntID(numericID)
 	if err != nil {
@@ -137,7 +136,7 @@ func (c *Cache) GetStorageOwner(numericID interface{}) (string, error) {
 	}
 }
 
-// GetStorageOwnerByFileID returns the username of the owner of the given entry
+// GetStorageOwnerByFileID returns the username of the owner of the given entry.
 func (c *Cache) GetStorageOwnerByFileID(numericID interface{}) (string, error) {
 	numericID, err := toIntID(numericID)
 	if err != nil {
@@ -153,7 +152,7 @@ func (c *Cache) GetStorageOwnerByFileID(numericID interface{}) (string, error) {
 	}
 }
 
-// File represents an entry of the file cache
+// File represents an entry of the file cache.
 type File struct {
 	ID              int
 	Storage         int
@@ -173,7 +172,7 @@ type File struct {
 	Checksum        string
 }
 
-// TrashItem represents a trash item of the file cache
+// TrashItem represents a trash item of the file cache.
 type TrashItem struct {
 	ID        int
 	Name      string
@@ -182,7 +181,7 @@ type TrashItem struct {
 	Timestamp int
 }
 
-// Scannable describes the interface providing a Scan method
+// Scannable describes the interface providing a Scan method.
 type Scannable interface {
 	Scan(...interface{}) error
 }
@@ -216,7 +215,7 @@ func (c *Cache) rowToFile(row Scannable) (*File, error) {
 	}, nil
 }
 
-// Get returns the cache entry for the specified storage/path
+// Get returns the cache entry for the specified storage/path.
 func (c *Cache) Get(s interface{}, p string) (*File, error) {
 	storageID, err := toIntID(s)
 	if err != nil {
@@ -237,7 +236,7 @@ func (c *Cache) Get(s interface{}, p string) (*File, error) {
 	return c.rowToFile(row)
 }
 
-// Path returns the path for the specified entry
+// Path returns the path for the specified entry.
 func (c *Cache) Path(id interface{}) (string, error) {
 	id, err := toIntID(id)
 	if err != nil {
@@ -253,7 +252,7 @@ func (c *Cache) Path(id interface{}) (string, error) {
 	return path, nil
 }
 
-// List returns the list of entries below the given path
+// List returns the list of entries below the given path.
 func (c *Cache) List(storage interface{}, p string) ([]*File, error) {
 	storageID, err := toIntID(storage)
 	if err != nil {
@@ -287,7 +286,7 @@ func (c *Cache) List(storage interface{}, p string) ([]*File, error) {
 	return entries, nil
 }
 
-// Permissions returns the permissions for the specified storage/path
+// Permissions returns the permissions for the specified storage/path.
 func (c *Cache) Permissions(storage interface{}, p string) (*provider.ResourcePermissions, error) {
 	entry, err := c.Get(storage, p)
 	if err != nil {
@@ -302,7 +301,7 @@ func (c *Cache) Permissions(storage interface{}, p string) (*provider.ResourcePe
 	return conversions.RoleFromOCSPermissions(perms).CS3ResourcePermissions(), nil
 }
 
-// InsertOrUpdate creates or updates a cache entry
+// InsertOrUpdate creates or updates a cache entry.
 func (c *Cache) InsertOrUpdate(storage interface{}, data map[string]interface{}, allowEmptyParent bool) (int, error) {
 	tx, err := c.db.Begin()
 	if err != nil {
@@ -436,7 +435,7 @@ func (c *Cache) doInsertOrUpdate(tx *sql.Tx, storage interface{}, data map[strin
 	return int(id), nil
 }
 
-// Copy creates a copy of the specified entry at the target path
+// Copy creates a copy of the specified entry at the target path.
 func (c *Cache) Copy(storage interface{}, sourcePath, targetPath string) (int, error) {
 	storageID, err := toIntID(storage)
 	if err != nil {
@@ -469,7 +468,7 @@ func (c *Cache) Copy(storage interface{}, sourcePath, targetPath string) (int, e
 	return c.InsertOrUpdate(storage, data, false)
 }
 
-// Move moves the specified entry to the target path
+// Move moves the specified entry to the target path.
 func (c *Cache) Move(storage interface{}, sourcePath, targetPath string) error {
 	storageID, err := toIntID(storage)
 	if err != nil {
@@ -531,7 +530,7 @@ func (c *Cache) Move(storage interface{}, sourcePath, targetPath string) error {
 	return tx.Commit()
 }
 
-// Purge removes the specified storage/path from the cache without putting it into the trash
+// Purge removes the specified storage/path from the cache without putting it into the trash.
 func (c *Cache) Purge(storage interface{}, path string) error {
 	storageID, err := toIntID(storage)
 	if err != nil {
@@ -543,7 +542,7 @@ func (c *Cache) Purge(storage interface{}, path string) error {
 	return err
 }
 
-// Delete removes the specified storage/path from the cache
+// Delete removes the specified storage/path from the cache.
 func (c *Cache) Delete(storage interface{}, user, path, trashPath string) error {
 	err := c.Move(storage, path, trashPath)
 	if err != nil {
@@ -572,7 +571,7 @@ func (c *Cache) Delete(storage interface{}, user, path, trashPath string) error 
 	return nil
 }
 
-// GetRecycleItem returns the specified recycle item
+// GetRecycleItem returns the specified recycle item.
 func (c *Cache) GetRecycleItem(user, path string, timestamp int) (*TrashItem, error) {
 	row := c.db.QueryRow("SELECT auto_id, id, location FROM oc_files_trash WHERE id = ? AND user = ? AND timestamp = ?", path, user, timestamp)
 	var autoID int
@@ -591,7 +590,7 @@ func (c *Cache) GetRecycleItem(user, path string, timestamp int) (*TrashItem, er
 	}, nil
 }
 
-// EmptyRecycle clears the recycle bin for the given user
+// EmptyRecycle clears the recycle bin for the given user.
 func (c *Cache) EmptyRecycle(user string) error {
 	_, err := c.db.Exec("DELETE FROM oc_files_trash WHERE user = ?", user)
 	if err != nil {
@@ -607,13 +606,13 @@ func (c *Cache) EmptyRecycle(user string) error {
 	return err
 }
 
-// DeleteRecycleItem deletes the specified item from the trash
+// DeleteRecycleItem deletes the specified item from the trash.
 func (c *Cache) DeleteRecycleItem(user, path string, timestamp int) error {
 	_, err := c.db.Exec("DELETE FROM oc_files_trash WHERE id = ? AND user = ? AND timestamp = ?", path, user, timestamp)
 	return err
 }
 
-// PurgeRecycleItem deletes the specified item from the filecache and the trash
+// PurgeRecycleItem deletes the specified item from the filecache and the trash.
 func (c *Cache) PurgeRecycleItem(user, path string, timestamp int, isVersionFile bool) error {
 	row := c.db.QueryRow("SELECT auto_id, location FROM oc_files_trash WHERE id = ? AND user = ? AND timestamp = ?", path, user, timestamp)
 	var autoID int
@@ -645,7 +644,7 @@ func (c *Cache) PurgeRecycleItem(user, path string, timestamp int, isVersionFile
 	return err
 }
 
-// SetEtag set a new etag for the specified item
+// SetEtag set a new etag for the specified item.
 func (c *Cache) SetEtag(storage interface{}, path, etag string) error {
 	storageID, err := toIntID(storage)
 	if err != nil {

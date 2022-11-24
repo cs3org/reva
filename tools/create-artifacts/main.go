@@ -25,7 +25,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
@@ -59,7 +58,6 @@ func init() {
 }
 
 func main() {
-
 	if err := os.RemoveAll("dist"); err != nil {
 		fmt.Fprintf(os.Stderr, "error removing dist folder: %s", err)
 		os.Exit(1)
@@ -122,7 +120,7 @@ func hashFile(file string) {
 	}
 	f.Close()
 	val := hex.EncodeToString(hasher.Sum(nil))
-	if err := ioutil.WriteFile(file+".sha256", []byte(val), 0644); err != nil {
+	if err := os.WriteFile(file+".sha256", []byte(val), 0644); err != nil {
 		log.Fatal(err)
 	}
 }

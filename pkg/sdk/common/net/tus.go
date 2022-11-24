@@ -27,10 +27,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cs3org/reva/pkg/sdk/common"
 	"github.com/eventials/go-tus"
 	"github.com/eventials/go-tus/memorystore"
-
-	"github.com/cs3org/reva/pkg/sdk/common"
 )
 
 // TUSClient is a simple client wrapper for uploading files via TUS.
@@ -74,7 +73,7 @@ func (client *TUSClient) checkEndpointCreationOption(endpoint string) bool {
 		Timeout: time.Duration(1.5 * float64(time.Second)),
 	}
 
-	if httpReq, err := http.NewRequest("OPTIONS", endpoint, nil); err == nil {
+	if httpReq, err := http.NewRequest(http.MethodOptions, endpoint, nil); err == nil {
 		if res, err := httpClient.Do(httpReq); err == nil {
 			defer res.Body.Close()
 

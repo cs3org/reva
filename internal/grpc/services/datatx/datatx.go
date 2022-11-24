@@ -22,7 +22,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/url"
 	"os"
 	"sync"
@@ -116,9 +116,8 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 	return c, nil
 }
 
-// New creates a new datatx svc
+// New creates a new datatx svc.
 func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
-
 	c, err := parseConfig(m)
 	if err != nil {
 		return nil, err
@@ -334,7 +333,7 @@ func (s *service) extractEndpointInfo(ctx context.Context, targetURL string) (*w
 func loadOrCreate(file string) (*txShareModel, error) {
 	_, err := os.Stat(file)
 	if os.IsNotExist(err) {
-		if err := ioutil.WriteFile(file, []byte("{}"), 0700); err != nil {
+		if err := os.WriteFile(file, []byte("{}"), 0700); err != nil {
 			err = errors.Wrap(err, "datatx service: error creating the transfer shares storage file: "+file)
 			return nil, err
 		}
@@ -347,7 +346,7 @@ func loadOrCreate(file string) (*txShareModel, error) {
 	}
 	defer fd.Close()
 
-	data, err := ioutil.ReadAll(fd)
+	data, err := io.ReadAll(fd)
 	if err != nil {
 		err = errors.Wrap(err, "datatx service: error reading the data")
 		return nil, err
@@ -374,7 +373,7 @@ func (m *txShareModel) saveTxShare() error {
 		return err
 	}
 
-	if err := ioutil.WriteFile(m.File, data, 0644); err != nil {
+	if err := os.WriteFile(m.File, data, 0644); err != nil {
 		err = errors.Wrap(err, "datatx service: error writing transfer share data to file: "+m.File)
 		return err
 	}

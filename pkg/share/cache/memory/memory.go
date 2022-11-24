@@ -41,7 +41,7 @@ type manager struct {
 	cache gcache.Cache
 }
 
-// New returns an implementation of a resource info cache that stores the objects in memory
+// New returns an implementation of a resource info cache that stores the objects in memory.
 func New(m map[string]interface{}) (cache.ResourceInfoCache, error) {
 	c := &config{}
 	if err := mapstructure.Decode(m, c); err != nil {

@@ -21,6 +21,7 @@ package demo
 import (
 	"context"
 	"fmt"
+	"net/http"
 
 	appprovider "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
 	appregistry "github.com/cs3org/go-cs3apis/cs3/app/registry/v1beta1"
@@ -42,7 +43,7 @@ func (p *demoProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 	url := fmt.Sprintf("<iframe src=%s/open/%s?view-mode=%s&access-token=%s&lang=%s />", p.iframeUIProvider, resource.Id.StorageId+":"+resource.Id.OpaqueId, viewMode.String(), token, language)
 	return &appprovider.OpenInAppURL{
 		AppUrl: url,
-		Method: "GET",
+		Method: http.MethodGet,
 	}, nil
 }
 

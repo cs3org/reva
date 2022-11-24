@@ -1,37 +1,67 @@
-issues:
-  exclude-rules:
-    - path: internal/http/interceptors/log/log.go
-      text: "SA1019:"
-      linters:
-        - staticcheck
-    - path: pkg/utils/utils.go
-      text: "SA1019:"
-      linters:
-        - staticcheck
-    # Exclude scopelint for tests files because of https://github.com/kyoh86/scopelint/issues/4
-    - path: _test\.go
-      linters:
-        - scopelint
+run:
+  timeout: 20m
+
 linters:
-  enable:
-    - maligned
-    - bodyclose
-    - deadcode
-    - errcheck
-    - gosimple
-    - govet
-    - ineffassign
-    - staticcheck
-    - structcheck
-    - typecheck
-    - unused
-    - varcheck
-    - depguard
-    - golint
-    - goimports
-    - unconvert
-    - scopelint
-    - misspell
-    - gocritic
-    - prealloc
-    #- gosec
+  enable-all: true
+  disable:
+    - exhaustive        # TODO: consider enabling the 'exhaustive' linter to check the exhaustiveness of enum switch statements and map literals.
+    - wrapcheck         # TODO: consider enabling the 'wrapcheck' linter to check that errors from external packages are wrapped during return to help identify the error source during debugging.
+    - cyclop            # TODO: consider enabling the 'cyclop' linter to calculate the cyclomatic complexities of functions/packages.
+    - varnamelen        # TODO: consider enabling the 'varnamelen' linter to check that the length of a variable's name matches its usage scope.
+    - testpackage       # TODO: consider enabling the 'testpackage' linter to make sure that separate _test packages are used.
+    - gosec             # TODO: consider enabling the 'gosec' linter to inspect source code for security problems.
+    - tagliatelle       # TODO: consider enabling the 'tagliatelle' linter to check the struct tags.
+    - thelper           # TODO: consider enabling the 'thelper' linter to detect golang test helpers without t.Helper() call and check the consistency of test helpers.
+    - predeclared       # TODO: consider enabling the 'predeclared' linter to find code that shadows one of Go's predeclared identifiers.
+    - paralleltest      # TODO: consider enabling the 'paralleltest' linter to detect missing usage of t.Parallel() method in Go test.
+    - ireturn           # TODO: consider enabling the 'ireturn' linter to accept interfaces and return concrete types.
+    - nosprintfhostport # TODO: consider enabling the 'nosprintfhostport' linter to check for misuse of Sprintf to construct a host with port in a URL.
+    - nonamedreturns    # TODO: consider enabling the 'nonamedreturns' linter to reports all named returns.
+    - gomnd             # TODO: consider enabling the 'gomnd' linter to detect magic numbers.
+    - noctx             # TODO: consider enabling the 'noctx' linter to find sending http request without context.Context.
+    - nlreturn          # TODO: consider enabling the 'nlreturn' linter to check for a new line before return and branch statements to increase code clarity.
+    - nilnil            # TODO: consider enabling the 'nilnil' linter to check that there is no simultaneous return of nil error and an invalid value.
+    - nilerr            # TODO: consider enabling the 'nilerr' linter to find the code that returns nil even if it checks that the error is not nil.
+    - interfacebloat    # TODO: consider enabling the 'interfacebloat' linter to check the number of methods inside an interface.
+    - goerr113          # TODO: consider enabling the 'goerr113' linter to check the errors handling expressions.
+    - gochecknoglobals  # TODO: consider enabling the 'gochecknoglobals' linter to check that no global variables exist.
+    - forcetypeassert   # TODO: consider enabling the 'forcetypeassert' linter to find forced type assertions.
+    - exhaustruct       # TODO: consider enabling the 'exhaustruct' linter to check if all structure fields are initialized.
+    - execinquery       # TODO: consider enabling the 'execinquery' linter to check query strings.
+    - errorlint         # TODO: consider enabling the 'errorlint' linter to find code that will cause problems with the error wrapping scheme introduced in Go 1.13.
+    - errname           # TODO: consider enabling the 'errname' linter to check that sentinel errors are prefixed with the Err and error types are suffixed with the Error.
+    - wsl               # TODO: consider enabling the 'wsl' linter to force the use of empty lines.
+    - nestif            # TODO: consider enabling the 'nestif' linter to report deeply nested if statements.
+    - errchkjson        # TODO: consider enabling the 'errchkjson' linter to checks types passed to the json encoding functions.
+    - contextcheck      # TODO: consider enabling the 'contextcheck' linter to check whether the function uses a non-inherited context.
+    - asasalint         # TODO: consider enabling the 'asasalint' linter to check for pass []any as any in variadic func(...any).
+    - containedctx      # TODO: consider enabling the 'containedctx' linter to detect struct contained context.Context field.
+    - unparam           # TODO: consider enabling the 'unparam' linter to report unused function parameters.
+    - nakedret          # TODO: consider enabling the 'nakedret' linter to find naked returns in functions greater than a specified function length.
+    - makezero          # TODO: consider enabling the 'makezero' linter to find slice declarations with non-zero initial length.
+    - lll               # TODO: consider enabling the 'lll' linter to report long lines.
+    - gomoddirectives   # TODO: consider enabling the 'gomoddirectives' linter to manage the use of 'replace', 'retract', and 'excludes' directives in go.mod.
+    - gofumpt           # TODO: consider enabling the 'gofumpt' linter to check whether code was gofumpt-ed.
+    - godox             # TODO: consider enabling the 'godox' linter to detect FIXME, TODO and other comment keywords.
+    - goconst           # TODO: consider enabling the 'goconst' linter to find repeated strings that could be replaced by a constant.
+    - gocognit          # TODO: consider enabling the 'gocognit' linter to compute and check the cognitive complexity of functions.
+    - gochecknoinits    # TODO: consider enabling the 'gochecknoinits' linter to check that no init functions are present in Go code.
+    - gci               # TODO: consider enabling the 'gci' linter to control golang package import order and make it always deterministic.
+    - funlen            # TODO: consider enabling the 'funlen' linter to detect long functions.
+    - maintidx          # TODO: consider enabling the 'maintidx' linter to measure the maintainability index of each function.
+    - gocyclo           # TODO: consider enabling the 'gocyclo' linter to compute and check the cyclomatic complexity of functions.
+    - forbidigo         # TODO: consider enabling the 'forbidigo' linter to forbid identifiers.
+    - dupl              # TODO: consider enabling the 'dupl' linter to detect code cloning.
+    - golint            # deprecated since v1.41.0 - replaced by 'revive'.
+    - ifshort           # deprecated since v1.48.0
+    - structcheck       # deprecated since v1.49.0 - replaced by 'unused'.
+    - exhaustivestruct  # deprecated since v1.46.0 - replaced by 'exhaustruct'.
+    - deadcode          # deprecated since v1.49.0 - replaced by 'unused'.
+    - interfacer        # deprecated since v1.38.0
+    - nosnakecase       # deprecated since v1.48.1 - replaced by 'revive'(var-naming).
+    - varcheck          # deprecated since v1.49.0 - replaced by 'unused'.
+    - maligned          # deprecated since v1.38.0 - replaced by 'govet' 'fieldalignment'.
+    - scopelint         # deprecated since v1.39.0 - replaced by 'exportloopref'.
+    - rowserrcheck      # disabled because of generics - https://github.com/golangci/golangci-lint/issues/2649.
+    - sqlclosecheck     # disabled because of generics - https://github.com/golangci/golangci-lint/issues/2649.
+    - wastedassign      # disabled because of generics - https://github.com/golangci/golangci-lint/issues/2649.

@@ -23,23 +23,7 @@ jobs:
         uses: actions/setup-go@v3.3.0
         with:
           go-version-file: go.mod
-      - name: Setup Golang caches
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-
-      - name: Cache calens
-        id: cache-calens
-        uses: actions/cache@v3
-        with:
-          path: $(go env GOPATH)/bin/calens
-          key: ${{ runner.os }}-calens
-      - name: clone calens
-        if: steps.cache-calens.outputs.cache-hit != 'true'
+      - name: Clone calens
         uses: actions/checkout@v3
         with:
           repository: restic/calens
@@ -47,7 +31,6 @@ jobs:
           fetch-depth: 0
           ref: v0.2.0
       - name: Install calens
-        if: steps.cache-calens.outputs.cache-hit != 'true'
         run: cd calens && go install
       - name: Check if changelog exists
         run: |

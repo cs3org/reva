@@ -49,7 +49,7 @@ func (r HTTPRange) ContentRange(size int64) string {
 	return fmt.Sprintf("bytes %d-%d/%d", r.Start, r.Start+r.Length-1, size)
 }
 
-// MimeHeader creates range relevant MimeHeaders
+// MimeHeader creates range relevant MimeHeaders.
 func (r HTTPRange) MimeHeader(contentType string, size int64) textproto.MIMEHeader {
 	return textproto.MIMEHeader{
 		"Content-Range": {r.ContentRange(size)},
@@ -151,7 +151,7 @@ func RangesMIMESize(ranges []HTTPRange, contentType string, contentSize int64) (
 	return
 }
 
-// SumRangesSize adds up the length of all ranges
+// SumRangesSize adds up the length of all ranges.
 func SumRangesSize(ranges []HTTPRange) (size int64) {
 	for _, ra := range ranges {
 		size += ra.Length

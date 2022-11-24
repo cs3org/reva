@@ -109,14 +109,14 @@ func TestUserPanic(t *testing.T) {
 	assertPanic(t, testBadUser)
 }
 
-// should panic
+// should panic.
 func testBadLayout() {
 	layout := "{{ bad layout syntax"
 	user := &userpb.User{}
 	WithUser(user, layout)
 }
 
-// should panic
+// should panic.
 func testBadUser() {
 	layout := "{{ .DoesNotExist }}"
 	user := &userpb.User{}

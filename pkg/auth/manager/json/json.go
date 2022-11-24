@@ -21,7 +21,7 @@ package json
 import (
 	"context"
 	"encoding/json"
-	"io/ioutil"
+	"os"
 
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -38,7 +38,7 @@ func init() {
 	registry.Register("json", New)
 }
 
-// Credentials holds a pair of secret and userid
+// Credentials holds a pair of secret and userid.
 type Credentials struct {
 	ID           *user.UserId    `mapstructure:"id" json:"id"`
 	Username     string          `mapstructure:"username" json:"username"`
@@ -94,7 +94,7 @@ func (m *manager) Configure(ml map[string]interface{}) error {
 	}
 
 	m.credentials = map[string]*Credentials{}
-	f, err := ioutil.ReadFile(c.Users)
+	f, err := os.ReadFile(c.Users)
 	if err != nil {
 		return err
 	}

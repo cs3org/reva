@@ -42,7 +42,7 @@ type service struct {
 
 // New returns a new PreferencesServiceServer
 // It can be tested like this:
-// prototool grpc --address 0.0.0.0:9999 --method 'revad.helloworld.HelloWorldService/Hello' --data '{"name": "Alice"}'
+// prototool grpc --address 0.0.0.0:9999 --method 'revad.helloworld.HelloWorldService/Hello' --data '{"name": "Alice"}'.
 func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 	c := &conf{}
 	if err := mapstructure.Decode(m, c); err != nil {

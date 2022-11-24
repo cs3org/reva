@@ -22,10 +22,9 @@
 package cephfs
 
 import (
-	"github.com/pkg/errors"
-
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
+	"github.com/pkg/errors"
 )
 
 func init() {

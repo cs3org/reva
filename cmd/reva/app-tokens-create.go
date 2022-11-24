@@ -73,7 +73,6 @@ func appTokensCreateCommand() *command {
 	}
 
 	cmd.Action = func(w ...io.Writer) error {
-
 		createOpts := &appTokenCreateOpts{
 			Expiration: *expiration,
 			Label:      *label,
@@ -215,7 +214,7 @@ func getPathScope(ctx context.Context, client gateway.GatewayAPIClient, path, pe
 	return scope.AddResourceInfoScope(statResponse.GetInfo(), role, scopes)
 }
 
-// parse permission string in the form of "rw" to create a role
+// parse permission string in the form of "rw" to create a role.
 func parsePermission(perm string) (authpb.Role, error) {
 	switch perm {
 	case "r":

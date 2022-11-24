@@ -23,7 +23,6 @@ import (
 
 	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/config"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
@@ -32,19 +31,19 @@ import (
 	"github.com/cs3org/reva/pkg/storage/utils/templates"
 )
 
-// Handler implements the ownCloud sharing API
+// Handler implements the ownCloud sharing API.
 type Handler struct {
 	gatewayAddr             string
 	additionalInfoAttribute string
 }
 
-// Init initializes this and any contained handlers
+// Init initializes this and any contained handlers.
 func (h *Handler) Init(c *config.Config) {
 	h.gatewayAddr = c.GatewaySvc
 	h.additionalInfoAttribute = c.AdditionalInfoAttribute
 }
 
-// FindSharees implements the /apps/files_sharing/api/v1/sharees endpoint
+// FindSharees implements the /apps/files_sharing/api/v1/sharees endpoint.
 func (h *Handler) FindSharees(w http.ResponseWriter, r *http.Request) {
 	log := appctx.GetLogger(r.Context())
 	term := r.URL.Query().Get("search")

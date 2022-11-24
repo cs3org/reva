@@ -114,7 +114,7 @@ type QuotaInfo struct {
 }
 
 // SetQuotaInfo encapsulates the information needed to
-// create a quota space in EOS for a user
+// create a quota space in EOS for a user.
 type SetQuotaInfo struct {
 	Username  string
 	UID       string
@@ -124,7 +124,7 @@ type SetQuotaInfo struct {
 	MaxFiles  uint64
 }
 
-// Constants for ACL position
+// Constants for ACL position.
 const (
 	EndPosition   uint = 0
 	StartPosition uint = 1
@@ -143,9 +143,9 @@ type Authorization struct {
 }
 
 // AttrAlreadyExistsError is the error raised when setting
-// an already existing attr on a resource
+// an already existing attr on a resource.
 const AttrAlreadyExistsError = errtypes.BadRequest("attr already exists")
 
 // AttrNotExistsError is the error raised when removing
-// an attribute that does not exist
+// an attribute that does not exist.
 const AttrNotExistsError = errtypes.BadRequest("attr not exists")

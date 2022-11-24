@@ -23,7 +23,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -39,11 +38,10 @@ import (
 	treemocks "github.com/cs3org/reva/pkg/storage/utils/decomposedfs/tree/mocks"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/xattrs"
 	"github.com/cs3org/reva/tests/helpers"
-	"github.com/pkg/xattr"
-	"github.com/stretchr/testify/mock"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/pkg/xattr"
+	"github.com/stretchr/testify/mock"
 )
 
 var _ = Describe("File uploads", func() {
@@ -215,13 +213,13 @@ var _ = Describe("File uploads", func() {
 					Return(nil).
 					Run(func(args mock.Arguments) {
 						reader := args.Get(1).(io.Reader)
-						data, err := ioutil.ReadAll(reader)
+						data, err := io.ReadAll(reader)
 
 						Expect(err).ToNot(HaveOccurred())
 						Expect(data).To(Equal([]byte("0123456789")))
 					})
 
-				err = fs.Upload(ctx, uploadRef, ioutil.NopCloser(bytes.NewReader(fileContent)))
+				err = fs.Upload(ctx, uploadRef, io.NopCloser(bytes.NewReader(fileContent)))
 
 				Expect(err).ToNot(HaveOccurred())
 				bs.AssertCalled(GinkgoT(), "Upload", mock.Anything, mock.Anything)
@@ -254,13 +252,13 @@ var _ = Describe("File uploads", func() {
 					Return(nil).
 					Run(func(args mock.Arguments) {
 						reader := args.Get(1).(io.Reader)
-						data, err := ioutil.ReadAll(reader)
+						data, err := io.ReadAll(reader)
 
 						Expect(err).ToNot(HaveOccurred())
 						Expect(data).To(Equal([]byte("")))
 					})
 
-				err = fs.Upload(ctx, uploadRef, ioutil.NopCloser(bytes.NewReader(fileContent)))
+				err = fs.Upload(ctx, uploadRef, io.NopCloser(bytes.NewReader(fileContent)))
 
 				Expect(err).ToNot(HaveOccurred())
 				bs.AssertCalled(GinkgoT(), "Upload", mock.Anything, mock.Anything)
@@ -281,7 +279,7 @@ var _ = Describe("File uploads", func() {
 				)
 
 				uploadRef := &provider.Reference{Path: "/some-non-existent-upload-reference"}
-				err := fs.Upload(ctx, uploadRef, ioutil.NopCloser(bytes.NewReader(fileContent)))
+				err := fs.Upload(ctx, uploadRef, io.NopCloser(bytes.NewReader(fileContent)))
 
 				Expect(err).To(HaveOccurred())
 

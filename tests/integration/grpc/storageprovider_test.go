@@ -22,8 +22,6 @@ import (
 	"context"
 	"os"
 
-	"google.golang.org/grpc/metadata"
-
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	storagep "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -34,9 +32,9 @@ import (
 	"github.com/cs3org/reva/pkg/storage/fs/owncloud"
 	jwt "github.com/cs3org/reva/pkg/token/manager/jwt"
 	"github.com/cs3org/reva/tests/helpers"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"google.golang.org/grpc/metadata"
 )
 
 // This test suite tests the gprc storageprovider interface using different

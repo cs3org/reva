@@ -26,13 +26,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cs3org/reva/pkg/mentix/utils"
-	"github.com/rs/zerolog"
-
 	"github.com/cs3org/reva/pkg/mentix/config"
 	"github.com/cs3org/reva/pkg/mentix/connectors/gocdb"
 	"github.com/cs3org/reva/pkg/mentix/meshdata"
+	"github.com/cs3org/reva/pkg/mentix/utils"
 	"github.com/cs3org/reva/pkg/mentix/utils/network"
+	"github.com/rs/zerolog"
 )
 
 // GOCDBConnector is used to read mesh data from a GOCDB instance.

@@ -22,7 +22,6 @@ import (
 	"fmt"
 
 	storage "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-
 	"github.com/cs3org/reva/pkg/sdk"
 	"github.com/cs3org/reva/pkg/sdk/common/net"
 )

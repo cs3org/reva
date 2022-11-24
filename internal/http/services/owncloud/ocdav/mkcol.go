@@ -81,7 +81,6 @@ func (s *svc) handleSpacesMkCol(w http.ResponseWriter, r *http.Request, spaceID 
 	}
 
 	s.handleMkcol(ctx, w, r, parentRef, childRef, sublog)
-
 }
 
 func (s *svc) handleMkcol(ctx context.Context, w http.ResponseWriter, r *http.Request, parentRef, childRef *provider.Reference, log zerolog.Logger) {

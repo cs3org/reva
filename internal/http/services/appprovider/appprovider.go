@@ -47,7 +47,7 @@ func init() {
 	global.Register("appprovider", New)
 }
 
-// Config holds the config options for the HTTP appprovider service
+// Config holds the config options for the HTTP appprovider service.
 type Config struct {
 	Prefix     string `mapstructure:"prefix"`
 	GatewaySvc string `mapstructure:"gatewaysvc"`
@@ -66,9 +66,8 @@ type svc struct {
 	router *chi.Mux
 }
 
-// New returns a new ocmd object
+// New returns a new ocmd object.
 func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) {
-
 	conf := &Config{}
 	if err := mapstructure.Decode(m, conf); err != nil {
 		return nil, err

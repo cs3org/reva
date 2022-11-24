@@ -18,7 +18,7 @@
 
 package data
 
-// ConfigData holds basic config
+// ConfigData holds basic config.
 type ConfigData struct {
 	Version string `json:"version" xml:"version"`
 	Website string `json:"website" xml:"website"`

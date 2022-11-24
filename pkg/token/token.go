@@ -25,7 +25,7 @@ import (
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 )
 
-// Manager is the interface to implement to sign and verify tokens
+// Manager is the interface to implement to sign and verify tokens.
 type Manager interface {
 	MintToken(ctx context.Context, u *user.User, scope map[string]*auth.Scope) (string, error)
 	DismantleToken(ctx context.Context, token string) (*user.User, map[string]*auth.Scope, error)

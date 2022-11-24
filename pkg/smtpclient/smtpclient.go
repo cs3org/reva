@@ -64,7 +64,6 @@ func NewSMTPCredentials(c *SMTPCredentials) *SMTPCredentials {
 
 // SendMail allows sending mails using a set of client credentials.
 func (creds *SMTPCredentials) SendMail(recipient, subject, body string) error {
-
 	headers := map[string]string{
 		"From":                      creds.SenderMail,
 		"To":                        recipient,
@@ -89,7 +88,6 @@ func (creds *SMTPCredentials) SendMail(recipient, subject, body string) error {
 }
 
 func (creds *SMTPCredentials) sendMailAuthSMTP(recipient, subject, message string) error {
-
 	auth := smtp.PlainAuth("", creds.SenderLogin, creds.SenderPassword, creds.SMTPServer)
 
 	err := smtp.SendMail(
@@ -108,7 +106,6 @@ func (creds *SMTPCredentials) sendMailAuthSMTP(recipient, subject, message strin
 }
 
 func (creds *SMTPCredentials) sendMailSMTP(recipient, subject, message string) error {
-
 	c, err := smtp.Dial(fmt.Sprintf("%s:%d", creds.SMTPServer, creds.SMTPPort))
 	if err != nil {
 		return err

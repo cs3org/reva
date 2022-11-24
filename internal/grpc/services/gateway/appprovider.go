@@ -170,7 +170,6 @@ func (s *svc) openFederatedShares(ctx context.Context, targetURL string, vm gate
 
 func (s *svc) openLocalResources(ctx context.Context, ri *storageprovider.ResourceInfo,
 	vm gateway.OpenInAppRequest_ViewMode, app string) (*providerpb.OpenInAppResponse, error) {
-
 	accessToken, ok := ctxpkg.ContextGetToken(ctx)
 	if !ok || accessToken == "" {
 		return &providerpb.OpenInAppResponse{
@@ -233,7 +232,6 @@ func (s *svc) findAppProvider(ctx context.Context, ri *storageprovider.ResourceI
 		if err != nil {
 			err = errors.Wrap(err, "gateway: error calling GetDefaultAppProviderForMimeType")
 			return nil, err
-
 		}
 
 		// we've found a provider
@@ -297,7 +295,6 @@ func (s *svc) findAppProvider(ctx context.Context, ri *storageprovider.ResourceI
 	// we should never arrive to the point of having more than one
 	// provider for the given "app" parameters sent by the user
 	return nil, errtypes.InternalError(fmt.Sprintf("gateway: user requested app %q and we provided %d applications", app, len(res.Providers)))
-
 }
 
 func getGRPCConfig(opaque *typespb.Opaque) (bool, bool) {

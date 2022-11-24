@@ -29,7 +29,6 @@ import (
 )
 
 func TestFindProviders(t *testing.T) {
-
 	testCases := []struct {
 		name         string
 		mimeTypes    []*mimeTypeConfig
@@ -173,9 +172,7 @@ func TestFindProviders(t *testing.T) {
 	}
 
 	for _, tt := range testCases {
-
 		t.Run(tt.name, func(t *testing.T) {
-
 			ctx := context.TODO()
 
 			registry, err := New(map[string]interface{}{
@@ -196,15 +193,11 @@ func TestFindProviders(t *testing.T) {
 			if !providersEquals(providers, tt.expectedRes) {
 				t.Errorf("providers list different from expected: \n\tgot=%v\n\texp=%v", providers, tt.expectedRes)
 			}
-
 		})
-
 	}
-
 }
 
 func TestFindProvidersWithPriority(t *testing.T) {
-
 	testCases := []struct {
 		name         string
 		mimeTypes    []*mimeTypeConfig
@@ -478,9 +471,7 @@ func TestFindProvidersWithPriority(t *testing.T) {
 	}
 
 	for _, tt := range testCases {
-
 		t.Run(tt.name, func(t *testing.T) {
-
 			ctx := context.TODO()
 
 			registry, err := New(map[string]interface{}{
@@ -508,15 +499,11 @@ func TestFindProvidersWithPriority(t *testing.T) {
 			if !providersEquals(providers, tt.expectedRes) {
 				t.Errorf("providers list different from expected: \n\tgot=%v\n\texp=%v", providers, tt.expectedRes)
 			}
-
 		})
-
 	}
-
 }
 
 func TestAddProvider(t *testing.T) {
-
 	testCases := []struct {
 		name              string
 		mimeTypes         []*mimeTypeConfig
@@ -774,7 +761,6 @@ func TestAddProvider(t *testing.T) {
 
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
-
 			ctx := context.TODO()
 
 			registry, err := New(map[string]interface{}{
@@ -812,10 +798,8 @@ func TestAddProvider(t *testing.T) {
 					t.Errorf("list of addresses different from expected: \n\tgot=%v\n\texp=%v", addrsReg, expAddrs)
 				}
 			}
-
 		})
 	}
-
 }
 
 func TestListSupportedMimeTypes(t *testing.T) {
@@ -1028,7 +1012,6 @@ func TestListSupportedMimeTypes(t *testing.T) {
 
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
-
 			ctx := context.TODO()
 
 			registry, err := New(map[string]interface{}{
@@ -1054,7 +1037,6 @@ func TestListSupportedMimeTypes(t *testing.T) {
 			if !mimeTypesEquals(got, tt.expected) {
 				t.Errorf("mime types list different from expected: \n\tgot=%v\n\texp=%v", got, tt.expected)
 			}
-
 		})
 	}
 }
@@ -1157,7 +1139,6 @@ func TestSetDefaultProviderForMimeType(t *testing.T) {
 
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
-
 			ctx := context.TODO()
 
 			registry, err := New(map[string]interface{}{
@@ -1190,7 +1171,6 @@ func TestSetDefaultProviderForMimeType(t *testing.T) {
 			if !equalsProviderInfo(got, tt.newDefault.provider) {
 				t.Errorf("provider differ from expected:\n\tgot=%v\n\texp=%v", got, tt.newDefault.provider)
 			}
-
 		})
 	}
 }

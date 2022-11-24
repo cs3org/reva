@@ -32,11 +32,11 @@ const (
 	XSInvalid XS = "invalid"
 	// XSUnset means the checksum is optional.
 	XSUnset = "unset"
-	// XSAdler32 means the checksum is adler32
+	// XSAdler32 means the checksum is adler32.
 	XSAdler32 = "adler32"
-	// XSMD5 means the checksum is md5
+	// XSMD5 means the checksum is md5.
 	XSMD5 = "md5"
-	// XSSHA1 means the checksum is SHA1
+	// XSSHA1 means the checksum is SHA1.
 	XSSHA1 = "sha1"
 	// XSSHA256 means the checksum is SHA256.
 	XSSHA256 = "sha256"

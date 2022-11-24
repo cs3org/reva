@@ -27,7 +27,7 @@ import (
 )
 
 // Registry is the interface that application registries implement
-// for discovering application providers
+// for discovering application providers.
 type Registry interface {
 	FindProviders(ctx context.Context, mimeType string) ([]*registry.ProviderInfo, error)
 	ListProviders(ctx context.Context) ([]*registry.ProviderInfo, error)

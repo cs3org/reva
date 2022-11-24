@@ -24,7 +24,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
@@ -56,7 +55,7 @@ func init() {
 }
 
 type config struct {
-	MimeTypes           []string `mapstructure:"mime_types" docs:";Inherited from the appprovider."`
+	MimeTypes           []string `mapstructure:"mime_types" docs:"nil;Inherited from the appprovider."`
 	IOPSecret           string   `mapstructure:"iop_secret" docs:";The IOP secret used to connect to the wopiserver."`
 	WopiURL             string   `mapstructure:"wopi_url" docs:";The wopiserver's URL."`
 	AppName             string   `mapstructure:"app_name" docs:";The App user-friendly name."`
@@ -129,7 +128,7 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 	}
 	wopiurl.Path = path.Join(wopiurl.Path, "/wopi/iop/openinapp")
 
-	httpReq, err := rhttp.NewRequest(ctx, "GET", wopiurl.String(), nil)
+	httpReq, err := rhttp.NewRequest(ctx, http.MethodGet, wopiurl.String(), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -162,7 +161,7 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 			q.Add("appviewurl", viewAppURL)
 		}
 	}
-	var access string = "edit"
+	var access = "edit"
 	if resource.GetSize() == 0 {
 		if _, ok := p.appURLs["editnew"]; ok {
 			access = "editnew"
@@ -205,7 +204,7 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 	}
 	defer openRes.Body.Close()
 
-	body, err := ioutil.ReadAll(openRes.Body)
+	body, err := io.ReadAll(openRes.Body)
 	if err != nil {
 		return nil, err
 	}
@@ -248,14 +247,14 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 	// Depending on whether the WOPI server returned any form parameters or not,
 	// we decide whether the request method is POST or GET
 	var formParams map[string]string
-	method := "GET"
+	method := http.MethodGet
 	if form, ok := result["form-parameters"].(map[string]interface{}); ok {
 		if tkn, ok := form["access_token"].(string); ok {
 			formParams = map[string]string{
 				"access_token":     tkn,
 				"access_token_ttl": tokenTTL,
 			}
-			method = "POST"
+			method = http.MethodPost
 		}
 	}
 
@@ -303,7 +302,7 @@ func getAppURLs(c *config) (map[string]map[string]string, error) {
 	}
 	appurl.Path = path.Join(appurl.Path, "/hosting/discovery")
 
-	discReq, err := http.NewRequest("GET", appurl.String(), nil)
+	discReq, err := http.NewRequest(http.MethodGet, appurl.String(), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -322,7 +321,7 @@ func getAppURLs(c *config) (map[string]map[string]string, error) {
 		}
 	} else if discRes.StatusCode == http.StatusNotFound {
 		// this may be a bridge-supported app
-		discReq, err = http.NewRequest("GET", c.AppIntURL, nil)
+		discReq, err = http.NewRequest(http.MethodGet, c.AppIntURL, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -391,7 +390,6 @@ func parseWopiDiscovery(body io.Reader) (map[string]map[string]string, error) {
 	}
 
 	for _, netzone := range root.SelectElements("net-zone") {
-
 		if strings.Contains(netzone.SelectAttrValue("name", ""), "external") {
 			for _, app := range netzone.SelectElements("app") {
 				for _, action := range app.SelectElements("action") {

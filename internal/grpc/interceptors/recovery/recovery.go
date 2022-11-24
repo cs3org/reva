@@ -20,7 +20,6 @@ package recovery
 
 import (
 	"context"
-
 	"runtime/debug"
 
 	"github.com/cs3org/reva/pkg/appctx"

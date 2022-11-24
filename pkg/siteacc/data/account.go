@@ -23,9 +23,8 @@ import (
 	"time"
 
 	"github.com/cs3org/reva/pkg/siteacc/credentials"
-	"github.com/pkg/errors"
-
 	"github.com/cs3org/reva/pkg/utils"
+	"github.com/pkg/errors"
 )
 
 // Account represents a single sites account.

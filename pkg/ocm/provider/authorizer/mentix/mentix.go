@@ -29,12 +29,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cs3org/reva/pkg/rhttp"
-
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/ocm/provider"
 	"github.com/cs3org/reva/pkg/ocm/provider/authorizer/registry"
+	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )
@@ -43,7 +42,7 @@ func init() {
 	registry.Register("mentix", New)
 }
 
-// Client is a Mentix API client
+// Client is a Mentix API client.
 type Client struct {
 	BaseURL    string
 	HTTPClient *http.Client
@@ -101,7 +100,7 @@ func (a *authorizer) fetchProviders() ([]*ocmprovider.ProviderInfo, error) {
 		return a.providers, nil
 	}
 
-	req, err := http.NewRequest("GET", a.client.BaseURL, nil)
+	req, err := http.NewRequest(http.MethodGet, a.client.BaseURL, nil)
 	if err != nil {
 		return nil, err
 	}

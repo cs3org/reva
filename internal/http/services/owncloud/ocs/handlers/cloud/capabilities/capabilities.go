@@ -26,7 +26,7 @@ import (
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
 )
 
-// Handler renders the capability endpoint
+// Handler renders the capability endpoint.
 type Handler struct {
 	c                      data.CapabilitiesData
 	defaultUploadProtocol  string
@@ -34,7 +34,7 @@ type Handler struct {
 	groupBasedCapabilities map[string][]string
 }
 
-// Init initializes this and any contained handlers
+// Init initializes this and any contained handlers.
 func (h *Handler) Init(c *config.Config) {
 	h.c = c.Capabilities
 	h.defaultUploadProtocol = c.DefaultUploadProtocol
@@ -233,10 +233,9 @@ func (h *Handler) Init(c *config.Config) {
 
 	// upload protocol-specific details
 	setCapabilitiesForChunkProtocol(chunkProtocol(h.defaultUploadProtocol), h.c.Capabilities)
-
 }
 
-// Handler renders the capabilities
+// GetCapabilities renders the capabilities.
 func (h *Handler) GetCapabilities(w http.ResponseWriter, r *http.Request) {
 	c := h.getCapabilitiesForUserAgent(r.Context(), r.UserAgent())
 	response.WriteOCSSuccess(w, r, c)

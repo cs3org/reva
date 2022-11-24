@@ -20,7 +20,6 @@ package account
 
 import (
 	"net/http"
-	"strings"
 
 	"github.com/cs3org/reva/pkg/siteacc/config"
 	"github.com/cs3org/reva/pkg/siteacc/data"
@@ -35,6 +34,8 @@ import (
 	"github.com/cs3org/reva/pkg/siteacc/panels/account/sites"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 // Panel represents the account panel.
@@ -141,7 +142,8 @@ func (panel *Panel) Execute(w http.ResponseWriter, r *http.Request, session *htm
 	dataProvider := func(*html.Session) interface{} {
 		flatValues := make(map[string]string, len(r.URL.Query()))
 		for k, v := range r.URL.Query() {
-			flatValues[strings.Title(k)] = v[0]
+			caser := cases.Title(language.Und)
+			flatValues[caser.String(k)] = v[0]
 		}
 
 		availOps, err := data.QueryAvailableOperators(panel.Config().Mentix.URL, panel.Config().Mentix.DataEndpoint)

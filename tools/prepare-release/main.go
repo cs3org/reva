@@ -23,7 +23,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path"
@@ -81,18 +80,18 @@ func main() {
 	run(cmd)
 
 	// add new VERSION and BUILD_DATE
-	if err := ioutil.WriteFile("VERSION", []byte(*version), 0644); err != nil {
+	if err := os.WriteFile("VERSION", []byte(*version), 0644); err != nil {
 		fmt.Fprintf(os.Stderr, "error writing to VERSION file: %s", err)
 		os.Exit(1)
 	}
 
 	// add new VERSION and RELEASE_DATE
-	if err := ioutil.WriteFile("RELEASE_DATE", []byte(date), 0644); err != nil {
+	if err := os.WriteFile("RELEASE_DATE", []byte(date), 0644); err != nil {
 		fmt.Fprintf(os.Stderr, "error writing to RELEASE_DATE file: %s", err)
 		os.Exit(1)
 	}
 
-	tmp, err := ioutil.TempDir("", "reva-changelog")
+	tmp, err := os.MkdirTemp("", "reva-changelog")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error creating tmp directory to store changelog: %s", err)
 		os.Exit(1)
@@ -120,7 +119,7 @@ func main() {
 	}
 	os.RemoveAll(tmp)
 
-	data, err := ioutil.ReadFile("changelog/NOTE.md")
+	data, err := os.ReadFile("changelog/NOTE.md")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error reading NOTE.md: %s", err)
 		os.Exit(1)
@@ -138,7 +137,7 @@ description: >
 `, *version, *version, *version, date)
 
 	releaseDocs += string(data)
-	if err := ioutil.WriteFile(fmt.Sprintf("docs/content/en/docs/changelog/%s/_index.md", *version), []byte(releaseDocs), 0644); err != nil {
+	if err := os.WriteFile(fmt.Sprintf("docs/content/en/docs/changelog/%s/_index.md", *version), []byte(releaseDocs), 0644); err != nil {
 		fmt.Fprintf(os.Stderr, "error writing docs release file _index.md: %s", err)
 		os.Exit(1)
 	}
@@ -188,7 +187,6 @@ func add(msg string, files ...string) {
 		cmd.Dir = "."
 		run(cmd)
 	}
-
 }
 
 func createCommit(msg string) {

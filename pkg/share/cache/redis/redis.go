@@ -44,7 +44,7 @@ type manager struct {
 	redisPool *redis.Pool
 }
 
-// New returns an implementation of a resource info cache that stores the objects in a redis cluster
+// New returns an implementation of a resource info cache that stores the objects in a redis cluster.
 func New(m map[string]interface{}) (cache.ResourceInfoCache, error) {
 	c := &config{}
 	if err := mapstructure.Decode(m, c); err != nil {

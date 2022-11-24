@@ -72,9 +72,8 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 	return c, nil
 }
 
-// New creates a new ocm share provider svc
+// New creates a new ocm share provider svc.
 func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
-
 	c, err := parseConfig(m)
 	if err != nil {
 		return nil, err
@@ -114,7 +113,7 @@ func (s *service) UnprotectedEndpoints() []string {
 // internal/grpc/service/ocmcore/ocmcore.go
 // Both functions end up calling the same s.sm.Share function
 // on the OCM share manager:
-// pkg/ocm/share/manager/{json|nextcloud|...}
+// pkg/ocm/share/manager/{json|nextcloud|...}.
 func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareRequest) (*ocm.CreateOCMShareResponse, error) {
 	if req.Opaque == nil {
 		return &ocm.CreateOCMShareResponse{

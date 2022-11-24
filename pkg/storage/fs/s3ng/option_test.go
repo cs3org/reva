@@ -19,10 +19,8 @@
 package s3ng_test
 
 import (
-	"github.com/mitchellh/mapstructure"
-
 	"github.com/cs3org/reva/pkg/storage/fs/s3ng"
-
+	"github.com/mitchellh/mapstructure"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )

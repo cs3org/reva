@@ -8,27 +8,19 @@ description: >
 
 # _struct: config_
 
-{{% dir name="iopsecret" type="string" default="" %}}
-The iopsecret used to connect to the wopiserver. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/appprovider/appprovider.go#L60)
+{{% dir name="mime_types" type="[]string" default=nil %}}
+A list of mime types supported by this app. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/appprovider/appprovider.go#L62)
 {{< highlight toml >}}
 [grpc.services.appprovider]
-iopsecret = ""
+mime_types = nil
 {{< /highlight >}}
 {{% /dir %}}
 
-{{% dir name="wopiurl" type="string" default="" %}}
-The wopiserver's URL. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/appprovider/appprovider.go#L61)
+{{% dir name="custom_mime_types_json" type="string" default="nil" %}}
+An optional mapping file with the list of supported custom file extensions and corresponding mime types. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/appprovider/appprovider.go#L63)
 {{< highlight toml >}}
 [grpc.services.appprovider]
-wopiurl = ""
-{{< /highlight >}}
-{{% /dir %}}
-
-{{% dir name="wopibridgeurl" type="string" default="" %}}
-The wopibridge's URL. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/grpc/services/appprovider/appprovider.go#L62)
-{{< highlight toml >}}
-[grpc.services.appprovider]
-wopibridgeurl = ""
+custom_mime_types_json = "nil"
 {{< /highlight >}}
 {{% /dir %}}
 

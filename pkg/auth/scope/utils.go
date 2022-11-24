@@ -29,7 +29,7 @@ import (
 	"github.com/cs3org/reva/pkg/utils"
 )
 
-// FormatScope create a pretty print of the scope
+// FormatScope create a pretty print of the scope.
 func FormatScope(scopeType string, scope *authpb.Scope) (string, error) {
 	// TODO(gmgigi96): check decoder type
 	switch {
