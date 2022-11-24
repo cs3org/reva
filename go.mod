@@ -74,7 +74,6 @@ require (
 )
 
 require (
-	cloud.google.com/go/compute/metadata v0.2.1 // indirect
 	github.com/Azure/go-ntlmssp v0.0.0-20211209120228-48547f28849e // indirect
 	github.com/Masterminds/goutils v1.1.1 // indirect
 	github.com/Masterminds/semver v1.5.0 // indirect
@@ -150,6 +149,7 @@ require (
 	github.com/tidwall/pretty v1.2.0 // indirect
 	go.etcd.io/bbolt v1.3.6 // indirect
 	go.mongodb.org/mongo-driver v1.8.3 // indirect
+	go.step.sm/crypto v0.23.1
 	golang.org/x/net v0.1.0 // indirect
 	golang.org/x/text v0.4.0
 	golang.org/x/time v0.0.0-20211116232009-f0f3c7e86c11 // indirect
