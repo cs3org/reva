@@ -20,7 +20,7 @@ package cback
 
 import provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 
-// Config for the cback driver
+// Config for the cback driver.
 type Config struct {
 	Token             string `mapstructure:"token"`
 	APIURL            string `mapstructure:"api_url"`

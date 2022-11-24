@@ -59,7 +59,7 @@ func init() {
 }
 
 // New returns an implementation to the storage.FS interface that expose
-// the snapshots stored in cback
+// the snapshots stored in cback.
 func New(m map[string]interface{}) (storage.FS, error) {
 	c := &Config{}
 	if err := mapstructure.Decode(m, c); err != nil {
@@ -155,7 +155,7 @@ func encodeBackupInResourceID(backupID int, snapshotID, source, path string) *pr
 	}
 }
 
-// return b.Source, snap, p, b.ID, true
+// return b.Source, snap, p, b.ID, true.
 func decodeResourceID(r *provider.ResourceId) (string, string, string, int, bool) {
 	if r == nil {
 		return "", "", "", 0, false
@@ -175,27 +175,27 @@ func decodeResourceID(r *provider.ResourceId) (string, string, string, int, bool
 	return split[2], split[1], split[3], int(backupID), true
 }
 
-// GetBackupInfo returns a tuple path, snapshot, backup id from a resource id
+// GetBackupInfo returns a tuple path, snapshot, backup id from a resource id.
 func GetBackupInfo(r *provider.ResourceId) (string, string, int, bool) {
 	source, snap, path, id, ok := decodeResourceID(r)
 	return filepath.Join(source, path), snap, id, ok
 }
 
-func (f *cbackfs) placeholderResourceInfo(path string, owner *user.UserId, mtime *types.Timestamp, resId *provider.ResourceId) *provider.ResourceInfo {
+func (f *cbackfs) placeholderResourceInfo(path string, owner *user.UserId, mtime *types.Timestamp, resID *provider.ResourceId) *provider.ResourceInfo {
 	if mtime == nil {
 		mtime = &types.Timestamp{
 			Seconds: 0,
 		}
 	}
-	if resId == nil {
-		resId = &provider.ResourceId{
+	if resID == nil {
+		resID = &provider.ResourceId{
 			StorageId: "cback",
 			OpaqueId:  path,
 		}
 	}
 	return &provider.ResourceInfo{
 		Type: provider.ResourceType_RESOURCE_TYPE_CONTAINER,
-		Id:   resId,
+		Id:   resID,
 		Checksum: &provider.ResourceChecksum{
 			Type: provider.ResourceChecksumType_RESOURCE_CHECKSUM_TYPE_UNSET,
 		},
@@ -395,7 +395,6 @@ func (f *cbackfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKey
 	}
 
 	return nil, errtypes.NotFound(fmt.Sprintf("path %s does not exist", ref.Path))
-
 }
 
 func (f *cbackfs) Download(ctx context.Context, ref *provider.Reference) (io.ReadCloser, error) {
@@ -545,7 +544,7 @@ func (f *cbackfs) GetLock(ctx context.Context, ref *provider.Reference) (*provid
 	return nil, errtypes.NotSupported("Operation Not Permitted")
 }
 
-func (fs *cbackfs) RefreshLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock, existingLockID string) error {
+func (f *cbackfs) RefreshLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock, existingLockID string) error {
 	return errtypes.NotSupported("Operation Not Permitted")
 }
 

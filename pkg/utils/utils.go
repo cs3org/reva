@@ -392,7 +392,7 @@ func UserIsLightweight(u *userpb.User) bool {
 		u.Id.Type == userpb.UserType_USER_TYPE_LIGHTWEIGHT
 }
 
-// Must panics if err is nil, otherwise return t
+// Must panics if err is nil, otherwise return t.
 func Must[T any](t T, err error) T {
 	if err != nil {
 		panic(err)

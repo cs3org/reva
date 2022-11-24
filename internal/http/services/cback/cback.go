@@ -73,7 +73,7 @@ type svc struct {
 	tplCback   *template.Template
 }
 
-// New returns a new cback http service
+// New returns a new cback http service.
 func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) {
 	c := &config{}
 	if err := mapstructure.Decode(m, c); err != nil {
@@ -115,10 +115,9 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 	s.initRouter()
 
 	return s, nil
-
 }
 
-// Close cleanup the cback http service
+// Close cleanup the cback http service.
 func (s *svc) Close() error {
 	return nil
 }
@@ -271,7 +270,7 @@ func (s *svc) getRestoreByID(w http.ResponseWriter, r *http.Request) {
 	}
 
 	id := chi.URLParam(r, "id")
-	restoreID, err := strconv.ParseInt(id, 10, 64)
+	restoreID, err := strconv.ParseInt(id, 10, 32)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
