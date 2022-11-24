@@ -47,7 +47,6 @@ func (f *cbackfs) stat(ctx context.Context, username string, id int, snapshot, p
 	if s, err := f.cache.Get(key); err == nil {
 		return s.(*cback.Resource), nil
 	}
-	path = convertTemplate(path, f.tplCback)
 	s, err := f.client.Stat(ctx, username, id, snapshot, path, true)
 	if err != nil {
 		return nil, err

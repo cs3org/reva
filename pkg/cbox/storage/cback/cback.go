@@ -255,6 +255,7 @@ func (f *cbackfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []s
 		}
 	} else {
 		source, snapshot, path, id, ok = split(ref.Path, backups)
+		source = convertTemplate(source, f.tplCback)
 	}
 
 	if ok {
@@ -288,11 +289,11 @@ func (f *cbackfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []s
 	// the path is not one of the backup. There is a situation in which
 	// the user's path is a parent folder of some of the backups
 
-	if f.isParentOfBackup(ref.Path, backups) {
-		return f.placeholderResourceInfo(ref.Path, user.Id, nil, nil), nil
+	if f.isParentOfBackup(source, backups) {
+		return f.placeholderResourceInfo(source, user.Id, nil, nil), nil
 	}
 
-	return nil, errtypes.NotFound(fmt.Sprintf("path %s does not exist", ref.Path))
+	return nil, errtypes.NotFound(fmt.Sprintf("path %s does not exist", source))
 }
 
 func timeToTimestamp(t time.Time) *types.Timestamp {
