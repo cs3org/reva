@@ -52,7 +52,7 @@ func SetMaxLockCycles(v int) {
 	})
 }
 
-// SetLockCycleDurationFactor configures the factor applied to the timeout allowed durig a lock cycle. Subsequent calls to SetLockCycleDurationFactor have no effect
+// SetLockCycleDurationFactor configures the factor applied to the timeout allowed during a lock cycle. Subsequent calls to SetLockCycleDurationFactor have no effect
 func SetLockCycleDurationFactor(v int) {
 	_lockCycleDuration.Do(func() {
 		_lockCycleDurationFactor = v
