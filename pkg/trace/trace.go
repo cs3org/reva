@@ -26,11 +26,15 @@ import (
 	"strings"
 	"sync"
 
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/jaeger"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
+
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -71,13 +75,28 @@ func ContextGetTracerProvider(ctx context.Context) trace.TracerProvider {
 }
 
 // InitDefaultTracerProvider initializes a global default TracerProvider at a package level.
-func InitDefaultTracerProvider(collectorEndpoint string, agentEndpoint string) {
+func InitDefaultTracerProvider(exporter, collector, endpoint string) {
 	defaultProvider.mutex.Lock()
 	defer defaultProvider.mutex.Unlock()
 	if !defaultProvider.initialized {
-		defaultProvider.provider = GetTracerProvider(true, collectorEndpoint, agentEndpoint, "reva default provider")
+		switch exporter {
+		case "otlp":
+			defaultProvider.provider = getOtlpTracerProvider(true, endpoint, "reva default otlp provider")
+		default:
+			defaultProvider.provider = getJaegerTracerProvider(true, collector, endpoint, "reva default jaeger provider")
+		}
 	}
 	defaultProvider.initialized = true
+}
+
+// GetTracerProvider returns a new TracerProvider, configure for the specified service
+func GetTracerProvider(enabled bool, exporter, collector, endpoint, serviceName string) trace.TracerProvider {
+	switch exporter {
+	case "otlp":
+		return getOtlpTracerProvider(enabled, endpoint, serviceName)
+	default:
+		return getJaegerTracerProvider(enabled, collector, endpoint, serviceName)
+	}
 }
 
 // DefaultProvider returns the "global" default TracerProvider
@@ -87,8 +106,8 @@ func DefaultProvider() trace.TracerProvider {
 	return defaultProvider.provider
 }
 
-// GetTracerProvider returns a new TracerProvider, configure for the specified service
-func GetTracerProvider(enabled bool, collectorEndpoint string, agentEndpoint, serviceName string) trace.TracerProvider {
+// getJaegerTracerProvider returns a new TracerProvider, configure for the specified service
+func getJaegerTracerProvider(enabled bool, collector, endpoint, serviceName string) trace.TracerProvider {
 	if !enabled {
 		return trace.NewNoopTracerProvider()
 	}
@@ -101,11 +120,11 @@ func GetTracerProvider(enabled bool, collectorEndpoint string, agentEndpoint, se
 	var exp *jaeger.Exporter
 	var err error
 
-	if agentEndpoint != "" {
+	if endpoint != "" {
 		var agentHost string
 		var agentPort string
 
-		agentHost, agentPort, err = parseAgentConfig(agentEndpoint)
+		agentHost, agentPort, err = parseAgentConfig(endpoint)
 		if err != nil {
 			panic(err)
 		}
@@ -121,8 +140,8 @@ func GetTracerProvider(enabled bool, collectorEndpoint string, agentEndpoint, se
 		}
 	}
 
-	if collectorEndpoint != "" {
-		exp, err = jaeger.New(jaeger.WithCollectorEndpoint(jaeger.WithEndpoint(collectorEndpoint)))
+	if collector != "" {
+		exp, err = jaeger.New(jaeger.WithCollectorEndpoint(jaeger.WithEndpoint(collector)))
 		if err != nil {
 			panic(err)
 		}
@@ -165,4 +184,49 @@ func parseAgentConfig(ae string) (string, string, error) {
 		return "", "", fmt.Errorf(fmt.Sprintf("invalid agent endpoint `%s`. expected format: `hostname:port`", ae))
 	}
 	return p[0], p[1], nil
+}
+
+// getOtelTracerProvider returns a new TracerProvider, configure for the specified service
+func getOtlpTracerProvider(enabled bool, endpoint string, serviceName string) trace.TracerProvider {
+	if !enabled {
+		return trace.NewNoopTracerProvider()
+	}
+
+	// default to 'reva' as service name if not set
+	if serviceName == "" {
+		serviceName = "reva"
+	}
+
+	//secureOption := otlptracegrpc.WithTLSCredentials(credentials.NewClientTLSFromCert(nil, ""))
+	//if len(insecure) > 0 {
+	secureOption := otlptracegrpc.WithInsecure()
+	//}
+
+	exporter, err := otlptrace.New(
+		context.Background(),
+		otlptracegrpc.NewClient(
+			secureOption,
+			otlptracegrpc.WithEndpoint(endpoint),
+		),
+	)
+
+	if err != nil {
+		panic(err)
+	}
+	resources, err := resource.New(
+		context.Background(),
+		resource.WithAttributes(
+			attribute.String("service.name", serviceName),
+			attribute.String("library.language", "go"),
+		),
+	)
+	if err != nil {
+		panic(err)
+	}
+
+	return sdktrace.NewTracerProvider(
+		sdktrace.WithSampler(sdktrace.AlwaysSample()),
+		sdktrace.WithBatcher(exporter),
+		sdktrace.WithResource(resources),
+	)
 }

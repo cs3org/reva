@@ -48,6 +48,7 @@ type Options struct {
 	GatewayClient   gateway.GatewayAPIClient
 
 	TracingEnabled   bool
+	TracingExporter  string
 	TracingCollector string
 	TracingEndpoint  string
 
@@ -209,11 +210,12 @@ func LockSystem(val ocdav.LockSystem) Option {
 }
 
 // Tracing enables tracing
-func Tracing(trEndpoint string, trCollector string) Option {
+func Tracing(exporter, endpoint, collector string) Option {
 	return func(o *Options) {
 		o.TracingEnabled = true
-		o.TracingEndpoint = trEndpoint
-		o.TracingCollector = trCollector
+		o.TracingExporter = exporter
+		o.TracingEndpoint = endpoint
+		o.TracingCollector = collector
 	}
 }
 
