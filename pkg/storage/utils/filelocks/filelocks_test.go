@@ -32,6 +32,7 @@ func TestAcquireWriteLock(t *testing.T) {
 	defer fin()
 
 	filelocks.SetMaxLockCycles(90)
+	filelocks.SetLockCycleDurationFactor(3)
 
 	var wg sync.WaitGroup
 	for i := 0; i < 10; i++ {
@@ -61,6 +62,7 @@ func TestAcquireReadLock(t *testing.T) {
 	defer fin()
 
 	filelocks.SetMaxLockCycles(90)
+	filelocks.SetLockCycleDurationFactor(3)
 
 	var wg sync.WaitGroup
 	for i := 0; i < 10; i++ {
@@ -85,6 +87,40 @@ func TestAcquireReadLock(t *testing.T) {
 
 	wg.Wait()
 }
+
+/* This negative test is flaky as 8000 goroutines are not enough to trigger this in ci
+func TestAcquireReadLockFail(t *testing.T) {
+	file, fin, _ := filelocks.FileFactory()
+	defer fin()
+
+	filelocks.SetMaxLockCycles(1)
+	filelocks.SetLockCycleDurationFactor(1)
+
+	// create a channel big enough for all waiting groups
+	errors := make(chan error, 8000)
+	var wg sync.WaitGroup
+	for i := 0; i < 8000; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+
+			l, err := filelocks.AcquireReadLock(file)
+			if err != nil {
+				// collect the error in a channel
+				errors <- err
+				return
+			}
+			err = filelocks.ReleaseLock(l)
+			assert.Nil(t, err)
+		}()
+	}
+
+	// at least one error should have occurred
+	assert.NotNil(t, <-errors)
+
+	wg.Wait()
+}
+*/
 
 func TestReleaseLock(t *testing.T) {
 	file, fin, _ := filelocks.FileFactory()

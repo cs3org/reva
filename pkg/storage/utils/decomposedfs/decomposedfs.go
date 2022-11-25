@@ -137,6 +137,10 @@ func New(o *options.Options, lu *lookup.Lookup, p PermissionsChecker, tp Tree, p
 		filelocks.SetMaxLockCycles(o.MaxAcquireLockCycles)
 	}
 
+	if o.LockCycleDurationFactor != 0 {
+		filelocks.SetLockCycleDurationFactor(o.LockCycleDurationFactor)
+	}
+
 	return &Decomposedfs{
 		tp:                tp,
 		lu:                lu,
