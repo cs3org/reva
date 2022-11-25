@@ -32,9 +32,12 @@ import (
 const LockFileSuffix = ".flock"
 
 var (
-	_localLocks      sync.Map
-	_lockCycles      sync.Once
-	_lockCyclesValue = 25
+	_localLocks sync.Map
+	// waiting 20 lock cycles with a factor of 30 yields 6300ms, or a little over 6 sec
+	_lockCycles              sync.Once
+	_lockCyclesValue         = 20
+	_lockCycleDuration       sync.Once
+	_lockCycleDurationFactor = 30
 
 	// ErrPathEmpty indicates that no path was specified
 	ErrPathEmpty = errors.New("lock path is empty")
@@ -46,6 +49,13 @@ var (
 func SetMaxLockCycles(v int) {
 	_lockCycles.Do(func() {
 		_lockCyclesValue = v
+	})
+}
+
+// SetLockCycleDurationFactor configures the factor applied to the timeout allowed durig a lock cycle. Subsequent calls to SetLockCycleDurationFactor have no effect
+func SetLockCycleDurationFactor(v int) {
+	_lockCycleDuration.Do(func() {
+		_lockCycleDurationFactor = v
 	})
 }
 
@@ -93,7 +103,7 @@ func acquireLock(file string, write bool) (*flock.Flock, error) {
 		if flock = getMutexedFlock(n); flock != nil {
 			break
 		}
-		w := time.Duration(i*3) * time.Millisecond
+		w := time.Duration(i*_lockCycleDurationFactor) * time.Millisecond
 
 		time.Sleep(w)
 	}
@@ -113,7 +123,7 @@ func acquireLock(file string, write bool) (*flock.Flock, error) {
 			break
 		}
 
-		time.Sleep(time.Duration(i*3) * time.Millisecond)
+		time.Sleep(time.Duration(i*_lockCycleDurationFactor) * time.Millisecond)
 	}
 
 	if !ok {
