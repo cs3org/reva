@@ -266,8 +266,6 @@ func (sm *Manager) Share(ctx context.Context, md *provider.ResourceId, g *ocm.Sh
 		return nil, errors.New("nextcloud: user and grantee are the same")
 	}
 
-	// fixme: this should come from the EFSS backend
-	id := genID()
 	now := time.Now().UnixNano()
 	ts := &typespb.Timestamp{
 		Seconds: uint64(now / 1000000000),
@@ -276,7 +274,7 @@ func (sm *Manager) Share(ctx context.Context, md *provider.ResourceId, g *ocm.Sh
 
 	s := &ocm.Share{
 		Id: &ocm.ShareId{
-			OpaqueId: id,
+			OpaqueId: "will-be-filled-in-by-the-backend",
 		},
 		Name:        name,
 		ResourceId:  md,
@@ -335,13 +333,10 @@ func (sm *Manager) Share(ctx context.Context, md *provider.ResourceId, g *ocm.Sh
 		}
 	}
 
-	_, _, err = sm.do(ctx, Action{apiMethod, string(encShare)}, username)
-
-	// FIXME: the Nextcloud backend should return an id but we already generated one
-	// _, body, err := sm.do(ctx, Action{apiMethod, string(encShare)}, username)
-	// s.Id = &ocm.ShareId{
-	// 	OpaqueId: string(body),
-	// }
+	_, body, err := sm.do(ctx, Action{apiMethod, string(encShare)}, username)
+	s.Id = &ocm.ShareId{
+		OpaqueId: string(body),
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -381,11 +376,11 @@ func (sm *Manager) Share(ctx context.Context, md *provider.ResourceId, g *ocm.Sh
 
 		requestBodyMap := map[string]interface{}{
 			"shareWith":    g.Grantee.GetUserId().OpaqueId,
-			"name":         name,
+			"name":         name[5:], // e.g. /home/welcome.txt becomes /welcome.txt
 			"providerId":   s.Id.OpaqueId,
 			"owner":        userID.OpaqueId,
 			"protocol":     protocol,
-			"meshProvider": userID.Idp, // FIXME: move this into the 'owner' string?
+			"meshProvider": userID.Idp,
 		}
 		err = sender.Send(ctx, requestBodyMap, pi)
 		if err != nil {
