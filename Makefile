@@ -69,7 +69,6 @@ litmus-test-new: build
 	docker run --rm --network=host -e LITMUS_URL=$(LITMUS_URL_NEW) -e LITMUS_USERNAME=$(LITMUS_USERNAME) -e LITMUS_PASSWORD=$(LITMUS_PASSWORD) -e TESTS=$(TESTS) owncloud/litmus:latest
 	pkill revad
 lint:
-	go run tools/check-license/check-license.go
 	go vet ./...
 
 contrib:
@@ -87,14 +86,11 @@ build-ci: off
 	go build -ldflags ${CI_BUILD_FLAGS} -o ./cmd/revad/revad ./cmd/revad
 	go build -ldflags ${CI_BUILD_FLAGS} -o ./cmd/reva/reva ./cmd/reva
 
-lint-ci:
-	go run tools/check-license/check-license.go
-
 gen-doc:
 	go run tools/generate-documentation/main.go
 
 # to be run in CI platform
-ci: build-ci test  lint-ci
+ci: build-ci test
 
 # to be run in Docker build
 build-revad-docker: off

@@ -2,11 +2,8 @@ name: golangci-lint
 on:
   pull_request:
     paths-ignore:
-      - ".github/**"
       - "Makefile"
-      - "tools/**"
       - "docs/**"
-      - "tests/**"
       - ".drone.star"
       - ".drone.env"
       - ".fossa.yml"
