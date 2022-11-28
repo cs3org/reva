@@ -72,7 +72,6 @@ def main(ctx):
     return [
         checkStarlark(),
         buildAndPublishDocker(),
-        buildOnly(),
         testIntegration(),
         release(),
         litmusOcisOldWebdav(),
@@ -203,36 +202,6 @@ def buildAndPublishDocker():
                         "128.142.17.5",
                         "128.142.16.5",
                     ],
-                },
-            },
-        ],
-    }
-
-def buildOnly():
-    return {
-        "kind": "pipeline",
-        "type": "docker",
-        "name": "build-only",
-        "platform": {
-            "os": "linux",
-            "arch": "amd64",
-        },
-        "trigger": {
-            "event": {
-                "include": [
-                    "pull_request",
-                ],
-            },
-        },
-        "steps": [
-            makeStep("ci"),
-            {
-                "name": "Docker build",
-                "image": "plugins/docker",
-                "settings": {
-                    "repo": "n/a",
-                    "dry_run": "true",
-                    "dockerfile": "Dockerfile.revad",
                 },
             },
         ],

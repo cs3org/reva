@@ -1,0 +1,27 @@
+name: Build and Test
+on:
+  pull_request:
+    paths-ignore:
+      - "tools/**"
+      - "docs/**"
+      - ".drone.star"
+      - ".drone.env"
+      - ".fossa.yml"
+  workflow_dispatch:
+
+jobs:
+  build-and-test:
+    runs-on: self-hosted
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Setup Go environment
+        uses: actions/setup-go@v3.3.0
+        with:
+          go-version-file: go.mod
+      - name: Install goimports
+        run: go install golang.org/x/tools/cmd/goimports@v0.3.0
+      - name: Build
+        run: make build
+      - name: Test
+        run: make test
