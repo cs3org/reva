@@ -24,6 +24,7 @@ import (
 	appprovider "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
 	registry "github.com/cs3org/go-cs3apis/cs3/app/registry/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 )
 
 // Registry is the interface that application registries implement
@@ -40,6 +41,6 @@ type Registry interface {
 // Provider is the interface that application providers implement
 // for interacting with external apps that serve the requested resource.
 type Provider interface {
-	GetAppURL(ctx context.Context, resource *provider.ResourceInfo, viewMode appprovider.OpenInAppRequest_ViewMode, token, language string) (*appprovider.OpenInAppURL, error)
+	GetAppURL(ctx context.Context, resource *provider.ResourceInfo, viewMode appprovider.OpenInAppRequest_ViewMode, token string, opaqueMap map[string]*typespb.OpaqueEntry, language string) (*appprovider.OpenInAppURL, error)
 	GetAppProviderInfo(ctx context.Context) (*registry.ProviderInfo, error)
 }
