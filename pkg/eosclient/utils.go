@@ -43,7 +43,7 @@ func AttrStringToType(t string) (AttrType, error) {
 	}
 }
 
-// AttrTypeToString converts a type to a string representation
+// AttrTypeToString converts a type to a string representation.
 func AttrTypeToString(at AttrType) string {
 	switch at {
 	case SystemAttr:
@@ -55,7 +55,7 @@ func AttrTypeToString(at AttrType) string {
 	}
 }
 
-// GetKey returns the key considering the type of attribute
+// GetKey returns the key considering the type of attribute.
 func (a *Attribute) GetKey() string {
 	return fmt.Sprintf("%s.%s", AttrTypeToString(a.Type), a.Key)
 }

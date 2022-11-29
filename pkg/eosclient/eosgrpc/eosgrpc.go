@@ -837,7 +837,6 @@ func (c *Client) SetQuota(ctx context.Context, rootAuth eosclient.Authorization,
 	log.Debug().Str("func", "GetQuota").Str("quotanodes", fmt.Sprintf("%d", len(resp.Quota.Quotanode))).Msg("grpc response")
 
 	return err
-
 }
 
 // Touch creates a 0-size,0-replica file in the EOS namespace.
@@ -1596,9 +1595,7 @@ func (c *Client) grpcMDResponseToFileInfo(st *erpc.MDResponse) (*eosclient.FileI
 			fi.XS = xs
 
 			log.Debug().Str("stat info - path", fi.File).Uint64("inode", fi.Inode).Uint64("uid", fi.UID).Uint64("gid", fi.GID).Str("etag", fi.ETag).Str("checksum", fi.XS.XSType+":"+fi.XS.XSSum).Msg("grpc response")
-
 		}
-
 	}
 	return fi, nil
 }
