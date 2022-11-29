@@ -398,9 +398,9 @@ func (sm *Manager) Share(ctx context.Context, md *provider.ResourceId, g *ocm.Sh
 			"shareWith":    g.Grantee.GetUserId().OpaqueId,
 			"name":         name, // e.g. /home/welcome.txt becomes /welcome.txt
 			"providerId":   s.Id.OpaqueId,
-			"owner":        userID.OpaqueId,
+			"owner":        fmt.Sprintf("%s@%s", userID.OpaqueId, sm.webDAVHost),
 			"protocol":     protocol,
-			"meshProvider": sm.webDAVHost, // userID.Idp,
+			"meshProvider": userID.Idp,
 		}
 		err = sender.Send(ctx, requestBodyMap, pi)
 		if err != nil {

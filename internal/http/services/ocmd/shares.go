@@ -191,9 +191,13 @@ func (h *sharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	ownerParts := strings.Split(owner, "@")
+	if len(ownerParts) != 2 {
+		WriteError(w, r, APIErrorInvalidParameter, "owner should be opaqueId@webDAVHost", nil)
+	}
 	ownerID := &userpb.UserId{
-		OpaqueId: owner,
-		Idp:      meshProvider,
+		OpaqueId: ownerParts[0],
+		Idp:      ownerParts[1],
 		Type:     userpb.UserType_USER_TYPE_PRIMARY,
 	}
 	createShareReq := &ocmcore.CreateOCMCoreShareRequest{
