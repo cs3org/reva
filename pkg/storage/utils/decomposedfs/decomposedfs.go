@@ -53,13 +53,13 @@ import (
 	"github.com/pkg/xattr"
 )
 
-// PermissionsChecker defines an interface for checking permissions on a Node
+// PermissionsChecker defines an interface for checking permissions on a Node.
 type PermissionsChecker interface {
 	AssemblePermissions(ctx context.Context, n *node.Node) (ap provider.ResourcePermissions, err error)
 	HasPermission(ctx context.Context, n *node.Node, check func(*provider.ResourcePermissions) bool) (can bool, err error)
 }
 
-// Tree is used to manage a tree hierarchy
+// Tree is used to manage a tree hierarchy.
 type Tree interface {
 	Setup(owner *userpb.UserId, propagateToRoot bool) error
 
@@ -80,7 +80,7 @@ type Tree interface {
 	Propagate(ctx context.Context, node *node.Node) (err error)
 }
 
-// Decomposedfs provides the base for decomposed filesystem implementations
+// Decomposedfs provides the base for decomposed filesystem implementations.
 type Decomposedfs struct {
 	lu           *Lookup
 	tp           Tree
@@ -89,7 +89,7 @@ type Decomposedfs struct {
 	chunkHandler *chunking.ChunkHandler
 }
 
-// NewDefault returns an instance with default components
+// NewDefault returns an instance with default components.
 func NewDefault(m map[string]interface{}, bs tree.Blobstore) (storage.FS, error) {
 	o, err := options.New(m)
 	if err != nil {
@@ -107,7 +107,7 @@ func NewDefault(m map[string]interface{}, bs tree.Blobstore) (storage.FS, error)
 	return New(o, lu, p, tp)
 }
 
-// when enable home is false we want propagation to root if tree size or mtime accounting is enabled
+// when enable home is false we want propagation to root if tree size or mtime accounting is enabled.
 func enablePropagationForRoot(o *options.Options) bool {
 	return (!o.EnableHome && (o.TreeSizeAccounting || o.TreeTimeAccounting))
 }
@@ -135,7 +135,7 @@ func New(o *options.Options, lu *Lookup, p PermissionsChecker, tp Tree) (storage
 	}, nil
 }
 
-// Shutdown shuts down the storage
+// Shutdown shuts down the storage.
 func (fs *Decomposedfs) Shutdown(ctx context.Context) error {
 	return nil
 }
@@ -198,7 +198,7 @@ func (fs *Decomposedfs) GetQuota(ctx context.Context, ref *provider.Reference) (
 	return total, ri.Size, nil
 }
 
-// CreateHome creates a new home node for the given user
+// CreateHome creates a new home node for the given user.
 func (fs *Decomposedfs) CreateHome(ctx context.Context) (err error) {
 	if !fs.o.EnableHome || fs.o.UserLayout == "" {
 		return errtypes.NotSupported("Decomposedfs: CreateHome() home supported disabled")
@@ -259,7 +259,7 @@ func isAlreadyExists(err error) bool {
 }
 
 // GetHome is called to look up the home path for a user
-// It is NOT supposed to return the internal path but the external path
+// It is NOT supposed to return the internal path but the external path.
 func (fs *Decomposedfs) GetHome(ctx context.Context) (string, error) {
 	if !fs.o.EnableHome || fs.o.UserLayout == "" {
 		return "", errtypes.NotSupported("Decomposedfs: GetHome() home supported disabled")
@@ -269,7 +269,7 @@ func (fs *Decomposedfs) GetHome(ctx context.Context) (string, error) {
 	return filepath.Join(fs.o.Root, layout), nil // TODO use a namespace?
 }
 
-// GetPathByID returns the fn pointed by the file id, without the internal namespace
+// GetPathByID returns the fn pointed by the file id, without the internal namespace.
 func (fs *Decomposedfs) GetPathByID(ctx context.Context, id *provider.ResourceId) (string, error) {
 	node, err := fs.lu.NodeFromID(ctx, id)
 	if err != nil {
@@ -279,7 +279,7 @@ func (fs *Decomposedfs) GetPathByID(ctx context.Context, id *provider.ResourceId
 	return fs.lu.Path(ctx, node)
 }
 
-// CreateDir creates the specified directory
+// CreateDir creates the specified directory.
 func (fs *Decomposedfs) CreateDir(ctx context.Context, ref *provider.Reference) (err error) {
 	name := path.Base(ref.Path)
 	if name == "" || name == "." || name == "/" {
@@ -299,7 +299,7 @@ func (fs *Decomposedfs) CreateDir(ctx context.Context, ref *provider.Reference) 
 	}
 	pn, err := n.Parent()
 	if err != nil {
-		return errors.Wrap(err, "Decomposedfs: error getting parent "+n.ParentID)
+		return errors.Wrap(err, "decomposedfs: error getting parent "+n.ParentID)
 	}
 	ok, err := fs.p.HasPermission(ctx, pn, func(rp *provider.ResourcePermissions) bool {
 		return rp.CreateContainer
@@ -324,7 +324,7 @@ func (fs *Decomposedfs) CreateDir(ctx context.Context, ref *provider.Reference) 
 	return
 }
 
-// TouchFile as defined in the storage.FS interface
+// TouchFile as defined in the storage.FS interface.
 func (fs *Decomposedfs) TouchFile(ctx context.Context, ref *provider.Reference) error {
 	return fmt.Errorf("unimplemented: TouchFile")
 }
@@ -335,7 +335,6 @@ func (fs *Decomposedfs) TouchFile(ctx context.Context, ref *provider.Reference) 
 // To mimic the eos end owncloud driver we only allow references as children of the "/Shares" folder
 // TODO when home support is enabled should the "/Shares" folder still be listed?
 func (fs *Decomposedfs) CreateReference(ctx context.Context, p string, targetURI *url.URL) (err error) {
-
 	p = strings.Trim(p, "/")
 	parts := strings.Split(p, "/")
 
@@ -377,7 +376,7 @@ func (fs *Decomposedfs) CreateReference(ctx context.Context, p string, targetURI
 	return nil
 }
 
-// Move moves a resource from one reference to another
+// Move moves a resource from one reference to another.
 func (fs *Decomposedfs) Move(ctx context.Context, oldRef, newRef *provider.Reference) (err error) {
 	var oldNode, newNode *node.Node
 	if oldNode, err = fs.lu.NodeFromResource(ctx, oldRef); err != nil {
@@ -410,7 +409,7 @@ func (fs *Decomposedfs) Move(ctx context.Context, oldRef, newRef *provider.Refer
 	return fs.tp.Move(ctx, oldNode, newNode)
 }
 
-// GetMD returns the metadata for the specified resource
+// GetMD returns the metadata for the specified resource.
 func (fs *Decomposedfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []string) (ri *provider.ResourceInfo, err error) {
 	var node *node.Node
 	if node, err = fs.lu.NodeFromResource(ctx, ref); err != nil {
@@ -433,7 +432,7 @@ func (fs *Decomposedfs) GetMD(ctx context.Context, ref *provider.Reference, mdKe
 	return node.AsResourceInfo(ctx, &rp, mdKeys, utils.IsRelativeReference(ref))
 }
 
-// ListFolder returns a list of resources in the specified folder
+// ListFolder returns a list of resources in the specified folder.
 func (fs *Decomposedfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys []string) (finfos []*provider.ResourceInfo, err error) {
 	var n *node.Node
 	if n, err = fs.lu.NodeFromResource(ctx, ref); err != nil {
@@ -474,7 +473,7 @@ func (fs *Decomposedfs) ListFolder(ctx context.Context, ref *provider.Reference,
 	return
 }
 
-// Delete deletes the specified resource
+// Delete deletes the specified resource.
 func (fs *Decomposedfs) Delete(ctx context.Context, ref *provider.Reference) (err error) {
 	var node *node.Node
 	if node, err = fs.lu.NodeFromResource(ctx, ref); err != nil {
@@ -498,11 +497,11 @@ func (fs *Decomposedfs) Delete(ctx context.Context, ref *provider.Reference) (er
 	return fs.tp.Delete(ctx, node)
 }
 
-// Download returns a reader to the specified resource
+// Download returns a reader to the specified resource.
 func (fs *Decomposedfs) Download(ctx context.Context, ref *provider.Reference) (io.ReadCloser, error) {
 	node, err := fs.lu.NodeFromResource(ctx, ref)
 	if err != nil {
-		return nil, errors.Wrap(err, "Decomposedfs: error resolving ref")
+		return nil, errors.Wrap(err, "decomposedfs: error resolving ref")
 	}
 
 	if !node.Exists {
@@ -522,27 +521,27 @@ func (fs *Decomposedfs) Download(ctx context.Context, ref *provider.Reference) (
 
 	reader, err := fs.tp.ReadBlob(node.BlobID)
 	if err != nil {
-		return nil, errors.Wrap(err, "Decomposedfs: error download blob '"+node.ID+"'")
+		return nil, errors.Wrap(err, "decomposedfs: error download blob '"+node.ID+"'")
 	}
 	return reader, nil
 }
 
-// GetLock returns an existing lock on the given reference
+// GetLock returns an existing lock on the given reference.
 func (fs *Decomposedfs) GetLock(ctx context.Context, ref *provider.Reference) (*provider.Lock, error) {
 	return nil, errtypes.NotSupported("unimplemented")
 }
 
-// SetLock puts a lock on the given reference
+// SetLock puts a lock on the given reference.
 func (fs *Decomposedfs) SetLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
 	return errtypes.NotSupported("unimplemented")
 }
 
-// RefreshLock refreshes an existing lock on the given reference
+// RefreshLock refreshes an existing lock on the given reference.
 func (fs *Decomposedfs) RefreshLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock, existingLockID string) error {
 	return errtypes.NotSupported("unimplemented")
 }
 
-// Unlock removes an existing lock from the given reference
+// Unlock removes an existing lock from the given reference.
 func (fs *Decomposedfs) Unlock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
 	return errtypes.NotSupported("unimplemented")
 }

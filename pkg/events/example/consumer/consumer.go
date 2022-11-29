@@ -26,7 +26,7 @@ import (
 	"github.com/cs3org/reva/pkg/events"
 )
 
-// Example consumes events from the queue
+// Example consumes events from the queue.
 func Example(c events.Consumer) {
 	// Step 1 - which group does the consumer belong to?
 	// each group will get each event that is emitted, but only one member of the group will get it.
@@ -56,5 +56,4 @@ func Example(c events.Consumer) {
 			fmt.Printf("%s) Unregistered event: %+v\n", group, v)
 		}
 	}
-
 }

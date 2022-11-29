@@ -39,11 +39,11 @@ import (
 )
 
 const (
-	// PerfMarkerResponseTime corresponds to the interval at which a performance marker is sent back to the TPC client
+	// PerfMarkerResponseTime corresponds to the interval at which a performance marker is sent back to the TPC client.
 	PerfMarkerResponseTime float64 = 5
 )
 
-// PerfResponse provides a single chunk of permormance marker response
+// PerfResponse provides a single chunk of permormance marker response.
 type PerfResponse struct {
 	Timestamp time.Time
 	Bytes     uint64
@@ -85,7 +85,6 @@ func (wc *WriteCounter) SendPerfMarker(size uint64) {
 }
 
 func (wc *WriteCounter) Write(p []byte) (int, error) {
-
 	n := len(p)
 	wc.Total += uint64(n)
 	NowTime := time.Now()
@@ -178,7 +177,7 @@ func (s *svc) performHTTPPull(ctx context.Context, client gateway.GatewayAPIClie
 	// get http client for remote
 	httpClient := &http.Client{}
 
-	req, err := http.NewRequest("GET", src, nil)
+	req, err := http.NewRequest(http.MethodGet, src, nil)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return err
@@ -240,7 +239,7 @@ func (s *svc) performHTTPPull(ctx context.Context, client gateway.GatewayAPIClie
 	tempReader := io.TeeReader(httpDownloadRes.Body, &wc)
 
 	// do Upload
-	httpUploadReq, err := rhttp.NewRequest(ctx, "PUT", uploadEP, tempReader)
+	httpUploadReq, err := rhttp.NewRequest(ctx, http.MethodPut, uploadEP, tempReader)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return err
@@ -362,7 +361,7 @@ func (s *svc) performHTTPPush(ctx context.Context, client gateway.GatewayAPIClie
 	}
 
 	// do download
-	httpDownloadReq, err := rhttp.NewRequest(ctx, "GET", downloadEP, nil)
+	httpDownloadReq, err := rhttp.NewRequest(ctx, http.MethodGet, downloadEP, nil)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return err
@@ -377,7 +376,7 @@ func (s *svc) performHTTPPush(ctx context.Context, client gateway.GatewayAPIClie
 	defer httpDownloadRes.Body.Close()
 	if httpDownloadRes.StatusCode != http.StatusOK {
 		w.WriteHeader(httpDownloadRes.StatusCode)
-		return fmt.Errorf("Remote PUT returned status code %d", httpDownloadRes.StatusCode)
+		return fmt.Errorf("remote PUT returned status code %d", httpDownloadRes.StatusCode)
 	}
 
 	// send performance markers periodically every PerfMarkerResponseTime (5 seconds unless configured)
@@ -387,7 +386,7 @@ func (s *svc) performHTTPPush(ctx context.Context, client gateway.GatewayAPIClie
 
 	// get http client for a remote call
 	httpClient := &http.Client{}
-	req, err := http.NewRequest("PUT", dst, tempReader)
+	req, err := http.NewRequest(http.MethodPut, dst, tempReader)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return err

@@ -57,7 +57,7 @@ var (
 	passwordProtected bool
 )
 
-// CreatePublicShare adds a new entry to manager.shares
+// CreatePublicShare adds a new entry to manager.shares.
 func (m *manager) CreatePublicShare(ctx context.Context, u *user.User, rInfo *provider.ResourceInfo, g *link.Grant, description string, internal bool) (*link.PublicShare, error) {
 	id := &link.PublicShareId{
 		OpaqueId: randString(15),
@@ -104,7 +104,7 @@ func (m *manager) CreatePublicShare(ctx context.Context, u *user.User, rInfo *pr
 	return &s, nil
 }
 
-// UpdatePublicShare updates the expiration date, permissions and Mtime
+// UpdatePublicShare updates the expiration date, permissions and Mtime.
 func (m *manager) UpdatePublicShare(ctx context.Context, u *user.User, req *link.UpdatePublicShareRequest, g *link.Grant) (*link.PublicShare, error) {
 	log := appctx.GetLogger(ctx)
 	share, err := m.GetPublicShare(ctx, u, req.Ref, false)

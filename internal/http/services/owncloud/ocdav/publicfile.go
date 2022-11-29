@@ -30,7 +30,7 @@ import (
 	rtrace "github.com/cs3org/reva/pkg/trace"
 )
 
-// PublicFileHandler handles requests on a shared file. it needs to be wrapped in a collection
+// PublicFileHandler handles requests on a shared file. it needs to be wrapped in a collection.
 type PublicFileHandler struct {
 	namespace string
 }
@@ -40,7 +40,7 @@ func (h *PublicFileHandler) init(ns string) error {
 	return nil
 }
 
-// Handler handles requests
+// Handler handles requests.
 func (h *PublicFileHandler) Handler(s *svc) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		log := appctx.GetLogger(r.Context())
@@ -123,7 +123,7 @@ func (s *svc) adjustResourcePathInURL(w http.ResponseWriter, r *http.Request) bo
 	return true
 }
 
-// ns is the namespace that is prefixed to the path in the cs3 namespace
+// ns is the namespace that is prefixed to the path in the cs3 namespace.
 func (s *svc) handlePropfindOnToken(w http.ResponseWriter, r *http.Request, ns string, onContainer bool) {
 	ctx, span := rtrace.Provider.Tracer("ocdav").Start(r.Context(), "token_propfind")
 	defer span.End()
@@ -196,7 +196,7 @@ func (s *svc) handlePropfindOnToken(w http.ResponseWriter, r *http.Request, ns s
 
 // there are only two possible entries
 // 1. the non existing collection
-// 2. the shared file
+// 2. the shared file.
 func (s *svc) getPublicFileInfos(onContainer, onlyRoot bool, i *provider.ResourceInfo) []*provider.ResourceInfo {
 	infos := []*provider.ResourceInfo{}
 	if onContainer {

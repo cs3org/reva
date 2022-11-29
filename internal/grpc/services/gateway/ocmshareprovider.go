@@ -522,7 +522,6 @@ func (s *svc) removeOCMReference(ctx context.Context, resourceID *provider.Resou
 }
 
 func (s *svc) createOCMReference(ctx context.Context, share *ocm.Share) (*rpc.Status, error) {
-
 	log := appctx.GetLogger(ctx)
 
 	var token string

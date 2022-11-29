@@ -37,7 +37,7 @@ import (
 )
 
 // UserData contains the template placeholders for a user.
-// For example {{.Username}} or {{.Id.Idp}}
+// For example {{.Username}} or {{.Id.Idp}}.
 type UserData struct {
 	*userpb.User
 	Email EmailData

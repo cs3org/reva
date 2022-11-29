@@ -33,13 +33,13 @@ import (
 	"google.golang.org/protobuf/types/known/fieldmaskpb"
 )
 
-// AcceptReceivedShare handles Post Requests on /apps/files_sharing/api/v1/shares/{shareid}
+// AcceptReceivedShare handles Post Requests on /apps/files_sharing/api/v1/shares/{shareid}.
 func (h *Handler) AcceptReceivedShare(w http.ResponseWriter, r *http.Request) {
 	shareID := chi.URLParam(r, "shareid")
 	h.updateReceivedShare(w, r, shareID, false)
 }
 
-// RejectReceivedShare handles DELETE Requests on /apps/files_sharing/api/v1/shares/{shareid}
+// RejectReceivedShare handles DELETE Requests on /apps/files_sharing/api/v1/shares/{shareid}.
 func (h *Handler) RejectReceivedShare(w http.ResponseWriter, r *http.Request) {
 	shareID := chi.URLParam(r, "shareid")
 	h.updateReceivedShare(w, r, shareID, true)

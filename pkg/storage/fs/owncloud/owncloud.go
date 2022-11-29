@@ -23,7 +23,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"io/ioutil"
+	iofs "io/fs"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -62,13 +62,13 @@ const (
 	// A non root user can only manipulate the user. namespace, which is what
 	// we will use to store ownCloud specific metadata. To prevent name
 	// collisions with other apps We are going to introduce a sub namespace
-	// "user.oc."
+	// "user.oc.".
 	ocPrefix string = "user.oc."
 
-	// idAttribute is the name of the filesystem extended attribute that is used to store the uuid in
+	// idAttribute is the name of the filesystem extended attribute that is used to store the uuid in.
 	idAttribute string = ocPrefix + "id"
 
-	// SharePrefix is the prefix for sharing related extended attributes
+	// SharePrefix is the prefix for sharing related extended attributes.
 	sharePrefix       string = ocPrefix + "grant." // grants are similar to acls, but they are not propagated down the tree when being changed
 	trashOriginPrefix string = ocPrefix + "o"
 	mdPrefix          string = ocPrefix + "md."   // arbitrary metadata
@@ -219,7 +219,7 @@ func (fs *ocfs) Shutdown(ctx context.Context) error {
 	return fs.pool.Close()
 }
 
-// scan files and add uuid to path mapping to kv store
+// scan files and add uuid to path mapping to kv store.
 func (fs *ocfs) scanFiles(ctx context.Context, conn redis.Conn) {
 	if fs.c.Scan {
 		fs.c.Scan = false // TODO ... in progress use mutex ?
@@ -258,7 +258,7 @@ func (fs *ocfs) scanFiles(ctx context.Context, conn redis.Conn) {
 // owncloud stores files in the files subfolder
 // the incoming path starts with /<username>, so we need to insert the files subfolder into the path
 // and prefix the data directory
-// TODO the path handed to a storage provider should not contain the username
+// TODO the path handed to a storage provider should not contain the username.
 func (fs *ocfs) toInternalPath(ctx context.Context, sp string) (ip string) {
 	if fs.c.EnableHome {
 		u := ctxpkg.ContextMustGetUser(ctx)
@@ -292,9 +292,8 @@ func (fs *ocfs) toInternalPath(ctx context.Context, sp string) (ip string) {
 			ip = filepath.Join(fs.c.DataDirectory, layout, "files")
 		} else {
 			// parts = "<username>", "foo/bar.txt"
-			ip = filepath.Join(fs.c.DataDirectory, layout, "files", filepath.Clean(segments[1]))
+			ip = filepath.Join(fs.c.DataDirectory, layout, "files", segments[1])
 		}
-
 	}
 	return
 }
@@ -339,7 +338,7 @@ func (fs *ocfs) toInternalShadowPath(ctx context.Context, sp string) (internal s
 // ownloud stores versions in the files_versions subfolder
 // the incoming path starts with /<username>, so we need to insert the files subfolder into the path
 // and prefix the data directory
-// TODO the path handed to a storage provider should not contain the username
+// TODO the path handed to a storage provider should not contain the username.
 func (fs *ocfs) getVersionsPath(ctx context.Context, ip string) string {
 	// ip = /path/to/data/<username>/files/foo/bar.txt
 	// remove data dir
@@ -368,10 +367,9 @@ func (fs *ocfs) getVersionsPath(ctx context.Context, ip string) string {
 	default:
 		return "" // TODO Must not happen?
 	}
-
 }
 
-// owncloud stores trashed items in the files_trashbin subfolder of a users home
+// owncloud stores trashed items in the files_trashbin subfolder of a users home.
 func (fs *ocfs) getRecyclePath(ctx context.Context) (string, error) {
 	u, ok := ctxpkg.ContextGetUser(ctx)
 	if !ok {
@@ -461,7 +459,7 @@ func (fs *ocfs) toStorageShadowPath(ctx context.Context, ip string) (sp string) 
 	return
 }
 
-// TODO the owner needs to come from a different place
+// TODO the owner needs to come from a different place.
 func (fs *ocfs) getOwner(ip string) string {
 	ip = strings.TrimPrefix(ip, fs.c.DataDirectory)
 	parts := strings.SplitN(ip, "/", 3)
@@ -471,7 +469,7 @@ func (fs *ocfs) getOwner(ip string) string {
 	return ""
 }
 
-// TODO cache user lookup
+// TODO cache user lookup.
 func (fs *ocfs) getUser(ctx context.Context, usernameOrID string) (id *userpb.User, err error) {
 	u := ctxpkg.ContextMustGetUser(ctx)
 	// check if username matches and id is set
@@ -528,7 +526,7 @@ func (fs *ocfs) getUser(ctx context.Context, usernameOrID string) (id *userpb.Us
 	return res.User, nil
 }
 
-// permissionSet returns the permission set for the current user
+// permissionSet returns the permission set for the current user.
 func (fs *ocfs) permissionSet(ctx context.Context, owner *userpb.UserId) *provider.ResourcePermissions {
 	if owner == nil {
 		return &provider.ResourcePermissions{
@@ -705,7 +703,7 @@ func getResourceType(isDir bool) provider.ResourceType {
 	return provider.ResourceType_RESOURCE_TYPE_FILE
 }
 
-// CreateStorageSpace creates a storage space
+// CreateStorageSpace creates a storage space.
 func (fs *ocfs) CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error) {
 	return nil, fmt.Errorf("unimplemented: CreateStorageSpace")
 }
@@ -775,7 +773,7 @@ func (fs *ocfs) getPath(ctx context.Context, id *provider.ResourceId) (string, e
 	return ip, nil
 }
 
-// GetPathByID returns the storage relative path for the file id, without the internal namespace
+// GetPathByID returns the storage relative path for the file id, without the internal namespace.
 func (fs *ocfs) GetPathByID(ctx context.Context, id *provider.ResourceId) (string, error) {
 	ip, err := fs.getPath(ctx, id)
 	if err != nil {
@@ -799,7 +797,6 @@ func (fs *ocfs) GetPathByID(ctx context.Context, id *provider.ResourceId) (strin
 
 // resolve takes in a request path or request id and converts it to an internal path.
 func (fs *ocfs) resolve(ctx context.Context, ref *provider.Reference) (string, error) {
-
 	// if storage id is set look up that
 	if ref.ResourceId != nil {
 		ip, err := fs.getPath(ctx, ref.ResourceId)
@@ -811,7 +808,6 @@ func (fs *ocfs) resolve(ctx context.Context, ref *provider.Reference) (string, e
 
 	// use a path
 	return fs.toInternalPath(ctx, ref.Path), nil
-
 }
 
 func (fs *ocfs) DenyGrant(ctx context.Context, ref *provider.Reference, g *provider.Grantee) error {
@@ -844,7 +840,7 @@ func (fs *ocfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provid
 	return fs.propagate(ctx, ip)
 }
 
-// extractACEsFromAttrs reads ACEs in the list of attrs from the file
+// extractACEsFromAttrs reads ACEs in the list of attrs from the file.
 func extractACEsFromAttrs(ctx context.Context, ip string, attrs []string) (entries []*ace.ACE) {
 	log := appctx.GetLogger(ctx)
 	entries = []*ace.ACE{}
@@ -874,9 +870,8 @@ func extractACEsFromAttrs(ctx context.Context, ip string, attrs []string) (entri
 // We could also add default acls that can only the admin can set, eg for a read only storage?
 // Someone needs to write to provide the content that should be read only, so this would likely be an acl for a group anyway.
 // We need the storage relative path so we can calculate the permissions
-// for the node based on all acls in the tree up to the root
+// for the node based on all acls in the tree up to the root.
 func (fs *ocfs) readPermissions(ctx context.Context, ip string) (p *provider.ResourcePermissions, err error) {
-
 	u, ok := ctxpkg.ContextGetUser(ctx)
 	if !ok {
 		appctx.GetLogger(ctx).Debug().Str("ipath", ip).Msg("no user in context, returning default permissions")
@@ -908,7 +903,6 @@ func (fs *ocfs) readPermissions(ctx context.Context, ip string) (p *provider.Res
 	var e *ace.ACE
 	// for all segments, starting at the leaf
 	for np != rp {
-
 		var attrs []string
 		if attrs, err = xattr.List(np); err != nil {
 			appctx.GetLogger(ctx).Error().Err(err).Str("ipath", np).Msg("error listing attributes")
@@ -1005,7 +999,7 @@ func (fs *ocfs) readACE(ctx context.Context, ip string, principal string) (e *ac
 	return
 }
 
-// additive merging of permissions only
+// additive merging of permissions only.
 func addPermissions(p1 *provider.ResourcePermissions, p2 *provider.ResourcePermissions) {
 	p1.AddGrant = p1.AddGrant || p2.AddGrant
 	p1.CreateContainer = p1.CreateContainer || p2.CreateContainer
@@ -1066,7 +1060,6 @@ func (fs *ocfs) ListGrants(ctx context.Context, ref *provider.Reference) (grants
 }
 
 func (fs *ocfs) RemoveGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) (err error) {
-
 	var ip string
 	if ip, err = fs.resolve(ctx, ref); err != nil {
 		return errors.Wrap(err, "ocfs: error resolving reference")
@@ -1149,7 +1142,7 @@ func (fs *ocfs) CreateHome(ctx context.Context) error {
 	return nil
 }
 
-// If home is enabled, the relative home is always the empty string
+// If home is enabled, the relative home is always the empty string.
 func (fs *ocfs) GetHome(ctx context.Context) (string, error) {
 	if !fs.c.EnableHome {
 		return "", errtypes.NotSupported("ocfs: get home not supported")
@@ -1158,7 +1151,6 @@ func (fs *ocfs) GetHome(ctx context.Context) (string, error) {
 }
 
 func (fs *ocfs) CreateDir(ctx context.Context, ref *provider.Reference) (err error) {
-
 	ip, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return err
@@ -1186,7 +1178,7 @@ func (fs *ocfs) CreateDir(ctx context.Context, ref *provider.Reference) (err err
 	return fs.propagate(ctx, ip)
 }
 
-// TouchFile as defined in the storage.FS interface
+// TouchFile as defined in the storage.FS interface.
 func (fs *ocfs) TouchFile(ctx context.Context, ref *provider.Reference) error {
 	return fmt.Errorf("unimplemented: TouchFile")
 }
@@ -1473,22 +1465,22 @@ func (fs *ocfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Refere
 	}
 }
 
-// GetLock returns an existing lock on the given reference
+// GetLock returns an existing lock on the given reference.
 func (fs *ocfs) GetLock(ctx context.Context, ref *provider.Reference) (*provider.Lock, error) {
 	return nil, errtypes.NotSupported("unimplemented")
 }
 
-// SetLock puts a lock on the given reference
+// SetLock puts a lock on the given reference.
 func (fs *ocfs) SetLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
 	return errtypes.NotSupported("unimplemented")
 }
 
-// RefreshLock refreshes an existing lock on the given reference
+// RefreshLock refreshes an existing lock on the given reference.
 func (fs *ocfs) RefreshLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock, existingLockID string) error {
 	return errtypes.NotSupported("unimplemented")
 }
 
-// Unlock removes an existing lock from the given reference
+// Unlock removes an existing lock from the given reference.
 func (fs *ocfs) Unlock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
 	return errtypes.NotSupported("unimplemented")
 }
@@ -1769,7 +1761,6 @@ func (fs *ocfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys 
 }
 
 func (fs *ocfs) listWithNominalHome(ctx context.Context, ip string, mdKeys []string) ([]*provider.ResourceInfo, error) {
-
 	// If a user wants to list a folder shared with him the path will already
 	// be wrapped with the files directory path of the share owner.
 	// In that case we don't want to wrap the path again.
@@ -1789,9 +1780,17 @@ func (fs *ocfs) listWithNominalHome(ctx context.Context, ip string, mdKeys []str
 		return nil, errors.Wrap(err, "ocfs: error reading permissions")
 	}
 
-	mds, err := ioutil.ReadDir(ip)
+	entries, err := os.ReadDir(ip)
 	if err != nil {
 		return nil, errors.Wrapf(err, "ocfs: error listing %s", ip)
+	}
+	mds := make([]iofs.FileInfo, 0, len(entries))
+	for _, entry := range entries {
+		info, err := entry.Info()
+		if err != nil {
+			return nil, err
+		}
+		mds = append(mds, info)
 	}
 	c := fs.pool.Get()
 	defer c.Close()
@@ -1840,11 +1839,18 @@ func (fs *ocfs) listHome(ctx context.Context, home string, mdKeys []string) ([]*
 		return nil, errors.Wrap(err, "ocfs: error reading permissions")
 	}
 
-	mds, err := ioutil.ReadDir(ip)
+	entries, err := os.ReadDir(ip)
 	if err != nil {
 		return nil, errors.Wrap(err, "ocfs: error listing files")
 	}
-
+	mds := make([]iofs.FileInfo, 0, len(entries))
+	for _, entry := range entries {
+		info, err := entry.Info()
+		if err != nil {
+			return nil, err
+		}
+		mds = append(mds, info)
+	}
 	c := fs.pool.Get()
 	defer c.Close()
 
@@ -1857,9 +1863,17 @@ func (fs *ocfs) listHome(ctx context.Context, home string, mdKeys []string) ([]*
 
 	// list shadow_files
 	ip = fs.toInternalShadowPath(ctx, home)
-	mds, err = ioutil.ReadDir(ip)
+	entries, err = os.ReadDir(ip)
 	if err != nil {
 		return nil, errors.Wrap(err, "ocfs: error listing shadow_files")
+	}
+	mds = make([]iofs.FileInfo, 0, len(entries))
+	for _, entry := range entries {
+		info, err := entry.Info()
+		if err != nil {
+			return nil, err
+		}
+		mds = append(mds, info)
 	}
 	for _, md := range mds {
 		cp := filepath.Join(ip, md.Name())
@@ -1884,14 +1898,21 @@ func (fs *ocfs) listShareFolderRoot(ctx context.Context, sp string, mdKeys []str
 		return nil, errors.Wrap(err, "ocfs: error reading permissions")
 	}
 
-	mds, err := ioutil.ReadDir(ip)
+	entries, err := os.ReadDir(ip)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, errtypes.NotFound(fs.toStoragePath(ctx, filepath.Dir(ip)))
 		}
 		return nil, errors.Wrap(err, "ocfs: error listing shadow_files")
 	}
-
+	mds := make([]iofs.FileInfo, 0, len(entries))
+	for _, entry := range entries {
+		info, err := entry.Info()
+		if err != nil {
+			return nil, err
+		}
+		mds = append(mds, info)
+	}
 	c := fs.pool.Get()
 	defer c.Close()
 
@@ -1996,16 +2017,23 @@ func (fs *ocfs) ListRevisions(ctx context.Context, ref *provider.Reference) ([]*
 	bn := filepath.Base(ip)
 
 	revisions := []*provider.FileVersion{}
-	mds, err := ioutil.ReadDir(filepath.Dir(vp))
+	entries, err := os.ReadDir(filepath.Dir(vp))
 	if err != nil {
 		return nil, errors.Wrap(err, "ocfs: error reading"+filepath.Dir(vp))
+	}
+	mds := make([]iofs.FileInfo, 0, len(entries))
+	for _, entry := range entries {
+		info, err := entry.Info()
+		if err != nil {
+			return nil, err
+		}
+		mds = append(mds, info)
 	}
 	for i := range mds {
 		rev := fs.filterAsRevision(ctx, bn, mds[i])
 		if rev != nil {
 			revisions = append(revisions, rev)
 		}
-
 	}
 	return revisions, nil
 }
@@ -2195,12 +2223,21 @@ func (fs *ocfs) ListRecycle(ctx context.Context, basePath, key, relativePath str
 	}
 
 	// list files folder
-	mds, err := ioutil.ReadDir(filepath.Join(rp, key))
+	entries, err := os.ReadDir(filepath.Join(rp, key))
 	if err != nil {
 		log := appctx.GetLogger(ctx)
 		log.Debug().Err(err).Str("path", rp).Msg("trash not readable")
 		// TODO jfd only ignore not found errors
 		return []*provider.RecycleItem{}, nil
+	}
+	mds := make([]iofs.FileInfo, 0, len(entries))
+	for _, entry := range entries {
+		info, err := entry.Info()
+		if err != nil {
+			// TODO jfd only ignore not found errors
+			return []*provider.RecycleItem{}, nil
+		}
+		mds = append(mds, info)
 	}
 	// TODO (jfd) limit and offset
 	items := []*provider.RecycleItem{}
@@ -2209,7 +2246,6 @@ func (fs *ocfs) ListRecycle(ctx context.Context, basePath, key, relativePath str
 		if ri != nil {
 			items = append(items, ri)
 		}
-
 	}
 	return items, nil
 }
@@ -2259,7 +2295,7 @@ func (fs *ocfs) ListStorageSpaces(ctx context.Context, filter []*provider.ListSt
 	return nil, errtypes.NotSupported("list storage spaces")
 }
 
-// UpdateStorageSpace updates a storage space
+// UpdateStorageSpace updates a storage space.
 func (fs *ocfs) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
 	return nil, errtypes.NotSupported("update storage space")
 }
@@ -2302,7 +2338,7 @@ func (fs *ocfs) propagate(ctx context.Context, leafPath string) error {
 			Int("i", i).
 			Interface("parts", parts).
 			Msg("propagating change")
-		if err := os.Chtimes(filepath.Clean(root), fi.ModTime(), fi.ModTime()); err != nil {
+		if err := os.Chtimes(root, fi.ModTime(), fi.ModTime()); err != nil {
 			appctx.GetLogger(ctx).Error().
 				Err(err).
 				Str("leafPath", leafPath).

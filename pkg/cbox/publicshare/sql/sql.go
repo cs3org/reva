@@ -29,8 +29,6 @@ import (
 	"syscall"
 	"time"
 
-	"golang.org/x/crypto/bcrypt"
-
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -44,6 +42,7 @@ import (
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
+	"golang.org/x/crypto/bcrypt"
 )
 
 const (
@@ -63,11 +62,11 @@ type config struct {
 	SharePasswordHashCost      int    `mapstructure:"password_hash_cost"`
 	JanitorRunInterval         int    `mapstructure:"janitor_run_interval"`
 	EnableExpiredSharesCleanup bool   `mapstructure:"enable_expired_shares_cleanup"`
-	DbUsername                 string `mapstructure:"db_username"`
-	DbPassword                 string `mapstructure:"db_password"`
-	DbHost                     string `mapstructure:"db_host"`
-	DbPort                     int    `mapstructure:"db_port"`
-	DbName                     string `mapstructure:"db_name"`
+	DBUsername                 string `mapstructure:"db_username"`
+	DBPassword                 string `mapstructure:"db_password"`
+	DBHost                     string `mapstructure:"db_host"`
+	DBPort                     int    `mapstructure:"db_port"`
+	DBName                     string `mapstructure:"db_name"`
 	GatewaySvc                 string `mapstructure:"gatewaysvc"`
 }
 
@@ -114,7 +113,7 @@ func New(m map[string]interface{}) (publicshare.Manager, error) {
 	}
 	c.init()
 
-	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%d)/%s", c.DbUsername, c.DbPassword, c.DbHost, c.DbPort, c.DbName))
+	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%d)/%s", c.DBUsername, c.DBPassword, c.DBHost, c.DBPort, c.DBName))
 	if err != nil {
 		return nil, err
 	}
@@ -129,7 +128,6 @@ func New(m map[string]interface{}) (publicshare.Manager, error) {
 }
 
 func (m *manager) CreatePublicShare(ctx context.Context, u *user.User, rInfo *provider.ResourceInfo, g *link.Grant, description string, internal bool) (*link.PublicShare, error) {
-
 	tkn := utils.RandString(15)
 	now := time.Now().Unix()
 
@@ -320,7 +318,6 @@ func (m *manager) GetPublicShare(ctx context.Context, u *user.User, ref *link.Pu
 		if err := publicshare.AddSignature(s, pw); err != nil {
 			return nil, err
 		}
-
 	}
 
 	return s, nil

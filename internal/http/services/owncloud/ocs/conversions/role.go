@@ -57,12 +57,12 @@ const (
 	RoleDenied = "denied"
 )
 
-// CS3ResourcePermissions for the role
+// CS3ResourcePermissions for the role.
 func (r *Role) CS3ResourcePermissions() *provider.ResourcePermissions {
 	return r.cS3ResourcePermissions
 }
 
-// OCSPermissions for the role
+// OCSPermissions for the role.
 func (r *Role) OCSPermissions() Permissions {
 	return r.ocsPermissions
 }
@@ -128,7 +128,7 @@ func (r *Role) WebDAVPermissions(isDir, isShared, isMountpoint, isPublic bool) s
 	return b.String()
 }
 
-// RoleFromName creates a role from the name
+// RoleFromName creates a role from the name.
 func RoleFromName(name string) *Role {
 	switch name {
 	case RoleDenied:
@@ -161,7 +161,7 @@ func NewUnknownRole() *Role {
 	}
 }
 
-// NewDeniedRole creates a fully denied role
+// NewDeniedRole creates a fully denied role.
 func NewDeniedRole() *Role {
 	return &Role{
 		Name:                   RoleDenied,
@@ -170,7 +170,7 @@ func NewDeniedRole() *Role {
 	}
 }
 
-// NewViewerRole creates a viewer role
+// NewViewerRole creates a viewer role.
 func NewViewerRole() *Role {
 	return &Role{
 		Name: RoleViewer,
@@ -188,7 +188,7 @@ func NewViewerRole() *Role {
 	}
 }
 
-// NewReaderRole creates a reader role
+// NewReaderRole creates a reader role.
 func NewReaderRole() *Role {
 	return &Role{
 		Name: RoleViewer,
@@ -207,7 +207,7 @@ func NewReaderRole() *Role {
 	}
 }
 
-// NewEditorRole creates an editor role
+// NewEditorRole creates an editor role.
 func NewEditorRole() *Role {
 	return &Role{
 		Name: RoleEditor,
@@ -232,7 +232,7 @@ func NewEditorRole() *Role {
 	}
 }
 
-// NewFileEditorRole creates a file-editor role
+// NewFileEditorRole creates a file-editor role.
 func NewFileEditorRole() *Role {
 	return &Role{
 		Name: RoleEditor,
@@ -253,7 +253,7 @@ func NewFileEditorRole() *Role {
 	}
 }
 
-// NewCollaboratorRole creates a collaborator role
+// NewCollaboratorRole creates a collaborator role.
 func NewCollaboratorRole() *Role {
 	return &Role{
 		Name: RoleCollaborator,
@@ -281,7 +281,7 @@ func NewCollaboratorRole() *Role {
 	}
 }
 
-// NewUploaderRole creates an uploader role
+// NewUploaderRole creates an uploader role.
 func NewUploaderRole() *Role {
 	return &Role{
 		Name: RoleUploader,
@@ -296,7 +296,7 @@ func NewUploaderRole() *Role {
 	}
 }
 
-// NewManagerRole creates an editor role
+// NewManagerRole creates an editor role.
 func NewManagerRole() *Role {
 	return &Role{
 		Name: RoleManager,
@@ -326,7 +326,7 @@ func NewManagerRole() *Role {
 	}
 }
 
-// RoleFromOCSPermissions tries to map ocs permissions to a role
+// RoleFromOCSPermissions tries to map ocs permissions to a role.
 func RoleFromOCSPermissions(p Permissions) *Role {
 	if p.Contain(PermissionNone) {
 		return NewDeniedRole()
@@ -349,7 +349,7 @@ func RoleFromOCSPermissions(p Permissions) *Role {
 	return NewLegacyRoleFromOCSPermissions(p)
 }
 
-// NewLegacyRoleFromOCSPermissions tries to map a legacy combination of ocs permissions to cs3 resource permissions as a legacy role
+// NewLegacyRoleFromOCSPermissions tries to map a legacy combination of ocs permissions to cs3 resource permissions as a legacy role.
 func NewLegacyRoleFromOCSPermissions(p Permissions) *Role {
 	r := &Role{
 		Name:                   RoleLegacy, // TODO custom role?
@@ -398,7 +398,7 @@ func NewLegacyRoleFromOCSPermissions(p Permissions) *Role {
 	return r
 }
 
-// RoleFromResourcePermissions tries to map cs3 resource permissions to a role
+// RoleFromResourcePermissions tries to map cs3 resource permissions to a role.
 func RoleFromResourcePermissions(rp *provider.ResourcePermissions) *Role {
 	r := &Role{
 		Name:                   RoleUnknown,

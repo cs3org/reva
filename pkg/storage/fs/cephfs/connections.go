@@ -54,7 +54,7 @@ type connections struct {
 	groupCache *ristretto.Cache
 }
 
-//TODO: make configurable/add to options
+// TODO: make configurable/add to options
 var usrLimit int64 = 1e4
 
 func newCache() (c *connections, err error) {

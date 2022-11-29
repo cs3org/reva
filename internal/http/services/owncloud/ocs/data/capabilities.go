@@ -42,13 +42,13 @@ func (c ocsBool) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
 	return e.EncodeElement("0", start)
 }
 
-// CapabilitiesData TODO document
+// CapabilitiesData TODO document.
 type CapabilitiesData struct {
 	Capabilities *Capabilities `json:"capabilities" xml:"capabilities"`
 	Version      *Version      `json:"version" xml:"version"`
 }
 
-// Capabilities groups several capability aspects
+// Capabilities groups several capability aspects.
 type Capabilities struct {
 	Core         *CapabilitiesCore         `json:"core" xml:"core"`
 	Checksums    *CapabilitiesChecksums    `json:"checksums" xml:"checksums"`
@@ -69,7 +69,7 @@ type Spaces struct {
 	Projects ocsBool `json:"projects" xml:"projects" mapstructure:"projects"`
 }
 
-// CapabilitiesCore holds webdav config
+// CapabilitiesCore holds webdav config.
 type CapabilitiesCore struct {
 	PollInterval      int     `json:"pollinterval" xml:"pollinterval" mapstructure:"poll_interval"`
 	WebdavRoot        string  `json:"webdav-root,omitempty" xml:"webdav-root,omitempty" mapstructure:"webdav_root"`
@@ -77,7 +77,7 @@ type CapabilitiesCore struct {
 	SupportURLSigning ocsBool `json:"support-url-signing" xml:"support-url-signing" mapstructure:"support_url_signing"`
 }
 
-// Status holds basic status information
+// Status holds basic status information.
 type Status struct {
 	Installed      ocsBool `json:"installed" xml:"installed"`
 	Maintenance    ocsBool `json:"maintenance" xml:"maintenance"`
@@ -90,13 +90,13 @@ type Status struct {
 	Hostname       string  `json:"hostname,omitempty" xml:"hostname,omitempty"`
 }
 
-// CapabilitiesChecksums holds available hashes
+// CapabilitiesChecksums holds available hashes.
 type CapabilitiesChecksums struct {
 	SupportedTypes      []string `json:"supportedTypes" xml:"supportedTypes>element" mapstructure:"supported_types"`
 	PreferredUploadType string   `json:"preferredUploadType" xml:"preferredUploadType" mapstructure:"preferred_upload_type"`
 }
 
-// CapabilitiesFilesTusSupport TODO this must be a summary of storages
+// CapabilitiesFilesTusSupport TODO this must be a summary of storages.
 type CapabilitiesFilesTusSupport struct {
 	Version            string `json:"version" xml:"version"`
 	Resumable          string `json:"resumable" xml:"resumable"`
@@ -105,7 +105,7 @@ type CapabilitiesFilesTusSupport struct {
 	HTTPMethodOverride string `json:"http_method_override" xml:"http_method_override" mapstructure:"http_method_override"`
 }
 
-// CapabilitiesArchiver holds available archivers information
+// CapabilitiesArchiver holds available archivers information.
 type CapabilitiesArchiver struct {
 	Enabled     bool     `json:"enabled" xml:"enabled" mapstructure:"enabled"`
 	Version     string   `json:"version" xml:"version" mapstructure:"version"`
@@ -115,7 +115,7 @@ type CapabilitiesArchiver struct {
 	MaxSize     string   `json:"max_size" xml:"max_size" mapstructure:"max_size"`
 }
 
-// CapabilitiesAppProvider holds available app provider information
+// CapabilitiesAppProvider holds available app provider information.
 type CapabilitiesAppProvider struct {
 	Enabled bool   `json:"enabled" xml:"enabled" mapstructure:"enabled"`
 	Version string `json:"version" xml:"version" mapstructure:"version"`
@@ -138,7 +138,7 @@ type CapabilitiesFiles struct {
 	AppProviders      []*CapabilitiesAppProvider   `json:"app_providers" xml:"app_providers" mapstructure:"app_providers"`
 }
 
-// CapabilitiesDav holds dav endpoint config
+// CapabilitiesDav holds dav endpoint config.
 type CapabilitiesDav struct {
 	Chunking                       string   `json:"chunking" xml:"chunking"`
 	Trashbin                       string   `json:"trashbin" xml:"trashbin"`
@@ -146,7 +146,7 @@ type CapabilitiesDav struct {
 	ChunkingParallelUploadDisabled bool     `json:"chunkingParallelUploadDisabled" xml:"chunkingParallelUploadDisabled"`
 }
 
-// CapabilitiesFilesSharing TODO document
+// CapabilitiesFilesSharing TODO document.
 type CapabilitiesFilesSharing struct {
 	APIEnabled                    ocsBool                                  `json:"api_enabled" xml:"api_enabled" mapstructure:"api_enabled"`
 	Resharing                     ocsBool                                  `json:"resharing" xml:"resharing"`
@@ -165,7 +165,7 @@ type CapabilitiesFilesSharing struct {
 	User                          *CapabilitiesFilesSharingUser            `json:"user" xml:"user"`
 }
 
-// CapabilitiesFilesSharingPublic TODO document
+// CapabilitiesFilesSharingPublic TODO document.
 type CapabilitiesFilesSharingPublic struct {
 	Enabled            ocsBool                                   `json:"enabled" xml:"enabled"`
 	SendMail           ocsBool                                   `json:"send_mail" xml:"send_mail" mapstructure:"send_mail"`
@@ -179,60 +179,60 @@ type CapabilitiesFilesSharingPublic struct {
 	ExpireDate         *CapabilitiesFilesSharingPublicExpireDate `json:"expire_date" xml:"expire_date" mapstructure:"expire_date"`
 }
 
-// CapabilitiesFilesSharingPublicPassword TODO document
+// CapabilitiesFilesSharingPublicPassword TODO document.
 type CapabilitiesFilesSharingPublicPassword struct {
 	EnforcedFor *CapabilitiesFilesSharingPublicPasswordEnforcedFor `json:"enforced_for" xml:"enforced_for" mapstructure:"enforced_for"`
 	Enforced    ocsBool                                            `json:"enforced" xml:"enforced"`
 }
 
-// CapabilitiesFilesSharingPublicPasswordEnforcedFor TODO document
+// CapabilitiesFilesSharingPublicPasswordEnforcedFor TODO document.
 type CapabilitiesFilesSharingPublicPasswordEnforcedFor struct {
 	ReadOnly   ocsBool `json:"read_only" xml:"read_only,omitempty" mapstructure:"read_only"`
 	ReadWrite  ocsBool `json:"read_write" xml:"read_write,omitempty" mapstructure:"read_write"`
 	UploadOnly ocsBool `json:"upload_only" xml:"upload_only,omitempty" mapstructure:"upload_only"`
 }
 
-// CapabilitiesFilesSharingPublicExpireDate TODO document
+// CapabilitiesFilesSharingPublicExpireDate TODO document.
 type CapabilitiesFilesSharingPublicExpireDate struct {
 	Enabled ocsBool `json:"enabled" xml:"enabled"`
 }
 
-// CapabilitiesFilesSharingUser TODO document
+// CapabilitiesFilesSharingUser TODO document.
 type CapabilitiesFilesSharingUser struct {
 	SendMail       ocsBool                     `json:"send_mail" xml:"send_mail" mapstructure:"send_mail"`
 	ProfilePicture ocsBool                     `json:"profile_picture" xml:"profile_picture" mapstructure:"profile_picture"`
 	Settings       []*CapabilitiesUserSettings `json:"settings" xml:"settings" mapstructure:"settings"`
 }
 
-// CapabilitiesUserSettings holds available user settings service information
+// CapabilitiesUserSettings holds available user settings service information.
 type CapabilitiesUserSettings struct {
 	Enabled bool   `json:"enabled" xml:"enabled" mapstructure:"enabled"`
 	Version string `json:"version" xml:"version" mapstructure:"version"`
 }
 
-// CapabilitiesFilesSharingUserEnumeration TODO document
+// CapabilitiesFilesSharingUserEnumeration TODO document.
 type CapabilitiesFilesSharingUserEnumeration struct {
 	Enabled          ocsBool `json:"enabled" xml:"enabled"`
 	GroupMembersOnly ocsBool `json:"group_members_only" xml:"group_members_only" mapstructure:"group_members_only"`
 }
 
-// CapabilitiesFilesSharingFederation holds outgoing and incoming flags
+// CapabilitiesFilesSharingFederation holds outgoing and incoming flags.
 type CapabilitiesFilesSharingFederation struct {
 	Outgoing ocsBool `json:"outgoing" xml:"outgoing"`
 	Incoming ocsBool `json:"incoming" xml:"incoming"`
 }
 
-// CapabilitiesNotifications holds a list of notification endpoints
+// CapabilitiesNotifications holds a list of notification endpoints.
 type CapabilitiesNotifications struct {
 	Endpoints []string `json:"ocs-endpoints,omitempty" xml:"ocs-endpoints>element,omitempty" mapstructure:"endpoints"`
 }
 
-// CapabilitiesGroupBased holds capabilities based on the groups a user belongs to
+// CapabilitiesGroupBased holds capabilities based on the groups a user belongs to.
 type CapabilitiesGroupBased struct {
 	Capabilities []string `json:"capabilities" xml:"capabilities" mapstructure:"capabilities"`
 }
 
-// Version holds version information
+// Version holds version information.
 type Version struct {
 	Major   int    `json:"major" xml:"major"`
 	Minor   int    `json:"minor" xml:"minor"`

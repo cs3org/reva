@@ -20,7 +20,6 @@ package config
 
 import (
 	"io"
-	"io/ioutil"
 
 	"github.com/BurntSushi/toml"
 	"github.com/pkg/errors"
@@ -28,7 +27,7 @@ import (
 
 // Read reads the configuration from the reader.
 func Read(r io.Reader) (map[string]interface{}, error) {
-	data, err := ioutil.ReadAll(r)
+	data, err := io.ReadAll(r)
 	if err != nil {
 		err = errors.Wrap(err, "config: error reading from reader")
 		return nil, err

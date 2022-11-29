@@ -23,7 +23,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -88,7 +88,7 @@ type transferModel struct {
 	Transfers map[string]*transfer `json:"transfers"`
 }
 
-// persistency driver
+// persistency driver.
 type pDriver struct {
 	sync.Mutex // concurrent access to the file
 	model      *transferModel
@@ -107,7 +107,7 @@ type transfer struct {
 	Ctime          string
 }
 
-// txEndStatuses final statuses that cannot be changed anymore
+// txEndStatuses final statuses that cannot be changed anymore.
 var txEndStatuses = map[string]int32{
 	"STATUS_INVALID":                0,
 	"STATUS_DESTINATION_NOT_FOUND":  1,
@@ -118,7 +118,7 @@ var txEndStatuses = map[string]int32{
 	"STATUS_TRANSFER_EXPIRED":       10,
 }
 
-// New returns a new rclone driver
+// New returns a new rclone driver.
 func New(m map[string]interface{}) (txdriver.Manager, error) {
 	c, err := parseConfig(m)
 	if err != nil {
@@ -158,7 +158,7 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 func loadOrCreate(file string) (*transferModel, error) {
 	_, err := os.Stat(file)
 	if os.IsNotExist(err) {
-		if err := ioutil.WriteFile(file, []byte("{}"), 0700); err != nil {
+		if err := os.WriteFile(file, []byte("{}"), 0700); err != nil {
 			err = errors.Wrap(err, "error creating the transfers storage file: "+file)
 			return nil, err
 		}
@@ -171,7 +171,7 @@ func loadOrCreate(file string) (*transferModel, error) {
 	}
 	defer fd.Close()
 
-	data, err := ioutil.ReadAll(fd)
+	data, err := io.ReadAll(fd)
 	if err != nil {
 		err = errors.Wrap(err, "error reading the data")
 		return nil, err
@@ -199,7 +199,7 @@ func (m *transferModel) saveTransfer(e error) error {
 		return e
 	}
 
-	if err := ioutil.WriteFile(m.File, data, 0644); err != nil {
+	if err := os.WriteFile(m.File, data, 0644); err != nil {
 		e = errors.Wrap(err, "error writing transfer data to file: "+m.File)
 		return e
 	}
@@ -332,7 +332,7 @@ func (driver *rclone) startJob(ctx context.Context, transferID string, srcRemote
 	}
 	u.Path = path.Join(u.Path, transferFileMethod)
 	requestURL := u.String()
-	req, err := http.NewRequest("POST", requestURL, bytes.NewReader(data))
+	req, err := http.NewRequest(http.MethodPost, requestURL, bytes.NewReader(data))
 	if err != nil {
 		err = errors.Wrap(err, "rclone: error pulling transfer: error framing post request")
 		transfer.TransferStatus = datatx.Status_STATUS_TRANSFER_FAILED
@@ -474,7 +474,7 @@ func (driver *rclone) startJob(ctx context.Context, transferID string, srcRemote
 			u.Path = path.Join(u.Path, transferFileMethod)
 			requestURL := u.String()
 
-			req, err := http.NewRequest("POST", requestURL, bytes.NewReader(data))
+			req, err := http.NewRequest(http.MethodPost, requestURL, bytes.NewReader(data))
 			if err != nil {
 				logger.Error().Err(err).Msgf("rclone driver: error framing post request: %v", err)
 				transfer.TransferStatus = datatx.Status_STATUS_INVALID
@@ -582,7 +582,7 @@ func (driver *rclone) startJob(ctx context.Context, transferID string, srcRemote
 	}, nil
 }
 
-// GetTransferStatus returns the status of the transfer with the specified job id
+// GetTransferStatus returns the status of the transfer with the specified job id.
 func (driver *rclone) GetTransferStatus(ctx context.Context, transferID string) (*datatx.TxInfo, error) {
 	transfer, err := driver.pDriver.model.getTransfer(transferID)
 	if err != nil {
@@ -600,7 +600,7 @@ func (driver *rclone) GetTransferStatus(ctx context.Context, transferID string) 
 	}, nil
 }
 
-// CancelTransfer cancels the transfer with the specified transfer id
+// CancelTransfer cancels the transfer with the specified transfer id.
 func (driver *rclone) CancelTransfer(ctx context.Context, transferID string) (*datatx.TxInfo, error) {
 	transfer, err := driver.pDriver.model.getTransfer(transferID)
 	if err != nil {
@@ -653,7 +653,7 @@ func (driver *rclone) CancelTransfer(ctx context.Context, transferID string) (*d
 	u.Path = path.Join(u.Path, transferFileMethod)
 	requestURL := u.String()
 
-	req, err := http.NewRequest("POST", requestURL, bytes.NewReader(data))
+	req, err := http.NewRequest(http.MethodPost, requestURL, bytes.NewReader(data))
 	if err != nil {
 		err = errors.Wrap(err, "rclone driver: error framing post request")
 		return &datatx.TxInfo{
@@ -748,7 +748,7 @@ func (driver *rclone) RetryTransfer(ctx context.Context, transferID string) (*da
 	return driver.startJob(ctx, transferID, "", "", "", "", "", "")
 }
 
-// getTransfer returns the transfer with the specified transfer ID
+// getTransfer returns the transfer with the specified transfer ID.
 func (m *transferModel) getTransfer(transferID string) (*transfer, error) {
 	transfer, ok := m.Transfers[transferID]
 	if !ok {
@@ -781,7 +781,7 @@ func (driver *rclone) remotePathIsFolder(remote string, remotePath string, remot
 	u.Path = path.Join(u.Path, listMethod)
 	requestURL := u.String()
 
-	req, err := http.NewRequest("POST", requestURL, bytes.NewReader(data))
+	req, err := http.NewRequest(http.MethodPost, requestURL, bytes.NewReader(data))
 	if err != nil {
 		return false, errors.Wrap(err, "rclone driver: error framing post request")
 	}

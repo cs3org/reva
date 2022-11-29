@@ -26,12 +26,12 @@ import (
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
 )
 
-// Handler renders the config endpoint
+// Handler renders the config endpoint.
 type Handler struct {
 	c data.ConfigData
 }
 
-// Init initializes this and any contained handlers
+// Init initializes this and any contained handlers.
 func (h *Handler) Init(c *config.Config) {
 	h.c = c.Config
 	// config
@@ -52,7 +52,7 @@ func (h *Handler) Init(c *config.Config) {
 	}
 }
 
-// Handler renders the config
+// GetConfig renders the config.
 func (h *Handler) GetConfig(w http.ResponseWriter, r *http.Request) {
 	response.WriteOCSSuccess(w, r, h.c)
 }

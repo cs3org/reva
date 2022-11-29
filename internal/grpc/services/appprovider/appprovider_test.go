@@ -26,7 +26,6 @@ import (
 )
 
 func Test_parseConfig(t *testing.T) {
-
 	tests := []struct {
 		name    string
 		m       map[string]interface{}
@@ -47,6 +46,7 @@ func Test_parseConfig(t *testing.T) {
 		},
 		{
 			name: "all configurations set for wopi driver",
+			// Note that the wopi driver is not loaded by this unit test, therefore those properties are just a non-validated example
 			m: map[string]interface{}{
 				"Driver":  "wopi",
 				"Drivers": map[string]map[string]interface{}{"wopi": {"iop_secret": "very-secret", "wopi_url": "https://my.wopi:9871"}},

@@ -26,12 +26,11 @@ import (
 	"os"
 
 	"github.com/cs3org/reva/pkg/logger"
-	"github.com/mitchellh/mapstructure"
-	"github.com/rs/zerolog"
-
 	"github.com/cs3org/reva/pkg/metrics"
 	"github.com/cs3org/reva/pkg/metrics/config"
 	"github.com/cs3org/reva/pkg/rhttp/global"
+	"github.com/mitchellh/mapstructure"
+	"github.com/rs/zerolog"
 )
 
 func init() {

@@ -89,7 +89,7 @@ type ConfigPublicLinkDownload struct {
 	PublicFolder string `mapstructure:"public_folder"`
 }
 
-// Config holds the config options that need to be passed down to all ocdav handlers
+// Config holds the config options that need to be passed down to all ocdav handlers.
 type Config struct {
 	Prefix string `mapstructure:"prefix"`
 	// FilesNamespace prefixes the namespace, optionally with user information.
@@ -137,7 +137,7 @@ func getFavoritesManager(c *Config) (favorite.Manager, error) {
 	return nil, errtypes.NotFound("driver not found: " + c.FavoriteStorageDriver)
 }
 
-// New returns a new ocdav
+// New returns a new ocdav.
 func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) {
 	conf := &Config{}
 	if err := mapstructure.Decode(m, conf); err != nil {

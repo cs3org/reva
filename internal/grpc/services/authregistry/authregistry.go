@@ -65,7 +65,7 @@ func (c *config) init() {
 	}
 }
 
-// New creates a new AuthRegistry
+// New creates a new AuthRegistry.
 func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 	c, err := parseConfig(m)
 	if err != nil {

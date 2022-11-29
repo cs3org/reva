@@ -20,14 +20,11 @@ package filecache_test
 
 import (
 	"database/sql"
-	"io/ioutil"
 	"os"
 	"strconv"
 
-	_ "github.com/mattn/go-sqlite3"
-
 	"github.com/cs3org/reva/pkg/storage/fs/owncloudsql/filecache"
-
+	_ "github.com/mattn/go-sqlite3"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
@@ -35,24 +32,24 @@ import (
 var _ = Describe("Filecache", func() {
 	var (
 		cache      *filecache.Cache
-		testDbFile *os.File
+		testDBFile *os.File
 		sqldb      *sql.DB
 	)
 
 	BeforeEach(func() {
 		var err error
-		testDbFile, err = ioutil.TempFile("", "example")
+		testDBFile, err = os.CreateTemp("", "example")
 		Expect(err).ToNot(HaveOccurred())
 
-		dbData, err := ioutil.ReadFile("test.db")
+		dbData, err := os.ReadFile("test.db")
 		Expect(err).ToNot(HaveOccurred())
 
-		_, err = testDbFile.Write(dbData)
+		_, err = testDBFile.Write(dbData)
 		Expect(err).ToNot(HaveOccurred())
-		err = testDbFile.Close()
+		err = testDBFile.Close()
 		Expect(err).ToNot(HaveOccurred())
 
-		sqldb, err = sql.Open("sqlite3", testDbFile.Name())
+		sqldb, err = sql.Open("sqlite3", testDBFile.Name())
 		Expect(err).ToNot(HaveOccurred())
 
 		cache, err = filecache.New("sqlite3", sqldb)
@@ -60,7 +57,7 @@ var _ = Describe("Filecache", func() {
 	})
 
 	AfterEach(func() {
-		os.Remove(testDbFile.Name())
+		os.Remove(testDBFile.Name())
 	})
 
 	Describe("GetNumericStorageID", func() {

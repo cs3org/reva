@@ -19,7 +19,7 @@
 package runtime
 
 import (
-	// These are all the extensions points for REVA
+	// These are all the extensions points for REVA.
 	_ "github.com/cs3org/reva/internal/grpc/interceptors/loader"
 	_ "github.com/cs3org/reva/internal/grpc/services/loader"
 	_ "github.com/cs3org/reva/internal/http/interceptors/auth/credential/loader"

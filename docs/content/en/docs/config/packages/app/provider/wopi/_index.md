@@ -8,6 +8,14 @@ description: >
 
 # _struct: config_
 
+{{% dir name="mime_types" type="[]string" default=nil %}}
+Inherited from the appprovider. [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/app/provider/wopi/wopi.go#L58)
+{{< highlight toml >}}
+[app.provider.wopi]
+mime_types = nil
+{{< /highlight >}}
+{{% /dir %}}
+
 {{% dir name="iop_secret" type="string" default="" %}}
 The IOP secret used to connect to the wopiserver. [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/app/provider/wopi/wopi.go#L59)
 {{< highlight toml >}}
@@ -72,16 +80,8 @@ jwt_secret = ""
 {{< /highlight >}}
 {{% /dir %}}
 
-{{% dir name="custom_mime_types_json" type="string" default="nil" %}}
-An optional mapping file with the list of supported custom file extensions and corresponding mime types. [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/app/provider/wopi/wopi.go#L67)
-{{< highlight toml >}}
-[app.provider.wopi]
-custom_mime_types_json = "nil"
-{{< /highlight >}}
-{{% /dir %}}
-
 {{% dir name="app_desktop_only" type="bool" default=false %}}
-Specifies if the app can be opened only on desktop. [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/app/provider/wopi/wopi.go#L68)
+Specifies if the app can be opened only on desktop. [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/app/provider/wopi/wopi.go#L67)
 {{< highlight toml >}}
 [app.provider.wopi]
 app_desktop_only = false

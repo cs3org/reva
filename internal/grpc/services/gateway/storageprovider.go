@@ -27,8 +27,6 @@ import (
 	"sync"
 	"time"
 
-	"google.golang.org/protobuf/types/known/fieldmaskpb"
-
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
@@ -36,20 +34,19 @@ import (
 	registry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
-	rtrace "github.com/cs3org/reva/pkg/trace"
-	"github.com/cs3org/reva/pkg/utils"
-
 	"github.com/cs3org/reva/pkg/appctx"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	rtrace "github.com/cs3org/reva/pkg/trace"
+	"github.com/cs3org/reva/pkg/utils"
 	"github.com/golang-jwt/jwt"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
-
 	"google.golang.org/grpc/codes"
 	gstatus "google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/fieldmaskpb"
 )
 
 // transferClaims are custom claims for a JWT token to be used between the metadata and data gateways.
@@ -348,7 +345,6 @@ func (s *svc) InitiateFileDownload(ctx context.Context, req *provider.InitiateFi
 		return &gateway.InitiateFileDownloadResponse{
 			Status: status.NewInvalidArg(ctx, "path points to share folder"),
 		}, nil
-
 	}
 
 	if s.isShareName(ctx, p) {
@@ -552,7 +548,6 @@ func (s *svc) InitiateFileUpload(ctx context.Context, req *provider.InitiateFile
 		return &gateway.InitiateFileUploadResponse{
 			Status: status.NewInvalidArg(ctx, "path points to share folder"),
 		}, nil
-
 	}
 
 	if s.isShareName(ctx, p) {
@@ -619,7 +614,6 @@ func (s *svc) InitiateFileUpload(ctx context.Context, req *provider.InitiateFile
 		return &gateway.InitiateFileUploadResponse{
 			Status: status.NewInvalidArg(ctx, "path points to share name"),
 		}, nil
-
 	}
 
 	if s.isShareChild(ctx, p) {
@@ -890,7 +884,6 @@ func (s *svc) Delete(ctx context.Context, req *provider.DeleteRequest) (*provide
 		return &provider.DeleteResponse{
 			Status: status.NewInvalidArg(ctx, "path points to share folder or share name"),
 		}, nil
-
 	}
 
 	if s.isShareName(ctx, p) {
@@ -1218,7 +1211,7 @@ func (s *svc) UnsetArbitraryMetadata(ctx context.Context, req *provider.UnsetArb
 	return res, nil
 }
 
-// SetLock puts a lock on the given reference
+// SetLock puts a lock on the given reference.
 func (s *svc) SetLock(ctx context.Context, req *provider.SetLockRequest) (*provider.SetLockResponse, error) {
 	c, err := s.find(ctx, req.Ref)
 	if err != nil {
@@ -1238,7 +1231,7 @@ func (s *svc) SetLock(ctx context.Context, req *provider.SetLockRequest) (*provi
 	return res, nil
 }
 
-// GetLock returns an existing lock on the given reference
+// GetLock returns an existing lock on the given reference.
 func (s *svc) GetLock(ctx context.Context, req *provider.GetLockRequest) (*provider.GetLockResponse, error) {
 	c, err := s.find(ctx, req.Ref)
 	if err != nil {
@@ -1258,7 +1251,7 @@ func (s *svc) GetLock(ctx context.Context, req *provider.GetLockRequest) (*provi
 	return res, nil
 }
 
-// RefreshLock refreshes an existing lock on the given reference
+// RefreshLock refreshes an existing lock on the given reference.
 func (s *svc) RefreshLock(ctx context.Context, req *provider.RefreshLockRequest) (*provider.RefreshLockResponse, error) {
 	c, err := s.find(ctx, req.Ref)
 	if err != nil {
@@ -1278,7 +1271,7 @@ func (s *svc) RefreshLock(ctx context.Context, req *provider.RefreshLockRequest)
 	return res, nil
 }
 
-// Unlock removes an existing lock from the given reference
+// Unlock removes an existing lock from the given reference.
 func (s *svc) Unlock(ctx context.Context, req *provider.UnlockRequest) (*provider.UnlockResponse, error) {
 	c, err := s.find(ctx, req.Ref)
 	if err != nil {
@@ -1460,7 +1453,6 @@ func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 		// It should be possible to delete and move share references, so expose all possible permissions
 		res.Info.PermissionSet = conversions.NewManagerRole().CS3ResourcePermissions()
 		return res, nil
-
 	}
 
 	if s.isShareChild(ctx, p) {
@@ -1817,7 +1809,6 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 		}
 
 		return newRes, nil
-
 	}
 
 	if s.isShareChild(ctx, p) {
@@ -1894,14 +1885,12 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 		}
 
 		return newRes, nil
-
 	}
 
 	panic("gateway: stating an unknown path:" + p)
 }
 
 func (s *svc) getPath(ctx context.Context, ref *provider.Reference, keys ...string) (string, *rpc.Status) {
-
 	// check if it is an id based or combined reference first
 	if ref.ResourceId != nil {
 		req := &provider.StatRequest{Ref: ref, ArbitraryMetadataKeys: keys}
@@ -1920,6 +1909,11 @@ func (s *svc) getPath(ctx context.Context, ref *provider.Reference, keys ...stri
 		return ref.Path, &rpc.Status{Code: rpc.Code_CODE_OK}
 	}
 	return "", &rpc.Status{Code: rpc.Code_CODE_INTERNAL}
+}
+
+func (s *svc) splitPath(_ context.Context, p string) []string {
+	p = strings.Trim(p, "/")
+	return strings.SplitN(p, "/", 4) // ["home", "MyShares", "photos", "Ibiza/beach.png"]
 }
 
 func (s *svc) CreateSymlink(ctx context.Context, req *provider.CreateSymlinkRequest) (*provider.CreateSymlinkResponse, error) {
@@ -1964,7 +1958,7 @@ func (s *svc) ListRecycleStream(_ *provider.ListRecycleStreamRequest, _ gateway.
 	return errtypes.NotSupported("ListRecycleStream unimplemented")
 }
 
-// TODO use the ListRecycleRequest.Ref to only list the trash of a specific storage
+// TODO use the ListRecycleRequest.Ref to only list the trash of a specific storage.
 func (s *svc) ListRecycle(ctx context.Context, req *provider.ListRecycleRequest) (*provider.ListRecycleResponse, error) {
 	c, err := s.find(ctx, req.GetRef())
 	if err != nil {

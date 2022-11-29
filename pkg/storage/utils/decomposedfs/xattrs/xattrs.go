@@ -31,7 +31,7 @@ import (
 // A non root user can only manipulate the user. namespace, which is what
 // we will use to store ownCloud specific metadata. To prevent name
 // collisions with other apps We are going to introduce a sub namespace
-// "user.ocis."
+// "user.ocis.".
 const (
 	OcisPrefix    string = "user.ocis."
 	ParentidAttr  string = OcisPrefix + "parentid"
@@ -39,20 +39,20 @@ const (
 	OwnerIDPAttr  string = OcisPrefix + "owner.idp"
 	OwnerTypeAttr string = OcisPrefix + "owner.type"
 	// the base name of the node
-	// updated when the file is renamed or moved
+	// updated when the file is renamed or moved.
 	NameAttr string = OcisPrefix + "name"
 
 	BlobIDAttr   string = OcisPrefix + "blobid"
 	BlobsizeAttr string = OcisPrefix + "blobsize"
 
-	// grantPrefix is the prefix for sharing related extended attributes
+	// grantPrefix is the prefix for sharing related extended attributes.
 	GrantPrefix    string = OcisPrefix + "grant."
 	MetadataPrefix string = OcisPrefix + "md."
 
-	// favorite flag, per user
+	// favorite flag, per user.
 	FavPrefix string = OcisPrefix + "fav."
 
-	// a temporary etag for a folder that is removed when the mtime propagation happens
+	// a temporary etag for a folder that is removed when the mtime propagation happens.
 	TmpEtagAttr     string = OcisPrefix + "tmp.etag"
 	ReferenceAttr   string = OcisPrefix + "cs3.ref"      // arbitrary metadata
 	ChecksumPrefix  string = OcisPrefix + "cs."          // followed by the algorithm, eg. ocis.cs.sha1
@@ -66,16 +66,16 @@ const (
 	// the tree modification time of the tree below this node,
 	// propagated when synctime_accounting is true and
 	// user.ocis.propagation=1 is set
-	// stored as a readable time.RFC3339Nano
+	// stored as a readable time.RFC3339Nano.
 	TreeMTimeAttr string = OcisPrefix + "tmtime"
 
 	// the size of the tree below this node,
 	// propagated when treesize_accounting is true and
 	// user.ocis.propagation=1 is set
-	// stored as uint64, little endian
+	// stored as uint64, little endian.
 	TreesizeAttr string = OcisPrefix + "treesize"
 
-	// the quota for the storage space / tree, regardless who accesses it
+	// the quota for the storage space / tree, regardless who accesses it.
 	QuotaAttr string = OcisPrefix + "quota"
 
 	// the name given to a storage space. It should not contain any semantics as its only purpose is to be read.
@@ -86,7 +86,7 @@ const (
 )
 
 // ReferenceFromAttr returns a CS3 reference from xattr of a node.
-// Supported formats are: "cs3:storageid/nodeid"
+// Supported formats are: "cs3:storageid/nodeid".
 func ReferenceFromAttr(b []byte) (*provider.Reference, error) {
 	return refFromCS3(b)
 }

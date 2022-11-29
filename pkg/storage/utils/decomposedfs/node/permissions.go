@@ -33,19 +33,19 @@ import (
 	"github.com/pkg/xattr"
 )
 
-// NoPermissions represents an empty set of permissions
+// NoPermissions represents an empty set of permissions.
 func NoPermissions() provider.ResourcePermissions {
 	return provider.ResourcePermissions{}
 }
 
-// NoOwnerPermissions defines permissions for nodes that don't have an owner set, eg the root node
+// NoOwnerPermissions defines permissions for nodes that don't have an owner set, eg the root node.
 func NoOwnerPermissions() provider.ResourcePermissions {
 	return provider.ResourcePermissions{
 		Stat: true,
 	}
 }
 
-// ShareFolderPermissions defines permissions for the shared jail
+// ShareFolderPermissions defines permissions for the shared jail.
 func ShareFolderPermissions() provider.ResourcePermissions {
 	return provider.ResourcePermissions{
 		// read permissions
@@ -58,7 +58,7 @@ func ShareFolderPermissions() provider.ResourcePermissions {
 	}
 }
 
-// OwnerPermissions defines permissions for nodes owned by the user
+// OwnerPermissions defines permissions for nodes owned by the user.
 func OwnerPermissions() provider.ResourcePermissions {
 	return provider.ResourcePermissions{
 		// all permissions
@@ -83,19 +83,19 @@ func OwnerPermissions() provider.ResourcePermissions {
 	}
 }
 
-// Permissions implements permission checks
+// Permissions implements permission checks.
 type Permissions struct {
 	lu PathLookup
 }
 
-// NewPermissions returns a new Permissions instance
+// NewPermissions returns a new Permissions instance.
 func NewPermissions(lu PathLookup) *Permissions {
 	return &Permissions{
 		lu: lu,
 	}
 }
 
-// AssemblePermissions will assemble the permissions for the current user on the given node, taking into account all parent nodes
+// AssemblePermissions will assemble the permissions for the current user on the given node, taking into account all parent nodes.
 func (p *Permissions) AssemblePermissions(ctx context.Context, n *Node) (ap provider.ResourcePermissions, err error) {
 	u, ok := ctxpkg.ContextGetUser(ctx)
 	if !ok {
@@ -148,7 +148,7 @@ func (p *Permissions) AssemblePermissions(ctx context.Context, n *Node) (ap prov
 			// continue with next segment
 		}
 		if cn, err = cn.Parent(); err != nil {
-			return ap, errors.Wrap(err, "Decomposedfs: error getting parent "+cn.ParentID)
+			return ap, errors.Wrap(err, "decomposedfs: error getting parent "+cn.ParentID)
 		}
 	}
 
@@ -179,9 +179,8 @@ func AddPermissions(l *provider.ResourcePermissions, r *provider.ResourcePermiss
 	l.UpdateGrant = l.UpdateGrant || r.UpdateGrant
 }
 
-// HasPermission call check() for every node up to the root until check returns true
+// HasPermission call check() for every node up to the root until check returns true.
 func (p *Permissions) HasPermission(ctx context.Context, n *Node, check func(*provider.ResourcePermissions) bool) (can bool, err error) {
-
 	var u *userv1beta1.User
 	var perms *provider.ResourcePermissions
 	if u, perms = p.getUserAndPermissions(ctx, n); perms != nil {
@@ -206,7 +205,6 @@ func (p *Permissions) HasPermission(ctx context.Context, n *Node, check func(*pr
 	var g *provider.Grant
 	// for all segments, starting at the leaf
 	for cn.ID != rn.ID {
-
 		var grantees []string
 		if grantees, err = cn.ListGrantees(ctx); err != nil {
 			appctx.GetLogger(ctx).Error().Err(err).Interface("node", cn).Msg("error listing grantees")
@@ -249,7 +247,7 @@ func (p *Permissions) HasPermission(ctx context.Context, n *Node, check func(*pr
 		}
 
 		if cn, err = cn.Parent(); err != nil {
-			return false, errors.Wrap(err, "Decomposedfs: error getting parent "+cn.ParentID)
+			return false, errors.Wrap(err, "decomposedfs: error getting parent "+cn.ParentID)
 		}
 	}
 

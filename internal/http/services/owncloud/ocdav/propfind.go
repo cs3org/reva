@@ -63,12 +63,12 @@ const (
 	// RFC1123 time that mimics oc10. time.RFC1123 would end in "UTC", see https://github.com/golang/go/issues/13781
 	RFC1123 = "Mon, 02 Jan 2006 15:04:05 GMT"
 
-	// _propQuotaUncalculated = "-1"
+	// _propQuotaUncalculated = "-1".
 	_propQuotaUnknown = "-2"
-	// _propQuotaUnlimited    = "-3"
+	// _propQuotaUnlimited    = "-3".
 )
 
-// ns is the namespace that is prefixed to the path in the cs3 namespace
+// ns is the namespace that is prefixed to the path in the cs3 namespace.
 func (s *svc) handlePathPropfind(w http.ResponseWriter, r *http.Request, ns string) {
 	ctx, span := rtrace.Provider.Tracer("reva").Start(r.Context(), fmt.Sprintf("%s %v", r.Method, r.URL.Path))
 	defer span.End()
@@ -141,7 +141,6 @@ func (s *svc) handleSpacesPropfind(w http.ResponseWriter, r *http.Request, space
 	}
 
 	s.propfindResponse(ctx, w, r, "", pf, parentInfo, resourceInfos, sublog)
-
 }
 
 func (s *svc) propfindResponse(ctx context.Context, w http.ResponseWriter, r *http.Request, namespace string, pf propfindXML, parentInfo *provider.ResourceInfo, resourceInfos []*provider.ResourceInfo, log zerolog.Logger) {
@@ -499,7 +498,7 @@ func (s *svc) newPropNS(namespace string, local string, val string) *propertyXML
 	}
 }
 
-// TODO properly use the space
+// TODO properly use the space.
 func (s *svc) newProp(key, val string) *propertyXML {
 	return &propertyXML{
 		XMLName:  xml.Name{Space: "", Local: key},
@@ -508,7 +507,7 @@ func (s *svc) newProp(key, val string) *propertyXML {
 	}
 }
 
-// TODO properly use the space
+// TODO properly use the space.
 func (s *svc) newPropRaw(key, val string) *propertyXML {
 	return &propertyXML{
 		XMLName:  xml.Name{Space: "", Local: key},
@@ -519,7 +518,7 @@ func (s *svc) newPropRaw(key, val string) *propertyXML {
 
 // mdToPropResponse converts the CS3 metadata into a webdav PropResponse
 // ns is the CS3 namespace that needs to be removed from the CS3 path before
-// prefixing it with the baseURI
+// prefixing it with the baseURI.
 func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provider.ResourceInfo, ns string, usershares, linkshares map[string]struct{}) (*responseXML, error) {
 	sublog := appctx.GetLogger(ctx).With().Str("ns", ns).Logger()
 	md.Path = strings.TrimPrefix(md.Path, ns)
@@ -1028,7 +1027,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 	return &response, nil
 }
 
-// be defensive about wrong encoded etags
+// be defensive about wrong encoded etags.
 func quoteEtag(etag string) string {
 	if strings.HasPrefix(etag, "W/") {
 		return `W/"` + strings.Trim(etag[2:], `"`) + `"`
@@ -1036,7 +1035,7 @@ func quoteEtag(etag string) string {
 	return `"` + strings.Trim(etag, `"`) + `"`
 }
 
-// a file is only yours if you are the owner
+// a file is only yours if you are the owner.
 func isCurrentUserOwner(ctx context.Context, owner *userv1beta1.UserId) bool {
 	contextUser, ok := ctxpkg.ContextGetUser(ctx)
 	if ok && contextUser.Id != nil && owner != nil &&

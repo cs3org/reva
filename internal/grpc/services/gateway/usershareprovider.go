@@ -40,7 +40,6 @@ import (
 
 // TODO(labkode): add multi-phase commit logic when commit share or commit ref is enabled.
 func (s *svc) CreateShare(ctx context.Context, req *collaboration.CreateShareRequest) (*collaboration.CreateShareResponse, error) {
-
 	if s.isSharedFolder(ctx, req.ResourceInfo.GetPath()) {
 		return nil, errtypes.AlreadyExists("gateway: can't share the share folder itself")
 	}
@@ -273,8 +272,8 @@ func (s *svc) GetReceivedShare(ctx context.Context, req *collaboration.GetReceiv
 
 // When updating a received share:
 // if the update contains update for displayName:
-//   1) if received share is mounted: we also do a rename in the storage
-//   2) if received share is not mounted: we only rename in user share provider.
+//  1. if received share is mounted: we also do a rename in the storage
+//  2. if received share is not mounted: we only rename in user share provider.
 func (s *svc) UpdateReceivedShare(ctx context.Context, req *collaboration.UpdateReceivedShareRequest) (*collaboration.UpdateReceivedShareResponse, error) {
 	log := appctx.GetLogger(ctx)
 

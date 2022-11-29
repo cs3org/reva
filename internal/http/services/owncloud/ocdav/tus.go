@@ -216,7 +216,6 @@ func (s *svc) handleTusPost(ctx context.Context, w http.ResponseWriter, r *http.
 	// for creation-with-upload extension forward bytes to dataprovider
 	// TODO check this really streams
 	if r.Header.Get(HeaderContentType) == "application/offset+octet-stream" {
-
 		length, err := strconv.ParseInt(r.Header.Get(HeaderContentLength), 10, 64)
 		if err != nil {
 			log.Debug().Err(err).Msg("wrong request")
@@ -270,7 +269,6 @@ func (s *svc) handleTusPost(ctx context.Context, w http.ResponseWriter, r *http.
 			}
 
 			if sRes.Status.Code != rpc.Code_CODE_OK && sRes.Status.Code != rpc.Code_CODE_NOT_FOUND {
-
 				if sRes.Status.Code == rpc.Code_CODE_PERMISSION_DENIED {
 					// the token expired during upload, so the stat failed
 					// and we can't do anything about it.

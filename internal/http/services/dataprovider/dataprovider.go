@@ -61,7 +61,7 @@ type svc struct {
 	dataTXs map[string]http.Handler
 }
 
-// New returns a new datasvc
+// New returns a new datasvc.
 func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) {
 	conf := &config{}
 	if err := mapstructure.Decode(m, conf); err != nil {
@@ -139,7 +139,6 @@ func (s *svc) Handler() http.Handler {
 }
 
 func (s *svc) setHandler() error {
-
 	s.handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		log := appctx.GetLogger(r.Context())
 		log.Debug().Msgf("dataprovider routing: path=%s", r.URL.Path)

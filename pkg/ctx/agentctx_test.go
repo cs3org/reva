@@ -26,7 +26,6 @@ import (
 )
 
 func TestUserAgentIsAllowed(t *testing.T) {
-
 	tests := []struct {
 		description string
 		userAgent   string
@@ -73,7 +72,6 @@ func TestUserAgentIsAllowed(t *testing.T) {
 			if cat != tt.expected {
 				t.Fatalf("result does not match with expected. got=%+v expected=%+v", cat, tt.expected)
 			}
-
 		})
 	}
 }

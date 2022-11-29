@@ -24,12 +24,11 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/cs3org/reva/pkg/utils"
 	"github.com/pkg/errors"
 	"go.opencensus.io/stats"
 	"go.opencensus.io/stats/view"
 	"go.opencensus.io/tag"
-
-	"github.com/cs3org/reva/pkg/utils"
 )
 
 type sysInfoMetricsLabels = map[tag.Key]string

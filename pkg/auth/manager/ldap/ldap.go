@@ -76,7 +76,7 @@ type attributes struct {
 	GIDNumber string `mapstructure:"gidNumber"`
 }
 
-// Default attributes (Active Directory)
+// Default attributes (Active Directory).
 var ldapDefaults = attributes{
 	DN:          "dn",
 	UID:         "ms-DS-ConsistencyGuid", // you can fall back to objectguid or even samaccountname but you will run into trouble when user names change. You have been warned.
@@ -228,7 +228,6 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 	log.Debug().Interface("entry", sr.Entries[0]).Interface("user", u).Msg("authenticated user")
 
 	return u, scopes, nil
-
 }
 
 func (am *mgr) getLoginFilter(login string) string {

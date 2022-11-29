@@ -37,7 +37,7 @@ type manager struct {
 	credentials map[string]Credentials
 }
 
-// Credentials holds a pair of secret and userid
+// Credentials holds a pair of secret and userid.
 type Credentials struct {
 	User   *user.User
 	Secret string

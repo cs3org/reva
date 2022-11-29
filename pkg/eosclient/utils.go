@@ -27,7 +27,7 @@ const (
 	UserAttr
 )
 
-// AttrStringToType converts a string to an AttrType
+// AttrStringToType converts a string to an AttrType.
 func AttrStringToType(t string) (AttrType, error) {
 	switch t {
 	case "sys":

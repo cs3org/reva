@@ -24,7 +24,7 @@ import (
 	datatx "github.com/cs3org/go-cs3apis/cs3/tx/v1beta1"
 )
 
-// Manager the interface any transfer driver should implement
+// Manager the interface any transfer driver should implement.
 type Manager interface {
 	// StartTransfer initiates a transfer job and returns a TxInfo object including a unique transfer id, and error if any.
 	StartTransfer(ctx context.Context, srcRemote string, srcPath string, srcToken string, destRemote string, destPath string, destToken string) (*datatx.TxInfo, error)

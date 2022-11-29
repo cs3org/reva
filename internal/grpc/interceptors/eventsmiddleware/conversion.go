@@ -23,7 +23,7 @@ import (
 	"github.com/cs3org/reva/pkg/events"
 )
 
-// ShareCreated converts response to event
+// ShareCreated converts response to event.
 func ShareCreated(r *collaboration.CreateShareResponse) events.ShareCreated {
 	e := events.ShareCreated{
 		Sharer:         r.Share.Creator,

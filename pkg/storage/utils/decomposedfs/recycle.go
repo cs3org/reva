@@ -45,7 +45,7 @@ import (
 // TODO For an efficient listing of deleted nodes the ocis storages trash folder should have
 // contain a directory with symlinks to trash files for every userid/"root"
 
-// ListRecycle returns the list of available recycle items
+// ListRecycle returns the list of available recycle items.
 func (fs *Decomposedfs) ListRecycle(ctx context.Context, basePath, key, relativePath string) ([]*provider.RecycleItem, error) {
 	log := appctx.GetLogger(ctx)
 
@@ -257,7 +257,7 @@ func (fs *Decomposedfs) listTrashRoot(ctx context.Context) ([]*provider.RecycleI
 	return items, nil
 }
 
-// RestoreRecycleItem restores the specified item
+// RestoreRecycleItem restores the specified item.
 func (fs *Decomposedfs) RestoreRecycleItem(ctx context.Context, basePath, key, relativePath string, restoreRef *provider.Reference) error {
 	if restoreRef == nil {
 		restoreRef = &provider.Reference{}
@@ -292,7 +292,7 @@ func (fs *Decomposedfs) RestoreRecycleItem(ctx context.Context, basePath, key, r
 	return restoreFunc()
 }
 
-// PurgeRecycleItem purges the specified item
+// PurgeRecycleItem purges the specified item.
 func (fs *Decomposedfs) PurgeRecycleItem(ctx context.Context, basePath, key, relativePath string) error {
 	rn, purgeFunc, err := fs.tp.PurgeRecycleItemFunc(ctx, key, relativePath)
 	if err != nil {
@@ -314,7 +314,7 @@ func (fs *Decomposedfs) PurgeRecycleItem(ctx context.Context, basePath, key, rel
 	return purgeFunc()
 }
 
-// EmptyRecycle empties the trash
+// EmptyRecycle empties the trash.
 func (fs *Decomposedfs) EmptyRecycle(ctx context.Context) error {
 	u, ok := ctxpkg.ContextGetUser(ctx)
 	// TODO what permission should we check? we could check the root node of the user? or the owner permissions on his home root node?

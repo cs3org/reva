@@ -35,11 +35,11 @@ func init() {
 }
 
 type config struct {
-	DbUsername string `mapstructure:"db_username"`
-	DbPassword string `mapstructure:"db_password"`
-	DbHost     string `mapstructure:"db_host"`
-	DbPort     int    `mapstructure:"db_port"`
-	DbName     string `mapstructure:"db_name"`
+	DBUsername string `mapstructure:"db_username"`
+	DBPassword string `mapstructure:"db_password"`
+	DBHost     string `mapstructure:"db_host"`
+	DBPort     int    `mapstructure:"db_port"`
+	DBName     string `mapstructure:"db_name"`
 }
 
 type mgr struct {
@@ -54,7 +54,7 @@ func New(m map[string]interface{}) (preferences.Manager, error) {
 		return nil, err
 	}
 
-	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%d)/%s", c.DbUsername, c.DbPassword, c.DbHost, c.DbPort, c.DbName))
+	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%d)/%s", c.DBUsername, c.DBPassword, c.DBHost, c.DBPort, c.DBName))
 	if err != nil {
 		return nil, err
 	}

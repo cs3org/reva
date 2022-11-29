@@ -22,7 +22,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"io/ioutil"
+	"io"
 	"os"
 	"reflect"
 	"testing"
@@ -136,7 +136,6 @@ func TestNewManager(t *testing.T) {
 			}
 		})
 	}
-
 }
 
 func TestGenerateAppPassword(t *testing.T) {
@@ -270,7 +269,7 @@ func TestGenerateAppPassword(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			data, err := ioutil.ReadAll(tmpFile)
+			data, err := io.ReadAll(tmpFile)
 			if err != nil {
 				t.Fatalf("error reading file %s: %v", tmpFile.Name(), err)
 			}
@@ -284,10 +283,8 @@ func TestGenerateAppPassword(t *testing.T) {
 			if !reflect.DeepEqual(jsonState, test.expectedState) {
 				t.Fatalf("json state differ: expected=%v got=%v", render.AsCode(jsonState), render.AsCode(test.expectedState))
 			}
-
 		})
 	}
-
 }
 
 func TestListAppPasswords(t *testing.T) {
@@ -412,10 +409,8 @@ func TestListAppPasswords(t *testing.T) {
 			if !reflect.DeepEqual(pws, test.expectedState) {
 				t.Fatalf("list passwords differ: expected=%v got=%v", test.expectedState, pws)
 			}
-
 		})
 	}
-
 }
 
 func TestInvalidateAppPassword(t *testing.T) {
@@ -538,10 +533,8 @@ func TestInvalidateAppPassword(t *testing.T) {
 			if !reflect.DeepEqual(test.expectedState, manager.(*jsonManager).passwords) {
 				t.Fatalf("apppauth state differ: expected=%v got=%v", render.AsCode(test.expectedState), render.AsCode(manager.(*jsonManager).passwords))
 			}
-
 		})
 	}
-
 }
 
 func TestGetAppPassword(t *testing.T) {
@@ -695,13 +688,12 @@ func TestGetAppPassword(t *testing.T) {
 			if !reflect.DeepEqual(test.expectedState, pw) {
 				t.Fatalf("apppauth state differ: expected=%v got=%v", render.AsCode(test.expectedState), render.AsCode(pw))
 			}
-
 		})
 	}
 }
 
 func createTempDir(t *testing.T, name string) string {
-	tempDir, err := ioutil.TempDir("", name)
+	tempDir, err := os.MkdirTemp("", name)
 	if err != nil {
 		t.Fatalf("error while creating temp dir: %v", err)
 	}
@@ -709,7 +701,7 @@ func createTempDir(t *testing.T, name string) string {
 }
 
 func createTempFile(t *testing.T, tempDir string, name string) *os.File {
-	tempFile, err := ioutil.TempFile(tempDir, name)
+	tempFile, err := os.CreateTemp(tempDir, name)
 	if err != nil {
 		t.Fatalf("error while creating temp file: %v", err)
 	}

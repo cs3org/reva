@@ -38,7 +38,6 @@ func appTokensListCommand() *command {
 	cmd.Usage = func() string { return "Usage: token-list" }
 
 	cmd.Action = func(w ...io.Writer) error {
-
 		client, err := getClient()
 		if err != nil {
 			return err

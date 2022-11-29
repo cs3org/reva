@@ -21,5 +21,5 @@ package loader
 import (
 	// Load datatx drivers.
 	_ "github.com/cs3org/reva/pkg/datatx/manager/rclone"
-	// Add your own here
+	// Add your own here.
 )

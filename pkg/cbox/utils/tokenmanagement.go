@@ -22,7 +22,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -33,14 +33,14 @@ import (
 	"github.com/mitchellh/mapstructure"
 )
 
-// APITokenManager stores config related to api management
+// APITokenManager stores config related to api management.
 type APITokenManager struct {
 	oidcToken OIDCToken
 	conf      *config
 	client    *http.Client
 }
 
-// OIDCToken stores the OIDC token used to authenticate requests to the REST API service
+// OIDCToken stores the OIDC token used to authenticate requests to the REST API service.
 type OIDCToken struct {
 	sync.Mutex          // concurrent access to apiToken and tokenExpirationTime
 	apiToken            string
@@ -56,7 +56,7 @@ type config struct {
 	Insecure          bool   `mapstructure:"insecure"`
 }
 
-// InitAPITokenManager initializes a new APITokenManager
+// InitAPITokenManager initializes a new APITokenManager.
 func InitAPITokenManager(conf map[string]interface{}) (*APITokenManager, error) {
 	c := &config{}
 	if err := mapstructure.Decode(conf, c); err != nil {
@@ -90,13 +90,12 @@ func (a *APITokenManager) renewAPIToken(ctx context.Context, forceRenewal bool) 
 }
 
 func (a *APITokenManager) getAPIToken(ctx context.Context) (string, time.Time, error) {
-
 	params := url.Values{
 		"grant_type": {"client_credentials"},
 		"audience":   {a.conf.TargetAPI},
 	}
 
-	httpReq, err := http.NewRequest("POST", a.conf.OIDCTokenEndpoint, strings.NewReader(params.Encode()))
+	httpReq, err := http.NewRequest(http.MethodPost, a.conf.OIDCTokenEndpoint, strings.NewReader(params.Encode()))
 	if err != nil {
 		return "", time.Time{}, err
 	}
@@ -109,7 +108,7 @@ func (a *APITokenManager) getAPIToken(ctx context.Context) (string, time.Time, e
 	}
 	defer httpRes.Body.Close()
 
-	body, err := ioutil.ReadAll(httpRes.Body)
+	body, err := io.ReadAll(httpRes.Body)
 	if err != nil {
 		return "", time.Time{}, err
 	}
@@ -128,14 +127,14 @@ func (a *APITokenManager) getAPIToken(ctx context.Context) (string, time.Time, e
 	return result["access_token"].(string), expirationTime, nil
 }
 
-// SendAPIGetRequest makes an API GET Request to the passed URL
+// SendAPIGetRequest makes an API GET Request to the passed URL.
 func (a *APITokenManager) SendAPIGetRequest(ctx context.Context, url string, forceRenewal bool) (map[string]interface{}, error) {
 	err := a.renewAPIToken(ctx, forceRenewal)
 	if err != nil {
 		return nil, err
 	}
 
-	httpReq, err := http.NewRequest("GET", url, nil)
+	httpReq, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -159,7 +158,7 @@ func (a *APITokenManager) SendAPIGetRequest(ctx context.Context, url string, for
 		return nil, errors.New("rest: API request returned " + httpRes.Status)
 	}
 
-	body, err := ioutil.ReadAll(httpRes.Body)
+	body, err := io.ReadAll(httpRes.Body)
 	if err != nil {
 		return nil, err
 	}

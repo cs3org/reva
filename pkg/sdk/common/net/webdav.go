@@ -21,13 +21,11 @@ package net
 import (
 	"fmt"
 	"io"
-	"io/ioutil"
 	"strconv"
 
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	"github.com/studio-b12/gowebdav"
-
 	"github.com/cs3org/reva/pkg/sdk/common"
+	"github.com/studio-b12/gowebdav"
 )
 
 const (
@@ -61,7 +59,7 @@ func (webdav *WebDAVClient) Read(file string) ([]byte, error) {
 	}
 	defer reader.Close()
 
-	data, err := ioutil.ReadAll(reader)
+	data, err := io.ReadAll(reader)
 	if err != nil {
 		return nil, fmt.Errorf("unable to read the data: %v", err)
 	}

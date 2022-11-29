@@ -24,7 +24,7 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 )
 
-// TODO(jfd) implement lock
+// TODO(jfd) implement lock.
 func (s *svc) handleLock(w http.ResponseWriter, r *http.Request, ns string) {
 	log := appctx.GetLogger(r.Context())
 	xml := `<?xml version="1.0" encoding="utf-8"?>

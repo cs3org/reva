@@ -44,7 +44,7 @@ import (
 // UnaryInterceptors is a map of registered unary grpc interceptors.
 var UnaryInterceptors = map[string]NewUnaryInterceptor{}
 
-// StreamInterceptors is a map of registered streaming grpc interceptor
+// StreamInterceptors is a map of registered streaming grpc interceptor.
 var StreamInterceptors = map[string]NewStreamInterceptor{}
 
 // NewUnaryInterceptor is the type that unary interceptors need to register.

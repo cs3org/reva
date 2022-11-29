@@ -22,38 +22,38 @@ import (
 	"fmt"
 )
 
-// Permissions reflects the CRUD permissions used in the OCS sharing API
+// Permissions reflects the CRUD permissions used in the OCS sharing API.
 type Permissions uint
 
 const (
-	// PermissionInvalid represents an invalid permission
+	// PermissionInvalid grants no permissions on a resource.
 	PermissionInvalid Permissions = 0
-	// PermissionRead grants read permissions on a resource
+	// PermissionRead grants read permissions on a resource.
 	PermissionRead Permissions = 1 << (iota - 1)
-	// PermissionWrite grants write permissions on a resource
+	// PermissionWrite grants write permissions on a resource.
 	PermissionWrite
-	// PermissionCreate grants create permissions on a resource
+	// PermissionCreate grants create permissions on a resource.
 	PermissionCreate
-	// PermissionDelete grants delete permissions on a resource
+	// PermissionDelete grants delete permissions on a resource.
 	PermissionDelete
-	// PermissionShare grants share permissions on a resource
+	// PermissionShare grants share permissions on a resource.
 	PermissionShare
 	// PermissionDeny grants permissions to deny access on a resource
 	// The recipient of the resource will then have PermissionNone.
 	PermissionDeny
-	// PermissionNone grants no permissions on a resource
+	// PermissionNone grants no permissions on a resource.
 	PermissionNone
-	// PermissionMax is to be used within value range checks
+	// PermissionMax is to be used within value range checks.
 	PermissionMax Permissions = (1 << (iota - 1)) - 1
-	// PermissionAll grants all permissions on a resource
+	// PermissionAll grants all permissions on a resource.
 	PermissionAll = PermissionMax - PermissionNone
-	// PermissionMin is to be used within value range checks
+	// PermissionMin is to be used within value range checks.
 	PermissionMin = PermissionRead
 )
 
 var (
 	// ErrPermissionNotInRange defines a permission specific error.
-	ErrPermissionNotInRange = fmt.Errorf("The provided permission is not between %d and %d", PermissionMin, PermissionMax)
+	ErrPermissionNotInRange = fmt.Errorf("the provided permission is not between %d and %d", PermissionInvalid, PermissionAll)
 )
 
 // NewPermissions creates a new Permissions instance.

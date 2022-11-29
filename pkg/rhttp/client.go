@@ -24,10 +24,9 @@ import (
 	"io"
 	"net/http"
 
-	"go.opencensus.io/plugin/ochttp"
-
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/pkg/errors"
+	"go.opencensus.io/plugin/ochttp"
 )
 
 // GetHTTPClient returns an http client with open census tracing support.

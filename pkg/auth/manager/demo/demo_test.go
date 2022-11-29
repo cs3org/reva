@@ -40,5 +40,4 @@ func TestUserManager(t *testing.T) {
 	if err == nil {
 		t.Fatalf("no error (but we expected one) while authenticate with bad credentials")
 	}
-
 }

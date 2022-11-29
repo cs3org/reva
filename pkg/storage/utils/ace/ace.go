@@ -39,31 +39,31 @@ import (
 // see https://linux.die.net/man/5/nfs4_acl:
 // the extended attributes will look like this
 // "user.oc.grant.<type>:<flags>:<principal>:<permissions>"
-// - *type* will be limited to A for now
+//   - *type* will be limited to A for now
 //     A: Allow - allow *principal* to perform actions requiring *permissions*
-//   In the future we can use:
+//     In the future we can use:
 //     U: aUdit - log any attempted access by principal which requires
-//                permissions.
+//     permissions.
 //     L: aLarm - generate a system alarm at any attempted access by
-//                principal which requires permissions
+//     principal which requires permissions
 //     D: for Deny is not recommended
-// - *flags* for now empty or g for group, no inheritance yet
+//   - *flags* for now empty or g for group, no inheritance yet
 //   - d directory-inherit - newly-created subdirectories will inherit the
-//                           ACE.
+//     ACE.
 //   - f file-inherit - newly-created files will inherit the ACE, minus its
-//                      inheritance flags. Newly-created subdirectories
-//                      will inherit the ACE; if directory-inherit is not
-//                      also specified in the parent ACE, inherit-only will
-//                      be added to the inherited ACE.
+//     inheritance flags. Newly-created subdirectories
+//     will inherit the ACE; if directory-inherit is not
+//     also specified in the parent ACE, inherit-only will
+//     be added to the inherited ACE.
 //   - n no-propagate-inherit - newly-created subdirectories will inherit
-//                              the ACE, minus its inheritance flags.
+//     the ACE, minus its inheritance flags.
 //   - i inherit-only - the ACE is not considered in permissions checks,
-//                      but it is heritable; however, the inherit-only
-//                      flag is stripped from inherited ACEs.
-// - *principal* a named user, group or special principal
+//     but it is heritable; however, the inherit-only
+//     flag is stripped from inherited ACEs.
+//   - *principal* a named user, group or special principal
 //   - the oidc sub@iss maps nicely to this
 //   - 'OWNER@', 'GROUP@', and 'EVERYONE@', which are, respectively, analogous to the POSIX user/group/other
-// - *permissions*
+//   - *permissions*
 //   - r read-data (files) / list-directory (directories)
 //   - w write-data (files) / create-file (directories)
 //   - a append-data (files) / create-subdirectory (directories)
@@ -78,15 +78,18 @@ import (
 //   - C write-ACL - write the file/directory NFSv4 ACL.
 //   - o write-owner - change ownership of the file/directory.
 //   - y synchronize - allow clients to use synchronous I/O with the server.
+//
 // TODO implement OWNER@ as "user.oc.grant.A::OWNER@:rwaDxtTnNcCy"
 // attribute names are limited to 255 chars by the linux kernel vfs, values to 64 kb
 // ext3 extended attributes must fit inside a single filesystem block ... 4096 bytes
 // that leaves us with "user.oc.grant.A::someonewithaslightlylongersubject@whateverissuer:rwaDxtTnNcCy" ~80 chars
 // 4096/80 = 51 shares ... with luck we might move the actual permissions to the value, saving ~15 chars
 // 4096/64 = 64 shares ... still meh ... we can do better by using ints instead of strings for principals
-//   "user.oc.grant.u:100000" is pretty neat, but we can still do better: base64 encode the int
-//   "user.oc.grant.u:6Jqg" but base64 always has at least 4 chars, maybe hex is better for smaller numbers
-//   well use 4 chars in addition to the ace: "user.oc.grant.u:////" = 65535 -> 18 chars
+//
+//	"user.oc.grant.u:100000" is pretty neat, but we can still do better: base64 encode the int
+//	"user.oc.grant.u:6Jqg" but base64 always has at least 4 chars, maybe hex is better for smaller numbers
+//	well use 4 chars in addition to the ace: "user.oc.grant.u:////" = 65535 -> 18 chars
+//
 // 4096/18 = 227 shares
 // still ... ext attrs for this are not infinite scale ...
 // so .. attach shares via fileid.
@@ -95,8 +98,8 @@ import (
 //
 // whatever ... 50 shares is good enough. If more is needed we can delegate to the metadata
 // if "user.oc.grant.M" is present look inside the metadata app.
-// - if we cannot set an ace we might get an io error.
-//   in that case convert all shares to metadata and try to set "user.oc.grant.m"
+//   - if we cannot set an ace we might get an io error.
+//     in that case convert all shares to metadata and try to set "user.oc.grant.m"
 //
 // what about metadata like share creator, share time, expiry?
 // - creator is same as owner, but can be set
@@ -124,7 +127,7 @@ type ACE struct {
 	label     string // l
 }
 
-// FromGrant creates an ACE from a CS3 grant
+// FromGrant creates an ACE from a CS3 grant.
 func FromGrant(g *provider.Grant) *ACE {
 	e := &ACE{
 		_type:       "A",
@@ -140,12 +143,12 @@ func FromGrant(g *provider.Grant) *ACE {
 	return e
 }
 
-// Principal returns the principal of the ACE, eg. `u:<userid>` or `g:<groupid>`
+// Principal returns the principal of the ACE, eg. `u:<userid>` or `g:<groupid>`.
 func (e *ACE) Principal() string {
 	return e.principal
 }
 
-// Marshal renders a principal and byte[] that can be used to persist the ACE as an extended attribute
+// Marshal renders a principal and byte[] that can be used to persist the ACE as an extended attribute.
 func (e *ACE) Marshal() (string, []byte) {
 	// first byte will be replaced after converting to byte array
 	val := fmt.Sprintf("_t=%s:f=%s:p=%s", e._type, e.flags, e.permissions)
@@ -154,7 +157,7 @@ func (e *ACE) Marshal() (string, []byte) {
 	return e.principal, b
 }
 
-// Unmarshal parses a principal string and byte[] into an ACE
+// Unmarshal parses a principal string and byte[] into an ACE.
 func Unmarshal(principal string, v []byte) (e *ACE, err error) {
 	// first byte indicates type of value
 	switch v[0] {
@@ -179,7 +182,7 @@ func Unmarshal(principal string, v []byte) (e *ACE, err error) {
 	return
 }
 
-// Grant returns a CS3 grant
+// Grant returns a CS3 grant.
 func (e *ACE) Grant() *provider.Grant {
 	g := &provider.Grant{
 		Grantee: &provider.Grantee{
@@ -196,7 +199,7 @@ func (e *ACE) Grant() *provider.Grant {
 	return g
 }
 
-// granteeType returns the CS3 grantee type
+// granteeType returns the CS3 grantee type.
 func (e *ACE) granteeType() provider.GranteeType {
 	if strings.Contains(e.flags, "g") {
 		return provider.GranteeType_GRANTEE_TYPE_GROUP
@@ -204,7 +207,7 @@ func (e *ACE) granteeType() provider.GranteeType {
 	return provider.GranteeType_GRANTEE_TYPE_USER
 }
 
-// grantPermissionSet returns the set of CS3 resource permissions representing the ACE
+// grantPermissionSet returns the set of CS3 resource permissions representing the ACE.
 func (e *ACE) grantPermissionSet() *provider.ResourcePermissions {
 	p := &provider.ResourcePermissions{}
 	// r

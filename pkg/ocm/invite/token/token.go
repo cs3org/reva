@@ -33,7 +33,6 @@ const DefaultExpirationTime = "24h"
 
 // CreateToken creates a InviteToken object for the userID indicated by userID.
 func CreateToken(expiration string, userID *userpb.UserId) (*invitepb.InviteToken, error) {
-
 	// Parse time of expiration
 	duration, err := time.ParseDuration(expiration)
 	if err != nil {

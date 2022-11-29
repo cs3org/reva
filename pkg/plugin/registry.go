@@ -20,10 +20,10 @@ package plugin
 
 import "github.com/hashicorp/go-plugin"
 
-// PluginMap is a map containing all the plugins
+// PluginMap is a map containing all the plugins.
 var PluginMap = map[string]plugin.Plugin{}
 
-// Register registers the plugin
+// Register registers the plugin.
 func Register(name string, plugin plugin.Plugin) {
 	PluginMap[name] = plugin
 }

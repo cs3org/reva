@@ -19,18 +19,18 @@
 package meshdata
 
 const (
-	// EndpointRevad identifies the main Reva Daemon endpoint
+	// EndpointRevad identifies the main Reva Daemon endpoint.
 	EndpointRevad = "REVAD"
 
-	// EndpointGateway identifies the Gateway endpoint
+	// EndpointGateway identifies the Gateway endpoint.
 	EndpointGateway = "GATEWAY"
-	// EndpointMetrics identifies the Metrics endpoint
+	// EndpointMetrics identifies the Metrics endpoint.
 	EndpointMetrics = "METRICS"
-	// EndpointWebdav identifies the Webdav endpoint
+	// EndpointWebdav identifies the Webdav endpoint.
 	EndpointWebdav = "WEBDAV"
-	// EndpointOCM identifies the OCM endpoint
+	// EndpointOCM identifies the OCM endpoint.
 	EndpointOCM = "OCM"
-	// EndpointMeshDir identifies the Mesh Directory endpoint
+	// EndpointMeshDir identifies the Mesh Directory endpoint.
 	EndpointMeshDir = "MESHDIR"
 )
 

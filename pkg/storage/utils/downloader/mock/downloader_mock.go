@@ -29,7 +29,7 @@ import (
 type mockDownloader struct{}
 
 // NewDownloader creates a mock downloader that implements the Downloader interface
-// supposed to be used for testing
+// supposed to be used for testing.
 func NewDownloader() downloader.Downloader {
 	return &mockDownloader{}
 }

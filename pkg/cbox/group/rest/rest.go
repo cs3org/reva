@@ -221,7 +221,6 @@ func (m *manager) parseAndCacheGroup(ctx context.Context, groupData map[string]i
 	}
 
 	return g, nil
-
 }
 
 func (m *manager) GetGroup(ctx context.Context, gid *grouppb.GroupId, skipFetchingMembers bool) (*grouppb.Group, error) {
@@ -263,7 +262,6 @@ func (m *manager) GetGroupByClaim(ctx context.Context, claim, value string, skip
 }
 
 func (m *manager) FindGroups(ctx context.Context, query string, skipFetchingMembers bool) ([]*grouppb.Group, error) {
-
 	// Look at namespaces filters. If the query starts with:
 	// "a" or none => get egroups
 	// other filters => get empty list
@@ -282,7 +280,6 @@ func (m *manager) FindGroups(ctx context.Context, query string, skipFetchingMemb
 }
 
 func (m *manager) GetMembers(ctx context.Context, gid *grouppb.GroupId) ([]*userpb.UserId, error) {
-
 	users, err := m.fetchCachedGroupMembers(gid)
 	if err == nil {
 		return users, nil

@@ -51,7 +51,7 @@ type strategy struct {
 	c *config
 }
 
-// New returns a new auth strategy that handles public share verification
+// New returns a new auth strategy that handles public share verification.
 func New(m map[string]interface{}) (auth.CredentialStrategy, error) {
 	c, err := parseConfig(m)
 	if err != nil {

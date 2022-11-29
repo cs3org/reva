@@ -35,7 +35,7 @@ import (
 	"github.com/rs/zerolog"
 )
 
-// GetOrHeadFile returns the requested file content
+// GetOrHeadFile returns the requested file content.
 func GetOrHeadFile(w http.ResponseWriter, r *http.Request, fs storage.FS, spaceID string) {
 	ctx := r.Context()
 	sublog := appctx.GetLogger(ctx).With().Str("svc", "datatx").Str("handler", "download").Logger()
@@ -184,7 +184,7 @@ func GetOrHeadFile(w http.ResponseWriter, r *http.Request, fs storage.FS, spaceI
 
 	w.WriteHeader(code)
 
-	if r.Method != "HEAD" {
+	if r.Method != http.MethodHead {
 		var c int64
 		c, err = io.CopyN(w, sendContent, sendSize)
 		if err != nil {
@@ -195,7 +195,6 @@ func GetOrHeadFile(w http.ResponseWriter, r *http.Request, fs storage.FS, spaceI
 			sublog.Error().Int64("copied", c).Int64("size", sendSize).Msg("copied vs size mismatch")
 		}
 	}
-
 }
 
 func handleError(w http.ResponseWriter, log *zerolog.Logger, err error, action string) {

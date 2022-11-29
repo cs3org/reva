@@ -21,19 +21,17 @@ package exporters
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"net/url"
 	"os"
 	"path"
 	"path/filepath"
 	"strings"
 
-	"github.com/cs3org/reva/pkg/mentix/utils"
-	"github.com/rs/zerolog"
-
 	"github.com/cs3org/reva/pkg/mentix/config"
 	"github.com/cs3org/reva/pkg/mentix/exchangers/exporters/prometheus"
 	"github.com/cs3org/reva/pkg/mentix/meshdata"
+	"github.com/cs3org/reva/pkg/mentix/utils"
+	"github.com/rs/zerolog"
 )
 
 type prometheusSDScrapeCreatorCallback = func(op *meshdata.Operator, site *meshdata.Site, service *meshdata.Service, endpoint *meshdata.ServiceEndpoint) *prometheus.ScrapeConfig
@@ -222,7 +220,7 @@ func (exporter *PrometheusSDExporter) exportScrapeConfig(outputFilename string, 
 	}
 
 	// Write the data to disk
-	if err := ioutil.WriteFile(outputFilename, data, 0755); err != nil {
+	if err := os.WriteFile(outputFilename, data, 0755); err != nil {
 		return fmt.Errorf("unable to write scrape config '%v': %v", outputFilename, err)
 	}
 

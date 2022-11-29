@@ -154,7 +154,7 @@ func NewConflict(ctx context.Context, err error, msg string) *rpc.Status {
 	}
 }
 
-// NewFailedPrecondition TODO
+// NewFailedPrecondition TODO.
 func NewFailedPrecondition(ctx context.Context, err error, msg string) *rpc.Status {
 	log := appctx.GetLogger(ctx).With().CallerWithSkipFrameCount(3).Logger()
 	log.Error().Err(err).Msg(msg)
@@ -165,7 +165,7 @@ func NewFailedPrecondition(ctx context.Context, err error, msg string) *rpc.Stat
 	}
 }
 
-// NewStatusFromErrType returns a status that corresponds to the given errtype
+// NewStatusFromErrType returns a status that corresponds to the given errtype.
 func NewStatusFromErrType(ctx context.Context, msg string, err error) *rpc.Status {
 	switch e := err.(type) {
 	case nil:
@@ -212,7 +212,7 @@ func NewErrorFromCode(code rpc.Code, pkgname string) error {
 	return errors.New(pkgname + ": grpc failed with code " + code.String())
 }
 
-// internal function to attach the trace to a context
+// internal function to attach the trace to a context.
 func getTrace(ctx context.Context) string {
 	span := trace.SpanFromContext(ctx)
 	return span.SpanContext().TraceID().String()
