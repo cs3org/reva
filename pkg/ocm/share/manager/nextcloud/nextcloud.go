@@ -396,11 +396,11 @@ func (sm *Manager) Share(ctx context.Context, md *provider.ResourceId, g *ocm.Sh
 
 		requestBodyMap := map[string]interface{}{
 			"shareWith":    g.Grantee.GetUserId().OpaqueId,
-			"name":         name[5:], // e.g. /home/welcome.txt becomes /welcome.txt
+			"name":         name, // e.g. /home/welcome.txt becomes /welcome.txt
 			"providerId":   s.Id.OpaqueId,
 			"owner":        userID.OpaqueId,
 			"protocol":     protocol,
-			"meshProvider": userID.Idp,
+			"meshProvider": sm.webDAVHost, // userID.Idp,
 		}
 		err = sender.Send(ctx, requestBodyMap, pi)
 		if err != nil {
