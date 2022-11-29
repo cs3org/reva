@@ -31,13 +31,16 @@ import (
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/datagateway"
 	"github.com/cs3org/reva/pkg/appctx"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/storage/utils/chunking"
 	rtrace "github.com/cs3org/reva/pkg/trace"
+	"github.com/cs3org/reva/pkg/user"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/cs3org/reva/pkg/utils/resourceid"
 	"github.com/rs/zerolog"
+	"go.step.sm/crypto/randutil"
 )
 
 func sufferMacOSFinder(r *http.Request) bool {
@@ -219,6 +222,18 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 		Opaque: &typespb.Opaque{Map: opaqueMap},
 	}
 
+	if userInCtxHasUploaderRole(ctx) {
+		ref.Path, err = randomizePath(ref.Path)
+		if err != nil {
+			log.Debug().Err(err).Msg("error randomizing path")
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		uReq.Options = &provider.InitiateFileUploadRequest_IfNotExist{
+			IfNotExist: true,
+		}
+	}
+
 	// where to upload the file?
 	uRes, err := client.InitiateFileUpload(ctx, uReq)
 	if err != nil {
@@ -279,6 +294,14 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 			HandleWebdavError(&log, w, b, err)
 			return
 		}
+		if httpRes.StatusCode == http.StatusConflict {
+			w.WriteHeader(http.StatusConflict)
+			b, err := Marshal(exception{
+				message: "The file cannot be uploaded. Try again.",
+			})
+			HandleWebdavError(&log, w, b, err)
+			return
+		}
 		log.Error().Err(err).Msg("PUT request to data server failed")
 		w.WriteHeader(httpRes.StatusCode)
 		return
@@ -329,6 +352,36 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 
 	// overwrite
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func userInCtxHasUploaderRole(ctx context.Context) bool {
+	u, ok := ctxpkg.ContextGetUser(ctx)
+	if !ok {
+		return false
+	}
+	return user.HasUploaderRole(u)
+}
+
+func randomizePath(p string) (string, error) {
+	rand, err := randutil.String(5, "abcdefghijklmnopqrstuvwxyz")
+	if err != nil {
+		return "", err
+	}
+	base, ext := split(p)
+	new := base + "_" + rand
+	if ext != "" {
+		new += ext
+	}
+	return new, nil
+}
+
+func split(p string) (string, string) {
+	e := path.Ext(p)
+	if e == "" {
+		return p, ""
+	}
+	i := strings.Index(p, e)
+	return p[:i], e
 }
 
 func (s *svc) handleSpacesPut(w http.ResponseWriter, r *http.Request, spaceID string) {
