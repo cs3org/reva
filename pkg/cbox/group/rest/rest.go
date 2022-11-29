@@ -314,17 +314,20 @@ func (m *manager) GetMembers(ctx context.Context, gid *grouppb.GroupId) ([]*user
 }
 
 func (m *manager) HasMember(ctx context.Context, gid *grouppb.GroupId, uid *userpb.UserId) (bool, error) {
-	groupMemers, err := m.GetMembers(ctx, gid)
-	if err != nil {
+	url := fmt.Sprintf("%s/api/v1.0/Identity/%s/isMemberRecursive/%s", m.conf.APIBaseURL, uid.OpaqueId, gid.OpaqueId)
+
+	var result struct {
+		Data struct {
+			IsMember bool `json:"isMember"`
+		} `json:"data"`
+	}
+
+	if err := m.apiTokenManager.SendAPIGetRequest(ctx, url, false, &result); err != nil {
+		// TODO: handle group/user not found
 		return false, err
 	}
 
-	for _, u := range groupMemers {
-		if uid.OpaqueId == u.OpaqueId {
-			return true, nil
-		}
-	}
-	return false, nil
+	return result.Data.IsMember, nil
 }
 
 func getUserType(userType, upn string) userpb.UserType {
