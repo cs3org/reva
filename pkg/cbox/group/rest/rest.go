@@ -285,7 +285,8 @@ func (m *manager) GetMembers(ctx context.Context, gid *grouppb.GroupId) ([]*user
 
 	var result struct {
 		Data []struct {
-			Upn *string `json:"upn"`
+			Type string  `json:"type"`
+			Upn  *string `json:"upn"`
 		} `json:"data"`
 	}
 	if err := m.apiTokenManager.SendAPIGetRequest(ctx, url, false, &result); err != nil {
@@ -297,7 +298,7 @@ func (m *manager) GetMembers(ctx context.Context, gid *grouppb.GroupId) ([]*user
 	for _, u := range result.Data {
 		if u.Upn != nil {
 			users = append(users, &userpb.UserId{
-				// TODO: the type is missing
+				Type:     getUserType(u.Type, *u.Upn),
 				OpaqueId: *u.Upn,
 				Idp:      m.conf.IDProvider,
 			})
@@ -324,4 +325,28 @@ func (m *manager) HasMember(ctx context.Context, gid *grouppb.GroupId, uid *user
 		}
 	}
 	return false, nil
+}
+
+func getUserType(userType, upn string) userpb.UserType {
+	var t userpb.UserType
+	switch userType {
+	case "Application":
+		t = userpb.UserType_USER_TYPE_APPLICATION
+	case "Service":
+		t = userpb.UserType_USER_TYPE_SERVICE
+	case "Secondary":
+		t = userpb.UserType_USER_TYPE_SECONDARY
+	case "Person":
+		switch {
+		case strings.HasPrefix(upn, "guest"):
+			t = userpb.UserType_USER_TYPE_LIGHTWEIGHT
+		case strings.Contains(upn, "@"):
+			t = userpb.UserType_USER_TYPE_FEDERATED
+		default:
+			t = userpb.UserType_USER_TYPE_PRIMARY
+		}
+	default:
+		t = userpb.UserType_USER_TYPE_INVALID
+	}
+	return t
 }
