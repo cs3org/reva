@@ -732,7 +732,12 @@ func (fs *eosfs) GetLock(ctx context.Context, ref *provider.Reference) (*provide
 	return fs.getLock(ctx, auth, user, path, ref)
 }
 
-func (fs *eosfs) setLock(ctx context.Context, auth eosclient.Authorization, lock *provider.Lock, path string, check bool) error {
+func (fs *eosfs) setLock(ctx context.Context, lock *provider.Lock, path string, check bool) error {
+	auth, err := fs.getRootAuth(ctx)
+	if err != nil {
+		return err
+	}
+
 	encodedLock, err := encodeLock(lock)
 	if err != nil {
 		return errors.Wrap(err, "eosfs: error encoding lock")
@@ -832,7 +837,7 @@ func (fs *eosfs) SetLock(ctx context.Context, ref *provider.Reference, l *provid
 		}
 	}
 
-	return fs.setLock(ctx, auth, l, path, true)
+	return fs.setLock(ctx, l, path, true)
 }
 
 func (fs *eosfs) getUserFromID(ctx context.Context, userID *userpb.UserId) (*userpb.User, error) {
@@ -932,13 +937,7 @@ func (fs *eosfs) RefreshLock(ctx context.Context, ref *provider.Reference, newLo
 		return errtypes.PermissionDenied(fmt.Sprintf("user %s has not write access on resource", user.Username))
 	}
 
-	// set the xattr with the new value
-	auth, err := fs.getUserAuth(ctx, user, path)
-	if err != nil {
-		return errors.Wrap(err, "eosfs: error getting uid and gid for user")
-	}
-
-	return fs.setLock(ctx, auth, newLock, path, false)
+	return fs.setLock(ctx, newLock, path, false)
 }
 
 func sameHolder(l1, l2 *provider.Lock) bool {
@@ -999,7 +998,7 @@ func (fs *eosfs) Unlock(ctx context.Context, ref *provider.Reference, lock *prov
 	}
 	path = fs.wrap(ctx, path)
 
-	auth, err := fs.getUserAuth(ctx, user, path)
+	auth, err := fs.getRootAuth(ctx)
 	if err != nil {
 		return errors.Wrap(err, "eosfs: error getting uid and gid for user")
 	}
@@ -2236,6 +2235,7 @@ func (fs *eosfs) convert(ctx context.Context, eosFileInfo *eosclient.FileInfo) (
 		Etag:          fmt.Sprintf("\"%s\"", strings.Trim(eosFileInfo.ETag, "\"")),
 		MimeType:      mime.Detect(eosFileInfo.IsDir, path),
 		Size:          size,
+		ParentId:      &provider.ResourceId{OpaqueId: fmt.Sprintf("%d", eosFileInfo.FID)},
 		PermissionSet: fs.permissionSet(ctx, eosFileInfo, owner),
 		Checksum:      &xs,
 		Type:          getResourceType(eosFileInfo.IsDir),

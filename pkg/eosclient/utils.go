@@ -18,7 +18,11 @@
 
 package eosclient
 
-import "github.com/cs3org/reva/v2/pkg/errtypes"
+import (
+	"fmt"
+
+	"github.com/cs3org/reva/v2/pkg/errtypes"
+)
 
 const (
 	// SystemAttr is the system extended attribute.
@@ -37,4 +41,21 @@ func AttrStringToType(t string) (AttrType, error) {
 	default:
 		return 0, errtypes.InternalError("attr type not existing")
 	}
+}
+
+// AttrTypeToString converts a type to a string representation.
+func AttrTypeToString(at AttrType) string {
+	switch at {
+	case SystemAttr:
+		return "sys"
+	case UserAttr:
+		return "user"
+	default:
+		return "invalid"
+	}
+}
+
+// GetKey returns the key considering the type of attribute.
+func (a *Attribute) GetKey() string {
+	return fmt.Sprintf("%s.%s", AttrTypeToString(a.Type), a.Key)
 }
