@@ -70,6 +70,7 @@ func init() {
 type Manager struct {
 	client       *http.Client
 	sharedSecret string
+	webDAVHost   string
 	endPoint     string
 }
 
@@ -77,6 +78,7 @@ type Manager struct {
 type ShareManagerConfig struct {
 	EndPoint     string `mapstructure:"endpoint" docs:";The Nextcloud backend endpoint for user check"`
 	SharedSecret string `mapstructure:"shared_secret"`
+	WebDAVHost   string `mapstructure:"webdav_host" docs:";`
 	MockHTTP     bool   `mapstructure:"mock_http"`
 }
 
@@ -168,6 +170,7 @@ func NewShareManager(c *ShareManagerConfig) (*Manager, error) {
 		endPoint:     c.EndPoint, // e.g. "http://nc/apps/sciencemesh/"
 		sharedSecret: c.SharedSecret,
 		client:       client,
+		webDAVHost:   c.WebDAVHost,
 	}, nil
 }
 
@@ -244,7 +247,7 @@ func (sm *Manager) Share(ctx context.Context, md *provider.ResourceId, g *ocm.Sh
 		isOwnersMeshProvider = true
 		apiMethod = "addSentShare"
 		username = getUsername(ctx)
-		token = randSeq(10)
+		token = randSeq(10) // FIXME: is this used for datatx?
 	} else {
 		apiMethod = "addReceivedShare"
 		username = g.Grantee.GetUserId().OpaqueId
@@ -361,6 +364,7 @@ func (sm *Manager) Share(ctx context.Context, md *provider.ResourceId, g *ocm.Sh
 				"options": map[string]string{
 					"permissions":  pm,
 					"sharedSecret": token,
+					"remote":       sm.webDAVHost,
 				},
 			}
 		}
@@ -373,6 +377,22 @@ func (sm *Manager) Share(ctx context.Context, md *provider.ResourceId, g *ocm.Sh
 		log.Info().Msgf("pkg/ocm/share/manager/nextcloud owner: %s", userID.OpaqueId)
 		log.Info().Msgf("pkg/ocm/share/manager/nextcloud protocol: %s", protocol)
 		log.Info().Msgf("pkg/ocm/share/manager/nextcloud meshProvider: %s", userID.Idp)
+		log.Info().Msgf("Truncating name from %s to %s", name, name[5:])
+
+		// required:
+		// shareWith	       string Consumer specific identifier of the user or group the provider wants to share the resource with. This is known in advance. Please note that the consumer service endpoint is known in advance as well, so this is no part of the request body.
+		// name				       string Name of the resource (file or folder).
+		// providerId        string Identifier to identify the resource at the provider side. This is unique per provider
+		// owner             string Provider specific identifier of the user who owns the resource.
+		// shareType         string Share type (user or group share)
+		// resourceType      string Resource type (file, calendar, contact,...)
+		// protocol          object The protocol which is used to establish synchronisation. At the moment only webdav is supported, but other (custom) protocols might be added in the future.
+		//
+		// optional:
+		// description       string Optional description of the resource (file or folder).
+		// sender	           string Provider specific identifier of the user that wants to share the resource. Please note that the requesting provider is being identified on a higher level, so the former remote property is no part of the request body.
+		// ownerDisplayName	 string Display name of the owner of the resource
+		// senderDisplayName string Display name of the owner of the resource
 
 		requestBodyMap := map[string]interface{}{
 			"shareWith":    g.Grantee.GetUserId().OpaqueId,
