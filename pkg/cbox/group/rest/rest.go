@@ -20,7 +20,6 @@ package rest
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"os/signal"
@@ -146,65 +145,62 @@ func (m *manager) fetchAllGroups() {
 	}
 }
 
+type groupData struct {
+	GroupIdentifier string `json:"groupIdentifier"`
+	DisplayName     string `json:"displayName"`
+	Gid             *int64 `json:"gid"`
+	ID              string `json:"id"`
+}
+
 func (m *manager) fetchAllGroupAccounts() error {
 	ctx := context.Background()
 	url := fmt.Sprintf("%s/api/v1.0/Group?field=groupIdentifier&field=displayName&field=gid", m.conf.APIBaseURL)
 
-	for url != "" {
-		result, err := m.apiTokenManager.SendAPIGetRequest(ctx, url, false)
-		if err != nil {
+	var result struct {
+		Pagination struct {
+			Links struct {
+				Next *string `json:"next"`
+			} `json:"links"`
+			Token string `json:"token"`
+		} `json:"pagination"`
+		Data []*groupData `json:"data"`
+	}
+
+	for {
+		if err := m.apiTokenManager.SendAPIGetRequest(ctx, url, false, &result); err != nil {
 			return err
 		}
 
-		responseData, ok := result["data"].([]interface{})
-		if !ok {
-			return errors.New("rest: error in type assertion")
-		}
-		for _, usr := range responseData {
-			groupData, ok := usr.(map[string]interface{})
-			if !ok {
-				continue
-			}
-
-			_, err = m.parseAndCacheGroup(ctx, groupData)
-			if err != nil {
+		for _, groupData := range result.Data {
+			if _, err := m.parseAndCacheGroup(ctx, groupData); err != nil {
 				continue
 			}
 		}
 
-		url = ""
-		if pagination, ok := result["pagination"].(map[string]interface{}); ok {
-			if links, ok := pagination["links"].(map[string]interface{}); ok {
-				if next, ok := links["next"].(string); ok {
-					url = fmt.Sprintf("%s%s", m.conf.APIBaseURL, next)
-				}
-			}
+		if result.Pagination.Links.Next == nil {
+			break
 		}
+		url = fmt.Sprintf("%s%s", m.conf.APIBaseURL, *result.Pagination.Links.Next)
 	}
 
 	return nil
 }
 
-func (m *manager) parseAndCacheGroup(ctx context.Context, groupData map[string]interface{}) (*grouppb.Group, error) {
-	id, ok := groupData["groupIdentifier"].(string)
-	if !ok {
-		return nil, errors.New("rest: missing upn in user data")
+func (m *manager) parseAndCacheGroup(ctx context.Context, groupData *groupData) (*grouppb.Group, error) {
+	var gid int64
+	if groupData.Gid != nil {
+		gid = *groupData.Gid
 	}
-
-	name, _ := groupData["displayName"].(string)
 	groupID := &grouppb.GroupId{
-		OpaqueId: id,
+		OpaqueId: groupData.GroupIdentifier,
 		Idp:      m.conf.IDProvider,
 	}
-	gid, ok := groupData["gid"].(int64)
-	if !ok {
-		gid = 0
-	}
+
 	g := &grouppb.Group{
 		Id:          groupID,
-		GroupName:   id,
-		Mail:        id + "@cern.ch",
-		DisplayName: name,
+		GroupName:   groupData.GroupIdentifier,
+		Mail:        groupData.GroupIdentifier + "@cern.ch",
+		DisplayName: groupData.DisplayName,
 		GidNumber:   gid,
 	}
 
@@ -212,10 +208,8 @@ func (m *manager) parseAndCacheGroup(ctx context.Context, groupData map[string]i
 		log.Error().Err(err).Msg("rest: error caching group details")
 	}
 
-	if internalID, ok := groupData["id"].(string); ok {
-		if err := m.cacheInternalID(groupID, internalID); err != nil {
-			log.Error().Err(err).Msg("rest: error caching group details")
-		}
+	if err := m.cacheInternalID(groupID, groupData.ID); err != nil {
+		log.Error().Err(err).Msg("rest: error caching group details")
 	}
 
 	return g, nil
@@ -288,21 +282,25 @@ func (m *manager) GetMembers(ctx context.Context, gid *grouppb.GroupId) ([]*user
 		return nil, err
 	}
 	url := fmt.Sprintf("%s/api/v1.0/Group/%s/memberidentities/precomputed", m.conf.APIBaseURL, internalID)
-	result, err := m.apiTokenManager.SendAPIGetRequest(ctx, url, false)
-	if err != nil {
+
+	var result struct {
+		Data []struct {
+			Upn *string `json:"upn"`
+		} `json:"data"`
+	}
+	if err := m.apiTokenManager.SendAPIGetRequest(ctx, url, false, &result); err != nil {
 		return nil, err
 	}
 
-	userData := result["data"].([]interface{})
-	users = []*userpb.UserId{}
+	users = make([]*userpb.UserId, 0, len(result.Data))
 
-	for _, u := range userData {
-		userInfo, ok := u.(map[string]interface{})
-		if !ok {
-			return nil, errors.New("rest: error in type assertion")
-		}
-		if id, ok := userInfo["upn"].(string); ok {
-			users = append(users, &userpb.UserId{OpaqueId: id, Idp: m.conf.IDProvider})
+	for _, u := range result.Data {
+		if u.Upn != nil {
+			users = append(users, &userpb.UserId{
+				// TODO: the type is missing
+				OpaqueId: *u.Upn,
+				Idp:      m.conf.IDProvider,
+			})
 		}
 	}
 

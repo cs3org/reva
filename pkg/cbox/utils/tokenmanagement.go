@@ -128,15 +128,15 @@ func (a *APITokenManager) getAPIToken(ctx context.Context) (string, time.Time, e
 }
 
 // SendAPIGetRequest makes an API GET Request to the passed URL.
-func (a *APITokenManager) SendAPIGetRequest(ctx context.Context, url string, forceRenewal bool) (map[string]interface{}, error) {
+func (a *APITokenManager) SendAPIGetRequest(ctx context.Context, url string, forceRenewal bool, result any) error {
 	err := a.renewAPIToken(ctx, forceRenewal)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	httpReq, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	// We don't need to take the lock when reading apiToken, because if we reach here,
@@ -146,28 +146,17 @@ func (a *APITokenManager) SendAPIGetRequest(ctx context.Context, url string, for
 
 	httpRes, err := a.client.Do(httpReq)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	defer httpRes.Body.Close()
 
 	if httpRes.StatusCode == http.StatusUnauthorized {
 		// The token is no longer valid, try renewing it
-		return a.SendAPIGetRequest(ctx, url, true)
+		return a.SendAPIGetRequest(ctx, url, true, result)
 	}
 	if httpRes.StatusCode < 200 || httpRes.StatusCode > 299 {
-		return nil, errors.New("rest: API request returned " + httpRes.Status)
+		return errors.New("rest: API request returned " + httpRes.Status)
 	}
 
-	body, err := io.ReadAll(httpRes.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	var result map[string]interface{}
-	err = json.Unmarshal(body, &result)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return json.NewDecoder(httpReq.Body).Decode(result)
 }
