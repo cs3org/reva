@@ -318,7 +318,11 @@ func (driver *rclone) startJob(ctx context.Context, transferID string, srcRemote
 		srcAuthHeader = fmt.Sprintf("headers=\"x-access-token,%v\"", srcToken)
 	}
 	srcFs := fmt.Sprintf(":webdav,%v,url=\"%v\":%v", srcAuthHeader, srcRemote, srcPath)
-	dstFs := fmt.Sprintf(":webdav,headers=\"x-access-token,%v\",url=\"%v\":%v", destToken, destRemote, destPath)
+	destAuthHeader := fmt.Sprintf("bearer_token=\"%v\"", destToken)
+	if driver.config.AuthHeader == "x-access-token" {
+		destAuthHeader = fmt.Sprintf("headers=\"x-access-token,%v\"", destToken)
+	}
+	dstFs := fmt.Sprintf(":webdav,%v,url=\"%v\":%v", destAuthHeader, destRemote, destPath)
 	rcloneReq := &rcloneAsyncReqJSON{
 		SrcFs: srcFs,
 		DstFs: dstFs,
