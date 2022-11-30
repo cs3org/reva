@@ -849,6 +849,9 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 }
 
 func (s *service) fixLightweightPermissionsForGroups(ctx context.Context, user *userpb.User, rinfo *provider.ResourceInfo) error {
+	if err := s.wrap(ctx, rinfo, true); err != nil {
+		return err
+	}
 	res, err := s.ListGrants(ctx, &provider.ListGrantsRequest{
 		Ref: &provider.Reference{
 			Path: rinfo.Path,
