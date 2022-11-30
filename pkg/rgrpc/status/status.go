@@ -144,17 +144,6 @@ func NewConflict(ctx context.Context, err error, msg string) *rpc.Status {
 	}
 }
 
-// NewFailedPrecondition TODO
-func NewFailedPrecondition(ctx context.Context, err error, msg string) *rpc.Status {
-	log := appctx.GetLogger(ctx).With().CallerWithSkipFrameCount(3).Logger()
-	log.Error().Err(err).Msg(msg)
-	return &rpc.Status{
-		Code:    rpc.Code_CODE_FAILED_PRECONDITION,
-		Message: msg,
-		Trace:   getTrace(ctx),
-	}
-}
-
 // NewStatusFromErrType returns a status that corresponds to the given errtype
 func NewStatusFromErrType(ctx context.Context, msg string, err error) *rpc.Status {
 	switch e := err.(type) {

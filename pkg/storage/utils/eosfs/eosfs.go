@@ -860,7 +860,7 @@ func (fs *eosfs) getUserFromID(ctx context.Context, userID *userpb.UserId) (*use
 
 func (fs *eosfs) userHasWriteAccess(ctx context.Context, user *userpb.User, ref *provider.Reference) (bool, error) {
 	ctx = ctxpkg.ContextSetUser(ctx, user)
-	resInfo, err := fs.GetMD(ctx, ref, nil)
+	resInfo, err := fs.GetMD(ctx, ref, nil, nil)
 	if err != nil {
 		return false, err
 	}
@@ -877,7 +877,7 @@ func (fs *eosfs) userIDHasWriteAccess(ctx context.Context, userID *userpb.UserId
 
 func (fs *eosfs) userHasReadAccess(ctx context.Context, user *userpb.User, ref *provider.Reference) (bool, error) {
 	ctx = ctxpkg.ContextSetUser(ctx, user)
-	resInfo, err := fs.GetMD(ctx, ref, nil)
+	resInfo, err := fs.GetMD(ctx, ref, nil, nil)
 	if err != nil {
 		return false, err
 	}
@@ -893,7 +893,8 @@ func encodeLock(l *provider.Lock) (string, error) {
 }
 
 // RefreshLock refreshes an existing lock on the given reference
-func (fs *eosfs) RefreshLock(ctx context.Context, ref *provider.Reference, newLock *provider.Lock) error {
+// TODO: use existingLockId. See https://github.com/cs3org/reva/pull/3286
+func (fs *eosfs) RefreshLock(ctx context.Context, ref *provider.Reference, newLock *provider.Lock, _ string) error {
 	// TODO (gdelmont): check if the new lock is already expired?
 
 	if newLock.Type == provider.LockType_LOCK_TYPE_SHARED {
