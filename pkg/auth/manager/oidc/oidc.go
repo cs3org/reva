@@ -199,7 +199,7 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 		return nil, nil, fmt.Errorf("no \"email\" attribute found in userinfo: maybe the client did not request the oidc \"email\"-scope")
 	}
 
-	err = am.resolveUser(ctx, claims, clientID)
+	err = am.resolveUser(ctx, claims)
 	if err != nil {
 		return nil, nil, errors.Wrapf(err, "oidc: error resolving username for external user '%v'", claims["email"])
 	}
@@ -302,8 +302,9 @@ func (am *mgr) getOIDCProvider(ctx context.Context) (*oidc.Provider, error) {
 	return am.provider, nil
 }
 
-func (am *mgr) resolveUser(ctx context.Context, claims map[string]interface{}, clientID string) error {
+func (am *mgr) resolveUser(ctx context.Context, claims map[string]interface{}) error {
 	var (
+		claim   string
 		value   string
 		resolve bool
 	)
@@ -338,9 +339,11 @@ func (am *mgr) resolveUser(ctx context.Context, claims map[string]interface{}, c
 		for _, m := range intersection {
 			value = am.oidcUsersMapping[m.(string)].Username
 		}
+		claim = "username"
 		resolve = true
 	} else if uid == 0 || gid == 0 {
-		value = clientID
+		claim = "mail"
+		value = claims["email"].(string)
 		resolve = true
 	}
 
@@ -353,7 +356,7 @@ func (am *mgr) resolveUser(ctx context.Context, claims map[string]interface{}, c
 		return errors.Wrap(err, "error getting user provider grpc client")
 	}
 	getUserByClaimResp, err := upsc.GetUserByClaim(ctx, &user.GetUserByClaimRequest{
-		Claim: "username",
+		Claim: claim,
 		Value: value,
 	})
 	if err != nil {
@@ -371,7 +374,7 @@ func (am *mgr) resolveUser(ctx context.Context, claims map[string]interface{}, c
 	claims[am.c.GIDClaim] = getUserByClaimResp.GetUser().GidNumber
 	log := appctx.GetLogger(ctx).Debug().Str("username", value).Interface("claims", claims)
 	if uid == 0 || gid == 0 {
-		log.Msgf("resolveUser: claims overridden from '%s'", clientID)
+		log.Msgf("resolveUser: claims overridden from '%s'", value)
 	} else {
 		log.Msg("resolveUser: claims overridden from mapped user")
 	}
