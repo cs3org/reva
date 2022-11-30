@@ -609,6 +609,9 @@ func (c *Client) GetAttrs(ctx context.Context, auth eosclient.Authorization, pat
 	attrsStr := strings.Split(attrOut, "\n")
 	attrs := make([]*eosclient.Attribute, 0, len(attrsStr))
 	for _, line := range attrsStr {
+		if line == "" {
+			continue
+		}
 		attr, err := deserializeAttribute(line)
 		if err != nil {
 			return nil, err
