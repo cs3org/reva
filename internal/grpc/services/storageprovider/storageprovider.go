@@ -30,18 +30,25 @@ import (
 	"strconv"
 	"strings"
 
+	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+	groupb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/mime"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
+	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp/router"
+	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
 	rtrace "github.com/cs3org/reva/pkg/trace"
 	"github.com/cs3org/reva/pkg/utils"
+	"github.com/google/go-cmp/cmp"
 	"github.com/google/uuid"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
@@ -62,6 +69,7 @@ type config struct {
 	DataServerURL       string                            `mapstructure:"data_server_url" docs:"http://localhost/data;The URL for the data server."`
 	ExposeDataServer    bool                              `mapstructure:"expose_data_server" docs:"false;Whether to expose data server."` // if true the client will be able to upload/download directly to it
 	AvailableXS         map[string]uint32                 `mapstructure:"available_checksums" docs:"nil;List of available checksums."`
+	GatewaySvc          string                            `mapstructure:"available_checksums" docs:"The URL of the gateway."`
 	CustomMimeTypesJSON string                            `mapstructure:"custom_mime_types_json" docs:"nil;An optional mapping file with the list of supported custom file extensions and corresponding mime types."`
 }
 
@@ -95,6 +103,8 @@ func (c *config) init() {
 	if len(c.AvailableXS) == 0 {
 		c.AvailableXS = map[string]uint32{"md5": 100, "unset": 1000}
 	}
+
+	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
 }
 
 type service struct {
@@ -817,6 +827,15 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 		}, nil
 	}
 
+	if u, ok := ctxpkg.ContextGetUser(ctx); ok && utils.UserIsLightweight(u) {
+		err := s.fixLightweightPermissionsForGroups(ctx, u, md)
+		if err != nil {
+			return &provider.StatResponse{
+				Status: status.NewInternal(ctx, err, "error wrapping path"),
+			}, nil
+		}
+	}
+
 	if err := s.wrap(ctx, md, utils.IsAbsoluteReference(req.Ref)); err != nil {
 		return &provider.StatResponse{
 			Status: status.NewInternal(ctx, err, "error wrapping path"),
@@ -827,6 +846,77 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 		Info:   md,
 	}
 	return res, nil
+}
+
+func (s *service) fixLightweightPermissionsForGroups(ctx context.Context, user *userpb.User, rinfo *provider.ResourceInfo) error {
+	res, err := s.ListGrants(ctx, &provider.ListGrantsRequest{
+		Ref: &provider.Reference{
+			Path: rinfo.Path,
+		},
+	})
+	if err != nil {
+		return err
+	}
+	if res.Status.Code != rpc.Code_CODE_OK {
+		return errtypes.InternalError(res.Status.Message)
+	}
+
+	client, err := pool.GetGatewayServiceClient(pool.Endpoint(s.conf.GatewaySvc))
+	if err != nil {
+		return err
+	}
+
+	for _, g := range res.GetGrants() {
+		switch v := g.Grantee.Id.(type) {
+		case *provider.Grantee_GroupId:
+			if s.userIsMemberOfGroup(ctx, client, user.GetId(), v.GroupId) {
+				s.mergePermissions(rinfo.PermissionSet, g.Permissions)
+			}
+		default:
+			continue
+		}
+	}
+
+	return nil
+}
+
+func (s *service) userIsMemberOfGroup(ctx context.Context, client gateway.GatewayAPIClient, user *userpb.UserId, group *groupb.GroupId) bool {
+	res, err := client.HasMember(ctx, &groupb.HasMemberRequest{
+		GroupId: group,
+		UserId:  user,
+	})
+	if err != nil || res.Status.Code != rpc.Code_CODE_OK {
+		return false
+	}
+	return res.Ok
+}
+
+func (s *service) mergePermissions(original, new *provider.ResourcePermissions) {
+	if cmp.Equal(provider.ResourcePermissions{}, *new) {
+		// permission denied. we have to deny the
+		// original permissions
+		*original = provider.ResourcePermissions{}
+		return
+	}
+	original.AddGrant = original.AddGrant || new.AddGrant
+	original.CreateContainer = original.CreateContainer || new.CreateContainer
+	original.Delete = original.Delete || new.Delete
+	original.GetPath = original.GetPath || new.GetPath
+	original.GetQuota = original.GetQuota || new.GetQuota
+	original.InitiateFileDownload = original.InitiateFileDownload || new.InitiateFileDownload
+	original.InitiateFileUpload = original.InitiateFileUpload || new.InitiateFileUpload
+	original.ListContainer = original.ListContainer || new.ListContainer
+	original.ListFileVersions = original.ListFileVersions || new.ListFileVersions
+	original.ListGrants = original.ListGrants || new.ListGrants
+	original.ListRecycle = original.ListRecycle || new.ListRecycle
+	original.Move = original.Move || new.Move
+	original.PurgeRecycle = original.PurgeRecycle || new.PurgeRecycle
+	original.RemoveGrant = original.RemoveGrant || new.RemoveGrant
+	original.RestoreFileVersion = original.RestoreFileVersion || new.RestoreFileVersion
+	original.RestoreRecycleItem = original.RestoreRecycleItem || new.RestoreRecycleItem
+	original.Stat = original.Stat || new.Stat
+	original.UpdateGrant = original.UpdateGrant || new.UpdateGrant
+	original.DenyGrant = original.DenyGrant || new.DenyGrant
 }
 
 func (s *service) statVirtualView(ctx context.Context, ref *provider.Reference) (*provider.StatResponse, error) {
