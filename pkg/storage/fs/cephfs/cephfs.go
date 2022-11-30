@@ -625,7 +625,7 @@ func (fs *cephfs) GetLock(ctx context.Context, ref *provider.Reference) (*provid
 	return nil, errtypes.NotSupported("unimplemented")
 }
 
-func (fs *cephfs) RefreshLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
+func (fs *cephfs) RefreshLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock, existingLockID string) error {
 	return errtypes.NotSupported("unimplemented")
 }
 
