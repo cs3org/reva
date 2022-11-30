@@ -155,5 +155,5 @@ func (a *APITokenManager) SendAPIGetRequest(ctx context.Context, url string, for
 		return errors.New("rest: API request returned " + httpRes.Status)
 	}
 
-	return json.NewDecoder(httpReq.Body).Decode(result)
+	return json.NewDecoder(httpRes.Body).Decode(result)
 }

@@ -202,7 +202,7 @@ func (m *manager) parseAndCacheUser(ctx context.Context, userData *userData) (*u
 		mail = *userData.PrimaryAccountEmail
 	}
 	if userData.DisplayName != nil {
-		name = *userData.PrimaryAccountEmail
+		name = *userData.DisplayName
 	}
 
 	userType := getUserType(userData.Type, userData.Upn)
