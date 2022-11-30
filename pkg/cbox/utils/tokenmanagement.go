@@ -22,7 +22,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -108,23 +107,21 @@ func (a *APITokenManager) getAPIToken(ctx context.Context) (string, time.Time, e
 	}
 	defer httpRes.Body.Close()
 
-	body, err := io.ReadAll(httpRes.Body)
-	if err != nil {
-		return "", time.Time{}, err
-	}
 	if httpRes.StatusCode < 200 || httpRes.StatusCode > 299 {
 		return "", time.Time{}, errors.New("rest: get token endpoint returned " + httpRes.Status)
 	}
 
-	var result map[string]interface{}
-	err = json.Unmarshal(body, &result)
-	if err != nil {
+	var result struct {
+		ExpiresIn   int64  `json:"expires_in"`
+		AccessToken string `json:"access_token"`
+	}
+
+	if err := json.NewDecoder(httpRes.Body).Decode(&result); err != nil {
 		return "", time.Time{}, err
 	}
 
-	expirationSecs := result["expires_in"].(float64)
-	expirationTime := time.Now().Add(time.Second * time.Duration(expirationSecs))
-	return result["access_token"].(string), expirationTime, nil
+	expirationTime := time.Now().Add(time.Second * time.Duration(result.ExpiresIn))
+	return result.AccessToken, expirationTime, nil
 }
 
 // SendAPIGetRequest makes an API GET Request to the passed URL.
