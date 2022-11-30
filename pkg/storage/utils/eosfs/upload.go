@@ -91,16 +91,11 @@ func (fs *eosfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadC
 }
 
 func (fs *eosfs) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64, metadata map[string]string) (map[string]string, error) {
-	fn, _, err := fs.resolveRefAndGetAuth(ctx, ref)
+	p, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return nil, err
 	}
-	fn, err = fs.unwrap(ctx, fn)
-	if err != nil {
-		return nil, err
-	}
-
 	return map[string]string{
-		"simple": fn,
+		"simple": p,
 	}, nil
 }

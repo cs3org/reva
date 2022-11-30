@@ -35,7 +35,7 @@ The core handles all of the communication details and go-plugin implementations 
 
 Your plugin must use the packages from the Reva core to implement the interfaces. You're encouraged to use whatever other packages you want in your plugin implementation. Because plugins are their own processes, there is no danger of colliding dependencies.
 
-- `github.com/cs3org/reva/pkg/<service_type>`: Contains the interface that you have to implement for any give plugin.
+- `github.com/cs3org/reva/v2/pkg/<service_type>`: Contains the interface that you have to implement for any give plugin.
 - `github.com/hashicorp/go-plugin`: To serve the plugin over RPC. This handles all the inter-process communication.
 
 Basic example of serving your component is shown below. This example consists of a simple `JSON` plugin driver for the [Userprovider](https://github.com/cs3org/reva/blob/master/internal/grpc/services/userprovider/userprovider.go) service. You can find the example code [here](https://github.com/cs3org/reva/blob/master/examples/plugin/json/json.go).
@@ -68,7 +68,7 @@ The `plugin.Serve` method handles all the details of communicating with Reva cor
 
 The `plugin.Serve` method takes in the plugin configuration, which you would have to define in your plugin source code:
 
-- `HandshakeConfig`: The handshake is defined in `github.com/cs3org/reva/pkg/plugin`
+- `HandshakeConfig`: The handshake is defined in `github.com/cs3org/reva/v2/pkg/plugin`
 
 ```go
 var Handshake = plugin.HandshakeConfig{

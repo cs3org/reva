@@ -49,42 +49,24 @@ const (
 	favoritesKey   = "http://owncloud.org/ns/favorite"
 )
 
-const (
-	// SystemAttr is the system extended attribute.
-	SystemAttr eosclient.AttrType = iota
-	// UserAttr is the user extended attribute.
-	UserAttr
-)
-
 func serializeAttribute(a *eosclient.Attribute) string {
 	return fmt.Sprintf("%s.%s=%s", attrTypeToString(a.Type), a.Key, a.Val)
 }
 
 func attrTypeToString(at eosclient.AttrType) string {
 	switch at {
-	case SystemAttr:
+	case eosclient.SystemAttr:
 		return "sys"
-	case UserAttr:
+	case eosclient.UserAttr:
 		return "user"
 	default:
 		return "invalid"
 	}
 }
 
-func attrStringToType(t string) (eosclient.AttrType, error) {
-	switch t {
-	case "sys":
-		return SystemAttr, nil
-	case "user":
-		return UserAttr, nil
-	default:
-		return 0, errtypes.InternalError("attr type not existing")
-	}
-}
-
 func isValidAttribute(a *eosclient.Attribute) bool {
 	// validate that an attribute is correct.
-	if (a.Type != SystemAttr && a.Type != UserAttr) || a.Key == "" {
+	if (a.Type != eosclient.SystemAttr && a.Type != eosclient.UserAttr) || a.Key == "" {
 		return false
 	}
 	return true
@@ -212,13 +194,14 @@ func (c *Client) executeXRDCopy(ctx context.Context, cmdArgs []string) (string, 
 		}
 	}
 
+	// check for operation not permitted error
+	if strings.Contains(errBuf.String(), "Operation not permitted") {
+		err = errtypes.InvalidCredentials("eosclient: no sufficient permissions for the operation")
+	}
+
 	args := fmt.Sprintf("%s", cmd.Args)
 	env := fmt.Sprintf("%s", cmd.Env)
 	log.Info().Str("args", args).Str("env", env).Int("exit", exitStatus).Msg("eos cmd")
-
-	if err != nil && exitStatus != int(syscall.ENOENT) { // don't wrap the errtypes.NotFoundError
-		err = errors.Wrap(err, "eosclient: error while executing command")
-	}
 
 	return outBuf.String(), errBuf.String(), err
 }
@@ -313,14 +296,11 @@ func (c *Client) AddACL(ctx context.Context, auth, rootAuth eosclient.Authorizat
 			sysACL = a.CitrineSerialize()
 		}
 		sysACLAttr := &eosclient.Attribute{
-			Type: SystemAttr,
+			Type: eosclient.SystemAttr,
 			Key:  lwShareAttrKey,
 			Val:  sysACL,
 		}
-		if err = c.SetAttr(ctx, auth, sysACLAttr, finfo.IsDir, path); err != nil {
-			return err
-		}
-		return nil
+		return c.SetAttr(ctx, auth, sysACLAttr, false, finfo.IsDir, path)
 	}
 
 	sysACL := a.CitrineSerialize()
@@ -366,14 +346,11 @@ func (c *Client) RemoveACL(ctx context.Context, auth, rootAuth eosclient.Authori
 			sysACL = a.CitrineSerialize()
 		}
 		sysACLAttr := &eosclient.Attribute{
-			Type: SystemAttr,
+			Type: eosclient.SystemAttr,
 			Key:  lwShareAttrKey,
 			Val:  sysACL,
 		}
-		if err = c.SetAttr(ctx, auth, sysACLAttr, finfo.IsDir, path); err != nil {
-			return err
-		}
-		return nil
+		return c.SetAttr(ctx, auth, sysACLAttr, false, finfo.IsDir, path)
 	}
 
 	sysACL := a.CitrineSerialize()
@@ -524,7 +501,7 @@ func (c *Client) mergeACLsAndAttrsForFiles(ctx context.Context, auth eosclient.A
 }
 
 // SetAttr sets an extended attributes on a path.
-func (c *Client) SetAttr(ctx context.Context, auth eosclient.Authorization, attr *eosclient.Attribute, recursive bool, path string) error {
+func (c *Client) SetAttr(ctx context.Context, auth eosclient.Authorization, attr *eosclient.Attribute, errorIfExists, recursive bool, path string) error {
 	if !isValidAttribute(attr) {
 		return errors.New("eos: attr is invalid: " + serializeAttribute(attr))
 	}
@@ -534,7 +511,7 @@ func (c *Client) SetAttr(ctx context.Context, auth eosclient.Authorization, attr
 	// We need to set the attrs on the version folder as they are not persisted across writes
 	// Except for the sys.eval.useracl attr as EOS uses that to determine if it needs to obey
 	// the user ACLs set on the file
-	if !(attr.Type == SystemAttr && attr.Key == userACLEvalKey) {
+	if !(attr.Type == eosclient.SystemAttr && attr.Key == userACLEvalKey) {
 		info, err = c.getRawFileInfoByPath(ctx, auth, path)
 		if err != nil {
 			return err
@@ -545,22 +522,29 @@ func (c *Client) SetAttr(ctx context.Context, auth eosclient.Authorization, attr
 	}
 
 	// Favorites need to be stored per user so handle these separately
-	if attr.Type == UserAttr && attr.Key == favoritesKey {
+	if attr.Type == eosclient.UserAttr && attr.Key == favoritesKey {
 		return c.handleFavAttr(ctx, auth, attr, recursive, path, info, true)
 	}
-	return c.setEOSAttr(ctx, auth, attr, recursive, path)
+	return c.setEOSAttr(ctx, auth, attr, errorIfExists, recursive, path)
 }
 
-func (c *Client) setEOSAttr(ctx context.Context, auth eosclient.Authorization, attr *eosclient.Attribute, recursive bool, path string) error {
-	var args []string
+func (c *Client) setEOSAttr(ctx context.Context, auth eosclient.Authorization, attr *eosclient.Attribute, errorIfExists, recursive bool, path string) error {
+	args := []string{"attr"}
 	if recursive {
-		args = []string{"attr", "-r", "set", serializeAttribute(attr), path}
-	} else {
-		args = []string{"attr", "set", serializeAttribute(attr), path}
+		args = append(args, "-r")
 	}
+	args = append(args, "set")
+	if errorIfExists {
+		args = append(args, "-c")
+	}
+	args = append(args, serializeAttribute(attr), path)
 
 	_, _, err := c.executeEOS(ctx, args, auth)
 	if err != nil {
+		var exErr *exec.ExitError
+		if errors.As(err, &exErr) && exErr.ExitCode() == 17 {
+			return eosclient.AttrAlreadyExistsError
+		}
 		return err
 	}
 	return nil
@@ -589,7 +573,7 @@ func (c *Client) handleFavAttr(ctx context.Context, auth eosclient.Authorization
 		favs.DeleteEntry(acl.TypeUser, u.Id.OpaqueId)
 	}
 	attr.Val = favs.Serialize()
-	return c.setEOSAttr(ctx, auth, attr, recursive, path)
+	return c.setEOSAttr(ctx, auth, attr, false, recursive, path)
 }
 
 // UnsetAttr unsets an extended attribute on a path.
@@ -603,7 +587,7 @@ func (c *Client) UnsetAttr(ctx context.Context, auth eosclient.Authorization, at
 	// We need to set the attrs on the version folder as they are not persisted across writes
 	// Except for the sys.eval.useracl attr as EOS uses that to determine if it needs to obey
 	// the user ACLs set on the file
-	if !(attr.Type == SystemAttr && attr.Key == userACLEvalKey) {
+	if !(attr.Type == eosclient.SystemAttr && attr.Key == userACLEvalKey) {
 		info, err = c.getRawFileInfoByPath(ctx, auth, path)
 		if err != nil {
 			return err
@@ -614,7 +598,7 @@ func (c *Client) UnsetAttr(ctx context.Context, auth eosclient.Authorization, at
 	}
 
 	// Favorites need to be stored per user so handle these separately
-	if attr.Type == UserAttr && attr.Key == favoritesKey {
+	if attr.Type == eosclient.UserAttr && attr.Key == favoritesKey {
 		return c.handleFavAttr(ctx, auth, attr, recursive, path, info, false)
 	}
 
@@ -626,6 +610,10 @@ func (c *Client) UnsetAttr(ctx context.Context, auth eosclient.Authorization, at
 	}
 	_, _, err = c.executeEOS(ctx, args, auth)
 	if err != nil {
+		var exErr *exec.ExitError
+		if errors.As(err, &exErr) && exErr.ExitCode() == 61 {
+			return eosclient.AttrNotExistsError
+		}
 		return err
 	}
 	return nil
@@ -633,6 +621,17 @@ func (c *Client) UnsetAttr(ctx context.Context, auth eosclient.Authorization, at
 
 // GetAttr returns the attribute specified by key
 func (c *Client) GetAttr(ctx context.Context, auth eosclient.Authorization, key, path string) (*eosclient.Attribute, error) {
+
+	// As SetAttr set the attr on the version folder, we will read the attribute on it
+	// if the resource is not a folder
+	info, err := c.getRawFileInfoByPath(ctx, auth, path)
+	if err != nil {
+		return nil, err
+	}
+	if !info.IsDir {
+		path = getVersionFolder(path)
+	}
+
 	args := []string{"attr", "get", key, path}
 	attrOut, _, err := c.executeEOS(ctx, args, auth)
 	if err != nil {
@@ -647,7 +646,7 @@ func (c *Client) GetAttr(ctx context.Context, auth eosclient.Authorization, key,
 
 func deserializeAttribute(attrStr string) (*eosclient.Attribute, error) {
 	// the string is in the form sys.forced.checksum="adler"
-	keyValue := strings.Split(strings.TrimSpace(attrStr), "=") // keyValue = ["sys.forced.checksum", "\"adler\""]
+	keyValue := strings.SplitN(strings.TrimSpace(attrStr), "=", 2) // keyValue = ["sys.forced.checksum", "\"adler\""]
 	if len(keyValue) != 2 {
 		return nil, errtypes.InternalError("wrong attr format to deserialize")
 	}
@@ -655,7 +654,7 @@ func deserializeAttribute(attrStr string) (*eosclient.Attribute, error) {
 	if len(type2key) != 2 {
 		return nil, errtypes.InternalError("wrong attr format to deserialize")
 	}
-	t, err := attrStringToType(type2key[0])
+	t, err := eosclient.AttrStringToType(type2key[0])
 	if err != nil {
 		return nil, err
 	}
