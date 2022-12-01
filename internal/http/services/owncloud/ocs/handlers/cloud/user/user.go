@@ -95,6 +95,7 @@ type updateSelfRequest struct {
 	Language string `json:"language"`
 }
 
+// UpdateSelf handles PATCH requests on /cloud/user.
 func (h *Handler) UpdateSelf(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
