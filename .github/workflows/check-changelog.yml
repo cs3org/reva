@@ -23,17 +23,5 @@ jobs:
         uses: actions/setup-go@v3.3.0
         with:
           go-version-file: go.mod
-      - name: Clone calens
-        uses: actions/checkout@v3
-        with:
-          repository: restic/calens
-          path: calens
-          fetch-depth: 0
-          ref: v0.2.0
-      - name: Install calens
-        run: cd calens && go install
-      - name: Check if changelog exists
-        run: |
-          $(go env GOPATH)/bin/calens | \
-          sed -n '/^Changelog for reva unreleased (UNRELEASED)/,/^Details/p' | \
-          grep -E '^ \* [[:alpha:]]{3} #${{ github.event.pull_request.number }}: '
+      - name: Check changelog
+        run: make check-changelog PR=${{ github.event.pull_request.number }}
