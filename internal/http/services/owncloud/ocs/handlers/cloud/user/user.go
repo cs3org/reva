@@ -19,17 +19,34 @@
 package user
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 
+	preferences "github.com/cs3org/go-cs3apis/cs3/preferences/v1beta1"
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/config"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
+	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 )
 
 // The Handler renders the user endpoint.
 type Handler struct {
+	gatewayAddr string
 }
+
+// Init initializes this and any contained handlers.
+func (h *Handler) Init(c *config.Config) {
+	h.gatewayAddr = c.GatewaySvc
+}
+
+const (
+	defaultLanguage   = "en"
+	languageNamespace = "core"
+	languageKey       = "lang"
+)
 
 // GetSelf handles GET requests on /cloud/user.
 func (h *Handler) GetSelf(w http.ResponseWriter, r *http.Request) {
@@ -47,7 +64,25 @@ func (h *Handler) GetSelf(w http.ResponseWriter, r *http.Request) {
 		DisplayName: u.DisplayName,
 		Email:       u.Mail,
 		UserType:    conversions.UserTypeString(u.Id.Type),
+		Language:    h.getLanguage(ctx),
 	})
+}
+
+func (h *Handler) getLanguage(ctx context.Context) string {
+	gw, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	if err != nil {
+		return defaultLanguage
+	}
+	res, err := gw.GetKey(ctx, &preferences.GetKeyRequest{
+		Key: &preferences.PreferenceKey{
+			Namespace: languageNamespace,
+			Key:       languageKey,
+		},
+	})
+	if err != nil || res.Status.Code != rpc.Code_CODE_OK {
+		return defaultLanguage
+	}
+	return res.GetVal()
 }
 
 // User holds user data.
@@ -57,4 +92,5 @@ type User struct {
 	DisplayName string `json:"display-name" xml:"display-name"`
 	Email       string `json:"email" xml:"email"`
 	UserType    string `json:"user-type" xml:"user-type"`
+	Language    string `json:"language" xml:"language"`
 }
