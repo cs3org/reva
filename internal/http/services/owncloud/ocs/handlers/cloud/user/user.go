@@ -43,7 +43,6 @@ func (h *Handler) Init(c *config.Config) {
 }
 
 const (
-	defaultLanguage   = "en"
 	languageNamespace = "core"
 	languageKey       = "lang"
 )
@@ -71,7 +70,7 @@ func (h *Handler) GetSelf(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) getLanguage(ctx context.Context) string {
 	gw, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
 	if err != nil {
-		return defaultLanguage
+		return ""
 	}
 	res, err := gw.GetKey(ctx, &preferences.GetKeyRequest{
 		Key: &preferences.PreferenceKey{
@@ -80,7 +79,7 @@ func (h *Handler) getLanguage(ctx context.Context) string {
 		},
 	})
 	if err != nil || res.Status.Code != rpc.Code_CODE_OK {
-		return defaultLanguage
+		return ""
 	}
 	return res.GetVal()
 }
@@ -92,5 +91,5 @@ type User struct {
 	DisplayName string `json:"display-name" xml:"display-name"`
 	Email       string `json:"email" xml:"email"`
 	UserType    string `json:"user-type" xml:"user-type"`
-	Language    string `json:"language" xml:"language"`
+	Language    string `json:"language,omitempty" xml:"language,omitempty"`
 }
