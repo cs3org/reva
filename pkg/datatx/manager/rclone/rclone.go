@@ -216,8 +216,9 @@ func (m *transferModel) saveTransfer(e error) error {
 	return e
 }
 
-// Transfer initiates a transfer job and returns a TxInfo object that includes a unique transfer id.
-func (driver *rclone) Transfer(ctx context.Context, srcTargetURI string, dstTargetURI string) (*datatx.TxInfo, error) {
+// CreateTransfer creates a transfer job and returns a TxInfo object that includes a unique transfer id.
+// Specified target URIs are of form scheme://userinfo@host:port?name={path}
+func (driver *rclone) CreateTransfer(ctx context.Context, srcTargetURI string, dstTargetURI string) (*datatx.TxInfo, error) {
 	logger := appctx.GetLogger(ctx)
 
 	srcEp, err := driver.extractEndpointInfo(ctx, srcTargetURI)

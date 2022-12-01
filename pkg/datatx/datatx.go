@@ -26,7 +26,9 @@ import (
 
 // Manager the interface any transfer driver should implement.
 type Manager interface {
-	Transfer(ctx context.Context, srcTargetURI string, dstTargetURI string) (*datatx.TxInfo, error)
+	// CreateTransfer creates a transfer job and returns a TxInfo object that includes a unique transfer id.
+	// Specified target URIs are of form scheme://userinfo@host:port?name={path}
+	CreateTransfer(ctx context.Context, srcTargetURI string, dstTargetURI string) (*datatx.TxInfo, error)
 	// GetTransferStatus returns a TxInfo object including the current status, and error if any.
 	GetTransferStatus(ctx context.Context, transferID string) (*datatx.TxInfo, error)
 	// CancelTransfer cancels the transfer and returns a TxInfo object and error if any.

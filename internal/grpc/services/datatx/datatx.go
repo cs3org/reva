@@ -147,7 +147,7 @@ func (s *service) UnprotectedEndpoints() []string {
 }
 
 func (s *service) PullTransfer(ctx context.Context, req *datatx.PullTransferRequest) (*datatx.PullTransferResponse, error) {
-	txInfo, startTransferErr := s.txManager.Transfer(ctx, req.SrcTargetUri, req.DestTargetUri)
+	txInfo, startTransferErr := s.txManager.CreateTransfer(ctx, req.SrcTargetUri, req.DestTargetUri)
 
 	// we always save the transfer regardless of start transfer outcome
 	// only then, if starting fails, can we try to restart it
