@@ -1142,12 +1142,12 @@ func (s *service) GetQuota(ctx context.Context, req *provider.GetQuotaRequest) (
 		default:
 			st = status.NewInternal(ctx, "error getting quota")
 		}
-		appctx.GetLogger(ctx).
-			Error().
-			Err(err).
-			Interface("status", st).
-			Interface("reference", req.Ref).
-			Msg("failed to get quota")
+		//appctx.GetLogger(ctx).
+		//Error().
+		//Err(err).
+		//Interface("status", st).
+		//Interface("reference", req.Ref).
+		//Msg("failed to get quota")
 		return &provider.GetQuotaResponse{
 			Status: st,
 		}, nil
