@@ -95,6 +95,7 @@ func (s *svc) routerInit() error {
 	shareesHandler := new(sharees.Handler)
 	capabilitiesHandler.Init(s.c)
 	usersHandler.Init(s.c)
+	userHandler.Init(s.c)
 	configHandler.Init(s.c)
 	sharesHandler.Init(s.c)
 	shareesHandler.Init(s.c)
