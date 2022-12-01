@@ -134,6 +134,7 @@ func (s *svc) routerInit() error {
 		r.Route("/cloud", func(r chi.Router) {
 			r.Get("/capabilities", capabilitiesHandler.GetCapabilities)
 			r.Get("/user", userHandler.GetSelf)
+			r.Patch("/user", userHandler.UpdateSelf)
 			r.Route("/users", func(r chi.Router) {
 				r.Get("/{userid}", usersHandler.GetUsers)
 				r.Get("/{userid}/groups", usersHandler.GetGroups)

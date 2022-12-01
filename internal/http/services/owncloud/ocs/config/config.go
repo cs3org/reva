@@ -42,6 +42,7 @@ type Config struct {
 	ResourceInfoCacheTTL     int                               `mapstructure:"resource_info_cache_ttl"`
 	ResourceInfoCacheDrivers map[string]map[string]interface{} `mapstructure:"resource_info_caches"`
 	UserIdentifierCacheTTL   int                               `mapstructure:"user_identifier_cache_ttl"`
+	AllowedLanguages         []string                          `mapstructure:"allowed_languages"`
 }
 
 // Init sets sane defaults.
