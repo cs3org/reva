@@ -28,6 +28,7 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -35,17 +36,21 @@ import (
 	"github.com/beevik/etree"
 	appprovider "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
 	appregistry "github.com/cs3org/go-cs3apis/cs3/app/registry/v1beta1"
+	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/app"
 	"github.com/cs3org/reva/pkg/app/provider/registry"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/auth/scope"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/mime"
+	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/sharedconf"
+	"github.com/cs3org/reva/pkg/utils"
 	"github.com/golang-jwt/jwt"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
@@ -61,6 +66,7 @@ type config struct {
 	WopiURL             string   `mapstructure:"wopi_url" docs:";The wopiserver's URL."`
 	AppName             string   `mapstructure:"app_name" docs:";The App user-friendly name."`
 	AppIconURI          string   `mapstructure:"app_icon_uri" docs:";A URI to a static asset which represents the app icon."`
+	FolderBaseURL       string   `mapstructure:"folder_base_url" docs:";The base URL to generate links to navigate back to the containing folder."`
 	AppURL              string   `mapstructure:"app_url" docs:";The App URL."`
 	AppIntURL           string   `mapstructure:"app_int_url" docs:";The internal app URL in case of dockerized deployments. Defaults to AppURL"`
 	AppAPIKey           string   `mapstructure:"app_api_key" docs:";The API key used by the app, if applicable."`
@@ -141,18 +147,45 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 	q.Add("appname", p.conf.AppName)
 
 	u, ok := ctxpkg.ContextGetUser(ctx)
-	if ok { // else username defaults to "Guest xyz"
-		if u.Id.Type == userpb.UserType_USER_TYPE_LIGHTWEIGHT || u.Id.Type == userpb.UserType_USER_TYPE_FEDERATED {
-			q.Add("userid", resource.Owner.OpaqueId+"@"+resource.Owner.Idp)
-		} else {
-			q.Add("userid", u.Id.OpaqueId+"@"+u.Id.Idp)
-		}
+	if !ok {
+		// we must have been authenticated
+		return nil, errors.New("wopi: ContextGetUser failed")
+	}
+	if u.Id.Type == userpb.UserType_USER_TYPE_LIGHTWEIGHT || u.Id.Type == userpb.UserType_USER_TYPE_FEDERATED {
+		q.Add("userid", resource.Owner.OpaqueId+"@"+resource.Owner.Idp)
+	} else {
+		q.Add("userid", u.Id.OpaqueId+"@"+u.Id.Idp)
+	}
+	q.Add("username", u.DisplayName)
 
-		q.Add("username", u.DisplayName)
-		if u.Opaque != nil {
-			if _, ok := u.Opaque.Map["public-share-role"]; ok {
-				q.Del("username") // on public shares default to "Guest xyz"
-			}
+	scopes, ok := ctxpkg.ContextGetScopes(ctx)
+	if !ok {
+		// we must find at least one scope (as owner or sharee)
+		return nil, errors.New("wopi: ContextGetScopes failed")
+	}
+
+	// TODO (lopresti) consolidate with the templating implemented in the edge branch;
+	// here we assume the FolderBaseURL looks like `https://<hostname>` and we
+	// either append `/files/spaces/<full_path>` or `/s/<pltoken>/<relative_path>`
+	var rPath string
+	if _, ok := utils.HasPublicShareRole(u); ok {
+		// we are in a public link
+		q.Del("username") // on public shares default to "Guest xyz"
+		var err error
+		rPath, err = getPathForPublicLink(ctx, scopes, resource)
+		if err != nil {
+			log.Warn().Err(err).Msg("wopi: failed to extract relative path from public link scope")
+		}
+	} else {
+		// in all other cases use the resource's path
+		rPath = "/files/spaces/" + path.Dir(resource.Path)
+	}
+	if rPath != "" {
+		fu, err := url.JoinPath(p.conf.FolderBaseURL, rPath)
+		if err != nil {
+			log.Error().Err(err).Msg("wopi: failed to prepare folderurl parameter, folder_base_url may be malformed")
+		} else {
+			q.Add("folderurl", fu)
 		}
 	}
 
@@ -183,7 +216,6 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 	if q.Get("appurl") == "" && q.Get("appviewurl") == "" {
 		return nil, errors.New("wopi: neither edit nor view app url found")
 	}
-
 	if p.conf.AppIntURL != "" {
 		q.Add("appinturl", p.conf.AppIntURL)
 	}
@@ -436,4 +468,41 @@ func parseWopiDiscovery(body io.Reader) (map[string]map[string]string, error) {
 		}
 	}
 	return appURLs, nil
+}
+
+func getPathForPublicLink(ctx context.Context, scopes map[string]*authpb.Scope, resource *provider.ResourceInfo) (string, error) {
+	pubShares, err := scope.GetPublicSharesFromScopes(scopes)
+	if err != nil {
+		return "", err
+	}
+	if len(pubShares) > 1 {
+		return "", errors.New("More than one public share found in the scope, lookup not implemented")
+	}
+
+	client, err := pool.GetGatewayServiceClient(pool.Endpoint(sharedconf.GetGatewaySVC("")))
+	if err != nil {
+		return "", err
+	}
+	statRes, err := client.Stat(ctx, &provider.StatRequest{
+		Ref: &provider.Reference{
+			ResourceId: pubShares[0].ResourceId,
+		},
+	})
+	if err != nil {
+		return "", err
+	}
+
+	if statRes.Info.Path == resource.Path {
+		// this is a direct link to the resource
+		return "/s/" + pubShares[0].Token, nil
+	}
+	// otherwise we are in a subfolder of the public link
+	relPath, err := filepath.Rel(statRes.Info.Path, resource.Path)
+	if err != nil {
+		return "", err
+	}
+	if strings.HasPrefix(relPath, "../") {
+		return "", errors.New("Scope path does not contain target resource")
+	}
+	return path.Join("/files/public/show/"+pubShares[0].Token, path.Dir(relPath)), nil
 }

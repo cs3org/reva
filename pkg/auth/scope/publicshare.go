@@ -135,3 +135,23 @@ func AddPublicShareScope(share *link.PublicShare, role authpb.Role, scopes map[s
 	}
 	return scopes, nil
 }
+
+// GetPublicSharesFromScopes returns all the public shares in the given scope.
+func GetPublicSharesFromScopes(scopes map[string]*authpb.Scope) ([]*link.PublicShare, error) {
+	var shares []*link.PublicShare
+	for k, s := range scopes {
+		if strings.HasPrefix(k, "publicshare:") {
+			res := s.Resource
+			if res.Decoder != "json" {
+				return nil, errtypes.InternalError("resource should be json encoded")
+			}
+			var share link.PublicShare
+			err := utils.UnmarshalJSONToProtoV1(res.Value, &share)
+			if err != nil {
+				return nil, err
+			}
+			shares = append(shares, &share)
+		}
+	}
+	return shares, nil
+}

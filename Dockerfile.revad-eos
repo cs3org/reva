@@ -16,7 +16,7 @@
 # granted to it by virtue of its status as an Intergovernmental Organization
 # or submit itself to any jurisdiction.
 
-FROM gitlab-registry.cern.ch/dss/eos/eos-all:4.8.66
+FROM gitlab-registry.cern.ch/dss/eos/eos-fusex:4.8.91
 
 RUN yum -y update && yum clean all
 
@@ -24,6 +24,13 @@ RUN yum -y install https://packages.endpointdev.com/rhel/7/os/x86_64/endpoint-re
 RUN yum install -y make git gcc libc-dev bash epel-release golang && \
   yum clean all && \
   rm -rf /var/cache/yum
+
+ADD https://golang.org/dl/go1.19.linux-amd64.tar.gz \
+  go1.19.linux-amd64.tar.gz
+
+RUN rm -rf /usr/local/go && \
+  tar -C /usr/local -xzf go1.19.linux-amd64.tar.gz && \
+  rm go1.19.linux-amd64.tar.gz
 
 ENV PATH /go/bin:/usr/local/go/bin:$PATH
 ENV GOPATH /go
