@@ -107,7 +107,7 @@ func (fs *eosfs) ListStorageSpaces(ctx context.Context, filter []*provider.ListS
 		spaces = append(spaces, projectSpaces...)
 	}
 
-	fs.cacheSpaces(ctx, u, spaceType, spaceID, spacePath, spaces)
+	//fs.cacheSpaces(ctx, u, spaceType, spaceID, spacePath, spaces)
 	return spaces, nil
 }
 
@@ -115,7 +115,7 @@ func (fs *eosfs) listPersonalStorageSpaces(ctx context.Context, u *userpb.User, 
 	var eosFileInfo *eosclient.FileInfo
 	// if no spaceID and spacePath are provided, we just return the user home
 	switch {
-	case spaceID == "" && spacePath == "":
+	case spaceID == "" && (spacePath == "" || spacePath == "."):
 		fn, err := fs.wrapUserHomeStorageSpaceID(ctx, u, "/")
 		if err != nil {
 			return nil, err
@@ -147,10 +147,14 @@ func (fs *eosfs) listPersonalStorageSpaces(ctx context.Context, u *userpb.User, 
 		}
 	default:
 		fn := fs.wrap(ctx, spacePath)
+		// TODO: extract spacePath from filePath
+		fn = path.Dir(fn)
+
 		auth, err := fs.getUserAuth(ctx, u, fn)
 		if err != nil {
 			return nil, err
 		}
+
 		eosFileInfo, err = fs.c.GetFileInfoByPath(ctx, auth, fn)
 		if err != nil {
 			return nil, err
@@ -167,14 +171,26 @@ func (fs *eosfs) listPersonalStorageSpaces(ctx context.Context, u *userpb.User, 
 		md.Path = path.Base(md.Path)
 	}
 
+	//id := &provider.StorageSpaceId{OpaqueId: "19!" + md.Id.OpaqueId}
+	ssID, err := storagespace.FormatReference(
+		&provider.Reference{
+			ResourceId: &provider.ResourceId{
+				SpaceId:  md.Id.SpaceId,
+				OpaqueId: md.Id.OpaqueId,
+			},
+		},
+	)
+	if err != nil {
+		return nil, err
+	}
 	return []*provider.StorageSpace{{
-		Id:        &provider.StorageSpaceId{OpaqueId: md.Id.OpaqueId},
+		Id:        &provider.StorageSpaceId{OpaqueId: ssID},
 		Name:      md.Owner.OpaqueId,
 		SpaceType: "personal",
 		Owner:     &userpb.User{Id: md.Owner},
 		Root: &provider.ResourceId{
-			StorageId: md.Id.OpaqueId,
-			OpaqueId:  md.Id.OpaqueId,
+			SpaceId:  md.Id.SpaceId,
+			OpaqueId: md.Id.OpaqueId,
 		},
 		Mtime: &types.Timestamp{
 			Seconds: eosFileInfo.MTimeSec,

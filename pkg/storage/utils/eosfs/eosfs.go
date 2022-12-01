@@ -133,7 +133,8 @@ func (c *Config) init() {
 	}
 
 	if c.UserLayout == "" {
-		c.UserLayout = "{{.Username}}" // TODO set better layout
+		c.UserLayout = "users/{{.Id.OpaqueId}}" // TODO set better layout
+		//c.UserLayout = "{{.Username}}" // TODO set better layout
 	}
 
 	if c.UserIDCacheSize == 0 {
@@ -1249,7 +1250,8 @@ func (fs *eosfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []st
 
 		parent, err := fs.unwrap(ctx, eosFileInfo.File)
 		if err != nil {
-			return nil, err
+			fmt.Println("UNWRAP ERR", err)
+			//return nil, err
 		}
 
 		p = path.Join(parent, p)
@@ -2230,7 +2232,10 @@ func (fs *eosfs) convert(ctx context.Context, eosFileInfo *eosclient.FileInfo) (
 	}
 
 	info := &provider.ResourceInfo{
-		Id:            &provider.ResourceId{OpaqueId: fmt.Sprintf("%d", eosFileInfo.Inode)},
+		Id: &provider.ResourceId{
+			SpaceId:  fmt.Sprintf("%d", eosFileInfo.Inode),
+			OpaqueId: fmt.Sprintf("%d", eosFileInfo.Inode),
+		},
 		Path:          path,
 		Owner:         owner,
 		Etag:          fmt.Sprintf("\"%s\"", strings.Trim(eosFileInfo.ETag, "\"")),
@@ -2329,10 +2334,15 @@ func (fs *eosfs) getUserIDGateway(ctx context.Context, uid string) (*userpb.User
 	if err != nil {
 		return nil, errors.Wrap(err, "eosfs: error getting gateway grpc client")
 	}
-	getUserResp, err := client.GetUserByClaim(ctx, &userpb.GetUserByClaimRequest{
-		Claim:                  "uid",
-		Value:                  uid,
-		SkipFetchingUserGroups: true,
+	//getUserResp, err := client.GetUserByClaim(ctx, &userpb.GetUserByClaimRequest{
+	//Claim: "uid",
+	////Value:                  uid,
+	//Value:                  "3f44740b-f40f-4f05-a1d4-d6f3bbc1677e",
+	//SkipFetchingUserGroups: true,
+	//})
+	getUserResp, err := client.GetUser(ctx, &userpb.GetUserRequest{
+		UserId: &userpb.UserId{
+			OpaqueId: "3f44740b-f40f-4f05-a1d4-d6f3bbc1677e"},
 	})
 	if err != nil {
 		// Insert an empty object in the cache so that we don't make another call
