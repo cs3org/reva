@@ -115,7 +115,6 @@ func (h *Handler) UpdateSelf(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-
 }
 
 func (h *Handler) updateLanguage(ctx context.Context, lang string) error {
