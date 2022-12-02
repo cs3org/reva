@@ -144,8 +144,8 @@ test-go-version:
 
 .PHONY: build-ci
 build-ci: off
-	go build -ldflags ${CI_BUILD_FLAGS} -o ./cmd/revad/revad ./cmd/revad
-	go build -ldflags ${CI_BUILD_FLAGS} -o ./cmd/reva/reva ./cmd/reva
+	go build -ldflags ${BUILD_FLAGS} -o ./cmd/revad/revad ./cmd/revad
+	go build -ldflags ${BUILD_FLAGS} -o ./cmd/reva/reva ./cmd/reva
 
 .PHONY: gen-doc
 gen-doc:
