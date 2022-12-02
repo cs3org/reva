@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,7 +22,6 @@ import (
 	"context"
 	"encoding/json"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 
@@ -86,9 +85,8 @@ func (fs *localfs) Upload(ctx context.Context, ref *provider.Reference, r io.Rea
 // It resolves the resource and then reuses the NewUpload function
 // Currently requires the uploadLength to be set
 // TODO to implement LengthDeferrerDataStore make size optional
-// TODO read optional content for small files in this request
+// TODO read optional content for small files in this request.
 func (fs *localfs) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64, metadata map[string]string) (map[string]string, error) {
-
 	np, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return nil, errors.Wrap(err, "localfs: error resolving reference")
@@ -136,7 +134,6 @@ func (fs *localfs) UseIn(composer *tusd.StoreComposer) {
 // the Fileinfo metadata must contain a dir and a filename.
 // returns a unique id which is used to identify the upload. The properties Size and MetaData will be filled.
 func (fs *localfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upload tusd.Upload, err error) {
-
 	log := appctx.GetLogger(ctx)
 	log.Debug().Interface("info", info).Msg("localfs: NewUpload")
 
@@ -203,7 +200,7 @@ func (fs *localfs) getUploadPath(ctx context.Context, uploadID string) (string, 
 	return filepath.Join(fs.conf.Uploads, uploadID), nil
 }
 
-// GetUpload returns the Upload for the given upload id
+// GetUpload returns the Upload for the given upload id.
 func (fs *localfs) GetUpload(ctx context.Context, id string) (tusd.Upload, error) {
 	binPath, err := fs.getUploadPath(ctx, id)
 	if err != nil {
@@ -211,7 +208,7 @@ func (fs *localfs) GetUpload(ctx context.Context, id string) (tusd.Upload, error
 	}
 	infoPath := binPath + ".info"
 	info := tusd.FileInfo{}
-	data, err := ioutil.ReadFile(infoPath)
+	data, err := os.ReadFile(infoPath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			// Interpret os.ErrNotExist as 404 Not Found
@@ -263,17 +260,17 @@ type fileUpload struct {
 	ctx context.Context
 }
 
-// GetInfo returns the FileInfo
+// GetInfo returns the FileInfo.
 func (upload *fileUpload) GetInfo(ctx context.Context) (tusd.FileInfo, error) {
 	return upload.info, nil
 }
 
-// GetReader returns an io.Reader for the upload
+// GetReader returns an io.Reader for the upload.
 func (upload *fileUpload) GetReader(ctx context.Context) (io.Reader, error) {
 	return os.Open(upload.binPath)
 }
 
-// WriteChunk writes the stream from the reader to the given offset of the upload
+// WriteChunk writes the stream from the reader to the given offset of the upload.
 func (upload *fileUpload) WriteChunk(ctx context.Context, offset int64, src io.Reader) (int64, error) {
 	file, err := os.OpenFile(upload.binPath, os.O_WRONLY|os.O_APPEND, defaultFilePerm)
 	if err != nil {
@@ -305,12 +302,11 @@ func (upload *fileUpload) writeInfo() error {
 	if err != nil {
 		return err
 	}
-	return ioutil.WriteFile(upload.infoPath, data, defaultFilePerm)
+	return os.WriteFile(upload.infoPath, data, defaultFilePerm)
 }
 
-// FinishUpload finishes an upload and moves the file to the internal destination
+// FinishUpload finishes an upload and moves the file to the internal destination.
 func (upload *fileUpload) FinishUpload(ctx context.Context) error {
-
 	np := upload.info.Storage["InternalDestination"]
 
 	// TODO check etag with If-Match header
@@ -352,12 +348,12 @@ func (upload *fileUpload) FinishUpload(ctx context.Context) error {
 // - the storage needs to implement AsTerminatableUpload
 // - the upload needs to implement Terminate
 
-// AsTerminatableUpload returns a a TerminatableUpload
+// AsTerminatableUpload returns a TerminatableUpload.
 func (fs *localfs) AsTerminatableUpload(upload tusd.Upload) tusd.TerminatableUpload {
 	return upload.(*fileUpload)
 }
 
-// Terminate terminates the upload
+// Terminate terminates the upload.
 func (upload *fileUpload) Terminate(ctx context.Context) error {
 	if err := os.Remove(upload.infoPath); err != nil {
 		return err

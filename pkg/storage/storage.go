@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -60,7 +60,7 @@ type FS interface {
 	UnsetArbitraryMetadata(ctx context.Context, ref *provider.Reference, keys []string) error
 	SetLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error
 	GetLock(ctx context.Context, ref *provider.Reference) (*provider.Lock, error)
-	RefreshLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error
+	RefreshLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock, existingLockID string) error
 	Unlock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error
 	ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter) ([]*provider.StorageSpace, error)
 	CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error)
@@ -68,14 +68,14 @@ type FS interface {
 }
 
 // Registry is the interface that storage registries implement
-// for discovering storage providers
+// for discovering storage providers.
 type Registry interface {
 	FindProviders(ctx context.Context, ref *provider.Reference) ([]*registry.ProviderInfo, error)
 	ListProviders(ctx context.Context) ([]*registry.ProviderInfo, error)
 	GetHome(ctx context.Context) (*registry.ProviderInfo, error)
 }
 
-// PathWrapper is the interface to implement for path transformations
+// PathWrapper is the interface to implement for path transformations.
 type PathWrapper interface {
 	Unwrap(ctx context.Context, rp string) (string, error)
 	Wrap(ctx context.Context, rp string) (string, error)

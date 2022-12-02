@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -72,9 +72,8 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 	return c, nil
 }
 
-// New creates a new ocm share provider svc
+// New creates a new ocm share provider svc.
 func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
-
 	c, err := parseConfig(m)
 	if err != nil {
 		return nil, err
@@ -114,7 +113,7 @@ func (s *service) UnprotectedEndpoints() []string {
 // internal/grpc/service/ocmcore/ocmcore.go
 // Both functions end up calling the same s.sm.Share function
 // on the OCM share manager:
-// pkg/ocm/share/manager/{json|nextcloud|...}
+// pkg/ocm/share/manager/{json|nextcloud|...}.
 func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareRequest) (*ocm.CreateOCMShareResponse, error) {
 	if req.Opaque == nil {
 		return &ocm.CreateOCMShareResponse{
@@ -158,7 +157,6 @@ func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareReq
 
 	// discover share type
 	sharetype := ocm.Share_SHARE_TYPE_REGULAR
-	// FIXME: https://github.com/cs3org/reva/issues/2402
 	protocol, ok := req.Opaque.Map["protocol"]
 	if ok {
 		switch protocol.Decoder {
@@ -172,7 +170,6 @@ func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareReq
 				Status: status.NewInternal(ctx, err, "error creating share"),
 			}, nil
 		}
-		// token = protocol FIXME!
 	}
 
 	var sharedSecret string

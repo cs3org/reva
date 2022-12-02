@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -39,6 +39,7 @@ type EOSClient interface {
 	SetAttr(ctx context.Context, auth Authorization, attr *Attribute, errorIfExists, recursive bool, path string) error
 	UnsetAttr(ctx context.Context, auth Authorization, attr *Attribute, recursive bool, path string) error
 	GetAttr(ctx context.Context, auth Authorization, key, path string) (*Attribute, error)
+	GetAttrs(ctx context.Context, auth Authorization, path string) ([]*Attribute, error)
 	GetQuota(ctx context.Context, username string, rootAuth Authorization, path string) (*QuotaInfo, error)
 	SetQuota(ctx context.Context, rooAuth Authorization, info *SetQuotaInfo) error
 	Touch(ctx context.Context, auth Authorization, path string) error
@@ -113,7 +114,7 @@ type QuotaInfo struct {
 }
 
 // SetQuotaInfo encapsulates the information needed to
-// create a quota space in EOS for a user
+// create a quota space in EOS for a user.
 type SetQuotaInfo struct {
 	Username  string
 	UID       string
@@ -123,7 +124,7 @@ type SetQuotaInfo struct {
 	MaxFiles  uint64
 }
 
-// Constants for ACL position
+// Constants for ACL position.
 const (
 	EndPosition   uint = 0
 	StartPosition uint = 1
@@ -142,9 +143,9 @@ type Authorization struct {
 }
 
 // AttrAlreadyExistsError is the error raised when setting
-// an already existing attr on a resource
+// an already existing attr on a resource.
 const AttrAlreadyExistsError = errtypes.BadRequest("attr already exists")
 
 // AttrNotExistsError is the error raised when removing
-// an attribute that does not exist
+// an attribute that does not exist.
 const AttrNotExistsError = errtypes.BadRequest("attr not exists")

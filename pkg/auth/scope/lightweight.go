@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -56,11 +56,13 @@ func checkLightweightPath(path string) bool {
 		"/ocs/v1.php/cloud/user",
 		"/remote.php/webdav",
 		"/remote.php/dav/files",
+		"/thumbnails",
 		"/app/open",
 		"/app/new",
 		"/archiver",
 		"/dataprovider",
 		"/data",
+		"/app/open",
 	}
 	for _, p := range paths {
 		if strings.HasPrefix(path, p) {

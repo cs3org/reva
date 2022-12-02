@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,7 +29,7 @@ import (
 	"github.com/cs3org/reva/pkg/events/server"
 )
 
-// Simple example of an event workflow
+// Simple example of an event workflow.
 func main() {
 	// start a server
 	Server()
@@ -48,10 +48,9 @@ func main() {
 
 	// wait for consumer go-routine to print
 	time.Sleep(500 * time.Millisecond)
-
 }
 
-// Server generates a nats server
+// Server generates a nats server.
 func Server() {
 	err := server.RunNatsServer()
 	if err != nil {
@@ -59,12 +58,11 @@ func Server() {
 	}
 }
 
-// Client builds a nats client
+// Client builds a nats client.
 func Client() events.Stream {
 	c, err := server.NewNatsStream(nats.Address("127.0.0.1:4222"), nats.ClusterID("test-cluster"))
 	if err != nil {
 		log.Fatal(err)
 	}
 	return c
-
 }

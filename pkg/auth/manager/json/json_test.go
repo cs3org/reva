@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,7 +20,6 @@ package json
 
 import (
 	"context"
-	"io/ioutil"
 	"os"
 	"testing"
 
@@ -93,7 +92,7 @@ func TestGetManagerWithJSONObject(t *testing.T) {
 	var tmpFile *os.File
 
 	// add tempdir
-	tmpDir, err := ioutil.TempDir("", "json_test")
+	tmpDir, err := os.MkdirTemp("", "json_test")
 	if err != nil {
 		t.Fatalf("Error while creating temp dir: %v", err)
 	}
@@ -101,7 +100,7 @@ func TestGetManagerWithJSONObject(t *testing.T) {
 
 	for _, tt := range tests {
 		// get file handler for temporary file
-		tmpFile, err = ioutil.TempFile(tmpDir, "json_test")
+		tmpFile, err = os.CreateTemp(tmpDir, "json_test")
 		if err != nil {
 			t.Fatalf("Error while opening temp file: %v", err)
 		}
@@ -159,14 +158,14 @@ func TestGetAuthenticatedManager(t *testing.T) {
 	}
 
 	// add tempdir
-	tempdir, err := ioutil.TempDir("", "json_test")
+	tempdir, err := os.MkdirTemp("", "json_test")
 	if err != nil {
 		t.Fatalf("Error while creating temp dir: %v", err)
 	}
 	defer os.RemoveAll(tempdir)
 
 	// get file handler for temporary file
-	tempFile, err := ioutil.TempFile(tempdir, "json_test")
+	tempFile, err := os.CreateTemp(tempdir, "json_test")
 	if err != nil {
 		t.Fatalf("Error while opening temp file: %v", err)
 	}

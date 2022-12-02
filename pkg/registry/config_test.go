@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,20 +28,20 @@ config example:
 
 ---
 services:
-  authprovider:
-    basic:
-      name: auth-basic
-      nodes:
-      - address: 0.0.0.0:1234
-        metadata:
-          version: v0.1.0
-    bearer:
-      name: auth-bearer
-      nodes:
-      - address: 0.0.0.0:5678
-        metadata:
-          version: v0.1.0
 
+	authprovider:
+	  basic:
+	    name: auth-basic
+	    nodes:
+	    - address: 0.0.0.0:1234
+	      metadata:
+	        version: v0.1.0
+	  bearer:
+	    name: auth-bearer
+	    nodes:
+	    - address: 0.0.0.0:5678
+	      metadata:
+	        version: v0.1.0
 */
 func TestParseConfig(t *testing.T) {
 	type args struct {

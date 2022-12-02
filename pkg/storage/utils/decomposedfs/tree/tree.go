@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -50,14 +50,14 @@ const (
 	spaceTypeShare    = "share"
 )
 
-// Blobstore defines an interface for storing blobs in a blobstore
+// Blobstore defines an interface for storing blobs in a blobstore.
 type Blobstore interface {
 	Upload(key string, reader io.Reader) error
 	Download(key string) (io.ReadCloser, error)
 	Delete(key string) error
 }
 
-// PathLookup defines the interface for the lookup component
+// PathLookup defines the interface for the lookup component.
 type PathLookup interface {
 	NodeFromPath(ctx context.Context, fn string, followReferences bool) (*node.Node, error)
 	NodeFromID(ctx context.Context, id *provider.ResourceId) (n *node.Node, err error)
@@ -70,7 +70,7 @@ type PathLookup interface {
 	ShareFolder() string
 }
 
-// Tree manages a hierarchical tree
+// Tree manages a hierarchical tree.
 type Tree struct {
 	lookup    PathLookup
 	blobstore Blobstore
@@ -80,10 +80,10 @@ type Tree struct {
 	treeTimeAccounting bool
 }
 
-// PermissionCheckFunc defined a function used to check resource permissions
+// PermissionCheckFunc defined a function used to check resource permissions.
 type PermissionCheckFunc func(rp *provider.ResourcePermissions) bool
 
-// New returns a new instance of Tree
+// New returns a new instance of Tree.
 func New(root string, tta bool, tsa bool, lu PathLookup, bs Blobstore) *Tree {
 	return &Tree{
 		lookup:             lu,
@@ -94,7 +94,7 @@ func New(root string, tta bool, tsa bool, lu PathLookup, bs Blobstore) *Tree {
 	}
 }
 
-// Setup prepares the tree structure
+// Setup prepares the tree structure.
 func (t *Tree) Setup(owner *userpb.UserId, propagateToRoot bool) error {
 	// create data paths for internal layout
 	dataPaths := []string{
@@ -173,7 +173,7 @@ func (t *Tree) Setup(owner *userpb.UserId, propagateToRoot bool) error {
 	return nil
 }
 
-// linkSpace creates a new symbolic link for a space with the given type st, and node id
+// linkSpace creates a new symbolic link for a space with the given type st, and node id.
 func (t *Tree) linkSpace(spaceType, spaceID, nodeID string) {
 	spacesPath := filepath.Join(t.root, "spaces", spaceType, spaceID)
 	expectedTarget := "../../nodes/" + nodeID
@@ -222,7 +222,7 @@ func isSharedNode(nodePath string) bool {
 	return false
 }
 
-// GetMD returns the metadata of a node in the tree
+// GetMD returns the metadata of a node in the tree.
 func (t *Tree) GetMD(ctx context.Context, n *node.Node) (os.FileInfo, error) {
 	md, err := os.Stat(n.InternalPath())
 	if err != nil {
@@ -235,9 +235,8 @@ func (t *Tree) GetMD(ctx context.Context, n *node.Node) (os.FileInfo, error) {
 	return md, nil
 }
 
-// CreateDir creates a new directory entry in the tree
+// CreateDir creates a new directory entry in the tree.
 func (t *Tree) CreateDir(ctx context.Context, n *node.Node) (err error) {
-
 	if n.Exists || n.ID != "" {
 		return errtypes.AlreadyExists(n.ID) // path?
 	}
@@ -270,13 +269,13 @@ func (t *Tree) CreateDir(ctx context.Context, n *node.Node) (err error) {
 	return t.Propagate(ctx, n)
 }
 
-// Move replaces the target with the source
+// Move replaces the target with the source.
 func (t *Tree) Move(ctx context.Context, oldNode *node.Node, newNode *node.Node) (err error) {
 	// if target exists delete it without trashing it
 	if newNode.Exists {
 		// TODO make sure all children are deleted
 		if err := os.RemoveAll(newNode.InternalPath()); err != nil {
-			return errors.Wrap(err, "Decomposedfs: Move: error deleting target node "+newNode.ID)
+			return errors.Wrap(err, "decomposedfs: Move: error deleting target node "+newNode.ID)
 		}
 	}
 
@@ -287,7 +286,6 @@ func (t *Tree) Move(ctx context.Context, oldNode *node.Node, newNode *node.Node)
 
 	// are we just renaming (parent stays the same)?
 	if oldNode.ParentID == newNode.ParentID {
-
 		parentPath := t.lookup.InternalPath(oldNode.ParentID)
 
 		// rename child
@@ -296,12 +294,12 @@ func (t *Tree) Move(ctx context.Context, oldNode *node.Node, newNode *node.Node)
 			filepath.Join(parentPath, newNode.Name),
 		)
 		if err != nil {
-			return errors.Wrap(err, "Decomposedfs: could not rename child")
+			return errors.Wrap(err, "decomposedfs: could not rename child")
 		}
 
 		// update name attribute
 		if err := xattr.Set(tgtPath, xattrs.NameAttr, []byte(newNode.Name)); err != nil {
-			return errors.Wrap(err, "Decomposedfs: could not set name attribute")
+			return errors.Wrap(err, "decomposedfs: could not set name attribute")
 		}
 
 		return t.Propagate(ctx, newNode)
@@ -316,15 +314,15 @@ func (t *Tree) Move(ctx context.Context, oldNode *node.Node, newNode *node.Node)
 		filepath.Join(t.lookup.InternalPath(newNode.ParentID), newNode.Name),
 	)
 	if err != nil {
-		return errors.Wrap(err, "Decomposedfs: could not move child")
+		return errors.Wrap(err, "decomposedfs: could not move child")
 	}
 
 	// update target parentid and name
 	if err := xattr.Set(tgtPath, xattrs.ParentidAttr, []byte(newNode.ParentID)); err != nil {
-		return errors.Wrap(err, "Decomposedfs: could not set parentid attribute")
+		return errors.Wrap(err, "decomposedfs: could not set parentid attribute")
 	}
 	if err := xattr.Set(tgtPath, xattrs.NameAttr, []byte(newNode.Name)); err != nil {
-		return errors.Wrap(err, "Decomposedfs: could not set name attribute")
+		return errors.Wrap(err, "decomposedfs: could not set name attribute")
 	}
 
 	// TODO inefficient because we might update several nodes twice, only propagate unchanged nodes?
@@ -333,16 +331,16 @@ func (t *Tree) Move(ctx context.Context, oldNode *node.Node, newNode *node.Node)
 
 	err = t.Propagate(ctx, oldNode)
 	if err != nil {
-		return errors.Wrap(err, "Decomposedfs: Move: could not propagate old node")
+		return errors.Wrap(err, "decomposedfs: Move: could not propagate old node")
 	}
 	err = t.Propagate(ctx, newNode)
 	if err != nil {
-		return errors.Wrap(err, "Decomposedfs: Move: could not propagate new node")
+		return errors.Wrap(err, "decomposedfs: Move: could not propagate new node")
 	}
 	return nil
 }
 
-// ListFolder lists the content of a folder node
+// ListFolder lists the content of a folder node.
 func (t *Tree) ListFolder(ctx context.Context, n *node.Node) ([]*node.Node, error) {
 	dir := n.InternalPath()
 	f, err := os.Open(dir)
@@ -376,7 +374,7 @@ func (t *Tree) ListFolder(ctx context.Context, n *node.Node) ([]*node.Node, erro
 	return nodes, nil
 }
 
-// Delete deletes a node in the tree by moving it to the trash
+// Delete deletes a node in the tree by moving it to the trash.
 func (t *Tree) Delete(ctx context.Context, n *node.Node) (err error) {
 	deletingSharedResource := ctx.Value(appctx.DeletingSharedResource)
 
@@ -518,13 +516,13 @@ func (t *Tree) RestoreRecycleItemFunc(ctx context.Context, key, trashPath, resto
 		n.Exists = true
 		// update name attribute
 		if err := xattr.Set(nodePath, xattrs.NameAttr, []byte(n.Name)); err != nil {
-			return errors.Wrap(err, "Decomposedfs: could not set name attribute")
+			return errors.Wrap(err, "decomposedfs: could not set name attribute")
 		}
 
 		// set ParentidAttr to restorePath's node parent id
 		if trashPath != "" {
 			if err := xattr.Set(nodePath, xattrs.ParentidAttr, []byte(n.ParentID)); err != nil {
-				return errors.Wrap(err, "Decomposedfs: could not set name attribute")
+				return errors.Wrap(err, "decomposedfs: could not set name attribute")
 			}
 		}
 
@@ -537,7 +535,7 @@ func (t *Tree) RestoreRecycleItemFunc(ctx context.Context, key, trashPath, resto
 	return rn, p, fn, nil
 }
 
-// PurgeRecycleItemFunc returns a node and a function to purge it from the trash
+// PurgeRecycleItemFunc returns a node and a function to purge it from the trash.
 func (t *Tree) PurgeRecycleItemFunc(ctx context.Context, key string, path string) (*node.Node, func() error, error) {
 	rn, trashItem, deletedNodePath, _, err := t.readRecycleItem(ctx, key, path)
 	if err != nil {
@@ -570,7 +568,7 @@ func (t *Tree) PurgeRecycleItemFunc(ctx context.Context, key string, path string
 	return rn, fn, nil
 }
 
-// Propagate propagates changes to the root of the tree
+// Propagate propagates changes to the root of the tree.
 func (t *Tree) Propagate(ctx context.Context, n *node.Node) (err error) {
 	sublog := appctx.GetLogger(ctx).With().Interface("node", n).Logger()
 	if !t.treeTimeAccounting && !t.treeSizeAccounting {
@@ -743,20 +741,19 @@ func calculateTreeSize(ctx context.Context, nodePath string) (uint64, error) {
 		}
 	}
 	return size, err
-
 }
 
-// WriteBlob writes a blob to the blobstore
+// WriteBlob writes a blob to the blobstore.
 func (t *Tree) WriteBlob(key string, reader io.Reader) error {
 	return t.blobstore.Upload(key, reader)
 }
 
-// ReadBlob reads a blob from the blobstore
+// ReadBlob reads a blob from the blobstore.
 func (t *Tree) ReadBlob(key string) (io.ReadCloser, error) {
 	return t.blobstore.Download(key)
 }
 
-// DeleteBlob deletes a blob from the blobstore
+// DeleteBlob deletes a blob from the blobstore.
 func (t *Tree) DeleteBlob(key string) error {
 	if key == "" {
 		return fmt.Errorf("could not delete blob, empty key was given")
@@ -770,7 +767,7 @@ func (t *Tree) createNode(n *node.Node, owner *userpb.UserId) (err error) {
 	// create a directory node
 	nodePath := n.InternalPath()
 	if err = os.MkdirAll(nodePath, 0700); err != nil {
-		return errors.Wrap(err, "Decomposedfs: error creating node")
+		return errors.Wrap(err, "decomposedfs: error creating node")
 	}
 
 	return n.WriteMetadata(owner)

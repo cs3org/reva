@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -95,7 +95,7 @@ func downloadCommand() *command {
 
 			dataServerURL := p.DownloadEndpoint
 			// TODO(labkode): do a protocol switch
-			httpReq, err := rhttp.NewRequest(ctx, "GET", dataServerURL, nil)
+			httpReq, err := rhttp.NewRequest(ctx, http.MethodGet, dataServerURL, nil)
 			if err != nil {
 				return err
 			}

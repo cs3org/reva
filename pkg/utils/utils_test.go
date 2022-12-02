@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -205,5 +205,74 @@ func TestParseStorageSpaceReference(t *testing.T) {
 		if ref.Path != tt.relPath {
 			t.Errorf("Expected path %s got %s", tt.relPath, ref.Path)
 		}
+	}
+}
+
+func TestHasPermissions(t *testing.T) {
+	tests := []struct {
+		name     string
+		target   *provider.ResourcePermissions
+		toCheck  *provider.ResourcePermissions
+		expected bool
+	}{
+		{
+			name:     "both empty",
+			target:   &provider.ResourcePermissions{},
+			toCheck:  &provider.ResourcePermissions{},
+			expected: true,
+		},
+		{
+			name:   "empty target",
+			target: &provider.ResourcePermissions{},
+			toCheck: &provider.ResourcePermissions{
+				AddGrant: true,
+			},
+			expected: false,
+		},
+		{
+			name: "empty to_check",
+			target: &provider.ResourcePermissions{
+				AddGrant: true,
+			},
+			toCheck:  &provider.ResourcePermissions{},
+			expected: true,
+		},
+		{
+			name: "to_check is a subset",
+			target: &provider.ResourcePermissions{
+				AddGrant:        true,
+				CreateContainer: true,
+				Delete:          true,
+				GetPath:         true,
+			},
+			toCheck: &provider.ResourcePermissions{
+				CreateContainer: true,
+				GetPath:         true,
+			},
+			expected: true,
+		},
+		{
+			name: "to_check contains permissions to in target",
+			target: &provider.ResourcePermissions{
+				AddGrant:        true,
+				CreateContainer: true,
+				Delete:          true,
+				GetPath:         true,
+			},
+			toCheck: &provider.ResourcePermissions{
+				CreateContainer: true,
+				GetPath:         true,
+				Move:            true,
+			},
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if res := HasPermissions(tt.target, tt.toCheck); res != tt.expected {
+				t.Fatalf("got unexpected result: target=%+v to_check=%+v res=%+v expected=%+v", tt.target, tt.toCheck, res, tt.expected)
+			}
+		})
 	}
 }

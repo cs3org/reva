@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -37,7 +37,7 @@ func init() {
 	global.Register("preferences", New)
 }
 
-// Config holds the config options that for the preferences HTTP service
+// Config holds the config options that for the preferences HTTP service.
 type Config struct {
 	Prefix     string `mapstructure:"prefix"`
 	GatewaySvc string `mapstructure:"gatewaysvc"`
@@ -55,9 +55,8 @@ type svc struct {
 	router *chi.Mux
 }
 
-// New returns a new ocmd object
+// New returns a new ocmd object.
 func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) {
-
 	conf := &Config{}
 	if err := mapstructure.Decode(m, conf); err != nil {
 		return nil, err
@@ -116,7 +115,6 @@ func (s *svc) handleGet(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusInternalServerError)
 		}
 		return
-
 	}
 
 	client, err := pool.GetGatewayServiceClient(pool.Endpoint(s.conf.GatewaySvc))
@@ -164,7 +162,6 @@ func (s *svc) handleGet(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-
 }
 
 func (s *svc) handlePost(w http.ResponseWriter, r *http.Request) {
@@ -182,7 +179,6 @@ func (s *svc) handlePost(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusInternalServerError)
 		}
 		return
-
 	}
 
 	client, err := pool.GetGatewayServiceClient(pool.Endpoint(s.conf.GatewaySvc))

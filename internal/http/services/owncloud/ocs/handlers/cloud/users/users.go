@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -36,23 +36,23 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-// Handler renders user data for the user id given in the url path
+// Handler renders user data for the user id given in the url path.
 type Handler struct {
 	gatewayAddr string
 }
 
-// Init initializes this and any contained handlers
+// Init initializes this and any contained handlers.
 func (h *Handler) Init(c *config.Config) {
 	h.gatewayAddr = c.GatewaySvc
 }
 
 // GetGroups handles GET requests on /cloud/users/groups
-// TODO: implement
+// TODO: implement.
 func (h *Handler) GetGroups(w http.ResponseWriter, r *http.Request) {
 	response.WriteOCSSuccess(w, r, &Groups{})
 }
 
-// Quota holds quota information
+// Quota holds quota information.
 type Quota struct {
 	Free       int64   `json:"free" xml:"free"`
 	Used       int64   `json:"used" xml:"used"`
@@ -61,7 +61,7 @@ type Quota struct {
 	Definition string  `json:"definition" xml:"definition"`
 }
 
-// Users holds users data
+// Users holds users data.
 type Users struct {
 	Quota       *Quota `json:"quota" xml:"quota"`
 	Email       string `json:"email" xml:"email"`
@@ -72,14 +72,14 @@ type Users struct {
 	TwoFactorAuthEnabled bool `json:"two_factor_auth_enabled" xml:"two_factor_auth_enabled"`
 }
 
-// Groups holds group data
+// Groups holds group data.
 type Groups struct {
 	Groups []string `json:"groups" xml:"groups>element"`
 }
 
 // GetUsers handles GET requests on /cloud/users
 // Only allow self-read currently. TODO: List Users and Get on other users (both require
-// administrative privileges)
+// administrative privileges).
 func (h *Handler) GetUsers(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	sublog := appctx.GetLogger(r.Context())
@@ -104,20 +104,21 @@ func (h *Handler) GetUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	getHomeRes, err := gc.GetHome(ctx, &provider.GetHomeRequest{})
-	if err != nil {
-		sublog.Error().Err(err).Msg("error calling GetHome")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	if getHomeRes.Status.Code != rpc.Code_CODE_OK {
-		ocdav.HandleErrorStatus(sublog, w, getHomeRes.Status)
-		return
-	}
 	var total, used uint64 = 2, 1
 	var relative float32
 	// lightweight and federated accounts don't have access to their storage space
 	if u.Id.Type != userpb.UserType_USER_TYPE_LIGHTWEIGHT && u.Id.Type != userpb.UserType_USER_TYPE_FEDERATED {
+		getHomeRes, err := gc.GetHome(ctx, &provider.GetHomeRequest{})
+		if err != nil {
+			sublog.Error().Err(err).Msg("error calling GetHome")
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		if getHomeRes.Status.Code != rpc.Code_CODE_OK {
+			ocdav.HandleErrorStatus(sublog, w, getHomeRes.Status)
+			return
+		}
+
 		getQuotaRes, err := gc.GetQuota(ctx, &gateway.GetQuotaRequest{Ref: &provider.Reference{Path: getHomeRes.Path}})
 		if err != nil {
 			sublog.Error().Err(err).Msg("error calling GetQuota")
@@ -131,7 +132,7 @@ func (h *Handler) GetUsers(w http.ResponseWriter, r *http.Request) {
 		}
 		total = getQuotaRes.TotalBytes
 		used = getQuotaRes.UsedBytes
-		relative = float32(float64(used) / float64(total))
+		relative = float32(float64(used)/float64(total)) * 100
 	}
 
 	response.WriteOCSSuccess(w, r, &Users{

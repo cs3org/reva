@@ -44,9 +44,6 @@ mime_types = [
     {"mime_type" = "application/vnd.jupyter", "extension" = "ipynb", "name" = "Jupyter Notebook", "description" = "Jupyter Notebook"}
 ]
 
-[grpc.services.appprovider]
-mime_types = ["text/plain"]
-
 [http.services.datagateway]
 [http.services.prometheus]
 [http.services.ocmd]

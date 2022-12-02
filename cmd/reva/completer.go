@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,7 +25,7 @@ import (
 	"github.com/c-bata/go-prompt"
 )
 
-// Completer provides completion command handler
+// Completer provides completion command handler.
 type Completer struct {
 	Commands                  []*command
 	DisableArgPrompt          bool
@@ -45,7 +45,7 @@ func (c *Completer) init() {
 	c.lsDirArguments = new(argumentCompleter)
 }
 
-// Complete provides completion to prompt
+// Complete provides completion to prompt.
 func (c *Completer) Complete(d prompt.Document) []prompt.Suggest {
 	if d.TextBeforeCursor() == "" {
 		return []prompt.Suggest{}
@@ -80,7 +80,6 @@ func (c *Completer) argumentCompleter(args ...string) []prompt.Suggest {
 	}
 
 	switch args[0] {
-
 	case "login":
 		if len(args) == 2 {
 			return prompt.FilterHasPrefix(c.loginArgumentCompleter(), args[1], true)

@@ -1,4 +1,4 @@
-// Copyright 2018-2020 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -169,6 +169,10 @@ func (panel *Panel) prepareTemplate(tpl *template.Template) {
 				}
 			}
 			return strings.Join(sites, ", ")
+		},
+		"getSiteName": func(siteID string, fullName bool) string {
+			siteName, _ := data.QuerySiteName(siteID, fullName, panel.conf.Mentix.URL, panel.conf.Mentix.DataEndpoint)
+			return siteName
 		},
 	})
 }

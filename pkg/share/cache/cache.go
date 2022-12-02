@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,7 +29,7 @@ type Warmup interface {
 	GetResourceInfos() ([]*provider.ResourceInfo, error)
 }
 
-// ResourceInfoCache is the interface to implement caches for resource infos
+// ResourceInfoCache is the interface to implement caches for resource infos.
 type ResourceInfoCache interface {
 	Get(key string) (*provider.ResourceInfo, error)
 	GetKeys(keys []string) ([]*provider.ResourceInfo, error)

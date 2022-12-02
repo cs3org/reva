@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -37,7 +37,7 @@ import (
 )
 
 // UserData contains the template placeholders for a user.
-// For example {{.Username}} or {{.Id.Idp}}
+// For example {{.Username}} or {{.Id.Idp}}.
 type UserData struct {
 	*userpb.User
 	Email EmailData

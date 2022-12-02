@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -49,9 +49,8 @@ func init() {
 }
 
 // New returns an implementation to the storage.FS interface that talks to
-// cback
+// cback.
 func New(m map[string]interface{}) (fs storage.FS, err error) {
-
 	c := &Options{}
 	if err = mapstructure.Decode(m, c); err != nil {
 		return nil, errors.Wrap(err, "Error Decoding Configuration")
@@ -61,7 +60,6 @@ func New(m map[string]interface{}) (fs storage.FS, err error) {
 
 	// Returns the storage.FS interface
 	return &cback{conf: c, client: httpClient}, nil
-
 }
 
 func (fs *cback) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []string) (*provider.ResourceInfo, error) {
@@ -112,7 +110,6 @@ func (fs *cback) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []st
 		}
 
 		return ri, nil
-
 	}
 
 	ret, err := fs.statResource(resp.ID, ssID, user.Username, searchPath, resp.Source)
@@ -153,8 +150,7 @@ func (fs *cback) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []st
 }
 
 func (fs *cback) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys []string) ([]*provider.ResourceInfo, error) {
-
-	var path string = ref.GetPath()
+	var path = ref.GetPath()
 	var ssID, searchPath string
 
 	user, inContext := ctxpkg.ContextGetUser(ctx)
@@ -180,7 +176,6 @@ func (fs *cback) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys
 		files := make([]*provider.ResourceInfo, 0, len(pathList))
 
 		for _, paths := range pathList {
-
 			setTime := v1beta1.Timestamp{
 				Seconds: 0,
 				Nanos:   0,
@@ -235,7 +230,6 @@ func (fs *cback) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys
 		files := make([]*provider.ResourceInfo, 0, len(ret))
 
 		for _, j := range ret {
-
 			setTime := v1beta1.Timestamp{
 				Seconds: j.Mtime,
 				Nanos:   0,
@@ -268,14 +262,12 @@ func (fs *cback) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys
 		}
 
 		return files, nil
-
 	}
 
 	// If match in path, therefore print the Snapshot IDs
 	files := make([]*provider.ResourceInfo, 0, len(snapshotList))
 
 	for _, snapshot := range snapshotList {
-
 		epochTime, err := fs.timeConv(snapshot.Time)
 
 		if err != nil {
@@ -306,15 +298,13 @@ func (fs *cback) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys
 		}
 
 		files = append(files, &f)
-
 	}
 
 	return files, nil
-
 }
 
 func (fs *cback) Download(ctx context.Context, ref *provider.Reference) (io.ReadCloser, error) {
-	var path string = ref.GetPath()
+	var path = ref.GetPath()
 	var ssID, searchPath string
 	user, _ := ctxpkg.ContextGetUser(ctx)
 
@@ -333,11 +323,10 @@ func (fs *cback) Download(ctx context.Context, ref *provider.Reference) (io.Read
 	}
 
 	if resp.Substring != "" {
-
 		ssID, searchPath = fs.pathTrimmer(snapshotList, resp)
 
 		url := fs.conf.APIURL + "/backups/" + strconv.Itoa(resp.ID) + "/snapshots/" + ssID + "/" + searchPath
-		requestType := "GET"
+		requestType := http.MethodGet
 		md, err := fs.GetMD(ctx, ref, nil)
 
 		if err != nil {
@@ -345,7 +334,6 @@ func (fs *cback) Download(ctx context.Context, ref *provider.Reference) (io.Read
 		}
 
 		if md.Type == provider.ResourceType_RESOURCE_TYPE_FILE {
-
 			responseData, err := fs.getRequest(user.Username, url, requestType, nil)
 
 			if err != nil {
@@ -356,7 +344,6 @@ func (fs *cback) Download(ctx context.Context, ref *provider.Reference) (io.Read
 		}
 
 		return nil, errtypes.BadRequest("can only download files")
-
 	}
 
 	return nil, errtypes.NotFound("cback: resource not found")
@@ -478,7 +465,7 @@ func (fs *cback) GetLock(ctx context.Context, ref *provider.Reference) (*provide
 	return nil, errtypes.NotSupported("Operation Not Permitted")
 }
 
-func (fs *cback) RefreshLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
+func (fs *cback) RefreshLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock, existingLockID string) error {
 	return errtypes.NotSupported("Operation Not Permitted")
 }
 
@@ -488,10 +475,8 @@ func (fs *cback) Unlock(ctx context.Context, ref *provider.Reference, lock *prov
 
 func (fs *cback) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser) error {
 	return errtypes.NotSupported("Operation Not Permitted")
-
 }
 
 func (fs *cback) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64, metadata map[string]string) (map[string]string, error) {
 	return nil, errtypes.NotSupported("Operation Not Permitted")
-
 }

@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -41,7 +41,7 @@ import (
 // - inode (if available),
 // - device (if available) and
 // - size.
-// errors are logged, but an etag will still be returned
+// errors are logged, but an etag will still be returned.
 func calcEtag(ctx context.Context, fi os.FileInfo) string {
 	log := appctx.GetLogger(ctx)
 	h := md5.New()

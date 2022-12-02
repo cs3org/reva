@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,7 +23,6 @@ import (
 
 	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-	userprovider "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -54,31 +53,31 @@ type DBShare struct {
 	State        int
 }
 
-// UserConverter describes an interface for converting user ids to names and back
+// UserConverter describes an interface for converting user ids to names and back.
 type UserConverter interface {
 	UserNameToUserID(ctx context.Context, username string) (*userpb.UserId, error)
 	UserIDToUserName(ctx context.Context, userid *userpb.UserId) (string, error)
 }
 
-// GatewayUserConverter converts usernames and ids using the gateway
+// GatewayUserConverter converts usernames and ids using the gateway.
 type GatewayUserConverter struct {
 	gwAddr string
 }
 
-// NewGatewayUserConverter returns a instance of GatewayUserConverter
+// NewGatewayUserConverter returns a instance of GatewayUserConverter.
 func NewGatewayUserConverter(gwAddr string) *GatewayUserConverter {
 	return &GatewayUserConverter{
 		gwAddr: gwAddr,
 	}
 }
 
-// UserIDToUserName converts a user ID to an username
+// UserIDToUserName converts a user ID to an username.
 func (c *GatewayUserConverter) UserIDToUserName(ctx context.Context, userid *userpb.UserId) (string, error) {
 	gwConn, err := pool.GetGatewayServiceClient(pool.Endpoint(c.gwAddr))
 	if err != nil {
 		return "", err
 	}
-	getUserResponse, err := gwConn.GetUser(ctx, &userprovider.GetUserRequest{
+	getUserResponse, err := gwConn.GetUser(ctx, &userpb.GetUserRequest{
 		UserId:                 userid,
 		SkipFetchingUserGroups: true,
 	})
@@ -91,7 +90,7 @@ func (c *GatewayUserConverter) UserIDToUserName(ctx context.Context, userid *use
 	return getUserResponse.User.Username, nil
 }
 
-// UserNameToUserID converts a username to an user ID
+// UserNameToUserID converts a username to an user ID.
 func (c *GatewayUserConverter) UserNameToUserID(ctx context.Context, username string) (*userpb.UserId, error) {
 	gwConn, err := pool.GetGatewayServiceClient(pool.Endpoint(c.gwAddr))
 	if err != nil {

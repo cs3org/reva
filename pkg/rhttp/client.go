@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,10 +24,9 @@ import (
 	"io"
 	"net/http"
 
-	"go.opencensus.io/plugin/ochttp"
-
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/pkg/errors"
+	"go.opencensus.io/plugin/ochttp"
 )
 
 // GetHTTPClient returns an http client with open census tracing support.

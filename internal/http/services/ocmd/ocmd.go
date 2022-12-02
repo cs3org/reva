@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -34,7 +34,7 @@ func init() {
 	global.Register("ocmd", New)
 }
 
-// Config holds the config options that need to be passed down to all ocdav handlers
+// Config holds the config options that need to be passed down to all ocdav handlers.
 type Config struct {
 	SMTPCredentials  *smtpclient.SMTPCredentials `mapstructure:"smtp_credentials"`
 	Prefix           string                      `mapstructure:"prefix"`
@@ -61,9 +61,8 @@ type svc struct {
 	SendHandler          *sendHandler
 }
 
-// New returns a new ocmd object
+// New returns a new ocmd object.
 func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) {
-
 	conf := &Config{}
 	if err := mapstructure.Decode(m, conf); err != nil {
 		return nil, err
@@ -104,7 +103,6 @@ func (s *svc) Unprotected() []string {
 
 func (s *svc) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-
 		ctx := r.Context()
 		log := appctx.GetLogger(ctx)
 

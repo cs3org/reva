@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -36,7 +36,7 @@ func New() func(http.Handler) http.Handler {
 	return handler
 }
 
-// handler is a logging middleware
+// handler is a logging middleware.
 func handler(h http.Handler) http.Handler {
 	return newLoggingHandler(h)
 }
@@ -63,13 +63,9 @@ func makeLogger(w http.ResponseWriter) loggingResponseWriter {
 	if _, ok := w.(http.Hijacker); ok {
 		logger = &hijackLogger{responseLogger{w: w, status: http.StatusOK}}
 	}
-	h, ok1 := logger.(http.Hijacker)
-	c, ok2 := w.(http.CloseNotifier)
-	if ok1 && ok2 {
-		return hijackCloseNotifier{logger, h, c}
-	}
-	if ok2 {
-		return &closeNotifyWriter{logger, c}
+	h, ok := logger.(http.Hijacker)
+	if ok {
+		return hijackCloseNotifier{logger, h}
 	}
 	return logger
 }
@@ -133,7 +129,7 @@ type commonLoggingResponseWriter interface {
 }
 
 // responseLogger is wrapper of http.ResponseWriter that keeps track of its HTTP
-// status code and body size
+// status code and body size.
 type responseLogger struct {
 	w      http.ResponseWriter
 	status int
@@ -183,13 +179,7 @@ func (l *hijackLogger) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 	return conn, rw, err
 }
 
-type closeNotifyWriter struct {
-	loggingResponseWriter
-	http.CloseNotifier
-}
-
 type hijackCloseNotifier struct {
 	loggingResponseWriter
 	http.Hijacker
-	http.CloseNotifier
 }

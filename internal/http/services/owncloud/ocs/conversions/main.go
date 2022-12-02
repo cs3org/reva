@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,37 +26,36 @@ import (
 	"path"
 	"time"
 
-	"github.com/cs3org/reva/pkg/publicshare"
-	"github.com/cs3org/reva/pkg/user"
-
 	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	"github.com/cs3org/reva/pkg/publicshare"
 	publicsharemgr "github.com/cs3org/reva/pkg/publicshare/manager/registry"
+	"github.com/cs3org/reva/pkg/user"
 	usermgr "github.com/cs3org/reva/pkg/user/manager/registry"
 )
 
 const (
-	// ShareTypeUser refers to user shares
+	// ShareTypeUser refers to user shares.
 	ShareTypeUser ShareType = 0
 
-	// ShareTypePublicLink refers to public link shares
+	// ShareTypePublicLink refers to public link shares.
 	ShareTypePublicLink ShareType = 3
 
-	// ShareTypeGroup represents a group share
+	// ShareTypeGroup represents a group share.
 	ShareTypeGroup ShareType = 1
 
-	// ShareTypeFederatedCloudShare represents a federated share
+	// ShareTypeFederatedCloudShare represents a federated share.
 	ShareTypeFederatedCloudShare ShareType = 6
 
-	// ShareTypeSpaceMembership represents an action regarding space members
+	// ShareTypeSpaceMembership represents an action regarding space members.
 	ShareTypeSpaceMembership ShareType = 7
 )
 
-// ResourceType indicates the OCS type of the resource
+// ResourceType indicates the OCS type of the resource.
 type ResourceType int
 
 func (rt ResourceType) String() (s string) {
@@ -75,7 +74,7 @@ func (rt ResourceType) String() (s string) {
 	return
 }
 
-// ShareType denotes a type of share
+// ShareType denotes a type of share.
 type ShareType int
 
 // ShareData represents https://doc.owncloud.com/server/developer_manual/core/ocs-share-api.html#response-attributes-1
@@ -144,9 +143,12 @@ type ShareData struct {
 	Attributes string `json:"attributes,omitempty" xml:"attributes,omitempty"`
 	// PasswordProtected represents a public share is password protected
 	// PasswordProtected bool `json:"password_protected,omitempty" xml:"password_protected,omitempty"`
+	Quicklink bool `json:"quicklink,omitempty" xml:"quicklink,omitempty"`
+	// Description of the public share
+	Description string `json:"description" xml:"description"`
 }
 
-// ShareeData holds share recipient search results
+// ShareeData holds share recipient search results.
 type ShareeData struct {
 	Exact   *ExactMatchesData `json:"exact" xml:"exact"`
 	Users   []*MatchData      `json:"users" xml:"users>element"`
@@ -154,27 +156,27 @@ type ShareeData struct {
 	Remotes []*MatchData      `json:"remotes" xml:"remotes>element"`
 }
 
-// ExactMatchesData hold exact matches
+// ExactMatchesData hold exact matches.
 type ExactMatchesData struct {
 	Users   []*MatchData `json:"users" xml:"users>element"`
 	Groups  []*MatchData `json:"groups" xml:"groups>element"`
 	Remotes []*MatchData `json:"remotes" xml:"remotes>element"`
 }
 
-// MatchData describes a single match
+// MatchData describes a single match.
 type MatchData struct {
 	Label string          `json:"label" xml:"label,omitempty"`
 	Value *MatchValueData `json:"value" xml:"value"`
 }
 
-// MatchValueData holds the type and actual value
+// MatchValueData holds the type and actual value.
 type MatchValueData struct {
 	ShareType               int    `json:"shareType" xml:"shareType"`
 	ShareWith               string `json:"shareWith" xml:"shareWith"`
 	ShareWithAdditionalInfo string `json:"shareWithAdditionalInfo" xml:"shareWithAdditionalInfo"`
 }
 
-// CS3Share2ShareData converts a cs3api user share into shareData data model
+// CS3Share2ShareData converts a cs3api user share into shareData data model.
 func CS3Share2ShareData(ctx context.Context, share *collaboration.Share) (*ShareData, error) {
 	sd := &ShareData{
 		// share.permissions are mapped below
@@ -203,7 +205,7 @@ func CS3Share2ShareData(ctx context.Context, share *collaboration.Share) (*Share
 	return sd, nil
 }
 
-// PublicShare2ShareData converts a cs3api public share into shareData data model
+// PublicShare2ShareData converts a cs3api public share into shareData data model.
 func PublicShare2ShareData(share *link.PublicShare, r *http.Request, publicURL string) *ShareData {
 	sd := &ShareData{
 		// share.permissions are mapped below
@@ -215,6 +217,8 @@ func PublicShare2ShareData(share *link.PublicShare, r *http.Request, publicURL s
 		URL:          publicURL + path.Join("/", "s/"+share.Token),
 		UIDOwner:     LocalUserIDToString(share.Creator),
 		UIDFileOwner: LocalUserIDToString(share.Owner),
+		Quicklink:    share.Quicklink,
+		Description:  share.Description,
 	}
 	if share.Id != nil {
 		sd.ID = share.Id.OpaqueId
@@ -239,7 +243,7 @@ func PublicShare2ShareData(share *link.PublicShare, r *http.Request, publicURL s
 }
 
 // LocalUserIDToString transforms a cs3api user id into an ocs data model without domain name
-// TODO ocs uses user names ... so an additional lookup is needed. see mapUserIds()
+// TODO ocs uses user names ... so an additional lookup is needed. see mapUserIds().
 func LocalUserIDToString(userID *userpb.UserId) string {
 	if userID == nil || userID.OpaqueId == "" {
 		return ""
@@ -247,7 +251,7 @@ func LocalUserIDToString(userID *userpb.UserId) string {
 	return userID.OpaqueId
 }
 
-// LocalGroupIDToString transforms a cs3api group id into an ocs data model without domain name
+// LocalGroupIDToString transforms a cs3api group id into an ocs data model without domain name.
 func LocalGroupIDToString(groupID *grouppb.GroupId) string {
 	if groupID == nil || groupID.OpaqueId == "" {
 		return ""
@@ -255,7 +259,7 @@ func LocalGroupIDToString(groupID *grouppb.GroupId) string {
 	return groupID.OpaqueId
 }
 
-// GetUserManager returns a connection to a user share manager
+// GetUserManager returns a connection to a user share manager.
 func GetUserManager(manager string, m map[string]map[string]interface{}) (user.Manager, error) {
 	if f, ok := usermgr.NewFuncs[manager]; ok {
 		return f(m[manager])
@@ -264,7 +268,7 @@ func GetUserManager(manager string, m map[string]map[string]interface{}) (user.M
 	return nil, fmt.Errorf("driver %s not found for user manager", manager)
 }
 
-// GetPublicShareManager returns a connection to a public share manager
+// GetPublicShareManager returns a connection to a public share manager.
 func GetPublicShareManager(manager string, m map[string]map[string]interface{}) (publicshare.Manager, error) {
 	if f, ok := publicsharemgr.NewFuncs[manager]; ok {
 		return f(m[manager])
@@ -279,7 +283,7 @@ func timestampToExpiration(t *types.Timestamp) string {
 	return time.Unix(int64(t.Seconds), int64(t.Nanos)).UTC().Format("2006-01-02 15:05:05")
 }
 
-// ParseTimestamp tries to parses the ocs expiry into a CS3 Timestamp
+// ParseTimestamp tries to parses the ocs expiry into a CS3 Timestamp.
 func ParseTimestamp(timestampString string) (*types.Timestamp, error) {
 	parsedTime, err := time.Parse("2006-01-02T15:04:05Z0700", timestampString)
 	if err != nil {
@@ -296,7 +300,7 @@ func ParseTimestamp(timestampString string) (*types.Timestamp, error) {
 	}, nil
 }
 
-// UserTypeString returns human readable strings for various user types
+// UserTypeString returns human readable strings for various user types.
 func UserTypeString(userType userpb.UserType) string {
 	switch userType {
 	case userpb.UserType_USER_TYPE_PRIMARY:

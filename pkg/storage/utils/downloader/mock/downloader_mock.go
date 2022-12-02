@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,12 +30,12 @@ import (
 type mockDownloader struct{}
 
 // NewDownloader creates a mock downloader that implements the Downloader interface
-// supposed to be used for testing
+// supposed to be used for testing.
 func NewDownloader() downloader.Downloader {
 	return &mockDownloader{}
 }
 
-// Download copies the content of a local file into the dst Writer
+// Download copies the content of a local file into the dst Writer.
 func (m *mockDownloader) Download(ctx context.Context, path string, dst io.Writer) error {
 	f, err := os.Open(path)
 	if err != nil {

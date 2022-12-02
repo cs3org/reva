@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -49,7 +49,7 @@ const (
 	spaceIDAny   = "*"
 )
 
-// CreateStorageSpace creates a storage space
+// CreateStorageSpace creates a storage space.
 func (fs *Decomposedfs) CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error) {
 	// spaces will be located by default in the root of the storage.
 	r, err := fs.lu.RootNode(ctx)
@@ -157,7 +157,7 @@ func (fs *Decomposedfs) CreateStorageSpace(ctx context.Context, req *provider.Cr
 // ListStorageSpaces returns a list of StorageSpaces.
 // The list can be filtered by space type or space id.
 // Spaces are persisted with symlinks in /spaces/<type>/<spaceid> pointing to ../../nodes/<nodeid>, the root node of the space
-// The spaceid is a concatenation of storageid + "!" + nodeid
+// The spaceid is a concatenation of storageid + "!" + nodeid.
 func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter) ([]*provider.StorageSpace, error) {
 	// TODO check filters
 
@@ -260,10 +260,9 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 	}
 
 	return spaces, nil
-
 }
 
-// UpdateStorageSpace updates a storage space
+// UpdateStorageSpace updates a storage space.
 func (fs *Decomposedfs) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
 	space := req.StorageSpace
 

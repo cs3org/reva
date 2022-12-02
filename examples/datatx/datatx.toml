@@ -1,22 +1,39 @@
-# example data transfer service configuration 
+# Example data transfer service configuration 
 [grpc.services.datatx]
-# rclone is the default data transfer driver
+# Rclone is the default data transfer driver
 txdriver = "rclone"
-# the shares,transfers db file (default: /var/tmp/reva/datatx-shares.json)
+# The shares,transfers db file (default: /var/tmp/reva/datatx-shares.json)
 tx_shares_file = ""
-# base folder of the data transfers (default: /home/DataTransfers)
+# Base folder of the data transfers (default: /home/DataTransfers)
 data_transfers_folder = ""
 
-# rclone data transfer driver
+# Rclone data transfer driver
 [grpc.services.datatx.txdrivers.rclone]
-# rclone endpoint
+# Rclone endpoint
 endpoint = "http://..."
-# basic auth is used
+# Basic auth is used
 auth_user = "...rcloneuser"
 auth_pass = "...rcloneusersecret"
-# the transfers(jobs) db file (default: /var/tmp/reva/datatx-transfers.json)
+# The authentication scheme to use in the src and dest requests by rclone (follows the endpoints' authentication methods)
+# Valid values:
+#   "bearer" (default)    will result in rclone using request header:   Authorization: "Bearer ...token..."
+#   "x-access-token"      will result in rclone using request header:   X-Access-Token: "...token..."
+# If not set "bearer" is assumed
+auth_header = "x-access-token"
+# The transfers(jobs) db file (default: /var/tmp/reva/datatx-transfers.json)
 file = ""
-# check status job interval in milliseconds
+# Check status job interval in milliseconds
 job_status_check_interval = 2000
-# the job timeout in milliseconds (must be long enough for big transfers!)
+# The job timeout in milliseconds (must be long enough for big transfers!)
 job_timeout = 120000
+
+[http.services.ocdav]
+# Rclone supports third-party copy push; for that to work with reva enable this setting
+enable_http_tpc = true
+# The authentication scheme reva uses for the tpc push call (the call to Destination). 
+# Follows the destination endpoint authentication method.
+# Valid values:
+#   "bearer" (default)    will result in header:   Authorization: "Bearer ...token..."
+#   "x-access-token"      will result in header:   X-Access-Token: "...token..."
+# If not set "bearer" is assumed
+http_tpc_push_auth_header = "x-access-token"

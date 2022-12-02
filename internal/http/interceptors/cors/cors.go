@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,6 +19,8 @@
 package cors
 
 import (
+	"net/http"
+
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/mitchellh/mapstructure"
 	"github.com/rs/cors"
@@ -62,11 +64,11 @@ func New(m map[string]interface{}) (global.Middleware, int, error) {
 
 	if len(conf.AllowedMethods) == 0 {
 		conf.AllowedMethods = []string{
-			"OPTIONS",
-			"HEAD",
-			"GET",
-			"PUT",
-			"POST",
+			http.MethodOptions,
+			http.MethodHead,
+			http.MethodGet,
+			http.MethodPut,
+			http.MethodPost,
 			"DELETE",
 			"MKCOL",
 			"PROPFIND",

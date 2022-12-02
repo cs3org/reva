@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,10 +23,9 @@ import (
 	"database/sql"
 	"path"
 
-	"github.com/pkg/errors"
-
-	// Provides sqlite drivers
+	// Provides sqlite drivers.
 	_ "github.com/mattn/go-sqlite3"
+	"github.com/pkg/errors"
 )
 
 func initializeDB(root, dbName string) (*sql.DB, error) {

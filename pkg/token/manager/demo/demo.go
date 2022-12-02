@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -65,7 +65,7 @@ func (m *manager) DismantleToken(ctx context.Context, token string) (*user.User,
 }
 
 // from https://stackoverflow.com/questions/28020070/golang-serialize-and-deserialize-back
-// go binary encoder
+// go binary encoder.
 func encode(c *claims) (string, error) {
 	b := bytes.Buffer{}
 	e := gob.NewEncoder(&b)
@@ -77,7 +77,7 @@ func encode(c *claims) (string, error) {
 }
 
 // from https://stackoverflow.com/questions/28020070/golang-serialize-and-deserialize-back
-// go binary decoder
+// go binary decoder.
 func decode(token string) (*claims, error) {
 	c := &claims{}
 	by, err := base64.StdEncoding.DecodeString(token)

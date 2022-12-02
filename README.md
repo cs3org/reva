@@ -23,7 +23,6 @@ You need to have [Go](https://golang.org/doc/install) (version 1.16 or higher), 
 ```
 $ git clone https://github.com/cs3org/reva
 $ cd reva
-$ make deps
 $ make build
 $ mkdir -p /etc/revad
 $ cp examples/storage-references/users.demo.json /etc/revad/users.json
@@ -114,7 +113,7 @@ This will require some PHP-related tools to run, for instance on Ubuntu you will
         -e LDAP_ADMIN_PASSWORD=admin \
         --name docker-slapd \
         -p 127.0.0.1:389:389 \
-        -p 636:636 -d osixia/openldap
+        -p 636:636 -d osixia/openldap:1.3.0
     ```
 
 2.  start the needed services

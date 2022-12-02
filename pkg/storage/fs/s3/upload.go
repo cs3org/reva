@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,7 +25,7 @@ import (
 	"github.com/cs3org/reva/pkg/errtypes"
 )
 
-// InitiateUpload returns upload ids corresponding to different protocols it supports
+// InitiateUpload returns upload ids corresponding to different protocols it supports.
 func (fs *s3FS) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64, metadata map[string]string) (map[string]string, error) {
 	return nil, errtypes.NotSupported("op not supported")
 }

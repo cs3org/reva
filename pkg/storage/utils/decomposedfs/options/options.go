@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -57,7 +57,7 @@ type Options struct {
 	GatewayAddr string `mapstructure:"gateway_addr"`
 }
 
-// New returns a new Options instance for the given configuration
+// New returns a new Options instance for the given configuration.
 func New(m map[string]interface{}) (*Options, error) {
 	o := &Options{}
 	if err := mapstructure.Decode(m, o); err != nil {

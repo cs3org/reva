@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -56,7 +56,6 @@ func getDriver(c *config) (provider.Authorizer, error) {
 
 // New returns a new HTTP middleware that verifies that the provider is registered in OCM.
 func New(m map[string]interface{}, unprotected []string, ocmPrefix string) (global.Middleware, error) {
-
 	if ocmPrefix == "" {
 		ocmPrefix = "ocm"
 	}
@@ -74,12 +73,11 @@ func New(m map[string]interface{}, unprotected []string, ocmPrefix string) (glob
 
 	handler := func(h http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-
 			ctx := r.Context()
 			log := appctx.GetLogger(ctx)
 			head, _ := router.ShiftPath(r.URL.Path)
 
-			if r.Method == "OPTIONS" || head != ocmPrefix || utils.Skip(r.URL.Path, unprotected) {
+			if r.Method == http.MethodOptions || head != ocmPrefix || utils.Skip(r.URL.Path, unprotected) {
 				log.Info().Msg("skipping provider authorizer check for: " + r.URL.Path)
 				h.ServeHTTP(w, r)
 				return
@@ -110,5 +108,4 @@ func New(m map[string]interface{}, unprotected []string, ocmPrefix string) (glob
 	}
 
 	return handler, nil
-
 }

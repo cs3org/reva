@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,12 +27,11 @@ import (
 	"sync"
 	"time"
 
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
-	"github.com/cs3org/reva/pkg/errtypes"
-
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
+	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/ocm/invite"
 	"github.com/cs3org/reva/pkg/ocm/invite/manager/registry"
 	"github.com/cs3org/reva/pkg/ocm/invite/token"
@@ -86,7 +85,6 @@ type config struct {
 }
 
 func (m *manager) GenerateToken(ctx context.Context) (*invitepb.InviteToken, error) {
-
 	ctxUser := ctxpkg.ContextMustGetUser(ctx)
 	inviteToken, err := token.CreateToken(m.Config.Expiration, ctxUser.GetId())
 	if err != nil {
@@ -98,7 +96,6 @@ func (m *manager) GenerateToken(ctx context.Context) (*invitepb.InviteToken, err
 }
 
 func (m *manager) ForwardInvite(ctx context.Context, invite *invitepb.InviteToken, originProvider *ocmprovider.ProviderInfo) error {
-
 	contextUser := ctxpkg.ContextMustGetUser(ctx)
 	requestBody := url.Values{
 		"token":             {invite.GetToken()},
@@ -119,7 +116,7 @@ func (m *manager) ForwardInvite(ctx context.Context, invite *invitepb.InviteToke
 	u.Path = path.Join(u.Path, acceptInviteEndpoint)
 	recipientURL := u.String()
 
-	req, err := http.NewRequest("POST", recipientURL, strings.NewReader(requestBody.Encode()))
+	req, err := http.NewRequest(http.MethodPost, recipientURL, strings.NewReader(requestBody.Encode()))
 	if err != nil {
 		return errors.Wrap(err, "json: error framing post request")
 	}

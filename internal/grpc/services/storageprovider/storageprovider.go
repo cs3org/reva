@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,7 +22,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"net/url"
 	"os"
 	"path"
@@ -144,7 +143,7 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 
 func registerMimeTypes(mappingFile string) error {
 	if mappingFile != "" {
-		f, err := ioutil.ReadFile(mappingFile)
+		f, err := os.ReadFile(mappingFile)
 		if err != nil {
 			return fmt.Errorf("storageprovider: error reading the custom mime types file: +%v", err)
 		}
@@ -161,9 +160,8 @@ func registerMimeTypes(mappingFile string) error {
 	return nil
 }
 
-// New creates a new storage provider svc
+// New creates a new storage provider svc.
 func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
-
 	c, err := parseConfig(m)
 	if err != nil {
 		return nil, err
@@ -278,7 +276,7 @@ func (s *service) UnsetArbitraryMetadata(ctx context.Context, req *provider.Unse
 	return res, nil
 }
 
-// SetLock puts a lock on the given reference
+// SetLock puts a lock on the given reference.
 func (s *service) SetLock(ctx context.Context, req *provider.SetLockRequest) (*provider.SetLockResponse, error) {
 	newRef, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
@@ -311,7 +309,7 @@ func (s *service) SetLock(ctx context.Context, req *provider.SetLockRequest) (*p
 	return res, nil
 }
 
-// GetLock returns an existing lock on the given reference
+// GetLock returns an existing lock on the given reference.
 func (s *service) GetLock(ctx context.Context, req *provider.GetLockRequest) (*provider.GetLockResponse, error) {
 	newRef, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
@@ -344,7 +342,7 @@ func (s *service) GetLock(ctx context.Context, req *provider.GetLockRequest) (*p
 	return res, nil
 }
 
-// RefreshLock refreshes an existing lock on the given reference
+// RefreshLock refreshes an existing lock on the given reference.
 func (s *service) RefreshLock(ctx context.Context, req *provider.RefreshLockRequest) (*provider.RefreshLockResponse, error) {
 	newRef, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
@@ -354,7 +352,7 @@ func (s *service) RefreshLock(ctx context.Context, req *provider.RefreshLockRequ
 		}, nil
 	}
 
-	if err = s.storage.RefreshLock(ctx, newRef, req.Lock); err != nil {
+	if err = s.storage.RefreshLock(ctx, newRef, req.Lock, req.ExistingLockId); err != nil {
 		var st *rpc.Status
 		switch err.(type) {
 		case errtypes.IsNotFound:
@@ -377,7 +375,7 @@ func (s *service) RefreshLock(ctx context.Context, req *provider.RefreshLockRequ
 	return res, nil
 }
 
-// Unlock removes an existing lock from the given reference
+// Unlock removes an existing lock from the given reference.
 func (s *service) Unlock(ctx context.Context, req *provider.UnlockRequest) (*provider.UnlockResponse, error) {
 	newRef, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
@@ -580,7 +578,7 @@ func (s *service) CreateHome(ctx context.Context, req *provider.CreateHomeReques
 	return res, nil
 }
 
-// CreateStorageSpace creates a storage space
+// CreateStorageSpace creates a storage space.
 func (s *service) CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error) {
 	resp, err := s.storage.CreateStorageSpace(ctx, req)
 	if err != nil {
@@ -1560,6 +1558,9 @@ func (s *service) wrap(ctx context.Context, ri *provider.ResourceInfo, prefixMou
 	if ri.Id.StorageId == "" {
 		// For wrapper drivers, the storage ID might already be set. In that case, skip setting it
 		ri.Id.StorageId = s.mountID
+	}
+	if ri.ParentId != nil && ri.ParentId.StorageId == "" {
+		ri.ParentId.StorageId = s.mountID
 	}
 	if prefixMountpoint {
 		// TODO move mount path prefixing to the gateway

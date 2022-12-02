@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,7 +25,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-// new returns a dummy auth manager for testing
+// new returns a dummy auth manager for testing.
 func new(m map[string]interface{}) (*manager, error) {
 	mgr := &manager{}
 	err := mgr.Configure(m)

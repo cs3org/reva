@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,33 +21,32 @@ package test
 import (
 	"bytes"
 	"errors"
-	"io/ioutil"
 	"os"
 	"path"
 )
 
 const (
-	// TmpDirPattern is the pattern used for tmp folder creation
+	// TmpDirPattern is the pattern used for tmp folder creation.
 	TmpDirPattern = "tmp-reva-"
 )
 
 // File struct represents a test file,
-// with a certain content. Its name is defined in TestDir
+// with a certain content. Its name is defined in TestDir.
 type File struct {
 	Content string
 }
 
 // Dir struct represents a test dir, where each
-// key is the resource (Dir or File) name
+// key is the resource (Dir or File) name.
 type Dir map[string]interface{}
 
-// CleanerFunc is a function to call after creating a TestDir
+// CleanerFunc is a function to call after creating a TestDir.
 type CleanerFunc func()
 
 // TmpDir creates a dir in the system temp folder that has
-// TmpDirPattern as prefix
+// TmpDirPattern as prefix.
 func TmpDir() (string, CleanerFunc, error) {
-	name, err := ioutil.TempDir("", TmpDirPattern)
+	name, err := os.MkdirTemp("", TmpDirPattern)
 	if err != nil {
 		return "", nil, err
 	}
@@ -59,7 +58,7 @@ func TmpDir() (string, CleanerFunc, error) {
 	return name, c, nil
 }
 
-// NewTestDir creates the Dir structure in a local temporary folder
+// NewTestDir creates the Dir structure in a local temporary folder.
 func NewTestDir(src Dir) (tmpdir string, cleanup CleanerFunc, err error) {
 	tmpdir, cleanup, err = TmpDir()
 	if err != nil {
@@ -69,7 +68,7 @@ func NewTestDir(src Dir) (tmpdir string, cleanup CleanerFunc, err error) {
 	return
 }
 
-// NewFile creates a new file given the path and the content
+// NewFile creates a new file given the path and the content.
 func NewFile(path, content string) error {
 	file, err := os.Create(path)
 	if err != nil {
@@ -104,7 +103,7 @@ func newTestDirFileRecursive(p string, res interface{}) error {
 	}
 }
 
-// checks if the two files have the same content
+// checks if the two files have the same content.
 func fileEquals(file1, file2 string) bool {
 	c1, _ := os.ReadFile(file1)
 	c2, _ := os.ReadFile(file2)
@@ -115,7 +114,6 @@ func fileEquals(file1, file2 string) bool {
 // Two files are equals if the name and the content is equal, while two folders
 // are equal if the name is equal and the content is recursively equal.
 func DirEquals(dir1, dir2 string) bool {
-
 	l1, _ := os.ReadDir(dir1)
 	l2, _ := os.ReadDir(dir2)
 
@@ -144,7 +142,6 @@ func DirEquals(dir1, dir2 string) bool {
 		default: // different resource type
 			return false
 		}
-
 	}
 	return true
 }

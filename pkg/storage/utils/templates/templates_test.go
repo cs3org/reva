@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -109,14 +109,14 @@ func TestUserPanic(t *testing.T) {
 	assertPanic(t, testBadUser)
 }
 
-// should panic
+// should panic.
 func testBadLayout() {
 	layout := "{{ bad layout syntax"
 	user := &userpb.User{}
 	WithUser(user, layout)
 }
 
-// should panic
+// should panic.
 func testBadUser() {
 	layout := "{{ .DoesNotExist }}"
 	user := &userpb.User{}

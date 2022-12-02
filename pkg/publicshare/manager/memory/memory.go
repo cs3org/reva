@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -57,8 +57,8 @@ var (
 	passwordProtected bool
 )
 
-// CreatePublicShare adds a new entry to manager.shares
-func (m *manager) CreatePublicShare(ctx context.Context, u *user.User, rInfo *provider.ResourceInfo, g *link.Grant) (*link.PublicShare, error) {
+// CreatePublicShare adds a new entry to manager.shares.
+func (m *manager) CreatePublicShare(ctx context.Context, u *user.User, rInfo *provider.ResourceInfo, g *link.Grant, description string, internal bool) (*link.PublicShare, error) {
 	id := &link.PublicShareId{
 		OpaqueId: randString(15),
 	}
@@ -97,13 +97,14 @@ func (m *manager) CreatePublicShare(ctx context.Context, u *user.User, rInfo *pr
 		PasswordProtected: passwordProtected,
 		Expiration:        g.Expiration,
 		DisplayName:       displayName,
+		Description:       description,
 	}
 
 	m.shares.Store(s.Token, &s)
 	return &s, nil
 }
 
-// UpdatePublicShare updates the expiration date, permissions and Mtime
+// UpdatePublicShare updates the expiration date, permissions and Mtime.
 func (m *manager) UpdatePublicShare(ctx context.Context, u *user.User, req *link.UpdatePublicShareRequest, g *link.Grant) (*link.PublicShare, error) {
 	log := appctx.GetLogger(ctx)
 	share, err := m.GetPublicShare(ctx, u, req.Ref, false)

@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -35,12 +35,12 @@ import (
 	"github.com/pkg/xattr"
 )
 
-// Lookup implements transformations from filepath to node and back
+// Lookup implements transformations from filepath to node and back.
 type Lookup struct {
 	Options *options.Options
 }
 
-// NodeFromResource takes in a request path or request id and converts it to a Node
+// NodeFromResource takes in a request path or request id and converts it to a Node.
 func (lu *Lookup) NodeFromResource(ctx context.Context, ref *provider.Reference) (*node.Node, error) {
 	if ref.ResourceId != nil {
 		// check if a storage space reference is used
@@ -73,7 +73,7 @@ func (lu *Lookup) NodeFromResource(ctx context.Context, ref *provider.Reference)
 	return nil, fmt.Errorf("invalid reference %+v. at least resource_id or path must be set", ref)
 }
 
-// NodeFromPath converts a filename into a Node
+// NodeFromPath converts a filename into a Node.
 func (lu *Lookup) NodeFromPath(ctx context.Context, fn string, followReferences bool) (*node.Node, error) {
 	log := appctx.GetLogger(ctx)
 	log.Debug().Interface("fn", fn).Msg("NodeFromPath()")
@@ -102,7 +102,7 @@ func (lu *Lookup) NodeFromPath(ctx context.Context, fn string, followReferences 
 	return n, nil
 }
 
-// NodeFromID returns the internal path for the id
+// NodeFromID returns the internal path for the id.
 func (lu *Lookup) NodeFromID(ctx context.Context, id *provider.ResourceId) (n *node.Node, err error) {
 	if id == nil || id.OpaqueId == "" {
 		return nil, fmt.Errorf("invalid resource id %+v", id)
@@ -115,7 +115,7 @@ func (lu *Lookup) NodeFromID(ctx context.Context, id *provider.ResourceId) (n *n
 	return n, n.FindStorageSpaceRoot()
 }
 
-// Path returns the path for node
+// Path returns the path for node.
 func (lu *Lookup) Path(ctx context.Context, n *node.Node) (p string, err error) {
 	var root *node.Node
 	if root, err = lu.HomeOrRootNode(ctx); err != nil {
@@ -136,14 +136,14 @@ func (lu *Lookup) Path(ctx context.Context, n *node.Node) (p string, err error) 
 	return
 }
 
-// RootNode returns the root node of the storage
+// RootNode returns the root node of the storage.
 func (lu *Lookup) RootNode(ctx context.Context) (*node.Node, error) {
 	n := node.New("root", "", "", 0, "", nil, lu)
 	n.Exists = true
 	return n, nil
 }
 
-// HomeNode returns the home node of a user
+// HomeNode returns the home node of a user.
 func (lu *Lookup) HomeNode(ctx context.Context) (node *node.Node, err error) {
 	if !lu.Options.EnableHome {
 		return nil, errtypes.NotSupported("Decomposedfs: home supported disabled")
@@ -198,7 +198,7 @@ func (lu *Lookup) WalkPath(ctx context.Context, r *node.Node, p string, followRe
 }
 
 // HomeOrRootNode returns the users home node when home support is enabled.
-// it returns the storages root node otherwise
+// it returns the storages root node otherwise.
 func (lu *Lookup) HomeOrRootNode(ctx context.Context) (node *node.Node, err error) {
 	if lu.Options.EnableHome {
 		return lu.HomeNode(ctx)
@@ -206,12 +206,12 @@ func (lu *Lookup) HomeOrRootNode(ctx context.Context) (node *node.Node, err erro
 	return lu.RootNode(ctx)
 }
 
-// InternalRoot returns the internal storage root directory
+// InternalRoot returns the internal storage root directory.
 func (lu *Lookup) InternalRoot() string {
 	return lu.Options.Root
 }
 
-// InternalPath returns the internal path for a given ID
+// InternalPath returns the internal path for a given ID.
 func (lu *Lookup) InternalPath(id string) string {
 	return filepath.Join(lu.Options.Root, "nodes", id)
 }
@@ -221,7 +221,7 @@ func (lu *Lookup) mustGetUserLayout(ctx context.Context) string {
 	return templates.WithUser(u, lu.Options.UserLayout)
 }
 
-// ShareFolder returns the internal storage root directory
+// ShareFolder returns the internal storage root directory.
 func (lu *Lookup) ShareFolder() string {
 	return lu.Options.ShareFolder
 }
