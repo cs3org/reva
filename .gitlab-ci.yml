@@ -14,8 +14,8 @@ include: "https://gitlab.cern.ch/linuxsupport/rpmci/raw/master/rpm-ci.yml"
     - rpmci_install_builddeps
     - yum group install -y "Development Tools"
     - rm -rf /usr/local/go
-    - wget https://go.dev/dl/go1.18.3.linux-amd64.tar.gz
-    - tar -C /usr/local -xzf go1.18.3.linux-amd64.tar.gz
+    - wget https://go.dev/dl/go1.19.3.linux-amd64.tar.gz
+    - tar -C /usr/local -xzf go1.19.3.linux-amd64.tar.gz
     - export PATH=$PATH:/usr/local/go/bin
 
 .tag_qa:
