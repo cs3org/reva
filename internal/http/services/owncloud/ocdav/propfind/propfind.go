@@ -513,6 +513,7 @@ func (p *Handler) getResourceInfos(ctx context.Context, w http.ResponseWriter, r
 
 		// adjust path
 		info.Path = filepath.Join("/", spacePath, spaceRef.Path)
+		spaceRef.Path = filepath.Join("/", spacePath, spaceRef.Path)
 
 		spaceMap[info] = spaceData{Ref: spaceRef, SpaceType: space.SpaceType}
 
