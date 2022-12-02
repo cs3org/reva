@@ -34,6 +34,7 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
+	"google.golang.org/grpc/credentials"
 
 	"go.opentelemetry.io/otel/trace"
 )
@@ -52,54 +53,62 @@ type revaDefaultTracerProvider struct {
 	provider    trace.TracerProvider
 }
 
-type ctxKey struct{}
+// NewTracerProvider returns a new TracerProvider, configure for the specified service
+func NewTracerProvider(opts ...Option) trace.TracerProvider {
+	options := Options{}
 
-// ContextSetTracerProvider returns a copy of ctx with p associated.
-func ContextSetTracerProvider(ctx context.Context, p trace.TracerProvider) context.Context {
-	if tp, ok := ctx.Value(ctxKey{}).(trace.TracerProvider); ok {
-		if tp == p {
-			return ctx
-		}
+	for _, o := range opts {
+		o(&options)
 	}
-	return context.WithValue(ctx, ctxKey{}, p)
+
+	if options.TransportCredentials == nil {
+		options.TransportCredentials = credentials.NewClientTLSFromCert(nil, "")
+	}
+
+	if !options.Enabled {
+		return trace.NewNoopTracerProvider()
+	}
+
+	// default to 'reva' as service name if not set
+	if options.ServiceName == "" {
+		options.ServiceName = "reva"
+	}
+
+	switch options.Exporter {
+	case "otlp":
+		return getOtlpTracerProvider(options)
+	default:
+		return getJaegerTracerProvider(options)
+	}
 }
 
-// ContextGetTracerProvider returns the TracerProvider associated with the ctx.
-// If no TracerProvider is associated is associated, the global default TracerProvider
-// is returned
-func ContextGetTracerProvider(ctx context.Context) trace.TracerProvider {
-	if p, ok := ctx.Value(ctxKey{}).(trace.TracerProvider); ok {
-		return p
-	}
-	return DefaultProvider()
+// SetDefaultTracerProvider sets the default trace provider
+func SetDefaultTracerProvider(tp trace.TracerProvider) {
+	defaultProvider.mutex.Lock()
+	defer defaultProvider.mutex.Unlock()
+	defaultProvider.provider = tp
+	defaultProvider.initialized = true
 }
 
-// InitDefaultTracerProvider initializes a global default TracerProvider at a package level.
-func InitDefaultTracerProvider(exporter, collector, endpoint string) {
+// InitDefaultTracerProvider initializes a global default jaeger TracerProvider at a package level.
+//
+// Deprecated: Use NewTracerProvider and SetDefaultTracerProvider to properly initialize a tracer provider with options
+func InitDefaultTracerProvider(collector, endpoint string) {
 	defaultProvider.mutex.Lock()
 	defer defaultProvider.mutex.Unlock()
 	if !defaultProvider.initialized {
-		switch exporter {
-		case "otlp":
-			defaultProvider.provider = getOtlpTracerProvider(true, endpoint, "reva default otlp provider")
-		default:
-			defaultProvider.provider = getJaegerTracerProvider(true, collector, endpoint, "reva default jaeger provider")
-		}
+		defaultProvider.provider = getJaegerTracerProvider(Options{
+			Enabled:     true,
+			Collector:   collector,
+			Endpoint:    endpoint,
+			ServiceName: "reva default jaeger provider",
+		})
 	}
 	defaultProvider.initialized = true
 }
 
-// GetTracerProvider returns a new TracerProvider, configure for the specified service
-func GetTracerProvider(enabled bool, exporter, collector, endpoint, serviceName string) trace.TracerProvider {
-	switch exporter {
-	case "otlp":
-		return getOtlpTracerProvider(enabled, endpoint, serviceName)
-	default:
-		return getJaegerTracerProvider(enabled, collector, endpoint, serviceName)
-	}
-}
-
 // DefaultProvider returns the "global" default TracerProvider
+// Currently used by the pool to get the global tracer
 func DefaultProvider() trace.TracerProvider {
 	defaultProvider.mutex.RLock()
 	defer defaultProvider.mutex.RUnlock()
@@ -107,24 +116,15 @@ func DefaultProvider() trace.TracerProvider {
 }
 
 // getJaegerTracerProvider returns a new TracerProvider, configure for the specified service
-func getJaegerTracerProvider(enabled bool, collector, endpoint, serviceName string) trace.TracerProvider {
-	if !enabled {
-		return trace.NewNoopTracerProvider()
-	}
-
-	// default to 'reva' as service name if not set
-	if serviceName == "" {
-		serviceName = "reva"
-	}
-
+func getJaegerTracerProvider(options Options) trace.TracerProvider {
 	var exp *jaeger.Exporter
 	var err error
 
-	if endpoint != "" {
+	if options.Endpoint != "" {
 		var agentHost string
 		var agentPort string
 
-		agentHost, agentPort, err = parseAgentConfig(endpoint)
+		agentHost, agentPort, err = parseAgentConfig(options.Endpoint)
 		if err != nil {
 			panic(err)
 		}
@@ -140,8 +140,8 @@ func getJaegerTracerProvider(enabled bool, collector, endpoint, serviceName stri
 		}
 	}
 
-	if collector != "" {
-		exp, err = jaeger.New(jaeger.WithCollectorEndpoint(jaeger.WithEndpoint(collector)))
+	if options.Collector != "" {
+		exp, err = jaeger.New(jaeger.WithCollectorEndpoint(jaeger.WithEndpoint(options.Collector)))
 		if err != nil {
 			panic(err)
 		}
@@ -156,7 +156,7 @@ func getJaegerTracerProvider(enabled bool, collector, endpoint, serviceName stri
 		sdktrace.WithBatcher(exp),
 		sdktrace.WithResource(resource.NewWithAttributes(
 			semconv.SchemaURL,
-			semconv.ServiceNameKey.String(serviceName),
+			semconv.ServiceNameKey.String(options.ServiceName),
 			semconv.HostNameKey.String(hostname),
 		)),
 	)
@@ -187,27 +187,21 @@ func parseAgentConfig(ae string) (string, string, error) {
 }
 
 // getOtelTracerProvider returns a new TracerProvider, configure for the specified service
-func getOtlpTracerProvider(enabled bool, endpoint string, serviceName string) trace.TracerProvider {
-	if !enabled {
-		return trace.NewNoopTracerProvider()
-	}
+func getOtlpTracerProvider(options Options) trace.TracerProvider {
 
-	// default to 'reva' as service name if not set
-	if serviceName == "" {
-		serviceName = "reva"
+	opts := []otlptracegrpc.Option{
+		otlptracegrpc.WithEndpoint(options.Endpoint),
 	}
-
-	//secureOption := otlptracegrpc.WithTLSCredentials(credentials.NewClientTLSFromCert(nil, ""))
-	//if len(insecure) > 0 {
-	secureOption := otlptracegrpc.WithInsecure()
-	//}
+	if options.TransportCredentials != nil {
+		opts = append(opts, otlptracegrpc.WithTLSCredentials(options.TransportCredentials))
+	}
+	if options.Insecure {
+		opts = append(opts, otlptracegrpc.WithInsecure())
+	}
 
 	exporter, err := otlptrace.New(
 		context.Background(),
-		otlptracegrpc.NewClient(
-			secureOption,
-			otlptracegrpc.WithEndpoint(endpoint),
-		),
+		otlptracegrpc.NewClient(opts...),
 	)
 
 	if err != nil {
@@ -216,7 +210,7 @@ func getOtlpTracerProvider(enabled bool, endpoint string, serviceName string) tr
 	resources, err := resource.New(
 		context.Background(),
 		resource.WithAttributes(
-			attribute.String("service.name", serviceName),
+			attribute.String("service.name", options.ServiceName),
 			attribute.String("library.language", "go"),
 		),
 	)
