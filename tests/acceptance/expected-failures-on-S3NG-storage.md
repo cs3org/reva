@@ -545,12 +545,13 @@ API, search, favorites, config, capabilities, not existing endpoints, CORS and o
 - [apiAuthOcs/ocsPOSTAuth.feature:8](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthOcs/ocsPOSTAuth.feature#L8) Scenario: send POST requests to OCS endpoints as normal user with wrong password
 - [apiAuthOcs/ocsPUTAuth.feature:8](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthOcs/ocsPUTAuth.feature#L8) Scenario: send PUT request to OCS endpoints as admin with wrong password
 
-#### [sending MKCOL requests to another user's webDav endpoints as normal user gives 404 instead of 403 ](https://github.com/owncloud/ocis/issues/3872)
+#### [sending MKCOL requests to another or non-existing user's webDav endpoints as normal user should return 404](https://github.com/owncloud/ocis/issues/5049)
 _ocdav: api compatibility, return correct status code_
 - [apiAuthWebDav/webDavDELETEAuth.feature:57](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthWebDav/webDavDELETEAuth.feature#L57) Scenario: send DELETE requests to another user's webDav endpoints as normal user
 - [apiAuthWebDav/webDavPROPFINDAuth.feature:55](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthWebDav/webDavPROPFINDAuth.feature#L55)  Scenario: send PROPFIND requests to another user's webDav endpoints as normal user
 - [apiAuthWebDav/webDavPROPPATCHAuth.feature:56](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthWebDav/webDavPROPPATCHAuth.feature#L56) Scenario: send PROPPATCH requests to another user's webDav endpoints as normal user
 - [apiAuthWebDav/webDavMKCOLAuth.feature:52](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthWebDav/webDavMKCOLAuth.feature#L52) Scenario: send MKCOL requests to another user's webDav endpoints as normal user
+- [apiAuthWebDav/webDavMKCOLAuth.feature:63](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthWebDav/webDavMKCOLAuth.feature#L63) Scenario: send MKCOL requests to another user's webDav endpoints as normal user using the spaces WebDAV API
 
 #### [trying to lock file of another user gives http 200](https://github.com/owncloud/ocis/issues/2176)
 - [apiAuthWebDav/webDavLOCKAuth.feature:56](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthWebDav/webDavLOCKAuth.feature#L56) Scenario: send LOCK requests to another user's webDav endpoints as normal user
