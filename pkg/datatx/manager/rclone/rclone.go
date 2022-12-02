@@ -37,6 +37,7 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	txdriver "github.com/cs3org/reva/pkg/datatx"
 	registry "github.com/cs3org/reva/pkg/datatx/manager/registry"
+	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/google/uuid"
 	"github.com/mitchellh/mapstructure"
@@ -64,6 +65,7 @@ type config struct {
 	Endpoint               string `mapstructure:"endpoint"`
 	AuthUser               string `mapstructure:"auth_user"` // rclone basicauth user
 	AuthPass               string `mapstructure:"auth_pass"` // rclone basicauth pass
+	AuthHeader             string `mapstructure:"auth_header"`
 	File                   string `mapstructure:"file"`
 	JobStatusCheckInterval int    `mapstructure:"job_status_check_interval"`
 	JobTimeout             int    `mapstructure:"job_timeout"`
@@ -116,6 +118,13 @@ var txEndStatuses = map[string]int32{
 	"STATUS_TRANSFER_CANCELLED":     8,
 	"STATUS_TRANSFER_CANCEL_FAILED": 9,
 	"STATUS_TRANSFER_EXPIRED":       10,
+}
+
+type endpoint struct {
+	filePath       string
+	endpoint       string
+	endpointScheme string
+	token          string
 }
 
 // New returns a new rclone driver.
@@ -207,9 +216,32 @@ func (m *transferModel) saveTransfer(e error) error {
 	return e
 }
 
-// StartTransfer initiates a transfer job and returns a TxInfo object that includes a unique transfer id.
-func (driver *rclone) StartTransfer(ctx context.Context, srcRemote string, srcPath string, srcToken string, destRemote string, destPath string, destToken string) (*datatx.TxInfo, error) {
-	return driver.startJob(ctx, "", srcRemote, srcPath, srcToken, destRemote, destPath, destToken)
+// CreateTransfer creates a transfer job and returns a TxInfo object that includes a unique transfer id.
+// Specified target URIs are of form scheme://userinfo@host:port?name={path}
+func (driver *rclone) CreateTransfer(ctx context.Context, srcTargetURI string, dstTargetURI string) (*datatx.TxInfo, error) {
+	logger := appctx.GetLogger(ctx)
+
+	srcEp, err := driver.extractEndpointInfo(ctx, srcTargetURI)
+	if err != nil {
+		return nil, err
+	}
+	srcRemote := fmt.Sprintf("%s://%s", srcEp.endpointScheme, srcEp.endpoint)
+	srcPath := srcEp.filePath
+	srcToken := srcEp.token
+
+	destEp, err := driver.extractEndpointInfo(ctx, dstTargetURI)
+	if err != nil {
+		return nil, err
+	}
+	dstPath := destEp.filePath
+	dstToken := destEp.token
+	// we always set the userinfo part of the destination url for rclone tpc push support
+	dstRemote := fmt.Sprintf("%s://%s@%s", destEp.endpointScheme, dstToken, destEp.endpoint)
+
+	logger.Debug().Msgf("destination target URI: %v", dstTargetURI)
+	logger.Debug().Msgf("destination remote: %v", dstRemote)
+
+	return driver.startJob(ctx, "", srcRemote, srcPath, srcToken, dstRemote, dstPath, dstToken)
 }
 
 // startJob starts a transfer job. Retries a previous job if transferID is specified.
@@ -281,8 +313,17 @@ func (driver *rclone) startJob(ctx context.Context, transferID string, srcRemote
 		// DstToken string `json:"destToken"`
 		Async bool `json:"_async"`
 	}
-	srcFs := fmt.Sprintf(":webdav,headers=\"x-access-token,%v\",url=\"%v\":%v", srcToken, srcRemote, srcPath)
-	dstFs := fmt.Sprintf(":webdav,headers=\"x-access-token,%v\",url=\"%v\":%v", destToken, destRemote, destPath)
+	// bearer is the default authentication scheme for reva
+	srcAuthHeader := fmt.Sprintf("bearer_token=\"%v\"", srcToken)
+	if driver.config.AuthHeader == "x-access-token" {
+		srcAuthHeader = fmt.Sprintf("headers=\"x-access-token,%v\"", srcToken)
+	}
+	srcFs := fmt.Sprintf(":webdav,%v,url=\"%v\":%v", srcAuthHeader, srcRemote, srcPath)
+	destAuthHeader := fmt.Sprintf("bearer_token=\"%v\"", destToken)
+	if driver.config.AuthHeader == "x-access-token" {
+		destAuthHeader = fmt.Sprintf("headers=\"x-access-token,%v\"", destToken)
+	}
+	dstFs := fmt.Sprintf(":webdav,%v,url=\"%v\":%v", destAuthHeader, destRemote, destPath)
 	rcloneReq := &rcloneAsyncReqJSON{
 		SrcFs: srcFs,
 		DstFs: dstFs,
@@ -828,4 +869,27 @@ func (driver *rclone) remotePathIsFolder(remote string, remotePath string, remot
 
 	// in all other cases the remote path is a directory
 	return true, nil
+}
+
+func (driver *rclone) extractEndpointInfo(ctx context.Context, targetURL string) (*endpoint, error) {
+	if targetURL == "" {
+		return nil, errtypes.BadRequest("datatx service: ref target is an empty uri")
+	}
+
+	uri, err := url.Parse(targetURL)
+	if err != nil {
+		return nil, errors.Wrap(err, "datatx service: error parsing target uri: "+targetURL)
+	}
+
+	m, err := url.ParseQuery(uri.RawQuery)
+	if err != nil {
+		return nil, errors.Wrap(err, "datatx service: error parsing target resource name")
+	}
+
+	return &endpoint{
+		filePath:       m["name"][0],
+		endpoint:       uri.Host + uri.Path,
+		endpointScheme: uri.Scheme,
+		token:          uri.User.String(),
+	}, nil
 }
