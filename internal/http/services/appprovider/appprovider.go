@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -378,10 +378,21 @@ func (s *svc) handleOpen(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	opaqueMap := make(map[string]*typespb.OpaqueEntry)
+	for k, v := range r.Form {
+		if k != "file_id" && k != "view_mode" && k != "app_name" {
+			opaqueMap[k] = &typespb.OpaqueEntry{
+				Decoder: "plain",
+				Value:   []byte(v[0]),
+			}
+		}
+	}
+
 	openReq := gateway.OpenInAppRequest{
 		Ref:      fileRef,
 		ViewMode: viewMode,
 		App:      r.Form.Get("app_name"),
+		Opaque:   &typespb.Opaque{Map: opaqueMap},
 	}
 	openRes, err := client.OpenInApp(ctx, &openReq)
 	if err != nil {

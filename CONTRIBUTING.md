@@ -59,7 +59,7 @@ To compile the REVA daemon and the REVA command line you can:
 $ git clone https://github.com/cs3org/reva
 $ make
 $ ./cmd/revad/revad --version
-version=v0.0.0 commit=639f48d branch=review go_version=go1.11.5 build_date=2019-04-17T13:57:17+0200 build_platform=linux/amd64
+version=v0.0.0 commit=639f48d branch=review go_version=go1.19 build_date=2019-04-17T13:57:17+0200 build_platform=linux/amd64
 ```
 
 If you only want to run the tests you can:

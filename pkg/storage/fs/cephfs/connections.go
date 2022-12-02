@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -229,7 +229,7 @@ func (fs *cephfs) getUserByID(ctx context.Context, uid string) (*userpb.User, er
 		return entity.(*userpb.User), nil
 	}
 
-	client, err := pool.GetGatewayServiceClient(fs.conf.GatewaySvc)
+	client, err := pool.GetGatewayServiceClient(pool.Endpoint(fs.conf.GatewaySvc))
 	if err != nil {
 		return nil, errors.Wrap(err, "cephfs: error getting gateway grpc client")
 	}
@@ -254,7 +254,7 @@ func (fs *cephfs) getUserByOpaqueID(ctx context.Context, oid string) (*userpb.Us
 	if entity, found := fs.conn.userCache.Get(oid); found {
 		return entity.(*userpb.User), nil
 	}
-	client, err := pool.GetGatewayServiceClient(fs.conf.GatewaySvc)
+	client, err := pool.GetGatewayServiceClient(pool.Endpoint(fs.conf.GatewaySvc))
 	if err != nil {
 		return nil, errors.Wrap(err, "cephfs: error getting gateway grpc client")
 	}
@@ -281,7 +281,7 @@ func (fs *cephfs) getGroupByID(ctx context.Context, gid string) (*grouppb.Group,
 		return entity.(*grouppb.Group), nil
 	}
 
-	client, err := pool.GetGatewayServiceClient(fs.conf.GatewaySvc)
+	client, err := pool.GetGatewayServiceClient(pool.Endpoint(fs.conf.GatewaySvc))
 	if err != nil {
 		return nil, errors.Wrap(err, "cephfs: error getting gateway grpc client")
 	}
@@ -305,7 +305,7 @@ func (fs *cephfs) getGroupByOpaqueID(ctx context.Context, oid string) (*grouppb.
 	if entity, found := fs.conn.groupCache.Get(oid); found {
 		return entity.(*grouppb.Group), nil
 	}
-	client, err := pool.GetGatewayServiceClient(fs.conf.GatewaySvc)
+	client, err := pool.GetGatewayServiceClient(pool.Endpoint(fs.conf.GatewaySvc))
 	if err != nil {
 		return nil, errors.Wrap(err, "cephfs: error getting gateway grpc client")
 	}

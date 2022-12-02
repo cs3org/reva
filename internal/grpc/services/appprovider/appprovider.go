@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -212,7 +212,7 @@ func getProvider(c *config) (app.Provider, error) {
 }
 
 func (s *service) OpenInApp(ctx context.Context, req *providerpb.OpenInAppRequest) (*providerpb.OpenInAppResponse, error) {
-	appURL, err := s.provider.GetAppURL(ctx, req.ResourceInfo, req.ViewMode, req.AccessToken, s.conf.Language)
+	appURL, err := s.provider.GetAppURL(ctx, req.ResourceInfo, req.ViewMode, req.AccessToken, req.Opaque.Map, s.conf.Language)
 	if err != nil {
 		res := &providerpb.OpenInAppResponse{
 			Status: status.NewInternal(ctx, errors.New("appprovider: error calling GetAppURL"), err.Error()),

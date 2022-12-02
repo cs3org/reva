@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -42,6 +42,7 @@ type Config struct {
 	ResourceInfoCacheTTL     int                               `mapstructure:"resource_info_cache_ttl"`
 	ResourceInfoCacheDrivers map[string]map[string]interface{} `mapstructure:"resource_info_caches"`
 	UserIdentifierCacheTTL   int                               `mapstructure:"user_identifier_cache_ttl"`
+	AllowedLanguages         []string                          `mapstructure:"allowed_languages"`
 }
 
 // Init sets sane defaults.

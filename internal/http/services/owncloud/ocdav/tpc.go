@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"path"
 	"strconv"
 	"strings"
@@ -392,9 +393,28 @@ func (s *svc) performHTTPPush(ctx context.Context, client gateway.GatewayAPIClie
 		return err
 	}
 
-	// add authentication header and content length
-	bearerHeader := r.Header.Get(HeaderTransferAuth)
-	req.Header.Add("Authorization", bearerHeader)
+	// Check if there is userinfo to be found in the destination URI
+	// This should be the token to use in the HTTP push call
+	userInfo, err := s.extractUserInfo(ctx, dst)
+	if err != nil {
+		sublog.Debug().Msgf("tpc push: error: %v", err)
+	}
+	if len(userInfo) > 0 {
+		sublog.Debug().Msg("tpc push: userinfo part found in destination url, using userinfo as token for the HTTP push request authorization header")
+		if s.c.HTTPTpcPushAuthHeader == "x-access-token" {
+			req.Header.Add(s.c.HTTPTpcPushAuthHeader, userInfo)
+			sublog.Debug().Msgf("tpc push: using authentication scheme: %v", s.c.HTTPTpcPushAuthHeader)
+		} else { // Bearer is the default
+			req.Header.Add("Authorization", "Bearer "+userInfo)
+			sublog.Debug().Msg("tpc push: using authentication scheme: bearer")
+		}
+	} else {
+		sublog.Debug().Msg("tpc push: no userinfo part found in destination url, using token from the COPY request authorization header")
+		// add authorization header; single token tpc
+		bearerHeader := r.Header.Get(HeaderTransferAuth)
+		req.Header.Add("Authorization", bearerHeader)
+	}
+	// add content length
 	req.ContentLength = int64(srcInfo.GetSize())
 
 	// do Upload
@@ -411,4 +431,15 @@ func (s *svc) performHTTPPush(ctx context.Context, client gateway.GatewayAPIClie
 	}
 
 	return nil
+}
+
+// Extracts and returns the userinfo part of the specified target URL (https://[userinfo]@www.example.com:123/...path).
+// Returns an empty string if no userinfo part is found.
+func (s *svc) extractUserInfo(ctx context.Context, targetURL string) (string, error) {
+	parsedURL, err := url.Parse(targetURL)
+	if err != nil {
+		return "", errtypes.BadRequest("tpc: error extracting userinfo part - error parsing url: " + targetURL)
+	}
+
+	return parsedURL.User.String(), nil
 }

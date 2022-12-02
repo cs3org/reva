@@ -56,3 +56,4 @@ tmp/
 # rpm builds
 revad-*
 rpmbuild
+toolchain/

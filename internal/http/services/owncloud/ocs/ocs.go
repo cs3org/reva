@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -95,6 +95,7 @@ func (s *svc) routerInit() error {
 	shareesHandler := new(sharees.Handler)
 	capabilitiesHandler.Init(s.c)
 	usersHandler.Init(s.c)
+	userHandler.Init(s.c)
 	configHandler.Init(s.c)
 	sharesHandler.Init(s.c)
 	shareesHandler.Init(s.c)
@@ -133,6 +134,7 @@ func (s *svc) routerInit() error {
 		r.Route("/cloud", func(r chi.Router) {
 			r.Get("/capabilities", capabilitiesHandler.GetCapabilities)
 			r.Get("/user", userHandler.GetSelf)
+			r.Patch("/user", userHandler.UpdateSelf)
 			r.Route("/users", func(r chi.Router) {
 				r.Get("/{userid}", usersHandler.GetUsers)
 				r.Get("/{userid}/groups", usersHandler.GetGroups)

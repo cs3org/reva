@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -106,7 +106,12 @@ type Config struct {
 	Timeout         int64  `mapstructure:"timeout"`
 	Insecure        bool   `mapstructure:"insecure" docs:"false;Whether to skip certificate checks when sending requests."`
 	// If true, HTTP COPY will expect the HTTP-TPC (third-party copy) headers
-	EnableHTTPTpc          bool                              `mapstructure:"enable_http_tpc"`
+	EnableHTTPTpc bool `mapstructure:"enable_http_tpc"`
+	// The authentication scheme to use for the tpc push call when userinfo part is specified in the Destination header uri. Default value is 'bearer'.
+	// Possible values:
+	// "bearer"				results in header: Authorization: Bearer ...token...
+	// "x-access-token":	results in header: X-Access-Token: ...token...
+	HTTPTpcPushAuthHeader  string                            `mapstructure:"http_tpc_push_auth_header"`
 	PublicURL              string                            `mapstructure:"public_url"`
 	FavoriteStorageDriver  string                            `mapstructure:"favorite_storage_driver"`
 	FavoriteStorageDrivers map[string]map[string]interface{} `mapstructure:"favorite_storage_drivers"`

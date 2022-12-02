@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -1558,6 +1558,9 @@ func (s *service) wrap(ctx context.Context, ri *provider.ResourceInfo, prefixMou
 	if ri.Id.StorageId == "" {
 		// For wrapper drivers, the storage ID might already be set. In that case, skip setting it
 		ri.Id.StorageId = s.mountID
+	}
+	if ri.ParentId != nil && ri.ParentId.StorageId == "" {
+		ri.ParentId.StorageId = s.mountID
 	}
 	if prefixMountpoint {
 		// TODO move mount path prefixing to the gateway
