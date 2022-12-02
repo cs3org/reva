@@ -16,7 +16,7 @@
 # granted to it by virtue of its status as an Intergovernmental Organization
 # or submit itself to any jurisdiction.
 
-FROM gitlab-registry.cern.ch/dss/eos/eos-all:4.8.91 as builder
+FROM gitlab-registry.cern.ch/dss/eos/eos-fusex:4.8.91 as builder
 
 RUN yum -y install \
     gcc \
