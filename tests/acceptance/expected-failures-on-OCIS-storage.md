@@ -445,7 +445,7 @@ API, search, favorites, config, capabilities, not existing endpoints, CORS and o
 #### [sending MKCOL requests to another user's webDav endpoints as normal user gives 404 instead of 403 ](https://github.com/owncloud/ocis/issues/3872)
 _ocdav: api compatibility, return correct status code_
 -   [apiAuthWebDav/webDavMKCOLAuth.feature:52](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthWebDav/webDavMKCOLAuth.feature#L52) Scenario: send MKCOL requests to another user's webDav endpoints as normal user
--   [apiAuthWebDav/webDavMKCOLAuth.feature:66](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthWebDav/webDavMKCOLAuth.feature#L66) Scenario: send MKCOL requests to another user's webDav endpoints as normal user using the spaces WebDAV API
+-   [apiAuthWebDav/webDavMKCOLAuth.feature:63](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthWebDav/webDavMKCOLAuth.feature#L63) Scenario: send MKCOL requests to another user's webDav endpoints as normal user using the spaces WebDAV API
 
 #### [trying to lock file of another user gives http 200](https://github.com/owncloud/ocis/issues/2176)
 -   [apiAuthWebDav/webDavLOCKAuth.feature:56](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthWebDav/webDavLOCKAuth.feature#L56) Scenario: send LOCK requests to another user's webDav endpoints as normal user
