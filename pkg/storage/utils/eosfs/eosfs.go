@@ -2342,7 +2342,7 @@ func (fs *eosfs) getUserIDGateway(ctx context.Context, uid string) (*userpb.User
 	//})
 	getUserResp, err := client.GetUser(ctx, &userpb.GetUserRequest{
 		UserId: &userpb.UserId{
-			OpaqueId: "3f44740b-f40f-4f05-a1d4-d6f3bbc1677e"},
+			OpaqueId: "some-admin-user-id-0000-000000000000"},
 	})
 	if err != nil {
 		// Insert an empty object in the cache so that we don't make another call
