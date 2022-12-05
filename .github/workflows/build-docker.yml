@@ -3,6 +3,8 @@ on:
   push:
     branches:
       - "master"
+    tags:
+      - "*"
   pull_request:
   workflow_dispatch:
 
@@ -12,13 +14,13 @@ jobs:
     strategy:
       matrix:
         include:
-          - tag: reva:latest
+          - tag: reva:${{ ((github.ref_type == 'tag') && github.ref_name) || 'latest' }}
             file: Dockerfile.reva
-          - tag: revad:latest
+          - tag: revad:${{ ((github.ref_type == 'tag') && github.ref_name) || 'latest' }}
             file: Dockerfile.revad
-          - tag: revad:latest-eos
+          - tag: revad:${{ ((github.ref_type == 'tag') && github.ref_name) || 'latest' }}-eos
             file: Dockerfile.revad-eos
-          - tag: revad:latest-ceph
+          - tag: revad:${{ ((github.ref_type == 'tag') && github.ref_name) || 'latest' }}-ceph
             file: Dockerfile.revad-ceph
     steps:
       - name: Checkout
