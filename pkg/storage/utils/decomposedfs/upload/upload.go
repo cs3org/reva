@@ -68,7 +68,7 @@ type Tree interface {
 	ReadBlob(node *node.Node) (io.ReadCloser, error)
 	DeleteBlob(node *node.Node) error
 
-	Propagate(ctx context.Context, node *node.Node) (err error)
+	Propagate(ctx context.Context, node *node.Node, sizeDiff int64) (err error)
 }
 
 // Upload processes the upload
@@ -261,7 +261,8 @@ func (upload *Upload) FinishUpload(_ context.Context) error {
 
 	if upload.async {
 		// handle postprocessing asynchronously but inform there is something in progress
-		return upload.tp.Propagate(upload.Ctx, n)
+		// TODO: calculate sizeDiff
+		return upload.tp.Propagate(upload.Ctx, n, 0)
 	}
 
 	err = upload.Finalize()
@@ -270,7 +271,8 @@ func (upload *Upload) FinishUpload(_ context.Context) error {
 		return err
 	}
 
-	return upload.tp.Propagate(upload.Ctx, n)
+	// TODO: calculate sizeDiff
+	return upload.tp.Propagate(upload.Ctx, n, 0)
 }
 
 // Terminate terminates the upload
@@ -357,7 +359,7 @@ func (upload *Upload) Finalize() (err error) {
 
 	// tests sometimes set the mtime
 	if upload.Info.MetaData["mtime"] != "" {
-		if err := n.SetMtime(upload.Ctx, upload.Info.MetaData["mtime"]); err != nil {
+		if err := n.SetMtimeString(upload.Info.MetaData["mtime"]); err != nil {
 			sublog.Err(err).Interface("info", upload.Info).Msg("Decomposedfs: could not set mtime metadata")
 			return err
 		}

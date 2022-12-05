@@ -268,7 +268,8 @@ func (fs *Decomposedfs) Postprocessing(ch <-chan interface{}) {
 				// update parent tmtime to propagate etag change
 				now := time.Now()
 				p.SetTMTime(&now)
-				if err := fs.tp.Propagate(ctx, p); err != nil {
+				// TODO: calculate sizeDiff
+				if err := fs.tp.Propagate(ctx, p, 0); err != nil {
 					log.Error().Err(err).Str("uploadID", ev.UploadID).Msg("could not propagate etag change")
 				}
 			}
@@ -537,7 +538,7 @@ func (fs *Decomposedfs) GetPathByID(ctx context.Context, id *provider.ResourceId
 	if err != nil {
 		return "", err
 	}
-	rp, err := fs.p.AssemblePermissions(ctx, node)
+	rp, err := fs.p.AssemblePermissions(ctx, n)
 	switch {
 	case err != nil:
 		return "", errtypes.InternalError(err.Error())
@@ -550,13 +551,11 @@ func (fs *Decomposedfs) GetPathByID(ctx context.Context, id *provider.ResourceId
 	}
 
 	hp := func(n *node.Node) bool {
-		ok, err := fs.p.HasPermission(ctx, n, func(rp *provider.ResourcePermissions) bool {
-			return rp.GetPath
-		})
+		perms, err := fs.p.AssemblePermissions(ctx, n)
 		if err != nil {
 			return false
 		}
-		return ok
+		return perms.GetPath
 	}
 	return fs.lu.Path(ctx, n, hp)
 }

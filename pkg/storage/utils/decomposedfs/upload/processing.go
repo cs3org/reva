@@ -51,7 +51,6 @@ var defaultFilePerm = os.FileMode(0664)
 // PermissionsChecker defines an interface for checking permissions on a Node
 type PermissionsChecker interface {
 	AssemblePermissions(ctx context.Context, n *node.Node) (ap provider.ResourcePermissions, err error)
-	HasPermission(ctx context.Context, n *node.Node, check func(*provider.ResourcePermissions) bool) (can bool, err error)
 }
 
 // New returns a new processing instance
@@ -89,22 +88,19 @@ func New(ctx context.Context, info tusd.FileInfo, lu *lookup.Lookup, tp Tree, p 
 	}
 
 	// check permissions
-	var ok bool
+	var rp provider.ResourcePermissions
+
 	if n.Exists {
 		// check permissions of file to be overwritten
-		ok, err = p.HasPermission(ctx, n, func(rp *provider.ResourcePermissions) bool {
-			return rp.InitiateFileUpload
-		})
+		rp, err = p.AssemblePermissions(ctx, n)
 	} else {
 		// check permissions of parent
-		ok, err = p.HasPermission(ctx, parent, func(rp *provider.ResourcePermissions) bool {
-			return rp.InitiateFileUpload
-		})
+		rp, err = p.AssemblePermissions(ctx, parent)
 	}
 	switch {
 	case err != nil:
 		return nil, errtypes.InternalError(err.Error())
-	case !ok:
+	case !rp.InitiateFileUpload:
 		return nil, errtypes.PermissionDenied(filepath.Join(n.ParentID, n.Name))
 	}
 
@@ -126,7 +122,10 @@ func New(ctx context.Context, info tusd.FileInfo, lu *lookup.Lookup, tp Tree, p 
 	binPath := filepath.Join(fsRoot, "uploads", info.ID)
 	usr := ctxpkg.ContextMustGetUser(ctx)
 
-	var spaceRoot string
+	var (
+		spaceRoot string
+		ok        bool
+	)
 	if info.Storage != nil {
 		if spaceRoot, ok = info.Storage["SpaceRoot"]; !ok {
 			spaceRoot = n.SpaceRoot.ID

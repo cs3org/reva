@@ -144,7 +144,7 @@ func (fs *Decomposedfs) DeleteRevision(ctx context.Context, ref *provider.Refere
 	return fs.tp.DeleteBlob(n)
 }
 
-func (fs *Decomposedfs) getRevisionNode(ctx context.Context, ref *provider.Reference, revisionKey string, permissions func(*provider.ResourcePermissions) bool) (*node.Node, error) {
+func (fs *Decomposedfs) getRevisionNode(ctx context.Context, ref *provider.Reference, revisionKey string, hasPermission func(*provider.ResourcePermissions) bool) (*node.Node, error) {
 	log := appctx.GetLogger(ctx)
 
 	// verify revision key format
@@ -166,11 +166,12 @@ func (fs *Decomposedfs) getRevisionNode(ctx context.Context, ref *provider.Refer
 		return nil, err
 	}
 
-	ok, err := fs.p.HasPermission(ctx, n, permissions)
-	switch {
-	case err != nil:
+	perms, err := fs.p.AssemblePermissions(ctx, n)
+	if err != nil {
 		return nil, errtypes.InternalError(err.Error())
-	case !ok:
+	}
+
+	if !hasPermission(&perms) {
 		return nil, errtypes.PermissionDenied(filepath.Join(n.ParentID, n.Name))
 	}
 

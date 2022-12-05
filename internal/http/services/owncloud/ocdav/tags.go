@@ -131,14 +131,7 @@ func (h *TagHandler) modifyTags(w http.ResponseWriter, r *http.Request, s *svc, 
 		return
 	}
 
-	client, err := s.getClient()
-	if err != nil {
-		log.Error().Err(err).Msg("error getting gateway client")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	sres, err := client.Stat(ctx, &provider.StatRequest{
+	sres, err := s.gwClient.Stat(ctx, &provider.StatRequest{
 		Ref: &provider.Reference{ResourceId: rid},
 	})
 	if err != nil {
@@ -178,7 +171,7 @@ func (h *TagHandler) modifyTags(w http.ResponseWriter, r *http.Request, s *svc, 
 		return
 	}
 
-	resp, err := client.SetArbitraryMetadata(ctx, &provider.SetArbitraryMetadataRequest{
+	resp, err := s.gwClient.SetArbitraryMetadata(ctx, &provider.SetArbitraryMetadataRequest{
 		Ref: &provider.Reference{ResourceId: rid},
 		ArbitraryMetadata: &provider.ArbitraryMetadata{
 			Metadata: map[string]string{

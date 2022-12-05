@@ -64,11 +64,8 @@ func (s *svc) handlePathGet(w http.ResponseWriter, r *http.Request, ns string) {
 }
 
 func (s *svc) handleGet(ctx context.Context, w http.ResponseWriter, r *http.Request, ref *provider.Reference, dlProtocol string, log zerolog.Logger) {
-	client, err := s.getClient()
-	if err != nil {
-		log.Error().Err(err).Msg("error getting grpc client")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
+	sReq := &provider.StatRequest{
+		Ref: ref,
 	}
 
 	sr, err := s.gwClient.Stat(ctx, sReq)
@@ -97,7 +94,7 @@ func (s *svc) handleGet(ctx context.Context, w http.ResponseWriter, r *http.Requ
 		id, etag, last := info.GetId(), info.GetEtag(), parseScanDate(info)
 		if !last.After(min) {
 			// last scan date is too old - we need to rescan the file
-			if err := s.davHandler.PostprocessingHandler.doVirusScan(r.Context(), client, id, r.Header.Get("x-access-token"), s.stream); err != nil {
+			if err := s.davHandler.PostprocessingHandler.doVirusScan(r.Context(), s.gwClient, id, r.Header.Get("x-access-token"), s.stream); err != nil {
 				log.Error().Err(err).Interface("ref", ref).Msg("error initiating virus scan")
 				w.WriteHeader(http.StatusInternalServerError)
 				return
@@ -113,7 +110,7 @@ func (s *svc) handleGet(ctx context.Context, w http.ResponseWriter, r *http.Requ
 					return nil
 				}
 
-				sr, err := client.Stat(ctx, &provider.StatRequest{Ref: ref})
+				sr, err := s.gwClient.Stat(ctx, &provider.StatRequest{Ref: ref})
 				if err != nil {
 					return err
 				}

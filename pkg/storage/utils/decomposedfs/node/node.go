@@ -128,6 +128,33 @@ func (n *Node) ChangeOwner(new *userpb.UserId) (err error) {
 	return
 }
 
+// SetMetadata populates a given key with its value.
+// Note that consumers should be aware of the metadata options on xattrs.go.
+func (n *Node) SetMetadata(key string, val string) (err error) {
+	nodePath := n.InternalPath()
+	if err := xattrs.Set(nodePath, key, val); err != nil {
+		return errors.Wrap(err, "Decomposedfs: could not set extended attribute")
+	}
+	return nil
+}
+
+// RemoveMetadata removes a given key
+func (n *Node) RemoveMetadata(key string) (err error) {
+	if err = xattrs.Remove(n.InternalPath(), key); err == nil || xattrs.IsAttrUnset(err) {
+		return nil
+	}
+	return err
+}
+
+// GetMetadata reads the metadata for the given key
+func (n *Node) GetMetadata(key string) (val string, err error) {
+	nodePath := n.InternalPath()
+	if val, err = xattrs.Get(nodePath, key); err != nil {
+		return "", errors.Wrap(err, "Decomposedfs: could not get extended attribute")
+	}
+	return val, nil
+}
+
 // WriteAllNodeMetadata writes the Node metadata to disk
 func (n *Node) WriteAllNodeMetadata() (err error) {
 	attribs := make(map[string]string)

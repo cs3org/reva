@@ -74,14 +74,7 @@ func (h *PostprocessingHandler) handleVirusScan(w http.ResponseWriter, r *http.R
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
-	client, err := s.getClient()
-	if err != nil {
-		log.Error().Err(err).Interface("resourceid", rid).Msg("cannot get gateway client")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	if err := h.doVirusScan(ctx, client, rid, r.Header.Get("x-access-token"), s.stream); err != nil {
+	if err := h.doVirusScan(ctx, s.gwClient, rid, r.Header.Get("x-access-token"), s.stream); err != nil {
 		log.Error().Err(err).Interface("resourceid", rid).Msg("cannot do virus scan")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
