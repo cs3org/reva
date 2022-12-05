@@ -19,6 +19,7 @@
 package rgrpc
 
 import (
+	"crypto/tls"
 	"fmt"
 	"io"
 	"net"
@@ -36,9 +37,11 @@ import (
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
+	mtls "go-micro.dev/v4/util/tls"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/reflection"
 )
 
@@ -95,9 +98,17 @@ type streamInterceptorTriple struct {
 	Interceptor grpc.StreamServerInterceptor
 }
 
+type tlsSettings struct {
+	Enabled         bool   `mapstructure:"enabled"`
+	CertificateFile string `mapstructure:"certificate"`
+	KeyFile         string `mapstructure:"key"`
+	tlsConfig       *tls.Config
+}
+
 type config struct {
 	Network          string                            `mapstructure:"network"`
 	Address          string                            `mapstructure:"address"`
+	TLSSettings      tlsSettings                       `mapstructure:"tls_settings"`
 	ShutdownDeadline int                               `mapstructure:"shutdown_deadline"`
 	Services         map[string]map[string]interface{} `mapstructure:"services"`
 	Interceptors     map[string]map[string]interface{} `mapstructure:"interceptors"`
@@ -126,12 +137,43 @@ type Server struct {
 
 // NewServer returns a new Server.
 func NewServer(m interface{}, log zerolog.Logger, tp trace.TracerProvider) (*Server, error) {
+	var err error
 	conf := &config{}
 	if err := mapstructure.Decode(m, conf); err != nil {
 		return nil, err
 	}
 
 	conf.init()
+
+	if conf.TLSSettings.Enabled {
+		var cert tls.Certificate
+		switch {
+		case conf.TLSSettings.CertificateFile == "" && conf.TLSSettings.KeyFile == "":
+			// Generate a self-signed server certificate on the fly. This requires the clients
+			// to connect with InsecureSkipVerify.
+			subj := []string{conf.Address}
+			if host, _, err := net.SplitHostPort(conf.Address); err == nil && host != "" {
+				subj = []string{host}
+			}
+
+			log.Warn().Str("address", conf.Address).Str("network", conf.Network).
+				Msg("No server certificate configured. Generating a temporary self-signed certificate")
+
+			cert, err = mtls.Certificate(subj...)
+			if err != nil {
+				return nil, err
+			}
+		default:
+			cert, err = tls.LoadX509KeyPair(
+				conf.TLSSettings.CertificateFile,
+				conf.TLSSettings.KeyFile,
+			)
+			if err != nil {
+				return nil, err
+			}
+		}
+		conf.TLSSettings.tlsConfig = &tls.Config{Certificates: []tls.Certificate{cert}}
+	}
 
 	server := &Server{conf: conf, log: log, tracerProvider: tp, services: map[string]Service{}}
 
@@ -199,6 +241,11 @@ func (s *Server) registerServices() error {
 	if err != nil {
 		return err
 	}
+
+	if s.conf.TLSSettings.tlsConfig != nil {
+		opts = append(opts, grpc.Creds(credentials.NewTLS(s.conf.TLSSettings.tlsConfig)))
+	}
+
 	grpcServer := grpc.NewServer(opts...)
 
 	for _, svc := range s.services {

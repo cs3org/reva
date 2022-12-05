@@ -20,7 +20,6 @@ package test
 
 import (
 	"encoding/json"
-	"io/ioutil"
 	"os"
 	"path"
 )
@@ -111,7 +110,7 @@ func writeData(m map[string][]interface{}, privateKey string, rootDir string) er
 			}
 
 			pkVal := ValueOf(u, privateKey)
-			if err := ioutil.WriteFile(path.Join(fileTypePath, pkVal), data, 0600); err != nil {
+			if err := os.WriteFile(path.Join(fileTypePath, pkVal), data, 0600); err != nil {
 				return err
 			}
 		}

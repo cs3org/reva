@@ -53,6 +53,7 @@ type config struct {
 	NatsClusterID      string                            `mapstructure:"nats_clusterID"`
 	NatsTLSInsecure    bool                              `mapstructure:"nats_tls_insecure"`
 	NatsRootCACertPath string                            `mapstructure:"nats_root_ca_cert_path"`
+	NatsEnableTLS      bool                              `mapstructure:"nats_enable_tls"`
 }
 
 func (c *config) init() {
@@ -90,25 +91,28 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 	if conf.NatsAddress == "" || conf.NatsClusterID == "" {
 		log.Warn().Msg("missing or incomplete nats configuration. Events will not be published.")
 	} else {
-		var rootCAPool *x509.CertPool
-		if conf.NatsRootCACertPath != "" {
-			f, err := os.Open(conf.NatsRootCACertPath)
-			if err != nil {
-				return nil, err
-			}
+		var tlsConf *tls.Config
+		if conf.NatsEnableTLS {
+			var rootCAPool *x509.CertPool
+			if conf.NatsRootCACertPath != "" {
+				f, err := os.Open(conf.NatsRootCACertPath)
+				if err != nil {
+					return nil, err
+				}
 
-			var certBytes bytes.Buffer
-			if _, err := io.Copy(&certBytes, f); err != nil {
-				return nil, err
-			}
+				var certBytes bytes.Buffer
+				if _, err := io.Copy(&certBytes, f); err != nil {
+					return nil, err
+				}
 
-			rootCAPool = x509.NewCertPool()
-			rootCAPool.AppendCertsFromPEM(certBytes.Bytes())
-			conf.NatsTLSInsecure = false
-		}
-		tlsConf := &tls.Config{
-			InsecureSkipVerify: conf.NatsTLSInsecure,
-			RootCAs:            rootCAPool,
+				rootCAPool = x509.NewCertPool()
+				rootCAPool.AppendCertsFromPEM(certBytes.Bytes())
+				conf.NatsTLSInsecure = false
+			}
+			tlsConf = &tls.Config{
+				InsecureSkipVerify: conf.NatsTLSInsecure,
+				RootCAs:            rootCAPool,
+			}
 		}
 		publisher, err = server.NewNatsStream(natsjs.TLSConfig(tlsConf), natsjs.Address(conf.NatsAddress), natsjs.ClusterID(conf.NatsClusterID))
 		if err != nil {

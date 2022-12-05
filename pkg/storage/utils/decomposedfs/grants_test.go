@@ -89,13 +89,28 @@ var _ = Describe("Grants", func() {
 		}
 	})
 
-	Context("with insufficient permissions", func() {
+	Context("with no permissions", func() {
 		JustBeforeEach(func() {
-			env.Permissions.On("HasPermission", mock.Anything, mock.Anything, mock.Anything).Return(false, nil)
+			env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(provider.ResourcePermissions{}, nil)
 		})
 
 		Describe("AddGrant", func() {
-			It("adds grants", func() {
+			It("hides the resource", func() {
+				err := env.Fs.AddGrant(env.Ctx, ref, grant)
+				Expect(err).To(MatchError(ContainSubstring("not found")))
+			})
+		})
+	})
+
+	Context("with insufficient permissions", func() {
+		JustBeforeEach(func() {
+			env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(provider.ResourcePermissions{
+				Stat: true,
+			}, nil)
+		})
+
+		Describe("AddGrant", func() {
+			It("denies adding grants", func() {
 				err := env.Fs.AddGrant(env.Ctx, ref, grant)
 				Expect(err).To(MatchError(ContainSubstring("permission denied")))
 			})
@@ -104,7 +119,12 @@ var _ = Describe("Grants", func() {
 
 	Context("with sufficient permissions", func() {
 		JustBeforeEach(func() {
-			env.Permissions.On("HasPermission", mock.Anything, mock.Anything, mock.Anything).Return(true, nil)
+			env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(provider.ResourcePermissions{
+				Stat:        true,
+				AddGrant:    true,
+				ListGrants:  true,
+				RemoveGrant: true,
+			}, nil)
 		})
 
 		Describe("AddGrant", func() {

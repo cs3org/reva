@@ -52,7 +52,7 @@ See `CreateDir`.
 
 ### Potential Problems
 
-There is no exit critera step so all concurrent calls try to create a symlink in step 3 with only one of them 
+There is no exit critera step so all concurrent calls try to create a symlink in step 3 with only one of them
 succeeding (See `Considerations > Creating symlinks`).
 
 ### Negative Effects
@@ -71,7 +71,7 @@ No risk of inconsistency.
 ### Potential Problems
 
 Several concurrent calls can get past the exit criteria steps 1 and 2. But the first writing operation is always the
-actual move of the node on the filesystem which is an atomic filesystem operation. That means that with concurrent 
+actual move of the node on the filesystem which is an atomic filesystem operation. That means that with concurrent
 calls only one can ever succeed.
 
 ### Negative Effects
@@ -167,16 +167,15 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 )
 
 func main() {
-	err := ioutil.WriteFile("file1", []byte(""), 0600)
+	err := os.WriteFile("file1", []byte(""), 0600)
 	if err != nil {
 		os.Exit(1)
 	}
-	err = ioutil.WriteFile("file2", []byte(""), 0600)
+	err = os.WriteFile("file2", []byte(""), 0600)
 	if err != nil {
 		os.Exit(1)
 	}
@@ -208,16 +207,15 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 )
 
 func main() {
-	err := ioutil.WriteFile("file1", []byte(""), 0600)
+	err := os.WriteFile("file1", []byte(""), 0600)
 	if err != nil {
 		os.Exit(1)
 	}
-	err = ioutil.WriteFile("file2", []byte(""), 0600)
+	err = os.WriteFile("file2", []byte(""), 0600)
 	if err != nil {
 		os.Exit(1)
 	}

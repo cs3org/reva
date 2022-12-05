@@ -21,7 +21,6 @@ package chunking
 import (
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -91,7 +90,7 @@ func NewChunkHandler(chunkFolder string) *ChunkHandler {
 }
 
 func (c *ChunkHandler) createChunkTempFile() (string, *os.File, error) {
-	file, err := ioutil.TempFile(fmt.Sprintf("/%s", c.ChunkFolder), "")
+	file, err := os.CreateTemp(fmt.Sprintf("/%s", c.ChunkFolder), "")
 	if err != nil {
 		return "", nil, err
 	}

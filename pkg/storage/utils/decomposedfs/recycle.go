@@ -62,14 +62,15 @@ func (fs *Decomposedfs) ListRecycle(ctx context.Context, ref *provider.Reference
 	if err != nil {
 		return nil, err
 	}
-	ok, err := fs.p.HasPermission(ctx, trashnode, func(rp *provider.ResourcePermissions) bool {
-		return rp.ListRecycle
-	})
+	rp, err := fs.p.AssemblePermissions(ctx, trashnode)
 	switch {
 	case err != nil:
 		return nil, errtypes.InternalError(err.Error())
-	case !ok:
-		return nil, errtypes.PermissionDenied(key)
+	case !rp.ListRecycle:
+		if rp.Stat {
+			return nil, errtypes.PermissionDenied(key)
+		}
+		return nil, errtypes.NotFound(key)
 	}
 
 	if key == "" && relativePath == "/" {
@@ -264,28 +265,31 @@ func (fs *Decomposedfs) RestoreRecycleItem(ctx context.Context, ref *provider.Re
 	}
 
 	// check permissions of deleted node
-	ok, err := fs.p.HasPermission(ctx, rn, func(rp *provider.ResourcePermissions) bool {
-		return rp.RestoreRecycleItem
-	})
+	rp, err := fs.p.AssemblePermissions(ctx, rn)
 	switch {
 	case err != nil:
 		return errtypes.InternalError(err.Error())
-	case !ok:
-		return errtypes.PermissionDenied(key)
+	case !rp.RestoreRecycleItem:
+		if rp.Stat {
+			return errtypes.PermissionDenied(key)
+		}
+		return errtypes.NotFound(key)
 	}
 
 	// Set space owner in context
 	storagespace.ContextSendSpaceOwnerID(ctx, rn.SpaceOwnerOrManager(ctx))
 
 	// check we can write to the parent of the restore reference
-	ps, err := fs.p.AssemblePermissions(ctx, parent)
-	if err != nil {
+	pp, err := fs.p.AssemblePermissions(ctx, parent)
+	switch {
+	case err != nil:
 		return errtypes.InternalError(err.Error())
-	}
-
-	// share receiver cannot restore to a shared resource to which she does not have write permissions.
-	if !ps.InitiateFileUpload {
-		return errtypes.PermissionDenied(key)
+	case !pp.InitiateFileUpload:
+		// share receiver cannot restore to a shared resource to which she does not have write permissions.
+		if rp.Stat {
+			return errtypes.PermissionDenied(key)
+		}
+		return errtypes.NotFound(key)
 	}
 
 	// Run the restore func
@@ -307,14 +311,15 @@ func (fs *Decomposedfs) PurgeRecycleItem(ctx context.Context, ref *provider.Refe
 	}
 
 	// check permissions of deleted node
-	ok, err := fs.p.HasPermission(ctx, rn, func(rp *provider.ResourcePermissions) bool {
-		return rp.PurgeRecycle
-	})
+	rp, err := fs.p.AssemblePermissions(ctx, rn)
 	switch {
 	case err != nil:
 		return errtypes.InternalError(err.Error())
-	case !ok:
-		return errtypes.PermissionDenied(key)
+	case !rp.PurgeRecycle:
+		if rp.Stat {
+			return errtypes.PermissionDenied(key)
+		}
+		return errtypes.NotFound(key)
 	}
 
 	// Run the purge func

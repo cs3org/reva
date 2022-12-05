@@ -31,6 +31,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/favorite/memory"
 	rtrace "github.com/cs3org/reva/v2/pkg/trace"
 	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 	httpServer "github.com/go-micro/plugins/v4/server/http"
 	"github.com/owncloud/ocis/v2/ocis-pkg/registry"
 	"github.com/prometheus/client_golang/prometheus"
@@ -67,7 +68,7 @@ func Service(opts ...Option) (micro.Service, error) {
 	)
 
 	tp := rtrace.GetTracerProvider(sopts.TracingEnabled, sopts.TracingCollector, sopts.TracingEndpoint, sopts.Name)
-	revaService, err := ocdav.NewWith(&sopts.config, sopts.FavoriteManager, sopts.lockSystem, &sopts.Logger, tp)
+	revaService, err := ocdav.NewWith(&sopts.config, sopts.FavoriteManager, sopts.lockSystem, &sopts.Logger, tp, sopts.GatewayClient)
 	if err != nil {
 		return nil, err
 	}
@@ -191,8 +192,11 @@ func useMiddlewares(r *chi.Mux, sopts *Options, svc global.Service, tp trace.Tra
 	// ctx
 	cm := appctx.New(sopts.Logger, tp)
 
+	// request-id
+	rm := middleware.RequestID
+
 	// actually register
-	r.Use(pm, tm, lm, authMiddle, cm)
+	r.Use(pm, tm, lm, authMiddle, rm, cm)
 	return nil
 }
 

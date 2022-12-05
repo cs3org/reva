@@ -288,7 +288,10 @@ var _ = Describe("Tree", func() {
 		var dir *node.Node
 
 		JustBeforeEach(func() {
-			env.Permissions.On("HasPermission", mock.Anything, mock.Anything, mock.Anything).Return(true, nil)
+			env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(provider.ResourcePermissions{
+				CreateContainer: true,
+				Stat:            true,
+			}, nil)
 
 			// Create test dir
 			var err error
@@ -305,9 +308,15 @@ var _ = Describe("Tree", func() {
 				riBefore, err := dir.AsResourceInfo(env.Ctx, &perms, []string{}, []string{}, false)
 				Expect(err).ToNot(HaveOccurred())
 
-				err = env.Tree.Propagate(env.Ctx, file)
+				err = env.Tree.Propagate(env.Ctx, file, 0)
 				Expect(err).ToNot(HaveOccurred())
 
+				dir, err := env.Lookup.NodeFromID(env.Ctx, &provider.ResourceId{
+					StorageId: dir.SpaceID,
+					SpaceId:   dir.SpaceID,
+					OpaqueId:  dir.ID,
+				})
+				Expect(err).ToNot(HaveOccurred())
 				riAfter, err := dir.AsResourceInfo(env.Ctx, &perms, []string{}, []string{}, false)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(riAfter.Etag).ToNot(Equal(riBefore.Etag))
@@ -316,10 +325,14 @@ var _ = Describe("Tree", func() {
 
 		Describe("with TreeSizeAccounting enabled", func() {
 			It("calculates the size", func() {
-				file, err := env.CreateTestFile("file1", "", dir.ID, dir.SpaceID, 1)
+				_, err := env.CreateTestFile("file1", "", dir.ID, dir.SpaceID, 1)
 				Expect(err).ToNot(HaveOccurred())
 
-				err = env.Tree.Propagate(env.Ctx, file)
+				dir, err := env.Lookup.NodeFromID(env.Ctx, &provider.ResourceId{
+					StorageId: dir.SpaceID,
+					SpaceId:   dir.SpaceID,
+					OpaqueId:  dir.ID,
+				})
 				Expect(err).ToNot(HaveOccurred())
 				size, err := dir.GetTreeSize()
 				Expect(err).ToNot(HaveOccurred())
@@ -329,10 +342,14 @@ var _ = Describe("Tree", func() {
 			It("considers all files", func() {
 				_, err := env.CreateTestFile("file1", "", dir.ID, dir.SpaceID, 1)
 				Expect(err).ToNot(HaveOccurred())
-				file2, err := env.CreateTestFile("file2", "", dir.ID, dir.SpaceID, 100)
+				_, err = env.CreateTestFile("file2", "", dir.ID, dir.SpaceID, 100)
 				Expect(err).ToNot(HaveOccurred())
 
-				err = env.Tree.Propagate(env.Ctx, file2)
+				dir, err := env.Lookup.NodeFromID(env.Ctx, &provider.ResourceId{
+					StorageId: dir.SpaceID,
+					SpaceId:   dir.SpaceID,
+					OpaqueId:  dir.ID,
+				})
 				Expect(err).ToNot(HaveOccurred())
 				size, err := dir.GetTreeSize()
 				Expect(err).ToNot(HaveOccurred())
@@ -344,11 +361,17 @@ var _ = Describe("Tree", func() {
 				Expect(err).ToNot(HaveOccurred())
 				err = subdir.SetTreeSize(uint64(200))
 				Expect(err).ToNot(HaveOccurred())
-
-				file, err := env.CreateTestFile("file1", "", dir.ID, dir.SpaceID, 1)
+				err = env.Tree.Propagate(env.Ctx, subdir, 200)
 				Expect(err).ToNot(HaveOccurred())
 
-				err = env.Tree.Propagate(env.Ctx, file)
+				_, err = env.CreateTestFile("file1", "", dir.ID, dir.SpaceID, 1)
+				Expect(err).ToNot(HaveOccurred())
+
+				dir, err := env.Lookup.NodeFromID(env.Ctx, &provider.ResourceId{
+					StorageId: dir.SpaceID,
+					SpaceId:   dir.SpaceID,
+					OpaqueId:  dir.ID,
+				})
 				Expect(err).ToNot(HaveOccurred())
 				size, err := dir.GetTreeSize()
 				Expect(err).ToNot(HaveOccurred())
@@ -360,8 +383,14 @@ var _ = Describe("Tree", func() {
 				Expect(err).ToNot(HaveOccurred())
 				err = subdir.SetTreeSize(uint64(200))
 				Expect(err).ToNot(HaveOccurred())
+				err = env.Tree.Propagate(env.Ctx, subdir, 200)
+				Expect(err).ToNot(HaveOccurred())
 
-				err = env.Tree.Propagate(env.Ctx, subdir)
+				dir, err := env.Lookup.NodeFromID(env.Ctx, &provider.ResourceId{
+					StorageId: dir.SpaceID,
+					SpaceId:   dir.SpaceID,
+					OpaqueId:  dir.ID,
+				})
 				Expect(err).ToNot(HaveOccurred())
 				size, err := dir.GetTreeSize()
 				Expect(size).To(Equal(uint64(200)))
@@ -375,9 +404,15 @@ var _ = Describe("Tree", func() {
 				Expect(err).ToNot(HaveOccurred())
 				err = otherdir.SetTreeSize(uint64(100000))
 				Expect(err).ToNot(HaveOccurred())
-				err = env.Tree.Propagate(env.Ctx, otherdir)
+				err = env.Tree.Propagate(env.Ctx, otherdir, 100000)
 				Expect(err).ToNot(HaveOccurred())
 
+				dir, err = env.Lookup.NodeFromID(env.Ctx, &provider.ResourceId{
+					StorageId: dir.SpaceID,
+					SpaceId:   dir.SpaceID,
+					OpaqueId:  dir.ID,
+				})
+				Expect(err).ToNot(HaveOccurred())
 				size, err = dir.GetTreeSize()
 				Expect(err).ToNot(HaveOccurred())
 				Expect(size).To(Equal(uint64(200)))

@@ -22,6 +22,7 @@ import (
 	"context"
 	"crypto/tls"
 
+	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav"
 	"github.com/cs3org/reva/v2/pkg/storage/favorite"
 	"github.com/rs/zerolog"
@@ -44,6 +45,7 @@ type Options struct {
 	JWTSecret string
 
 	FavoriteManager favorite.Manager
+	GatewayClient   gateway.GatewayAPIClient
 
 	TracingEnabled   bool
 	TracingCollector string
@@ -185,6 +187,13 @@ func PublicURL(val string) Option {
 func FavoriteManager(val favorite.Manager) Option {
 	return func(o *Options) {
 		o.FavoriteManager = val
+	}
+}
+
+// GatewayClient provides a function to set the GatewayClient option.
+func GatewayClient(val gateway.GatewayAPIClient) Option {
+	return func(o *Options) {
+		o.GatewayClient = val
 	}
 }
 

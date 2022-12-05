@@ -107,12 +107,41 @@ type SpaceShared struct {
 	GranteeUserID  *user.UserId
 	GranteeGroupID *group.GroupId
 	Creator        *user.UserId
-	ID             *provider.ResourceId
+	ID             *provider.StorageSpaceId
 }
 
 // Unmarshal to fulfill umarshaller interface
 func (SpaceShared) Unmarshal(v []byte) (interface{}, error) {
 	e := SpaceShared{}
+	err := json.Unmarshal(v, &e)
+	return e, err
+}
+
+// SpaceUnshared is emitted when a space is unshared
+type SpaceUnshared struct {
+	Executant      *user.UserId
+	GranteeUserID  *user.UserId
+	GranteeGroupID *group.GroupId
+	ID             *provider.StorageSpaceId
+}
+
+// Unmarshal to fulfill umarshaller interface
+func (SpaceUnshared) Unmarshal(v []byte) (interface{}, error) {
+	e := SpaceUnshared{}
+	err := json.Unmarshal(v, &e)
+	return e, err
+}
+
+// SpaceUpdated is emitted when a space is updated
+type SpaceUpdated struct {
+	Executant *user.UserId
+	ID        *provider.StorageSpaceId
+	Space     *provider.StorageSpace
+}
+
+// Unmarshal to fulfill umarshaller interface
+func (SpaceUpdated) Unmarshal(v []byte) (interface{}, error) {
+	e := SpaceUpdated{}
 	err := json.Unmarshal(v, &e)
 	return e, err
 }

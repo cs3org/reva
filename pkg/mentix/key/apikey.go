@@ -48,7 +48,7 @@ const (
 
 // GenerateAPIKey generates a new (random) API key which also contains flags and a (salted) hash.
 // An API key has the following format:
-//   <RandomString:30><Flags:2><SaltedHash:32>
+// <RandomString:30><Flags:2><SaltedHash:32>
 func GenerateAPIKey(salt string, flags int) (APIKey, error) {
 	if len(salt) == 0 {
 		return "", errors.Errorf("no salt specified")

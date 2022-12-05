@@ -266,7 +266,7 @@ func getHTTPServer(conf interface{}, l *zerolog.Logger, tp trace.TracerProvider)
 	return s, nil
 }
 
-//  adjustCPU parses string cpu and sets GOMAXPROCS
+// adjustCPU parses string cpu and sets GOMAXPROCS
 // according to its value. It accepts either
 // a number (e.g. 3) or a percent (e.g. 50%).
 // Default is to use all available cores.

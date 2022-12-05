@@ -42,7 +42,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	iso6391 "github.com/emvi/iso-639-1"
-	"github.com/go-chi/chi"
+	"github.com/go-chi/chi/v5"
 	ua "github.com/mileusna/useragent"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"

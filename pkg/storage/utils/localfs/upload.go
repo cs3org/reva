@@ -22,7 +22,6 @@ import (
 	"context"
 	"encoding/json"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 
@@ -239,7 +238,7 @@ func (fs *localfs) GetUpload(ctx context.Context, id string) (tusd.Upload, error
 	}
 	infoPath := binPath + ".info"
 	info := tusd.FileInfo{}
-	data, err := ioutil.ReadFile(infoPath)
+	data, err := os.ReadFile(infoPath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			// Interpret os.ErrNotExist as 404 Not Found
@@ -333,7 +332,7 @@ func (upload *fileUpload) writeInfo() error {
 	if err != nil {
 		return err
 	}
-	return ioutil.WriteFile(upload.infoPath, data, defaultFilePerm)
+	return os.WriteFile(upload.infoPath, data, defaultFilePerm)
 }
 
 // FinishUpload finishes an upload and moves the file to the internal destination

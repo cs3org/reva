@@ -22,7 +22,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"net/url"
 	"os"
 	"path"
@@ -133,7 +132,7 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 
 func registerMimeTypes(mappingFile string) error {
 	if mappingFile != "" {
-		f, err := ioutil.ReadFile(mappingFile)
+		f, err := os.ReadFile(mappingFile)
 		if err != nil {
 			return fmt.Errorf("storageprovider: error reading the custom mime types file: +%v", err)
 		}
@@ -807,7 +806,7 @@ func (s *service) ListRecycleStream(req *provider.ListRecycleStreamRequest, ss p
 		var st *rpc.Status
 		switch err.(type) {
 		case errtypes.IsNotFound:
-			st = status.NewNotFound(ctx, "path not found when listing recycle stream")
+			st = status.NewNotFound(ctx, "resource not found when listing recycle stream")
 		case errtypes.PermissionDenied:
 			st = status.NewPermissionDenied(ctx, err, "permission denied")
 		default:
@@ -853,7 +852,7 @@ func (s *service) ListRecycle(ctx context.Context, req *provider.ListRecycleRequ
 		var st *rpc.Status
 		switch err.(type) {
 		case errtypes.IsNotFound:
-			st = status.NewNotFound(ctx, "path not found when listing recycle")
+			st = status.NewNotFound(ctx, "resource not found when listing recycle")
 		case errtypes.PermissionDenied:
 			st = status.NewPermissionDenied(ctx, err, "permission denied")
 		default:

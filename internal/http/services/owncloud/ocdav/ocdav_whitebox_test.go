@@ -4,7 +4,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+//	http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -20,13 +20,13 @@ package ocdav
 import (
 	"testing"
 
-	providerv1beta1 "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	sprovider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
 )
 
 func TestWrapResourceID(t *testing.T) {
 	expected := "storageid" + "$" + "spaceid" + "!" + "opaqueid"
-	wrapped := storagespace.FormatResourceID(providerv1beta1.ResourceId{StorageId: "storageid", SpaceId: "spaceid", OpaqueId: "opaqueid"})
+	wrapped := storagespace.FormatResourceID(sprovider.ResourceId{StorageId: "storageid", SpaceId: "spaceid", OpaqueId: "opaqueid"})
 
 	if wrapped != expected {
 		t.Errorf("wrapped id doesn't have the expected format: got %s expected %s", wrapped, expected)
@@ -83,5 +83,4 @@ func TestNameDoesNotContainRule(t *testing.T) {
 			}
 		}
 	}
-
 }

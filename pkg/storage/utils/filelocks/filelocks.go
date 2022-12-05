@@ -28,11 +28,36 @@ import (
 	"github.com/gofrs/flock"
 )
 
+// LockFileSuffix to use for lock files
+const LockFileSuffix = ".flock"
+
 var (
 	_localLocks sync.Map
-	// MaxAcquireLockCycles defines how often the system tries to acquire a lock before failing.
-	MaxAcquireLockCycles = 25
+	// waiting 20 lock cycles with a factor of 30 yields 6300ms, or a little over 6 sec
+	_lockCycles              sync.Once
+	_lockCyclesValue         = 20
+	_lockCycleDuration       sync.Once
+	_lockCycleDurationFactor = 30
+
+	// ErrPathEmpty indicates that no path was specified
+	ErrPathEmpty = errors.New("lock path is empty")
+	// ErrAcquireLockFailed indicates that it was not possible to lock the resource.
+	ErrAcquireLockFailed = errors.New("unable to acquire a lock on the file")
 )
+
+// SetMaxLockCycles configures the maximum amount of lock cycles. Subsequent calls to SetMaxLockCycles have no effect
+func SetMaxLockCycles(v int) {
+	_lockCycles.Do(func() {
+		_lockCyclesValue = v
+	})
+}
+
+// SetLockCycleDurationFactor configures the factor applied to the timeout allowed during a lock cycle. Subsequent calls to SetLockCycleDurationFactor have no effect
+func SetLockCycleDurationFactor(v int) {
+	_lockCycleDuration.Do(func() {
+		_lockCycleDurationFactor = v
+	})
+}
 
 // getMutexedFlock returns a new Flock struct for the given file.
 // If there is already one in the local store, it returns nil.
@@ -68,26 +93,26 @@ func acquireLock(file string, write bool) (*flock.Flock, error) {
 	var err error
 
 	// Create a file to carry the log
-	n := flockFile(file)
+	n := FlockFile(file)
 	if len(n) == 0 {
-		return nil, errors.New("lock path is empty")
+		return nil, ErrPathEmpty
 	}
 
 	var flock *flock.Flock
-	for i := 1; i <= MaxAcquireLockCycles; i++ {
+	for i := 1; i <= _lockCyclesValue; i++ {
 		if flock = getMutexedFlock(n); flock != nil {
 			break
 		}
-		w := time.Duration(i*3) * time.Millisecond
+		w := time.Duration(i*_lockCycleDurationFactor) * time.Millisecond
 
 		time.Sleep(w)
 	}
 	if flock == nil {
-		return nil, errors.New("unable to acquire a lock on the file")
+		return nil, ErrAcquireLockFailed
 	}
 
 	var ok bool
-	for i := 1; i <= 10; i++ {
+	for i := 1; i <= _lockCyclesValue; i++ {
 		if write {
 			ok, err = flock.TryLock()
 		} else {
@@ -98,11 +123,11 @@ func acquireLock(file string, write bool) (*flock.Flock, error) {
 			break
 		}
 
-		time.Sleep(time.Duration(i*3) * time.Millisecond)
+		time.Sleep(time.Duration(i*_lockCycleDurationFactor) * time.Millisecond)
 	}
 
 	if !ok {
-		err = errors.New("could not acquire lock after wait")
+		err = ErrAcquireLockFailed
 	}
 
 	if err != nil {
@@ -111,14 +136,13 @@ func acquireLock(file string, write bool) (*flock.Flock, error) {
 	return flock, nil
 }
 
-// flockFile returns the flock filename for a given file name
+// FlockFile returns the flock filename for a given file name
 // it returns an empty string if the input is empty
-func flockFile(file string) string {
-	var n string
-	if len(file) > 0 {
-		n = file + ".flock"
+func FlockFile(file string) string {
+	if file == "" {
+		return ""
 	}
-	return n
+	return file + LockFileSuffix
 }
 
 // AcquireReadLock tries to acquire a shared lock to read from the

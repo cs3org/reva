@@ -31,12 +31,44 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/ace"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs"
+	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/utils"
 )
 
 // DenyGrant denies access to a resource.
-func (fs *Decomposedfs) DenyGrant(ctx context.Context, ref *provider.Reference, g *provider.Grantee) error {
-	return errtypes.NotSupported("decomposedfs: not supported")
+func (fs *Decomposedfs) DenyGrant(ctx context.Context, ref *provider.Reference, grantee *provider.Grantee) error {
+	log := appctx.GetLogger(ctx)
+
+	log.Debug().Interface("ref", ref).Interface("grantee", grantee).Msg("DenyGrant()")
+
+	node, err := fs.lu.NodeFromResource(ctx, ref)
+	if err != nil {
+		return err
+	}
+	if !node.Exists {
+		return errtypes.NotFound(filepath.Join(node.ParentID, node.Name))
+	}
+
+	// set all permissions to false
+	grant := &provider.Grant{
+		Grantee:     grantee,
+		Permissions: &provider.ResourcePermissions{},
+	}
+
+	// add acting user
+	u := ctxpkg.ContextMustGetUser(ctx)
+	grant.Creator = u.GetId()
+
+	rp, err := fs.p.AssemblePermissions(ctx, node)
+
+	switch {
+	case err != nil:
+		return errtypes.InternalError(err.Error())
+	case !rp.DenyGrant:
+		return errtypes.PermissionDenied(filepath.Join(node.ParentID, node.Name))
+	}
+
+	return fs.storeGrant(ctx, node, grant)
 }
 
 // AddGrant adds a grant to a resource
@@ -67,14 +99,16 @@ func (fs *Decomposedfs) AddGrant(ctx context.Context, ref *provider.Reference, g
 	// However, if we are trying to edit an existing grant we do not have to check for permission if the user owns the grant
 	// TODO: find a better to check this
 	if !(len(grants) == 0 && (owner == nil || owner.OpaqueId == "" || (owner.OpaqueId == node.SpaceID && owner.Type == 8))) {
-		ok, err := fs.p.HasPermission(ctx, node, func(rp *provider.ResourcePermissions) bool {
-			return rp.AddGrant
-		})
+		rp, err := fs.p.AssemblePermissions(ctx, node)
 		switch {
 		case err != nil:
 			return errtypes.InternalError(err.Error())
-		case !ok:
-			return errtypes.PermissionDenied(filepath.Join(node.ParentID, node.Name))
+		case !rp.AddGrant:
+			f, _ := storagespace.FormatReference(ref)
+			if rp.Stat {
+				return errtypes.PermissionDenied(f)
+			}
+			return errtypes.NotFound(f)
 		}
 	}
 
@@ -91,25 +125,31 @@ func (fs *Decomposedfs) ListGrants(ctx context.Context, ref *provider.Reference)
 		err = errtypes.NotFound(filepath.Join(node.ParentID, node.Name))
 		return
 	}
-
-	listGrants, err := fs.p.HasPermission(ctx, node, func(rp *provider.ResourcePermissions) bool {
-		return rp.ListGrants
-	})
-	if err != nil {
+	rp, err := fs.p.AssemblePermissions(ctx, node)
+	switch {
+	case err != nil:
 		return nil, errtypes.InternalError(err.Error())
+	case !rp.ListGrants && !rp.Stat:
+		f, _ := storagespace.FormatReference(ref)
+		return nil, errtypes.NotFound(f)
 	}
-
 	log := appctx.GetLogger(ctx)
 	np := node.InternalPath()
-	var attrs []string
-	if attrs, err = xattrs.List(np); err != nil {
+	var attrs map[string]string
+	if attrs, err = node.Xattrs(); err != nil {
 		log.Error().Err(err).Msg("error listing attributes")
 		return nil, err
 	}
+	attrNames := make([]string, len(attrs))
+	i := 0
+	for attr := range attrs {
+		attrNames[i] = attr
+		i++
+	}
 
-	log.Debug().Interface("attrs", attrs).Msg("read attributes")
+	log.Debug().Interface("attrs", attrNames).Msg("read attributes")
 
-	aces := extractACEsFromAttrs(ctx, np, attrs)
+	aces := extractACEsFromAttrs(ctx, np, attrNames)
 
 	uid := ctxpkg.ContextMustGetUser(ctx).GetId()
 	grants = make([]*provider.Grant, 0, len(aces))
@@ -117,7 +157,7 @@ func (fs *Decomposedfs) ListGrants(ctx context.Context, ref *provider.Reference)
 		g := aces[i].Grant()
 
 		// you may list your own grants even without listgrants permission
-		if !listGrants && !utils.UserIDEqual(g.Creator, uid) && !utils.UserIDEqual(g.Grantee.GetUserId(), uid) {
+		if !rp.ListGrants && !utils.UserIDEqual(g.Creator, uid) && !utils.UserIDEqual(g.Grantee.GetUserId(), uid) {
 			continue
 		}
 
@@ -140,14 +180,16 @@ func (fs *Decomposedfs) RemoveGrant(ctx context.Context, ref *provider.Reference
 
 	// you are allowed to remove grants if you created them yourself or have the proper permission
 	if !utils.UserIDEqual(grant.Creator, ctxpkg.ContextMustGetUser(ctx).GetId()) {
-		ok, err := fs.p.HasPermission(ctx, node, func(rp *provider.ResourcePermissions) bool {
-			return rp.RemoveGrant
-		})
+		rp, err := fs.p.AssemblePermissions(ctx, node)
 		switch {
 		case err != nil:
 			return errtypes.InternalError(err.Error())
-		case !ok:
-			return errtypes.PermissionDenied(filepath.Join(node.ParentID, node.Name))
+		case !rp.RemoveGrant:
+			f, _ := storagespace.FormatReference(ref)
+			if rp.Stat {
+				return errtypes.PermissionDenied(f)
+			}
+			return errtypes.NotFound(f)
 		}
 	}
 
@@ -178,7 +220,7 @@ func (fs *Decomposedfs) RemoveGrant(ctx context.Context, ref *provider.Reference
 		}
 	}
 
-	return fs.tp.Propagate(ctx, node)
+	return fs.tp.Propagate(ctx, node, 0)
 }
 
 // UpdateGrant updates a grant on a resource
@@ -200,14 +242,16 @@ func (fs *Decomposedfs) UpdateGrant(ctx context.Context, ref *provider.Reference
 
 	// You may update a grant when you have the UpdateGrant permission or created the grant (regardless what your permissions are now)
 	if !utils.UserIDEqual(grant.Creator, ctxpkg.ContextMustGetUser(ctx).GetId()) {
-		ok, err := fs.p.HasPermission(ctx, node, func(rp *provider.ResourcePermissions) bool {
-			return rp.UpdateGrant
-		})
+		rp, err := fs.p.AssemblePermissions(ctx, node)
 		switch {
 		case err != nil:
 			return errtypes.InternalError(err.Error())
-		case !ok:
-			return errtypes.PermissionDenied(filepath.Join(node.ParentID, node.Name))
+		case !rp.UpdateGrant:
+			f, _ := storagespace.FormatReference(ref)
+			if rp.Stat {
+				return errtypes.PermissionDenied(f)
+			}
+			return errtypes.NotFound(f)
 		}
 	}
 
@@ -265,7 +309,7 @@ func (fs *Decomposedfs) storeGrant(ctx context.Context, n *node.Node, g *provide
 	// set the grant
 	e := ace.FromGrant(g)
 	principal, value := e.Marshal()
-	if err := n.SetMetadata(xattrs.GrantPrefix+principal, string(value)); err != nil {
+	if err := n.SetXattr(xattrs.GrantPrefix+principal, string(value)); err != nil {
 		appctx.GetLogger(ctx).Error().Err(err).
 			Str("principal", principal).Msg("Could not set grant for principal")
 		return err
@@ -277,7 +321,7 @@ func (fs *Decomposedfs) storeGrant(ctx context.Context, n *node.Node, g *provide
 		return err
 	}
 
-	return fs.tp.Propagate(ctx, n)
+	return fs.tp.Propagate(ctx, n, 0)
 }
 
 // extractACEsFromAttrs reads ACEs in the list of attrs from the node

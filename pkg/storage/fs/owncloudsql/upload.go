@@ -24,7 +24,6 @@ import (
 	"fmt"
 	"io"
 	iofs "io/fs"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -245,7 +244,7 @@ func (fs *owncloudsqlfs) NewUpload(ctx context.Context, info tusd.FileInfo) (upl
 		"Type":                "OwnCloudStore",
 		"BinPath":             binPath,
 		"InternalDestination": ip,
-		"Permissions":         strconv.Itoa((int)(conversions.RoleFromResourcePermissions(perm).OCSPermissions())),
+		"Permissions":         strconv.Itoa((int)(conversions.RoleFromResourcePermissions(perm, false).OCSPermissions())),
 
 		"Idp":      usr.Id.Idp,
 		"UserId":   usr.Id.OpaqueId,
@@ -295,7 +294,7 @@ func (fs *owncloudsqlfs) GetUpload(ctx context.Context, id string) (tusd.Upload,
 	infoPath := filepath.Join(fs.c.UploadInfoDir, id+".info")
 
 	info := tusd.FileInfo{}
-	data, err := ioutil.ReadFile(infoPath)
+	data, err := os.ReadFile(infoPath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			// Interpret os.ErrNotExist as 404 Not Found
@@ -400,7 +399,7 @@ func (upload *fileUpload) writeInfo() error {
 	if err != nil {
 		return err
 	}
-	return ioutil.WriteFile(upload.infoPath, data, defaultFilePerm)
+	return os.WriteFile(upload.infoPath, data, defaultFilePerm)
 }
 
 // FinishUpload finishes an upload and moves the file to the internal destination

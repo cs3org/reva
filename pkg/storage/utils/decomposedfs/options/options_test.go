@@ -43,7 +43,6 @@ var _ = Describe("Options", func() {
 		})
 
 		It("sets defaults", func() {
-			Expect(len(o.ShareFolder) > 0).To(BeTrue())
 			Expect(len(o.UserLayout) > 0).To(BeTrue())
 		})
 

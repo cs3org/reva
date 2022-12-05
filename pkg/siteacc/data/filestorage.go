@@ -20,7 +20,6 @@ package data
 
 import (
 	"encoding/json"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 
@@ -70,7 +69,7 @@ func (storage *FileStorage) initialize(conf *config.Configuration, log *zerolog.
 
 func (storage *FileStorage) readData(file string, obj interface{}) error {
 	// Read the data from the specified file
-	jsonData, err := ioutil.ReadFile(file)
+	jsonData, err := os.ReadFile(file)
 	if err != nil {
 		return errors.Wrapf(err, "unable to read file %v", file)
 	}
@@ -103,7 +102,7 @@ func (storage *FileStorage) ReadAccounts() (*Accounts, error) {
 func (storage *FileStorage) writeData(file string, obj interface{}) error {
 	// Write the data to the specified file
 	jsonData, _ := json.MarshalIndent(obj, "", "\t")
-	if err := ioutil.WriteFile(file, jsonData, 0755); err != nil {
+	if err := os.WriteFile(file, jsonData, 0755); err != nil {
 		return errors.Wrapf(err, "unable to write file %v", file)
 	}
 	return nil

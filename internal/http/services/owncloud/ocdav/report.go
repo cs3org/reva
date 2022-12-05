@@ -64,14 +64,6 @@ func (s *svc) handleReport(w http.ResponseWriter, r *http.Request, ns string) {
 }
 
 func (s *svc) doSearchFiles(w http.ResponseWriter, r *http.Request, sf *reportSearchFiles) {
-	ctx := r.Context()
-	log := appctx.GetLogger(ctx)
-	_, err := s.getClient()
-	if err != nil {
-		log.Error().Err(err).Msg("error getting grpc client")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -89,16 +81,9 @@ func (s *svc) doFilterFiles(w http.ResponseWriter, r *http.Request, ff *reportFi
 			return
 		}
 
-		client, err := s.getClient()
-		if err != nil {
-			log.Error().Err(err).Msg("error getting gateway client")
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-
 		infos := make([]*provider.ResourceInfo, 0, len(favorites))
 		for i := range favorites {
-			statRes, err := client.Stat(ctx, &providerv1beta1.StatRequest{Ref: &providerv1beta1.Reference{ResourceId: favorites[i]}})
+			statRes, err := s.gwClient.Stat(ctx, &providerv1beta1.StatRequest{Ref: &providerv1beta1.Reference{ResourceId: favorites[i]}})
 			if err != nil {
 				log.Error().Err(err).Msg("error getting resource info")
 				continue

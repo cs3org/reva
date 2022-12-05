@@ -82,6 +82,7 @@ type Handler struct {
 	userIdentifierCache                   *ttlcache.Cache
 	resourceInfoCache                     cache.ResourceInfoCache
 	resourceInfoCacheTTL                  time.Duration
+	deniable                              bool
 
 	getClient GatewayClientGetter
 }
@@ -131,6 +132,7 @@ func (h *Handler) Init(c *config.Config) {
 
 	h.userIdentifierCache = ttlcache.NewCache()
 	_ = h.userIdentifierCache.SetTTL(time.Second * time.Duration(c.UserIdentifierCacheTTL))
+	h.deniable = c.EnableDenials
 
 	cache, err := getCacheManager(c)
 	if err == nil {
@@ -238,7 +240,7 @@ func (h *Handler) CreateShare(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// check user has share permissions
-	if !conversions.RoleFromResourcePermissions(statRes.Info.PermissionSet).OCSPermissions().Contain(conversions.PermissionShare) {
+	if !conversions.RoleFromResourcePermissions(statRes.Info.PermissionSet, false).OCSPermissions().Contain(conversions.PermissionShare) {
 		response.WriteOCSError(w, r, http.StatusNotFound, "No share permission", nil)
 		return
 	}
@@ -445,11 +447,35 @@ func (h *Handler) extractPermissions(reqRole string, reqPermissions string, ri *
 		role = conversions.RoleFromOCSPermissions(permissions)
 	}
 
-	if !sufficientPermissions(ri.PermissionSet, role.CS3ResourcePermissions()) {
+	if !sufficientPermissions(ri.PermissionSet, role.CS3ResourcePermissions(), false) && role.Name != conversions.RoleDenied {
 		return nil, nil, &ocsError{
 			Code:    http.StatusNotFound,
 			Message: "Cannot set the requested share permissions",
 			Error:   errors.New("cannot set the requested share permissions"),
+		}
+	}
+
+	if role.Name == conversions.RoleDenied {
+		switch {
+		case !h.deniable:
+			return nil, nil, &ocsError{
+				Code:    http.StatusBadRequest,
+				Message: "Cannot set the requested share permissions: denials are not enabled on this api",
+				Error:   errors.New("Cannot set the requested share permissions: denials are not enabled on this api"),
+			}
+		case ri.Type != provider.ResourceType_RESOURCE_TYPE_CONTAINER:
+			return nil, nil, &ocsError{
+				Code:    http.StatusBadRequest,
+				Message: "Cannot set the requested share permissions: deny access only works on folders",
+				Error:   errors.New("Cannot set the requested share permissions: deny access only works on folders"),
+			}
+		case !ri.PermissionSet.DenyGrant:
+			// add a deny permission only if the user has the grant to deny (ResourcePermissions.DenyGrant == true)
+			return nil, nil, &ocsError{
+				Code:    http.StatusForbidden,
+				Message: "Cannot set the requested share permissions: no deny grant on resource",
+				Error:   errors.New("Cannot set the requested share permissions: no deny grant on resource"),
+			}
 		}
 	}
 
@@ -607,7 +633,7 @@ func (h *Handler) GetShare(w http.ResponseWriter, r *http.Request) {
 		// the path (/users/u-u-i-d/foo) will not be accessible
 
 		// in a global namespace we can access the share using the full path
-		// in a jailed namespace we have to point to the mount point in the users /Shares jail
+		// in a jailed namespace we have to point to the mount point in the users /Shares Jail
 		// - needed for oc10 hot migration
 		// or use the /dav/spaces/<space id> endpoint?
 
@@ -619,7 +645,7 @@ func (h *Handler) GetShare(w http.ResponseWriter, r *http.Request) {
 		// - no, the gateway only sees the same list any has the same options as the ocs service
 		// - we would need to have a list of mountpoints for the shares -> owncloudstorageprovider for hot migration migration
 
-		// best we can do for now is stat the /Shares jail if it is set and return those paths
+		// best we can do for now is stat the /Shares Jail if it is set and return those paths
 
 		// if we are in a jail and the current share has been accepted use the stat from the share jail
 		// Needed because received shares can be jailed in a folder in the users home
@@ -934,7 +960,7 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 			// the path (/users/u-u-i-d/foo) will not be accessible
 
 			// in a global namespace we can access the share using the full path
-			// in a jailed namespace we have to point to the mount point in the users /Shares jail
+			// in a jailed namespace we have to point to the mount point in the users /Shares Jail
 			// - needed for oc10 hot migration
 			// or use the /dav/spaces/<space id> endpoint?
 
@@ -946,7 +972,7 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 			// - no, the gateway only sees the same list any has the same options as the ocs service
 			// - we would need to have a list of mountpoints for the shares -> owncloudstorageprovider for hot migration migration
 
-			// best we can do for now is stat the /Shares jail if it is set and return those paths
+			// best we can do for now is stat the /Shares Jail if it is set and return those paths
 
 			// if we are in a jail and the current share has been accepted use the stat from the share jail
 			// Needed because received shares can be jailed in a folder in the users home
@@ -1152,6 +1178,9 @@ func (h *Handler) addFileInfo(ctx context.Context, s *conversions.ShareData, inf
 		s.FileTarget = path.Join(h.sharePrefix, name)
 		if s.ShareType == conversions.ShareTypePublicLink {
 			s.FileTarget = path.Join("/", name)
+			if info.Id.OpaqueId == info.Id.SpaceId { // we unfortunately have to special case space roots and not append their name here
+				s.FileTarget = "/"
+			}
 		}
 	}
 	s.StorageID = storageIDPrefix + s.FileTarget
@@ -1495,8 +1524,8 @@ func (h *Handler) granteeExists(ctx context.Context, g *provider.Grantee, rid *p
 }
 
 // sufficientPermissions returns true if the `existing` permissions contain the `requested` permissions
-func sufficientPermissions(existing, requested *provider.ResourcePermissions) bool {
-	ep := conversions.RoleFromResourcePermissions(existing).OCSPermissions()
-	rp := conversions.RoleFromResourcePermissions(requested).OCSPermissions()
+func sufficientPermissions(existing, requested *provider.ResourcePermissions, islink bool) bool {
+	ep := conversions.RoleFromResourcePermissions(existing, islink).OCSPermissions()
+	rp := conversions.RoleFromResourcePermissions(requested, islink).OCSPermissions()
 	return ep.Contain(rp)
 }

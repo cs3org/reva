@@ -22,7 +22,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"io/ioutil"
+	"io"
 	"os"
 	"reflect"
 	"testing"
@@ -270,7 +270,7 @@ func TestGenerateAppPassword(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			data, err := ioutil.ReadAll(tmpFile)
+			data, err := io.ReadAll(tmpFile)
 			if err != nil {
 				t.Fatalf("error reading file %s: %v", tmpFile.Name(), err)
 			}
@@ -701,7 +701,7 @@ func TestGetAppPassword(t *testing.T) {
 }
 
 func createTempDir(t *testing.T, name string) string {
-	tempDir, err := ioutil.TempDir("", name)
+	tempDir, err := os.MkdirTemp("", name)
 	if err != nil {
 		t.Fatalf("error while creating temp dir: %v", err)
 	}
@@ -709,7 +709,7 @@ func createTempDir(t *testing.T, name string) string {
 }
 
 func createTempFile(t *testing.T, tempDir string, name string) *os.File {
-	tempFile, err := ioutil.TempFile(tempDir, name)
+	tempFile, err := os.CreateTemp(tempDir, name)
 	if err != nil {
 		t.Fatalf("error while creating temp file: %v", err)
 	}

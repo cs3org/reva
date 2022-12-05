@@ -27,7 +27,6 @@ import (
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/errors"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/propfind"
 	"github.com/cs3org/reva/v2/pkg/appctx"
-	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
 )
 
 // Common Webdav methods.
@@ -75,7 +74,7 @@ func (h *WebDavHandler) Handler(s *svc) http.Handler {
 		switch r.Method {
 		case MethodPropfind:
 			p := propfind.NewHandler(config.PublicURL, func() (gateway.GatewayAPIClient, error) {
-				return pool.GetGatewayServiceClient(config.GatewaySvc)
+				return s.gwClient, nil
 			})
 			p.HandlePathPropfind(w, r, ns)
 		case MethodLock:
@@ -103,7 +102,7 @@ func (h *WebDavHandler) Handler(s *svc) http.Handler {
 		case http.MethodHead:
 			s.handlePathHead(w, r, ns)
 		case http.MethodDelete:
-			s.handlePathDelete(w, r, ns)
+			status, err = s.handlePathDelete(w, r, ns)
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}

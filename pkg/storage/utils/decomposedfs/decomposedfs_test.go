@@ -65,9 +65,22 @@ var _ = Describe("Decomposed", func() {
 	})
 
 	Describe("Delete", func() {
+		Context("with no permissions", func() {
+			It("returns an error", func() {
+				env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(provider.ResourcePermissions{}, nil)
+
+				err := env.Fs.Delete(env.Ctx, ref)
+
+				Expect(err).To(MatchError(ContainSubstring("not found")))
+			})
+		})
+
 		Context("with insufficient permissions", func() {
 			It("returns an error", func() {
-				env.Permissions.On("HasPermission", mock.Anything, mock.Anything, mock.Anything).Return(false, nil)
+				env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(provider.ResourcePermissions{
+					Stat:   true,
+					Delete: false,
+				}, nil)
 
 				err := env.Fs.Delete(env.Ctx, ref)
 
@@ -77,7 +90,10 @@ var _ = Describe("Decomposed", func() {
 
 		Context("with sufficient permissions", func() {
 			JustBeforeEach(func() {
-				env.Permissions.On("HasPermission", mock.Anything, mock.Anything, mock.Anything).Return(true, nil)
+				env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(provider.ResourcePermissions{
+					Stat:   true,
+					Delete: true,
+				}, nil)
 			})
 
 			It("does not (yet) delete the blob from the blobstore", func() {

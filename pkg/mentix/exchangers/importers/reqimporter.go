@@ -19,7 +19,7 @@
 package importers
 
 import (
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 
@@ -38,7 +38,7 @@ type BaseRequestImporter struct {
 
 // HandleRequest handles the actual HTTP request.
 func (importer *BaseRequestImporter) HandleRequest(resp http.ResponseWriter, req *http.Request, conf *config.Configuration, log *zerolog.Logger) {
-	body, _ := ioutil.ReadAll(req.Body)
+	body, _ := io.ReadAll(req.Body)
 	meshDataSet, status, respData, err := importer.handleQuery(body, req.URL.Query(), conf, log)
 	if err == nil {
 		if len(meshDataSet) > 0 {

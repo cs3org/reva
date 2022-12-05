@@ -387,13 +387,8 @@ func (s *svc) handleLock(w http.ResponseWriter, r *http.Request, ns string) (ret
 
 	fn := path.Join(ns, r.URL.Path) // TODO do we still need to jail if we query the registry about the spaces?
 
-	client, err := s.getClient()
-	if err != nil {
-		return http.StatusInternalServerError, err
-	}
-
 	// TODO instead of using a string namespace ns pass in the space with the request?
-	ref, cs3Status, err := spacelookup.LookupReferenceForPath(ctx, client, fn)
+	ref, cs3Status, err := spacelookup.LookupReferenceForPath(ctx, s.gwClient, fn)
 	if err != nil {
 		return http.StatusInternalServerError, err
 	}
@@ -570,13 +565,8 @@ func (s *svc) handleUnlock(w http.ResponseWriter, r *http.Request, ns string) (s
 
 	fn := path.Join(ns, r.URL.Path) // TODO do we still need to jail if we query the registry about the spaces?
 
-	client, err := s.getClient()
-	if err != nil {
-		return http.StatusInternalServerError, err
-	}
-
 	// TODO instead of using a string namespace ns pass in the space with the request?
-	ref, cs3Status, err := spacelookup.LookupReferenceForPath(ctx, client, fn)
+	ref, cs3Status, err := spacelookup.LookupReferenceForPath(ctx, s.gwClient, fn)
 	if err != nil {
 		return http.StatusInternalServerError, err
 	}

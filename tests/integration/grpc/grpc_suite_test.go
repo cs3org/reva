@@ -20,7 +20,6 @@ package grpc_test
 
 import (
 	"fmt"
-	"io/ioutil"
 	"net"
 	"os"
 	"os/exec"
@@ -65,15 +64,15 @@ type Revad struct {
 // Placeholders in the config files can be replaced the variables from the
 // `variables` map, e.g. the config
 //
-//   redis = "{{redis_address}}"
+//	redis = "{{redis_address}}"
 //
 // and the variables map
 //
-//   variables = map[string]string{"redis_address": "localhost:6379"}
+//	variables = map[string]string{"redis_address": "localhost:6379"}
 //
 // will result in the config
 //
-//   redis = "localhost:6379"
+//	redis = "localhost:6379"
 //
 // Special variables are created for the revad addresses, e.g. having a
 // `storage` and a `users` revad will make `storage_address` and
@@ -101,12 +100,12 @@ func startRevads(configs map[string]string, variables map[string]string) (map[st
 		ownID := ids[name]
 
 		// Create a temporary root for this revad
-		tmpRoot, err := ioutil.TempDir("", "reva-grpc-integration-tests-"+name+"-*-root")
+		tmpRoot, err := os.MkdirTemp("", "reva-grpc-integration-tests-"+name+"-*-root")
 		if err != nil {
 			return nil, errors.Wrapf(err, "Could not create tmpdir")
 		}
 		newCfgPath := path.Join(tmpRoot, "config.toml")
-		rawCfg, err := ioutil.ReadFile(path.Join("fixtures", config))
+		rawCfg, err := os.ReadFile(path.Join("fixtures", config))
 		if err != nil {
 			return nil, errors.Wrapf(err, "Could not read config file")
 		}
@@ -125,7 +124,7 @@ func startRevads(configs map[string]string, variables map[string]string) (map[st
 		for name, id := range ids {
 			cfg = strings.ReplaceAll(cfg, "{{"+name+"_id}}", id)
 		}
-		err = ioutil.WriteFile(newCfgPath, []byte(cfg), 0600)
+		err = os.WriteFile(newCfgPath, []byte(cfg), 0600)
 		if err != nil {
 			return nil, errors.Wrapf(err, "Could not write config file")
 		}

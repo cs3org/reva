@@ -240,13 +240,13 @@ var _ = Describe("Recycle", func() {
 		When("a user deletes files from different spaces", func() {
 			BeforeEach(func() {
 				var err error
-				env.Permissions.On("HasPermission", mock.Anything, mock.Anything, mock.Anything).Return(true, nil).Times(1) // Permissions required for setup below (AddGrant)
 				projectID, err = env.CreateTestStorageSpace("project", &provider.Quota{QuotaMaxBytes: 2000})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(projectID).ToNot(BeNil())
 
 				// in this scenario user "25b69780-5f39-43be-a7ac-a9b9e9fe4230" has this permissions:
 				registerPermissions(env.Permissions, "25b69780-5f39-43be-a7ac-a9b9e9fe4230", &provider.ResourcePermissions{
+					Stat:               true,
 					InitiateFileUpload: true,
 					Delete:             true,
 					ListRecycle:        true,
@@ -320,14 +320,17 @@ var _ = Describe("Recycle", func() {
 
 				// in this scenario user "25b69780-5f39-43be-a7ac-a9b9e9fe4230" has this permissions:
 				registerPermissions(env.Permissions, "25b69780-5f39-43be-a7ac-a9b9e9fe4230", &provider.ResourcePermissions{
+					Stat:               true,
 					Delete:             true,
 					ListRecycle:        true,
 					PurgeRecycle:       true,
 					RestoreRecycleItem: true,
+					InitiateFileUpload: true,
 				})
 
 				// and user "readuserid" has this permissions:
 				registerPermissions(env.Permissions, "readuserid", &provider.ResourcePermissions{
+					Stat:        true,
 					ListRecycle: true,
 				})
 			})
@@ -405,10 +408,12 @@ var _ = Describe("Recycle", func() {
 
 			// in this scenario user "userid" has this permissions:
 			registerPermissions(env.Permissions, "25b69780-5f39-43be-a7ac-a9b9e9fe4230", &provider.ResourcePermissions{
+				Stat:               true,
 				Delete:             true,
 				ListRecycle:        true,
 				PurgeRecycle:       true,
 				RestoreRecycleItem: true,
+				InitiateFileUpload: true,
 			})
 
 			// and user "hacker" has no permissions:
@@ -421,7 +426,7 @@ var _ = Describe("Recycle", func() {
 				Path:       "/dir1/file1",
 			})
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("permission denied"))
+			Expect(err.Error()).To(ContainSubstring("not found"))
 
 			err = env.Fs.Delete(env.Ctx, &provider.Reference{
 				ResourceId: env.SpaceRootRes,
@@ -431,7 +436,7 @@ var _ = Describe("Recycle", func() {
 
 			_, err = env.Fs.ListRecycle(ctx, &provider.Reference{ResourceId: env.SpaceRootRes}, "", "/")
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("permission denied"))
+			Expect(err.Error()).To(ContainSubstring("not found"))
 
 			items, err := env.Fs.ListRecycle(env.Ctx, &provider.Reference{ResourceId: env.SpaceRootRes}, "", "/")
 			Expect(err).ToNot(HaveOccurred())
@@ -439,38 +444,16 @@ var _ = Describe("Recycle", func() {
 
 			err = env.Fs.PurgeRecycleItem(ctx, &provider.Reference{ResourceId: env.SpaceRootRes}, items[0].Key, "/")
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("permission denied"))
+			Expect(err.Error()).To(ContainSubstring("not found"))
 
 			err = env.Fs.RestoreRecycleItem(ctx, &provider.Reference{ResourceId: env.SpaceRootRes}, items[0].Key, "/", nil)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("permission denied"))
+			Expect(err.Error()).To(ContainSubstring("not found"))
 		})
 	})
 })
 
 func registerPermissions(m *mocks.PermissionsChecker, uid string, exp *provider.ResourcePermissions) {
-	// add positives
-	m.On("HasPermission",
-		mock.MatchedBy(func(ctx context.Context) bool {
-			return uid == "" || ctxpkg.ContextMustGetUser(ctx).Id.OpaqueId == uid
-		}),
-		mock.Anything,
-		mock.MatchedBy(func(r func(*provider.ResourcePermissions) bool) bool {
-			return exp == nil || r(exp)
-		}),
-	).Return(true, nil)
-
-	// add negatives
-	if exp != nil {
-		m.On("HasPermission",
-			mock.MatchedBy(func(ctx context.Context) bool {
-				return uid == "" || ctxpkg.ContextMustGetUser(ctx).Id.OpaqueId == uid
-			}),
-			mock.Anything,
-			mock.Anything,
-		).Return(false, nil)
-	}
-
 	p := provider.ResourcePermissions{}
 	if exp != nil {
 		p = *exp

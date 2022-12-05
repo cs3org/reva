@@ -46,6 +46,8 @@ const (
 	PermissionMaxInput = PermissionAll
 	// PermissionMinInput is to be used within value range checks
 	PermissionMinInput = PermissionRead
+	// PermissionsNone is to be used to deny access on a resource
+	PermissionsNone = 64
 )
 
 var (

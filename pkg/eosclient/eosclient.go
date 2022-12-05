@@ -22,6 +22,7 @@ import (
 	"context"
 	"io"
 
+	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/acl"
 )
 
@@ -35,7 +36,7 @@ type EOSClient interface {
 	GetFileInfoByInode(ctx context.Context, auth Authorization, inode uint64) (*FileInfo, error)
 	GetFileInfoByFXID(ctx context.Context, auth Authorization, fxid string) (*FileInfo, error)
 	GetFileInfoByPath(ctx context.Context, auth Authorization, path string) (*FileInfo, error)
-	SetAttr(ctx context.Context, auth Authorization, attr *Attribute, recursive bool, path string) error
+	SetAttr(ctx context.Context, auth Authorization, attr *Attribute, errorIfExists, recursive bool, path string) error
 	UnsetAttr(ctx context.Context, auth Authorization, attr *Attribute, recursive bool, path string) error
 	GetAttr(ctx context.Context, auth Authorization, key, path string) (*Attribute, error)
 	GetQuota(ctx context.Context, username string, rootAuth Authorization, path string) (*QuotaInfo, error)
@@ -139,3 +140,11 @@ type Authorization struct {
 	Role  Role
 	Token string
 }
+
+// AttrAlreadyExistsError is the error raised when setting
+// an already existing attr on a resource
+const AttrAlreadyExistsError = errtypes.BadRequest("attr already exists")
+
+// AttrNotExistsError is the error raised when removing
+// an attribute that does not exist
+const AttrNotExistsError = errtypes.BadRequest("attr not exists")

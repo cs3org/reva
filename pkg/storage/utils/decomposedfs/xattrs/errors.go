@@ -19,6 +19,7 @@
 package xattrs
 
 import (
+	"os"
 	"syscall"
 
 	"github.com/pkg/errors"
@@ -28,6 +29,9 @@ import (
 // IsNotExist checks if there is a os not exists error buried inside the xattr error,
 // as we cannot just use os.IsNotExist().
 func IsNotExist(err error) bool {
+	if os.IsNotExist(errors.Cause(err)) {
+		return true
+	}
 	if xerr, ok := errors.Cause(err).(*xattr.Error); ok {
 		if serr, ok2 := xerr.Err.(syscall.Errno); ok2 {
 			return serr == syscall.ENOENT
