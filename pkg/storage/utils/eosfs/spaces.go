@@ -208,6 +208,10 @@ func (fs *eosfs) listPersonalStorageSpaces(ctx context.Context, u *userpb.User, 
 					Decoder: "plain",
 					Value:   []byte(md.Path),
 				},
+				"spaceAlias": {
+					Decoder: "plain",
+					Value:   []byte("personal/" + md.Owner.OpaqueId),
+				},
 			},
 		},
 	}}, nil
