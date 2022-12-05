@@ -71,50 +71,11 @@ def main(ctx):
     # implemented for: ocisIntegrationTests and s3ngIntegrationTests
     return [
         checkStarlark(),
-        release(),
         litmusOcisOldWebdav(),
         litmusOcisNewWebdav(),
         litmusOcisSpacesDav(),
         virtualViews(),
     ] + ocisIntegrationTests(6) + s3ngIntegrationTests(12)
-
-def release():
-    return {
-        "kind": "pipeline",
-        "type": "docker",
-        "name": "release",
-        "platform": {
-            "os": "linux",
-            "arch": "amd64",
-        },
-        "trigger": {
-            "event": {
-                "include": [
-                    "tag",
-                ],
-            },
-        },
-        "steps": [
-            {
-                "name": "create-dist",
-                "image": "registry.cern.ch/docker.io/library/golang:1.19",
-                "commands": [
-                    "go run tools/create-artifacts/main.go -version ${DRONE_TAG} -commit ${DRONE_COMMIT} -goversion `go version | awk '{print $$3}'`",
-                ],
-            },
-            {
-                "name": "publish",
-                "image": "registry.cern.ch/docker.io/plugins/github-release",
-                "settings": {
-                    "api_key": {
-                        "from_secret": "github_token",
-                    },
-                    "files": "dist/*",
-                    "note": "changelog/NOTE.md",
-                },
-            },
-        ],
-    }
 
 def virtualViews():
     return {

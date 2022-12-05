@@ -1,10 +1,10 @@
 SHELL := /bin/bash
 BUILD_DATE=`date +%FT%T%z`
-GIT_COMMIT=`git rev-parse --short HEAD`
+GIT_COMMIT ?= `git rev-parse --short HEAD`
 GIT_BRANCH=`git rev-parse --symbolic-full-name --abbrev-ref HEAD`
 GIT_DIRTY=`git diff-index --quiet HEAD -- || echo "dirty-"`
-VERSION=`git describe --always`
-GO_VERSION=`go version | awk '{print $$3}'`
+VERSION	?= `git describe --always`
+GO_VERSION ?= `go version | awk '{print $$3}'`
 MINIMUM_GO_VERSION=1.16.2
 BUILD_FLAGS="-X main.gitCommit=${GIT_COMMIT} -X main.version=${VERSION} -X main.goVersion=${GO_VERSION} -X main.buildDate=${BUILD_DATE}"
 CI_BUILD_FLAGS="-w -extldflags "-static" -X main.gitCommit=${GIT_COMMIT} -X main.version=${VERSION} -X main.goVersion=${GO_VERSION} -X main.buildDate=${BUILD_DATE}"
@@ -159,7 +159,7 @@ clean: toolchain-clean
 all: build test lint gen-doc
 
 # create local build versions
-dist: all
+dist: gen-doc
 	go run tools/create-artifacts/main.go -version ${VERSION} -commit ${GIT_COMMIT} -goversion ${GO_VERSION}
 
 BEHAT_BIN=vendor-bin/behat/vendor/bin/behat
