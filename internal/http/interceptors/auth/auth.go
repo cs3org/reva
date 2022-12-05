@@ -187,7 +187,7 @@ func New(m map[string]interface{}, unprotected []string, tp trace.TracerProvider
 			}
 
 			log := appctx.GetLogger(r.Context())
-			isUnprotectedEndpoint := false
+			isUnprotectedEndpoint := true /*no auth for now */
 
 			// For unprotected URLs, we try to authenticate the request in case some service needs it,
 			// but don't return any errors if it fails.

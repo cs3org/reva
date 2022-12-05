@@ -122,7 +122,10 @@ func (s *svc) handlePathPut(w http.ResponseWriter, r *http.Request, ns string) {
 		return
 	}
 
-	s.handlePut(ctx, w, r, spacelookup.MakeRelativeReference(space, fn, false), sublog)
+	cref := spacelookup.MakeRelativeReference(space, fn, false)
+	// TODO: use absolute path in eos case, or fix spaces
+	cref.Path = fn
+	s.handlePut(ctx, w, r, cref, sublog)
 }
 
 func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Request, ref *provider.Reference, log zerolog.Logger) {
