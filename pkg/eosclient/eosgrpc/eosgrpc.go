@@ -1562,7 +1562,7 @@ func (c *Client) grpcMDResponseToFileInfo(st *erpc.MDResponse) (*eosclient.FileI
 	if st.Type == erpc.TYPE_CONTAINER {
 		fi.IsDir = true
 		fi.Inode = st.Cmd.Inode
-		fi.FID = st.Cmd.ParentId
+		fi.FID = st.Cmd.Id
 		fi.UID = st.Cmd.Uid
 		fi.GID = st.Cmd.Gid
 		fi.MTimeSec = st.Cmd.Mtime.Sec
@@ -1579,7 +1579,7 @@ func (c *Client) grpcMDResponseToFileInfo(st *erpc.MDResponse) (*eosclient.FileI
 		log.Debug().Str("stat info - path", fi.File).Uint64("inode", fi.Inode).Uint64("uid", fi.UID).Uint64("gid", fi.GID).Str("etag", fi.ETag).Msg("grpc response")
 	} else {
 		fi.Inode = st.Fmd.Inode
-		fi.FID = st.Fmd.ContId
+		fi.FID = st.Fmd.Id
 		fi.UID = st.Fmd.Uid
 		fi.GID = st.Fmd.Gid
 		fi.MTimeSec = st.Fmd.Mtime.Sec
