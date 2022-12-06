@@ -1,4 +1,4 @@
-// Copyright 2018-2020 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -76,7 +76,7 @@ type attributes struct {
 	GIDNumber string `mapstructure:"gidNumber"`
 }
 
-// Default attributes (Active Directory)
+// Default attributes (Active Directory).
 var ldapDefaults = attributes{
 	DN:          "dn",
 	GID:         "objectGUID", // you can fall back to samaccountname but you will run into trouble when group names change. You have been warned.

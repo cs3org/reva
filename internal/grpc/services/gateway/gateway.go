@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,9 +24,8 @@ import (
 	"strings"
 	"time"
 
-	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
-
 	"github.com/ReneKroon/ttlcache/v2"
+	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/sharedconf"
@@ -74,7 +73,7 @@ type config struct {
 	CreateHomeCacheTTL  int                               `mapstructure:"create_home_cache_ttl"`
 }
 
-// sets defaults
+// sets defaults.
 func (c *config) init() {
 	if c.ShareFolder == "" {
 		c.ShareFolder = "MyShares"

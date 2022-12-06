@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,7 +21,7 @@ package main
 import (
 	"bufio"
 	"encoding/json"
-	"io/ioutil"
+	"os"
 	gouser "os/user"
 	"path"
 	"strings"
@@ -50,7 +50,7 @@ func getConfigFile() string {
 }
 
 func readConfig() (*config, error) {
-	data, err := ioutil.ReadFile(getConfigFile())
+	data, err := os.ReadFile(getConfigFile())
 	if err != nil {
 		return nil, err
 	}
@@ -68,7 +68,7 @@ func writeConfig(c *config) error {
 	if err != nil {
 		return err
 	}
-	return ioutil.WriteFile(getConfigFile(), data, 0600)
+	return os.WriteFile(getConfigFile(), data, 0600)
 }
 
 func getTokenFile() string {
@@ -81,7 +81,7 @@ func getTokenFile() string {
 }
 
 func readToken() (string, error) {
-	data, err := ioutil.ReadFile(getTokenFile())
+	data, err := os.ReadFile(getTokenFile())
 	if err != nil {
 		return "", err
 	}
@@ -89,7 +89,7 @@ func readToken() (string, error) {
 }
 
 func writeToken(token string) {
-	err := ioutil.WriteFile(getTokenFile(), []byte(token), 0600)
+	err := os.WriteFile(getTokenFile(), []byte(token), 0600)
 	if err != nil {
 		panic(err)
 	}

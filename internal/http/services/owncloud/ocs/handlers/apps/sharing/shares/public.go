@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,14 +28,13 @@ import (
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	"github.com/rs/zerolog/log"
-
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/publicshare"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog/log"
 )
 
 func (h *Handler) createPublicLinkShare(w http.ResponseWriter, r *http.Request, statInfo *provider.ResourceInfo) {
@@ -82,7 +81,6 @@ func (h *Handler) createPublicLinkShare(w http.ResponseWriter, r *http.Request, 
 				return
 			}
 		}
-
 	}
 
 	newPermissions, err := permissionFromRequest(r, h)
@@ -215,7 +213,6 @@ func (h *Handler) listPublicShares(r *http.Request, filters []*link.ListPublicSh
 			log.Debug().Interface("share", share).Interface("info", info).Interface("shareData", share).Msg("mapped")
 
 			ocsDataPayload = append(ocsDataPayload, sData)
-
 		}
 
 		return ocsDataPayload, nil, nil
@@ -520,7 +517,7 @@ func permissionFromRequest(r *http.Request, h *Handler) (*provider.ResourcePermi
 
 // TODO: add mapping for user share permissions to role
 
-// Maps oc10 public link permissions to roles
+// Maps oc10 public link permissions to roles.
 var ocPublicPermToRole = map[int]string{
 	// Recipients can view and download contents.
 	1: "viewer",

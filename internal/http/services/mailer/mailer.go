@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -68,7 +68,7 @@ type svc struct {
 	tplSubj *template.Template
 }
 
-// New creates a new mailer service
+// New creates a new mailer service.
 func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) {
 	conf := &config{}
 	if err := mapstructure.Decode(m, conf); err != nil {

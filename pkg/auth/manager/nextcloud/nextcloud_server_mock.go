@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,7 +29,7 @@ import (
 )
 
 // Response contains data for the Nextcloud mock server to respond
-// and to switch to a new server state
+// and to switch to a new server state.
 type Response struct {
 	code           int
 	body           string
@@ -46,7 +46,7 @@ var responses = map[string]Response{
 	`POST /apps/sciencemesh/~einstein/api/auth/Authenticate {"clientID":"einstein","clientSecret":"relativity"}`: {200, `{"user":{"id":{"idp":"some-idp","opaque_id":"some-opaque-user-id","type":1}},"scopes":{"user":{"resource":{"decoder":"json","value":"eyJyZXNvdXJjZV9pZCI6eyJzdG9yYWdlX2lkIjoic3RvcmFnZS1pZCIsIm9wYXF1ZV9pZCI6Im9wYXF1ZS1pZCJ9LCJwYXRoIjoic29tZS9maWxlL3BhdGgudHh0In0="},"role":1}}}`, serverStateHome},
 }
 
-// GetNextcloudServerMock returns a handler that pretends to be a remote Nextcloud server
+// GetNextcloudServerMock returns a handler that pretends to be a remote Nextcloud server.
 func GetNextcloudServerMock(called *[]string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		buf := new(strings.Builder)

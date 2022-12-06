@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,9 +19,9 @@
 package loader
 
 import (
-	// Load core data transfer protocols
+	// Load core data transfer protocols.
 	_ "github.com/cs3org/reva/pkg/rhttp/datatx/manager/simple"
 	_ "github.com/cs3org/reva/pkg/rhttp/datatx/manager/spaces"
 	_ "github.com/cs3org/reva/pkg/rhttp/datatx/manager/tus"
-	// Add your own here
+	// Add your own here.
 )

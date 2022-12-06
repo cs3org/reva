@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,9 +29,6 @@ import (
 	"strings"
 	"time"
 
-	rtrace "github.com/cs3org/reva/pkg/trace"
-	"github.com/cs3org/reva/pkg/utils/resourceid"
-
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -39,10 +36,12 @@ import (
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp/router"
+	rtrace "github.com/cs3org/reva/pkg/trace"
 	"github.com/cs3org/reva/pkg/utils"
+	"github.com/cs3org/reva/pkg/utils/resourceid"
 )
 
-// TrashbinHandler handles trashbin requests
+// TrashbinHandler handles trashbin requests.
 type TrashbinHandler struct {
 	gatewaySvc string
 }
@@ -52,7 +51,7 @@ func (h *TrashbinHandler) init(c *Config) error {
 	return nil
 }
 
-// Handler handles requests
+// Handler handles requests.
 func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
@@ -330,9 +329,8 @@ func (h *TrashbinHandler) formatTrashPropfind(ctx context.Context, s *svc, u *us
 
 // itemToPropResponse needs to create a listing that contains a key and destination
 // the key is the name of an entry in the trash listing
-// for now we need to limit trash to the users home, so we can expect all trash keys to have the home storage as the opaque id
+// for now we need to limit trash to the users home, so we can expect all trash keys to have the home storage as the opaque id.
 func (h *TrashbinHandler) itemToPropResponse(ctx context.Context, s *svc, u *userpb.User, pf *propfindXML, item *provider.RecycleItem, basePath string) (*responseXML, error) {
-
 	baseURI := ctx.Value(ctxKeyBaseURI).(string)
 	ref := path.Join(baseURI, u.Username, item.Key)
 	if item.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
@@ -371,7 +369,6 @@ func (h *TrashbinHandler) itemToPropResponse(ctx context.Context, s *svc, u *use
 				s.newProp("d:getcontentlength", fmt.Sprintf("%d", item.Size)),
 			)
 		}
-
 	} else {
 		// otherwise return only the requested properties
 		propstatOK := propstatXML{
@@ -588,7 +585,7 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 	w.WriteHeader(successCode)
 }
 
-// delete has only a key
+// delete has only a key.
 func (h *TrashbinHandler) delete(w http.ResponseWriter, r *http.Request, s *svc, u *userpb.User, basePath, key, itemPath string) {
 	ctx, span := rtrace.Provider.Tracer("trash-bin").Start(r.Context(), "erase")
 	defer span.End()

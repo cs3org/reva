@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -109,7 +109,6 @@ func mapReturn(fileType string) (provider.ResourceType, error) {
 }
 
 func (fs *cback) getRequest(userName, url string, reqType string, body io.Reader) (io.ReadCloser, error) {
-
 	req, err := http.NewRequest(reqType, url, body)
 	req.SetBasicAuth(userName, fs.conf.ImpersonatorToken)
 
@@ -130,9 +129,7 @@ func (fs *cback) getRequest(userName, url string, reqType string, body io.Reader
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-
 		switch resp.StatusCode {
-
 		case http.StatusNotFound:
 			return nil, errtypes.NotFound("cback: resource not found")
 		case http.StatusForbidden:
@@ -145,11 +142,9 @@ func (fs *cback) getRequest(userName, url string, reqType string, body io.Reader
 	}
 
 	return resp.Body, nil
-
 }
 
 func (fs *cback) listSnapshots(userName string, backupID int) ([]snapshotResponse, error) {
-
 	url := fs.conf.APIURL + "/backups/" + strconv.Itoa(backupID) + "/snapshots"
 	responseData, err := fs.getRequest(userName, url, http.MethodGet, nil)
 
@@ -172,7 +167,6 @@ func (fs *cback) listSnapshots(userName string, backupID int) ([]snapshotRespons
 }
 
 func (fs *cback) matchBackups(userName, pathInput string) (*backUpResponse, error) {
-
 	url := fs.conf.APIURL + "/backups/"
 	responseData, err := fs.getRequest(userName, url, http.MethodGet, nil)
 
@@ -228,7 +222,6 @@ func (fs *cback) matchBackups(userName, pathInput string) (*backUpResponse, erro
 }
 
 func (fs *cback) statResource(backupID int, snapID, userName, path, source string) (*fsReturn, error) {
-
 	url := fs.conf.APIURL + "/backups/" + strconv.Itoa(backupID) + "/snapshots/" + snapID + "/" + path + "?content=false"
 	responseData, err := fs.getRequest(userName, url, http.MethodOptions, nil)
 
@@ -264,7 +257,6 @@ func (fs *cback) statResource(backupID int, snapID, userName, path, source strin
 }
 
 func (fs *cback) fileSystem(backupID int, snapID, userName, path, source string) ([]*fsReturn, error) {
-
 	url := fs.conf.APIURL + "/backups/" + strconv.Itoa(backupID) + "/snapshots/" + snapID + "/" + path + "?content=true"
 	responseData, err := fs.getRequest(userName, url, http.MethodOptions, nil)
 
@@ -286,7 +278,6 @@ func (fs *cback) fileSystem(backupID int, snapID, userName, path, source string)
 	resp := make([]*fsReturn, 0, len(responseObject))
 
 	for _, response := range responseObject {
-
 		m, err := mapReturn(response.Type)
 
 		if err != nil {
@@ -359,20 +350,16 @@ func (fs *cback) pathFinder(userName, path string) ([]string, error) {
 	}
 
 	return nil, errtypes.NotFound("cback: resource not found")
-
 }
 
 func (fs *cback) pathTrimmer(snapshotList []snapshotResponse, resp *backUpResponse) (string, string) {
-
 	var ssID, searchPath string
 
 	for _, snapshot := range snapshotList {
-
 		if snapshot.ID == resp.Substring {
 			ssID = resp.Substring
 			searchPath = resp.Source
 			break
-
 		} else if strings.HasPrefix(resp.Substring, snapshot.ID) {
 			searchPath = strings.TrimPrefix(resp.Substring, snapshot.ID)
 			searchPath = resp.Source + searchPath
@@ -382,7 +369,6 @@ func (fs *cback) pathTrimmer(snapshotList []snapshotResponse, resp *backUpRespon
 	}
 
 	return ssID, searchPath
-
 }
 
 func duplicateRemoval(strSlice []string) []string {

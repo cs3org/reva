@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -38,7 +38,7 @@ func NewService(name string, nodes []interface{}) registry.Service {
 	}
 }
 
-// service implements the Service interface
+// service implements the Service interface.
 type service struct {
 	name  string
 	nodes []node

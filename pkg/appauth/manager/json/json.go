@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,7 +21,7 @@ package json
 import (
 	"context"
 	"encoding/json"
-	"io/ioutil"
+	"io"
 	"os"
 	"sync"
 	"time"
@@ -100,7 +100,7 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 func loadOrCreate(file string) (*jsonManager, error) {
 	stat, err := os.Stat(file)
 	if os.IsNotExist(err) || stat.Size() == 0 {
-		if err = ioutil.WriteFile(file, []byte("{}"), 0644); err != nil {
+		if err = os.WriteFile(file, []byte("{}"), 0644); err != nil {
 			return nil, errors.Wrapf(err, "error creating the file %s", file)
 		}
 	}
@@ -111,7 +111,7 @@ func loadOrCreate(file string) (*jsonManager, error) {
 	}
 	defer fd.Close()
 
-	data, err := ioutil.ReadAll(fd)
+	data, err := io.ReadAll(fd)
 	if err != nil {
 		return nil, errors.Wrapf(err, "error reading the file %s", file)
 	}
@@ -246,7 +246,7 @@ func (mgr *jsonManager) save() error {
 		return errors.Wrap(err, "error encoding json file")
 	}
 
-	if err = ioutil.WriteFile(mgr.config.File, data, 0644); err != nil {
+	if err = os.WriteFile(mgr.config.File, data, 0644); err != nil {
 		return errors.Wrapf(err, "error writing to file %s", mgr.config.File)
 	}
 

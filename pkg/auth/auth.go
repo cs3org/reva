@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,7 +28,7 @@ import (
 	"github.com/cs3org/reva/pkg/plugin"
 )
 
-// Manager is the interface to implement to authenticate users
+// Manager is the interface to implement to authenticate users.
 type Manager interface {
 	plugin.Plugin
 	Authenticate(ctx context.Context, clientID, clientSecret string) (*user.User, map[string]*authpb.Scope, error)
@@ -59,7 +59,7 @@ type TokenWriter interface {
 }
 
 // Registry is the interface that auth registries implement
-// for discovering auth providers
+// for discovering auth providers.
 type Registry interface {
 	ListProviders(ctx context.Context) ([]*registry.ProviderInfo, error)
 	GetProvider(ctx context.Context, authType string) (*registry.ProviderInfo, error)

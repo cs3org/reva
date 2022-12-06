@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -31,6 +31,7 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/ReneKroon/ttlcache/v2"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -38,10 +39,6 @@ import (
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/go-chi/chi/v5"
-	"github.com/rs/zerolog"
-
-	"github.com/ReneKroon/ttlcache/v2"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocdav"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/config"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
@@ -55,14 +52,16 @@ import (
 	warmupreg "github.com/cs3org/reva/pkg/share/cache/warmup/registry"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/cs3org/reva/pkg/utils/resourceid"
+	"github.com/go-chi/chi/v5"
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog"
 )
 
 const (
 	storageIDPrefix string = "shared::"
 )
 
-// Handler implements the shares part of the ownCloud sharing API
+// Handler implements the shares part of the ownCloud sharing API.
 type Handler struct {
 	gatewayAddr            string
 	storageRegistryAddr    string
@@ -75,7 +74,7 @@ type Handler struct {
 	resourceInfoCacheTTL   time.Duration
 }
 
-// we only cache the minimal set of data instead of the full user metadata
+// we only cache the minimal set of data instead of the full user metadata.
 type userIdentifiers struct {
 	DisplayName string
 	Username    string
@@ -96,7 +95,7 @@ func getCacheManager(c *config.Config) (cache.ResourceInfoCache, error) {
 	return nil, fmt.Errorf("driver not found: %s", c.ResourceInfoCacheDriver)
 }
 
-// Init initializes this and any contained handlers
+// Init initializes this and any contained handlers.
 func (h *Handler) Init(c *config.Config) {
 	h.gatewayAddr = c.GatewaySvc
 	h.storageRegistryAddr = c.StorageregistrySvc
@@ -149,7 +148,7 @@ func (h *Handler) extractReference(r *http.Request) (provider.Reference, error) 
 	return ref, nil
 }
 
-// CreateShare handles POST requests on /apps/files_sharing/api/v1/shares
+// CreateShare handles POST requests on /apps/files_sharing/api/v1/shares.
 func (h *Handler) CreateShare(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	shareType, err := strconv.Atoi(r.FormValue("shareType"))
@@ -290,10 +289,10 @@ func (h *Handler) extractPermissions(w http.ResponseWriter, r *http.Request, ri 
 	return role, val, nil
 }
 
-// PublicShareContextName represent cross boundaries context for the name of the public share
+// PublicShareContextName represent cross boundaries context for the name of the public share.
 type PublicShareContextName string
 
-// GetShare handles GET requests on /apps/files_sharing/api/v1/shares/(shareid)
+// GetShare handles GET requests on /apps/files_sharing/api/v1/shares/(shareid).
 func (h *Handler) GetShare(w http.ResponseWriter, r *http.Request) {
 	var share *conversions.ShareData
 	var resourceID *provider.ResourceId
@@ -408,7 +407,7 @@ func (h *Handler) GetShare(w http.ResponseWriter, r *http.Request) {
 	response.WriteOCSSuccess(w, r, []*conversions.ShareData{share})
 }
 
-// UpdateShare handles PUT requests on /apps/files_sharing/api/v1/shares/(shareid)
+// UpdateShare handles PUT requests on /apps/files_sharing/api/v1/shares/(shareid).
 func (h *Handler) UpdateShare(w http.ResponseWriter, r *http.Request) {
 	shareID := chi.URLParam(r, "shareid")
 	// FIXME: isPublicShare is already doing a GetShare and GetPublicShare,
@@ -516,7 +515,7 @@ func (h *Handler) updateShare(w http.ResponseWriter, r *http.Request, shareID st
 	response.WriteOCSSuccess(w, r, share)
 }
 
-// RemoveShare handles DELETE requests on /apps/files_sharing/api/v1/shares/(shareid)
+// RemoveShare handles DELETE requests on /apps/files_sharing/api/v1/shares/(shareid).
 func (h *Handler) RemoveShare(w http.ResponseWriter, r *http.Request) {
 	shareID := chi.URLParam(r, "shareid")
 	switch {
@@ -530,7 +529,7 @@ func (h *Handler) RemoveShare(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// ListShares handles GET requests on /apps/files_sharing/api/v1/shares
+// ListShares handles GET requests on /apps/files_sharing/api/v1/shares.
 func (h *Handler) ListShares(w http.ResponseWriter, r *http.Request) {
 	if r.FormValue("shared_with_me") != "" {
 		var err error
@@ -712,7 +711,7 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 
 			// can we return the mountpoint when the gateway resolves the listing of shares?
 			// - no, the gateway only sees the same list any has the same options as the ocs service
-			// - we would need to have a list of mountpoints for the shares -> owncloudstorageprovider for hot migration migration
+			// - we would need to have a list of mountpoints for the shares -> owncloudstorageprovider for hot migration
 
 			// best we can do for now is stat the /Shares jail if it is set and return those paths
 
@@ -912,7 +911,7 @@ func (h *Handler) addFileInfo(ctx context.Context, s *conversions.ShareData, inf
 	return nil
 }
 
-// mustGetIdentifiers always returns a struct with identifiers, if the user or group could not be found they will all be empty
+// mustGetIdentifiers always returns a struct with identifiers, if the user or group could not be found they will all be empty.
 func (h *Handler) mustGetIdentifiers(ctx context.Context, client gateway.GatewayAPIClient, id string, isGroup bool) *userIdentifiers {
 	log := appctx.GetLogger(ctx).With().Str("id", id).Logger()
 	if id == "" {

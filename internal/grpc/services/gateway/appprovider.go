@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -95,7 +95,7 @@ func (s *svc) OpenInApp(ctx context.Context, req *gateway.OpenInAppRequest) (*pr
 		}
 		if uri.Scheme == "webdav" {
 			insecure, skipVerify := getGRPCConfig(req.Opaque)
-			return s.openFederatedShares(ctx, fileInfo.Target, req.ViewMode, req.App, insecure, skipVerify, resChild)
+			return s.openFederatedShares(ctx, fileInfo.Target, req, insecure, skipVerify, resChild)
 		}
 
 		res, err := s.Stat(ctx, &storageprovider.StatRequest{
@@ -114,10 +114,10 @@ func (s *svc) OpenInApp(ctx context.Context, req *gateway.OpenInAppRequest) (*pr
 		}
 		fileInfo = res.Info
 	}
-	return s.openLocalResources(ctx, fileInfo, req.ViewMode, req.App)
+	return s.openLocalResources(ctx, fileInfo, req)
 }
 
-func (s *svc) openFederatedShares(ctx context.Context, targetURL string, vm gateway.OpenInAppRequest_ViewMode, app string,
+func (s *svc) openFederatedShares(ctx context.Context, targetURL string, req *gateway.OpenInAppRequest,
 	insecure, skipVerify bool, nameQueries ...string) (*providerpb.OpenInAppResponse, error) {
 	log := appctx.GetLogger(ctx)
 	targetURL, err := appendNameQuery(targetURL, nameQueries...)
@@ -132,8 +132,9 @@ func (s *svc) openFederatedShares(ctx context.Context, targetURL string, vm gate
 	ref := &storageprovider.Reference{Path: ep.filePath}
 	appProviderReq := &gateway.OpenInAppRequest{
 		Ref:      ref,
-		ViewMode: vm,
-		App:      app,
+		ViewMode: req.ViewMode,
+		App:      req.App,
+		Opaque:   req.Opaque,
 	}
 
 	meshProvider, err := s.GetInfoByDomain(ctx, &ocmprovider.GetInfoByDomainRequest{
@@ -168,9 +169,7 @@ func (s *svc) openFederatedShares(ctx context.Context, targetURL string, vm gate
 	return res, nil
 }
 
-func (s *svc) openLocalResources(ctx context.Context, ri *storageprovider.ResourceInfo,
-	vm gateway.OpenInAppRequest_ViewMode, app string) (*providerpb.OpenInAppResponse, error) {
-
+func (s *svc) openLocalResources(ctx context.Context, ri *storageprovider.ResourceInfo, req *gateway.OpenInAppRequest) (*providerpb.OpenInAppResponse, error) {
 	accessToken, ok := ctxpkg.ContextGetToken(ctx)
 	if !ok || accessToken == "" {
 		return &providerpb.OpenInAppResponse{
@@ -178,7 +177,7 @@ func (s *svc) openLocalResources(ctx context.Context, ri *storageprovider.Resour
 		}, nil
 	}
 
-	provider, err := s.findAppProvider(ctx, ri, app)
+	provider, err := s.findAppProvider(ctx, ri, req.App)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling findAppProvider")
 		if _, ok := err.(errtypes.IsNotFound); ok {
@@ -196,8 +195,9 @@ func (s *svc) openLocalResources(ctx context.Context, ri *storageprovider.Resour
 
 	appProviderReq := &providerpb.OpenInAppRequest{
 		ResourceInfo: ri,
-		ViewMode:     providerpb.OpenInAppRequest_ViewMode(vm),
+		ViewMode:     providerpb.OpenInAppRequest_ViewMode(req.ViewMode),
 		AccessToken:  accessToken,
+		Opaque:       req.Opaque,
 	}
 
 	res, err := appProviderClient.OpenInApp(ctx, appProviderReq)
@@ -233,7 +233,6 @@ func (s *svc) findAppProvider(ctx context.Context, ri *storageprovider.ResourceI
 		if err != nil {
 			err = errors.Wrap(err, "gateway: error calling GetDefaultAppProviderForMimeType")
 			return nil, err
-
 		}
 
 		// we've found a provider
@@ -297,7 +296,6 @@ func (s *svc) findAppProvider(ctx context.Context, ri *storageprovider.ResourceI
 	// we should never arrive to the point of having more than one
 	// provider for the given "app" parameters sent by the user
 	return nil, errtypes.InternalError(fmt.Sprintf("gateway: user requested app %q and we provided %d applications", app, len(res.Providers)))
-
 }
 
 func getGRPCConfig(opaque *typespb.Opaque) (bool, bool) {

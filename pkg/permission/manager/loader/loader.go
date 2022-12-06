@@ -1,4 +1,4 @@
-// Copyright 2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,7 +19,7 @@
 package loader
 
 import (
-	// Load permission manager drivers
+	// Load permission manager drivers.
 	_ "github.com/cs3org/reva/pkg/permission/manager/demo"
-	// Add your own here
+	// Add your own here.
 )

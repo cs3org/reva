@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,7 +22,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"os"
 	"sync"
 	"time"
@@ -35,7 +35,6 @@ import (
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/ocm/share"
-
 	"github.com/cs3org/reva/pkg/ocm/share/manager/registry"
 	"github.com/cs3org/reva/pkg/ocm/share/sender"
 	"github.com/cs3org/reva/pkg/utils"
@@ -76,7 +75,7 @@ func New(m map[string]interface{}) (share.Manager, error) {
 func loadOrCreate(file string) (*shareModel, error) {
 	_, err := os.Stat(file)
 	if os.IsNotExist(err) {
-		if err := ioutil.WriteFile(file, []byte("{}"), 0700); err != nil {
+		if err := os.WriteFile(file, []byte("{}"), 0700); err != nil {
 			err = errors.Wrap(err, "error creating the file: "+file)
 			return nil, err
 		}
@@ -89,7 +88,7 @@ func loadOrCreate(file string) (*shareModel, error) {
 	}
 	defer fd.Close()
 
-	data, err := ioutil.ReadAll(fd)
+	data, err := io.ReadAll(fd)
 	if err != nil {
 		err = errors.Wrap(err, "error reading the data")
 		return nil, err
@@ -142,7 +141,7 @@ func (m *shareModel) Save() error {
 		return err
 	}
 
-	if err := ioutil.WriteFile(m.file, data, 0644); err != nil {
+	if err := os.WriteFile(m.file, data, 0644); err != nil {
 		err = errors.Wrap(err, "error writing to file: "+m.file)
 		return err
 	}
@@ -151,7 +150,7 @@ func (m *shareModel) Save() error {
 }
 
 func (m *shareModel) ReadFile() error {
-	data, err := ioutil.ReadFile(m.file)
+	data, err := os.ReadFile(m.file)
 	if err != nil {
 		err = errors.Wrap(err, "error reading the data")
 		return err
@@ -180,7 +179,7 @@ func genID() string {
 // Called from both grpc CreateOCMShare for outgoing
 // and http /ocm/shares for incoming
 // pi is provider info
-// pm is permissions
+// pm is permissions.
 func (m *mgr) Share(ctx context.Context, md *provider.ResourceId, g *ocm.ShareGrant, name string,
 	pi *ocmprovider.ProviderInfo, pm string, owner *userpb.UserId, token string, st ocm.Share_ShareType) (*ocm.Share, error) {
 	id := genID()
@@ -278,7 +277,6 @@ func (m *mgr) Share(ctx context.Context, md *provider.ResourceId, g *ocm.ShareGr
 			err = errors.Wrap(err, "error sending OCM POST")
 			return nil, err
 		}
-
 	}
 
 	m.Lock()

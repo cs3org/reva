@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@ package eosfs
 
 import (
 	"context"
+	b64 "encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -32,8 +33,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	b64 "encoding/base64"
 
 	"github.com/ReneKroon/ttlcache/v2"
 	"github.com/bluele/gcache"
@@ -74,13 +73,13 @@ const (
 	UserAttr
 )
 
-// LockPayloadKey is the key in the xattr for lock payload
+// LockPayloadKey is the key in the xattr for lock payload.
 const LockPayloadKey = "reva.lock.payload"
 
-// LockExpirationKey is the key in the xattr for lock expiration
+// LockExpirationKey is the key in the xattr for lock expiration.
 const LockExpirationKey = "reva.lock.expiration"
 
-// LockTypeKey is the key in the xattr for lock payload
+// LockTypeKey is the key in the xattr for lock payload.
 const LockTypeKey = "reva.lock.type"
 
 var hiddenReg = regexp.MustCompile(`\.sys\..#.`)
@@ -101,7 +100,7 @@ func (c *Config) init() {
 	}
 
 	if c.DefaultQuotaBytes == 0 {
-		c.DefaultQuotaBytes = 1000000000000 // 1 TB
+		c.DefaultQuotaBytes = 2000000000000 // 1 TB logical
 	}
 	if c.DefaultQuotaFiles == 0 {
 		c.DefaultQuotaFiles = 1000000 // 1 Million
@@ -161,7 +160,7 @@ type eosfs struct {
 	tokenCache     gcache.Cache
 }
 
-// NewEOSFS returns a storage.FS interface implementation that connects to an EOS instance
+// NewEOSFS returns a storage.FS interface implementation that connects to an EOS instance.
 func NewEOSFS(c *Config) (storage.FS, error) {
 	c.init()
 
@@ -543,7 +542,6 @@ func (fs *eosfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Referen
 		if err != nil {
 			return errors.Wrap(err, "eosfs: error setting xattr in eos driver")
 		}
-
 	}
 	return nil
 }
@@ -572,7 +570,6 @@ func (fs *eosfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Refer
 		if err != nil {
 			return errors.Wrap(err, "eosfs: error unsetting xattr in eos driver")
 		}
-
 	}
 	return nil
 }
@@ -628,7 +625,6 @@ func (fs *eosfs) getLockContent(ctx context.Context, auth eosclient.Authorizatio
 	l.Expiration = expiration
 
 	return l, nil
-
 }
 
 func (fs *eosfs) removeLockAttrs(ctx context.Context, auth eosclient.Authorization, path string) error {
@@ -696,7 +692,7 @@ func (fs *eosfs) getLock(ctx context.Context, auth eosclient.Authorization, user
 	return l, nil
 }
 
-// GetLock returns an existing lock on the given reference
+// GetLock returns an existing lock on the given reference.
 func (fs *eosfs) GetLock(ctx context.Context, ref *provider.Reference) (*provider.Lock, error) {
 	path, err := fs.resolve(ctx, ref)
 	if err != nil {
@@ -716,7 +712,12 @@ func (fs *eosfs) GetLock(ctx context.Context, ref *provider.Reference) (*provide
 	return fs.getLock(ctx, auth, user, path, ref)
 }
 
-func (fs *eosfs) setLock(ctx context.Context, auth eosclient.Authorization, lock *provider.Lock, path string, check bool) error {
+func (fs *eosfs) setLock(ctx context.Context, lock *provider.Lock, path string, check bool) error {
+	auth, err := fs.getRootAuth(ctx)
+	if err != nil {
+		return err
+	}
+
 	encodedLock, err := encodeLock(lock)
 	if err != nil {
 		return errors.Wrap(err, "eosfs: error encoding lock")
@@ -759,7 +760,7 @@ func (fs *eosfs) setLock(ctx context.Context, auth eosclient.Authorization, lock
 	return nil
 }
 
-// SetLock puts a lock on the given reference
+// SetLock puts a lock on the given reference.
 func (fs *eosfs) SetLock(ctx context.Context, ref *provider.Reference, l *provider.Lock) error {
 	if l.Type == provider.LockType_LOCK_TYPE_SHARED {
 		return errtypes.NotSupported("shared lock not yet implemented")
@@ -816,7 +817,7 @@ func (fs *eosfs) SetLock(ctx context.Context, ref *provider.Reference, l *provid
 		}
 	}
 
-	return fs.setLock(ctx, auth, l, path, true)
+	return fs.setLock(ctx, l, path, true)
 }
 
 func (fs *eosfs) getUserFromID(ctx context.Context, userID *userpb.UserId) (*userpb.User, error) {
@@ -871,7 +872,7 @@ func encodeLock(l *provider.Lock) (string, error) {
 	return b64.StdEncoding.EncodeToString(data), nil
 }
 
-// RefreshLock refreshes an existing lock on the given reference
+// RefreshLock refreshes an existing lock on the given reference.
 func (fs *eosfs) RefreshLock(ctx context.Context, ref *provider.Reference, newLock *provider.Lock, existingLockID string) error {
 	if newLock.Type == provider.LockType_LOCK_TYPE_SHARED {
 		return errtypes.NotSupported("shared lock not yet implemented")
@@ -918,13 +919,7 @@ func (fs *eosfs) RefreshLock(ctx context.Context, ref *provider.Reference, newLo
 		return errtypes.PermissionDenied(fmt.Sprintf("user %s has not write access on resource", user.Username))
 	}
 
-	// set the xattr with the new value
-	auth, err := fs.getUserAuth(ctx, user, path)
-	if err != nil {
-		return errors.Wrap(err, "eosfs: error getting uid and gid for user")
-	}
-
-	return fs.setLock(ctx, auth, newLock, path, false)
+	return fs.setLock(ctx, newLock, path, false)
 }
 
 func sameHolder(l1, l2 *provider.Lock) bool {
@@ -938,7 +933,7 @@ func sameHolder(l1, l2 *provider.Lock) bool {
 	return same
 }
 
-// Unlock removes an existing lock from the given reference
+// Unlock removes an existing lock from the given reference.
 func (fs *eosfs) Unlock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
 	if lock.Type == provider.LockType_LOCK_TYPE_SHARED {
 		return errtypes.NotSupported("shared lock not yet implemented")
@@ -985,7 +980,7 @@ func (fs *eosfs) Unlock(ctx context.Context, ref *provider.Reference, lock *prov
 	}
 	path = fs.wrap(ctx, path)
 
-	auth, err := fs.getUserAuth(ctx, user, path)
+	auth, err := fs.getRootAuth(ctx)
 	if err != nil {
 		return errors.Wrap(err, "eosfs: error getting uid and gid for user")
 	}
@@ -1029,7 +1024,6 @@ func (fs *eosfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provi
 		return errors.Wrap(err, "eosfs: error adding acl")
 	}
 	return nil
-
 }
 
 func (fs *eosfs) DenyGrant(ctx context.Context, ref *provider.Reference, g *provider.Grantee) error {
@@ -1404,7 +1398,7 @@ func (fs *eosfs) listShareFolderRoot(ctx context.Context, p string) (finfos []*p
 	return finfos, nil
 }
 
-// CreateStorageSpace creates a storage space
+// CreateStorageSpace creates a storage space.
 func (fs *eosfs) CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error) {
 	return nil, fmt.Errorf("unimplemented: CreateStorageSpace")
 }
@@ -1637,7 +1631,7 @@ func (fs *eosfs) CreateDir(ctx context.Context, ref *provider.Reference) error {
 	return fs.c.CreateDir(ctx, auth, fn)
 }
 
-// TouchFile as defined in the storage.FS interface
+// TouchFile as defined in the storage.FS interface.
 func (fs *eosfs) TouchFile(ctx context.Context, ref *provider.Reference) error {
 	log := appctx.GetLogger(ctx)
 
@@ -1979,7 +1973,6 @@ func (fs *eosfs) ListRecycle(ctx context.Context, basePath, key, relativePath st
 			if hiddenReg.MatchString(base) {
 				continue
 			}
-
 		}
 		if recycleItem, err := fs.convertToRecycleItem(ctx, entry); err == nil {
 			recycleEntries = append(recycleEntries, recycleItem)
@@ -2026,7 +2019,7 @@ func (fs *eosfs) ListStorageSpaces(ctx context.Context, filter []*provider.ListS
 	return nil, errtypes.NotSupported("list storage spaces")
 }
 
-// UpdateStorageSpace updates a storage space
+// UpdateStorageSpace updates a storage space.
 func (fs *eosfs) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
 	return nil, errtypes.NotSupported("update storage space")
 }
@@ -2083,7 +2076,7 @@ func (fs *eosfs) convertToFileReference(ctx context.Context, eosFileInfo *eoscli
 	return info, nil
 }
 
-// permissionSet returns the permission set for the current user
+// permissionSet returns the permission set for the current user.
 func (fs *eosfs) permissionSet(ctx context.Context, eosFileInfo *eosclient.FileInfo, owner *userpb.UserId) *provider.ResourcePermissions {
 	u, ok := ctxpkg.ContextGetUser(ctx)
 	if !ok || u.Id == nil {
@@ -2250,6 +2243,7 @@ func (fs *eosfs) convert(ctx context.Context, eosFileInfo *eosclient.FileInfo) (
 		Etag:          fmt.Sprintf("\"%s\"", strings.Trim(eosFileInfo.ETag, "\"")),
 		MimeType:      mime.Detect(eosFileInfo.IsDir, path),
 		Size:          size,
+		ParentId:      &provider.ResourceId{OpaqueId: fmt.Sprintf("%d", eosFileInfo.FID)},
 		PermissionSet: fs.permissionSet(ctx, eosFileInfo, owner),
 		Checksum:      &xs,
 		Type:          getResourceType(eosFileInfo.IsDir),

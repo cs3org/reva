@@ -1,4 +1,4 @@
-// Copyright 2018-2020 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -126,7 +126,6 @@ const tplBody = `
 			Fields marked with <span class="mandatory">*</span> are mandatory.
 		</div>
 		<div style="grid-row: {{add $row 1}}; grid-column: 2; text-align: right;">
-			<button type="reset">Reset</button>
 			<button type="submit" style="font-weight: bold;">Save</button>
 		</div>
 	</form>

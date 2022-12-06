@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -451,7 +451,6 @@ func (s *svc) GetReceivedOCMShare(ctx context.Context, req *ocm.GetReceivedOCMSh
 }
 
 func (s *svc) createOCMReference(ctx context.Context, share *ocm.Share) (*rpc.Status, error) {
-
 	log := appctx.GetLogger(ctx)
 
 	var token string

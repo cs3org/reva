@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -33,7 +33,6 @@ const DefaultExpirationTime = "24h"
 
 // CreateToken creates a InviteToken object for the userID indicated by userID.
 func CreateToken(expiration string, userID *userpb.UserId) (*invitepb.InviteToken, error) {
-
 	// Parse time of expiration
 	duration, err := time.ParseDuration(expiration)
 	if err != nil {

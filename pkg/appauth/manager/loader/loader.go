@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,5 +21,5 @@ package loader
 import (
 	// Load core application auth manager drivers.
 	_ "github.com/cs3org/reva/pkg/appauth/manager/json"
-	// Add your own here
+	// Add your own here.
 )

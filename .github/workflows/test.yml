@@ -1,0 +1,20 @@
+name: Test
+on: [pull_request, push, workflow_dispatch]
+
+jobs:
+  test:
+    runs-on: self-hosted
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Setup Go environment
+        uses: actions/setup-go@v3.3.0
+        with:
+          go-version-file: go.mod
+      - name: Test
+        run: make test
+      - name: Test integration
+        run: make test-integration REDIS_ADDRESS=redis:6379
+    services:
+      redis:
+        image: registry.cern.ch/docker.io/webhippie/redis

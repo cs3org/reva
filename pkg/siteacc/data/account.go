@@ -1,7 +1,7 @@
-// Copyright 2018-2020 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this filePath except in compliance with the License.
+// you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
 //     http://www.apache.org/licenses/LICENSE-2.0
@@ -23,9 +23,8 @@ import (
 	"time"
 
 	"github.com/cs3org/reva/pkg/siteacc/credentials"
-	"github.com/pkg/errors"
-
 	"github.com/cs3org/reva/pkg/utils"
+	"github.com/pkg/errors"
 )
 
 // Account represents a single sites account.

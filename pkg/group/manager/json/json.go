@@ -1,4 +1,4 @@
-// Copyright 2018-2020 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,7 +21,7 @@ package json
 import (
 	"context"
 	"encoding/json"
-	"io/ioutil"
+	"os"
 	"strconv"
 	"strings"
 
@@ -70,7 +70,7 @@ func New(m map[string]interface{}) (group.Manager, error) {
 		return nil, err
 	}
 
-	f, err := ioutil.ReadFile(c.Groups)
+	f, err := os.ReadFile(c.Groups)
 	if err != nil {
 		return nil, err
 	}

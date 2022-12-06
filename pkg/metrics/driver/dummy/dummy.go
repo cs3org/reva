@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -34,27 +34,27 @@ func driverName() string {
 	return "dummy"
 }
 
-// MetricsDummyDriver the MetricsDummyDriver struct
+// MetricsDummyDriver the MetricsDummyDriver struct.
 type MetricsDummyDriver struct {
 }
 
-// Configure configures this driver
+// Configure configures this driver.
 func (d *MetricsDummyDriver) Configure(c *config.Config) error {
 	// no configuration necessary
 	return nil
 }
 
-// GetNumUsers returns the number of site users; it's a random number
+// GetNumUsers returns the number of site users; it's a random number.
 func (d *MetricsDummyDriver) GetNumUsers() int64 {
 	return int64(rand.Intn(30000))
 }
 
-// GetNumGroups returns the number of site groups; it's a random number
+// GetNumGroups returns the number of site groups; it's a random number.
 func (d *MetricsDummyDriver) GetNumGroups() int64 {
 	return int64(rand.Intn(200))
 }
 
-// GetAmountStorage returns the amount of site storage used; it's a random amount
+// GetAmountStorage returns the amount of site storage used; it's a random amount.
 func (d *MetricsDummyDriver) GetAmountStorage() int64 {
 	return rand.Int63n(70000000000)
 }

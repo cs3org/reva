@@ -1,4 +1,4 @@
-// Copyright 2018-2020 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,7 +23,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-// Credentials stores and en-/decrypts credentials
+// Credentials stores and en-/decrypts credentials.
 type Credentials struct {
 	ID     string `json:"id"`
 	Secret string `json:"secret"`

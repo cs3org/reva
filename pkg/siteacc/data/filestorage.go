@@ -1,7 +1,7 @@
-// Copyright 2018-2020 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this filePath except in compliance with the License.
+// you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
 //     http://www.apache.org/licenses/LICENSE-2.0
@@ -20,7 +20,6 @@ package data
 
 import (
 	"encoding/json"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 
@@ -70,7 +69,7 @@ func (storage *FileStorage) initialize(conf *config.Configuration, log *zerolog.
 
 func (storage *FileStorage) readData(file string, obj interface{}) error {
 	// Read the data from the specified file
-	jsonData, err := ioutil.ReadFile(file)
+	jsonData, err := os.ReadFile(file)
 	if err != nil {
 		return errors.Wrapf(err, "unable to read file %v", file)
 	}
@@ -103,7 +102,7 @@ func (storage *FileStorage) ReadAccounts() (*Accounts, error) {
 func (storage *FileStorage) writeData(file string, obj interface{}) error {
 	// Write the data to the specified file
 	jsonData, _ := json.MarshalIndent(obj, "", "\t")
-	if err := ioutil.WriteFile(file, jsonData, 0755); err != nil {
+	if err := os.WriteFile(file, jsonData, 0755); err != nil {
 		return errors.Wrapf(err, "unable to write file %v", file)
 	}
 	return nil

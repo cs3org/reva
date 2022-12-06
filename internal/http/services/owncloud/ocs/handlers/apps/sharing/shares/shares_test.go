@@ -1,4 +1,4 @@
-// Copyright 2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,7 +14,8 @@
 //
 // In applying this license, CERN does not waive the privileges and immunities
 // granted to it by virtue of its status as an Intergovernmental Organization
-// or submit itself to any jurisdiction.package shares
+// or submit itself to any jurisdiction.
+
 package shares
 
 import (

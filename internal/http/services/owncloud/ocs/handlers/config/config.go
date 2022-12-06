@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,12 +26,12 @@ import (
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
 )
 
-// Handler renders the config endpoint
+// Handler renders the config endpoint.
 type Handler struct {
 	c data.ConfigData
 }
 
-// Init initializes this and any contained handlers
+// Init initializes this and any contained handlers.
 func (h *Handler) Init(c *config.Config) {
 	h.c = c.Config
 	// config
@@ -52,7 +52,7 @@ func (h *Handler) Init(c *config.Config) {
 	}
 }
 
-// Handler renders the config
+// GetConfig renders the config.
 func (h *Handler) GetConfig(w http.ResponseWriter, r *http.Request) {
 	response.WriteOCSSuccess(w, r, h.c)
 }

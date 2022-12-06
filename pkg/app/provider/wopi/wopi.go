@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,11 +24,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
 	"path"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -36,16 +36,21 @@ import (
 	"github.com/beevik/etree"
 	appprovider "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
 	appregistry "github.com/cs3org/go-cs3apis/cs3/app/registry/v1beta1"
+	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/app"
 	"github.com/cs3org/reva/pkg/app/provider/registry"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/auth/scope"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/mime"
+	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/sharedconf"
+	"github.com/cs3org/reva/pkg/utils"
 	"github.com/golang-jwt/jwt"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
@@ -56,17 +61,18 @@ func init() {
 }
 
 type config struct {
-	IOPSecret           string `mapstructure:"iop_secret" docs:";The IOP secret used to connect to the wopiserver."`
-	WopiURL             string `mapstructure:"wopi_url" docs:";The wopiserver's URL."`
-	AppName             string `mapstructure:"app_name" docs:";The App user-friendly name."`
-	AppIconURI          string `mapstructure:"app_icon_uri" docs:";A URI to a static asset which represents the app icon."`
-	AppURL              string `mapstructure:"app_url" docs:";The App URL."`
-	AppIntURL           string `mapstructure:"app_int_url" docs:";The internal app URL in case of dockerized deployments. Defaults to AppURL"`
-	AppAPIKey           string `mapstructure:"app_api_key" docs:";The API key used by the app, if applicable."`
-	JWTSecret           string `mapstructure:"jwt_secret" docs:";The JWT secret to be used to retrieve the token TTL."`
-	CustomMimeTypesJSON string `mapstructure:"custom_mime_types_json" docs:"nil;An optional mapping file with the list of supported custom file extensions and corresponding mime types."`
-	AppDesktopOnly      bool   `mapstructure:"app_desktop_only" docs:"false;Specifies if the app can be opened only on desktop."`
-	InsecureConnections bool   `mapstructure:"insecure_connections"`
+	MimeTypes           []string `mapstructure:"mime_types" docs:"nil;Inherited from the appprovider."`
+	IOPSecret           string   `mapstructure:"iop_secret" docs:";The IOP secret used to connect to the wopiserver."`
+	WopiURL             string   `mapstructure:"wopi_url" docs:";The wopiserver's URL."`
+	AppName             string   `mapstructure:"app_name" docs:";The App user-friendly name."`
+	AppIconURI          string   `mapstructure:"app_icon_uri" docs:";A URI to a static asset which represents the app icon."`
+	FolderBaseURL       string   `mapstructure:"folder_base_url" docs:";The base URL to generate links to navigate back to the containing folder."`
+	AppURL              string   `mapstructure:"app_url" docs:";The App URL."`
+	AppIntURL           string   `mapstructure:"app_int_url" docs:";The internal app URL in case of dockerized deployments. Defaults to AppURL"`
+	AppAPIKey           string   `mapstructure:"app_api_key" docs:";The API key used by the app, if applicable."`
+	JWTSecret           string   `mapstructure:"jwt_secret" docs:";The JWT secret to be used to retrieve the token TTL."`
+	AppDesktopOnly      bool     `mapstructure:"app_desktop_only" docs:"false;Specifies if the app can be opened only on desktop."`
+	InsecureConnections bool     `mapstructure:"insecure_connections"`
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -112,12 +118,6 @@ func New(m map[string]interface{}) (app.Provider, error) {
 		return http.ErrUseLastResponse
 	}
 
-	// read and register custom mime types if configured
-	err = registerMimeTypes(c.CustomMimeTypesJSON)
-	if err != nil {
-		return nil, err
-	}
-
 	return &wopiProvider{
 		conf:       c,
 		wopiClient: wopiClient,
@@ -125,7 +125,7 @@ func New(m map[string]interface{}) (app.Provider, error) {
 	}, nil
 }
 
-func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.ResourceInfo, viewMode appprovider.OpenInAppRequest_ViewMode, token, language string) (*appprovider.OpenInAppURL, error) {
+func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.ResourceInfo, viewMode appprovider.OpenInAppRequest_ViewMode, token string, opaqueMap map[string]*typespb.OpaqueEntry, language string) (*appprovider.OpenInAppURL, error) {
 	log := appctx.GetLogger(ctx)
 
 	ext := path.Ext(resource.Path)
@@ -135,7 +135,7 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 	}
 	wopiurl.Path = path.Join(wopiurl.Path, "/wopi/iop/openinapp")
 
-	httpReq, err := rhttp.NewRequest(ctx, "GET", wopiurl.String(), nil)
+	httpReq, err := rhttp.NewRequest(ctx, http.MethodGet, wopiurl.String(), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -147,18 +147,45 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 	q.Add("appname", p.conf.AppName)
 
 	u, ok := ctxpkg.ContextGetUser(ctx)
-	if ok { // else username defaults to "Guest xyz"
-		if u.Id.Type == userpb.UserType_USER_TYPE_LIGHTWEIGHT || u.Id.Type == userpb.UserType_USER_TYPE_FEDERATED {
-			q.Add("userid", resource.Owner.OpaqueId+"@"+resource.Owner.Idp)
-		} else {
-			q.Add("userid", u.Id.OpaqueId+"@"+u.Id.Idp)
-		}
+	if !ok {
+		// we must have been authenticated
+		return nil, errors.New("wopi: ContextGetUser failed")
+	}
+	if u.Id.Type == userpb.UserType_USER_TYPE_LIGHTWEIGHT || u.Id.Type == userpb.UserType_USER_TYPE_FEDERATED {
+		q.Add("userid", resource.Owner.OpaqueId+"@"+resource.Owner.Idp)
+	} else {
+		q.Add("userid", u.Id.OpaqueId+"@"+u.Id.Idp)
+	}
+	q.Add("username", u.DisplayName)
 
-		q.Add("username", u.DisplayName)
-		if u.Opaque != nil {
-			if _, ok := u.Opaque.Map["public-share-role"]; ok {
-				q.Del("username") // on public shares default to "Guest xyz"
-			}
+	scopes, ok := ctxpkg.ContextGetScopes(ctx)
+	if !ok {
+		// we must find at least one scope (as owner or sharee)
+		return nil, errors.New("wopi: ContextGetScopes failed")
+	}
+
+	// TODO (lopresti) consolidate with the templating implemented in the edge branch;
+	// here we assume the FolderBaseURL looks like `https://<hostname>` and we
+	// either append `/files/spaces/<full_path>` or `/s/<pltoken>/<relative_path>`
+	var rPath string
+	if _, ok := utils.HasPublicShareRole(u); ok {
+		// we are in a public link
+		q.Del("username") // on public shares default to "Guest xyz"
+		var err error
+		rPath, err = getPathForPublicLink(ctx, scopes, resource)
+		if err != nil {
+			log.Warn().Err(err).Msg("wopi: failed to extract relative path from public link scope")
+		}
+	} else {
+		// in all other cases use the resource's path
+		rPath = "/files/spaces/" + path.Dir(resource.Path)
+	}
+	if rPath != "" {
+		fu, err := url.JoinPath(p.conf.FolderBaseURL, rPath)
+		if err != nil {
+			log.Error().Err(err).Msg("wopi: failed to prepare folderurl parameter, folder_base_url may be malformed")
+		} else {
+			q.Add("folderurl", fu)
 		}
 	}
 
@@ -168,7 +195,7 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 			q.Add("appviewurl", viewAppURL)
 		}
 	}
-	var access string = "edit"
+	var access = "edit"
 	if resource.GetSize() == 0 {
 		if _, ok := p.appURLs["editnew"]; ok {
 			access = "editnew"
@@ -189,9 +216,13 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 	if q.Get("appurl") == "" && q.Get("appviewurl") == "" {
 		return nil, errors.New("wopi: neither edit nor view app url found")
 	}
-
 	if p.conf.AppIntURL != "" {
 		q.Add("appinturl", p.conf.AppIntURL)
+	}
+
+	if _, ok := opaqueMap["forcelock"]; ok {
+		// this is to work around an issue with Microsoft Office, cf. cs3org/wopiserver#106
+		q.Add("forcelock", "1")
 	}
 
 	httpReq.URL.RawQuery = q.Encode()
@@ -203,15 +234,15 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 	httpReq.Header.Set("Authorization", "Bearer "+p.conf.IOPSecret)
 	httpReq.Header.Set("TokenHeader", token)
 
-	log.Debug().Str("url", httpReq.URL.String()).Msg("Sending request to wopi server")
+	log.Debug().Str("url", httpReq.URL.String()).Msg("Sending request to wopiserver")
 	// Call the WOPI server and parse the response (body will always contain a payload)
 	openRes, err := p.wopiClient.Do(httpReq)
 	if err != nil {
-		return nil, errors.Wrap(err, "wopi: error performing open request to WOPI server")
+		return nil, errors.Wrap(err, "wopi: error performing open request to wopiserver")
 	}
 	defer openRes.Body.Close()
 
-	body, err := ioutil.ReadAll(openRes.Body)
+	body, err := io.ReadAll(openRes.Body)
 	if err != nil {
 		return nil, err
 	}
@@ -221,7 +252,7 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 		if body != nil {
 			sbody = string(body)
 		}
-		log.Warn().Msg(fmt.Sprintf("wopi: WOPI server returned HTTP %s to request %s, error was: %s", openRes.Status, httpReq.URL.String(), sbody))
+		log.Warn().Str("status", openRes.Status).Str("error", sbody).Msg("wopi: wopiserver returned error")
 		return nil, errors.New(sbody)
 	}
 
@@ -251,21 +282,21 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 		appFullURL = url.String()
 	}
 
-	// Depending on whether wopi server returned any form parameters or not,
+	// Depending on whether the WOPI server returned any form parameters or not,
 	// we decide whether the request method is POST or GET
 	var formParams map[string]string
-	method := "GET"
+	method := http.MethodGet
 	if form, ok := result["form-parameters"].(map[string]interface{}); ok {
 		if tkn, ok := form["access_token"].(string); ok {
 			formParams = map[string]string{
 				"access_token":     tkn,
 				"access_token_ttl": tokenTTL,
 			}
-			method = "POST"
+			method = http.MethodPost
 		}
 	}
 
-	log.Info().Msg(fmt.Sprintf("wopi: returning app URL %s", appFullURL))
+	log.Info().Str("url", appFullURL).Str("resource", resource.Path).Msg("wopi: returning URL for file")
 	return &appprovider.OpenInAppURL{
 		AppUrl:         appFullURL,
 		Method:         method,
@@ -296,27 +327,6 @@ func (p *wopiProvider) GetAppProviderInfo(ctx context.Context) (*appregistry.Pro
 	}, nil
 }
 
-func registerMimeTypes(mappingFile string) error {
-	// TODO(lopresti) this function also exists in the storage provider, to be seen if we want to factor it out, though a
-	// fileext <-> mimetype "service" would have to be served by the gateway for it to be accessible both by storage providers and app providers.
-	if mappingFile != "" {
-		f, err := ioutil.ReadFile(mappingFile)
-		if err != nil {
-			return fmt.Errorf("storageprovider: error reading the custom mime types file: +%v", err)
-		}
-		mimeTypes := map[string]string{}
-		err = json.Unmarshal(f, &mimeTypes)
-		if err != nil {
-			return fmt.Errorf("storageprovider: error unmarshalling the custom mime types file: +%v", err)
-		}
-		// register all mime types that were read
-		for e, m := range mimeTypes {
-			mime.RegisterMime(e, m)
-		}
-	}
-	return nil
-}
-
 func getAppURLs(c *config) (map[string]map[string]string, error) {
 	// Initialize WOPI URLs by discovery
 	httpcl := rhttp.GetHTTPClient(
@@ -330,7 +340,7 @@ func getAppURLs(c *config) (map[string]map[string]string, error) {
 	}
 	appurl.Path = path.Join(appurl.Path, "/hosting/discovery")
 
-	discReq, err := http.NewRequest("GET", appurl.String(), nil)
+	discReq, err := http.NewRequest(http.MethodGet, appurl.String(), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -349,7 +359,7 @@ func getAppURLs(c *config) (map[string]map[string]string, error) {
 		}
 	} else if discRes.StatusCode == http.StatusNotFound {
 		// this may be a bridge-supported app
-		discReq, err = http.NewRequest("GET", c.AppIntURL, nil)
+		discReq, err = http.NewRequest(http.MethodGet, c.AppIntURL, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -367,18 +377,22 @@ func getAppURLs(c *config) (map[string]map[string]string, error) {
 
 		// scrape app's home page to find the appname
 		if !strings.Contains(buf.String(), c.AppName) {
-			return nil, errors.New("Application server at " + c.AppURL + " does not match this AppProvider for " + c.AppName)
+			return nil, fmt.Errorf("wopi: application server at %s does not match this AppProvider for %s", c.AppURL, c.AppName)
 		}
 
-		// register the supported mimetypes in the AppRegistry: this is hardcoded for the time being
-		// TODO(lopresti) move to config
-		switch c.AppName {
-		case "CodiMD":
-			appURLs = getCodimdExtensions(c.AppURL)
-		case "Etherpad":
-			appURLs = getEtherpadExtensions(c.AppURL)
-		default:
-			return nil, errors.New("Application server " + c.AppName + " running at " + c.AppURL + " is unsupported")
+		// TODO(lopresti) we don't know if the app is not supported/configured in WOPI
+		// return nil, errors.New("Application server " + c.AppName + " running at " + c.AppURL + " is unsupported")
+
+		// generate the map of supported extensions
+		appURLs = make(map[string]map[string]string)
+		appURLs["view"] = make(map[string]string)
+		appURLs["edit"] = make(map[string]string)
+		for _, m := range c.MimeTypes {
+			exts := mime.GetFileExts(m)
+			for _, e := range exts {
+				appURLs["view"]["."+e] = c.AppURL
+				appURLs["edit"]["."+e] = c.AppURL
+			}
 		}
 	}
 	return appURLs, nil
@@ -394,7 +408,7 @@ func (p *wopiProvider) getAccessTokenTTL(ctx context.Context) (string, error) {
 	}
 
 	if claims, ok := token.Claims.(*jwt.StandardClaims); ok && token.Valid {
-		// milliseconds since Jan 1, 1970 UTC as required in https://wopi.readthedocs.io/projects/wopirest/en/latest/concepts.html?highlight=access_token_ttl#term-access-token-ttl
+		// milliseconds since Jan 1, 1970 UTC as required in https://learn.microsoft.com/en-us/microsoft-365/cloud-storage-partner-program/rest/concepts#the-access_token_ttl-property
 		return strconv.FormatInt(claims.ExpiresAt*1000, 10), nil
 	}
 
@@ -409,9 +423,11 @@ func parseWopiDiscovery(body io.Reader) (map[string]map[string]string, error) {
 		return nil, err
 	}
 	root := doc.SelectElement("wopi-discovery")
+	if root == nil {
+		return nil, errors.New("wopi-discovery response malformed")
+	}
 
 	for _, netzone := range root.SelectElements("net-zone") {
-
 		if strings.Contains(netzone.SelectAttrValue("name", ""), "external") {
 			for _, app := range netzone.SelectElements("app") {
 				for _, action := range app.SelectElements("action") {
@@ -454,23 +470,39 @@ func parseWopiDiscovery(body io.Reader) (map[string]map[string]string, error) {
 	return appURLs, nil
 }
 
-func getCodimdExtensions(appURL string) map[string]map[string]string {
-	// Register custom mime types
-	mime.RegisterMime(".zmd", "application/compressed-markdown")
-
-	appURLs := make(map[string]map[string]string)
-	appURLs["edit"] = map[string]string{
-		".txt": appURL,
-		".md":  appURL,
-		".zmd": appURL,
+func getPathForPublicLink(ctx context.Context, scopes map[string]*authpb.Scope, resource *provider.ResourceInfo) (string, error) {
+	pubShares, err := scope.GetPublicSharesFromScopes(scopes)
+	if err != nil {
+		return "", err
 	}
-	return appURLs
-}
-
-func getEtherpadExtensions(appURL string) map[string]map[string]string {
-	appURLs := make(map[string]map[string]string)
-	appURLs["edit"] = map[string]string{
-		".epd": appURL,
+	if len(pubShares) > 1 {
+		return "", errors.New("More than one public share found in the scope, lookup not implemented")
 	}
-	return appURLs
+
+	client, err := pool.GetGatewayServiceClient(pool.Endpoint(sharedconf.GetGatewaySVC("")))
+	if err != nil {
+		return "", err
+	}
+	statRes, err := client.Stat(ctx, &provider.StatRequest{
+		Ref: &provider.Reference{
+			ResourceId: pubShares[0].ResourceId,
+		},
+	})
+	if err != nil {
+		return "", err
+	}
+
+	if statRes.Info.Path == resource.Path {
+		// this is a direct link to the resource
+		return "/s/" + pubShares[0].Token, nil
+	}
+	// otherwise we are in a subfolder of the public link
+	relPath, err := filepath.Rel(statRes.Info.Path, resource.Path)
+	if err != nil {
+		return "", err
+	}
+	if strings.HasPrefix(relPath, "../") {
+		return "", errors.New("Scope path does not contain target resource")
+	}
+	return path.Join("/files/public/show/"+pubShares[0].Token, path.Dir(relPath)), nil
 }

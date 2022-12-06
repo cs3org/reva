@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -31,7 +31,7 @@ const (
 )
 
 // OwnCloudResourceIDUnwrap returns the wrapped resource id
-// by OwnCloudResourceIDWrap and returns nil if not possible
+// by OwnCloudResourceIDWrap and returns nil if not possible.
 func OwnCloudResourceIDUnwrap(rid string) *provider.ResourceId {
 	id, err := unwrap(rid)
 	if err != nil {
@@ -57,14 +57,14 @@ func unwrap(rid string) (*provider.ResourceId, error) {
 }
 
 // OwnCloudResourceIDWrap wraps a resource id into a xml safe string
-// which can then be passed to the outside world
+// which can then be passed to the outside world.
 func OwnCloudResourceIDWrap(r *provider.ResourceId) string {
 	return wrap(r.StorageId, r.OpaqueId)
 }
 
 // The storageID and OpaqueID need to be separated by a delimiter
 // this delimiter should be Url safe
-// we use a reserved character
+// we use a reserved character.
 func wrap(sid string, oid string) string {
 	return sid + idDelimiter + oid
 }

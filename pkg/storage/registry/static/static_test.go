@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,7 +26,6 @@ import (
 	registrypb "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/storage/registry/static"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )

@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -47,14 +47,14 @@ type Manager struct {
 	endPoint     string
 }
 
-// AuthManagerConfig contains config for a Nextcloud-based AuthManager
+// AuthManagerConfig contains config for a Nextcloud-based AuthManager.
 type AuthManagerConfig struct {
 	EndPoint     string `mapstructure:"endpoint" docs:";The Nextcloud backend endpoint for user check"`
 	SharedSecret string `mapstructure:"shared_secret"`
 	MockHTTP     bool   `mapstructure:"mock_http"`
 }
 
-// Action describes a REST request to forward to the Nextcloud backend
+// Action describes a REST request to forward to the Nextcloud backend.
 type Action struct {
 	verb     string
 	username string
@@ -84,7 +84,7 @@ func New(m map[string]interface{}) (auth.Manager, error) {
 	return NewAuthManager(c)
 }
 
-// NewAuthManager returns a new Nextcloud-based AuthManager
+// NewAuthManager returns a new Nextcloud-based AuthManager.
 func NewAuthManager(c *AuthManagerConfig) (*Manager, error) {
 	var client *http.Client
 	if c.MockHTTP {
@@ -113,7 +113,7 @@ func (am *Manager) Configure(ml map[string]interface{}) error {
 	return nil
 }
 
-// SetHTTPClient sets the HTTP client
+// SetHTTPClient sets the HTTP client.
 func (am *Manager) SetHTTPClient(c *http.Client) {
 	am.client = c
 }

@@ -1,4 +1,4 @@
-// Copyright 2018-2020 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,7 +21,7 @@ package gocdb
 import (
 	"bytes"
 	"encoding/json"
-	"io/ioutil"
+	"io"
 	"net/http"
 
 	"github.com/cs3org/reva/pkg/mentix/utils/network"
@@ -77,8 +77,8 @@ func writeAccount(account *data.Account, operation string, address string, apiKe
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode >= 400 {
-		msg, _ := ioutil.ReadAll(resp.Body)
+	if resp.StatusCode >= http.StatusBadRequest {
+		msg, _ := io.ReadAll(resp.Body)
 		return errors.Errorf("unable to perform request: %v", string(msg))
 	}
 

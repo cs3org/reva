@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,12 +23,11 @@ import (
 
 	"github.com/asim/go-micro/plugins/events/nats/v4"
 	"github.com/cenkalti/backoff"
-	"go-micro.dev/v4/events"
-
 	stanServer "github.com/nats-io/nats-streaming-server/server"
+	"go-micro.dev/v4/events"
 )
 
-// RunNatsServer runs the nats streaming server
+// RunNatsServer runs the nats streaming server.
 func RunNatsServer(opts ...Option) error {
 	natsOpts := stanServer.DefaultNatsServerOptions
 	stanOpts := stanServer.GetDefaultOptions()
@@ -41,7 +40,7 @@ func RunNatsServer(opts ...Option) error {
 }
 
 // NewNatsStream returns a streaming client used by `Consume` and `Publish` methods
-// retries exponentially to connect to a nats server
+// retries exponentially to connect to a nats server.
 func NewNatsStream(opts ...nats.Option) (events.Stream, error) {
 	b := backoff.NewExponentialBackOff()
 	var stream events.Stream

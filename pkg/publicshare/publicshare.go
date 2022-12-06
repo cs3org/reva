@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -118,7 +118,7 @@ func MatchesAnyFilter(share *link.PublicShare, filters []*link.ListPublicSharesR
 // MatchesFilters checks if the share passes the given filters.
 // Filters of the same type form a disjuntion, a logical OR. Filters of separate type form a conjunction, a logical AND.
 // Here is an example:
-// (resource_id=1 OR resource_id=2) AND (grantee_type=USER OR grantee_type=GROUP)
+// (resource_id=1 OR resource_id=2) AND (grantee_type=USER OR grantee_type=GROUP).
 func MatchesFilters(share *link.PublicShare, filters []*link.ListPublicSharesRequest_Filter) bool {
 	grouped := GroupFiltersByType(filters)
 	for _, f := range grouped {
@@ -138,7 +138,7 @@ func GroupFiltersByType(filters []*link.ListPublicSharesRequest_Filter) map[link
 	return grouped
 }
 
-// IsExpired tests whether a public share is expired
+// IsExpired tests whether a public share is expired.
 func IsExpired(s *link.PublicShare) bool {
 	expiration := time.Unix(int64(s.Expiration.GetSeconds()), int64(s.Expiration.GetNanos()))
 	return s.Expiration != nil && expiration.Before(time.Now())

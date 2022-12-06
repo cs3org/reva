@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,7 +26,7 @@ import (
 	"github.com/cs3org/reva/pkg/events"
 )
 
-// Example publishes events to the queue
+// Example publishes events to the queue.
 func Example(p events.Publisher) {
 	// nothing to do - just publish!
 	err := events.Publish(p, events.ShareCreated{
@@ -40,5 +40,4 @@ func Example(p events.Publisher) {
 	if err != nil {
 		log.Fatal(err)
 	}
-
 }

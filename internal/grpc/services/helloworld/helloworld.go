@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -42,7 +42,7 @@ type service struct {
 
 // New returns a new PreferencesServiceServer
 // It can be tested like this:
-// prototool grpc --address 0.0.0.0:9999 --method 'revad.helloworld.HelloWorldService/Hello' --data '{"name": "Alice"}'
+// prototool grpc --address 0.0.0.0:9999 --method 'revad.helloworld.HelloWorldService/Hello' --data '{"name": "Alice"}'.
 func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 	c := &conf{}
 	if err := mapstructure.Decode(m, c); err != nil {

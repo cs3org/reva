@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -40,7 +40,7 @@ import (
 	"go.opentelemetry.io/otel/propagation"
 )
 
-// New returns a new server
+// New returns a new server.
 func New(m interface{}, l zerolog.Logger) (*Server, error) {
 	conf := &config{}
 	if err := mapstructure.Decode(m, conf); err != nil {
@@ -93,7 +93,7 @@ func (c *config) init() {
 	}
 }
 
-// Start starts the server
+// Start starts the server.
 func (s *Server) Start(ln net.Listener) error {
 	if err := s.registerServices(); err != nil {
 		return err
@@ -236,7 +236,7 @@ func getUnprotected(prefix string, unprotected []string) []string {
 
 // clean the url putting a slash (/) at the beginning if it does not have it
 // and removing the slashes at the end
-// if the url is "/", the output is ""
+// if the url is "/", the output is "".
 func cleanURL(url string) string {
 	if len(url) > 0 {
 		if url[0] != '/' {

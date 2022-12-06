@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -78,7 +78,7 @@ const (
 	HeaderTransferAuth         = "TransferHeaderAuthorization"
 )
 
-// WebDavHandler implements a dav endpoint
+// WebDavHandler implements a dav endpoint.
 type WebDavHandler struct {
 	namespace         string
 	useLoggedInUserNS bool
@@ -90,7 +90,7 @@ func (h *WebDavHandler) init(ns string, useLoggedInUserNS bool) error {
 	return nil
 }
 
-// Handler handles requests
+// Handler handles requests.
 func (h *WebDavHandler) Handler(s *svc) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ns := applyLayout(r.Context(), h.namespace, h.useLoggedInUserNS, r.URL.Path)

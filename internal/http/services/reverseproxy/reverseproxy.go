@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,10 +20,10 @@ package reverseproxy
 
 import (
 	"encoding/json"
-	"io/ioutil"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"os"
 
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/rhttp/global"
@@ -55,7 +55,7 @@ type svc struct {
 	router *chi.Mux
 }
 
-// New returns an instance of the reverse proxy service
+// New returns an instance of the reverse proxy service.
 func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) {
 	conf := &config{}
 	if err := mapstructure.Decode(m, conf); err != nil {
@@ -63,7 +63,7 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 	}
 	conf.init()
 
-	f, err := ioutil.ReadFile(conf.ProxyRulesJSON)
+	f, err := os.ReadFile(conf.ProxyRulesJSON)
 	if err != nil {
 		return nil, err
 	}

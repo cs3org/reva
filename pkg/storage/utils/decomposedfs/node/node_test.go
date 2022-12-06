@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,7 +24,6 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/node"
 	helpers "github.com/cs3org/reva/pkg/storage/utils/decomposedfs/testhelpers"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )

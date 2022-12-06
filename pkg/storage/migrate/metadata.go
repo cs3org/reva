@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -33,7 +33,7 @@ import (
 	storageprovider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 )
 
-// metaData representation in the import data
+// metaData representation in the import data.
 type metaData struct {
 	Type        string `json:"type"`
 	Path        string `json:"path"`
@@ -43,9 +43,8 @@ type metaData struct {
 }
 
 // ImportMetadata from a files.jsonl file in exportPath. The files must already be present on the storage
-// Will set etag and mtime
+// Will set etag and mtime.
 func ImportMetadata(ctx context.Context, client gateway.GatewayAPIClient, exportPath string, ns string) error {
-
 	filesJSONL, err := os.Open(path.Join(exportPath, "files.jsonl"))
 	if err != nil {
 		return err
@@ -92,7 +91,6 @@ func ImportMetadata(ctx context.Context, client gateway.GatewayAPIClient, export
 		} else {
 			log.Print("no etag or mtime for : " + fileData.Path)
 		}
-
 	}
 	return nil
 }

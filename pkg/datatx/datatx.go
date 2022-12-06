@@ -1,4 +1,4 @@
-// Copyright 2018-2020 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,10 +24,11 @@ import (
 	datatx "github.com/cs3org/go-cs3apis/cs3/tx/v1beta1"
 )
 
-// Manager the interface any transfer driver should implement
+// Manager the interface any transfer driver should implement.
 type Manager interface {
-	// StartTransfer initiates a transfer job and returns a TxInfo object including a unique transfer id, and error if any.
-	StartTransfer(ctx context.Context, srcRemote string, srcPath string, srcToken string, destRemote string, destPath string, destToken string) (*datatx.TxInfo, error)
+	// CreateTransfer creates a transfer job and returns a TxInfo object that includes a unique transfer id.
+	// Specified target URIs are of form scheme://userinfo@host:port?name={path}
+	CreateTransfer(ctx context.Context, srcTargetURI string, dstTargetURI string) (*datatx.TxInfo, error)
 	// GetTransferStatus returns a TxInfo object including the current status, and error if any.
 	GetTransferStatus(ctx context.Context, transferID string) (*datatx.TxInfo, error)
 	// CancelTransfer cancels the transfer and returns a TxInfo object and error if any.

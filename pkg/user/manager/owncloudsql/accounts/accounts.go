@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,7 +28,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-// Accounts represents oc10-style Accounts
+// Accounts represents oc10-style Accounts.
 type Accounts struct {
 	driver                                     string
 	db                                         *sql.DB
@@ -36,7 +36,7 @@ type Accounts struct {
 	selectSQL                                  string
 }
 
-// NewMysql returns a new Cache instance connecting to a MySQL database
+// NewMysql returns a new Cache instance connecting to a MySQL database.
 func NewMysql(dsn string, joinUsername, joinUUID, enableMedialSearch bool) (*Accounts, error) {
 	sqldb, err := sql.Open("mysql", dsn)
 	if err != nil {
@@ -54,9 +54,8 @@ func NewMysql(dsn string, joinUsername, joinUUID, enableMedialSearch bool) (*Acc
 	return New("mysql", sqldb, joinUsername, joinUUID, enableMedialSearch)
 }
 
-// New returns a new Cache instance connecting to the given sql.DB
+// New returns a new Cache instance connecting to the given sql.DB.
 func New(driver string, sqldb *sql.DB, joinUsername, joinUUID, enableMedialSearch bool) (*Accounts, error) {
-
 	sel := "SELECT id, email, user_id, display_name, quota, last_login, backend, home, state"
 	from := `
 		FROM oc_accounts a
@@ -117,12 +116,12 @@ func (as *Accounts) rowToAccount(ctx context.Context, row Scannable) (*Account, 
 	return &a, nil
 }
 
-// Scannable describes the interface providing a Scan method
+// Scannable describes the interface providing a Scan method.
 type Scannable interface {
 	Scan(...interface{}) error
 }
 
-// GetAccountByClaim fetches an account by mail, username or userid
+// GetAccountByClaim fetches an account by mail, username or userid.
 func (as *Accounts) GetAccountByClaim(ctx context.Context, claim, value string) (*Account, error) {
 	// TODO align supported claims with rest driver and the others, maybe refactor into common mapping
 	var row *sql.Row
@@ -201,7 +200,7 @@ func (as *Accounts) FindAccounts(ctx context.Context, query string) ([]Account, 
 	return accounts, nil
 }
 
-// GetAccountGroups lasts the groups for an account
+// GetAccountGroups lasts the groups for an account.
 func (as *Accounts) GetAccountGroups(ctx context.Context, uid string) ([]string, error) {
 	rows, err := as.db.QueryContext(ctx, "SELECT gid FROM oc_group_user WHERE uid=?", uid)
 	if err != nil {
