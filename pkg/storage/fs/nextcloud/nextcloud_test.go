@@ -440,13 +440,13 @@ var _ = Describe("Nextcloud", func() {
 					StorageId: "storage-id",
 					OpaqueId:  "opaque-id",
 				},
-				Path: "some/file/path.txt",
+				Path: "/some/file/path.txt",
 			}
 			stringReader := strings.NewReader("shiny!")
 			stringReadCloser := io.NopCloser(stringReader)
 			err := nc.Upload(ctx, ref, stringReadCloser)
 			Expect(err).ToNot(HaveOccurred())
-			checkCalled(called, `PUT /apps/sciencemesh/~tester/api/storage/Upload/some/file/path.txt shiny!`)
+			checkCalled(called, `PUT /apps/sciencemesh/~tester/api/storage/Upload/home/some/file/path.txt shiny!`)
 		})
 	})
 	// Download(ctx context.Context, ref *provider.Reference) (io.ReadCloser, error)
