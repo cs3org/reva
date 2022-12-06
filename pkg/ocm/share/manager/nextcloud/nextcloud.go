@@ -108,15 +108,11 @@ type ShareAltMap struct {
 	Mtime       *typespb.Timestamp    `json:"mtime"`
 }
 
-<<<<<<< HEAD
 func genID() string {
 	return uuid.New().String()
 }
 
-// ReceivedShareAltMap is an alternative map to JSON-unmarshal a ReceivedShare
-=======
 // ReceivedShareAltMap is an alternative map to JSON-unmarshal a ReceivedShare.
->>>>>>> origin/master
 type ReceivedShareAltMap struct {
 	Share *ShareAltMap   `json:"share"`
 	State ocm.ShareState `json:"state"`
@@ -580,12 +576,8 @@ func (sm *Manager) ListReceivedShares(ctx context.Context) ([]*ocm.ReceivedShare
 			}
 		}
 	}
-<<<<<<< HEAD
 	return pointersReceivedShare, err
 
-=======
-	return pointers, err
->>>>>>> origin/master
 }
 
 // GetReceivedShare as defined in the ocm.share.Manager interface

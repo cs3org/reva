@@ -66,14 +66,10 @@ func Send(ctx context.Context, requestBodyMap map[string]interface{}, pi *ocmpro
 	u.Path = path.Join(u.Path, createOCMCoreShareEndpoint)
 	recipientURL := u.String()
 
-<<<<<<< HEAD
 	log := appctx.GetLogger(ctx)
 	log.Info().Msgf("in OCM Send! %s %s", recipientURL, requestBody)
 
-	req, err := http.NewRequest("POST", recipientURL, strings.NewReader(string(requestBody)))
-=======
 	req, err := http.NewRequest(http.MethodPost, recipientURL, strings.NewReader(string(requestBody)))
->>>>>>> origin/master
 	if err != nil {
 		return errors.Wrap(err, "sender: error framing post request")
 	}
