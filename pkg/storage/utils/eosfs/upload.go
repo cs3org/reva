@@ -59,11 +59,14 @@ func (fs *eosfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadC
 		r = fd
 	}
 
-	fn := fs.wrap(ctx, p)
-
 	u, err := getUser(ctx)
 	if err != nil {
 		return provider.ResourceInfo{}, errors.Wrap(err, "eos: no user in ctx")
+	}
+
+	fn, err := fs.wrap(ctx, p, u)
+	if err != nil {
+		return provider.ResourceInfo{}, err
 	}
 
 	// We need the auth corresponding to the parent directory

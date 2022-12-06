@@ -146,11 +146,14 @@ func (fs *eosfs) listPersonalStorageSpaces(ctx context.Context, u *userpb.User, 
 			return nil, err
 		}
 	default:
-		fn := fs.wrap(ctx, spacePath)
+		fn, err := fs.wrap(ctx, spacePath, u)
+		if err != nil {
+			return nil, err
+		}
 
 		// TODO: extract spacePath from filePath
 		p := strings.Split(fn, "/")
-		for len(p) > 3 {
+		for len(p) > 4 {
 			fn = path.Dir(fn)
 			p = strings.Split(fn, "/")
 		}
@@ -329,7 +332,7 @@ func (fs *eosfs) CreateStorageSpace(ctx context.Context, req *provider.CreateSto
 			return nil, err
 		}
 
-		err = fs.createNominalHome(ctx, fn)
+		err = fs.createNominalHome(ctx)
 		if err != nil {
 			return nil, err
 		}
