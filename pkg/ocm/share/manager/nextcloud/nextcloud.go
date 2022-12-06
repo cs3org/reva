@@ -33,7 +33,6 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/utils"
-	"github.com/google/uuid"
 
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
@@ -79,7 +78,7 @@ type Manager struct {
 type ShareManagerConfig struct {
 	EndPoint     string `mapstructure:"endpoint" docs:";The Nextcloud backend endpoint for user check"`
 	SharedSecret string `mapstructure:"shared_secret"`
-	WebDAVHost   string `mapstructure:"webdav_host" docs:";`
+	WebDAVHost   string `mapstructure:"webdav_host"`
 	MockHTTP     bool   `mapstructure:"mock_http"`
 }
 
@@ -106,10 +105,6 @@ type ShareAltMap struct {
 	Creator     *userpb.UserId        `json:"creator"`
 	Ctime       *typespb.Timestamp    `json:"ctime"`
 	Mtime       *typespb.Timestamp    `json:"mtime"`
-}
-
-func genID() string {
-	return uuid.New().String()
 }
 
 // ReceivedShareAltMap is an alternative map to JSON-unmarshal a ReceivedShare.
