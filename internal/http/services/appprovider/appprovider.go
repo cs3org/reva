@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -47,7 +47,7 @@ func init() {
 	global.Register("appprovider", New)
 }
 
-// Config holds the config options for the HTTP appprovider service
+// Config holds the config options for the HTTP appprovider service.
 type Config struct {
 	Prefix     string `mapstructure:"prefix"`
 	GatewaySvc string `mapstructure:"gatewaysvc"`
@@ -66,9 +66,8 @@ type svc struct {
 	router *chi.Mux
 }
 
-// New returns a new ocmd object
+// New returns a new ocmd object.
 func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) {
-
 	conf := &Config{}
 	if err := mapstructure.Decode(m, conf); err != nil {
 		return nil, err
@@ -373,16 +372,27 @@ func (s *svc) handleOpen(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	viewMode := getViewMode(statRes.Info, r.Form.Get("view_mode"))
+	viewMode := resolveViewMode(statRes.Info, r.Form.Get("view_mode"))
 	if viewMode == gateway.OpenInAppRequest_VIEW_MODE_INVALID {
-		writeError(w, r, appErrorInvalidParameter, "invalid view mode", err)
+		writeError(w, r, appErrorUnauthenticated, "permission denied when accessing the file", err)
 		return
+	}
+
+	opaqueMap := make(map[string]*typespb.OpaqueEntry)
+	for k, v := range r.Form {
+		if k != "file_id" && k != "view_mode" && k != "app_name" {
+			opaqueMap[k] = &typespb.OpaqueEntry{
+				Decoder: "plain",
+				Value:   []byte(v[0]),
+			}
+		}
 	}
 
 	openReq := gateway.OpenInAppRequest{
 		Ref:      fileRef,
 		ViewMode: viewMode,
 		App:      r.Form.Get("app_name"),
+		Opaque:   &typespb.Opaque{Map: opaqueMap},
 	}
 	openRes, err := client.OpenInApp(ctx, &openReq)
 	if err != nil {
@@ -436,7 +446,7 @@ func filterAppsByUserAgent(mimeTypes []*appregistry.MimeTypeInfo, userAgent stri
 	return res
 }
 
-func getViewMode(res *provider.ResourceInfo, vm string) gateway.OpenInAppRequest_ViewMode {
+func resolveViewMode(res *provider.ResourceInfo, vm string) gateway.OpenInAppRequest_ViewMode {
 	if vm != "" {
 		return utils.GetViewMode(vm)
 	}
@@ -451,6 +461,7 @@ func getViewMode(res *provider.ResourceInfo, vm string) gateway.OpenInAppRequest
 	case canView:
 		viewMode = gateway.OpenInAppRequest_VIEW_MODE_READ_ONLY
 	default:
+		// no permissions, will return access denied
 		viewMode = gateway.OpenInAppRequest_VIEW_MODE_INVALID
 	}
 	return viewMode

@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,14 +21,13 @@ package tus
 import (
 	"net/http"
 
-	"github.com/pkg/errors"
-
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rhttp/datatx"
 	"github.com/cs3org/reva/pkg/rhttp/datatx/manager/registry"
 	"github.com/cs3org/reva/pkg/rhttp/datatx/utils/download"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/mitchellh/mapstructure"
+	"github.com/pkg/errors"
 	tusd "github.com/tus/tusd/pkg/handler"
 )
 
@@ -86,7 +85,6 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 	}
 
 	h := handler.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-
 		method := r.Method
 		// https://github.com/tus/tus-resumable-upload-protocol/blob/master/protocol.md#x-http-method-override
 		if r.Header.Get("X-HTTP-Method-Override") != "" {
@@ -94,15 +92,15 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 		}
 
 		switch method {
-		case "POST":
+		case http.MethodPost:
 			handler.PostFile(w, r)
-		case "HEAD":
+		case http.MethodHead:
 			handler.HeadFile(w, r)
-		case "PATCH":
+		case http.MethodPatch:
 			handler.PatchFile(w, r)
 		case "DELETE":
 			handler.DelFile(w, r)
-		case "GET":
+		case http.MethodGet:
 			download.GetOrHeadFile(w, r, fs, "")
 		default:
 			w.WriteHeader(http.StatusNotImplemented)
@@ -113,7 +111,7 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 }
 
 // Composable is the interface that a struct needs to implement
-// to be composable, so that it can support the TUS methods
+// to be composable, so that it can support the TUS methods.
 type composable interface {
 	UseIn(composer *tusd.StoreComposer)
 }

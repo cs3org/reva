@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,18 +22,15 @@ import (
 	"context"
 	"os"
 
-	"google.golang.org/grpc/metadata"
-
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-
 	"github.com/cs3org/reva/pkg/auth/scope"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	jwt "github.com/cs3org/reva/pkg/token/manager/jwt"
 	"github.com/cs3org/reva/pkg/user/manager/nextcloud"
 	"github.com/cs3org/reva/tests/helpers"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"google.golang.org/grpc/metadata"
 )
 
 func setUpNextcloudServer() (*nextcloud.Manager, *[]string, func()) {

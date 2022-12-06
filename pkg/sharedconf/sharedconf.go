@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -94,7 +94,7 @@ func SkipUserGroupsInToken() bool {
 	return sharedConf.SkipUserGroupsInToken
 }
 
-// GetBlockedUsers returns a list of blocked users
+// GetBlockedUsers returns a list of blocked users.
 func GetBlockedUsers() []string {
 	return sharedConf.BlockedUsers
 }

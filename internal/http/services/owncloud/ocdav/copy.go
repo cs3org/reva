@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -167,7 +167,6 @@ func (s *svc) executePathCopy(ctx context.Context, client gateway.GatewayAPIClie
 				return err
 			}
 		}
-
 	} else {
 		// copy file
 
@@ -237,7 +236,7 @@ func (s *svc) executePathCopy(ctx context.Context, client gateway.GatewayAPIClie
 
 		// 3. do download
 
-		httpDownloadReq, err := rhttp.NewRequest(ctx, "GET", downloadEP, nil)
+		httpDownloadReq, err := rhttp.NewRequest(ctx, http.MethodGet, downloadEP, nil)
 		if err != nil {
 			return err
 		}
@@ -254,7 +253,7 @@ func (s *svc) executePathCopy(ctx context.Context, client gateway.GatewayAPIClie
 
 		// 4. do upload
 
-		httpUploadReq, err := rhttp.NewRequest(ctx, "PUT", uploadEP, httpDownloadRes.Body)
+		httpUploadReq, err := rhttp.NewRequest(ctx, http.MethodPut, uploadEP, httpDownloadRes.Body)
 		if err != nil {
 			return err
 		}
@@ -268,7 +267,6 @@ func (s *svc) executePathCopy(ctx context.Context, client gateway.GatewayAPIClie
 		if httpUploadRes.StatusCode != http.StatusOK {
 			return err
 		}
-
 	}
 	return nil
 }

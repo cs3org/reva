@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,7 +21,7 @@ package main
 import (
 	"flag"
 	"fmt"
-	"io/ioutil"
+	"io/fs"
 	"os"
 	"path"
 	"regexp"
@@ -32,7 +32,6 @@ import (
 	"github.com/cs3org/reva/cmd/revad/internal/grace"
 	"github.com/cs3org/reva/cmd/revad/runtime"
 	"github.com/cs3org/reva/pkg/sysinfo"
-
 	"github.com/google/uuid"
 )
 
@@ -71,7 +70,7 @@ func main() {
 	// the pid flag has been set we abort as the pid flag
 	// is meant to work only with one main configuration.
 	if len(confs) != 1 && *pidFlag != "" {
-		fmt.Fprintf(os.Stderr, "cannot run with with multiple configurations and one pid file, remote the -p flag\n")
+		fmt.Fprintf(os.Stderr, "cannot run with multiple configurations and one pid file, remote the -p flag\n")
 		os.Exit(1)
 	}
 
@@ -163,9 +162,17 @@ func getConfigs() ([]map[string]interface{}, error) {
 }
 
 func getConfigsFromDir(dir string) (confs []string, err error) {
-	files, err := ioutil.ReadDir(*dirFlag)
+	entries, err := os.ReadDir(*dirFlag)
 	if err != nil {
 		return nil, err
+	}
+	files := make([]fs.FileInfo, 0, len(entries))
+	for _, entry := range entries {
+		info, err := entry.Info()
+		if err != nil {
+			return nil, err
+		}
+		files = append(files, info)
 	}
 
 	for _, value := range files {

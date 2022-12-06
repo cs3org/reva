@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,9 +21,7 @@ package datatx
 import (
 	"context"
 	"encoding/json"
-	"fmt"
-	"io/ioutil"
-	"net/url"
+	"io"
 	"os"
 	"sync"
 
@@ -77,13 +75,6 @@ type txShare struct {
 	Opaque        *types.Opaque `json:"opaque"`
 }
 
-type webdavEndpoint struct {
-	filePath       string
-	endpoint       string
-	endpointScheme string
-	token          string
-}
-
 func (c *config) init() {
 	if c.TxDriver == "" {
 		c.TxDriver = "rclone"
@@ -116,9 +107,8 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 	return c, nil
 }
 
-// New creates a new datatx svc
+// New creates a new datatx svc.
 func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
-
 	c, err := parseConfig(m)
 	if err != nil {
 		return nil, err
@@ -157,23 +147,7 @@ func (s *service) UnprotectedEndpoints() []string {
 }
 
 func (s *service) PullTransfer(ctx context.Context, req *datatx.PullTransferRequest) (*datatx.PullTransferResponse, error) {
-	srcEp, err := s.extractEndpointInfo(ctx, req.SrcTargetUri)
-	if err != nil {
-		return nil, err
-	}
-	srcRemote := fmt.Sprintf("%s://%s", srcEp.endpointScheme, srcEp.endpoint)
-	srcPath := srcEp.filePath
-	srcToken := srcEp.token
-
-	destEp, err := s.extractEndpointInfo(ctx, req.DestTargetUri)
-	if err != nil {
-		return nil, err
-	}
-	dstRemote := fmt.Sprintf("%s://%s", destEp.endpointScheme, destEp.endpoint)
-	dstPath := destEp.filePath
-	dstToken := destEp.token
-
-	txInfo, startTransferErr := s.txManager.StartTransfer(ctx, srcRemote, srcPath, srcToken, dstRemote, dstPath, dstToken)
+	txInfo, startTransferErr := s.txManager.CreateTransfer(ctx, req.SrcTargetUri, req.DestTargetUri)
 
 	// we always save the transfer regardless of start transfer outcome
 	// only then, if starting fails, can we try to restart it
@@ -206,7 +180,7 @@ func (s *service) PullTransfer(ctx context.Context, req *datatx.PullTransferRequ
 	return &datatx.PullTransferResponse{
 		Status: status.NewOK(ctx),
 		TxInfo: txInfo,
-	}, err
+	}, nil
 }
 
 func (s *service) GetTransferStatus(ctx context.Context, req *datatx.GetTransferStatusRequest) (*datatx.GetTransferStatusResponse, error) {
@@ -308,33 +282,10 @@ func (s *service) RetryTransfer(ctx context.Context, req *datatx.RetryTransferRe
 	}, nil
 }
 
-func (s *service) extractEndpointInfo(ctx context.Context, targetURL string) (*webdavEndpoint, error) {
-	if targetURL == "" {
-		return nil, errtypes.BadRequest("datatx service: ref target is an empty uri")
-	}
-
-	uri, err := url.Parse(targetURL)
-	if err != nil {
-		return nil, errors.Wrap(err, "datatx service: error parsing target uri: "+targetURL)
-	}
-
-	m, err := url.ParseQuery(uri.RawQuery)
-	if err != nil {
-		return nil, errors.Wrap(err, "datatx service: error parsing target resource name")
-	}
-
-	return &webdavEndpoint{
-		filePath:       m["name"][0],
-		endpoint:       uri.Host + uri.Path,
-		endpointScheme: uri.Scheme,
-		token:          uri.User.String(),
-	}, nil
-}
-
 func loadOrCreate(file string) (*txShareModel, error) {
 	_, err := os.Stat(file)
 	if os.IsNotExist(err) {
-		if err := ioutil.WriteFile(file, []byte("{}"), 0700); err != nil {
+		if err := os.WriteFile(file, []byte("{}"), 0700); err != nil {
 			err = errors.Wrap(err, "datatx service: error creating the transfer shares storage file: "+file)
 			return nil, err
 		}
@@ -347,7 +298,7 @@ func loadOrCreate(file string) (*txShareModel, error) {
 	}
 	defer fd.Close()
 
-	data, err := ioutil.ReadAll(fd)
+	data, err := io.ReadAll(fd)
 	if err != nil {
 		err = errors.Wrap(err, "datatx service: error reading the data")
 		return nil, err
@@ -374,7 +325,7 @@ func (m *txShareModel) saveTxShare() error {
 		return err
 	}
 
-	if err := ioutil.WriteFile(m.File, data, 0644); err != nil {
+	if err := os.WriteFile(m.File, data, 0644); err != nil {
 		err = errors.Wrap(err, "datatx service: error writing transfer share data to file: "+m.File)
 		return err
 	}

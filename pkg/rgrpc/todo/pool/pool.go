@@ -59,7 +59,7 @@ func newProvider() provider {
 }
 
 // TODO(labkode): is concurrent access to the maps safe?
-// var storageProviders = map[string]storageprovider.ProviderAPIClient{}
+// var storageProviders = map[string]storageprovider.ProviderAPIClient{}.
 var (
 	storageProviders       = newProvider()
 	authProviders          = newProvider()

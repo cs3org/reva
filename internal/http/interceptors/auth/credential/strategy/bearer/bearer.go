@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -54,7 +54,6 @@ func (s *strategy) GetCredentials(w http.ResponseWriter, r *http.Request) (*auth
 		return nil, fmt.Errorf("no bearer auth provided")
 	}
 	return &auth.Credentials{Type: "bearer", ClientSecret: tokens[0]}, nil
-
 }
 
 func (s *strategy) AddWWWAuthenticate(w http.ResponseWriter, r *http.Request, realm string) {

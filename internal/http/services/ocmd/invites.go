@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -79,7 +79,6 @@ func (h *invitesHandler) Handler() http.Handler {
 }
 
 func (h *invitesHandler) generateInviteToken(w http.ResponseWriter, r *http.Request) {
-
 	ctx := r.Context()
 
 	gatewayClient, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
@@ -95,7 +94,6 @@ func (h *invitesHandler) generateInviteToken(w http.ResponseWriter, r *http.Requ
 	}
 
 	if r.FormValue("recipient") != "" && h.smtpCredentials != nil {
-
 		usr := ctxpkg.ContextMustGetUser(ctx)
 
 		// TODO: the message body needs to point to the meshdirectory service

@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -124,7 +124,7 @@ func (b *reg) ListProviders(ctx context.Context) ([]*registrypb.ProviderInfo, er
 	return providers, nil
 }
 
-// returns the the root path of the first provider in the list.
+// returns the root path of the first provider in the list.
 func (b *reg) GetHome(ctx context.Context) (*registrypb.ProviderInfo, error) {
 	// Assume that HomeProvider is not a regexp
 	if r, ok := b.c.Rules[b.c.HomeProvider]; ok {
@@ -173,7 +173,6 @@ func (b *reg) FindProviders(ctx context.Context, ref *provider.Reference) ([]*re
 	fn := path.Clean(ref.GetPath())
 	if fn != "" {
 		for prefix, rule := range b.c.Rules {
-
 			addr := getProviderAddr(ctx, rule)
 			r, err := regexp.Compile("^" + prefix)
 			if err != nil {

@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,17 +23,16 @@ import (
 	"net/http"
 	"path"
 
-	rtrace "github.com/cs3org/reva/pkg/trace"
-	"github.com/cs3org/reva/pkg/utils/resourceid"
-
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp/router"
+	rtrace "github.com/cs3org/reva/pkg/trace"
+	"github.com/cs3org/reva/pkg/utils/resourceid"
 )
 
-// VersionsHandler handles version requests
+// VersionsHandler handles version requests.
 type VersionsHandler struct {
 }
 
@@ -43,7 +42,7 @@ func (h *VersionsHandler) init(c *Config) error {
 
 // Handler handles requests
 // versions can be listed with a PROPFIND to /remote.php/dav/meta/<fileid>/v
-// a version is identified by a timestamp, eg. /remote.php/dav/meta/<fileid>/v/1561410426
+// a version is identified by a timestamp, eg. /remote.php/dav/meta/<fileid>/v/1561410426.
 func (h *VersionsHandler) Handler(s *svc, rid *provider.ResourceId) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
@@ -179,7 +178,6 @@ func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request,
 		sublog.Error().Err(err).Msg("error writing body")
 		return
 	}
-
 }
 
 func (h *VersionsHandler) doRestore(w http.ResponseWriter, r *http.Request, s *svc, rid *provider.ResourceId, key string) {

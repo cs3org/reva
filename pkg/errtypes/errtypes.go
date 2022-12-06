@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,7 +30,7 @@ func (e NotFound) Error() string { return "error: not found: " + string(e) }
 // IsNotFound implements the IsNotFound interface.
 func (e NotFound) IsNotFound() {}
 
-// InternalError is the error to use when we really don't know what happened. Use with care
+// InternalError is the error to use when we really don't know what happened. Use with care.
 type InternalError string
 
 func (e InternalError) Error() string { return "internal error: " + string(e) }
@@ -135,7 +135,7 @@ type IsAlreadyExists interface {
 }
 
 // IsInternalError is the interface to implement
-// to specify that there was some internal error
+// to specify that there was some internal error.
 type IsInternalError interface {
 	IsInternalError()
 }

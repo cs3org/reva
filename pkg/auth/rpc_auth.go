@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -38,12 +38,12 @@ type ProviderPlugin struct {
 	Impl Manager
 }
 
-// Server returns the RPC Server which serves the methods that the Client calls over net/rpc
+// Server returns the RPC Server which serves the methods that the Client calls over net/rpc.
 func (p *ProviderPlugin) Server(*hcplugin.MuxBroker) (interface{}, error) {
 	return &RPCServer{Impl: p.Impl}, nil
 }
 
-// Client returns interface implementation for the plugin that communicates to the server end of the plugin
+// Client returns interface implementation for the plugin that communicates to the server end of the plugin.
 func (p *ProviderPlugin) Client(b *hcplugin.MuxBroker, c *rpc.Client) (interface{}, error) {
 	return &RPCClient{Client: c}, nil
 }
@@ -51,17 +51,17 @@ func (p *ProviderPlugin) Client(b *hcplugin.MuxBroker, c *rpc.Client) (interface
 // RPCClient is an implementation of Manager that talks over RPC.
 type RPCClient struct{ Client *rpc.Client }
 
-// ConfigureArg for RPC
+// ConfigureArg for RPC.
 type ConfigureArg struct {
 	Ml map[string]interface{}
 }
 
-// ConfigureReply for RPC
+// ConfigureReply for RPC.
 type ConfigureReply struct {
 	Err error
 }
 
-// Configure RPCClient configure method
+// Configure RPCClient configure method.
 func (m *RPCClient) Configure(ml map[string]interface{}) error {
 	args := ConfigureArg{Ml: ml}
 	resp := ConfigureReply{}
@@ -72,21 +72,21 @@ func (m *RPCClient) Configure(ml map[string]interface{}) error {
 	return resp.Err
 }
 
-// AuthenticateArgs for RPC
+// AuthenticateArgs for RPC.
 type AuthenticateArgs struct {
 	Ctx          map[interface{}]interface{}
 	ClientID     string
 	ClientSecret string
 }
 
-// AuthenticateReply for RPC
+// AuthenticateReply for RPC.
 type AuthenticateReply struct {
 	User  *user.User
 	Auth  map[string]*authpb.Scope
 	Error error
 }
 
-// Authenticate RPCClient Authenticate method
+// Authenticate RPCClient Authenticate method.
 func (m *RPCClient) Authenticate(ctx context.Context, clientID, clientSecret string) (*user.User, map[string]*authpb.Scope, error) {
 	ctxVal := appctx.GetKeyValuesFromCtx(ctx)
 	args := AuthenticateArgs{Ctx: ctxVal, ClientID: clientID, ClientSecret: clientSecret}
@@ -98,19 +98,19 @@ func (m *RPCClient) Authenticate(ctx context.Context, clientID, clientSecret str
 	return reply.User, reply.Auth, reply.Error
 }
 
-// RPCServer is the server that RPCClient talks to, conforming to the requirements of net/rpc
+// RPCServer is the server that RPCClient talks to, conforming to the requirements of net/rpc.
 type RPCServer struct {
 	// This is the real implementation
 	Impl Manager
 }
 
-// Configure RPCServer Configure method
+// Configure RPCServer Configure method.
 func (m *RPCServer) Configure(args ConfigureArg, resp *ConfigureReply) error {
 	resp.Err = m.Impl.Configure(args.Ml)
 	return nil
 }
 
-// Authenticate RPCServer Authenticate method
+// Authenticate RPCServer Authenticate method.
 func (m *RPCServer) Authenticate(args AuthenticateArgs, resp *AuthenticateReply) error {
 	ctx := appctx.PutKeyValuesToCtx(args.Ctx)
 	resp.User, resp.Auth, resp.Error = m.Impl.Authenticate(ctx, args.ClientID, args.ClientSecret)

@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,8 +21,6 @@ package preferences
 import (
 	"context"
 
-	"google.golang.org/grpc"
-
 	preferencespb "github.com/cs3org/go-cs3apis/cs3/preferences/v1beta1"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/preferences"
@@ -31,6 +29,7 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
+	"google.golang.org/grpc"
 )
 
 func init() {
@@ -69,7 +68,7 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 	return c, nil
 }
 
-// New returns a new PreferencesServiceServer
+// New returns a new PreferencesServiceServer.
 func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 	c, err := parseConfig(m)
 	if err != nil {

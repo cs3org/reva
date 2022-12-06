@@ -1,4 +1,4 @@
-// Copyright 2018-2020 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -47,7 +47,7 @@ type Session struct {
 	sessionCookieName string
 }
 
-// SessionUser holds information about the logged in user
+// SessionUser holds information about the logged in user.
 type SessionUser struct {
 	Account  *data.Account
 	Operator *data.Operator

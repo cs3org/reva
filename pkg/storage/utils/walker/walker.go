@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,10 +23,9 @@ import (
 	"fmt"
 	"path/filepath"
 
-	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/errtypes"
 )
 
@@ -40,7 +39,7 @@ import (
 // Otherwise, if the function returns a non-nil error, Walk stops entirely and returns that error.
 type WalkFunc func(path string, info *provider.ResourceInfo, err error) error
 
-// Walker is an interface implemented by objects that are able to walk from a dir rooted into the passed path
+// Walker is an interface implemented by objects that are able to walk from a dir rooted into the passed path.
 type Walker interface {
 	// Walk walks the file tree rooted at root, calling fn for each file or folder in the tree, including the root.
 	Walk(context.Context, string, WalkFunc) error
@@ -50,7 +49,7 @@ type revaWalker struct {
 	gtw gateway.GatewayAPIClient
 }
 
-// NewWalker creates a Walker object that uses the reva gateway
+// NewWalker creates a Walker object that uses the reva gateway.
 func NewWalker(gtw gateway.GatewayAPIClient) Walker {
 	return &revaWalker{gtw: gtw}
 }
@@ -73,7 +72,6 @@ func (r *revaWalker) Walk(ctx context.Context, root string, fn WalkFunc) error {
 }
 
 func (r *revaWalker) walkRecursively(ctx context.Context, path string, info *provider.ResourceInfo, fn WalkFunc) error {
-
 	if info.Type != provider.ResourceType_RESOURCE_TYPE_CONTAINER {
 		return fn(path, info, nil)
 	}

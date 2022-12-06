@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,8 +19,8 @@
 package loader
 
 import (
-	// Load core GRPC services
+	// Load core GRPC services.
 	_ "github.com/cs3org/reva/internal/grpc/interceptors/eventsmiddleware"
 	_ "github.com/cs3org/reva/internal/grpc/interceptors/readonly"
-	// Add your own service here
+	// Add your own service here.
 )

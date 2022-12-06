@@ -1,0 +1,27 @@
+name: Check Changelog
+on:
+  pull_request:
+    paths-ignore:
+      - ".github/**"
+      - "Makefile"
+      - "tools/**"
+      - "docs/**"
+      - "tests/**"
+      - ".drone.star"
+      - ".drone.env"
+      - ".fossa.yml"
+      - "go.mod"
+      - "go.sum"
+
+jobs:
+  check-changelog:
+    runs-on: self-hosted
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3.1.0
+      - name: Setup Go environment
+        uses: actions/setup-go@v3.3.0
+        with:
+          go-version-file: go.mod
+      - name: Check changelog
+        run: make check-changelog PR=${{ github.event.pull_request.number }}

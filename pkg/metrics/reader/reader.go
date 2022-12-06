@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,7 +26,7 @@ Each metric function should return the current/latest available metrics figure r
 
 import "github.com/cs3org/reva/pkg/metrics/config"
 
-// Reader the Reader interface
+// Reader the Reader interface.
 type Reader interface {
 
 	// Configure configures the reader according to the specified configuration

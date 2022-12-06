@@ -1,4 +1,4 @@
-// Copyright 2018-2020 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,7 +23,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -37,6 +37,7 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	txdriver "github.com/cs3org/reva/pkg/datatx"
 	registry "github.com/cs3org/reva/pkg/datatx/manager/registry"
+	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/google/uuid"
 	"github.com/mitchellh/mapstructure"
@@ -64,6 +65,7 @@ type config struct {
 	Endpoint               string `mapstructure:"endpoint"`
 	AuthUser               string `mapstructure:"auth_user"` // rclone basicauth user
 	AuthPass               string `mapstructure:"auth_pass"` // rclone basicauth pass
+	AuthHeader             string `mapstructure:"auth_header"`
 	File                   string `mapstructure:"file"`
 	JobStatusCheckInterval int    `mapstructure:"job_status_check_interval"`
 	JobTimeout             int    `mapstructure:"job_timeout"`
@@ -88,7 +90,7 @@ type transferModel struct {
 	Transfers map[string]*transfer `json:"transfers"`
 }
 
-// persistency driver
+// persistency driver.
 type pDriver struct {
 	sync.Mutex // concurrent access to the file
 	model      *transferModel
@@ -107,7 +109,7 @@ type transfer struct {
 	Ctime          string
 }
 
-// txEndStatuses final statuses that cannot be changed anymore
+// txEndStatuses final statuses that cannot be changed anymore.
 var txEndStatuses = map[string]int32{
 	"STATUS_INVALID":                0,
 	"STATUS_DESTINATION_NOT_FOUND":  1,
@@ -118,7 +120,14 @@ var txEndStatuses = map[string]int32{
 	"STATUS_TRANSFER_EXPIRED":       10,
 }
 
-// New returns a new rclone driver
+type endpoint struct {
+	filePath       string
+	endpoint       string
+	endpointScheme string
+	token          string
+}
+
+// New returns a new rclone driver.
 func New(m map[string]interface{}) (txdriver.Manager, error) {
 	c, err := parseConfig(m)
 	if err != nil {
@@ -158,7 +167,7 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 func loadOrCreate(file string) (*transferModel, error) {
 	_, err := os.Stat(file)
 	if os.IsNotExist(err) {
-		if err := ioutil.WriteFile(file, []byte("{}"), 0700); err != nil {
+		if err := os.WriteFile(file, []byte("{}"), 0700); err != nil {
 			err = errors.Wrap(err, "error creating the transfers storage file: "+file)
 			return nil, err
 		}
@@ -171,7 +180,7 @@ func loadOrCreate(file string) (*transferModel, error) {
 	}
 	defer fd.Close()
 
-	data, err := ioutil.ReadAll(fd)
+	data, err := io.ReadAll(fd)
 	if err != nil {
 		err = errors.Wrap(err, "error reading the data")
 		return nil, err
@@ -199,7 +208,7 @@ func (m *transferModel) saveTransfer(e error) error {
 		return e
 	}
 
-	if err := ioutil.WriteFile(m.File, data, 0644); err != nil {
+	if err := os.WriteFile(m.File, data, 0644); err != nil {
 		e = errors.Wrap(err, "error writing transfer data to file: "+m.File)
 		return e
 	}
@@ -207,9 +216,32 @@ func (m *transferModel) saveTransfer(e error) error {
 	return e
 }
 
-// StartTransfer initiates a transfer job and returns a TxInfo object that includes a unique transfer id.
-func (driver *rclone) StartTransfer(ctx context.Context, srcRemote string, srcPath string, srcToken string, destRemote string, destPath string, destToken string) (*datatx.TxInfo, error) {
-	return driver.startJob(ctx, "", srcRemote, srcPath, srcToken, destRemote, destPath, destToken)
+// CreateTransfer creates a transfer job and returns a TxInfo object that includes a unique transfer id.
+// Specified target URIs are of form scheme://userinfo@host:port?name={path}
+func (driver *rclone) CreateTransfer(ctx context.Context, srcTargetURI string, dstTargetURI string) (*datatx.TxInfo, error) {
+	logger := appctx.GetLogger(ctx)
+
+	srcEp, err := driver.extractEndpointInfo(ctx, srcTargetURI)
+	if err != nil {
+		return nil, err
+	}
+	srcRemote := fmt.Sprintf("%s://%s", srcEp.endpointScheme, srcEp.endpoint)
+	srcPath := srcEp.filePath
+	srcToken := srcEp.token
+
+	destEp, err := driver.extractEndpointInfo(ctx, dstTargetURI)
+	if err != nil {
+		return nil, err
+	}
+	dstPath := destEp.filePath
+	dstToken := destEp.token
+	// we always set the userinfo part of the destination url for rclone tpc push support
+	dstRemote := fmt.Sprintf("%s://%s@%s", destEp.endpointScheme, dstToken, destEp.endpoint)
+
+	logger.Debug().Msgf("destination target URI: %v", dstTargetURI)
+	logger.Debug().Msgf("destination remote: %v", dstRemote)
+
+	return driver.startJob(ctx, "", srcRemote, srcPath, srcToken, dstRemote, dstPath, dstToken)
 }
 
 // startJob starts a transfer job. Retries a previous job if transferID is specified.
@@ -281,8 +313,17 @@ func (driver *rclone) startJob(ctx context.Context, transferID string, srcRemote
 		// DstToken string `json:"destToken"`
 		Async bool `json:"_async"`
 	}
-	srcFs := fmt.Sprintf(":webdav,headers=\"x-access-token,%v\",url=\"%v\":%v", srcToken, srcRemote, srcPath)
-	dstFs := fmt.Sprintf(":webdav,headers=\"x-access-token,%v\",url=\"%v\":%v", destToken, destRemote, destPath)
+	// bearer is the default authentication scheme for reva
+	srcAuthHeader := fmt.Sprintf("bearer_token=\"%v\"", srcToken)
+	if driver.config.AuthHeader == "x-access-token" {
+		srcAuthHeader = fmt.Sprintf("headers=\"x-access-token,%v\"", srcToken)
+	}
+	srcFs := fmt.Sprintf(":webdav,%v,url=\"%v\":%v", srcAuthHeader, srcRemote, srcPath)
+	destAuthHeader := fmt.Sprintf("bearer_token=\"%v\"", destToken)
+	if driver.config.AuthHeader == "x-access-token" {
+		destAuthHeader = fmt.Sprintf("headers=\"x-access-token,%v\"", destToken)
+	}
+	dstFs := fmt.Sprintf(":webdav,%v,url=\"%v\":%v", destAuthHeader, destRemote, destPath)
 	rcloneReq := &rcloneAsyncReqJSON{
 		SrcFs: srcFs,
 		DstFs: dstFs,
@@ -332,7 +373,7 @@ func (driver *rclone) startJob(ctx context.Context, transferID string, srcRemote
 	}
 	u.Path = path.Join(u.Path, transferFileMethod)
 	requestURL := u.String()
-	req, err := http.NewRequest("POST", requestURL, bytes.NewReader(data))
+	req, err := http.NewRequest(http.MethodPost, requestURL, bytes.NewReader(data))
 	if err != nil {
 		err = errors.Wrap(err, "rclone: error pulling transfer: error framing post request")
 		transfer.TransferStatus = datatx.Status_STATUS_TRANSFER_FAILED
@@ -474,7 +515,7 @@ func (driver *rclone) startJob(ctx context.Context, transferID string, srcRemote
 			u.Path = path.Join(u.Path, transferFileMethod)
 			requestURL := u.String()
 
-			req, err := http.NewRequest("POST", requestURL, bytes.NewReader(data))
+			req, err := http.NewRequest(http.MethodPost, requestURL, bytes.NewReader(data))
 			if err != nil {
 				logger.Error().Err(err).Msgf("rclone driver: error framing post request: %v", err)
 				transfer.TransferStatus = datatx.Status_STATUS_INVALID
@@ -582,7 +623,7 @@ func (driver *rclone) startJob(ctx context.Context, transferID string, srcRemote
 	}, nil
 }
 
-// GetTransferStatus returns the status of the transfer with the specified job id
+// GetTransferStatus returns the status of the transfer with the specified job id.
 func (driver *rclone) GetTransferStatus(ctx context.Context, transferID string) (*datatx.TxInfo, error) {
 	transfer, err := driver.pDriver.model.getTransfer(transferID)
 	if err != nil {
@@ -600,7 +641,7 @@ func (driver *rclone) GetTransferStatus(ctx context.Context, transferID string) 
 	}, nil
 }
 
-// CancelTransfer cancels the transfer with the specified transfer id
+// CancelTransfer cancels the transfer with the specified transfer id.
 func (driver *rclone) CancelTransfer(ctx context.Context, transferID string) (*datatx.TxInfo, error) {
 	transfer, err := driver.pDriver.model.getTransfer(transferID)
 	if err != nil {
@@ -653,7 +694,7 @@ func (driver *rclone) CancelTransfer(ctx context.Context, transferID string) (*d
 	u.Path = path.Join(u.Path, transferFileMethod)
 	requestURL := u.String()
 
-	req, err := http.NewRequest("POST", requestURL, bytes.NewReader(data))
+	req, err := http.NewRequest(http.MethodPost, requestURL, bytes.NewReader(data))
 	if err != nil {
 		err = errors.Wrap(err, "rclone driver: error framing post request")
 		return &datatx.TxInfo{
@@ -748,7 +789,7 @@ func (driver *rclone) RetryTransfer(ctx context.Context, transferID string) (*da
 	return driver.startJob(ctx, transferID, "", "", "", "", "", "")
 }
 
-// getTransfer returns the transfer with the specified transfer ID
+// getTransfer returns the transfer with the specified transfer ID.
 func (m *transferModel) getTransfer(transferID string) (*transfer, error) {
 	transfer, ok := m.Transfers[transferID]
 	if !ok {
@@ -781,7 +822,7 @@ func (driver *rclone) remotePathIsFolder(remote string, remotePath string, remot
 	u.Path = path.Join(u.Path, listMethod)
 	requestURL := u.String()
 
-	req, err := http.NewRequest("POST", requestURL, bytes.NewReader(data))
+	req, err := http.NewRequest(http.MethodPost, requestURL, bytes.NewReader(data))
 	if err != nil {
 		return false, errors.Wrap(err, "rclone driver: error framing post request")
 	}
@@ -828,4 +869,27 @@ func (driver *rclone) remotePathIsFolder(remote string, remotePath string, remot
 
 	// in all other cases the remote path is a directory
 	return true, nil
+}
+
+func (driver *rclone) extractEndpointInfo(ctx context.Context, targetURL string) (*endpoint, error) {
+	if targetURL == "" {
+		return nil, errtypes.BadRequest("datatx service: ref target is an empty uri")
+	}
+
+	uri, err := url.Parse(targetURL)
+	if err != nil {
+		return nil, errors.Wrap(err, "datatx service: error parsing target uri: "+targetURL)
+	}
+
+	m, err := url.ParseQuery(uri.RawQuery)
+	if err != nil {
+		return nil, errors.Wrap(err, "datatx service: error parsing target resource name")
+	}
+
+	return &endpoint{
+		filePath:       m["name"][0],
+		endpoint:       uri.Host + uri.Path,
+		endpointScheme: uri.Scheme,
+		token:          uri.User.String(),
+	}, nil
 }

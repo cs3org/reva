@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,48 +21,44 @@ package sql_test
 import (
 	"context"
 	"database/sql"
-	"io/ioutil"
 	"os"
 
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	ruser "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/share"
 	sqlmanager "github.com/cs3org/reva/pkg/share/manager/sql"
 	mocks "github.com/cs3org/reva/pkg/share/manager/sql/mocks"
-	"google.golang.org/protobuf/types/known/fieldmaskpb"
-
 	_ "github.com/mattn/go-sqlite3"
-	"github.com/stretchr/testify/mock"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/stretchr/testify/mock"
+	"google.golang.org/protobuf/types/known/fieldmaskpb"
 )
 
 var _ = Describe("SQL manager", func() {
 	var (
 		mgr        share.Manager
 		ctx        context.Context
-		testDbFile *os.File
+		testDBFile *os.File
 
-		loginAs = func(user *userpb.User) {
+		loginAs = func(user *user.User) {
 			ctx = ruser.ContextSetUser(context.Background(), user)
 		}
-		admin = &userpb.User{
-			Id: &userpb.UserId{
+		admin = &user.User{
+			Id: &user.UserId{
 				Idp:      "idp",
 				OpaqueId: "userid",
-				Type:     userpb.UserType_USER_TYPE_PRIMARY,
+				Type:     user.UserType_USER_TYPE_PRIMARY,
 			},
 			Username: "admin",
 		}
-		otherUser = &userpb.User{
-			Id: &userpb.UserId{
+		otherUser = &user.User{
+			Id: &user.UserId{
 				Idp:      "idp",
 				OpaqueId: "userid",
-				Type:     userpb.UserType_USER_TYPE_PRIMARY,
+				Type:     user.UserType_USER_TYPE_PRIMARY,
 			},
 			Username: "einstein",
 		}
@@ -75,30 +71,30 @@ var _ = Describe("SQL manager", func() {
 	)
 
 	AfterEach(func() {
-		os.Remove(testDbFile.Name())
+		os.Remove(testDBFile.Name())
 	})
 
 	BeforeEach(func() {
 		var err error
-		testDbFile, err = ioutil.TempFile("", "example")
+		testDBFile, err = os.CreateTemp("", "example")
 		Expect(err).ToNot(HaveOccurred())
 
-		dbData, err := ioutil.ReadFile("test.db")
+		dbData, err := os.ReadFile("test.db")
 		Expect(err).ToNot(HaveOccurred())
 
-		_, err = testDbFile.Write(dbData)
+		_, err = testDBFile.Write(dbData)
 		Expect(err).ToNot(HaveOccurred())
-		err = testDbFile.Close()
+		err = testDBFile.Close()
 		Expect(err).ToNot(HaveOccurred())
 
-		sqldb, err := sql.Open("sqlite3", testDbFile.Name())
+		sqldb, err := sql.Open("sqlite3", testDBFile.Name())
 		Expect(err).ToNot(HaveOccurred())
 
 		userConverter := &mocks.UserConverter{}
 		userConverter.On("UserIDToUserName", mock.Anything, mock.Anything).Return("username", nil)
 		userConverter.On("UserNameToUserID", mock.Anything, mock.Anything).Return(
-			func(_ context.Context, username string) *userpb.UserId {
-				return &userpb.UserId{
+			func(_ context.Context, username string) *user.UserId {
+				return &user.UserId{
 					OpaqueId: username,
 				}
 			},

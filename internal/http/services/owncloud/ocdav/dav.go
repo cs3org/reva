@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,7 +27,6 @@ import (
 	gatewayv1beta1 "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
-	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
@@ -38,7 +37,7 @@ import (
 
 type tokenStatInfoKey struct{}
 
-// DavHandler routes to the different sub handlers
+// DavHandler routes to the different sub handlers.
 type DavHandler struct {
 	AvatarsHandler      *AvatarsHandler
 	FilesHandler        *WebDavHandler
@@ -91,7 +90,7 @@ func isOwner(userIDorName string, user *userv1beta1.User) bool {
 	return userIDorName != "" && (userIDorName == user.Id.OpaqueId || strings.EqualFold(userIDorName, user.Username))
 }
 
-// Handler handles requests
+// Handler handles requests.
 func (h *DavHandler) Handler(s *svc) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
@@ -200,15 +199,15 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 			case err != nil:
 				w.WriteHeader(http.StatusInternalServerError)
 				return
-			case res.Status.Code == rpcv1beta1.Code_CODE_PERMISSION_DENIED:
+			case res.Status.Code == rpc.Code_CODE_PERMISSION_DENIED:
 				fallthrough
-			case res.Status.Code == rpcv1beta1.Code_CODE_UNAUTHENTICATED:
+			case res.Status.Code == rpc.Code_CODE_UNAUTHENTICATED:
 				w.WriteHeader(http.StatusUnauthorized)
 				return
-			case res.Status.Code == rpcv1beta1.Code_CODE_NOT_FOUND:
+			case res.Status.Code == rpc.Code_CODE_NOT_FOUND:
 				w.WriteHeader(http.StatusNotFound)
 				return
-			case res.Status.Code != rpcv1beta1.Code_CODE_OK:
+			case res.Status.Code != rpc.Code_CODE_OK:
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}

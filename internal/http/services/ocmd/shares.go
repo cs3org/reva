@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -51,7 +51,6 @@ func (h *sharesHandler) init(c *Config) {
 
 func (h *sharesHandler) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-
 		switch r.Method {
 		case http.MethodPost:
 			h.createShare(w, r)
@@ -143,7 +142,7 @@ func (h *sharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var shareWithParts []string = strings.Split(shareWith, "@")
+	var shareWithParts = strings.Split(shareWith, "@")
 	userRes, err := gatewayClient.GetUser(ctx, &userpb.GetUserRequest{
 		UserId: &userpb.UserId{OpaqueId: shareWithParts[0]}, SkipFetchingUserGroups: true,
 	})

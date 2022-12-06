@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,26 +18,26 @@
 
 package manager
 
-// ErrMaxFileCount is the error returned when the max files count specified in the config has reached
+// ErrMaxFileCount is the error returned when the max files count specified in the config has reached.
 type ErrMaxFileCount struct{}
 
-// ErrMaxSize is the error returned when the max total files size specified in the config has reached
+// ErrMaxSize is the error returned when the max total files size specified in the config has reached.
 type ErrMaxSize struct{}
 
-// ErrEmptyList is the error returned when an empty list is passed when an archiver is created
+// ErrEmptyList is the error returned when an empty list is passed when an archiver is created.
 type ErrEmptyList struct{}
 
-// Error returns the string error msg for ErrMaxFileCount
+// Error returns the string error msg for ErrMaxFileCount.
 func (ErrMaxFileCount) Error() string {
 	return "reached max files count"
 }
 
-// Error returns the string error msg for ErrMaxSize
+// Error returns the string error msg for ErrMaxSize.
 func (ErrMaxSize) Error() string {
 	return "reached max total files size"
 }
 
-// Error returns the string error msg for ErrEmptyList
+// Error returns the string error msg for ErrEmptyList.
 func (ErrEmptyList) Error() string {
 	return "list of files to archive empty"
 }

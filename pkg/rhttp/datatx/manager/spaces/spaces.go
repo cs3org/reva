@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -75,9 +75,9 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 		sublog := appctx.GetLogger(ctx).With().Str("datatx", "spaces").Str("space", spaceID).Logger()
 
 		switch r.Method {
-		case "GET", "HEAD":
+		case http.MethodGet, http.MethodHead:
 			download.GetOrHeadFile(w, r, fs, spaceID)
-		case "PUT":
+		case http.MethodPut:
 			// make a clean relative path
 			fn := path.Clean(strings.TrimLeft(r.URL.Path, "/"))
 			defer r.Body.Close()

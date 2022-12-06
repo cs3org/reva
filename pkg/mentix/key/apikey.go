@@ -1,4 +1,4 @@
-// Copyright 2018-2020 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -48,7 +48,8 @@ const (
 
 // GenerateAPIKey generates a new (random) API key which also contains flags and a (salted) hash.
 // An API key has the following format:
-//   <RandomString:30><Flags:2><SaltedHash:32>
+//
+//	<RandomString:30><Flags:2><SaltedHash:32>
 func GenerateAPIKey(salt string, flags int) (APIKey, error) {
 	if len(salt) == 0 {
 		return "", errors.Errorf("no salt specified")

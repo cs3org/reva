@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,14 +23,12 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"regexp"
 	"time"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-
-	"regexp"
-
 	"github.com/cs3org/reva/internal/http/services/archiver/manager"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
@@ -57,7 +55,7 @@ type svc struct {
 	allowedFolders []*regexp.Regexp
 }
 
-// Config holds the config options that need to be passed down to all ocdav handlers
+// Config holds the config options that need to be passed down to all ocdav handlers.
 type Config struct {
 	Prefix         string   `mapstructure:"prefix"`
 	GatewaySvc     string   `mapstructure:"gatewaysvc"`
@@ -73,7 +71,7 @@ func init() {
 	global.Register("archiver", New)
 }
 
-// New creates a new archiver service
+// New creates a new archiver service.
 func New(conf map[string]interface{}, log *zerolog.Logger) (global.Service, error) {
 	c := &Config{}
 	err := mapstructure.Decode(conf, c)
@@ -151,7 +149,6 @@ func (s *svc) getFiles(ctx context.Context, files, ids []string) ([]string, erro
 		}
 
 		f = append(f, resp.Info.Path)
-
 	}
 
 	f = append(f, files...)
@@ -165,7 +162,7 @@ func (s *svc) getFiles(ctx context.Context, files, ids []string) ([]string, erro
 	return f, nil
 }
 
-// return true if path match with at least with one allowed folder regex
+// return true if path match with at least with one allowed folder regex.
 func (s *svc) isPathAllowed(path string) bool {
 	for _, reg := range s.allowedFolders {
 		if reg.MatchString(path) {
@@ -175,7 +172,7 @@ func (s *svc) isPathAllowed(path string) bool {
 	return false
 }
 
-// return nil if all the paths in the slide match with at least one allowed folder regex
+// return nil if all the paths in the slide match with at least one allowed folder regex.
 func (s *svc) allAllowed(paths []string) error {
 	if len(s.allowedFolders) == 0 {
 		return nil
@@ -262,7 +259,6 @@ func (s *svc) Handler() http.Handler {
 			s.writeHTTPError(rw, err)
 			return
 		}
-
 	})
 }
 

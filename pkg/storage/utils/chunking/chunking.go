@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,7 +21,6 @@ package chunking
 import (
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -29,13 +28,13 @@ import (
 	"strings"
 )
 
-// IsChunked checks if a given path refers to a chunk or not
+// IsChunked checks if a given path refers to a chunk or not.
 func IsChunked(fn string) (bool, error) {
 	// FIXME: also need to check whether the OC-Chunked header is set
 	return regexp.MatchString(`-chunking-\w+-[0-9]+-[0-9]+$`, fn)
 }
 
-// ChunkBLOBInfo stores info about a particular chunk
+// ChunkBLOBInfo stores info about a particular chunk.
 type ChunkBLOBInfo struct {
 	Path         string
 	TransferID   string
@@ -44,7 +43,7 @@ type ChunkBLOBInfo struct {
 }
 
 // Not using the resource path in the chunk folder name allows uploading to
-// the same folder after a move without having to restart the chunk upload
+// the same folder after a move without having to restart the chunk upload.
 func (c *ChunkBLOBInfo) uploadID() string {
 	return fmt.Sprintf("chunking-%s-%d", c.TransferID, c.TotalChunks)
 }
@@ -87,7 +86,7 @@ func NewChunkHandler(chunkFolder string) *ChunkHandler {
 }
 
 func (c *ChunkHandler) createChunkTempFile() (string, *os.File, error) {
-	file, err := ioutil.TempFile(fmt.Sprintf("/%s", c.ChunkFolder), "")
+	file, err := os.CreateTemp(fmt.Sprintf("/%s", c.ChunkFolder), "")
 	if err != nil {
 		return "", nil, err
 	}
@@ -187,7 +186,6 @@ func (c *ChunkHandler) saveChunk(path string, r io.ReadCloser) (bool, string, er
 		// we will end up with hundreds of open file descriptors
 		if err = chunk.Close(); err != nil {
 			return false, "", err
-
 		}
 	}
 

@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,7 +24,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"strings"
 	"time"
 
@@ -125,7 +125,7 @@ func (am *mgr) Configure(m map[string]interface{}) error {
 		return nil
 	}
 
-	f, err := ioutil.ReadFile(c.UsersMapping)
+	f, err := os.ReadFile(c.UsersMapping)
 	if err != nil {
 		return fmt.Errorf("oidc: error reading the users mapping file: +%v", err)
 	}
@@ -199,7 +199,7 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 		return nil, nil, fmt.Errorf("no \"email\" attribute found in userinfo: maybe the client did not request the oidc \"email\"-scope")
 	}
 
-	err = am.resolveUser(ctx, claims)
+	err = am.resolveUser(ctx, claims, clientID)
 	if err != nil {
 		return nil, nil, errors.Wrapf(err, "oidc: error resolving username for external user '%v'", claims["email"])
 	}
@@ -278,7 +278,7 @@ func (am *mgr) getOAuthCtx(ctx context.Context) context.Context {
 	return ctx
 }
 
-// getOIDCProvider returns a singleton OIDC provider
+// getOIDCProvider returns a singleton OIDC provider.
 func (am *mgr) getOIDCProvider(ctx context.Context) (*oidc.Provider, error) {
 	ctx = am.getOAuthCtx(ctx)
 	log := appctx.GetLogger(ctx)
@@ -302,9 +302,8 @@ func (am *mgr) getOIDCProvider(ctx context.Context) (*oidc.Provider, error) {
 	return am.provider, nil
 }
 
-func (am *mgr) resolveUser(ctx context.Context, claims map[string]interface{}) error {
+func (am *mgr) resolveUser(ctx context.Context, claims map[string]interface{}, clientID string) error {
 	var (
-		claim   string
 		value   string
 		resolve bool
 	)
@@ -316,7 +315,6 @@ func (am *mgr) resolveUser(ctx context.Context, claims map[string]interface{}) e
 	}
 
 	if len(am.oidcUsersMapping) > 0 {
-		claim = "username"
 		// map and discover the user's username when a mapping is defined
 		if claims[am.c.GroupClaim] == nil {
 			// we are required to perform a user mapping but the group claim is not available
@@ -342,8 +340,7 @@ func (am *mgr) resolveUser(ctx context.Context, claims map[string]interface{}) e
 		}
 		resolve = true
 	} else if uid == 0 || gid == 0 {
-		claim = "mail"
-		value = claims["email"].(string)
+		value = clientID
 		resolve = true
 	}
 
@@ -356,11 +353,11 @@ func (am *mgr) resolveUser(ctx context.Context, claims map[string]interface{}) e
 		return errors.Wrap(err, "error getting user provider grpc client")
 	}
 	getUserByClaimResp, err := upsc.GetUserByClaim(ctx, &user.GetUserByClaimRequest{
-		Claim: claim,
+		Claim: "username",
 		Value: value,
 	})
 	if err != nil {
-		return errors.Wrapf(err, "error getting user by %s '%v'", claim, value)
+		return errors.Wrapf(err, "error getting user by username '%v'", value)
 	}
 	if getUserByClaimResp.Status.Code != rpc.Code_CODE_OK {
 		return status.NewErrorFromCode(getUserByClaimResp.Status.Code, "oidc")
@@ -372,7 +369,12 @@ func (am *mgr) resolveUser(ctx context.Context, claims map[string]interface{}) e
 	claims["iss"] = getUserByClaimResp.GetUser().GetId().Idp
 	claims[am.c.UIDClaim] = getUserByClaimResp.GetUser().UidNumber
 	claims[am.c.GIDClaim] = getUserByClaimResp.GetUser().GidNumber
-	appctx.GetLogger(ctx).Debug().Str("username", value).Interface("claims", claims).Msg("resolveUser: claims overridden from mapped user")
+	log := appctx.GetLogger(ctx).Debug().Str("username", value).Interface("claims", claims)
+	if uid == 0 || gid == 0 {
+		log.Msgf("resolveUser: claims overridden from '%s'", clientID)
+	} else {
+		log.Msg("resolveUser: claims overridden from mapped user")
+	}
 	return nil
 }
 

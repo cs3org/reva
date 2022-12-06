@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -40,7 +40,7 @@ func New(m map[string]interface{}) (storage.FS, error) {
 	}
 
 	if !o.S3ConfigComplete() {
-		return nil, fmt.Errorf("S3 configuration incomplete")
+		return nil, fmt.Errorf("s3 configuration incomplete")
 	}
 
 	bs, err := blobstore.New(o.S3Endpoint, o.S3Region, o.S3Bucket, o.S3AccessKey, o.S3SecretKey)

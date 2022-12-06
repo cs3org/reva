@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,7 +25,7 @@ import (
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 )
 
-// Manager is the interface to implement to sign and verify tokens
+// Manager is the interface to implement to sign and verify tokens.
 type Manager interface {
 	MintToken(ctx context.Context, u *user.User, scope map[string]*auth.Scope) (string, error)
 	DismantleToken(ctx context.Context, token string) (*user.User, map[string]*auth.Scope, error)

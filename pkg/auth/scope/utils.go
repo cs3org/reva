@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,7 +29,7 @@ import (
 	"github.com/cs3org/reva/pkg/utils"
 )
 
-// FormatScope create a pretty print of the scope
+// FormatScope create a pretty print of the scope.
 func FormatScope(scopeType string, scope *authpb.Scope) (string, error) {
 	// TODO(gmgigi96): check decoder type
 	switch {

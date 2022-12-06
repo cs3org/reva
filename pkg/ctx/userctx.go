@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@ package ctx
 import (
 	"context"
 
+	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 )
 
@@ -29,6 +30,7 @@ type key int
 const (
 	userKey key = iota
 	tokenKey
+	scopeKey
 	idKey
 )
 
@@ -61,4 +63,15 @@ func ContextGetUserID(ctx context.Context) (*userpb.UserId, bool) {
 // ContextSetUserID stores the userid in the context.
 func ContextSetUserID(ctx context.Context, id *userpb.UserId) context.Context {
 	return context.WithValue(ctx, idKey, id)
+}
+
+// ContextSetScopes stores the scopes in the context.
+func ContextSetScopes(ctx context.Context, scopes map[string]*authpb.Scope) context.Context {
+	return context.WithValue(ctx, scopeKey, scopes)
+}
+
+// ContextGetScopes returns the scopes if set in the given context.
+func ContextGetScopes(ctx context.Context) (map[string]*authpb.Scope, bool) {
+	s, ok := ctx.Value(scopeKey).(map[string]*authpb.Scope)
+	return s, ok
 }

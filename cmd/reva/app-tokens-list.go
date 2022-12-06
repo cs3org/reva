@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -38,7 +38,6 @@ func appTokensListCommand() *command {
 	cmd.Usage = func() string { return "Usage: token-list" }
 
 	cmd.Action = func(w ...io.Writer) error {
-
 		client, err := getClient()
 		if err != nil {
 			return err

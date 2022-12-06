@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -41,7 +41,7 @@ type manager struct {
 	cache gcache.Cache
 }
 
-// New returns an implementation of a resource info cache that stores the objects in memory
+// New returns an implementation of a resource info cache that stores the objects in memory.
 func New(m map[string]interface{}) (cache.ResourceInfoCache, error) {
 	c := &config{}
 	if err := mapstructure.Decode(m, c); err != nil {

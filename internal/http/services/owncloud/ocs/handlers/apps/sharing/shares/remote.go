@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,11 +29,10 @@ import (
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	"github.com/go-chi/chi/v5"
-
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/go-chi/chi/v5"
 )
 
 func (h *Handler) createFederatedCloudShare(w http.ResponseWriter, r *http.Request, statInfo *provider.ResourceInfo, role *conversions.Role, roleVal []byte) {
@@ -120,9 +119,8 @@ func (h *Handler) createFederatedCloudShare(w http.ResponseWriter, r *http.Reque
 	response.WriteOCSSuccess(w, r, "OCM Share created")
 }
 
-// GetFederatedShare handles GET requests on /apps/files_sharing/api/v1/shares/remote_shares/{shareid}
+// GetFederatedShare handles GET requests on /apps/files_sharing/api/v1/shares/remote_shares/{shareid}.
 func (h *Handler) GetFederatedShare(w http.ResponseWriter, r *http.Request) {
-
 	// TODO: Implement response with HAL schemating
 	ctx := r.Context()
 
@@ -156,9 +154,8 @@ func (h *Handler) GetFederatedShare(w http.ResponseWriter, r *http.Request) {
 	response.WriteOCSSuccess(w, r, share)
 }
 
-// ListFederatedShares handles GET requests on /apps/files_sharing/api/v1/shares/remote_shares
+// ListFederatedShares handles GET requests on /apps/files_sharing/api/v1/shares/remote_shares.
 func (h *Handler) ListFederatedShares(w http.ResponseWriter, r *http.Request) {
-
 	// TODO Implement pagination.
 	// TODO Implement response with HAL schemating
 	ctx := r.Context()

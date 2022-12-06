@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,7 +22,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 	"path"
@@ -32,7 +32,6 @@ import (
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp"
-
 	"github.com/pkg/errors"
 )
 
@@ -67,10 +66,14 @@ func Send(ctx context.Context, requestBodyMap map[string]interface{}, pi *ocmpro
 	u.Path = path.Join(u.Path, createOCMCoreShareEndpoint)
 	recipientURL := u.String()
 
+<<<<<<< HEAD
 	log := appctx.GetLogger(ctx)
 	log.Info().Msgf("in OCM Send! %s %s", recipientURL, requestBody)
 
 	req, err := http.NewRequest("POST", recipientURL, strings.NewReader(string(requestBody)))
+=======
+	req, err := http.NewRequest(http.MethodPost, recipientURL, strings.NewReader(string(requestBody)))
+>>>>>>> origin/master
 	if err != nil {
 		return errors.Wrap(err, "sender: error framing post request")
 	}
@@ -87,7 +90,7 @@ func Send(ctx context.Context, requestBodyMap map[string]interface{}, pi *ocmpro
 
 	defer resp.Body.Close()
 	if (resp.StatusCode != http.StatusCreated) && (resp.StatusCode != http.StatusOK) {
-		respBody, e := ioutil.ReadAll(resp.Body)
+		respBody, e := io.ReadAll(resp.Body)
 		if e != nil {
 			e = errors.Wrap(e, "sender: error reading request body")
 			return e

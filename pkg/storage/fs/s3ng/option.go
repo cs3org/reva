@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -45,7 +45,7 @@ type Options struct {
 	S3SecretKey string `mapstructure:"s3.secret_key"`
 }
 
-// S3ConfigComplete return true if all required s3 fields are set
+// S3ConfigComplete return true if all required s3 fields are set.
 func (o *Options) S3ConfigComplete() bool {
 	return o.S3Endpoint != "" &&
 		o.S3Region != "" &&

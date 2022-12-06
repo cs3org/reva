@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,11 +26,10 @@ import (
 	"strings"
 
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
-	"github.com/cs3org/reva/pkg/mentix/utils"
-	"github.com/rs/zerolog"
-
 	"github.com/cs3org/reva/pkg/mentix/config"
 	"github.com/cs3org/reva/pkg/mentix/meshdata"
+	"github.com/cs3org/reva/pkg/mentix/utils"
+	"github.com/rs/zerolog"
 )
 
 // HandleDefaultQuery processes a basic query.
