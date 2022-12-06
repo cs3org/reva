@@ -550,23 +550,22 @@ func (sm *Manager) ListReceivedShares(ctx context.Context) ([]*ocm.ReceivedShare
 		altResultShare := respArr[i].Share
 		if altResultShare == nil {
 			return nil, errors.New("received an unreadable share object from the EFSS backend")
-		} else {
-			pointersBaseShare[i] = &ocm.Share{
-				Id:          altResultShare.ID,
-				ResourceId:  altResultShare.ResourceID,
-				Permissions: altResultShare.Permissions,
-				Grantee: &provider.Grantee{
-					Id: altResultShare.Grantee.ID,
-				},
-				Owner:   altResultShare.Owner,
-				Creator: altResultShare.Creator,
-				Ctime:   altResultShare.Ctime,
-				Mtime:   altResultShare.Mtime,
-			}
-			pointersReceivedShare[i] = &ocm.ReceivedShare{
-				Share: pointersBaseShare[i],
-				State: respArr[i].State,
-			}
+		}
+		pointersBaseShare[i] = &ocm.Share{
+			Id:          altResultShare.ID,
+			ResourceId:  altResultShare.ResourceID,
+			Permissions: altResultShare.Permissions,
+			Grantee: &provider.Grantee{
+				Id: altResultShare.Grantee.ID,
+			},
+			Owner:   altResultShare.Owner,
+			Creator: altResultShare.Creator,
+			Ctime:   altResultShare.Ctime,
+			Mtime:   altResultShare.Mtime,
+		}
+		pointersReceivedShare[i] = &ocm.ReceivedShare{
+			Share: pointersBaseShare[i],
+			State: respArr[i].State,
 		}
 	}
 	return pointersReceivedShare, err
