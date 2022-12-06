@@ -133,8 +133,7 @@ func (c *Config) init() {
 	}
 
 	if c.UserLayout == "" {
-		c.UserLayout = "users/{{.Id.OpaqueId}}" // TODO set better layout
-		//c.UserLayout = "{{.Username}}" // TODO set better layout
+		c.UserLayout = "{{.Username}}" // TODO set better layout
 	}
 
 	if c.UserIDCacheSize == 0 {
