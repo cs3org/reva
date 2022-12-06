@@ -2326,8 +2326,8 @@ func (fs *eosfs) convert(ctx context.Context, eosFileInfo *eosclient.FileInfo) (
 
 	info := &provider.ResourceInfo{
 		Id: &provider.ResourceId{
-			SpaceId:  fmt.Sprintf("%d", eosFileInfo.Inode),
-			OpaqueId: fmt.Sprintf("%d", eosFileInfo.Inode),
+			SpaceId:  fmt.Sprintf("%d", eosFileInfo.FID),
+			OpaqueId: fmt.Sprintf("%d", eosFileInfo.FID),
 		},
 		Path:          path,
 		Owner:         owner,
