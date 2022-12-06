@@ -49,7 +49,6 @@ func getOCMEndpoint(originProvider *ocmprovider.ProviderInfo) (string, error) {
 // Send executes the POST to the OCM shares endpoint to create the share at the
 // remote site.
 func Send(ctx context.Context, requestBodyMap map[string]interface{}, pi *ocmprovider.ProviderInfo) error {
-
 	requestBody, err := json.Marshal(requestBodyMap)
 	if err != nil {
 		err = errors.Wrap(err, "error marshalling request body")

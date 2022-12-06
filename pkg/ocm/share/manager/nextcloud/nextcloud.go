@@ -570,7 +570,6 @@ func (sm *Manager) ListReceivedShares(ctx context.Context) ([]*ocm.ReceivedShare
 		}
 	}
 	return pointersReceivedShare, err
-
 }
 
 // GetReceivedShare as defined in the ocm.share.Manager interface
