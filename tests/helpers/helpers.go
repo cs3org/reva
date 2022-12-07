@@ -46,7 +46,7 @@ func TempDir(name string) (string, error) {
 	if err != nil {
 		return "nil", err
 	}
-	tmpRoot, err := os.MkdirTemp(tmpDir, "reva-unit-tests-*-root")
+	tmpRoot, err := os.MkdirTemp(tmpDir, "reva-tests-*-root")
 	if err != nil {
 		return "nil", err
 	}
