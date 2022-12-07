@@ -89,7 +89,8 @@ func startRevads(configs map[string]string, variables map[string]string) (map[st
 		ownAddress := addresses[name]
 
 		// Create a temporary root for this revad
-		tmpRoot, err := os.MkdirTemp("", "reva-grpc-integration-tests-*-root")
+		tmpRoot := "/workspace/tmp/reva-grpc-integration-tests-*-root"
+		err := os.MkdirAll(tmpRoot, 0750)
 		if err != nil {
 			return nil, errors.Wrapf(err, "Could not create tmpdir")
 		}
