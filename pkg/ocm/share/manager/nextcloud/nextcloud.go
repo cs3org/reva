@@ -557,7 +557,6 @@ func (sm *Manager) ListReceivedShares(ctx context.Context) ([]*ocm.ReceivedShare
 			Share: s,
 			State: share.State,
 		})
-
 	}
 	return pointersReceivedShare, err
 }
