@@ -1,23 +1,24 @@
 // @project        The CERN Tape Archive (CTA)
 // @brief          CTA-EOS gRPC API for CASTOR-EOS migration
 // @copyright      Copyright 2019 CERN
-// @license        This program is free software: you can redistribute it and/or modify
-//                 it under the terms of the GNU General Public License as published by
-//                 the Free Software Foundation, either version 3 of the License, or
-//                 (at your option) any later version.
+// @license        This program is free software: you can redistribute it and/or
+// modify
+//                 it under the terms of the GNU General Public License as
+//                 published by the Free Software Foundation, either version 3
+//                 of the License, or (at your option) any later version.
 //
-//                 This program is distributed in the hope that it will be useful,
-//                 but WITHOUT ANY WARRANTY; without even the implied warranty of
-//                 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-//                 GNU General Public License for more details.
+//                 This program is distributed in the hope that it will be
+//                 useful, but WITHOUT ANY WARRANTY; without even the implied
+//                 warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
+//                 PURPOSE.  See the GNU General Public License for more
+//                 details.
 //
-//                 You should have received a copy of the GNU General Public License
-//                 along with this program.  If not, see <http://www.gnu.org/licenses/>.
-
+//                 You should have received a copy of the GNU General Public
+//                 License along with this program.  If not, see
+//                 <http://www.gnu.org/licenses/>.
 
 // NOTE: Compile for Go with:
 // protoc ./eos_grpc.proto --go_out=plugins=grpc:.
-
 
 syntax = "proto3";
 
@@ -29,37 +30,36 @@ option java_outer_classname = "EosProto";
 option objc_class_prefix = "EOS";
 option go_package = "github.com/cern-eos/grpc-proto/protobuf;eos_grpc";
 
-
 service Eos {
   // Replies to a ping
-  rpc Ping (PingRequest) returns (PingReply) {}  
+  rpc Ping(PingRequest) returns (PingReply) {}
 
   // ---------------------------------------------------------------------
   // NAMESPACE
   // ---------------------------------------------------------------------
 
-  // Replies to MD requests with a stream 
-  rpc MD (MDRequest) returns (stream MDResponse) {}
+  // Replies to MD requests with a stream
+  rpc MD(MDRequest) returns (stream MDResponse) {}
 
   // Replies to Find requests with a stream
-  rpc Find (FindRequest) returns (stream MDResponse) {}
+  rpc Find(FindRequest) returns (stream MDResponse) {}
 
   // Replies to a NsStat operation
-  rpc NsStat (NsStatRequest) returns (NsStatResponse) {}
+  rpc NsStat(NsStatRequest) returns (NsStatResponse) {}
 
   // Replies to an insert
-  rpc ContainerInsert (ContainerInsertRequest) returns (InsertReply) {}  
-  rpc FileInsert (FileInsertRequest) returns (InsertReply) {}
+  rpc ContainerInsert(ContainerInsertRequest) returns (InsertReply) {}
+  rpc FileInsert(FileInsertRequest) returns (InsertReply) {}
 
   // Replies to a NsRequest operation
-  rpc Exec (NSRequest) returns (NSResponse) {}
+  rpc Exec(NSRequest) returns (NSResponse) {}
 
   // ---------------------------------------------------------------------
   // OPENSTACK
   // ---------------------------------------------------------------------
 
   // Manila Driver
-  rpc ManilaServerRequest (ManilaRequest) returns (ManilaResponse) {}  
+  rpc ManilaServerRequest(ManilaRequest) returns (ManilaResponse) {}
 }
 
 message PingRequest {
@@ -67,9 +67,7 @@ message PingRequest {
   bytes message = 2;
 }
 
-message PingReply {
-  bytes message = 1;
-}
+message PingReply { bytes message = 1; }
 
 // ---------------------------------------------------------------------
 // NAMESPACE
@@ -113,12 +111,13 @@ message FileMdProto {
   bytes link_name = 9;
   Time ctime = 10; // change time
   Time mtime = 11; // modification time
-  Checksum checksum =12;
+  Checksum checksum = 12;
   repeated uint32 locations = 13;
   repeated uint32 unlink_locations = 14;
   map<string, bytes> xattrs = 15;
   bytes path = 16;
   string etag = 17;
+  uint64 inode = 18;
 }
 
 message ContainerMdProto {
@@ -136,32 +135,53 @@ message ContainerMdProto {
   map<string, bytes> xattrs = 12;
   bytes path = 13;
   string etag = 14;
+  uint64 inode = 15;
 }
 
-enum TYPE { FILE = 0; CONTAINER = 1; LISTING = 2; STAT = 3;}  
+enum TYPE {
+  FILE = 0;
+  CONTAINER = 1;
+  LISTING = 2;
+  STAT = 3;
+}
 
-enum QUOTATYPE { USER = 0; GROUP = 2; PROJECT = 3;}
+enum QUOTATYPE {
+  USER = 0;
+  GROUP = 2;
+  PROJECT = 3;
+}
 
-enum QUOTAOP { GET = 0; SET = 1; RM = 2; RMNODE = 3;}
+enum QUOTAOP {
+  GET = 0;
+  SET = 1;
+  RM = 2;
+  RMNODE = 3;
+}
 
-enum QUOTAENTRY { NONE = 0; VOLUME = 1; INODE = 2;}
-     
-message QuotaProto { 
-  bytes path = 1;                // quota node path
-  string name = 2;               // associated name for the given type
-  QUOTATYPE type = 3;            // user,group,project or all quota
-  uint64 usedbytes = 4;          // bytes used physical
-  uint64 usedlogicalbytes = 5;   // bytes used logical 
-  uint64 usedfiles = 6;          // number of files used
-  uint64 maxbytes = 7;           // maximum number of bytes (volume quota)
-  uint64 maxlogicalbytes = 8;    // maximum number of logical bytes (logical volume quota)
-  uint64 maxfiles = 9;           // maximum number of files (inode quota)
-  float percentageusedbytes = 10; // percentage of volume quota used from 0 to 100
+enum QUOTAENTRY {
+  NONE = 0;
+  VOLUME = 1;
+  INODE = 2;
+}
+
+message QuotaProto {
+  bytes path = 1;              // quota node path
+  string name = 2;             // associated name for the given type
+  QUOTATYPE type = 3;          // user,group,project or all quota
+  uint64 usedbytes = 4;        // bytes used physical
+  uint64 usedlogicalbytes = 5; // bytes used logical
+  uint64 usedfiles = 6;        // number of files used
+  uint64 maxbytes = 7;         // maximum number of bytes (volume quota)
+  uint64 maxlogicalbytes =
+      8;               // maximum number of logical bytes (logical volume quota)
+  uint64 maxfiles = 9; // maximum number of files (inode quota)
+  float percentageusedbytes =
+      10; // percentage of volume quota used from 0 to 100
   float percentageusedfiles = 11; // percentag of inode quota used from 0 to 100
-  string statusbytes = 12;       // status string for volume quota ok,warning,exceeded
-  string statusfiles = 13;       // status string for inode quota ok,warning,exceeded
+  string statusbytes = 12; // status string for volume quota ok,warning,exceeded
+  string statusfiles = 13; // status string for inode quota ok,warning,exceeded
 }
-  
+
 message RoleId {
   uint64 uid = 1;
   uint64 gid = 2;
@@ -222,26 +242,25 @@ message MDResponse {
 message FindRequest {
   TYPE type = 1;
   MDId id = 2;
-  RoleId role = 3;	
+  RoleId role = 3;
   string authkey = 4;
   uint64 maxdepth = 5;
   MDSelection selection = 6;
 }
 
 message ShareAuth {
- string prot = 1;
- string name = 2;
- string host = 3;
+  string prot = 1;
+  string name = 2;
+  string host = 3;
 }
-
 
 message ShareProto {
   string permission = 1;
-  uint64 expires    = 2;
-  string owner      = 3;
-  string group      = 4;
+  uint64 expires = 2;
+  string owner = 3;
+  string group = 4;
   uint64 generation = 5;
-  string path    = 6;
+  string path = 6;
   bool allowtree = 7;
   string vtoken = 8;
   repeated ShareAuth origins = 9;
@@ -260,14 +279,10 @@ message NSRequest {
     bool recursive = 2;
     int64 mode = 3;
   }
-  
-  message RmdirRequest {
-    MDId id = 1;
-  }
- 
-  message TouchRequest {
-    MDId id = 1;
-  }
+
+  message RmdirRequest { MDId id = 1; }
+
+  message TouchRequest { MDId id = 1; }
 
   message UnlinkRequest {
     MDId id = 1;
@@ -292,19 +307,19 @@ message NSRequest {
 
   message VersionRequest {
     enum VERSION_CMD {
-     CREATE= 0;
-     PURGE = 1;
-     LIST = 2;
-     GRAB = 3;
-   }
-   MDId id = 1;
-   VERSION_CMD cmd = 2;
-   int32 maxversion = 3;
-   string grabversion = 4;
+      CREATE = 0;
+      PURGE = 1;
+      LIST = 2;
+      GRAB = 3;
+    }
+    MDId id = 1;
+    VERSION_CMD cmd = 2;
+    int32 maxversion = 3;
+    string grabversion = 4;
   }
 
   message RecycleRequest {
-    string key = 1; 
+    string key = 1;
     enum RECYCLE_CMD {
       RESTORE = 0;
       PURGE = 1;
@@ -333,11 +348,12 @@ message NSRequest {
     map<string, bytes> xattrs = 2;
     bool recursive = 3;
     repeated string keystodelete = 4;
+    bool create = 5;
   }
 
   message ChownRequest {
     MDId id = 1;
-    RoleId owner = 2;  
+    RoleId owner = 2;
   }
 
   message ChmodRequest {
@@ -349,7 +365,7 @@ message NSRequest {
     enum ACL_COMMAND {
       NONE = 0;
       MODIFY = 1;
-      LIST   = 2;
+      LIST = 2;
     }
 
     enum ACL_TYPE {
@@ -361,102 +377,157 @@ message NSRequest {
     ACL_COMMAND cmd = 2;
     bool recursive = 3;
     ACL_TYPE type = 4;
-    string rule    = 5;
+    string rule = 5;
     uint32 position = 6;
   }
 
-  message TokenRequest {
-    ShareToken token = 1;
-  }
+  message TokenRequest { ShareToken token = 1; }
 
   message QuotaRequest {
     bytes path = 1;
     RoleId id = 2;
-    QUOTAOP op = 3; // get or set, rm or rmnode
-    uint64 maxfiles = 4; // maximum number of bytes (volume quota) for setting
-    uint64 maxbytes = 5; // maximum number of bytes (volume quota) for setting
+    QUOTAOP op = 3;       // get or set, rm or rmnode
+    uint64 maxfiles = 4;  // maximum number of bytes (volume quota) for setting
+    uint64 maxbytes = 5;  // maximum number of bytes (volume quota) for setting
     QUOTAENTRY entry = 6; // select volume or inode entry for deletion
+  }
+
+  message ShareRequest {
+    message LsShare {
+      enum OutFormat {
+        NONE = 0;       //
+        MONITORING = 1; // [-m]
+        LISTING = 2;    // [-l]
+        JSON = 3;       // [grpc]
+      }
+      OutFormat outformat = 1; //
+      string selection = 2;    //
+    }
+
+    message OperateShare {
+      enum Op {
+        CREATE = 0;
+        REMOVE = 1;
+        SHARE = 2;
+        UNSHARE = 3;
+        ACCESS = 4;
+        MODIFY = 5;
+      }
+      Op op = 1;
+      string share = 2;
+      string acl = 3;
+      string path = 4;
+      string user = 5;
+      string group = 6;
+    }
+
+    oneof subcmd {
+      LsShare ls = 1;
+      OperateShare op = 2;
+    }
   }
 
   string authkey = 1;
   RoleId role = 2;
+
   // Actual request data object
   oneof command {
-    MkdirRequest mkdir       = 21;
-    RmdirRequest rmdir       = 22;
-    TouchRequest touch       = 23;
-    UnlinkRequest unlink     = 24;
-    RmRequest rm             = 25;
-    RenameRequest rename     = 26;
-    SymlinkRequest symlink   = 27;
-    VersionRequest version   = 28;
-    RecycleRequest recycle   = 29;
-    SetXAttrRequest xattr    = 30;
-    ChownRequest chown       = 31;
-    ChmodRequest chmod       = 32;
-    AclRequest acl           = 33;
-    TokenRequest token       = 34;
-    QuotaRequest quota       = 35;
+    MkdirRequest mkdir = 21;
+    RmdirRequest rmdir = 22;
+    TouchRequest touch = 23;
+    UnlinkRequest unlink = 24;
+    RmRequest rm = 25;
+    RenameRequest rename = 26;
+    SymlinkRequest symlink = 27;
+    VersionRequest version = 28;
+    RecycleRequest recycle = 29;
+    SetXAttrRequest xattr = 30;
+    ChownRequest chown = 31;
+    ChmodRequest chmod = 32;
+    AclRequest acl = 33;
+    TokenRequest token = 34;
+    QuotaRequest quota = 35;
+    ShareRequest share = 36;
   }
 }
-
-
 
 message NSResponse {
   message ErrorResponse {
     int64 code = 1;
-    string msg = 2;	
+    string msg = 2;
   }
 
   message VersionResponse {
     message VersionInfo {
-      MDId   id = 1;
-      Time   mtime = 2;
+      MDId id = 1;
+      Time mtime = 2;
     }
     int64 code = 1;
-    string msg = 2;	
+    string msg = 2;
     repeated VersionInfo versions = 3;
   }
 
   message RecycleResponse {
     int64 code = 1;
-    string msg = 2;	
-    
+    string msg = 2;
+
     message RecycleInfo {
-      enum DELETIONTYPE { FILE = 0;  TREE = 1; }
-      MDId   id = 1;
+      enum DELETIONTYPE {
+        FILE = 0;
+        TREE = 1;
+      }
+      MDId id = 1;
       RoleId owner = 2;
-      Time   dtime = 3;
+      Time dtime = 3;
       uint64 size = 4;
       DELETIONTYPE type = 5;
       string key = 6;
-    }   
-    
+    }
+
     repeated RecycleInfo recycles = 3;
   }
 
   message AclResponse {
     int64 code = 1;
-    string msg = 2;	
+    string msg = 2;
     string rule = 3;
   }
 
   message QuotaResponse {
-    int64 code = 1;   
-    string msg = 2;   	
+    int64 code = 1;
+    string msg = 2;
     repeated QuotaProto quotanode = 3;
   }
 
-  ErrorResponse       error = 1;
-  VersionResponse     version = 2;
-  RecycleResponse     recycle = 3;
-  AclResponse         acl = 4;
-  QuotaResponse       quota = 5;
+  message ShareInfo {
+    string name = 1;
+    string root = 2;
+    string rule = 3;
+    uint64 uid = 4;
+    uint64 nshared = 5;
+  }
+
+  message ShareAccess {
+    string name = 1;
+    bool granted = 2;
+  }
+
+  message ShareResponse {
+    int64 code = 1;
+    string msg = 2;
+    repeated ShareInfo shares = 3;
+    repeated ShareAccess access = 4;
+  }
+
+  ErrorResponse error = 1;
+  VersionResponse version = 2;
+  RecycleResponse recycle = 3;
+  AclResponse acl = 4;
+  QuotaResponse quota = 5;
+  ShareResponse share = 6;
 }
 
-message NsStatRequest {
-  string authkey = 1;
-}
+message NsStatRequest { string authkey = 1; }
 
 message NsStatResponse {
   int64 code = 1;
@@ -481,57 +552,53 @@ message NsStatResponse {
 // ---------------------------------------------------------------------
 
 enum MANILA_REQUEST_TYPE {
-   CREATE_SHARE = 0;
-   DELETE_SHARE = 1;
-   EXTEND_SHARE = 2;
-   SHRINK_SHARE = 3;
-   MANAGE_EXISTING = 4;
-   UNMANAGE = 5;
-   GET_CAPACITIES = 6;
-/* EXTRA FUNCTIONS NOT IMPLEMENTED */
-   /*
-   CREATE_SNAPSHOT = 7;
-   DELETE_SNAPSHOT = 8;
-   CREATE_SHARE_FROM_SNAPSHOT = 9;
-   ENSURE_SHARE = 10;
-   ALLOW_ACCESS = 11;
-   DENY_ACCESS = 12;
-   GET_SHARE_STATS = 13;
-   DO_SETUP = 14;
-   SETUP_SERVER = 15;
-   TEARDOWN_SERVER = 16;
-   GET_NETWORK_ALLOCATIONS_NUMBER = 17;
-   VERIFY_SHARE_SERVER_HANDLING = 18;
-   CREATE_SHARE_GROUP = 19;
-   DELETE_SHARE_GROUP = 20;
-   */
-
+  CREATE_SHARE = 0;
+  DELETE_SHARE = 1;
+  EXTEND_SHARE = 2;
+  SHRINK_SHARE = 3;
+  MANAGE_EXISTING = 4;
+  UNMANAGE = 5;
+  GET_CAPACITIES = 6;
+  /* EXTRA FUNCTIONS NOT IMPLEMENTED */
+  /*
+  CREATE_SNAPSHOT = 7;
+  DELETE_SNAPSHOT = 8;
+  CREATE_SHARE_FROM_SNAPSHOT = 9;
+  ENSURE_SHARE = 10;
+  ALLOW_ACCESS = 11;
+  DENY_ACCESS = 12;
+  GET_SHARE_STATS = 13;
+  DO_SETUP = 14;
+  SETUP_SERVER = 15;
+  TEARDOWN_SERVER = 16;
+  GET_NETWORK_ALLOCATIONS_NUMBER = 17;
+  VERIFY_SHARE_SERVER_HANDLING = 18;
+  CREATE_SHARE_GROUP = 19;
+  DELETE_SHARE_GROUP = 20;
+  */
 }
 
 message ManilaRequest {
-   MANILA_REQUEST_TYPE request_type = 1;
-   string auth_key = 2;
-   string protocol = 3;
-   string share_name = 4;
-   string description = 5;
-   string share_id = 6;
-   string share_group_id = 7;
-   int32 quota = 8;
-   string creator = 9;
-   string egroup = 10;
-   string admin_egroup = 11;
-   string share_host = 12;
-   string share_location = 13;
+  MANILA_REQUEST_TYPE request_type = 1;
+  string auth_key = 2;
+  string protocol = 3;
+  string share_name = 4;
+  string description = 5;
+  string share_id = 6;
+  string share_group_id = 7;
+  int32 quota = 8;
+  string creator = 9;
+  string egroup = 10;
+  string admin_egroup = 11;
+  string share_host = 12;
+  string share_location = 13;
 }
 
 message ManilaResponse {
-   string msg = 1; //for generic messages
-   int32 code = 2; // < 1 is an error -- > 1 is OK
-   int64 total_used = 3;
-   int64 total_capacity = 4;
-   int64 new_share_quota = 5;
-   string new_share_path = 6;
-
+  string msg = 1; // for generic messages
+  int32 code = 2; // < 1 is an error -- > 1 is OK
+  int64 total_used = 3;
+  int64 total_capacity = 4;
+  int64 new_share_quota = 5;
+  string new_share_path = 6;
 }
-
-

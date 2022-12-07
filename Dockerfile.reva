@@ -16,7 +16,7 @@
 # granted to it by virtue of its status as an Intergovernmental Organization
 # or submit itself to any jurisdiction.
 
-FROM golang:alpine3.13 as builder
+FROM golang:1.19-alpine as builder
 
 RUN apk --no-cache add \
   ca-certificates \

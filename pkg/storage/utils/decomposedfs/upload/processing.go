@@ -22,9 +22,9 @@ import (
 	"context"
 	"encoding/json"
 	iofs "io/fs"
-	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strconv"
 	"time"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -40,6 +40,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/options"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/filelocks"
+	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
@@ -51,7 +52,6 @@ var defaultFilePerm = os.FileMode(0664)
 // PermissionsChecker defines an interface for checking permissions on a Node
 type PermissionsChecker interface {
 	AssemblePermissions(ctx context.Context, n *node.Node) (ap provider.ResourcePermissions, err error)
-	HasPermission(ctx context.Context, n *node.Node, check func(*provider.ResourcePermissions) bool) (can bool, err error)
 }
 
 // New returns a new processing instance
@@ -89,23 +89,31 @@ func New(ctx context.Context, info tusd.FileInfo, lu *lookup.Lookup, tp Tree, p 
 	}
 
 	// check permissions
-	var ok bool
+	var (
+		checkNode *node.Node
+		path      string
+	)
 	if n.Exists {
 		// check permissions of file to be overwritten
-		ok, err = p.HasPermission(ctx, n, func(rp *provider.ResourcePermissions) bool {
-			return rp.InitiateFileUpload
-		})
+		checkNode = n
+		path, _ = storagespace.FormatReference(&provider.Reference{ResourceId: &provider.ResourceId{
+			SpaceId:  checkNode.SpaceID,
+			OpaqueId: checkNode.ID,
+		}})
 	} else {
 		// check permissions of parent
-		ok, err = p.HasPermission(ctx, parent, func(rp *provider.ResourcePermissions) bool {
-			return rp.InitiateFileUpload
-		})
+		checkNode = parent
+		path, _ = storagespace.FormatReference(&provider.Reference{ResourceId: &provider.ResourceId{
+			SpaceId:  checkNode.SpaceID,
+			OpaqueId: checkNode.ID,
+		}, Path: n.Name})
 	}
+	rp, err := p.AssemblePermissions(ctx, checkNode)
 	switch {
 	case err != nil:
 		return nil, errtypes.InternalError(err.Error())
-	case !ok:
-		return nil, errtypes.PermissionDenied(filepath.Join(n.ParentID, n.Name))
+	case !rp.InitiateFileUpload:
+		return nil, errtypes.PermissionDenied(path)
 	}
 
 	// are we trying to overwriting a folder with a file?
@@ -126,7 +134,10 @@ func New(ctx context.Context, info tusd.FileInfo, lu *lookup.Lookup, tp Tree, p 
 	binPath := filepath.Join(fsRoot, "uploads", info.ID)
 	usr := ctxpkg.ContextMustGetUser(ctx)
 
-	var spaceRoot string
+	var (
+		spaceRoot string
+		ok        bool
+	)
 	if info.Storage != nil {
 		if spaceRoot, ok = info.Storage["SpaceRoot"]; !ok {
 			spaceRoot = n.SpaceRoot.ID
@@ -176,7 +187,7 @@ func Get(ctx context.Context, id string, lu *lookup.Lookup, tp Tree, fsRoot stri
 	infoPath := filepath.Join(fsRoot, "uploads", id+".info")
 
 	info := tusd.FileInfo{}
-	data, err := ioutil.ReadFile(infoPath)
+	data, err := os.ReadFile(infoPath)
 	if err != nil {
 		if errors.Is(err, iofs.ErrNotExist) {
 			// Interpret os.ErrNotExist as 404 Not Found
@@ -218,6 +229,7 @@ func Get(ctx context.Context, id string, lu *lookup.Lookup, tp Tree, fsRoot stri
 
 	up := buildUpload(ctx, info, info.Storage["BinPath"], infoPath, lu, tp, pub, async, tknopts)
 	up.versionsPath = info.MetaData["versionsPath"]
+	up.sizeDiff, _ = strconv.ParseInt(info.MetaData["sizeDiff"], 10, 64)
 	return up, nil
 }
 
@@ -307,6 +319,9 @@ func initNewNode(upload *Upload, n *node.Node, fsize uint64) error {
 		}
 	}
 
+	// on a new file the sizeDiff is the fileSize
+	upload.sizeDiff = int64(fsize)
+	upload.Info.MetaData["sizeDiff"] = strconv.Itoa(int(upload.sizeDiff))
 	return nil
 }
 
@@ -334,7 +349,9 @@ func updateExistingNode(upload *Upload, n *node.Node, spaceID string, fsize uint
 	}
 
 	upload.versionsPath = upload.lu.InternalPath(spaceID, n.ID+node.RevisionIDDelimiter+vfi.ModTime().UTC().Format(time.RFC3339Nano))
+	upload.sizeDiff = int64(fsize) - old.Blobsize
 	upload.Info.MetaData["versionsPath"] = upload.versionsPath
+	upload.Info.MetaData["sizeDiff"] = strconv.Itoa(int(upload.sizeDiff))
 
 	targetPath := n.InternalPath()
 

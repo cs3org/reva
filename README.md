@@ -57,7 +57,7 @@ If you see `TestGetManagerWithInvalidUser/Nil_in_user` fail, [try removing](http
 To run a single one of them you can do:
 ```sh
 $ go test `go list ./pkg/utils/...`
-ok  	github.com/cs3org/reva/pkg/utils	0.374s
+ok  	github.com/cs3org/reva/v2/pkg/utils	0.374s
 ```
 
 ### Integration tests (GRPC)

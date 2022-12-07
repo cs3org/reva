@@ -255,20 +255,20 @@ func (n *Node) Unlock(ctx context.Context, lock *provider.Lock) error {
 
 // CheckLock compares the context lock with the node lock
 func (n *Node) CheckLock(ctx context.Context) error {
-	lockID, _ := ctxpkg.ContextGetLockID(ctx)
-	lock, _ := n.ReadLock(ctx, false)
-	if lock != nil {
-		switch lockID {
+	contextLock, _ := ctxpkg.ContextGetLockID(ctx)
+	diskLock, _ := n.ReadLock(ctx, false)
+	if diskLock != nil {
+		switch contextLock {
 		case "":
-			return errtypes.Locked(lock.LockId) // no lockid in request
-		case lock.LockId:
+			return errtypes.Locked(diskLock.LockId) // no lockid in request
+		case diskLock.LockId:
 			return nil // ok
 		default:
 			return errtypes.Aborted("mismatching lock")
 		}
 	}
-	if lockID != "" {
-		return errtypes.Aborted("not locked")
+	if contextLock != "" {
+		return errtypes.Aborted("not locked") // no lock on disk. why is there a lockid in the context
 	}
 	return nil // ok
 }

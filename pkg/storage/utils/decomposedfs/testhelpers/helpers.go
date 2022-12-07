@@ -73,9 +73,9 @@ const (
 // NewTestEnv prepares a test environment on disk
 // The storage contains some directories and a file:
 //
-//  /dir1/
-//  /dir1/file1
-//  /dir1/subdir1/
+//	/dir1/
+//	/dir1/file1
+//	/dir1/subdir1/
 //
 // The default config can be overridden by providing the strings to override
 // via map as a parameter
@@ -228,8 +228,12 @@ func (t *TestEnv) CreateTestFile(name, blobID, parentID, spaceID string, blobSiz
 	if err != nil {
 		return nil, err
 	}
+	if err := n.FindStorageSpaceRoot(); err != nil {
+		return nil, err
+	}
 
-	return n, n.FindStorageSpaceRoot()
+	return n, t.Tree.Propagate(context.Background(), n, blobSize)
+
 }
 
 // CreateTestStorageSpace will create a storage space with some directories and files
@@ -242,8 +246,18 @@ func (t *TestEnv) CreateTestStorageSpace(typ string, quota *providerv1beta1.Quot
 	t.PermissionsClient.On("CheckPermission", mock.Anything, mock.Anything, mock.Anything).Times(1).Return(&cs3permissions.CheckPermissionResponse{
 		Status: &v1beta11.Status{Code: v1beta11.Code_CODE_OK},
 	}, nil)
+	// Permissions required for setup below
+	t.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(providerv1beta1.ResourcePermissions{
+		Stat:     true,
+		AddGrant: true,
+	}, nil).Times(1) //
+
+	var owner *userpb.User
+	if typ == "personal" {
+		owner = t.Owner
+	}
 	space, err := t.Fs.CreateStorageSpace(t.Ctx, &providerv1beta1.CreateStorageSpaceRequest{
-		Owner: t.Owner,
+		Owner: owner,
 		Type:  typ,
 		Quota: quota,
 	})
@@ -267,7 +281,10 @@ func (t *TestEnv) CreateTestStorageSpace(typ string, quota *providerv1beta1.Quot
 	}
 
 	// Create dir1
-	t.Permissions.On("HasPermission", mock.Anything, mock.Anything, mock.Anything).Return(true, nil).Times(1) // Permissions required for setup below
+	t.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(providerv1beta1.ResourcePermissions{
+		Stat:            true,
+		CreateContainer: true,
+	}, nil).Times(1) // Permissions required for setup below
 	dir1, err := t.CreateTestDir("./dir1", ref)
 	if err != nil {
 		return nil, err
@@ -280,7 +297,10 @@ func (t *TestEnv) CreateTestStorageSpace(typ string, quota *providerv1beta1.Quot
 	}
 
 	// Create subdir1 in dir1
-	t.Permissions.On("HasPermission", mock.Anything, mock.Anything, mock.Anything).Return(true, nil).Times(1) // Permissions required for setup below
+	t.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(providerv1beta1.ResourcePermissions{
+		Stat:            true,
+		CreateContainer: true,
+	}, nil).Times(1) // Permissions required for setup below
 	ref.Path = "./dir1/subdir1"
 	err = t.Fs.CreateDir(t.Ctx, ref)
 	if err != nil {
@@ -293,7 +313,10 @@ func (t *TestEnv) CreateTestStorageSpace(typ string, quota *providerv1beta1.Quot
 	}
 
 	// Create emptydir
-	t.Permissions.On("HasPermission", mock.Anything, mock.Anything, mock.Anything).Return(true, nil).Times(1) // Permissions required for setup below
+	t.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(providerv1beta1.ResourcePermissions{
+		Stat:            true,
+		CreateContainer: true,
+	}, nil).Times(1) // Permissions required for setup below
 	ref.Path = "/emptydir"
 	err = t.Fs.CreateDir(t.Ctx, ref)
 	if err != nil {

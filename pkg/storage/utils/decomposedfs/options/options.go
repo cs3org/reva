@@ -22,6 +22,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/v2/pkg/sharedconf"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )
@@ -37,9 +39,6 @@ type Options struct {
 	// UserLayout describes the relative path from the storage's root node to the users home node.
 	UserLayout string `mapstructure:"user_layout"`
 
-	// TODO NodeLayout option to save nodes as eg. nodes/1d/d8/1dd84abf-9466-4e14-bb86-02fc4ea3abcf
-	ShareFolder string `mapstructure:"share_folder"`
-
 	// propagate mtime changes as tmtime (tree modification time) to the parent directory when user.ocis.propagation=1 is set on a node
 	TreeTimeAccounting bool `mapstructure:"treetime_accounting"`
 
@@ -47,7 +46,9 @@ type Options struct {
 	TreeSizeAccounting bool `mapstructure:"treesize_accounting"`
 
 	// permissions service to use when checking permissions
-	PermissionsSVC string `mapstructure:"permissionssvc"`
+	PermissionsSVC           string `mapstructure:"permissionssvc"`
+	PermissionsClientTLSMode string `mapstructure:"permissionssvc_tls_mode"`
+	PermTLSMode              pool.TLSMode
 
 	PersonalSpaceAliasTemplate string `mapstructure:"personalspacealias_template"`
 	GeneralSpaceAliasTemplate  string `mapstructure:"generalspacealias_template"`
@@ -60,7 +61,8 @@ type Options struct {
 
 	StatCache CacheOptions `mapstructure:"statcache"`
 
-	MaxAcquireLockCycles int `mapstructure:"max_acquire_lock_cycles"`
+	MaxAcquireLockCycles    int `mapstructure:"max_acquire_lock_cycles"`
+	LockCycleDurationFactor int `mapstructure:"lock_cycle_duration_factor"`
 }
 
 // EventOptions are the configurable options for events
@@ -101,12 +103,6 @@ func New(m map[string]interface{}) (*Options, error) {
 	// ensure user layout has no starting or trailing /
 	o.UserLayout = strings.Trim(o.UserLayout, "/")
 
-	if o.ShareFolder == "" {
-		o.ShareFolder = "/Shares"
-	}
-	// ensure share folder always starts with slash
-	o.ShareFolder = filepath.Join("/", o.ShareFolder)
-
 	// c.DataDirectory should never end in / unless it is the root
 	o.Root = filepath.Clean(o.Root)
 
@@ -116,6 +112,21 @@ func New(m map[string]interface{}) (*Options, error) {
 
 	if o.GeneralSpaceAliasTemplate == "" {
 		o.GeneralSpaceAliasTemplate = "{{.SpaceType}}/{{.SpaceName | replace \" \" \"-\" | lower}}"
+	}
+
+	if o.PermissionsClientTLSMode != "" {
+		var err error
+		o.PermTLSMode, err = pool.StringToTLSMode(o.PermissionsClientTLSMode)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		sharedOpt := sharedconf.GRPCClientOptions()
+		var err error
+
+		if o.PermTLSMode, err = pool.StringToTLSMode(sharedOpt.TLSMode); err != nil {
+			return nil, err
+		}
 	}
 
 	return o, nil

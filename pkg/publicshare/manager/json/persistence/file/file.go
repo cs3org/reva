@@ -22,7 +22,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 
@@ -56,7 +55,7 @@ func (p *file) Init(_ context.Context) error {
 	}
 
 	if fi == nil || fi.Size() == 0 {
-		err := ioutil.WriteFile(p.path, []byte("{}"), 0644)
+		err := os.WriteFile(p.path, []byte("{}"), 0644)
 		if err != nil {
 			return err
 		}
@@ -70,7 +69,7 @@ func (p *file) Read(_ context.Context) (persistence.PublicShares, error) {
 		return nil, fmt.Errorf("not initialized")
 	}
 	db := map[string]interface{}{}
-	readBytes, err := ioutil.ReadFile(p.path)
+	readBytes, err := os.ReadFile(p.path)
 	if err != nil {
 		return nil, err
 	}
@@ -89,5 +88,5 @@ func (p *file) Write(_ context.Context, db persistence.PublicShares) error {
 		return err
 	}
 
-	return ioutil.WriteFile(p.path, dbAsJSON, 0644)
+	return os.WriteFile(p.path, dbAsJSON, 0644)
 }

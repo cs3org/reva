@@ -134,11 +134,11 @@ func refFromCS3(b []byte) (*provider.Reference, error) {
 func CopyMetadata(src, target string, filter func(attributeName string) bool) (err error) {
 	var readLock *flock.Flock
 
-	// now try to get a shared lock on the source
+	// Acquire a read log on the source node
 	readLock, err = filelocks.AcquireReadLock(src)
 
 	if err != nil {
-		return errors.Wrap(err, "xattrs: Unable to lock file for read")
+		return errors.Wrap(err, "xattrs: Unable to lock source to read")
 	}
 	defer func() {
 		rerr := filelocks.ReleaseLock(readLock)
@@ -148,6 +148,23 @@ func CopyMetadata(src, target string, filter func(attributeName string) bool) (e
 			err = rerr
 		}
 	}()
+
+	return CopyMetadataWithSourceLock(src, target, filter, readLock)
+}
+
+// CopyMetadataWithSourceLock copies all extended attributes from source to target.
+// The optional filter function can be used to filter by attribute name, e.g. by checking a prefix
+// For the source file, a shared lock is acquired.
+// NOTE: target resource is not locked! You need to acquire a write lock on the target additionally
+func CopyMetadataWithSourceLock(src, target string, filter func(attributeName string) bool, readLock *flock.Flock) (err error) {
+	switch {
+	case readLock == nil:
+		return errors.New("no lock provided")
+	case readLock.Path() != filelocks.FlockFile(src):
+		return errors.New("lockpath does not match filepath")
+	case !readLock.Locked() && !readLock.RLocked(): // we need either a read or a write lock
+		return errors.New("not locked")
+	}
 
 	// both locks are established. Copy.
 	var attrNameList []string
@@ -181,11 +198,8 @@ func CopyMetadata(src, target string, filter func(attributeName string) bool) (e
 }
 
 // Set an extended attribute key to the given value
-// No file locking is involved here as writing a single xattr is
-// considered to be atomic.
 func Set(filePath string, key string, val string) (err error) {
 	fileLock, err := filelocks.AcquireWriteLock(filePath)
-
 	if err != nil {
 		return errors.Wrap(err, "xattrs: Can not acquire write log")
 	}
@@ -201,9 +215,22 @@ func Set(filePath string, key string, val string) (err error) {
 	return xattr.Set(filePath, key, []byte(val))
 }
 
+// SetWithLock an extended attribute key to the given value with an existing lock
+func SetWithLock(filePath string, key string, val string, fileLock *flock.Flock) (err error) {
+	// check the file is write locked
+	switch {
+	case fileLock == nil:
+		return errors.New("no lock provided")
+	case fileLock.Path() != filelocks.FlockFile(filePath):
+		return errors.New("lockpath does not match filepath")
+	case !fileLock.Locked():
+		return errors.New("not write locked")
+	}
+
+	return xattr.Set(filePath, key, []byte(val))
+}
+
 // Remove an extended attribute key
-// No file locking is involved here as writing a single xattr is
-// considered to be atomic.
 func Remove(filePath string, key string) (err error) {
 	fileLock, err := filelocks.AcquireWriteLock(filePath)
 
@@ -227,9 +254,6 @@ func Remove(filePath string, key string) (err error) {
 // If the file lock can not be acquired the function returns a
 // lock error.
 func SetMultiple(filePath string, attribs map[string]string) (err error) {
-
-	// h, err := lockedfile.OpenFile(filePath, os.O_WRONLY, 0) // 0? Open File only workn for files ... but we want to lock dirs ... or symlinks
-	// or we append .lock to the file and use https://github.com/gofrs/flock
 	var fileLock *flock.Flock
 	fileLock, err = filelocks.AcquireWriteLock(filePath)
 
@@ -244,6 +268,20 @@ func SetMultiple(filePath string, attribs map[string]string) (err error) {
 			err = rerr
 		}
 	}()
+
+	return SetMultipleWithLock(filePath, attribs, fileLock)
+}
+
+// SetMultipleWithLock allows setting multiple key value pairs at once with an existing lock
+func SetMultipleWithLock(filePath string, attribs map[string]string, fileLock *flock.Flock) (err error) {
+	switch {
+	case fileLock == nil:
+		return errors.New("no lock provided")
+	case fileLock.Path() != filelocks.FlockFile(filePath):
+		return errors.New("lockpath does not match filepath")
+	case !fileLock.Locked():
+		return errors.New("not locked")
+	}
 
 	// error handling: Count if there are errors while setting the attribs.
 	// if there were any, return an error.
@@ -291,7 +329,12 @@ func GetInt64(filePath, key string) (int64, error) {
 // List retrieves a list of names of extended attributes associated with the
 // given path in the file system.
 func List(filePath string) (attribs []string, err error) {
-	// now try to get a shared lock on the source
+	attrs, err := xattr.List(filePath)
+	if err == nil {
+		return attrs, nil
+	}
+
+	// listing the attributes failed. lock the file and try again
 	readLock, err := filelocks.AcquireReadLock(filePath)
 
 	if err != nil {

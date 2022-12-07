@@ -81,8 +81,12 @@ var _ = Describe("Node locks", func() {
 			AppName: "app2",
 			LockId:  uuid.New().String(),
 		}
-		n = node.New("u-s-e-r-id", "tobelockedid", "", "tobelocked", 10, "", env.Owner.Id, env.Lookup)
-		n2 = node.New("u-s-e-r-id", "neverlockedid", "", "neverlocked", 10, "", env.Owner.Id, env.Lookup)
+		spaceResID, err := env.CreateTestStorageSpace("project", &provider.Quota{QuotaMaxBytes: 2000})
+		Expect(err).ToNot(HaveOccurred())
+		n, err = env.CreateTestFile("tobelockedid", "blob", spaceResID.OpaqueId, spaceResID.OpaqueId, 10)
+		Expect(err).ToNot(HaveOccurred())
+		n2, err = env.CreateTestFile("neverlockedlockedid", "blob", spaceResID.OpaqueId, spaceResID.OpaqueId, 10)
+		Expect(err).ToNot(HaveOccurred())
 	})
 
 	AfterEach(func() {

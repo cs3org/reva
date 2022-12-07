@@ -175,6 +175,7 @@ func (h *Handler) Init(c *config.Config) {
 
 	// h.c.Capabilities.FilesSharing.Resharing is boolean
 	// h.c.Capabilities.FilesSharing.GroupSharing is boolean
+	// h.c.Capabilities.FilesSharing.SharingRoles is boolean
 	// h.c.Capabilities.FilesSharing.AutoAcceptShare is boolean
 	// h.c.Capabilities.FilesSharing.ShareWithGroupMembersOnly is boolean
 	// h.c.Capabilities.FilesSharing.ShareWithMembershipGroupsOnly is boolean

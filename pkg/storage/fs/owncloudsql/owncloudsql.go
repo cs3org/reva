@@ -26,7 +26,6 @@ import (
 	"fmt"
 	"hash/adler32"
 	"io"
-	"io/ioutil"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -769,7 +768,7 @@ func (fs *owncloudsqlfs) CreateDir(ctx context.Context, ref *provider.Reference)
 
 	permissions := 31 // 1: READ, 2: UPDATE, 4: CREATE, 8: DELETE, 16: SHARE
 	if perm, err := fs.readPermissions(ctx, filepath.Dir(ip)); err == nil {
-		permissions = int(conversions.RoleFromResourcePermissions(perm).OCSPermissions()) // inherit permissions of parent
+		permissions = int(conversions.RoleFromResourcePermissions(perm, false).OCSPermissions()) // inherit permissions of parent
 	}
 	data := map[string]interface{}{
 		"path":          fs.toDatabasePath(ip),
@@ -836,7 +835,7 @@ func (fs *owncloudsqlfs) TouchFile(ctx context.Context, ref *provider.Reference)
 		"path":          fs.toDatabasePath(ip),
 		"etag":          calcEtag(ctx, fi),
 		"mimetype":      mime.Detect(false, ip),
-		"permissions":   int(conversions.RoleFromResourcePermissions(parentPerms).OCSPermissions()), // inherit permissions of parent
+		"permissions":   int(conversions.RoleFromResourcePermissions(parentPerms, false).OCSPermissions()), // inherit permissions of parent
 		"mtime":         mtime,
 		"storage_mtime": mtime,
 	}
@@ -1825,7 +1824,7 @@ func (fs *owncloudsqlfs) ListRecycle(ctx context.Context, ref *provider.Referenc
 	}
 
 	// list files folder
-	mds, err := ioutil.ReadDir(rp)
+	mds, err := os.ReadDir(rp)
 	if err != nil {
 		log := appctx.GetLogger(ctx)
 		log.Debug().Err(err).Str("path", rp).Msg("trash not readable")
@@ -1835,7 +1834,8 @@ func (fs *owncloudsqlfs) ListRecycle(ctx context.Context, ref *provider.Referenc
 	// TODO (jfd) limit and offset
 	items := []*provider.RecycleItem{}
 	for i := range mds {
-		ri := fs.convertToRecycleItem(ctx, mds[i])
+		mdsInfo, _ := mds[i].Info()
+		ri := fs.convertToRecycleItem(ctx, mdsInfo)
 		if ri != nil {
 			items = append(items, ri)
 		}

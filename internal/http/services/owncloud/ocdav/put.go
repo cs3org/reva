@@ -111,13 +111,7 @@ func (s *svc) handlePathPut(w http.ResponseWriter, r *http.Request, ns string) {
 	fn := path.Join(ns, r.URL.Path)
 
 	sublog := appctx.GetLogger(ctx).With().Str("path", fn).Logger()
-	client, err := s.getClient()
-	if err != nil {
-		sublog.Error().Err(err).Msg("error getting grpc client")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	space, status, err := spacelookup.LookUpStorageSpaceForPath(ctx, client, fn)
+	space, status, err := spacelookup.LookUpStorageSpaceForPath(ctx, s.gwClient, fn)
 	if err != nil {
 		sublog.Error().Err(err).Str("path", fn).Msg("failed to look up storage space")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -143,15 +137,8 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	client, err := s.getClient()
-	if err != nil {
-		log.Error().Err(err).Msg("error getting grpc client")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
 	if length == 0 {
-		tfRes, err := client.TouchFile(ctx, &provider.TouchFileRequest{
+		tfRes, err := s.gwClient.TouchFile(ctx, &provider.TouchFileRequest{
 			Ref: ref,
 		})
 		if err != nil {
@@ -224,7 +211,7 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 	}
 
 	// where to upload the file?
-	uRes, err := client.InitiateFileUpload(ctx, uReq)
+	uRes, err := s.gwClient.InitiateFileUpload(ctx, uReq)
 	if err != nil {
 		log.Error().Err(err).Msg("error initiating file upload")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -237,7 +224,7 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 			status := http.StatusForbidden
 			m := uRes.Status.Message
 			// check if user has access to parent
-			sRes, err := client.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{
+			sRes, err := s.gwClient.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{
 				ResourceId: ref.ResourceId,
 				Path:       utils.MakeRelativePath(path.Dir(ref.Path)),
 			}})
@@ -263,7 +250,7 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 		case rpc.Code_CODE_FAILED_PRECONDITION:
 			w.WriteHeader(http.StatusConflict)
 		case rpc.Code_CODE_NOT_FOUND:
-			w.WriteHeader(http.StatusConflict)
+			w.WriteHeader(http.StatusNotFound)
 		default:
 			errors.HandleErrorStatus(&log, w, uRes.Status)
 		}

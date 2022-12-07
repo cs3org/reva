@@ -49,13 +49,7 @@ func (s *svc) handlePathGet(w http.ResponseWriter, r *http.Request, ns string) {
 
 	sublog := appctx.GetLogger(ctx).With().Str("path", fn).Str("svc", "ocdav").Str("handler", "get").Logger()
 
-	client, err := s.getClient()
-	if err != nil {
-		sublog.Error().Err(err).Msg("error getting grpc client")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	space, status, err := spacelookup.LookUpStorageSpaceForPath(ctx, client, fn)
+	space, status, err := spacelookup.LookUpStorageSpaceForPath(ctx, s.gwClient, fn)
 	if err != nil {
 		sublog.Error().Err(err).Str("path", fn).Msg("failed to look up storage space")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -70,14 +64,11 @@ func (s *svc) handlePathGet(w http.ResponseWriter, r *http.Request, ns string) {
 }
 
 func (s *svc) handleGet(ctx context.Context, w http.ResponseWriter, r *http.Request, ref *provider.Reference, dlProtocol string, log zerolog.Logger) {
-	client, err := s.getClient()
-	if err != nil {
-		log.Error().Err(err).Msg("error getting grpc client")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
+	sReq := &provider.StatRequest{
+		Ref: ref,
 	}
 
-	sr, err := client.Stat(ctx, &provider.StatRequest{Ref: ref})
+	sr, err := s.gwClient.Stat(ctx, sReq)
 	if err != nil || sr.GetStatus().GetCode() != rpc.Code_CODE_OK {
 		log.Error().Err(err).Interface("ref", ref).Str("status", sr.GetStatus().GetMessage()).Msg("error stating resource")
 		w.WriteHeader(http.StatusForbidden)
@@ -103,7 +94,7 @@ func (s *svc) handleGet(ctx context.Context, w http.ResponseWriter, r *http.Requ
 		id, etag, last := info.GetId(), info.GetEtag(), parseScanDate(info)
 		if !last.After(min) {
 			// last scan date is too old - we need to rescan the file
-			if err := s.davHandler.PostprocessingHandler.doVirusScan(r.Context(), client, id, r.Header.Get("x-access-token"), s.stream); err != nil {
+			if err := s.davHandler.PostprocessingHandler.doVirusScan(r.Context(), s.gwClient, id, r.Header.Get("x-access-token"), s.stream); err != nil {
 				log.Error().Err(err).Interface("ref", ref).Msg("error initiating virus scan")
 				w.WriteHeader(http.StatusInternalServerError)
 				return
@@ -119,7 +110,7 @@ func (s *svc) handleGet(ctx context.Context, w http.ResponseWriter, r *http.Requ
 					return nil
 				}
 
-				sr, err := client.Stat(ctx, &provider.StatRequest{Ref: ref})
+				sr, err := s.gwClient.Stat(ctx, &provider.StatRequest{Ref: ref})
 				if err != nil {
 					return err
 				}
@@ -155,12 +146,13 @@ func (s *svc) handleGet(ctx context.Context, w http.ResponseWriter, r *http.Requ
 	}
 
 	dReq := &provider.InitiateFileDownloadRequest{Ref: ref}
-	dRes, err := client.InitiateFileDownload(ctx, dReq)
-	if err != nil {
+	dRes, err := s.gwClient.InitiateFileDownload(ctx, dReq)
+	switch {
+	case err != nil:
 		log.Error().Err(err).Msg("error initiating file download")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
-	} else if dRes.Status.Code != rpc.Code_CODE_OK {
+	case dRes.Status.Code != rpc.Code_CODE_OK:
 		errors.HandleErrorStatus(&log, w, dRes.Status)
 		return
 	}

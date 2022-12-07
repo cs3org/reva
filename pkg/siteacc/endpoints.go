@@ -21,7 +21,7 @@ package siteacc
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -127,7 +127,7 @@ func callMethodEndpoint(siteacc *SiteAccounts, ep endpoint, w http.ResponseWrite
 		// Search for a matching method in the list of callbacks
 		for method, cb := range ep.MethodCallbacks {
 			if method == r.Method {
-				body, _ := ioutil.ReadAll(r.Body)
+				body, _ := io.ReadAll(r.Body)
 
 				if respData, err := cb(siteacc, r.URL.Query(), body, session); err == nil {
 					resp.Success = true

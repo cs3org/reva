@@ -23,7 +23,6 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"time"
@@ -131,7 +130,7 @@ func (disk *Disk) Delete(_ context.Context, path string) error {
 
 // ReadDir returns the resource infos in a given directory
 func (disk *Disk) ReadDir(_ context.Context, p string) ([]string, error) {
-	infos, err := ioutil.ReadDir(disk.targetPath(p))
+	infos, err := os.ReadDir(disk.targetPath(p))
 	if err != nil {
 		if _, ok := err.(*fs.PathError); ok {
 			return []string{}, nil
@@ -148,7 +147,7 @@ func (disk *Disk) ReadDir(_ context.Context, p string) ([]string, error) {
 
 // ListDir returns a list of ResourceInfos for the entries in a given directory
 func (disk *Disk) ListDir(ctx context.Context, path string) ([]*provider.ResourceInfo, error) {
-	infos, err := ioutil.ReadDir(disk.targetPath(path))
+	diskEntries, err := os.ReadDir(disk.targetPath(path))
 	if err != nil {
 		if _, ok := err.(*fs.PathError); ok {
 			return []*provider.ResourceInfo{}, nil
@@ -156,8 +155,13 @@ func (disk *Disk) ListDir(ctx context.Context, path string) ([]*provider.Resourc
 		return nil, err
 	}
 
-	entries := make([]*provider.ResourceInfo, 0, len(infos))
-	for _, info := range infos {
+	entries := make([]*provider.ResourceInfo, 0, len(diskEntries))
+	for _, diskEntry := range diskEntries {
+		info, err := diskEntry.Info()
+		if err != nil {
+			continue
+		}
+
 		entry := &provider.ResourceInfo{
 			Type:  provider.ResourceType_RESOURCE_TYPE_FILE,
 			Path:  "./" + info.Name(),

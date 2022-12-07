@@ -194,7 +194,7 @@ func resourceTypeToItem(r provider.ResourceType) string {
 }
 
 func sharePermToInt(p *provider.ResourcePermissions) int {
-	return int(conversions.RoleFromResourcePermissions(p).OCSPermissions())
+	return int(conversions.RoleFromResourcePermissions(p, false).OCSPermissions())
 }
 
 func intTosharePerm(p int) (*provider.ResourcePermissions, error) {

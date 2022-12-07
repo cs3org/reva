@@ -138,7 +138,7 @@ func (lu *Lookup) WalkPath(ctx context.Context, r *node.Node, p string, followRe
 		}
 
 		if followReferences {
-			if attrBytes, err := r.GetMetadata(xattrs.ReferenceAttr); err == nil {
+			if attrBytes, err := r.Xattr(xattrs.ReferenceAttr); err == nil {
 				realNodeID := attrBytes
 				ref, err := xattrs.ReferenceFromAttr([]byte(realNodeID))
 				if err != nil {
@@ -151,7 +151,7 @@ func (lu *Lookup) WalkPath(ctx context.Context, r *node.Node, p string, followRe
 				}
 			}
 		}
-		if node.IsSpaceRoot(r) {
+		if r.IsSpaceRoot() {
 			r.SpaceRoot = r
 		}
 
@@ -175,9 +175,4 @@ func (lu *Lookup) InternalRoot() string {
 // InternalPath returns the internal path for a given ID
 func (lu *Lookup) InternalPath(spaceID, nodeID string) string {
 	return filepath.Join(lu.Options.Root, "spaces", Pathify(spaceID, 1, 2), "nodes", Pathify(nodeID, 4, 2))
-}
-
-// ShareFolder returns the internal storage root directory
-func (lu *Lookup) ShareFolder() string {
-	return lu.Options.ShareFolder
 }

@@ -32,7 +32,6 @@ import (
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/net"
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
-	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v2/pkg/rhttp/router"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"google.golang.org/grpc/metadata"
@@ -200,17 +199,14 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 		case "public-files":
 			base := path.Join(ctx.Value(net.CtxKeyBaseURI).(string), "public-files")
 			ctx = context.WithValue(ctx, net.CtxKeyBaseURI, base)
-			c, err := pool.GetGatewayServiceClient(s.c.GatewaySvc)
-			if err != nil {
-				w.WriteHeader(http.StatusNotFound)
-			}
 
 			var res *gatewayv1beta1.AuthenticateResponse
 			token, _ := router.ShiftPath(r.URL.Path)
 			var hasValidBasicAuthHeader bool
 			var pass string
+			var err error
 			if _, pass, hasValidBasicAuthHeader = r.BasicAuth(); hasValidBasicAuthHeader {
-				res, err = handleBasicAuth(r.Context(), c, token, pass)
+				res, err = handleBasicAuth(r.Context(), s.gwClient, token, pass)
 			} else {
 				q := r.URL.Query()
 				sig := q.Get("signature")
@@ -220,7 +216,7 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 					w.WriteHeader(http.StatusUnauthorized)
 					return
 				}
-				res, err = handleSignatureAuth(r.Context(), c, token, sig, expiration)
+				res, err = handleSignatureAuth(r.Context(), s.gwClient, token, sig, expiration)
 			}
 
 			switch {
@@ -254,7 +250,7 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 			r = r.WithContext(ctx)
 
 			// the public share manager knew the token, but does the referenced target still exist?
-			sRes, err := getTokenStatInfo(ctx, c, token)
+			sRes, err := getTokenStatInfo(ctx, s.gwClient, token)
 			switch {
 			case err != nil:
 				log.Error().Err(err).Msg("error sending grpc stat request")

@@ -29,7 +29,6 @@ import (
 	"hash/adler32"
 	"io"
 	"io/fs"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -68,7 +67,7 @@ type Tree interface {
 	ReadBlob(node *node.Node) (io.ReadCloser, error)
 	DeleteBlob(node *node.Node) error
 
-	Propagate(ctx context.Context, node *node.Node) (err error)
+	Propagate(ctx context.Context, node *node.Node, sizeDiff int64) (err error)
 }
 
 // Upload processes the upload
@@ -92,6 +91,8 @@ type Upload struct {
 	tp Tree
 	// versionsPath will be empty if there was no file before
 	versionsPath string
+	// sizeDiff size difference between new and old file version
+	sizeDiff int64
 	// and a logger as well
 	log zerolog.Logger
 	// publisher used to publish events
@@ -261,7 +262,7 @@ func (upload *Upload) FinishUpload(_ context.Context) error {
 
 	if upload.async {
 		// handle postprocessing asynchronously but inform there is something in progress
-		return upload.tp.Propagate(upload.Ctx, n)
+		return upload.tp.Propagate(upload.Ctx, n, upload.sizeDiff)
 	}
 
 	err = upload.Finalize()
@@ -270,7 +271,7 @@ func (upload *Upload) FinishUpload(_ context.Context) error {
 		return err
 	}
 
-	return upload.tp.Propagate(upload.Ctx, n)
+	return upload.tp.Propagate(upload.Ctx, n, upload.sizeDiff)
 }
 
 // Terminate terminates the upload
@@ -317,7 +318,7 @@ func (upload *Upload) writeInfo() error {
 	if err != nil {
 		return err
 	}
-	return ioutil.WriteFile(upload.infoPath, data, defaultFilePerm)
+	return os.WriteFile(upload.infoPath, data, defaultFilePerm)
 }
 
 // Finalize finalizes the upload (eg moves the file to the internal destination)
@@ -357,7 +358,7 @@ func (upload *Upload) Finalize() (err error) {
 
 	// tests sometimes set the mtime
 	if upload.Info.MetaData["mtime"] != "" {
-		if err := n.SetMtime(upload.Ctx, upload.Info.MetaData["mtime"]); err != nil {
+		if err := n.SetMtimeString(upload.Info.MetaData["mtime"]); err != nil {
 			sublog.Err(err).Interface("info", upload.Info).Msg("Decomposedfs: could not set mtime metadata")
 			return err
 		}

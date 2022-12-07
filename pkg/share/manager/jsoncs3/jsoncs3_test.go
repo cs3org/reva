@@ -21,7 +21,6 @@ package jsoncs3_test
 import (
 	"context"
 	"encoding/json"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"sync"
@@ -146,7 +145,7 @@ var _ = Describe("Jsoncs3", func() {
 		}
 
 		var err error
-		tmpdir, err = ioutil.TempDir("", "jsoncs3-test")
+		tmpdir, err = os.MkdirTemp("", "jsoncs3-test")
 		Expect(err).ToNot(HaveOccurred())
 
 		err = os.MkdirAll(tmpdir, 0755)

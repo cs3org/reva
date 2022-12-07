@@ -20,14 +20,12 @@ package decomposedfs_test
 
 import (
 	"context"
-	"fmt"
 	"os"
 
 	cs3permissions "github.com/cs3org/go-cs3apis/cs3/permissions/v1beta1"
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
-	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
 	helpers "github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/testhelpers"
@@ -63,19 +61,12 @@ var _ = Describe("Spaces", func() {
 					return &cs3permissions.CheckPermissionResponse{Status: &rpcv1beta1.Status{Code: rpcv1beta1.Code_CODE_PERMISSION_DENIED}}
 				},
 				nil)
-			env.Permissions.On("HasPermission", mock.Anything, mock.Anything, mock.Anything).Return(
-				func(ctx context.Context, n *node.Node, check func(*provider.ResourcePermissions) bool) bool {
-					return ctxpkg.ContextMustGetUser(ctx).Id.GetOpaqueId() == "25b69780-5f39-43be-a7ac-a9b9e9fe4230" // id of owner/admin
-				},
-				func(ctx context.Context, n *node.Node, check func(*provider.ResourcePermissions) bool) error {
-					if ctxpkg.ContextMustGetUser(ctx).Id.GetOpaqueId() == "25b69780-5f39-43be-a7ac-a9b9e9fe4230" {
-						// id of owner/admin
-						return nil
-					}
-					// id of generic user
-					return errtypes.PermissionDenied(fmt.Sprintf("user is not allowed to delete home space %s", n.ID))
-
-				})
+			env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(func(ctx context.Context, n *node.Node) provider.ResourcePermissions {
+				if ctxpkg.ContextMustGetUser(ctx).Id.GetOpaqueId() == "25b69780-5f39-43be-a7ac-a9b9e9fe4230" {
+					return node.OwnerPermissions() // id of owner/admin
+				}
+				return node.NoPermissions()
+			}, nil)
 		})
 
 		AfterEach(func() {
@@ -245,6 +236,11 @@ var _ = Describe("Spaces", func() {
 				})
 				Expect(err).ToNot(HaveOccurred())
 				env.PermissionsClient.On("CheckPermission", mock.Anything, mock.Anything, mock.Anything).Return(&cs3permissions.CheckPermissionResponse{Status: &rpcv1beta1.Status{Code: rpcv1beta1.Code_CODE_OK}}, nil)
+				env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(provider.ResourcePermissions{
+					Stat:     true,
+					AddGrant: true,
+					GetQuota: true,
+				}, nil)
 			})
 
 			AfterEach(func() {
@@ -333,6 +329,12 @@ var _ = Describe("Spaces", func() {
 				},
 				nil)
 
+			env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(func(ctx context.Context, n *node.Node) provider.ResourcePermissions {
+				if ctxpkg.ContextMustGetUser(ctx).Id.GetOpaqueId() == "25b69780-5f39-43be-a7ac-a9b9e9fe4230" {
+					return node.OwnerPermissions() // id of owner/admin
+				}
+				return node.NoPermissions()
+			}, nil)
 		})
 
 		AfterEach(func() {
@@ -371,7 +373,7 @@ var _ = Describe("Spaces", func() {
 					},
 				)
 				Expect(err).ToNot(HaveOccurred())
-				Expect(updateResp.Status.Code, rpcv1beta1.Code_CODE_PERMISSION_DENIED)
+				Expect(updateResp.Status.Code).To(Equal(rpcv1beta1.Code_CODE_PERMISSION_DENIED))
 			})
 		})
 	})

@@ -20,7 +20,6 @@ package json_test
 
 import (
 	"context"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"sync"
@@ -77,7 +76,7 @@ var _ = Describe("Json", func() {
 
 		BeforeEach(func() {
 			var err error
-			tmpFile, err = ioutil.TempFile("", "reva-unit-test-*.json")
+			tmpFile, err = os.CreateTemp("", "reva-unit-test-*.json")
 			Expect(err).ToNot(HaveOccurred())
 
 			config := map[string]interface{}{
@@ -179,7 +178,7 @@ var _ = Describe("Json", func() {
 
 		BeforeEach(func() {
 			var err error
-			tmpdir, err = ioutil.TempDir("", "json-publicshare-manager-test")
+			tmpdir, err = os.MkdirTemp("", "json-publicshare-manager-test")
 			Expect(err).ToNot(HaveOccurred())
 
 			err = os.MkdirAll(tmpdir, 0755)

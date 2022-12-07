@@ -33,7 +33,6 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/pkg/errors"
-	"github.com/pkg/xattr"
 )
 
 // SetArbitraryMetadata sets the metadata on a resource
@@ -49,15 +48,16 @@ func (fs *Decomposedfs) SetArbitraryMetadata(ctx context.Context, ref *provider.
 		return err
 	}
 
-	ok, err := fs.p.HasPermission(ctx, n, func(rp *provider.ResourcePermissions) bool {
-		// TODO add explicit SetArbitraryMetadata grant to CS3 api, tracked in https://github.com/cs3org/cs3apis/issues/91
-		return rp.InitiateFileUpload
-	})
+	rp, err := fs.p.AssemblePermissions(ctx, n)
 	switch {
 	case err != nil:
 		return errtypes.InternalError(err.Error())
-	case !ok:
-		return errtypes.PermissionDenied(filepath.Join(n.ParentID, n.Name))
+	case !rp.InitiateFileUpload: // TODO add explicit SetArbitraryMetadata grant to CS3 api, tracked in https://github.com/cs3org/cs3apis/issues/91
+		f, _ := storagespace.FormatReference(ref)
+		if rp.Stat {
+			return errtypes.PermissionDenied(f)
+		}
+		return errtypes.NotFound(f)
 	}
 
 	// Set space owner in context
@@ -68,15 +68,12 @@ func (fs *Decomposedfs) SetArbitraryMetadata(ctx context.Context, ref *provider.
 		return err
 	}
 
-	nodePath := n.InternalPath()
-
 	errs := []error{}
 	// TODO should we really continue updating when an error occurs?
 	if md.Metadata != nil {
 		if val, ok := md.Metadata["mtime"]; ok {
 			delete(md.Metadata, "mtime")
-			err := n.SetMtime(ctx, val)
-			if err != nil {
+			if err := n.SetMtimeString(val); err != nil {
 				errs = append(errs, errors.Wrap(err, "could not set mtime"))
 			}
 		}
@@ -87,8 +84,7 @@ func (fs *Decomposedfs) SetArbitraryMetadata(ctx context.Context, ref *provider.
 		// TODO unset when folder is updated or add timestamp to etag?
 		if val, ok := md.Metadata["etag"]; ok {
 			delete(md.Metadata, "etag")
-			err := n.SetEtag(ctx, val)
-			if err != nil {
+			if err := n.SetEtag(ctx, val); err != nil {
 				errs = append(errs, errors.Wrap(err, "could not set etag"))
 			}
 		}
@@ -114,14 +110,14 @@ func (fs *Decomposedfs) SetArbitraryMetadata(ctx context.Context, ref *provider.
 	}
 	for k, v := range md.Metadata {
 		attrName := xattrs.MetadataPrefix + k
-		if err = xattr.Set(nodePath, attrName, []byte(v)); err != nil {
+		if err = n.SetXattr(attrName, v); err != nil {
 			errs = append(errs, errors.Wrap(err, "Decomposedfs: could not set metadata attribute "+attrName+" to "+k))
 		}
 	}
 
 	switch len(errs) {
 	case 0:
-		return fs.tp.Propagate(ctx, n)
+		return fs.tp.Propagate(ctx, n, 0)
 	case 1:
 		// TODO Propagate if anything changed
 		return errs[0]
@@ -145,15 +141,16 @@ func (fs *Decomposedfs) UnsetArbitraryMetadata(ctx context.Context, ref *provide
 		return err
 	}
 
-	ok, err := fs.p.HasPermission(ctx, n, func(rp *provider.ResourcePermissions) bool {
-		// TODO use SetArbitraryMetadata grant to CS3 api, tracked in https://github.com/cs3org/cs3apis/issues/91
-		return rp.InitiateFileUpload
-	})
+	rp, err := fs.p.AssemblePermissions(ctx, n)
 	switch {
 	case err != nil:
 		return errtypes.InternalError(err.Error())
-	case !ok:
-		return errtypes.PermissionDenied(filepath.Join(n.ParentID, n.Name))
+	case !rp.InitiateFileUpload: // TODO use SetArbitraryMetadata grant to CS3 api, tracked in https://github.com/cs3org/cs3apis/issues/91
+		f, _ := storagespace.FormatReference(ref)
+		if rp.Stat {
+			return errtypes.PermissionDenied(f)
+		}
+		return errtypes.NotFound(f)
 	}
 
 	// Set space owner in context
@@ -164,14 +161,13 @@ func (fs *Decomposedfs) UnsetArbitraryMetadata(ctx context.Context, ref *provide
 		return err
 	}
 
-	nodePath := n.InternalPath()
 	errs := []error{}
 	for _, k := range keys {
 		switch k {
 		case node.FavoriteKey:
 			// the favorite flag is specific to the user, so we need to incorporate the userid
-			var u *userpb.User
-			if u, ok = ctxpkg.ContextGetUser(ctx); !ok {
+			u, ok := ctxpkg.ContextGetUser(ctx)
+			if !ok {
 				sublog.Error().
 					Interface("user", u).
 					Msg("error getting user from ctx")
@@ -187,7 +183,7 @@ func (fs *Decomposedfs) UnsetArbitraryMetadata(ctx context.Context, ref *provide
 				continue
 			}
 			fa := fmt.Sprintf("%s:%s:%s@%s", xattrs.FavPrefix, utils.UserTypeToString(uid.GetType()), uid.GetOpaqueId(), uid.GetIdp())
-			if err := xattrs.Remove(nodePath, fa); err != nil {
+			if err := n.RemoveXattr(fa); err != nil {
 				if xattrs.IsAttrUnset(err) {
 					continue // already gone, ignore
 				}
@@ -198,7 +194,7 @@ func (fs *Decomposedfs) UnsetArbitraryMetadata(ctx context.Context, ref *provide
 				errs = append(errs, errors.Wrap(err, "could not unset favorite flag"))
 			}
 		default:
-			if err = xattrs.Remove(nodePath, xattrs.MetadataPrefix+k); err != nil {
+			if err = n.RemoveXattr(xattrs.MetadataPrefix + k); err != nil {
 				if xattrs.IsAttrUnset(err) {
 					continue // already gone, ignore
 				}
@@ -211,7 +207,7 @@ func (fs *Decomposedfs) UnsetArbitraryMetadata(ctx context.Context, ref *provide
 	}
 	switch len(errs) {
 	case 0:
-		return fs.tp.Propagate(ctx, n)
+		return fs.tp.Propagate(ctx, n, 0)
 	case 1:
 		// TODO Propagate if anything changed
 		return errs[0]

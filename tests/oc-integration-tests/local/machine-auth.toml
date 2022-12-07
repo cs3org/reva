@@ -1,6 +1,9 @@
 [shared]
 jwt_secret = "Pive-Fumkiu4"
 
+[shared.grpc_client_options]
+tls_mode = "insecure"
+
 [log]
 #level = "warn"
 #mode = "json"
@@ -9,6 +12,9 @@ jwt_secret = "Pive-Fumkiu4"
 # - handles "machine" type authentication
 [grpc]
 address = "0.0.0.0:21000"
+
+[grpc.tls_settings]
+enabled = true
 
 [grpc.services.authprovider]
 auth_manager = "machine"

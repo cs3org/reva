@@ -24,7 +24,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
@@ -222,7 +221,7 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 	}
 	defer openRes.Body.Close()
 
-	body, err := ioutil.ReadAll(openRes.Body)
+	body, err := io.ReadAll(openRes.Body)
 	if err != nil {
 		return nil, err
 	}
@@ -399,6 +398,9 @@ func parseWopiDiscovery(body io.Reader) (map[string]map[string]string, error) {
 		return nil, err
 	}
 	root := doc.SelectElement("wopi-discovery")
+	if root == nil {
+		return nil, errors.New("wopi-discovery response malformed")
+	}
 
 	for _, netzone := range root.SelectElements("net-zone") {
 

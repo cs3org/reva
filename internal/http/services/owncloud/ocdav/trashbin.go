@@ -40,6 +40,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
+	rstatus "github.com/cs3org/reva/v2/pkg/rgrpc/status"
 	"github.com/cs3org/reva/v2/pkg/rhttp/router"
 	"github.com/cs3org/reva/v2/pkg/utils"
 )
@@ -83,8 +84,9 @@ func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 		if user.Username != username {
 			log.Debug().Str("username", username).Interface("user", user).Msg("trying to read another users trash")
 			// listing other users trash is forbidden, no auth will change that
-			w.WriteHeader(http.StatusUnauthorized)
-			b, err := errors.Marshal(http.StatusUnauthorized, "", "")
+			// do not leak existence of space and return 404
+			w.WriteHeader(http.StatusNotFound)
+			b, err := errors.Marshal(http.StatusNotFound, "not found", "")
 			if err != nil {
 				log.Error().Msgf("error marshaling xml response: %s", b)
 				w.WriteHeader(http.StatusInternalServerError)
@@ -108,22 +110,18 @@ func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 		}
 		r.URL.Path = newPath
 
-		client, err := s.getClient()
-		if err != nil {
-			log.Error().Err(err).Msg("error getting grpc client")
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-
 		basePath := path.Join(ns, newPath)
-		space, rpcstatus, err := spacelookup.LookUpStorageSpaceForPath(ctx, client, basePath)
-		if err != nil {
+		space, rpcstatus, err := spacelookup.LookUpStorageSpaceForPath(ctx, s.gwClient, basePath)
+		switch {
+		case err != nil:
 			log.Error().Err(err).Str("path", basePath).Msg("failed to look up storage space")
 			w.WriteHeader(http.StatusInternalServerError)
 			return
-		}
-		if rpcstatus.Code != rpc.Code_CODE_OK {
-			errors.HandleErrorStatus(log, w, rpcstatus)
+		case rpcstatus.Code != rpc.Code_CODE_OK:
+			httpStatus := rstatus.HTTPStatusFromCode(rpcstatus.Code)
+			w.WriteHeader(httpStatus)
+			b, err := errors.Marshal(httpStatus, rpcstatus.Message, "")
+			errors.HandleWebdavError(log, w, b, err)
 			return
 		}
 		ref := spacelookup.MakeRelativeReference(space, ".", false)
@@ -153,14 +151,17 @@ func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 
 			p := path.Join(ns, dst)
 			// The destination can be in another space. E.g. the 'Shares Jail'.
-			space, rpcstatus, err := spacelookup.LookUpStorageSpaceForPath(ctx, client, p)
+			space, rpcstatus, err := spacelookup.LookUpStorageSpaceForPath(ctx, s.gwClient, p)
 			if err != nil {
 				log.Error().Err(err).Str("path", p).Msg("failed to look up destination storage space")
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
 			if rpcstatus.Code != rpc.Code_CODE_OK {
-				errors.HandleErrorStatus(log, w, rpcstatus)
+				httpStatus := rstatus.HTTPStatusFromCode(rpcstatus.Code)
+				w.WriteHeader(httpStatus)
+				b, err := errors.Marshal(httpStatus, rpcstatus.Message, "")
+				errors.HandleWebdavError(log, w, b, err)
 				return
 			}
 			dstRef := spacelookup.MakeRelativeReference(space, p, false)
@@ -215,15 +216,8 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 		return
 	}
 
-	client, err := s.getClient()
-	if err != nil {
-		sublog.Error().Err(err).Msg("error getting grpc client")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
 	// ask gateway for recycle items
-	getRecycleRes, err := client.ListRecycle(ctx, &provider.ListRecycleRequest{Ref: ref, Key: path.Join(key, itemPath)})
+	getRecycleRes, err := s.gwClient.ListRecycle(ctx, &provider.ListRecycleRequest{Ref: ref, Key: path.Join(key, itemPath)})
 	if err != nil {
 		sublog.Error().Err(err).Msg("error calling ListRecycle")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -231,7 +225,10 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 	}
 
 	if getRecycleRes.Status.Code != rpc.Code_CODE_OK {
-		errors.HandleErrorStatus(&sublog, w, getRecycleRes.Status)
+		httpStatus := rstatus.HTTPStatusFromCode(getRecycleRes.Status.Code)
+		w.WriteHeader(httpStatus)
+		b, err := errors.Marshal(httpStatus, getRecycleRes.Status.Message, "")
+		errors.HandleWebdavError(&sublog, w, b, err)
 		return
 	}
 
@@ -250,7 +247,7 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 
 		for len(stack) > 0 {
 			key := stack[len(stack)-1]
-			getRecycleRes, err := client.ListRecycle(ctx, &provider.ListRecycleRequest{Ref: ref, Key: key})
+			getRecycleRes, err := s.gwClient.ListRecycle(ctx, &provider.ListRecycleRequest{Ref: ref, Key: key})
 			if err != nil {
 				sublog.Error().Err(err).Msg("error calling ListRecycle")
 				w.WriteHeader(http.StatusInternalServerError)
@@ -258,7 +255,10 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 			}
 
 			if getRecycleRes.Status.Code != rpc.Code_CODE_OK {
-				errors.HandleErrorStatus(&sublog, w, getRecycleRes.Status)
+				httpStatus := rstatus.HTTPStatusFromCode(getRecycleRes.Status.Code)
+				w.WriteHeader(httpStatus)
+				b, err := errors.Marshal(httpStatus, getRecycleRes.Status.Message, "")
+				errors.HandleWebdavError(&sublog, w, b, err)
 				return
 			}
 			items = append(items, getRecycleRes.RecycleItems...)
@@ -465,15 +465,8 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 		return
 	}
 
-	client, err := s.getClient()
-	if err != nil {
-		sublog.Error().Err(err).Msg("error getting grpc client")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
 	dstStatReq := &provider.StatRequest{Ref: dst}
-	dstStatRes, err := client.Stat(ctx, dstStatReq)
+	dstStatRes, err := s.gwClient.Stat(ctx, dstStatReq)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error sending grpc stat request")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -491,7 +484,7 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 		parentRef := &provider.Reference{ResourceId: dst.ResourceId, Path: utils.MakeRelativePath(path.Dir(dst.Path))}
 		parentStatReq := &provider.StatRequest{Ref: parentRef}
 
-		parentStatResponse, err := client.Stat(ctx, parentStatReq)
+		parentStatResponse, err := s.gwClient.Stat(ctx, parentStatReq)
 		if err != nil {
 			sublog.Error().Err(err).Msg("error sending grpc stat request")
 			w.WriteHeader(http.StatusInternalServerError)
@@ -522,7 +515,7 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 		}
 		// delete existing tree
 		delReq := &provider.DeleteRequest{Ref: dst}
-		delRes, err := client.Delete(ctx, delReq)
+		delRes, err := s.gwClient.Delete(ctx, delReq)
 		if err != nil {
 			sublog.Error().Err(err).Msg("error sending grpc delete request")
 			w.WriteHeader(http.StatusInternalServerError)
@@ -541,7 +534,7 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 		RestoreRef: dst,
 	}
 
-	res, err := client.RestoreRecycleItem(ctx, req)
+	res, err := s.gwClient.RestoreRecycleItem(ctx, req)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error sending a grpc restore recycle item request")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -558,7 +551,7 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 		return
 	}
 
-	dstStatRes, err = client.Stat(ctx, dstStatReq)
+	dstStatRes, err = s.gwClient.Stat(ctx, dstStatReq)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error sending grpc stat request")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -585,20 +578,13 @@ func (h *TrashbinHandler) delete(w http.ResponseWriter, r *http.Request, s *svc,
 
 	sublog := appctx.GetLogger(ctx).With().Interface("reference", ref).Str("key", key).Str("item_path", itemPath).Logger()
 
-	client, err := s.getClient()
-	if err != nil {
-		sublog.Error().Err(err).Msg("error getting grpc client")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
 	trashPath := path.Join(key, itemPath)
 	req := &provider.PurgeRecycleRequest{
 		Ref: ref,
 		Key: trashPath,
 	}
 
-	res, err := client.PurgeRecycle(ctx, req)
+	res, err := s.gwClient.PurgeRecycle(ctx, req)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error sending a grpc restore recycle item request")
 		w.WriteHeader(http.StatusInternalServerError)

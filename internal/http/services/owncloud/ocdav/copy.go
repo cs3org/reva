@@ -54,6 +54,13 @@ func (s *svc) handlePathCopy(w http.ResponseWriter, r *http.Request, ns string) 
 	ctx, span := s.tracerProvider.Tracer(tracerName).Start(r.Context(), "copy")
 	defer span.End()
 
+	if r.Body != http.NoBody {
+		w.WriteHeader(http.StatusUnsupportedMediaType)
+		b, err := errors.Marshal(http.StatusUnsupportedMediaType, "body must be empty", "")
+		errors.HandleWebdavError(appctx.GetLogger(ctx), w, b, err)
+		return
+	}
+
 	if s.c.EnableHTTPTpc {
 		if r.Header.Get("Source") != "" {
 			// HTTP Third-Party Copy Pull mode
@@ -73,15 +80,23 @@ func (s *svc) handlePathCopy(w http.ResponseWriter, r *http.Request, ns string) 
 	baseURI := r.Context().Value(net.CtxKeyBaseURI).(string)
 	dst, err := net.ParseDestination(baseURI, dh)
 	if err != nil {
-		appctx.GetLogger(ctx).Warn().Msg("HTTP COPY: failed to extract destination")
 		w.WriteHeader(http.StatusBadRequest)
+		b, err := errors.Marshal(http.StatusBadRequest, "failed to extract destination", "")
+		errors.HandleWebdavError(appctx.GetLogger(ctx), w, b, err)
 		return
 	}
 
 	for _, r := range nameRules {
-		if !r.Test(dst) {
-			appctx.GetLogger(ctx).Warn().Msgf("HTTP COPY: destination %s failed validation", dst)
+		if !r.Test(src) {
 			w.WriteHeader(http.StatusBadRequest)
+			b, err := errors.Marshal(http.StatusBadRequest, "source failed naming rules", "")
+			errors.HandleWebdavError(appctx.GetLogger(ctx), w, b, err)
+			return
+		}
+		if !r.Test(dst) {
+			w.WriteHeader(http.StatusBadRequest)
+			b, err := errors.Marshal(http.StatusBadRequest, "destination failed naming rules", "")
+			errors.HandleWebdavError(appctx.GetLogger(ctx), w, b, err)
 			return
 		}
 	}
@@ -90,14 +105,7 @@ func (s *svc) handlePathCopy(w http.ResponseWriter, r *http.Request, ns string) 
 
 	sublog := appctx.GetLogger(ctx).With().Str("src", src).Str("dst", dst).Logger()
 
-	client, err := s.getClient()
-	if err != nil {
-		sublog.Error().Err(err).Msg("error getting grpc client")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	srcSpace, status, err := spacelookup.LookUpStorageSpaceForPath(ctx, client, src)
+	srcSpace, status, err := spacelookup.LookUpStorageSpaceForPath(ctx, s.gwClient, src)
 	if err != nil {
 		sublog.Error().Err(err).Str("path", src).Msg("failed to look up storage space")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -107,7 +115,7 @@ func (s *svc) handlePathCopy(w http.ResponseWriter, r *http.Request, ns string) 
 		errors.HandleErrorStatus(&sublog, w, status)
 		return
 	}
-	dstSpace, status, err := spacelookup.LookUpStorageSpaceForPath(ctx, client, dst)
+	dstSpace, status, err := spacelookup.LookUpStorageSpaceForPath(ctx, s.gwClient, dst)
 	if err != nil {
 		sublog.Error().Err(err).Str("path", dst).Msg("failed to look up storage space")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -123,7 +131,7 @@ func (s *svc) handlePathCopy(w http.ResponseWriter, r *http.Request, ns string) 
 		return
 	}
 
-	if err := s.executePathCopy(ctx, client, w, r, cp); err != nil {
+	if err := s.executePathCopy(ctx, s.gwClient, w, r, cp); err != nil {
 		sublog.Error().Err(err).Str("depth", cp.depth.String()).Msg("error executing path copy")
 		w.WriteHeader(http.StatusInternalServerError)
 	}
@@ -286,6 +294,9 @@ func (s *svc) executePathCopy(ctx context.Context, client gateway.GatewayAPIClie
 			return err
 		}
 
+		if fileid := httpUploadRes.Header.Get(net.HeaderOCFileID); fileid != "" {
+			w.Header().Set(net.HeaderOCFileID, fileid)
+		}
 	}
 	return nil
 }
@@ -293,6 +304,13 @@ func (s *svc) executePathCopy(ctx context.Context, client gateway.GatewayAPIClie
 func (s *svc) handleSpacesCopy(w http.ResponseWriter, r *http.Request, spaceID string) {
 	ctx, span := s.tracerProvider.Tracer(tracerName).Start(r.Context(), "spaces_copy")
 	defer span.End()
+
+	if r.Body != http.NoBody {
+		w.WriteHeader(http.StatusUnsupportedMediaType)
+		b, err := errors.Marshal(http.StatusUnsupportedMediaType, "body must be empty", "")
+		errors.HandleWebdavError(appctx.GetLogger(ctx), w, b, err)
+		return
+	}
 
 	dh := r.Header.Get(net.HeaderDestination)
 	baseURI := r.Context().Value(net.CtxKeyBaseURI).(string)
@@ -303,13 +321,6 @@ func (s *svc) handleSpacesCopy(w http.ResponseWriter, r *http.Request, spaceID s
 	}
 
 	sublog := appctx.GetLogger(ctx).With().Str("spaceid", spaceID).Str("path", r.URL.Path).Str("destination", dst).Logger()
-
-	client, err := s.getClient()
-	if err != nil {
-		sublog.Error().Err(err).Msg("error getting grpc client")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
 
 	srcRef, err := spacelookup.MakeStorageSpaceReference(spaceID, r.URL.Path)
 	if err != nil {
@@ -330,7 +341,7 @@ func (s *svc) handleSpacesCopy(w http.ResponseWriter, r *http.Request, spaceID s
 		return
 	}
 
-	err = s.executeSpacesCopy(ctx, w, client, cp)
+	err = s.executeSpacesCopy(ctx, w, s.gwClient, cp)
 	if err != nil {
 		sublog.Error().Err(err).Str("depth", cp.depth.String()).Msg("error descending directory")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -482,19 +493,16 @@ func (s *svc) executeSpacesCopy(ctx context.Context, w http.ResponseWriter, clie
 		if httpUploadRes.StatusCode != http.StatusOK {
 			return err
 		}
+
+		if fileid := httpUploadRes.Header.Get(net.HeaderOCFileID); fileid != "" {
+			w.Header().Set(net.HeaderOCFileID, fileid)
+		}
 	}
 	return nil
 }
 
 func (s *svc) prepareCopy(ctx context.Context, w http.ResponseWriter, r *http.Request, srcRef, dstRef *provider.Reference, log *zerolog.Logger) *copy {
-	client, err := s.getClient()
-	if err != nil {
-		log.Error().Err(err).Msg("error getting grpc client")
-		w.WriteHeader(http.StatusInternalServerError)
-		return nil
-	}
-
-	isChild, err := s.referenceIsChildOf(ctx, client, dstRef, srcRef)
+	isChild, err := s.referenceIsChildOf(ctx, s.gwClient, dstRef, srcRef)
 	if err != nil {
 		switch err.(type) {
 		case errtypes.IsNotSupported:
@@ -540,33 +548,32 @@ func (s *svc) prepareCopy(ctx context.Context, w http.ResponseWriter, r *http.Re
 	log.Debug().Bool("overwrite", overwrite).Str("depth", depth.String()).Msg("copy")
 
 	srcStatReq := &provider.StatRequest{Ref: srcRef}
-	srcStatRes, err := client.Stat(ctx, srcStatReq)
-	if err != nil {
+	srcStatRes, err := s.gwClient.Stat(ctx, srcStatReq)
+	switch {
+	case err != nil:
 		log.Error().Err(err).Msg("error sending grpc stat request")
 		w.WriteHeader(http.StatusInternalServerError)
 		return nil
-	}
-
-	if srcStatRes.Status.Code != rpc.Code_CODE_OK {
-		if srcStatRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
-			w.WriteHeader(http.StatusNotFound)
-			m := fmt.Sprintf("Resource %v not found", srcStatReq.Ref.Path)
-			b, err := errors.Marshal(http.StatusNotFound, m, "")
-			errors.HandleWebdavError(log, w, b, err)
-		}
+	case srcStatRes.Status.Code == rpc.Code_CODE_NOT_FOUND:
+		errors.HandleErrorStatus(log, w, srcStatRes.Status)
+		m := fmt.Sprintf("Resource %v not found", srcStatReq.Ref.Path)
+		b, err := errors.Marshal(http.StatusNotFound, m, "")
+		errors.HandleWebdavError(log, w, b, err)
+		return nil
+	case srcStatRes.Status.Code != rpc.Code_CODE_OK:
 		errors.HandleErrorStatus(log, w, srcStatRes.Status)
 		return nil
 	}
 
 	dstStatReq := &provider.StatRequest{Ref: dstRef}
-	dstStatRes, err := client.Stat(ctx, dstStatReq)
-	if err != nil {
+	dstStatRes, err := s.gwClient.Stat(ctx, dstStatReq)
+	switch {
+	case err != nil:
 		log.Error().Err(err).Msg("error sending grpc stat request")
 		w.WriteHeader(http.StatusInternalServerError)
 		return nil
-	}
-	if dstStatRes.Status.Code != rpc.Code_CODE_OK && dstStatRes.Status.Code != rpc.Code_CODE_NOT_FOUND {
-		errors.HandleErrorStatus(log, w, srcStatRes.Status)
+	case dstStatRes.Status.Code != rpc.Code_CODE_OK && dstStatRes.Status.Code != rpc.Code_CODE_NOT_FOUND:
+		errors.HandleErrorStatus(log, w, dstStatRes.Status)
 		return nil
 	}
 
@@ -585,7 +592,7 @@ func (s *svc) prepareCopy(ctx context.Context, w http.ResponseWriter, r *http.Re
 
 		// delete existing tree
 		delReq := &provider.DeleteRequest{Ref: dstRef}
-		delRes, err := client.Delete(ctx, delReq)
+		delRes, err := s.gwClient.Delete(ctx, delReq)
 		if err != nil {
 			log.Error().Err(err).Msg("error sending grpc delete request")
 			w.WriteHeader(http.StatusInternalServerError)
@@ -603,7 +610,7 @@ func (s *svc) prepareCopy(ctx context.Context, w http.ResponseWriter, r *http.Re
 			Path:       utils.MakeRelativePath(p),
 		}
 		intStatReq := &provider.StatRequest{Ref: pRef}
-		intStatRes, err := client.Stat(ctx, intStatReq)
+		intStatRes, err := s.gwClient.Stat(ctx, intStatReq)
 		if err != nil {
 			log.Error().Err(err).Msg("error sending grpc stat request")
 			w.WriteHeader(http.StatusInternalServerError)

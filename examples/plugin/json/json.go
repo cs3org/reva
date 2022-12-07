@@ -22,7 +22,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"io/ioutil"
+	"os"
 	"strings"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -63,7 +63,7 @@ func (m *Manager) Configure(ml map[string]interface{}) error {
 		return err
 	}
 
-	f, err := ioutil.ReadFile(c.Users)
+	f, err := os.ReadFile(c.Users)
 	if err != nil {
 		return err
 	}

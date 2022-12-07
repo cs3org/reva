@@ -27,7 +27,6 @@ import (
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/net"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/propfind"
 	"github.com/cs3org/reva/v2/pkg/appctx"
-	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v2/pkg/rhttp/router"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/utils"
@@ -81,7 +80,7 @@ func (h *SpacesHandler) Handler(s *svc, trashbinHandler *TrashbinHandler) http.H
 		switch r.Method {
 		case MethodPropfind:
 			p := propfind.NewHandler(config.PublicURL, func() (gateway.GatewayAPIClient, error) {
-				return pool.GetGatewayServiceClient(config.GatewaySvc)
+				return s.gwClient, nil
 			})
 			p.HandleSpacesPropfind(w, r, spaceID)
 		case MethodProppatch:
@@ -109,7 +108,7 @@ func (h *SpacesHandler) Handler(s *svc, trashbinHandler *TrashbinHandler) http.H
 		case http.MethodHead:
 			s.handleSpacesHead(w, r, spaceID)
 		case http.MethodDelete:
-			s.handleSpacesDelete(w, r, spaceID)
+			status, err = s.handleSpacesDelete(w, r, spaceID)
 		default:
 			http.Error(w, http.StatusText(http.StatusNotImplemented), http.StatusNotImplemented)
 		}

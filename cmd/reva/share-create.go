@@ -41,7 +41,7 @@ func shareCreateCommand() *command {
 	grantType := cmd.String("type", "user", "grantee type (user or group)")
 	grantee := cmd.String("grantee", "", "the grantee")
 	idp := cmd.String("idp", "", "the idp of the grantee, default to same idp as the user triggering the action")
-	rol := cmd.String("rol", "viewer", "the permission for the share (viewer or editor)")
+	rol := cmd.String("rol", "viewer", "the permission for the share (viewer, editor, denied)")
 	userType := cmd.String("user-type", "primary", "the type of user account, defaults to primary")
 
 	cmd.ResetFlags = func() {

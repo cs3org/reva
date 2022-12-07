@@ -22,7 +22,6 @@ import (
 	"bytes"
 	"context"
 	"io"
-	"io/ioutil"
 	"os"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -115,6 +114,10 @@ var _ = Describe("File uploads", func() {
 		cs3permissionsclient.On("CheckPermission", mock.Anything, mock.Anything, mock.Anything).Return(&cs3permissions.CheckPermissionResponse{
 			Status: &v1beta11.Status{Code: v1beta11.Code_CODE_OK},
 		}, nil)
+		permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(provider.ResourcePermissions{
+			Stat:     true,
+			AddGrant: true,
+		}, nil).Times(1)
 		var err error
 		tree := tree.New(o.Root, true, true, lu, bs)
 		fs, err = decomposedfs.New(o, lu, permissions, tree, cs3permissionsclient)
@@ -129,6 +132,12 @@ var _ = Describe("File uploads", func() {
 	})
 
 	Context("the user's quota is exceeded", func() {
+		BeforeEach(func() {
+			permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(provider.ResourcePermissions{
+				Stat:     true,
+				GetQuota: true,
+			}, nil)
+		})
 		When("the user wants to initiate a file upload", func() {
 			It("fails", func() {
 				var originalFunc = node.CheckQuota
@@ -144,12 +153,14 @@ var _ = Describe("File uploads", func() {
 
 	Context("the user has insufficient permissions", func() {
 		BeforeEach(func() {
-			permissions.On("HasPermission", mock.Anything, mock.Anything, mock.Anything).Return(false, nil)
+			permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(provider.ResourcePermissions{
+				Stat: true,
+			}, nil)
 		})
 
 		When("the user wants to initiate a file upload", func() {
 			It("fails", func() {
-				msg := "error: permission denied: u-s-e-r-id/foo"
+				msg := "error: permission denied: u-s-e-r-id!u-s-e-r-id/foo"
 				_, err := fs.InitiateUpload(ctx, ref, 10, map[string]string{})
 				Expect(err).To(MatchError(msg))
 			})
@@ -164,12 +175,14 @@ var _ = Describe("File uploads", func() {
 			Expect(err).ToNot(HaveOccurred())
 			err = xattr.Set(h.InternalPath(), xattrs.SpaceNameAttr, []byte("username"))
 			Expect(err).ToNot(HaveOccurred())
-			permissions.On("HasPermission", mock.Anything, mock.Anything, mock.Anything).Return(false, nil)
+			permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(provider.ResourcePermissions{
+				Stat: true,
+			}, nil)
 		})
 
 		When("the user wants to initiate a file upload", func() {
 			It("fails", func() {
-				msg := "error: permission denied: u-s-e-r-id/foo"
+				msg := "error: permission denied: u-s-e-r-id!u-s-e-r-id/foo"
 				_, err := fs.InitiateUpload(ctx, ref, 10, map[string]string{})
 				Expect(err).To(MatchError(msg))
 			})
@@ -178,10 +191,12 @@ var _ = Describe("File uploads", func() {
 
 	Context("with sufficient permissions", func() {
 		BeforeEach(func() {
-			permissions.On("HasPermission", mock.Anything, mock.Anything, mock.Anything).Return(true, nil)
 			permissions.On("AssemblePermissions", mock.Anything, mock.Anything).
 				Return(provider.ResourcePermissions{
-					ListContainer: true,
+					Stat:               true,
+					GetQuota:           true,
+					InitiateFileUpload: true,
+					ListContainer:      true,
 				}, nil)
 		})
 
@@ -234,13 +249,13 @@ var _ = Describe("File uploads", func() {
 					Return(nil).
 					Run(func(args mock.Arguments) {
 						reader := args.Get(1).(io.Reader)
-						data, err := ioutil.ReadAll(reader)
+						data, err := io.ReadAll(reader)
 
 						Expect(err).ToNot(HaveOccurred())
 						Expect(data).To(Equal([]byte("0123456789")))
 					})
 
-				_, err = fs.Upload(ctx, uploadRef, ioutil.NopCloser(bytes.NewReader(fileContent)), nil)
+				_, err = fs.Upload(ctx, uploadRef, io.NopCloser(bytes.NewReader(fileContent)), nil)
 
 				Expect(err).ToNot(HaveOccurred())
 				bs.AssertCalled(GinkgoT(), "Upload", mock.Anything, mock.Anything, mock.Anything)
@@ -272,13 +287,13 @@ var _ = Describe("File uploads", func() {
 					Return(nil).
 					Run(func(args mock.Arguments) {
 						reader := args.Get(1).(io.Reader)
-						data, err := ioutil.ReadAll(reader)
+						data, err := io.ReadAll(reader)
 
 						Expect(err).ToNot(HaveOccurred())
 						Expect(data).To(Equal([]byte("")))
 					})
 
-				_, err = fs.Upload(ctx, uploadRef, ioutil.NopCloser(bytes.NewReader(fileContent)), nil)
+				_, err = fs.Upload(ctx, uploadRef, io.NopCloser(bytes.NewReader(fileContent)), nil)
 
 				Expect(err).ToNot(HaveOccurred())
 				bs.AssertCalled(GinkgoT(), "Upload", mock.Anything, mock.Anything, mock.Anything)
@@ -298,7 +313,7 @@ var _ = Describe("File uploads", func() {
 				)
 
 				uploadRef := &provider.Reference{Path: "/some-non-existent-upload-reference"}
-				_, err := fs.Upload(ctx, uploadRef, ioutil.NopCloser(bytes.NewReader(fileContent)), nil)
+				_, err := fs.Upload(ctx, uploadRef, io.NopCloser(bytes.NewReader(fileContent)), nil)
 
 				Expect(err).To(HaveOccurred())
 

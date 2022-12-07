@@ -21,7 +21,6 @@ package cs3_test
 import (
 	"context"
 	"encoding/json"
-	"io/ioutil"
 	"os"
 	"path"
 	"strings"
@@ -66,7 +65,7 @@ var _ = Describe("Cs3", func() {
 
 	BeforeEach(func() {
 		var err error
-		tmpdir, err = ioutil.TempDir("", "cs3-publicshare-test")
+		tmpdir, err = os.MkdirTemp("", "cs3-publicshare-test")
 		Expect(err).ToNot(HaveOccurred())
 
 		ds, err := metadata.NewDiskStorage(tmpdir)

@@ -21,7 +21,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 	"regexp"
@@ -163,7 +162,7 @@ func getConfigs() ([]map[string]interface{}, error) {
 }
 
 func getConfigsFromDir(dir string) (confs []string, err error) {
-	files, err := ioutil.ReadDir(*dirFlag)
+	files, err := os.ReadDir(*dirFlag)
 	if err != nil {
 		return nil, err
 	}

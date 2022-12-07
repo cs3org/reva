@@ -112,14 +112,15 @@ func (h *Handler) createPublicLinkShare(w http.ResponseWriter, r *http.Request, 
 
 	if statInfo != nil && statInfo.Type == provider.ResourceType_RESOURCE_TYPE_FILE {
 		// Single file shares should never have delete or create permissions
-		role := conversions.RoleFromResourcePermissions(newPermissions)
+		role := conversions.RoleFromResourcePermissions(newPermissions, true)
 		permissions := role.OCSPermissions()
 		permissions &^= conversions.PermissionCreate
 		permissions &^= conversions.PermissionDelete
 		newPermissions = conversions.RoleFromOCSPermissions(permissions).CS3ResourcePermissions()
 	}
 
-	if !sufficientPermissions(statInfo.PermissionSet, newPermissions) {
+	if !sufficientPermissions(statInfo.PermissionSet, newPermissions, true) {
+		response.WriteOCSError(w, r, http.StatusNotFound, "no share permission", nil)
 		return nil, &ocsError{
 			Code:    http.StatusNotFound,
 			Message: "Cannot set the requested share permissions",
@@ -355,7 +356,8 @@ func (h *Handler) updatePublicShare(w http.ResponseWriter, r *http.Request, shar
 		return
 	}
 
-	if !sufficientPermissions(statRes.Info.PermissionSet, newPermissions) {
+	// empty permissions mean internal link here - NOT denial. Hence we need an extra check
+	if !sufficientPermissions(statRes.Info.PermissionSet, newPermissions, true) {
 		response.WriteOCSError(w, r, http.StatusNotFound, "no share permission", nil)
 		return
 	}

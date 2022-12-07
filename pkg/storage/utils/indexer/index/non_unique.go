@@ -50,7 +50,7 @@ type NonUnique struct {
 // │    ├── goefe-789 -> /tmp/testfiles-395764020/pets/goefe-789
 // │    └── xadaf-189 -> /tmp/testfiles-395764020/pets/xadaf-189
 // └── White/
-//     └── wefwe-456 -> /tmp/testfiles-395764020/pets/wefwe-456
+// |    └── wefwe-456 -> /tmp/testfiles-395764020/pets/wefwe-456
 func NewNonUniqueIndexWithOptions(storage metadata.Storage, o ...option.Option) Index {
 	opts := &option.Options{}
 	for _, opt := range o {

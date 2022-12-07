@@ -43,6 +43,7 @@ type Config struct {
 	UserIdentifierCacheTTL                int                               `mapstructure:"user_identifier_cache_ttl"`
 	MachineAuthAPIKey                     string                            `mapstructure:"machine_auth_apikey"`
 	SkipUpdatingExistingSharesMountpoints bool                              `mapstructure:"skip_updating_existing_shares_mountpoint"`
+	EnableDenials                         bool                              `mapstructure:"enable_denials"`
 }
 
 // Init sets sane defaults
