@@ -362,16 +362,6 @@ func (sm *Manager) Share(ctx context.Context, md *provider.ResourceId, g *ocm.Sh
 			}
 		}
 
-		log := appctx.GetLogger(ctx)
-		log.Info().Msg("pkg/ocm/share/manager/nextcloud calls sender.Send")
-		log.Info().Msgf("pkg/ocm/share/manager/nextcloud shareWith: %s", g.Grantee.GetUserId().OpaqueId)
-		log.Info().Msgf("pkg/ocm/share/manager/nextcloud name: %s", name)
-		log.Info().Msgf("pkg/ocm/share/manager/nextcloud providerId: %s", s.Id.OpaqueId)
-		log.Info().Msgf("pkg/ocm/share/manager/nextcloud owner: %s", userID.OpaqueId)
-		log.Info().Msgf("pkg/ocm/share/manager/nextcloud protocol: %s", protocol)
-		log.Info().Msgf("pkg/ocm/share/manager/nextcloud meshProvider: %s", userID.Idp)
-		log.Info().Msgf("Truncating name from %s to %s", name, name[5:])
-
 		// required:
 		// shareWith	       string Consumer specific identifier of the user or group the provider wants to share the resource with. This is known in advance. Please note that the consumer service endpoint is known in advance as well, so this is no part of the request body.
 		// name				       string Name of the resource (file or folder).
@@ -543,15 +533,15 @@ func (sm *Manager) ListReceivedShares(ctx context.Context) ([]*ocm.ReceivedShare
 	if err != nil {
 		return nil, err
 	}
-	var pointersBaseShare = make([]*ocm.Share, len(respArr))
-	var pointersReceivedShare = make([]*ocm.ReceivedShare, len(respArr))
-	for i := 0; i < len(respArr); i++ {
-		log.Info().Msgf("Unpacking share object %+v\n", respArr[i].Share)
-		altResultShare := respArr[i].Share
+
+	var pointersReceivedShare = make([]*ocm.ReceivedShare, 0, len(respArr))
+	for _, share := range respArr {
+		altResultShare := share.Share
+		log.Info().Msgf("Unpacking share object %+v\n", altResultShare)
 		if altResultShare == nil {
 			return nil, errors.New("received an unreadable share object from the EFSS backend")
 		}
-		pointersBaseShare[i] = &ocm.Share{
+		s := &ocm.Share{
 			Id:          altResultShare.ID,
 			ResourceId:  altResultShare.ResourceID,
 			Permissions: altResultShare.Permissions,
@@ -563,10 +553,11 @@ func (sm *Manager) ListReceivedShares(ctx context.Context) ([]*ocm.ReceivedShare
 			Ctime:   altResultShare.Ctime,
 			Mtime:   altResultShare.Mtime,
 		}
-		pointersReceivedShare[i] = &ocm.ReceivedShare{
-			Share: pointersBaseShare[i],
-			State: respArr[i].State,
-		}
+		pointersReceivedShare = append(pointersReceivedShare, &ocm.ReceivedShare{
+			Share: s,
+			State: share.State,
+		})
+
 	}
 	return pointersReceivedShare, err
 }
