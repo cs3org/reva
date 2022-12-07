@@ -36,6 +36,7 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/pkg/utils"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -109,13 +110,13 @@ func (h *sendHandler) Handler() http.Handler {
 		req := &provider.StatRequest{Ref: ref}
 		res2, err := gatewayClient.Stat(authCtx, req)
 		if err != nil {
-			log.Error().Msg("error sending: stat file/folder to share")
+			log.Error().Msg("gatewayClient.Stat operation failed; is the storage backend reachable?")
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 
 		if res2.Status.Code != rpc.Code_CODE_OK {
-			log.Error().Msg("error returned: stat file/folder to share")
+			log.Error().Msgf("sourcePath %s does not exist on the storage backend", sourcePath)
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
@@ -183,17 +184,27 @@ func (h *sendHandler) Handler() http.Handler {
 
 		shareRes, err := gatewayClient.CreateOCMShare(authCtx, shareRequest)
 		if err != nil {
-			log.Error().Msg("error sending: CreateShare")
+			log.Error().Msg("error sending: CreateShare: " + err.Error())
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 
 		if shareRes.Status.Code != rpc.Code_CODE_OK {
-			log.Error().Msg("error returned: CreateShare")
+			log.Error().Msg("error returned: CreateShare: " + err.Error())
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 
+		responseBody, err := utils.MarshalProtoV1ToJSON(shareRes)
+		if err != nil {
+			log.Error().Msg("error encoding response: " + err.Error())
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
 		w.WriteHeader(http.StatusOK)
+		_, err = w.Write(responseBody)
+		if err != nil {
+			log.Error().Msg("error writing response body:" + err.Error())
+		}
 	})
 }

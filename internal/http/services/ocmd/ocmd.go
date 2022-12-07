@@ -125,9 +125,10 @@ func (s *svc) Handler() http.Handler {
 			return
 		case "send":
 			s.SendHandler.Handler().ServeHTTP(w, r)
+			return
 		}
 
-		log.Warn().Msg("request not handled")
+		log.Warn().Msgf("request not handled. Try e.g. 'ocm-provider', 'shares', 'notifications', 'invites', or 'send' instead of '%s'", head)
 		w.WriteHeader(http.StatusNotFound)
 	})
 }

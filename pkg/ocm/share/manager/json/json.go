@@ -32,6 +32,7 @@ import (
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	"github.com/cs3org/reva/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/ocm/share"
@@ -264,6 +265,15 @@ func (m *mgr) Share(ctx context.Context, md *provider.ResourceId, g *ocm.ShareGr
 			protocol["name"] = "datatx"
 		}
 
+		log := appctx.GetLogger(ctx)
+		log.Info().Msg("pkg/ocm/share/manager/json calls sender.Send")
+		log.Info().Msgf("pkg/ocm/share/manager/json shareWith: %s", g.Grantee.GetUserId().OpaqueId)
+		log.Info().Msgf("pkg/ocm/share/manager/json name: %s", name)
+		log.Info().Msgf("pkg/ocm/share/manager/json providerId: %s", fmt.Sprintf("%s:%s", md.StorageId, md.OpaqueId))
+		log.Info().Msgf("pkg/ocm/share/manager/json owner: %s", userID.OpaqueId)
+		log.Info().Msgf("pkg/ocm/share/manager/json protocol: %s", protocol)
+		log.Info().Msgf("pkg/ocm/share/manager/json meshProvider: %s", userID.Idp)
+
 		requestBodyMap := map[string]interface{}{
 			"shareWith":    g.Grantee.GetUserId().OpaqueId,
 			"name":         name,
@@ -272,7 +282,7 @@ func (m *mgr) Share(ctx context.Context, md *provider.ResourceId, g *ocm.ShareGr
 			"protocol":     protocol,
 			"meshProvider": userID.Idp, // FIXME: move this into the 'owner' string?
 		}
-		err = sender.Send(requestBodyMap, pi)
+		err = sender.Send(ctx, requestBodyMap, pi)
 		if err != nil {
 			err = errors.Wrap(err, "error sending OCM POST")
 			return nil, err

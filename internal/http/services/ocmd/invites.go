@@ -190,7 +190,7 @@ func (h *invitesHandler) forwardInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err = w.Write([]byte("Accepted invite from: " + html.EscapeString(providerDomain)))
+	_, err = w.Write([]byte("{\"message\": \"Success\", \"providerDomain\":\"" + html.EscapeString(providerDomain) + "\"}"))
 	if err != nil {
 		WriteError(w, r, APIErrorServerError, "error writing token data", err)
 		return
@@ -313,6 +313,7 @@ func (h *invitesHandler) findAcceptedUsers(w http.ResponseWriter, r *http.Reques
 	indentedResponse, _ := json.MarshalIndent(response, "", "   ")
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
+	log.Debug().Msg("findAcceptedUsers json response: " + string(indentedResponse))
 	if _, err := w.Write(indentedResponse); err != nil {
 		log.Err(err).Msg("Error writing to ResponseWriter")
 	}
