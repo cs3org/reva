@@ -1,3 +1,12 @@
+
+---
+title: "v1.21.0"
+linkTitle: "v1.21.0"
+weight: 40
+description: >
+  Changelog for Reva v1.21.0 (2022-12-07)
+---
+
 Changelog for reva 1.21.0 (2022-12-07)
 =======================================
 
