@@ -268,7 +268,6 @@ func (fs *Decomposedfs) Postprocessing(ch <-chan interface{}) {
 				// update parent tmtime to propagate etag change
 				now := time.Now()
 				p.SetTMTime(&now)
-				// TODO: calculate sizeDiff
 				if err := fs.tp.Propagate(ctx, p, 0); err != nil {
 					log.Error().Err(err).Str("uploadID", ev.UploadID).Msg("could not propagate etag change")
 				}

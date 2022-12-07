@@ -21,7 +21,6 @@ package decomposedfs
 import (
 	"context"
 	"io"
-	iofs "io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -109,42 +108,6 @@ func (fs *Decomposedfs) ListRevisions(ctx context.Context, ref *provider.Referen
 // DownloadRevision returns a reader for the specified revision
 // FIXME the CS3 api should explicitly allow initiating revision and trash download, a related issue is https://github.com/cs3org/reva/issues/1813
 func (fs *Decomposedfs) DownloadRevision(ctx context.Context, ref *provider.Reference, revisionKey string) (io.ReadCloser, error) {
-	n, err := fs.getRevisionNode(ctx, ref, revisionKey, func(rp *provider.ResourcePermissions) bool {
-		// TODO add explicit permission in the CS3 api?
-		return rp.ListFileVersions && rp.RestoreFileVersion && rp.InitiateFileDownload
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	contentPath := fs.lu.InternalPath(n.SpaceID, revisionKey)
-	r, err := os.Open(contentPath)
-	if err != nil {
-		if errors.Is(err, iofs.ErrNotExist) {
-			return nil, errtypes.NotFound(contentPath)
-		}
-		return nil, errors.Wrap(err, "Decomposedfs: error opening revision "+revisionKey)
-	}
-	return r, nil
-}
-
-// DeleteRevision deletes the specified revision of the resource
-func (fs *Decomposedfs) DeleteRevision(ctx context.Context, ref *provider.Reference, revisionKey string) error {
-	n, err := fs.getRevisionNode(ctx, ref, revisionKey, func(rp *provider.ResourcePermissions) bool {
-		return rp.RestoreFileVersion
-	})
-	if err != nil {
-		return err
-	}
-
-	if err := os.RemoveAll(fs.lu.InternalPath(n.SpaceID, revisionKey)); err != nil {
-		return err
-	}
-
-	return fs.tp.DeleteBlob(n)
-}
-
-func (fs *Decomposedfs) getRevisionNode(ctx context.Context, ref *provider.Reference, revisionKey string, hasPermission func(*provider.ResourcePermissions) bool) (*node.Node, error) {
 	log := appctx.GetLogger(ctx)
 
 	// verify revision key format
@@ -166,23 +129,39 @@ func (fs *Decomposedfs) getRevisionNode(ctx context.Context, ref *provider.Refer
 		return nil, err
 	}
 
-	perms, err := fs.p.AssemblePermissions(ctx, n)
-	if err != nil {
+	rp, err := fs.p.AssemblePermissions(ctx, n)
+	switch {
+	case err != nil:
 		return nil, errtypes.InternalError(err.Error())
+	case !rp.ListFileVersions || !rp.InitiateFileDownload: // TODO add explicit permission in the CS3 api?
+		f, _ := storagespace.FormatReference(ref)
+		if rp.Stat {
+			return nil, errtypes.PermissionDenied(f)
+		}
+		return nil, errtypes.NotFound(f)
 	}
 
-	if !hasPermission(&perms) {
-		return nil, errtypes.PermissionDenied(filepath.Join(n.ParentID, n.Name))
+	contentPath := fs.lu.InternalPath(spaceID, revisionKey)
+
+	blobid, err := node.ReadBlobIDAttr(contentPath)
+	if err != nil {
+		return nil, errors.Wrapf(err, "Decomposedfs: could not read blob id of revision '%s' for node '%s'", n.ID, revisionKey)
+	}
+	blobsize, err := node.ReadBlobSizeAttr(contentPath)
+	if err != nil {
+		return nil, errors.Wrapf(err, "Decomposedfs: could not read blob size of revision '%s' for node '%s'", n.ID, revisionKey)
 	}
 
-	// Set space owner in context
-	storagespace.ContextSendSpaceOwnerID(ctx, n.SpaceOwnerOrManager(ctx))
+	revisionNode := node.Node{SpaceID: spaceID, BlobID: blobid, Blobsize: blobsize} // blobsize is needed for the s3ng blobstore
 
-	return n, nil
+	reader, err := fs.tp.ReadBlob(&revisionNode)
+	if err != nil {
+		return nil, errors.Wrapf(err, "Decomposedfs: could not download blob of revision '%s' for node '%s'", n.ID, revisionKey)
+	}
+	return reader, nil
 }
 
 // RestoreRevision restores the specified revision of the resource
-// TODO: refactor to use getRevisionNode also?
 func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Reference, revisionKey string) (returnErr error) {
 	log := appctx.GetLogger(ctx)
 
@@ -298,4 +277,56 @@ func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Refer
 
 	log.Error().Err(err).Interface("ref", ref).Str("originalnode", kp[0]).Str("revisionKey", revisionKey).Msg("original node does not exist")
 	return nil
+}
+
+// DeleteRevision deletes the specified revision of the resource
+func (fs *Decomposedfs) DeleteRevision(ctx context.Context, ref *provider.Reference, revisionKey string) error {
+	n, err := fs.getRevisionNode(ctx, ref, revisionKey, func(rp *provider.ResourcePermissions) bool {
+		return rp.RestoreFileVersion
+	})
+	if err != nil {
+		return err
+	}
+
+	if err := os.RemoveAll(fs.lu.InternalPath(n.SpaceID, revisionKey)); err != nil {
+		return err
+	}
+
+	return fs.tp.DeleteBlob(n)
+}
+
+func (fs *Decomposedfs) getRevisionNode(ctx context.Context, ref *provider.Reference, revisionKey string, hasPermission func(*provider.ResourcePermissions) bool) (*node.Node, error) {
+	log := appctx.GetLogger(ctx)
+
+	// verify revision key format
+	kp := strings.SplitN(revisionKey, node.RevisionIDDelimiter, 2)
+	if len(kp) != 2 {
+		log.Error().Str("revisionKey", revisionKey).Msg("malformed revisionKey")
+		return nil, errtypes.NotFound(revisionKey)
+	}
+	log.Debug().Str("revisionKey", revisionKey).Msg("DownloadRevision")
+
+	spaceID := ref.ResourceId.SpaceId
+	// check if the node is available and has not been deleted
+	n, err := node.ReadNode(ctx, fs.lu, spaceID, kp[0], false)
+	if err != nil {
+		return nil, err
+	}
+	if !n.Exists {
+		err = errtypes.NotFound(filepath.Join(n.ParentID, n.Name))
+		return nil, err
+	}
+
+	p, err := fs.p.AssemblePermissions(ctx, n)
+	switch {
+	case err != nil:
+		return nil, errtypes.InternalError(err.Error())
+	case !hasPermission(&p):
+		return nil, errtypes.PermissionDenied(filepath.Join(n.ParentID, n.Name))
+	}
+
+	// Set space owner in context
+	storagespace.ContextSendSpaceOwnerID(ctx, n.SpaceOwnerOrManager(ctx))
+
+	return n, nil
 }

@@ -130,4 +130,3 @@ Details
    duration of a request.
 
    https://github.com/cs3org/reva/pull/3397
-

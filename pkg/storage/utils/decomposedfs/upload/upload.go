@@ -29,7 +29,6 @@ import (
 	"hash/adler32"
 	"io"
 	"io/fs"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -92,6 +91,8 @@ type Upload struct {
 	tp Tree
 	// versionsPath will be empty if there was no file before
 	versionsPath string
+	// sizeDiff size difference between new and old file version
+	sizeDiff int64
 	// and a logger as well
 	log zerolog.Logger
 	// publisher used to publish events
@@ -261,8 +262,7 @@ func (upload *Upload) FinishUpload(_ context.Context) error {
 
 	if upload.async {
 		// handle postprocessing asynchronously but inform there is something in progress
-		// TODO: calculate sizeDiff
-		return upload.tp.Propagate(upload.Ctx, n, 0)
+		return upload.tp.Propagate(upload.Ctx, n, upload.sizeDiff)
 	}
 
 	err = upload.Finalize()
@@ -271,8 +271,7 @@ func (upload *Upload) FinishUpload(_ context.Context) error {
 		return err
 	}
 
-	// TODO: calculate sizeDiff
-	return upload.tp.Propagate(upload.Ctx, n, 0)
+	return upload.tp.Propagate(upload.Ctx, n, upload.sizeDiff)
 }
 
 // Terminate terminates the upload
@@ -319,7 +318,7 @@ func (upload *Upload) writeInfo() error {
 	if err != nil {
 		return err
 	}
-	return ioutil.WriteFile(upload.infoPath, data, defaultFilePerm)
+	return os.WriteFile(upload.infoPath, data, defaultFilePerm)
 }
 
 // Finalize finalizes the upload (eg moves the file to the internal destination)

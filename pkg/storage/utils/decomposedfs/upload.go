@@ -129,7 +129,12 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 	log := appctx.GetLogger(ctx)
 
 	n, err := fs.lu.NodeFromResource(ctx, ref)
-	if err != nil {
+	switch err.(type) {
+	case nil:
+		// ok
+	case errtypes.IsNotFound:
+		return nil, errtypes.PreconditionFailed(err.Error())
+	default:
 		return nil, err
 	}
 

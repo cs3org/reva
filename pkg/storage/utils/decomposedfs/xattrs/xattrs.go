@@ -154,8 +154,8 @@ func CopyMetadata(src, target string, filter func(attributeName string) bool) (e
 
 // CopyMetadataWithSourceLock copies all extended attributes from source to target.
 // The optional filter function can be used to filter by attribute name, e.g. by checking a prefix
-// For the source file, a shared lock is acquired. For the target, an exclusive
-// write lock is acquired.
+// For the source file, a shared lock is acquired.
+// NOTE: target resource is not locked! You need to acquire a write lock on the target additionally
 func CopyMetadataWithSourceLock(src, target string, filter func(attributeName string) bool, readLock *flock.Flock) (err error) {
 	switch {
 	case readLock == nil:
@@ -165,23 +165,6 @@ func CopyMetadataWithSourceLock(src, target string, filter func(attributeName st
 	case !readLock.Locked() && !readLock.RLocked(): // we need either a read or a write lock
 		return errors.New("not locked")
 	}
-
-	var writeLock *flock.Flock
-
-	// Acquire the write log on the target node
-	writeLock, err = filelocks.AcquireWriteLock(target)
-
-	if err != nil {
-		return errors.Wrap(err, "xattrs: Unable to lock target to write")
-	}
-	defer func() {
-		rerr := filelocks.ReleaseLock(writeLock)
-
-		// if err is non nil we do not overwrite that
-		if err == nil {
-			err = rerr
-		}
-	}()
 
 	// both locks are established. Copy.
 	var attrNameList []string
