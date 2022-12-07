@@ -236,7 +236,7 @@ func (m *manager) ForwardInvite(ctx context.Context, invite *invitepb.InviteToke
 		if e != nil {
 			return errors.Wrap(e, "json: error reading request body")
 		}
-		return errors.Wrap(fmt.Errorf("%s: %s", resp.Status, string(respBody)), "json: error sending accept post request")
+		return errors.Wrap(fmt.Errorf("%s: %s", resp.Status, string(respBody)), fmt.Sprintf("json: error sending accept post request to %s", recipientURL))
 	}
 
 	return nil
