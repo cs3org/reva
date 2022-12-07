@@ -36,11 +36,11 @@ func init() {
 
 // Config holds the config options that need to be passed down to all ocdav handlers.
 type Config struct {
-	SMTPCredentials  *smtpclient.SMTPCredentials `mapstructure:"smtp_credentials"`
+	SMTPCredentials  *smtpclient.SMTPCredentials `mapstructure:"smtp_credentials" docs:"nil;url:pkg/smtpclient/smtpclient.go;Configuration for mail settings"`
 	Prefix           string                      `mapstructure:"prefix"`
 	Host             string                      `mapstructure:"host"`
-	GatewaySvc       string                      `mapstructure:"gatewaysvc"`
-	MeshDirectoryURL string                      `mapstructure:"mesh_directory_url"`
+	GatewaySvc       string                      `mapstructure:"gatewaysvc" docs:";Address of the gateway service."`
+	MeshDirectoryURL string                      `mapstructure:"mesh_directory_url" docs:"https://sciencemesh.cesnet.cz/iop/meshdir/;URL of the mesh directory url"`
 	Config           configData                  `mapstructure:"config"`
 }
 
