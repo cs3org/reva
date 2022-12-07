@@ -32,6 +32,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/pkg/errors"
+	"github.com/cs3org/reva/tests/helpers"
 )
 
 const timeoutMs = 30000
@@ -89,8 +90,7 @@ func startRevads(configs map[string]string, variables map[string]string) (map[st
 		ownAddress := addresses[name]
 
 		// Create a temporary root for this revad
-		tmpRoot := "/workspace/tmp/reva-grpc-integration-tests-*-root"
-		err := os.MkdirAll(tmpRoot, 0750)
+		tmpRoot, err := helpers.TempDir("")
 		if err != nil {
 			return nil, errors.Wrapf(err, "Could not create tmpdir")
 		}
