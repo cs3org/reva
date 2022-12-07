@@ -29,10 +29,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cs3org/reva/tests/helpers"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/pkg/errors"
-	"github.com/cs3org/reva/tests/helpers"
 )
 
 const timeoutMs = 30000
