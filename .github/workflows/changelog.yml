@@ -10,6 +10,8 @@ on:
       - ".drone.star"
       - ".drone.env"
       - ".fossa.yml"
+      - ".gitignore"
+      - ".gitmodules"
       - "go.mod"
       - "go.sum"
 
