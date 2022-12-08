@@ -155,7 +155,10 @@ func New(o *options.Options, lu *lookup.Lookup, p PermissionsChecker, tp Tree, p
 	var ev events.Stream
 	if o.Events.NatsAddress != "" {
 		evtsCfg := o.Events
-		var rootCAPool *x509.CertPool
+		var (
+			rootCAPool *x509.CertPool
+			tlsConf    *tls.Config
+		)
 		if evtsCfg.TLSRootCACertificate != "" {
 			rootCrtFile, err := os.Open(evtsCfg.TLSRootCACertificate)
 			if err != nil {
@@ -170,12 +173,13 @@ func New(o *options.Options, lu *lookup.Lookup, p PermissionsChecker, tp Tree, p
 			rootCAPool = x509.NewCertPool()
 			rootCAPool.AppendCertsFromPEM(certBytes.Bytes())
 			evtsCfg.TLSInsecure = false
+
+			tlsConf = &tls.Config{
+				InsecureSkipVerify: evtsCfg.TLSInsecure, //nolint:gosec
+				RootCAs:            rootCAPool,
+			}
 		}
 
-		tlsConf := &tls.Config{
-			InsecureSkipVerify: evtsCfg.TLSInsecure, //nolint:gosec
-			RootCAs:            rootCAPool,
-		}
 		ev, err = server.NewNatsStream(
 			natsjs.TLSConfig(tlsConf),
 			natsjs.Address(evtsCfg.NatsAddress),
