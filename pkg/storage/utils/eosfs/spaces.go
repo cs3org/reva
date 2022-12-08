@@ -146,18 +146,7 @@ func (fs *eosfs) listPersonalStorageSpaces(ctx context.Context, u *userpb.User, 
 			return nil, err
 		}
 	default:
-		fn, err := fs.wrap(ctx, spacePath, u)
-		if err != nil {
-			return nil, err
-		}
-
-		// TODO: extract spacePath from filePath
-		p := strings.Split(fn, "/")
-		for len(p) > 4 {
-			fn = path.Dir(fn)
-			p = strings.Split(fn, "/")
-		}
-
+		fn := path.Join(fs.conf.Namespace, spacePath)
 		auth, err := fs.getUserAuth(ctx, u, fn)
 		if err != nil {
 			return nil, err
