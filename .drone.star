@@ -291,7 +291,7 @@ def buildOnly():
         },
         "steps": [
             licenseScanStep(),
-            makeStep("ci"),
+            makeStep("dist"),
             {
                 "name": "Docker build",
                 "image": "plugins/docker",
