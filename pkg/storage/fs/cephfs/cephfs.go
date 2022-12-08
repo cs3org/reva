@@ -590,6 +590,6 @@ func (fs *cephfs) UpdateStorageSpace(ctx context.Context, req *provider.UpdateSt
 	return nil, errors.New("cephfs: updateStorageSpace not supported")
 }
 
-func (fs *cephfs) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorageSpaceRequest) (*provider.DeleteStorageSpaceResponse, error) {
+func (fs *cephfs) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorageSpaceRequest) error {
 	return nil, errors.New("cephfs: deleteStorageSpace not supported")
 }
