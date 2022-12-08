@@ -49,12 +49,7 @@ $(CALENS):
 
 .PHONY: check-changelog
 check-changelog: $(CALENS)
-ifndef PR
-	$(error PR is not defined)
-else
-	$(CALENS) | sed -n '/^Changelog for reva unreleased (UNRELEASED)/,/^Details/p' | \
-		grep -E '^ \* [[:alpha:]]{3} #$(PR): '
-endif
+	$(CALENS)
 
 $(GOIMPORTS):
 	@mkdir -p $(@D)
