@@ -238,7 +238,10 @@ func ReadNode(ctx context.Context, lu PathLookup, spaceID, nodeID string, canLis
 
 	// append back revision to nodeid, even when returning a not existing node
 	defer func() {
-		n.ID += revisionSuffix
+		// when returning errors n is nil
+		if n != nil {
+			n.ID += revisionSuffix
+		}
 	}()
 
 	nodePath := n.InternalPath()
