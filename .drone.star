@@ -24,15 +24,6 @@ def makeStep(target):
         ],
     }
 
-def lintStep():
-    return {
-        "name": "lint",
-        "image": "registry.cern.ch/docker.io/golangci/golangci-lint:v1.50.1",
-        "commands": [
-            "golangci-lint run --timeout 10m0s",
-        ],
-    }
-
 def cloneOc10TestReposStep():
     return {
         "name": "clone-oC10-test-repos",
@@ -96,7 +87,6 @@ def main(ctx):
     # ocisIntegrationTests(6, [1, 4])     - this will only run 1st and 4th parts
     # implemented for: ocisIntegrationTests and s3ngIntegrationTests
     return [
-        changelog(),
         checkStarlark(),
         checkGoGenerate(),
         coverage(),
@@ -158,7 +148,6 @@ def buildAndPublishDocker():
             },
             licenseScanStep(),
             makeStep("ci"),
-            lintStep(),
             {
                 "name": "license-check",
                 "image": "registry.cern.ch/docker.io/library/golang:1.18",
@@ -345,7 +334,6 @@ def buildOnly():
                     "dockerfile": "Dockerfile.revad",
                 },
             },
-            lintStep(),
             {
                 "name": "license-check",
                 "image": "registry.cern.ch/docker.io/library/golang:1.18",
@@ -417,7 +405,6 @@ def release():
         "steps": [
             licenseScanStep(),
             makeStep("ci"),
-            lintStep(),
             {
                 "name": "create-dist",
                 "image": "registry.cern.ch/docker.io/library/golang:1.18",
