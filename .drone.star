@@ -101,7 +101,6 @@ def main(ctx):
         #virtualViews(),
     ] + ocisIntegrationTests(6) + s3ngIntegrationTests(12)
 
-
 def coverage():
     return {
         "kind": "pipeline",
