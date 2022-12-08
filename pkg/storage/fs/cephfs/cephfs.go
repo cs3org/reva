@@ -163,6 +163,11 @@ func (fs *cephfs) CreateDir(ctx context.Context, ref *provider.Reference) error 
 	return getRevaError(err)
 }
 
+// TouchFile as defined in the storage.FS interface
+func (fs *cephfs) TouchFile(ctx context.Context, ref *provider.Reference) error {
+	return fmt.Errorf("unimplemented: TouchFile")
+}
+
 func (fs *cephfs) Delete(ctx context.Context, ref *provider.Reference) (err error) {
 	var path string
 	user := fs.makeUser(ctx)
@@ -213,7 +218,7 @@ func (fs *cephfs) Move(ctx context.Context, oldRef, newRef *provider.Reference) 
 	return getRevaError(err)
 }
 
-func (fs *cephfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []string) (ri *provider.ResourceInfo, err error) {
+func (fs *cephfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []string, fieldMask []string) (ri *provider.ResourceInfo, err error) {
 	var path string
 	user := fs.makeUser(ctx)
 
@@ -232,7 +237,7 @@ func (fs *cephfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []s
 	return ri, getRevaError(err)
 }
 
-func (fs *cephfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys []string) (files []*provider.ResourceInfo, err error) {
+func (fs *cephfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys []string, fieldMask []string) (files []*provider.ResourceInfo, err error) {
 	var path string
 	user := fs.makeUser(ctx)
 	if path, err = user.resolveRef(ref); err != nil {
@@ -464,7 +469,7 @@ func (fs *cephfs) ListGrants(ctx context.Context, ref *provider.Reference) (glis
 	return glist, getRevaError(err)
 }
 
-func (fs *cephfs) GetQuota(ctx context.Context, ref *provider.Reference) (total uint64, used uint64, err error) {
+func (fs *cephfs) GetQuota(ctx context.Context, ref *provider.Reference) (total uint64, used uint64, remaining uint64, err error) {
 	user := fs.makeUser(ctx)
 
 	log := appctx.GetLogger(ctx)
@@ -484,7 +489,13 @@ func (fs *cephfs) GetQuota(ctx context.Context, ref *provider.Reference) (total 
 		}
 	})
 
-	return total, used, getRevaError(err)
+	if used >= total {
+		remaining = 0
+	} else {
+		remaining = total - used
+	}
+
+	return total, used, remaining, getRevaError(err)
 }
 
 func (fs *cephfs) CreateReference(ctx context.Context, path string, targetURI *url.URL) (err error) {
@@ -570,19 +581,19 @@ func (fs *cephfs) CreateStorageSpace(ctx context.Context, req *provider.CreateSt
 	return nil, errors.New("cephfs: createStorageSpace not supported")
 }
 
-func (fs *cephfs) ListRecycle(ctx context.Context, basePath, key, relativePath string) ([]*provider.RecycleItem, error) {
+func (fs *cephfs) ListRecycle(ctx context.Context, ref *provider.Reference, key, relativePath string) ([]*provider.RecycleItem, error) {
 	panic("implement me")
 }
 
-func (fs *cephfs) RestoreRecycleItem(ctx context.Context, basePath, key, relativePath string, restoreRef *provider.Reference) error {
+func (fs *cephfs) RestoreRecycleItem(ctx context.Context, ref *provider.Reference, key, relativePath string, restoreRef *provider.Reference) error {
 	return errors.New("cephfs: restoreRecycleItem not supported")
 }
 
-func (fs *cephfs) PurgeRecycleItem(ctx context.Context, basePath, key, relativePath string) error {
+func (fs *cephfs) PurgeRecycleItem(ctx context.Context, ref *provider.Reference, key, relativePath string) error {
 	return errors.New("cephfs: purgeRecycleItem not supported")
 }
 
-func (fs *cephfs) ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter, permissions map[string]struct{}) ([]*provider.StorageSpace, error) {
+func (fs *cephfs) ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter, unrestricted bool) ([]*provider.StorageSpace, error) {
 	return nil, errors.New("cephfs: listStorageSpaces not supported")
 }
 
@@ -591,7 +602,7 @@ func (fs *cephfs) UpdateStorageSpace(ctx context.Context, req *provider.UpdateSt
 }
 
 func (fs *cephfs) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorageSpaceRequest) error {
-	errors.New("cephfs: deleteStorageSpace not supported")
+	return errors.New("cephfs: deleteStorageSpace not supported")
 }
 
 // GetLock returns an existing lock on the given reference
