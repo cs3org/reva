@@ -589,3 +589,7 @@ func (fs *cephfs) ListStorageSpaces(ctx context.Context, filter []*provider.List
 func (fs *cephfs) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
 	return nil, errors.New("cephfs: updateStorageSpace not supported")
 }
+
+func (fs *cephfs) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorageSpaceRequest) (*provider.DeleteStorageSpaceResponse, error) {
+	return nil, errors.New("cephfs: deleteStorageSpace not supported")
+}
