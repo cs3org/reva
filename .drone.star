@@ -245,39 +245,6 @@ def buildAndPublishDocker():
         ],
     }
 
-def changelog():
-    return {
-        "kind": "pipeline",
-        "type": "docker",
-        "name": "changelog",
-        "platform": {
-            "os": "linux",
-            "arch": "amd64",
-        },
-        "trigger": {
-            "event": {
-                "include": [
-                    "pull_request",
-                ],
-            },
-        },
-        "steps": [
-            {
-                "name": "changelog",
-                "image": "registry.cern.ch/docker.io/library/golang:1.18",
-                "commands": [
-                    "make release-deps && /go/bin/calens > /dev/null",
-                    "make check-changelog-drone PR=$DRONE_PULL_REQUEST",
-                ],
-                "environment": {
-                    "GITHUB_API_TOKEN": {
-                        "from_secret": "github_api_token",
-                    },
-                },
-            },
-        ],
-    }
-
 def coverage():
     return {
         "kind": "pipeline",
@@ -303,7 +270,7 @@ def coverage():
                 ],
             },
         ],
-        "depends_on": ["changelog"],
+        "depends_on": ["check-go-generate"],
     }
 
 def buildOnly():
@@ -349,7 +316,7 @@ def buildOnly():
                 ],
             },
         ],
-        "depends_on": ["changelog"],
+        "depends_on": ["check-go-generate"],
     }
 
 def testIntegration():
@@ -383,7 +350,7 @@ def testIntegration():
         "services": [
             redisService(),
         ],
-        "depends_on": ["changelog"],
+        "depends_on": ["check-go-generate"],
     }
 
 def release():
@@ -504,7 +471,7 @@ def release():
                 },
             },
         ],
-        "depends_on": ["changelog"],
+        "depends_on": ["check-go-generate"],
     }
 
 def virtualViews():
@@ -564,7 +531,7 @@ def virtualViews():
                 },
             },
         ],
-        "depends_on": ["changelog"],
+        "depends_on": ["check-go-generate"],
     }
 
 def litmusOcisOldWebdav():
@@ -620,7 +587,7 @@ def litmusOcisOldWebdav():
                 },
             },
         ],
-        "depends_on": ["changelog"],
+        "depends_on": ["check-go-generate"],
     }
 
 def litmusOcisNewWebdav():
@@ -677,7 +644,7 @@ def litmusOcisNewWebdav():
                 },
             },
         ],
-        "depends_on": ["changelog"],
+        "depends_on": ["check-go-generate"],
     }
 
 def litmusOcisSpacesDav():
@@ -738,7 +705,7 @@ def litmusOcisSpacesDav():
                 ],
             },
         ],
-        "depends_on": ["changelog"],
+        "depends_on": ["check-go-generate"],
     }
 
 def cs3ApiValidatorOcis():
@@ -791,7 +758,7 @@ def cs3ApiValidatorOcis():
                 ],
             },
         ],
-        "depends_on": ["changelog"],
+        "depends_on": ["check-go-generate"],
     }
 
 def cs3ApiValidatorS3NG():
@@ -847,7 +814,7 @@ def cs3ApiValidatorS3NG():
         "services": [
             cephService(),
         ],
-        "depends_on": ["changelog"],
+        "depends_on": ["check-go-generate"],
     }
 
 def ocisIntegrationTests(parallelRuns, skipExceptParts = []):
@@ -923,7 +890,7 @@ def ocisIntegrationTests(parallelRuns, skipExceptParts = []):
                 "services": [
                     ldapService(),
                 ],
-                "depends_on": ["changelog"],
+                "depends_on": ["check-go-generate"],
             },
         )
 
@@ -1003,7 +970,7 @@ def s3ngIntegrationTests(parallelRuns, skipExceptParts = []):
                     ldapService(),
                     cephService(),
                 ],
-                "depends_on": ["changelog"],
+                "depends_on": ["check-go-generate"],
             },
         )
 
