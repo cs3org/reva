@@ -53,8 +53,40 @@ type Options struct {
 	PersonalSpaceAliasTemplate string `mapstructure:"personalspacealias_template"`
 	GeneralSpaceAliasTemplate  string `mapstructure:"generalspacealias_template"`
 
+	AsyncFileUploads bool `mapstructure:"asyncfileuploads"`
+
+	Events EventOptions `mapstructure:"events"`
+
+	Tokens TokenOptions `mapstructure:"tokens"`
+
+	StatCache CacheOptions `mapstructure:"statcache"`
+
 	MaxAcquireLockCycles    int `mapstructure:"max_acquire_lock_cycles"`
 	LockCycleDurationFactor int `mapstructure:"lock_cycle_duration_factor"`
+}
+
+// EventOptions are the configurable options for events
+type EventOptions struct {
+	NatsAddress          string `mapstructure:"natsaddress"`
+	NatsClusterID        string `mapstructure:"natsclusterid"`
+	TLSInsecure          bool   `mapstructure:"tlsinsecure"`
+	TLSRootCACertificate string `mapstructure:"tlsrootcacertificate"`
+	NumConsumers         int    `mapstructure:"numconsumers"`
+}
+
+// TokenOptions are the configurable option for tokens
+type TokenOptions struct {
+	DownloadEndpoint     string `mapstructure:"download_endpoint"`
+	DataGatewayEndpoint  string `mapstructure:"datagateway_endpoint"`
+	TransferSharedSecret string `mapstructure:"transfer_shared_secret"`
+	TransferExpires      int64  `mapstructure:"transfer_expires"`
+}
+
+// CacheOptions contains options of configuring a cache
+type CacheOptions struct {
+	CacheStore    string   `mapstructure:"cache_store"`
+	CacheNodes    []string `mapstructure:"cache_nodes"`
+	CacheDatabase string   `mapstructure:"cache_database"`
 }
 
 // New returns a new Options instance for the given configuration

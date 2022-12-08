@@ -278,3 +278,55 @@ func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Refer
 	log.Error().Err(err).Interface("ref", ref).Str("originalnode", kp[0]).Str("revisionKey", revisionKey).Msg("original node does not exist")
 	return nil
 }
+
+// DeleteRevision deletes the specified revision of the resource
+func (fs *Decomposedfs) DeleteRevision(ctx context.Context, ref *provider.Reference, revisionKey string) error {
+	n, err := fs.getRevisionNode(ctx, ref, revisionKey, func(rp *provider.ResourcePermissions) bool {
+		return rp.RestoreFileVersion
+	})
+	if err != nil {
+		return err
+	}
+
+	if err := os.RemoveAll(fs.lu.InternalPath(n.SpaceID, revisionKey)); err != nil {
+		return err
+	}
+
+	return fs.tp.DeleteBlob(n)
+}
+
+func (fs *Decomposedfs) getRevisionNode(ctx context.Context, ref *provider.Reference, revisionKey string, hasPermission func(*provider.ResourcePermissions) bool) (*node.Node, error) {
+	log := appctx.GetLogger(ctx)
+
+	// verify revision key format
+	kp := strings.SplitN(revisionKey, node.RevisionIDDelimiter, 2)
+	if len(kp) != 2 {
+		log.Error().Str("revisionKey", revisionKey).Msg("malformed revisionKey")
+		return nil, errtypes.NotFound(revisionKey)
+	}
+	log.Debug().Str("revisionKey", revisionKey).Msg("DownloadRevision")
+
+	spaceID := ref.ResourceId.SpaceId
+	// check if the node is available and has not been deleted
+	n, err := node.ReadNode(ctx, fs.lu, spaceID, kp[0], false)
+	if err != nil {
+		return nil, err
+	}
+	if !n.Exists {
+		err = errtypes.NotFound(filepath.Join(n.ParentID, n.Name))
+		return nil, err
+	}
+
+	p, err := fs.p.AssemblePermissions(ctx, n)
+	switch {
+	case err != nil:
+		return nil, errtypes.InternalError(err.Error())
+	case !hasPermission(&p):
+		return nil, errtypes.PermissionDenied(filepath.Join(n.ParentID, n.Name))
+	}
+
+	// Set space owner in context
+	storagespace.ContextSendSpaceOwnerID(ctx, n.SpaceOwnerOrManager(ctx))
+
+	return n, nil
+}

@@ -20,6 +20,7 @@ package lookup_test
 
 import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
 	helpers "github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/testhelpers"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs"
 	. "github.com/onsi/ginkgo/v2"
@@ -51,7 +52,7 @@ var _ = Describe("Lookup", func() {
 			})
 			Expect(err).ToNot(HaveOccurred())
 
-			path, err := env.Lookup.Path(env.Ctx, n)
+			path, err := env.Lookup.Path(env.Ctx, n, func(n *node.Node) bool { return true })
 			Expect(err).ToNot(HaveOccurred())
 			Expect(path).To(Equal("/dir1/file1"))
 		})
@@ -65,7 +66,7 @@ var _ = Describe("Lookup", func() {
 			})
 			Expect(err).ToNot(HaveOccurred())
 
-			path, err := env.Lookup.Path(env.Ctx, n)
+			path, err := env.Lookup.Path(env.Ctx, n, func(n *node.Node) bool { return true })
 			Expect(err).ToNot(HaveOccurred())
 			Expect(path).To(Equal("/dir1/subdir1/file2"))
 			Expect(n.SpaceRoot.Name).To(Equal("userid"))
@@ -88,7 +89,7 @@ var _ = Describe("Lookup", func() {
 			Expect(n.SpaceRoot).ToNot(BeNil())
 
 			// Check if we got the right node and spaceRoot
-			path, err := env.Lookup.Path(env.Ctx, n)
+			path, err := env.Lookup.Path(env.Ctx, n, func(n *node.Node) bool { return true })
 			Expect(err).ToNot(HaveOccurred())
 			Expect(path).To(Equal("/dir1/file1"))
 			Expect(n.SpaceRoot.Name).To(Equal("userid"))
@@ -111,7 +112,7 @@ var _ = Describe("Lookup", func() {
 			Expect(n.SpaceRoot).ToNot(BeNil())
 
 			// Check if we got the right node and spaceRoot
-			path, err := env.Lookup.Path(env.Ctx, n)
+			path, err := env.Lookup.Path(env.Ctx, n, func(n *node.Node) bool { return true })
 			Expect(err).ToNot(HaveOccurred())
 			Expect(path).To(Equal("/dir1/file1"))
 			Expect(n.SpaceRoot.Name).To(Equal("userid"))

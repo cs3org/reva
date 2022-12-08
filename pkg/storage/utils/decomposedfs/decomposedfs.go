@@ -23,7 +23,10 @@ package decomposedfs
 //go:generate make --no-print-directory -C ../../../.. mockery NAME=Tree
 
 import (
+	"bytes"
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"io"
 	"net/url"
 	"os"
@@ -32,6 +35,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	cs3permissions "github.com/cs3org/go-cs3apis/cs3/permissions/v1beta1"
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
@@ -39,19 +43,24 @@ import (
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
+	"github.com/cs3org/reva/v2/pkg/events"
+	"github.com/cs3org/reva/v2/pkg/events/server"
 	"github.com/cs3org/reva/v2/pkg/logger"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v2/pkg/storage"
+	"github.com/cs3org/reva/v2/pkg/storage/cache"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/chunking"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/lookup"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/options"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/tree"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/upload"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/filelocks"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/templates"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/utils"
+	"github.com/go-micro/plugins/v4/events/natsjs"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 )
@@ -99,6 +108,8 @@ type Decomposedfs struct {
 	p                 PermissionsChecker
 	chunkHandler      *chunking.ChunkHandler
 	permissionsClient CS3PermissionsClient
+	stream            events.Stream
+	cache             cache.StatCache
 }
 
 // NewDefault returns an instance with default components
@@ -126,10 +137,10 @@ func NewDefault(m map[string]interface{}, bs tree.Blobstore) (storage.FS, error)
 // New returns an implementation of the storage.FS interface that talks to
 // a local filesystem.
 func New(o *options.Options, lu *lookup.Lookup, p PermissionsChecker, tp Tree, permissionsClient CS3PermissionsClient) (storage.FS, error) {
+	log := logger.New()
 	err := tp.Setup()
 	if err != nil {
-		logger.New().Error().Err(err).
-			Msg("could not setup tree")
+		log.Error().Err(err).Msg("could not setup tree")
 		return nil, errors.Wrap(err, "could not setup tree")
 	}
 
@@ -141,14 +152,266 @@ func New(o *options.Options, lu *lookup.Lookup, p PermissionsChecker, tp Tree, p
 		filelocks.SetLockCycleDurationFactor(o.LockCycleDurationFactor)
 	}
 
-	return &Decomposedfs{
+	var ev events.Stream
+	if o.Events.NatsAddress != "" {
+		evtsCfg := o.Events
+		var rootCAPool *x509.CertPool
+		if evtsCfg.TLSRootCACertificate != "" {
+			rootCrtFile, err := os.Open(evtsCfg.TLSRootCACertificate)
+			if err != nil {
+				return nil, err
+			}
+
+			var certBytes bytes.Buffer
+			if _, err := io.Copy(&certBytes, rootCrtFile); err != nil {
+				return nil, err
+			}
+
+			rootCAPool = x509.NewCertPool()
+			rootCAPool.AppendCertsFromPEM(certBytes.Bytes())
+			evtsCfg.TLSInsecure = false
+		}
+
+		tlsConf := &tls.Config{
+			InsecureSkipVerify: evtsCfg.TLSInsecure, //nolint:gosec
+			RootCAs:            rootCAPool,
+		}
+		ev, err = server.NewNatsStream(
+			natsjs.TLSConfig(tlsConf),
+			natsjs.Address(evtsCfg.NatsAddress),
+			natsjs.ClusterID(evtsCfg.NatsClusterID),
+		)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	fs := &Decomposedfs{
 		tp:                tp,
 		lu:                lu,
 		o:                 o,
 		p:                 p,
 		chunkHandler:      chunking.NewChunkHandler(filepath.Join(o.Root, "uploads")),
 		permissionsClient: permissionsClient,
-	}, nil
+		stream:            ev,
+		cache:             cache.GetStatCache(o.StatCache.CacheStore, o.StatCache.CacheNodes, o.StatCache.CacheDatabase, "stat", 0),
+	}
+
+	if o.AsyncFileUploads {
+		if o.Events.NatsAddress == "" {
+			log.Error().Msg("need nats for async file processing")
+			return nil, errors.New("need nats for async file processing")
+		}
+
+		ch, err := events.Consume(ev, "dcfs", events.PostprocessingFinished{}, events.VirusscanFinished{})
+		if err != nil {
+			return nil, err
+		}
+
+		if o.Events.NumConsumers <= 0 {
+			o.Events.NumConsumers = 1
+		}
+
+		for i := 0; i < o.Events.NumConsumers; i++ {
+			go fs.Postprocessing(ch)
+		}
+	}
+
+	return fs, nil
+}
+
+// Postprocessing starts the postprocessing result collector
+func (fs *Decomposedfs) Postprocessing(ch <-chan interface{}) {
+	ctx := context.TODO()
+	log := logger.New()
+	for event := range ch {
+		switch ev := event.(type) {
+		case events.PostprocessingFinished:
+			up, err := upload.Get(ctx, ev.UploadID, fs.lu, fs.tp, fs.o.Root, fs.stream, fs.o.AsyncFileUploads, fs.o.Tokens)
+			if err != nil {
+				log.Error().Err(err).Str("uploadID", ev.UploadID).Msg("Failed to get upload")
+				continue // NOTE: since we can't get the upload, we can't delete the blob
+			}
+
+			var (
+				failed     bool
+				keepUpload bool
+			)
+
+			switch ev.Outcome {
+			default:
+				log.Error().Str("outcome", string(ev.Outcome)).Str("uploadID", ev.UploadID).Msg("unknown postprocessing outcome - aborting")
+				fallthrough
+			case events.PPOutcomeAbort:
+				failed = true
+				keepUpload = true
+			case events.PPOutcomeContinue:
+				if err := up.Finalize(); err != nil {
+					log.Error().Err(err).Str("uploadID", ev.UploadID).Msg("could not finalize upload")
+					keepUpload = true // should we keep the upload when assembling failed?
+					failed = true
+				}
+			case events.PPOutcomeDelete:
+				failed = true
+			}
+
+			n, err := node.ReadNode(ctx, fs.lu, up.Info.Storage["SpaceRoot"], up.Info.Storage["NodeId"], false)
+			if err != nil {
+				log.Error().Err(err).Str("uploadID", ev.UploadID).Msg("could not read node")
+				continue
+			}
+			up.Node = n
+
+			if p, err := node.ReadNode(ctx, fs.lu, up.Info.Storage["SpaceRoot"], n.ParentID, false); err != nil {
+				log.Error().Err(err).Str("uploadID", ev.UploadID).Msg("could not read parent")
+			} else {
+				// update parent tmtime to propagate etag change
+				now := time.Now()
+				p.SetTMTime(&now)
+				if err := fs.tp.Propagate(ctx, p, 0); err != nil {
+					log.Error().Err(err).Str("uploadID", ev.UploadID).Msg("could not propagate etag change")
+				}
+			}
+
+			// remove cache entry in gateway
+			fs.cache.RemoveStat(ev.ExecutingUser.GetId(), &provider.ResourceId{SpaceId: n.SpaceID, OpaqueId: n.ID})
+
+			upload.Cleanup(up, failed, keepUpload)
+
+			if err := events.Publish(
+				fs.stream,
+				events.UploadReady{
+					UploadID:      ev.UploadID,
+					Failed:        failed,
+					ExecutingUser: ev.ExecutingUser,
+					FileRef: &provider.Reference{
+						ResourceId: &provider.ResourceId{
+							StorageId: up.Info.MetaData["providerID"],
+							SpaceId:   up.Info.Storage["SpaceRoot"],
+							OpaqueId:  up.Info.Storage["SpaceRoot"],
+						},
+						Path: utils.MakeRelativePath(filepath.Join(up.Info.MetaData["dir"], up.Info.MetaData["filename"])),
+					},
+				},
+			); err != nil {
+				log.Error().Err(err).Str("uploadID", ev.UploadID).Msg("Failed to publish UploadReady event")
+			}
+		case events.VirusscanFinished:
+			if ev.ErrorMsg != "" {
+				// scan failed somehow
+				// Should we handle this here?
+				continue
+			}
+
+			var n *node.Node
+			switch ev.UploadID {
+			case "":
+				// uploadid is empty -> this was an on-demand scan
+				ctx := ctxpkg.ContextSetUser(context.Background(), ev.ExecutingUser)
+				ref := &provider.Reference{ResourceId: ev.ResourceID}
+
+				no, err := fs.lu.NodeFromResource(ctx, ref)
+				if err != nil {
+					log.Error().Err(err).Interface("resourceID", ev.ResourceID).Msg("Failed to get node after scan")
+					continue
+
+				}
+				n = no
+				if ev.Outcome == events.PPOutcomeDelete {
+					// antivir wants us to delete the file. We must obey and need to
+
+					// check if there a previous versions existing
+					revs, err := fs.ListRevisions(ctx, ref)
+					if len(revs) == 0 {
+						if err != nil {
+							log.Error().Err(err).Interface("resourceID", ev.ResourceID).Msg("Failed to list revisions. Fallback to delete file")
+						}
+
+						// no versions -> trash file
+						err := fs.Delete(ctx, ref)
+						if err != nil {
+							log.Error().Err(err).Interface("resourceID", ev.ResourceID).Msg("Failed to delete infected resource")
+							continue
+						}
+
+						// now purge it from the recycle bin
+						if err := fs.PurgeRecycleItem(ctx, &provider.Reference{ResourceId: &provider.ResourceId{SpaceId: n.SpaceID, OpaqueId: n.SpaceID}}, n.ID, "/"); err != nil {
+							log.Error().Err(err).Interface("resourceID", ev.ResourceID).Msg("Failed to purge infected resource from trash")
+						}
+
+						// remove cache entry in gateway
+						fs.cache.RemoveStat(ev.ExecutingUser.GetId(), &provider.ResourceId{SpaceId: n.SpaceID, OpaqueId: n.ID})
+						continue
+					}
+
+					// we have versions - find the newest
+					versions := make(map[uint64]string) // remember all versions - we need them later
+					var nv uint64
+					for _, v := range revs {
+						versions[v.Mtime] = v.Key
+						if v.Mtime > nv {
+							nv = v.Mtime
+						}
+					}
+
+					// restore newest version
+					if err := fs.RestoreRevision(ctx, ref, versions[nv]); err != nil {
+						log.Error().Err(err).Interface("resourceID", ev.ResourceID).Str("revision", versions[nv]).Msg("Failed to restore revision")
+						continue
+					}
+
+					// now find infected version
+					revs, err = fs.ListRevisions(ctx, ref)
+					if err != nil {
+						log.Error().Err(err).Interface("resourceID", ev.ResourceID).Msg("Error listing revisions after restore")
+					}
+
+					for _, v := range revs {
+						// we looking for a version that was previously not there
+						if _, ok := versions[v.Mtime]; ok {
+							continue
+						}
+
+						if err := fs.DeleteRevision(ctx, ref, v.Key); err != nil {
+							log.Error().Err(err).Interface("resourceID", ev.ResourceID).Str("revision", v.Key).Msg("Failed to delete revision")
+						}
+					}
+
+					// remove cache entry in gateway
+					fs.cache.RemoveStat(ev.ExecutingUser.GetId(), &provider.ResourceId{SpaceId: n.SpaceID, OpaqueId: n.ID})
+					continue
+				}
+
+			default:
+				// uploadid is not empty -> this is an async upload
+				up, err := upload.Get(ctx, ev.UploadID, fs.lu, fs.tp, fs.o.Root, fs.stream, fs.o.AsyncFileUploads, fs.o.Tokens)
+				if err != nil {
+					log.Error().Err(err).Str("uploadID", ev.UploadID).Msg("Failed to get upload")
+					continue
+				}
+
+				no, err := node.ReadNode(up.Ctx, fs.lu, up.Info.Storage["SpaceRoot"], up.Info.Storage["NodeId"], false)
+				if err != nil {
+					log.Error().Err(err).Interface("uploadID", ev.UploadID).Msg("Failed to get node after scan")
+					continue
+				}
+
+				n = no
+			}
+
+			if err := n.SetScanData(ev.Description, ev.Scandate); err != nil {
+				log.Error().Err(err).Str("uploadID", ev.UploadID).Interface("resourceID", ev.ResourceID).Msg("Failed to set scan results")
+				continue
+			}
+
+			// remove cache entry in gateway
+			fs.cache.RemoveStat(ev.ExecutingUser.GetId(), &provider.ResourceId{SpaceId: n.SpaceID, OpaqueId: n.ID})
+
+		default:
+			log.Error().Interface("event", ev).Msg("Unknown event")
+		}
+	}
+
 }
 
 // Shutdown shuts down the storage
@@ -270,12 +533,11 @@ func (fs *Decomposedfs) GetHome(ctx context.Context) (string, error) {
 
 // GetPathByID returns the fn pointed by the file id, without the internal namespace
 func (fs *Decomposedfs) GetPathByID(ctx context.Context, id *provider.ResourceId) (string, error) {
-	node, err := fs.lu.NodeFromID(ctx, id)
+	n, err := fs.lu.NodeFromID(ctx, id)
 	if err != nil {
 		return "", err
 	}
-
-	rp, err := fs.p.AssemblePermissions(ctx, node)
+	rp, err := fs.p.AssemblePermissions(ctx, n)
 	switch {
 	case err != nil:
 		return "", errtypes.InternalError(err.Error())
@@ -287,7 +549,14 @@ func (fs *Decomposedfs) GetPathByID(ctx context.Context, id *provider.ResourceId
 		return "", errtypes.NotFound(f)
 	}
 
-	return fs.lu.Path(ctx, node)
+	hp := func(n *node.Node) bool {
+		perms, err := fs.p.AssemblePermissions(ctx, n)
+		if err != nil {
+			return false
+		}
+		return perms.GetPath
+	}
+	return fs.lu.Path(ctx, n, hp)
 }
 
 // CreateDir creates the specified directory
@@ -555,10 +824,13 @@ func (fs *Decomposedfs) ListFolder(ctx context.Context, ref *provider.Reference,
 		// add this childs permissions
 		pset, _ := n.PermissionSet(ctx)
 		node.AddPermissions(&np, &pset)
-		if ri, err := children[i].AsResourceInfo(ctx, &np, mdKeys, fieldMask, utils.IsRelativeReference(ref)); err == nil {
-			finfos = append(finfos, ri)
+		ri, err := children[i].AsResourceInfo(ctx, &np, mdKeys, fieldMask, utils.IsRelativeReference(ref))
+		if err != nil {
+			return nil, errtypes.InternalError(err.Error())
 		}
+		finfos = append(finfos, ri)
 	}
+
 	return
 }
 

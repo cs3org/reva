@@ -19,6 +19,7 @@
 package tree
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -60,7 +61,7 @@ type PathLookup interface {
 
 	InternalRoot() string
 	InternalPath(spaceID, nodeID string) string
-	Path(ctx context.Context, n *node.Node) (path string, err error)
+	Path(ctx context.Context, n *node.Node, hasPermission func(*node.Node) bool) (path string, err error)
 }
 
 // Tree manages a hierarchical tree
@@ -478,7 +479,7 @@ func (t *Tree) Delete(ctx context.Context, n *node.Node) (err error) {
 	}
 
 	// get the original path
-	origin, err := t.lookup.Path(ctx, n)
+	origin, err := t.lookup.Path(ctx, n, func(*node.Node) bool { return true })
 	if err != nil {
 		return
 	}
@@ -915,6 +916,10 @@ func (t *Tree) WriteBlob(node *node.Node, reader io.Reader) error {
 
 // ReadBlob reads a blob from the blobstore
 func (t *Tree) ReadBlob(node *node.Node) (io.ReadCloser, error) {
+	if node.BlobID == "" {
+		// there is no blob yet - we are dealing with a 0 byte file
+		return io.NopCloser(bytes.NewReader([]byte{})), nil
+	}
 	return t.blobstore.Download(node)
 }
 

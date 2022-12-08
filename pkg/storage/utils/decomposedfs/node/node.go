@@ -68,6 +68,9 @@ const (
 
 	// RootID defines the root node's ID
 	RootID = "root"
+
+	// ProcessingStatus is the name of the status when processing a file
+	ProcessingStatus = "processing"
 )
 
 // Node represents a node in the tree and provides methods to get a Parent or Child instance
@@ -90,7 +93,7 @@ type Node struct {
 type PathLookup interface {
 	InternalRoot() string
 	InternalPath(spaceID, nodeID string) string
-	Path(ctx context.Context, n *Node) (path string, err error)
+	Path(ctx context.Context, n *Node, hasPermission func(*Node) bool) (path string, err error)
 }
 
 // New returns a new instance of Node
@@ -123,6 +126,33 @@ func (n *Node) ChangeOwner(new *userpb.UserId) (err error) {
 	}
 
 	return
+}
+
+// SetMetadata populates a given key with its value.
+// Note that consumers should be aware of the metadata options on xattrs.go.
+func (n *Node) SetMetadata(key string, val string) (err error) {
+	nodePath := n.InternalPath()
+	if err := xattrs.Set(nodePath, key, val); err != nil {
+		return errors.Wrap(err, "Decomposedfs: could not set extended attribute")
+	}
+	return nil
+}
+
+// RemoveMetadata removes a given key
+func (n *Node) RemoveMetadata(key string) (err error) {
+	if err = xattrs.Remove(n.InternalPath(), key); err == nil || xattrs.IsAttrUnset(err) {
+		return nil
+	}
+	return err
+}
+
+// GetMetadata reads the metadata for the given key
+func (n *Node) GetMetadata(key string) (val string, err error) {
+	nodePath := n.InternalPath()
+	if val, err = xattrs.Get(nodePath, key); err != nil {
+		return "", errors.Wrap(err, "Decomposedfs: could not get extended attribute")
+	}
+	return val, nil
 }
 
 // WriteAllNodeMetadata writes the Node metadata to disk
@@ -632,7 +662,7 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 	case returnBasename:
 		fn = n.Name
 	default:
-		fn, err = n.lu.Path(ctx, n)
+		fn, err = n.lu.Path(ctx, n, func(*Node) bool { return true })
 		if err != nil {
 			return nil, err
 		}
@@ -657,6 +687,10 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 		Owner:         n.Owner(),
 		ParentId:      parentID,
 		Name:          n.Name,
+	}
+
+	if n.IsProcessing() {
+		ri.Opaque = utils.AppendPlainToOpaque(ri.Opaque, "status", "processing")
 	}
 
 	if nodeType == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
@@ -802,6 +836,11 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 	}
 	ri.ArbitraryMetadata = &provider.ArbitraryMetadata{
 		Metadata: metadata,
+	}
+
+	// add virusscan information
+	if scanned, _, date := n.ScanData(); scanned {
+		ri.Opaque = utils.AppendPlainToOpaque(ri.Opaque, "scantime", date.Format(time.RFC3339Nano))
 	}
 
 	sublog.Debug().
@@ -1183,10 +1222,54 @@ func (n *Node) FindStorageSpaceRoot() error {
 	return nil
 }
 
+// MarkProcessing marks the node as being processed
+func (n *Node) MarkProcessing() error {
+	return n.SetMetadata(xattrs.StatusPrefix, ProcessingStatus)
+}
+
+// UnmarkProcessing removes the processing flag from the node
+func (n *Node) UnmarkProcessing() error {
+	return n.RemoveMetadata(xattrs.StatusPrefix)
+}
+
+// IsProcessing returns true if the node is currently being processed
+func (n *Node) IsProcessing() bool {
+	v, err := n.GetMetadata(xattrs.StatusPrefix)
+	return err == nil && v == ProcessingStatus
+}
+
 // IsSpaceRoot checks if the node is a space root
 func (n *Node) IsSpaceRoot() bool {
 	_, err := n.Xattr(xattrs.SpaceNameAttr)
 	return err == nil
+}
+
+// SetScanData sets the virus scan info to the node
+func (n *Node) SetScanData(info string, date time.Time) error {
+	return xattrs.SetMultiple(n.InternalPath(), map[string]string{
+		xattrs.ScanStatusPrefix: info,
+		xattrs.ScanDatePrefix:   date.Format(time.RFC3339Nano),
+	})
+}
+
+// ScanData returns scanning information of the node
+func (n *Node) ScanData() (scanned bool, virus string, scantime time.Time) {
+	ti, _ := n.GetMetadata(xattrs.ScanDatePrefix)
+	if ti == "" {
+		return // not scanned yet
+	}
+
+	t, err := time.Parse(time.RFC3339Nano, ti)
+	if err != nil {
+		return
+	}
+
+	i, err := n.GetMetadata(xattrs.ScanStatusPrefix)
+	if err != nil {
+		return
+	}
+
+	return true, i, t
 }
 
 // CheckQuota checks if both disk space and available quota are sufficient
