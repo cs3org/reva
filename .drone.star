@@ -290,31 +290,7 @@ def buildOnly():
             },
         },
         "steps": [
-            licenseScanStep(),
             makeStep("dist"),
-            {
-                "name": "Docker build",
-                "image": "plugins/docker",
-                "settings": {
-                    "repo": "n/a",
-                    "dry_run": "true",
-                    "dockerfile": "Dockerfile.revad",
-                },
-            },
-            {
-                "name": "license-check",
-                "image": "registry.cern.ch/docker.io/library/golang:1.18",
-                "failure": "ignore",
-                "environment": {
-                    "FOSSA_API_KEY": {
-                        "from_secret": "fossa_api_key",
-                    },
-                },
-                "commands": [
-                    "wget -qO- https://github.com/fossas/fossa-cli/releases/download/v1.0.11/fossa-cli_1.0.11_linux_amd64.tar.gz | tar xvz -C /go/bin/",
-                    "/go/bin/fossa test --timeout 900",
-                ],
-            },
         ],
         "depends_on": ["check-go-generate"],
     }
