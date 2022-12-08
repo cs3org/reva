@@ -19,6 +19,8 @@ GOLANGCI_LINT	?= $(TOOLCHAIN)/golangci-lint
 CALENS			?= $(TOOLCHAIN)/calens
 GOIMPORTS		?= $(TOOLCHAIN)/goimports
 
+include .bingo/Variables.mk
+
 .PHONY: toolchain
 toolchain: $(GOLANGCI_LINT) $(CALENS) $(GOIMPORTS)
 
@@ -161,6 +163,15 @@ all: build test lint gen-doc
 # create local build versions
 dist: gen-doc
 	go run tools/create-artifacts/main.go -version ${VERSION} -commit ${GIT_COMMIT} -goversion ${GO_VERSION}
+
+.PHONY: mockery
+mockery: $(MOCKERY)
+	$(MOCKERY) --dir $(PWD) --output $(PWD)/mocks --boilerplate-file ./.templates/mockery.go.tmpl --name $(NAME)
+	@echo ""
+
+.PHONY: go-generate
+go-generate:
+	go generate ./...
 
 BEHAT_BIN=vendor-bin/behat/vendor/bin/behat
 
