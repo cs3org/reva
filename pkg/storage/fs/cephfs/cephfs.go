@@ -562,7 +562,7 @@ func (fs *cephfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Refe
 	return getRevaError(err)
 }
 
-func (fs *cephfs) EmptyRecycle(ctx context.Context) error {
+func (fs *cephfs) EmptyRecycle(ctx context.Context, ref *provider.Reference) error {
 	return errtypes.NotSupported("cephfs: empty recycle not supported")
 }
 
