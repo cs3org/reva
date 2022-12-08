@@ -20,6 +20,7 @@ package mime
 
 import (
 	"path"
+	"strings"
 	"sync"
 
 	gomime "github.com/glpatcern/go-mime" // hopefully temporary
@@ -47,11 +48,15 @@ func Detect(isDir bool, fn string) string {
 	}
 
 	ext := path.Ext(fn)
+	ext = strings.TrimPrefix(ext, ".")
 
 	mimeType := getCustomMime(ext)
 
 	if mimeType == "" {
 		mimeType = gomime.TypeByExtension(ext)
+		if mimeType != "" {
+			mimes.Store(ext, mimeType)
+		}
 	}
 
 	if mimeType == "" {

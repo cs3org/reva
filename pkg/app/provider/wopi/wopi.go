@@ -24,7 +24,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
@@ -76,18 +75,18 @@ func init() {
 }
 
 type config struct {
-	IOPSecret           string `mapstructure:"iop_secret" docs:";The IOP secret used to connect to the wopiserver."`
-	WopiURL             string `mapstructure:"wopi_url" docs:";The wopiserver's URL."`
-	AppName             string `mapstructure:"app_name" docs:";The App user-friendly name."`
-	AppIconURI          string `mapstructure:"app_icon_uri" docs:";A URI to a static asset which represents the app icon."`
-	FolderBaseURL       string `mapstructure:"folder_base_url" docs:";The base URL to generate links to navigate back to the containing folder."`
-	AppURL              string `mapstructure:"app_url" docs:";The App URL."`
-	AppIntURL           string `mapstructure:"app_int_url" docs:";The internal app URL in case of dockerized deployments. Defaults to AppURL"`
-	AppAPIKey           string `mapstructure:"app_api_key" docs:";The API key used by the app, if applicable."`
-	JWTSecret           string `mapstructure:"jwt_secret" docs:";The JWT secret to be used to retrieve the token TTL."`
-	CustomMimeTypesJSON string `mapstructure:"custom_mime_types_json" docs:"nil;An optional mapping file with the list of supported custom file extensions and corresponding mime types."`
-	AppDesktopOnly      bool   `mapstructure:"app_desktop_only" docs:"false;Specifies if the app can be opened only on desktop."`
-	InsecureConnections bool   `mapstructure:"insecure_connections"`
+	MimeTypes           []string `mapstructure:"mime_types" docs:"nil;Inherited from the appprovider."`
+	IOPSecret           string   `mapstructure:"iop_secret" docs:";The IOP secret used to connect to the wopiserver."`
+	WopiURL             string   `mapstructure:"wopi_url" docs:";The wopiserver's URL."`
+	AppName             string   `mapstructure:"app_name" docs:";The App user-friendly name."`
+	AppIconURI          string   `mapstructure:"app_icon_uri" docs:";A URI to a static asset which represents the app icon."`
+	FolderBaseURL       string   `mapstructure:"folder_base_url" docs:";The base URL to generate links to navigate back to the containing folder."`
+	AppURL              string   `mapstructure:"app_url" docs:";The App URL."`
+	AppIntURL           string   `mapstructure:"app_int_url" docs:";The internal app URL in case of dockerized deployments. Defaults to AppURL"`
+	AppAPIKey           string   `mapstructure:"app_api_key" docs:";The API key used by the app, if applicable."`
+	JWTSecret           string   `mapstructure:"jwt_secret" docs:";The JWT secret to be used to retrieve the token TTL."`
+	AppDesktopOnly      bool     `mapstructure:"app_desktop_only" docs:"false;Specifies if the app can be opened only on desktop."`
+	InsecureConnections bool     `mapstructure:"insecure_connections"`
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -131,12 +130,6 @@ func New(m map[string]interface{}) (app.Provider, error) {
 	)
 	wopiClient.CheckRedirect = func(req *http.Request, via []*http.Request) error {
 		return http.ErrUseLastResponse
-	}
-
-	// read and register custom mime types if configured
-	err = registerMimeTypes(c.CustomMimeTypesJSON)
-	if err != nil {
-		return nil, err
 	}
 
 	return &wopiProvider{
@@ -366,27 +359,6 @@ func (p *wopiProvider) GetAppProviderInfo(ctx context.Context) (*appregistry.Pro
 	}, nil
 }
 
-func registerMimeTypes(mappingFile string) error {
-	// TODO(lopresti) this function also exists in the storage provider, to be seen if we want to factor it out, though a
-	// fileext <-> mimetype "service" would have to be served by the gateway for it to be accessible both by storage providers and app providers.
-	if mappingFile != "" {
-		f, err := ioutil.ReadFile(mappingFile)
-		if err != nil {
-			return fmt.Errorf("storageprovider: error reading the custom mime types file: +%v", err)
-		}
-		mimeTypes := map[string]string{}
-		err = json.Unmarshal(f, &mimeTypes)
-		if err != nil {
-			return fmt.Errorf("storageprovider: error unmarshalling the custom mime types file: +%v", err)
-		}
-		// register all mime types that were read
-		for e, m := range mimeTypes {
-			mime.RegisterMime(e, m)
-		}
-	}
-	return nil
-}
-
 func getAppURLs(c *config) (map[string]map[string]string, error) {
 	// Initialize WOPI URLs by discovery
 	httpcl := rhttp.GetHTTPClient(
@@ -437,18 +409,22 @@ func getAppURLs(c *config) (map[string]map[string]string, error) {
 
 		// scrape app's home page to find the appname
 		if !strings.Contains(buf.String(), c.AppName) {
-			return nil, errors.New("Application server at " + c.AppURL + " does not match this AppProvider for " + c.AppName)
+			return nil, fmt.Errorf("wopi: application server at %s does not match this AppProvider for %s", c.AppURL, c.AppName)
 		}
 
-		// register the supported mimetypes in the AppRegistry: this is hardcoded for the time being
-		// TODO(lopresti) move to config
-		switch c.AppName {
-		case "CodiMD":
-			appURLs = getCodimdExtensions(c.AppURL)
-		case "Etherpad":
-			appURLs = getEtherpadExtensions(c.AppURL)
-		default:
-			return nil, errors.New("Application server " + c.AppName + " running at " + c.AppURL + " is unsupported")
+		// TODO(lopresti) we don't know if the app is not supported/configured in WOPI
+		// return nil, errors.New("Application server " + c.AppName + " running at " + c.AppURL + " is unsupported")
+
+		// generate the map of supported extensions
+		appURLs = make(map[string]map[string]string)
+		appURLs["view"] = make(map[string]string)
+		appURLs["edit"] = make(map[string]string)
+		for _, m := range c.MimeTypes {
+			exts := mime.GetFileExts(m)
+			for _, e := range exts {
+				appURLs["view"]["."+e] = c.AppURL
+				appURLs["edit"]["."+e] = c.AppURL
+			}
 		}
 	}
 	return appURLs, nil
@@ -574,25 +550,4 @@ func getPathForExternalLink(ctx context.Context, scopes map[string]*authpb.Scope
 		return "", errors.New("Scope path does not contain target resource")
 	}
 	return path.Join(pathPrefix+token, path.Dir(relPath)), nil
-}
-
-func getCodimdExtensions(appURL string) map[string]map[string]string {
-	// Register custom mime types
-	mime.RegisterMime(".zmd", "application/compressed-markdown")
-
-	appURLs := make(map[string]map[string]string)
-	appURLs["edit"] = map[string]string{
-		".txt": appURL,
-		".md":  appURL,
-		".zmd": appURL,
-	}
-	return appURLs
-}
-
-func getEtherpadExtensions(appURL string) map[string]map[string]string {
-	appURLs := make(map[string]map[string]string)
-	appURLs["edit"] = map[string]string{
-		".epd": appURL,
-	}
-	return appURLs
 }
