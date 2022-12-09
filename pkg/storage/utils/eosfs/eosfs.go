@@ -1298,13 +1298,6 @@ func (fs *eosfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []st
 		p = path.Join(parent, p)
 	}
 
-	// if path is home we need to add in the response any shadow folder in the shadow homedirectory.
-	if fs.conf.EnableHome {
-		if fs.isShareFolder(ctx, p) {
-			return fs.getMDShareFolder(ctx, p, mdKeys)
-		}
-	}
-
 	fn, err = fs.wrap(ctx, p, u)
 	if err != nil {
 		return nil, err
@@ -1314,34 +1307,7 @@ func (fs *eosfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []st
 		return nil, err
 	}
 
-	return fs.convertToResourceInfo(ctx, eosFileInfo)
-}
-
-func (fs *eosfs) getMDShareFolder(ctx context.Context, p string, mdKeys []string) (*provider.ResourceInfo, error) {
-	u, err := getUser(ctx)
-	if err != nil {
-		return nil, err
-	}
-	fn, err := fs.wrapShadow(ctx, p, u)
-	if err != nil {
-		return nil, err
-	}
-
-	// lightweight accounts don't have share folders, so we're passing an empty string as path
-	auth, err := fs.getUserAuth(ctx, u, "")
-	if err != nil {
-		return nil, err
-	}
-
-	eosFileInfo, err := fs.c.GetFileInfoByPath(ctx, auth, fn)
-	if err != nil {
-		return nil, err
-	}
-
-	if fs.isShareFolderRoot(ctx, p) {
-		return fs.convertToResourceInfo(ctx, eosFileInfo)
-	}
-	return fs.convertToFileReference(ctx, eosFileInfo)
+	return fs.convertToResourceInfo(ctx, eosFileInfo, ref.ResourceId.GetSpaceId())
 }
 
 func (fs *eosfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys, fieldMask []string) ([]*provider.ResourceInfo, error) {
@@ -1350,12 +1316,7 @@ func (fs *eosfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys
 		return nil, errors.Wrap(err, "eosfs: error resolving reference")
 	}
 
-	// if path is home we need to add in the response any shadow folder in the shadow homedirectory.
-	if fs.conf.EnableHome {
-		return fs.listWithHome(ctx, p)
-	}
-
-	return fs.listWithNominalHome(ctx, p)
+	return fs.listWithNominalHome(ctx, ref, p)
 }
 
 func (fs *eosfs) listWithNominalHome(ctx context.Context, p string) (finfos []*provider.ResourceInfo, err error) {
@@ -1391,100 +1352,7 @@ func (fs *eosfs) listWithNominalHome(ctx context.Context, p string) (finfos []*p
 		}
 
 		// Remove the hidden folders in the topmost directory
-		if finfo, err := fs.convertToResourceInfo(ctx, eosFileInfo); err == nil && finfo.Path != "/" && !strings.HasPrefix(finfo.Path, "/.") {
-			finfos = append(finfos, finfo)
-		}
-	}
-
-	return finfos, nil
-}
-
-func (fs *eosfs) listWithHome(ctx context.Context, p string) ([]*provider.ResourceInfo, error) {
-	if p == "/" {
-		return fs.listHome(ctx)
-	}
-
-	if fs.isShareFolderRoot(ctx, p) {
-		return fs.listShareFolderRoot(ctx, p)
-	}
-
-	if fs.isShareFolderChild(ctx, p) {
-		return nil, errtypes.PermissionDenied("eosfs: error listing folders inside the shared folder, only file references are stored inside")
-	}
-
-	// path points to a resource in the nominal home
-	return fs.listWithNominalHome(ctx, p)
-}
-
-func (fs *eosfs) listHome(ctx context.Context) ([]*provider.ResourceInfo, error) {
-	fns := []string{path.Join(fs.conf.Namespace, "/"), path.Join(fs.conf.ShadowNamespace, "/")}
-
-	u, err := getUser(ctx)
-	if err != nil {
-		return nil, errors.Wrap(err, "eosfs: no user in ctx")
-	}
-	// lightweight accounts don't have home folders, so we're passing an empty string as path
-	auth, err := fs.getUserAuth(ctx, u, "")
-	if err != nil {
-		return nil, err
-	}
-
-	finfos := []*provider.ResourceInfo{}
-	for _, fn := range fns {
-		eosFileInfos, err := fs.c.List(ctx, auth, fn)
-		if err != nil {
-			return nil, errors.Wrap(err, "eosfs: error listing")
-		}
-
-		for _, eosFileInfo := range eosFileInfos {
-			// filter out sys files
-			if !fs.conf.ShowHiddenSysFiles {
-				base := path.Base(eosFileInfo.File)
-				if hiddenReg.MatchString(base) {
-					continue
-				}
-			}
-
-			if finfo, err := fs.convertToResourceInfo(ctx, eosFileInfo); err == nil && finfo.Path != "/" && !strings.HasPrefix(finfo.Path, "/.") {
-				finfos = append(finfos, finfo)
-			}
-		}
-
-	}
-	return finfos, nil
-}
-
-func (fs *eosfs) listShareFolderRoot(ctx context.Context, p string) (finfos []*provider.ResourceInfo, err error) {
-
-	u, err := getUser(ctx)
-	if err != nil {
-		return nil, errors.Wrap(err, "eosfs: no user in ctx")
-	}
-	fn, err := fs.wrapShadow(ctx, p, u)
-	if err != nil {
-		return nil, err
-	}
-	// lightweight accounts don't have share folders, so we're passing an empty string as path
-	auth, err := fs.getUserAuth(ctx, u, "")
-	if err != nil {
-		return nil, err
-	}
-
-	eosFileInfos, err := fs.c.List(ctx, auth, fn)
-	if err != nil {
-		return nil, errors.Wrap(err, "eosfs: error listing")
-	}
-
-	for _, eosFileInfo := range eosFileInfos {
-		// filter out sys files
-		if !fs.conf.ShowHiddenSysFiles {
-			base := path.Base(eosFileInfo.File)
-			if hiddenReg.MatchString(base) {
-				continue
-			}
-		}
-
-		if finfo, err := fs.convertToFileReference(ctx, eosFileInfo); err == nil {
+		if finfo, err := fs.convertToResourceInfo(ctx, eosFileInfo, ref.ResourceId.GetSpaceId()); err == nil && finfo.Path != "/" && !strings.HasPrefix(finfo.Path, "/.") {
 			finfos = append(finfos, finfo)
 		}
 	}
