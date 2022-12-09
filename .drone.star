@@ -1,8 +1,17 @@
+# images
+OC_CI_GOLANG = "owncloudci/golang:1.18"
+OC_CI_ALPINE = "owncloudci/alpine:latest"
+OSIXIA_OPEN_LDAP = "osixia/openldap:latest"
+REDIS = "redis:6-alpine"
+OC_CI_PHP = "owncloudci/php:7.4"
+OC_LITMUS = "owncloud/litmus:latest"
+OC_CS3_API_VALIDATOR = "owncloud/cs3api-validator:0.2.0"
+OC_CI_BAZEL_BUILDIFIER = "owncloudci/bazel-buildifier:latest"
 # Shared step definitions
 def licenseScanStep():
     return {
         "name": "license-scan",
-        "image": "registry.cern.ch/docker.io/library/golang:1.18",
+        "image": OC_CI_GOLANG,
         "environment": {
             "FOSSA_API_KEY": {
                 "from_secret": "fossa_api_key",
@@ -18,7 +27,7 @@ def licenseScanStep():
 def makeStep(target):
     return {
         "name": "build",
-        "image": "registry.cern.ch/docker.io/library/golang:1.18",
+        "image": OC_CI_GOLANG,
         "commands": [
             "make %s" % target,
         ],
@@ -27,7 +36,7 @@ def makeStep(target):
 def cloneOc10TestReposStep():
     return {
         "name": "clone-oC10-test-repos",
-        "image": "registry.cern.ch/docker.io/owncloudci/alpine:latest",
+        "image": OC_CI_ALPINE,
         "commands": [
             "source /drone/src/.drone.env",
             "git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing",
@@ -41,7 +50,7 @@ def cloneOc10TestReposStep():
 def ldapService():
     return {
         "name": "ldap",
-        "image": "registry.cern.ch/docker.io/osixia/openldap:1.3.0",
+        "image": OSIXIA_OPEN_LDAP,
         "pull": "always",
         "environment": {
             "LDAP_DOMAIN": "owncloud.com",
@@ -55,7 +64,7 @@ def ldapService():
 def redisService():
     return {
         "name": "redis",
-        "image": "registry.cern.ch/docker.io/webhippie/redis",
+        "image": REDIS,
         "pull": "always",
         "environment": {
             "REDIS_DATABASES": 1,
@@ -120,7 +129,7 @@ def coverage():
         "steps": [
             {
                 "name": "unit-test",
-                "image": "registry.cern.ch/docker.io/library/golang:1.18",
+                "image": OC_CI_GOLANG,
                 "commands": [
                     "make test",
                 ],
@@ -170,7 +179,7 @@ def testIntegration():
         "steps": [
             {
                 "name": "test",
-                "image": "registry.cern.ch/docker.io/library/golang:1.18",
+                "image": OC_CI_GOLANG,
                 "commands": [
                     "make test-integration",
                 ],
@@ -205,7 +214,7 @@ def virtualViews():
             makeStep("build-ci"),
             {
                 "name": "revad-services",
-                "image": "registry.cern.ch/docker.io/library/golang:1.18",
+                "image": OC_CI_GOLANG,
                 "detach": True,
                 "commands": [
                     "cd /drone/src/tests/oc-integration-tests/drone/",
@@ -220,7 +229,7 @@ def virtualViews():
             cloneOc10TestReposStep(),
             {
                 "name": "oC10APIAcceptanceTestsOcisStorage",
-                "image": "registry.cern.ch/docker.io/owncloudci/php:7.4",
+                "image": OC_CI_PHP,
                 "commands": [
                     "cd /drone/src",
                     "composer self-update",
@@ -264,7 +273,7 @@ def litmusOcisOldWebdav():
             makeStep("build-ci"),
             {
                 "name": "revad-services",
-                "image": "registry.cern.ch/docker.io/library/golang:1.18",
+                "image": OC_CI_GOLANG,
                 "detach": True,
                 "commands": [
                     "cd /drone/src/tests/oc-integration-tests/drone/",
@@ -280,14 +289,14 @@ def litmusOcisOldWebdav():
             },
             {
                 "name": "sleep-for-revad-start",
-                "image": "registry.cern.ch/docker.io/library/golang:1.18",
+                "image": OC_CI_GOLANG,
                 "commands": [
                     "sleep 5",
                 ],
             },
             {
                 "name": "litmus-ocis-old-webdav",
-                "image": "registry.cern.ch/docker.io/owncloud/litmus:latest",
+                "image": OC_LITMUS,
                 "environment": {
                     "LITMUS_URL": "http://revad-services:20080/remote.php/webdav",
                     "LITMUS_USERNAME": "einstein",
@@ -319,7 +328,7 @@ def litmusOcisNewWebdav():
             makeStep("build-ci"),
             {
                 "name": "revad-services",
-                "image": "registry.cern.ch/docker.io/library/golang:1.18",
+                "image": OC_CI_GOLANG,
                 "detach": True,
                 "commands": [
                     "cd /drone/src/tests/oc-integration-tests/drone/",
@@ -335,14 +344,14 @@ def litmusOcisNewWebdav():
             },
             {
                 "name": "sleep-for-revad-start",
-                "image": "registry.cern.ch/docker.io/library/golang:1.18",
+                "image": OC_CI_GOLANG,
                 "commands": [
                     "sleep 5",
                 ],
             },
             {
                 "name": "litmus-ocis-new-webdav",
-                "image": "registry.cern.ch/docker.io/owncloud/litmus:latest",
+                "image": OC_LITMUS,
                 "environment": {
                     # UUID is einstein user, see https://github.com/owncloud/ocis-accounts/blob/8de0530f31ed5ffb0bbb7f7f3471f87f429cb2ea/pkg/service/v0/service.go#L45
                     "LITMUS_URL": "http://revad-services:20080/remote.php/dav/files/4c510ada-c86b-4815-8820-42cdf82c3d51",
@@ -375,7 +384,7 @@ def litmusOcisSpacesDav():
             makeStep("build-ci"),
             {
                 "name": "revad-services",
-                "image": "registry.cern.ch/docker.io/library/golang:1.18",
+                "image": OC_CI_GOLANG,
                 "detach": True,
                 "commands": [
                     "cd /drone/src/tests/oc-integration-tests/drone/",
@@ -391,14 +400,14 @@ def litmusOcisSpacesDav():
             },
             {
                 "name": "sleep-for-revad-start",
-                "image": "registry.cern.ch/docker.io/library/golang:1.18",
+                "image": OC_CI_GOLANG,
                 "commands": [
                     "sleep 5",
                 ],
             },
             {
                 "name": "litmus-owncloud-spaces-dav",
-                "image": "registry.cern.ch/docker.io/owncloud/litmus:latest",
+                "image": OC_LITMUS,
                 "environment": {
                     "LITMUS_USERNAME": "einstein",
                     "LITMUS_PASSWORD": "relativity",
@@ -435,7 +444,7 @@ def cs3ApiValidatorOcis():
             makeStep("build-ci"),
             {
                 "name": "revad-services",
-                "image": "registry.cern.ch/docker.io/library/golang:1.18",
+                "image": OC_CI_GOLANG,
                 "detach": True,
                 "commands": [
                     "cd /drone/src/tests/oc-integration-tests/drone/",
@@ -451,14 +460,14 @@ def cs3ApiValidatorOcis():
             },
             {
                 "name": "sleep-for-revad-start",
-                "image": "registry.cern.ch/docker.io/library/golang:1.18",
+                "image": OC_CI_GOLANG,
                 "commands": [
                     "sleep 5",
                 ],
             },
             {
                 "name": "cs3api-validator-ocis",
-                "image": "owncloud/cs3api-validator:0.2.0",
+                "image": OC_CS3_API_VALIDATOR,
                 "commands": [
                     "/usr/bin/cs3api-validator /var/lib/cs3api-validator --endpoint=revad-services:19000",
                 ],
@@ -487,7 +496,7 @@ def cs3ApiValidatorS3NG():
             makeStep("build-ci"),
             {
                 "name": "revad-services",
-                "image": "registry.cern.ch/docker.io/library/golang:1.18",
+                "image": OC_CI_GOLANG,
                 "detach": True,
                 "commands": [
                     "cd /drone/src/tests/oc-integration-tests/drone/",
@@ -503,14 +512,14 @@ def cs3ApiValidatorS3NG():
             },
             {
                 "name": "sleep-for-revad-start",
-                "image": "registry.cern.ch/docker.io/library/golang:1.18",
+                "image": OC_CI_GOLANG,
                 "commands": [
                     "sleep 5",
                 ],
             },
             {
                 "name": "cs3api-validator-S3NG",
-                "image": "owncloud/cs3api-validator:0.2.0",
+                "image": OC_CS3_API_VALIDATOR,
                 "commands": [
                     "/usr/bin/cs3api-validator /var/lib/cs3api-validator --endpoint=revad-services:19000",
                 ],
@@ -549,7 +558,7 @@ def ocisIntegrationTests(parallelRuns, skipExceptParts = []):
                     makeStep("build-ci"),
                     {
                         "name": "revad-services",
-                        "image": "registry.cern.ch/docker.io/library/golang:1.18",
+                        "image": OC_CI_GOLANG,
                         "detach": True,
                         "commands": [
                             "cd /drone/src/tests/oc-integration-tests/drone/",
@@ -567,7 +576,7 @@ def ocisIntegrationTests(parallelRuns, skipExceptParts = []):
                     cloneOc10TestReposStep(),
                     {
                         "name": "oC10APIAcceptanceTestsOcisStorage",
-                        "image": "registry.cern.ch/docker.io/owncloudci/php:7.4",
+                        "image": OC_CI_PHP,
                         "commands": [
                             "cd /drone/src/tmp/testrunner",
                             "composer self-update",
@@ -627,7 +636,7 @@ def s3ngIntegrationTests(parallelRuns, skipExceptParts = []):
                     makeStep("build-ci"),
                     {
                         "name": "revad-services",
-                        "image": "registry.cern.ch/docker.io/library/golang:1.18",
+                        "image": OC_CI_GOLANG,
                         "detach": True,
                         "commands": [
                             "cd /drone/src/tests/oc-integration-tests/drone/",
@@ -645,7 +654,7 @@ def s3ngIntegrationTests(parallelRuns, skipExceptParts = []):
                     cloneOc10TestReposStep(),
                     {
                         "name": "oC10APIAcceptanceTestsS3ngStorage",
-                        "image": "registry.cern.ch/docker.io/owncloudci/php:7.4",
+                        "image": OC_CI_PHP,
                         "commands": [
                             "cd /drone/src/tmp/testrunner",
                             "composer self-update",
@@ -687,14 +696,14 @@ def checkStarlark():
         "steps": [
             {
                 "name": "format-check-starlark",
-                "image": "registry.cern.ch/docker.io/owncloudci/bazel-buildifier:latest",
+                "image": OC_CI_BAZEL_BUILDIFIER,
                 "commands": [
                     "buildifier --mode=check .drone.star",
                 ],
             },
             {
                 "name": "show-diff",
-                "image": "registry.cern.ch/docker.io/owncloudci/bazel-buildifier:latest",
+                "image": OC_CI_BAZEL_BUILDIFIER,
                 "commands": [
                     "buildifier --mode=fix .drone.star",
                     "git diff",
@@ -722,7 +731,7 @@ def checkGoGenerate():
         "steps": [
             {
                 "name": "check-go-generate",
-                "image": "registry.cern.ch/docker.io/library/golang:1.18",
+                "image": OC_CI_GOLANG,
                 "commands": [
                     "make go-generate",
                     "git diff --exit-code",
