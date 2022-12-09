@@ -139,11 +139,11 @@ def buildOnly():
             "arch": "amd64",
         },
         "trigger": {
-            "event": {
-                "include": [
-                    "pull_request",
-                ],
-            },
+            "ref": [
+                "refs/heads/master",
+                "refs/heads/edge",
+                "refs/pull/**",
+            ],
         },
         "steps": [
             makeStep("dist"),
@@ -161,11 +161,11 @@ def testIntegration():
             "arch": "amd64",
         },
         "trigger": {
-            "event": {
-                "include": [
-                    "pull_request",
-                ],
-            },
+            "ref": [
+                "refs/heads/master",
+                "refs/heads/edge",
+                "refs/pull/**",
+            ],
         },
         "steps": [
             {
@@ -195,12 +195,11 @@ def virtualViews():
             "arch": "amd64",
         },
         "trigger": {
-            "event": {
-                "include": [
-                    "pull_request",
-                    "tag",
-                ],
-            },
+            "ref": [
+                "refs/heads/master",
+                "refs/heads/edge",
+                "refs/pull/**",
+            ],
         },
         "steps": [
             makeStep("build-ci"),
@@ -255,12 +254,11 @@ def litmusOcisOldWebdav():
             "arch": "amd64",
         },
         "trigger": {
-            "event": {
-                "include": [
-                    "pull_request",
-                    "tag",
-                ],
-            },
+            "ref": [
+                "refs/heads/master",
+                "refs/heads/edge",
+                "refs/pull/**",
+            ],
         },
         "steps": [
             makeStep("build-ci"),
@@ -311,12 +309,11 @@ def litmusOcisNewWebdav():
             "arch": "amd64",
         },
         "trigger": {
-            "event": {
-                "include": [
-                    "pull_request",
-                    "tag",
-                ],
-            },
+            "ref": [
+                "refs/heads/master",
+                "refs/heads/edge",
+                "refs/pull/**",
+            ],
         },
         "steps": [
             makeStep("build-ci"),
@@ -368,12 +365,11 @@ def litmusOcisSpacesDav():
             "arch": "amd64",
         },
         "trigger": {
-            "event": {
-                "include": [
-                    "pull_request",
-                    "tag",
-                ],
-            },
+            "ref": [
+                "refs/heads/master",
+                "refs/heads/edge",
+                "refs/pull/**",
+            ],
         },
         "steps": [
             makeStep("build-ci"),
@@ -429,12 +425,11 @@ def cs3ApiValidatorOcis():
             "arch": "amd64",
         },
         "trigger": {
-            "event": {
-                "include": [
-                    "pull_request",
-                    "tag",
-                ],
-            },
+            "ref": [
+                "refs/heads/master",
+                "refs/heads/edge",
+                "refs/pull/**",
+            ],
         },
         "steps": [
             makeStep("build-ci"),
@@ -482,12 +477,11 @@ def cs3ApiValidatorS3NG():
             "arch": "amd64",
         },
         "trigger": {
-            "event": {
-                "include": [
-                    "pull_request",
-                    "tag",
-                ],
-            },
+            "ref": [
+                "refs/heads/master",
+                "refs/heads/edge",
+                "refs/pull/**",
+            ],
         },
         "steps": [
             makeStep("build-ci"),
@@ -545,12 +539,11 @@ def ocisIntegrationTests(parallelRuns, skipExceptParts = []):
                     "arch": "amd64",
                 },
                 "trigger": {
-                    "event": {
-                        "include": [
-                            "pull_request",
-                            "tag",
-                        ],
-                    },
+                    "ref": [
+                        "refs/heads/master",
+                        "refs/heads/edge",
+                        "refs/pull/**",
+                    ],
                 },
                 "steps": [
                     makeStep("build-ci"),
@@ -624,12 +617,11 @@ def s3ngIntegrationTests(parallelRuns, skipExceptParts = []):
                     "arch": "amd64",
                 },
                 "trigger": {
-                    "event": {
-                        "include": [
-                            "pull_request",
-                            "tag",
-                        ],
-                    },
+                    "ref": [
+                        "refs/heads/master",
+                        "refs/heads/edge",
+                        "refs/pull/**",
+                    ],
                 },
                 "steps": [
                     makeStep("build-ci"),
@@ -740,6 +732,8 @@ def checkGoGenerate():
         "depends_on": [],
         "trigger": {
             "ref": [
+                "refs/heads/master",
+                "refs/heads/edge",
                 "refs/pull/**",
             ],
         },
