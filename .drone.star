@@ -7,6 +7,7 @@ OC_CI_PHP = "owncloudci/php:7.4"
 OC_LITMUS = "owncloud/litmus:latest"
 OC_CS3_API_VALIDATOR = "owncloud/cs3api-validator:0.2.0"
 OC_CI_BAZEL_BUILDIFIER = "owncloudci/bazel-buildifier:latest"
+
 # Shared step definitions
 def licenseScanStep():
     return {
