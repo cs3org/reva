@@ -16,7 +16,7 @@
 # granted to it by virtue of its status as an Intergovernmental Organization
 # or submit itself to any jurisdiction.
 
-FROM golang:1.19-alpine as builder
+FROM golang:alpine3.16 as builder
 
 RUN apk --no-cache add \
   ca-certificates \
@@ -36,7 +36,7 @@ RUN make build-revad-docker && \
 
 RUN mkdir -p /etc/revad/ && echo "" > /etc/revad/revad.toml
 
-FROM golang:1.19-alpine
+FROM golang:alpine3.16
 
 RUN apk --no-cache add \
   mailcap

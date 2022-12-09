@@ -24,15 +24,6 @@ def makeStep(target):
         ],
     }
 
-def lintStep():
-    return {
-        "name": "lint",
-        "image": "registry.cern.ch/docker.io/golangci/golangci-lint:v1.50.1",
-        "commands": [
-            "golangci-lint run --timeout 10m0s",
-        ],
-    }
-
 def cloneOc10TestReposStep():
     return {
         "name": "clone-oC10-test-repos",
@@ -96,14 +87,11 @@ def main(ctx):
     # ocisIntegrationTests(6, [1, 4])     - this will only run 1st and 4th parts
     # implemented for: ocisIntegrationTests and s3ngIntegrationTests
     return [
-        changelog(),
         checkStarlark(),
         checkGoGenerate(),
         coverage(),
-        buildAndPublishDocker(),
         buildOnly(),
         testIntegration(),
-        release(),
         litmusOcisOldWebdav(),
         litmusOcisNewWebdav(),
         litmusOcisSpacesDav(),
@@ -112,182 +100,6 @@ def main(ctx):
         # virtual views don't work on edge at the moment
         #virtualViews(),
     ] + ocisIntegrationTests(6) + s3ngIntegrationTests(12)
-
-def buildAndPublishDocker():
-    return {
-        "kind": "pipeline",
-        "type": "docker",
-        "name": "build-and-publish-docker",
-        "platform": {
-            "os": "linux",
-            "arch": "amd64",
-        },
-        "trigger": {
-            "branch": [
-                "master",
-            ],
-            "event": {
-                "exclude": [
-                    "pull_request",
-                    "tag",
-                    "promote",
-                    "rollback",
-                ],
-            },
-        },
-        "steps": [
-            {
-                "name": "store-dev-release",
-                "image": "registry.cern.ch/docker.io/library/golang:1.18",
-                "environment": {
-                    "USERNAME": {
-                        "from_secret": "cbox_username",
-                    },
-                    "PASSWORD": {
-                        "from_secret": "cbox_password",
-                    },
-                },
-                "detach": True,
-                "commands": [
-                    "TZ=Europe/Berlin go run tools/create-artifacts/main.go -dev -commit ${DRONE_COMMIT} -goversion `go version | awk '{print $$3}'`",
-                    "curl --fail -X MKCOL 'https://cernbox.cern.ch/cernbox/desktop/remote.php/webdav/eos/project/r/reva/www/daily/' -k -u $${USERNAME}:$${PASSWORD}",
-                    "curl --fail -X MKCOL 'https://cernbox.cern.ch/cernbox/desktop/remote.php/webdav/eos/project/r/reva/www/daily/'$(date +%Y-%m-%d) -k -u $${USERNAME}:$${PASSWORD}",
-                    "curl --fail -X MKCOL 'https://cernbox.cern.ch/cernbox/desktop/remote.php/webdav/eos/project/r/reva/www/daily/'$(date +%Y-%m-%d)'/${DRONE_COMMIT}' -k -u $${USERNAME}:$${PASSWORD}",
-                    "for i in $(ls /drone/src/dist);do curl --fail -X PUT -u $${USERNAME}:$${PASSWORD} https://cernbox.cern.ch/cernbox/desktop/remote.php/webdav/eos/project/r/reva/www/daily/$(date +%Y-%m-%d)/${DRONE_COMMIT}/$${i} --data-binary @./dist/$${i} ; done",
-                ],
-            },
-            licenseScanStep(),
-            makeStep("ci"),
-            lintStep(),
-            {
-                "name": "license-check",
-                "image": "registry.cern.ch/docker.io/library/golang:1.18",
-                "failure": "ignore",
-                "environment": {
-                    "FOSSA_API_KEY": {
-                        "from_secret": "fossa_api_key",
-                    },
-                },
-                "commands": [
-                    "wget -qO- https://github.com/fossas/fossa-cli/releases/download/v1.0.11/fossa-cli_1.0.11_linux_amd64.tar.gz | tar xvz -C /go/bin/",
-                    "/go/bin/fossa test --timeout 900",
-                ],
-            },
-            {
-                "name": "publish-docker-reva-latest",
-                "pull": "always",
-                "image": "plugins/docker",
-                "settings": {
-                    "repo": "cs3org/reva",
-                    "tags": "latest",
-                    "dockerfile": "Dockerfile.reva",
-                    "username": {
-                        "from_secret": "dockerhub_username",
-                    },
-                    "password": {
-                        "from_secret": "dockerhub_password",
-                    },
-                    "custom_dns": [
-                        "128.142.17.5",
-                        "128.142.16.5",
-                    ],
-                },
-            },
-            {
-                "name": "publish-docker-revad-latest",
-                "pull": "always",
-                "image": "plugins/docker",
-                "settings": {
-                    "repo": "cs3org/revad",
-                    "tags": "latest",
-                    "dockerfile": "Dockerfile.revad",
-                    "username": {
-                        "from_secret": "dockerhub_username",
-                    },
-                    "password": {
-                        "from_secret": "dockerhub_password",
-                    },
-                    "custom_dns": [
-                        "128.142.17.5",
-                        "128.142.16.5",
-                    ],
-                },
-            },
-            {
-                "name": "publish-docker-revad-eos-latest",
-                "pull": "always",
-                "image": "plugins/docker",
-                "settings": {
-                    "repo": "cs3org/revad",
-                    "tags": "latest-eos",
-                    "dockerfile": "Dockerfile.revad-eos",
-                    "username": {
-                        "from_secret": "dockerhub_username",
-                    },
-                    "password": {
-                        "from_secret": "dockerhub_password",
-                    },
-                    "custom_dns": [
-                        "128.142.17.5",
-                        "128.142.16.5",
-                    ],
-                },
-            },
-            {
-                "name": "publish-docker-revad-ceph-latest",
-                "pull": "always",
-                "image": "plugins/docker",
-                "settings": {
-                    "repo": "cs3org/revad",
-                    "tags": "latest-ceph",
-                    "dockerfile": "Dockerfile.revad-ceph",
-                    "username": {
-                        "from_secret": "dockerhub_username",
-                    },
-                    "password": {
-                        "from_secret": "dockerhub_password",
-                    },
-                    "custom_dns": [
-                        "128.142.17.5",
-                        "128.142.16.5",
-                    ],
-                },
-            },
-        ],
-    }
-
-def changelog():
-    return {
-        "kind": "pipeline",
-        "type": "docker",
-        "name": "changelog",
-        "platform": {
-            "os": "linux",
-            "arch": "amd64",
-        },
-        "trigger": {
-            "event": {
-                "include": [
-                    "pull_request",
-                ],
-            },
-        },
-        "steps": [
-            {
-                "name": "changelog",
-                "image": "registry.cern.ch/docker.io/library/golang:1.18",
-                "commands": [
-                    "make release-deps && /go/bin/calens > /dev/null",
-                    "make check-changelog-drone PR=$DRONE_PULL_REQUEST",
-                ],
-                "environment": {
-                    "GITHUB_API_TOKEN": {
-                        "from_secret": "github_api_token",
-                    },
-                },
-            },
-        ],
-    }
 
 def coverage():
     return {
@@ -314,7 +126,7 @@ def coverage():
                 ],
             },
         ],
-        "depends_on": ["changelog"],
+        "depends_on": ["check-go-generate"],
     }
 
 def buildOnly():
@@ -334,34 +146,9 @@ def buildOnly():
             },
         },
         "steps": [
-            licenseScanStep(),
-            makeStep("ci"),
-            {
-                "name": "Docker build",
-                "image": "plugins/docker",
-                "settings": {
-                    "repo": "n/a",
-                    "dry_run": "true",
-                    "dockerfile": "Dockerfile.revad",
-                },
-            },
-            lintStep(),
-            {
-                "name": "license-check",
-                "image": "registry.cern.ch/docker.io/library/golang:1.18",
-                "failure": "ignore",
-                "environment": {
-                    "FOSSA_API_KEY": {
-                        "from_secret": "fossa_api_key",
-                    },
-                },
-                "commands": [
-                    "wget -qO- https://github.com/fossas/fossa-cli/releases/download/v1.0.11/fossa-cli_1.0.11_linux_amd64.tar.gz | tar xvz -C /go/bin/",
-                    "/go/bin/fossa test --timeout 900",
-                ],
-            },
+            makeStep("dist"),
         ],
-        "depends_on": ["changelog"],
+        "depends_on": ["check-go-generate"],
     }
 
 def testIntegration():
@@ -395,129 +182,7 @@ def testIntegration():
         "services": [
             redisService(),
         ],
-        "depends_on": ["changelog"],
-    }
-
-def release():
-    return {
-        "kind": "pipeline",
-        "type": "docker",
-        "name": "release",
-        "platform": {
-            "os": "linux",
-            "arch": "amd64",
-        },
-        "trigger": {
-            "event": {
-                "include": [
-                    "tag",
-                ],
-            },
-        },
-        "steps": [
-            licenseScanStep(),
-            makeStep("ci"),
-            lintStep(),
-            {
-                "name": "create-dist",
-                "image": "registry.cern.ch/docker.io/library/golang:1.18",
-                "commands": [
-                    "go run tools/create-artifacts/main.go -version ${DRONE_TAG} -commit ${DRONE_COMMIT} -goversion `go version | awk '{print $$3}'`",
-                ],
-            },
-            {
-                "name": "publish",
-                "image": "registry.cern.ch/docker.io/plugins/github-release",
-                "settings": {
-                    "api_key": {
-                        "from_secret": "github_token",
-                    },
-                    "files": "dist/*",
-                    "note": "changelog/NOTE.md",
-                },
-            },
-            {
-                "name": "docker-reva-tag",
-                "pull": "always",
-                "image": "plugins/docker",
-                "settings": {
-                    "repo": "cs3org/reva",
-                    "tags": "${DRONE_TAG}",
-                    "dockerfile": "Dockerfile.reva",
-                    "username": {
-                        "from_secret": "dockerhub_username",
-                    },
-                    "password": {
-                        "from_secret": "dockerhub_password",
-                    },
-                    "custom_dns": [
-                        "128.142.17.5",
-                        "128.142.16.5",
-                    ],
-                },
-            },
-            {
-                "name": "docker-revad-tag",
-                "pull": "always",
-                "image": "plugins/docker",
-                "settings": {
-                    "repo": "cs3org/revad",
-                    "tags": "${DRONE_TAG}",
-                    "dockerfile": "Dockerfile.revad",
-                    "username": {
-                        "from_secret": "dockerhub_username",
-                    },
-                    "password": {
-                        "from_secret": "dockerhub_password",
-                    },
-                    "custom_dns": [
-                        "128.142.17.5",
-                        "128.142.16.5",
-                    ],
-                },
-            },
-            {
-                "name": "docker-revad-eos-tag",
-                "pull": "always",
-                "image": "plugins/docker",
-                "settings": {
-                    "repo": "cs3org/revad",
-                    "tags": "${DRONE_TAG}-eos",
-                    "dockerfile": "Dockerfile.revad-eos",
-                    "username": {
-                        "from_secret": "dockerhub_username",
-                    },
-                    "password": {
-                        "from_secret": "dockerhub_password",
-                    },
-                    "custom_dns": [
-                        "128.142.17.5",
-                        "128.142.16.5",
-                    ],
-                },
-            },
-            {
-                "name": "docker-revad-ceph-tag",
-                "pull": "always",
-                "image": "plugins/docker",
-                "settings": {
-                    "repo": "cs3org/revad",
-                    "tags": "${DRONE_TAG}-ceph",
-                    "dockerfile": "Dockerfile.revad-ceph",
-                    "username": {
-                        "from_secret": "dockerhub_username",
-                    },
-                    "password": {
-                        "from_secret": "dockerhub_password",
-                    },
-                    "custom_dns": [
-                        "128.142.17.5",
-                        "128.142.16.5",
-                    ],
-                },
-            },
-        ],
-        "depends_on": ["changelog"],
+        "depends_on": ["check-go-generate"],
     }
 
 def virtualViews():
@@ -577,7 +242,7 @@ def virtualViews():
                 },
             },
         ],
-        "depends_on": ["changelog"],
+        "depends_on": ["check-go-generate"],
     }
 
 def litmusOcisOldWebdav():
@@ -633,7 +298,7 @@ def litmusOcisOldWebdav():
                 },
             },
         ],
-        "depends_on": ["changelog"],
+        "depends_on": ["check-go-generate"],
     }
 
 def litmusOcisNewWebdav():
@@ -690,7 +355,7 @@ def litmusOcisNewWebdav():
                 },
             },
         ],
-        "depends_on": ["changelog"],
+        "depends_on": ["check-go-generate"],
     }
 
 def litmusOcisSpacesDav():
@@ -751,7 +416,7 @@ def litmusOcisSpacesDav():
                 ],
             },
         ],
-        "depends_on": ["changelog"],
+        "depends_on": ["check-go-generate"],
     }
 
 def cs3ApiValidatorOcis():
@@ -804,7 +469,7 @@ def cs3ApiValidatorOcis():
                 ],
             },
         ],
-        "depends_on": ["changelog"],
+        "depends_on": ["check-go-generate"],
     }
 
 def cs3ApiValidatorS3NG():
@@ -860,7 +525,7 @@ def cs3ApiValidatorS3NG():
         "services": [
             cephService(),
         ],
-        "depends_on": ["changelog"],
+        "depends_on": ["check-go-generate"],
     }
 
 def ocisIntegrationTests(parallelRuns, skipExceptParts = []):
@@ -936,7 +601,7 @@ def ocisIntegrationTests(parallelRuns, skipExceptParts = []):
                 "services": [
                     ldapService(),
                 ],
-                "depends_on": ["changelog"],
+                "depends_on": ["check-go-generate"],
             },
         )
 
@@ -1016,7 +681,7 @@ def s3ngIntegrationTests(parallelRuns, skipExceptParts = []):
                     ldapService(),
                     cephService(),
                 ],
-                "depends_on": ["changelog"],
+                "depends_on": ["check-go-generate"],
             },
         )
 
