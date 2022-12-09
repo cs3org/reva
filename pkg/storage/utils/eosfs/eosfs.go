@@ -1286,7 +1286,7 @@ func (fs *eosfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []st
 
 		// If it's not a relative reference, return now, else we need to append the path
 		if !utils.IsRelativeReference(ref) || ref.Path == "." {
-			return fs.convertToResourceInfo(ctx, eosFileInfo)
+			return fs.convertToResourceInfo(ctx, eosFileInfo, ref.ResourceId.GetSpaceId())
 		}
 
 		parent, err := fs.unwrap(ctx, eosFileInfo.File)
@@ -1319,7 +1319,7 @@ func (fs *eosfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys
 	return fs.listWithNominalHome(ctx, ref, p)
 }
 
-func (fs *eosfs) listWithNominalHome(ctx context.Context, p string) (finfos []*provider.ResourceInfo, err error) {
+func (fs *eosfs) listWithNominalHome(ctx context.Context, ref *provider.Reference, p string) (finfos []*provider.ResourceInfo, err error) {
 	log := appctx.GetLogger(ctx)
 
 	u, err := getUser(ctx)
@@ -1837,7 +1837,7 @@ func (fs *eosfs) ListRevisions(ctx context.Context, ref *provider.Reference) ([]
 	}
 	revisions := []*provider.FileVersion{}
 	for _, eosRev := range eosRevisions {
-		if rev, err := fs.convertToRevision(ctx, eosRev); err == nil {
+		if rev, err := fs.convertToRevision(ctx, eosRev, ref.ResourceId.GetSpaceId()); err == nil {
 			revisions = append(revisions, rev)
 		}
 	}
@@ -2039,8 +2039,8 @@ func (fs *eosfs) convertToRecycleItem(ctx context.Context, eosDeletedItem *eoscl
 	return recycleItem, nil
 }
 
-func (fs *eosfs) convertToRevision(ctx context.Context, eosFileInfo *eosclient.FileInfo) (*provider.FileVersion, error) {
-	md, err := fs.convertToResourceInfo(ctx, eosFileInfo)
+func (fs *eosfs) convertToRevision(ctx context.Context, eosFileInfo *eosclient.FileInfo, spaceID string) (*provider.FileVersion, error) {
+	md, err := fs.convertToResourceInfo(ctx, eosFileInfo, spaceID)
 	if err != nil {
 		return nil, err
 	}
@@ -2053,12 +2053,12 @@ func (fs *eosfs) convertToRevision(ctx context.Context, eosFileInfo *eosclient.F
 	return revision, nil
 }
 
-func (fs *eosfs) convertToResourceInfo(ctx context.Context, eosFileInfo *eosclient.FileInfo) (*provider.ResourceInfo, error) {
-	return fs.convert(ctx, eosFileInfo)
+func (fs *eosfs) convertToResourceInfo(ctx context.Context, eosFileInfo *eosclient.FileInfo, spaceID string) (*provider.ResourceInfo, error) {
+	return fs.convert(ctx, eosFileInfo, spaceID)
 }
 
-func (fs *eosfs) convertToFileReference(ctx context.Context, eosFileInfo *eosclient.FileInfo) (*provider.ResourceInfo, error) {
-	info, err := fs.convert(ctx, eosFileInfo)
+func (fs *eosfs) convertToFileReference(ctx context.Context, eosFileInfo *eosclient.FileInfo, spaceID string) (*provider.ResourceInfo, error) {
+	info, err := fs.convert(ctx, eosFileInfo, spaceID)
 	if err != nil {
 		return nil, err
 	}
@@ -2155,7 +2155,7 @@ func mergePermissions(l *provider.ResourcePermissions, r *provider.ResourcePermi
 	l.DenyGrant = l.DenyGrant || r.DenyGrant
 }
 
-func (fs *eosfs) convert(ctx context.Context, eosFileInfo *eosclient.FileInfo) (*provider.ResourceInfo, error) {
+func (fs *eosfs) convert(ctx context.Context, eosFileInfo *eosclient.FileInfo, spaceId string) (*provider.ResourceInfo, error) {
 	path, err := fs.unwrap(ctx, eosFileInfo.File)
 	if err != nil {
 		return nil, err
@@ -2194,7 +2194,7 @@ func (fs *eosfs) convert(ctx context.Context, eosFileInfo *eosclient.FileInfo) (
 
 	info := &provider.ResourceInfo{
 		Id: &provider.ResourceId{
-			SpaceId:  fmt.Sprintf("%d", eosFileInfo.FID),
+			SpaceId:  spaceId,
 			OpaqueId: fmt.Sprintf("%d", eosFileInfo.FID),
 		},
 		Path:          path,

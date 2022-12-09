@@ -85,7 +85,7 @@ func (fs *eosfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadC
 		return provider.ResourceInfo{}, err
 	}
 
-	ri, err := fs.convertToResourceInfo(ctx, eosFileInfo)
+	ri, err := fs.convertToResourceInfo(ctx, eosFileInfo, ref.ResourceId.GetSpaceId())
 	if err != nil {
 		return provider.ResourceInfo{}, err
 	}

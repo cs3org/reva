@@ -158,7 +158,7 @@ func (fs *eosfs) listPersonalStorageSpaces(ctx context.Context, u *userpb.User, 
 		}
 	}
 
-	md, err := fs.convertToResourceInfo(ctx, eosFileInfo)
+	md, err := fs.convertToResourceInfo(ctx, eosFileInfo, fmt.Sprintf("%d", eosFileInfo.FID))
 	if err != nil {
 		return nil, err
 	}
@@ -334,7 +334,7 @@ func (fs *eosfs) CreateStorageSpace(ctx context.Context, req *provider.CreateSto
 		if err != nil {
 			return nil, err
 		}
-		sid := fmt.Sprintf("%d", eosFileInfo.Inode)
+		sid := fmt.Sprintf("%d", eosFileInfo.FID)
 
 		space := &provider.StorageSpace{
 			Id:        &provider.StorageSpaceId{OpaqueId: sid},
