@@ -42,6 +42,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/lookup"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/options"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/golang-jwt/jwt"
 	"github.com/pkg/errors"
@@ -227,18 +228,20 @@ func (upload *Upload) FinishUpload(_ context.Context) error {
 		}
 	}
 
-	n, err := CreateNodeForUpload(upload)
+	// update checksums
+	attrs := map[string]string{
+		xattrs.ChecksumPrefix + "sha1":    string(sha1h.Sum(nil)),
+		xattrs.ChecksumPrefix + "md5":     string(md5h.Sum(nil)),
+		xattrs.ChecksumPrefix + "adler32": string(adler32h.Sum(nil)),
+	}
+
+	n, err := CreateNodeForUpload(upload, attrs)
 	if err != nil {
 		Cleanup(upload, true, false)
 		return err
 	}
 
 	upload.Node = n
-
-	// now try write all checksums
-	tryWritingChecksum(log, upload.Node, "sha1", sha1h)
-	tryWritingChecksum(log, upload.Node, "md5", md5h)
-	tryWritingChecksum(log, upload.Node, "adler32", adler32h)
 
 	if upload.pub != nil {
 		u, _ := ctxpkg.ContextGetUser(upload.Ctx)
@@ -458,14 +461,4 @@ func joinurl(paths ...string) string {
 	}
 
 	return s.String()
-}
-
-func tryWritingChecksum(log *zerolog.Logger, n *node.Node, algo string, h hash.Hash) {
-	if err := n.SetChecksum(algo, h); err != nil {
-		log.Err(err).
-			Str("csType", algo).
-			Bytes("hash", h.Sum(nil)).
-			Msg("Decomposedfs: could not write checksum")
-		// this is not critical, the bytes are there so we will continue
-	}
 }

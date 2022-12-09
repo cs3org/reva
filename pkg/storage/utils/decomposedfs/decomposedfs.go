@@ -300,6 +300,8 @@ func (fs *Decomposedfs) Postprocessing(ch <-chan interface{}) {
 			); err != nil {
 				log.Error().Err(err).Str("uploadID", ev.UploadID).Msg("Failed to publish UploadReady event")
 			}
+
+		/* LETS KEEP THIS COMMENTED UNTIL VIRUSSCANNING IS BACKMERGED
 		case events.VirusscanFinished:
 			if ev.ErrorMsg != "" {
 				// scan failed somehow
@@ -385,7 +387,6 @@ func (fs *Decomposedfs) Postprocessing(ch <-chan interface{}) {
 					fs.cache.RemoveStat(ev.ExecutingUser.GetId(), &provider.ResourceId{SpaceId: n.SpaceID, OpaqueId: n.ID})
 					continue
 				}
-
 			default:
 				// uploadid is not empty -> this is an async upload
 				up, err := upload.Get(ctx, ev.UploadID, fs.lu, fs.tp, fs.o.Root, fs.stream, fs.o.AsyncFileUploads, fs.o.Tokens)
@@ -410,7 +411,7 @@ func (fs *Decomposedfs) Postprocessing(ch <-chan interface{}) {
 
 			// remove cache entry in gateway
 			fs.cache.RemoveStat(ev.ExecutingUser.GetId(), &provider.ResourceId{SpaceId: n.SpaceID, OpaqueId: n.ID})
-
+		*/
 		default:
 			log.Error().Interface("event", ev).Msg("Unknown event")
 		}
