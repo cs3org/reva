@@ -1,7 +1,7 @@
 # images
 OC_CI_GOLANG = "owncloudci/golang:1.18"
 OC_CI_ALPINE = "owncloudci/alpine:latest"
-OSIXIA_OPEN_LDAP = "osixia/openldap:latest"
+OSIXIA_OPEN_LDAP = "osixia/openldap:1.3.0"
 REDIS = "redis:6-alpine"
 OC_CI_PHP = "owncloudci/php:7.4"
 OC_LITMUS = "owncloud/litmus:latest"
