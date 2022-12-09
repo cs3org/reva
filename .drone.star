@@ -126,7 +126,7 @@ def coverage():
                 ],
             },
         ],
-        "depends_on": ["check-go-generate"],
+        "depends_on": [],
     }
 
 def buildOnly():
@@ -148,7 +148,7 @@ def buildOnly():
         "steps": [
             makeStep("dist"),
         ],
-        "depends_on": ["check-go-generate"],
+        "depends_on": ["unit-test-coverage"],
     }
 
 def testIntegration():
@@ -182,7 +182,7 @@ def testIntegration():
         "services": [
             redisService(),
         ],
-        "depends_on": ["check-go-generate"],
+        "depends_on": ["unit-test-coverage"],
     }
 
 def virtualViews():
@@ -242,7 +242,7 @@ def virtualViews():
                 },
             },
         ],
-        "depends_on": ["check-go-generate"],
+        "depends_on": ["unit-test-coverage"],
     }
 
 def litmusOcisOldWebdav():
@@ -298,7 +298,7 @@ def litmusOcisOldWebdav():
                 },
             },
         ],
-        "depends_on": ["check-go-generate"],
+        "depends_on": ["unit-test-coverage"],
     }
 
 def litmusOcisNewWebdav():
@@ -355,7 +355,7 @@ def litmusOcisNewWebdav():
                 },
             },
         ],
-        "depends_on": ["check-go-generate"],
+        "depends_on": ["unit-test-coverage"],
     }
 
 def litmusOcisSpacesDav():
@@ -416,7 +416,7 @@ def litmusOcisSpacesDav():
                 ],
             },
         ],
-        "depends_on": ["check-go-generate"],
+        "depends_on": ["unit-test-coverage"],
     }
 
 def cs3ApiValidatorOcis():
@@ -469,7 +469,7 @@ def cs3ApiValidatorOcis():
                 ],
             },
         ],
-        "depends_on": ["check-go-generate"],
+        "depends_on": ["unit-test-coverage"],
     }
 
 def cs3ApiValidatorS3NG():
@@ -525,7 +525,7 @@ def cs3ApiValidatorS3NG():
         "services": [
             cephService(),
         ],
-        "depends_on": ["check-go-generate"],
+        "depends_on": ["unit-test-coverage"],
     }
 
 def ocisIntegrationTests(parallelRuns, skipExceptParts = []):
@@ -601,7 +601,7 @@ def ocisIntegrationTests(parallelRuns, skipExceptParts = []):
                 "services": [
                     ldapService(),
                 ],
-                "depends_on": ["check-go-generate"],
+                "depends_on": ["unit-test-coverage"],
             },
         )
 
@@ -681,7 +681,7 @@ def s3ngIntegrationTests(parallelRuns, skipExceptParts = []):
                     ldapService(),
                     cephService(),
                 ],
-                "depends_on": ["check-go-generate"],
+                "depends_on": ["unit-test-coverage"],
             },
         )
 
