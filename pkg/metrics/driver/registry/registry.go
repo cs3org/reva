@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,7 +24,7 @@ import (
 
 var drivers map[string]reader.Reader // map key is driver type name
 
-// Register register a driver
+// Register register a driver.
 func Register(driverName string, r reader.Reader) {
 	if drivers == nil {
 		drivers = make(map[string]reader.Reader)
@@ -32,7 +32,7 @@ func Register(driverName string, r reader.Reader) {
 	drivers[driverName] = r
 }
 
-// GetDriver returns the registered driver for the specified driver name, or nil if it is not registered
+// GetDriver returns the registered driver for the specified driver name, or nil if it is not registered.
 func GetDriver(driverName string) reader.Reader {
 	driver, found := drivers[driverName]
 	if found {

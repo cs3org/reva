@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,7 +25,7 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 )
 
-// appErrorCode stores the type of error encountered
+// appErrorCode stores the type of error encountered.
 type appErrorCode string
 
 const (
@@ -37,7 +37,7 @@ const (
 	appErrorServerError      appErrorCode = "SERVER_ERROR"
 )
 
-// appErrorCodeMapping stores the HTTP error code mapping for various APIErrorCodes
+// appErrorCodeMapping stores the HTTP error code mapping for various APIErrorCodes.
 var appErrorCodeMapping = map[appErrorCode]int{
 	appErrorNotFound:         http.StatusNotFound,
 	appErrorAlreadyExists:    http.StatusForbidden,
@@ -47,13 +47,13 @@ var appErrorCodeMapping = map[appErrorCode]int{
 	appErrorServerError:      http.StatusInternalServerError,
 }
 
-// APIError encompasses the error type and message
+// APIError encompasses the error type and message.
 type appError struct {
 	Code    appErrorCode `json:"code"`
 	Message string       `json:"message"`
 }
 
-// writeError handles writing error responses
+// writeError handles writing error responses.
 func writeError(w http.ResponseWriter, r *http.Request, code appErrorCode, message string, err error) {
 	if err != nil {
 		appctx.GetLogger(r.Context()).Error().Err(err).Msg(message)

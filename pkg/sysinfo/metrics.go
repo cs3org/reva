@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,12 +24,11 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/cs3org/reva/pkg/utils"
 	"github.com/pkg/errors"
 	"go.opencensus.io/stats"
 	"go.opencensus.io/stats/view"
 	"go.opencensus.io/tag"
-
-	"github.com/cs3org/reva/pkg/utils"
 )
 
 type sysInfoMetricsLabels = map[tag.Key]string

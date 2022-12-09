@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,18 +24,17 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
-
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/cs3org/reva/pkg/user/manager/registry"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
-
-	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-	// "github.com/cs3org/reva/pkg/errtypes"
+	// "github.com/cs3org/reva/pkg/errtypes".
 )
 
 func init() {
@@ -50,7 +49,7 @@ type Manager struct {
 	endPoint     string
 }
 
-// UserManagerConfig contains config for a Nextcloud-based UserManager
+// UserManagerConfig contains config for a Nextcloud-based UserManager.
 type UserManagerConfig struct {
 	EndPoint     string `mapstructure:"endpoint" docs:";The Nextcloud backend endpoint for user management"`
 	SharedSecret string `mapstructure:"shared_secret"`
@@ -73,7 +72,7 @@ func parseConfig(m map[string]interface{}) (*UserManagerConfig, error) {
 	return c, nil
 }
 
-// Action describes a REST request to forward to the Nextcloud backend
+// Action describes a REST request to forward to the Nextcloud backend.
 type Action struct {
 	verb string
 	argS string
@@ -90,7 +89,7 @@ func New(m map[string]interface{}) (user.Manager, error) {
 	return NewUserManager(c)
 }
 
-// NewUserManager returns a new Nextcloud-based UserManager
+// NewUserManager returns a new Nextcloud-based UserManager.
 func NewUserManager(c *UserManagerConfig) (*Manager, error) {
 	var client *http.Client
 	if c.MockHTTP {
@@ -110,7 +109,7 @@ func NewUserManager(c *UserManagerConfig) (*Manager, error) {
 	}, nil
 }
 
-// SetHTTPClient sets the HTTP client
+// SetHTTPClient sets the HTTP client.
 func (um *Manager) SetHTTPClient(c *http.Client) {
 	um.client = c
 }
@@ -141,6 +140,9 @@ func (um *Manager) do(ctx context.Context, a Action, username string) (int, []by
 
 	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		return 0, nil, fmt.Errorf("Unexpected response code from EFSS API: " + strconv.Itoa(resp.StatusCode))
+	}
 	return resp.StatusCode, body, err
 }
 

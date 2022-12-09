@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,7 +26,7 @@ import (
 	"github.com/cs3org/reva/pkg/rhttp/router"
 )
 
-// AvatarsHandler handles avatar requests
+// AvatarsHandler handles avatar requests.
 type AvatarsHandler struct {
 }
 
@@ -34,7 +34,7 @@ func (h *AvatarsHandler) init(c *Config) error {
 	return nil
 }
 
-// Handler handles requests
+// Handler handles requests.
 func (h *AvatarsHandler) Handler(s *svc) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()

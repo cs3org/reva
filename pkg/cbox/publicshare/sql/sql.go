@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,8 +29,6 @@ import (
 	"syscall"
 	"time"
 
-	"golang.org/x/crypto/bcrypt"
-
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
@@ -45,6 +43,7 @@ import (
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
+	"golang.org/x/crypto/bcrypt"
 )
 
 const (
@@ -63,11 +62,11 @@ type config struct {
 	SharePasswordHashCost      int    `mapstructure:"password_hash_cost"`
 	JanitorRunInterval         int    `mapstructure:"janitor_run_interval"`
 	EnableExpiredSharesCleanup bool   `mapstructure:"enable_expired_shares_cleanup"`
-	DbUsername                 string `mapstructure:"db_username"`
-	DbPassword                 string `mapstructure:"db_password"`
-	DbHost                     string `mapstructure:"db_host"`
-	DbPort                     int    `mapstructure:"db_port"`
-	DbName                     string `mapstructure:"db_name"`
+	DBUsername                 string `mapstructure:"db_username"`
+	DBPassword                 string `mapstructure:"db_password"`
+	DBHost                     string `mapstructure:"db_host"`
+	DBPort                     int    `mapstructure:"db_port"`
+	DBName                     string `mapstructure:"db_name"`
 	GatewaySvc                 string `mapstructure:"gatewaysvc"`
 }
 
@@ -114,7 +113,7 @@ func New(m map[string]interface{}) (publicshare.Manager, error) {
 	}
 	c.init()
 
-	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%d)/%s", c.DbUsername, c.DbPassword, c.DbHost, c.DbPort, c.DbName))
+	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%d)/%s", c.DBUsername, c.DBPassword, c.DBHost, c.DBPort, c.DBName))
 	if err != nil {
 		return nil, err
 	}
@@ -128,10 +127,11 @@ func New(m map[string]interface{}) (publicshare.Manager, error) {
 	return &mgr, nil
 }
 
-func (m *manager) CreatePublicShare(ctx context.Context, u *user.User, rInfo *provider.ResourceInfo, g *link.Grant) (*link.PublicShare, error) {
-
+func (m *manager) CreatePublicShare(ctx context.Context, u *user.User, rInfo *provider.ResourceInfo, g *link.Grant, description string, internal bool) (*link.PublicShare, error) {
 	tkn := utils.RandString(15)
 	now := time.Now().Unix()
+
+	quicklink, _ := strconv.ParseBool(rInfo.ArbitraryMetadata.Metadata["quicklink"])
 
 	displayName, ok := rInfo.ArbitraryMetadata.Metadata["name"]
 	if !ok {
@@ -154,8 +154,8 @@ func (m *manager) CreatePublicShare(ctx context.Context, u *user.User, rInfo *pr
 		fileSource = 0
 	}
 
-	query := "insert into oc_share set share_type=?,uid_owner=?,uid_initiator=?,item_type=?,fileid_prefix=?,item_source=?,file_source=?,permissions=?,stime=?,token=?,share_name=?"
-	params := []interface{}{publicShareType, owner, creator, itemType, prefix, itemSource, fileSource, permissions, now, tkn, displayName}
+	query := "insert into oc_share set share_type=?,uid_owner=?,uid_initiator=?,item_type=?,fileid_prefix=?,item_source=?,file_source=?,permissions=?,stime=?,token=?,share_name=?,quicklink=?,description=?,internal=?"
+	params := []interface{}{publicShareType, owner, creator, itemType, prefix, itemSource, fileSource, permissions, now, tkn, displayName, quicklink, description, internal}
 
 	var passwordProtected bool
 	password := g.Password
@@ -203,6 +203,8 @@ func (m *manager) CreatePublicShare(ctx context.Context, u *user.User, rInfo *pr
 		PasswordProtected: passwordProtected,
 		Expiration:        g.Expiration,
 		DisplayName:       displayName,
+		Quicklink:         quicklink,
+		Description:       description,
 	}, nil
 }
 
@@ -231,6 +233,8 @@ func (m *manager) UpdatePublicShare(ctx context.Context, u *user.User, req *link
 			}
 			paramsMap["share_with"] = h
 		}
+	case link.UpdatePublicShareRequest_Update_TYPE_DESCRIPTION:
+		paramsMap["description"] = req.Update.GetDescription()
 	default:
 		return nil, fmt.Errorf("invalid update type: %v", req.GetUpdate().GetType())
 	}
@@ -264,8 +268,8 @@ func (m *manager) UpdatePublicShare(ctx context.Context, u *user.User, req *link
 
 func (m *manager) getByToken(ctx context.Context, token string, u *user.User) (*link.PublicShare, string, error) {
 	s := conversions.DBShare{Token: token}
-	query := "select coalesce(uid_owner, '') as uid_owner, coalesce(uid_initiator, '') as uid_initiator, coalesce(share_with, '') as share_with, coalesce(fileid_prefix, '') as fileid_prefix, coalesce(item_source, '') as item_source, coalesce(item_type, '') as item_type, coalesce(expiration, '') as expiration, coalesce(share_name, '') as share_name, id, stime, permissions FROM oc_share WHERE (orphan = 0 or orphan IS NULL) AND share_type=? AND token=?"
-	if err := m.db.QueryRow(query, publicShareType, token).Scan(&s.UIDOwner, &s.UIDInitiator, &s.ShareWith, &s.Prefix, &s.ItemSource, &s.ItemType, &s.Expiration, &s.ShareName, &s.ID, &s.STime, &s.Permissions); err != nil {
+	query := "select coalesce(uid_owner, '') as uid_owner, coalesce(uid_initiator, '') as uid_initiator, coalesce(share_with, '') as share_with, coalesce(fileid_prefix, '') as fileid_prefix, coalesce(item_source, '') as item_source, coalesce(item_type, '') as item_type, coalesce(expiration, '') as expiration, coalesce(share_name, '') as share_name, id, stime, permissions, quicklink, description FROM oc_share WHERE (orphan = 0 or orphan IS NULL) AND share_type=? AND token=?"
+	if err := m.db.QueryRow(query, publicShareType, token).Scan(&s.UIDOwner, &s.UIDInitiator, &s.ShareWith, &s.Prefix, &s.ItemSource, &s.ItemType, &s.Expiration, &s.ShareName, &s.ID, &s.STime, &s.Permissions, &s.Quicklink, &s.Description); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, "", errtypes.NotFound(token)
 		}
@@ -277,8 +281,8 @@ func (m *manager) getByToken(ctx context.Context, token string, u *user.User) (*
 func (m *manager) getByID(ctx context.Context, id *link.PublicShareId, u *user.User) (*link.PublicShare, string, error) {
 	uid := conversions.FormatUserID(u.Id)
 	s := conversions.DBShare{ID: id.OpaqueId}
-	query := "select coalesce(uid_owner, '') as uid_owner, coalesce(uid_initiator, '') as uid_initiator, coalesce(share_with, '') as share_with, coalesce(fileid_prefix, '') as fileid_prefix, coalesce(item_source, '') as item_source, coalesce(item_type, '') as item_type, coalesce(token,'') as token, coalesce(expiration, '') as expiration, coalesce(share_name, '') as share_name, stime, permissions FROM oc_share WHERE (orphan = 0 or orphan IS NULL) AND share_type=? AND id=? AND (uid_owner=? OR uid_initiator=?)"
-	if err := m.db.QueryRow(query, publicShareType, id.OpaqueId, uid, uid).Scan(&s.UIDOwner, &s.UIDInitiator, &s.ShareWith, &s.Prefix, &s.ItemSource, &s.ItemType, &s.Token, &s.Expiration, &s.ShareName, &s.STime, &s.Permissions); err != nil {
+	query := "select coalesce(uid_owner, '') as uid_owner, coalesce(uid_initiator, '') as uid_initiator, coalesce(share_with, '') as share_with, coalesce(fileid_prefix, '') as fileid_prefix, coalesce(item_source, '') as item_source, coalesce(item_type, '') as item_type, coalesce(token,'') as token, coalesce(expiration, '') as expiration, coalesce(share_name, '') as share_name, stime, permissions, quicklink, description FROM oc_share WHERE (orphan = 0 or orphan IS NULL) AND share_type=? AND id=? AND (uid_owner=? OR uid_initiator=?)"
+	if err := m.db.QueryRow(query, publicShareType, id.OpaqueId, uid, uid).Scan(&s.UIDOwner, &s.UIDInitiator, &s.ShareWith, &s.Prefix, &s.ItemSource, &s.ItemType, &s.Token, &s.Expiration, &s.ShareName, &s.STime, &s.Permissions, &s.Quicklink, &s.Description); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, "", errtypes.NotFound(id.OpaqueId)
 		}
@@ -314,14 +318,13 @@ func (m *manager) GetPublicShare(ctx context.Context, u *user.User, ref *link.Pu
 		if err := publicshare.AddSignature(s, pw); err != nil {
 			return nil, err
 		}
-
 	}
 
 	return s, nil
 }
 
 func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []*link.ListPublicSharesRequest_Filter, md *provider.ResourceInfo, sign bool) ([]*link.PublicShare, error) {
-	query := "select coalesce(uid_owner, '') as uid_owner, coalesce(uid_initiator, '') as uid_initiator, coalesce(share_with, '') as share_with, coalesce(fileid_prefix, '') as fileid_prefix, coalesce(item_source, '') as item_source, coalesce(item_type, '') as item_type, coalesce(token,'') as token, coalesce(expiration, '') as expiration, coalesce(share_name, '') as share_name, id, stime, permissions FROM oc_share WHERE (orphan = 0 or orphan IS NULL) AND (share_type=?)"
+	query := "select coalesce(uid_owner, '') as uid_owner, coalesce(uid_initiator, '') as uid_initiator, coalesce(share_with, '') as share_with, coalesce(fileid_prefix, '') as fileid_prefix, coalesce(item_source, '') as item_source, coalesce(item_type, '') as item_type, coalesce(token,'') as token, coalesce(expiration, '') as expiration, coalesce(share_name, '') as share_name, id, stime, permissions, quicklink, description FROM oc_share WHERE (orphan = 0 or orphan IS NULL) AND (share_type=?) AND internal=false"
 	var resourceFilters, ownerFilters, creatorFilters string
 	var resourceParams, ownerParams, creatorParams []interface{}
 	params := []interface{}{publicShareType}
@@ -379,7 +382,7 @@ func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []
 	var s conversions.DBShare
 	shares := []*link.PublicShare{}
 	for rows.Next() {
-		if err := rows.Scan(&s.UIDOwner, &s.UIDInitiator, &s.ShareWith, &s.Prefix, &s.ItemSource, &s.ItemType, &s.Token, &s.Expiration, &s.ShareName, &s.ID, &s.STime, &s.Permissions); err != nil {
+		if err := rows.Scan(&s.UIDOwner, &s.UIDInitiator, &s.ShareWith, &s.Prefix, &s.ItemSource, &s.ItemType, &s.Token, &s.Expiration, &s.ShareName, &s.ID, &s.STime, &s.Permissions, &s.Quicklink, &s.Description); err != nil {
 			continue
 		}
 		cs3Share := conversions.ConvertToCS3PublicShare(s)
@@ -438,14 +441,20 @@ func (m *manager) RevokePublicShare(ctx context.Context, u *user.User, ref *link
 
 func (m *manager) GetPublicShareByToken(ctx context.Context, token string, auth *link.PublicShareAuthentication, sign bool) (*link.PublicShare, error) {
 	s := conversions.DBShare{Token: token}
-	query := "select coalesce(uid_owner, '') as uid_owner, coalesce(uid_initiator, '') as uid_initiator, coalesce(share_with, '') as share_with, coalesce(fileid_prefix, '') as fileid_prefix, coalesce(item_source, '') as item_source, coalesce(item_type, '') as item_type, coalesce(expiration, '') as expiration, coalesce(share_name, '') as share_name, id, stime, permissions FROM oc_share WHERE share_type=? AND token=?"
-	if err := m.db.QueryRow(query, publicShareType, token).Scan(&s.UIDOwner, &s.UIDInitiator, &s.ShareWith, &s.Prefix, &s.ItemSource, &s.ItemType, &s.Expiration, &s.ShareName, &s.ID, &s.STime, &s.Permissions); err != nil {
+	query := "select coalesce(uid_owner, '') as uid_owner, coalesce(uid_initiator, '') as uid_initiator, coalesce(share_with, '') as share_with, coalesce(fileid_prefix, '') as fileid_prefix, coalesce(item_source, '') as item_source, coalesce(item_type, '') as item_type, coalesce(expiration, '') as expiration, coalesce(share_name, '') as share_name, id, stime, permissions, quicklink, description FROM oc_share WHERE share_type=? AND token=?"
+	if err := m.db.QueryRow(query, publicShareType, token).Scan(&s.UIDOwner, &s.UIDInitiator, &s.ShareWith, &s.Prefix, &s.ItemSource, &s.ItemType, &s.Expiration, &s.ShareName, &s.ID, &s.STime, &s.Permissions, &s.Quicklink, &s.Description); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, errtypes.NotFound(token)
 		}
 		return nil, err
 	}
 	cs3Share := conversions.ConvertToCS3PublicShare(s)
+	if expired(cs3Share) {
+		if err := m.cleanupExpiredShares(); err != nil {
+			return nil, err
+		}
+		return nil, errtypes.NotFound(token)
+	}
 	if s.ShareWith != "" {
 		if !authenticate(cs3Share, s.ShareWith, auth) {
 			// if check := checkPasswordHash(auth.Password, s.ShareWith); !check {
@@ -457,13 +466,6 @@ func (m *manager) GetPublicShareByToken(ctx context.Context, token string, auth 
 				return nil, err
 			}
 		}
-	}
-
-	if expired(cs3Share) {
-		if err := m.cleanupExpiredShares(); err != nil {
-			return nil, err
-		}
-		return nil, errtypes.NotFound(token)
 	}
 
 	return cs3Share, nil

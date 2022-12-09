@@ -1,4 +1,4 @@
-// Copyright 2018-2020 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,7 +21,7 @@ package siteacc
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -71,13 +71,13 @@ func getEndpoints() []endpoint {
 		{config.EndpointList, callMethodEndpoint, createMethodCallbacks(handleList, nil), false},
 		{config.EndpointFind, callMethodEndpoint, createMethodCallbacks(handleFind, nil), false},
 		{config.EndpointCreate, callMethodEndpoint, createMethodCallbacks(nil, handleCreate), true},
-		{config.EndpointUpdate, callMethodEndpoint, createMethodCallbacks(nil, handleUpdate), false},
-		{config.EndpointConfigure, callMethodEndpoint, createMethodCallbacks(nil, handleConfigure), false},
+		{config.EndpointUpdate, callMethodEndpoint, createMethodCallbacks(nil, handleUpdate), true},
+		{config.EndpointConfigure, callMethodEndpoint, createMethodCallbacks(nil, handleConfigure), true},
 		{config.EndpointRemove, callMethodEndpoint, createMethodCallbacks(nil, handleRemove), false},
 		// Site endpoints
 		{config.EndpointSiteGet, callMethodEndpoint, createMethodCallbacks(handleSiteGet, nil), false},
 		// Sites endpoints
-		{config.EndpointSitesConfigure, callMethodEndpoint, createMethodCallbacks(nil, handleSitesConfigure), false},
+		{config.EndpointSitesConfigure, callMethodEndpoint, createMethodCallbacks(nil, handleSitesConfigure), true},
 		// Login endpoints
 		{config.EndpointLogin, callMethodEndpoint, createMethodCallbacks(nil, handleLogin), true},
 		{config.EndpointLogout, callMethodEndpoint, createMethodCallbacks(handleLogout, nil), true},
@@ -128,7 +128,7 @@ func callMethodEndpoint(siteacc *SiteAccounts, ep endpoint, w http.ResponseWrite
 		// Search for a matching method in the list of callbacks
 		for method, cb := range ep.MethodCallbacks {
 			if method == r.Method {
-				body, _ := ioutil.ReadAll(r.Body)
+				body, _ := io.ReadAll(r.Body)
 
 				if respData, err := cb(siteacc, r.URL.Query(), body, session); err == nil {
 					resp.Success = true

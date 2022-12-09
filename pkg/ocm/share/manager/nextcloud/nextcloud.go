@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,26 +22,27 @@ package nextcloud
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"math/rand"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
-	"github.com/cs3org/reva/pkg/utils"
 
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/ocm/share"
 	"github.com/cs3org/reva/pkg/ocm/share/manager/registry"
 	"github.com/cs3org/reva/pkg/ocm/share/sender"
+	"github.com/cs3org/reva/pkg/utils"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"google.golang.org/genproto/protobuf/field_mask"
@@ -67,17 +68,19 @@ func init() {
 type Manager struct {
 	client       *http.Client
 	sharedSecret string
+	webDAVHost   string
 	endPoint     string
 }
 
-// ShareManagerConfig contains config for a Nextcloud-based ShareManager
+// ShareManagerConfig contains config for a Nextcloud-based ShareManager.
 type ShareManagerConfig struct {
 	EndPoint     string `mapstructure:"endpoint" docs:";The Nextcloud backend endpoint for user check"`
 	SharedSecret string `mapstructure:"shared_secret"`
+	WebDAVHost   string `mapstructure:"webdav_host"`
 	MockHTTP     bool   `mapstructure:"mock_http"`
 }
 
-// Action describes a REST request to forward to the Nextcloud backend
+// Action describes a REST request to forward to the Nextcloud backend.
 type Action struct {
 	verb string
 	argS string
@@ -90,7 +93,7 @@ type GranteeAltMap struct {
 	ID *provider.Grantee_UserId `json:"id"`
 }
 
-// ShareAltMap is an alternative map to JSON-unmarshal a Share
+// ShareAltMap is an alternative map to JSON-unmarshal a Share.
 type ShareAltMap struct {
 	ID          *ocm.ShareId          `json:"id"`
 	ResourceID  *provider.ResourceId  `json:"resource_id"`
@@ -102,7 +105,7 @@ type ShareAltMap struct {
 	Mtime       *typespb.Timestamp    `json:"mtime"`
 }
 
-// ReceivedShareAltMap is an alternative map to JSON-unmarshal a ReceivedShare
+// ReceivedShareAltMap is an alternative map to JSON-unmarshal a ReceivedShare.
 type ReceivedShareAltMap struct {
 	Share *ShareAltMap   `json:"share"`
 	State ocm.ShareState `json:"state"`
@@ -140,7 +143,7 @@ func New(m map[string]interface{}) (share.Manager, error) {
 	return NewShareManager(c)
 }
 
-// NewShareManager returns a new Nextcloud-based ShareManager
+// NewShareManager returns a new Nextcloud-based ShareManager.
 func NewShareManager(c *ShareManagerConfig) (*Manager, error) {
 	var client *http.Client
 	if c.MockHTTP {
@@ -161,10 +164,11 @@ func NewShareManager(c *ShareManagerConfig) (*Manager, error) {
 		endPoint:     c.EndPoint, // e.g. "http://nc/apps/sciencemesh/"
 		sharedSecret: c.SharedSecret,
 		client:       client,
+		webDAVHost:   c.WebDAVHost,
 	}, nil
 }
 
-// SetHTTPClient sets the HTTP client
+// SetHTTPClient sets the HTTP client.
 func (sm *Manager) SetHTTPClient(c *http.Client) {
 	sm.client = c
 }
@@ -210,16 +214,19 @@ func (sm *Manager) do(ctx context.Context, a Action, username string) (int, []by
 	// curl -i -H 'application/json' -H 'X-Reva-Secret: shared-secret-1' -d '{"md":{"opaque_id":"fileid-/other/q/as"},"g":{"grantee":{"type":1,"Id":{"UserId":{"idp":"revanc2.docker","opaque_id":"marie"}}},"permissions":{"permissions":{"get_path":true,"initiate_file_download":true,"list_container":true,"list_file_versions":true,"stat":true}}},"provider_domain":"cern.ch","resource_type":"file","provider_id":2,"owner_opaque_id":"einstein","owner_display_name":"Albert Einstein","protocol":{"name":"webdav","options":{"sharedSecret":"secret","permissions":"webdav-property"}}}' https://nc1.docker/index.php/apps/sciencemesh/~/api/ocm/addSentShare
 
 	log.Info().Msgf("am.do response %d %s", resp.StatusCode, body)
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		return 0, nil, fmt.Errorf("Unexpected response code from EFSS API: " + strconv.Itoa(resp.StatusCode))
+	}
 	return resp.StatusCode, body, nil
 }
 
 // Share is called from both grpc CreateOCMShare for outgoing
 // and http /ocm/shares for incoming
 // pi is provider info
-// pm is permissions
+// pm is permissions.
 func (sm *Manager) Share(ctx context.Context, md *provider.ResourceId, g *ocm.ShareGrant, name string,
 	pi *ocmprovider.ProviderInfo, pm string, owner *userpb.UserId, token string, st ocm.Share_ShareType) (*ocm.Share, error) {
-
 	// Since both OCMCore and OCMShareProvider use the same package, we distinguish
 	// between calls received from them on the basis of whether they provide info
 	// about the remote provider on which the share is to be created.
@@ -233,7 +240,7 @@ func (sm *Manager) Share(ctx context.Context, md *provider.ResourceId, g *ocm.Sh
 		isOwnersMeshProvider = true
 		apiMethod = "addSentShare"
 		username = getUsername(ctx)
-		token = randSeq(10)
+		token = randSeq(10) // FIXME: is this used for datatx?
 	} else {
 		apiMethod = "addReceivedShare"
 		username = g.Grantee.GetUserId().OpaqueId
@@ -255,13 +262,24 @@ func (sm *Manager) Share(ctx context.Context, md *provider.ResourceId, g *ocm.Sh
 		return nil, errors.New("nextcloud: user and grantee are the same")
 	}
 
+	now := time.Now().UnixNano()
+	ts := &typespb.Timestamp{
+		Seconds: uint64(now / 1000000000),
+		Nanos:   uint32(now % 1000000000),
+	}
+
 	s := &ocm.Share{
+		Id: &ocm.ShareId{
+			OpaqueId: "will-be-filled-in-by-the-backend",
+		},
 		Name:        name,
 		ResourceId:  md,
 		Permissions: g.Permissions,
 		Grantee:     g.Grantee,
 		Owner:       userID,
 		Creator:     userID,
+		Ctime:       ts,
+		Mtime:       ts,
 		ShareType:   st,
 	}
 
@@ -312,14 +330,8 @@ func (sm *Manager) Share(ctx context.Context, md *provider.ResourceId, g *ocm.Sh
 	}
 
 	_, body, err := sm.do(ctx, Action{apiMethod, string(encShare)}, username)
-
 	s.Id = &ocm.ShareId{
 		OpaqueId: string(body),
-	}
-	now := time.Now().UnixNano()
-	s.Ctime = &typespb.Timestamp{
-		Seconds: uint64(now / 1000000000),
-		Nanos:   uint32(now % 1000000000),
 	}
 	if err != nil {
 		return nil, err
@@ -345,18 +357,35 @@ func (sm *Manager) Share(ctx context.Context, md *provider.ResourceId, g *ocm.Sh
 				"options": map[string]string{
 					"permissions":  pm,
 					"sharedSecret": token,
+					"remote":       sm.webDAVHost,
 				},
 			}
 		}
+
+		// required:
+		// shareWith	       string Consumer specific identifier of the user or group the provider wants to share the resource with. This is known in advance. Please note that the consumer service endpoint is known in advance as well, so this is no part of the request body.
+		// name				       string Name of the resource (file or folder).
+		// providerId        string Identifier to identify the resource at the provider side. This is unique per provider
+		// owner             string Provider specific identifier of the user who owns the resource.
+		// shareType         string Share type (user or group share)
+		// resourceType      string Resource type (file, calendar, contact,...)
+		// protocol          object The protocol which is used to establish synchronisation. At the moment only webdav is supported, but other (custom) protocols might be added in the future.
+		//
+		// optional:
+		// description       string Optional description of the resource (file or folder).
+		// sender	           string Provider specific identifier of the user that wants to share the resource. Please note that the requesting provider is being identified on a higher level, so the former remote property is no part of the request body.
+		// ownerDisplayName	 string Display name of the owner of the resource
+		// senderDisplayName string Display name of the owner of the resource
+
 		requestBodyMap := map[string]interface{}{
 			"shareWith":    g.Grantee.GetUserId().OpaqueId,
-			"name":         name,
+			"name":         name, // e.g. /home/welcome.txt becomes /welcome.txt
 			"providerId":   s.Id.OpaqueId,
-			"owner":        userID.OpaqueId,
+			"owner":        fmt.Sprintf("%s@%s", userID.OpaqueId, sm.webDAVHost),
 			"protocol":     protocol,
-			"meshProvider": userID.Idp, // FIXME: move this into the 'owner' string?
+			"meshProvider": userID.Idp,
 		}
-		err = sender.Send(requestBodyMap, pi)
+		err = sender.Send(ctx, requestBodyMap, pi)
 		if err != nil {
 			err = errors.Wrap(err, "error sending OCM POST")
 			return nil, err
@@ -490,7 +519,10 @@ func (sm *Manager) ListShares(ctx context.Context, filters []*ocm.ListOCMSharesR
 
 // ListReceivedShares as defined in the ocm.share.Manager interface
 // https://github.com/cs3org/reva/blob/v1.13.0/pkg/ocm/share/share.go#L30-L57
+// returns a list of these:
+// https://github.com/cs3org/go-cs3apis/blob/d297419/cs3/sharing/ocm/v1beta1/resources.pb.go#L290-L302
 func (sm *Manager) ListReceivedShares(ctx context.Context) ([]*ocm.ReceivedShare, error) {
+	log := appctx.GetLogger(ctx)
 	_, respBody, err := sm.do(ctx, Action{"ListReceivedShares", string("")}, getUsername(ctx))
 	if err != nil {
 		return nil, err
@@ -501,34 +533,32 @@ func (sm *Manager) ListReceivedShares(ctx context.Context) ([]*ocm.ReceivedShare
 	if err != nil {
 		return nil, err
 	}
-	var pointers = make([]*ocm.ReceivedShare, len(respArr))
-	for i := 0; i < len(respArr); i++ {
-		altResultShare := respArr[i].Share
-		if altResultShare == nil {
-			pointers[i] = &ocm.ReceivedShare{
-				Share: nil,
-				State: respArr[i].State,
-			}
-		} else {
-			pointers[i] = &ocm.ReceivedShare{
-				Share: &ocm.Share{
-					Id:          altResultShare.ID,
-					ResourceId:  altResultShare.ResourceID,
-					Permissions: altResultShare.Permissions,
-					Grantee: &provider.Grantee{
-						Id: altResultShare.Grantee.ID,
-					},
-					Owner:   altResultShare.Owner,
-					Creator: altResultShare.Creator,
-					Ctime:   altResultShare.Ctime,
-					Mtime:   altResultShare.Mtime,
-				},
-				State: respArr[i].State,
-			}
-		}
-	}
-	return pointers, err
 
+	var pointersReceivedShare = make([]*ocm.ReceivedShare, 0, len(respArr))
+	for _, share := range respArr {
+		altResultShare := share.Share
+		log.Info().Msgf("Unpacking share object %+v\n", altResultShare)
+		if altResultShare == nil {
+			return nil, errors.New("received an unreadable share object from the EFSS backend")
+		}
+		s := &ocm.Share{
+			Id:          altResultShare.ID,
+			ResourceId:  altResultShare.ResourceID,
+			Permissions: altResultShare.Permissions,
+			Grantee: &provider.Grantee{
+				Id: altResultShare.Grantee.ID,
+			},
+			Owner:   altResultShare.Owner,
+			Creator: altResultShare.Creator,
+			Ctime:   altResultShare.Ctime,
+			Mtime:   altResultShare.Mtime,
+		}
+		pointersReceivedShare = append(pointersReceivedShare, &ocm.ReceivedShare{
+			Share: s,
+			State: share.State,
+		})
+	}
+	return pointersReceivedShare, err
 }
 
 // GetReceivedShare as defined in the ocm.share.Manager interface

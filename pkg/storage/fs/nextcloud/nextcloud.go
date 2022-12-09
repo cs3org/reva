@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -42,7 +43,7 @@ func init() {
 	registry.Register("nextcloud", New)
 }
 
-// StorageDriverConfig is the configuration struct for a NextcloudStorageDriver
+// StorageDriverConfig is the configuration struct for a NextcloudStorageDriver.
 type StorageDriverConfig struct {
 	EndPoint     string `mapstructure:"endpoint"` // e.g. "http://nc/apps/sciencemesh/~alice/"
 	SharedSecret string `mapstructure:"shared_secret"`
@@ -50,7 +51,7 @@ type StorageDriverConfig struct {
 }
 
 // StorageDriver implements the storage.FS interface
-// and connects with a StorageDriver server as its backend
+// and connects with a StorageDriver server as its backend.
 type StorageDriver struct {
 	endPoint     string
 	sharedSecret string
@@ -77,7 +78,7 @@ func New(m map[string]interface{}) (storage.FS, error) {
 	return NewStorageDriver(conf)
 }
 
-// NewStorageDriver returns a new NextcloudStorageDriver
+// NewStorageDriver returns a new NextcloudStorageDriver.
 func NewStorageDriver(c *StorageDriverConfig) (*StorageDriver, error) {
 	var client *http.Client
 	if c.MockHTTP {
@@ -104,7 +105,7 @@ func NewStorageDriver(c *StorageDriverConfig) (*StorageDriver, error) {
 	}, nil
 }
 
-// Action describes a REST request to forward to the Nextcloud backend
+// Action describes a REST request to forward to the Nextcloud backend.
 type Action struct {
 	verb string
 	argS string
@@ -119,22 +120,28 @@ func getUser(ctx context.Context) (*user.User, error) {
 	return u, nil
 }
 
-// SetHTTPClient sets the HTTP client
+// SetHTTPClient sets the HTTP client.
 func (nc *StorageDriver) SetHTTPClient(c *http.Client) {
 	nc.client = c
 }
 
 func (nc *StorageDriver) doUpload(ctx context.Context, filePath string, r io.ReadCloser) error {
 	// log := appctx.GetLogger(ctx)
+	// log.Error().Msgf("in doUpload!  %s", filePath)
 	user, err := getUser(ctx)
 	if err != nil {
+		// log.Error().Msg("error getting user!")
 		return err
 	}
+	// log.Error().Msgf("got user! %+v", user)
+
 	// See https://github.com/pondersource/nc-sciencemesh/issues/5
 	// url := nc.endPoint + "~" + user.Username + "/files/" + filePath
-	url := nc.endPoint + "~" + user.Username + "/api/storage/Upload/" + filePath
+	url := nc.endPoint + "~" + user.Id.OpaqueId + "/api/storage/Upload/home" + filePath
+	// log.Error().Msgf("sending PUT to NC/OC!  %s", url)
 	req, err := http.NewRequest(http.MethodPut, url, r)
 	if err != nil {
+		// log.Error().Msgf("error!  %s", err.Error())
 		panic(err)
 	}
 
@@ -142,8 +149,10 @@ func (nc *StorageDriver) doUpload(ctx context.Context, filePath string, r io.Rea
 	// set the request header Content-Type for the upload
 	// FIXME: get the actual content type from somewhere
 	req.Header.Set("Content-Type", "text/plain")
+	// log.Error().Msg("client req")
 	resp, err := nc.client.Do(req)
 	if err != nil {
+		// log.Error().Msgf("error!  %s", err.Error())
 		panic(err)
 	}
 
@@ -169,7 +178,7 @@ func (nc *StorageDriver) doDownload(ctx context.Context, filePath string) (io.Re
 	if err != nil {
 		panic(err)
 	}
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		panic("No 200 response code in download request")
 	}
 
@@ -193,7 +202,7 @@ func (nc *StorageDriver) doDownloadRevision(ctx context.Context, filePath string
 	if err != nil {
 		panic(err)
 	}
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		panic("No 200 response code in download request")
 	}
 
@@ -229,11 +238,13 @@ func (nc *StorageDriver) do(ctx context.Context, a Action) (int, []byte, error) 
 		return 0, nil, err
 	}
 	log.Info().Msgf("nc.do res %s %s", url, string(body))
-
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusNotFound {
+		return 0, nil, fmt.Errorf("Unexpected response code from EFSS API: " + strconv.Itoa(resp.StatusCode) + ":" + string(body))
+	}
 	return resp.StatusCode, body, nil
 }
 
-// GetHome as defined in the storage.FS interface
+// GetHome as defined in the storage.FS interface.
 func (nc *StorageDriver) GetHome(ctx context.Context) (string, error) {
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("GetHome")
@@ -242,7 +253,7 @@ func (nc *StorageDriver) GetHome(ctx context.Context) (string, error) {
 	return string(respBody), err
 }
 
-// CreateHome as defined in the storage.FS interface
+// CreateHome as defined in the storage.FS interface.
 func (nc *StorageDriver) CreateHome(ctx context.Context) error {
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("CreateHome")
@@ -251,7 +262,7 @@ func (nc *StorageDriver) CreateHome(ctx context.Context) error {
 	return err
 }
 
-// CreateDir as defined in the storage.FS interface
+// CreateDir as defined in the storage.FS interface.
 func (nc *StorageDriver) CreateDir(ctx context.Context, ref *provider.Reference) error {
 	bodyStr, err := json.Marshal(ref)
 	if err != nil {
@@ -264,12 +275,12 @@ func (nc *StorageDriver) CreateDir(ctx context.Context, ref *provider.Reference)
 	return err
 }
 
-// TouchFile as defined in the storage.FS interface
+// TouchFile as defined in the storage.FS interface.
 func (nc *StorageDriver) TouchFile(ctx context.Context, ref *provider.Reference) error {
 	return fmt.Errorf("unimplemented: TouchFile")
 }
 
-// Delete as defined in the storage.FS interface
+// Delete as defined in the storage.FS interface.
 func (nc *StorageDriver) Delete(ctx context.Context, ref *provider.Reference) error {
 	bodyStr, err := json.Marshal(ref)
 	if err != nil {
@@ -282,7 +293,7 @@ func (nc *StorageDriver) Delete(ctx context.Context, ref *provider.Reference) er
 	return err
 }
 
-// Move as defined in the storage.FS interface
+// Move as defined in the storage.FS interface.
 func (nc *StorageDriver) Move(ctx context.Context, oldRef, newRef *provider.Reference) error {
 	type paramsObj struct {
 		OldRef *provider.Reference `json:"oldRef"`
@@ -300,7 +311,7 @@ func (nc *StorageDriver) Move(ctx context.Context, oldRef, newRef *provider.Refe
 	return err
 }
 
-// GetMD as defined in the storage.FS interface
+// GetMD as defined in the storage.FS interface.
 func (nc *StorageDriver) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []string) (*provider.ResourceInfo, error) {
 	type paramsObj struct {
 		Ref    *provider.Reference `json:"ref"`
@@ -330,7 +341,7 @@ func (nc *StorageDriver) GetMD(ctx context.Context, ref *provider.Reference, mdK
 	return &respObj, nil
 }
 
-// ListFolder as defined in the storage.FS interface
+// ListFolder as defined in the storage.FS interface.
 func (nc *StorageDriver) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys []string) ([]*provider.ResourceInfo, error) {
 	type paramsObj struct {
 		Ref    *provider.Reference `json:"ref"`
@@ -366,7 +377,7 @@ func (nc *StorageDriver) ListFolder(ctx context.Context, ref *provider.Reference
 	return pointers, err
 }
 
-// InitiateUpload as defined in the storage.FS interface
+// InitiateUpload as defined in the storage.FS interface.
 func (nc *StorageDriver) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64, metadata map[string]string) (map[string]string, error) {
 	type paramsObj struct {
 		Ref          *provider.Reference `json:"ref"`
@@ -394,17 +405,17 @@ func (nc *StorageDriver) InitiateUpload(ctx context.Context, ref *provider.Refer
 	return respMap, err
 }
 
-// Upload as defined in the storage.FS interface
+// Upload as defined in the storage.FS interface.
 func (nc *StorageDriver) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser) error {
 	return nc.doUpload(ctx, ref.Path, r)
 }
 
-// Download as defined in the storage.FS interface
+// Download as defined in the storage.FS interface.
 func (nc *StorageDriver) Download(ctx context.Context, ref *provider.Reference) (io.ReadCloser, error) {
 	return nc.doDownload(ctx, ref.Path)
 }
 
-// ListRevisions as defined in the storage.FS interface
+// ListRevisions as defined in the storage.FS interface.
 func (nc *StorageDriver) ListRevisions(ctx context.Context, ref *provider.Reference) ([]*provider.FileVersion, error) {
 	bodyStr, _ := json.Marshal(ref)
 	log := appctx.GetLogger(ctx)
@@ -427,7 +438,7 @@ func (nc *StorageDriver) ListRevisions(ctx context.Context, ref *provider.Refere
 	return revs, err
 }
 
-// DownloadRevision as defined in the storage.FS interface
+// DownloadRevision as defined in the storage.FS interface.
 func (nc *StorageDriver) DownloadRevision(ctx context.Context, ref *provider.Reference, key string) (io.ReadCloser, error) {
 	log := appctx.GetLogger(ctx)
 	log.Info().Msgf("DownloadRevision %s %s", ref.Path, key)
@@ -436,7 +447,7 @@ func (nc *StorageDriver) DownloadRevision(ctx context.Context, ref *provider.Ref
 	return readCloser, err
 }
 
-// RestoreRevision as defined in the storage.FS interface
+// RestoreRevision as defined in the storage.FS interface.
 func (nc *StorageDriver) RestoreRevision(ctx context.Context, ref *provider.Reference, key string) error {
 	type paramsObj struct {
 		Ref *provider.Reference `json:"ref"`
@@ -454,7 +465,7 @@ func (nc *StorageDriver) RestoreRevision(ctx context.Context, ref *provider.Refe
 	return err
 }
 
-// ListRecycle as defined in the storage.FS interface
+// ListRecycle as defined in the storage.FS interface.
 func (nc *StorageDriver) ListRecycle(ctx context.Context, basePath, key string, relativePath string) ([]*provider.RecycleItem, error) {
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("ListRecycle")
@@ -485,7 +496,7 @@ func (nc *StorageDriver) ListRecycle(ctx context.Context, basePath, key string, 
 	return items, err
 }
 
-// RestoreRecycleItem as defined in the storage.FS interface
+// RestoreRecycleItem as defined in the storage.FS interface.
 func (nc *StorageDriver) RestoreRecycleItem(ctx context.Context, basePath, key, relativePath string, restoreRef *provider.Reference) error {
 	type paramsObj struct {
 		Key        string              `json:"key"`
@@ -507,7 +518,7 @@ func (nc *StorageDriver) RestoreRecycleItem(ctx context.Context, basePath, key, 
 	return err
 }
 
-// PurgeRecycleItem as defined in the storage.FS interface
+// PurgeRecycleItem as defined in the storage.FS interface.
 func (nc *StorageDriver) PurgeRecycleItem(ctx context.Context, basePath, key, relativePath string) error {
 	type paramsObj struct {
 		Key  string `json:"key"`
@@ -525,7 +536,7 @@ func (nc *StorageDriver) PurgeRecycleItem(ctx context.Context, basePath, key, re
 	return err
 }
 
-// EmptyRecycle as defined in the storage.FS interface
+// EmptyRecycle as defined in the storage.FS interface.
 func (nc *StorageDriver) EmptyRecycle(ctx context.Context) error {
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("EmptyRecycle")
@@ -534,14 +545,14 @@ func (nc *StorageDriver) EmptyRecycle(ctx context.Context) error {
 	return err
 }
 
-// GetPathByID as defined in the storage.FS interface
+// GetPathByID as defined in the storage.FS interface.
 func (nc *StorageDriver) GetPathByID(ctx context.Context, id *provider.ResourceId) (string, error) {
 	bodyStr, _ := json.Marshal(id)
 	_, respBody, err := nc.do(ctx, Action{"GetPathByID", string(bodyStr)})
 	return string(respBody), err
 }
 
-// AddGrant as defined in the storage.FS interface
+// AddGrant as defined in the storage.FS interface.
 func (nc *StorageDriver) AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
 	type paramsObj struct {
 		Ref *provider.Reference `json:"ref"`
@@ -559,7 +570,7 @@ func (nc *StorageDriver) AddGrant(ctx context.Context, ref *provider.Reference, 
 	return err
 }
 
-// DenyGrant as defined in the storage.FS interface
+// DenyGrant as defined in the storage.FS interface.
 func (nc *StorageDriver) DenyGrant(ctx context.Context, ref *provider.Reference, g *provider.Grantee) error {
 	type paramsObj struct {
 		Ref *provider.Reference `json:"ref"`
@@ -577,7 +588,7 @@ func (nc *StorageDriver) DenyGrant(ctx context.Context, ref *provider.Reference,
 	return err
 }
 
-// RemoveGrant as defined in the storage.FS interface
+// RemoveGrant as defined in the storage.FS interface.
 func (nc *StorageDriver) RemoveGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
 	type paramsObj struct {
 		Ref *provider.Reference `json:"ref"`
@@ -595,7 +606,7 @@ func (nc *StorageDriver) RemoveGrant(ctx context.Context, ref *provider.Referenc
 	return err
 }
 
-// UpdateGrant as defined in the storage.FS interface
+// UpdateGrant as defined in the storage.FS interface.
 func (nc *StorageDriver) UpdateGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
 	type paramsObj struct {
 		Ref *provider.Reference `json:"ref"`
@@ -613,7 +624,7 @@ func (nc *StorageDriver) UpdateGrant(ctx context.Context, ref *provider.Referenc
 	return err
 }
 
-// ListGrants as defined in the storage.FS interface
+// ListGrants as defined in the storage.FS interface.
 func (nc *StorageDriver) ListGrants(ctx context.Context, ref *provider.Reference) ([]*provider.Grant, error) {
 	bodyStr, _ := json.Marshal(ref)
 	log := appctx.GetLogger(ctx)
@@ -691,7 +702,7 @@ func (nc *StorageDriver) ListGrants(ctx context.Context, ref *provider.Reference
 	return grants, err
 }
 
-// GetQuota as defined in the storage.FS interface
+// GetQuota as defined in the storage.FS interface.
 func (nc *StorageDriver) GetQuota(ctx context.Context, ref *provider.Reference) (uint64, uint64, error) {
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("GetQuota")
@@ -709,7 +720,7 @@ func (nc *StorageDriver) GetQuota(ctx context.Context, ref *provider.Reference) 
 	return uint64(respMap["totalBytes"].(float64)), uint64(respMap["usedBytes"].(float64)), err
 }
 
-// CreateReference as defined in the storage.FS interface
+// CreateReference as defined in the storage.FS interface.
 func (nc *StorageDriver) CreateReference(ctx context.Context, path string, targetURI *url.URL) error {
 	type paramsObj struct {
 		Path string `json:"path"`
@@ -725,7 +736,7 @@ func (nc *StorageDriver) CreateReference(ctx context.Context, path string, targe
 	return err
 }
 
-// Shutdown as defined in the storage.FS interface
+// Shutdown as defined in the storage.FS interface.
 func (nc *StorageDriver) Shutdown(ctx context.Context) error {
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("Shutdown")
@@ -734,7 +745,7 @@ func (nc *StorageDriver) Shutdown(ctx context.Context) error {
 	return err
 }
 
-// SetArbitraryMetadata as defined in the storage.FS interface
+// SetArbitraryMetadata as defined in the storage.FS interface.
 func (nc *StorageDriver) SetArbitraryMetadata(ctx context.Context, ref *provider.Reference, md *provider.ArbitraryMetadata) error {
 	type paramsObj struct {
 		Ref *provider.Reference         `json:"ref"`
@@ -752,7 +763,7 @@ func (nc *StorageDriver) SetArbitraryMetadata(ctx context.Context, ref *provider
 	return err
 }
 
-// UnsetArbitraryMetadata as defined in the storage.FS interface
+// UnsetArbitraryMetadata as defined in the storage.FS interface.
 func (nc *StorageDriver) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Reference, keys []string) error {
 	type paramsObj struct {
 		Ref  *provider.Reference `json:"ref"`
@@ -770,27 +781,27 @@ func (nc *StorageDriver) UnsetArbitraryMetadata(ctx context.Context, ref *provid
 	return err
 }
 
-// GetLock returns an existing lock on the given reference
+// GetLock returns an existing lock on the given reference.
 func (nc *StorageDriver) GetLock(ctx context.Context, ref *provider.Reference) (*provider.Lock, error) {
 	return nil, errtypes.NotSupported("unimplemented")
 }
 
-// SetLock puts a lock on the given reference
+// SetLock puts a lock on the given reference.
 func (nc *StorageDriver) SetLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
 	return errtypes.NotSupported("unimplemented")
 }
 
-// RefreshLock refreshes an existing lock on the given reference
-func (nc *StorageDriver) RefreshLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
+// RefreshLock refreshes an existing lock on the given reference.
+func (nc *StorageDriver) RefreshLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock, existingLockID string) error {
 	return errtypes.NotSupported("unimplemented")
 }
 
-// Unlock removes an existing lock from the given reference
+// Unlock removes an existing lock from the given reference.
 func (nc *StorageDriver) Unlock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
 	return errtypes.NotSupported("unimplemented")
 }
 
-// ListStorageSpaces as defined in the storage.FS interface
+// ListStorageSpaces as defined in the storage.FS interface.
 func (nc *StorageDriver) ListStorageSpaces(ctx context.Context, f []*provider.ListStorageSpacesRequest_Filter) ([]*provider.StorageSpace, error) {
 	bodyStr, _ := json.Marshal(f)
 	_, respBody, err := nc.do(ctx, Action{"ListStorageSpaces", string(bodyStr)})
@@ -811,7 +822,7 @@ func (nc *StorageDriver) ListStorageSpaces(ctx context.Context, f []*provider.Li
 	return spaces, err
 }
 
-// CreateStorageSpace creates a storage space
+// CreateStorageSpace creates a storage space.
 func (nc *StorageDriver) CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error) {
 	bodyStr, _ := json.Marshal(req)
 	_, respBody, err := nc.do(ctx, Action{"CreateStorageSpace", string(bodyStr)})
@@ -826,7 +837,7 @@ func (nc *StorageDriver) CreateStorageSpace(ctx context.Context, req *provider.C
 	return &respObj, nil
 }
 
-// UpdateStorageSpace updates a storage space
+// UpdateStorageSpace updates a storage space.
 func (nc *StorageDriver) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
 	bodyStr, _ := json.Marshal(req)
 	_, respBody, err := nc.do(ctx, Action{"UpdateStorageSpace", string(bodyStr)})

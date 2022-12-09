@@ -16,7 +16,7 @@
 # granted to it by virtue of its status as an Intergovernmental Organization
 # or submit itself to any jurisdiction.
 
-FROM quay.ceph.io/ceph-ci/ceph:pacific
+FROM quay.io/ceph/ceph:v16
 
 RUN dnf update -y && dnf install -y \
   git \
@@ -26,19 +26,19 @@ RUN dnf update -y && dnf install -y \
   librbd-devel \
   librados-devel
 
-ADD https://golang.org/dl/go1.16.4.linux-amd64.tar.gz \
-  go1.16.4.linux-amd64.tar.gz
+ADD https://golang.org/dl/go1.19.linux-amd64.tar.gz \
+  go1.19.linux-amd64.tar.gz
 
 RUN rm -rf /usr/local/go && \
-  tar -C /usr/local -xzf go1.16.4.linux-amd64.tar.gz && \
-  rm go1.16.4.linux-amd64.tar.gz
+  tar -C /usr/local -xzf go1.19.linux-amd64.tar.gz && \
+  rm go1.19.linux-amd64.tar.gz
 
 ENV PATH /go/bin:/usr/local/go/bin:$PATH
 ENV GOPATH /go
 
 WORKDIR /go/src/github/cs3org/reva
 COPY . .
-RUN mkdir -p /go/bin \
+RUN mkdir -p /go/bin && \
     make build-revad-cephfs-docker && \
     cp /go/src/github/cs3org/reva/cmd/revad/revad /usr/bin/revad
 

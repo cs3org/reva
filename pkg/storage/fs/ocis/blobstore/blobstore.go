@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,12 +27,12 @@ import (
 	"github.com/pkg/errors"
 )
 
-// Blobstore provides an interface to an filesystem based blobstore
+// Blobstore provides an interface to an filesystem based blobstore.
 type Blobstore struct {
 	root string
 }
 
-// New returns a new Blobstore
+// New returns a new Blobstore.
 func New(root string) (*Blobstore, error) {
 	err := os.MkdirAll(root, 0700)
 	if err != nil {
@@ -44,7 +44,7 @@ func New(root string) (*Blobstore, error) {
 	}, nil
 }
 
-// Upload stores some data in the blobstore under the given key
+// Upload stores some data in the blobstore under the given key.
 func (bs *Blobstore) Upload(key string, data io.Reader) error {
 	f, err := os.OpenFile(bs.path(key), os.O_CREATE|os.O_WRONLY, 0700)
 	if err != nil {
@@ -60,7 +60,7 @@ func (bs *Blobstore) Upload(key string, data io.Reader) error {
 	return w.Flush()
 }
 
-// Download retrieves a blob from the blobstore for reading
+// Download retrieves a blob from the blobstore for reading.
 func (bs *Blobstore) Download(key string) (io.ReadCloser, error) {
 	file, err := os.Open(bs.path(key))
 	if err != nil {
@@ -69,7 +69,7 @@ func (bs *Blobstore) Download(key string) (io.ReadCloser, error) {
 	return file, nil
 }
 
-// Delete deletes a blob from the blobstore
+// Delete deletes a blob from the blobstore.
 func (bs *Blobstore) Delete(key string) error {
 	err := os.Remove(bs.path(key))
 	if err != nil {

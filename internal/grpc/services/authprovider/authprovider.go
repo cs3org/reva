@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -31,6 +31,8 @@ import (
 	"github.com/cs3org/reva/pkg/plugin"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
+	"github.com/cs3org/reva/pkg/sharedconf"
+	"github.com/cs3org/reva/pkg/user"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
@@ -43,18 +45,21 @@ func init() {
 type config struct {
 	AuthManager  string                            `mapstructure:"auth_manager"`
 	AuthManagers map[string]map[string]interface{} `mapstructure:"auth_managers"`
+	blockedUsers []string
 }
 
 func (c *config) init() {
 	if c.AuthManager == "" {
 		c.AuthManager = "json"
 	}
+	c.blockedUsers = sharedconf.GetBlockedUsers()
 }
 
 type service struct {
-	authmgr auth.Manager
-	conf    *config
-	plugin  *plugin.RevaPlugin
+	authmgr      auth.Manager
+	conf         *config
+	plugin       *plugin.RevaPlugin
+	blockedUsers user.BlockedUsers
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -107,9 +112,10 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 	}
 
 	svc := &service{
-		conf:    c,
-		authmgr: authManager,
-		plugin:  plug,
+		conf:         c,
+		authmgr:      authManager,
+		plugin:       plug,
+		blockedUsers: user.NewBlockedUsersSet(c.blockedUsers),
 	}
 
 	return svc, nil
@@ -135,10 +141,16 @@ func (s *service) Authenticate(ctx context.Context, req *provider.AuthenticateRe
 	username := req.ClientId
 	password := req.ClientSecret
 
+	if s.blockedUsers.IsBlocked(username) {
+		return &provider.AuthenticateResponse{
+			Status: status.NewPermissionDenied(ctx, errtypes.PermissionDenied(""), "user is blocked"),
+		}, nil
+	}
+
 	u, scope, err := s.authmgr.Authenticate(ctx, username, password)
 	switch v := err.(type) {
 	case nil:
-		log.Info().Msgf("user %s authenticated", u.Id)
+		log.Info().Interface("userId", u.Id).Msg("user authenticated")
 		return &provider.AuthenticateResponse{
 			Status:     status.NewOK(ctx),
 			User:       u,
@@ -158,5 +170,4 @@ func (s *service) Authenticate(ctx context.Context, req *provider.AuthenticateRe
 			Status: status.NewUnauthenticated(ctx, err, "error authenticating user"),
 		}, nil
 	}
-
 }

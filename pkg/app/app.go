@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,10 +24,11 @@ import (
 	appprovider "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
 	registry "github.com/cs3org/go-cs3apis/cs3/app/registry/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 )
 
 // Registry is the interface that application registries implement
-// for discovering application providers
+// for discovering application providers.
 type Registry interface {
 	FindProviders(ctx context.Context, mimeType string) ([]*registry.ProviderInfo, error)
 	ListProviders(ctx context.Context) ([]*registry.ProviderInfo, error)
@@ -40,6 +41,6 @@ type Registry interface {
 // Provider is the interface that application providers implement
 // for interacting with external apps that serve the requested resource.
 type Provider interface {
-	GetAppURL(ctx context.Context, resource *provider.ResourceInfo, viewMode appprovider.OpenInAppRequest_ViewMode, token string) (*appprovider.OpenInAppURL, error)
+	GetAppURL(ctx context.Context, resource *provider.ResourceInfo, viewMode appprovider.OpenInAppRequest_ViewMode, token string, opaqueMap map[string]*typespb.OpaqueEntry, language string) (*appprovider.OpenInAppURL, error)
 	GetAppProviderInfo(ctx context.Context) (*registry.ProviderInfo, error)
 }

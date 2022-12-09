@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"path"
 	"strconv"
 	"strings"
@@ -39,11 +40,11 @@ import (
 )
 
 const (
-	// PerfMarkerResponseTime corresponds to the interval at which a performance marker is sent back to the TPC client
+	// PerfMarkerResponseTime corresponds to the interval at which a performance marker is sent back to the TPC client.
 	PerfMarkerResponseTime float64 = 5
 )
 
-// PerfResponse provides a single chunk of permormance marker response
+// PerfResponse provides a single chunk of permormance marker response.
 type PerfResponse struct {
 	Timestamp time.Time
 	Bytes     uint64
@@ -85,7 +86,6 @@ func (wc *WriteCounter) SendPerfMarker(size uint64) {
 }
 
 func (wc *WriteCounter) Write(p []byte) (int, error) {
-
 	n := len(p)
 	wc.Total += uint64(n)
 	NowTime := time.Now()
@@ -178,7 +178,7 @@ func (s *svc) performHTTPPull(ctx context.Context, client gateway.GatewayAPIClie
 	// get http client for remote
 	httpClient := &http.Client{}
 
-	req, err := http.NewRequest("GET", src, nil)
+	req, err := http.NewRequest(http.MethodGet, src, nil)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return err
@@ -240,7 +240,7 @@ func (s *svc) performHTTPPull(ctx context.Context, client gateway.GatewayAPIClie
 	tempReader := io.TeeReader(httpDownloadRes.Body, &wc)
 
 	// do Upload
-	httpUploadReq, err := rhttp.NewRequest(ctx, "PUT", uploadEP, tempReader)
+	httpUploadReq, err := rhttp.NewRequest(ctx, http.MethodPut, uploadEP, tempReader)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return err
@@ -362,7 +362,7 @@ func (s *svc) performHTTPPush(ctx context.Context, client gateway.GatewayAPIClie
 	}
 
 	// do download
-	httpDownloadReq, err := rhttp.NewRequest(ctx, "GET", downloadEP, nil)
+	httpDownloadReq, err := rhttp.NewRequest(ctx, http.MethodGet, downloadEP, nil)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return err
@@ -377,7 +377,7 @@ func (s *svc) performHTTPPush(ctx context.Context, client gateway.GatewayAPIClie
 	defer httpDownloadRes.Body.Close()
 	if httpDownloadRes.StatusCode != http.StatusOK {
 		w.WriteHeader(httpDownloadRes.StatusCode)
-		return fmt.Errorf("Remote PUT returned status code %d", httpDownloadRes.StatusCode)
+		return fmt.Errorf("remote PUT returned status code %d", httpDownloadRes.StatusCode)
 	}
 
 	// send performance markers periodically every PerfMarkerResponseTime (5 seconds unless configured)
@@ -387,15 +387,34 @@ func (s *svc) performHTTPPush(ctx context.Context, client gateway.GatewayAPIClie
 
 	// get http client for a remote call
 	httpClient := &http.Client{}
-	req, err := http.NewRequest("PUT", dst, tempReader)
+	req, err := http.NewRequest(http.MethodPut, dst, tempReader)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return err
 	}
 
-	// add authentication header and content length
-	bearerHeader := r.Header.Get(HeaderTransferAuth)
-	req.Header.Add("Authorization", bearerHeader)
+	// Check if there is userinfo to be found in the destination URI
+	// This should be the token to use in the HTTP push call
+	userInfo, err := s.extractUserInfo(ctx, dst)
+	if err != nil {
+		sublog.Debug().Msgf("tpc push: error: %v", err)
+	}
+	if len(userInfo) > 0 {
+		sublog.Debug().Msg("tpc push: userinfo part found in destination url, using userinfo as token for the HTTP push request authorization header")
+		if s.c.HTTPTpcPushAuthHeader == "x-access-token" {
+			req.Header.Add(s.c.HTTPTpcPushAuthHeader, userInfo)
+			sublog.Debug().Msgf("tpc push: using authentication scheme: %v", s.c.HTTPTpcPushAuthHeader)
+		} else { // Bearer is the default
+			req.Header.Add("Authorization", "Bearer "+userInfo)
+			sublog.Debug().Msg("tpc push: using authentication scheme: bearer")
+		}
+	} else {
+		sublog.Debug().Msg("tpc push: no userinfo part found in destination url, using token from the COPY request authorization header")
+		// add authorization header; single token tpc
+		bearerHeader := r.Header.Get(HeaderTransferAuth)
+		req.Header.Add("Authorization", bearerHeader)
+	}
+	// add content length
 	req.ContentLength = int64(srcInfo.GetSize())
 
 	// do Upload
@@ -412,4 +431,15 @@ func (s *svc) performHTTPPush(ctx context.Context, client gateway.GatewayAPIClie
 	}
 
 	return nil
+}
+
+// Extracts and returns the userinfo part of the specified target URL (https://[userinfo]@www.example.com:123/...path).
+// Returns an empty string if no userinfo part is found.
+func (s *svc) extractUserInfo(ctx context.Context, targetURL string) (string, error) {
+	parsedURL, err := url.Parse(targetURL)
+	if err != nil {
+		return "", errtypes.BadRequest("tpc: error extracting userinfo part - error parsing url: " + targetURL)
+	}
+
+	return parsedURL.User.String(), nil
 }

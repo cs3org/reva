@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -51,7 +51,6 @@ func (h *sharesHandler) init(c *Config) {
 
 func (h *sharesHandler) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-
 		switch r.Method {
 		case http.MethodPost:
 			h.createShare(w, r)
@@ -101,11 +100,13 @@ func (h *sharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if resource == "" || providerID == "" || owner == "" {
-		WriteError(w, r, APIErrorInvalidParameter, "missing details about resource to be shared", nil)
+		msg := fmt.Sprintf("missing details about resource to be shared (resource='%s', providerID='%s', owner='%s", resource, providerID, owner)
+		WriteError(w, r, APIErrorInvalidParameter, msg, nil)
 		return
 	}
 	if shareWith == "" || protocol["name"] == "" || meshProvider == "" {
-		WriteError(w, r, APIErrorInvalidParameter, "missing request parameters", nil)
+		msg := fmt.Sprintf("missing request parameters (shareWith='%s', protocol.name='%s', meshProvider='%s'", shareWith, protocol["name"], meshProvider)
+		WriteError(w, r, APIErrorInvalidParameter, msg, nil)
 		return
 	}
 
@@ -141,7 +142,7 @@ func (h *sharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var shareWithParts []string = strings.Split(shareWith, "@")
+	var shareWithParts = strings.Split(shareWith, "@")
 	userRes, err := gatewayClient.GetUser(ctx, &userpb.GetUserRequest{
 		UserId: &userpb.UserId{OpaqueId: shareWithParts[0]}, SkipFetchingUserGroups: true,
 	})
@@ -189,9 +190,13 @@ func (h *sharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	ownerParts := strings.Split(owner, "@")
+	if len(ownerParts) != 2 {
+		WriteError(w, r, APIErrorInvalidParameter, "owner should be opaqueId@webDAVHost", nil)
+	}
 	ownerID := &userpb.UserId{
-		OpaqueId: owner,
-		Idp:      meshProvider,
+		OpaqueId: ownerParts[0],
+		Idp:      ownerParts[1],
 		Type:     userpb.UserType_USER_TYPE_PRIMARY,
 	}
 	createShareReq := &ocmcore.CreateOCMCoreShareRequest{

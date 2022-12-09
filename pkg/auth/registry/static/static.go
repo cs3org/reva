@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -50,7 +50,7 @@ type reg struct {
 }
 
 func (r *reg) ListProviders(ctx context.Context) ([]*registrypb.ProviderInfo, error) {
-	providers := []*registrypb.ProviderInfo{}
+	providers := make([]*registrypb.ProviderInfo, len(r.rules))
 	for k, v := range r.rules {
 		providers = append(providers, &registrypb.ProviderInfo{
 			ProviderType: k,
@@ -61,13 +61,11 @@ func (r *reg) ListProviders(ctx context.Context) ([]*registrypb.ProviderInfo, er
 }
 
 func (r *reg) GetProvider(ctx context.Context, authType string) (*registrypb.ProviderInfo, error) {
-	for k, v := range r.rules {
-		if k == authType {
-			return &registrypb.ProviderInfo{
-				ProviderType: k,
-				Address:      v,
-			}, nil
-		}
+	if address, ok := r.rules[authType]; ok {
+		return &registrypb.ProviderInfo{
+			ProviderType: authType,
+			Address:      address,
+		}, nil
 	}
 	return nil, errtypes.NotFound("static: auth type not found: " + authType)
 }

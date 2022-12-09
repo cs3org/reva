@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -72,9 +72,8 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 	return c, nil
 }
 
-// New creates a new OCM invite manager svc
+// New creates a new OCM invite manager svc.
 func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
-
 	c, err := parseConfig(m)
 	if err != nil {
 		return nil, err
@@ -119,7 +118,7 @@ func (s *service) ForwardInvite(ctx context.Context, req *invitepb.ForwardInvite
 	err := s.im.ForwardInvite(ctx, req.InviteToken, req.OriginSystemProvider)
 	if err != nil {
 		return &invitepb.ForwardInviteResponse{
-			Status: status.NewInternal(ctx, err, "error forwarding invite"),
+			Status: status.NewInternal(ctx, err, "error forwarding invite:"+err.Error()),
 		}, nil
 	}
 
@@ -159,7 +158,7 @@ func (s *service) FindAcceptedUsers(ctx context.Context, req *invitepb.FindAccep
 	acceptedUsers, err := s.im.FindAcceptedUsers(ctx, req.Filter)
 	if err != nil {
 		return &invitepb.FindAcceptedUsersResponse{
-			Status: status.NewInternal(ctx, err, "error finding remote users"),
+			Status: status.NewInternal(ctx, err, "error finding remote users: "+err.Error()),
 		}, nil
 	}
 

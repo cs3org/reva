@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,8 +22,10 @@ package nextcloud
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
@@ -47,14 +49,14 @@ type Manager struct {
 	endPoint     string
 }
 
-// AuthManagerConfig contains config for a Nextcloud-based AuthManager
+// AuthManagerConfig contains config for a Nextcloud-based AuthManager.
 type AuthManagerConfig struct {
 	EndPoint     string `mapstructure:"endpoint" docs:";The Nextcloud backend endpoint for user check"`
 	SharedSecret string `mapstructure:"shared_secret"`
 	MockHTTP     bool   `mapstructure:"mock_http"`
 }
 
-// Action describes a REST request to forward to the Nextcloud backend
+// Action describes a REST request to forward to the Nextcloud backend.
 type Action struct {
 	verb     string
 	username string
@@ -84,7 +86,7 @@ func New(m map[string]interface{}) (auth.Manager, error) {
 	return NewAuthManager(c)
 }
 
-// NewAuthManager returns a new Nextcloud-based AuthManager
+// NewAuthManager returns a new Nextcloud-based AuthManager.
 func NewAuthManager(c *AuthManagerConfig) (*Manager, error) {
 	var client *http.Client
 	if c.MockHTTP {
@@ -113,7 +115,7 @@ func (am *Manager) Configure(ml map[string]interface{}) error {
 	return nil
 }
 
-// SetHTTPClient sets the HTTP client
+// SetHTTPClient sets the HTTP client.
 func (am *Manager) SetHTTPClient(c *http.Client) {
 	am.client = c
 }
@@ -141,6 +143,9 @@ func (am *Manager) do(ctx context.Context, a Action) (int, []byte, error) {
 	}
 
 	log.Info().Msgf("am.do response %d %s", resp.StatusCode, body)
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		return 0, nil, fmt.Errorf("Unexpected response code from EFSS API: " + strconv.Itoa(resp.StatusCode))
+	}
 	return resp.StatusCode, body, nil
 }
 

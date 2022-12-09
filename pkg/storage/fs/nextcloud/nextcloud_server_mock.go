@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,7 +29,7 @@ import (
 )
 
 // Response contains data for the Nextcloud mock server to respond
-// and to switch to a new server state
+// and to switch to a new server state.
 type Response struct {
 	code           int
 	body           string
@@ -124,6 +124,8 @@ var responses = map[string]Response{
 
 	`POST /apps/sciencemesh/~f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c/api/storage/Move {"oldRef":{"path":"/subdir"},"newRef":{"path":"/new_subdir"}}`: {200, ``, serverStateEmpty},
 
+	`POST /apps/sciencemesh/~f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c/api/storage/RemoveGrant {"ref":{"path":"/subdir"},"g":{"grantee":{"type":1,"Id":{"UserId":{"idp":"some-idp","opaque_id":"some-opaque-id","type":1}}},"permissions":{"add_grant":true,"create_container":true,"delete":true,"get_path":true,"get_quota":true,"initiate_file_download":true,"initiate_file_upload":true,"list_grants":true,"list_container":true,"list_file_versions":true,"list_recycle":true,"move":true,"remove_grant":true,"purge_recycle":true,"restore_file_version":true,"restore_recycle_item":true,"stat":true,"update_grant":true}}} EMPTY`:       {200, ``, serverStateGrantRemoved},
+	`POST /apps/sciencemesh/~f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c/api/storage/RemoveGrant {"ref":{"path":"/subdir"},"g":{"grantee":{"type":1,"Id":{"UserId":{"idp":"some-idp","opaque_id":"some-opaque-id","type":1}}},"permissions":{"add_grant":true,"create_container":true,"delete":true,"get_path":true,"get_quota":true,"initiate_file_download":true,"initiate_file_upload":true,"list_grants":true,"list_container":true,"list_file_versions":true,"list_recycle":true,"move":true,"remove_grant":true,"purge_recycle":true,"restore_file_version":true,"restore_recycle_item":true,"stat":true,"update_grant":true}}} GRANT-ADDED`: {200, ``, serverStateGrantRemoved},
 	`POST /apps/sciencemesh/~f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c/api/storage/RemoveGrant {"path":"/subdir"} GRANT-ADDED`: {200, ``, serverStateGrantRemoved},
 
 	`POST /apps/sciencemesh/~f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c/api/storage/RestoreRecycleItem null`:                                                                              {200, ``, serverStateSubdir},
@@ -147,7 +149,7 @@ var responses = map[string]Response{
 	`POST /apps/sciencemesh/~tester/api/storage/ListFolder {"ref":{"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"/some"},"mdKeys":["val1","val2","val3"]}`:                                                                                    {200, `[{"opaque":{},"type":1,"id":{"opaque_id":"fileid-/some/path"},"checksum":{},"etag":"deadbeef","mime_type":"text/plain","mtime":{"seconds":1234567890},"path":"/some/path","permission_set":{},"size":12345,"canonical_metadata":{},"arbitrary_metadata":{"metadata":{"da":"ta","some":"arbi","trary":"meta"}}}]`, serverStateEmpty},
 	// `POST /apps/sciencemesh/~tester/api/storage/ListFolder {"ref":{"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"/some"},"mdKeys":["val1","val2","val3"]}`:                                                                                    {200, `[{"opaque":{},"type":1,"id":{"opaque_id":"fileid-/path"},"checksum":{},"etag":"deadbeef","mime_type":"text/plain","mtime":{"seconds":1234567890},"path":"/path","permission_set":{},"size":12345,"canonical_metadata":{},"arbitrary_metadata":{"metadata":{"da":"ta","some":"arbi","trary":"meta"}}}]`, serverStateEmpty},
 	`POST /apps/sciencemesh/~tester/api/storage/InitiateUpload {"ref":{"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"/some/path"},"uploadLength":12345,"metadata":{"key1":"val1","key2":"val2","key3":"val3"}}`: {200, `{ "not":"sure", "what": "should be", "returned": "here" }`, serverStateEmpty},
-	`PUT /apps/sciencemesh/~tester/api/storage/Upload/some/file/path.txt shiny!`:                                                                                                                                                            {200, ``, serverStateEmpty},
+	`PUT /apps/sciencemesh/~tester/api/storage/Upload/home/some/file/path.txt shiny!`:                                                                                                                                                       {200, ``, serverStateEmpty},
 	`GET /apps/sciencemesh/~tester/api/storage/Download/some/file/path.txt `:                                                                                                                                                                {200, `the contents of the file`, serverStateEmpty},
 	`POST /apps/sciencemesh/~tester/api/storage/ListRevisions {"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"/some/path"}`:                                                                                      {200, `[{"opaque":{"map":{"some":{"value":"ZGF0YQ=="}}},"key":"version-12","size":12345,"mtime":1234567890,"etag":"deadb00f"},{"opaque":{"map":{"different":{"value":"c3R1ZmY="}}},"key":"asdf","size":12345,"mtime":1234567890,"etag":"deadbeef"}]`, serverStateEmpty},
 	`GET /apps/sciencemesh/~tester/api/storage/DownloadRevision/some%2Frevision/some/file/path.txt `:                                                                                                                                        {200, `the contents of that revision`, serverStateEmpty},
@@ -165,13 +167,13 @@ var responses = map[string]Response{
 	`POST /apps/sciencemesh/~tester/api/storage/GetQuota `:                                                                             {200, `{"totalBytes":456,"usedBytes":123}`, serverStateEmpty},
 	`POST /apps/sciencemesh/~tester/api/storage/CreateReference {"path":"some/file/path.txt","url":"http://bing.com/search?q=dotnet"}`: {200, ``, serverStateEmpty},
 	`POST /apps/sciencemesh/~tester/api/storage/Shutdown `:                                                                             {200, ``, serverStateEmpty},
-	`POST /apps/sciencemesh/~tester/api/storage/SetArbitraryMetadata {"ref":{"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"some/file/path.txt"},"md":{"metadata":{"arbi":"trary","meta":"data"}}}`: {200, ``, serverStateEmpty},
-	`POST /apps/sciencemesh/~tester/api/storage/UnsetArbitraryMetadata {"ref":{"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"some/file/path.txt"},"keys":["arbi"]}`:                                {200, ``, serverStateEmpty},
-	`POST /apps/sciencemesh/~tester/api/storage/ListStorageSpaces [{"type":3,"Term":{"Owner":{"idp":"0.0.0.0:19000","opaque_id":"f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c","type":1}}},{"type":2,"Term":{"Id":{"opaque_id":"opaque-id"}}},{"type":4,"Term":{"SpaceType":"home"}}]`: {200, `	[{"opaque":{"map":{"bar":{"value":"c2FtYQ=="},"foo":{"value":"c2FtYQ=="}}},"id":{"opaque_id":"some-opaque-storage-space-id"},"owner":{"id":{"idp":"some-idp","opaque_id":"some-opaque-user-id","type":1}},"root":{"storage_id":"some-storage-ud","opaque_id":"some-opaque-root-id"},"name":"My Storage Space","quota":{"quota_max_bytes":456,"quota_max_files":123},"space_type":"home","mtime":{"seconds":1234567890}}]`, serverStateEmpty},
+	`POST /apps/sciencemesh/~tester/api/storage/SetArbitraryMetadata {"ref":{"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"some/file/path.txt"},"md":{"metadata":{"arbi":"trary","meta":"data"}}}`:                                                                                            {200, ``, serverStateEmpty},
+	`POST /apps/sciencemesh/~tester/api/storage/UnsetArbitraryMetadata {"ref":{"resource_id":{"storage_id":"storage-id","opaque_id":"opaque-id"},"path":"some/file/path.txt"},"keys":["arbi"]}`:                                                                                                                           {200, ``, serverStateEmpty},
+	`POST /apps/sciencemesh/~tester/api/storage/ListStorageSpaces [{"type":3,"Term":{"Owner":{"idp":"0.0.0.0:19000","opaque_id":"f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c","type":1}}},{"type":2,"Term":{"Id":{"opaque_id":"opaque-id"}}},{"type":4,"Term":{"SpaceType":"home"}}]`:                                            {200, `	[{"opaque":{"map":{"bar":{"value":"c2FtYQ=="},"foo":{"value":"c2FtYQ=="}}},"id":{"opaque_id":"some-opaque-storage-space-id"},"owner":{"id":{"idp":"some-idp","opaque_id":"some-opaque-user-id","type":1}},"root":{"storage_id":"some-storage-ud","opaque_id":"some-opaque-root-id"},"name":"My Storage Space","quota":{"quota_max_bytes":456,"quota_max_files":123},"space_type":"home","mtime":{"seconds":1234567890}}]`, serverStateEmpty},
 	`POST /apps/sciencemesh/~tester/api/storage/CreateStorageSpace {"opaque":{"map":{"bar":{"value":"c2FtYQ=="},"foo":{"value":"c2FtYQ=="}}},"owner":{"id":{"idp":"some-idp","opaque_id":"some-opaque-user-id","type":1}},"type":"home","name":"My Storage Space","quota":{"quota_max_bytes":456,"quota_max_files":123}}`: {200, `{"storage_space":{"opaque":{"map":{"bar":{"value":"c2FtYQ=="},"foo":{"value":"c2FtYQ=="}}},"id":{"opaque_id":"some-opaque-storage-space-id"},"owner":{"id":{"idp":"some-idp","opaque_id":"some-opaque-user-id","type":1}},"root":{"storage_id":"some-storage-ud","opaque_id":"some-opaque-root-id"},"name":"My Storage Space","quota":{"quota_max_bytes":456,"quota_max_files":123},"space_type":"home","mtime":{"seconds":1234567890}}}`, serverStateEmpty},
 }
 
-// GetNextcloudServerMock returns a handler that pretends to be a remote Nextcloud server
+// GetNextcloudServerMock returns a handler that pretends to be a remote Nextcloud server.
 func GetNextcloudServerMock(called *[]string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		buf := new(strings.Builder)
@@ -180,6 +182,7 @@ func GetNextcloudServerMock(called *[]string) http.Handler {
 			panic("Error reading response into buffer")
 		}
 		var key = fmt.Sprintf("%s %s %s", r.Method, r.URL, buf.String())
+		fmt.Printf("Server mock is asked for '%s'\n", key)
 		*called = append(*called, key)
 		response := responses[key]
 		if (response == Response{}) {
@@ -187,7 +190,7 @@ func GetNextcloudServerMock(called *[]string) http.Handler {
 			response = responses[key]
 		}
 		if (response == Response{}) {
-			fmt.Printf("%s %s %s %s\n", r.Method, r.URL, buf.String(), serverState)
+			fmt.Printf("server mock cannot serve '%s %s %s %s'\n", r.Method, r.URL, buf.String(), serverState)
 			response = Response{500, fmt.Sprintf("response not defined! %s", key), serverStateEmpty}
 		}
 		serverState = responses[key].newServerState

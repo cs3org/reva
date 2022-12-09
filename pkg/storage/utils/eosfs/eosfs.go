@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,18 +20,19 @@ package eosfs
 
 import (
 	"context"
+	b64 "encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/url"
 	"os"
+	"os/exec"
 	"path"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
-
-	b64 "encoding/base64"
 
 	"github.com/ReneKroon/ttlcache/v2"
 	"github.com/bluele/gcache"
@@ -62,6 +63,7 @@ import (
 
 const (
 	refTargetAttrKey = "reva.target"
+	lwShareAttrKey   = "reva.lwshare"
 )
 
 const (
@@ -71,13 +73,13 @@ const (
 	UserAttr
 )
 
-// LockPayloadKey is the key in the xattr for lock payload
+// LockPayloadKey is the key in the xattr for lock payload.
 const LockPayloadKey = "reva.lock.payload"
 
-// LockExpirationKey is the key in the xattr for lock expiration
+// LockExpirationKey is the key in the xattr for lock expiration.
 const LockExpirationKey = "reva.lock.expiration"
 
-// LockTypeKey is the key in the xattr for lock payload
+// LockTypeKey is the key in the xattr for lock payload.
 const LockTypeKey = "reva.lock.type"
 
 var hiddenReg = regexp.MustCompile(`\.sys\..#.`)
@@ -98,7 +100,7 @@ func (c *Config) init() {
 	}
 
 	if c.DefaultQuotaBytes == 0 {
-		c.DefaultQuotaBytes = 1000000000000 // 1 TB
+		c.DefaultQuotaBytes = 2000000000000 // 1 TB logical
 	}
 	if c.DefaultQuotaFiles == 0 {
 		c.DefaultQuotaFiles = 1000000 // 1 Million
@@ -158,7 +160,7 @@ type eosfs struct {
 	tokenCache     gcache.Cache
 }
 
-// NewEOSFS returns a storage.FS interface implementation that connects to an EOS instance
+// NewEOSFS returns a storage.FS interface implementation that connects to an EOS instance.
 func NewEOSFS(c *Config) (storage.FS, error) {
 	c.init()
 
@@ -540,7 +542,6 @@ func (fs *eosfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Referen
 		if err != nil {
 			return errors.Wrap(err, "eosfs: error setting xattr in eos driver")
 		}
-
 	}
 	return nil
 }
@@ -569,7 +570,6 @@ func (fs *eosfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Refer
 		if err != nil {
 			return errors.Wrap(err, "eosfs: error unsetting xattr in eos driver")
 		}
-
 	}
 	return nil
 }
@@ -625,7 +625,6 @@ func (fs *eosfs) getLockContent(ctx context.Context, auth eosclient.Authorizatio
 	l.Expiration = expiration
 
 	return l, nil
-
 }
 
 func (fs *eosfs) removeLockAttrs(ctx context.Context, auth eosclient.Authorization, path string) error {
@@ -693,7 +692,7 @@ func (fs *eosfs) getLock(ctx context.Context, auth eosclient.Authorization, user
 	return l, nil
 }
 
-// GetLock returns an existing lock on the given reference
+// GetLock returns an existing lock on the given reference.
 func (fs *eosfs) GetLock(ctx context.Context, ref *provider.Reference) (*provider.Lock, error) {
 	path, err := fs.resolve(ctx, ref)
 	if err != nil {
@@ -713,7 +712,12 @@ func (fs *eosfs) GetLock(ctx context.Context, ref *provider.Reference) (*provide
 	return fs.getLock(ctx, auth, user, path, ref)
 }
 
-func (fs *eosfs) setLock(ctx context.Context, auth eosclient.Authorization, lock *provider.Lock, path string, check bool) error {
+func (fs *eosfs) setLock(ctx context.Context, lock *provider.Lock, path string, check bool) error {
+	auth, err := fs.getRootAuth(ctx)
+	if err != nil {
+		return err
+	}
+
 	encodedLock, err := encodeLock(lock)
 	if err != nil {
 		return errors.Wrap(err, "eosfs: error encoding lock")
@@ -756,7 +760,7 @@ func (fs *eosfs) setLock(ctx context.Context, auth eosclient.Authorization, lock
 	return nil
 }
 
-// SetLock puts a lock on the given reference
+// SetLock puts a lock on the given reference.
 func (fs *eosfs) SetLock(ctx context.Context, ref *provider.Reference, l *provider.Lock) error {
 	if l.Type == provider.LockType_LOCK_TYPE_SHARED {
 		return errtypes.NotSupported("shared lock not yet implemented")
@@ -813,7 +817,7 @@ func (fs *eosfs) SetLock(ctx context.Context, ref *provider.Reference, l *provid
 		}
 	}
 
-	return fs.setLock(ctx, auth, l, path, true)
+	return fs.setLock(ctx, l, path, true)
 }
 
 func (fs *eosfs) getUserFromID(ctx context.Context, userID *userpb.UserId) (*userpb.User, error) {
@@ -868,10 +872,8 @@ func encodeLock(l *provider.Lock) (string, error) {
 	return b64.StdEncoding.EncodeToString(data), nil
 }
 
-// RefreshLock refreshes an existing lock on the given reference
-func (fs *eosfs) RefreshLock(ctx context.Context, ref *provider.Reference, newLock *provider.Lock) error {
-	// TODO (gdelmont): check if the new lock is already expired?
-
+// RefreshLock refreshes an existing lock on the given reference.
+func (fs *eosfs) RefreshLock(ctx context.Context, ref *provider.Reference, newLock *provider.Lock, existingLockID string) error {
 	if newLock.Type == provider.LockType_LOCK_TYPE_SHARED {
 		return errtypes.NotSupported("shared lock not yet implemented")
 	}
@@ -897,6 +899,10 @@ func (fs *eosfs) RefreshLock(ctx context.Context, ref *provider.Reference, newLo
 		return errtypes.BadRequest("caller does not hold the lock")
 	}
 
+	if existingLockID != "" && oldLock.LockId != existingLockID {
+		return errtypes.BadRequest("mismatching existing lock id")
+	}
+
 	path, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return errors.Wrap(err, "eosfs: error resolving reference")
@@ -913,13 +919,7 @@ func (fs *eosfs) RefreshLock(ctx context.Context, ref *provider.Reference, newLo
 		return errtypes.PermissionDenied(fmt.Sprintf("user %s has not write access on resource", user.Username))
 	}
 
-	// set the xattr with the new value
-	auth, err := fs.getUserAuth(ctx, user, path)
-	if err != nil {
-		return errors.Wrap(err, "eosfs: error getting uid and gid for user")
-	}
-
-	return fs.setLock(ctx, auth, newLock, path, false)
+	return fs.setLock(ctx, newLock, path, false)
 }
 
 func sameHolder(l1, l2 *provider.Lock) bool {
@@ -933,7 +933,7 @@ func sameHolder(l1, l2 *provider.Lock) bool {
 	return same
 }
 
-// Unlock removes an existing lock from the given reference
+// Unlock removes an existing lock from the given reference.
 func (fs *eosfs) Unlock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
 	if lock.Type == provider.LockType_LOCK_TYPE_SHARED {
 		return errtypes.NotSupported("shared lock not yet implemented")
@@ -980,7 +980,7 @@ func (fs *eosfs) Unlock(ctx context.Context, ref *provider.Reference, lock *prov
 	}
 	path = fs.wrap(ctx, path)
 
-	auth, err := fs.getUserAuth(ctx, user, path)
+	auth, err := fs.getRootAuth(ctx)
 	if err != nil {
 		return errors.Wrap(err, "eosfs: error getting uid and gid for user")
 	}
@@ -998,20 +998,32 @@ func (fs *eosfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provi
 		return err
 	}
 
-	// position where put the ACL
-	position := eosclient.StartPosition
-
 	eosACL, err := fs.getEosACL(ctx, g)
 	if err != nil {
 		return err
 	}
 
-	err = fs.c.AddACL(ctx, auth, rootAuth, fn, position, eosACL)
+	if eosACL.Type == acl.TypeLightweight {
+		// The ACLs for a lightweight are not understandable by EOS
+		// directly, but only from reva. So we have to store them
+		// in an xattr named sys.reva.lwshare.<lw_account>, with value
+		// the permissions.
+		attr := &eosclient.Attribute{
+			Type: SystemAttr,
+			Key:  fmt.Sprintf("%s.%s", lwShareAttrKey, eosACL.Qualifier),
+			Val:  eosACL.Permissions,
+		}
+		if err := fs.c.SetAttr(ctx, rootAuth, attr, false, true, fn); err != nil {
+			return errors.Wrap(err, "eosfs: error adding acl for lightweight account")
+		}
+		return nil
+	}
+
+	err = fs.c.AddACL(ctx, auth, rootAuth, fn, eosclient.StartPosition, eosACL)
 	if err != nil {
 		return errors.Wrap(err, "eosfs: error adding acl")
 	}
 	return nil
-
 }
 
 func (fs *eosfs) DenyGrant(ctx context.Context, ref *provider.Reference, g *provider.Grantee) error {
@@ -1084,35 +1096,6 @@ func (fs *eosfs) getEosACL(ctx context.Context, g *provider.Grant) (*acl.Entry, 
 }
 
 func (fs *eosfs) RemoveGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
-	eosACLType, err := grants.GetACLType(g.Grantee.Type)
-	if err != nil {
-		return err
-	}
-
-	var recipient string
-	if eosACLType == acl.TypeUser {
-		// if the grantee is a lightweight account, we need to set it accordingly
-		if g.Grantee.GetUserId().Type == userpb.UserType_USER_TYPE_LIGHTWEIGHT ||
-			g.Grantee.GetUserId().Type == userpb.UserType_USER_TYPE_FEDERATED {
-			eosACLType = acl.TypeLightweight
-			recipient = g.Grantee.GetUserId().OpaqueId
-		} else {
-			// since EOS Citrine ACLs are stored with uid, we need to convert username to uid
-			auth, err := fs.getUIDGateway(ctx, g.Grantee.GetUserId())
-			if err != nil {
-				return err
-			}
-			recipient = auth.Role.UID
-		}
-	} else {
-		recipient = g.Grantee.GetGroupId().OpaqueId
-	}
-
-	eosACL := &acl.Entry{
-		Qualifier: recipient,
-		Type:      eosACLType,
-	}
-
 	fn, auth, err := fs.resolveRefAndGetAuth(ctx, ref)
 	if err != nil {
 		return err
@@ -1121,6 +1104,19 @@ func (fs *eosfs) RemoveGrant(ctx context.Context, ref *provider.Reference, g *pr
 	rootAuth, err := fs.getRootAuth(ctx)
 	if err != nil {
 		return err
+	}
+
+	eosACL, err := fs.getEosACL(ctx, g)
+	if err != nil {
+		return err
+	}
+
+	if eosACL.Type == acl.TypeLightweight {
+		attr := &eosclient.Attribute{}
+		if err := fs.c.UnsetAttr(ctx, rootAuth, attr, true, fn); err != nil {
+			return errors.Wrap(err, "eosfs: error removing acl for lightweight account")
+		}
+		return nil
 	}
 
 	err = fs.c.RemoveACL(ctx, auth, rootAuth, fn, eosACL)
@@ -1134,19 +1130,9 @@ func (fs *eosfs) UpdateGrant(ctx context.Context, ref *provider.Reference, g *pr
 	return fs.AddGrant(ctx, ref, g)
 }
 
-func (fs *eosfs) ListGrants(ctx context.Context, ref *provider.Reference) ([]*provider.Grant, error) {
-	fn, auth, err := fs.resolveRefAndGetAuth(ctx, ref)
-	if err != nil {
-		return nil, err
-	}
-
-	acls, err := fs.c.ListACLs(ctx, auth, fn)
-	if err != nil {
-		return nil, err
-	}
-
-	grantList := []*provider.Grant{}
-	for _, a := range acls {
+func (fs *eosfs) convertACLsToGrants(ctx context.Context, acls *acl.ACLs) ([]*provider.Grant, error) {
+	res := make([]*provider.Grant, 0, len(acls.Entries))
+	for _, a := range acls.Entries {
 		var grantee *provider.Grantee
 		switch {
 		case a.Type == acl.TypeUser:
@@ -1160,23 +1146,73 @@ func (fs *eosfs) ListGrants(ctx context.Context, ref *provider.Reference) ([]*pr
 				Id:   &provider.Grantee_UserId{UserId: qualifier},
 				Type: grants.GetGranteeType(a.Type),
 			}
-		case a.Type == acl.TypeLightweight:
-			a.Type = acl.TypeUser
-			grantee = &provider.Grantee{
-				Id:   &provider.Grantee_UserId{UserId: &userpb.UserId{OpaqueId: a.Qualifier}},
-				Type: grants.GetGranteeType(a.Type),
-			}
-		default:
+		case a.Type == acl.TypeGroup:
 			grantee = &provider.Grantee{
 				Id:   &provider.Grantee_GroupId{GroupId: &grouppb.GroupId{OpaqueId: a.Qualifier}},
 				Type: grants.GetGranteeType(a.Type),
 			}
+		default:
+			return nil, errtypes.InternalError(fmt.Sprintf("eosfs: acl type %s not recognised", a.Type))
 		}
-
-		grantList = append(grantList, &provider.Grant{
+		res = append(res, &provider.Grant{
 			Grantee:     grantee,
 			Permissions: grants.GetGrantPermissionSet(a.Permissions),
 		})
+	}
+	return res, nil
+}
+
+func isSysACLs(a *eosclient.Attribute) bool {
+	return a.Type == SystemAttr && a.Key == "sys"
+}
+
+func isLightweightACL(a *eosclient.Attribute) bool {
+	return a.Type == SystemAttr && strings.HasPrefix(a.Key, lwShareAttrKey)
+}
+
+func parseLightweightACL(a *eosclient.Attribute) *provider.Grant {
+	qualifier := strings.TrimPrefix(a.Key, lwShareAttrKey+".")
+	return &provider.Grant{
+		Grantee: &provider.Grantee{
+			Id: &provider.Grantee_UserId{UserId: &userpb.UserId{
+				// FIXME: idp missing, maybe get the user_id from the user provider?
+				Type:     userpb.UserType_USER_TYPE_LIGHTWEIGHT,
+				OpaqueId: qualifier,
+			}},
+			Type: grants.GetGranteeType(acl.TypeLightweight),
+		},
+		Permissions: grants.GetGrantPermissionSet(a.Val),
+	}
+}
+
+func (fs *eosfs) ListGrants(ctx context.Context, ref *provider.Reference) ([]*provider.Grant, error) {
+	fn, auth, err := fs.resolveRefAndGetAuth(ctx, ref)
+	if err != nil {
+		return nil, err
+	}
+
+	attrs, err := fs.c.GetAttrs(ctx, auth, fn)
+	if err != nil {
+		return nil, err
+	}
+
+	grantList := []*provider.Grant{}
+	for _, a := range attrs {
+		switch {
+		case isSysACLs(a):
+			// EOS ACLs
+			acls, err := acl.Parse(a.Val, acl.ShortTextForm)
+			if err != nil {
+				return nil, err
+			}
+			grants, err := fs.convertACLsToGrants(ctx, acls)
+			if err != nil {
+				return nil, err
+			}
+			grantList = append(grantList, grants...)
+		case isLightweightACL(a):
+			grantList = append(grantList, parseLightweightACL(a))
+		}
 	}
 
 	return grantList, nil
@@ -1362,7 +1398,7 @@ func (fs *eosfs) listShareFolderRoot(ctx context.Context, p string) (finfos []*p
 	return finfos, nil
 }
 
-// CreateStorageSpace creates a storage space
+// CreateStorageSpace creates a storage space.
 func (fs *eosfs) CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error) {
 	return nil, fmt.Errorf("unimplemented: CreateStorageSpace")
 }
@@ -1478,7 +1514,13 @@ func (fs *eosfs) createNominalHome(ctx context.Context) error {
 		return err
 	}
 
-	return err
+	if fs.conf.EnablePostCreateHomeHook {
+		if err := fs.runPostCreateHomeHook(ctx); err != nil {
+			return errors.Wrap(err, "eosfs: error running post create home hook")
+		}
+	}
+
+	return nil
 }
 
 func (fs *eosfs) CreateHome(ctx context.Context) error {
@@ -1495,6 +1537,11 @@ func (fs *eosfs) CreateHome(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+func (fs *eosfs) runPostCreateHomeHook(ctx context.Context) error {
+	user := ctxpkg.ContextMustGetUser(ctx)
+	return exec.Command(fs.conf.OnPostCreateHomeHook, user.Username).Run()
 }
 
 func (fs *eosfs) createUserDir(ctx context.Context, u *userpb.User, path string, recursiveAttr bool) error {
@@ -1584,7 +1631,7 @@ func (fs *eosfs) CreateDir(ctx context.Context, ref *provider.Reference) error {
 	return fs.c.CreateDir(ctx, auth, fn)
 }
 
-// TouchFile as defined in the storage.FS interface
+// TouchFile as defined in the storage.FS interface.
 func (fs *eosfs) TouchFile(ctx context.Context, ref *provider.Reference) error {
 	log := appctx.GetLogger(ctx)
 
@@ -1926,7 +1973,6 @@ func (fs *eosfs) ListRecycle(ctx context.Context, basePath, key, relativePath st
 			if hiddenReg.MatchString(base) {
 				continue
 			}
-
 		}
 		if recycleItem, err := fs.convertToRecycleItem(ctx, entry); err == nil {
 			recycleEntries = append(recycleEntries, recycleItem)
@@ -1973,7 +2019,7 @@ func (fs *eosfs) ListStorageSpaces(ctx context.Context, filter []*provider.ListS
 	return nil, errtypes.NotSupported("list storage spaces")
 }
 
-// UpdateStorageSpace updates a storage space
+// UpdateStorageSpace updates a storage space.
 func (fs *eosfs) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
 	return nil, errtypes.NotSupported("update storage space")
 }
@@ -2030,7 +2076,7 @@ func (fs *eosfs) convertToFileReference(ctx context.Context, eosFileInfo *eoscli
 	return info, nil
 }
 
-// permissionSet returns the permission set for the current user
+// permissionSet returns the permission set for the current user.
 func (fs *eosfs) permissionSet(ctx context.Context, eosFileInfo *eosclient.FileInfo, owner *userpb.UserId) *provider.ResourcePermissions {
 	u, ok := ctxpkg.ContextGetUser(ctx)
 	if !ok || u.Id == nil {
@@ -2039,23 +2085,17 @@ func (fs *eosfs) permissionSet(ctx context.Context, eosFileInfo *eosclient.FileI
 		}
 	}
 
-	if owner != nil && u.Id.OpaqueId == owner.OpaqueId && u.Id.Idp == owner.Idp {
-		// The logged-in user is the owner but we may be impersonating them
-		// on behalf of a public share accessor.
-
-		if u.Opaque != nil {
-			if publicShare, ok := u.Opaque.Map["public-share-role"]; ok {
-				if string(publicShare.Value) == "editor" {
-					return conversions.NewEditorRole().CS3ResourcePermissions()
-				} else if string(publicShare.Value) == "uploader" {
-					return conversions.NewUploaderRole().CS3ResourcePermissions()
-				}
-				// Default to viewer role
-				return conversions.NewViewerRole().CS3ResourcePermissions()
-			}
+	if role, ok := utils.HasPublicShareRole(u); ok {
+		switch role {
+		case "editor":
+			return conversions.NewEditorRole().CS3ResourcePermissions()
+		case "uploader":
+			return conversions.NewUploaderRole().CS3ResourcePermissions()
 		}
+		return conversions.NewViewerRole().CS3ResourcePermissions()
+	}
 
-		// owner has all permissions
+	if utils.UserEqual(u.Id, owner) {
 		return conversions.NewManagerRole().CS3ResourcePermissions()
 	}
 
@@ -2073,23 +2113,69 @@ func (fs *eosfs) permissionSet(ctx context.Context, eosFileInfo *eosclient.FileI
 	}
 	var perm provider.ResourcePermissions
 
-	for _, e := range eosFileInfo.SysACL.Entries {
-		var userInGroup bool
-		if e.Type == acl.TypeGroup {
-			for _, g := range u.Groups {
-				if e.Qualifier == g {
-					userInGroup = true
-					break
-				}
-			}
+	// as the lightweight acl are stored as normal attrs,
+	// we need to add them in the sysacl entries
+
+	for k, v := range eosFileInfo.Attrs {
+		if e, ok := attrForLightweightACL(k, v); ok {
+			eosFileInfo.SysACL.Entries = append(eosFileInfo.SysACL.Entries, e)
 		}
+	}
+
+	userGroupsSet := makeSet(u.Groups)
+
+	for _, e := range eosFileInfo.SysACL.Entries {
+		userInGroup := e.Type == acl.TypeGroup && userGroupsSet.in(strings.ToLower(e.Qualifier))
 
 		if (e.Type == acl.TypeUser && e.Qualifier == auth.Role.UID) || (e.Type == acl.TypeLightweight && e.Qualifier == u.Id.OpaqueId) || userInGroup {
 			mergePermissions(&perm, grants.GetGrantPermissionSet(e.Permissions))
 		}
 	}
 
+	// for normal files, we need to inherit also the lw acls
+	// from the parent folder, as these, when creating a new
+	// file are not inherited
+
+	if utils.UserIsLightweight(u) && !eosFileInfo.IsDir {
+		if parentPath, err := fs.unwrap(ctx, filepath.Dir(eosFileInfo.File)); err == nil {
+			if parent, err := fs.GetMD(ctx, &provider.Reference{Path: parentPath}, nil); err == nil {
+				mergePermissions(&perm, parent.PermissionSet)
+			}
+		}
+	}
+
 	return &perm
+}
+
+func attrForLightweightACL(k, v string) (*acl.Entry, bool) {
+	ok := strings.HasPrefix(k, "sys."+lwShareAttrKey)
+	if !ok {
+		return nil, false
+	}
+
+	qualifier := strings.TrimPrefix(k, fmt.Sprintf("sys.%s.", lwShareAttrKey))
+
+	attr := &acl.Entry{
+		Type:        acl.TypeLightweight,
+		Qualifier:   qualifier,
+		Permissions: v,
+	}
+	return attr, true
+}
+
+type groupSet map[string]struct{}
+
+func makeSet(lst []string) groupSet {
+	s := make(map[string]struct{}, len(lst))
+	for _, e := range lst {
+		s[e] = struct{}{}
+	}
+	return s
+}
+
+func (s groupSet) in(group string) bool {
+	_, ok := s[group]
+	return ok
 }
 
 func mergePermissions(l *provider.ResourcePermissions, r *provider.ResourcePermissions) {
@@ -2157,6 +2243,7 @@ func (fs *eosfs) convert(ctx context.Context, eosFileInfo *eosclient.FileInfo) (
 		Etag:          fmt.Sprintf("\"%s\"", strings.Trim(eosFileInfo.ETag, "\"")),
 		MimeType:      mime.Detect(eosFileInfo.IsDir, path),
 		Size:          size,
+		ParentId:      &provider.ResourceId{OpaqueId: fmt.Sprintf("%d", eosFileInfo.FID)},
 		PermissionSet: fs.permissionSet(ctx, eosFileInfo, owner),
 		Checksum:      &xs,
 		Type:          getResourceType(eosFileInfo.IsDir),

@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -37,7 +37,7 @@ const (
 
 type strategy struct{}
 
-// New returns a new auth strategy that handles public share verification
+// New returns a new auth strategy that handles public share verification.
 func New(m map[string]interface{}) (auth.CredentialStrategy, error) {
 	return &strategy{}, nil
 }

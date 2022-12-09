@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -32,13 +32,13 @@ import (
 	"github.com/cs3org/reva/pkg/storage/utils/walker"
 )
 
-// Config is the config for the Archiver
+// Config is the config for the Archiver.
 type Config struct {
 	MaxNumFiles int64
 	MaxSize     int64
 }
 
-// Archiver is the struct able to create an archive
+// Archiver is the struct able to create an archive.
 type Archiver struct {
 	files      []string
 	dir        string
@@ -47,7 +47,7 @@ type Archiver struct {
 	config     Config
 }
 
-// NewArchiver creates a new archiver able to create an archive containing the files in the list
+// NewArchiver creates a new archiver able to create an archive containing the files in the list.
 func NewArchiver(files []string, w walker.Walker, d downloader.Downloader, config Config) (*Archiver, error) {
 	if len(files) == 0 {
 		return nil, ErrEmptyList{}
@@ -68,7 +68,7 @@ func NewArchiver(files []string, w walker.Walker, d downloader.Downloader, confi
 	return arc, nil
 }
 
-// pathIn verifies that the path `f`is in the `files`list
+// pathIn verifies that the path `f`is in the `files`list.
 func pathIn(files []string, f string) bool {
 	f = filepath.Clean(f)
 	for _, file := range files {
@@ -80,7 +80,6 @@ func pathIn(files []string, f string) bool {
 }
 
 func getDeepestCommonDir(files []string) string {
-
 	if len(files) == 0 {
 		return ""
 	}
@@ -100,7 +99,6 @@ func getDeepestCommonDir(files []string) string {
 				res = res[:i]
 			}
 		}
-
 	}
 
 	// the common substring could be between two / - inside a file name
@@ -113,14 +111,13 @@ func getDeepestCommonDir(files []string) string {
 	return filepath.Clean(res)
 }
 
-// CreateTar creates a tar and write it into the dst Writer
+// CreateTar creates a tar and write it into the dst Writer.
 func (a *Archiver) CreateTar(ctx context.Context, dst io.Writer) error {
 	w := tar.NewWriter(dst)
 
 	var filesCount, sizeFiles int64
 
 	for _, root := range a.files {
-
 		err := a.walker.Walk(ctx, root, func(path string, info *provider.ResourceInfo, err error) error {
 			if err != nil {
 				return err
@@ -182,19 +179,17 @@ func (a *Archiver) CreateTar(ctx context.Context, dst io.Writer) error {
 		if err != nil {
 			return err
 		}
-
 	}
 	return w.Close()
 }
 
-// CreateZip creates a zip and write it into the dst Writer
+// CreateZip creates a zip and write it into the dst Writer.
 func (a *Archiver) CreateZip(ctx context.Context, dst io.Writer) error {
 	w := zip.NewWriter(dst)
 
 	var filesCount, sizeFiles int64
 
 	for _, root := range a.files {
-
 		err := a.walker.Walk(ctx, root, func(path string, info *provider.ResourceInfo, err error) error {
 			if err != nil {
 				return err
@@ -255,7 +250,6 @@ func (a *Archiver) CreateZip(ctx context.Context, dst io.Writer) error {
 		if err != nil {
 			return err
 		}
-
 	}
 	return w.Close()
 }

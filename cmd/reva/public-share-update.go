@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -32,9 +32,10 @@ func publicShareUpdateCommand() *command {
 	cmd.Description = func() string { return "update a public share" }
 	cmd.Usage = func() string { return "Usage: public-share-update [-flags] <share_id>" }
 	rol := cmd.String("rol", "viewer", "the permission for the share (viewer or editor)")
+	description := cmd.String("description", "", "the description for the share")
 
 	cmd.ResetFlags = func() {
-		*rol = "viewer"
+		*rol, *description = "viewer", ""
 	}
 	cmd.Action = func(w ...io.Writer) error {
 		if cmd.NArg() < 1 {
@@ -59,7 +60,9 @@ func publicShareUpdateCommand() *command {
 			return err
 		}
 
-		shareRequest := &link.UpdatePublicShareRequest{
+		var updates []*link.UpdatePublicShareRequest
+
+		updates = append(updates, &link.UpdatePublicShareRequest{
 			Ref: &link.PublicShareReference{
 				Spec: &link.PublicShareReference_Id{
 					Id: &link.PublicShareId{
@@ -75,15 +78,33 @@ func publicShareUpdateCommand() *command {
 					},
 				},
 			},
+		})
+
+		if *description != "" {
+			updates = append(updates, &link.UpdatePublicShareRequest{
+				Ref: &link.PublicShareReference{
+					Spec: &link.PublicShareReference_Id{
+						Id: &link.PublicShareId{
+							OpaqueId: id,
+						},
+					},
+				},
+				Update: &link.UpdatePublicShareRequest_Update{
+					Type:        link.UpdatePublicShareRequest_Update_TYPE_DESCRIPTION,
+					Description: *description,
+				},
+			})
 		}
 
-		shareRes, err := shareClient.UpdatePublicShare(ctx, shareRequest)
-		if err != nil {
-			return err
-		}
+		for _, u := range updates {
+			shareRes, err := shareClient.UpdatePublicShare(ctx, u)
+			if err != nil {
+				return err
+			}
 
-		if shareRes.Status.Code != rpc.Code_CODE_OK {
-			return formatError(shareRes.Status)
+			if shareRes.Status.Code != rpc.Code_CODE_OK {
+				return formatError(shareRes.Status)
+			}
 		}
 
 		fmt.Println("OK")

@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -31,6 +31,7 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/ReneKroon/ttlcache/v2"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -38,10 +39,6 @@ import (
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/go-chi/chi/v5"
-	"github.com/rs/zerolog/log"
-
-	"github.com/ReneKroon/ttlcache/v2"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocdav"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/config"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
@@ -55,14 +52,16 @@ import (
 	warmupreg "github.com/cs3org/reva/pkg/share/cache/warmup/registry"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/cs3org/reva/pkg/utils/resourceid"
+	"github.com/go-chi/chi/v5"
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog"
 )
 
 const (
 	storageIDPrefix string = "shared::"
 )
 
-// Handler implements the shares part of the ownCloud sharing API
+// Handler implements the shares part of the ownCloud sharing API.
 type Handler struct {
 	gatewayAddr            string
 	storageRegistryAddr    string
@@ -75,7 +74,7 @@ type Handler struct {
 	resourceInfoCacheTTL   time.Duration
 }
 
-// we only cache the minimal set of data instead of the full user metadata
+// we only cache the minimal set of data instead of the full user metadata.
 type userIdentifiers struct {
 	DisplayName string
 	Username    string
@@ -96,7 +95,7 @@ func getCacheManager(c *config.Config) (cache.ResourceInfoCache, error) {
 	return nil, fmt.Errorf("driver not found: %s", c.ResourceInfoCacheDriver)
 }
 
-// Init initializes this and any contained handlers
+// Init initializes this and any contained handlers.
 func (h *Handler) Init(c *config.Config) {
 	h.gatewayAddr = c.GatewaySvc
 	h.storageRegistryAddr = c.StorageregistrySvc
@@ -149,7 +148,7 @@ func (h *Handler) extractReference(r *http.Request) (provider.Reference, error) 
 	return ref, nil
 }
 
-// CreateShare handles POST requests on /apps/files_sharing/api/v1/shares
+// CreateShare handles POST requests on /apps/files_sharing/api/v1/shares.
 func (h *Handler) CreateShare(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	shareType, err := strconv.Atoi(r.FormValue("shareType"))
@@ -175,17 +174,17 @@ func (h *Handler) CreateShare(w http.ResponseWriter, r *http.Request) {
 		Ref: &ref,
 	}
 
-	sublog := appctx.GetLogger(ctx).With().Interface("ref", ref).Logger()
+	log := appctx.GetLogger(ctx).With().Interface("ref", ref).Logger()
 
 	statRes, err := client.Stat(ctx, &statReq)
 	if err != nil {
-		sublog.Debug().Err(err).Str("createShare", "shares").Msg("error on stat call")
+		log.Debug().Err(err).Str("createShare", "shares").Msg("error on stat call")
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "missing resource information", fmt.Errorf("error getting resource information"))
 		return
 	}
 
 	if statRes.Status.Code != rpc.Code_CODE_OK {
-		ocdav.HandleErrorStatus(&sublog, w, statRes.Status)
+		ocdav.HandleErrorStatus(&log, w, statRes.Status)
 		return
 	}
 
@@ -290,24 +289,24 @@ func (h *Handler) extractPermissions(w http.ResponseWriter, r *http.Request, ri 
 	return role, val, nil
 }
 
-// PublicShareContextName represent cross boundaries context for the name of the public share
+// PublicShareContextName represent cross boundaries context for the name of the public share.
 type PublicShareContextName string
 
-// GetShare handles GET requests on /apps/files_sharing/api/v1/shares/(shareid)
+// GetShare handles GET requests on /apps/files_sharing/api/v1/shares/(shareid).
 func (h *Handler) GetShare(w http.ResponseWriter, r *http.Request) {
 	var share *conversions.ShareData
 	var resourceID *provider.ResourceId
 	shareID := chi.URLParam(r, "shareid")
 	ctx := r.Context()
-	logger := appctx.GetLogger(r.Context())
-	logger.Debug().Str("shareID", shareID).Msg("get share by id")
+	log := appctx.GetLogger(r.Context())
+	log.Debug().Str("shareID", shareID).Msg("get share by id")
 	client, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
 		return
 	}
 
-	logger.Debug().Str("shareID", shareID).Msg("get public share by id")
+	log.Debug().Str("shareID", shareID).Msg("get public share by id")
 	psRes, err := client.GetPublicShare(r.Context(), &link.GetPublicShareRequest{
 		Ref: &link.PublicShareReference{
 			Spec: &link.PublicShareReference_Id{
@@ -342,7 +341,7 @@ func (h *Handler) GetShare(w http.ResponseWriter, r *http.Request) {
 
 	if share == nil {
 		// check if we have a user share
-		logger.Debug().Str("shareID", shareID).Msg("get user share by id")
+		log.Debug().Str("shareID", shareID).Msg("get user share by id")
 		uRes, err := client.GetShare(r.Context(), &collaboration.GetShareRequest{
 			Ref: &collaboration.ShareReference{
 				Spec: &collaboration.ShareReference_Id{
@@ -363,7 +362,7 @@ func (h *Handler) GetShare(w http.ResponseWriter, r *http.Request) {
 			}
 
 			if uRes.Status.Code != rpc.Code_CODE_OK && uRes.Status.Code != rpc.Code_CODE_NOT_FOUND {
-				logger.Error().Err(err).Msgf("grpc get user share request failed, code: %v", uRes.Status.Code)
+				log.Error().Err(err).Msgf("grpc get user share request failed, code: %v", uRes.Status.Code)
 				response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "grpc get user share request failed", err)
 				return
 			}
@@ -380,7 +379,7 @@ func (h *Handler) GetShare(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if share == nil {
-		logger.Debug().Str("shareID", shareID).Msg("no share found with this id")
+		log.Debug().Str("shareID", shareID).Msg("no share found with this id")
 		response.WriteOCSError(w, r, response.MetaNotFound.StatusCode, "share not found", nil)
 		return
 	}
@@ -408,7 +407,7 @@ func (h *Handler) GetShare(w http.ResponseWriter, r *http.Request) {
 	response.WriteOCSSuccess(w, r, []*conversions.ShareData{share})
 }
 
-// UpdateShare handles PUT requests on /apps/files_sharing/api/v1/shares/(shareid)
+// UpdateShare handles PUT requests on /apps/files_sharing/api/v1/shares/(shareid).
 func (h *Handler) UpdateShare(w http.ResponseWriter, r *http.Request) {
 	shareID := chi.URLParam(r, "shareid")
 	// FIXME: isPublicShare is already doing a GetShare and GetPublicShare,
@@ -422,6 +421,7 @@ func (h *Handler) UpdateShare(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) updateShare(w http.ResponseWriter, r *http.Request, shareID string) {
 	ctx := r.Context()
+	log := appctx.GetLogger(ctx)
 
 	pval := r.FormValue("permissions")
 	if pval == "" {
@@ -515,7 +515,7 @@ func (h *Handler) updateShare(w http.ResponseWriter, r *http.Request, shareID st
 	response.WriteOCSSuccess(w, r, share)
 }
 
-// RemoveShare handles DELETE requests on /apps/files_sharing/api/v1/shares/(shareid)
+// RemoveShare handles DELETE requests on /apps/files_sharing/api/v1/shares/(shareid).
 func (h *Handler) RemoveShare(w http.ResponseWriter, r *http.Request) {
 	shareID := chi.URLParam(r, "shareid")
 	switch {
@@ -529,7 +529,7 @@ func (h *Handler) RemoveShare(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// ListShares handles GET requests on /apps/files_sharing/api/v1/shares
+// ListShares handles GET requests on /apps/files_sharing/api/v1/shares.
 func (h *Handler) ListShares(w http.ResponseWriter, r *http.Request) {
 	if r.FormValue("shared_with_me") != "" {
 		var err error
@@ -649,7 +649,7 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 				Ref: &provider.Reference{Path: path.Join(h.homeNamespace, h.sharePrefix)},
 			})
 			if err != nil || lcRes.Status.Code != rpc.Code_CODE_OK {
-				h.logProblems(lcRes.GetStatus(), err, "could not list container, continuing without share jail path info")
+				h.logProblems(lcRes.GetStatus(), err, "could not list container, continuing without share jail path info", log)
 			} else {
 				shareJailInfos = lcRes.Infos
 			}
@@ -676,7 +676,7 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 			var status *rpc.Status
 			info, status, err = h.getResourceInfoByID(ctx, client, rs.Share.ResourceId)
 			if err != nil || status.Code != rpc.Code_CODE_OK {
-				h.logProblems(status, err, "could not stat, skipping")
+				h.logProblems(status, err, "could not stat, skipping", log)
 				continue
 			}
 		}
@@ -711,7 +711,7 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 
 			// can we return the mountpoint when the gateway resolves the listing of shares?
 			// - no, the gateway only sees the same list any has the same options as the ocs service
-			// - we would need to have a list of mountpoints for the shares -> owncloudstorageprovider for hot migration migration
+			// - we would need to have a list of mountpoints for the shares -> owncloudstorageprovider for hot migration
 
 			// best we can do for now is stat the /Shares jail if it is set and return those paths
 
@@ -752,6 +752,8 @@ func findMatch(shareJailInfos []*provider.ResourceInfo, id *provider.ResourceId)
 
 func (h *Handler) listSharesWithOthers(w http.ResponseWriter, r *http.Request) {
 	shares := make([]*conversions.ShareData, 0)
+
+	log := appctx.GetLogger(r.Context())
 
 	filters := []*collaboration.Filter{}
 	linkFilters := []*link.ListPublicSharesRequest_Filter{}
@@ -800,19 +802,19 @@ func (h *Handler) listSharesWithOthers(w http.ResponseWriter, r *http.Request) {
 
 	if listPublicShares {
 		publicShares, status, err := h.listPublicShares(r, linkFilters)
-		h.logProblems(status, err, "could not listPublicShares")
+		h.logProblems(status, err, "could not listPublicShares", log)
 		shares = append(shares, publicShares...)
 	}
 	if listUserShares {
 		userShares, status, err := h.listUserShares(r, filters)
-		h.logProblems(status, err, "could not listUserShares")
+		h.logProblems(status, err, "could not listUserShares", log)
 		shares = append(shares, userShares...)
 	}
 
 	response.WriteOCSSuccess(w, r, shares)
 }
 
-func (h *Handler) logProblems(s *rpc.Status, e error, msg string) {
+func (h *Handler) logProblems(s *rpc.Status, e error, msg string, log *zerolog.Logger) {
 	if e != nil {
 		// errors need to be taken care of
 		log.Error().Err(e).Msg(msg)
@@ -909,19 +911,19 @@ func (h *Handler) addFileInfo(ctx context.Context, s *conversions.ShareData, inf
 	return nil
 }
 
-// mustGetIdentifiers always returns a struct with identifiers, if the user or group could not be found they will all be empty
+// mustGetIdentifiers always returns a struct with identifiers, if the user or group could not be found they will all be empty.
 func (h *Handler) mustGetIdentifiers(ctx context.Context, client gateway.GatewayAPIClient, id string, isGroup bool) *userIdentifiers {
-	sublog := appctx.GetLogger(ctx).With().Str("id", id).Logger()
+	log := appctx.GetLogger(ctx).With().Str("id", id).Logger()
 	if id == "" {
 		return &userIdentifiers{}
 	}
 
 	if idIf, err := h.userIdentifierCache.Get(id); err == nil {
-		sublog.Debug().Msg("cache hit")
+		log.Debug().Msg("cache hit")
 		return idIf.(*userIdentifiers)
 	}
 
-	sublog.Debug().Msg("cache miss")
+	log.Debug().Msg("cache miss")
 	var ui *userIdentifiers
 
 	if isGroup {
@@ -932,18 +934,18 @@ func (h *Handler) mustGetIdentifiers(ctx context.Context, client gateway.Gateway
 			SkipFetchingMembers: true,
 		})
 		if err != nil {
-			sublog.Err(err).Msg("could not look up group")
+			log.Err(err).Msg("could not look up group")
 			return &userIdentifiers{}
 		}
 		if res.GetStatus().GetCode() != rpc.Code_CODE_OK {
-			sublog.Err(err).
+			log.Err(err).
 				Int32("code", int32(res.GetStatus().GetCode())).
 				Str("message", res.GetStatus().GetMessage()).
 				Msg("get group call failed")
 			return &userIdentifiers{}
 		}
 		if res.Group == nil {
-			sublog.Debug().
+			log.Debug().
 				Int32("code", int32(res.GetStatus().GetCode())).
 				Str("message", res.GetStatus().GetMessage()).
 				Msg("group not found")
@@ -962,18 +964,18 @@ func (h *Handler) mustGetIdentifiers(ctx context.Context, client gateway.Gateway
 			SkipFetchingUserGroups: true,
 		})
 		if err != nil {
-			sublog.Err(err).Msg("could not look up user")
+			log.Err(err).Msg("could not look up user")
 			return &userIdentifiers{}
 		}
 		if res.GetStatus().GetCode() != rpc.Code_CODE_OK {
-			sublog.Err(err).
+			log.Err(err).
 				Int32("code", int32(res.GetStatus().GetCode())).
 				Str("message", res.GetStatus().GetMessage()).
 				Msg("get user call failed")
 			return &userIdentifiers{}
 		}
 		if res.User == nil {
-			sublog.Debug().
+			log.Debug().
 				Int32("code", int32(res.GetStatus().GetCode())).
 				Str("message", res.GetStatus().GetMessage()).
 				Msg("user not found")

@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -33,13 +33,13 @@ import (
 	"google.golang.org/protobuf/types/known/fieldmaskpb"
 )
 
-// AcceptReceivedShare handles Post Requests on /apps/files_sharing/api/v1/shares/{shareid}
+// AcceptReceivedShare handles Post Requests on /apps/files_sharing/api/v1/shares/{shareid}.
 func (h *Handler) AcceptReceivedShare(w http.ResponseWriter, r *http.Request) {
 	shareID := chi.URLParam(r, "shareid")
 	h.updateReceivedShare(w, r, shareID, false)
 }
 
-// RejectReceivedShare handles DELETE Requests on /apps/files_sharing/api/v1/shares/{shareid}
+// RejectReceivedShare handles DELETE Requests on /apps/files_sharing/api/v1/shares/{shareid}.
 func (h *Handler) RejectReceivedShare(w http.ResponseWriter, r *http.Request) {
 	shareID := chi.URLParam(r, "shareid")
 	h.updateReceivedShare(w, r, shareID, true)
@@ -87,7 +87,7 @@ func (h *Handler) updateReceivedShare(w http.ResponseWriter, r *http.Request, sh
 
 	info, status, err := h.getResourceInfoByID(ctx, client, rs.Share.ResourceId)
 	if err != nil || status.Code != rpc.Code_CODE_OK {
-		h.logProblems(status, err, "could not stat, skipping")
+		h.logProblems(status, err, "could not stat, skipping", logger)
 	}
 
 	data, err := conversions.CS3Share2ShareData(r.Context(), rs.Share)

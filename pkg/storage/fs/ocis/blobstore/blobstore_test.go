@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,13 +20,12 @@ package blobstore_test
 
 import (
 	"bytes"
-	"io/ioutil"
+	"io"
 	"os"
 	"path"
 
 	"github.com/cs3org/reva/pkg/storage/fs/ocis/blobstore"
 	"github.com/cs3org/reva/tests/helpers"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
@@ -70,7 +69,7 @@ var _ = Describe("Blobstore", func() {
 			err := bs.Upload(key, bytes.NewReader(data))
 			Expect(err).ToNot(HaveOccurred())
 
-			writtenBytes, err := ioutil.ReadFile(blobPath)
+			writtenBytes, err := os.ReadFile(blobPath)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(writtenBytes).To(Equal(data))
 		})
@@ -78,7 +77,7 @@ var _ = Describe("Blobstore", func() {
 
 	Context("with an existing blob", func() {
 		BeforeEach(func() {
-			Expect(ioutil.WriteFile(blobPath, data, 0700)).To(Succeed())
+			Expect(os.WriteFile(blobPath, data, 0700)).To(Succeed())
 		})
 
 		Describe("Download", func() {
@@ -86,7 +85,7 @@ var _ = Describe("Blobstore", func() {
 				reader, err := bs.Download("../" + key)
 				Expect(err).ToNot(HaveOccurred())
 
-				readData, err := ioutil.ReadAll(reader)
+				readData, err := io.ReadAll(reader)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(readData).To(Equal(data))
 			})
@@ -95,7 +94,7 @@ var _ = Describe("Blobstore", func() {
 				reader, err := bs.Download(key)
 				Expect(err).ToNot(HaveOccurred())
 
-				readData, err := ioutil.ReadAll(reader)
+				readData, err := io.ReadAll(reader)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(readData).To(Equal(data))
 			})

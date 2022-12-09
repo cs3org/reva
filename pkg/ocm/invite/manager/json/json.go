@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,7 +22,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -34,6 +34,7 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
+	"github.com/cs3org/reva/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/ocm/invite"
@@ -82,7 +83,6 @@ func (c *config) init() error {
 
 // New returns a new invite manager object.
 func New(m map[string]interface{}) (invite.Manager, error) {
-
 	config, err := parseConfig(m)
 	if err != nil {
 		err = errors.Wrap(err, "error parsing config for json invite manager")
@@ -122,10 +122,9 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 }
 
 func loadOrCreate(file string) (*inviteModel, error) {
-
 	_, err := os.Stat(file)
 	if os.IsNotExist(err) {
-		if err := ioutil.WriteFile(file, []byte("{}"), 0700); err != nil {
+		if err := os.WriteFile(file, []byte("{}"), 0700); err != nil {
 			err = errors.Wrap(err, "error creating the invite storage file: "+file)
 			return nil, err
 		}
@@ -138,7 +137,7 @@ func loadOrCreate(file string) (*inviteModel, error) {
 	}
 	defer fd.Close()
 
-	data, err := ioutil.ReadAll(fd)
+	data, err := io.ReadAll(fd)
 	if err != nil {
 		err = errors.Wrap(err, "error reading the data")
 		return nil, err
@@ -168,7 +167,7 @@ func (model *inviteModel) Save() error {
 		return err
 	}
 
-	if err := ioutil.WriteFile(model.File, data, 0644); err != nil {
+	if err := os.WriteFile(model.File, data, 0644); err != nil {
 		err = errors.Wrap(err, "error writing invite data to file: "+model.File)
 		return err
 	}
@@ -177,7 +176,6 @@ func (model *inviteModel) Save() error {
 }
 
 func (m *manager) GenerateToken(ctx context.Context) (*invitepb.InviteToken, error) {
-
 	contexUser := ctxpkg.ContextMustGetUser(ctx)
 	inviteToken, err := token.CreateToken(m.config.Expiration, contexUser.GetId())
 	if err != nil {
@@ -198,7 +196,6 @@ func (m *manager) GenerateToken(ctx context.Context) (*invitepb.InviteToken, err
 }
 
 func (m *manager) ForwardInvite(ctx context.Context, invite *invitepb.InviteToken, originProvider *ocmprovider.ProviderInfo) error {
-
 	contextUser := ctxpkg.ContextMustGetUser(ctx)
 	recipientProvider := contextUser.GetId().GetIdp()
 
@@ -221,7 +218,7 @@ func (m *manager) ForwardInvite(ctx context.Context, invite *invitepb.InviteToke
 	u.Path = path.Join(u.Path, acceptInviteEndpoint)
 	recipientURL := u.String()
 
-	req, err := http.NewRequest("POST", recipientURL, strings.NewReader(requestBody.Encode()))
+	req, err := http.NewRequest(http.MethodPost, recipientURL, strings.NewReader(requestBody.Encode()))
 	if err != nil {
 		return errors.Wrap(err, "json: error framing post request")
 	}
@@ -235,18 +232,17 @@ func (m *manager) ForwardInvite(ctx context.Context, invite *invitepb.InviteToke
 
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		respBody, e := ioutil.ReadAll(resp.Body)
+		respBody, e := io.ReadAll(resp.Body)
 		if e != nil {
 			return errors.Wrap(e, "json: error reading request body")
 		}
-		return errors.Wrap(errors.New(fmt.Sprintf("%s: %s", resp.Status, string(respBody))), "json: error sending accept post request")
+		return errors.Wrap(fmt.Errorf("%s: %s", resp.Status, string(respBody)), fmt.Sprintf("json: error sending accept post request to %s", recipientURL))
 	}
 
 	return nil
 }
 
 func (m *manager) AcceptInvite(ctx context.Context, invite *invitepb.InviteToken, remoteUser *userpb.User) error {
-
 	m.Lock()
 	defer m.Unlock()
 
@@ -276,9 +272,15 @@ func (m *manager) AcceptInvite(ctx context.Context, invite *invitepb.InviteToken
 }
 
 func (m *manager) GetAcceptedUser(ctx context.Context, remoteUserID *userpb.UserId) (*userpb.User, error) {
-
 	userKey := ctxpkg.ContextMustGetUser(ctx).GetId().GetOpaqueId()
+	log := appctx.GetLogger(ctx)
 	for _, acceptedUser := range m.model.AcceptedUsers[userKey] {
+		log.Info().Msgf("looking for '%s' at '%s' - considering '%s' at '%s'",
+			remoteUserID.OpaqueId,
+			remoteUserID.Idp,
+			acceptedUser.Id.GetOpaqueId(),
+			acceptedUser.Id.GetIdp(),
+		)
 		if (acceptedUser.Id.GetOpaqueId() == remoteUserID.OpaqueId) && (remoteUserID.Idp == "" || acceptedUser.Id.GetIdp() == remoteUserID.Idp) {
 			return acceptedUser, nil
 		}

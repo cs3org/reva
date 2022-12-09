@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,7 +20,6 @@ package options_test
 
 import (
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/options"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )

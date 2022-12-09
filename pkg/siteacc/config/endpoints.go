@@ -1,4 +1,4 @@
-// Copyright 2018-2020 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -48,9 +48,9 @@ const (
 	EndpointLogin = "/login"
 	// EndpointLogout is the endpoint path for (internal) user logout.
 	EndpointLogout = "/logout"
-	// EndpointResetPassword is the endpoint path for resetting user passwords
+	// EndpointResetPassword is the endpoint path for resetting user passwords.
 	EndpointResetPassword = "/reset-password"
-	// EndpointContact is the endpoint path for sending contact emails
+	// EndpointContact is the endpoint path for sending contact emails.
 	EndpointContact = "/contact"
 
 	// EndpointVerifyUserToken is the endpoint path for user token validation.

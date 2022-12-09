@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,14 +29,14 @@ import (
 	"github.com/pkg/errors"
 )
 
-// Blobstore provides an interface to an s3 compatible blobstore
+// Blobstore provides an interface to an s3 compatible blobstore.
 type Blobstore struct {
 	client *minio.Client
 
 	bucket string
 }
 
-// New returns a new Blobstore
+// New returns a new Blobstore.
 func New(endpoint, region, bucket, accessKey, secretKey string) (*Blobstore, error) {
 	u, err := url.Parse(endpoint)
 	if err != nil {
@@ -59,7 +59,7 @@ func New(endpoint, region, bucket, accessKey, secretKey string) (*Blobstore, err
 	}, nil
 }
 
-// Upload stores some data in the blobstore under the given key
+// Upload stores some data in the blobstore under the given key.
 func (bs *Blobstore) Upload(key string, reader io.Reader) error {
 	size := int64(-1)
 	if file, ok := reader.(*os.File); ok {
@@ -78,7 +78,7 @@ func (bs *Blobstore) Upload(key string, reader io.Reader) error {
 	return nil
 }
 
-// Download retrieves a blob from the blobstore for reading
+// Download retrieves a blob from the blobstore for reading.
 func (bs *Blobstore) Download(key string) (io.ReadCloser, error) {
 	reader, err := bs.client.GetObject(context.Background(), bs.bucket, key, minio.GetObjectOptions{})
 	if err != nil {
@@ -87,7 +87,7 @@ func (bs *Blobstore) Download(key string) (io.ReadCloser, error) {
 	return reader, nil
 }
 
-// Delete deletes a blob from the blobstore
+// Delete deletes a blob from the blobstore.
 func (bs *Blobstore) Delete(key string) error {
 	err := bs.client.RemoveObject(context.Background(), bs.bucket, key, minio.RemoveObjectOptions{})
 	if err != nil {

@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,7 +21,7 @@ package json
 import (
 	"context"
 	"encoding/json"
-	"io/ioutil"
+	"io"
 	"os"
 	"sync"
 	"time"
@@ -32,13 +32,12 @@ import (
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/share"
+	"github.com/cs3org/reva/pkg/share/manager/registry"
+	"github.com/cs3org/reva/pkg/utils"
 	"github.com/google/uuid"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"google.golang.org/genproto/protobuf/field_mask"
-
-	"github.com/cs3org/reva/pkg/share/manager/registry"
-	"github.com/cs3org/reva/pkg/utils"
 )
 
 func init() {
@@ -71,7 +70,7 @@ func New(m map[string]interface{}) (share.Manager, error) {
 func loadOrCreate(file string) (*shareModel, error) {
 	info, err := os.Stat(file)
 	if os.IsNotExist(err) || info.Size() == 0 {
-		if err := ioutil.WriteFile(file, []byte("{}"), 0700); err != nil {
+		if err := os.WriteFile(file, []byte("{}"), 0700); err != nil {
 			err = errors.Wrap(err, "error opening/creating the file: "+file)
 			return nil, err
 		}
@@ -84,7 +83,7 @@ func loadOrCreate(file string) (*shareModel, error) {
 	}
 	defer fd.Close()
 
-	data, err := ioutil.ReadAll(fd)
+	data, err := io.ReadAll(fd)
 	if err != nil {
 		err = errors.Wrap(err, "error reading the data")
 		return nil, err
@@ -140,7 +139,7 @@ func (m *shareModel) Save() error {
 		return err
 	}
 
-	if err := ioutil.WriteFile(m.file, data, 0644); err != nil {
+	if err := os.WriteFile(m.file, data, 0644); err != nil {
 		err = errors.Wrap(err, "error writing to file: "+m.file)
 		return err
 	}

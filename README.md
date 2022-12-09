@@ -1,6 +1,6 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0) [![GoDoc](https://godoc.org/github.com/cs3org/reva?status.svg)](https://godoc.org/github.com/cs3org/reva)
  [![Gitter chat](https://badges.gitter.im/cs3org/reva.svg)](https://gitter.im/cs3org/reva) [![Build Status](https://drone.cernbox.cern.ch/api/badges/cs3org/reva/status.svg)](https://drone.cernbox.cern.ch/cs3org/reva)
- [![Go Report Card](https://goreportcard.com/badge/github.com/cs3org/reva)](https://goreportcard.com/report/github.com/cs3org/reva)  [![codecov](https://codecov.io/gh/cs3org/reva/branch/master/graph/badge.svg)](https://codecov.io/gh/cs3org/reva) [![FOSSA Status](https://app.fossa.com/api/projects/custom%2B11650%2Fcs3org%2Freva.svg?type=shield)](https://app.fossa.com/projects/custom%2B11650%2Fcs3org%2Freva?ref=badge_shield)
+ [![Go Report Card](https://goreportcard.com/badge/github.com/cs3org/reva)](https://goreportcard.com/report/github.com/cs3org/reva) [![FOSSA Status](https://app.fossa.com/api/projects/custom%2B11650%2Fcs3org%2Freva.svg?type=shield)](https://app.fossa.com/projects/custom%2B11650%2Fcs3org%2Freva?ref=badge_shield)
 ================
 
 
@@ -11,19 +11,21 @@
 REVA is an interoperability platform. It connects storage, sync and share platforms and application providers, and it does it in a vendor and platform neutral way by using the [CS3 APIS](https://github.com/cs3org/cs3apis).
 
 ## Installation
+
 Head to [Documentation](https://reva.link) for documentation or [download](https://github.com/cs3org/reva/releases) to get the latest available release.
 
 ## Documentation & Support
+
 Read the [getting started guide](https://reva.link/docs/getting-started/) and the other feature guides.
 
 
 ## Build and run it yourself
+
 You need to have [Go](https://golang.org/doc/install) (version 1.16 or higher), [git](https://git-scm.com/) and [make](https://en.wikipedia.org/wiki/Make_(software)) installed. Some of these commands may require `sudo`, depending on your system setup.
 
 ```
 $ git clone https://github.com/cs3org/reva
 $ cd reva
-$ make deps
 $ make build
 $ mkdir -p /etc/revad
 $ cp examples/storage-references/users.demo.json /etc/revad/users.json
@@ -61,6 +63,7 @@ ok  	github.com/cs3org/reva/pkg/utils	0.374s
 ```
 
 ### Integration tests (GRPC)
+
 See [tests/integration](https://github.com/cs3org/reva/tree/master/tests/integration).
 This requires Redis.
 
@@ -74,6 +77,7 @@ You can get more verbose output with `ginkgo -v -r tests/integration/`.
 NB: This will work better on Linux than on MacOS because of issues with static linking (`library not found for -lcrt0.o`).
 
 ### Litmus tests (WebDAV)
+
 [Litmus](http://www.webdav.org/neon/litmus/) is a webdav test suite. The litmus tests for Reva's WebDAV interface are run using the [ownCloud's litmus Docker image](https://github.com/owncloud-docker/litmus). The '-old' and '-new' refer to which `LITMUS_URL` environment variable is passed to that Docker image, in other words, which path on the Reva server the litmus tests are run against.
 
 1. start the needed services
@@ -101,6 +105,7 @@ NB: This will work better on Linux than on MacOS because of issues with static l
    - if on MacOS you see `FAIL (connection refused by '127.0.0.1' port 20080: Connection refused)`, it may be necessary to replace 'localhost' with your host IP address (e.g. `ipconfig getifaddr en0` or `sudo ifconfig | grep 192`)
 
 ### Acceptance tests (ownCloud legacy)
+
 See [tests/acceptance](https://github.com/cs3org/reva/tree/master/tests/acceptance).
 
 This will require some PHP-related tools to run, for instance on Ubuntu you will need `apt install -y php-xml php-curl composer`.
@@ -114,7 +119,7 @@ This will require some PHP-related tools to run, for instance on Ubuntu you will
         -e LDAP_ADMIN_PASSWORD=admin \
         --name docker-slapd \
         -p 127.0.0.1:389:389 \
-        -p 636:636 -d osixia/openldap
+        -p 636:636 -d osixia/openldap:1.3.0
     ```
 
 2.  start the needed services
@@ -163,6 +168,7 @@ This will require some PHP-related tools to run, for instance on Ubuntu you will
     Make sure to double check the paths if you are changing the `OCIS_REVA_DATA_ROOT`. The `DELETE_USER_DATA_CMD` needs to clean up the correct folders.
 
 ## Daily releases
+
 On every commit on the master branch (including merged Pull Requests) a new release will be created and 
 available at [daily releases](https://reva-releases.web.cern.ch/reva-releases).
 
@@ -200,8 +206,8 @@ portability of the applications and service extensions.
 REVA is distributed under [Apache 2.0 license](https://github.com/cs3org/reva/blob/master/LICENSE).
 
 ## Logo
-REVA logo's have been designed and contributed to the project by Eamon Maguire.
 
+REVA logo's have been designed and contributed to the project by Eamon Maguire.
 
 ## Disclaimer
 

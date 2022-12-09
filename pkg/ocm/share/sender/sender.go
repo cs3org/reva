@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,9 +19,10 @@
 package sender
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 	"path"
@@ -29,8 +30,8 @@ import (
 	"time"
 
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp"
-
 	"github.com/pkg/errors"
 )
 
@@ -47,7 +48,7 @@ func getOCMEndpoint(originProvider *ocmprovider.ProviderInfo) (string, error) {
 
 // Send executes the POST to the OCM shares endpoint to create the share at the
 // remote site.
-func Send(requestBodyMap map[string]interface{}, pi *ocmprovider.ProviderInfo) error {
+func Send(ctx context.Context, requestBodyMap map[string]interface{}, pi *ocmprovider.ProviderInfo) error {
 	requestBody, err := json.Marshal(requestBodyMap)
 	if err != nil {
 		err = errors.Wrap(err, "error marshalling request body")
@@ -64,11 +65,14 @@ func Send(requestBodyMap map[string]interface{}, pi *ocmprovider.ProviderInfo) e
 	u.Path = path.Join(u.Path, createOCMCoreShareEndpoint)
 	recipientURL := u.String()
 
-	req, err := http.NewRequest("POST", recipientURL, strings.NewReader(string(requestBody)))
+	log := appctx.GetLogger(ctx)
+	log.Info().Msgf("in OCM Send! %s %s", recipientURL, requestBody)
+
+	req, err := http.NewRequest(http.MethodPost, recipientURL, strings.NewReader(string(requestBody)))
 	if err != nil {
 		return errors.Wrap(err, "sender: error framing post request")
 	}
-	req.Header.Set("Content-Type", "application/json; param=value")
+	req.Header.Set("Content-Type", "application/json")
 	client := rhttp.GetHTTPClient(
 		rhttp.Timeout(5 * time.Second),
 	)
@@ -81,12 +85,12 @@ func Send(requestBodyMap map[string]interface{}, pi *ocmprovider.ProviderInfo) e
 
 	defer resp.Body.Close()
 	if (resp.StatusCode != http.StatusCreated) && (resp.StatusCode != http.StatusOK) {
-		respBody, e := ioutil.ReadAll(resp.Body)
+		respBody, e := io.ReadAll(resp.Body)
 		if e != nil {
 			e = errors.Wrap(e, "sender: error reading request body")
 			return e
 		}
-		err = errors.Wrap(fmt.Errorf("%s: %s", resp.Status, string(respBody)), "sender: error sending create ocm core share post request")
+		err = errors.Wrap(fmt.Errorf("%s: %s", resp.Status, string(respBody)), "sender: error from "+ocmEndpoint)
 		return err
 	}
 	return nil

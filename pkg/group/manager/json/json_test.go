@@ -1,4 +1,4 @@
-// Copyright 2018-2020 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,7 +20,6 @@ package json
 
 import (
 	"context"
-	"io/ioutil"
 	"os"
 	"reflect"
 	"testing"
@@ -34,7 +33,7 @@ var ctx = context.Background()
 
 func TestUserManager(t *testing.T) {
 	// add tempdir
-	tempdir, err := ioutil.TempDir("", "json_test")
+	tempdir, err := os.MkdirTemp("", "json_test")
 	if err != nil {
 		t.Fatalf("error while create temp dir: %v", err)
 	}
@@ -44,7 +43,7 @@ func TestUserManager(t *testing.T) {
 	userJSON := `[{`
 
 	// get file handler for temporary file
-	file, err := ioutil.TempFile(tempdir, "json_test")
+	file, err := os.CreateTemp(tempdir, "json_test")
 	if err != nil {
 		t.Fatalf("error while open temp file: %v", err)
 	}
@@ -71,7 +70,7 @@ func TestUserManager(t *testing.T) {
 	userJSON = `[{"id":{"opaque_id":"sailing-lovers"},"group_name":"sailing-lovers","mail":"sailing-lovers@example.org","display_name":"Sailing Lovers","gid_number":1234,"members":[{"idp":"localhost","opaque_id":"einstein","type":1},{"idp":"localhost","opaque_id":"marie","type":1}]}]`
 
 	// get file handler for temporary file
-	file, err = ioutil.TempFile(tempdir, "json_test")
+	file, err = os.CreateTemp(tempdir, "json_test")
 	if err != nil {
 		t.Fatalf("error while open temp file: %v", err)
 	}

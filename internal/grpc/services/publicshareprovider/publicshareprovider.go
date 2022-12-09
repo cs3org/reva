@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -86,9 +86,8 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 	return c, nil
 }
 
-// New creates a new user share provider svc
+// New creates a new user share provider svc.
 func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
-
 	c, err := parseConfig(m)
 	if err != nil {
 		return nil, err
@@ -146,16 +145,26 @@ func (s *service) CreatePublicShare(ctx context.Context, req *link.CreatePublicS
 		log.Error().Msg("error getting user from context")
 	}
 
-	share, err := s.sm.CreatePublicShare(ctx, u, req.ResourceInfo, req.Grant)
-	if err != nil {
-		log.Debug().Err(err).Str("createShare", "shares").Msg("error connecting to storage provider")
+	share, err := s.sm.CreatePublicShare(ctx, u, req.ResourceInfo, req.Grant, req.Description, req.Internal)
+	switch err.(type) {
+	case nil:
+		return &link.CreatePublicShareResponse{
+			Status: status.NewOK(ctx),
+			Share:  share,
+		}, nil
+	case errtypes.NotFound:
+		return &link.CreatePublicShareResponse{
+			Status: status.NewNotFound(ctx, "resource does not exist"),
+		}, nil
+	case errtypes.AlreadyExists:
+		return &link.CreatePublicShareResponse{
+			Status: status.NewAlreadyExists(ctx, err, "share already exists"),
+		}, nil
+	default:
+		return &link.CreatePublicShareResponse{
+			Status: status.NewInternal(ctx, err, "unknown error"),
+		}, nil
 	}
-
-	res := &link.CreatePublicShareResponse{
-		Status: status.NewOK(ctx),
-		Share:  share,
-	}
-	return res, nil
 }
 
 func (s *service) RemovePublicShare(ctx context.Context, req *link.RemovePublicShareRequest) (*link.RemovePublicShareResponse, error) {
@@ -164,14 +173,20 @@ func (s *service) RemovePublicShare(ctx context.Context, req *link.RemovePublicS
 
 	user := ctxpkg.ContextMustGetUser(ctx)
 	err := s.sm.RevokePublicShare(ctx, user, req.Ref)
-	if err != nil {
+	switch err.(type) {
+	case nil:
+		return &link.RemovePublicShareResponse{
+			Status: status.NewOK(ctx),
+		}, nil
+	case errtypes.NotFound:
+		return &link.RemovePublicShareResponse{
+			Status: status.NewNotFound(ctx, "unknown token"),
+		}, nil
+	default:
 		return &link.RemovePublicShareResponse{
 			Status: status.NewInternal(ctx, err, "error deleting public share"),
-		}, err
+		}, nil
 	}
-	return &link.RemovePublicShareResponse{
-		Status: status.NewOK(ctx),
-	}, nil
 }
 
 func (s *service) GetPublicShareByToken(ctx context.Context, req *link.GetPublicShareByTokenRequest) (*link.GetPublicShareByTokenResponse, error) {
@@ -211,14 +226,21 @@ func (s *service) GetPublicShare(ctx context.Context, req *link.GetPublicShareRe
 	}
 
 	found, err := s.sm.GetPublicShare(ctx, u, req.Ref, req.GetSign())
-	if err != nil {
-		return nil, err
+	switch err.(type) {
+	case nil:
+		return &link.GetPublicShareResponse{
+			Status: status.NewOK(ctx),
+			Share:  found,
+		}, nil
+	case errtypes.NotFound:
+		return &link.GetPublicShareResponse{
+			Status: status.NewNotFound(ctx, "share not found"),
+		}, nil
+	default:
+		return &link.GetPublicShareResponse{
+			Status: status.NewInternal(ctx, err, "unknown error"),
+		}, nil
 	}
-
-	return &link.GetPublicShareResponse{
-		Status: status.NewOK(ctx),
-		Share:  found,
-	}, nil
 }
 
 func (s *service) ListPublicShares(ctx context.Context, req *link.ListPublicSharesRequest) (*link.ListPublicSharesResponse, error) {
@@ -250,14 +272,20 @@ func (s *service) UpdatePublicShare(ctx context.Context, req *link.UpdatePublicS
 		log.Error().Msg("error getting user from context")
 	}
 
-	updateR, err := s.sm.UpdatePublicShare(ctx, u, req, nil)
-	if err != nil {
-		log.Err(err).Msgf("error updating public shares: %v", err)
+	updated, err := s.sm.UpdatePublicShare(ctx, u, req, nil)
+	switch err.(type) {
+	case nil:
+		return &link.UpdatePublicShareResponse{
+			Status: status.NewOK(ctx),
+			Share:  updated,
+		}, nil
+	case errtypes.NotFound:
+		return &link.UpdatePublicShareResponse{
+			Status: status.NewNotFound(ctx, "share not found"),
+		}, nil
+	default:
+		return &link.UpdatePublicShareResponse{
+			Status: status.NewInternal(ctx, err, "unknown error"),
+		}, nil
 	}
-
-	res := &link.UpdatePublicShareResponse{
-		Status: status.NewOK(ctx),
-		Share:  updateR,
-	}
-	return res, nil
 }

@@ -24,7 +24,6 @@ import (
 
 	"github.com/cs3org/reva/pkg/siteacc/config"
 	"github.com/cs3org/reva/pkg/siteacc/data"
-
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 )

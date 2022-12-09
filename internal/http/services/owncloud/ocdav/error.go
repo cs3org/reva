@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -31,19 +31,19 @@ type code int
 
 const (
 
-	// SabredavBadRequest maps to HTTP 400
+	// SabredavBadRequest maps to HTTP 400.
 	SabredavBadRequest code = iota
-	// SabredavMethodNotAllowed maps to HTTP 405
+	// SabredavMethodNotAllowed maps to HTTP 405.
 	SabredavMethodNotAllowed
-	// SabredavNotAuthenticated maps to HTTP 401
+	// SabredavNotAuthenticated maps to HTTP 401.
 	SabredavNotAuthenticated
-	// SabredavPreconditionFailed maps to HTTP 412
+	// SabredavPreconditionFailed maps to HTTP 412.
 	SabredavPreconditionFailed
-	// SabredavPermissionDenied maps to HTTP 403
+	// SabredavPermissionDenied maps to HTTP 403.
 	SabredavPermissionDenied
-	// SabredavNotFound maps to HTTP 404
+	// SabredavNotFound maps to HTTP 404.
 	SabredavNotFound
-	// SabredavConflict maps to HTTP 409
+	// SabredavConflict maps to HTTP 409.
 	SabredavConflict
 )
 
@@ -95,7 +95,7 @@ type errorXML struct {
 var errInvalidPropfind = errors.New("webdav: invalid propfind")
 
 // HandleErrorStatus checks the status code, logs a Debug or Error level message
-// and writes an appropriate http status
+// and writes an appropriate http status.
 func HandleErrorStatus(log *zerolog.Logger, w http.ResponseWriter, s *rpc.Status) {
 	switch s.Code {
 	case rpc.Code_CODE_OK:
@@ -129,7 +129,7 @@ func HandleErrorStatus(log *zerolog.Logger, w http.ResponseWriter, s *rpc.Status
 }
 
 // HandleWebdavError checks the status code, logs an error and creates a webdav response body
-// if needed
+// if needed.
 func HandleWebdavError(log *zerolog.Logger, w http.ResponseWriter, b []byte, err error) {
 	if err != nil {
 		log.Error().Msgf("error marshaling xml response: %s", b)

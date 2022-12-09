@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,14 +19,13 @@
 package exporters
 
 import (
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 
-	"github.com/rs/zerolog"
-
 	"github.com/cs3org/reva/pkg/mentix/config"
 	"github.com/cs3org/reva/pkg/mentix/exchangers"
+	"github.com/rs/zerolog"
 )
 
 // BaseRequestExporter implements basic exporter functionality common to all request exporters.
@@ -37,7 +36,7 @@ type BaseRequestExporter struct {
 
 // HandleRequest handles the actual HTTP request.
 func (exporter *BaseRequestExporter) HandleRequest(resp http.ResponseWriter, req *http.Request, conf *config.Configuration, log *zerolog.Logger) {
-	body, _ := ioutil.ReadAll(req.Body)
+	body, _ := io.ReadAll(req.Body)
 	status, respData, err := exporter.handleQuery(body, req.URL.Query(), conf, log)
 	if err != nil {
 		respData = []byte(err.Error())

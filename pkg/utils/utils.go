@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,6 +27,7 @@ import (
 	"os/user"
 	"path"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"strings"
 	"time"
@@ -38,7 +39,9 @@ import (
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/registry"
 	"github.com/cs3org/reva/pkg/registry/memory"
-	"github.com/golang/protobuf/proto"
+
+	// gocritic is disabled because google.golang.org/protobuf/proto does not provide a method to convert MessageV1 to MessageV2.
+	"github.com/golang/protobuf/proto" //nolint:staticcheck
 	"google.golang.org/protobuf/encoding/protojson"
 )
 
@@ -52,7 +55,7 @@ var (
 )
 
 // Skip  evaluates whether a source endpoint contains any of the prefixes.
-// i.e: /a/b/c/d/e contains prefix /a/b/c
+// i.e: /a/b/c/d/e contains prefix /a/b/c.
 func Skip(source string, prefixes []string) bool {
 	for i := range prefixes {
 		if strings.HasPrefix(source, prefixes[i]) {
@@ -62,7 +65,7 @@ func Skip(source string, prefixes []string) bool {
 	return false
 }
 
-// GetClientIP retrieves the client IP from incoming requests
+// GetClientIP retrieves the client IP from incoming requests.
 func GetClientIP(r *http.Request) (string, error) {
 	var clientIP string
 	forwarded := r.Header.Get("X-FORWARDED-FOR")
@@ -90,7 +93,7 @@ func ToSnakeCase(str string) string {
 	return strings.ToLower(snake)
 }
 
-// ResolvePath converts relative local paths to absolute paths
+// ResolvePath converts relative local paths to absolute paths.
 func ResolvePath(path string) (string, error) {
 	usr, err := user.Current()
 	if err != nil {
@@ -137,7 +140,7 @@ func LaterTS(t1 *types.Timestamp, t2 *types.Timestamp) *types.Timestamp {
 	return t2
 }
 
-// ExtractGranteeID returns the ID, user or group, set in the GranteeId object
+// ExtractGranteeID returns the ID, user or group, set in the GranteeId object.
 func ExtractGranteeID(grantee *provider.Grantee) (*userpb.UserId, *grouppb.GroupId) {
 	switch t := grantee.Id.(type) {
 	case *provider.Grantee_UserId:
@@ -206,14 +209,14 @@ func IsValidName(name string) bool {
 }
 
 // MarshalProtoV1ToJSON marshals a proto V1 message to a JSON byte array
-// TODO: update this once we start using V2 in CS3APIs
+// TODO: update this once we start using V2 in CS3APIs.
 func MarshalProtoV1ToJSON(m proto.Message) ([]byte, error) {
 	mV2 := proto.MessageV2(m)
 	return protojson.Marshal(mV2)
 }
 
 // UnmarshalJSONToProtoV1 decodes a JSON byte array to a specified proto message type
-// TODO: update this once we start using V2 in CS3APIs
+// TODO: update this once we start using V2 in CS3APIs.
 func UnmarshalJSONToProtoV1(b []byte, m proto.Message) error {
 	mV2 := proto.MessageV2(m)
 	if err := protojson.Unmarshal(b, mV2); err != nil {
@@ -243,12 +246,12 @@ func IsAbsoluteReference(ref *provider.Reference) bool {
 }
 
 // IsAbsolutePathReference returns true if the given reference qualifies as a global path
-// when only the path is set and starts with /
+// when only the path is set and starts with /.
 func IsAbsolutePathReference(ref *provider.Reference) bool {
 	return ref.ResourceId == nil && strings.HasPrefix(ref.Path, "/")
 }
 
-// MakeRelativePath prefixes the path with a . to use it in a relative reference
+// MakeRelativePath prefixes the path with a . to use it in a relative reference.
 func MakeRelativePath(p string) string {
 	p = path.Join("/", p)
 
@@ -258,7 +261,7 @@ func MakeRelativePath(p string) string {
 	return "." + p
 }
 
-// UserTypeMap translates account type string to CS3 UserType
+// UserTypeMap translates account type string to CS3 UserType.
 func UserTypeMap(accountType string) userpb.UserType {
 	var t userpb.UserType
 	switch accountType {
@@ -280,7 +283,7 @@ func UserTypeMap(accountType string) userpb.UserType {
 	return t
 }
 
-// UserTypeToString translates CS3 UserType to user-readable string
+// UserTypeToString translates CS3 UserType to user-readable string.
 func UserTypeToString(accountType userpb.UserType) string {
 	var t string
 	switch accountType {
@@ -348,7 +351,43 @@ func GetViewMode(viewMode string) gateway.OpenInAppRequest_ViewMode {
 		return gateway.OpenInAppRequest_VIEW_MODE_READ_ONLY
 	case "write":
 		return gateway.OpenInAppRequest_VIEW_MODE_READ_WRITE
+	case "preview":
+		return gateway.OpenInAppRequest_VIEW_MODE_PREVIEW
 	default:
 		return gateway.OpenInAppRequest_VIEW_MODE_INVALID
 	}
+}
+
+// HasPublicShareRole return true if the user has a public share role.
+// If yes, the string is the type of role, viewer, editor or uploader.
+func HasPublicShareRole(u *userpb.User) (string, bool) {
+	if u.Opaque == nil {
+		return "", false
+	}
+	if publicShare, ok := u.Opaque.Map["public-share-role"]; ok {
+		return string(publicShare.Value), true
+	}
+	return "", false
+}
+
+// HasPermissions returns true if all permissions defined in the stuict toCheck
+// are set in the target.
+func HasPermissions(target, toCheck *provider.ResourcePermissions) bool {
+	targetStruct := reflect.ValueOf(target).Elem()
+	toCheckStruct := reflect.ValueOf(toCheck).Elem()
+
+	for i := 0; i < toCheckStruct.NumField(); i++ {
+		fieldToCheck := toCheckStruct.Field(i)
+		if fieldToCheck.Kind() == reflect.Bool && fieldToCheck.Bool() && !targetStruct.Field(i).Bool() {
+			return false
+		}
+	}
+	return true
+}
+
+// UserIsLightweight returns true if the user is a lightweith
+// or federated account.
+func UserIsLightweight(u *userpb.User) bool {
+	return u.Id.Type == userpb.UserType_USER_TYPE_FEDERATED ||
+		u.Id.Type == userpb.UserType_USER_TYPE_LIGHTWEIGHT
 }

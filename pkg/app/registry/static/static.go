@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -120,7 +120,7 @@ func New(m map[string]interface{}) (app.Registry, error) {
 }
 
 // remove a provider from the provider list in a mime type
-// it's a no-op if the provider is not in the list of providers in the mime type
+// it's a no-op if the provider is not in the list of providers in the mime type.
 func unregisterProvider(p *registrypb.ProviderInfo, mime *mimeTypeConfig) {
 	if index, in := getIndex(mime.apps, p); in {
 		// remove the provider from the list
@@ -231,7 +231,6 @@ func (m *manager) ListSupportedMimeTypes(ctx context.Context) ([]*registrypb.Mim
 	res := make([]*registrypb.MimeTypeInfo, 0, m.mimetypes.Len())
 
 	for pair := m.mimetypes.Oldest(); pair != nil; pair = pair.Next() {
-
 		mime := pair.Value.(*mimeTypeConfig)
 
 		res = append(res, &registrypb.MimeTypeInfo{
@@ -244,7 +243,6 @@ func (m *manager) ListSupportedMimeTypes(ctx context.Context) ([]*registrypb.Mim
 			AllowCreation:      mime.AllowCreation,
 			DefaultApplication: mime.DefaultApp,
 		})
-
 	}
 
 	return res, nil
@@ -332,7 +330,7 @@ func equalsProviderInfo(p1, p2 *registrypb.ProviderInfo) bool {
 	return p1.Name == p2.Name
 }
 
-// check that all providers in the two lists are equals
+// check that all providers in the two lists are equals.
 func providersEquals(l1, l2 []*registrypb.ProviderInfo) bool {
 	if len(l1) != len(l2) {
 		return false

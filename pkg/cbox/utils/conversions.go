@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -48,9 +48,11 @@ type DBShare struct {
 	STime        int
 	FileTarget   string
 	State        int
+	Quicklink    bool
+	Description  string
 }
 
-// FormatGrantee formats a CS3API grantee to a string
+// FormatGrantee formats a CS3API grantee to a string.
 func FormatGrantee(g *provider.Grantee) (int, string) {
 	var granteeType int
 	var formattedID string
@@ -67,7 +69,7 @@ func FormatGrantee(g *provider.Grantee) (int, string) {
 	return granteeType, formattedID
 }
 
-// ExtractGrantee retrieves the CS3API grantee from a formatted string
+// ExtractGrantee retrieves the CS3API grantee from a formatted string.
 func ExtractGrantee(t int, g string) *provider.Grantee {
 	var grantee provider.Grantee
 	switch t {
@@ -83,7 +85,7 @@ func ExtractGrantee(t int, g string) *provider.Grantee {
 	return &grantee
 }
 
-// ResourceTypeToItem maps a resource type to a string
+// ResourceTypeToItem maps a resource type to a string.
 func ResourceTypeToItem(r provider.ResourceType) string {
 	switch r {
 	case provider.ResourceType_RESOURCE_TYPE_FILE:
@@ -99,7 +101,7 @@ func ResourceTypeToItem(r provider.ResourceType) string {
 	}
 }
 
-// ResourceTypeToItemInt maps a resource type to an integer
+// ResourceTypeToItemInt maps a resource type to an integer.
 func ResourceTypeToItemInt(r provider.ResourceType) int {
 	switch r {
 	case provider.ResourceType_RESOURCE_TYPE_CONTAINER:
@@ -111,7 +113,7 @@ func ResourceTypeToItemInt(r provider.ResourceType) int {
 	}
 }
 
-// SharePermToInt maps read/write permissions to an integer
+// SharePermToInt maps read/write permissions to an integer.
 func SharePermToInt(p *provider.ResourcePermissions) int {
 	var perm int
 	switch {
@@ -126,7 +128,7 @@ func SharePermToInt(p *provider.ResourcePermissions) int {
 	return perm
 }
 
-// IntTosharePerm retrieves read/write permissions from an integer
+// IntTosharePerm retrieves read/write permissions from an integer.
 func IntTosharePerm(p int, itemType string) *provider.ResourcePermissions {
 	switch p {
 	case 1:
@@ -144,7 +146,7 @@ func IntTosharePerm(p int, itemType string) *provider.ResourcePermissions {
 	}
 }
 
-// IntToShareState retrieves the received share state from an integer
+// IntToShareState retrieves the received share state from an integer.
 func IntToShareState(g int) collaboration.ShareState {
 	switch g {
 	case 0:
@@ -158,12 +160,12 @@ func IntToShareState(g int) collaboration.ShareState {
 	}
 }
 
-// FormatUserID formats a CS3API user ID to a string
+// FormatUserID formats a CS3API user ID to a string.
 func FormatUserID(u *userpb.UserId) string {
 	return u.OpaqueId
 }
 
-// ExtractUserID retrieves a CS3API user ID from a string
+// ExtractUserID retrieves a CS3API user ID from a string.
 func ExtractUserID(u string) *userpb.UserId {
 	t := userpb.UserType_USER_TYPE_PRIMARY
 	if strings.HasPrefix(u, "guest:") {
@@ -174,17 +176,17 @@ func ExtractUserID(u string) *userpb.UserId {
 	return &userpb.UserId{OpaqueId: u, Type: t}
 }
 
-// FormatGroupID formats a CS3API group ID to a string
+// FormatGroupID formats a CS3API group ID to a string.
 func FormatGroupID(u *grouppb.GroupId) string {
 	return u.OpaqueId
 }
 
-// ExtractGroupID retrieves a CS3API group ID from a string
+// ExtractGroupID retrieves a CS3API group ID from a string.
 func ExtractGroupID(u string) *grouppb.GroupId {
 	return &grouppb.GroupId{OpaqueId: u}
 }
 
-// ConvertToCS3Share converts a DBShare to a CS3API collaboration share
+// ConvertToCS3Share converts a DBShare to a CS3API collaboration share.
 func ConvertToCS3Share(s DBShare) *collaboration.Share {
 	ts := &typespb.Timestamp{
 		Seconds: uint64(s.STime),
@@ -207,7 +209,7 @@ func ConvertToCS3Share(s DBShare) *collaboration.Share {
 	}
 }
 
-// ConvertToCS3ReceivedShare converts a DBShare to a CS3API collaboration received share
+// ConvertToCS3ReceivedShare converts a DBShare to a CS3API collaboration received share.
 func ConvertToCS3ReceivedShare(s DBShare) *collaboration.ReceivedShare {
 	return &collaboration.ReceivedShare{
 		Share: ConvertToCS3Share(s),
@@ -215,7 +217,7 @@ func ConvertToCS3ReceivedShare(s DBShare) *collaboration.ReceivedShare {
 	}
 }
 
-// ConvertToCS3PublicShare converts a DBShare to a CS3API public share
+// ConvertToCS3PublicShare converts a DBShare to a CS3API public share.
 func ConvertToCS3PublicShare(s DBShare) *link.PublicShare {
 	ts := &typespb.Timestamp{
 		Seconds: uint64(s.STime),
@@ -250,5 +252,7 @@ func ConvertToCS3PublicShare(s DBShare) *link.PublicShare {
 		Expiration:        expires,
 		Ctime:             ts,
 		Mtime:             ts,
+		Quicklink:         s.Quicklink,
+		Description:       s.Description,
 	}
 }

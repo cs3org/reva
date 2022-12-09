@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,19 +22,18 @@ import (
 	"net/http"
 
 	"contrib.go.opencensus.io/exporter/prometheus"
+	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	"go.opencensus.io/stats/view"
-
-	"github.com/cs3org/reva/pkg/rhttp/global"
 )
 
 func init() {
 	global.Register("prometheus", New)
 }
 
-// New returns a new prometheus service
+// New returns a new prometheus service.
 func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) {
 	conf := &config{}
 	if err := mapstructure.Decode(m, conf); err != nil {

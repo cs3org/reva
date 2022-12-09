@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,7 +23,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path"
@@ -55,7 +54,7 @@ func main() {
 	}
 
 	// also the build is okay
-	cmd := exec.Command("make", "release")
+	cmd := exec.Command("make", "all")
 	run(cmd)
 
 	fmt.Printf("Generating new release: version=%s\n", *version)
@@ -73,26 +72,26 @@ func main() {
 	run(cmd)
 
 	// install release-deps: calens
-	cmd = exec.Command("make", "release-deps")
+	cmd = exec.Command("make", "toolchain")
 	run(cmd)
 
 	// create new changelog
-	cmd = exec.Command(getGoBin("calens"), "-o", "CHANGELOG.md")
+	cmd = exec.Command("toolchain/calens", "-o", "CHANGELOG.md")
 	run(cmd)
 
 	// add new VERSION and BUILD_DATE
-	if err := ioutil.WriteFile("VERSION", []byte(*version), 0644); err != nil {
+	if err := os.WriteFile("VERSION", []byte(*version), 0644); err != nil {
 		fmt.Fprintf(os.Stderr, "error writing to VERSION file: %s", err)
 		os.Exit(1)
 	}
 
 	// add new VERSION and RELEASE_DATE
-	if err := ioutil.WriteFile("RELEASE_DATE", []byte(date), 0644); err != nil {
+	if err := os.WriteFile("RELEASE_DATE", []byte(date), 0644); err != nil {
 		fmt.Fprintf(os.Stderr, "error writing to RELEASE_DATE file: %s", err)
 		os.Exit(1)
 	}
 
-	tmp, err := ioutil.TempDir("", "reva-changelog")
+	tmp, err := os.MkdirTemp("", "reva-changelog")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error creating tmp directory to store changelog: %s", err)
 		os.Exit(1)
@@ -109,7 +108,7 @@ func main() {
 	run(cmd)
 
 	// create new changelog
-	cmd = exec.Command(getGoBin("calens"), "-o", "changelog/NOTE.md", "-i", path.Join(tmp, "changelog"))
+	cmd = exec.Command("toolchain/calens", "-o", "changelog/NOTE.md", "-i", path.Join(tmp, "changelog"))
 	run(cmd)
 
 	// Generate changelog also in the documentation
@@ -120,7 +119,7 @@ func main() {
 	}
 	os.RemoveAll(tmp)
 
-	data, err := ioutil.ReadFile("changelog/NOTE.md")
+	data, err := os.ReadFile("changelog/NOTE.md")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error reading NOTE.md: %s", err)
 		os.Exit(1)
@@ -138,7 +137,7 @@ description: >
 `, *version, *version, *version, date)
 
 	releaseDocs += string(data)
-	if err := ioutil.WriteFile(fmt.Sprintf("docs/content/en/docs/changelog/%s/_index.md", *version), []byte(releaseDocs), 0644); err != nil {
+	if err := os.WriteFile(fmt.Sprintf("docs/content/en/docs/changelog/%s/_index.md", *version), []byte(releaseDocs), 0644); err != nil {
 		fmt.Fprintf(os.Stderr, "error writing docs release file _index.md: %s", err)
 		os.Exit(1)
 	}
@@ -188,7 +187,6 @@ func add(msg string, files ...string) {
 		cmd.Dir = "."
 		run(cmd)
 	}
-
 }
 
 func createCommit(msg string) {
@@ -208,12 +206,6 @@ func createTag(version string) {
 	run(cmd)
 }
 
-func getGoBin(tool string) string {
-	cmd := exec.Command("go", "env", "GOPATH")
-	gopath := runAndGet(cmd)
-	gobin := fmt.Sprintf("%s/bin", gopath)
-	return path.Join(gobin, tool)
-}
 func run(cmd *exec.Cmd) {
 	var b bytes.Buffer
 	mw := io.MultiWriter(os.Stdout, &b)

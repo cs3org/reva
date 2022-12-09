@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -134,4 +134,24 @@ func AddPublicShareScope(share *link.PublicShare, role authpb.Role, scopes map[s
 		Role: role,
 	}
 	return scopes, nil
+}
+
+// GetPublicSharesFromScopes returns all the public shares in the given scope.
+func GetPublicSharesFromScopes(scopes map[string]*authpb.Scope) ([]*link.PublicShare, error) {
+	var shares []*link.PublicShare
+	for k, s := range scopes {
+		if strings.HasPrefix(k, "publicshare:") {
+			res := s.Resource
+			if res.Decoder != "json" {
+				return nil, errtypes.InternalError("resource should be json encoded")
+			}
+			var share link.PublicShare
+			err := utils.UnmarshalJSONToProtoV1(res.Value, &share)
+			if err != nil {
+				return nil, err
+			}
+			shares = append(shares, &share)
+		}
+	}
+	return shares, nil
 }

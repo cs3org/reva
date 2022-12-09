@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,14 +22,13 @@ import (
 	"context"
 	"fmt"
 
-	"go-micro.dev/v4/util/log"
-	"google.golang.org/grpc"
-
 	"github.com/asim/go-micro/plugins/events/nats/v4"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	"github.com/cs3org/reva/pkg/events"
 	"github.com/cs3org/reva/pkg/events/server"
 	"github.com/cs3org/reva/pkg/rgrpc"
+	"go-micro.dev/v4/util/log"
+	"google.golang.org/grpc"
 )
 
 const (
@@ -42,7 +41,8 @@ func init() {
 
 // NewUnary returns a new unary interceptor that emits events when needed
 // no lint because of the switch statement that should be extendable
-//nolint:gocritic
+//
+
 func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error) {
 	publisher, err := publisherFromConfig(m)
 	if err != nil {
@@ -56,7 +56,9 @@ func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error
 		}
 
 		var ev interface{}
-		switch v := res.(type) {
+
+		// gocritic is disabled because the use of .(type) outside type switch is forbidden
+		switch v := res.(type) { //nolint:gocritic
 		case *collaboration.CreateShareResponse:
 			ev = ShareCreated(v)
 		}

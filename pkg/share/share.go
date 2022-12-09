@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -139,7 +139,7 @@ func MatchesAnyFilter(share *collaboration.Share, filters []*collaboration.Filte
 // MatchesFilters checks if the share passes the given filters.
 // Filters of the same type form a disjuntion, a logical OR. Filters of separate type form a conjunction, a logical AND.
 // Here is an example:
-// (resource_id=1 OR resource_id=2) AND (grantee_type=USER OR grantee_type=GROUP)
+// (resource_id=1 OR resource_id=2) AND (grantee_type=USER OR grantee_type=GROUP).
 func MatchesFilters(share *collaboration.Share, filters []*collaboration.Filter) bool {
 	grouped := GroupFiltersByType(filters)
 	for _, f := range grouped {

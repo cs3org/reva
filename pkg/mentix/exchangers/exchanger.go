@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2022 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,11 +23,10 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/rs/zerolog"
-
 	"github.com/cs3org/reva/pkg/mentix/config"
 	"github.com/cs3org/reva/pkg/mentix/entity"
 	"github.com/cs3org/reva/pkg/mentix/meshdata"
+	"github.com/rs/zerolog"
 )
 
 // Exchanger is the base interface for importers and exporters.
