@@ -268,9 +268,9 @@ func (m *mgr) Share(ctx context.Context, md *provider.ResourceId, g *ocm.ShareGr
 			"shareWith":    g.Grantee.GetUserId().OpaqueId,
 			"name":         name,
 			"providerId":   fmt.Sprintf("%s:%s", md.StorageId, md.OpaqueId),
-			"owner":        userID.OpaqueId,
+			"owner":        fmt.Sprintf("%s@%s", userID.OpaqueId, userID.Idp),
 			"protocol":     protocol,
-			"meshProvider": userID.Idp, // FIXME: move this into the 'owner' string?
+			"meshProvider": userID.Idp,
 		}
 		err = sender.Send(ctx, requestBodyMap, pi)
 		if err != nil {
