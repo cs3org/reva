@@ -18,7 +18,7 @@
 					"is_monitored": true
 				},
 				"api_version": "0.0.1",
-				"host": "http://127.0.0.1:13001/"
+				"host": "127.0.0.1:13001"
 			},
 			{
 				"endpoint": {
@@ -31,7 +31,7 @@
 					"is_monitored": true
 				},
 				"api_version": "0.0.1",
-				"host": "http://127.0.0.1:13001/"
+				"host": "127.0.0.1:13001"
 			}
 		]
 	},
@@ -54,7 +54,7 @@
 					"is_monitored": true
 				},
 				"api_version": "0.0.1",
-				"host": "http://127.0.0.1:13001/"
+				"host": "127.0.0.1:13001"
 			},
 			{
 				"endpoint": {
@@ -67,7 +67,7 @@
 					"is_monitored": true
 				},
 				"api_version": "0.0.1",
-				"host": "http://127.0.0.1:13001/"
+				"host": "127.0.0.1:13001"
 			}
 		]
 	},
@@ -90,7 +90,7 @@
 					"is_monitored": true
 				},
 				"api_version": "0.0.1",
-				"host": "http://127.0.0.1:13001/"
+				"host": "127.0.0.1:13001"
 			},
 			{
 				"endpoint": {
@@ -103,7 +103,7 @@
 					"is_monitored": true
 				},
 				"api_version": "0.0.1",
-				"host": "http://127.0.0.1:13001/"
+				"host": "/127.0.0.1:13001"
 			}
 		]
 	},
@@ -126,7 +126,7 @@
 					"is_monitored": true
 				},
 				"api_version": "0.0.1",
-				"host": "http://127.0.0.1:13001/"
+				"host": "127.0.0.1:13001"
 			},
 			{
 				"endpoint": {
@@ -139,7 +139,7 @@
 					"is_monitored": true
 				},
 				"api_version": "0.0.1",
-				"host": "http://127.0.0.1:13001/"
+				"host": "127.0.0.1:13001"
 			}
 		]
 	}
