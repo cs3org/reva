@@ -20,6 +20,7 @@ package tus
 
 import (
 	"context"
+	"log"
 	"net/http"
 	"path"
 	"path/filepath"
@@ -99,6 +100,7 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 	config := tusd.Config{
 		StoreComposer:         composer,
 		NotifyCompleteUploads: true,
+		Logger:                log.New(appctx.GetLogger(context.Background()), "", 0),
 	}
 
 	handler, err := tusd.NewUnroutedHandler(config)
