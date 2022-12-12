@@ -43,6 +43,8 @@ import (
 	"github.com/pkg/errors"
 )
 
+var _idRegexp = regexp.MustCompile(".*/([^/]+).info")
+
 // Upload uploads data to the given resource
 // TODO Upload (and InitiateUpload) needs a way to receive the expected checksum.
 // Maybe in metadata as 'checksum' => 'sha1 aeosvp45w5xaeoe' = lowercase, space separated?
@@ -290,9 +292,8 @@ func (fs *Decomposedfs) uploadInfos(ctx context.Context) ([]tusd.FileInfo, error
 		return nil, err
 	}
 
-	idRegexp := regexp.MustCompile(".*/([^/]+).info")
 	for _, info := range infoFiles {
-		match := idRegexp.FindStringSubmatch(info)
+		match := _idRegexp.FindStringSubmatch(info)
 		if match == nil || len(match) < 2 {
 			continue
 		}
