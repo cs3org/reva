@@ -146,7 +146,7 @@ func (s *service) UnprotectedEndpoints() []string {
 	return []string{}
 }
 
-func (s *service) PullTransfer(ctx context.Context, req *datatx.PullTransferRequest) (*datatx.PullTransferResponse, error) {
+func (s *service) CreateTransfer(ctx context.Context, req *datatx.CreateTransferRequest) (*datatx.CreateTransferResponse, error) {
 	txInfo, startTransferErr := s.txManager.CreateTransfer(ctx, req.SrcTargetUri, req.DestTargetUri)
 
 	// we always save the transfer regardless of start transfer outcome
@@ -163,21 +163,21 @@ func (s *service) PullTransfer(ctx context.Context, req *datatx.PullTransferRequ
 	s.txShareDriver.model.TxShares[txInfo.GetId().OpaqueId] = txShare
 	if err := s.txShareDriver.model.saveTxShare(); err != nil {
 		err = errors.Wrap(err, "datatx service: error saving transfer share: "+datatx.Status_STATUS_INVALID.String())
-		return &datatx.PullTransferResponse{
-			Status: status.NewInvalid(ctx, "error pulling transfer"),
+		return &datatx.CreateTransferResponse{
+			Status: status.NewInvalid(ctx, "error creating transfer"),
 		}, err
 	}
 
 	// now check start transfer outcome
 	if startTransferErr != nil {
 		startTransferErr = errors.Wrap(startTransferErr, "datatx service: error starting transfer job")
-		return &datatx.PullTransferResponse{
-			Status: status.NewInvalid(ctx, "datatx service: error pulling transfer"),
+		return &datatx.CreateTransferResponse{
+			Status: status.NewInvalid(ctx, "datatx service: error creating transfer"),
 			TxInfo: txInfo,
 		}, startTransferErr
 	}
 
-	return &datatx.PullTransferResponse{
+	return &datatx.CreateTransferResponse{
 		Status: status.NewOK(ctx),
 		TxInfo: txInfo,
 	}, nil
