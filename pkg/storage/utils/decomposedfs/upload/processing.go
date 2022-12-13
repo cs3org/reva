@@ -273,7 +273,7 @@ func CreateNodeForUpload(upload *Upload, initAttrs map[string]string) (*node.Nod
 		lock, err = updateExistingNode(upload, n, spaceID, uint64(fsize))
 	}
 
-	defer filelocks.ReleaseLock(lock)
+	defer filelocks.ReleaseLock(lock) //nolint:errcheck
 	if err != nil {
 		return nil, err
 	}

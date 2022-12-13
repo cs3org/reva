@@ -1,6 +1,4 @@
 issues:
-  exclude:
-    - "Error return value of .* is not checked"
   exclude-rules:
     - path: internal/http/interceptors/log/log.go
       text: "SA1019:"
