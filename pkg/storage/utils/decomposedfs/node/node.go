@@ -128,33 +128,6 @@ func (n *Node) ChangeOwner(new *userpb.UserId) (err error) {
 	return
 }
 
-// SetMetadata populates a given key with its value.
-// Note that consumers should be aware of the metadata options on xattrs.go.
-func (n *Node) SetMetadata(key string, val string) (err error) {
-	nodePath := n.InternalPath()
-	if err := xattrs.Set(nodePath, key, val); err != nil {
-		return errors.Wrap(err, "Decomposedfs: could not set extended attribute")
-	}
-	return nil
-}
-
-// RemoveMetadata removes a given key
-func (n *Node) RemoveMetadata(key string) (err error) {
-	if err = xattrs.Remove(n.InternalPath(), key); err == nil || xattrs.IsAttrUnset(err) {
-		return nil
-	}
-	return err
-}
-
-// GetMetadata reads the metadata for the given key
-func (n *Node) GetMetadata(key string) (val string, err error) {
-	nodePath := n.InternalPath()
-	if val, err = xattrs.Get(nodePath, key); err != nil {
-		return "", errors.Wrap(err, "Decomposedfs: could not get extended attribute")
-	}
-	return val, nil
-}
-
 // WriteAllNodeMetadata writes the Node metadata to disk
 func (n *Node) WriteAllNodeMetadata() (err error) {
 	attribs := make(map[string]string)
@@ -1224,17 +1197,17 @@ func (n *Node) FindStorageSpaceRoot() error {
 
 // MarkProcessing marks the node as being processed
 func (n *Node) MarkProcessing() error {
-	return n.SetMetadata(xattrs.StatusPrefix, ProcessingStatus)
+	return n.SetXattr(xattrs.StatusPrefix, ProcessingStatus)
 }
 
 // UnmarkProcessing removes the processing flag from the node
 func (n *Node) UnmarkProcessing() error {
-	return n.RemoveMetadata(xattrs.StatusPrefix)
+	return n.RemoveXattr(xattrs.StatusPrefix)
 }
 
 // IsProcessing returns true if the node is currently being processed
 func (n *Node) IsProcessing() bool {
-	v, err := n.GetMetadata(xattrs.StatusPrefix)
+	v, err := n.Xattr(xattrs.StatusPrefix)
 	return err == nil && v == ProcessingStatus
 }
 
@@ -1254,7 +1227,7 @@ func (n *Node) SetScanData(info string, date time.Time) error {
 
 // ScanData returns scanning information of the node
 func (n *Node) ScanData() (scanned bool, virus string, scantime time.Time) {
-	ti, _ := n.GetMetadata(xattrs.ScanDatePrefix)
+	ti, _ := n.Xattr(xattrs.ScanDatePrefix)
 	if ti == "" {
 		return // not scanned yet
 	}
@@ -1264,7 +1237,7 @@ func (n *Node) ScanData() (scanned bool, virus string, scantime time.Time) {
 		return
 	}
 
-	i, err := n.GetMetadata(xattrs.ScanStatusPrefix)
+	i, err := n.Xattr(xattrs.ScanStatusPrefix)
 	if err != nil {
 		return
 	}
