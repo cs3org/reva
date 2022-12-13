@@ -30,6 +30,16 @@ import (
 	"github.com/pkg/errors"
 )
 
+// PermissionFunc should return true when the user has permission to access the node
+type PermissionFunc func(*Node) bool
+
+var (
+	// NoCheck doesn't check permissions, returns true always
+	NoCheck PermissionFunc = func(_ *Node) bool {
+		return true
+	}
+)
+
 // NoPermissions represents an empty set of permissions
 func NoPermissions() provider.ResourcePermissions {
 	return provider.ResourcePermissions{}

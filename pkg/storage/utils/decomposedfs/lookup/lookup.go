@@ -105,7 +105,7 @@ func (lu *Lookup) NodeFromSpaceID(ctx context.Context, id *provider.ResourceId) 
 }
 
 // Path returns the path for node
-func (lu *Lookup) Path(ctx context.Context, n *node.Node, hasPermission func(*node.Node) bool) (p string, err error) {
+func (lu *Lookup) Path(ctx context.Context, n *node.Node, hasPermission node.PermissionFunc) (p string, err error) {
 	root := n.SpaceRoot
 	for n.ID != root.ID {
 		p = filepath.Join(n.Name, p)
