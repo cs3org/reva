@@ -76,6 +76,7 @@ type FileInfo struct {
 	MTimeNanos uint32
 	Inode      uint64            `json:"inode"`
 	FID        uint64            `json:"fid"`
+	PID        uint64            `json:"pid"`
 	UID        uint64            `json:"uid"`
 	GID        uint64            `json:"gid"`
 	TreeSize   uint64            `json:"tree_size"`
