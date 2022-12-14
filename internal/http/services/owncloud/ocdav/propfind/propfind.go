@@ -695,6 +695,7 @@ func (p *Handler) getSpaceResourceInfos(ctx context.Context, w http.ResponseWrit
 
 	if res.Status.Code != rpc.Code_CODE_OK {
 		log.Debug().Interface("status", res.Status).Msg("List Container not ok, skipping")
+		w.WriteHeader(http.StatusInternalServerError)
 		return nil, false
 	}
 	for _, info := range res.Infos {
@@ -830,7 +831,7 @@ func requiresExplicitFetching(n *xml.Name) bool {
 		}
 	case net.NsOwncloud:
 		switch n.Local {
-		case "favorite", "share-types", "checksums", "size":
+		case "favorite", "share-types", "checksums", "size", "tags":
 			return true
 		default:
 			return false
@@ -1085,6 +1086,10 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 		if checksums.Len() > 0 {
 			checksums.WriteString("</oc:checksum>")
 			appendToOK(prop.Raw("oc:checksums", checksums.String()))
+		}
+
+		if k := md.GetArbitraryMetadata().GetMetadata(); k != nil {
+			propstatOK.Prop = append(propstatOK.Prop, prop.Raw("oc:tags", k["tags"]))
 		}
 
 		// ls do not report any properties as missing by default
@@ -1354,6 +1359,10 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 							appendToNotFound(prop.NotFound("oc:signature-auth"))
 						}
 					}
+				case "tags":
+					if k := md.GetArbitraryMetadata().GetMetadata(); k != nil {
+						propstatOK.Prop = append(propstatOK.Prop, prop.Raw("oc:tags", k["tags"]))
+					}
 				case "name":
 					appendToOK(prop.Escaped("oc:name", md.Name))
 				case "shareid":
@@ -1589,6 +1598,10 @@ func metadataKeyOf(n *xml.Name) string {
 	case net.NsOwncloud:
 		if n.Local == "share-types" {
 			return "share-types"
+		}
+
+		if n.Local == "tags" {
+			return "tags"
 		}
 	}
 	return fmt.Sprintf("%s/%s", n.Space, n.Local)

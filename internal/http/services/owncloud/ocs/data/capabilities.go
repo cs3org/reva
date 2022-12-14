@@ -132,6 +132,7 @@ type CapabilitiesFiles struct {
 	Undelete         ocsBool                      `json:"undelete" xml:"undelete"`
 	Versioning       ocsBool                      `json:"versioning" xml:"versioning"`
 	Favorites        ocsBool                      `json:"favorites" xml:"favorites"`
+	Tags             ocsBool                      `json:"tags" xml:"tags"`
 	BlacklistedFiles []string                     `json:"blacklisted_files" xml:"blacklisted_files>element" mapstructure:"blacklisted_files"`
 	TusSupport       *CapabilitiesFilesTusSupport `json:"tus_support" xml:"tus_support" mapstructure:"tus_support"`
 	Archivers        []*CapabilitiesArchiver      `json:"archivers" xml:"archivers" mapstructure:"archivers"`
