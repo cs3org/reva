@@ -1600,10 +1600,31 @@ func (c *Client) grpcMDResponseToFileInfo(st *erpc.MDResponse) (*eosclient.FileI
 			}
 			fi.XS = xs
 
-			log.Debug().Str("stat info - path", fi.File).Uint64("inode", fi.Inode).Uint64("uid", fi.UID).Uint64("gid", fi.GID).Str("etag", fi.ETag).Str("checksum", fi.XS.XSType+":"+fi.XS.XSSum).Msg("grpc response")
 		}
 	}
+
+	// work around an issue with the inode being received via grcp being 0
+	// Note: This can be removed once a proper inode value is retrieved
+	if fi.Inode == 0 {
+		fi.Inode = calcInode(fi)
+	}
+	if fi.XS != nil {
+		log.Debug().Str("stat info - path", fi.File).Uint64("inode", fi.Inode).Uint64("uid", fi.UID).Uint64("gid", fi.GID).Str("etag", fi.ETag).Str("checksum", fi.XS.XSType+":"+fi.XS.XSSum).Msg("grpc response")
+	} else {
+		log.Debug().Str("stat info - path", fi.File).Uint64("inode", fi.Inode).Uint64("uid", fi.UID).Uint64("gid", fi.GID).Str("etag", fi.ETag).Msg("grpc response")
+	}
+
 	return fi, nil
+}
+
+// calcInode translates a file id into an inode according to the legacy encoding
+// See https://github.com/cern-eos/eos/blob/3f8f06d8a67283da8b214aafbc39602a0481d4e2/common/FileId.hh#L138
+func calcInode(fi *eosclient.FileInfo) uint64 {
+	if fi.IsDir {
+		return fi.FID
+	}
+
+	return fi.FID << 28
 }
 
 // exec executes the command and returns the stdout, stderr and return code
