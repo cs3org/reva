@@ -140,6 +140,10 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 		return nil, err
 	}
 
+	if n.IsProcessing() {
+		return nil, errtypes.PreconditionFailed("file is processing")
+	}
+
 	// permissions are checked in NewUpload below
 
 	relative, err := fs.lu.Path(ctx, n, node.NoCheck)
