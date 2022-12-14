@@ -38,7 +38,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	revactx "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/events"
-	"github.com/cs3org/reva/v2/pkg/events/server"
+	"github.com/cs3org/reva/v2/pkg/events/stream"
 	"github.com/cs3org/reva/v2/pkg/rgrpc"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/utils"
@@ -260,6 +260,6 @@ func publisherFromConfig(m map[string]interface{}) (events.Publisher, error) {
 				RootCAs:            rootCAPool,
 			}
 		}
-		return server.NewNatsStream(natsjs.TLSConfig(tlsConf), natsjs.Address(address), natsjs.ClusterID(cid))
+		return stream.Nats(natsjs.TLSConfig(tlsConf), natsjs.Address(address), natsjs.ClusterID(cid))
 	}
 }

@@ -44,7 +44,7 @@ import (
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/events"
-	"github.com/cs3org/reva/v2/pkg/events/server"
+	"github.com/cs3org/reva/v2/pkg/events/stream"
 	"github.com/cs3org/reva/v2/pkg/logger"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v2/pkg/storage"
@@ -180,7 +180,7 @@ func New(o *options.Options, lu *lookup.Lookup, p PermissionsChecker, tp Tree, p
 			}
 		}
 
-		ev, err = server.NewNatsStream(
+		ev, err = stream.Nats(
 			natsjs.TLSConfig(tlsConf),
 			natsjs.Address(evtsCfg.NatsAddress),
 			natsjs.ClusterID(evtsCfg.NatsClusterID),
