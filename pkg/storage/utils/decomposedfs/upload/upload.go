@@ -400,9 +400,17 @@ func (upload *Upload) cleanup(cleanNode, cleanBin, cleanInfo bool) {
 				upload.log.Info().Str("path", upload.Node.ParentInternalPath()).Err(err).Msg("removing node from parent failed")
 			}
 		default:
-			// restore old version
-			if err := os.Rename(p, upload.Node.InternalPath()); err != nil {
+
+			if err := xattrs.CopyMetadata(upload.Node.InternalPath(), p, func(attributeName string) bool {
+				return strings.HasPrefix(attributeName, xattrs.ChecksumPrefix) ||
+					attributeName == xattrs.BlobIDAttr ||
+					attributeName == xattrs.BlobsizeAttr
+			}); err != nil {
 				upload.log.Info().Str("versionpath", p).Str("nodepath", upload.Node.InternalPath()).Err(err).Msg("renaming version node failed")
+			}
+
+			if err := os.RemoveAll(p); err != nil {
+				upload.log.Info().Str("versionpath", p).Str("nodepath", upload.Node.InternalPath()).Err(err).Msg("error removing version")
 			}
 
 		}

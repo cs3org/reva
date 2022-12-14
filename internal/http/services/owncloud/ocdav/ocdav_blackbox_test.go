@@ -542,6 +542,13 @@ var _ = Describe("ocdav", func() {
 						Status: status.NewFailedPrecondition(ctx, errors.New("precondition failed"), "precondition failed"),
 					}, nil)
 
+					client.On("Stat", mock.Anything, mock.Anything).Return(&cs3storageprovider.StatResponse{
+						Status: status.NewOK(ctx),
+						Info: &cs3storageprovider.ResourceInfo{
+							Type: cs3storageprovider.ResourceType_RESOURCE_TYPE_FILE,
+						},
+					}, nil)
+
 					handler.Handler().ServeHTTP(rr, req)
 					Expect(rr).To(HaveHTTPStatus(http.StatusConflict))
 					// TODO Expect(rr).To(HaveHTTPBody(BeEmpty()), "Body must be a sabredav exception")
