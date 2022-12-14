@@ -164,6 +164,10 @@ func AcquireWriteLock(file string) (*flock.Flock, error) {
 // ReleaseLock releases a lock from a file that was previously created
 // by AcquireReadLock or AcquireWriteLock.
 func ReleaseLock(lock *flock.Flock) error {
+	if lock == nil {
+		return errors.New("cannot unlock nil lock")
+	}
+
 	// there is a probability that if the file can not be unlocked,
 	// we also can not remove the file. We will only try to remove if it
 	// was successfully unlocked.

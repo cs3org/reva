@@ -1476,6 +1476,14 @@ func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, p
 		}
 	}
 
+	if status := utils.ReadPlainFromOpaque(md.Opaque, "status"); status == "processing" {
+		response.Propstat = append(response.Propstat, PropstatXML{
+			Status: "HTTP/1.1 425 TOO EARLY",
+			Prop:   propstatOK.Prop,
+		})
+		return &response, nil
+	}
+
 	if len(propstatOK.Prop) > 0 {
 		response.Propstat = append(response.Propstat, propstatOK)
 	}

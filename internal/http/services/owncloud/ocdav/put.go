@@ -137,6 +137,26 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	/* FIXME: to bring back 0-byte touch instead upload return fileid in TouchFileRequest and add it to response headers
+	if length == 0 {
+		tfRes, err := s.gwClient.TouchFile(ctx, &provider.TouchFileRequest{
+			Ref: ref,
+		})
+		if err != nil {
+			log.Error().Err(err).Msg("error sending grpc touch file request")
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		if tfRes.Status.Code != rpc.Code_CODE_OK {
+			log.Error().Interface("status", tfRes.Status).Msg("error touching file")
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusCreated)
+		return
+	}
+	*/
+
 	opaqueMap := map[string]*typespb.OpaqueEntry{
 		net.HeaderUploadLength: {
 			Decoder: "plain",

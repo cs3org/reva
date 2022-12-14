@@ -210,7 +210,6 @@ var _ = Describe("File uploads", func() {
 				Expect(uploadIds["tus"]).ToNot(BeEmpty())
 
 				resources, err := fs.ListFolder(ctx, rootRef, []string{}, []string{})
-
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(resources)).To(Equal(0))
 			})
@@ -226,7 +225,6 @@ var _ = Describe("File uploads", func() {
 				Expect(uploadIds["tus"]).ToNot(BeEmpty())
 
 				resources, err := fs.ListFolder(ctx, rootRef, []string{}, []string{})
-
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(resources)).To(Equal(0))
 			})
