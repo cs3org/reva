@@ -35,6 +35,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/rhttp"
+	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/rs/zerolog"
 )
@@ -137,7 +138,6 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	/* FIXME: to bring back 0-byte touch instead upload return fileid in TouchFileRequest and add it to response headers
 	if length == 0 {
 		tfRes, err := s.gwClient.TouchFile(ctx, &provider.TouchFileRequest{
 			Ref: ref,
@@ -152,10 +152,28 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
+		sRes, err := s.gwClient.Stat(ctx, &provider.StatRequest{
+			Ref: ref,
+		})
+		if err != nil {
+			log.Error().Err(err).Msg("error sending grpc touch file request")
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		if sRes.Status.Code != rpc.Code_CODE_OK {
+			log.Error().Interface("status", sRes.Status).Msg("error touching file")
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set(net.HeaderETag, sRes.Info.Etag)
+		w.Header().Set(net.HeaderOCETag, sRes.Info.Etag)
+		w.Header().Set(net.HeaderOCFileID, storagespace.FormatResourceID(*sRes.Info.Id))
+		w.Header().Set(net.HeaderLastModified, net.RFC1123Z(sRes.Info.Mtime))
+
 		w.WriteHeader(http.StatusCreated)
 		return
 	}
-	*/
 
 	opaqueMap := map[string]*typespb.OpaqueEntry{
 		net.HeaderUploadLength: {
