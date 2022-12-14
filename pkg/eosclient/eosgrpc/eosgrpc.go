@@ -1132,6 +1132,8 @@ func (c *Client) List(ctx context.Context, auth eosclient.Authorization, dpath s
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("func", "List").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("dpath", dpath).Msg("")
 
+	versionFolders := map[string]*eosclient.FileInfo{}
+
 	// Stuff filename, uid, gid into the FindRequest type
 	fdrq := new(erpc.FindRequest)
 	fdrq.Maxdepth = 1
@@ -1162,10 +1164,9 @@ func (c *Client) List(ctx context.Context, auth eosclient.Authorization, dpath s
 		return nil, err
 	}
 
-	var mylst []*eosclient.FileInfo
+	var infos []*eosclient.FileInfo
 	var parent *eosclient.FileInfo
-	i := 0
-	for {
+	for i := 0; ; i++ {
 		rsp, err := resp.Recv()
 		if err != nil {
 			if err == io.EOF {
@@ -1178,7 +1179,7 @@ func (c *Client) List(ctx context.Context, auth eosclient.Authorization, dpath s
 			log.Error().Err(err).Str("func", "List").Int("nitems", i).Str("path", dpath).Str("got err from EOS", err.Error()).Msg("")
 			if i > 0 {
 				log.Error().Str("path", dpath).Int("nitems", i).Msg("No more items, dirty exit")
-				return mylst, nil
+				return infos, nil
 			}
 		}
 
@@ -1189,39 +1190,64 @@ func (c *Client) List(ctx context.Context, auth eosclient.Authorization, dpath s
 
 		log.Debug().Str("func", "List").Str("path", dpath).Str("item resp:", fmt.Sprintf("%#v", rsp)).Msg("grpc response")
 
-		myitem, err := c.grpcMDResponseToFileInfo(rsp)
+		fi, err := c.grpcMDResponseToFileInfo(rsp)
 		if err != nil {
 			log.Error().Err(err).Str("func", "List").Str("path", dpath).Str("could not convert item:", fmt.Sprintf("%#v", rsp)).Str("err", err.Error()).Msg("")
 
 			return nil, err
 		}
 
-		i++
+		// If it's a version folder, store it in a map, so that for the corresponding file,
+		// we can return its inode instead
+		if isVersionFolder(fi.File) {
+			versionFolders[fi.File] = fi
+		}
+
 		// The first item is the directory itself... skip
-		if i == 1 {
-			parent = myitem
+		if i == 0 {
+			parent = fi
 			log.Debug().Str("func", "List").Str("path", dpath).Str("skipping first item resp:", fmt.Sprintf("%#v", rsp)).Msg("grpc response")
 			continue
 		}
 
-		mylst = append(mylst, myitem)
+		infos = append(infos, fi)
 	}
 
-	if parent.SysACL != nil {
+	for _, info := range infos {
+		if !info.IsDir && parent != nil && parent.SysACL != nil {
+			if info.SysACL == nil {
+				log.Warn().Str("func", "List").Str("path", dpath).Str("SysACL is nil, taking parent", "").Msg("grpc response")
+				info.SysACL = parent.SysACL
+			} else {
+				info.SysACL.Entries = append(info.SysACL.Entries, parent.SysACL.Entries...)
+			}
+		}
 
-		for _, info := range mylst {
-			if !info.IsDir && parent != nil {
+		// For files, inherit ACLs from the parent
+		// And set the inode to that of their version folder
+		if !info.IsDir && !isVersionFolder(dpath) {
+			versionFolderPath := getVersionFolder(info.File)
+			if vf, ok := versionFolders[versionFolderPath]; ok {
+				info.Inode = vf.Inode
 				if info.SysACL == nil {
 					log.Warn().Str("func", "List").Str("path", dpath).Str("SysACL is nil, taking parent", "").Msg("grpc response")
-					info.SysACL.Entries = parent.SysACL.Entries
+					info.SysACL = vf.SysACL
 				} else {
-					info.SysACL.Entries = append(info.SysACL.Entries, parent.SysACL.Entries...)
+					info.SysACL.Entries = append(info.SysACL.Entries, vf.SysACL.Entries...)
+				}
+				for k, v := range vf.Attrs {
+					info.Attrs[k] = v
+				}
+
+			} else if err := c.CreateDir(ctx, auth, versionFolderPath); err == nil { // Create the version folder if it doesn't exist
+				if md, err := c.GetFileInfoByPath(ctx, auth, versionFolderPath); err == nil {
+					info.Inode = md.Inode
 				}
 			}
 		}
 	}
 
-	return mylst, nil
+	return infos, nil
 
 }
 
@@ -1608,6 +1634,7 @@ func (c *Client) grpcMDResponseToFileInfo(st *erpc.MDResponse) (*eosclient.FileI
 	if fi.Inode == 0 {
 		fi.Inode = calcInode(fi)
 	}
+
 	if fi.XS != nil {
 		log.Debug().Str("stat info - path", fi.File).Uint64("inode", fi.Inode).Uint64("uid", fi.UID).Uint64("gid", fi.GID).Str("etag", fi.ETag).Str("checksum", fi.XS.XSType+":"+fi.XS.XSSum).Msg("grpc response")
 	} else {
