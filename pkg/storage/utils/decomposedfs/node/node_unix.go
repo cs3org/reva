@@ -21,7 +21,9 @@
 
 package node
 
-import "syscall"
+import (
+	"syscall"
+)
 
 // GetAvailableSize stats the filesystem and return the available bytes
 func GetAvailableSize(path string) (uint64, error) {
@@ -30,5 +32,7 @@ func GetAvailableSize(path string) (uint64, error) {
 	if err != nil {
 		return 0, err
 	}
-	return stat.Bavail * uint64(stat.Bsize), nil
+
+	// convert stat.Bavail to uint64 because it returns an int64 on freebsd
+	return uint64(stat.Bavail) * uint64(stat.Bsize), nil //nolint:unconvert
 }
