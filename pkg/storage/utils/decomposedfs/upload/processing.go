@@ -283,7 +283,7 @@ func CreateNodeForUpload(upload *Upload, initAttrs map[string]string) (*node.Nod
 	initAttrs[xattrs.NameAttr] = n.Name
 	initAttrs[xattrs.BlobIDAttr] = n.BlobID
 	initAttrs[xattrs.BlobsizeAttr] = strconv.FormatInt(n.Blobsize, 10)
-	initAttrs[xattrs.StatusPrefix] = node.ProcessingStatus
+	initAttrs[xattrs.StatusPrefix] = node.ProcessingStatus + upload.Info.ID
 
 	// update node metadata with new blobid etc
 	err = n.SetXattrsWithLock(initAttrs, lock)

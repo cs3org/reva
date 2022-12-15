@@ -377,4 +377,69 @@ var _ = Describe("Async file uploads", Ordered, func() {
 		})
 
 	})
+	When("Two uploads are happening in parallel", func() {
+		var secondUploadID string
+
+		JustBeforeEach(func() {
+			// upload again
+			uploadIds, err := fs.InitiateUpload(ctx, ref, 10, map[string]string{})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(len(uploadIds)).To(Equal(2))
+			Expect(uploadIds["simple"]).ToNot(BeEmpty())
+			Expect(uploadIds["tus"]).ToNot(BeEmpty())
+
+			uploadRef := &provider.Reference{Path: "/" + uploadIds["simple"]}
+
+			_, err = fs.Upload(ctx, uploadRef, io.NopCloser(bytes.NewReader(fileContent)), nil)
+			Expect(err).ToNot(HaveOccurred())
+
+			secondUploadID = uploadIds["simple"]
+
+			// wait for bytes received event
+			_, ok := (<-pub).(events.BytesReceived)
+			Expect(ok).To(BeTrue())
+		})
+
+		It("doesn't remove processing status when first upload is finished", func() {
+			// finish postprocessing
+			con <- events.PostprocessingFinished{
+				UploadID: uploadID,
+				Outcome:  events.PPOutcomeContinue,
+			}
+			// wait for upload to be ready
+			ev, ok := (<-pub).(events.UploadReady)
+			Expect(ok).To(BeTrue())
+			Expect(ev.Failed).To(BeFalse())
+
+			// check processing status
+			resources, err := fs.ListFolder(ctx, rootRef, []string{}, []string{})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(len(resources)).To(Equal(1))
+
+			item := resources[0]
+			Expect(item.Path).To(Equal(ref.Path))
+			Expect(utils.ReadPlainFromOpaque(item.Opaque, "status")).To(Equal("processing"))
+		})
+
+		It("removes processing status when second upload is finished", func() {
+			// finish postprocessing
+			con <- events.PostprocessingFinished{
+				UploadID: secondUploadID,
+				Outcome:  events.PPOutcomeContinue,
+			}
+			// wait for upload to be ready
+			ev, ok := (<-pub).(events.UploadReady)
+			Expect(ok).To(BeTrue())
+			Expect(ev.Failed).To(BeFalse())
+
+			// check processing status
+			resources, err := fs.ListFolder(ctx, rootRef, []string{}, []string{})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(len(resources)).To(Equal(1))
+
+			item := resources[0]
+			Expect(item.Path).To(Equal(ref.Path))
+			Expect(utils.ReadPlainFromOpaque(item.Opaque, "status")).To(Equal(""))
+		})
+	})
 })
