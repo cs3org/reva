@@ -268,15 +268,6 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 		case rpc.Code_CODE_ABORTED:
 			w.WriteHeader(http.StatusPreconditionFailed)
 		case rpc.Code_CODE_FAILED_PRECONDITION:
-			// check if file is processing TODO: special status code to avoid stat?
-			sRes, err := s.gwClient.Stat(ctx, &provider.StatRequest{
-				Ref: ref,
-			})
-			if err == nil && sRes.Status.Code == rpc.Code_CODE_OK && utils.ReadPlainFromOpaque(sRes.Info.Opaque, "status") == "processing" {
-				w.WriteHeader(http.StatusTooEarly)
-				return
-			}
-
 			w.WriteHeader(http.StatusConflict)
 		case rpc.Code_CODE_NOT_FOUND:
 			w.WriteHeader(http.StatusNotFound)
@@ -285,6 +276,9 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 		}
 		return
 	}
+
+	// ony send actual PUT request if file has bytes. Otherwise the initiate file upload request creates the file
+	// if length != 0 { // FIXME bring back 0 byte file upload handling, see https://github.com/owncloud/ocis/issues/2609
 
 	var ep, token string
 	for _, p := range uRes.Protocols {
