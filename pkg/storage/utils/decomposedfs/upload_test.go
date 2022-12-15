@@ -120,7 +120,7 @@ var _ = Describe("File uploads", func() {
 		}, nil).Times(1)
 		var err error
 		tree := tree.New(o.Root, true, true, lu, bs)
-		fs, err = decomposedfs.New(o, lu, permissions, tree, cs3permissionsclient)
+		fs, err = decomposedfs.New(o, lu, permissions, tree, cs3permissionsclient, nil)
 		Expect(err).ToNot(HaveOccurred())
 
 		resp, err := fs.CreateStorageSpace(ctx, &provider.CreateStorageSpaceRequest{Owner: user, Type: "personal"})

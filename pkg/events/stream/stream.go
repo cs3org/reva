@@ -3,6 +3,7 @@ package stream
 
 import (
 	"encoding/json"
+	"reflect"
 	"time"
 
 	"github.com/cenkalti/backoff"
@@ -35,7 +36,7 @@ func Nats(opts ...natsjs.Option) (events.Stream, error) {
 // Useful for tests or in memory applications
 type Chan [2]chan interface{}
 
-// Publish not implemented atm
+// Publish implementation
 func (ch Chan) Publish(_ string, msg interface{}, _ ...events.PublishOption) error {
 	go func() {
 		ch[0] <- msg
@@ -47,9 +48,19 @@ func (ch Chan) Publish(_ string, msg interface{}, _ ...events.PublishOption) err
 func (ch Chan) Consume(_ string, _ ...events.ConsumeOption) (<-chan events.Event, error) {
 	evch := make(chan events.Event)
 	go func() {
-		e := <-ch[1]
-		b, _ := json.Marshal(e)
-		evch <- events.Event{Payload: b}
+		for {
+			e := <-ch[1]
+			if e == nil {
+				// channel closed
+				return
+			}
+			b, _ := json.Marshal(e)
+			evname := reflect.TypeOf(e).String()
+			evch <- events.Event{
+				Payload:  b,
+				Metadata: map[string]string{"eventtype": evname},
+			}
+		}
 	}()
 	return evch, nil
 }

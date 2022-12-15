@@ -399,6 +399,9 @@ func (upload *Upload) cleanup(cleanNode, cleanBin, cleanInfo bool) {
 			if err := os.Remove(src); err != nil {
 				upload.log.Info().Str("path", upload.Node.ParentInternalPath()).Err(err).Msg("removing node from parent failed")
 			}
+
+			// remove node from upload as it no longer exists
+			upload.Node = nil
 		default:
 
 			if err := xattrs.CopyMetadata(upload.Node.InternalPath(), p, func(attributeName string) bool {
