@@ -117,7 +117,6 @@ func (opt *Options) init() {
 	if opt.CacheDirectory == "" {
 		opt.CacheDirectory = os.TempDir()
 	}
-
 }
 
 // Client performs actions against a EOS management node (MGM)
@@ -256,10 +255,6 @@ func (c *Client) AddACL(ctx context.Context, auth, rootAuth eosclient.Authorizat
 	if err != nil {
 		return err
 	}
-
-	// workaround to be root
-	// TODO: removed once fixed in eos grpc
-	rq.Role.Gid = 1
 
 	msg := new(erpc.NSRequest_AclRequest)
 	msg.Cmd = erpc.NSRequest_AclRequest_ACL_COMMAND(erpc.NSRequest_AclRequest_ACL_COMMAND_value["MODIFY"])
@@ -1248,7 +1243,6 @@ func (c *Client) List(ctx context.Context, auth eosclient.Authorization, dpath s
 	}
 
 	return infos, nil
-
 }
 
 // Read reads a file from the mgm and returns a handle to read it

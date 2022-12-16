@@ -1132,7 +1132,6 @@ func (fs *eosfs) getEosACL(ctx context.Context, g *provider.Grant) (*acl.Entry, 
 	} else {
 		qualifier = g.Grantee.GetGroupId().OpaqueId
 	}
-
 	eosACL := &acl.Entry{
 		Qualifier:   qualifier,
 		Permissions: permissions,
