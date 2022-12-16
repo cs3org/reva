@@ -1,18 +1,17 @@
 OC_CI_GOLANG = "owncloudci/golang:1.19"
 OC_CI_ALPINE = "owncloudci/alpine:latest"
 OSIXIA_OPEN_LDAP = "osixia/openldap:1.3.0"
-REDIS = "redis:6-alpine"
 OC_CI_PHP = "owncloudci/php:7.4"
 OC_LITMUS = "owncloud/litmus:latest"
 OC_CS3_API_VALIDATOR = "owncloud/cs3api-validator:0.2.0"
 OC_CI_BAZEL_BUILDIFIER = "owncloudci/bazel-buildifier:latest"
 
-def makeStep(target):
+def makeStep():
     return {
         "name": "build",
         "image": OC_CI_GOLANG,
         "commands": [
-            "make %s" % target,
+            "make build",
         ],
     }
 
@@ -44,16 +43,6 @@ def ldapService():
         },
     }
 
-def redisService():
-    return {
-        "name": "redis",
-        "image": REDIS,
-        "pull": "always",
-        "environment": {
-            "REDIS_DATABASES": 1,
-        },
-    }
-
 def cephService():
     return {
         "name": "ceph",
@@ -80,8 +69,6 @@ def main(ctx):
     # implemented for: ocisIntegrationTests and s3ngIntegrationTests
     return [
         checkStarlark(),
-        litmusOcisOldWebdav(),
-        litmusOcisNewWebdav(),
         litmusOcisSpacesDav(),
         virtualViews(),
     ] + ocisIntegrationTests(6) + s3ngIntegrationTests(12)
@@ -104,7 +91,7 @@ def virtualViews():
             },
         },
         "steps": [
-            makeStep("build-ci"),
+            makeStep(),
             {
                 "name": "revad-services",
                 "image": OC_CI_GOLANG,
@@ -145,111 +132,6 @@ def virtualViews():
         ],
     }
 
-def litmusOcisOldWebdav():
-    return {
-        "kind": "pipeline",
-        "type": "docker",
-        "name": "litmus-ocis-old-webdav",
-        "platform": {
-            "os": "linux",
-            "arch": "amd64",
-        },
-        "trigger": {
-            "event": {
-                "include": [
-                    "pull_request",
-                    "tag",
-                ],
-            },
-        },
-        "steps": [
-            makeStep("build-ci"),
-            {
-                "name": "revad-services",
-                "image": OC_CI_GOLANG,
-                "detach": True,
-                "commands": [
-                    "cd /drone/src/tests/oc-integration-tests/drone/",
-                    "/drone/src/cmd/revad/revad -c frontend.toml &",
-                    "/drone/src/cmd/revad/revad -c gateway.toml &",
-                    "/drone/src/cmd/revad/revad -c storage-home-ocis.toml &",
-                    "/drone/src/cmd/revad/revad -c storage-users-ocis.toml &",
-                    "/drone/src/cmd/revad/revad -c users.toml",
-                ],
-            },
-            {
-                "name": "sleep-for-revad-start",
-                "image": OC_CI_GOLANG,
-                "commands": [
-                    "sleep 5",
-                ],
-            },
-            {
-                "name": "litmus-ocis-old-webdav",
-                "image": OC_LITMUS,
-                "environment": {
-                    "LITMUS_URL": "http://revad-services:20080/remote.php/webdav",
-                    "LITMUS_USERNAME": "einstein",
-                    "LITMUS_PASSWORD": "relativity",
-                    "TESTS": "basic http copymove props",
-                },
-            },
-        ],
-    }
-
-def litmusOcisNewWebdav():
-    return {
-        "kind": "pipeline",
-        "type": "docker",
-        "name": "litmus-ocis-new-webdav",
-        "platform": {
-            "os": "linux",
-            "arch": "amd64",
-        },
-        "trigger": {
-            "event": {
-                "include": [
-                    "pull_request",
-                    "tag",
-                ],
-            },
-        },
-        "steps": [
-            makeStep("build-ci"),
-            {
-                "name": "revad-services",
-                "image": OC_CI_GOLANG,
-                "detach": True,
-                "commands": [
-                    "cd /drone/src/tests/oc-integration-tests/drone/",
-                    "/drone/src/cmd/revad/revad -c frontend.toml &",
-                    "/drone/src/cmd/revad/revad -c gateway.toml &",
-                    "/drone/src/cmd/revad/revad -c storage-home-ocis.toml &",
-                    "/drone/src/cmd/revad/revad -c storage-users-ocis.toml &",
-                    "/drone/src/cmd/revad/revad -c users.toml",
-                ],
-            },
-            {
-                "name": "sleep-for-revad-start",
-                "image": OC_CI_GOLANG,
-                "commands": [
-                    "sleep 5",
-                ],
-            },
-            {
-                "name": "litmus-ocis-new-webdav",
-                "image": OC_LITMUS,
-                "environment": {
-                    # UUID is einstein user, see https://github.com/owncloud/ocis-accounts/blob/8de0530f31ed5ffb0bbb7f7f3471f87f429cb2ea/pkg/service/v0/service.go#L45
-                    "LITMUS_URL": "http://revad-services:20080/remote.php/dav/files/4c510ada-c86b-4815-8820-42cdf82c3d51",
-                    "LITMUS_USERNAME": "einstein",
-                    "LITMUS_PASSWORD": "relativity",
-                    "TESTS": "basic http copymove props",
-                },
-            },
-        ],
-    }
-
 def litmusOcisSpacesDav():
     return {
         "kind": "pipeline",
@@ -268,7 +150,7 @@ def litmusOcisSpacesDav():
             },
         },
         "steps": [
-            makeStep("build-ci"),
+            makeStep(),
             {
                 "name": "revad-services",
                 "image": OC_CI_GOLANG,
@@ -333,7 +215,7 @@ def ocisIntegrationTests(parallelRuns, skipExceptParts = []):
                     },
                 },
                 "steps": [
-                    makeStep("build-ci"),
+                    makeStep(),
                     {
                         "name": "revad-services",
                         "image": OC_CI_GOLANG,
@@ -409,7 +291,7 @@ def s3ngIntegrationTests(parallelRuns, skipExceptParts = []):
                     },
                 },
                 "steps": [
-                    makeStep("build-ci"),
+                    makeStep(),
                     {
                         "name": "revad-services",
                         "image": OC_CI_GOLANG,

@@ -1,6 +1,9 @@
 name: Test
 on: [pull_request, push, workflow_dispatch]
 
+env:
+  TEST_IMAGE: 'revad:test'
+
 jobs:
   test:
     runs-on: self-hosted
@@ -14,7 +17,47 @@ jobs:
       - name: Test
         run: make test
       - name: Test integration
-        run: make test-integration REDIS_ADDRESS=redis:6379
+        run: make test-integration
+        env:
+          REDIS_ADDRESS: redis:6379
     services:
       redis:
         image: registry.cern.ch/docker.io/webhippie/redis
+  docker:
+    runs-on: self-hosted
+    strategy:
+      matrix:
+        image: [reva, revad, revad-eos, revad-ceph]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3.1.0
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      - name: Build Docker image from ${{ matrix.image }}
+        uses: docker/build-push-action@v3
+        with:
+          context: .
+          file: docker/Dockerfile.${{ matrix.image }}
+          tags: ${{ env.TEST_IMAGE }}
+          load: ${{ matrix.image == 'revad' }}
+      - name: Upload ${{ env.TEST_IMAGE }} to artifacts
+        uses: ishworkh/docker-image-artifact-upload@v1
+        if: ${{ matrix.image == 'revad' }}
+        with:
+          image: ${{ env.TEST_IMAGE }}
+          retention_days: '1'
+  litmus:
+    needs: docker
+    runs-on: self-hosted
+    strategy:
+      matrix:
+        test: [litmus-1-only, litmus-2-only]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Download image
+        uses: ishworkh/docker-image-artifact-download@v1
+        with:
+          image: ${{ env.TEST_IMAGE }}
+      - name: Test
+        run: make ${{ matrix.test }}

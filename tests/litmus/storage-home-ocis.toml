@@ -9,42 +9,39 @@
 
 [shared]
 jwt_secret = "Pive-Fumkiu4"
-gatewaysvc = "localhost:39000"
-
+gatewaysvc = "gateway:19000"
 
 [grpc]
-address = "0.0.0.0:32000"
+address = "0.0.0.0:12000"
 
 # This is a storage provider that grants direct access to the wrapped storage
-# the context path wrapper reads the username from the context and prefixes the relative storage path with it
+# the context path wrapper reads tho username from the context and prefixes the relative storage path with it
 [grpc.services.storageprovider]
 driver = "ocis"
 mount_path = "/home"
 mount_id = "123e4567-e89b-12d3-a456-426655440000"
 expose_data_server = true
-data_server_url = "http://localhost:12001/data"
+data_server_url = "http://storage-home-ocis:12001/data"
 enable_home_creation = true
+gateway_addr = "gateway:19000"
 
 [grpc.services.storageprovider.drivers.ocis]
-root = "/var/tmp/reva/data"
+root = "/tmp/reva/data"
 enable_home = true
 treetime_accounting = true
 treesize_accounting = true
-#user_layout = 
-# do we need owner for users?
-#owner = 95cb8724-03b2-11eb-a0a6-c33ef8ef53ad 
-
+gateway_addr = "gateway:19000"
 
 # we have a locally running dataprovider
 [http]
-address = "0.0.0.0:32001"
+address = "0.0.0.0:12001"
 
 [http.services.dataprovider]
 driver = "ocis"
-temp_folder = "/var/tmp/reva/tmp"
+temp_folder = "/tmp/reva/tmp"
 
 [http.services.dataprovider.drivers.ocis]
-root = "/var/tmp/reva/data"
+root = "/tmp/reva/data"
 enable_home = true
 treetime_accounting = true
 treesize_accounting = true
