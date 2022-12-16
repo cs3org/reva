@@ -421,7 +421,7 @@ var _ = Describe("Async file uploads", Ordered, func() {
 			Expect(utils.ReadPlainFromOpaque(item.Opaque, "status")).To(Equal("processing"))
 		})
 
-		It("removes processing status when second upload is finished", func() {
+		It("removes processing status when second upload is finished, even if first isn't", func() {
 			// finish postprocessing
 			con <- events.PostprocessingFinished{
 				UploadID: secondUploadID,

@@ -242,6 +242,13 @@ func (fs *Decomposedfs) Postprocessing(ch <-chan interface{}) {
 				keepUpload bool
 			)
 
+			n, err := node.ReadNode(ctx, fs.lu, up.Info.Storage["SpaceRoot"], up.Info.Storage["NodeId"], false)
+			if err != nil {
+				log.Error().Err(err).Str("uploadID", ev.UploadID).Msg("could not read node")
+				continue
+			}
+			up.Node = n
+
 			switch ev.Outcome {
 			default:
 				log.Error().Str("outcome", string(ev.Outcome)).Str("uploadID", ev.UploadID).Msg("unknown postprocessing outcome - aborting")
@@ -258,13 +265,6 @@ func (fs *Decomposedfs) Postprocessing(ch <-chan interface{}) {
 			case events.PPOutcomeDelete:
 				failed = true
 			}
-
-			n, err := node.ReadNode(ctx, fs.lu, up.Info.Storage["SpaceRoot"], up.Info.Storage["NodeId"], false)
-			if err != nil {
-				log.Error().Err(err).Str("uploadID", ev.UploadID).Msg("could not read node")
-				continue
-			}
-			up.Node = n
 
 			if p, err := node.ReadNode(ctx, fs.lu, up.Info.Storage["SpaceRoot"], n.ParentID, false); err != nil {
 				log.Error().Err(err).Str("uploadID", ev.UploadID).Msg("could not read parent")
