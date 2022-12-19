@@ -39,37 +39,38 @@ type Tags struct {
 	numtags int
 }
 
-// FromList creates a Tags struct from a list of tags
-func FromList(s string) *Tags {
-	t := &Tags{sep: _tagsep, maxtags: _maxtags, exists: make(map[string]bool)}
-	t.t = t.addTags(s)
+// New creates a Tag struct from a slice of tags, e.g. ["tag1", "tag2"] or a list of tags, e.g. "tag1,tag2"
+func New(ts ...string) *Tags {
+	t := &Tags{sep: _tagsep, maxtags: _maxtags, exists: make(map[string]bool), t: make([]string, 0)}
+	t.addTags(ts)
 	return t
 }
 
-// AddList appends a list of new tags and returns true if at least one was appended
-func (t *Tags) AddList(s string) bool {
-	tags := t.addTags(s)
-	t.t = append(tags, t.t...)
-	return len(tags) > 0
+// Add appends a list of new tags and returns true if at least one was appended
+func (t *Tags) Add(ts ...string) bool {
+	return len(t.addTags(ts)) > 0
 }
 
-// RemoveList removes a list of tags and returns true if at least one was removed
-func (t *Tags) RemoveList(s string) bool {
+// Remove removes a list of tags and returns true if at least one was removed
+func (t *Tags) Remove(s ...string) bool {
 	var removed bool
-	for _, tag := range strings.Split(s, t.sep) {
-		if !t.exists[tag] {
-			continue
-		}
 
-		for i, tt := range t.t {
-			if tt == tag {
-				t.t = append(t.t[:i], t.t[i+1:]...)
-				break
+	for _, tt := range s {
+		for _, tag := range strings.Split(tt, t.sep) {
+			if !t.exists[tag] {
+				continue
 			}
-		}
 
-		delete(t.exists, tag)
-		removed = true
+			for i, tt := range t.t {
+				if tt == tag {
+					t.t = append(t.t[:i], t.t[i+1:]...)
+					break
+				}
+			}
+
+			delete(t.exists, tag)
+			removed = true
+		}
 	}
 	return removed
 }
@@ -85,28 +86,31 @@ func (t *Tags) AsSlice() []string {
 }
 
 // adds the tags and returns a list of added tags
-func (t *Tags) addTags(s string) []string {
+func (t *Tags) addTags(s []string) []string {
 	added := make([]string, 0)
-	for _, tag := range strings.Split(s, t.sep) {
-		if tag == "" {
-			// ignore empty tags
-			continue
-		}
+	for _, tt := range s {
+		for _, tag := range strings.Split(tt, t.sep) {
+			if tag == "" {
+				// ignore empty tags
+				continue
+			}
 
-		if t.exists[tag] {
-			// tag is already existing
-			continue
-		}
+			if t.exists[tag] {
+				// tag is already existing
+				continue
+			}
 
-		if t.numtags >= t.maxtags {
-			// max number of tags reached. We return silently without warning anyone
-			break
-		}
+			if t.numtags >= t.maxtags {
+				// max number of tags reached. We return silently without warning anyone
+				break
+			}
 
-		added = append(added, tag)
-		t.exists[tag] = true
-		t.numtags++
+			added = append(added, tag)
+			t.exists[tag] = true
+			t.numtags++
+		}
 	}
 
+	t.t = append(added, t.t...)
 	return added
 }
