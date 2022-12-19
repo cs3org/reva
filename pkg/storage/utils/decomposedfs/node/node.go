@@ -70,7 +70,7 @@ const (
 	RootID = "root"
 
 	// ProcessingStatus is the name of the status when processing a file
-	ProcessingStatus = "processing"
+	ProcessingStatus = "processing:"
 )
 
 // Node represents a node in the tree and provides methods to get a Parent or Child instance
@@ -241,7 +241,10 @@ func ReadNode(ctx context.Context, lu PathLookup, spaceID, nodeID string, canLis
 
 	// append back revision to nodeid, even when returning a not existing node
 	defer func() {
-		n.ID += revisionSuffix
+		// when returning errors n is nil
+		if n != nil {
+			n.ID += revisionSuffix
+		}
 	}()
 
 	nodePath := n.InternalPath()
@@ -1195,20 +1198,20 @@ func (n *Node) FindStorageSpaceRoot() error {
 	return nil
 }
 
-// MarkProcessing marks the node as being processed
-func (n *Node) MarkProcessing() error {
-	return n.SetXattr(xattrs.StatusPrefix, ProcessingStatus)
-}
-
 // UnmarkProcessing removes the processing flag from the node
-func (n *Node) UnmarkProcessing() error {
+func (n *Node) UnmarkProcessing(uploadID string) error {
+	v, _ := n.Xattr(xattrs.StatusPrefix)
+	if v != ProcessingStatus+uploadID {
+		// file started another postprocessing later - do not remove
+		return nil
+	}
 	return n.RemoveXattr(xattrs.StatusPrefix)
 }
 
 // IsProcessing returns true if the node is currently being processed
 func (n *Node) IsProcessing() bool {
 	v, err := n.Xattr(xattrs.StatusPrefix)
-	return err == nil && v == ProcessingStatus
+	return err == nil && strings.HasPrefix(v, ProcessingStatus)
 }
 
 // IsSpaceRoot checks if the node is a space root

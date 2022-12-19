@@ -29,7 +29,7 @@ import (
 
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	"github.com/cs3org/reva/v2/pkg/events"
-	"github.com/cs3org/reva/v2/pkg/events/server"
+	"github.com/cs3org/reva/v2/pkg/events/stream"
 	datatxregistry "github.com/cs3org/reva/v2/pkg/rhttp/datatx/manager/registry"
 	"github.com/cs3org/reva/v2/pkg/rhttp/global"
 	"github.com/cs3org/reva/v2/pkg/rhttp/router"
@@ -114,7 +114,7 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 				RootCAs:            rootCAPool,
 			}
 		}
-		publisher, err = server.NewNatsStream(natsjs.TLSConfig(tlsConf), natsjs.Address(conf.NatsAddress), natsjs.ClusterID(conf.NatsClusterID))
+		publisher, err = stream.Nats(natsjs.TLSConfig(tlsConf), natsjs.Address(conf.NatsAddress), natsjs.ClusterID(conf.NatsClusterID))
 		if err != nil {
 			return nil, err
 		}

@@ -44,7 +44,7 @@ import (
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/events"
-	"github.com/cs3org/reva/v2/pkg/events/server"
+	"github.com/cs3org/reva/v2/pkg/events/stream"
 	"github.com/cs3org/reva/v2/pkg/logger"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v2/pkg/storage"
@@ -131,28 +131,7 @@ func NewDefault(m map[string]interface{}, bs tree.Blobstore) (storage.FS, error)
 		return nil, err
 	}
 
-	return New(o, lu, p, tp, permissionsClient)
-}
-
-// New returns an implementation of the storage.FS interface that talks to
-// a local filesystem.
-func New(o *options.Options, lu *lookup.Lookup, p PermissionsChecker, tp Tree, permissionsClient CS3PermissionsClient) (storage.FS, error) {
-	log := logger.New()
-	err := tp.Setup()
-	if err != nil {
-		log.Error().Err(err).Msg("could not setup tree")
-		return nil, errors.Wrap(err, "could not setup tree")
-	}
-
-	if o.MaxAcquireLockCycles != 0 {
-		filelocks.SetMaxLockCycles(o.MaxAcquireLockCycles)
-	}
-
-	if o.LockCycleDurationFactor != 0 {
-		filelocks.SetLockCycleDurationFactor(o.LockCycleDurationFactor)
-	}
-
-	var ev events.Stream
+	var es events.Stream
 	if o.Events.NatsAddress != "" {
 		evtsCfg := o.Events
 		var (
@@ -180,7 +159,7 @@ func New(o *options.Options, lu *lookup.Lookup, p PermissionsChecker, tp Tree, p
 			}
 		}
 
-		ev, err = server.NewNatsStream(
+		es, err = stream.Nats(
 			natsjs.TLSConfig(tlsConf),
 			natsjs.Address(evtsCfg.NatsAddress),
 			natsjs.ClusterID(evtsCfg.NatsClusterID),
@@ -190,6 +169,27 @@ func New(o *options.Options, lu *lookup.Lookup, p PermissionsChecker, tp Tree, p
 		}
 	}
 
+	return New(o, lu, p, tp, permissionsClient, es)
+}
+
+// New returns an implementation of the storage.FS interface that talks to
+// a local filesystem.
+func New(o *options.Options, lu *lookup.Lookup, p PermissionsChecker, tp Tree, permissionsClient CS3PermissionsClient, es events.Stream) (storage.FS, error) {
+	log := logger.New()
+	err := tp.Setup()
+	if err != nil {
+		log.Error().Err(err).Msg("could not setup tree")
+		return nil, errors.Wrap(err, "could not setup tree")
+	}
+
+	if o.MaxAcquireLockCycles != 0 {
+		filelocks.SetMaxLockCycles(o.MaxAcquireLockCycles)
+	}
+
+	if o.LockCycleDurationFactor != 0 {
+		filelocks.SetLockCycleDurationFactor(o.LockCycleDurationFactor)
+	}
+
 	fs := &Decomposedfs{
 		tp:                tp,
 		lu:                lu,
@@ -197,17 +197,17 @@ func New(o *options.Options, lu *lookup.Lookup, p PermissionsChecker, tp Tree, p
 		p:                 p,
 		chunkHandler:      chunking.NewChunkHandler(filepath.Join(o.Root, "uploads")),
 		permissionsClient: permissionsClient,
-		stream:            ev,
+		stream:            es,
 		cache:             cache.GetStatCache(o.StatCache.CacheStore, o.StatCache.CacheNodes, o.StatCache.CacheDatabase, "stat", 0),
 	}
 
 	if o.AsyncFileUploads {
-		if o.Events.NatsAddress == "" {
-			log.Error().Msg("need nats for async file processing")
+		if fs.stream == nil {
+			log.Error().Msg("need event stream for async file processing")
 			return nil, errors.New("need nats for async file processing")
 		}
 
-		ch, err := events.Consume(ev, "dcfs", events.PostprocessingFinished{}, events.VirusscanFinished{})
+		ch, err := events.Consume(fs.stream, "dcfs", events.PostprocessingFinished{}, events.VirusscanFinished{})
 		if err != nil {
 			return nil, err
 		}
@@ -242,6 +242,13 @@ func (fs *Decomposedfs) Postprocessing(ch <-chan interface{}) {
 				keepUpload bool
 			)
 
+			n, err := node.ReadNode(ctx, fs.lu, up.Info.Storage["SpaceRoot"], up.Info.Storage["NodeId"], false)
+			if err != nil {
+				log.Error().Err(err).Str("uploadID", ev.UploadID).Msg("could not read node")
+				continue
+			}
+			up.Node = n
+
 			switch ev.Outcome {
 			default:
 				log.Error().Str("outcome", string(ev.Outcome)).Str("uploadID", ev.UploadID).Msg("unknown postprocessing outcome - aborting")
@@ -258,13 +265,6 @@ func (fs *Decomposedfs) Postprocessing(ch <-chan interface{}) {
 			case events.PPOutcomeDelete:
 				failed = true
 			}
-
-			n, err := node.ReadNode(ctx, fs.lu, up.Info.Storage["SpaceRoot"], up.Info.Storage["NodeId"], false)
-			if err != nil {
-				log.Error().Err(err).Str("uploadID", ev.UploadID).Msg("could not read node")
-				continue
-			}
-			up.Node = n
 
 			if p, err := node.ReadNode(ctx, fs.lu, up.Info.Storage["SpaceRoot"], n.ParentID, false); err != nil {
 				log.Error().Err(err).Str("uploadID", ev.UploadID).Msg("could not read parent")

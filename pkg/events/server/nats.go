@@ -19,13 +19,6 @@
 package server
 
 import (
-	"time"
-
-	"github.com/cenkalti/backoff"
-	"github.com/cs3org/reva/v2/pkg/logger"
-	"go-micro.dev/v4/events"
-
-	"github.com/go-micro/plugins/v4/events/natsjs"
 	nserver "github.com/nats-io/nats-server/v2/server"
 )
 
@@ -51,23 +44,4 @@ func RunNatsServer(opts ...Option) error {
 
 	server.Start()
 	return nil
-}
-
-// NewNatsStream returns a streaming client used by `Consume` and `Publish` methods
-// retries exponentially to connect to a nats server
-func NewNatsStream(opts ...natsjs.Option) (events.Stream, error) {
-	b := backoff.NewExponentialBackOff()
-	var stream events.Stream
-	o := func() error {
-		n := b.NextBackOff()
-		s, err := natsjs.NewStream(opts...)
-		if err != nil && n > time.Second {
-			logger.New().Error().Err(err).Msgf("can't connect to nats (jetstream) server, retrying in %s", n)
-		}
-		stream = s
-		return err
-	}
-
-	err := backoff.Retry(o, b)
-	return stream, err
 }

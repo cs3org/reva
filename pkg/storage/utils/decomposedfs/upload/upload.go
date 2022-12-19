@@ -129,7 +129,7 @@ func Cleanup(upload *Upload, failure bool, keepUpload bool) {
 
 	// unset processing status
 	if upload.Node != nil { // node can be nil when there was an error before it was created (eg. checksum-mismatch)
-		if err := upload.Node.UnmarkProcessing(); err != nil {
+		if err := upload.Node.UnmarkProcessing(upload.Info.ID); err != nil {
 			upload.log.Info().Str("path", upload.Node.InternalPath()).Err(err).Msg("unmarking processing failed")
 		}
 	}
@@ -399,10 +399,21 @@ func (upload *Upload) cleanup(cleanNode, cleanBin, cleanInfo bool) {
 			if err := os.Remove(src); err != nil {
 				upload.log.Info().Str("path", upload.Node.ParentInternalPath()).Err(err).Msg("removing node from parent failed")
 			}
+
+			// remove node from upload as it no longer exists
+			upload.Node = nil
 		default:
-			// restore old version
-			if err := os.Rename(p, upload.Node.InternalPath()); err != nil {
+
+			if err := xattrs.CopyMetadata(upload.Node.InternalPath(), p, func(attributeName string) bool {
+				return strings.HasPrefix(attributeName, xattrs.ChecksumPrefix) ||
+					attributeName == xattrs.BlobIDAttr ||
+					attributeName == xattrs.BlobsizeAttr
+			}); err != nil {
 				upload.log.Info().Str("versionpath", p).Str("nodepath", upload.Node.InternalPath()).Err(err).Msg("renaming version node failed")
+			}
+
+			if err := os.RemoveAll(p); err != nil {
+				upload.log.Info().Str("versionpath", p).Str("nodepath", upload.Node.InternalPath()).Err(err).Msg("error removing version")
 			}
 
 		}

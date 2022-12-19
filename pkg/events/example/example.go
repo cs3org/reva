@@ -26,6 +26,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/events/example/consumer"
 	"github.com/cs3org/reva/v2/pkg/events/example/publisher"
 	"github.com/cs3org/reva/v2/pkg/events/server"
+	"github.com/cs3org/reva/v2/pkg/events/stream"
 	"github.com/go-micro/plugins/v4/events/natsjs"
 )
 
@@ -67,7 +68,7 @@ func Server() {
 
 // Client builds a nats client
 func Client() events.Stream {
-	c, err := server.NewNatsStream(
+	c, err := stream.Nats(
 		natsjs.Address("127.0.0.1:9233"),
 		natsjs.ClusterID("test-cluster"),
 	)
