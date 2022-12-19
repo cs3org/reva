@@ -18,7 +18,7 @@
 					"is_monitored": true
 				},
 				"api_version": "0.0.1",
-				"host": "https://sciencemesh.cernbox.cern.ch/iop/"
+				"host": "sciencemesh.cernbox.cern.ch"
 			},
 			{
 				"endpoint": {
@@ -31,7 +31,7 @@
 					"is_monitored": true
 				},
 				"api_version": "0.0.1",
-				"host": "https://sciencemesh.cernbox.cern.ch/iop/"
+				"host": "sciencemesh.cernbox.cern.ch"
 			}
 		]
 	},
@@ -54,7 +54,7 @@
 					"is_monitored": true
 				},
 				"api_version": "0.0.1",
-				"host": "https://sciencemesh.cesnet.cz/iop/"
+				"host": "sciencemesh.cesnet.cz"
 			},
 			{
 				"endpoint": {
@@ -67,7 +67,7 @@
 					"is_monitored": true
 				},
 				"api_version": "0.0.1",
-				"host": "https://sciencemesh.cesnet.cz/iop/"
+				"host": "sciencemesh.cesnet.cz"
 			}
 		]
 	},
@@ -90,7 +90,7 @@
 					"is_monitored": true
 				},
 				"api_version": "0.0.1",
-				"host": "https://sciencemesh-test.uni-muenster.de/api/"
+				"host": "sciencemesh-test.uni-muenster.de"
 			},
 			{
 				"endpoint": {
@@ -103,7 +103,7 @@
 					"is_monitored": true
 				},
 				"api_version": "0.0.1",
-				"host": "https://sciencemesh-test.uni-muenster.de/api/"
+				"host": "sciencemesh-test.uni-muenster.de"
 			}
 		]
 	},
@@ -126,7 +126,7 @@
 					"is_monitored": true
 				},
 				"api_version": "0.0.1",
-				"host": "https://sciencemesh.cubbit.io/"
+				"host": "sciencemesh.cubbit.io"
 			},
 			{
 				"endpoint": {
@@ -139,7 +139,7 @@
 					"is_monitored": true
 				},
 				"api_version": "0.0.1",
-				"host": "https://sciencemesh.cubbit.io/"
+				"host": "sciencemesh.cubbit.io"
 			}
 		]
 	},
@@ -162,7 +162,7 @@
 					"is_monitored": true
 				},
 				"api_version": "0.0.1",
-				"host": "https://sciencemesh.softwaremind.com/iop/"
+				"host": "sciencemesh.softwaremind.com"
 			},
 			{
 				"endpoint": {
@@ -175,7 +175,7 @@
 					"is_monitored": true
 				},
 				"api_version": "0.0.1",
-				"host": "https://sciencemesh.softwaremind.com/iop/"
+				"host": "sciencemesh.softwaremind.com"
 			}
 		]
 	},
@@ -198,7 +198,7 @@
 					"is_monitored": true
 				},
 				"api_version": "0.0.1",
-				"host": "https://app.cs3mesh-iop.k8s.surfsara.nl/iop/"
+				"host": "app.cs3mesh-iop.k8s.surfsara.nl"
 			},
 			{
 				"endpoint": {
@@ -211,7 +211,7 @@
 					"is_monitored": true
 				},
 				"api_version": "0.0.1",
-				"host": "https://app.cs3mesh-iop.k8s.surfsara.nl/iop/"
+				"host": "app.cs3mesh-iop.k8s.surfsara.nl"
 			}
 		]
 	},
@@ -234,7 +234,7 @@
 					"is_monitored": true
 				},
 				"api_version": "0.0.1",
-				"host": "https://sciencemesh-test.switch.ch/api/"
+				"host": "sciencemesh-test.switch.ch"
 			},
 			{
 				"endpoint": {
@@ -247,7 +247,7 @@
 					"is_monitored": true
 				},
 				"api_version": "0.0.1",
-				"host": "https://sciencemesh-test.switch.ch/api/"
+				"host": "sciencemesh-test.switch.ch"
 			}
 		]
 	},
@@ -270,7 +270,7 @@
 					 "is_monitored": true
 				 },
 				 "api_version": "0.0.1",
-				 "host": "https://sciencemesh.sciencedata.dk/iop/"
+				 "host": "sciencemesh.sciencedata.dk"
 			},
 			{
 			         "endpoint": {
@@ -283,7 +283,7 @@
 					 "is_monitored": true
 				 },
 				 "api_version": "0.0.1",
-				 "host": "https://sciencemesh.sciencedata.dk/iop"
+				 "host": "sciencemesh.sciencedata.dk"
 			}
 		
 		]
