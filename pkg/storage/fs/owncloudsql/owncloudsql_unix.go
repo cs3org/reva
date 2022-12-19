@@ -78,8 +78,10 @@ func (fs *owncloudsqlfs) GetQuota(ctx context.Context, ref *provider.Reference) 
 	if err != nil {
 		return 0, 0, 0, err
 	}
-	total := stat.Blocks * uint64(stat.Bsize)                // Total data blocks in filesystem
-	used := (stat.Blocks - stat.Bavail) * uint64(stat.Bsize) // Free blocks available to unprivileged user
+	// Total data blocks in filesystem
+	total := stat.Blocks * uint64(stat.Bsize)
+	// Free blocks available to unprivileged user
+	used := (stat.Blocks - uint64(stat.Bavail)) * uint64(stat.Bsize) //nolint:unconvert
 	remaining := total - used
 	return total, used, remaining, nil
 }

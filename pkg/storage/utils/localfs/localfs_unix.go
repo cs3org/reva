@@ -76,8 +76,12 @@ func (fs *localfs) GetQuota(ctx context.Context, ref *provider.Reference) (uint6
 	if err != nil {
 		return 0, 0, 0, err
 	}
-	total := stat.Blocks * uint64(stat.Bsize)                // Total data blocks in filesystem
-	used := (stat.Blocks - stat.Bavail) * uint64(stat.Bsize) // Free blocks available to unprivileged user
-	remaining := stat.Bavail * uint64(stat.Bsize)
+	// Total data blocks in filesystem
+	total := stat.Blocks * uint64(stat.Bsize)
+	// Free blocks available to unprivileged user
+	// convert stat.Bavail to uint64 because it returns an int64 on freebsd
+	used := (stat.Blocks - uint64(stat.Bavail)) * uint64(stat.Bsize) //nolint:unconvert
+	// convert stat.Bavail to uint64 because it returns an int64 on freebsd
+	remaining := uint64(stat.Bavail) * uint64(stat.Bsize) //nolint:unconvert
 	return total, used, remaining, nil
 }
