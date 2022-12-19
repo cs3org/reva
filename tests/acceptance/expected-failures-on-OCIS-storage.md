@@ -190,8 +190,8 @@ File and sync features in a shared scenario
 - [apiSharePublicLink1/accessToPublicLinkShare.feature:47](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink1/accessToPublicLinkShare.feature#L47)
 - [apiSharePublicLink1/createPublicLinkShare.feature:218](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink1/createPublicLinkShare.feature#L218)
 - [apiSharePublicLink1/createPublicLinkShare.feature:219](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink1/createPublicLinkShare.feature#L219)
-- [apiSharePublicLink1/createPublicLinkShare.feature:581](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink1/createPublicLinkShare.feature#L581)
-- [apiSharePublicLink1/createPublicLinkShare.feature:602](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink1/createPublicLinkShare.feature#L602)
+- [apiSharePublicLink1/createPublicLinkShare.feature:531](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink1/createPublicLinkShare.feature#L531)
+- [apiSharePublicLink1/createPublicLinkShare.feature:552](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink1/createPublicLinkShare.feature#L552)
 
 #### [creating public links with permissions fails](https://github.com/owncloud/product/issues/252)
 
