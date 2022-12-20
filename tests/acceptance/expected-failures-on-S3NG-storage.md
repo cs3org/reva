@@ -219,8 +219,8 @@ File and sync features in a shared scenario
 - [apiSharePublicLink1/accessToPublicLinkShare.feature:47](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink1/accessToPublicLinkShare.feature#L47)
 - [apiSharePublicLink1/createPublicLinkShare.feature:199](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink1/createPublicLinkShare.feature#L199)
 - [apiSharePublicLink1/createPublicLinkShare.feature:200](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink1/createPublicLinkShare.feature#L200)
-- [apiSharePublicLink1/createPublicLinkShare.feature:531](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink1/createPublicLinkShare.feature#L531)
-- [apiSharePublicLink1/createPublicLinkShare.feature:552](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink1/createPublicLinkShare.feature#L552)
+- [apiSharePublicLink1/createPublicLinkShare.feature:528](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink1/createPublicLinkShare.feature#L528)
+- [apiSharePublicLink1/createPublicLinkShare.feature:549](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink1/createPublicLinkShare.feature#L549)
 
 #### [creating public links with permissions fails](https://github.com/owncloud/product/issues/252)
 
@@ -981,8 +981,8 @@ _ocs: api compatibility, return correct status code_
 - [apiShareOperationsToShares1/gettingShares.feature:39](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareOperationsToShares1/gettingShares.feature#L39)
 
 #### [These tests pass in ocis and reva egde but fail in master with `file_target has unexpected value '/home'`](https://github.com/owncloud/ocis/issues/2113)
-- [apiSharePublicLink1/createPublicLinkShare.feature:475](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink1/createPublicLinkShare.feature#L475)
-- [apiSharePublicLink1/createPublicLinkShare.feature:476](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink1/createPublicLinkShare.feature#L476)
+- [apiSharePublicLink1/createPublicLinkShare.feature:434](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink1/createPublicLinkShare.feature#L434)
+- [apiSharePublicLink1/createPublicLinkShare.feature:435](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiSharePublicLink1/createPublicLinkShare.feature#L435)
 
 #### [valid WebDAV (DELETE, COPY or MOVE) requests with body must exit with 415](https://github.com/owncloud/ocis/issues/4332)
 - [apiAuthWebDav/webDavDELETEAuth.feature:187](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthWebDav/webDavDELETEAuth.feature#L187)
