@@ -1,33 +1,32 @@
-BUILD_DATE=`date +%FT%T%z`
-GIT_COMMIT ?= `git rev-parse --short HEAD`
-GIT_DIRTY=`git diff-index --quiet HEAD -- || echo "dirty-"`
-VERSION	?= `git describe --always`
-GO_VERSION ?= `go version | awk '{print $$3}'`
-BUILD_FLAGS="-X main.gitCommit=${GIT_COMMIT} -X main.version=${VERSION} -X main.goVersion=${GO_VERSION} -X main.buildDate=${BUILD_DATE}"
+BUILD_DATE	= `date +%FT%T%z`
+GIT_COMMIT	?= `git rev-parse --short HEAD`
+GIT_DIRTY	= `git diff-index --quiet HEAD -- || echo "dirty-"`
+VERSION		?= `git describe --always`
+GO_VERSION	?= `go version | awk '{print $$3}'`
+BUILD_FLAGS	= "-X main.gitCommit=${GIT_COMMIT} -X main.version=${VERSION} -X main.goVersion=${GO_VERSION} -X main.buildDate=${BUILD_DATE}"
 
-TEST_IMAGE	?= revad:test
+.PHONY: all
+all: build-revad build-reva test lint gen-doc
+
+IMAGE			?= revad:test
 
 .PHONY: test-image
 test-image:
-	docker build -t $(TEST_IMAGE) -f docker/Dockerfile.revad .
+	docker build -t $(IMAGE) -f docker/Dockerfile.revad .
 
-LITMUS		?= $(CURDIR)/tests/litmus
-TIMEOUT		?= 3600
-URL_PATH	?= /remote.php/webdav
+LITMUS	?= $(CURDIR)/tests/litmus
+TIMEOUT	?= 3600
 
-.PHONY: litmus-1-only
-litmus-1-only:
-	@cd $(LITMUS) && URL_PATH=$(URL_PATH) TEST_IMAGE=$(TEST_IMAGE) docker-compose up --remove-orphans --force-recreate --exit-code-from litmus --abort-on-container-exit --timeout $(TIMEOUT)
+.PHONY: litmus-only
+litmus-only:
+ifndef PROFILE
+	$(error PROFILE is not defined)
+else
+	@cd $(LITMUS) && IMAGE=$(IMAGE) docker-compose --profile $(PROFILE) up --remove-orphans --exit-code-from litmus-$(PROFILE) --abort-on-container-exit --timeout $(TIMEOUT)
+endif
 
-.PHONY: litmus-1
-litmus-1: test-image litmus-1-only
-
-.PHONY: litmus-2-only
-litmus-2-only: URL_PATH=/remote.php/dav/files/4c510ada-c86b-4815-8820-42cdf82c3d51
-litmus-2-only: litmus-1-only
-
-.PHONY: litmus-2
-litmus-2: test-image litmus-2-only
+.PHONY: litmus
+litmus: test-image litmus-only
 
 TOOLCHAIN		?= $(CURDIR)/toolchain
 GOLANGCI_LINT	?= $(TOOLCHAIN)/golangci-lint
@@ -47,7 +46,7 @@ $(GOLANGCI_LINT):
 
 .PHONY: check-changelog
 lint: $(GOLANGCI_LINT)
-	$(GOLANGCI_LINT) run
+	@$(GOLANGCI_LINT) run || (echo "Tip: many lint errors can be automatically fixed with \"make lint-fix\""; exit 1)
 
 .PHONY: lint-fix
 lint-fix: $(GOLANGCI_LINT)
@@ -86,9 +85,6 @@ off:
 imports: off $(GOIMPORTS)
 	$(GOIMPORTS) -w tools pkg internal cmd
 
-.PHONY: build
-build: build-revad build-reva
-
 .PHONY: build-cephfs
 build-cephfs: build-revad-cephfs build-reva
 
@@ -123,11 +119,11 @@ build-reva-docker: off
 
 .PHONY: test
 test: off
-	go test -coverprofile coverage.out -race $$(go list ./... | grep -v /tests/integration)
+	go test -race $$(go list ./... | grep -v /tests/integration)
 
 .PHONY: test-integration
-test-integration: build
-	cd tests/integration && go test -race ./...
+test-integration: build-revad
+	go test -race ./tests/integration/...
 
 .PHONY: contrib
 contrib:
@@ -140,9 +136,6 @@ gen-doc:
 .PHONY: clean
 clean: toolchain-clean
 	rm -rf dist
-
-.PHONY: all
-all: build test lint gen-doc
 
 # create local build versions
 dist: gen-doc

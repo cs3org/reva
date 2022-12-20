@@ -29,7 +29,7 @@ allow_credentials = true
 [http.services.ocdav]
 # serve ocdav on the root path
 prefix = ""
-chunk_folder = "/tmp/reva/chunks"
+chunk_folder = "/var/tmp/reva/chunks"
 # for user lookups
 # prefix the path of requests to /dav/files with this namespace
 # While owncloud has only listed usernames at this endpoint CERN has
