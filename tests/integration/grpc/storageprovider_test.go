@@ -610,7 +610,6 @@ var _ = Describe("storage providers", func() {
 
 			assertCreateContainer()
 			assertListContainer()
-			// assertGetPath() TODO: Investigate why this test is failing
 			assertDelete()
 			assertMove()
 			assertGrants()

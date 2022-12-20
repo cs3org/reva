@@ -44,7 +44,7 @@ RUN mkdir -p /go/bin && \
 
 RUN cp -r examples/ceph /etc/
 
-RUN mkdir -p /etc/revad/ && echo "" > /etc/revad/revad.toml
+RUN mkdir -p /etc/revad/ && touch /etc/revad/revad.toml
 
 EXPOSE 9999 10000
 
