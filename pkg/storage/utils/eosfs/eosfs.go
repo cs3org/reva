@@ -363,7 +363,7 @@ func (fs *eosfs) wrap(ctx context.Context, fn string, u *userpb.User) (string, e
 	return internal, nil
 }
 
-func (fs *eosfs) unwrap(ctx context.Context, internal string) (string, error) {
+func (fs *eosfs) unwrap(ctx context.Context, internal string, ownerUid *uint64) (string, error) {
 	log := appctx.GetLogger(ctx)
 	ns, err := fs.getNsMatch(internal, []string{fs.conf.Namespace, fs.conf.ShadowNamespace})
 	if err != nil {
@@ -375,11 +375,24 @@ func (fs *eosfs) unwrap(ctx context.Context, internal string) (string, error) {
 		return "", err
 	}
 
-	external, err := fs.unwrapInternal(ctx, ns, internal, u.Username)
-	if err != nil {
-		return "", err
+	trim := path.Join(ns, u.Username)
+
+	if !strings.HasPrefix(internal, trim) && ownerUid != nil {
+		// ugh.. this looks like a share?
+		owner, err := fs.getUserGateway(ctx, strconv.Itoa(int(*ownerUid)))
+		if err != nil {
+			return "", err
+		}
+		trim = path.Join(ns, owner.Username)
+	}
+
+	external := strings.TrimPrefix(internal, trim)
+
+	if external == "" {
+		external = "/"
 	}
 	log.Debug().Msgf("eosfs: unwrap: internal=%s external=%s", internal, external)
+
 	return external, nil
 }
 
@@ -399,38 +412,18 @@ func (fs *eosfs) getNsMatch(internal string, nss []string) (string, error) {
 	return match, nil
 }
 
-func (fs *eosfs) unwrapInternal(ctx context.Context, ns, np, layout string) (string, error) {
-	trim := path.Join(ns, layout)
-
-	if !strings.HasPrefix(np, trim) {
-		return "", errtypes.NotFound(fmt.Sprintf("eosfs: path is outside the directory of the logged-in user: internal=%s trim=%s namespace=%+v", np, trim, ns))
-	}
-
-	external := strings.TrimPrefix(np, trim)
-
-	if external == "" {
-		external = "/"
-	}
-
-	return external, nil
-}
-
 func (fs *eosfs) resolveRefForbidShareFolder(ctx context.Context, ref *provider.Reference) (string, eosclient.Authorization, error) {
-	p, err := fs.resolve(ctx, ref)
+	fn, _, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return "", eosclient.Authorization{}, errors.Wrap(err, "eosfs: error resolving reference")
 	}
-	if fs.isShareFolder(ctx, p) {
+	if fs.isShareFolder(ctx, fn) {
 		return "", eosclient.Authorization{}, errtypes.PermissionDenied("eosfs: cannot perform operation under the virtual share folder")
 	}
 
 	u, err := getUser(ctx)
 	if err != nil {
 		return "", eosclient.Authorization{}, errors.Wrap(err, "eosfs: no user in ctx")
-	}
-	fn, err := fs.wrap(ctx, p, u)
-	if err != nil {
-		return "", eosclient.Authorization{}, err
 	}
 	auth, err := fs.getUserAuth(ctx, u, fn)
 	if err != nil {
@@ -441,7 +434,7 @@ func (fs *eosfs) resolveRefForbidShareFolder(ctx context.Context, ref *provider.
 }
 
 func (fs *eosfs) resolveRefAndGetAuth(ctx context.Context, ref *provider.Reference) (string, eosclient.Authorization, error) {
-	p, err := fs.resolve(ctx, ref)
+	fn, _, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return "", eosclient.Authorization{}, errors.Wrap(err, "eosfs: error resolving reference")
 	}
@@ -449,10 +442,6 @@ func (fs *eosfs) resolveRefAndGetAuth(ctx context.Context, ref *provider.Referen
 	u, err := getUser(ctx)
 	if err != nil {
 		return "", eosclient.Authorization{}, errors.Wrap(err, "eosfs: no user in ctx")
-	}
-	fn, err := fs.wrap(ctx, p, u)
-	if err != nil {
-		return "", eosclient.Authorization{}, err
 	}
 	auth, err := fs.getUserAuth(ctx, u, fn)
 	if err != nil {
@@ -462,41 +451,45 @@ func (fs *eosfs) resolveRefAndGetAuth(ctx context.Context, ref *provider.Referen
 	return fn, auth, nil
 }
 
-// resolve takes in a request path or request id and returns the unwrapped path.
-func (fs *eosfs) resolve(ctx context.Context, ref *provider.Reference) (string, error) {
-	if ref.ResourceId != nil {
-		p, err := fs.getPath(ctx, ref.ResourceId)
+// resolve takes in a request path or request id and returns the internal and the unwrapped path.
+func (fs *eosfs) resolve(ctx context.Context, ref *provider.Reference) (string, string, error) {
+	switch {
+	case ref.ResourceId != nil:
+		fullPath, spacePath, err := fs.getPath(ctx, ref.ResourceId)
 		if err != nil {
-			return "", err
+			return "", "", err
 		}
-		p = path.Join(p, ref.Path)
-		return p, nil
-	}
-	if ref.Path != "" {
-		return ref.Path, nil
-	}
 
-	// reference is invalid
-	return "", fmt.Errorf("invalid reference %+v. at least resource_id or path must be set", ref)
+		return path.Join(fullPath, ref.Path), path.Join(spacePath, ref.Path), nil
+	case ref.Path != "":
+		return ref.Path, "", nil
+	default:
+		// reference is invalid
+		return "", "", fmt.Errorf("invalid reference %+v. at least resource_id or path must be set", ref)
+	}
 }
 
-func (fs *eosfs) getPath(ctx context.Context, id *provider.ResourceId) (string, error) {
+func (fs *eosfs) getPath(ctx context.Context, id *provider.ResourceId) (string, string, error) {
 	fid, err := strconv.ParseUint(id.OpaqueId, 10, 64)
 	if err != nil {
-		return "", fmt.Errorf("error converting string to int for eos fileid: %s", id.OpaqueId)
+		return "", "", fmt.Errorf("error converting string to int for eos fileid: %s", id.OpaqueId)
 	}
 
 	auth, err := fs.getRootAuth(ctx)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
 	eosFileInfo, err := fs.c.GetFileInfoByInode(ctx, auth, fid)
 	if err != nil {
-		return "", errors.Wrap(err, "eosfs: error getting file info by inode")
+		return "", "", errors.Wrap(err, "eosfs: error getting file info by inode")
 	}
 
-	return fs.unwrap(ctx, eosFileInfo.File)
+	unwrapped, err := fs.unwrap(ctx, eosFileInfo.File, &eosFileInfo.UID)
+	if err != nil {
+		return "", "", err
+	}
+	return eosFileInfo.File, unwrapped, nil
 }
 
 func (fs *eosfs) isShareFolder(ctx context.Context, p string) bool {
@@ -533,7 +526,7 @@ func (fs *eosfs) GetPathByID(ctx context.Context, id *provider.ResourceId) (stri
 			return "", errors.Wrap(err, "eosfs: error getting file info by inode")
 		}
 		if perm := fs.permissionSet(ctx, eosFileInfo, nil); perm.GetPath {
-			return fs.unwrap(ctx, eosFileInfo.File)
+			return fs.unwrap(ctx, eosFileInfo.File, nil)
 		}
 		return "", errtypes.PermissionDenied("eosfs: getting path for id not allowed")
 	}
@@ -548,7 +541,7 @@ func (fs *eosfs) GetPathByID(ctx context.Context, id *provider.ResourceId) (stri
 		return "", errors.Wrap(err, "eosfs: error getting file info by inode")
 	}
 
-	p, err := fs.unwrap(ctx, eosFileInfo.File)
+	p, err := fs.unwrap(ctx, eosFileInfo.File, nil)
 	if err != nil {
 		return "", err
 	}
@@ -742,7 +735,7 @@ func (fs *eosfs) getLock(ctx context.Context, auth eosclient.Authorization, user
 
 // GetLock returns an existing lock on the given reference
 func (fs *eosfs) GetLock(ctx context.Context, ref *provider.Reference) (*provider.Lock, error) {
-	path, err := fs.resolve(ctx, ref)
+	path, _, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return nil, errors.Wrap(err, "eosfs: error resolving reference")
 	}
@@ -750,10 +743,6 @@ func (fs *eosfs) GetLock(ctx context.Context, ref *provider.Reference) (*provide
 	user, err := getUser(ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "eosfs: no user in ctx")
-	}
-	path, err = fs.wrap(ctx, path, user)
-	if err != nil {
-		return nil, err
 	}
 	auth, err := fs.getUserAuth(ctx, user, path)
 	if err != nil {
@@ -817,7 +806,7 @@ func (fs *eosfs) SetLock(ctx context.Context, ref *provider.Reference, l *provid
 		return errtypes.NotSupported("shared lock not yet implemented")
 	}
 
-	path, err := fs.resolve(ctx, ref)
+	path, _, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return errors.Wrap(err, "eosfs: error resolving reference")
 	}
@@ -825,10 +814,6 @@ func (fs *eosfs) SetLock(ctx context.Context, ref *provider.Reference, l *provid
 	user, err := getUser(ctx)
 	if err != nil {
 		return errors.Wrap(err, "eosfs: no user in ctx")
-	}
-	path, err = fs.wrap(ctx, path, user)
-	if err != nil {
-		return err
 	}
 	auth, err := fs.getUserAuth(ctx, user, path)
 	if err != nil {
@@ -956,13 +941,9 @@ func (fs *eosfs) RefreshLock(ctx context.Context, ref *provider.Reference, newLo
 		return errtypes.BadRequest("caller does not hold the lock")
 	}
 
-	path, err := fs.resolve(ctx, ref)
+	path, _, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return errors.Wrap(err, "eosfs: error resolving reference")
-	}
-	path, err = fs.wrap(ctx, path, user)
-	if err != nil {
-		return err
 	}
 	// the cs3apis require to have the write permission on the resource
 	// to set a lock
@@ -1029,13 +1010,9 @@ func (fs *eosfs) Unlock(ctx context.Context, ref *provider.Reference, lock *prov
 		return errtypes.PermissionDenied(fmt.Sprintf("user %s has not write access on resource", user.Username))
 	}
 
-	path, err := fs.resolve(ctx, ref)
+	path, _, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return errors.Wrap(err, "eosfs: error resolving reference")
-	}
-	path, err = fs.wrap(ctx, path, user)
-	if err != nil {
-		return err
 	}
 
 	auth, err := fs.getRootAuth(ctx)
@@ -1253,7 +1230,7 @@ func (fs *eosfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []st
 
 	if u.Id.Type == userpb.UserType_USER_TYPE_LIGHTWEIGHT ||
 		u.Id.Type == userpb.UserType_USER_TYPE_FEDERATED {
-		p, err := fs.resolve(ctx, ref)
+		p, _, err := fs.resolve(ctx, ref)
 		if err != nil {
 			return nil, errors.Wrap(err, "eosfs: error resolving reference")
 		}
@@ -1288,7 +1265,7 @@ func (fs *eosfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []st
 			return fs.convertToResourceInfo(ctx, eosFileInfo, ref.ResourceId.GetSpaceId())
 		}
 
-		parent, err := fs.unwrap(ctx, eosFileInfo.File)
+		parent, err := fs.unwrap(ctx, eosFileInfo.File, &eosFileInfo.UID)
 		if err != nil {
 			fmt.Println("UNWRAP ERR", err)
 			//return nil, err
@@ -1310,12 +1287,49 @@ func (fs *eosfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []st
 }
 
 func (fs *eosfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys, fieldMask []string) ([]*provider.ResourceInfo, error) {
-	p, err := fs.resolve(ctx, ref)
+	log := appctx.GetLogger(ctx)
+	p, spacePath, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return nil, errors.Wrap(err, "eosfs: error resolving reference")
 	}
 
-	return fs.listWithNominalHome(ctx, ref, p)
+	if ref.ResourceId != nil {
+		u, err := getUser(ctx)
+		if err != nil {
+			return nil, errors.Wrap(err, "eosfs: no user in ctx")
+		}
+
+		auth, err := fs.getUserAuth(ctx, u, p)
+		if err != nil {
+			return nil, err
+		}
+
+		eosFileInfos, err := fs.c.List(ctx, auth, p)
+		if err != nil {
+			return nil, errors.Wrap(err, "eosfs: error listing")
+		}
+
+		finfos := []*provider.ResourceInfo{}
+		for _, eosFileInfo := range eosFileInfos {
+			// filter out sys files
+			if !fs.conf.ShowHiddenSysFiles {
+				base := path.Base(eosFileInfo.File)
+				if hiddenReg.MatchString(base) {
+					log.Debug().Msgf("eosfs: path is filtered because is considered hidden: path=%s hiddenReg=%s", base, hiddenReg)
+					continue
+				}
+			}
+
+			// Remove the hidden folders in the topmost directory
+			if finfo, err := fs.convertToResourceInfo(ctx, eosFileInfo, ref.ResourceId.GetSpaceId()); err == nil && finfo.Path != "/" && !strings.HasPrefix(finfo.Path, "/.") {
+				finfos = append(finfos, finfo)
+			}
+		}
+
+		return finfos, nil
+	}
+
+	return fs.listWithNominalHome(ctx, ref, spacePath)
 }
 
 func (fs *eosfs) listWithNominalHome(ctx context.Context, ref *provider.Reference, p string) (finfos []*provider.ResourceInfo, err error) {
@@ -1575,21 +1589,17 @@ func (fs *eosfs) createUserDir(ctx context.Context, u *userpb.User, path string,
 
 func (fs *eosfs) CreateDir(ctx context.Context, ref *provider.Reference) error {
 	log := appctx.GetLogger(ctx)
-	p, err := fs.resolve(ctx, ref)
+	fn, _, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return errors.Wrap(err, "eosfs: error resolving reference")
 	}
-	if fs.isShareFolder(ctx, p) {
+	if fs.isShareFolder(ctx, fn) {
 		return errtypes.PermissionDenied("eosfs: cannot perform operation under the virtual share folder")
 	}
 
 	u, err := getUser(ctx)
 	if err != nil {
 		return errors.Wrap(err, "eosfs: no user in ctx")
-	}
-	fn, err := fs.wrap(ctx, p, u)
-	if err != nil {
-		return err
 	}
 
 	// We need the auth corresponding to the parent directory
@@ -1668,7 +1678,7 @@ func (fs *eosfs) CreateReference(ctx context.Context, p string, targetURI *url.U
 }
 
 func (fs *eosfs) Delete(ctx context.Context, ref *provider.Reference) error {
-	p, err := fs.resolve(ctx, ref)
+	p, _, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return errors.Wrap(err, "eosfs: error resolving reference")
 	}
@@ -1680,10 +1690,6 @@ func (fs *eosfs) Delete(ctx context.Context, ref *provider.Reference) error {
 	u, err := getUser(ctx)
 	if err != nil {
 		return errors.Wrap(err, "eosfs: no user in ctx")
-	}
-	fn, err := fs.wrap(ctx, p, u)
-	if err != nil {
-		return err
 	}
 	auth, err := fs.getUserAuth(ctx, u, fn)
 	if err != nil {
@@ -1719,12 +1725,12 @@ func (fs *eosfs) deleteShadow(ctx context.Context, p string) error {
 }
 
 func (fs *eosfs) Move(ctx context.Context, oldRef, newRef *provider.Reference) error {
-	oldPath, err := fs.resolve(ctx, oldRef)
+	oldPath, _, err := fs.resolve(ctx, oldRef)
 	if err != nil {
 		return errors.Wrap(err, "eosfs: error resolving reference")
 	}
 
-	newPath, err := fs.resolve(ctx, newRef)
+	newPath, _, err := fs.resolve(ctx, newRef)
 	if err != nil {
 		return errors.Wrap(err, "eosfs: error resolving reference")
 	}
@@ -1737,21 +1743,13 @@ func (fs *eosfs) Move(ctx context.Context, oldRef, newRef *provider.Reference) e
 	if err != nil {
 		return errors.Wrap(err, "eosfs: no user in ctx")
 	}
-	oldFn, err := fs.wrap(ctx, oldPath, u)
-	if err != nil {
-		return err
-	}
-	newFn, err := fs.wrap(ctx, newPath, u)
+
+	auth, err := fs.getUserAuth(ctx, u, oldPath)
 	if err != nil {
 		return err
 	}
 
-	auth, err := fs.getUserAuth(ctx, u, oldFn)
-	if err != nil {
-		return err
-	}
-
-	return fs.c.Rename(ctx, auth, oldFn, newFn)
+	return fs.c.Rename(ctx, auth, oldPath, newPath)
 }
 
 func (fs *eosfs) moveShadow(ctx context.Context, oldPath, newPath string) error {
@@ -2018,7 +2016,7 @@ func (fs *eosfs) RestoreRecycleItem(ctx context.Context, ref *provider.Reference
 }
 
 func (fs *eosfs) convertToRecycleItem(ctx context.Context, eosDeletedItem *eosclient.DeletedEntry) (*provider.RecycleItem, error) {
-	path, err := fs.unwrap(ctx, eosDeletedItem.RestorePath)
+	path, err := fs.unwrap(ctx, eosDeletedItem.RestorePath, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -2155,7 +2153,13 @@ func mergePermissions(l *provider.ResourcePermissions, r *provider.ResourcePermi
 }
 
 func (fs *eosfs) convert(ctx context.Context, eosFileInfo *eosclient.FileInfo, spaceId string) (*provider.ResourceInfo, error) {
-	path, err := fs.unwrap(ctx, eosFileInfo.File)
+	owner, err := fs.getUserIDGateway(ctx, strconv.FormatUint(eosFileInfo.UID, 10))
+	if err != nil {
+		sublog := appctx.GetLogger(ctx).With().Logger()
+		sublog.Warn().Uint64("uid", eosFileInfo.UID).Msg("could not lookup userid, leaving empty")
+	}
+
+	path, err := fs.unwrap(ctx, eosFileInfo.File, &eosFileInfo.UID)
 	if err != nil {
 		return nil, err
 	}
@@ -2164,12 +2168,6 @@ func (fs *eosfs) convert(ctx context.Context, eosFileInfo *eosclient.FileInfo, s
 	size := eosFileInfo.Size
 	if eosFileInfo.IsDir {
 		size = eosFileInfo.TreeSize
-	}
-
-	owner, err := fs.getUserIDGateway(ctx, strconv.FormatUint(eosFileInfo.UID, 10))
-	if err != nil {
-		sublog := appctx.GetLogger(ctx).With().Logger()
-		sublog.Warn().Uint64("uid", eosFileInfo.UID).Msg("could not lookup userid, leaving empty")
 	}
 
 	var xs provider.ResourceChecksum
@@ -2254,7 +2252,7 @@ func (fs *eosfs) extractUIDAndGID(u *userpb.User) (eosclient.Authorization, erro
 
 func (fs *eosfs) getUIDGateway(ctx context.Context, u *userpb.UserId) (eosclient.Authorization, error) {
 	log := appctx.GetLogger(ctx)
-	if userIDInterface, err := fs.userIDCache.Get(u.OpaqueId); err == nil {
+	if userIDInterface, err := fs.userCache.Get(u.OpaqueId); err == nil {
 		log.Debug().Msg("eosfs: found cached user " + u.OpaqueId)
 		return fs.extractUIDAndGID(userIDInterface.(*userpb.User))
 	}
@@ -2268,28 +2266,36 @@ func (fs *eosfs) getUIDGateway(ctx context.Context, u *userpb.UserId) (eosclient
 		SkipFetchingUserGroups: true,
 	})
 	if err != nil {
-		_ = fs.userIDCache.SetWithTTL(u.OpaqueId, &userpb.User{}, 12*time.Hour)
+		_ = fs.userCache.SetWithTTL(u.OpaqueId, &userpb.User{}, 12*time.Hour)
 		return eosclient.Authorization{}, errors.Wrap(err, "eosfs: error getting user")
 	}
 	if getUserResp.Status.Code != rpc.Code_CODE_OK {
-		_ = fs.userIDCache.SetWithTTL(u.OpaqueId, &userpb.User{}, 12*time.Hour)
+		_ = fs.userCache.SetWithTTL(u.OpaqueId, &userpb.User{}, 12*time.Hour)
 		return eosclient.Authorization{}, status.NewErrorFromCode(getUserResp.Status.Code, "eosfs")
 	}
 
-	_ = fs.userIDCache.Set(u.OpaqueId, getUserResp.User)
+	_ = fs.userCache.Set(u.OpaqueId, getUserResp.User)
 	return fs.extractUIDAndGID(getUserResp.User)
 }
 
 func (fs *eosfs) getUserIDGateway(ctx context.Context, uid string) (*userpb.UserId, error) {
+	u, err := fs.getUserGateway(ctx, uid)
+	if err != nil {
+		return nil, err
+	}
+	return u.Id, nil
+}
+
+func (fs *eosfs) getUserGateway(ctx context.Context, uid string) (*userpb.User, error) {
 	log := appctx.GetLogger(ctx)
 	// Handle the case of root
 	if uid == "0" {
 		return nil, errtypes.BadRequest("eosfs: cannot return root user")
 	}
 
-	if userIDInterface, err := fs.userIDCache.Get(uid); err == nil {
+	if userIDInterface, err := fs.userCache.Get(uid); err == nil {
 		log.Debug().Msg("eosfs: found cached uid " + uid)
-		return userIDInterface.(*userpb.UserId), nil
+		return userIDInterface.(*userpb.User), nil
 	}
 
 	log.Debug().Msg("eosfs: retrieving user from gateway for uid " + uid)
@@ -2304,18 +2310,18 @@ func (fs *eosfs) getUserIDGateway(ctx context.Context, uid string) (*userpb.User
 	if err != nil {
 		// Insert an empty object in the cache so that we don't make another call
 		// for a specific amount of time
-		_ = fs.userIDCache.SetWithTTL(uid, &userpb.UserId{}, 12*time.Hour)
+		_ = fs.userCache.SetWithTTL(uid, &userpb.User{}, 12*time.Hour)
 		return nil, errors.Wrap(err, "eosfs: error getting user")
 	}
 	if getUserResp.Status.Code != rpc.Code_CODE_OK {
 		// Insert an empty object in the cache so that we don't make another call
 		// for a specific amount of time
-		_ = fs.userIDCache.SetWithTTL(uid, &userpb.UserId{}, 12*time.Hour)
+		_ = fs.userCache.SetWithTTL(uid, &userpb.User{}, 12*time.Hour)
 		return nil, status.NewErrorFromCode(getUserResp.Status.Code, "eosfs")
 	}
 
-	_ = fs.userIDCache.Set(uid, getUserResp.User.Id)
-	return getUserResp.User.Id, nil
+	_ = fs.userCache.Set(uid, getUserResp.User)
+	return getUserResp.User, nil
 }
 
 func (fs *eosfs) getUserAuth(ctx context.Context, u *userpb.User, fn string) (eosclient.Authorization, error) {

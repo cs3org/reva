@@ -32,22 +32,22 @@ import (
 )
 
 func (fs *eosfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser, uff storage.UploadFinishedFunc) (provider.ResourceInfo, error) {
-	p, err := fs.resolve(ctx, ref)
+	fn, _, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return provider.ResourceInfo{}, errors.Wrap(err, "eos: error resolving reference")
 	}
 
-	if fs.isShareFolder(ctx, p) {
+	if fs.isShareFolder(ctx, fn) {
 		return provider.ResourceInfo{}, errtypes.PermissionDenied("eos: cannot upload under the virtual share folder")
 	}
 
-	if chunking.IsChunked(p) {
+	if chunking.IsChunked(fn) {
 		var assembledFile string
-		p, assembledFile, err = fs.chunkHandler.WriteChunk(p, r)
+		fn, assembledFile, err = fs.chunkHandler.WriteChunk(fn, r)
 		if err != nil {
 			return provider.ResourceInfo{}, err
 		}
-		if p == "" {
+		if fn == "" {
 			return provider.ResourceInfo{}, errtypes.PartialContent(ref.String())
 		}
 		fd, err := os.Open(assembledFile)
@@ -62,11 +62,6 @@ func (fs *eosfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadC
 	u, err := getUser(ctx)
 	if err != nil {
 		return provider.ResourceInfo{}, errors.Wrap(err, "eos: no user in ctx")
-	}
-
-	fn, err := fs.wrap(ctx, p, u)
-	if err != nil {
-		return provider.ResourceInfo{}, err
 	}
 
 	// We need the auth corresponding to the parent directory
@@ -94,7 +89,7 @@ func (fs *eosfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadC
 }
 
 func (fs *eosfs) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64, metadata map[string]string) (map[string]string, error) {
-	p, err := fs.resolve(ctx, ref)
+	p, _, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return nil, err
 	}
