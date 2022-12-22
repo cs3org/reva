@@ -48,6 +48,10 @@ import (
 	"github.com/pkg/errors"
 )
 
+const (
+	_defaultSharesJailEtag = "DECAFC00FEE"
+)
+
 func init() {
 	rgrpc.Register("sharesstorageprovider", NewDefault)
 }
@@ -370,7 +374,7 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 				OpaqueId:  utils.ShareStorageSpaceID,
 			}
 			if spaceID == nil || isShareJailRoot(spaceID) {
-				earliestShare, atLeastOneAccepted := findEarliestShare(receivedShares, shareInfo)
+				earliestShare := findEarliestShare(receivedShares, shareInfo)
 				var opaque *typesv1beta1.Opaque
 				var mtime *typesv1beta1.Timestamp
 				if earliestShare != nil {
@@ -378,24 +382,24 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 						mtime = info.Mtime
 						opaque = utils.AppendPlainToOpaque(opaque, "etag", info.Etag)
 					}
+				} else {
+					opaque = utils.AppendPlainToOpaque(opaque, "etag", _defaultSharesJailEtag)
 				}
 				// only display the shares jail if we have accepted shares
-				if atLeastOneAccepted {
-					opaque = utils.AppendPlainToOpaque(opaque, "spaceAlias", "virtual/shares")
-					space := &provider.StorageSpace{
-						Opaque: opaque,
-						Id: &provider.StorageSpaceId{
-							OpaqueId: storagespace.FormatResourceID(*virtualRootID),
-						},
-						SpaceType: "virtual",
-						//Owner:     &userv1beta1.User{Id: receivedShare.Share.Owner}, // FIXME actually, the mount point belongs to the recipient
-						// the sharesstorageprovider keeps track of mount points
-						Root:  virtualRootID,
-						Name:  "Shares",
-						Mtime: mtime,
-					}
-					res.StorageSpaces = append(res.StorageSpaces, space)
+				opaque = utils.AppendPlainToOpaque(opaque, "spaceAlias", "virtual/shares")
+				space := &provider.StorageSpace{
+					Opaque: opaque,
+					Id: &provider.StorageSpaceId{
+						OpaqueId: storagespace.FormatResourceID(*virtualRootID),
+					},
+					SpaceType: "virtual",
+					//Owner:     &userv1beta1.User{Id: receivedShare.Share.Owner}, // FIXME actually, the mount point belongs to the recipient
+					// the sharesstorageprovider keeps track of mount points
+					Root:  virtualRootID,
+					Name:  "Shares",
+					Mtime: mtime,
 				}
+				res.StorageSpaces = append(res.StorageSpaces, space)
 			}
 		case "grant":
 			for _, receivedShare := range receivedShares {
@@ -646,7 +650,7 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 		if err != nil {
 			return nil, err
 		}
-		earliestShare, _ := findEarliestShare(receivedShares, shareMd)
+		earliestShare := findEarliestShare(receivedShares, shareMd)
 		var mtime *typesv1beta1.Timestamp
 		var etag string
 		if earliestShare != nil {
@@ -1043,16 +1047,12 @@ func (s *service) fetchShares(ctx context.Context) ([]*collaboration.ReceivedSha
 	return lsRes.Shares, shareMetaData, nil
 }
 
-func findEarliestShare(receivedShares []*collaboration.ReceivedShare, shareInfo map[string]*provider.ResourceInfo) (earliestShare *collaboration.Share, atLeastOneAccepted bool) {
+func findEarliestShare(receivedShares []*collaboration.ReceivedShare, shareInfo map[string]*provider.ResourceInfo) (earliestShare *collaboration.Share) {
 	for _, rs := range receivedShares {
 		var hasCurrentMd bool
 		var hasEarliestMd bool
 
 		current := rs.Share
-		if rs.State == collaboration.ShareState_SHARE_STATE_ACCEPTED {
-			atLeastOneAccepted = true
-		}
-
 		// We cannot assume that every share has metadata
 		if current.Id != nil {
 			_, hasCurrentMd = shareInfo[current.Id.OpaqueId]
@@ -1074,7 +1074,7 @@ func findEarliestShare(receivedShares []*collaboration.ReceivedShare, shareInfo 
 			earliestShare = current
 		}
 	}
-	return earliestShare, atLeastOneAccepted
+	return earliestShare
 }
 
 func buildReferenceInShare(ref *provider.Reference, s *collaboration.ReceivedShare) *provider.Reference {
