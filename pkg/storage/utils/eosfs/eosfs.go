@@ -337,11 +337,11 @@ func (fs *eosfs) resolveRefAndGetAuth(ctx context.Context, ref *provider.Referen
 		return "", eosclient.Authorization{}, errors.Wrap(err, "eosfs: error resolving reference")
 	}
 
-	u, err := getUser(ctx)
+	s, err := fs.resolveSpace(ctx, ref)
 	if err != nil {
-		return "", eosclient.Authorization{}, errors.Wrap(err, "eosfs: no user in ctx")
+		return "", eosclient.Authorization{}, errors.Wrap(err, "eosfs: could not resolve space")
 	}
-	auth, err := fs.getUserAuth(ctx, u, fn)
+	auth, err := fs.getUserAuth(ctx, s.Owner, fn)
 	if err != nil {
 		return "", eosclient.Authorization{}, err
 	}
@@ -364,6 +364,45 @@ func (fs *eosfs) resolve(ctx context.Context, ref *provider.Reference) (string, 
 		// reference is invalid
 		return "", fmt.Errorf("invalid reference %+v. at least resource_id or path must be set", ref)
 	}
+}
+
+func (fs *eosfs) resolveSpace(ctx context.Context, ref *provider.Reference) (*provider.StorageSpace, error) {
+	sublog := appctx.GetLogger(ctx).With().Logger()
+
+	spaceID := ref.GetResourceId().GetSpaceId()
+	if s, err := fs.spacesCache.Get(spaceID); err == nil {
+		return s.(*provider.StorageSpace), nil
+	}
+
+	fid, err := strconv.ParseUint(spaceID, 10, 64)
+	if err != nil {
+		return nil, errors.Wrap(err, "eosfs: error parsing spacid string")
+	}
+	auth, err := fs.getRootAuth(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	info, err := fs.c.GetFileInfoByInode(ctx, auth, fid)
+	if err != nil {
+		return nil, err
+	}
+	owner, err := fs.getUserGateway(ctx, strconv.FormatUint(info.UID, 10))
+	if err != nil {
+		sublog.Warn().Uint64("uid", info.UID).Msg("could not lookup userid, leaving empty")
+	}
+
+	s := &provider.StorageSpace{
+		Id: &provider.StorageSpaceId{
+			OpaqueId: spaceID,
+		},
+		Owner: owner,
+	}
+	err = fs.spacesCache.Set(spaceID, s)
+	if err != nil {
+		sublog.Warn().Str("spaceID", spaceID).Msg("could not store space in cache")
+	}
+	return s, nil
 }
 
 func (fs *eosfs) getPath(ctx context.Context, id *provider.ResourceId) (string, error) {
@@ -1307,14 +1346,13 @@ func (fs *eosfs) CreateDir(ctx context.Context, ref *provider.Reference) error {
 		return errors.Wrap(err, "eosfs: error resolving reference")
 	}
 
-	u, err := getUser(ctx)
+	s, err := fs.resolveSpace(ctx, ref)
 	if err != nil {
-		return errors.Wrap(err, "eosfs: no user in ctx")
+		return errors.Wrap(err, "eosfs: could not resolve space")
 	}
-
 	// We need the auth corresponding to the parent directory
 	// as the file might not exist at the moment
-	auth, err := fs.getUserAuth(ctx, u, path.Dir(fn))
+	auth, err := fs.getUserAuth(ctx, s.Owner, path.Dir(fn))
 	if err != nil {
 		return err
 	}
