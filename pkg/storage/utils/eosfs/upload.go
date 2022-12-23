@@ -32,22 +32,18 @@ import (
 )
 
 func (fs *eosfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser, uff storage.UploadFinishedFunc) (provider.ResourceInfo, error) {
-	fn, _, err := fs.resolve(ctx, ref)
+	resPath, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return provider.ResourceInfo{}, errors.Wrap(err, "eos: error resolving reference")
 	}
 
-	if fs.isShareFolder(ctx, fn) {
-		return provider.ResourceInfo{}, errtypes.PermissionDenied("eos: cannot upload under the virtual share folder")
-	}
-
-	if chunking.IsChunked(fn) {
+	if chunking.IsChunked(resPath) {
 		var assembledFile string
-		fn, assembledFile, err = fs.chunkHandler.WriteChunk(fn, r)
+		resPath, assembledFile, err = fs.chunkHandler.WriteChunk(resPath, r)
 		if err != nil {
 			return provider.ResourceInfo{}, err
 		}
-		if fn == "" {
+		if resPath == "" {
 			return provider.ResourceInfo{}, errtypes.PartialContent(ref.String())
 		}
 		fd, err := os.Open(assembledFile)
@@ -66,21 +62,21 @@ func (fs *eosfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadC
 
 	// We need the auth corresponding to the parent directory
 	// as the file might not exist at the moment
-	auth, err := fs.getUserAuth(ctx, u, path.Dir(fn))
+	auth, err := fs.getUserAuth(ctx, u, path.Dir(resPath))
 	if err != nil {
 		return provider.ResourceInfo{}, err
 	}
 
-	if err := fs.c.Write(ctx, auth, fn, r); err != nil {
+	if err := fs.c.Write(ctx, auth, resPath, r); err != nil {
 		return provider.ResourceInfo{}, err
 	}
 
-	eosFileInfo, err := fs.c.GetFileInfoByPath(ctx, auth, fn)
+	eosFileInfo, err := fs.c.GetFileInfoByPath(ctx, auth, resPath)
 	if err != nil {
 		return provider.ResourceInfo{}, err
 	}
 
-	ri, err := fs.convertToResourceInfo(ctx, eosFileInfo, ref.ResourceId.GetSpaceId())
+	ri, err := fs.convertToResourceInfo(ctx, eosFileInfo, ref.ResourceId.GetSpaceId(), false)
 	if err != nil {
 		return provider.ResourceInfo{}, err
 	}
@@ -89,7 +85,7 @@ func (fs *eosfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadC
 }
 
 func (fs *eosfs) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64, metadata map[string]string) (map[string]string, error) {
-	p, _, err := fs.resolve(ctx, ref)
+	p, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return nil, err
 	}

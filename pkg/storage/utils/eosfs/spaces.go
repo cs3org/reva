@@ -158,7 +158,7 @@ func (fs *eosfs) listPersonalStorageSpaces(ctx context.Context, u *userpb.User, 
 		}
 	}
 
-	md, err := fs.convertToResourceInfo(ctx, eosFileInfo, fmt.Sprintf("%d", eosFileInfo.FID))
+	md, err := fs.convertToResourceInfo(ctx, eosFileInfo, fmt.Sprintf("%d", eosFileInfo.FID), true)
 	if err != nil {
 		return nil, err
 	}
@@ -321,15 +321,16 @@ func (fs *eosfs) CreateStorageSpace(ctx context.Context, req *provider.CreateSto
 			return nil, err
 		}
 
-		err = fs.createNominalHome(ctx)
-		if err != nil {
-			return nil, err
-		}
-
 		auth, err := fs.getUserAuth(ctx, u, fn)
 		if err != nil {
 			return nil, err
 		}
+
+		err = fs.c.CreateDir(ctx, auth, fn)
+		if err != nil {
+			return nil, err
+		}
+
 		eosFileInfo, err := fs.c.GetFileInfoByPath(ctx, auth, fn)
 		if err != nil {
 			return nil, err
