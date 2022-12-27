@@ -92,6 +92,10 @@ func (s *svc) handleHead(ctx context.Context, w http.ResponseWriter, r *http.Req
 	if info.Type != provider.ResourceType_RESOURCE_TYPE_CONTAINER {
 		w.Header().Set(net.HeaderAcceptRanges, "bytes")
 	}
+	if utils.ReadPlainFromOpaque(res.GetInfo().GetOpaque(), "status") == "processing" {
+		w.WriteHeader(http.StatusTooEarly)
+		return
+	}
 	w.WriteHeader(http.StatusOK)
 }
 
