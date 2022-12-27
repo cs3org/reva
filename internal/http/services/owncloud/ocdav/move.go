@@ -35,18 +35,14 @@ import (
 	"github.com/cs3org/reva/v2/pkg/rhttp/router"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/utils"
-	"github.com/rs/zerolog"
 )
 
-func (s *svc) handlePathMove(w http.ResponseWriter, r *http.Request, ns string) {
+func (s *svc) handlePathMove(w http.ResponseWriter, r *http.Request, ns string) (status int, err error) {
 	ctx, span := s.tracerProvider.Tracer(tracerName).Start(r.Context(), "move")
 	defer span.End()
 
 	if r.Body != http.NoBody {
-		w.WriteHeader(http.StatusUnsupportedMediaType)
-		b, err := errors.Marshal(http.StatusUnsupportedMediaType, "body must be empty", "")
-		errors.HandleWebdavError(appctx.GetLogger(ctx), w, b, err)
-		return
+		return http.StatusUnsupportedMediaType, nil
 	}
 
 	srcPath := path.Join(ns, r.URL.Path)
@@ -54,10 +50,7 @@ func (s *svc) handlePathMove(w http.ResponseWriter, r *http.Request, ns string) 
 	baseURI := r.Context().Value(net.CtxKeyBaseURI).(string)
 	dstPath, err := net.ParseDestination(baseURI, dh)
 	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		b, err := errors.Marshal(http.StatusBadRequest, "failed to extract destination", "")
-		errors.HandleWebdavError(appctx.GetLogger(ctx), w, b, err)
-		return
+		return http.StatusBadRequest, err
 	}
 
 	for _, r := range nameRules {
@@ -68,138 +61,120 @@ func (s *svc) handlePathMove(w http.ResponseWriter, r *http.Request, ns string) 
 			return
 		}
 		if !r.Test(dstPath) {
-			w.WriteHeader(http.StatusBadRequest)
-			b, err := errors.Marshal(http.StatusBadRequest, "destination naming rules", "")
-			errors.HandleWebdavError(appctx.GetLogger(ctx), w, b, err)
-			return
+			return http.StatusBadRequest, fmt.Errorf("path violates naming rules")
 		}
 	}
 
 	dstPath = path.Join(ns, dstPath)
 
-	sublog := appctx.GetLogger(ctx).With().Str("src", srcPath).Str("dst", dstPath).Logger()
-
-	srcSpace, status, err := spacelookup.LookUpStorageSpaceForPath(ctx, s.gwClient, srcPath)
+	client, err := s.getClient()
 	if err != nil {
-		sublog.Error().Err(err).Str("path", srcPath).Msg("failed to look up source storage space")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	if status.Code != rpc.Code_CODE_OK {
-		errors.HandleErrorStatus(&sublog, w, status)
-		return
-	}
-	dstSpace, status, err := spacelookup.LookUpStorageSpaceForPath(ctx, s.gwClient, dstPath)
-	if err != nil {
-		sublog.Error().Err(err).Str("path", dstPath).Msg("failed to look up destination storage space")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	if status.Code != rpc.Code_CODE_OK {
-		errors.HandleErrorStatus(&sublog, w, status)
-		return
+		return http.StatusInternalServerError, err
 	}
 
-	s.handleMove(ctx, w, r, spacelookup.MakeRelativeReference(srcSpace, srcPath, false), spacelookup.MakeRelativeReference(dstSpace, dstPath, false), sublog)
+	srcSpace, rpcStatus, err := spacelookup.LookUpStorageSpaceForPath(ctx, client, srcPath)
+	switch {
+	case err != nil:
+		span.RecordError(err)
+		return http.StatusInternalServerError, err
+	case rpcStatus.Code != rpc.Code_CODE_OK:
+		return rstatus.HTTPStatusFromCode(rpcStatus.Code), errtypes.NewErrtypeFromStatus(rpcStatus)
+	}
+	dstSpace, rpcStatus, err := spacelookup.LookUpStorageSpaceForPath(ctx, client, dstPath)
+	switch {
+	case err != nil:
+		span.RecordError(err)
+		return http.StatusInternalServerError, err
+	case rpcStatus.Code != rpc.Code_CODE_OK:
+		return rstatus.HTTPStatusFromCode(rpcStatus.Code), errtypes.NewErrtypeFromStatus(rpcStatus)
+	}
+
+	return s.handleMove(ctx, w, r, spacelookup.MakeRelativeReference(srcSpace, srcPath, false), spacelookup.MakeRelativeReference(dstSpace, dstPath, false))
 }
 
-func (s *svc) handleSpacesMove(w http.ResponseWriter, r *http.Request, srcSpaceID string) {
+func (s *svc) handleSpacesMove(w http.ResponseWriter, r *http.Request, srcSpaceID string) (status int, err error) {
 	ctx, span := s.tracerProvider.Tracer(tracerName).Start(r.Context(), "spaces_move")
 	defer span.End()
 
 	if r.Body != http.NoBody {
-		w.WriteHeader(http.StatusUnsupportedMediaType)
-		b, err := errors.Marshal(http.StatusUnsupportedMediaType, "body must be empty", "")
-		errors.HandleWebdavError(appctx.GetLogger(ctx), w, b, err)
-		return
+		return http.StatusUnsupportedMediaType, nil
 	}
 
 	dh := r.Header.Get(net.HeaderDestination)
 	baseURI := r.Context().Value(net.CtxKeyBaseURI).(string)
 	dst, err := net.ParseDestination(baseURI, dh)
 	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		return
+		return http.StatusBadRequest, nil
 	}
-
-	sublog := appctx.GetLogger(ctx).With().Str("spaceid", srcSpaceID).Str("path", r.URL.Path).Logger()
 
 	srcRef, err := spacelookup.MakeStorageSpaceReference(srcSpaceID, r.URL.Path)
 	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		return
+		return http.StatusBadRequest, nil
 	}
 
 	dstSpaceID, dstRelPath := router.ShiftPath(dst)
 
 	dstRef, err := spacelookup.MakeStorageSpaceReference(dstSpaceID, dstRelPath)
 	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		return
+		return http.StatusBadRequest, nil
 	}
 
-	s.handleMove(ctx, w, r, &srcRef, &dstRef, sublog)
+	return s.handleMove(ctx, w, r, &srcRef, &dstRef)
 }
 
-func (s *svc) handleMove(ctx context.Context, w http.ResponseWriter, r *http.Request, src, dst *provider.Reference, log zerolog.Logger) {
-	isChild, err := s.referenceIsChildOf(ctx, s.gwClient, dst, src)
+func (s *svc) handleMove(ctx context.Context, w http.ResponseWriter, r *http.Request, src, dst *provider.Reference) (status int, err error) {
+	ctx, span := s.tracerProvider.Tracer(tracerName).Start(ctx, "move")
+	defer span.End()
+
+	client, err := s.getClient()
+	if err != nil {
+		span.RecordError(err)
+		return http.StatusInternalServerError, err
+	}
+
+	isChild, err := s.referenceIsChildOf(ctx, client, dst, src)
 	if err != nil {
 		switch err.(type) {
 		case errtypes.IsNotSupported:
-			log.Error().Err(err).Msg("can not detect recursive move operation. missing machine auth configuration?")
-			w.WriteHeader(http.StatusForbidden)
+			return http.StatusForbidden, fmt.Errorf("can not detect recursive move operation. missing machine auth configuration?")
 		default:
-			log.Error().Err(err).Msg("error while trying to detect recursive move operation")
-			w.WriteHeader(http.StatusInternalServerError)
+			span.RecordError(err)
+			return http.StatusInternalServerError, err
 		}
-		return
 	}
 	if isChild {
-		w.WriteHeader(http.StatusConflict)
-		b, err := errors.Marshal(http.StatusBadRequest, "can not move a folder into one of its children", "")
-		errors.HandleWebdavError(&log, w, b, err)
-		return
+		return http.StatusConflict, fmt.Errorf("can not move a folder into one of its children")
 	}
 
 	oh := r.Header.Get(net.HeaderOverwrite)
-	log.Debug().Str("overwrite", oh).Msg("move")
 
 	overwrite, err := net.ParseOverwrite(oh)
 	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		return
+		return http.StatusBadRequest, nil
 	}
 
 	// check src exists
 	srcStatReq := &provider.StatRequest{Ref: src}
-	srcStatRes, err := s.gwClient.Stat(ctx, srcStatReq)
-	if err != nil {
-		log.Error().Err(err).Msg("error sending grpc stat request")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	if srcStatRes.Status.Code != rpc.Code_CODE_OK {
-		if srcStatRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
-			w.WriteHeader(http.StatusNotFound)
-			m := fmt.Sprintf("Resource %v not found", srcStatReq.Ref.Path)
-			b, err := errors.Marshal(http.StatusNotFound, m, "")
-			errors.HandleWebdavError(&log, w, b, err)
-		}
-		errors.HandleErrorStatus(&log, w, srcStatRes.Status)
-		return
+	srcStatRes, err := client.Stat(ctx, srcStatReq)
+	switch {
+	case err != nil:
+		span.RecordError(err)
+		return http.StatusInternalServerError, err
+	case srcStatRes.Status.Code == rpc.Code_CODE_NOT_FOUND:
+		return http.StatusNotFound, fmt.Errorf("resource %v not found", srcStatReq.Ref.Path)
+	case srcStatRes.Status.Code != rpc.Code_CODE_OK:
+		return rstatus.HTTPStatusFromCode(srcStatRes.Status.Code), errtypes.NewErrtypeFromStatus(srcStatRes.Status)
 	}
 
 	// check dst exists
 	dstStatReq := &provider.StatRequest{Ref: dst}
-	dstStatRes, err := s.gwClient.Stat(ctx, dstStatReq)
-	if err != nil {
-		log.Error().Err(err).Msg("error sending grpc stat request")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	if dstStatRes.Status.Code != rpc.Code_CODE_OK && dstStatRes.Status.Code != rpc.Code_CODE_NOT_FOUND {
-		errors.HandleErrorStatus(&log, w, srcStatRes.Status)
-		return
+	dstStatRes, err := client.Stat(ctx, dstStatReq)
+	switch {
+	case err != nil:
+		span.RecordError(err)
+		return http.StatusInternalServerError, err
+	case dstStatRes.Status.Code != rpc.Code_CODE_OK && dstStatRes.Status.Code != rpc.Code_CODE_NOT_FOUND:
+		return rstatus.HTTPStatusFromCode(dstStatRes.Status.Code), errtypes.NewErrtypeFromStatus(dstStatRes.Status)
 	}
 
 	successCode := http.StatusCreated // 201 if new resource was created, see https://tools.ietf.org/html/rfc4918#section-9.9.4
@@ -207,23 +182,19 @@ func (s *svc) handleMove(ctx context.Context, w http.ResponseWriter, r *http.Req
 		successCode = http.StatusNoContent // 204 if target already existed, see https://tools.ietf.org/html/rfc4918#section-9.9.4
 
 		if !overwrite {
-			log.Warn().Bool("overwrite", overwrite).Msg("dst already exists")
-			w.WriteHeader(http.StatusPreconditionFailed) // 412, see https://tools.ietf.org/html/rfc4918#section-9.9.4
-			return
+			// 412, see https://tools.ietf.org/html/rfc4918#section-9.9.4
+			return http.StatusPreconditionFailed, fmt.Errorf("destination already exists")
 		}
 
 		// delete existing tree
 		delReq := &provider.DeleteRequest{Ref: dst}
-		delRes, err := s.gwClient.Delete(ctx, delReq)
-		if err != nil {
-			log.Error().Err(err).Msg("error sending grpc delete request")
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-
-		if delRes.Status.Code != rpc.Code_CODE_OK && delRes.Status.Code != rpc.Code_CODE_NOT_FOUND {
-			errors.HandleErrorStatus(&log, w, delRes.Status)
-			return
+		delRes, err := client.Delete(ctx, delReq)
+		switch {
+		case err != nil:
+			span.RecordError(err)
+			return http.StatusInternalServerError, err
+		case delRes.Status.Code != rpc.Code_CODE_OK && delRes.Status.Code != rpc.Code_CODE_NOT_FOUND:
+			return rstatus.HTTPStatusFromCode(delRes.Status.Code), errtypes.NewErrtypeFromStatus(delRes.Status)
 		}
 	} else {
 		// check if an intermediate path / the parent exists
@@ -231,65 +202,46 @@ func (s *svc) handleMove(ctx context.Context, w http.ResponseWriter, r *http.Req
 			ResourceId: dst.ResourceId,
 			Path:       utils.MakeRelativePath(path.Dir(dst.Path)),
 		}}
-		intStatRes, err := s.gwClient.Stat(ctx, intStatReq)
-		if err != nil {
-			log.Error().Err(err).Msg("error sending grpc stat request")
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-		if intStatRes.Status.Code != rpc.Code_CODE_OK {
-			if intStatRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
-				// 409 if intermediate dir is missing, see https://tools.ietf.org/html/rfc4918#section-9.8.5
-				log.Debug().Interface("parent", dst).Interface("status", intStatRes.Status).Msg("conflict")
-				w.WriteHeader(http.StatusConflict)
-			} else {
-				errors.HandleErrorStatus(&log, w, intStatRes.Status)
-			}
-			return
+		intStatRes, err := client.Stat(ctx, intStatReq)
+		switch {
+		case err != nil:
+			span.RecordError(err)
+			return http.StatusInternalServerError, err
+		case intStatRes.Status.Code == rpc.Code_CODE_NOT_FOUND:
+			// 409 if intermediate dir is missing, see https://tools.ietf.org/html/rfc4918#section-9.8.5
+			return http.StatusConflict, fmt.Errorf(intStatRes.Status.Message)
+		case intStatRes.Status.Code != rpc.Code_CODE_OK:
+			return rstatus.HTTPStatusFromCode(intStatRes.Status.Code), errtypes.NewErrtypeFromStatus(intStatRes.Status)
 		}
 		// TODO what if intermediate is a file?
 	}
 
 	mReq := &provider.MoveRequest{Source: src, Destination: dst}
-	mRes, err := s.gwClient.Move(ctx, mReq)
-	if err != nil {
-		log.Error().Err(err).Msg("error sending move grpc request")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
+	mRes, err := client.Move(ctx, mReq)
+	switch {
+	case err != nil:
+		span.RecordError(err)
+		return http.StatusInternalServerError, err
+	case mRes.Status.Code == rpc.Code_CODE_ABORTED:
+		return http.StatusPreconditionFailed, errtypes.NewErrtypeFromStatus(mRes.Status)
+	case mRes.Status.Code == rpc.Code_CODE_UNIMPLEMENTED:
+		// We translate this into a Bad Gateway error as per https://www.rfc-editor.org/rfc/rfc4918#section-9.9.4
+		// > 502 (Bad Gateway) - This may occur when the destination is on another
+		// > server and the destination server refuses to accept the resource.
+		// > This could also occur when the destination is on another sub-section
+		// > of the same server namespace.
+		return http.StatusBadGateway, errtypes.NewErrtypeFromStatus(mRes.Status)
+	case mRes.Status.Code != rpc.Code_CODE_OK:
+		return rstatus.HTTPStatusFromCode(mRes.Status.Code), errtypes.NewErrtypeFromStatus(mRes.Status)
 	}
 
-	if mRes.Status.Code != rpc.Code_CODE_OK {
-		status := rstatus.HTTPStatusFromCode(mRes.Status.Code)
-		m := mRes.Status.Message
-		switch mRes.Status.Code {
-		case rpc.Code_CODE_ABORTED:
-			status = http.StatusPreconditionFailed
-		case rpc.Code_CODE_UNIMPLEMENTED:
-			// We translate this into a Bad Gateway error as per https://www.rfc-editor.org/rfc/rfc4918#section-9.9.4
-			// > 502 (Bad Gateway) - This may occur when the destination is on another
-			// > server and the destination server refuses to accept the resource.
-			// > This could also occur when the destination is on another sub-section
-			// > of the same server namespace.
-			status = http.StatusBadGateway
-		}
-
-		w.WriteHeader(status)
-
-		b, err := errors.Marshal(status, m, "")
-		errors.HandleWebdavError(&log, w, b, err)
-		return
-	}
-
-	dstStatRes, err = s.gwClient.Stat(ctx, dstStatReq)
-	if err != nil {
-		log.Error().Err(err).Msg("error sending grpc stat request")
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	if dstStatRes.Status.Code != rpc.Code_CODE_OK {
-		errors.HandleErrorStatus(&log, w, dstStatRes.Status)
-		return
+	dstStatRes, err = client.Stat(ctx, dstStatReq)
+	switch {
+	case err != nil:
+		span.RecordError(err)
+		return http.StatusInternalServerError, err
+	case dstStatRes.Status.Code != rpc.Code_CODE_OK:
+		return rstatus.HTTPStatusFromCode(dstStatRes.Status.Code), errtypes.NewErrtypeFromStatus(dstStatRes.Status)
 	}
 
 	info := dstStatRes.Info
@@ -297,5 +249,5 @@ func (s *svc) handleMove(ctx context.Context, w http.ResponseWriter, r *http.Req
 	w.Header().Set(net.HeaderETag, info.Etag)
 	w.Header().Set(net.HeaderOCFileID, storagespace.FormatResourceID(*info.Id))
 	w.Header().Set(net.HeaderOCETag, info.Etag)
-	w.WriteHeader(successCode)
+	return successCode, nil
 }

@@ -92,7 +92,7 @@ func (h *SpacesHandler) Handler(s *svc, trashbinHandler *TrashbinHandler) http.H
 		case MethodMkcol:
 			status, err = s.handleSpacesMkCol(w, r, spaceID)
 		case MethodMove:
-			s.handleSpacesMove(w, r, spaceID)
+			status, err = s.handleSpacesMove(w, r, spaceID)
 		case MethodCopy:
 			s.handleSpacesCopy(w, r, spaceID)
 		case MethodReport:
@@ -113,17 +113,34 @@ func (h *SpacesHandler) Handler(s *svc, trashbinHandler *TrashbinHandler) http.H
 			http.Error(w, http.StatusText(http.StatusNotImplemented), http.StatusNotImplemented)
 		}
 
-		if status != 0 { // 0 means the handler already sent the response
+		switch status {
+		case statusSentByHandler:
+			// nothing left to do
+			return
+		case http.StatusCreated, http.StatusNoContent:
 			w.WriteHeader(status)
-			if status != http.StatusNoContent {
-				var b []byte
-				if b, err = errors.Marshal(status, err.Error(), ""); err == nil {
-					_, err = w.Write(b)
-				}
+			// no body
+			return
+		case http.StatusInternalServerError:
+			// log an error on the server side
+			if err != nil {
+				appctx.GetLogger(r.Context()).Error().Err(err).Msg(err.Error())
 			}
-		}
-		if err != nil {
-			appctx.GetLogger(r.Context()).Error().Err(err).Msg(err.Error())
+			fallthrough
+		default:
+			w.WriteHeader(status)
+			// recreate oc10 like sabredav exception body
+			message := ""
+			if err != nil {
+				message = err.Error()
+			}
+			var b []byte
+			if b, err = errors.Marshal(status, message, ""); err == nil {
+				_, err = w.Write(b)
+			}
+			if err != nil {
+				appctx.GetLogger(r.Context()).Error().Err(err).Msg(err.Error())
+			}
 		}
 	})
 }
