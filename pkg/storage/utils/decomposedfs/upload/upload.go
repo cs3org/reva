@@ -263,15 +263,13 @@ func (upload *Upload) FinishUpload(_ context.Context) error {
 		}
 	}
 
-	if upload.async {
-		// handle postprocessing asynchronously but inform there is something in progress
-		return upload.tp.Propagate(upload.Ctx, n, upload.sizeDiff)
-	}
-
-	err = upload.Finalize()
-	Cleanup(upload, err != nil, false)
-	if err != nil {
-		return err
+	if !upload.async {
+		// handle postprocessing synchronously
+		err = upload.Finalize()
+		Cleanup(upload, err != nil, false)
+		if err != nil {
+			return err
+		}
 	}
 
 	return upload.tp.Propagate(upload.Ctx, n, upload.sizeDiff)
@@ -347,25 +345,6 @@ func (upload *Upload) Finalize() (err error) {
 		return errors.Wrap(err, "failed to upload file to blostore")
 	}
 
-	if upload.async {
-		return nil
-	}
-
-	sublog := appctx.GetLogger(upload.Ctx).
-		With().
-		Interface("info", upload.Info).
-		Str("binPath", upload.binPath).
-		Str("targetPath", n.InternalPath()).
-		Str("spaceID", upload.Info.Storage["SpaceRoot"]).
-		Logger()
-
-	// some clients need the etag in the upload metadata
-	fi, err := os.Stat(n.InternalPath())
-	if err != nil {
-		sublog.Err(err).Interface("info", upload.Info).Str("path", n.InternalPath()).Msg("Decomposedfs: could not stat file")
-		return err
-	}
-	upload.Info.MetaData["etag"], _ = node.CalculateEtag(n.ID, fi.ModTime())
 	return nil
 }
 

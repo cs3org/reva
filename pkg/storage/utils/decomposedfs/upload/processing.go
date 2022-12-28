@@ -298,6 +298,13 @@ func CreateNodeForUpload(upload *Upload, initAttrs map[string]string) (*node.Nod
 		}
 	}
 
+	// add etag to metadata
+	nfi, err := os.Stat(n.InternalPath())
+	if err != nil {
+		return nil, err
+	}
+	upload.Info.MetaData["etag"], _ = node.CalculateEtag(n.ID, nfi.ModTime())
+
 	// update nodeid for later
 	upload.Info.Storage["NodeId"] = n.ID
 	if err := upload.writeInfo(); err != nil {
