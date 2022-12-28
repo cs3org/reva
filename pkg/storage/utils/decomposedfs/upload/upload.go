@@ -359,14 +359,6 @@ func (upload *Upload) Finalize() (err error) {
 		Str("spaceID", upload.Info.Storage["SpaceRoot"]).
 		Logger()
 
-	// tests sometimes set the mtime
-	if upload.Info.MetaData["mtime"] != "" {
-		if err := n.SetMtimeString(upload.Info.MetaData["mtime"]); err != nil {
-			sublog.Err(err).Interface("info", upload.Info).Msg("Decomposedfs: could not set mtime metadata")
-			return err
-		}
-	}
-
 	// some clients need the etag in the upload metadata
 	fi, err := os.Stat(n.InternalPath())
 	if err != nil {
