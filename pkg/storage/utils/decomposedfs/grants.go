@@ -41,12 +41,12 @@ func (fs *Decomposedfs) DenyGrant(ctx context.Context, ref *provider.Reference, 
 
 	log.Debug().Interface("ref", ref).Interface("grantee", grantee).Msg("DenyGrant()")
 
-	node, err := fs.lu.NodeFromResource(ctx, ref)
+	gNode, err := fs.lu.NodeFromResource(ctx, ref)
 	if err != nil {
 		return err
 	}
-	if !node.Exists {
-		return errtypes.NotFound(filepath.Join(node.ParentID, node.Name))
+	if !gNode.Exists {
+		return errtypes.NotFound(filepath.Join(gNode.ParentID, gNode.Name))
 	}
 
 	// set all permissions to false
@@ -59,23 +59,23 @@ func (fs *Decomposedfs) DenyGrant(ctx context.Context, ref *provider.Reference, 
 	u := ctxpkg.ContextMustGetUser(ctx)
 	grant.Creator = u.GetId()
 
-	rp, err := fs.p.AssemblePermissions(ctx, node)
+	rp, err := fs.p.AssemblePermissions(ctx, gNode)
 
 	switch {
 	case err != nil:
 		return errtypes.InternalError(err.Error())
 	case !rp.DenyGrant:
-		return errtypes.PermissionDenied(filepath.Join(node.ParentID, node.Name))
+		return errtypes.PermissionDenied(filepath.Join(gNode.ParentID, gNode.Name))
 	}
 
-	return fs.storeGrant(ctx, node, grant)
+	return fs.storeGrant(ctx, gNode, grant)
 }
 
 // AddGrant adds a grant to a resource
 func (fs *Decomposedfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) (err error) {
 	log := appctx.GetLogger(ctx)
 	log.Debug().Interface("ref", ref).Interface("grant", g).Msg("AddGrant()")
-	node, grant, err := fs.loadGrant(ctx, ref, g)
+	gNode, grant, err := fs.loadGrant(ctx, ref, g)
 	if err != nil {
 		return err
 	}
@@ -86,8 +86,8 @@ func (fs *Decomposedfs) AddGrant(ctx context.Context, ref *provider.Reference, g
 		return fs.UpdateGrant(ctx, ref, g)
 	}
 
-	owner := node.Owner()
-	grants, err := node.ListGrants(ctx)
+	owner := gNode.Owner()
+	grants, err := gNode.ListGrants(ctx)
 	if err != nil {
 		return err
 	}
@@ -98,8 +98,8 @@ func (fs *Decomposedfs) AddGrant(ctx context.Context, ref *provider.Reference, g
 	// When the owner is empty but grants are set then we do want to check the grants.
 	// However, if we are trying to edit an existing grant we do not have to check for permission if the user owns the grant
 	// TODO: find a better to check this
-	if !(len(grants) == 0 && (owner == nil || owner.OpaqueId == "" || (owner.OpaqueId == node.SpaceID && owner.Type == 8))) {
-		rp, err := fs.p.AssemblePermissions(ctx, node)
+	if !(len(grants) == 0 && (owner == nil || owner.OpaqueId == "" || (owner.OpaqueId == gNode.SpaceID && owner.Type == 8))) {
+		rp, err := fs.p.AssemblePermissions(ctx, gNode)
 		switch {
 		case err != nil:
 			return errtypes.InternalError(err.Error())
@@ -112,20 +112,20 @@ func (fs *Decomposedfs) AddGrant(ctx context.Context, ref *provider.Reference, g
 		}
 	}
 
-	return fs.storeGrant(ctx, node, g)
+	return fs.storeGrant(ctx, gNode, g)
 }
 
 // ListGrants lists the grants on the specified resource
 func (fs *Decomposedfs) ListGrants(ctx context.Context, ref *provider.Reference) (grants []*provider.Grant, err error) {
-	var node *node.Node
-	if node, err = fs.lu.NodeFromResource(ctx, ref); err != nil {
+	var gNode *node.Node
+	if gNode, err = fs.lu.NodeFromResource(ctx, ref); err != nil {
 		return
 	}
-	if !node.Exists {
-		err = errtypes.NotFound(filepath.Join(node.ParentID, node.Name))
+	if !gNode.Exists {
+		err = errtypes.NotFound(filepath.Join(gNode.ParentID, gNode.Name))
 		return
 	}
-	rp, err := fs.p.AssemblePermissions(ctx, node)
+	rp, err := fs.p.AssemblePermissions(ctx, gNode)
 	switch {
 	case err != nil:
 		return nil, errtypes.InternalError(err.Error())
@@ -134,9 +134,9 @@ func (fs *Decomposedfs) ListGrants(ctx context.Context, ref *provider.Reference)
 		return nil, errtypes.NotFound(f)
 	}
 	log := appctx.GetLogger(ctx)
-	np := node.InternalPath()
+	np := gNode.InternalPath()
 	var attrs map[string]string
-	if attrs, err = node.Xattrs(); err != nil {
+	if attrs, err = gNode.Xattrs(); err != nil {
 		log.Error().Err(err).Msg("error listing attributes")
 		return nil, err
 	}
@@ -169,7 +169,7 @@ func (fs *Decomposedfs) ListGrants(ctx context.Context, ref *provider.Reference)
 
 // RemoveGrant removes a grant from resource
 func (fs *Decomposedfs) RemoveGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) (err error) {
-	node, grant, err := fs.loadGrant(ctx, ref, g)
+	gNode, grant, err := fs.loadGrant(ctx, ref, g)
 	if err != nil {
 		return err
 	}
@@ -180,7 +180,7 @@ func (fs *Decomposedfs) RemoveGrant(ctx context.Context, ref *provider.Reference
 
 	// you are allowed to remove grants if you created them yourself or have the proper permission
 	if !utils.UserIDEqual(grant.Creator, ctxpkg.ContextMustGetUser(ctx).GetId()) {
-		rp, err := fs.p.AssemblePermissions(ctx, node)
+		rp, err := fs.p.AssemblePermissions(ctx, gNode)
 		switch {
 		case err != nil:
 			return errtypes.InternalError(err.Error())
@@ -194,7 +194,7 @@ func (fs *Decomposedfs) RemoveGrant(ctx context.Context, ref *provider.Reference
 	}
 
 	// check lock
-	if err := node.CheckLock(ctx); err != nil {
+	if err := gNode.CheckLock(ctx); err != nil {
 		return err
 	}
 
@@ -207,20 +207,20 @@ func (fs *Decomposedfs) RemoveGrant(ctx context.Context, ref *provider.Reference
 		attr = xattrs.GrantUserAcePrefix + g.Grantee.GetUserId().OpaqueId
 	}
 
-	if err = xattrs.Remove(node.InternalPath(), attr); err != nil {
+	if err = xattrs.Remove(gNode.InternalPath(), attr); err != nil {
 		return err
 	}
 
-	if spaceGrant != nil {
+	// TODO we need an index for groups
+	if spaceGrant != nil && g.Grantee.Type != provider.GranteeType_GRANTEE_TYPE_GROUP {
 		// remove from user index
-		// TODO we need an index for groups
-		userIDPath := filepath.Join(fs.o.Root, "indexes", "by-user-id", g.Grantee.GetUserId().OpaqueId, node.SpaceID)
+		userIDPath := filepath.Join(fs.o.Root, "indexes", "by-user-id", g.Grantee.GetUserId().OpaqueId, gNode.SpaceID)
 		if err := os.Remove(userIDPath); err != nil {
 			return err
 		}
 	}
 
-	return fs.tp.Propagate(ctx, node, 0)
+	return fs.tp.Propagate(ctx, gNode, 0)
 }
 
 // UpdateGrant updates a grant on a resource
@@ -229,7 +229,7 @@ func (fs *Decomposedfs) UpdateGrant(ctx context.Context, ref *provider.Reference
 	log := appctx.GetLogger(ctx)
 	log.Debug().Interface("ref", ref).Interface("grant", g).Msg("UpdateGrant()")
 
-	node, grant, err := fs.loadGrant(ctx, ref, g)
+	gNode, grant, err := fs.loadGrant(ctx, ref, g)
 	if err != nil {
 		return err
 	}
@@ -242,7 +242,7 @@ func (fs *Decomposedfs) UpdateGrant(ctx context.Context, ref *provider.Reference
 
 	// You may update a grant when you have the UpdateGrant permission or created the grant (regardless what your permissions are now)
 	if !utils.UserIDEqual(grant.Creator, ctxpkg.ContextMustGetUser(ctx).GetId()) {
-		rp, err := fs.p.AssemblePermissions(ctx, node)
+		rp, err := fs.p.AssemblePermissions(ctx, gNode)
 		switch {
 		case err != nil:
 			return errtypes.InternalError(err.Error())
@@ -255,7 +255,7 @@ func (fs *Decomposedfs) UpdateGrant(ctx context.Context, ref *provider.Reference
 		}
 	}
 
-	return fs.storeGrant(ctx, node, g)
+	return fs.storeGrant(ctx, gNode, g)
 }
 
 // checks if the given grant exists and returns it. Nil grant means it doesn't exist
