@@ -803,28 +803,28 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 		return nil, err
 	}
 
-	pm := make(map[string]*provider.ResourcePermissions, len(grants))
-	gm := make(map[string]struct{})
+	grantMap := make(map[string]*provider.ResourcePermissions, len(grants))
+	groupMap := make(map[string]struct{})
 	for _, g := range grants {
 		var id string
 		switch g.Grantee.Type {
 		case provider.GranteeType_GRANTEE_TYPE_GROUP:
 			id = g.Grantee.GetGroupId().OpaqueId
-			gm[id] = struct{}{}
+			groupMap[id] = struct{}{}
 		case provider.GranteeType_GRANTEE_TYPE_USER:
 			id = g.Grantee.GetUserId().OpaqueId
 		default:
 			continue
 		}
 
-		pm[id] = g.Permissions
+		grantMap[id] = g.Permissions
 	}
-	marshalledG, err := json.Marshal(gm)
+	groupMapJson, err := json.Marshal(groupMap)
 	if err != nil {
 		return nil, err
 	}
 
-	marshalledP, err := json.Marshal(pm)
+	grantMapJson, err := json.Marshal(grantMap)
 	if err != nil {
 		return nil, err
 	}
@@ -844,11 +844,11 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 			Map: map[string]*types.OpaqueEntry{
 				"grants": {
 					Decoder: "json",
-					Value:   marshalledP,
+					Value:   grantMapJson,
 				},
 				"groups": {
 					Decoder: "json",
-					Value:   marshalledG,
+					Value:   groupMapJson,
 				},
 			},
 		},
