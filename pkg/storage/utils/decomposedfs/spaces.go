@@ -819,12 +819,13 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 
 		grantMap[id] = g.Permissions
 	}
-	groupMapJson, err := json.Marshal(groupMap)
+
+	grantMapJSON, err := json.Marshal(grantMap)
 	if err != nil {
 		return nil, err
 	}
 
-	grantMapJson, err := json.Marshal(grantMap)
+	groupMapJSON, err := json.Marshal(groupMap)
 	if err != nil {
 		return nil, err
 	}
@@ -844,11 +845,11 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 			Map: map[string]*types.OpaqueEntry{
 				"grants": {
 					Decoder: "json",
-					Value:   grantMapJson,
+					Value:   grantMapJSON,
 				},
 				"groups": {
 					Decoder: "json",
-					Value:   groupMapJson,
+					Value:   groupMapJSON,
 				},
 			},
 		},
