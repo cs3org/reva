@@ -19,6 +19,8 @@
 package utils
 
 import (
+	"encoding/json"
+	"errors"
 	"math/rand"
 	"net"
 	"net/http"
@@ -384,6 +386,18 @@ func AppendPlainToOpaque(o *types.Opaque, key, value string) *types.Opaque {
 	return o
 }
 
+// AppendJSONToOpaque adds a new key value pair as a json on the given opaque and returns it. Ignores errors
+func AppendJSONToOpaque(o *types.Opaque, key string, value interface{}) *types.Opaque {
+	o = ensureOpaque(o)
+
+	b, _ := json.Marshal(value)
+	o.Map[key] = &types.OpaqueEntry{
+		Decoder: "json",
+		Value:   b,
+	}
+	return o
+}
+
 // ReadPlainFromOpaque reads a plain string from the given opaque map
 func ReadPlainFromOpaque(o *types.Opaque, key string) string {
 	if o.GetMap() == nil {
@@ -393,6 +407,20 @@ func ReadPlainFromOpaque(o *types.Opaque, key string) string {
 		return string(e.Value)
 	}
 	return ""
+}
+
+// ReadJSONFromOpaque reads and unmarshals a value from the opaque in the given interface{} (Make sure it's a pointer!)
+func ReadJSONFromOpaque(o *types.Opaque, key string, valptr interface{}) error {
+	if o.GetMap() == nil {
+		return errors.New("not found")
+	}
+
+	e, ok := o.Map[key]
+	if !ok || e.Decoder != "json" {
+		return errors.New("not found")
+	}
+
+	return json.Unmarshal(e.Value, valptr)
 }
 
 // ExistsInOpaque returns true if the key exists in the opaque (ignoring the value)
