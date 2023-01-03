@@ -177,6 +177,7 @@ func (a *authorizer) IsProviderAllowed(ctx context.Context, pi *ocmprovider.Prov
 		for _, p := range providers {
 			if p.Domain == normalizedDomain {
 				providerAuthorized = true
+				pi.Services = p.Services
 				break
 			}
 		}
