@@ -108,22 +108,32 @@ Synchronization features like etag propagation, setting mtime and locking files
 -   [apiWebdavLocksUnlock/unlockSharingToShares.feature:28](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavLocksUnlock/unlockSharingToShares.feature#L28)
 -   [apiWebdavLocksUnlock/unlockSharingToShares.feature:29](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavLocksUnlock/unlockSharingToShares.feature#L29)
 -   [apiWebdavLocksUnlock/unlockSharingToShares.feature:30](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavLocksUnlock/unlockSharingToShares.feature#L30)
+-   [apiWebdavLocksUnlock/unlockSharingToShares.feature:35](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavLocksUnlock/unlockSharingToShares.feature#L35)
+-   [apiWebdavLocksUnlock/unlockSharingToShares.feature:36](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavLocksUnlock/unlockSharingToShares.feature#L36)
 -   [apiWebdavLocksUnlock/unlockSharingToShares.feature:51](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavLocksUnlock/unlockSharingToShares.feature#L51)
 -   [apiWebdavLocksUnlock/unlockSharingToShares.feature:52](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavLocksUnlock/unlockSharingToShares.feature#L52)
 -   [apiWebdavLocksUnlock/unlockSharingToShares.feature:53](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavLocksUnlock/unlockSharingToShares.feature#L53)
 -   [apiWebdavLocksUnlock/unlockSharingToShares.feature:54](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavLocksUnlock/unlockSharingToShares.feature#L54)
+-   [apiWebdavLocksUnlock/unlockSharingToShares.feature:59](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavLocksUnlock/unlockSharingToShares.feature#L59)
+-   [apiWebdavLocksUnlock/unlockSharingToShares.feature:60](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavLocksUnlock/unlockSharingToShares.feature#L60)
 -   [apiWebdavLocksUnlock/unlockSharingToShares.feature:99](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavLocksUnlock/unlockSharingToShares.feature#L99)
 -   [apiWebdavLocksUnlock/unlockSharingToShares.feature:100](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavLocksUnlock/unlockSharingToShares.feature#L100)
 -   [apiWebdavLocksUnlock/unlockSharingToShares.feature:101](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavLocksUnlock/unlockSharingToShares.feature#L101)
 -   [apiWebdavLocksUnlock/unlockSharingToShares.feature:102](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavLocksUnlock/unlockSharingToShares.feature#L102)
+-   [apiWebdavLocksUnlock/unlockSharingToShares.feature:107](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavLocksUnlock/unlockSharingToShares.feature#L107)
+-   [apiWebdavLocksUnlock/unlockSharingToShares.feature:108](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavLocksUnlock/unlockSharingToShares.feature#L108)
 -   [apiWebdavLocksUnlock/unlockSharingToShares.feature:123](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavLocksUnlock/unlockSharingToShares.feature#L123)
 -   [apiWebdavLocksUnlock/unlockSharingToShares.feature:124](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavLocksUnlock/unlockSharingToShares.feature#L124)
 -   [apiWebdavLocksUnlock/unlockSharingToShares.feature:125](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavLocksUnlock/unlockSharingToShares.feature#L125)
 -   [apiWebdavLocksUnlock/unlockSharingToShares.feature:126](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavLocksUnlock/unlockSharingToShares.feature#L126)
+-   [apiWebdavLocksUnlock/unlockSharingToShares.feature:131](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavLocksUnlock/unlockSharingToShares.feature#L131)
+-   [apiWebdavLocksUnlock/unlockSharingToShares.feature:132](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavLocksUnlock/unlockSharingToShares.feature#L132)
 -   [apiWebdavLocksUnlock/unlockSharingToShares.feature:147](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavLocksUnlock/unlockSharingToShares.feature#L147)
 -   [apiWebdavLocksUnlock/unlockSharingToShares.feature:148](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavLocksUnlock/unlockSharingToShares.feature#L148)
 -   [apiWebdavLocksUnlock/unlockSharingToShares.feature:149](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavLocksUnlock/unlockSharingToShares.feature#L149)
 -   [apiWebdavLocksUnlock/unlockSharingToShares.feature:150](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavLocksUnlock/unlockSharingToShares.feature#L150)
+-   [apiWebdavLocksUnlock/unlockSharingToShares.feature:155](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavLocksUnlock/unlockSharingToShares.feature#L155)
+-   [apiWebdavLocksUnlock/unlockSharingToShares.feature:156](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavLocksUnlock/unlockSharingToShares.feature#L156)
 
 ### Share
 File and sync features in a shared scenario
@@ -178,8 +188,8 @@ File and sync features in a shared scenario
 -   [apiShareOperationsToShares1/gettingShares.feature:185](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareOperationsToShares1/gettingShares.feature#L185)
 
 #### [Listing shares via ocs API does not show path for parent folders](https://github.com/owncloud/ocis/issues/1231)
+-   [apiShareOperationsToShares1/gettingShares.feature:221](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareOperationsToShares1/gettingShares.feature#L221)
 -   [apiShareOperationsToShares1/gettingShares.feature:222](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareOperationsToShares1/gettingShares.feature#L222)
--   [apiShareOperationsToShares1/gettingShares.feature:223](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiShareOperationsToShares1/gettingShares.feature#L223)
 
 #### [Public link enforce permissions](https://github.com/owncloud/ocis/issues/1269)
 
