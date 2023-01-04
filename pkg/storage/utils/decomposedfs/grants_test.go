@@ -142,7 +142,7 @@ var _ = Describe("Grants", func() {
 				localPath := n.InternalPath()
 				attr, err := xattr.Get(localPath, xattrs.GrantUserAcePrefix+grant.Grantee.GetUserId().OpaqueId)
 				Expect(err).ToNot(HaveOccurred())
-				Expect(string(attr)).To(Equal(fmt.Sprintf("\x00t=A:f=:p=rw:c=%s", o.GetOpaqueId()+"\n"))) // NOTE: this tests ace package
+				Expect(string(attr)).To(Equal(fmt.Sprintf("\x00t=A:f=:p=rw:c=%s:e=0\n", o.GetOpaqueId()))) // NOTE: this tests ace package
 			})
 
 			It("creates a storage space per created grant", func() {
