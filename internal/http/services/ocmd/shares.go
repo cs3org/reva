@@ -100,11 +100,13 @@ func (h *sharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if resource == "" || providerID == "" || owner == "" {
-		WriteError(w, r, APIErrorInvalidParameter, "missing details about resource to be shared", nil)
+		msg := fmt.Sprintf("missing details about resource to be shared (resource='%s', providerID='%s', owner='%s", resource, providerID, owner)
+		WriteError(w, r, APIErrorInvalidParameter, msg, nil)
 		return
 	}
 	if shareWith == "" || protocol["name"] == "" || meshProvider == "" {
-		WriteError(w, r, APIErrorInvalidParameter, "missing request parameters", nil)
+		msg := fmt.Sprintf("missing request parameters (shareWith='%s', protocol.name='%s', meshProvider='%s'", shareWith, protocol["name"], meshProvider)
+		WriteError(w, r, APIErrorInvalidParameter, msg, nil)
 		return
 	}
 
@@ -188,9 +190,13 @@ func (h *sharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	ownerParts := strings.Split(owner, "@")
+	if len(ownerParts) != 2 {
+		WriteError(w, r, APIErrorInvalidParameter, "owner should be opaqueId@webDAVHost", nil)
+	}
 	ownerID := &userpb.UserId{
-		OpaqueId: owner,
-		Idp:      meshProvider,
+		OpaqueId: ownerParts[0],
+		Idp:      ownerParts[1],
 		Type:     userpb.UserType_USER_TYPE_PRIMARY,
 	}
 	createShareReq := &ocmcore.CreateOCMCoreShareRequest{

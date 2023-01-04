@@ -26,7 +26,6 @@ import (
 	"io"
 	"mime"
 	"net/http"
-	"net/url"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
@@ -190,7 +189,7 @@ func (h *invitesHandler) forwardInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err = w.Write([]byte("Accepted invite from: " + html.EscapeString(providerDomain)))
+	_, err = w.Write([]byte("{\"message\": \"Success\", \"providerDomain\":\"" + html.EscapeString(providerDomain) + "\"}"))
 	if err != nil {
 		WriteError(w, r, APIErrorServerError, "error writing token data", err)
 		return
@@ -237,14 +236,8 @@ func (h *invitesHandler) acceptInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	recipientProviderURL, err := url.Parse(recipientProvider)
-	if err != nil {
-		WriteError(w, r, APIErrorServerError, fmt.Sprintf("error parseing recipientProvider URL: %s", recipientProvider), err)
-		return
-	}
-
 	providerInfo := ocmprovider.ProviderInfo{
-		Domain: recipientProviderURL.Hostname(),
+		Domain: recipientProvider,
 		Services: []*ocmprovider.Service{
 			{
 				Host: clientIP,
@@ -313,6 +306,7 @@ func (h *invitesHandler) findAcceptedUsers(w http.ResponseWriter, r *http.Reques
 	indentedResponse, _ := json.MarshalIndent(response, "", "   ")
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
+	log.Debug().Msg("findAcceptedUsers json response: " + string(indentedResponse))
 	if _, err := w.Write(indentedResponse); err != nil {
 		log.Err(err).Msg("Error writing to ResponseWriter")
 	}

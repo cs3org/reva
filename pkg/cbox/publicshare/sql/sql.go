@@ -449,6 +449,12 @@ func (m *manager) GetPublicShareByToken(ctx context.Context, token string, auth 
 		return nil, err
 	}
 	cs3Share := conversions.ConvertToCS3PublicShare(s)
+	if expired(cs3Share) {
+		if err := m.cleanupExpiredShares(); err != nil {
+			return nil, err
+		}
+		return nil, errtypes.NotFound(token)
+	}
 	if s.ShareWith != "" {
 		if !authenticate(cs3Share, s.ShareWith, auth) {
 			// if check := checkPasswordHash(auth.Password, s.ShareWith); !check {
@@ -460,13 +466,6 @@ func (m *manager) GetPublicShareByToken(ctx context.Context, token string, auth 
 				return nil, err
 			}
 		}
-	}
-
-	if expired(cs3Share) {
-		if err := m.cleanupExpiredShares(); err != nil {
-			return nil, err
-		}
-		return nil, errtypes.NotFound(token)
 	}
 
 	return cs3Share, nil

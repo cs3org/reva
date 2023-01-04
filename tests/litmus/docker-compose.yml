@@ -1,0 +1,36 @@
+version: "3.3"
+services:
+  frontend:
+    image: ${TEST_IMAGE}
+    command: -c /litmus/frontend.toml
+    volumes:
+      - .:/litmus
+    working_dir: /litmus
+  gateway:
+    image: ${TEST_IMAGE}
+    command: -c /litmus/gateway.toml
+    volumes:
+      - .:/litmus
+  storage-home-ocis:
+    image: ${TEST_IMAGE}
+    command: -c /litmus/storage-home-ocis.toml
+    volumes:
+      - .:/litmus
+  users:
+    image: ${TEST_IMAGE}
+    command: -c /litmus/users.toml
+    volumes:
+      - .:/litmus
+    working_dir: /litmus
+  litmus:
+    image: registry.cern.ch/docker.io/owncloud/litmus:latest
+    environment:
+      LITMUS_URL: http://frontend:20080${URL_PATH}
+      LITMUS_USERNAME: einstein
+      LITMUS_PASSWORD: relativity 
+      TESTS: basic http copymove props
+    depends_on:
+      - frontend
+      - gateway
+      - storage-home-ocis
+      - users

@@ -1,18 +1,33 @@
-SHELL := /bin/bash
 BUILD_DATE=`date +%FT%T%z`
 GIT_COMMIT ?= `git rev-parse --short HEAD`
-GIT_BRANCH=`git rev-parse --symbolic-full-name --abbrev-ref HEAD`
 GIT_DIRTY=`git diff-index --quiet HEAD -- || echo "dirty-"`
 VERSION	?= `git describe --always`
 GO_VERSION ?= `go version | awk '{print $$3}'`
-MINIMUM_GO_VERSION=1.16.2
 BUILD_FLAGS="-X main.gitCommit=${GIT_COMMIT} -X main.version=${VERSION} -X main.goVersion=${GO_VERSION} -X main.buildDate=${BUILD_DATE}"
-CI_BUILD_FLAGS="-w -extldflags "-static" -X main.gitCommit=${GIT_COMMIT} -X main.version=${VERSION} -X main.goVersion=${GO_VERSION} -X main.buildDate=${BUILD_DATE}"
-LITMUS_URL_OLD="http://localhost:20080/remote.php/webdav"
-LITMUS_URL_NEW="http://localhost:20080/remote.php/dav/files/4c510ada-c86b-4815-8820-42cdf82c3d51"
-LITMUS_USERNAME="einstein"
-LITMUS_PASSWORD="relativity"
-TESTS="basic http copymove props"
+
+TEST_IMAGE	?= revad:test
+
+.PHONY: test-image
+test-image:
+	docker build -t $(TEST_IMAGE) -f docker/Dockerfile.revad .
+
+LITMUS		?= $(CURDIR)/tests/litmus
+TIMEOUT		?= 3600
+URL_PATH	?= /remote.php/webdav
+
+.PHONY: litmus-1-only
+litmus-1-only:
+	@cd $(LITMUS) && URL_PATH=$(URL_PATH) TEST_IMAGE=$(TEST_IMAGE) docker-compose up --remove-orphans --force-recreate --exit-code-from litmus --abort-on-container-exit --timeout $(TIMEOUT)
+
+.PHONY: litmus-1
+litmus-1: test-image litmus-1-only
+
+.PHONY: litmus-2-only
+litmus-2-only: URL_PATH=/remote.php/dav/files/4c510ada-c86b-4815-8820-42cdf82c3d51
+litmus-2-only: litmus-1-only
+
+.PHONY: litmus-2
+litmus-2: test-image litmus-2-only
 
 TOOLCHAIN		?= $(CURDIR)/toolchain
 GOLANGCI_LINT	?= $(TOOLCHAIN)/golangci-lint
@@ -72,7 +87,7 @@ imports: off $(GOIMPORTS)
 	$(GOIMPORTS) -w tools pkg internal cmd
 
 .PHONY: build
-build: build-revad build-reva test-go-version
+build: build-revad build-reva
 
 .PHONY: build-cephfs
 build-cephfs: build-revad-cephfs build-reva
@@ -111,41 +126,12 @@ test: off
 	go test -coverprofile coverage.out -race $$(go list ./... | grep -v /tests/integration)
 
 .PHONY: test-integration
-test-integration: build-ci
+test-integration: build
 	cd tests/integration && go test -race ./...
-
-.PHONY: litmus-test-old
-litmus-test-old: build
-	cd tests/oc-integration-tests/local && ../../../cmd/revad/revad -c frontend.toml &
-	cd tests/oc-integration-tests/local && ../../../cmd/revad/revad -c gateway.toml &
-	cd tests/oc-integration-tests/local && ../../../cmd/revad/revad -c storage-home.toml &
-	cd tests/oc-integration-tests/local && ../../../cmd/revad/revad -c storage-users.toml &
-	cd tests/oc-integration-tests/local && ../../../cmd/revad/revad -c users.toml &
-	docker run --rm --network=host -e LITMUS_URL=$(LITMUS_URL_OLD) -e LITMUS_USERNAME=$(LITMUS_USERNAME) -e LITMUS_PASSWORD=$(LITMUS_PASSWORD) -e TESTS=$(TESTS) owncloud/litmus:latest
-	pkill revad
-
-.PHONY: litmus-test-new
-litmus-test-new: build
-	cd tests/oc-integration-tests/local && ../../../cmd/revad/revad -c frontend.toml &
-	cd tests/oc-integration-tests/local && ../../../cmd/revad/revad -c gateway.toml &
-	cd tests/oc-integration-tests/local && ../../../cmd/revad/revad -c storage-home.toml &
-	cd tests/oc-integration-tests/local && ../../../cmd/revad/revad -c storage-users.toml &
-	cd tests/oc-integration-tests/local && ../../../cmd/revad/revad -c users.toml &
-	docker run --rm --network=host -e LITMUS_URL=$(LITMUS_URL_NEW) -e LITMUS_USERNAME=$(LITMUS_USERNAME) -e LITMUS_PASSWORD=$(LITMUS_PASSWORD) -e TESTS=$(TESTS) owncloud/litmus:latest
-	pkill revad
 
 .PHONY: contrib
 contrib:
 	git shortlog -se | cut -c8- | sort -u | awk '{print "-", $$0}' | grep -v 'users.noreply.github.com' > CONTRIBUTORS.md
-
-.PHONY: test-go-version
-test-go-version:
-	@echo -e "$(MINIMUM_GO_VERSION)\n$(shell echo $(GO_VERSION) | sed 's/go//')" | sort -Vc &> /dev/null || echo -e "\n\033[33;5m[WARNING]\033[0m You are not using a supported go version. Please use $(MINIMUM_GO_VERSION) or above.\n"
-
-.PHONY: build-ci
-build-ci: off
-	go build -ldflags ${BUILD_FLAGS} -o ./cmd/revad/revad ./cmd/revad
-	go build -ldflags ${BUILD_FLAGS} -o ./cmd/reva/reva ./cmd/reva
 
 .PHONY: gen-doc
 gen-doc:

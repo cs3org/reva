@@ -272,7 +272,7 @@ func (m *mgr) Share(ctx context.Context, md *provider.ResourceId, g *ocm.ShareGr
 			"protocol":     protocol,
 			"meshProvider": userID.Idp, // FIXME: move this into the 'owner' string?
 		}
-		err = sender.Send(requestBodyMap, pi)
+		err = sender.Send(ctx, requestBodyMap, pi)
 		if err != nil {
 			err = errors.Wrap(err, "error sending OCM POST")
 			return nil, err

@@ -1,16 +1,27 @@
 # This config file will start a reva service that:
-# - serves as the entrypoint for owncloud APIs but with a globally accessible namespace.
-# - serves http endpoints on port 20180
+# - serves as the entrypoint for owncloud APIs.
+# - jails users into their home folder as in owncloud classic
+# - serves http endpoints on port 20080
 #   - / --------------- ocdav
 #   - /ocs ------------ ocs
 #   - TODO(diocas): ocm
 
 [shared]
 jwt_secret = "Pive-Fumkiu4"
-gatewaysvc = "localhost:19000"
+gatewaysvc = "gateway:19000"
+
+[grpc]
+address = "0.0.0.0:20099"
+
+[grpc.services.authprovider]
+auth_manager = "oidc"
+
+# If you want to use your own openid provider change this config
+[grpc.services.authprovider.auth_managers.oidc]
+issuer = "http://localhost:20080"
 
 [http]
-address = "0.0.0.0:20180"
+address = "0.0.0.0:20080"
 
 [http.middlewares.cors]
 allow_credentials = true
@@ -18,7 +29,7 @@ allow_credentials = true
 [http.services.ocdav]
 # serve ocdav on the root path
 prefix = ""
-chunk_folder = "/var/tmp/reva/chunks"
+chunk_folder = "/tmp/reva/chunks"
 # for user lookups
 # prefix the path of requests to /dav/files with this namespace
 # While owncloud has only listed usernames at this endpoint CERN has
@@ -34,7 +45,7 @@ chunk_folder = "/var/tmp/reva/chunks"
 # for eos we need to rewrite the path
 # TODO strip the username from the path so the CS3 namespace can be mounted
 # at the files/<username> endpoint? what about migration? separate reva instance
-files_namespace = "/"
+files_namespace = "/users"
 
 # similar to the dav/files endpoint we can configure a prefix for the old webdav endpoint
 # we use the old webdav endpoint to present the cs3 namespace
@@ -45,7 +56,7 @@ files_namespace = "/"
 # - the ios ios uses the core.webdav-root capability which points to remote.php/webdav in oc10
 # - the oc js sdk is hardcoded to the remote.php/webdav so it will see the new tree
 # - TODO android? no sync ... but will see different tree
-webdav_namespace = "/"
+webdav_namespace = "/home"
 
 [http.services.ocs]
 

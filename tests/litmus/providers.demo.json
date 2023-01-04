@@ -14,11 +14,11 @@
 						"description": "Example Open Cloud Mesh API"
 					},
 					"name": "Example - OCM API",
-					"path": "http://127.0.0.1:20080/ocm/",
+					"path": "http://frontend:20080/ocm/",
 					"is_monitored": true
 				},
 				"api_version": "0.0.1",
-				"host": "http://127.0.0.1:20080/"
+				"host": "frontend:20080"
 			},
 			{
 				"endpoint": {
@@ -27,11 +27,11 @@
 						"description": "Example Webdav API"
 					},
 					"name": "Example - Webdav API",
-					"path": "http://127.0.0.1:20080/remote.php/webdav/",
+					"path": "http://frontend:20080/remote.php/webdav/",
 					"is_monitored": true
 				},
 				"api_version": "0.0.1",
-				"host": "http://127.0.0.1:20080/"
+				"host": "frontend:20080"
 			},
 			{
 				"endpoint": {
@@ -40,11 +40,11 @@
 						"description": "Example GRPC Gateway"
 					},
 					"name": "Example - GRPC Gateway",
-					"path": "127.0.0.1:19000",
+					"path": "gateway:19000",
 					"is_monitored": true
 				},
 				"api_version": "0.0.1",
-				"host": "127.0.0.1:19000"
+				"host": "gateway:19000"
 			}
 		]
 	},
@@ -67,7 +67,7 @@
 					"is_monitored": true
 				},
 				"api_version": "0.0.1",
-				"host": "http://127.0.0.1:40080/"
+				"host": "127.0.0.1:40080"
 			},
 			{
 				"endpoint": {
@@ -80,7 +80,7 @@
 					"is_monitored": true
 				},
 				"api_version": "0.0.1",
-				"host": "http://127.0.0.1:40080/"
+				"host": "127.0.0.1:40080"
 			},
 			{
 				"endpoint": {
