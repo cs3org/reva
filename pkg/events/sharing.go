@@ -20,6 +20,7 @@ package events
 
 import (
 	"encoding/json"
+	"time"
 
 	group "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -83,6 +84,23 @@ type ShareUpdated struct {
 // Unmarshal to fulfill umarshaller interface
 func (ShareUpdated) Unmarshal(v []byte) (interface{}, error) {
 	e := ShareUpdated{}
+	err := json.Unmarshal(v, &e)
+	return e, err
+}
+
+// ShareExpired is emitted when a share is removed
+type ShareExpired struct {
+	ShareOwner *user.UserId
+	ItemID     *provider.ResourceId
+	ExpiredAt  time.Time
+	// split the protobuf Grantee oneof so we can use stdlib encoding/json
+	GranteeUserID  *user.UserId
+	GranteeGroupID *group.GroupId
+}
+
+// Unmarshal to fulfill umarshaller interface
+func (ShareExpired) Unmarshal(v []byte) (interface{}, error) {
+	e := ShareExpired{}
 	err := json.Unmarshal(v, &e)
 	return e, err
 }
