@@ -48,7 +48,6 @@ require (
 	github.com/prometheus/alertmanager v0.24.0
 	github.com/rs/cors v1.8.2
 	github.com/rs/zerolog v1.27.0
-	github.com/sciencemesh/meshdirectory-web v1.0.4
 	github.com/sethvargo/go-password v0.2.0
 	github.com/stretchr/testify v1.8.1
 	github.com/studio-b12/gowebdav v0.0.0-20210917133250-a3a86976a1df
