@@ -238,6 +238,7 @@ func (m *Manager) Share(ctx context.Context, md *provider.ResourceInfo, g *colla
 		ResourceId:  md.Id,
 		Permissions: g.Permissions,
 		Grantee:     g.Grantee,
+		Expiration:  g.Expiration,
 		Owner:       md.Owner,
 		Creator:     user.Id,
 		Ctime:       ts,

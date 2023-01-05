@@ -60,6 +60,9 @@ const (
 
 	// ShareWithUserTypeGuest represents a guest user
 	ShareWithUserTypeGuest ShareWithUserType = 1
+
+	// The datetime format of ISO8601
+	_iso8601 = "2006-01-02T15:04:05Z0700"
 )
 
 // ResourceType indicates the OCS type of the resource
@@ -242,6 +245,12 @@ func CS3Share2ShareData(ctx context.Context, share *collaboration.Share) (*Share
 	if share.Ctime != nil {
 		sd.STime = share.Ctime.Seconds // TODO CS3 api birth time = btime
 	}
+
+	if share.Expiration != nil {
+		expiration := time.Unix(int64(share.Expiration.Seconds), int64(share.Expiration.Nanos))
+		sd.Expiration = expiration.Format(_iso8601)
+	}
+
 	return sd, nil
 }
 
