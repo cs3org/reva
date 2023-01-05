@@ -660,7 +660,7 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 		Size:          uint64(n.Blobsize),
 		Target:        target,
 		PermissionSet: rp,
-		Owner:         n.Owner(),
+		Owner:         n.SpaceOwnerOrManager(ctx),
 		ParentId:      parentID,
 		Name:          n.Name,
 	}
