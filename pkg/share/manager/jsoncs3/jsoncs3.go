@@ -27,6 +27,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog/log"
 	"google.golang.org/genproto/protobuf/field_mask"
 
 	gatewayv1beta1 "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
@@ -406,35 +407,7 @@ func (m *Manager) Unshare(ctx context.Context, ref *collaboration.ShareReference
 		return errtypes.NotFound(ref.String())
 	}
 
-	storageID, spaceID, _ := shareid.Decode(s.Id.OpaqueId)
-	err = m.Cache.Remove(ctx, storageID, spaceID, s.Id.OpaqueId)
-	if _, ok := err.(errtypes.IsPreconditionFailed); ok {
-		if err := m.Cache.Sync(ctx, storageID, spaceID); err != nil {
-			return err
-		}
-		err = m.Cache.Remove(ctx, storageID, spaceID, s.Id.OpaqueId)
-		// TODO try more often?
-	}
-	if err != nil {
-		return err
-	}
-
-	// remove from created cache
-	err = m.CreatedCache.Remove(ctx, s.GetCreator().GetOpaqueId(), s.Id.OpaqueId)
-	if _, ok := err.(errtypes.IsPreconditionFailed); ok {
-		if err := m.CreatedCache.Sync(ctx, s.GetCreator().GetOpaqueId()); err != nil {
-			return err
-		}
-		err = m.CreatedCache.Remove(ctx, s.GetCreator().GetOpaqueId(), s.Id.OpaqueId)
-		// TODO try more often?
-	}
-	if err != nil {
-		return err
-	}
-
-	// TODO remove from grantee cache
-
-	return nil
+	return m.removeShare(ctx, s)
 }
 
 // UpdateShare updates the mode of the given share.
@@ -530,6 +503,13 @@ func (m *Manager) listSharesByIDs(ctx context.Context, user *userv1beta1.User, f
 			shares := m.Cache.ListSpace(providerID, spaceID)
 
 			for _, s := range shares.Shares {
+				if share.IsExpired(s) {
+					if err := m.removeShare(ctx, s); err != nil {
+						log.Error().Err(err).
+							Msg("failed to unshare expired share")
+					}
+					continue
+				}
 				if !share.MatchesFilters(s, filters) {
 					continue
 				}
@@ -573,6 +553,13 @@ func (m *Manager) listCreatedShares(ctx context.Context, user *userv1beta1.User,
 		for shareid := range spaceShareIDs.IDs {
 			s := spaceShares.Shares[shareid]
 			if s == nil {
+				continue
+			}
+			if share.IsExpired(s) {
+				if err := m.removeShare(ctx, s); err != nil {
+					log.Error().Err(err).
+						Msg("failed to unshare expired share")
+				}
 				continue
 			}
 			if utils.UserEqual(user.GetId(), s.GetCreator()) {
@@ -647,6 +634,13 @@ func (m *Manager) ListReceivedShares(ctx context.Context, filters []*collaborati
 		for shareID, state := range rspace.States {
 			s := m.Cache.Get(storageID, spaceID, shareID)
 			if s == nil {
+				continue
+			}
+			if share.IsExpired(s) {
+				if err := m.removeShare(ctx, s); err != nil {
+					log.Error().Err(err).
+						Msg("failed to unshare expired share")
+				}
 				continue
 			}
 
@@ -814,6 +808,38 @@ func (m *Manager) Load(ctx context.Context, shareChan <-chan *collaboration.Shar
 		wg.Done()
 	}()
 	wg.Wait()
+
+	return nil
+}
+
+func (m *Manager) removeShare(ctx context.Context, s *collaboration.Share) error {
+	storageID, spaceID, _ := shareid.Decode(s.Id.OpaqueId)
+	err := m.Cache.Remove(ctx, storageID, spaceID, s.Id.OpaqueId)
+	if _, ok := err.(errtypes.IsPreconditionFailed); ok {
+		if err := m.Cache.Sync(ctx, storageID, spaceID); err != nil {
+			return err
+		}
+		err = m.Cache.Remove(ctx, storageID, spaceID, s.Id.OpaqueId)
+		// TODO try more often?
+	}
+	if err != nil {
+		return err
+	}
+
+	// remove from created cache
+	err = m.CreatedCache.Remove(ctx, s.GetCreator().GetOpaqueId(), s.Id.OpaqueId)
+	if _, ok := err.(errtypes.IsPreconditionFailed); ok {
+		if err := m.CreatedCache.Sync(ctx, s.GetCreator().GetOpaqueId()); err != nil {
+			return err
+		}
+		err = m.CreatedCache.Remove(ctx, s.GetCreator().GetOpaqueId(), s.Id.OpaqueId)
+		// TODO try more often?
+	}
+	if err != nil {
+		return err
+	}
+
+	// TODO remove from grantee cache
 
 	return nil
 }
