@@ -373,21 +373,51 @@ func (m *mgr) Unshare(ctx context.Context, ref *collaboration.ShareReference) er
 	return nil
 }
 
-func (m *mgr) UpdateShare(ctx context.Context, ref *collaboration.ShareReference, p *collaboration.SharePermissions) (*collaboration.Share, error) {
+func (m *mgr) UpdateShare(ctx context.Context, ref *collaboration.ShareReference, p *collaboration.SharePermissions, updated *collaboration.Share, fieldMask *field_mask.FieldMask) (*collaboration.Share, error) {
 	m.Lock()
 	defer m.Unlock()
-	idx, s, err := m.get(ref)
-	if err != nil {
-		return nil, err
+
+	var (
+		idx      int
+		toUpdate *collaboration.Share
+	)
+
+	if ref != nil {
+		var err error
+		idx, toUpdate, err = m.get(ref)
+		if err != nil {
+			return nil, err
+		}
+	} else if updated != nil {
+		var err error
+		idx, toUpdate, err = m.getByID(updated.Id)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if fieldMask != nil {
+		for i := range fieldMask.Paths {
+			switch fieldMask.Paths[i] {
+			case "permissions":
+				m.model.Shares[idx].Permissions = updated.Permissions
+			case "expiration":
+				m.model.Shares[idx].Expiration = updated.Expiration
+			default:
+				return nil, errtypes.NotSupported("updating " + fieldMask.Paths[i] + " is not supported")
+			}
+		}
 	}
 
 	user := ctxpkg.ContextMustGetUser(ctx)
-	if !share.IsCreatedByUser(s, user) {
+	if !share.IsCreatedByUser(toUpdate, user) {
 		return nil, errtypes.NotFound(ref.String())
 	}
 
 	now := time.Now().UnixNano()
-	m.model.Shares[idx].Permissions = p
+	if p != nil {
+		m.model.Shares[idx].Permissions = p
+	}
 	m.model.Shares[idx].Mtime = &typespb.Timestamp{
 		Seconds: uint64(now / int64(time.Second)),
 		Nanos:   uint32(now % int64(time.Second)),

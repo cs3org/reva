@@ -83,6 +83,9 @@ func (h *Handler) createUserShare(w http.ResponseWriter, r *http.Request, statIn
 	expireDate := r.PostFormValue("expireDate")
 	var expirationTs *types.Timestamp
 	if expireDate != "" {
+		// FIXME: the web ui sends the RFC3339 format when updating a share but
+		// initially on creating a share the format ISO 8601 is used.
+		// OC10 uses RFC3339 in both cases so we should fix the web ui and change it here.
 		expiration, err := time.Parse(_iso8601, expireDate)
 		if err != nil {
 			return nil, &ocsError{

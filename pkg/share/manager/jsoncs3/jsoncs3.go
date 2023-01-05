@@ -411,22 +411,47 @@ func (m *Manager) Unshare(ctx context.Context, ref *collaboration.ShareReference
 }
 
 // UpdateShare updates the mode of the given share.
-func (m *Manager) UpdateShare(ctx context.Context, ref *collaboration.ShareReference, p *collaboration.SharePermissions) (*collaboration.Share, error) {
+func (m *Manager) UpdateShare(ctx context.Context, ref *collaboration.ShareReference, p *collaboration.SharePermissions, updated *collaboration.Share, fieldMask *field_mask.FieldMask) (*collaboration.Share, error) {
 	if err := m.initialize(); err != nil {
 		return nil, err
 	}
 
 	m.Lock()
 	defer m.Unlock()
-	s, err := m.get(ctx, ref)
-	if err != nil {
-		return nil, err
+
+	var toUpdate *collaboration.Share
+
+	if ref != nil {
+		var err error
+		toUpdate, err = m.get(ctx, ref)
+		if err != nil {
+			return nil, err
+		}
+	} else if updated != nil {
+		var err error
+		toUpdate, err = m.getByID(ctx, updated.Id)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if fieldMask != nil {
+		for i := range fieldMask.Paths {
+			switch fieldMask.Paths[i] {
+			case "permissions":
+				toUpdate.Permissions = updated.Permissions
+			case "expiration":
+				toUpdate.Expiration = updated.Expiration
+			default:
+				return nil, errtypes.NotSupported("updating " + fieldMask.Paths[i] + " is not supported")
+			}
+		}
 	}
 
 	user := ctxpkg.ContextMustGetUser(ctx)
-	if !share.IsCreatedByUser(s, user) {
+	if !share.IsCreatedByUser(toUpdate, user) {
 		req := &provider.StatRequest{
-			Ref: &provider.Reference{ResourceId: s.ResourceId},
+			Ref: &provider.Reference{ResourceId: toUpdate.ResourceId},
 		}
 		res, err := m.gateway.Stat(ctx, req)
 		if err != nil ||
@@ -436,30 +461,32 @@ func (m *Manager) UpdateShare(ctx context.Context, ref *collaboration.ShareRefer
 		}
 	}
 
-	s.Permissions = p
-	s.Mtime = utils.TSNow()
+	if p != nil {
+		toUpdate.Permissions = p
+	}
+	toUpdate.Mtime = utils.TSNow()
 
 	// Update provider cache
-	err = m.Cache.Persist(ctx, s.ResourceId.StorageId, s.ResourceId.SpaceId)
+	err := m.Cache.Persist(ctx, toUpdate.ResourceId.StorageId, toUpdate.ResourceId.SpaceId)
 	// when persisting fails
 	if _, ok := err.(errtypes.IsPreconditionFailed); ok {
 		// reupdate
-		s, err = m.get(ctx, ref) // does an implicit sync
+		toUpdate, err = m.get(ctx, ref) // does an implicit sync
 		if err != nil {
 			return nil, err
 		}
-		s.Permissions = p
-		s.Mtime = utils.TSNow()
+		toUpdate.Permissions = p
+		toUpdate.Mtime = utils.TSNow()
 
 		// persist again
-		err = m.Cache.Persist(ctx, s.ResourceId.StorageId, s.ResourceId.SpaceId)
+		err = m.Cache.Persist(ctx, toUpdate.ResourceId.StorageId, toUpdate.ResourceId.SpaceId)
 		// TODO try more often?
 	}
 	if err != nil {
 		return nil, err
 	}
 
-	return s, nil
+	return toUpdate, nil
 }
 
 // ListShares returns the shares created by the user

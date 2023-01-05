@@ -212,15 +212,40 @@ func sharesEqual(ref *collaboration.ShareReference, s *collaboration.Share) bool
 	return false
 }
 
-func (m *manager) UpdateShare(ctx context.Context, ref *collaboration.ShareReference, p *collaboration.SharePermissions) (*collaboration.Share, error) {
+func (m *manager) UpdateShare(ctx context.Context, ref *collaboration.ShareReference, p *collaboration.SharePermissions, updated *collaboration.Share, fieldMask *field_mask.FieldMask) (*collaboration.Share, error) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 	user := ctxpkg.ContextMustGetUser(ctx)
+	var shareRef *collaboration.ShareReference
+	if ref != nil {
+		shareRef = ref
+	} else if updated != nil {
+		shareRef = &collaboration.ShareReference{
+			Spec: &collaboration.ShareReference_Id{
+				Id: updated.Id,
+			},
+		}
+	}
+
 	for i, s := range m.shares {
-		if sharesEqual(ref, s) {
+		if sharesEqual(shareRef, s) {
 			if share.IsCreatedByUser(s, user) {
 				now := time.Now().UnixNano()
-				m.shares[i].Permissions = p
+				if p != nil {
+					m.shares[i].Permissions = p
+				}
+				if fieldMask != nil {
+					for _, path := range fieldMask.Paths {
+						switch path {
+						case "permissions":
+							m.shares[i].Permissions = updated.Permissions
+						case "expiration":
+							m.shares[i].Expiration = updated.Expiration
+						default:
+							return nil, errtypes.NotSupported("updating " + path + " is not supported")
+						}
+					}
+				}
 				m.shares[i].Mtime = &typespb.Timestamp{
 					Seconds: uint64(now / 1000000000),
 					Nanos:   uint32(now % 1000000000),

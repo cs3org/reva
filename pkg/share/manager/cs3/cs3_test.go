@@ -302,7 +302,7 @@ var _ = Describe("Manager", func() {
 				Expect(share.Permissions.Permissions.AddGrant).To(BeFalse())
 				s, err := m.UpdateShare(ctx,
 					&collaboration.ShareReference{Spec: &collaboration.ShareReference_Id{Id: share.Id}},
-					&collaboration.SharePermissions{Permissions: &provider.ResourcePermissions{AddGrant: true}})
+					&collaboration.SharePermissions{Permissions: &provider.ResourcePermissions{AddGrant: true}}, nil, nil)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(s).ToNot(BeNil())
 				Expect(s.Permissions.Permissions.AddGrant).To(BeTrue())

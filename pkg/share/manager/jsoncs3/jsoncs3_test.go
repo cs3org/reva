@@ -538,7 +538,7 @@ var _ = Describe("Jsoncs3", func() {
 					Permissions: &providerv1beta1.ResourcePermissions{
 						InitiateFileUpload: true,
 					},
-				})
+				}, nil, nil)
 				Expect(err).To(HaveOccurred())
 			})
 
@@ -560,7 +560,7 @@ var _ = Describe("Jsoncs3", func() {
 					Permissions: &providerv1beta1.ResourcePermissions{
 						InitiateFileUpload: true,
 					},
-				})
+				}, nil, nil)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(us).ToNot(BeNil())
 				Expect(us.GetPermissions().GetPermissions().InitiateFileUpload).To(BeTrue())
@@ -582,7 +582,7 @@ var _ = Describe("Jsoncs3", func() {
 					Permissions: &providerv1beta1.ResourcePermissions{
 						InitiateFileUpload: false,
 					},
-				})
+				}, nil, nil)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(us).ToNot(BeNil())
 				Expect(us.GetPermissions().GetPermissions().InitiateFileUpload).To(BeFalse())
@@ -612,7 +612,7 @@ var _ = Describe("Jsoncs3", func() {
 					Permissions: &providerv1beta1.ResourcePermissions{
 						InitiateFileUpload: true,
 					},
-				})
+				}, nil, nil)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(us).ToNot(BeNil())
 				Expect(us.GetPermissions().GetPermissions().InitiateFileUpload).To(BeTrue())

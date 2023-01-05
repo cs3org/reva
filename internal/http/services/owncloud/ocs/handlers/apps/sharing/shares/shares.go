@@ -38,6 +38,7 @@ import (
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog"
 	"google.golang.org/grpc/metadata"
@@ -729,21 +730,36 @@ func (h *Handler) updateShare(w http.ResponseWriter, r *http.Request, shareID st
 		return
 	}
 
+	shareR.Share.Permissions = &collaboration.SharePermissions{Permissions: role.CS3ResourcePermissions()}
+
+	var fieldMaskPaths = []string{"permissions"}
+
+	expireDate := r.PostFormValue("expireDate")
+	var expirationTs *types.Timestamp
+	if expireDate != "" {
+
+		expiration, err := time.Parse(time.RFC3339, expireDate)
+		if err != nil {
+			response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "could not parse expireDate", err)
+			return
+		}
+		expirationTs = &types.Timestamp{
+			Seconds: uint64(expiration.UnixNano() / int64(time.Second)),
+			Nanos:   uint32(expiration.UnixNano() % int64(time.Second)),
+		}
+
+		shareR.Share.Expiration = expirationTs
+		fieldMaskPaths = append(fieldMaskPaths, "expiration")
+	} else if r.Form.Has("expireDate") {
+		// If the expiration parameter was sent but is empty, then the expiration should be removed.
+		shareR.Share.Expiration = nil
+		fieldMaskPaths = append(fieldMaskPaths, "expiration")
+	}
+
 	uReq := &collaboration.UpdateShareRequest{
-		Ref: &collaboration.ShareReference{
-			Spec: &collaboration.ShareReference_Id{
-				Id: &collaboration.ShareId{
-					OpaqueId: shareID,
-				},
-			},
-		},
-		Field: &collaboration.UpdateShareRequest_UpdateField{
-			Field: &collaboration.UpdateShareRequest_UpdateField_Permissions{
-				Permissions: &collaboration.SharePermissions{
-					// this completely overwrites the permissions for this user
-					Permissions: role.CS3ResourcePermissions(),
-				},
-			},
+		Share: shareR.Share,
+		UpdateMask: &fieldmaskpb.FieldMask{
+			Paths: fieldMaskPaths,
 		},
 	}
 	uRes, err := client.UpdateShare(ctx, uReq)
