@@ -47,7 +47,7 @@ require (
 	github.com/pkg/xattr v0.4.5
 	github.com/prometheus/alertmanager v0.24.0
 	github.com/rs/cors v1.8.2
-	github.com/rs/zerolog v1.27.0
+	github.com/rs/zerolog v1.28.0
 	github.com/sciencemesh/meshdirectory-web v1.0.4
 	github.com/sethvargo/go-password v0.2.0
 	github.com/stretchr/testify v1.8.1
