@@ -88,7 +88,7 @@ func (ShareUpdated) Unmarshal(v []byte) (interface{}, error) {
 	return e, err
 }
 
-// ShareExpired is emitted when a share is removed
+// ShareExpired is emitted when a share expires
 type ShareExpired struct {
 	ShareOwner *user.UserId
 	ItemID     *provider.ResourceId

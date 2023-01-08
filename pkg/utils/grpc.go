@@ -24,8 +24,8 @@ func Impersonate(userID *user.UserId, gwc gateway.GatewayAPIClient, machineAuthA
 	}
 
 	// Get auth context
-	ownerCtx := revactx.ContextSetUser(context.Background(), getUserResponse.User)
-	authRes, err := gwc.Authenticate(ownerCtx, &gateway.AuthenticateRequest{
+	ctx := revactx.ContextSetUser(context.Background(), getUserResponse.User)
+	authRes, err := gwc.Authenticate(ctx, &gateway.AuthenticateRequest{
 		Type:         "machine",
 		ClientId:     "userid:" + userID.OpaqueId,
 		ClientSecret: machineAuthAPIKey,
@@ -37,5 +37,5 @@ func Impersonate(userID *user.UserId, gwc gateway.GatewayAPIClient, machineAuthA
 		return nil, nil, fmt.Errorf("error impersonating user: %s", authRes.Status.Message)
 	}
 
-	return metadata.AppendToOutgoingContext(context.Background(), revactx.TokenHeader, authRes.Token), authRes.GetUser(), nil
+	return metadata.AppendToOutgoingContext(ctx, revactx.TokenHeader, authRes.Token), authRes.GetUser(), nil
 }
