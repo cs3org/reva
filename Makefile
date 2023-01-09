@@ -142,9 +142,14 @@ dist: gen-doc
 	go run tools/create-artifacts/main.go -version ${VERSION} -commit ${GIT_COMMIT} -goversion ${GO_VERSION}
 
 BEHAT_BIN=vendor-bin/behat/vendor/bin/behat
+# behat config file for core api tests
+CORE_BEHAT_YML=$(PATH_TO_APITESTS)/tests/acceptance/config/behat-core.yml
 
 test-acceptance-api: vendor-bin/behat/vendor
 	BEHAT_BIN=$(BEHAT_BIN) $(PATH_TO_APITESTS)/tests/acceptance/run.sh --remote --type api
+
+test-acceptance-core-api: vendor-bin/behat/vendor
+	BEHAT_BIN=$(BEHAT_BIN) BEHAT_YML=$(CORE_BEHAT_YML) $(PATH_TO_APITESTS)/tests/acceptance/run.sh --type core-api
 
 vendor/bamarni/composer-bin-plugin: composer.lock
 	composer install
