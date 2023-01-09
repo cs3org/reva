@@ -582,7 +582,7 @@ def ocisIntegrationTests(parallelRuns, skipExceptParts = []):
                             "cd /drone/src/tmp/testrunner",
                             "composer self-update",
                             "composer --version",
-                            "make test-acceptance-api",
+                            "make test-acceptance-core-api",
                         ],
                         "environment": {
                             "TEST_SERVER_URL": "http://revad-services:20080",
@@ -660,7 +660,7 @@ def s3ngIntegrationTests(parallelRuns, skipExceptParts = []):
                             "cd /drone/src/tmp/testrunner",
                             "composer self-update",
                             "composer --version",
-                            "make test-acceptance-api",
+                            "make test-acceptance-core-api",
                         ],
                         "environment": {
                             "TEST_SERVER_URL": "http://revad-services:20080",
