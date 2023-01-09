@@ -144,7 +144,7 @@ dist: gen-doc
 BEHAT_BIN=vendor-bin/behat/vendor/bin/behat
 
 test-acceptance-api: vendor-bin/behat/vendor
-	BEHAT_BIN=$(BEHAT_BIN) $(PATH_TO_CORE)/tests/acceptance/run.sh --remote --type api
+	BEHAT_BIN=$(BEHAT_BIN) $(PATH_TO_APITESTS)/tests/acceptance/run.sh --remote --type api
 
 vendor/bamarni/composer-bin-plugin: composer.lock
 	composer install
