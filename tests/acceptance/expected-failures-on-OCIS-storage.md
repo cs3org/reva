@@ -987,5 +987,10 @@ _ocs: api compatibility, return correct status code_
 - [apiAuthWebDav/webDavDELETEAuth.feature:187](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthWebDav/webDavDELETEAuth.feature#L187)
 - [apiAuthWebDav/webDavCOPYAuth.feature:166](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiAuthWebDav/webDavCOPYAuth.feature#L166)
 
+#### [PROPFIND on (password protected) public link returns invalid XML](https://github.com/owncloud/core/issues/39707)
+The problem has been fixed in reva edge branch but not in reva master
+- [apiWebdavOperations/propfind.feature:78](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavOperations/propfind.feature#L78)
+- [apiWebdavOperations/propfind.feature:90](https://github.com/owncloud/core/blob/master/tests/acceptance/features/apiWebdavOperations/propfind.feature#L90)
+
 Note: always have an empty line at the end of this file.
 The bash script that processes this file may not process a scenario reference on the last line.
