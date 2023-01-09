@@ -1279,66 +1279,6 @@ func (fs *eosfs) CreateHome(ctx context.Context) error {
 	return errtypes.NotSupported("eosfs: create home not supported")
 }
 
-func (fs *eosfs) createUserDir(ctx context.Context, u *userpb.User, path string, recursiveAttr bool) error {
-	rootAuth, err := fs.getRootAuth(ctx)
-	if err != nil {
-		return nil
-	}
-
-	chownAuth, err := fs.getUserAuth(ctx, u, "")
-	if err != nil {
-		return err
-	}
-
-	err = fs.c.CreateDir(ctx, rootAuth, path)
-	if err != nil {
-		// EOS will return success on mkdir over an existing directory.
-		return errors.Wrap(err, "eosfs: error creating dir")
-	}
-
-	err = fs.c.Chown(ctx, rootAuth, chownAuth, path)
-	if err != nil {
-		return errors.Wrap(err, "eosfs: error chowning directory")
-	}
-
-	err = fs.c.Chmod(ctx, rootAuth, "2770", path)
-	if err != nil {
-		return errors.Wrap(err, "eosfs: error chmoding directory")
-	}
-
-	attrs := []*eosclient.Attribute{
-		{
-			Type: SystemAttr,
-			Key:  "mask",
-			Val:  "700",
-		},
-		{
-			Type: SystemAttr,
-			Key:  "allow.oc.sync",
-			Val:  "1",
-		},
-		{
-			Type: SystemAttr,
-			Key:  "mtime.propagation",
-			Val:  "1",
-		},
-		{
-			Type: SystemAttr,
-			Key:  "forced.atomic",
-			Val:  "1",
-		},
-	}
-
-	for _, attr := range attrs {
-		err = fs.c.SetAttr(ctx, rootAuth, attr, false, recursiveAttr, path)
-		if err != nil {
-			return errors.Wrap(err, "eosfs: error setting attribute")
-		}
-	}
-
-	return nil
-}
-
 func (fs *eosfs) CreateDir(ctx context.Context, ref *provider.Reference) error {
 	log := appctx.GetLogger(ctx)
 	fn, err := fs.resolve(ctx, ref)

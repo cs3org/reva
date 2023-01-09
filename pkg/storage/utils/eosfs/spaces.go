@@ -309,6 +309,11 @@ func (fs *eosfs) wrapUserHomeStorageSpaceID(ctx context.Context, u *userpb.User,
 func (fs *eosfs) CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error) {
 	// The request is to create a user home
 	if req.Type == spaceTypePersonal {
+		rootAuth, err := fs.getRootAuth(ctx)
+		if err != nil {
+			return nil, err
+		}
+
 		u, err := getUser(ctx)
 		if err != nil {
 			err = errors.Wrap(err, "eosfs: wrap: no user in ctx")
@@ -329,6 +334,46 @@ func (fs *eosfs) CreateStorageSpace(ctx context.Context, req *provider.CreateSto
 		err = fs.c.CreateDir(ctx, auth, fn)
 		if err != nil {
 			return nil, err
+		}
+
+		err = fs.c.Chown(ctx, rootAuth, auth, fn)
+		if err != nil {
+			return nil, errors.Wrap(err, "eosfs: error chowning directory")
+		}
+
+		err = fs.c.Chmod(ctx, rootAuth, "2770", fn)
+		if err != nil {
+			return nil, errors.Wrap(err, "eosfs: error chmoding directory")
+		}
+
+		attrs := []*eosclient.Attribute{
+			{
+				Type: SystemAttr,
+				Key:  "mask",
+				Val:  "700",
+			},
+			{
+				Type: SystemAttr,
+				Key:  "allow.oc.sync",
+				Val:  "1",
+			},
+			{
+				Type: SystemAttr,
+				Key:  "mtime.propagation",
+				Val:  "1",
+			},
+			{
+				Type: SystemAttr,
+				Key:  "forced.atomic",
+				Val:  "1",
+			},
+		}
+
+		for _, attr := range attrs {
+			err = fs.c.SetAttr(ctx, rootAuth, attr, false, false, fn)
+			if err != nil {
+				return nil, errors.Wrap(err, "eosfs: error setting attribute")
+			}
 		}
 
 		eosFileInfo, err := fs.c.GetFileInfoByPath(ctx, auth, fn)
