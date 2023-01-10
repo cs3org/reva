@@ -39,7 +39,7 @@ require (
 	github.com/mileusna/useragent v1.2.1
 	github.com/minio/minio-go/v7 v7.0.45
 	github.com/mitchellh/mapstructure v1.5.0
-	github.com/nats-io/nats-server/v2 v2.9.3
+	github.com/nats-io/nats-server/v2 v2.9.11
 	github.com/nats-io/nats-streaming-server v0.25.2
 	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/gomega v1.19.0
@@ -62,12 +62,12 @@ require (
 	go.opentelemetry.io/otel/exporters/jaeger v1.11.2
 	go.opentelemetry.io/otel/sdk v1.11.2
 	go.opentelemetry.io/otel/trace v1.11.2
-	golang.org/x/crypto v0.0.0-20221010152910-d6f0a8c073c2
+	golang.org/x/crypto v0.5.0
 	golang.org/x/oauth2 v0.0.0-20220909003341-f21342109be1
 	golang.org/x/sync v0.0.0-20220722155255-886fb9371eb4
-	golang.org/x/sys v0.2.0
-	golang.org/x/term v0.2.0
-	golang.org/x/text v0.5.0
+	golang.org/x/sys v0.4.0
+	golang.org/x/term v0.4.0
+	golang.org/x/text v0.6.0
 	google.golang.org/genproto v0.0.0-20220920201722-2b89144ce006
 	google.golang.org/grpc v1.50.0
 	google.golang.org/protobuf v1.28.1
@@ -124,7 +124,7 @@ require (
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/nats-io/jwt/v2 v2.3.0 // indirect
-	github.com/nats-io/nats.go v1.17.0 // indirect
+	github.com/nats-io/nats.go v1.19.0 // indirect
 	github.com/nats-io/nkeys v0.3.0 // indirect
 	github.com/nats-io/nuid v1.0.1 // indirect
 	github.com/nats-io/stan.go v0.10.3 // indirect
@@ -149,7 +149,7 @@ require (
 	github.com/tidwall/pretty v1.2.0 // indirect
 	go.etcd.io/bbolt v1.3.6 // indirect
 	go.mongodb.org/mongo-driver v1.8.3 // indirect
-	golang.org/x/net v0.1.0 // indirect
+	golang.org/x/net v0.5.0 // indirect
 	golang.org/x/time v0.0.0-20220922220347-f3bd1da661af // indirect
 	google.golang.org/appengine v1.6.7 // indirect
 	gopkg.in/ini.v1 v1.66.6 // indirect
