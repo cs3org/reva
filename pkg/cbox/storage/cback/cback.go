@@ -280,7 +280,7 @@ func (f *cbackfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []s
 			if err != nil {
 				return nil, errors.Wrap(err, "cback: error getting snapshot")
 			}
-			return f.placeholderResourceInfo(filepath.Join(source, snapshot), user.Id, timeToTimestamp(snap.Time), encodeBackupInResourceID(id, snapshot, source, "")), nil
+			return f.placeholderResourceInfo(filepath.Join(source, snapshot), user.Id, timeToTimestamp(snap.Time.Time), encodeBackupInResourceID(id, snapshot, source, "")), nil
 		}
 		// the path from the user is something like /eos/home-g/gdelmont
 		return f.placeholderResourceInfo(source, user.Id, nil, nil), nil
@@ -363,7 +363,7 @@ func (f *cbackfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKey
 		res := make([]*provider.ResourceInfo, 0, len(snapshots))
 		for _, s := range snapshots {
 			snapTime := s.Time.Format(f.conf.TimestampFormat)
-			res = append(res, f.placeholderResourceInfo(filepath.Join(source, snapTime), user.Id, timeToTimestamp(s.Time), encodeBackupInResourceID(id, snapTime, source, "")))
+			res = append(res, f.placeholderResourceInfo(filepath.Join(source, snapTime), user.Id, timeToTimestamp(s.Time.Time), encodeBackupInResourceID(id, snapTime, source, "")))
 		}
 		return res, nil
 	}

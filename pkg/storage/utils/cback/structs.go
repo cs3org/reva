@@ -18,7 +18,11 @@
 
 package cback
 
-import "time"
+import (
+	"encoding/json"
+	"strings"
+	"time"
+)
 
 // Group is the group in cback.
 type Group struct {
@@ -39,7 +43,7 @@ type Backup struct {
 // Snapshot represents the metadata information of a snapshot in a backup.
 type Snapshot struct {
 	ID    string    `json:"id"`
-	Time  time.Time `json:"time"`
+	Time  CBackTime `json:"time"`
 	Paths []string  `json:"paths"`
 }
 
@@ -63,7 +67,27 @@ type Restore struct {
 	Destionation string    `json:"destination"`
 	Pattern      string    `json:"pattern"`
 	Status       int       `json:"status"`
-	Created      time.Time `json:"created"`
+	Created      CBackTime `json:"created"`
+}
+
+type CBackTime struct{ time.Time }
+
+func (c CBackTime) MarshalJSON() ([]byte, error) {
+	return json.Marshal(c.Time)
+}
+
+func (c *CBackTime) UnmarshalJSON(b []byte) error {
+	s := strings.Trim(string(b), "\"")
+	t, err := time.Parse("2006-01-02T15:04:05", s)
+	if err != nil {
+		// fall back to the default unmarshaler for date0time
+		if err := json.Unmarshal(b, &t); err != nil {
+			return err
+		}
+
+	}
+	*c = CBackTime{t}
+	return nil
 }
 
 // IsDir returns true if the resoure is a directory.

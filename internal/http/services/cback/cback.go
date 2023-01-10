@@ -170,7 +170,7 @@ func (s *svc) convertToRestoureOut(user *userpb.User, r *cback.Restore) *restore
 		Path:        r.Pattern,
 		Destination: utils.Must(s.toDestination(user.Username, r.Destionation)),
 		Status:      r.Status,
-		Created:     r.Created,
+		Created:     r.Created.Time,
 	}
 }
 

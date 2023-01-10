@@ -80,7 +80,8 @@ func (f *cbackfs) listSnapshots(ctx context.Context, username string, id int) ([
 	}
 	for _, snap := range l {
 		// truncate the time according to the given format
-		snap.Time, _ = time.Parse(f.conf.TimestampFormat, snap.Time.Format(f.conf.TimestampFormat))
+		t, _ := time.Parse(f.conf.TimestampFormat, snap.Time.Format(f.conf.TimestampFormat))
+		snap.Time = cback.CBackTime{Time: t}
 	}
 	_ = f.cache.SetWithExpire(key, l, time.Duration(f.conf.Expiration)*time.Second)
 	return l, nil
