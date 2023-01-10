@@ -146,7 +146,7 @@ BEHAT_BIN=vendor-bin/behat/vendor/bin/behat
 CORE_BEHAT_YML=$(PATH_TO_APITESTS)/tests/acceptance/config/behat-core.yml
 
 test-acceptance-api: vendor-bin/behat/vendor
-	BEHAT_BIN=$(BEHAT_BIN) $(PATH_TO_APITESTS)/tests/acceptance/run.sh --remote --type api
+	BEHAT_BIN=$(BEHAT_BIN) $(PATH_TO_APITESTS)/tests/acceptance/run.sh --type api
 
 test-acceptance-core-api: vendor-bin/behat/vendor
 	BEHAT_BIN=$(BEHAT_BIN) BEHAT_YML=$(CORE_BEHAT_YML) $(PATH_TO_APITESTS)/tests/acceptance/run.sh --type core-api
