@@ -23,8 +23,10 @@ import (
 	"io"
 	"os"
 	"path"
+	"strconv"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/v2/pkg/eosclient"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/storage"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/chunking"
@@ -55,16 +57,22 @@ func (fs *eosfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadC
 		r = fd
 	}
 
-	u, err := getUser(ctx)
-	if err != nil {
-		return provider.ResourceInfo{}, errors.Wrap(err, "eos: no user in ctx")
-	}
-
 	// We need the auth corresponding to the parent directory
-	// as the file might not exist at the moment
-	auth, err := fs.getUserAuth(ctx, u, path.Dir(resPath))
+	// as the file might not exist at the moment and we also
+	// want to create files as the share owner in case of shares.
+	rootAuth, err := fs.getRootAuth(ctx)
 	if err != nil {
 		return provider.ResourceInfo{}, err
+	}
+	parentInfo, err := fs.c.GetFileInfoByPath(ctx, rootAuth, path.Dir(resPath))
+	if err != nil {
+		return provider.ResourceInfo{}, err
+	}
+	auth := eosclient.Authorization{
+		Role: eosclient.Role{
+			UID: strconv.FormatUint(parentInfo.UID, 10),
+			GID: strconv.FormatUint(parentInfo.GID, 10),
+		},
 	}
 
 	if err := fs.c.Write(ctx, auth, resPath, r); err != nil {
