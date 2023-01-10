@@ -1,11 +1,29 @@
 name: Test
-on: [pull_request, push, workflow_dispatch]
-
-env:
-  TEST_IMAGE: 'revad:test'
+on:
+  pull_request:
+  push:
+    tags-ignore:
+      - "*"
+  workflow_dispatch:
 
 jobs:
-  test:
+  integration-test:
+    runs-on: self-hosted
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Setup Go environment
+        uses: actions/setup-go@v3.3.0
+        with:
+          go-version-file: go.mod
+      - name: Test integration
+        run: make test-integration
+        env:
+          REDIS_ADDRESS: redis:6379
+    services:
+      redis:
+        image: registry.cern.ch/docker.io/webhippie/redis
+  go-test:
     runs-on: self-hosted
     steps:
       - name: Checkout
@@ -16,48 +34,37 @@ jobs:
           go-version-file: go.mod
       - name: Test
         run: make test
-      - name: Test integration
-        run: make test-integration
-        env:
-          REDIS_ADDRESS: redis:6379
-    services:
-      redis:
-        image: registry.cern.ch/docker.io/webhippie/redis
   docker:
-    runs-on: self-hosted
     strategy:
+      fail-fast: false
       matrix:
-        image: [reva, revad, revad-eos, revad-ceph]
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3.1.0
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
-      - name: Build Docker image from ${{ matrix.image }}
-        uses: docker/build-push-action@v3
-        with:
-          context: .
-          file: docker/Dockerfile.${{ matrix.image }}
-          tags: ${{ env.TEST_IMAGE }}
-          load: ${{ matrix.image == 'revad' }}
-      - name: Upload ${{ env.TEST_IMAGE }} to artifacts
-        uses: ishworkh/docker-image-artifact-upload@v1
-        if: ${{ matrix.image == 'revad' }}
-        with:
-          image: ${{ env.TEST_IMAGE }}
-          retention_days: '1'
+        image: [reva, revad-eos, revad-ceph]
+    uses: ./.github/workflows/docker.yml
+    with:
+      file: docker/Dockerfile.${{ matrix.image }}
+  docker-revad:
+    name: docker (revad)
+    uses: ./.github/workflows/docker.yml
+    with:
+      file: docker/Dockerfile.revad
+      tag: revad:test
+      load: true
   litmus:
-    needs: docker
+    needs: docker-revad
     runs-on: self-hosted
     strategy:
+      fail-fast: false
       matrix:
-        test: [litmus-1-only, litmus-2-only]
+        profile: [1, 2, 3]
     steps:
       - name: Checkout
         uses: actions/checkout@v3
       - name: Download image
         uses: ishworkh/docker-image-artifact-download@v1
         with:
-          image: ${{ env.TEST_IMAGE }}
+          image: revad:test
       - name: Test
-        run: make ${{ matrix.test }}
+        run: make litmus-only
+        env:
+          PROFILE: ${{ matrix.profile }}
+          IMAGE: revad:test

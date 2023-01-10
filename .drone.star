@@ -2,8 +2,6 @@ OC_CI_GOLANG = "owncloudci/golang:1.19"
 OC_CI_ALPINE = "owncloudci/alpine:latest"
 OSIXIA_OPEN_LDAP = "osixia/openldap:1.3.0"
 OC_CI_PHP = "owncloudci/php:7.4"
-OC_LITMUS = "owncloud/litmus:latest"
-OC_CS3_API_VALIDATOR = "owncloud/cs3api-validator:0.2.0"
 OC_CI_BAZEL_BUILDIFIER = "owncloudci/bazel-buildifier:latest"
 
 def makeStep():
@@ -11,7 +9,7 @@ def makeStep():
         "name": "build",
         "image": OC_CI_GOLANG,
         "commands": [
-            "make build",
+            "make build-revad",
         ],
     }
 
@@ -69,7 +67,6 @@ def main(ctx):
     # implemented for: ocisIntegrationTests and s3ngIntegrationTests
     return [
         checkStarlark(),
-        litmusOcisSpacesDav(),
         virtualViews(),
     ] + ocisIntegrationTests(6) + s3ngIntegrationTests(12)
 
@@ -128,64 +125,6 @@ def virtualViews():
                     "SEND_SCENARIO_LINE_REFERENCES": "true",
                     "BEHAT_SUITE": "apiVirtualViews",
                 },
-            },
-        ],
-    }
-
-def litmusOcisSpacesDav():
-    return {
-        "kind": "pipeline",
-        "type": "docker",
-        "name": "litmus-owncloud-spaces-dav",
-        "platform": {
-            "os": "linux",
-            "arch": "amd64",
-        },
-        "trigger": {
-            "event": {
-                "include": [
-                    "pull_request",
-                    "tag",
-                ],
-            },
-        },
-        "steps": [
-            makeStep(),
-            {
-                "name": "revad-services",
-                "image": OC_CI_GOLANG,
-                "detach": True,
-                "commands": [
-                    "cd /drone/src/tests/oc-integration-tests/drone/",
-                    "/drone/src/cmd/revad/revad -c frontend.toml &",
-                    "/drone/src/cmd/revad/revad -c gateway.toml &",
-                    "/drone/src/cmd/revad/revad -c storage-home-ocis.toml &",
-                    "/drone/src/cmd/revad/revad -c storage-users-ocis.toml &",
-                    "/drone/src/cmd/revad/revad -c permissions-ocis-ci.toml &",
-                    "/drone/src/cmd/revad/revad -c users.toml",
-                ],
-            },
-            {
-                "name": "sleep-for-revad-start",
-                "image": OC_CI_GOLANG,
-                "commands": [
-                    "sleep 5",
-                ],
-            },
-            {
-                "name": "litmus-owncloud-spaces-dav",
-                "image": OC_LITMUS,
-                "environment": {
-                    "LITMUS_USERNAME": "einstein",
-                    "LITMUS_PASSWORD": "relativity",
-                    "TESTS": "basic http copymove props",
-                },
-                "commands": [
-                    # The spaceid is randomly generated during the first login so we need this hack to construct the correct url.
-                    "curl -s -k -u einstein:relativity -I http://revad-services:20080/remote.php/dav/files/einstein",
-                    "export LITMUS_URL=http://revad-services:20080/remote.php/dav/spaces/123e4567-e89b-12d3-a456-426655440000!$(ls /drone/src/tmp/reva/data/spaces/personal/)",
-                    "/usr/local/bin/litmus-wrapper",
-                ],
             },
         ],
     }

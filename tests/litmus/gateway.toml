@@ -31,7 +31,7 @@ ocmshareprovidersvc = "localhost:14000"
 ocminvitemanagersvc = "localhost:14000"
 ocmproviderauthorizersvc = "localhost:14000"
 # permissions
-permissionssvc = "localhost:10000"
+permissionssvc = "permissions:10000"
 # other
 commit_share_to_storage_grant = true
 commit_share_to_storage_ref = true
@@ -40,7 +40,7 @@ datagateway = "http://localhost:19001/data"
 transfer_shared_secret = "replace-me-with-a-transfer-secret" # for direct uploads
 transfer_expires = 6 # give it a moment
 #disable_home_creation_on_login = true
-link_grants_file = "/tmp/reva/link_grants_file.json"
+link_grants_file = "/var/tmp/reva/link_grants_file.json"
 
 [grpc.services.authregistry]
 driver = "static"
