@@ -131,12 +131,13 @@ func (c *config) init() {
 }
 
 type svc struct {
-	c               *config
-	dataGatewayURL  url.URL
-	tokenmgr        token.Manager
-	statCache       cache.StatCache
-	providerCache   cache.ProviderCache
-	createHomeCache cache.CreateHomeCache
+	c                        *config
+	dataGatewayURL           url.URL
+	tokenmgr                 token.Manager
+	statCache                cache.StatCache
+	providerCache            cache.ProviderCache
+	createHomeCache          cache.CreateHomeCache
+	createPersonalSpaceCache cache.CreatePersonalSpaceCache
 }
 
 // New creates a new gateway svc that acts as a proxy for any grpc operation.
@@ -162,12 +163,13 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 	}
 
 	s := &svc{
-		c:               c,
-		dataGatewayURL:  *u,
-		tokenmgr:        tokenManager,
-		statCache:       cache.GetStatCache(c.CacheStore, c.CacheNodes, c.CacheDatabase, "stat", time.Duration(c.StatCacheTTL)*time.Second),
-		providerCache:   cache.GetProviderCache(c.CacheStore, c.CacheNodes, c.CacheDatabase, "provider", time.Duration(c.ProviderCacheTTL)*time.Second),
-		createHomeCache: cache.GetCreateHomeCache(c.CacheStore, c.CacheNodes, c.CacheDatabase, "createHome", time.Duration(c.CreateHomeCacheTTL)*time.Second),
+		c:                        c,
+		dataGatewayURL:           *u,
+		tokenmgr:                 tokenManager,
+		statCache:                cache.GetStatCache(c.CacheStore, c.CacheNodes, c.CacheDatabase, "stat", time.Duration(c.StatCacheTTL)*time.Second),
+		providerCache:            cache.GetProviderCache(c.CacheStore, c.CacheNodes, c.CacheDatabase, "provider", time.Duration(c.ProviderCacheTTL)*time.Second),
+		createHomeCache:          cache.GetCreateHomeCache(c.CacheStore, c.CacheNodes, c.CacheDatabase, "createHome", time.Duration(c.CreateHomeCacheTTL)*time.Second),
+		createPersonalSpaceCache: cache.GetCreatePersonalSpaceCache(c.CacheStore, c.CacheNodes, c.CacheDatabase, "createPersonalSpace", time.Duration(c.CreateHomeCacheTTL)*time.Second),
 	}
 
 	return s, nil

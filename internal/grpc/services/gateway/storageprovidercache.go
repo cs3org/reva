@@ -83,9 +83,10 @@ func (c *cachedRegistryClient) GetHome(ctx context.Context, in *registry.GetHome
 */
 
 type cachedAPIClient struct {
-	c               provider.ProviderAPIClient
-	statCache       cache.StatCache
-	createHomeCache cache.CreateHomeCache
+	c                        provider.ProviderAPIClient
+	statCache                cache.StatCache
+	createHomeCache          cache.CreateHomeCache
+	createPersonalSpaceCache cache.CreatePersonalSpaceCache
 }
 
 // Stat looks in cache first before forwarding to storage provider
@@ -228,6 +229,26 @@ func (c *cachedAPIClient) GetHome(ctx context.Context, in *provider.GetHomeReque
 	return c.c.GetHome(ctx, in, opts...)
 }
 func (c *cachedAPIClient) CreateStorageSpace(ctx context.Context, in *provider.CreateStorageSpaceRequest, opts ...grpc.CallOption) (*provider.CreateStorageSpaceResponse, error) {
+	if in.Type == "personal" {
+		key := c.createPersonalSpaceCache.GetKey(ctxpkg.ContextMustGetUser(ctx).GetId())
+		if key != "" {
+			s := &provider.CreateStorageSpaceResponse{}
+			if err := c.createPersonalSpaceCache.PullFromCache(key, s); err == nil {
+				return s, nil
+			}
+		}
+		resp, err := c.c.CreateStorageSpace(ctx, in, opts...)
+		switch {
+		case err != nil:
+			return nil, err
+		case resp.Status.Code != rpc.Code_CODE_OK && resp.Status.Code != rpc.Code_CODE_ALREADY_EXISTS:
+			return resp, nil
+		case key == "":
+			return resp, nil
+		default:
+			return resp, c.createPersonalSpaceCache.PushToCache(key, resp)
+		}
+	}
 	return c.c.CreateStorageSpace(ctx, in, opts...)
 }
 func (c *cachedAPIClient) ListStorageSpaces(ctx context.Context, in *provider.ListStorageSpacesRequest, opts ...grpc.CallOption) (*provider.ListStorageSpacesResponse, error) {
