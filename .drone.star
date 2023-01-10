@@ -34,16 +34,16 @@ def makeStep(target):
         ],
     }
 
-def cloneOc10TestReposStep():
+def cloneApiTestReposStep():
     return {
-        "name": "clone-oC10-test-repos",
+        "name": "clone-api-test-repos",
         "image": OC_CI_ALPINE,
         "commands": [
             "source /drone/src/.drone.env",
             "git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing",
-            "git clone -b $CORE_BRANCH --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner",
+            "git clone -b $APITESTS_BRANCH --single-branch --no-tags https://github.com/owncloud/ocis.git /drone/src/tmp/testrunner",
             "cd /drone/src/tmp/testrunner",
-            "git checkout $CORE_COMMITID",
+            "git checkout $APITESTS_COMMITID",
         ],
     }
 
@@ -227,9 +227,9 @@ def virtualViews():
                     "/drone/src/cmd/revad/revad -c users.toml",
                 ],
             },
-            cloneOc10TestReposStep(),
+            cloneApiTestReposStep(),
             {
-                "name": "oC10APIAcceptanceTestsOcisStorage",
+                "name": "APIAcceptanceTestsOcisStorage",
                 "image": OC_CI_PHP,
                 "commands": [
                     "cd /drone/src",
@@ -238,7 +238,7 @@ def virtualViews():
                     "make test-acceptance-api",
                 ],
                 "environment": {
-                    "PATH_TO_CORE": "/drone/src/tmp/testrunner",
+                    "PATH_TO_APITESTS": "/drone/src/tmp/testrunner",
                     "TEST_SERVER_URL": "http://revad-services:20180",
                     "OCIS_REVA_DATA_ROOT": "/drone/src/tmp/reva/data/",
                     "DELETE_USER_DATA_CMD": "rm -rf /drone/src/tmp/reva/data/spaces/* /drone/src/tmp/reva/data/blobs/* /drone/src/tmp/reva/data/indexes",
@@ -574,15 +574,15 @@ def ocisIntegrationTests(parallelRuns, skipExceptParts = []):
                             "/drone/src/cmd/revad/revad -c ldap-users.toml",
                         ],
                     },
-                    cloneOc10TestReposStep(),
+                    cloneApiTestReposStep(),
                     {
-                        "name": "oC10APIAcceptanceTestsOcisStorage",
+                        "name": "APIAcceptanceTestsOcisStorage",
                         "image": OC_CI_PHP,
                         "commands": [
                             "cd /drone/src/tmp/testrunner",
                             "composer self-update",
                             "composer --version",
-                            "make test-acceptance-api",
+                            "make test-acceptance-core-api",
                         ],
                         "environment": {
                             "TEST_SERVER_URL": "http://revad-services:20080",
@@ -652,15 +652,15 @@ def s3ngIntegrationTests(parallelRuns, skipExceptParts = []):
                             "/drone/src/cmd/revad/revad -c machine-auth.toml",
                         ],
                     },
-                    cloneOc10TestReposStep(),
+                    cloneApiTestReposStep(),
                     {
-                        "name": "oC10APIAcceptanceTestsS3ngStorage",
+                        "name": "APIAcceptanceTestsS3ngStorage",
                         "image": OC_CI_PHP,
                         "commands": [
                             "cd /drone/src/tmp/testrunner",
                             "composer self-update",
                             "composer --version",
-                            "make test-acceptance-api",
+                            "make test-acceptance-core-api",
                         ],
                         "environment": {
                             "TEST_SERVER_URL": "http://revad-services:20080",
