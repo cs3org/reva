@@ -23,14 +23,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"path"
 	"strconv"
 	"text/template"
 	"time"
 
 	"github.com/Masterminds/sprig"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
-	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	storage "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	cbackfs "github.com/cs3org/reva/pkg/cbox/storage/cback"
@@ -151,24 +149,20 @@ func (s *svc) initRouter() {
 	s.router.Get("/backups", s.getBackups)
 }
 
-type destination struct {
-	Path   string `json:"path"`
-	Webdav string `json:"webdav"`
-}
-
 type restoreOut struct {
-	ID          int         `json:"id"`
-	Path        string      `json:"path"`
-	Destination destination `json:"destination"`
-	Status      int         `json:"status"`
-	Created     time.Time   `json:"created"`
+	ID          int       `json:"id"`
+	Path        string    `json:"path"`
+	Destination string    `json:"destination"`
+	Status      int       `json:"status"`
+	Created     time.Time `json:"created"`
 }
 
-func (s *svc) convertToRestoureOut(user *userpb.User, r *cback.Restore) *restoreOut {
+func (s *svc) convertToRestoureOut(r *cback.Restore) *restoreOut {
+	dest, _ := getPath(r.Destionation, s.tplStorage)
 	return &restoreOut{
 		ID:          r.ID,
 		Path:        r.Pattern,
-		Destination: utils.Must(s.toDestination(user.Username, r.Destionation)),
+		Destination: dest,
 		Status:      r.Status,
 		Created:     r.Created.Time,
 	}
@@ -224,7 +218,7 @@ func (s *svc) createRestore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.writeJSON(w, s.convertToRestoureOut(user, restore))
+	s.writeJSON(w, s.convertToRestoureOut(restore))
 }
 
 func (s *svc) cbackPath(p string) string {
@@ -248,7 +242,7 @@ func (s *svc) getRestores(w http.ResponseWriter, r *http.Request) {
 
 	res := make([]*restoreOut, 0, len(list))
 	for _, r := range list {
-		res = append(res, s.convertToRestoureOut(user, r))
+		res = append(res, s.convertToRestoureOut(r))
 	}
 
 	s.writeJSON(w, res)
@@ -282,7 +276,7 @@ func (s *svc) getRestoreByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.writeJSON(w, s.convertToRestoureOut(user, restore))
+	s.writeJSON(w, s.convertToRestoureOut(restore))
 }
 
 func getPath(p string, tpl *template.Template) (string, error) {
@@ -308,9 +302,9 @@ func (s *svc) getBackups(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	paths := make([]destination, 0, len(list))
+	paths := make([]string, 0, len(list))
 	for _, b := range list {
-		d, err := s.toDestination(user.Username, b.Source)
+		d, err := getPath(b.Source, s.tplStorage)
 		if err != nil {
 			continue
 		}
@@ -324,19 +318,4 @@ func (s *svc) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		s.router.ServeHTTP(w, r)
 	})
-}
-
-func (s *svc) toDestination(username, p string) (destination, error) {
-	p, err := getPath(p, s.tplStorage)
-	if err != nil {
-		return destination{}, err
-	}
-	return destination{
-		Path:   p,
-		Webdav: getWebdavPath(username, p),
-	}, nil
-}
-
-func getWebdavPath(username, p string) string {
-	return path.Join(webdavPrefix, username, p)
 }
