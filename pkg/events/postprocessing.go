@@ -153,6 +153,7 @@ type UploadReady struct {
 	ExecutingUser *user.User
 	FileRef       *provider.Reference
 	Failed        bool
+	Timestamp     time.Time
 	// add reference here? We could use it to inform client pp is finished
 }
 

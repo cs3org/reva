@@ -266,11 +266,11 @@ func (fs *Decomposedfs) Postprocessing(ch <-chan interface{}) {
 				failed = true
 			}
 
+			now := time.Now()
 			if p, err := node.ReadNode(ctx, fs.lu, up.Info.Storage["SpaceRoot"], n.ParentID, false); err != nil {
 				log.Error().Err(err).Str("uploadID", ev.UploadID).Msg("could not read parent")
 			} else {
 				// update parent tmtime to propagate etag change
-				now := time.Now()
 				_ = p.SetTMTime(&now)
 				if err := fs.tp.Propagate(ctx, p, 0); err != nil {
 					log.Error().Err(err).Str("uploadID", ev.UploadID).Msg("could not propagate etag change")
@@ -288,6 +288,7 @@ func (fs *Decomposedfs) Postprocessing(ch <-chan interface{}) {
 					UploadID:      ev.UploadID,
 					Failed:        failed,
 					ExecutingUser: ev.ExecutingUser,
+					Filename:      ev.Filename,
 					FileRef: &provider.Reference{
 						ResourceId: &provider.ResourceId{
 							StorageId: up.Info.MetaData["providerID"],
@@ -296,6 +297,8 @@ func (fs *Decomposedfs) Postprocessing(ch <-chan interface{}) {
 						},
 						Path: utils.MakeRelativePath(filepath.Join(up.Info.MetaData["dir"], up.Info.MetaData["filename"])),
 					},
+					Timestamp:  now,
+					SpaceOwner: n.SpaceOwnerOrManager(ctx),
 				},
 			); err != nil {
 				log.Error().Err(err).Str("uploadID", ev.UploadID).Msg("Failed to publish UploadReady event")
