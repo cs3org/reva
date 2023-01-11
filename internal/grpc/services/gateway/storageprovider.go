@@ -1090,9 +1090,10 @@ func (s *svc) getStorageProviderClient(_ context.Context, p *registry.ProviderIn
 	}
 
 	return &cachedAPIClient{
-		c:               c,
-		statCache:       s.statCache,
-		createHomeCache: s.createHomeCache,
+		c:                        c,
+		statCache:                s.statCache,
+		createHomeCache:          s.createHomeCache,
+		createPersonalSpaceCache: s.createPersonalSpaceCache,
 	}, nil
 }
 

@@ -36,10 +36,11 @@ import (
 
 var (
 	// DefaultStatCache is the memory store.
-	statCaches       = make(map[string]StatCache)
-	providerCaches   = make(map[string]ProviderCache)
-	createHomeCaches = make(map[string]CreateHomeCache)
-	mutex            sync.Mutex
+	statCaches                = make(map[string]StatCache)
+	providerCaches            = make(map[string]ProviderCache)
+	createHomeCaches          = make(map[string]CreateHomeCache)
+	createPersonalSpaceCaches = make(map[string]CreatePersonalSpaceCache)
+	mutex                     sync.Mutex
 )
 
 // Cache handles key value operations on caches
@@ -69,6 +70,12 @@ type ProviderCache interface {
 type CreateHomeCache interface {
 	Cache
 	RemoveCreateHome(res *provider.ResourceId)
+	GetKey(userID *userpb.UserId) string
+}
+
+// CreatePersonalSpaceCache handles removing keys from a create home cache
+type CreatePersonalSpaceCache interface {
+	Cache
 	GetKey(userID *userpb.UserId) string
 }
 
@@ -109,6 +116,19 @@ func GetCreateHomeCache(cacheStore string, cacheNodes []string, database, table 
 		createHomeCaches[key] = NewCreateHomeCache(cacheStore, cacheNodes, database, table, ttl)
 	}
 	return createHomeCaches[key]
+}
+
+// GetCreatePersonalSpaceCache will return an existing CreatePersonalSpaceCache for the given store, nodes, database and table
+// If it does not exist yet it will be created, different TTLs are ignored
+func GetCreatePersonalSpaceCache(cacheStore string, cacheNodes []string, database, table string, ttl time.Duration) CreatePersonalSpaceCache {
+	mutex.Lock()
+	defer mutex.Unlock()
+
+	key := strings.Join(append(append([]string{cacheStore}, cacheNodes...), database, table), ":")
+	if createPersonalSpaceCaches[key] == nil {
+		createPersonalSpaceCaches[key] = NewCreatePersonalSpaceCache(cacheStore, cacheNodes, database, table, ttl)
+	}
+	return createPersonalSpaceCaches[key]
 }
 
 // CacheStore holds cache store specific configuration
