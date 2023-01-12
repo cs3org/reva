@@ -389,7 +389,7 @@ func (s *svc) denyGrant(ctx context.Context, id *provider.ResourceId, g *provide
 	return grantRes.Status, nil
 }
 
-func (s *svc) addGrant(ctx context.Context, id *provider.ResourceId, g *provider.Grantee, p *provider.ResourcePermissions, opaque *typesv1beta1.Opaque) (*rpc.Status, error) {
+func (s *svc) addGrant(ctx context.Context, id *provider.ResourceId, g *provider.Grantee, p *provider.ResourcePermissions, expiration *typesv1beta1.Timestamp, opaque *typesv1beta1.Opaque) (*rpc.Status, error) {
 	ref := &provider.Reference{
 		ResourceId: id,
 	}
@@ -401,6 +401,7 @@ func (s *svc) addGrant(ctx context.Context, id *provider.ResourceId, g *provider
 			Grantee:     g,
 			Permissions: p,
 			Creator:     creator.GetId(),
+			Expiration:  expiration,
 		},
 		Opaque: opaque,
 	}
@@ -568,7 +569,7 @@ func (s *svc) addShare(ctx context.Context, req *collaboration.CreateShareReques
 				return nil, errors.Wrap(err, "gateway: error denying grant in storage")
 			}
 		} else {
-			status, err = s.addGrant(ctx, req.ResourceInfo.Id, req.Grant.Grantee, req.Grant.Permissions.Permissions, nil)
+			status, err = s.addGrant(ctx, req.ResourceInfo.Id, req.Grant.Grantee, req.Grant.Permissions.Permissions, req.Grant.Expiration, nil)
 			if err != nil {
 				return nil, errors.Wrap(err, "gateway: error adding grant to storage")
 			}
@@ -609,7 +610,7 @@ func (s *svc) addSpaceShare(ctx context.Context, req *collaboration.CreateShareR
 			return nil, errors.Wrap(err, "gateway: error denying grant in storage")
 		}
 	} else {
-		st, err = s.addGrant(ctx, req.ResourceInfo.Id, req.Grant.Grantee, req.Grant.Permissions.Permissions, opaque)
+		st, err = s.addGrant(ctx, req.ResourceInfo.Id, req.Grant.Grantee, req.Grant.Permissions.Permissions, req.Grant.Expiration, opaque)
 		if err != nil {
 			return nil, errors.Wrap(err, "gateway: error adding grant to storage")
 		}

@@ -19,7 +19,12 @@
 package jsoncs3
 
 import (
+	"bytes"
 	"context"
+	"crypto/tls"
+	"crypto/x509"
+	"io"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -27,6 +32,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog/log"
 	"google.golang.org/genproto/protobuf/field_mask"
 
 	gatewayv1beta1 "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
@@ -37,6 +43,8 @@ import (
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
+	"github.com/cs3org/reva/v2/pkg/events"
+	"github.com/cs3org/reva/v2/pkg/events/stream"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v2/pkg/share"
 	"github.com/cs3org/reva/v2/pkg/share/manager/jsoncs3/providercache"
@@ -47,6 +55,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/metadata" // nolint:staticcheck // we need the legacy package to convert V1 to V2 messages
 	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/utils"
+	"github.com/go-micro/plugins/v4/events/natsjs"
 )
 
 /*
@@ -105,12 +114,21 @@ func init() {
 }
 
 type config struct {
-	GatewayAddr       string `mapstructure:"gateway_addr"`
-	ProviderAddr      string `mapstructure:"provider_addr"`
-	ServiceUserID     string `mapstructure:"service_user_id"`
-	ServiceUserIdp    string `mapstructure:"service_user_idp"`
-	MachineAuthAPIKey string `mapstructure:"machine_auth_apikey"`
-	CacheTTL          int    `mapstructure:"ttl"`
+	GatewayAddr       string       `mapstructure:"gateway_addr"`
+	ProviderAddr      string       `mapstructure:"provider_addr"`
+	ServiceUserID     string       `mapstructure:"service_user_id"`
+	ServiceUserIdp    string       `mapstructure:"service_user_idp"`
+	MachineAuthAPIKey string       `mapstructure:"machine_auth_apikey"`
+	CacheTTL          int          `mapstructure:"ttl"`
+	Events            EventOptions `mapstructure:"events"`
+}
+
+// EventOptions are the configurable options for events
+type EventOptions struct {
+	NatsAddress          string `mapstructure:"natsaddress"`
+	NatsClusterID        string `mapstructure:"natsclusterid"`
+	TLSInsecure          bool   `mapstructure:"tlsinsecure"`
+	TLSRootCACertificate string `mapstructure:"tlsrootcacertificate"`
 }
 
 // Manager implements a share manager using a cs3 storage backend with local caching
@@ -127,7 +145,8 @@ type Manager struct {
 
 	initialized bool
 
-	gateway gatewayv1beta1.GatewayAPIClient
+	gateway     gatewayv1beta1.GatewayAPIClient
+	eventStream events.Stream
 }
 
 // NewDefault returns a new manager instance with default dependencies
@@ -148,11 +167,49 @@ func NewDefault(m map[string]interface{}) (share.Manager, error) {
 		return nil, err
 	}
 
-	return New(s, gc, c.CacheTTL)
+	var es events.Stream
+	if c.Events.NatsAddress != "" {
+		evtsCfg := c.Events
+		var (
+			rootCAPool *x509.CertPool
+			tlsConf    *tls.Config
+		)
+		if evtsCfg.TLSRootCACertificate != "" {
+			rootCrtFile, err := os.Open(evtsCfg.TLSRootCACertificate)
+			if err != nil {
+				return nil, err
+			}
+
+			var certBytes bytes.Buffer
+			if _, err := io.Copy(&certBytes, rootCrtFile); err != nil {
+				return nil, err
+			}
+
+			rootCAPool = x509.NewCertPool()
+			rootCAPool.AppendCertsFromPEM(certBytes.Bytes())
+			evtsCfg.TLSInsecure = false
+
+			tlsConf = &tls.Config{
+				InsecureSkipVerify: evtsCfg.TLSInsecure, //nolint:gosec
+				RootCAs:            rootCAPool,
+			}
+		}
+
+		es, err = stream.Nats(
+			natsjs.TLSConfig(tlsConf),
+			natsjs.Address(evtsCfg.NatsAddress),
+			natsjs.ClusterID(evtsCfg.NatsClusterID),
+		)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return New(s, gc, c.CacheTTL, es)
 }
 
 // New returns a new manager instance.
-func New(s metadata.Storage, gc gatewayv1beta1.GatewayAPIClient, ttlSeconds int) (*Manager, error) {
+func New(s metadata.Storage, gc gatewayv1beta1.GatewayAPIClient, ttlSeconds int, es events.Stream) (*Manager, error) {
 	ttl := time.Duration(ttlSeconds) * time.Second
 	return &Manager{
 		Cache:              providercache.New(s, ttl),
@@ -161,6 +218,7 @@ func New(s metadata.Storage, gc gatewayv1beta1.GatewayAPIClient, ttlSeconds int)
 		GroupReceivedCache: sharecache.New(s, "groups", "received.json", ttl),
 		storage:            s,
 		gateway:            gc,
+		eventStream:        es,
 	}, nil
 }
 
@@ -238,6 +296,7 @@ func (m *Manager) Share(ctx context.Context, md *provider.ResourceInfo, g *colla
 		ResourceId:  md.Id,
 		Permissions: g.Permissions,
 		Grantee:     g.Grantee,
+		Expiration:  g.Expiration,
 		Owner:       md.Owner,
 		Creator:     user.Id,
 		Ctime:       ts,
@@ -364,6 +423,22 @@ func (m *Manager) GetShare(ctx context.Context, ref *collaboration.ShareReferenc
 	if err != nil {
 		return nil, err
 	}
+	if share.IsExpired(s) {
+		if err := m.removeShare(ctx, s); err != nil {
+			log.Error().Err(err).
+				Msg("failed to unshare expired share")
+		}
+		if err := events.Publish(m.eventStream, events.ShareExpired{
+			ShareOwner:     s.GetOwner(),
+			ItemID:         s.GetResourceId(),
+			ExpiredAt:      time.Unix(int64(s.GetExpiration().GetSeconds()), int64(s.GetExpiration().GetNanos())),
+			GranteeUserID:  s.GetGrantee().GetUserId(),
+			GranteeGroupID: s.GetGrantee().GetGroupId(),
+		}); err != nil {
+			log.Error().Err(err).
+				Msg("failed to publish share expired event")
+		}
+	}
 	// check if we are the creator or the grantee
 	// TODO allow manager to get shares in a space created by other users
 	user := ctxpkg.ContextMustGetUser(ctx)
@@ -405,54 +480,51 @@ func (m *Manager) Unshare(ctx context.Context, ref *collaboration.ShareReference
 		return errtypes.NotFound(ref.String())
 	}
 
-	storageID, spaceID, _ := shareid.Decode(s.Id.OpaqueId)
-	err = m.Cache.Remove(ctx, storageID, spaceID, s.Id.OpaqueId)
-	if _, ok := err.(errtypes.IsPreconditionFailed); ok {
-		if err := m.Cache.Sync(ctx, storageID, spaceID); err != nil {
-			return err
-		}
-		err = m.Cache.Remove(ctx, storageID, spaceID, s.Id.OpaqueId)
-		// TODO try more often?
-	}
-	if err != nil {
-		return err
-	}
-
-	// remove from created cache
-	err = m.CreatedCache.Remove(ctx, s.GetCreator().GetOpaqueId(), s.Id.OpaqueId)
-	if _, ok := err.(errtypes.IsPreconditionFailed); ok {
-		if err := m.CreatedCache.Sync(ctx, s.GetCreator().GetOpaqueId()); err != nil {
-			return err
-		}
-		err = m.CreatedCache.Remove(ctx, s.GetCreator().GetOpaqueId(), s.Id.OpaqueId)
-		// TODO try more often?
-	}
-	if err != nil {
-		return err
-	}
-
-	// TODO remove from grantee cache
-
-	return nil
+	return m.removeShare(ctx, s)
 }
 
 // UpdateShare updates the mode of the given share.
-func (m *Manager) UpdateShare(ctx context.Context, ref *collaboration.ShareReference, p *collaboration.SharePermissions) (*collaboration.Share, error) {
+func (m *Manager) UpdateShare(ctx context.Context, ref *collaboration.ShareReference, p *collaboration.SharePermissions, updated *collaboration.Share, fieldMask *field_mask.FieldMask) (*collaboration.Share, error) {
 	if err := m.initialize(); err != nil {
 		return nil, err
 	}
 
 	m.Lock()
 	defer m.Unlock()
-	s, err := m.get(ctx, ref)
-	if err != nil {
-		return nil, err
+
+	var toUpdate *collaboration.Share
+
+	if ref != nil {
+		var err error
+		toUpdate, err = m.get(ctx, ref)
+		if err != nil {
+			return nil, err
+		}
+	} else if updated != nil {
+		var err error
+		toUpdate, err = m.getByID(ctx, updated.Id)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if fieldMask != nil {
+		for i := range fieldMask.Paths {
+			switch fieldMask.Paths[i] {
+			case "permissions":
+				toUpdate.Permissions = updated.Permissions
+			case "expiration":
+				toUpdate.Expiration = updated.Expiration
+			default:
+				return nil, errtypes.NotSupported("updating " + fieldMask.Paths[i] + " is not supported")
+			}
+		}
 	}
 
 	user := ctxpkg.ContextMustGetUser(ctx)
-	if !share.IsCreatedByUser(s, user) {
+	if !share.IsCreatedByUser(toUpdate, user) {
 		req := &provider.StatRequest{
-			Ref: &provider.Reference{ResourceId: s.ResourceId},
+			Ref: &provider.Reference{ResourceId: toUpdate.ResourceId},
 		}
 		res, err := m.gateway.Stat(ctx, req)
 		if err != nil ||
@@ -462,30 +534,32 @@ func (m *Manager) UpdateShare(ctx context.Context, ref *collaboration.ShareRefer
 		}
 	}
 
-	s.Permissions = p
-	s.Mtime = utils.TSNow()
+	if p != nil {
+		toUpdate.Permissions = p
+	}
+	toUpdate.Mtime = utils.TSNow()
 
 	// Update provider cache
-	err = m.Cache.Persist(ctx, s.ResourceId.StorageId, s.ResourceId.SpaceId)
+	err := m.Cache.Persist(ctx, toUpdate.ResourceId.StorageId, toUpdate.ResourceId.SpaceId)
 	// when persisting fails
 	if _, ok := err.(errtypes.IsPreconditionFailed); ok {
 		// reupdate
-		s, err = m.get(ctx, ref) // does an implicit sync
+		toUpdate, err = m.get(ctx, ref) // does an implicit sync
 		if err != nil {
 			return nil, err
 		}
-		s.Permissions = p
-		s.Mtime = utils.TSNow()
+		toUpdate.Permissions = p
+		toUpdate.Mtime = utils.TSNow()
 
 		// persist again
-		err = m.Cache.Persist(ctx, s.ResourceId.StorageId, s.ResourceId.SpaceId)
+		err = m.Cache.Persist(ctx, toUpdate.ResourceId.StorageId, toUpdate.ResourceId.SpaceId)
 		// TODO try more often?
 	}
 	if err != nil {
 		return nil, err
 	}
 
-	return s, nil
+	return toUpdate, nil
 }
 
 // ListShares returns the shares created by the user
@@ -529,6 +603,23 @@ func (m *Manager) listSharesByIDs(ctx context.Context, user *userv1beta1.User, f
 			shares := m.Cache.ListSpace(providerID, spaceID)
 
 			for _, s := range shares.Shares {
+				if share.IsExpired(s) {
+					if err := m.removeShare(ctx, s); err != nil {
+						log.Error().Err(err).
+							Msg("failed to unshare expired share")
+					}
+					if err := events.Publish(m.eventStream, events.ShareExpired{
+						ShareOwner:     s.GetOwner(),
+						ItemID:         s.GetResourceId(),
+						ExpiredAt:      time.Unix(int64(s.GetExpiration().GetSeconds()), int64(s.GetExpiration().GetNanos())),
+						GranteeUserID:  s.GetGrantee().GetUserId(),
+						GranteeGroupID: s.GetGrantee().GetGroupId(),
+					}); err != nil {
+						log.Error().Err(err).
+							Msg("failed to publish share expired event")
+					}
+					continue
+				}
 				if !share.MatchesFilters(s, filters) {
 					continue
 				}
@@ -572,6 +663,23 @@ func (m *Manager) listCreatedShares(ctx context.Context, user *userv1beta1.User,
 		for shareid := range spaceShareIDs.IDs {
 			s := spaceShares.Shares[shareid]
 			if s == nil {
+				continue
+			}
+			if share.IsExpired(s) {
+				if err := m.removeShare(ctx, s); err != nil {
+					log.Error().Err(err).
+						Msg("failed to unshare expired share")
+				}
+				if err := events.Publish(m.eventStream, events.ShareExpired{
+					ShareOwner:     s.GetOwner(),
+					ItemID:         s.GetResourceId(),
+					ExpiredAt:      time.Unix(int64(s.GetExpiration().GetSeconds()), int64(s.GetExpiration().GetNanos())),
+					GranteeUserID:  s.GetGrantee().GetUserId(),
+					GranteeGroupID: s.GetGrantee().GetGroupId(),
+				}); err != nil {
+					log.Error().Err(err).
+						Msg("failed to publish share expired event")
+				}
 				continue
 			}
 			if utils.UserEqual(user.GetId(), s.GetCreator()) {
@@ -648,6 +756,23 @@ func (m *Manager) ListReceivedShares(ctx context.Context, filters []*collaborati
 			if s == nil {
 				continue
 			}
+			if share.IsExpired(s) {
+				if err := m.removeShare(ctx, s); err != nil {
+					log.Error().Err(err).
+						Msg("failed to unshare expired share")
+				}
+				if err := events.Publish(m.eventStream, events.ShareExpired{
+					ShareOwner:     s.GetOwner(),
+					ItemID:         s.GetResourceId(),
+					ExpiredAt:      time.Unix(int64(s.GetExpiration().GetSeconds()), int64(s.GetExpiration().GetNanos())),
+					GranteeUserID:  s.GetGrantee().GetUserId(),
+					GranteeGroupID: s.GetGrantee().GetGroupId(),
+				}); err != nil {
+					log.Error().Err(err).
+						Msg("failed to publish share expired event")
+				}
+				continue
+			}
 
 			if share.IsGrantedToUser(s, user) {
 				if share.MatchesFiltersWithState(s, state.State, filters) {
@@ -702,6 +827,22 @@ func (m *Manager) getReceived(ctx context.Context, ref *collaboration.ShareRefer
 	user := ctxpkg.ContextMustGetUser(ctx)
 	if !share.IsGrantedToUser(s, user) {
 		return nil, errtypes.NotFound(ref.String())
+	}
+	if share.IsExpired(s) {
+		if err := m.removeShare(ctx, s); err != nil {
+			log.Error().Err(err).
+				Msg("failed to unshare expired share")
+		}
+		if err := events.Publish(m.eventStream, events.ShareExpired{
+			ShareOwner:     s.GetOwner(),
+			ItemID:         s.GetResourceId(),
+			ExpiredAt:      time.Unix(int64(s.GetExpiration().GetSeconds()), int64(s.GetExpiration().GetNanos())),
+			GranteeUserID:  s.GetGrantee().GetUserId(),
+			GranteeGroupID: s.GetGrantee().GetGroupId(),
+		}); err != nil {
+			log.Error().Err(err).
+				Msg("failed to publish share expired event")
+		}
 	}
 	return m.convert(ctx, user.Id.GetOpaqueId(), s), nil
 }
@@ -813,6 +954,38 @@ func (m *Manager) Load(ctx context.Context, shareChan <-chan *collaboration.Shar
 		wg.Done()
 	}()
 	wg.Wait()
+
+	return nil
+}
+
+func (m *Manager) removeShare(ctx context.Context, s *collaboration.Share) error {
+	storageID, spaceID, _ := shareid.Decode(s.Id.OpaqueId)
+	err := m.Cache.Remove(ctx, storageID, spaceID, s.Id.OpaqueId)
+	if _, ok := err.(errtypes.IsPreconditionFailed); ok {
+		if err := m.Cache.Sync(ctx, storageID, spaceID); err != nil {
+			return err
+		}
+		err = m.Cache.Remove(ctx, storageID, spaceID, s.Id.OpaqueId)
+		// TODO try more often?
+	}
+	if err != nil {
+		return err
+	}
+
+	// remove from created cache
+	err = m.CreatedCache.Remove(ctx, s.GetCreator().GetOpaqueId(), s.Id.OpaqueId)
+	if _, ok := err.(errtypes.IsPreconditionFailed); ok {
+		if err := m.CreatedCache.Sync(ctx, s.GetCreator().GetOpaqueId()); err != nil {
+			return err
+		}
+		err = m.CreatedCache.Remove(ctx, s.GetCreator().GetOpaqueId(), s.Id.OpaqueId)
+		// TODO try more often?
+	}
+	if err != nil {
+		return err
+	}
+
+	// TODO remove from grantee cache
 
 	return nil
 }

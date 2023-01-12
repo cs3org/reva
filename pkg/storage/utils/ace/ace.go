@@ -24,10 +24,12 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/grants"
 )
 
@@ -181,7 +183,7 @@ type ACE struct {
 	// sharing specific
 	shareTime int    // s
 	creator   string // c
-	expires   int    // e
+	expires   int64  // e
 	password  string // w passWord TODO h = hash
 	label     string // l
 }
@@ -204,6 +206,11 @@ func FromGrant(g *provider.Grant) *ACE {
 	} else {
 		e.principal = "u:" + g.Grantee.GetUserId().OpaqueId
 	}
+
+	if g.Expiration != nil {
+		e.expires = int64(g.Expiration.Seconds)*int64(time.Second) + int64(g.Expiration.Nanos)
+	}
+
 	return e
 }
 
@@ -223,6 +230,7 @@ func (e *ACE) Marshal() (string, []byte) {
 		fmt.Sprintf("f=%s", e.flags),
 		fmt.Sprintf("p=%s", e.permissions),
 		fmt.Sprintf("c=%s", e.creator),
+		fmt.Sprintf("e=%d", e.expires),
 	}); err != nil {
 		return "", nil
 	}
@@ -277,6 +285,13 @@ func (e *ACE) Grant() *provider.Grant {
 		g.Grantee.Id = &provider.Grantee_GroupId{GroupId: &grouppb.GroupId{OpaqueId: id}}
 	} else if e.granteeType() == provider.GranteeType_GRANTEE_TYPE_USER {
 		g.Grantee.Id = &provider.Grantee_UserId{UserId: &userpb.UserId{OpaqueId: id}}
+	}
+
+	if e.expires != 0 {
+		g.Expiration = &typesv1beta1.Timestamp{
+			Seconds: uint64(e.expires / int64(time.Second)),
+			Nanos:   uint32(e.expires % int64(time.Second)),
+		}
 	}
 
 	return g
@@ -398,7 +413,7 @@ func unmarshalKV(s string) (*ACE, error) {
 		case "c":
 			e.creator = kv[1]
 		case "e":
-			v, err := strconv.Atoi(kv[1])
+			v, err := strconv.ParseInt(kv[1], 10, 64)
 			if err != nil {
 				return nil, err
 			}

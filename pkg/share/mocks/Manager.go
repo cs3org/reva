@@ -189,13 +189,13 @@ func (_m *Manager) UpdateReceivedShare(ctx context.Context, _a1 *collaborationv1
 	return r0, r1
 }
 
-// UpdateShare provides a mock function with given fields: ctx, ref, p
-func (_m *Manager) UpdateShare(ctx context.Context, ref *collaborationv1beta1.ShareReference, p *collaborationv1beta1.SharePermissions) (*collaborationv1beta1.Share, error) {
-	ret := _m.Called(ctx, ref, p)
+// UpdateShare provides a mock function with given fields: ctx, ref, p, updated, fieldMask
+func (_m *Manager) UpdateShare(ctx context.Context, ref *collaborationv1beta1.ShareReference, p *collaborationv1beta1.SharePermissions, updated *collaborationv1beta1.Share, fieldMask *fieldmaskpb.FieldMask) (*collaborationv1beta1.Share, error) {
+	ret := _m.Called(ctx, ref, p, updated, fieldMask)
 
 	var r0 *collaborationv1beta1.Share
-	if rf, ok := ret.Get(0).(func(context.Context, *collaborationv1beta1.ShareReference, *collaborationv1beta1.SharePermissions) *collaborationv1beta1.Share); ok {
-		r0 = rf(ctx, ref, p)
+	if rf, ok := ret.Get(0).(func(context.Context, *collaborationv1beta1.ShareReference, *collaborationv1beta1.SharePermissions, *collaborationv1beta1.Share, *fieldmaskpb.FieldMask) *collaborationv1beta1.Share); ok {
+		r0 = rf(ctx, ref, p, updated, fieldMask)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(*collaborationv1beta1.Share)
@@ -203,8 +203,8 @@ func (_m *Manager) UpdateShare(ctx context.Context, ref *collaborationv1beta1.Sh
 	}
 
 	var r1 error
-	if rf, ok := ret.Get(1).(func(context.Context, *collaborationv1beta1.ShareReference, *collaborationv1beta1.SharePermissions) error); ok {
-		r1 = rf(ctx, ref, p)
+	if rf, ok := ret.Get(1).(func(context.Context, *collaborationv1beta1.ShareReference, *collaborationv1beta1.SharePermissions, *collaborationv1beta1.Share, *fieldmaskpb.FieldMask) error); ok {
+		r1 = rf(ctx, ref, p, updated, fieldMask)
 	} else {
 		r1 = ret.Error(1)
 	}

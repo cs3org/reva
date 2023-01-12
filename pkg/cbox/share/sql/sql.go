@@ -249,7 +249,7 @@ func (m *mgr) Unshare(ctx context.Context, ref *collaboration.ShareReference) er
 	return nil
 }
 
-func (m *mgr) UpdateShare(ctx context.Context, ref *collaboration.ShareReference, p *collaboration.SharePermissions) (*collaboration.Share, error) {
+func (m *mgr) UpdateShare(ctx context.Context, ref *collaboration.ShareReference, p *collaboration.SharePermissions, updated *collaboration.Share, fieldMask *field_mask.FieldMask) (*collaboration.Share, error) {
 	permissions := conversions.SharePermToInt(p.Permissions)
 	uid := conversions.FormatUserID(ctxpkg.ContextMustGetUser(ctx).Id)
 

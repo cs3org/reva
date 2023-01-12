@@ -20,6 +20,7 @@ package share
 
 import (
 	"context"
+	"time"
 
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
@@ -55,7 +56,7 @@ type Manager interface {
 	Unshare(ctx context.Context, ref *collaboration.ShareReference) error
 
 	// UpdateShare updates the mode of the given share.
-	UpdateShare(ctx context.Context, ref *collaboration.ShareReference, p *collaboration.SharePermissions) (*collaboration.Share, error)
+	UpdateShare(ctx context.Context, ref *collaboration.ShareReference, p *collaboration.SharePermissions, updated *collaboration.Share, fieldMask *field_mask.FieldMask) (*collaboration.Share, error)
 
 	// ListShares returns the shares created by the user. If md is provided is not nil,
 	// it returns only shares attached to the given resource.
@@ -237,4 +238,10 @@ func GroupFiltersByType(filters []*collaboration.Filter) map[collaboration.Filte
 // empty slice is returned.
 func FilterFiltersByType(f []*collaboration.Filter, t collaboration.Filter_Type) []*collaboration.Filter {
 	return GroupFiltersByType(f)[t]
+}
+
+// IsExpired tests whether a share is expired
+func IsExpired(s *collaboration.Share) bool {
+	expiration := time.Unix(int64(s.Expiration.GetSeconds()), int64(s.Expiration.GetNanos()))
+	return s.Expiration != nil && expiration.Before(time.Now())
 }

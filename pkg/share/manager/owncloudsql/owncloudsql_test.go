@@ -516,7 +516,7 @@ var _ = Describe("SQL manager", func() {
 					InitiateFileUpload: true,
 					RestoreFileVersion: true,
 					RestoreRecycleItem: true,
-				}})
+				}}, nil, nil)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(share.Permissions.Permissions.Delete).To(BeFalse())
 

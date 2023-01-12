@@ -54,7 +54,7 @@ func (s *svc) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareRequest
 	}
 
 	if s.c.CommitShareToStorageGrant {
-		addGrantStatus, err := s.addGrant(ctx, req.ResourceId, req.Grant.Grantee, req.Grant.Permissions.Permissions, nil)
+		addGrantStatus, err := s.addGrant(ctx, req.ResourceId, req.Grant.Grantee, req.Grant.Permissions.Permissions, nil, nil)
 		if err != nil {
 			return nil, errors.Wrap(err, "gateway: error adding OCM grant to storage")
 		}

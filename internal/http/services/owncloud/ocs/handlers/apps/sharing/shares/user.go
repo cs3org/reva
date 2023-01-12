@@ -20,6 +20,7 @@ package shares
 
 import (
 	"net/http"
+	"time"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
@@ -32,6 +33,10 @@ import (
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v2/pkg/utils"
+)
+
+const (
+	_iso8601 = "2006-01-02T15:04:05Z0700"
 )
 
 func (h *Handler) createUserShare(w http.ResponseWriter, r *http.Request, statInfo *provider.ResourceInfo, role *conversions.Role, roleVal []byte) (*collaboration.Share, *ocsError) {
@@ -75,6 +80,26 @@ func (h *Handler) createUserShare(w http.ResponseWriter, r *http.Request, statIn
 		}
 	}
 
+	expireDate := r.PostFormValue("expireDate")
+	var expirationTs *types.Timestamp
+	if expireDate != "" {
+		// FIXME: the web ui sends the RFC3339 format when updating a share but
+		// initially on creating a share the format ISO 8601 is used.
+		// OC10 uses RFC3339 in both cases so we should fix the web ui and change it here.
+		expiration, err := time.Parse(_iso8601, expireDate)
+		if err != nil {
+			return nil, &ocsError{
+				Code:    response.MetaBadRequest.StatusCode,
+				Message: "could not parse expireDate",
+				Error:   err,
+			}
+		}
+		expirationTs = &types.Timestamp{
+			Seconds: uint64(expiration.UnixNano() / int64(time.Second)),
+			Nanos:   uint32(expiration.UnixNano() % int64(time.Second)),
+		}
+	}
+
 	createShareReq := &collaboration.CreateShareRequest{
 		Opaque: &types.Opaque{
 			Map: map[string]*types.OpaqueEntry{
@@ -93,6 +118,7 @@ func (h *Handler) createUserShare(w http.ResponseWriter, r *http.Request, statIn
 			Permissions: &collaboration.SharePermissions{
 				Permissions: role.CS3ResourcePermissions(),
 			},
+			Expiration: expirationTs,
 		},
 	}
 

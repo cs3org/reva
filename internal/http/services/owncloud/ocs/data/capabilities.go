@@ -199,9 +199,10 @@ type CapabilitiesFilesSharingPublicExpireDate struct {
 
 // CapabilitiesFilesSharingUser TODO document
 type CapabilitiesFilesSharingUser struct {
-	SendMail       ocsBool                     `json:"send_mail" xml:"send_mail" mapstructure:"send_mail"`
-	ProfilePicture ocsBool                     `json:"profile_picture" xml:"profile_picture" mapstructure:"profile_picture"`
-	Settings       []*CapabilitiesUserSettings `json:"settings" xml:"settings" mapstructure:"settings"`
+	SendMail       ocsBool                                   `json:"send_mail" xml:"send_mail" mapstructure:"send_mail"`
+	ProfilePicture ocsBool                                   `json:"profile_picture" xml:"profile_picture" mapstructure:"profile_picture"`
+	Settings       []*CapabilitiesUserSettings               `json:"settings" xml:"settings" mapstructure:"settings"`
+	ExpireDate     *CapabilitiesFilesSharingPublicExpireDate `json:"expire_date" xml:"expire_date" mapstructure:"expire_date"`
 }
 
 // CapabilitiesUserSettings holds available user settings service information

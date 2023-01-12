@@ -498,7 +498,7 @@ func (m *Manager) ListShares(ctx context.Context, filters []*collaboration.Filte
 }
 
 // UpdateShare updates the mode of the given share.
-func (m *Manager) UpdateShare(ctx context.Context, ref *collaboration.ShareReference, p *collaboration.SharePermissions) (*collaboration.Share, error) {
+func (m *Manager) UpdateShare(ctx context.Context, ref *collaboration.ShareReference, p *collaboration.SharePermissions, updated *collaboration.Share, fieldMask *field_mask.FieldMask) (*collaboration.Share, error) {
 	if err := m.initialize(); err != nil {
 		return nil, err
 	}
