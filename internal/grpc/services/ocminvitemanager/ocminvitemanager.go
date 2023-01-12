@@ -20,11 +20,15 @@ package ocminvitemanager
 
 import (
 	"context"
+	"time"
 
 	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
+	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/ocm/client"
 	"github.com/cs3org/reva/pkg/ocm/invite"
-	"github.com/cs3org/reva/pkg/ocm/invite/manager/registry"
+	"github.com/cs3org/reva/pkg/ocm/invite/repository/registry"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/mitchellh/mapstructure"
@@ -37,26 +41,43 @@ func init() {
 }
 
 type config struct {
-	Driver  string                            `mapstructure:"driver"`
-	Drivers map[string]map[string]interface{} `mapstructure:"drivers"`
+	Driver            string                            `mapstructure:"driver"`
+	Drivers           map[string]map[string]interface{} `mapstructure:"drivers"`
+	TokenExpiration   string                            `mapstructure:"token_expiration"`
+	OCMClientTimeout  int                               `mapstructure:"ocm_timeout"`
+	OCMClientInsecure bool                              `mapstructure:"ocm_insecure"`
+
+	tokenExpiration time.Duration
 }
 
 type service struct {
-	conf *config
-	im   invite.Manager
+	conf      *config
+	repo      invite.Repository
+	ocmClient *client.OCMClient
 }
 
-func (c *config) init() {
+func (c *config) init() error {
 	if c.Driver == "" {
 		c.Driver = "json"
 	}
+	if c.TokenExpiration == "" {
+		c.TokenExpiration = "24h"
+	}
+
+	p, err := time.ParseDuration(c.TokenExpiration)
+	if err != nil {
+		return err
+	}
+	c.tokenExpiration = p
+
+	return nil
 }
 
 func (s *service) Register(ss *grpc.Server) {
 	invitepb.RegisterInviteAPIServer(ss, s)
 }
 
-func getInviteManager(c *config) (invite.Manager, error) {
+func getInviteRepository(c *config) (invite.Repository, error) {
 	if f, ok := registry.NewFuncs[c.Driver]; ok {
 		return f(c.Drivers[c.Driver])
 	}
@@ -78,16 +99,22 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 	if err != nil {
 		return nil, err
 	}
-	c.init()
+	if err := c.init(); err != nil {
+		return nil, err
+	}
 
-	im, err := getInviteManager(c)
+	repo, err := getInviteRepository(c)
 	if err != nil {
 		return nil, err
 	}
 
 	service := &service{
 		conf: c,
-		im:   im,
+		repo: repo,
+		ocmClient: client.New(&client.Config{
+			Timeout:  time.Duration(c.OCMClientTimeout) * time.Second,
+			Insecure: c.OCMClientInsecure,
+		}),
 	}
 	return service, nil
 }
@@ -101,8 +128,10 @@ func (s *service) UnprotectedEndpoints() []string {
 }
 
 func (s *service) GenerateInviteToken(ctx context.Context, req *invitepb.GenerateInviteTokenRequest) (*invitepb.GenerateInviteTokenResponse, error) {
-	token, err := s.im.GenerateToken(ctx)
-	if err != nil {
+	user := ctxpkg.ContextMustGetUser(ctx)
+	token := CreateToken(s.conf.tokenExpiration, user.GetId())
+
+	if err := s.repo.AddToken(ctx, token); err != nil {
 		return &invitepb.GenerateInviteTokenResponse{
 			Status: status.NewInternal(ctx, err, "error generating invite token"),
 		}, nil
@@ -115,10 +144,28 @@ func (s *service) GenerateInviteToken(ctx context.Context, req *invitepb.Generat
 }
 
 func (s *service) ForwardInvite(ctx context.Context, req *invitepb.ForwardInviteRequest) (*invitepb.ForwardInviteResponse, error) {
-	err := s.im.ForwardInvite(ctx, req.InviteToken, req.OriginSystemProvider)
+	user := ctxpkg.ContextMustGetUser(ctx)
+
+	ocmEndpoint, err := getOCMEndpoint(req.GetOriginSystemProvider())
 	if err != nil {
+		return nil, err
+	}
+
+	_, err = s.ocmClient.InviteAccepted(ctx, ocmEndpoint, &client.InviteAcceptedRequest{
+		Token:             req.InviteToken.GetToken(),
+		RecipientProvider: user.GetId().GetIdp(),
+		UserID:            user.GetId().GetOpaqueId(),
+		Email:             user.GetMail(),
+		Name:              user.GetDisplayName(),
+	})
+	if err != nil {
+		if errors.Is(err, client.ErrTokenInvalid) {
+			return &invitepb.ForwardInviteResponse{
+				Status: status.NewInvalid(ctx, "token not valid"),
+			}, nil
+		}
 		return &invitepb.ForwardInviteResponse{
-			Status: status.NewInternal(ctx, err, "error forwarding invite:"+err.Error()),
+			Status: status.NewInternal(ctx, err, err.Error()),
 		}, nil
 	}
 
@@ -127,11 +174,42 @@ func (s *service) ForwardInvite(ctx context.Context, req *invitepb.ForwardInvite
 	}, nil
 }
 
+func getOCMEndpoint(originProvider *ocmprovider.ProviderInfo) (string, error) {
+	for _, s := range originProvider.Services {
+		if s.Endpoint.Type.Name == "OCM" {
+			return s.Endpoint.Path, nil
+		}
+	}
+	return "", errors.New("json: ocm endpoint not specified for mesh provider")
+}
+
 func (s *service) AcceptInvite(ctx context.Context, req *invitepb.AcceptInviteRequest) (*invitepb.AcceptInviteResponse, error) {
-	err := s.im.AcceptInvite(ctx, req.InviteToken, req.RemoteUser)
+	token, err := s.repo.GetToken(ctx, req.InviteToken.Token)
 	if err != nil {
+		if errors.Is(err, invite.ErrTokenNotFound) {
+			return &invitepb.AcceptInviteResponse{
+				Status: status.NewPermissionDenied(ctx, errors.New("token not found"), "token not found"),
+			}, nil
+		}
 		return &invitepb.AcceptInviteResponse{
-			Status: status.NewInternal(ctx, err, "error accepting invite"),
+			Status: status.NewInternal(ctx, err, err.Error()),
+		}, nil
+	}
+
+	if !isTokenValid(token) {
+		return &invitepb.AcceptInviteResponse{
+			Status: status.NewPermissionDenied(ctx, errors.New("token is not valid"), "token is not valid"),
+		}, nil
+	}
+
+	if err := s.repo.AddRemoteUser(ctx, token.GetUserId(), req.GetRemoteUser()); err != nil {
+		if errors.Is(err, invite.ErrUserAlreadyAccepted) {
+			return &invitepb.AcceptInviteResponse{
+				Status: status.NewAlreadyExists(ctx, err, err.Error()),
+			}, nil
+		}
+		return &invitepb.AcceptInviteResponse{
+			Status: status.NewInternal(ctx, err, err.Error()),
 		}, nil
 	}
 
@@ -140,8 +218,13 @@ func (s *service) AcceptInvite(ctx context.Context, req *invitepb.AcceptInviteRe
 	}, nil
 }
 
+func isTokenValid(token *invitepb.InviteToken) bool {
+	return time.Now().Unix() < int64(token.Expiration.Seconds)
+}
+
 func (s *service) GetAcceptedUser(ctx context.Context, req *invitepb.GetAcceptedUserRequest) (*invitepb.GetAcceptedUserResponse, error) {
-	remoteUser, err := s.im.GetAcceptedUser(ctx, req.RemoteUserId)
+	user := ctxpkg.ContextMustGetUser(ctx)
+	remoteUser, err := s.repo.GetRemoteUser(ctx, user.GetId(), req.GetRemoteUserId())
 	if err != nil {
 		return &invitepb.GetAcceptedUserResponse{
 			Status: status.NewInternal(ctx, err, "error fetching remote user details"),
@@ -155,7 +238,8 @@ func (s *service) GetAcceptedUser(ctx context.Context, req *invitepb.GetAccepted
 }
 
 func (s *service) FindAcceptedUsers(ctx context.Context, req *invitepb.FindAcceptedUsersRequest) (*invitepb.FindAcceptedUsersResponse, error) {
-	acceptedUsers, err := s.im.FindAcceptedUsers(ctx, req.Filter)
+	user := ctxpkg.ContextMustGetUser(ctx)
+	acceptedUsers, err := s.repo.FindRemoteUsers(ctx, user.GetId(), req.GetFilter())
 	if err != nil {
 		return &invitepb.FindAcceptedUsersResponse{
 			Status: status.NewInternal(ctx, err, "error finding remote users: "+err.Error()),
