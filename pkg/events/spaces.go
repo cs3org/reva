@@ -20,6 +20,7 @@ package events
 
 import (
 	"encoding/json"
+	"time"
 
 	group "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -142,6 +143,24 @@ type SpaceUpdated struct {
 // Unmarshal to fulfill umarshaller interface
 func (SpaceUpdated) Unmarshal(v []byte) (interface{}, error) {
 	e := SpaceUpdated{}
+	err := json.Unmarshal(v, &e)
+	return e, err
+}
+
+// SpaceMembershipExpired is emitted when a space membership expires
+type SpaceMembershipExpired struct {
+	SpaceOwner *user.UserId
+	SpaceID    *provider.StorageSpaceId
+	SpaceName  string
+	ExpiredAt  time.Time
+	// split the protobuf Grantee oneof so we can use stdlib encoding/json
+	GranteeUserID  *user.UserId
+	GranteeGroupID *group.GroupId
+}
+
+// Unmarshal to fulfill umarshaller interface
+func (SpaceMembershipExpired) Unmarshal(v []byte) (interface{}, error) {
+	e := ShareExpired{}
 	err := json.Unmarshal(v, &e)
 	return e, err
 }
