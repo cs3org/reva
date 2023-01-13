@@ -19,6 +19,7 @@
 package local
 
 import (
+	"github.com/cs3org/reva/v2/pkg/events"
 	"github.com/cs3org/reva/v2/pkg/storage"
 	"github.com/cs3org/reva/v2/pkg/storage/fs/registry"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/localfs"
@@ -48,7 +49,7 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 
 // New returns an implementation to of the storage.FS interface that talks to
 // a local filesystem with user homes disabled.
-func New(m map[string]interface{}) (storage.FS, error) {
+func New(m map[string]interface{}, _ events.Stream) (storage.FS, error) {
 	c, err := parseConfig(m)
 	if err != nil {
 		return nil, err

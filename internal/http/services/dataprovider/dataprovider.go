@@ -81,12 +81,7 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 
 	conf.init()
 
-	fs, err := getFS(conf)
-	if err != nil {
-		return nil, err
-	}
-
-	var publisher events.Publisher
+	var evstream events.Stream
 
 	if conf.NatsAddress == "" || conf.NatsClusterID == "" {
 		log.Warn().Msg("missing or incomplete nats configuration. Events will not be published.")
@@ -114,13 +109,20 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 				RootCAs:            rootCAPool,
 			}
 		}
-		publisher, err = stream.Nats(natsjs.TLSConfig(tlsConf), natsjs.Address(conf.NatsAddress), natsjs.ClusterID(conf.NatsClusterID))
+		s, err := stream.Nats(natsjs.TLSConfig(tlsConf), natsjs.Address(conf.NatsAddress), natsjs.ClusterID(conf.NatsClusterID))
 		if err != nil {
 			return nil, err
 		}
+
+		evstream = s
 	}
 
-	dataTXs, err := getDataTXs(conf, fs, publisher)
+	fs, err := getFS(conf, evstream)
+	if err != nil {
+		return nil, err
+	}
+
+	dataTXs, err := getDataTXs(conf, fs, evstream)
 	if err != nil {
 		return nil, err
 	}
@@ -135,9 +137,9 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 	return s, err
 }
 
-func getFS(c *config) (storage.FS, error) {
+func getFS(c *config, stream events.Stream) (storage.FS, error) {
 	if f, ok := registry.NewFuncs[c.Driver]; ok {
-		return f(c.Drivers[c.Driver])
+		return f(c.Drivers[c.Driver], stream)
 	}
 	return nil, fmt.Errorf("driver not found: %s", c.Driver)
 }

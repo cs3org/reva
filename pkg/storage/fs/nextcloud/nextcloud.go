@@ -32,6 +32,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
+	"github.com/cs3org/reva/v2/pkg/events"
 	"github.com/cs3org/reva/v2/pkg/storage"
 	"github.com/cs3org/reva/v2/pkg/storage/fs/registry"
 	"github.com/mitchellh/mapstructure"
@@ -68,7 +69,7 @@ func parseConfig(m map[string]interface{}) (*StorageDriverConfig, error) {
 
 // New returns an implementation to of the storage.FS interface that talks to
 // a Nextcloud instance over http.
-func New(m map[string]interface{}) (storage.FS, error) {
+func New(m map[string]interface{}, _ events.Stream) (storage.FS, error) {
 	conf, err := parseConfig(m)
 	if err != nil {
 		return nil, err

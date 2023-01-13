@@ -19,6 +19,7 @@
 package eoshome
 
 import (
+	"github.com/cs3org/reva/v2/pkg/events"
 	"github.com/cs3org/reva/v2/pkg/storage"
 	"github.com/cs3org/reva/v2/pkg/storage/fs/registry"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/eosfs"
@@ -46,7 +47,7 @@ func parseConfig(m map[string]interface{}) (*eosfs.Config, error) {
 }
 
 // New returns a new implementation of the storage.FS interface that connects to EOS.
-func New(m map[string]interface{}) (storage.FS, error) {
+func New(m map[string]interface{}, _ events.Stream) (storage.FS, error) {
 	c, err := parseConfig(m)
 	if err != nil {
 		return nil, err

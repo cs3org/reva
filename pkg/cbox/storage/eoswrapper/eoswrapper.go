@@ -30,6 +30,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
+	"github.com/cs3org/reva/v2/pkg/events"
 	"github.com/cs3org/reva/v2/pkg/storage"
 	"github.com/cs3org/reva/v2/pkg/storage/fs/registry"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/eosfs"
@@ -85,7 +86,7 @@ func parseConfig(m map[string]interface{}) (*eosfs.Config, string, error) {
 
 // New returns an implementation of the storage.FS interface that forms a wrapper
 // around separate connections to EOS.
-func New(m map[string]interface{}) (storage.FS, error) {
+func New(m map[string]interface{}, _ events.Stream) (storage.FS, error) {
 	c, t, err := parseConfig(m)
 	if err != nil {
 		return nil, err

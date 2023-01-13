@@ -53,7 +53,7 @@ var _ = Describe("Ocis", func() {
 
 	Describe("New", func() {
 		It("returns a new instance", func() {
-			_, err := ocis.New(options)
+			_, err := ocis.New(options, nil)
 			Expect(err).ToNot(HaveOccurred())
 		})
 	})

@@ -28,6 +28,7 @@ import (
 	storagep "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v2/pkg/auth/scope"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
+	"github.com/cs3org/reva/v2/pkg/events"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v2/pkg/storage"
 	"github.com/cs3org/reva/v2/pkg/storage/fs/nextcloud"
@@ -55,7 +56,7 @@ func ref(provider string, path string) *storagep.Reference {
 
 func createFS(provider string, revads map[string]*Revad) (storage.FS, error) {
 	conf := make(map[string]interface{})
-	var f func(map[string]interface{}) (storage.FS, error)
+	var f func(map[string]interface{}, events.Stream) (storage.FS, error)
 	switch provider {
 	case "ocis":
 		conf["root"] = revads["storage"].StorageRoot
@@ -66,7 +67,7 @@ func createFS(provider string, revads map[string]*Revad) (storage.FS, error) {
 		conf["mock_http"] = true
 		f = nextcloud.New
 	}
-	return f(conf)
+	return f(conf, nil)
 }
 
 // This test suite tests the gprc storageprovider interface using different

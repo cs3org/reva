@@ -35,6 +35,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
+	"github.com/cs3org/reva/v2/pkg/events"
 	"github.com/cs3org/reva/v2/pkg/storage"
 	"github.com/cs3org/reva/v2/pkg/storage/fs/registry"
 	"github.com/mitchellh/mapstructure"
@@ -64,7 +65,7 @@ func init() {
 
 // New returns an implementation to of the storage.FS interface that talk to
 // a ceph filesystem.
-func New(m map[string]interface{}) (fs storage.FS, err error) {
+func New(m map[string]interface{}, _ events.Stream) (fs storage.FS, err error) {
 	c := &Options{}
 	if err = mapstructure.Decode(m, c); err != nil {
 		return nil, errors.Wrap(err, "error decoding conf")

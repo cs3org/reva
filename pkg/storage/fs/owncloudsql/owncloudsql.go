@@ -44,6 +44,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
+	"github.com/cs3org/reva/v2/pkg/events"
 	"github.com/cs3org/reva/v2/pkg/logger"
 	"github.com/cs3org/reva/v2/pkg/mime"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
@@ -150,7 +151,7 @@ func (c *config) init(m map[string]interface{}) {
 
 // New returns an implementation to of the storage.FS interface that talk to
 // a local filesystem.
-func New(m map[string]interface{}) (storage.FS, error) {
+func New(m map[string]interface{}, _ events.Stream) (storage.FS, error) {
 	c, err := parseConfig(m)
 	if err != nil {
 		return nil, err
