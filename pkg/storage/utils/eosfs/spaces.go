@@ -331,7 +331,7 @@ func (fs *eosfs) CreateStorageSpace(ctx context.Context, req *provider.CreateSto
 			return nil, err
 		}
 
-		err = fs.c.CreateDir(ctx, auth, fn)
+		err = fs.c.CreateDir(ctx, rootAuth, fn)
 		if err != nil {
 			return nil, err
 		}
