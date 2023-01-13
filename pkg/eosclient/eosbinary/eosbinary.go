@@ -1129,6 +1129,10 @@ func (c *Client) mapToFileInfo(ctx context.Context, kv, attrs map[string]string,
 	if err != nil {
 		return nil, err
 	}
+	pid, err := strconv.ParseUint(kv["pid"], 10, 64)
+	if err != nil {
+		return nil, err
+	}
 
 	var treeSize uint64
 	// treeSize is only for containers, so we check
@@ -1227,6 +1231,7 @@ func (c *Client) mapToFileInfo(ctx context.Context, kv, attrs map[string]string,
 		File:       kv["file"],
 		Inode:      inode,
 		FID:        fid,
+		PID:        pid,
 		UID:        uid,
 		GID:        gid,
 		ETag:       kv["etag"],
