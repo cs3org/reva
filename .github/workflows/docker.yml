@@ -5,7 +5,7 @@ on:
       file:
         required: true
         type: string
-      tag:
+      tags:
         type: string
       load:
         type: boolean
@@ -26,17 +26,17 @@ jobs:
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-      - name: Build ${{ (inputs.push && 'and push') || '' }} ${{ inputs.tag }} Docker image
+      - name: Build ${{ (inputs.push && 'and push') || '' }} ${{ inputs.tags }} Docker image
         uses: docker/build-push-action@v3
         with:
           context: .
           file: ${{ inputs.file }}
-          tags: ${{ (inputs.push && format('{0}/', secrets.DOCKERHUB_ORGANIZATION)) || '' }}${{ inputs.tag }}
+          tags: ${{ inputs.tags }}
           load: ${{ inputs.load }}
           push: ${{ inputs.push }}
-      - name: Upload ${{ inputs.tag }} Docker image to artifacts
+      - name: Upload ${{ inputs.tags }} Docker image to artifacts
         uses: ishworkh/docker-image-artifact-upload@v1
         if: ${{ inputs.load }}
         with:
-          image: ${{ inputs.tag }}
+          image: ${{ inputs.tags }}
           retention_days: '1'

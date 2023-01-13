@@ -38,16 +38,16 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        image: [reva, revad-eos, revad-ceph]
+        file: [docker/Dockerfile.reva, docker/Dockerfile.revad-eos, docker/Dockerfile.revad-ceph]
     uses: ./.github/workflows/docker.yml
     with:
-      file: docker/Dockerfile.${{ matrix.image }}
+      file: ${{ matrix.file }}
   docker-revad:
-    name: docker (revad)
+    name: docker (docker/Dockerfile.revad)
     uses: ./.github/workflows/docker.yml
     with:
       file: docker/Dockerfile.revad
-      tag: revad:test
+      tags: revad:test
       load: true
   litmus:
     needs: docker-revad

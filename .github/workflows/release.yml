@@ -26,17 +26,17 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - image: reva
-            tag: reva:${{ github.ref_name }}
-          - image: revad
-            tag: revad:${{ github.ref_name }}
-          - image: revad-eos
-            tag: revad:${{ github.ref_name }}-eos
-          - image: revad-ceph
-            tag: revad:${{ github.ref_name }}-ceph
+          - file: docker/Dockerfile.reva
+            tags: ${{ vars.DOCKERHUB_ORGANIZATION }}/reva:${{ github.ref_name }}
+          - file: docker/Dockerfile.revad
+            tags: ${{ vars.DOCKERHUB_ORGANIZATION }}/revad:${{ github.ref_name }},${{ vars.DOCKERHUB_ORGANIZATION }}/revad:latest
+          - file: docker/Dockerfile.revad-eos
+            tags: ${{ vars.DOCKERHUB_ORGANIZATION }}/revad:${{ github.ref_name }}-eos
+          - file: docker/Dockerfile.revad-ceph
+            tags: ${{ vars.DOCKERHUB_ORGANIZATION }}/revad:${{ github.ref_name }}-ceph
     uses: ./.github/workflows/docker.yml
     secrets: inherit
     with:
-      file: docker/Dockerfile.${{ matrix.image }}
-      tag: ${{ matrix.tag }}
+      file: ${{ matrix.file }}
+      tags: ${{ matrix.tags }}
       push: true
