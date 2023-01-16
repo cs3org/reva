@@ -22,9 +22,11 @@ import (
 	"context"
 	"time"
 
+	gatewayv1beta1 "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
+	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/ocm/client"
@@ -32,6 +34,8 @@ import (
 	"github.com/cs3org/reva/pkg/ocm/invite/repository/registry"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
+	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
@@ -47,6 +51,8 @@ type config struct {
 	TokenExpiration   string                            `mapstructure:"token_expiration"`
 	OCMClientTimeout  int                               `mapstructure:"ocm_timeout"`
 	OCMClientInsecure bool                              `mapstructure:"ocm_insecure"`
+	GatewaySVC        string                            `mapstructure:"gateway_svc"`
+	MachineSecret     string                            `mapstructure:"machine_secret"`
 
 	tokenExpiration time.Duration
 }
@@ -70,6 +76,8 @@ func (c *config) init() error {
 		return err
 	}
 	c.tokenExpiration = p
+
+	c.GatewaySVC = sharedconf.GetGatewaySVC(c.GatewaySVC)
 
 	return nil
 }
@@ -210,6 +218,13 @@ func (s *service) AcceptInvite(ctx context.Context, req *invitepb.AcceptInviteRe
 		}, nil
 	}
 
+	initiator, err := s.getUserInfo(ctx, token.UserId)
+	if err != nil {
+		return &invitepb.AcceptInviteResponse{
+			Status: status.NewInternal(ctx, err, err.Error()),
+		}, nil
+	}
+
 	if err := s.repo.AddRemoteUser(ctx, token.GetUserId(), req.GetRemoteUser()); err != nil {
 		if errors.Is(err, invite.ErrUserAlreadyAccepted) {
 			return &invitepb.AcceptInviteResponse{
@@ -222,8 +237,31 @@ func (s *service) AcceptInvite(ctx context.Context, req *invitepb.AcceptInviteRe
 	}
 
 	return &invitepb.AcceptInviteResponse{
-		Status: status.NewOK(ctx),
+		Status:      status.NewOK(ctx),
+		UserId:      initiator.GetId(),
+		Email:       initiator.Mail,
+		DisplayName: initiator.DisplayName,
 	}, nil
+}
+
+func (s *service) getUserInfo(ctx context.Context, id *userpb.UserId) (*userpb.User, error) {
+	gw, err := pool.GetGatewayServiceClient(pool.Endpoint(s.conf.GatewaySVC))
+	if err != nil {
+		return nil, err
+	}
+	res, err := gw.Authenticate(ctx, &gatewayv1beta1.AuthenticateRequest{
+		Type:         "machine",
+		ClientId:     id.OpaqueId,
+		ClientSecret: s.conf.MachineSecret,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if res.Status.Code != rpcv1beta1.Code_CODE_OK {
+		return nil, errors.New(res.Status.Message)
+	}
+
+	return res.User, nil
 }
 
 func isTokenValid(token *invitepb.InviteToken) bool {
