@@ -22,7 +22,6 @@ import (
 	"context"
 	"time"
 
-	gatewayv1beta1 "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
@@ -52,7 +51,6 @@ type config struct {
 	OCMClientTimeout  int                               `mapstructure:"ocm_timeout"`
 	OCMClientInsecure bool                              `mapstructure:"ocm_insecure"`
 	GatewaySVC        string                            `mapstructure:"gateway_svc"`
-	MachineSecret     string                            `mapstructure:"machine_secret"`
 
 	tokenExpiration time.Duration
 }
@@ -249,10 +247,8 @@ func (s *service) getUserInfo(ctx context.Context, id *userpb.UserId) (*userpb.U
 	if err != nil {
 		return nil, err
 	}
-	res, err := gw.Authenticate(ctx, &gatewayv1beta1.AuthenticateRequest{
-		Type:         "machine",
-		ClientId:     id.OpaqueId,
-		ClientSecret: s.conf.MachineSecret,
+	res, err := gw.GetUser(ctx, &userpb.GetUserRequest{
+		UserId: id,
 	})
 	if err != nil {
 		return nil, err
