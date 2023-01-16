@@ -119,7 +119,7 @@ build-reva-docker: off
 
 .PHONY: test
 test: off
-	go test -race $$(go list ./... | grep -v /tests/integration)
+	go test $$([[ -z "${COVER_PROFILE}" ]] && echo "" || echo "-coverprofile=${COVER_PROFILE}") -race $$(go list ./... | grep -v /tests/integration)
 
 .PHONY: test-integration
 test-integration: build-revad
