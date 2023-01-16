@@ -131,7 +131,24 @@ func (h *invitesHandler) AcceptInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if err := json.NewEncoder(w).Encode(&User{
+		UserID: acceptInviteResponse.UserId.OpaqueId,
+		Email:  acceptInviteResponse.Email,
+		Name:   acceptInviteResponse.DisplayName,
+	}); err != nil {
+		reqres.WriteError(w, r, reqres.APIErrorServerError, "error encoding response", err)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	w.Header().Set("Content-Type", "application/json")
+
 	log.Info().Str("user", fmt.Sprintf("%s@%s", userObj.Id.OpaqueId, userObj.Id.Idp)).Str("token", req.Token).Msg("added to accepted users")
+}
+
+type User struct {
+	UserID string `json:"userID"`
+	Email  string `json:"email"`
+	Name   string `json:"name"`
 }
 
 func getAcceptInviteRequest(r *http.Request) (*AcceptInviteRequest, error) {
