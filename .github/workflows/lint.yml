@@ -5,7 +5,7 @@ on:
       - "go.mod"
       - "go.sum"
   push:
-    tags-ignore:
+    branches:
       - "*"
   workflow_dispatch:
 
