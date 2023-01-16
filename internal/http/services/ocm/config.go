@@ -75,15 +75,13 @@ func (h *configHandler) init(c *Config) {
 	}}
 }
 
-func (h *configHandler) Handler() http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		log := appctx.GetLogger(r.Context())
+func (h *configHandler) Send(w http.ResponseWriter, r *http.Request) {
+	log := appctx.GetLogger(r.Context())
 
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		indentedConf, _ := json.MarshalIndent(h.c, "", "   ")
-		if _, err := w.Write(indentedConf); err != nil {
-			log.Err(err).Msg("Error writing to ResponseWriter")
-		}
-	})
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	indentedConf, _ := json.MarshalIndent(h.c, "", "   ")
+	if _, err := w.Write(indentedConf); err != nil {
+		log.Err(err).Msg("Error writing to ResponseWriter")
+	}
 }
