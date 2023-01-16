@@ -22,6 +22,7 @@ import (
 	"context"
 	"time"
 
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
@@ -151,7 +152,7 @@ func (s *service) ForwardInvite(ctx context.Context, req *invitepb.ForwardInvite
 		return nil, err
 	}
 
-	_, err = s.ocmClient.InviteAccepted(ctx, ocmEndpoint, &client.InviteAcceptedRequest{
+	remoteUser, err := s.ocmClient.InviteAccepted(ctx, ocmEndpoint, &client.InviteAcceptedRequest{
 		Token:             req.InviteToken.GetToken(),
 		RecipientProvider: user.GetId().GetIdp(),
 		UserID:            user.GetId().GetOpaqueId(),
@@ -171,6 +172,13 @@ func (s *service) ForwardInvite(ctx context.Context, req *invitepb.ForwardInvite
 
 	return &invitepb.ForwardInviteResponse{
 		Status: status.NewOK(ctx),
+		UserId: &userpb.UserId{
+			Type:     userpb.UserType_USER_TYPE_PRIMARY,
+			Idp:      req.GetOriginSystemProvider().Domain,
+			OpaqueId: remoteUser.UserID,
+		},
+		Email:       remoteUser.Email,
+		DisplayName: remoteUser.Name,
 	}, nil
 }
 
