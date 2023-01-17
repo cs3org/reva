@@ -376,7 +376,7 @@ func (fs *eosfs) resolveSpace(ctx context.Context, ref *provider.Reference) (*pr
 
 	fid, err := strconv.ParseUint(spaceID, 10, 64)
 	if err != nil {
-		return nil, errors.Wrap(err, "eosfs: error parsing spacid string")
+		return nil, errors.Wrap(err, "eosfs: error parsing spaceid string")
 	}
 	auth, err := fs.getRootAuth(ctx)
 	if err != nil {
