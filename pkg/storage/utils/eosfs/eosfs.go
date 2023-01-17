@@ -397,6 +397,21 @@ func (fs *eosfs) resolveSpace(ctx context.Context, ref *provider.Reference) (*pr
 			OpaqueId: spaceID,
 		},
 		Owner: owner,
+		Root: &provider.ResourceId{
+			SpaceId:  spaceID,
+			OpaqueId: spaceID,
+		},
+		RootInfo: &provider.ResourceInfo{
+			Id: &provider.ResourceId{
+				SpaceId:  spaceID,
+				OpaqueId: spaceID,
+			},
+			Path:  info.File,
+			Name:  path.Base(info.File),
+			Owner: owner.Id,
+			Etag:  fmt.Sprintf("\"%s\"", strings.Trim(info.ETag, "\"")),
+			Size:  info.TreeSize,
+		},
 	}
 	err = fs.spacesCache.Set(spaceID, s)
 	if err != nil {
