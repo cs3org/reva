@@ -176,13 +176,32 @@ func (s *service) ForwardInvite(ctx context.Context, req *invitepb.ForwardInvite
 		}, nil
 	}
 
+	// create a link between the user that accepted the share (in ctx)
+	// and the remote one (the initiator), so at the end of the invitation workflow they
+	// know each other
+
+	remoteUserId := &userpb.UserId{
+		Type:     userpb.UserType_USER_TYPE_PRIMARY,
+		Idp:      req.GetOriginSystemProvider().Domain,
+		OpaqueId: remoteUser.UserID,
+	}
+
+	if err := s.repo.AddRemoteUser(ctx, user.Id, &userpb.User{
+		Id:          remoteUserId,
+		Mail:        remoteUser.Email,
+		DisplayName: remoteUser.Name,
+	}); err != nil {
+		if !errors.Is(err, invite.ErrUserAlreadyAccepted) {
+			// skip error if user was already accepted
+			return &invitepb.ForwardInviteResponse{
+				Status: status.NewInternal(ctx, err, err.Error()),
+			}, nil
+		}
+	}
+
 	return &invitepb.ForwardInviteResponse{
-		Status: status.NewOK(ctx),
-		UserId: &userpb.UserId{
-			Type:     userpb.UserType_USER_TYPE_PRIMARY,
-			Idp:      req.GetOriginSystemProvider().Domain,
-			OpaqueId: remoteUser.UserID,
-		},
+		Status:      status.NewOK(ctx),
+		UserId:      remoteUserId,
 		Email:       remoteUser.Email,
 		DisplayName: remoteUser.Name,
 	}, nil
