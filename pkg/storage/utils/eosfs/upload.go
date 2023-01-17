@@ -27,6 +27,7 @@ import (
 	"strings"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/eosclient"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/storage"
@@ -98,6 +99,9 @@ func (fs *eosfs) Upload(ctx context.Context, uploadRef *provider.Reference, r io
 	if err != nil {
 		return provider.ResourceInfo{}, err
 	}
+
+	u, _ := ctxpkg.ContextGetUser(ctx)
+	uff(ri.Owner, u.Id, &ref) // call back to let them know the upload has finished
 
 	return *ri, nil
 }
