@@ -28,7 +28,7 @@ import (
 )
 
 // CreateToken creates a InviteToken object for the userID indicated by userID.
-func CreateToken(expiration time.Duration, userID *userpb.UserId) *invitepb.InviteToken {
+func CreateToken(expiration time.Duration, userID *userpb.UserId, description string) *invitepb.InviteToken {
 	tokenID := uuid.New().String()
 	now := time.Now()
 	expirationTime := now.Add(expiration)
@@ -40,5 +40,6 @@ func CreateToken(expiration time.Duration, userID *userpb.UserId) *invitepb.Invi
 			Seconds: uint64(expirationTime.Unix()),
 			Nanos:   0,
 		},
+		Description: description,
 	}
 }

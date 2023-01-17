@@ -60,7 +60,9 @@ func (h *TokenHandler) Init(c *config) error {
 func (h *TokenHandler) Generate(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	token, err := h.gatewayClient.GenerateInviteToken(ctx, &invitepb.GenerateInviteTokenRequest{})
+	token, err := h.gatewayClient.GenerateInviteToken(ctx, &invitepb.GenerateInviteTokenRequest{
+		Description: r.URL.Query().Get("description"),
+	})
 	if err != nil {
 		reqres.WriteError(w, r, reqres.APIErrorServerError, "error generating token", err)
 		return

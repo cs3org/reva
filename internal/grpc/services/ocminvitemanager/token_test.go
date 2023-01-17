@@ -41,7 +41,7 @@ func TestCreateToken(t *testing.T) {
 		Opaque:       nil,
 	}
 
-	token := CreateToken(24*time.Hour, user.GetId())
+	token := CreateToken(24*time.Hour, user.GetId(), "")
 	if token == nil {
 		t.Errorf("CreateToken() got = %v", token)
 	}
@@ -71,7 +71,7 @@ func TestCreateTokenCollision(t *testing.T) {
 	}
 
 	for i := 0; i < 1000000; i++ {
-		token := CreateToken(24*time.Hour, user.GetId())
+		token := CreateToken(24*time.Hour, user.GetId(), "")
 
 		if token == nil {
 			t.Errorf("CreateToken() token = %v", token)

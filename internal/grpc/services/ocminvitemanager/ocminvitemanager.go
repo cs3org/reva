@@ -136,7 +136,7 @@ func (s *service) UnprotectedEndpoints() []string {
 
 func (s *service) GenerateInviteToken(ctx context.Context, req *invitepb.GenerateInviteTokenRequest) (*invitepb.GenerateInviteTokenResponse, error) {
 	user := ctxpkg.ContextMustGetUser(ctx)
-	token := CreateToken(s.conf.tokenExpiration, user.GetId())
+	token := CreateToken(s.conf.tokenExpiration, user.GetId(), req.Description)
 
 	if err := s.repo.AddToken(ctx, token); err != nil {
 		return &invitepb.GenerateInviteTokenResponse{
