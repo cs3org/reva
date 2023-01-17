@@ -1628,26 +1628,33 @@ func (fs *eosfs) convertToRevision(ctx context.Context, eosFileInfo *eosclient.F
 }
 
 func (fs *eosfs) convertToResourceInfo(ctx context.Context, eosFileInfo *eosclient.FileInfo, spaceID string, returnBasename bool) (*provider.ResourceInfo, error) {
+	fn := ""
+	if spaceID != "" {
+		space, err := fs.resolveSpace(ctx, &provider.Reference{
+			ResourceId: &provider.ResourceId{SpaceId: spaceID},
+		})
+		if err != nil {
+			return nil, err
+		}
+		trim := space.RootInfo.Path
+
+		fn = eosFileInfo.File
+		switch {
+		case strconv.FormatUint(eosFileInfo.Inode, 10) == spaceID:
+			// this is the space root. Do not mess with its path since it's referencing itself
+		case returnBasename:
+			fn = path.Base(fn)
+		}
+
+		fn = strings.TrimPrefix(fn, trim)
+		fn = filepath.Join(fs.conf.MountPath, fn)
+	}
+
 	owner, err := fs.getUserIDGateway(ctx, strconv.FormatUint(eosFileInfo.UID, 10))
 	if err != nil {
 		sublog := appctx.GetLogger(ctx).With().Logger()
 		sublog.Warn().Uint64("uid", eosFileInfo.UID).Msg("could not lookup userid, leaving empty")
 	}
-
-	fn := eosFileInfo.File
-	switch {
-	case strconv.FormatUint(eosFileInfo.Inode, 10) == spaceID:
-		// this is the space root. Do not mess with its path since it's referencing itself
-	case returnBasename:
-		fn = path.Base(fn)
-	}
-	// fn, err := fs.unwrap(ctx, eosFileInfo.File, &eosFileInfo.UID)
-	// if err != nil {
-	// 	return nil, err
-	// }
-
-	fn = filepath.Join(fs.conf.MountPath, fn)
-
 	size := eosFileInfo.Size
 	if eosFileInfo.IsDir {
 		size = eosFileInfo.TreeSize
@@ -1677,7 +1684,6 @@ func (fs *eosfs) convertToResourceInfo(ctx context.Context, eosFileInfo *eosclie
 			SpaceId:  spaceID,
 			OpaqueId: fmt.Sprintf("%d", eosFileInfo.Inode),
 		},
-		Path:     fn,
 		Name:     path.Base(fn),
 		Owner:    owner,
 		Etag:     fmt.Sprintf("\"%s\"", strings.Trim(eosFileInfo.ETag, "\"")),
@@ -1705,6 +1711,9 @@ func (fs *eosfs) convertToResourceInfo(ctx context.Context, eosFileInfo *eosclie
 		ArbitraryMetadata: &provider.ArbitraryMetadata{
 			Metadata: filteredAttrs,
 		},
+	}
+	if fn != "" {
+		info.Path = fn
 	}
 
 	if eosFileInfo.IsDir {
