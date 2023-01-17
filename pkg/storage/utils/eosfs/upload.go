@@ -20,21 +20,27 @@ package eosfs
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"os"
-	"path"
 	"strconv"
+	"strings"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v2/pkg/eosclient"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/storage"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/chunking"
+	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/pkg/errors"
 )
 
-func (fs *eosfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser, uff storage.UploadFinishedFunc) (provider.ResourceInfo, error) {
-	resPath, err := fs.resolve(ctx, ref)
+func (fs *eosfs) Upload(ctx context.Context, uploadRef *provider.Reference, r io.ReadCloser, uff storage.UploadFinishedFunc) (provider.ResourceInfo, error) {
+	ref, err := storagespace.ParseReference(strings.TrimPrefix(uploadRef.Path, "/"))
+	if err != nil {
+		return provider.ResourceInfo{}, errors.Wrap(err, "eos: error resolving reference")
+	}
+	resPath, err := fs.resolve(ctx, &ref)
 	if err != nil {
 		return provider.ResourceInfo{}, errors.Wrap(err, "eos: error resolving reference")
 	}
@@ -64,7 +70,11 @@ func (fs *eosfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadC
 	if err != nil {
 		return provider.ResourceInfo{}, err
 	}
-	parentInfo, err := fs.c.GetFileInfoByPath(ctx, rootAuth, path.Dir(resPath))
+	fid, err := strconv.ParseUint(ref.GetResourceId().GetOpaqueId(), 10, 64)
+	if err != nil {
+		return provider.ResourceInfo{}, fmt.Errorf("error converting string to int for eos fileid: %s", ref.GetResourceId().GetOpaqueId())
+	}
+	parentInfo, err := fs.c.GetFileInfoByInode(ctx, rootAuth, fid)
 	if err != nil {
 		return provider.ResourceInfo{}, err
 	}
@@ -93,7 +103,7 @@ func (fs *eosfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadC
 }
 
 func (fs *eosfs) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64, metadata map[string]string) (map[string]string, error) {
-	p, err := fs.resolve(ctx, ref)
+	p, err := storagespace.FormatReference(ref)
 	if err != nil {
 		return nil, err
 	}
