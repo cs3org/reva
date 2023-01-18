@@ -170,6 +170,18 @@ func (s *service) ForwardInvite(ctx context.Context, req *invitepb.ForwardInvite
 			return &invitepb.ForwardInviteResponse{
 				Status: status.NewInvalid(ctx, "token not valid"),
 			}, nil
+		} else if errors.Is(err, client.ErrTokenNotFound) {
+			return &invitepb.ForwardInviteResponse{
+				Status: status.NewNotFound(ctx, "token not found"),
+			}, nil
+		} else if errors.Is(err, client.ErrUserAlreadyAccepted) {
+			return &invitepb.ForwardInviteResponse{
+				Status: status.NewAlreadyExists(ctx, err, err.Error()),
+			}, nil
+		} else if errors.Is(err, client.ErrServiceNotTrusted) {
+			return &invitepb.ForwardInviteResponse{
+				Status: status.NewPermissionDenied(ctx, err, err.Error()),
+			}, nil
 		}
 		return &invitepb.ForwardInviteResponse{
 			Status: status.NewInternal(ctx, err, err.Error()),
@@ -213,7 +225,7 @@ func getOCMEndpoint(originProvider *ocmprovider.ProviderInfo) (string, error) {
 			return s.Endpoint.Path, nil
 		}
 	}
-	return "", errors.New("json: ocm endpoint not specified for mesh provider")
+	return "", errors.New("ocm endpoint not specified for mesh provider")
 }
 
 func (s *service) AcceptInvite(ctx context.Context, req *invitepb.AcceptInviteRequest) (*invitepb.AcceptInviteResponse, error) {
@@ -221,7 +233,7 @@ func (s *service) AcceptInvite(ctx context.Context, req *invitepb.AcceptInviteRe
 	if err != nil {
 		if errors.Is(err, invite.ErrTokenNotFound) {
 			return &invitepb.AcceptInviteResponse{
-				Status: status.NewPermissionDenied(ctx, errors.New("token not found"), "token not found"),
+				Status: status.NewNotFound(ctx, "token not found"),
 			}, nil
 		}
 		return &invitepb.AcceptInviteResponse{
@@ -231,7 +243,7 @@ func (s *service) AcceptInvite(ctx context.Context, req *invitepb.AcceptInviteRe
 
 	if !isTokenValid(token) {
 		return &invitepb.AcceptInviteResponse{
-			Status: status.NewPermissionDenied(ctx, errors.New("token is not valid"), "token is not valid"),
+			Status: status.NewInvalid(ctx, "token is not valid"),
 		}, nil
 	}
 

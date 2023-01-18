@@ -31,7 +31,7 @@ import (
 )
 
 func init() {
-	global.Register("ocmd", New)
+	global.Register("ocm", New)
 }
 
 type Config struct {

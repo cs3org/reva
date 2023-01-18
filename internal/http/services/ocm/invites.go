@@ -127,8 +127,20 @@ func (h *invitesHandler) AcceptInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if acceptInviteResponse.Status.Code != rpc.Code_CODE_OK {
-		reqres.WriteError(w, r, reqres.APIErrorServerError, "grpc accept invite request failed", errors.New(acceptInviteResponse.Status.Message))
-		return
+		switch acceptInviteResponse.Status.Code {
+		case rpc.Code_CODE_NOT_FOUND:
+			reqres.WriteError(w, r, reqres.APIErrorNotFound, "token not found", errors.New(acceptInviteResponse.Status.Message))
+			return
+		case rpc.Code_CODE_INVALID_ARGUMENT:
+			reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, "token has expired", errors.New(acceptInviteResponse.Status.Message))
+			return
+		case rpc.Code_CODE_ALREADY_EXISTS:
+			reqres.WriteError(w, r, reqres.APIErrorAlreadyExist, "user already known", errors.New(acceptInviteResponse.Status.Message))
+			return
+		default:
+			reqres.WriteError(w, r, reqres.APIErrorServerError, "unexpected error: "+acceptInviteResponse.Status.Message, errors.New(acceptInviteResponse.Status.Message))
+			return
+		}
 	}
 
 	if err := json.NewEncoder(w).Encode(&User{
