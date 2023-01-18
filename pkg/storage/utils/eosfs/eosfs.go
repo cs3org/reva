@@ -449,30 +449,6 @@ func (fs *eosfs) GetPathByID(ctx context.Context, id *provider.ResourceId) (stri
 	if err != nil {
 		return "", errors.Wrap(err, "eosfs: no user in ctx")
 	}
-	if u.Id.Type == userpb.UserType_USER_TYPE_LIGHTWEIGHT || u.Id.Type == userpb.UserType_USER_TYPE_FEDERATED {
-		auth, err := fs.getRootAuth(ctx)
-		if err != nil {
-			return "", err
-		}
-		eosFileInfo, err := fs.c.GetFileInfoByInode(ctx, auth, fid)
-		if err != nil {
-			return "", errors.Wrap(err, "eosfs: error getting file info by inode")
-		}
-		if perm := fs.permissionSet(ctx, eosFileInfo, nil); perm.GetPath {
-			return fs.unwrap(ctx, eosFileInfo.File, nil)
-		}
-		return "", errtypes.PermissionDenied("eosfs: getting path for id not allowed")
-	}
-
-	auth, err := fs.getUserAuth(ctx, u, "")
-	if err != nil {
-		return "", err
-	}
-
-	eosFileInfo, err := fs.c.GetFileInfoByInode(ctx, auth, fid)
-	if err != nil {
-		return "", errors.Wrap(err, "eosfs: error getting file info by inode")
-	}
 
 	space, err := fs.resolveSpace(ctx, &provider.Reference{
 		ResourceId: &provider.ResourceId{SpaceId: id.GetSpaceId()},
@@ -482,7 +458,25 @@ func (fs *eosfs) GetPathByID(ctx context.Context, id *provider.ResourceId) (stri
 	}
 	trim := space.RootInfo.Path
 
-	return path.Join(fs.conf.MountPath, strings.TrimPrefix(eosFileInfo.File, trim)), nil
+	var auth eosclient.Authorization
+	if u.Id.Type == userpb.UserType_USER_TYPE_LIGHTWEIGHT || u.Id.Type == userpb.UserType_USER_TYPE_FEDERATED {
+		auth, err = fs.getRootAuth(ctx)
+	} else {
+		auth, err = fs.getUserAuth(ctx, u, "")
+	}
+	if err != nil {
+		return "", err
+	}
+
+	eosFileInfo, err := fs.c.GetFileInfoByInode(ctx, auth, fid)
+	if err != nil {
+		return "", errors.Wrap(err, "eosfs: error getting file info by inode")
+	}
+
+	if perm := fs.permissionSet(ctx, eosFileInfo, nil); perm.GetPath {
+		return path.Join(fs.conf.MountPath, strings.TrimPrefix(eosFileInfo.File, trim)), nil
+	}
+	return "", errtypes.PermissionDenied("eosfs: getting path for id not allowed")
 }
 
 func (fs *eosfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Reference, md *provider.ArbitraryMetadata) error {
