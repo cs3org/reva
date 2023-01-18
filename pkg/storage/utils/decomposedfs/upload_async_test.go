@@ -105,7 +105,7 @@ var _ = Describe("Async file uploads", Ordered, func() {
 		// setup fs
 		pub, con = make(chan interface{}), make(chan interface{})
 		tree := tree.New(o.Root, true, true, lu, bs)
-		fs, err = New(o, lu, permissions, tree, cs3permissionsclient, stream.Chan{pub, con})
+		fs, err = New(o, lu, NewPermissions(permissions, cs3permissionsclient), tree, stream.Chan{pub, con})
 		Expect(err).ToNot(HaveOccurred())
 
 		resp, err := fs.CreateStorageSpace(ctx, &provider.CreateStorageSpaceRequest{Owner: user, Type: "personal"})

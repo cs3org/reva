@@ -30,7 +30,6 @@ import (
 	"time"
 
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-	cs3permissions "github.com/cs3org/go-cs3apis/cs3/permissions/v1beta1"
 	v1beta11 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
@@ -89,7 +88,7 @@ func (fs *Decomposedfs) CreateStorageSpace(ctx context.Context, req *provider.Cr
 		return nil, err
 	case root.Exists:
 		return nil, errtypes.AlreadyExists("decomposedfs: spaces: space already exists")
-	case !fs.canCreateSpace(ctx, spaceID):
+	case !fs.p.CreateSpace(ctx, spaceID):
 		return nil, errtypes.PermissionDenied(spaceID)
 	}
 
@@ -180,96 +179,6 @@ func (fs *Decomposedfs) CreateStorageSpace(ctx context.Context, req *provider.Cr
 		StorageSpace: space,
 	}
 	return resp, nil
-}
-
-func (fs *Decomposedfs) canListAllSpaces(ctx context.Context) bool {
-	user := ctxpkg.ContextMustGetUser(ctx)
-	checkRes, err := fs.permissionsClient.CheckPermission(ctx, &cs3permissions.CheckPermissionRequest{
-		Permission: "list-all-spaces",
-		SubjectRef: &cs3permissions.SubjectReference{
-			Spec: &cs3permissions.SubjectReference_UserId{
-				UserId: user.Id,
-			},
-		},
-	})
-	if err != nil {
-		return false
-	}
-
-	return checkRes.Status.Code == v1beta11.Code_CODE_OK
-}
-
-func (fs *Decomposedfs) checkSpacePermission(ctx context.Context, permission string) bool {
-	user := ctxpkg.ContextMustGetUser(ctx)
-	checkRes, err := fs.permissionsClient.CheckPermission(ctx, &cs3permissions.CheckPermissionRequest{
-		Permission: permission,
-		SubjectRef: &cs3permissions.SubjectReference{
-			Spec: &cs3permissions.SubjectReference_UserId{
-				UserId: user.Id,
-			},
-		},
-	})
-	if err != nil {
-		return false
-	}
-
-	return checkRes.Status.Code == v1beta11.Code_CODE_OK
-}
-
-func (fs *Decomposedfs) canDeleteAllSpaces(ctx context.Context) bool {
-	return fs.checkSpacePermission(ctx, "delete-all-spaces")
-}
-
-func (fs *Decomposedfs) canDeleteAllHomeSpaces(ctx context.Context) bool {
-	return fs.checkSpacePermission(ctx, "delete-all-home-spaces")
-}
-
-// returns true when the user in the context can create a space / resource with storageID and nodeID set to his user opaqueID
-func (fs *Decomposedfs) canCreateSpace(ctx context.Context, spaceID string) bool {
-	user := ctxpkg.ContextMustGetUser(ctx)
-	checkRes, err := fs.permissionsClient.CheckPermission(ctx, &cs3permissions.CheckPermissionRequest{
-		Permission: "create-space",
-		SubjectRef: &cs3permissions.SubjectReference{
-			Spec: &cs3permissions.SubjectReference_UserId{
-				UserId: user.Id,
-			},
-		},
-		Ref: &provider.Reference{
-			ResourceId: &provider.ResourceId{
-				StorageId: spaceID,
-				// OpaqueId is the same, no need to transfer it
-			},
-		},
-	})
-	if err != nil {
-		return false
-	}
-
-	return checkRes.Status.Code == v1beta11.Code_CODE_OK
-}
-
-// returns true when the user in the context can set a space quota
-func (fs *Decomposedfs) canSetSpaceQuota(ctx context.Context, spaceID string) bool {
-	user := ctxpkg.ContextMustGetUser(ctx)
-	checkRes, err := fs.permissionsClient.CheckPermission(ctx, &cs3permissions.CheckPermissionRequest{
-		Permission: "set-space-quota",
-		SubjectRef: &cs3permissions.SubjectReference{
-			Spec: &cs3permissions.SubjectReference_UserId{
-				UserId: user.Id,
-			},
-		},
-		Ref: &provider.Reference{
-			ResourceId: &provider.ResourceId{
-				StorageId: spaceID,
-				// OpaqueId is the same, no need to transfer it
-			},
-		},
-	})
-	if err != nil {
-		return false
-	}
-
-	return checkRes.Status.Code == v1beta11.Code_CODE_OK
 }
 
 // ReadSpaceAndNodeFromIndexLink reads a symlink and parses space and node id if the link has the correct format, eg:
@@ -492,7 +401,7 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 // MustCheckNodePermissions checks if permission checks are needed to be performed when user requests spaces
 func (fs *Decomposedfs) MustCheckNodePermissions(ctx context.Context, unrestricted bool) bool {
 	// canListAllSpaces indicates if the user has the permission from the global user role
-	canListAllSpaces := fs.canListAllSpaces(ctx)
+	canListAllSpaces := fs.p.ListAllSpaces(ctx)
 	// unrestricted is the param which indicates if the user wants to list all spaces or only the spaces he is part of
 	// if a user lists all spaces unrestricted and doesn't have the permissions from the role, we need to check
 	// the nodePermissions and this will return a spaces list where the user has access to
@@ -512,7 +421,7 @@ func (fs *Decomposedfs) CanListSpacesOfRequestedUser(ctx context.Context, reques
 		return true
 	case requestedUserID == authenticatedUserID:
 		return true
-	case fs.canListAllSpaces(ctx):
+	case fs.p.ListAllSpaces(ctx):
 		return true
 	}
 	return false
@@ -597,7 +506,7 @@ func (fs *Decomposedfs) UpdateStorageSpace(ctx context.Context, req *provider.Up
 		}
 	case mapHasKey(metadata, xattrs.QuotaAttr):
 		// this attribute needs a permission on the user role
-		if !fs.canSetSpaceQuota(ctx, spaceID) {
+		if !fs.p.SetSpaceQuota(ctx, spaceID) {
 			return &provider.UpdateStorageSpaceResponse{
 				Status: &v1beta11.Status{Code: v1beta11.Code_CODE_PERMISSION_DENIED, Message: errors.New("No permission to set space quota").Error()},
 			}, nil
@@ -662,11 +571,11 @@ func (fs *Decomposedfs) DeleteStorageSpace(ctx context.Context, req *provider.De
 	// - spaces of type personal can also be deleted by users with the "delete-all-home-spaces" permission
 	// - otherwise a space can be deleted by its manager (i.e. users have the "remove" grant)
 	switch {
-	case fs.canDeleteAllSpaces(ctx):
+	case fs.p.DeleteAllSpaces(ctx):
 		// We are allowed to delete any space, no further permission checks needed
 		break
 	case st == "personal":
-		if !fs.canDeleteAllHomeSpaces(ctx) {
+		if !fs.p.DeleteAllHomeSpaces(ctx) {
 			return errtypes.PermissionDenied(fmt.Sprintf("user is not allowed to delete home space %s", n.ID))
 		}
 	default:
