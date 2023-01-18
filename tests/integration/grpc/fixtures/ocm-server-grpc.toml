@@ -1,0 +1,41 @@
+[shared]
+gatewaysvc = "{{grpc_address}}"
+
+[grpc]
+address = "{{grpc_address}}"
+
+[grpc.services.gateway]
+authregistrysvc = "{{grpc_address}}"
+userprovidersvc = "{{grpc_address}}"
+ocminvitemanagersvc = "{{grpc_address}}"
+ocmproviderauthorizersvc = "{{grpc_address}}"
+
+[grpc.services.authregistry]
+driver = "static"
+
+[grpc.services.authregistry.drivers.static.rules]
+basic = "{{grpc_address}}"
+
+[grpc.services.ocminvitemanager]
+driver = "json"
+
+[grpc.services.ocminvitemanager.drivers.json]
+file = "{{invite_token_file}}"
+
+[grpc.services.ocmproviderauthorizer]
+driver = "json"
+
+[grpc.services.ocmproviderauthorizer.drivers.json]
+providers = "fixtures/ocm-providers.demo.json"
+
+[grpc.services.authprovider]
+auth_manager = "json"
+
+[grpc.services.authprovider.auth_managers.json]
+users = "fixtures/ocm-users.demo.json"
+
+[grpc.services.userprovider]
+driver = "json"
+
+[grpc.services.userprovider.drivers.json]
+users = "fixtures/ocm-users.demo.json"

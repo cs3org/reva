@@ -94,7 +94,8 @@ func startRevads(configs map[string]string, variables map[string]string) (map[st
 		if err != nil {
 			return nil, errors.Wrapf(err, "Could not create tmpdir")
 		}
-		newCfgPath := path.Join(tmpRoot, "config.toml")
+		newCfgPath := path.Join(tmpRoot, config)
+		fmt.Println(newCfgPath)
 		rawCfg, err := os.ReadFile(path.Join("fixtures", config))
 		if err != nil {
 			return nil, errors.Wrapf(err, "Could not read config file")
@@ -102,6 +103,9 @@ func startRevads(configs map[string]string, variables map[string]string) (map[st
 		cfg := string(rawCfg)
 		cfg = strings.ReplaceAll(cfg, "{{root}}", tmpRoot)
 		cfg = strings.ReplaceAll(cfg, "{{grpc_address}}", ownAddress)
+		if url, ok := addresses["gateway"]; ok {
+			cfg = strings.ReplaceAll(cfg, "{{gateway_address}}", url)
+		}
 		for v, value := range variables {
 			cfg = strings.ReplaceAll(cfg, "{{"+v+"}}", value)
 		}

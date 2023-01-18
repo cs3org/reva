@@ -21,6 +21,7 @@ package helpers
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"os"
@@ -52,6 +53,37 @@ func TempDir(name string) (string, error) {
 	}
 
 	return tmpRoot, nil
+}
+
+// TempFile creates a temporary file returning its path.
+// The file is filled with the provider r if not nil.
+func TempFile(r io.Reader) (string, error) {
+	dir, err := TempDir("")
+	if err != nil {
+		return "", err
+	}
+	f, err := os.CreateTemp(dir, "*")
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+
+	if r != nil {
+		if _, err := io.Copy(f, r); err != nil {
+			return "", err
+		}
+	}
+	return f.Name(), nil
+}
+
+// TempJsonFile creates a temporary file returning its path.
+// The file is filled with the object encoded in json.
+func TempJsonFile(c any) (string, error) {
+	data, err := json.Marshal(c)
+	if err != nil {
+		return "", err
+	}
+	return TempFile(bytes.NewBuffer(data))
 }
 
 // Upload can be used to initiate an upload and do the upload to a storage.FS in one step.

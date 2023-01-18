@@ -1,0 +1,14 @@
+[http]
+address = "{{grpc_address}}"
+
+[http.services.ocm]
+prefix = "ocm"
+gatewaysvc = "{{gateway_address}}"
+
+[http.middlewares.providerauthorizer]
+driver = "json"
+
+[http.middlewares.providerauthorizer.drivers.json]
+providers = "fixtures/providers.demo.json"
+
+[http.middlewares.cors]
