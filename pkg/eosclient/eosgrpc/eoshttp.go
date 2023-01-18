@@ -21,6 +21,7 @@ package eosgrpc
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"fmt"
 	"io"
 	"net/http"
@@ -143,19 +144,19 @@ func NewEOSHTTPClient(opt *HTTPOptions) (*EOSHTTPClient, error) {
 	}
 
 	opt.init()
-	//cert, err := tls.LoadX509KeyPair(opt.ClientCertFile, opt.ClientKeyFile)
-	//if err != nil {
-	//return nil, err
-	//}
+	cert, err := tls.LoadX509KeyPair(opt.ClientCertFile, opt.ClientKeyFile)
+	if err != nil {
+		return nil, err
+	}
 
 	// TODO: the error reporting of http.transport is insufficient
 	// we may want to check manually at least the existence of the certfiles
 	// The point is that also the error reporting of the context that calls this function
 	// is weak
 	t := &http.Transport{
-		//TLSClientConfig: &tls.Config{
-		//Certificates: []tls.Certificate{cert},
-		//},
+		TLSClientConfig: &tls.Config{
+			Certificates: []tls.Certificate{cert},
+		},
 		MaxIdleConns:        opt.MaxIdleConns,
 		MaxConnsPerHost:     opt.MaxConnsPerHost,
 		MaxIdleConnsPerHost: opt.MaxIdleConnsPerHost,
