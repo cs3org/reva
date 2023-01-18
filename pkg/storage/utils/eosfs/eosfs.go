@@ -474,11 +474,15 @@ func (fs *eosfs) GetPathByID(ctx context.Context, id *provider.ResourceId) (stri
 		return "", errors.Wrap(err, "eosfs: error getting file info by inode")
 	}
 
-	p, err := fs.unwrap(ctx, eosFileInfo.File, nil)
+	space, err := fs.resolveSpace(ctx, &provider.Reference{
+		ResourceId: &provider.ResourceId{SpaceId: id.GetSpaceId()},
+	})
 	if err != nil {
 		return "", err
 	}
-	return path.Join(fs.conf.MountPath, p), nil
+	trim := space.RootInfo.Path
+
+	return path.Join(fs.conf.MountPath, strings.TrimPrefix(eosFileInfo.File, trim)), nil
 }
 
 func (fs *eosfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Reference, md *provider.ArbitraryMetadata) error {
