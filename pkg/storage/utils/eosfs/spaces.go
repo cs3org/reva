@@ -107,7 +107,7 @@ func (fs *eosfs) ListStorageSpaces(ctx context.Context, filter []*provider.ListS
 		spaces = append(spaces, projectSpaces...)
 	}
 
-	//fs.cacheSpaces(ctx, u, spaceType, spaceID, spacePath, spaces)
+	fs.cacheSpaces(ctx, u, spaceType, spaceID, spacePath, spaces)
 	return spaces, nil
 }
 
