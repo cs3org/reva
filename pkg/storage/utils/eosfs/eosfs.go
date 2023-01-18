@@ -62,10 +62,6 @@ import (
 )
 
 const (
-	refTargetAttrKey = "reva.target"
-)
-
-const (
 	// SystemAttr is the system extended attribute.
 	SystemAttr eosclient.AttrType = iota
 	// UserAttr is the user extended attribute.
@@ -282,7 +278,7 @@ func getUser(ctx context.Context) (*userpb.User, error) {
 	return u, nil
 }
 
-func (fs *eosfs) unwrap(ctx context.Context, internal string, ownerUid *uint64) (string, error) {
+func (fs *eosfs) unwrap(ctx context.Context, internal string, ownerUID *uint64) (string, error) {
 	log := appctx.GetLogger(ctx)
 	ns, err := fs.getNsMatch(internal, []string{fs.conf.Namespace, fs.conf.ShadowNamespace})
 	if err != nil {
@@ -296,9 +292,9 @@ func (fs *eosfs) unwrap(ctx context.Context, internal string, ownerUid *uint64) 
 
 	trim := path.Join(ns, u.Username)
 
-	if !strings.HasPrefix(internal, trim) && ownerUid != nil {
+	if !strings.HasPrefix(internal, trim) && ownerUID != nil {
 		// ugh.. this looks like a share?
-		owner, err := fs.getUserGateway(ctx, strconv.Itoa(int(*ownerUid)))
+		owner, err := fs.getUserGateway(ctx, strconv.Itoa(int(*ownerUID)))
 		if err != nil {
 			return "", err
 		}
