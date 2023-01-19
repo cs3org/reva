@@ -26,6 +26,8 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/acl"
 )
 
+//go:generate make --no-print-directory -C ../.. mockery NAME=EOSClient
+
 // EOSClient is the interface which enables access to EOS instances through various interfaces.
 type EOSClient interface {
 	AddACL(ctx context.Context, auth, rootAuth Authorization, path string, position uint, a *acl.Entry) error
