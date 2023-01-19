@@ -75,15 +75,40 @@ type Revad struct {
 // `storage` and a `users` revad will make `storage_address` and
 // `users_address` available wit the dynamically assigned ports so that
 // the services can be made available to each other.
-func startRevads(configs map[string]string, variables map[string]string) (map[string]*Revad, error) {
+func startRevads(configs map[string]string, files map[string]string, variables map[string]string) (map[string]*Revad, error) {
 	mutex.Lock()
 	defer mutex.Unlock()
 
 	revads := map[string]*Revad{}
 	addresses := map[string]string{}
+	filesPath := map[string]string{}
 	for name := range configs {
 		addresses[name] = fmt.Sprintf("localhost:%d", port)
 		port++
+	}
+	for name, p := range files {
+		tmpRoot, err := helpers.TempDir("")
+		if err != nil {
+			return nil, errors.Wrapf(err, "cannot create tmpdir for")
+		}
+
+		rawFile, err := os.ReadFile(path.Join("fixtures", p))
+		if err != nil {
+			return nil, errors.Wrapf(err, "error reading file")
+		}
+		cfg := string(rawFile)
+		for v, value := range variables {
+			cfg = strings.ReplaceAll(cfg, "{{"+v+"}}", value)
+		}
+		for name, address := range addresses {
+			cfg = strings.ReplaceAll(cfg, "{{"+name+"_address}}", address)
+		}
+		newFilePath := path.Join(tmpRoot, p)
+		err = os.WriteFile(newFilePath, []byte(cfg), 0600)
+		if err != nil {
+			return nil, errors.Wrapf(err, "error writing file")
+		}
+		filesPath[name] = newFilePath
 	}
 
 	for name, config := range configs {
@@ -102,6 +127,9 @@ func startRevads(configs map[string]string, variables map[string]string) (map[st
 		}
 		cfg := string(rawCfg)
 		cfg = strings.ReplaceAll(cfg, "{{root}}", tmpRoot)
+		for name, path := range filesPath {
+			cfg = strings.ReplaceAll(cfg, "{{file_"+name+"}}", path)
+		}
 		cfg = strings.ReplaceAll(cfg, "{{grpc_address}}", ownAddress)
 		if url, ok := addresses["gateway"]; ok {
 			cfg = strings.ReplaceAll(cfg, "{{gateway_address}}", url)
