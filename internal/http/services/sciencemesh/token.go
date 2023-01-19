@@ -36,13 +36,13 @@ import (
 	"github.com/cs3org/reva/pkg/smtpclient"
 )
 
-type TokenHandler struct {
+type tokenHandler struct {
 	gatewayClient    gateway.GatewayAPIClient
 	smtpCredentials  *smtpclient.SMTPCredentials
 	meshDirectoryURL string
 }
 
-func (h *TokenHandler) Init(c *config) error {
+func (h *tokenHandler) init(c *config) error {
 	var err error
 	h.gatewayClient, err = pool.GetGatewayServiceClient(pool.Endpoint(c.GatewaySvc))
 	if err != nil {
@@ -57,7 +57,10 @@ func (h *TokenHandler) Init(c *config) error {
 	return nil
 }
 
-func (h *TokenHandler) Generate(w http.ResponseWriter, r *http.Request) {
+// Generate generates an invitation token and if a recipient is specified,
+// will send an email containing the link the user will use to accept the
+// invitation.
+func (h *tokenHandler) Generate(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	token, err := h.gatewayClient.GenerateInviteToken(ctx, &invitepb.GenerateInviteTokenRequest{
@@ -98,12 +101,13 @@ func (h *TokenHandler) Generate(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-type AcceptInviteRequest struct {
+type acceptInviteRequest struct {
 	Token          string `json:"token"`
 	ProviderDomain string `json:"providerDomain"`
 }
 
-func (h *TokenHandler) AcceptInvite(w http.ResponseWriter, r *http.Request) {
+// AcceptInvite accepts an invitation from the user in the remote provider.
+func (h *tokenHandler) AcceptInvite(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
@@ -166,8 +170,8 @@ func (h *TokenHandler) AcceptInvite(w http.ResponseWriter, r *http.Request) {
 	log.Info().Str("token", req.Token).Str("provider", req.ProviderDomain).Msgf("invite forwarded")
 }
 
-func getAcceptInviteRequest(r *http.Request) (*AcceptInviteRequest, error) {
-	var req AcceptInviteRequest
+func getAcceptInviteRequest(r *http.Request) (*acceptInviteRequest, error) {
+	var req acceptInviteRequest
 	contentType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
 	if err == nil && contentType == "application/json" {
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -179,7 +183,9 @@ func getAcceptInviteRequest(r *http.Request) (*AcceptInviteRequest, error) {
 	return &req, nil
 }
 
-func (h *TokenHandler) FindAccepted(w http.ResponseWriter, r *http.Request) {
+// FindAccepted returns the list of all the users that accepted the invitation
+// to the authenticated user.
+func (h *tokenHandler) FindAccepted(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	res, err := h.gatewayClient.FindAcceptedUsers(ctx, &invitepb.FindAcceptedUsersRequest{})

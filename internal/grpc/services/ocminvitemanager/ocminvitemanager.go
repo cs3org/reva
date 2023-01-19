@@ -166,40 +166,42 @@ func (s *service) ForwardInvite(ctx context.Context, req *invitepb.ForwardInvite
 		Name:              user.GetDisplayName(),
 	})
 	if err != nil {
-		if errors.Is(err, client.ErrTokenInvalid) {
+		switch {
+		case errors.Is(err, client.ErrTokenInvalid):
 			return &invitepb.ForwardInviteResponse{
 				Status: status.NewInvalid(ctx, "token not valid"),
 			}, nil
-		} else if errors.Is(err, client.ErrTokenNotFound) {
+		case errors.Is(err, client.ErrTokenNotFound):
 			return &invitepb.ForwardInviteResponse{
 				Status: status.NewNotFound(ctx, "token not found"),
 			}, nil
-		} else if errors.Is(err, client.ErrUserAlreadyAccepted) {
+		case errors.Is(err, client.ErrUserAlreadyAccepted):
 			return &invitepb.ForwardInviteResponse{
 				Status: status.NewAlreadyExists(ctx, err, err.Error()),
 			}, nil
-		} else if errors.Is(err, client.ErrServiceNotTrusted) {
+		case errors.Is(err, client.ErrServiceNotTrusted):
 			return &invitepb.ForwardInviteResponse{
 				Status: status.NewPermissionDenied(ctx, err, err.Error()),
 			}, nil
+		default:
+			return &invitepb.ForwardInviteResponse{
+				Status: status.NewInternal(ctx, err, err.Error()),
+			}, nil
 		}
-		return &invitepb.ForwardInviteResponse{
-			Status: status.NewInternal(ctx, err, err.Error()),
-		}, nil
 	}
 
 	// create a link between the user that accepted the share (in ctx)
 	// and the remote one (the initiator), so at the end of the invitation workflow they
 	// know each other
 
-	remoteUserId := &userpb.UserId{
+	remoteUserID := &userpb.UserId{
 		Type:     userpb.UserType_USER_TYPE_PRIMARY,
 		Idp:      req.GetOriginSystemProvider().Domain,
 		OpaqueId: remoteUser.UserID,
 	}
 
 	if err := s.repo.AddRemoteUser(ctx, user.Id, &userpb.User{
-		Id:          remoteUserId,
+		Id:          remoteUserID,
 		Mail:        remoteUser.Email,
 		DisplayName: remoteUser.Name,
 	}); err != nil {
@@ -213,7 +215,7 @@ func (s *service) ForwardInvite(ctx context.Context, req *invitepb.ForwardInvite
 
 	return &invitepb.ForwardInviteResponse{
 		Status:      status.NewOK(ctx),
-		UserId:      remoteUserId,
+		UserId:      remoteUserID,
 		Email:       remoteUser.Email,
 		DisplayName: remoteUser.Name,
 	}, nil

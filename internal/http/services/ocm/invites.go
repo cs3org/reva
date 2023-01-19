@@ -43,7 +43,7 @@ type invitesHandler struct {
 	meshDirectoryURL string
 }
 
-func (h *invitesHandler) init(c *Config) error {
+func (h *invitesHandler) init(c *config) error {
 	var err error
 	h.gatewayClient, err = pool.GetGatewayServiceClient(pool.Endpoint(c.GatewaySvc))
 	if err != nil {
@@ -56,7 +56,7 @@ func (h *invitesHandler) init(c *Config) error {
 	return nil
 }
 
-type AcceptInviteRequest struct {
+type acceptInviteRequest struct {
 	Token             string `json:"token"`
 	UserID            string `json:"userID"`
 	RecipientProvider string `json:"recipientProvider"`
@@ -64,6 +64,8 @@ type AcceptInviteRequest struct {
 	Email             string `json:"email"`
 }
 
+// AcceptInvite informs avout an accepted invitation so that the users
+// can initiate the OCM share creation.
 func (h *invitesHandler) AcceptInvite(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
@@ -143,7 +145,7 @@ func (h *invitesHandler) AcceptInvite(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if err := json.NewEncoder(w).Encode(&User{
+	if err := json.NewEncoder(w).Encode(&user{
 		UserID: acceptInviteResponse.UserId.OpaqueId,
 		Email:  acceptInviteResponse.Email,
 		Name:   acceptInviteResponse.DisplayName,
@@ -157,14 +159,14 @@ func (h *invitesHandler) AcceptInvite(w http.ResponseWriter, r *http.Request) {
 	log.Info().Str("user", fmt.Sprintf("%s@%s", userObj.Id.OpaqueId, userObj.Id.Idp)).Str("token", req.Token).Msg("added to accepted users")
 }
 
-type User struct {
+type user struct {
 	UserID string `json:"userID"`
 	Email  string `json:"email"`
 	Name   string `json:"name"`
 }
 
-func getAcceptInviteRequest(r *http.Request) (*AcceptInviteRequest, error) {
-	var req AcceptInviteRequest
+func getAcceptInviteRequest(r *http.Request) (*acceptInviteRequest, error) {
+	var req acceptInviteRequest
 	contentType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
 	if err == nil && contentType == "application/json" {
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {

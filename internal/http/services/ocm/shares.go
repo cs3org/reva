@@ -46,10 +46,12 @@ type sharesHandler struct {
 	gatewayAddr string
 }
 
-func (h *sharesHandler) init(c *Config) {
+func (h *sharesHandler) init(c *config) {
 	h.gatewayAddr = c.GatewaySvc
 }
 
+// CreateShare sends all the informations to the consumer needed to start
+// synchronization between the two services.
 func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)

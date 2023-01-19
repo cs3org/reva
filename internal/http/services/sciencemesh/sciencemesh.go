@@ -82,8 +82,8 @@ type svc struct {
 }
 
 func (s *svc) routerInit() error {
-	tokenHandler := new(TokenHandler)
-	if err := tokenHandler.Init(s.conf); err != nil {
+	tokenHandler := new(tokenHandler)
+	if err := tokenHandler.init(s.conf); err != nil {
 		return err
 	}
 

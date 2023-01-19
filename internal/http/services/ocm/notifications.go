@@ -25,9 +25,10 @@ import (
 type notificationsHandler struct {
 }
 
-func (h *notificationsHandler) init(c *Config) {
+func (h *notificationsHandler) init(c *config) {
 }
 
+// SendNotification is used to let the provider know that a user has removed a share.
 func (h *notificationsHandler) SendNotification(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }

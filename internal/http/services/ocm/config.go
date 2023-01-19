@@ -49,7 +49,7 @@ type configHandler struct {
 	c configData
 }
 
-func (h *configHandler) init(c *Config) {
+func (h *configHandler) init(c *config) {
 	h.c = c.Config
 	if h.c.APIVersion == "" {
 		h.c.APIVersion = "1.0-proposal1"
@@ -75,6 +75,7 @@ func (h *configHandler) init(c *Config) {
 	}}
 }
 
+// Send sends the configuration to the caller.
 func (h *configHandler) Send(w http.ResponseWriter, r *http.Request) {
 	log := appctx.GetLogger(r.Context())
 

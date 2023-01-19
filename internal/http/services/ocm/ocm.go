@@ -34,7 +34,7 @@ func init() {
 	global.Register("ocm", New)
 }
 
-type Config struct {
+type config struct {
 	SMTPCredentials  *smtpclient.SMTPCredentials `mapstructure:"smtp_credentials"`
 	Prefix           string                      `mapstructure:"prefix"`
 	Host             string                      `mapstructure:"host"`
@@ -43,7 +43,7 @@ type Config struct {
 	Config           configData                  `mapstructure:"config"`
 }
 
-func (c *Config) init() {
+func (c *config) init() {
 	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
 
 	if c.Prefix == "" {
@@ -52,14 +52,14 @@ func (c *Config) init() {
 }
 
 type svc struct {
-	Conf   *Config
+	Conf   *config
 	router chi.Router
 }
 
 // New returns a new ocmd object, that implements
 // the OCM APIs specified in https://cs3org.github.io/OCM-API/docs.html
 func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) {
-	conf := &Config{}
+	conf := &config{}
 	if err := mapstructure.Decode(m, conf); err != nil {
 		return nil, err
 	}
