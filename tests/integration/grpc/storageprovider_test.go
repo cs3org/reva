@@ -87,7 +87,7 @@ var _ = Describe("storage providers", func() {
 		ctx = metadata.AppendToOutgoingContext(ctx, ctxpkg.TokenHeader, t)
 		ctx = ctxpkg.ContextSetUser(ctx, user)
 
-		revads, err = startRevads(dependencies, variables)
+		revads, err = startRevads(dependencies, nil, variables)
 		Expect(err).ToNot(HaveOccurred())
 		serviceClient, err = pool.GetStorageProviderServiceClient(pool.Endpoint(revads["storage"].GrpcAddress))
 		Expect(err).ToNot(HaveOccurred())
