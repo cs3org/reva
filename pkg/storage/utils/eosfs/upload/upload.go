@@ -120,7 +120,7 @@ func (u *Upload) FinishUpload(ctx context.Context) error {
 	}
 	defer file.Close()
 
-	err = u.client.Write(ctx, auth, u.Info.Storage["Path"], file)
+	err = u.client.Write(ctx, auth, u.Info.Storage["StoragePath"], file)
 	if err != nil {
 		return err
 	}

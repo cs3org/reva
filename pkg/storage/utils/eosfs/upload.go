@@ -24,19 +24,21 @@ import (
 	"io"
 	"path/filepath"
 	"strconv"
+	"strings"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/eosclient"
 	"github.com/cs3org/reva/v2/pkg/storage"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/eosfs/upload"
+	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	tusd "github.com/tus/tusd/pkg/handler"
 )
 
-func (fs *eosfs) Upload(ctx context.Context, uploadRef *provider.Reference, r io.ReadCloser, uff storage.UploadFinishedFunc) (provider.ResourceInfo, error) {
-	upload, err := fs.GetUpload(ctx, uploadRef.Path)
+func (fs *eosfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser, uff storage.UploadFinishedFunc) (provider.ResourceInfo, error) {
+	upload, err := fs.GetUpload(ctx, ref.Path)
 	if err != nil {
 		return provider.ResourceInfo{}, err
 	}
@@ -55,35 +57,36 @@ func (fs *eosfs) Upload(ctx context.Context, uploadRef *provider.Reference, r io
 		},
 	}
 
-	if err := fs.c.Write(ctx, auth, info.Storage["Path"], r); err != nil {
+	if err := fs.c.Write(ctx, auth, info.Storage["StoragePath"], r); err != nil {
 		return provider.ResourceInfo{}, err
 	}
 
-	eosFileInfo, err := fs.c.GetFileInfoByPath(ctx, auth, info.Storage["Path"])
+	eosFileInfo, err := fs.c.GetFileInfoByPath(ctx, auth, info.Storage["StoragePath"])
 	if err != nil {
 		return provider.ResourceInfo{}, err
 	}
 
-	ri, err := fs.convertToResourceInfo(ctx, eosFileInfo, info.Storage["SpaceID"], false)
+	ri, err := fs.convertToResourceInfo(ctx, eosFileInfo, info.Storage["SpaceRoot"], false)
 	if err != nil {
 		return provider.ResourceInfo{}, err
 	}
 
 	u, _ := ctxpkg.ContextGetUser(ctx)
-	uff(ri.Owner, u.Id, &provider.Reference{}) // call back to let them know the upload has finished
+
+	uploadRef := &provider.Reference{
+		ResourceId: &provider.ResourceId{
+			StorageId: info.MetaData["providerID"],
+			SpaceId:   info.Storage["SpaceRoot"],
+			OpaqueId:  info.Storage["SpaceRoot"],
+		},
+		Path: utils.MakeRelativePath(info.Storage["SpacePath"]),
+	}
+	uff(ri.Owner, u.Id, uploadRef) // call back to let them know the upload has finished
 
 	return *ri, nil
 }
 
 func (fs *eosfs) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64, metadata map[string]string) (map[string]string, error) {
-	// p, err := storagespace.FormatReference(ref)
-	// if err != nil {
-	// return nil, err
-	// }
-	// return map[string]string{
-	// "simple": p,
-	// }, nil
-
 	space, err := fs.resolveSpace(ctx, ref)
 	if err != nil {
 		return nil, err
@@ -92,6 +95,7 @@ func (fs *eosfs) InitiateUpload(ctx context.Context, ref *provider.Reference, up
 	if err != nil {
 		return nil, errors.Wrap(err, "eos: error resolving reference")
 	}
+	spacePath := strings.TrimPrefix(resPath, space.RootInfo.Path)
 	fid, err := strconv.ParseUint(ref.GetResourceId().GetOpaqueId(), 10, 64)
 	if err != nil {
 		return nil, fmt.Errorf("error converting string to int for eos fileid: %s", ref.GetResourceId().GetOpaqueId())
@@ -117,9 +121,10 @@ func (fs *eosfs) InitiateUpload(ctx context.Context, ref *provider.Reference, up
 		},
 		Size: uploadLength,
 		Storage: map[string]string{
-			"Path":                resPath,
 			"UID":                 strconv.FormatUint(parentInfo.UID, 10),
 			"GID":                 strconv.FormatUint(parentInfo.GID, 10),
+			"StoragePath":         resPath,
+			"SpacePath":           spacePath,
 			"SpaceRoot":           space.Id.OpaqueId,
 			"SpaceOwnerOrManager": space.Owner.GetId().GetOpaqueId(),
 		},
