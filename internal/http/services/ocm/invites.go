@@ -102,7 +102,7 @@ func (h *invitesHandler) AcceptInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if providerAllowedResp.Status.Code != rpc.Code_CODE_OK {
-		reqres.WriteError(w, r, reqres.APIErrorUnauthenticated, "provider not authorized", errors.New(providerAllowedResp.Status.Message))
+		reqres.WriteError(w, r, reqres.APIErrorUntrustedService, "provider not trusted", errors.New(providerAllowedResp.Status.Message))
 		return
 	}
 
@@ -129,13 +129,13 @@ func (h *invitesHandler) AcceptInvite(w http.ResponseWriter, r *http.Request) {
 	if acceptInviteResponse.Status.Code != rpc.Code_CODE_OK {
 		switch acceptInviteResponse.Status.Code {
 		case rpc.Code_CODE_NOT_FOUND:
-			reqres.WriteError(w, r, reqres.APIErrorNotFound, "token not found", errors.New(acceptInviteResponse.Status.Message))
+			reqres.WriteError(w, r, reqres.APIErrorNotFound, "token not found", nil)
 			return
 		case rpc.Code_CODE_INVALID_ARGUMENT:
-			reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, "token has expired", errors.New(acceptInviteResponse.Status.Message))
+			reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, "token has expired", nil)
 			return
 		case rpc.Code_CODE_ALREADY_EXISTS:
-			reqres.WriteError(w, r, reqres.APIErrorAlreadyExist, "user already known", errors.New(acceptInviteResponse.Status.Message))
+			reqres.WriteError(w, r, reqres.APIErrorAlreadyExist, "user already known", nil)
 			return
 		default:
 			reqres.WriteError(w, r, reqres.APIErrorServerError, "unexpected error: "+acceptInviteResponse.Status.Message, errors.New(acceptInviteResponse.Status.Message))
