@@ -142,8 +142,23 @@ func (h *TokenHandler) AcceptInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if forwardInviteResponse.Status.Code != rpc.Code_CODE_OK {
-		reqres.WriteError(w, r, reqres.APIErrorServerError, "grpc forward invite request failed", errors.New(forwardInviteResponse.Status.Message))
-		return
+		switch forwardInviteResponse.Status.Code {
+		case rpc.Code_CODE_NOT_FOUND:
+			reqres.WriteError(w, r, reqres.APIErrorNotFound, "token not found", nil)
+			return
+		case rpc.Code_CODE_INVALID_ARGUMENT:
+			reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, "token has expired", nil)
+			return
+		case rpc.Code_CODE_ALREADY_EXISTS:
+			reqres.WriteError(w, r, reqres.APIErrorAlreadyExist, "user already known", nil)
+			return
+		case rpc.Code_CODE_PERMISSION_DENIED:
+			reqres.WriteError(w, r, reqres.APIErrorUnauthenticated, "remove service not trusted", nil)
+			return
+		default:
+			reqres.WriteError(w, r, reqres.APIErrorServerError, "unexpected error: "+forwardInviteResponse.Status.Message, errors.New(forwardInviteResponse.Status.Message))
+			return
+		}
 	}
 
 	w.WriteHeader(http.StatusOK)
