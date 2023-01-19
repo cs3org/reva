@@ -37,6 +37,21 @@ func (p Permissions) AssemblePermissions(ctx context.Context, n *node.Node) (pro
 	return p.item.AssemblePermissions(ctx, n)
 }
 
+// Manager returns true if the user has the manager role on the space the node belongs to
+func (p Permissions) Manager(ctx context.Context, n *node.Node) bool {
+	return p.checkRole(ctx, n, "manager")
+}
+
+// Editor returns true if the user has the editor role on the space the node belongs to
+func (p Permissions) Editor(ctx context.Context, n *node.Node) bool {
+	return p.checkRole(ctx, n, "editor")
+}
+
+// Viewer returns true if the user has the viewer role on the space the node belongs to
+func (p Permissions) Viewer(ctx context.Context, n *node.Node) bool {
+	return p.checkRole(ctx, n, "viewer")
+}
+
 // CreateSpace returns true when the user is allowed to create the space
 func (p Permissions) CreateSpace(ctx context.Context, spaceid string) bool {
 	return p.checkPermission(ctx, "create-space", spaceRef(spaceid))
@@ -45,6 +60,16 @@ func (p Permissions) CreateSpace(ctx context.Context, spaceid string) bool {
 // SetSpaceQuota returns true when the user is allowed to change the spaces quota
 func (p Permissions) SetSpaceQuota(ctx context.Context, spaceid string) bool {
 	return p.checkPermission(ctx, "set-space-quota", spaceRef(spaceid))
+}
+
+// ManageSpaceProperties returns true when the user is allowed to change space properties (name/subtitle)
+func (p Permissions) ManageSpaceProperties(ctx context.Context, spaceid string) bool {
+	return p.checkPermission(ctx, "manage-space-properties", spaceRef(spaceid))
+}
+
+// SpaceAbility returns true when the user is allowed to enable/disable the space
+func (p Permissions) SpaceAbility(ctx context.Context, spaceid string) bool {
+	return p.checkPermission(ctx, "space-ability", spaceRef(spaceid))
 }
 
 // ListAllSpaces returns true when the user is allowed to list all spaces
@@ -62,7 +87,29 @@ func (p Permissions) DeleteAllHomeSpaces(ctx context.Context) bool {
 	return p.checkPermission(ctx, "delete-all-home-spaces", nil)
 }
 
-// CheckPermission is used to check a users space permissions
+// checkRole returns true if the user has the given role on the space the node belongs to
+func (p Permissions) checkRole(ctx context.Context, n *node.Node, role string) bool {
+	rp, err := p.AssemblePermissions(ctx, n)
+	if err != nil {
+		return false
+	}
+
+	switch role {
+	case "manager":
+		// current workaround: check if RemoveGrant Permission exists
+		return rp.RemoveGrant
+	case "editor":
+		// current workaround: check if InitiateFileUpload Permission exists
+		return rp.InitiateFileUpload
+	case "viewer":
+		// current workaround: check if Stat Permission exists
+		return rp.Stat
+	default:
+		return false
+	}
+}
+
+// checkPermission is used to check a users space permissions
 func (p Permissions) checkPermission(ctx context.Context, perm string, ref *provider.Reference) bool {
 	user := ctxpkg.ContextMustGetUser(ctx)
 	checkRes, err := p.space.CheckPermission(ctx, &cs3permissions.CheckPermissionRequest{

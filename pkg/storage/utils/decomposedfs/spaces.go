@@ -484,8 +484,7 @@ func (fs *Decomposedfs) UpdateStorageSpace(ctx context.Context, req *provider.Up
 	switch {
 	case space.Name != "", mapHasKey(metadata, xattrs.SpaceDescriptionAttr), restore:
 		// these three attributes need manager permissions
-		err = fs.checkManagerPermission(ctx, spaceNode)
-		if err != nil {
+		if !fs.p.Manager(ctx, spaceNode) {
 			if restore {
 				// a disabled space is invisible to non admins
 				return &provider.UpdateStorageSpaceResponse{
@@ -498,8 +497,7 @@ func (fs *Decomposedfs) UpdateStorageSpace(ctx context.Context, req *provider.Up
 		}
 	case mapHasKey(metadata, xattrs.SpaceReadmeAttr), mapHasKey(metadata, xattrs.SpaceAliasAttr), mapHasKey(metadata, xattrs.SpaceImageAttr):
 		// these three attributes need editor permissions
-		err = fs.checkEditorPermission(ctx, spaceNode)
-		if err != nil {
+		if fs.p.Editor(ctx, spaceNode) {
 			return &provider.UpdateStorageSpaceResponse{
 				Status: &v1beta11.Status{Code: v1beta11.Code_CODE_PERMISSION_DENIED, Message: err.Error()},
 			}, nil
@@ -514,7 +512,7 @@ func (fs *Decomposedfs) UpdateStorageSpace(ctx context.Context, req *provider.Up
 	default:
 		// you may land here when making an update request without changes
 		// check if user has access to the drive before continuing
-		if err := fs.checkViewerPermission(ctx, spaceNode); err != nil {
+		if !fs.p.Viewer(ctx, spaceNode) {
 			return &provider.UpdateStorageSpaceResponse{
 				Status: &v1beta11.Status{Code: v1beta11.Code_CODE_NOT_FOUND},
 			}, nil
@@ -580,7 +578,7 @@ func (fs *Decomposedfs) DeleteStorageSpace(ctx context.Context, req *provider.De
 		}
 	default:
 		// only managers are allowed to disable or purge a drive
-		if err := fs.checkManagerPermission(ctx, n); err != nil {
+		if !fs.p.Manager(ctx, n) {
 			return errtypes.PermissionDenied(fmt.Sprintf("user is not allowed to delete spaces %s", n.ID))
 		}
 	}
@@ -686,7 +684,7 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 		}
 
 		if n.SpaceRoot.IsDisabled() {
-			if err := fs.checkManagerPermission(ctx, n); err != nil {
+			if !fs.p.Manager(ctx, n) {
 				return nil, errtypes.PermissionDenied(fmt.Sprintf("user %s is not allowed to list deleted spaces %s", user.Username, n.ID))
 			}
 		}
@@ -862,52 +860,6 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 	ps, _ := n.SpaceRoot.PermissionSet(ctx)
 	space.RootInfo, _ = n.SpaceRoot.AsResourceInfo(ctx, &ps, nil, nil, false)
 	return space, nil
-}
-
-func (fs *Decomposedfs) checkManagerPermission(ctx context.Context, n *node.Node) error {
-	// to update the space name or short description we need the manager role
-	// current workaround: check if RemoveGrant Permission exists
-	rp, err := fs.p.AssemblePermissions(ctx, n)
-	switch {
-	case err != nil:
-		return errtypes.InternalError(err.Error())
-	case !rp.RemoveGrant:
-		if rp.Stat {
-			msg := fmt.Sprintf("not enough permissions to change attributes on %s", filepath.Join(n.ParentID, n.Name))
-			return errtypes.PermissionDenied(msg)
-		}
-		return errtypes.NotFound(filepath.Join(n.ParentID, n.Name))
-	}
-	return nil
-}
-
-func (fs *Decomposedfs) checkEditorPermission(ctx context.Context, n *node.Node) error {
-	// current workaround: check if InitiateFileUpload Permission exists
-	rp, err := fs.p.AssemblePermissions(ctx, n)
-	switch {
-	case err != nil:
-		return errtypes.InternalError(err.Error())
-	case !rp.InitiateFileUpload:
-		if rp.Stat {
-			msg := fmt.Sprintf("not enough permissions to change attributes on %s", filepath.Join(n.ParentID, n.Name))
-			return errtypes.PermissionDenied(msg)
-		}
-		return errtypes.NotFound(n.ID)
-	}
-	return nil
-}
-
-func (fs *Decomposedfs) checkViewerPermission(ctx context.Context, n *node.Node) error {
-	// to update the space name or short description we need the manager role
-	// current workaround: check if RemoveGrant Permission exists
-	rp, err := fs.p.AssemblePermissions(ctx, n)
-	switch {
-	case err != nil:
-		return errtypes.InternalError(err.Error())
-	case !rp.Stat:
-		return errtypes.NotFound(n.ID)
-	}
-	return nil
 }
 
 func mapHasKey(checkMap map[string]string, key string) bool {
