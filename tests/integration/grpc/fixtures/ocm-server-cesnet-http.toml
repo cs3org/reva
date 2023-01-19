@@ -1,0 +1,11 @@
+[http]
+address = "{{grpc_address}}"
+
+[http.services.ocm]
+prefix = "ocm"
+gatewaysvc = "{{cesnetgw_address}}"
+
+[http.services.sciencemesh]
+gatewaysvc = "{{cesnetgw_address}}"
+
+[http.middlewares.cors]
