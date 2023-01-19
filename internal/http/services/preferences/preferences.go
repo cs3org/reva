@@ -70,16 +70,22 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 		router: r,
 	}
 
-	if err := s.routerInit(); err != nil {
+	if err := s.routerInit(log); err != nil {
 		return nil, err
 	}
 
 	return s, nil
 }
 
-func (s *svc) routerInit() error {
+func (s *svc) routerInit(log *zerolog.Logger) error {
 	s.router.Get("/", s.handleGet)
 	s.router.Post("/", s.handlePost)
+
+	_ = chi.Walk(s.router, func(method string, route string, handler http.Handler, middlewares ...func(http.Handler) http.Handler) error {
+		log.Debug().Str("service", "preferences").Str("method", method).Str("route", route).Int("middlewares", len(middlewares)).Msg("serving endpoint")
+		return nil
+	})
+
 	return nil
 }
 

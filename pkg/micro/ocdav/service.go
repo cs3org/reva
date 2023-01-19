@@ -96,6 +96,11 @@ func Service(opts ...Option) (micro.Service, error) {
 	// back to using `chi.RegisterMethod`.
 	r.MethodNotAllowed(http.HandlerFunc(revaService.Handler().ServeHTTP))
 
+	_ = chi.Walk(r, func(method string, route string, handler http.Handler, middlewares ...func(http.Handler) http.Handler) error {
+		sopts.Logger.Debug().Str("service", "ocdav").Str("method", method).Str("route", route).Int("middlewares", len(middlewares)).Msg("serving endpoint")
+		return nil
+	})
+
 	hd := srv.NewHandler(r)
 	if err := srv.Handle(hd); err != nil {
 		return nil, err
