@@ -1,11 +1,12 @@
+[shared]
+gatewaysvc = "{{cernboxgw_address}}"
+
 [http]
 address = "{{grpc_address}}"
 
 [http.services.ocm]
 prefix = "ocm"
-gatewaysvc = "{{cernboxgw_address}}"
 
 [http.services.sciencemesh]
-gatewaysvc = "{{cernboxgw_address}}"
 
 [http.middlewares.cors]
