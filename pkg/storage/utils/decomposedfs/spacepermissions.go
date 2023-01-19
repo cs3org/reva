@@ -37,21 +37,6 @@ func (p Permissions) AssemblePermissions(ctx context.Context, n *node.Node) (pro
 	return p.item.AssemblePermissions(ctx, n)
 }
 
-// Manager returns true if the user has the manager role on the space the node belongs to
-func (p Permissions) Manager(ctx context.Context, n *node.Node) bool {
-	return p.checkRole(ctx, n, "manager")
-}
-
-// Editor returns true if the user has the editor role on the space the node belongs to
-func (p Permissions) Editor(ctx context.Context, n *node.Node) bool {
-	return p.checkRole(ctx, n, "editor")
-}
-
-// Viewer returns true if the user has the viewer role on the space the node belongs to
-func (p Permissions) Viewer(ctx context.Context, n *node.Node) bool {
-	return p.checkRole(ctx, n, "viewer")
-}
-
 // CreateSpace returns true when the user is allowed to create the space
 func (p Permissions) CreateSpace(ctx context.Context, spaceid string) bool {
 	return p.checkPermission(ctx, "create-space", spaceRef(spaceid))
@@ -77,6 +62,19 @@ func (p Permissions) ListAllSpaces(ctx context.Context) bool {
 	return p.checkPermission(ctx, "list-all-spaces", nil)
 }
 
+// ListSpacesOfUser returns true when the user is allowed to list the spaces of the given user
+func (p Permissions) ListSpacesOfUser(ctx context.Context, userid string) bool {
+	switch userid {
+	case userIDAny:
+		// there is no filter
+		return true // TODO: is `true` actually correct here? Shouldn't we check for ListAllSpaces too?
+	case ctxpkg.ContextMustGetUser(ctx).GetId().GetOpaqueId():
+		return true
+	default:
+		return p.ListAllSpaces(ctx)
+	}
+}
+
 // DeleteAllSpaces returns true when the user is allowed to delete all spaces
 func (p Permissions) DeleteAllSpaces(ctx context.Context) bool {
 	return p.checkPermission(ctx, "delete-all-spaces", nil)
@@ -85,28 +83,6 @@ func (p Permissions) DeleteAllSpaces(ctx context.Context) bool {
 // DeleteAllHomeSpaces returns true when the user is allowed to delete all home spaces
 func (p Permissions) DeleteAllHomeSpaces(ctx context.Context) bool {
 	return p.checkPermission(ctx, "delete-all-home-spaces", nil)
-}
-
-// checkRole returns true if the user has the given role on the space the node belongs to
-func (p Permissions) checkRole(ctx context.Context, n *node.Node, role string) bool {
-	rp, err := p.AssemblePermissions(ctx, n)
-	if err != nil {
-		return false
-	}
-
-	switch role {
-	case "manager":
-		// current workaround: check if RemoveGrant Permission exists
-		return rp.RemoveGrant
-	case "editor":
-		// current workaround: check if InitiateFileUpload Permission exists
-		return rp.InitiateFileUpload
-	case "viewer":
-		// current workaround: check if Stat Permission exists
-		return rp.Stat
-	default:
-		return false
-	}
 }
 
 // checkPermission is used to check a users space permissions
@@ -126,6 +102,21 @@ func (p Permissions) checkPermission(ctx context.Context, perm string, ref *prov
 	}
 
 	return checkRes.Status.Code == v1beta11.Code_CODE_OK
+}
+
+// IsManager returns true if the given resource permissions evaluate the user as "manager"
+func IsManager(rp provider.ResourcePermissions) bool {
+	return rp.RemoveGrant
+}
+
+// IsEditor returns true if the given resource permissions evaluate the user as "editor"
+func IsEditor(rp provider.ResourcePermissions) bool {
+	return rp.InitiateFileUpload
+}
+
+// IsViewer returns true if the given resource permissions evaluate the user as "viewer"
+func IsViewer(rp provider.ResourcePermissions) bool {
+	return rp.Stat
 }
 
 func spaceRef(spaceid string) *provider.Reference {

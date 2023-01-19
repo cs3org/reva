@@ -86,10 +86,10 @@ func (fs *Decomposedfs) CreateStorageSpace(ctx context.Context, req *provider.Cr
 	switch {
 	case err != nil:
 		return nil, err
-	case root.Exists:
-		return nil, errtypes.AlreadyExists("decomposedfs: spaces: space already exists")
 	case !fs.p.CreateSpace(ctx, spaceID):
 		return nil, errtypes.PermissionDenied(spaceID)
+	case root.Exists:
+		return nil, errtypes.AlreadyExists("decomposedfs: spaces: space already exists")
 	}
 
 	// create a directory node
@@ -244,7 +244,7 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 
 	authenticatedUserID := ctxpkg.ContextMustGetUser(ctx).GetId().GetOpaqueId()
 
-	if !fs.CanListSpacesOfRequestedUser(ctx, requestedUserID) {
+	if !fs.p.ListSpacesOfUser(ctx, requestedUserID) {
 		return nil, errtypes.PermissionDenied(fmt.Sprintf("user %s is not allowed to list spaces of other users", authenticatedUserID))
 	}
 
@@ -412,21 +412,6 @@ func (fs *Decomposedfs) MustCheckNodePermissions(ctx context.Context, unrestrict
 	return true
 }
 
-// CanListSpacesOfRequestedUser checks if user is allowed to list spaces of another user
-func (fs *Decomposedfs) CanListSpacesOfRequestedUser(ctx context.Context, requestedUserID string) bool {
-	authenticatedUserID := ctxpkg.ContextMustGetUser(ctx).GetId().GetOpaqueId()
-	switch {
-	case requestedUserID == userIDAny:
-		// there is no filter
-		return true
-	case requestedUserID == authenticatedUserID:
-		return true
-	case fs.p.ListAllSpaces(ctx):
-		return true
-	}
-	return false
-}
-
 // UpdateStorageSpace updates a storage space
 func (fs *Decomposedfs) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
 	var restore bool
@@ -436,11 +421,6 @@ func (fs *Decomposedfs) UpdateStorageSpace(ctx context.Context, req *provider.Up
 
 	space := req.StorageSpace
 	_, spaceID, _, _ := storagespace.SplitID(space.Id.OpaqueId)
-
-	spaceNode, err := node.ReadNode(ctx, fs.lu, spaceID, spaceID, true) // permission to read disabled space will be checked later
-	if err != nil {
-		return nil, err
-	}
 
 	metadata := make(map[string]string, 5)
 	if space.Name != "" {
@@ -480,43 +460,58 @@ func (fs *Decomposedfs) UpdateStorageSpace(ctx context.Context, req *provider.Up
 		}
 	}
 
-	// TODO change the permission handling
-	switch {
-	case space.Name != "", mapHasKey(metadata, xattrs.SpaceDescriptionAttr), restore:
-		// these three attributes need manager permissions
-		if !fs.p.Manager(ctx, spaceNode) {
-			if restore {
-				// a disabled space is invisible to non admins
-				return &provider.UpdateStorageSpaceResponse{
-					Status: &v1beta11.Status{Code: v1beta11.Code_CODE_NOT_FOUND, Message: err.Error()},
-				}, nil
-			}
-			return &provider.UpdateStorageSpaceResponse{
-				Status: &v1beta11.Status{Code: v1beta11.Code_CODE_PERMISSION_DENIED, Message: err.Error()},
-			}, nil
-		}
-	case mapHasKey(metadata, xattrs.SpaceReadmeAttr), mapHasKey(metadata, xattrs.SpaceAliasAttr), mapHasKey(metadata, xattrs.SpaceImageAttr):
-		// these three attributes need editor permissions
-		if fs.p.Editor(ctx, spaceNode) {
-			return &provider.UpdateStorageSpaceResponse{
-				Status: &v1beta11.Status{Code: v1beta11.Code_CODE_PERMISSION_DENIED, Message: err.Error()},
-			}, nil
-		}
-	case mapHasKey(metadata, xattrs.QuotaAttr):
-		// this attribute needs a permission on the user role
-		if !fs.p.SetSpaceQuota(ctx, spaceID) {
-			return &provider.UpdateStorageSpaceResponse{
-				Status: &v1beta11.Status{Code: v1beta11.Code_CODE_PERMISSION_DENIED, Message: errors.New("No permission to set space quota").Error()},
-			}, nil
-		}
-	default:
+	// check which permissions are needed
+	spaceNode, err := node.ReadNode(ctx, fs.lu, spaceID, spaceID, true)
+	if err != nil {
+		return nil, err
+	}
+
+	if !spaceNode.Exists {
+		return &provider.UpdateStorageSpaceResponse{
+			Status: &v1beta11.Status{Code: v1beta11.Code_CODE_NOT_FOUND},
+		}, nil
+	}
+
+	sp, err := fs.p.AssemblePermissions(ctx, spaceNode)
+	if err != nil {
+		return &provider.UpdateStorageSpaceResponse{
+			Status: &v1beta11.Status{Code: v1beta11.Code_CODE_INVALID, Message: err.Error()},
+		}, nil
+
+	}
+
+	if !restore && len(metadata) == 0 && !IsViewer(sp) {
 		// you may land here when making an update request without changes
 		// check if user has access to the drive before continuing
-		if !fs.p.Viewer(ctx, spaceNode) {
+		return &provider.UpdateStorageSpaceResponse{
+			Status: &v1beta11.Status{Code: v1beta11.Code_CODE_NOT_FOUND},
+		}, nil
+	}
+
+	if !IsManager(sp) {
+		// We are not a space manager. We need to check for additional permissions.
+		k := []string{xattrs.NameAttr, xattrs.SpaceDescriptionAttr}
+		if !IsEditor(sp) {
+			k = append(k, xattrs.SpaceReadmeAttr, xattrs.SpaceAliasAttr, xattrs.SpaceImageAttr)
+		}
+
+		if mapHasKey(metadata, k...) && !fs.p.ManageSpaceProperties(ctx, spaceID) {
 			return &provider.UpdateStorageSpaceResponse{
-				Status: &v1beta11.Status{Code: v1beta11.Code_CODE_NOT_FOUND},
+				Status: &v1beta11.Status{Code: v1beta11.Code_CODE_PERMISSION_DENIED},
 			}, nil
 		}
+
+		if restore && !fs.p.SpaceAbility(ctx, spaceID) {
+			return &provider.UpdateStorageSpaceResponse{
+				Status: &v1beta11.Status{Code: v1beta11.Code_CODE_PERMISSION_DENIED},
+			}, nil
+		}
+	}
+
+	if mapHasKey(metadata, xattrs.QuotaAttr) && !fs.p.SetSpaceQuota(ctx, spaceID) {
+		return &provider.UpdateStorageSpaceResponse{
+			Status: &v1beta11.Status{Code: v1beta11.Code_CODE_PERMISSION_DENIED},
+		}, nil
 	}
 
 	err = spaceNode.SetXattrs(metadata)
@@ -571,15 +566,17 @@ func (fs *Decomposedfs) DeleteStorageSpace(ctx context.Context, req *provider.De
 	switch {
 	case fs.p.DeleteAllSpaces(ctx):
 		// We are allowed to delete any space, no further permission checks needed
-		break
 	case st == "personal":
 		if !fs.p.DeleteAllHomeSpaces(ctx) {
 			return errtypes.PermissionDenied(fmt.Sprintf("user is not allowed to delete home space %s", n.ID))
 		}
 	default:
-		// only managers are allowed to disable or purge a drive
-		if !fs.p.Manager(ctx, n) {
-			return errtypes.PermissionDenied(fmt.Sprintf("user is not allowed to delete spaces %s", n.ID))
+		// managers and users with 'space ability' permission are allowed to disable or purge a drive
+		if !fs.p.SpaceAbility(ctx, spaceID) {
+			rp, err := fs.p.AssemblePermissions(ctx, n)
+			if err != nil || !IsManager(rp) {
+				return errtypes.PermissionDenied(fmt.Sprintf("user is not allowed to delete spaces %s", n.ID))
+			}
 		}
 	}
 
@@ -684,7 +681,8 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 		}
 
 		if n.SpaceRoot.IsDisabled() {
-			if !fs.p.Manager(ctx, n) {
+			rp, err := fs.p.AssemblePermissions(ctx, n)
+			if err != nil || !IsManager(rp) {
 				return nil, errtypes.PermissionDenied(fmt.Sprintf("user %s is not allowed to list deleted spaces %s", user.Username, n.ID))
 			}
 		}
@@ -862,7 +860,11 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 	return space, nil
 }
 
-func mapHasKey(checkMap map[string]string, key string) bool {
-	_, hasKey := checkMap[key]
-	return hasKey
+func mapHasKey(checkMap map[string]string, keys ...string) bool {
+	for _, key := range keys {
+		if _, hasKey := checkMap[key]; hasKey {
+			return true
+		}
+	}
+	return false
 }

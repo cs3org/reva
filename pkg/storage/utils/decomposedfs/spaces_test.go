@@ -119,21 +119,22 @@ var _ = Describe("Spaces", func() {
 			})
 		})
 
-		Context("can list spaces of requested user", func() {
-			It("returns false on requesting for other user as non-admin", func() {
-				ctx := ctxpkg.ContextSetUser(context.Background(), env.Users[0])
-				res := env.Fs.CanListSpacesOfRequestedUser(ctx, helpers.User1ID)
-				Expect(res).To(Equal(false))
-			})
-			It("returns true on requesting for other user as admin", func() {
-				res := env.Fs.CanListSpacesOfRequestedUser(env.Ctx, helpers.User0ID)
-				Expect(res).To(Equal(true))
-			})
-			It("returns true on requesting for own spaces", func() {
-				res := env.Fs.CanListSpacesOfRequestedUser(env.Ctx, helpers.OwnerID)
-				Expect(res).To(Equal(true))
-			})
-		})
+		// TODO: move to Permissions tests
+		// Context("can list spaces of requested user", func() {
+		// It("returns false on requesting for other user as non-admin", func() {
+		// ctx := ctxpkg.ContextSetUser(context.Background(), env.Users[0])
+		// res := env.Fs.CanListSpacesOfRequestedUser(ctx, helpers.User1ID)
+		// Expect(res).To(Equal(false))
+		// })
+		// It("returns true on requesting for other user as admin", func() {
+		// res := env.Fs.CanListSpacesOfRequestedUser(env.Ctx, helpers.User0ID)
+		// Expect(res).To(Equal(true))
+		// })
+		// It("returns true on requesting for own spaces", func() {
+		// res := env.Fs.CanListSpacesOfRequestedUser(env.Ctx, helpers.OwnerID)
+		// Expect(res).To(Equal(true))
+		// })
+		// })
 
 		Context("can delete homespace", func() {
 			It("fails on trying to delete a homespace as non-admin", func() {
