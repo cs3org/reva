@@ -99,13 +99,13 @@ func (s *svc) Prefix() string {
 }
 
 func (s *svc) Unprotected() []string {
-	return []string{"/accept-invite"}
+	return nil
 }
 
 func (s *svc) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		log := appctx.GetLogger(r.Context())
-		log.Debug().Str("path", r.URL.Path).Msg("ocs routing")
+		log.Debug().Str("path", r.URL.Path).Msg("sciencemesh routing")
 
 		// unset raw path, otherwise chi uses it to route and then fails to match percent encoded path segments
 		r.URL.RawPath = ""
