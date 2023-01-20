@@ -87,7 +87,7 @@ type GroupFeature struct {
 // GroupFeatureChanged is emitted when a group feature was changed
 type GroupFeatureChanged struct {
 	Executant *user.UserId
-	UserID    string
+	GroupID   string
 	Features  []GroupFeature
 }
 
