@@ -48,15 +48,18 @@ var ErrUserAlreadyAccepted = errors.New("user already accepted an invitation tok
 // endpoint when the request is done using a not existing token.
 var ErrTokenNotFound = errors.New("token not found")
 
+// OCMClient is the client for an OCM provider.
 type OCMClient struct {
 	client *http.Client
 }
 
+// Config is the configuration to be used for the OCMClient.
 type Config struct {
 	Timeout  time.Duration
 	Insecure bool
 }
 
+// New returns a new OCMClient.
 func New(c *Config) *OCMClient {
 	return &OCMClient{
 		client: rhttp.GetHTTPClient(
@@ -66,6 +69,8 @@ func New(c *Config) *OCMClient {
 	}
 }
 
+// InviteAcceptedRequest contains the parameters for accepting
+// an invitation.
 type InviteAcceptedRequest struct {
 	UserID            string `json:"userID"`
 	Email             string `json:"email"`
@@ -74,6 +79,8 @@ type InviteAcceptedRequest struct {
 	Token             string `json:"token"`
 }
 
+// User contains the remote user's information when accepting
+// an invitation.
 type User struct {
 	UserID string `json:"userID"`
 	Email  string `json:"email"`

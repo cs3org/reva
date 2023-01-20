@@ -76,9 +76,9 @@ func TempFile(r io.Reader) (string, error) {
 	return f.Name(), nil
 }
 
-// TempJsonFile creates a temporary file returning its path.
+// TempJSONFile creates a temporary file returning its path.
 // The file is filled with the object encoded in json.
-func TempJsonFile(c any) (string, error) {
+func TempJSONFile(c any) (string, error) {
 	data, err := json.Marshal(c)
 	if err != nil {
 		return "", err

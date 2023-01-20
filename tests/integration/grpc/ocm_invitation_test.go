@@ -1,3 +1,21 @@
+// Copyright 2018-2023 CERN
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// In applying this license, CERN does not waive the privileges and immunities
+// granted to it by virtue of its status as an Intergovernmental Organization
+// or submit itself to any jurisdiction.
+
 package grpc_test
 
 import (
@@ -129,7 +147,7 @@ var _ = Describe("ocm invitation workflow", func() {
 
 	Describe("einstein and marie do not know each other", func() {
 		BeforeEach(func() {
-			inviteTokenFile, err = helpers.TempJsonFile(map[string]string{})
+			inviteTokenFile, err = helpers.TempJSONFile(map[string]string{})
 			Expect(err).ToNot(HaveOccurred())
 			variables = map[string]string{
 				"invite_token_file": inviteTokenFile,
@@ -173,7 +191,7 @@ var _ = Describe("ocm invitation workflow", func() {
 
 	Describe("an invitation workflow has been already completed between einstein and marie", func() {
 		BeforeEach(func() {
-			inviteTokenFile, err = helpers.TempJsonFile(map[string]map[string][]*userpb.User{
+			inviteTokenFile, err = helpers.TempJSONFile(map[string]map[string][]*userpb.User{
 				"accepted_users": {
 					einstein.Id.OpaqueId: {marie},
 					marie.Id.OpaqueId:    {einstein},
@@ -211,7 +229,7 @@ var _ = Describe("ocm invitation workflow", func() {
 			Description: "expired token",
 		}
 		BeforeEach(func() {
-			inviteTokenFile, err = helpers.TempJsonFile(map[string]map[string]*invitepb.InviteToken{
+			inviteTokenFile, err = helpers.TempJSONFile(map[string]map[string]*invitepb.InviteToken{
 				"invites": {
 					expiredToken.Token: expiredToken,
 				},
@@ -234,7 +252,7 @@ var _ = Describe("ocm invitation workflow", func() {
 
 	Describe("marie accept a not existing token", func() {
 		BeforeEach(func() {
-			inviteTokenFile, err = helpers.TempJsonFile(map[string]string{})
+			inviteTokenFile, err = helpers.TempJSONFile(map[string]string{})
 			Expect(err).ToNot(HaveOccurred())
 			variables = map[string]string{
 				"invite_token_file": inviteTokenFile,
@@ -305,7 +323,7 @@ var _ = Describe("ocm invitation workflow", func() {
 			defer res.Body.Close()
 
 			var users []*userpb.User
-			json.NewDecoder(res.Body).Decode(&users)
+			_ = json.NewDecoder(res.Body).Decode(&users)
 			return users, res.StatusCode
 		}
 
@@ -347,7 +365,7 @@ var _ = Describe("ocm invitation workflow", func() {
 
 		Context("marie already accepted an invitation before", func() {
 			BeforeEach(func() {
-				inviteTokenFile, err = helpers.TempJsonFile(map[string]map[string][]*userpb.User{
+				inviteTokenFile, err = helpers.TempJSONFile(map[string]map[string][]*userpb.User{
 					"accepted_users": {
 						einstein.Id.OpaqueId: {marie},
 						marie.Id.OpaqueId:    {einstein},
@@ -383,7 +401,7 @@ var _ = Describe("ocm invitation workflow", func() {
 				Description: "expired token",
 			}
 			BeforeEach(func() {
-				inviteTokenFile, err = helpers.TempJsonFile(map[string]map[string]*invitepb.InviteToken{
+				inviteTokenFile, err = helpers.TempJSONFile(map[string]map[string]*invitepb.InviteToken{
 					"invites": {
 						expiredToken.Token: expiredToken,
 					},
@@ -410,13 +428,13 @@ var _ = Describe("ocm invitation workflow", func() {
 
 		Context("generate the token from http apis", func() {
 			BeforeEach(func() {
-				inviteTokenFile, err = helpers.TempJsonFile(map[string]map[string]*invitepb.InviteToken{})
+				inviteTokenFile, err = helpers.TempJSONFile(map[string]map[string]*invitepb.InviteToken{})
 				Expect(err).ToNot(HaveOccurred())
 				variables = map[string]string{
 					"invite_token_file": inviteTokenFile,
 				}
 			})
-			It("succeds", func() {
+			It("succeeds", func() {
 				users, code := findAccepted(tknEinstein, cernboxURL)
 				Expect(code).To(Equal(http.StatusOK))
 				Expect(ocmUsersEqual(users, []*userpb.User{})).To(BeTrue())
