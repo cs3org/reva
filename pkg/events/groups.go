@@ -77,3 +77,23 @@ func (GroupMemberRemoved) Unmarshal(v []byte) (interface{}, error) {
 	err := json.Unmarshal(v, &e)
 	return e, err
 }
+
+// GroupFeature represents a group feature
+type GroupFeature struct {
+	Name  string
+	Value string
+}
+
+// UserFeatureChanged is emitted when a group feature was changed
+type GroupFeatureChanged struct {
+	Executant *user.UserId
+	UserID    string
+	Features  []GroupFeature
+}
+
+// Unmarshal to fulfill unmarshaller interface
+func (GroupFeatureChanged) Unmarshal(v []byte) (interface{}, error) {
+	e := GroupFeatureChanged{}
+	err := json.Unmarshal(v, &e)
+	return e, err
+}
