@@ -56,6 +56,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/acl"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/chunking"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/grants"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/templates"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/jellydator/ttlcache/v2"
 	"github.com/pkg/errors"
@@ -290,7 +291,8 @@ func (fs *eosfs) unwrap(ctx context.Context, internal string, ownerUID *uint64) 
 		return "", err
 	}
 
-	trim := path.Join(ns, u.Username)
+	layout := templates.WithUser(u, fs.conf.UserLayout)
+	trim := path.Join(ns, layout)
 
 	if !strings.HasPrefix(internal, trim) && ownerUID != nil {
 		// ugh.. this looks like a share?
