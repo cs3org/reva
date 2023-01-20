@@ -168,7 +168,6 @@ func (fs *eosfs) listPersonalStorageSpaces(ctx context.Context, u *userpb.User, 
 		md.Path = path.Base(md.Path)
 	}
 
-	//id := &provider.StorageSpaceId{OpaqueId: "19!" + md.Id.OpaqueId}
 	ssID, err := storagespace.FormatReference(
 		&provider.Reference{
 			ResourceId: &provider.ResourceId{
