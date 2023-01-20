@@ -4,9 +4,14 @@ gatewaysvc = "{{cesnetgw_address}}"
 [http]
 address = "{{grpc_address}}"
 
-[http.services.ocm]
-prefix = "ocm"
+[http.services.ocmd]
 
 [http.services.sciencemesh]
 
 [http.middlewares.cors]
+
+[http.middlewares.providerauthorizer]
+driver = "json"
+
+[http.middlewares.providerauthorizer.drivers.json]
+providers = "fixtures/ocm-providers.demo.json"
