@@ -22,14 +22,15 @@ import (
 	"context"
 	"os"
 
+	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	cs3permissions "github.com/cs3org/go-cs3apis/cs3/permissions/v1beta1"
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
 	helpers "github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/testhelpers"
-	"github.com/cs3org/reva/v2/pkg/storagespace"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/stretchr/testify/mock"
@@ -313,29 +314,56 @@ var _ = Describe("Spaces", func() {
 
 	Describe("Update Space", func() {
 		var (
-			env *helpers.TestEnv
+			env     *helpers.TestEnv
+			spaceid *provider.StorageSpaceId
+
+			manager  = &userv1beta1.User{Id: &userv1beta1.UserId{OpaqueId: "manager"}}
+			editor   = &userv1beta1.User{Id: &userv1beta1.UserId{OpaqueId: "editor"}}
+			viewer   = &userv1beta1.User{Id: &userv1beta1.UserId{OpaqueId: "viewer"}}
+			nomember = &userv1beta1.User{Id: &userv1beta1.UserId{OpaqueId: "nomember"}}
+			admin    = &userv1beta1.User{Id: &userv1beta1.UserId{OpaqueId: "admin"}}
 		)
 		BeforeEach(func() {
 			var err error
 			env, err = helpers.NewTestEnv(nil)
 			Expect(err).ToNot(HaveOccurred())
+
+			// space permissions
 			env.PermissionsClient.On("CheckPermission", mock.Anything, mock.Anything, mock.Anything).Return(
 				func(ctx context.Context, in *cs3permissions.CheckPermissionRequest, opts ...grpc.CallOption) *cs3permissions.CheckPermissionResponse {
-					if ctxpkg.ContextMustGetUser(ctx).Id.GetOpaqueId() == "25b69780-5f39-43be-a7ac-a9b9e9fe4230" {
-						// id of owner/admin
+					switch ctxpkg.ContextMustGetUser(ctx).GetId().GetOpaqueId() {
+					case manager.GetId().GetOpaqueId():
+						switch in.Permission {
+						case "create-space":
+							return &cs3permissions.CheckPermissionResponse{Status: &rpcv1beta1.Status{Code: rpcv1beta1.Code_CODE_OK}}
+						default:
+							return &cs3permissions.CheckPermissionResponse{Status: &rpcv1beta1.Status{Code: rpcv1beta1.Code_CODE_PERMISSION_DENIED}}
+						}
+					case admin.GetId().GetOpaqueId():
 						return &cs3permissions.CheckPermissionResponse{Status: &rpcv1beta1.Status{Code: rpcv1beta1.Code_CODE_OK}}
+					default:
+						return &cs3permissions.CheckPermissionResponse{Status: &rpcv1beta1.Status{Code: rpcv1beta1.Code_CODE_PERMISSION_DENIED}}
 					}
-					// id of generic user
-					return &cs3permissions.CheckPermissionResponse{Status: &rpcv1beta1.Status{Code: rpcv1beta1.Code_CODE_PERMISSION_DENIED}}
-				},
-				nil)
+				}, nil)
 
-			env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(func(ctx context.Context, n *node.Node) provider.ResourcePermissions {
-				if ctxpkg.ContextMustGetUser(ctx).Id.GetOpaqueId() == "25b69780-5f39-43be-a7ac-a9b9e9fe4230" {
-					return node.OwnerPermissions() // id of owner/admin
-				}
-				return node.NoPermissions()
-			}, nil)
+			env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(
+				func(ctx context.Context, n *node.Node) provider.ResourcePermissions {
+					switch ctxpkg.ContextMustGetUser(ctx).GetId().GetOpaqueId() {
+					case manager.GetId().GetOpaqueId():
+						return node.OwnerPermissions() // id of owner/admin
+					case editor.GetId().GetOpaqueId():
+						return provider.ResourcePermissions{InitiateFileUpload: true} // mock editor
+					case viewer.GetId().GetOpaqueId():
+						return provider.ResourcePermissions{Stat: true} // mock viewer
+					default:
+						return node.NoPermissions()
+					}
+				}, nil)
+
+			resp, err := env.Fs.CreateStorageSpace(ctxpkg.ContextSetUser(context.Background(), manager), &provider.CreateStorageSpaceRequest{Name: "Mission to Venus", Type: "project"})
+			Expect(err).ToNot(HaveOccurred())
+
+			spaceid = resp.GetStorageSpace().GetId()
 		})
 
 		AfterEach(func() {
@@ -343,39 +371,150 @@ var _ = Describe("Spaces", func() {
 				env.Cleanup()
 			}
 		})
-		Context("project space", func() {
-			It("Create a project space as admin and change quota", func() {
-				resp, err := env.Fs.CreateStorageSpace(env.Ctx, &provider.CreateStorageSpaceRequest{Name: "Mission to Venus", Type: "project"})
+
+		DescribeTable("update project spaces",
+			func(details func() (*userv1beta1.User, *provider.UpdateStorageSpaceRequest), expectedStatusCode rpcv1beta1.Code) {
+				u, req := details()
+				r, err := env.Fs.UpdateStorageSpace(ctxpkg.ContextSetUser(context.Background(), u), req)
 				Expect(err).ToNot(HaveOccurred())
-				updateResp, err := env.Fs.UpdateStorageSpace(
-					env.Ctx,
-					&provider.UpdateStorageSpaceRequest{
+				Expect(r.Status.Code).To(Equal(expectedStatusCode))
+			},
+
+			Entry("Manager can change everything but quota",
+				func() (*userv1beta1.User, *provider.UpdateStorageSpaceRequest) {
+					return manager, &provider.UpdateStorageSpaceRequest{
 						StorageSpace: &provider.StorageSpace{
-							Id:    resp.StorageSpace.Id,
-							Quota: &provider.Quota{QuotaMaxBytes: uint64(1000)},
-						},
-					},
-				)
-				Expect(err).ToNot(HaveOccurred())
-				Expect(updateResp.Status.Code, rpcv1beta1.Code_CODE_OK)
-				Expect(updateResp.StorageSpace.Quota.QuotaMaxBytes, uint64(1000))
-			})
-			It("try to change quota as a non admin user", func() {
-				ctx := ctxpkg.ContextSetUser(context.Background(), env.Users[0])
-				updateResp, err := env.Fs.UpdateStorageSpace(
-					ctx,
-					&provider.UpdateStorageSpaceRequest{
-						StorageSpace: &provider.StorageSpace{
-							Id: &provider.StorageSpaceId{
-								OpaqueId: storagespace.FormatResourceID(*env.SpaceRootRes),
+							Name: "new space name",
+							Id:   spaceid,
+							Opaque: &typesv1beta1.Opaque{
+								Map: map[string]*typesv1beta1.OpaqueEntry{
+									"description": {
+										Decoder: "plain",
+										Value:   []byte("new description"),
+									},
+									"spacealias": {
+										Decoder: "plain",
+										Value:   []byte("new alias"),
+									},
+									"image": {
+										Decoder: "plain",
+										Value:   []byte("a$b!c"),
+									},
+									"readme": {
+										Decoder: "plain",
+										Value:   []byte("f$g!h"),
+									},
+								},
 							},
+						},
+					}
+				},
+				rpcv1beta1.Code_CODE_OK,
+			),
+			Entry("Manager cannot change quota, even with large request",
+				func() (*userv1beta1.User, *provider.UpdateStorageSpaceRequest) {
+					return manager, &provider.UpdateStorageSpaceRequest{
+						StorageSpace: &provider.StorageSpace{
+							Name:  "new space name",
+							Id:    spaceid,
+							Quota: &provider.Quota{QuotaMaxBytes: uint64(1000)},
+							Opaque: &typesv1beta1.Opaque{
+								Map: map[string]*typesv1beta1.OpaqueEntry{
+									"description": {
+										Decoder: "plain",
+										Value:   []byte("new description"),
+									},
+									"spacealias": {
+										Decoder: "plain",
+										Value:   []byte("new alias"),
+									},
+									"image": {
+										Decoder: "plain",
+										Value:   []byte("a$b!c"),
+									},
+									"readme": {
+										Decoder: "plain",
+										Value:   []byte("f$g!h"),
+									},
+								},
+							},
+						},
+					}
+				},
+				rpcv1beta1.Code_CODE_PERMISSION_DENIED,
+			),
+			Entry("Editor cannot change quota",
+				func() (*userv1beta1.User, *provider.UpdateStorageSpaceRequest) {
+					return editor, &provider.UpdateStorageSpaceRequest{
+						StorageSpace: &provider.StorageSpace{
+							Id:    spaceid,
 							Quota: &provider.Quota{QuotaMaxBytes: uint64(1000)},
 						},
-					},
-				)
-				Expect(err).ToNot(HaveOccurred())
-				Expect(updateResp.Status.Code).To(Equal(rpcv1beta1.Code_CODE_PERMISSION_DENIED))
-			})
-		})
+					}
+				},
+				rpcv1beta1.Code_CODE_PERMISSION_DENIED,
+			),
+			Entry("Editor cannot change name",
+				func() (*userv1beta1.User, *provider.UpdateStorageSpaceRequest) {
+					return editor, &provider.UpdateStorageSpaceRequest{
+						StorageSpace: &provider.StorageSpace{
+							Name: "new spacename",
+							Id:   spaceid,
+						},
+					}
+				},
+				rpcv1beta1.Code_CODE_PERMISSION_DENIED,
+			),
+			Entry("Admin can change quota",
+				func() (*userv1beta1.User, *provider.UpdateStorageSpaceRequest) {
+					return admin, &provider.UpdateStorageSpaceRequest{
+						StorageSpace: &provider.StorageSpace{
+							Id:    spaceid,
+							Quota: &provider.Quota{QuotaMaxBytes: uint64(1000)},
+						},
+					}
+				},
+				rpcv1beta1.Code_CODE_OK,
+			),
+			Entry("Admin can change name and description",
+				func() (*userv1beta1.User, *provider.UpdateStorageSpaceRequest) {
+					return admin, &provider.UpdateStorageSpaceRequest{
+						StorageSpace: &provider.StorageSpace{
+							Name: "new spacename",
+							Id:   spaceid,
+							Opaque: &typesv1beta1.Opaque{
+								Map: map[string]*typesv1beta1.OpaqueEntry{
+									"description": {
+										Decoder: "plain",
+										Value:   []byte("new description"),
+									},
+								},
+							},
+						},
+					}
+				},
+				rpcv1beta1.Code_CODE_OK,
+			),
+			Entry("Viewer gets OK when he changes nothing",
+				func() (*userv1beta1.User, *provider.UpdateStorageSpaceRequest) {
+					return viewer, &provider.UpdateStorageSpaceRequest{
+						StorageSpace: &provider.StorageSpace{
+							Id: spaceid,
+						},
+					}
+				},
+				rpcv1beta1.Code_CODE_OK,
+			),
+			Entry("NoMember will not find the space",
+				func() (*userv1beta1.User, *provider.UpdateStorageSpaceRequest) {
+					return nomember, &provider.UpdateStorageSpaceRequest{
+						StorageSpace: &provider.StorageSpace{
+							Id: spaceid,
+						},
+					}
+				},
+				rpcv1beta1.Code_CODE_NOT_FOUND,
+			),
+		)
 	})
 })
