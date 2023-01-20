@@ -36,6 +36,7 @@ import (
 
 var defaultFilePerm = os.FileMode(0664)
 
+// Upload represents an upload in progress
 type Upload struct {
 	ID       string
 	Info     tusd.FileInfo
@@ -46,6 +47,7 @@ type Upload struct {
 	log    zerolog.Logger
 }
 
+// New returns a new Upload instance
 func New(ctx context.Context, info tusd.FileInfo, storageRoot string, client eosclient.EOSClient) (*Upload, error) {
 	u := &Upload{
 		ID:       info.ID,
@@ -69,6 +71,7 @@ func New(ctx context.Context, info tusd.FileInfo, storageRoot string, client eos
 	return u, u.writeInfo()
 }
 
+// Get returns the Upload for the given upload id
 func Get(ctx context.Context, id, storageRoot string, client eosclient.EOSClient) (*Upload, error) {
 	u := &Upload{
 		ID:       id,
@@ -98,14 +101,7 @@ func Get(ctx context.Context, id, storageRoot string, client eosclient.EOSClient
 	return u, nil
 }
 
-func (u *Upload) writeInfo() error {
-	data, err := json.Marshal(u.Info)
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(u.InfoPath, data, defaultFilePerm)
-}
-
+// FinishUpload finishes an upload and moves the file to the internal destination
 func (u *Upload) FinishUpload(ctx context.Context) error {
 	auth := eosclient.Authorization{
 		Role: eosclient.Role{
@@ -128,6 +124,7 @@ func (u *Upload) FinishUpload(ctx context.Context) error {
 	return u.cleanup()
 }
 
+// WriteChunk writes the stream from the reader to the given offset of the upload
 func (u *Upload) WriteChunk(ctx context.Context, offset int64, src io.Reader) (int64, error) {
 	file, err := os.OpenFile(u.BinPath, os.O_WRONLY|os.O_APPEND, defaultFilePerm)
 	if err != nil {
@@ -153,10 +150,12 @@ func (u *Upload) WriteChunk(ctx context.Context, offset int64, src io.Reader) (i
 	return n, u.writeInfo()
 }
 
+// GetInfo returns the FileInfo
 func (u *Upload) GetInfo(_ context.Context) (tusd.FileInfo, error) {
 	return u.Info, nil
 }
 
+// GetReader returns an io.Reader for the upload
 func (u *Upload) GetReader(_ context.Context) (io.Reader, error) {
 	return os.Open(u.BinPath)
 }
@@ -196,6 +195,14 @@ func (u *Upload) ConcatUploads(_ context.Context, uploads []tusd.Upload) (err er
 	}
 
 	return
+}
+
+func (u *Upload) writeInfo() error {
+	data, err := json.Marshal(u.Info)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(u.InfoPath, data, defaultFilePerm)
 }
 
 func (u *Upload) cleanup() error {

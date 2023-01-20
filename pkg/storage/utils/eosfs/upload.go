@@ -37,6 +37,7 @@ import (
 	tusd "github.com/tus/tusd/pkg/handler"
 )
 
+// Upload uploads data to the given resource
 func (fs *eosfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadCloser, uff storage.UploadFinishedFunc) (provider.ResourceInfo, error) {
 	upload, err := fs.GetUpload(ctx, ref.Path)
 	if err != nil {
@@ -86,6 +87,7 @@ func (fs *eosfs) Upload(ctx context.Context, ref *provider.Reference, r io.ReadC
 	return *ri, nil
 }
 
+// InitiateUpload returns upload ids corresponding to different protocols it supports
 func (fs *eosfs) InitiateUpload(ctx context.Context, ref *provider.Reference, uploadLength int64, metadata map[string]string) (map[string]string, error) {
 	space, err := fs.resolveSpace(ctx, ref)
 	if err != nil {
