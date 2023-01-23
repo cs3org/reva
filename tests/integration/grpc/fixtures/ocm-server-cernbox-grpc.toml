@@ -25,8 +25,7 @@ file = "{{invite_token_file}}"
 [grpc.services.ocminvitemanager.drivers.sql]
 db_username = "{{db_username}}"
 db_password = "{{db_password}}"
-db_host = "{{db_host}}"
-db_port = {{db_port}}
+db_address = "{{db_address}}"
 db_name = "{{db_name}}"
 
 [grpc.services.ocmproviderauthorizer]

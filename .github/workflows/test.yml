@@ -20,9 +20,18 @@ jobs:
         run: make test-integration
         env:
           REDIS_ADDRESS: redis:6379
+          SQL_USERNAME: root
+          SQL_PASSWORD: my-secret-pw
+          SQL_ADDRESS: mysql:3306
+          SQL_DBNAME: reva
     services:
       redis:
         image: registry.cern.ch/docker.io/webhippie/redis
+      mysql:
+        image: mysql
+        env:
+          MYSQL_ROOT_PASSWORD: my-secret-pw
+          MYSQL_DATABASE: reva
   go-test:
     runs-on: self-hosted
     steps:

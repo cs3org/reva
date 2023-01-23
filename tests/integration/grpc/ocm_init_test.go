@@ -98,11 +98,10 @@ func dropTables(db *sql.DB) error {
 func initSQLData(variables map[string]string, tokens []*invitepb.InviteToken, acceptedUsers map[string][]*userpb.User) (map[string]string, func(), error) {
 	username := os.Getenv("SQL_USERNAME")
 	password := os.Getenv("SQL_PASSWORD")
-	host := os.Getenv("SQL_HOST")
-	port := os.Getenv("SQL_PORT")
+	address := os.Getenv("SQL_ADDRESS")
 	database := os.Getenv("SQL_DBNAME")
 
-	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", username, password, host, port, database))
+	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s)/%s", username, password, address, database))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -115,8 +114,7 @@ func initSQLData(variables map[string]string, tokens []*invitepb.InviteToken, ac
 
 	variables["db_username"] = username
 	variables["db_password"] = password
-	variables["db_host"] = host
-	variables["db_port"] = port
+	variables["db_address"] = address
 	variables["db_name"] = database
 
 	if err := initTokens(db, tokens); err != nil {
