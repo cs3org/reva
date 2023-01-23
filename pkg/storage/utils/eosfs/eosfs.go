@@ -471,7 +471,12 @@ func (fs *eosfs) GetPathByID(ctx context.Context, id *provider.ResourceId) (stri
 		return "", errors.Wrap(err, "eosfs: error getting file info by inode")
 	}
 
-	if perm := fs.permissionSet(ctx, eosFileInfo, nil); perm.GetPath {
+	owner, err := fs.getUserIDGateway(ctx, strconv.FormatUint(eosFileInfo.UID, 10))
+	if err != nil {
+		sublog := appctx.GetLogger(ctx).With().Logger()
+		sublog.Warn().Uint64("uid", eosFileInfo.UID).Msg("could not lookup userid, leaving empty")
+	}
+	if perm := fs.permissionSet(ctx, eosFileInfo, owner); perm.GetPath {
 		return path.Join(fs.conf.MountPath, strings.TrimPrefix(eosFileInfo.File, trim)), nil
 	}
 	return "", errtypes.PermissionDenied("eosfs: getting path for id not allowed")
