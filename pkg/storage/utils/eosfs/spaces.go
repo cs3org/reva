@@ -244,7 +244,16 @@ func (fs *eosfs) listProjectStorageSpaces(ctx context.Context, user *userpb.User
 	for rows.Next() {
 		var name, relPath string
 		if err = rows.Scan(&name, &relPath); err == nil {
-			info, err := fs.GetMD(ctx, &provider.Reference{Path: relPath}, []string{}, nil)
+			rootAuth, err := fs.getRootAuth(ctx)
+			if err != nil {
+				return nil, err
+			}
+			fi, err := fs.c.GetFileInfoByPath(ctx, rootAuth, path.Join(fs.conf.Namespace, relPath))
+			if err != nil {
+				log.Error().Err(err).Str("path", relPath).Msgf("eosfs: error listing project space - can't get file info by path")
+				continue
+			}
+			info, err := fs.convertToResourceInfo(ctx, fi, strconv.FormatUint(fi.Inode, 10), true)
 			if err == nil {
 				if (spaceID == "" || spaceID == info.Id.OpaqueId) && (spacePath == "" || spacePath == relPath) {
 					// If the request was for a relative ref, return just the base path
@@ -252,14 +261,29 @@ func (fs *eosfs) listProjectStorageSpaces(ctx context.Context, user *userpb.User
 						relPath = path.Base(relPath)
 					}
 
+					ssID, err := storagespace.FormatReference(
+						&provider.Reference{
+							ResourceId: &provider.ResourceId{
+								SpaceId:  info.Id.SpaceId,
+								OpaqueId: info.Id.OpaqueId,
+							},
+						},
+					)
+					if err != nil {
+						log.Error().Err(err).Str("path", relPath).Msgf("eosfs: error listing project space - invalid resource id")
+						continue
+					}
 					dbProjects = append(dbProjects, &provider.StorageSpace{
-						Id:        &provider.StorageSpaceId{OpaqueId: name},
+						Id:        &provider.StorageSpaceId{OpaqueId: ssID},
 						Name:      name,
 						SpaceType: "project",
 						Owner: &userpb.User{
 							Id: info.Owner,
 						},
-						Root:  &provider.ResourceId{StorageId: info.Id.OpaqueId, OpaqueId: info.Id.OpaqueId},
+						Root: &provider.ResourceId{
+							SpaceId:  info.Id.OpaqueId,
+							OpaqueId: info.Id.OpaqueId,
+						},
 						Mtime: info.Mtime,
 						Quota: &provider.Quota{},
 						Opaque: &types.Opaque{
@@ -267,6 +291,10 @@ func (fs *eosfs) listProjectStorageSpaces(ctx context.Context, user *userpb.User
 								"path": {
 									Decoder: "plain",
 									Value:   []byte(relPath),
+								},
+								"spaceAlias": {
+									Decoder: "plain",
+									Value:   []byte("project/" + name),
 								},
 							},
 						},
