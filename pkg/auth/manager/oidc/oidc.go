@@ -147,7 +147,7 @@ func (am *mgr) Configure(m map[string]interface{}) error {
 // The clientID would be empty as we only need to validate the clientSecret variable
 // which contains the access token that we can use to contact the UserInfo endpoint
 // and get the user claims.
-func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) (*user.User, map[string]*authpb.Scope, error) {
+func (am *mgr) Authenticate(ctx context.Context, _, clientSecret string) (*user.User, map[string]*authpb.Scope, error) {
 	ctx = am.getOAuthCtx(ctx)
 	log := appctx.GetLogger(ctx)
 
@@ -199,7 +199,7 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 		return nil, nil, fmt.Errorf("no \"email\" attribute found in userinfo: maybe the client did not request the oidc \"email\"-scope")
 	}
 
-	err = am.resolveUser(ctx, claims, clientID)
+	err = am.resolveUser(ctx, claims, userInfo.Subject)
 	if err != nil {
 		return nil, nil, errors.Wrapf(err, "oidc: error resolving username for external user '%v'", claims["email"])
 	}
@@ -302,7 +302,7 @@ func (am *mgr) getOIDCProvider(ctx context.Context) (*oidc.Provider, error) {
 	return am.provider, nil
 }
 
-func (am *mgr) resolveUser(ctx context.Context, claims map[string]interface{}, clientID string) error {
+func (am *mgr) resolveUser(ctx context.Context, claims map[string]interface{}, subject string) error {
 	var (
 		value   string
 		resolve bool
@@ -340,7 +340,7 @@ func (am *mgr) resolveUser(ctx context.Context, claims map[string]interface{}, c
 		}
 		resolve = true
 	} else if uid == 0 || gid == 0 {
-		value = clientID
+		value = subject
 		resolve = true
 	}
 
@@ -371,7 +371,7 @@ func (am *mgr) resolveUser(ctx context.Context, claims map[string]interface{}, c
 	claims[am.c.GIDClaim] = getUserByClaimResp.GetUser().GidNumber
 	log := appctx.GetLogger(ctx).Debug().Str("username", value).Interface("claims", claims)
 	if uid == 0 || gid == 0 {
-		log.Msgf("resolveUser: claims overridden from '%s'", clientID)
+		log.Msgf("resolveUser: claims overridden from '%s'", subject)
 	} else {
 		log.Msg("resolveUser: claims overridden from mapped user")
 	}
