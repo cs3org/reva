@@ -163,6 +163,7 @@ require (
 go 1.19
 
 replace (
+	github.com/cs3org/go-cs3apis => github.com/redblom/go-cs3apis v0.0.0-20230123143944-f55fe944b09a
 	github.com/eventials/go-tus => github.com/andrewmostello/go-tus v0.0.0-20200314041820-904a9904af9a
 	github.com/oleiade/reflections => github.com/oleiade/reflections v1.0.1
 )
