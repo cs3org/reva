@@ -20,6 +20,7 @@ package ocdav
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"path"
 	"strconv"
@@ -239,6 +240,10 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 	}
 
 	if uRes.Status.Code != rpc.Code_CODE_OK {
+		if r.ProtoMajor == 1 {
+			// drain body to avoid `connection closed` errors
+			_, _ = io.Copy(io.Discard, r.Body)
+		}
 		switch uRes.Status.Code {
 		case rpc.Code_CODE_PERMISSION_DENIED:
 			status := http.StatusForbidden

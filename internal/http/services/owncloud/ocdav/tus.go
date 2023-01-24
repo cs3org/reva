@@ -21,6 +21,7 @@ package ocdav
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"path"
 	"strconv"
@@ -204,6 +205,10 @@ func (s *svc) handleTusPost(ctx context.Context, w http.ResponseWriter, r *http.
 	}
 
 	if uRes.Status.Code != rpc.Code_CODE_OK {
+		if r.ProtoMajor == 1 {
+			// drain body to avoid `connection closed` errors
+			_, _ = io.Copy(io.Discard, r.Body)
+		}
 		if uRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
 			w.WriteHeader(http.StatusPreconditionFailed)
 			return
