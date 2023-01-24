@@ -129,7 +129,7 @@ func (m *manager) Authenticate(ctx context.Context, token, secret string) (*user
 
 	var owner *user.User
 	// FIXME use new user type SPACE_OWNER
-	if publicShareResponse.GetShare().GetOwner().Type == 8 {
+	if publicShareResponse.GetShare().GetOwner().GetType() == 8 {
 		owner = &user.User{Id: publicShareResponse.GetShare().GetOwner(), DisplayName: "Public", Username: "public"}
 	} else {
 		getUserResponse, err := gwConn.GetUser(ctx, &userprovider.GetUserRequest{

@@ -94,6 +94,11 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 		r.Mount(rule.Endpoint, handler)
 	}
 
+	_ = chi.Walk(r, func(method string, route string, handler http.Handler, middlewares ...func(http.Handler) http.Handler) error {
+		log.Debug().Str("service", "reverseproxy").Str("method", method).Str("route", route).Int("middlewares", len(middlewares)).Msg("serving endpoint")
+		return nil
+	})
+
 	return &svc{router: r}, nil
 }
 

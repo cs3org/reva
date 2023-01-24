@@ -99,6 +99,11 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 		return nil, err
 	}
 
+	_ = chi.Walk(s.router, func(method string, route string, handler http.Handler, middlewares ...func(http.Handler) http.Handler) error {
+		log.Debug().Str("service", "approvider").Str("method", method).Str("route", route).Int("middlewares", len(middlewares)).Msg("serving endpoint")
+		return nil
+	})
+
 	return s, nil
 }
 
