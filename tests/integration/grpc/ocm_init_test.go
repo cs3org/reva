@@ -25,6 +25,7 @@ import (
 	"time"
 
 	conversions "github.com/cs3org/reva/pkg/cbox/utils"
+	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/pkg/errors"
 
@@ -115,9 +116,21 @@ func dropTables(db *sql.DB) error {
 
 func initSQLData(variables map[string]string, tokens []*invitepb.InviteToken, acceptedUsers map[string][]*userpb.User) (map[string]string, func(), error) {
 	username := os.Getenv("SQL_USERNAME")
+	if username == "" {
+		Fail("SQL_USERNAME not set")
+	}
 	password := os.Getenv("SQL_PASSWORD")
+	if password == "" {
+		Fail("SQL_PASSWORD not set")
+	}
 	address := os.Getenv("SQL_ADDRESS")
+	if address == "" {
+		Fail("SQL_ADDRESS not set")
+	}
 	database := os.Getenv("SQL_DBNAME")
+	if database == "" {
+		Fail("SQL_DBNAME not set")
+	}
 
 	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s)/%s", username, password, address, database))
 	if err != nil {
