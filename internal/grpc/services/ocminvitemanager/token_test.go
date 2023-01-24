@@ -16,11 +16,12 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package token
+package ocminvitemanager
 
 import (
 	"sync"
 	"testing"
+	"time"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 )
@@ -40,10 +41,7 @@ func TestCreateToken(t *testing.T) {
 		Opaque:       nil,
 	}
 
-	token, err := CreateToken("24h", user.GetId())
-	if err != nil {
-		t.Errorf("CreateToken() error = %v", err)
-	}
+	token := CreateToken(24*time.Hour, user.GetId(), "")
 	if token == nil {
 		t.Errorf("CreateToken() got = %v", token)
 	}
@@ -73,10 +71,8 @@ func TestCreateTokenCollision(t *testing.T) {
 	}
 
 	for i := 0; i < 1000000; i++ {
-		token, err := CreateToken("24h", user.GetId())
-		if err != nil {
-			t.Errorf("CreateToken() error = %v", err)
-		}
+		token := CreateToken(24*time.Hour, user.GetId(), "")
+
 		if token == nil {
 			t.Errorf("CreateToken() token = %v", token)
 		}

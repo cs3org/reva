@@ -16,7 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package ocmd
+package reqres
 
 import (
 	"encoding/json"
@@ -36,6 +36,7 @@ const (
 	APIErrorUnimplemented    APIErrorCode = "FUNCTION_NOT_IMPLEMENTED"
 	APIErrorInvalidParameter APIErrorCode = "INVALID_PARAMETER"
 	APIErrorProviderError    APIErrorCode = "PROVIDER_ERROR"
+	APIErrorAlreadyExist     APIErrorCode = "ALREADY_EXIST"
 	APIErrorServerError      APIErrorCode = "SERVER_ERROR"
 )
 
@@ -47,6 +48,7 @@ var APIErrorCodeMapping = map[APIErrorCode]int{
 	APIErrorUnimplemented:    http.StatusNotImplemented,
 	APIErrorInvalidParameter: http.StatusBadRequest,
 	APIErrorProviderError:    http.StatusBadGateway,
+	APIErrorAlreadyExist:     http.StatusConflict,
 	APIErrorServerError:      http.StatusInternalServerError,
 }
 

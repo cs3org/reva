@@ -23,9 +23,9 @@ import (
 
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp/global"
-	"github.com/cs3org/reva/pkg/rhttp/router"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/smtpclient"
+	"github.com/go-chi/chi/v5"
 	"github.com/mitchellh/mapstructure"
 	"github.com/rs/zerolog"
 )
@@ -34,8 +34,7 @@ func init() {
 	global.Register("ocmd", New)
 }
 
-// Config holds the config options that need to be passed down to all ocdav handlers.
-type Config struct {
+type config struct {
 	SMTPCredentials  *smtpclient.SMTPCredentials `mapstructure:"smtp_credentials"`
 	Prefix           string                      `mapstructure:"prefix"`
 	Host             string                      `mapstructure:"host"`
@@ -44,7 +43,7 @@ type Config struct {
 	Config           configData                  `mapstructure:"config"`
 }
 
-func (c *Config) init() {
+func (c *config) init() {
 	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
 
 	if c.Prefix == "" {
@@ -53,39 +52,51 @@ func (c *Config) init() {
 }
 
 type svc struct {
-	Conf                 *Config
-	SharesHandler        *sharesHandler
-	NotificationsHandler *notificationsHandler
-	ConfigHandler        *configHandler
-	InvitesHandler       *invitesHandler
-	SendHandler          *sendHandler
+	Conf   *config
+	router chi.Router
 }
 
-// New returns a new ocmd object.
+// New returns a new ocmd object, that implements
+// the OCM APIs specified in https://cs3org.github.io/OCM-API/docs.html
 func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) {
-	conf := &Config{}
+	conf := &config{}
 	if err := mapstructure.Decode(m, conf); err != nil {
 		return nil, err
 	}
 	conf.init()
 
+	r := chi.NewRouter()
 	s := &svc{
-		Conf: conf,
+		Conf:   conf,
+		router: r,
 	}
-	s.SharesHandler = new(sharesHandler)
-	s.NotificationsHandler = new(notificationsHandler)
-	s.ConfigHandler = new(configHandler)
-	s.InvitesHandler = new(invitesHandler)
-	s.SendHandler = new(sendHandler)
-	s.SharesHandler.init(s.Conf)
-	s.NotificationsHandler.init(s.Conf)
-	log.Debug().Str("initializing ConfigHandler Host", s.Conf.Host)
 
-	s.ConfigHandler.init(s.Conf)
-	s.InvitesHandler.init(s.Conf)
-	s.SendHandler.init(s.Conf)
+	if err := s.routerInit(); err != nil {
+		return nil, err
+	}
 
 	return s, nil
+}
+
+func (s *svc) routerInit() error {
+	configHandler := new(configHandler)
+	sharesHandler := new(sharesHandler)
+	notificationsHandler := new(notificationsHandler)
+	invitesHandler := new(invitesHandler)
+
+	configHandler.init(s.Conf)
+	sharesHandler.init(s.Conf)
+	notificationsHandler.init(s.Conf)
+	if err := invitesHandler.init(s.Conf); err != nil {
+		return err
+	}
+
+	s.router.Get("/ocm-provider", configHandler.Send) // FIXME: where this endpoint is documented?
+	s.router.Post("/shares", sharesHandler.CreateShare)
+	s.router.Post("/notifications", notificationsHandler.SendNotification)
+	s.router.Post("/invite-accepted", invitesHandler.AcceptInvite)
+
+	return nil
 }
 
 // Close performs cleanup.
@@ -98,37 +109,16 @@ func (s *svc) Prefix() string {
 }
 
 func (s *svc) Unprotected() []string {
-	return []string{"/invites/accept", "/shares", "/ocm-provider", "/notifications"}
+	return []string{"/invite-accepted", "/shares", "/ocm-provider", "/notifications"}
 }
 
 func (s *svc) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ctx := r.Context()
-		log := appctx.GetLogger(ctx)
+		log := appctx.GetLogger(r.Context())
+		log.Debug().Str("path", r.URL.Path).Msg("ocs routing")
 
-		var head string
-		head, r.URL.Path = router.ShiftPath(r.URL.Path)
-		log.Debug().Str("head", head).Str("tail", r.URL.Path).Msg("http routing")
-
-		switch head {
-		case "ocm-provider":
-			s.ConfigHandler.Handler().ServeHTTP(w, r)
-			return
-		case "shares":
-			s.SharesHandler.Handler().ServeHTTP(w, r)
-			return
-		case "notifications":
-			s.NotificationsHandler.Handler().ServeHTTP(w, r)
-			return
-		case "invites":
-			s.InvitesHandler.Handler().ServeHTTP(w, r)
-			return
-		case "send":
-			s.SendHandler.Handler().ServeHTTP(w, r)
-			return
-		}
-
-		log.Warn().Msgf("request not handled. Try e.g. 'ocm-provider', 'shares', 'notifications', 'invites', or 'send' instead of '%s'", head)
-		w.WriteHeader(http.StatusNotFound)
+		// unset raw path, otherwise chi uses it to route and then fails to match percent encoded path segments
+		r.URL.RawPath = ""
+		s.router.ServeHTTP(w, r)
 	})
 }

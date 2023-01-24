@@ -35,6 +35,7 @@ import (
 	_ "github.com/cs3org/reva/internal/http/services/preferences"
 	_ "github.com/cs3org/reva/internal/http/services/prometheus"
 	_ "github.com/cs3org/reva/internal/http/services/reverseproxy"
+	_ "github.com/cs3org/reva/internal/http/services/sciencemesh"
 	_ "github.com/cs3org/reva/internal/http/services/siteacc"
 	_ "github.com/cs3org/reva/internal/http/services/sysinfo"
 	_ "github.com/cs3org/reva/internal/http/services/wellknown"

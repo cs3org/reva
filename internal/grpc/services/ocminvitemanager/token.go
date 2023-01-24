@@ -16,7 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package token
+package ocminvitemanager
 
 import (
 	"time"
@@ -25,32 +25,21 @@ import (
 	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/google/uuid"
-	"github.com/pkg/errors"
 )
 
-// DefaultExpirationTime is the expiration time to be used when unspecified in the config.
-const DefaultExpirationTime = "24h"
-
 // CreateToken creates a InviteToken object for the userID indicated by userID.
-func CreateToken(expiration string, userID *userpb.UserId) (*invitepb.InviteToken, error) {
-	// Parse time of expiration
-	duration, err := time.ParseDuration(expiration)
-	if err != nil {
-		return nil, errors.Wrap(err, "error parsing time of expiration")
-	}
-
+func CreateToken(expiration time.Duration, userID *userpb.UserId, description string) *invitepb.InviteToken {
 	tokenID := uuid.New().String()
 	now := time.Now()
-	expirationTime := now.Add(duration)
+	expirationTime := now.Add(expiration)
 
-	token := invitepb.InviteToken{
+	return &invitepb.InviteToken{
 		Token:  tokenID,
 		UserId: userID,
 		Expiration: &typesv1beta1.Timestamp{
 			Seconds: uint64(expirationTime.Unix()),
 			Nanos:   0,
 		},
+		Description: description,
 	}
-
-	return &token, nil
 }

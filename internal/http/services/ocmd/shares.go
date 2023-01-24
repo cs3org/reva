@@ -36,6 +36,7 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
+	"github.com/cs3org/reva/internal/http/services/reqres"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/utils"
@@ -45,22 +46,13 @@ type sharesHandler struct {
 	gatewayAddr string
 }
 
-func (h *sharesHandler) init(c *Config) {
+func (h *sharesHandler) init(c *config) {
 	h.gatewayAddr = c.GatewaySvc
 }
 
-func (h *sharesHandler) Handler() http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case http.MethodPost:
-			h.createShare(w, r)
-		default:
-			WriteError(w, r, APIErrorInvalidParameter, "Only POST method is allowed", nil)
-		}
-	})
-}
-
-func (h *sharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
+// CreateShare sends all the informations to the consumer needed to start
+// synchronization between the two services.
+func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 	contentType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
@@ -86,7 +78,7 @@ func (h *sharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 					providerID = reqMap["providerId"].(string)
 				}
 			} else {
-				WriteError(w, r, APIErrorInvalidParameter, "could not parse json request body", nil)
+				reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, "could not parse json request body", nil)
 			}
 		}
 	} else {
@@ -95,30 +87,30 @@ func (h *sharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 		resource, providerID, owner = r.FormValue("name"), r.FormValue("providerId"), r.FormValue("owner")
 		err = json.Unmarshal([]byte(protocolJSON), &protocol)
 		if err != nil {
-			WriteError(w, r, APIErrorInvalidParameter, "invalid protocol parameters", nil)
+			reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, "invalid protocol parameters", nil)
 		}
 	}
 
 	if resource == "" || providerID == "" || owner == "" {
 		msg := fmt.Sprintf("missing details about resource to be shared (resource='%s', providerID='%s', owner='%s", resource, providerID, owner)
-		WriteError(w, r, APIErrorInvalidParameter, msg, nil)
+		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, msg, nil)
 		return
 	}
 	if shareWith == "" || protocol["name"] == "" || meshProvider == "" {
 		msg := fmt.Sprintf("missing request parameters (shareWith='%s', protocol.name='%s', meshProvider='%s'", shareWith, protocol["name"], meshProvider)
-		WriteError(w, r, APIErrorInvalidParameter, msg, nil)
+		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, msg, nil)
 		return
 	}
 
 	gatewayClient, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
 	if err != nil {
-		WriteError(w, r, APIErrorServerError, "error getting storage grpc client", err)
+		reqres.WriteError(w, r, reqres.APIErrorServerError, "error getting storage grpc client", err)
 		return
 	}
 
 	clientIP, err := utils.GetClientIP(r)
 	if err != nil {
-		WriteError(w, r, APIErrorServerError, fmt.Sprintf("error retrieving client IP from request: %s", r.RemoteAddr), err)
+		reqres.WriteError(w, r, reqres.APIErrorServerError, fmt.Sprintf("error retrieving client IP from request: %s", r.RemoteAddr), err)
 		return
 	}
 	providerInfo := ocmprovider.ProviderInfo{
@@ -134,11 +126,11 @@ func (h *sharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 		Provider: &providerInfo,
 	})
 	if err != nil {
-		WriteError(w, r, APIErrorServerError, "error sending a grpc is provider allowed request", err)
+		reqres.WriteError(w, r, reqres.APIErrorServerError, "error sending a grpc is provider allowed request", err)
 		return
 	}
 	if providerAllowedResp.Status.Code != rpc.Code_CODE_OK {
-		WriteError(w, r, APIErrorUnauthenticated, "provider not authorized", errors.New(providerAllowedResp.Status.Message))
+		reqres.WriteError(w, r, reqres.APIErrorUnauthenticated, "provider not authorized", errors.New(providerAllowedResp.Status.Message))
 		return
 	}
 
@@ -147,11 +139,11 @@ func (h *sharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 		UserId: &userpb.UserId{OpaqueId: shareWithParts[0]}, SkipFetchingUserGroups: true,
 	})
 	if err != nil {
-		WriteError(w, r, APIErrorServerError, "error searching recipient", err)
+		reqres.WriteError(w, r, reqres.APIErrorServerError, "error searching recipient", err)
 		return
 	}
 	if userRes.Status.Code != rpc.Code_CODE_OK {
-		WriteError(w, r, APIErrorNotFound, "user not found", errors.New(userRes.Status.Message))
+		reqres.WriteError(w, r, reqres.APIErrorNotFound, "user not found", errors.New(userRes.Status.Message))
 		return
 	}
 
@@ -159,7 +151,7 @@ func (h *sharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 	var token string
 	options, ok := protocol["options"].(map[string]interface{})
 	if !ok {
-		WriteError(w, r, APIErrorInvalidParameter, "protocol: webdav token not provided", nil)
+		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, "protocol: webdav token not provided", nil)
 		return
 	}
 
@@ -167,7 +159,7 @@ func (h *sharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		token, ok = options["token"].(string)
 		if !ok {
-			WriteError(w, r, APIErrorInvalidParameter, "protocol: webdav token not provided", nil)
+			reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, "protocol: webdav token not provided", nil)
 			return
 		}
 	}
@@ -178,7 +170,7 @@ func (h *sharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 	} else {
 		permissions, err = conversions.NewPermissions(pval)
 		if err != nil {
-			WriteError(w, r, APIErrorInvalidParameter, err.Error(), nil)
+			reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, err.Error(), nil)
 			return
 		}
 		role = conversions.RoleFromOCSPermissions(permissions)
@@ -186,13 +178,13 @@ func (h *sharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 
 	val, err := json.Marshal(role.CS3ResourcePermissions())
 	if err != nil {
-		WriteError(w, r, APIErrorServerError, "could not encode role", nil)
+		reqres.WriteError(w, r, reqres.APIErrorServerError, "could not encode role", nil)
 		return
 	}
 
 	ownerParts := strings.Split(owner, "@")
 	if len(ownerParts) != 2 {
-		WriteError(w, r, APIErrorInvalidParameter, "owner should be opaqueId@webDAVHost", nil)
+		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, "owner should be opaqueId@webDAVHost", nil)
 	}
 	ownerID := &userpb.UserId{
 		OpaqueId: ownerParts[0],
@@ -222,15 +214,15 @@ func (h *sharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 	}
 	createShareResponse, err := gatewayClient.CreateOCMCoreShare(ctx, createShareReq)
 	if err != nil {
-		WriteError(w, r, APIErrorServerError, "error sending a grpc create ocm core share request", err)
+		reqres.WriteError(w, r, reqres.APIErrorServerError, "error sending a grpc create ocm core share request", err)
 		return
 	}
 	if createShareResponse.Status.Code != rpc.Code_CODE_OK {
 		if createShareResponse.Status.Code == rpc.Code_CODE_NOT_FOUND {
-			WriteError(w, r, APIErrorNotFound, "not found", nil)
+			reqres.WriteError(w, r, reqres.APIErrorNotFound, "not found", nil)
 			return
 		}
-		WriteError(w, r, APIErrorServerError, "grpc create ocm core share request failed", errors.New(createShareResponse.Status.Message))
+		reqres.WriteError(w, r, reqres.APIErrorServerError, "grpc create ocm core share request failed", errors.New(createShareResponse.Status.Message))
 		return
 	}
 
@@ -242,7 +234,7 @@ func (h *sharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 		},
 	)
 	if err != nil {
-		WriteError(w, r, APIErrorServerError, "error marshalling share data", err)
+		reqres.WriteError(w, r, reqres.APIErrorServerError, "error marshalling share data", err)
 		return
 	}
 
@@ -251,7 +243,7 @@ func (h *sharesHandler) createShare(w http.ResponseWriter, r *http.Request) {
 
 	_, err = w.Write(jsonOut)
 	if err != nil {
-		WriteError(w, r, APIErrorServerError, "error writing shares data", err)
+		reqres.WriteError(w, r, reqres.APIErrorServerError, "error writing shares data", err)
 		return
 	}
 

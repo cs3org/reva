@@ -20,26 +20,15 @@ package ocmd
 
 import (
 	"net/http"
-
-	"github.com/cs3org/reva/pkg/appctx"
-	"github.com/cs3org/reva/pkg/rhttp/router"
 )
 
 type notificationsHandler struct {
 }
 
-func (h *notificationsHandler) init(c *Config) {
+func (h *notificationsHandler) init(c *config) {
 }
 
-func (h *notificationsHandler) Handler() http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		log := appctx.GetLogger(r.Context())
-
-		var head string
-		head, r.URL.Path = router.ShiftPath(r.URL.Path)
-
-		log.Debug().Str("head", head).Str("tail", r.URL.Path).Msg("http routing")
-
-		w.WriteHeader(http.StatusOK)
-	})
+// SendNotification is used to let the provider know that a user has removed a share.
+func (h *notificationsHandler) SendNotification(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
 }

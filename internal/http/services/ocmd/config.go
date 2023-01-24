@@ -49,7 +49,7 @@ type configHandler struct {
 	c configData
 }
 
-func (h *configHandler) init(c *Config) {
+func (h *configHandler) init(c *config) {
 	h.c = c.Config
 	if h.c.APIVersion == "" {
 		h.c.APIVersion = "1.0-proposal1"
@@ -75,15 +75,14 @@ func (h *configHandler) init(c *Config) {
 	}}
 }
 
-func (h *configHandler) Handler() http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		log := appctx.GetLogger(r.Context())
+// Send sends the configuration to the caller.
+func (h *configHandler) Send(w http.ResponseWriter, r *http.Request) {
+	log := appctx.GetLogger(r.Context())
 
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		indentedConf, _ := json.MarshalIndent(h.c, "", "   ")
-		if _, err := w.Write(indentedConf); err != nil {
-			log.Err(err).Msg("Error writing to ResponseWriter")
-		}
-	})
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	indentedConf, _ := json.MarshalIndent(h.c, "", "   ")
+	if _, err := w.Write(indentedConf); err != nil {
+		log.Err(err).Msg("Error writing to ResponseWriter")
+	}
 }
