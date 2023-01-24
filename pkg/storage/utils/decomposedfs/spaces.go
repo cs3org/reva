@@ -503,7 +503,7 @@ func (fs *Decomposedfs) UpdateStorageSpace(ctx context.Context, req *provider.Up
 
 		if restore && !fs.p.SpaceAbility(ctx, spaceID) {
 			return &provider.UpdateStorageSpaceResponse{
-				Status: &v1beta11.Status{Code: v1beta11.Code_CODE_PERMISSION_DENIED},
+				Status: &v1beta11.Status{Code: v1beta11.Code_CODE_NOT_FOUND},
 			}, nil
 		}
 	}
