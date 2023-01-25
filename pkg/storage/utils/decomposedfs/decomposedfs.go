@@ -37,7 +37,6 @@ import (
 	"syscall"
 	"time"
 
-	cs3permissions "github.com/cs3org/go-cs3apis/cs3/permissions/v1beta1"
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v2/pkg/appctx"
@@ -62,21 +61,10 @@ import (
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/go-micro/plugins/v4/events/natsjs"
 	"github.com/pkg/errors"
-	"google.golang.org/grpc"
 )
 
 // name is the Tracer name used to identify this instrumentation library.
 const tracerName = "decomposedfs"
-
-// PermissionsChecker defines an interface for checking permissions on a Node
-type PermissionsChecker interface {
-	AssemblePermissions(ctx context.Context, n *node.Node) (ap provider.ResourcePermissions, err error)
-}
-
-// CS3PermissionsClient defines an interface for checking permissions against the CS3 permissions service
-type CS3PermissionsClient interface {
-	CheckPermission(ctx context.Context, in *cs3permissions.CheckPermissionRequest, opts ...grpc.CallOption) (*cs3permissions.CheckPermissionResponse, error)
-}
 
 // Tree is used to manage a tree hierarchy
 type Tree interface {
@@ -102,14 +90,13 @@ type Tree interface {
 
 // Decomposedfs provides the base for decomposed filesystem implementations
 type Decomposedfs struct {
-	lu                *lookup.Lookup
-	tp                Tree
-	o                 *options.Options
-	p                 PermissionsChecker
-	chunkHandler      *chunking.ChunkHandler
-	permissionsClient CS3PermissionsClient
-	stream            events.Stream
-	cache             cache.StatCache
+	lu           *lookup.Lookup
+	tp           Tree
+	o            *options.Options
+	p            Permissions
+	chunkHandler *chunking.ChunkHandler
+	stream       events.Stream
+	cache        cache.StatCache
 }
 
 // NewDefault returns an instance with default components
@@ -120,8 +107,6 @@ func NewDefault(m map[string]interface{}, bs tree.Blobstore) (storage.FS, error)
 	}
 
 	lu := &lookup.Lookup{}
-	p := node.NewPermissions(lu)
-
 	lu.Options = o
 
 	tp := tree.New(o.Root, o.TreeTimeAccounting, o.TreeSizeAccounting, lu, bs)
@@ -130,6 +115,8 @@ func NewDefault(m map[string]interface{}, bs tree.Blobstore) (storage.FS, error)
 	if err != nil {
 		return nil, err
 	}
+
+	permissions := NewPermissions(node.NewPermissions(lu), permissionsClient)
 
 	var es events.Stream
 	if o.Events.NatsAddress != "" {
@@ -169,12 +156,12 @@ func NewDefault(m map[string]interface{}, bs tree.Blobstore) (storage.FS, error)
 		}
 	}
 
-	return New(o, lu, p, tp, permissionsClient, es)
+	return New(o, lu, permissions, tp, es)
 }
 
 // New returns an implementation of the storage.FS interface that talks to
 // a local filesystem.
-func New(o *options.Options, lu *lookup.Lookup, p PermissionsChecker, tp Tree, permissionsClient CS3PermissionsClient, es events.Stream) (storage.FS, error) {
+func New(o *options.Options, lu *lookup.Lookup, p Permissions, tp Tree, es events.Stream) (storage.FS, error) {
 	log := logger.New()
 	err := tp.Setup()
 	if err != nil {
@@ -191,14 +178,13 @@ func New(o *options.Options, lu *lookup.Lookup, p PermissionsChecker, tp Tree, p
 	}
 
 	fs := &Decomposedfs{
-		tp:                tp,
-		lu:                lu,
-		o:                 o,
-		p:                 p,
-		chunkHandler:      chunking.NewChunkHandler(filepath.Join(o.Root, "uploads")),
-		permissionsClient: permissionsClient,
-		stream:            es,
-		cache:             cache.GetStatCache(o.StatCache.CacheStore, o.StatCache.CacheNodes, o.StatCache.CacheDatabase, "stat", 0),
+		tp:           tp,
+		lu:           lu,
+		o:            o,
+		p:            p,
+		chunkHandler: chunking.NewChunkHandler(filepath.Join(o.Root, "uploads")),
+		stream:       es,
+		cache:        cache.GetStatCache(o.StatCache.CacheStore, o.StatCache.CacheNodes, o.StatCache.CacheDatabase, "stat", 0),
 	}
 
 	if o.AsyncFileUploads {
@@ -448,7 +434,7 @@ func (fs *Decomposedfs) GetQuota(ctx context.Context, ref *provider.Reference) (
 	switch {
 	case err != nil:
 		return 0, 0, 0, errtypes.InternalError(err.Error())
-	case !rp.GetQuota && !fs.canListAllSpaces(ctx):
+	case !rp.GetQuota && !fs.p.ListAllSpaces(ctx):
 		f, _ := storagespace.FormatReference(ref)
 		if rp.Stat {
 			return 0, 0, 0, errtypes.PermissionDenied(f)
