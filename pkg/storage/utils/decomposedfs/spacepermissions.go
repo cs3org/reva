@@ -49,12 +49,12 @@ func (p Permissions) SetSpaceQuota(ctx context.Context, spaceid string) bool {
 
 // ManageSpaceProperties returns true when the user is allowed to change space properties (name/subtitle)
 func (p Permissions) ManageSpaceProperties(ctx context.Context, spaceid string) bool {
-	return p.checkPermission(ctx, "manage-space-properties", spaceRef(spaceid))
+	return p.checkPermission(ctx, "Drive.ReadWrite", spaceRef(spaceid))
 }
 
 // SpaceAbility returns true when the user is allowed to enable/disable the space
 func (p Permissions) SpaceAbility(ctx context.Context, spaceid string) bool {
-	return p.checkPermission(ctx, "space-ability", spaceRef(spaceid))
+	return p.checkPermission(ctx, "Drive.ReadWriteEnabled", spaceRef(spaceid))
 }
 
 // ListAllSpaces returns true when the user is allowed to list all spaces
