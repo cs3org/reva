@@ -110,6 +110,8 @@ func checkLightweightScope(ctx context.Context, req interface{}, tokenScope map[
 		return true
 	case *provider.StatRequest:
 		return true
+	case *appregistry.GetAppProvidersRequest:
+		return true
 	case *provider.ListContainerRequest:
 		return hasPermissions(ctx, client, r.GetRef(), &provider.ResourcePermissions{
 			ListContainer: true,
@@ -142,11 +144,11 @@ func checkLightweightScope(ctx context.Context, req interface{}, tokenScope map[
 			return false
 		}
 		return hasPermissions(ctx, client, parent, &provider.ResourcePermissions{
-			InitiateFileDownload: true,
+			InitiateFileUpload: true,
 		})
 	case *provider.DeleteRequest:
 		return hasPermissions(ctx, client, r.GetRef(), &provider.ResourcePermissions{
-			InitiateFileDownload: true,
+			Delete: true,
 		})
 	case *provider.MoveRequest:
 		return hasPermissions(ctx, client, r.Source, &provider.ResourcePermissions{
