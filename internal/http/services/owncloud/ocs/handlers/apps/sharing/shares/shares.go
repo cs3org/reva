@@ -309,7 +309,7 @@ func (h *Handler) CreateShare(w http.ResponseWriter, r *http.Request) {
 		if role, val, err := h.extractPermissions(reqRole, reqPermissions, statRes.Info, conversions.NewViewerRole()); err == nil {
 			h.createFederatedCloudShare(w, r, statRes.Info, role, val)
 		}
-	case int(conversions.ShareTypeSpaceMembership):
+	case int(conversions.ShareTypeSpaceMembershipUser), int(conversions.ShareTypeSpaceMembershipGroup):
 		switch reqRole {
 		// Note: we convert viewer and editor roles to spaceviewer and spaceditor to keep backwards compatibility
 		// we can remove this switch when this behaviour is no longer wanted.
