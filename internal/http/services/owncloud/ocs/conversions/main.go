@@ -52,8 +52,11 @@ const (
 	// ShareTypeFederatedCloudShare represents a federated share
 	ShareTypeFederatedCloudShare ShareType = 6
 
-	// ShareTypeSpaceMembership represents an action regarding space members
-	ShareTypeSpaceMembership ShareType = 7
+	// ShareTypeSpaceMembershipUser represents an action regarding user type space members
+	ShareTypeSpaceMembershipUser ShareType = 7
+
+	// ShareTypeSpaceMembershipGroup represents an action regarding group type space members
+	ShareTypeSpaceMembershipGroup ShareType = 8
 
 	// ShareWithUserTypeUser represents a normal user
 	ShareWithUserTypeUser ShareWithUserType = 0
