@@ -1566,7 +1566,7 @@ func (fs *eosfs) createUserDir(ctx context.Context, u *userpb.User, path string,
 		return errors.Wrap(err, "eosfs: error chowning directory")
 	}
 
-	err = fs.c.Chmod(ctx, rootAuth, "2770", path)
+	err = fs.c.Chmod(ctx, rootAuth, "2700", path)
 	if err != nil {
 		return errors.Wrap(err, "eosfs: error chmoding directory")
 	}
