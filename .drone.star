@@ -232,13 +232,12 @@ def virtualViews():
                 "name": "APIAcceptanceTestsOcisStorage",
                 "image": OC_CI_PHP,
                 "commands": [
-                    "cd /drone/src",
+                    "cd /drone/src/tmp/testrunner",
                     "composer self-update",
                     "composer --version",
-                    "make test-acceptance-api",
+                    "make test-acceptance-from-core-api",
                 ],
                 "environment": {
-                    "PATH_TO_APITESTS": "/drone/src/tmp/testrunner",
                     "TEST_SERVER_URL": "http://revad-services:20180",
                     "OCIS_REVA_DATA_ROOT": "/drone/src/tmp/reva/data/",
                     "DELETE_USER_DATA_CMD": "rm -rf /drone/src/tmp/reva/data/spaces/* /drone/src/tmp/reva/data/blobs/* /drone/src/tmp/reva/data/indexes",
