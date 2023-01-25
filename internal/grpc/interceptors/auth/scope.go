@@ -79,7 +79,9 @@ func expandAndVerifyScope(ctx context.Context, req interface{}, tokenScope map[s
 					return nil
 				}
 			}
-			log.Err(err).Msgf("error resolving reference %s under scope %+v", ref.String(), k)
+			if err != nil {
+				log.Err(err).Msgf("error resolving reference %s under scope %+v", ref.String(), k)
+			}
 		}
 	}
 
