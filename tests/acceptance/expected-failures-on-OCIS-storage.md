@@ -312,16 +312,11 @@ _requires a [CS3 user provisioning api that can update the quota for a user](htt
 - [coreApiWebdavMove2/moveFile.feature:288](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiWebdavMove2/moveFile.feature#L288)
 
 #### [OCIS-storage overwriting a file as share receiver, does not create a new file version for the sharer](https://github.com/owncloud/ocis/issues/766) //todo
-- [coreApiVersions/fileVersionsSharingToShares.feature:33](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiVersions/fileVersionsSharingToShares.feature#L33)
+- [coreApiVersions/fileVersions.feature:291](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiVersions/fileVersions.feature#L291)
 
 #### [restoring an older version of a shared file deletes the share](https://github.com/owncloud/ocis/issues/765)
 - [coreApiShareManagementToShares/acceptShares.feature:532](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiShareManagementToShares/acceptShares.feature#L532)
-- [coreApiVersions/fileVersionsSharingToShares.feature:44](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiVersions/fileVersionsSharingToShares.feature#L44)
-
-#### [not possible to move file into a received folder](https://github.com/owncloud/ocis/issues/764)
-
-- [coreApiVersions/fileVersionsSharingToShares.feature:220](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiVersions/fileVersionsSharingToShares.feature#L220)
-- [coreApiVersions/fileVersionsSharingToShares.feature:221](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiVersions/fileVersionsSharingToShares.feature#L221)
+- [coreApiVersions/fileVersions.feature:302](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiVersions/fileVersions.feature#L302)
 
 #### [Expiration date for shares is not implemented](https://github.com/owncloud/ocis/issues/1250)
 #### Expiration date of user shares
@@ -497,14 +492,14 @@ _requires a [CS3 user provisioning api that can update the quota for a user](htt
 - [coreApiShareUpdateToShares/updateShare.feature:282](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiShareUpdateToShares/updateShare.feature#L282)
 
 #### [user can access version metadata of a received share before accepting it](https://github.com/owncloud/ocis/issues/760)
-- [coreApiVersions/fileVersionsSharingToShares.feature:283](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiVersions/fileVersionsSharingToShares.feature#L283)
+- [coreApiVersions/fileVersions.feature:487](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiVersions/fileVersions.feature#L487)
 
 #### [Share lists deleted user as 'user'](https://github.com/owncloud/ocis/issues/903)
 - [coreApiShareManagementBasicToShares/createShareToSharesFolder.feature:682](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiShareManagementBasicToShares/createShareToSharesFolder.feature#L682)
 - [coreApiShareManagementBasicToShares/createShareToSharesFolder.feature:683](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiShareManagementBasicToShares/createShareToSharesFolder.feature#L683)
 
 #### [OCIS-storage overwriting a file as share receiver, does not create a new file version for the sharer](https://github.com/owncloud/ocis/issues/766)
-- [coreApiVersions/fileVersionsSharingToShares.feature:295](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiVersions/fileVersionsSharingToShares.feature#L295) //todo
+- [coreApiVersions/fileVersions.feature:499](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiVersions/fileVersions.feature#L499) //todo
 
 #### [deleting a share with wrong authentication returns OCS status 996 / HTTP 500](https://github.com/owncloud/ocis/issues/1229)
 - [coreApiShareManagementBasicToShares/deleteShareFromShares.feature:226](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiShareManagementBasicToShares/deleteShareFromShares.feature#L226)
@@ -779,20 +774,24 @@ _ocs: api compatibility, return correct status code_
 - [coreApiWebdavProperties1/copyFile.feature:437](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiWebdavProperties1/copyFile.feature#L437)
 
 #### [Downloading the older version of shared file gives 404](https://github.com/owncloud/ocis/issues/3868)
-- [coreApiVersions/fileVersions.feature:443](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiVersions/fileVersions.feature#L443)
-- [coreApiVersions/fileVersions.feature:461](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiVersions/fileVersions.feature#L461)
-- [coreApiVersions/fileVersionsSharingToShares.feature:306](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiVersions/fileVersionsSharingToShares.feature#L306)
+- [coreApiVersions/fileVersions.feature:160](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiVersions/fileVersions.feature#L160)
+- [coreApiVersions/fileVersions.feature:178](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiVersions/fileVersions.feature#L178)
+- [coreApiVersions/fileVersions.feature:510](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiVersions/fileVersions.feature#L510)
 
 #### [file versions do not report the version author](https://github.com/owncloud/ocis/issues/2914)
-- [coreApiVersions/fileVersionAuthor.feature:14](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiVersions/fileVersionAuthor.feature#L14)
-- [coreApiVersions/fileVersionAuthor.feature:37](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiVersions/fileVersionAuthor.feature#L37)
-- [coreApiVersions/fileVersionAuthor.feature:58](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiVersions/fileVersionAuthor.feature#L58)
-- [coreApiVersions/fileVersionAuthor.feature:78](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiVersions/fileVersionAuthor.feature#L78)
-- [coreApiVersions/fileVersionAuthor.feature:104](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiVersions/fileVersionAuthor.feature#L104)
-- [coreApiVersions/fileVersionAuthor.feature:129](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiVersions/fileVersionAuthor.feature#L129)
-- [coreApiVersions/fileVersionAuthor.feature:154](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiVersions/fileVersionAuthor.feature#L154)
-- [coreApiVersions/fileVersionAuthor.feature:180](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiVersions/fileVersionAuthor.feature#L180)
+- [coreApiVersions/fileVersionAuthor.feature:13](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiVersions/fileVersionAuthor.feature#L13)
+- [coreApiVersions/fileVersionAuthor.feature:44](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiVersions/fileVersionAuthor.feature#L44)
+- [coreApiVersions/fileVersionAuthor.feature:71](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiVersions/fileVersionAuthor.feature#L71)
+- [coreApiVersions/fileVersionAuthor.feature:97](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiVersions/fileVersionAuthor.feature#L97)
+- [coreApiVersions/fileVersionAuthor.feature:130](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiVersions/fileVersionAuthor.feature#L130)
+- [coreApiVersions/fileVersionAuthor.feature:157](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiVersions/fileVersionAuthor.feature#L157)
+- [coreApiVersions/fileVersionAuthor.feature:188](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiVersions/fileVersionAuthor.feature#L188)
 - [coreApiVersions/fileVersionAuthor.feature:223](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiVersions/fileVersionAuthor.feature#L223)
+- [coreApiVersions/fileVersionAuthor.feature:275](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiVersions/fileVersionAuthor.feature#L275)
+- [coreApiVersions/fileVersionAuthor.feature:324](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiVersions/fileVersionAuthor.feature#L324)
+- [coreApiVersions/fileVersionAuthor.feature:345](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiVersions/fileVersionAuthor.feature#L345)
+- [coreApiVersions/fileVersionAuthor.feature:365](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiVersions/fileVersionAuthor.feature#L365)
+- [coreApiVersions/fileVersionAuthor.feature:390](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiVersions/fileVersionAuthor.feature#L390)
 
 #### [Allow public link sharing only for certain groups feature not implemented](https://github.com/owncloud/ocis/issues/4623)
 - [coreApiSharePublicLink3/allowGroupToCreatePublicLinks.feature:35](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiSharePublicLink3/allowGroupToCreatePublicLinks.feature#L35)
@@ -834,12 +833,6 @@ _ocs: api compatibility, return correct status code_
 - [coreApiWebdavMove2/moveFileToBlacklistedName.feature:36](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiWebdavMove2/moveFileToBlacklistedName.feature#L36)
 - [coreApiWebdavMove2/moveFileToBlacklistedName.feature:74](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiWebdavMove2/moveFileToBlacklistedName.feature#L74)
 - [coreApiWebdavMove2/moveFileToBlacklistedName.feature:75](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiWebdavMove2/moveFileToBlacklistedName.feature#L75)
-
-
-#### [could not create system tag](https://github.com/owncloud/ocis/issues/3092)
-- [coreApiWebdavOperations/search.feature:274](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiWebdavOperations/search.feature#L274)
-- [coreApiWebdavOperations/search.feature:291](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiWebdavOperations/search.feature#L291)
-- [coreApiWebdavOperations/search.feature:317](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiWebdavOperations/search.feature#L317)
 
 #### [resource path is included in the returned error message](https://github.com/owncloud/ocis/issues/3344)
 - [coreApiWebdavProperties2/getFileProperties.feature:324](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiWebdavProperties2/getFileProperties.feature#L324)
@@ -953,17 +946,17 @@ _ocs: api compatibility, return correct status code_
 - [coreApiWebdavEtagPropagation2/restoreFromTrash.feature:71](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiWebdavEtagPropagation2/restoreFromTrash.feature#L71)
 - [coreApiWebdavEtagPropagation2/restoreFromTrash.feature:93](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiWebdavEtagPropagation2/restoreFromTrash.feature#L93)
 - [coreApiWebdavEtagPropagation2/restoreFromTrash.feature:94](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiWebdavEtagPropagation2/restoreFromTrash.feature#L94)
-- [coreApiVersions/fileVersions.feature:520](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiVersions/fileVersions.feature#L520)
+- [coreApiVersions/fileVersions.feature:237](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiVersions/fileVersions.feature#L237)
 
 #### [`meta` requests have empty responses with master branch](https://github.com/cs3org/reva/issues/2897)
-- [coreApiVersions/fileVersions.feature:480](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiVersions/fileVersions.feature#L480)
-- [coreApiVersions/fileVersions.feature:486](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiVersions/fileVersions.feature#L486)
-- [coreApiVersions/fileVersions.feature:493](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiVersions/fileVersions.feature#L493)
-- [coreApiVersions/fileVersions.feature:501](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiVersions/fileVersions.feature#L501)
-- [coreApiVersions/fileVersions.feature:514](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiVersions/fileVersions.feature#L514)
-- [coreApiVersions/fileVersions.feature:515](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiVersions/fileVersions.feature#L515)
-- [coreApiVersions/fileVersions.feature:516](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiVersions/fileVersions.feature#L516)
-- [coreApiVersions/fileVersions.feature:517](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiVersions/fileVersions.feature#L517)
+- [coreApiVersions/fileVersions.feature:197](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiVersions/fileVersions.feature#L197)
+- [coreApiVersions/fileVersions.feature:203](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiVersions/fileVersions.feature#L203)
+- [coreApiVersions/fileVersions.feature:210](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiVersions/fileVersions.feature#L210)
+- [coreApiVersions/fileVersions.feature:218](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiVersions/fileVersions.feature#L218)
+- [coreApiVersions/fileVersions.feature:231](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiVersions/fileVersions.feature#L231)
+- [coreApiVersions/fileVersions.feature:232](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiVersions/fileVersions.feature#L232)
+- [coreApiVersions/fileVersions.feature:233](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiVersions/fileVersions.feature#L233)
+- [coreApiVersions/fileVersions.feature:234](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiVersions/fileVersions.feature#L234)
 
 #### [WebDAV MOVE with body returns 400 rather than 415](https://github.com/cs3org/reva/issues/3119)
 
@@ -991,6 +984,12 @@ _ocs: api compatibility, return correct status code_
 The problem has been fixed in reva edge branch but not in reva master
 - [coreApiWebdavOperations/propfind.feature:78](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiWebdavOperations/propfind.feature#L78)
 - [coreApiWebdavOperations/propfind.feature:90](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiWebdavOperations/propfind.feature#L90)
+
+#### [Updating the role of a public link to internal gives returns 400]
+- [coreApiSharePublicLink3/updatePublicLinkShare.feature:628](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiSharePublicLink3/updatePublicLinkShare.feature#L628)
+- [coreApiSharePublicLink3/updatePublicLinkShare.feature:629](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiSharePublicLink3/updatePublicLinkShare.feature#L629)
+- [coreApiSharePublicLink3/updatePublicLinkShare.feature:630](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiSharePublicLink3/updatePublicLinkShare.feature#L630)
+- [coreApiSharePublicLink3/updatePublicLinkShare.feature:631](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiSharePublicLink3/updatePublicLinkShare.feature#L631)
 
 Note: always have an empty line at the end of this file.
 The bash script that processes this file may not process a scenario reference on the last line.
