@@ -141,11 +141,5 @@ clean: toolchain-clean
 dist: gen-doc
 	go run tools/create-artifacts/main.go -version ${VERSION} -commit ${GIT_COMMIT} -goversion ${GO_VERSION}
 
-# behat config file for core api tests
-CORE_BEHAT_YML=$(PATH_TO_APITESTS)/tests/acceptance/config/behat-core.yml
-
 test-acceptance-api:
 	$(PATH_TO_APITESTS)/tests/acceptance/run.sh --type api
-
-test-acceptance-core-api:
-	BEHAT_YML=$(CORE_BEHAT_YML) $(PATH_TO_APITESTS)/tests/acceptance/run.sh --type core-api

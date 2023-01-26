@@ -20,7 +20,7 @@ def cloneApiTestReposStep():
         "commands": [
             "source /drone/src/.drone.env",
             "git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing",
-            "git clone -b $APITESTS_BRANCH --single-branch --no-tags https://github.com/owncloud/ocis.git /drone/src/tmp/testrunner",
+            "git clone -b $APITESTS_BRANCH --single-branch --no-tags $APITESTS_REPO_GIT_URL /drone/src/tmp/testrunner",
             "cd /drone/src/tmp/testrunner",
             "git checkout $APITESTS_COMMITID",
         ],
@@ -174,7 +174,7 @@ def ocisIntegrationTests(parallelRuns, skipExceptParts = []):
                         "image": OC_CI_PHP,
                         "commands": [
                             "cd /drone/src/tmp/testrunner",
-                            "make test-acceptance-core-api",
+                            "make test-acceptance-from-core-api",
                         ],
                         "environment": {
                             "TEST_SERVER_URL": "http://revad-services:20080",
@@ -248,7 +248,7 @@ def s3ngIntegrationTests(parallelRuns, skipExceptParts = []):
                         "image": OC_CI_PHP,
                         "commands": [
                             "cd /drone/src/tmp/testrunner",
-                            "make test-acceptance-core-api",
+                            "make test-acceptance-from-core-api",
                         ],
                         "environment": {
                             "TEST_SERVER_URL": "http://revad-services:20080",
