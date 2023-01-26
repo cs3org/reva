@@ -1,7 +1,7 @@
 OC_CI_GOLANG = "owncloudci/golang:1.19"
 OC_CI_ALPINE = "owncloudci/alpine:latest"
 OSIXIA_OPEN_LDAP = "osixia/openldap:1.3.0"
-OC_CI_PHP = "owncloudci/php:7.4"
+OC_CI_PHP = "cs3org/behat:latest"
 OC_CI_BAZEL_BUILDIFIER = "owncloudci/bazel-buildifier:latest"
 
 def makeStep():
@@ -109,8 +109,6 @@ def virtualViews():
                 "image": OC_CI_PHP,
                 "commands": [
                     "cd /drone/src",
-                    "composer self-update",
-                    "composer --version",
                     "make test-acceptance-api",
                 ],
                 "environment": {
@@ -176,8 +174,6 @@ def ocisIntegrationTests(parallelRuns, skipExceptParts = []):
                         "image": OC_CI_PHP,
                         "commands": [
                             "cd /drone/src/tmp/testrunner",
-                            "composer self-update",
-                            "composer --version",
                             "make test-acceptance-core-api",
                         ],
                         "environment": {
@@ -252,8 +248,6 @@ def s3ngIntegrationTests(parallelRuns, skipExceptParts = []):
                         "image": OC_CI_PHP,
                         "commands": [
                             "cd /drone/src/tmp/testrunner",
-                            "composer self-update",
-                            "composer --version",
                             "make test-acceptance-core-api",
                         ],
                         "environment": {
