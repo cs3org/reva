@@ -1,0 +1,69 @@
+version: "3.3"
+services:
+  gateway:
+    extends:
+      file: tests/docker-compose/common.yml
+      service: revad
+    command: -c /etc/revad/gateway.toml
+  frontend:
+    extends:
+      file: tests/docker-compose/common.yml
+      service: revad
+    command: -c /etc/revad/frontend-2.toml
+  storage-home-ocis:
+    extends:
+      file: tests/docker-compose/common.yml
+      service: revad
+    command: -c /etc/revad/storage-home-ocis.toml
+    volumes:
+      - shared-volume:/var/tmp
+  storage-local-1:
+    extends:
+      file: tests/docker-compose/common.yml
+      service: revad
+    command: -c /etc/revad/storage-local-1.toml
+    volumes:
+      - shared-volume:/var/tmp
+  storage-local-2:
+    extends:
+      file: tests/docker-compose/common.yml
+      service: revad
+    command: -c /etc/revad/storage-local-2.toml
+    volumes:
+      - shared-volume:/var/tmp
+  users:
+    extends:
+      file: tests/docker-compose/common.yml
+      service: revad
+    command: -c /etc/revad/users.toml
+  acceptance-1:
+    image: cs3org/behat:latest
+    environment:
+      PATH_TO_CORE: /mnt/ocis
+      PATH_TO_APITESTS: /mnt/ocis
+      TEST_SERVER_URL: http://frontend:20180
+      OCIS_REVA_DATA_ROOT: /var/tmp/reva/data/
+      DELETE_USER_DATA_CMD: rm -rf /var/tmp/reva/data/nodes/root/* /var/tmp/reva/data/nodes/*-*-*-* /var/tmp/reva/data/blobs/*
+      STORAGE_DRIVER: OCIS
+      SKELETON_DIR: /mnt/testing/data/apiSkeleton
+      TEST_REVA: 'true'
+      REGULAR_USER_PASSWORD: relativity
+      SEND_SCENARIO_LINE_REFERENCES: 'true'
+      BEHAT_SUITE: apiVirtualViews
+    command: /mnt/ocis/tests/acceptance/run.sh --type api
+    volumes:
+      - shared-volume:/var/tmp
+      - ./tests/testing:/mnt/testing
+      - ./tests/ocis:/mnt/ocis
+      - ./tests/acceptance:/mnt/acceptance
+    working_dir: /mnt/acceptance
+    depends_on:
+      - frontend
+      - gateway
+      - storage-home-ocis
+      - storage-local-1
+      - storage-local-2
+      - users
+
+volumes:
+  shared-volume:

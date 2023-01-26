@@ -1,63 +1,79 @@
-BUILD_DATE	= `date +%FT%T%z`
-GIT_COMMIT	?= `git rev-parse --short HEAD`
-GIT_DIRTY	= `git diff-index --quiet HEAD -- || echo "dirty-"`
-VERSION		?= `git describe --always`
-GO_VERSION	?= `go version | awk '{print $$3}'`
-BUILD_FLAGS	= "-X main.gitCommit=${GIT_COMMIT} -X main.version=${VERSION} -X main.goVersion=${GO_VERSION} -X main.buildDate=${BUILD_DATE}"
-
 .PHONY: all
-all: build-revad build-reva test lint gen-doc
+all: revad reva test-go lint gen-doc
 
-IMAGE			?= revad:test
 
-.PHONY: test-image
-test-image:
-	docker build -t $(IMAGE) -f docker/Dockerfile.revad .
-
-LITMUS	?= $(CURDIR)/tests/litmus
-TIMEOUT	?= 3600
-
-.PHONY: litmus-only
-litmus-only:
-ifndef PROFILE
-	$(error PROFILE is not defined)
-else
-	@cd $(LITMUS) && IMAGE=$(IMAGE) docker-compose --profile $(PROFILE) up --remove-orphans --exit-code-from litmus-$(PROFILE) --abort-on-container-exit --timeout $(TIMEOUT)
-endif
-
-.PHONY: litmus
-litmus: test-image litmus-only
+################################################################################
+# Toolchain
+################################################################################
 
 TOOLCHAIN		?= $(CURDIR)/toolchain
 GOLANGCI_LINT	?= $(TOOLCHAIN)/golangci-lint
 CALENS			?= $(TOOLCHAIN)/calens
-GOIMPORTS		?= $(TOOLCHAIN)/goimports
 
 .PHONY: toolchain
-toolchain: $(GOLANGCI_LINT) $(CALENS) $(GOIMPORTS)
-
-.PHONY: toolchain-clean
-toolchain-clean:
-	rm -rf $(TOOLCHAIN)
+toolchain: $(GOLANGCI_LINT) $(CALENS)
 
 $(GOLANGCI_LINT):
 	@mkdir -p $(@D)
 	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | BINDIR=$(@D) sh -s v1.50.1
-
-.PHONY: check-changelog
-lint: $(GOLANGCI_LINT)
-	@$(GOLANGCI_LINT) run || (echo "Tip: many lint errors can be automatically fixed with \"make lint-fix\""; exit 1)
-
-.PHONY: lint-fix
-lint-fix: $(GOLANGCI_LINT)
-	gofmt -w .
-	$(GOLANGCI_LINT) run --fix
 
 $(CALENS):
 	@mkdir -p $(@D)
 	git clone --depth 1 --branch v0.2.0 -c advice.detachedHead=false https://github.com/restic/calens.git /tmp/calens
 	cd /tmp/calens && GOBIN=$(@D) go install
 	rm -rf /tmp/calens
+
+
+################################################################################
+# Build
+################################################################################
+
+GIT_COMMIT	?= `git rev-parse --short HEAD`
+VERSION		?= `git describe --always`
+GO_VERSION	?= `go version | awk '{print $$3}'`
+BUILD_DATE	= `date +%FT%T%z`
+BUILD_FLAGS	= "-X main.gitCommit=$(GIT_COMMIT) -X main.version=$(VERSION) -X main.goVersion=$(GO_VERSION) -X main.buildDate=$(BUILD_DATE)"
+
+.PHONY: revad
+revad:
+	go build -ldflags $(BUILD_FLAGS) -o ./cmd/revad/revad ./cmd/revad
+
+.PHONY: revad-cephfs
+revad-cephfs:
+	go build -ldflags $(BUILD_FLAGS) -tags ceph -o ./cmd/revad/revad ./cmd/revad
+
+.PHONY: reva
+reva:
+	go build -ldflags $(BUILD_FLAGS) -o ./cmd/reva/reva ./cmd/reva
+
+################################################################################
+# Test
+################################################################################
+
+REVAD_IMAGE	?= revad:test
+
+.PHONY: test-docker
+test-docker:
+	docker build -f docker/Dockerfile.revad -t $(REVAD_IMAGE) .
+
+TESTS		= litmus-1 litmus-2 litmus-3 acceptance-1
+TIMEOUT		?= 3600
+
+.PHONY: $(TESTS)
+$(TESTS): test-docker
+	docker pull cs3org/behat:latest
+	REVAD_IMAGE=$(REVAD_IMAGE) \
+	docker-compose --file tests/docker-compose/$@.yml --project-directory . \
+		up --force-recreate --renew-anon-volumes --remove-orphans \
+		--exit-code-from $@ --abort-on-container-exit --timeout $(TIMEOUT)
+
+.PHONY: test-go
+test-go:
+	go test $$([[ -z "$(COVER_PROFILE)" ]] && echo "" || echo "-coverprofile=$(COVER_PROFILE)") -race $$(go list ./... | grep -v /tests/integration)
+
+.PHONY: test-integration
+test-integration: revad
+	go test -race ./tests/integration/...
 
 .PHONY: check-changelog
 check-changelog: $(CALENS)
@@ -68,78 +84,40 @@ else
 		grep -E '^ \* [[:alpha:]]{3} #$(PR): '
 endif
 
-$(GOIMPORTS):
-	@mkdir -p $(@D)
-	GOBIN=$(@D) go install golang.org/x/tools/cmd/goimports@v0.3.0
+.PHONY: lint
+lint: $(GOLANGCI_LINT)
+	@$(GOLANGCI_LINT) run || (echo "Tip: many lint errors can be automatically fixed with \"make lint-fix\""; exit 1)
 
-.PHONY: off
-off:
-	GOPROXY=off
-	echo BUILD_DATE=${BUILD_DATE}
-	echo GIT_COMMIT=${GIT_COMMIT}
-	echo GIT_DIRTY=${GIT_DIRTY}
-	echo VERSION=${VERSION}
-	echo GO_VERSION=${GO_VERSION}
+.PHONY: lint-fix
+lint-fix: $(GOLANGCI_LINT)
+	gofmt -w .
+	$(GOLANGCI_LINT) run --fix
 
-.PHONY: imports
-imports: off $(GOIMPORTS)
-	$(GOIMPORTS) -w tools pkg internal cmd
 
-.PHONY: build-cephfs
-build-cephfs: build-revad-cephfs build-reva
-
-.PHONY: tidy
-tidy:
-	go mod tidy
-
-.PHONY: build-revad
-build-revad: imports
-	go build -ldflags ${BUILD_FLAGS} -o ./cmd/revad/revad ./cmd/revad
-
-.PHONY: build-revad-cephfs
-build-revad-cephfs: imports
-	go build -ldflags ${BUILD_FLAGS} -tags ceph -o ./cmd/revad/revad ./cmd/revad
-
-.PHONY: build-reva
-build-reva: imports
-	go build -ldflags ${BUILD_FLAGS} -o ./cmd/reva/reva ./cmd/reva
-
-# to be run in Docker build
-.PHONY: build-revad-docker
-build-revad-docker: off
-	go build -ldflags ${BUILD_FLAGS} -o ./cmd/revad/revad ./cmd/revad
-
-.PHONY: build-revad-cephfs-docker
-build-revad-cephfs-docker: off
-	go build -ldflags ${BUILD_FLAGS} -tags ceph -o ./cmd/revad/revad ./cmd/revad
-
-.PHONY: build-reva-docker
-build-reva-docker: off
-	go build -ldflags ${BUILD_FLAGS} -o ./cmd/reva/reva ./cmd/reva
-
-.PHONY: test
-test: off
-	go test $$([[ -z "${COVER_PROFILE}" ]] && echo "" || echo "-coverprofile=${COVER_PROFILE}") -race $$(go list ./... | grep -v /tests/integration)
-
-.PHONY: test-integration
-test-integration: build-revad
-	go test -race ./tests/integration/...
-
-.PHONY: contrib
-contrib:
-	git shortlog -se | cut -c8- | sort -u | awk '{print "-", $$0}' | grep -v 'users.noreply.github.com' > CONTRIBUTORS.md
+################################################################################
+# Release
+################################################################################
 
 .PHONY: gen-doc
 gen-doc:
 	go run tools/generate-documentation/main.go
 
+dist: gen-doc
+	go run tools/create-artifacts/main.go -version $(VERSION) -commit $(GIT_COMMIT) -goversion $(GO_VERSION)
+
+
+################################################################################
+# Clean
+################################################################################
+
+.PHONY: toolchain-clean
+toolchain-clean:
+	rm -rf $(TOOLCHAIN)
+
 .PHONY: clean
 clean: toolchain-clean
 	rm -rf dist
 
-# create local build versions
-dist: gen-doc
-	go run tools/create-artifacts/main.go -version ${VERSION} -commit ${GIT_COMMIT} -goversion ${GO_VERSION}
 
 test-acceptance-api:
 	$(PATH_TO_APITESTS)/tests/acceptance/run.sh --type api

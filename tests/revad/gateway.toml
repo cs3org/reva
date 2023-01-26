@@ -66,10 +66,10 @@ home_provider = "/home"
 "123e4567-e89b-12d3-a456-426655440000" = {"address" = "storage-users-ocis:11000"}
 
 # the /virtual namespace is only accessible via the frontend-global service
-"/virtual/[a-k]" = {"address" = "localhost:11100"}
-"virtual-a-k" = {"address" = "localhost:11100"}
-"/virtual/[l-z]" = {"address" = "localhost:11110"}
-"virtual-l-z" = {"address" = "localhost:11110"}
+"/virtual/[a-k]" = {"address" = "storage-local-1:11100"}
+"virtual-a-k" = {"address" = "storage-local-1:11100"}
+"/virtual/[l-z]" = {"address" = "storage-local-2:11110"}
+"virtual-l-z" = {"address" = "storage-local-2:11110"}
 
 # another mount point might be "/projects/"
 
