@@ -7,7 +7,16 @@ services:
     working_dir: /etc/revad/
   litmus:
     image: registry.cern.ch/docker.io/owncloud/litmus:latest
+    entrypoint:
+      - /bin/sh
+    command:
+      - -c
+      - |
+        sleep 5
+        /usr/local/bin/litmus-wrapper
     environment:
       LITMUS_USERNAME: einstein
       LITMUS_PASSWORD: relativity
       TESTS: basic http copymove props
+      LITMUS_WAIT: 'true'
+      LITMUS_CHECK_URL: http://frontend:20080/ocs/v2.php/cloud/capabilities
