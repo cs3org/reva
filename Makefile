@@ -172,15 +172,3 @@ mockery: $(MOCKERY)
 .PHONY: go-generate
 go-generate:
 	go generate ./...
-
-vendor/bamarni/composer-bin-plugin: composer.lock
-	composer install
-
-vendor-bin/behat/vendor: vendor/bamarni/composer-bin-plugin vendor-bin/behat/composer.lock
-	composer bin behat install --no-progress
-
-vendor-bin/behat/composer.lock: vendor-bin/behat/composer.json
-	@echo behat composer.lock is not up to date.
-
-composer.lock: composer.json
-	@echo composer.lock is not up to date.

@@ -4,5 +4,4 @@ docs
 grpc-tests
 tests
 tools
-vendor-bin
 *.md
