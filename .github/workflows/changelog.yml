@@ -24,6 +24,6 @@ jobs:
         with:
           go-version-file: go.mod
       - name: Check changelog
-        run: make check-changelog 
+        run: make check-changelog
         env:
           PR: ${{ github.event.pull_request.number }}

@@ -1,0 +1,13 @@
+version: "3.3"
+services:
+  revad:
+    image: ${REVAD_IMAGE}
+    volumes:
+      - ../revad:/etc/revad
+    working_dir: /etc/revad/
+  litmus:
+    image: registry.cern.ch/docker.io/owncloud/litmus:latest
+    environment:
+      LITMUS_USERNAME: einstein
+      LITMUS_PASSWORD: relativity
+      TESTS: basic http copymove props

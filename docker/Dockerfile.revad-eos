@@ -37,7 +37,7 @@ ENV PATH /go/bin:/usr/local/go/bin:$PATH
 ENV GOPATH /go
 WORKDIR /go/src/github/cs3org/reva
 COPY . .
-RUN make build-revad-docker
+RUN make revad
 
 
 FROM gitlab-registry.cern.ch/dss/eos/eos-all:4.8.91

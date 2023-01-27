@@ -1,0 +1,33 @@
+version: "3.3"
+services:
+  frontend:
+    extends:
+      file: tests/docker-compose/common.yml
+      service: revad
+    command: -c /etc/revad/frontend-1.toml
+  gateway:
+    extends:
+      file: tests/docker-compose/common.yml
+      service: revad
+    command: -c /etc/revad/gateway.toml
+  storage-home-ocis:
+    extends:
+      file: tests/docker-compose/common.yml
+      service: revad
+    command: -c /etc/revad/storage-home-ocis.toml
+  users:
+    extends:
+      file: tests/docker-compose/common.yml
+      service: revad
+    command: -c /etc/revad/users.toml
+  litmus-2:
+    extends:
+      file: tests/docker-compose/common.yml
+      service: litmus
+    environment:
+      LITMUS_URL: http://frontend:20080/remote.php/dav/files/4c510ada-c86b-4815-8820-42cdf82c3d51
+    depends_on:
+      - frontend
+      - gateway
+      - users
+      - storage-home-ocis

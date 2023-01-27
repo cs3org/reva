@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  integration-test:
+  integration:
     runs-on: self-hosted
     steps:
       - name: Checkout
@@ -23,7 +23,7 @@ jobs:
     services:
       redis:
         image: registry.cern.ch/docker.io/webhippie/redis
-  go-test:
+  go:
     runs-on: self-hosted
     steps:
       - name: Checkout
@@ -33,7 +33,7 @@ jobs:
         with:
           go-version-file: go.mod
       - name: Test
-        run: make test
+        run: make test-go
         env:
           COVER_PROFILE: ${{ github.event_name == 'push' && 'coverage.out' || '' }}
       - name: Run codacy-coverage-reporter
@@ -58,22 +58,34 @@ jobs:
       file: docker/Dockerfile.revad
       tags: revad:test
       load: true
-  litmus:
+  test:
     needs: docker-revad
     runs-on: self-hosted
     strategy:
       fail-fast: false
       matrix:
-        profile: [1, 2, 3]
+        test: [litmus-1, litmus-2, litmus-3, acceptance-1]
     steps:
       - name: Checkout
         uses: actions/checkout@v3
+      - name: Checkout core
+        uses: actions/checkout@v3
+        if: matrix.test == 'acceptance-1'
+        with:
+          repository: owncloud/ocis
+          ref: ${{ vars.OCIS_COMMITID }}
+          path: tests/ocis
+      - name: Checkout testing
+        uses: actions/checkout@v3
+        if: matrix.test == 'acceptance-1'
+        with:
+          repository: owncloud/testing
+          path: tests/testing
       - name: Download image
         uses: ishworkh/docker-image-artifact-download@v1
         with:
           image: revad:test
       - name: Test
-        run: make litmus-only
+        run: make ${{ matrix.test }} -o test-docker
         env:
-          PROFILE: ${{ matrix.profile }}
-          IMAGE: revad:test
+          REVAD_IMAGE: revad:test
