@@ -126,7 +126,7 @@ func (m *mgr) CreatePublicShare(ctx context.Context, u *user.User, rInfo *provid
 	}
 	permissions := sharePermToInt(g.Permissions.Permissions)
 	itemType := resourceTypeToItem(rInfo.Type)
-	//prefix := rInfo.Id.SpaceId
+	// prefix := rInfo.Id.SpaceId
 	itemSource := rInfo.Id.OpaqueId
 	fileSource, err := strconv.ParseUint(itemSource, 10, 64)
 	if err != nil {
