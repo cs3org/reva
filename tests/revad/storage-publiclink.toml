@@ -3,7 +3,7 @@
 
 [shared]
 jwt_secret = "Pive-Fumkiu4"
-gatewaysvc = "localhost:19000"
+gatewaysvc = "gateway:19000"
 
 [grpc]
 address = "0.0.0.0:13000"
@@ -13,5 +13,5 @@ address = "0.0.0.0:13000"
 [grpc.services.publicstorageprovider]
 mount_path = "/public/"
 mount_id = "e1a73ede-549b-4226-abdf-40e69ca8230d"
-gateway_addr = "0.0.0.0:19000"
+gateway_addr = "gateway:19000"
 
