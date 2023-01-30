@@ -85,7 +85,9 @@ func (s *svc) routerInit() error {
 	invitesHandler := new(invitesHandler)
 
 	configHandler.init(s.Conf)
-	sharesHandler.init(s.Conf)
+	if err := sharesHandler.init(s.Conf); err != nil {
+		return err
+	}
 	notificationsHandler.init(s.Conf)
 	if err := invitesHandler.init(s.Conf); err != nil {
 		return err
