@@ -51,6 +51,7 @@ func init() {
 	registry.Register("owncloudsql", NewMysql)
 }
 
+// Config configures an owncloudsql publicshare manager
 type Config struct {
 	GatewayAddr                string `mapstructure:"gateway_addr"`
 	DbUsername                 string `mapstructure:"db_username"`
