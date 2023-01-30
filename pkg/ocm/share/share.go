@@ -57,6 +57,34 @@ type Manager interface {
 	UpdateReceivedShare(ctx context.Context, share *ocm.ReceivedShare, fieldMask *field_mask.FieldMask) (*ocm.ReceivedShare, error)
 }
 
+// Repository is the interface that manipulates the OCM shares repositories.
+type Repository interface {
+	// StoreShare stores a share.
+	StoreShare(ctx context.Context, share *ocm.Share) (*ocm.Share, error)
+
+	// GetShare gets the information for a share by the given ref.
+	GetShare(ctx context.Context, ref *ocm.ShareReference) (*ocm.Share, error)
+
+	// DeleteShare deletes the share pointed by ref.
+	DeleteShare(ctx context.Context, ref *ocm.ShareReference) error
+
+	// UpdateShare updates the mode of the given share.
+	UpdateShare(ctx context.Context, ref *ocm.ShareReference, p *ocm.SharePermissions) (*ocm.Share, error)
+
+	// ListShares returns the shares created by the user. If md is provided is not nil,
+	// it returns only shares attached to the given resource.
+	ListShares(ctx context.Context, filters []*ocm.ListOCMSharesRequest_Filter) ([]*ocm.Share, error)
+
+	// ListReceivedShares returns the list of shares the user has access.
+	ListReceivedShares(ctx context.Context) ([]*ocm.ReceivedShare, error)
+
+	// GetReceivedShare returns the information for a received share the user has access.
+	GetReceivedShare(ctx context.Context, ref *ocm.ShareReference) (*ocm.ReceivedShare, error)
+
+	// UpdateReceivedShare updates the received share with share state.
+	UpdateReceivedShare(ctx context.Context, share *ocm.ReceivedShare, fieldMask *field_mask.FieldMask) (*ocm.ReceivedShare, error)
+}
+
 // ResourceIDFilter is an abstraction for creating filter by resource id.
 func ResourceIDFilter(id *provider.ResourceId) *ocm.ListOCMSharesRequest_Filter {
 	return &ocm.ListOCMSharesRequest_Filter{
