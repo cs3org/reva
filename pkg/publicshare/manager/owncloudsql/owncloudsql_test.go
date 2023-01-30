@@ -22,6 +22,7 @@ import (
 	"context"
 	"database/sql"
 	"os"
+	"strings"
 	"time"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -35,7 +36,6 @@ import (
 	"github.com/cs3org/reva/v2/pkg/share/manager/owncloudsql/mocks"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/stretchr/testify/mock"
-	"golang.org/x/crypto/bcrypt"
 
 	_ "github.com/mattn/go-sqlite3"
 
@@ -172,9 +172,10 @@ var _ = Describe("SQL manager", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(existingShare).ToNot(BeNil())
 
-			h, err := bcrypt.GenerateFromPassword([]byte(grant.Password), bcrypt.DefaultCost)
+			// read hashed password from db
+			s, err := owncloudsql.GetByToken(sqldb, existingShare.Token)
 			Expect(err).ToNot(HaveOccurred())
-			hashedPassword = string(h)
+			hashedPassword = strings.TrimPrefix(s.ShareWith, "1|")
 		})
 
 		Describe("ListPublicShares", func() {
@@ -340,7 +341,7 @@ var _ = Describe("SQL manager", func() {
 				Expect(ps).ToNot(BeNil())
 			})
 
-			PIt("gets the share using a signature", func() {
+			It("gets the share using a signature", func() {
 				err := publicshare.AddSignature(existingShare, hashedPassword)
 				Expect(err).ToNot(HaveOccurred())
 				auth := &link.PublicShareAuthentication{

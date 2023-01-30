@@ -16,6 +16,10 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
+// Package owncloudsql implements a publiclink share manager backed by an existing ownCloud 10 database
+//
+// The SQL queries use `coalesce({column_identifier}, ”) as {column_identifier}` to read an emptystring
+// instead of null values, which better fits the golang default values.
 package owncloudsql
 
 import (
@@ -90,6 +94,9 @@ func NewMysql(m map[string]interface{}) (publicshare.Manager, error) {
 
 // New returns a new Cache instance connecting to the given sql.DB
 func New(driver string, db *sql.DB, c Config, userConverter UserConverter) (publicshare.Manager, error) {
+	if c.SharePasswordHashCost == 0 {
+		c.SharePasswordHashCost = bcrypt.DefaultCost
+	}
 	return &mgr{
 		driver:        driver,
 		db:            db,
@@ -195,6 +202,7 @@ func (m *mgr) CreatePublicShare(ctx context.Context, u *user.User, rInfo *provid
 	}, nil
 }
 
+// owncloud 10 prefixes the hash with `1|`
 func hashPassword(password string, cost int) (string, error) {
 	bytes, err := bcrypt.GenerateFromPassword([]byte(password), cost)
 	return "1|" + string(bytes), err
@@ -258,60 +266,77 @@ func (m *mgr) UpdatePublicShare(ctx context.Context, u *user.User, req *link.Upd
 }
 
 func (m *mgr) GetPublicShare(ctx context.Context, u *user.User, ref *link.PublicShareReference, sign bool) (share *link.PublicShare, err error) {
-	var s *link.PublicShare
-	var pw string
-	switch {
-	case ref.GetId() != nil:
-		s, pw, err = m.getByID(ctx, ref.GetId(), u)
-	case ref.GetToken() != "":
-		s, pw, err = m.getByToken(ctx, ref.GetToken())
-	default:
-		err = errtypes.NotFound(ref.String())
-	}
+
+	ps, err := m.getWithPassword(ctx, ref)
 	if err != nil {
 		return nil, err
 	}
 
-	if expired(s) {
+	if publicshare.IsExpired(ps.PublicShare) {
 		if err := m.cleanupExpiredShares(); err != nil {
 			return nil, err
 		}
-		return nil, errtypes.NotFound(ref.String())
+		return nil, errtypes.NotFound("public share has expired")
 	}
 
-	if s.PasswordProtected && sign {
-		if err := publicshare.AddSignature(s, pw); err != nil {
+	if ps.PublicShare.PasswordProtected && sign {
+		err = publicshare.AddSignature(&ps.PublicShare, ps.Password)
+		if err != nil {
 			return nil, err
 		}
 	}
 
-	return s, nil
+	return &ps.PublicShare, nil
 }
 
-func (m *mgr) getByToken(ctx context.Context, token string) (*link.PublicShare, string, error) {
+func (m *mgr) getWithPassword(ctx context.Context, ref *link.PublicShareReference) (*publicshare.WithPassword, error) {
+	switch {
+	case ref.GetToken() != "":
+		return m.getByToken(ctx, ref.GetToken())
+	case ref.GetId().GetOpaqueId() != "":
+		return m.getByID(ctx, ref.GetId().GetOpaqueId())
+	default:
+		return nil, errtypes.BadRequest("neither id nor token given")
+	}
+}
+
+func (m *mgr) getByToken(ctx context.Context, token string) (*publicshare.WithPassword, error) {
+	s, err := getByToken(m.db, token)
+	if err != nil {
+		return nil, err
+	}
+	ps, err := m.ConvertToCS3PublicShare(ctx, s)
+	if err != nil {
+		return nil, err
+	}
+	return &publicshare.WithPassword{
+		PublicShare: *ps,
+		Password:    strings.TrimPrefix(s.ShareWith, "1|"),
+	}, nil
+}
+
+func getByToken(db *sql.DB, token string) (DBShare, error) {
 	s := DBShare{Token: token}
 	query := `SELECT
 				coalesce(uid_owner, '') as uid_owner, coalesce(uid_initiator, '') as uid_initiator,
 				coalesce(share_with, '') as share_with, coalesce(file_source, '') as file_source,
-				coalesce(item_type, '') as item_type, coalesce(token,'') as token,
+				coalesce(item_type, '') as item_type,
 				coalesce(expiration, '') as expiration, coalesce(share_name, '') as share_name,
-				s.stime, s.permissions, fc.storage as storage
+				s.id, s.stime, s.permissions, fc.storage as storage
 			FROM oc_share s
 			LEFT JOIN oc_filecache fc ON fc.fileid = file_source
 			WHERE share_type=? AND token=?`
-	if err := m.db.QueryRow(query, publicShareType, token).Scan(&s.UIDOwner, &s.UIDInitiator, &s.ShareWith, &s.FileSource, &s.ItemType, &s.Expiration, &s.ShareName, &s.ID, &s.STime, &s.Permissions, &s.ItemStorage); err != nil {
+	if err := db.QueryRow(query, publicShareType, token).Scan(&s.UIDOwner, &s.UIDInitiator, &s.ShareWith, &s.FileSource, &s.ItemType, &s.Expiration, &s.ShareName, &s.ID, &s.STime, &s.Permissions, &s.ItemStorage); err != nil {
 		if err == sql.ErrNoRows {
-			return nil, "", errtypes.NotFound(token)
+			return s, errtypes.NotFound(token)
 		}
-		return nil, "", err
+		return s, err
 	}
-	ps, err := m.ConvertToCS3PublicShare(ctx, s)
-	return ps, s.ShareWith, err
+	return s, nil
 }
 
-func (m *mgr) getByID(ctx context.Context, id *link.PublicShareId, u *user.User) (*link.PublicShare, string, error) {
-	uid := u.Username
-	s := DBShare{ID: id.OpaqueId}
+func (m *mgr) getByID(ctx context.Context, id string) (*publicshare.WithPassword, error) {
+	s := DBShare{ID: id}
 	query := `SELECT
 				coalesce(uid_owner, '') as uid_owner, coalesce(uid_initiator, '') as uid_initiator,
 				coalesce(share_with, '') as share_with, coalesce(file_source, '') as file_source,
@@ -320,16 +345,21 @@ func (m *mgr) getByID(ctx context.Context, id *link.PublicShareId, u *user.User)
 				s.stime, s.permissions, fc.storage as storage
 			FROM oc_share s
 			LEFT JOIN oc_filecache fc ON fc.fileid = file_source
-			WHERE share_type=? AND id=?
-			AND (uid_owner=? or uid_initiator=?)`
-	if err := m.db.QueryRow(query, publicShareType, id.OpaqueId, uid, uid).Scan(&s.UIDOwner, &s.UIDInitiator, &s.ShareWith, &s.FileSource, &s.ItemType, &s.Token, &s.Expiration, &s.ShareName, &s.STime, &s.Permissions, &s.ItemStorage); err != nil {
+			WHERE share_type=? AND id=?`
+	if err := m.db.QueryRow(query, publicShareType, id).Scan(&s.UIDOwner, &s.UIDInitiator, &s.ShareWith, &s.FileSource, &s.ItemType, &s.Token, &s.Expiration, &s.ShareName, &s.STime, &s.Permissions, &s.ItemStorage); err != nil {
 		if err == sql.ErrNoRows {
-			return nil, "", errtypes.NotFound(id.OpaqueId)
+			return nil, errtypes.NotFound(id)
 		}
-		return nil, "", err
+		return nil, err
 	}
 	ps, err := m.ConvertToCS3PublicShare(ctx, s)
-	return ps, s.ShareWith, err
+	if err != nil {
+		return nil, err
+	}
+	return &publicshare.WithPassword{
+		PublicShare: *ps,
+		Password:    strings.TrimPrefix(s.ShareWith, "1|"),
+	}, nil
 }
 
 func (m *mgr) ListPublicShares(ctx context.Context, u *user.User, filters []*link.ListPublicSharesRequest_Filter, sign bool) ([]*link.PublicShare, error) {
@@ -410,11 +440,11 @@ func (m *mgr) ListPublicShares(ctx context.Context, u *user.User, filters []*lin
 		if cs3Share, err = m.ConvertToCS3PublicShare(ctx, s); err != nil {
 			return nil, err
 		}
-		if expired(cs3Share) {
+		if publicshare.IsExpired(*cs3Share) {
 			_ = m.cleanupExpiredShares()
 		} else {
 			if cs3Share.PasswordProtected && sign {
-				if err := publicshare.AddSignature(cs3Share, s.ShareWith); err != nil {
+				if err := publicshare.AddSignature(cs3Share, strings.TrimPrefix(s.ShareWith, "1|")); err != nil {
 					return nil, err
 				}
 			}
@@ -465,40 +495,32 @@ func (m *mgr) RevokePublicShare(ctx context.Context, u *user.User, ref *link.Pub
 
 func (m *mgr) GetPublicShareByToken(ctx context.Context, token string, auth *link.PublicShareAuthentication, sign bool) (*link.PublicShare, error) {
 
-	s, pw, err := m.getByToken(ctx, token)
+	ps, err := m.getByToken(ctx, token)
 	if err != nil {
 		return nil, err
 	}
 
-	if expired(s) {
+	if publicshare.IsExpired(ps.PublicShare) {
 		if err := m.cleanupExpiredShares(); err != nil {
 			return nil, err
 		}
-		return nil, errtypes.NotFound(token)
+		return nil, errtypes.NotFound("public share has expired")
 	}
 
-	if pw != "" {
-		if !authenticate(s, pw, auth) {
-			return nil, errtypes.InvalidCredentials(token)
+	if ps.PublicShare.PasswordProtected {
+		if !publicshare.Authenticate(&ps.PublicShare, ps.Password, auth) {
+			return nil, errtypes.InvalidCredentials("access denied")
 		}
-
-		if sign {
-			if err := publicshare.AddSignature(s, pw); err != nil {
-				return nil, err
+		/*
+			if sign {
+				if err := publicshare.AddSignature(s, pw); err != nil {
+					return nil, err
+				}
 			}
-		}
+		*/
 	}
 
-	return s, nil
-}
-
-func expired(s *link.PublicShare) bool {
-	if s.Expiration != nil {
-		if t := time.Unix(int64(s.Expiration.GetSeconds()), int64(s.Expiration.GetNanos())); t.Before(time.Now()) {
-			return true
-		}
-	}
-	return false
+	return &ps.PublicShare, nil
 }
 
 func (m *mgr) cleanupExpiredShares() error {
@@ -519,29 +541,4 @@ func (m *mgr) cleanupExpiredShares() error {
 		}
 	*/
 	return nil
-}
-
-func checkPasswordHash(password, hash string) bool {
-	err := bcrypt.CompareHashAndPassword([]byte(strings.TrimPrefix(hash, "1|")), []byte(password))
-	return err == nil
-}
-
-func authenticate(share *link.PublicShare, pw string, auth *link.PublicShareAuthentication) bool {
-	switch {
-	case auth.GetPassword() != "":
-		return checkPasswordHash(auth.GetPassword(), pw)
-	case auth.GetSignature() != nil:
-		sig := auth.GetSignature()
-		now := time.Now()
-		expiration := time.Unix(int64(sig.GetSignatureExpiration().GetSeconds()), int64(sig.GetSignatureExpiration().GetNanos()))
-		if now.After(expiration) {
-			return false
-		}
-		s, err := publicshare.CreateSignature(share.Token, pw, expiration)
-		if err != nil {
-			return false
-		}
-		return sig.GetSignature() == s
-	}
-	return false
 }
