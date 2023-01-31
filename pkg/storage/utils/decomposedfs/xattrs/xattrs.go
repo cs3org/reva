@@ -38,7 +38,6 @@ import (
 // collisions with other apps We are going to introduce a sub namespace
 // "user.ocis."
 const (
-	OcisPrefix    string = "user.ocis."
 	ParentidAttr  string = OcisPrefix + "parentid"
 	OwnerIDAttr   string = OcisPrefix + "owner.id"
 	OwnerIDPAttr  string = OcisPrefix + "owner.idp"
