@@ -85,7 +85,7 @@ var _ = Describe("SQL manager", func() {
 					OpaqueId: username,
 				}
 			},
-			func(_ context.Context, username string) error { return nil })
+			nil)
 		m, err = owncloudsql.New("sqlite3", sqldb, owncloudsql.Config{}, userConverter)
 		Expect(err).ToNot(HaveOccurred())
 
@@ -97,13 +97,6 @@ var _ = Describe("SQL manager", func() {
 			Username: "username",
 		}
 		ctx = ctxpkg.ContextSetUser(context.Background(), user)
-
-		/*
-			share = &link.PublicShare{
-				Id:    &link.PublicShareId{OpaqueId: "1"},
-				Token: "abcd",
-			}
-		*/
 
 		ri = &provider.ResourceInfo{
 			Type:  provider.ResourceType_RESOURCE_TYPE_CONTAINER,
@@ -142,7 +135,10 @@ var _ = Describe("SQL manager", func() {
 			Expect(link).ToNot(BeNil())
 			Expect(link.Token).ToNot(Equal(""))
 			Expect(link.PasswordProtected).To(BeTrue())
-			// TODO check it is in the db?
+			// check it is in the db
+			s, err := owncloudsql.GetByToken(sqldb, link.Token)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(s.ShareWith).To(HavePrefix("1|"))
 		})
 
 		It("picks up the displayname from the metadata", func() {

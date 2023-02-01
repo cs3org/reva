@@ -133,7 +133,7 @@ func (m *mgr) CreatePublicShare(ctx context.Context, u *user.User, rInfo *provid
 	}
 	permissions := sharePermToInt(g.Permissions.Permissions)
 	itemType := resourceTypeToItem(rInfo.Type)
-	// prefix := rInfo.Id.SpaceId
+
 	itemSource := rInfo.Id.OpaqueId
 	fileSource, err := strconv.ParseUint(itemSource, 10, 64)
 	if err != nil {
@@ -142,10 +142,6 @@ func (m *mgr) CreatePublicShare(ctx context.Context, u *user.User, rInfo *provid
 		fileSource = 0
 	}
 
-	/*
-		query := "insert into oc_share set share_type=?,uid_owner=?,uid_initiator=?,item_type=?,fileid_prefix=?,item_source=?,file_source=?,permissions=?,stime=?,token=?,share_name=?"
-		params := []interface{}{publicShareType, owner, creator, itemType, prefix, itemSource, fileSource, permissions, now, tkn, displayName}
-	*/
 	columns := "share_type,uid_owner,uid_initiator,item_type,item_source,file_source,permissions,stime,token,share_name"
 	placeholders := "?,?,?,?,?,?,?,?,?,?"
 	params := []interface{}{publicShareType, owner, creator, itemType, itemSource, fileSource, permissions, now, tkn, displayName}
@@ -494,7 +490,6 @@ func (m *mgr) RevokePublicShare(ctx context.Context, u *user.User, ref *link.Pub
 }
 
 func (m *mgr) GetPublicShareByToken(ctx context.Context, token string, auth *link.PublicShareAuthentication, sign bool) (*link.PublicShare, error) {
-
 	ps, err := m.getByToken(ctx, token)
 	if err != nil {
 		return nil, err
@@ -511,34 +506,25 @@ func (m *mgr) GetPublicShareByToken(ctx context.Context, token string, auth *lin
 		if !publicshare.Authenticate(&ps.PublicShare, ps.Password, auth) {
 			return nil, errtypes.InvalidCredentials("access denied")
 		}
-		/*
-			if sign {
-				if err := publicshare.AddSignature(s, pw); err != nil {
-					return nil, err
-				}
-			}
-		*/
 	}
 
 	return &ps.PublicShare, nil
 }
 
 func (m *mgr) cleanupExpiredShares() error {
-	/*
-		if !m.c.EnableExpiredSharesCleanup {
-			return nil
-		}
+	if !m.c.EnableExpiredSharesCleanup {
+		return nil
+	}
 
-		query := "update oc_share set orphan = 1 where expiration IS NOT NULL AND expiration < ?"
-		params := []interface{}{time.Now().Format("2006-01-02 03:04:05")}
+	query := "DELETE FROM oc_share WHERE expiration IS NOT NULL AND expiration < ?"
+	params := []interface{}{time.Now().Format("2006-01-02 03:04:05")}
 
-		stmt, err := m.db.Prepare(query)
-		if err != nil {
-			return err
-		}
-		if _, err = stmt.Exec(params...); err != nil {
-			return err
-		}
-	*/
+	stmt, err := m.db.Prepare(query)
+	if err != nil {
+		return err
+	}
+	if _, err = stmt.Exec(params...); err != nil {
+		return err
+	}
 	return nil
 }
