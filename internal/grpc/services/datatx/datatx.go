@@ -27,7 +27,6 @@ import (
 
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	datatx "github.com/cs3org/go-cs3apis/cs3/tx/v1beta1"
-	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	txdriver "github.com/cs3org/reva/pkg/datatx"
 	txregistry "github.com/cs3org/reva/pkg/datatx/manager/registry"
 	"github.com/cs3org/reva/pkg/errtypes"
@@ -69,10 +68,10 @@ type txShareModel struct {
 }
 
 type txShare struct {
-	TxID          string
+	TxId          string
 	SrcTargetURI  string
 	DestTargetURI string
-	Opaque        *types.Opaque `json:"opaque"`
+	ShareId       string
 }
 
 func (c *config) init() {
@@ -152,10 +151,10 @@ func (s *service) CreateTransfer(ctx context.Context, req *datatx.CreateTransfer
 	// we always save the transfer regardless of start transfer outcome
 	// only then, if starting fails, can we try to restart it
 	txShare := &txShare{
-		TxID:          txInfo.GetId().OpaqueId,
+		TxId:          txInfo.GetId().OpaqueId,
 		SrcTargetURI:  req.SrcTargetUri,
 		DestTargetURI: req.DestTargetUri,
-		Opaque:        req.Opaque,
+		ShareId:       req.GetShareId().OpaqueId,
 	}
 	s.txShareDriver.Lock()
 	defer s.txShareDriver.Unlock()
@@ -198,7 +197,7 @@ func (s *service) GetTransferStatus(ctx context.Context, req *datatx.GetTransfer
 		}, err
 	}
 
-	txInfo.ShareId = &ocm.ShareId{OpaqueId: string(txShare.Opaque.Map["shareId"].Value)}
+	txInfo.ShareId = &ocm.ShareId{OpaqueId: txShare.ShareId}
 
 	return &datatx.GetTransferStatusResponse{
 		Status: status.NewOK(ctx),
@@ -207,14 +206,14 @@ func (s *service) GetTransferStatus(ctx context.Context, req *datatx.GetTransfer
 }
 
 func (s *service) CancelTransfer(ctx context.Context, req *datatx.CancelTransferRequest) (*datatx.CancelTransferResponse, error) {
-	txShare, ok := s.txShareDriver.model.TxShares[req.GetTxId().GetOpaqueId()]
+	txShare, ok := s.txShareDriver.model.TxShares[req.GetTxId().OpaqueId]
 	if !ok {
 		return nil, errtypes.InternalError("datatx service: transfer not found")
 	}
 
 	txInfo, err := s.txManager.CancelTransfer(ctx, req.GetTxId().OpaqueId)
 	if err != nil {
-		txInfo.ShareId = &ocm.ShareId{OpaqueId: string(txShare.Opaque.Map["shareId"].Value)}
+		txInfo.ShareId = &ocm.ShareId{OpaqueId: txShare.ShareId}
 		err = errors.Wrap(err, "datatx service: error cancelling transfer")
 		return &datatx.CancelTransferResponse{
 			Status: status.NewInternal(ctx, err, "error cancelling transfer"),
@@ -222,7 +221,7 @@ func (s *service) CancelTransfer(ctx context.Context, req *datatx.CancelTransfer
 		}, err
 	}
 
-	txInfo.ShareId = &ocm.ShareId{OpaqueId: string(txShare.Opaque.Map["shareId"].Value)}
+	txInfo.ShareId = &ocm.ShareId{OpaqueId: txShare.ShareId}
 
 	return &datatx.CancelTransferResponse{
 		Status: status.NewOK(ctx),
@@ -236,16 +235,16 @@ func (s *service) ListTransfers(ctx context.Context, req *datatx.ListTransfersRe
 	for _, txShare := range s.txShareDriver.model.TxShares {
 		if len(filters) == 0 {
 			txInfos = append(txInfos, &datatx.TxInfo{
-				Id:      &datatx.TxId{OpaqueId: txShare.TxID},
-				ShareId: &ocm.ShareId{OpaqueId: string(txShare.Opaque.Map["shareId"].Value)},
+				Id:      &datatx.TxId{OpaqueId: txShare.TxId},
+				ShareId: &ocm.ShareId{OpaqueId: txShare.ShareId},
 			})
 		} else {
 			for _, f := range filters {
 				if f.Type == datatx.ListTransfersRequest_Filter_TYPE_SHARE_ID {
-					if f.GetShareId().GetOpaqueId() == string(txShare.Opaque.Map["shareId"].Value) {
+					if f.GetShareId().GetOpaqueId() == txShare.ShareId {
 						txInfos = append(txInfos, &datatx.TxInfo{
-							Id:      &datatx.TxId{OpaqueId: txShare.TxID},
-							ShareId: &ocm.ShareId{OpaqueId: string(txShare.Opaque.Map["shareId"].Value)},
+							Id:      &datatx.TxId{OpaqueId: txShare.TxId},
+							ShareId: &ocm.ShareId{OpaqueId: txShare.ShareId},
 						})
 					}
 				}
@@ -274,7 +273,7 @@ func (s *service) RetryTransfer(ctx context.Context, req *datatx.RetryTransferRe
 		}, err
 	}
 
-	txInfo.ShareId = &ocm.ShareId{OpaqueId: string(txShare.Opaque.Map["shareId"].Value)}
+	txInfo.ShareId = &ocm.ShareId{OpaqueId: txShare.ShareId}
 
 	return &datatx.RetryTransferResponse{
 		Status: status.NewOK(ctx),

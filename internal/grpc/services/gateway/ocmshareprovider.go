@@ -30,7 +30,6 @@ import (
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	datatx "github.com/cs3org/go-cs3apis/cs3/tx/v1beta1"
-	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
@@ -380,18 +379,13 @@ func (s *svc) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateReceive
 					destPath := path.Join(destEndpointPath, homeRes.Path, s.c.DataTransfersFolder, path.Base(share.GetShare().Name))
 					destTargetURI := fmt.Sprintf("%s://%s@%s?name=%s", destEndpointScheme, destToken, destServiceHost, destPath)
 
-					opaqueObj := &types.Opaque{
-						Map: map[string]*types.OpaqueEntry{
-							"shareId": {
-								Decoder: "plain",
-								Value:   []byte(share.GetShare().GetId().OpaqueId),
-							},
-						},
+					shareId := &ocm.ShareId{
+						OpaqueId: share.GetShare().GetId().OpaqueId,
 					}
 					req := &datatx.CreateTransferRequest{
 						SrcTargetUri:  srcTargetURI,
 						DestTargetUri: destTargetURI,
-						Opaque:        opaqueObj,
+						ShareId:       shareId,
 					}
 					res, err := s.CreateTransfer(ctx, req)
 					if err != nil {
