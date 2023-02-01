@@ -157,6 +157,9 @@ func NewShareManager(c *ShareManagerConfig) (*Manager, error) {
 		if len(c.EndPoint) == 0 {
 			return nil, errors.New("Please specify 'endpoint' in '[grpc.services.ocmshareprovider.drivers.nextcloud]' and  '[grpc.services.ocmcore.drivers.nextcloud]'")
 		}
+		if len(c.WebDAVHost) == 0 {
+			return nil, errors.New("Please specify 'webdav_host' in '[grpc.services.ocmshareprovider.drivers.nextcloud]' and  '[grpc.services.ocmcore.drivers.nextcloud]'")
+		}
 		client = &http.Client{}
 	}
 
