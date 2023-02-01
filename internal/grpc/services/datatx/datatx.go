@@ -68,10 +68,10 @@ type txShareModel struct {
 }
 
 type txShare struct {
-	TxId          string
+	TxID          string
 	SrcTargetURI  string
 	DestTargetURI string
-	ShareId       string
+	ShareID       string
 }
 
 func (c *config) init() {
@@ -151,10 +151,10 @@ func (s *service) CreateTransfer(ctx context.Context, req *datatx.CreateTransfer
 	// we always save the transfer regardless of start transfer outcome
 	// only then, if starting fails, can we try to restart it
 	txShare := &txShare{
-		TxId:          txInfo.GetId().OpaqueId,
+		TxID:          txInfo.GetId().OpaqueId,
 		SrcTargetURI:  req.SrcTargetUri,
 		DestTargetURI: req.DestTargetUri,
-		ShareId:       req.GetShareId().OpaqueId,
+		ShareID:       req.GetShareId().OpaqueId,
 	}
 	s.txShareDriver.Lock()
 	defer s.txShareDriver.Unlock()
@@ -197,7 +197,7 @@ func (s *service) GetTransferStatus(ctx context.Context, req *datatx.GetTransfer
 		}, err
 	}
 
-	txInfo.ShareId = &ocm.ShareId{OpaqueId: txShare.ShareId}
+	txInfo.ShareId = &ocm.ShareId{OpaqueId: txShare.ShareID}
 
 	return &datatx.GetTransferStatusResponse{
 		Status: status.NewOK(ctx),
@@ -213,7 +213,7 @@ func (s *service) CancelTransfer(ctx context.Context, req *datatx.CancelTransfer
 
 	txInfo, err := s.txManager.CancelTransfer(ctx, req.GetTxId().OpaqueId)
 	if err != nil {
-		txInfo.ShareId = &ocm.ShareId{OpaqueId: txShare.ShareId}
+		txInfo.ShareId = &ocm.ShareId{OpaqueId: txShare.ShareID}
 		err = errors.Wrap(err, "datatx service: error cancelling transfer")
 		return &datatx.CancelTransferResponse{
 			Status: status.NewInternal(ctx, err, "error cancelling transfer"),
@@ -221,7 +221,7 @@ func (s *service) CancelTransfer(ctx context.Context, req *datatx.CancelTransfer
 		}, err
 	}
 
-	txInfo.ShareId = &ocm.ShareId{OpaqueId: txShare.ShareId}
+	txInfo.ShareId = &ocm.ShareId{OpaqueId: txShare.ShareID}
 
 	return &datatx.CancelTransferResponse{
 		Status: status.NewOK(ctx),
@@ -235,16 +235,16 @@ func (s *service) ListTransfers(ctx context.Context, req *datatx.ListTransfersRe
 	for _, txShare := range s.txShareDriver.model.TxShares {
 		if len(filters) == 0 {
 			txInfos = append(txInfos, &datatx.TxInfo{
-				Id:      &datatx.TxId{OpaqueId: txShare.TxId},
-				ShareId: &ocm.ShareId{OpaqueId: txShare.ShareId},
+				Id:      &datatx.TxId{OpaqueId: txShare.TxID},
+				ShareId: &ocm.ShareId{OpaqueId: txShare.ShareID},
 			})
 		} else {
 			for _, f := range filters {
 				if f.Type == datatx.ListTransfersRequest_Filter_TYPE_SHARE_ID {
-					if f.GetShareId().GetOpaqueId() == txShare.ShareId {
+					if f.GetShareId().GetOpaqueId() == txShare.ShareID {
 						txInfos = append(txInfos, &datatx.TxInfo{
-							Id:      &datatx.TxId{OpaqueId: txShare.TxId},
-							ShareId: &ocm.ShareId{OpaqueId: txShare.ShareId},
+							Id:      &datatx.TxId{OpaqueId: txShare.TxID},
+							ShareId: &ocm.ShareId{OpaqueId: txShare.ShareID},
 						})
 					}
 				}
@@ -273,7 +273,7 @@ func (s *service) RetryTransfer(ctx context.Context, req *datatx.RetryTransferRe
 		}, err
 	}
 
-	txInfo.ShareId = &ocm.ShareId{OpaqueId: txShare.ShareId}
+	txInfo.ShareId = &ocm.ShareId{OpaqueId: txShare.ShareID}
 
 	return &datatx.RetryTransferResponse{
 		Status: status.NewOK(ctx),
