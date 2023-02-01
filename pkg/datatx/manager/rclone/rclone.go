@@ -219,8 +219,6 @@ func (m *transferModel) saveTransfer(e error) error {
 // CreateTransfer creates a transfer job and returns a TxInfo object that includes a unique transfer id.
 // Specified target URIs are of form scheme://userinfo@host:port?name={path}
 func (driver *rclone) CreateTransfer(ctx context.Context, srcTargetURI string, dstTargetURI string) (*datatx.TxInfo, error) {
-	logger := appctx.GetLogger(ctx)
-
 	srcEp, err := driver.extractEndpointInfo(ctx, srcTargetURI)
 	if err != nil {
 		return nil, err
@@ -237,9 +235,6 @@ func (driver *rclone) CreateTransfer(ctx context.Context, srcTargetURI string, d
 	dstToken := destEp.token
 	// we always set the userinfo part of the destination url for rclone tpc push support
 	dstRemote := fmt.Sprintf("%s://%s@%s", destEp.endpointScheme, dstToken, destEp.endpoint)
-
-	logger.Debug().Msgf("destination target URI: %v", dstTargetURI)
-	logger.Debug().Msgf("destination remote: %v", dstRemote)
 
 	return driver.startJob(ctx, "", srcRemote, srcPath, srcToken, dstRemote, dstPath, dstToken)
 }

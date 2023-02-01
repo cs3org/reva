@@ -284,25 +284,31 @@ func (s *svc) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateReceive
 					var srcEndpointScheme string
 					for _, s := range meshProvider.ProviderInfo.Services {
 						if strings.ToLower(s.Endpoint.Type.Name) == "webdav" {
-							endpointURL, err := url.Parse(s.Endpoint.Path)
-							if err != nil {
-								log.Err(err).Msg("gateway: error calling UpdateReceivedShare: unable to parse webdav endpoint " + s.Endpoint.Path)
+							srcWebdavEndpointURL, err := url.Parse(s.Endpoint.Path)
+							if err != nil || srcWebdavEndpointURL.Host == "" {
+								log.Err(err).Msg("gateway: error calling UpdateReceivedShare: unable to parse webdav endpoint \"" + s.Endpoint.Path + "\" into URL structure")
 								return &ocm.UpdateReceivedOCMShareResponse{
 									Status: &rpc.Status{Code: rpc.Code_CODE_INTERNAL},
 								}, nil
 							}
-							urlServiceHostFull, err := url.Parse(s.Host)
+							var srcWebdavHostURLString string
+							if strings.Contains(s.Host, "://") {
+								srcWebdavHostURLString = s.Host
+							} else {
+								srcWebdavHostURLString = "http://" + s.Host
+							}
+							srcWebdavHostURL, err := url.Parse(srcWebdavHostURLString)
 							if err != nil {
-								log.Err(err).Msg("gateway: error calling UpdateReceivedShare: unable to parse webdav service host " + s.Host)
+								log.Err(err).Msg("gateway: error calling UpdateReceivedShare: unable to parse webdav service host \"" + s.Host + "\" into URL structure")
 								return &ocm.UpdateReceivedOCMShareResponse{
 									Status: &rpc.Status{Code: rpc.Code_CODE_INTERNAL},
 								}, nil
 							}
-							srcServiceHost = urlServiceHostFull.Host + urlServiceHostFull.Path
+							srcServiceHost = srcWebdavHostURL.Host + srcWebdavHostURL.Path
 							// optional prefix must only appear in target url path:
 							// http://...token...@reva.eu/prefix/?name=remote.php/webdav/home/...
-							srcEndpointPath = strings.TrimPrefix(endpointURL.Path, urlServiceHostFull.Path)
-							srcEndpointScheme = endpointURL.Scheme
+							srcEndpointPath = strings.TrimPrefix(srcWebdavEndpointURL.Path, srcWebdavHostURL.Path)
+							srcEndpointScheme = srcWebdavEndpointURL.Scheme
 							break
 						}
 					}
@@ -344,7 +350,7 @@ func (s *svc) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateReceive
 					}
 					destWebdavEndpointURL, err := url.Parse(destWebdavEndpoint)
 					if err != nil {
-						log.Err(err).Msg("gateway: error calling UpdateReceivedShare: unable to parse webdav endpoint " + destWebdavEndpoint)
+						log.Err(err).Msg("gateway: error calling UpdateReceivedShare: unable to parse webdav endpoint \"" + destWebdavEndpoint + "\" into URL structure")
 						return &ocm.UpdateReceivedOCMShareResponse{
 							Status: &rpc.Status{Code: rpc.Code_CODE_INTERNAL},
 						}, nil
@@ -356,17 +362,23 @@ func (s *svc) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateReceive
 							Status: &rpc.Status{Code: rpc.Code_CODE_INTERNAL},
 						}, nil
 					}
-					urlServiceHostFull, err := url.Parse(destWebdavHost)
+					var dstWebdavUrlString string
+					if strings.Contains(destWebdavHost, "://") {
+						dstWebdavUrlString = destWebdavHost
+					} else {
+						dstWebdavUrlString = "http://" + destWebdavHost
+					}
+					dstWebdavHostURL, err := url.Parse(dstWebdavUrlString)
 					if err != nil {
-						log.Err(err).Msg("gateway: error calling UpdateReceivedShare: unable to parse webdav service host " + destWebdavHost)
+						log.Err(err).Msg("gateway: error calling UpdateReceivedShare: unable to parse webdav service host \"" + dstWebdavUrlString + "\" into URL structure")
 						return &ocm.UpdateReceivedOCMShareResponse{
 							Status: &rpc.Status{Code: rpc.Code_CODE_INTERNAL},
 						}, nil
 					}
-					destServiceHost := urlServiceHostFull.Host + urlServiceHostFull.Path
+					destServiceHost := dstWebdavHostURL.Host + dstWebdavHostURL.Path
 					// optional prefix must only appear in target url path:
 					// http://...token...@reva.eu/prefix/?name=remote.php/webdav/home/...
-					destEndpointPath := strings.TrimPrefix(destWebdavEndpointURL.Path, urlServiceHostFull.Path)
+					destEndpointPath := strings.TrimPrefix(destWebdavEndpointURL.Path, dstWebdavHostURL.Path)
 					destEndpointScheme := destWebdavEndpointURL.Scheme
 					destToken := ctxpkg.ContextMustGetToken(ctx)
 					homeRes, err := s.GetHome(ctx, &provider.GetHomeRequest{})
