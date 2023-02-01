@@ -303,10 +303,8 @@ func (driver *rclone) startJob(ctx context.Context, transferID string, srcRemote
 
 	type rcloneAsyncReqJSON struct {
 		SrcFs string `json:"srcFs"`
-		// SrcToken string `json:"srcToken"`
 		DstFs string `json:"dstFs"`
-		// DstToken string `json:"destToken"`
-		Async bool `json:"_async"`
+		Async bool   `json:"_async"`
 	}
 	// bearer is the default authentication scheme for reva
 	srcAuthHeader := fmt.Sprintf("bearer_token=\"%v\"", srcToken)
