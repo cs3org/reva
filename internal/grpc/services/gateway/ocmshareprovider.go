@@ -362,15 +362,15 @@ func (s *svc) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateReceive
 							Status: &rpc.Status{Code: rpc.Code_CODE_INTERNAL},
 						}, nil
 					}
-					var dstWebdavUrlString string
+					var dstWebdavURLString string
 					if strings.Contains(destWebdavHost, "://") {
-						dstWebdavUrlString = destWebdavHost
+						dstWebdavURLString = destWebdavHost
 					} else {
-						dstWebdavUrlString = "http://" + destWebdavHost
+						dstWebdavURLString = "http://" + destWebdavHost
 					}
-					dstWebdavHostURL, err := url.Parse(dstWebdavUrlString)
+					dstWebdavHostURL, err := url.Parse(dstWebdavURLString)
 					if err != nil {
-						log.Err(err).Msg("gateway: error calling UpdateReceivedShare: unable to parse webdav service host \"" + dstWebdavUrlString + "\" into URL structure")
+						log.Err(err).Msg("gateway: error calling UpdateReceivedShare: unable to parse webdav service host \"" + dstWebdavURLString + "\" into URL structure")
 						return &ocm.UpdateReceivedOCMShareResponse{
 							Status: &rpc.Status{Code: rpc.Code_CODE_INTERNAL},
 						}, nil
@@ -391,13 +391,13 @@ func (s *svc) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateReceive
 					destPath := path.Join(destEndpointPath, homeRes.Path, s.c.DataTransfersFolder, path.Base(share.GetShare().Name))
 					destTargetURI := fmt.Sprintf("%s://%s@%s?name=%s", destEndpointScheme, destToken, destServiceHost, destPath)
 
-					shareId := &ocm.ShareId{
+					shareID := &ocm.ShareId{
 						OpaqueId: share.GetShare().GetId().OpaqueId,
 					}
 					req := &datatx.CreateTransferRequest{
 						SrcTargetUri:  srcTargetURI,
 						DestTargetUri: destTargetURI,
-						ShareId:       shareId,
+						ShareId:       shareID,
 					}
 					res, err := s.CreateTransfer(ctx, req)
 					if err != nil {
