@@ -11,6 +11,8 @@ on:
         type: boolean
       push:
         type: boolean
+      build-args:
+        type: string
 
 jobs:
   docker:
@@ -34,6 +36,7 @@ jobs:
           tags: ${{ inputs.tags }}
           load: ${{ inputs.load }}
           push: ${{ inputs.push }}
+          build-args: ${{ inputs.build-args }}
       - name: Upload ${{ inputs.tags }} Docker image to artifacts
         uses: ishworkh/docker-image-artifact-upload@v1
         if: ${{ inputs.load }}
