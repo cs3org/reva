@@ -105,8 +105,7 @@ type shareModel struct {
 }
 
 type config struct {
-	File                string `mapstructure:"file"`
-	InsecureConnections bool   `mapstructure:"insecure_connections"`
+	File string `mapstructure:"file"`
 }
 
 func (c *config) init() {
