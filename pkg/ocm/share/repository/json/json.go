@@ -151,18 +151,7 @@ func (m *mgr) StoreShare(ctx context.Context, share *ocm.Share) (*ocm.Share, err
 	m.Lock()
 	defer m.Unlock()
 
-	now := time.Now().UnixNano()
-	ts := &typespb.Timestamp{
-		Seconds: uint64(now / 1000000000),
-		Nanos:   uint32(now % 1000000000),
-	}
-
-	share.Id = &ocm.ShareId{
-		OpaqueId: genID(),
-	}
-	share.Mtime = ts
-	share.Ctime = ts
-
+	share.Id = &ocm.ShareId{OpaqueId: genID()}
 	m.model.Shares[share.Id.OpaqueId] = cloneShare(share)
 
 	if err := m.model.save(); err != nil {
