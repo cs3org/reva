@@ -168,11 +168,11 @@ func New(o *options.Options, lu *lookup.Lookup, p Permissions, tp Tree, es event
 }
 
 // Postprocessing starts the postprocessing result collector
-func (fs *Decomposedfs) Postprocessing(ch <-chan interface{}) {
+func (fs *Decomposedfs) Postprocessing(ch <-chan events.Event) {
 	ctx := context.TODO()
 	log := logger.New()
 	for event := range ch {
-		switch ev := event.(type) {
+		switch ev := event.Event.(type) {
 		case events.PostprocessingFinished:
 			up, err := upload.Get(ctx, ev.UploadID, fs.lu, fs.tp, fs.o.Root, fs.stream, fs.o.AsyncFileUploads, fs.o.Tokens)
 			if err != nil {

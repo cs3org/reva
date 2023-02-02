@@ -56,7 +56,7 @@ func Example(c events.Consumer) {
 		event := <-evChan
 
 		// best to use type switch to differentiate events
-		switch v := event.(type) {
+		switch v := event.Event.(type) {
 		case events.ShareCreated:
 			fmt.Printf("%s) Share created: %+v\n", group, v)
 		default:
