@@ -219,6 +219,7 @@ func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareReq
 		Name:          filepath.Base(info.Path),
 		ResourceId:    req.ResourceId,
 		Grantee:       req.Grantee,
+		ShareType:     ocm.ShareType_SHARE_TYPE_USER,
 		Owner:         info.Owner,
 		Creator:       user.Id,
 		AccessMethods: req.AccessMethods,

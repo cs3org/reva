@@ -121,6 +121,7 @@ func (s *service) CreateOCMCoreShare(ctx context.Context, req *ocmcore.CreateOCM
 				UserId: req.ShareWith,
 			},
 		},
+		ShareType: req.ShareType,
 		Owner:     req.Owner,
 		Creator:   req.Sender,
 		Protocols: req.Protocols,
