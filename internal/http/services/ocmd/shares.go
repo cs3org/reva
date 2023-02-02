@@ -28,6 +28,7 @@ import (
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	providerpb "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	ocmcore "github.com/cs3org/go-cs3apis/cs3/ocm/core/v1beta1"
@@ -67,6 +68,7 @@ type createShareRequest struct {
 	SenderDisplayName string    `json:"senderDisplayName"`                              // dispay name of the user who wants to share the resource
 	ShareType         string    `json:"shareType" validate:"required,oneof=user group"` // recipient share type (user or group)
 	ResourceType      string    `json:"resourceType" validate:"required,oneof=file folder"`
+	Expiration        uint64    `json:"expiration"`
 	Protocols         Protocols `json:"protocols" validate:"required"`
 }
 
@@ -143,7 +145,7 @@ func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	createShareResp, err := h.gatewayClient.CreateOCMCoreShare(ctx, &ocmcore.CreateOCMCoreShareRequest{
+	createShareReq := &ocmcore.CreateOCMCoreShareRequest{
 		Description:  req.Description,
 		Name:         req.Name,
 		ResourceId:   req.ResourceID,
@@ -153,7 +155,15 @@ func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 		ResourceType: getResourceTypeFromOCMRequest(req.ResourceType),
 		ShareType:    getOCMShareType(req.ShareType),
 		Protocols:    getProtocols(req.Protocols),
-	})
+	}
+
+	if req.Expiration != 0 {
+		createShareReq.Expiration = &types.Timestamp{
+			Seconds: req.Expiration,
+		}
+	}
+
+	createShareResp, err := h.gatewayClient.CreateOCMCoreShare(ctx, createShareReq)
 	if err != nil {
 		reqres.WriteError(w, r, reqres.APIErrorServerError, "error creating ocm share", err)
 		return

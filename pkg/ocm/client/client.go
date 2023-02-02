@@ -164,6 +164,7 @@ type NewShareRequest struct {
 	OwnerDisplayName  string         `json:"ownerDisplayName"`
 	SenderDisplayName string         `json:"senderDisplayName"`
 	ShareType         string         `json:"shareType"`
+	Expiration        uint64         `json:"expiration"`
 	ResourceType      string         `json:"resourceType"`
 	Protocols         ocmd.Protocols `json:"protocols"`
 }

@@ -225,6 +225,7 @@ func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareReq
 		ShareType:     ocm.ShareType_SHARE_TYPE_USER,
 		Owner:         info.Owner,
 		Creator:       user.Id,
+		Expiration:    req.Expiration,
 		AccessMethods: req.AccessMethods,
 	}
 
@@ -240,7 +241,7 @@ func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareReq
 		return nil, errtypes.InternalError(err.Error())
 	}
 
-	err = s.client.NewShare(ctx, ocmEndpoint, &client.NewShareRequest{
+	newShareReq := &client.NewShareRequest{
 		ShareWith:         req.Grantee.GetGroupId().OpaqueId,
 		Name:              share.Name,
 		ResourceID:        fmt.Sprintf("%s:%s", req.ResourceId.StorageId, req.ResourceId.OpaqueId),
@@ -250,7 +251,13 @@ func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareReq
 		ShareType:         "user",
 		ResourceType:      getResourceType(info),
 		Protocols:         s.getProtocols(ctx, info, req.AccessMethods),
-	})
+	}
+
+	if req.Expiration != nil {
+		newShareReq.Expiration = req.Expiration.Seconds
+	}
+
+	err = s.client.NewShare(ctx, ocmEndpoint, newShareReq)
 
 	if err != nil {
 		// TODO: err

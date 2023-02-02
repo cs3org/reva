@@ -121,11 +121,12 @@ func (s *service) CreateOCMCoreShare(ctx context.Context, req *ocmcore.CreateOCM
 				UserId: req.ShareWith,
 			},
 		},
-		ShareType: req.ShareType,
-		Owner:     req.Owner,
-		Creator:   req.Sender,
-		Protocols: req.Protocols,
-		State:     ocm.ShareState_SHARE_STATE_PENDING,
+		ShareType:  req.ShareType,
+		Owner:      req.Owner,
+		Creator:    req.Sender,
+		Protocols:  req.Protocols,
+		Expiration: req.Expiration,
+		State:      ocm.ShareState_SHARE_STATE_PENDING,
 	})
 	if err != nil {
 		// TODO: identify errors
