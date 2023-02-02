@@ -33,29 +33,29 @@ type Repository interface {
 	StoreShare(ctx context.Context, share *ocm.Share) (*ocm.Share, error)
 
 	// GetShare gets the information for a share by the given ref.
-	GetShare(ctx context.Context, user *userpb.UserId, ref *ocm.ShareReference) (*ocm.Share, error)
+	GetShare(ctx context.Context, user *userpb.User, ref *ocm.ShareReference) (*ocm.Share, error)
 
 	// DeleteShare deletes the share pointed by ref.
-	DeleteShare(ctx context.Context, user *userpb.UserId, ref *ocm.ShareReference) error
+	DeleteShare(ctx context.Context, user *userpb.User, ref *ocm.ShareReference) error
 
 	// UpdateShare updates the mode of the given share.
-	UpdateShare(ctx context.Context, user *userpb.UserId, ref *ocm.ShareReference, p *ocm.SharePermissions) (*ocm.Share, error)
+	UpdateShare(ctx context.Context, user *userpb.User, ref *ocm.ShareReference, p *ocm.SharePermissions) (*ocm.Share, error)
 
 	// ListShares returns the shares created by the user. If md is provided is not nil,
 	// it returns only shares attached to the given resource.
-	ListShares(ctx context.Context, user *userpb.UserId, filters []*ocm.ListOCMSharesRequest_Filter) ([]*ocm.Share, error)
+	ListShares(ctx context.Context, user *userpb.User, filters []*ocm.ListOCMSharesRequest_Filter) ([]*ocm.Share, error)
 
 	// StoreShare stores a share.
 	StoreReceivedShare(ctx context.Context, share *ocm.ReceivedShare) (*ocm.ReceivedShare, error)
 
 	// ListReceivedShares returns the list of shares the user has access.
-	ListReceivedShares(ctx context.Context, user *userpb.UserId) ([]*ocm.ReceivedShare, error)
+	ListReceivedShares(ctx context.Context, user *userpb.User) ([]*ocm.ReceivedShare, error)
 
 	// GetReceivedShare returns the information for a received share the user has access.
-	GetReceivedShare(ctx context.Context, user *userpb.UserId, ref *ocm.ShareReference) (*ocm.ReceivedShare, error)
+	GetReceivedShare(ctx context.Context, user *userpb.User, ref *ocm.ShareReference) (*ocm.ReceivedShare, error)
 
 	// UpdateReceivedShare updates the received share with share state.
-	UpdateReceivedShare(ctx context.Context, user *userpb.UserId, share *ocm.ReceivedShare, fieldMask *field_mask.FieldMask) (*ocm.ReceivedShare, error)
+	UpdateReceivedShare(ctx context.Context, user *userpb.User, share *ocm.ReceivedShare, fieldMask *field_mask.FieldMask) (*ocm.ReceivedShare, error)
 }
 
 // ResourceIDFilter is an abstraction for creating filter by resource id.

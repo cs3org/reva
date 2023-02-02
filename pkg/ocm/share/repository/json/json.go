@@ -185,7 +185,7 @@ func cloneReceivedShare(s *ocm.ReceivedShare) *ocm.ReceivedShare {
 	return &cloned
 }
 
-func (m *mgr) GetShare(ctx context.Context, user *userpb.UserId, ref *ocm.ShareReference) (*ocm.Share, error) {
+func (m *mgr) GetShare(ctx context.Context, user *userpb.User, ref *ocm.ShareReference) (*ocm.Share, error) {
 	var (
 		s   *ocm.Share
 		err error
@@ -205,7 +205,7 @@ func (m *mgr) GetShare(ctx context.Context, user *userpb.UserId, ref *ocm.ShareR
 	}
 
 	// check if we are the owner
-	if utils.UserEqual(user, s.Owner) || utils.UserEqual(user, s.Creator) {
+	if utils.UserEqual(user.Id, s.Owner) || utils.UserEqual(user.Id, s.Creator) {
 		return s, nil
 	}
 
@@ -235,13 +235,13 @@ func (m *mgr) getByKey(ctx context.Context, key *ocm.ShareKey) (*ocm.Share, erro
 	return nil, errtypes.NotFound(key.String())
 }
 
-func (m *mgr) DeleteShare(ctx context.Context, user *userpb.UserId, ref *ocm.ShareReference) error {
+func (m *mgr) DeleteShare(ctx context.Context, user *userpb.User, ref *ocm.ShareReference) error {
 	m.Lock()
 	defer m.Unlock()
 
 	for id, share := range m.model.Shares {
 		if sharesEqual(ref, share) {
-			if utils.UserEqual(user, share.Owner) || utils.UserEqual(user, share.Creator) {
+			if utils.UserEqual(user.Id, share.Owner) || utils.UserEqual(user.Id, share.Creator) {
 				delete(m.model.Shares, id)
 				if err := m.model.save(); err != nil {
 					return err
@@ -282,18 +282,18 @@ func receivedShareEqual(ref *ocm.ShareReference, s *ocm.ReceivedShare) bool {
 	return false
 }
 
-func (m *mgr) UpdateShare(ctx context.Context, user *userpb.UserId, ref *ocm.ShareReference, p *ocm.SharePermissions) (*ocm.Share, error) {
+func (m *mgr) UpdateShare(ctx context.Context, user *userpb.User, ref *ocm.ShareReference, p *ocm.SharePermissions) (*ocm.Share, error) {
 	return nil, errtypes.NotSupported("not yet implemented")
 }
 
-func (m *mgr) ListShares(ctx context.Context, user *userpb.UserId, filters []*ocm.ListOCMSharesRequest_Filter) ([]*ocm.Share, error) {
+func (m *mgr) ListShares(ctx context.Context, user *userpb.User, filters []*ocm.ListOCMSharesRequest_Filter) ([]*ocm.Share, error) {
 	var ss []*ocm.Share
 
 	m.Lock()
 	defer m.Unlock()
 
 	for _, share := range m.model.Shares {
-		if utils.UserEqual(user, share.Owner) || utils.UserEqual(user, share.Creator) {
+		if utils.UserEqual(user.Id, share.Owner) || utils.UserEqual(user.Id, share.Creator) {
 			// no filter we return earlier
 			if len(filters) == 0 {
 				ss = append(ss, share)
@@ -334,30 +334,30 @@ func (m *mgr) StoreReceivedShare(ctx context.Context, share *ocm.ReceivedShare) 
 	return share, nil
 }
 
-func (m *mgr) ListReceivedShares(ctx context.Context, user *userpb.UserId) ([]*ocm.ReceivedShare, error) {
+func (m *mgr) ListReceivedShares(ctx context.Context, user *userpb.User) ([]*ocm.ReceivedShare, error) {
 	var rss []*ocm.ReceivedShare
 	m.Lock()
 	defer m.Unlock()
 
 	for _, share := range m.model.ReceivedShares {
-		if utils.UserEqual(user, share.Owner) || utils.UserEqual(user, share.Creator) {
+		if utils.UserEqual(user.Id, share.Owner) || utils.UserEqual(user.Id, share.Creator) {
 			// omit shares created by me
 			continue
 		}
-		if share.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER && utils.UserEqual(user, share.Grantee.GetUserId()) {
+		if share.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER && utils.UserEqual(user.Id, share.Grantee.GetUserId()) {
 			rss = append(rss, share)
 		}
 	}
 	return rss, nil
 }
 
-func (m *mgr) GetReceivedShare(ctx context.Context, user *userpb.UserId, ref *ocm.ShareReference) (*ocm.ReceivedShare, error) {
+func (m *mgr) GetReceivedShare(ctx context.Context, user *userpb.User, ref *ocm.ShareReference) (*ocm.ReceivedShare, error) {
 	m.Lock()
 	defer m.Unlock()
 
 	for _, share := range m.model.ReceivedShares {
 		if receivedShareEqual(ref, share) {
-			if share.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER && utils.UserEqual(user, share.Grantee.GetUserId()) {
+			if share.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER && utils.UserEqual(user.Id, share.Grantee.GetUserId()) {
 				return share, nil
 			}
 		}
@@ -365,7 +365,7 @@ func (m *mgr) GetReceivedShare(ctx context.Context, user *userpb.UserId, ref *oc
 	return nil, errtypes.NotFound(ref.String())
 }
 
-func (m *mgr) UpdateReceivedShare(ctx context.Context, user *userpb.UserId, share *ocm.ReceivedShare, fieldMask *field_mask.FieldMask) (*ocm.ReceivedShare, error) {
+func (m *mgr) UpdateReceivedShare(ctx context.Context, user *userpb.User, share *ocm.ReceivedShare, fieldMask *field_mask.FieldMask) (*ocm.ReceivedShare, error) {
 	rs, err := m.GetReceivedShare(ctx, user, &ocm.ShareReference{Spec: &ocm.ShareReference_Id{Id: share.Id}})
 	if err != nil {
 		return nil, err
