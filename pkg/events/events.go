@@ -111,6 +111,27 @@ func Consume(s Consumer, group string, evs ...Unmarshaller) (<-chan Event, error
 	return outchan, nil
 }
 
+// ConsumeAll allows consuming all events. Note that unmarshalling must be done manually in this case, therefore Event.Event will always be of type []byte
+func ConsumeAll(s Consumer, group string) (<-chan Event, error) {
+	c, err := s.Consume(MainQueueName, events.WithGroup(group))
+	if err != nil {
+		return nil, err
+	}
+
+	outchan := make(chan Event)
+	go func() {
+		for {
+			e := <-c
+			outchan <- Event{
+				Type:  e.Metadata[MetadatakeyEventType],
+				ID:    e.Metadata[MetadatakeyEventID],
+				Event: e.Payload,
+			}
+		}
+	}()
+	return outchan, nil
+}
+
 // Publish publishes the ev to the MainQueue from where it is distributed to all subscribers
 // NOTE: needs to use reflect on runtime
 func Publish(s Publisher, ev interface{}) error {
