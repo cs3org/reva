@@ -30,12 +30,13 @@ import (
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	providerv1beta1 "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/ocmd"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/ocm/client"
 	"github.com/cs3org/reva/pkg/ocm/share"
-	"github.com/cs3org/reva/pkg/ocm/share/manager/registry"
+	"github.com/cs3org/reva/pkg/ocm/share/repository/registry"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
@@ -216,6 +217,11 @@ func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareReq
 	info := statRes.Info
 	user := ctxpkg.ContextMustGetUser(ctx)
 	tkn := utils.RandString(32)
+	now := time.Now().UnixNano()
+	ts := &typespb.Timestamp{
+		Seconds: uint64(now / 1000000000),
+		Nanos:   uint32(now % 1000000000),
+	}
 
 	share := &ocm.Share{
 		Token:         tkn,
@@ -225,6 +231,8 @@ func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareReq
 		ShareType:     ocm.ShareType_SHARE_TYPE_USER,
 		Owner:         info.Owner,
 		Creator:       user.Id,
+		Ctime:         ts,
+		Mtime:         ts,
 		Expiration:    req.Expiration,
 		AccessMethods: req.AccessMethods,
 	}
@@ -275,7 +283,7 @@ func (s *service) RemoveOCMShare(ctx context.Context, req *ocm.RemoveOCMShareReq
 	// TODO (gdelmont): notify the remote provider using the /notification ocm endpoint
 	// https://cs3org.github.io/OCM-API/docs.html?branch=develop&repo=OCM-API&user=cs3org#/paths/~1notifications/post
 	user := ctxpkg.ContextMustGetUser(ctx)
-	if err := s.repo.DeleteShare(ctx, user.Id, req.Ref); err != nil {
+	if err := s.repo.DeleteShare(ctx, user, req.Ref); err != nil {
 		// TODO: error
 		return &ocm.RemoveOCMShareResponse{
 			Status: status.NewInternal(ctx, err, "error removing share"),
@@ -289,7 +297,7 @@ func (s *service) RemoveOCMShare(ctx context.Context, req *ocm.RemoveOCMShareReq
 
 func (s *service) GetOCMShare(ctx context.Context, req *ocm.GetOCMShareRequest) (*ocm.GetOCMShareResponse, error) {
 	user := ctxpkg.ContextMustGetUser(ctx)
-	share, err := s.repo.GetShare(ctx, user.Id, req.Ref)
+	share, err := s.repo.GetShare(ctx, user, req.Ref)
 	if err != nil {
 		// TODO: error
 		return &ocm.GetOCMShareResponse{
@@ -305,7 +313,7 @@ func (s *service) GetOCMShare(ctx context.Context, req *ocm.GetOCMShareRequest) 
 
 func (s *service) ListOCMShares(ctx context.Context, req *ocm.ListOCMSharesRequest) (*ocm.ListOCMSharesResponse, error) {
 	user := ctxpkg.ContextMustGetUser(ctx)
-	shares, err := s.repo.ListShares(ctx, user.Id, req.Filters)
+	shares, err := s.repo.ListShares(ctx, user, req.Filters)
 	if err != nil {
 		return &ocm.ListOCMSharesResponse{
 			Status: status.NewInternal(ctx, err, "error listing shares"),
@@ -321,7 +329,7 @@ func (s *service) ListOCMShares(ctx context.Context, req *ocm.ListOCMSharesReque
 
 func (s *service) UpdateOCMShare(ctx context.Context, req *ocm.UpdateOCMShareRequest) (*ocm.UpdateOCMShareResponse, error) {
 	user := ctxpkg.ContextMustGetUser(ctx)
-	_, err := s.repo.UpdateShare(ctx, user.Id, req.Ref, req.Field.GetPermissions()) // TODO(labkode): check what to update
+	_, err := s.repo.UpdateShare(ctx, user, req.Ref, req.Field.GetPermissions()) // TODO(labkode): check what to update
 	if err != nil {
 		// TODO: error
 		return &ocm.UpdateOCMShareResponse{
@@ -337,7 +345,7 @@ func (s *service) UpdateOCMShare(ctx context.Context, req *ocm.UpdateOCMShareReq
 
 func (s *service) ListReceivedOCMShares(ctx context.Context, req *ocm.ListReceivedOCMSharesRequest) (*ocm.ListReceivedOCMSharesResponse, error) {
 	user := ctxpkg.ContextMustGetUser(ctx)
-	shares, err := s.repo.ListReceivedShares(ctx, user.Id)
+	shares, err := s.repo.ListReceivedShares(ctx, user)
 	if err != nil {
 		// TODO: error
 		return &ocm.ListReceivedOCMSharesResponse{
@@ -354,7 +362,7 @@ func (s *service) ListReceivedOCMShares(ctx context.Context, req *ocm.ListReceiv
 
 func (s *service) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateReceivedOCMShareRequest) (*ocm.UpdateReceivedOCMShareResponse, error) {
 	user := ctxpkg.ContextMustGetUser(ctx)
-	_, err := s.repo.UpdateReceivedShare(ctx, user.Id, req.Share, req.UpdateMask) // TODO(labkode): check what to update
+	_, err := s.repo.UpdateReceivedShare(ctx, user, req.Share, req.UpdateMask) // TODO(labkode): check what to update
 	if err != nil {
 		// TODO: error
 		return &ocm.UpdateReceivedOCMShareResponse{
@@ -370,7 +378,7 @@ func (s *service) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateRec
 
 func (s *service) GetReceivedOCMShare(ctx context.Context, req *ocm.GetReceivedOCMShareRequest) (*ocm.GetReceivedOCMShareResponse, error) {
 	user := ctxpkg.ContextMustGetUser(ctx)
-	share, err := s.repo.GetReceivedShare(ctx, user.Id, req.Ref)
+	share, err := s.repo.GetReceivedShare(ctx, user, req.Ref)
 	if err != nil {
 		// TODO: error
 		return &ocm.GetReceivedOCMShareResponse{
