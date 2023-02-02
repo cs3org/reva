@@ -54,7 +54,7 @@ func ocmShareUpdateCommand() *command {
 			return err
 		}
 
-		perm, _, err := getOCMSharePerm(*rol)
+		perm, err := getOCMSharePerm(*rol)
 		if err != nil {
 			return err
 		}
@@ -69,7 +69,9 @@ func ocmShareUpdateCommand() *command {
 			},
 			Field: &ocm.UpdateOCMShareRequest_UpdateField{
 				Field: &ocm.UpdateOCMShareRequest_UpdateField_Permissions{
-					Permissions: perm,
+					Permissions: &ocm.SharePermissions{
+						Permissions: perm,
+					},
 				},
 			},
 		}
