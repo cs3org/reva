@@ -8,6 +8,7 @@ import (
 
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	providerv1beta1 "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	ocmshare "github.com/cs3org/reva/pkg/ocm/share"
 )
 
 type Protocols []Protocol
@@ -43,15 +44,7 @@ func (w *WebDAV) ToOCMProtocol() *ocm.Protocol {
 		}
 	}
 
-	return &ocm.Protocol{
-		Term: &ocm.Protocol_WebdapOptions{
-			WebdapOptions: &ocm.WebDAVProtocol{
-				SharedSecret: w.SharedSecret,
-				Uri:          w.URL,
-				Permissions:  perms,
-			},
-		},
-	}
+	return ocmshare.NewWebDAVProtocol(w.URL, w.SharedSecret, perms)
 }
 
 // Webapp contains the parameters for the Webapp protocol.
@@ -60,13 +53,7 @@ type Webapp struct {
 }
 
 func (w *Webapp) ToOCMProtocol() *ocm.Protocol {
-	return &ocm.Protocol{
-		Term: &ocm.Protocol_WebappOptions{
-			WebappOptions: &ocm.WebappProtocol{
-				UriTemplate: w.URITemplate,
-			},
-		},
-	}
+	return ocmshare.NewWebappProtocol(w.URITemplate)
 }
 
 // Datatx contains the parameters for the Datatx protocol.
@@ -77,15 +64,7 @@ type Datatx struct {
 }
 
 func (w *Datatx) ToOCMProtocol() *ocm.Protocol {
-	return &ocm.Protocol{
-		Term: &ocm.Protocol_DatatxOprions{
-			DatatxOprions: &ocm.DatatxProtocol{
-				SharedSecret: w.SharedSecret,
-				SourceUri:    w.SourceURI,
-				Size:         w.Size,
-			},
-		},
-	}
+	return ocmshare.NewDatatxProtocol(w.SourceURI, w.SharedSecret, w.Size)
 }
 
 var protocolImpl = map[string]reflect.Type{
