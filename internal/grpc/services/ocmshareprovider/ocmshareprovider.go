@@ -40,6 +40,7 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/sharedconf"
+	"github.com/cs3org/reva/pkg/utils"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
@@ -214,8 +215,10 @@ func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareReq
 
 	info := statRes.Info
 	user := ctxpkg.ContextMustGetUser(ctx)
+	tkn := utils.RandString(32)
 
 	share := &ocm.Share{
+		Token:         tkn,
 		Name:          filepath.Base(info.Path),
 		ResourceId:    req.ResourceId,
 		Grantee:       req.Grantee,
