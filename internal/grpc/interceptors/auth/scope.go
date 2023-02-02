@@ -79,7 +79,9 @@ func expandAndVerifyScope(ctx context.Context, req interface{}, tokenScope map[s
 					return nil
 				}
 			}
-			log.Err(err).Msgf("error resolving reference %s under scope %+v", ref.String(), k)
+			if err != nil {
+				log.Err(err).Msgf("error resolving reference %s under scope %+v", ref.String(), k)
+			}
 		}
 	}
 
@@ -109,6 +111,8 @@ func checkLightweightScope(ctx context.Context, req interface{}, tokenScope map[
 	case *registry.GetStorageProvidersRequest:
 		return true
 	case *provider.StatRequest:
+		return true
+	case *appregistry.GetAppProvidersRequest:
 		return true
 	case *provider.ListContainerRequest:
 		return hasPermissions(ctx, client, r.GetRef(), &provider.ResourcePermissions{
@@ -142,11 +146,11 @@ func checkLightweightScope(ctx context.Context, req interface{}, tokenScope map[
 			return false
 		}
 		return hasPermissions(ctx, client, parent, &provider.ResourcePermissions{
-			InitiateFileDownload: true,
+			InitiateFileUpload: true,
 		})
 	case *provider.DeleteRequest:
 		return hasPermissions(ctx, client, r.GetRef(), &provider.ResourcePermissions{
-			InitiateFileDownload: true,
+			Delete: true,
 		})
 	case *provider.MoveRequest:
 		return hasPermissions(ctx, client, r.Source, &provider.ResourcePermissions{
