@@ -111,7 +111,7 @@ func transferCreateCommand() *command {
 			},
 			ResourceId: statRes.Info.Id,
 			AccessMethods: []*ocm.AccessMethod{
-				&ocm.AccessMethod{
+				{
 					Term: &ocm.AccessMethod_DatatxOptions{
 						DatatxOptions: &ocm.DatatxAccessMethod{},
 					},
