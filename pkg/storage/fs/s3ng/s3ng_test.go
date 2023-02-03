@@ -58,12 +58,12 @@ var _ = Describe("S3ng", func() {
 
 	Describe("New", func() {
 		It("fails on missing s3 configuration", func() {
-			_, err := s3ng.New(map[string]interface{}{})
+			_, err := s3ng.New(map[string]interface{}{}, nil)
 			Expect(err).To(MatchError("S3 configuration incomplete"))
 		})
 
 		It("works with complete configuration", func() {
-			_, err := s3ng.New(options)
+			_, err := s3ng.New(options, nil)
 			Expect(err).ToNot(HaveOccurred())
 		})
 	})

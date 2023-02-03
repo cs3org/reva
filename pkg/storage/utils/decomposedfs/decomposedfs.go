@@ -23,10 +23,7 @@ package decomposedfs
 //go:generate make --no-print-directory -C ../../../.. mockery NAME=Tree
 
 import (
-	"bytes"
 	"context"
-	"crypto/tls"
-	"crypto/x509"
 	"io"
 	"net/url"
 	"os"
@@ -43,7 +40,6 @@ import (
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/events"
-	"github.com/cs3org/reva/v2/pkg/events/stream"
 	"github.com/cs3org/reva/v2/pkg/logger"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v2/pkg/storage"
@@ -59,7 +55,6 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/templates"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/utils"
-	"github.com/go-micro/plugins/v4/events/natsjs"
 	"github.com/pkg/errors"
 )
 
@@ -100,7 +95,7 @@ type Decomposedfs struct {
 }
 
 // NewDefault returns an instance with default components
-func NewDefault(m map[string]interface{}, bs tree.Blobstore) (storage.FS, error) {
+func NewDefault(m map[string]interface{}, bs tree.Blobstore, es events.Stream) (storage.FS, error) {
 	o, err := options.New(m)
 	if err != nil {
 		return nil, err
@@ -117,44 +112,6 @@ func NewDefault(m map[string]interface{}, bs tree.Blobstore) (storage.FS, error)
 	}
 
 	permissions := NewPermissions(node.NewPermissions(lu), permissionsClient)
-
-	var es events.Stream
-	if o.Events.NatsAddress != "" {
-		evtsCfg := o.Events
-		var (
-			rootCAPool *x509.CertPool
-			tlsConf    *tls.Config
-		)
-		if evtsCfg.TLSRootCACertificate != "" {
-			rootCrtFile, err := os.Open(evtsCfg.TLSRootCACertificate)
-			if err != nil {
-				return nil, err
-			}
-
-			var certBytes bytes.Buffer
-			if _, err := io.Copy(&certBytes, rootCrtFile); err != nil {
-				return nil, err
-			}
-
-			rootCAPool = x509.NewCertPool()
-			rootCAPool.AppendCertsFromPEM(certBytes.Bytes())
-			evtsCfg.TLSInsecure = false
-
-			tlsConf = &tls.Config{
-				InsecureSkipVerify: evtsCfg.TLSInsecure, //nolint:gosec
-				RootCAs:            rootCAPool,
-			}
-		}
-
-		es, err = stream.Nats(
-			natsjs.TLSConfig(tlsConf),
-			natsjs.Address(evtsCfg.NatsAddress),
-			natsjs.ClusterID(evtsCfg.NatsClusterID),
-		)
-		if err != nil {
-			return nil, err
-		}
-	}
 
 	return New(o, lu, permissions, tp, es)
 }

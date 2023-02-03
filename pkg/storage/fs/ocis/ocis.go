@@ -21,6 +21,7 @@ package ocis
 import (
 	"path"
 
+	"github.com/cs3org/reva/v2/pkg/events"
 	"github.com/cs3org/reva/v2/pkg/storage"
 	"github.com/cs3org/reva/v2/pkg/storage/fs/ocis/blobstore"
 	"github.com/cs3org/reva/v2/pkg/storage/fs/registry"
@@ -34,7 +35,7 @@ func init() {
 
 // New returns an implementation to of the storage.FS interface that talk to
 // a local filesystem.
-func New(m map[string]interface{}) (storage.FS, error) {
+func New(m map[string]interface{}, stream events.Stream) (storage.FS, error) {
 	o, err := options.New(m)
 	if err != nil {
 		return nil, err
@@ -45,5 +46,5 @@ func New(m map[string]interface{}) (storage.FS, error) {
 		return nil, err
 	}
 
-	return decomposedfs.NewDefault(m, bs)
+	return decomposedfs.NewDefault(m, bs, stream)
 }

@@ -19,9 +19,13 @@
 package storageprovider
 
 import (
+	"bytes"
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/url"
 	"os"
 	"path"
@@ -35,6 +39,8 @@ import (
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
+	"github.com/cs3org/reva/v2/pkg/events"
+	"github.com/cs3org/reva/v2/pkg/events/stream"
 	"github.com/cs3org/reva/v2/pkg/mime"
 	"github.com/cs3org/reva/v2/pkg/rgrpc"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/status"
@@ -44,6 +50,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storagespace"
 	rtrace "github.com/cs3org/reva/v2/pkg/trace"
 	"github.com/cs3org/reva/v2/pkg/utils"
+	"github.com/go-micro/plugins/v4/events/natsjs"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"go.opentelemetry.io/otel/attribute"
@@ -66,6 +73,15 @@ type config struct {
 	CustomMimeTypesJSON string                            `mapstructure:"custom_mimetypes_json" docs:"nil;An optional mapping file with the list of supported custom file extensions and corresponding mime types."`
 	MountID             string                            `mapstructure:"mount_id"`
 	UploadExpiration    int64                             `mapstructure:"upload_expiration" docs:"0;Duration for how long uploads will be valid."`
+	Events              eventconfig                       `mapstructure:"events" docs:"0;Event stream configuration"`
+}
+
+type eventconfig struct {
+	NatsAddress          string `mapstructure:"nats_address" docs:"address of the nats server"`
+	NatsClusterID        string `mapstructure:"nats_clusterid" docs:"clusterid of the nats server"`
+	EnableTLS            bool   `mapstructure:"nats_enable_tls" docs:"events tls switch"`
+	TLSInsecure          bool   `mapstructure:"tls_insecure"  docs:"Whether to verify the server TLS certificates."`
+	TLSRootCACertificate string `mapstructure:"tls_root_ca_cert"  docs:"The root CA certificate used to validate the server's TLS certificate."`
 }
 
 func (c *config) init() {
@@ -1182,9 +1198,15 @@ func (s *service) addMissingStorageProviderID(resourceID *provider.ResourceId, s
 }
 
 func getFS(c *config) (storage.FS, error) {
-	if f, ok := registry.NewFuncs[c.Driver]; ok {
-		return f(c.Drivers[c.Driver])
+	evstream, err := estreamFromConfig(c.Events)
+	if err != nil {
+		return nil, err
 	}
+
+	if f, ok := registry.NewFuncs[c.Driver]; ok {
+		return f(c.Drivers[c.Driver], evstream)
+	}
+
 	return nil, errtypes.NotFound("driver not found: " + c.Driver)
 }
 
@@ -1200,4 +1222,41 @@ func (v descendingMtime) Less(i, j int) bool {
 
 func (v descendingMtime) Swap(i, j int) {
 	v[i], v[j] = v[j], v[i]
+}
+
+func estreamFromConfig(c eventconfig) (events.Stream, error) {
+	if c.NatsAddress == "" {
+		return nil, nil
+	}
+	var (
+		rootCAPool *x509.CertPool
+		tlsConf    *tls.Config
+	)
+	if c.TLSRootCACertificate != "" {
+		rootCrtFile, err := os.Open(c.TLSRootCACertificate)
+		if err != nil {
+			return nil, err
+		}
+
+		var certBytes bytes.Buffer
+		if _, err := io.Copy(&certBytes, rootCrtFile); err != nil {
+			return nil, err
+		}
+
+		rootCAPool = x509.NewCertPool()
+		rootCAPool.AppendCertsFromPEM(certBytes.Bytes())
+		c.TLSInsecure = false
+
+		tlsConf = &tls.Config{
+			InsecureSkipVerify: c.TLSInsecure, //nolint:gosec
+			RootCAs:            rootCAPool,
+		}
+	}
+
+	s, err := stream.Nats(natsjs.Address(c.NatsAddress), natsjs.ClusterID(c.NatsClusterID), natsjs.TLSConfig(tlsConf))
+	if err != nil {
+		return nil, err
+	}
+
+	return s, nil
 }
