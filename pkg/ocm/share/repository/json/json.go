@@ -21,6 +21,7 @@ package json
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"os"
 	"sync"
 	"time"
@@ -84,7 +85,9 @@ func loadOrCreate(file string) (*shareModel, error) {
 
 	var m shareModel
 	if err := json.NewDecoder(f).Decode(&m); err != nil {
-		return nil, errors.Wrap(err, "error decoding data to json")
+		if err != io.EOF {
+			return nil, errors.Wrap(err, "error decoding data to json")
+		}
 	}
 
 	if m.Shares == nil {
