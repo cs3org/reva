@@ -16,13 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package loader
+package owncloudsql
 
-import (
-	// Load core share manager drivers.
-	_ "github.com/cs3org/reva/v2/pkg/publicshare/manager/cs3"
-	_ "github.com/cs3org/reva/v2/pkg/publicshare/manager/json"
-	_ "github.com/cs3org/reva/v2/pkg/publicshare/manager/memory"
-	_ "github.com/cs3org/reva/v2/pkg/publicshare/manager/owncloudsql"
-	// Add your own here
-)
+// Export for testing
+var GetByToken = getByToken

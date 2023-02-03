@@ -16,13 +16,16 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package loader
+package owncloudsql_test
 
 import (
-	// Load core share manager drivers.
-	_ "github.com/cs3org/reva/v2/pkg/publicshare/manager/cs3"
-	_ "github.com/cs3org/reva/v2/pkg/publicshare/manager/json"
-	_ "github.com/cs3org/reva/v2/pkg/publicshare/manager/memory"
-	_ "github.com/cs3org/reva/v2/pkg/publicshare/manager/owncloudsql"
-	// Add your own here
+	"testing"
+
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 )
+
+func TestOwnCloudSQL(t *testing.T) {
+	RegisterFailHandler(Fail)
+	RunSpecs(t, "ownCloudSQL publicshare manager Suite")
+}
