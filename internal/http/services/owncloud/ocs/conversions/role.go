@@ -184,7 +184,6 @@ func NewViewerRole() *Role {
 			GetQuota:             true,
 			InitiateFileDownload: true,
 			ListContainer:        true,
-			ListFileVersions:     true,
 			ListRecycle:          true,
 			Stat:                 true,
 		},
@@ -201,7 +200,6 @@ func NewSpaceViewerRole() *Role {
 			GetQuota:             true,
 			InitiateFileDownload: true,
 			ListContainer:        true,
-			ListFileVersions:     true,
 			ListGrants:           true,
 			ListRecycle:          true,
 			Stat:                 true,
@@ -223,11 +221,9 @@ func NewEditorRole() *Role {
 			InitiateFileDownload: true,
 			InitiateFileUpload:   true,
 			ListContainer:        true,
-			ListFileVersions:     true,
 			ListRecycle:          true,
 			Move:                 true,
 			PurgeRecycle:         true,
-			RestoreFileVersion:   true,
 			RestoreRecycleItem:   true,
 			Stat:                 true,
 		},
@@ -270,11 +266,9 @@ func NewFileEditorRole() *Role {
 			InitiateFileDownload: true,
 			ListGrants:           true,
 			ListContainer:        true,
-			ListFileVersions:     true,
 			ListRecycle:          true,
 			Stat:                 true,
 			InitiateFileUpload:   true,
-			RestoreFileVersion:   true,
 			RestoreRecycleItem:   true,
 		},
 		ocsPermissions: PermissionRead | PermissionWrite,
@@ -374,7 +368,7 @@ func NewLegacyRoleFromOCSPermissions(p Permissions) *Role {
 	if p.Contain(PermissionRead) {
 		r.cS3ResourcePermissions.ListContainer = true
 		// r.cS3ResourcePermissions.ListGrants = true
-		r.cS3ResourcePermissions.ListFileVersions = true
+		// r.cS3ResourcePermissions.ListFileVersions = true
 		r.cS3ResourcePermissions.ListRecycle = true
 		r.cS3ResourcePermissions.Stat = true
 		r.cS3ResourcePermissions.GetPath = true
@@ -383,7 +377,7 @@ func NewLegacyRoleFromOCSPermissions(p Permissions) *Role {
 	}
 	if p.Contain(PermissionWrite) {
 		r.cS3ResourcePermissions.InitiateFileUpload = true
-		r.cS3ResourcePermissions.RestoreFileVersion = true
+		// r.cS3ResourcePermissions.RestoreFileVersion = true
 		r.cS3ResourcePermissions.RestoreRecycleItem = true
 	}
 	if p.Contain(PermissionCreate) {
@@ -429,7 +423,7 @@ func RoleFromResourcePermissions(rp *provider.ResourcePermissions, islink bool) 
 		return r
 	}
 	if rp.ListContainer &&
-		rp.ListFileVersions &&
+		// rp.ListFileVersions &&
 		rp.ListRecycle &&
 		rp.Stat &&
 		rp.GetPath &&
@@ -438,7 +432,7 @@ func RoleFromResourcePermissions(rp *provider.ResourcePermissions, islink bool) 
 		r.ocsPermissions |= PermissionRead
 	}
 	if rp.InitiateFileUpload &&
-		rp.RestoreFileVersion &&
+		// rp.RestoreFileVersion &&
 		rp.RestoreRecycleItem {
 		r.ocsPermissions |= PermissionWrite
 	}
