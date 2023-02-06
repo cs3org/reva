@@ -192,7 +192,7 @@ func (s *service) getProtocols(ctx context.Context, info *providerv1beta1.Resour
 			p = append(p, s.getWebdavProtocol(ctx, info, t))
 		case *ocm.AccessMethod_WebappOptions:
 			// TODO
-		case *ocm.AccessMethod_DatatxOptions:
+		case *ocm.AccessMethod_TransferOptions:
 			// TODO
 		}
 	}

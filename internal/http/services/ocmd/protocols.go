@@ -64,7 +64,7 @@ type Datatx struct {
 }
 
 func (w *Datatx) ToOCMProtocol() *ocm.Protocol {
-	return ocmshare.NewDatatxProtocol(w.SourceURI, w.SharedSecret, w.Size)
+	return ocmshare.NewTransferProtocol(w.SourceURI, w.SharedSecret, w.Size)
 }
 
 var protocolImpl = map[string]reflect.Type{

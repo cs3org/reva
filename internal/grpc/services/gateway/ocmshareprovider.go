@@ -372,7 +372,7 @@ func (s *svc) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateReceive
 }
 
 func isTransferShare(s *ocm.ReceivedShare) bool {
-	_, ok := getDatatxProtocol(s)
+	_, ok := getTransferProtocol(s)
 	return ok
 }
 
@@ -393,10 +393,10 @@ func (s *svc) GetReceivedOCMShare(ctx context.Context, req *ocm.GetReceivedOCMSh
 	return res, nil
 }
 
-func getDatatxProtocol(share *ocm.ReceivedShare) (*ocm.DatatxProtocol, bool) {
+func getTransferProtocol(share *ocm.ReceivedShare) (*ocm.TransferProtocol, bool) {
 	for _, p := range share.Protocols {
-		if d, ok := p.Term.(*ocm.Protocol_DatatxOprions); ok {
-			return d.DatatxOprions, true
+		if d, ok := p.Term.(*ocm.Protocol_TransferOptions); ok {
+			return d.TransferOptions, true
 		}
 	}
 	return nil, false
@@ -405,7 +405,7 @@ func getDatatxProtocol(share *ocm.ReceivedShare) (*ocm.DatatxProtocol, bool) {
 func (s *svc) createOCMReference(ctx context.Context, share *ocm.ReceivedShare) (*rpc.Status, error) {
 	log := appctx.GetLogger(ctx)
 
-	d, _ := getDatatxProtocol(share)
+	d, _ := getTransferProtocol(share)
 
 	homeRes, err := s.GetHome(ctx, &provider.GetHomeRequest{})
 	if err != nil {

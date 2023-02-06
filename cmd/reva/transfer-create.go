@@ -30,6 +30,7 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/pkg/ocm/share"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/jedib0t/go-pretty/table"
 	"github.com/pkg/errors"
@@ -111,11 +112,7 @@ func transferCreateCommand() *command {
 			},
 			ResourceId: statRes.Info.Id,
 			AccessMethods: []*ocm.AccessMethod{
-				{
-					Term: &ocm.AccessMethod_DatatxOptions{
-						DatatxOptions: &ocm.DatatxAccessMethod{},
-					},
-				},
+				share.NewTransferAccessMethod(),
 			},
 			RecipientMeshProvider: providerInfoResp.ProviderInfo,
 		}

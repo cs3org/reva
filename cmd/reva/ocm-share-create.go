@@ -48,12 +48,12 @@ func ocmShareCreateCommand() *command {
 
 	webdav := cmd.Bool("webdav", false, "create a share with webdav access")
 	webapp := cmd.Bool("webapp", false, "create a share for app access")
-	datatx := cmd.Bool("datatx", false, "create a share for a data transfer")
+	transfer := cmd.Bool("transfer", false, "create a share for a data transfer")
 
 	rol := cmd.String("rol", "viewer", "the permission for the share (viewer or editor) / applies to webdav and webapp")
 
 	cmd.ResetFlags = func() {
-		*grantType, *grantee, *idp, *rol, *userType, *webdav, *webapp, *datatx = "user", "", "", "viewer", "primary", false, false, false
+		*grantType, *grantee, *idp, *rol, *userType, *webdav, *webapp, *transfer = "user", "", "", "viewer", "primary", false, false, false
 	}
 
 	cmd.Action = func(w ...io.Writer) error {
@@ -107,7 +107,7 @@ func ocmShareCreateCommand() *command {
 		}
 
 		gt := getGrantType(*grantType)
-		am, err := getAccessMethods(*webdav, *webapp, *datatx, *rol)
+		am, err := getAccessMethods(*webdav, *webapp, *transfer, *rol)
 		if err != nil {
 			return err
 		}
@@ -151,7 +151,7 @@ func ocmShareCreateCommand() *command {
 	return cmd
 }
 
-func getAccessMethods(webdav, webapp, datatx bool, rol string) ([]*ocm.AccessMethod, error) {
+func getAccessMethods(webdav, webapp, transfer bool, rol string) ([]*ocm.AccessMethod, error) {
 	var m []*ocm.AccessMethod
 	if webdav {
 		perm, err := getOCMSharePerm(rol)
@@ -167,8 +167,8 @@ func getAccessMethods(webdav, webapp, datatx bool, rol string) ([]*ocm.AccessMet
 		}
 		m = append(m, ocmshare.NewWebappAccessMethod(v))
 	}
-	if datatx {
-		m = append(m, ocmshare.NewDatatxAccessMethod())
+	if transfer {
+		m = append(m, ocmshare.NewTransferAccessMethod())
 	}
 	return m, nil
 }

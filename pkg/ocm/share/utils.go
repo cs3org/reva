@@ -8,8 +8,8 @@ import (
 
 func NewWebDAVProtocol(uri, shareSecred string, perms *ocm.SharePermissions) *ocm.Protocol {
 	return &ocm.Protocol{
-		Term: &ocm.Protocol_WebdapOptions{
-			WebdapOptions: &ocm.WebDAVProtocol{
+		Term: &ocm.Protocol_WebdavOptions{
+			WebdavOptions: &ocm.WebDAVProtocol{
 				Uri:          uri,
 				SharedSecret: shareSecred,
 				Permissions:  perms,
@@ -28,10 +28,10 @@ func NewWebappProtocol(uriTemplate string) *ocm.Protocol {
 	}
 }
 
-func NewDatatxProtocol(sourceUri, sharedSecret string, size uint64) *ocm.Protocol {
+func NewTransferProtocol(sourceUri, sharedSecret string, size uint64) *ocm.Protocol {
 	return &ocm.Protocol{
-		Term: &ocm.Protocol_DatatxOprions{
-			DatatxOprions: &ocm.DatatxProtocol{
+		Term: &ocm.Protocol_TransferOptions{
+			TransferOptions: &ocm.TransferProtocol{
 				SourceUri:    sourceUri,
 				SharedSecret: sharedSecret,
 				Size:         size,
@@ -60,10 +60,10 @@ func NewWebappAccessMethod(mode appprovider.ViewMode) *ocm.AccessMethod {
 	}
 }
 
-func NewDatatxAccessMethod() *ocm.AccessMethod {
+func NewTransferAccessMethod() *ocm.AccessMethod {
 	return &ocm.AccessMethod{
-		Term: &ocm.AccessMethod_DatatxOptions{
-			DatatxOptions: &ocm.DatatxAccessMethod{},
+		Term: &ocm.AccessMethod_TransferOptions{
+			TransferOptions: &ocm.TransferAccessMethod{},
 		},
 	}
 }
