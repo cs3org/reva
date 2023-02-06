@@ -13,6 +13,8 @@ on:
         type: boolean
       build-args:
         type: string
+      platforms:
+        type: string
 
 jobs:
   docker:
@@ -20,6 +22,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3.1.0
+      - name: Set up QEMU
+        if: inputs.platforms != ''
+        uses: docker/setup-qemu-action@v2
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
       - name: Login to Docker Hub
@@ -37,6 +42,7 @@ jobs:
           load: ${{ inputs.load }}
           push: ${{ inputs.push }}
           build-args: ${{ inputs.build-args }}
+          platforms: ${{ inputs.platforms }}
       - name: Upload ${{ inputs.tags }} Docker image to artifacts
         uses: ishworkh/docker-image-artifact-upload@v1
         if: ${{ inputs.load }}
