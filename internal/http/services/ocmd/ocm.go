@@ -35,12 +35,13 @@ func init() {
 }
 
 type config struct {
-	SMTPCredentials  *smtpclient.SMTPCredentials `mapstructure:"smtp_credentials"`
-	Prefix           string                      `mapstructure:"prefix"`
-	Host             string                      `mapstructure:"host"`
-	GatewaySvc       string                      `mapstructure:"gatewaysvc"`
-	MeshDirectoryURL string                      `mapstructure:"mesh_directory_url"`
-	Config           configData                  `mapstructure:"config"`
+	SMTPCredentials            *smtpclient.SMTPCredentials `mapstructure:"smtp_credentials"`
+	Prefix                     string                      `mapstructure:"prefix"`
+	Host                       string                      `mapstructure:"host"`
+	GatewaySvc                 string                      `mapstructure:"gatewaysvc"`
+	MeshDirectoryURL           string                      `mapstructure:"mesh_directory_url"`
+	Config                     configData                  `mapstructure:"config"`
+	ExposeRecipientDisplayName bool                        `mapstructure:"expose_recipient_display_name"`
 }
 
 func (c *config) init() {

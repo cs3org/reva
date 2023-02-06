@@ -265,16 +265,16 @@ func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareReq
 		newShareReq.Expiration = req.Expiration.Seconds
 	}
 
-	err = s.client.NewShare(ctx, ocmEndpoint, newShareReq)
-
+	newShareRes, err := s.client.NewShare(ctx, ocmEndpoint, newShareReq)
 	if err != nil {
 		// TODO: err
 		return nil, errtypes.InternalError(err.Error())
 	}
 
 	res := &ocm.CreateOCMShareResponse{
-		Status: status.NewOK(ctx),
-		Share:  share,
+		Status:               status.NewOK(ctx),
+		Share:                share,
+		RecipientDisplayName: newShareRes.RecipientDisplayName,
 	}
 	return res, nil
 }

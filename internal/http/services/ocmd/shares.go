@@ -45,7 +45,8 @@ import (
 var validate = validator.New()
 
 type sharesHandler struct {
-	gatewayClient gateway.GatewayAPIClient
+	gatewayClient              gateway.GatewayAPIClient
+	exposeRecipientDisplayName bool
 }
 
 func (h *sharesHandler) init(c *config) error {
@@ -54,6 +55,7 @@ func (h *sharesHandler) init(c *config) error {
 	if err != nil {
 		return err
 	}
+	h.exposeRecipientDisplayName = c.ExposeRecipientDisplayName
 	return nil
 }
 
@@ -173,6 +175,12 @@ func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 		// TODO: define errors in the cs3apis
 		reqres.WriteError(w, r, reqres.APIErrorServerError, "error creating ocm share", errors.New(createShareResp.Status.Message))
 		return
+	}
+
+	if h.exposeRecipientDisplayName {
+		json.NewEncoder(w).Encode(map[string]any{
+			"recipientDisplayName": userRes.User.DisplayName,
+		})
 	}
 
 	w.WriteHeader(http.StatusCreated)

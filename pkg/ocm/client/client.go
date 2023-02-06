@@ -177,47 +177,54 @@ func (r *NewShareRequest) toJSON() (io.Reader, error) {
 	return &b, nil
 }
 
+// NewShareResponse is the response returned when creating a new share.
+type NewShareResponse struct {
+	RecipientDisplayName string `json:"recipientDisplayName"`
+}
+
 // NewShare creates a new share.
 // https://github.com/cs3org/OCM-API/blob/223285aa4d828ed85c361c7382efd08c42b5e719/spec.yaml
-func (c *OCMClient) NewShare(ctx context.Context, endpoint string, r *NewShareRequest) error {
+func (c *OCMClient) NewShare(ctx context.Context, endpoint string, r *NewShareRequest) (*NewShareResponse, error) {
 	url, err := url.JoinPath(endpoint, "shares")
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	body, err := r.toJSON()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, body)
 	if err != nil {
-		return errors.Wrap(err, "error creating request")
+		return nil, errors.Wrap(err, "error creating request")
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := c.client.Do(req)
 	if err != nil {
-		return errors.Wrap(err, "error doing request")
+		return nil, errors.Wrap(err, "error doing request")
 	}
 	defer resp.Body.Close()
 
 	return c.parseNewShareError(resp)
 }
 
-func (c *OCMClient) parseNewShareError(r *http.Response) error {
+func (c *OCMClient) parseNewShareError(r *http.Response) (*NewShareResponse, error) {
 	switch r.StatusCode {
 	case http.StatusOK, http.StatusCreated:
-		return nil
+		var res NewShareResponse
+		err := json.NewDecoder(r.Body).Decode(&res)
+		return &res, err
 	case http.StatusBadRequest:
-		return ErrInvalidParameters
+		return nil, ErrInvalidParameters
 	case http.StatusUnauthorized, http.StatusForbidden:
-		return ErrServiceNotTrusted
+		return nil, ErrServiceNotTrusted
 	}
 
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		return errors.Wrap(err, "error decoding response body")
+		return nil, errors.Wrap(err, "error decoding response body")
 	}
-	return errtypes.InternalError(string(body))
+	return nil, errtypes.InternalError(string(body))
 }
