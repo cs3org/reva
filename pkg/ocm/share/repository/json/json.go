@@ -96,15 +96,74 @@ func loadOrCreate(file string) (*shareModel, error) {
 	if m.ReceivedShares == nil {
 		m.ReceivedShares = map[string]*ocm.ReceivedShare{}
 	}
-	m.file = file
 
 	return &m, nil
 }
 
 type shareModel struct {
-	file           string                        `json:"-"`
 	Shares         map[string]*ocm.Share         `json:"shares"`          // share_id -> share
 	ReceivedShares map[string]*ocm.ReceivedShare `json:"received_shares"` // share_id -> share
+}
+
+func (s *shareModel) UnmarshalJSON(d []byte) error {
+	m := struct {
+		Shares         map[string]json.RawMessage `json:"shares"`
+		ReceivedShares map[string]json.RawMessage `json:"received_shares"`
+	}{}
+
+	if err := json.Unmarshal(d, &m); err != nil {
+		return err
+	}
+
+	share := map[string]*ocm.Share{}
+	for k, v := range m.Shares {
+		var s ocm.Share
+		if err := utils.UnmarshalJSONToProtoV1(v, &s); err != nil {
+			return err
+		}
+		share[k] = &s
+	}
+
+	received := map[string]*ocm.ReceivedShare{}
+	for k, v := range m.ReceivedShares {
+		var s ocm.ReceivedShare
+		if err := utils.UnmarshalJSONToProtoV1(v, &s); err != nil {
+			return err
+		}
+		received[k] = &s
+	}
+
+	*s = shareModel{
+		Shares:         share,
+		ReceivedShares: received,
+	}
+
+	return nil
+}
+
+func (s *shareModel) MarshalJSON() ([]byte, error) {
+	shares := map[string]json.RawMessage{}
+	for k, v := range s.Shares {
+		d, err := utils.MarshalProtoV1ToJSON(v)
+		if err != nil {
+			return nil, err
+		}
+		shares[k] = d
+	}
+
+	received := map[string]json.RawMessage{}
+	for k, v := range s.ReceivedShares {
+		d, err := utils.MarshalProtoV1ToJSON(v)
+		if err != nil {
+			return nil, err
+		}
+		received[k] = d
+	}
+
+	return json.Marshal(map[string]any{
+		"shares":          shares,
+		"received_shares": received,
+	})
 }
 
 type config struct {
@@ -123,17 +182,38 @@ type mgr struct {
 	model      *shareModel
 }
 
-func (m *shareModel) save() error {
-	f, err := os.OpenFile(m.file, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+func (m *mgr) save() error {
+	f, err := os.OpenFile(m.c.File, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
 	if err != nil {
-		return errors.Wrap(err, "error opening file "+m.file)
+		return errors.Wrap(err, "error opening file "+m.c.File)
 	}
 	defer f.Close()
 
-	if err := json.NewEncoder(f).Encode(m); err != nil {
+	if err := json.NewEncoder(f).Encode(m.model); err != nil {
 		return errors.Wrap(err, "error encoding to json")
 	}
 
+	return f.Sync()
+}
+
+func (m *mgr) load() error {
+	f, err := os.OpenFile(m.c.File, os.O_RDONLY, 0644)
+	if err != nil {
+		return errors.Wrap(err, "error opening file "+m.c.File)
+	}
+	defer f.Close()
+
+	d, err := io.ReadAll(f)
+	if err != nil {
+		return err
+	}
+
+	var model shareModel
+	if err := json.Unmarshal(d, &model); err != nil {
+		return err
+	}
+
+	m.model = &model
 	return nil
 }
 
@@ -153,10 +233,14 @@ func (m *mgr) StoreShare(ctx context.Context, share *ocm.Share) (*ocm.Share, err
 	m.Lock()
 	defer m.Unlock()
 
+	if err := m.load(); err != nil {
+		return nil, err
+	}
+
 	share.Id = &ocm.ShareId{OpaqueId: genID()}
 	m.model.Shares[share.Id.OpaqueId] = cloneShare(share)
 
-	if err := m.model.save(); err != nil {
+	if err := m.save(); err != nil {
 		return nil, errors.Wrap(err, "error saving share")
 	}
 
@@ -192,6 +276,10 @@ func (m *mgr) GetShare(ctx context.Context, user *userpb.User, ref *ocm.ShareRef
 		s   *ocm.Share
 		err error
 	)
+
+	if err := m.load(); err != nil {
+		return nil, err
+	}
 
 	switch {
 	case ref.GetId() != nil:
@@ -241,11 +329,15 @@ func (m *mgr) DeleteShare(ctx context.Context, user *userpb.User, ref *ocm.Share
 	m.Lock()
 	defer m.Unlock()
 
+	if err := m.load(); err != nil {
+		return err
+	}
+
 	for id, share := range m.model.Shares {
 		if sharesEqual(ref, share) {
 			if utils.UserEqual(user.Id, share.Owner) || utils.UserEqual(user.Id, share.Creator) {
 				delete(m.model.Shares, id)
-				if err := m.model.save(); err != nil {
+				if err := m.save(); err != nil {
 					return err
 				}
 				return nil
@@ -294,6 +386,10 @@ func (m *mgr) ListShares(ctx context.Context, user *userpb.User, filters []*ocm.
 	m.Lock()
 	defer m.Unlock()
 
+	if err := m.load(); err != nil {
+		return nil, err
+	}
+
 	for _, share := range m.model.Shares {
 		if utils.UserEqual(user.Id, share.Owner) || utils.UserEqual(user.Id, share.Creator) {
 			// no filter we return earlier
@@ -319,6 +415,10 @@ func (m *mgr) StoreReceivedShare(ctx context.Context, share *ocm.ReceivedShare) 
 	m.Lock()
 	defer m.Unlock()
 
+	if err := m.load(); err != nil {
+		return nil, err
+	}
+
 	now := time.Now().UnixNano()
 	ts := &typespb.Timestamp{
 		Seconds: uint64(now / 1000000000),
@@ -332,6 +432,9 @@ func (m *mgr) StoreReceivedShare(ctx context.Context, share *ocm.ReceivedShare) 
 	share.Mtime = ts
 
 	m.model.ReceivedShares[share.Id.OpaqueId] = cloneReceivedShare(share)
+	if err := m.save(); err != nil {
+		return nil, err
+	}
 
 	return share, nil
 }
@@ -341,11 +444,16 @@ func (m *mgr) ListReceivedShares(ctx context.Context, user *userpb.User) ([]*ocm
 	m.Lock()
 	defer m.Unlock()
 
+	if err := m.load(); err != nil {
+		return nil, err
+	}
+
 	for _, share := range m.model.ReceivedShares {
 		if utils.UserEqual(user.Id, share.Owner) || utils.UserEqual(user.Id, share.Creator) {
 			// omit shares created by me
 			continue
 		}
+
 		if share.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER && utils.UserEqual(user.Id, share.Grantee.GetUserId()) {
 			rss = append(rss, share)
 		}
@@ -356,6 +464,10 @@ func (m *mgr) ListReceivedShares(ctx context.Context, user *userpb.User) ([]*ocm
 func (m *mgr) GetReceivedShare(ctx context.Context, user *userpb.User, ref *ocm.ShareReference) (*ocm.ReceivedShare, error) {
 	m.Lock()
 	defer m.Unlock()
+
+	if err := m.load(); err != nil {
+		return nil, err
+	}
 
 	for _, share := range m.model.ReceivedShares {
 		if receivedShareEqual(ref, share) {
@@ -376,6 +488,10 @@ func (m *mgr) UpdateReceivedShare(ctx context.Context, user *userpb.User, share 
 	m.Lock()
 	defer m.Unlock()
 
+	if err := m.load(); err != nil {
+		return nil, err
+	}
+
 	for _, mask := range fieldMask.Paths {
 		switch mask {
 		case "state":
@@ -386,7 +502,7 @@ func (m *mgr) UpdateReceivedShare(ctx context.Context, user *userpb.User, share 
 		}
 	}
 
-	if err := m.model.save(); err != nil {
+	if err := m.save(); err != nil {
 		return nil, errors.Wrap(err, "error saving model")
 	}
 
