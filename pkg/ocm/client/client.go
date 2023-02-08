@@ -207,10 +207,10 @@ func (c *OCMClient) NewShare(ctx context.Context, endpoint string, r *NewShareRe
 	}
 	defer resp.Body.Close()
 
-	return c.parseNewShareError(resp)
+	return c.parseNewShareResponse(resp)
 }
 
-func (c *OCMClient) parseNewShareError(r *http.Response) (*NewShareResponse, error) {
+func (c *OCMClient) parseNewShareResponse(r *http.Response) (*NewShareResponse, error) {
 	switch r.StatusCode {
 	case http.StatusOK, http.StatusCreated:
 		var res NewShareResponse
