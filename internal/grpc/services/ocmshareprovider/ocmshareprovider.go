@@ -21,6 +21,7 @@ package ocmshareprovider
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"path/filepath"
 	"time"
 
@@ -165,7 +166,11 @@ func getResourceType(info *providerv1beta1.ResourceInfo) string {
 func (s *service) webdavURL(ctx context.Context, path string) string {
 	// the url is in the form of https://cernbox.cern.ch/remote.php/dav/files/gdelmont/eos/user/g/gdelmont
 	user := ctxpkg.ContextMustGetUser(ctx)
-	return filepath.Join(s.conf.WebDAVPrefix, user.Username, path)
+	p, err := url.JoinPath(s.conf.WebDAVPrefix, user.Username, path)
+	if err != nil {
+		panic(err)
+	}
+	return p
 }
 
 func (s *service) getWebdavProtocol(ctx context.Context, info *providerv1beta1.ResourceInfo, m *ocm.AccessMethod_WebdavOptions) *ocmd.WebDAV {
@@ -206,12 +211,16 @@ func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareReq
 		},
 	})
 	if err != nil {
-		return nil, err
+		return &ocm.CreateOCMShareResponse{
+			Status: status.NewInternal(ctx, err, err.Error()),
+		}, err
 	}
 
 	if statRes.Status.Code != rpcv1beta1.Code_CODE_OK {
 		// TODO: review error codes
-		return nil, errtypes.InternalError(statRes.Status.Message)
+		return &ocm.CreateOCMShareResponse{
+			Status: status.NewInternal(ctx, errors.New(statRes.Status.Message), statRes.Status.Message),
+		}, nil
 	}
 
 	info := statRes.Info
@@ -240,17 +249,21 @@ func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareReq
 	share, err = s.repo.StoreShare(ctx, share)
 	if err != nil {
 		// TODO: err
-		return nil, errtypes.InternalError(err.Error())
+		return &ocm.CreateOCMShareResponse{
+			Status: status.NewInternal(ctx, err, err.Error()),
+		}, nil
 	}
 
 	ocmEndpoint, err := getOCMEndpoint(req.RecipientMeshProvider)
 	if err != nil {
 		// TODO: err
-		return nil, errtypes.InternalError(err.Error())
+		return &ocm.CreateOCMShareResponse{
+			Status: status.NewInternal(ctx, err, err.Error()),
+		}, nil
 	}
 
 	newShareReq := &client.NewShareRequest{
-		ShareWith:         req.Grantee.GetGroupId().OpaqueId,
+		ShareWith:         formatOCMUser(req.Grantee.GetUserId()),
 		Name:              share.Name,
 		ResourceID:        fmt.Sprintf("%s:%s", req.ResourceId.StorageId, req.ResourceId.OpaqueId),
 		Owner:             formatOCMUser(info.Owner),
@@ -268,7 +281,9 @@ func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareReq
 	newShareRes, err := s.client.NewShare(ctx, ocmEndpoint, newShareReq)
 	if err != nil {
 		// TODO: err
-		return nil, errtypes.InternalError(err.Error())
+		return &ocm.CreateOCMShareResponse{
+			Status: status.NewInternal(ctx, err, err.Error()),
+		}, nil
 	}
 
 	res := &ocm.CreateOCMShareResponse{
