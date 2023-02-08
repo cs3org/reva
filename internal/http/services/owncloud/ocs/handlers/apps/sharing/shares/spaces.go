@@ -22,6 +22,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"time"
 
 	groupv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -100,13 +101,32 @@ func (h *Handler) addSpaceMember(w http.ResponseWriter, r *http.Request, info *p
 	// The viewer role doesn't have the ListGrants permission so we set it here.
 	permissions.ListGrants = true
 
+	expireDate := r.PostFormValue("expireDate")
+	var expirationTs *types.Timestamp
+	if expireDate != "" {
+		expiration, err := time.Parse(_iso8601, expireDate)
+		if err != nil {
+			// Web sends different formats when adding and when editing a space membership...
+			// We need to fix this in a separate PR.
+			expiration, err = time.Parse(time.RFC3339, expireDate)
+			if err != nil {
+				response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "could not parse expireDate", err)
+				return
+			}
+		}
+		expirationTs = &types.Timestamp{
+			Seconds: uint64(expiration.UnixNano() / int64(time.Second)),
+			Nanos:   uint32(expiration.UnixNano() % int64(time.Second)),
+		}
+	}
 	createShareRes, err := client.CreateShare(ctx, &collaborationv1beta1.CreateShareRequest{
 		ResourceInfo: info,
 		Grant: &collaborationv1beta1.ShareGrant{
 			Permissions: &collaborationv1beta1.SharePermissions{
 				Permissions: permissions,
 			},
-			Grantee: &grantee,
+			Grantee:    &grantee,
+			Expiration: expirationTs,
 		},
 	})
 	if err != nil || createShareRes.Status.Code != rpc.Code_CODE_OK {

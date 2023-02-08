@@ -709,6 +709,7 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 	}
 
 	grantMap := make(map[string]*provider.ResourcePermissions, len(grants))
+	grantExpiration := make(map[string]*types.Timestamp)
 	groupMap := make(map[string]struct{})
 	for _, g := range grants {
 		var id string
@@ -723,9 +724,17 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 		}
 
 		grantMap[id] = g.Permissions
+		if g.Expiration != nil {
+			grantExpiration[id] = g.Expiration
+		}
 	}
 
 	grantMapJSON, err := json.Marshal(grantMap)
+	if err != nil {
+		return nil, err
+	}
+
+	grantExpirationMapJSON, err := json.Marshal(grantExpiration)
 	if err != nil {
 		return nil, err
 	}
@@ -751,6 +760,10 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 				"grants": {
 					Decoder: "json",
 					Value:   grantMapJSON,
+				},
+				"grants_expirations": {
+					Decoder: "json",
+					Value:   grantExpirationMapJSON,
 				},
 				"groups": {
 					Decoder: "json",
