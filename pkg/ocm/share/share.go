@@ -24,6 +24,7 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/pkg/errtypes"
 	"google.golang.org/genproto/protobuf/field_mask"
 )
 
@@ -67,3 +68,10 @@ func ResourceIDFilter(id *provider.ResourceId) *ocm.ListOCMSharesRequest_Filter 
 		},
 	}
 }
+
+// ErrShareAlreadyExisting is the error returned when the share already exists
+// for the 3-tuple consisting of (owner, resource, grantee).
+var ErrShareAlreadyExisting = errtypes.AlreadyExists("share already exists")
+
+// ErrShareNotFound is the error returned where the share does not exist.
+var ErrShareNotFound = errtypes.NotFound("share not found")
