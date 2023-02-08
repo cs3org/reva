@@ -20,7 +20,7 @@ package registry
 
 import "github.com/cs3org/reva/pkg/ocm/share"
 
-// NewShareRepositoryFunc is the function that share repositories
+// NewFunc is the function that share repositories
 // should register at init time.
 type NewFunc func(map[string]interface{}) (share.Repository, error)
 

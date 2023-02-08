@@ -147,6 +147,7 @@ func (sm *Manager) SetHTTPClient(c *http.Client) {
 	sm.client = c
 }
 
+// StoreShare stores a share.
 func (sm *Manager) StoreShare(ctx context.Context, share *ocm.Share) (*ocm.Share, error) {
 	encShare, err := utils.MarshalProtoV1ToJSON(share)
 	if err != nil {
@@ -273,7 +274,7 @@ func (sm *Manager) ListShares(ctx context.Context, user *userpb.User, filters []
 	return lst, nil
 }
 
-// StoreShare stores a share.
+// StoreReceivedShare stores a received share.
 func (sm *Manager) StoreReceivedShare(ctx context.Context, share *ocm.ReceivedShare) (*ocm.ReceivedShare, error) {
 	data, err := utils.MarshalProtoV1ToJSON(share)
 	if err != nil {

@@ -29,7 +29,7 @@ import (
 
 // Repository is the interface that manipulates the OCM shares repository.
 type Repository interface {
-	// StoreShare // TODO
+	// StoreShare stores a share.
 	StoreShare(ctx context.Context, share *ocm.Share) (*ocm.Share, error)
 
 	// GetShare gets the information for a share by the given ref.
@@ -45,7 +45,7 @@ type Repository interface {
 	// it returns only shares attached to the given resource.
 	ListShares(ctx context.Context, user *userpb.User, filters []*ocm.ListOCMSharesRequest_Filter) ([]*ocm.Share, error)
 
-	// StoreShare stores a share.
+	// StoreReceivedShare stores a received share.
 	StoreReceivedShare(ctx context.Context, share *ocm.ReceivedShare) (*ocm.ReceivedShare, error)
 
 	// ListReceivedShares returns the list of shares the user has access.
