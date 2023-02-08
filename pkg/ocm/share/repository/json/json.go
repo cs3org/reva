@@ -229,7 +229,7 @@ func genID() string {
 	return uuid.New().String()
 }
 
-func (m *mgr) StoreShare(ctx context.Context, share *ocm.Share) (*ocm.Share, error) {
+func (m *mgr) StoreShare(ctx context.Context, ocmshare *ocm.Share) (*ocm.Share, error) {
 	m.Lock()
 	defer m.Unlock()
 
@@ -237,14 +237,22 @@ func (m *mgr) StoreShare(ctx context.Context, share *ocm.Share) (*ocm.Share, err
 		return nil, err
 	}
 
-	share.Id = &ocm.ShareId{OpaqueId: genID()}
-	m.model.Shares[share.Id.OpaqueId] = cloneShare(share)
+	if _, err := m.getByKey(ctx, &ocm.ShareKey{
+		Owner:      ocmshare.Owner,
+		ResourceId: ocmshare.ResourceId,
+		Grantee:    ocmshare.Grantee,
+	}); err == nil {
+		return nil, share.ErrShareAlreadyExisting
+	}
+
+	ocmshare.Id = &ocm.ShareId{OpaqueId: genID()}
+	m.model.Shares[ocmshare.Id.OpaqueId] = cloneShare(ocmshare)
 
 	if err := m.save(); err != nil {
 		return nil, errors.Wrap(err, "error saving share")
 	}
 
-	return share, nil
+	return ocmshare, nil
 }
 
 func cloneShare(s *ocm.Share) *ocm.Share {
@@ -272,6 +280,9 @@ func cloneReceivedShare(s *ocm.ReceivedShare) *ocm.ReceivedShare {
 }
 
 func (m *mgr) GetShare(ctx context.Context, user *userpb.User, ref *ocm.ShareReference) (*ocm.Share, error) {
+	m.Lock()
+	defer m.Unlock()
+
 	var (
 		s   *ocm.Share
 		err error
@@ -299,13 +310,10 @@ func (m *mgr) GetShare(ctx context.Context, user *userpb.User, ref *ocm.ShareRef
 		return s, nil
 	}
 
-	return nil, errtypes.NotFound(ref.String())
+	return nil, share.ErrShareNotFound
 }
 
 func (m *mgr) getByID(ctx context.Context, id *ocm.ShareId) (*ocm.Share, error) {
-	m.Lock()
-	defer m.Unlock()
-
 	if share, ok := m.model.Shares[id.OpaqueId]; ok {
 		return share, nil
 	}
@@ -313,16 +321,13 @@ func (m *mgr) getByID(ctx context.Context, id *ocm.ShareId) (*ocm.Share, error) 
 }
 
 func (m *mgr) getByKey(ctx context.Context, key *ocm.ShareKey) (*ocm.Share, error) {
-	m.Lock()
-	defer m.Unlock()
-
 	for _, share := range m.model.Shares {
 		if (utils.UserEqual(key.Owner, share.Owner) || utils.UserEqual(key.Owner, share.Creator)) &&
 			utils.ResourceIDEqual(key.ResourceId, share.ResourceId) && utils.GranteeEqual(key.Grantee, share.Grantee) {
 			return share, nil
 		}
 	}
-	return nil, errtypes.NotFound(key.String())
+	return nil, share.ErrShareNotFound
 }
 
 func (m *mgr) DeleteShare(ctx context.Context, user *userpb.User, ref *ocm.ShareReference) error {

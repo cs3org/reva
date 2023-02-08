@@ -411,6 +411,81 @@ var _ = Describe("ocm share", func() {
 			})
 		})
 
+		Context("einstein creates twice the share to marie", func() {
+			It("fail with already existing error", func() {
+				fileToShare := &provider.Reference{Path: "/home/double-share"}
+				Expect(helpers.CreateFolder(ctxEinstein, cernboxgw, fileToShare.Path)).To(Succeed())
+
+				By("share the file with marie")
+
+				info, err := stat(ctxEinstein, cernboxgw, fileToShare)
+				Expect(err).ToNot(HaveOccurred())
+
+				cesnet, err := cernboxgw.GetInfoByDomain(ctxEinstein, &ocmproviderpb.GetInfoByDomainRequest{
+					Domain: "cesnet.cz",
+				})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(cesnet.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+
+				createShareRes, err := cernboxgw.CreateOCMShare(ctxEinstein, &ocmv1beta1.CreateOCMShareRequest{
+					ResourceId: info.Id,
+					Grantee: &provider.Grantee{
+						Id: &provider.Grantee_UserId{
+							UserId: marie.Id,
+						},
+					},
+					AccessMethods: []*ocmv1beta1.AccessMethod{
+						share.NewWebDavAccessMethod(conversions.NewEditorRole().CS3ResourcePermissions()),
+					},
+					RecipientMeshProvider: cesnet.ProviderInfo,
+				})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(createShareRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+
+				By("resharing the same file with marie")
+
+				createShareRes2, err := cernboxgw.CreateOCMShare(ctxEinstein, &ocmv1beta1.CreateOCMShareRequest{
+					ResourceId: info.Id,
+					Grantee: &provider.Grantee{
+						Id: &provider.Grantee_UserId{
+							UserId: marie.Id,
+						},
+					},
+					AccessMethods: []*ocmv1beta1.AccessMethod{
+						share.NewWebDavAccessMethod(conversions.NewEditorRole().CS3ResourcePermissions()),
+					},
+					RecipientMeshProvider: cesnet.ProviderInfo,
+				})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(createShareRes2.Status.Code).To(Equal(rpcv1beta1.Code_CODE_ALREADY_EXISTS))
+			})
+		})
+
+		Context("einstein creates a share on a not existing resource", func() {
+			It("fail with not found error", func() {
+				cesnet, err := cernboxgw.GetInfoByDomain(ctxEinstein, &ocmproviderpb.GetInfoByDomainRequest{
+					Domain: "cesnet.cz",
+				})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(cesnet.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+
+				createShareRes, err := cernboxgw.CreateOCMShare(ctxEinstein, &ocmv1beta1.CreateOCMShareRequest{
+					ResourceId: &provider.ResourceId{StorageId: "123e4567-e89b-12d3-a456-426655440000", OpaqueId: "NON_EXISTING_FILE"},
+					Grantee: &provider.Grantee{
+						Id: &provider.Grantee_UserId{
+							UserId: marie.Id,
+						},
+					},
+					AccessMethods: []*ocmv1beta1.AccessMethod{
+						share.NewWebDavAccessMethod(conversions.NewEditorRole().CS3ResourcePermissions()),
+					},
+					RecipientMeshProvider: cesnet.ProviderInfo,
+				})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(createShareRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_NOT_FOUND))
+			})
+		})
+
 	})
 })
 
