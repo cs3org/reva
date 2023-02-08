@@ -1,0 +1,58 @@
+[log]
+mode = "json"
+
+[shared]
+gatewaysvc = "{{grpc_address}}"
+
+[grpc]
+address = "{{grpc_address}}"
+
+[grpc.services.gateway]
+authregistrysvc = "{{grpc_address}}"
+userprovidersvc = "{{grpc_address}}"
+ocminvitemanagersvc = "{{grpc_address}}"
+ocmproviderauthorizersvc = "{{grpc_address}}"
+ocmshareprovidersvc = "{{grpc_address}}"
+ocmcoresvc = "{{grpc_address}}"
+
+[grpc.services.authregistry]
+driver = "static"
+
+[grpc.services.authregistry.drivers.static.rules]
+basic = "{{grpc_address}}"
+
+[grpc.services.ocminvitemanager]
+driver = "json"
+
+[grpc.services.ocminvitemanager.drivers.json]
+file = "{{invite_token_file}}"
+
+[grpc.services.ocmproviderauthorizer]
+driver = "json"
+
+[grpc.services.ocmproviderauthorizer.drivers.json]
+providers = "{{file_providers}}"
+
+[grpc.services.ocmshareprovider]
+driver = "json"
+
+[grpc.services.ocmshareprovider.drivers.json]
+file = "{{ocm_share_cesnet_file}}"
+
+[grpc.services.ocmcore]
+driver = "json"
+
+[grpc.services.ocmcore.drivers.json]
+file = "{{ocm_share_cesnet_file}}"
+
+[grpc.services.authprovider]
+auth_manager = "json"
+
+[grpc.services.authprovider.auth_managers.json]
+users = "fixtures/ocm-users.demo.json"
+
+[grpc.services.userprovider]
+driver = "json"
+
+[grpc.services.userprovider.drivers.json]
+users = "fixtures/ocm-users.demo.json"
