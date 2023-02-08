@@ -129,7 +129,7 @@ var _ = Describe("ocm invitation workflow", func() {
 			"cesnethttp":  "ocm-server-cesnet-http.toml",
 		}, map[string]string{
 			"providers": "ocm-providers.demo.json",
-		}, variables)
+		}, nil, variables)
 		Expect(err).ToNot(HaveOccurred())
 		cernboxgw, err = pool.GetGatewayServiceClient(pool.Endpoint(revads["cernboxgw"].GrpcAddress))
 		Expect(err).ToNot(HaveOccurred())
