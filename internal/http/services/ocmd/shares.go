@@ -177,12 +177,13 @@ func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	response := map[string]any{}
+
 	if h.exposeRecipientDisplayName {
-		json.NewEncoder(w).Encode(map[string]any{
-			"recipientDisplayName": userRes.User.DisplayName,
-		})
+		response["recipientDisplayName"] = userRes.User.DisplayName
 	}
 
+	_ = json.NewEncoder(w).Encode(response)
 	w.WriteHeader(http.StatusCreated)
 }
 
