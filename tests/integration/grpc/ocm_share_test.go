@@ -191,7 +191,7 @@ var _ = Describe("ocm share", func() {
 				Expect(d).To(Equal([]byte("test")))
 
 				// TODO: enable once we don't send anymore the owner token
-				// err = webdavClient.Write(".", []byte("will-never-be-writter"), 0)
+				// err = webdavClient.Write(".", []byte("will-never-be-written"), 0)
 				// Expect(err).To(HaveOccurred())
 			})
 		})
