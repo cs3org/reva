@@ -31,7 +31,7 @@ ENV GOPATH /go
 
 WORKDIR /go/src/github/cs3org/reva
 COPY . .
-RUN make build-reva-docker && cp /go/src/github/cs3org/reva/cmd/reva/reva /go/bin/reva
+RUN make reva && cp /go/src/github/cs3org/reva/cmd/reva/reva /go/bin/reva
 
 FROM scratch
 

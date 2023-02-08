@@ -1,7 +1,7 @@
 OC_CI_GOLANG = "owncloudci/golang:1.19"
 OC_CI_ALPINE = "owncloudci/alpine:latest"
 OSIXIA_OPEN_LDAP = "osixia/openldap:1.3.0"
-OC_CI_PHP = "owncloudci/php:7.4"
+OC_CI_PHP = "cs3org/behat:latest"
 OC_CI_BAZEL_BUILDIFIER = "owncloudci/bazel-buildifier:latest"
 
 def makeStep():
@@ -9,7 +9,7 @@ def makeStep():
         "name": "build",
         "image": OC_CI_GOLANG,
         "commands": [
-            "make build-revad",
+            "make revad",
         ],
     }
 
@@ -20,7 +20,7 @@ def cloneApiTestReposStep():
         "commands": [
             "source /drone/src/.drone.env",
             "git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing",
-            "git clone -b $APITESTS_BRANCH --single-branch --no-tags https://github.com/owncloud/ocis.git /drone/src/tmp/testrunner",
+            "git clone -b $APITESTS_BRANCH --single-branch --no-tags $APITESTS_REPO_GIT_URL /drone/src/tmp/testrunner",
             "cd /drone/src/tmp/testrunner",
             "git checkout $APITESTS_COMMITID",
         ],
@@ -67,67 +67,7 @@ def main(ctx):
     # implemented for: ocisIntegrationTests and s3ngIntegrationTests
     return [
         checkStarlark(),
-        virtualViews(),
     ] + ocisIntegrationTests(6) + s3ngIntegrationTests(12)
-
-def virtualViews():
-    return {
-        "kind": "pipeline",
-        "type": "docker",
-        "name": "virtual-views",
-        "platform": {
-            "os": "linux",
-            "arch": "amd64",
-        },
-        "trigger": {
-            "event": {
-                "include": [
-                    "pull_request",
-                    "tag",
-                ],
-            },
-        },
-        "steps": [
-            makeStep(),
-            {
-                "name": "revad-services",
-                "image": OC_CI_GOLANG,
-                "detach": True,
-                "commands": [
-                    "cd /drone/src/tests/oc-integration-tests/drone/",
-                    "/drone/src/cmd/revad/revad -c frontend-global.toml &",
-                    "/drone/src/cmd/revad/revad -c gateway.toml &",
-                    "/drone/src/cmd/revad/revad -c storage-home-ocis.toml &",
-                    "/drone/src/cmd/revad/revad -c storage-local-1.toml &",
-                    "/drone/src/cmd/revad/revad -c storage-local-2.toml &",
-                    "/drone/src/cmd/revad/revad -c users.toml",
-                ],
-            },
-            cloneApiTestReposStep(),
-            {
-                "name": "APIAcceptanceTestsOcisStorage",
-                "image": OC_CI_PHP,
-                "commands": [
-                    "cd /drone/src",
-                    "composer self-update",
-                    "composer --version",
-                    "make test-acceptance-api",
-                ],
-                "environment": {
-                    "PATH_TO_APITESTS": "/drone/src/tmp/testrunner",
-                    "TEST_SERVER_URL": "http://revad-services:20180",
-                    "OCIS_REVA_DATA_ROOT": "/drone/src/tmp/reva/data/",
-                    "DELETE_USER_DATA_CMD": "rm -rf /drone/src/tmp/reva/data/nodes/root/* /drone/src/tmp/reva/data/nodes/*-*-*-* /drone/src/tmp/reva/data/blobs/*",
-                    "STORAGE_DRIVER": "OCIS",
-                    "SKELETON_DIR": "/drone/src/tmp/testing/data/apiSkeleton",
-                    "TEST_REVA": "true",
-                    "REGULAR_USER_PASSWORD": "relativity",
-                    "SEND_SCENARIO_LINE_REFERENCES": "true",
-                    "BEHAT_SUITE": "apiVirtualViews",
-                },
-            },
-        ],
-    }
 
 def ocisIntegrationTests(parallelRuns, skipExceptParts = []):
     pipelines = []
@@ -176,9 +116,7 @@ def ocisIntegrationTests(parallelRuns, skipExceptParts = []):
                         "image": OC_CI_PHP,
                         "commands": [
                             "cd /drone/src/tmp/testrunner",
-                            "composer self-update",
-                            "composer --version",
-                            "make test-acceptance-core-api",
+                            "make test-acceptance-from-core-api",
                         ],
                         "environment": {
                             "TEST_SERVER_URL": "http://revad-services:20080",
@@ -252,9 +190,7 @@ def s3ngIntegrationTests(parallelRuns, skipExceptParts = []):
                         "image": OC_CI_PHP,
                         "commands": [
                             "cd /drone/src/tmp/testrunner",
-                            "composer self-update",
-                            "composer --version",
-                            "make test-acceptance-core-api",
+                            "make test-acceptance-from-core-api",
                         ],
                         "environment": {
                             "TEST_SERVER_URL": "http://revad-services:20080",

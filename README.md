@@ -134,9 +134,9 @@ This will require some PHP-related tools to run, for instance on Ubuntu you will
     ../../../cmd/revad/revad -c ldap-users.toml
     ```
 
-3.  clone ownCloud 10
+3.  clone ownCloud Infinite Scale `OCIS`
     ```
-    git clone https://github.com/owncloud/core.git ./testrunner
+    git clone https://github.com/owncloud/ocis.git ./testrunner
     ```
 
 4.  to run the correct version of the testsuite check out the commit id from the `.drone.env` file
@@ -158,7 +158,7 @@ This will require some PHP-related tools to run, for instance on Ubuntu you will
     TEST_REVA='true' \
     BEHAT_FILTER_TAGS='~@notToImplementOnOCIS&&~@toImplementOnOCIS&&~comments-app-required&&~@federation-app-required&&~@notifications-app-required&&~systemtags-app-required&&~@provisioning_api-app-required&&~@preview-extension-required&&~@local_storage&&~@skipOnOcis-OCIS-Storage&&~@skipOnOcis' \
     EXPECTED_FAILURES_FILE=../reva/tests/acceptance/expected-failures-on-OCIS-storage.md \
-    make test-acceptance-api
+    make test-acceptance-from-core-api
     ```
 
     This will run all tests that are relevant to reva.
