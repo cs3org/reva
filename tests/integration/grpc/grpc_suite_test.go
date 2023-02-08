@@ -132,7 +132,6 @@ func startRevads(configs map[string]string, externalFiles map[string]string, new
 		filesPath[name] = newFilePath
 	}
 	for name, resource := range newResources {
-
 		tmpResourcePath := filepath.Join(tmpRoot, name)
 
 		switch r := resource.(type) {

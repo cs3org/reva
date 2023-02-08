@@ -1,3 +1,21 @@
+// Copyright 2018-2023 CERN
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// In applying this license, CERN does not waive the privileges and immunities
+// granted to it by virtue of its status as an Intergovernmental Organization
+// or submit itself to any jurisdiction.
+
 package ocmd
 
 import (
@@ -11,9 +29,13 @@ import (
 	ocmshare "github.com/cs3org/reva/pkg/ocm/share"
 )
 
+// Protocols is the list of protocols.
 type Protocols []Protocol
 
+// Protocol represents the way of access the resource
+// in the OCM share.
 type Protocol interface {
+	// ToOCMProtocol convert the protocol to a ocm Protocol struct
 	ToOCMProtocol() *ocm.Protocol
 }
 
@@ -26,6 +48,7 @@ type WebDAV struct {
 	URL          string   `json:"url" validate:"required"`
 }
 
+// ToOCMProtocol convert the protocol to a ocm Protocol struct.
 func (w *WebDAV) ToOCMProtocol() *ocm.Protocol {
 	perms := &ocm.SharePermissions{
 		Permissions: &providerv1beta1.ResourcePermissions{},
@@ -52,6 +75,7 @@ type Webapp struct {
 	URITemplate string `json:"uriTemplate" validate:"required"`
 }
 
+// ToOCMProtocol convert the protocol to a ocm Protocol struct.
 func (w *Webapp) ToOCMProtocol() *ocm.Protocol {
 	return ocmshare.NewWebappProtocol(w.URITemplate)
 }
@@ -63,6 +87,7 @@ type Datatx struct {
 	Size         uint64 `json:"size" validate:"required"`
 }
 
+// ToOCMProtocol convert the protocol to a ocm Protocol struct.
 func (w *Datatx) ToOCMProtocol() *ocm.Protocol {
 	return ocmshare.NewTransferProtocol(w.SourceURI, w.SharedSecret, w.Size)
 }
@@ -73,6 +98,7 @@ var protocolImpl = map[string]reflect.Type{
 	"datatx": reflect.TypeOf(Datatx{}),
 }
 
+// UnmarshalJSON implements the Unmarshaler interface.
 func (p *Protocols) UnmarshalJSON(data []byte) error {
 	var prot map[string]json.RawMessage
 	if err := json.Unmarshal(data, &prot); err != nil {
@@ -98,6 +124,7 @@ func (p *Protocols) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// MarshalJSON implements the Marshaler interface.
 func (p Protocols) MarshalJSON() ([]byte, error) {
 	d := make(map[string]Protocol)
 	for _, prot := range p {

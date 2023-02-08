@@ -85,7 +85,7 @@ func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, meshProvider, err := getIdAndMeshProvider(req.Sender)
+	_, meshProvider, err := getIDAndMeshProvider(req.Sender)
 	if err != nil {
 		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, err.Error(), nil)
 		return
@@ -117,7 +117,7 @@ func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	shareWith, _, err := getIdAndMeshProvider(req.ShareWith)
+	shareWith, _, err := getIDAndMeshProvider(req.ShareWith)
 	if err != nil {
 		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, err.Error(), nil)
 		return
@@ -188,7 +188,7 @@ func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 }
 
 func getUserIDFromOCMUser(user string) (*userpb.UserId, error) {
-	id, idp, err := getIdAndMeshProvider(user)
+	id, idp, err := getIDAndMeshProvider(user)
 	if err != nil {
 		return nil, err
 	}
@@ -200,7 +200,7 @@ func getUserIDFromOCMUser(user string) (*userpb.UserId, error) {
 	}, nil
 }
 
-func getIdAndMeshProvider(user string) (string, string, error) {
+func getIDAndMeshProvider(user string) (string, string, error) {
 	// the user is in the form of dimitri@apiwise.nl
 	split := strings.Split(user, "@")
 	if len(split) < 2 {
@@ -245,7 +245,7 @@ func getOCMShareType(t string) ocm.ShareType {
 }
 
 func getProtocols(p Protocols) []*ocm.Protocol {
-	var prot []*ocm.Protocol
+	prot := make([]*ocm.Protocol, 0, len(p))
 	for _, data := range p {
 		prot = append(prot, data.ToOCMProtocol())
 	}
