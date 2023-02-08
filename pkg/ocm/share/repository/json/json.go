@@ -342,10 +342,7 @@ func (m *mgr) DeleteShare(ctx context.Context, user *userpb.User, ref *ocm.Share
 		if sharesEqual(ref, share) {
 			if utils.UserEqual(user.Id, share.Owner) || utils.UserEqual(user.Id, share.Creator) {
 				delete(m.model.Shares, id)
-				if err := m.save(); err != nil {
-					return err
-				}
-				return nil
+				return m.save()
 			}
 		}
 	}

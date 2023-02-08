@@ -320,7 +320,6 @@ func (s *service) RemoveOCMShare(ctx context.Context, req *ocm.RemoveOCMShareReq
 			return &ocm.RemoveOCMShareResponse{
 				Status: status.NewNotFound(ctx, "share does not exist"),
 			}, nil
-
 		}
 		return &ocm.RemoveOCMShareResponse{
 			Status: status.NewInternal(ctx, err, "error removing share"),
@@ -340,7 +339,6 @@ func (s *service) GetOCMShare(ctx context.Context, req *ocm.GetOCMShareRequest) 
 			return &ocm.GetOCMShareResponse{
 				Status: status.NewNotFound(ctx, "share does not exist"),
 			}, nil
-
 		}
 		return &ocm.GetOCMShareResponse{
 			Status: status.NewInternal(ctx, err, "error getting share"),
@@ -377,7 +375,6 @@ func (s *service) UpdateOCMShare(ctx context.Context, req *ocm.UpdateOCMShareReq
 			return &ocm.UpdateOCMShareResponse{
 				Status: status.NewNotFound(ctx, "share does not exist"),
 			}, nil
-
 		}
 		return &ocm.UpdateOCMShareResponse{
 			Status: status.NewInternal(ctx, err, "error updating share"),
@@ -414,7 +411,6 @@ func (s *service) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateRec
 			return &ocm.UpdateReceivedOCMShareResponse{
 				Status: status.NewNotFound(ctx, "share does not exist"),
 			}, nil
-
 		}
 		return &ocm.UpdateReceivedOCMShareResponse{
 			Status: status.NewInternal(ctx, err, "error updating received share"),
@@ -435,7 +431,6 @@ func (s *service) GetReceivedOCMShare(ctx context.Context, req *ocm.GetReceivedO
 			return &ocm.GetReceivedOCMShareResponse{
 				Status: status.NewNotFound(ctx, "share does not exist"),
 			}, nil
-
 		}
 		return &ocm.GetReceivedOCMShareResponse{
 			Status: status.NewInternal(ctx, err, "error getting received share"),
