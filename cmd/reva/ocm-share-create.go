@@ -118,7 +118,7 @@ func ocmShareCreateCommand() *command {
 				Type: gt,
 				// For now, we only support user shares.
 				// TODO (ishank011): To be updated once this is decided.
-				Id: &provider.Grantee_UserId{UserId: u},
+				Id: &provider.Grantee_UserId{UserId: remoteUserRes.RemoteUser.Id},
 			},
 			RecipientMeshProvider: providerInfo.ProviderInfo,
 			AccessMethods:         am,
