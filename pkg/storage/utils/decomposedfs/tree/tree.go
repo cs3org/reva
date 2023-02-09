@@ -253,6 +253,7 @@ func (t *Tree) TouchFile(ctx context.Context, n *node.Node) error {
 	if n.ID == "" {
 		n.ID = uuid.New().String()
 	}
+	n.Type = provider.ResourceType_RESOURCE_TYPE_FILE
 
 	nodePath := n.InternalPath()
 	if err := os.MkdirAll(filepath.Dir(nodePath), 0700); err != nil {
@@ -269,7 +270,7 @@ func (t *Tree) TouchFile(ctx context.Context, n *node.Node) error {
 	}
 
 	// link child name to parent if it is new
-	childNameLink := filepath.Join(n.ParentInternalPath(), n.Name)
+	childNameLink := filepath.Join(n.ParentChildrenPath(), n.Name)
 	var link string
 	link, err = os.Readlink(childNameLink)
 	if err == nil && link != "../"+n.ID {
@@ -289,12 +290,12 @@ func (t *Tree) TouchFile(ctx context.Context, n *node.Node) error {
 
 // CreateDir creates a new directory entry in the tree
 func (t *Tree) CreateDir(ctx context.Context, n *node.Node) (err error) {
-
 	if n.Exists {
 		return errtypes.AlreadyExists(n.ID) // path?
 	}
 
 	// create a directory node
+	n.Type = provider.ResourceType_RESOURCE_TYPE_CONTAINER
 	if n.ID == "" {
 		n.ID = uuid.New().String()
 	}
@@ -310,7 +311,7 @@ func (t *Tree) CreateDir(ctx context.Context, n *node.Node) (err error) {
 
 	// make child appear in listings
 	relativeNodePath := filepath.Join("../../../../../", lookup.Pathify(n.ID, 4, 2))
-	err = os.Symlink(relativeNodePath, filepath.Join(n.ParentInternalPath(), n.Name))
+	err = os.Symlink(relativeNodePath, filepath.Join(n.ParentChildrenPath(), n.Name))
 	if err != nil {
 		// no better way to check unfortunately
 		if !strings.Contains(err.Error(), "file exists") {
@@ -353,7 +354,7 @@ func (t *Tree) Move(ctx context.Context, oldNode *node.Node, newNode *node.Node)
 	if oldNode.ParentID == newNode.ParentID {
 
 		// parentPath := t.lookup.InternalPath(oldNode.SpaceID, oldNode.ParentID)
-		parentPath := oldNode.ParentInternalPath()
+		parentPath := oldNode.ParentChildrenPath()
 
 		// rename child
 		err = os.Rename(
@@ -377,8 +378,8 @@ func (t *Tree) Move(ctx context.Context, oldNode *node.Node, newNode *node.Node)
 
 	// rename child
 	err = os.Rename(
-		filepath.Join(oldNode.ParentInternalPath(), oldNode.Name),
-		filepath.Join(newNode.ParentInternalPath(), newNode.Name),
+		filepath.Join(oldNode.ParentChildrenPath(), oldNode.Name),
+		filepath.Join(newNode.ParentChildrenPath(), newNode.Name),
 	)
 	if err != nil {
 		return errors.Wrap(err, "Decomposedfs: could not move child")
@@ -431,7 +432,7 @@ func readChildNodeFromLink(path string) (string, error) {
 
 // ListFolder lists the content of a folder node
 func (t *Tree) ListFolder(ctx context.Context, n *node.Node) ([]*node.Node, error) {
-	dir := n.InternalPath()
+	dir := n.ChildrenPath()
 	f, err := os.Open(dir)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
@@ -474,7 +475,7 @@ func (t *Tree) Delete(ctx context.Context, n *node.Node) (err error) {
 	deletingSharedResource := ctx.Value(appctx.DeletingSharedResource)
 
 	if deletingSharedResource != nil && deletingSharedResource.(bool) {
-		src := filepath.Join(n.ParentInternalPath(), n.Name)
+		src := filepath.Join(n.ParentChildrenPath(), n.Name)
 		return os.Remove(src)
 	}
 
@@ -541,7 +542,7 @@ func (t *Tree) Delete(ctx context.Context, n *node.Node) (err error) {
 	_ = os.Remove(n.LockFilePath())
 
 	// finally remove the entry from the parent dir
-	src := filepath.Join(n.ParentInternalPath(), n.Name)
+	src := filepath.Join(n.ParentChildrenPath(), n.Name)
 	err = os.Remove(src)
 	if err != nil {
 		// To roll back changes
@@ -589,7 +590,7 @@ func (t *Tree) RestoreRecycleItemFunc(ctx context.Context, spaceid, key, trashPa
 		}
 
 		// add the entry for the parent dir
-		err = os.Symlink("../../../../../"+lookup.Pathify(recycleNode.ID, 4, 2), filepath.Join(targetNode.ParentInternalPath(), targetNode.Name))
+		err = os.Symlink("../../../../../"+lookup.Pathify(recycleNode.ID, 4, 2), filepath.Join(targetNode.ParentChildrenPath(), targetNode.Name))
 		if err != nil {
 			return err
 		}
@@ -825,7 +826,7 @@ func (t *Tree) Propagate(ctx context.Context, n *node.Node, sizeDiff int64) (err
 			switch {
 			case xattrs.IsAttrUnset(err):
 				// fallback to calculating the treesize
-				newSize, err = calculateTreeSize(ctx, n.InternalPath())
+				newSize, err = calculateTreeSize(ctx, n.ChildrenPath())
 				if err != nil {
 					return err
 				}
@@ -861,23 +862,23 @@ func (t *Tree) Propagate(ctx context.Context, n *node.Node, sizeDiff int64) (err
 	return
 }
 
-func calculateTreeSize(ctx context.Context, nodePath string) (uint64, error) {
+func calculateTreeSize(ctx context.Context, childrenPath string) (uint64, error) {
 	var size uint64
 
-	f, err := os.Open(nodePath)
+	f, err := os.Open(childrenPath)
 	if err != nil {
-		appctx.GetLogger(ctx).Error().Err(err).Str("nodepath", nodePath).Msg("could not open dir")
+		appctx.GetLogger(ctx).Error().Err(err).Str("childrenPath", childrenPath).Msg("could not open dir")
 		return 0, err
 	}
 	defer f.Close()
 
 	names, err := f.Readdirnames(0)
 	if err != nil {
-		appctx.GetLogger(ctx).Error().Err(err).Str("nodepath", nodePath).Msg("could not read dirnames")
+		appctx.GetLogger(ctx).Error().Err(err).Str("childrenPath", childrenPath).Msg("could not read dirnames")
 		return 0, err
 	}
 	for i := range names {
-		cPath := filepath.Join(nodePath, names[i])
+		cPath := filepath.Join(childrenPath, names[i])
 		info, err := os.Stat(cPath)
 		if err != nil {
 			appctx.GetLogger(ctx).Error().Err(err).Str("childpath", cPath).Msg("could not stat child entry")
@@ -939,7 +940,15 @@ func (t *Tree) DeleteBlob(node *node.Node) error {
 func (t *Tree) createNode(n *node.Node) (err error) {
 	// create a directory node
 	nodePath := n.InternalPath()
-	if err = os.MkdirAll(nodePath, 0700); err != nil {
+	if err := os.MkdirAll(filepath.Dir(nodePath), 0700); err != nil {
+		return errors.Wrap(err, "Decomposedfs: error creating node")
+	}
+	_, err = os.Create(nodePath)
+	if err != nil {
+		return errors.Wrap(err, "Decomposedfs: error creating node")
+	}
+
+	if err = os.MkdirAll(n.ChildrenPath(), 0700); err != nil {
 		return errors.Wrap(err, "Decomposedfs: error creating node")
 	}
 

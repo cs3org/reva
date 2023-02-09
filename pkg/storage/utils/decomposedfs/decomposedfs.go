@@ -58,6 +58,11 @@ import (
 	"github.com/pkg/errors"
 )
 
+func init() {
+	// xattrs.UseXattrsBackend()
+	xattrs.UseIniBackend()
+}
+
 // name is the Tracer name used to identify this instrumentation library.
 const tracerName = "decomposedfs"
 

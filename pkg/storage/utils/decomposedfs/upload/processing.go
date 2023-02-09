@@ -255,6 +255,7 @@ func CreateNodeForUpload(upload *Upload, initAttrs map[string]string) (*node.Nod
 		nil,
 		upload.lu,
 	)
+	n.Type = provider.ResourceType_RESOURCE_TYPE_FILE
 	n.SpaceRoot, err = node.ReadNode(upload.Ctx, upload.lu, spaceID, spaceID, false)
 	if err != nil {
 		return nil, err
@@ -279,6 +280,7 @@ func CreateNodeForUpload(upload *Upload, initAttrs map[string]string) (*node.Nod
 	}
 
 	// overwrite technical information
+	initAttrs[xattrs.TypeAttr] = strconv.FormatInt(int64(n.Type), 10)
 	initAttrs[xattrs.ParentidAttr] = n.ParentID
 	initAttrs[xattrs.NameAttr] = n.Name
 	initAttrs[xattrs.BlobIDAttr] = n.BlobID
@@ -337,7 +339,7 @@ func initNewNode(upload *Upload, n *node.Node, fsize uint64) (*flock.Flock, erro
 	}
 
 	// link child name to parent if it is new
-	childNameLink := filepath.Join(n.ParentInternalPath(), n.Name)
+	childNameLink := filepath.Join(n.ParentChildrenPath(), n.Name)
 	link, err := os.Readlink(childNameLink)
 	if err == nil && link != "../"+n.ID {
 		if err := os.Remove(childNameLink); err != nil {

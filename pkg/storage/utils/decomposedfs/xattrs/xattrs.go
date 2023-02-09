@@ -19,14 +19,12 @@
 package xattrs
 
 import (
-	"strconv"
 	"strings"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/filelocks"
 	"github.com/gofrs/flock"
 	"github.com/pkg/errors"
-	"github.com/pkg/xattr"
 )
 
 // Declare a list of xattr keys
@@ -38,6 +36,7 @@ import (
 // collisions with other apps We are going to introduce a sub namespace
 // "user.ocis." in the xattrs_prefix*.go files.
 const (
+	TypeAttr      string = OcisPrefix + "type"
 	ParentidAttr  string = OcisPrefix + "parentid"
 	OwnerIDAttr   string = OcisPrefix + "owner.id"
 	OwnerIDPAttr  string = OcisPrefix + "owner.idp"
@@ -167,7 +166,7 @@ func CopyMetadataWithSourceLock(src, target string, filter func(attributeName st
 
 	// both locks are established. Copy.
 	var attrNameList []string
-	if attrNameList, err = xattr.List(src); err != nil {
+	if attrNameList, err = backend.List(src); err != nil {
 		return errors.Wrap(err, "Can not get xattr listing on src")
 	}
 
@@ -180,11 +179,11 @@ func CopyMetadataWithSourceLock(src, target string, filter func(attributeName st
 	for idx := range attrNameList {
 		attrName := attrNameList[idx]
 		if filter == nil || filter(attrName) {
-			var attrVal []byte
-			if attrVal, xerr = xattr.Get(src, attrName); xerr != nil {
+			var attrVal string
+			if attrVal, xerr = backend.Get(src, attrName); xerr != nil {
 				xerrs++
 			}
-			if xerr = xattr.Set(target, attrName, attrVal); xerr != nil {
+			if xerr = backend.Set(target, attrName, attrVal); xerr != nil {
 				xerrs++
 			}
 		}
@@ -211,7 +210,7 @@ func Set(filePath string, key string, val string) (err error) {
 		}
 	}()
 
-	return xattr.Set(filePath, key, []byte(val))
+	return SetWithLock(filePath, key, val, fileLock)
 }
 
 // SetWithLock an extended attribute key to the given value with an existing lock
@@ -226,26 +225,12 @@ func SetWithLock(filePath string, key string, val string, fileLock *flock.Flock)
 		return errors.New("not write locked")
 	}
 
-	return xattr.Set(filePath, key, []byte(val))
+	return backend.Set(filePath, key, val)
 }
 
 // Remove an extended attribute key
 func Remove(filePath string, key string) (err error) {
-	fileLock, err := filelocks.AcquireWriteLock(filePath)
-
-	if err != nil {
-		return errors.Wrap(err, "xattrs: Can not acquire write log")
-	}
-	defer func() {
-		rerr := filelocks.ReleaseLock(fileLock)
-
-		// if err is non nil we do not overwrite that
-		if err == nil {
-			err = rerr
-		}
-	}()
-
-	return xattr.Remove(filePath, key)
+	return backend.Remove(filePath, key)
 }
 
 // SetMultiple allows setting multiple key value pairs at once
@@ -282,103 +267,21 @@ func SetMultipleWithLock(filePath string, attribs map[string]string, fileLock *f
 		return errors.New("not locked")
 	}
 
-	// error handling: Count if there are errors while setting the attribs.
-	// if there were any, return an error.
-	var (
-		xerrs = 0
-		xerr  error
-	)
-	for key, val := range attribs {
-		if xerr = xattr.Set(filePath, key, []byte(val)); xerr != nil {
-			// log
-			xerrs++
-		}
-	}
-	if xerrs > 0 {
-		err = errors.Wrap(xerr, "Failed to set all xattrs")
-	}
-	return err
+	return backend.SetMultiple(filePath, attribs)
 }
 
-// Get an extended attribute value for the given key
-// No file locking is involved here as reading a single xattr is
-// considered to be atomic.
-func Get(filePath, key string) (string, error) {
-	v, err := xattr.Get(filePath, key)
-	if err != nil {
-		return "", err
-	}
-	val := string(v)
-	return val, nil
+func All(path string) (map[string]string, error) {
+	return backend.All(path)
 }
 
-// GetInt64 reads a string as int64 from the xattrs
-func GetInt64(filePath, key string) (int64, error) {
-	attr, err := Get(filePath, key)
-	if err != nil {
-		return 0, err
-	}
-	v, err := strconv.ParseInt(attr, 10, 64)
-	if err != nil {
-		return 0, err
-	}
-	return v, nil
+func Get(path, key string) (string, error) {
+	return backend.Get(path, key)
 }
 
-// List retrieves a list of names of extended attributes associated with the
-// given path in the file system.
-func List(filePath string) (attribs []string, err error) {
-	attrs, err := xattr.List(filePath)
-	if err == nil {
-		return attrs, nil
-	}
-
-	// listing the attributes failed. lock the file and try again
-	readLock, err := filelocks.AcquireReadLock(filePath)
-
-	if err != nil {
-		return nil, errors.Wrap(err, "xattrs: Unable to lock file for read")
-	}
-	defer func() {
-		rerr := filelocks.ReleaseLock(readLock)
-
-		// if err is non nil we do not overwrite that
-		if err == nil {
-			err = rerr
-		}
-	}()
-
-	return xattr.List(filePath)
+func GetInt64(path, key string) (int64, error) {
+	return backend.GetInt64(path, key)
 }
 
-// All reads all extended attributes for a node, protected by a
-// shared file lock
-func All(filePath string) (attribs map[string]string, err error) {
-	attrNames, err := List(filePath)
-
-	if err != nil {
-		return nil, err
-	}
-
-	var (
-		xerrs = 0
-		xerr  error
-	)
-	// error handling: Count if there are errors while reading all attribs.
-	// if there were any, return an error.
-	attribs = make(map[string]string, len(attrNames))
-	for _, name := range attrNames {
-		var val []byte
-		if val, xerr = xattr.Get(filePath, name); xerr != nil {
-			xerrs++
-		} else {
-			attribs[name] = string(val)
-		}
-	}
-
-	if xerrs > 0 {
-		err = errors.Wrap(xerr, "Failed to read all xattrs")
-	}
-
-	return attribs, err
+func List(path string) ([]string, error) {
+	return backend.List(path)
 }

@@ -92,7 +92,7 @@ func (n *Node) Xattrs() (map[string]string, error) {
 // been cached it is not read from disk again.
 func (n *Node) Xattr(key string) (string, error) {
 	if n.xattrsCache == nil {
-		b, err := xattr.Get(n.InternalPath(), key)
+		b, err := xattrs.Get(n.InternalPath(), key)
 		if err != nil {
 			return "", err
 		}

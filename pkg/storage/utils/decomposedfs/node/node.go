@@ -75,6 +75,7 @@ const (
 
 // Node represents a node in the tree and provides methods to get a Parent or Child instance
 type Node struct {
+	Type      provider.ResourceType
 	SpaceID   string
 	ParentID  string
 	ID        string
@@ -86,6 +87,7 @@ type Node struct {
 	SpaceRoot *Node
 
 	lu          PathLookup
+	xattrsPath  string
 	xattrsCache map[string]string
 }
 
@@ -132,6 +134,7 @@ func (n *Node) ChangeOwner(new *userpb.UserId) (err error) {
 func (n *Node) WriteAllNodeMetadata() (err error) {
 	attribs := make(map[string]string)
 
+	attribs[xattrs.TypeAttr] = strconv.FormatInt(int64(n.Type), 10)
 	attribs[xattrs.ParentidAttr] = n.ParentID
 	attribs[xattrs.NameAttr] = n.Name
 	attribs[xattrs.BlobIDAttr] = n.BlobID
@@ -178,7 +181,8 @@ func (n *Node) SpaceOwnerOrManager(ctx context.Context) *userpb.UserId {
 }
 
 // ReadNode creates a new instance from an id and checks if it exists
-func ReadNode(ctx context.Context, lu PathLookup, spaceID, nodeID string, canListDisabledSpace bool) (n *Node, err error) {
+func ReadNode(ctx context.Context, lu PathLookup, spaceID, nodeID string, canListDisabledSpace bool) (*Node, error) {
+	var err error
 
 	// read space root
 	r := &Node{
@@ -194,15 +198,13 @@ func ReadNode(ctx context.Context, lu PathLookup, spaceID, nodeID string, canLis
 	case err != nil:
 		return nil, err
 	}
+	r.Exists = true
+
 	// lookup name in extended attributes
 	r.Name, err = r.Xattr(xattrs.NameAttr)
-	switch {
-	case xattrs.IsNotExist(err):
-		return r, nil // swallow not found, the node defaults to exists = false
-	case err != nil:
+	if err != nil {
 		return nil, err
 	}
-	r.Exists = true
 
 	// TODO ReadNode should not check permissions
 	if !canListDisabledSpace && r.IsDisabled() {
@@ -232,12 +234,13 @@ func ReadNode(ctx context.Context, lu PathLookup, spaceID, nodeID string, canLis
 	}
 
 	// read node
-	n = &Node{
+	n := &Node{
 		SpaceID:   spaceID,
 		lu:        lu,
 		ID:        nodeID,
 		SpaceRoot: r,
 	}
+	nodePath := n.InternalPath()
 
 	// append back revision to nodeid, even when returning a not existing node
 	defer func() {
@@ -247,48 +250,20 @@ func ReadNode(ctx context.Context, lu PathLookup, spaceID, nodeID string, canLis
 		}
 	}()
 
-	nodePath := n.InternalPath()
-
-	// lookup name in extended attributes
-	n.Name, err = n.Xattr(xattrs.NameAttr)
+	attrs, err := n.Xattrs()
 	switch {
 	case xattrs.IsNotExist(err):
 		return n, nil // swallow not found, the node defaults to exists = false
 	case err != nil:
 		return nil, err
 	}
-
 	n.Exists = true
 
-	// lookup blobID in extended attributes
-	n.BlobID, err = ReadBlobIDAttr(nodePath + revisionSuffix)
-	switch {
-	case xattrs.IsNotExist(err):
-		return n, nil // swallow not found, the node defaults to exists = false
-	case err != nil:
-		return nil, err
+	n.Name = attrs[xattrs.NameAttr]
+	n.ParentID = attrs[xattrs.ParentidAttr]
+	if n.ParentID == "" {
+		return nil, errtypes.InternalError("Missing parent ID on node")
 	}
-
-	// Lookup blobsize
-	n.Blobsize, err = ReadBlobSizeAttr(nodePath + revisionSuffix)
-	switch {
-	case xattrs.IsNotExist(err):
-		return n, nil // swallow not found, the node defaults to exists = false
-	case err != nil:
-		return nil, errtypes.InternalError(err.Error())
-	}
-
-	// lookup parent id in extended attributes
-	n.ParentID, err = n.Xattr(xattrs.ParentidAttr)
-	switch {
-	case xattrs.IsAttrUnset(err):
-		return nil, errtypes.InternalError(err.Error())
-	case xattrs.IsNotExist(err):
-		return n, nil // swallow not found, the node defaults to exists = false
-	case err != nil:
-		return nil, errtypes.InternalError(err.Error())
-	}
-
 	// TODO why do we stat the parent? to determine if the current node is in the trash we would need to traverse all parents...
 	// we need to traverse all parents for permissions anyway ...
 	// - we can compare to space root owner with the current user
@@ -311,7 +286,7 @@ func ReadNode(ctx context.Context, lu PathLookup, spaceID, nodeID string, canLis
 	//     - can be made more robust with a journal
 	//     - same recursion mechanism can be used to purge items? sth we still need to do
 	//   - flag the two above options with dtime
-	_, err = os.Stat(n.ParentInternalPath())
+	_, err = os.Stat(n.ParentChildrenPath())
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
 			return nil, errtypes.NotFound(err.Error())
@@ -319,7 +294,28 @@ func ReadNode(ctx context.Context, lu PathLookup, spaceID, nodeID string, canLis
 		return nil, err
 	}
 
-	return
+	typeAttr, err := n.Xattr(xattrs.TypeAttr)
+	if err != nil {
+		return nil, err
+	}
+	typeInt, err := strconv.ParseInt(typeAttr, 10, 32)
+	if err != nil {
+		return nil, err
+	}
+	n.Type = provider.ResourceType(typeInt)
+
+	n.BlobID, err = ReadBlobIDAttr(nodePath + revisionSuffix)
+	if err != nil {
+		return nil, err
+	}
+
+	// Lookup blobsize
+	n.Blobsize, err = ReadBlobSizeAttr(nodePath + revisionSuffix)
+	if err != nil {
+		return nil, err
+	}
+
+	return n, nil
 }
 
 // The os error is buried inside the fs.PathError error
@@ -350,7 +346,7 @@ func (n *Node) Child(ctx context.Context, name string) (*Node, error) {
 	} else if n.SpaceRoot != nil {
 		spaceID = n.SpaceRoot.ID
 	}
-	nodeID, err := readChildNodeFromLink(filepath.Join(n.InternalPath(), name))
+	nodeID, err := readChildNodeFromLink(filepath.Join(n.ChildrenPath(), name))
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) || isNotDir(err) {
 
@@ -488,14 +484,19 @@ func (n *Node) InternalPath() string {
 	return n.lu.InternalPath(n.SpaceID, n.ID)
 }
 
-// ParentInternalPath returns the internal path of the parent of the current node
-func (n *Node) ParentInternalPath() string {
-	return n.lu.InternalPath(n.SpaceID, n.ParentID)
+// ParentChildrenPath returns the internal path of the parent of the current node
+func (n *Node) ParentChildrenPath() string {
+	return n.lu.InternalPath(n.SpaceID, n.ParentID) + ".children"
 }
 
 // LockFilePath returns the internal path of the lock file of the node
 func (n *Node) LockFilePath() string {
 	return n.InternalPath() + ".lock"
+}
+
+// ChildrenPath returns the internal path of the children directory of the node
+func (n *Node) ChildrenPath() string {
+	return n.InternalPath() + ".children"
 }
 
 // CalculateEtag returns a hash of fileid + tmtime (or mtime)
@@ -616,18 +617,26 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 
 	var target string
 	switch {
-	case fi.IsDir():
+	case fi.Mode().IsRegular():
 		if target, err = n.Xattr(xattrs.ReferenceAttr); err == nil {
 			nodeType = provider.ResourceType_RESOURCE_TYPE_REFERENCE
 		} else {
-			nodeType = provider.ResourceType_RESOURCE_TYPE_CONTAINER
+			typeString, err := n.Xattr(xattrs.TypeAttr)
+			if err != nil {
+				return nil, err
+			}
+			t, err := strconv.ParseInt(typeString, 10, 32)
+			if err != nil {
+				return nil, err
+			}
+			nodeType = provider.ResourceType(t)
 		}
-	case fi.Mode().IsRegular():
-		nodeType = provider.ResourceType_RESOURCE_TYPE_FILE
 	case fi.Mode()&os.ModeSymlink != 0:
 		nodeType = provider.ResourceType_RESOURCE_TYPE_SYMLINK
 		// TODO reference using ext attr on a symlink
 		// nodeType = provider.ResourceType_RESOURCE_TYPE_REFERENCE
+	default:
+		return nil, errtypes.InternalError("invalid node type on disk")
 	}
 
 	id := &provider.ResourceId{SpaceId: n.SpaceID, OpaqueId: n.ID}
