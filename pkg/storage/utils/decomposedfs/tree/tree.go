@@ -840,7 +840,7 @@ func (t *Tree) Propagate(ctx context.Context, n *node.Node, sizeDiff int64) (err
 				}
 			}
 
-			// update the tree time of the node
+			// update the tree size of the node
 			if err = n.SetXattrWithLock(xattrs.TreesizeAttr, strconv.FormatUint(newSize, 10), nodeLock); err != nil {
 				return err
 			}
@@ -879,12 +879,14 @@ func calculateTreeSize(ctx context.Context, childrenPath string) (uint64, error)
 	}
 	for i := range names {
 		cPath := filepath.Join(childrenPath, names[i])
-		info, err := os.Stat(cPath)
+		// raw read of the attributes for performance reasons
+		attribs, err := xattrs.All(cPath)
+		// info, err := os.Stat(cPath)
 		if err != nil {
-			appctx.GetLogger(ctx).Error().Err(err).Str("childpath", cPath).Msg("could not stat child entry")
+			appctx.GetLogger(ctx).Error().Err(err).Str("childpath", cPath).Msg("could not read attributes of child entry")
 			continue // continue after an error
 		}
-		if !info.IsDir() {
+		if attribs[xattrs.TypeAttr] == strconv.FormatUint(uint64(provider.ResourceType_RESOURCE_TYPE_FILE), 10) {
 			blobSize, err := node.ReadBlobSizeAttr(cPath)
 			if err != nil {
 				appctx.GetLogger(ctx).Error().Err(err).Str("childpath", cPath).Msg("could not read blobSize xattr")
@@ -892,7 +894,7 @@ func calculateTreeSize(ctx context.Context, childrenPath string) (uint64, error)
 			}
 			size += uint64(blobSize)
 		} else {
-			// read from attr
+			// try to read from attr
 			var b string
 			// xattrs.Get will follow the symlink
 			if b, err = xattrs.Get(cPath, xattrs.TreesizeAttr); err != nil {

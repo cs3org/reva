@@ -35,7 +35,6 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/pkg/errors"
-	"github.com/pkg/xattr"
 )
 
 // Recycle items are stored inside the node folder and start with the uuid of the deleted node.
@@ -89,7 +88,7 @@ func (fs *Decomposedfs) ListRecycle(ctx context.Context, ref *provider.Reference
 
 	origin := ""
 	// lookup origin path in extended attributes
-	if attrBytes, err := xattr.Get(trashRootPath, xattrs.TrashOriginAttr); err == nil {
+	if attrBytes, err := xattrs.Get(trashRootPath, xattrs.TrashOriginAttr); err == nil {
 		origin = string(attrBytes)
 	} else {
 		sublog.Error().Err(err).Str("space", spaceID).Msg("could not read origin path, skipping")
@@ -226,9 +225,8 @@ func (fs *Decomposedfs) listTrashRoot(ctx context.Context, spaceID string) ([]*p
 		}
 
 		// lookup origin path in extended attributes
-		var attrBytes []byte
-		if attrBytes, err = xattr.Get(nodePath, xattrs.TrashOriginAttr); err == nil {
-			item.Ref = &provider.Reference{Path: string(attrBytes)}
+		if attr, err := xattrs.Get(nodePath, xattrs.TrashOriginAttr); err == nil {
+			item.Ref = &provider.Reference{Path: attr}
 		} else {
 			log.Error().Err(err).Str("trashRoot", trashRoot).Str("item", itemPath).Str("node", nodeID).Str("dtime", timeSuffix).Msg("could not read origin path, skipping")
 			continue

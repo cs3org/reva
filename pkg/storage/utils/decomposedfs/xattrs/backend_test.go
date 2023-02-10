@@ -3,6 +3,7 @@ package xattrs_test
 import (
 	"os"
 	"path"
+	"strings"
 
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs"
 	. "github.com/onsi/ginkgo/v2"
@@ -65,7 +66,8 @@ var _ = Describe("Backend", func() {
 
 				content, err := os.ReadFile(file)
 				Expect(err).ToNot(HaveOccurred())
-				Expect(string(content)).To(Equal("foo = bar\nbaz = qux\n"))
+				lines := strings.Split(strings.Trim(string(content), "\n"), "\n")
+				Expect(lines).To(ConsistOf("foo = bar", "baz = qux"))
 			})
 
 			It("updates an attribute", func() {
@@ -76,7 +78,8 @@ var _ = Describe("Backend", func() {
 
 				content, err := os.ReadFile(file)
 				Expect(err).ToNot(HaveOccurred())
-				Expect(string(content)).To(Equal("foo = bar\nbaz = qux\n"))
+				lines := strings.Split(strings.Trim(string(content), "\n"), "\n")
+				Expect(lines).To(ConsistOf("foo = bar", "baz = qux"))
 			})
 		})
 
@@ -126,10 +129,9 @@ var _ = Describe("Backend", func() {
 				Expect(v).To(Equal("bar"))
 			})
 
-			It("returns an empty string on unknown attributes", func() {
-				v, err := backend.Get(file, "foo")
-				Expect(err).ToNot(HaveOccurred())
-				Expect(v).To(Equal(""))
+			It("returns an error on unknown attributes", func() {
+				_, err := backend.Get(file, "foo")
+				Expect(err).To(HaveOccurred())
 			})
 		})
 
@@ -143,10 +145,9 @@ var _ = Describe("Backend", func() {
 				Expect(v).To(Equal(int64(123)))
 			})
 
-			It("returns 0 on unknown attributes", func() {
-				v, err := backend.GetInt64(file, "foo")
-				Expect(err).ToNot(HaveOccurred())
-				Expect(v).To(Equal(int64(0)))
+			It("returns an error on unknown attributes", func() {
+				_, err := backend.GetInt64(file, "foo")
+				Expect(err).To(HaveOccurred())
 			})
 		})
 
@@ -162,9 +163,8 @@ var _ = Describe("Backend", func() {
 				err = backend.Remove(file, "foo")
 				Expect(err).ToNot(HaveOccurred())
 
-				v, err = backend.Get(file, "foo")
-				Expect(err).ToNot(HaveOccurred())
-				Expect(v).To(Equal(""))
+				_, err = backend.Get(file, "foo")
+				Expect(err).To(HaveOccurred())
 			})
 		})
 	})

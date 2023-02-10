@@ -27,7 +27,6 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/google/uuid"
-	"github.com/pkg/xattr"
 	"github.com/stretchr/testify/mock"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -276,7 +275,7 @@ func (t *TestEnv) CreateTestStorageSpace(typ string, quota *providerv1beta1.Quot
 	if err != nil {
 		return nil, err
 	}
-	if err = xattr.Set(h.InternalPath(), xattrs.SpaceNameAttr, []byte("username")); err != nil {
+	if err = xattrs.Set(h.InternalPath(), xattrs.SpaceNameAttr, "username"); err != nil {
 		return nil, err
 	}
 

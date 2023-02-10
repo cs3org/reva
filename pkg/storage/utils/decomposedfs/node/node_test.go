@@ -327,6 +327,8 @@ var _ = Describe("Node", func() {
 			})
 			Expect(err).ToNot(HaveOccurred())
 			// checking that the path "subpath" is denied properly
+			subfolder, err = node.ReadNode(env.Ctx, env.Lookup, subfolder.SpaceID, subfolder.ID, false)
+			Expect(err).ToNot(HaveOccurred())
 			subfolderActual, denied := subfolder.PermissionSet(env.Ctx)
 			subfolderExpected := ocsconv.NewDeniedRole().CS3ResourcePermissions()
 			Expect(grants.PermissionsEqual(&subfolderActual, subfolderExpected)).To(BeTrue())
