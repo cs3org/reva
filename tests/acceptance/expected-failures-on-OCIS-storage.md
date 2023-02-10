@@ -194,9 +194,7 @@ File and sync features in a shared scenario
 #### [Public link enforce permissions](https://github.com/owncloud/ocis/issues/1269)
 
 -   [coreApiSharePublicLink1/accessToPublicLinkShare.feature:10](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiSharePublicLink1/accessToPublicLinkShare.feature#L10)
--   [coreApiSharePublicLink1/accessToPublicLinkShare.feature:21](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiSharePublicLink1/accessToPublicLinkShare.feature#L21)
--   [coreApiSharePublicLink1/accessToPublicLinkShare.feature:31](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiSharePublicLink1/accessToPublicLinkShare.feature#L31)
--   [coreApiSharePublicLink1/accessToPublicLinkShare.feature:47](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiSharePublicLink1/accessToPublicLinkShare.feature#L47)
+-   [coreApiSharePublicLink1/accessToPublicLinkShare.feature:29](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiSharePublicLink1/accessToPublicLinkShare.feature#L29)
 
 #### [creating public links with permissions fails](https://github.com/owncloud/product/issues/252)
 
