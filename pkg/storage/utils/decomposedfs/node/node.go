@@ -541,12 +541,7 @@ func (n *Node) SetEtag(ctx context.Context, val string) (err error) {
 	sublog := appctx.GetLogger(ctx).With().Interface("node", n).Logger()
 	var tmTime time.Time
 	if tmTime, err = n.GetTMTime(); err != nil {
-		// no tmtime, use mtime
-		var fi os.FileInfo
-		if fi, err = os.Lstat(n.InternalPath()); err != nil {
-			return
-		}
-		tmTime = fi.ModTime()
+		return
 	}
 	var etag string
 	if etag, err = calculateEtag(n.ID, tmTime); err != nil {
@@ -692,8 +687,7 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 
 	var tmTime time.Time
 	if tmTime, err = n.GetTMTime(); err != nil {
-		// no tmtime, use mtime
-		tmTime = fi.ModTime()
+		sublog.Debug().Err(err).Msg("could not get tmtime")
 	}
 
 	// use temporary etag if it is set
@@ -909,12 +903,24 @@ func (n *Node) HasPropagation() (propagation bool) {
 }
 
 // GetTMTime reads the tmtime from the extended attributes
-func (n *Node) GetTMTime() (tmTime time.Time, err error) {
-	var b string
-	if b, err = n.Xattr(xattrs.TreeMTimeAttr); err != nil {
-		return
+func (n *Node) GetTMTime() (time.Time, error) {
+	b, err := n.Xattr(xattrs.TreeMTimeAttr)
+	if err == nil {
+		return time.Parse(time.RFC3339Nano, b)
 	}
-	return time.Parse(time.RFC3339Nano, b)
+
+	// no tmtime, use mtime
+	fi, err := os.Lstat(n.InternalPath())
+	if err != nil {
+		return time.Time{}, err
+	}
+	if n.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
+		childrenFi, err := os.Stat(n.ChildrenPath())
+		if err != nil && fi.ModTime().Before(childrenFi.ModTime()) {
+			fi = childrenFi
+		}
+	}
+	return fi.ModTime(), nil
 }
 
 // SetTMTime writes the UTC tmtime to the extended attributes or removes the attribute if nil is passed
