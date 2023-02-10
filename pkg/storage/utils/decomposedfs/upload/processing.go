@@ -403,6 +403,7 @@ func updateExistingNode(upload *Upload, n *node.Node, spaceID string, fsize uint
 	// copy blob metadata to version node
 	if err := xattrs.CopyMetadataWithSourceLock(targetPath, upload.versionsPath, func(attributeName string) bool {
 		return strings.HasPrefix(attributeName, xattrs.ChecksumPrefix) ||
+			attributeName == xattrs.TypeAttr ||
 			attributeName == xattrs.BlobIDAttr ||
 			attributeName == xattrs.BlobsizeAttr
 	}, lock); err != nil {

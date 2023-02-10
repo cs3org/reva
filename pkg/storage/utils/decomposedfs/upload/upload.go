@@ -377,6 +377,7 @@ func (upload *Upload) cleanup(cleanNode, cleanBin, cleanInfo bool) {
 
 			if err := xattrs.CopyMetadata(upload.Node.InternalPath(), p, func(attributeName string) bool {
 				return strings.HasPrefix(attributeName, xattrs.ChecksumPrefix) ||
+					attributeName == xattrs.TypeAttr ||
 					attributeName == xattrs.BlobIDAttr ||
 					attributeName == xattrs.BlobsizeAttr
 			}); err != nil {

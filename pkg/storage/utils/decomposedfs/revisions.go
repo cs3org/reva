@@ -227,6 +227,7 @@ func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Refer
 		// copy blob metadata from node to new revision node
 		err = xattrs.CopyMetadata(nodePath, newRevisionPath, func(attributeName string) bool {
 			return strings.HasPrefix(attributeName, xattrs.ChecksumPrefix) || // for checksums
+				attributeName == xattrs.TypeAttr ||
 				attributeName == xattrs.BlobIDAttr ||
 				attributeName == xattrs.BlobsizeAttr
 		})
@@ -245,6 +246,7 @@ func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Refer
 		restoredRevisionPath := fs.lu.InternalPath(spaceID, revisionKey)
 		err = xattrs.CopyMetadata(restoredRevisionPath, nodePath, func(attributeName string) bool {
 			return strings.HasPrefix(attributeName, xattrs.ChecksumPrefix) ||
+				attributeName == xattrs.TypeAttr ||
 				attributeName == xattrs.BlobIDAttr ||
 				attributeName == xattrs.BlobsizeAttr
 		})
