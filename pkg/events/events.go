@@ -22,6 +22,7 @@ import (
 	"log"
 	"reflect"
 
+	"github.com/google/uuid"
 	"go-micro.dev/v4/events"
 )
 
@@ -34,6 +35,9 @@ var (
 
 	// MetadatakeyEventType is the key used for the eventtype in the metadata map of the event
 	MetadatakeyEventType = "eventtype"
+
+	// MetadatakeyEventID is the key used for the eventID in the metadata map of the event
+	MetadatakeyEventID = "eventid"
 )
 
 type (
@@ -57,12 +61,19 @@ type (
 		Publish(string, interface{}, ...events.PublishOption) error
 		Consume(string, ...events.ConsumeOption) (<-chan events.Event, error)
 	}
+
+	// Event is the envelope for events
+	Event struct {
+		Type  string
+		ID    string
+		Event interface{}
+	}
 )
 
 // Consume returns a channel that will get all events that match the given evs
 // group defines the service type: One group will get exactly one copy of a event that is emitted
 // NOTE: uses reflect on initialization
-func Consume(s Consumer, group string, evs ...Unmarshaller) (<-chan interface{}, error) {
+func Consume(s Consumer, group string, evs ...Unmarshaller) (<-chan Event, error) {
 	c, err := s.Consume(MainQueueName, events.WithGroup(group))
 	if err != nil {
 		return nil, err
@@ -74,7 +85,7 @@ func Consume(s Consumer, group string, evs ...Unmarshaller) (<-chan interface{},
 		registeredEvents[typ.String()] = e
 	}
 
-	outchan := make(chan interface{})
+	outchan := make(chan Event)
 	go func() {
 		for {
 			e := <-c
@@ -90,7 +101,32 @@ func Consume(s Consumer, group string, evs ...Unmarshaller) (<-chan interface{},
 				continue
 			}
 
-			outchan <- event
+			outchan <- Event{
+				Type:  et,
+				ID:    e.Metadata[MetadatakeyEventID],
+				Event: event,
+			}
+		}
+	}()
+	return outchan, nil
+}
+
+// ConsumeAll allows consuming all events. Note that unmarshalling must be done manually in this case, therefore Event.Event will always be of type []byte
+func ConsumeAll(s Consumer, group string) (<-chan Event, error) {
+	c, err := s.Consume(MainQueueName, events.WithGroup(group))
+	if err != nil {
+		return nil, err
+	}
+
+	outchan := make(chan Event)
+	go func() {
+		for {
+			e := <-c
+			outchan <- Event{
+				Type:  e.Metadata[MetadatakeyEventType],
+				ID:    e.Metadata[MetadatakeyEventID],
+				Event: e.Payload,
+			}
 		}
 	}()
 	return outchan, nil
@@ -102,5 +138,6 @@ func Publish(s Publisher, ev interface{}) error {
 	evName := reflect.TypeOf(ev).String()
 	return s.Publish(MainQueueName, ev, events.WithMetadata(map[string]string{
 		MetadatakeyEventType: evName,
+		MetadatakeyEventID:   uuid.New().String(),
 	}))
 }
