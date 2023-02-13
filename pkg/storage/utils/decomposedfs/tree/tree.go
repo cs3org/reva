@@ -1023,6 +1023,18 @@ func (t *Tree) readRecycleItem(ctx context.Context, spaceID, key, path string) (
 
 	var attrStr string
 	// lookup blobID in extended attributes
+	if attrStr, err = xattrs.Get(deletedNodePath, xattrs.TypeAttr); err == nil {
+		var typeAttr int64
+		typeAttr, err = strconv.ParseInt(attrStr, 10, 64)
+		if err != nil {
+			return
+		}
+		recycleNode.Type = provider.ResourceType(typeAttr)
+	} else {
+		return
+	}
+
+	// lookup blobID in extended attributes
 	if attrStr, err = xattrs.Get(deletedNodePath, xattrs.BlobIDAttr); err == nil {
 		recycleNode.BlobID = attrStr
 	} else {
