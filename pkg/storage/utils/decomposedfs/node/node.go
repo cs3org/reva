@@ -585,15 +585,8 @@ func (n *Node) SetFavorite(uid *userpb.UserId, val string) error {
 
 // IsDir returns true if the node is a directory
 func (n *Node) IsDir() bool {
-	nodePath := n.InternalPath()
-	if fi, err := os.Lstat(nodePath); err == nil {
-		if fi.IsDir() {
-			if _, err := n.Xattr(xattrs.ReferenceAttr); err != nil {
-				return true
-			}
-		}
-	}
-	return false
+	attr, _ := n.Xattr(xattrs.TypeAttr)
+	return attr == strconv.FormatInt(int64(provider.ResourceType_RESOURCE_TYPE_CONTAINER), 10)
 }
 
 // AsResourceInfo return the node as CS3 ResourceInfo
