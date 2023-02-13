@@ -42,6 +42,7 @@ func init() {
 	registry.Register("sql", New)
 }
 
+// New creates a Repository with a SQL driver.
 func New(c map[string]interface{}) (share.Repository, error) {
 	conf, err := parseConfig(c)
 	if err != nil {
@@ -80,7 +81,7 @@ func parseConfig(conf map[string]interface{}) (*config, error) {
 	return &c, nil
 }
 
-func formatUserId(u *userpb.UserId) string {
+func formatUserID(u *userpb.UserId) string {
 	return fmt.Sprintf("%s@%s", u.OpaqueId, u.Idp)
 }
 
@@ -128,10 +129,10 @@ func storeAccessMethod(tx *sql.Tx, shareID int64, t AccessMethod) (int64, error)
 
 // StoreShare stores a share.
 func (m *mgr) StoreShare(ctx context.Context, s *ocm.Share) (*ocm.Share, error) {
-	if err := Transaction(ctx, m.db, func(tx *sql.Tx) error {
+	if err := transaction(ctx, m.db, func(tx *sql.Tx) error {
 		// store the share
 		query := "INSERT INTO ocm_shares SET token=?,fileid_prefix=?,item_source=?,name=?,share_with=?,owner=?,initiator=?,ctime=?,mtime=?,type=?"
-		params := []any{s.Token, s.ResourceId.StorageId, s.ResourceId.OpaqueId, s.Name, formatUserId(s.Grantee.GetUserId()), s.Owner.OpaqueId, s.Creator.OpaqueId, s.Ctime.Seconds, s.Mtime.Seconds, convertFromCS3OCMShareType(s.ShareType)}
+		params := []any{s.Token, s.ResourceId.StorageId, s.ResourceId.OpaqueId, s.Name, formatUserID(s.Grantee.GetUserId()), s.Owner.OpaqueId, s.Creator.OpaqueId, s.Ctime.Seconds, s.Mtime.Seconds, convertFromCS3OCMShareType(s.ShareType)}
 
 		if s.Expiration != nil {
 			query += ",expiration=?"
@@ -168,7 +169,6 @@ func (m *mgr) StoreShare(ctx context.Context, s *ocm.Share) (*ocm.Share, error) 
 
 		s.Id = &ocm.ShareId{OpaqueId: strconv.FormatInt(id, 10)}
 		return nil
-
 	}); err != nil {
 		// check if the share already exists in the db
 		// https://dev.mysql.com/doc/mysql-errors/8.0/en/server-error-reference.html#error_er_dup_unique
@@ -182,7 +182,9 @@ func (m *mgr) StoreShare(ctx context.Context, s *ocm.Share) (*ocm.Share, error) 
 	return s, nil
 }
 
-func Transaction(ctx context.Context, db *sql.DB, f func(*sql.Tx) error) error {
+// this func will run f in a transaction, committing if no errors
+// rolling back if there were error running f.
+func transaction(ctx context.Context, db *sql.DB, f func(*sql.Tx) error) error {
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -191,9 +193,9 @@ func Transaction(ctx context.Context, db *sql.DB, f func(*sql.Tx) error) error {
 	var txErr error
 	defer func() {
 		if txErr == nil {
-			tx.Commit()
+			_ = tx.Commit()
 		} else {
-			tx.Rollback()
+			_ = tx.Rollback()
 		}
 	}()
 
@@ -242,7 +244,7 @@ func (m *mgr) getByKey(ctx context.Context, user *userpb.User, key *ocm.ShareKey
 	query := "SELECT id, token, fileid_prefix, item_source, name, share_with, owner, initiator, ctime, mtime, expiration, type FROM ocm_shares WHERE owner=? AND fileid_prefix=? AND item_source=? AND share_with=? AND (initiator=? OR owner=?)"
 
 	var s dbShare
-	if err := m.db.QueryRowContext(ctx, query, key.Owner.OpaqueId, key.ResourceId.StorageId, key.ResourceId.OpaqueId, formatUserId(key.Grantee.GetUserId()), user.Id.OpaqueId, user.Id.OpaqueId).Scan(&s.ID, &s.Token, &s.Prefix, &s.ItemSource, &s.Name, &s.ShareWith, &s.Owner, &s.Initiator, &s.Ctime, &s.Mtime, &s.Expiration, &s.ShareType); err != nil {
+	if err := m.db.QueryRowContext(ctx, query, key.Owner.OpaqueId, key.ResourceId.StorageId, key.ResourceId.OpaqueId, formatUserID(key.Grantee.GetUserId()), user.Id.OpaqueId, user.Id.OpaqueId).Scan(&s.ID, &s.Token, &s.Prefix, &s.ItemSource, &s.Name, &s.ShareWith, &s.Owner, &s.Initiator, &s.Ctime, &s.Mtime, &s.Expiration, &s.ShareType); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, share.ErrShareNotFound
 		}
@@ -300,7 +302,7 @@ func (m *mgr) deleteByID(ctx context.Context, user *userpb.User, id *ocm.ShareId
 
 func (m *mgr) deleteByKey(ctx context.Context, user *userpb.User, key *ocm.ShareKey) error {
 	query := "DELETE FROM ocm_shares WHERE owner=? AND fileid_prefix=? AND item_source=? AND share_with=? AND (initiator=? OR owner=?)"
-	_, err := m.db.ExecContext(ctx, query, key.Owner.OpaqueId, key.ResourceId.StorageId, key.ResourceId.OpaqueId, formatUserId(key.Grantee.GetUserId()), user.Id.OpaqueId, user.Id.OpaqueId)
+	_, err := m.db.ExecContext(ctx, query, key.Owner.OpaqueId, key.ResourceId.StorageId, key.ResourceId.OpaqueId, formatUserID(key.Grantee.GetUserId()), user.Id.OpaqueId, user.Id.OpaqueId)
 	return err
 }
 
@@ -490,9 +492,9 @@ func storeProtocol(tx *sql.Tx, shareID int64, p Protocol) (int64, error) {
 
 // StoreReceivedShare stores a received share.
 func (m *mgr) StoreReceivedShare(ctx context.Context, s *ocm.ReceivedShare) (*ocm.ReceivedShare, error) {
-	if err := Transaction(ctx, m.db, func(tx *sql.Tx) error {
+	if err := transaction(ctx, m.db, func(tx *sql.Tx) error {
 		query := "INSERT INTO ocm_received_shares SET name=?,fileid_prefix=?,item_source=?,share_with=?,owner=?,initiator=?,ctime=?,mtime=?,type=?,state=?"
-		params := []any{s.Name, s.ResourceId.StorageId, s.ResourceId.OpaqueId, s.Grantee.GetUserId().OpaqueId, formatUserId(s.Owner), formatUserId(s.Creator), s.Ctime.Seconds, s.Mtime.Seconds, convertFromCS3OCMShareType(s.ShareType), convertFromCS3OCMShareState(s.State)}
+		params := []any{s.Name, s.ResourceId.StorageId, s.ResourceId.OpaqueId, s.Grantee.GetUserId().OpaqueId, formatUserID(s.Owner), formatUserID(s.Creator), s.Ctime.Seconds, s.Mtime.Seconds, convertFromCS3OCMShareType(s.ShareType), convertFromCS3OCMShareState(s.State)}
 
 		if s.Expiration != nil {
 			query += ",expiration=?"
@@ -642,7 +644,7 @@ func (m *mgr) getReceivedByID(ctx context.Context, user *userpb.User, id *ocm.Sh
 
 func (m *mgr) getReceivedByKey(ctx context.Context, user *userpb.User, key *ocm.ShareKey) (*ocm.ReceivedShare, error) {
 	query := "SELECT id, name, fileid_prefix, item_source, share_with, owner, initiator, ctime, mtime, expiration, type, state FROM ocm_received_shares WHERE owner=? AND fileid_prefix=? AND item_source=? AND share_with=?"
-	params := []any{formatUserId(key.Owner), key.ResourceId.StorageId, key.ResourceId.OpaqueId, key.Grantee.GetUserId().OpaqueId}
+	params := []any{formatUserID(key.Owner), key.ResourceId.StorageId, key.ResourceId.OpaqueId, key.Grantee.GetUserId().OpaqueId}
 
 	var s dbReceivedShare
 	if err := m.db.QueryRowContext(ctx, query, params...).Scan(&s.ID, &s.Name, &s.Prefix, &s.ItemSource, &s.ShareWith, &s.Owner, &s.Initiator, &s.Ctime, &s.Mtime, &s.Expiration, &s.Type, &s.State); err != nil {

@@ -31,34 +31,52 @@ import (
 	"github.com/cs3org/reva/pkg/ocm/share"
 )
 
+// ShareType is the type of the share.
 type ShareType int
 
+// AccessMethod is method granted by the sharer to access
+// the shared resource.
 type AccessMethod int
 
+// Protocol is the protocol the recipient of the share
+// uses to access the shared resource.
 type Protocol int
 
+// ShareState is the state of the share.
 type ShareState int
 
 const (
+	// ShareTypeUser is used for a share to an user.
 	ShareTypeUser ShareType = iota
+	// ShareTypeGroup is used for a share to a group.
 	ShareTypeGroup
 )
 
 const (
+	// ShareStatePending is the state for a pending share.
 	ShareStatePending ShareState = iota
+	// ShareStateAccepted is the share for an accepted share.
 	ShareStateAccepted
+	// ShareStateRejected is the share for a rejected share.
 	ShareStateRejected
 )
 
 const (
+	// WebDAVAccessMethod indicates an access using WebDAV to the share.
 	WebDAVAccessMethod AccessMethod = iota
+	// WebappAccessMethod indicates an access using a collaborative
+	// application to the share.
 	WebappAccessMethod
+	// TransferAccessMethod indicates a share for a transfer.
 	TransferAccessMethod
 )
 
 const (
+	// WebDAVProtocol is the WebDav protocol.
 	WebDAVProtocol Protocol = iota
+	// WebappProtcol is the Webapp protocol.
 	WebappProtcol
+	// TransferProtocol is the Transfer protocol.
 	TransferProtocol
 )
 
@@ -130,7 +148,7 @@ type dbReceivedShare struct {
 	Mtime      int
 	Expiration int
 	Type       ShareType
-	State      ShareState // TODO: defined a type
+	State      ShareState
 }
 
 type dbProtocol struct {
