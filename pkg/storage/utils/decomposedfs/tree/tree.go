@@ -27,6 +27,7 @@ import (
 	iofs "io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -537,6 +538,18 @@ func (t *Tree) Delete(ctx context.Context, n *node.Node) (err error) {
 		_ = n.RemoveXattr(xattrs.TrashOriginAttr)
 		return
 	}
+	// // Also move children directories if needed
+	if n.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
+		err = os.Rename(nodePath+".children", trashPath+".children")
+		if err != nil {
+			// To roll back changes
+			// TODO remove symlink
+			// Roll back changes
+			_ = n.RemoveXattr(xattrs.TrashOriginAttr)
+			_ = os.Rename(trashPath, nodePath)
+			return
+		}
+	}
 
 	// Remove lock file if it exists
 	_ = os.Remove(n.LockFilePath())
@@ -603,6 +616,12 @@ func (t *Tree) RestoreRecycleItemFunc(ctx context.Context, spaceid, key, trashPa
 			err = os.Rename(deletedNodePath, nodePath)
 			if err != nil {
 				return err
+			}
+			if recycleNode.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
+				err = os.Rename(filepath.Clean(deletedNodePath)+".children", filepath.Clean(nodePath)+".children")
+				if err != nil {
+					return err
+				}
 			}
 		}
 
@@ -957,63 +976,26 @@ func (t *Tree) createNode(n *node.Node) (err error) {
 	return n.WriteAllNodeMetadata()
 }
 
-// readTrashLink returns nodeID and timestamp
-func readTrashLink(path string) (string, string, error) {
-	link, err := os.Readlink(path)
-	if err != nil {
-		return "", "", err
-	}
-	// ../../../../../nodes/e5/6c/75/a8/-d235-4cbb-8b4e-48b6fd0f2094.T.2022-02-16T14:38:11.769917408Z
-	// TODO use filepath.Separator to support windows
-	link = strings.ReplaceAll(link, "/", "")
-	// ..........nodese56c75a8-d235-4cbb-8b4e-48b6fd0f2094.T.2022-02-16T14:38:11.769917408Z
-	if link[0:15] != "..........nodes" || link[51:54] != ".T." {
-		return "", "", errtypes.InternalError("malformed trash link")
-	}
-	return link[15:51], link[54:], nil
-}
-
-// readTrashChildLink returns nodeID
-func readTrashChildLink(path string) (string, error) {
-	link, err := os.Readlink(path)
-	if err != nil {
-		return "", err
-	}
-	// ../../../../../e5/6c/75/a8/-d235-4cbb-8b4e-48b6fd0f2094
-	// TODO use filepath.Separator to support windows
-	link = strings.ReplaceAll(link, "/", "")
-	// ..........e56c75a8-d235-4cbb-8b4e-48b6fd0f2094
-	if link[0:10] != ".........." {
-		return "", errtypes.InternalError("malformed trash child link")
-	}
-	return link[10:], nil
-}
-
 // TODO refactor the returned params into Node properties? would make all the path transformations go away...
 func (t *Tree) readRecycleItem(ctx context.Context, spaceID, key, path string) (recycleNode *node.Node, trashItem string, deletedNodePath string, origin string, err error) {
 	if key == "" {
 		return nil, "", "", "", errtypes.InternalError("key is empty")
 	}
 
-	var nodeID, timeSuffix string
+	var nodeID string
 
-	trashItem = filepath.Join(t.lookup.InternalRoot(), "spaces", lookup.Pathify(spaceID, 1, 2), "trash", lookup.Pathify(key, 4, 2), path)
-	if path == "" || path == "/" {
-		nodeID, timeSuffix, err = readTrashLink(trashItem)
-		if err != nil {
-			appctx.GetLogger(ctx).Error().Err(err).Str("trashItem", trashItem).Msg("error reading trash link")
-			return
-		}
-		deletedNodePath = t.lookup.InternalPath(spaceID, nodeID) + node.TrashIDDelimiter + timeSuffix
-	} else {
-		// children of a trashed node are in the nodes folder
-		nodeID, err = readTrashChildLink(trashItem)
-		if err != nil {
-			appctx.GetLogger(ctx).Error().Err(err).Str("trashItem", trashItem).Msg("error reading trash child link")
-			return
-		}
-		deletedNodePath = t.lookup.InternalPath(spaceID, nodeID)
+	trashItem = filepath.Join(t.lookup.InternalRoot(), "spaces", lookup.Pathify(spaceID, 1, 2), "trash", lookup.Pathify(key, 4, 2))
+	resolvedTrashItem, err := filepath.EvalSymlinks(trashItem)
+	if err != nil {
+		return
 	}
+	deletedNodePath, err = Traverse(resolvedTrashItem, path)
+	if err != nil {
+		return
+	}
+	nodeIDRegep := regexp.MustCompile(`.*/nodes/(.*)`)
+	nodeID = nodeIDRegep.ReplaceAllString(deletedNodePath, "$1")
+	nodeID = strings.ReplaceAll(nodeID, "/", "")
 
 	recycleNode = node.New(spaceID, nodeID, "", "", 0, "", nil, t.lookup)
 	recycleNode.SpaceRoot, err = node.ReadNode(ctx, t.lookup, spaceID, spaceID, false)
@@ -1098,4 +1080,23 @@ func appendChildren(ctx context.Context, n *node.Node, nodes []*node.Node) ([]*n
 	}
 
 	return nodes, nil
+}
+
+func Traverse(root, path string) (string, error) {
+	path = strings.TrimPrefix(path, "/")
+	if path == "" {
+		return root, nil
+	}
+	var err error
+	resPath := root
+
+	steps := strings.Split(path, "/")
+	for _, step := range steps {
+		link := filepath.Join(resPath+".children", step)
+		resPath, err = filepath.EvalSymlinks(link)
+		if err != nil {
+			return "", err
+		}
+	}
+	return resPath, nil
 }

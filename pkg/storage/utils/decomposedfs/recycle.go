@@ -33,6 +33,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/lookup"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/tree"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/pkg/errors"
@@ -80,16 +81,20 @@ func (fs *Decomposedfs) ListRecycle(ctx context.Context, ref *provider.Reference
 	// build a list of trash items relative to the given trash root and path
 	items := make([]*provider.RecycleItem, 0)
 
-	trashRootPath := filepath.Join(fs.getRecycleRoot(ctx, spaceID), lookup.Pathify(key, 4, 2))
-	_, timeSuffix, err := readTrashLink(trashRootPath)
+	trashRootPath := filepath.Join(fs.getRecycleRoot(spaceID), lookup.Pathify(key, 4, 2))
+	originalPath, _, timeSuffix, err := readTrashLink(trashRootPath)
 	if err != nil {
 		sublog.Error().Err(err).Str("trashRoot", trashRootPath).Msg("error reading trash link")
 		return nil, err
 	}
 
 	origin := ""
+	attrs, err := xattrs.All(originalPath)
+	if err != nil {
+		return items, err
+	}
 	// lookup origin path in extended attributes
-	if attrBytes, err := xattrs.Get(trashRootPath, xattrs.TrashOriginAttr); err == nil {
+	if attrBytes, ok := attrs[xattrs.TrashOriginAttr]; ok {
 		origin = string(attrBytes)
 	} else {
 		sublog.Error().Err(err).Str("space", spaceID).Msg("could not read origin path, skipping")
@@ -107,36 +112,19 @@ func (fs *Decomposedfs) ListRecycle(ctx context.Context, ref *provider.Reference
 		sublog.Error().Err(err).Msg("could not parse time format, ignoring")
 	}
 
-	trashItemPath := filepath.Join(trashRootPath, relativePath)
-
-	f, err := os.Open(trashItemPath)
-	if err != nil {
-		if errors.Is(err, iofs.ErrNotExist) {
-			return items, nil
-		}
-		return nil, errors.Wrapf(err, "recycle: error opening trashItemPath %s", trashItemPath)
-	}
-	defer f.Close()
-
-	attrs, err := xattrs.All(trashItemPath)
-	if err != nil {
-		return items, err
-	}
-
 	nodeType, err := strconv.ParseInt(attrs[xattrs.TypeAttr], 10, 64)
 	if err != nil {
 		return items, err
 	}
 	if provider.ResourceType(nodeType) != provider.ResourceType_RESOURCE_TYPE_CONTAINER {
 		// this is the case when we want to directly list a file in the trashbin
-		md, err := f.Stat()
+		blobsize, err := strconv.ParseInt(attrs[xattrs.BlobsizeAttr], 10, 64)
 		if err != nil {
-			return nil, err
+			return items, err
 		}
-
 		item := &provider.RecycleItem{
 			Type:         provider.ResourceType(nodeType),
-			Size:         uint64(md.Size()),
+			Size:         uint64(blobsize),
 			Key:          filepath.Join(key, relativePath),
 			DeletionTime: deletionTime,
 			Ref: &provider.Reference{
@@ -148,17 +136,31 @@ func (fs *Decomposedfs) ListRecycle(ctx context.Context, ref *provider.Reference
 	}
 
 	// we have to read the names and stat the path to follow the symlinks
-	names, err := f.Readdirnames(0)
+	if err != nil {
+		return nil, err
+	}
+	childrenPath, err := tree.Traverse(originalPath, relativePath)
+	if err != nil {
+		return nil, err
+	}
+	childrenPath += ".children"
+
+	childrenDir, err := os.Open(childrenPath)
+	if err != nil {
+		return nil, err
+	}
+
+	names, err := childrenDir.Readdirnames(0)
 	if err != nil {
 		return nil, err
 	}
 	for _, name := range names {
-		md, err := os.Stat(filepath.Join(trashItemPath, name))
+		md, err := os.Stat(filepath.Join(childrenPath, name))
 		if err != nil {
 			sublog.Error().Err(err).Str("name", name).Msg("could not stat, skipping")
 			continue
 		}
-		attrs, err := xattrs.All(filepath.Join(trashItemPath, name))
+		attrs, err := xattrs.All(filepath.Join(childrenPath, name))
 		if err != nil {
 			sublog.Error().Err(err).Str("name", name).Msg("could not get extended attributes, skipping")
 			continue
@@ -184,40 +186,43 @@ func (fs *Decomposedfs) ListRecycle(ctx context.Context, ref *provider.Reference
 	return items, nil
 }
 
-// readTrashLink returns nodeID and timestamp
-func readTrashLink(path string) (string, string, error) {
+// readTrashLink returns path, nodeID and timestamp
+func readTrashLink(path string) (string, string, string, error) {
 	link, err := os.Readlink(path)
 	if err != nil {
-		return "", "", err
+		return "", "", "", err
+	}
+	resolved, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		return "", "", "", err
 	}
 	// ../../../../../nodes/e5/6c/75/a8/-d235-4cbb-8b4e-48b6fd0f2094.T.2022-02-16T14:38:11.769917408Z
 	// TODO use filepath.Separator to support windows
 	link = strings.ReplaceAll(link, "/", "")
 	// ..........nodese56c75a8-d235-4cbb-8b4e-48b6fd0f2094.T.2022-02-16T14:38:11.769917408Z
 	if link[0:15] != "..........nodes" || link[51:54] != node.TrashIDDelimiter {
-		return "", "", errtypes.InternalError("malformed trash link")
+		return "", "", "", errtypes.InternalError("malformed trash link")
 	}
-	return link[15:51], link[54:], nil
+	return resolved, link[15:51], link[54:], nil
 }
 
 func (fs *Decomposedfs) listTrashRoot(ctx context.Context, spaceID string) ([]*provider.RecycleItem, error) {
 	log := appctx.GetLogger(ctx)
 	items := make([]*provider.RecycleItem, 0)
 
-	trashRoot := fs.getRecycleRoot(ctx, spaceID)
+	trashRoot := fs.getRecycleRoot(spaceID)
 	matches, err := filepath.Glob(trashRoot + "/*/*/*/*/*")
 	if err != nil {
 		return nil, err
 	}
 
 	for _, itemPath := range matches {
-		nodeID, timeSuffix, err := readTrashLink(itemPath)
+		nodePath, nodeID, timeSuffix, err := readTrashLink(itemPath)
 		if err != nil {
 			log.Error().Err(err).Str("trashRoot", trashRoot).Str("item", itemPath).Msg("error reading trash link, skipping")
 			continue
 		}
 
-		nodePath := fs.lu.InternalPath(spaceID, nodeID) + node.TrashIDDelimiter + timeSuffix
 		md, err := os.Stat(nodePath)
 		if err != nil {
 			log.Error().Err(err).Str("trashRoot", trashRoot).Str("item", itemPath).Str("node_path", nodePath).Msg("could not stat trash item, skipping")
@@ -368,9 +373,9 @@ func (fs *Decomposedfs) EmptyRecycle(ctx context.Context, ref *provider.Referenc
 	}
 	// TODO what permission should we check? we could check the root node of the user? or the owner permissions on his home root node?
 	// The current impl will wipe your own trash. or when no user provided the trash of 'root'
-	return os.RemoveAll(fs.getRecycleRoot(ctx, ref.ResourceId.SpaceId))
+	return os.RemoveAll(fs.getRecycleRoot(ref.ResourceId.SpaceId))
 }
 
-func (fs *Decomposedfs) getRecycleRoot(ctx context.Context, spaceID string) string {
-	return filepath.Join(fs.o.Root, "spaces", lookup.Pathify(spaceID, 1, 2), "trash")
+func (fs *Decomposedfs) getRecycleRoot(spaceID string) string {
+	return filepath.Join(fs.getSpaceRoot(spaceID), "trash")
 }

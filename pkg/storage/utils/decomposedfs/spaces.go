@@ -606,7 +606,7 @@ func (fs *Decomposedfs) DeleteStorageSpace(ctx context.Context, req *provider.De
 		}
 
 		// remove space metadata
-		if err := os.RemoveAll(filepath.Join(fs.o.Root, "spaces", lookup.Pathify(spaceID, 1, 2))); err != nil {
+		if err := os.RemoveAll(fs.getSpaceRoot(spaceID)); err != nil {
 			return err
 		}
 
@@ -890,4 +890,8 @@ func mapHasKey(checkMap map[string]string, keys ...string) bool {
 		}
 	}
 	return false
+}
+
+func (fs *Decomposedfs) getSpaceRoot(spaceID string) string {
+	return filepath.Join(fs.o.Root, "spaces", lookup.Pathify(spaceID, 1, 2))
 }
