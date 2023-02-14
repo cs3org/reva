@@ -639,7 +639,12 @@ func (t *Tree) RestoreRecycleItemFunc(ctx context.Context, spaceid, key, trashPa
 		}
 
 		// delete item link in trash
-		if err = os.Remove(trashItem); err != nil {
+		resolvedTrashItem, err := filepath.EvalSymlinks(trashItem)
+		if err != nil {
+			return errors.Wrap(err, "Decomposedfs: could not resolve trash item")
+		}
+		deletePath := filepath.Join(resolvedTrashItem+".children", trashPath)
+		if err = os.Remove(deletePath); err != nil {
 			log.Error().Err(err).Str("trashItem", trashItem).Msg("error deleting trash item")
 		}
 
