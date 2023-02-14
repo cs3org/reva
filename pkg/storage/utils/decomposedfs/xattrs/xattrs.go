@@ -36,9 +36,8 @@ import (
 // A non root user can only manipulate the user. namespace, which is what
 // we will use to store ownCloud specific metadata. To prevent name
 // collisions with other apps We are going to introduce a sub namespace
-// "user.ocis."
+// "user.ocis." in the xattrs_prefix*.go files.
 const (
-	OcisPrefix    string = "user.ocis."
 	ParentidAttr  string = OcisPrefix + "parentid"
 	OwnerIDAttr   string = OcisPrefix + "owner.id"
 	OwnerIDPAttr  string = OcisPrefix + "owner.idp"
