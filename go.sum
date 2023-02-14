@@ -207,8 +207,8 @@ github.com/aws/aws-sdk-go v1.37.27/go.mod h1:hcU610XS61/+aQV88ixoOzUoG7v3b31pl2z
 github.com/aws/aws-sdk-go v1.38.35/go.mod h1:hcU610XS61/+aQV88ixoOzUoG7v3b31pl2zKMmprdro=
 github.com/aws/aws-sdk-go v1.43.11/go.mod h1:y4AeaBuwd2Lk+GepC1E9v0qOiTws0MIWAX4oIKwKHZo=
 github.com/aws/aws-sdk-go v1.44.114/go.mod h1:y4AeaBuwd2Lk+GepC1E9v0qOiTws0MIWAX4oIKwKHZo=
-github.com/aws/aws-sdk-go v1.44.192 h1:KL54vCxRd5v5XBGjnF3FelzXXwl+aWHDmDTihFmRNgM=
-github.com/aws/aws-sdk-go v1.44.192/go.mod h1:aVsgQcEevwlmQ7qHE9I3h+dtQgpqhFB+i8Phjh7fkwI=
+github.com/aws/aws-sdk-go v1.44.199 h1:hYuQmS4zLMJR9v2iOp2UOD6Vi/0V+nwyR/Uhrkrtlbc=
+github.com/aws/aws-sdk-go v1.44.199/go.mod h1:aVsgQcEevwlmQ7qHE9I3h+dtQgpqhFB+i8Phjh7fkwI=
 github.com/beevik/etree v1.1.0 h1:T0xke/WvNtMoCqgzPhkX2r4rjY3GDZFi+FjpRZY2Jbs=
 github.com/beevik/etree v1.1.0/go.mod h1:r8Aw8JqVegEf0w2fDnATrX9VpkMcyFeM0FhwO62wh+A=
 github.com/beorn7/perks v0.0.0-20180321164747-3a771d992973/go.mod h1:Dwedo/Wpr24TaqPxmxbtue+5NUziq4I4S80YR8gNf3Q=
@@ -284,6 +284,8 @@ github.com/creack/pty v1.1.9/go.mod h1:oKZEueFk5CKHvIhNR5MUki03XCEU+Q6VDXinZuGJ3
 github.com/creack/pty v1.1.11/go.mod h1:oKZEueFk5CKHvIhNR5MUki03XCEU+Q6VDXinZuGJ33E=
 github.com/cs3org/cato v0.0.0-20200828125504-e418fc54dd5e h1:tqSPWQeueWTKnJVMJffz4pz0o1WuQxJ28+5x5JgaHD8=
 github.com/cs3org/cato v0.0.0-20200828125504-e418fc54dd5e/go.mod h1:XJEZ3/EQuI3BXTp/6DUzFr850vlxq11I6satRtz0YQ4=
+github.com/cs3org/go-cs3apis v0.0.0-20230214162720-ac2ceb2ad50e h1:w4A601AS6pC+3eHb9XDZe5Ctpi4cFyoFnsed2Yisd8Q=
+github.com/cs3org/go-cs3apis v0.0.0-20230214162720-ac2ceb2ad50e/go.mod h1:UXha4TguuB52H14EMoSsCqDj7k8a/t7g4gVP+bgY5LY=
 github.com/cyberdelia/templates v0.0.0-20141128023046-ca7fffd4298c/go.mod h1:GyV+0YP4qX0UQ7r2MoYZ+AvYDp12OF5yg4q8rGnyNh4=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
@@ -341,8 +343,6 @@ github.com/ghodss/yaml v1.0.0/go.mod h1:4dBDuWmgqj2HViK6kFavaiC9ZROes6MMH2rRYeME
 github.com/gliderlabs/ssh v0.2.2/go.mod h1:U7qILu1NlMHj9FlMhZLlkCdDnU1DBEAqr0aevW3Awn0=
 github.com/glpatcern/go-mime v0.0.0-20221026162842-2a8d71ad17a9 h1:3um08ooi0/lyRmK2eE1XTKmRQHDzPu0IvpCPMljyMZ8=
 github.com/glpatcern/go-mime v0.0.0-20221026162842-2a8d71ad17a9/go.mod h1:EJaddanP+JfU3UkVvn0rYYF3b/gD7eZRejbTHqiQExA=
-github.com/gmgigi96/go-cs3apis v0.0.0-20230208123149-2678adc8f59e h1:Vickon2JEEHSnMso1yMQ25pmKqSKCItzD6PH4BW/SPk=
-github.com/gmgigi96/go-cs3apis v0.0.0-20230208123149-2678adc8f59e/go.mod h1:UXha4TguuB52H14EMoSsCqDj7k8a/t7g4gVP+bgY5LY=
 github.com/go-acme/lego/v4 v4.4.0/go.mod h1:l3+tFUFZb590dWcqhWZegynUthtaHJbG2fevUpoOOE0=
 github.com/go-asn1-ber/asn1-ber v1.5.4 h1:vXT6d/FNDiELJnLb6hGNa309LMsrCoYFvpwHDF0+Y1A=
 github.com/go-asn1-ber/asn1-ber v1.5.4/go.mod h1:hEBeB/ic+5LoWskz+yKT7vGhhPYkProFKoKdwZRWMe0=

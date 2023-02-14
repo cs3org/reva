@@ -30,7 +30,6 @@ import (
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	datatx "github.com/cs3org/go-cs3apis/cs3/tx/v1beta1"
-	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
@@ -223,25 +222,31 @@ func (s *svc) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateReceive
 					var srcEndpointScheme string
 					for _, s := range meshProvider.ProviderInfo.Services {
 						if strings.ToLower(s.Endpoint.Type.Name) == "webdav" {
-							endpointURL, err := url.Parse(s.Endpoint.Path)
-							if err != nil {
-								log.Err(err).Msg("gateway: error calling UpdateReceivedShare: unable to parse webdav endpoint " + s.Endpoint.Path)
+							srcWebdavEndpointURL, err := url.Parse(s.Endpoint.Path)
+							if err != nil || srcWebdavEndpointURL.Host == "" {
+								log.Err(err).Msg("gateway: error calling UpdateReceivedShare: unable to parse webdav endpoint \"" + s.Endpoint.Path + "\" into URL structure")
 								return &ocm.UpdateReceivedOCMShareResponse{
 									Status: &rpc.Status{Code: rpc.Code_CODE_INTERNAL},
 								}, nil
 							}
-							urlServiceHostFull, err := url.Parse(s.Host)
+							var srcWebdavHostURLString string
+							if strings.Contains(s.Host, "://") {
+								srcWebdavHostURLString = s.Host
+							} else {
+								srcWebdavHostURLString = "http://" + s.Host
+							}
+							srcWebdavHostURL, err := url.Parse(srcWebdavHostURLString)
 							if err != nil {
-								log.Err(err).Msg("gateway: error calling UpdateReceivedShare: unable to parse webdav service host " + s.Host)
+								log.Err(err).Msg("gateway: error calling UpdateReceivedShare: unable to parse webdav service host \"" + s.Host + "\" into URL structure")
 								return &ocm.UpdateReceivedOCMShareResponse{
 									Status: &rpc.Status{Code: rpc.Code_CODE_INTERNAL},
 								}, nil
 							}
-							srcServiceHost = urlServiceHostFull.Host + urlServiceHostFull.Path
+							srcServiceHost = srcWebdavHostURL.Host + srcWebdavHostURL.Path
 							// optional prefix must only appear in target url path:
 							// http://...token...@reva.eu/prefix/?name=remote.php/webdav/home/...
-							srcEndpointPath = strings.TrimPrefix(endpointURL.Path, urlServiceHostFull.Path)
-							srcEndpointScheme = endpointURL.Scheme
+							srcEndpointPath = strings.TrimPrefix(srcWebdavEndpointURL.Path, srcWebdavHostURL.Path)
+							srcEndpointScheme = srcWebdavEndpointURL.Scheme
 							break
 						}
 					}
@@ -283,7 +288,7 @@ func (s *svc) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateReceive
 					}
 					destWebdavEndpointURL, err := url.Parse(destWebdavEndpoint)
 					if err != nil {
-						log.Err(err).Msg("gateway: error calling UpdateReceivedShare: unable to parse webdav endpoint " + destWebdavEndpoint)
+						log.Err(err).Msg("gateway: error calling UpdateReceivedShare: unable to parse webdav endpoint \"" + destWebdavEndpoint + "\" into URL structure")
 						return &ocm.UpdateReceivedOCMShareResponse{
 							Status: &rpc.Status{Code: rpc.Code_CODE_INTERNAL},
 						}, nil
@@ -295,17 +300,23 @@ func (s *svc) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateReceive
 							Status: &rpc.Status{Code: rpc.Code_CODE_INTERNAL},
 						}, nil
 					}
-					urlServiceHostFull, err := url.Parse(destWebdavHost)
+					var dstWebdavURLString string
+					if strings.Contains(destWebdavHost, "://") {
+						dstWebdavURLString = destWebdavHost
+					} else {
+						dstWebdavURLString = "http://" + destWebdavHost
+					}
+					dstWebdavHostURL, err := url.Parse(dstWebdavURLString)
 					if err != nil {
-						log.Err(err).Msg("gateway: error calling UpdateReceivedShare: unable to parse webdav service host " + destWebdavHost)
+						log.Err(err).Msg("gateway: error calling UpdateReceivedShare: unable to parse webdav service host \"" + dstWebdavURLString + "\" into URL structure")
 						return &ocm.UpdateReceivedOCMShareResponse{
 							Status: &rpc.Status{Code: rpc.Code_CODE_INTERNAL},
 						}, nil
 					}
-					destServiceHost := urlServiceHostFull.Host + urlServiceHostFull.Path
+					destServiceHost := dstWebdavHostURL.Host + dstWebdavHostURL.Path
 					// optional prefix must only appear in target url path:
 					// http://...token...@reva.eu/prefix/?name=remote.php/webdav/home/...
-					destEndpointPath := strings.TrimPrefix(destWebdavEndpointURL.Path, urlServiceHostFull.Path)
+					destEndpointPath := strings.TrimPrefix(destWebdavEndpointURL.Path, dstWebdavHostURL.Path)
 					destEndpointScheme := destWebdavEndpointURL.Scheme
 					destToken := ctxpkg.ContextMustGetToken(ctx)
 					homeRes, err := s.GetHome(ctx, &provider.GetHomeRequest{})
@@ -318,22 +329,17 @@ func (s *svc) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateReceive
 					destPath := path.Join(destEndpointPath, homeRes.Path, s.c.DataTransfersFolder, path.Base(share.Name))
 					destTargetURI := fmt.Sprintf("%s://%s@%s?name=%s", destEndpointScheme, destToken, destServiceHost, destPath)
 
-					opaqueObj := &types.Opaque{
-						Map: map[string]*types.OpaqueEntry{
-							"shareId": {
-								Decoder: "plain",
-								Value:   []byte(share.Id.OpaqueId),
-							},
-						},
+					shareID := &ocm.ShareId{
+						OpaqueId: share.GetId().OpaqueId,
 					}
-					req := &datatx.PullTransferRequest{
+					req := &datatx.CreateTransferRequest{
 						SrcTargetUri:  srcTargetURI,
 						DestTargetUri: destTargetURI,
-						Opaque:        opaqueObj,
+						ShareId:       shareID,
 					}
-					res, err := s.PullTransfer(ctx, req)
+					res, err := s.CreateTransfer(ctx, req)
 					if err != nil {
-						log.Err(err).Msg("gateway: error calling PullTransfer")
+						log.Err(err).Msg("gateway: error calling CreateTransfer")
 						return &ocm.UpdateReceivedOCMShareResponse{
 							Status: &rpc.Status{
 								Code: rpc.Code_CODE_INTERNAL,
@@ -341,7 +347,7 @@ func (s *svc) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateReceive
 						}, err
 					}
 
-					log.Info().Msgf("gateway: PullTransfer: %v", res.TxInfo)
+					log.Info().Msgf("gateway: CreateTransfer: %v", res.TxInfo)
 
 					// do not create an OCM reference, just return
 					return &ocm.UpdateReceivedOCMShareResponse{

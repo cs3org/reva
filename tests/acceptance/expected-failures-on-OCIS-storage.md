@@ -185,9 +185,7 @@ File and sync features in a shared scenario
 #### [Public link enforce permissions](https://github.com/owncloud/ocis/issues/1269)
 
 - [coreApiSharePublicLink1/accessToPublicLinkShare.feature:10](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiSharePublicLink1/accessToPublicLinkShare.feature#L10)
-- [coreApiSharePublicLink1/accessToPublicLinkShare.feature:21](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiSharePublicLink1/accessToPublicLinkShare.feature#L21)
-- [coreApiSharePublicLink1/accessToPublicLinkShare.feature:31](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiSharePublicLink1/accessToPublicLinkShare.feature#L31)
-- [coreApiSharePublicLink1/accessToPublicLinkShare.feature:47](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiSharePublicLink1/accessToPublicLinkShare.feature#L47)
+- [coreApiSharePublicLink1/accessToPublicLinkShare.feature:29](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiSharePublicLink1/accessToPublicLinkShare.feature#L29)
 - [coreApiSharePublicLink1/createPublicLinkShare.feature:199](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiSharePublicLink1/createPublicLinkShare.feature#L199)
 - [coreApiSharePublicLink1/createPublicLinkShare.feature:200](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiSharePublicLink1/createPublicLinkShare.feature#L200)
 - [coreApiSharePublicLink1/createPublicLinkShare.feature:528](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiSharePublicLink1/createPublicLinkShare.feature#L528)
@@ -218,10 +216,10 @@ File and sync features in a shared scenario
 
 #### [Increasing permission of a public link of a folder that was initially shared with share+read permissions is allowed](https://github.com/owncloud/ocis/issues/3881)
 
-- [coreApiSharePublicLink2/reShareAsPublicLinkToSharesNewDav.feature:161](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiSharePublicLink2/reShareAsPublicLinkToSharesNewDav.feature#L161)
-- [coreApiSharePublicLink2/reShareAsPublicLinkToSharesNewDav.feature:162](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiSharePublicLink2/reShareAsPublicLinkToSharesNewDav.feature#L162)
-- [coreApiSharePublicLink2/reShareAsPublicLinkToSharesNewDav.feature:183](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiSharePublicLink2/reShareAsPublicLinkToSharesNewDav.feature#L183)
-- [coreApiSharePublicLink2/reShareAsPublicLinkToSharesNewDav.feature:184](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiSharePublicLink2/reShareAsPublicLinkToSharesNewDav.feature#L184)
+- [coreApiSharePublicLink2/reShareAsPublicLinkToSharesNewDav.feature:159](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiSharePublicLink2/reShareAsPublicLinkToSharesNewDav.feature#L159)
+- [coreApiSharePublicLink2/reShareAsPublicLinkToSharesNewDav.feature:160](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiSharePublicLink2/reShareAsPublicLinkToSharesNewDav.feature#L160)
+- [coreApiSharePublicLink2/reShareAsPublicLinkToSharesNewDav.feature:181](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiSharePublicLink2/reShareAsPublicLinkToSharesNewDav.feature#L181)
+- [coreApiSharePublicLink2/reShareAsPublicLinkToSharesNewDav.feature:182](https://github.com/owncloud/core/blob/master/tests/acceptance/features/coreApiSharePublicLink2/reShareAsPublicLinkToSharesNewDav.feature#L182)
 
 #### [Adding public upload to a read only shared folder as a receipient is allowed ](https://github.com/owncloud/ocis/issues/2164)
 

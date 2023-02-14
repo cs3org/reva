@@ -7,7 +7,7 @@ require (
 	github.com/Masterminds/sprig v2.22.0+incompatible
 	github.com/ReneKroon/ttlcache/v2 v2.11.0
 	github.com/asim/go-micro/plugins/events/nats/v4 v4.0.0-20220118152736-9e0be6c85d75
-	github.com/aws/aws-sdk-go v1.44.192
+	github.com/aws/aws-sdk-go v1.44.199
 	github.com/beevik/etree v1.1.0
 	github.com/bluele/gcache v0.0.2
 	github.com/c-bata/go-prompt v0.2.5
@@ -16,7 +16,7 @@ require (
 	github.com/cheggaaa/pb v1.0.29
 	github.com/coreos/go-oidc v2.2.1+incompatible
 	github.com/cs3org/cato v0.0.0-20200828125504-e418fc54dd5e
-	github.com/cs3org/go-cs3apis v0.0.0-20230124153659-5dc78d32c9b7
+	github.com/cs3org/go-cs3apis v0.0.0-20230214162720-ac2ceb2ad50e
 	github.com/dgraph-io/ristretto v0.1.1
 	github.com/eventials/go-tus v0.0.0-20200718001131-45c7ec8f5d59
 	github.com/gdexlab/go-render v1.0.1
@@ -168,7 +168,6 @@ require (
 go 1.19
 
 replace (
-	github.com/cs3org/go-cs3apis => github.com/gmgigi96/go-cs3apis v0.0.0-20230208123149-2678adc8f59e
 	github.com/eventials/go-tus => github.com/andrewmostello/go-tus v0.0.0-20200314041820-904a9904af9a
 	github.com/oleiade/reflections => github.com/oleiade/reflections v1.0.1
 )
