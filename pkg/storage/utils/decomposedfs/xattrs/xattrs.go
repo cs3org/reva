@@ -290,3 +290,8 @@ func GetInt64(path, key string) (int64, error) {
 func List(path string) ([]string, error) {
 	return backend.List(path)
 }
+
+// MetadataPath returns the path of the file holding the metadata for the given path
+func MetadataPath(path string) string {
+	return backend.MetadataPath(path)
+}

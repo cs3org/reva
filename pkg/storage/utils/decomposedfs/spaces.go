@@ -96,16 +96,12 @@ func (fs *Decomposedfs) CreateStorageSpace(ctx context.Context, req *provider.Cr
 	root.Type = provider.ResourceType_RESOURCE_TYPE_CONTAINER
 	rootPath := root.InternalPath()
 
-	if err := os.MkdirAll(filepath.Dir(rootPath), 0700); err != nil {
+	if err := os.MkdirAll(rootPath, 0700); err != nil {
 		return nil, errors.Wrap(err, "Decomposedfs: error creating node")
 	}
-	_, err = os.Create(rootPath)
+	_, err = os.Create(xattrs.MetadataPath(rootPath))
 	if err != nil {
-		return nil, errors.Wrap(err, "Decomposedfs: error creating node")
-	}
-
-	if err = os.MkdirAll(root.ChildrenPath(), 0700); err != nil {
-		return nil, errors.Wrap(err, "Decomposedfs: error creating node")
+		return nil, errors.Wrap(err, "Decomposedfs: error creating metadata file")
 	}
 
 	if err := root.WriteAllNodeMetadata(); err != nil {

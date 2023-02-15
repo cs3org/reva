@@ -19,7 +19,6 @@
 package xattrs
 
 import (
-	"os"
 	"strconv"
 
 	"github.com/cs3org/reva/v2/pkg/storage/utils/filelocks"
@@ -50,6 +49,8 @@ type Backend interface {
 	Set(path, key, val string) error
 	SetMultiple(path string, attribs map[string]string) error
 	Remove(path, key string) error
+
+	MetadataPath(path string) string
 }
 
 // NullBackend is the default stub backend, used to enforce the configuration of a proper backend
@@ -76,8 +77,11 @@ func (NullBackend) SetMultiple(path string, attribs map[string]string) error {
 	return errUnconfiguredError
 }
 
-// Remove an extended attribute key
+// Remove removes an extended attribute key
 func (NullBackend) Remove(path string, key string) error { return errUnconfiguredError }
+
+// MetadataPath returns the path of the file holding the metadata for the given path
+func (NullBackend) MetadataPath(path string) string { return "" }
 
 // XattrsBackend stores the file attributes in extended attributes
 type XattrsBackend struct{}
@@ -210,11 +214,16 @@ func (XattrsBackend) Remove(filePath string, key string) (err error) {
 	return xattr.Remove(filePath, key)
 }
 
+// MetadataPath returns the path of the file holding the metadata for the given path
+func (XattrsBackend) MetadataPath(path string) string { return path }
+
 // IniBackend persists the attributs in INI format inside the file
 type IniBackend struct{}
 
 // All reads all extended attributes for a node
-func (IniBackend) All(path string) (map[string]string, error) {
+func (b IniBackend) All(path string) (map[string]string, error) {
+	path = b.MetadataPath(path)
+
 	ini, err := ini.Load(path)
 	if err != nil {
 		return nil, err
@@ -224,7 +233,9 @@ func (IniBackend) All(path string) (map[string]string, error) {
 }
 
 // Get an extended attribute value for the given key
-func (IniBackend) Get(path, key string) (string, error) {
+func (b IniBackend) Get(path, key string) (string, error) {
+	path = b.MetadataPath(path)
+
 	ini, err := ini.Load(path)
 	if err != nil {
 		return "", err
@@ -236,7 +247,9 @@ func (IniBackend) Get(path, key string) (string, error) {
 }
 
 // GetInt64 reads a string as int64 from the xattrs
-func (IniBackend) GetInt64(path, key string) (int64, error) {
+func (b IniBackend) GetInt64(path, key string) (int64, error) {
+	path = b.MetadataPath(path)
+
 	ini, err := ini.Load(path)
 	if err != nil {
 		return 0, err
@@ -249,7 +262,9 @@ func (IniBackend) GetInt64(path, key string) (int64, error) {
 
 // List retrieves a list of names of extended attributes associated with the
 // given path in the file system.
-func (IniBackend) List(path string) ([]string, error) {
+func (b IniBackend) List(path string) ([]string, error) {
+	path = b.MetadataPath(path)
+
 	ini, err := ini.Load(path)
 	if err != nil {
 		return nil, err
@@ -258,13 +273,8 @@ func (IniBackend) List(path string) ([]string, error) {
 }
 
 // Set sets one attribute for the given path
-func (IniBackend) Set(path, key, val string) error {
-	// Do not change the mtime
-	fi, err := os.Stat(path)
-	if err != nil {
-		return err
-	}
-	defer os.Chtimes(path, fi.ModTime(), fi.ModTime())
+func (b IniBackend) Set(path, key, val string) error {
+	path = b.MetadataPath(path)
 
 	ini, err := ini.Load(path)
 	if err != nil {
@@ -277,13 +287,8 @@ func (IniBackend) Set(path, key, val string) error {
 }
 
 // SetMultiple sets a set of attribute for the given path
-func (IniBackend) SetMultiple(path string, attribs map[string]string) error {
-	// Do not change the mtime
-	fi, err := os.Stat(path)
-	if err != nil {
-		return err
-	}
-	defer os.Chtimes(path, fi.ModTime(), fi.ModTime())
+func (b IniBackend) SetMultiple(path string, attribs map[string]string) error {
+	path = b.MetadataPath(path)
 
 	ini, err := ini.Load(path)
 	if err != nil {
@@ -298,13 +303,8 @@ func (IniBackend) SetMultiple(path string, attribs map[string]string) error {
 }
 
 // Remove an extended attribute key
-func (IniBackend) Remove(path, key string) error {
-	// Do not change the mtime
-	fi, err := os.Stat(path)
-	if err != nil {
-		return err
-	}
-	defer os.Chtimes(path, fi.ModTime(), fi.ModTime())
+func (b IniBackend) Remove(path, key string) error {
+	path = b.MetadataPath(path)
 
 	ini, err := ini.Load(path)
 	if err != nil {
@@ -315,3 +315,6 @@ func (IniBackend) Remove(path, key string) error {
 
 	return ini.SaveTo(path)
 }
+
+// MetadataPath returns the path of the file holding the metadata for the given path
+func (IniBackend) MetadataPath(path string) string { return path + ".ini" }

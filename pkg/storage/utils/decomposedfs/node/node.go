@@ -87,7 +87,6 @@ type Node struct {
 	SpaceRoot *Node
 
 	lu          PathLookup
-	xattrsPath  string
 	xattrsCache map[string]string
 }
 
@@ -286,7 +285,7 @@ func ReadNode(ctx context.Context, lu PathLookup, spaceID, nodeID string, canLis
 	//     - can be made more robust with a journal
 	//     - same recursion mechanism can be used to purge items? sth we still need to do
 	//   - flag the two above options with dtime
-	_, err = os.Stat(n.ParentChildrenPath())
+	_, err = os.Stat(n.ParentPath())
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
 			return nil, errtypes.NotFound(err.Error())
@@ -346,7 +345,7 @@ func (n *Node) Child(ctx context.Context, name string) (*Node, error) {
 	} else if n.SpaceRoot != nil {
 		spaceID = n.SpaceRoot.ID
 	}
-	nodeID, err := readChildNodeFromLink(filepath.Join(n.ChildrenPath(), name))
+	nodeID, err := readChildNodeFromLink(filepath.Join(n.InternalPath(), name))
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) || isNotDir(err) {
 
@@ -484,19 +483,14 @@ func (n *Node) InternalPath() string {
 	return n.lu.InternalPath(n.SpaceID, n.ID)
 }
 
-// ParentChildrenPath returns the internal path of the parent of the current node
-func (n *Node) ParentChildrenPath() string {
-	return n.lu.InternalPath(n.SpaceID, n.ParentID) + ".children"
+// ParentPath returns the internal path of the parent of the current node
+func (n *Node) ParentPath() string {
+	return n.lu.InternalPath(n.SpaceID, n.ParentID)
 }
 
 // LockFilePath returns the internal path of the lock file of the node
 func (n *Node) LockFilePath() string {
 	return n.InternalPath() + ".lock"
-}
-
-// ChildrenPath returns the internal path of the children directory of the node
-func (n *Node) ChildrenPath() string {
-	return n.InternalPath() + ".children"
 }
 
 // CalculateEtag returns a hash of fileid + tmtime (or mtime)
@@ -605,20 +599,14 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 
 	var target string
 	switch {
-	case fi.Mode().IsRegular():
+	case fi.IsDir():
 		if target, err = n.Xattr(xattrs.ReferenceAttr); err == nil {
 			nodeType = provider.ResourceType_RESOURCE_TYPE_REFERENCE
 		} else {
-			typeString, err := n.Xattr(xattrs.TypeAttr)
-			if err != nil {
-				return nil, err
-			}
-			t, err := strconv.ParseInt(typeString, 10, 32)
-			if err != nil {
-				return nil, err
-			}
-			nodeType = provider.ResourceType(t)
+			nodeType = provider.ResourceType_RESOURCE_TYPE_CONTAINER
 		}
+	case fi.Mode().IsRegular():
+		nodeType = provider.ResourceType_RESOURCE_TYPE_FILE
 	case fi.Mode()&os.ModeSymlink != 0:
 		nodeType = provider.ResourceType_RESOURCE_TYPE_SYMLINK
 		// TODO reference using ext attr on a symlink
@@ -906,12 +894,6 @@ func (n *Node) GetTMTime() (time.Time, error) {
 	fi, err := os.Lstat(n.InternalPath())
 	if err != nil {
 		return time.Time{}, err
-	}
-	if n.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
-		childrenFi, err := os.Stat(n.ChildrenPath())
-		if err != nil && fi.ModTime().Before(childrenFi.ModTime()) {
-			fi = childrenFi
-		}
 	}
 	return fi.ModTime(), nil
 }

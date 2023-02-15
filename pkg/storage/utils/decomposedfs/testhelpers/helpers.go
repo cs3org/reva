@@ -223,7 +223,7 @@ func (t *TestEnv) CreateTestFile(name, blobID, parentID, spaceID string, blobSiz
 		return nil, err
 	}
 	// Link in parent
-	childNameLink := filepath.Join(n.ParentChildrenPath(), n.Name)
+	childNameLink := filepath.Join(n.ParentPath(), n.Name)
 	err = os.Symlink("../../../../../"+lookup.Pathify(n.ID, 4, 2), childNameLink)
 	if err != nil {
 		return nil, err

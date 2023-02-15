@@ -328,6 +328,10 @@ func initNewNode(upload *Upload, n *node.Node, fsize uint64) (*flock.Flock, erro
 		return nil, err
 	}
 
+	if _, err := os.Create(xattrs.MetadataPath(n.InternalPath())); err != nil {
+		return nil, err
+	}
+
 	lock, err := filelocks.AcquireWriteLock(n.InternalPath())
 	if err != nil {
 		// we cannot acquire a lock - we error for safety
@@ -339,7 +343,7 @@ func initNewNode(upload *Upload, n *node.Node, fsize uint64) (*flock.Flock, erro
 	}
 
 	// link child name to parent if it is new
-	childNameLink := filepath.Join(n.ParentChildrenPath(), n.Name)
+	childNameLink := filepath.Join(n.ParentPath(), n.Name)
 	link, err := os.Readlink(childNameLink)
 	if err == nil && link != "../"+n.ID {
 		if err := os.Remove(childNameLink); err != nil {
@@ -397,6 +401,9 @@ func updateExistingNode(upload *Upload, n *node.Node, spaceID string, fsize uint
 
 	// create version node
 	if _, err := os.Create(upload.versionsPath); err != nil {
+		return lock, err
+	}
+	if _, err := os.Create(xattrs.MetadataPath(upload.versionsPath)); err != nil {
 		return lock, err
 	}
 

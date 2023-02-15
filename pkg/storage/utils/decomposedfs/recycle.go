@@ -33,7 +33,6 @@ import (
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/lookup"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/tree"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/pkg/errors"
@@ -139,12 +138,7 @@ func (fs *Decomposedfs) ListRecycle(ctx context.Context, ref *provider.Reference
 	if err != nil {
 		return nil, err
 	}
-	childrenPath, err := tree.Traverse(originalPath, relativePath)
-	if err != nil {
-		return nil, err
-	}
-	childrenPath += ".children"
-
+	childrenPath := filepath.Join(originalPath, relativePath)
 	childrenDir, err := os.Open(childrenPath)
 	if err != nil {
 		return nil, err

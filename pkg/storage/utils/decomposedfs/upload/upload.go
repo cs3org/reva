@@ -366,9 +366,9 @@ func (upload *Upload) cleanup(cleanNode, cleanBin, cleanInfo bool) {
 			}
 
 			// no old version was present - remove child entry
-			src := filepath.Join(upload.Node.ParentChildrenPath(), upload.Node.Name)
+			src := filepath.Join(upload.Node.ParentPath(), upload.Node.Name)
 			if err := os.Remove(src); err != nil {
-				upload.log.Info().Str("path", upload.Node.ParentChildrenPath()).Err(err).Msg("removing node from parent failed")
+				upload.log.Info().Str("path", upload.Node.ParentPath()).Err(err).Msg("removing node from parent failed")
 			}
 
 			// remove node from upload as it no longer exists

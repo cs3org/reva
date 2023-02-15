@@ -264,6 +264,10 @@ func (t *Tree) TouchFile(ctx context.Context, n *node.Node) error {
 	if err != nil {
 		return errors.Wrap(err, "Decomposedfs: error creating node")
 	}
+	_, err = os.Create(xattrs.MetadataPath(nodePath))
+	if err != nil {
+		return errors.Wrap(err, "Decomposedfs: error creating node")
+	}
 
 	err = n.WriteAllNodeMetadata()
 	if err != nil {
@@ -271,7 +275,7 @@ func (t *Tree) TouchFile(ctx context.Context, n *node.Node) error {
 	}
 
 	// link child name to parent if it is new
-	childNameLink := filepath.Join(n.ParentChildrenPath(), n.Name)
+	childNameLink := filepath.Join(n.ParentPath(), n.Name)
 	var link string
 	link, err = os.Readlink(childNameLink)
 	if err == nil && link != "../"+n.ID {
@@ -312,7 +316,7 @@ func (t *Tree) CreateDir(ctx context.Context, n *node.Node) (err error) {
 
 	// make child appear in listings
 	relativeNodePath := filepath.Join("../../../../../", lookup.Pathify(n.ID, 4, 2))
-	err = os.Symlink(relativeNodePath, filepath.Join(n.ParentChildrenPath(), n.Name))
+	err = os.Symlink(relativeNodePath, filepath.Join(n.ParentPath(), n.Name))
 	if err != nil {
 		// no better way to check unfortunately
 		if !strings.Contains(err.Error(), "file exists") {
@@ -355,7 +359,7 @@ func (t *Tree) Move(ctx context.Context, oldNode *node.Node, newNode *node.Node)
 	if oldNode.ParentID == newNode.ParentID {
 
 		// parentPath := t.lookup.InternalPath(oldNode.SpaceID, oldNode.ParentID)
-		parentPath := oldNode.ParentChildrenPath()
+		parentPath := oldNode.ParentPath()
 
 		// rename child
 		err = os.Rename(
@@ -379,8 +383,8 @@ func (t *Tree) Move(ctx context.Context, oldNode *node.Node, newNode *node.Node)
 
 	// rename child
 	err = os.Rename(
-		filepath.Join(oldNode.ParentChildrenPath(), oldNode.Name),
-		filepath.Join(newNode.ParentChildrenPath(), newNode.Name),
+		filepath.Join(oldNode.ParentPath(), oldNode.Name),
+		filepath.Join(newNode.ParentPath(), newNode.Name),
 	)
 	if err != nil {
 		return errors.Wrap(err, "Decomposedfs: could not move child")
@@ -433,7 +437,7 @@ func readChildNodeFromLink(path string) (string, error) {
 
 // ListFolder lists the content of a folder node
 func (t *Tree) ListFolder(ctx context.Context, n *node.Node) ([]*node.Node, error) {
-	dir := n.ChildrenPath()
+	dir := n.InternalPath()
 	f, err := os.Open(dir)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
@@ -476,7 +480,7 @@ func (t *Tree) Delete(ctx context.Context, n *node.Node) (err error) {
 	deletingSharedResource := ctx.Value(appctx.DeletingSharedResource)
 
 	if deletingSharedResource != nil && deletingSharedResource.(bool) {
-		src := filepath.Join(n.ParentChildrenPath(), n.Name)
+		src := filepath.Join(n.ParentPath(), n.Name)
 		return os.Remove(src)
 	}
 
@@ -538,25 +542,18 @@ func (t *Tree) Delete(ctx context.Context, n *node.Node) (err error) {
 		_ = n.RemoveXattr(xattrs.TrashOriginAttr)
 		return
 	}
-	// // Also move children directories if needed
-	if n.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
-		err = os.Rename(nodePath+".children", trashPath+".children")
-		if err != nil {
-			// To roll back changes
-			// TODO remove symlink
-			// Roll back changes
-			_ = n.RemoveXattr(xattrs.TrashOriginAttr)
-			_ = os.Rename(trashPath, nodePath)
-			return
-		}
+	err = os.Rename(xattrs.MetadataPath(nodePath), xattrs.MetadataPath(trashPath))
+	if err != nil {
+		_ = n.RemoveXattr(xattrs.TrashOriginAttr)
+		_ = os.Rename(trashPath, nodePath)
+		return
 	}
 
 	// Remove lock file if it exists
 	_ = os.Remove(n.LockFilePath())
 
 	// finally remove the entry from the parent dir
-	src := filepath.Join(n.ParentChildrenPath(), n.Name)
-	err = os.Remove(src)
+	err = os.Remove(filepath.Join(n.ParentPath(), n.Name))
 	if err != nil {
 		// To roll back changes
 		// TODO revert the rename
@@ -603,7 +600,7 @@ func (t *Tree) RestoreRecycleItemFunc(ctx context.Context, spaceid, key, trashPa
 		}
 
 		// add the entry for the parent dir
-		err = os.Symlink("../../../../../"+lookup.Pathify(recycleNode.ID, 4, 2), filepath.Join(targetNode.ParentChildrenPath(), targetNode.Name))
+		err = os.Symlink("../../../../../"+lookup.Pathify(recycleNode.ID, 4, 2), filepath.Join(targetNode.ParentPath(), targetNode.Name))
 		if err != nil {
 			return err
 		}
@@ -617,11 +614,9 @@ func (t *Tree) RestoreRecycleItemFunc(ctx context.Context, spaceid, key, trashPa
 			if err != nil {
 				return err
 			}
-			if recycleNode.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
-				err = os.Rename(filepath.Clean(deletedNodePath)+".children", filepath.Clean(nodePath)+".children")
-				if err != nil {
-					return err
-				}
+			err = os.Rename(xattrs.MetadataPath(deletedNodePath), xattrs.MetadataPath(nodePath))
+			if err != nil {
+				return err
 			}
 		}
 
@@ -645,11 +640,7 @@ func (t *Tree) RestoreRecycleItemFunc(ctx context.Context, spaceid, key, trashPa
 			if err != nil {
 				return errors.Wrap(err, "Decomposedfs: could not resolve trash root")
 			}
-			resolvedTrashParent, err := Traverse(resolvedTrashRoot, filepath.Dir(trashPath))
-			if err != nil {
-				return errors.Wrap(err, "Decomposedfs: could not resolve trash parent")
-			}
-			deletePath = filepath.Join(resolvedTrashParent+".children", filepath.Base(trashPath))
+			deletePath = filepath.Join(resolvedTrashRoot, trashPath)
 		}
 		if err = os.Remove(deletePath); err != nil {
 			log.Error().Err(err).Str("trashItem", trashItem).Msg("error deleting trash item")
@@ -689,11 +680,7 @@ func (t *Tree) PurgeRecycleItemFunc(ctx context.Context, spaceid, key string, pa
 			if err != nil {
 				return errors.Wrap(err, "Decomposedfs: could not resolve trash root")
 			}
-			resolvedTrashParent, err := Traverse(resolvedTrashRoot, filepath.Dir(path))
-			if err != nil {
-				return errors.Wrap(err, "Decomposedfs: could not resolve trash parent")
-			}
-			deletePath = filepath.Join(resolvedTrashParent+".children", filepath.Base(path))
+			deletePath = filepath.Join(resolvedTrashRoot, path)
 		}
 		if err = os.Remove(deletePath); err != nil {
 			log.Error().Err(err).Str("deletePath", deletePath).Msg("error deleting trash item")
@@ -709,16 +696,21 @@ func (t *Tree) PurgeRecycleItemFunc(ctx context.Context, spaceid, key string, pa
 func (t *Tree) removeNode(path string, n *node.Node) error {
 	// delete the actual node
 	if err := utils.RemoveItem(path); err != nil {
-		log.Error().Err(err).Str("path", path).Msg("error node")
+		log.Error().Err(err).Str("path", path).Msg("error purging node")
 		return err
 	}
 
 	// delete blob from blobstore
 	if n.BlobID != "" {
 		if err := t.DeleteBlob(n); err != nil {
-			log.Error().Err(err).Str("blobID", n.BlobID).Msg("error deleting nodes blob")
+			log.Error().Err(err).Str("blobID", n.BlobID).Msg("error purging nodes blob")
 			return err
 		}
+	}
+
+	if err := utils.RemoveItem(xattrs.MetadataPath(path)); err != nil {
+		log.Error().Err(err).Str("path", xattrs.MetadataPath(path)).Msg("error purging node metadata")
+		return err
 	}
 
 	// delete revisions
@@ -746,16 +738,6 @@ func (t *Tree) removeNode(path string, n *node.Node) error {
 			}
 		}
 
-	}
-
-	// delete .children
-	childrenPath := path + ".children"
-	_, err = os.Stat(childrenPath)
-	if err == nil {
-		if err := utils.RemoveItem(childrenPath); err != nil {
-			log.Error().Err(err).Str("path", path).Msg("error removing .children directory")
-			return err
-		}
 	}
 
 	return nil
@@ -856,7 +838,7 @@ func (t *Tree) Propagate(ctx context.Context, n *node.Node, sizeDiff int64) (err
 			switch {
 			case xattrs.IsAttrUnset(err):
 				// fallback to calculating the treesize
-				newSize, err = calculateTreeSize(ctx, n.ChildrenPath())
+				newSize, err = calculateTreeSize(ctx, n.InternalPath())
 				if err != nil {
 					return err
 				}
@@ -909,35 +891,29 @@ func calculateTreeSize(ctx context.Context, childrenPath string) (uint64, error)
 	}
 	for i := range names {
 		cPath := filepath.Join(childrenPath, names[i])
+		resolvedPath, err := filepath.EvalSymlinks(cPath)
+		if err != nil {
+			appctx.GetLogger(ctx).Error().Err(err).Str("childpath", cPath).Msg("could not resolve child entry symlink")
+			continue // continue after an error
+		}
+
 		// raw read of the attributes for performance reasons
-		attribs, err := xattrs.All(cPath)
-		// info, err := os.Stat(cPath)
+		attribs, err := xattrs.All(resolvedPath)
 		if err != nil {
 			appctx.GetLogger(ctx).Error().Err(err).Str("childpath", cPath).Msg("could not read attributes of child entry")
 			continue // continue after an error
 		}
+		sizeAttr := ""
 		if attribs[xattrs.TypeAttr] == strconv.FormatUint(uint64(provider.ResourceType_RESOURCE_TYPE_FILE), 10) {
-			blobSize, err := node.ReadBlobSizeAttr(cPath)
-			if err != nil {
-				appctx.GetLogger(ctx).Error().Err(err).Str("childpath", cPath).Msg("could not read blobSize xattr")
-				continue // continue after an error
-			}
-			size += uint64(blobSize)
+			sizeAttr = attribs[xattrs.BlobsizeAttr]
 		} else {
-			// try to read from attr
-			var b string
-			// xattrs.Get will follow the symlink
-			if b, err = xattrs.Get(cPath, xattrs.TreesizeAttr); err != nil {
-				// TODO recursively descend and recalculate treesize
-				continue // continue after an error
-			}
-			csize, err := strconv.ParseUint(b, 10, 64)
-			if err != nil {
-				// TODO recursively descend and recalculate treesize
-				continue // continue after an error
-			}
-			size += csize
+			sizeAttr = attribs[xattrs.TreesizeAttr]
 		}
+		csize, err := strconv.ParseInt(sizeAttr, 10, 64)
+		if err != nil {
+			return 0, errors.Wrapf(err, "invalid blobsize xattr format")
+		}
+		size += uint64(csize)
 	}
 	return size, err
 }
@@ -972,15 +948,11 @@ func (t *Tree) DeleteBlob(node *node.Node) error {
 func (t *Tree) createNode(n *node.Node) (err error) {
 	// create a directory node
 	nodePath := n.InternalPath()
-	if err := os.MkdirAll(filepath.Dir(nodePath), 0700); err != nil {
+	if err := os.MkdirAll(nodePath, 0700); err != nil {
 		return errors.Wrap(err, "Decomposedfs: error creating node")
 	}
-	_, err = os.Create(nodePath)
+	_, err = os.Create(xattrs.MetadataPath(nodePath))
 	if err != nil {
-		return errors.Wrap(err, "Decomposedfs: error creating node")
-	}
-
-	if err = os.MkdirAll(n.ChildrenPath(), 0700); err != nil {
 		return errors.Wrap(err, "Decomposedfs: error creating node")
 	}
 
@@ -1000,10 +972,7 @@ func (t *Tree) readRecycleItem(ctx context.Context, spaceID, key, path string) (
 	if err != nil {
 		return
 	}
-	deletedNodePath, err = Traverse(resolvedTrashItem, path)
-	if err != nil {
-		return
-	}
+	deletedNodePath = filepath.Join(resolvedTrashItem, path)
 	nodeIDRegep := regexp.MustCompile(`.*/nodes/([^.]*).*`)
 	nodeID = nodeIDRegep.ReplaceAllString(deletedNodePath, "$1")
 	nodeID = strings.ReplaceAll(nodeID, "/", "")
@@ -1056,9 +1025,8 @@ func (t *Tree) readRecycleItem(ctx context.Context, spaceID, key, path string) (
 	// get origin node, is relative to space root
 	origin = "/"
 
-	trashRootItemPath := filepath.Join(t.lookup.InternalRoot(), "spaces", lookup.Pathify(spaceID, 1, 2), "trash", lookup.Pathify(key, 4, 2))
 	// lookup origin path in extended attributes
-	if attrStr, err = xattrs.Get(trashRootItemPath, xattrs.TrashOriginAttr); err == nil {
+	if attrStr, err = xattrs.Get(resolvedTrashItem, xattrs.TrashOriginAttr); err == nil {
 		origin = filepath.Join(attrStr, path)
 	} else {
 		log.Error().Err(err).Str("trashItem", trashItem).Str("deletedNodePath", deletedNodePath).Msg("could not read origin path, restoring to /")
@@ -1091,24 +1059,4 @@ func appendChildren(ctx context.Context, n *node.Node, nodes []*node.Node) ([]*n
 	}
 
 	return nodes, nil
-}
-
-// Traverse traverses the tree from a root path up to the given subdirectory
-func Traverse(root, path string) (string, error) {
-	path = strings.TrimPrefix(path, "/")
-	if filepath.Clean(root) == filepath.Clean(filepath.Join(root, path)) {
-		return root, nil
-	}
-	var err error
-	resPath := root
-
-	steps := strings.Split(path, "/")
-	for _, step := range steps {
-		link := filepath.Join(resPath+".children", step)
-		resPath, err = filepath.EvalSymlinks(link)
-		if err != nil {
-			return "", err
-		}
-	}
-	return resPath, nil
 }

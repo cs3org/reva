@@ -211,14 +211,19 @@ func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Refer
 		newRevisionPath := fs.lu.InternalPath(spaceID, kp[0]+node.RevisionIDDelimiter+fi.ModTime().UTC().Format(time.RFC3339Nano))
 
 		// touch new revision
-		if file, err := os.Create(newRevisionPath); err != nil {
+		if _, err := os.Create(newRevisionPath); err != nil {
 			return err
-		} else if err := file.Close(); err != nil {
+		}
+		if _, err := os.Create(xattrs.MetadataPath(newRevisionPath)); err != nil {
+			_ = os.Remove(newRevisionPath)
 			return err
 		}
 		defer func() {
 			if returnErr != nil {
 				if err := os.Remove(newRevisionPath); err != nil {
+					log.Error().Err(err).Str("revision", filepath.Base(newRevisionPath)).Msg("could not clean up revision node")
+				}
+				if err := os.Remove(xattrs.MetadataPath(newRevisionPath)); err != nil {
 					log.Error().Err(err).Str("revision", filepath.Base(newRevisionPath)).Msg("could not clean up revision node")
 				}
 			}
