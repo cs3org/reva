@@ -21,6 +21,7 @@ package tree_test
 import (
 	"os"
 	"path"
+	"path/filepath"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/lookup"
@@ -118,7 +119,10 @@ var _ = Describe("Tree", func() {
 
 				It("sets the trash origin xattr", func() {
 					trashPath := path.Join(env.Root, "spaces", lookup.Pathify(n.SpaceRoot.ID, 1, 2), "trash", lookup.Pathify(n.ID, 4, 2))
-					attr, err := xattrs.Get(trashPath, xattrs.TrashOriginAttr)
+					resolveTrashPath, err := filepath.EvalSymlinks(trashPath)
+					Expect(err).ToNot(HaveOccurred())
+
+					attr, err := xattrs.Get(resolveTrashPath, xattrs.TrashOriginAttr)
 					Expect(err).ToNot(HaveOccurred())
 					Expect(string(attr)).To(Equal("/dir1/file1"))
 				})
