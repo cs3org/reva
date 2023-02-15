@@ -677,38 +677,27 @@ func (t *Tree) PurgeRecycleItemFunc(ctx context.Context, spaceid, key string, pa
 		return nil, nil, err
 	}
 
-	// only the root node is trashed, the rest is still in normal file system
-	children, err := os.ReadDir(deletedNodePath)
-	var nodes []*node.Node
-	for _, c := range children {
-		n, _, _, _, err := t.readRecycleItem(ctx, spaceid, key, filepath.Join(path, c.Name()))
-		if err != nil {
-			return nil, nil, err
-		}
-		nodes, err = appendChildren(ctx, n, nodes)
-		if err != nil {
-			return nil, nil, err
-		}
-	}
-
 	fn := func() error {
 		if err := t.removeNode(deletedNodePath, rn); err != nil {
 			return err
 		}
 
 		// delete item link in trash
-		if err = os.Remove(trashItem); err != nil {
-			log.Error().Err(err).Str("trashItem", trashItem).Msg("error deleting trash item")
-			return err
-		}
-
-		// delete children
-		for i := len(nodes) - 1; i >= 0; i-- {
-			n := nodes[i]
-			if err := t.removeNode(n.InternalPath(), n); err != nil {
-				return err
+		deletePath := trashItem
+		if path != "" && path != "/" {
+			resolvedTrashRoot, err := filepath.EvalSymlinks(trashItem)
+			if err != nil {
+				return errors.Wrap(err, "Decomposedfs: could not resolve trash root")
 			}
-
+			resolvedTrashParent, err := Traverse(resolvedTrashRoot, filepath.Dir(path))
+			if err != nil {
+				return errors.Wrap(err, "Decomposedfs: could not resolve trash parent")
+			}
+			deletePath = filepath.Join(resolvedTrashParent+".children", filepath.Base(path))
+		}
+		if err = os.Remove(deletePath); err != nil {
+			log.Error().Err(err).Str("deletePath", deletePath).Msg("error deleting trash item")
+			return err
 		}
 
 		return nil
@@ -757,6 +746,16 @@ func (t *Tree) removeNode(path string, n *node.Node) error {
 			}
 		}
 
+	}
+
+	// delete .children
+	childrenPath := path + ".children"
+	_, err = os.Stat(childrenPath)
+	if err == nil {
+		if err := utils.RemoveItem(childrenPath); err != nil {
+			log.Error().Err(err).Str("path", path).Msg("error removing .children directory")
+			return err
+		}
 	}
 
 	return nil
