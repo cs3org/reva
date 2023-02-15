@@ -295,3 +295,8 @@ func List(path string) ([]string, error) {
 func MetadataPath(path string) string {
 	return backend.MetadataPath(path)
 }
+
+// IsMetaFile returns whether the given path represents a meta file
+func IsMetaFile(path string) bool {
+	return backend.IsMetaFile(path)
+}

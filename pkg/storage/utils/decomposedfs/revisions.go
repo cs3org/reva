@@ -70,6 +70,10 @@ func (fs *Decomposedfs) ListRevisions(ctx context.Context, ref *provider.Referen
 	np := n.InternalPath()
 	if items, err := filepath.Glob(np + node.RevisionIDDelimiter + "*"); err == nil {
 		for i := range items {
+			if xattrs.IsMetaFile(items[i]) {
+				continue
+			}
+
 			if fi, err := os.Stat(items[i]); err == nil {
 				parts := strings.SplitN(fi.Name(), node.RevisionIDDelimiter, 2)
 				if len(parts) != 2 {

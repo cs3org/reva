@@ -20,6 +20,7 @@ package xattrs
 
 import (
 	"strconv"
+	"strings"
 
 	"github.com/cs3org/reva/v2/pkg/storage/utils/filelocks"
 	"github.com/pkg/errors"
@@ -50,6 +51,7 @@ type Backend interface {
 	SetMultiple(path string, attribs map[string]string) error
 	Remove(path, key string) error
 
+	IsMetaFile(path string) bool
 	MetadataPath(path string) string
 }
 
@@ -79,6 +81,9 @@ func (NullBackend) SetMultiple(path string, attribs map[string]string) error {
 
 // Remove removes an extended attribute key
 func (NullBackend) Remove(path string, key string) error { return errUnconfiguredError }
+
+// IsMetaFile returns whether the given path represents a meta file
+func (NullBackend) IsMetaFile(path string) bool { return false }
 
 // MetadataPath returns the path of the file holding the metadata for the given path
 func (NullBackend) MetadataPath(path string) string { return "" }
@@ -214,6 +219,9 @@ func (XattrsBackend) Remove(filePath string, key string) (err error) {
 	return xattr.Remove(filePath, key)
 }
 
+// IsMetaFile returns whether the given path represents a meta file
+func (XattrsBackend) IsMetaFile(path string) bool { return false }
+
 // MetadataPath returns the path of the file holding the metadata for the given path
 func (XattrsBackend) MetadataPath(path string) string { return path }
 
@@ -315,6 +323,9 @@ func (b IniBackend) Remove(path, key string) error {
 
 	return ini.SaveTo(path)
 }
+
+// IsMetaFile returns whether the given path represents a meta file
+func (IniBackend) IsMetaFile(path string) bool { return strings.HasSuffix(path, ".ini") }
 
 // MetadataPath returns the path of the file holding the metadata for the given path
 func (IniBackend) MetadataPath(path string) string { return path + ".ini" }
