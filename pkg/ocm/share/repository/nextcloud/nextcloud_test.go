@@ -28,7 +28,7 @@ import (
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/auth/scope"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
-	"github.com/cs3org/reva/pkg/ocm/share/manager/nextcloud"
+	"github.com/cs3org/reva/pkg/ocm/share/repository/nextcloud"
 	jwt "github.com/cs3org/reva/pkg/token/manager/jwt"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -248,7 +248,7 @@ var _ = Describe("Nextcloud", func() {
 			am, called, teardown := setUpNextcloudServer()
 			defer teardown()
 
-			share, err := am.GetShare(ctx, &ocm.ShareReference{
+			share, err := am.GetShare(ctx, user, &ocm.ShareReference{
 				Spec: &ocm.ShareReference_Id{
 					Id: &ocm.ShareId{
 						OpaqueId: "some-share-id",
@@ -259,29 +259,6 @@ var _ = Describe("Nextcloud", func() {
 			Expect(*share).To(Equal(ocm.Share{
 				Id:         &ocm.ShareId{},
 				ResourceId: &provider.ResourceId{},
-				Permissions: &ocm.SharePermissions{
-					Permissions: &provider.ResourcePermissions{
-						AddGrant:             true,
-						CreateContainer:      true,
-						Delete:               true,
-						GetPath:              true,
-						GetQuota:             true,
-						InitiateFileDownload: true,
-						InitiateFileUpload:   true,
-						ListGrants:           true,
-						ListContainer:        true,
-						ListFileVersions:     true,
-						ListRecycle:          true,
-						Move:                 true,
-						RemoveGrant:          true,
-						PurgeRecycle:         true,
-						RestoreFileVersion:   true,
-						RestoreRecycleItem:   true,
-						Stat:                 true,
-						UpdateGrant:          true,
-						DenyGrant:            true,
-					},
-				},
 				Grantee: &provider.Grantee{
 					Id: &provider.Grantee_UserId{
 						UserId: &userpb.UserId{
@@ -326,7 +303,7 @@ var _ = Describe("Nextcloud", func() {
 			am, called, teardown := setUpNextcloudServer()
 			defer teardown()
 
-			err := am.Unshare(ctx, &ocm.ShareReference{
+			err := am.DeleteShare(ctx, user, &ocm.ShareReference{
 				Spec: &ocm.ShareReference_Id{
 					Id: &ocm.ShareId{
 						OpaqueId: "some-share-id",
@@ -344,7 +321,7 @@ var _ = Describe("Nextcloud", func() {
 			am, called, teardown := setUpNextcloudServer()
 			defer teardown()
 
-			share, err := am.UpdateShare(ctx, &ocm.ShareReference{
+			share, err := am.UpdateShare(ctx, user, &ocm.ShareReference{
 				Spec: &ocm.ShareReference_Id{
 					Id: &ocm.ShareId{
 						OpaqueId: "some-share-id",
@@ -378,29 +355,6 @@ var _ = Describe("Nextcloud", func() {
 			Expect(*share).To(Equal(ocm.Share{
 				Id:         &ocm.ShareId{},
 				ResourceId: &provider.ResourceId{},
-				Permissions: &ocm.SharePermissions{
-					Permissions: &provider.ResourcePermissions{
-						AddGrant:             true,
-						CreateContainer:      true,
-						Delete:               true,
-						GetPath:              true,
-						GetQuota:             true,
-						InitiateFileDownload: true,
-						InitiateFileUpload:   true,
-						ListGrants:           true,
-						ListContainer:        true,
-						ListFileVersions:     true,
-						ListRecycle:          true,
-						Move:                 true,
-						RemoveGrant:          true,
-						PurgeRecycle:         true,
-						RestoreFileVersion:   true,
-						RestoreRecycleItem:   true,
-						Stat:                 true,
-						UpdateGrant:          true,
-						DenyGrant:            true,
-					},
-				},
 				Grantee: &provider.Grantee{
 					Id: &provider.Grantee_UserId{
 						UserId: &userpb.UserId{
@@ -445,7 +399,7 @@ var _ = Describe("Nextcloud", func() {
 			am, called, teardown := setUpNextcloudServer()
 			defer teardown()
 
-			shares, err := am.ListShares(ctx, []*ocm.ListOCMSharesRequest_Filter{
+			shares, err := am.ListShares(ctx, user, []*ocm.ListOCMSharesRequest_Filter{
 				{
 					Type: ocm.ListOCMSharesRequest_Filter_TYPE_CREATOR,
 					Term: &ocm.ListOCMSharesRequest_Filter_Creator{
@@ -462,29 +416,6 @@ var _ = Describe("Nextcloud", func() {
 			Expect(*shares[0]).To(Equal(ocm.Share{
 				Id:         &ocm.ShareId{},
 				ResourceId: &provider.ResourceId{},
-				Permissions: &ocm.SharePermissions{
-					Permissions: &provider.ResourcePermissions{
-						AddGrant:             true,
-						CreateContainer:      true,
-						Delete:               true,
-						GetPath:              true,
-						GetQuota:             true,
-						InitiateFileDownload: true,
-						InitiateFileUpload:   true,
-						ListGrants:           true,
-						ListContainer:        true,
-						ListFileVersions:     true,
-						ListRecycle:          true,
-						Move:                 true,
-						RemoveGrant:          true,
-						PurgeRecycle:         true,
-						RestoreFileVersion:   true,
-						RestoreRecycleItem:   true,
-						Stat:                 true,
-						UpdateGrant:          true,
-						DenyGrant:            true,
-					},
-				},
 				Grantee: &provider.Grantee{
 					Id: &provider.Grantee_UserId{
 						UserId: &userpb.UserId{
@@ -529,69 +460,44 @@ var _ = Describe("Nextcloud", func() {
 			am, called, teardown := setUpNextcloudServer()
 			defer teardown()
 
-			receivedShares, err := am.ListReceivedShares(ctx)
+			receivedShares, err := am.ListReceivedShares(ctx, user)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(len(receivedShares)).To(Equal(1))
 			Expect(*receivedShares[0]).To(Equal(ocm.ReceivedShare{
-				Share: &ocm.Share{
-					Id:         &ocm.ShareId{},
-					ResourceId: &provider.ResourceId{},
-					Permissions: &ocm.SharePermissions{
-						Permissions: &provider.ResourcePermissions{
-							AddGrant:             true,
-							CreateContainer:      true,
-							Delete:               true,
-							GetPath:              true,
-							GetQuota:             true,
-							InitiateFileDownload: true,
-							InitiateFileUpload:   true,
-							ListGrants:           true,
-							ListContainer:        true,
-							ListFileVersions:     true,
-							ListRecycle:          true,
-							Move:                 true,
-							RemoveGrant:          true,
-							PurgeRecycle:         true,
-							RestoreFileVersion:   true,
-							RestoreRecycleItem:   true,
-							Stat:                 true,
-							UpdateGrant:          true,
-							DenyGrant:            true,
+				Id:         &ocm.ShareId{},
+				ResourceId: &provider.ResourceId{},
+				Grantee: &provider.Grantee{
+					Id: &provider.Grantee_UserId{
+						UserId: &userpb.UserId{
+							Idp:      "0.0.0.0:19000",
+							OpaqueId: "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
+							Type:     userpb.UserType_USER_TYPE_PRIMARY,
 						},
 					},
-					Grantee: &provider.Grantee{
-						Id: &provider.Grantee_UserId{
-							UserId: &userpb.UserId{
-								Idp:      "0.0.0.0:19000",
-								OpaqueId: "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
-								Type:     userpb.UserType_USER_TYPE_PRIMARY,
-							},
-						},
-					},
-					Owner: &userpb.UserId{
-						Idp:      "0.0.0.0:19000",
-						OpaqueId: "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
-						Type:     userpb.UserType_USER_TYPE_PRIMARY,
-					},
-					Creator: &userpb.UserId{
-						Idp:      "0.0.0.0:19000",
-						OpaqueId: "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
-						Type:     userpb.UserType_USER_TYPE_PRIMARY,
-					},
-					Ctime: &types.Timestamp{
-						Seconds:              1234567890,
-						Nanos:                0,
-						XXX_NoUnkeyedLiteral: struct{}{},
-						XXX_unrecognized:     nil,
-						XXX_sizecache:        0,
-					},
-					Mtime: &types.Timestamp{
-						Seconds:              1234567890,
-						Nanos:                0,
-						XXX_NoUnkeyedLiteral: struct{}{},
-						XXX_unrecognized:     nil,
-						XXX_sizecache:        0,
-					},
+				},
+				Owner: &userpb.UserId{
+					Idp:      "0.0.0.0:19000",
+					OpaqueId: "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
+					Type:     userpb.UserType_USER_TYPE_PRIMARY,
+				},
+				Creator: &userpb.UserId{
+					Idp:      "0.0.0.0:19000",
+					OpaqueId: "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
+					Type:     userpb.UserType_USER_TYPE_PRIMARY,
+				},
+				Ctime: &types.Timestamp{
+					Seconds:              1234567890,
+					Nanos:                0,
+					XXX_NoUnkeyedLiteral: struct{}{},
+					XXX_unrecognized:     nil,
+					XXX_sizecache:        0,
+				},
+				Mtime: &types.Timestamp{
+					Seconds:              1234567890,
+					Nanos:                0,
+					XXX_NoUnkeyedLiteral: struct{}{},
+					XXX_unrecognized:     nil,
+					XXX_sizecache:        0,
 				},
 				State: ocm.ShareState_SHARE_STATE_ACCEPTED,
 			}))
@@ -605,7 +511,7 @@ var _ = Describe("Nextcloud", func() {
 			am, called, teardown := setUpNextcloudServer()
 			defer teardown()
 
-			receivedShare, err := am.GetReceivedShare(ctx, &ocm.ShareReference{
+			receivedShare, err := am.GetReceivedShare(ctx, user, &ocm.ShareReference{
 				Spec: &ocm.ShareReference_Id{
 					Id: &ocm.ShareId{
 						OpaqueId: "some-share-id",
@@ -614,65 +520,40 @@ var _ = Describe("Nextcloud", func() {
 			})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(*receivedShare).To(Equal(ocm.ReceivedShare{
-				Share: &ocm.Share{
-					Id:         &ocm.ShareId{},
-					ResourceId: &provider.ResourceId{},
-					Permissions: &ocm.SharePermissions{
-						Permissions: &provider.ResourcePermissions{
-							AddGrant:             true,
-							CreateContainer:      true,
-							Delete:               true,
-							GetPath:              true,
-							GetQuota:             true,
-							InitiateFileDownload: true,
-							InitiateFileUpload:   true,
-							ListGrants:           true,
-							ListContainer:        true,
-							ListFileVersions:     true,
-							ListRecycle:          true,
-							Move:                 true,
-							RemoveGrant:          true,
-							PurgeRecycle:         true,
-							RestoreFileVersion:   true,
-							RestoreRecycleItem:   true,
-							Stat:                 true,
-							UpdateGrant:          true,
-							DenyGrant:            true,
+				Id:         &ocm.ShareId{},
+				ResourceId: &provider.ResourceId{},
+				Grantee: &provider.Grantee{
+					Id: &provider.Grantee_UserId{
+						UserId: &userpb.UserId{
+							Idp:      "0.0.0.0:19000",
+							OpaqueId: "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
+							Type:     userpb.UserType_USER_TYPE_PRIMARY,
 						},
 					},
-					Grantee: &provider.Grantee{
-						Id: &provider.Grantee_UserId{
-							UserId: &userpb.UserId{
-								Idp:      "0.0.0.0:19000",
-								OpaqueId: "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
-								Type:     userpb.UserType_USER_TYPE_PRIMARY,
-							},
-						},
-					},
-					Owner: &userpb.UserId{
-						Idp:      "0.0.0.0:19000",
-						OpaqueId: "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
-						Type:     userpb.UserType_USER_TYPE_PRIMARY,
-					},
-					Creator: &userpb.UserId{
-						Idp:      "0.0.0.0:19000",
-						OpaqueId: "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
-						Type:     userpb.UserType_USER_TYPE_PRIMARY,
-					},
-					Ctime: &types.Timestamp{
-						Seconds:              1234567890,
-						Nanos:                0,
-						XXX_NoUnkeyedLiteral: struct{}{},
-						XXX_unrecognized:     nil,
-						XXX_sizecache:        0,
-					},
-					Mtime: &types.Timestamp{
-						Seconds:              1234567890,
-						Nanos:                0,
-						XXX_NoUnkeyedLiteral: struct{}{},
-						XXX_unrecognized:     nil,
-						XXX_sizecache:        0,
-					},
+				},
+				Owner: &userpb.UserId{
+					Idp:      "0.0.0.0:19000",
+					OpaqueId: "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
+					Type:     userpb.UserType_USER_TYPE_PRIMARY,
+				},
+				Creator: &userpb.UserId{
+					Idp:      "0.0.0.0:19000",
+					OpaqueId: "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
+					Type:     userpb.UserType_USER_TYPE_PRIMARY,
+				},
+				Ctime: &types.Timestamp{
+					Seconds:              1234567890,
+					Nanos:                0,
+					XXX_NoUnkeyedLiteral: struct{}{},
+					XXX_unrecognized:     nil,
+					XXX_sizecache:        0,
+				},
+				Mtime: &types.Timestamp{
+					Seconds:              1234567890,
+					Nanos:                0,
+					XXX_NoUnkeyedLiteral: struct{}{},
+					XXX_unrecognized:     nil,
+					XXX_sizecache:        0,
 				},
 				State: ocm.ShareState_SHARE_STATE_ACCEPTED,
 			}))
@@ -686,101 +567,10 @@ var _ = Describe("Nextcloud", func() {
 			am, called, teardown := setUpNextcloudServer()
 			defer teardown()
 
-			receivedShare, err := am.UpdateReceivedShare(ctx,
+			receivedShare, err := am.UpdateReceivedShare(ctx, user,
 				&ocm.ReceivedShare{
-					Share: &ocm.Share{
-						Id:         &ocm.ShareId{},
-						ResourceId: &provider.ResourceId{},
-						Permissions: &ocm.SharePermissions{
-							Permissions: &provider.ResourcePermissions{
-								AddGrant:             true,
-								CreateContainer:      true,
-								Delete:               true,
-								GetPath:              true,
-								GetQuota:             true,
-								InitiateFileDownload: true,
-								InitiateFileUpload:   true,
-								ListGrants:           true,
-								ListContainer:        true,
-								ListFileVersions:     true,
-								ListRecycle:          true,
-								Move:                 true,
-								RemoveGrant:          true,
-								PurgeRecycle:         true,
-								RestoreFileVersion:   true,
-								RestoreRecycleItem:   true,
-								Stat:                 true,
-								UpdateGrant:          true,
-								DenyGrant:            true,
-							},
-						},
-						Grantee: &provider.Grantee{
-							Id: &provider.Grantee_UserId{
-								UserId: &userpb.UserId{
-									Idp:      "0.0.0.0:19000",
-									OpaqueId: "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
-									Type:     userpb.UserType_USER_TYPE_PRIMARY,
-								},
-							},
-						},
-						Owner: &userpb.UserId{
-							Idp:      "0.0.0.0:19000",
-							OpaqueId: "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
-							Type:     userpb.UserType_USER_TYPE_PRIMARY,
-						},
-						Creator: &userpb.UserId{
-							Idp:      "0.0.0.0:19000",
-							OpaqueId: "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
-							Type:     userpb.UserType_USER_TYPE_PRIMARY,
-						},
-						Ctime: &types.Timestamp{
-							Seconds:              1234567890,
-							Nanos:                0,
-							XXX_NoUnkeyedLiteral: struct{}{},
-							XXX_unrecognized:     nil,
-							XXX_sizecache:        0,
-						},
-						Mtime: &types.Timestamp{
-							Seconds:              1234567890,
-							Nanos:                0,
-							XXX_NoUnkeyedLiteral: struct{}{},
-							XXX_unrecognized:     nil,
-							XXX_sizecache:        0,
-						},
-					},
-					State: ocm.ShareState_SHARE_STATE_ACCEPTED,
-				},
-				&field_mask.FieldMask{
-					Paths: []string{"state"},
-				})
-			Expect(err).ToNot(HaveOccurred())
-			Expect(*receivedShare).To(Equal(ocm.ReceivedShare{
-				Share: &ocm.Share{
 					Id:         &ocm.ShareId{},
 					ResourceId: &provider.ResourceId{},
-					Permissions: &ocm.SharePermissions{
-						Permissions: &provider.ResourcePermissions{
-							AddGrant:             true,
-							CreateContainer:      true,
-							Delete:               true,
-							GetPath:              true,
-							GetQuota:             true,
-							InitiateFileDownload: true,
-							InitiateFileUpload:   true,
-							ListGrants:           true,
-							ListContainer:        true,
-							ListFileVersions:     true,
-							ListRecycle:          true,
-							Move:                 true,
-							RemoveGrant:          true,
-							PurgeRecycle:         true,
-							RestoreFileVersion:   true,
-							RestoreRecycleItem:   true,
-							Stat:                 true,
-							UpdateGrant:          true,
-							DenyGrant:            true,
-						},
-					},
 					Grantee: &provider.Grantee{
 						Id: &provider.Grantee_UserId{
 							UserId: &userpb.UserId{
@@ -814,10 +604,51 @@ var _ = Describe("Nextcloud", func() {
 						XXX_unrecognized:     nil,
 						XXX_sizecache:        0,
 					},
+					State: ocm.ShareState_SHARE_STATE_ACCEPTED,
+				},
+				&field_mask.FieldMask{
+					Paths: []string{"state"},
+				})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(*receivedShare).To(Equal(ocm.ReceivedShare{
+				Id:         &ocm.ShareId{},
+				ResourceId: &provider.ResourceId{},
+				Grantee: &provider.Grantee{
+					Id: &provider.Grantee_UserId{
+						UserId: &userpb.UserId{
+							Idp:      "0.0.0.0:19000",
+							OpaqueId: "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
+							Type:     userpb.UserType_USER_TYPE_PRIMARY,
+						},
+					},
+				},
+				Owner: &userpb.UserId{
+					Idp:      "0.0.0.0:19000",
+					OpaqueId: "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
+					Type:     userpb.UserType_USER_TYPE_PRIMARY,
+				},
+				Creator: &userpb.UserId{
+					Idp:      "0.0.0.0:19000",
+					OpaqueId: "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
+					Type:     userpb.UserType_USER_TYPE_PRIMARY,
+				},
+				Ctime: &types.Timestamp{
+					Seconds:              1234567890,
+					Nanos:                0,
+					XXX_NoUnkeyedLiteral: struct{}{},
+					XXX_unrecognized:     nil,
+					XXX_sizecache:        0,
+				},
+				Mtime: &types.Timestamp{
+					Seconds:              1234567890,
+					Nanos:                0,
+					XXX_NoUnkeyedLiteral: struct{}{},
+					XXX_unrecognized:     nil,
+					XXX_sizecache:        0,
 				},
 				State: ocm.ShareState_SHARE_STATE_ACCEPTED,
 			}))
-			checkCalled(called, `POST /apps/sciencemesh/~tester/api/ocm/UpdateReceivedShare {"received_share":{"share":{"id":{},"resource_id":{},"permissions":{"permissions":{"add_grant":true,"create_container":true,"delete":true,"get_path":true,"get_quota":true,"initiate_file_download":true,"initiate_file_upload":true,"list_grants":true,"list_container":true,"list_file_versions":true,"list_recycle":true,"move":true,"remove_grant":true,"purge_recycle":true,"restore_file_version":true,"restore_recycle_item":true,"stat":true,"update_grant":true,"deny_grant":true}},"grantee":{"Id":{"UserId":{"idp":"0.0.0.0:19000","opaque_id":"f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c","type":1}}},"owner":{"idp":"0.0.0.0:19000","opaque_id":"f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c","type":1},"creator":{"idp":"0.0.0.0:19000","opaque_id":"f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c","type":1},"ctime":{"seconds":1234567890},"mtime":{"seconds":1234567890}},"state":2},"field_mask":{"paths":["state"]}}`)
+			checkCalled(called, `POST /apps/sciencemesh/~tester/api/ocm/UpdateReceivedShare {"received_share":{"id":{},"resource_id":{},"grantee":{"Id":{"UserId":{"idp":"0.0.0.0:19000","opaque_id":"f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c","type":1}}},"owner":{"idp":"0.0.0.0:19000","opaque_id":"f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c","type":1},"creator":{"idp":"0.0.0.0:19000","opaque_id":"f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c","type":1},"ctime":{"seconds":1234567890},"mtime":{"seconds":1234567890},"state":2},"field_mask":{"paths":["state"]}}`)
 		})
 	})
 

@@ -22,89 +22,72 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"math"
 	"mime"
 	"net/http"
-	"reflect"
 	"strings"
-	"time"
+
+	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+	providerpb "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	ocmcore "github.com/cs3org/go-cs3apis/cs3/ocm/core/v1beta1"
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
+	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
+
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
-	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/internal/http/services/reqres"
-	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/utils"
+	"github.com/go-playground/validator/v10"
 )
 
+var validate = validator.New()
+
 type sharesHandler struct {
-	gatewayAddr string
+	gatewayClient              gateway.GatewayAPIClient
+	exposeRecipientDisplayName bool
 }
 
-func (h *sharesHandler) init(c *config) {
-	h.gatewayAddr = c.GatewaySvc
+func (h *sharesHandler) init(c *config) error {
+	var err error
+	h.gatewayClient, err = pool.GetGatewayServiceClient(pool.Endpoint(c.GatewaySvc))
+	if err != nil {
+		return err
+	}
+	h.exposeRecipientDisplayName = c.ExposeRecipientDisplayName
+	return nil
+}
+
+type createShareRequest struct {
+	ShareWith         string    `json:"shareWith" validate:"required"`                  // identifier of the recipient of the share
+	Name              string    `json:"name" validate:"required"`                       // name of the resource
+	Description       string    `json:"description"`                                    // (optional) description of the resource
+	ResourceID        string    `json:"resourceId" validate:"required"`                 // unique identifier of the resource at provider side
+	Owner             string    `json:"owner" validate:"required"`                      // unique identifier of the owner at provider side
+	Sender            string    `json:"sender" validate:"required"`                     // unique indentifier of the user who wants to share the resource at provider side
+	OwnerDisplayName  string    `json:"ownerDisplayName"`                               // display name of the owner of the resource
+	SenderDisplayName string    `json:"senderDisplayName"`                              // dispay name of the user who wants to share the resource
+	ShareType         string    `json:"shareType" validate:"required,oneof=user group"` // recipient share type (user or group)
+	ResourceType      string    `json:"resourceType" validate:"required,oneof=file folder"`
+	Expiration        uint64    `json:"expiration"`
+	Protocols         Protocols `json:"protocols" validate:"required"`
 }
 
 // CreateShare sends all the informations to the consumer needed to start
 // synchronization between the two services.
 func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	log := appctx.GetLogger(ctx)
-	contentType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
-	var shareWith, meshProvider, resource, providerID, owner string
-	var protocol map[string]interface{}
-	if err == nil && contentType == "application/json" {
-		defer r.Body.Close()
-		reqBody, err := io.ReadAll(r.Body)
-		if err == nil {
-			reqMap := make(map[string]interface{})
-			err = json.Unmarshal(reqBody, &reqMap)
-			if err == nil {
-				meshProvider = reqMap["meshProvider"].(string) // FIXME: get this from sharedBy string?
-				shareWith, protocol = reqMap["shareWith"].(string), reqMap["protocol"].(map[string]interface{})
-				resource, owner = reqMap["name"].(string), reqMap["owner"].(string)
-				// Note that if an OCM request were to go directly from a Nextcloud server
-				// to a Reva server, it will (incorrectly) sends an integer provider_id instead a string one.
-				// This doesn't happen when using the sciencemesh-nextcloud app, but in order to make the OCM
-				// test suite pass, this code works around that:
-				if reflect.ValueOf(reqMap["providerId"]).Kind() == reflect.Float64 {
-					providerID = fmt.Sprintf("%d", int(math.Round(reqMap["providerId"].(float64))))
-				} else {
-					providerID = reqMap["providerId"].(string)
-				}
-			} else {
-				reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, "could not parse json request body", nil)
-			}
-		}
-	} else {
-		var protocolJSON string
-		shareWith, protocolJSON, meshProvider = r.FormValue("shareWith"), r.FormValue("protocol"), r.FormValue("meshProvider")
-		resource, providerID, owner = r.FormValue("name"), r.FormValue("providerId"), r.FormValue("owner")
-		err = json.Unmarshal([]byte(protocolJSON), &protocol)
-		if err != nil {
-			reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, "invalid protocol parameters", nil)
-		}
-	}
 
-	if resource == "" || providerID == "" || owner == "" {
-		msg := fmt.Sprintf("missing details about resource to be shared (resource='%s', providerID='%s', owner='%s", resource, providerID, owner)
-		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, msg, nil)
-		return
-	}
-	if shareWith == "" || protocol["name"] == "" || meshProvider == "" {
-		msg := fmt.Sprintf("missing request parameters (shareWith='%s', protocol.name='%s', meshProvider='%s'", shareWith, protocol["name"], meshProvider)
-		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, msg, nil)
-		return
-	}
-
-	gatewayClient, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	req, err := getCreateShareRequest(r)
 	if err != nil {
-		reqres.WriteError(w, r, reqres.APIErrorServerError, "error getting storage grpc client", err)
+		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, err.Error(), nil)
+		return
+	}
+
+	_, meshProvider, err := getIDAndMeshProvider(req.Sender)
+	if err != nil {
+		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, err.Error(), nil)
 		return
 	}
 
@@ -122,7 +105,7 @@ func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 
-	providerAllowedResp, err := gatewayClient.IsProviderAllowed(ctx, &ocmprovider.IsProviderAllowedRequest{
+	providerAllowedResp, err := h.gatewayClient.IsProviderAllowed(ctx, &ocmprovider.IsProviderAllowedRequest{
 		Provider: &providerInfo,
 	})
 	if err != nil {
@@ -134,9 +117,14 @@ func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var shareWithParts = strings.Split(shareWith, "@")
-	userRes, err := gatewayClient.GetUser(ctx, &userpb.GetUserRequest{
-		UserId: &userpb.UserId{OpaqueId: shareWithParts[0]}, SkipFetchingUserGroups: true,
+	shareWith, _, err := getIDAndMeshProvider(req.ShareWith)
+	if err != nil {
+		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, err.Error(), nil)
+		return
+	}
+
+	userRes, err := h.gatewayClient.GetUser(ctx, &userpb.GetUserRequest{
+		UserId: &userpb.UserId{OpaqueId: shareWith}, SkipFetchingUserGroups: true,
 	})
 	if err != nil {
 		reqres.WriteError(w, r, reqres.APIErrorServerError, "error searching recipient", err)
@@ -147,105 +135,119 @@ func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var permissions conversions.Permissions
-	var token string
-	options, ok := protocol["options"].(map[string]interface{})
-	if !ok {
-		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, "protocol: webdav token not provided", nil)
-		return
-	}
-
-	token, ok = options["sharedSecret"].(string)
-	if !ok {
-		token, ok = options["token"].(string)
-		if !ok {
-			reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, "protocol: webdav token not provided", nil)
-			return
-		}
-	}
-	var role *conversions.Role
-	pval, ok := options["permissions"].(int)
-	if !ok {
-		role = conversions.NewViewerRole()
-	} else {
-		permissions, err = conversions.NewPermissions(pval)
-		if err != nil {
-			reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, err.Error(), nil)
-			return
-		}
-		role = conversions.RoleFromOCSPermissions(permissions)
-	}
-
-	val, err := json.Marshal(role.CS3ResourcePermissions())
+	owner, err := getUserIDFromOCMUser(req.Owner)
 	if err != nil {
-		reqres.WriteError(w, r, reqres.APIErrorServerError, "could not encode role", nil)
+		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, err.Error(), nil)
 		return
 	}
 
-	ownerParts := strings.Split(owner, "@")
-	if len(ownerParts) != 2 {
-		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, "owner should be opaqueId@webDAVHost", nil)
+	sender, err := getUserIDFromOCMUser(req.Sender)
+	if err != nil {
+		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, err.Error(), nil)
+		return
 	}
-	ownerID := &userpb.UserId{
-		OpaqueId: ownerParts[0],
-		Idp:      ownerParts[1],
-		Type:     userpb.UserType_USER_TYPE_PRIMARY,
-	}
+
 	createShareReq := &ocmcore.CreateOCMCoreShareRequest{
-		Name:       resource,
-		ProviderId: providerID,
-		Owner:      ownerID,
-		ShareWith:  userRes.User.GetId(),
-		Protocol: &ocmcore.Protocol{
-			Name: protocol["name"].(string),
-			Opaque: &types.Opaque{
-				Map: map[string]*types.OpaqueEntry{
-					"permissions": {
-						Decoder: "json",
-						Value:   val,
-					},
-					"token": {
-						Decoder: "plain",
-						Value:   []byte(token),
-					},
-				},
-			},
-		},
+		Description:  req.Description,
+		Name:         req.Name,
+		ResourceId:   req.ResourceID,
+		Owner:        owner,
+		Sender:       sender,
+		ShareWith:    userRes.User.Id,
+		ResourceType: getResourceTypeFromOCMRequest(req.ResourceType),
+		ShareType:    getOCMShareType(req.ShareType),
+		Protocols:    getProtocols(req.Protocols),
 	}
-	createShareResponse, err := gatewayClient.CreateOCMCoreShare(ctx, createShareReq)
-	if err != nil {
-		reqres.WriteError(w, r, reqres.APIErrorServerError, "error sending a grpc create ocm core share request", err)
-		return
-	}
-	if createShareResponse.Status.Code != rpc.Code_CODE_OK {
-		if createShareResponse.Status.Code == rpc.Code_CODE_NOT_FOUND {
-			reqres.WriteError(w, r, reqres.APIErrorNotFound, "not found", nil)
-			return
+
+	if req.Expiration != 0 {
+		createShareReq.Expiration = &types.Timestamp{
+			Seconds: req.Expiration,
 		}
-		reqres.WriteError(w, r, reqres.APIErrorServerError, "grpc create ocm core share request failed", errors.New(createShareResponse.Status.Message))
-		return
 	}
 
-	timeCreated := createShareResponse.Created
-	jsonOut, err := json.Marshal(
-		map[string]string{
-			"id":        createShareResponse.Id,
-			"createdAt": time.Unix(int64(timeCreated.Seconds), int64(timeCreated.Nanos)).String(),
-		},
-	)
+	createShareResp, err := h.gatewayClient.CreateOCMCoreShare(ctx, createShareReq)
 	if err != nil {
-		reqres.WriteError(w, r, reqres.APIErrorServerError, "error marshalling share data", err)
+		reqres.WriteError(w, r, reqres.APIErrorServerError, "error creating ocm share", err)
 		return
 	}
 
+	if userRes.Status.Code != rpc.Code_CODE_OK {
+		// TODO: define errors in the cs3apis
+		reqres.WriteError(w, r, reqres.APIErrorServerError, "error creating ocm share", errors.New(createShareResp.Status.Message))
+		return
+	}
+
+	response := map[string]any{}
+
+	if h.exposeRecipientDisplayName {
+		response["recipientDisplayName"] = userRes.User.DisplayName
+	}
+
+	_ = json.NewEncoder(w).Encode(response)
 	w.WriteHeader(http.StatusCreated)
-	w.Header().Set("Content-Type", "application/json")
+}
 
-	_, err = w.Write(jsonOut)
+func getUserIDFromOCMUser(user string) (*userpb.UserId, error) {
+	id, idp, err := getIDAndMeshProvider(user)
 	if err != nil {
-		reqres.WriteError(w, r, reqres.APIErrorServerError, "error writing shares data", err)
-		return
+		return nil, err
 	}
+	return &userpb.UserId{
+		OpaqueId: id,
+		Idp:      idp,
+		// the remote user is a federated account for the local reva
+		Type: userpb.UserType_USER_TYPE_FEDERATED,
+	}, nil
+}
 
-	log.Info().Msg("Share created.")
+func getIDAndMeshProvider(user string) (string, string, error) {
+	// the user is in the form of dimitri@apiwise.nl
+	split := strings.Split(user, "@")
+	if len(split) < 2 {
+		return "", "", errors.New("not in the form <id>@<provider>")
+	}
+	return strings.Join(split[:len(split)-1], "@"), split[len(split)-1], nil
+}
+
+func getCreateShareRequest(r *http.Request) (*createShareRequest, error) {
+	var req createShareRequest
+	contentType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	if err == nil && contentType == "application/json" {
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			return nil, err
+		}
+	} else {
+		return nil, errors.New("body request not recognised")
+	}
+	// validate the request
+	if err := validate.Struct(req); err != nil {
+		return nil, err
+	}
+	return &req, nil
+}
+
+func getResourceTypeFromOCMRequest(t string) providerpb.ResourceType {
+	switch t {
+	case "file":
+		return providerpb.ResourceType_RESOURCE_TYPE_FILE
+	case "folder":
+		return providerpb.ResourceType_RESOURCE_TYPE_CONTAINER
+	default:
+		return providerpb.ResourceType_RESOURCE_TYPE_INVALID
+	}
+}
+
+func getOCMShareType(t string) ocm.ShareType {
+	if t == "user" {
+		return ocm.ShareType_SHARE_TYPE_USER
+	}
+	return ocm.ShareType_SHARE_TYPE_GROUP
+}
+
+func getProtocols(p Protocols) []*ocm.Protocol {
+	prot := make([]*ocm.Protocol, 0, len(p))
+	for _, data := range p {
+		prot = append(prot, data.ToOCMProtocol())
+	}
+	return prot
 }

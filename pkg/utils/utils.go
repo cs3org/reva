@@ -20,7 +20,6 @@ package utils
 
 import (
 	"fmt"
-	"math/rand"
 	"net"
 	"net/http"
 	"net/url"
@@ -39,6 +38,7 @@ import (
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/registry"
 	"github.com/cs3org/reva/pkg/registry/memory"
+	"go.step.sm/crypto/randutil"
 
 	// gocritic is disabled because google.golang.org/protobuf/proto does not provide a method to convert MessageV1 to MessageV2.
 	"github.com/golang/protobuf/proto" //nolint:staticcheck
@@ -112,13 +112,11 @@ func ResolvePath(path string) (string, error) {
 
 // RandString is a helper to create tokens.
 func RandString(n int) string {
-	rand.Seed(time.Now().UTC().UnixNano())
-	var l = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
-	b := make([]rune, n)
-	for i := range b {
-		b[i] = l[rand.Intn(len(l))]
+	s, err := randutil.Alphanumeric(n)
+	if err != nil {
+		panic(err)
 	}
-	return string(b)
+	return s
 }
 
 // TSToUnixNano converts a protobuf Timestamp to uint64

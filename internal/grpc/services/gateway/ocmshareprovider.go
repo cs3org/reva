@@ -52,24 +52,6 @@ func (s *svc) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareRequest
 		return nil, errors.Wrap(err, "gateway: error calling CreateShare")
 	}
 
-	// if we don't need to commit we return earlier
-	if !s.c.CommitShareToStorageGrant && !s.c.CommitShareToStorageRef {
-		return res, nil
-	}
-
-	// TODO(labkode): if both commits are enabled they could be done concurrently.
-	if s.c.CommitShareToStorageGrant {
-		addGrantStatus, err := s.addGrant(ctx, req.ResourceId, req.Grant.Grantee, req.Grant.Permissions.Permissions)
-		if err != nil {
-			return nil, errors.Wrap(err, "gateway: error adding OCM grant to storage")
-		}
-		if addGrantStatus.Code != rpc.Code_CODE_OK {
-			return &ocm.CreateOCMShareResponse{
-				Status: addGrantStatus,
-			}, err
-		}
-	}
-
 	return res, nil
 }
 
@@ -81,48 +63,9 @@ func (s *svc) RemoveOCMShare(ctx context.Context, req *ocm.RemoveOCMShareRequest
 		}, nil
 	}
 
-	// if we need to commit the share, we need the resource it points to.
-	var share *ocm.Share
-	if s.c.CommitShareToStorageGrant {
-		getShareReq := &ocm.GetOCMShareRequest{
-			Ref: req.Ref,
-		}
-		getShareRes, err := c.GetOCMShare(ctx, getShareReq)
-		if err != nil {
-			return nil, errors.Wrap(err, "gateway: error calling GetShare")
-		}
-
-		if getShareRes.Status.Code != rpc.Code_CODE_OK {
-			res := &ocm.RemoveOCMShareResponse{
-				Status: status.NewInternal(ctx, status.NewErrorFromCode(getShareRes.Status.Code, "gateway"),
-					"error getting share when committing to the storage"),
-			}
-			return res, nil
-		}
-		share = getShareRes.Share
-	}
-
 	res, err := c.RemoveOCMShare(ctx, req)
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error calling RemoveShare")
-	}
-
-	// if we don't need to commit we return earlier
-	if !s.c.CommitShareToStorageGrant && !s.c.CommitShareToStorageRef {
-		return res, nil
-	}
-
-	// TODO(labkode): if both commits are enabled they could be done concurrently.
-	if s.c.CommitShareToStorageGrant {
-		removeGrantStatus, err := s.removeGrant(ctx, share.ResourceId, share.Grantee, share.Permissions.Permissions)
-		if err != nil {
-			return nil, errors.Wrap(err, "gateway: error removing OCM grant from storage")
-		}
-		if removeGrantStatus.Code != rpc.Code_CODE_OK {
-			return &ocm.RemoveOCMShareResponse{
-				Status: removeGrantStatus,
-			}, err
-		}
 	}
 
 	return res, nil
@@ -224,11 +167,6 @@ func (s *svc) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateReceive
 		}, nil
 	}
 
-	// if we don't need to create/delete references then we return early.
-	if !s.c.CommitShareToStorageGrant && !s.c.CommitShareToStorageRef {
-		return res, nil
-	}
-
 	// properties are updated in the order they appear in the field mask
 	// when an error occurs the request ends and no further fields are updated
 	for i := range req.UpdateMask.Paths {
@@ -239,7 +177,7 @@ func (s *svc) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateReceive
 				getShareReq := &ocm.GetReceivedOCMShareRequest{
 					Ref: &ocm.ShareReference{
 						Spec: &ocm.ShareReference_Id{
-							Id: req.Share.Share.Id,
+							Id: req.Share.Id,
 						},
 					},
 				}
@@ -267,8 +205,8 @@ func (s *svc) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateReceive
 					panic("gateway: error updating a received share: the share is nil")
 				}
 
-				if share.GetShare().ShareType == ocm.Share_SHARE_TYPE_TRANSFER {
-					srcIdp := share.GetShare().GetOwner().GetIdp()
+				if isTransferShare(share) {
+					srcIdp := share.GetOwner().GetIdp()
 					meshProvider, err := s.GetInfoByDomain(ctx, &ocmprovider.GetInfoByDomainRequest{
 						Domain: srcIdp,
 					})
@@ -314,7 +252,7 @@ func (s *svc) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateReceive
 					}
 
 					var srcToken string
-					srcTokenOpaque, ok := share.GetShare().Grantee.Opaque.Map["token"]
+					srcTokenOpaque, ok := share.Grantee.Opaque.Map["token"]
 					if !ok {
 						return &ocm.UpdateReceivedOCMShareResponse{
 							Status: status.NewNotFound(ctx, "token not found"),
@@ -330,16 +268,16 @@ func (s *svc) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateReceive
 						}, nil
 					}
 
-					srcPath := path.Join(srcEndpointPath, share.GetShare().Name)
+					srcPath := path.Join(srcEndpointPath, share.Name)
 					srcTargetURI := fmt.Sprintf("%s://%s@%s?name=%s", srcEndpointScheme, srcToken, srcServiceHost, srcPath)
 
 					// get the webdav endpoint of the grantee's idp
 					var granteeIdp string
-					if share.GetShare().GetGrantee().Type == provider.GranteeType_GRANTEE_TYPE_USER {
-						granteeIdp = share.GetShare().GetGrantee().GetUserId().Idp
+					if share.GetGrantee().Type == provider.GranteeType_GRANTEE_TYPE_USER {
+						granteeIdp = share.GetGrantee().GetUserId().Idp
 					}
-					if share.GetShare().GetGrantee().Type == provider.GranteeType_GRANTEE_TYPE_GROUP {
-						granteeIdp = share.GetShare().GetGrantee().GetGroupId().Idp
+					if share.GetGrantee().Type == provider.GranteeType_GRANTEE_TYPE_GROUP {
+						granteeIdp = share.GetGrantee().GetGroupId().Idp
 					}
 					destWebdavEndpoint, err := s.getWebdavEndpoint(ctx, granteeIdp)
 					if err != nil {
@@ -388,11 +326,11 @@ func (s *svc) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateReceive
 							Status: &rpc.Status{Code: rpc.Code_CODE_INTERNAL},
 						}, nil
 					}
-					destPath := path.Join(destEndpointPath, homeRes.Path, s.c.DataTransfersFolder, path.Base(share.GetShare().Name))
+					destPath := path.Join(destEndpointPath, homeRes.Path, s.c.DataTransfersFolder, path.Base(share.Name))
 					destTargetURI := fmt.Sprintf("%s://%s@%s?name=%s", destEndpointScheme, destToken, destServiceHost, destPath)
 
 					shareID := &ocm.ShareId{
-						OpaqueId: share.GetShare().GetId().OpaqueId,
+						OpaqueId: share.GetId().OpaqueId,
 					}
 					req := &datatx.CreateTransferRequest{
 						SrcTargetUri:  srcTargetURI,
@@ -417,12 +355,12 @@ func (s *svc) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateReceive
 					}, nil
 				}
 
-				createRefStatus, err := s.createOCMReference(ctx, share.Share)
+				createRefStatus, err := s.createOCMReference(ctx, share)
 				return &ocm.UpdateReceivedOCMShareResponse{
 					Status: createRefStatus,
 				}, err
 			case ocm.ShareState_SHARE_STATE_REJECTED:
-				s.removeReference(ctx, req.GetShare().GetShare().ResourceId) // error is logged inside removeReference
+				s.removeReference(ctx, req.GetShare().ResourceId) // error is logged inside removeReference
 				// FIXME we are ignoring an error from removeReference here
 				return res, nil
 			}
@@ -437,6 +375,11 @@ func (s *svc) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateReceive
 		}
 	}
 	return res, nil
+}
+
+func isTransferShare(s *ocm.ReceivedShare) bool {
+	_, ok := getTransferProtocol(s)
+	return ok
 }
 
 func (s *svc) GetReceivedOCMShare(ctx context.Context, req *ocm.GetReceivedOCMShareRequest) (*ocm.GetReceivedOCMShareResponse, error) {
@@ -456,21 +399,19 @@ func (s *svc) GetReceivedOCMShare(ctx context.Context, req *ocm.GetReceivedOCMSh
 	return res, nil
 }
 
-func (s *svc) createOCMReference(ctx context.Context, share *ocm.Share) (*rpc.Status, error) {
+func getTransferProtocol(share *ocm.ReceivedShare) (*ocm.TransferProtocol, bool) {
+	for _, p := range share.Protocols {
+		if d, ok := p.Term.(*ocm.Protocol_TransferOptions); ok {
+			return d.TransferOptions, true
+		}
+	}
+	return nil, false
+}
+
+func (s *svc) createOCMReference(ctx context.Context, share *ocm.ReceivedShare) (*rpc.Status, error) {
 	log := appctx.GetLogger(ctx)
 
-	var token string
-	tokenOpaque, ok := share.Grantee.Opaque.Map["token"]
-	if !ok {
-		return status.NewNotFound(ctx, "token not found"), nil
-	}
-	switch tokenOpaque.Decoder {
-	case "plain":
-		token = string(tokenOpaque.Value)
-	default:
-		err := errtypes.NotSupported("opaque entry decoder not recognized: " + tokenOpaque.Decoder)
-		return status.NewInternal(ctx, err, "invalid opaque entry decoder"), nil
-	}
+	d, _ := getTransferProtocol(share)
 
 	homeRes, err := s.GetHome(ctx, &provider.GetHomeRequest{})
 	if err != nil {
@@ -485,7 +426,7 @@ func (s *svc) createOCMReference(ctx context.Context, share *ocm.Share) (*rpc.St
 	// from the main request.
 	refPath = path.Join(homeRes.Path, s.c.ShareFolder, path.Base(share.Name))
 	// webdav is the scheme, token@host the opaque part and the share name the query of the URL.
-	targetURI = fmt.Sprintf("webdav://%s@%s?name=%s", token, share.Creator.Idp, share.Name)
+	targetURI = fmt.Sprintf("webdav://%s@%s?name=%s", d.SharedSecret, share.Creator.Idp, share.Name)
 
 	log.Info().Msg("mount path will be:" + refPath)
 	createRefReq := &provider.CreateReferenceRequest{

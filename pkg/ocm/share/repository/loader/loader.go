@@ -16,19 +16,11 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package registry
+package loader
 
-import "github.com/cs3org/reva/pkg/ocm/share"
-
-// NewFunc is the function that share managers
-// should register at init time.
-type NewFunc func(map[string]interface{}) (share.Manager, error)
-
-// NewFuncs is a map containing all the registered share managers.
-var NewFuncs = map[string]NewFunc{}
-
-// Register registers a new share manager new function.
-// Not safe for concurrent use. Safe for use from package init.
-func Register(name string, f NewFunc) {
-	NewFuncs[name] = f
-}
+import (
+	// Load core share repository drivers.
+	_ "github.com/cs3org/reva/pkg/ocm/share/repository/json"
+	_ "github.com/cs3org/reva/pkg/ocm/share/repository/nextcloud"
+	// Add your own here.
+)

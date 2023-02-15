@@ -138,7 +138,7 @@ func (c *Completer) ocmShareReceivedArgumentCompleter() []prompt.Suggest {
 		}
 
 		for _, r := range info {
-			suggests = append(suggests, prompt.Suggest{Text: r.Share.Id.OpaqueId})
+			suggests = append(suggests, prompt.Suggest{Text: r.Id.OpaqueId})
 		}
 	}
 

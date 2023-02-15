@@ -19,47 +19,33 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"io"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
-	"github.com/pkg/errors"
+	"github.com/cs3org/reva/pkg/utils"
 )
 
-func ocmShareUpdateCommand() *command {
-	cmd := newCommand("ocm-share-update")
-	cmd.Description = func() string { return "update an OCM share" }
-	cmd.Usage = func() string { return "Usage: ocm-share-update [-flags] <share_id>" }
-	rol := cmd.String("rol", "viewer", "the permission for the share (viewer or editor)")
-
-	cmd.ResetFlags = func() {
-		*rol = "viewer"
-	}
+func ocmShareGetReceivedCommand() *command {
+	cmd := newCommand("ocm-share-get-received")
+	cmd.Description = func() string { return "get the info of the OCM share you have received" }
+	cmd.Usage = func() string { return "Usage: ocm-share-get-received" }
 	cmd.Action = func(w ...io.Writer) error {
 		if cmd.NArg() < 1 {
 			return errors.New("Invalid arguments: " + cmd.Usage())
 		}
 
-		// validate flags
-		if *rol != viewerPermission && *rol != editorPermission {
-			return errors.New("Invalid rol: rol must be viewer or editor\n" + cmd.Usage())
-		}
-
-		id := cmd.Args()[0]
-
 		ctx := getAuthContext()
-		shareClient, err := getClient()
+		client, err := getClient()
 		if err != nil {
 			return err
 		}
 
-		perm, err := getOCMSharePerm(*rol)
-		if err != nil {
-			return err
-		}
+		id := cmd.Arg(0)
 
-		shareRequest := &ocm.UpdateOCMShareRequest{
+		shareRes, err := client.GetReceivedOCMShare(ctx, &ocm.GetReceivedOCMShareRequest{
 			Ref: &ocm.ShareReference{
 				Spec: &ocm.ShareReference_Id{
 					Id: &ocm.ShareId{
@@ -67,25 +53,21 @@ func ocmShareUpdateCommand() *command {
 					},
 				},
 			},
-			Field: &ocm.UpdateOCMShareRequest_UpdateField{
-				Field: &ocm.UpdateOCMShareRequest_UpdateField_Permissions{
-					Permissions: &ocm.SharePermissions{
-						Permissions: perm,
-					},
-				},
-			},
-		}
-
-		shareRes, err := shareClient.UpdateOCMShare(ctx, shareRequest)
+		})
 		if err != nil {
 			return err
 		}
-
 		if shareRes.Status.Code != rpc.Code_CODE_OK {
 			return formatError(shareRes.Status)
 		}
 
-		fmt.Println("OK")
+		d, err := utils.MarshalProtoV1ToJSON(shareRes.Share)
+		if err != nil {
+			return err
+		}
+
+		fmt.Println(string(d))
+
 		return nil
 	}
 	return cmd

@@ -23,13 +23,20 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
 
+	gatewayv1beta1 "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/internal/http/services/datagateway"
+	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/storage"
+	"github.com/studio-b12/gowebdav"
 )
 
 // TempDir creates a temporary directory in tmp/ and returns its path
@@ -99,4 +106,132 @@ func Upload(ctx context.Context, fs storage.FS, ref *provider.Reference, content
 	uploadRef := &provider.Reference{Path: "/" + uploadID}
 	err = fs.Upload(ctx, uploadRef, io.NopCloser(bytes.NewReader(content)))
 	return err
+}
+
+// Resource represents a general resource (file or folder).
+type Resource interface {
+	isResource()
+}
+
+// Folder implements the Resource interface.
+type Folder map[string]Resource
+
+func (Folder) isResource() {}
+
+// File implements the Resource interface.
+type File struct {
+	Content string
+}
+
+func (File) isResource() {}
+
+// CreateStructure creates the given structure.
+func CreateStructure(ctx context.Context, gw gatewayv1beta1.GatewayAPIClient, root string, f Resource) error {
+	switch r := f.(type) {
+	case Folder:
+		if err := CreateFolder(ctx, gw, root); err != nil {
+			return err
+		}
+		for name, resource := range r {
+			p := filepath.Join(root, name)
+			if err := CreateStructure(ctx, gw, p, resource); err != nil {
+				return err
+			}
+		}
+	case File:
+		if err := CreateFile(ctx, gw, root, []byte(r.Content)); err != nil {
+			return err
+		}
+	default:
+		return fmt.Errorf("resource %T not valid", f)
+	}
+	return nil
+}
+
+// CreateFile creates a file in the given path with an initial content.
+func CreateFile(ctx context.Context, gw gatewayv1beta1.GatewayAPIClient, path string, content []byte) error {
+	initRes, err := gw.InitiateFileUpload(ctx, &provider.InitiateFileUploadRequest{Ref: &provider.Reference{Path: path}})
+	if err != nil {
+		return err
+	}
+	var token, endpoint string
+	for _, p := range initRes.Protocols {
+		if p.Protocol == "simple" {
+			token, endpoint = p.Token, p.UploadEndpoint
+		}
+	}
+	httpReq, err := rhttp.NewRequest(ctx, http.MethodPut, endpoint, bytes.NewReader(content))
+	if err != nil {
+		return err
+	}
+
+	httpReq.Header.Set(datagateway.TokenTransportHeader, token)
+
+	httpRes, err := http.DefaultClient.Do(httpReq)
+	if err != nil {
+		return err
+	}
+	if httpRes.StatusCode != http.StatusOK {
+		return errors.New(httpRes.Status)
+	}
+	defer httpRes.Body.Close()
+	return nil
+}
+
+// CreateFolder creates a folder in the given path.
+func CreateFolder(ctx context.Context, gw gatewayv1beta1.GatewayAPIClient, path string) error {
+	res, err := gw.CreateContainer(ctx, &provider.CreateContainerRequest{
+		Ref: &provider.Reference{Path: path},
+	})
+	if err != nil {
+		return err
+	}
+	if res.Status.Code != rpcv1beta1.Code_CODE_OK {
+		return errors.New(res.Status.Message)
+	}
+	return nil
+}
+
+// SameContentWebDAV checks that starting from the root path the webdav client sees the same
+// content defined in the Resource.
+func SameContentWebDAV(cl *gowebdav.Client, root string, f Resource) (bool, error) {
+	return sameContentWebDAV(cl, root, "", f)
+}
+
+func sameContentWebDAV(cl *gowebdav.Client, root, rel string, f Resource) (bool, error) {
+	switch r := f.(type) {
+	case Folder:
+		list, err := cl.ReadDir(rel)
+		if err != nil {
+			return false, err
+		}
+		if len(list) != len(r) {
+			return false, nil
+		}
+		for _, d := range list {
+			resource, ok := r[d.Name()]
+			if !ok {
+				return false, nil
+			}
+			ok, err := sameContentWebDAV(cl, root, filepath.Join(rel, d.Name()), resource)
+			if err != nil {
+				return false, err
+			}
+			if !ok {
+				return false, nil
+			}
+		}
+		return true, nil
+	case File:
+		c, err := cl.Read(rel)
+		if err != nil {
+			return false, err
+		}
+		if !bytes.Equal(c, []byte(r.Content)) {
+			return false, nil
+		}
+		return true, nil
+	default:
+		return false, errors.New("resource not valid")
+	}
 }
