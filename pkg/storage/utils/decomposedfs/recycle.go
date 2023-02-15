@@ -149,12 +149,13 @@ func (fs *Decomposedfs) ListRecycle(ctx context.Context, ref *provider.Reference
 		return nil, err
 	}
 	for _, name := range names {
-		md, err := os.Stat(filepath.Join(childrenPath, name))
+		resolvedChildPath, err := filepath.EvalSymlinks(filepath.Join(childrenPath, name))
 		if err != nil {
-			sublog.Error().Err(err).Str("name", name).Msg("could not stat, skipping")
+			sublog.Error().Err(err).Str("name", name).Msg("could not resolve symlink, skipping")
 			continue
 		}
-		attrs, err := xattrs.All(filepath.Join(childrenPath, name))
+
+		attrs, err := xattrs.All(resolvedChildPath)
 		if err != nil {
 			sublog.Error().Err(err).Str("name", name).Msg("could not get extended attributes, skipping")
 			continue
@@ -166,9 +167,30 @@ func (fs *Decomposedfs) ListRecycle(ctx context.Context, ref *provider.Reference
 			continue
 		}
 
+		size := int64(0)
+		switch provider.ResourceType(nodeType) {
+		case provider.ResourceType_RESOURCE_TYPE_FILE:
+			size, err = node.ReadBlobSizeAttr(resolvedChildPath)
+			if err != nil {
+				sublog.Error().Err(err).Str("name", name).Msg("invalid blob size, skipping")
+				continue
+			}
+		case provider.ResourceType_RESOURCE_TYPE_CONTAINER:
+			attr, err := xattrs.Get(resolvedChildPath, xattrs.TreesizeAttr)
+			if err != nil {
+				sublog.Error().Err(err).Str("name", name).Msg("invalid tree size, skipping")
+				continue
+			}
+			size, err = strconv.ParseInt(attr, 10, 64)
+			if err != nil {
+				sublog.Error().Err(err).Str("name", name).Msg("invalid tree size, skipping")
+				continue
+			}
+		}
+
 		item := &provider.RecycleItem{
 			Type:         provider.ResourceType(nodeType),
-			Size:         uint64(md.Size()),
+			Size:         uint64(size),
 			Key:          filepath.Join(key, relativePath, name),
 			DeletionTime: deletionTime,
 			Ref: &provider.Reference{
