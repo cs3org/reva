@@ -19,6 +19,7 @@
 package xattrs
 
 import (
+	"encoding/base64"
 	"strconv"
 	"strings"
 
@@ -228,6 +229,8 @@ func (XattrsBackend) MetadataPath(path string) string { return path }
 // IniBackend persists the attributs in INI format inside the file
 type IniBackend struct{}
 
+var encodedPrefixes = []string{ChecksumPrefix, MetadataPrefix, GrantPrefix}
+
 // All reads all extended attributes for a node
 func (b IniBackend) All(path string) (map[string]string, error) {
 	path = b.MetadataPath(path)
@@ -236,8 +239,21 @@ func (b IniBackend) All(path string) (map[string]string, error) {
 	if err != nil {
 		return nil, err
 	}
+	attribs := ini.Section("").KeysHash()
+	for key, val := range attribs {
+		for _, prefix := range encodedPrefixes {
+			if strings.HasPrefix(key, prefix) {
+				valBytes, err := base64.StdEncoding.DecodeString(val)
+				if err != nil {
+					return nil, err
+				}
+				attribs[key] = string(valBytes)
+				break
+			}
+		}
+	}
 
-	return ini.Section("").KeysHash(), nil
+	return attribs, nil
 }
 
 // Get an extended attribute value for the given key
@@ -251,7 +267,19 @@ func (b IniBackend) Get(path, key string) (string, error) {
 	if !ini.Section("").HasKey(key) {
 		return "", &xattr.Error{Op: "xattr.get", Path: path, Name: key, Err: xattr.ENOATTR}
 	}
-	return ini.Section("").Key(key).Value(), nil
+
+	val := ini.Section("").Key(key).Value()
+	for _, prefix := range encodedPrefixes {
+		if strings.HasPrefix(key, prefix) {
+			valBytes, err := base64.StdEncoding.DecodeString(val)
+			if err != nil {
+				return "", err
+			}
+			return string(valBytes), nil
+		}
+	}
+
+	return val, nil
 }
 
 // GetInt64 reads a string as int64 from the xattrs
@@ -289,6 +317,13 @@ func (b IniBackend) Set(path, key, val string) error {
 		return err
 	}
 
+	for _, prefix := range encodedPrefixes {
+		if strings.HasPrefix(key, prefix) {
+			val = base64.StdEncoding.EncodeToString([]byte(val))
+			break
+		}
+	}
+
 	ini.Section("").Key(key).SetValue(val)
 
 	return ini.SaveTo(path)
@@ -304,6 +339,12 @@ func (b IniBackend) SetMultiple(path string, attribs map[string]string) error {
 	}
 
 	for key, val := range attribs {
+		for _, prefix := range encodedPrefixes {
+			if strings.HasPrefix(key, prefix) {
+				val = base64.StdEncoding.EncodeToString([]byte(val))
+				break
+			}
+		}
 		ini.Section("").Key(key).SetValue(val)
 	}
 
