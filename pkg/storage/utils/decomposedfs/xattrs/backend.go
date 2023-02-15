@@ -28,14 +28,14 @@ import (
 )
 
 var backend Backend = NullBackend{}
-var unconfiguredError = errors.New("No xattrs backend configured. Bailing out.")
+var errUnconfiguredError = errors.New("no xattrs backend configured. Bailing out.")
 
 // UseXattrsBackend configures decomposedfs to use xattrs for storing file attributes
 func UseXattrsBackend() {
 	backend = XattrsBackend{}
 }
 
-// UseXattrsBackend configures decomposedfs to use ini files for storing file attributes
+// UseIniBackend configures decomposedfs to use ini files for storing file attributes
 func UseIniBackend() {
 	backend = IniBackend{}
 }
@@ -54,30 +54,29 @@ type Backend interface {
 // NullBackend is the default stub backend, used to enforce the configuration of a proper backend
 type NullBackend struct{}
 
-// All reads all extended attributes for a node, protected by a
-// shared file lock
-func (NullBackend) All(path string) (map[string]string, error) { return nil, unconfiguredError }
+// All reads all extended attributes for a node
+func (NullBackend) All(path string) (map[string]string, error) { return nil, errUnconfiguredError }
 
 // Get an extended attribute value for the given key
-func (NullBackend) Get(path, key string) (string, error) { return "", unconfiguredError }
+func (NullBackend) Get(path, key string) (string, error) { return "", errUnconfiguredError }
 
 // GetInt64 reads a string as int64 from the xattrs
-func (NullBackend) GetInt64(path, key string) (int64, error) { return 0, unconfiguredError }
+func (NullBackend) GetInt64(path, key string) (int64, error) { return 0, errUnconfiguredError }
 
 // List retrieves a list of names of extended attributes associated with the
 // given path in the file system.
-func (NullBackend) List(path string) ([]string, error) { return nil, unconfiguredError }
+func (NullBackend) List(path string) ([]string, error) { return nil, errUnconfiguredError }
 
 // Set sets one attribute for the given path
-func (NullBackend) Set(path string, key string, val string) error { return unconfiguredError }
+func (NullBackend) Set(path string, key string, val string) error { return errUnconfiguredError }
 
-// Set sets a set of attribute for the given path
+// SetMultiple sets a set of attribute for the given path
 func (NullBackend) SetMultiple(path string, attribs map[string]string) error {
-	return unconfiguredError
+	return errUnconfiguredError
 }
 
 // Remove an extended attribute key
-func (NullBackend) Remove(path string, key string) error { return unconfiguredError }
+func (NullBackend) Remove(path string, key string) error { return errUnconfiguredError }
 
 // XattrsBackend stores the file attributes in extended attributes
 type XattrsBackend struct{}
@@ -170,7 +169,7 @@ func (XattrsBackend) Set(path string, key string, val string) (err error) {
 	return xattr.Set(path, key, []byte(val))
 }
 
-// Set sets a set of attribute for the given path
+// SetMultiple sets a set of attribute for the given path
 func (XattrsBackend) SetMultiple(path string, attribs map[string]string) (err error) {
 	// error handling: Count if there are errors while setting the attribs.
 	// if there were any, return an error.
@@ -269,7 +268,7 @@ func (IniBackend) Set(path, key, val string) error {
 	return ini.SaveTo(path)
 }
 
-// Set sets a set of attribute for the given path
+// SetMultiple sets a set of attribute for the given path
 func (IniBackend) SetMultiple(path string, attribs map[string]string) error {
 	ini, err := ini.Load(path)
 	if err != nil {

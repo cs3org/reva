@@ -270,18 +270,23 @@ func SetMultipleWithLock(filePath string, attribs map[string]string, fileLock *f
 	return backend.SetMultiple(filePath, attribs)
 }
 
+// All reads all extended attributes for a node
 func All(path string) (map[string]string, error) {
 	return backend.All(path)
 }
 
+// Get an extended attribute value for the given key
 func Get(path, key string) (string, error) {
 	return backend.Get(path, key)
 }
 
+// GetInt64 reads a string as int64 from the xattrs
 func GetInt64(path, key string) (int64, error) {
 	return backend.GetInt64(path, key)
 }
 
+// List retrieves a list of names of extended attributes associated with the
+// given path in the file system.
 func List(path string) ([]string, error) {
 	return backend.List(path)
 }
