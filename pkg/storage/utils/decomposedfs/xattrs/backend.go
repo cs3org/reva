@@ -29,7 +29,7 @@ import (
 )
 
 var backend Backend = NullBackend{}
-var errUnconfiguredError = errors.New("no xattrs backend configured. Bailing out.")
+var errUnconfiguredError = errors.New("no xattrs backend configured. Bailing out")
 
 // UseXattrsBackend configures decomposedfs to use xattrs for storing file attributes
 func UseXattrsBackend() {
