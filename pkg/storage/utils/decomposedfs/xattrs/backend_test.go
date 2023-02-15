@@ -12,17 +12,23 @@ import (
 
 var _ = Describe("Backend", func() {
 	var (
-		tmpdir string
-		file   string
+		tmpdir   string
+		file     string
+		metafile string
+
+		backend xattrs.Backend
 	)
 
 	BeforeEach(func() {
 		var err error
 		tmpdir, err = os.MkdirTemp(os.TempDir(), "XattrsBackendTest-")
 		Expect(err).ToNot(HaveOccurred())
+	})
 
+	JustBeforeEach(func() {
 		file = path.Join(tmpdir, "file")
-		_, err = os.Create(file)
+		metafile = backend.MetadataPath(file)
+		_, err := os.Create(metafile)
 		Expect(err).ToNot(HaveOccurred())
 	})
 
@@ -33,16 +39,16 @@ var _ = Describe("Backend", func() {
 	})
 
 	Describe("IniBackend", func() {
-		var (
+		BeforeEach(func() {
 			backend = xattrs.IniBackend{}
-		)
+		})
 
 		Describe("Set", func() {
 			It("sets an attribute", func() {
 				err := backend.Set(file, "foo", "bar")
 				Expect(err).ToNot(HaveOccurred())
 
-				content, err := os.ReadFile(file)
+				content, err := os.ReadFile(metafile)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(string(content)).To(Equal("foo = bar\n"))
 			})
@@ -53,7 +59,7 @@ var _ = Describe("Backend", func() {
 				err = backend.Set(file, "foo", "baz")
 				Expect(err).ToNot(HaveOccurred())
 
-				content, err := os.ReadFile(file)
+				content, err := os.ReadFile(metafile)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(string(content)).To(Equal("foo = baz\n"))
 			})
@@ -64,7 +70,7 @@ var _ = Describe("Backend", func() {
 				err := backend.SetMultiple(file, map[string]string{"foo": "bar", "baz": "qux"})
 				Expect(err).ToNot(HaveOccurred())
 
-				content, err := os.ReadFile(file)
+				content, err := os.ReadFile(metafile)
 				Expect(err).ToNot(HaveOccurred())
 				lines := strings.Split(strings.Trim(string(content), "\n"), "\n")
 				Expect(lines).To(ConsistOf("foo = bar", "baz = qux"))
@@ -76,7 +82,7 @@ var _ = Describe("Backend", func() {
 				err = backend.SetMultiple(file, map[string]string{"foo": "bar", "baz": "qux"})
 				Expect(err).ToNot(HaveOccurred())
 
-				content, err := os.ReadFile(file)
+				content, err := os.ReadFile(metafile)
 				Expect(err).ToNot(HaveOccurred())
 				lines := strings.Split(strings.Trim(string(content), "\n"), "\n")
 				Expect(lines).To(ConsistOf("foo = bar", "baz = qux"))
@@ -85,7 +91,7 @@ var _ = Describe("Backend", func() {
 
 		Describe("All", func() {
 			It("returns the entries", func() {
-				err := os.WriteFile(file, []byte("foo=123\nbar=baz"), 0600)
+				err := os.WriteFile(metafile, []byte("foo=123\nbar=baz"), 0600)
 				Expect(err).ToNot(HaveOccurred())
 
 				v, err := backend.All(file)
@@ -104,7 +110,7 @@ var _ = Describe("Backend", func() {
 
 		Describe("List", func() {
 			It("returns the entries", func() {
-				err := os.WriteFile(file, []byte("foo = 123\nbar = baz"), 0600)
+				err := os.WriteFile(metafile, []byte("foo = 123\nbar = baz"), 0600)
 				Expect(err).ToNot(HaveOccurred())
 
 				v, err := backend.List(file)
@@ -121,7 +127,7 @@ var _ = Describe("Backend", func() {
 
 		Describe("Get", func() {
 			It("returns the attribute", func() {
-				err := os.WriteFile(file, []byte("foo = \"bar\"\n"), 0600)
+				err := os.WriteFile(metafile, []byte("foo = \"bar\"\n"), 0600)
 				Expect(err).ToNot(HaveOccurred())
 
 				v, err := backend.Get(file, "foo")
@@ -137,7 +143,7 @@ var _ = Describe("Backend", func() {
 
 		Describe("GetInt64", func() {
 			It("returns the attribute", func() {
-				err := os.WriteFile(file, []byte("foo=123\n"), 0600)
+				err := os.WriteFile(metafile, []byte("foo=123\n"), 0600)
 				Expect(err).ToNot(HaveOccurred())
 
 				v, err := backend.GetInt64(file, "foo")
@@ -153,7 +159,7 @@ var _ = Describe("Backend", func() {
 
 		Describe("Get", func() {
 			It("deletes an attribute", func() {
-				err := os.WriteFile(file, []byte("foo=bar\n"), 0600)
+				err := os.WriteFile(metafile, []byte("foo=bar\n"), 0600)
 				Expect(err).ToNot(HaveOccurred())
 
 				v, err := backend.Get(file, "foo")
