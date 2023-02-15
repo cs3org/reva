@@ -972,7 +972,10 @@ func (t *Tree) readRecycleItem(ctx context.Context, spaceID, key, path string) (
 	if err != nil {
 		return
 	}
-	deletedNodePath = filepath.Join(resolvedTrashItem, path)
+	deletedNodePath, err = filepath.EvalSymlinks(filepath.Join(resolvedTrashItem, path))
+	if err != nil {
+		return
+	}
 	nodeIDRegep := regexp.MustCompile(`.*/nodes/([^.]*).*`)
 	nodeID = nodeIDRegep.ReplaceAllString(deletedNodePath, "$1")
 	nodeID = strings.ReplaceAll(nodeID, "/", "")
