@@ -1093,6 +1093,7 @@ func appendChildren(ctx context.Context, n *node.Node, nodes []*node.Node) ([]*n
 	return nodes, nil
 }
 
+// Traverse traverses the tree from a root path up to the given subdirectory
 func Traverse(root, path string) (string, error) {
 	path = strings.TrimPrefix(path, "/")
 	if filepath.Clean(root) == filepath.Clean(filepath.Join(root, path)) {
