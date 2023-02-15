@@ -19,6 +19,7 @@
 package xattrs
 
 import (
+	"os"
 	"strconv"
 
 	"github.com/cs3org/reva/v2/pkg/storage/utils/filelocks"
@@ -258,6 +259,13 @@ func (IniBackend) List(path string) ([]string, error) {
 
 // Set sets one attribute for the given path
 func (IniBackend) Set(path, key, val string) error {
+	// Do not change the mtime
+	fi, err := os.Stat(path)
+	if err != nil {
+		return err
+	}
+	defer os.Chtimes(path, fi.ModTime(), fi.ModTime())
+
 	ini, err := ini.Load(path)
 	if err != nil {
 		return err
@@ -270,6 +278,13 @@ func (IniBackend) Set(path, key, val string) error {
 
 // SetMultiple sets a set of attribute for the given path
 func (IniBackend) SetMultiple(path string, attribs map[string]string) error {
+	// Do not change the mtime
+	fi, err := os.Stat(path)
+	if err != nil {
+		return err
+	}
+	defer os.Chtimes(path, fi.ModTime(), fi.ModTime())
+
 	ini, err := ini.Load(path)
 	if err != nil {
 		return err
@@ -284,6 +299,13 @@ func (IniBackend) SetMultiple(path string, attribs map[string]string) error {
 
 // Remove an extended attribute key
 func (IniBackend) Remove(path, key string) error {
+	// Do not change the mtime
+	fi, err := os.Stat(path)
+	if err != nil {
+		return err
+	}
+	defer os.Chtimes(path, fi.ModTime(), fi.ModTime())
+
 	ini, err := ini.Load(path)
 	if err != nil {
 		return err
