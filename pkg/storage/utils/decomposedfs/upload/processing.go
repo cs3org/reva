@@ -301,11 +301,11 @@ func CreateNodeForUpload(upload *Upload, initAttrs map[string]string) (*node.Nod
 	}
 
 	// add etag to metadata
-	nfi, err := os.Stat(n.InternalPath())
+	tmtime, err := n.GetTMTime()
 	if err != nil {
 		return nil, err
 	}
-	upload.Info.MetaData["etag"], _ = node.CalculateEtag(n.ID, nfi.ModTime())
+	upload.Info.MetaData["etag"], _ = node.CalculateEtag(n.ID, tmtime)
 
 	// update nodeid for later
 	upload.Info.Storage["NodeId"] = n.ID
@@ -365,7 +365,7 @@ func updateExistingNode(upload *Upload, n *node.Node, spaceID string, fsize uint
 		return nil, err
 	}
 
-	vfi, err := os.Stat(old.InternalPath())
+	tmtime, err := old.GetTMTime()
 	if err != nil {
 		return nil, err
 	}
@@ -373,7 +373,7 @@ func updateExistingNode(upload *Upload, n *node.Node, spaceID string, fsize uint
 	// When the if-match header was set we need to check if the
 	// etag still matches before finishing the upload.
 	if ifMatch, ok := upload.Info.MetaData["if-match"]; ok {
-		targetEtag, err := node.CalculateEtag(n.ID, vfi.ModTime())
+		targetEtag, err := node.CalculateEtag(n.ID, tmtime)
 		switch {
 		case err != nil:
 			return nil, errtypes.InternalError(err.Error())
@@ -382,7 +382,7 @@ func updateExistingNode(upload *Upload, n *node.Node, spaceID string, fsize uint
 		}
 	}
 
-	upload.versionsPath = upload.lu.InternalPath(spaceID, n.ID+node.RevisionIDDelimiter+vfi.ModTime().UTC().Format(time.RFC3339Nano))
+	upload.versionsPath = upload.lu.InternalPath(spaceID, n.ID+node.RevisionIDDelimiter+tmtime.UTC().Format(time.RFC3339Nano))
 	upload.sizeDiff = int64(fsize) - old.Blobsize
 	upload.Info.MetaData["versionsPath"] = upload.versionsPath
 	upload.Info.MetaData["sizeDiff"] = strconv.Itoa(int(upload.sizeDiff))
@@ -411,7 +411,7 @@ func updateExistingNode(upload *Upload, n *node.Node, spaceID string, fsize uint
 	}
 
 	// keep mtime from previous version
-	if err := os.Chtimes(upload.versionsPath, vfi.ModTime(), vfi.ModTime()); err != nil {
+	if err := os.Chtimes(upload.versionsPath, tmtime, tmtime); err != nil {
 		return lock, errtypes.InternalError(fmt.Sprintf("failed to change mtime of version node: %s", err))
 	}
 
