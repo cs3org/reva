@@ -639,11 +639,18 @@ func (t *Tree) RestoreRecycleItemFunc(ctx context.Context, spaceid, key, trashPa
 		}
 
 		// delete item link in trash
-		resolvedTrashItem, err := filepath.EvalSymlinks(trashItem)
-		if err != nil {
-			return errors.Wrap(err, "Decomposedfs: could not resolve trash item")
+		deletePath := trashItem
+		if trashPath != "" && trashPath != "/" {
+			resolvedTrashRoot, err := filepath.EvalSymlinks(trashItem)
+			if err != nil {
+				return errors.Wrap(err, "Decomposedfs: could not resolve trash root")
+			}
+			resolvedTrashParent, err := Traverse(resolvedTrashRoot, filepath.Dir(trashPath))
+			if err != nil {
+				return errors.Wrap(err, "Decomposedfs: could not resolve trash parent")
+			}
+			deletePath = filepath.Join(resolvedTrashParent+".children", filepath.Base(trashPath))
 		}
-		deletePath := filepath.Join(resolvedTrashItem+".children", trashPath)
 		if err = os.Remove(deletePath); err != nil {
 			log.Error().Err(err).Str("trashItem", trashItem).Msg("error deleting trash item")
 		}
@@ -998,7 +1005,7 @@ func (t *Tree) readRecycleItem(ctx context.Context, spaceID, key, path string) (
 	if err != nil {
 		return
 	}
-	nodeIDRegep := regexp.MustCompile(`.*/nodes/([^.]*)`)
+	nodeIDRegep := regexp.MustCompile(`.*/nodes/([^.]*).*`)
 	nodeID = nodeIDRegep.ReplaceAllString(deletedNodePath, "$1")
 	nodeID = strings.ReplaceAll(nodeID, "/", "")
 
@@ -1089,7 +1096,7 @@ func appendChildren(ctx context.Context, n *node.Node, nodes []*node.Node) ([]*n
 
 func Traverse(root, path string) (string, error) {
 	path = strings.TrimPrefix(path, "/")
-	if path == "" {
+	if filepath.Clean(root) == filepath.Clean(filepath.Join(root, path)) {
 		return root, nil
 	}
 	var err error
