@@ -113,14 +113,14 @@ func (fs *Decomposedfs) ListRecycle(ctx context.Context, ref *provider.Reference
 	}
 
 	nodeType := node.TypeFromPath(originalPath)
-	if provider.ResourceType(nodeType) != provider.ResourceType_RESOURCE_TYPE_CONTAINER {
+	if nodeType != provider.ResourceType_RESOURCE_TYPE_CONTAINER {
 		// this is the case when we want to directly list a file in the trashbin
 		blobsize, err := strconv.ParseInt(attrs[prefixes.BlobsizeAttr], 10, 64)
 		if err != nil {
 			return items, err
 		}
 		item := &provider.RecycleItem{
-			Type:         provider.ResourceType(nodeType),
+			Type:         nodeType,
 			Size:         uint64(blobsize),
 			Key:          filepath.Join(key, relativePath),
 			DeletionTime: deletionTime,
@@ -153,14 +153,10 @@ func (fs *Decomposedfs) ListRecycle(ctx context.Context, ref *provider.Reference
 			continue
 		}
 
-		nodeType = node.TypeFromPath(resolvedChildPath)
-		if nodeType == provider.ResourceType_RESOURCE_TYPE_INVALID {
-			sublog.Error().Err(err).Str("name", name).Str("resolvedChildPath", resolvedChildPath).Msg("invalid node type, skipping")
-			continue
-		}
-
 		size := int64(0)
-		switch provider.ResourceType(nodeType) {
+
+		nodeType = node.TypeFromPath(resolvedChildPath)
+		switch nodeType {
 		case provider.ResourceType_RESOURCE_TYPE_FILE:
 			size, err = node.ReadBlobSizeAttr(resolvedChildPath)
 			if err != nil {
@@ -178,10 +174,13 @@ func (fs *Decomposedfs) ListRecycle(ctx context.Context, ref *provider.Reference
 				sublog.Error().Err(err).Str("name", name).Msg("invalid tree size, skipping")
 				continue
 			}
+		case provider.ResourceType_RESOURCE_TYPE_INVALID:
+			sublog.Error().Err(err).Str("name", name).Str("resolvedChildPath", resolvedChildPath).Msg("invalid node type, skipping")
+			continue
 		}
 
 		item := &provider.RecycleItem{
-			Type:         provider.ResourceType(nodeType),
+			Type:         nodeType,
 			Size:         uint64(size),
 			Key:          filepath.Join(key, relativePath, name),
 			DeletionTime: deletionTime,
