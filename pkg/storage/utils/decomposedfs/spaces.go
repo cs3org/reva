@@ -93,7 +93,7 @@ func (fs *Decomposedfs) CreateStorageSpace(ctx context.Context, req *provider.Cr
 	}
 
 	// create a directory node
-	root.Type = provider.ResourceType_RESOURCE_TYPE_CONTAINER
+	root.SetType(provider.ResourceType_RESOURCE_TYPE_CONTAINER)
 	rootPath := root.InternalPath()
 
 	if err := os.MkdirAll(rootPath, 0700); err != nil {

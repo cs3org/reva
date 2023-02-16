@@ -111,10 +111,7 @@ func (fs *Decomposedfs) ListRecycle(ctx context.Context, ref *provider.Reference
 		sublog.Error().Err(err).Msg("could not parse time format, ignoring")
 	}
 
-	nodeType, err := strconv.ParseInt(attrs[xattrs.TypeAttr], 10, 64)
-	if err != nil {
-		return items, err
-	}
+	nodeType := node.NodeTypeFromPath(originalPath)
 	if provider.ResourceType(nodeType) != provider.ResourceType_RESOURCE_TYPE_CONTAINER {
 		// this is the case when we want to directly list a file in the trashbin
 		blobsize, err := strconv.ParseInt(attrs[xattrs.BlobsizeAttr], 10, 64)
@@ -155,15 +152,9 @@ func (fs *Decomposedfs) ListRecycle(ctx context.Context, ref *provider.Reference
 			continue
 		}
 
-		attrs, err := xattrs.All(resolvedChildPath)
-		if err != nil {
-			sublog.Error().Err(err).Str("name", name).Msg("could not get extended attributes, skipping")
-			continue
-		}
-
-		nodeType, err := strconv.ParseInt(attrs[xattrs.TypeAttr], 10, 64)
-		if err != nil {
-			sublog.Error().Err(err).Str("name", name).Msg("invalid node type, skipping")
+		nodeType = node.NodeTypeFromPath(resolvedChildPath)
+		if nodeType == provider.ResourceType_RESOURCE_TYPE_INVALID {
+			sublog.Error().Err(err).Str("name", name).Str("resolvedChildPath", resolvedChildPath).Msg("invalid node type, skipping")
 			continue
 		}
 
@@ -251,8 +242,8 @@ func (fs *Decomposedfs) listTrashRoot(ctx context.Context, spaceID string) ([]*p
 			continue
 		}
 
-		nodeType, err := strconv.ParseInt(attrs[xattrs.TypeAttr], 10, 64)
-		if err != nil {
+		nodeType := node.NodeTypeFromPath(nodePath)
+		if nodeType == provider.ResourceType_RESOURCE_TYPE_INVALID {
 			log.Error().Err(err).Str("trashRoot", trashRoot).Str("item", itemPath).Str("node_path", nodePath).Msg("invalid node type, skipping")
 			continue
 		}

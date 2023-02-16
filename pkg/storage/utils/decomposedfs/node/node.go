@@ -75,7 +75,6 @@ const (
 
 // Node represents a node in the tree and provides methods to get a Parent or Child instance
 type Node struct {
-	Type      provider.ResourceType
 	SpaceID   string
 	ParentID  string
 	ID        string
@@ -88,6 +87,7 @@ type Node struct {
 
 	lu          PathLookup
 	xattrsCache map[string]string
+	nodeType    *provider.ResourceType
 }
 
 // PathLookup defines the interface for the lookup component
@@ -98,7 +98,7 @@ type PathLookup interface {
 }
 
 // New returns a new instance of Node
-func New(spaceID, id, parentID, name string, blobsize int64, blobID string, owner *userpb.UserId, lu PathLookup) *Node {
+func New(spaceID, id, parentID, name string, blobsize int64, blobID string, t provider.ResourceType, owner *userpb.UserId, lu PathLookup) *Node {
 	if blobID == "" {
 		blobID = uuid.New().String()
 	}
@@ -111,7 +111,56 @@ func New(spaceID, id, parentID, name string, blobsize int64, blobID string, owne
 		owner:    owner,
 		lu:       lu,
 		BlobID:   blobID,
+		nodeType: &t,
 	}
+}
+
+// Type returns the node's resource type
+func (n *Node) Type() provider.ResourceType {
+	if n.nodeType != nil {
+		return *n.nodeType
+	}
+
+	t := provider.ResourceType_RESOURCE_TYPE_INVALID
+
+	// Try to read from xattrs
+	typeAttr, err := n.Xattr(xattrs.TypeAttr)
+	if err == nil {
+		typeInt, err := strconv.ParseInt(typeAttr, 10, 32)
+		if err != nil {
+			return t
+		}
+		t = provider.ResourceType(typeInt)
+		n.nodeType = &t
+		return t
+	}
+
+	// Fall back to checking on disk
+	fi, err := os.Lstat(n.InternalPath())
+	if err != nil {
+		return t
+	}
+
+	switch {
+	case fi.IsDir():
+		if _, err = n.Xattr(xattrs.ReferenceAttr); err == nil {
+			t = provider.ResourceType_RESOURCE_TYPE_REFERENCE
+		} else {
+			t = provider.ResourceType_RESOURCE_TYPE_CONTAINER
+		}
+	case fi.Mode().IsRegular():
+		t = provider.ResourceType_RESOURCE_TYPE_FILE
+	case fi.Mode()&os.ModeSymlink != 0:
+		t = provider.ResourceType_RESOURCE_TYPE_SYMLINK
+		// TODO reference using ext attr on a symlink
+		// nodeType = provider.ResourceType_RESOURCE_TYPE_REFERENCE
+	}
+	n.nodeType = &t
+	return t
+}
+
+func (n *Node) SetType(t provider.ResourceType) {
+	n.nodeType = &t
 }
 
 // ChangeOwner sets the owner of n to newOwner
@@ -133,7 +182,7 @@ func (n *Node) ChangeOwner(new *userpb.UserId) (err error) {
 func (n *Node) WriteAllNodeMetadata() (err error) {
 	attribs := make(map[string]string)
 
-	attribs[xattrs.TypeAttr] = strconv.FormatInt(int64(n.Type), 10)
+	attribs[xattrs.TypeAttr] = strconv.FormatInt(int64(n.Type()), 10)
 	attribs[xattrs.ParentidAttr] = n.ParentID
 	attribs[xattrs.NameAttr] = n.Name
 	attribs[xattrs.BlobIDAttr] = n.BlobID
@@ -292,16 +341,6 @@ func ReadNode(ctx context.Context, lu PathLookup, spaceID, nodeID string, canLis
 		}
 		return nil, err
 	}
-
-	typeAttr, err := n.Xattr(xattrs.TypeAttr)
-	if err != nil {
-		return nil, err
-	}
-	typeInt, err := strconv.ParseInt(typeAttr, 10, 32)
-	if err != nil {
-		return nil, err
-	}
-	n.Type = provider.ResourceType(typeInt)
 
 	n.BlobID, err = ReadBlobIDAttr(nodePath + revisionSuffix)
 	if err != nil {
@@ -588,31 +627,11 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 	sublog := appctx.GetLogger(ctx).With().Interface("node", n.ID).Logger()
 
 	var fn string
-	nodePath := n.InternalPath()
-
-	var fi os.FileInfo
-
-	nodeType := provider.ResourceType_RESOURCE_TYPE_INVALID
-	if fi, err = os.Lstat(nodePath); err != nil {
-		return
-	}
+	nodeType := n.Type()
 
 	var target string
-	switch {
-	case fi.IsDir():
-		if target, err = n.Xattr(xattrs.ReferenceAttr); err == nil {
-			nodeType = provider.ResourceType_RESOURCE_TYPE_REFERENCE
-		} else {
-			nodeType = provider.ResourceType_RESOURCE_TYPE_CONTAINER
-		}
-	case fi.Mode().IsRegular():
-		nodeType = provider.ResourceType_RESOURCE_TYPE_FILE
-	case fi.Mode()&os.ModeSymlink != 0:
-		nodeType = provider.ResourceType_RESOURCE_TYPE_SYMLINK
-		// TODO reference using ext attr on a symlink
-		// nodeType = provider.ResourceType_RESOURCE_TYPE_REFERENCE
-	default:
-		return nil, errtypes.InternalError("invalid node type on disk")
+	if nodeType == provider.ResourceType_RESOURCE_TYPE_REFERENCE {
+		target, _ = n.Xattr(xattrs.ReferenceAttr)
 	}
 
 	id := &provider.ResourceId{SpaceId: n.SpaceID, OpaqueId: n.ID}
@@ -1271,4 +1290,39 @@ func enoughDiskSpace(path string, fileSize uint64) bool {
 		return false
 	}
 	return avalB > fileSize
+}
+
+func NodeTypeFromPath(path string) provider.ResourceType {
+	// Try to read from xattrs
+	typeAttr, err := xattrs.Get(path, xattrs.TypeAttr)
+	t := provider.ResourceType_RESOURCE_TYPE_INVALID
+	if err == nil {
+		typeInt, err := strconv.ParseInt(typeAttr, 10, 32)
+		if err != nil {
+			return t
+		}
+		return provider.ResourceType(typeInt)
+	}
+
+	// Fall back to checking on disk
+	fi, err := os.Lstat(path)
+	if err != nil {
+		return t
+	}
+
+	switch {
+	case fi.IsDir():
+		if _, err = xattrs.Get(path, xattrs.ReferenceAttr); err == nil {
+			t = provider.ResourceType_RESOURCE_TYPE_REFERENCE
+		} else {
+			t = provider.ResourceType_RESOURCE_TYPE_CONTAINER
+		}
+	case fi.Mode().IsRegular():
+		t = provider.ResourceType_RESOURCE_TYPE_FILE
+	case fi.Mode()&os.ModeSymlink != 0:
+		t = provider.ResourceType_RESOURCE_TYPE_SYMLINK
+		// TODO reference using ext attr on a symlink
+		// nodeType = provider.ResourceType_RESOURCE_TYPE_REFERENCE
+	}
+	return t
 }

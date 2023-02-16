@@ -254,7 +254,7 @@ func (t *Tree) TouchFile(ctx context.Context, n *node.Node) error {
 	if n.ID == "" {
 		n.ID = uuid.New().String()
 	}
-	n.Type = provider.ResourceType_RESOURCE_TYPE_FILE
+	n.SetType(provider.ResourceType_RESOURCE_TYPE_FILE)
 
 	nodePath := n.InternalPath()
 	if err := os.MkdirAll(filepath.Dir(nodePath), 0700); err != nil {
@@ -300,7 +300,7 @@ func (t *Tree) CreateDir(ctx context.Context, n *node.Node) (err error) {
 	}
 
 	// create a directory node
-	n.Type = provider.ResourceType_RESOURCE_TYPE_CONTAINER
+	n.SetType(provider.ResourceType_RESOURCE_TYPE_CONTAINER)
 	if n.ID == "" {
 		n.ID = uuid.New().String()
 	}
@@ -720,6 +720,10 @@ func (t *Tree) removeNode(path string, n *node.Node) error {
 		return err
 	}
 	for _, rev := range revs {
+		if xattrs.IsMetaFile(rev) {
+			continue
+		}
+
 		bID, err := node.ReadBlobIDAttr(rev)
 		if err != nil {
 			log.Error().Err(err).Str("revision", rev).Msg("error reading blobid attribute")
@@ -980,25 +984,14 @@ func (t *Tree) readRecycleItem(ctx context.Context, spaceID, key, path string) (
 	nodeID = nodeIDRegep.ReplaceAllString(deletedNodePath, "$1")
 	nodeID = strings.ReplaceAll(nodeID, "/", "")
 
-	recycleNode = node.New(spaceID, nodeID, "", "", 0, "", nil, t.lookup)
+	recycleNode = node.New(spaceID, nodeID, "", "", 0, "", provider.ResourceType_RESOURCE_TYPE_INVALID, nil, t.lookup)
 	recycleNode.SpaceRoot, err = node.ReadNode(ctx, t.lookup, spaceID, spaceID, false)
 	if err != nil {
 		return
 	}
+	recycleNode.SetType(node.NodeTypeFromPath(recycleNode.InternalPath()))
 
 	var attrStr string
-	// lookup blobID in extended attributes
-	if attrStr, err = xattrs.Get(deletedNodePath, xattrs.TypeAttr); err == nil {
-		var typeAttr int64
-		typeAttr, err = strconv.ParseInt(attrStr, 10, 64)
-		if err != nil {
-			return
-		}
-		recycleNode.Type = provider.ResourceType(typeAttr)
-	} else {
-		return
-	}
-
 	// lookup blobID in extended attributes
 	if attrStr, err = xattrs.Get(deletedNodePath, xattrs.BlobIDAttr); err == nil {
 		recycleNode.BlobID = attrStr

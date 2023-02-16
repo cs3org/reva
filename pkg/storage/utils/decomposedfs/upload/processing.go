@@ -252,10 +252,10 @@ func CreateNodeForUpload(upload *Upload, initAttrs map[string]string) (*node.Nod
 		upload.Info.Storage["NodeName"],
 		fsize,
 		upload.Info.ID,
+		provider.ResourceType_RESOURCE_TYPE_FILE,
 		nil,
 		upload.lu,
 	)
-	n.Type = provider.ResourceType_RESOURCE_TYPE_FILE
 	n.SpaceRoot, err = node.ReadNode(upload.Ctx, upload.lu, spaceID, spaceID, false)
 	if err != nil {
 		return nil, err
@@ -280,7 +280,7 @@ func CreateNodeForUpload(upload *Upload, initAttrs map[string]string) (*node.Nod
 	}
 
 	// overwrite technical information
-	initAttrs[xattrs.TypeAttr] = strconv.FormatInt(int64(n.Type), 10)
+	initAttrs[xattrs.TypeAttr] = strconv.FormatInt(int64(n.Type()), 10)
 	initAttrs[xattrs.ParentidAttr] = n.ParentID
 	initAttrs[xattrs.NameAttr] = n.Name
 	initAttrs[xattrs.BlobIDAttr] = n.BlobID

@@ -206,10 +206,10 @@ func (t *TestEnv) CreateTestFile(name, blobID, parentID, spaceID string, blobSiz
 		name,
 		blobSize,
 		blobID,
+		providerv1beta1.ResourceType_RESOURCE_TYPE_FILE,
 		nil,
 		t.Lookup,
 	)
-	n.Type = providerv1beta1.ResourceType_RESOURCE_TYPE_FILE
 	nodePath := n.InternalPath()
 	if err := os.MkdirAll(filepath.Dir(nodePath), 0700); err != nil {
 		return nil, err
