@@ -57,6 +57,8 @@ const (
 	spaceTypeAny   = "*"
 	spaceIDAny     = "*"
 	userIDAny      = "*"
+
+	quotaUnrestricted = 0
 )
 
 // CreateStorageSpace creates a storage space
@@ -139,6 +141,9 @@ func (fs *Decomposedfs) CreateStorageSpace(ctx context.Context, req *provider.Cr
 
 	if q := req.GetQuota(); q != nil {
 		// set default space quota
+		if fs.o.MaxQuota != quotaUnrestricted && q.GetQuotaMaxBytes() > fs.o.MaxQuota {
+			return nil, errtypes.BadRequest("decompsedFS: requested quota is higher than allowed")
+		}
 		metadata[prefixes.QuotaAttr] = strconv.FormatUint(q.QuotaMaxBytes, 10)
 	}
 
@@ -438,6 +443,11 @@ func (fs *Decomposedfs) UpdateStorageSpace(ctx context.Context, req *provider.Up
 	}
 
 	if space.Quota != nil {
+		if fs.o.MaxQuota != quotaUnrestricted && fs.o.MaxQuota < space.Quota.QuotaMaxBytes {
+			return &provider.UpdateStorageSpaceResponse{
+				Status: &v1beta11.Status{Code: v1beta11.Code_CODE_INVALID_ARGUMENT, Message: "decompsedFS: requested quota is higher than allowed"},
+			}, nil
+		}
 		metadata[prefixes.QuotaAttr] = strconv.FormatUint(space.Quota.QuotaMaxBytes, 10)
 	}
 

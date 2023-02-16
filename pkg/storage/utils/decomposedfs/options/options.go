@@ -67,6 +67,8 @@ type Options struct {
 
 	MaxAcquireLockCycles    int `mapstructure:"max_acquire_lock_cycles"`
 	LockCycleDurationFactor int `mapstructure:"lock_cycle_duration_factor"`
+
+	MaxQuota uint64 `mapstructure:"max_quota"`
 }
 
 // EventOptions are the configurable options for events
