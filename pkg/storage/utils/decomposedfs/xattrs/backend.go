@@ -23,7 +23,7 @@ import (
 )
 
 // TODO This is currently a singleton because the trash code needs to be refactored before we can hide this behind a real metadata backend interface
-var backend xattrBackend.Backend = xattrBackend.NullBackend{}
+var backend xattrBackend.Backend = xattrBackend.XattrsBackend{}
 
 // UseXattrsBackend configures decomposedfs to use xattrs for storing file attributes
 func UseXattrsBackend() {
