@@ -29,6 +29,7 @@ import (
 	"gopkg.in/ini.v1"
 )
 
+// TODO This is currently a singleton because the trash code needs to be refactored before we can hide this behind a real metadata backend interface
 var backend Backend = NullBackend{}
 var errUnconfiguredError = errors.New("no xattrs backend configured. Bailing out")
 

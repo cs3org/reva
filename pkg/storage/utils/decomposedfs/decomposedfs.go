@@ -24,6 +24,7 @@ package decomposedfs
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net/url"
 	"os"
@@ -57,11 +58,6 @@ import (
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/pkg/errors"
 )
-
-func init() {
-	xattrs.UseXattrsBackend()
-	//xattrs.UseIniBackend()
-}
 
 // name is the Tracer name used to identify this instrumentation library.
 const tracerName = "decomposedfs"
@@ -104,6 +100,15 @@ func NewDefault(m map[string]interface{}, bs tree.Blobstore, es events.Stream) (
 	o, err := options.New(m)
 	if err != nil {
 		return nil, err
+	}
+
+	switch o.MetadataBackend {
+	case "xattrs":
+		xattrs.UseXattrsBackend()
+	case "ini":
+		xattrs.UseIniBackend()
+	default:
+		return nil, fmt.Errorf("unknown metadata backend %s, only 'ini' or 'xattrs' (default) supported", o.MetadataBackend)
 	}
 
 	lu := &lookup.Lookup{}
