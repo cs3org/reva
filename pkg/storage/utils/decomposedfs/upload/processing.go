@@ -327,9 +327,10 @@ func initNewNode(upload *Upload, n *node.Node, fsize uint64) (*flock.Flock, erro
 	if _, err := os.Create(n.InternalPath()); err != nil {
 		return nil, err
 	}
-
-	if _, err := os.Create(xattrs.MetadataPath(n.InternalPath())); err != nil {
-		return nil, err
+	if xattrs.UsesExternalMetadataFile() {
+		if _, err := os.Create(xattrs.MetadataPath(n.InternalPath())); err != nil {
+			return nil, err
+		}
 	}
 
 	lock, err := filelocks.AcquireWriteLock(n.InternalPath())
@@ -403,8 +404,10 @@ func updateExistingNode(upload *Upload, n *node.Node, spaceID string, fsize uint
 	if _, err := os.Create(upload.versionsPath); err != nil {
 		return lock, err
 	}
-	if _, err := os.Create(xattrs.MetadataPath(upload.versionsPath)); err != nil {
-		return lock, err
+	if xattrs.UsesExternalMetadataFile() {
+		if _, err := os.Create(xattrs.MetadataPath(upload.versionsPath)); err != nil {
+			return lock, err
+		}
 	}
 
 	// copy blob metadata to version node

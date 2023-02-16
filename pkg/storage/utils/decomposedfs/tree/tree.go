@@ -264,9 +264,11 @@ func (t *Tree) TouchFile(ctx context.Context, n *node.Node) error {
 	if err != nil {
 		return errors.Wrap(err, "Decomposedfs: error creating node")
 	}
-	_, err = os.Create(xattrs.MetadataPath(nodePath))
-	if err != nil {
-		return errors.Wrap(err, "Decomposedfs: error creating node")
+	if xattrs.UsesExternalMetadataFile() {
+		_, err = os.Create(xattrs.MetadataPath(nodePath))
+		if err != nil {
+			return errors.Wrap(err, "Decomposedfs: error creating node")
+		}
 	}
 
 	err = n.WriteAllNodeMetadata()
@@ -305,7 +307,7 @@ func (t *Tree) CreateDir(ctx context.Context, n *node.Node) (err error) {
 		n.ID = uuid.New().String()
 	}
 
-	err = t.createNode(n)
+	err = t.createDirNode(n)
 	if err != nil {
 		return
 	}
@@ -542,11 +544,13 @@ func (t *Tree) Delete(ctx context.Context, n *node.Node) (err error) {
 		_ = n.RemoveXattr(xattrs.TrashOriginAttr)
 		return
 	}
-	err = os.Rename(xattrs.MetadataPath(nodePath), xattrs.MetadataPath(trashPath))
-	if err != nil {
-		_ = n.RemoveXattr(xattrs.TrashOriginAttr)
-		_ = os.Rename(trashPath, nodePath)
-		return
+	if xattrs.UsesExternalMetadataFile() {
+		err = os.Rename(xattrs.MetadataPath(nodePath), xattrs.MetadataPath(trashPath))
+		if err != nil {
+			_ = n.RemoveXattr(xattrs.TrashOriginAttr)
+			_ = os.Rename(trashPath, nodePath)
+			return
+		}
 	}
 
 	// Remove lock file if it exists
@@ -614,9 +618,11 @@ func (t *Tree) RestoreRecycleItemFunc(ctx context.Context, spaceid, key, trashPa
 			if err != nil {
 				return err
 			}
-			err = os.Rename(xattrs.MetadataPath(deletedNodePath), xattrs.MetadataPath(nodePath))
-			if err != nil {
-				return err
+			if xattrs.UsesExternalMetadataFile() {
+				err = os.Rename(xattrs.MetadataPath(deletedNodePath), xattrs.MetadataPath(nodePath))
+				if err != nil {
+					return err
+				}
 			}
 		}
 
@@ -699,6 +705,12 @@ func (t *Tree) removeNode(path string, n *node.Node) error {
 		log.Error().Err(err).Str("path", path).Msg("error purging node")
 		return err
 	}
+	if xattrs.UsesExternalMetadataFile() {
+		if err := utils.RemoveItem(xattrs.MetadataPath(path)); err != nil {
+			log.Error().Err(err).Str("path", xattrs.MetadataPath(path)).Msg("error purging node metadata")
+			return err
+		}
+	}
 
 	// delete blob from blobstore
 	if n.BlobID != "" {
@@ -706,11 +718,6 @@ func (t *Tree) removeNode(path string, n *node.Node) error {
 			log.Error().Err(err).Str("blobID", n.BlobID).Msg("error purging nodes blob")
 			return err
 		}
-	}
-
-	if err := utils.RemoveItem(xattrs.MetadataPath(path)); err != nil {
-		log.Error().Err(err).Str("path", xattrs.MetadataPath(path)).Msg("error purging node metadata")
-		return err
 	}
 
 	// delete revisions
@@ -949,15 +956,17 @@ func (t *Tree) DeleteBlob(node *node.Node) error {
 }
 
 // TODO check if node exists?
-func (t *Tree) createNode(n *node.Node) (err error) {
+func (t *Tree) createDirNode(n *node.Node) (err error) {
 	// create a directory node
 	nodePath := n.InternalPath()
 	if err := os.MkdirAll(nodePath, 0700); err != nil {
 		return errors.Wrap(err, "Decomposedfs: error creating node")
 	}
-	_, err = os.Create(xattrs.MetadataPath(nodePath))
-	if err != nil {
-		return errors.Wrap(err, "Decomposedfs: error creating node")
+	if xattrs.UsesExternalMetadataFile() {
+		_, err = os.Create(xattrs.MetadataPath(nodePath))
+		if err != nil {
+			return errors.Wrap(err, "Decomposedfs: error creating node")
+		}
 	}
 
 	return n.WriteAllNodeMetadata()

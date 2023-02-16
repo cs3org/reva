@@ -218,9 +218,11 @@ func (t *TestEnv) CreateTestFile(name, blobID, parentID, spaceID string, blobSiz
 	if err != nil {
 		return nil, err
 	}
-	_, err = os.OpenFile(xattrs.MetadataPath(nodePath), os.O_CREATE, 0700)
-	if err != nil {
-		return nil, err
+	if xattrs.UsesExternalMetadataFile() {
+		_, err = os.OpenFile(xattrs.MetadataPath(nodePath), os.O_CREATE, 0700)
+		if err != nil {
+			return nil, err
+		}
 	}
 	err = n.WriteAllNodeMetadata()
 	if err != nil {

@@ -59,8 +59,8 @@ import (
 )
 
 func init() {
-	// xattrs.UseXattrsBackend()
-	xattrs.UseIniBackend()
+	xattrs.UseXattrsBackend()
+	//xattrs.UseIniBackend()
 }
 
 // name is the Tracer name used to identify this instrumentation library.

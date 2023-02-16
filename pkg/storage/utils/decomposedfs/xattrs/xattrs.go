@@ -296,6 +296,11 @@ func MetadataPath(path string) string {
 	return backend.MetadataPath(path)
 }
 
+// UsesExternalMetadataFile returns true when the backend uses external metadata files
+func UsesExternalMetadataFile() bool {
+	return backend.UsesExternalMetadataFile()
+}
+
 // IsMetaFile returns whether the given path represents a meta file
 func IsMetaFile(path string) bool {
 	return backend.IsMetaFile(path)

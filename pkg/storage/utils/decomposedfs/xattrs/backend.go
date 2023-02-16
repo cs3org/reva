@@ -53,6 +53,8 @@ type Backend interface {
 	Remove(path, key string) error
 
 	IsMetaFile(path string) bool
+	// UsesExternalMetadataFile returns true when the backend uses external metadata files
+	UsesExternalMetadataFile() bool
 	MetadataPath(path string) string
 }
 
@@ -85,6 +87,9 @@ func (NullBackend) Remove(path string, key string) error { return errUnconfigure
 
 // IsMetaFile returns whether the given path represents a meta file
 func (NullBackend) IsMetaFile(path string) bool { return false }
+
+// UsesExternalMetadataFile returns true when the backend uses external metadata files
+func (NullBackend) UsesExternalMetadataFile() bool { return false }
 
 // MetadataPath returns the path of the file holding the metadata for the given path
 func (NullBackend) MetadataPath(path string) string { return "" }
@@ -222,6 +227,9 @@ func (XattrsBackend) Remove(filePath string, key string) (err error) {
 
 // IsMetaFile returns whether the given path represents a meta file
 func (XattrsBackend) IsMetaFile(path string) bool { return false }
+
+// UsesExternalMetadataFile returns true when the backend uses external metadata files
+func (XattrsBackend) UsesExternalMetadataFile() bool { return false }
 
 // MetadataPath returns the path of the file holding the metadata for the given path
 func (XattrsBackend) MetadataPath(path string) string { return path }
@@ -367,6 +375,9 @@ func (b IniBackend) Remove(path, key string) error {
 
 // IsMetaFile returns whether the given path represents a meta file
 func (IniBackend) IsMetaFile(path string) bool { return strings.HasSuffix(path, ".ini") }
+
+// UsesExternalMetadataFile returns true when the backend uses external metadata files
+func (IniBackend) UsesExternalMetadataFile() bool { return true }
 
 // MetadataPath returns the path of the file holding the metadata for the given path
 func (IniBackend) MetadataPath(path string) string { return path + ".ini" }

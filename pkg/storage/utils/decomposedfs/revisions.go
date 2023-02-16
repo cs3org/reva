@@ -218,17 +218,21 @@ func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Refer
 		if _, err := os.Create(newRevisionPath); err != nil {
 			return err
 		}
-		if _, err := os.Create(xattrs.MetadataPath(newRevisionPath)); err != nil {
-			_ = os.Remove(newRevisionPath)
-			return err
+		if xattrs.UsesExternalMetadataFile() {
+			if _, err := os.Create(xattrs.MetadataPath(newRevisionPath)); err != nil {
+				_ = os.Remove(newRevisionPath)
+				return err
+			}
 		}
 		defer func() {
 			if returnErr != nil {
 				if err := os.Remove(newRevisionPath); err != nil {
 					log.Error().Err(err).Str("revision", filepath.Base(newRevisionPath)).Msg("could not clean up revision node")
 				}
-				if err := os.Remove(xattrs.MetadataPath(newRevisionPath)); err != nil {
-					log.Error().Err(err).Str("revision", filepath.Base(newRevisionPath)).Msg("could not clean up revision node")
+				if xattrs.UsesExternalMetadataFile() {
+					if err := os.Remove(xattrs.MetadataPath(newRevisionPath)); err != nil {
+						log.Error().Err(err).Str("revision", filepath.Base(newRevisionPath)).Msg("could not clean up revision node")
+					}
 				}
 			}
 		}()
