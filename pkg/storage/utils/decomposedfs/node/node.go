@@ -293,15 +293,14 @@ func ReadNode(ctx context.Context, lu PathLookup, spaceID, nodeID string, canLis
 	}
 
 	// are we reading a revision?
-	revisionSuffix := ""
+	revisionKey := ""
 	if strings.Contains(nodeID, RevisionIDDelimiter) {
 		// verify revision key format
 		kp := strings.SplitN(nodeID, RevisionIDDelimiter, 2)
 		if len(kp) == 2 {
 			// use the actual node for the metadata lookup
 			nodeID = kp[0]
-			// remember revision for blob metadata
-			revisionSuffix = RevisionIDDelimiter + kp[1]
+			revisionKey = kp[1]
 		}
 	}
 
@@ -318,7 +317,7 @@ func ReadNode(ctx context.Context, lu PathLookup, spaceID, nodeID string, canLis
 	defer func() {
 		// when returning errors n is nil
 		if n != nil {
-			n.ID += revisionSuffix
+			n.ID += RevisionIDDelimiter + revisionKey
 		}
 	}()
 
@@ -366,13 +365,13 @@ func ReadNode(ctx context.Context, lu PathLookup, spaceID, nodeID string, canLis
 		return nil, err
 	}
 
-	n.BlobID, err = ReadBlobIDAttr(nodePath + revisionSuffix)
+	n.BlobID, err = ReadBlobIDAttr(nodePath + RevisionIDDelimiter + revisionKey)
 	if err != nil {
 		return nil, err
 	}
 
 	// Lookup blobsize
-	n.Blobsize, err = ReadBlobSizeAttr(nodePath + revisionSuffix)
+	n.Blobsize, err = n.RevisionBlobSize(revisionKey)
 	if err != nil {
 		return nil, err
 	}
@@ -976,29 +975,6 @@ func (n *Node) IsDisabled() bool {
 	return false
 }
 
-// GetTreeSize reads the treesize from the extended attributes
-func (n *Node) GetTreeSize() (treesize uint64, err error) {
-	var b string
-	if b, err = n.Xattr(prefixes.TreesizeAttr); err != nil {
-		return
-	}
-	return strconv.ParseUint(b, 10, 64)
-}
-
-// SetTreeSize writes the treesize to the extended attributes
-func (n *Node) SetTreeSize(ts uint64) (err error) {
-	return n.SetXattr(prefixes.TreesizeAttr, strconv.FormatUint(ts, 10))
-}
-
-// GetBlobSize reads the blobsize from the extended attributes
-func (n *Node) GetBlobSize() (treesize uint64, err error) {
-	var b string
-	if b, err = n.Xattr(prefixes.BlobsizeAttr); err != nil {
-		return
-	}
-	return strconv.ParseUint(b, 10, 64)
-}
-
 // SetChecksum writes the checksum with the given checksum type to the extended attributes
 func (n *Node) SetChecksum(csType string, h hash.Hash) (err error) {
 	return n.SetXattr(prefixes.ChecksumPrefix+csType, string(h.Sum(nil)))
@@ -1097,19 +1073,6 @@ func (n *Node) IsDenied(ctx context.Context) bool {
 		// be paranoid, resource is denied
 		return true
 	}
-}
-
-// ReadBlobSizeAttr reads the blobsize from the xattrs
-func ReadBlobSizeAttr(path string) (int64, error) {
-	attr, err := xattrs.Get(path, prefixes.BlobsizeAttr)
-	if err != nil {
-		return 0, errors.Wrapf(err, "error reading blobsize xattr")
-	}
-	blobSize, err := strconv.ParseInt(attr, 10, 64)
-	if err != nil {
-		return 0, errors.Wrapf(err, "invalid blobsize xattr format")
-	}
-	return blobSize, nil
 }
 
 // ReadBlobIDAttr reads the blobsize from the xattrs

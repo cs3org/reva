@@ -59,11 +59,11 @@ func (fs *Decomposedfs) ListRecycle(ctx context.Context, ref *provider.Reference
 	sublog := appctx.GetLogger(ctx).With().Str("space", spaceID).Str("key", key).Str("relative_path", relativePath).Logger()
 
 	// check permissions
-	trashnode, err := fs.lu.NodeFromSpaceID(ctx, ref.ResourceId)
+	spaceRoot, err := fs.lu.NodeFromSpaceID(ctx, ref.ResourceId)
 	if err != nil {
 		return nil, err
 	}
-	rp, err := fs.p.AssemblePermissions(ctx, trashnode)
+	rp, err := fs.p.AssemblePermissions(ctx, spaceRoot)
 	switch {
 	case err != nil:
 		return nil, errtypes.InternalError(err.Error())
@@ -81,22 +81,28 @@ func (fs *Decomposedfs) ListRecycle(ctx context.Context, ref *provider.Reference
 	// build a list of trash items relative to the given trash root and path
 	items := make([]*provider.RecycleItem, 0)
 
+	// TODO we need a trash interface that can be used to implement different trash strategies
+	// - eg freedesktop org, eos, trash folder with symlinks to trash nodes delimiter ...
+	// - uses trash nodes
+
+	// TODO revisions should also be hidden behind an interface
+	// - uses revision nodes
+
+	// TODO same goes for grants, arbitrary metadata, size?
+	// we already have tree, node and lookup
+
 	trashRootPath := filepath.Join(fs.getRecycleRoot(spaceID), lookup.Pathify(key, 4, 2))
-	originalPath, _, timeSuffix, err := readTrashLink(trashRootPath)
+	originalPath, nodeID, timeSuffix, err := readTrashLink(trashRootPath)
 	if err != nil {
 		sublog.Error().Err(err).Str("trashRoot", trashRootPath).Msg("error reading trash link")
 		return nil, err
 	}
 
 	origin := ""
-	attrs, err := xattrs.All(originalPath)
-	if err != nil {
-		return items, err
-	}
-	// lookup origin path in extended attributes
-	if attrBytes, ok := attrs[prefixes.TrashOriginAttr]; ok {
-		origin = attrBytes
-	} else {
+	nodeType := node.TypeFromPath(originalPath)
+	// lookup origin path
+	trashNode := node.New(spaceID, nodeID+node.TrashIDDelimiter+timeSuffix, "", "", 0, "", nodeType, nil, fs.lu)
+	if origin, err = trashNode.GetTrashOrigin(); err != nil {
 		sublog.Error().Err(err).Str("space", spaceID).Msg("could not read origin path, skipping")
 		return nil, err
 	}
@@ -112,16 +118,15 @@ func (fs *Decomposedfs) ListRecycle(ctx context.Context, ref *provider.Reference
 		sublog.Error().Err(err).Msg("could not parse time format, ignoring")
 	}
 
-	nodeType := node.TypeFromPath(originalPath)
 	if nodeType != provider.ResourceType_RESOURCE_TYPE_CONTAINER {
 		// this is the case when we want to directly list a file in the trashbin
-		blobsize, err := strconv.ParseInt(attrs[prefixes.BlobsizeAttr], 10, 64)
+		blobsize, err := trashNode.GetBlobSize()
 		if err != nil {
 			return items, err
 		}
 		item := &provider.RecycleItem{
 			Type:         nodeType,
-			Size:         uint64(blobsize),
+			Size:         blobsize,
 			Key:          filepath.Join(key, relativePath),
 			DeletionTime: deletionTime,
 			Ref: &provider.Reference{
@@ -147,15 +152,18 @@ func (fs *Decomposedfs) ListRecycle(ctx context.Context, ref *provider.Reference
 		return nil, err
 	}
 	for _, name := range names {
+
 		resolvedChildPath, err := filepath.EvalSymlinks(filepath.Join(childrenPath, name))
 		if err != nil {
 			sublog.Error().Err(err).Str("name", name).Msg("could not resolve symlink, skipping")
 			continue
 		}
 
+		// TODO navigate using n.Child?
+		nodeType = node.TypeFromPath(resolvedChildPath)
+		childNode := node.New(spaceID, nodeID+node.TrashIDDelimiter+timeSuffix, "", "", 0, "", nodeType, nil, fs.lu)
 		size := int64(0)
 
-		nodeType = node.TypeFromPath(resolvedChildPath)
 		switch nodeType {
 		case provider.ResourceType_RESOURCE_TYPE_FILE:
 			size, err = node.ReadBlobSizeAttr(resolvedChildPath)

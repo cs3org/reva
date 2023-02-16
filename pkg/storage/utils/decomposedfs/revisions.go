@@ -86,7 +86,7 @@ func (fs *Decomposedfs) ListRevisions(ctx context.Context, ref *provider.Referen
 					Key:   n.ID + node.RevisionIDDelimiter + parts[1],
 					Mtime: uint64(mtime.Unix()),
 				}
-				blobSize, err := node.ReadBlobSizeAttr(items[i])
+				blobSize, err := n.RevisionBlobSize(parts[1])
 				if err != nil {
 					appctx.GetLogger(ctx).Error().Err(err).Str("name", fi.Name()).Msg("error reading blobsize xattr, using 0")
 				}
@@ -152,7 +152,7 @@ func (fs *Decomposedfs) DownloadRevision(ctx context.Context, ref *provider.Refe
 	if err != nil {
 		return nil, errors.Wrapf(err, "Decomposedfs: could not read blob id of revision '%s' for node '%s'", n.ID, revisionKey)
 	}
-	blobsize, err := node.ReadBlobSizeAttr(contentPath)
+	blobsize, err := n.RevisionBlobSize(kp[1])
 	if err != nil {
 		return nil, errors.Wrapf(err, "Decomposedfs: could not read blob size of revision '%s' for node '%s'", n.ID, revisionKey)
 	}

@@ -99,4 +99,10 @@ func (n *Node) RemoveGrant(ctx context.Context, g *provider.Grant) error {
 		attr = prefixes.GrantUserAcePrefix + g.Grantee.GetUserId().OpaqueId
 	}
 	return n.RemoveXattr(attr)
+	/* TODO ignore unset error?
+	if xattrs.IsAttrUnset(err) {
+		return nil // already gone, ignore
+	}
+	return err
+	*/
 }
