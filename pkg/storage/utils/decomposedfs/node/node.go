@@ -160,6 +160,7 @@ func (n *Node) Type() provider.ResourceType {
 	return t
 }
 
+// SetType sets the type of the node.
 func (n *Node) SetType(t provider.ResourceType) {
 	n.nodeType = &t
 }
@@ -1293,6 +1294,7 @@ func enoughDiskSpace(path string, fileSize uint64) bool {
 	return avalB > fileSize
 }
 
+// TypeFromPath returns the type of the node at the given path
 func TypeFromPath(path string) provider.ResourceType {
 	// Try to read from xattrs
 	typeAttr, err := xattrs.Get(path, prefixes.TypeAttr)
