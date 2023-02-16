@@ -52,7 +52,6 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/tree"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/upload"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs/prefixes"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/filelocks"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/templates"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
@@ -577,7 +576,7 @@ func (fs *Decomposedfs) CreateDir(ctx context.Context, ref *provider.Reference) 
 
 	if fs.o.TreeTimeAccounting || fs.o.TreeSizeAccounting {
 		// mark the home node as the end of propagation
-		if err = n.SetXattr(prefixes.PropagationAttr, "1"); err != nil {
+		if err = n.EnablePropagation(); err != nil {
 			appctx.GetLogger(ctx).Error().Err(err).Interface("node", n).Msg("could not mark node to propagate")
 
 			// FIXME: This does not return an error at all, but results in a severe situation that the

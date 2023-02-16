@@ -26,6 +26,7 @@ import (
 	"hash"
 	"io"
 	"io/fs"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -163,6 +164,28 @@ func (n *Node) Type() provider.ResourceType {
 // SetType sets the type of the node.
 func (n *Node) SetType(t provider.ResourceType) {
 	n.nodeType = &t
+}
+
+// EnablePropagation enables recursive size and change time propagation
+func (n *Node) EnablePropagation() (err error) {
+	nodePath := n.InternalPath()
+	if err := xattrs.Set(nodePath, prefixes.PropagationAttr, "1"); err != nil {
+		return errors.Wrap(err, "Decomposedfs: could not enable propagation")
+	}
+	return nil
+}
+
+// SetReference sets a cs3 reference property in the metadata
+func (n *Node) SetReference(targetURI *url.URL) (err error) {
+	nodePath := n.InternalPath()
+	if err := xattrs.Set(nodePath, prefixes.ReferenceAttr, targetURI.String()); err != nil {
+		// the reference could not be set - that would result in an lost reference?
+		return errors.Wrapf(err, "Decomposedfs: error setting the target %s on the reference file %s",
+			targetURI.String(),
+			nodePath,
+		)
+	}
+	return nil
 }
 
 // ChangeOwner sets the owner of n to newOwner
