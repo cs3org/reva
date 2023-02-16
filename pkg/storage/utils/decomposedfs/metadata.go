@@ -20,7 +20,6 @@ package decomposedfs
 
 import (
 	"context"
-	"fmt"
 	"path/filepath"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -29,10 +28,7 @@ import (
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs/prefixes"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
-	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/pkg/errors"
 )
 
@@ -110,9 +106,8 @@ func (fs *Decomposedfs) SetArbitraryMetadata(ctx context.Context, ref *provider.
 		}
 	}
 	for k, v := range md.Metadata {
-		attrName := prefixes.MetadataPrefix + k
-		if err = n.SetXattr(attrName, v); err != nil {
-			errs = append(errs, errors.Wrap(err, "Decomposedfs: could not set metadata attribute "+attrName+" to "+k))
+		if err = n.SetArbitraryMetadata(k, v); err != nil {
+			errs = append(errs, errors.Wrap(err, "Decomposedfs: could not set metadata attribute "+k+" to "+v))
 		}
 	}
 
@@ -183,22 +178,14 @@ func (fs *Decomposedfs) UnsetArbitraryMetadata(ctx context.Context, ref *provide
 				errs = append(errs, errors.Wrap(errtypes.UserRequired("userrequired"), "user has no id"))
 				continue
 			}
-			fa := fmt.Sprintf("%s:%s:%s@%s", prefixes.FavPrefix, utils.UserTypeToString(uid.GetType()), uid.GetOpaqueId(), uid.GetIdp())
-			if err := n.RemoveXattr(fa); err != nil {
-				if xattrs.IsAttrUnset(err) {
-					continue // already gone, ignore
-				}
+			if err := n.RemoveFavorite(uid); err != nil {
 				sublog.Error().Err(err).
 					Interface("user", u).
-					Str("key", fa).
 					Msg("could not unset favorite flag")
 				errs = append(errs, errors.Wrap(err, "could not unset favorite flag"))
 			}
 		default:
-			if err = n.RemoveXattr(prefixes.MetadataPrefix + k); err != nil {
-				if xattrs.IsAttrUnset(err) {
-					continue // already gone, ignore
-				}
+			if err = n.UnsetArbitraryMetadata(k); err != nil {
 				sublog.Error().Err(err).
 					Str("key", k).
 					Msg("could not unset metadata")
