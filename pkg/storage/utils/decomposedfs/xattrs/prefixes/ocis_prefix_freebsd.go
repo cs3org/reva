@@ -16,21 +16,13 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package xattrs
+//go:build freebsd
 
-import (
-	xattrBackend "github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs/backend"
+package prefixes
+
+// On FreeBSD the `user` namespace is implied through a separate syscall argument
+// and will fail with invalid argument when you try to start an xattr name with user. or system.
+// For that reason we drop the superfluous user. prefix for FreeBSD specifically.
+const (
+	OcisPrefix string = "ocis."
 )
-
-// TODO This is currently a singleton because the trash code needs to be refactored before we can hide this behind a real metadata backend interface
-var backend xattrBackend.Backend = xattrBackend.NullBackend{}
-
-// UseXattrsBackend configures decomposedfs to use xattrs for storing file attributes
-func UseXattrsBackend() {
-	backend = xattrBackend.XattrsBackend{}
-}
-
-// UseIniBackend configures decomposedfs to use ini files for storing file attributes
-func UseIniBackend() {
-	backend = xattrBackend.IniBackend{}
-}

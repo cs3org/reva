@@ -43,6 +43,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/mime"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/ace"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs/prefixes"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/grants"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/google/uuid"
@@ -124,7 +125,7 @@ func (n *Node) Type() provider.ResourceType {
 	t := provider.ResourceType_RESOURCE_TYPE_INVALID
 
 	// Try to read from xattrs
-	typeAttr, err := n.Xattr(xattrs.TypeAttr)
+	typeAttr, err := n.Xattr(prefixes.TypeAttr)
 	if err == nil {
 		typeInt, err := strconv.ParseInt(typeAttr, 10, 32)
 		if err != nil {
@@ -143,7 +144,7 @@ func (n *Node) Type() provider.ResourceType {
 
 	switch {
 	case fi.IsDir():
-		if _, err = n.Xattr(xattrs.ReferenceAttr); err == nil {
+		if _, err = n.Xattr(prefixes.ReferenceAttr); err == nil {
 			t = provider.ResourceType_RESOURCE_TYPE_REFERENCE
 		} else {
 			t = provider.ResourceType_RESOURCE_TYPE_CONTAINER
@@ -167,9 +168,9 @@ func (n *Node) SetType(t provider.ResourceType) {
 func (n *Node) ChangeOwner(new *userpb.UserId) (err error) {
 	n.SpaceRoot.owner = new
 
-	var attribs = map[string]string{xattrs.OwnerIDAttr: new.OpaqueId,
-		xattrs.OwnerIDPAttr:  new.Idp,
-		xattrs.OwnerTypeAttr: utils.UserTypeToString(new.Type)}
+	var attribs = map[string]string{prefixes.OwnerIDAttr: new.OpaqueId,
+		prefixes.OwnerIDPAttr:  new.Idp,
+		prefixes.OwnerTypeAttr: utils.UserTypeToString(new.Type)}
 
 	if err := n.SpaceRoot.SetXattrs(attribs); err != nil {
 		return err
@@ -182,11 +183,11 @@ func (n *Node) ChangeOwner(new *userpb.UserId) (err error) {
 func (n *Node) WriteAllNodeMetadata() (err error) {
 	attribs := make(map[string]string)
 
-	attribs[xattrs.TypeAttr] = strconv.FormatInt(int64(n.Type()), 10)
-	attribs[xattrs.ParentidAttr] = n.ParentID
-	attribs[xattrs.NameAttr] = n.Name
-	attribs[xattrs.BlobIDAttr] = n.BlobID
-	attribs[xattrs.BlobsizeAttr] = strconv.FormatInt(n.Blobsize, 10)
+	attribs[prefixes.TypeAttr] = strconv.FormatInt(int64(n.Type()), 10)
+	attribs[prefixes.ParentidAttr] = n.ParentID
+	attribs[prefixes.NameAttr] = n.Name
+	attribs[prefixes.BlobIDAttr] = n.BlobID
+	attribs[prefixes.BlobsizeAttr] = strconv.FormatInt(n.Blobsize, 10)
 
 	return n.SetXattrs(attribs)
 }
@@ -195,9 +196,9 @@ func (n *Node) WriteAllNodeMetadata() (err error) {
 func (n *Node) WriteOwner(owner *userpb.UserId) error {
 	n.SpaceRoot.owner = owner
 	attribs := map[string]string{
-		xattrs.OwnerIDAttr:   owner.OpaqueId,
-		xattrs.OwnerIDPAttr:  owner.Idp,
-		xattrs.OwnerTypeAttr: utils.UserTypeToString(owner.Type),
+		prefixes.OwnerIDAttr:   owner.OpaqueId,
+		prefixes.OwnerIDPAttr:  owner.Idp,
+		prefixes.OwnerTypeAttr: utils.UserTypeToString(owner.Type),
 	}
 	if err := n.SpaceRoot.SetXattrs(attribs); err != nil {
 		return err
@@ -249,7 +250,7 @@ func ReadNode(ctx context.Context, lu PathLookup, spaceID, nodeID string, canLis
 	r.Exists = true
 
 	// lookup name in extended attributes
-	r.Name, err = r.Xattr(xattrs.NameAttr)
+	r.Name, err = r.Xattr(prefixes.NameAttr)
 	if err != nil {
 		return nil, err
 	}
@@ -307,8 +308,8 @@ func ReadNode(ctx context.Context, lu PathLookup, spaceID, nodeID string, canLis
 	}
 	n.Exists = true
 
-	n.Name = attrs[xattrs.NameAttr]
-	n.ParentID = attrs[xattrs.ParentidAttr]
+	n.Name = attrs[prefixes.NameAttr]
+	n.ParentID = attrs[prefixes.ParentidAttr]
 	if n.ParentID == "" {
 		return nil, errtypes.InternalError("Missing parent ID on node")
 	}
@@ -424,12 +425,12 @@ func (n *Node) Parent() (p *Node, err error) {
 	}
 
 	// lookup parent id in extended attributes
-	if p.ParentID, err = p.Xattr(xattrs.ParentidAttr); err != nil {
+	if p.ParentID, err = p.Xattr(prefixes.ParentidAttr); err != nil {
 		p.ParentID = ""
 		return
 	}
 	// lookup name in extended attributes
-	if p.Name, err = p.Xattr(xattrs.NameAttr); err != nil {
+	if p.Name, err = p.Xattr(prefixes.NameAttr); err != nil {
 		p.Name = ""
 		p.ParentID = ""
 		return
@@ -456,7 +457,7 @@ func (n *Node) readOwner() (*userpb.UserId, error) {
 	var attr string
 	var err error
 	// lookup ID in extended attributes
-	attr, err = n.SpaceRoot.Xattr(xattrs.OwnerIDAttr)
+	attr, err = n.SpaceRoot.Xattr(prefixes.OwnerIDAttr)
 	switch {
 	case err == nil:
 		owner.OpaqueId = attr
@@ -467,7 +468,7 @@ func (n *Node) readOwner() (*userpb.UserId, error) {
 	}
 
 	// lookup IDP in extended attributes
-	attr, err = n.SpaceRoot.Xattr(xattrs.OwnerIDPAttr)
+	attr, err = n.SpaceRoot.Xattr(prefixes.OwnerIDPAttr)
 	switch {
 	case err == nil:
 		owner.Idp = attr
@@ -478,7 +479,7 @@ func (n *Node) readOwner() (*userpb.UserId, error) {
 	}
 
 	// lookup type in extended attributes
-	attr, err = n.SpaceRoot.Xattr(xattrs.OwnerTypeAttr)
+	attr, err = n.SpaceRoot.Xattr(prefixes.OwnerTypeAttr)
 	switch {
 	case err == nil:
 		owner.Type = utils.UserTypeMap(attr)
@@ -590,7 +591,7 @@ func (n *Node) SetEtag(ctx context.Context, val string) (err error) {
 		return nil
 	}
 	// etag is only valid until the calculated etag changes, is part of propagation
-	return n.SetXattr(xattrs.TmpEtagAttr, val)
+	return n.SetXattr(prefixes.TmpEtagAttr, val)
 }
 
 // SetFavorite sets the favorite for the current user
@@ -612,13 +613,13 @@ func (n *Node) SetEtag(ctx context.Context, val string) (err error) {
 // public tags can be mapped to extended attributes
 func (n *Node) SetFavorite(uid *userpb.UserId, val string) error {
 	// the favorite flag is specific to the user, so we need to incorporate the userid
-	fa := fmt.Sprintf("%s:%s:%s@%s", xattrs.FavPrefix, utils.UserTypeToString(uid.GetType()), uid.GetOpaqueId(), uid.GetIdp())
+	fa := fmt.Sprintf("%s:%s:%s@%s", prefixes.FavPrefix, utils.UserTypeToString(uid.GetType()), uid.GetOpaqueId(), uid.GetIdp())
 	return n.SetXattr(fa, val)
 }
 
 // IsDir returns true if the node is a directory
 func (n *Node) IsDir() bool {
-	attr, _ := n.Xattr(xattrs.TypeAttr)
+	attr, _ := n.Xattr(prefixes.TypeAttr)
 	return attr == strconv.FormatInt(int64(provider.ResourceType_RESOURCE_TYPE_CONTAINER), 10)
 }
 
@@ -631,7 +632,7 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 
 	var target string
 	if nodeType == provider.ResourceType_RESOURCE_TYPE_REFERENCE {
-		target, _ = n.Xattr(xattrs.ReferenceAttr)
+		target, _ = n.Xattr(prefixes.ReferenceAttr)
 	}
 
 	id := &provider.ResourceId{SpaceId: n.SpaceID, OpaqueId: n.ID}
@@ -691,7 +692,7 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 	}
 
 	// use temporary etag if it is set
-	if b, err := n.Xattr(xattrs.TmpEtagAttr); err == nil {
+	if b, err := n.Xattr(prefixes.TmpEtagAttr); err == nil {
 		ri.Etag = fmt.Sprintf(`"%x"`, b) // TODO why do we convert string(b)? is the temporary etag stored as string? -> should we use bytes? use hex.EncodeToString?
 	} else if ri.Etag, err = calculateEtag(n.ID, tmTime); err != nil {
 		sublog.Debug().Err(err).Msg("could not calculate etag")
@@ -733,7 +734,7 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 		if u, ok := ctxpkg.ContextGetUser(ctx); ok {
 			// the favorite flag is specific to the user, so we need to incorporate the userid
 			if uid := u.GetId(); uid != nil {
-				fa := fmt.Sprintf("%s:%s:%s@%s", xattrs.FavPrefix, utils.UserTypeToString(uid.GetType()), uid.GetOpaqueId(), uid.GetIdp())
+				fa := fmt.Sprintf("%s:%s:%s@%s", prefixes.FavPrefix, utils.UserTypeToString(uid.GetType()), uid.GetOpaqueId(), uid.GetIdp())
 				if val, err := n.Xattr(fa); err == nil {
 					sublog.Debug().
 						Str("favorite", fa).
@@ -802,11 +803,11 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 	} else {
 		for key, value := range attrs {
 			// filter out non-custom properties
-			if !strings.HasPrefix(key, xattrs.MetadataPrefix) {
+			if !strings.HasPrefix(key, prefixes.MetadataPrefix) {
 				continue
 			}
 			// only read when key was requested
-			k := key[len(xattrs.MetadataPrefix):]
+			k := key[len(prefixes.MetadataPrefix):]
 			if _, ok := mdKeysMap[k]; returnAllMetadata || ok {
 				metadata[k] = value
 			}
@@ -830,7 +831,7 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 }
 
 func (n *Node) readChecksumIntoResourceChecksum(ctx context.Context, algo string, ri *provider.ResourceInfo) {
-	v, err := n.Xattr(xattrs.ChecksumPrefix + algo)
+	v, err := n.Xattr(prefixes.ChecksumPrefix + algo)
 	switch {
 	case err == nil:
 		ri.Checksum = &provider.ResourceChecksum{
@@ -845,7 +846,7 @@ func (n *Node) readChecksumIntoResourceChecksum(ctx context.Context, algo string
 }
 
 func (n *Node) readChecksumIntoOpaque(ctx context.Context, algo string, ri *provider.ResourceInfo) {
-	v, err := n.Xattr(xattrs.ChecksumPrefix + algo)
+	v, err := n.Xattr(prefixes.ChecksumPrefix + algo)
 	switch {
 	case err == nil:
 		if ri.Opaque == nil {
@@ -866,7 +867,7 @@ func (n *Node) readChecksumIntoOpaque(ctx context.Context, algo string, ri *prov
 
 // quota is always stored on the root node
 func (n *Node) readQuotaIntoOpaque(ctx context.Context, ri *provider.ResourceInfo) {
-	v, err := n.Xattr(xattrs.QuotaAttr)
+	v, err := n.Xattr(prefixes.QuotaAttr)
 	switch {
 	case err == nil:
 		// make sure we have a proper signed int
@@ -896,7 +897,7 @@ func (n *Node) readQuotaIntoOpaque(ctx context.Context, ri *provider.ResourceInf
 
 // HasPropagation checks if the propagation attribute exists and is set to "1"
 func (n *Node) HasPropagation() (propagation bool) {
-	if b, err := n.Xattr(xattrs.PropagationAttr); err == nil {
+	if b, err := n.Xattr(prefixes.PropagationAttr); err == nil {
 		return b == "1"
 	}
 	return false
@@ -904,7 +905,7 @@ func (n *Node) HasPropagation() (propagation bool) {
 
 // GetTMTime reads the tmtime from the extended attributes
 func (n *Node) GetTMTime() (time.Time, error) {
-	b, err := n.Xattr(xattrs.TreeMTimeAttr)
+	b, err := n.Xattr(prefixes.TreeMTimeAttr)
 	if err == nil {
 		return time.Parse(time.RFC3339Nano, b)
 	}
@@ -920,14 +921,14 @@ func (n *Node) GetTMTime() (time.Time, error) {
 // SetTMTime writes the UTC tmtime to the extended attributes or removes the attribute if nil is passed
 func (n *Node) SetTMTime(t *time.Time) (err error) {
 	if t == nil {
-		return n.RemoveXattr(xattrs.TreeMTimeAttr)
+		return n.RemoveXattr(prefixes.TreeMTimeAttr)
 	}
-	return n.SetXattr(xattrs.TreeMTimeAttr, t.UTC().Format(time.RFC3339Nano))
+	return n.SetXattr(prefixes.TreeMTimeAttr, t.UTC().Format(time.RFC3339Nano))
 }
 
 // GetDTime reads the dtime from the extended attributes
 func (n *Node) GetDTime() (tmTime time.Time, err error) {
-	b, err := n.Xattr(xattrs.DTimeAttr)
+	b, err := n.Xattr(prefixes.DTimeAttr)
 	if err != nil {
 		return time.Time{}, err
 	}
@@ -937,9 +938,9 @@ func (n *Node) GetDTime() (tmTime time.Time, err error) {
 // SetDTime writes the UTC dtime to the extended attributes or removes the attribute if nil is passed
 func (n *Node) SetDTime(t *time.Time) (err error) {
 	if t == nil {
-		return n.RemoveXattr(xattrs.DTimeAttr)
+		return n.RemoveXattr(prefixes.DTimeAttr)
 	}
-	return n.SetXattr(xattrs.DTimeAttr, t.UTC().Format(time.RFC3339Nano))
+	return n.SetXattr(prefixes.DTimeAttr, t.UTC().Format(time.RFC3339Nano))
 }
 
 // IsDisabled returns true when the node has a dmtime attribute set
@@ -955,7 +956,7 @@ func (n *Node) IsDisabled() bool {
 // GetTreeSize reads the treesize from the extended attributes
 func (n *Node) GetTreeSize() (treesize uint64, err error) {
 	var b string
-	if b, err = n.Xattr(xattrs.TreesizeAttr); err != nil {
+	if b, err = n.Xattr(prefixes.TreesizeAttr); err != nil {
 		return
 	}
 	return strconv.ParseUint(b, 10, 64)
@@ -963,13 +964,13 @@ func (n *Node) GetTreeSize() (treesize uint64, err error) {
 
 // SetTreeSize writes the treesize to the extended attributes
 func (n *Node) SetTreeSize(ts uint64) (err error) {
-	return n.SetXattr(xattrs.TreesizeAttr, strconv.FormatUint(ts, 10))
+	return n.SetXattr(prefixes.TreesizeAttr, strconv.FormatUint(ts, 10))
 }
 
 // GetBlobSize reads the blobsize from the extended attributes
 func (n *Node) GetBlobSize() (treesize uint64, err error) {
 	var b string
-	if b, err = n.Xattr(xattrs.BlobsizeAttr); err != nil {
+	if b, err = n.Xattr(prefixes.BlobsizeAttr); err != nil {
 		return
 	}
 	return strconv.ParseUint(b, 10, 64)
@@ -977,12 +978,12 @@ func (n *Node) GetBlobSize() (treesize uint64, err error) {
 
 // SetChecksum writes the checksum with the given checksum type to the extended attributes
 func (n *Node) SetChecksum(csType string, h hash.Hash) (err error) {
-	return n.SetXattr(xattrs.ChecksumPrefix+csType, string(h.Sum(nil)))
+	return n.SetXattr(prefixes.ChecksumPrefix+csType, string(h.Sum(nil)))
 }
 
 // UnsetTempEtag removes the temporary etag attribute
 func (n *Node) UnsetTempEtag() (err error) {
-	return n.RemoveXattr(xattrs.TmpEtagAttr)
+	return n.RemoveXattr(prefixes.TmpEtagAttr)
 }
 
 // ReadUserPermissions will assemble the permissions for the current user on the given node without parent nodes
@@ -1017,15 +1018,15 @@ func (n *Node) ReadUserPermissions(ctx context.Context, u *userpb.User) (ap prov
 	// 1. we can start iterating over the acls / grants on the node or
 	// 2. we can iterate over the number of groups
 	// The current implementation tries to be defensive for cases where users have hundreds or thousands of groups, so we iterate over the existing acls.
-	userace := xattrs.GrantUserAcePrefix + u.Id.OpaqueId
+	userace := prefixes.GrantUserAcePrefix + u.Id.OpaqueId
 	userFound := false
 	for i := range grantees {
 		switch {
 		// we only need to find the user once
 		case !userFound && grantees[i] == userace:
 			g, err = n.ReadGrant(ctx, grantees[i])
-		case strings.HasPrefix(grantees[i], xattrs.GrantGroupAcePrefix): // only check group grantees
-			gr := strings.TrimPrefix(grantees[i], xattrs.GrantGroupAcePrefix)
+		case strings.HasPrefix(grantees[i], prefixes.GrantGroupAcePrefix): // only check group grantees
+			gr := strings.TrimPrefix(grantees[i], prefixes.GrantGroupAcePrefix)
 			if groupsMap[gr] {
 				g, err = n.ReadGrant(ctx, grantees[i])
 			} else {
@@ -1061,7 +1062,7 @@ func (n *Node) ReadUserPermissions(ctx context.Context, u *userpb.User) (ap prov
 // IsDenied checks if the node was denied to that user
 func (n *Node) IsDenied(ctx context.Context) bool {
 	u := ctxpkg.ContextMustGetUser(ctx)
-	userace := xattrs.GrantUserAcePrefix + u.Id.OpaqueId
+	userace := prefixes.GrantUserAcePrefix + u.Id.OpaqueId
 	g, err := n.ReadGrant(ctx, userace)
 	switch {
 	case err == nil:
@@ -1085,7 +1086,7 @@ func (n *Node) ListGrantees(ctx context.Context) (grantees []string, err error) 
 		return nil, err
 	}
 	for name := range attrs {
-		if strings.HasPrefix(name, xattrs.GrantPrefix) {
+		if strings.HasPrefix(name, prefixes.GrantPrefix) {
 			grantees = append(grantees, name)
 		}
 	}
@@ -1099,7 +1100,7 @@ func (n *Node) ReadGrant(ctx context.Context, grantee string) (g *provider.Grant
 		return nil, err
 	}
 	var e *ace.ACE
-	if e, err = ace.Unmarshal(strings.TrimPrefix(grantee, xattrs.GrantPrefix), []byte(xattr)); err != nil {
+	if e, err = ace.Unmarshal(strings.TrimPrefix(grantee, prefixes.GrantPrefix), []byte(xattr)); err != nil {
 		return nil, err
 	}
 	return e.Grant(), nil
@@ -1131,7 +1132,7 @@ func (n *Node) ListGrants(ctx context.Context) ([]*provider.Grant, error) {
 
 // ReadBlobSizeAttr reads the blobsize from the xattrs
 func ReadBlobSizeAttr(path string) (int64, error) {
-	attr, err := xattrs.Get(path, xattrs.BlobsizeAttr)
+	attr, err := xattrs.Get(path, prefixes.BlobsizeAttr)
 	if err != nil {
 		return 0, errors.Wrapf(err, "error reading blobsize xattr")
 	}
@@ -1144,7 +1145,7 @@ func ReadBlobSizeAttr(path string) (int64, error) {
 
 // ReadBlobIDAttr reads the blobsize from the xattrs
 func ReadBlobIDAttr(path string) (string, error) {
-	attr, err := xattrs.Get(path, xattrs.BlobIDAttr)
+	attr, err := xattrs.Get(path, prefixes.BlobIDAttr)
 	if err != nil {
 		return "", errors.Wrapf(err, "error reading blobid xattr")
 	}
@@ -1157,9 +1158,9 @@ func (n *Node) getGranteeTypes(ctx context.Context) []provider.GranteeType {
 		hasUserShares, hasGroupShares := false, false
 		for i := range g {
 			switch {
-			case !hasUserShares && strings.HasPrefix(g[i], xattrs.GrantUserAcePrefix):
+			case !hasUserShares && strings.HasPrefix(g[i], prefixes.GrantUserAcePrefix):
 				hasUserShares = true
-			case !hasGroupShares && strings.HasPrefix(g[i], xattrs.GrantGroupAcePrefix):
+			case !hasGroupShares && strings.HasPrefix(g[i], prefixes.GrantGroupAcePrefix):
 				hasGroupShares = true
 			case hasUserShares && hasGroupShares:
 				break
@@ -1209,37 +1210,37 @@ func (n *Node) FindStorageSpaceRoot() error {
 
 // UnmarkProcessing removes the processing flag from the node
 func (n *Node) UnmarkProcessing(uploadID string) error {
-	v, _ := n.Xattr(xattrs.StatusPrefix)
+	v, _ := n.Xattr(prefixes.StatusPrefix)
 	if v != ProcessingStatus+uploadID {
 		// file started another postprocessing later - do not remove
 		return nil
 	}
-	return n.RemoveXattr(xattrs.StatusPrefix)
+	return n.RemoveXattr(prefixes.StatusPrefix)
 }
 
 // IsProcessing returns true if the node is currently being processed
 func (n *Node) IsProcessing() bool {
-	v, err := n.Xattr(xattrs.StatusPrefix)
+	v, err := n.Xattr(prefixes.StatusPrefix)
 	return err == nil && strings.HasPrefix(v, ProcessingStatus)
 }
 
 // IsSpaceRoot checks if the node is a space root
 func (n *Node) IsSpaceRoot() bool {
-	_, err := n.Xattr(xattrs.SpaceNameAttr)
+	_, err := n.Xattr(prefixes.SpaceNameAttr)
 	return err == nil
 }
 
 // SetScanData sets the virus scan info to the node
 func (n *Node) SetScanData(info string, date time.Time) error {
 	return xattrs.SetMultiple(n.InternalPath(), map[string]string{
-		xattrs.ScanStatusPrefix: info,
-		xattrs.ScanDatePrefix:   date.Format(time.RFC3339Nano),
+		prefixes.ScanStatusPrefix: info,
+		prefixes.ScanDatePrefix:   date.Format(time.RFC3339Nano),
 	})
 }
 
 // ScanData returns scanning information of the node
 func (n *Node) ScanData() (scanned bool, virus string, scantime time.Time) {
-	ti, _ := n.Xattr(xattrs.ScanDatePrefix)
+	ti, _ := n.Xattr(prefixes.ScanDatePrefix)
 	if ti == "" {
 		return // not scanned yet
 	}
@@ -1249,7 +1250,7 @@ func (n *Node) ScanData() (scanned bool, virus string, scantime time.Time) {
 		return
 	}
 
-	i, err := n.Xattr(xattrs.ScanStatusPrefix)
+	i, err := n.Xattr(prefixes.ScanStatusPrefix)
 	if err != nil {
 		return
 	}
@@ -1267,7 +1268,7 @@ var CheckQuota = func(spaceRoot *Node, overwrite bool, oldSize, newSize uint64) 
 	if !enoughDiskSpace(spaceRoot.InternalPath(), newSize) {
 		return false, errtypes.InsufficientStorage("disk full")
 	}
-	quotaByteStr, _ := spaceRoot.Xattr(xattrs.QuotaAttr)
+	quotaByteStr, _ := spaceRoot.Xattr(prefixes.QuotaAttr)
 	if quotaByteStr == "" || quotaByteStr == QuotaUnlimited {
 		// if quota is not set, it means unlimited
 		return true, nil
@@ -1292,9 +1293,9 @@ func enoughDiskSpace(path string, fileSize uint64) bool {
 	return avalB > fileSize
 }
 
-func NodeTypeFromPath(path string) provider.ResourceType {
+func TypeFromPath(path string) provider.ResourceType {
 	// Try to read from xattrs
-	typeAttr, err := xattrs.Get(path, xattrs.TypeAttr)
+	typeAttr, err := xattrs.Get(path, prefixes.TypeAttr)
 	t := provider.ResourceType_RESOURCE_TYPE_INVALID
 	if err == nil {
 		typeInt, err := strconv.ParseInt(typeAttr, 10, 32)
@@ -1312,7 +1313,7 @@ func NodeTypeFromPath(path string) provider.ResourceType {
 
 	switch {
 	case fi.IsDir():
-		if _, err = xattrs.Get(path, xattrs.ReferenceAttr); err == nil {
+		if _, err = xattrs.Get(path, prefixes.ReferenceAttr); err == nil {
 			t = provider.ResourceType_RESOURCE_TYPE_REFERENCE
 		} else {
 			t = provider.ResourceType_RESOURCE_TYPE_CONTAINER

@@ -39,6 +39,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/tree"
 	treemocks "github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/tree/mocks"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs/prefixes"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/tests/helpers"
 	"github.com/stretchr/testify/mock"
@@ -172,7 +173,7 @@ var _ = Describe("File uploads", func() {
 			// the space name attribute is the stop condition in the lookup
 			h, err := lu.NodeFromResource(ctx, rootRef)
 			Expect(err).ToNot(HaveOccurred())
-			err = xattrs.Set(h.InternalPath(), xattrs.SpaceNameAttr, "username")
+			err = xattrs.Set(h.InternalPath(), prefixes.SpaceNameAttr, "username")
 			Expect(err).ToNot(HaveOccurred())
 			permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(provider.ResourcePermissions{
 				Stat: true,

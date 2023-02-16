@@ -43,6 +43,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/options"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs/prefixes"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/golang-jwt/jwt"
 	"github.com/pkg/errors"
@@ -230,9 +231,9 @@ func (upload *Upload) FinishUpload(_ context.Context) error {
 
 	// update checksums
 	attrs := map[string]string{
-		xattrs.ChecksumPrefix + "sha1":    string(sha1h.Sum(nil)),
-		xattrs.ChecksumPrefix + "md5":     string(md5h.Sum(nil)),
-		xattrs.ChecksumPrefix + "adler32": string(adler32h.Sum(nil)),
+		prefixes.ChecksumPrefix + "sha1":    string(sha1h.Sum(nil)),
+		prefixes.ChecksumPrefix + "md5":     string(md5h.Sum(nil)),
+		prefixes.ChecksumPrefix + "adler32": string(adler32h.Sum(nil)),
 	}
 
 	n, err := CreateNodeForUpload(upload, attrs)
@@ -376,10 +377,10 @@ func (upload *Upload) cleanup(cleanNode, cleanBin, cleanInfo bool) {
 		default:
 
 			if err := xattrs.CopyMetadata(upload.Node.InternalPath(), p, func(attributeName string) bool {
-				return strings.HasPrefix(attributeName, xattrs.ChecksumPrefix) ||
-					attributeName == xattrs.TypeAttr ||
-					attributeName == xattrs.BlobIDAttr ||
-					attributeName == xattrs.BlobsizeAttr
+				return strings.HasPrefix(attributeName, prefixes.ChecksumPrefix) ||
+					attributeName == prefixes.TypeAttr ||
+					attributeName == prefixes.BlobIDAttr ||
+					attributeName == prefixes.BlobsizeAttr
 			}); err != nil {
 				upload.log.Info().Str("versionpath", p).Str("nodepath", upload.Node.InternalPath()).Err(err).Msg("renaming version node failed")
 			}

@@ -16,21 +16,14 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package xattrs
+//go:build !freebsd
 
-import (
-	xattrBackend "github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs/backend"
+package prefixes
+
+// The default namespace for ocis. As non root users can only manipulate
+// the user. namespace, which is what is used to store ownCloud specific
+// metadata. To prevent name collisions with other apps, we are going to
+// introduce a sub namespace "user.ocis."
+const (
+	OcisPrefix string = "user.ocis."
 )
-
-// TODO This is currently a singleton because the trash code needs to be refactored before we can hide this behind a real metadata backend interface
-var backend xattrBackend.Backend = xattrBackend.NullBackend{}
-
-// UseXattrsBackend configures decomposedfs to use xattrs for storing file attributes
-func UseXattrsBackend() {
-	backend = xattrBackend.XattrsBackend{}
-}
-
-// UseIniBackend configures decomposedfs to use ini files for storing file attributes
-func UseIniBackend() {
-	backend = xattrBackend.IniBackend{}
-}

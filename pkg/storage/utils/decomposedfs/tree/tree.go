@@ -39,6 +39,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/lookup"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs/prefixes"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/filelocks"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/google/uuid"
@@ -228,7 +229,7 @@ func (t *Tree) linkSpaceNode(spaceType, spaceID string) {
 
 // isRootNode checks if a node is a space root
 func isRootNode(nodePath string) bool {
-	attr, err := xattrs.Get(nodePath, xattrs.ParentidAttr)
+	attr, err := xattrs.Get(nodePath, prefixes.ParentidAttr)
 	return err == nil && attr == node.RootID
 }
 
@@ -373,7 +374,7 @@ func (t *Tree) Move(ctx context.Context, oldNode *node.Node, newNode *node.Node)
 		}
 
 		// update name attribute
-		if err := oldNode.SetXattr(xattrs.NameAttr, newNode.Name); err != nil {
+		if err := oldNode.SetXattr(prefixes.NameAttr, newNode.Name); err != nil {
 			return errors.Wrap(err, "Decomposedfs: could not set name attribute")
 		}
 
@@ -393,10 +394,10 @@ func (t *Tree) Move(ctx context.Context, oldNode *node.Node, newNode *node.Node)
 	}
 
 	// update target parentid and name
-	if err := oldNode.SetXattr(xattrs.ParentidAttr, newNode.ParentID); err != nil {
+	if err := oldNode.SetXattr(prefixes.ParentidAttr, newNode.ParentID); err != nil {
 		return errors.Wrap(err, "Decomposedfs: could not set parentid attribute")
 	}
-	if err := oldNode.SetXattr(xattrs.NameAttr, newNode.Name); err != nil {
+	if err := oldNode.SetXattr(prefixes.NameAttr, newNode.Name); err != nil {
 		return errors.Wrap(err, "Decomposedfs: could not set name attribute")
 	}
 
@@ -494,7 +495,7 @@ func (t *Tree) Delete(ctx context.Context, n *node.Node) (err error) {
 
 	// set origin location in metadata
 	nodePath := n.InternalPath()
-	if err := n.SetXattr(xattrs.TrashOriginAttr, origin); err != nil {
+	if err := n.SetXattr(prefixes.TrashOriginAttr, origin); err != nil {
 		return err
 	}
 
@@ -515,7 +516,7 @@ func (t *Tree) Delete(ctx context.Context, n *node.Node) (err error) {
 	trashLink := filepath.Join(t.root, "spaces", lookup.Pathify(n.SpaceRoot.ID, 1, 2), "trash", lookup.Pathify(n.ID, 4, 2))
 	if err := os.MkdirAll(filepath.Dir(trashLink), 0700); err != nil {
 		// Roll back changes
-		_ = n.RemoveXattr(xattrs.TrashOriginAttr)
+		_ = n.RemoveXattr(prefixes.TrashOriginAttr)
 		return err
 	}
 
@@ -528,7 +529,7 @@ func (t *Tree) Delete(ctx context.Context, n *node.Node) (err error) {
 	err = os.Symlink("../../../../../nodes/"+lookup.Pathify(n.ID, 4, 2)+node.TrashIDDelimiter+deletionTime, trashLink)
 	if err != nil {
 		// Roll back changes
-		_ = n.RemoveXattr(xattrs.TrashOriginAttr)
+		_ = n.RemoveXattr(prefixes.TrashOriginAttr)
 		return
 	}
 
@@ -541,13 +542,13 @@ func (t *Tree) Delete(ctx context.Context, n *node.Node) (err error) {
 		// To roll back changes
 		// TODO remove symlink
 		// Roll back changes
-		_ = n.RemoveXattr(xattrs.TrashOriginAttr)
+		_ = n.RemoveXattr(prefixes.TrashOriginAttr)
 		return
 	}
 	if xattrs.UsesExternalMetadataFile() {
 		err = os.Rename(xattrs.MetadataPath(nodePath), xattrs.MetadataPath(trashPath))
 		if err != nil {
-			_ = n.RemoveXattr(xattrs.TrashOriginAttr)
+			_ = n.RemoveXattr(prefixes.TrashOriginAttr)
 			_ = os.Rename(trashPath, nodePath)
 			return
 		}
@@ -563,7 +564,7 @@ func (t *Tree) Delete(ctx context.Context, n *node.Node) (err error) {
 		// TODO revert the rename
 		// TODO remove symlink
 		// Roll back changes
-		_ = n.RemoveXattr(xattrs.TrashOriginAttr)
+		_ = n.RemoveXattr(prefixes.TrashOriginAttr)
 		return
 	}
 
@@ -628,13 +629,13 @@ func (t *Tree) RestoreRecycleItemFunc(ctx context.Context, spaceid, key, trashPa
 
 		targetNode.Exists = true
 		// update name attribute
-		if err := recycleNode.SetXattr(xattrs.NameAttr, targetNode.Name); err != nil {
+		if err := recycleNode.SetXattr(prefixes.NameAttr, targetNode.Name); err != nil {
 			return errors.Wrap(err, "Decomposedfs: could not set name attribute")
 		}
 
 		// set ParentidAttr to restorePath's node parent id
 		if trashPath != "" {
-			if err := recycleNode.SetXattr(xattrs.ParentidAttr, targetNode.ParentID); err != nil {
+			if err := recycleNode.SetXattr(prefixes.ParentidAttr, targetNode.ParentID); err != nil {
 				return errors.Wrap(err, "Decomposedfs: could not set name attribute")
 			}
 		}
@@ -781,7 +782,7 @@ func (t *Tree) Propagate(ctx context.Context, n *node.Node, sizeDiff int64) (err
 
 		// TODO none, sync and async?
 		if !n.HasPropagation() {
-			sublog.Debug().Str("attr", xattrs.PropagationAttr).Msg("propagation attribute not set or unreadable, not propagating")
+			sublog.Debug().Str("attr", prefixes.PropagationAttr).Msg("propagation attribute not set or unreadable, not propagating")
 			// if the attribute is not set treat it as false / none / no propagation
 			return nil
 		}
@@ -864,7 +865,7 @@ func (t *Tree) Propagate(ctx context.Context, n *node.Node, sizeDiff int64) (err
 			}
 
 			// update the tree size of the node
-			if err = n.SetXattrWithLock(xattrs.TreesizeAttr, strconv.FormatUint(newSize, 10), nodeLock); err != nil {
+			if err = n.SetXattrWithLock(prefixes.TreesizeAttr, strconv.FormatUint(newSize, 10), nodeLock); err != nil {
 				return err
 			}
 
@@ -915,10 +916,10 @@ func calculateTreeSize(ctx context.Context, childrenPath string) (uint64, error)
 			continue // continue after an error
 		}
 		sizeAttr := ""
-		if attribs[xattrs.TypeAttr] == strconv.FormatUint(uint64(provider.ResourceType_RESOURCE_TYPE_FILE), 10) {
-			sizeAttr = attribs[xattrs.BlobsizeAttr]
+		if attribs[prefixes.TypeAttr] == strconv.FormatUint(uint64(provider.ResourceType_RESOURCE_TYPE_FILE), 10) {
+			sizeAttr = attribs[prefixes.BlobsizeAttr]
 		} else {
-			sizeAttr = attribs[xattrs.TreesizeAttr]
+			sizeAttr = attribs[prefixes.TreesizeAttr]
 		}
 		csize, err := strconv.ParseInt(sizeAttr, 10, 64)
 		if err != nil {
@@ -998,30 +999,30 @@ func (t *Tree) readRecycleItem(ctx context.Context, spaceID, key, path string) (
 	if err != nil {
 		return
 	}
-	recycleNode.SetType(node.NodeTypeFromPath(recycleNode.InternalPath()))
+	recycleNode.SetType(node.TypeFromPath(recycleNode.InternalPath()))
 
 	var attrStr string
 	// lookup blobID in extended attributes
-	if attrStr, err = xattrs.Get(deletedNodePath, xattrs.BlobIDAttr); err == nil {
+	if attrStr, err = xattrs.Get(deletedNodePath, prefixes.BlobIDAttr); err == nil {
 		recycleNode.BlobID = attrStr
 	} else {
 		return
 	}
 
 	// lookup blobSize in extended attributes
-	if recycleNode.Blobsize, err = xattrs.GetInt64(deletedNodePath, xattrs.BlobsizeAttr); err != nil {
+	if recycleNode.Blobsize, err = xattrs.GetInt64(deletedNodePath, prefixes.BlobsizeAttr); err != nil {
 		return
 	}
 
 	// lookup parent id in extended attributes
-	if attrStr, err = xattrs.Get(deletedNodePath, xattrs.ParentidAttr); err == nil {
+	if attrStr, err = xattrs.Get(deletedNodePath, prefixes.ParentidAttr); err == nil {
 		recycleNode.ParentID = attrStr
 	} else {
 		return
 	}
 
 	// lookup name in extended attributes
-	if attrStr, err = xattrs.Get(deletedNodePath, xattrs.NameAttr); err == nil {
+	if attrStr, err = xattrs.Get(deletedNodePath, prefixes.NameAttr); err == nil {
 		recycleNode.Name = attrStr
 	} else {
 		return
@@ -1031,37 +1032,11 @@ func (t *Tree) readRecycleItem(ctx context.Context, spaceID, key, path string) (
 	origin = "/"
 
 	// lookup origin path in extended attributes
-	if attrStr, err = xattrs.Get(resolvedTrashItem, xattrs.TrashOriginAttr); err == nil {
+	if attrStr, err = xattrs.Get(resolvedTrashItem, prefixes.TrashOriginAttr); err == nil {
 		origin = filepath.Join(attrStr, path)
 	} else {
 		log.Error().Err(err).Str("trashItem", trashItem).Str("deletedNodePath", deletedNodePath).Msg("could not read origin path, restoring to /")
 	}
 
 	return
-}
-
-// appendChildren appends `n` and all its children to `nodes`
-func appendChildren(ctx context.Context, n *node.Node, nodes []*node.Node) ([]*node.Node, error) {
-	nodes = append(nodes, n)
-
-	children, err := os.ReadDir(n.InternalPath())
-	if err != nil {
-		// TODO: How to differentiate folders from files?
-		return nodes, nil
-	}
-
-	for _, c := range children {
-		cn, err := n.Child(ctx, c.Name())
-		if err != nil {
-			// continue?
-			return nil, err
-		}
-		nodes, err = appendChildren(ctx, cn, nodes)
-		if err != nil {
-			// continue?
-			return nil, err
-		}
-	}
-
-	return nodes, nil
 }

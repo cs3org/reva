@@ -28,6 +28,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	helpers "github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/testhelpers"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs/prefixes"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/stretchr/testify/mock"
@@ -139,7 +140,7 @@ var _ = Describe("Grants", func() {
 
 				o := env.Owner.GetId()
 				localPath := n.InternalPath()
-				attr, err := xattrs.Get(localPath, xattrs.GrantUserAcePrefix+grant.Grantee.GetUserId().OpaqueId)
+				attr, err := xattrs.Get(localPath, prefixes.GrantUserAcePrefix+grant.Grantee.GetUserId().OpaqueId)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(string(attr)).To(Equal(fmt.Sprintf("\x00t=A:f=:p=rw:c=%s:e=0\n", o.GetOpaqueId()))) // NOTE: this tests ace package
 			})

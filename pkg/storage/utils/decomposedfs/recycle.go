@@ -34,6 +34,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/lookup"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs/prefixes"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/pkg/errors"
 )
@@ -93,8 +94,8 @@ func (fs *Decomposedfs) ListRecycle(ctx context.Context, ref *provider.Reference
 		return items, err
 	}
 	// lookup origin path in extended attributes
-	if attrBytes, ok := attrs[xattrs.TrashOriginAttr]; ok {
-		origin = string(attrBytes)
+	if attrBytes, ok := attrs[prefixes.TrashOriginAttr]; ok {
+		origin = attrBytes
 	} else {
 		sublog.Error().Err(err).Str("space", spaceID).Msg("could not read origin path, skipping")
 		return nil, err
@@ -111,10 +112,10 @@ func (fs *Decomposedfs) ListRecycle(ctx context.Context, ref *provider.Reference
 		sublog.Error().Err(err).Msg("could not parse time format, ignoring")
 	}
 
-	nodeType := node.NodeTypeFromPath(originalPath)
+	nodeType := node.TypeFromPath(originalPath)
 	if provider.ResourceType(nodeType) != provider.ResourceType_RESOURCE_TYPE_CONTAINER {
 		// this is the case when we want to directly list a file in the trashbin
-		blobsize, err := strconv.ParseInt(attrs[xattrs.BlobsizeAttr], 10, 64)
+		blobsize, err := strconv.ParseInt(attrs[prefixes.BlobsizeAttr], 10, 64)
 		if err != nil {
 			return items, err
 		}
@@ -152,7 +153,7 @@ func (fs *Decomposedfs) ListRecycle(ctx context.Context, ref *provider.Reference
 			continue
 		}
 
-		nodeType = node.NodeTypeFromPath(resolvedChildPath)
+		nodeType = node.TypeFromPath(resolvedChildPath)
 		if nodeType == provider.ResourceType_RESOURCE_TYPE_INVALID {
 			sublog.Error().Err(err).Str("name", name).Str("resolvedChildPath", resolvedChildPath).Msg("invalid node type, skipping")
 			continue
@@ -167,7 +168,7 @@ func (fs *Decomposedfs) ListRecycle(ctx context.Context, ref *provider.Reference
 				continue
 			}
 		case provider.ResourceType_RESOURCE_TYPE_CONTAINER:
-			attr, err := xattrs.Get(resolvedChildPath, xattrs.TreesizeAttr)
+			attr, err := xattrs.Get(resolvedChildPath, prefixes.TreesizeAttr)
 			if err != nil {
 				sublog.Error().Err(err).Str("name", name).Msg("invalid tree size, skipping")
 				continue
@@ -242,14 +243,14 @@ func (fs *Decomposedfs) listTrashRoot(ctx context.Context, spaceID string) ([]*p
 			continue
 		}
 
-		nodeType := node.NodeTypeFromPath(nodePath)
+		nodeType := node.TypeFromPath(nodePath)
 		if nodeType == provider.ResourceType_RESOURCE_TYPE_INVALID {
 			log.Error().Err(err).Str("trashRoot", trashRoot).Str("item", itemPath).Str("node_path", nodePath).Msg("invalid node type, skipping")
 			continue
 		}
 
 		item := &provider.RecycleItem{
-			Type: provider.ResourceType(nodeType),
+			Type: nodeType,
 			Size: uint64(md.Size()),
 			Key:  nodeID,
 		}
@@ -263,7 +264,7 @@ func (fs *Decomposedfs) listTrashRoot(ctx context.Context, spaceID string) ([]*p
 		}
 
 		// lookup origin path in extended attributes
-		if attr, ok := attrs[xattrs.TrashOriginAttr]; ok {
+		if attr, ok := attrs[prefixes.TrashOriginAttr]; ok {
 			item.Ref = &provider.Reference{Path: attr}
 		} else {
 			log.Error().Str("trashRoot", trashRoot).Str("item", itemPath).Str("node", nodeID).Str("dtime", timeSuffix).Msg("could not read origin path, skipping")

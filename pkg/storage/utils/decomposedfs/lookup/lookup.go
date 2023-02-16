@@ -30,6 +30,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/options"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs/prefixes"
 )
 
 // Lookup implements transformations from filepath to node and back
@@ -138,7 +139,7 @@ func (lu *Lookup) WalkPath(ctx context.Context, r *node.Node, p string, followRe
 		}
 
 		if followReferences {
-			if attrBytes, err := r.Xattr(xattrs.ReferenceAttr); err == nil {
+			if attrBytes, err := r.Xattr(prefixes.ReferenceAttr); err == nil {
 				realNodeID := attrBytes
 				ref, err := xattrs.ReferenceFromAttr([]byte(realNodeID))
 				if err != nil {

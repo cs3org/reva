@@ -31,6 +31,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs/prefixes"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/pkg/errors"
 )
@@ -239,10 +240,10 @@ func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Refer
 
 		// copy blob metadata from node to new revision node
 		err = xattrs.CopyMetadata(nodePath, newRevisionPath, func(attributeName string) bool {
-			return strings.HasPrefix(attributeName, xattrs.ChecksumPrefix) || // for checksums
-				attributeName == xattrs.TypeAttr ||
-				attributeName == xattrs.BlobIDAttr ||
-				attributeName == xattrs.BlobsizeAttr
+			return strings.HasPrefix(attributeName, prefixes.ChecksumPrefix) || // for checksums
+				attributeName == prefixes.TypeAttr ||
+				attributeName == prefixes.BlobIDAttr ||
+				attributeName == prefixes.BlobsizeAttr
 		})
 		if err != nil {
 			return errtypes.InternalError("failed to copy blob xattrs to version node")
@@ -258,16 +259,16 @@ func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Refer
 		// copy blob metadata from restored revision to node
 		restoredRevisionPath := fs.lu.InternalPath(spaceID, revisionKey)
 		err = xattrs.CopyMetadata(restoredRevisionPath, nodePath, func(attributeName string) bool {
-			return strings.HasPrefix(attributeName, xattrs.ChecksumPrefix) ||
-				attributeName == xattrs.TypeAttr ||
-				attributeName == xattrs.BlobIDAttr ||
-				attributeName == xattrs.BlobsizeAttr
+			return strings.HasPrefix(attributeName, prefixes.ChecksumPrefix) ||
+				attributeName == prefixes.TypeAttr ||
+				attributeName == prefixes.BlobIDAttr ||
+				attributeName == prefixes.BlobsizeAttr
 		})
 		if err != nil {
 			return errtypes.InternalError("failed to copy blob xattrs to old revision to node")
 		}
 
-		revisionSize, err := xattrs.GetInt64(restoredRevisionPath, xattrs.BlobsizeAttr)
+		revisionSize, err := xattrs.GetInt64(restoredRevisionPath, prefixes.BlobsizeAttr)
 		if err != nil {
 			return errtypes.InternalError("failed to read blob size xattr from old revision")
 		}

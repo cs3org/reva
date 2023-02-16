@@ -29,6 +29,7 @@ import (
 	helpers "github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/testhelpers"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/tree"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs/prefixes"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/mock"
 
@@ -122,7 +123,7 @@ var _ = Describe("Tree", func() {
 					resolveTrashPath, err := filepath.EvalSymlinks(trashPath)
 					Expect(err).ToNot(HaveOccurred())
 
-					attr, err := xattrs.Get(resolveTrashPath, xattrs.TrashOriginAttr)
+					attr, err := xattrs.Get(resolveTrashPath, prefixes.TrashOriginAttr)
 					Expect(err).ToNot(HaveOccurred())
 					Expect(string(attr)).To(Equal("/dir1/file1"))
 				})
@@ -401,7 +402,7 @@ var _ = Describe("Tree", func() {
 
 				stopdir, err := env.CreateTestDir("testdir/stophere", &provider.Reference{ResourceId: env.SpaceRootRes})
 				Expect(err).ToNot(HaveOccurred())
-				err = xattrs.Set(stopdir.InternalPath(), xattrs.PropagationAttr, "0")
+				err = xattrs.Set(stopdir.InternalPath(), prefixes.PropagationAttr, "0")
 				Expect(err).ToNot(HaveOccurred())
 				otherdir, err := env.CreateTestDir("testdir/stophere/lotsofbytes", &provider.Reference{ResourceId: env.SpaceRootRes})
 				Expect(err).ToNot(HaveOccurred())

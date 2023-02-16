@@ -41,6 +41,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/options"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs/prefixes"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/filelocks"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/utils"
@@ -280,12 +281,12 @@ func CreateNodeForUpload(upload *Upload, initAttrs map[string]string) (*node.Nod
 	}
 
 	// overwrite technical information
-	initAttrs[xattrs.TypeAttr] = strconv.FormatInt(int64(n.Type()), 10)
-	initAttrs[xattrs.ParentidAttr] = n.ParentID
-	initAttrs[xattrs.NameAttr] = n.Name
-	initAttrs[xattrs.BlobIDAttr] = n.BlobID
-	initAttrs[xattrs.BlobsizeAttr] = strconv.FormatInt(n.Blobsize, 10)
-	initAttrs[xattrs.StatusPrefix] = node.ProcessingStatus + upload.Info.ID
+	initAttrs[prefixes.TypeAttr] = strconv.FormatInt(int64(n.Type()), 10)
+	initAttrs[prefixes.ParentidAttr] = n.ParentID
+	initAttrs[prefixes.NameAttr] = n.Name
+	initAttrs[prefixes.BlobIDAttr] = n.BlobID
+	initAttrs[prefixes.BlobsizeAttr] = strconv.FormatInt(n.Blobsize, 10)
+	initAttrs[prefixes.StatusPrefix] = node.ProcessingStatus + upload.Info.ID
 
 	// update node metadata with new blobid etc
 	err = n.SetXattrsWithLock(initAttrs, lock)
@@ -412,10 +413,10 @@ func updateExistingNode(upload *Upload, n *node.Node, spaceID string, fsize uint
 
 	// copy blob metadata to version node
 	if err := xattrs.CopyMetadataWithSourceLock(targetPath, upload.versionsPath, func(attributeName string) bool {
-		return strings.HasPrefix(attributeName, xattrs.ChecksumPrefix) ||
-			attributeName == xattrs.TypeAttr ||
-			attributeName == xattrs.BlobIDAttr ||
-			attributeName == xattrs.BlobsizeAttr
+		return strings.HasPrefix(attributeName, prefixes.ChecksumPrefix) ||
+			attributeName == prefixes.TypeAttr ||
+			attributeName == prefixes.BlobIDAttr ||
+			attributeName == prefixes.BlobsizeAttr
 	}, lock); err != nil {
 		return lock, err
 	}

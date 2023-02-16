@@ -96,7 +96,7 @@ func (n *Node) Xattr(key string) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		return string(b), nil
+		return b, nil
 	}
 
 	if val, ok := n.xattrsCache[key]; ok {
