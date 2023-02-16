@@ -732,10 +732,25 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 			continue
 		}
 
-		grantMap[id] = g.Permissions
 		if g.Expiration != nil {
+			// We are doing this check here because we want to remove expired grants "on access".
+			// This way we don't have to have a cron job checking the grants in regular intervals.
+			// The tradeof obviously is that this code is here.
+			if isGrantExpired(g) {
+				err := fs.RemoveGrant(ctx, &provider.Reference{
+					ResourceId: &provider.ResourceId{
+						SpaceId:  n.SpaceRoot.SpaceID,
+						OpaqueId: n.ID},
+				}, g)
+				appctx.GetLogger(ctx).Error().Err(err).
+					Str("space", n.SpaceRoot.ID).
+					Str("grantee", id).
+					Msg("failed to remove expired space grant")
+				continue
+			}
 			grantExpiration[id] = g.Expiration
 		}
+		grantMap[id] = g.Permissions
 	}
 
 	grantMapJSON, err := json.Marshal(grantMap)
@@ -889,6 +904,13 @@ func mapHasKey(checkMap map[string]string, keys ...string) bool {
 		}
 	}
 	return false
+}
+
+func isGrantExpired(g *provider.Grant) bool {
+	if g.Expiration == nil {
+		return false
+	}
+	return time.Now().After(time.Unix(int64(g.Expiration.Seconds), int64(g.Expiration.Nanos)))
 }
 
 func (fs *Decomposedfs) getSpaceRoot(spaceID string) string {
