@@ -203,6 +203,25 @@ func (n *Node) ChangeOwner(new *userpb.UserId) (err error) {
 	return
 }
 
+// SetGrant sets a grant on the node
+func (n *Node) SetGrant(g *provider.Grant) error {
+	// set the grant
+	e := ace.FromGrant(g)
+	principal, value := e.Marshal()
+	return n.SetXattr(prefixes.GrantPrefix+principal, string(value))
+}
+
+// RemoveGrant removes a grant from the node
+func (n *Node) RemoveGrant(ctx context.Context, g *provider.Grant) error {
+	var attr string
+	if g.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_GROUP {
+		attr = prefixes.GrantGroupAcePrefix + g.Grantee.GetGroupId().OpaqueId
+	} else {
+		attr = prefixes.GrantUserAcePrefix + g.Grantee.GetUserId().OpaqueId
+	}
+	return n.RemoveXattr(attr)
+}
+
 // WriteAllNodeMetadata writes the Node metadata to disk
 func (n *Node) WriteAllNodeMetadata() (err error) {
 	attribs := make(map[string]string)
