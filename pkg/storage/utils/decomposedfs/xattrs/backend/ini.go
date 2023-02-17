@@ -66,7 +66,7 @@ func (b IniBackend) Get(path, key string) (string, error) {
 		return "", err
 	}
 	if !ini.Section("").HasKey(key) {
-		return "", &xattr.Error{Op: "xattr.get", Path: path, Name: key, Err: xattr.ENOATTR}
+		return "", &xattr.Error{Op: "ini.get", Path: path, Name: key, Err: xattr.ENOATTR}
 	}
 
 	val := ini.Section("").Key(key).Value()
@@ -92,7 +92,7 @@ func (b IniBackend) GetInt64(path, key string) (int64, error) {
 		return 0, err
 	}
 	if !ini.Section("").HasKey(key) {
-		return 0, &xattr.Error{Op: "xattr.get", Path: path, Name: key, Err: xattr.ENOATTR}
+		return 0, &xattr.Error{Op: "ini.get", Path: path, Name: key, Err: xattr.ENOATTR}
 	}
 	return ini.Section("").Key(key).MustInt64(), nil
 }
