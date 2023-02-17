@@ -229,10 +229,13 @@ func (b IniBackend) loadIni(path string) (*ini.File, error) {
 		return nil, err
 	}
 
-	b.metaCache.Set(path, cacheEntry{
+	err = b.metaCache.Set(path, cacheEntry{
 		mtime: fi.ModTime(),
 		meta:  iniFile,
 	})
+	if err != nil {
+		return nil, err
+	}
 
 	return iniFile, nil
 }
