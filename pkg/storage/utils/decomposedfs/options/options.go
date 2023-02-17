@@ -35,7 +35,7 @@ type Option func(o *Options)
 type Options struct {
 
 	// the metadata backend to use, currently supports `xattr` or `ini`
-	MetadataBackend string `mapstructure:"metadata_bachend"`
+	MetadataBackend string `mapstructure:"metadata_backend"`
 
 	// ocis fs works on top of a dir of uuid nodes
 	Root string `mapstructure:"root"`
