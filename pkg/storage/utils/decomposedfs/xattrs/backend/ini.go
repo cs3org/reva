@@ -22,7 +22,9 @@ import (
 	"encoding/base64"
 	"os"
 	"strings"
+	"time"
 
+	"github.com/bluele/gcache"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs/prefixes"
 	"github.com/pkg/xattr"
 	"github.com/rogpeppe/go-internal/lockedfile"
@@ -30,15 +32,29 @@ import (
 )
 
 // IniBackend persists the attributes in INI format inside the file
-type IniBackend struct{}
+type IniBackend struct {
+	metaCache gcache.Cache
+}
+
+type cacheEntry struct {
+	mtime time.Time
+	meta  *ini.File
+}
 
 var encodedPrefixes = []string{prefixes.ChecksumPrefix, prefixes.MetadataPrefix, prefixes.GrantPrefix}
+
+// NewIniBackend returns a new IniBackend instance
+func NewIniBackend() IniBackend {
+	return IniBackend{
+		metaCache: gcache.New(1_000_000).LFU().Build(),
+	}
+}
 
 // All reads all extended attributes for a node
 func (b IniBackend) All(path string) (map[string]string, error) {
 	path = b.MetadataPath(path)
 
-	ini, err := loadIni(path)
+	ini, err := b.loadIni(path)
 	if err != nil {
 		return nil, err
 	}
@@ -63,7 +79,7 @@ func (b IniBackend) All(path string) (map[string]string, error) {
 func (b IniBackend) Get(path, key string) (string, error) {
 	path = b.MetadataPath(path)
 
-	ini, err := loadIni(path)
+	ini, err := b.loadIni(path)
 	if err != nil {
 		return "", err
 	}
@@ -89,7 +105,7 @@ func (b IniBackend) Get(path, key string) (string, error) {
 func (b IniBackend) GetInt64(path, key string) (int64, error) {
 	path = b.MetadataPath(path)
 
-	ini, err := loadIni(path)
+	ini, err := b.loadIni(path)
 	if err != nil {
 		return 0, err
 	}
@@ -104,7 +120,7 @@ func (b IniBackend) GetInt64(path, key string) (int64, error) {
 func (b IniBackend) List(path string) ([]string, error) {
 	path = b.MetadataPath(path)
 
-	ini, err := loadIni(path)
+	ini, err := b.loadIni(path)
 	if err != nil {
 		return nil, err
 	}
@@ -115,7 +131,7 @@ func (b IniBackend) List(path string) ([]string, error) {
 func (b IniBackend) Set(path, key, val string) error {
 	path = b.MetadataPath(path)
 
-	ini, err := loadIni(path)
+	ini, err := b.loadIni(path)
 	if err != nil {
 		return err
 	}
@@ -129,14 +145,14 @@ func (b IniBackend) Set(path, key, val string) error {
 
 	ini.Section("").Key(key).SetValue(val)
 
-	return saveIni(path, ini)
+	return b.saveIni(path, ini)
 }
 
 // SetMultiple sets a set of attribute for the given path
 func (b IniBackend) SetMultiple(path string, attribs map[string]string) error {
 	path = b.MetadataPath(path)
 
-	ini, err := loadIni(path)
+	ini, err := b.loadIni(path)
 	if err != nil {
 		return err
 	}
@@ -151,24 +167,24 @@ func (b IniBackend) SetMultiple(path string, attribs map[string]string) error {
 		ini.Section("").Key(key).SetValue(val)
 	}
 
-	return saveIni(path, ini)
+	return b.saveIni(path, ini)
 }
 
 // Remove an extended attribute key
 func (b IniBackend) Remove(path, key string) error {
 	path = b.MetadataPath(path)
 
-	ini, err := loadIni(path)
+	ini, err := b.loadIni(path)
 	if err != nil {
 		return err
 	}
 
 	ini.Section("").DeleteKey(key)
 
-	return saveIni(path, ini)
+	return b.saveIni(path, ini)
 }
 
-func saveIni(path string, ini *ini.File) error {
+func (b IniBackend) saveIni(path string, ini *ini.File) error {
 	lockedFile, err := lockedfile.OpenFile(path, os.O_TRUNC|os.O_WRONLY, 0600)
 	if err != nil {
 		return err
@@ -176,17 +192,49 @@ func saveIni(path string, ini *ini.File) error {
 	defer lockedFile.Close()
 
 	_, err = ini.WriteTo(lockedFile)
-	return err
+	if err != nil {
+		return err
+	}
+	fi, err := os.Stat(path)
+	if err != nil {
+		return err
+	}
+
+	return b.metaCache.Set(path, cacheEntry{
+		mtime: fi.ModTime(),
+		meta:  ini,
+	})
 }
 
-func loadIni(path string) (*ini.File, error) {
+func (b IniBackend) loadIni(path string) (*ini.File, error) {
+	fi, err := os.Stat(path)
+	if err != nil {
+		return nil, err
+	}
+	if cachedIf, err := b.metaCache.Get(path); err == nil {
+		cached, ok := cachedIf.(cacheEntry)
+		if ok && cached.mtime == fi.ModTime() {
+			return cached.meta, nil
+		}
+	}
+
 	lockedFile, err := lockedfile.Open(path)
 	if err != nil {
 		return nil, err
 	}
 	defer lockedFile.Close()
 
-	return ini.Load(lockedFile)
+	iniFile, err := ini.Load(lockedFile)
+	if err != nil {
+		return nil, err
+	}
+
+	b.metaCache.Set(path, cacheEntry{
+		mtime: fi.ModTime(),
+		meta:  iniFile,
+	})
+
+	return iniFile, nil
 }
 
 // IsMetaFile returns whether the given path represents a meta file

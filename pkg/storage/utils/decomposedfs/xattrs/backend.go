@@ -32,5 +32,5 @@ func UseXattrsBackend() {
 
 // UseIniBackend configures decomposedfs to use ini files for storing file attributes
 func UseIniBackend() {
-	backend = xattrBackend.IniBackend{}
+	backend = xattrBackend.NewIniBackend()
 }
