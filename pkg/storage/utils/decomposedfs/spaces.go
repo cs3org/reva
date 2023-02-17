@@ -41,6 +41,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/lookup"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs/prefixes"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/filelocks"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/templates"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
@@ -93,9 +94,17 @@ func (fs *Decomposedfs) CreateStorageSpace(ctx context.Context, req *provider.Cr
 	}
 
 	// create a directory node
+	root.SetType(provider.ResourceType_RESOURCE_TYPE_CONTAINER)
 	rootPath := root.InternalPath()
-	if err = os.MkdirAll(rootPath, 0700); err != nil {
-		return nil, errors.Wrap(err, "decomposedfs: error creating node")
+
+	if err := os.MkdirAll(rootPath, 0700); err != nil {
+		return nil, errors.Wrap(err, "Decomposedfs: error creating node")
+	}
+	if xattrs.UsesExternalMetadataFile() {
+		_, err = os.Create(xattrs.MetadataPath(rootPath))
+		if err != nil {
+			return nil, errors.Wrap(err, "Decomposedfs: error creating metadata file")
+		}
 	}
 
 	if err := root.WriteAllNodeMetadata(); err != nil {
@@ -120,25 +129,25 @@ func (fs *Decomposedfs) CreateStorageSpace(ctx context.Context, req *provider.Cr
 
 	// always enable propagation on the storage space root
 	// mark the space root node as the end of propagation
-	metadata[xattrs.PropagationAttr] = "1"
-	metadata[xattrs.NameAttr] = req.Name
-	metadata[xattrs.SpaceNameAttr] = req.Name
+	metadata[prefixes.PropagationAttr] = "1"
+	metadata[prefixes.NameAttr] = req.Name
+	metadata[prefixes.SpaceNameAttr] = req.Name
 
 	if req.Type != "" {
-		metadata[xattrs.SpaceTypeAttr] = req.Type
+		metadata[prefixes.SpaceTypeAttr] = req.Type
 	}
 
 	if q := req.GetQuota(); q != nil {
 		// set default space quota
-		metadata[xattrs.QuotaAttr] = strconv.FormatUint(q.QuotaMaxBytes, 10)
+		metadata[prefixes.QuotaAttr] = strconv.FormatUint(q.QuotaMaxBytes, 10)
 	}
 
 	if description != "" {
-		metadata[xattrs.SpaceDescriptionAttr] = description
+		metadata[prefixes.SpaceDescriptionAttr] = description
 	}
 
 	if alias != "" {
-		metadata[xattrs.SpaceAliasAttr] = alias
+		metadata[prefixes.SpaceAliasAttr] = alias
 	}
 
 	if err := root.SetXattrs(metadata); err != nil {
@@ -424,21 +433,21 @@ func (fs *Decomposedfs) UpdateStorageSpace(ctx context.Context, req *provider.Up
 
 	metadata := make(map[string]string, 5)
 	if space.Name != "" {
-		metadata[xattrs.NameAttr] = space.Name
-		metadata[xattrs.SpaceNameAttr] = space.Name
+		metadata[prefixes.NameAttr] = space.Name
+		metadata[prefixes.SpaceNameAttr] = space.Name
 	}
 
 	if space.Quota != nil {
-		metadata[xattrs.QuotaAttr] = strconv.FormatUint(space.Quota.QuotaMaxBytes, 10)
+		metadata[prefixes.QuotaAttr] = strconv.FormatUint(space.Quota.QuotaMaxBytes, 10)
 	}
 
 	// TODO also return values which are not in the request
 	if space.Opaque != nil {
 		if description, ok := space.Opaque.Map["description"]; ok {
-			metadata[xattrs.SpaceDescriptionAttr] = string(description.Value)
+			metadata[prefixes.SpaceDescriptionAttr] = string(description.Value)
 		}
 		if alias := utils.ReadPlainFromOpaque(space.Opaque, "spaceAlias"); alias != "" {
-			metadata[xattrs.SpaceAliasAttr] = alias
+			metadata[prefixes.SpaceAliasAttr] = alias
 		}
 		if image := utils.ReadPlainFromOpaque(space.Opaque, "image"); image != "" {
 			imageID, err := storagespace.ParseID(image)
@@ -447,7 +456,7 @@ func (fs *Decomposedfs) UpdateStorageSpace(ctx context.Context, req *provider.Up
 					Status: &v1beta11.Status{Code: v1beta11.Code_CODE_NOT_FOUND, Message: "decomposedFS: space image resource not found"},
 				}, nil
 			}
-			metadata[xattrs.SpaceImageAttr] = imageID.OpaqueId
+			metadata[prefixes.SpaceImageAttr] = imageID.OpaqueId
 		}
 		if readme := utils.ReadPlainFromOpaque(space.Opaque, "readme"); readme != "" {
 			readmeID, err := storagespace.ParseID(readme)
@@ -456,7 +465,7 @@ func (fs *Decomposedfs) UpdateStorageSpace(ctx context.Context, req *provider.Up
 					Status: &v1beta11.Status{Code: v1beta11.Code_CODE_NOT_FOUND, Message: "decomposedFS: space readme resource not found"},
 				}, nil
 			}
-			metadata[xattrs.SpaceReadmeAttr] = readmeID.OpaqueId
+			metadata[prefixes.SpaceReadmeAttr] = readmeID.OpaqueId
 		}
 	}
 
@@ -490,9 +499,9 @@ func (fs *Decomposedfs) UpdateStorageSpace(ctx context.Context, req *provider.Up
 
 	if !IsManager(sp) {
 		// We are not a space manager. We need to check for additional permissions.
-		k := []string{xattrs.NameAttr, xattrs.SpaceDescriptionAttr}
+		k := []string{prefixes.NameAttr, prefixes.SpaceDescriptionAttr}
 		if !IsEditor(sp) {
-			k = append(k, xattrs.SpaceReadmeAttr, xattrs.SpaceAliasAttr, xattrs.SpaceImageAttr)
+			k = append(k, prefixes.SpaceReadmeAttr, prefixes.SpaceAliasAttr, prefixes.SpaceImageAttr)
 		}
 
 		if mapHasKey(metadata, k...) && !fs.p.ManageSpaceProperties(ctx, spaceID) {
@@ -508,7 +517,7 @@ func (fs *Decomposedfs) UpdateStorageSpace(ctx context.Context, req *provider.Up
 		}
 	}
 
-	if mapHasKey(metadata, xattrs.QuotaAttr) && !fs.p.SetSpaceQuota(ctx, spaceID) {
+	if mapHasKey(metadata, prefixes.QuotaAttr) && !fs.p.SetSpaceQuota(ctx, spaceID) {
 		return &provider.UpdateStorageSpaceResponse{
 			Status: &v1beta11.Status{Code: v1beta11.Code_CODE_PERMISSION_DENIED},
 		}, nil
@@ -555,7 +564,7 @@ func (fs *Decomposedfs) DeleteStorageSpace(ctx context.Context, req *provider.De
 		return err
 	}
 
-	st, err := n.SpaceRoot.Xattr(xattrs.SpaceTypeAttr)
+	st, err := n.SpaceRoot.Xattr(prefixes.SpaceTypeAttr)
 	if err != nil {
 		return errtypes.InternalError(fmt.Sprintf("space %s does not have a spacetype, possible corrupt decompsedfs", n.ID))
 	}
@@ -585,7 +594,7 @@ func (fs *Decomposedfs) DeleteStorageSpace(ctx context.Context, req *provider.De
 			return errtypes.NewErrtypeFromStatus(status.NewInvalid(ctx, "can't purge enabled space"))
 		}
 
-		spaceType, err := n.Xattr(xattrs.SpaceTypeAttr)
+		spaceType, err := n.Xattr(prefixes.SpaceTypeAttr)
 		if err != nil {
 			return err
 		}
@@ -596,7 +605,7 @@ func (fs *Decomposedfs) DeleteStorageSpace(ctx context.Context, req *provider.De
 		}
 
 		// remove space metadata
-		if err := os.RemoveAll(filepath.Join(fs.o.Root, "spaces", lookup.Pathify(spaceID, 1, 2))); err != nil {
+		if err := os.RemoveAll(fs.getSpaceRoot(spaceID)); err != nil {
 			return err
 		}
 
@@ -691,7 +700,7 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 	var err error
 	// TODO apply more filters
 	var sname string
-	if sname, err = n.SpaceRoot.Xattr(xattrs.SpaceNameAttr); err != nil {
+	if sname, err = n.SpaceRoot.Xattr(prefixes.SpaceNameAttr); err != nil {
 		// FIXME: Is that a severe problem?
 		appctx.GetLogger(ctx).Debug().Err(err).Msg("space does not have a name attribute")
 	}
@@ -796,7 +805,7 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 		// Mtime is set either as node.tmtime or as fi.mtime below
 	}
 
-	if space.SpaceType, err = n.SpaceRoot.Xattr(xattrs.SpaceTypeAttr); err != nil {
+	if space.SpaceType, err = n.SpaceRoot.Xattr(prefixes.SpaceTypeAttr); err != nil {
 		appctx.GetLogger(ctx).Debug().Err(err).Msg("space does not have a type attribute")
 	}
 
@@ -845,7 +854,7 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 	}
 
 	// quota
-	quotaAttr, ok := spaceAttributes[xattrs.QuotaAttr]
+	quotaAttr, ok := spaceAttributes[prefixes.QuotaAttr]
 	if ok {
 		// make sure we have a proper signed int
 		// we use the same magic numbers to indicate:
@@ -861,23 +870,23 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 			return nil, err
 		}
 	}
-	spaceImage, ok := spaceAttributes[xattrs.SpaceImageAttr]
+	spaceImage, ok := spaceAttributes[prefixes.SpaceImageAttr]
 	if ok {
 		space.Opaque = utils.AppendPlainToOpaque(space.Opaque, "image", storagespace.FormatResourceID(
 			provider.ResourceId{StorageId: space.Root.StorageId, SpaceId: space.Root.SpaceId, OpaqueId: spaceImage},
 		))
 	}
-	spaceDescription, ok := spaceAttributes[xattrs.SpaceDescriptionAttr]
+	spaceDescription, ok := spaceAttributes[prefixes.SpaceDescriptionAttr]
 	if ok {
 		space.Opaque = utils.AppendPlainToOpaque(space.Opaque, "description", spaceDescription)
 	}
-	spaceReadme, ok := spaceAttributes[xattrs.SpaceReadmeAttr]
+	spaceReadme, ok := spaceAttributes[prefixes.SpaceReadmeAttr]
 	if ok {
 		space.Opaque = utils.AppendPlainToOpaque(space.Opaque, "readme", storagespace.FormatResourceID(
 			provider.ResourceId{StorageId: space.Root.StorageId, SpaceId: space.Root.SpaceId, OpaqueId: spaceReadme},
 		))
 	}
-	spaceAlias, ok := spaceAttributes[xattrs.SpaceAliasAttr]
+	spaceAlias, ok := spaceAttributes[prefixes.SpaceAliasAttr]
 	if ok {
 		space.Opaque = utils.AppendPlainToOpaque(space.Opaque, "spaceAlias", spaceAlias)
 	}
@@ -902,4 +911,8 @@ func isGrantExpired(g *provider.Grant) bool {
 		return false
 	}
 	return time.Now().After(time.Unix(int64(g.Expiration.Seconds), int64(g.Expiration.Nanos)))
+}
+
+func (fs *Decomposedfs) getSpaceRoot(spaceID string) string {
+	return filepath.Join(fs.o.Root, "spaces", lookup.Pathify(spaceID, 1, 2))
 }

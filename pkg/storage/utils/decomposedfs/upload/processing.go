@@ -41,6 +41,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/options"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs/prefixes"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/filelocks"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/utils"
@@ -252,6 +253,7 @@ func CreateNodeForUpload(upload *Upload, initAttrs map[string]string) (*node.Nod
 		upload.Info.Storage["NodeName"],
 		fsize,
 		upload.Info.ID,
+		provider.ResourceType_RESOURCE_TYPE_FILE,
 		nil,
 		upload.lu,
 	)
@@ -279,11 +281,12 @@ func CreateNodeForUpload(upload *Upload, initAttrs map[string]string) (*node.Nod
 	}
 
 	// overwrite technical information
-	initAttrs[xattrs.ParentidAttr] = n.ParentID
-	initAttrs[xattrs.NameAttr] = n.Name
-	initAttrs[xattrs.BlobIDAttr] = n.BlobID
-	initAttrs[xattrs.BlobsizeAttr] = strconv.FormatInt(n.Blobsize, 10)
-	initAttrs[xattrs.StatusPrefix] = node.ProcessingStatus + upload.Info.ID
+	initAttrs[prefixes.TypeAttr] = strconv.FormatInt(int64(n.Type()), 10)
+	initAttrs[prefixes.ParentidAttr] = n.ParentID
+	initAttrs[prefixes.NameAttr] = n.Name
+	initAttrs[prefixes.BlobIDAttr] = n.BlobID
+	initAttrs[prefixes.BlobsizeAttr] = strconv.FormatInt(n.Blobsize, 10)
+	initAttrs[prefixes.StatusPrefix] = node.ProcessingStatus + upload.Info.ID
 
 	// update node metadata with new blobid etc
 	err = n.SetXattrsWithLock(initAttrs, lock)
@@ -299,11 +302,11 @@ func CreateNodeForUpload(upload *Upload, initAttrs map[string]string) (*node.Nod
 	}
 
 	// add etag to metadata
-	nfi, err := os.Stat(n.InternalPath())
+	tmtime, err := n.GetTMTime()
 	if err != nil {
 		return nil, err
 	}
-	upload.Info.MetaData["etag"], _ = node.CalculateEtag(n.ID, nfi.ModTime())
+	upload.Info.MetaData["etag"], _ = node.CalculateEtag(n.ID, tmtime)
 
 	// update nodeid for later
 	upload.Info.Storage["NodeId"] = n.ID
@@ -325,6 +328,11 @@ func initNewNode(upload *Upload, n *node.Node, fsize uint64) (*flock.Flock, erro
 	if _, err := os.Create(n.InternalPath()); err != nil {
 		return nil, err
 	}
+	if xattrs.UsesExternalMetadataFile() {
+		if _, err := os.Create(xattrs.MetadataPath(n.InternalPath())); err != nil {
+			return nil, err
+		}
+	}
 
 	lock, err := filelocks.AcquireWriteLock(n.InternalPath())
 	if err != nil {
@@ -337,7 +345,7 @@ func initNewNode(upload *Upload, n *node.Node, fsize uint64) (*flock.Flock, erro
 	}
 
 	// link child name to parent if it is new
-	childNameLink := filepath.Join(n.ParentInternalPath(), n.Name)
+	childNameLink := filepath.Join(n.ParentPath(), n.Name)
 	link, err := os.Readlink(childNameLink)
 	if err == nil && link != "../"+n.ID {
 		if err := os.Remove(childNameLink); err != nil {
@@ -363,7 +371,7 @@ func updateExistingNode(upload *Upload, n *node.Node, spaceID string, fsize uint
 		return nil, err
 	}
 
-	vfi, err := os.Stat(old.InternalPath())
+	tmtime, err := old.GetTMTime()
 	if err != nil {
 		return nil, err
 	}
@@ -371,7 +379,7 @@ func updateExistingNode(upload *Upload, n *node.Node, spaceID string, fsize uint
 	// When the if-match header was set we need to check if the
 	// etag still matches before finishing the upload.
 	if ifMatch, ok := upload.Info.MetaData["if-match"]; ok {
-		targetEtag, err := node.CalculateEtag(n.ID, vfi.ModTime())
+		targetEtag, err := node.CalculateEtag(n.ID, tmtime)
 		switch {
 		case err != nil:
 			return nil, errtypes.InternalError(err.Error())
@@ -380,7 +388,7 @@ func updateExistingNode(upload *Upload, n *node.Node, spaceID string, fsize uint
 		}
 	}
 
-	upload.versionsPath = upload.lu.InternalPath(spaceID, n.ID+node.RevisionIDDelimiter+vfi.ModTime().UTC().Format(time.RFC3339Nano))
+	upload.versionsPath = upload.lu.InternalPath(spaceID, n.ID+node.RevisionIDDelimiter+tmtime.UTC().Format(time.RFC3339Nano))
 	upload.sizeDiff = int64(fsize) - old.Blobsize
 	upload.Info.MetaData["versionsPath"] = upload.versionsPath
 	upload.Info.MetaData["sizeDiff"] = strconv.Itoa(int(upload.sizeDiff))
@@ -397,18 +405,24 @@ func updateExistingNode(upload *Upload, n *node.Node, spaceID string, fsize uint
 	if _, err := os.Create(upload.versionsPath); err != nil {
 		return lock, err
 	}
+	if xattrs.UsesExternalMetadataFile() {
+		if _, err := os.Create(xattrs.MetadataPath(upload.versionsPath)); err != nil {
+			return lock, err
+		}
+	}
 
 	// copy blob metadata to version node
 	if err := xattrs.CopyMetadataWithSourceLock(targetPath, upload.versionsPath, func(attributeName string) bool {
-		return strings.HasPrefix(attributeName, xattrs.ChecksumPrefix) ||
-			attributeName == xattrs.BlobIDAttr ||
-			attributeName == xattrs.BlobsizeAttr
+		return strings.HasPrefix(attributeName, prefixes.ChecksumPrefix) ||
+			attributeName == prefixes.TypeAttr ||
+			attributeName == prefixes.BlobIDAttr ||
+			attributeName == prefixes.BlobsizeAttr
 	}, lock); err != nil {
 		return lock, err
 	}
 
 	// keep mtime from previous version
-	if err := os.Chtimes(upload.versionsPath, vfi.ModTime(), vfi.ModTime()); err != nil {
+	if err := os.Chtimes(upload.versionsPath, tmtime, tmtime); err != nil {
 		return lock, errtypes.InternalError(fmt.Sprintf("failed to change mtime of version node: %s", err))
 	}
 

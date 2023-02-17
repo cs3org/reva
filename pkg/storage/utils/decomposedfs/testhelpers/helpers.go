@@ -25,9 +25,9 @@ import (
 
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/lookup"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs/prefixes"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/google/uuid"
-	"github.com/pkg/xattr"
 	"github.com/stretchr/testify/mock"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -207,6 +207,7 @@ func (t *TestEnv) CreateTestFile(name, blobID, parentID, spaceID string, blobSiz
 		name,
 		blobSize,
 		blobID,
+		providerv1beta1.ResourceType_RESOURCE_TYPE_FILE,
 		nil,
 		t.Lookup,
 	)
@@ -218,12 +219,18 @@ func (t *TestEnv) CreateTestFile(name, blobID, parentID, spaceID string, blobSiz
 	if err != nil {
 		return nil, err
 	}
+	if xattrs.UsesExternalMetadataFile() {
+		_, err = os.OpenFile(xattrs.MetadataPath(nodePath), os.O_CREATE, 0700)
+		if err != nil {
+			return nil, err
+		}
+	}
 	err = n.WriteAllNodeMetadata()
 	if err != nil {
 		return nil, err
 	}
 	// Link in parent
-	childNameLink := filepath.Join(n.ParentInternalPath(), n.Name)
+	childNameLink := filepath.Join(n.ParentPath(), n.Name)
 	err = os.Symlink("../../../../../"+lookup.Pathify(n.ID, 4, 2), childNameLink)
 	if err != nil {
 		return nil, err
@@ -276,7 +283,7 @@ func (t *TestEnv) CreateTestStorageSpace(typ string, quota *providerv1beta1.Quot
 	if err != nil {
 		return nil, err
 	}
-	if err = xattr.Set(h.InternalPath(), xattrs.SpaceNameAttr, []byte("username")); err != nil {
+	if err = xattrs.Set(h.InternalPath(), prefixes.SpaceNameAttr, "username"); err != nil {
 		return nil, err
 	}
 

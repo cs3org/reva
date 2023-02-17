@@ -33,6 +33,10 @@ type Option func(o *Options)
 
 // Options defines the available options for this package.
 type Options struct {
+
+	// the metadata backend to use, currently supports `xattr` or `ini`
+	MetadataBackend string `mapstructure:"metadata_bachend"`
+
 	// ocis fs works on top of a dir of uuid nodes
 	Root string `mapstructure:"root"`
 
@@ -95,6 +99,10 @@ func New(m map[string]interface{}) (*Options, error) {
 	if err := mapstructure.Decode(m, o); err != nil {
 		err = errors.Wrap(err, "error decoding conf")
 		return nil, err
+	}
+
+	if o.MetadataBackend == "" {
+		o.MetadataBackend = "xattrs"
 	}
 
 	if o.UserLayout == "" {
