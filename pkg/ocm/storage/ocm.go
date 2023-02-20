@@ -32,6 +32,7 @@ import (
 	ocmpb "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typepb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocdav"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/mime"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
@@ -212,6 +213,13 @@ func convertStatToResourceInfo(f fs.FileInfo, share *ocmpb.ReceivedShare, relPat
 		t = provider.ResourceType_RESOURCE_TYPE_CONTAINER
 	}
 
+	var name string
+	if share.ResourceType == provider.ResourceType_RESOURCE_TYPE_FILE {
+		name = share.Name
+	} else {
+		name = f.Name()
+	}
+
 	webdav, _ := getWebDAVProtocol(share.Protocols)
 
 	return &provider.ResourceInfo{
@@ -219,7 +227,7 @@ func convertStatToResourceInfo(f fs.FileInfo, share *ocmpb.ReceivedShare, relPat
 		Id:       getResourceInfo(share.Id, relPath),
 		MimeType: mime.Detect(f.IsDir(), f.Name()),
 		Path:     getPathFromShareIDAndRelPath(share.Id, relPath),
-		Name:     f.Name(),
+		Name:     name,
 		Size:     uint64(f.Size()),
 		Mtime: &typepb.Timestamp{
 			Seconds: uint64(f.ModTime().Unix()),
@@ -279,6 +287,7 @@ func (d *driver) Upload(ctx context.Context, ref *provider.Reference, r io.ReadC
 		return err
 	}
 
+	client.SetHeader(ocdav.HeaderUploadLength, "-1")
 	return client.WriteStream(rel, r, 0)
 }
 
