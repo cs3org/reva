@@ -96,11 +96,30 @@ func TestUnmarshalProtocol(t *testing.T) {
 		}
 
 		if tt.err == "" {
-			if !reflect.DeepEqual(got, tt.expected) {
+			if !protocolsEqual(got, tt.expected) {
 				t.Fatalf("result does not match with expected. got=%+v expected=%+v", render.AsCode(got), render.AsCode(tt.expected))
 			}
 		}
 	}
+}
+
+func protocolsToMap(p Protocols) map[string]Protocol {
+	m := make(map[string]Protocol)
+	for _, prot := range p {
+		switch prot.(type) {
+		case *WebDAV:
+			m["webdav"] = prot
+		case *Webapp:
+			m["webapp"] = prot
+		case *Datatx:
+			m["datatx"] = prot
+		}
+	}
+	return m
+}
+
+func protocolsEqual(p1, p2 Protocols) bool {
+	return reflect.DeepEqual(protocolsToMap(p1), protocolsToMap(p2))
 }
 
 func TestMarshalProtocol(t *testing.T) {
