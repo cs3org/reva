@@ -34,6 +34,9 @@ import (
 // ShareType is the type of the share.
 type ShareType int
 
+// ItemType is the type of the shares resource.
+type ItemType int
+
 // AccessMethod is method granted by the sharer to access
 // the shared resource.
 type AccessMethod int
@@ -78,6 +81,13 @@ const (
 	WebappProtcol
 	// TransferProtocol is the Transfer protocol.
 	TransferProtocol
+)
+
+const (
+	// ItemTypeFile is used when the shared resource is a file.
+	ItemTypeFile ItemType = iota
+	// ItemTypeFolder is used when the shared resource is a folder.
+	ItemTypeFolder
 )
 
 func convertFromCS3OCMShareType(shareType ocm.ShareType) ShareType {
@@ -141,6 +151,7 @@ type dbReceivedShare struct {
 	Name       string
 	Prefix     string
 	ItemSource string
+	ItemType   ItemType
 	ShareWith  string
 	Owner      string
 	Initiator  string
@@ -242,9 +253,10 @@ func convertToCS3OCMReceivedShare(s *dbReceivedShare, p []*ocm.Protocol) *ocm.Re
 		Mtime: &types.Timestamp{
 			Seconds: uint64(s.Mtime),
 		},
-		ShareType: ocm.ShareType_SHARE_TYPE_USER,
-		State:     convertToCS3OCMShareState(s.State),
-		Protocols: p,
+		ResourceType: convertToCS3ResourceType(s.ItemType),
+		ShareType:    ocm.ShareType_SHARE_TYPE_USER,
+		State:        convertToCS3OCMShareState(s.State),
+		Protocols:    p,
 	}
 	if s.Expiration != 0 {
 		share.Expiration = &types.Timestamp{
@@ -278,4 +290,24 @@ func convertToCS3Protocol(p *dbProtocol) *ocm.Protocol {
 		return share.NewTransferProtocol(*p.TransferSourceURI, *p.TransferSharedSecret, uint64(*p.TransferSize))
 	}
 	return nil
+}
+
+func convertToCS3ResourceType(t ItemType) provider.ResourceType {
+	switch t {
+	case ItemTypeFile:
+		return provider.ResourceType_RESOURCE_TYPE_FILE
+	case ItemTypeFolder:
+		return provider.ResourceType_RESOURCE_TYPE_CONTAINER
+	}
+	return provider.ResourceType_RESOURCE_TYPE_INVALID
+}
+
+func convertFromCS3ResourceType(t provider.ResourceType) ItemType {
+	switch t {
+	case provider.ResourceType_RESOURCE_TYPE_FILE:
+		return ItemTypeFile
+	case provider.ResourceType_RESOURCE_TYPE_CONTAINER:
+		return ItemTypeFolder
+	}
+	return -1
 }
