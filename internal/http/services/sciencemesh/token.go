@@ -202,3 +202,26 @@ func (h *tokenHandler) FindAccepted(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 }
+
+func (h *tokenHandler) ListInvite(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	res, err := h.gatewayClient.ListInviteTokens(ctx, &invitepb.ListInviteTokensRequest{})
+	if err != nil {
+		reqres.WriteError(w, r, reqres.APIErrorServerError, "error listing tokens", err)
+		return
+	}
+
+	if res.Status.Code != rpc.Code_CODE_OK {
+		reqres.WriteError(w, r, reqres.APIErrorServerError, res.Status.Message, errors.New(res.Status.Message))
+		return
+	}
+
+	if err := json.NewEncoder(w).Encode(res.InviteTokens); err != nil {
+		reqres.WriteError(w, r, reqres.APIErrorServerError, "error marshalling token data", err)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+}
