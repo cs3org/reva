@@ -18,3 +18,10 @@ driver = "json"
 
 [http.middlewares.providerauthorizer.drivers.json]
 providers = "fixtures/ocm-providers.demo.json"
+
+[http.services.datagateway]
+
+[http.services.dataprovider]
+driver = "ocm"
+
+[http.services.dataprovider.drivers.ocm]

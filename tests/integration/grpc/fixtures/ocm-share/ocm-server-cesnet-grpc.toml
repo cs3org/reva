@@ -14,6 +14,7 @@ ocminvitemanagersvc = "{{grpc_address}}"
 ocmproviderauthorizersvc = "{{grpc_address}}"
 ocmshareprovidersvc = "{{grpc_address}}"
 ocmcoresvc = "{{grpc_address}}"
+datagateway = "http://{{cesnethttp_address}}/datagateway"
 
 [grpc.services.authregistry]
 driver = "static"
@@ -56,3 +57,17 @@ driver = "json"
 
 [grpc.services.userprovider.drivers.json]
 users = "fixtures/ocm-users.demo.json"
+
+[grpc.services.storageregistry]
+[grpc.services.storageregistry.drivers.static]
+[grpc.services.storageregistry.drivers.static.rules]
+"/ocm" = {"address" = "{{grpc_address}}"}
+"984e7351-2729-4417-99b4-ab5e6d41fa97" = {"address" = "{{grpc_address}}"}
+
+[grpc.services.storageprovider]
+driver = "ocm"
+mount_path = "/ocm"
+mount_id = "984e7351-2729-4417-99b4-ab5e6d41fa97"
+data_server_url = "http://{{cesnethttp_address}}/data"
+
+[grpc.services.storageprovider.drivers.ocm]
