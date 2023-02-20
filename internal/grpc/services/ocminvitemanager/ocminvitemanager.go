@@ -150,6 +150,20 @@ func (s *service) GenerateInviteToken(ctx context.Context, req *invitepb.Generat
 	}, nil
 }
 
+func (s *service) ListInviteTokens(ctx context.Context, req *invitepb.ListInviteTokensRequest) (*invitepb.ListInviteTokensResponse, error) {
+	user := ctxpkg.ContextMustGetUser(ctx)
+	tokens, err := s.repo.ListTokens(ctx, user.Id)
+	if err != nil {
+		return &invitepb.ListInviteTokensResponse{
+			Status: status.NewInternal(ctx, err, "error listing tokens"),
+		}, nil
+	}
+	return &invitepb.ListInviteTokensResponse{
+		Status:       status.NewOK(ctx),
+		InviteTokens: tokens,
+	}, nil
+}
+
 func (s *service) ForwardInvite(ctx context.Context, req *invitepb.ForwardInviteRequest) (*invitepb.ForwardInviteResponse, error) {
 	user := ctxpkg.ContextMustGetUser(ctx)
 

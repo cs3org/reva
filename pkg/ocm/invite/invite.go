@@ -34,6 +34,9 @@ type Repository interface {
 	// GetToken gets the token from the repository.
 	GetToken(ctx context.Context, token string) (*invitepb.InviteToken, error)
 
+	// ListTokens gets the valid tokens from the repository (i.e. not expired).
+	ListTokens(ctx context.Context, initiator *userpb.UserId) ([]*invitepb.InviteToken, error)
+
 	// AddRemoteUser stores the remote user.
 	AddRemoteUser(ctx context.Context, initiator *userpb.UserId, remoteUser *userpb.User) error
 

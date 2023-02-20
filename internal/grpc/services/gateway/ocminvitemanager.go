@@ -43,6 +43,22 @@ func (s *svc) GenerateInviteToken(ctx context.Context, req *invitepb.GenerateInv
 	return res, nil
 }
 
+func (s *svc) ListInviteTokens(ctx context.Context, req *invitepb.ListInviteTokensRequest) (*invitepb.ListInviteTokensResponse, error) {
+	c, err := pool.GetOCMInviteManagerClient(pool.Endpoint(s.c.OCMInviteManagerEndpoint))
+	if err != nil {
+		return &invitepb.ListInviteTokensResponse{
+			Status: status.NewInternal(ctx, err, "error getting user invite provider client"),
+		}, nil
+	}
+
+	res, err := c.ListInviteTokens(ctx, req)
+	if err != nil {
+		return nil, errors.Wrap(err, "gateway: error calling ListInviteTokens")
+	}
+
+	return res, nil
+}
+
 func (s *svc) ForwardInvite(ctx context.Context, req *invitepb.ForwardInviteRequest) (*invitepb.ForwardInviteResponse, error) {
 	c, err := pool.GetOCMInviteManagerClient(pool.Endpoint(s.c.OCMInviteManagerEndpoint))
 	if err != nil {
