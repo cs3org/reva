@@ -86,10 +86,15 @@ func (s *svc) routerInit() error {
 	if err := tokenHandler.init(s.conf); err != nil {
 		return err
 	}
+	providersHandler := new(providersHandler)
+	if err := providersHandler.init(s.conf); err != nil {
+		return err
+	}
 
 	s.router.Get("/generate-invite", tokenHandler.Generate)
 	s.router.Post("/accept-invite", tokenHandler.AcceptInvite)
 	s.router.Get("/find-accepted-users", tokenHandler.FindAccepted)
+	s.router.Get("/list-providers", providersHandler.ListProviders)
 
 	return nil
 }
