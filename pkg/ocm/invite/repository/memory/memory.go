@@ -28,6 +28,7 @@ import (
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/ocm/invite"
 	"github.com/cs3org/reva/pkg/ocm/invite/repository/registry"
+	"github.com/cs3org/reva/pkg/utils"
 )
 
 func init() {
@@ -57,6 +58,18 @@ func (m *manager) GetToken(ctx context.Context, token string) (*invitepb.InviteT
 		return v.(*invitepb.InviteToken), nil
 	}
 	return nil, invite.ErrTokenNotFound
+}
+
+func (m *manager) ListTokens(ctx context.Context, initiator *userpb.UserId) ([]*invitepb.InviteToken, error) {
+	tokens := []*invitepb.InviteToken{}
+	m.Invites.Range(func(_, value any) bool {
+		token := value.(*invitepb.InviteToken)
+		if utils.UserEqual(token.UserId, initiator) {
+			tokens = append(tokens, token)
+		}
+		return true
+	})
+	return tokens, nil
 }
 
 func (m *manager) AddRemoteUser(ctx context.Context, initiator *userpb.UserId, remoteUser *userpb.User) error {

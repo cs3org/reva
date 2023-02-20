@@ -32,6 +32,7 @@ import (
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/ocm/invite"
 	"github.com/cs3org/reva/pkg/ocm/invite/repository/registry"
+	"github.com/cs3org/reva/pkg/utils"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )
@@ -164,6 +165,19 @@ func (m *manager) GetToken(ctx context.Context, token string) (*invitepb.InviteT
 		return tkn, nil
 	}
 	return nil, invite.ErrTokenNotFound
+}
+
+func (m *manager) ListTokens(ctx context.Context, initiator *userpb.UserId) ([]*invitepb.InviteToken, error) {
+	m.RLock()
+	defer m.RUnlock()
+
+	tokens := []*invitepb.InviteToken{}
+	for _, token := range m.model.Invites {
+		if utils.UserEqual(token.UserId, initiator) {
+			tokens = append(tokens, token)
+		}
+	}
+	return tokens, nil
 }
 
 func (m *manager) AddRemoteUser(ctx context.Context, initiator *userpb.UserId, remoteUser *userpb.User) error {
