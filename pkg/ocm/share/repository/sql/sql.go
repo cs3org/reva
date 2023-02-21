@@ -493,8 +493,8 @@ func storeProtocol(tx *sql.Tx, shareID int64, p Protocol) (int64, error) {
 // StoreReceivedShare stores a received share.
 func (m *mgr) StoreReceivedShare(ctx context.Context, s *ocm.ReceivedShare) (*ocm.ReceivedShare, error) {
 	if err := transaction(ctx, m.db, func(tx *sql.Tx) error {
-		query := "INSERT INTO ocm_received_shares SET name=?,fileid_prefix=?,item_source=?,share_with=?,owner=?,initiator=?,ctime=?,mtime=?,type=?,state=?"
-		params := []any{s.Name, s.ResourceId.StorageId, s.ResourceId.OpaqueId, s.Grantee.GetUserId().OpaqueId, formatUserID(s.Owner), formatUserID(s.Creator), s.Ctime.Seconds, s.Mtime.Seconds, convertFromCS3OCMShareType(s.ShareType), convertFromCS3OCMShareState(s.State)}
+		query := "INSERT INTO ocm_received_shares SET name=?,fileid_prefix=?,item_source=?,item_type=?,share_with=?,owner=?,initiator=?,ctime=?,mtime=?,type=?,state=?"
+		params := []any{s.Name, s.ResourceId.StorageId, s.ResourceId.OpaqueId, convertFromCS3ResourceType(s.ResourceType), s.Grantee.GetUserId().OpaqueId, formatUserID(s.Owner), formatUserID(s.Creator), s.Ctime.Seconds, s.Mtime.Seconds, convertFromCS3OCMShareType(s.ShareType), convertFromCS3OCMShareState(s.State)}
 
 		if s.Expiration != nil {
 			query += ",expiration=?"
@@ -545,7 +545,7 @@ func (m *mgr) StoreReceivedShare(ctx context.Context, s *ocm.ReceivedShare) (*oc
 
 // ListReceivedShares returns the list of shares the user has access.
 func (m *mgr) ListReceivedShares(ctx context.Context, user *userpb.User) ([]*ocm.ReceivedShare, error) {
-	query := "SELECT id, name, fileid_prefix, item_source, share_with, owner, initiator, ctime, mtime, expiration, type, state FROM ocm_received_shares WHERE share_with=?"
+	query := "SELECT id, name, fileid_prefix, item_source, item_type, share_with, owner, initiator, ctime, mtime, expiration, type, state FROM ocm_received_shares WHERE share_with=?"
 
 	rows, err := m.db.QueryContext(ctx, query, user.Id.OpaqueId)
 	if err != nil {
@@ -556,7 +556,7 @@ func (m *mgr) ListReceivedShares(ctx context.Context, user *userpb.User) ([]*ocm
 	shares := []*ocm.ReceivedShare{}
 	var ids []any
 	for rows.Next() {
-		if err := rows.Scan(&s.ID, &s.Name, &s.Prefix, &s.ItemSource, &s.ShareWith, &s.Owner, &s.Initiator, &s.Ctime, &s.Mtime, &s.Expiration, &s.Type, &s.State); err != nil {
+		if err := rows.Scan(&s.ID, &s.Name, &s.Prefix, &s.ItemSource, &s.ItemType, &s.ShareWith, &s.Owner, &s.Initiator, &s.Ctime, &s.Mtime, &s.Expiration, &s.Type, &s.State); err != nil {
 			continue
 		}
 		shares = append(shares, convertToCS3OCMReceivedShare(&s, nil))
@@ -623,11 +623,11 @@ func (m *mgr) GetReceivedShare(ctx context.Context, user *userpb.User, ref *ocm.
 }
 
 func (m *mgr) getReceivedByID(ctx context.Context, user *userpb.User, id *ocm.ShareId) (*ocm.ReceivedShare, error) {
-	query := "SELECT id, name, fileid_prefix, item_source, share_with, owner, initiator, ctime, mtime, expiration, type, state FROM ocm_received_shares WHERE id=? AND share_with=?"
+	query := "SELECT id, name, fileid_prefix, item_source, item_type, share_with, owner, initiator, ctime, mtime, expiration, type, state FROM ocm_received_shares WHERE id=? AND share_with=?"
 	params := []any{id.OpaqueId, user.Id.OpaqueId}
 
 	var s dbReceivedShare
-	if err := m.db.QueryRowContext(ctx, query, params...).Scan(&s.ID, &s.Name, &s.Prefix, &s.ItemSource, &s.ShareWith, &s.Owner, &s.Initiator, &s.Ctime, &s.Mtime, &s.Expiration, &s.Type, &s.State); err != nil {
+	if err := m.db.QueryRowContext(ctx, query, params...).Scan(&s.ID, &s.Name, &s.Prefix, &s.ItemSource, &s.ItemType, &s.ShareWith, &s.Owner, &s.Initiator, &s.Ctime, &s.Mtime, &s.Expiration, &s.Type, &s.State); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, share.ErrShareNotFound
 		}
@@ -643,11 +643,11 @@ func (m *mgr) getReceivedByID(ctx context.Context, user *userpb.User, id *ocm.Sh
 }
 
 func (m *mgr) getReceivedByKey(ctx context.Context, user *userpb.User, key *ocm.ShareKey) (*ocm.ReceivedShare, error) {
-	query := "SELECT id, name, fileid_prefix, item_source, share_with, owner, initiator, ctime, mtime, expiration, type, state FROM ocm_received_shares WHERE owner=? AND fileid_prefix=? AND item_source=? AND share_with=?"
+	query := "SELECT id, name, fileid_prefix, item_source, item_type, share_with, owner, initiator, ctime, mtime, expiration, type, state FROM ocm_received_shares WHERE owner=? AND fileid_prefix=? AND item_source=? AND share_with=?"
 	params := []any{formatUserID(key.Owner), key.ResourceId.StorageId, key.ResourceId.OpaqueId, key.Grantee.GetUserId().OpaqueId}
 
 	var s dbReceivedShare
-	if err := m.db.QueryRowContext(ctx, query, params...).Scan(&s.ID, &s.Name, &s.Prefix, &s.ItemSource, &s.ShareWith, &s.Owner, &s.Initiator, &s.Ctime, &s.Mtime, &s.Expiration, &s.Type, &s.State); err != nil {
+	if err := m.db.QueryRowContext(ctx, query, params...).Scan(&s.ID, &s.Name, &s.Prefix, &s.ItemSource, &s.ItemType, &s.ShareWith, &s.Owner, &s.Initiator, &s.Ctime, &s.Mtime, &s.Expiration, &s.Type, &s.State); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, share.ErrShareNotFound
 		}

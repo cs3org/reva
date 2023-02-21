@@ -40,6 +40,7 @@ CREATE TABLE IF NOT EXISTS ocm_received_shares (
     name VARCHAR(255) NOT NULL,
     fileid_prefix VARCHAR(255) NOT NULL,
     item_source VARCHAR(255) NOT NULL,
+    item_type TINYINT NOT NULL,
     share_with VARCHAR(255) NOT NULL,
     owner VARCHAR(255) NOT NULL,
     initiator VARCHAR(255) NOT NULL,

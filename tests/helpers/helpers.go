@@ -22,13 +22,14 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
+
+	"github.com/pkg/errors"
 
 	gatewayv1beta1 "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
@@ -106,6 +107,81 @@ func Upload(ctx context.Context, fs storage.FS, ref *provider.Reference, content
 	uploadRef := &provider.Reference{Path: "/" + uploadID}
 	err = fs.Upload(ctx, uploadRef, io.NopCloser(bytes.NewReader(content)))
 	return err
+}
+
+// UploadGateway uploads in one step a the content in a file.
+func UploadGateway(ctx context.Context, gw gatewayv1beta1.GatewayAPIClient, ref *provider.Reference, content []byte) error {
+	res, err := gw.InitiateFileUpload(ctx, &provider.InitiateFileUploadRequest{
+		Ref: ref,
+	})
+	if err != nil {
+		return errors.Wrap(err, "error initiating file upload")
+	}
+	if res.Status.Code != rpcv1beta1.Code_CODE_OK {
+		return errors.Errorf("error initiating file upload: %s", res.Status.Message)
+	}
+
+	var token, endpoint string
+	for _, p := range res.Protocols {
+		if p.Protocol == "simple" {
+			token, endpoint = p.Token, p.UploadEndpoint
+		}
+	}
+	httpReq, err := rhttp.NewRequest(ctx, http.MethodPut, endpoint, bytes.NewReader(content))
+	if err != nil {
+		return errors.Wrap(err, "error creating new request")
+	}
+
+	httpReq.Header.Set(datagateway.TokenTransportHeader, token)
+
+	httpRes, err := http.DefaultClient.Do(httpReq)
+	if err != nil {
+		return errors.Wrap(err, "error doing put request")
+	}
+	defer httpRes.Body.Close()
+
+	if httpRes.StatusCode != http.StatusOK {
+		return errors.Errorf("error doing put request: %s", httpRes.Status)
+	}
+
+	return nil
+}
+
+// Download downloads the content of a file in one step.
+func Download(ctx context.Context, gw gatewayv1beta1.GatewayAPIClient, ref *provider.Reference) ([]byte, error) {
+	res, err := gw.InitiateFileDownload(ctx, &provider.InitiateFileDownloadRequest{
+		Ref: ref,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if res.Status.Code != rpcv1beta1.Code_CODE_OK {
+		return nil, errors.New(res.Status.Message)
+	}
+
+	var token, endpoint string
+	for _, p := range res.Protocols {
+		if p.Protocol == "simple" {
+			token, endpoint = p.Token, p.DownloadEndpoint
+		}
+	}
+	httpReq, err := rhttp.NewRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, err
+	}
+	httpReq.Header.Set(datagateway.TokenTransportHeader, token)
+
+	httpRes, err := http.DefaultClient.Do(httpReq)
+	if err != nil {
+		return nil, err
+	}
+	defer httpRes.Body.Close()
+
+	if httpRes.StatusCode != http.StatusOK {
+		return nil, errors.New(httpRes.Status)
+	}
+
+	return io.ReadAll(httpRes.Body)
 }
 
 // Resource represents a general resource (file or folder).

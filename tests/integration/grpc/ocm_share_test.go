@@ -22,6 +22,7 @@ import (
 	"context"
 	"io"
 	"net/http"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -45,6 +46,22 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/pkg/errors"
 	"github.com/studio-b12/gowebdav"
+)
+
+var (
+	editorPermissions = &provider.ResourcePermissions{
+		InitiateFileDownload: true,
+		InitiateFileUpload:   true,
+		ListContainer:        true,
+		GetPath:              true,
+		Stat:                 true,
+	}
+	viewerPermissions = &provider.ResourcePermissions{
+		Stat:                 true,
+		InitiateFileDownload: true,
+		GetPath:              true,
+		ListContainer:        true,
+	}
 )
 
 var _ = Describe("ocm share", func() {
@@ -211,6 +228,30 @@ var _ = Describe("ocm share", func() {
 				// TODO: enable once we don't send anymore the owner token
 				// err = webdavClient.Write(".", []byte("will-never-be-written"), 0)
 				// Expect(err).To(HaveOccurred())
+
+				By("marie access the share using the ocm mount")
+				ref := &provider.Reference{Path: ocmPath(share.Id, "")}
+				statRes, err := cesnetgw.Stat(ctxMarie, &provider.StatRequest{Ref: ref})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+				checkResourceInfo(statRes.Info, &provider.ResourceInfo{
+					Id: &provider.ResourceId{
+						StorageId: "984e7351-2729-4417-99b4-ab5e6d41fa97",
+						OpaqueId:  share.Id.OpaqueId + ":/",
+					},
+					Name:          "new-file",
+					Path:          ocmPath(share.Id, ""),
+					Size:          4,
+					Type:          provider.ResourceType_RESOURCE_TYPE_FILE,
+					PermissionSet: viewerPermissions,
+				})
+
+				data, err := helpers.Download(ctxMarie, cesnetgw, ref)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(data).To(Equal([]byte("test")))
+
+				// TODO: enable once we don't send anymore the owner token
+				// Expect(helpers.UploadGateway(ctxMarie, cesnetgw, ref, []byte("will-never-be-written"))).ToNot(Succeed())
 			})
 		})
 
@@ -273,6 +314,32 @@ var _ = Describe("ocm share", func() {
 				newContent, err := download(ctxEinstein, cernboxgw, fileToShare)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(newContent).To(Equal([]byte("new-content")))
+
+				By("marie access the share using the ocm mount")
+				ref := &provider.Reference{Path: ocmPath(share.Id, "")}
+				statRes, err := cesnetgw.Stat(ctxMarie, &provider.StatRequest{Ref: ref})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(statRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+				checkResourceInfo(statRes.Info, &provider.ResourceInfo{
+					Id: &provider.ResourceId{
+						StorageId: "984e7351-2729-4417-99b4-ab5e6d41fa97",
+						OpaqueId:  share.Id.OpaqueId + ":/",
+					},
+					Name:          "new-file",
+					Path:          ocmPath(share.Id, ""),
+					Size:          uint64(len(data)),
+					Type:          provider.ResourceType_RESOURCE_TYPE_FILE,
+					PermissionSet: editorPermissions,
+				})
+
+				data, err = helpers.Download(ctxMarie, cesnetgw, ref)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(data).To(Equal([]byte("new-content")))
+
+				Expect(helpers.UploadGateway(ctxMarie, cesnetgw, ref, []byte("uploaded-from-ocm-mount"))).To(Succeed())
+				newContent, err = download(ctxEinstein, cernboxgw, fileToShare)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(newContent).To(Equal([]byte("uploaded-from-ocm-mount")))
 			})
 		})
 
@@ -282,7 +349,12 @@ var _ = Describe("ocm share", func() {
 					"foo": helpers.File{
 						Content: "foo",
 					},
-					"dir": helpers.Folder{},
+					"dir": helpers.Folder{
+						"foo": helpers.File{
+							Content: "dir/foo",
+						},
+						"bar": helpers.Folder{},
+					},
 				}
 				fileToShare := &provider.Reference{Path: "/home/ocm-share-folder"}
 				Expect(helpers.CreateStructure(ctxEinstein, cernboxgw, fileToShare.Path, structure)).To(Succeed())
@@ -336,6 +408,42 @@ var _ = Describe("ocm share", func() {
 
 				// By("check that marie does not have permissions to create files")
 				// Expect(webdavClient.Write("new-file", []byte("new-file"), 0)).ToNot(Succeed())
+
+				By("marie access the share using the ocm mount")
+				ref := &provider.Reference{Path: ocmPath(share.Id, "dir")}
+				listFolderRes, err := cesnetgw.ListContainer(ctxMarie, &provider.ListContainerRequest{
+					Ref: ref,
+				})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(listFolderRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+				checkResourceInfoList(listFolderRes.Infos, []*provider.ResourceInfo{
+					{
+						Id: &provider.ResourceId{
+							StorageId: "984e7351-2729-4417-99b4-ab5e6d41fa97",
+							OpaqueId:  share.Id.OpaqueId + ":/dir/foo",
+						},
+						Name:          "foo",
+						Path:          ocmPath(share.Id, "dir/foo"),
+						Size:          7,
+						Type:          provider.ResourceType_RESOURCE_TYPE_FILE,
+						PermissionSet: viewerPermissions,
+					},
+					{
+						Id: &provider.ResourceId{
+							StorageId: "984e7351-2729-4417-99b4-ab5e6d41fa97",
+							OpaqueId:  share.Id.OpaqueId + ":/dir/bar",
+						},
+						Name:          "bar",
+						Path:          ocmPath(share.Id, "dir/bar"),
+						Size:          0,
+						Type:          provider.ResourceType_RESOURCE_TYPE_CONTAINER,
+						PermissionSet: viewerPermissions,
+					},
+				})
+
+				// TODO: enable once we don't send anymore the owner token
+				// newFile := &provider.Reference{Path: ocmPath(share.Id, "dir/new")}
+				// Expect(helpers.UploadGateway(ctxMarie, cesnetgw, newFile, []byte("uploaded-from-ocm-mount"))).ToNot(Succeed())
 			})
 		})
 
@@ -345,7 +453,12 @@ var _ = Describe("ocm share", func() {
 					"foo": helpers.File{
 						Content: "foo",
 					},
-					"dir": helpers.Folder{},
+					"dir": helpers.Folder{
+						"foo": helpers.File{
+							Content: "dir/foo",
+						},
+						"bar": helpers.Folder{},
+					},
 				}
 				fileToShare := &provider.Reference{Path: "/home/ocm-share-folder"}
 
@@ -403,7 +516,91 @@ var _ = Describe("ocm share", func() {
 					"foo": helpers.File{
 						Content: "foo",
 					},
-					"dir": helpers.Folder{},
+					"dir": helpers.Folder{
+						"foo": helpers.File{
+							Content: "dir/foo",
+						},
+						"bar": helpers.Folder{},
+					},
+					"new-file": helpers.File{
+						Content: "new-file",
+					},
+				}))
+
+				By("marie access the share using the ocm mount")
+				ref := &provider.Reference{Path: ocmPath(share.Id, "dir")}
+				listFolderRes, err := cesnetgw.ListContainer(ctxMarie, &provider.ListContainerRequest{
+					Ref: ref,
+				})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(listFolderRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+				checkResourceInfoList(listFolderRes.Infos, []*provider.ResourceInfo{
+					{
+						Id: &provider.ResourceId{
+							StorageId: "984e7351-2729-4417-99b4-ab5e6d41fa97",
+							OpaqueId:  share.Id.OpaqueId + ":/dir/foo",
+						},
+						Name:          "foo",
+						Path:          ocmPath(share.Id, "dir/foo"),
+						Size:          7,
+						Type:          provider.ResourceType_RESOURCE_TYPE_FILE,
+						PermissionSet: editorPermissions,
+					},
+					{
+						Id: &provider.ResourceId{
+							StorageId: "984e7351-2729-4417-99b4-ab5e6d41fa97",
+							OpaqueId:  share.Id.OpaqueId + ":/dir/bar",
+						},
+						Name:          "bar",
+						Path:          ocmPath(share.Id, "dir/bar"),
+						Size:          0,
+						Type:          provider.ResourceType_RESOURCE_TYPE_CONTAINER,
+						PermissionSet: editorPermissions,
+					},
+				})
+
+				// create a new file
+				newFile := &provider.Reference{Path: ocmPath(share.Id, "dir/new-file")}
+				Expect(helpers.UploadGateway(ctxMarie, cesnetgw, newFile, []byte("uploaded-from-ocm-mount"))).To(Succeed())
+				Expect(helpers.SameContentWebDAV(webdavClient, fileToShare.Path, helpers.Folder{
+					"foo": helpers.File{
+						Content: "foo",
+					},
+					"dir": helpers.Folder{
+						"foo": helpers.File{
+							Content: "dir/foo",
+						},
+						"bar": helpers.Folder{},
+						"new-file": helpers.File{
+							Content: "uploaded-from-ocm-mount",
+						},
+					},
+					"new-file": helpers.File{
+						Content: "new-file",
+					},
+				}))
+
+				// create a new directory
+				newDir := &provider.Reference{Path: ocmPath(share.Id, "dir/new-dir")}
+				createDirRes, err := cesnetgw.CreateContainer(ctxMarie, &provider.CreateContainerRequest{
+					Ref: newDir,
+				})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(createDirRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+				Expect(helpers.SameContentWebDAV(webdavClient, fileToShare.Path, helpers.Folder{
+					"foo": helpers.File{
+						Content: "foo",
+					},
+					"dir": helpers.Folder{
+						"foo": helpers.File{
+							Content: "dir/foo",
+						},
+						"bar": helpers.Folder{},
+						"new-file": helpers.File{
+							Content: "uploaded-from-ocm-mount",
+						},
+						"new-dir": helpers.Folder{},
+					},
 					"new-file": helpers.File{
 						Content: "new-file",
 					},
@@ -526,4 +723,36 @@ func download(ctx context.Context, gw gatewaypb.GatewayAPIClient, ref *provider.
 	defer httpRes.Body.Close()
 
 	return io.ReadAll(httpRes.Body)
+}
+
+func ocmPath(id *ocmv1beta1.ShareId, p string) string {
+	return filepath.Join("/ocm", id.OpaqueId, p)
+}
+
+func checkResourceInfo(info, target *provider.ResourceInfo) {
+	Expect(info.Id).To(Equal(target.Id))
+	Expect(info.Name).To(Equal(target.Name))
+	Expect(info.Path).To(Equal(target.Path))
+	Expect(info.Size).To(Equal(target.Size))
+	Expect(info.Type).To(Equal(target.Type))
+	Expect(info.PermissionSet).To(Equal(target.PermissionSet))
+}
+
+func mapResourceInfos(l []*provider.ResourceInfo) map[string]*provider.ResourceInfo {
+	m := make(map[string]*provider.ResourceInfo)
+	for _, e := range l {
+		m[e.Path] = e
+	}
+	return m
+}
+
+func checkResourceInfoList(l1, l2 []*provider.ResourceInfo) {
+	m1, m2 := mapResourceInfos(l1), mapResourceInfos(l2)
+	Expect(l1).To(HaveLen(len(l2)))
+
+	for k, ri1 := range m1 {
+		ri2, ok := m2[k]
+		Expect(ok).To(BeTrue())
+		checkResourceInfo(ri1, ri2)
+	}
 }
