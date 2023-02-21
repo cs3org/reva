@@ -109,6 +109,7 @@ func Upload(ctx context.Context, fs storage.FS, ref *provider.Reference, content
 	return err
 }
 
+// UploadGateway uploads in one step a the content in a file.
 func UploadGateway(ctx context.Context, gw gatewayv1beta1.GatewayAPIClient, ref *provider.Reference, content []byte) error {
 	res, err := gw.InitiateFileUpload(ctx, &provider.InitiateFileUploadRequest{
 		Ref: ref,
@@ -146,7 +147,8 @@ func UploadGateway(ctx context.Context, gw gatewayv1beta1.GatewayAPIClient, ref 
 	return nil
 }
 
-func Dowload(ctx context.Context, gw gatewayv1beta1.GatewayAPIClient, ref *provider.Reference) ([]byte, error) {
+// Download downloads the content of a file in one step.
+func Download(ctx context.Context, gw gatewayv1beta1.GatewayAPIClient, ref *provider.Reference) ([]byte, error) {
 	res, err := gw.InitiateFileDownload(ctx, &provider.InitiateFileDownloadRequest{
 		Ref: ref,
 	})

@@ -246,7 +246,7 @@ var _ = Describe("ocm share", func() {
 					PermissionSet: viewerPermissions,
 				})
 
-				data, err := helpers.Dowload(ctxMarie, cesnetgw, ref)
+				data, err := helpers.Download(ctxMarie, cesnetgw, ref)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(data).To(Equal([]byte("test")))
 
@@ -332,7 +332,7 @@ var _ = Describe("ocm share", func() {
 					PermissionSet: editorPermissions,
 				})
 
-				data, err = helpers.Dowload(ctxMarie, cesnetgw, ref)
+				data, err = helpers.Download(ctxMarie, cesnetgw, ref)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(data).To(Equal([]byte("new-content")))
 

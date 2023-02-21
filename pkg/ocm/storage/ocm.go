@@ -4,7 +4,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//	http://www.apache.org/licenses/LICENSE-2.0
+//     http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -68,6 +68,7 @@ func (c *config) init() {
 	c.GatewaySVC = sharedconf.GetGatewaySVC(c.GatewaySVC)
 }
 
+// New creates an OCM storage driver.
 func New(c map[string]interface{}) (storage.FS, error) {
 	conf, err := parseConfig(c)
 	if err != nil {
@@ -273,8 +274,8 @@ func (d *driver) ListFolder(ctx context.Context, ref *provider.Reference, _ []st
 }
 
 func (d *driver) InitiateUpload(ctx context.Context, ref *provider.Reference, _ int64, _ map[string]string) (map[string]string, error) {
-	shareId, rel := shareInfoFromReference(ref)
-	p := getPathFromShareIDAndRelPath(shareId, rel)
+	shareID, rel := shareInfoFromReference(ref)
+	p := getPathFromShareIDAndRelPath(shareID, rel)
 
 	return map[string]string{
 		"simple": p,
@@ -301,10 +302,10 @@ func (d *driver) Download(ctx context.Context, ref *provider.Reference) (io.Read
 }
 
 func (d *driver) GetPathByID(ctx context.Context, id *provider.ResourceId) (string, error) {
-	shareId, rel := shareInfoFromReference(&provider.Reference{
+	shareID, rel := shareInfoFromReference(&provider.Reference{
 		ResourceId: id,
 	})
-	return getPathFromShareIDAndRelPath(shareId, rel), nil
+	return getPathFromShareIDAndRelPath(shareID, rel), nil
 }
 
 func (d *driver) Shutdown(ctx context.Context) error {
