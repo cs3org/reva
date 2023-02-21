@@ -70,7 +70,7 @@ func (_m *Blobstore) Download(_a0 *node.Node) (io.ReadCloser, error) {
 }
 
 // Upload provides a mock function with given fields: _a0, reader
-func (_m *Blobstore) Upload(_a0 *node.Node, reader io.Reader) error {
+func (_m *Blobstore) Upload(_a0 *node.Node, source string) error {
 	ret := _m.Called(_a0, reader)
 
 	var r0 error

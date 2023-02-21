@@ -64,19 +64,23 @@ func New(endpoint, region, bucket, accessKey, secretKey string) (*Blobstore, err
 }
 
 // Upload stores some data in the blobstore under the given key
-func (bs *Blobstore) Upload(node *node.Node, reader io.Reader) error {
+func (bs *Blobstore) Upload(node *node.Node, source string) error {
 	size := int64(-1)
-	if file, ok := reader.(*os.File); ok {
-		info, err := file.Stat()
-		if err != nil {
-			return errors.Wrapf(err, "could not determine file size for object '%s'", bs.path(node))
-		}
-		size = info.Size()
-	}
-
-	_, err := bs.client.PutObject(context.Background(), bs.bucket, bs.path(node), reader, size, minio.PutObjectOptions{ContentType: "application/octet-stream"})
-
+	reader, err := os.Open(source)
 	if err != nil {
+		return errors.Wrap(err, "can not open source file to upload")
+	}
+	defer reader.Close()
+
+	info, err := os.Stat(source)
+	if err != nil {
+		return errors.Wrapf(err, "could not determine file size for object '%s'", bs.path(node))
+	}
+	size = info.Size()
+
+	_, err2 := bs.client.PutObject(context.Background(), bs.bucket, bs.path(node), reader, size, minio.PutObjectOptions{ContentType: "application/octet-stream"})
+
+	if err2 != nil {
 		return errors.Wrapf(err, "could not store object '%s' into bucket '%s'", bs.path(node), bs.bucket)
 	}
 	return nil
