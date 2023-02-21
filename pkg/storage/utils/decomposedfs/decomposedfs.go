@@ -24,6 +24,7 @@ package decomposedfs
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net/url"
 	"os"
@@ -51,6 +52,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/tree"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/upload"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs/prefixes"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/filelocks"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/templates"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
@@ -99,6 +101,15 @@ func NewDefault(m map[string]interface{}, bs tree.Blobstore, es events.Stream) (
 	o, err := options.New(m)
 	if err != nil {
 		return nil, err
+	}
+
+	switch o.MetadataBackend {
+	case "xattrs":
+		xattrs.UseXattrsBackend()
+	case "ini":
+		xattrs.UseIniBackend()
+	default:
+		return nil, fmt.Errorf("unknown metadata backend %s, only 'ini' or 'xattrs' (default) supported", o.MetadataBackend)
 	}
 
 	lu := &lookup.Lookup{}
@@ -566,7 +577,7 @@ func (fs *Decomposedfs) CreateDir(ctx context.Context, ref *provider.Reference) 
 
 	if fs.o.TreeTimeAccounting || fs.o.TreeSizeAccounting {
 		// mark the home node as the end of propagation
-		if err = n.SetXattr(xattrs.PropagationAttr, "1"); err != nil {
+		if err = n.SetXattr(prefixes.PropagationAttr, "1"); err != nil {
 			appctx.GetLogger(ctx).Error().Err(err).Interface("node", n).Msg("could not mark node to propagate")
 
 			// FIXME: This does not return an error at all, but results in a severe situation that the

@@ -58,8 +58,8 @@ var _ = Describe("Node", func() {
 
 	Describe("New", func() {
 		It("generates unique blob ids if none are given", func() {
-			n1 := node.New(env.SpaceRootRes.SpaceId, id, "", name, 10, "", env.Owner.Id, env.Lookup)
-			n2 := node.New(env.SpaceRootRes.SpaceId, id, "", name, 10, "", env.Owner.Id, env.Lookup)
+			n1 := node.New(env.SpaceRootRes.SpaceId, id, "", name, 10, "", provider.ResourceType_RESOURCE_TYPE_FILE, env.Owner.Id, env.Lookup)
+			n2 := node.New(env.SpaceRootRes.SpaceId, id, "", name, 10, "", provider.ResourceType_RESOURCE_TYPE_FILE, env.Owner.Id, env.Lookup)
 
 			Expect(len(n1.BlobID)).To(Equal(36))
 			Expect(n1.BlobID).ToNot(Equal(n2.BlobID))
@@ -327,6 +327,8 @@ var _ = Describe("Node", func() {
 			})
 			Expect(err).ToNot(HaveOccurred())
 			// checking that the path "subpath" is denied properly
+			subfolder, err = node.ReadNode(env.Ctx, env.Lookup, subfolder.SpaceID, subfolder.ID, false)
+			Expect(err).ToNot(HaveOccurred())
 			subfolderActual, denied := subfolder.PermissionSet(env.Ctx)
 			subfolderExpected := ocsconv.NewDeniedRole().CS3ResourcePermissions()
 			Expect(grants.PermissionsEqual(&subfolderActual, subfolderExpected)).To(BeTrue())

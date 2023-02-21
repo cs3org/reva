@@ -30,6 +30,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs/prefixes"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/pkg/errors"
@@ -109,7 +110,7 @@ func (fs *Decomposedfs) SetArbitraryMetadata(ctx context.Context, ref *provider.
 		}
 	}
 	for k, v := range md.Metadata {
-		attrName := xattrs.MetadataPrefix + k
+		attrName := prefixes.MetadataPrefix + k
 		if err = n.SetXattr(attrName, v); err != nil {
 			errs = append(errs, errors.Wrap(err, "Decomposedfs: could not set metadata attribute "+attrName+" to "+k))
 		}
@@ -182,7 +183,7 @@ func (fs *Decomposedfs) UnsetArbitraryMetadata(ctx context.Context, ref *provide
 				errs = append(errs, errors.Wrap(errtypes.UserRequired("userrequired"), "user has no id"))
 				continue
 			}
-			fa := fmt.Sprintf("%s:%s:%s@%s", xattrs.FavPrefix, utils.UserTypeToString(uid.GetType()), uid.GetOpaqueId(), uid.GetIdp())
+			fa := fmt.Sprintf("%s:%s:%s@%s", prefixes.FavPrefix, utils.UserTypeToString(uid.GetType()), uid.GetOpaqueId(), uid.GetIdp())
 			if err := n.RemoveXattr(fa); err != nil {
 				if xattrs.IsAttrUnset(err) {
 					continue // already gone, ignore
@@ -194,7 +195,7 @@ func (fs *Decomposedfs) UnsetArbitraryMetadata(ctx context.Context, ref *provide
 				errs = append(errs, errors.Wrap(err, "could not unset favorite flag"))
 			}
 		default:
-			if err = n.RemoveXattr(xattrs.MetadataPrefix + k); err != nil {
+			if err = n.RemoveXattr(prefixes.MetadataPrefix + k); err != nil {
 				if xattrs.IsAttrUnset(err) {
 					continue // already gone, ignore
 				}
