@@ -24,6 +24,7 @@ import (
 	"encoding/xml"
 	"fmt"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -111,10 +112,24 @@ func (s *svc) CreateHome(ctx context.Context, req *provider.CreateHomeRequest) (
 		}, nil
 
 	}
+	quotaStr := utils.ReadPlainFromOpaque(req.Opaque, "quota")
+	var quota *provider.Quota
+	if quotaStr != "" {
+		q, err := strconv.ParseUint(quotaStr, 10, 64)
+		if err != nil {
+			return &provider.CreateHomeResponse{
+				Status: status.NewInvalid(ctx, fmt.Sprintf("can't parse quotaStr: %s", quotaStr)),
+			}, nil
+		}
+		quota = &provider.Quota{
+			QuotaMaxBytes: q,
+		}
+	}
 	createReq := &provider.CreateStorageSpaceRequest{
 		Type:  "personal",
 		Owner: u,
 		Name:  u.DisplayName,
+		Quota: quota,
 	}
 
 	// send the user id as the space id, makes debugging easier
