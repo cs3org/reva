@@ -973,6 +973,8 @@ func (t *Tree) createDirNode(n *node.Node) (err error) {
 	return n.WriteAllNodeMetadata()
 }
 
+var nodeIDRegep = regexp.MustCompile(`.*/nodes/([^.]*).*`)
+
 // TODO refactor the returned params into Node properties? would make all the path transformations go away...
 func (t *Tree) readRecycleItem(ctx context.Context, spaceID, key, path string) (recycleNode *node.Node, trashItem string, deletedNodePath string, origin string, err error) {
 	if key == "" {
@@ -990,7 +992,6 @@ func (t *Tree) readRecycleItem(ctx context.Context, spaceID, key, path string) (
 	if err != nil {
 		return
 	}
-	nodeIDRegep := regexp.MustCompile(`.*/nodes/([^.]*).*`)
 	nodeID = nodeIDRegep.ReplaceAllString(deletedNodePath, "$1")
 	nodeID = strings.ReplaceAll(nodeID, "/", "")
 
