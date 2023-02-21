@@ -68,6 +68,7 @@ type Handler struct {
 	publicURL              string
 	sharePrefix            string
 	homeNamespace          string
+	ocmMountPoint          string
 	additionalInfoTemplate *template.Template
 	userIdentifierCache    *ttlcache.Cache
 	resourceInfoCache      cache.ResourceInfoCache
@@ -102,6 +103,7 @@ func (h *Handler) Init(c *config.Config) {
 	h.publicURL = c.Config.Host
 	h.sharePrefix = c.SharePrefix
 	h.homeNamespace = c.HomeNamespace
+	h.ocmMountPoint = c.OCMMountPoint
 
 	h.additionalInfoTemplate, _ = template.New("additionalInfo").Parse(c.AdditionalInfoAttribute)
 	h.resourceInfoCacheTTL = time.Second * time.Duration(c.ResourceInfoCacheTTL)
@@ -738,7 +740,15 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 		log.Debug().Msgf("share: %+v", *data)
 	}
 
-	response.WriteOCSSuccess(w, r, shares)
+	// include ocm shares in the response
+	lst, err := h.listReceivedFederatedShares(ctx, client)
+	if err != nil {
+		log.Err(err).Msg("error listing received ocm shares")
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error listing received ocm shares", err)
+		return
+	}
+
+	response.WriteOCSSuccess(w, r, append(shares, lst...))
 }
 
 func findMatch(shareJailInfos []*provider.ResourceInfo, id *provider.ResourceId) *provider.ResourceInfo {
