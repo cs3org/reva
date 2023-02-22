@@ -22,7 +22,7 @@ package mocks
 
 import (
 	io "io"
-
+	"os"
 	node "github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
 	mock "github.com/stretchr/testify/mock"
 )
@@ -71,6 +71,12 @@ func (_m *Blobstore) Download(_a0 *node.Node) (io.ReadCloser, error) {
 
 // Upload provides a mock function with given fields: _a0, reader
 func (_m *Blobstore) Upload(_a0 *node.Node, source string) error {
+
+	reader, err := os.Open(source)
+	if err != nil {
+		return err
+	}
+
 	ret := _m.Called(_a0, reader)
 
 	var r0 error
