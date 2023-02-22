@@ -21,10 +21,12 @@ package ocmcore
 import (
 	"context"
 	"fmt"
+	"time"
 
 	ocmcore "github.com/cs3org/go-cs3apis/cs3/ocm/core/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	providerpb "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/ocm/share"
 	"github.com/cs3org/reva/pkg/ocm/share/repository/registry"
@@ -110,6 +112,10 @@ func (s *service) CreateOCMCoreShare(ctx context.Context, req *ocmcore.CreateOCM
 		return nil, errtypes.NotSupported("share type not supported")
 	}
 
+	now := &typesv1beta1.Timestamp{
+		Seconds: uint64(time.Now().Unix()),
+	}
+
 	share, err := s.repo.StoreReceivedShare(ctx, &ocm.ReceivedShare{
 		ResourceId: &providerpb.ResourceId{
 			OpaqueId: req.ResourceId,
@@ -126,6 +132,8 @@ func (s *service) CreateOCMCoreShare(ctx context.Context, req *ocmcore.CreateOCM
 		Owner:        req.Owner,
 		Creator:      req.Sender,
 		Protocols:    req.Protocols,
+		Ctime:        now,
+		Mtime:        now,
 		Expiration:   req.Expiration,
 		State:        ocm.ShareState_SHARE_STATE_PENDING,
 	})
