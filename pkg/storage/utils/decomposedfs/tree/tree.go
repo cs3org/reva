@@ -787,49 +787,10 @@ func (t *Tree) Propagate(ctx context.Context, n *node.Node, sizeDiff int64) (err
 			return nil
 		}
 
-		if t.treeTimeAccounting {
-			// update the parent tree time if it is older than the nodes mtime
-			updateSyncTime := false
+		if t.treeTimeAccounting || (t.treeSizeAccounting && sizeDiff != 0) {
+			attrs := map[string]string{}
 
-			var tmTime time.Time
-			tmTime, err = n.GetTMTime()
-			switch {
-			case err != nil:
-				// missing attribute, or invalid format, overwrite
-				sublog.Debug().Err(err).
-					Msg("could not read tmtime attribute, overwriting")
-				updateSyncTime = true
-			case tmTime.Before(sTime):
-				sublog.Debug().
-					Time("tmtime", tmTime).
-					Time("stime", sTime).
-					Msg("parent tmtime is older than node mtime, updating")
-				updateSyncTime = true
-			default:
-				sublog.Debug().
-					Time("tmtime", tmTime).
-					Time("stime", sTime).
-					Dur("delta", sTime.Sub(tmTime)).
-					Msg("parent tmtime is younger than node mtime, not updating")
-			}
-
-			if updateSyncTime {
-				// update the tree time of the parent node
-				if err = n.SetTMTime(&sTime); err != nil {
-					sublog.Error().Err(err).Time("tmtime", sTime).Msg("could not update tmtime of parent node")
-				} else {
-					sublog.Debug().Time("tmtime", sTime).Msg("updated tmtime of parent node")
-				}
-			}
-
-			if err := n.UnsetTempEtag(); err != nil && !xattrs.IsAttrUnset(err) {
-				sublog.Error().Err(err).Msg("could not remove temporary etag attribute")
-			}
-		}
-
-		// size accounting
-		if t.treeSizeAccounting && sizeDiff != 0 {
-			// lock node before reading treesize
+			// lock node before reading treesize or tree time
 			nodeLock, err := filelocks.AcquireWriteLock(n.InternalPath())
 			if err != nil {
 				return err
@@ -843,29 +804,69 @@ func (t *Tree) Propagate(ctx context.Context, n *node.Node, sizeDiff int64) (err
 			}
 			defer releaseLock()
 
-			var newSize uint64
+			if t.treeTimeAccounting {
+				// update the parent tree time if it is older than the nodes mtime
+				updateSyncTime := false
 
-			// read treesize
-			treeSize, err := n.GetTreeSize()
-			switch {
-			case xattrs.IsAttrUnset(err):
-				// fallback to calculating the treesize
-				newSize, err = calculateTreeSize(ctx, n.InternalPath())
-				if err != nil {
-					return err
+				var tmTime time.Time
+				tmTime, err = n.GetTMTime()
+				switch {
+				case err != nil:
+					// missing attribute, or invalid format, overwrite
+					sublog.Debug().Err(err).
+						Msg("could not read tmtime attribute, overwriting")
+					updateSyncTime = true
+				case tmTime.Before(sTime):
+					sublog.Debug().
+						Time("tmtime", tmTime).
+						Time("stime", sTime).
+						Msg("parent tmtime is older than node mtime, updating")
+					updateSyncTime = true
+				default:
+					sublog.Debug().
+						Time("tmtime", tmTime).
+						Time("stime", sTime).
+						Dur("delta", sTime.Sub(tmTime)).
+						Msg("parent tmtime is younger than node mtime, not updating")
 				}
-			case err != nil:
-				return err
-			default:
-				if sizeDiff > 0 {
-					newSize = treeSize + uint64(sizeDiff)
-				} else {
-					newSize = treeSize - uint64(-sizeDiff)
+
+				if updateSyncTime {
+					// update the tree time of the parent node
+					attrs[prefixes.TreeMTimeAttr] = sTime.UTC().Format(time.RFC3339Nano)
 				}
+
+				attrs[prefixes.TmpEtagAttr] = ""
 			}
 
-			// update the tree size of the node
-			if err = n.SetXattrWithLock(prefixes.TreesizeAttr, strconv.FormatUint(newSize, 10), nodeLock); err != nil {
+			// size accounting
+			if t.treeSizeAccounting && sizeDiff != 0 {
+				var newSize uint64
+
+				// read treesize
+				treeSize, err := n.GetTreeSize()
+				switch {
+				case xattrs.IsAttrUnset(err):
+					// fallback to calculating the treesize
+					newSize, err = calculateTreeSize(ctx, n.InternalPath())
+					if err != nil {
+						return err
+					}
+				case err != nil:
+					return err
+				default:
+					if sizeDiff > 0 {
+						newSize = treeSize + uint64(sizeDiff)
+					} else {
+						newSize = treeSize - uint64(-sizeDiff)
+					}
+				}
+
+				// update the tree size of the node
+				attrs[prefixes.TreesizeAttr] = strconv.FormatUint(newSize, 10)
+				sublog.Debug().Uint64("newSize", newSize).Msg("updated treesize of parent node")
+			}
+
+			if err = n.SetXattrsWithLock(attrs, nodeLock); err != nil {
 				return err
 			}
 
@@ -874,10 +875,7 @@ func (t *Tree) Propagate(ctx context.Context, n *node.Node, sizeDiff int64) (err
 			if err != nil {
 				return errtypes.InternalError(err.Error())
 			}
-
-			sublog.Debug().Uint64("newSize", newSize).Msg("updated treesize of parent node")
 		}
-
 	}
 	if err != nil {
 		sublog.Error().Err(err).Msg("error propagating")
