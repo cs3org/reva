@@ -1060,13 +1060,17 @@ func TestStoreShare(t *testing.T) {
 				ShareType:  ocm.ShareType_SHARE_TYPE_USER,
 				AccessMethods: []*ocm.AccessMethod{
 					share.NewWebDavAccessMethod(conversions.NewViewerRole().CS3ResourcePermissions()),
+					share.NewWebappAccessMethod(appprovider.ViewMode_VIEW_MODE_READ_ONLY),
 				},
 			},
 			expected: storeShareExpected{
-				shares:        []sql.Row{{int64(1), "qwerty", "storage", "resource-id1", "file-name", "richard@cesnet", "einstein", "marie", uint64(1670859468), uint64(1670859468), nil, int8(0)}},
-				accessmethods: []sql.Row{{int64(1), int64(1), int8(0)}},
-				webdav:        []sql.Row{{int64(1), int64(1)}},
-				webapp:        []sql.Row{},
+				shares: []sql.Row{{int64(1), "qwerty", "storage", "resource-id1", "file-name", "richard@cesnet", "einstein", "marie", uint64(1670859468), uint64(1670859468), nil, int8(0)}},
+				accessmethods: []sql.Row{
+					{int64(1), int64(1), int8(0)},
+					{int64(2), int64(1), int8(1)},
+				},
+				webdav: []sql.Row{{int64(1), int64(1)}},
+				webapp: []sql.Row{{int64(2), int8(2)}},
 			},
 		},
 		{

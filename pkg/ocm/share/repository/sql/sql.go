@@ -99,7 +99,7 @@ func storeWebDAVAccessMethod(tx *sql.Tx, shareID int64, o *ocm.AccessMethod_Webd
 }
 
 func storeWebappAccessMethod(tx *sql.Tx, shareID int64, o *ocm.AccessMethod_WebappOptions) error {
-	amID, err := storeAccessMethod(tx, shareID, WebDAVAccessMethod)
+	amID, err := storeAccessMethod(tx, shareID, WebappAccessMethod)
 	if err != nil {
 		return err
 	}
