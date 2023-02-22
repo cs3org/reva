@@ -175,6 +175,7 @@ type MatchData struct {
 type MatchValueData struct {
 	ShareType               int    `json:"shareType" xml:"shareType"`
 	ShareWith               string `json:"shareWith" xml:"shareWith"`
+	ShareWithProvider       string `json:"shareWithProvider" xml:"shareWithProvider"`
 	ShareWithAdditionalInfo string `json:"shareWithAdditionalInfo" xml:"shareWithAdditionalInfo"`
 }
 
