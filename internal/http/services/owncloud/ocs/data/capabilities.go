@@ -66,6 +66,7 @@ type Spaces struct {
 	Enabled   bool   `json:"enabled" xml:"enabled" mapstructure:"enabled"`
 	Projects  bool   `json:"projects" xml:"projects" mapstructure:"projects"`
 	ShareJail bool   `json:"share_jail" xml:"share_jail" mapstructure:"share_jail"`
+	MaxQuota  uint64 `json:"max_quota" xml:"max_quota" mapstructure:"max_quota"`
 }
 
 // CapabilitiesCore holds webdav config
