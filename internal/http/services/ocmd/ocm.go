@@ -24,7 +24,6 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/sharedconf"
-	"github.com/cs3org/reva/pkg/smtpclient"
 	"github.com/go-chi/chi/v5"
 	"github.com/mitchellh/mapstructure"
 	"github.com/rs/zerolog"
@@ -35,13 +34,10 @@ func init() {
 }
 
 type config struct {
-	SMTPCredentials            *smtpclient.SMTPCredentials `mapstructure:"smtp_credentials"`
-	Prefix                     string                      `mapstructure:"prefix"`
-	Host                       string                      `mapstructure:"host"`
-	GatewaySvc                 string                      `mapstructure:"gatewaysvc"`
-	MeshDirectoryURL           string                      `mapstructure:"mesh_directory_url"`
-	Config                     configData                  `mapstructure:"config"`
-	ExposeRecipientDisplayName bool                        `mapstructure:"expose_recipient_display_name"`
+	Prefix                     string     `mapstructure:"prefix"`
+	GatewaySvc                 string     `mapstructure:"gatewaysvc"`
+	Config                     configData `mapstructure:"config"`
+	ExposeRecipientDisplayName bool       `mapstructure:"expose_recipient_display_name"`
 }
 
 func (c *config) init() {

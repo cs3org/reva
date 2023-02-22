@@ -33,14 +33,11 @@ import (
 	"github.com/cs3org/reva/internal/http/services/reqres"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
-	"github.com/cs3org/reva/pkg/smtpclient"
 	"github.com/cs3org/reva/pkg/utils"
 )
 
 type invitesHandler struct {
-	smtpCredentials  *smtpclient.SMTPCredentials
-	gatewayClient    gateway.GatewayAPIClient
-	meshDirectoryURL string
+	gatewayClient gateway.GatewayAPIClient
 }
 
 func (h *invitesHandler) init(c *config) error {
@@ -49,10 +46,6 @@ func (h *invitesHandler) init(c *config) error {
 	if err != nil {
 		return err
 	}
-	if c.SMTPCredentials != nil {
-		h.smtpCredentials = smtpclient.NewSMTPCredentials(c.SMTPCredentials)
-	}
-	h.meshDirectoryURL = c.MeshDirectoryURL
 	return nil
 }
 
