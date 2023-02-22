@@ -117,7 +117,7 @@ func storeTransferAccessMethod(tx *sql.Tx, shareID int64, _ *ocm.AccessMethod_Tr
 }
 
 func storeAccessMethod(tx *sql.Tx, shareID int64, t AccessMethod) (int64, error) {
-	query := "INSERT INTO ocm_shares_access_method SET ocm_share_id=?, type=?"
+	query := "INSERT INTO ocm_shares_access_methods SET ocm_share_id=?, type=?"
 	params := []any{shareID, int(t)}
 
 	res, err := tx.Exec(query, params...)
@@ -259,7 +259,7 @@ func (m *mgr) getByKey(ctx context.Context, user *userpb.User, key *ocm.ShareKey
 }
 
 func (m *mgr) getAccessMethods(ctx context.Context, id int) ([]*ocm.AccessMethod, error) {
-	query := "SELECT m.type, dav.permissions, app.view_mode FROM ocm_shares_access_method as m LEFT JOIN ocm_access_method_webdav as dav ON m.id=dav.ocm_access_method_id LEFT JOIN ocm_access_method_webapp as app ON m.id=app.ocm_access_method_id WHERE m.ocm_share_id=?"
+	query := "SELECT m.type, dav.permissions, app.view_mode FROM ocm_shares_access_methods as m LEFT JOIN ocm_access_method_webdav as dav ON m.id=dav.ocm_access_method_id LEFT JOIN ocm_access_method_webapp as app ON m.id=app.ocm_access_method_id WHERE m.ocm_share_id=?"
 
 	var methods []*ocm.AccessMethod
 	rows, err := m.db.QueryContext(ctx, query, id)
@@ -415,7 +415,7 @@ func (m *mgr) getAccessMethodsIds(ctx context.Context, ids []any) (map[string][]
 		return methods, nil
 	}
 
-	query := "SELECT m.ocm_share_id, m.type, dav.permissions, app.view_mode FROM ocm_shares_access_method as m LEFT JOIN ocm_access_method_webdav as dav ON m.id=dav.ocm_access_method_id LEFT JOIN ocm_access_method_webapp as app ON m.id=app.ocm_access_method_id WHERE m.ocm_share_id IN "
+	query := "SELECT m.ocm_share_id, m.type, dav.permissions, app.view_mode FROM ocm_shares_access_methods as m LEFT JOIN ocm_access_method_webdav as dav ON m.id=dav.ocm_access_method_id LEFT JOIN ocm_access_method_webapp as app ON m.id=app.ocm_access_method_id WHERE m.ocm_share_id IN "
 	in := strings.Repeat("?,", len(ids))
 	query += "(" + in[:len(in)-1] + ")"
 

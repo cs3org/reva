@@ -47,7 +47,7 @@ var (
 	port                 = 3306
 	m                    sync.Mutex // for increasing the port
 	ocmShareTable        = "ocm_shares"
-	ocmAccessMethodTable = "ocm_shares_access_method"
+	ocmAccessMethodTable = "ocm_shares_access_methods"
 	ocmAMWebDAVTable     = "ocm_access_method_webdav"
 	ocmAMWebappTable     = "ocm_access_method_webapp"
 
@@ -128,7 +128,7 @@ func createShareTables(ctx *sql.Context, initData []*ocm.Share) map[string]*memo
 	}, ""))
 	tables[ocmShareTable] = tableShares
 
-	// ocm_shares_access_method table
+	// ocm_shares_access_methods table
 	var fkAccessMethods memory.ForeignKeyCollection
 	fkAccessMethods.AddFK(sql.ForeignKeyConstraint{
 		Columns:       []string{"ocm_share_id"},
