@@ -37,6 +37,7 @@ import (
 	"github.com/cs3org/reva/pkg/ocm/share"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/go-chi/chi/v5"
+	"github.com/pkg/errors"
 )
 
 func (h *Handler) createFederatedCloudShare(w http.ResponseWriter, r *http.Request, resource *provider.ResourceInfo, role *conversions.Role, roleVal []byte) {
@@ -59,6 +60,12 @@ func (h *Handler) createFederatedCloudShare(w http.ResponseWriter, r *http.Reque
 	})
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error sending a grpc get invite by domain info request", err)
+		return
+	}
+
+	if providerInfoResp.Status.Code != rpc.Code_CODE_OK {
+		// return proper error
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error from provider info response", errors.New(providerInfoResp.Status.Message))
 		return
 	}
 
