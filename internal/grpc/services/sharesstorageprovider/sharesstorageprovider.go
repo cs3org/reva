@@ -652,7 +652,7 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 		}
 		earliestShare := findEarliestShare(receivedShares, shareMd)
 		var mtime *typesv1beta1.Timestamp
-		var etag string
+		etag := _defaultSharesJailEtag
 		if earliestShare != nil {
 			if info, ok := shareMd[earliestShare.GetId().GetOpaqueId()]; ok {
 				mtime = info.Mtime
