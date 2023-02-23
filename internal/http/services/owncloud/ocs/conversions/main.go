@@ -273,6 +273,7 @@ func ReceivedOCMShare2ShareData(share *ocm.ReceivedShare, path string) (*ShareDa
 		Permissions:  RoleFromResourcePermissions(webdav.Permissions.Permissions).OCSPermissions(),
 		ShareType:    ShareTypeFederatedCloudShare,
 		Path:         path,
+		FileTarget:   path,
 		MimeType:     mime.Detect(share.ResourceType == provider.ResourceType_RESOURCE_TYPE_CONTAINER, share.Name),
 		ItemType:     ResourceType(share.ResourceType).String(),
 		ItemSource:   path,
