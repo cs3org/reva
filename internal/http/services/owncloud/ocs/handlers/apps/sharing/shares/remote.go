@@ -174,7 +174,7 @@ func (h *Handler) listReceivedFederatedShares(ctx context.Context, gw gatewayv1b
 		if err != nil {
 			continue
 		}
-		h.mapUserIdsFederatedShare(ctx, gw, sd)
+		h.mapUserIdsReceivedFederatedShare(ctx, gw, sd)
 		shares = append(shares, sd)
 	}
 	return shares, nil
@@ -182,6 +182,24 @@ func (h *Handler) listReceivedFederatedShares(ctx context.Context, gw gatewayv1b
 
 func (h *Handler) ocmLocalMount(share *ocm.ReceivedShare) string {
 	return filepath.Join("/", h.ocmMountPoint, share.Id.OpaqueId)
+}
+
+func (h *Handler) mapUserIdsReceivedFederatedShare(ctx context.Context, gw gatewayv1beta1.GatewayAPIClient, sd *conversions.ShareData) {
+	if sd.ShareWith != "" {
+		user := h.mustGetIdentifiers(ctx, gw, sd.ShareWith, false)
+		sd.ShareWith = user.Username
+		sd.ShareWithDisplayname = user.DisplayName
+	}
+
+	if sd.UIDOwner != "" {
+		user := h.mustGetRemoteUser(ctx, gw, sd.UIDOwner)
+		sd.DisplaynameOwner = user.DisplayName
+	}
+
+	if sd.UIDFileOwner != "" {
+		user := h.mustGetRemoteUser(ctx, gw, sd.UIDFileOwner)
+		sd.DisplaynameFileOwner = user.DisplayName
+	}
 }
 
 func (h *Handler) mapUserIdsFederatedShare(ctx context.Context, gw gatewayv1beta1.GatewayAPIClient, sd *conversions.ShareData) {
