@@ -145,6 +145,10 @@ func (fs *Decomposedfs) CreateStorageSpace(ctx context.Context, req *provider.Cr
 			return nil, errtypes.BadRequest("decompsedFS: requested quota is higher than allowed")
 		}
 		metadata[prefixes.QuotaAttr] = strconv.FormatUint(q.QuotaMaxBytes, 10)
+	} else if fs.o.MaxQuota != quotaUnrestricted {
+		// If no quota was requested but a max quota was set then the the storage space has a quota
+		// of max quota.
+		metadata[prefixes.QuotaAttr] = strconv.FormatUint(fs.o.MaxQuota, 10)
 	}
 
 	if description != "" {
