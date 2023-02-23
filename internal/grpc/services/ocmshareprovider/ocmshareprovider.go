@@ -59,6 +59,7 @@ type config struct {
 	ClientInsecure bool                              `mapstructure:"client_insecure"`
 	GatewaySVC     string                            `mapstructure:"gatewaysvc"`
 	WebDAVPrefix   string                            `mapstructure:"webdav_prefix"`
+	ProviderDomain string                            `mapstructure:"provider_domain" docs:"The same domain registered in the provider authorizer"`
 }
 
 type service struct {
@@ -270,11 +271,17 @@ func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareReq
 	}
 
 	newShareReq := &client.NewShareRequest{
-		ShareWith:         formatOCMUser(req.Grantee.GetUserId()),
-		Name:              ocmshare.Name,
-		ResourceID:        fmt.Sprintf("%s:%s", req.ResourceId.StorageId, req.ResourceId.OpaqueId),
-		Owner:             formatOCMUser(info.Owner),
-		Sender:            formatOCMUser(user.Id),
+		ShareWith:  formatOCMUser(req.Grantee.GetUserId()),
+		Name:       ocmshare.Name,
+		ResourceID: fmt.Sprintf("%s:%s", req.ResourceId.StorageId, req.ResourceId.OpaqueId),
+		Owner: formatOCMUser(&userpb.UserId{
+			OpaqueId: info.Owner.OpaqueId,
+			Idp:      s.conf.ProviderDomain, // FIXME: this is not generally true in case of resharing
+		}),
+		Sender: formatOCMUser(&userpb.UserId{
+			OpaqueId: user.Id.OpaqueId,
+			Idp:      s.conf.ProviderDomain,
+		}),
 		SenderDisplayName: user.DisplayName,
 		ShareType:         "user",
 		ResourceType:      getResourceType(info),
