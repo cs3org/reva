@@ -156,6 +156,11 @@ func (d *driver) webdavClient(ctx context.Context, ref *provider.Reference) (*go
 		return nil, nil, "", err
 	}
 
+	endpoint, err = url.PathUnescape(endpoint)
+	if err != nil {
+		return nil, nil, "", err
+	}
+
 	// FIXME: it's still not clear from the OCM APIs how to use the shared secret
 	// will use as a token in the bearer authentication as this is the reva implementation
 	c := gowebdav.NewClient(endpoint, "", "")
