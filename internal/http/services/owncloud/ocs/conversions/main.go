@@ -264,18 +264,22 @@ func ReceivedOCMShare2ShareData(share *ocm.ReceivedShare, path string) (*ShareDa
 		return nil, errtypes.InternalError("webdav endpoint not in share")
 	}
 
-	return &ShareData{
+	s := &ShareData{
 		ID:           share.Id.OpaqueId,
 		UIDOwner:     formatRemoteUser(share.Creator),
 		UIDFileOwner: formatRemoteUser(share.Owner),
 		ShareWith:    share.Grantee.GetUserId().OpaqueId,
 		Permissions:  RoleFromResourcePermissions(webdav.Permissions.Permissions).OCSPermissions(),
 		ShareType:    ShareTypeFederatedCloudShare,
-		Expiration:   timestampToExpiration(share.Expiration),
 		Path:         path,
 		STime:        share.Ctime.Seconds,
 		Name:         share.Name,
-	}, nil
+	}
+
+	if share.Expiration != nil {
+		s.Expiration = timestampToExpiration(share.Expiration)
+	}
+	return s, nil
 }
 
 func webdavAMInfo(methods []*ocm.AccessMethod) (*ocm.WebDAVAccessMethod, bool) {
