@@ -186,18 +186,18 @@ func (h *Handler) ocmLocalMount(share *ocm.ReceivedShare) string {
 
 func (h *Handler) mapUserIdsFederatedShare(ctx context.Context, gw gatewayv1beta1.GatewayAPIClient, sd *conversions.ShareData) {
 	if sd.ShareWith != "" {
-		user := h.mustGetIdentifiers(ctx, gw, sd.ShareWith, false)
+		user := h.mustGetRemoteUser(ctx, gw, sd.ShareWith)
 		sd.ShareWith = user.Username
 		sd.ShareWithDisplayname = user.DisplayName
 	}
 
 	if sd.UIDOwner != "" {
-		user := h.mustGetRemoteUser(ctx, gw, sd.UIDOwner)
+		user := h.mustGetIdentifiers(ctx, gw, sd.UIDOwner, false)
 		sd.DisplaynameOwner = user.DisplayName
 	}
 
 	if sd.UIDFileOwner != "" {
-		user := h.mustGetRemoteUser(ctx, gw, sd.UIDFileOwner)
+		user := h.mustGetIdentifiers(ctx, gw, sd.UIDFileOwner, false)
 		sd.DisplaynameFileOwner = user.DisplayName
 	}
 }
