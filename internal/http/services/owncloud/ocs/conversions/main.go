@@ -297,18 +297,22 @@ func OCMShare2ShareData(share *ocm.Share) (*ShareData, error) {
 		return nil, errtypes.InternalError("webdav endpoint not in share")
 	}
 
-	return &ShareData{
+	s := &ShareData{
 		ID:           share.Id.OpaqueId,
 		UIDOwner:     share.Creator.OpaqueId,
 		UIDFileOwner: share.Owner.OpaqueId,
+		ShareWith:    formatRemoteUser(share.Grantee.GetUserId()),
+		Permissions:  RoleFromResourcePermissions(webdav.Permissions).OCSPermissions(),
+		ShareType:    ShareTypeFederatedCloudShare,
+		STime:        share.Ctime.Seconds,
+		Name:         share.Name,
+	}
 
-		ShareWith:   formatRemoteUser(share.Grantee.GetUserId()),
-		Permissions: RoleFromResourcePermissions(webdav.Permissions).OCSPermissions(),
-		ShareType:   ShareTypeFederatedCloudShare,
-		Expiration:  timestampToExpiration(share.Expiration),
-		STime:       share.Ctime.Seconds,
-		Name:        share.Name,
-	}, nil
+	if share.Expiration != nil {
+		s.Expiration = timestampToExpiration(share.Expiration)
+	}
+
+	return s, nil
 }
 
 // LocalUserIDToString transforms a cs3api user id into an ocs data model without domain name
