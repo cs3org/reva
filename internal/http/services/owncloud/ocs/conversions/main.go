@@ -34,6 +34,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/mime"
 	"github.com/cs3org/reva/pkg/publicshare"
 	publicsharemgr "github.com/cs3org/reva/pkg/publicshare/manager/registry"
 	"github.com/cs3org/reva/pkg/user"
@@ -272,6 +273,7 @@ func ReceivedOCMShare2ShareData(share *ocm.ReceivedShare, path string) (*ShareDa
 		Permissions:  RoleFromResourcePermissions(webdav.Permissions.Permissions).OCSPermissions(),
 		ShareType:    ShareTypeFederatedCloudShare,
 		Path:         path,
+		MimeType:     mime.Detect(share.ResourceType == provider.ResourceType_RESOURCE_TYPE_CONTAINER, share.Name),
 		ItemType:     ResourceType(share.ResourceType).String(),
 		ItemSource:   path,
 		STime:        share.Ctime.Seconds,
