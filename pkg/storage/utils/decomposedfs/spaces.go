@@ -159,7 +159,7 @@ func (fs *Decomposedfs) CreateStorageSpace(ctx context.Context, req *provider.Cr
 		metadata[prefixes.SpaceAliasAttr] = alias
 	}
 
-	if err := root.SetXattrs(metadata); err != nil {
+	if err := root.SetXattrs(metadata, true); err != nil {
 		return nil, err
 	}
 
@@ -537,7 +537,7 @@ func (fs *Decomposedfs) UpdateStorageSpace(ctx context.Context, req *provider.Up
 		}, nil
 	}
 
-	err = spaceNode.SetXattrs(metadata)
+	err = spaceNode.SetXattrs(metadata, true)
 	if err != nil {
 		return nil, err
 	}

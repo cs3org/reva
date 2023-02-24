@@ -117,34 +117,6 @@ func CopyMetadataWithSourceLock(src, target string, filter func(attributeName st
 
 // Set an extended attribute key to the given value
 func Set(filePath string, key string, val string) (err error) {
-	fileLock, err := filelocks.AcquireWriteLock(filePath)
-	if err != nil {
-		return errors.Wrap(err, "xattrs: Can not acquire write log")
-	}
-	defer func() {
-		rerr := filelocks.ReleaseLock(fileLock)
-
-		// if err is non nil we do not overwrite that
-		if err == nil {
-			err = rerr
-		}
-	}()
-
-	return SetWithLock(filePath, key, val, fileLock)
-}
-
-// SetWithLock an extended attribute key to the given value with an existing lock
-func SetWithLock(filePath string, key string, val string, fileLock *flock.Flock) (err error) {
-	// check the file is write locked
-	switch {
-	case fileLock == nil:
-		return errors.New("no lock provided")
-	case fileLock.Path() != filelocks.FlockFile(filePath):
-		return errors.New("lockpath does not match filepath")
-	case !fileLock.Locked():
-		return errors.New("not write locked")
-	}
-
 	return backend.Set(filePath, key, val)
 }
 
@@ -157,37 +129,8 @@ func Remove(filePath string, key string) (err error) {
 // the changes are protected with an file lock
 // If the file lock can not be acquired the function returns a
 // lock error.
-func SetMultiple(filePath string, attribs map[string]string) (err error) {
-	var fileLock *flock.Flock
-	fileLock, err = filelocks.AcquireWriteLock(filePath)
-
-	if err != nil {
-		return errors.Wrap(err, "xattrs: Can not acquire write log")
-	}
-	defer func() {
-		rerr := filelocks.ReleaseLock(fileLock)
-
-		// if err is non nil we do not overwrite that
-		if err == nil {
-			err = rerr
-		}
-	}()
-
-	return SetMultipleWithLock(filePath, attribs, fileLock)
-}
-
-// SetMultipleWithLock allows setting multiple key value pairs at once with an existing lock
-func SetMultipleWithLock(filePath string, attribs map[string]string, fileLock *flock.Flock) (err error) {
-	switch {
-	case fileLock == nil:
-		return errors.New("no lock provided")
-	case fileLock.Path() != filelocks.FlockFile(filePath):
-		return errors.New("lockpath does not match filepath")
-	case !fileLock.Locked():
-		return errors.New("not locked")
-	}
-
-	return backend.SetMultiple(filePath, attribs)
+func SetMultiple(filePath string, attribs map[string]string, acquireLock bool) (err error) {
+	return backend.SetMultiple(filePath, attribs, acquireLock)
 }
 
 // All reads all extended attributes for a node

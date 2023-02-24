@@ -31,7 +31,7 @@ type Backend interface {
 	GetInt64(path, key string) (int64, error)
 	List(path string) (attribs []string, err error)
 	Set(path, key, val string) error
-	SetMultiple(path string, attribs map[string]string) error
+	SetMultiple(path string, attribs map[string]string, acquireLock bool) error
 	Remove(path, key string) error
 
 	IsMetaFile(path string) bool
@@ -60,7 +60,7 @@ func (NullBackend) List(path string) ([]string, error) { return nil, errUnconfig
 func (NullBackend) Set(path string, key string, val string) error { return errUnconfiguredError }
 
 // SetMultiple sets a set of attribute for the given path
-func (NullBackend) SetMultiple(path string, attribs map[string]string) error {
+func (NullBackend) SetMultiple(path string, attribs map[string]string, acquireLock bool) error {
 	return errUnconfiguredError
 }
 

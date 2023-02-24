@@ -19,11 +19,14 @@
 package backend
 
 import (
+	"os"
+	"path/filepath"
 	"strconv"
 
 	"github.com/cs3org/reva/v2/pkg/storage/utils/filelocks"
 	"github.com/pkg/errors"
 	"github.com/pkg/xattr"
+	"github.com/rogpeppe/go-internal/lockedfile"
 )
 
 // XattrsBackend stores the file attributes in extended attributes
@@ -62,20 +65,11 @@ func (XattrsBackend) List(filePath string) (attribs []string, err error) {
 		return attrs, nil
 	}
 
-	// listing the attributes failed. lock the file and try again
-	readLock, err := filelocks.AcquireReadLock(filePath)
-
+	f, err := lockedfile.Open(filePath + filelocks.LockFileSuffix)
 	if err != nil {
-		return nil, errors.Wrap(err, "xattrs: Unable to lock file for read")
+		return nil, err
 	}
-	defer func() {
-		rerr := filelocks.ReleaseLock(readLock)
-
-		// if err is non nil we do not overwrite that
-		if err == nil {
-			err = rerr
-		}
-	}()
+	defer f.Close()
 
 	return xattr.List(filePath)
 }
@@ -113,12 +107,24 @@ func (b XattrsBackend) All(filePath string) (attribs map[string]string, err erro
 }
 
 // Set sets one attribute for the given path
-func (XattrsBackend) Set(path string, key string, val string) (err error) {
-	return xattr.Set(path, key, []byte(val))
+func (b XattrsBackend) Set(path string, key string, val string) (err error) {
+	return b.SetMultiple(path, map[string]string{key: val}, true)
 }
 
 // SetMultiple sets a set of attribute for the given path
-func (XattrsBackend) SetMultiple(path string, attribs map[string]string) (err error) {
+func (XattrsBackend) SetMultiple(path string, attribs map[string]string, acquireLock bool) (err error) {
+	if acquireLock {
+		err := os.MkdirAll(filepath.Dir(path), 0600)
+		if err != nil {
+			return err
+		}
+		lockedFile, err := lockedfile.OpenFile(path+filelocks.LockFileSuffix, os.O_CREATE|os.O_WRONLY, 0600)
+		if err != nil {
+			return err
+		}
+		defer lockedFile.Close()
+	}
+
 	// error handling: Count if there are errors while setting the attribs.
 	// if there were any, return an error.
 	var (
@@ -140,19 +146,11 @@ func (XattrsBackend) SetMultiple(path string, attribs map[string]string) (err er
 
 // Remove an extended attribute key
 func (XattrsBackend) Remove(filePath string, key string) (err error) {
-	fileLock, err := filelocks.AcquireWriteLock(filePath)
-
+	lockedFile, err := lockedfile.OpenFile(filePath, os.O_WRONLY, 0600)
 	if err != nil {
-		return errors.Wrap(err, "xattrs: Can not acquire write log")
+		return err
 	}
-	defer func() {
-		rerr := filelocks.ReleaseLock(fileLock)
-
-		// if err is non nil we do not overwrite that
-		if err == nil {
-			err = rerr
-		}
-	}()
+	defer lockedFile.Close()
 
 	return xattr.Remove(filePath, key)
 }
