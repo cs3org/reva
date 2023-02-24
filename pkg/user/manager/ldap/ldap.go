@@ -148,6 +148,10 @@ func (m *manager) GetUserByClaim(ctx context.Context, claim, value string, skipF
 		return nil, err
 	}
 
+	if m.c.LDAPIdentity.IsLDAPUserInDisabledGroup(log, m.ldapClient, userEntry) {
+		return nil, errtypes.NotFound("user is locally disabled")
+	}
+
 	if skipFetchingGroups {
 		return u, nil
 	}

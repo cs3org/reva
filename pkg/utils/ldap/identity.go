@@ -41,6 +41,7 @@ type userConfig struct {
 	scopeVal            int
 	Filter              string     `mapstructure:"user_filter"`
 	Objectclass         string     `mapstructure:"user_objectclass"`
+	EnabledProperty     string     `mapstructure:"user_enabled_property"`
 	Schema              userSchema `mapstructure:"user_schema"`
 	SubstringFilterType string     `mapstructure:"user_substring_filter_type"`
 	substringFilterVal  int
@@ -55,6 +56,8 @@ type groupConfig struct {
 	Schema              groupSchema `mapstructure:"group_schema"`
 	SubstringFilterType string      `mapstructure:"group_substring_filter_type"`
 	substringFilterVal  int
+	// LocalDisabledDN contains the full DN of a group that contains disabled users.
+	LocalDisabledDN string `mapstructure:"group_local_disabled_dn"`
 }
 
 type groupSchema struct {
@@ -194,7 +197,6 @@ func (i *Identity) GetLDAPUserByFilter(log *zerolog.Logger, lc ldap.Client, filt
 	)
 	log.Debug().Str("backend", "ldap").Str("basedn", i.User.BaseDN).Str("filter", filter).Int("scope", i.User.scopeVal).Msg("LDAP Search")
 	res, err := lc.Search(searchRequest)
-
 	if err != nil {
 		log.Debug().Str("backend", "ldap").Err(err).Str("userfilter", filter).Msg("Error looking up user by filter")
 		var errmsg string
@@ -234,7 +236,6 @@ func (i *Identity) GetLDAPUserByDN(log *zerolog.Logger, lc ldap.Client, dn strin
 	)
 	log.Debug().Str("backend", "ldap").Str("basedn", dn).Str("filter", filter).Int("scope", i.User.scopeVal).Msg("LDAP Search")
 	res, err := lc.Search(searchRequest)
-
 	if err != nil {
 		log.Debug().Str("backend", "ldap").Err(err).Str("dn", dn).Msg("Error looking up user by DN")
 		return nil, errtypes.NotFound(dn)
@@ -272,6 +273,26 @@ func (i *Identity) GetLDAPUsers(log *zerolog.Logger, lc ldap.Client, query strin
 		return nil, errtypes.NotFound(query)
 	}
 	return sr.Entries, nil
+}
+
+// IsLDAPUserInDisabledGroup checkes if the user is in the disabled group.
+func (i *Identity) IsLDAPUserInDisabledGroup(log *zerolog.Logger, lc ldap.Client, userEntry *ldap.Entry) bool {
+	filter := fmt.Sprintf("(&(objectClass=groupOfNames)(%s=%s)", i.Group.Schema.Member, userEntry.DN)
+	searchRequest := ldap.NewSearchRequest(
+		i.Group.LocalDisabledDN,
+		i.Group.scopeVal,
+		ldap.NeverDerefAliases, 0, 0, false,
+		filter,
+		[]string{i.Group.Schema.ID},
+		nil,
+	)
+	log.Debug().Str("backend", "ldap").Str("basedn", i.Group.LocalDisabledDN).Str("filter", filter).Int("scope", i.Group.scopeVal).Msg("LDAP Search")
+	sr, err := lc.Search(searchRequest)
+	if err != nil {
+		log.Error().Str("backend", "ldap").Err(err).Str("filter", filter).Msg("Error looking up error group")
+	}
+
+	return len(sr.Entries) > 0
 }
 
 // GetLDAPUserGroups looks up the group member ship of the supplied LDAP user entry.
@@ -354,7 +375,6 @@ func (i *Identity) GetLDAPGroupByFilter(log *zerolog.Logger, lc ldap.Client, fil
 
 	log.Debug().Str("backend", "ldap").Str("basedn", i.Group.BaseDN).Str("filter", filter).Int("scope", i.Group.scopeVal).Msg("LDAP Search")
 	res, err := lc.Search(searchRequest)
-
 	if err != nil {
 		log.Debug().Str("backend", "ldap").Err(err).Str("filter", filter).Msg("Error looking up group by filter")
 		var errmsg string
@@ -384,7 +404,8 @@ func (i *Identity) GetLDAPGroups(log *zerolog.Logger, lc ldap.Client, query stri
 			i.Group.Schema.ID,
 			i.Group.Schema.Mail,
 			i.Group.Schema.Groupname,
-			i.Group.Schema.GIDNumber},
+			i.Group.Schema.GIDNumber,
+		},
 		nil,
 	)
 
@@ -474,11 +495,12 @@ func (i *Identity) getUserAttributeFilter(attribute, value string) (string, erro
 	} else {
 		value = ldap.EscapeFilter(value)
 	}
-	return fmt.Sprintf("(&%s(objectclass=%s)(%s=%s))",
+	return fmt.Sprintf("(&%s(objectclass=%s)(%s=%s)(!(%s=FALSE)))",
 		i.User.Filter,
 		i.User.Objectclass,
 		attribute,
 		value,
+		i.User.EnabledProperty,
 	), nil
 }
 
