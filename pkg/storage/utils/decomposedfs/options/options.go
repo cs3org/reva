@@ -104,7 +104,7 @@ func New(m map[string]interface{}) (*Options, error) {
 	}
 
 	if o.MetadataBackend == "" {
-		o.MetadataBackend = "xattrs"
+		o.MetadataBackend = "ini"
 	}
 
 	if o.UserLayout == "" {

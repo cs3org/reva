@@ -30,6 +30,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -66,6 +67,11 @@ type PathLookup interface {
 	Path(ctx context.Context, n *node.Node, hasPermission node.PermissionFunc) (path string, err error)
 }
 
+type propagateData struct {
+	mtime    time.Time
+	sizeDiff int64
+}
+
 // Tree manages a hierarchical tree
 type Tree struct {
 	lookup    PathLookup
@@ -74,6 +80,8 @@ type Tree struct {
 	root               string
 	treeSizeAccounting bool
 	treeTimeAccounting bool
+	propagateMutex     sync.Mutex
+	propagateMap       map[string]propagateData
 }
 
 // PermissionCheckFunc defined a function used to check resource permissions
@@ -87,6 +95,7 @@ func New(root string, tta bool, tsa bool, lu PathLookup, bs Blobstore) *Tree {
 		root:               root,
 		treeTimeAccounting: tta,
 		treeSizeAccounting: tsa,
+		propagateMap:       map[string]propagateData{},
 	}
 }
 
@@ -788,6 +797,24 @@ func (t *Tree) Propagate(ctx context.Context, n *node.Node, sizeDiff int64) (err
 		}
 
 		if t.treeTimeAccounting || (t.treeSizeAccounting && sizeDiff != 0) {
+
+			t.propagateMutex.Lock()
+			pd, ok := t.propagateMap[n.ID]
+			if ok {
+				// There is an update pending already. Merge our data.
+				pd.sizeDiff += sizeDiff
+				if sTime.After(pd.mtime) {
+					pd.mtime = sTime
+				}
+				t.propagateMutex.Unlock()
+				continue
+			}
+			t.propagateMap[n.ID] = propagateData{
+				sizeDiff: sizeDiff,
+				mtime:    sTime,
+			}
+			t.propagateMutex.Unlock()
+
 			attrs := map[string]string{}
 
 			// lock node before reading treesize or tree time
@@ -795,6 +822,19 @@ func (t *Tree) Propagate(ctx context.Context, n *node.Node, sizeDiff int64) (err
 			if err != nil {
 				return err
 			}
+
+			// Get update data from all merged updates
+			t.propagateMutex.Lock()
+			pd, ok = t.propagateMap[n.ID]
+			if !ok {
+				// this shouldn't ever happen
+				return errtypes.InternalError(fmt.Sprintf("lost propagate data for node %s", n.ID))
+			}
+			delete(t.propagateMap, n.ID)
+			t.propagateMutex.Unlock()
+			sTime = pd.mtime
+			sizeDiff = pd.sizeDiff
+
 			// always unlock node
 			releaseLock := func() {
 				// ReleaseLock returns nil if already unlocked
