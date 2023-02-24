@@ -254,6 +254,9 @@ func (d *driver) GetMD(ctx context.Context, ref *provider.Reference, _ []string)
 
 	info, err := client.Stat(rel)
 	if err != nil {
+		if gowebdav.IsErrNotFound(err) {
+			return nil, errtypes.NotFound(ref.GetPath())
+		}
 		return nil, err
 	}
 

@@ -53,7 +53,7 @@ require (
 	github.com/sciencemesh/meshdirectory-web v1.0.4
 	github.com/sethvargo/go-password v0.2.0
 	github.com/stretchr/testify v1.8.1
-	github.com/studio-b12/gowebdav v0.0.0-20210917133250-a3a86976a1df
+	github.com/studio-b12/gowebdav v0.0.0-20230203202212-3282f94193f2
 	github.com/thanhpk/randstr v1.0.4
 	github.com/tus/tusd v1.10.0
 	github.com/wk8/go-ordered-map v1.0.0
