@@ -21,7 +21,7 @@ package sciencemesh
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
+	"html/template"
 	"mime"
 	"net/http"
 
@@ -40,6 +40,9 @@ type tokenHandler struct {
 	gatewayClient    gateway.GatewayAPIClient
 	smtpCredentials  *smtpclient.SMTPCredentials
 	meshDirectoryURL string
+
+	tplSubj *template.Template
+	tplBody *template.Template
 }
 
 func (h *tokenHandler) init(c *config) error {
@@ -54,6 +57,14 @@ func (h *tokenHandler) init(c *config) error {
 	}
 
 	h.meshDirectoryURL = c.MeshDirectoryURL
+
+	if err := h.initSubjectTemplate(c.SubjectTemplate); err != nil {
+		return err
+	}
+
+	if err := h.initBodyTemplate(c.BodyTemplatePath); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -63,30 +74,23 @@ func (h *tokenHandler) init(c *config) error {
 func (h *tokenHandler) Generate(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
+	query := r.URL.Query()
 	token, err := h.gatewayClient.GenerateInviteToken(ctx, &invitepb.GenerateInviteTokenRequest{
-		Description: r.URL.Query().Get("description"),
+		Description: query.Get("description"),
 	})
 	if err != nil {
 		reqres.WriteError(w, r, reqres.APIErrorServerError, "error generating token", err)
 		return
 	}
 
-	if r.FormValue("recipient") != "" && h.smtpCredentials != nil {
-		usr := ctxpkg.ContextMustGetUser(ctx)
-
-		// TODO: the message body needs to point to the meshdirectory service
-		subject := fmt.Sprintf("ScienceMesh: %s wants to collaborate with you", usr.DisplayName)
-		body := "Hi,\n\n" +
-			usr.DisplayName + " (" + usr.Mail + ") wants to start sharing OCM resources with you. " +
-			"To accept the invite, please visit the following URL:\n" +
-			h.meshDirectoryURL + "?token=" + token.InviteToken.Token + "&providerDomain=" + usr.Id.Idp + "\n\n" +
-			"Alternatively, you can visit your mesh provider and use the following details:\n" +
-			"Token: " + token.InviteToken.Token + "\n" +
-			"ProviderDomain: " + usr.Id.Idp + "\n\n" +
-			"Best,\nThe ScienceMesh team"
-
-		err = h.smtpCredentials.SendMail(r.FormValue("recipient"), subject, body)
-		if err != nil {
+	recipient := query.Get("recipient")
+	if recipient != "" && h.smtpCredentials != nil {
+		templObj := &emailParams{
+			User:             ctxpkg.ContextMustGetUser(ctx),
+			Token:            token.InviteToken.Token,
+			MeshDirectoryURL: h.meshDirectoryURL,
+		}
+		if err := h.sendEmail(recipient, templObj); err != nil {
 			reqres.WriteError(w, r, reqres.APIErrorServerError, "error sending token by mail", err)
 			return
 		}

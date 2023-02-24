@@ -22,6 +22,7 @@ import (
 	"bytes"
 	"encoding/base64"
 	"fmt"
+	"net/http"
 	"net/smtp"
 	"os"
 	"strings"
@@ -64,6 +65,9 @@ func NewSMTPCredentials(c *SMTPCredentials) *SMTPCredentials {
 
 // SendMail allows sending mails using a set of client credentials.
 func (creds *SMTPCredentials) SendMail(recipient, subject, body string) error {
+	// try to detect the content type from the subject
+	mime := http.DetectContentType([]byte(body))
+
 	headers := map[string]string{
 		"From":                      creds.SenderMail,
 		"To":                        recipient,
@@ -71,7 +75,7 @@ func (creds *SMTPCredentials) SendMail(recipient, subject, body string) error {
 		"Date":                      time.Now().Format(time.RFC1123Z),
 		"Message-ID":                uuid.New().String(),
 		"MIME-Version":              "1.0",
-		"Content-Type":              "text/plain; charset=\"utf-8\"",
+		"Content-Type":              mime + "; charset=\"utf-8\"",
 		"Content-Transfer-Encoding": "base64",
 	}
 
