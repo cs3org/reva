@@ -20,9 +20,9 @@ package sciencemesh
 
 import (
 	"bytes"
+	"html/template"
 	"io"
 	"os"
-	"text/template"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 )

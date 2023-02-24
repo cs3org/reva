@@ -21,9 +21,9 @@ package sciencemesh
 import (
 	"encoding/json"
 	"errors"
+	"html/template"
 	"mime"
 	"net/http"
-	"text/template"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
