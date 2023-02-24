@@ -56,6 +56,8 @@ import (
 	"github.com/pkg/errors"
 )
 
+const publicLinkURLPrefix = "/files/link/public/"
+
 func init() {
 	registry.Register("wopi", New)
 }
@@ -166,7 +168,7 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 
 	// TODO (lopresti) consolidate with the templating implemented in the edge branch;
 	// here we assume the FolderBaseURL looks like `https://<hostname>` and we
-	// either append `/files/spaces/<full_path>` or `/s/<pltoken>/<relative_path>`
+	// either append `/files/spaces/<full_path>` or publicLinkURLPrefix + `/<relative_path>`
 	var rPath string
 	if _, ok := utils.HasPublicShareRole(u); ok {
 		// we are in a public link
@@ -494,7 +496,7 @@ func getPathForPublicLink(ctx context.Context, scopes map[string]*authpb.Scope, 
 
 	if statRes.Info.Path == resource.Path {
 		// this is a direct link to the resource
-		return "/s/" + pubShares[0].Token, nil
+		return publicLinkURLPrefix + pubShares[0].Token, nil
 	}
 	// otherwise we are in a subfolder of the public link
 	relPath, err := filepath.Rel(statRes.Info.Path, resource.Path)
@@ -504,5 +506,5 @@ func getPathForPublicLink(ctx context.Context, scopes map[string]*authpb.Scope, 
 	if strings.HasPrefix(relPath, "../") {
 		return "", errors.New("Scope path does not contain target resource")
 	}
-	return path.Join("/files/public/show/"+pubShares[0].Token, path.Dir(relPath)), nil
+	return path.Join(publicLinkURLPrefix+pubShares[0].Token, path.Dir(relPath)), nil
 }
