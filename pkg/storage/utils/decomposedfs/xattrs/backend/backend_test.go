@@ -85,7 +85,7 @@ var _ = Describe("Backend", func() {
 
 		Describe("SetMultiple", func() {
 			It("sets attributes", func() {
-				err := backend.SetMultiple(file, map[string]string{"foo": "bar", "baz": "qux"})
+				err := backend.SetMultiple(file, map[string]string{"foo": "bar", "baz": "qux"}, true)
 				Expect(err).ToNot(HaveOccurred())
 
 				content, err := os.ReadFile(metafile)
@@ -97,7 +97,7 @@ var _ = Describe("Backend", func() {
 			It("updates an attribute", func() {
 				err := backend.Set(file, "foo", "bar")
 				Expect(err).ToNot(HaveOccurred())
-				err = backend.SetMultiple(file, map[string]string{"foo": "bar", "baz": "qux"})
+				err = backend.SetMultiple(file, map[string]string{"foo": "bar", "baz": "qux"}, true)
 				Expect(err).ToNot(HaveOccurred())
 
 				content, err := os.ReadFile(metafile)

@@ -20,6 +20,7 @@ package backend
 
 import (
 	"encoding/base64"
+	"io"
 	"os"
 	"strings"
 	"time"
@@ -145,11 +146,11 @@ func (b IniBackend) Set(path, key, val string) error {
 
 	ini.Section("").Key(key).SetValue(val)
 
-	return b.saveIni(path, ini)
+	return b.saveIni(path, ini, true)
 }
 
 // SetMultiple sets a set of attribute for the given path
-func (b IniBackend) SetMultiple(path string, attribs map[string]string) error {
+func (b IniBackend) SetMultiple(path string, attribs map[string]string, acquireLock bool) error {
 	path = b.MetadataPath(path)
 
 	ini, err := b.loadIni(path)
@@ -167,7 +168,7 @@ func (b IniBackend) SetMultiple(path string, attribs map[string]string) error {
 		ini.Section("").Key(key).SetValue(val)
 	}
 
-	return b.saveIni(path, ini)
+	return b.saveIni(path, ini, acquireLock)
 }
 
 // Remove an extended attribute key
@@ -181,17 +182,25 @@ func (b IniBackend) Remove(path, key string) error {
 
 	ini.Section("").DeleteKey(key)
 
-	return b.saveIni(path, ini)
+	return b.saveIni(path, ini, true)
 }
 
-func (b IniBackend) saveIni(path string, ini *ini.File) error {
-	lockedFile, err := lockedfile.OpenFile(path, os.O_TRUNC|os.O_WRONLY, 0600)
+func (b IniBackend) saveIni(path string, ini *ini.File, acquireLock bool) error {
+	var (
+		f   io.WriteCloser
+		err error
+	)
+	if acquireLock {
+		f, err = lockedfile.OpenFile(path, os.O_TRUNC|os.O_WRONLY, 0600)
+	} else {
+		f, err = os.OpenFile(path, os.O_TRUNC|os.O_WRONLY, 0600)
+	}
 	if err != nil {
 		return err
 	}
-	defer lockedFile.Close()
+	defer f.Close()
 
-	_, err = ini.WriteTo(lockedFile)
+	_, err = ini.WriteTo(f)
 	if err != nil {
 		return err
 	}
@@ -211,22 +220,44 @@ func (b IniBackend) loadIni(path string) (*ini.File, error) {
 	if err != nil {
 		return nil, err
 	}
-	if cachedIf, err := b.metaCache.Get(path); err == nil {
+	var cachedIf interface{}
+	if cachedIf, err = b.metaCache.Get(path); err == nil {
 		cached, ok := cachedIf.(cacheEntry)
 		if ok && cached.mtime == fi.ModTime() {
 			return cached.meta, nil
 		}
 	}
 
-	lockedFile, err := lockedfile.Open(path)
-	if err != nil {
-		return nil, err
-	}
-	defer lockedFile.Close()
+	var iniFile *ini.File
+	f, err := os.ReadFile(path)
+	length := len(f)
 
-	iniFile, err := ini.Load(lockedFile)
-	if err != nil {
-		return nil, err
+	// Try to read the file without getting a lock first. We will either
+	// get the old or the new state or an empty byte array when the file
+	// was just truncated by a writer.
+	if err == nil && length > 0 {
+		iniFile, err = ini.Load(f)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		// We didn't manage to read the file without an advisory lock
+		// Try harder
+		lockedFile, err := lockedfile.Open(path)
+		if err != nil {
+			return nil, err
+		}
+		defer lockedFile.Close()
+
+		iniFile, err = ini.Load(lockedFile)
+		if err != nil {
+			return nil, err
+		}
+
+		fi, err = os.Stat(path) // Get current mtime for the cache
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	err = b.metaCache.Set(path, cacheEntry{

@@ -289,7 +289,7 @@ func CreateNodeForUpload(upload *Upload, initAttrs map[string]string) (*node.Nod
 	initAttrs[prefixes.StatusPrefix] = node.ProcessingStatus + upload.Info.ID
 
 	// update node metadata with new blobid etc
-	err = n.SetXattrsWithLock(initAttrs, lock)
+	err = n.SetXattrs(initAttrs, false)
 	if err != nil {
 		return nil, errors.Wrap(err, "Decomposedfs: could not write metadata")
 	}

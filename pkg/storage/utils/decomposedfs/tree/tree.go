@@ -866,7 +866,7 @@ func (t *Tree) Propagate(ctx context.Context, n *node.Node, sizeDiff int64) (err
 				sublog.Debug().Uint64("newSize", newSize).Msg("updated treesize of parent node")
 			}
 
-			if err = n.SetXattrsWithLock(attrs, nodeLock); err != nil {
+			if err = n.SetXattrs(attrs, false); err != nil {
 				return err
 			}
 

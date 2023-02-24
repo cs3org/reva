@@ -173,7 +173,7 @@ func (n *Node) ChangeOwner(new *userpb.UserId) (err error) {
 		prefixes.OwnerIDPAttr:  new.Idp,
 		prefixes.OwnerTypeAttr: utils.UserTypeToString(new.Type)}
 
-	if err := n.SpaceRoot.SetXattrs(attribs); err != nil {
+	if err := n.SpaceRoot.SetXattrs(attribs, true); err != nil {
 		return err
 	}
 
@@ -190,7 +190,7 @@ func (n *Node) WriteAllNodeMetadata() (err error) {
 	attribs[prefixes.BlobIDAttr] = n.BlobID
 	attribs[prefixes.BlobsizeAttr] = strconv.FormatInt(n.Blobsize, 10)
 
-	return n.SetXattrs(attribs)
+	return n.SetXattrs(attribs, true)
 }
 
 // WriteOwner writes the space owner
@@ -201,7 +201,7 @@ func (n *Node) WriteOwner(owner *userpb.UserId) error {
 		prefixes.OwnerIDPAttr:  owner.Idp,
 		prefixes.OwnerTypeAttr: utils.UserTypeToString(owner.Type),
 	}
-	if err := n.SpaceRoot.SetXattrs(attribs); err != nil {
+	if err := n.SpaceRoot.SetXattrs(attribs, true); err != nil {
 		return err
 	}
 	n.SpaceRoot.owner = owner
@@ -1236,7 +1236,7 @@ func (n *Node) SetScanData(info string, date time.Time) error {
 	return xattrs.SetMultiple(n.InternalPath(), map[string]string{
 		prefixes.ScanStatusPrefix: info,
 		prefixes.ScanDatePrefix:   date.Format(time.RFC3339Nano),
-	})
+	}, true)
 }
 
 // ScanData returns scanning information of the node
