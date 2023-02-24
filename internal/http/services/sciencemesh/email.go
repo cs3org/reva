@@ -35,17 +35,17 @@ type emailParams struct {
 
 const defaultSubject = `ScienceMesh: {{.User.DisplayName}} wants to collaborate with you`
 
-const defaultBody = `Hi\n\n
+const defaultBody = `Hi
 
-{{.User.DisplayName}} ({{.User.Mail}}) wants to start sharing OCM resources with you.\n
-To accept the invite, please visit the following URL:\n
-{{.MeshDirectoryURL}}?token={{.Token}}&providerDomain={{.User.Id.Idp}}\n\n
+{{.User.DisplayName}} ({{.User.Mail}}) wants to start sharing OCM resources with you.
+To accept the invite, please visit the following URL:
+{{.MeshDirectoryURL}}?token={{.Token}}&providerDomain={{.User.Id.Idp}}
 
-Alternatively, you can visit your mesh provider and use the following details:\n
-Token: {{.Token}}\n
-ProviderDomain: {{.User.Id.Idp}}\n\n
+Alternatively, you can visit your mesh provider and use the following details:
+Token: {{.Token}}
+ProviderDomain: {{.User.Id.Idp}}
 
-Best,\n
+Best,
 The ScienceMesh team`
 
 func (h *tokenHandler) sendEmail(recipient string, obj *emailParams) error {
