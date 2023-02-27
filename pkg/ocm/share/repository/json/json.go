@@ -297,6 +297,8 @@ func (m *mgr) GetShare(ctx context.Context, user *userpb.User, ref *ocm.ShareRef
 		s, err = m.getByID(ctx, ref.GetId())
 	case ref.GetKey() != nil:
 		s, err = m.getByKey(ctx, ref.GetKey())
+	case ref.GetToken() != "":
+		s, err = m.getByToken(ctx, ref.GetToken())
 	default:
 		err = errtypes.NotFound(ref.String())
 	}
@@ -306,11 +308,20 @@ func (m *mgr) GetShare(ctx context.Context, user *userpb.User, ref *ocm.ShareRef
 	}
 
 	// check if we are the owner
-	if utils.UserEqual(user.Id, s.Owner) || utils.UserEqual(user.Id, s.Creator) {
+	if ref.GetToken() == "" && (utils.UserEqual(user.Id, s.Owner) || utils.UserEqual(user.Id, s.Creator)) {
 		return s, nil
 	}
 
 	return nil, share.ErrShareNotFound
+}
+
+func (m *mgr) getByToken(ctx context.Context, token string) (*ocm.Share, error) {
+	for _, share := range m.model.Shares {
+		if share.Token == token {
+			return share, nil
+		}
+	}
+	return nil, errtypes.NotFound(token)
 }
 
 func (m *mgr) getByID(ctx context.Context, id *ocm.ShareId) (*ocm.Share, error) {
