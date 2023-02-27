@@ -298,7 +298,7 @@ func (m *mgr) GetShare(ctx context.Context, user *userpb.User, ref *ocm.ShareRef
 	case ref.GetKey() != nil:
 		s, err = m.getByKey(ctx, ref.GetKey())
 	case ref.GetToken() != "":
-		s, err = m.getByToken(ctx, ref.GetToken())
+		return m.getByToken(ctx, ref.GetToken())
 	default:
 		err = errtypes.NotFound(ref.String())
 	}
@@ -308,7 +308,7 @@ func (m *mgr) GetShare(ctx context.Context, user *userpb.User, ref *ocm.ShareRef
 	}
 
 	// check if we are the owner
-	if ref.GetToken() == "" && (utils.UserEqual(user.Id, s.Owner) || utils.UserEqual(user.Id, s.Creator)) {
+	if utils.UserEqual(user.Id, s.Owner) || utils.UserEqual(user.Id, s.Creator) {
 		return s, nil
 	}
 
