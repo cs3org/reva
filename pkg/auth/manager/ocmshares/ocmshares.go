@@ -28,12 +28,15 @@ import (
 	invitev1beta1 "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
+	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/auth"
 	"github.com/cs3org/reva/pkg/auth/manager/registry"
 	"github.com/cs3org/reva/pkg/auth/scope"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/sharedconf"
+	"github.com/cs3org/reva/pkg/utils"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )
@@ -82,22 +85,23 @@ func (m *manager) Configure(ml map[string]interface{}) error {
 }
 
 func (m *manager) Authenticate(ctx context.Context, token, _ string) (*userpb.User, map[string]*authpb.Scope, error) {
-	shareRes, err := m.gw.GetOCMShare(ctx, &ocm.GetOCMShareRequest{
-		Ref: &ocm.ShareReference{
-			Spec: &ocm.ShareReference_Token{
-				Token: token,
-			},
-		},
+	log := appctx.GetLogger(ctx).With().Str("token", token).Logger()
+	shareRes, err := m.gw.GetOCMShareByToken(ctx, &ocm.GetOCMShareByTokenRequest{
+		Token: token,
 	})
 
 	switch {
 	case err != nil:
+		log.Error().Err(err).Msg("error getting ocm share by token")
 		return nil, nil, err
 	case shareRes.Status.Code == rpc.Code_CODE_NOT_FOUND:
+		log.Debug().Msg("ocm share not found")
 		return nil, nil, errtypes.NotFound(shareRes.Status.Message)
 	case shareRes.Status.Code == rpc.Code_CODE_PERMISSION_DENIED:
+		log.Debug().Msg("permission denied")
 		return nil, nil, errtypes.InvalidCredentials(shareRes.Status.Message)
 	case shareRes.Status.Code != rpc.Code_CODE_OK:
+		log.Error().Interface("status", shareRes.Status).Msg("got unexpected error in the grpc call to GetOCMShare")
 		return nil, nil, errtypes.InternalError(shareRes.Status.Message)
 	}
 
@@ -105,8 +109,23 @@ func (m *manager) Authenticate(ctx context.Context, token, _ string) (*userpb.Us
 	// is the recipient of the share
 	u := shareRes.Share.Grantee.GetUserId()
 
+	d, err := utils.MarshalProtoV1ToJSON(shareRes.GetShare().Creator)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	o := &typesv1beta1.Opaque{
+		Map: map[string]*typesv1beta1.OpaqueEntry{
+			"user-filter": {
+				Decoder: "json",
+				Value:   d,
+			},
+		},
+	}
+
 	userRes, err := m.gw.GetAcceptedUser(ctx, &invitev1beta1.GetAcceptedUserRequest{
 		RemoteUserId: u,
+		Opaque:       o,
 	})
 
 	switch {
