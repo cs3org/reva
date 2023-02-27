@@ -65,9 +65,9 @@ users = "fixtures/ocm-users.demo.json"
 "984e7351-2729-4417-99b4-ab5e6d41fa97" = {"address" = "{{grpc_address}}"}
 
 [grpc.services.storageprovider]
-driver = "ocm"
+driver = "ocmreceived"
 mount_path = "/ocm"
 mount_id = "984e7351-2729-4417-99b4-ab5e6d41fa97"
 data_server_url = "http://{{cesnethttp_address}}/data"
 
-[grpc.services.storageprovider.drivers.ocm]
+[grpc.services.storageprovider.drivers.ocmreceived]

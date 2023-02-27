@@ -1,0 +1,13 @@
+[log]
+mode = "json"
+
+[shared]
+gatewaysvc = "{{cernboxgw_address}}"
+
+[http]
+address = "{{grpc_address}}"
+
+[http.services.dataprovider]
+driver = "ocmoutcoming"
+
+[http.services.dataprovider.drivers.ocmoutcoming]

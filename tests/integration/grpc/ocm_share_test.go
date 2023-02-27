@@ -24,7 +24,6 @@ import (
 	"net/http"
 	"path/filepath"
 	"strconv"
-	"strings"
 
 	gatewaypb "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -36,7 +35,6 @@ import (
 	"github.com/cs3org/reva/internal/http/services/datagateway"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocdav"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
-	"github.com/cs3org/reva/pkg/ocm/client"
 	"github.com/cs3org/reva/pkg/ocm/share"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp"
@@ -125,11 +123,13 @@ var _ = Describe("ocm share", func() {
 		ctxEinstein = ctxWithAuthToken(tokenManager, einstein)
 		ctxMarie = ctxWithAuthToken(tokenManager, marie)
 		revads, err = startRevads(map[string]string{
-			"cernboxgw":     "ocm-share/ocm-server-cernbox-grpc.toml",
-			"cernboxwebdav": "ocm-share/cernbox-webdav-server.toml",
-			"cernboxhttp":   "ocm-share/ocm-server-cernbox-http.toml",
-			"cesnetgw":      "ocm-share/ocm-server-cesnet-grpc.toml",
-			"cesnethttp":    "ocm-share/ocm-server-cesnet-http.toml",
+			"cernboxgw":            "ocm-share/ocm-server-cernbox-grpc.toml",
+			"cernboxwebdav":        "ocm-share/cernbox-webdav-server.toml",
+			"cernboxhttp":          "ocm-share/ocm-server-cernbox-http.toml",
+			"cesnetgw":             "ocm-share/ocm-server-cesnet-grpc.toml",
+			"cesnethttp":           "ocm-share/ocm-server-cesnet-http.toml",
+			"cernboxoutcomingocm":  "ocm-share/ocm-cernbox-outcoming-shares.toml",
+			"cernboxocmdataserver": "ocm-share/ocm-cernbox-outcoming-dataserver.toml",
 		}, map[string]string{
 			"providers": "ocm-providers.demo.json",
 		}, map[string]Resource{
@@ -162,14 +162,12 @@ var _ = Describe("ocm share", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(tknRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 
-			_, err = client.New(&client.Config{}).InviteAccepted(ctxMarie, cernbox.Services[0].Endpoint.Path, &client.InviteAcceptedRequest{
-				UserID:            marie.Id.OpaqueId,
-				Email:             marie.Mail,
-				RecipientProvider: "cernbox.cern.ch",
-				Name:              marie.DisplayName,
-				Token:             tknRes.InviteToken.Token,
+			invRes, err := cesnetgw.ForwardInvite(ctxMarie, &invitev1beta1.ForwardInviteRequest{
+				InviteToken:          tknRes.InviteToken,
+				OriginSystemProvider: cernbox,
 			})
 			Expect(err).ToNot(HaveOccurred())
+			Expect(invRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
 		})
 
 		Context("einstein shares a file with view permissions", func() {
@@ -220,14 +218,12 @@ var _ = Describe("ocm share", func() {
 				Expect(ok).To(BeTrue())
 
 				webdavClient := gowebdav.NewClient(webdav.WebdavOptions.Uri, "", "")
-				webdavClient.SetHeader("Authorization", "Bearer "+webdav.WebdavOptions.SharedSecret)
 				d, err := webdavClient.Read(".")
 				Expect(err).ToNot(HaveOccurred())
 				Expect(d).To(Equal([]byte("test")))
 
-				// TODO: enable once we don't send anymore the owner token
-				// err = webdavClient.Write(".", []byte("will-never-be-written"), 0)
-				// Expect(err).To(HaveOccurred())
+				err = webdavClient.Write(".", []byte("will-never-be-written"), 0)
+				Expect(err).To(HaveOccurred())
 
 				By("marie access the share using the ocm mount")
 				ref := &provider.Reference{Path: ocmPath(share.Id, "")}
@@ -250,8 +246,7 @@ var _ = Describe("ocm share", func() {
 				Expect(err).ToNot(HaveOccurred())
 				Expect(data).To(Equal([]byte("test")))
 
-				// TODO: enable once we don't send anymore the owner token
-				// Expect(helpers.UploadGateway(ctxMarie, cesnetgw, ref, []byte("will-never-be-written"))).ToNot(Succeed())
+				Expect(helpers.UploadGateway(ctxMarie, cesnetgw, ref, []byte("will-never-be-written"))).ToNot(Succeed())
 			})
 		})
 
@@ -302,12 +297,10 @@ var _ = Describe("ocm share", func() {
 				webdav, ok := protocol.Term.(*ocmv1beta1.Protocol_WebdavOptions)
 				Expect(ok).To(BeTrue())
 
-				u := strings.TrimSuffix(webdav.WebdavOptions.Uri, "/new-file")
-				webdavClient := gowebdav.NewClient(u, "", "")
+				webdavClient := gowebdav.NewClient(webdav.WebdavOptions.Uri, "", "")
 				data := []byte("new-content")
-				webdavClient.SetHeader("Authorization", "Bearer "+webdav.WebdavOptions.SharedSecret)
 				webdavClient.SetHeader(ocdav.HeaderUploadLength, strconv.Itoa(len(data)))
-				err = webdavClient.Write("new-file", data, 0)
+				err = webdavClient.Write(".", data, 0)
 				Expect(err).ToNot(HaveOccurred())
 
 				By("check that the file was modified")
@@ -400,14 +393,13 @@ var _ = Describe("ocm share", func() {
 				Expect(ok).To(BeTrue())
 
 				webdavClient := gowebdav.NewClient(webdav.WebdavOptions.Uri, "", "")
-				webdavClient.SetHeader("Authorization", "Bearer "+webdav.WebdavOptions.SharedSecret)
 
 				ok, err = helpers.SameContentWebDAV(webdavClient, fileToShare.Path, structure)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(ok).To(BeTrue())
 
-				// By("check that marie does not have permissions to create files")
-				// Expect(webdavClient.Write("new-file", []byte("new-file"), 0)).ToNot(Succeed())
+				By("check that marie does not have permissions to create files")
+				Expect(webdavClient.Write("new-file", []byte("new-file"), 0)).ToNot(Succeed())
 
 				By("marie access the share using the ocm mount")
 				ref := &provider.Reference{Path: ocmPath(share.Id, "dir")}
@@ -441,9 +433,8 @@ var _ = Describe("ocm share", func() {
 					},
 				})
 
-				// TODO: enable once we don't send anymore the owner token
-				// newFile := &provider.Reference{Path: ocmPath(share.Id, "dir/new")}
-				// Expect(helpers.UploadGateway(ctxMarie, cesnetgw, newFile, []byte("uploaded-from-ocm-mount"))).ToNot(Succeed())
+				newFile := &provider.Reference{Path: ocmPath(share.Id, "dir/new")}
+				Expect(helpers.UploadGateway(ctxMarie, cesnetgw, newFile, []byte("uploaded-from-ocm-mount"))).ToNot(Succeed())
 			})
 		})
 
@@ -506,7 +497,6 @@ var _ = Describe("ocm share", func() {
 
 				webdavClient := gowebdav.NewClient(webdav.WebdavOptions.Uri, "", "")
 				data := []byte("new-content")
-				webdavClient.SetHeader("Authorization", "Bearer "+webdav.WebdavOptions.SharedSecret)
 				webdavClient.SetHeader(ocdav.HeaderUploadLength, strconv.Itoa(len(data)))
 				err = webdavClient.Write("new-file", data, 0)
 				Expect(err).ToNot(HaveOccurred())

@@ -1,0 +1,19 @@
+[log]
+mode = "json"
+
+[shared]
+gatewaysvc = "{{cernboxgw_address}}"
+
+[grpc]
+address = "{{grpc_address}}"
+
+[grpc.services.storageprovider]
+driver = "ocmoutcoming"
+mount_path = "/ocm"
+mount_id = "ocm"
+data_server_url = "http://{{cernboxocmdataserver_address}}/data"
+
+[grpc.services.authprovider]
+auth_manager = "ocmshares"
+
+[grpc.services.authprovider.auth_managers.ocmshares]
