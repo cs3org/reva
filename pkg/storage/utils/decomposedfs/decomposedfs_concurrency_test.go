@@ -25,6 +25,7 @@ import (
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	testhelpers "github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/testhelpers"
+	"github.com/rogpeppe/go-internal/lockedfile"
 	"github.com/stretchr/testify/mock"
 
 	"github.com/cs3org/reva/v2/tests/helpers"
@@ -47,6 +48,76 @@ var _ = Describe("Decomposed", func() {
 		if env != nil {
 			os.RemoveAll(env.Root)
 		}
+	})
+
+	Describe("file locking", func() {
+		Describe("lockedfile", func() {
+			It("prevents exclusive locks while shared locks are being held", func() {
+				var (
+					roFile1             *lockedfile.File
+					roFile2             *lockedfile.File
+					woFile              *lockedfile.File
+					managedToOpenroFile = false
+					managedToOpenwoFile = false
+				)
+
+				path, err := os.CreateTemp("", "decomposedfs-lockedfile-test-")
+				Expect(err).ToNot(HaveOccurred())
+				go func() {
+					roFile1, err = lockedfile.OpenFile(path.Name(), os.O_RDONLY, 0)
+					Expect(err).ToNot(HaveOccurred())
+					defer roFile1.Close()
+
+					roFile2, err = lockedfile.OpenFile(path.Name(), os.O_RDONLY, 0)
+					Expect(err).ToNot(HaveOccurred())
+					defer roFile2.Close()
+					managedToOpenroFile = true
+
+					woFile, err = lockedfile.OpenFile(path.Name(), os.O_WRONLY, 0)
+					Expect(err).ToNot(HaveOccurred())
+					defer woFile.Close()
+					managedToOpenwoFile = true
+				}()
+				Eventually(func() bool { return managedToOpenroFile }).Should(BeTrue())
+				Consistently(func() bool { return managedToOpenwoFile }).Should(BeFalse())
+
+				roFile1.Close()
+				Consistently(func() bool { return managedToOpenwoFile }).Should(BeFalse())
+
+				roFile2.Close()
+				Eventually(func() bool { return managedToOpenwoFile }).Should(BeTrue())
+			})
+
+			It("prevents shared locks while an exclusive lock is being held", func() {
+				var (
+					roFile              *lockedfile.File
+					woFile              *lockedfile.File
+					managedToOpenroFile = false
+					managedToOpenwoFile = false
+				)
+
+				path, err := os.CreateTemp("", "decomposedfs-lockedfile-test-")
+				Expect(err).ToNot(HaveOccurred())
+				go func() {
+
+					woFile, err = lockedfile.OpenFile(path.Name(), os.O_WRONLY, 0)
+					Expect(err).ToNot(HaveOccurred())
+					defer woFile.Close()
+					managedToOpenwoFile = true
+
+					roFile, err = lockedfile.OpenFile(path.Name(), os.O_RDONLY, 0)
+					Expect(err).ToNot(HaveOccurred())
+					defer roFile.Close()
+					managedToOpenroFile = true
+				}()
+				Eventually(func() bool { return managedToOpenwoFile }).Should(BeTrue())
+				Consistently(func() bool { return managedToOpenroFile }).Should(BeFalse())
+
+				woFile.Close()
+				Eventually(func() bool { return managedToOpenroFile }).Should(BeTrue())
+			})
+		})
+
 	})
 
 	Describe("concurrent", func() {
