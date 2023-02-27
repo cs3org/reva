@@ -467,7 +467,7 @@ func (fs *Decomposedfs) CreateHome(ctx context.Context) (err error) {
 
 	u := ctxpkg.ContextMustGetUser(ctx)
 	res, err := fs.CreateStorageSpace(ctx, &provider.CreateStorageSpaceRequest{
-		Type:  spaceTypePersonal,
+		Type:  _spaceTypePersonal,
 		Owner: u,
 	})
 	if err != nil {
