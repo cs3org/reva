@@ -155,6 +155,22 @@ func (i *Identity) Setup() error {
 		return fmt.Errorf("error configuring group substring filter type: %w", err)
 	}
 
+	dm := i.User.DisableMechanism
+	if dm == "" || dm == "none" || dm == "attribute" || dm == "group" {
+		if dm == "attribute" || dm == "group" {
+			if i.User.EnabledProperty == "" {
+				return fmt.Errorf("error configuring disable mechanism, enabled property not set")
+			}
+		}
+		if dm == "group" {
+			if i.Group.LocalDisabledDN == "" {
+				return fmt.Errorf("error configuring disable mechanism, disabled group DN not set")
+			}
+		}
+	} else {
+		return fmt.Errorf("invalid disable mechanism setting: %s", dm)
+	}
+
 	return nil
 }
 
