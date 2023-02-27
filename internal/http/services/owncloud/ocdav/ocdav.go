@@ -119,6 +119,10 @@ func (c *Config) init() {
 	if c.FavoriteStorageDriver == "" {
 		c.FavoriteStorageDriver = "memory"
 	}
+
+	if c.OCMNamespace == "" {
+		c.OCMNamespace = "/ocm"
+	}
 }
 
 type svc struct {
@@ -179,7 +183,7 @@ func (s *svc) Close() error {
 }
 
 func (s *svc) Unprotected() []string {
-	return []string{"/status.php", "/remote.php/dav/public-files/", "/apps/files/", "/index.php/f/", "/index.php/s/"}
+	return []string{"/status.php", "/remote.php/dav/public-files/", "/apps/files/", "/index.php/f/", "/index.php/s/", "/remote.php/dav/ocm/"}
 }
 
 func (s *svc) Handler() http.Handler {
