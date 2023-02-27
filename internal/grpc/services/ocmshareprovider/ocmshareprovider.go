@@ -58,8 +58,8 @@ type config struct {
 	ClientTimeout  int                               `mapstructure:"client_timeout"`
 	ClientInsecure bool                              `mapstructure:"client_insecure"`
 	GatewaySVC     string                            `mapstructure:"gatewaysvc"`
-	WebDAVPrefix   string                            `mapstructure:"webdav_prefix"`
 	ProviderDomain string                            `mapstructure:"provider_domain" docs:"The same domain registered in the provider authorizer"`
+	WebDAVEndpoint string                            `mapstructure:"webdav_endpoint"`
 }
 
 type service struct {
@@ -164,17 +164,13 @@ func getResourceType(info *providerpb.ResourceInfo) string {
 	return "unknown"
 }
 
-func (s *service) webdavURL(ctx context.Context, path string) string {
-	// the url is in the form of https://cernbox.cern.ch/remote.php/dav/files/gdelmont/eos/user/g/gdelmont
-	user := ctxpkg.ContextMustGetUser(ctx)
-	p, err := url.JoinPath(s.conf.WebDAVPrefix, user.Username, path)
-	if err != nil {
-		panic(err)
-	}
+func (s *service) webdavURL(ctx context.Context, share *ocm.Share, path string) string {
+	// the url is in the form of https://cernbox.cern.ch/remote.php/dav/ocm/token/rel-path
+	p, _ := url.JoinPath(s.conf.WebDAVEndpoint, "/remote.php/dav/ocm", share.Token, path)
 	return p
 }
 
-func (s *service) getWebdavProtocol(ctx context.Context, info *providerpb.ResourceInfo, m *ocm.AccessMethod_WebdavOptions) *ocmd.WebDAV {
+func (s *service) getWebdavProtocol(ctx context.Context, share *ocm.Share, info *providerpb.ResourceInfo, m *ocm.AccessMethod_WebdavOptions) *ocmd.WebDAV {
 	var perms []string
 	if m.WebdavOptions.Permissions.InitiateFileDownload {
 		perms = append(perms, "read")
@@ -184,18 +180,17 @@ func (s *service) getWebdavProtocol(ctx context.Context, info *providerpb.Resour
 	}
 
 	return &ocmd.WebDAV{
-		SharedSecret: ctxpkg.ContextMustGetToken(ctx), // TODO: change this and use an ocm token
-		Permissions:  perms,
-		URL:          s.webdavURL(ctx, info.Path), // TODO: change this and use an endpoint for ocm
+		Permissions: perms,
+		URL:         s.webdavURL(ctx, share, info.Path),
 	}
 }
 
-func (s *service) getProtocols(ctx context.Context, info *providerpb.ResourceInfo, methods []*ocm.AccessMethod) ocmd.Protocols {
+func (s *service) getProtocols(ctx context.Context, share *ocm.Share, info *providerpb.ResourceInfo) ocmd.Protocols {
 	var p ocmd.Protocols
-	for _, m := range methods {
+	for _, m := range share.AccessMethods {
 		switch t := m.Term.(type) {
 		case *ocm.AccessMethod_WebdavOptions:
-			p = append(p, s.getWebdavProtocol(ctx, info, t))
+			p = append(p, s.getWebdavProtocol(ctx, share, info, t))
 		case *ocm.AccessMethod_WebappOptions:
 			// TODO
 		case *ocm.AccessMethod_TransferOptions:
@@ -285,7 +280,7 @@ func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareReq
 		SenderDisplayName: user.DisplayName,
 		ShareType:         "user",
 		ResourceType:      getResourceType(info),
-		Protocols:         s.getProtocols(ctx, info, req.AccessMethods),
+		Protocols:         s.getProtocols(ctx, ocmshare, info),
 	}
 
 	if req.Expiration != nil {
