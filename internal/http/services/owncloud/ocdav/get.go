@@ -33,6 +33,7 @@ import (
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/spacelookup"
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	"github.com/cs3org/reva/v2/pkg/rhttp"
+	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/rs/zerolog"
 )
 
@@ -75,6 +76,11 @@ func (s *svc) handleGet(ctx context.Context, w http.ResponseWriter, r *http.Requ
 	if sRes.Info.Type != provider.ResourceType_RESOURCE_TYPE_FILE {
 		w.Header().Set("Content-Length", "0")
 		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	if status := utils.ReadPlainFromOpaque(sRes.GetInfo().GetOpaque(), "status"); status == "processing" {
+		w.WriteHeader(http.StatusTooEarly)
 		return
 	}
 
