@@ -21,6 +21,7 @@ package ocmshares
 import (
 	"context"
 
+	providerv1beta1 "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -117,10 +118,41 @@ func (m *manager) Authenticate(ctx context.Context, token, _ string) (*userpb.Us
 		return nil, nil, errtypes.InternalError(userRes.Status.Message)
 	}
 
-	scope, err := scope.AddOCMShareScope(shareRes.Share, nil)
+	scope, err := scope.AddOCMShareScope(shareRes.Share, getRole(shareRes.Share), nil)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	return userRes.RemoteUser, scope, nil
+}
+
+func getRole(s *ocm.Share) authpb.Role {
+	// TODO: consider to somehow merge the permissions from all the access methods?
+	// it's not clear infact which should be the role when webdav is editor role while
+	// webapp is only view mode for example
+	// this implementation considers only the simple case in which when a client creates
+	// a share with multiple access methods, the permissions are matching in all of them.
+	for _, m := range s.AccessMethods {
+		switch v := m.Term.(type) {
+		case *ocm.AccessMethod_WebdavOptions:
+			p := v.WebdavOptions.Permissions
+			if p.InitiateFileUpload {
+				return authpb.Role_ROLE_EDITOR
+			}
+			if p.InitiateFileDownload {
+				return authpb.Role_ROLE_VIEWER
+			}
+		case *ocm.AccessMethod_WebappOptions:
+			viewMode := v.WebappOptions.ViewMode
+			if viewMode == providerv1beta1.ViewMode_VIEW_MODE_VIEW_ONLY ||
+				viewMode == providerv1beta1.ViewMode_VIEW_MODE_READ_ONLY ||
+				viewMode == providerv1beta1.ViewMode_VIEW_MODE_PREVIEW {
+				return authpb.Role_ROLE_VIEWER
+			}
+			if viewMode == providerv1beta1.ViewMode_VIEW_MODE_READ_WRITE {
+				return authpb.Role_ROLE_EDITOR
+			}
+		}
+	}
+	return authpb.Role_ROLE_INVALID
 }
