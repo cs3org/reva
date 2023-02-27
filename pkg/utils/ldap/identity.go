@@ -41,6 +41,7 @@ type userConfig struct {
 	scopeVal            int
 	Filter              string     `mapstructure:"user_filter"`
 	Objectclass         string     `mapstructure:"user_objectclass"`
+	DisableMechanism    string     `mapstructure:"user_disable_mechanism"`
 	EnabledProperty     string     `mapstructure:"user_enabled_property"`
 	Schema              userSchema `mapstructure:"user_schema"`
 	SubstringFilterType string     `mapstructure:"user_substring_filter_type"`
@@ -277,6 +278,11 @@ func (i *Identity) GetLDAPUsers(log *zerolog.Logger, lc ldap.Client, query strin
 
 // IsLDAPUserInDisabledGroup checkes if the user is in the disabled group.
 func (i *Identity) IsLDAPUserInDisabledGroup(log *zerolog.Logger, lc ldap.Client, userEntry *ldap.Entry) bool {
+	// Check if we need to do this here because the configuration is local to Identity.
+	if i.User.DisableMechanism != "group" {
+		return false
+	}
+
 	filter := fmt.Sprintf("(&(objectClass=groupOfNames)(%s=%s)", i.Group.Schema.Member, userEntry.DN)
 	searchRequest := ldap.NewSearchRequest(
 		i.Group.LocalDisabledDN,
@@ -495,13 +501,20 @@ func (i *Identity) getUserAttributeFilter(attribute, value string) (string, erro
 	} else {
 		value = ldap.EscapeFilter(value)
 	}
-	return fmt.Sprintf("(&%s(objectclass=%s)(%s=%s)(!(%s=FALSE)))",
+	return fmt.Sprintf("(&%s(objectclass=%s)(%s=%s)%s)",
 		i.User.Filter,
 		i.User.Objectclass,
 		attribute,
 		value,
-		i.User.EnabledProperty,
+		i.disabledFilter(),
 	), nil
+}
+
+func (i *Identity) disabledFilter() string {
+	if i.User.DisableMechanism == "attribute" || i.User.DisableMechanism == "group" {
+		return fmt.Sprintf("(!(%s=FALSE)))", i.User.EnabledProperty)
+	}
+	return ""
 }
 
 // getUserFindFilter construct a LDAP filter to perform a prefix-substring
