@@ -191,17 +191,22 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 			authRes, err := handleOCMAuth(ctx, c, token)
 			switch {
 			case err != nil:
+				log.Error().Err(err).Msg("error during ocm authentication")
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			case authRes.Status.Code == rpc.Code_CODE_PERMISSION_DENIED:
+				log.Debug().Str("token", token).Msg("permission denied")
 				fallthrough
 			case authRes.Status.Code == rpc.Code_CODE_UNAUTHENTICATED:
+				log.Debug().Str("token", token).Msg("unauthorized")
 				w.WriteHeader(http.StatusUnauthorized)
 				return
 			case authRes.Status.Code == rpc.Code_CODE_NOT_FOUND:
+				log.Debug().Str("token", token).Msg("not found")
 				w.WriteHeader(http.StatusNotFound)
 				return
 			case authRes.Status.Code != rpc.Code_CODE_OK:
+				log.Error().Str("token", token).Interface("status", authRes.Status).Msg("grpc auth request failed")
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
@@ -209,6 +214,8 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 			ctx = ctxpkg.ContextSetToken(ctx, authRes.Token)
 			ctx = ctxpkg.ContextSetUser(ctx, authRes.User)
 			ctx = metadata.AppendToOutgoingContext(ctx, ctxpkg.TokenHeader, authRes.Token)
+
+			log.Debug().Str("token", token).Interface("user", authRes.User).Msg("OCM user authenticated")
 
 			r = r.WithContext(ctx)
 			h.OCMSharesHandler.Handler(s).ServeHTTP(w, r)
