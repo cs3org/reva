@@ -35,6 +35,7 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/sharedconf"
+	"github.com/cs3org/reva/pkg/utils"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
@@ -132,7 +133,7 @@ func (s *service) Close() error {
 }
 
 func (s *service) UnprotectedEndpoints() []string {
-	return []string{"/cs3.ocm.invite.v1beta1.InviteAPI/AcceptInvite"}
+	return []string{"/cs3.ocm.invite.v1beta1.InviteAPI/AcceptInvite", "/cs3.ocm.invite.v1beta1.InviteAPI/GetAcceptedUser"}
 }
 
 func (s *service) GenerateInviteToken(ctx context.Context, req *invitepb.GenerateInviteTokenRequest) (*invitepb.GenerateInviteTokenResponse, error) {
@@ -313,7 +314,12 @@ func isTokenValid(token *invitepb.InviteToken) bool {
 }
 
 func (s *service) GetAcceptedUser(ctx context.Context, req *invitepb.GetAcceptedUserRequest) (*invitepb.GetAcceptedUserResponse, error) {
-	user := ctxpkg.ContextMustGetUser(ctx)
+	user, ok := getUserFilter(ctx, req)
+	if !ok {
+		return &invitepb.GetAcceptedUserResponse{
+			Status: status.NewInvalidArg(ctx, "user not found"),
+		}, nil
+	}
 	remoteUser, err := s.repo.GetRemoteUser(ctx, user.GetId(), req.GetRemoteUserId())
 	if err != nil {
 		return &invitepb.GetAcceptedUserResponse{
@@ -325,6 +331,28 @@ func (s *service) GetAcceptedUser(ctx context.Context, req *invitepb.GetAccepted
 		Status:     status.NewOK(ctx),
 		RemoteUser: remoteUser,
 	}, nil
+}
+
+func getUserFilter(ctx context.Context, req *invitepb.GetAcceptedUserRequest) (*userpb.User, bool) {
+	user, ok := ctxpkg.ContextGetUser(ctx)
+	if ok {
+		return user, true
+	}
+
+	if req.Opaque == nil || req.Opaque.Map == nil {
+		return nil, false
+	}
+
+	v, ok := req.Opaque.Map["user-filter"]
+	if !ok {
+		return nil, false
+	}
+
+	var u userpb.UserId
+	if err := utils.UnmarshalJSONToProtoV1(v.Value, &u); err != nil {
+		return nil, false
+	}
+	return &userpb.User{Id: &u}, true
 }
 
 func (s *service) FindAcceptedUsers(ctx context.Context, req *invitepb.FindAcceptedUsersRequest) (*invitepb.FindAcceptedUsersResponse, error) {
