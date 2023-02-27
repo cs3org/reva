@@ -44,7 +44,7 @@ import (
 )
 
 func init() {
-	registry.Register("ocmreceived", New)
+	registry.Register("ocmoutcoming", New)
 }
 
 type driver struct {
@@ -388,10 +388,12 @@ func (d *driver) Upload(ctx context.Context, ref *provider.Reference, content io
 	return nil
 }
 
-func getDownloadProtocol(protocols []*gateway.FileDownloadProtocol, protocol string) (string, string, bool) {
+func getDownloadProtocol(protocols []*gateway.FileDownloadProtocol, lst []string) (string, string, bool) {
 	for _, p := range protocols {
-		if p.Protocol == protocol {
-			return p.DownloadEndpoint, p.Token, true
+		for _, prot := range lst {
+			if p.Protocol == prot {
+				return p.DownloadEndpoint, p.Token, true
+			}
 		}
 	}
 	return "", "", false
@@ -413,7 +415,7 @@ func (d *driver) Download(ctx context.Context, ref *provider.Reference) (io.Read
 		return nil, errtypes.InternalError(initRes.Status.Message)
 	}
 
-	endpoint, token, ok := getDownloadProtocol(initRes.Protocols, "simple")
+	endpoint, token, ok := getDownloadProtocol(initRes.Protocols, []string{"simple", "spaces"})
 	if !ok {
 		return nil, errtypes.InternalError("simple download not supported")
 	}
