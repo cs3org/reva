@@ -354,6 +354,66 @@ func TestGetShare(t *testing.T) {
 			},
 		},
 		{
+			description: "query by token",
+			shares: []*ocm.Share{
+				{
+					Id:            &ocm.ShareId{OpaqueId: "1"},
+					ResourceId:    &providerv1beta1.ResourceId{StorageId: "storage", OpaqueId: "resource-id"},
+					Name:          "file-name",
+					Token:         "qwerty",
+					Grantee:       &providerv1beta1.Grantee{Type: providerv1beta1.GranteeType_GRANTEE_TYPE_USER, Id: &providerv1beta1.Grantee_UserId{UserId: &userpb.UserId{Idp: "cesnet", OpaqueId: "marie"}}},
+					Owner:         &userpb.UserId{Idp: "cernbox", OpaqueId: "einstein"},
+					Creator:       &userpb.UserId{Idp: "cernbox", OpaqueId: "einstein"},
+					Ctime:         &typesv1beta1.Timestamp{Seconds: 1670859468},
+					Mtime:         &typesv1beta1.Timestamp{Seconds: 1670859468},
+					ShareType:     ocm.ShareType_SHARE_TYPE_USER,
+					AccessMethods: []*ocm.AccessMethod{share.NewWebDavAccessMethod(conversions.NewEditorRole().CS3ResourcePermissions())},
+				},
+			},
+			query: &ocm.ShareReference{
+				Spec: &ocm.ShareReference_Token{
+					Token: "qwerty",
+				},
+			},
+			expected: &ocm.Share{
+				Id:            &ocm.ShareId{OpaqueId: "1"},
+				ResourceId:    &providerv1beta1.ResourceId{StorageId: "storage", OpaqueId: "resource-id"},
+				Name:          "file-name",
+				Token:         "qwerty",
+				Grantee:       &providerv1beta1.Grantee{Type: providerv1beta1.GranteeType_GRANTEE_TYPE_USER, Id: &providerv1beta1.Grantee_UserId{UserId: &userpb.UserId{Idp: "cesnet", OpaqueId: "marie", Type: userpb.UserType_USER_TYPE_FEDERATED}}},
+				Owner:         &userpb.UserId{OpaqueId: "einstein"},
+				Creator:       &userpb.UserId{OpaqueId: "einstein"},
+				Ctime:         &typesv1beta1.Timestamp{Seconds: 1670859468},
+				Mtime:         &typesv1beta1.Timestamp{Seconds: 1670859468},
+				ShareType:     ocm.ShareType_SHARE_TYPE_USER,
+				AccessMethods: []*ocm.AccessMethod{share.NewWebDavAccessMethod(conversions.NewEditorRole().CS3ResourcePermissions())},
+			},
+		},
+		{
+			description: "query by token - not found",
+			shares: []*ocm.Share{
+				{
+					Id:            &ocm.ShareId{OpaqueId: "1"},
+					ResourceId:    &providerv1beta1.ResourceId{StorageId: "storage", OpaqueId: "resource-id"},
+					Name:          "file-name",
+					Token:         "qwerty",
+					Grantee:       &providerv1beta1.Grantee{Type: providerv1beta1.GranteeType_GRANTEE_TYPE_USER, Id: &providerv1beta1.Grantee_UserId{UserId: &userpb.UserId{Idp: "cesnet", OpaqueId: "marie"}}},
+					Owner:         &userpb.UserId{Idp: "cernbox", OpaqueId: "einstein"},
+					Creator:       &userpb.UserId{Idp: "cernbox", OpaqueId: "einstein"},
+					Ctime:         &typesv1beta1.Timestamp{Seconds: 1670859468},
+					Mtime:         &typesv1beta1.Timestamp{Seconds: 1670859468},
+					ShareType:     ocm.ShareType_SHARE_TYPE_USER,
+					AccessMethods: []*ocm.AccessMethod{share.NewWebDavAccessMethod(conversions.NewEditorRole().CS3ResourcePermissions())},
+				},
+			},
+			query: &ocm.ShareReference{
+				Spec: &ocm.ShareReference_Token{
+					Token: "not-existing-token",
+				},
+			},
+			err: share.ErrShareNotFound,
+		},
+		{
 			description: "query by key",
 			shares: []*ocm.Share{
 				{

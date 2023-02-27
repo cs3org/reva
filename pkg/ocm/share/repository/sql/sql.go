@@ -214,6 +214,8 @@ func (m *mgr) GetShare(ctx context.Context, user *userpb.User, ref *ocm.ShareRef
 		s, err = m.getByID(ctx, user, ref.GetId())
 	case ref.GetKey() != nil:
 		s, err = m.getByKey(ctx, user, ref.GetKey())
+	case ref.GetToken() != "":
+		s, err = m.getByToken(ctx, ref.GetToken())
 	default:
 		err = errtypes.NotFound(ref.String())
 	}
@@ -245,6 +247,24 @@ func (m *mgr) getByKey(ctx context.Context, user *userpb.User, key *ocm.ShareKey
 
 	var s dbShare
 	if err := m.db.QueryRowContext(ctx, query, key.Owner.OpaqueId, key.ResourceId.StorageId, key.ResourceId.OpaqueId, formatUserID(key.Grantee.GetUserId()), user.Id.OpaqueId, user.Id.OpaqueId).Scan(&s.ID, &s.Token, &s.Prefix, &s.ItemSource, &s.Name, &s.ShareWith, &s.Owner, &s.Initiator, &s.Ctime, &s.Mtime, &s.Expiration, &s.ShareType); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, share.ErrShareNotFound
+		}
+	}
+
+	am, err := m.getAccessMethods(ctx, s.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	return convertToCS3OCMShare(&s, am), nil
+}
+
+func (m *mgr) getByToken(ctx context.Context, token string) (*ocm.Share, error) {
+	query := "SELECT id, token, fileid_prefix, item_source, name, share_with, owner, initiator, ctime, mtime, expiration, type FROM ocm_shares WHERE token=?"
+
+	var s dbShare
+	if err := m.db.QueryRowContext(ctx, query, token).Scan(&s.ID, &s.Token, &s.Prefix, &s.ItemSource, &s.Name, &s.ShareWith, &s.Owner, &s.Initiator, &s.Ctime, &s.Mtime, &s.Expiration, &s.ShareType); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, share.ErrShareNotFound
 		}
