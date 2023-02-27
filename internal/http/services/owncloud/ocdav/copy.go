@@ -38,6 +38,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/rhttp"
 	"github.com/cs3org/reva/v2/pkg/rhttp/router"
+	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/rs/zerolog"
 )
@@ -141,6 +142,8 @@ func (s *svc) handlePathCopy(w http.ResponseWriter, r *http.Request, ns string) 
 func (s *svc) executePathCopy(ctx context.Context, client gateway.GatewayAPIClient, w http.ResponseWriter, r *http.Request, cp *copy) error {
 	log := appctx.GetLogger(ctx)
 	log.Debug().Str("src", cp.sourceInfo.Path).Str("dst", cp.destination.Path).Msg("descending")
+
+	var fileid string
 	if cp.sourceInfo.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
 		// create dir
 		createReq := &provider.CreateContainerRequest{
@@ -196,6 +199,17 @@ func (s *svc) executePathCopy(ctx context.Context, client gateway.GatewayAPIClie
 			}
 		}
 
+		// we need to stat again to get the fileid
+		r, err := client.Stat(ctx, &provider.StatRequest{Ref: cp.destination})
+		if err != nil {
+			return err
+		}
+
+		if r.GetStatus().GetCode() != rpc.Code_CODE_OK {
+			return fmt.Errorf("status code %d", r.GetStatus().GetCode())
+		}
+
+		fileid = storagespace.FormatResourceID(*r.GetInfo().GetId())
 	} else {
 		// copy file
 
@@ -294,10 +308,10 @@ func (s *svc) executePathCopy(ctx context.Context, client gateway.GatewayAPIClie
 			return err
 		}
 
-		if fileid := httpUploadRes.Header.Get(net.HeaderOCFileID); fileid != "" {
-			w.Header().Set(net.HeaderOCFileID, fileid)
-		}
+		fileid = httpUploadRes.Header.Get(net.HeaderOCFileID)
 	}
+
+	w.Header().Set(net.HeaderOCFileID, fileid)
 	return nil
 }
 
@@ -353,6 +367,7 @@ func (s *svc) executeSpacesCopy(ctx context.Context, w http.ResponseWriter, clie
 	log := appctx.GetLogger(ctx)
 	log.Debug().Interface("src", cp.sourceInfo).Interface("dst", cp.destination).Msg("descending")
 
+	var fileid string
 	if cp.sourceInfo.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
 		// create dir
 		createReq := &provider.CreateContainerRequest{
@@ -401,6 +416,18 @@ func (s *svc) executeSpacesCopy(ctx context.Context, w http.ResponseWriter, clie
 				return err
 			}
 		}
+
+		// we need to stat again to get the fileid
+		r, err := client.Stat(ctx, &provider.StatRequest{Ref: cp.destination})
+		if err != nil {
+			return err
+		}
+
+		if r.GetStatus().GetCode() != rpc.Code_CODE_OK {
+			return fmt.Errorf("stat: status code %d", r.GetStatus().GetCode())
+		}
+
+		fileid = storagespace.FormatResourceID(*r.GetInfo().GetId())
 	} else {
 		// copy file
 		// 1. get download url
@@ -494,10 +521,10 @@ func (s *svc) executeSpacesCopy(ctx context.Context, w http.ResponseWriter, clie
 			return err
 		}
 
-		if fileid := httpUploadRes.Header.Get(net.HeaderOCFileID); fileid != "" {
-			w.Header().Set(net.HeaderOCFileID, fileid)
-		}
+		fileid = httpUploadRes.Header.Get(net.HeaderOCFileID)
 	}
+
+	w.Header().Set(net.HeaderOCFileID, fileid)
 	return nil
 }
 
