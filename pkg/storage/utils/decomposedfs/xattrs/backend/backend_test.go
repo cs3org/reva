@@ -58,7 +58,7 @@ var _ = Describe("Backend", func() {
 
 	Describe("IniBackend", func() {
 		BeforeEach(func() {
-			backend = xattrsBackend.IniBackend{}
+			backend = xattrsBackend.NewIniBackend()
 		})
 
 		Describe("Set", func() {
@@ -80,6 +80,15 @@ var _ = Describe("Backend", func() {
 				content, err := os.ReadFile(metafile)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(string(content)).To(Equal("foo = baz\n"))
+			})
+
+			It("encodes where needed", func() {
+				err := backend.Set(file, "user.ocis.cs.foo", "bar")
+				Expect(err).ToNot(HaveOccurred())
+
+				content, err := os.ReadFile(metafile)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(string(content)).To(Equal("user.ocis.cs.foo = YmFy\n"))
 			})
 		})
 
@@ -104,6 +113,20 @@ var _ = Describe("Backend", func() {
 				Expect(err).ToNot(HaveOccurred())
 				lines := strings.Split(strings.Trim(string(content), "\n"), "\n")
 				Expect(lines).To(ConsistOf("foo = bar", "baz = qux"))
+			})
+
+			It("encodes where needed", func() {
+				err := backend.SetMultiple(file, map[string]string{
+					"user.ocis.something.foo": "bar",
+					"user.ocis.cs.foo":        "bar",
+					"user.ocis.md.foo":        "bar",
+					"user.ocis.grant.foo":     "bar",
+				})
+				Expect(err).ToNot(HaveOccurred())
+
+				content, err := os.ReadFile(metafile)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(strings.ReplaceAll(string(content), " ", "")).To(Equal("user.ocis.something.foo=bar\nuser.ocis.cs.foo=YmFy\nuser.ocis.md.foo=YmFy\nuser.ocis.grant.foo=YmFy\n"))
 			})
 		})
 
@@ -189,6 +212,22 @@ var _ = Describe("Backend", func() {
 
 				_, err = backend.Get(file, "foo")
 				Expect(err).To(HaveOccurred())
+			})
+		})
+
+		Describe("UsesExternalMetadataFile", func() {
+			It("returns true", func() {
+				Expect(backend.UsesExternalMetadataFile()).To(BeTrue())
+			})
+		})
+
+		Describe("IsMetaFile", func() {
+			It("returns true", func() {
+				Expect(backend.IsMetaFile("foo.ini")).To(BeTrue())
+			})
+
+			It("returns false", func() {
+				Expect(backend.IsMetaFile("foo.txt")).To(BeFalse())
 			})
 		})
 	})
