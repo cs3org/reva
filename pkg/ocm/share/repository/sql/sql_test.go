@@ -349,6 +349,7 @@ func TestGetShare(t *testing.T) {
 				Ctime:         &typesv1beta1.Timestamp{Seconds: 1670859468},
 				Mtime:         &typesv1beta1.Timestamp{Seconds: 1670859468},
 				ShareType:     ocm.ShareType_SHARE_TYPE_USER,
+				Expiration:    &typesv1beta1.Timestamp{},
 				AccessMethods: []*ocm.AccessMethod{share.NewWebDavAccessMethod(conversions.NewEditorRole().CS3ResourcePermissions())},
 			},
 		},
@@ -390,6 +391,7 @@ func TestGetShare(t *testing.T) {
 				Ctime:         &typesv1beta1.Timestamp{Seconds: 1670859468},
 				Mtime:         &typesv1beta1.Timestamp{Seconds: 1670859468},
 				ShareType:     ocm.ShareType_SHARE_TYPE_USER,
+				Expiration:    &typesv1beta1.Timestamp{},
 				AccessMethods: []*ocm.AccessMethod{share.NewWebDavAccessMethod(conversions.NewEditorRole().CS3ResourcePermissions())},
 			},
 		},
@@ -485,6 +487,7 @@ func TestGetShare(t *testing.T) {
 				Ctime:      &typesv1beta1.Timestamp{Seconds: 1670859468},
 				Mtime:      &typesv1beta1.Timestamp{Seconds: 1670859468},
 				ShareType:  ocm.ShareType_SHARE_TYPE_USER,
+				Expiration: &typesv1beta1.Timestamp{},
 				AccessMethods: []*ocm.AccessMethod{
 					share.NewWebDavAccessMethod(conversions.NewEditorRole().CS3ResourcePermissions()),
 					share.NewWebappAccessMethod(appprovider.ViewMode_VIEW_MODE_READ_ONLY),
@@ -526,6 +529,7 @@ func TestGetShare(t *testing.T) {
 				Ctime:      &typesv1beta1.Timestamp{Seconds: 1670859468},
 				Mtime:      &typesv1beta1.Timestamp{Seconds: 1670859468},
 				ShareType:  ocm.ShareType_SHARE_TYPE_USER,
+				Expiration: &typesv1beta1.Timestamp{},
 				AccessMethods: []*ocm.AccessMethod{
 					share.NewWebDavAccessMethod(conversions.NewEditorRole().CS3ResourcePermissions()),
 					share.NewWebappAccessMethod(appprovider.ViewMode_VIEW_MODE_READ_ONLY),
@@ -617,6 +621,7 @@ func TestListShares(t *testing.T) {
 					Ctime:      &typesv1beta1.Timestamp{Seconds: 1670859468},
 					Mtime:      &typesv1beta1.Timestamp{Seconds: 1670859468},
 					ShareType:  ocm.ShareType_SHARE_TYPE_USER,
+					Expiration: &typesv1beta1.Timestamp{},
 					AccessMethods: []*ocm.AccessMethod{
 						share.NewWebDavAccessMethod(conversions.NewEditorRole().CS3ResourcePermissions()),
 						share.NewWebappAccessMethod(appprovider.ViewMode_VIEW_MODE_READ_ONLY),
@@ -675,6 +680,7 @@ func TestListShares(t *testing.T) {
 					Ctime:      &typesv1beta1.Timestamp{Seconds: 1670859468},
 					Mtime:      &typesv1beta1.Timestamp{Seconds: 1670859468},
 					ShareType:  ocm.ShareType_SHARE_TYPE_USER,
+					Expiration: &typesv1beta1.Timestamp{},
 					AccessMethods: []*ocm.AccessMethod{
 						share.NewWebDavAccessMethod(conversions.NewEditorRole().CS3ResourcePermissions()),
 						share.NewWebappAccessMethod(appprovider.ViewMode_VIEW_MODE_READ_ONLY),
@@ -691,6 +697,7 @@ func TestListShares(t *testing.T) {
 					Creator:    &userpb.UserId{OpaqueId: "einstein"},
 					Ctime:      &typesv1beta1.Timestamp{Seconds: 1670859468},
 					Mtime:      &typesv1beta1.Timestamp{Seconds: 1670859468},
+					Expiration: &typesv1beta1.Timestamp{},
 					ShareType:  ocm.ShareType_SHARE_TYPE_USER,
 					AccessMethods: []*ocm.AccessMethod{
 						share.NewWebDavAccessMethod(conversions.NewViewerRole().CS3ResourcePermissions()),
@@ -748,6 +755,7 @@ func TestListShares(t *testing.T) {
 					Ctime:      &typesv1beta1.Timestamp{Seconds: 1670859468},
 					Mtime:      &typesv1beta1.Timestamp{Seconds: 1670859468},
 					ShareType:  ocm.ShareType_SHARE_TYPE_USER,
+					Expiration: &typesv1beta1.Timestamp{},
 					AccessMethods: []*ocm.AccessMethod{
 						share.NewWebDavAccessMethod(conversions.NewViewerRole().CS3ResourcePermissions()),
 					},
@@ -811,6 +819,7 @@ func TestListShares(t *testing.T) {
 					Ctime:      &typesv1beta1.Timestamp{Seconds: 1670859468},
 					Mtime:      &typesv1beta1.Timestamp{Seconds: 1670859468},
 					ShareType:  ocm.ShareType_SHARE_TYPE_USER,
+					Expiration: &typesv1beta1.Timestamp{},
 					AccessMethods: []*ocm.AccessMethod{
 						share.NewWebDavAccessMethod(conversions.NewViewerRole().CS3ResourcePermissions()),
 					},
@@ -942,6 +951,7 @@ func TestListShares(t *testing.T) {
 					Ctime:      &typesv1beta1.Timestamp{Seconds: 1670859468},
 					Mtime:      &typesv1beta1.Timestamp{Seconds: 1670859468},
 					ShareType:  ocm.ShareType_SHARE_TYPE_USER,
+					Expiration: &typesv1beta1.Timestamp{},
 					AccessMethods: []*ocm.AccessMethod{
 						share.NewWebDavAccessMethod(conversions.NewEditorRole().CS3ResourcePermissions()),
 						share.NewWebappAccessMethod(appprovider.ViewMode_VIEW_MODE_READ_ONLY),
@@ -959,6 +969,7 @@ func TestListShares(t *testing.T) {
 					Ctime:      &typesv1beta1.Timestamp{Seconds: 1670859468},
 					Mtime:      &typesv1beta1.Timestamp{Seconds: 1670859468},
 					ShareType:  ocm.ShareType_SHARE_TYPE_USER,
+					Expiration: &typesv1beta1.Timestamp{},
 					AccessMethods: []*ocm.AccessMethod{
 						share.NewWebDavAccessMethod(conversions.NewViewerRole().CS3ResourcePermissions()),
 					},
@@ -1242,6 +1253,7 @@ func TestGetReceivedShare(t *testing.T) {
 				ShareType:    ocm.ShareType_SHARE_TYPE_USER,
 				State:        ocm.ShareState_SHARE_STATE_ACCEPTED,
 				ResourceType: providerv1beta1.ResourceType_RESOURCE_TYPE_CONTAINER,
+				Expiration:   &typesv1beta1.Timestamp{},
 				Protocols: []*ocm.Protocol{
 					share.NewWebDAVProtocol("webdav+https//cernbox.cern.ch/dav/ocm/1", "secret", &ocm.SharePermissions{
 						Permissions: conversions.NewEditorRole().CS3ResourcePermissions(),
@@ -1293,6 +1305,7 @@ func TestGetReceivedShare(t *testing.T) {
 				ShareType:    ocm.ShareType_SHARE_TYPE_USER,
 				State:        ocm.ShareState_SHARE_STATE_ACCEPTED,
 				ResourceType: providerv1beta1.ResourceType_RESOURCE_TYPE_FILE,
+				Expiration:   &typesv1beta1.Timestamp{},
 				Protocols: []*ocm.Protocol{
 					share.NewWebDAVProtocol("webdav+https//cernbox.cern.ch/dav/ocm/1", "secret", &ocm.SharePermissions{
 						Permissions: conversions.NewEditorRole().CS3ResourcePermissions(),
@@ -1398,6 +1411,7 @@ func TestGetReceivedShare(t *testing.T) {
 				ShareType:    ocm.ShareType_SHARE_TYPE_USER,
 				State:        ocm.ShareState_SHARE_STATE_ACCEPTED,
 				ResourceType: providerv1beta1.ResourceType_RESOURCE_TYPE_FILE,
+				Expiration:   &typesv1beta1.Timestamp{},
 				Protocols: []*ocm.Protocol{
 					share.NewWebDAVProtocol("webdav+https//cernbox.cern.ch/dav/ocm/1", "secret", &ocm.SharePermissions{
 						Permissions: conversions.NewEditorRole().CS3ResourcePermissions(),
@@ -1492,6 +1506,7 @@ func TestListReceviedShares(t *testing.T) {
 					ShareType:    ocm.ShareType_SHARE_TYPE_USER,
 					State:        ocm.ShareState_SHARE_STATE_ACCEPTED,
 					ResourceType: providerv1beta1.ResourceType_RESOURCE_TYPE_CONTAINER,
+					Expiration:   &typesv1beta1.Timestamp{},
 					Protocols: []*ocm.Protocol{
 						share.NewWebDAVProtocol("webdav+https//cernbox.cern.ch/dav/ocm/1", "secret", &ocm.SharePermissions{
 							Permissions: conversions.NewEditorRole().CS3ResourcePermissions(),
@@ -1556,6 +1571,7 @@ func TestListReceviedShares(t *testing.T) {
 					ShareType:    ocm.ShareType_SHARE_TYPE_USER,
 					State:        ocm.ShareState_SHARE_STATE_ACCEPTED,
 					ResourceType: providerv1beta1.ResourceType_RESOURCE_TYPE_FILE,
+					Expiration:   &typesv1beta1.Timestamp{},
 					Protocols: []*ocm.Protocol{
 						share.NewWebDAVProtocol("webdav+https//cernbox.cern.ch/dav/ocm/1", "secret", &ocm.SharePermissions{
 							Permissions: conversions.NewEditorRole().CS3ResourcePermissions(),
@@ -1576,6 +1592,7 @@ func TestListReceviedShares(t *testing.T) {
 					ShareType:    ocm.ShareType_SHARE_TYPE_USER,
 					State:        ocm.ShareState_SHARE_STATE_ACCEPTED,
 					ResourceType: providerv1beta1.ResourceType_RESOURCE_TYPE_CONTAINER,
+					Expiration:   &typesv1beta1.Timestamp{},
 					Protocols: []*ocm.Protocol{
 						share.NewWebappProtocol("https://cernbox.cern.ch/ocm/54321"),
 					},
@@ -1636,6 +1653,7 @@ func TestListReceviedShares(t *testing.T) {
 					ShareType:    ocm.ShareType_SHARE_TYPE_USER,
 					State:        ocm.ShareState_SHARE_STATE_ACCEPTED,
 					ResourceType: providerv1beta1.ResourceType_RESOURCE_TYPE_CONTAINER,
+					Expiration:   &typesv1beta1.Timestamp{},
 					Protocols: []*ocm.Protocol{
 						share.NewWebDAVProtocol("webdav+https//cernbox.cern.ch/dav/ocm/1", "secret", &ocm.SharePermissions{
 							Permissions: conversions.NewEditorRole().CS3ResourcePermissions(),
