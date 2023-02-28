@@ -141,8 +141,6 @@ func (d *driver) resolvePath(ctx context.Context, path string) (*provider.Refere
 		return nil, nil, err
 	}
 
-	fmt.Println("********************* info from stat in resolving path", info.Path)
-
 	p := filepath.Join(info.Path, rel)
 
 	return &provider.Reference{
@@ -183,61 +181,64 @@ func (d *driver) translateOCMShareToCS3Ref(ctx context.Context, ref *provider.Re
 }
 
 func (d *driver) CreateDir(ctx context.Context, ref *provider.Reference) error {
-	newRef, _, err := d.translateOCMShareToCS3Ref(ctx, ref)
+	newRef, share, err := d.translateOCMShareToCS3Ref(ctx, ref)
 	if err != nil {
 		return err
 	}
 
-	res, err := d.gateway.CreateContainer(ctx, &provider.CreateContainerRequest{Ref: newRef})
-	switch {
-	case err != nil:
-		return err
-	case res.Status.Code != rpcv1beta1.Code_CODE_OK:
-		// TODO: better error handling
-		return errtypes.InternalError(res.Status.Message)
-	}
-
-	return nil
+	return d.opFromUser(ctx, share.Creator, func(userCtx context.Context) error {
+		res, err := d.gateway.CreateContainer(userCtx, &provider.CreateContainerRequest{Ref: newRef})
+		switch {
+		case err != nil:
+			return err
+		case res.Status.Code != rpcv1beta1.Code_CODE_OK:
+			// TODO: better error handling
+			return errtypes.InternalError(res.Status.Message)
+		}
+		return nil
+	})
 }
 
 func (d *driver) TouchFile(ctx context.Context, ref *provider.Reference) error {
-	newRef, _, err := d.translateOCMShareToCS3Ref(ctx, ref)
+	newRef, share, err := d.translateOCMShareToCS3Ref(ctx, ref)
 	if err != nil {
 		return err
 	}
 
-	res, err := d.gateway.TouchFile(ctx, &provider.TouchFileRequest{Ref: newRef})
-	switch {
-	case err != nil:
-		return err
-	case res.Status.Code != rpcv1beta1.Code_CODE_OK:
-		// TODO: better error handling
-		return errtypes.InternalError(res.Status.Message)
-	}
-
-	return nil
+	return d.opFromUser(ctx, share.Creator, func(userCtx context.Context) error {
+		res, err := d.gateway.TouchFile(userCtx, &provider.TouchFileRequest{Ref: newRef})
+		switch {
+		case err != nil:
+			return err
+		case res.Status.Code != rpcv1beta1.Code_CODE_OK:
+			// TODO: better error handling
+			return errtypes.InternalError(res.Status.Message)
+		}
+		return nil
+	})
 }
 
 func (d *driver) Delete(ctx context.Context, ref *provider.Reference) error {
-	newRef, _, err := d.translateOCMShareToCS3Ref(ctx, ref)
+	newRef, share, err := d.translateOCMShareToCS3Ref(ctx, ref)
 	if err != nil {
 		return err
 	}
 
-	res, err := d.gateway.Delete(ctx, &provider.DeleteRequest{Ref: newRef})
-	switch {
-	case err != nil:
-		return err
-	case res.Status.Code != rpcv1beta1.Code_CODE_OK:
-		// TODO: better error handling
-		return errtypes.InternalError(res.Status.Message)
-	}
-
-	return nil
+	return d.opFromUser(ctx, share.Creator, func(userCtx context.Context) error {
+		res, err := d.gateway.Delete(userCtx, &provider.DeleteRequest{Ref: newRef})
+		switch {
+		case err != nil:
+			return err
+		case res.Status.Code != rpcv1beta1.Code_CODE_OK:
+			// TODO: better error handling
+			return errtypes.InternalError(res.Status.Message)
+		}
+		return nil
+	})
 }
 
 func (d *driver) Move(ctx context.Context, oldRef, newRef *provider.Reference) error {
-	resolvedOldRef, _, err := d.translateOCMShareToCS3Ref(ctx, oldRef)
+	resolvedOldRef, share, err := d.translateOCMShareToCS3Ref(ctx, oldRef)
 	if err != nil {
 		return err
 	}
@@ -247,16 +248,17 @@ func (d *driver) Move(ctx context.Context, oldRef, newRef *provider.Reference) e
 		return err
 	}
 
-	res, err := d.gateway.Move(ctx, &provider.MoveRequest{Source: resolvedOldRef, Destination: resolvedNewRef})
-	switch {
-	case err != nil:
-		return err
-	case res.Status.Code != rpcv1beta1.Code_CODE_OK:
-		// TODO: better error handling
-		return errtypes.InternalError(res.Status.Message)
-	}
-
-	return nil
+	return d.opFromUser(ctx, share.Creator, func(userCtx context.Context) error {
+		res, err := d.gateway.Move(ctx, &provider.MoveRequest{Source: resolvedOldRef, Destination: resolvedNewRef})
+		switch {
+		case err != nil:
+			return err
+		case res.Status.Code != rpcv1beta1.Code_CODE_OK:
+			// TODO: better error handling
+			return errtypes.InternalError(res.Status.Message)
+		}
+		return nil
+	})
 }
 
 func (d *driver) opFromUser(ctx context.Context, userID *userv1beta1.UserId, f func(ctx context.Context) error) error {
@@ -269,8 +271,6 @@ func (d *driver) opFromUser(ctx context.Context, userID *userv1beta1.UserId, f f
 	if userRes.Status.Code != rpcv1beta1.Code_CODE_OK {
 		return errors.New(userRes.Status.Message)
 	}
-
-	fmt.Println("****************** OP FROM USER =", userRes.User)
 
 	authRes, err := d.gateway.Authenticate(context.TODO(), &gateway.AuthenticateRequest{
 		Type:         "machine",
@@ -293,17 +293,14 @@ func (d *driver) opFromUser(ctx context.Context, userID *userv1beta1.UserId, f f
 }
 
 func (d *driver) GetMD(ctx context.Context, ref *provider.Reference, _ []string) (*provider.ResourceInfo, error) {
-	fmt.Println("*********************** ref=", ref)
 	newRef, share, err := d.translateOCMShareToCS3Ref(ctx, ref)
 	if err != nil {
 		return nil, err
 	}
-	fmt.Println("*********************** new ref=", newRef)
 
 	var info *provider.ResourceInfo
 	if err := d.opFromUser(ctx, share.Creator, func(userCtx context.Context) error {
 		info, err = d.stat(userCtx, newRef)
-		fmt.Println("********************* stat from user = ", info, err)
 		return err
 	}); err != nil {
 		return nil, err
