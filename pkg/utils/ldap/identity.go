@@ -155,20 +155,18 @@ func (i *Identity) Setup() error {
 		return fmt.Errorf("error configuring group substring filter type: %w", err)
 	}
 
-	dm := i.User.DisableMechanism
-	if dm == "" || dm == "none" || dm == "attribute" || dm == "group" {
-		if dm == "attribute" || dm == "group" {
-			if i.User.EnabledProperty == "" {
-				return fmt.Errorf("error configuring disable mechanism, enabled property not set")
-			}
+	switch i.User.DisableMechanism {
+	case "group":
+		if i.Group.LocalDisabledDN == "" {
+			return fmt.Errorf("error configuring disable mechanism, disabled group DN not set")
 		}
-		if dm == "group" {
-			if i.Group.LocalDisabledDN == "" {
-				return fmt.Errorf("error configuring disable mechanism, disabled group DN not set")
-			}
+	case "attribute":
+		if i.User.EnabledProperty == "" {
+			return fmt.Errorf("error configuring disable mechanism, enabled property not set")
 		}
-	} else {
-		return fmt.Errorf("invalid disable mechanism setting: %s", dm)
+	case "", "none":
+	default:
+		return fmt.Errorf("invalid disable mechanism setting: %s", i.User.DisableMechanism)
 	}
 
 	return nil
@@ -527,7 +525,7 @@ func (i *Identity) getUserAttributeFilter(attribute, value string) (string, erro
 }
 
 func (i *Identity) disabledFilter() string {
-	if i.User.DisableMechanism == "attribute" || i.User.DisableMechanism == "group" {
+	if i.User.DisableMechanism == "attribute" {
 		return fmt.Sprintf("(!(%s=FALSE)))", i.User.EnabledProperty)
 	}
 	return ""
