@@ -141,12 +141,15 @@ func (d *driver) resolvePath(ctx context.Context, path string) (*provider.Refere
 		return nil, nil, err
 	}
 
+	fmt.Println("********************* info from stat in resolving path", info.Path)
+
 	p := filepath.Join(info.Path, rel)
 
 	return &provider.Reference{
 		Path: p,
 	}, share, nil
 }
+
 func makeRelative(path string) string {
 	if strings.HasPrefix(path, "/") {
 		return "." + path
@@ -267,6 +270,8 @@ func (d *driver) opFromUser(ctx context.Context, userID *userv1beta1.UserId, f f
 		return errors.New(userRes.Status.Message)
 	}
 
+	fmt.Println("****************** OP FROM USER =", userRes.User)
+
 	authRes, err := d.gateway.Authenticate(context.TODO(), &gateway.AuthenticateRequest{
 		Type:         "machine",
 		ClientId:     userRes.User.Username,
@@ -288,14 +293,17 @@ func (d *driver) opFromUser(ctx context.Context, userID *userv1beta1.UserId, f f
 }
 
 func (d *driver) GetMD(ctx context.Context, ref *provider.Reference, _ []string) (*provider.ResourceInfo, error) {
+	fmt.Println("*********************** ref=", ref)
 	newRef, share, err := d.translateOCMShareToCS3Ref(ctx, ref)
 	if err != nil {
 		return nil, err
 	}
+	fmt.Println("*********************** new ref=", newRef)
 
 	var info *provider.ResourceInfo
 	if err := d.opFromUser(ctx, share.Creator, func(userCtx context.Context) error {
 		info, err = d.stat(userCtx, newRef)
+		fmt.Println("********************* stat from user = ", info, err)
 		return err
 	}); err != nil {
 		return nil, err
@@ -485,7 +493,7 @@ func (d *driver) Download(ctx context.Context, ref *provider.Reference) (io.Read
 		if httpRes.StatusCode != http.StatusOK {
 			return errors.New(httpRes.Status)
 		}
-		r = httpReq.Body
+		r = httpRes.Body
 		return nil
 	}); err != nil {
 		return nil, err
