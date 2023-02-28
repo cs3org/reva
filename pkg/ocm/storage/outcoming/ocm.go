@@ -28,10 +28,12 @@ import (
 	"strings"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	ocmv1beta1 "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/datagateway"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp"
@@ -41,6 +43,7 @@ import (
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
+	"google.golang.org/grpc/metadata"
 )
 
 func init() {
@@ -53,7 +56,8 @@ type driver struct {
 }
 
 type config struct {
-	GatewaySVC string
+	GatewaySVC    string
+	MachineSecret string
 }
 
 func parseConfig(c map[string]interface{}) (*config, error) {
@@ -252,27 +256,55 @@ func (d *driver) Move(ctx context.Context, oldRef, newRef *provider.Reference) e
 	return nil
 }
 
+func (d *driver) opFromUser(ctx context.Context, userID *userv1beta1.UserId, f func(ctx context.Context) error) error {
+	userRes, err := d.gateway.GetUser(ctx, &userv1beta1.GetUserRequest{
+		UserId: userID,
+	})
+	if err != nil {
+		return err
+	}
+	if userRes.Status.Code != rpcv1beta1.Code_CODE_OK {
+		return errors.New(userRes.Status.Message)
+	}
+
+	authRes, err := d.gateway.Authenticate(ctx, &gateway.AuthenticateRequest{
+		Type:         "machine",
+		ClientId:     userRes.User.Username,
+		ClientSecret: d.c.MachineSecret,
+	})
+	if err != nil {
+		return err
+	}
+	if authRes.Status.Code != rpcv1beta1.Code_CODE_OK {
+		return errors.New(authRes.Status.Message)
+	}
+
+	ctx = ctxpkg.ContextSetToken(ctx, authRes.Token)
+	ctx = ctxpkg.ContextSetUser(ctx, authRes.User)
+	ctx = metadata.AppendToOutgoingContext(ctx, ctxpkg.TokenHeader, authRes.Token)
+
+	return f(ctx)
+}
+
 func (d *driver) GetMD(ctx context.Context, ref *provider.Reference, _ []string) (*provider.ResourceInfo, error) {
 	newRef, share, err := d.translateOCMShareToCS3Ref(ctx, ref)
 	if err != nil {
 		return nil, err
 	}
 
-	statRes, err := d.gateway.Stat(ctx, &provider.StatRequest{Ref: newRef})
-	switch {
-	case err != nil:
-		return nil, err
-	case statRes.Status.Code == rpcv1beta1.Code_CODE_NOT_FOUND:
-		return nil, errtypes.NotFound(ref.String())
-	case statRes.Status.Code != rpcv1beta1.Code_CODE_OK:
-		return nil, errtypes.InternalError(statRes.Status.Message)
-	}
-
-	if err := d.augmentResourceInfo(ctx, statRes.Info, share); err != nil {
+	var info *provider.ResourceInfo
+	if err := d.opFromUser(ctx, share.Creator, func(ctx context.Context) error {
+		info, err = d.stat(ctx, newRef)
+		return err
+	}); err != nil {
 		return nil, err
 	}
 
-	return statRes.Info, nil
+	if err := d.augmentResourceInfo(ctx, info, share); err != nil {
+		return nil, err
+	}
+
+	return info, nil
 }
 
 func (d *driver) augmentResourceInfo(ctx context.Context, info *provider.ResourceInfo, share *ocmv1beta1.Share) error {
