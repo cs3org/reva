@@ -344,15 +344,24 @@ func ReadNode(ctx context.Context, lu PathLookup, spaceID, nodeID string, canLis
 		return nil, err
 	}
 
-	n.BlobID, err = ReadBlobIDAttr(nodePath + revisionSuffix)
-	if err != nil {
-		return nil, err
-	}
+	if revisionSuffix == "" {
+		n.BlobID = attrs[prefixes.BlobIDAttr]
+		blobSize, err := strconv.ParseInt(attrs[prefixes.BlobsizeAttr], 10, 64)
+		if err != nil {
+			return nil, err
+		}
+		n.Blobsize = blobSize
+	} else {
+		n.BlobID, err = ReadBlobIDAttr(nodePath + revisionSuffix)
+		if err != nil {
+			return nil, err
+		}
 
-	// Lookup blobsize
-	n.Blobsize, err = ReadBlobSizeAttr(nodePath + revisionSuffix)
-	if err != nil {
-		return nil, err
+		// Lookup blobsize
+		n.Blobsize, err = ReadBlobSizeAttr(nodePath + revisionSuffix)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return n, nil
@@ -425,17 +434,9 @@ func (n *Node) Parent() (p *Node, err error) {
 		SpaceRoot: n.SpaceRoot,
 	}
 
-	// lookup parent id in extended attributes
-	if p.ParentID, err = p.Xattr(prefixes.ParentidAttr); err != nil {
-		p.ParentID = ""
-		return
-	}
-	// lookup name in extended attributes
-	if p.Name, err = p.Xattr(prefixes.NameAttr); err != nil {
-		p.Name = ""
-		p.ParentID = ""
-		return
-	}
+	// lookup name and parent id in extended attributes
+	p.ParentID, _ = p.Xattr(prefixes.ParentidAttr)
+	p.Name, _ = p.Xattr(prefixes.NameAttr)
 
 	// check node exists
 	if _, err := os.Stat(p.InternalPath()); err == nil {
