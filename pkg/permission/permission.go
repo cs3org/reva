@@ -27,6 +27,8 @@ const (
 	ListAllSpaces string = "list-all-spaces"
 	// CreateSpace is the hardcoded name for the create space permission
 	CreateSpace string = "create-space"
+	// WritePublicLink is the hardcoded name for the PublicLink.Write permission
+	WritePublicLink string = "PublicLink.Write"
 )
 
 // Manager defines the interface for the permission service driver
