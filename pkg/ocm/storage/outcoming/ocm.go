@@ -294,8 +294,8 @@ func (d *driver) GetMD(ctx context.Context, ref *provider.Reference, _ []string)
 	}
 
 	var info *provider.ResourceInfo
-	if err := d.opFromUser(ctx, share.Creator, func(c context.Context) error {
-		info, err = d.stat(ctx, newRef)
+	if err := d.opFromUser(ctx, share.Creator, func(userCtx context.Context) error {
+		info, err = d.stat(userCtx, newRef)
 		return err
 	}); err != nil {
 		return nil, err
