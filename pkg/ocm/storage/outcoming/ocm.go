@@ -336,14 +336,21 @@ func (d *driver) ListFolder(ctx context.Context, ref *provider.Reference, _ []st
 		return nil, err
 	}
 
-	lstRes, err := d.gateway.ListContainer(ctx, &provider.ListContainerRequest{Ref: newRef})
-	switch {
-	case err != nil:
+	var infos []*provider.ResourceInfo
+	if err := d.opFromUser(ctx, share.Creator, func(userCtx context.Context) error {
+		lstRes, err := d.gateway.ListContainer(userCtx, &provider.ListContainerRequest{Ref: newRef})
+		switch {
+		case err != nil:
+			return err
+		case lstRes.Status.Code == rpcv1beta1.Code_CODE_NOT_FOUND:
+			return errtypes.NotFound(ref.String())
+		case lstRes.Status.Code != rpcv1beta1.Code_CODE_OK:
+			return errtypes.InternalError(lstRes.Status.Message)
+		}
+		infos = lstRes.Infos
+		return nil
+	}); err != nil {
 		return nil, err
-	case lstRes.Status.Code == rpcv1beta1.Code_CODE_NOT_FOUND:
-		return nil, errtypes.NotFound(ref.String())
-	case lstRes.Status.Code != rpcv1beta1.Code_CODE_OK:
-		return nil, errtypes.InternalError(lstRes.Status.Message)
 	}
 
 	shareInfo, err := d.stat(ctx, &provider.Reference{ResourceId: share.ResourceId})
@@ -351,11 +358,11 @@ func (d *driver) ListFolder(ctx context.Context, ref *provider.Reference, _ []st
 		return nil, err
 	}
 
-	for _, info := range lstRes.Infos {
+	for _, info := range infos {
 		fixResourceInfo(info, shareInfo, share)
 	}
 
-	return lstRes.Infos, nil
+	return infos, nil
 }
 
 func exposedPathFromReference(ref *provider.Reference) string {
@@ -389,42 +396,44 @@ func getUploadProtocol(protocols []*gateway.FileUploadProtocol, protocol string)
 }
 
 func (d *driver) Upload(ctx context.Context, ref *provider.Reference, content io.ReadCloser) error {
-	newRef, _, err := d.translateOCMShareToCS3Ref(ctx, ref)
+	newRef, share, err := d.translateOCMShareToCS3Ref(ctx, ref)
 	if err != nil {
 		return err
 	}
 
-	initRes, err := d.gateway.InitiateFileUpload(ctx, &provider.InitiateFileUploadRequest{Ref: newRef})
-	switch {
-	case err != nil:
-		return err
-	case initRes.Status.Code != rpcv1beta1.Code_CODE_OK:
-		return errtypes.InternalError(initRes.Status.Message)
-	}
+	return d.opFromUser(ctx, share.Creator, func(userCtx context.Context) error {
+		initRes, err := d.gateway.InitiateFileUpload(userCtx, &provider.InitiateFileUploadRequest{Ref: newRef})
+		switch {
+		case err != nil:
+			return err
+		case initRes.Status.Code != rpcv1beta1.Code_CODE_OK:
+			return errtypes.InternalError(initRes.Status.Message)
+		}
 
-	endpoint, token, ok := getUploadProtocol(initRes.Protocols, "simple")
-	if !ok {
-		return errtypes.InternalError("simple upload not supported")
-	}
+		endpoint, token, ok := getUploadProtocol(initRes.Protocols, "simple")
+		if !ok {
+			return errtypes.InternalError("simple upload not supported")
+		}
 
-	httpReq, err := rhttp.NewRequest(ctx, http.MethodPut, endpoint, content)
-	if err != nil {
-		return errors.Wrap(err, "error creating new request")
-	}
+		httpReq, err := rhttp.NewRequest(userCtx, http.MethodPut, endpoint, content)
+		if err != nil {
+			return errors.Wrap(err, "error creating new request")
+		}
 
-	httpReq.Header.Set(datagateway.TokenTransportHeader, token)
+		httpReq.Header.Set(datagateway.TokenTransportHeader, token)
 
-	httpRes, err := http.DefaultClient.Do(httpReq)
-	if err != nil {
-		return errors.Wrap(err, "error doing put request")
-	}
-	defer httpRes.Body.Close()
+		httpRes, err := http.DefaultClient.Do(httpReq)
+		if err != nil {
+			return errors.Wrap(err, "error doing put request")
+		}
+		defer httpRes.Body.Close()
 
-	if httpRes.StatusCode != http.StatusOK {
-		return errors.Errorf("error doing put request: %s", httpRes.Status)
-	}
+		if httpRes.StatusCode != http.StatusOK {
+			return errors.Errorf("error doing put request: %s", httpRes.Status)
+		}
 
-	return nil
+		return nil
+	})
 }
 
 func getDownloadProtocol(protocols []*gateway.FileDownloadProtocol, lst []string) (string, string, bool) {
@@ -439,42 +448,50 @@ func getDownloadProtocol(protocols []*gateway.FileDownloadProtocol, lst []string
 }
 
 func (d *driver) Download(ctx context.Context, ref *provider.Reference) (io.ReadCloser, error) {
-	newRef, _, err := d.translateOCMShareToCS3Ref(ctx, ref)
+	newRef, share, err := d.translateOCMShareToCS3Ref(ctx, ref)
 	if err != nil {
 		return nil, err
 	}
 
-	initRes, err := d.gateway.InitiateFileDownload(ctx, &provider.InitiateFileDownloadRequest{Ref: newRef})
-	switch {
-	case err != nil:
+	var r io.ReadCloser
+
+	if err := d.opFromUser(ctx, share.Creator, func(userCtx context.Context) error {
+		initRes, err := d.gateway.InitiateFileDownload(userCtx, &provider.InitiateFileDownloadRequest{Ref: newRef})
+		switch {
+		case err != nil:
+			return err
+		case initRes.Status.Code == rpcv1beta1.Code_CODE_NOT_FOUND:
+			return errtypes.NotFound(ref.String())
+		case initRes.Status.Code != rpcv1beta1.Code_CODE_OK:
+			return errtypes.InternalError(initRes.Status.Message)
+		}
+
+		endpoint, token, ok := getDownloadProtocol(initRes.Protocols, []string{"simple", "spaces"})
+		if !ok {
+			return errtypes.InternalError("simple download not supported")
+		}
+
+		httpReq, err := rhttp.NewRequest(userCtx, http.MethodGet, endpoint, nil)
+		if err != nil {
+			return err
+		}
+		httpReq.Header.Set(datagateway.TokenTransportHeader, token)
+
+		httpRes, err := http.DefaultClient.Do(httpReq)
+		if err != nil {
+			return err
+		}
+
+		if httpRes.StatusCode != http.StatusOK {
+			return errors.New(httpRes.Status)
+		}
+		r = httpReq.Body
+		return nil
+	}); err != nil {
 		return nil, err
-	case initRes.Status.Code == rpcv1beta1.Code_CODE_NOT_FOUND:
-		return nil, errtypes.NotFound(ref.String())
-	case initRes.Status.Code != rpcv1beta1.Code_CODE_OK:
-		return nil, errtypes.InternalError(initRes.Status.Message)
 	}
 
-	endpoint, token, ok := getDownloadProtocol(initRes.Protocols, []string{"simple", "spaces"})
-	if !ok {
-		return nil, errtypes.InternalError("simple download not supported")
-	}
-
-	httpReq, err := rhttp.NewRequest(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return nil, err
-	}
-	httpReq.Header.Set(datagateway.TokenTransportHeader, token)
-
-	httpRes, err := http.DefaultClient.Do(httpReq)
-	if err != nil {
-		return nil, err
-	}
-
-	if httpRes.StatusCode != http.StatusOK {
-		return nil, errors.New(httpRes.Status)
-	}
-
-	return httpRes.Body, nil
+	return r, nil
 }
 
 func (d *driver) GetPathByID(ctx context.Context, id *provider.ResourceId) (string, error) {
