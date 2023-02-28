@@ -41,6 +41,12 @@ type IniBackend struct {
 	metaCache *cache.Cache
 }
 
+type ReadWriteCloseSeekTruncater interface {
+	io.ReadWriteCloser
+	io.Seeker
+	Truncate(int64) error
+}
+
 var encodedPrefixes = []string{prefixes.ChecksumPrefix, prefixes.MetadataPrefix, prefixes.GrantPrefix}
 
 // NewIniBackend returns a new IniBackend instance
@@ -134,7 +140,7 @@ func (b IniBackend) Remove(path, key string) error {
 
 func (b IniBackend) saveIni(path string, attribs map[string]string, acquireLock bool) error {
 	var (
-		f   io.ReadWriteCloser
+		f   ReadWriteCloseSeekTruncater
 		err error
 	)
 	path = b.MetadataPath(path)
@@ -153,10 +159,6 @@ func (b IniBackend) saveIni(path string, attribs map[string]string, acquireLock 
 	if err != nil {
 		return err
 	}
-	_, err = f.(io.WriteSeeker).Seek(0, io.SeekStart)
-	if err != nil {
-		return err
-	}
 	iniFile, err := ini.Load(iniBytes)
 	if err != nil {
 		return err
@@ -170,6 +172,16 @@ func (b IniBackend) saveIni(path string, attribs map[string]string, acquireLock 
 		} else {
 			iniAttribs[key] = val
 		}
+	}
+
+	// Truncate file
+	_, err = f.Seek(0, io.SeekStart)
+	if err != nil {
+		return err
+	}
+	err = f.Truncate(0)
+	if err != nil {
+		return err
 	}
 
 	// Write new metadata to file
@@ -205,16 +217,30 @@ func (b IniBackend) loadMeta(path string) (map[string]string, error) {
 		return attribs, err
 	}
 
-	// // No cached entry found. Read from storage and store in cache
-	lockedFile, err := lockedfile.Open(path)
-	if err != nil {
-		return nil, err
-	}
-	defer lockedFile.Close()
+	var iniFile *ini.File
+	f, err := os.ReadFile(path)
+	length := len(f)
 
-	iniFile, err := ini.Load(lockedFile)
-	if err != nil {
-		return nil, err
+	// Try to read the file without getting a lock first. We will either
+	// get the old or the new state or an empty byte array when the file
+	// was just truncated by a writer.
+	if err == nil && length > 0 {
+		iniFile, err = ini.Load(f)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		// // No cached entry found. Read from storage and store in cache
+		lockedFile, err := lockedfile.Open(path)
+		if err != nil {
+			return nil, err
+		}
+		defer lockedFile.Close()
+
+		iniFile, err = ini.Load(lockedFile)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	attribs = iniFile.Section("").KeysHash()
