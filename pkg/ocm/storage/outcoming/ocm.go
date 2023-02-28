@@ -132,9 +132,15 @@ func (d *driver) resolvePath(ctx context.Context, path string) (*provider.Refere
 		return nil, nil, err
 	}
 
+	info, err := d.stat(ctx, &provider.Reference{ResourceId: resId})
+	if err != nil {
+		return nil, nil, err
+	}
+
+	p := filepath.Join(info.Path, rel)
+
 	return &provider.Reference{
-		ResourceId: resId,
-		Path:       rel,
+		Path: p,
 	}, share, nil
 }
 func makeRelative(path string) string {
@@ -163,13 +169,9 @@ func (d *driver) translateOCMShareToCS3Ref(ctx context.Context, ref *provider.Re
 		return nil, nil, err
 	}
 
-	resIDStat, err := d.stat(ctx, &provider.Reference{ResourceId: resID})
-	if err != nil {
-		return nil, nil, err
-	}
-
 	return &provider.Reference{
-		Path: filepath.Join(resIDStat.Path, path),
+		ResourceId: resID,
+		Path:       path,
 	}, share, nil
 }
 
