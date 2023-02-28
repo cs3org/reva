@@ -130,6 +130,7 @@ var _ = Describe("ocm share", func() {
 			"cesnethttp":           "ocm-share/ocm-server-cesnet-http.toml",
 			"cernboxoutcomingocm":  "ocm-share/ocm-cernbox-outcoming-shares.toml",
 			"cernboxocmdataserver": "ocm-share/ocm-cernbox-outcoming-dataserver.toml",
+			"cernboxmachineauth":   "ocm-share/cernbox-machine-authprovider.toml",
 		}, map[string]string{
 			"providers": "ocm-providers.demo.json",
 		}, map[string]Resource{

@@ -11,3 +11,4 @@ address = "{{grpc_address}}"
 driver = "ocmoutcoming"
 
 [http.services.dataprovider.drivers.ocmoutcoming]
+machine_secret = "secret"
