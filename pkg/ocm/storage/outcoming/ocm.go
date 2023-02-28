@@ -279,11 +279,12 @@ func (d *driver) opFromUser(ctx context.Context, userID *userv1beta1.UserId, f f
 		return errors.New(authRes.Status.Message)
 	}
 
-	ctx = ctxpkg.ContextSetToken(ctx, authRes.Token)
-	ctx = ctxpkg.ContextSetUser(ctx, authRes.User)
-	ctx = metadata.AppendToOutgoingContext(ctx, ctxpkg.TokenHeader, authRes.Token)
+	ownerCtx := context.TODO()
+	ownerCtx = ctxpkg.ContextSetToken(ownerCtx, authRes.Token)
+	ownerCtx = ctxpkg.ContextSetUser(ownerCtx, authRes.User)
+	ownerCtx = metadata.AppendToOutgoingContext(ownerCtx, ctxpkg.TokenHeader, authRes.Token)
 
-	return f(ctx)
+	return f(ownerCtx)
 }
 
 func (d *driver) GetMD(ctx context.Context, ref *provider.Reference, _ []string) (*provider.ResourceInfo, error) {
@@ -293,7 +294,7 @@ func (d *driver) GetMD(ctx context.Context, ref *provider.Reference, _ []string)
 	}
 
 	var info *provider.ResourceInfo
-	if err := d.opFromUser(ctx, share.Creator, func(ctx context.Context) error {
+	if err := d.opFromUser(ctx, share.Creator, func(c context.Context) error {
 		info, err = d.stat(ctx, newRef)
 		return err
 	}); err != nil {
