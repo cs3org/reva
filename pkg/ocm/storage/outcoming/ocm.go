@@ -56,8 +56,8 @@ type driver struct {
 }
 
 type config struct {
-	GatewaySVC    string
-	MachineSecret string
+	GatewaySVC    string `mapstructure:"gatewaysvc"`
+	MachineSecret string `mapstructure:"machine_secret"`
 }
 
 func parseConfig(c map[string]interface{}) (*config, error) {
