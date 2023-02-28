@@ -58,6 +58,8 @@ import (
 
 const publicLinkURLPrefix = "/files/link/public/"
 
+const ocmLinkURLPrefix = "/files/spaces/sciencemesh/"
+
 func init() {
 	registry.Register("wopi", New)
 }
@@ -158,7 +160,6 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 	} else {
 		q.Add("userid", u.Id.OpaqueId+"@"+u.Id.Idp)
 	}
-	q.Add("username", u.DisplayName)
 
 	scopes, ok := ctxpkg.ContextGetScopes(ctx)
 	if !ok {
@@ -168,19 +169,34 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 
 	// TODO (lopresti) consolidate with the templating implemented in the edge branch;
 	// here we assume the FolderBaseURL looks like `https://<hostname>` and we
-	// either append `/files/spaces/<full_path>` or publicLinkURLPrefix + `/<relative_path>`
+	// either append `/files/spaces/<full_path>` or the proper URL prefix + `/<relative_path>`
 	var rPath string
-	if _, ok := utils.HasPublicShareRole(u); ok {
-		// we are in a public link
-		q.Del("username") // on public shares default to "Guest xyz"
-		var err error
-		rPath, err = getPathForPublicLink(ctx, scopes, resource)
-		if err != nil {
-			log.Warn().Err(err).Msg("wopi: failed to extract relative path from public link scope")
+	var pathErr error
+	_, ok = utils.HasPublicShareRole(u)
+	switch {
+	case ok:
+		// we are in a public link, username is not set so it will default to "Guest xyz"
+		rPath, pathErr = getPathForExternalLink(ctx, scopes, resource, publicLinkURLPrefix)
+		if pathErr != nil {
+			log.Warn().Err(pathErr).Msg("wopi: failed to extract relative path from public link scope")
 		}
-	} else {
+	case u.Username == "":
+		// OCM users have no username: use displayname@Idp
+		idpURL, e := url.Parse(u.Id.Idp)
+		if e != nil {
+			q.Add("username", u.DisplayName+" @ "+u.Id.Idp)
+		} else {
+			q.Add("username", u.DisplayName+" @ "+idpURL.Hostname())
+		}
+		// and resolve the folder
+		rPath, pathErr = getPathForExternalLink(ctx, scopes, resource, ocmLinkURLPrefix)
+		if pathErr != nil {
+			log.Warn().Err(pathErr).Msg("wopi: failed to extract relative path from ocm link scope")
+		}
+	default:
 		// in all other cases use the resource's path
 		rPath = "/files/spaces/" + path.Dir(resource.Path)
+		q.Add("username", u.DisplayName)
 	}
 	if rPath != "" {
 		fu, err := url.JoinPath(p.conf.FolderBaseURL, rPath)
@@ -472,13 +488,13 @@ func parseWopiDiscovery(body io.Reader) (map[string]map[string]string, error) {
 	return appURLs, nil
 }
 
-func getPathForPublicLink(ctx context.Context, scopes map[string]*authpb.Scope, resource *provider.ResourceInfo) (string, error) {
-	pubShares, err := scope.GetPublicSharesFromScopes(scopes)
+func getPathForExternalLink(ctx context.Context, scopes map[string]*authpb.Scope, resource *provider.ResourceInfo, pathPrefix string) (string, error) {
+	shares, err := scope.GetPublicOcmSharesFromScopes(scopes)
 	if err != nil {
 		return "", err
 	}
-	if len(pubShares) > 1 {
-		return "", errors.New("More than one public share found in the scope, lookup not implemented")
+	if len(shares) > 1 {
+		return "", errors.New("More than one public or OCM share found in the scope, lookup not implemented")
 	}
 
 	client, err := pool.GetGatewayServiceClient(pool.Endpoint(sharedconf.GetGatewaySVC("")))
@@ -487,7 +503,7 @@ func getPathForPublicLink(ctx context.Context, scopes map[string]*authpb.Scope, 
 	}
 	statRes, err := client.Stat(ctx, &provider.StatRequest{
 		Ref: &provider.Reference{
-			ResourceId: pubShares[0].ResourceId,
+			ResourceId: shares[0].ResourceId,
 		},
 	})
 	if err != nil {
@@ -496,7 +512,7 @@ func getPathForPublicLink(ctx context.Context, scopes map[string]*authpb.Scope, 
 
 	if statRes.Info.Path == resource.Path {
 		// this is a direct link to the resource
-		return publicLinkURLPrefix + pubShares[0].Token, nil
+		return pathPrefix + shares[0].Token, nil
 	}
 	// otherwise we are in a subfolder of the public link
 	relPath, err := filepath.Rel(statRes.Info.Path, resource.Path)
@@ -506,5 +522,5 @@ func getPathForPublicLink(ctx context.Context, scopes map[string]*authpb.Scope, 
 	if strings.HasPrefix(relPath, "../") {
 		return "", errors.New("Scope path does not contain target resource")
 	}
-	return path.Join(publicLinkURLPrefix+pubShares[0].Token, path.Dir(relPath)), nil
+	return path.Join(pathPrefix+shares[0].Token, path.Dir(relPath)), nil
 }

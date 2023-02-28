@@ -9,7 +9,7 @@ description: >
 # _struct: config_
 
 {{% dir name="mime_types" type="[]string" default=nil %}}
-Inherited from the appprovider. [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/app/provider/wopi/wopi.go#L64)
+Inherited from the appprovider. [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/app/provider/wopi/wopi.go#L68)
 {{< highlight toml >}}
 [app.provider.wopi]
 mime_types = nil
@@ -17,7 +17,7 @@ mime_types = nil
 {{% /dir %}}
 
 {{% dir name="iop_secret" type="string" default="" %}}
-The IOP secret used to connect to the wopiserver. [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/app/provider/wopi/wopi.go#L65)
+The IOP secret used to connect to the wopiserver. [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/app/provider/wopi/wopi.go#L69)
 {{< highlight toml >}}
 [app.provider.wopi]
 iop_secret = ""
@@ -25,7 +25,7 @@ iop_secret = ""
 {{% /dir %}}
 
 {{% dir name="wopi_url" type="string" default="" %}}
-The wopiserver's URL. [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/app/provider/wopi/wopi.go#L66)
+The wopiserver's URL. [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/app/provider/wopi/wopi.go#L70)
 {{< highlight toml >}}
 [app.provider.wopi]
 wopi_url = ""
@@ -33,7 +33,7 @@ wopi_url = ""
 {{% /dir %}}
 
 {{% dir name="app_name" type="string" default="" %}}
-The App user-friendly name. [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/app/provider/wopi/wopi.go#L67)
+The App user-friendly name. [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/app/provider/wopi/wopi.go#L71)
 {{< highlight toml >}}
 [app.provider.wopi]
 app_name = ""
@@ -41,7 +41,7 @@ app_name = ""
 {{% /dir %}}
 
 {{% dir name="app_icon_uri" type="string" default="" %}}
-A URI to a static asset which represents the app icon. [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/app/provider/wopi/wopi.go#L68)
+A URI to a static asset which represents the app icon. [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/app/provider/wopi/wopi.go#L72)
 {{< highlight toml >}}
 [app.provider.wopi]
 app_icon_uri = ""
@@ -49,7 +49,7 @@ app_icon_uri = ""
 {{% /dir %}}
 
 {{% dir name="folder_base_url" type="string" default="" %}}
-The base URL to generate links to navigate back to the containing folder. [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/app/provider/wopi/wopi.go#L69)
+The base URL to generate links to navigate back to the containing folder. [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/app/provider/wopi/wopi.go#L73)
 {{< highlight toml >}}
 [app.provider.wopi]
 folder_base_url = ""
@@ -57,7 +57,7 @@ folder_base_url = ""
 {{% /dir %}}
 
 {{% dir name="app_url" type="string" default="" %}}
-The App URL. [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/app/provider/wopi/wopi.go#L70)
+The App URL. [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/app/provider/wopi/wopi.go#L74)
 {{< highlight toml >}}
 [app.provider.wopi]
 app_url = ""
@@ -65,7 +65,7 @@ app_url = ""
 {{% /dir %}}
 
 {{% dir name="app_int_url" type="string" default="" %}}
-The internal app URL in case of dockerized deployments. Defaults to AppURL [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/app/provider/wopi/wopi.go#L71)
+The internal app URL in case of dockerized deployments. Defaults to AppURL [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/app/provider/wopi/wopi.go#L75)
 {{< highlight toml >}}
 [app.provider.wopi]
 app_int_url = ""
@@ -73,7 +73,7 @@ app_int_url = ""
 {{% /dir %}}
 
 {{% dir name="app_api_key" type="string" default="" %}}
-The API key used by the app, if applicable. [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/app/provider/wopi/wopi.go#L72)
+The API key used by the app, if applicable. [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/app/provider/wopi/wopi.go#L76)
 {{< highlight toml >}}
 [app.provider.wopi]
 app_api_key = ""
@@ -81,7 +81,7 @@ app_api_key = ""
 {{% /dir %}}
 
 {{% dir name="jwt_secret" type="string" default="" %}}
-The JWT secret to be used to retrieve the token TTL. [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/app/provider/wopi/wopi.go#L73)
+The JWT secret to be used to retrieve the token TTL. [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/app/provider/wopi/wopi.go#L77)
 {{< highlight toml >}}
 [app.provider.wopi]
 jwt_secret = ""
@@ -89,7 +89,7 @@ jwt_secret = ""
 {{% /dir %}}
 
 {{% dir name="app_desktop_only" type="bool" default=false %}}
-Specifies if the app can be opened only on desktop. [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/app/provider/wopi/wopi.go#L74)
+Specifies if the app can be opened only on desktop. [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/app/provider/wopi/wopi.go#L78)
 {{< highlight toml >}}
 [app.provider.wopi]
 app_desktop_only = false
