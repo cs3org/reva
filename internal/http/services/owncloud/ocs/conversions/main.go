@@ -259,6 +259,7 @@ func webdavInfo(protocols []*ocm.Protocol) (*ocm.WebDAVProtocol, bool) {
 	return nil, false
 }
 
+// ReceivedOCMShare2ShareData converts a cs3 ocm received share into a share data model.
 func ReceivedOCMShare2ShareData(share *ocm.ReceivedShare, path string) (*ShareData, error) {
 	webdav, ok := webdavInfo(share.Protocols)
 	if !ok {
@@ -296,6 +297,7 @@ func webdavAMInfo(methods []*ocm.AccessMethod) (*ocm.WebDAVAccessMethod, bool) {
 	return nil, false
 }
 
+// OCMShare2ShareData converts a cs3 ocm share into a share data model.
 func OCMShare2ShareData(share *ocm.Share) (*ShareData, error) {
 	webdav, ok := webdavAMInfo(share.AccessMethods)
 	if !ok {
