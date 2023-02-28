@@ -267,7 +267,7 @@ func (d *driver) opFromUser(ctx context.Context, userID *userv1beta1.UserId, f f
 		return errors.New(userRes.Status.Message)
 	}
 
-	authRes, err := d.gateway.Authenticate(ctx, &gateway.AuthenticateRequest{
+	authRes, err := d.gateway.Authenticate(context.TODO(), &gateway.AuthenticateRequest{
 		Type:         "machine",
 		ClientId:     userRes.User.Username,
 		ClientSecret: d.c.MachineSecret,
