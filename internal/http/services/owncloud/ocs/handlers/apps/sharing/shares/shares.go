@@ -73,6 +73,7 @@ type Handler struct {
 	userIdentifierCache    *ttlcache.Cache
 	resourceInfoCache      cache.ResourceInfoCache
 	resourceInfoCacheTTL   time.Duration
+	listOCMShares          bool
 }
 
 // we only cache the minimal set of data instead of the full user metadata.
@@ -104,6 +105,7 @@ func (h *Handler) Init(c *config.Config) {
 	h.sharePrefix = c.SharePrefix
 	h.homeNamespace = c.HomeNamespace
 	h.ocmMountPoint = c.OCMMountPoint
+	h.listOCMShares = c.ListOCMShares
 
 	h.additionalInfoTemplate, _ = template.New("additionalInfo").Parse(c.AdditionalInfoAttribute)
 	h.resourceInfoCacheTTL = time.Second * time.Duration(c.ResourceInfoCacheTTL)
@@ -740,15 +742,18 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 		log.Debug().Msgf("share: %+v", *data)
 	}
 
-	// include ocm shares in the response
-	lst, err := h.listReceivedFederatedShares(ctx, client)
-	if err != nil {
-		log.Err(err).Msg("error listing received ocm shares")
-		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error listing received ocm shares", err)
-		return
+	if h.listOCMShares {
+		// include ocm shares in the response
+		lst, err := h.listReceivedFederatedShares(ctx, client)
+		if err != nil {
+			log.Err(err).Msg("error listing received ocm shares")
+			response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error listing received ocm shares", err)
+			return
+		}
+		shares = append(shares, lst...)
 	}
 
-	response.WriteOCSSuccess(w, r, append(shares, lst...))
+	response.WriteOCSSuccess(w, r, shares)
 }
 
 func findMatch(shareJailInfos []*provider.ResourceInfo, id *provider.ResourceId) *provider.ResourceInfo {

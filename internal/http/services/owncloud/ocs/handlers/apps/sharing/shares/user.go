@@ -214,13 +214,15 @@ func (h *Handler) listUserShares(r *http.Request, filters []*collaboration.Filte
 			ocsDataPayload = append(ocsDataPayload, data)
 		}
 
-		// include the ocm shares
-		ocmShares, err := h.listOutcomingFederatedShares(ctx, client)
-		if err != nil {
-			return nil, nil, err
+		if h.listOCMShares {
+			// include the ocm shares
+			ocmShares, err := h.listOutcomingFederatedShares(ctx, client)
+			if err != nil {
+				return nil, nil, err
+			}
+			ocsDataPayload = append(ocsDataPayload, ocmShares...)
 		}
 
-		ocsDataPayload = append(ocsDataPayload, ocmShares...)
 	}
 
 	return ocsDataPayload, nil, nil
