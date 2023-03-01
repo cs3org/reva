@@ -52,6 +52,9 @@ func (h *appsHandler) init(c *config) error {
 func (h *appsHandler) shareInfo(p string) (*ocmpb.ShareId, string) {
 	p = strings.TrimPrefix(p, h.ocmMountPoint)
 	shareID, rel := router.ShiftPath(p)
+	if len(rel) > 0 {
+		rel = rel[1:]
+	}
 	return &ocmpb.ShareId{OpaqueId: shareID}, rel
 }
 
