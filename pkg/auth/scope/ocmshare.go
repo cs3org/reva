@@ -47,6 +47,7 @@ func ocmShareScope(_ context.Context, scope *authpb.Scope, resource interface{},
 	}
 
 	switch v := resource.(type) {
+	// viewer role
 	case *registry.GetStorageProvidersRequest:
 		return checkStorageRefForOCMShare(&share, v.GetRef(), ocmNamespace), nil
 	case *provider.StatRequest:
@@ -59,7 +60,10 @@ func ocmShareScope(_ context.Context, scope *authpb.Scope, resource interface{},
 		return checkStorageRefForOCMShare(&share, &provider.Reference{ResourceId: v.ResourceInfo.Id}, ocmNamespace), nil
 	case *gateway.OpenInAppRequest:
 		return checkStorageRefForOCMShare(&share, v.GetRef(), ocmNamespace), nil
+	case *provider.GetLockRequest:
+		return checkStorageRefForOCMShare(&share, v.GetRef(), ocmNamespace), nil
 
+	// editor role
 	case *provider.CreateContainerRequest:
 		return hasRoleEditor(*scope) && checkStorageRefForOCMShare(&share, v.GetRef(), ocmNamespace), nil
 	case *provider.TouchFileRequest:
@@ -73,6 +77,12 @@ func ocmShareScope(_ context.Context, scope *authpb.Scope, resource interface{},
 	case *provider.SetArbitraryMetadataRequest:
 		return hasRoleEditor(*scope) && checkStorageRefForOCMShare(&share, v.GetRef(), ocmNamespace), nil
 	case *provider.UnsetArbitraryMetadataRequest:
+		return hasRoleEditor(*scope) && checkStorageRefForOCMShare(&share, v.GetRef(), ocmNamespace), nil
+	case *provider.SetLockRequest:
+		return hasRoleEditor(*scope) && checkStorageRefForOCMShare(&share, v.GetRef(), ocmNamespace), nil
+	case *provider.RefreshLockRequest:
+		return hasRoleEditor(*scope) && checkStorageRefForOCMShare(&share, v.GetRef(), ocmNamespace), nil
+	case *provider.UnlockRequest:
 		return hasRoleEditor(*scope) && checkStorageRefForOCMShare(&share, v.GetRef(), ocmNamespace), nil
 
 	// App provider requests
