@@ -93,12 +93,17 @@ func (s *svc) routerInit() error {
 	if err := providersHandler.init(s.conf); err != nil {
 		return err
 	}
+	sharesHandler := new(sharesHandler)
+	if err := sharesHandler.init(s.conf); err != nil {
+		return err
+	}
 
 	s.router.Get("/generate-invite", tokenHandler.Generate)
 	s.router.Get("/list-invite", tokenHandler.ListInvite)
 	s.router.Post("/accept-invite", tokenHandler.AcceptInvite)
 	s.router.Get("/find-accepted-users", tokenHandler.FindAccepted)
 	s.router.Get("/list-providers", providersHandler.ListProviders)
+	s.router.Post("/create-share", sharesHandler.CreateShare)
 
 	return nil
 }
