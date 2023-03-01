@@ -159,9 +159,14 @@ func MetadataPath(path string) string {
 	return backend.MetadataPath(path)
 }
 
-// UsesExternalMetadataFile returns true when the backend uses external metadata files
-func UsesExternalMetadataFile() bool {
-	return backend.UsesExternalMetadataFile()
+// Purge purges the data of a given path
+func Purge(path string) error {
+	return backend.Purge(path)
+}
+
+// Rename purges the data of a given path
+func Rename(oldPath, newPath string) error {
+	return backend.Rename(oldPath, newPath)
 }
 
 // IsMetaFile returns whether the given path represents a meta file

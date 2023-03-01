@@ -282,8 +282,34 @@ func (b IniBackend) loadMeta(path string) (map[string]string, error) {
 // IsMetaFile returns whether the given path represents a meta file
 func (IniBackend) IsMetaFile(path string) bool { return strings.HasSuffix(path, ".ini") }
 
-// UsesExternalMetadataFile returns true when the backend uses external metadata files
-func (IniBackend) UsesExternalMetadataFile() bool { return true }
+// Purge purges the data of a given path
+func (b IniBackend) Purge(path string) error {
+	if err := b.metaCache.Delete(context.Background(), path); err != nil {
+		return err
+	}
+	return os.Remove(b.MetadataPath(path))
+}
+
+// Rename moves the data for a given path to a new path
+func (b IniBackend) Rename(oldPath, newPath string) error {
+	ctx := context.Background()
+	data := map[string]string{}
+	_ = b.metaCache.Get(ctx, oldPath, &data)
+	err := b.metaCache.Delete(ctx, oldPath)
+	if err != nil {
+		return err
+	}
+	err = b.metaCache.Set(&cache.Item{
+		Key:   newPath,
+		Value: data,
+		TTL:   24 * time.Hour,
+	})
+	if err != nil {
+		return err
+	}
+
+	return os.Rename(b.MetadataPath(oldPath), b.MetadataPath(newPath))
+}
 
 // MetadataPath returns the path of the file holding the metadata for the given path
 func (IniBackend) MetadataPath(path string) string { return path + ".ini" }

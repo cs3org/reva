@@ -539,13 +539,11 @@ func (t *Tree) Delete(ctx context.Context, n *node.Node) (err error) {
 		_ = n.RemoveXattr(prefixes.TrashOriginAttr)
 		return
 	}
-	if xattrs.UsesExternalMetadataFile() {
-		err = os.Rename(xattrs.MetadataPath(nodePath), xattrs.MetadataPath(trashPath))
-		if err != nil {
-			_ = n.RemoveXattr(prefixes.TrashOriginAttr)
-			_ = os.Rename(trashPath, nodePath)
-			return
-		}
+	err = xattrs.Rename(nodePath, trashPath)
+	if err != nil {
+		_ = n.RemoveXattr(prefixes.TrashOriginAttr)
+		_ = os.Rename(trashPath, nodePath)
+		return
 	}
 
 	// Remove lock file if it exists
@@ -613,11 +611,9 @@ func (t *Tree) RestoreRecycleItemFunc(ctx context.Context, spaceid, key, trashPa
 			if err != nil {
 				return err
 			}
-			if xattrs.UsesExternalMetadataFile() {
-				err = os.Rename(xattrs.MetadataPath(deletedNodePath), xattrs.MetadataPath(nodePath))
-				if err != nil {
-					return err
-				}
+			err = xattrs.Rename(deletedNodePath, nodePath)
+			if err != nil {
+				return err
 			}
 		}
 
@@ -700,11 +696,10 @@ func (t *Tree) removeNode(path string, n *node.Node) error {
 		log.Error().Err(err).Str("path", path).Msg("error purging node")
 		return err
 	}
-	if xattrs.UsesExternalMetadataFile() {
-		if err := utils.RemoveItem(xattrs.MetadataPath(path)); err != nil {
-			log.Error().Err(err).Str("path", xattrs.MetadataPath(path)).Msg("error purging node metadata")
-			return err
-		}
+
+	if err := xattrs.Purge(path); err != nil {
+		log.Error().Err(err).Str("path", xattrs.MetadataPath(path)).Msg("error purging node metadata")
+		return err
 	}
 
 	// delete blob from blobstore

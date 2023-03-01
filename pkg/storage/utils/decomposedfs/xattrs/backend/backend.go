@@ -34,9 +34,9 @@ type Backend interface {
 	SetMultiple(path string, attribs map[string]string, acquireLock bool) error
 	Remove(path, key string) error
 
+	Purge(path string) error
+	Rename(oldPath, newPath string) error
 	IsMetaFile(path string) bool
-	// UsesExternalMetadataFile returns true when the backend uses external metadata files
-	UsesExternalMetadataFile() bool
 	MetadataPath(path string) string
 }
 
@@ -70,8 +70,11 @@ func (NullBackend) Remove(path string, key string) error { return errUnconfigure
 // IsMetaFile returns whether the given path represents a meta file
 func (NullBackend) IsMetaFile(path string) bool { return false }
 
-// UsesExternalMetadataFile returns true when the backend uses external metadata files
-func (NullBackend) UsesExternalMetadataFile() bool { return false }
+// Purge purges the data of a given path from any cache that might hold it
+func (NullBackend) Purge(purges string) error { return errUnconfiguredError }
+
+// Rename moves the data for a given path to a new path
+func (NullBackend) Rename(oldPath, newPath string) error { return errUnconfiguredError }
 
 // MetadataPath returns the path of the file holding the metadata for the given path
 func (NullBackend) MetadataPath(path string) string { return "" }

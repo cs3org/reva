@@ -158,8 +158,11 @@ func (XattrsBackend) Remove(filePath string, key string) (err error) {
 // IsMetaFile returns whether the given path represents a meta file
 func (XattrsBackend) IsMetaFile(path string) bool { return false }
 
-// UsesExternalMetadataFile returns true when the backend uses external metadata files
-func (XattrsBackend) UsesExternalMetadataFile() bool { return false }
+// Purge purges the data of a given path
+func (XattrsBackend) Purge(path string) error { return nil }
+
+// Rename moves the data for a given path to a new path
+func (XattrsBackend) Rename(oldPath, newPath string) error { return nil }
 
 // MetadataPath returns the path of the file holding the metadata for the given path
 func (XattrsBackend) MetadataPath(path string) string { return path }
