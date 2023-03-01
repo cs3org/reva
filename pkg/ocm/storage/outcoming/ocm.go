@@ -93,7 +93,7 @@ func New(c map[string]interface{}) (storage.FS, error) {
 	return d, nil
 }
 
-func (d *driver) resolveToken(ctx context.Context, token string) (*provider.ResourceId, *ocmv1beta1.Share, error) {
+func (d *driver) resolveToken(ctx context.Context, token string) (*ocmv1beta1.Share, error) {
 	shareRes, err := d.gateway.GetOCMShare(ctx, &ocmv1beta1.GetOCMShareRequest{
 		Ref: &ocmv1beta1.ShareReference{
 			Spec: &ocmv1beta1.ShareReference_Token{
@@ -104,14 +104,14 @@ func (d *driver) resolveToken(ctx context.Context, token string) (*provider.Reso
 
 	switch {
 	case err != nil:
-		return nil, nil, err
+		return nil, err
 	case shareRes.Status.Code == rpcv1beta1.Code_CODE_NOT_FOUND:
-		return nil, nil, errtypes.NotFound(token)
+		return nil, errtypes.NotFound(token)
 	case shareRes.Status.Code != rpcv1beta1.Code_CODE_OK:
-		return nil, nil, errtypes.InternalError(shareRes.Status.Message)
+		return nil, errtypes.InternalError(shareRes.Status.Message)
 	}
 
-	return shareRes.Share.ResourceId, shareRes.Share, nil
+	return shareRes.Share, nil
 }
 
 func (d *driver) stat(ctx context.Context, ref *provider.Reference) (*provider.ResourceInfo, error) {
@@ -128,27 +128,27 @@ func (d *driver) stat(ctx context.Context, ref *provider.Reference) (*provider.R
 	return statRes.Info, nil
 }
 
-func (d *driver) resolvePath(ctx context.Context, path string) (*provider.Reference, *ocmv1beta1.Share, error) {
-	// path is of type /token/<rel-path>
-	tkn, rel := router.ShiftPath(path)
-	rel = makeRelative(rel)
+// func (d *driver) resolvePath(ctx context.Context, path string) (*provider.Reference, *ocmv1beta1.Share, error) {
+// 	// path is of type /token/<rel-path>
+// 	tkn, rel := router.ShiftPath(path)
+// 	rel = makeRelative(rel)
 
-	resID, share, err := d.resolveToken(ctx, tkn)
-	if err != nil {
-		return nil, nil, err
-	}
+// 	resID, share, err := d.resolveToken(ctx, tkn)
+// 	if err != nil {
+// 		return nil, nil, err
+// 	}
 
-	info, err := d.stat(ctx, &provider.Reference{ResourceId: resID})
-	if err != nil {
-		return nil, nil, err
-	}
+// 	info, err := d.stat(ctx, &provider.Reference{ResourceId: resID})
+// 	if err != nil {
+// 		return nil, nil, err
+// 	}
 
-	p := filepath.Join(info.Path, rel)
+// 	p := filepath.Join(info.Path, rel)
 
-	return &provider.Reference{
-		Path: p,
-	}, share, nil
-}
+// 	return &provider.Reference{
+// 		Path: p,
+// 	}, share, nil
+// }
 
 func makeRelative(path string) string {
 	if strings.HasPrefix(path, "/") {
@@ -157,43 +157,50 @@ func makeRelative(path string) string {
 	return path
 }
 
-func (d *driver) translateOCMShareToCS3Ref(ctx context.Context, ref *provider.Reference) (*provider.Reference, *ocmv1beta1.Share, error) {
+func (d *driver) shareAndRelativePathFromRef(ctx context.Context, ref *provider.Reference) (*ocmv1beta1.Share, string, error) {
+	var (
+		token string
+		path  string
+	)
 	if ref.ResourceId == nil {
-		return d.resolvePath(ctx, ref.Path)
+		// path is of type /token/<rel-path>
+		token, path = router.ShiftPath(ref.Path)
+	} else {
+		// opaque id is of type token:rel.path
+		s := strings.SplitN(ref.ResourceId.OpaqueId, ":", 2)
+		token = s[0]
+		if len(s) == 2 {
+			path = s[1]
+		}
+		path = filepath.Join(path, ref.Path)
 	}
-
-	s := strings.SplitN(ref.ResourceId.OpaqueId, ":", 2)
-	tkn := s[0]
-	var path string
-	if len(s) == 2 {
-		path = s[1]
-	}
-	path = filepath.Join(path, ref.Path)
 	path = makeRelative(path)
 
-	resID, share, err := d.resolveToken(ctx, tkn)
+	share, err := d.resolveToken(ctx, token)
 	if err != nil {
-		return nil, nil, err
+		return nil, "", err
 	}
+	return share, path, nil
+}
 
+func (d *driver) translateOCMShareResourceToCS3Ref(ctx context.Context, resID *provider.ResourceId, rel string) (*provider.Reference, error) {
 	info, err := d.stat(ctx, &provider.Reference{ResourceId: resID})
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-
 	return &provider.Reference{
-		Path: filepath.Join(info.Path, path),
-	}, share, nil
+		Path: filepath.Join(info.Path, rel),
+	}, nil
 }
 
 func (d *driver) CreateDir(ctx context.Context, ref *provider.Reference) error {
-	newRef, share, err := d.translateOCMShareToCS3Ref(ctx, ref)
+	share, rel, err := d.shareAndRelativePathFromRef(ctx, ref)
 	if err != nil {
 		return err
 	}
 
-	return d.opFromUser(ctx, share.Creator, func(userCtx context.Context) error {
-		res, err := d.gateway.CreateContainer(userCtx, &provider.CreateContainerRequest{Ref: newRef})
+	return d.unwrappedOpFromShareCreator(ctx, share, rel, func(userCtx context.Context, ref *provider.Reference) error {
+		res, err := d.gateway.CreateContainer(userCtx, &provider.CreateContainerRequest{Ref: ref})
 		switch {
 		case err != nil:
 			return err
@@ -206,13 +213,13 @@ func (d *driver) CreateDir(ctx context.Context, ref *provider.Reference) error {
 }
 
 func (d *driver) TouchFile(ctx context.Context, ref *provider.Reference) error {
-	newRef, share, err := d.translateOCMShareToCS3Ref(ctx, ref)
+	share, rel, err := d.shareAndRelativePathFromRef(ctx, ref)
 	if err != nil {
 		return err
 	}
 
-	return d.opFromUser(ctx, share.Creator, func(userCtx context.Context) error {
-		res, err := d.gateway.TouchFile(userCtx, &provider.TouchFileRequest{Ref: newRef})
+	return d.unwrappedOpFromShareCreator(ctx, share, rel, func(userCtx context.Context, ref *provider.Reference) error {
+		res, err := d.gateway.TouchFile(userCtx, &provider.TouchFileRequest{Ref: ref})
 		switch {
 		case err != nil:
 			return err
@@ -225,13 +232,13 @@ func (d *driver) TouchFile(ctx context.Context, ref *provider.Reference) error {
 }
 
 func (d *driver) Delete(ctx context.Context, ref *provider.Reference) error {
-	newRef, share, err := d.translateOCMShareToCS3Ref(ctx, ref)
+	share, rel, err := d.shareAndRelativePathFromRef(ctx, ref)
 	if err != nil {
 		return err
 	}
 
-	return d.opFromUser(ctx, share.Creator, func(userCtx context.Context) error {
-		res, err := d.gateway.Delete(userCtx, &provider.DeleteRequest{Ref: newRef})
+	return d.unwrappedOpFromShareCreator(ctx, share, rel, func(userCtx context.Context, ref *provider.Reference) error {
+		res, err := d.gateway.Delete(userCtx, &provider.DeleteRequest{Ref: ref})
 		switch {
 		case err != nil:
 			return err
@@ -243,28 +250,8 @@ func (d *driver) Delete(ctx context.Context, ref *provider.Reference) error {
 	})
 }
 
-func (d *driver) Move(ctx context.Context, oldRef, newRef *provider.Reference) error {
-	resolvedOldRef, share, err := d.translateOCMShareToCS3Ref(ctx, oldRef)
-	if err != nil {
-		return err
-	}
-
-	resolvedNewRef, _, err := d.translateOCMShareToCS3Ref(ctx, newRef)
-	if err != nil {
-		return err
-	}
-
-	return d.opFromUser(ctx, share.Creator, func(userCtx context.Context) error {
-		res, err := d.gateway.Move(ctx, &provider.MoveRequest{Source: resolvedOldRef, Destination: resolvedNewRef})
-		switch {
-		case err != nil:
-			return err
-		case res.Status.Code != rpcv1beta1.Code_CODE_OK:
-			// TODO: better error handling
-			return errtypes.InternalError(res.Status.Message)
-		}
-		return nil
-	})
+func (d *driver) Move(ctx context.Context, from, to *provider.Reference) error {
+	return errtypes.NotSupported("not yet implemented")
 }
 
 func (d *driver) opFromUser(ctx context.Context, userID *userv1beta1.UserId, f func(ctx context.Context) error) error {
@@ -298,14 +285,24 @@ func (d *driver) opFromUser(ctx context.Context, userID *userv1beta1.UserId, f f
 	return f(ownerCtx)
 }
 
+func (d *driver) unwrappedOpFromShareCreator(ctx context.Context, share *ocmv1beta1.Share, rel string, f func(ctx context.Context, ref *provider.Reference) error) error {
+	return d.opFromUser(ctx, share.Creator, func(userCtx context.Context) error {
+		newRef, err := d.translateOCMShareResourceToCS3Ref(userCtx, share.ResourceId, rel)
+		if err != nil {
+			return err
+		}
+		return f(userCtx, newRef)
+	})
+}
+
 func (d *driver) GetMD(ctx context.Context, ref *provider.Reference, _ []string) (*provider.ResourceInfo, error) {
-	newRef, share, err := d.translateOCMShareToCS3Ref(ctx, ref)
+	share, rel, err := d.shareAndRelativePathFromRef(ctx, ref)
 	if err != nil {
 		return nil, err
 	}
 
 	var info *provider.ResourceInfo
-	if err := d.opFromUser(ctx, share.Creator, func(userCtx context.Context) error {
+	if err := d.unwrappedOpFromShareCreator(ctx, share, rel, func(userCtx context.Context, newRef *provider.Reference) error {
 		info, err = d.stat(userCtx, newRef)
 		return err
 	}); err != nil {
@@ -359,13 +356,13 @@ func fixResourceInfo(info, shareInfo *provider.ResourceInfo, share *ocmv1beta1.S
 }
 
 func (d *driver) ListFolder(ctx context.Context, ref *provider.Reference, _ []string) ([]*provider.ResourceInfo, error) {
-	newRef, share, err := d.translateOCMShareToCS3Ref(ctx, ref)
+	share, rel, err := d.shareAndRelativePathFromRef(ctx, ref)
 	if err != nil {
 		return nil, err
 	}
 
 	var infos []*provider.ResourceInfo
-	if err := d.opFromUser(ctx, share.Creator, func(userCtx context.Context) error {
+	if err := d.unwrappedOpFromShareCreator(ctx, share, rel, func(userCtx context.Context, newRef *provider.Reference) error {
 		lstRes, err := d.gateway.ListContainer(userCtx, &provider.ListContainerRequest{Ref: newRef})
 		switch {
 		case err != nil:
@@ -425,12 +422,12 @@ func getUploadProtocol(protocols []*gateway.FileUploadProtocol, protocol string)
 }
 
 func (d *driver) Upload(ctx context.Context, ref *provider.Reference, content io.ReadCloser) error {
-	newRef, share, err := d.translateOCMShareToCS3Ref(ctx, ref)
+	share, rel, err := d.shareAndRelativePathFromRef(ctx, ref)
 	if err != nil {
 		return err
 	}
 
-	return d.opFromUser(ctx, share.Creator, func(userCtx context.Context) error {
+	return d.unwrappedOpFromShareCreator(ctx, share, rel, func(userCtx context.Context, newRef *provider.Reference) error {
 		initRes, err := d.gateway.InitiateFileUpload(userCtx, &provider.InitiateFileUploadRequest{Ref: newRef})
 		switch {
 		case err != nil:
@@ -477,14 +474,13 @@ func getDownloadProtocol(protocols []*gateway.FileDownloadProtocol, lst []string
 }
 
 func (d *driver) Download(ctx context.Context, ref *provider.Reference) (io.ReadCloser, error) {
-	newRef, share, err := d.translateOCMShareToCS3Ref(ctx, ref)
+	share, rel, err := d.shareAndRelativePathFromRef(ctx, ref)
 	if err != nil {
 		return nil, err
 	}
 
 	var r io.ReadCloser
-
-	if err := d.opFromUser(ctx, share.Creator, func(userCtx context.Context) error {
+	if err := d.unwrappedOpFromShareCreator(ctx, share, rel, func(userCtx context.Context, newRef *provider.Reference) error {
 		initRes, err := d.gateway.InitiateFileDownload(userCtx, &provider.InitiateFileDownloadRequest{Ref: newRef})
 		switch {
 		case err != nil:
@@ -532,12 +528,12 @@ func (d *driver) GetPathByID(ctx context.Context, id *provider.ResourceId) (stri
 }
 
 func (d *driver) SetLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
-	newRef, share, err := d.translateOCMShareToCS3Ref(ctx, ref)
+	share, rel, err := d.shareAndRelativePathFromRef(ctx, ref)
 	if err != nil {
 		return err
 	}
 
-	return d.opFromUser(ctx, share.Creator, func(userCtx context.Context) error {
+	return d.unwrappedOpFromShareCreator(ctx, share, rel, func(userCtx context.Context, newRef *provider.Reference) error {
 		lockRes, err := d.gateway.SetLock(ctx, &provider.SetLockRequest{
 			Ref:  newRef,
 			Lock: lock,
@@ -557,13 +553,13 @@ func (d *driver) SetLock(ctx context.Context, ref *provider.Reference, lock *pro
 }
 
 func (d *driver) GetLock(ctx context.Context, ref *provider.Reference) (*provider.Lock, error) {
-	newRef, share, err := d.translateOCMShareToCS3Ref(ctx, ref)
+	share, rel, err := d.shareAndRelativePathFromRef(ctx, ref)
 	if err != nil {
 		return nil, err
 	}
 
 	var lock *provider.Lock
-	if err := d.opFromUser(ctx, share.Creator, func(userCtx context.Context) error {
+	if err := d.unwrappedOpFromShareCreator(ctx, share, rel, func(userCtx context.Context, newRef *provider.Reference) error {
 		lockRes, err := d.gateway.GetLock(userCtx, &provider.GetLockRequest{Ref: newRef})
 		switch {
 		case err != nil:
@@ -583,12 +579,12 @@ func (d *driver) GetLock(ctx context.Context, ref *provider.Reference) (*provide
 }
 
 func (d *driver) RefreshLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock, existingLockID string) error {
-	newRef, share, err := d.translateOCMShareToCS3Ref(ctx, ref)
+	share, rel, err := d.shareAndRelativePathFromRef(ctx, ref)
 	if err != nil {
 		return err
 	}
 
-	return d.opFromUser(ctx, share.Creator, func(userCtx context.Context) error {
+	return d.unwrappedOpFromShareCreator(ctx, share, rel, func(userCtx context.Context, newRef *provider.Reference) error {
 		lockRes, err := d.gateway.RefreshLock(userCtx, &provider.RefreshLockRequest{
 			Ref:            newRef,
 			ExistingLockId: existingLockID,
@@ -609,12 +605,12 @@ func (d *driver) RefreshLock(ctx context.Context, ref *provider.Reference, lock 
 }
 
 func (d *driver) Unlock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
-	newRef, share, err := d.translateOCMShareToCS3Ref(ctx, ref)
+	share, rel, err := d.shareAndRelativePathFromRef(ctx, ref)
 	if err != nil {
 		return err
 	}
 
-	return d.opFromUser(ctx, share.Creator, func(userCtx context.Context) error {
+	return d.unwrappedOpFromShareCreator(ctx, share, rel, func(userCtx context.Context, newRef *provider.Reference) error {
 		lockRes, err := d.gateway.Unlock(userCtx, &provider.UnlockRequest{
 			Ref:  newRef,
 			Lock: lock,
@@ -634,12 +630,12 @@ func (d *driver) Unlock(ctx context.Context, ref *provider.Reference, lock *prov
 }
 
 func (d *driver) SetArbitraryMetadata(ctx context.Context, ref *provider.Reference, md *provider.ArbitraryMetadata) error {
-	newRef, share, err := d.translateOCMShareToCS3Ref(ctx, ref)
+	share, rel, err := d.shareAndRelativePathFromRef(ctx, ref)
 	if err != nil {
 		return err
 	}
 
-	return d.opFromUser(ctx, share.Creator, func(userCtx context.Context) error {
+	return d.unwrappedOpFromShareCreator(ctx, share, rel, func(userCtx context.Context, newRef *provider.Reference) error {
 		res, err := d.gateway.SetArbitraryMetadata(userCtx, &provider.SetArbitraryMetadataRequest{
 			Ref:               newRef,
 			ArbitraryMetadata: md,
@@ -657,12 +653,12 @@ func (d *driver) SetArbitraryMetadata(ctx context.Context, ref *provider.Referen
 }
 
 func (d *driver) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Reference, keys []string) error {
-	newRef, share, err := d.translateOCMShareToCS3Ref(ctx, ref)
+	share, rel, err := d.shareAndRelativePathFromRef(ctx, ref)
 	if err != nil {
 		return err
 	}
 
-	return d.opFromUser(ctx, share.Creator, func(userCtx context.Context) error {
+	return d.unwrappedOpFromShareCreator(ctx, share, rel, func(userCtx context.Context, newRef *provider.Reference) error {
 		res, err := d.gateway.UnsetArbitraryMetadata(userCtx, &provider.UnsetArbitraryMetadataRequest{
 			Ref:                   newRef,
 			ArbitraryMetadataKeys: keys,
