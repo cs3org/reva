@@ -20,7 +20,6 @@ package outcoming
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -127,28 +126,6 @@ func (d *driver) stat(ctx context.Context, ref *provider.Reference) (*provider.R
 
 	return statRes.Info, nil
 }
-
-// func (d *driver) resolvePath(ctx context.Context, path string) (*provider.Reference, *ocmv1beta1.Share, error) {
-// 	// path is of type /token/<rel-path>
-// 	tkn, rel := router.ShiftPath(path)
-// 	rel = makeRelative(rel)
-
-// 	resID, share, err := d.resolveToken(ctx, tkn)
-// 	if err != nil {
-// 		return nil, nil, err
-// 	}
-
-// 	info, err := d.stat(ctx, &provider.Reference{ResourceId: resID})
-// 	if err != nil {
-// 		return nil, nil, err
-// 	}
-
-// 	p := filepath.Join(info.Path, rel)
-
-// 	return &provider.Reference{
-// 		Path: p,
-// 	}, share, nil
-// }
 
 func makeRelative(path string) string {
 	if strings.HasPrefix(path, "/") {
@@ -347,11 +324,10 @@ func fixResourceInfo(info, shareInfo *provider.ResourceInfo, share *ocmv1beta1.S
 	relPath := makeRelative(strings.TrimPrefix(info.Path, shareInfo.Path))
 	info.Path = filepath.Join("/", share.Token, relPath)
 
-	// fix resource id
-	info.Id = &provider.ResourceId{
-		OpaqueId: fmt.Sprintf("%s:%s", share.Token, relPath),
-	}
-	// TODO: we should filter the permissions also
+	// to enable collaborative apps, the fileid must be the same
+	// of the proxied storage
+
+	// fix permissions
 	info.PermissionSet = perms
 }
 
