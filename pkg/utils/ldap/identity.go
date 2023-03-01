@@ -526,7 +526,7 @@ func (i *Identity) getUserAttributeFilter(attribute, value string) (string, erro
 
 func (i *Identity) disabledFilter() string {
 	if i.User.DisableMechanism == "attribute" {
-		return fmt.Sprintf("(!(%s=FALSE)))", i.User.EnabledProperty)
+		return fmt.Sprintf("(!(%s=FALSE))", i.User.EnabledProperty)
 	}
 	return ""
 }
