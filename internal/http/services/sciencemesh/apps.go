@@ -21,6 +21,7 @@ package sciencemesh
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 
@@ -76,7 +77,10 @@ func (h *appsHandler) OpenInApp(w http.ResponseWriter, r *http.Request) {
 
 	template, err := h.webappTemplate(ctx, shareID)
 	if err != nil {
-		// TODO: error
+		var e errtypes.NotFound
+		if errors.As(err, &e) {
+			reqres.WriteError(w, r, reqres.APIErrorNotFound, e.Error(), nil)
+		}
 		reqres.WriteError(w, r, reqres.APIErrorServerError, err.Error(), err)
 		return
 	}
