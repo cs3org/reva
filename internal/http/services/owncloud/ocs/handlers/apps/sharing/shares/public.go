@@ -24,6 +24,7 @@ import (
 	"net/http"
 	"strconv"
 
+	permissionsv1beta1 "github.com/cs3org/go-cs3apis/cs3/permissions/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -49,6 +50,30 @@ func (h *Handler) createPublicLinkShare(w http.ResponseWriter, r *http.Request, 
 			Code:    response.MetaServerError.StatusCode,
 			Message: "error getting grpc gateway client",
 			Error:   err,
+		}
+	}
+
+	user := ctxpkg.ContextMustGetUser(ctx)
+	resp, err := c.CheckPermission(ctx, &permissionsv1beta1.CheckPermissionRequest{
+		SubjectRef: &permissionsv1beta1.SubjectReference{
+			Spec: &permissionsv1beta1.SubjectReference_UserId{
+				UserId: user.Id,
+			},
+		},
+		Permission: "PublicLink.Write",
+	})
+	if err != nil {
+		return nil, &ocsError{
+			Code:    response.MetaServerError.StatusCode,
+			Message: "failed to check user permission",
+			Error:   err,
+		}
+	}
+
+	if resp.Status.Code != rpc.Code_CODE_OK {
+		return nil, &ocsError{
+			Code:    response.MetaForbidden.StatusCode,
+			Message: "user is not allowed to create a public link",
 		}
 	}
 
@@ -267,6 +292,27 @@ func (h *Handler) updatePublicShare(w http.ResponseWriter, r *http.Request, shar
 	if err != nil {
 		log.Err(err).Str("shareID", shareID).Msg("updatePublicShare")
 		response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "error getting a connection to the gateway service", nil)
+		return
+	}
+
+	ctx := r.Context()
+
+	user := ctxpkg.ContextMustGetUser(ctx)
+	resp, err := gwC.CheckPermission(ctx, &permissionsv1beta1.CheckPermissionRequest{
+		SubjectRef: &permissionsv1beta1.SubjectReference{
+			Spec: &permissionsv1beta1.SubjectReference_UserId{
+				UserId: user.Id,
+			},
+		},
+		Permission: "PublicLink.Write",
+	})
+	if err != nil {
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "failed to check user permission", err)
+		return
+	}
+
+	if resp.Status.Code != rpc.Code_CODE_OK {
+		response.WriteOCSError(w, r, response.MetaForbidden.StatusCode, "user is not allowed to create a public link", nil)
 		return
 	}
 

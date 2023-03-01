@@ -42,6 +42,8 @@ func (m manager) CheckPermission(perm string, subject string, ref *provider.Refe
 		// TODO Users can only create their own personal space
 		// TODO guest accounts cannot create spaces
 		return true
+	case permission.WritePublicLink:
+		return true
 	case permission.ListAllSpaces:
 		// TODO introduce an admin role to allow listing all spaces
 		return false
