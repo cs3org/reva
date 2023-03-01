@@ -176,9 +176,13 @@ func (d *driver) translateOCMShareToCS3Ref(ctx context.Context, ref *provider.Re
 		return nil, nil, err
 	}
 
+	info, err := d.stat(ctx, &provider.Reference{ResourceId: resID})
+	if err != nil {
+		return nil, nil, err
+	}
+
 	return &provider.Reference{
-		ResourceId: resID,
-		Path:       path,
+		Path: filepath.Join(info.Path, path),
 	}, share, nil
 }
 
