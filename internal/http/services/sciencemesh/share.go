@@ -30,7 +30,6 @@ import (
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
-	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	ocmv1beta1 "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	providerv1beta1 "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
@@ -88,7 +87,7 @@ func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, "unexpected error", err)
 		return
 	}
-	if res.Status.Code != rpcv1beta1.Code_CODE_OK {
+	if res.Status.Code != rpc.Code_CODE_OK {
 		reqres.WriteError(w, r, reqres.APIErrorUnauthenticated, res.Status.Message, errors.New(res.Status.Message))
 		return
 	}
@@ -106,10 +105,10 @@ func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 	case err != nil:
 		reqres.WriteError(w, r, reqres.APIErrorServerError, "unexpected error", err)
 		return
-	case statRes.Status.Code == rpcv1beta1.Code_CODE_NOT_FOUND:
+	case statRes.Status.Code == rpc.Code_CODE_NOT_FOUND:
 		reqres.WriteError(w, r, reqres.APIErrorNotFound, statRes.Status.Message, nil)
 		return
-	case statRes.Status.Code != rpcv1beta1.Code_CODE_OK:
+	case statRes.Status.Code != rpc.Code_CODE_OK:
 		reqres.WriteError(w, r, reqres.APIErrorServerError, statRes.Status.Message, errors.New(statRes.Status.Message))
 		return
 	}
