@@ -130,15 +130,15 @@ func (b IniBackend) Set(path, key, val string) error {
 
 // SetMultiple sets a set of attribute for the given path
 func (b IniBackend) SetMultiple(path string, attribs map[string]string, acquireLock bool) error {
-	return b.saveIni(path, attribs, acquireLock)
+	return b.saveIni(path, attribs, nil, acquireLock)
 }
 
 // Remove an extended attribute key
 func (b IniBackend) Remove(path, key string) error {
-	return b.saveIni(path, map[string]string{key: ""}, true)
+	return b.saveIni(path, nil, []string{key}, true)
 }
 
-func (b IniBackend) saveIni(path string, attribs map[string]string, acquireLock bool) error {
+func (b IniBackend) saveIni(path string, setAttribs map[string]string, deleteAttribs []string, acquireLock bool) error {
 	var (
 		f   ReadWriteCloseSeekTruncater
 		err error
@@ -166,12 +166,11 @@ func (b IniBackend) saveIni(path string, attribs map[string]string, acquireLock 
 
 	// Prepare new metadata
 	iniAttribs := iniFile.Section("").KeysHash()
-	for key, val := range attribs {
-		if val == "" {
-			delete(iniAttribs, key)
-		} else {
-			iniAttribs[key] = val
-		}
+	for key, val := range setAttribs {
+		iniAttribs[key] = val
+	}
+	for _, key := range deleteAttribs {
+		delete(iniAttribs, key)
 	}
 
 	// Truncate file

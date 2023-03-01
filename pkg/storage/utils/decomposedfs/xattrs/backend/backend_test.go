@@ -90,6 +90,18 @@ var _ = Describe("Backend", func() {
 				Expect(err).ToNot(HaveOccurred())
 				Expect(string(content)).To(Equal("user.ocis.cs.foo = YmFy\n"))
 			})
+
+			It("sets an empty attribute", func() {
+				_, err := backend.Get(file, "foo")
+				Expect(err).To(HaveOccurred())
+
+				err = backend.Set(file, "foo", "")
+				Expect(err).ToNot(HaveOccurred())
+
+				v, err := backend.Get(file, "foo")
+				Expect(err).ToNot(HaveOccurred())
+				Expect(v).To(Equal(""))
+			})
 		})
 
 		Describe("SetMultiple", func() {
