@@ -222,7 +222,6 @@ func (h *Handler) listUserShares(r *http.Request, filters []*collaboration.Filte
 			}
 			ocsDataPayload = append(ocsDataPayload, ocmShares...)
 		}
-
 	}
 
 	return ocsDataPayload, nil, nil
