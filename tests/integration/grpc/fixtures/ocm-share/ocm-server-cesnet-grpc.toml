@@ -24,6 +24,7 @@ basic = "{{grpc_address}}"
 
 [grpc.services.ocminvitemanager]
 driver = "json"
+provider_domain = "cesnet.cz"
 
 [grpc.services.ocminvitemanager.drivers.json]
 file = "{{invite_token_file}}"

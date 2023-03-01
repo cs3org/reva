@@ -44,6 +44,7 @@ machine = "{{cernboxmachineauth_address}}"
 
 [grpc.services.ocminvitemanager]
 driver = "json"
+provider_domain = "cernbox.cern.ch"
 
 [grpc.services.ocminvitemanager.drivers.json]
 file = "{{invite_token_file}}"
