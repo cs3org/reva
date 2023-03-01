@@ -51,6 +51,7 @@ type config struct {
 	OCMClientTimeout  int                               `mapstructure:"ocm_timeout"`
 	OCMClientInsecure bool                              `mapstructure:"ocm_insecure"`
 	GatewaySVC        string                            `mapstructure:"gateway_svc"`
+	ProviderDomain    string                            `mapstructure:"provider_domain" docs:"The same domain registered in the provider authorizer"`
 
 	tokenExpiration time.Duration
 }
@@ -174,7 +175,7 @@ func (s *service) ForwardInvite(ctx context.Context, req *invitepb.ForwardInvite
 
 	remoteUser, err := s.ocmClient.InviteAccepted(ctx, ocmEndpoint, &client.InviteAcceptedRequest{
 		Token:             req.InviteToken.GetToken(),
-		RecipientProvider: user.GetId().GetIdp(),
+		RecipientProvider: s.conf.ProviderDomain,
 		UserID:            user.GetId().GetOpaqueId(),
 		Email:             user.GetMail(),
 		Name:              user.GetDisplayName(),

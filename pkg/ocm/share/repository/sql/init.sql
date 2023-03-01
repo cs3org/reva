@@ -62,7 +62,7 @@ CREATE TABLE IF NOT EXISTS ocm_received_share_protocols (
 CREATE TABLE IF NOT EXISTS ocm_protocol_webdav (
     ocm_protocol_id INTEGER NOT NULL PRIMARY KEY,
     uri VARCHAR(255) NOT NULL,
-    shared_secret VARCHAR(255) NOT NULL,
+    shared_secret TEXT NOT NULL,
     permissions INTEGER NOT NULL,
     FOREIGN KEY (ocm_protocol_id) REFERENCES ocm_received_share_protocols(id) ON DELETE CASCADE
 );
