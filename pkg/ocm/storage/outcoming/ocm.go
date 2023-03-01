@@ -531,6 +531,154 @@ func (d *driver) GetPathByID(ctx context.Context, id *provider.ResourceId) (stri
 	return info.Path, nil
 }
 
+func (d *driver) SetLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
+	newRef, share, err := d.translateOCMShareToCS3Ref(ctx, ref)
+	if err != nil {
+		return err
+	}
+
+	return d.opFromUser(ctx, share.Creator, func(userCtx context.Context) error {
+		lockRes, err := d.gateway.SetLock(ctx, &provider.SetLockRequest{
+			Ref:  newRef,
+			Lock: lock,
+		})
+		switch {
+		case err != nil:
+			return err
+		case lockRes.Status.Code == rpcv1beta1.Code_CODE_NOT_FOUND:
+			return errtypes.NotFound(ref.String())
+		case lockRes.Status.Code == rpcv1beta1.Code_CODE_FAILED_PRECONDITION:
+			return errtypes.BadRequest(lockRes.Status.Message)
+		case lockRes.Status.Code != rpcv1beta1.Code_CODE_OK:
+			return errtypes.InternalError(lockRes.Status.Message)
+		}
+		return nil
+	})
+}
+
+func (d *driver) GetLock(ctx context.Context, ref *provider.Reference) (*provider.Lock, error) {
+	newRef, share, err := d.translateOCMShareToCS3Ref(ctx, ref)
+	if err != nil {
+		return nil, err
+	}
+
+	var lock *provider.Lock
+	if err := d.opFromUser(ctx, share.Creator, func(userCtx context.Context) error {
+		lockRes, err := d.gateway.GetLock(userCtx, &provider.GetLockRequest{Ref: newRef})
+		switch {
+		case err != nil:
+			return err
+		case lockRes.Status.Code == rpcv1beta1.Code_CODE_NOT_FOUND:
+			return errtypes.NotFound(ref.String())
+		case lockRes.Status.Code != rpcv1beta1.Code_CODE_OK:
+			return errtypes.InternalError(lockRes.Status.Message)
+		}
+
+		lock = lockRes.Lock
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+	return lock, nil
+}
+
+func (d *driver) RefreshLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock, existingLockID string) error {
+	newRef, share, err := d.translateOCMShareToCS3Ref(ctx, ref)
+	if err != nil {
+		return err
+	}
+
+	return d.opFromUser(ctx, share.Creator, func(userCtx context.Context) error {
+		lockRes, err := d.gateway.RefreshLock(userCtx, &provider.RefreshLockRequest{
+			Ref:            newRef,
+			ExistingLockId: existingLockID,
+			Lock:           lock,
+		})
+		switch {
+		case err != nil:
+			return err
+		case lockRes.Status.Code == rpcv1beta1.Code_CODE_NOT_FOUND:
+			return errtypes.NotFound(ref.String())
+		case lockRes.Status.Code == rpcv1beta1.Code_CODE_FAILED_PRECONDITION:
+			return errtypes.BadRequest(lockRes.Status.Message)
+		case lockRes.Status.Code != rpcv1beta1.Code_CODE_OK:
+			return errtypes.InternalError(lockRes.Status.Message)
+		}
+		return nil
+	})
+}
+
+func (d *driver) Unlock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
+	newRef, share, err := d.translateOCMShareToCS3Ref(ctx, ref)
+	if err != nil {
+		return err
+	}
+
+	return d.opFromUser(ctx, share.Creator, func(userCtx context.Context) error {
+		lockRes, err := d.gateway.Unlock(userCtx, &provider.UnlockRequest{
+			Ref:  newRef,
+			Lock: lock,
+		})
+		switch {
+		case err != nil:
+			return err
+		case lockRes.Status.Code == rpcv1beta1.Code_CODE_NOT_FOUND:
+			return errtypes.NotFound(ref.String())
+		case lockRes.Status.Code == rpcv1beta1.Code_CODE_FAILED_PRECONDITION:
+			return errtypes.BadRequest(lockRes.Status.Message)
+		case lockRes.Status.Code != rpcv1beta1.Code_CODE_OK:
+			return errtypes.InternalError(lockRes.Status.Message)
+		}
+		return nil
+	})
+}
+
+func (d *driver) SetArbitraryMetadata(ctx context.Context, ref *provider.Reference, md *provider.ArbitraryMetadata) error {
+	newRef, share, err := d.translateOCMShareToCS3Ref(ctx, ref)
+	if err != nil {
+		return err
+	}
+
+	return d.opFromUser(ctx, share.Creator, func(userCtx context.Context) error {
+		res, err := d.gateway.SetArbitraryMetadata(userCtx, &provider.SetArbitraryMetadataRequest{
+			Ref:               newRef,
+			ArbitraryMetadata: md,
+		})
+		switch {
+		case err != nil:
+			return err
+		case res.Status.Code == rpcv1beta1.Code_CODE_NOT_FOUND:
+			return errtypes.NotFound(ref.String())
+		case res.Status.Code != rpcv1beta1.Code_CODE_OK:
+			return errtypes.InternalError(res.Status.Message)
+		}
+		return nil
+	})
+}
+
+func (d *driver) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Reference, keys []string) error {
+	newRef, share, err := d.translateOCMShareToCS3Ref(ctx, ref)
+	if err != nil {
+		return err
+	}
+
+	return d.opFromUser(ctx, share.Creator, func(userCtx context.Context) error {
+		res, err := d.gateway.UnsetArbitraryMetadata(userCtx, &provider.UnsetArbitraryMetadataRequest{
+			Ref:                   newRef,
+			ArbitraryMetadataKeys: keys,
+		})
+		switch {
+		case err != nil:
+			return err
+		case res.Status.Code == rpcv1beta1.Code_CODE_NOT_FOUND:
+			return errtypes.NotFound(ref.String())
+		case res.Status.Code != rpcv1beta1.Code_CODE_OK:
+			return errtypes.InternalError(res.Status.Message)
+		}
+		return nil
+	})
+}
+
 func (d *driver) Shutdown(ctx context.Context) error {
 	return nil
 }
@@ -595,30 +743,6 @@ func (d *driver) GetQuota(ctx context.Context, ref *provider.Reference) ( /*Tota
 }
 
 func (d *driver) CreateReference(ctx context.Context, path string, targetURI *url.URL) error {
-	return errtypes.NotSupported("operation not supported")
-}
-
-func (d *driver) SetArbitraryMetadata(ctx context.Context, ref *provider.Reference, md *provider.ArbitraryMetadata) error {
-	return errtypes.NotSupported("operation not supported")
-}
-
-func (d *driver) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Reference, keys []string) error {
-	return errtypes.NotSupported("operation not supported")
-}
-
-func (d *driver) SetLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
-	return errtypes.NotSupported("operation not supported")
-}
-
-func (d *driver) GetLock(ctx context.Context, ref *provider.Reference) (*provider.Lock, error) {
-	return nil, errtypes.NotSupported("operation not supported")
-}
-
-func (d *driver) RefreshLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock, existingLockID string) error {
-	return errtypes.NotSupported("operation not supported")
-}
-
-func (d *driver) Unlock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
 	return errtypes.NotSupported("operation not supported")
 }
 
