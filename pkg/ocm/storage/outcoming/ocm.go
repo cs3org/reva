@@ -133,12 +133,12 @@ func (d *driver) resolvePath(ctx context.Context, path string) (*provider.Refere
 	tkn, rel := router.ShiftPath(path)
 	rel = makeRelative(rel)
 
-	resId, share, err := d.resolveToken(ctx, tkn)
+	resID, share, err := d.resolveToken(ctx, tkn)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	info, err := d.stat(ctx, &provider.Reference{ResourceId: resId})
+	info, err := d.stat(ctx, &provider.Reference{ResourceId: resID})
 	if err != nil {
 		return nil, nil, err
 	}
@@ -334,9 +334,8 @@ func getPermissionsFromShare(share *ocmv1beta1.Share) *provider.ResourcePermissi
 			mode := v.WebappOptions.ViewMode
 			if mode == providerv1beta1.ViewMode_VIEW_MODE_READ_WRITE {
 				return conversions.NewEditorRole().CS3ResourcePermissions()
-			} else {
-				return conversions.NewViewerRole().CS3ResourcePermissions()
 			}
+			return conversions.NewViewerRole().CS3ResourcePermissions()
 		}
 	}
 	return nil
@@ -351,7 +350,7 @@ func fixResourceInfo(info, shareInfo *provider.ResourceInfo, share *ocmv1beta1.S
 	info.Id = &provider.ResourceId{
 		OpaqueId: fmt.Sprintf("%s:%s", share.Token, relPath),
 	}
-	// TODO: we should filter the the permissions also
+	// TODO: we should filter the permissions also
 	info.PermissionSet = perms
 }
 
@@ -503,7 +502,7 @@ func (d *driver) Download(ctx context.Context, ref *provider.Reference) (io.Read
 		}
 		httpReq.Header.Set(datagateway.TokenTransportHeader, token)
 
-		httpRes, err := http.DefaultClient.Do(httpReq)
+		httpRes, err := http.DefaultClient.Do(httpReq) //nolint:golint,bodyclose
 		if err != nil {
 			return err
 		}

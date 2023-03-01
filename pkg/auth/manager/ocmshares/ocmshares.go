@@ -58,6 +58,7 @@ func (c *config) init() {
 	c.GatewayAddr = sharedconf.GetGatewaySVC(c.GatewayAddr)
 }
 
+// New creates a new ocmshares authentication manager.
 func New(m map[string]interface{}) (auth.Manager, error) {
 	var mgr manager
 	if err := mgr.Configure(m); err != nil {
