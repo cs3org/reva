@@ -265,12 +265,6 @@ func (t *Tree) TouchFile(ctx context.Context, n *node.Node) error {
 	if err != nil {
 		return errors.Wrap(err, "Decomposedfs: error creating node")
 	}
-	if xattrs.UsesExternalMetadataFile() {
-		_, err = os.Create(xattrs.MetadataPath(nodePath))
-		if err != nil {
-			return errors.Wrap(err, "Decomposedfs: error creating node")
-		}
-	}
 
 	err = n.WriteAllNodeMetadata()
 	if err != nil {
@@ -960,12 +954,6 @@ func (t *Tree) createDirNode(n *node.Node) (err error) {
 	nodePath := n.InternalPath()
 	if err := os.MkdirAll(nodePath, 0700); err != nil {
 		return errors.Wrap(err, "Decomposedfs: error creating node")
-	}
-	if xattrs.UsesExternalMetadataFile() {
-		_, err = os.Create(xattrs.MetadataPath(nodePath))
-		if err != nil {
-			return errors.Wrap(err, "Decomposedfs: error creating node")
-		}
 	}
 
 	return n.WriteAllNodeMetadata()

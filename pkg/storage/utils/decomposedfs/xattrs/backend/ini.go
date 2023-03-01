@@ -145,9 +145,9 @@ func (b IniBackend) saveIni(path string, setAttribs map[string]string, deleteAtt
 	)
 	path = b.MetadataPath(path)
 	if acquireLock {
-		f, err = lockedfile.OpenFile(path, os.O_RDWR, 0600)
+		f, err = lockedfile.OpenFile(path, os.O_RDWR|os.O_CREATE, 0600)
 	} else {
-		f, err = os.OpenFile(path, os.O_RDWR, 0600)
+		f, err = os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0600)
 	}
 	if err != nil {
 		return err
@@ -229,6 +229,17 @@ func (b IniBackend) loadMeta(path string) (map[string]string, error) {
 			return nil, err
 		}
 	} else {
+		if os.IsNotExist(err) {
+			// some of the caller rely on ENOTEXISTS to be returned when the
+			// actual file (not the metafile) does not exist in order to
+			// determine whether a node exists or not -> stat the actual node
+			_, err := os.Stat(strings.TrimSuffix(path, ".ini"))
+			if err != nil {
+				return nil, err
+			}
+			return attribs, nil // no attributes set yet
+		}
+
 		// // No cached entry found. Read from storage and store in cache
 		lockedFile, err := lockedfile.Open(path)
 		if err != nil {

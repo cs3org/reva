@@ -40,7 +40,6 @@ import (
 	"github.com/cs3org/reva/v2/pkg/rgrpc/status"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/lookup"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs/prefixes"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/filelocks"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/templates"
@@ -101,12 +100,6 @@ func (fs *Decomposedfs) CreateStorageSpace(ctx context.Context, req *provider.Cr
 
 	if err := os.MkdirAll(rootPath, 0700); err != nil {
 		return nil, errors.Wrap(err, "Decomposedfs: error creating node")
-	}
-	if xattrs.UsesExternalMetadataFile() {
-		_, err = os.Create(xattrs.MetadataPath(rootPath))
-		if err != nil {
-			return nil, errors.Wrap(err, "Decomposedfs: error creating metadata file")
-		}
 	}
 
 	if err := root.WriteAllNodeMetadata(); err != nil {
