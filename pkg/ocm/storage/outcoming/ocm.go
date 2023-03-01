@@ -330,7 +330,7 @@ func fixResourceInfo(info, shareInfo *provider.ResourceInfo, share *ocmv1beta1.S
 
 	// fix resource id
 	info.Id = &provider.ResourceId{
-		StorageId: fmt.Sprintf("%s:%s", share.Token, relPath),
+		OpaqueId: fmt.Sprintf("%s:%s", share.Token, relPath),
 	}
 	// TODO: we should filter the the permissions also
 }
