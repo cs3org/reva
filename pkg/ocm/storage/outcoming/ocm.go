@@ -27,12 +27,14 @@ import (
 	"path/filepath"
 	"strings"
 
+	providerv1beta1 "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	ocmv1beta1 "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/datagateway"
+	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
@@ -319,11 +321,28 @@ func (d *driver) augmentResourceInfo(ctx context.Context, info *provider.Resourc
 	if err != nil {
 		return err
 	}
-	fixResourceInfo(info, shareInfo, share)
+	fixResourceInfo(info, shareInfo, share, getPermissionsFromShare(share))
 	return nil
 }
 
-func fixResourceInfo(info, shareInfo *provider.ResourceInfo, share *ocmv1beta1.Share) {
+func getPermissionsFromShare(share *ocmv1beta1.Share) *provider.ResourcePermissions {
+	for _, m := range share.AccessMethods {
+		switch v := m.Term.(type) {
+		case *ocmv1beta1.AccessMethod_WebdavOptions:
+			return v.WebdavOptions.Permissions
+		case *ocmv1beta1.AccessMethod_WebappOptions:
+			mode := v.WebappOptions.ViewMode
+			if mode == providerv1beta1.ViewMode_VIEW_MODE_READ_WRITE {
+				return conversions.NewEditorRole().CS3ResourcePermissions()
+			} else {
+				return conversions.NewViewerRole().CS3ResourcePermissions()
+			}
+		}
+	}
+	return nil
+}
+
+func fixResourceInfo(info, shareInfo *provider.ResourceInfo, share *ocmv1beta1.Share, perms *provider.ResourcePermissions) {
 	// fix path
 	relPath := makeRelative(strings.TrimPrefix(info.Path, shareInfo.Path))
 	info.Path = filepath.Join("/", share.Token, relPath)
@@ -333,6 +352,7 @@ func fixResourceInfo(info, shareInfo *provider.ResourceInfo, share *ocmv1beta1.S
 		OpaqueId: fmt.Sprintf("%s:%s", share.Token, relPath),
 	}
 	// TODO: we should filter the the permissions also
+	info.PermissionSet = perms
 }
 
 func (d *driver) ListFolder(ctx context.Context, ref *provider.Reference, _ []string) ([]*provider.ResourceInfo, error) {
@@ -363,8 +383,9 @@ func (d *driver) ListFolder(ctx context.Context, ref *provider.Reference, _ []st
 		return nil, err
 	}
 
+	perms := getPermissionsFromShare(share)
 	for _, info := range infos {
-		fixResourceInfo(info, shareInfo, share)
+		fixResourceInfo(info, shareInfo, share, perms)
 	}
 
 	return infos, nil
