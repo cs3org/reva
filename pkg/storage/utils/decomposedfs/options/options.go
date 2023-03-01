@@ -63,7 +63,8 @@ type Options struct {
 
 	Tokens TokenOptions `mapstructure:"tokens"`
 
-	StatCache CacheOptions `mapstructure:"statcache"`
+	StatCache         CacheOptions `mapstructure:"statcache"`
+	FileMetadataCache CacheOptions `mapstructure:"filemetadatacache"`
 
 	MaxAcquireLockCycles    int `mapstructure:"max_acquire_lock_cycles"`
 	LockCycleDurationFactor int `mapstructure:"lock_cycle_duration_factor"`

@@ -40,6 +40,7 @@ var (
 	providerCaches            = make(map[string]ProviderCache)
 	createHomeCaches          = make(map[string]CreateHomeCache)
 	createPersonalSpaceCaches = make(map[string]CreatePersonalSpaceCache)
+	fileMetadataCaches        = make(map[string]FileMetadataCache)
 	mutex                     sync.Mutex
 )
 
@@ -77,6 +78,11 @@ type CreateHomeCache interface {
 type CreatePersonalSpaceCache interface {
 	Cache
 	GetKey(userID *userpb.UserId) string
+}
+
+// FileMetadataCache handles file metadata
+type FileMetadataCache interface {
+	Cache
 }
 
 // GetStatCache will return an existing StatCache for the given store, nodes, database and table
@@ -129,6 +135,19 @@ func GetCreatePersonalSpaceCache(cacheStore string, cacheNodes []string, databas
 		createPersonalSpaceCaches[key] = NewCreatePersonalSpaceCache(cacheStore, cacheNodes, database, table, ttl)
 	}
 	return createPersonalSpaceCaches[key]
+}
+
+// GetFileMetadataCache will return an existing GetFileMetadataCache for the given store, nodes, database and table
+// If it does not exist yet it will be created, different TTLs are ignored
+func GetFileMetadataCache(cacheStore string, cacheNodes []string, database, table string, ttl time.Duration) FileMetadataCache {
+	mutex.Lock()
+	defer mutex.Unlock()
+
+	key := strings.Join(append(append([]string{cacheStore}, cacheNodes...), database, table), ":")
+	if fileMetadataCaches[key] == nil {
+		fileMetadataCaches[key] = NewFileMetadataCache(cacheStore, cacheNodes, database, table, ttl)
+	}
+	return fileMetadataCaches[key]
 }
 
 // CacheStore holds cache store specific configuration

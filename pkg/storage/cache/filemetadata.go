@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2023 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,22 +16,23 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package xattrs
+package cache
 
 import (
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/options"
-	xattrBackend "github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs/backend"
+	"time"
 )
 
-// TODO This is currently a singleton because the trash code needs to be refactored before we can hide this behind a real metadata backend interface
-var backend xattrBackend.Backend = xattrBackend.XattrsBackend{}
-
-// UseXattrsBackend configures decomposedfs to use xattrs for storing file attributes
-func UseXattrsBackend() {
-	backend = xattrBackend.XattrsBackend{}
+type fileMetadataCache struct {
+	cacheStore
 }
 
-// UseIniBackend configures decomposedfs to use ini files for storing file attributes
-func UseIniBackend(o options.CacheOptions) {
-	backend = xattrBackend.NewIniBackend(o)
+// NewFileMetadataCache creates a new FileMetadataCache
+func NewFileMetadataCache(store string, nodes []string, database, table string, ttl time.Duration) FileMetadataCache {
+	c := &fileMetadataCache{}
+	c.s = getStore(store, nodes, database, table, ttl)
+	c.database = database
+	c.table = table
+	c.ttl = ttl
+
+	return c
 }

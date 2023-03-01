@@ -103,15 +103,6 @@ func NewDefault(m map[string]interface{}, bs tree.Blobstore, es events.Stream) (
 		return nil, err
 	}
 
-	switch o.MetadataBackend {
-	case "xattrs":
-		xattrs.UseXattrsBackend()
-	case "ini":
-		xattrs.UseIniBackend()
-	default:
-		return nil, fmt.Errorf("unknown metadata backend %s, only 'ini' or 'xattrs' (default) supported", o.MetadataBackend)
-	}
-
 	lu := &lookup.Lookup{}
 	lu.Options = o
 
@@ -143,6 +134,15 @@ func New(o *options.Options, lu *lookup.Lookup, p Permissions, tp Tree, es event
 
 	if o.LockCycleDurationFactor != 0 {
 		filelocks.SetLockCycleDurationFactor(o.LockCycleDurationFactor)
+	}
+
+	switch o.MetadataBackend {
+	case "xattrs":
+		xattrs.UseXattrsBackend()
+	case "ini":
+		xattrs.UseIniBackend(o.FileMetadataCache)
+	default:
+		return nil, fmt.Errorf("unknown metadata backend %s, only 'ini' or 'xattrs' (default) supported", o.MetadataBackend)
 	}
 
 	fs := &Decomposedfs{

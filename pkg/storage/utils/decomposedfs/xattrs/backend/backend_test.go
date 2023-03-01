@@ -23,6 +23,7 @@ import (
 	"path"
 	"strings"
 
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/options"
 	xattrsBackend "github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs/backend"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -58,7 +59,7 @@ var _ = Describe("Backend", func() {
 
 	Describe("IniBackend", func() {
 		BeforeEach(func() {
-			backend = xattrsBackend.NewIniBackend()
+			backend = xattrsBackend.NewIniBackend(options.CacheOptions{})
 		})
 
 		Describe("Set", func() {

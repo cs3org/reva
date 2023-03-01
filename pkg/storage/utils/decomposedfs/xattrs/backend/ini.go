@@ -19,7 +19,6 @@
 package backend
 
 import (
-	"context"
 	"encoding/base64"
 	"io"
 	"io/ioutil"
@@ -28,17 +27,17 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cs3org/reva/v2/pkg/storage/cache"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/options"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs/prefixes"
-	"github.com/go-redis/cache/v9"
 	"github.com/pkg/xattr"
-	"github.com/redis/go-redis/v9"
 	"github.com/rogpeppe/go-internal/lockedfile"
 	"gopkg.in/ini.v1"
 )
 
 // IniBackend persists the attributes in INI format inside the file
 type IniBackend struct {
-	metaCache *cache.Cache
+	metaCache cache.FileMetadataCache
 }
 
 type ReadWriteCloseSeekTruncater interface {
@@ -50,19 +49,9 @@ type ReadWriteCloseSeekTruncater interface {
 var encodedPrefixes = []string{prefixes.ChecksumPrefix, prefixes.MetadataPrefix, prefixes.GrantPrefix}
 
 // NewIniBackend returns a new IniBackend instance
-func NewIniBackend() IniBackend {
-	rdb := redis.NewClient(&redis.Options{
-		Addr:     "127.0.0.1:6379",
-		Password: "", // no password set
-		DB:       0,  // use default DB
-	})
-
-	c := cache.New(&cache.Options{
-		Redis: rdb,
-	})
-
+func NewIniBackend(o options.CacheOptions) IniBackend {
 	return IniBackend{
-		metaCache: c,
+		metaCache: cache.GetFileMetadataCache(o.CacheStore, o.CacheNodes, o.CacheDatabase, "filemetadata", 24*time.Hour),
 	}
 }
 
@@ -202,16 +191,12 @@ func (b IniBackend) saveIni(path string, setAttribs map[string]string, deleteAtt
 		return err
 	}
 
-	return b.metaCache.Set(&cache.Item{
-		Key:   path,
-		Value: iniAttribs,
-		TTL:   24 * time.Hour,
-	})
+	return b.metaCache.PushToCache(path, iniAttribs)
 }
 
 func (b IniBackend) loadMeta(path string) (map[string]string, error) {
 	var attribs map[string]string
-	err := b.metaCache.Get(context.Background(), path, &attribs)
+	err := b.metaCache.PullFromCache(path, &attribs)
 	if err == nil {
 		return attribs, err
 	}
@@ -267,11 +252,7 @@ func (b IniBackend) loadMeta(path string) (map[string]string, error) {
 		}
 	}
 
-	err = b.metaCache.Set(&cache.Item{
-		Key:   path,
-		Value: attribs,
-		TTL:   24 * time.Hour,
-	})
+	err = b.metaCache.PushToCache(path, attribs)
 	if err != nil {
 		return nil, err
 	}
@@ -284,7 +265,7 @@ func (IniBackend) IsMetaFile(path string) bool { return strings.HasSuffix(path, 
 
 // Purge purges the data of a given path
 func (b IniBackend) Purge(path string) error {
-	if err := b.metaCache.Delete(context.Background(), path); err != nil {
+	if err := b.metaCache.Delete(path); err != nil {
 		return err
 	}
 	return os.Remove(b.MetadataPath(path))
@@ -292,18 +273,13 @@ func (b IniBackend) Purge(path string) error {
 
 // Rename moves the data for a given path to a new path
 func (b IniBackend) Rename(oldPath, newPath string) error {
-	ctx := context.Background()
 	data := map[string]string{}
-	_ = b.metaCache.Get(ctx, oldPath, &data)
-	err := b.metaCache.Delete(ctx, oldPath)
+	_ = b.metaCache.PullFromCache(oldPath, &data)
+	err := b.metaCache.Delete(oldPath)
 	if err != nil {
 		return err
 	}
-	err = b.metaCache.Set(&cache.Item{
-		Key:   newPath,
-		Value: data,
-		TTL:   24 * time.Hour,
-	})
+	err = b.metaCache.PushToCache(newPath, data)
 	if err != nil {
 		return err
 	}
