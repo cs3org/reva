@@ -40,9 +40,10 @@ func init() {
 }
 
 type config struct {
-	Driver                string                            `mapstructure:"driver"`
-	Drivers               map[string]map[string]interface{} `mapstructure:"drivers"`
-	AllowedPathsForShares []string                          `mapstructure:"allowed_paths_for_shares"`
+	Driver                         string                            `mapstructure:"driver"`
+	Drivers                        map[string]map[string]interface{} `mapstructure:"drivers"`
+	AllowedPathsForShares          []string                          `mapstructure:"allowed_paths_for_shares"`
+	WriteableShareMustHavePassword bool                              `mapstructure:"writeable_share_must_have_password"`
 }
 
 func (c *config) init() {
@@ -137,6 +138,14 @@ func (s *service) CreatePublicShare(ctx context.Context, req *link.CreatePublicS
 	if !s.isPathAllowed(req.ResourceInfo.Path) {
 		return &link.CreatePublicShareResponse{
 			Status: status.NewInvalid(ctx, "share creation is not allowed for the specified path"),
+		}, nil
+	}
+
+	grant := req.GetGrant()
+	if grant != nil && s.conf.WriteableShareMustHavePassword &&
+		publicshare.IsWriteable(grant) && grant.Password == "" {
+		return &link.CreatePublicShareResponse{
+			Status: status.NewInvalid(ctx, "writeable shares must have a password protection"),
 		}, nil
 	}
 
@@ -243,6 +252,14 @@ func (s *service) ListPublicShares(ctx context.Context, req *link.ListPublicShar
 func (s *service) UpdatePublicShare(ctx context.Context, req *link.UpdatePublicShareRequest) (*link.UpdatePublicShareResponse, error) {
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("publicshareprovider", "update").Msg("update public share")
+
+	grant := req.GetUpdate().GetGrant()
+	if grant != nil && s.conf.WriteableShareMustHavePassword &&
+		publicshare.IsWriteable(grant) && grant.Password == "" {
+		return &link.UpdatePublicShareResponse{
+			Status: status.NewInvalid(ctx, "writeable shares must have a password protection"),
+		}, nil
+	}
 
 	u, ok := ctxpkg.ContextGetUser(ctx)
 	if !ok {
