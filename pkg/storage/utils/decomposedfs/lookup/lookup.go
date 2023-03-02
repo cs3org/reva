@@ -29,10 +29,10 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/options"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs/backend"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs/prefixes"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/filelocks"
 	"github.com/gofrs/flock"
 	"github.com/pkg/errors"
@@ -42,17 +42,17 @@ import (
 type Lookup struct {
 	Options *options.Options
 
-	metadataBackend backend.Backend
+	metadataBackend metadata.Backend
 }
 
-func New(b backend.Backend, o *options.Options) *Lookup {
+func New(b metadata.Backend, o *options.Options) *Lookup {
 	return &Lookup{
 		Options:         o,
 		metadataBackend: b,
 	}
 }
 
-func (lu *Lookup) MetadataBackend() backend.Backend {
+func (lu *Lookup) MetadataBackend() metadata.Backend {
 	return lu.metadataBackend
 }
 

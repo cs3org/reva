@@ -16,15 +16,15 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package backend_test
+package metadata_test
 
 import (
 	"os"
 	"path"
 	"strings"
 
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/options"
-	xattrsBackend "github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs/backend"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
@@ -35,7 +35,7 @@ var _ = Describe("Backend", func() {
 		file     string
 		metafile string
 
-		backend xattrsBackend.Backend
+		backend metadata.Backend
 	)
 
 	BeforeEach(func() {
@@ -59,7 +59,7 @@ var _ = Describe("Backend", func() {
 
 	Describe("IniBackend", func() {
 		BeforeEach(func() {
-			backend = xattrsBackend.NewIniBackend(options.CacheOptions{})
+			backend = metadata.NewIniBackend(options.CacheOptions{})
 		})
 
 		Describe("Set", func() {

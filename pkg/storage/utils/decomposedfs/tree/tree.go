@@ -37,10 +37,9 @@ import (
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/logger"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/lookup"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs/backend"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs/prefixes"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/filelocks"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/google/uuid"
@@ -65,7 +64,7 @@ type PathLookup interface {
 	InternalRoot() string
 	InternalPath(spaceID, nodeID string) string
 	Path(ctx context.Context, n *node.Node, hasPermission node.PermissionFunc) (path string, err error)
-	MetadataBackend() backend.Backend
+	MetadataBackend() metadata.Backend
 	ReadBlobSizeAttr(path string) (int64, error)
 	ReadBlobIDAttr(path string) (string, error)
 	TypeFromPath(path string) provider.ResourceType
@@ -833,7 +832,7 @@ func (t *Tree) Propagate(ctx context.Context, n *node.Node, sizeDiff int64) (err
 				// read treesize
 				treeSize, err := n.GetTreeSize()
 				switch {
-				case xattrs.IsAttrUnset(err):
+				case metadata.IsAttrUnset(err):
 					// fallback to calculating the treesize
 					newSize, err = t.calculateTreeSize(ctx, n.InternalPath())
 					if err != nil {

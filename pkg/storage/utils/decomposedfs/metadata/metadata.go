@@ -1,4 +1,4 @@
-// Copyright 2018-2023 CERN
+// Copyright 2018-2021 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,13 +16,11 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package backend
+package metadata
 
-import (
-	"github.com/pkg/errors"
-)
+import "errors"
 
-var errUnconfiguredError = errors.New("no xattrs backend configured. Bailing out")
+var errUnconfiguredError = errors.New("no metadata backend configured. Bailing out")
 
 // Backend defines the interface for file attribute backends
 type Backend interface {

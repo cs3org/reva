@@ -42,9 +42,8 @@ import (
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/mime"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/ace"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs/backend"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs/prefixes"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/grants"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/google/uuid"
@@ -97,7 +96,7 @@ type PathLookup interface {
 	InternalRoot() string
 	InternalPath(spaceID, nodeID string) string
 	Path(ctx context.Context, n *Node, hasPermission PermissionFunc) (path string, err error)
-	MetadataBackend() backend.Backend
+	MetadataBackend() metadata.Backend
 	ReadBlobSizeAttr(path string) (int64, error)
 	ReadBlobIDAttr(path string) (string, error)
 }
@@ -247,7 +246,7 @@ func ReadNode(ctx context.Context, lu PathLookup, spaceID, nodeID string, canLis
 	r.SpaceRoot = r
 	r.owner, err = r.readOwner()
 	switch {
-	case xattrs.IsNotExist(err):
+	case metadata.IsNotExist(err):
 		return r, nil // swallow not found, the node defaults to exists = false
 	case err != nil:
 		return nil, err
@@ -306,7 +305,7 @@ func ReadNode(ctx context.Context, lu PathLookup, spaceID, nodeID string, canLis
 
 	attrs, err := n.Xattrs()
 	switch {
-	case xattrs.IsNotExist(err):
+	case metadata.IsNotExist(err):
 		return n, nil // swallow not found, the node defaults to exists = false
 	case err != nil:
 		return nil, err
@@ -467,7 +466,7 @@ func (n *Node) readOwner() (*userpb.UserId, error) {
 	switch {
 	case err == nil:
 		owner.OpaqueId = attr
-	case xattrs.IsAttrUnset(err):
+	case metadata.IsAttrUnset(err):
 		// ignore
 	default:
 		return nil, err
@@ -478,7 +477,7 @@ func (n *Node) readOwner() (*userpb.UserId, error) {
 	switch {
 	case err == nil:
 		owner.Idp = attr
-	case xattrs.IsAttrUnset(err):
+	case metadata.IsAttrUnset(err):
 		// ignore
 	default:
 		return nil, err
@@ -489,7 +488,7 @@ func (n *Node) readOwner() (*userpb.UserId, error) {
 	switch {
 	case err == nil:
 		owner.Type = utils.UserTypeMap(attr)
-	case xattrs.IsAttrUnset(err):
+	case metadata.IsAttrUnset(err):
 		// ignore
 	default:
 		return nil, err
@@ -844,7 +843,7 @@ func (n *Node) readChecksumIntoResourceChecksum(ctx context.Context, algo string
 			Type: storageprovider.PKG2GRPCXS(algo),
 			Sum:  hex.EncodeToString([]byte(v)),
 		}
-	case xattrs.IsAttrUnset(err):
+	case metadata.IsAttrUnset(err):
 		appctx.GetLogger(ctx).Debug().Err(err).Str("nodepath", n.InternalPath()).Str("algorithm", algo).Msg("checksum not set")
 	default:
 		appctx.GetLogger(ctx).Error().Err(err).Str("nodepath", n.InternalPath()).Str("algorithm", algo).Msg("could not read checksum")
@@ -864,7 +863,7 @@ func (n *Node) readChecksumIntoOpaque(ctx context.Context, algo string, ri *prov
 			Decoder: "plain",
 			Value:   []byte(hex.EncodeToString([]byte(v))),
 		}
-	case xattrs.IsAttrUnset(err):
+	case metadata.IsAttrUnset(err):
 		appctx.GetLogger(ctx).Debug().Err(err).Str("nodepath", n.InternalPath()).Str("algorithm", algo).Msg("checksum not set")
 	default:
 		appctx.GetLogger(ctx).Error().Err(err).Str("nodepath", n.InternalPath()).Str("algorithm", algo).Msg("could not read checksum")
@@ -894,7 +893,7 @@ func (n *Node) readQuotaIntoOpaque(ctx context.Context, ri *provider.ResourceInf
 		} else {
 			appctx.GetLogger(ctx).Error().Err(err).Str("nodepath", n.InternalPath()).Str("quota", v).Msg("malformed quota")
 		}
-	case xattrs.IsAttrUnset(err):
+	case metadata.IsAttrUnset(err):
 		appctx.GetLogger(ctx).Debug().Err(err).Str("nodepath", n.InternalPath()).Msg("quota not set")
 	default:
 		appctx.GetLogger(ctx).Error().Err(err).Str("nodepath", n.InternalPath()).Msg("could not read quota")
@@ -1051,7 +1050,7 @@ func (n *Node) ReadUserPermissions(ctx context.Context, u *userpb.User) (ap prov
 				return NoPermissions(), true, nil
 			}
 			AddPermissions(&ap, g.GetPermissions())
-		case xattrs.IsAttrUnset(err):
+		case metadata.IsAttrUnset(err):
 			err = nil
 			appctx.GetLogger(ctx).Error().Interface("node", n).Str("grant", grantees[i]).Interface("grantees", grantees).Msg("grant vanished from node after listing")
 			// continue with next segment
@@ -1074,7 +1073,7 @@ func (n *Node) IsDenied(ctx context.Context) bool {
 	case err == nil:
 		// If all permissions are set to false we have a deny grant
 		return grants.PermissionsEqual(g.Permissions, &provider.ResourcePermissions{})
-	case xattrs.IsAttrUnset(err):
+	case metadata.IsAttrUnset(err):
 		return false
 	default:
 		// be paranoid, resource is denied
