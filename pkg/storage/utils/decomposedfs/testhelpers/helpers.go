@@ -24,7 +24,6 @@ import (
 	"path/filepath"
 
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/lookup"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs/prefixes"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/google/uuid"
@@ -277,7 +276,7 @@ func (t *TestEnv) CreateTestStorageSpace(typ string, quota *providerv1beta1.Quot
 	if err != nil {
 		return nil, err
 	}
-	if err = xattrs.Set(h.InternalPath(), prefixes.SpaceNameAttr, "username"); err != nil {
+	if err = h.SetXattr(prefixes.SpaceNameAttr, "username"); err != nil {
 		return nil, err
 	}
 

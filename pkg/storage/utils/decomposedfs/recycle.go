@@ -33,7 +33,6 @@ import (
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/lookup"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs/prefixes"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/pkg/errors"
@@ -89,7 +88,7 @@ func (fs *Decomposedfs) ListRecycle(ctx context.Context, ref *provider.Reference
 	}
 
 	origin := ""
-	attrs, err := xattrs.All(originalPath)
+	attrs, err := fs.lu.MetadataBackend().All(originalPath)
 	if err != nil {
 		return items, err
 	}
@@ -112,7 +111,7 @@ func (fs *Decomposedfs) ListRecycle(ctx context.Context, ref *provider.Reference
 		sublog.Error().Err(err).Msg("could not parse time format, ignoring")
 	}
 
-	nodeType := node.TypeFromPath(originalPath)
+	nodeType := fs.lu.TypeFromPath(originalPath)
 	if nodeType != provider.ResourceType_RESOURCE_TYPE_CONTAINER {
 		// this is the case when we want to directly list a file in the trashbin
 		blobsize, err := strconv.ParseInt(attrs[prefixes.BlobsizeAttr], 10, 64)
@@ -155,16 +154,16 @@ func (fs *Decomposedfs) ListRecycle(ctx context.Context, ref *provider.Reference
 
 		size := int64(0)
 
-		nodeType = node.TypeFromPath(resolvedChildPath)
+		nodeType = fs.lu.TypeFromPath(resolvedChildPath)
 		switch nodeType {
 		case provider.ResourceType_RESOURCE_TYPE_FILE:
-			size, err = node.ReadBlobSizeAttr(resolvedChildPath)
+			size, err = fs.lu.ReadBlobSizeAttr(resolvedChildPath)
 			if err != nil {
 				sublog.Error().Err(err).Str("name", name).Msg("invalid blob size, skipping")
 				continue
 			}
 		case provider.ResourceType_RESOURCE_TYPE_CONTAINER:
-			attr, err := xattrs.Get(resolvedChildPath, prefixes.TreesizeAttr)
+			attr, err := fs.lu.MetadataBackend().Get(resolvedChildPath, prefixes.TreesizeAttr)
 			if err != nil {
 				sublog.Error().Err(err).Str("name", name).Msg("invalid tree size, skipping")
 				continue
@@ -236,13 +235,13 @@ func (fs *Decomposedfs) listTrashRoot(ctx context.Context, spaceID string) ([]*p
 			continue
 		}
 
-		attrs, err := xattrs.All(nodePath)
+		attrs, err := fs.lu.MetadataBackend().All(nodePath)
 		if err != nil {
 			log.Error().Err(err).Str("trashRoot", trashRoot).Str("item", itemPath).Str("node_path", nodePath).Msg("could not get extended attributes, skipping")
 			continue
 		}
 
-		nodeType := node.TypeFromPath(nodePath)
+		nodeType := fs.lu.TypeFromPath(nodePath)
 		if nodeType == provider.ResourceType_RESOURCE_TYPE_INVALID {
 			log.Error().Err(err).Str("trashRoot", trashRoot).Str("item", itemPath).Str("node_path", nodePath).Msg("invalid node type, skipping")
 			continue

@@ -51,7 +51,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/options"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/tree"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/upload"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs/backend"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs/prefixes"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/filelocks"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/templates"
@@ -103,8 +103,15 @@ func NewDefault(m map[string]interface{}, bs tree.Blobstore, es events.Stream) (
 		return nil, err
 	}
 
-	lu := &lookup.Lookup{}
-	lu.Options = o
+	var lu *lookup.Lookup
+	switch o.MetadataBackend {
+	case "xattrs":
+		lu = lookup.New(backend.XattrsBackend{}, o)
+	case "ini":
+		lu = lookup.New(backend.NewIniBackend(o.FileMetadataCache), o)
+	default:
+		return nil, fmt.Errorf("unknown metadata backend %s, only 'ini' or 'xattrs' (default) supported", o.MetadataBackend)
+	}
 
 	tp := tree.New(o.Root, o.TreeTimeAccounting, o.TreeSizeAccounting, lu, bs)
 
@@ -134,15 +141,6 @@ func New(o *options.Options, lu *lookup.Lookup, p Permissions, tp Tree, es event
 
 	if o.LockCycleDurationFactor != 0 {
 		filelocks.SetLockCycleDurationFactor(o.LockCycleDurationFactor)
-	}
-
-	switch o.MetadataBackend {
-	case "xattrs":
-		xattrs.UseXattrsBackend()
-	case "ini":
-		xattrs.UseIniBackend(o.FileMetadataCache)
-	default:
-		return nil, fmt.Errorf("unknown metadata backend %s, only 'ini' or 'xattrs' (default) supported", o.MetadataBackend)
 	}
 
 	fs := &Decomposedfs{

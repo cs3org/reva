@@ -30,7 +30,6 @@ import (
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/ace"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs/prefixes"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/utils"
@@ -135,22 +134,25 @@ func (fs *Decomposedfs) ListGrants(ctx context.Context, ref *provider.Reference)
 		return nil, errtypes.NotFound(f)
 	}
 	log := appctx.GetLogger(ctx)
-	np := grantNode.InternalPath()
 	var attrs map[string]string
 	if attrs, err = grantNode.Xattrs(); err != nil {
 		log.Error().Err(err).Msg("error listing attributes")
 		return nil, err
 	}
-	attrNames := make([]string, len(attrs))
-	i := 0
-	for attr := range attrs {
-		attrNames[i] = attr
-		i++
+
+	aces := []*ace.ACE{}
+	for k, v := range attrs {
+		if strings.HasPrefix(k, prefixes.GrantPrefix) {
+			var err error
+			var e *ace.ACE
+			principal := k[len(prefixes.GrantPrefix):]
+			if e, err = ace.Unmarshal(principal, []byte(v)); err != nil {
+				log.Error().Err(err).Str("principal", principal).Str("attr", k).Msg("could not unmarshal ace")
+				continue
+			}
+			aces = append(aces, e)
+		}
 	}
-
-	log.Debug().Interface("attrs", attrNames).Msg("read attributes")
-
-	aces := extractACEsFromAttrs(ctx, np, attrNames)
 
 	uid := ctxpkg.ContextMustGetUser(ctx).GetId()
 	grants = make([]*provider.Grant, 0, len(aces))
@@ -208,7 +210,7 @@ func (fs *Decomposedfs) RemoveGrant(ctx context.Context, ref *provider.Reference
 		attr = prefixes.GrantUserAcePrefix + g.Grantee.GetUserId().OpaqueId
 	}
 
-	if err = xattrs.Remove(grantNode.InternalPath(), attr); err != nil {
+	if err = grantNode.RemoveXattr(attr); err != nil {
 		return err
 	}
 
@@ -323,28 +325,4 @@ func (fs *Decomposedfs) storeGrant(ctx context.Context, n *node.Node, g *provide
 	}
 
 	return fs.tp.Propagate(ctx, n, 0)
-}
-
-// extractACEsFromAttrs reads ACEs in the list of attrs from the node
-func extractACEsFromAttrs(ctx context.Context, fsfn string, attrs []string) (entries []*ace.ACE) {
-	log := appctx.GetLogger(ctx)
-	entries = []*ace.ACE{}
-	for i := range attrs {
-		if strings.HasPrefix(attrs[i], prefixes.GrantPrefix) {
-			var value string
-			var err error
-			if value, err = xattrs.Get(fsfn, attrs[i]); err != nil {
-				log.Error().Err(err).Str("attr", attrs[i]).Msg("could not read attribute")
-				continue
-			}
-			var e *ace.ACE
-			principal := attrs[i][len(prefixes.GrantPrefix):]
-			if e, err = ace.Unmarshal(principal, []byte(value)); err != nil {
-				log.Error().Err(err).Str("principal", principal).Str("attr", attrs[i]).Msg("could not unmarshal ace")
-				continue
-			}
-			entries = append(entries, e)
-		}
-	}
-	return
 }

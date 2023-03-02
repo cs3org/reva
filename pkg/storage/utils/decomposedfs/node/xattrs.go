@@ -19,7 +19,6 @@
 package node
 
 import (
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs"
 	"github.com/pkg/xattr"
 )
 
@@ -31,7 +30,7 @@ func (n *Node) SetXattrs(attribs map[string]string, acquireLock bool) (err error
 		}
 	}
 
-	return xattrs.SetMultiple(n.InternalPath(), attribs, acquireLock)
+	return n.lu.MetadataBackend().SetMultiple(n.InternalPath(), attribs, acquireLock)
 }
 
 // SetXattr sets an extended attribute on the write-through cache/node
@@ -40,7 +39,7 @@ func (n *Node) SetXattr(key, val string) (err error) {
 		n.xattrsCache[key] = val
 	}
 
-	return xattrs.Set(n.InternalPath(), key, val)
+	return n.lu.MetadataBackend().Set(n.InternalPath(), key, val)
 }
 
 // RemoveXattr removes an extended attribute from the write-through cache/node
@@ -48,7 +47,7 @@ func (n *Node) RemoveXattr(key string) error {
 	if n.xattrsCache != nil {
 		delete(n.xattrsCache, key)
 	}
-	return xattrs.Remove(n.InternalPath(), key)
+	return n.lu.MetadataBackend().Remove(n.InternalPath(), key)
 }
 
 // Xattrs returns the extended attributes of the node. If the attributes have already
@@ -58,7 +57,7 @@ func (n *Node) Xattrs() (map[string]string, error) {
 		return n.xattrsCache, nil
 	}
 
-	attrs, err := xattrs.All(n.InternalPath())
+	attrs, err := n.lu.MetadataBackend().All(n.InternalPath())
 	if err != nil {
 		return nil, err
 	}
@@ -70,7 +69,7 @@ func (n *Node) Xattrs() (map[string]string, error) {
 // been cached it is not read from disk again.
 func (n *Node) Xattr(key string) (string, error) {
 	if n.xattrsCache == nil {
-		attrs, err := xattrs.All(n.InternalPath())
+		attrs, err := n.lu.MetadataBackend().All(n.InternalPath())
 		if err != nil {
 			return "", err
 		}

@@ -21,7 +21,9 @@ package lookup
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -29,13 +31,87 @@ import (
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/options"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs/backend"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs/prefixes"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/filelocks"
+	"github.com/gofrs/flock"
+	"github.com/pkg/errors"
 )
 
 // Lookup implements transformations from filepath to node and back
 type Lookup struct {
 	Options *options.Options
+
+	metadataBackend backend.Backend
+}
+
+func New(b backend.Backend, o *options.Options) *Lookup {
+	return &Lookup{
+		Options:         o,
+		metadataBackend: b,
+	}
+}
+
+func (lu *Lookup) MetadataBackend() backend.Backend {
+	return lu.metadataBackend
+}
+
+// ReadBlobSizeAttr reads the blobsize from the xattrs
+func (lu *Lookup) ReadBlobSizeAttr(path string) (int64, error) {
+	attr, err := lu.metadataBackend.Get(path, prefixes.BlobsizeAttr)
+	if err != nil {
+		return 0, errors.Wrapf(err, "error reading blobsize xattr")
+	}
+	blobSize, err := strconv.ParseInt(attr, 10, 64)
+	if err != nil {
+		return 0, errors.Wrapf(err, "invalid blobsize xattr format")
+	}
+	return blobSize, nil
+}
+
+// ReadBlobIDAttr reads the blobsize from the xattrs
+func (lu *Lookup) ReadBlobIDAttr(path string) (string, error) {
+	attr, err := lu.metadataBackend.Get(path, prefixes.BlobIDAttr)
+	if err != nil {
+		return "", errors.Wrapf(err, "error reading blobid xattr")
+	}
+	return attr, nil
+}
+
+// TypeFromPath returns the type of the node at the given path
+func (lu *Lookup) TypeFromPath(path string) provider.ResourceType {
+	// Try to read from xattrs
+	typeAttr, err := lu.metadataBackend.Get(path, prefixes.TypeAttr)
+	t := provider.ResourceType_RESOURCE_TYPE_INVALID
+	if err == nil {
+		typeInt, err := strconv.ParseInt(typeAttr, 10, 32)
+		if err != nil {
+			return t
+		}
+		return provider.ResourceType(typeInt)
+	}
+
+	// Fall back to checking on disk
+	fi, err := os.Lstat(path)
+	if err != nil {
+		return t
+	}
+
+	switch {
+	case fi.IsDir():
+		if _, err = lu.metadataBackend.Get(path, prefixes.ReferenceAttr); err == nil {
+			t = provider.ResourceType_RESOURCE_TYPE_REFERENCE
+		} else {
+			t = provider.ResourceType_RESOURCE_TYPE_CONTAINER
+		}
+	case fi.Mode().IsRegular():
+		t = provider.ResourceType_RESOURCE_TYPE_FILE
+	case fi.Mode()&os.ModeSymlink != 0:
+		t = provider.ResourceType_RESOURCE_TYPE_SYMLINK
+		// TODO reference using ext attr on a symlink
+		// nodeType = provider.ResourceType_RESOURCE_TYPE_REFERENCE
+	}
+	return t
 }
 
 // NodeFromResource takes in a request path or request id and converts it to a Node
@@ -141,7 +217,7 @@ func (lu *Lookup) WalkPath(ctx context.Context, r *node.Node, p string, followRe
 		if followReferences {
 			if attrBytes, err := r.Xattr(prefixes.ReferenceAttr); err == nil {
 				realNodeID := attrBytes
-				ref, err := xattrs.ReferenceFromAttr([]byte(realNodeID))
+				ref, err := refFromCS3([]byte(realNodeID))
 				if err != nil {
 					return nil, err
 				}
@@ -176,4 +252,92 @@ func (lu *Lookup) InternalRoot() string {
 // InternalPath returns the internal path for a given ID
 func (lu *Lookup) InternalPath(spaceID, nodeID string) string {
 	return filepath.Join(lu.Options.Root, "spaces", Pathify(spaceID, 1, 2), "nodes", Pathify(nodeID, 4, 2))
+}
+
+// // ReferenceFromAttr returns a CS3 reference from xattr of a node.
+// // Supported formats are: "cs3:storageid/nodeid"
+// func ReferenceFromAttr(b []byte) (*provider.Reference, error) {
+// 	return refFromCS3(b)
+// }
+
+// refFromCS3 creates a CS3 reference from a set of bytes. This method should remain private
+// and only be called after validation because it can potentially panic.
+func refFromCS3(b []byte) (*provider.Reference, error) {
+	parts := string(b[4:])
+	return &provider.Reference{
+		ResourceId: &provider.ResourceId{
+			StorageId: strings.Split(parts, "/")[0],
+			OpaqueId:  strings.Split(parts, "/")[1],
+		},
+	}, nil
+}
+
+// CopyMetadata copies all extended attributes from source to target.
+// The optional filter function can be used to filter by attribute name, e.g. by checking a prefix
+// For the source file, a shared lock is acquired.
+// NOTE: target resource is not locked! You need to acquire a write lock on the target additionally
+func (lu *Lookup) CopyMetadata(src, target string, filter func(attributeName string) bool) (err error) {
+	var readLock *flock.Flock
+
+	// Acquire a read log on the source node
+	readLock, err = filelocks.AcquireReadLock(src)
+
+	if err != nil {
+		return errors.Wrap(err, "xattrs: Unable to lock source to read")
+	}
+	defer func() {
+		rerr := filelocks.ReleaseLock(readLock)
+
+		// if err is non nil we do not overwrite that
+		if err == nil {
+			err = rerr
+		}
+	}()
+
+	return lu.CopyMetadataWithSourceLock(src, target, filter, readLock)
+}
+
+// CopyMetadataWithSourceLock copies all extended attributes from source to target.
+// The optional filter function can be used to filter by attribute name, e.g. by checking a prefix
+// For the source file, a shared lock is acquired.
+// NOTE: target resource is not locked! You need to acquire a write lock on the target additionally
+func (lu *Lookup) CopyMetadataWithSourceLock(src, target string, filter func(attributeName string) bool, readLock *flock.Flock) (err error) {
+	switch {
+	case readLock == nil:
+		return errors.New("no lock provided")
+	case readLock.Path() != filelocks.FlockFile(src):
+		return errors.New("lockpath does not match filepath")
+	case !readLock.Locked() && !readLock.RLocked(): // we need either a read or a write lock
+		return errors.New("not locked")
+	}
+
+	// both locks are established. Copy.
+	var attrNameList []string
+	if attrNameList, err = lu.metadataBackend.List(src); err != nil {
+		return errors.Wrap(err, "Can not get xattr listing on src")
+	}
+
+	// error handling: We count errors of reads or writes of xattrs.
+	// if there were any read or write errors an error is returned.
+	var (
+		xerrs = 0
+		xerr  error
+	)
+	for idx := range attrNameList {
+		attrName := attrNameList[idx]
+		if filter == nil || filter(attrName) {
+			var attrVal string
+			if attrVal, xerr = lu.metadataBackend.Get(src, attrName); xerr != nil {
+				xerrs++
+			}
+			if xerr = lu.metadataBackend.Set(target, attrName, attrVal); xerr != nil {
+				xerrs++
+			}
+		}
+	}
+	if xerrs > 0 {
+		err = errors.Wrap(xerr, "failed to copy all xattrs, last error returned")
+	}
+
+	return err
 }

@@ -43,6 +43,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/mime"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/ace"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs/backend"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs/prefixes"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/grants"
 	"github.com/cs3org/reva/v2/pkg/utils"
@@ -96,6 +97,9 @@ type PathLookup interface {
 	InternalRoot() string
 	InternalPath(spaceID, nodeID string) string
 	Path(ctx context.Context, n *Node, hasPermission PermissionFunc) (path string, err error)
+	MetadataBackend() backend.Backend
+	ReadBlobSizeAttr(path string) (int64, error)
+	ReadBlobIDAttr(path string) (string, error)
 }
 
 // New returns a new instance of Node
@@ -352,13 +356,13 @@ func ReadNode(ctx context.Context, lu PathLookup, spaceID, nodeID string, canLis
 		}
 		n.Blobsize = blobSize
 	} else {
-		n.BlobID, err = ReadBlobIDAttr(nodePath + revisionSuffix)
+		n.BlobID, err = lu.ReadBlobIDAttr(nodePath + revisionSuffix)
 		if err != nil {
 			return nil, err
 		}
 
 		// Lookup blobsize
-		n.Blobsize, err = ReadBlobSizeAttr(nodePath + revisionSuffix)
+		n.Blobsize, err = lu.ReadBlobSizeAttr(nodePath + revisionSuffix)
 		if err != nil {
 			return nil, err
 		}
@@ -1132,28 +1136,6 @@ func (n *Node) ListGrants(ctx context.Context) ([]*provider.Grant, error) {
 	return grants, nil
 }
 
-// ReadBlobSizeAttr reads the blobsize from the xattrs
-func ReadBlobSizeAttr(path string) (int64, error) {
-	attr, err := xattrs.Get(path, prefixes.BlobsizeAttr)
-	if err != nil {
-		return 0, errors.Wrapf(err, "error reading blobsize xattr")
-	}
-	blobSize, err := strconv.ParseInt(attr, 10, 64)
-	if err != nil {
-		return 0, errors.Wrapf(err, "invalid blobsize xattr format")
-	}
-	return blobSize, nil
-}
-
-// ReadBlobIDAttr reads the blobsize from the xattrs
-func ReadBlobIDAttr(path string) (string, error) {
-	attr, err := xattrs.Get(path, prefixes.BlobIDAttr)
-	if err != nil {
-		return "", errors.Wrapf(err, "error reading blobid xattr")
-	}
-	return attr, nil
-}
-
 func (n *Node) getGranteeTypes(ctx context.Context) []provider.GranteeType {
 	types := []provider.GranteeType{}
 	if g, err := n.ListGrantees(ctx); err == nil {
@@ -1234,7 +1216,7 @@ func (n *Node) IsSpaceRoot() bool {
 
 // SetScanData sets the virus scan info to the node
 func (n *Node) SetScanData(info string, date time.Time) error {
-	return xattrs.SetMultiple(n.InternalPath(), map[string]string{
+	return n.SetXattrs(map[string]string{
 		prefixes.ScanStatusPrefix: info,
 		prefixes.ScanDatePrefix:   date.Format(time.RFC3339Nano),
 	}, true)
@@ -1293,40 +1275,4 @@ func enoughDiskSpace(path string, fileSize uint64) bool {
 		return false
 	}
 	return avalB > fileSize
-}
-
-// TypeFromPath returns the type of the node at the given path
-func TypeFromPath(path string) provider.ResourceType {
-	// Try to read from xattrs
-	typeAttr, err := xattrs.Get(path, prefixes.TypeAttr)
-	t := provider.ResourceType_RESOURCE_TYPE_INVALID
-	if err == nil {
-		typeInt, err := strconv.ParseInt(typeAttr, 10, 32)
-		if err != nil {
-			return t
-		}
-		return provider.ResourceType(typeInt)
-	}
-
-	// Fall back to checking on disk
-	fi, err := os.Lstat(path)
-	if err != nil {
-		return t
-	}
-
-	switch {
-	case fi.IsDir():
-		if _, err = xattrs.Get(path, prefixes.ReferenceAttr); err == nil {
-			t = provider.ResourceType_RESOURCE_TYPE_REFERENCE
-		} else {
-			t = provider.ResourceType_RESOURCE_TYPE_CONTAINER
-		}
-	case fi.Mode().IsRegular():
-		t = provider.ResourceType_RESOURCE_TYPE_FILE
-	case fi.Mode()&os.ModeSymlink != 0:
-		t = provider.ResourceType_RESOURCE_TYPE_SYMLINK
-		// TODO reference using ext attr on a symlink
-		// nodeType = provider.ResourceType_RESOURCE_TYPE_REFERENCE
-	}
-	return t
 }
