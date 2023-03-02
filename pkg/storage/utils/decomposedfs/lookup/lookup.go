@@ -45,6 +45,7 @@ type Lookup struct {
 	metadataBackend metadata.Backend
 }
 
+// New returns a new Lookup instance
 func New(b metadata.Backend, o *options.Options) *Lookup {
 	return &Lookup{
 		Options:         o,
@@ -52,6 +53,7 @@ func New(b metadata.Backend, o *options.Options) *Lookup {
 	}
 }
 
+// MetadataBackend returns the metadata backend
 func (lu *Lookup) MetadataBackend() metadata.Backend {
 	return lu.metadataBackend
 }

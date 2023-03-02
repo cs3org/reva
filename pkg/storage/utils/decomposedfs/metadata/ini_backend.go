@@ -21,7 +21,6 @@ package metadata
 import (
 	"encoding/base64"
 	"io"
-	"io/ioutil"
 	"os"
 	"strconv"
 	"strings"
@@ -40,7 +39,7 @@ type IniBackend struct {
 	metaCache cache.FileMetadataCache
 }
 
-type ReadWriteCloseSeekTruncater interface {
+type readWriteCloseSeekTruncater interface {
 	io.ReadWriteCloser
 	io.Seeker
 	Truncate(int64) error
@@ -106,7 +105,7 @@ func (b IniBackend) List(path string) ([]string, error) {
 		return nil, err
 	}
 	keys := []string{}
-	for k, _ := range attribs {
+	for k := range attribs {
 		keys = append(keys, k)
 	}
 	return keys, nil
@@ -129,7 +128,7 @@ func (b IniBackend) Remove(path, key string) error {
 
 func (b IniBackend) saveIni(path string, setAttribs map[string]string, deleteAttribs []string, acquireLock bool) error {
 	var (
-		f   ReadWriteCloseSeekTruncater
+		f   readWriteCloseSeekTruncater
 		err error
 	)
 	path = b.MetadataPath(path)
@@ -144,7 +143,7 @@ func (b IniBackend) saveIni(path string, setAttribs map[string]string, deleteAtt
 	defer f.Close()
 
 	// Read current state
-	iniBytes, err := ioutil.ReadAll(f)
+	iniBytes, err := io.ReadAll(f)
 	if err != nil {
 		return err
 	}
