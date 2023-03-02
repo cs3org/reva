@@ -153,7 +153,10 @@ func (b IniBackend) saveIni(path string, setAttribs map[string]string, deleteAtt
 	}
 
 	// Prepare new metadata
-	iniAttribs := iniFile.Section("").KeysHash()
+	iniAttribs, err := decodedAttribs(iniFile)
+	if err != nil {
+		return err
+	}
 	for key, val := range setAttribs {
 		iniAttribs[key] = val
 	}
@@ -237,18 +240,9 @@ func (b IniBackend) loadMeta(path string) (map[string]string, error) {
 		}
 	}
 
-	attribs = iniFile.Section("").KeysHash()
-	for key, val := range attribs {
-		for _, prefix := range encodedPrefixes {
-			if strings.HasPrefix(key, prefix) {
-				valBytes, err := base64.StdEncoding.DecodeString(val)
-				if err != nil {
-					return nil, err
-				}
-				attribs[key] = string(valBytes)
-				break
-			}
-		}
+	attribs, err = decodedAttribs(iniFile)
+	if err != nil {
+		return nil, err
 	}
 
 	err = b.metaCache.PushToCache(path, attribs)
@@ -288,3 +282,20 @@ func (b IniBackend) Rename(oldPath, newPath string) error {
 
 // MetadataPath returns the path of the file holding the metadata for the given path
 func (IniBackend) MetadataPath(path string) string { return path + ".ini" }
+
+func decodedAttribs(iniFile *ini.File) (map[string]string, error) {
+	attribs := iniFile.Section("").KeysHash()
+	for key, val := range attribs {
+		for _, prefix := range encodedPrefixes {
+			if strings.HasPrefix(key, prefix) {
+				valBytes, err := base64.StdEncoding.DecodeString(val)
+				if err != nil {
+					return nil, err
+				}
+				attribs[key] = string(valBytes)
+				break
+			}
+		}
+	}
+	return attribs, nil
+}

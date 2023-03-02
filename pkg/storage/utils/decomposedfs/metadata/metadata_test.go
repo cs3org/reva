@@ -92,6 +92,22 @@ var _ = Describe("Backend", func() {
 				Expect(string(content)).To(Equal("user.ocis.cs.foo = YmFy\n"))
 			})
 
+			It("doesn't encode already encoded attributes", func() {
+				err := backend.Set(file, "user.ocis.cs.foo", "bar")
+				Expect(err).ToNot(HaveOccurred())
+
+				content, err := os.ReadFile(metafile)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(string(content)).To(Equal("user.ocis.cs.foo = YmFy\n"))
+
+				err = backend.Set(file, "user.something", "doesn'tmatter")
+				Expect(err).ToNot(HaveOccurred())
+
+				content, err = os.ReadFile(metafile)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(string(content)).To(ContainSubstring("user.ocis.cs.foo = YmFy\n"))
+			})
+
 			It("sets an empty attribute", func() {
 				_, err := backend.Get(file, "foo")
 				Expect(err).To(HaveOccurred())
