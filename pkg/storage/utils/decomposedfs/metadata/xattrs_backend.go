@@ -65,11 +65,11 @@ func (XattrsBackend) List(filePath string) (attribs []string, err error) {
 		return attrs, nil
 	}
 
-	f, err := lockedfile.Open(filePath + filelocks.LockFileSuffix)
+	f, err := lockedfile.OpenFile(filePath+filelocks.LockFileSuffix, os.O_CREATE|os.O_WRONLY, 0600)
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
+	defer cleanupLockfile(f)
 
 	return xattr.List(filePath)
 }
@@ -122,7 +122,7 @@ func (XattrsBackend) SetMultiple(path string, attribs map[string]string, acquire
 		if err != nil {
 			return err
 		}
-		defer lockedFile.Close()
+		defer cleanupLockfile(lockedFile)
 	}
 
 	// error handling: Count if there are errors while setting the attribs.
@@ -146,11 +146,11 @@ func (XattrsBackend) SetMultiple(path string, attribs map[string]string, acquire
 
 // Remove an extended attribute key
 func (XattrsBackend) Remove(filePath string, key string) (err error) {
-	lockedFile, err := lockedfile.OpenFile(filePath, os.O_WRONLY, 0600)
+	lockedFile, err := lockedfile.OpenFile(filePath+filelocks.LockFileSuffix, os.O_CREATE|os.O_WRONLY, 0600)
 	if err != nil {
 		return err
 	}
-	defer lockedFile.Close()
+	defer cleanupLockfile(lockedFile)
 
 	return xattr.Remove(filePath, key)
 }
@@ -166,3 +166,8 @@ func (XattrsBackend) Rename(oldPath, newPath string) error { return nil }
 
 // MetadataPath returns the path of the file holding the metadata for the given path
 func (XattrsBackend) MetadataPath(path string) string { return path }
+
+func cleanupLockfile(f *lockedfile.File) {
+	_ = f.Close()
+	_ = os.Remove(f.Name())
+}
