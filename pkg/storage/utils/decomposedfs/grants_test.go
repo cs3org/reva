@@ -128,16 +128,16 @@ var _ = Describe("Grants", func() {
 
 		Describe("AddGrant", func() {
 			It("adds grants", func() {
+				err := env.Fs.AddGrant(env.Ctx, ref, grant)
+				Expect(err).ToNot(HaveOccurred())
+
+				o := env.Owner.GetId()
+
 				n, err := env.Lookup.NodeFromResource(env.Ctx, &provider.Reference{
 					ResourceId: env.SpaceRootRes,
 					Path:       "/dir1",
 				})
 				Expect(err).ToNot(HaveOccurred())
-
-				err = env.Fs.AddGrant(env.Ctx, ref, grant)
-				Expect(err).ToNot(HaveOccurred())
-
-				o := env.Owner.GetId()
 				attr, err := n.Xattr(prefixes.GrantUserAcePrefix + grant.Grantee.GetUserId().OpaqueId)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(attr).To(Equal(fmt.Sprintf("\x00t=A:f=:p=rw:c=%s:e=0\n", o.GetOpaqueId()))) // NOTE: this tests ace package

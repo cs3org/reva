@@ -24,6 +24,7 @@ import (
 	"path/filepath"
 
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/lookup"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/google/uuid"
@@ -140,7 +141,7 @@ func NewTestEnv(config map[string]interface{}) (*TestEnv, error) {
 			},
 		},
 	}
-	lookup := &lookup.Lookup{Options: o}
+	lookup := lookup.New(metadata.XattrsBackend{}, o)
 	permissions := &mocks.PermissionsChecker{}
 	cs3permissionsclient := &mocks.CS3PermissionsClient{}
 	bs := &treemocks.Blobstore{}

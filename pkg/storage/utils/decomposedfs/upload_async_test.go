@@ -16,6 +16,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/events/stream"
 	"github.com/cs3org/reva/v2/pkg/storage"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/lookup"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/mocks"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/options"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/tree"
@@ -82,7 +83,7 @@ var _ = Describe("Async file uploads", Ordered, func() {
 		})
 		Expect(err).ToNot(HaveOccurred())
 
-		lu = &lookup.Lookup{Options: o}
+		lu = lookup.New(metadata.XattrsBackend{}, o)
 		permissions = &mocks.PermissionsChecker{}
 		cs3permissionsclient = &mocks.CS3PermissionsClient{}
 		bs = &treemocks.Blobstore{}

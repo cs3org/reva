@@ -134,12 +134,17 @@ var _ = Describe("Backend", func() {
 					"user.ocis.cs.foo":        "bar",
 					"user.ocis.md.foo":        "bar",
 					"user.ocis.grant.foo":     "bar",
-				})
+				}, true)
 				Expect(err).ToNot(HaveOccurred())
 
 				content, err := os.ReadFile(metafile)
 				Expect(err).ToNot(HaveOccurred())
-				Expect(strings.ReplaceAll(string(content), " ", "")).To(Equal("user.ocis.something.foo=bar\nuser.ocis.cs.foo=YmFy\nuser.ocis.md.foo=YmFy\nuser.ocis.grant.foo=YmFy\n"))
+				expected := []string{
+					"user.ocis.something.foo=bar",
+					"user.ocis.cs.foo=YmFy",
+					"user.ocis.md.foo=YmFy",
+					"user.ocis.grant.foo=YmFy"}
+				Expect(strings.Split(strings.ReplaceAll(strings.Trim(string(content), "\n"), " ", ""), "\n")).To(ConsistOf(expected))
 			})
 		})
 
@@ -225,12 +230,6 @@ var _ = Describe("Backend", func() {
 
 				_, err = backend.Get(file, "foo")
 				Expect(err).To(HaveOccurred())
-			})
-		})
-
-		Describe("UsesExternalMetadataFile", func() {
-			It("returns true", func() {
-				Expect(backend.UsesExternalMetadataFile()).To(BeTrue())
 			})
 		})
 
