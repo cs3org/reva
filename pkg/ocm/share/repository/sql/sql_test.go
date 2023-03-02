@@ -386,6 +386,7 @@ func TestGetShare(t *testing.T) {
 				Ctime:         &typesv1beta1.Timestamp{Seconds: 1670859468},
 				Mtime:         &typesv1beta1.Timestamp{Seconds: 1670859468},
 				ShareType:     ocm.ShareType_SHARE_TYPE_USER,
+				Expiration:    &typesv1beta1.Timestamp{},
 				AccessMethods: []*ocm.AccessMethod{share.NewWebDavAccessMethod(conversions.NewEditorRole().CS3ResourcePermissions())},
 			},
 		},
