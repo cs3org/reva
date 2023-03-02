@@ -297,7 +297,7 @@ func (i *Identity) IsLDAPUserInDisabledGroup(log *zerolog.Logger, lc ldap.Client
 		return false
 	}
 
-	filter := fmt.Sprintf("(&(objectClass=groupOfNames)(%s=%s)", i.Group.Schema.Member, userEntry.DN)
+	filter := fmt.Sprintf("(&(objectClass=groupOfNames)(%s=%s))", i.Group.Schema.Member, userEntry.DN)
 	searchRequest := ldap.NewSearchRequest(
 		i.Group.LocalDisabledDN,
 		i.Group.scopeVal,
@@ -310,6 +310,8 @@ func (i *Identity) IsLDAPUserInDisabledGroup(log *zerolog.Logger, lc ldap.Client
 	sr, err := lc.Search(searchRequest)
 	if err != nil {
 		log.Error().Str("backend", "ldap").Err(err).Str("filter", filter).Msg("Error looking up error group")
+		// Err on the side of caution.
+		return true
 	}
 
 	return len(sr.Entries) > 0
