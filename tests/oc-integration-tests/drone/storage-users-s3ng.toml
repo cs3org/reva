@@ -28,6 +28,10 @@ permissionssvc = "localhost:10000"
 "s3.bucket" = "test"
 "s3.access_key" = "test"
 "s3.secret_key" = "test"
+"metadata_backend" = "ini"
+"filemetadatacache.cache_store" = "redis"
+"filemetadatacache.cache_nodes" = "redis:6379"
+"filemetadatacache.cache_database" = "ocis"
 
 # we have a locally running dataprovider
 [http]
@@ -47,3 +51,7 @@ permissionssvc = "localhost:10000"
 "s3.bucket" = "test"
 "s3.access_key" = "test"
 "s3.secret_key" = "test"
+"metadata_backend" = "ini"
+"filemetadatacache.cache_store" = "redis"
+"filemetadatacache.cache_nodes" = "redis:6379"
+"filemetadatacache.cache_database" = "ocis"
