@@ -52,69 +52,65 @@ var _ = Describe("Decomposed", func() {
 
 	Describe("file locking", func() {
 		Describe("lockedfile", func() {
-			It("prevents exclusive locks while shared locks are being held", func() {
-				var (
-					roFile1             *lockedfile.File
-					roFile2             *lockedfile.File
-					woFile              *lockedfile.File
-					managedToOpenroFile = false
-					managedToOpenwoFile = false
-				)
+			It("allows shared locks while shared locks are being held", func() {
+				states := sync.Map{}
 
 				path, err := os.CreateTemp("", "decomposedfs-lockedfile-test-")
 				Expect(err).ToNot(HaveOccurred())
-				go func() {
-					roFile1, err = lockedfile.OpenFile(path.Name(), os.O_RDONLY, 0)
-					Expect(err).ToNot(HaveOccurred())
-					defer roFile1.Close()
+				states.Store("managedToOpenroFile", false)
+				roFile, err := lockedfile.OpenFile(path.Name(), os.O_RDONLY, 0)
+				Expect(err).ToNot(HaveOccurred())
+				defer roFile.Close()
 
-					roFile2, err = lockedfile.OpenFile(path.Name(), os.O_RDONLY, 0)
+				go func() {
+					roFile2, err := lockedfile.OpenFile(path.Name(), os.O_RDONLY, 0)
 					Expect(err).ToNot(HaveOccurred())
 					defer roFile2.Close()
-					managedToOpenroFile = true
-
-					woFile, err = lockedfile.OpenFile(path.Name(), os.O_WRONLY, 0)
-					Expect(err).ToNot(HaveOccurred())
-					defer woFile.Close()
-					managedToOpenwoFile = true
+					states.Store("managedToOpenroFile", true)
 				}()
-				Eventually(func() bool { return managedToOpenroFile }).Should(BeTrue())
-				Consistently(func() bool { return managedToOpenwoFile }).Should(BeFalse())
+				Eventually(func() bool { s, _ := states.Load("managedToOpenroFile"); return s.(bool) }).Should(BeTrue())
+			})
 
-				roFile1.Close()
-				Consistently(func() bool { return managedToOpenwoFile }).Should(BeFalse())
+			It("prevents exclusive locks while shared locks are being held", func() {
+				states := sync.Map{}
 
-				roFile2.Close()
-				Eventually(func() bool { return managedToOpenwoFile }).Should(BeTrue())
+				path, err := os.CreateTemp("", "decomposedfs-lockedfile-test-")
+				Expect(err).ToNot(HaveOccurred())
+				states.Store("managedToOpenwoFile", false)
+				roFile, err := lockedfile.OpenFile(path.Name(), os.O_RDONLY, 0)
+				Expect(err).ToNot(HaveOccurred())
+
+				go func() {
+					woFile, err := lockedfile.OpenFile(path.Name(), os.O_WRONLY, 0)
+					Expect(err).ToNot(HaveOccurred())
+					states.Store("managedToOpenwoFile", true)
+					woFile.Close()
+				}()
+				Consistently(func() bool { s, _ := states.Load("managedToOpenwoFile"); return s.(bool) }).Should(BeFalse())
+
+				roFile.Close()
+				Eventually(func() bool { s, _ := states.Load("managedToOpenwoFile"); return s.(bool) }).Should(BeTrue())
 			})
 
 			It("prevents shared locks while an exclusive lock is being held", func() {
-				var (
-					roFile              *lockedfile.File
-					woFile              *lockedfile.File
-					managedToOpenroFile = false
-					managedToOpenwoFile = false
-				)
+				states := sync.Map{}
 
 				path, err := os.CreateTemp("", "decomposedfs-lockedfile-test-")
 				Expect(err).ToNot(HaveOccurred())
+				states.Store("managedToOpenroFile", false)
+				woFile, err := lockedfile.OpenFile(path.Name(), os.O_WRONLY, 0)
+				Expect(err).ToNot(HaveOccurred())
+				defer woFile.Close()
 				go func() {
-
-					woFile, err = lockedfile.OpenFile(path.Name(), os.O_WRONLY, 0)
-					Expect(err).ToNot(HaveOccurred())
-					defer woFile.Close()
-					managedToOpenwoFile = true
-
-					roFile, err = lockedfile.OpenFile(path.Name(), os.O_RDONLY, 0)
+					roFile, err := lockedfile.OpenFile(path.Name(), os.O_RDONLY, 0)
 					Expect(err).ToNot(HaveOccurred())
 					defer roFile.Close()
-					managedToOpenroFile = true
+					states.Store("managedToOpenroFile", true)
 				}()
-				Eventually(func() bool { return managedToOpenwoFile }).Should(BeTrue())
-				Consistently(func() bool { return managedToOpenroFile }).Should(BeFalse())
+				Consistently(func() bool { s, _ := states.Load("managedToOpenroFile"); return s.(bool) }).Should(BeFalse())
 
 				woFile.Close()
-				Eventually(func() bool { return managedToOpenroFile }).Should(BeTrue())
+				Eventually(func() bool { s, _ := states.Load("managedToOpenroFile"); return s.(bool) }).Should(BeTrue())
 			})
 		})
 
