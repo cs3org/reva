@@ -112,6 +112,8 @@ func (c *cachedAPIClient) Stat(ctx context.Context, in *provider.StatRequest, op
 		// we do not know when to invalidate them
 		// FIXME: find a way to cache/invalidate them too
 		return resp, nil
+	case utils.ReadPlainFromOpaque(resp.GetInfo().GetOpaque(), "status") == "processing":
+		return resp, nil
 	default:
 		return resp, c.statCache.PushToCache(key, resp)
 	}
