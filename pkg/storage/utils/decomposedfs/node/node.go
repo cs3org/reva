@@ -1216,7 +1216,7 @@ func (n *Node) UnmarkProcessing(uploadID string) error {
 		// file started another postprocessing later - do not remove
 		return nil
 	}
-	return n.RemoveXattr(prefixes.StatusPrefix)
+	return n.SetXattr(prefixes.StatusPrefix, "")
 }
 
 // IsProcessing returns true if the node is currently being processed
