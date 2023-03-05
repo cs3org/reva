@@ -60,6 +60,16 @@ const publicLinkURLPrefix = "/files/link/public/"
 
 const ocmLinkURLPrefix = "/files/spaces/sciencemesh/"
 
+type userType string
+
+const (
+	invalid   userType = "invalid"
+	regular   userType = "regular"
+	federated userType = "federated"
+	ocm       userType = "ocm"
+	anonymous userType = "anonymous"
+)
+
 func init() {
 	registry.Register("wopi", New)
 }
@@ -150,6 +160,7 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 	q.Add("viewmode", viewMode.String())
 	q.Add("appname", p.conf.AppName)
 
+	var ut = invalid
 	u, ok := ctxpkg.ContextGetUser(ctx)
 	if !ok {
 		// we must have been authenticated
@@ -157,6 +168,7 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 	}
 	if u.Id.Type == userpb.UserType_USER_TYPE_LIGHTWEIGHT || u.Id.Type == userpb.UserType_USER_TYPE_FEDERATED {
 		q.Add("userid", resource.Owner.OpaqueId+"@"+resource.Owner.Idp)
+		ut = federated
 	} else {
 		q.Add("userid", u.Id.OpaqueId+"@"+u.Id.Idp)
 	}
@@ -176,12 +188,14 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 	switch {
 	case ok:
 		// we are in a public link, username is not set so it will default to "Guest xyz"
+		ut = anonymous
 		rPath, pathErr = getPathForExternalLink(ctx, scopes, resource, publicLinkURLPrefix)
 		if pathErr != nil {
 			log.Warn().Err(pathErr).Msg("wopi: failed to extract relative path from public link scope")
 		}
 	case u.Username == "":
 		// OCM users have no username: use displayname@Idp
+		ut = ocm
 		idpURL, e := url.Parse(u.Id.Idp)
 		if e != nil {
 			q.Add("username", u.DisplayName+" @ "+u.Id.Idp)
@@ -193,8 +207,12 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 		if pathErr != nil {
 			log.Warn().Err(pathErr).Msg("wopi: failed to extract relative path from ocm link scope")
 		}
+		q.Add("usertype", "ocm")
 	default:
 		// in all other cases use the resource's path
+		if ut == invalid {
+			ut = regular
+		}
 		rPath = "/files/spaces/" + path.Dir(resource.Path)
 		q.Add("username", u.DisplayName)
 	}
@@ -206,6 +224,7 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 			q.Add("folderurl", fu)
 		}
 	}
+	q.Add("usertype", string(ut))
 
 	var viewAppURL string
 	if viewAppURLs, ok := p.appURLs["view"]; ok {
