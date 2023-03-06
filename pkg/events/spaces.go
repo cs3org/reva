@@ -91,8 +91,11 @@ func (SpaceEnabled) Unmarshal(v []byte) (interface{}, error) {
 
 // SpaceDeleted is emitted when a space is deleted
 type SpaceDeleted struct {
-	Executant *user.UserId
-	ID        *provider.StorageSpaceId
+	Executant    *user.UserId
+	ID           *provider.StorageSpaceId
+	SpaceName    string
+	FinalMembers map[string]provider.ResourcePermissions
+	Timestamp    *types.Timestamp
 }
 
 // Unmarshal to fulfill umarshaller interface
