@@ -149,7 +149,7 @@ func (m *manager) Authenticate(ctx context.Context, token, _ string) (*userpb.Us
 	user := userRes.RemoteUser
 	user.Opaque = &types.Opaque{
 		Map: map[string]*types.OpaqueEntry{
-			"public-share-role": {
+			"ocm-share-role": {
 				Decoder: "plain",
 				Value:   []byte(roleStr),
 			},
