@@ -429,6 +429,7 @@ func (m *Manager) GetShare(ctx context.Context, ref *collaboration.ShareReferenc
 				Msg("failed to unshare expired share")
 		}
 		if err := events.Publish(m.eventStream, events.ShareExpired{
+			ShareID:        s.GetId(),
 			ShareOwner:     s.GetOwner(),
 			ItemID:         s.GetResourceId(),
 			ExpiredAt:      time.Unix(int64(s.GetExpiration().GetSeconds()), int64(s.GetExpiration().GetNanos())),
