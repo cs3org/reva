@@ -261,6 +261,13 @@ func checkCacheForNestedResource(ctx context.Context, ref *provider.Reference, r
 	return errtypes.PermissionDenied("request is not for a nested resource")
 }
 
+func isRelativePathOrEmpty(path string) bool {
+	if len(path) == 0 {
+		return true
+	}
+	return path[0] != '/'
+}
+
 func checkIfNestedResource(ctx context.Context, ref *provider.Reference, parent *provider.ResourceId, client gateway.GatewayAPIClient, mgr token.Manager) (bool, error) {
 	// Since the resource ID is obtained from the scope, the current token
 	// has access to it.
@@ -274,7 +281,7 @@ func checkIfNestedResource(ctx context.Context, ref *provider.Reference, parent 
 	parentPath := statResponse.Info.Path
 
 	childPath := ref.GetPath()
-	if childPath == "" {
+	if isRelativePathOrEmpty(childPath) {
 		// We mint a token as the owner of the public share and try to stat the reference
 		// TODO(ishank011): We need to find a better alternative to this
 
