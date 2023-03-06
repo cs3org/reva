@@ -125,7 +125,7 @@ func New(m map[string]interface{}) (app.Provider, error) {
 	}
 
 	wopiClient := rhttp.GetHTTPClient(
-		rhttp.Timeout(time.Duration(5*int64(time.Second))),
+		rhttp.Timeout(time.Duration(10*int64(time.Second))),
 		rhttp.Insecure(c.InsecureConnections),
 	)
 	wopiClient.CheckRedirect = func(req *http.Request, via []*http.Request) error {
@@ -184,30 +184,25 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 	// either append `/files/spaces/<full_path>` or the proper URL prefix + `/<relative_path>`
 	var rPath string
 	var pathErr error
-	_, ok = utils.HasPublicShareRole(u)
+	_, pubrole := utils.HasPublicShareRole(u)
+	_, ocmrole := utils.HasOCMShareRole(u)
 	switch {
-	case ok:
+	case pubrole:
 		// we are in a public link, username is not set so it will default to "Guest xyz"
 		ut = anonymous
 		rPath, pathErr = getPathForExternalLink(ctx, scopes, resource, publicLinkURLPrefix)
 		if pathErr != nil {
 			log.Warn().Err(pathErr).Msg("wopi: failed to extract relative path from public link scope")
 		}
-	case u.Username == "":
+	case ocmrole:
 		// OCM users have no username: use displayname@Idp
 		ut = ocm
-		idpURL, e := url.Parse(u.Id.Idp)
-		if e != nil {
-			q.Add("username", u.DisplayName+" @ "+u.Id.Idp)
-		} else {
-			q.Add("username", u.DisplayName+" @ "+idpURL.Hostname())
-		}
+		q.Add("username", u.DisplayName+" @ "+u.Id.Idp)
 		// and resolve the folder
 		rPath, pathErr = getPathForExternalLink(ctx, scopes, resource, ocmLinkURLPrefix)
 		if pathErr != nil {
 			log.Warn().Err(pathErr).Msg("wopi: failed to extract relative path from ocm link scope")
 		}
-		q.Add("usertype", "ocm")
 	default:
 		// in all other cases use the resource's path
 		if ut == invalid {
@@ -508,12 +503,25 @@ func parseWopiDiscovery(body io.Reader) (map[string]map[string]string, error) {
 }
 
 func getPathForExternalLink(ctx context.Context, scopes map[string]*authpb.Scope, resource *provider.ResourceInfo, pathPrefix string) (string, error) {
-	shares, err := scope.GetPublicOcmSharesFromScopes(scopes)
+	pubShares, err := scope.GetPublicSharesFromScopes(scopes)
 	if err != nil {
 		return "", err
 	}
-	if len(shares) > 1 {
-		return "", errors.New("More than one public or OCM share found in the scope, lookup not implemented")
+	ocmShares, err := scope.GetOCMSharesFromScopes(scopes)
+	if err != nil {
+		return "", err
+	}
+	var resID *provider.ResourceId
+	var token string
+	switch {
+	case len(pubShares) == 1:
+		resID = pubShares[0].ResourceId
+		token = pubShares[0].Token
+	case len(ocmShares) == 1:
+		resID = ocmShares[0].ResourceId
+		token = ocmShares[0].Token
+	default:
+		return "", errors.New("Either one public xor OCM share is supported, lookups not implemented")
 	}
 
 	client, err := pool.GetGatewayServiceClient(pool.Endpoint(sharedconf.GetGatewaySVC("")))
@@ -522,7 +530,7 @@ func getPathForExternalLink(ctx context.Context, scopes map[string]*authpb.Scope
 	}
 	statRes, err := client.Stat(ctx, &provider.StatRequest{
 		Ref: &provider.Reference{
-			ResourceId: shares[0].ResourceId,
+			ResourceId: resID,
 		},
 	})
 	if err != nil {
@@ -531,7 +539,7 @@ func getPathForExternalLink(ctx context.Context, scopes map[string]*authpb.Scope
 
 	if statRes.Info.Path == resource.Path {
 		// this is a direct link to the resource
-		return pathPrefix + shares[0].Token, nil
+		return pathPrefix + token, nil
 	}
 	// otherwise we are in a subfolder of the public link
 	relPath, err := filepath.Rel(statRes.Info.Path, resource.Path)
@@ -541,5 +549,5 @@ func getPathForExternalLink(ctx context.Context, scopes map[string]*authpb.Scope
 	if strings.HasPrefix(relPath, "../") {
 		return "", errors.New("Scope path does not contain target resource")
 	}
-	return path.Join(pathPrefix+shares[0].Token, path.Dir(relPath)), nil
+	return path.Join(pathPrefix+token, path.Dir(relPath)), nil
 }
