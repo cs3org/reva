@@ -57,6 +57,12 @@ type ShareRemoved struct {
 	// split protobuf Spec
 	ShareID  *collaboration.ShareId
 	ShareKey *collaboration.ShareKey
+	// split the protobuf Grantee oneof so we can use stdlib encoding/json
+	GranteeUserID  *user.UserId
+	GranteeGroupID *group.GroupId
+
+	ItemID    *provider.ResourceId
+	Timestamp *types.Timestamp
 }
 
 // Unmarshal to fulfill umarshaller interface

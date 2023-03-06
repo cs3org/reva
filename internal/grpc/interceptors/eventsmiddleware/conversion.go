@@ -19,6 +19,9 @@
 package eventsmiddleware
 
 import (
+	"time"
+
+	group "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
@@ -52,10 +55,20 @@ func ShareCreated(r *collaboration.CreateShareResponse, executant *user.UserId) 
 
 // ShareRemoved converts the response to an event
 func ShareRemoved(r *collaboration.RemoveShareResponse, req *collaboration.RemoveShareRequest, executant *user.UserId) events.ShareRemoved {
+	var userid *user.UserId
+	utils.ReadJSONFromOpaque(r.Opaque, "granteeuserid", &userid)
+	var groupid *group.GroupId
+	utils.ReadJSONFromOpaque(r.Opaque, "granteegroupid", &userid)
+	var rid *provider.ResourceId
+	utils.ReadJSONFromOpaque(r.Opaque, "resourceid", &rid)
 	return events.ShareRemoved{
-		Executant: executant,
-		ShareID:   req.Ref.GetId(),
-		ShareKey:  req.Ref.GetKey(),
+		Executant:      executant,
+		ShareID:        req.Ref.GetId(),
+		ShareKey:       req.Ref.GetKey(),
+		GranteeUserID:  userid,
+		GranteeGroupID: groupid,
+		ItemID:         rid,
+		Timestamp:      utils.TimeToTS(time.Now()),
 	}
 }
 
