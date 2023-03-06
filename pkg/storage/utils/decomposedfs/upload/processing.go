@@ -38,10 +38,9 @@ import (
 	"github.com/cs3org/reva/v2/pkg/logger"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/chunking"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/lookup"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/options"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs/prefixes"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/filelocks"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/utils"
@@ -289,7 +288,7 @@ func CreateNodeForUpload(upload *Upload, initAttrs map[string]string) (*node.Nod
 	initAttrs[prefixes.StatusPrefix] = node.ProcessingStatus + upload.Info.ID
 
 	// update node metadata with new blobid etc
-	err = n.SetXattrsWithLock(initAttrs, lock)
+	err = n.SetXattrs(initAttrs, false)
 	if err != nil {
 		return nil, errors.Wrap(err, "Decomposedfs: could not write metadata")
 	}
@@ -327,11 +326,6 @@ func initNewNode(upload *Upload, n *node.Node, fsize uint64) (*flock.Flock, erro
 
 	if _, err := os.Create(n.InternalPath()); err != nil {
 		return nil, err
-	}
-	if xattrs.UsesExternalMetadataFile() {
-		if _, err := os.Create(xattrs.MetadataPath(n.InternalPath())); err != nil {
-			return nil, err
-		}
 	}
 
 	lock, err := filelocks.AcquireWriteLock(n.InternalPath())
@@ -405,14 +399,9 @@ func updateExistingNode(upload *Upload, n *node.Node, spaceID string, fsize uint
 	if _, err := os.Create(upload.versionsPath); err != nil {
 		return lock, err
 	}
-	if xattrs.UsesExternalMetadataFile() {
-		if _, err := os.Create(xattrs.MetadataPath(upload.versionsPath)); err != nil {
-			return lock, err
-		}
-	}
 
 	// copy blob metadata to version node
-	if err := xattrs.CopyMetadataWithSourceLock(targetPath, upload.versionsPath, func(attributeName string) bool {
+	if err := upload.lu.CopyMetadataWithSourceLock(targetPath, upload.versionsPath, func(attributeName string) bool {
 		return strings.HasPrefix(attributeName, prefixes.ChecksumPrefix) ||
 			attributeName == prefixes.TypeAttr ||
 			attributeName == prefixes.BlobIDAttr ||

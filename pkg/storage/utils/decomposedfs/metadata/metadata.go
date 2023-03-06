@@ -1,4 +1,4 @@
-// Copyright 2018-2023 CERN
+// Copyright 2018-2021 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,13 +16,11 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package backend
+package metadata
 
-import (
-	"github.com/pkg/errors"
-)
+import "errors"
 
-var errUnconfiguredError = errors.New("no xattrs backend configured. Bailing out")
+var errUnconfiguredError = errors.New("no metadata backend configured. Bailing out")
 
 // Backend defines the interface for file attribute backends
 type Backend interface {
@@ -31,12 +29,12 @@ type Backend interface {
 	GetInt64(path, key string) (int64, error)
 	List(path string) (attribs []string, err error)
 	Set(path, key, val string) error
-	SetMultiple(path string, attribs map[string]string) error
+	SetMultiple(path string, attribs map[string]string, acquireLock bool) error
 	Remove(path, key string) error
 
+	Purge(path string) error
+	Rename(oldPath, newPath string) error
 	IsMetaFile(path string) bool
-	// UsesExternalMetadataFile returns true when the backend uses external metadata files
-	UsesExternalMetadataFile() bool
 	MetadataPath(path string) string
 }
 
@@ -60,7 +58,7 @@ func (NullBackend) List(path string) ([]string, error) { return nil, errUnconfig
 func (NullBackend) Set(path string, key string, val string) error { return errUnconfiguredError }
 
 // SetMultiple sets a set of attribute for the given path
-func (NullBackend) SetMultiple(path string, attribs map[string]string) error {
+func (NullBackend) SetMultiple(path string, attribs map[string]string, acquireLock bool) error {
 	return errUnconfiguredError
 }
 
@@ -70,8 +68,11 @@ func (NullBackend) Remove(path string, key string) error { return errUnconfigure
 // IsMetaFile returns whether the given path represents a meta file
 func (NullBackend) IsMetaFile(path string) bool { return false }
 
-// UsesExternalMetadataFile returns true when the backend uses external metadata files
-func (NullBackend) UsesExternalMetadataFile() bool { return false }
+// Purge purges the data of a given path from any cache that might hold it
+func (NullBackend) Purge(purges string) error { return errUnconfiguredError }
+
+// Rename moves the data for a given path to a new path
+func (NullBackend) Rename(oldPath, newPath string) error { return errUnconfiguredError }
 
 // MetadataPath returns the path of the file holding the metadata for the given path
 func (NullBackend) MetadataPath(path string) string { return "" }

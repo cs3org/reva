@@ -25,6 +25,7 @@ import (
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	testhelpers "github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/testhelpers"
+	"github.com/rogpeppe/go-internal/lockedfile"
 	"github.com/stretchr/testify/mock"
 
 	"github.com/cs3org/reva/v2/tests/helpers"
@@ -47,6 +48,72 @@ var _ = Describe("Decomposed", func() {
 		if env != nil {
 			os.RemoveAll(env.Root)
 		}
+	})
+
+	Describe("file locking", func() {
+		Describe("lockedfile", func() {
+			It("allows shared locks while shared locks are being held", func() {
+				states := sync.Map{}
+
+				path, err := os.CreateTemp("", "decomposedfs-lockedfile-test-")
+				Expect(err).ToNot(HaveOccurred())
+				states.Store("managedToOpenroFile", false)
+				roFile, err := lockedfile.OpenFile(path.Name(), os.O_RDONLY, 0)
+				Expect(err).ToNot(HaveOccurred())
+				defer roFile.Close()
+
+				go func() {
+					roFile2, err := lockedfile.OpenFile(path.Name(), os.O_RDONLY, 0)
+					Expect(err).ToNot(HaveOccurred())
+					defer roFile2.Close()
+					states.Store("managedToOpenroFile", true)
+				}()
+				Eventually(func() bool { s, _ := states.Load("managedToOpenroFile"); return s.(bool) }).Should(BeTrue())
+			})
+
+			It("prevents exclusive locks while shared locks are being held", func() {
+				states := sync.Map{}
+
+				path, err := os.CreateTemp("", "decomposedfs-lockedfile-test-")
+				Expect(err).ToNot(HaveOccurred())
+				states.Store("managedToOpenwoFile", false)
+				roFile, err := lockedfile.OpenFile(path.Name(), os.O_RDONLY, 0)
+				Expect(err).ToNot(HaveOccurred())
+
+				go func() {
+					woFile, err := lockedfile.OpenFile(path.Name(), os.O_WRONLY, 0)
+					Expect(err).ToNot(HaveOccurred())
+					states.Store("managedToOpenwoFile", true)
+					woFile.Close()
+				}()
+				Consistently(func() bool { s, _ := states.Load("managedToOpenwoFile"); return s.(bool) }).Should(BeFalse())
+
+				roFile.Close()
+				Eventually(func() bool { s, _ := states.Load("managedToOpenwoFile"); return s.(bool) }).Should(BeTrue())
+			})
+
+			It("prevents shared locks while an exclusive lock is being held", func() {
+				states := sync.Map{}
+
+				path, err := os.CreateTemp("", "decomposedfs-lockedfile-test-")
+				Expect(err).ToNot(HaveOccurred())
+				states.Store("managedToOpenroFile", false)
+				woFile, err := lockedfile.OpenFile(path.Name(), os.O_WRONLY, 0)
+				Expect(err).ToNot(HaveOccurred())
+				defer woFile.Close()
+				go func() {
+					roFile, err := lockedfile.OpenFile(path.Name(), os.O_RDONLY, 0)
+					Expect(err).ToNot(HaveOccurred())
+					defer roFile.Close()
+					states.Store("managedToOpenroFile", true)
+				}()
+				Consistently(func() bool { s, _ := states.Load("managedToOpenroFile"); return s.(bool) }).Should(BeFalse())
+
+				woFile.Close()
+				Eventually(func() bool { s, _ := states.Load("managedToOpenroFile"); return s.(bool) }).Should(BeTrue())
+			})
+		})
+
 	})
 
 	Describe("concurrent", func() {

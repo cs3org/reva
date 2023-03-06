@@ -29,6 +29,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	natsjs "github.com/go-micro/plugins/v4/store/nats-js"
 	"github.com/go-micro/plugins/v4/store/redis"
+	redisopts "github.com/go-redis/redis/v8"
 	"github.com/nats-io/nats.go"
 	microetcd "github.com/owncloud/ocis/v2/ocis-pkg/store/etcd"
 	microstore "go-micro.dev/v4/store"
@@ -40,6 +41,7 @@ var (
 	providerCaches            = make(map[string]ProviderCache)
 	createHomeCaches          = make(map[string]CreateHomeCache)
 	createPersonalSpaceCaches = make(map[string]CreatePersonalSpaceCache)
+	fileMetadataCaches        = make(map[string]FileMetadataCache)
 	mutex                     sync.Mutex
 )
 
@@ -77,6 +79,11 @@ type CreateHomeCache interface {
 type CreatePersonalSpaceCache interface {
 	Cache
 	GetKey(userID *userpb.UserId) string
+}
+
+// FileMetadataCache handles file metadata
+type FileMetadataCache interface {
+	Cache
 }
 
 // GetStatCache will return an existing StatCache for the given store, nodes, database and table
@@ -131,6 +138,19 @@ func GetCreatePersonalSpaceCache(cacheStore string, cacheNodes []string, databas
 	return createPersonalSpaceCaches[key]
 }
 
+// GetFileMetadataCache will return an existing GetFileMetadataCache for the given store, nodes, database and table
+// If it does not exist yet it will be created, different TTLs are ignored
+func GetFileMetadataCache(cacheStore string, cacheNodes []string, database, table string, ttl time.Duration) FileMetadataCache {
+	mutex.Lock()
+	defer mutex.Unlock()
+
+	key := strings.Join(append(append([]string{cacheStore}, cacheNodes...), database, table), ":")
+	if fileMetadataCaches[key] == nil {
+		fileMetadataCaches[key] = NewFileMetadataCache(cacheStore, cacheNodes, database, table, ttl)
+	}
+	return fileMetadataCaches[key]
+}
+
 // CacheStore holds cache store specific configuration
 type cacheStore struct {
 	s               microstore.Store
@@ -168,12 +188,34 @@ func getStore(store string, nodes []string, database, table string, ttl time.Dur
 			natsjs.DefaultTTL(ttl),
 		) // TODO test with ocis nats
 	case "redis":
-		// FIXME redis plugin does not support redis cluster, sentinel or ring -> needs upstream patch or our implementation
 		return redis.NewStore(
 			microstore.Database(database),
 			microstore.Table(table),
 			microstore.Nodes(nodes...),
 		) // only the first node is taken into account
+	case "redis-sentinel":
+		redisMaster := ""
+		redisNodes := []string{}
+		for _, node := range nodes {
+			parts := strings.SplitN(node, "/", 2)
+			if len(parts) != 2 {
+				return nil
+			}
+			// the first node is used to retrieve the redis master
+			redisNodes = append(redisNodes, parts[0])
+			if redisMaster == "" {
+				redisMaster = parts[1]
+			}
+		}
+
+		return redis.NewStore(
+			microstore.Database(database),
+			microstore.Table(table),
+			microstore.Nodes(redisNodes...),
+			redis.WithRedisOptions(redisopts.UniversalOptions{
+				MasterName: redisMaster,
+			}),
+		)
 	case "memory":
 		return microstore.NewStore(
 			microstore.Database(database),

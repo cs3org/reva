@@ -24,8 +24,8 @@ import (
 	"path/filepath"
 
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/lookup"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs/prefixes"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/mock"
@@ -141,7 +141,7 @@ func NewTestEnv(config map[string]interface{}) (*TestEnv, error) {
 			},
 		},
 	}
-	lookup := &lookup.Lookup{Options: o}
+	lookup := lookup.New(metadata.XattrsBackend{}, o)
 	permissions := &mocks.PermissionsChecker{}
 	cs3permissionsclient := &mocks.CS3PermissionsClient{}
 	bs := &treemocks.Blobstore{}
@@ -219,12 +219,6 @@ func (t *TestEnv) CreateTestFile(name, blobID, parentID, spaceID string, blobSiz
 	if err != nil {
 		return nil, err
 	}
-	if xattrs.UsesExternalMetadataFile() {
-		_, err = os.OpenFile(xattrs.MetadataPath(nodePath), os.O_CREATE, 0700)
-		if err != nil {
-			return nil, err
-		}
-	}
 	err = n.WriteAllNodeMetadata()
 	if err != nil {
 		return nil, err
@@ -283,7 +277,7 @@ func (t *TestEnv) CreateTestStorageSpace(typ string, quota *providerv1beta1.Quot
 	if err != nil {
 		return nil, err
 	}
-	if err = xattrs.Set(h.InternalPath(), prefixes.SpaceNameAttr, "username"); err != nil {
+	if err = h.SetXattr(prefixes.SpaceNameAttr, "username"); err != nil {
 		return nil, err
 	}
 

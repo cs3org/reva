@@ -40,10 +40,9 @@ import (
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/events"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/lookup"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/options"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs/prefixes"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/golang-jwt/jwt"
 	"github.com/pkg/errors"
@@ -376,7 +375,7 @@ func (upload *Upload) cleanup(cleanNode, cleanBin, cleanInfo bool) {
 			upload.Node = nil
 		default:
 
-			if err := xattrs.CopyMetadata(upload.Node.InternalPath(), p, func(attributeName string) bool {
+			if err := upload.lu.CopyMetadata(upload.Node.InternalPath(), p, func(attributeName string) bool {
 				return strings.HasPrefix(attributeName, prefixes.ChecksumPrefix) ||
 					attributeName == prefixes.TypeAttr ||
 					attributeName == prefixes.BlobIDAttr ||

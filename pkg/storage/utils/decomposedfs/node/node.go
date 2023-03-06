@@ -42,8 +42,8 @@ import (
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/mime"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/ace"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs/prefixes"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/grants"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/google/uuid"
@@ -96,6 +96,9 @@ type PathLookup interface {
 	InternalRoot() string
 	InternalPath(spaceID, nodeID string) string
 	Path(ctx context.Context, n *Node, hasPermission PermissionFunc) (path string, err error)
+	MetadataBackend() metadata.Backend
+	ReadBlobSizeAttr(path string) (int64, error)
+	ReadBlobIDAttr(path string) (string, error)
 }
 
 // New returns a new instance of Node
@@ -173,7 +176,7 @@ func (n *Node) ChangeOwner(new *userpb.UserId) (err error) {
 		prefixes.OwnerIDPAttr:  new.Idp,
 		prefixes.OwnerTypeAttr: utils.UserTypeToString(new.Type)}
 
-	if err := n.SpaceRoot.SetXattrs(attribs); err != nil {
+	if err := n.SpaceRoot.SetXattrs(attribs, true); err != nil {
 		return err
 	}
 
@@ -190,7 +193,7 @@ func (n *Node) WriteAllNodeMetadata() (err error) {
 	attribs[prefixes.BlobIDAttr] = n.BlobID
 	attribs[prefixes.BlobsizeAttr] = strconv.FormatInt(n.Blobsize, 10)
 
-	return n.SetXattrs(attribs)
+	return n.SetXattrs(attribs, true)
 }
 
 // WriteOwner writes the space owner
@@ -201,7 +204,7 @@ func (n *Node) WriteOwner(owner *userpb.UserId) error {
 		prefixes.OwnerIDPAttr:  owner.Idp,
 		prefixes.OwnerTypeAttr: utils.UserTypeToString(owner.Type),
 	}
-	if err := n.SpaceRoot.SetXattrs(attribs); err != nil {
+	if err := n.SpaceRoot.SetXattrs(attribs, true); err != nil {
 		return err
 	}
 	n.SpaceRoot.owner = owner
@@ -243,7 +246,7 @@ func ReadNode(ctx context.Context, lu PathLookup, spaceID, nodeID string, canLis
 	r.SpaceRoot = r
 	r.owner, err = r.readOwner()
 	switch {
-	case xattrs.IsNotExist(err):
+	case metadata.IsNotExist(err):
 		return r, nil // swallow not found, the node defaults to exists = false
 	case err != nil:
 		return nil, err
@@ -302,7 +305,7 @@ func ReadNode(ctx context.Context, lu PathLookup, spaceID, nodeID string, canLis
 
 	attrs, err := n.Xattrs()
 	switch {
-	case xattrs.IsNotExist(err):
+	case metadata.IsNotExist(err):
 		return n, nil // swallow not found, the node defaults to exists = false
 	case err != nil:
 		return nil, err
@@ -344,15 +347,24 @@ func ReadNode(ctx context.Context, lu PathLookup, spaceID, nodeID string, canLis
 		return nil, err
 	}
 
-	n.BlobID, err = ReadBlobIDAttr(nodePath + revisionSuffix)
-	if err != nil {
-		return nil, err
-	}
+	if revisionSuffix == "" {
+		n.BlobID = attrs[prefixes.BlobIDAttr]
+		blobSize, err := strconv.ParseInt(attrs[prefixes.BlobsizeAttr], 10, 64)
+		if err != nil {
+			return nil, err
+		}
+		n.Blobsize = blobSize
+	} else {
+		n.BlobID, err = lu.ReadBlobIDAttr(nodePath + revisionSuffix)
+		if err != nil {
+			return nil, err
+		}
 
-	// Lookup blobsize
-	n.Blobsize, err = ReadBlobSizeAttr(nodePath + revisionSuffix)
-	if err != nil {
-		return nil, err
+		// Lookup blobsize
+		n.Blobsize, err = lu.ReadBlobSizeAttr(nodePath + revisionSuffix)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return n, nil
@@ -425,17 +437,9 @@ func (n *Node) Parent() (p *Node, err error) {
 		SpaceRoot: n.SpaceRoot,
 	}
 
-	// lookup parent id in extended attributes
-	if p.ParentID, err = p.Xattr(prefixes.ParentidAttr); err != nil {
-		p.ParentID = ""
-		return
-	}
-	// lookup name in extended attributes
-	if p.Name, err = p.Xattr(prefixes.NameAttr); err != nil {
-		p.Name = ""
-		p.ParentID = ""
-		return
-	}
+	// lookup name and parent id in extended attributes
+	p.ParentID, _ = p.Xattr(prefixes.ParentidAttr)
+	p.Name, _ = p.Xattr(prefixes.NameAttr)
 
 	// check node exists
 	if _, err := os.Stat(p.InternalPath()); err == nil {
@@ -462,7 +466,7 @@ func (n *Node) readOwner() (*userpb.UserId, error) {
 	switch {
 	case err == nil:
 		owner.OpaqueId = attr
-	case xattrs.IsAttrUnset(err):
+	case metadata.IsAttrUnset(err):
 		// ignore
 	default:
 		return nil, err
@@ -473,7 +477,7 @@ func (n *Node) readOwner() (*userpb.UserId, error) {
 	switch {
 	case err == nil:
 		owner.Idp = attr
-	case xattrs.IsAttrUnset(err):
+	case metadata.IsAttrUnset(err):
 		// ignore
 	default:
 		return nil, err
@@ -484,7 +488,7 @@ func (n *Node) readOwner() (*userpb.UserId, error) {
 	switch {
 	case err == nil:
 		owner.Type = utils.UserTypeMap(attr)
-	case xattrs.IsAttrUnset(err):
+	case metadata.IsAttrUnset(err):
 		// ignore
 	default:
 		return nil, err
@@ -693,7 +697,7 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 	}
 
 	// use temporary etag if it is set
-	if b, err := n.Xattr(prefixes.TmpEtagAttr); err == nil {
+	if b, err := n.Xattr(prefixes.TmpEtagAttr); err == nil && b != "" {
 		ri.Etag = fmt.Sprintf(`"%x"`, b) // TODO why do we convert string(b)? is the temporary etag stored as string? -> should we use bytes? use hex.EncodeToString?
 	} else if ri.Etag, err = calculateEtag(n.ID, tmTime); err != nil {
 		sublog.Debug().Err(err).Msg("could not calculate etag")
@@ -839,7 +843,7 @@ func (n *Node) readChecksumIntoResourceChecksum(ctx context.Context, algo string
 			Type: storageprovider.PKG2GRPCXS(algo),
 			Sum:  hex.EncodeToString([]byte(v)),
 		}
-	case xattrs.IsAttrUnset(err):
+	case metadata.IsAttrUnset(err):
 		appctx.GetLogger(ctx).Debug().Err(err).Str("nodepath", n.InternalPath()).Str("algorithm", algo).Msg("checksum not set")
 	default:
 		appctx.GetLogger(ctx).Error().Err(err).Str("nodepath", n.InternalPath()).Str("algorithm", algo).Msg("could not read checksum")
@@ -859,7 +863,7 @@ func (n *Node) readChecksumIntoOpaque(ctx context.Context, algo string, ri *prov
 			Decoder: "plain",
 			Value:   []byte(hex.EncodeToString([]byte(v))),
 		}
-	case xattrs.IsAttrUnset(err):
+	case metadata.IsAttrUnset(err):
 		appctx.GetLogger(ctx).Debug().Err(err).Str("nodepath", n.InternalPath()).Str("algorithm", algo).Msg("checksum not set")
 	default:
 		appctx.GetLogger(ctx).Error().Err(err).Str("nodepath", n.InternalPath()).Str("algorithm", algo).Msg("could not read checksum")
@@ -889,7 +893,7 @@ func (n *Node) readQuotaIntoOpaque(ctx context.Context, ri *provider.ResourceInf
 		} else {
 			appctx.GetLogger(ctx).Error().Err(err).Str("nodepath", n.InternalPath()).Str("quota", v).Msg("malformed quota")
 		}
-	case xattrs.IsAttrUnset(err):
+	case metadata.IsAttrUnset(err):
 		appctx.GetLogger(ctx).Debug().Err(err).Str("nodepath", n.InternalPath()).Msg("quota not set")
 	default:
 		appctx.GetLogger(ctx).Error().Err(err).Str("nodepath", n.InternalPath()).Msg("could not read quota")
@@ -1046,7 +1050,7 @@ func (n *Node) ReadUserPermissions(ctx context.Context, u *userpb.User) (ap prov
 				return NoPermissions(), true, nil
 			}
 			AddPermissions(&ap, g.GetPermissions())
-		case xattrs.IsAttrUnset(err):
+		case metadata.IsAttrUnset(err):
 			err = nil
 			appctx.GetLogger(ctx).Error().Interface("node", n).Str("grant", grantees[i]).Interface("grantees", grantees).Msg("grant vanished from node after listing")
 			// continue with next segment
@@ -1069,7 +1073,7 @@ func (n *Node) IsDenied(ctx context.Context) bool {
 	case err == nil:
 		// If all permissions are set to false we have a deny grant
 		return grants.PermissionsEqual(g.Permissions, &provider.ResourcePermissions{})
-	case xattrs.IsAttrUnset(err):
+	case metadata.IsAttrUnset(err):
 		return false
 	default:
 		// be paranoid, resource is denied
@@ -1129,28 +1133,6 @@ func (n *Node) ListGrants(ctx context.Context) ([]*provider.Grant, error) {
 		grants = append(grants, grant)
 	}
 	return grants, nil
-}
-
-// ReadBlobSizeAttr reads the blobsize from the xattrs
-func ReadBlobSizeAttr(path string) (int64, error) {
-	attr, err := xattrs.Get(path, prefixes.BlobsizeAttr)
-	if err != nil {
-		return 0, errors.Wrapf(err, "error reading blobsize xattr")
-	}
-	blobSize, err := strconv.ParseInt(attr, 10, 64)
-	if err != nil {
-		return 0, errors.Wrapf(err, "invalid blobsize xattr format")
-	}
-	return blobSize, nil
-}
-
-// ReadBlobIDAttr reads the blobsize from the xattrs
-func ReadBlobIDAttr(path string) (string, error) {
-	attr, err := xattrs.Get(path, prefixes.BlobIDAttr)
-	if err != nil {
-		return "", errors.Wrapf(err, "error reading blobid xattr")
-	}
-	return attr, nil
 }
 
 func (n *Node) getGranteeTypes(ctx context.Context) []provider.GranteeType {
@@ -1233,10 +1215,10 @@ func (n *Node) IsSpaceRoot() bool {
 
 // SetScanData sets the virus scan info to the node
 func (n *Node) SetScanData(info string, date time.Time) error {
-	return xattrs.SetMultiple(n.InternalPath(), map[string]string{
+	return n.SetXattrs(map[string]string{
 		prefixes.ScanStatusPrefix: info,
 		prefixes.ScanDatePrefix:   date.Format(time.RFC3339Nano),
-	})
+	}, true)
 }
 
 // ScanData returns scanning information of the node
@@ -1292,40 +1274,4 @@ func enoughDiskSpace(path string, fileSize uint64) bool {
 		return false
 	}
 	return avalB > fileSize
-}
-
-// TypeFromPath returns the type of the node at the given path
-func TypeFromPath(path string) provider.ResourceType {
-	// Try to read from xattrs
-	typeAttr, err := xattrs.Get(path, prefixes.TypeAttr)
-	t := provider.ResourceType_RESOURCE_TYPE_INVALID
-	if err == nil {
-		typeInt, err := strconv.ParseInt(typeAttr, 10, 32)
-		if err != nil {
-			return t
-		}
-		return provider.ResourceType(typeInt)
-	}
-
-	// Fall back to checking on disk
-	fi, err := os.Lstat(path)
-	if err != nil {
-		return t
-	}
-
-	switch {
-	case fi.IsDir():
-		if _, err = xattrs.Get(path, prefixes.ReferenceAttr); err == nil {
-			t = provider.ResourceType_RESOURCE_TYPE_REFERENCE
-		} else {
-			t = provider.ResourceType_RESOURCE_TYPE_CONTAINER
-		}
-	case fi.Mode().IsRegular():
-		t = provider.ResourceType_RESOURCE_TYPE_FILE
-	case fi.Mode()&os.ModeSymlink != 0:
-		t = provider.ResourceType_RESOURCE_TYPE_SYMLINK
-		// TODO reference using ext attr on a symlink
-		// nodeType = provider.ResourceType_RESOURCE_TYPE_REFERENCE
-	}
-	return t
 }

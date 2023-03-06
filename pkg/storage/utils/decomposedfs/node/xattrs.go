@@ -19,32 +19,18 @@
 package node
 
 import (
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs"
-	"github.com/gofrs/flock"
 	"github.com/pkg/xattr"
 )
 
 // SetXattrs sets multiple extended attributes on the write-through cache/node
-func (n *Node) SetXattrs(attribs map[string]string) (err error) {
+func (n *Node) SetXattrs(attribs map[string]string, acquireLock bool) (err error) {
 	if n.xattrsCache != nil {
 		for k, v := range attribs {
 			n.xattrsCache[k] = v
 		}
 	}
 
-	return xattrs.SetMultiple(n.InternalPath(), attribs)
-}
-
-// SetXattrsWithLock sets multiple extended attributes on the write-through cache/node with a given lock
-func (n *Node) SetXattrsWithLock(attribs map[string]string, fileLock *flock.Flock) (err error) {
-	// TODO what if writing the lock fails?
-	if n.xattrsCache != nil {
-		for k, v := range attribs {
-			n.xattrsCache[k] = v
-		}
-	}
-
-	return xattrs.SetMultipleWithLock(n.InternalPath(), attribs, fileLock)
+	return n.lu.MetadataBackend().SetMultiple(n.InternalPath(), attribs, acquireLock)
 }
 
 // SetXattr sets an extended attribute on the write-through cache/node
@@ -53,16 +39,7 @@ func (n *Node) SetXattr(key, val string) (err error) {
 		n.xattrsCache[key] = val
 	}
 
-	return xattrs.Set(n.InternalPath(), key, val)
-}
-
-// SetXattrWithLock sets an extended attribute on the write-through cache/node with the given lock
-func (n *Node) SetXattrWithLock(key, val string, fileLock *flock.Flock) (err error) {
-	if n.xattrsCache != nil {
-		n.xattrsCache[key] = val
-	}
-
-	return xattrs.SetWithLock(n.InternalPath(), key, val, fileLock)
+	return n.lu.MetadataBackend().Set(n.InternalPath(), key, val)
 }
 
 // RemoveXattr removes an extended attribute from the write-through cache/node
@@ -70,7 +47,7 @@ func (n *Node) RemoveXattr(key string) error {
 	if n.xattrsCache != nil {
 		delete(n.xattrsCache, key)
 	}
-	return xattrs.Remove(n.InternalPath(), key)
+	return n.lu.MetadataBackend().Remove(n.InternalPath(), key)
 }
 
 // Xattrs returns the extended attributes of the node. If the attributes have already
@@ -80,7 +57,7 @@ func (n *Node) Xattrs() (map[string]string, error) {
 		return n.xattrsCache, nil
 	}
 
-	attrs, err := xattrs.All(n.InternalPath())
+	attrs, err := n.lu.MetadataBackend().All(n.InternalPath())
 	if err != nil {
 		return nil, err
 	}
@@ -92,11 +69,11 @@ func (n *Node) Xattrs() (map[string]string, error) {
 // been cached it is not read from disk again.
 func (n *Node) Xattr(key string) (string, error) {
 	if n.xattrsCache == nil {
-		b, err := xattrs.Get(n.InternalPath(), key)
+		attrs, err := n.lu.MetadataBackend().All(n.InternalPath())
 		if err != nil {
 			return "", err
 		}
-		return b, nil
+		n.xattrsCache = attrs
 	}
 
 	if val, ok := n.xattrsCache[key]; ok {

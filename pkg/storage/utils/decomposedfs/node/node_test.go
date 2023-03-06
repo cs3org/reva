@@ -268,8 +268,6 @@ var _ = Describe("Node", func() {
 		It("Checks the Editor permissions on a project space and a denial", func() {
 			storageSpace, err := env.CreateTestStorageSpace("project", &provider.Quota{QuotaMaxBytes: 2000})
 			Expect(err).ToNot(HaveOccurred())
-			spaceRoot, err := env.Lookup.NodeFromSpaceID(env.Ctx, storageSpace)
-			Expect(err).ToNot(HaveOccurred())
 			u := ctxpkg.ContextMustGetUser(env.Ctx)
 			env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(provider.ResourcePermissions{
 				UpdateGrant: true,
@@ -289,6 +287,8 @@ var _ = Describe("Node", func() {
 				},
 				Permissions: ocsconv.NewEditorRole().CS3ResourcePermissions(),
 			})
+			Expect(err).ToNot(HaveOccurred())
+			spaceRoot, err := env.Lookup.NodeFromSpaceID(env.Ctx, storageSpace)
 			Expect(err).ToNot(HaveOccurred())
 			permissionsActual, _ := spaceRoot.PermissionSet(env.Ctx)
 			permissionsExpected := ocsconv.NewEditorRole().CS3ResourcePermissions()

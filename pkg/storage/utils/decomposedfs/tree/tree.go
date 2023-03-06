@@ -37,9 +37,9 @@ import (
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/logger"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/lookup"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs/prefixes"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/filelocks"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/google/uuid"
@@ -64,6 +64,10 @@ type PathLookup interface {
 	InternalRoot() string
 	InternalPath(spaceID, nodeID string) string
 	Path(ctx context.Context, n *node.Node, hasPermission node.PermissionFunc) (path string, err error)
+	MetadataBackend() metadata.Backend
+	ReadBlobSizeAttr(path string) (int64, error)
+	ReadBlobIDAttr(path string) (string, error)
+	TypeFromPath(path string) provider.ResourceType
 }
 
 // Tree manages a hierarchical tree
@@ -227,12 +231,6 @@ func (t *Tree) linkSpaceNode(spaceType, spaceID string) {
 	}
 }
 
-// isRootNode checks if a node is a space root
-func isRootNode(nodePath string) bool {
-	attr, err := xattrs.Get(nodePath, prefixes.ParentidAttr)
-	return err == nil && attr == node.RootID
-}
-
 // GetMD returns the metadata of a node in the tree
 func (t *Tree) GetMD(ctx context.Context, n *node.Node) (os.FileInfo, error) {
 	md, err := os.Stat(n.InternalPath())
@@ -264,12 +262,6 @@ func (t *Tree) TouchFile(ctx context.Context, n *node.Node) error {
 	_, err := os.Create(nodePath)
 	if err != nil {
 		return errors.Wrap(err, "Decomposedfs: error creating node")
-	}
-	if xattrs.UsesExternalMetadataFile() {
-		_, err = os.Create(xattrs.MetadataPath(nodePath))
-		if err != nil {
-			return errors.Wrap(err, "Decomposedfs: error creating node")
-		}
 	}
 
 	err = n.WriteAllNodeMetadata()
@@ -545,13 +537,11 @@ func (t *Tree) Delete(ctx context.Context, n *node.Node) (err error) {
 		_ = n.RemoveXattr(prefixes.TrashOriginAttr)
 		return
 	}
-	if xattrs.UsesExternalMetadataFile() {
-		err = os.Rename(xattrs.MetadataPath(nodePath), xattrs.MetadataPath(trashPath))
-		if err != nil {
-			_ = n.RemoveXattr(prefixes.TrashOriginAttr)
-			_ = os.Rename(trashPath, nodePath)
-			return
-		}
+	err = t.lookup.MetadataBackend().Rename(nodePath, trashPath)
+	if err != nil {
+		_ = n.RemoveXattr(prefixes.TrashOriginAttr)
+		_ = os.Rename(trashPath, nodePath)
+		return
 	}
 
 	// Remove lock file if it exists
@@ -619,11 +609,9 @@ func (t *Tree) RestoreRecycleItemFunc(ctx context.Context, spaceid, key, trashPa
 			if err != nil {
 				return err
 			}
-			if xattrs.UsesExternalMetadataFile() {
-				err = os.Rename(xattrs.MetadataPath(deletedNodePath), xattrs.MetadataPath(nodePath))
-				if err != nil {
-					return err
-				}
+			err = t.lookup.MetadataBackend().Rename(deletedNodePath, nodePath)
+			if err != nil {
+				return err
 			}
 		}
 
@@ -706,11 +694,10 @@ func (t *Tree) removeNode(path string, n *node.Node) error {
 		log.Error().Err(err).Str("path", path).Msg("error purging node")
 		return err
 	}
-	if xattrs.UsesExternalMetadataFile() {
-		if err := utils.RemoveItem(xattrs.MetadataPath(path)); err != nil {
-			log.Error().Err(err).Str("path", xattrs.MetadataPath(path)).Msg("error purging node metadata")
-			return err
-		}
+
+	if err := t.lookup.MetadataBackend().Purge(path); err != nil {
+		log.Error().Err(err).Str("path", t.lookup.MetadataBackend().MetadataPath(path)).Msg("error purging node metadata")
+		return err
 	}
 
 	// delete blob from blobstore
@@ -728,11 +715,11 @@ func (t *Tree) removeNode(path string, n *node.Node) error {
 		return err
 	}
 	for _, rev := range revs {
-		if xattrs.IsMetaFile(rev) {
+		if t.lookup.MetadataBackend().IsMetaFile(rev) {
 			continue
 		}
 
-		bID, err := node.ReadBlobIDAttr(rev)
+		bID, err := t.lookup.ReadBlobIDAttr(rev)
 		if err != nil {
 			log.Error().Err(err).Str("revision", rev).Msg("error reading blobid attribute")
 			return err
@@ -787,49 +774,10 @@ func (t *Tree) Propagate(ctx context.Context, n *node.Node, sizeDiff int64) (err
 			return nil
 		}
 
-		if t.treeTimeAccounting {
-			// update the parent tree time if it is older than the nodes mtime
-			updateSyncTime := false
+		if t.treeTimeAccounting || (t.treeSizeAccounting && sizeDiff != 0) {
+			attrs := map[string]string{}
 
-			var tmTime time.Time
-			tmTime, err = n.GetTMTime()
-			switch {
-			case err != nil:
-				// missing attribute, or invalid format, overwrite
-				sublog.Debug().Err(err).
-					Msg("could not read tmtime attribute, overwriting")
-				updateSyncTime = true
-			case tmTime.Before(sTime):
-				sublog.Debug().
-					Time("tmtime", tmTime).
-					Time("stime", sTime).
-					Msg("parent tmtime is older than node mtime, updating")
-				updateSyncTime = true
-			default:
-				sublog.Debug().
-					Time("tmtime", tmTime).
-					Time("stime", sTime).
-					Dur("delta", sTime.Sub(tmTime)).
-					Msg("parent tmtime is younger than node mtime, not updating")
-			}
-
-			if updateSyncTime {
-				// update the tree time of the parent node
-				if err = n.SetTMTime(&sTime); err != nil {
-					sublog.Error().Err(err).Time("tmtime", sTime).Msg("could not update tmtime of parent node")
-				} else {
-					sublog.Debug().Time("tmtime", sTime).Msg("updated tmtime of parent node")
-				}
-			}
-
-			if err := n.UnsetTempEtag(); err != nil && !xattrs.IsAttrUnset(err) {
-				sublog.Error().Err(err).Msg("could not remove temporary etag attribute")
-			}
-		}
-
-		// size accounting
-		if t.treeSizeAccounting && sizeDiff != 0 {
-			// lock node before reading treesize
+			// lock node before reading treesize or tree time
 			nodeLock, err := filelocks.AcquireWriteLock(n.InternalPath())
 			if err != nil {
 				return err
@@ -843,29 +791,69 @@ func (t *Tree) Propagate(ctx context.Context, n *node.Node, sizeDiff int64) (err
 			}
 			defer releaseLock()
 
-			var newSize uint64
+			if t.treeTimeAccounting {
+				// update the parent tree time if it is older than the nodes mtime
+				updateSyncTime := false
 
-			// read treesize
-			treeSize, err := n.GetTreeSize()
-			switch {
-			case xattrs.IsAttrUnset(err):
-				// fallback to calculating the treesize
-				newSize, err = calculateTreeSize(ctx, n.InternalPath())
-				if err != nil {
-					return err
+				var tmTime time.Time
+				tmTime, err = n.GetTMTime()
+				switch {
+				case err != nil:
+					// missing attribute, or invalid format, overwrite
+					sublog.Debug().Err(err).
+						Msg("could not read tmtime attribute, overwriting")
+					updateSyncTime = true
+				case tmTime.Before(sTime):
+					sublog.Debug().
+						Time("tmtime", tmTime).
+						Time("stime", sTime).
+						Msg("parent tmtime is older than node mtime, updating")
+					updateSyncTime = true
+				default:
+					sublog.Debug().
+						Time("tmtime", tmTime).
+						Time("stime", sTime).
+						Dur("delta", sTime.Sub(tmTime)).
+						Msg("parent tmtime is younger than node mtime, not updating")
 				}
-			case err != nil:
-				return err
-			default:
-				if sizeDiff > 0 {
-					newSize = treeSize + uint64(sizeDiff)
-				} else {
-					newSize = treeSize - uint64(-sizeDiff)
+
+				if updateSyncTime {
+					// update the tree time of the parent node
+					attrs[prefixes.TreeMTimeAttr] = sTime.UTC().Format(time.RFC3339Nano)
 				}
+
+				attrs[prefixes.TmpEtagAttr] = ""
 			}
 
-			// update the tree size of the node
-			if err = n.SetXattrWithLock(prefixes.TreesizeAttr, strconv.FormatUint(newSize, 10), nodeLock); err != nil {
+			// size accounting
+			if t.treeSizeAccounting && sizeDiff != 0 {
+				var newSize uint64
+
+				// read treesize
+				treeSize, err := n.GetTreeSize()
+				switch {
+				case metadata.IsAttrUnset(err):
+					// fallback to calculating the treesize
+					newSize, err = t.calculateTreeSize(ctx, n.InternalPath())
+					if err != nil {
+						return err
+					}
+				case err != nil:
+					return err
+				default:
+					if sizeDiff > 0 {
+						newSize = treeSize + uint64(sizeDiff)
+					} else {
+						newSize = treeSize - uint64(-sizeDiff)
+					}
+				}
+
+				// update the tree size of the node
+				attrs[prefixes.TreesizeAttr] = strconv.FormatUint(newSize, 10)
+				sublog.Debug().Uint64("newSize", newSize).Msg("updated treesize of parent node")
+			}
+
+			if err = n.SetXattrs(attrs, false); err != nil {
 				return err
 			}
 
@@ -874,10 +862,7 @@ func (t *Tree) Propagate(ctx context.Context, n *node.Node, sizeDiff int64) (err
 			if err != nil {
 				return errtypes.InternalError(err.Error())
 			}
-
-			sublog.Debug().Uint64("newSize", newSize).Msg("updated treesize of parent node")
 		}
-
 	}
 	if err != nil {
 		sublog.Error().Err(err).Msg("error propagating")
@@ -886,7 +871,7 @@ func (t *Tree) Propagate(ctx context.Context, n *node.Node, sizeDiff int64) (err
 	return
 }
 
-func calculateTreeSize(ctx context.Context, childrenPath string) (uint64, error) {
+func (t *Tree) calculateTreeSize(ctx context.Context, childrenPath string) (uint64, error) {
 	var size uint64
 
 	f, err := os.Open(childrenPath)
@@ -910,7 +895,7 @@ func calculateTreeSize(ctx context.Context, childrenPath string) (uint64, error)
 		}
 
 		// raw read of the attributes for performance reasons
-		attribs, err := xattrs.All(resolvedPath)
+		attribs, err := t.lookup.MetadataBackend().All(resolvedPath)
 		if err != nil {
 			appctx.GetLogger(ctx).Error().Err(err).Str("childpath", cPath).Msg("could not read attributes of child entry")
 			continue // continue after an error
@@ -963,12 +948,6 @@ func (t *Tree) createDirNode(n *node.Node) (err error) {
 	if err := os.MkdirAll(nodePath, 0700); err != nil {
 		return errors.Wrap(err, "Decomposedfs: error creating node")
 	}
-	if xattrs.UsesExternalMetadataFile() {
-		_, err = os.Create(xattrs.MetadataPath(nodePath))
-		if err != nil {
-			return errors.Wrap(err, "Decomposedfs: error creating node")
-		}
-	}
 
 	return n.WriteAllNodeMetadata()
 }
@@ -981,6 +960,7 @@ func (t *Tree) readRecycleItem(ctx context.Context, spaceID, key, path string) (
 		return nil, "", "", "", errtypes.InternalError("key is empty")
 	}
 
+	backend := t.lookup.MetadataBackend()
 	var nodeID string
 
 	trashItem = filepath.Join(t.lookup.InternalRoot(), "spaces", lookup.Pathify(spaceID, 1, 2), "trash", lookup.Pathify(key, 4, 2))
@@ -1000,30 +980,30 @@ func (t *Tree) readRecycleItem(ctx context.Context, spaceID, key, path string) (
 	if err != nil {
 		return
 	}
-	recycleNode.SetType(node.TypeFromPath(recycleNode.InternalPath()))
+	recycleNode.SetType(t.lookup.TypeFromPath(recycleNode.InternalPath()))
 
 	var attrStr string
 	// lookup blobID in extended attributes
-	if attrStr, err = xattrs.Get(deletedNodePath, prefixes.BlobIDAttr); err == nil {
+	if attrStr, err = backend.Get(deletedNodePath, prefixes.BlobIDAttr); err == nil {
 		recycleNode.BlobID = attrStr
 	} else {
 		return
 	}
 
 	// lookup blobSize in extended attributes
-	if recycleNode.Blobsize, err = xattrs.GetInt64(deletedNodePath, prefixes.BlobsizeAttr); err != nil {
+	if recycleNode.Blobsize, err = backend.GetInt64(deletedNodePath, prefixes.BlobsizeAttr); err != nil {
 		return
 	}
 
 	// lookup parent id in extended attributes
-	if attrStr, err = xattrs.Get(deletedNodePath, prefixes.ParentidAttr); err == nil {
+	if attrStr, err = backend.Get(deletedNodePath, prefixes.ParentidAttr); err == nil {
 		recycleNode.ParentID = attrStr
 	} else {
 		return
 	}
 
 	// lookup name in extended attributes
-	if attrStr, err = xattrs.Get(deletedNodePath, prefixes.NameAttr); err == nil {
+	if attrStr, err = backend.Get(deletedNodePath, prefixes.NameAttr); err == nil {
 		recycleNode.Name = attrStr
 	} else {
 		return
@@ -1033,7 +1013,7 @@ func (t *Tree) readRecycleItem(ctx context.Context, spaceID, key, path string) (
 	origin = "/"
 
 	// lookup origin path in extended attributes
-	if attrStr, err = xattrs.Get(resolvedTrashItem, prefixes.TrashOriginAttr); err == nil {
+	if attrStr, err = backend.Get(resolvedTrashItem, prefixes.TrashOriginAttr); err == nil {
 		origin = filepath.Join(attrStr, path)
 	} else {
 		log.Error().Err(err).Str("trashItem", trashItem).Str("deletedNodePath", deletedNodePath).Msg("could not read origin path, restoring to /")

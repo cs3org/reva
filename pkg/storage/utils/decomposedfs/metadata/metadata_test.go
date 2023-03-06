@@ -16,14 +16,15 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package backend_test
+package metadata_test
 
 import (
 	"os"
 	"path"
 	"strings"
 
-	xattrsBackend "github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs/backend"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/options"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
@@ -34,7 +35,7 @@ var _ = Describe("Backend", func() {
 		file     string
 		metafile string
 
-		backend xattrsBackend.Backend
+		backend metadata.Backend
 	)
 
 	BeforeEach(func() {
@@ -58,7 +59,7 @@ var _ = Describe("Backend", func() {
 
 	Describe("IniBackend", func() {
 		BeforeEach(func() {
-			backend = xattrsBackend.NewIniBackend()
+			backend = metadata.NewIniBackend(options.CacheOptions{})
 		})
 
 		Describe("Set", func() {
@@ -90,11 +91,39 @@ var _ = Describe("Backend", func() {
 				Expect(err).ToNot(HaveOccurred())
 				Expect(string(content)).To(Equal("user.ocis.cs.foo = YmFy\n"))
 			})
+
+			It("doesn't encode already encoded attributes", func() {
+				err := backend.Set(file, "user.ocis.cs.foo", "bar")
+				Expect(err).ToNot(HaveOccurred())
+
+				content, err := os.ReadFile(metafile)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(string(content)).To(Equal("user.ocis.cs.foo = YmFy\n"))
+
+				err = backend.Set(file, "user.something", "doesn'tmatter")
+				Expect(err).ToNot(HaveOccurred())
+
+				content, err = os.ReadFile(metafile)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(string(content)).To(ContainSubstring("user.ocis.cs.foo = YmFy\n"))
+			})
+
+			It("sets an empty attribute", func() {
+				_, err := backend.Get(file, "foo")
+				Expect(err).To(HaveOccurred())
+
+				err = backend.Set(file, "foo", "")
+				Expect(err).ToNot(HaveOccurred())
+
+				v, err := backend.Get(file, "foo")
+				Expect(err).ToNot(HaveOccurred())
+				Expect(v).To(Equal(""))
+			})
 		})
 
 		Describe("SetMultiple", func() {
 			It("sets attributes", func() {
-				err := backend.SetMultiple(file, map[string]string{"foo": "bar", "baz": "qux"})
+				err := backend.SetMultiple(file, map[string]string{"foo": "bar", "baz": "qux"}, true)
 				Expect(err).ToNot(HaveOccurred())
 
 				content, err := os.ReadFile(metafile)
@@ -106,7 +135,7 @@ var _ = Describe("Backend", func() {
 			It("updates an attribute", func() {
 				err := backend.Set(file, "foo", "bar")
 				Expect(err).ToNot(HaveOccurred())
-				err = backend.SetMultiple(file, map[string]string{"foo": "bar", "baz": "qux"})
+				err = backend.SetMultiple(file, map[string]string{"foo": "bar", "baz": "qux"}, true)
 				Expect(err).ToNot(HaveOccurred())
 
 				content, err := os.ReadFile(metafile)
@@ -121,12 +150,17 @@ var _ = Describe("Backend", func() {
 					"user.ocis.cs.foo":        "bar",
 					"user.ocis.md.foo":        "bar",
 					"user.ocis.grant.foo":     "bar",
-				})
+				}, true)
 				Expect(err).ToNot(HaveOccurred())
 
 				content, err := os.ReadFile(metafile)
 				Expect(err).ToNot(HaveOccurred())
-				Expect(strings.ReplaceAll(string(content), " ", "")).To(Equal("user.ocis.something.foo=bar\nuser.ocis.cs.foo=YmFy\nuser.ocis.md.foo=YmFy\nuser.ocis.grant.foo=YmFy\n"))
+				expected := []string{
+					"user.ocis.something.foo=bar",
+					"user.ocis.cs.foo=YmFy",
+					"user.ocis.md.foo=YmFy",
+					"user.ocis.grant.foo=YmFy"}
+				Expect(strings.Split(strings.ReplaceAll(strings.Trim(string(content), "\n"), " ", ""), "\n")).To(ConsistOf(expected))
 			})
 		})
 
@@ -212,12 +246,6 @@ var _ = Describe("Backend", func() {
 
 				_, err = backend.Get(file, "foo")
 				Expect(err).To(HaveOccurred())
-			})
-		})
-
-		Describe("UsesExternalMetadataFile", func() {
-			It("returns true", func() {
-				Expect(backend.UsesExternalMetadataFile()).To(BeTrue())
 			})
 		})
 

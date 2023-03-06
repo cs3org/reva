@@ -28,9 +28,9 @@ import (
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs/prefixes"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/pkg/errors"
@@ -185,7 +185,7 @@ func (fs *Decomposedfs) UnsetArbitraryMetadata(ctx context.Context, ref *provide
 			}
 			fa := fmt.Sprintf("%s:%s:%s@%s", prefixes.FavPrefix, utils.UserTypeToString(uid.GetType()), uid.GetOpaqueId(), uid.GetIdp())
 			if err := n.RemoveXattr(fa); err != nil {
-				if xattrs.IsAttrUnset(err) {
+				if metadata.IsAttrUnset(err) {
 					continue // already gone, ignore
 				}
 				sublog.Error().Err(err).
@@ -196,7 +196,7 @@ func (fs *Decomposedfs) UnsetArbitraryMetadata(ctx context.Context, ref *provide
 			}
 		default:
 			if err = n.RemoveXattr(prefixes.MetadataPrefix + k); err != nil {
-				if xattrs.IsAttrUnset(err) {
+				if metadata.IsAttrUnset(err) {
 					continue // already gone, ignore
 				}
 				sublog.Error().Err(err).

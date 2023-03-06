@@ -29,9 +29,8 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs/prefixes"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/pkg/errors"
 )
@@ -71,7 +70,7 @@ func (fs *Decomposedfs) ListRevisions(ctx context.Context, ref *provider.Referen
 	np := n.InternalPath()
 	if items, err := filepath.Glob(np + node.RevisionIDDelimiter + "*"); err == nil {
 		for i := range items {
-			if xattrs.IsMetaFile(items[i]) {
+			if fs.lu.MetadataBackend().IsMetaFile(items[i]) {
 				continue
 			}
 
@@ -86,7 +85,7 @@ func (fs *Decomposedfs) ListRevisions(ctx context.Context, ref *provider.Referen
 					Key:   n.ID + node.RevisionIDDelimiter + parts[1],
 					Mtime: uint64(mtime.Unix()),
 				}
-				blobSize, err := node.ReadBlobSizeAttr(items[i])
+				blobSize, err := fs.lu.ReadBlobSizeAttr(items[i])
 				if err != nil {
 					appctx.GetLogger(ctx).Error().Err(err).Str("name", fi.Name()).Msg("error reading blobsize xattr, using 0")
 				}
@@ -148,11 +147,11 @@ func (fs *Decomposedfs) DownloadRevision(ctx context.Context, ref *provider.Refe
 
 	contentPath := fs.lu.InternalPath(spaceID, revisionKey)
 
-	blobid, err := node.ReadBlobIDAttr(contentPath)
+	blobid, err := fs.lu.ReadBlobIDAttr(contentPath)
 	if err != nil {
 		return nil, errors.Wrapf(err, "Decomposedfs: could not read blob id of revision '%s' for node '%s'", n.ID, revisionKey)
 	}
-	blobsize, err := node.ReadBlobSizeAttr(contentPath)
+	blobsize, err := fs.lu.ReadBlobSizeAttr(contentPath)
 	if err != nil {
 		return nil, errors.Wrapf(err, "Decomposedfs: could not read blob size of revision '%s' for node '%s'", n.ID, revisionKey)
 	}
@@ -219,27 +218,19 @@ func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Refer
 		if _, err := os.Create(newRevisionPath); err != nil {
 			return err
 		}
-		if xattrs.UsesExternalMetadataFile() {
-			if _, err := os.Create(xattrs.MetadataPath(newRevisionPath)); err != nil {
-				_ = os.Remove(newRevisionPath)
-				return err
-			}
-		}
 		defer func() {
 			if returnErr != nil {
 				if err := os.Remove(newRevisionPath); err != nil {
 					log.Error().Err(err).Str("revision", filepath.Base(newRevisionPath)).Msg("could not clean up revision node")
 				}
-				if xattrs.UsesExternalMetadataFile() {
-					if err := os.Remove(xattrs.MetadataPath(newRevisionPath)); err != nil {
-						log.Error().Err(err).Str("revision", filepath.Base(newRevisionPath)).Msg("could not clean up revision node")
-					}
+				if err := fs.lu.MetadataBackend().Purge(newRevisionPath); err != nil {
+					log.Error().Err(err).Str("revision", filepath.Base(newRevisionPath)).Msg("could not clean up revision node")
 				}
 			}
 		}()
 
 		// copy blob metadata from node to new revision node
-		err = xattrs.CopyMetadata(nodePath, newRevisionPath, func(attributeName string) bool {
+		err = fs.lu.CopyMetadata(nodePath, newRevisionPath, func(attributeName string) bool {
 			return strings.HasPrefix(attributeName, prefixes.ChecksumPrefix) || // for checksums
 				attributeName == prefixes.TypeAttr ||
 				attributeName == prefixes.BlobIDAttr ||
@@ -258,7 +249,7 @@ func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Refer
 
 		// copy blob metadata from restored revision to node
 		restoredRevisionPath := fs.lu.InternalPath(spaceID, revisionKey)
-		err = xattrs.CopyMetadata(restoredRevisionPath, nodePath, func(attributeName string) bool {
+		err = fs.lu.CopyMetadata(restoredRevisionPath, nodePath, func(attributeName string) bool {
 			return strings.HasPrefix(attributeName, prefixes.ChecksumPrefix) ||
 				attributeName == prefixes.TypeAttr ||
 				attributeName == prefixes.BlobIDAttr ||
@@ -268,7 +259,7 @@ func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Refer
 			return errtypes.InternalError("failed to copy blob xattrs to old revision to node")
 		}
 
-		revisionSize, err := xattrs.GetInt64(restoredRevisionPath, prefixes.BlobsizeAttr)
+		revisionSize, err := fs.lu.MetadataBackend().GetInt64(restoredRevisionPath, prefixes.BlobsizeAttr)
 		if err != nil {
 			return errtypes.InternalError("failed to read blob size xattr from old revision")
 		}

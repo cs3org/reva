@@ -24,6 +24,8 @@ import (
 	"path/filepath"
 
 	"github.com/cs3org/reva/v2/pkg/logger"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
 )
 
 /**
@@ -53,17 +55,18 @@ func (t *Tree) migration0001Nodes() error {
 			return err
 		}
 
-		for _, node := range nodes {
-			nodePath := filepath.Join(nodesPath, node.Name())
+		for _, n := range nodes {
+			nodePath := filepath.Join(nodesPath, n.Name())
 
-			if isRootNode(nodePath) {
-				if err := t.moveNode(node.Name(), node.Name()); err != nil {
+			attr, err := t.lookup.MetadataBackend().Get(nodePath, prefixes.ParentidAttr)
+			if err == nil && attr == node.RootID {
+				if err := t.moveNode(n.Name(), n.Name()); err != nil {
 					logger.New().Error().Err(err).
-						Str("space", node.Name()).
+						Str("space", n.Name()).
 						Msg("could not move space")
 					continue
 				}
-				t.linkSpaceNode("personal", node.Name())
+				t.linkSpaceNode("personal", n.Name())
 			}
 		}
 		// TODO delete nodesPath if empty

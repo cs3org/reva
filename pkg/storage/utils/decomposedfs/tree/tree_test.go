@@ -25,11 +25,10 @@ import (
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/lookup"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
 	helpers "github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/testhelpers"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/tree"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/xattrs/prefixes"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/mock"
 
@@ -123,7 +122,7 @@ var _ = Describe("Tree", func() {
 					resolveTrashPath, err := filepath.EvalSymlinks(trashPath)
 					Expect(err).ToNot(HaveOccurred())
 
-					attr, err := xattrs.Get(resolveTrashPath, prefixes.TrashOriginAttr)
+					attr, err := env.Lookup.MetadataBackend().Get(resolveTrashPath, prefixes.TrashOriginAttr)
 					Expect(err).ToNot(HaveOccurred())
 					Expect(attr).To(Equal("/dir1/file1"))
 				})
@@ -402,7 +401,7 @@ var _ = Describe("Tree", func() {
 
 				stopdir, err := env.CreateTestDir("testdir/stophere", &provider.Reference{ResourceId: env.SpaceRootRes})
 				Expect(err).ToNot(HaveOccurred())
-				err = xattrs.Set(stopdir.InternalPath(), prefixes.PropagationAttr, "0")
+				err = stopdir.SetXattr(prefixes.PropagationAttr, "0")
 				Expect(err).ToNot(HaveOccurred())
 				otherdir, err := env.CreateTestDir("testdir/stophere/lotsofbytes", &provider.Reference{ResourceId: env.SpaceRootRes})
 				Expect(err).ToNot(HaveOccurred())

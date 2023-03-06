@@ -1,4 +1,4 @@
-package backend_test
+package metadata_test
 
 import (
 	"testing"
@@ -7,7 +7,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-func TestBackend(t *testing.T) {
+func TestXattrs(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Backend Suite")
+	RunSpecs(t, "Xattrs Suite")
 }
