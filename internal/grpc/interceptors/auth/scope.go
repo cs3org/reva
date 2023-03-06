@@ -328,6 +328,8 @@ func extractRefForReaderRole(req interface{}) (*provider.Reference, bool) {
 		return &provider.Reference{ResourceId: v.ResourceInfo.Id}, true
 	case *gateway.OpenInAppRequest:
 		return v.GetRef(), true
+	case *provider.GetLockRequest:
+		return v.GetRef(), true
 
 	// App provider requests
 	case *appregistry.GetAppProvidersRequest:
@@ -365,6 +367,12 @@ func extractRefForEditorRole(req interface{}) (*provider.Reference, bool) {
 	case *provider.SetArbitraryMetadataRequest:
 		return v.GetRef(), true
 	case *provider.UnsetArbitraryMetadataRequest:
+		return v.GetRef(), true
+	case *provider.SetLockRequest:
+		return v.GetRef(), true
+	case *provider.RefreshLockRequest:
+		return v.GetRef(), true
+	case *provider.UnlockRequest:
 		return v.GetRef(), true
 	}
 
