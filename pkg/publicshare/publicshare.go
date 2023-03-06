@@ -211,3 +211,10 @@ func Authenticate(share *link.PublicShare, pw string, auth *link.PublicShareAuth
 func IsCreatedByUser(share link.PublicShare, user *user.User) bool {
 	return utils.UserEqual(user.Id, share.Owner) || utils.UserEqual(user.Id, share.Creator)
 }
+
+// IsWriteable checks if the grant for a publicshare allows writes or uploads.
+func IsWriteable(g *link.Grant) bool {
+	p := g.Permissions.Permissions
+	return p.CreateContainer || p.Delete || p.InitiateFileUpload ||
+		p.Move || p.AddGrant || p.PurgeRecycle || p.RestoreFileVersion || p.RestoreRecycleItem
+}

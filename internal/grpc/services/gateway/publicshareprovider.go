@@ -44,7 +44,9 @@ func (s *svc) CreatePublicShare(ctx context.Context, req *link.CreatePublicShare
 		return nil, err
 	}
 
-	s.statCache.RemoveStat(ctxpkg.ContextMustGetUser(ctx).GetId(), res.Share.ResourceId)
+	if res.GetShare() != nil {
+		s.statCache.RemoveStat(ctxpkg.ContextMustGetUser(ctx).GetId(), res.Share.ResourceId)
+	}
 	return res, nil
 }
 
@@ -139,11 +141,13 @@ func (s *svc) UpdatePublicShare(ctx context.Context, req *link.UpdatePublicShare
 	if err != nil {
 		return nil, errors.Wrap(err, "error updating share")
 	}
-	s.statCache.RemoveStat(
-		&userprovider.UserId{
-			OpaqueId: res.Share.Owner.GetOpaqueId(),
-		},
-		res.Share.ResourceId,
-	)
+	if res.GetShare() != nil {
+		s.statCache.RemoveStat(
+			&userprovider.UserId{
+				OpaqueId: res.Share.Owner.GetOpaqueId(),
+			},
+			res.Share.ResourceId,
+		)
+	}
 	return res, nil
 }

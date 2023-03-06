@@ -470,6 +470,11 @@ func (h *Handler) updatePublicShare(w http.ResponseWriter, r *http.Request, shar
 				response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "Error sending update request to public link provider", err)
 				return
 			}
+			if uRes.Status.Code != rpc.Code_CODE_OK {
+				log.Debug().Str("shareID", shareID).Msgf("sending update request to public link provider failed: %s", uRes.Status.Message)
+				response.WriteOCSError(w, r, response.MetaServerError.StatusCode, fmt.Sprintf("Error sending update request to public link provider: %s", uRes.Status.Message), nil)
+				return
+			}
 		}
 		publicShare = uRes.Share
 	} else if !updatesFound {
