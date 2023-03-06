@@ -62,7 +62,7 @@ type ShareRemoved struct {
 	GranteeGroupID *group.GroupId
 
 	ItemID    *provider.ResourceId
-	Timestamp *types.Timestamp
+	Timestamp time.Time
 }
 
 // Unmarshal to fulfill umarshaller interface

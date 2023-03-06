@@ -68,7 +68,7 @@ func ShareRemoved(r *collaboration.RemoveShareResponse, req *collaboration.Remov
 		GranteeUserID:  userid,
 		GranteeGroupID: groupid,
 		ItemID:         rid,
-		Timestamp:      utils.TimeToTS(time.Now()),
+		Timestamp:      time.Now(),
 	}
 }
 
@@ -316,6 +316,7 @@ func SpaceShared(r *provider.AddGrantResponse, req *provider.AddGrantRequest, ex
 		GranteeUserID:  req.Grant.GetGrantee().GetUserId(),
 		GranteeGroupID: req.Grant.GetGrantee().GetGroupId(),
 		ID:             &provider.StorageSpaceId{OpaqueId: id},
+		Timestamp:      time.Now(),
 	}
 }
 
@@ -327,6 +328,7 @@ func SpaceUnshared(r *provider.RemoveGrantResponse, req *provider.RemoveGrantReq
 		GranteeUserID:  req.Grant.GetGrantee().GetUserId(),
 		GranteeGroupID: req.Grant.GetGrantee().GetGroupId(),
 		ID:             &provider.StorageSpaceId{OpaqueId: id},
+		Timestamp:      time.Now(),
 	}
 }
 
@@ -335,6 +337,7 @@ func SpaceDisabled(r *provider.DeleteStorageSpaceResponse, req *provider.DeleteS
 	return events.SpaceDisabled{
 		Executant: executant,
 		ID:        req.Id,
+		Timestamp: time.Now(),
 	}
 }
 
@@ -347,7 +350,7 @@ func SpaceDeleted(r *provider.DeleteStorageSpaceResponse, req *provider.DeleteSt
 		ID:           req.Id,
 		SpaceName:    utils.ReadPlainFromOpaque(r.GetOpaque(), "spacename"),
 		FinalMembers: final,
-		Timestamp:    utils.TimeToTS(time.Now()),
+		Timestamp:    time.Now(),
 	}
 }
 

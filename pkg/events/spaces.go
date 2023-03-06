@@ -66,6 +66,7 @@ func (SpaceRenamed) Unmarshal(v []byte) (interface{}, error) {
 type SpaceDisabled struct {
 	Executant *user.UserId
 	ID        *provider.StorageSpaceId
+	Timestamp time.Time
 }
 
 // Unmarshal to fulfill umarshaller interface
@@ -95,7 +96,7 @@ type SpaceDeleted struct {
 	ID           *provider.StorageSpaceId
 	SpaceName    string
 	FinalMembers map[string]provider.ResourcePermissions
-	Timestamp    *types.Timestamp
+	Timestamp    time.Time
 }
 
 // Unmarshal to fulfill umarshaller interface
@@ -112,6 +113,7 @@ type SpaceShared struct {
 	GranteeGroupID *group.GroupId
 	Creator        *user.UserId
 	ID             *provider.StorageSpaceId
+	Timestamp      time.Time
 }
 
 // Unmarshal to fulfill umarshaller interface
@@ -127,6 +129,7 @@ type SpaceUnshared struct {
 	GranteeUserID  *user.UserId
 	GranteeGroupID *group.GroupId
 	ID             *provider.StorageSpaceId
+	Timestamp      time.Time
 }
 
 // Unmarshal to fulfill umarshaller interface
