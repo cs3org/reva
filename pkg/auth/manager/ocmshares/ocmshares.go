@@ -21,15 +21,14 @@ package ocmshares
 import (
 	"context"
 
-	providerv1beta1 "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
-	invitev1beta1 "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
+	ocminvite "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/auth"
 	"github.com/cs3org/reva/pkg/auth/manager/registry"
@@ -116,8 +115,8 @@ func (m *manager) Authenticate(ctx context.Context, token, _ string) (*userpb.Us
 		return nil, nil, err
 	}
 
-	o := &typesv1beta1.Opaque{
-		Map: map[string]*typesv1beta1.OpaqueEntry{
+	o := &types.Opaque{
+		Map: map[string]*types.OpaqueEntry{
 			"user-filter": {
 				Decoder: "json",
 				Value:   d,
@@ -125,7 +124,7 @@ func (m *manager) Authenticate(ctx context.Context, token, _ string) (*userpb.Us
 		},
 	}
 
-	userRes, err := m.gw.GetAcceptedUser(ctx, &invitev1beta1.GetAcceptedUserRequest{
+	userRes, err := m.gw.GetAcceptedUser(ctx, &ocminvite.GetAcceptedUserRequest{
 		RemoteUserId: u,
 		Opaque:       o,
 	})
@@ -177,12 +176,12 @@ func getRole(s *ocm.Share) (authpb.Role, string) {
 			}
 		case *ocm.AccessMethod_WebappOptions:
 			viewMode := v.WebappOptions.ViewMode
-			if viewMode == providerv1beta1.ViewMode_VIEW_MODE_VIEW_ONLY ||
-				viewMode == providerv1beta1.ViewMode_VIEW_MODE_READ_ONLY ||
-				viewMode == providerv1beta1.ViewMode_VIEW_MODE_PREVIEW {
+			if viewMode == provider.ViewMode_VIEW_MODE_VIEW_ONLY ||
+				viewMode == provider.ViewMode_VIEW_MODE_READ_ONLY ||
+				viewMode == provider.ViewMode_VIEW_MODE_PREVIEW {
 				return authpb.Role_ROLE_VIEWER, "viewer"
 			}
-			if viewMode == providerv1beta1.ViewMode_VIEW_MODE_READ_WRITE {
+			if viewMode == provider.ViewMode_VIEW_MODE_READ_WRITE {
 				return authpb.Role_ROLE_EDITOR, "editor"
 			}
 		}
