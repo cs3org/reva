@@ -156,7 +156,7 @@ func (m *manager) Authenticate(ctx context.Context, token, _ string) (*userpb.Us
 		},
 	}
 
-	return userRes.RemoteUser, scope, nil
+	return user, scope, nil
 }
 
 func getRole(s *ocm.Share) (authpb.Role, string) {
