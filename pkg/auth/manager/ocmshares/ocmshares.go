@@ -28,6 +28,7 @@ import (
 	invitev1beta1 "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
+	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/auth"
@@ -138,15 +139,27 @@ func (m *manager) Authenticate(ctx context.Context, token, _ string) (*userpb.Us
 		return nil, nil, errtypes.InternalError(userRes.Status.Message)
 	}
 
-	scope, err := scope.AddOCMShareScope(shareRes.Share, getRole(shareRes.Share), nil)
+	role, roleStr := getRole(shareRes.Share)
+
+	scope, err := scope.AddOCMShareScope(shareRes.Share, role, nil)
 	if err != nil {
 		return nil, nil, err
+	}
+
+	user := userRes.RemoteUser
+	user.Opaque = &types.Opaque{
+		Map: map[string]*types.OpaqueEntry{
+			"public-share-role": {
+				Decoder: "plain",
+				Value:   []byte(roleStr),
+			},
+		},
 	}
 
 	return userRes.RemoteUser, scope, nil
 }
 
-func getRole(s *ocm.Share) authpb.Role {
+func getRole(s *ocm.Share) (authpb.Role, string) {
 	// TODO: consider to somehow merge the permissions from all the access methods?
 	// it's not clear infact which should be the role when webdav is editor role while
 	// webapp is only view mode for example
@@ -157,22 +170,22 @@ func getRole(s *ocm.Share) authpb.Role {
 		case *ocm.AccessMethod_WebdavOptions:
 			p := v.WebdavOptions.Permissions
 			if p.InitiateFileUpload {
-				return authpb.Role_ROLE_EDITOR
+				return authpb.Role_ROLE_EDITOR, "editor"
 			}
 			if p.InitiateFileDownload {
-				return authpb.Role_ROLE_VIEWER
+				return authpb.Role_ROLE_VIEWER, "viewer"
 			}
 		case *ocm.AccessMethod_WebappOptions:
 			viewMode := v.WebappOptions.ViewMode
 			if viewMode == providerv1beta1.ViewMode_VIEW_MODE_VIEW_ONLY ||
 				viewMode == providerv1beta1.ViewMode_VIEW_MODE_READ_ONLY ||
 				viewMode == providerv1beta1.ViewMode_VIEW_MODE_PREVIEW {
-				return authpb.Role_ROLE_VIEWER
+				return authpb.Role_ROLE_VIEWER, "viewer"
 			}
 			if viewMode == providerv1beta1.ViewMode_VIEW_MODE_READ_WRITE {
-				return authpb.Role_ROLE_EDITOR
+				return authpb.Role_ROLE_EDITOR, "editor"
 			}
 		}
 	}
-	return authpb.Role_ROLE_INVALID
+	return authpb.Role_ROLE_INVALID, "invalid"
 }

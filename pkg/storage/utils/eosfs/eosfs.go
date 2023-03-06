@@ -2095,6 +2095,13 @@ func (fs *eosfs) permissionSet(ctx context.Context, eosFileInfo *eosclient.FileI
 		return conversions.NewViewerRole().CS3ResourcePermissions()
 	}
 
+	if role, ok := utils.HasOCMShareRole(u); ok {
+		if role == "editor" {
+			return conversions.NewEditorRole().CS3ResourcePermissions()
+		}
+		return conversions.NewViewerRole().CS3ResourcePermissions()
+	}
+
 	if utils.UserEqual(u.Id, owner) {
 		return conversions.NewManagerRole().CS3ResourcePermissions()
 	}
