@@ -23,6 +23,8 @@ import (
 	"fmt"
 	"net/url"
 	"path/filepath"
+	"strings"
+	"text/template"
 	"time"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
@@ -60,13 +62,15 @@ type config struct {
 	GatewaySVC     string                            `mapstructure:"gatewaysvc"`
 	WebDAVPrefix   string                            `mapstructure:"webdav_prefix"`
 	ProviderDomain string                            `mapstructure:"provider_domain" docs:"The same domain registered in the provider authorizer"`
+	WebappTemplate string                            `mapstructure:"webapp_template"`
 }
 
 type service struct {
-	conf    *config
-	repo    share.Repository
-	client  *client.OCMClient
-	gateway gateway.GatewayAPIClient
+	conf       *config
+	repo       share.Repository
+	client     *client.OCMClient
+	gateway    gateway.GatewayAPIClient
+	webappTmpl *template.Template
 }
 
 func (c *config) init() {
@@ -75,6 +79,9 @@ func (c *config) init() {
 	}
 	if c.ClientTimeout == 0 {
 		c.ClientTimeout = 10
+	}
+	if c.WebappTemplate == "" {
+		c.WebappTemplate = "https://cernbox.cern.ch/external/sciencemesh/{{.Token}}{relative-path-to-shared-resource}"
 	}
 
 	c.GatewaySVC = sharedconf.GetGatewaySVC(c.GatewaySVC)
@@ -123,11 +130,17 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 		return nil, err
 	}
 
+	tpl, err := template.New("webapp_template").Parse(c.WebappTemplate)
+	if err != nil {
+		return nil, err
+	}
+
 	service := &service{
-		conf:    c,
-		repo:    repo,
-		client:  client,
-		gateway: gateway,
+		conf:       c,
+		repo:       repo,
+		client:     client,
+		gateway:    gateway,
+		webappTmpl: tpl,
 	}
 
 	return service, nil
@@ -190,14 +203,24 @@ func (s *service) getWebdavProtocol(ctx context.Context, info *providerpb.Resour
 	}
 }
 
-func (s *service) getProtocols(ctx context.Context, info *providerpb.ResourceInfo, methods []*ocm.AccessMethod) ocmd.Protocols {
+func (s *service) getWebappProtocol(share *ocm.Share) *ocmd.Webapp {
+	var b strings.Builder
+	if err := s.webappTmpl.Execute(&b, share); err != nil {
+		panic(err)
+	}
+	return &ocmd.Webapp{
+		URITemplate: b.String(),
+	}
+}
+
+func (s *service) getProtocols(ctx context.Context, share *ocm.Share, info *providerpb.ResourceInfo, methods []*ocm.AccessMethod) ocmd.Protocols {
 	var p ocmd.Protocols
 	for _, m := range methods {
 		switch t := m.Term.(type) {
 		case *ocm.AccessMethod_WebdavOptions:
 			p = append(p, s.getWebdavProtocol(ctx, info, t))
 		case *ocm.AccessMethod_WebappOptions:
-			// TODO
+			p = append(p, s.getWebappProtocol(share))
 		case *ocm.AccessMethod_TransferOptions:
 			// TODO
 		}
@@ -285,7 +308,7 @@ func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareReq
 		SenderDisplayName: user.DisplayName,
 		ShareType:         "user",
 		ResourceType:      getResourceType(info),
-		Protocols:         s.getProtocols(ctx, info, req.AccessMethods),
+		Protocols:         s.getProtocols(ctx, ocmshare, info, req.AccessMethods),
 	}
 
 	if req.Expiration != nil {
