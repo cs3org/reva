@@ -19,6 +19,9 @@
 package eventsmiddleware
 
 import (
+	"time"
+
+	group "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
@@ -40,6 +43,7 @@ func ContainerCreated(r *provider.CreateContainerResponse, req *provider.CreateC
 // ShareCreated converts the response to an event
 func ShareCreated(r *collaboration.CreateShareResponse, executant *user.UserId) events.ShareCreated {
 	return events.ShareCreated{
+		ShareID:        r.Share.GetId(),
 		Executant:      executant,
 		Sharer:         r.Share.Creator,
 		GranteeUserID:  r.Share.GetGrantee().GetUserId(),
@@ -52,10 +56,22 @@ func ShareCreated(r *collaboration.CreateShareResponse, executant *user.UserId) 
 
 // ShareRemoved converts the response to an event
 func ShareRemoved(r *collaboration.RemoveShareResponse, req *collaboration.RemoveShareRequest, executant *user.UserId) events.ShareRemoved {
+	var (
+		userid  *user.UserId
+		groupid *group.GroupId
+		rid     *provider.ResourceId
+	)
+	_ = utils.ReadJSONFromOpaque(r.Opaque, "granteeuserid", &userid)
+	_ = utils.ReadJSONFromOpaque(r.Opaque, "granteegroupid", &userid)
+	_ = utils.ReadJSONFromOpaque(r.Opaque, "resourceid", &rid)
 	return events.ShareRemoved{
-		Executant: executant,
-		ShareID:   req.Ref.GetId(),
-		ShareKey:  req.Ref.GetKey(),
+		Executant:      executant,
+		ShareID:        req.Ref.GetId(),
+		ShareKey:       req.Ref.GetKey(),
+		GranteeUserID:  userid,
+		GranteeGroupID: groupid,
+		ItemID:         rid,
+		Timestamp:      time.Now(),
 	}
 }
 
@@ -303,6 +319,7 @@ func SpaceShared(r *provider.AddGrantResponse, req *provider.AddGrantRequest, ex
 		GranteeUserID:  req.Grant.GetGrantee().GetUserId(),
 		GranteeGroupID: req.Grant.GetGrantee().GetGroupId(),
 		ID:             &provider.StorageSpaceId{OpaqueId: id},
+		Timestamp:      time.Now(),
 	}
 }
 
@@ -314,6 +331,7 @@ func SpaceUnshared(r *provider.RemoveGrantResponse, req *provider.RemoveGrantReq
 		GranteeUserID:  req.Grant.GetGrantee().GetUserId(),
 		GranteeGroupID: req.Grant.GetGrantee().GetGroupId(),
 		ID:             &provider.StorageSpaceId{OpaqueId: id},
+		Timestamp:      time.Now(),
 	}
 }
 
@@ -322,14 +340,20 @@ func SpaceDisabled(r *provider.DeleteStorageSpaceResponse, req *provider.DeleteS
 	return events.SpaceDisabled{
 		Executant: executant,
 		ID:        req.Id,
+		Timestamp: time.Now(),
 	}
 }
 
 // SpaceDeleted converts the response to an event
 func SpaceDeleted(r *provider.DeleteStorageSpaceResponse, req *provider.DeleteStorageSpaceRequest, executant *user.UserId) events.SpaceDeleted {
+	var final map[string]provider.ResourcePermissions
+	_ = utils.ReadJSONFromOpaque(r.GetOpaque(), "grants", &final)
 	return events.SpaceDeleted{
-		Executant: executant,
-		ID:        req.Id,
+		Executant:    executant,
+		ID:           req.Id,
+		SpaceName:    utils.ReadPlainFromOpaque(r.GetOpaque(), "spacename"),
+		FinalMembers: final,
+		Timestamp:    time.Now(),
 	}
 }
 

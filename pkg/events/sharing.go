@@ -33,6 +33,7 @@ import (
 
 // ShareCreated is emitted when a share is created
 type ShareCreated struct {
+	ShareID   *collaboration.ShareId
 	Executant *user.UserId
 	Sharer    *user.UserId
 	// split the protobuf Grantee oneof so we can use stdlib encoding/json
@@ -57,6 +58,12 @@ type ShareRemoved struct {
 	// split protobuf Spec
 	ShareID  *collaboration.ShareId
 	ShareKey *collaboration.ShareKey
+	// split the protobuf Grantee oneof so we can use stdlib encoding/json
+	GranteeUserID  *user.UserId
+	GranteeGroupID *group.GroupId
+
+	ItemID    *provider.ResourceId
+	Timestamp time.Time
 }
 
 // Unmarshal to fulfill umarshaller interface
@@ -90,6 +97,7 @@ func (ShareUpdated) Unmarshal(v []byte) (interface{}, error) {
 
 // ShareExpired is emitted when a share expires
 type ShareExpired struct {
+	ShareID    *collaboration.ShareId
 	ShareOwner *user.UserId
 	ItemID     *provider.ResourceId
 	ExpiredAt  time.Time

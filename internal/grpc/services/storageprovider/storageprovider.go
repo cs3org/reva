@@ -589,6 +589,19 @@ func (s *service) UpdateStorageSpace(ctx context.Context, req *provider.UpdateSt
 }
 
 func (s *service) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorageSpaceRequest) (*provider.DeleteStorageSpaceResponse, error) {
+	// we need to get the space before so we can return critical information
+	// FIXME: why is this string parsing necessary?
+	idraw, _ := storagespace.ParseID(req.Id.GetOpaqueId())
+	idraw.OpaqueId = idraw.GetSpaceId()
+	id := &provider.StorageSpaceId{OpaqueId: storagespace.FormatResourceID(idraw)}
+
+	spaces, err := s.storage.ListStorageSpaces(ctx, []*provider.ListStorageSpacesRequest_Filter{{Type: provider.ListStorageSpacesRequest_Filter_TYPE_ID, Term: &provider.ListStorageSpacesRequest_Filter_Id{Id: id}}}, true)
+	if err != nil || len(spaces) != 1 {
+		return &provider.DeleteStorageSpaceResponse{
+			Status: status.NewInternal(ctx, "cannot get space"),
+		}, nil
+	}
+
 	if err := s.storage.DeleteStorageSpace(ctx, req); err != nil {
 		var st *rpc.Status
 		switch err.(type) {
@@ -612,7 +625,12 @@ func (s *service) DeleteStorageSpace(ctx context.Context, req *provider.DeleteSt
 		}, nil
 	}
 
+	// TODO: update cs3api
+	o := utils.AppendPlainToOpaque(nil, "spacename", spaces[0].GetName())
+	o.Map["grants"] = spaces[0].GetOpaque().GetMap()["grants"]
+
 	res := &provider.DeleteStorageSpaceResponse{
+		Opaque: o,
 		Status: status.NewOK(ctx),
 	}
 	return res, nil

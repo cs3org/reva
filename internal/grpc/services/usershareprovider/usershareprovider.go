@@ -32,6 +32,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/rgrpc/status"
 	"github.com/cs3org/reva/v2/pkg/share"
 	"github.com/cs3org/reva/v2/pkg/share/manager/registry"
+	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
@@ -162,14 +163,29 @@ func (s *service) CreateShare(ctx context.Context, req *collaboration.CreateShar
 }
 
 func (s *service) RemoveShare(ctx context.Context, req *collaboration.RemoveShareRequest) (*collaboration.RemoveShareResponse, error) {
-	err := s.sm.Unshare(ctx, req.Ref)
+	share, err := s.sm.GetShare(ctx, req.Ref)
+	if err != nil {
+		return &collaboration.RemoveShareResponse{
+			Status: status.NewInternal(ctx, "error getting share"),
+		}, nil
+	}
+
+	err = s.sm.Unshare(ctx, req.Ref)
 	if err != nil {
 		return &collaboration.RemoveShareResponse{
 			Status: status.NewInternal(ctx, "error removing share"),
 		}, nil
 	}
 
+	o := utils.AppendJSONToOpaque(nil, "resourceid", share.GetResourceId())
+	if user := share.GetGrantee().GetUserId(); user != nil {
+		o = utils.AppendJSONToOpaque(o, "granteeuserid", user)
+	} else {
+		o = utils.AppendJSONToOpaque(o, "granteegroupid", share.GetGrantee().GetGroupId())
+	}
+
 	return &collaboration.RemoveShareResponse{
+		Opaque: o,
 		Status: status.NewOK(ctx),
 	}, nil
 }
