@@ -4,6 +4,7 @@
 
 [shared]
 jwt_secret = "Pive-Fumkiu4"
+gatewaysvc = "gateway:19000"
 
 [grpc]
 address = "0.0.0.0:18000"

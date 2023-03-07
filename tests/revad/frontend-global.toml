@@ -103,10 +103,6 @@ extension = "creation,creation-with-upload"
 http_method_override = ""
 max_chunk_size = 0
 
-# serve /ocm
-[http.services.ocmd]
-prefix = "ocm"
-
 [http.middlewares.providerauthorizer]
 driver = "json"
 

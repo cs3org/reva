@@ -38,34 +38,43 @@ BUILD_FLAGS	= "-X main.gitCommit=$(GIT_COMMIT) -X main.version=$(VERSION) -X mai
 revad:
 	go build -ldflags $(BUILD_FLAGS) -o ./cmd/revad/revad ./cmd/revad
 
-.PHONY: revad-cephfs
-revad-cephfs:
+.PHONY: revad-ceph
+revad-ceph:
 	go build -ldflags $(BUILD_FLAGS) -tags ceph -o ./cmd/revad/revad ./cmd/revad
 
 .PHONY: reva
 reva:
 	go build -ldflags $(BUILD_FLAGS) -o ./cmd/reva/reva ./cmd/reva
 
+.PHONY: docker-reva
+docker-reva:
+	docker build -f docker/Dockerfile.reva -t reva .
+
+.PHONY: docker-revad
+docker-revad:
+	docker build -f docker/Dockerfile.revad -t revad .
+
+.PHONY: docker-revad-ceph
+docker-revad-ceph:
+	docker build -f docker/Dockerfile.revad-ceph -t revad-ceph .
+
+.PHONY: docker-revad-eos
+docker-revad-eos:
+	docker build -f docker/Dockerfile.revad-eos -t revad-eos .
+
 ################################################################################
 # Test
 ################################################################################
 
-REVAD_IMAGE	?= revad:test
+TEST				= litmus-1 litmus-2 litmus-3 acceptance-1 acceptance-2 acceptance-3
+export REVAD_IMAGE	?= revad
+export PARTS		?= 1
+export PART			?= 1
 
-.PHONY: test-docker
-test-docker:
-	docker build -f docker/Dockerfile.revad -t $(REVAD_IMAGE) .
-
-TESTS		= litmus-1 litmus-2 litmus-3 acceptance-1
-TIMEOUT		?= 3600
-
-.PHONY: $(TESTS)
-$(TESTS): test-docker
-	docker pull cs3org/behat:latest
-	REVAD_IMAGE=$(REVAD_IMAGE) \
-	docker-compose --file tests/docker-compose/$@.yml --project-directory . \
-		up --force-recreate --renew-anon-volumes --remove-orphans \
-		--exit-code-from $@ --abort-on-container-exit --timeout $(TIMEOUT)
+.PHONY: $(TEST)
+$(TEST): docker-revad
+	docker-compose -f ./tests/docker/docker-compose.yml up --force-recreate --always-recreate-deps --build --abort-on-container-exit -V --remove-orphans --exit-code-from $@ $@; \
+	docker-compose -f ./tests/docker/docker-compose.yml down --rmi all -v --remove-orphans
 
 .PHONY: test-go
 test-go:
@@ -117,7 +126,3 @@ toolchain-clean:
 .PHONY: clean
 clean: toolchain-clean
 	rm -rf dist
-
-
-test-acceptance-api:
-	$(PATH_TO_APITESTS)/tests/acceptance/run.sh --type api

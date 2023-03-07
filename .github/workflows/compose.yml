@@ -1,0 +1,37 @@
+name: Compose
+on:
+  workflow_call:
+    inputs:
+      test:
+        required: true
+        type: string
+      submodules:
+        type: boolean
+      parts:
+        type: number
+      part:
+        type: number
+
+jobs:
+  compose:
+    runs-on: self-hosted
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          submodules: ${{ inputs.submodules }}
+      - name: Download image
+        uses: ishworkh/docker-image-artifact-download@v1
+        with:
+          image: revad:test
+      - name: Test
+        uses: isbang/compose-action@v1.4.1
+        with:
+          compose-file: ./tests/docker/docker-compose.yml
+          up-flags: --force-recreate --always-recreate-deps --build --abort-on-container-exit -V --remove-orphans --exit-code-from ${{ inputs.test }}
+          down-flags: --rmi all -v --remove-orphans
+          services: ${{ inputs.test }}
+        env:
+          REVAD_IMAGE: revad:test
+          PARTS: ${{ inputs.parts }}
+          PART: ${{ inputs.part }}
