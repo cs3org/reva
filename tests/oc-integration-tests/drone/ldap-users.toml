@@ -1,0 +1,71 @@
+# This config file will start a reva service that:
+# - handles user metadata and user preferences
+# - serves the grpc services on port 18000
+
+[shared]
+jwt_secret = "Pive-Fumkiu4"
+
+[grpc]
+address = "0.0.0.0:18000"
+
+[grpc.services.authprovider]
+auth_manager = "ldap"
+
+[grpc.services.authprovider.auth_managers.ldap]
+hostname="ldap"
+port=636
+insecure=true
+base_dn="dc=owncloud,dc=com"
+loginfilter="(&(objectclass=posixAccount)(|(cn={{login}}))(uid={{login}}))"
+bind_username="cn=admin,dc=owncloud,dc=com"
+bind_password="admin"
+idp="http://localhost:18000"
+[grpc.services.authprovider.auth_managers.ldap.schema]
+uid="uid"
+displayName="displayName"
+dn="dn"
+cn="cn"
+
+[grpc.services.userprovider]
+driver = "ldap"
+
+[grpc.services.userprovider.drivers.ldap]
+hostname="ldap"
+port=636
+insecure=true
+base_dn="dc=owncloud,dc=com"
+userfilter="(&(objectclass=posixAccount)(|(uid={{.OpaqueId}})(cn={{.OpaqueId}})))"
+findfilter="(&(objectclass=posixAccount)(|(cn={{query}}*)(displayname={{query}}*)(mail={{query}}*)))"
+attributefilter="(&(objectclass=posixAccount)({{attr}}={{value}}))"
+groupfilter="(&(objectclass=posixGroup)(cn=*)(memberuid={{.OpaqueId}}))"
+bind_username="cn=admin,dc=owncloud,dc=com"
+bind_password="admin"
+idp="http://localhost:18000"
+
+[grpc.services.userprovider.drivers.ldap.schema]
+uid="uid"
+displayName="displayName"
+dn="dn"
+cn="cn"
+
+[grpc.services.groupprovider]
+driver = "ldap"
+
+[grpc.services.groupprovider.drivers.ldap]
+hostname="ldap"
+port=636
+insecure=true
+base_dn="dc=owncloud,dc=com"
+groupfilter="(&(objectclass=posixGroup)(|(gid={{.OpaqueId}})(cn={{.OpaqueId}})))"
+findfilter="(&(objectclass=posixGroup)(|(cn={{query}}*)(displayname={{query}}*)(mail={{query}}*)))"
+attributefilter="(&(objectclass=posixGroup)({{attr}}={{value}}))"
+memberfilter="(&(objectclass=posixAccount)(cn={{.OpaqueId}}))"
+bind_username="cn=admin,dc=owncloud,dc=com"
+bind_password="admin"
+idp="http://localhost:18000"
+
+[grpc.services.groupprovider.drivers.ldap.schema]
+gid="cn"
+displayName="cn"
+dn="dn"
+cn="cn"
