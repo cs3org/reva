@@ -380,7 +380,7 @@ func HasOCMShareRole(u *userpb.User) (string, bool) {
 	return "", false
 }
 
-// HasPermissions returns true if all permissions defined in the stuict toCheck
+// HasPermissions returns true if all permissions defined in the struct toCheck
 // are set in the target.
 func HasPermissions(target, toCheck *provider.ResourcePermissions) bool {
 	targetStruct := reflect.ValueOf(target).Elem()
@@ -395,7 +395,7 @@ func HasPermissions(target, toCheck *provider.ResourcePermissions) bool {
 	return true
 }
 
-// UserIsLightweight returns true if the user is a lightweith
+// UserIsLightweight returns true if the user is a lightweight
 // or federated account.
 func UserIsLightweight(u *userpb.User) bool {
 	return u.Id.Type == userpb.UserType_USER_TYPE_FEDERATED ||
