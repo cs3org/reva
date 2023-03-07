@@ -60,8 +60,8 @@ type config struct {
 	ClientTimeout  int                               `mapstructure:"client_timeout"`
 	ClientInsecure bool                              `mapstructure:"client_insecure"`
 	GatewaySVC     string                            `mapstructure:"gatewaysvc"`
-	WebDAVPrefix   string                            `mapstructure:"webdav_prefix"`
 	ProviderDomain string                            `mapstructure:"provider_domain" docs:"The same domain registered in the provider authorizer"`
+	WebDAVEndpoint string                            `mapstructure:"webdav_endpoint"`
 	WebappTemplate string                            `mapstructure:"webapp_template"`
 }
 
@@ -151,7 +151,7 @@ func (s *service) Close() error {
 }
 
 func (s *service) UnprotectedEndpoints() []string {
-	return nil
+	return []string{"/cs3.sharing.ocm.v1beta1.OcmAPI/GetOCMShareByToken"}
 }
 
 func getOCMEndpoint(originProvider *ocmprovider.ProviderInfo) (string, error) {
@@ -177,17 +177,13 @@ func getResourceType(info *providerpb.ResourceInfo) string {
 	return "unknown"
 }
 
-func (s *service) webdavURL(ctx context.Context, path string) string {
-	// the url is in the form of https://cernbox.cern.ch/remote.php/dav/files/gdelmont/eos/user/g/gdelmont
-	user := ctxpkg.ContextMustGetUser(ctx)
-	p, err := url.JoinPath(s.conf.WebDAVPrefix, user.Username, path)
-	if err != nil {
-		panic(err)
-	}
+func (s *service) webdavURL(ctx context.Context, share *ocm.Share) string {
+	// the url is in the form of https://cernbox.cern.ch/remote.php/dav/ocm/token
+	p, _ := url.JoinPath(s.conf.WebDAVEndpoint, "/remote.php/dav/ocm", share.Token)
 	return p
 }
 
-func (s *service) getWebdavProtocol(ctx context.Context, info *providerpb.ResourceInfo, m *ocm.AccessMethod_WebdavOptions) *ocmd.WebDAV {
+func (s *service) getWebdavProtocol(ctx context.Context, share *ocm.Share, m *ocm.AccessMethod_WebdavOptions) *ocmd.WebDAV {
 	var perms []string
 	if m.WebdavOptions.Permissions.InitiateFileDownload {
 		perms = append(perms, "read")
@@ -197,9 +193,8 @@ func (s *service) getWebdavProtocol(ctx context.Context, info *providerpb.Resour
 	}
 
 	return &ocmd.WebDAV{
-		SharedSecret: ctxpkg.ContextMustGetToken(ctx), // TODO: change this and use an ocm token
-		Permissions:  perms,
-		URL:          s.webdavURL(ctx, info.Path), // TODO: change this and use an endpoint for ocm
+		Permissions: perms,
+		URL:         s.webdavURL(ctx, share),
 	}
 }
 
@@ -213,12 +208,12 @@ func (s *service) getWebappProtocol(share *ocm.Share) *ocmd.Webapp {
 	}
 }
 
-func (s *service) getProtocols(ctx context.Context, share *ocm.Share, info *providerpb.ResourceInfo, methods []*ocm.AccessMethod) ocmd.Protocols {
+func (s *service) getProtocols(ctx context.Context, share *ocm.Share) ocmd.Protocols {
 	var p ocmd.Protocols
-	for _, m := range methods {
+	for _, m := range share.AccessMethods {
 		switch t := m.Term.(type) {
 		case *ocm.AccessMethod_WebdavOptions:
-			p = append(p, s.getWebdavProtocol(ctx, info, t))
+			p = append(p, s.getWebdavProtocol(ctx, share, t))
 		case *ocm.AccessMethod_WebappOptions:
 			p = append(p, s.getWebappProtocol(share))
 		case *ocm.AccessMethod_TransferOptions:
@@ -308,7 +303,7 @@ func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareReq
 		SenderDisplayName: user.DisplayName,
 		ShareType:         "user",
 		ResourceType:      getResourceType(info),
-		Protocols:         s.getProtocols(ctx, ocmshare, info, req.AccessMethods),
+		Protocols:         s.getProtocols(ctx, ocmshare),
 	}
 
 	if req.Expiration != nil {
@@ -362,7 +357,11 @@ func (s *service) RemoveOCMShare(ctx context.Context, req *ocm.RemoveOCMShareReq
 }
 
 func (s *service) GetOCMShare(ctx context.Context, req *ocm.GetOCMShareRequest) (*ocm.GetOCMShareResponse, error) {
-	user := ctxpkg.ContextMustGetUser(ctx)
+	// if the request is by token, the user does not need to be in the ctx
+	var user *userpb.User
+	if req.Ref.GetToken() == "" {
+		user = ctxpkg.ContextMustGetUser(ctx)
+	}
 	ocmshare, err := s.repo.GetShare(ctx, user, req.Ref)
 	if err != nil {
 		if errors.Is(err, share.ErrShareNotFound) {
@@ -376,6 +375,29 @@ func (s *service) GetOCMShare(ctx context.Context, req *ocm.GetOCMShareRequest) 
 	}
 
 	return &ocm.GetOCMShareResponse{
+		Status: status.NewOK(ctx),
+		Share:  ocmshare,
+	}, nil
+}
+
+func (s *service) GetOCMShareByToken(ctx context.Context, req *ocm.GetOCMShareByTokenRequest) (*ocm.GetOCMShareByTokenResponse, error) {
+	ocmshare, err := s.repo.GetShare(ctx, nil, &ocm.ShareReference{
+		Spec: &ocm.ShareReference_Token{
+			Token: req.Token,
+		},
+	})
+	if err != nil {
+		if errors.Is(err, share.ErrShareNotFound) {
+			return &ocm.GetOCMShareByTokenResponse{
+				Status: status.NewNotFound(ctx, "share does not exist"),
+			}, nil
+		}
+		return &ocm.GetOCMShareByTokenResponse{
+			Status: status.NewInternal(ctx, err, "error getting share"),
+		}, nil
+	}
+
+	return &ocm.GetOCMShareByTokenResponse{
 		Status: status.NewOK(ctx),
 		Share:  ocmshare,
 	}, nil

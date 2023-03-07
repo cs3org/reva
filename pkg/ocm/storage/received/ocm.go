@@ -46,7 +46,7 @@ import (
 )
 
 func init() {
-	registry.Register("ocm", New)
+	registry.Register("ocmreceived", New)
 }
 
 type driver struct {

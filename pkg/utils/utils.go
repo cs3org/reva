@@ -368,6 +368,18 @@ func HasPublicShareRole(u *userpb.User) (string, bool) {
 	return "", false
 }
 
+// HasOCMShareRole return true if the user has a ocm share role.
+// If yes, the string is the type of role, viewer, editor or uploader.
+func HasOCMShareRole(u *userpb.User) (string, bool) {
+	if u.Opaque == nil {
+		return "", false
+	}
+	if ocmShare, ok := u.Opaque.Map["ocm-share-role"]; ok {
+		return string(ocmShare.Value), true
+	}
+	return "", false
+}
+
 // HasPermissions returns true if all permissions defined in the stuict toCheck
 // are set in the target.
 func HasPermissions(target, toCheck *provider.ResourcePermissions) bool {

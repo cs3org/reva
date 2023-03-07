@@ -95,6 +95,20 @@ func (s *svc) getOCMShare(ctx context.Context, req *ocm.GetOCMShareRequest) (*oc
 	return res, nil
 }
 
+func (s *svc) GetOCMShareByToken(ctx context.Context, req *ocm.GetOCMShareByTokenRequest) (*ocm.GetOCMShareByTokenResponse, error) {
+	c, err := pool.GetOCMShareProviderClient(pool.Endpoint(s.c.OCMShareProviderEndpoint))
+	if err != nil {
+		return nil, errors.Wrap(err, "gateway: error calling GetOCMShareProviderClient")
+	}
+
+	res, err := c.GetOCMShareByToken(ctx, req)
+	if err != nil {
+		return nil, errors.Wrap(err, "gateway: error calling GetOCMShareByToken")
+	}
+
+	return res, nil
+}
+
 // TODO(labkode): read GetShare comment.
 func (s *svc) ListOCMShares(ctx context.Context, req *ocm.ListOCMSharesRequest) (*ocm.ListOCMSharesResponse, error) {
 	c, err := pool.GetOCMShareProviderClient(pool.Endpoint(s.c.OCMShareProviderEndpoint))

@@ -220,7 +220,7 @@ func startRevads(configs map[string]string, externalFiles map[string]string, new
 			}
 
 			// even the port is open the service might not be available yet
-			time.Sleep(1 * time.Second)
+			time.Sleep(2 * time.Second)
 
 			revad := &Revad{
 				TmpRoot:     tmpRoot,
