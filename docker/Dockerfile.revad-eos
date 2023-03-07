@@ -16,35 +16,27 @@
 # granted to it by virtue of its status as an Intergovernmental Organization
 # or submit itself to any jurisdiction.
 
-FROM gitlab-registry.cern.ch/dss/eos/eos-fusex:4.8.91 as builder
+FROM golang:alpine3.16 as builder
 
-RUN yum -y install \
-    gcc \
-    git \
-    golang \
-    make && \
-  yum clean all && \
-  rm -rf /var/cache/yum
-
-ADD https://golang.org/dl/go1.19.linux-amd64.tar.gz \
-  go1.19.linux-amd64.tar.gz
-
-RUN rm -rf /usr/local/go && \
-  tar -C /usr/local -xzf go1.19.linux-amd64.tar.gz && \
-  rm go1.19.linux-amd64.tar.gz
+RUN apk --no-cache add \
+  ca-certificates \
+  make
 
 ENV PATH /go/bin:/usr/local/go/bin:$PATH
 ENV GOPATH /go
+
 WORKDIR /go/src/github/cs3org/reva
 COPY . .
-RUN make revad
+RUN make revad && \
+    cp /go/src/github/cs3org/reva/cmd/revad/revad /go/bin/revad
 
+RUN mkdir -p /etc/revad/ && touch /etc/revad/revad.toml
 
 FROM gitlab-registry.cern.ch/dss/eos/eos-all:4.8.91
-COPY --from=builder /go/src/github/cs3org/reva/cmd/revad/revad /usr/bin/revad
-RUN chmod +x /usr/bin/revad
-RUN mkdir -p /etc/revad/ && \
-  touch /etc/revad/revad.toml
+
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+COPY --from=builder /go/bin/revad /usr/bin/revad
+COPY --from=builder /etc/revad /etc/revad
 
 ENTRYPOINT [ "/usr/bin/revad" ]
 CMD [ "-c", "/etc/revad/revad.toml", "-p", "/var/run/revad.pid" ]
