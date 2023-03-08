@@ -28,12 +28,7 @@ jobs:
         with:
           image: ${{ inputs.image }}
       - name: Test
-        uses: isbang/compose-action@v1.4.1
-        with:
-          compose-file: ./tests/docker/docker-compose.yml
-          up-flags: --force-recreate --always-recreate-deps --build --abort-on-container-exit -V --remove-orphans --exit-code-from ${{ inputs.test }}
-          down-flags: --rmi local -v --remove-orphans
-          services: ${{ inputs.test }}
+        run: make ${{ inputs.test }} -o docker-revad
         env:
           REVAD_IMAGE: ${{ inputs.image }}
           PARTS: ${{ inputs.parts }}
