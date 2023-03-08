@@ -73,8 +73,7 @@ export PART			?= 1
 
 .PHONY: $(TEST)
 $(TEST): docker-revad
-	docker compose -f ./tests/docker/docker-compose.yml up --force-recreate --always-recreate-deps --build --abort-on-container-exit -V --remove-orphans --exit-code-from $@ $@; \
-	docker compose -f ./tests/docker/docker-compose.yml down --rmi local -v --remove-orphans
+	docker compose -f ./tests/docker/docker-compose.yml up --force-recreate --always-recreate-deps --build --abort-on-container-exit -V --remove-orphans --exit-code-from $@ $@
 
 .PHONY: test-go
 test-go:
@@ -123,6 +122,12 @@ dist: gen-doc
 toolchain-clean:
 	rm -rf $(TOOLCHAIN)
 
+.PHONY: docker-clean
+docker-clean:
+	docker compose -f ./tests/docker/docker-compose.yml down --rmi local -v --remove-orphans
+
 .PHONY: clean
-clean: toolchain-clean
+clean: toolchain-clean docker-clean
 	rm -rf dist
+
+

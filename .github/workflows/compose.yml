@@ -33,3 +33,8 @@ jobs:
           REVAD_IMAGE: ${{ inputs.image }}
           PARTS: ${{ inputs.parts }}
           PART: ${{ inputs.part }}
+      - name: Clean
+        if: always()
+        run: make docker-clean
+        env:
+          REVAD_IMAGE: ${{ inputs.image }}
