@@ -6,7 +6,7 @@ services:
       - ../revad:/etc/revad
     working_dir: /etc/revad/
     healthcheck:
-      test: sleep 10
+      test: sleep 5
   litmus:
     image: registry.cern.ch/docker.io/owncloud/litmus:latest
     environment:
@@ -28,8 +28,6 @@ services:
   gateway:
     extends: revad
     command: -c /etc/revad/gateway.toml
-    healthcheck:
-      test: sleep 5
     volumes:
       - shared-volume:/var/tmp
   frontend:
@@ -37,39 +35,29 @@ services:
     command: -c /etc/revad/frontend.toml
     volumes:
       - shared-volume:/var/tmp
-    depends_on:
-      gateway:
-        condition: service_healthy
   storage-home-ocis:
     extends: revad
     hostname: storage-home
     command: -c /etc/revad/storage-home-ocis.toml
     volumes:
       - shared-volume:/var/tmp
-    depends_on:
-      gateway:
-        condition: service_healthy
   users:
     extends: revad
     command: -c /etc/revad/users.toml
     volumes:
       - shared-volume:/var/tmp
-    depends_on:
-      gateway:
-        condition: service_healthy
   shares:
     extends: revad
     command: -c /etc/revad/shares.toml
     volumes:
       - shared-volume:/var/tmp
-    depends_on:
-      gateway:
-        condition: service_healthy
   litmus-1:
     extends: litmus
     environment:
       LITMUS_URL: http://frontend:20080/remote.php/webdav
     depends_on:
+      gateway:
+        condition: service_healthy
       frontend:
         condition: service_healthy
       storage-home-ocis:
@@ -83,6 +71,8 @@ services:
     environment:
       LITMUS_URL: http://frontend:20080/remote.php/dav/files/4c510ada-c86b-4815-8820-42cdf82c3d51
     depends_on:
+      gateway:
+        condition: service_healthy
       frontend:
         condition: service_healthy
       storage-home-ocis:
@@ -94,18 +84,12 @@ services:
   permissions-ocis-ci:
     extends: revad
     command: -c /etc/revad/permissions-ocis-ci.toml
-    depends_on:
-      gateway:
-        condition: service_healthy
   storage-users-ocis:
     extends: revad
     hostname: storage-users
     command: -c /etc/revad/storage-users-ocis.toml
     volumes:
       - shared-volume:/var/tmp
-    depends_on:
-      gateway:
-        condition: service_healthy
   litmus-3:
     extends: litmus
     entrypoint: /bin/sh
@@ -118,6 +102,8 @@ services:
     volumes:
       - shared-volume:/var/tmp
     depends_on:
+      gateway:
+        condition: service_healthy
       frontend:
         condition: service_healthy
       storage-home-ocis:
@@ -136,25 +122,16 @@ services:
     command: -c /etc/revad/frontend-global.toml
     volumes:
       - shared-volume:/var/tmp
-    depends_on:
-      gateway:
-        condition: service_healthy
   storage-local-1:
     extends: revad
     command: -c /etc/revad/storage-local-1.toml
     volumes:
       - shared-volume:/var/tmp
-    depends_on:
-      gateway:
-        condition: service_healthy
   storage-local-2:
     extends: revad
     command: -c /etc/revad/storage-local-2.toml
     volumes:
       - shared-volume:/var/tmp
-    depends_on:
-      gateway:
-        condition: service_healthy
   acceptance-1:
     extends: acceptance
     environment:
@@ -170,6 +147,8 @@ services:
       - shared-volume:/var/tmp
     working_dir: /mnt/acceptance
     depends_on:
+      gateway:
+        condition: service_healthy
       frontend-global:
         condition: service_healthy
       storage-home-ocis:
@@ -200,9 +179,6 @@ services:
     command: -c /etc/revad/storage-publiclink.toml
     volumes:
       - shared-volume:/var/tmp
-    depends_on:
-      gateway:
-        condition: service_healthy
   ldap-users:
     extends: revad
     hostname: users
@@ -210,8 +186,6 @@ services:
     volumes:
       - shared-volume:/var/tmp
     depends_on:
-      gateway:
-        condition: service_healthy
       ldap:
         condition: service_healthy
   acceptance-2:
@@ -233,6 +207,8 @@ services:
       - shared-volume:/var/tmp
     working_dir: /mnt/ocis
     depends_on:
+      gateway:
+        condition: service_healthy
       frontend:
         condition: service_healthy
       storage-home-ocis:
@@ -270,8 +246,6 @@ services:
     volumes:
       - shared-volume:/var/tmp
     depends_on:
-      gateway:
-        condition: service_healthy
       ceph:
         condition: service_healthy
   storage-users-s3ng:
@@ -281,8 +255,6 @@ services:
     volumes:
       - shared-volume:/var/tmp
     depends_on:
-      gateway:
-        condition: service_healthy
       ceph:
         condition: service_healthy
   acceptance-3:
@@ -304,6 +276,8 @@ services:
       - shared-volume:/var/tmp
     working_dir: /mnt/ocis
     depends_on:
+      gateway:
+        condition: service_healthy
       frontend:
         condition: service_healthy
       shares:
