@@ -22,20 +22,26 @@ import (
 	"encoding/base64"
 	"io"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/cs3org/reva/v2/pkg/storage/cache"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/options"
 	"github.com/pkg/xattr"
 	"github.com/rogpeppe/go-internal/lockedfile"
 	"gopkg.in/ini.v1"
 )
 
+func init() {
+	ini.PrettyFormat = false // Disable alignment of values for performance reasons
+}
+
 // IniBackend persists the attributes in INI format inside the file
 type IniBackend struct {
+	rootPath  string
 	metaCache cache.FileMetadataCache
 }
 
@@ -45,11 +51,11 @@ type readWriteCloseSeekTruncater interface {
 	Truncate(int64) error
 }
 
-var encodedPrefixes = []string{prefixes.ChecksumPrefix, prefixes.MetadataPrefix, prefixes.GrantPrefix}
-
 // NewIniBackend returns a new IniBackend instance
-func NewIniBackend(o options.CacheOptions) IniBackend {
+func NewIniBackend(rootPath string, o options.CacheOptions) IniBackend {
+	ini.PrettyFormat = false
 	return IniBackend{
+		rootPath:  filepath.Clean(rootPath),
 		metaCache: cache.GetFileMetadataCache(o.CacheStore, o.CacheNodes, o.CacheDatabase, "filemetadata", 24*time.Hour),
 	}
 }
@@ -142,6 +148,9 @@ func (b IniBackend) saveIni(path string, setAttribs map[string]string, deleteAtt
 	}
 	defer f.Close()
 
+	// Invalidate cache early
+	_ = b.metaCache.RemoveMetadata(path)
+
 	// Read current state
 	iniBytes, err := io.ReadAll(f)
 	if err != nil {
@@ -153,7 +162,7 @@ func (b IniBackend) saveIni(path string, setAttribs map[string]string, deleteAtt
 	}
 
 	// Prepare new metadata
-	iniAttribs, err := decodedAttribs(iniFile)
+	iniAttribs, err := decodeAttribs(iniFile)
 	if err != nil {
 		return err
 	}
@@ -179,13 +188,7 @@ func (b IniBackend) saveIni(path string, setAttribs map[string]string, deleteAtt
 	if err != nil {
 		return err
 	}
-	for key, val := range iniAttribs {
-		for _, prefix := range encodedPrefixes {
-			if strings.HasPrefix(key, prefix) {
-				val = base64.StdEncoding.EncodeToString([]byte(val))
-				break
-			}
-		}
+	for key, val := range encodeAttribs(iniAttribs) {
 		ini.Section("").Key(key).SetValue(val)
 	}
 	_, err = ini.WriteTo(f)
@@ -193,29 +196,20 @@ func (b IniBackend) saveIni(path string, setAttribs map[string]string, deleteAtt
 		return err
 	}
 
-	return b.metaCache.PushToCache(path, iniAttribs)
+	return b.metaCache.PushToCache(b.cacheKey(path), iniAttribs)
 }
 
 func (b IniBackend) loadMeta(path string) (map[string]string, error) {
 	var attribs map[string]string
-	err := b.metaCache.PullFromCache(path, &attribs)
+	err := b.metaCache.PullFromCache(b.cacheKey(path), &attribs)
 	if err == nil {
 		return attribs, err
 	}
 
-	var iniFile *ini.File
-	f, err := os.ReadFile(path)
-	length := len(f)
+	lockedFile, err := lockedfile.Open(path)
 
-	// Try to read the file without getting a lock first. We will either
-	// get the old or the new state or an empty byte array when the file
-	// was just truncated by a writer.
-	if err == nil && length > 0 {
-		iniFile, err = ini.Load(f)
-		if err != nil {
-			return nil, err
-		}
-	} else {
+	// // No cached entry found. Read from storage and store in cache
+	if err != nil {
 		if os.IsNotExist(err) {
 			// some of the caller rely on ENOTEXISTS to be returned when the
 			// actual file (not the metafile) does not exist in order to
@@ -226,26 +220,20 @@ func (b IniBackend) loadMeta(path string) (map[string]string, error) {
 			}
 			return attribs, nil // no attributes set yet
 		}
-
-		// // No cached entry found. Read from storage and store in cache
-		lockedFile, err := lockedfile.Open(path)
-		if err != nil {
-			return nil, err
-		}
-		defer lockedFile.Close()
-
-		iniFile, err = ini.Load(lockedFile)
-		if err != nil {
-			return nil, err
-		}
 	}
+	defer lockedFile.Close()
 
-	attribs, err = decodedAttribs(iniFile)
+	iniFile, err := ini.Load(lockedFile)
 	if err != nil {
 		return nil, err
 	}
 
-	err = b.metaCache.PushToCache(path, attribs)
+	attribs, err = decodeAttribs(iniFile)
+	if err != nil {
+		return nil, err
+	}
+
+	err = b.metaCache.PushToCache(b.cacheKey(path), attribs)
 	if err != nil {
 		return nil, err
 	}
@@ -258,7 +246,7 @@ func (IniBackend) IsMetaFile(path string) bool { return strings.HasSuffix(path, 
 
 // Purge purges the data of a given path
 func (b IniBackend) Purge(path string) error {
-	if err := b.metaCache.Delete(path); err != nil {
+	if err := b.metaCache.RemoveMetadata(b.cacheKey(path)); err != nil {
 		return err
 	}
 	return os.Remove(b.MetadataPath(path))
@@ -267,12 +255,12 @@ func (b IniBackend) Purge(path string) error {
 // Rename moves the data for a given path to a new path
 func (b IniBackend) Rename(oldPath, newPath string) error {
 	data := map[string]string{}
-	_ = b.metaCache.PullFromCache(oldPath, &data)
-	err := b.metaCache.Delete(oldPath)
+	_ = b.metaCache.PullFromCache(b.cacheKey(oldPath), &data)
+	err := b.metaCache.RemoveMetadata(b.cacheKey(oldPath))
 	if err != nil {
 		return err
 	}
-	err = b.metaCache.PushToCache(newPath, data)
+	err = b.metaCache.PushToCache(b.cacheKey(newPath), data)
 	if err != nil {
 		return err
 	}
@@ -283,19 +271,54 @@ func (b IniBackend) Rename(oldPath, newPath string) error {
 // MetadataPath returns the path of the file holding the metadata for the given path
 func (IniBackend) MetadataPath(path string) string { return path + ".ini" }
 
-func decodedAttribs(iniFile *ini.File) (map[string]string, error) {
-	attribs := iniFile.Section("").KeysHash()
-	for key, val := range attribs {
-		for _, prefix := range encodedPrefixes {
-			if strings.HasPrefix(key, prefix) {
-				valBytes, err := base64.StdEncoding.DecodeString(val)
-				if err != nil {
-					return nil, err
-				}
-				attribs[key] = string(valBytes)
-				break
-			}
+func (b IniBackend) cacheKey(path string) string {
+	// rootPath is guaranteed to have no trailing slash
+	// the cache key shouldn't begin with a slash as some stores drop it which can cause
+	// confusion
+	return strings.TrimPrefix(path, b.rootPath+"/")
+}
+
+func needsEncoding(s []byte) bool {
+	if len(s) == 0 {
+		return false
+	}
+
+	if s[0] == '\'' || s[0] == '"' || s[0] == '`' {
+		return true
+	}
+
+	for i := 0; i < len(s); i++ {
+		if s[i] < 32 || s[i] >= unicode.MaxASCII { // ASCII 127 = Del - we don't want that
+			return true
 		}
 	}
-	return attribs, nil
+	return false
+}
+
+func encodeAttribs(attribs map[string]string) map[string]string {
+	encAttribs := map[string]string{}
+	for key, val := range attribs {
+		if needsEncoding([]byte(val)) {
+			encAttribs["base64:"+key] = base64.StdEncoding.EncodeToString([]byte(val))
+		} else {
+			encAttribs[key] = val
+		}
+	}
+	return encAttribs
+}
+
+func decodeAttribs(iniFile *ini.File) (map[string]string, error) {
+	decodedAttributes := map[string]string{}
+	for key, val := range iniFile.Section("").KeysHash() {
+		if strings.HasPrefix(key, "base64:") {
+			key = strings.TrimPrefix(key, "base64:")
+			valBytes, err := base64.StdEncoding.DecodeString(val)
+			if err != nil {
+				return nil, err
+			}
+			val = string(valBytes)
+		}
+		decodedAttributes[key] = val
+	}
+	return decodedAttributes, nil
 }

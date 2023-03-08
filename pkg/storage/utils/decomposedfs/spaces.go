@@ -102,7 +102,7 @@ func (fs *Decomposedfs) CreateStorageSpace(ctx context.Context, req *provider.Cr
 		return nil, errors.Wrap(err, "Decomposedfs: error creating node")
 	}
 
-	if err := root.WriteAllNodeMetadata(); err != nil {
+	if err := root.WriteAllNodeMetadata(ctx); err != nil {
 		return nil, err
 	}
 	var owner *userv1beta1.UserId
@@ -341,8 +341,13 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 
 	for match := range matches {
 		var err error
+		// TODO introduce metadata.IsLockFile(path)
 		// do not investigate flock files any further. They indicate file locks but are not relevant here.
 		if strings.HasSuffix(match, filelocks.LockFileSuffix) {
+			continue
+		}
+		// skip metadata files
+		if fs.lu.MetadataBackend().IsMetaFile(match) {
 			continue
 		}
 		// always read link in case storage space id != node id

@@ -85,6 +85,7 @@ type CreatePersonalSpaceCache interface {
 // FileMetadataCache handles file metadata
 type FileMetadataCache interface {
 	Cache
+	RemoveMetadata(path string) error
 }
 
 // GetStatCache will return an existing StatCache for the given store, nodes, database and table

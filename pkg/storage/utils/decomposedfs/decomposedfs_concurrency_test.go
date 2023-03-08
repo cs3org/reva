@@ -112,6 +112,26 @@ var _ = Describe("Decomposed", func() {
 				woFile.Close()
 				Eventually(func() bool { s, _ := states.Load("managedToOpenroFile"); return s.(bool) }).Should(BeTrue())
 			})
+
+			It("allows opening rw while an exclusive lock is being held", func() {
+				states := sync.Map{}
+
+				path, err := os.CreateTemp("", "decomposedfs-lockedfile-test-")
+				Expect(err).ToNot(HaveOccurred())
+				states.Store("managedToOpenrwLockedFile", false)
+				woFile, err := lockedfile.OpenFile(path.Name(), os.O_WRONLY, 0)
+				Expect(err).ToNot(HaveOccurred())
+				defer woFile.Close()
+				go func() {
+					roFile, err := os.OpenFile(path.Name(), os.O_RDWR, 0)
+					Expect(err).ToNot(HaveOccurred())
+					defer roFile.Close()
+					states.Store("managedToOpenrwLockedFile", true)
+				}()
+
+				woFile.Close()
+				Eventually(func() bool { s, _ := states.Load("managedToOpenrwLockedFile"); return s.(bool) }).Should(BeTrue())
+			})
 		})
 
 	})

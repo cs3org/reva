@@ -59,7 +59,7 @@ var _ = Describe("Backend", func() {
 
 	Describe("IniBackend", func() {
 		BeforeEach(func() {
-			backend = metadata.NewIniBackend(options.CacheOptions{})
+			backend = metadata.NewIniBackend(tmpdir, options.CacheOptions{})
 		})
 
 		Describe("Set", func() {
@@ -89,23 +89,30 @@ var _ = Describe("Backend", func() {
 
 				content, err := os.ReadFile(metafile)
 				Expect(err).ToNot(HaveOccurred())
-				Expect(string(content)).To(Equal("user.ocis.cs.foo = YmFy\n"))
+				Expect(string(content)).To(Equal("user.ocis.cs.foo = bar\n"))
+
+				err = backend.Set(file, "user.ocis.cs.foo", string([]byte{200, 201, 202}))
+				Expect(err).ToNot(HaveOccurred())
+
+				content, err = os.ReadFile(metafile)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(string(content)).To(Equal("`base64:user.ocis.cs.foo` = yMnK\n"))
 			})
 
 			It("doesn't encode already encoded attributes", func() {
-				err := backend.Set(file, "user.ocis.cs.foo", "bar")
+				err := backend.Set(file, "user.ocis.cs.foo", string([]byte{200, 201, 202}))
 				Expect(err).ToNot(HaveOccurred())
 
 				content, err := os.ReadFile(metafile)
 				Expect(err).ToNot(HaveOccurred())
-				Expect(string(content)).To(Equal("user.ocis.cs.foo = YmFy\n"))
+				Expect(string(content)).To(Equal("`base64:user.ocis.cs.foo` = yMnK\n"))
 
 				err = backend.Set(file, "user.something", "doesn'tmatter")
 				Expect(err).ToNot(HaveOccurred())
 
 				content, err = os.ReadFile(metafile)
 				Expect(err).ToNot(HaveOccurred())
-				Expect(string(content)).To(ContainSubstring("user.ocis.cs.foo = YmFy\n"))
+				Expect(string(content)).To(ContainSubstring("`base64:user.ocis.cs.foo` = yMnK\n"))
 			})
 
 			It("sets an empty attribute", func() {
@@ -147,8 +154,8 @@ var _ = Describe("Backend", func() {
 			It("encodes where needed", func() {
 				err := backend.SetMultiple(file, map[string]string{
 					"user.ocis.something.foo": "bar",
-					"user.ocis.cs.foo":        "bar",
-					"user.ocis.md.foo":        "bar",
+					"user.ocis.cs.foo":        string([]byte{200, 201, 202}),
+					"user.ocis.md.foo":        string([]byte{200, 201, 202}),
 					"user.ocis.grant.foo":     "bar",
 				}, true)
 				Expect(err).ToNot(HaveOccurred())
@@ -157,9 +164,9 @@ var _ = Describe("Backend", func() {
 				Expect(err).ToNot(HaveOccurred())
 				expected := []string{
 					"user.ocis.something.foo=bar",
-					"user.ocis.cs.foo=YmFy",
-					"user.ocis.md.foo=YmFy",
-					"user.ocis.grant.foo=YmFy"}
+					"`base64:user.ocis.cs.foo`=yMnK",
+					"`base64:user.ocis.md.foo`=yMnK",
+					"user.ocis.grant.foo=bar"}
 				Expect(strings.Split(strings.ReplaceAll(strings.Trim(string(content), "\n"), " ", ""), "\n")).To(ConsistOf(expected))
 			})
 		})

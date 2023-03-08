@@ -44,6 +44,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
+	"github.com/rogpeppe/go-internal/lockedfile"
 	"github.com/rs/zerolog/log"
 )
 
@@ -264,7 +265,7 @@ func (t *Tree) TouchFile(ctx context.Context, n *node.Node) error {
 		return errors.Wrap(err, "Decomposedfs: error creating node")
 	}
 
-	err = n.WriteAllNodeMetadata()
+	err = n.WriteAllNodeMetadata(ctx)
 	if err != nil {
 		return err
 	}
@@ -300,7 +301,7 @@ func (t *Tree) CreateDir(ctx context.Context, n *node.Node) (err error) {
 		n.ID = uuid.New().String()
 	}
 
-	err = t.createDirNode(n)
+	err = t.createDirNode(ctx, n)
 	if err != nil {
 		return
 	}
@@ -386,11 +387,11 @@ func (t *Tree) Move(ctx context.Context, oldNode *node.Node, newNode *node.Node)
 	}
 
 	// update target parentid and name
-	if err := oldNode.SetXattr(prefixes.ParentidAttr, newNode.ParentID); err != nil {
-		return errors.Wrap(err, "Decomposedfs: could not set parentid attribute")
-	}
-	if err := oldNode.SetXattr(prefixes.NameAttr, newNode.Name); err != nil {
-		return errors.Wrap(err, "Decomposedfs: could not set name attribute")
+	if err := oldNode.SetXattrs(map[string]string{
+		prefixes.ParentidAttr: newNode.ParentID,
+		prefixes.NameAttr:     newNode.Name,
+	}, true); err != nil {
+		return errors.Wrap(err, "Decomposedfs: could not update old node attributes")
 	}
 
 	// the size diff is the current treesize or blobsize of the old/source node
@@ -616,16 +617,18 @@ func (t *Tree) RestoreRecycleItemFunc(ctx context.Context, spaceid, key, trashPa
 		}
 
 		targetNode.Exists = true
-		// update name attribute
-		if err := recycleNode.SetXattr(prefixes.NameAttr, targetNode.Name); err != nil {
-			return errors.Wrap(err, "Decomposedfs: could not set name attribute")
+
+		attrs := map[string]string{
+			// update name attribute
+			prefixes.NameAttr: targetNode.Name,
+		}
+		if trashPath != "" {
+			// set ParentidAttr to restorePath's node parent id
+			attrs[prefixes.ParentidAttr] = targetNode.ParentID
 		}
 
-		// set ParentidAttr to restorePath's node parent id
-		if trashPath != "" {
-			if err := recycleNode.SetXattr(prefixes.ParentidAttr, targetNode.ParentID); err != nil {
-				return errors.Wrap(err, "Decomposedfs: could not set name attribute")
-			}
+		if err = recycleNode.SetXattrs(attrs, true); err != nil {
+			return errors.Wrap(err, "Decomposedfs: could not update recycle node")
 		}
 
 		// delete item link in trash
@@ -777,19 +780,27 @@ func (t *Tree) Propagate(ctx context.Context, n *node.Node, sizeDiff int64) (err
 		if t.treeTimeAccounting || (t.treeSizeAccounting && sizeDiff != 0) {
 			attrs := map[string]string{}
 
+			var f *lockedfile.File
 			// lock node before reading treesize or tree time
-			nodeLock, err := filelocks.AcquireWriteLock(n.InternalPath())
+			switch t.lookup.MetadataBackend().(type) {
+			case metadata.IniBackend:
+				f, err = lockedfile.OpenFile(t.lookup.MetadataBackend().MetadataPath(n.InternalPath()), os.O_RDWR|os.O_CREATE, 0600)
+			case metadata.XattrsBackend:
+				// we have to use dedicated lockfiles to lock directories
+				// this only works because the xattr backend also locks folders with separate lock files
+				f, err = lockedfile.OpenFile(n.InternalPath()+filelocks.LockFileSuffix, os.O_RDWR|os.O_CREATE, 0600)
+			}
 			if err != nil {
 				return err
 			}
-			// always unlock node
-			releaseLock := func() {
-				// ReleaseLock returns nil if already unlocked
-				if err := filelocks.ReleaseLock(nodeLock); err != nil {
-					sublog.Err(err).Msg("Decomposedfs: could not unlock parent node")
+			// always log error if closing node fails
+			defer func() {
+				// ignore already closed error
+				cerr := f.Close()
+				if err == nil && cerr != nil && !errors.Is(cerr, os.ErrClosed) {
+					err = cerr // only overwrite err with en error from close if the former was nil
 				}
-			}
-			defer releaseLock()
+			}()
 
 			if t.treeTimeAccounting {
 				// update the parent tree time if it is older than the nodes mtime
@@ -857,10 +868,10 @@ func (t *Tree) Propagate(ctx context.Context, n *node.Node, sizeDiff int64) (err
 				return err
 			}
 
-			// Release node lock early, returns nil if already unlocked
-			err = filelocks.ReleaseLock(nodeLock)
-			if err != nil {
-				return errtypes.InternalError(err.Error())
+			// Release node lock early, ignore already closed error
+			cerr := f.Close()
+			if cerr != nil && !errors.Is(cerr, os.ErrClosed) {
+				return cerr
 			}
 		}
 	}
@@ -942,14 +953,14 @@ func (t *Tree) DeleteBlob(node *node.Node) error {
 }
 
 // TODO check if node exists?
-func (t *Tree) createDirNode(n *node.Node) (err error) {
+func (t *Tree) createDirNode(ctx context.Context, n *node.Node) (err error) {
 	// create a directory node
 	nodePath := n.InternalPath()
 	if err := os.MkdirAll(nodePath, 0700); err != nil {
 		return errors.Wrap(err, "Decomposedfs: error creating node")
 	}
 
-	return n.WriteAllNodeMetadata()
+	return n.WriteAllNodeMetadata(ctx)
 }
 
 var nodeIDRegep = regexp.MustCompile(`.*/nodes/([^.]*).*`)

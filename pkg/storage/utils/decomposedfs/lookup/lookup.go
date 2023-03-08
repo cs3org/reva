@@ -33,9 +33,8 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/options"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/filelocks"
-	"github.com/gofrs/flock"
 	"github.com/pkg/errors"
+	"github.com/rogpeppe/go-internal/lockedfile"
 )
 
 // Lookup implements transformations from filepath to node and back
@@ -277,18 +276,20 @@ func refFromCS3(b []byte) (*provider.Reference, error) {
 // CopyMetadata copies all extended attributes from source to target.
 // The optional filter function can be used to filter by attribute name, e.g. by checking a prefix
 // For the source file, a shared lock is acquired.
-// NOTE: target resource is not locked! You need to acquire a write lock on the target additionally
+// NOTE: target resource will be write locked!
 func (lu *Lookup) CopyMetadata(src, target string, filter func(attributeName string) bool) (err error) {
-	var readLock *flock.Flock
-
 	// Acquire a read log on the source node
-	readLock, err = filelocks.AcquireReadLock(src)
+	// write lock existing node before reading treesize or tree time
+	f, err := lockedfile.Open(lu.MetadataBackend().MetadataPath(src))
+	if err != nil {
+		return err
+	}
 
 	if err != nil {
 		return errors.Wrap(err, "xattrs: Unable to lock source to read")
 	}
 	defer func() {
-		rerr := filelocks.ReleaseLock(readLock)
+		rerr := f.Close()
 
 		// if err is non nil we do not overwrite that
 		if err == nil {
@@ -296,50 +297,32 @@ func (lu *Lookup) CopyMetadata(src, target string, filter func(attributeName str
 		}
 	}()
 
-	return lu.CopyMetadataWithSourceLock(src, target, filter, readLock)
+	return lu.CopyMetadataWithSourceLock(src, target, filter, f)
 }
 
 // CopyMetadataWithSourceLock copies all extended attributes from source to target.
 // The optional filter function can be used to filter by attribute name, e.g. by checking a prefix
-// For the source file, a shared lock is acquired.
-// NOTE: target resource is not locked! You need to acquire a write lock on the target additionally
-func (lu *Lookup) CopyMetadataWithSourceLock(src, target string, filter func(attributeName string) bool, readLock *flock.Flock) (err error) {
+// For the source file, a matching lockedfile is required.
+// NOTE: target resource will be write locked!
+func (lu *Lookup) CopyMetadataWithSourceLock(source, target string, filter func(attributeName string) bool, readLock *lockedfile.File) (err error) {
 	switch {
 	case readLock == nil:
 		return errors.New("no lock provided")
-	case readLock.Path() != filelocks.FlockFile(src):
+	case readLock.File.Name() != lu.MetadataBackend().MetadataPath(source):
 		return errors.New("lockpath does not match filepath")
-	case !readLock.Locked() && !readLock.RLocked(): // we need either a read or a write lock
-		return errors.New("not locked")
 	}
 
-	// both locks are established. Copy.
-	var attrNameList []string
-	if attrNameList, err = lu.metadataBackend.List(src); err != nil {
-		return errors.Wrap(err, "Can not get xattr listing on src")
+	attrs, err := lu.metadataBackend.All(source)
+	if err != nil {
+		return err
 	}
 
-	// error handling: We count errors of reads or writes of xattrs.
-	// if there were any read or write errors an error is returned.
-	var (
-		xerrs = 0
-		xerr  error
-	)
-	for idx := range attrNameList {
-		attrName := attrNameList[idx]
+	newAttrs := make(map[string]string, 0)
+	for attrName, val := range attrs {
 		if filter == nil || filter(attrName) {
-			var attrVal string
-			if attrVal, xerr = lu.metadataBackend.Get(src, attrName); xerr != nil {
-				xerrs++
-			}
-			if xerr = lu.metadataBackend.Set(target, attrName, attrVal); xerr != nil {
-				xerrs++
-			}
+			newAttrs[attrName] = val
 		}
 	}
-	if xerrs > 0 {
-		err = errors.Wrap(xerr, "failed to copy all xattrs, last error returned")
-	}
 
-	return err
+	return lu.MetadataBackend().SetMultiple(target, newAttrs, true)
 }
