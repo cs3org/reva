@@ -56,7 +56,6 @@ jobs:
     uses: ./.github/workflows/docker.yml
     with:
       file: docker/Dockerfile.revad
-      tags: revad:test
       load: true
   litmus:
     needs: docker-revad
@@ -67,12 +66,14 @@ jobs:
     uses: ./.github/workflows/compose.yml
     with:
       test: ${{ matrix.test }}
+      image: ${{ needs.docker-revad.outputs.image }}
   acceptance-1:
+    needs: docker-revad
     uses: ./.github/workflows/compose.yml
     with:
       test: acceptance-1
+      image: ${{ needs.docker-revad.outputs.image }}
       submodules: true
-    needs: docker-revad
   acceptance-2:
     needs: docker-revad
     strategy:
@@ -82,6 +83,7 @@ jobs:
     uses: ./.github/workflows/compose.yml
     with:
       test: acceptance-2
+      image: ${{ needs.docker-revad.outputs.image }}
       submodules: true
       parts: 6
       part: ${{ matrix.part }}
@@ -94,6 +96,7 @@ jobs:
     uses: ./.github/workflows/compose.yml
     with:
       test: acceptance-3
+      image: ${{ needs.docker-revad.outputs.image }}
       submodules: true
       parts: 12
       part: ${{ matrix.part }}
