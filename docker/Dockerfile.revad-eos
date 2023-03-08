@@ -18,30 +18,20 @@
 
 FROM golang:alpine3.16 as builder
 
-RUN apk --no-cache add \
-  ca-certificates \
-  make
-
-ENV PATH /go/bin:/usr/local/go/bin:$PATH
-ENV GOPATH /go
-
-WORKDIR /go/src/github/cs3org/reva
+WORKDIR /home/reva
 COPY . .
 
 ARG GIT_COMMIT
 ARG VERSION
 ENV GIT_COMMIT=$GIT_COMMIT
 ENV VERSION=$VERSION
-RUN make revad && \
-    cp /go/src/github/cs3org/reva/cmd/revad/revad /go/bin/revad
-
-RUN mkdir -p /etc/revad/ && touch /etc/revad/revad.toml
+RUN go build -ldflags "-X main.gitCommit=$GIT_COMMIT -X main.version=$VERSION -X main.goVersion=`go version | awk '{print $3}'` -X main.buildDate=`date +%FT%T%z`" -o ./cmd/revad/revad ./cmd/revad
 
 FROM gitlab-registry.cern.ch/dss/eos/eos-all:4.8.91
 
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
-COPY --from=builder /go/bin/revad /usr/bin/revad
-COPY --from=builder /etc/revad /etc/revad
+COPY --from=builder /home/reva/cmd/revad/revad /usr/bin/revad
+RUN mkdir -p /etc/revad/ && touch /etc/revad/revad.toml
 
 ENTRYPOINT [ "/usr/bin/revad" ]
 CMD [ "-c", "/etc/revad/revad.toml", "-p", "/var/run/revad.pid" ]
