@@ -25,18 +25,20 @@ RUN apk --no-cache add \
 ENV PATH /go/bin:/usr/local/go/bin:$PATH
 ENV GOPATH /go
 
-WORKDIR /go/src/github/cs3org/reva
+WORKDIR /home/reva
 COPY . .
-RUN make revad && \
-    cp /go/src/github/cs3org/reva/cmd/revad/revad /go/bin/revad
 
-RUN mkdir -p /etc/revad/ && touch /etc/revad/revad.toml
+ARG GIT_COMMIT
+ARG VERSION
+ENV GIT_COMMIT=$GIT_COMMIT
+ENV VERSION=$VERSION
+RUN make revad
 
 FROM alpine:3.16
 
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
-COPY --from=builder /go/bin/revad /usr/bin/revad
-COPY --from=builder /etc/revad /etc/revad
+COPY --from=builder /home/reva/cmd/revad/revad /usr/bin/revad
+RUN mkdir -p /etc/revad/ && touch /etc/revad/revad.toml
 
 ENTRYPOINT [ "/usr/bin/revad" ]
 CMD [ "-c", "/etc/revad/revad.toml", "-p", "/var/run/revad.pid" ]

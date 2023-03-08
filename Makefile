@@ -48,19 +48,19 @@ reva:
 
 .PHONY: docker-reva
 docker-reva:
-	docker build -f docker/Dockerfile.reva -t reva .
+	docker build -f docker/Dockerfile.reva -t reva --build-arg VERSION=$(VERSION) --build-arg GIT_COMMIT=$(GIT_COMMIT) .
 
 .PHONY: docker-revad
 docker-revad:
-	docker build -f docker/Dockerfile.revad -t revad .
+	docker build -f docker/Dockerfile.revad -t revad --build-arg VERSION=$(VERSION) --build-arg GIT_COMMIT=$(GIT_COMMIT) .
 
 .PHONY: docker-revad-ceph
 docker-revad-ceph:
-	docker build -f docker/Dockerfile.revad-ceph -t revad-ceph .
+	docker build -f docker/Dockerfile.revad-ceph -t revad-ceph --build-arg VERSION=$(VERSION) --build-arg GIT_COMMIT=$(GIT_COMMIT) .
 
 .PHONY: docker-revad-eos
 docker-revad-eos:
-	docker build -f docker/Dockerfile.revad-eos -t revad-eos .
+	docker build -f docker/Dockerfile.revad-eos -t revad-eos --build-arg VERSION=$(VERSION) --build-arg GIT_COMMIT=$(GIT_COMMIT) .
 
 ################################################################################
 # Test

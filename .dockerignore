@@ -1,4 +1,5 @@
 .github
+.git
 changelog
 docs
 grpc-tests
