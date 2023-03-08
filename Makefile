@@ -125,9 +125,8 @@ toolchain-clean:
 .PHONY: docker-clean
 docker-clean:
 	docker compose -f ./tests/docker/docker-compose.yml down --rmi local -v --remove-orphans
+	docker rmi $(REVAD_IMAGE)
 
 .PHONY: clean
 clean: toolchain-clean docker-clean
 	rm -rf dist
-
-
