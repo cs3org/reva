@@ -28,12 +28,18 @@ import (
 	"github.com/rs/zerolog"
 )
 
-var allMigrations = []string{"0001", "0002"}
+var allMigrations = []string{"0001", "0002", "0003"}
 
-type migrationFunc func() error
+const (
+	resultFailed            = "failed"
+	resultSucceeded         = "succeeded"
+	resultSucceededRunAgain = "runagain"
+)
+
+type result string
 type migrationState struct {
-	state   string
-	message string
+	State   string
+	Message string
 }
 type migrationStates map[string]migrationState
 
@@ -64,28 +70,35 @@ func (m *Migrator) RunMigrations() error {
 	}
 
 	for _, migration := range allMigrations {
-		if s, ok := m.states[migration]; !ok || s.state != "succeeded" {
-			if s.state != "" {
-				m.log.Info().Msg("Re-running migration " + migration + "...")
-			} else {
-				m.log.Info().Msg("Running migration " + migration + "...")
-			}
-			migrateMethod := reflect.ValueOf(m).MethodByName("migration" + migration)
-			v := migrateMethod.Call(nil)
-			err := v[0].Interface().(error)
-			if err != nil {
-				m.log.Error().Err(err).Msg("migration " + migration + " failed")
-				s.state = "failed"
-				s.message = err.Error()
-				m.writeStates()
-				return err
-			}
+		s := m.states[migration]
+		switch s.State {
+		case "succeeded":
+			m.log.Info().Msg("Skipping finished migration " + migration + "...")
+			continue
+		case "":
+			m.log.Info().Msg("Running migration " + migration + "...")
+		default:
+			m.log.Info().Msg("Re-running migration " + migration + "...")
 		}
+
+		migrateMethod := reflect.ValueOf(m).MethodByName("Migration" + migration)
+		v := migrateMethod.Call(nil)
+		s.State = string(v[0].Interface().(result))
+		if v[1].Interface() != nil {
+			err := v[1].Interface().(error)
+			m.log.Error().Err(err).Msg("migration " + migration + " failed")
+			s.Message = err.Error()
+		}
+
+		m.states[migration] = s
+		m.writeStates()
 	}
 	return nil
 }
 
 func (m *Migrator) readStates() error {
+	m.states = migrationStates{}
+
 	d, err := os.ReadFile(filepath.Join(m.lu.InternalRoot(), ".migrations"))
 	if err != nil {
 		if !os.IsNotExist(err) {

@@ -26,18 +26,18 @@ import (
 	"github.com/cs3org/reva/v2/pkg/logger"
 )
 
-func (m *Migrator) migration0002() error {
+func (m *Migrator) Migration0002() (result, error) {
 	spaceTypesPath := filepath.Join(m.lu.InternalRoot(), "spacetypes")
 	fi, err := os.Stat(spaceTypesPath)
 	if err == nil && fi.IsDir() {
 
 		f, err := os.Open(spaceTypesPath)
 		if err != nil {
-			return err
+			return resultFailed, err
 		}
 		spaceTypes, err := f.Readdir(0)
 		if err != nil {
-			return err
+			return resultFailed, err
 		}
 
 		for _, st := range spaceTypes {
@@ -56,7 +56,7 @@ func (m *Migrator) migration0002() error {
 			logger.New().Error().Err(err).
 				Str("spacetypesdir", spaceTypesPath).
 				Msg("could not open spacetypesdir")
-			return nil
+			return resultFailed, nil
 		}
 		defer d.Close()
 		_, err = d.Readdirnames(1) // Or f.Readdir(1)
@@ -74,7 +74,7 @@ func (m *Migrator) migration0002() error {
 				Msg("could not delete, not empty")
 		}
 	}
-	return nil
+	return resultSucceeded, nil
 }
 
 func (m *Migrator) moveSpaceType(spaceType string) error {

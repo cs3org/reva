@@ -29,7 +29,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
 )
 
-func (m *Migrator) migration0001() error {
+func (m *Migrator) Migration0001() (result, error) {
 	// create spaces folder and iterate over existing nodes to populate it
 	nodesPath := filepath.Join(m.lu.InternalRoot(), "nodes")
 	fi, err := os.Stat(nodesPath)
@@ -37,18 +37,18 @@ func (m *Migrator) migration0001() error {
 
 		f, err := os.Open(nodesPath)
 		if err != nil {
-			return err
+			return resultFailed, err
 		}
 		nodes, err := f.Readdir(0)
 		if err != nil {
-			return err
+			return resultFailed, err
 		}
 
 		for _, n := range nodes {
 			nodePath := filepath.Join(nodesPath, n.Name())
 
 			attr, err := m.lu.MetadataBackend().Get(nodePath, prefixes.ParentidAttr)
-			if err == nil && attr == node.RootID {
+			if err == nil && string(attr) == node.RootID {
 				if err := m.moveNode(n.Name(), n.Name()); err != nil {
 					logger.New().Error().Err(err).
 						Str("space", n.Name()).
@@ -60,7 +60,7 @@ func (m *Migrator) migration0001() error {
 		}
 		// TODO delete nodesPath if empty
 	}
-	return nil
+	return resultSucceeded, nil
 }
 
 func (m *Migrator) moveNode(spaceID, nodeID string) error {

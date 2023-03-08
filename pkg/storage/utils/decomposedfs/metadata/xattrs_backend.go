@@ -33,6 +33,9 @@ import (
 // XattrsBackend stores the file attributes in extended attributes
 type XattrsBackend struct{}
 
+// Name returns the name of the backend
+func (XattrsBackend) Name() string { return "xattrs" }
+
 // Get an extended attribute value for the given key
 // No file locking is involved here as reading a single xattr is
 // considered to be atomic.
