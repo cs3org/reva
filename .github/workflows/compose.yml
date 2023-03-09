@@ -5,6 +5,9 @@ on:
       test:
         required: true
         type: string
+      image:
+        required: true
+        type: string
       submodules:
         type: boolean
       parts:
@@ -23,15 +26,15 @@ jobs:
       - name: Download image
         uses: ishworkh/docker-image-artifact-download@v1
         with:
-          image: revad:test
+          image: ${{ inputs.image }}
       - name: Test
-        uses: isbang/compose-action@v1.4.1
-        with:
-          compose-file: ./tests/docker/docker-compose.yml
-          up-flags: --force-recreate --always-recreate-deps --build --abort-on-container-exit -V --remove-orphans --exit-code-from ${{ inputs.test }}
-          down-flags: --rmi all -v --remove-orphans
-          services: ${{ inputs.test }}
+        run: make ${{ inputs.test }} -o docker-revad
         env:
-          REVAD_IMAGE: revad:test
+          REVAD_IMAGE: ${{ inputs.image }}
           PARTS: ${{ inputs.parts }}
           PART: ${{ inputs.part }}
+      - name: Clean
+        if: always()
+        run: make docker-clean
+        env:
+          REVAD_IMAGE: ${{ inputs.image }}

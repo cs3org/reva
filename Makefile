@@ -48,19 +48,19 @@ reva:
 
 .PHONY: docker-reva
 docker-reva:
-	docker build -f docker/Dockerfile.reva -t reva .
+	docker build -f docker/Dockerfile.reva -t reva --build-arg VERSION=$(VERSION) --build-arg GIT_COMMIT=$(GIT_COMMIT) .
 
 .PHONY: docker-revad
 docker-revad:
-	docker build -f docker/Dockerfile.revad -t revad .
+	docker build -f docker/Dockerfile.revad -t revad --build-arg VERSION=$(VERSION) --build-arg GIT_COMMIT=$(GIT_COMMIT) .
 
 .PHONY: docker-revad-ceph
 docker-revad-ceph:
-	docker build -f docker/Dockerfile.revad-ceph -t revad-ceph .
+	docker build -f docker/Dockerfile.revad-ceph -t revad-ceph --build-arg VERSION=$(VERSION) --build-arg GIT_COMMIT=$(GIT_COMMIT) .
 
 .PHONY: docker-revad-eos
 docker-revad-eos:
-	docker build -f docker/Dockerfile.revad-eos -t revad-eos .
+	docker build -f docker/Dockerfile.revad-eos -t revad-eos --build-arg VERSION=$(VERSION) --build-arg GIT_COMMIT=$(GIT_COMMIT) .
 
 ################################################################################
 # Test
@@ -73,8 +73,7 @@ export PART			?= 1
 
 .PHONY: $(TEST)
 $(TEST): docker-revad
-	docker-compose -f ./tests/docker/docker-compose.yml up --force-recreate --always-recreate-deps --build --abort-on-container-exit -V --remove-orphans --exit-code-from $@ $@; \
-	docker-compose -f ./tests/docker/docker-compose.yml down --rmi all -v --remove-orphans
+	docker compose -f ./tests/docker/docker-compose.yml up --force-recreate --always-recreate-deps --build --abort-on-container-exit -V --remove-orphans --exit-code-from $@ $@
 
 .PHONY: test-go
 test-go:
@@ -123,6 +122,11 @@ dist: gen-doc
 toolchain-clean:
 	rm -rf $(TOOLCHAIN)
 
+.PHONY: docker-clean
+docker-clean:
+	docker compose -f ./tests/docker/docker-compose.yml down --rmi local -v --remove-orphans
+	docker rmi $(REVAD_IMAGE)
+
 .PHONY: clean
-clean: toolchain-clean
+clean: toolchain-clean docker-clean
 	rm -rf dist

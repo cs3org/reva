@@ -13,10 +13,15 @@ on:
         type: boolean
       platforms:
         type: string
+    outputs:
+      image: 
+        value: ${{ jobs.docker.outputs.image }}
 
 jobs:
   docker:
     runs-on: self-hosted
+    outputs:
+      image: ${{ steps.build.outputs.imageid }}
     steps:
       - name: Checkout
         uses: actions/checkout@v3.1.0
@@ -33,6 +38,7 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
       - name: Build ${{ inputs.push && 'and push' || '' }} ${{ inputs.tags }} Docker image
         uses: docker/build-push-action@v3
+        id: build
         with:
           context: .
           file: ${{ inputs.file }}
@@ -40,9 +46,9 @@ jobs:
           load: ${{ inputs.load }}
           push: ${{ inputs.push }}
           platforms: ${{ inputs.platforms }}
-      - name: Upload ${{ inputs.tags }} Docker image to artifacts
+      - name: Upload ${{ steps.build.outputs.imageid }} Docker image to artifacts
         uses: ishworkh/docker-image-artifact-upload@v1
         if: inputs.load
         with:
-          image: ${{ inputs.tags }}
+          image: ${{ steps.build.outputs.imageid }}
           retention_days: '1'
