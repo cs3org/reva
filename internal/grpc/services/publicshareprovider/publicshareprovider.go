@@ -143,7 +143,7 @@ func (s *service) CreatePublicShare(ctx context.Context, req *link.CreatePublicS
 
 	grant := req.GetGrant()
 	if grant != nil && s.conf.WriteableShareMustHavePassword &&
-		publicshare.IsWriteable(grant) && grant.Password == "" {
+		publicshare.IsWriteable(grant.GetPermissions()) && grant.Password == "" {
 		return &link.CreatePublicShareResponse{
 			Status: status.NewInvalid(ctx, "writeable shares must have a password protection"),
 		}, nil
@@ -253,14 +253,6 @@ func (s *service) UpdatePublicShare(ctx context.Context, req *link.UpdatePublicS
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("publicshareprovider", "update").Msg("update public share")
 
-	grant := req.GetUpdate().GetGrant()
-	if grant != nil && s.conf.WriteableShareMustHavePassword &&
-		publicshare.IsWriteable(grant) && grant.Password == "" {
-		return &link.UpdatePublicShareResponse{
-			Status: status.NewInvalid(ctx, "writeable shares must have a password protection"),
-		}, nil
-	}
-
 	u, ok := ctxpkg.ContextGetUser(ctx)
 	if !ok {
 		log.Error().Msg("error getting user from context")
@@ -268,7 +260,14 @@ func (s *service) UpdatePublicShare(ctx context.Context, req *link.UpdatePublicS
 
 	updateR, err := s.sm.UpdatePublicShare(ctx, u, req)
 	if err != nil {
-		log.Err(err).Msgf("error updating public shares: %v", err)
+		if errors.Is(err, publicshare.ErrShareNeedsPassword) {
+			return &link.UpdatePublicShareResponse{
+				Status: status.NewInvalid(ctx, err.Error()),
+			}, nil
+		}
+		return &link.UpdatePublicShareResponse{
+			Status: status.NewInternal(ctx, err.Error()),
+		}, nil
 	}
 
 	res := &link.UpdatePublicShareResponse{
