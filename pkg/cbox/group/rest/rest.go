@@ -148,7 +148,7 @@ func (m *manager) fetchAllGroups() {
 
 func (m *manager) fetchAllGroupAccounts() error {
 	ctx := context.Background()
-	url := fmt.Sprintf("%s/api/v1.0/Group?field=groupIdentifier&field=displayName&field=gid", m.conf.APIBaseURL)
+	url := fmt.Sprintf("%s/api/v1.0/Group?field=groupIdentifier&field=displayName&field=gid&field=isComputingGroup", m.conf.APIBaseURL)
 
 	for url != "" {
 		result, err := m.apiTokenManager.SendAPIGetRequest(ctx, url, false)
@@ -163,6 +163,12 @@ func (m *manager) fetchAllGroupAccounts() error {
 		for _, usr := range responseData {
 			groupData, ok := usr.(map[string]interface{})
 			if !ok {
+				continue
+			}
+
+			// filter computing groups
+			is, ok := groupData["isComputingGroup"].(bool)
+			if ok && is {
 				continue
 			}
 
