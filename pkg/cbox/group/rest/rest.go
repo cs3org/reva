@@ -167,8 +167,7 @@ func (m *manager) fetchAllGroupAccounts() error {
 			}
 
 			// filter computing groups
-			is, ok := groupData["isComputingGroup"].(bool)
-			if ok && is {
+			if is, ok := groupData["isComputingGroup"].(bool); ok && is {
 				continue
 			}
 
