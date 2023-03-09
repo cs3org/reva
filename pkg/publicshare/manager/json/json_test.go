@@ -190,7 +190,7 @@ var _ = Describe("Json", func() {
 			persistence := cs3.New(storage)
 			Expect(persistence.Init(context.Background())).To(Succeed())
 
-			m, err = json.New("https://localhost:9200", 11, 60, false, persistence)
+			m, err = json.New("https://localhost:9200", 11, 60, false, persistence, false)
 			Expect(err).ToNot(HaveOccurred())
 
 			ctx = ctxpkg.ContextSetUser(context.Background(), user1)
@@ -228,7 +228,7 @@ var _ = Describe("Json", func() {
 				p := cs3.New(storage)
 				Expect(p.Init(context.Background())).To(Succeed())
 
-				m, err = json.New("https://localhost:9200", 11, 60, false, p)
+				m, err = json.New("https://localhost:9200", 11, 60, false, p, false)
 				Expect(err).ToNot(HaveOccurred())
 
 				ps, err := m.ListPublicShares(ctx, user1, []*link.ListPublicSharesRequest_Filter{}, false)

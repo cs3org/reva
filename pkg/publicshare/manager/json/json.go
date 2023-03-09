@@ -76,7 +76,7 @@ func NewFile(c map[string]interface{}) (publicshare.Manager, error) {
 		return nil, err
 	}
 
-	return New(conf.GatewayAddr, conf.SharePasswordHashCost, conf.JanitorRunInterval, conf.EnableExpiredSharesCleanup, p)
+	return New(conf.GatewayAddr, conf.SharePasswordHashCost, conf.JanitorRunInterval, conf.EnableExpiredSharesCleanup, p, conf.WriteableShareMustHavePassword)
 }
 
 // NewMemory returns a new in-memory public shares manager.
@@ -93,7 +93,7 @@ func NewMemory(c map[string]interface{}) (publicshare.Manager, error) {
 		return nil, err
 	}
 
-	return New(conf.GatewayAddr, conf.SharePasswordHashCost, conf.JanitorRunInterval, conf.EnableExpiredSharesCleanup, p)
+	return New(conf.GatewayAddr, conf.SharePasswordHashCost, conf.JanitorRunInterval, conf.EnableExpiredSharesCleanup, p, conf.WriteableShareMustHavePassword)
 }
 
 // NewCS3 returns a new cs3 public shares manager.
@@ -115,18 +115,19 @@ func NewCS3(c map[string]interface{}) (publicshare.Manager, error) {
 		return nil, err
 	}
 
-	return New(conf.GatewayAddr, conf.SharePasswordHashCost, conf.JanitorRunInterval, conf.EnableExpiredSharesCleanup, p)
+	return New(conf.GatewayAddr, conf.SharePasswordHashCost, conf.JanitorRunInterval, conf.EnableExpiredSharesCleanup, p, conf.WriteableShareMustHavePassword)
 }
 
 // New returns a new public share manager instance
-func New(gwAddr string, pwHashCost, janitorRunInterval int, enableCleanup bool, p persistence.Persistence) (publicshare.Manager, error) {
+func New(gwAddr string, pwHashCost, janitorRunInterval int, enableCleanup bool, p persistence.Persistence, writeableShareMustHavePassword bool) (publicshare.Manager, error) {
 	m := &manager{
-		gatewayAddr:                gwAddr,
-		mutex:                      &sync.Mutex{},
-		passwordHashCost:           pwHashCost,
-		janitorRunInterval:         janitorRunInterval,
-		enableExpiredSharesCleanup: enableCleanup,
-		persistence:                p,
+		gatewayAddr:                    gwAddr,
+		mutex:                          &sync.Mutex{},
+		passwordHashCost:               pwHashCost,
+		janitorRunInterval:             janitorRunInterval,
+		enableExpiredSharesCleanup:     enableCleanup,
+		persistence:                    p,
+		writeableShareMustHavePassword: writeableShareMustHavePassword,
 	}
 
 	go m.startJanitorRun()
@@ -134,10 +135,11 @@ func New(gwAddr string, pwHashCost, janitorRunInterval int, enableCleanup bool, 
 }
 
 type commonConfig struct {
-	GatewayAddr                string `mapstructure:"gateway_addr"`
-	SharePasswordHashCost      int    `mapstructure:"password_hash_cost"`
-	JanitorRunInterval         int    `mapstructure:"janitor_run_interval"`
-	EnableExpiredSharesCleanup bool   `mapstructure:"enable_expired_shares_cleanup"`
+	GatewayAddr                    string `mapstructure:"gateway_addr"`
+	SharePasswordHashCost          int    `mapstructure:"password_hash_cost"`
+	JanitorRunInterval             int    `mapstructure:"janitor_run_interval"`
+	EnableExpiredSharesCleanup     bool   `mapstructure:"enable_expired_shares_cleanup"`
+	WriteableShareMustHavePassword bool   `mapstructure:"writeable_share_must_have_password"`
 }
 
 type fileConfig struct {
@@ -169,9 +171,10 @@ type manager struct {
 	mutex       *sync.Mutex
 	persistence persistence.Persistence
 
-	passwordHashCost           int
-	janitorRunInterval         int
-	enableExpiredSharesCleanup bool
+	passwordHashCost               int
+	janitorRunInterval             int
+	enableExpiredSharesCleanup     bool
+	writeableShareMustHavePassword bool
 }
 
 func (m *manager) startJanitorRun() {
@@ -339,6 +342,11 @@ func (m *manager) UpdatePublicShare(ctx context.Context, u *user.User, req *link
 	case link.UpdatePublicShareRequest_Update_TYPE_PERMISSIONS:
 		old, _ := json.Marshal(share.Permissions)
 		new, _ := json.Marshal(req.Update.GetGrant().Permissions)
+
+		if m.writeableShareMustHavePassword && publicshare.IsWriteable(req.GetUpdate().GetGrant().GetPermissions()) && !share.PasswordProtected {
+			return nil, publicshare.ErrShareNeedsPassword
+		}
+
 		log.Debug().Str("json", "update grants").Msgf("from: `%v`\nto\n`%v`", old, new)
 		share.Permissions = req.Update.GetGrant().GetPermissions()
 	case link.UpdatePublicShareRequest_Update_TYPE_EXPIRATION:
@@ -349,6 +357,10 @@ func (m *manager) UpdatePublicShare(ctx context.Context, u *user.User, req *link
 	case link.UpdatePublicShareRequest_Update_TYPE_PASSWORD:
 		passwordChanged = true
 		if req.Update.GetGrant().Password == "" {
+			if m.writeableShareMustHavePassword && publicshare.IsWriteable(share.Permissions) {
+				return nil, publicshare.ErrShareNeedsPassword
+			}
+
 			share.PasswordProtected = false
 			newPasswordEncoded = ""
 		} else {
