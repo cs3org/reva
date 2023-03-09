@@ -444,6 +444,9 @@ func (fs *Decomposedfs) UpdateStorageSpace(ctx context.Context, req *provider.Up
 			return &provider.UpdateStorageSpaceResponse{
 				Status: &v1beta11.Status{Code: v1beta11.Code_CODE_INVALID_ARGUMENT, Message: "decompsedFS: requested quota is higher than allowed"},
 			}, nil
+		} else if fs.o.MaxQuota != quotaUnrestricted && space.Quota.QuotaMaxBytes == quotaUnrestricted {
+			// If the caller wants to unrestrict the space we give it the maximum allowed quota.
+			space.Quota.QuotaMaxBytes = fs.o.MaxQuota
 		}
 		metadata[prefixes.QuotaAttr] = strconv.FormatUint(space.Quota.QuotaMaxBytes, 10)
 	}
