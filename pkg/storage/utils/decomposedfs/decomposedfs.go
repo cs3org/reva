@@ -107,10 +107,12 @@ func NewDefault(m map[string]interface{}, bs tree.Blobstore, es events.Stream) (
 	switch o.MetadataBackend {
 	case "xattrs":
 		lu = lookup.New(metadata.XattrsBackend{}, o)
+	case "messagepack":
+		lu = lookup.New(metadata.NewMessagePackBackend(o.Root, o.FileMetadataCache), o)
 	case "ini":
 		lu = lookup.New(metadata.NewIniBackend(o.Root, o.FileMetadataCache), o)
 	default:
-		return nil, fmt.Errorf("unknown metadata backend %s, only 'ini' or 'xattrs' (default) supported", o.MetadataBackend)
+		return nil, fmt.Errorf("unknown metadata backend %s, only 'ini', 'messagepack' or 'xattrs' (default) supported", o.MetadataBackend)
 	}
 
 	tp := tree.New(o.Root, o.TreeTimeAccounting, o.TreeSizeAccounting, lu, bs)

@@ -312,8 +312,13 @@ func ReadNode(ctx context.Context, lu PathLookup, spaceID, nodeID string, canLis
 	n.Name = attrs.String(prefixes.NameAttr)
 	n.ParentID = attrs.String(prefixes.ParentidAttr)
 	if n.ParentID == "" {
-		d, _ := os.ReadFile(n.InternalPath() + ".ini")
-		appctx.GetLogger(ctx).Error().Str("nodeid", n.ID).Str("parentid", n.ParentID).Interface("attrs", attrs).Str("ini", string(d)).Msg("missing parent id")
+		d, _ := os.ReadFile(lu.MetadataBackend().MetadataPath(n.InternalPath()))
+		switch lu.MetadataBackend().(type) {
+		case metadata.IniBackend:
+			appctx.GetLogger(ctx).Error().Str("nodeid", n.ID).Interface("attrs", attrs).Str("ini", string(d)).Msg("missing parent id")
+		case metadata.MessagePackBackend:
+			appctx.GetLogger(ctx).Error().Str("nodeid", n.ID).Interface("attrs", attrs).Bytes("messagepack", d).Msg("missing parent id")
+		}
 		return nil, errtypes.InternalError("Missing parent ID on node")
 	}
 	// TODO why do we stat the parent? to determine if the current node is in the trash we would need to traverse all parents...

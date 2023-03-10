@@ -19,28 +19,22 @@
 package metadata
 
 import (
-	"encoding/base64"
 	"io"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
-	"unicode"
 
 	"github.com/cs3org/reva/v2/pkg/storage/cache"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/options"
 	"github.com/pkg/xattr"
 	"github.com/rogpeppe/go-internal/lockedfile"
-	"gopkg.in/ini.v1"
+	"github.com/shamaton/msgpack/v2"
 )
 
-func init() {
-	ini.PrettyFormat = false // Disable alignment of values for performance reasons
-}
-
-// IniBackend persists the attributes in INI format inside the file
-type IniBackend struct {
+// MessagePackBackend persists the attributes in messagepack format inside the file
+type MessagePackBackend struct {
 	rootPath  string
 	metaCache cache.FileMetadataCache
 }
@@ -51,48 +45,47 @@ type readWriteCloseSeekTruncater interface {
 	Truncate(int64) error
 }
 
-// NewIniBackend returns a new IniBackend instance
-func NewIniBackend(rootPath string, o options.CacheOptions) IniBackend {
-	ini.PrettyFormat = false
-	return IniBackend{
+// NewMessagePackBackend returns a new MessagePackBackend instance
+func NewMessagePackBackend(rootPath string, o options.CacheOptions) MessagePackBackend {
+	return MessagePackBackend{
 		rootPath:  filepath.Clean(rootPath),
 		metaCache: cache.GetFileMetadataCache(o.CacheStore, o.CacheNodes, o.CacheDatabase, "filemetadata", 24*time.Hour),
 	}
 }
 
 // All reads all extended attributes for a node
-func (b IniBackend) All(path string) (map[string][]byte, error) {
+func (b MessagePackBackend) All(path string) (map[string][]byte, error) {
 	path = b.MetadataPath(path)
 
-	return b.loadMeta(path)
+	return b.loadAttributes(path)
 }
 
 // Get an extended attribute value for the given key
-func (b IniBackend) Get(path, key string) ([]byte, error) {
+func (b MessagePackBackend) Get(path, key string) ([]byte, error) {
 	path = b.MetadataPath(path)
 
-	attribs, err := b.loadMeta(path)
+	attribs, err := b.loadAttributes(path)
 	if err != nil {
 		return []byte{}, err
 	}
 	val, ok := attribs[key]
 	if !ok {
-		return []byte{}, &xattr.Error{Op: "ini.get", Path: path, Name: key, Err: xattr.ENOATTR}
+		return []byte{}, &xattr.Error{Op: "mpk.get", Path: path, Name: key, Err: xattr.ENOATTR}
 	}
 	return val, nil
 }
 
 // GetInt64 reads a string as int64 from the xattrs
-func (b IniBackend) GetInt64(path, key string) (int64, error) {
+func (b MessagePackBackend) GetInt64(path, key string) (int64, error) {
 	path = b.MetadataPath(path)
 
-	attribs, err := b.loadMeta(path)
+	attribs, err := b.loadAttributes(path)
 	if err != nil {
 		return 0, err
 	}
 	val, ok := attribs[key]
 	if !ok {
-		return 0, &xattr.Error{Op: "ini.get", Path: path, Name: key, Err: xattr.ENOATTR}
+		return 0, &xattr.Error{Op: "mpk.get", Path: path, Name: key, Err: xattr.ENOATTR}
 	}
 	i, err := strconv.ParseInt(string(val), 10, 64)
 	if err != nil {
@@ -103,10 +96,10 @@ func (b IniBackend) GetInt64(path, key string) (int64, error) {
 
 // List retrieves a list of names of extended attributes associated with the
 // given path in the file system.
-func (b IniBackend) List(path string) ([]string, error) {
+func (b MessagePackBackend) List(path string) ([]string, error) {
 	path = b.MetadataPath(path)
 
-	attribs, err := b.loadMeta(path)
+	attribs, err := b.loadAttributes(path)
 	if err != nil {
 		return nil, err
 	}
@@ -118,21 +111,21 @@ func (b IniBackend) List(path string) ([]string, error) {
 }
 
 // Set sets one attribute for the given path
-func (b IniBackend) Set(path, key string, val []byte) error {
+func (b MessagePackBackend) Set(path, key string, val []byte) error {
 	return b.SetMultiple(path, map[string][]byte{key: val}, true)
 }
 
 // SetMultiple sets a set of attribute for the given path
-func (b IniBackend) SetMultiple(path string, attribs map[string][]byte, acquireLock bool) error {
-	return b.saveIni(path, attribs, nil, acquireLock)
+func (b MessagePackBackend) SetMultiple(path string, attribs map[string][]byte, acquireLock bool) error {
+	return b.saveAttributes(path, attribs, nil, acquireLock)
 }
 
 // Remove an extended attribute key
-func (b IniBackend) Remove(path, key string) error {
-	return b.saveIni(path, nil, []string{key}, true)
+func (b MessagePackBackend) Remove(path, key string) error {
+	return b.saveAttributes(path, nil, []string{key}, true)
 }
 
-func (b IniBackend) saveIni(path string, setAttribs map[string][]byte, deleteAttribs []string, acquireLock bool) error {
+func (b MessagePackBackend) saveAttributes(path string, setAttribs map[string][]byte, deleteAttribs []string, acquireLock bool) error {
 	var (
 		f   readWriteCloseSeekTruncater
 		err error
@@ -152,25 +145,24 @@ func (b IniBackend) saveIni(path string, setAttribs map[string][]byte, deleteAtt
 	_ = b.metaCache.RemoveMetadata(path)
 
 	// Read current state
-	iniBytes, err := io.ReadAll(f)
+	msgBytes, err := io.ReadAll(f)
 	if err != nil {
 		return err
 	}
-	iniFile, err := ini.Load(iniBytes)
-	if err != nil {
-		return err
+	attribs := map[string][]byte{}
+	if len(msgBytes) > 0 {
+		err = msgpack.Unmarshal(msgBytes, &attribs)
+		if err != nil {
+			return err
+		}
 	}
 
-	// Prepare new metadata
-	iniAttribs, err := decodeAttribs(iniFile)
-	if err != nil {
-		return err
-	}
+	// set new metadata
 	for key, val := range setAttribs {
-		iniAttribs[key] = val
+		attribs[key] = val
 	}
 	for _, key := range deleteAttribs {
-		delete(iniAttribs, key)
+		delete(attribs, key)
 	}
 
 	// Truncate file
@@ -184,23 +176,16 @@ func (b IniBackend) saveIni(path string, setAttribs map[string][]byte, deleteAtt
 	}
 
 	// Write new metadata to file
-	ini, err := ini.Load([]byte{})
-	if err != nil {
-		return err
-	}
-	for key, val := range encodeAttribs(iniAttribs) {
-		ini.Section("").Key(key).SetValue(val)
-	}
-	_, err = ini.WriteTo(f)
+	msgpack.NewEncoder(f).Encode(attribs)
 	if err != nil {
 		return err
 	}
 
-	return b.metaCache.PushToCache(b.cacheKey(path), iniAttribs)
+	return b.metaCache.PushToCache(b.cacheKey(path), attribs)
 }
 
-func (b IniBackend) loadMeta(path string) (map[string][]byte, error) {
-	var attribs map[string][]byte
+func (b MessagePackBackend) loadAttributes(path string) (map[string][]byte, error) {
+	attribs := map[string][]byte{}
 	err := b.metaCache.PullFromCache(b.cacheKey(path), &attribs)
 	if err == nil {
 		return attribs, err
@@ -214,7 +199,7 @@ func (b IniBackend) loadMeta(path string) (map[string][]byte, error) {
 			// some of the caller rely on ENOTEXISTS to be returned when the
 			// actual file (not the metafile) does not exist in order to
 			// determine whether a node exists or not -> stat the actual node
-			_, err := os.Stat(strings.TrimSuffix(path, ".ini"))
+			_, err := os.Stat(strings.TrimSuffix(path, ".mpk"))
 			if err != nil {
 				return nil, err
 			}
@@ -223,14 +208,15 @@ func (b IniBackend) loadMeta(path string) (map[string][]byte, error) {
 	}
 	defer lockedFile.Close()
 
-	iniFile, err := ini.Load(lockedFile)
+	msgBytes, err := io.ReadAll(lockedFile)
 	if err != nil {
 		return nil, err
 	}
-
-	attribs, err = decodeAttribs(iniFile)
-	if err != nil {
-		return nil, err
+	if len(msgBytes) > 0 {
+		err = msgpack.Unmarshal(msgBytes, &attribs)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	err = b.metaCache.PushToCache(b.cacheKey(path), attribs)
@@ -242,10 +228,10 @@ func (b IniBackend) loadMeta(path string) (map[string][]byte, error) {
 }
 
 // IsMetaFile returns whether the given path represents a meta file
-func (IniBackend) IsMetaFile(path string) bool { return strings.HasSuffix(path, ".ini") }
+func (MessagePackBackend) IsMetaFile(path string) bool { return strings.HasSuffix(path, ".mpk") }
 
 // Purge purges the data of a given path
-func (b IniBackend) Purge(path string) error {
+func (b MessagePackBackend) Purge(path string) error {
 	if err := b.metaCache.RemoveMetadata(b.cacheKey(path)); err != nil {
 		return err
 	}
@@ -253,7 +239,7 @@ func (b IniBackend) Purge(path string) error {
 }
 
 // Rename moves the data for a given path to a new path
-func (b IniBackend) Rename(oldPath, newPath string) error {
+func (b MessagePackBackend) Rename(oldPath, newPath string) error {
 	data := map[string]string{}
 	_ = b.metaCache.PullFromCache(b.cacheKey(oldPath), &data)
 	err := b.metaCache.RemoveMetadata(b.cacheKey(oldPath))
@@ -269,57 +255,11 @@ func (b IniBackend) Rename(oldPath, newPath string) error {
 }
 
 // MetadataPath returns the path of the file holding the metadata for the given path
-func (IniBackend) MetadataPath(path string) string { return path + ".ini" }
+func (MessagePackBackend) MetadataPath(path string) string { return path + ".mpk" }
 
-func (b IniBackend) cacheKey(path string) string {
+func (b MessagePackBackend) cacheKey(path string) string {
 	// rootPath is guaranteed to have no trailing slash
 	// the cache key shouldn't begin with a slash as some stores drop it which can cause
 	// confusion
 	return strings.TrimPrefix(path, b.rootPath+"/")
-}
-
-func needsEncoding(s []byte) bool {
-	if len(s) == 0 {
-		return false
-	}
-
-	if s[0] == '\'' || s[0] == '"' || s[0] == '`' {
-		return true
-	}
-
-	for i := 0; i < len(s); i++ {
-		if s[i] < 32 || s[i] >= unicode.MaxASCII { // ASCII 127 = Del - we don't want that
-			return true
-		}
-	}
-	return false
-}
-
-func encodeAttribs(attribs map[string][]byte) map[string]string {
-	encAttribs := map[string]string{}
-	for key, val := range attribs {
-		if needsEncoding(val) {
-			encAttribs["base64:"+key] = base64.StdEncoding.EncodeToString(val)
-		} else {
-			encAttribs[key] = string(val)
-		}
-	}
-	return encAttribs
-}
-
-func decodeAttribs(iniFile *ini.File) (map[string][]byte, error) {
-	decodedAttributes := map[string][]byte{}
-	for key, val := range iniFile.Section("").KeysHash() {
-		if strings.HasPrefix(key, "base64:") {
-			key = strings.TrimPrefix(key, "base64:")
-			valBytes, err := base64.StdEncoding.DecodeString(val)
-			if err != nil {
-				return nil, err
-			}
-			decodedAttributes[key] = valBytes
-		} else {
-			decodedAttributes[key] = []byte(val)
-		}
-	}
-	return decodedAttributes, nil
 }

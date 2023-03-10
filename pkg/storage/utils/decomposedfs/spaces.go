@@ -865,7 +865,7 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 		return nil, err
 	}
 
-	// quota
+	// if quota is set try parsing it as int64, otherwise don't bother
 	if q, err := spaceAttributes.Int64(prefixes.QuotaAttr); err == nil && q >= 0 {
 		// make sure we have a proper signed int
 		// we use the same magic numbers to indicate:
