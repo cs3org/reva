@@ -31,6 +31,7 @@ type emailParams struct {
 	User             *userpb.User
 	Token            string
 	MeshDirectoryURL string
+	InviteLink       string
 }
 
 const defaultSubject = `ScienceMesh: {{.User.DisplayName}} wants to collaborate with you`
@@ -39,7 +40,7 @@ const defaultBody = `Hi
 
 {{.User.DisplayName}} ({{.User.Mail}}) wants to start sharing OCM resources with you.
 To accept the invite, please visit the following URL:
-{{.MeshDirectoryURL}}?token={{.Token}}&providerDomain={{.User.Id.Idp}}
+{{.InviteLink}}
 
 Alternatively, you can visit your mesh provider and use the following details:
 Token: {{.Token}}
@@ -114,5 +115,21 @@ func (h *tokenHandler) initSubjectTemplate(subjTempl string) error {
 		return err
 	}
 	h.tplSubj = tpl
+	return nil
+}
+
+func (h *tokenHandler) initInviteLinkTemplate(inviteTempl string) error {
+	var t string
+	if inviteTempl == "" {
+		t = defaultInviteLink
+	} else {
+		t = inviteTempl
+	}
+
+	tpl, err := template.New("tpl_invite").Parse(t)
+	if err != nil {
+		return err
+	}
+	h.tplInviteLink = tpl
 	return nil
 }
