@@ -71,10 +71,7 @@ func (h *tokenHandler) init(c *config) error {
 		return err
 	}
 
-	if err := h.initInviteLinkTemplate(c.InviteLinkTemplate); err != nil {
-		return err
-	}
-	return nil
+	return h.initInviteLinkTemplate(c.InviteLinkTemplate)
 }
 
 type token struct {
