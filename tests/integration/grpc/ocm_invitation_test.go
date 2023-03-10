@@ -44,6 +44,13 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
+type generateInviteResponse struct {
+	Token       string `json:"token"`
+	Description string `json:"descriptions"`
+	Expiration  uint64 `json:"expiration"`
+	InviteLink  string `json:"invite_link"`
+}
+
 func ctxWithAuthToken(tokenManager token.Manager, user *userpb.User) context.Context {
 	ctx := context.Background()
 	scope, err := scope.AddOwnerScope(nil)
@@ -327,7 +334,7 @@ var _ = Describe("ocm invitation workflow", func() {
 			return users, res.StatusCode
 		}
 
-		generateToken := func(revaToken, domain string) (*invitepb.InviteToken, int) {
+		generateToken := func(revaToken, domain string) (*generateInviteResponse, int) {
 			req, err := http.NewRequestWithContext(context.TODO(), http.MethodGet, fmt.Sprintf("http://%s/sciencemesh/generate-invite", domain), nil)
 			Expect(err).ToNot(HaveOccurred())
 			req.Header.Set("x-access-token", revaToken)
@@ -336,9 +343,9 @@ var _ = Describe("ocm invitation workflow", func() {
 			Expect(err).ToNot(HaveOccurred())
 			defer res.Body.Close()
 
-			var token invitepb.InviteToken
-			Expect(json.NewDecoder(res.Body).Decode(&token)).To(Succeed())
-			return &token, res.StatusCode
+			var inviteRes generateInviteResponse
+			Expect(json.NewDecoder(res.Body).Decode(&res)).To(Succeed())
+			return &inviteRes, res.StatusCode
 		}
 
 		Context("einstein and marie do not know each other", func() {
