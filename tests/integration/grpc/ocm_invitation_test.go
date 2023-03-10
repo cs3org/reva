@@ -344,7 +344,7 @@ var _ = Describe("ocm invitation workflow", func() {
 			defer res.Body.Close()
 
 			var inviteRes generateInviteResponse
-			Expect(json.NewDecoder(res.Body).Decode(&res)).To(Succeed())
+			Expect(json.NewDecoder(res.Body).Decode(&inviteRes)).To(Succeed())
 			return &inviteRes, res.StatusCode
 		}
 
