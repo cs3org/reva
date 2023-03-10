@@ -79,8 +79,8 @@ func (h *tokenHandler) init(c *config) error {
 
 type token struct {
 	Token       string `json:"token"`
-	Description string `json:"description"`
-	Expiration  uint64 `json:"expiration"`
+	Description string `json:"description,omitempty"`
+	Expiration  uint64 `json:"expiration,omitempty"`
 	InviteLink  string `json:"invite_link"`
 }
 
@@ -280,7 +280,26 @@ func (h *tokenHandler) ListInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := json.NewEncoder(w).Encode(res.InviteTokens); err != nil {
+	tokens := make([]*token, 0, len(res.InviteTokens))
+	user := ctxpkg.ContextMustGetUser(ctx)
+	for _, tkn := range res.InviteTokens {
+		inviteURL, err := h.generateInviteLink(user, tkn)
+		if err != nil {
+			reqres.WriteError(w, r, reqres.APIErrorServerError, "error generating invite URL from OCM token", err)
+			return
+		}
+		t := &token{
+			Token:       tkn.Token,
+			Description: tkn.Description,
+			InviteLink:  inviteURL,
+		}
+		if tkn.Expiration != nil {
+			t.Expiration = tkn.Expiration.Seconds
+		}
+		tokens = append(tokens, t)
+	}
+
+	if err := json.NewEncoder(w).Encode(tokens); err != nil {
 		reqres.WriteError(w, r, reqres.APIErrorServerError, "error marshalling token data", err)
 		return
 	}
