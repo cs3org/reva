@@ -401,7 +401,7 @@ var _ = Describe("Tree", func() {
 
 				stopdir, err := env.CreateTestDir("testdir/stophere", &provider.Reference{ResourceId: env.SpaceRootRes})
 				Expect(err).ToNot(HaveOccurred())
-				err = stopdir.SetXattr(prefixes.PropagationAttr, "0")
+				err = stopdir.SetXattrString(prefixes.PropagationAttr, "0")
 				Expect(err).ToNot(HaveOccurred())
 				otherdir, err := env.CreateTestDir("testdir/stophere/lotsofbytes", &provider.Reference{ResourceId: env.SpaceRootRes})
 				Expect(err).ToNot(HaveOccurred())

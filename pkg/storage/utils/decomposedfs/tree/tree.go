@@ -367,7 +367,7 @@ func (t *Tree) Move(ctx context.Context, oldNode *node.Node, newNode *node.Node)
 		}
 
 		// update name attribute
-		if err := oldNode.SetXattr(prefixes.NameAttr, newNode.Name); err != nil {
+		if err := oldNode.SetXattrString(prefixes.NameAttr, newNode.Name); err != nil {
 			return errors.Wrap(err, "Decomposedfs: could not set name attribute")
 		}
 
@@ -387,10 +387,10 @@ func (t *Tree) Move(ctx context.Context, oldNode *node.Node, newNode *node.Node)
 	}
 
 	// update target parentid and name
-	if err := oldNode.SetXattrs(map[string]string{
-		prefixes.ParentidAttr: newNode.ParentID,
-		prefixes.NameAttr:     newNode.Name,
-	}, true); err != nil {
+	attribs := node.Attributes{}
+	attribs.SetString(prefixes.ParentidAttr, newNode.ParentID)
+	attribs.SetString(prefixes.NameAttr, newNode.Name)
+	if err := oldNode.SetXattrs(attribs, true); err != nil {
 		return errors.Wrap(err, "Decomposedfs: could not update old node attributes")
 	}
 
@@ -488,7 +488,7 @@ func (t *Tree) Delete(ctx context.Context, n *node.Node) (err error) {
 
 	// set origin location in metadata
 	nodePath := n.InternalPath()
-	if err := n.SetXattr(prefixes.TrashOriginAttr, origin); err != nil {
+	if err := n.SetXattrString(prefixes.TrashOriginAttr, origin); err != nil {
 		return err
 	}
 
@@ -618,13 +618,11 @@ func (t *Tree) RestoreRecycleItemFunc(ctx context.Context, spaceid, key, trashPa
 
 		targetNode.Exists = true
 
-		attrs := map[string]string{
-			// update name attribute
-			prefixes.NameAttr: targetNode.Name,
-		}
+		attrs := node.Attributes{}
+		attrs.SetString(prefixes.NameAttr, targetNode.Name)
 		if trashPath != "" {
 			// set ParentidAttr to restorePath's node parent id
-			attrs[prefixes.ParentidAttr] = targetNode.ParentID
+			attrs.SetString(prefixes.ParentidAttr, targetNode.ParentID)
 		}
 
 		if err = recycleNode.SetXattrs(attrs, true); err != nil {
@@ -778,7 +776,7 @@ func (t *Tree) Propagate(ctx context.Context, n *node.Node, sizeDiff int64) (err
 		}
 
 		if t.treeTimeAccounting || (t.treeSizeAccounting && sizeDiff != 0) {
-			attrs := map[string]string{}
+			attrs := node.Attributes{}
 
 			var f *lockedfile.File
 			// lock node before reading treesize or tree time
@@ -830,10 +828,10 @@ func (t *Tree) Propagate(ctx context.Context, n *node.Node, sizeDiff int64) (err
 
 				if updateSyncTime {
 					// update the tree time of the parent node
-					attrs[prefixes.TreeMTimeAttr] = sTime.UTC().Format(time.RFC3339Nano)
+					attrs.SetString(prefixes.TreeMTimeAttr, sTime.UTC().Format(time.RFC3339Nano))
 				}
 
-				attrs[prefixes.TmpEtagAttr] = ""
+				attrs.SetString(prefixes.TmpEtagAttr, "")
 			}
 
 			// size accounting
@@ -860,7 +858,7 @@ func (t *Tree) Propagate(ctx context.Context, n *node.Node, sizeDiff int64) (err
 				}
 
 				// update the tree size of the node
-				attrs[prefixes.TreesizeAttr] = strconv.FormatUint(newSize, 10)
+				attrs.SetString(prefixes.TreesizeAttr, strconv.FormatUint(newSize, 10))
 				sublog.Debug().Uint64("newSize", newSize).Msg("updated treesize of parent node")
 			}
 
@@ -912,10 +910,10 @@ func (t *Tree) calculateTreeSize(ctx context.Context, childrenPath string) (uint
 			continue // continue after an error
 		}
 		sizeAttr := ""
-		if attribs[prefixes.TypeAttr] == strconv.FormatUint(uint64(provider.ResourceType_RESOURCE_TYPE_FILE), 10) {
-			sizeAttr = attribs[prefixes.BlobsizeAttr]
+		if string(attribs[prefixes.TypeAttr]) == strconv.FormatUint(uint64(provider.ResourceType_RESOURCE_TYPE_FILE), 10) {
+			sizeAttr = string(attribs[prefixes.BlobsizeAttr])
 		} else {
-			sizeAttr = attribs[prefixes.TreesizeAttr]
+			sizeAttr = string(attribs[prefixes.TreesizeAttr])
 		}
 		csize, err := strconv.ParseInt(sizeAttr, 10, 64)
 		if err != nil {
@@ -993,10 +991,10 @@ func (t *Tree) readRecycleItem(ctx context.Context, spaceID, key, path string) (
 	}
 	recycleNode.SetType(t.lookup.TypeFromPath(recycleNode.InternalPath()))
 
-	var attrStr string
+	var attrBytes []byte
 	// lookup blobID in extended attributes
-	if attrStr, err = backend.Get(deletedNodePath, prefixes.BlobIDAttr); err == nil {
-		recycleNode.BlobID = attrStr
+	if attrBytes, err = backend.Get(deletedNodePath, prefixes.BlobIDAttr); err == nil {
+		recycleNode.BlobID = string(attrBytes)
 	} else {
 		return
 	}
@@ -1007,15 +1005,15 @@ func (t *Tree) readRecycleItem(ctx context.Context, spaceID, key, path string) (
 	}
 
 	// lookup parent id in extended attributes
-	if attrStr, err = backend.Get(deletedNodePath, prefixes.ParentidAttr); err == nil {
-		recycleNode.ParentID = attrStr
+	if attrBytes, err = backend.Get(deletedNodePath, prefixes.ParentidAttr); err == nil {
+		recycleNode.ParentID = string(attrBytes)
 	} else {
 		return
 	}
 
 	// lookup name in extended attributes
-	if attrStr, err = backend.Get(deletedNodePath, prefixes.NameAttr); err == nil {
-		recycleNode.Name = attrStr
+	if attrBytes, err = backend.Get(deletedNodePath, prefixes.NameAttr); err == nil {
+		recycleNode.Name = string(attrBytes)
 	} else {
 		return
 	}
@@ -1024,8 +1022,8 @@ func (t *Tree) readRecycleItem(ctx context.Context, spaceID, key, path string) (
 	origin = "/"
 
 	// lookup origin path in extended attributes
-	if attrStr, err = backend.Get(resolvedTrashItem, prefixes.TrashOriginAttr); err == nil {
-		origin = filepath.Join(attrStr, path)
+	if attrBytes, err = backend.Get(resolvedTrashItem, prefixes.TrashOriginAttr); err == nil {
+		origin = filepath.Join(string(attrBytes), path)
 	} else {
 		log.Error().Err(err).Str("trashItem", trashItem).Str("deletedNodePath", deletedNodePath).Msg("could not read origin path, restoring to /")
 	}

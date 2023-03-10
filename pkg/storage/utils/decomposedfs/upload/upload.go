@@ -229,10 +229,10 @@ func (upload *Upload) FinishUpload(_ context.Context) error {
 	}
 
 	// update checksums
-	attrs := map[string]string{
-		prefixes.ChecksumPrefix + "sha1":    string(sha1h.Sum(nil)),
-		prefixes.ChecksumPrefix + "md5":     string(md5h.Sum(nil)),
-		prefixes.ChecksumPrefix + "adler32": string(adler32h.Sum(nil)),
+	attrs := node.Attributes{
+		prefixes.ChecksumPrefix + "sha1":    sha1h.Sum(nil),
+		prefixes.ChecksumPrefix + "md5":     md5h.Sum(nil),
+		prefixes.ChecksumPrefix + "adler32": adler32h.Sum(nil),
 	}
 
 	n, err := CreateNodeForUpload(upload, attrs)

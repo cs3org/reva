@@ -25,7 +25,6 @@ import (
 	"math"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
@@ -120,16 +119,16 @@ func (fs *Decomposedfs) CreateStorageSpace(ctx context.Context, req *provider.Cr
 		return nil, err
 	}
 
-	metadata := make(map[string]string, 6)
+	metadata := make(node.Attributes, 6)
 
 	// always enable propagation on the storage space root
 	// mark the space root node as the end of propagation
-	metadata[prefixes.PropagationAttr] = "1"
-	metadata[prefixes.NameAttr] = req.Name
-	metadata[prefixes.SpaceNameAttr] = req.Name
+	metadata.SetString(prefixes.PropagationAttr, "1")
+	metadata.SetString(prefixes.NameAttr, req.Name)
+	metadata.SetString(prefixes.SpaceNameAttr, req.Name)
 
 	if req.Type != "" {
-		metadata[prefixes.SpaceTypeAttr] = req.Type
+		metadata.SetString(prefixes.SpaceTypeAttr, req.Type)
 	}
 
 	if q := req.GetQuota(); q != nil {
@@ -137,19 +136,19 @@ func (fs *Decomposedfs) CreateStorageSpace(ctx context.Context, req *provider.Cr
 		if fs.o.MaxQuota != quotaUnrestricted && q.GetQuotaMaxBytes() > fs.o.MaxQuota {
 			return nil, errtypes.BadRequest("decompsedFS: requested quota is higher than allowed")
 		}
-		metadata[prefixes.QuotaAttr] = strconv.FormatUint(q.QuotaMaxBytes, 10)
+		metadata.SetInt64(prefixes.QuotaAttr, int64(q.QuotaMaxBytes))
 	} else if fs.o.MaxQuota != quotaUnrestricted {
 		// If no quota was requested but a max quota was set then the the storage space has a quota
 		// of max quota.
-		metadata[prefixes.QuotaAttr] = strconv.FormatUint(fs.o.MaxQuota, 10)
+		metadata.SetInt64(prefixes.QuotaAttr, int64(fs.o.MaxQuota))
 	}
 
 	if description != "" {
-		metadata[prefixes.SpaceDescriptionAttr] = description
+		metadata.SetString(prefixes.SpaceDescriptionAttr, description)
 	}
 
 	if alias != "" {
-		metadata[prefixes.SpaceAliasAttr] = alias
+		metadata.SetString(prefixes.SpaceAliasAttr, alias)
 	}
 
 	if err := root.SetXattrs(metadata, true); err != nil {
@@ -438,10 +437,10 @@ func (fs *Decomposedfs) UpdateStorageSpace(ctx context.Context, req *provider.Up
 	space := req.StorageSpace
 	_, spaceID, _, _ := storagespace.SplitID(space.Id.OpaqueId)
 
-	metadata := make(map[string]string, 5)
+	metadata := make(node.Attributes, 5)
 	if space.Name != "" {
-		metadata[prefixes.NameAttr] = space.Name
-		metadata[prefixes.SpaceNameAttr] = space.Name
+		metadata.SetString(prefixes.NameAttr, space.Name)
+		metadata.SetString(prefixes.SpaceNameAttr, space.Name)
 	}
 
 	if space.Quota != nil {
@@ -450,16 +449,16 @@ func (fs *Decomposedfs) UpdateStorageSpace(ctx context.Context, req *provider.Up
 				Status: &v1beta11.Status{Code: v1beta11.Code_CODE_INVALID_ARGUMENT, Message: "decompsedFS: requested quota is higher than allowed"},
 			}, nil
 		}
-		metadata[prefixes.QuotaAttr] = strconv.FormatUint(space.Quota.QuotaMaxBytes, 10)
+		metadata.SetInt64(prefixes.QuotaAttr, int64(space.Quota.QuotaMaxBytes))
 	}
 
 	// TODO also return values which are not in the request
 	if space.Opaque != nil {
 		if description, ok := space.Opaque.Map["description"]; ok {
-			metadata[prefixes.SpaceDescriptionAttr] = string(description.Value)
+			metadata[prefixes.SpaceDescriptionAttr] = description.Value
 		}
 		if alias := utils.ReadPlainFromOpaque(space.Opaque, "spaceAlias"); alias != "" {
-			metadata[prefixes.SpaceAliasAttr] = alias
+			metadata.SetString(prefixes.SpaceAliasAttr, alias)
 		}
 		if image := utils.ReadPlainFromOpaque(space.Opaque, "image"); image != "" {
 			imageID, err := storagespace.ParseID(image)
@@ -468,7 +467,7 @@ func (fs *Decomposedfs) UpdateStorageSpace(ctx context.Context, req *provider.Up
 					Status: &v1beta11.Status{Code: v1beta11.Code_CODE_NOT_FOUND, Message: "decomposedFS: space image resource not found"},
 				}, nil
 			}
-			metadata[prefixes.SpaceImageAttr] = imageID.OpaqueId
+			metadata.SetString(prefixes.SpaceImageAttr, imageID.OpaqueId)
 		}
 		if readme := utils.ReadPlainFromOpaque(space.Opaque, "readme"); readme != "" {
 			readmeID, err := storagespace.ParseID(readme)
@@ -477,7 +476,7 @@ func (fs *Decomposedfs) UpdateStorageSpace(ctx context.Context, req *provider.Up
 					Status: &v1beta11.Status{Code: v1beta11.Code_CODE_NOT_FOUND, Message: "decomposedFS: space readme resource not found"},
 				}, nil
 			}
-			metadata[prefixes.SpaceReadmeAttr] = readmeID.OpaqueId
+			metadata.SetString(prefixes.SpaceReadmeAttr, readmeID.OpaqueId)
 		}
 	}
 
@@ -576,7 +575,7 @@ func (fs *Decomposedfs) DeleteStorageSpace(ctx context.Context, req *provider.De
 		return err
 	}
 
-	st, err := n.SpaceRoot.Xattr(prefixes.SpaceTypeAttr)
+	st, err := n.SpaceRoot.XattrString(prefixes.SpaceTypeAttr)
 	if err != nil {
 		return errtypes.InternalError(fmt.Sprintf("space %s does not have a spacetype, possible corrupt decompsedfs", n.ID))
 	}
@@ -606,7 +605,7 @@ func (fs *Decomposedfs) DeleteStorageSpace(ctx context.Context, req *provider.De
 			return errtypes.NewErrtypeFromStatus(status.NewInvalid(ctx, "can't purge enabled space"))
 		}
 
-		spaceType, err := n.Xattr(prefixes.SpaceTypeAttr)
+		spaceType, err := n.XattrString(prefixes.SpaceTypeAttr)
 		if err != nil {
 			return err
 		}
@@ -712,7 +711,7 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 	var err error
 	// TODO apply more filters
 	var sname string
-	if sname, err = n.SpaceRoot.Xattr(prefixes.SpaceNameAttr); err != nil {
+	if sname, err = n.SpaceRoot.XattrString(prefixes.SpaceNameAttr); err != nil {
 		// FIXME: Is that a severe problem?
 		appctx.GetLogger(ctx).Debug().Err(err).Msg("space does not have a name attribute")
 	}
@@ -817,7 +816,8 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 		// Mtime is set either as node.tmtime or as fi.mtime below
 	}
 
-	if space.SpaceType, err = n.SpaceRoot.Xattr(prefixes.SpaceTypeAttr); err != nil {
+	space.SpaceType, err = n.SpaceRoot.XattrString(prefixes.SpaceTypeAttr)
+	if err != nil {
 		appctx.GetLogger(ctx).Debug().Err(err).Msg("space does not have a type attribute")
 	}
 
@@ -866,41 +866,32 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 	}
 
 	// quota
-	quotaAttr, ok := spaceAttributes[prefixes.QuotaAttr]
-	if ok {
+	if q, err := spaceAttributes.Int64(prefixes.QuotaAttr); err == nil && q >= 0 {
 		// make sure we have a proper signed int
 		// we use the same magic numbers to indicate:
 		// -1 = uncalculated
 		// -2 = unknown
 		// -3 = unlimited
-		if quota, err := strconv.ParseUint(quotaAttr, 10, 64); err == nil {
-			space.Quota = &provider.Quota{
-				QuotaMaxBytes: quota,
-				QuotaMaxFiles: math.MaxUint64, // TODO MaxUInt64? = unlimited? why even max files? 0 = unlimited?
-			}
-		} else {
-			return nil, err
+		space.Quota = &provider.Quota{
+			QuotaMaxBytes: uint64(q),
+			QuotaMaxFiles: math.MaxUint64, // TODO MaxUInt64? = unlimited? why even max files? 0 = unlimited?
 		}
 	}
-	spaceImage, ok := spaceAttributes[prefixes.SpaceImageAttr]
-	if ok {
+	if si := spaceAttributes.String(prefixes.SpaceImageAttr); si != "" {
 		space.Opaque = utils.AppendPlainToOpaque(space.Opaque, "image", storagespace.FormatResourceID(
-			provider.ResourceId{StorageId: space.Root.StorageId, SpaceId: space.Root.SpaceId, OpaqueId: spaceImage},
+			provider.ResourceId{StorageId: space.Root.StorageId, SpaceId: space.Root.SpaceId, OpaqueId: si},
 		))
 	}
-	spaceDescription, ok := spaceAttributes[prefixes.SpaceDescriptionAttr]
-	if ok {
-		space.Opaque = utils.AppendPlainToOpaque(space.Opaque, "description", spaceDescription)
+	if sd := spaceAttributes.String(prefixes.SpaceDescriptionAttr); sd != "" {
+		space.Opaque = utils.AppendPlainToOpaque(space.Opaque, "description", sd)
 	}
-	spaceReadme, ok := spaceAttributes[prefixes.SpaceReadmeAttr]
-	if ok {
+	if sr := spaceAttributes.String(prefixes.SpaceReadmeAttr); sr != "" {
 		space.Opaque = utils.AppendPlainToOpaque(space.Opaque, "readme", storagespace.FormatResourceID(
-			provider.ResourceId{StorageId: space.Root.StorageId, SpaceId: space.Root.SpaceId, OpaqueId: spaceReadme},
+			provider.ResourceId{StorageId: space.Root.StorageId, SpaceId: space.Root.SpaceId, OpaqueId: sr},
 		))
 	}
-	spaceAlias, ok := spaceAttributes[prefixes.SpaceAliasAttr]
-	if ok {
-		space.Opaque = utils.AppendPlainToOpaque(space.Opaque, "spaceAlias", spaceAlias)
+	if sa := spaceAttributes.String(prefixes.SpaceAliasAttr); sa != "" {
+		space.Opaque = utils.AppendPlainToOpaque(space.Opaque, "spaceAlias", sa)
 	}
 
 	// add rootinfo
@@ -909,7 +900,7 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 	return space, nil
 }
 
-func mapHasKey(checkMap map[string]string, keys ...string) bool {
+func mapHasKey(checkMap map[string][]byte, keys ...string) bool {
 	for _, key := range keys {
 		if _, hasKey := checkMap[key]; hasKey {
 			return true

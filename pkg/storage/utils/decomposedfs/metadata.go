@@ -111,7 +111,7 @@ func (fs *Decomposedfs) SetArbitraryMetadata(ctx context.Context, ref *provider.
 	}
 	for k, v := range md.Metadata {
 		attrName := prefixes.MetadataPrefix + k
-		if err = n.SetXattr(attrName, v); err != nil {
+		if err = n.SetXattrString(attrName, v); err != nil {
 			errs = append(errs, errors.Wrap(err, "Decomposedfs: could not set metadata attribute "+attrName+" to "+k))
 		}
 	}

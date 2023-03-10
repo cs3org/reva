@@ -64,7 +64,7 @@ var _ = Describe("Backend", func() {
 
 		Describe("Set", func() {
 			It("sets an attribute", func() {
-				err := backend.Set(file, "foo", "bar")
+				err := backend.Set(file, "foo", []byte("bar"))
 				Expect(err).ToNot(HaveOccurred())
 
 				content, err := os.ReadFile(metafile)
@@ -73,9 +73,9 @@ var _ = Describe("Backend", func() {
 			})
 
 			It("updates an attribute", func() {
-				err := backend.Set(file, "foo", "bar")
+				err := backend.Set(file, "foo", []byte("bar"))
 				Expect(err).ToNot(HaveOccurred())
-				err = backend.Set(file, "foo", "baz")
+				err = backend.Set(file, "foo", []byte("baz"))
 				Expect(err).ToNot(HaveOccurred())
 
 				content, err := os.ReadFile(metafile)
@@ -84,14 +84,14 @@ var _ = Describe("Backend", func() {
 			})
 
 			It("encodes where needed", func() {
-				err := backend.Set(file, "user.ocis.cs.foo", "bar")
+				err := backend.Set(file, "user.ocis.cs.foo", []byte("bar"))
 				Expect(err).ToNot(HaveOccurred())
 
 				content, err := os.ReadFile(metafile)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(string(content)).To(Equal("user.ocis.cs.foo = bar\n"))
 
-				err = backend.Set(file, "user.ocis.cs.foo", string([]byte{200, 201, 202}))
+				err = backend.Set(file, "user.ocis.cs.foo", []byte{200, 201, 202})
 				Expect(err).ToNot(HaveOccurred())
 
 				content, err = os.ReadFile(metafile)
@@ -100,14 +100,14 @@ var _ = Describe("Backend", func() {
 			})
 
 			It("doesn't encode already encoded attributes", func() {
-				err := backend.Set(file, "user.ocis.cs.foo", string([]byte{200, 201, 202}))
+				err := backend.Set(file, "user.ocis.cs.foo", []byte{200, 201, 202})
 				Expect(err).ToNot(HaveOccurred())
 
 				content, err := os.ReadFile(metafile)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(string(content)).To(Equal("`base64:user.ocis.cs.foo` = yMnK\n"))
 
-				err = backend.Set(file, "user.something", "doesn'tmatter")
+				err = backend.Set(file, "user.something", []byte("doesn'tmatter"))
 				Expect(err).ToNot(HaveOccurred())
 
 				content, err = os.ReadFile(metafile)
@@ -119,7 +119,7 @@ var _ = Describe("Backend", func() {
 				_, err := backend.Get(file, "foo")
 				Expect(err).To(HaveOccurred())
 
-				err = backend.Set(file, "foo", "")
+				err = backend.Set(file, "foo", []byte{})
 				Expect(err).ToNot(HaveOccurred())
 
 				v, err := backend.Get(file, "foo")
@@ -130,7 +130,7 @@ var _ = Describe("Backend", func() {
 
 		Describe("SetMultiple", func() {
 			It("sets attributes", func() {
-				err := backend.SetMultiple(file, map[string]string{"foo": "bar", "baz": "qux"}, true)
+				err := backend.SetMultiple(file, map[string][]byte{"foo": []byte("bar"), "baz": []byte("qux")}, true)
 				Expect(err).ToNot(HaveOccurred())
 
 				content, err := os.ReadFile(metafile)
@@ -140,9 +140,9 @@ var _ = Describe("Backend", func() {
 			})
 
 			It("updates an attribute", func() {
-				err := backend.Set(file, "foo", "bar")
+				err := backend.Set(file, "foo", []byte("bar"))
 				Expect(err).ToNot(HaveOccurred())
-				err = backend.SetMultiple(file, map[string]string{"foo": "bar", "baz": "qux"}, true)
+				err = backend.SetMultiple(file, map[string][]byte{"foo": []byte("bar"), "baz": []byte("qux")}, true)
 				Expect(err).ToNot(HaveOccurred())
 
 				content, err := os.ReadFile(metafile)
@@ -152,11 +152,11 @@ var _ = Describe("Backend", func() {
 			})
 
 			It("encodes where needed", func() {
-				err := backend.SetMultiple(file, map[string]string{
-					"user.ocis.something.foo": "bar",
-					"user.ocis.cs.foo":        string([]byte{200, 201, 202}),
-					"user.ocis.md.foo":        string([]byte{200, 201, 202}),
-					"user.ocis.grant.foo":     "bar",
+				err := backend.SetMultiple(file, map[string][]byte{
+					"user.ocis.something.foo": []byte("bar"),
+					"user.ocis.cs.foo":        []byte{200, 201, 202},
+					"user.ocis.md.foo":        []byte{200, 201, 202},
+					"user.ocis.grant.foo":     []byte("bar"),
 				}, true)
 				Expect(err).ToNot(HaveOccurred())
 
@@ -180,7 +180,7 @@ var _ = Describe("Backend", func() {
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(v)).To(Equal(2))
 				Expect(v["foo"]).To(Equal("123"))
-				Expect(v["bar"]).To(Equal("baz"))
+				Expect(v["bar"]).To(Equal([]byte("baz")))
 			})
 
 			It("returns an empty map", func() {
@@ -197,7 +197,7 @@ var _ = Describe("Backend", func() {
 
 				v, err := backend.List(file)
 				Expect(err).ToNot(HaveOccurred())
-				Expect(v).To(ConsistOf("foo", "bar"))
+				Expect(v).To(ConsistOf("foo", []byte("bar")))
 			})
 
 			It("returns an empty list", func() {
@@ -214,7 +214,7 @@ var _ = Describe("Backend", func() {
 
 				v, err := backend.Get(file, "foo")
 				Expect(err).ToNot(HaveOccurred())
-				Expect(v).To(Equal("bar"))
+				Expect(v).To(Equal([]byte("bar")))
 			})
 
 			It("returns an error on unknown attributes", func() {
@@ -246,7 +246,7 @@ var _ = Describe("Backend", func() {
 
 				v, err := backend.Get(file, "foo")
 				Expect(err).ToNot(HaveOccurred())
-				Expect(v).To(Equal("bar"))
+				Expect(v).To(Equal([]byte("bar")))
 
 				err = backend.Remove(file, "foo")
 				Expect(err).ToNot(HaveOccurred())

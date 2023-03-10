@@ -61,23 +61,23 @@ func NewIniBackend(rootPath string, o options.CacheOptions) IniBackend {
 }
 
 // All reads all extended attributes for a node
-func (b IniBackend) All(path string) (map[string]string, error) {
+func (b IniBackend) All(path string) (map[string][]byte, error) {
 	path = b.MetadataPath(path)
 
 	return b.loadMeta(path)
 }
 
 // Get an extended attribute value for the given key
-func (b IniBackend) Get(path, key string) (string, error) {
+func (b IniBackend) Get(path, key string) ([]byte, error) {
 	path = b.MetadataPath(path)
 
 	attribs, err := b.loadMeta(path)
 	if err != nil {
-		return "", err
+		return []byte{}, err
 	}
 	val, ok := attribs[key]
 	if !ok {
-		return "", &xattr.Error{Op: "ini.get", Path: path, Name: key, Err: xattr.ENOATTR}
+		return []byte{}, &xattr.Error{Op: "ini.get", Path: path, Name: key, Err: xattr.ENOATTR}
 	}
 	return val, nil
 }
@@ -94,7 +94,7 @@ func (b IniBackend) GetInt64(path, key string) (int64, error) {
 	if !ok {
 		return 0, &xattr.Error{Op: "ini.get", Path: path, Name: key, Err: xattr.ENOATTR}
 	}
-	i, err := strconv.ParseInt(val, 10, 64)
+	i, err := strconv.ParseInt(string(val), 10, 64)
 	if err != nil {
 		return 0, err
 	}
@@ -118,12 +118,12 @@ func (b IniBackend) List(path string) ([]string, error) {
 }
 
 // Set sets one attribute for the given path
-func (b IniBackend) Set(path, key, val string) error {
-	return b.SetMultiple(path, map[string]string{key: val}, true)
+func (b IniBackend) Set(path, key string, val []byte) error {
+	return b.SetMultiple(path, map[string][]byte{key: val}, true)
 }
 
 // SetMultiple sets a set of attribute for the given path
-func (b IniBackend) SetMultiple(path string, attribs map[string]string, acquireLock bool) error {
+func (b IniBackend) SetMultiple(path string, attribs map[string][]byte, acquireLock bool) error {
 	return b.saveIni(path, attribs, nil, acquireLock)
 }
 
@@ -132,7 +132,7 @@ func (b IniBackend) Remove(path, key string) error {
 	return b.saveIni(path, nil, []string{key}, true)
 }
 
-func (b IniBackend) saveIni(path string, setAttribs map[string]string, deleteAttribs []string, acquireLock bool) error {
+func (b IniBackend) saveIni(path string, setAttribs map[string][]byte, deleteAttribs []string, acquireLock bool) error {
 	var (
 		f   readWriteCloseSeekTruncater
 		err error
@@ -199,8 +199,8 @@ func (b IniBackend) saveIni(path string, setAttribs map[string]string, deleteAtt
 	return b.metaCache.PushToCache(b.cacheKey(path), iniAttribs)
 }
 
-func (b IniBackend) loadMeta(path string) (map[string]string, error) {
-	var attribs map[string]string
+func (b IniBackend) loadMeta(path string) (map[string][]byte, error) {
+	var attribs map[string][]byte
 	err := b.metaCache.PullFromCache(b.cacheKey(path), &attribs)
 	if err == nil {
 		return attribs, err
@@ -295,20 +295,20 @@ func needsEncoding(s []byte) bool {
 	return false
 }
 
-func encodeAttribs(attribs map[string]string) map[string]string {
+func encodeAttribs(attribs map[string][]byte) map[string]string {
 	encAttribs := map[string]string{}
 	for key, val := range attribs {
-		if needsEncoding([]byte(val)) {
-			encAttribs["base64:"+key] = base64.StdEncoding.EncodeToString([]byte(val))
+		if needsEncoding(val) {
+			encAttribs["base64:"+key] = base64.StdEncoding.EncodeToString(val)
 		} else {
-			encAttribs[key] = val
+			encAttribs[key] = string(val)
 		}
 	}
 	return encAttribs
 }
 
-func decodeAttribs(iniFile *ini.File) (map[string]string, error) {
-	decodedAttributes := map[string]string{}
+func decodeAttribs(iniFile *ini.File) (map[string][]byte, error) {
+	decodedAttributes := map[string][]byte{}
 	for key, val := range iniFile.Section("").KeysHash() {
 		if strings.HasPrefix(key, "base64:") {
 			key = strings.TrimPrefix(key, "base64:")
@@ -316,9 +316,10 @@ func decodeAttribs(iniFile *ini.File) (map[string]string, error) {
 			if err != nil {
 				return nil, err
 			}
-			val = string(valBytes)
+			decodedAttributes[key] = valBytes
+		} else {
+			decodedAttributes[key] = []byte(val)
 		}
-		decodedAttributes[key] = val
 	}
 	return decodedAttributes, nil
 }

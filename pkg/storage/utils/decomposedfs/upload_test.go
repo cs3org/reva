@@ -173,7 +173,7 @@ var _ = Describe("File uploads", func() {
 			// the space name attribute is the stop condition in the lookup
 			h, err := lu.NodeFromResource(ctx, rootRef)
 			Expect(err).ToNot(HaveOccurred())
-			err = h.SetXattr(prefixes.SpaceNameAttr, "username")
+			err = h.SetXattrString(prefixes.SpaceNameAttr, "username")
 			Expect(err).ToNot(HaveOccurred())
 			permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(provider.ResourcePermissions{
 				Stat: true,

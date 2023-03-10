@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -59,13 +58,9 @@ func (lu *Lookup) MetadataBackend() metadata.Backend {
 
 // ReadBlobSizeAttr reads the blobsize from the xattrs
 func (lu *Lookup) ReadBlobSizeAttr(path string) (int64, error) {
-	attr, err := lu.metadataBackend.Get(path, prefixes.BlobsizeAttr)
+	blobSize, err := lu.metadataBackend.GetInt64(path, prefixes.BlobsizeAttr)
 	if err != nil {
 		return 0, errors.Wrapf(err, "error reading blobsize xattr")
-	}
-	blobSize, err := strconv.ParseInt(attr, 10, 64)
-	if err != nil {
-		return 0, errors.Wrapf(err, "invalid blobsize xattr format")
 	}
 	return blobSize, nil
 }
@@ -76,22 +71,18 @@ func (lu *Lookup) ReadBlobIDAttr(path string) (string, error) {
 	if err != nil {
 		return "", errors.Wrapf(err, "error reading blobid xattr")
 	}
-	return attr, nil
+	return string(attr), nil
 }
 
 // TypeFromPath returns the type of the node at the given path
 func (lu *Lookup) TypeFromPath(path string) provider.ResourceType {
 	// Try to read from xattrs
-	typeAttr, err := lu.metadataBackend.Get(path, prefixes.TypeAttr)
-	t := provider.ResourceType_RESOURCE_TYPE_INVALID
+	typeAttr, err := lu.metadataBackend.GetInt64(path, prefixes.TypeAttr)
 	if err == nil {
-		typeInt, err := strconv.ParseInt(typeAttr, 10, 32)
-		if err != nil {
-			return t
-		}
-		return provider.ResourceType(typeInt)
+		return provider.ResourceType(int32(typeAttr))
 	}
 
+	t := provider.ResourceType_RESOURCE_TYPE_INVALID
 	// Fall back to checking on disk
 	fi, err := os.Lstat(path)
 	if err != nil {
@@ -317,7 +308,7 @@ func (lu *Lookup) CopyMetadataWithSourceLock(source, target string, filter func(
 		return err
 	}
 
-	newAttrs := make(map[string]string, 0)
+	newAttrs := make(map[string][]byte, 0)
 	for attrName, val := range attrs {
 		if filter == nil || filter(attrName) {
 			newAttrs[attrName] = val

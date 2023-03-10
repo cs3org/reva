@@ -237,7 +237,7 @@ func Get(ctx context.Context, id string, lu *lookup.Lookup, tp Tree, fsRoot stri
 }
 
 // CreateNodeForUpload will create the target node for the Upload
-func CreateNodeForUpload(upload *Upload, initAttrs map[string]string) (*node.Node, error) {
+func CreateNodeForUpload(upload *Upload, initAttrs node.Attributes) (*node.Node, error) {
 	fi, err := os.Stat(upload.binPath)
 	if err != nil {
 		return nil, err
@@ -283,12 +283,12 @@ func CreateNodeForUpload(upload *Upload, initAttrs map[string]string) (*node.Nod
 	}
 
 	// overwrite technical information
-	initAttrs[prefixes.TypeAttr] = strconv.FormatInt(int64(n.Type()), 10)
-	initAttrs[prefixes.ParentidAttr] = n.ParentID
-	initAttrs[prefixes.NameAttr] = n.Name
-	initAttrs[prefixes.BlobIDAttr] = n.BlobID
-	initAttrs[prefixes.BlobsizeAttr] = strconv.FormatInt(n.Blobsize, 10)
-	initAttrs[prefixes.StatusPrefix] = node.ProcessingStatus + upload.Info.ID
+	initAttrs.SetInt64(prefixes.TypeAttr, int64(n.Type()))
+	initAttrs.SetString(prefixes.ParentidAttr, n.ParentID)
+	initAttrs.SetString(prefixes.NameAttr, n.Name)
+	initAttrs.SetString(prefixes.BlobIDAttr, n.BlobID)
+	initAttrs.SetInt64(prefixes.BlobsizeAttr, n.Blobsize)
+	initAttrs.SetString(prefixes.StatusPrefix, node.ProcessingStatus+upload.Info.ID)
 
 	// update node metadata with new blobid etc
 	err = n.SetXattrs(initAttrs, false)

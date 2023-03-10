@@ -24,12 +24,12 @@ var errUnconfiguredError = errors.New("no metadata backend configured. Bailing o
 
 // Backend defines the interface for file attribute backends
 type Backend interface {
-	All(path string) (map[string]string, error)
-	Get(path, key string) (string, error)
+	All(path string) (map[string][]byte, error)
+	Get(path, key string) ([]byte, error)
 	GetInt64(path, key string) (int64, error)
 	List(path string) (attribs []string, err error)
-	Set(path, key, val string) error
-	SetMultiple(path string, attribs map[string]string, acquireLock bool) error
+	Set(path, key string, val []byte) error
+	SetMultiple(path string, attribs map[string][]byte, acquireLock bool) error
 	Remove(path, key string) error
 
 	Purge(path string) error
@@ -42,10 +42,10 @@ type Backend interface {
 type NullBackend struct{}
 
 // All reads all extended attributes for a node
-func (NullBackend) All(path string) (map[string]string, error) { return nil, errUnconfiguredError }
+func (NullBackend) All(path string) (map[string][]byte, error) { return nil, errUnconfiguredError }
 
 // Get an extended attribute value for the given key
-func (NullBackend) Get(path, key string) (string, error) { return "", errUnconfiguredError }
+func (NullBackend) Get(path, key string) ([]byte, error) { return []byte{}, errUnconfiguredError }
 
 // GetInt64 reads a string as int64 from the xattrs
 func (NullBackend) GetInt64(path, key string) (int64, error) { return 0, errUnconfiguredError }
@@ -55,10 +55,10 @@ func (NullBackend) GetInt64(path, key string) (int64, error) { return 0, errUnco
 func (NullBackend) List(path string) ([]string, error) { return nil, errUnconfiguredError }
 
 // Set sets one attribute for the given path
-func (NullBackend) Set(path string, key string, val string) error { return errUnconfiguredError }
+func (NullBackend) Set(path string, key string, val []byte) error { return errUnconfiguredError }
 
 // SetMultiple sets a set of attribute for the given path
-func (NullBackend) SetMultiple(path string, attribs map[string]string, acquireLock bool) error {
+func (NullBackend) SetMultiple(path string, attribs map[string][]byte, acquireLock bool) error {
 	return errUnconfiguredError
 }
 
