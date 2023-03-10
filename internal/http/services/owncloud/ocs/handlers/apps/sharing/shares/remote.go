@@ -244,8 +244,10 @@ func (h *Handler) mustGetRemoteUser(ctx context.Context, gw gatewayv1beta1.Gatew
 	}
 }
 
-func (h *Handler) listOutcomingFederatedShares(ctx context.Context, gw gatewayv1beta1.GatewayAPIClient) ([]*conversions.ShareData, error) {
-	listRes, err := gw.ListOCMShares(ctx, &ocm.ListOCMSharesRequest{})
+func (h *Handler) listOutcomingFederatedShares(ctx context.Context, gw gatewayv1beta1.GatewayAPIClient, filters []*ocm.ListOCMSharesRequest_Filter) ([]*conversions.ShareData, error) {
+	listRes, err := gw.ListOCMShares(ctx, &ocm.ListOCMSharesRequest{
+		Filters: filters,
+	})
 	if err != nil {
 		return nil, err
 	}

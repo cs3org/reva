@@ -25,6 +25,7 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
+	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
@@ -226,7 +227,7 @@ func (h *Handler) listUserShares(r *http.Request, filters []*collaboration.Filte
 
 		if h.listOCMShares {
 			// include the ocm shares
-			ocmShares, err := h.listOutcomingFederatedShares(ctx, client)
+			ocmShares, err := h.listOutcomingFederatedShares(ctx, client, convertToOCMFilters(filters))
 			if err != nil {
 				return nil, nil, err
 			}
@@ -235,4 +236,34 @@ func (h *Handler) listUserShares(r *http.Request, filters []*collaboration.Filte
 	}
 
 	return ocsDataPayload, nil, nil
+}
+
+func convertToOCMFilters(filters []*collaboration.Filter) []*ocm.ListOCMSharesRequest_Filter {
+	ocmfilters := []*ocm.ListOCMSharesRequest_Filter{}
+	for _, f := range filters {
+		switch v := f.Term.(type) {
+		case *collaboration.Filter_ResourceId:
+			ocmfilters = append(ocmfilters, &ocm.ListOCMSharesRequest_Filter{
+				Type: ocm.ListOCMSharesRequest_Filter_TYPE_RESOURCE_ID,
+				Term: &ocm.ListOCMSharesRequest_Filter_ResourceId{
+					ResourceId: v.ResourceId,
+				},
+			})
+		case *collaboration.Filter_Creator:
+			ocmfilters = append(ocmfilters, &ocm.ListOCMSharesRequest_Filter{
+				Type: ocm.ListOCMSharesRequest_Filter_TYPE_CREATOR,
+				Term: &ocm.ListOCMSharesRequest_Filter_Creator{
+					Creator: v.Creator,
+				},
+			})
+		case *collaboration.Filter_Owner:
+			ocmfilters = append(ocmfilters, &ocm.ListOCMSharesRequest_Filter{
+				Type: ocm.ListOCMSharesRequest_Filter_TYPE_OWNER,
+				Term: &ocm.ListOCMSharesRequest_Filter_Owner{
+					Owner: v.Owner,
+				},
+			})
+		}
+	}
+	return ocmfilters
 }
