@@ -139,7 +139,7 @@ func convertToInviteToken(tkn dbToken) *invitepb.InviteToken {
 }
 
 func (m *mgr) ListTokens(ctx context.Context, initiator *userpb.UserId) ([]*invitepb.InviteToken, error) {
-	query := "SELECT token, initiator, expiration, description FROM ocm_tokens WHERE initiator=?"
+	query := "SELECT token, initiator, expiration, description FROM ocm_tokens WHERE initiator=? AND expiration > NOW()"
 
 	tokens := []*invitepb.InviteToken{}
 	rows, err := m.db.QueryContext(ctx, query, conversions.FormatUserID(initiator))

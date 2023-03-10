@@ -25,6 +25,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"time"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
@@ -173,11 +174,15 @@ func (m *manager) ListTokens(ctx context.Context, initiator *userpb.UserId) ([]*
 
 	tokens := []*invitepb.InviteToken{}
 	for _, token := range m.model.Invites {
-		if utils.UserEqual(token.UserId, initiator) {
+		if utils.UserEqual(token.UserId, initiator) && !tokenIsExpired(token) {
 			tokens = append(tokens, token)
 		}
 	}
 	return tokens, nil
+}
+
+func tokenIsExpired(token *invitepb.InviteToken) bool {
+	return token.Expiration != nil && token.Expiration.Seconds > uint64(time.Now().Unix())
 }
 
 func (m *manager) AddRemoteUser(ctx context.Context, initiator *userpb.UserId, remoteUser *userpb.User) error {
