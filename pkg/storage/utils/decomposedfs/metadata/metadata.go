@@ -18,7 +18,10 @@
 
 package metadata
 
-import "errors"
+import (
+	"errors"
+	"io"
+)
 
 var errUnconfiguredError = errors.New("no metadata backend configured. Bailing out")
 
@@ -36,6 +39,8 @@ type Backend interface {
 	Rename(oldPath, newPath string) error
 	IsMetaFile(path string) bool
 	MetadataPath(path string) string
+
+	AllWithLockedSource(path string, source io.Reader) (map[string][]byte, error)
 }
 
 // NullBackend is the default stub backend, used to enforce the configuration of a proper backend
@@ -76,3 +81,9 @@ func (NullBackend) Rename(oldPath, newPath string) error { return errUnconfigure
 
 // MetadataPath returns the path of the file holding the metadata for the given path
 func (NullBackend) MetadataPath(path string) string { return "" }
+
+// AllWithLockedSource reads all extended attributes from the given reader
+// The path argument is used for storing the data in the cache
+func (NullBackend) AllWithLockedSource(path string, source io.Reader) (map[string][]byte, error) {
+	return nil, errUnconfiguredError
+}

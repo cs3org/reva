@@ -57,14 +57,14 @@ func NewMessagePackBackend(rootPath string, o options.CacheOptions) MessagePackB
 func (b MessagePackBackend) All(path string) (map[string][]byte, error) {
 	path = b.MetadataPath(path)
 
-	return b.loadAttributes(path)
+	return b.loadAttributes(path, nil)
 }
 
 // Get an extended attribute value for the given key
 func (b MessagePackBackend) Get(path, key string) ([]byte, error) {
 	path = b.MetadataPath(path)
 
-	attribs, err := b.loadAttributes(path)
+	attribs, err := b.loadAttributes(path, nil)
 	if err != nil {
 		return []byte{}, err
 	}
@@ -79,7 +79,7 @@ func (b MessagePackBackend) Get(path, key string) ([]byte, error) {
 func (b MessagePackBackend) GetInt64(path, key string) (int64, error) {
 	path = b.MetadataPath(path)
 
-	attribs, err := b.loadAttributes(path)
+	attribs, err := b.loadAttributes(path, nil)
 	if err != nil {
 		return 0, err
 	}
@@ -99,7 +99,7 @@ func (b MessagePackBackend) GetInt64(path, key string) (int64, error) {
 func (b MessagePackBackend) List(path string) ([]string, error) {
 	path = b.MetadataPath(path)
 
-	attribs, err := b.loadAttributes(path)
+	attribs, err := b.loadAttributes(path, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -123,6 +123,13 @@ func (b MessagePackBackend) SetMultiple(path string, attribs map[string][]byte, 
 // Remove an extended attribute key
 func (b MessagePackBackend) Remove(path, key string) error {
 	return b.saveAttributes(path, nil, []string{key}, true)
+}
+
+// AllWithLockedSource reads all extended attributes from the given reader (if possible).
+// The path argument is used for storing the data in the cache
+func (b MessagePackBackend) AllWithLockedSource(path string, source io.Reader) (map[string][]byte, error) {
+	path = b.MetadataPath(path)
+	return b.loadAttributes(path, source)
 }
 
 func (b MessagePackBackend) saveAttributes(path string, setAttribs map[string][]byte, deleteAttribs []string, acquireLock bool) error {
@@ -188,31 +195,32 @@ func (b MessagePackBackend) saveAttributes(path string, setAttribs map[string][]
 	return b.metaCache.PushToCache(b.cacheKey(path), attribs)
 }
 
-func (b MessagePackBackend) loadAttributes(path string) (map[string][]byte, error) {
+func (b MessagePackBackend) loadAttributes(path string, source io.Reader) (map[string][]byte, error) {
 	attribs := map[string][]byte{}
 	err := b.metaCache.PullFromCache(b.cacheKey(path), &attribs)
 	if err == nil {
 		return attribs, err
 	}
 
-	lockedFile, err := lockedfile.Open(path)
-
-	// // No cached entry found. Read from storage and store in cache
-	if err != nil {
-		if os.IsNotExist(err) {
-			// some of the caller rely on ENOTEXISTS to be returned when the
-			// actual file (not the metafile) does not exist in order to
-			// determine whether a node exists or not -> stat the actual node
-			_, err := os.Stat(strings.TrimSuffix(path, ".mpk"))
-			if err != nil {
-				return nil, err
+	if source == nil {
+		source, err = lockedfile.Open(path)
+		// // No cached entry found. Read from storage and store in cache
+		if err != nil {
+			if os.IsNotExist(err) {
+				// some of the caller rely on ENOTEXISTS to be returned when the
+				// actual file (not the metafile) does not exist in order to
+				// determine whether a node exists or not -> stat the actual node
+				_, err := os.Stat(strings.TrimSuffix(path, ".mpk"))
+				if err != nil {
+					return nil, err
+				}
+				return attribs, nil // no attributes set yet
 			}
-			return attribs, nil // no attributes set yet
 		}
+		defer source.(*lockedfile.File).Close()
 	}
-	defer lockedFile.Close()
 
-	msgBytes, err := io.ReadAll(lockedFile)
+	msgBytes, err := io.ReadAll(source)
 	if err != nil {
 		return nil, err
 	}

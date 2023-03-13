@@ -295,15 +295,15 @@ func (lu *Lookup) CopyMetadata(src, target string, filter func(attributeName str
 // The optional filter function can be used to filter by attribute name, e.g. by checking a prefix
 // For the source file, a matching lockedfile is required.
 // NOTE: target resource will be write locked!
-func (lu *Lookup) CopyMetadataWithSourceLock(source, target string, filter func(attributeName string) bool, readLock *lockedfile.File) (err error) {
+func (lu *Lookup) CopyMetadataWithSourceLock(sourcePath, targetPath string, filter func(attributeName string) bool, lockedSource *lockedfile.File) (err error) {
 	switch {
-	case readLock == nil:
+	case lockedSource == nil:
 		return errors.New("no lock provided")
-	case readLock.File.Name() != lu.MetadataBackend().MetadataPath(source):
+	case lockedSource.File.Name() != lu.MetadataBackend().MetadataPath(sourcePath):
 		return errors.New("lockpath does not match filepath")
 	}
 
-	attrs, err := lu.metadataBackend.All(source)
+	attrs, err := lu.metadataBackend.AllWithLockedSource(sourcePath, lockedSource)
 	if err != nil {
 		return err
 	}
@@ -315,5 +315,5 @@ func (lu *Lookup) CopyMetadataWithSourceLock(source, target string, filter func(
 		}
 	}
 
-	return lu.MetadataBackend().SetMultiple(target, newAttrs, true)
+	return lu.MetadataBackend().SetMultiple(targetPath, newAttrs, true)
 }

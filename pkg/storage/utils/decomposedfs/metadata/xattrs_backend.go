@@ -19,6 +19,7 @@
 package metadata
 
 import (
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -165,4 +166,10 @@ func (XattrsBackend) MetadataPath(path string) string { return path }
 func cleanupLockfile(f *lockedfile.File) {
 	_ = f.Close()
 	_ = os.Remove(f.Name())
+}
+
+// AllFromSource reads all extended attributes from the given reader.
+// The path argument is used for storing the data in the cache
+func (b XattrsBackend) AllWithLockedSource(path string, _ io.Reader) (map[string][]byte, error) {
+	return b.All(path)
 }
