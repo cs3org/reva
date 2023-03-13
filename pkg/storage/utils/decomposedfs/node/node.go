@@ -314,8 +314,6 @@ func ReadNode(ctx context.Context, lu PathLookup, spaceID, nodeID string, canLis
 	if n.ParentID == "" {
 		d, _ := os.ReadFile(lu.MetadataBackend().MetadataPath(n.InternalPath()))
 		switch lu.MetadataBackend().(type) {
-		case metadata.IniBackend:
-			appctx.GetLogger(ctx).Error().Str("nodeid", n.ID).Interface("attrs", attrs).Str("ini", string(d)).Msg("missing parent id")
 		case metadata.MessagePackBackend:
 			appctx.GetLogger(ctx).Error().Str("nodeid", n.ID).Interface("attrs", attrs).Bytes("messagepack", d).Msg("missing parent id")
 		}

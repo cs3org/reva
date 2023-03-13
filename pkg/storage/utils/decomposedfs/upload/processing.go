@@ -334,7 +334,7 @@ func initNewNode(upload *Upload, n *node.Node, fsize uint64) (*lockedfile.File, 
 	}
 
 	switch upload.lu.MetadataBackend().(type) {
-	case metadata.IniBackend, metadata.MessagePackBackend:
+	case metadata.MessagePackBackend:
 		// for the ini and metadata backend we also need to touch the actual node file here.
 		// it stores the mtime of the resource, which must not change when we update the ini file
 		h, err := os.OpenFile(n.InternalPath(), os.O_CREATE, 0600)

@@ -781,7 +781,7 @@ func (t *Tree) Propagate(ctx context.Context, n *node.Node, sizeDiff int64) (err
 			var f *lockedfile.File
 			// lock node before reading treesize or tree time
 			switch t.lookup.MetadataBackend().(type) {
-			case metadata.IniBackend, metadata.MessagePackBackend:
+			case metadata.MessagePackBackend:
 				f, err = lockedfile.OpenFile(t.lookup.MetadataBackend().MetadataPath(n.InternalPath()), os.O_RDWR|os.O_CREATE, 0600)
 			case metadata.XattrsBackend:
 				// we have to use dedicated lockfiles to lock directories
