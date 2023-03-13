@@ -38,15 +38,15 @@ import (
 	"github.com/cs3org/reva/v2/pkg/logger"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/chunking"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/lookup"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/options"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/filelocks"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/utils"
-	"github.com/gofrs/flock"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
+	"github.com/rogpeppe/go-internal/lockedfile"
 	tusd "github.com/tus/tusd/pkg/handler"
 )
 
@@ -237,7 +237,7 @@ func Get(ctx context.Context, id string, lu *lookup.Lookup, tp Tree, fsRoot stri
 }
 
 // CreateNodeForUpload will create the target node for the Upload
-func CreateNodeForUpload(upload *Upload, initAttrs map[string]string) (*node.Node, error) {
+func CreateNodeForUpload(upload *Upload, initAttrs node.Attributes) (*node.Node, error) {
 	fi, err := os.Stat(upload.binPath)
 	if err != nil {
 		return nil, err
@@ -266,26 +266,29 @@ func CreateNodeForUpload(upload *Upload, initAttrs map[string]string) (*node.Nod
 		return nil, err
 	}
 
-	var lock *flock.Flock
+	var f *lockedfile.File
 	switch n.ID {
 	case "":
-		lock, err = initNewNode(upload, n, uint64(fsize))
+		f, err = initNewNode(upload, n, uint64(fsize))
 	default:
-		lock, err = updateExistingNode(upload, n, spaceID, uint64(fsize))
+		f, err = updateExistingNode(upload, n, spaceID, uint64(fsize))
 	}
-
-	defer filelocks.ReleaseLock(lock) //nolint:errcheck
+	defer func() {
+		if err := f.Close(); err != nil {
+			appctx.GetLogger(upload.Ctx).Error().Err(err).Str("nodeid", n.ID).Str("parentid", n.ParentID).Msg("could not close lock")
+		}
+	}()
 	if err != nil {
 		return nil, err
 	}
 
 	// overwrite technical information
-	initAttrs[prefixes.TypeAttr] = strconv.FormatInt(int64(n.Type()), 10)
-	initAttrs[prefixes.ParentidAttr] = n.ParentID
-	initAttrs[prefixes.NameAttr] = n.Name
-	initAttrs[prefixes.BlobIDAttr] = n.BlobID
-	initAttrs[prefixes.BlobsizeAttr] = strconv.FormatInt(n.Blobsize, 10)
-	initAttrs[prefixes.StatusPrefix] = node.ProcessingStatus + upload.Info.ID
+	initAttrs.SetInt64(prefixes.TypeAttr, int64(provider.ResourceType_RESOURCE_TYPE_FILE))
+	initAttrs.SetString(prefixes.ParentidAttr, n.ParentID)
+	initAttrs.SetString(prefixes.NameAttr, n.Name)
+	initAttrs.SetString(prefixes.BlobIDAttr, n.BlobID)
+	initAttrs.SetInt64(prefixes.BlobsizeAttr, n.Blobsize)
+	initAttrs.SetString(prefixes.StatusPrefix, node.ProcessingStatus+upload.Info.ID)
 
 	// update node metadata with new blobid etc
 	err = n.SetXattrs(initAttrs, false)
@@ -301,7 +304,7 @@ func CreateNodeForUpload(upload *Upload, initAttrs map[string]string) (*node.Nod
 	}
 
 	// add etag to metadata
-	tmtime, err := n.GetTMTime()
+	tmtime, err := n.GetMTime()
 	if err != nil {
 		return nil, err
 	}
@@ -316,7 +319,7 @@ func CreateNodeForUpload(upload *Upload, initAttrs map[string]string) (*node.Nod
 	return n, nil
 }
 
-func initNewNode(upload *Upload, n *node.Node, fsize uint64) (*flock.Flock, error) {
+func initNewNode(upload *Upload, n *node.Node, fsize uint64) (*lockedfile.File, error) {
 	n.ID = uuid.New().String()
 
 	// create folder structure (if needed)
@@ -324,18 +327,27 @@ func initNewNode(upload *Upload, n *node.Node, fsize uint64) (*flock.Flock, erro
 		return nil, err
 	}
 
-	if _, err := os.Create(n.InternalPath()); err != nil {
+	// create and write lock new node metadata
+	f, err := lockedfile.OpenFile(upload.lu.MetadataBackend().MetadataPath(n.InternalPath()), os.O_RDWR|os.O_CREATE, 0600)
+	if err != nil {
 		return nil, err
 	}
 
-	lock, err := filelocks.AcquireWriteLock(n.InternalPath())
-	if err != nil {
-		// we cannot acquire a lock - we error for safety
-		return lock, err
+	switch upload.lu.MetadataBackend().(type) {
+	case metadata.MessagePackBackend:
+		// for the ini and metadata backend we also need to touch the actual node file here.
+		// it stores the mtime of the resource, which must not change when we update the ini file
+		h, err := os.OpenFile(n.InternalPath(), os.O_CREATE, 0600)
+		if err != nil {
+			return f, err
+		}
+		h.Close()
+	case metadata.XattrsBackend:
+		// nothing to do
 	}
 
 	if _, err := node.CheckQuota(n.SpaceRoot, false, 0, fsize); err != nil {
-		return lock, err
+		return f, err
 	}
 
 	// link child name to parent if it is new
@@ -343,23 +355,23 @@ func initNewNode(upload *Upload, n *node.Node, fsize uint64) (*flock.Flock, erro
 	link, err := os.Readlink(childNameLink)
 	if err == nil && link != "../"+n.ID {
 		if err := os.Remove(childNameLink); err != nil {
-			return lock, errors.Wrap(err, "Decomposedfs: could not remove symlink child entry")
+			return f, errors.Wrap(err, "Decomposedfs: could not remove symlink child entry")
 		}
 	}
 	if errors.Is(err, iofs.ErrNotExist) || link != "../"+n.ID {
 		relativeNodePath := filepath.Join("../../../../../", lookup.Pathify(n.ID, 4, 2))
 		if err = os.Symlink(relativeNodePath, childNameLink); err != nil {
-			return lock, errors.Wrap(err, "Decomposedfs: could not symlink child entry")
+			return f, errors.Wrap(err, "Decomposedfs: could not symlink child entry")
 		}
 	}
 
 	// on a new file the sizeDiff is the fileSize
 	upload.sizeDiff = int64(fsize)
 	upload.Info.MetaData["sizeDiff"] = strconv.Itoa(int(upload.sizeDiff))
-	return lock, nil
+	return f, nil
 }
 
-func updateExistingNode(upload *Upload, n *node.Node, spaceID string, fsize uint64) (*flock.Flock, error) {
+func updateExistingNode(upload *Upload, n *node.Node, spaceID string, fsize uint64) (*lockedfile.File, error) {
 	old, _ := node.ReadNode(upload.Ctx, upload.lu, spaceID, n.ID, false)
 	if _, err := node.CheckQuota(n.SpaceRoot, true, uint64(old.Blobsize), fsize); err != nil {
 		return nil, err
@@ -389,15 +401,15 @@ func updateExistingNode(upload *Upload, n *node.Node, spaceID string, fsize uint
 
 	targetPath := n.InternalPath()
 
-	lock, err := filelocks.AcquireWriteLock(targetPath)
+	// write lock existing node before reading treesize or tree time
+	f, err := lockedfile.OpenFile(upload.lu.MetadataBackend().MetadataPath(targetPath), os.O_RDWR, 0600)
 	if err != nil {
-		// we cannot acquire a lock - we error for safety
 		return nil, err
 	}
 
 	// create version node
 	if _, err := os.Create(upload.versionsPath); err != nil {
-		return lock, err
+		return f, err
 	}
 
 	// copy blob metadata to version node
@@ -406,13 +418,13 @@ func updateExistingNode(upload *Upload, n *node.Node, spaceID string, fsize uint
 			attributeName == prefixes.TypeAttr ||
 			attributeName == prefixes.BlobIDAttr ||
 			attributeName == prefixes.BlobsizeAttr
-	}, lock); err != nil {
-		return lock, err
+	}, f); err != nil {
+		return f, err
 	}
 
 	// keep mtime from previous version
 	if err := os.Chtimes(upload.versionsPath, tmtime, tmtime); err != nil {
-		return lock, errtypes.InternalError(fmt.Sprintf("failed to change mtime of version node: %s", err))
+		return f, errtypes.InternalError(fmt.Sprintf("failed to change mtime of version node: %s", err))
 	}
 
 	// update mtime of current version
@@ -421,7 +433,7 @@ func updateExistingNode(upload *Upload, n *node.Node, spaceID string, fsize uint
 		return nil, err
 	}
 
-	return lock, nil
+	return f, nil
 }
 
 // lookupNode looks up nodes by path.

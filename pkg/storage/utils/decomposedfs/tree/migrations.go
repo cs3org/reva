@@ -59,7 +59,7 @@ func (t *Tree) migration0001Nodes() error {
 			nodePath := filepath.Join(nodesPath, n.Name())
 
 			attr, err := t.lookup.MetadataBackend().Get(nodePath, prefixes.ParentidAttr)
-			if err == nil && attr == node.RootID {
+			if err == nil && string(attr) == node.RootID {
 				if err := t.moveNode(n.Name(), n.Name()); err != nil {
 					logger.New().Error().Err(err).
 						Str("space", n.Name()).

@@ -94,7 +94,7 @@ var _ = Describe("Node", func() {
 			n.BlobID = "TestBlobID"
 			n.Blobsize = blobsize
 
-			err = n.WriteAllNodeMetadata()
+			err = n.WriteAllNodeMetadata(env.Ctx)
 			Expect(err).ToNot(HaveOccurred())
 			n2, err := env.Lookup.NodeFromResource(env.Ctx, ref)
 			Expect(err).ToNot(HaveOccurred())

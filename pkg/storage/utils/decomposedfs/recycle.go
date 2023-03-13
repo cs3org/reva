@@ -94,7 +94,7 @@ func (fs *Decomposedfs) ListRecycle(ctx context.Context, ref *provider.Reference
 	}
 	// lookup origin path in extended attributes
 	if attrBytes, ok := attrs[prefixes.TrashOriginAttr]; ok {
-		origin = attrBytes
+		origin = string(attrBytes)
 	} else {
 		sublog.Error().Err(err).Str("space", spaceID).Msg("could not read origin path, skipping")
 		return nil, err
@@ -114,7 +114,7 @@ func (fs *Decomposedfs) ListRecycle(ctx context.Context, ref *provider.Reference
 	nodeType := fs.lu.TypeFromPath(originalPath)
 	if nodeType != provider.ResourceType_RESOURCE_TYPE_CONTAINER {
 		// this is the case when we want to directly list a file in the trashbin
-		blobsize, err := strconv.ParseInt(attrs[prefixes.BlobsizeAttr], 10, 64)
+		blobsize, err := strconv.ParseInt(string(attrs[prefixes.BlobsizeAttr]), 10, 64)
 		if err != nil {
 			return items, err
 		}
@@ -168,7 +168,7 @@ func (fs *Decomposedfs) ListRecycle(ctx context.Context, ref *provider.Reference
 				sublog.Error().Err(err).Str("name", name).Msg("invalid tree size, skipping")
 				continue
 			}
-			size, err = strconv.ParseInt(attr, 10, 64)
+			size, err = strconv.ParseInt(string(attr), 10, 64)
 			if err != nil {
 				sublog.Error().Err(err).Str("name", name).Msg("invalid tree size, skipping")
 				continue
@@ -263,7 +263,7 @@ func (fs *Decomposedfs) listTrashRoot(ctx context.Context, spaceID string) ([]*p
 
 		// lookup origin path in extended attributes
 		if attr, ok := attrs[prefixes.TrashOriginAttr]; ok {
-			item.Ref = &provider.Reference{Path: attr}
+			item.Ref = &provider.Reference{Path: string(attr)}
 		} else {
 			log.Error().Str("trashRoot", trashRoot).Str("item", itemPath).Str("node", nodeID).Str("dtime", timeSuffix).Msg("could not read origin path, skipping")
 			continue

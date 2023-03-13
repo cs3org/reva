@@ -134,7 +134,7 @@ func (fs *Decomposedfs) ListGrants(ctx context.Context, ref *provider.Reference)
 		return nil, errtypes.NotFound(f)
 	}
 	log := appctx.GetLogger(ctx)
-	var attrs map[string]string
+	var attrs node.Attributes
 	if attrs, err = grantNode.Xattrs(); err != nil {
 		log.Error().Err(err).Msg("error listing attributes")
 		return nil, err
@@ -146,7 +146,7 @@ func (fs *Decomposedfs) ListGrants(ctx context.Context, ref *provider.Reference)
 			var err error
 			var e *ace.ACE
 			principal := k[len(prefixes.GrantPrefix):]
-			if e, err = ace.Unmarshal(principal, []byte(v)); err != nil {
+			if e, err = ace.Unmarshal(principal, v); err != nil {
 				log.Error().Err(err).Str("principal", principal).Str("attr", k).Msg("could not unmarshal ace")
 				continue
 			}
@@ -312,7 +312,7 @@ func (fs *Decomposedfs) storeGrant(ctx context.Context, n *node.Node, g *provide
 	// set the grant
 	e := ace.FromGrant(g)
 	principal, value := e.Marshal()
-	if err := n.SetXattr(prefixes.GrantPrefix+principal, string(value)); err != nil {
+	if err := n.SetXattr(prefixes.GrantPrefix+principal, value); err != nil {
 		appctx.GetLogger(ctx).Error().Err(err).
 			Str("principal", principal).Msg("Could not set grant for principal")
 		return err

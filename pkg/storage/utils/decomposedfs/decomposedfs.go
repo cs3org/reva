@@ -107,10 +107,10 @@ func NewDefault(m map[string]interface{}, bs tree.Blobstore, es events.Stream) (
 	switch o.MetadataBackend {
 	case "xattrs":
 		lu = lookup.New(metadata.XattrsBackend{}, o)
-	case "ini":
-		lu = lookup.New(metadata.NewIniBackend(o.FileMetadataCache), o)
+	case "messagepack":
+		lu = lookup.New(metadata.NewMessagePackBackend(o.Root, o.FileMetadataCache), o)
 	default:
-		return nil, fmt.Errorf("unknown metadata backend %s, only 'ini' or 'xattrs' (default) supported", o.MetadataBackend)
+		return nil, fmt.Errorf("unknown metadata backend %s, only 'messagepack' or 'xattrs' (default) supported", o.MetadataBackend)
 	}
 
 	tp := tree.New(o.Root, o.TreeTimeAccounting, o.TreeSizeAccounting, lu, bs)
@@ -575,7 +575,7 @@ func (fs *Decomposedfs) CreateDir(ctx context.Context, ref *provider.Reference) 
 
 	if fs.o.TreeTimeAccounting || fs.o.TreeSizeAccounting {
 		// mark the home node as the end of propagation
-		if err = n.SetXattr(prefixes.PropagationAttr, "1"); err != nil {
+		if err = n.SetXattrString(prefixes.PropagationAttr, "1"); err != nil {
 			appctx.GetLogger(ctx).Error().Err(err).Interface("node", n).Msg("could not mark node to propagate")
 
 			// FIXME: This does not return an error at all, but results in a severe situation that the

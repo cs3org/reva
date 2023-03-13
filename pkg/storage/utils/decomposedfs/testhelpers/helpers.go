@@ -219,7 +219,7 @@ func (t *TestEnv) CreateTestFile(name, blobID, parentID, spaceID string, blobSiz
 	if err != nil {
 		return nil, err
 	}
-	err = n.WriteAllNodeMetadata()
+	err = n.WriteAllNodeMetadata(context.Background())
 	if err != nil {
 		return nil, err
 	}
@@ -277,7 +277,7 @@ func (t *TestEnv) CreateTestStorageSpace(typ string, quota *providerv1beta1.Quot
 	if err != nil {
 		return nil, err
 	}
-	if err = h.SetXattr(prefixes.SpaceNameAttr, "username"); err != nil {
+	if err = h.SetXattr(prefixes.SpaceNameAttr, []byte("username")); err != nil {
 		return nil, err
 	}
 

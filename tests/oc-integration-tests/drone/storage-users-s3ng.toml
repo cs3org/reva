@@ -28,7 +28,7 @@ permissionssvc = "localhost:10000"
 "s3.bucket" = "test"
 "s3.access_key" = "test"
 "s3.secret_key" = "test"
-"metadata_backend" = "ini"
+"metadata_backend" = "xattrs"
 
 # we have a locally running dataprovider
 [http]
@@ -48,4 +48,4 @@ permissionssvc = "localhost:10000"
 "s3.bucket" = "test"
 "s3.access_key" = "test"
 "s3.secret_key" = "test"
-"metadata_backend" = "ini"
+"metadata_backend" = "xattrs"

@@ -124,7 +124,7 @@ var _ = Describe("Tree", func() {
 
 					attr, err := env.Lookup.MetadataBackend().Get(resolveTrashPath, prefixes.TrashOriginAttr)
 					Expect(err).ToNot(HaveOccurred())
-					Expect(attr).To(Equal("/dir1/file1"))
+					Expect(string(attr)).To(Equal("/dir1/file1"))
 				})
 
 				It("does not delete the blob from the blobstore", func() {
@@ -401,7 +401,7 @@ var _ = Describe("Tree", func() {
 
 				stopdir, err := env.CreateTestDir("testdir/stophere", &provider.Reference{ResourceId: env.SpaceRootRes})
 				Expect(err).ToNot(HaveOccurred())
-				err = stopdir.SetXattr(prefixes.PropagationAttr, "0")
+				err = stopdir.SetXattrString(prefixes.PropagationAttr, "0")
 				Expect(err).ToNot(HaveOccurred())
 				otherdir, err := env.CreateTestDir("testdir/stophere/lotsofbytes", &provider.Reference{ResourceId: env.SpaceRootRes})
 				Expect(err).ToNot(HaveOccurred())

@@ -18,34 +18,39 @@
 
 package metadata
 
-import "errors"
+import (
+	"errors"
+	"io"
+)
 
 var errUnconfiguredError = errors.New("no metadata backend configured. Bailing out")
 
 // Backend defines the interface for file attribute backends
 type Backend interface {
-	All(path string) (map[string]string, error)
-	Get(path, key string) (string, error)
+	All(path string) (map[string][]byte, error)
+	Get(path, key string) ([]byte, error)
 	GetInt64(path, key string) (int64, error)
 	List(path string) (attribs []string, err error)
-	Set(path, key, val string) error
-	SetMultiple(path string, attribs map[string]string, acquireLock bool) error
+	Set(path, key string, val []byte) error
+	SetMultiple(path string, attribs map[string][]byte, acquireLock bool) error
 	Remove(path, key string) error
 
 	Purge(path string) error
 	Rename(oldPath, newPath string) error
 	IsMetaFile(path string) bool
 	MetadataPath(path string) string
+
+	AllWithLockedSource(path string, source io.Reader) (map[string][]byte, error)
 }
 
 // NullBackend is the default stub backend, used to enforce the configuration of a proper backend
 type NullBackend struct{}
 
 // All reads all extended attributes for a node
-func (NullBackend) All(path string) (map[string]string, error) { return nil, errUnconfiguredError }
+func (NullBackend) All(path string) (map[string][]byte, error) { return nil, errUnconfiguredError }
 
 // Get an extended attribute value for the given key
-func (NullBackend) Get(path, key string) (string, error) { return "", errUnconfiguredError }
+func (NullBackend) Get(path, key string) ([]byte, error) { return []byte{}, errUnconfiguredError }
 
 // GetInt64 reads a string as int64 from the xattrs
 func (NullBackend) GetInt64(path, key string) (int64, error) { return 0, errUnconfiguredError }
@@ -55,10 +60,10 @@ func (NullBackend) GetInt64(path, key string) (int64, error) { return 0, errUnco
 func (NullBackend) List(path string) ([]string, error) { return nil, errUnconfiguredError }
 
 // Set sets one attribute for the given path
-func (NullBackend) Set(path string, key string, val string) error { return errUnconfiguredError }
+func (NullBackend) Set(path string, key string, val []byte) error { return errUnconfiguredError }
 
 // SetMultiple sets a set of attribute for the given path
-func (NullBackend) SetMultiple(path string, attribs map[string]string, acquireLock bool) error {
+func (NullBackend) SetMultiple(path string, attribs map[string][]byte, acquireLock bool) error {
 	return errUnconfiguredError
 }
 
@@ -76,3 +81,9 @@ func (NullBackend) Rename(oldPath, newPath string) error { return errUnconfigure
 
 // MetadataPath returns the path of the file holding the metadata for the given path
 func (NullBackend) MetadataPath(path string) string { return "" }
+
+// AllWithLockedSource reads all extended attributes from the given reader
+// The path argument is used for storing the data in the cache
+func (NullBackend) AllWithLockedSource(path string, source io.Reader) (map[string][]byte, error) {
+	return nil, errUnconfiguredError
+}
