@@ -176,7 +176,11 @@ func (b MessagePackBackend) saveAttributes(path string, setAttribs map[string][]
 	}
 
 	// Write new metadata to file
-	msgpack.NewEncoder(f).Encode(attribs)
+	d, err := msgpack.Marshal(attribs)
+	if err != nil {
+		return err
+	}
+	_, err = f.Write(d)
 	if err != nil {
 		return err
 	}

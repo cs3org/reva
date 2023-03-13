@@ -64,6 +64,7 @@ require (
 	github.com/rs/zerolog v1.28.0
 	github.com/sciencemesh/meshdirectory-web v1.0.4
 	github.com/sethvargo/go-password v0.2.0
+	github.com/shamaton/msgpack/v2 v2.1.1
 	github.com/stretchr/testify v1.8.1
 	github.com/studio-b12/gowebdav v0.0.0-20221015232716-17255f2e7423
 	github.com/test-go/testify v1.1.4
@@ -189,8 +190,6 @@ require (
 	github.com/stretchr/objx v0.5.0 // indirect
 	github.com/tidwall/pretty v1.2.1 // indirect
 	github.com/urfave/cli/v2 v2.20.3 // indirect
-	github.com/vmihailenco/msgpack/v5 v5.3.5 // indirect
-	github.com/vmihailenco/tagparser/v2 v2.0.0 // indirect
 	github.com/xanzy/ssh-agent v0.3.2 // indirect
 	github.com/xrash/smetrics v0.0.0-20201216005158-039620a65673 // indirect
 	go.etcd.io/etcd/api/v3 v3.5.5 // indirect

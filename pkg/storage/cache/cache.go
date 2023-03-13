@@ -19,7 +19,6 @@
 package cache
 
 import (
-	"bytes"
 	"fmt"
 	"strings"
 	"sync"
@@ -32,7 +31,7 @@ import (
 	redisopts "github.com/go-redis/redis/v8"
 	"github.com/nats-io/nats.go"
 	microetcd "github.com/owncloud/ocis/v2/ocis-pkg/store/etcd"
-	msgpack "github.com/vmihailenco/msgpack/v5"
+	"github.com/shamaton/msgpack/v2"
 	microstore "go-micro.dev/v4/store"
 )
 
@@ -240,12 +239,8 @@ func (cache cacheStore) PullFromCache(key string, dest interface{}) error {
 	if len(r) == 0 {
 		return fmt.Errorf("not found")
 	}
-	// we seem to need the TypedMap decoder: https://github.com/vmihailenco/msgpack/issues/327
-	decoder := msgpack.NewDecoder(bytes.NewReader(r[0].Value))
-	decoder.SetMapDecoder(func(dec *msgpack.Decoder) (interface{}, error) {
-		return dec.DecodeTypedMap()
-	})
-	return decoder.Decode(&dest)
+
+	return msgpack.Unmarshal(r[0].Value, &dest)
 }
 
 // PushToCache pushes a key and value to the configured database and table of the underlying store
