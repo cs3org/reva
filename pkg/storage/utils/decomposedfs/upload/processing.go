@@ -283,7 +283,7 @@ func CreateNodeForUpload(upload *Upload, initAttrs node.Attributes) (*node.Node,
 	}
 
 	// overwrite technical information
-	initAttrs.SetInt64(prefixes.TypeAttr, int64(n.Type()))
+	initAttrs.SetInt64(prefixes.TypeAttr, int64(provider.ResourceType_RESOURCE_TYPE_FILE))
 	initAttrs.SetString(prefixes.ParentidAttr, n.ParentID)
 	initAttrs.SetString(prefixes.NameAttr, n.Name)
 	initAttrs.SetString(prefixes.BlobIDAttr, n.BlobID)
@@ -304,7 +304,7 @@ func CreateNodeForUpload(upload *Upload, initAttrs node.Attributes) (*node.Node,
 	}
 
 	// add etag to metadata
-	tmtime, err := n.GetTMTime()
+	tmtime, err := n.GetMTime()
 	if err != nil {
 		return nil, err
 	}

@@ -909,7 +909,7 @@ func (n *Node) HasPropagation() (propagation bool) {
 	return false
 }
 
-// GetTMTime reads the tmtime from the extended attributes
+// GetTMTime reads the tmtime from the extended attributes, falling back to GetMTime()
 func (n *Node) GetTMTime() (time.Time, error) {
 	b, err := n.XattrString(prefixes.TreeMTimeAttr)
 	if err == nil {
@@ -917,6 +917,11 @@ func (n *Node) GetTMTime() (time.Time, error) {
 	}
 
 	// no tmtime, use mtime
+	return n.GetMTime()
+}
+
+// GetMTime reads the mtime from disk
+func (n *Node) GetMTime() (time.Time, error) {
 	fi, err := os.Lstat(n.InternalPath())
 	if err != nil {
 		return time.Time{}, err
