@@ -146,7 +146,7 @@ func (fs *Decomposedfs) ListGrants(ctx context.Context, ref *provider.Reference)
 			var err error
 			var e *ace.ACE
 			principal := k[len(prefixes.GrantPrefix):]
-			if e, err = ace.Unmarshal(principal, []byte(v)); err != nil {
+			if e, err = ace.Unmarshal(principal, v); err != nil {
 				log.Error().Err(err).Str("principal", principal).Str("attr", k).Msg("could not unmarshal ace")
 				continue
 			}

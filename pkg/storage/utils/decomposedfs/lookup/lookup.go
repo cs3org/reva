@@ -209,7 +209,7 @@ func (lu *Lookup) WalkPath(ctx context.Context, r *node.Node, p string, followRe
 		if followReferences {
 			if attrBytes, err := r.Xattr(prefixes.ReferenceAttr); err == nil {
 				realNodeID := attrBytes
-				ref, err := refFromCS3([]byte(realNodeID))
+				ref, err := refFromCS3(realNodeID)
 				if err != nil {
 					return nil, err
 				}

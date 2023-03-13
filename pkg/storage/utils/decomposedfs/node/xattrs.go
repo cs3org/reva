@@ -24,20 +24,25 @@ import (
 	"github.com/pkg/xattr"
 )
 
+// Attributes is a map of string keys and byte array values
 type Attributes map[string][]byte
 
+// String reads a String value
 func (md Attributes) String(key string) string {
 	return string(md[key])
 }
 
+// SetString sets a string value
 func (md Attributes) SetString(key, val string) {
 	md[key] = []byte(val)
 }
 
+// Int64 reads an int64 value
 func (md Attributes) Int64(key string) (int64, error) {
 	return strconv.ParseInt(string(md[key]), 10, 64)
 }
 
+// SetInt64 sets an int64 value
 func (md Attributes) SetInt64(key string, val int64) {
 	md[key] = []byte(strconv.FormatInt(val, 10))
 }

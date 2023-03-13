@@ -313,8 +313,7 @@ func ReadNode(ctx context.Context, lu PathLookup, spaceID, nodeID string, canLis
 	n.ParentID = attrs.String(prefixes.ParentidAttr)
 	if n.ParentID == "" {
 		d, _ := os.ReadFile(lu.MetadataBackend().MetadataPath(n.InternalPath()))
-		switch lu.MetadataBackend().(type) {
-		case metadata.MessagePackBackend:
+		if _, ok := lu.MetadataBackend().(metadata.MessagePackBackend); ok {
 			appctx.GetLogger(ctx).Error().Str("nodeid", n.ID).Interface("attrs", attrs).Bytes("messagepack", d).Msg("missing parent id")
 		}
 		return nil, errtypes.InternalError("Missing parent ID on node")
@@ -467,7 +466,7 @@ func (n *Node) readOwner() (*userpb.UserId, error) {
 	attr, err = n.SpaceRoot.XattrString(prefixes.OwnerIDAttr)
 	switch {
 	case err == nil:
-		owner.OpaqueId = string(attr)
+		owner.OpaqueId = attr
 	case metadata.IsAttrUnset(err):
 		// ignore
 	default:
@@ -478,7 +477,7 @@ func (n *Node) readOwner() (*userpb.UserId, error) {
 	attr, err = n.SpaceRoot.XattrString(prefixes.OwnerIDPAttr)
 	switch {
 	case err == nil:
-		owner.Idp = string(attr)
+		owner.Idp = attr
 	case metadata.IsAttrUnset(err):
 		// ignore
 	default:
@@ -489,7 +488,7 @@ func (n *Node) readOwner() (*userpb.UserId, error) {
 	attr, err = n.SpaceRoot.XattrString(prefixes.OwnerTypeAttr)
 	switch {
 	case err == nil:
-		owner.Type = utils.UserTypeMap(string(attr))
+		owner.Type = utils.UserTypeMap(attr)
 	case metadata.IsAttrUnset(err):
 		// ignore
 	default:
@@ -843,7 +842,7 @@ func (n *Node) readChecksumIntoResourceChecksum(ctx context.Context, algo string
 	case err == nil:
 		ri.Checksum = &provider.ResourceChecksum{
 			Type: storageprovider.PKG2GRPCXS(algo),
-			Sum:  hex.EncodeToString([]byte(v)),
+			Sum:  hex.EncodeToString(v),
 		}
 	case metadata.IsAttrUnset(err):
 		appctx.GetLogger(ctx).Debug().Err(err).Str("nodepath", n.InternalPath()).Str("algorithm", algo).Msg("checksum not set")
@@ -863,7 +862,7 @@ func (n *Node) readChecksumIntoOpaque(ctx context.Context, algo string, ri *prov
 		}
 		ri.Opaque.Map[algo] = &types.OpaqueEntry{
 			Decoder: "plain",
-			Value:   []byte(hex.EncodeToString([]byte(v))),
+			Value:   []byte(hex.EncodeToString(v)),
 		}
 	case metadata.IsAttrUnset(err):
 		appctx.GetLogger(ctx).Debug().Err(err).Str("nodepath", n.InternalPath()).Str("algorithm", algo).Msg("checksum not set")
@@ -1107,7 +1106,7 @@ func (n *Node) ReadGrant(ctx context.Context, grantee string) (g *provider.Grant
 		return nil, err
 	}
 	var e *ace.ACE
-	if e, err = ace.Unmarshal(strings.TrimPrefix(grantee, prefixes.GrantPrefix), []byte(xattr)); err != nil {
+	if e, err = ace.Unmarshal(strings.TrimPrefix(grantee, prefixes.GrantPrefix), xattr); err != nil {
 		return nil, err
 	}
 	return e.Grant(), nil
