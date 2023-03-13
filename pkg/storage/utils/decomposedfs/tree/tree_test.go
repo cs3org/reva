@@ -124,7 +124,7 @@ var _ = Describe("Tree", func() {
 
 					attr, err := env.Lookup.MetadataBackend().Get(resolveTrashPath, prefixes.TrashOriginAttr)
 					Expect(err).ToNot(HaveOccurred())
-					Expect(attr).To(Equal("/dir1/file1"))
+					Expect(string(attr)).To(Equal("/dir1/file1"))
 				})
 
 				It("does not delete the blob from the blobstore", func() {
