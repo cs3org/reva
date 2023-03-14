@@ -58,11 +58,8 @@ func New(lu *lookup.Lookup, log *zerolog.Logger) Migrator {
 	}
 }
 
-/**
- * RunMigrations runs all migrations in sequence.
- * Note this sequence must not be changed or it might
- * damage existing decomposed fs.
- */
+// RunMigrations runs all migrations in sequence. Note this sequence must not be changed or it might
+// damage existing decomposed fs.
 func (m *Migrator) RunMigrations() error {
 	err := m.readStates()
 	if err != nil {

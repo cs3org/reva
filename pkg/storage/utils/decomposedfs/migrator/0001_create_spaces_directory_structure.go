@@ -29,6 +29,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
 )
 
+// Migration0001 creates the spaces directory structure
 func (m *Migrator) Migration0001() (result, error) {
 	// create spaces folder and iterate over existing nodes to populate it
 	nodesPath := filepath.Join(m.lu.InternalRoot(), "nodes")

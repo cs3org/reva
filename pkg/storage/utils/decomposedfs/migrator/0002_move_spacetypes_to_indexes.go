@@ -26,6 +26,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/logger"
 )
 
+// Migration0002 migrates spacetypes to indexes
 func (m *Migrator) Migration0002() (result, error) {
 	spaceTypesPath := filepath.Join(m.lu.InternalRoot(), "spacetypes")
 	fi, err := os.Stat(spaceTypesPath)
