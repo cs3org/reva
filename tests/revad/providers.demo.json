@@ -1,0 +1,38 @@
+[
+	{
+		"name": "local",
+		"full_name": "ownCloud@Example",
+		"organization": "Example",
+		"domain": "example.org",
+		"homepage": "http://example.org",
+		"description": "Example cloud storage.",
+		"services": [
+			{
+				"endpoint": {
+					"type": {
+						"name": "Webdav",
+						"description": "Example Webdav API"
+					},
+					"name": "Example - Webdav API",
+					"path": "http://frontend:20080/remote.php/webdav/",
+					"is_monitored": true
+				},
+				"api_version": "0.0.1",
+				"host": "frontend:20080"
+			},
+			{
+				"endpoint": {
+					"type": {
+						"name": "Gateway",
+						"description": "Example GRPC Gateway"
+					},
+					"name": "Example - GRPC Gateway",
+					"path": "gateway:19000",
+					"is_monitored": true
+				},
+				"api_version": "0.0.1",
+				"host": "gateway:19000"
+			}
+		]
+	}
+]

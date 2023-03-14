@@ -1,4 +1,4 @@
-// Copyright 2018-2022 CERN
+// Copyright 2018-2023 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,6 +20,8 @@ package loader
 
 import (
 	// Load core storage filesystem backends.
+	_ "github.com/cs3org/reva/pkg/ocm/storage/outcoming"
+	_ "github.com/cs3org/reva/pkg/ocm/storage/received"
 	_ "github.com/cs3org/reva/pkg/storage/fs/cback"
 	_ "github.com/cs3org/reva/pkg/storage/fs/cephfs"
 	_ "github.com/cs3org/reva/pkg/storage/fs/eos"

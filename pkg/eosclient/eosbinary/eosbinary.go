@@ -1,4 +1,4 @@
-// Copyright 2018-2022 CERN
+// Copyright 2018-2023 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -110,6 +110,9 @@ type Options struct {
 
 	// SecProtocol is the comma separated list of security protocols used by xrootd.
 	// For example: "sss, unix"
+	// DEPRECATED
+	// This variable is no longer used. Only sss and unix protocols are possible.
+	// If UseKeytab is set to true the protocol will be set to "sss", else to "unix"
 	SecProtocol string
 
 	// TokenExpiry stores in seconds the time after which generated tokens will expire
@@ -168,8 +171,11 @@ func (c *Client) executeXRDCopy(ctx context.Context, cmdArgs []string) (string, 
 	}
 
 	if c.opt.UseKeytab {
-		cmd.Env = append(cmd.Env, "XrdSecPROTOCOL="+c.opt.SecProtocol)
+		cmd.Env = append(cmd.Env, "XrdSecPROTOCOL=sss")
 		cmd.Env = append(cmd.Env, "XrdSecSSSKT="+c.opt.Keytab)
+	} else { // we are a trusted gateway
+		cmd.Env = append(cmd.Env, "XrdSecPROTOCOL=unix")
+		cmd.Env = append(cmd.Env, "KRB5CCNAME=FILE:/dev/null") // do not try to use krb
 	}
 
 	err := cmd.Run()
@@ -225,8 +231,11 @@ func (c *Client) executeEOS(ctx context.Context, cmdArgs []string, auth eosclien
 	}
 
 	if c.opt.UseKeytab {
-		cmd.Env = append(cmd.Env, "XrdSecPROTOCOL="+c.opt.SecProtocol)
+		cmd.Env = append(cmd.Env, "XrdSecPROTOCOL=sss")
 		cmd.Env = append(cmd.Env, "XrdSecSSSKT="+c.opt.Keytab)
+	} else { // we are a trusted gateway
+		cmd.Env = append(cmd.Env, "XrdSecPROTOCOL=unix")
+		cmd.Env = append(cmd.Env, "KRB5CCNAME=FILE:/dev/null") // do not try to use krb
 	}
 
 	cmd.Args = append(cmd.Args, cmdArgs...)

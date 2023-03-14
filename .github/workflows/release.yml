@@ -1,0 +1,47 @@
+name: Release
+on:
+  push:
+    tags:
+      - "*"
+
+jobs:
+  release:
+    runs-on: self-hosted
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Setup Go environment
+        id: go
+        uses: actions/setup-go@v3.3.0
+        with:
+          go-version-file: go.mod
+      - name: Make distribution
+        run: make dist
+        env:
+          VERSION: ${{ github.ref_name }}
+          GIT_COMMIT: ${{ github.sha }}
+          GO_VERSION: ${{ steps.go.outputs.go-version }}
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: "dist/*"
+          body_path: "changelog/NOTE.md"
+  docker:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - file: docker/Dockerfile.reva
+            tags: ${{ vars.DOCKERHUB_ORGANIZATION }}/reva:${{ github.ref_name }}
+          - file: docker/Dockerfile.revad
+            tags: ${{ vars.DOCKERHUB_ORGANIZATION }}/revad:${{ github.ref_name }},${{ vars.DOCKERHUB_ORGANIZATION }}/revad:latest
+          - file: docker/Dockerfile.revad-eos
+            tags: ${{ vars.DOCKERHUB_ORGANIZATION }}/revad:${{ github.ref_name }}-eos
+          - file: docker/Dockerfile.revad-ceph
+            tags: ${{ vars.DOCKERHUB_ORGANIZATION }}/revad:${{ github.ref_name }}-ceph
+    uses: ./.github/workflows/docker.yml
+    secrets: inherit
+    with:
+      file: ${{ matrix.file }}
+      tags: ${{ matrix.tags }}
+      push: true

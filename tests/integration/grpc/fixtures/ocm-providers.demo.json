@@ -1,0 +1,48 @@
+[
+	{
+		"name": "cernbox",
+		"full_name": "CERNBox",
+		"organization": "CERN",
+		"domain": "cernbox.cern.ch",
+		"homepage": "https://cernbox.web.cern.ch",
+		"description": "CERNBox provides cloud data storage to all CERN users.",
+		"services": [
+			{
+				"endpoint": {
+					"type": {
+						"name": "OCM",
+						"description": "CERNBox Open Cloud Mesh API"
+					},
+					"name": "CERNBox - OCM API",
+					"path": "http://{{cernboxhttp_address}}/ocm/",
+					"is_monitored": true
+				},
+				"api_version": "0.0.1",
+				"host": "{{cernboxhttp_address}}"
+			}
+		]
+	},
+	{
+		"name": "oc-cesnet",
+		"full_name": "ownCloud@CESNET",
+		"organization": "CESNET",
+		"domain": "cesnet.cz",
+		"homepage": "https://owncloud.cesnet.cz",
+		"description": "OwnCloud has been designed for individual users.",
+		"services": [
+			{
+				"endpoint": {
+					"type": {
+						"name": "OCM",
+						"description": "CESNET Open Cloud Mesh API"
+					},
+					"name": "CESNET - OCM API",
+					"path": "http://{{cesnethttp_address}}/ocm/",
+					"is_monitored": true
+				},
+				"api_version": "0.0.1",
+				"host": "{{cesnethttp_address}}"
+			}
+		]
+	}
+]

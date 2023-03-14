@@ -1,0 +1,13 @@
+[log]
+mode = "json"
+
+[shared]
+gatewaysvc = "{{cernboxgw_address}}"
+
+[http]
+address = "{{grpc_address}}"
+
+[http.middlewares.auth]
+token_strategy = "bearer"
+
+[http.services.ocdav]

@@ -1,4 +1,4 @@
-// Copyright 2018-2022 CERN
+// Copyright 2018-2023 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -1573,7 +1573,7 @@ func (fs *eosfs) createUserDir(ctx context.Context, u *userpb.User, path string,
 		return errors.Wrap(err, "eosfs: error chowning directory")
 	}
 
-	err = fs.c.Chmod(ctx, rootAuth, "2770", path)
+	err = fs.c.Chmod(ctx, rootAuth, "2700", path)
 	if err != nil {
 		return errors.Wrap(err, "eosfs: error chmoding directory")
 	}
@@ -2098,6 +2098,13 @@ func (fs *eosfs) permissionSet(ctx context.Context, eosFileInfo *eosclient.FileI
 			return conversions.NewEditorRole().CS3ResourcePermissions()
 		case "uploader":
 			return conversions.NewUploaderRole().CS3ResourcePermissions()
+		}
+		return conversions.NewViewerRole().CS3ResourcePermissions()
+	}
+
+	if role, ok := utils.HasOCMShareRole(u); ok {
+		if role == "editor" {
+			return conversions.NewEditorRole().CS3ResourcePermissions()
 		}
 		return conversions.NewViewerRole().CS3ResourcePermissions()
 	}

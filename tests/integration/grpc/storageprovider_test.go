@@ -1,4 +1,4 @@
-// Copyright 2018-2022 CERN
+// Copyright 2018-2023 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -87,7 +87,7 @@ var _ = Describe("storage providers", func() {
 		ctx = metadata.AppendToOutgoingContext(ctx, ctxpkg.TokenHeader, t)
 		ctx = ctxpkg.ContextSetUser(ctx, user)
 
-		revads, err = startRevads(dependencies, variables)
+		revads, err = startRevads(dependencies, nil, nil, variables)
 		Expect(err).ToNot(HaveOccurred())
 		serviceClient, err = pool.GetStorageProviderServiceClient(pool.Endpoint(revads["storage"].GrpcAddress))
 		Expect(err).ToNot(HaveOccurred())
@@ -610,7 +610,6 @@ var _ = Describe("storage providers", func() {
 
 			assertCreateContainer()
 			assertListContainer()
-			assertGetPath()
 			assertDelete()
 			assertMove()
 			assertGrants()

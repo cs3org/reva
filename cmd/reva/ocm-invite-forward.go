@@ -1,4 +1,4 @@
-// Copyright 2018-2022 CERN
+// Copyright 2018-2023 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -80,7 +80,7 @@ func ocmInviteForwardCommand() *command {
 		if forwardToken.Status.Code != rpc.Code_CODE_OK {
 			return formatError(forwardToken.Status)
 		}
-		fmt.Println("OK")
+		fmt.Println(forwardToken)
 		return nil
 	}
 	return cmd

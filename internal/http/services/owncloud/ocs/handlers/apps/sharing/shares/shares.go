@@ -1,4 +1,4 @@
-// Copyright 2018-2022 CERN
+// Copyright 2018-2023 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -69,10 +69,12 @@ type Handler struct {
 	publicURL              string
 	sharePrefix            string
 	homeNamespace          string
+	ocmMountPoint          string
 	additionalInfoTemplate *template.Template
 	userIdentifierCache    *ttlcache.Cache
 	resourceInfoCache      cache.ResourceInfoCache
 	resourceInfoCacheTTL   time.Duration
+	listOCMShares          bool
 }
 
 // we only cache the minimal set of data instead of the full user metadata.
@@ -103,6 +105,8 @@ func (h *Handler) Init(c *config.Config) {
 	h.publicURL = c.Config.Host
 	h.sharePrefix = c.SharePrefix
 	h.homeNamespace = c.HomeNamespace
+	h.ocmMountPoint = c.OCMMountPoint
+	h.listOCMShares = c.ListOCMShares
 
 	h.additionalInfoTemplate, _ = template.New("additionalInfo").Parse(c.AdditionalInfoAttribute)
 	h.resourceInfoCacheTTL = time.Second * time.Duration(c.ResourceInfoCacheTTL)
@@ -767,6 +771,17 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 
 	for s := range output {
 		shares = append(shares, s)
+	}
+
+	if h.listOCMShares {
+		// include ocm shares in the response
+		lst, err := h.listReceivedFederatedShares(ctx, client)
+		if err != nil {
+			log.Err(err).Msg("error listing received ocm shares")
+			response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error listing received ocm shares", err)
+			return
+		}
+		shares = append(shares, lst...)
 	}
 
 	response.WriteOCSSuccess(w, r, shares)

@@ -1,0 +1,40 @@
+# Copyright 2018-2021 CERN
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# In applying this license, CERN does not waive the privileges and immunities
+# granted to it by virtue of its status as an Intergovernmental Organization
+# or submit itself to any jurisdiction.
+
+FROM golang:alpine3.17 as builder
+
+WORKDIR /home/reva
+COPY . .
+
+ARG GIT_COMMIT
+ARG VERSION
+ENV GIT_COMMIT=$GIT_COMMIT
+ENV VERSION=$VERSION
+ENV CGO_ENABLED 1
+
+RUN apk add --no-cache gcc musl-dev
+
+RUN go build -ldflags "-X main.gitCommit=$GIT_COMMIT -X main.version=$VERSION -X main.goVersion=`go version | awk '{print $3}'` -X main.buildDate=`date +%FT%T%z`" -o ./cmd/revad/revad ./cmd/revad
+
+FROM alpine:3.16
+
+COPY --from=builder /home/reva/cmd/revad/revad /usr/bin/revad
+RUN mkdir -p /etc/revad/ && touch /etc/revad/revad.toml
+
+ENTRYPOINT [ "/usr/bin/revad" ]
+CMD [ "-c", "/etc/revad/revad.toml", "-p", "/var/run/revad.pid" ]

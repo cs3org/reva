@@ -1,4 +1,4 @@
-// Copyright 2018-2022 CERN
+// Copyright 2018-2023 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -241,8 +241,13 @@ func (h *Handler) listUserShares(r *http.Request, filters []*collaboration.Filte
 	wg.Wait()
 	close(output)
 
-	for s := range output {
-		ocsDataPayload = append(ocsDataPayload, s)
+	if h.listOCMShares {
+		// include the ocm shares
+		ocmShares, err := h.listOutcomingFederatedShares(ctx, client)
+		if err != nil {
+			return nil, nil, err
+		}
+		ocsDataPayload = append(ocsDataPayload, ocmShares...)
 	}
 
 	return ocsDataPayload, nil, nil

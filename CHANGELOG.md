@@ -1,3 +1,379 @@
+Changelog for reva 1.23.0 (2023-03-09)
+=======================================
+
+The following sections list the changes in reva 1.23.0 relevant to
+reva users. The changes are ordered by importance.
+
+Summary
+-------
+
+ * Fix #3621: Use 2700 as permission when creating EOS home folder
+ * Fix #3551: Fixes implementation omission of #3526
+ * Fix #3706: Fix revad-eos docker image which was failing to build
+ * Fix #3626: Fix open in app for lightweight accounts
+ * Fix #3613: Use subject from oidc userinfo when quering the user provider
+ * Fix #3633: Fix litmus and acceptance tests in GitHub Actions
+ * Fix #3694: Updated public links URLs and users' display names in WOPI apps
+ * Chg #3553: Rename PullTransfer to CreateTransfer
+ * Enh #3584: Bump the Copyright date to 2023
+ * Enh #3640: Migrate acceptance tests from Drone to GitHub Actions
+ * Enh #3629: Use cs3org/behat:latest docker image for tests
+ * Enh #3608: Add Golang test coverage report for Codacy
+ * Enh #3599: Add latest tag to revad Docker image with GitHub Actions
+ * Enh #3713: Streamline EOS SSS and UNIX modes
+ * Enh #3566: Migrate the litmusOcisSpacesDav test from Drone to GitHub Actions
+ * Enh #3712: Improve Docker build speed and Docker Compose test speed
+ * Enh #3630: Migrate the virtualViews test from Drone to GitHub Actions
+ * Enh #3675: Cleanup unused configs in OCM HTTP service
+ * Enh #3692: Create and list OCM shares in OCS layer
+ * Enh #3666: Search OCM accepted users
+ * Enh #3665: List valid OCM invite tokens
+ * Enh #3617: SQL driver for OCM invitation manager
+ * Enh #3667: List OCM providers
+ * Enh #3668: Expose OCM received shares as a local mount
+ * Enh #3683: Remote open in app in OCM
+ * Enh #3654: SQL driver for OCM shares
+ * Enh #3646: Update OCM shares to last version of CS3APIs
+ * Enh #3687: Specify recipient as a query param when sending OCM token by email
+ * Enh #3691: Add OCM scope and webdav endpoint
+ * Enh #3611: Revamp OCM invitation workflow
+ * Enh #3703: Bump reva(d) base image to alpine 3.17
+
+Details
+-------
+
+ * Bugfix #3621: Use 2700 as permission when creating EOS home folder
+
+   https://github.com/cs3org/reva/pull/3621
+
+ * Bugfix #3551: Fixes implementation omission of #3526
+
+   In #3526 a new value format of the owner parameter of the ocm share request was introduced. This
+   change was not implemented in the json driver. This change fixes that.
+
+   https://github.com/cs3org/reva/pull/3551
+
+ * Bugfix #3706: Fix revad-eos docker image which was failing to build
+
+   https://github.com/cs3org/reva/pull/3706
+
+ * Bugfix #3626: Fix open in app for lightweight accounts
+
+   https://github.com/cs3org/reva/pull/3626
+
+ * Bugfix #3613: Use subject from oidc userinfo when quering the user provider
+
+   https://github.com/cs3org/reva/pull/3613
+
+ * Bugfix #3633: Fix litmus and acceptance tests in GitHub Actions
+
+   https://github.com/cs3org/reva/pull/3633
+
+ * Bugfix #3694: Updated public links URLs and users' display names in WOPI apps
+
+   Public links have changed in the frontend and are reflected in folderurl query parameter.
+   Additionally, OCM shares are supported for the folderurl and OCM users are decorated with
+   their ID provider.
+
+   https://github.com/cs3org/reva/pull/3694
+
+ * Change #3553: Rename PullTransfer to CreateTransfer
+
+   This change implements a CS3APIs name change in the datatx module (PullTransfer to
+   CreateTransfer)
+
+   https://github.com/cs3org/reva/pull/3553
+
+ * Enhancement #3584: Bump the Copyright date to 2023
+
+   https://github.com/cs3org/reva/pull/3584
+
+ * Enhancement #3640: Migrate acceptance tests from Drone to GitHub Actions
+
+   Migrate ocisIntegrationTests and s3ngIntegrationTests to GitHub Actions
+
+   https://github.com/cs3org/reva/pull/3640
+
+ * Enhancement #3629: Use cs3org/behat:latest docker image for tests
+
+   https://github.com/cs3org/reva/pull/3629
+
+ * Enhancement #3608: Add Golang test coverage report for Codacy
+
+   https://github.com/cs3org/reva/pull/3608
+
+ * Enhancement #3599: Add latest tag to revad Docker image with GitHub Actions
+
+   https://github.com/cs3org/reva/pull/3599
+
+ * Enhancement #3713: Streamline EOS SSS and UNIX modes
+
+   https://github.com/cs3org/reva/pull/3713
+
+ * Enhancement #3566: Migrate the litmusOcisSpacesDav test from Drone to GitHub Actions
+
+   https://github.com/cs3org/reva/pull/3566
+
+ * Enhancement #3712: Improve Docker build speed and Docker Compose test speed
+
+   https://github.com/cs3org/reva/pull/3712
+
+ * Enhancement #3630: Migrate the virtualViews test from Drone to GitHub Actions
+
+   https://github.com/cs3org/reva/pull/3630
+
+ * Enhancement #3675: Cleanup unused configs in OCM HTTP service
+
+   https://github.com/cs3org/reva/pull/3675
+
+ * Enhancement #3692: Create and list OCM shares in OCS layer
+
+   https://github.com/cs3org/reva/pull/3692
+
+ * Enhancement #3666: Search OCM accepted users
+
+   Adds the prefix `sm:` to the FindUser endpoint, to filter only the OCM accepted users.
+
+   https://github.com/cs3org/reva/pull/3666
+
+ * Enhancement #3665: List valid OCM invite tokens
+
+   Adds the endpoint `/list-invite` in the sciencemesh service, to get the list of valid OCM
+   invite tokens.
+
+   https://github.com/cs3org/reva/pull/3665
+   https://github.com/cs3org/cs3apis/pull/201
+
+ * Enhancement #3617: SQL driver for OCM invitation manager
+
+   https://github.com/cs3org/reva/pull/3617
+
+ * Enhancement #3667: List OCM providers
+
+   Adds the endpoint `/list-providers` in the sciencemesh service, to get a filtered list of the
+   OCM providers. The filter can be specified with the `search` query parameters, and filters by
+   domain and full name of the provider.
+
+   https://github.com/cs3org/reva/pull/3667
+
+ * Enhancement #3668: Expose OCM received shares as a local mount
+
+   https://github.com/cs3org/reva/pull/3668
+
+ * Enhancement #3683: Remote open in app in OCM
+
+   https://github.com/cs3org/reva/pull/3683
+
+ * Enhancement #3654: SQL driver for OCM shares
+
+   https://github.com/cs3org/reva/pull/3654
+
+ * Enhancement #3646: Update OCM shares to last version of CS3APIs
+
+   https://github.com/cs3org/reva/pull/3646
+   https://github.com/cs3org/cs3apis/pull/199
+
+ * Enhancement #3687: Specify recipient as a query param when sending OCM token by email
+
+   Before the email recipient when sending the OCM token was specified as a form parameter. Now as a
+   query parameter, as some clients does not allow in a GET request to set form values. It also add
+   the possibility to specify a template for the subject and the body for the token email.
+
+   https://github.com/cs3org/reva/pull/3687
+
+ * Enhancement #3691: Add OCM scope and webdav endpoint
+
+   Adds the OCM scope and the ocmshares authentication, to authenticate the federated user to use
+   the OCM shared resources. It also adds the (unprotected) webdav endpoint used to interact with
+   the shared resources.
+
+   https://github.com/cs3org/reva/issues/2739
+   https://github.com/cs3org/reva/pull/3691
+
+ * Enhancement #3611: Revamp OCM invitation workflow
+
+   https://github.com/cs3org/reva/issues/3540
+   https://github.com/cs3org/reva/pull/3611
+
+ * Enhancement #3703: Bump reva(d) base image to alpine 3.17
+
+   Prevents several vulnerabilities from the base image itself:
+   https://artifacthub.io/packages/helm/cs3org/revad?modal=security-report
+
+   https://github.com/cs3org/reva/pull/3703
+
+
+Changelog for reva 1.22.0 (2022-12-31)
+=======================================
+
+The following sections list the changes in reva 1.22.0 relevant to
+reva users. The changes are ordered by importance.
+
+Summary
+-------
+
+ * Fix #3528: Fix expired authenticated public link error code
+ * Fix #3121: Add missing domain normalization to mentix provider authorizer
+ * Enh #3565: Migrate the litmus tests from Drone to GitHub Actions
+
+Details
+-------
+
+ * Bugfix #3528: Fix expired authenticated public link error code
+
+   On an expired authenticated public link, the error returned was 401 unauthorized, behaving
+   differently from a not-authenticated one, that returns 404 not found. This has been fixed,
+   returning 404 not found.
+
+   https://github.com/cs3org/reva/pull/3528
+
+ * Bugfix #3121: Add missing domain normalization to mentix provider authorizer
+
+   The Mentix OCM Provider authorizer lacked provider domain normalization. This led to
+   incorrect provider domain matching when authorizing OCM providers.
+
+   https://github.com/cs3org/reva/pull/3121
+
+ * Enhancement #3565: Migrate the litmus tests from Drone to GitHub Actions
+
+   We've migrated the litmusOcisOldWebdav and the litmusOcisNewWebdav tests from Drone to
+   GitHub Actions.
+
+   https://github.com/cs3org/reva/pull/3565
+
+
+Changelog for reva 1.21.0 (2022-12-07)
+=======================================
+
+The following sections list the changes in reva 1.21.0 relevant to
+reva users. The changes are ordered by importance.
+
+Summary
+-------
+
+ * Fix #3492: Fixes the DefaultQuotaBytes in EOS
+ * Fix #3420: EOS grpc fixes
+ * Fix #3501: Fix errors of public share provider according to cs3apis
+ * Fix #3504: Fix RefreshLock method for cephfs storage driver
+ * Enh #3502: Appproviders: pass other query parameters as Opaque
+ * Enh #3028: Access directly auth registry rules map when getting provider
+ * Enh #3197: Bring back multi-stage build to save on image size
+ * Enh #3506: Migrate the buildAndPublishDocker job from Drone to GitHub Actions
+ * Enh #3500: Migrate the BuildOnly job from Drone to GitHub Actions
+ * Enh #3513: Migrate the testIntegration job from Drone to GitHub Actions
+ * Enh #3494: Implemented folderurl for WOPI apps
+ * Enh #3507: Get user preferred language
+ * Enh #3530: Improve error logging in ocmd flow
+ * Enh #3491: Implement rclone third-party copy push option
+ * Enh #3508: Allow an user to set a preferred language
+
+Details
+-------
+
+ * Bugfix #3492: Fixes the DefaultQuotaBytes in EOS
+
+   We were setting the default logical quota to 1T, resulting on only 500GB available to the user.
+
+   https://github.com/cs3org/reva/pull/3492
+
+ * Bugfix #3420: EOS grpc fixes
+
+   The shares and the applications were not working with the EOS grpc storage driver. This fixes
+   both.
+
+   https://github.com/cs3org/reva/pull/3420
+
+ * Bugfix #3501: Fix errors of public share provider according to cs3apis
+
+   All the errors returned by the public share provider where internal errors. Now this has been
+   fixed and the returned errors are the one defined in the cs3apis.
+
+   https://github.com/cs3org/reva/pull/3501
+
+ * Bugfix #3504: Fix RefreshLock method for cephfs storage driver
+
+   https://github.com/cs3org/reva/pull/3504
+
+ * Enhancement #3502: Appproviders: pass other query parameters as Opaque
+
+   This allows to send any other HTTP query parameter passed to /app/open to the underlying
+   appprovider drivers via GRPC
+
+   https://github.com/cs3org/reva/pull/3502
+
+ * Enhancement #3028: Access directly auth registry rules map when getting provider
+
+   https://github.com/cs3org/reva/pull/3028
+
+ * Enhancement #3197: Bring back multi-stage build to save on image size
+
+   - Use EOS 4.8.91 as base image - Bring back multi-stage build - Build revad on the eos 4.8.91 image
+   due to missing dependency (`ld-musl-x86_64.so.1`, typical of alpine) - Copy the resulting
+   revad from the builder container
+
+   Resulting image size (unpacked on disk) is 2.59GB - eos-all:4.8.91 is 2.47GB - existing
+   revad:latest-eos is 6.18GB
+
+   https://github.com/cs3org/reva/pull/3197
+
+ * Enhancement #3506: Migrate the buildAndPublishDocker job from Drone to GitHub Actions
+
+   We've migrated the buildAndPublishDocker job from Drone to GitHub Actions workflow. We've
+   updated the Golang version used to build the Docker images to go1.19. We've fixed the Cephfs
+   storage module. We've improved the Makefile. We've refactored the build-docker workflow.
+
+   https://github.com/cs3org/reva/pull/3506
+
+ * Enhancement #3500: Migrate the BuildOnly job from Drone to GitHub Actions
+
+   We've migrated the BuildOnly job from Drone to GitHub Actions workflow. The Workflow builds
+   and Tests Reva, builds a Revad Docker Image and checks the license headers. The license header
+   tools was removed since the goheader linter provides the same functionality.
+
+   https://github.com/cs3org/reva/pull/3500
+
+ * Enhancement #3513: Migrate the testIntegration job from Drone to GitHub Actions
+
+   https://github.com/cs3org/reva/pull/3513
+
+ * Enhancement #3494: Implemented folderurl for WOPI apps
+
+   The folderurl is now populated for WOPI apps, such that for owners and named shares it points to
+   the containing folder, and for public links it points to the appropriate public link URL.
+
+   On the way, functions to manipulate the user's scope and extract the eventual public link
+   token(s) have been added, coauthored with @gmgigi96.
+
+   https://github.com/cs3org/reva/pull/3494
+
+ * Enhancement #3507: Get user preferred language
+
+   The only way for an OCIS web user to change language was to set it into the browser settings. In the
+   ocs user info response, a field `language` is added, to change their language in the UI,
+   regardless of the browser settings.
+
+   https://github.com/cs3org/reva/pull/3507
+
+ * Enhancement #3530: Improve error logging in ocmd flow
+
+   https://github.com/cs3org/reva/issues/3365
+   https://github.com/cs3org/reva/pull/3530
+   https://github.com/cs3org/reva/pull/3526
+   https://github.com/cs3org/reva/pull/3419
+   https://github.com/cs3org/reva/pull/3369
+
+ * Enhancement #3491: Implement rclone third-party copy push option
+
+   This enhancement gives the option to use third-party copy push with rclone between two
+   different user accounts.
+
+   https://github.com/cs3org/reva/pull/3491
+
+ * Enhancement #3508: Allow an user to set a preferred language
+
+   https://github.com/cs3org/reva/pull/3508
+
+
 Changelog for reva 1.20.0 (2022-11-24)
 =======================================
 

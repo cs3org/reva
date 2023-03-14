@@ -1,4 +1,4 @@
-// Copyright 2018-2022 CERN
+// Copyright 2018-2023 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,8 +20,11 @@ package gateway
 
 import (
 	"context"
+	"strings"
 
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/pkg/errors"
@@ -60,6 +63,35 @@ func (s *svc) GetUserByClaim(ctx context.Context, req *user.GetUserByClaimReques
 }
 
 func (s *svc) FindUsers(ctx context.Context, req *user.FindUsersRequest) (*user.FindUsersResponse, error) {
+	if strings.HasPrefix(req.Filter, "sm:") {
+		c, err := pool.GetOCMInviteManagerClient(pool.Endpoint(s.c.OCMInviteManagerEndpoint))
+		if err != nil {
+			return &user.FindUsersResponse{
+				Status: status.NewInternal(ctx, err, "error getting auth client"),
+			}, nil
+		}
+
+		term := strings.TrimPrefix(req.Filter, "sm:")
+
+		res, err := c.FindAcceptedUsers(ctx, &invitepb.FindAcceptedUsersRequest{
+			Filter: term,
+		})
+		if err != nil {
+			return nil, errors.Wrap(err, "gateway: error calling FindAcceptedUsers")
+		}
+
+		if res.Status.Code != rpc.Code_CODE_OK {
+			return &user.FindUsersResponse{
+				Status: status.NewInternal(ctx, errors.New(res.Status.Message), res.Status.Message),
+			}, nil
+		}
+
+		return &user.FindUsersResponse{
+			Status: status.NewOK(ctx),
+			Users:  res.AcceptedUsers,
+		}, nil
+	}
+
 	c, err := pool.GetUserProviderServiceClient(pool.Endpoint(s.c.UserProviderEndpoint))
 	if err != nil {
 		return &user.FindUsersResponse{

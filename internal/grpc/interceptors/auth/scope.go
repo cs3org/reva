@@ -1,4 +1,4 @@
-// Copyright 2018-2022 CERN
+// Copyright 2018-2023 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -32,6 +32,7 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
+	ocmv1beta1 "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	registry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
@@ -73,9 +74,12 @@ func expandAndVerifyScope(ctx context.Context, req interface{}, tokenScope map[s
 				if err = resolvePublicShare(ctx, ref, tokenScope[k], client, mgr); err == nil {
 					return nil
 				}
-
 			case strings.HasPrefix(k, "share"):
 				if err = resolveUserShare(ctx, ref, tokenScope[k], client, mgr); err == nil {
+					return nil
+				}
+			case strings.HasPrefix(k, "ocmshare"):
+				if err = resolveOCMShare(ctx, ref, tokenScope[k], client, mgr); err == nil {
 					return nil
 				}
 			}
@@ -223,6 +227,15 @@ func resolvePublicShare(ctx context.Context, ref *provider.Reference, scope *aut
 	return checkCacheForNestedResource(ctx, ref, share.ResourceId, client, mgr)
 }
 
+func resolveOCMShare(ctx context.Context, ref *provider.Reference, scope *authpb.Scope, client gateway.GatewayAPIClient, mgr token.Manager) error {
+	var share ocmv1beta1.Share
+	if err := utils.UnmarshalJSONToProtoV1(scope.Resource.Value, &share); err != nil {
+		return err
+	}
+
+	return checkCacheForNestedResource(ctx, ref, share.ResourceId, client, mgr)
+}
+
 func resolveUserShare(ctx context.Context, ref *provider.Reference, scope *authpb.Scope, client gateway.GatewayAPIClient, mgr token.Manager) error {
 	var share collaboration.Share
 	err := utils.UnmarshalJSONToProtoV1(scope.Resource.Value, &share)
@@ -270,7 +283,10 @@ func checkIfNestedResource(ctx context.Context, ref *provider.Reference, parent 
 	// We mint a token as the owner of the public share and try to stat the reference
 	// TODO(ishank011): We need to find a better alternative to this
 	childPath := ref.GetPath()
-	if isRelativePathOrEmpty(ref.GetPath()) {
+	if isRelativePathOrEmpty(childPath) {
+		// We mint a token as the owner of the public share and try to stat the reference
+		// TODO(ishank011): We need to find a better alternative to this
+
 		userResp, err := client.GetUser(ctx, &userpb.GetUserRequest{UserId: statResponse.Info.Owner, SkipFetchingUserGroups: true})
 		if err != nil || userResp.Status.Code != rpc.Code_CODE_OK {
 			return false, err
@@ -315,6 +331,8 @@ func extractRefForReaderRole(req interface{}) (*provider.Reference, bool) {
 		return &provider.Reference{ResourceId: v.ResourceInfo.Id}, true
 	case *gateway.OpenInAppRequest:
 		return v.GetRef(), true
+	case *provider.GetLockRequest:
+		return v.GetRef(), true
 
 	// App provider requests
 	case *appregistry.GetAppProvidersRequest:
@@ -352,6 +370,12 @@ func extractRefForEditorRole(req interface{}) (*provider.Reference, bool) {
 	case *provider.SetArbitraryMetadataRequest:
 		return v.GetRef(), true
 	case *provider.UnsetArbitraryMetadataRequest:
+		return v.GetRef(), true
+	case *provider.SetLockRequest:
+		return v.GetRef(), true
+	case *provider.RefreshLockRequest:
+		return v.GetRef(), true
+	case *provider.UnlockRequest:
 		return v.GetRef(), true
 	}
 

@@ -1,4 +1,4 @@
-// Copyright 2018-2022 CERN
+// Copyright 2018-2023 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -136,7 +136,7 @@ func AddPublicShareScope(share *link.PublicShare, role authpb.Role, scopes map[s
 	return scopes, nil
 }
 
-// GetPublicSharesFromScopes returns all the public shares in the given scope.
+// GetPublicSharesFromScopes returns all public shares in the given scope.
 func GetPublicSharesFromScopes(scopes map[string]*authpb.Scope) ([]*link.PublicShare, error) {
 	var shares []*link.PublicShare
 	for k, s := range scopes {

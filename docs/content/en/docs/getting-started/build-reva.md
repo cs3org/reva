@@ -12,5 +12,5 @@ the Go programming language that installs the Go compiler.
 ```
 git clone https://github.com/cs3org/reva
 cd reva
-make build
+make
 ```

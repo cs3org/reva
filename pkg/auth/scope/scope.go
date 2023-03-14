@@ -1,4 +1,4 @@
-// Copyright 2018-2022 CERN
+// Copyright 2018-2023 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -37,6 +37,7 @@ var supportedScopes = map[string]Verifier{
 	"share":         shareScope,
 	"receivedshare": receivedShareScope,
 	"lightweight":   lightweightAccountScope,
+	"ocmshare":      ocmShareScope,
 }
 
 // VerifyScope is the function to be called when dismantling tokens to check if

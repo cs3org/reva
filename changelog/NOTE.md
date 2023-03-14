@@ -1,328 +1,205 @@
-Changelog for reva 1.20.0 (2022-11-24)
+Changelog for reva 1.23.0 (2023-03-09)
 =======================================
 
-The following sections list the changes in reva 1.20.0 relevant to
+The following sections list the changes in reva 1.23.0 relevant to
 reva users. The changes are ordered by importance.
 
 Summary
 -------
 
- * Sec #3316: Mitigate XSS
- * Fix #3455: Fixes panic in case of empty configuration
- * Fix #3311: Remove FIXME
- * Fix #3396: Fix the Ceph Docker image repository URL
- * Fix #3055: Fix quota for LW accounts
- * Fix #3361: Use custom reva logger in ocs
- * Fix #3344: Fix quota percentage
- * Fix #2979: Removed unused datatx code
- * Fix #2973: Fix datatxtarget uri when prefix is used
- * Fix #3319: Fix oidc provider crash when custom claims are provided
- * Fix #3481: OIDC: resolve users with no uid/gid by username
- * Fix #3055: Get user from user provider in oidc driver
- * Fix #3053: Temporary read user acl instead of sys acl
- * Enh #3401: Make WOPI bridged apps (CodiMD) configuration non hard-coded
- * Enh #3402: Block users
- * Enh #3098: App provider http endpoint uses Form instead of Query
- * Enh #3116: Implementation of cback storage driver for REVA
- * Enh #3422: Migrate Codacy from Drone to Codacy/GitHub integration
- * Enh #3412: Migrate Fossa from Drone to Github Integration
- * Enh #3367: Update go version
- * Enh #3467: Enable gocritic linter in golangci-lint and solve issues
- * Enh #3463: Enable gofmt linter in golangci-lint and apply gofmt
- * Enh #3471: Enable goimports and usestdlibvars in golangci-lint
- * Enh #3466: Migrate golangci-lint from Drone to GitHub Actions
- * Enh #3465: Enable revive linter in golangci-lint and solve issues
- * Enh #3487: Enable staticcheck linter in golangci-lint and solve issues
- * Enh #3475: Enable the style linters
- * Enh #3070: Allow http service to expose prefixes containing /
- * Enh #2986: Better display name in apps for all user types
- * Enh #3303: Added support for configuring language locales in apps
- * Enh #3348: Revamp lightweigth accounts
- * Enh #3304: Add http service to send email for shares
- * Enh #3072: Mesh meta data operators
- * Enh #3313: Fix content-type for OCM sharing
- * Enh #3234: Add post create home hook for eos storage driver
- * Enh #3347: Implemented PROPFIND with 0 depth
- * Enh #3056: Add public share auth provider
- * Enh #3305: Add description to public link
- * Enh #3163: Add support for quicklinks for public shares
- * Enh #3289: Make Refresh Lock operation WOPI compliant
- * Enh #3315: Accept reva token as a bearer authentication
- * Enh #3438: Sanitize non-utf8 characters in xattr values in EOS
- * Enh #3221: Site Accounts improvements
- * Enh #3404: Site accounts & Mentix updates
- * Enh #3424: Expire tokens on sunday
- * Enh #2986: Use email as display name for external users opening WOPI apps
+ * Fix #3621: Use 2700 as permission when creating EOS home folder
+ * Fix #3551: Fixes implementation omission of #3526
+ * Fix #3706: Fix revad-eos docker image which was failing to build
+ * Fix #3626: Fix open in app for lightweight accounts
+ * Fix #3613: Use subject from oidc userinfo when quering the user provider
+ * Fix #3633: Fix litmus and acceptance tests in GitHub Actions
+ * Fix #3694: Updated public links URLs and users' display names in WOPI apps
+ * Chg #3553: Rename PullTransfer to CreateTransfer
+ * Enh #3584: Bump the Copyright date to 2023
+ * Enh #3640: Migrate acceptance tests from Drone to GitHub Actions
+ * Enh #3629: Use cs3org/behat:latest docker image for tests
+ * Enh #3608: Add Golang test coverage report for Codacy
+ * Enh #3599: Add latest tag to revad Docker image with GitHub Actions
+ * Enh #3713: Streamline EOS SSS and UNIX modes
+ * Enh #3566: Migrate the litmusOcisSpacesDav test from Drone to GitHub Actions
+ * Enh #3712: Improve Docker build speed and Docker Compose test speed
+ * Enh #3630: Migrate the virtualViews test from Drone to GitHub Actions
+ * Enh #3675: Cleanup unused configs in OCM HTTP service
+ * Enh #3692: Create and list OCM shares in OCS layer
+ * Enh #3666: Search OCM accepted users
+ * Enh #3665: List valid OCM invite tokens
+ * Enh #3617: SQL driver for OCM invitation manager
+ * Enh #3667: List OCM providers
+ * Enh #3668: Expose OCM received shares as a local mount
+ * Enh #3683: Remote open in app in OCM
+ * Enh #3654: SQL driver for OCM shares
+ * Enh #3646: Update OCM shares to last version of CS3APIs
+ * Enh #3687: Specify recipient as a query param when sending OCM token by email
+ * Enh #3691: Add OCM scope and webdav endpoint
+ * Enh #3611: Revamp OCM invitation workflow
+ * Enh #3703: Bump reva(d) base image to alpine 3.17
 
 Details
 -------
 
- * Security #3316: Mitigate XSS
+ * Bugfix #3621: Use 2700 as permission when creating EOS home folder
 
-   We've mitigated an XSS vulnerability resulting from unescaped HTTP responses containing
-   user-provided values in pkg/siteacc/siteacc.go and
-   internal/http/services/ocmd/invites.go. This patch uses html.EscapeString to escape the
-   user-provided values in the HTTP responses of pkg/siteacc/siteacc.go and
-   internal/http/services/ocmd/invites.go.
+   https://github.com/cs3org/reva/pull/3621
 
-   https://github.com/cs3org/reva/pull/3316
+ * Bugfix #3551: Fixes implementation omission of #3526
 
- * Bugfix #3455: Fixes panic in case of empty configuration
+   In #3526 a new value format of the owner parameter of the ocm share request was introduced. This
+   change was not implemented in the json driver. This change fixes that.
 
-   Makes sure the config map is allocated prior to setting it
+   https://github.com/cs3org/reva/pull/3551
 
-   https://github.com/cs3org/reva/pull/3455
+ * Bugfix #3706: Fix revad-eos docker image which was failing to build
 
- * Bugfix #3311: Remove FIXME
+   https://github.com/cs3org/reva/pull/3706
 
-   Issue https://github.com/cs3org/reva/issues/2402 is closed.
+ * Bugfix #3626: Fix open in app for lightweight accounts
 
-   https://github.com/cs3org/reva/pull/3311
+   https://github.com/cs3org/reva/pull/3626
 
- * Bugfix #3396: Fix the Ceph Docker image repository URL
+ * Bugfix #3613: Use subject from oidc userinfo when quering the user provider
 
-   https://github.com/cs3org/reva/pull/3396
+   https://github.com/cs3org/reva/pull/3613
 
- * Bugfix #3055: Fix quota for LW accounts
+ * Bugfix #3633: Fix litmus and acceptance tests in GitHub Actions
 
-   LW accounts do not have quota assigned.
+   https://github.com/cs3org/reva/pull/3633
 
-   https://github.com/cs3org/reva/pull/3055
+ * Bugfix #3694: Updated public links URLs and users' display names in WOPI apps
 
- * Bugfix #3361: Use custom reva logger in ocs
+   Public links have changed in the frontend and are reflected in folderurl query parameter.
+   Additionally, OCM shares are supported for the folderurl and OCM users are decorated with
+   their ID provider.
 
-   https://github.com/cs3org/reva/pull/3361
+   https://github.com/cs3org/reva/pull/3694
 
- * Bugfix #3344: Fix quota percentage
+ * Change #3553: Rename PullTransfer to CreateTransfer
 
-   https://github.com/cs3org/reva/pull/3344
+   This change implements a CS3APIs name change in the datatx module (PullTransfer to
+   CreateTransfer)
 
- * Bugfix #2979: Removed unused datatx code
+   https://github.com/cs3org/reva/pull/3553
 
-   An OCM reference is not created for a data transfer type share.
+ * Enhancement #3584: Bump the Copyright date to 2023
 
-   https://github.com/cs3org/reva/pull/2979
+   https://github.com/cs3org/reva/pull/3584
 
- * Bugfix #2973: Fix datatxtarget uri when prefix is used
+ * Enhancement #3640: Migrate acceptance tests from Drone to GitHub Actions
 
-   When a webdav prefix is used it appears in both host and name parameter of the target uri for data
-   transfer. This PR fixes that.
+   Migrate ocisIntegrationTests and s3ngIntegrationTests to GitHub Actions
 
-   https://github.com/cs3org/reva/pull/2973
+   https://github.com/cs3org/reva/pull/3640
 
- * Bugfix #3319: Fix oidc provider crash when custom claims are provided
+ * Enhancement #3629: Use cs3org/behat:latest docker image for tests
 
-   https://github.com/cs3org/reva/pull/3319
+   https://github.com/cs3org/reva/pull/3629
 
- * Bugfix #3481: OIDC: resolve users with no uid/gid by username
+ * Enhancement #3608: Add Golang test coverage report for Codacy
 
-   Previously we resolved such users (so called "lightweight" or "external" accounts in the CERN
-   realm) by email, but it turns out that the same email may have multiple accounts associated to
-   it.
+   https://github.com/cs3org/reva/pull/3608
 
-   Therefore we now resolve them by username, that is the upn, which is unique.
+ * Enhancement #3599: Add latest tag to revad Docker image with GitHub Actions
 
-   https://github.com/cs3org/reva/pull/3481
+   https://github.com/cs3org/reva/pull/3599
 
- * Bugfix #3055: Get user from user provider in oidc driver
+ * Enhancement #3713: Streamline EOS SSS and UNIX modes
 
-   For oidc providers that only respond with standard claims, use the user provider to get the
-   user.
+   https://github.com/cs3org/reva/pull/3713
 
-   https://github.com/cs3org/reva/pull/3055
+ * Enhancement #3566: Migrate the litmusOcisSpacesDav test from Drone to GitHub Actions
 
- * Bugfix #3053: Temporary read user acl instead of sys acl
+   https://github.com/cs3org/reva/pull/3566
 
-   We read the user acl in EOS until the migration of all user acls to sys acls are done
+ * Enhancement #3712: Improve Docker build speed and Docker Compose test speed
 
-   https://github.com/cs3org/reva/pull/3053
+   https://github.com/cs3org/reva/pull/3712
 
- * Enhancement #3401: Make WOPI bridged apps (CodiMD) configuration non hard-coded
+ * Enhancement #3630: Migrate the virtualViews test from Drone to GitHub Actions
 
-   The configuration of the custom mimetypes has been moved to the AppProvider, and the given
-   mimetypes are used to configure bridged apps by sharing the corresponding config item to the
-   drivers.
+   https://github.com/cs3org/reva/pull/3630
 
-   https://github.com/cs3org/reva/pull/3401
+ * Enhancement #3675: Cleanup unused configs in OCM HTTP service
 
- * Enhancement #3402: Block users
+   https://github.com/cs3org/reva/pull/3675
 
-   Allows an operator to set a list of users that are banned for every operation in reva.
+ * Enhancement #3692: Create and list OCM shares in OCS layer
 
-   https://github.com/cs3org/reva/pull/3402
+   https://github.com/cs3org/reva/pull/3692
 
- * Enhancement #3098: App provider http endpoint uses Form instead of Query
+ * Enhancement #3666: Search OCM accepted users
 
-   We've improved the http endpoint now uses the Form instead of Query to also support
-   `application/x-www-form-urlencoded` parameters on the app provider http endpoint.
+   Adds the prefix `sm:` to the FindUser endpoint, to filter only the OCM accepted users.
 
-   https://github.com/cs3org/reva/pull/3098
-   https://github.com/cs3org/reva/pull/3101
+   https://github.com/cs3org/reva/pull/3666
 
- * Enhancement #3116: Implementation of cback storage driver for REVA
+ * Enhancement #3665: List valid OCM invite tokens
 
-   This is a read only fs interface.
+   Adds the endpoint `/list-invite` in the sciencemesh service, to get the list of valid OCM
+   invite tokens.
 
-   https://github.com/cs3org/reva/pull/3116
+   https://github.com/cs3org/reva/pull/3665
+   https://github.com/cs3org/cs3apis/pull/201
 
- * Enhancement #3422: Migrate Codacy from Drone to Codacy/GitHub integration
+ * Enhancement #3617: SQL driver for OCM invitation manager
 
-   https://github.com/cs3org/reva/pull/3422
+   https://github.com/cs3org/reva/pull/3617
 
- * Enhancement #3412: Migrate Fossa from Drone to Github Integration
+ * Enhancement #3667: List OCM providers
 
-   https://github.com/cs3org/reva/pull/3412
+   Adds the endpoint `/list-providers` in the sciencemesh service, to get a filtered list of the
+   OCM providers. The filter can be specified with the `search` query parameters, and filters by
+   domain and full name of the provider.
 
- * Enhancement #3367: Update go version
+   https://github.com/cs3org/reva/pull/3667
 
-   Update go version to 1.19 in go.mod
+ * Enhancement #3668: Expose OCM received shares as a local mount
 
-   https://github.com/cs3org/reva/pull/3367
+   https://github.com/cs3org/reva/pull/3668
 
- * Enhancement #3467: Enable gocritic linter in golangci-lint and solve issues
+ * Enhancement #3683: Remote open in app in OCM
 
-   https://github.com/cs3org/reva/pull/3467
+   https://github.com/cs3org/reva/pull/3683
 
- * Enhancement #3463: Enable gofmt linter in golangci-lint and apply gofmt
+ * Enhancement #3654: SQL driver for OCM shares
 
-   https://github.com/cs3org/reva/pull/3463
+   https://github.com/cs3org/reva/pull/3654
 
- * Enhancement #3471: Enable goimports and usestdlibvars in golangci-lint
+ * Enhancement #3646: Update OCM shares to last version of CS3APIs
 
-   We've enabled the goimports and usestdlibvars linters in golangci-lint and solved the
-   related issues.
+   https://github.com/cs3org/reva/pull/3646
+   https://github.com/cs3org/cs3apis/pull/199
 
-   https://github.com/cs3org/reva/pull/3471
+ * Enhancement #3687: Specify recipient as a query param when sending OCM token by email
 
- * Enhancement #3466: Migrate golangci-lint from Drone to GitHub Actions
+   Before the email recipient when sending the OCM token was specified as a form parameter. Now as a
+   query parameter, as some clients does not allow in a GET request to set form values. It also add
+   the possibility to specify a template for the subject and the body for the token email.
 
-   https://github.com/cs3org/reva/pull/3466
+   https://github.com/cs3org/reva/pull/3687
 
- * Enhancement #3465: Enable revive linter in golangci-lint and solve issues
+ * Enhancement #3691: Add OCM scope and webdav endpoint
 
-   https://github.com/cs3org/reva/pull/3465
+   Adds the OCM scope and the ocmshares authentication, to authenticate the federated user to use
+   the OCM shared resources. It also adds the (unprotected) webdav endpoint used to interact with
+   the shared resources.
 
- * Enhancement #3487: Enable staticcheck linter in golangci-lint and solve issues
+   https://github.com/cs3org/reva/issues/2739
+   https://github.com/cs3org/reva/pull/3691
 
-   https://github.com/cs3org/reva/pull/3487
+ * Enhancement #3611: Revamp OCM invitation workflow
 
- * Enhancement #3475: Enable the style linters
+   https://github.com/cs3org/reva/issues/3540
+   https://github.com/cs3org/reva/pull/3611
 
-   We've enabled the stylecheck, whitespace, dupword, godot and dogsled linters in
-   golangci-lint and solved the related issues.
+ * Enhancement #3703: Bump reva(d) base image to alpine 3.17
 
-   https://github.com/cs3org/reva/pull/3475
+   Prevents several vulnerabilities from the base image itself:
+   https://artifacthub.io/packages/helm/cs3org/revad?modal=security-report
 
- * Enhancement #3070: Allow http service to expose prefixes containing /
-
-   https://github.com/cs3org/reva/pull/3070
-
- * Enhancement #2986: Better display name in apps for all user types
-
-   This includes a `FirstName FamilyName (domain)` format for non-primary accounts, and a
-   sanitization of the email address claim for such non-primary accounts.
-
-   https://github.com/cs3org/reva/pull/2986
-   https://github.com/cs3org/reva/pull/3280
-
- * Enhancement #3303: Added support for configuring language locales in apps
-
-   This is a partial backport from edge: we introduce a language option in the appprovider, which
-   if set is passed as appropriate parameter to the external apps in order to force a given
-   localization. In particular, for Microsoft Office 365 the DC_LLCC option is set as well. The
-   default behavior is unset, where apps try and resolve the localization from the browser
-   headers.
-
-   https://github.com/cs3org/reva/pull/3303
-
- * Enhancement #3348: Revamp lightweigth accounts
-
-   Re-implements the lighweight account scope check, making it more efficient. Also, the ACLs
-   for the EOS storage driver for the lw accounts are set atomically.
-
-   https://github.com/cs3org/reva/pull/3348
-
- * Enhancement #3304: Add http service to send email for shares
-
-   https://github.com/cs3org/reva/pull/3304
-
- * Enhancement #3072: Mesh meta data operators
-
-   To better support sites that run multiple instances, the meta data have been extended to
-   include a new hierarchy layer called 'operators'. This PR brings all necessary changes in the
-   Mentix and site accounts services.
-
-   https://github.com/cs3org/reva/pull/3072
-
- * Enhancement #3313: Fix content-type for OCM sharing
-
-   This fix change the content type to just "application/json"
-
-   https://github.com/cs3org/reva/pull/3313
-
- * Enhancement #3234: Add post create home hook for eos storage driver
-
-   https://github.com/cs3org/reva/pull/3234
-
- * Enhancement #3347: Implemented PROPFIND with 0 depth
-
-   https://github.com/cs3org/reva/pull/3347
-
- * Enhancement #3056: Add public share auth provider
-
-   Add a public share auth middleware
-
-   https://github.com/cs3org/reva/pull/3056
-
- * Enhancement #3305: Add description to public link
-
-   https://github.com/cs3org/reva/pull/3305
-
- * Enhancement #3163: Add support for quicklinks for public shares
-
-   https://github.com/cs3org/reva/pull/3163
-   https://github.com/cs3org/reva/pull/2715
-
- * Enhancement #3289: Make Refresh Lock operation WOPI compliant
-
-   We now support the WOPI compliant `UnlockAndRelock` operation. This has been implemented in
-   the Eos FS. To make use of it, we need a compatible WOPI server.
-
-   https://github.com/cs3org/reva/pull/3289
-   https://learn.microsoft.com/en-us/microsoft-365/cloud-storage-partner-program/rest/files/unlockandrelock
-
- * Enhancement #3315: Accept reva token as a bearer authentication
-
-   https://github.com/cs3org/reva/pull/3315
-
- * Enhancement #3438: Sanitize non-utf8 characters in xattr values in EOS
-
-   https://github.com/cs3org/reva/pull/3438
-
- * Enhancement #3221: Site Accounts improvements
-
-   The site accounts admin panel has been reworked and now also shows which sites aren't
-   configured properly yet. Furthermore, a bug that prevented users from changing site
-   configurations has been fixed.
-
-   https://github.com/cs3org/reva/pull/3221
-
- * Enhancement #3404: Site accounts & Mentix updates
-
-   Some small improvements to the Site Accounts and Mentix services, including normalization of
-   data exposed at the `/cs3` endpoint of Mentix.
-
-   https://github.com/cs3org/reva/pull/3404
-
- * Enhancement #3424: Expire tokens on sunday
-
-   https://github.com/cs3org/reva/pull/3424
-
- * Enhancement #2986: Use email as display name for external users opening WOPI apps
-
-   We use now the email claim for external/federated accounts as the `username` that is then
-   passed to the wopiserver and used as `displayName` in the WOPI context.
-
-   https://github.com/cs3org/reva/pull/2986
+   https://github.com/cs3org/reva/pull/3703
 
 

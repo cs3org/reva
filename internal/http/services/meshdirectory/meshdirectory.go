@@ -1,4 +1,4 @@
-// Copyright 2018-2022 CERN
+// Copyright 2018-2023 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,7 +25,7 @@ import (
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	providerv1beta1 "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
-	"github.com/cs3org/reva/internal/http/services/ocmd"
+	"github.com/cs3org/reva/internal/http/services/reqres"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/rhttp/router"
@@ -107,27 +107,27 @@ func (s *svc) serveJSON(w http.ResponseWriter, r *http.Request) {
 
 	gatewayClient, err := s.getClient()
 	if err != nil {
-		ocmd.WriteError(w, r, ocmd.APIErrorServerError,
+		reqres.WriteError(w, r, reqres.APIErrorServerError,
 			fmt.Sprintf("error getting grpc client on addr: %v", s.conf.GatewaySvc), err)
 		return
 	}
 
 	providers, err := gatewayClient.ListAllProviders(ctx, &providerv1beta1.ListAllProvidersRequest{})
 	if err != nil {
-		ocmd.WriteError(w, r, ocmd.APIErrorServerError, "error listing all providers", err)
+		reqres.WriteError(w, r, reqres.APIErrorServerError, "error listing all providers", err)
 		return
 	}
 
 	jsonResponse, err := json.Marshal(providers.Providers)
 	if err != nil {
-		ocmd.WriteError(w, r, ocmd.APIErrorServerError, "error marshalling providers data", err)
+		reqres.WriteError(w, r, reqres.APIErrorServerError, "error marshalling providers data", err)
 		return
 	}
 
 	// Write response
 	_, err = w.Write(jsonResponse)
 	if err != nil {
-		ocmd.WriteError(w, r, ocmd.APIErrorServerError, "error writing providers data", err)
+		reqres.WriteError(w, r, reqres.APIErrorServerError, "error writing providers data", err)
 		return
 	}
 

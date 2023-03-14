@@ -1,4 +1,4 @@
-// Copyright 2018-2022 CERN
+// Copyright 2018-2023 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -482,6 +482,12 @@ func (m *manager) GetPublicShareByToken(ctx context.Context, token string, auth 
 		return nil, err
 	}
 	cs3Share := conversions.ConvertToCS3PublicShare(s)
+	if expired(cs3Share) {
+		if err := m.cleanupExpiredShares(); err != nil {
+			return nil, err
+		}
+		return nil, errtypes.NotFound(token)
+	}
 	if s.ShareWith != "" {
 		if !authenticate(cs3Share, s.ShareWith, auth) {
 			// if check := checkPasswordHash(auth.Password, s.ShareWith); !check {
@@ -493,13 +499,6 @@ func (m *manager) GetPublicShareByToken(ctx context.Context, token string, auth 
 				return nil, err
 			}
 		}
-	}
-
-	if expired(cs3Share) {
-		if err := m.cleanupExpiredShares(); err != nil {
-			return nil, err
-		}
-		return nil, errtypes.NotFound(token)
 	}
 
 	return cs3Share, nil

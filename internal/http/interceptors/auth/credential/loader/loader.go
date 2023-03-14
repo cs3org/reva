@@ -1,4 +1,4 @@
-// Copyright 2018-2022 CERN
+// Copyright 2018-2023 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@ import (
 	// Load core authentication strategies.
 	_ "github.com/cs3org/reva/internal/http/interceptors/auth/credential/strategy/basic"
 	_ "github.com/cs3org/reva/internal/http/interceptors/auth/credential/strategy/bearer"
+	_ "github.com/cs3org/reva/internal/http/interceptors/auth/credential/strategy/ocmshares"
 	_ "github.com/cs3org/reva/internal/http/interceptors/auth/credential/strategy/publicshares"
 	// Add your own here.
 )

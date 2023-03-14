@@ -1,8 +1,29 @@
 name: Test
-on: [pull_request, push, workflow_dispatch]
+on:
+  pull_request:
+  push:
+    branches:
+      - "*"
+  workflow_dispatch:
 
 jobs:
-  test:
+  integration:
+    runs-on: self-hosted
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Setup Go environment
+        uses: actions/setup-go@v3.3.0
+        with:
+          go-version-file: go.mod
+      - name: Test integration
+        run: make test-integration
+        env:
+          REDIS_ADDRESS: redis:6379
+    services:
+      redis:
+        image: registry.cern.ch/docker.io/webhippie/redis
+  go:
     runs-on: self-hosted
     steps:
       - name: Checkout
@@ -12,4 +33,70 @@ jobs:
         with:
           go-version-file: go.mod
       - name: Test
-        run: make test
+        run: make test-go
+        env:
+          COVER_PROFILE: ${{ github.event_name == 'push' && 'coverage.out' || '' }}
+      - name: Run codacy-coverage-reporter
+        uses: codacy/codacy-coverage-reporter-action@v1
+        if: github.event_name == 'push'
+        with:
+          project-token: ${{ secrets.CODACY_PROJECT_TOKEN }}
+          coverage-reports: coverage.out
+          force-coverage-parser: go
+  docker:
+    strategy:
+      fail-fast: false
+      matrix:
+        file: [docker/Dockerfile.reva, docker/Dockerfile.revad-eos, docker/Dockerfile.revad-ceph]
+    uses: ./.github/workflows/docker.yml
+    with:
+      file: ${{ matrix.file }}
+  docker-revad:
+    name: docker (docker/Dockerfile.revad)
+    uses: ./.github/workflows/docker.yml
+    with:
+      file: docker/Dockerfile.revad
+      load: true
+  litmus:
+    needs: docker-revad
+    strategy:
+      fail-fast: false
+      matrix:
+        test: [litmus-1, litmus-2, litmus-3]
+    uses: ./.github/workflows/compose.yml
+    with:
+      test: ${{ matrix.test }}
+      image: ${{ needs.docker-revad.outputs.image }}
+  acceptance-1:
+    needs: docker-revad
+    uses: ./.github/workflows/compose.yml
+    with:
+      test: acceptance-1
+      image: ${{ needs.docker-revad.outputs.image }}
+      submodules: true
+  acceptance-2:
+    needs: docker-revad
+    strategy:
+      fail-fast: false
+      matrix:
+        part: [1, 3, 4, 5, 6]
+    uses: ./.github/workflows/compose.yml
+    with:
+      test: acceptance-2
+      image: ${{ needs.docker-revad.outputs.image }}
+      submodules: true
+      parts: 6
+      part: ${{ matrix.part }}
+  acceptance-3:
+    needs: docker-revad
+    strategy:
+      fail-fast: false
+      matrix:
+        part: [9]
+    uses: ./.github/workflows/compose.yml
+    with:
+      test: acceptance-3
+      image: ${{ needs.docker-revad.outputs.image }}
+      submodules: true
+      parts: 12
+      part: ${{ matrix.part }}

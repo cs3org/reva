@@ -1,4 +1,4 @@
-// Copyright 2018-2022 CERN
+// Copyright 2018-2023 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -195,7 +195,7 @@ func (s *svc) openLocalResources(ctx context.Context, ri *storageprovider.Resour
 
 	appProviderReq := &providerpb.OpenInAppRequest{
 		ResourceInfo: ri,
-		ViewMode:     providerpb.OpenInAppRequest_ViewMode(req.ViewMode),
+		ViewMode:     providerpb.ViewMode(req.ViewMode),
 		AccessToken:  accessToken,
 		Opaque:       req.Opaque,
 	}

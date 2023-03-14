@@ -1,4 +1,4 @@
-// Copyright 2018-2022 CERN
+// Copyright 2018-2023 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,7 +21,6 @@ package open
 import (
 	"context"
 	"encoding/json"
-	"net/url"
 	"os"
 	"strings"
 
@@ -107,11 +106,7 @@ func (a *authorizer) getOCMProviders(providers []*ocmprovider.ProviderInfo) (po 
 func (a *authorizer) getOCMHost(provider *ocmprovider.ProviderInfo) (string, error) {
 	for _, s := range provider.Services {
 		if s.Endpoint.Type.Name == "OCM" {
-			ocmHost, err := url.Parse(s.Host)
-			if err != nil {
-				return "", errors.Wrap(err, "json: error parsing OCM host URL")
-			}
-			return ocmHost.Host, nil
+			return s.Host, nil
 		}
 	}
 	return "", errtypes.NotFound("OCM Host")

@@ -1,4 +1,4 @@
-// Copyright 2018-2022 CERN
+// Copyright 2018-2023 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -54,7 +54,7 @@ func ocmShareUpdateCommand() *command {
 			return err
 		}
 
-		perm, _, err := getOCMSharePerm(*rol)
+		perm, err := getOCMSharePerm(*rol)
 		if err != nil {
 			return err
 		}
@@ -69,7 +69,9 @@ func ocmShareUpdateCommand() *command {
 			},
 			Field: &ocm.UpdateOCMShareRequest_UpdateField{
 				Field: &ocm.UpdateOCMShareRequest_UpdateField_Permissions{
-					Permissions: perm,
+					Permissions: &ocm.SharePermissions{
+						Permissions: perm,
+					},
 				},
 			},
 		}

@@ -1,4 +1,4 @@
-// Copyright 2018-2022 CERN
+// Copyright 2018-2023 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -148,7 +148,7 @@ func (m *manager) fetchAllGroups() {
 
 func (m *manager) fetchAllGroupAccounts() error {
 	ctx := context.Background()
-	url := fmt.Sprintf("%s/api/v1.0/Group?field=groupIdentifier&field=displayName&field=gid", m.conf.APIBaseURL)
+	url := fmt.Sprintf("%s/api/v1.0/Group?field=groupIdentifier&field=displayName&field=gid&field=isComputingGroup", m.conf.APIBaseURL)
 
 	for url != "" {
 		result, err := m.apiTokenManager.SendAPIGetRequest(ctx, url, false)
@@ -163,6 +163,11 @@ func (m *manager) fetchAllGroupAccounts() error {
 		for _, usr := range responseData {
 			groupData, ok := usr.(map[string]interface{})
 			if !ok {
+				continue
+			}
+
+			// filter computing groups
+			if is, ok := groupData["isComputingGroup"].(bool); ok && is {
 				continue
 			}
 

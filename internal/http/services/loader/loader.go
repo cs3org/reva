@@ -1,4 +1,4 @@
-// Copyright 2018-2022 CERN
+// Copyright 2018-2023 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -35,6 +35,7 @@ import (
 	_ "github.com/cs3org/reva/internal/http/services/preferences"
 	_ "github.com/cs3org/reva/internal/http/services/prometheus"
 	_ "github.com/cs3org/reva/internal/http/services/reverseproxy"
+	_ "github.com/cs3org/reva/internal/http/services/sciencemesh"
 	_ "github.com/cs3org/reva/internal/http/services/siteacc"
 	_ "github.com/cs3org/reva/internal/http/services/sysinfo"
 	_ "github.com/cs3org/reva/internal/http/services/thumbnails"

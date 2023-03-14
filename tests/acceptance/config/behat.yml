@@ -9,7 +9,7 @@ default:
       contexts:
         - RevaContext:
         - FeatureContext: &common_feature_context_params
-            baseUrl:  http://localhost:20180
+            baseUrl:  http://frontend:20180
             adminUsername: admin
             adminPassword: admin
             regularUserPassword: relativity

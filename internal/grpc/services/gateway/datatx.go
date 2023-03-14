@@ -1,4 +1,4 @@
-// Copyright 2018-2022 CERN
+// Copyright 2018-2023 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,18 +27,18 @@ import (
 	"github.com/pkg/errors"
 )
 
-func (s *svc) PullTransfer(ctx context.Context, req *datatx.PullTransferRequest) (*datatx.PullTransferResponse, error) {
+func (s *svc) CreateTransfer(ctx context.Context, req *datatx.CreateTransferRequest) (*datatx.CreateTransferResponse, error) {
 	c, err := pool.GetDataTxClient(pool.Endpoint(s.c.DataTxEndpoint))
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetDataTxClient")
-		return &datatx.PullTransferResponse{
+		return &datatx.CreateTransferResponse{
 			Status: status.NewInternal(ctx, err, "error getting data transfer client"),
 		}, nil
 	}
 
-	res, err := c.PullTransfer(ctx, req)
+	res, err := c.CreateTransfer(ctx, req)
 	if err != nil {
-		return nil, errors.Wrap(err, "gateway: error calling PullTransfer")
+		return nil, errors.Wrap(err, "gateway: error calling CreateTransfer")
 	}
 
 	return res, nil

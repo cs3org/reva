@@ -1,4 +1,4 @@
-// Copyright 2018-2022 CERN
+// Copyright 2018-2023 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -113,9 +113,9 @@ func (a *authorizer) GetInfoByDomain(ctx context.Context, domain string) (*ocmpr
 	return nil, errtypes.NotFound(domain)
 }
 
-func (a *authorizer) IsProviderAllowed(ctx context.Context, provider *ocmprovider.ProviderInfo) error {
+func (a *authorizer) IsProviderAllowed(ctx context.Context, pi *ocmprovider.ProviderInfo) error {
 	var err error
-	normalizedDomain, err := normalizeDomain(provider.Domain)
+	normalizedDomain, err := normalizeDomain(pi.Domain)
 	if err != nil {
 		return err
 	}
@@ -133,10 +133,10 @@ func (a *authorizer) IsProviderAllowed(ctx context.Context, provider *ocmprovide
 
 	switch {
 	case !providerAuthorized:
-		return errtypes.NotFound(provider.GetDomain())
+		return errtypes.NotFound(pi.GetDomain())
 	case !a.conf.VerifyRequestHostname:
 		return nil
-	case len(provider.Services) == 0:
+	case len(pi.Services) == 0:
 		return errtypes.NotSupported("No IP provided")
 	}
 
@@ -147,6 +147,7 @@ func (a *authorizer) IsProviderAllowed(ctx context.Context, provider *ocmprovide
 			if err != nil {
 				return err
 			}
+			break
 		}
 	}
 	if ocmHost == "" {
@@ -169,8 +170,9 @@ func (a *authorizer) IsProviderAllowed(ctx context.Context, provider *ocmprovide
 	}
 
 	for _, ip := range ipList {
-		if ip == provider.Services[0].Host {
+		if ip == pi.Services[0].Host {
 			providerAuthorized = true
+			break
 		}
 	}
 	if !providerAuthorized {
@@ -194,14 +196,10 @@ func (a *authorizer) getOCMProviders(providers []*ocmprovider.ProviderInfo) (po 
 	return
 }
 
-func (a *authorizer) getOCMHost(provider *ocmprovider.ProviderInfo) (string, error) {
-	for _, s := range provider.Services {
+func (a *authorizer) getOCMHost(pi *ocmprovider.ProviderInfo) (string, error) {
+	for _, s := range pi.Services {
 		if s.Endpoint.Type.Name == "OCM" {
-			ocmHost, err := url.Parse(s.Host)
-			if err != nil {
-				return "", errors.Wrap(err, "json: error parsing OCM host URL")
-			}
-			return ocmHost.Host, nil
+			return s.Host, nil
 		}
 	}
 	return "", errtypes.NotFound("OCM Host")

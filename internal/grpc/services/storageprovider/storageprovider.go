@@ -1,4 +1,4 @@
-// Copyright 2018-2022 CERN
+// Copyright 2018-2023 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -54,15 +54,16 @@ func init() {
 }
 
 type config struct {
-	MountPath           string                            `mapstructure:"mount_path" docs:"/;The path where the file system would be mounted."`
-	MountID             string                            `mapstructure:"mount_id" docs:"-;The ID of the mounted file system."`
-	Driver              string                            `mapstructure:"driver" docs:"localhome;The storage driver to be used."`
-	Drivers             map[string]map[string]interface{} `mapstructure:"drivers" docs:"url:pkg/storage/fs/localhome/localhome.go"`
-	TmpFolder           string                            `mapstructure:"tmp_folder" docs:"/var/tmp;Path to temporary folder."`
-	DataServerURL       string                            `mapstructure:"data_server_url" docs:"http://localhost/data;The URL for the data server."`
-	ExposeDataServer    bool                              `mapstructure:"expose_data_server" docs:"false;Whether to expose data server."` // if true the client will be able to upload/download directly to it
-	AvailableXS         map[string]uint32                 `mapstructure:"available_checksums" docs:"nil;List of available checksums."`
-	CustomMimeTypesJSON string                            `mapstructure:"custom_mime_types_json" docs:"nil;An optional mapping file with the list of supported custom file extensions and corresponding mime types."`
+	MountPath                       string                            `mapstructure:"mount_path" docs:"/;The path where the file system would be mounted."`
+	MountID                         string                            `mapstructure:"mount_id" docs:"-;The ID of the mounted file system."`
+	Driver                          string                            `mapstructure:"driver" docs:"localhome;The storage driver to be used."`
+	Drivers                         map[string]map[string]interface{} `mapstructure:"drivers" docs:"url:pkg/storage/fs/localhome/localhome.go"`
+	TmpFolder                       string                            `mapstructure:"tmp_folder" docs:"/var/tmp;Path to temporary folder."`
+	DataServerURL                   string                            `mapstructure:"data_server_url" docs:"http://localhost/data;The URL for the data server."`
+	ExposeDataServer                bool                              `mapstructure:"expose_data_server" docs:"false;Whether to expose data server."` // if true the client will be able to upload/download directly to it
+	AvailableXS                     map[string]uint32                 `mapstructure:"available_checksums" docs:"nil;List of available checksums."`
+	CustomMimeTypesJSON             string                            `mapstructure:"custom_mime_types_json" docs:"nil;An optional mapping file with the list of supported custom file extensions and corresponding mime types."`
+	MinimunAllowedPathLevelForShare int                               `mapstructure:"minimum_allowed_path_level_for_share"`
 }
 
 func (c *config) init() {
@@ -822,11 +823,29 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 			Status: status.NewInternal(ctx, err, "error wrapping path"),
 		}, nil
 	}
+	s.fixPermissions(md)
 	res := &provider.StatResponse{
 		Status: status.NewOK(ctx),
 		Info:   md,
 	}
 	return res, nil
+}
+
+func pathLevels(p string) int {
+	if p == "/" {
+		return 0
+	}
+	return strings.Count(p, "/")
+}
+
+func (s *service) fixPermissions(md *provider.ResourceInfo) {
+	// do not allow shares for low path levels
+	if pathLevels(md.Path) < s.conf.MinimunAllowedPathLevelForShare {
+		md.PermissionSet.AddGrant = false
+		md.PermissionSet.RemoveGrant = false
+		md.PermissionSet.DenyGrant = false
+		md.PermissionSet.UpdateGrant = false
+	}
 }
 
 func (s *service) statVirtualView(ctx context.Context, ref *provider.Reference) (*provider.StatResponse, error) {
@@ -962,6 +981,7 @@ func (s *service) ListContainer(ctx context.Context, req *provider.ListContainer
 				Status: status.NewInternal(ctx, err, "error wrapping path"),
 			}, nil
 		}
+		s.fixPermissions(md)
 		infos = append(infos, md)
 	}
 	res := &provider.ListContainerResponse{

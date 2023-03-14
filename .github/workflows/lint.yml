@@ -1,5 +1,13 @@
 name: Lint
-on: [pull_request, push, workflow_dispatch]
+on:
+  pull_request:
+    paths-ignore:
+      - "go.mod"
+      - "go.sum"
+  push:
+    branches:
+      - "*"
+  workflow_dispatch:
 
 jobs:
   lint:

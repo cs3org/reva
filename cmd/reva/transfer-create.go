@@ -1,4 +1,4 @@
-// Copyright 2018-2022 CERN
+// Copyright 2018-2023 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,7 +21,6 @@ package main
 import (
 	"io"
 	"os"
-	"strconv"
 	"strings"
 	"time"
 
@@ -31,7 +30,7 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	"github.com/cs3org/reva/pkg/ocm/share"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/jedib0t/go-pretty/table"
 	"github.com/pkg/errors"
@@ -99,42 +98,21 @@ func transferCreateCommand() *command {
 			return err
 		}
 
-		resourcePermissions, pint, err := getOCMSharePerm(editorPermission)
-		if err != nil {
-			return err
-		}
-
 		gt := provider.GranteeType_GRANTEE_TYPE_USER
 		if strings.ToLower(*granteeType) == "group" {
 			gt = provider.GranteeType_GRANTEE_TYPE_GROUP
 		}
 
 		createShareReq := &ocm.CreateOCMShareRequest{
-			Opaque: &types.Opaque{
-				Map: map[string]*types.OpaqueEntry{
-					"permissions": {
-						Decoder: "plain",
-						Value:   []byte(strconv.Itoa(pint)),
-					},
-					"name": {
-						Decoder: "plain",
-						Value:   []byte(statRes.Info.Path),
-					},
-					"protocol": {
-						Decoder: "plain",
-						Value:   []byte("datatx"),
-					},
+			Grantee: &provider.Grantee{
+				Type: gt,
+				Id: &provider.Grantee_UserId{
+					UserId: u,
 				},
 			},
 			ResourceId: statRes.Info.Id,
-			Grant: &ocm.ShareGrant{
-				Grantee: &provider.Grantee{
-					Type: gt,
-					Id: &provider.Grantee_UserId{
-						UserId: u,
-					},
-				},
-				Permissions: resourcePermissions,
+			AccessMethods: []*ocm.AccessMethod{
+				share.NewTransferAccessMethod(),
 			},
 			RecipientMeshProvider: providerInfoResp.ProviderInfo,
 		}
@@ -152,11 +130,11 @@ func transferCreateCommand() *command {
 
 		t := table.NewWriter()
 		t.SetOutputMirror(os.Stdout)
-		t.AppendHeader(table.Row{"#", "Owner.Idp", "Owner.OpaqueId", "ResourceId", "Permissions", "Type", "Grantee.Idp", "Grantee.OpaqueId", "ShareType", "Created", "Updated"})
+		t.AppendHeader(table.Row{"#", "Owner.Idp", "Owner.OpaqueId", "ResourceId", "Type", "Grantee.Idp", "Grantee.OpaqueId", "ShareType", "Created", "Updated"})
 
 		s := createShareResponse.Share
 		t.AppendRows([]table.Row{
-			{s.Id.OpaqueId, s.Owner.Idp, s.Owner.OpaqueId, s.ResourceId.String(), s.Permissions.String(),
+			{s.Id.OpaqueId, s.Owner.Idp, s.Owner.OpaqueId, s.ResourceId.String(),
 				s.Grantee.Type.String(), s.Grantee.GetUserId().Idp, s.Grantee.GetUserId().OpaqueId, s.ShareType.String(),
 				time.Unix(int64(s.Ctime.Seconds), 0), time.Unix(int64(s.Mtime.Seconds), 0)},
 		})

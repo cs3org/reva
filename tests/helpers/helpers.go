@@ -1,4 +1,4 @@
-// Copyright 2018-2022 CERN
+// Copyright 2018-2023 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,14 +21,23 @@ package helpers
 import (
 	"bytes"
 	"context"
-	"errors"
+	"encoding/json"
+	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
 
+	"github.com/pkg/errors"
+
+	gatewayv1beta1 "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	"github.com/cs3org/reva/internal/http/services/datagateway"
+	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/storage"
+	"github.com/studio-b12/gowebdav"
 )
 
 // TempDir creates a temporary directory in tmp/ and returns its path
@@ -46,12 +55,43 @@ func TempDir(name string) (string, error) {
 	if err != nil {
 		return "nil", err
 	}
-	tmpRoot, err := os.MkdirTemp(tmpDir, "reva-unit-tests-*-root")
+	tmpRoot, err := os.MkdirTemp(tmpDir, "reva-tests-*-root")
 	if err != nil {
 		return "nil", err
 	}
 
 	return tmpRoot, nil
+}
+
+// TempFile creates a temporary file returning its path.
+// The file is filled with the provider r if not nil.
+func TempFile(r io.Reader) (string, error) {
+	dir, err := TempDir("")
+	if err != nil {
+		return "", err
+	}
+	f, err := os.CreateTemp(dir, "*")
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+
+	if r != nil {
+		if _, err := io.Copy(f, r); err != nil {
+			return "", err
+		}
+	}
+	return f.Name(), nil
+}
+
+// TempJSONFile creates a temporary file returning its path.
+// The file is filled with the object encoded in json.
+func TempJSONFile(c any) (string, error) {
+	data, err := json.Marshal(c)
+	if err != nil {
+		return "", err
+	}
+	return TempFile(bytes.NewBuffer(data))
 }
 
 // Upload can be used to initiate an upload and do the upload to a storage.FS in one step.
@@ -67,4 +107,207 @@ func Upload(ctx context.Context, fs storage.FS, ref *provider.Reference, content
 	uploadRef := &provider.Reference{Path: "/" + uploadID}
 	err = fs.Upload(ctx, uploadRef, io.NopCloser(bytes.NewReader(content)))
 	return err
+}
+
+// UploadGateway uploads in one step a the content in a file.
+func UploadGateway(ctx context.Context, gw gatewayv1beta1.GatewayAPIClient, ref *provider.Reference, content []byte) error {
+	res, err := gw.InitiateFileUpload(ctx, &provider.InitiateFileUploadRequest{
+		Ref: ref,
+	})
+	if err != nil {
+		return errors.Wrap(err, "error initiating file upload")
+	}
+	if res.Status.Code != rpcv1beta1.Code_CODE_OK {
+		return errors.Errorf("error initiating file upload: %s", res.Status.Message)
+	}
+
+	var token, endpoint string
+	for _, p := range res.Protocols {
+		if p.Protocol == "simple" {
+			token, endpoint = p.Token, p.UploadEndpoint
+		}
+	}
+	httpReq, err := rhttp.NewRequest(ctx, http.MethodPut, endpoint, bytes.NewReader(content))
+	if err != nil {
+		return errors.Wrap(err, "error creating new request")
+	}
+
+	httpReq.Header.Set(datagateway.TokenTransportHeader, token)
+
+	httpRes, err := http.DefaultClient.Do(httpReq)
+	if err != nil {
+		return errors.Wrap(err, "error doing put request")
+	}
+	defer httpRes.Body.Close()
+
+	if httpRes.StatusCode != http.StatusOK {
+		return errors.Errorf("error doing put request: %s", httpRes.Status)
+	}
+
+	return nil
+}
+
+// Download downloads the content of a file in one step.
+func Download(ctx context.Context, gw gatewayv1beta1.GatewayAPIClient, ref *provider.Reference) ([]byte, error) {
+	res, err := gw.InitiateFileDownload(ctx, &provider.InitiateFileDownloadRequest{
+		Ref: ref,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if res.Status.Code != rpcv1beta1.Code_CODE_OK {
+		return nil, errors.New(res.Status.Message)
+	}
+
+	var token, endpoint string
+	for _, p := range res.Protocols {
+		if p.Protocol == "simple" {
+			token, endpoint = p.Token, p.DownloadEndpoint
+		}
+	}
+	httpReq, err := rhttp.NewRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, err
+	}
+	httpReq.Header.Set(datagateway.TokenTransportHeader, token)
+
+	httpRes, err := http.DefaultClient.Do(httpReq)
+	if err != nil {
+		return nil, err
+	}
+	defer httpRes.Body.Close()
+
+	if httpRes.StatusCode != http.StatusOK {
+		return nil, errors.New(httpRes.Status)
+	}
+
+	return io.ReadAll(httpRes.Body)
+}
+
+// Resource represents a general resource (file or folder).
+type Resource interface {
+	isResource()
+}
+
+// Folder implements the Resource interface.
+type Folder map[string]Resource
+
+func (Folder) isResource() {}
+
+// File implements the Resource interface.
+type File struct {
+	Content string
+}
+
+func (File) isResource() {}
+
+// CreateStructure creates the given structure.
+func CreateStructure(ctx context.Context, gw gatewayv1beta1.GatewayAPIClient, root string, f Resource) error {
+	switch r := f.(type) {
+	case Folder:
+		if err := CreateFolder(ctx, gw, root); err != nil {
+			return err
+		}
+		for name, resource := range r {
+			p := filepath.Join(root, name)
+			if err := CreateStructure(ctx, gw, p, resource); err != nil {
+				return err
+			}
+		}
+	case File:
+		if err := CreateFile(ctx, gw, root, []byte(r.Content)); err != nil {
+			return err
+		}
+	default:
+		return fmt.Errorf("resource %T not valid", f)
+	}
+	return nil
+}
+
+// CreateFile creates a file in the given path with an initial content.
+func CreateFile(ctx context.Context, gw gatewayv1beta1.GatewayAPIClient, path string, content []byte) error {
+	initRes, err := gw.InitiateFileUpload(ctx, &provider.InitiateFileUploadRequest{Ref: &provider.Reference{Path: path}})
+	if err != nil {
+		return err
+	}
+	var token, endpoint string
+	for _, p := range initRes.Protocols {
+		if p.Protocol == "simple" {
+			token, endpoint = p.Token, p.UploadEndpoint
+		}
+	}
+	httpReq, err := rhttp.NewRequest(ctx, http.MethodPut, endpoint, bytes.NewReader(content))
+	if err != nil {
+		return err
+	}
+
+	httpReq.Header.Set(datagateway.TokenTransportHeader, token)
+
+	httpRes, err := http.DefaultClient.Do(httpReq)
+	if err != nil {
+		return err
+	}
+	if httpRes.StatusCode != http.StatusOK {
+		return errors.New(httpRes.Status)
+	}
+	defer httpRes.Body.Close()
+	return nil
+}
+
+// CreateFolder creates a folder in the given path.
+func CreateFolder(ctx context.Context, gw gatewayv1beta1.GatewayAPIClient, path string) error {
+	res, err := gw.CreateContainer(ctx, &provider.CreateContainerRequest{
+		Ref: &provider.Reference{Path: path},
+	})
+	if err != nil {
+		return err
+	}
+	if res.Status.Code != rpcv1beta1.Code_CODE_OK {
+		return errors.New(res.Status.Message)
+	}
+	return nil
+}
+
+// SameContentWebDAV checks that starting from the root path the webdav client sees the same
+// content defined in the Resource.
+func SameContentWebDAV(cl *gowebdav.Client, root string, f Resource) (bool, error) {
+	return sameContentWebDAV(cl, root, "", f)
+}
+
+func sameContentWebDAV(cl *gowebdav.Client, root, rel string, f Resource) (bool, error) {
+	switch r := f.(type) {
+	case Folder:
+		list, err := cl.ReadDir(rel)
+		if err != nil {
+			return false, err
+		}
+		if len(list) != len(r) {
+			return false, nil
+		}
+		for _, d := range list {
+			resource, ok := r[d.Name()]
+			if !ok {
+				return false, nil
+			}
+			ok, err := sameContentWebDAV(cl, root, filepath.Join(rel, d.Name()), resource)
+			if err != nil {
+				return false, err
+			}
+			if !ok {
+				return false, nil
+			}
+		}
+		return true, nil
+	case File:
+		c, err := cl.Read(rel)
+		if err != nil {
+			return false, err
+		}
+		if !bytes.Equal(c, []byte(r.Content)) {
+			return false, nil
+		}
+		return true, nil
+	default:
+		return false, errors.New("resource not valid")
+	}
 }

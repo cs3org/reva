@@ -1,4 +1,4 @@
-// Copyright 2018-2022 CERN
+// Copyright 2018-2023 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -112,6 +112,7 @@ func checkResourcePath(path string) bool {
 		"/ocs/v2.php/cloud/capabilities",
 		"/ocs/v1.php/cloud/capabilities",
 		"/thumbnails",
+		"/ocs/v1.php/cloud/user",
 	}
 	for _, p := range paths {
 		if strings.HasPrefix(path, p) {
