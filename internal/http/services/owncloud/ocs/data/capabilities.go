@@ -174,7 +174,7 @@ type CapabilitiesFilesSharingPublic struct {
 	Multiple           ocsBool                                   `json:"multiple" xml:"multiple"`
 	SupportsUploadOnly ocsBool                                   `json:"supports_upload_only" xml:"supports_upload_only" mapstructure:"supports_upload_only"`
 	CanEdit            ocsBool                                   `json:"can_edit" xml:"can_edit" mapstructure:"can_edit"`
-	Contribute         ocsBool                                   `json:"contribute" xml:"contribute"`
+	CanContribute      ocsBool                                   `json:"can_contribute" xml:"can_contribute"`
 	Password           *CapabilitiesFilesSharingPublicPassword   `json:"password" xml:"password"`
 	ExpireDate         *CapabilitiesFilesSharingPublicExpireDate `json:"expire_date" xml:"expire_date" mapstructure:"expire_date"`
 }
