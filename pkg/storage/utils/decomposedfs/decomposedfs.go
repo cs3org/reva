@@ -58,6 +58,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/pkg/errors"
+	"golang.org/x/sync/errgroup"
 )
 
 // name is the Tracer name used to identify this instrumentation library.
@@ -747,18 +748,17 @@ func (fs *Decomposedfs) GetMD(ctx context.Context, ref *provider.Reference, mdKe
 }
 
 // ListFolder returns a list of resources in the specified folder
-func (fs *Decomposedfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys []string, fieldMask []string) (finfos []*provider.ResourceInfo, err error) {
-	var n *node.Node
-	if n, err = fs.lu.NodeFromResource(ctx, ref); err != nil {
-		return
+func (fs *Decomposedfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys []string, fieldMask []string) ([]*provider.ResourceInfo, error) {
+	n, err := fs.lu.NodeFromResource(ctx, ref)
+	if err != nil {
+		return nil, err
 	}
 
 	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "ListFolder")
 	defer span.End()
 
 	if !n.Exists {
-		err = errtypes.NotFound(filepath.Join(n.ParentID, n.Name))
-		return
+		return nil, errtypes.NotFound(filepath.Join(n.ParentID, n.Name))
 	}
 
 	rp, err := fs.p.AssemblePermissions(ctx, n)
@@ -776,22 +776,30 @@ func (fs *Decomposedfs) ListFolder(ctx context.Context, ref *provider.Reference,
 	var children []*node.Node
 	children, err = fs.tp.ListFolder(ctx, n)
 	if err != nil {
-		return
+		return nil, err
 	}
-
+	finfos := make([]*provider.ResourceInfo, len(children))
+	eg, ctx := errgroup.WithContext(ctx)
 	for i := range children {
-		np := rp
-		// add this childs permissions
-		pset, _ := n.PermissionSet(ctx)
-		node.AddPermissions(&np, &pset)
-		ri, err := children[i].AsResourceInfo(ctx, &np, mdKeys, fieldMask, utils.IsRelativeReference(ref))
-		if err != nil {
-			return nil, errtypes.InternalError(err.Error())
-		}
-		finfos = append(finfos, ri)
+		pos := i
+		eg.Go(func() error {
+			np := rp
+			// add this childs permissions
+			pset, _ := n.PermissionSet(ctx)
+			node.AddPermissions(&np, &pset)
+			ri, err := children[pos].AsResourceInfo(ctx, &np, mdKeys, fieldMask, utils.IsRelativeReference(ref))
+			if err != nil {
+				return errtypes.InternalError(err.Error())
+			}
+			finfos[pos] = ri
+			return nil
+		})
+	}
+	if err := eg.Wait(); err != nil {
+		return nil, err
 	}
 
-	return
+	return finfos, nil
 }
 
 // Delete deletes the specified resource
