@@ -20,6 +20,7 @@ package helpers
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -59,6 +60,7 @@ type TestEnv struct {
 	Ctx                  context.Context
 	SpaceRootRes         *providerv1beta1.ResourceId
 	PermissionsClient    *mocks.CS3PermissionsClient
+	Options              *options.Options
 }
 
 // Constant UUIDs for the space users
@@ -141,12 +143,21 @@ func NewTestEnv(config map[string]interface{}) (*TestEnv, error) {
 			},
 		},
 	}
-	lookup := lookup.New(metadata.XattrsBackend{}, o)
+	var lu *lookup.Lookup
+	switch o.MetadataBackend {
+	case "xattrs":
+		lu = lookup.New(metadata.XattrsBackend{}, o)
+	case "messagepack":
+		lu = lookup.New(metadata.NewMessagePackBackend(o.Root, o.FileMetadataCache), o)
+	default:
+		return nil, fmt.Errorf("unknown metadata backend %s", o.MetadataBackend)
+	}
+
 	permissions := &mocks.PermissionsChecker{}
 	cs3permissionsclient := &mocks.CS3PermissionsClient{}
 	bs := &treemocks.Blobstore{}
-	tree := tree.New(o.Root, true, true, lookup, bs)
-	fs, err := decomposedfs.New(o, lookup, decomposedfs.NewPermissions(permissions, cs3permissionsclient), tree, nil)
+	tree := tree.New(o.Root, true, true, lu, bs)
+	fs, err := decomposedfs.New(o, lu, decomposedfs.NewPermissions(permissions, cs3permissionsclient), tree, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -158,7 +169,7 @@ func NewTestEnv(config map[string]interface{}) (*TestEnv, error) {
 		Root:                 tmpRoot,
 		Fs:                   tmpFs,
 		Tree:                 tree,
-		Lookup:               lookup,
+		Lookup:               lu,
 		Permissions:          permissions,
 		Blobstore:            bs,
 		Owner:                owner,
@@ -167,6 +178,7 @@ func NewTestEnv(config map[string]interface{}) (*TestEnv, error) {
 		Users:                users,
 		Ctx:                  ctx,
 		PermissionsClient:    cs3permissionsclient,
+		Options:              o,
 	}
 
 	env.SpaceRootRes, err = env.CreateTestStorageSpace("personal", nil)

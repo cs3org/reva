@@ -53,6 +53,9 @@ func NewMessagePackBackend(rootPath string, o options.CacheOptions) MessagePackB
 	}
 }
 
+// Name returns the name of the backend
+func (MessagePackBackend) Name() string { return "messagepack" }
+
 // All reads all extended attributes for a node
 func (b MessagePackBackend) All(path string) (map[string][]byte, error) {
 	path = b.MetadataPath(path)

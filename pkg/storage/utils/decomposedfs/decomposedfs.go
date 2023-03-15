@@ -49,6 +49,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/lookup"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/migrator"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/options"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/tree"
@@ -133,6 +134,14 @@ func New(o *options.Options, lu *lookup.Lookup, p Permissions, tp Tree, es event
 	if err != nil {
 		log.Error().Err(err).Msg("could not setup tree")
 		return nil, errors.Wrap(err, "could not setup tree")
+	}
+
+	// Run migrations & return
+	m := migrator.New(lu, log)
+	err = m.RunMigrations()
+	if err != nil {
+		log.Error().Err(err).Msg("could not migrate tree")
+		return nil, errors.Wrap(err, "could not migrate tree")
 	}
 
 	if o.MaxAcquireLockCycles != 0 {

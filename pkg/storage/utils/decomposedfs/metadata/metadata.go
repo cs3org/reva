@@ -27,8 +27,11 @@ var errUnconfiguredError = errors.New("no metadata backend configured. Bailing o
 
 // Backend defines the interface for file attribute backends
 type Backend interface {
+	Name() string
+
 	All(path string) (map[string][]byte, error)
 	Get(path, key string) ([]byte, error)
+
 	GetInt64(path, key string) (int64, error)
 	List(path string) (attribs []string, err error)
 	Set(path, key string, val []byte) error
@@ -45,6 +48,9 @@ type Backend interface {
 
 // NullBackend is the default stub backend, used to enforce the configuration of a proper backend
 type NullBackend struct{}
+
+// Name returns the name of the backend
+func (NullBackend) Name() string { return "null" }
 
 // All reads all extended attributes for a node
 func (NullBackend) All(path string) (map[string][]byte, error) { return nil, errUnconfiguredError }
