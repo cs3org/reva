@@ -77,14 +77,8 @@ func (m *Migrator) RunMigrations() error {
 
 	for _, migration := range allMigrations {
 		s := m.states[migration]
-		switch s.State {
-		case "succeeded":
-			m.log.Info().Msg("Skipping finished migration " + migration + "...")
+		if s.State == "succeeded" {
 			continue
-		case "":
-			m.log.Info().Msg("Running migration " + migration + "...")
-		default:
-			m.log.Info().Msg("Re-running migration " + migration + "...")
 		}
 
 		migrateMethod := reflect.ValueOf(m).MethodByName("Migration" + migration)
