@@ -152,6 +152,7 @@ func (h *Handler) Init(c *config.Config) {
 
 	// h.c.Capabilities.FilesSharing.IsPublic.Password.EnforcedFor.ReadOnly is boolean
 	// h.c.Capabilities.FilesSharing.IsPublic.Password.EnforcedFor.ReadWrite is boolean
+	// h.c.Capabilities.FilesSharing.IsPublic.Password.EnforcedFor.ReadWriteDelete is boolean
 	// h.c.Capabilities.FilesSharing.IsPublic.Password.EnforcedFor.UploadOnly is boolean
 
 	// h.c.Capabilities.FilesSharing.IsPublic.Password.Enforced is boolean

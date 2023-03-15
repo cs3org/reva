@@ -188,9 +188,10 @@ type CapabilitiesFilesSharingPublicPassword struct {
 
 // CapabilitiesFilesSharingPublicPasswordEnforcedFor TODO document
 type CapabilitiesFilesSharingPublicPasswordEnforcedFor struct {
-	ReadOnly   ocsBool `json:"read_only" xml:"read_only,omitempty" mapstructure:"read_only"`
-	ReadWrite  ocsBool `json:"read_write" xml:"read_write,omitempty" mapstructure:"read_write"`
-	UploadOnly ocsBool `json:"upload_only" xml:"upload_only,omitempty" mapstructure:"upload_only"`
+	ReadOnly        ocsBool `json:"read_only" xml:"read_only,omitempty" mapstructure:"read_only"`
+	ReadWrite       ocsBool `json:"read_write" xml:"read_write,omitempty" mapstructure:"read_write"`
+	ReadWriteDelete ocsBool `json:"read_write_delete" xml:"read_write_delete,omitempty" mapstructure:"read_write_delete"`
+	UploadOnly      ocsBool `json:"upload_only" xml:"upload_only,omitempty" mapstructure:"upload_only"`
 }
 
 // CapabilitiesFilesSharingPublicExpireDate TODO document
