@@ -25,6 +25,7 @@ import (
 	"reflect"
 
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/lookup"
+	"github.com/rogpeppe/go-internal/lockedfile"
 	"github.com/rs/zerolog"
 )
 
@@ -63,7 +64,13 @@ func New(lu *lookup.Lookup, log *zerolog.Logger) Migrator {
 // RunMigrations runs all migrations in sequence. Note this sequence must not be changed or it might
 // damage existing decomposed fs.
 func (m *Migrator) RunMigrations() error {
-	err := m.readStates()
+	lock, err := lockedfile.OpenFile(filepath.Join(m.lu.InternalRoot(), ".migrations.lock"), os.O_WRONLY|os.O_CREATE, 0600)
+	if err != nil {
+		return err
+	}
+	defer lock.Close()
+
+	err = m.readStates()
 	if err != nil {
 		return err
 	}
