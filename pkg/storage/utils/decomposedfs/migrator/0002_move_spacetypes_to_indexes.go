@@ -27,7 +27,7 @@ import (
 )
 
 // Migration0002 migrates spacetypes to indexes
-func (m *Migrator) Migration0002() (result, error) {
+func (m *Migrator) Migration0002() (Result, error) {
 	spaceTypesPath := filepath.Join(m.lu.InternalRoot(), "spacetypes")
 	fi, err := os.Stat(spaceTypesPath)
 	if err == nil && fi.IsDir() {

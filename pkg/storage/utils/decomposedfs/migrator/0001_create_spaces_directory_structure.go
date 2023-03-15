@@ -30,7 +30,7 @@ import (
 )
 
 // Migration0001 creates the spaces directory structure
-func (m *Migrator) Migration0001() (result, error) {
+func (m *Migrator) Migration0001() (Result, error) {
 	// create spaces folder and iterate over existing nodes to populate it
 	nodesPath := filepath.Join(m.lu.InternalRoot(), "nodes")
 	fi, err := os.Stat(nodesPath)

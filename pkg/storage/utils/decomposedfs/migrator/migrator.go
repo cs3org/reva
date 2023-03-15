@@ -36,7 +36,7 @@ const (
 	resultSucceededRunAgain = "runagain"
 )
 
-type result string
+type Result string
 type migrationState struct {
 	State   string
 	Message string
@@ -80,7 +80,7 @@ func (m *Migrator) RunMigrations() error {
 
 		migrateMethod := reflect.ValueOf(m).MethodByName("Migration" + migration)
 		v := migrateMethod.Call(nil)
-		s.State = string(v[0].Interface().(result))
+		s.State = string(v[0].Interface().(Result))
 		if v[1].Interface() != nil {
 			err := v[1].Interface().(error)
 			m.log.Error().Err(err).Msg("migration " + migration + " failed")

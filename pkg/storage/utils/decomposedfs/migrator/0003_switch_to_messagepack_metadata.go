@@ -32,7 +32,7 @@ import (
 
 // Migration0003 migrates the file metadata to the current backend.
 // Only the xattrs -> messagepack path is supported.
-func (m *Migrator) Migration0003() (result, error) {
+func (m *Migrator) Migration0003() (Result, error) {
 	bod := m.detectBackendOnDisk()
 	if bod == "" {
 		return resultFailed, errors.New("could not detect metadata backend on disk")
