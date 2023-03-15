@@ -46,6 +46,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/rogpeppe/go-internal/lockedfile"
 	"github.com/rs/zerolog/log"
+	"golang.org/x/sync/errgroup"
 )
 
 //go:generate make --no-print-directory -C ../../../../.. mockery NAME=Blobstore
@@ -447,28 +448,43 @@ func (t *Tree) ListFolder(ctx context.Context, n *node.Node) ([]*node.Node, erro
 	if err != nil {
 		return nil, err
 	}
-	nodes := []*node.Node{}
+	nodes := make([]*node.Node, len(names))
+
+	eg, ctx := errgroup.WithContext(ctx)
 	for i := range names {
-		nodeID, err := readChildNodeFromLink(filepath.Join(dir, names[i]))
-		if err != nil {
-			return nil, err
-		}
+		pos := i
+		eg.Go(func() error {
+			nodeID, err := readChildNodeFromLink(filepath.Join(dir, names[pos]))
+			if err != nil {
+				return err
+			}
 
-		child, err := node.ReadNode(ctx, t.lookup, n.SpaceID, nodeID, false)
-		if err != nil {
-			return nil, err
-		}
+			child, err := node.ReadNode(ctx, t.lookup, n.SpaceID, nodeID, false, n, true)
+			if err != nil {
+				return err
+			}
 
-		// prevent listing denied resources
-		if child.IsDenied(ctx) {
-			continue
-		}
-		if child.SpaceRoot == nil {
-			child.SpaceRoot = n.SpaceRoot
-		}
-		nodes = append(nodes, child)
+			// prevent listing denied resources
+			if !child.IsDenied(ctx) {
+				if child.SpaceRoot == nil {
+					child.SpaceRoot = n.SpaceRoot
+				}
+				nodes[pos] = child
+			}
+			return nil
+		})
 	}
-	return nodes, nil
+	if err := eg.Wait(); err != nil {
+		return nil, err
+	}
+
+	retNodes := []*node.Node{}
+	for _, n := range nodes {
+		if n != nil {
+			retNodes = append(retNodes, n)
+		}
+	}
+	return retNodes, nil
 }
 
 // Delete deletes a node in the tree by moving it to the trash
