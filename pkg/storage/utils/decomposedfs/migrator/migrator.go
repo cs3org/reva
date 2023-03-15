@@ -88,7 +88,10 @@ func (m *Migrator) RunMigrations() error {
 		}
 
 		m.states[migration] = s
-		m.writeStates()
+		err = m.writeStates()
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -104,7 +107,10 @@ func (m *Migrator) readStates() error {
 	}
 
 	if len(d) > 0 {
-		json.Unmarshal(d, &m.states)
+		err = json.Unmarshal(d, &m.states)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil

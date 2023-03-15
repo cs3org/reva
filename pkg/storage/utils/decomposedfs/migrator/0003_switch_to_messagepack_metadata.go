@@ -113,7 +113,7 @@ func (m *Migrator) detectBackendOnDisk() string {
 
 	matches, _ := filepath.Glob(filepath.Join(root, "spaces", "*", "*"))
 	if len(matches) > 0 {
-		base := filepath.Join(matches[len(matches)-1])
+		base := matches[len(matches)-1]
 		spaceid := strings.ReplaceAll(
 			strings.TrimPrefix(base, filepath.Join(root, "spaces")),
 			"/", "")

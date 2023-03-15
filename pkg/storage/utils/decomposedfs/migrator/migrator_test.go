@@ -1,7 +1,7 @@
 package migrator_test
 
 import (
-	"io/ioutil"
+	"io"
 	"os"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -21,7 +21,7 @@ var _ = Describe("Migrator", func() {
 	var (
 		env *helpers.TestEnv
 
-		nullLogger = zerolog.New(ioutil.Discard).With().Logger()
+		nullLogger = zerolog.New(io.Discard).With().Logger()
 	)
 
 	BeforeEach(func() {
