@@ -231,33 +231,35 @@ func (n *Node) SpaceOwnerOrManager(ctx context.Context) *userpb.UserId {
 }
 
 // ReadNode creates a new instance from an id and checks if it exists
-func ReadNode(ctx context.Context, lu PathLookup, spaceID, nodeID string, canListDisabledSpace bool) (*Node, error) {
+func ReadNode(ctx context.Context, lu PathLookup, spaceID, nodeID string, canListDisabledSpace bool, spaceRoot *Node, skipParentCheck bool) (*Node, error) {
 	var err error
 
-	// read space root
-	r := &Node{
-		SpaceID: spaceID,
-		lu:      lu,
-		ID:      spaceID,
-	}
-	r.SpaceRoot = r
-	r.owner, err = r.readOwner()
-	switch {
-	case metadata.IsNotExist(err):
-		return r, nil // swallow not found, the node defaults to exists = false
-	case err != nil:
-		return nil, err
-	}
-	r.Exists = true
+	if spaceRoot == nil {
+		// read space root
+		spaceRoot = &Node{
+			SpaceID: spaceID,
+			lu:      lu,
+			ID:      spaceID,
+		}
+		spaceRoot.SpaceRoot = spaceRoot
+		spaceRoot.owner, err = spaceRoot.readOwner()
+		switch {
+		case metadata.IsNotExist(err):
+			return spaceRoot, nil // swallow not found, the node defaults to exists = false
+		case err != nil:
+			return nil, err
+		}
+		spaceRoot.Exists = true
 
-	// lookup name in extended attributes
-	r.Name, err = r.XattrString(prefixes.NameAttr)
-	if err != nil {
-		return nil, err
+		// lookup name in extended attributes
+		spaceRoot.Name, err = spaceRoot.XattrString(prefixes.NameAttr)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// TODO ReadNode should not check permissions
-	if !canListDisabledSpace && r.IsDisabled() {
+	if !canListDisabledSpace && spaceRoot.IsDisabled() {
 		// no permission = not found
 		return nil, errtypes.NotFound(spaceID)
 	}
@@ -267,7 +269,7 @@ func ReadNode(ctx context.Context, lu PathLookup, spaceID, nodeID string, canLis
 
 	// check if this is a space root
 	if spaceID == nodeID {
-		return r, nil
+		return spaceRoot, nil
 	}
 
 	// are we reading a revision?
@@ -288,7 +290,7 @@ func ReadNode(ctx context.Context, lu PathLookup, spaceID, nodeID string, canLis
 		SpaceID:   spaceID,
 		lu:        lu,
 		ID:        nodeID,
-		SpaceRoot: r,
+		SpaceRoot: spaceRoot,
 	}
 	nodePath := n.InternalPath()
 
@@ -340,12 +342,14 @@ func ReadNode(ctx context.Context, lu PathLookup, spaceID, nodeID string, canLis
 	//     - can be made more robust with a journal
 	//     - same recursion mechanism can be used to purge items? sth we still need to do
 	//   - flag the two above options with dtime
-	_, err = os.Stat(n.ParentPath())
-	if err != nil {
-		if errors.Is(err, fs.ErrNotExist) {
-			return nil, errtypes.NotFound(err.Error())
+	if !skipParentCheck {
+		_, err = os.Stat(n.ParentPath())
+		if err != nil {
+			if errors.Is(err, fs.ErrNotExist) {
+				return nil, errtypes.NotFound(err.Error())
+			}
+			return nil, err
 		}
-		return nil, err
 	}
 
 	if revisionSuffix == "" {
@@ -417,11 +421,10 @@ func (n *Node) Child(ctx context.Context, name string) (*Node, error) {
 	}
 
 	var c *Node
-	c, err = ReadNode(ctx, n.lu, spaceID, nodeID, false)
+	c, err = ReadNode(ctx, n.lu, spaceID, nodeID, false, n.SpaceRoot, true)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not read child node")
 	}
-	c.SpaceRoot = n.SpaceRoot
 
 	return c, nil
 }
@@ -655,14 +658,6 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 		}
 	}
 
-	var parentID *provider.ResourceId
-	if p, err := n.Parent(); err == nil {
-		parentID = &provider.ResourceId{
-			SpaceId:  p.SpaceID,
-			OpaqueId: p.ID,
-		}
-	}
-
 	ri = &provider.ResourceInfo{
 		Id:            id,
 		Path:          fn,
@@ -672,8 +667,11 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 		Target:        target,
 		PermissionSet: rp,
 		Owner:         n.Owner(),
-		ParentId:      parentID,
-		Name:          n.Name,
+		ParentId: &provider.ResourceId{
+			SpaceId:  n.SpaceID,
+			OpaqueId: n.ParentID,
+		},
+		Name: n.Name,
 	}
 
 	if n.IsProcessing() {
