@@ -36,12 +36,14 @@ const (
 	resultSucceededRunAgain = "runagain"
 )
 
-type Result string
 type migrationState struct {
 	State   string
 	Message string
 }
 type migrationStates map[string]migrationState
+
+// Result represents the result of a migration run
+type Result string
 
 // Migrator runs migrations on an existing decomposedfs
 type Migrator struct {
