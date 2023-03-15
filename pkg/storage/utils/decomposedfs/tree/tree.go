@@ -985,7 +985,7 @@ func (t *Tree) readRecycleItem(ctx context.Context, spaceID, key, path string) (
 	nodeID = strings.ReplaceAll(nodeID, "/", "")
 
 	recycleNode = node.New(spaceID, nodeID, "", "", 0, "", provider.ResourceType_RESOURCE_TYPE_INVALID, nil, t.lookup)
-	recycleNode.SpaceRoot, err = node.ReadNode(ctx, t.lookup, spaceID, spaceID, false)
+	recycleNode.SpaceRoot, err = node.ReadNode(ctx, t.lookup, spaceID, spaceID, false, nil, false)
 	if err != nil {
 		return
 	}

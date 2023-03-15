@@ -194,7 +194,7 @@ func (fs *Decomposedfs) Postprocessing(ch <-chan events.Event) {
 				keepUpload bool
 			)
 
-			n, err := node.ReadNode(ctx, fs.lu, up.Info.Storage["SpaceRoot"], up.Info.Storage["NodeId"], false)
+			n, err := node.ReadNode(ctx, fs.lu, up.Info.Storage["SpaceRoot"], up.Info.Storage["NodeId"], false, nil, true)
 			if err != nil {
 				log.Error().Err(err).Str("uploadID", ev.UploadID).Msg("could not read node")
 				continue
@@ -219,7 +219,7 @@ func (fs *Decomposedfs) Postprocessing(ch <-chan events.Event) {
 			}
 
 			now := time.Now()
-			if p, err := node.ReadNode(ctx, fs.lu, up.Info.Storage["SpaceRoot"], n.ParentID, false); err != nil {
+			if p, err := node.ReadNode(ctx, fs.lu, up.Info.Storage["SpaceRoot"], n.ParentID, false, nil, true); err != nil {
 				log.Error().Err(err).Str("uploadID", ev.UploadID).Msg("could not read parent")
 			} else {
 				// update parent tmtime to propagate etag change
