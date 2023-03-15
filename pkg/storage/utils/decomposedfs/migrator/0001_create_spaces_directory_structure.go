@@ -23,7 +23,6 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/cs3org/reva/v2/pkg/logger"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/lookup"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
@@ -51,7 +50,7 @@ func (m *Migrator) Migration0001() (Result, error) {
 			attr, err := m.lu.MetadataBackend().Get(nodePath, prefixes.ParentidAttr)
 			if err == nil && string(attr) == node.RootID {
 				if err := m.moveNode(n.Name(), n.Name()); err != nil {
-					logger.New().Error().Err(err).
+					m.log.Error().Err(err).
 						Str("space", n.Name()).
 						Msg("could not move space")
 					continue
@@ -78,7 +77,7 @@ func (m *Migrator) moveNode(spaceID, nodeID string) error {
 		old := filepath.Join(m.lu.InternalRoot(), "nodes", child.Name())
 		new := filepath.Join(m.lu.InternalRoot(), "spaces", lookup.Pathify(spaceID, 1, 2), "nodes", lookup.Pathify(child.Name(), 4, 2))
 		if err := os.Rename(old, new); err != nil {
-			logger.New().Error().Err(err).
+			m.log.Error().Err(err).
 				Str("space", spaceID).
 				Str("nodes", child.Name()).
 				Str("oldpath", old).
@@ -102,20 +101,20 @@ func (m *Migrator) linkSpaceNode(spaceType, spaceID string) {
 	if errors.Is(err, os.ErrNotExist) {
 		err = os.Symlink(expectedTarget, spaceTypesPath)
 		if err != nil {
-			logger.New().Error().Err(err).
+			m.log.Error().Err(err).
 				Str("space_type", spaceType).
 				Str("space", spaceID).
 				Msg("could not create symlink")
 		}
 	} else {
 		if err != nil {
-			logger.New().Error().Err(err).
+			m.log.Error().Err(err).
 				Str("space_type", spaceType).
 				Str("space", spaceID).
 				Msg("could not read symlink")
 		}
 		if linkTarget != expectedTarget {
-			logger.New().Warn().
+			m.log.Warn().
 				Str("space_type", spaceType).
 				Str("space", spaceID).
 				Str("expected", expectedTarget).
