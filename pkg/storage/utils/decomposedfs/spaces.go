@@ -49,12 +49,12 @@ import (
 )
 
 const (
-	spaceTypePersonal = "personal"
-	// spaceTypeProject  = "project"
-	spaceTypeShare = "share"
-	spaceTypeAny   = "*"
-	spaceIDAny     = "*"
-	userIDAny      = "*"
+	_spaceTypePersonal = "personal"
+	_spaceTypeProject  = "project"
+	spaceTypeShare     = "share"
+	spaceTypeAny       = "*"
+	spaceIDAny         = "*"
+	userIDAny          = "*"
 
 	quotaUnrestricted = 0
 )
@@ -78,7 +78,7 @@ func (fs *Decomposedfs) CreateStorageSpace(ctx context.Context, req *provider.Cr
 	}
 	// TODO enforce a uuid?
 	// TODO clarify if we want to enforce a single personal storage space or if we want to allow sending the spaceid
-	if req.Type == spaceTypePersonal {
+	if req.Type == _spaceTypePersonal {
 		spaceID = req.GetOwner().GetId().GetOpaqueId()
 		alias = templates.WithSpacePropertiesAndUser(u, req.Type, req.Name, fs.o.PersonalSpaceAliasTemplate)
 	}
@@ -157,7 +157,7 @@ func (fs *Decomposedfs) CreateStorageSpace(ctx context.Context, req *provider.Cr
 
 	ctx = context.WithValue(ctx, utils.SpaceGrant, struct{ SpaceType string }{SpaceType: req.Type})
 
-	if req.Type != spaceTypePersonal {
+	if req.Type != _spaceTypePersonal {
 		u := ctxpkg.ContextMustGetUser(ctx)
 		if err := fs.AddGrant(ctx, &provider.Reference{
 			ResourceId: &provider.ResourceId{
@@ -531,10 +531,22 @@ func (fs *Decomposedfs) UpdateStorageSpace(ctx context.Context, req *provider.Up
 		}
 	}
 
-	if mapHasKey(metadata, prefixes.QuotaAttr) && !fs.p.SetSpaceQuota(ctx, spaceID) {
-		return &provider.UpdateStorageSpaceResponse{
-			Status: &v1beta11.Status{Code: v1beta11.Code_CODE_PERMISSION_DENIED},
-		}, nil
+	if mapHasKey(metadata, prefixes.QuotaAttr) {
+		typ, err := spaceNode.SpaceRoot.Xattr(prefixes.SpaceTypeAttr)
+		if err != nil {
+			return &provider.UpdateStorageSpaceResponse{
+				Status: &v1beta11.Status{
+					Code:    v1beta11.Code_CODE_INTERNAL,
+					Message: "space has no type",
+				},
+			}, nil
+		}
+
+		if !fs.p.SetSpaceQuota(ctx, spaceID, string(typ)) {
+			return &provider.UpdateStorageSpaceResponse{
+				Status: &v1beta11.Status{Code: v1beta11.Code_CODE_PERMISSION_DENIED},
+			}, nil
+		}
 	}
 
 	err = spaceNode.SetXattrs(metadata, true)

@@ -43,8 +43,15 @@ func (p Permissions) CreateSpace(ctx context.Context, spaceid string) bool {
 }
 
 // SetSpaceQuota returns true when the user is allowed to change the spaces quota
-func (p Permissions) SetSpaceQuota(ctx context.Context, spaceid string) bool {
-	return p.checkPermission(ctx, "set-space-quota", spaceRef(spaceid))
+func (p Permissions) SetSpaceQuota(ctx context.Context, spaceid string, spaceType string) bool {
+	switch spaceType {
+	default:
+		return false // only quotas of personal and project space may be changed
+	case _spaceTypePersonal:
+		return p.checkPermission(ctx, "set-space-quota", spaceRef(spaceid))
+	case _spaceTypeProject:
+		return p.checkPermission(ctx, "Drive.ReadWriteQuota.Project", spaceRef(spaceid))
+	}
 }
 
 // ManageSpaceProperties returns true when the user is allowed to change space properties (name/subtitle)
