@@ -318,6 +318,7 @@ func (lu *Lookup) CopyMetadataWithSourceLock(sourcePath, targetPath string, filt
 	return lu.MetadataBackend().SetMultiple(targetPath, newAttrs, true)
 }
 
+// DetectBackendOnDisk returns the name of the metadata backend being used on disk
 func DetectBackendOnDisk(root string) string {
 	matches, _ := filepath.Glob(filepath.Join(root, "spaces", "*", "*"))
 	if len(matches) > 0 {
