@@ -317,3 +317,23 @@ func (lu *Lookup) CopyMetadataWithSourceLock(sourcePath, targetPath string, filt
 
 	return lu.MetadataBackend().SetMultiple(targetPath, newAttrs, true)
 }
+
+func DetectBackendOnDisk(root string) string {
+	matches, _ := filepath.Glob(filepath.Join(root, "spaces", "*", "*"))
+	if len(matches) > 0 {
+		base := matches[len(matches)-1]
+		spaceid := strings.ReplaceAll(
+			strings.TrimPrefix(base, filepath.Join(root, "spaces")),
+			"/", "")
+		spaceRoot := Pathify(spaceid, 4, 2)
+		_, err := os.Stat(filepath.Join(base, "nodes", spaceRoot+".mpk"))
+		if err == nil {
+			return "mpk"
+		}
+		_, err = os.Stat(filepath.Join(base, "nodes", spaceRoot+".ini"))
+		if err == nil {
+			return "ini"
+		}
+	}
+	return "xattrs"
+}

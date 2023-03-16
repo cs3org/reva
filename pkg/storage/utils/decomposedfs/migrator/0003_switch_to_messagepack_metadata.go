@@ -33,7 +33,7 @@ import (
 // Migration0003 migrates the file metadata to the current backend.
 // Only the xattrs -> messagepack path is supported.
 func (m *Migrator) Migration0003() (Result, error) {
-	bod := m.detectBackendOnDisk()
+	bod := lookup.DetectBackendOnDisk(m.lu.InternalRoot())
 	if bod == "" {
 		return resultFailed, errors.New("could not detect metadata backend on disk")
 	}
@@ -105,26 +105,4 @@ func (m *Migrator) Migration0003() (Result, error) {
 
 	m.log.Info().Msg("done.")
 	return resultSucceeded, nil
-}
-
-func (m *Migrator) detectBackendOnDisk() string {
-	root := m.lu.InternalRoot()
-
-	matches, _ := filepath.Glob(filepath.Join(root, "spaces", "*", "*"))
-	if len(matches) > 0 {
-		base := matches[len(matches)-1]
-		spaceid := strings.ReplaceAll(
-			strings.TrimPrefix(base, filepath.Join(root, "spaces")),
-			"/", "")
-		spaceRoot := lookup.Pathify(spaceid, 4, 2)
-		_, err := os.Stat(filepath.Join(base, "nodes", spaceRoot+".mpk"))
-		if err == nil {
-			return "mpk"
-		}
-		_, err = os.Stat(filepath.Join(base, "nodes", spaceRoot+".ini"))
-		if err == nil {
-			return "ini"
-		}
-	}
-	return "xattrs"
 }
