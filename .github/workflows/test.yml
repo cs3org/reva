@@ -56,36 +56,47 @@ jobs:
     uses: ./.github/workflows/docker.yml
     with:
       file: docker/Dockerfile.revad
-      tags: revad:test
       load: true
-  test:
+  litmus:
     needs: docker-revad
-    runs-on: self-hosted
     strategy:
       fail-fast: false
       matrix:
-        test: [litmus-1, litmus-2, litmus-3, acceptance-1]
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-      - name: Checkout core
-        uses: actions/checkout@v3
-        if: matrix.test == 'acceptance-1'
-        with:
-          repository: owncloud/ocis
-          ref: ${{ vars.OCIS_COMMITID }}
-          path: tests/ocis
-      - name: Checkout testing
-        uses: actions/checkout@v3
-        if: matrix.test == 'acceptance-1'
-        with:
-          repository: owncloud/testing
-          path: tests/testing
-      - name: Download image
-        uses: ishworkh/docker-image-artifact-download@v1
-        with:
-          image: revad:test
-      - name: Test
-        run: make ${{ matrix.test }} -o test-docker
-        env:
-          REVAD_IMAGE: revad:test
+        test: [litmus-1, litmus-2, litmus-3]
+    uses: ./.github/workflows/compose.yml
+    with:
+      test: ${{ matrix.test }}
+      image: ${{ needs.docker-revad.outputs.image }}
+  acceptance-1:
+    needs: docker-revad
+    uses: ./.github/workflows/compose.yml
+    with:
+      test: acceptance-1
+      image: ${{ needs.docker-revad.outputs.image }}
+      submodules: true
+  acceptance-2:
+    needs: docker-revad
+    strategy:
+      fail-fast: false
+      matrix:
+        part: [1, 3, 4, 5, 6]
+    uses: ./.github/workflows/compose.yml
+    with:
+      test: acceptance-2
+      image: ${{ needs.docker-revad.outputs.image }}
+      submodules: true
+      parts: 6
+      part: ${{ matrix.part }}
+  acceptance-3:
+    needs: docker-revad
+    strategy:
+      fail-fast: false
+      matrix:
+        part: [9]
+    uses: ./.github/workflows/compose.yml
+    with:
+      test: acceptance-3
+      image: ${{ needs.docker-revad.outputs.image }}
+      submodules: true
+      parts: 12
+      part: ${{ matrix.part }}

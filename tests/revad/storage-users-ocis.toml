@@ -18,7 +18,7 @@ driver = "ocis"
 mount_path = "/users"
 mount_id = "123e4567-e89b-12d3-a456-426655440000"
 expose_data_server = true
-data_server_url = "http://storage-users-ocis:11001/data"
+data_server_url = "http://storage-users:11001/data"
 gateway_addr = "gateway:19000"
 
 [grpc.services.storageprovider.drivers.ocis]

@@ -22,6 +22,6 @@ providers = "fixtures/ocm-providers.demo.json"
 [http.services.datagateway]
 
 [http.services.dataprovider]
-driver = "ocm"
+driver = "ocmreceived"
 
-[http.services.dataprovider.drivers.ocm]
+[http.services.dataprovider.drivers.ocmreceived]

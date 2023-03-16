@@ -22,6 +22,8 @@ home_provider = "/home"
 [grpc.services.storageregistry.drivers.static.rules]
 "/home" = {"address" = "{{grpc_address}}"}
 "123e4567-e89b-12d3-a456-426655440000" = {"address" = "{{grpc_address}}"}
+"/ocm" = {"address" = "{{cernboxoutcomingocm_address}}"}
+"ocm" = {"address" = "{{cernboxoutcomingocm_address}}"}
 
 [grpc.services.storageprovider]
 driver = "localhome"
@@ -37,9 +39,12 @@ driver = "static"
 
 [grpc.services.authregistry.drivers.static.rules]
 basic = "{{grpc_address}}"
+ocmshares = "{{cernboxoutcomingocm_address}}"
+machine = "{{cernboxmachineauth_address}}"
 
 [grpc.services.ocminvitemanager]
 driver = "json"
+provider_domain = "cernbox.cern.ch"
 
 [grpc.services.ocminvitemanager.drivers.json]
 file = "{{invite_token_file}}"
@@ -52,7 +57,7 @@ providers = "{{file_providers}}"
 
 [grpc.services.ocmshareprovider]
 driver = "json"
-webdav_prefix = "http://{{cernboxwebdav_address}}/remote.php/dav/files"
+webdav_endpoint = "http://{{cernboxwebdav_address}}"
 
 [grpc.services.ocmshareprovider.drivers.json]
 file = "{{ocm_share_cernbox_file}}"

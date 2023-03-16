@@ -62,13 +62,15 @@ func (s *svc) Close() error {
 }
 
 type config struct {
-	Prefix           string                      `mapstructure:"prefix"`
-	SMTPCredentials  *smtpclient.SMTPCredentials `mapstructure:"smtp_credentials"`
-	GatewaySvc       string                      `mapstructure:"gatewaysvc"`
-	MeshDirectoryURL string                      `mapstructure:"mesh_directory_url"`
-	ProviderDomain   string                      `mapstructure:"provider_domain"`
-	SubjectTemplate  string                      `mapstructure:"subject_template"`
-	BodyTemplatePath string                      `mapstructure:"body_template_path"`
+	Prefix             string                      `mapstructure:"prefix"`
+	SMTPCredentials    *smtpclient.SMTPCredentials `mapstructure:"smtp_credentials"`
+	GatewaySvc         string                      `mapstructure:"gatewaysvc"`
+	MeshDirectoryURL   string                      `mapstructure:"mesh_directory_url"`
+	ProviderDomain     string                      `mapstructure:"provider_domain"`
+	SubjectTemplate    string                      `mapstructure:"subject_template"`
+	BodyTemplatePath   string                      `mapstructure:"body_template_path"`
+	OCMMountPoint      string                      `mapstructure:"ocm_mount_point"`
+	InviteLinkTemplate string                      `mapstructure:"invite_link_template"`
 }
 
 func (c *config) init() {
@@ -98,13 +100,18 @@ func (s *svc) routerInit() error {
 		return err
 	}
 
+	appsHandler := new(appsHandler)
+	if err := appsHandler.init(s.conf); err != nil {
+		return err
+	}
+
 	s.router.Get("/generate-invite", tokenHandler.Generate)
 	s.router.Get("/list-invite", tokenHandler.ListInvite)
 	s.router.Post("/accept-invite", tokenHandler.AcceptInvite)
 	s.router.Get("/find-accepted-users", tokenHandler.FindAccepted)
 	s.router.Get("/list-providers", providersHandler.ListProviders)
 	s.router.Post("/create-share", sharesHandler.CreateShare)
-
+	s.router.Post("/open-in-app", appsHandler.OpenInApp)
 	return nil
 }
 

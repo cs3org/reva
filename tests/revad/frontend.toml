@@ -18,7 +18,7 @@ auth_manager = "oidc"
 
 # If you want to use your own openid provider change this config
 [grpc.services.authprovider.auth_managers.oidc]
-issuer = "http://localhost:20080"
+issuer = "http://frontend:20080"
 
 [http]
 address = "0.0.0.0:20080"
@@ -113,10 +113,6 @@ resumable = "1.0.0"
 extension = "creation,creation-with-upload"
 http_method_override = ""
 max_chunk_size = 0
-
-# serve /ocm
-[http.services.ocmd]
-prefix = "ocm"
 
 [http.middlewares.providerauthorizer]
 driver = "json"

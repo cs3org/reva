@@ -19,6 +19,7 @@
 package sql
 
 import (
+	"database/sql"
 	"strconv"
 	"strings"
 
@@ -135,7 +136,7 @@ type dbShare struct {
 	Initiator  string
 	Ctime      int
 	Mtime      int
-	Expiration int
+	Expiration sql.NullInt64
 	ShareType  ShareType
 }
 
@@ -157,7 +158,7 @@ type dbReceivedShare struct {
 	Initiator  string
 	Ctime      int
 	Mtime      int
-	Expiration int
+	Expiration sql.NullInt64
 	Type       ShareType
 	State      ShareState
 }
@@ -219,9 +220,9 @@ func convertToCS3OCMShare(s *dbShare, am []*ocm.AccessMethod) *ocm.Share {
 		ShareType:     ocm.ShareType_SHARE_TYPE_USER,
 		AccessMethods: am,
 	}
-	if s.Expiration != 0 {
+	if s.Expiration.Valid {
 		share.Expiration = &types.Timestamp{
-			Seconds: uint64(s.Expiration),
+			Seconds: uint64(s.Expiration.Int64),
 		}
 	}
 	return share
@@ -258,9 +259,9 @@ func convertToCS3OCMReceivedShare(s *dbReceivedShare, p []*ocm.Protocol) *ocm.Re
 		State:        convertToCS3OCMShareState(s.State),
 		Protocols:    p,
 	}
-	if s.Expiration != 0 {
+	if s.Expiration.Valid {
 		share.Expiration = &types.Timestamp{
-			Seconds: uint64(s.Expiration),
+			Seconds: uint64(s.Expiration.Int64),
 		}
 	}
 	return share

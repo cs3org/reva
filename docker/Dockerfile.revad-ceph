@@ -38,8 +38,13 @@ ENV GOPATH /go
 
 WORKDIR /go/src/github/cs3org/reva
 COPY . .
+
+ARG GIT_COMMIT
+ARG VERSION
+ENV GIT_COMMIT=$GIT_COMMIT
+ENV VERSION=$VERSION
 RUN mkdir -p /go/bin && \
-    make revad-cephfs && \
+    make revad-ceph && \
     cp /go/src/github/cs3org/reva/cmd/revad/revad /usr/bin/revad
 
 RUN cp -r examples/ceph /etc/

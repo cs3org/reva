@@ -1,0 +1,40 @@
+name: Compose
+on:
+  workflow_call:
+    inputs:
+      test:
+        required: true
+        type: string
+      image:
+        required: true
+        type: string
+      submodules:
+        type: boolean
+      parts:
+        type: number
+      part:
+        type: number
+
+jobs:
+  compose:
+    runs-on: self-hosted
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          submodules: ${{ inputs.submodules }}
+      - name: Download image
+        uses: ishworkh/docker-image-artifact-download@v1
+        with:
+          image: ${{ inputs.image }}
+      - name: Test
+        run: make ${{ inputs.test }} -o docker-revad
+        env:
+          REVAD_IMAGE: ${{ inputs.image }}
+          PARTS: ${{ inputs.parts }}
+          PART: ${{ inputs.part }}
+      - name: Clean
+        if: always()
+        run: make docker-clean
+        env:
+          REVAD_IMAGE: ${{ inputs.image }}

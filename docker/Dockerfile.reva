@@ -16,7 +16,7 @@
 # granted to it by virtue of its status as an Intergovernmental Organization
 # or submit itself to any jurisdiction.
 
-FROM golang:alpine3.16 as builder
+FROM golang:alpine3.17 as builder
 
 RUN apk --no-cache add \
   ca-certificates \
@@ -31,6 +31,10 @@ ENV GOPATH /go
 
 WORKDIR /go/src/github/cs3org/reva
 COPY . .
+ARG GIT_COMMIT
+ARG VERSION
+ENV GIT_COMMIT=$GIT_COMMIT
+ENV VERSION=$VERSION
 RUN make reva && cp /go/src/github/cs3org/reva/cmd/reva/reva /go/bin/reva
 
 FROM scratch

@@ -1,3 +1,6 @@
+[log]
+mode = "json"
+
 [shared]
 gatewaysvc = "{{cesnetgw_address}}"
 

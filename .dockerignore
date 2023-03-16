@@ -1,7 +1,9 @@
 .github
+.git
 changelog
+docker
 docs
-grpc-tests
 tests
+toolchain
 tools
 *.md

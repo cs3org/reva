@@ -99,7 +99,7 @@ func storeWebDAVAccessMethod(tx *sql.Tx, shareID int64, o *ocm.AccessMethod_Webd
 }
 
 func storeWebappAccessMethod(tx *sql.Tx, shareID int64, o *ocm.AccessMethod_WebappOptions) error {
-	amID, err := storeAccessMethod(tx, shareID, WebDAVAccessMethod)
+	amID, err := storeAccessMethod(tx, shareID, WebappAccessMethod)
 	if err != nil {
 		return err
 	}
@@ -117,7 +117,7 @@ func storeTransferAccessMethod(tx *sql.Tx, shareID int64, _ *ocm.AccessMethod_Tr
 }
 
 func storeAccessMethod(tx *sql.Tx, shareID int64, t AccessMethod) (int64, error) {
-	query := "INSERT INTO ocm_shares_access_method SET ocm_share_id=?, type=?"
+	query := "INSERT INTO ocm_shares_access_methods SET ocm_share_id=?, type=?"
 	params := []any{shareID, int(t)}
 
 	res, err := tx.Exec(query, params...)
@@ -214,6 +214,8 @@ func (m *mgr) GetShare(ctx context.Context, user *userpb.User, ref *ocm.ShareRef
 		s, err = m.getByID(ctx, user, ref.GetId())
 	case ref.GetKey() != nil:
 		s, err = m.getByKey(ctx, user, ref.GetKey())
+	case ref.GetToken() != "":
+		s, err = m.getByToken(ctx, ref.GetToken())
 	default:
 		err = errtypes.NotFound(ref.String())
 	}
@@ -258,8 +260,26 @@ func (m *mgr) getByKey(ctx context.Context, user *userpb.User, key *ocm.ShareKey
 	return convertToCS3OCMShare(&s, am), nil
 }
 
+func (m *mgr) getByToken(ctx context.Context, token string) (*ocm.Share, error) {
+	query := "SELECT id, token, fileid_prefix, item_source, name, share_with, owner, initiator, ctime, mtime, expiration, type FROM ocm_shares WHERE token=?"
+
+	var s dbShare
+	if err := m.db.QueryRowContext(ctx, query, token).Scan(&s.ID, &s.Token, &s.Prefix, &s.ItemSource, &s.Name, &s.ShareWith, &s.Owner, &s.Initiator, &s.Ctime, &s.Mtime, &s.Expiration, &s.ShareType); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, share.ErrShareNotFound
+		}
+	}
+
+	am, err := m.getAccessMethods(ctx, s.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	return convertToCS3OCMShare(&s, am), nil
+}
+
 func (m *mgr) getAccessMethods(ctx context.Context, id int) ([]*ocm.AccessMethod, error) {
-	query := "SELECT m.type, dav.permissions, app.view_mode FROM ocm_shares_access_method as m LEFT JOIN ocm_access_method_webdav as dav ON m.id=dav.ocm_access_method_id LEFT JOIN ocm_access_method_webapp as app ON m.id=app.ocm_access_method_id WHERE m.ocm_share_id=?"
+	query := "SELECT m.type, dav.permissions, app.view_mode FROM ocm_shares_access_methods as m LEFT JOIN ocm_access_method_webdav as dav ON m.id=dav.ocm_access_method_id LEFT JOIN ocm_access_method_webapp as app ON m.id=app.ocm_access_method_id WHERE m.ocm_share_id=?"
 
 	var methods []*ocm.AccessMethod
 	rows, err := m.db.QueryContext(ctx, query, id)
@@ -415,7 +435,7 @@ func (m *mgr) getAccessMethodsIds(ctx context.Context, ids []any) (map[string][]
 		return methods, nil
 	}
 
-	query := "SELECT m.ocm_share_id, m.type, dav.permissions, app.view_mode FROM ocm_shares_access_method as m LEFT JOIN ocm_access_method_webdav as dav ON m.id=dav.ocm_access_method_id LEFT JOIN ocm_access_method_webapp as app ON m.id=app.ocm_access_method_id WHERE m.ocm_share_id IN "
+	query := "SELECT m.ocm_share_id, m.type, dav.permissions, app.view_mode FROM ocm_shares_access_methods as m LEFT JOIN ocm_access_method_webdav as dav ON m.id=dav.ocm_access_method_id LEFT JOIN ocm_access_method_webapp as app ON m.id=app.ocm_access_method_id WHERE m.ocm_share_id IN "
 	in := strings.Repeat("?,", len(ids))
 	query += "(" + in[:len(in)-1] + ")"
 

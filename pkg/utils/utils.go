@@ -368,7 +368,19 @@ func HasPublicShareRole(u *userpb.User) (string, bool) {
 	return "", false
 }
 
-// HasPermissions returns true if all permissions defined in the stuict toCheck
+// HasOCMShareRole return true if the user has a ocm share role.
+// If yes, the string is the type of role, viewer, editor or uploader.
+func HasOCMShareRole(u *userpb.User) (string, bool) {
+	if u.Opaque == nil {
+		return "", false
+	}
+	if ocmShare, ok := u.Opaque.Map["ocm-share-role"]; ok {
+		return string(ocmShare.Value), true
+	}
+	return "", false
+}
+
+// HasPermissions returns true if all permissions defined in the struct toCheck
 // are set in the target.
 func HasPermissions(target, toCheck *provider.ResourcePermissions) bool {
 	targetStruct := reflect.ValueOf(target).Elem()
@@ -383,7 +395,7 @@ func HasPermissions(target, toCheck *provider.ResourcePermissions) bool {
 	return true
 }
 
-// UserIsLightweight returns true if the user is a lightweith
+// UserIsLightweight returns true if the user is a lightweight
 // or federated account.
 func UserIsLightweight(u *userpb.User) bool {
 	return u.Id.Type == userpb.UserType_USER_TYPE_FEDERATED ||
