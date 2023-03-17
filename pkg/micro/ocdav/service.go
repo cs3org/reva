@@ -38,6 +38,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"go-micro.dev/v4"
 	"go-micro.dev/v4/server"
+	"go-micro.dev/v4/transport"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/trace"
 )
@@ -65,6 +66,8 @@ func Service(opts ...Option) (micro.Service, error) {
 		server.Name(sopts.Name),
 		server.Address(sopts.Address), // Address defaults to ":0" and will pick any free port
 		server.Version(sopts.config.VersionString),
+		server.Transport(transport.NewHTTPTransport(transport.TLSConfig(sopts.TLSConfig))),
+		server.Metadata(map[string]string{"use_tls": "true"}),
 	)
 
 	tp := rtrace.GetTracerProvider(sopts.TracingEnabled, sopts.TracingCollector, sopts.TracingEndpoint, sopts.Name)
