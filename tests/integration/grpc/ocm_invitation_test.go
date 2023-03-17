@@ -131,14 +131,14 @@ var _ = Describe("ocm invitation workflow", func() {
 			Expect(err).ToNot(HaveOccurred())
 			ctxEinstein = ctxWithAuthToken(tokenManager, einstein)
 			ctxMarie = ctxWithAuthToken(tokenManager, marie)
+			variables["ocm_driver"] = driver
 			revads, err = startRevads(map[string]string{
 				"cernboxgw":   "ocm-server-cernbox-grpc.toml",
 				"cernboxhttp": "ocm-server-cernbox-http.toml",
 				"cesnetgw":    "ocm-server-cesnet-grpc.toml",
 				"cesnethttp":  "ocm-server-cesnet-http.toml",
 			}, map[string]string{
-				"providers":  "ocm-providers.demo.json",
-				"ocm_driver": driver,
+				"providers": "ocm-providers.demo.json",
 			}, nil, variables)
 			Expect(err).ToNot(HaveOccurred())
 			cernboxgw, err = pool.GetGatewayServiceClient(pool.Endpoint(revads["cernboxgw"].GrpcAddress))
