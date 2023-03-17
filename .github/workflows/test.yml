@@ -9,8 +9,6 @@ on:
 jobs:
   integration:
     runs-on: self-hosted
-    container:
-      image: ubuntu
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -24,13 +22,15 @@ jobs:
           REDIS_ADDRESS: redis:6379
           SQL_USERNAME: root
           SQL_PASSWORD: my-secret-pw
-          SQL_ADDRESS: mysql:3306
+          SQL_ADDRESS: localhost:3306
           SQL_DBNAME: reva
     services:
       redis:
         image: registry.cern.ch/docker.io/webhippie/redis
       mysql:
         image: mysql
+        ports:
+          - 3306:3306
         env:
           MYSQL_ROOT_PASSWORD: my-secret-pw
           MYSQL_DATABASE: reva
