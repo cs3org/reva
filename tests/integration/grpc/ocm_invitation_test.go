@@ -180,7 +180,7 @@ var _ = Describe("ocm invitation workflow", func() {
 
 					Expect(forwardRes.DisplayName).To(Equal(einstein.DisplayName))
 					Expect(forwardRes.Email).To(Equal(einstein.Mail))
-					Expect(forwardRes.UserId).To(Equal(einstein.Id))
+					Expect(utils.UserEqual(forwardRes.UserId, einstein.Id)).To(BeTrue())
 
 					usersRes1, err := cernboxgw.FindAcceptedUsers(ctxEinstein, &invitepb.FindAcceptedUsersRequest{})
 					Expect(err).ToNot(HaveOccurred())
