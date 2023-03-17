@@ -35,19 +35,15 @@ docs/public/
 docs/resources/
 docs/node_modules/
 docs/tech-doc-hugo
-docs/themes/
 
 dist/
 bin/
 
 # API acceptance tests
-composer.lock
-/vendor
-/vendor-php
-vendor-bin/**/vendor
-vendor-bin/**/composer.lock
 tests/acceptance/output
 tmp/
+tests/ocis/tests/acceptance/tus-upload-test-*
+tests/ocis/tests/acceptance/work_tmp
 
 # drone
 .drone.yml

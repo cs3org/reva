@@ -1,5 +1,5 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0) [![GoDoc](https://godoc.org/github.com/cs3org/reva?status.svg)](https://godoc.org/github.com/cs3org/reva)
- [![Gitter chat](https://badges.gitter.im/cs3org/reva.svg)](https://gitter.im/cs3org/reva) [![Build Status](https://drone.cernbox.cern.ch/api/badges/cs3org/reva/status.svg)](https://drone.cernbox.cern.ch/cs3org/reva)
+ [![Gitter chat](https://badges.gitter.im/cs3org/reva.svg)](https://gitter.im/cs3org/reva) ![Build Status](https://github.com/cs3org/reva/actions/workflows/docker.yml/badge.svg?branch=master&event=push)
  [![Go Report Card](https://goreportcard.com/badge/github.com/cs3org/reva)](https://goreportcard.com/report/github.com/cs3org/reva) [![FOSSA Status](https://app.fossa.com/api/projects/custom%2B11650%2Fcs3org%2Freva.svg?type=shield)](https://app.fossa.com/projects/custom%2B11650%2Fcs3org%2Freva?ref=badge_shield)
 ================
 
@@ -134,9 +134,9 @@ This will require some PHP-related tools to run, for instance on Ubuntu you will
     ../../../cmd/revad/revad -c ldap-users.toml
     ```
 
-3.  clone ownCloud 10
+3.  clone ownCloud Infinite Scale `OCIS`
     ```
-    git clone https://github.com/owncloud/core.git ./testrunner
+    git clone https://github.com/owncloud/ocis.git ./testrunner
     ```
 
 4.  to run the correct version of the testsuite check out the commit id from the `.drone.env` file
@@ -158,7 +158,7 @@ This will require some PHP-related tools to run, for instance on Ubuntu you will
     TEST_REVA='true' \
     BEHAT_FILTER_TAGS='~@notToImplementOnOCIS&&~@toImplementOnOCIS&&~comments-app-required&&~@federation-app-required&&~@notifications-app-required&&~systemtags-app-required&&~@provisioning_api-app-required&&~@preview-extension-required&&~@local_storage&&~@skipOnOcis-OCIS-Storage&&~@skipOnOcis' \
     EXPECTED_FAILURES_FILE=../reva/tests/acceptance/expected-failures-on-OCIS-storage.md \
-    make test-acceptance-api
+    make test-acceptance-from-core-api
     ```
 
     This will run all tests that are relevant to reva.

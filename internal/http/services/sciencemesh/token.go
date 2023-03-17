@@ -21,11 +21,13 @@ package sciencemesh
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
+	"html/template"
 	"mime"
 	"net/http"
+	"strings"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
@@ -36,10 +38,16 @@ import (
 	"github.com/cs3org/reva/pkg/smtpclient"
 )
 
+const defaultInviteLink = "{{.MeshDirectoryURL}}?token={{.Token}}&providerDomain={{.User.Id.Idp}}"
+
 type tokenHandler struct {
 	gatewayClient    gateway.GatewayAPIClient
 	smtpCredentials  *smtpclient.SMTPCredentials
 	meshDirectoryURL string
+
+	tplSubj       *template.Template
+	tplBody       *template.Template
+	tplInviteLink *template.Template
 }
 
 func (h *tokenHandler) init(c *config) error {
@@ -54,7 +62,29 @@ func (h *tokenHandler) init(c *config) error {
 	}
 
 	h.meshDirectoryURL = c.MeshDirectoryURL
-	return nil
+
+	if err := h.initSubjectTemplate(c.SubjectTemplate); err != nil {
+		return err
+	}
+
+	if err := h.initBodyTemplate(c.BodyTemplatePath); err != nil {
+		return err
+	}
+
+	return h.initInviteLinkTemplate(c.InviteLinkTemplate)
+}
+
+type token struct {
+	Token       string `json:"token"`
+	Description string `json:"description,omitempty"`
+	Expiration  uint64 `json:"expiration,omitempty"`
+	InviteLink  string `json:"invite_link"`
+}
+
+type inviteLinkParams struct {
+	User             *userpb.User
+	Token            string
+	MeshDirectoryURL string
 }
 
 // Generate generates an invitation token and if a recipient is specified,
@@ -63,42 +93,72 @@ func (h *tokenHandler) init(c *config) error {
 func (h *tokenHandler) Generate(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
+	query := r.URL.Query()
 	token, err := h.gatewayClient.GenerateInviteToken(ctx, &invitepb.GenerateInviteTokenRequest{
-		Description: r.URL.Query().Get("description"),
+		Description: query.Get("description"),
 	})
 	if err != nil {
 		reqres.WriteError(w, r, reqres.APIErrorServerError, "error generating token", err)
 		return
 	}
 
-	if r.FormValue("recipient") != "" && h.smtpCredentials != nil {
-		usr := ctxpkg.ContextMustGetUser(ctx)
-
-		// TODO: the message body needs to point to the meshdirectory service
-		subject := fmt.Sprintf("ScienceMesh: %s wants to collaborate with you", usr.DisplayName)
-		body := "Hi,\n\n" +
-			usr.DisplayName + " (" + usr.Mail + ") wants to start sharing OCM resources with you. " +
-			"To accept the invite, please visit the following URL:\n" +
-			h.meshDirectoryURL + "?token=" + token.InviteToken.Token + "&providerDomain=" + usr.Id.Idp + "\n\n" +
-			"Alternatively, you can visit your mesh provider and use the following details:\n" +
-			"Token: " + token.InviteToken.Token + "\n" +
-			"ProviderDomain: " + usr.Id.Idp + "\n\n" +
-			"Best,\nThe ScienceMesh team"
-
-		err = h.smtpCredentials.SendMail(r.FormValue("recipient"), subject, body)
-		if err != nil {
+	user := ctxpkg.ContextMustGetUser(ctx)
+	recipient := query.Get("recipient")
+	if recipient != "" && h.smtpCredentials != nil {
+		templObj := &emailParams{
+			User:             user,
+			Token:            token.InviteToken.Token,
+			MeshDirectoryURL: h.meshDirectoryURL,
+		}
+		if err := h.sendEmail(recipient, templObj); err != nil {
 			reqres.WriteError(w, r, reqres.APIErrorServerError, "error sending token by mail", err)
 			return
 		}
 	}
 
-	if err := json.NewEncoder(w).Encode(token.InviteToken); err != nil {
+	tknRes, err := h.prepareGenerateTokenResponse(user, token.InviteToken)
+	if err != nil {
+		reqres.WriteError(w, r, reqres.APIErrorServerError, "error generating response", err)
+		return
+	}
+
+	if err := json.NewEncoder(w).Encode(tknRes); err != nil {
 		reqres.WriteError(w, r, reqres.APIErrorServerError, "error marshalling token data", err)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
+}
+
+func (h *tokenHandler) generateInviteLink(user *userpb.User, token *invitepb.InviteToken) (string, error) {
+	var inviteLink strings.Builder
+	if err := h.tplInviteLink.Execute(&inviteLink, inviteLinkParams{
+		User:             user,
+		Token:            token.Token,
+		MeshDirectoryURL: h.meshDirectoryURL,
+	}); err != nil {
+		return "", err
+	}
+
+	return inviteLink.String(), nil
+}
+
+func (h *tokenHandler) prepareGenerateTokenResponse(user *userpb.User, tkn *invitepb.InviteToken) (*token, error) {
+	inviteLink, err := h.generateInviteLink(user, tkn)
+	if err != nil {
+		return nil, err
+	}
+	res := &token{
+		Token:       tkn.Token,
+		Description: tkn.Description,
+		InviteLink:  inviteLink,
+	}
+	if tkn.Expiration != nil {
+		res.Expiration = tkn.Expiration.Seconds
+	}
+
+	return res, nil
 }
 
 type acceptInviteRequest struct {
@@ -195,6 +255,48 @@ func (h *tokenHandler) FindAccepted(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := json.NewEncoder(w).Encode(res.AcceptedUsers); err != nil {
+		reqres.WriteError(w, r, reqres.APIErrorServerError, "error marshalling token data", err)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+}
+
+func (h *tokenHandler) ListInvite(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	res, err := h.gatewayClient.ListInviteTokens(ctx, &invitepb.ListInviteTokensRequest{})
+	if err != nil {
+		reqres.WriteError(w, r, reqres.APIErrorServerError, "error listing tokens", err)
+		return
+	}
+
+	if res.Status.Code != rpc.Code_CODE_OK {
+		reqres.WriteError(w, r, reqres.APIErrorServerError, res.Status.Message, errors.New(res.Status.Message))
+		return
+	}
+
+	tokens := make([]*token, 0, len(res.InviteTokens))
+	user := ctxpkg.ContextMustGetUser(ctx)
+	for _, tkn := range res.InviteTokens {
+		inviteURL, err := h.generateInviteLink(user, tkn)
+		if err != nil {
+			reqres.WriteError(w, r, reqres.APIErrorServerError, "error generating invite URL from OCM token", err)
+			return
+		}
+		t := &token{
+			Token:       tkn.Token,
+			Description: tkn.Description,
+			InviteLink:  inviteURL,
+		}
+		if tkn.Expiration != nil {
+			t.Expiration = tkn.Expiration.Seconds
+		}
+		tokens = append(tokens, t)
+	}
+
+	if err := json.NewEncoder(w).Encode(tokens); err != nil {
 		reqres.WriteError(w, r, reqres.APIErrorServerError, "error marshalling token data", err)
 		return
 	}

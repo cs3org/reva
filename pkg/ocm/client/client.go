@@ -27,6 +27,7 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/cs3org/reva/internal/http/services/ocmd"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/pkg/errors"
@@ -47,6 +48,10 @@ var ErrUserAlreadyAccepted = errors.New("user already accepted an invitation tok
 // ErrTokenNotFound is the error returned by the invite-accepted
 // endpoint when the request is done using a not existing token.
 var ErrTokenNotFound = errors.New("token not found")
+
+// ErrInvalidParameters is the error returned by the shares endpoint
+// when the request does not contain required properties.
+var ErrInvalidParameters = errors.New("invalid parameters")
 
 // OCMClient is the client for an OCM provider.
 type OCMClient struct {
@@ -138,6 +143,82 @@ func (c *OCMClient) parseInviteAcceptedResponse(r *http.Response) (*User, error)
 	case http.StatusConflict:
 		return nil, ErrUserAlreadyAccepted
 	case http.StatusForbidden:
+		return nil, ErrServiceNotTrusted
+	}
+
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		return nil, errors.Wrap(err, "error decoding response body")
+	}
+	return nil, errtypes.InternalError(string(body))
+}
+
+// NewShareRequest contains the parameters for creating a new OCM share.
+type NewShareRequest struct {
+	ShareWith         string         `json:"shareWith"`
+	Name              string         `json:"name"`
+	Description       string         `json:"description"`
+	ResourceID        string         `json:"resourceId"`
+	Owner             string         `json:"owner"`
+	Sender            string         `json:"sender"`
+	OwnerDisplayName  string         `json:"ownerDisplayName"`
+	SenderDisplayName string         `json:"senderDisplayName"`
+	ShareType         string         `json:"shareType"`
+	Expiration        uint64         `json:"expiration"`
+	ResourceType      string         `json:"resourceType"`
+	Protocols         ocmd.Protocols `json:"protocols"`
+}
+
+func (r *NewShareRequest) toJSON() (io.Reader, error) {
+	var b bytes.Buffer
+	if err := json.NewEncoder(&b).Encode(r); err != nil {
+		return nil, err
+	}
+	return &b, nil
+}
+
+// NewShareResponse is the response returned when creating a new share.
+type NewShareResponse struct {
+	RecipientDisplayName string `json:"recipientDisplayName"`
+}
+
+// NewShare creates a new share.
+// https://github.com/cs3org/OCM-API/blob/223285aa4d828ed85c361c7382efd08c42b5e719/spec.yaml
+func (c *OCMClient) NewShare(ctx context.Context, endpoint string, r *NewShareRequest) (*NewShareResponse, error) {
+	url, err := url.JoinPath(endpoint, "shares")
+	if err != nil {
+		return nil, err
+	}
+
+	body, err := r.toJSON()
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, body)
+	if err != nil {
+		return nil, errors.Wrap(err, "error creating request")
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return nil, errors.Wrap(err, "error doing request")
+	}
+	defer resp.Body.Close()
+
+	return c.parseNewShareResponse(resp)
+}
+
+func (c *OCMClient) parseNewShareResponse(r *http.Response) (*NewShareResponse, error) {
+	switch r.StatusCode {
+	case http.StatusOK, http.StatusCreated:
+		var res NewShareResponse
+		err := json.NewDecoder(r.Body).Decode(&res)
+		return &res, err
+	case http.StatusBadRequest:
+		return nil, ErrInvalidParameters
+	case http.StatusUnauthorized, http.StatusForbidden:
 		return nil, ErrServiceNotTrusted
 	}
 

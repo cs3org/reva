@@ -124,6 +124,10 @@ func (m *mgr) GetToken(ctx context.Context, token string) (*invitepb.InviteToken
 		}
 		return nil, err
 	}
+	return convertToInviteToken(tkn), nil
+}
+
+func convertToInviteToken(tkn dbToken) *invitepb.InviteToken {
 	return &invitepb.InviteToken{
 		Token:  tkn.Token,
 		UserId: conversions.ExtractUserID(tkn.Initiator),
@@ -131,7 +135,27 @@ func (m *mgr) GetToken(ctx context.Context, token string) (*invitepb.InviteToken
 			Seconds: uint64(tkn.Expiration.Unix()),
 		},
 		Description: tkn.Description,
-	}, nil
+	}
+}
+
+func (m *mgr) ListTokens(ctx context.Context, initiator *userpb.UserId) ([]*invitepb.InviteToken, error) {
+	query := "SELECT token, initiator, expiration, description FROM ocm_tokens WHERE initiator=? AND expiration > NOW()"
+
+	tokens := []*invitepb.InviteToken{}
+	rows, err := m.db.QueryContext(ctx, query, conversions.FormatUserID(initiator))
+	if err != nil {
+		return nil, err
+	}
+
+	var tkn dbToken
+	for rows.Next() {
+		if err := rows.Scan(&tkn.Token, &tkn.Initiator, &tkn.Expiration, &tkn.Description); err != nil {
+			continue
+		}
+		tokens = append(tokens, convertToInviteToken(tkn))
+	}
+
+	return tokens, nil
 }
 
 // AddRemoteUser stores the remote user.

@@ -96,6 +96,7 @@ type Config struct {
 	// and received path is /docs the internal path will be:
 	// /users/<first char of username>/<username>/docs
 	WebdavNamespace string `mapstructure:"webdav_namespace"`
+	OCMNamespace    string `mapstructure:"ocm_namespace"`
 	GatewaySvc      string `mapstructure:"gatewaysvc"`
 	Timeout         int64  `mapstructure:"timeout"`
 	Insecure        bool   `mapstructure:"insecure" docs:"false;Whether to skip certificate checks when sending requests."`
@@ -117,6 +118,10 @@ func (c *Config) init() {
 
 	if c.FavoriteStorageDriver == "" {
 		c.FavoriteStorageDriver = "memory"
+	}
+
+	if c.OCMNamespace == "" {
+		c.OCMNamespace = "/ocm"
 	}
 }
 
@@ -178,7 +183,7 @@ func (s *svc) Close() error {
 }
 
 func (s *svc) Unprotected() []string {
-	return []string{"/status.php", "/remote.php/dav/public-files/", "/apps/files/", "/index.php/f/", "/index.php/s/"}
+	return []string{"/status.php", "/remote.php/dav/public-files/", "/apps/files/", "/index.php/f/", "/index.php/s/", "/remote.php/dav/ocm/"}
 }
 
 func (s *svc) Handler() http.Handler {

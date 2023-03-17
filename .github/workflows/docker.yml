@@ -11,32 +11,44 @@ on:
         type: boolean
       push:
         type: boolean
+      platforms:
+        type: string
+    outputs:
+      image: 
+        value: ${{ jobs.docker.outputs.image }}
 
 jobs:
   docker:
     runs-on: self-hosted
+    outputs:
+      image: ${{ steps.build.outputs.imageid }}
     steps:
       - name: Checkout
         uses: actions/checkout@v3.1.0
+      - name: Set up QEMU
+        if: inputs.platforms != ''
+        uses: docker/setup-qemu-action@v2
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
       - name: Login to Docker Hub
-        if: ${{ inputs.push }}
+        if: inputs.push
         uses: docker/login-action@v2
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
       - name: Build ${{ inputs.push && 'and push' || '' }} ${{ inputs.tags }} Docker image
         uses: docker/build-push-action@v3
+        id: build
         with:
           context: .
           file: ${{ inputs.file }}
           tags: ${{ inputs.tags }}
           load: ${{ inputs.load }}
           push: ${{ inputs.push }}
-      - name: Upload ${{ inputs.tags }} Docker image to artifacts
+          platforms: ${{ inputs.platforms }}
+      - name: Upload ${{ steps.build.outputs.imageid }} Docker image to artifacts
         uses: ishworkh/docker-image-artifact-upload@v1
-        if: ${{ inputs.load }}
+        if: inputs.load
         with:
-          image: ${{ inputs.tags }}
+          image: ${{ steps.build.outputs.imageid }}
           retention_days: '1'

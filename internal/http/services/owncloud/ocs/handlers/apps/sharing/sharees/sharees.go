@@ -99,12 +99,23 @@ func (h *Handler) FindSharees(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) userAsMatch(u *userpb.User) *conversions.MatchData {
+	shareWith := u.Username
+	if shareWith == "" {
+		shareWith = u.Id.OpaqueId
+	}
+
+	shareType := conversions.ShareTypeUser
+	if u.Id.Type == userpb.UserType_USER_TYPE_FEDERATED {
+		shareType = conversions.ShareTypeFederatedCloudShare
+	}
+
 	return &conversions.MatchData{
 		Label: u.DisplayName,
 		Value: &conversions.MatchValueData{
-			ShareType: int(conversions.ShareTypeUser),
+			ShareType: int(shareType),
 			// api compatibility with oc10: always use the username
-			ShareWith:               u.Username,
+			ShareWith:               shareWith,
+			ShareWithProvider:       u.Id.Idp,
 			ShareWithAdditionalInfo: h.getAdditionalInfoAttribute(u),
 		},
 	}

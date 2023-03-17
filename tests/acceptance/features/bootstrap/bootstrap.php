@@ -1,14 +1,14 @@
 <?php
-$pathToCore = \getenv('PATH_TO_CORE');
-if ($pathToCore === false) {
-    $pathToCore = "../core";
+$pathToApiTests = \getenv('PATH_TO_APITESTS');
+if ($pathToApiTests === false) {
+    $pathToApiTests = "../ocis";
 }
 
-require_once $pathToCore . '/tests/acceptance/features/bootstrap/bootstrap.php';
+require_once $pathToApiTests . '/tests/acceptance/features/bootstrap/bootstrap.php';
 
 $classLoader = new \Composer\Autoload\ClassLoader();
 $classLoader->addPsr4(
-	"", $pathToCore . "/tests/acceptance/features/bootstrap", true
+	"", $pathToApiTests . "/tests/acceptance/features/bootstrap", true
 );
 
 $classLoader->register();

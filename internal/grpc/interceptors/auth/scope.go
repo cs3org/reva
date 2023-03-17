@@ -32,6 +32,7 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
+	ocmv1beta1 "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	registry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
@@ -73,13 +74,18 @@ func expandAndVerifyScope(ctx context.Context, req interface{}, tokenScope map[s
 				if err = resolvePublicShare(ctx, ref, tokenScope[k], client, mgr); err == nil {
 					return nil
 				}
-
 			case strings.HasPrefix(k, "share"):
 				if err = resolveUserShare(ctx, ref, tokenScope[k], client, mgr); err == nil {
 					return nil
 				}
+			case strings.HasPrefix(k, "ocmshare"):
+				if err = resolveOCMShare(ctx, ref, tokenScope[k], client, mgr); err == nil {
+					return nil
+				}
 			}
-			log.Err(err).Msgf("error resolving reference %s under scope %+v", ref.String(), k)
+			if err != nil {
+				log.Err(err).Msgf("error resolving reference %s under scope %+v", ref.String(), k)
+			}
 		}
 	}
 
@@ -109,6 +115,8 @@ func checkLightweightScope(ctx context.Context, req interface{}, tokenScope map[
 	case *registry.GetStorageProvidersRequest:
 		return true
 	case *provider.StatRequest:
+		return true
+	case *appregistry.GetAppProvidersRequest:
 		return true
 	case *provider.ListContainerRequest:
 		return hasPermissions(ctx, client, r.GetRef(), &provider.ResourcePermissions{
@@ -142,11 +150,11 @@ func checkLightweightScope(ctx context.Context, req interface{}, tokenScope map[
 			return false
 		}
 		return hasPermissions(ctx, client, parent, &provider.ResourcePermissions{
-			InitiateFileDownload: true,
+			InitiateFileUpload: true,
 		})
 	case *provider.DeleteRequest:
 		return hasPermissions(ctx, client, r.GetRef(), &provider.ResourcePermissions{
-			InitiateFileDownload: true,
+			Delete: true,
 		})
 	case *provider.MoveRequest:
 		return hasPermissions(ctx, client, r.Source, &provider.ResourcePermissions{
@@ -219,6 +227,15 @@ func resolvePublicShare(ctx context.Context, ref *provider.Reference, scope *aut
 	return checkCacheForNestedResource(ctx, ref, share.ResourceId, client, mgr)
 }
 
+func resolveOCMShare(ctx context.Context, ref *provider.Reference, scope *authpb.Scope, client gateway.GatewayAPIClient, mgr token.Manager) error {
+	var share ocmv1beta1.Share
+	if err := utils.UnmarshalJSONToProtoV1(scope.Resource.Value, &share); err != nil {
+		return err
+	}
+
+	return checkCacheForNestedResource(ctx, ref, share.ResourceId, client, mgr)
+}
+
 func resolveUserShare(ctx context.Context, ref *provider.Reference, scope *authpb.Scope, client gateway.GatewayAPIClient, mgr token.Manager) error {
 	var share collaboration.Share
 	err := utils.UnmarshalJSONToProtoV1(scope.Resource.Value, &share)
@@ -244,6 +261,13 @@ func checkCacheForNestedResource(ctx context.Context, ref *provider.Reference, r
 	return errtypes.PermissionDenied("request is not for a nested resource")
 }
 
+func isRelativePathOrEmpty(path string) bool {
+	if len(path) == 0 {
+		return true
+	}
+	return path[0] != '/'
+}
+
 func checkIfNestedResource(ctx context.Context, ref *provider.Reference, parent *provider.ResourceId, client gateway.GatewayAPIClient, mgr token.Manager) (bool, error) {
 	// Since the resource ID is obtained from the scope, the current token
 	// has access to it.
@@ -257,7 +281,7 @@ func checkIfNestedResource(ctx context.Context, ref *provider.Reference, parent 
 	parentPath := statResponse.Info.Path
 
 	childPath := ref.GetPath()
-	if childPath == "" {
+	if isRelativePathOrEmpty(childPath) {
 		// We mint a token as the owner of the public share and try to stat the reference
 		// TODO(ishank011): We need to find a better alternative to this
 
@@ -304,6 +328,8 @@ func extractRefForReaderRole(req interface{}) (*provider.Reference, bool) {
 		return &provider.Reference{ResourceId: v.ResourceInfo.Id}, true
 	case *gateway.OpenInAppRequest:
 		return v.GetRef(), true
+	case *provider.GetLockRequest:
+		return v.GetRef(), true
 
 	// App provider requests
 	case *appregistry.GetAppProvidersRequest:
@@ -341,6 +367,12 @@ func extractRefForEditorRole(req interface{}) (*provider.Reference, bool) {
 	case *provider.SetArbitraryMetadataRequest:
 		return v.GetRef(), true
 	case *provider.UnsetArbitraryMetadataRequest:
+		return v.GetRef(), true
+	case *provider.SetLockRequest:
+		return v.GetRef(), true
+	case *provider.RefreshLockRequest:
+		return v.GetRef(), true
+	case *provider.UnlockRequest:
 		return v.GetRef(), true
 	}
 

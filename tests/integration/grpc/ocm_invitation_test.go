@@ -38,10 +38,18 @@ import (
 	"github.com/cs3org/reva/pkg/token"
 	jwt "github.com/cs3org/reva/pkg/token/manager/jwt"
 	"github.com/cs3org/reva/pkg/utils"
+	"github.com/cs3org/reva/tests/helpers"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"google.golang.org/grpc/metadata"
 )
+
+type generateInviteResponse struct {
+	Token       string `json:"token"`
+	Description string `json:"descriptions"`
+	Expiration  uint64 `json:"expiration"`
+	InviteLink  string `json:"invite_link"`
+}
 
 func ctxWithAuthToken(tokenManager token.Manager, user *userpb.User) context.Context {
 	ctx := context.Background()
@@ -60,64 +68,63 @@ func ocmUserEqual(u1, u2 *userpb.User) bool {
 }
 
 var _ = Describe("ocm invitation workflow", func() {
+	var (
+		err    error
+		revads = map[string]*Revad{}
+
+		variables = map[string]string{}
+
+		ctxEinstein context.Context
+		ctxMarie    context.Context
+		cernboxgw   gatewaypb.GatewayAPIClient
+		cesnetgw    gatewaypb.GatewayAPIClient
+		cernbox     = &ocmproviderpb.ProviderInfo{
+			Name:         "cernbox",
+			FullName:     "CERNBox",
+			Description:  "CERNBox provides cloud data storage to all CERN users.",
+			Organization: "CERN",
+			Domain:       "cernbox.cern.ch",
+			Homepage:     "https://cernbox.web.cern.ch",
+			Services: []*ocmproviderpb.Service{
+				{
+					Endpoint: &ocmproviderpb.ServiceEndpoint{
+						Type: &ocmproviderpb.ServiceType{
+							Name:        "OCM",
+							Description: "CERNBox Open Cloud Mesh API",
+						},
+						Name:        "CERNBox - OCM API",
+						Path:        "http://127.0.0.1:19001/ocm/",
+						IsMonitored: true,
+					},
+					Host:       "127.0.0.1:19001",
+					ApiVersion: "0.0.1",
+				},
+			},
+		}
+		inviteTokenFile string
+		einstein        = &userpb.User{
+			Id: &userpb.UserId{
+				OpaqueId: "4c510ada-c86b-4815-8820-42cdf82c3d51",
+				Idp:      "cernbox.cern.ch",
+				Type:     userpb.UserType_USER_TYPE_PRIMARY,
+			},
+			Username:    "einstein",
+			Mail:        "einstein@cern.ch",
+			DisplayName: "Albert Einstein",
+		}
+		marie = &userpb.User{
+			Id: &userpb.UserId{
+				OpaqueId: "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
+				Idp:      "cesnet.cz",
+				Type:     userpb.UserType_USER_TYPE_PRIMARY,
+			},
+			Username:    "marie",
+			Mail:        "marie@cesnet.cz",
+			DisplayName: "Marie Curie",
+		}
+	)
 
 	for _, driver := range []string{"json", "sql"} {
-
-		var (
-			err    error
-			revads = map[string]*Revad{}
-
-			variables = map[string]string{}
-
-			ctxEinstein context.Context
-			ctxMarie    context.Context
-			cernboxgw   gatewaypb.GatewayAPIClient
-			cesnetgw    gatewaypb.GatewayAPIClient
-			cernbox     = &ocmproviderpb.ProviderInfo{
-				Name:         "cernbox",
-				FullName:     "CERNBox",
-				Description:  "CERNBox provides cloud data storage to all CERN users.",
-				Organization: "CERN",
-				Domain:       "cernbox.cern.ch",
-				Homepage:     "https://cernbox.web.cern.ch",
-				Services: []*ocmproviderpb.Service{
-					{
-						Endpoint: &ocmproviderpb.ServiceEndpoint{
-							Type: &ocmproviderpb.ServiceType{
-								Name:        "OCM",
-								Description: "CERNBox Open Cloud Mesh API",
-							},
-							Name:        "CERNBox - OCM API",
-							Path:        "http://127.0.0.1:19001/ocm/",
-							IsMonitored: true,
-						},
-						Host:       "127.0.0.1:19001",
-						ApiVersion: "0.0.1",
-					},
-				},
-			}
-			inviteTokenFile string
-			einstein        = &userpb.User{
-				Id: &userpb.UserId{
-					OpaqueId: "4c510ada-c86b-4815-8820-42cdf82c3d51",
-					Idp:      "cernbox.cern.ch",
-					Type:     userpb.UserType_USER_TYPE_PRIMARY,
-				},
-				Username:    "einstein",
-				Mail:        "einstein@cern.ch",
-				DisplayName: "Albert Einstein",
-			}
-			marie = &userpb.User{
-				Id: &userpb.UserId{
-					OpaqueId: "f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c",
-					Idp:      "cesnet.cz",
-					Type:     userpb.UserType_USER_TYPE_PRIMARY,
-				},
-				Username:    "marie",
-				Mail:        "marie@cesnet.cz",
-				DisplayName: "Marie Curie",
-			}
-		)
 
 		JustBeforeEach(func() {
 			tokenManager, err := jwt.New(map[string]interface{}{"secret": "changemeplease"})
@@ -130,8 +137,9 @@ var _ = Describe("ocm invitation workflow", func() {
 				"cesnetgw":    "ocm-server-cesnet-grpc.toml",
 				"cesnethttp":  "ocm-server-cesnet-http.toml",
 			}, map[string]string{
-				"providers": "ocm-providers.demo.json",
-			}, variables)
+				"providers":  "ocm-providers.demo.json",
+				"ocm_driver": driver,
+			}, nil, variables)
 			Expect(err).ToNot(HaveOccurred())
 			cernboxgw, err = pool.GetGatewayServiceClient(pool.Endpoint(revads["cernboxgw"].GrpcAddress))
 			Expect(err).ToNot(HaveOccurred())
@@ -148,14 +156,12 @@ var _ = Describe("ocm invitation workflow", func() {
 		})
 
 		Describe("einstein and marie do not know each other", func() {
-			var cleanup func()
 			BeforeEach(func() {
-				variables, cleanup, err = initData(driver, nil, nil)
+				inviteTokenFile, err = helpers.TempJSONFile(map[string]string{})
 				Expect(err).ToNot(HaveOccurred())
-			})
-
-			AfterEach(func() {
-				cleanup()
+				variables = map[string]string{
+					"invite_token_file": inviteTokenFile,
+				}
 			})
 
 			Context("einstein generates a token", func() {
@@ -194,17 +200,17 @@ var _ = Describe("ocm invitation workflow", func() {
 		})
 
 		Describe("an invitation workflow has been already completed between einstein and marie", func() {
-			var cleanup func()
 			BeforeEach(func() {
-				variables, cleanup, err = initData(driver, nil, map[string][]*userpb.User{
-					einstein.Id.OpaqueId: {marie},
-					marie.Id.OpaqueId:    {einstein},
+				inviteTokenFile, err = helpers.TempJSONFile(map[string]map[string][]*userpb.User{
+					"accepted_users": {
+						einstein.Id.OpaqueId: {marie},
+						marie.Id.OpaqueId:    {einstein},
+					},
 				})
 				Expect(err).ToNot(HaveOccurred())
-			})
-
-			AfterEach(func() {
-				cleanup()
+				variables = map[string]string{
+					"invite_token_file": inviteTokenFile,
+				}
 			})
 
 			Context("marie accepts a new invite token generated by einstein", func() {
@@ -232,15 +238,16 @@ var _ = Describe("ocm invitation workflow", func() {
 				},
 				Description: "expired token",
 			}
-
-			var cleanup func()
 			BeforeEach(func() {
-				variables, cleanup, err = initData(driver, []*invitepb.InviteToken{expiredToken}, nil)
+				inviteTokenFile, err = helpers.TempJSONFile(map[string]map[string]*invitepb.InviteToken{
+					"invites": {
+						expiredToken.Token: expiredToken,
+					},
+				})
 				Expect(err).ToNot(HaveOccurred())
-			})
-
-			AfterEach(func() {
-				cleanup()
+				variables = map[string]string{
+					"invite_token_file": inviteTokenFile,
+				}
 			})
 
 			It("will not complete the invitation workflow", func() {
@@ -254,14 +261,12 @@ var _ = Describe("ocm invitation workflow", func() {
 		})
 
 		Describe("marie accept a not existing token", func() {
-			var cleanup func()
 			BeforeEach(func() {
-				variables, cleanup, err = initData(driver, nil, nil)
+				inviteTokenFile, err = helpers.TempJSONFile(map[string]string{})
 				Expect(err).ToNot(HaveOccurred())
-			})
-
-			AfterEach(func() {
-				cleanup()
+				variables = map[string]string{
+					"invite_token_file": inviteTokenFile,
+				}
 			})
 
 			It("will not complete the invitation workflow", func() {
@@ -283,16 +288,6 @@ var _ = Describe("ocm invitation workflow", func() {
 				tknMarie, tknEinstein string
 				token                 string
 			)
-
-			var cleanup func()
-			BeforeEach(func() {
-				variables, cleanup, err = initData(driver, nil, nil)
-				Expect(err).ToNot(HaveOccurred())
-			})
-
-			AfterEach(func() {
-				cleanup()
-			})
 
 			JustBeforeEach(func() {
 				cesnetURL = revads["cesnethttp"].GrpcAddress
@@ -342,7 +337,7 @@ var _ = Describe("ocm invitation workflow", func() {
 				return users, res.StatusCode
 			}
 
-			generateToken := func(revaToken, domain string) (*invitepb.InviteToken, int) {
+			generateToken := func(revaToken, domain string) (*generateInviteResponse, int) {
 				req, err := http.NewRequestWithContext(context.TODO(), http.MethodGet, fmt.Sprintf("http://%s/sciencemesh/generate-invite", domain), nil)
 				Expect(err).ToNot(HaveOccurred())
 				req.Header.Set("x-access-token", revaToken)
@@ -351,9 +346,9 @@ var _ = Describe("ocm invitation workflow", func() {
 				Expect(err).ToNot(HaveOccurred())
 				defer res.Body.Close()
 
-				var token invitepb.InviteToken
-				Expect(json.NewDecoder(res.Body).Decode(&token)).To(Succeed())
-				return &token, res.StatusCode
+				var inviteRes generateInviteResponse
+				Expect(json.NewDecoder(res.Body).Decode(&inviteRes)).To(Succeed())
+				return &inviteRes, res.StatusCode
 			}
 
 			Context("einstein and marie do not know each other", func() {
@@ -379,17 +374,17 @@ var _ = Describe("ocm invitation workflow", func() {
 			})
 
 			Context("marie already accepted an invitation before", func() {
-				var cleanup func()
 				BeforeEach(func() {
-					variables, cleanup, err = initData(driver, nil, map[string][]*userpb.User{
-						einstein.Id.OpaqueId: {marie},
-						marie.Id.OpaqueId:    {einstein},
+					inviteTokenFile, err = helpers.TempJSONFile(map[string]map[string][]*userpb.User{
+						"accepted_users": {
+							einstein.Id.OpaqueId: {marie},
+							marie.Id.OpaqueId:    {einstein},
+						},
 					})
 					Expect(err).ToNot(HaveOccurred())
-				})
-
-				AfterEach(func() {
-					cleanup()
+					variables = map[string]string{
+						"invite_token_file": inviteTokenFile,
+					}
 				})
 
 				It("fails the invitation workflow", func() {
@@ -415,15 +410,16 @@ var _ = Describe("ocm invitation workflow", func() {
 					},
 					Description: "expired token",
 				}
-
-				var cleanup func()
 				BeforeEach(func() {
-					variables, cleanup, err = initData(driver, []*invitepb.InviteToken{expiredToken}, nil)
+					inviteTokenFile, err = helpers.TempJSONFile(map[string]map[string]*invitepb.InviteToken{
+						"invites": {
+							expiredToken.Token: expiredToken,
+						},
+					})
 					Expect(err).ToNot(HaveOccurred())
-				})
-
-				AfterEach(func() {
-					cleanup()
+					variables = map[string]string{
+						"invite_token_file": inviteTokenFile,
+					}
 				})
 
 				It("will not complete the invitation workflow", func() {
@@ -441,16 +437,13 @@ var _ = Describe("ocm invitation workflow", func() {
 			})
 
 			Context("generate the token from http apis", func() {
-				var cleanup func()
 				BeforeEach(func() {
-					variables, cleanup, err = initData(driver, nil, nil)
+					inviteTokenFile, err = helpers.TempJSONFile(map[string]map[string]*invitepb.InviteToken{})
 					Expect(err).ToNot(HaveOccurred())
+					variables = map[string]string{
+						"invite_token_file": inviteTokenFile,
+					}
 				})
-
-				AfterEach(func() {
-					cleanup()
-				})
-
 				It("succeeds", func() {
 					users, code := findAccepted(tknEinstein, cernboxURL)
 					Expect(code).To(Equal(http.StatusOK))
@@ -469,6 +462,7 @@ var _ = Describe("ocm invitation workflow", func() {
 			})
 
 		})
+
 	}
 
 })
