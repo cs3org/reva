@@ -9,6 +9,8 @@ on:
 jobs:
   integration:
     runs-on: self-hosted
+    container:
+      image: ubuntu
     steps:
       - name: Checkout
         uses: actions/checkout@v3
