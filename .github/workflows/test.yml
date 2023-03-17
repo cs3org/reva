@@ -52,7 +52,7 @@ jobs:
           project-token: ${{ secrets.CODACY_PROJECT_TOKEN }}
           coverage-reports: coverage.out
           force-coverage-parser: go
-docker:
+  docker:
     strategy:
       fail-fast: false
       matrix:
