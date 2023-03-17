@@ -20,11 +20,17 @@ driver = "static"
 basic = "{{grpc_address}}"
 
 [grpc.services.ocminvitemanager]
-driver = "json"
+driver = "{{ocm_driver}}"
 provider_domain = "cesnet.cz"
 
 [grpc.services.ocminvitemanager.drivers.json]
 file = "{{invite_token_file}}"
+
+[grpc.services.ocminvitemanager.drivers.sql]
+db_username = "{{db_username}}"
+db_password = "{{db_password}}"
+db_address = "{{db_address}}"
+db_name = "{{db_name}}"
 
 [grpc.services.ocmproviderauthorizer]
 driver = "json"
