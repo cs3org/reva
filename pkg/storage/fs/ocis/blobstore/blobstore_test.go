@@ -19,7 +19,6 @@
 package blobstore_test
 
 import (
-	"bytes"
 	"io"
 	"os"
 	"path"
@@ -69,14 +68,20 @@ var _ = Describe("Blobstore", func() {
 		Expect(err).ToNot(HaveOccurred())
 	})
 
-	Describe("Upload", func() {
-		It("writes the blob", func() {
-			err := bs.Upload(blobNode, bytes.NewReader(data))
-			Expect(err).ToNot(HaveOccurred())
+	Context("Blob upload", func() {
+		Describe("Upload", func() {
+			BeforeEach(func() {
+				Expect(os.MkdirAll(path.Dir(blobPath), 0700)).To(Succeed())
+				Expect(os.WriteFile(blobPath, data, 0700)).To(Succeed())
+			})
+			It("writes the blob", func() {
+				err := bs.Upload(blobNode, blobPath)
+				Expect(err).ToNot(HaveOccurred())
 
-			writtenBytes, err := os.ReadFile(blobPath)
-			Expect(err).ToNot(HaveOccurred())
-			Expect(writtenBytes).To(Equal(data))
+				writtenBytes, err := os.ReadFile(blobPath)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(writtenBytes).To(Equal(data))
+			})
 		})
 	})
 

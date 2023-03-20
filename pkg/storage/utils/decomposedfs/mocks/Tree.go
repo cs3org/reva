@@ -22,7 +22,7 @@ package mocks
 
 import (
 	context "context"
-
+	"os"
 	fs "io/fs"
 
 	io "io"
@@ -278,7 +278,13 @@ func (_m *Tree) TouchFile(ctx context.Context, _a1 *node.Node) error {
 }
 
 // WriteBlob provides a mock function with given fields: _a0, reader
-func (_m *Tree) WriteBlob(_a0 *node.Node, reader io.Reader) error {
+func (_m *Tree) WriteBlob(_a0 *node.Node, source string) error {
+	
+	reader, err := os.Open(source)
+	if err != nil {
+		return err
+	}
+	defer reader.Close()
 	ret := _m.Called(_a0, reader)
 
 	var r0 error
