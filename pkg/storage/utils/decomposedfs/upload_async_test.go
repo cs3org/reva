@@ -116,11 +116,10 @@ var _ = Describe("Async file uploads", Ordered, func() {
 		Expect(err).ToNot(HaveOccurred())
 		ref.ResourceId = &resID
 
-		bs.On("Upload", mock.AnythingOfType("*node.Node"), mock.AnythingOfType("*os.File"), mock.Anything).
+		bs.On("Upload", mock.AnythingOfType("*node.Node"), mock.AnythingOfType("string"), mock.Anything).
 			Return(nil).
 			Run(func(args mock.Arguments) {
-				reader := args.Get(1).(io.Reader)
-				data, err := io.ReadAll(reader)
+				data, err := os.ReadFile(args.Get(1).(string))
 
 				Expect(err).ToNot(HaveOccurred())
 				Expect(data).To(Equal(fileContent))

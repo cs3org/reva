@@ -69,13 +69,13 @@ func (_m *Blobstore) Download(_a0 *node.Node) (io.ReadCloser, error) {
 	return r0, r1
 }
 
-// Upload provides a mock function with given fields: _a0, reader
-func (_m *Blobstore) Upload(_a0 *node.Node, reader io.Reader) error {
-	ret := _m.Called(_a0, reader)
+// Upload provides a mock function with given fields: _a0, source
+func (_m *Blobstore) Upload(_a0 *node.Node, source string) error {
+	ret := _m.Called(_a0, source)
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(*node.Node, io.Reader) error); ok {
-		r0 = rf(_a0, reader)
+	if rf, ok := ret.Get(0).(func(*node.Node, string) error); ok {
+		r0 = rf(_a0, source)
 	} else {
 		r0 = ret.Error(0)
 	}

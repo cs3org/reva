@@ -52,7 +52,7 @@ import (
 
 // Blobstore defines an interface for storing blobs in a blobstore
 type Blobstore interface {
-	Upload(node *node.Node, reader io.Reader) error
+	Upload(node *node.Node, source string) error
 	Download(node *node.Node) (io.ReadCloser, error)
 	Delete(node *node.Node) error
 }
@@ -821,8 +821,8 @@ func (t *Tree) calculateTreeSize(ctx context.Context, childrenPath string) (uint
 }
 
 // WriteBlob writes a blob to the blobstore
-func (t *Tree) WriteBlob(node *node.Node, reader io.Reader) error {
-	return t.blobstore.Upload(node, reader)
+func (t *Tree) WriteBlob(node *node.Node, source string) error {
+	return t.blobstore.Upload(node, source)
 }
 
 // ReadBlob reads a blob from the blobstore

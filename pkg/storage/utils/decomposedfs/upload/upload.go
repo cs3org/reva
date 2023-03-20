@@ -64,7 +64,7 @@ type Tree interface {
 	RestoreRecycleItemFunc(ctx context.Context, spaceid, key, trashPath string, target *node.Node) (*node.Node, *node.Node, func() error, error)
 	PurgeRecycleItemFunc(ctx context.Context, spaceid, key, purgePath string) (*node.Node, func() error, error)
 
-	WriteBlob(node *node.Node, reader io.Reader) error
+	WriteBlob(node *node.Node, binPath string) error
 	ReadBlob(node *node.Node) (io.ReadCloser, error)
 	DeleteBlob(node *node.Node) error
 
@@ -335,13 +335,8 @@ func (upload *Upload) Finalize() (err error) {
 	}
 
 	// upload the data to the blobstore
-	file, err := os.Open(upload.binPath)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
 
-	if err := upload.tp.WriteBlob(n, file); err != nil {
+	if err := upload.tp.WriteBlob(n, upload.binPath); err != nil {
 		return errors.Wrap(err, "failed to upload file to blostore")
 	}
 
