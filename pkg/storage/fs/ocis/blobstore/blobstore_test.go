@@ -33,10 +33,11 @@ import (
 
 var _ = Describe("Blobstore", func() {
 	var (
-		tmpRoot  string
-		blobNode *node.Node
-		blobPath string
-		data     []byte
+		tmpRoot     string
+		blobNode    *node.Node
+		blobPath    string
+		blobSrcFile string
+		data        []byte
 
 		bs *blobstore.Blobstore
 	)
@@ -52,6 +53,8 @@ var _ = Describe("Blobstore", func() {
 			BlobID:  "huuuuugeblob",
 		}
 		blobPath = path.Join(tmpRoot, "spaces", "wo", "nderfullspace", "blobs", "hu", "uu", "uu", "ge", "blob")
+
+		blobSrcFile = path.Join(tmpRoot, "blobsrc")
 
 		bs, err = blobstore.New(path.Join(tmpRoot))
 		Expect(err).ToNot(HaveOccurred())
@@ -71,11 +74,10 @@ var _ = Describe("Blobstore", func() {
 	Context("Blob upload", func() {
 		Describe("Upload", func() {
 			BeforeEach(func() {
-				Expect(os.MkdirAll(path.Dir(blobPath), 0700)).To(Succeed())
-				Expect(os.WriteFile(blobPath, data, 0700)).To(Succeed())
+				Expect(os.WriteFile(blobSrcFile, data, 0700)).To(Succeed())
 			})
 			It("writes the blob", func() {
-				err := bs.Upload(blobNode, blobPath)
+				err := bs.Upload(blobNode, blobSrcFile)
 				Expect(err).ToNot(HaveOccurred())
 
 				writtenBytes, err := os.ReadFile(blobPath)
