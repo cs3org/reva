@@ -716,9 +716,14 @@ func (m *Manager) ListReceivedShares(ctx context.Context, filters []*collaborati
 		for ssid, spaceShareIDs := range m.GroupReceivedCache.List(group) {
 			// add a pending entry, the state will be updated
 			// when reading the received shares below if they have already been accepted or denied
-			rs := receivedsharecache.Space{
-				Mtime:  spaceShareIDs.Mtime,
-				States: make(map[string]*receivedsharecache.State, len(spaceShareIDs.IDs)),
+			var rs *receivedsharecache.Space
+			var ok bool
+			if rs, ok = ssids[ssid]; !ok {
+				rs = &receivedsharecache.Space{
+					Mtime:  spaceShareIDs.Mtime,
+					States: make(map[string]*receivedsharecache.State, len(spaceShareIDs.IDs)),
+				}
+				ssids[ssid] = rs
 			}
 
 			for shareid := range spaceShareIDs.IDs {
@@ -726,7 +731,6 @@ func (m *Manager) ListReceivedShares(ctx context.Context, filters []*collaborati
 					State: collaboration.ShareState_SHARE_STATE_PENDING,
 				}
 			}
-			ssids[ssid] = &rs
 		}
 	}
 
