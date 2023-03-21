@@ -833,7 +833,7 @@ func (fs *Decomposedfs) ListFolder(ctx context.Context, ref *provider.Reference,
 
 	// Wait for things to settle down, then close results chan
 	go func() {
-		g.Wait()
+		_ = g.Wait() // error is checked later
 		close(results)
 	}()
 

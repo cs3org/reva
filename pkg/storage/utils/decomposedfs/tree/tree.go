@@ -379,7 +379,7 @@ func (t *Tree) ListFolder(ctx context.Context, n *node.Node) ([]*node.Node, erro
 	}
 	// Wait for things to settle down, then close results chan
 	go func() {
-		g.Wait()
+		_ = g.Wait() // error is checked later
 		close(results)
 	}()
 
