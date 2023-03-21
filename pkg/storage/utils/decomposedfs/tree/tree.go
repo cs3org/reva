@@ -39,6 +39,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/options"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/filelocks"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/google/uuid"
@@ -76,22 +77,18 @@ type Tree struct {
 	lookup    PathLookup
 	blobstore Blobstore
 
-	root               string
-	treeSizeAccounting bool
-	treeTimeAccounting bool
+	options *options.Options
 }
 
 // PermissionCheckFunc defined a function used to check resource permissions
 type PermissionCheckFunc func(rp *provider.ResourcePermissions) bool
 
 // New returns a new instance of Tree
-func New(root string, tta bool, tsa bool, lu PathLookup, bs Blobstore) *Tree {
+func New(lu PathLookup, bs Blobstore, o *options.Options) *Tree {
 	return &Tree{
-		lookup:             lu,
-		blobstore:          bs,
-		root:               root,
-		treeTimeAccounting: tta,
-		treeSizeAccounting: tsa,
+		lookup:    lu,
+		blobstore: bs,
+		options:   o,
 	}
 }
 
@@ -99,10 +96,10 @@ func New(root string, tta bool, tsa bool, lu PathLookup, bs Blobstore) *Tree {
 func (t *Tree) Setup() error {
 	// create data paths for internal layout
 	dataPaths := []string{
-		filepath.Join(t.root, "spaces"),
+		filepath.Join(t.options.Root, "spaces"),
 		// notes contain symlinks from nodes/<u-u-i-d>/uploads/<uploadid> to ../../uploads/<uploadid>
 		// better to keep uploads on a fast / volatile storage before a workflow finally moves them to the nodes dir
-		filepath.Join(t.root, "uploads"),
+		filepath.Join(t.options.Root, "uploads"),
 	}
 	for _, v := range dataPaths {
 		err := os.MkdirAll(v, 0700)
@@ -328,42 +325,73 @@ func (t *Tree) ListFolder(ctx context.Context, n *node.Node) ([]*node.Node, erro
 	if err != nil {
 		return nil, err
 	}
-	nodes := make([]*node.Node, len(names))
 
-	eg, ctx := errgroup.WithContext(ctx)
-	for i := range names {
-		pos := i
-		eg.Go(func() error {
-			nodeID, err := readChildNodeFromLink(filepath.Join(dir, names[pos]))
-			if err != nil {
-				return err
+	numWorkers := t.options.MaxConcurrency
+	if len(names) < numWorkers {
+		numWorkers = len(names)
+	}
+	work := make(chan string)
+	results := make(chan *node.Node)
+
+	g, ctx := errgroup.WithContext(ctx)
+
+	// Distribute work
+	g.Go(func() error {
+		defer close(work)
+		for _, name := range names {
+			select {
+			case work <- name:
+			case <-ctx.Done():
+				return ctx.Err()
 			}
+		}
+		return nil
+	})
 
-			child, err := node.ReadNode(ctx, t.lookup, n.SpaceID, nodeID, false, n, true)
-			if err != nil {
-				return err
-			}
-
-			// prevent listing denied resources
-			if !child.IsDenied(ctx) {
-				if child.SpaceRoot == nil {
-					child.SpaceRoot = n.SpaceRoot
+	// Spawn workers that'll concurrently work the queue
+	for i := 0; i < numWorkers; i++ {
+		g.Go(func() error {
+			for name := range work {
+				nodeID, err := readChildNodeFromLink(filepath.Join(dir, name))
+				if err != nil {
+					return err
 				}
-				nodes[pos] = child
+
+				child, err := node.ReadNode(ctx, t.lookup, n.SpaceID, nodeID, false, n, true)
+				if err != nil {
+					return err
+				}
+
+				// prevent listing denied resources
+				if !child.IsDenied(ctx) {
+					if child.SpaceRoot == nil {
+						child.SpaceRoot = n.SpaceRoot
+					}
+					select {
+					case results <- child:
+					case <-ctx.Done():
+						return ctx.Err()
+					}
+				}
 			}
 			return nil
 		})
 	}
-	if err := eg.Wait(); err != nil {
+	// Wait for things to settle down, then close results chan
+	go func() {
+		g.Wait()
+		close(results)
+	}()
+
+	retNodes := []*node.Node{}
+	for n := range results {
+		retNodes = append(retNodes, n)
+	}
+
+	if err := g.Wait(); err != nil {
 		return nil, err
 	}
 
-	retNodes := []*node.Node{}
-	for _, n := range nodes {
-		if n != nil {
-			retNodes = append(retNodes, n)
-		}
-	}
 	return retNodes, nil
 }
 
@@ -402,7 +430,7 @@ func (t *Tree) Delete(ctx context.Context, n *node.Node) (err error) {
 	deletionTime := time.Now().UTC().Format(time.RFC3339Nano)
 
 	// Prepare the trash
-	trashLink := filepath.Join(t.root, "spaces", lookup.Pathify(n.SpaceRoot.ID, 1, 2), "trash", lookup.Pathify(n.ID, 4, 2))
+	trashLink := filepath.Join(t.options.Root, "spaces", lookup.Pathify(n.SpaceRoot.ID, 1, 2), "trash", lookup.Pathify(n.ID, 4, 2))
 	if err := os.MkdirAll(filepath.Dir(trashLink), 0700); err != nil {
 		// Roll back changes
 		_ = n.RemoveXattr(prefixes.TrashOriginAttr)
@@ -642,7 +670,7 @@ func (t *Tree) removeNode(path string, n *node.Node) error {
 // Propagate propagates changes to the root of the tree
 func (t *Tree) Propagate(ctx context.Context, n *node.Node, sizeDiff int64) (err error) {
 	sublog := appctx.GetLogger(ctx).With().Str("spaceid", n.SpaceID).Str("nodeid", n.ID).Logger()
-	if !t.treeTimeAccounting && !t.treeSizeAccounting {
+	if !t.options.TreeTimeAccounting && !t.options.TreeSizeAccounting {
 		// no propagation enabled
 		sublog.Debug().Msg("propagation disabled")
 		return
@@ -671,7 +699,7 @@ func (t *Tree) Propagate(ctx context.Context, n *node.Node, sizeDiff int64) (err
 			return nil
 		}
 
-		if t.treeTimeAccounting || (t.treeSizeAccounting && sizeDiff != 0) {
+		if t.options.TreeTimeAccounting || (t.options.TreeSizeAccounting && sizeDiff != 0) {
 			attrs := node.Attributes{}
 
 			var f *lockedfile.File
@@ -696,7 +724,7 @@ func (t *Tree) Propagate(ctx context.Context, n *node.Node, sizeDiff int64) (err
 				}
 			}()
 
-			if t.treeTimeAccounting {
+			if t.options.TreeTimeAccounting {
 				// update the parent tree time if it is older than the nodes mtime
 				updateSyncTime := false
 
@@ -731,7 +759,7 @@ func (t *Tree) Propagate(ctx context.Context, n *node.Node, sizeDiff int64) (err
 			}
 
 			// size accounting
-			if t.treeSizeAccounting && sizeDiff != 0 {
+			if t.options.TreeSizeAccounting && sizeDiff != 0 {
 				var newSize uint64
 
 				// read treesize

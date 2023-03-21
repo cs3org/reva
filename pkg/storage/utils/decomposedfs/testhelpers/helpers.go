@@ -156,7 +156,7 @@ func NewTestEnv(config map[string]interface{}) (*TestEnv, error) {
 	permissions := &mocks.PermissionsChecker{}
 	cs3permissionsclient := &mocks.CS3PermissionsClient{}
 	bs := &treemocks.Blobstore{}
-	tree := tree.New(o.Root, true, true, lu, bs)
+	tree := tree.New(lu, bs, o)
 	fs, err := decomposedfs.New(o, lu, decomposedfs.NewPermissions(permissions, cs3permissionsclient), tree, nil)
 	if err != nil {
 		return nil, err
