@@ -68,6 +68,7 @@ type Options struct {
 
 	MaxAcquireLockCycles    int `mapstructure:"max_acquire_lock_cycles"`
 	LockCycleDurationFactor int `mapstructure:"lock_cycle_duration_factor"`
+	MaxConcurrency          int `mapstructure:"max_concurrency"`
 
 	MaxQuota uint64 `mapstructure:"max_quota"`
 }
@@ -138,6 +139,10 @@ func New(m map[string]interface{}) (*Options, error) {
 		if o.PermTLSMode, err = pool.StringToTLSMode(sharedOpt.TLSMode); err != nil {
 			return nil, err
 		}
+	}
+
+	if o.MaxConcurrency <= 0 {
+		o.MaxConcurrency = 100
 	}
 
 	return o, nil

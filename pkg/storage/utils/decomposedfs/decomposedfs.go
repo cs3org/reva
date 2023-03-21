@@ -115,7 +115,7 @@ func NewDefault(m map[string]interface{}, bs tree.Blobstore, es events.Stream) (
 		return nil, fmt.Errorf("unknown metadata backend %s, only 'messagepack' or 'xattrs' (default) supported", o.MetadataBackend)
 	}
 
-	tp := tree.New(o.Root, o.TreeTimeAccounting, o.TreeSizeAccounting, lu, bs)
+	tp := tree.New(lu, bs, o)
 
 	permissionsClient, err := pool.GetPermissionsClient(o.PermissionsSVC, pool.WithTLSMode(o.PermTLSMode))
 	if err != nil {
@@ -782,29 +782,69 @@ func (fs *Decomposedfs) ListFolder(ctx context.Context, ref *provider.Reference,
 		return nil, errtypes.NotFound(f)
 	}
 
-	var children []*node.Node
-	children, err = fs.tp.ListFolder(ctx, n)
+	children, err := fs.tp.ListFolder(ctx, n)
 	if err != nil {
 		return nil, err
 	}
-	finfos := make([]*provider.ResourceInfo, len(children))
-	eg, ctx := errgroup.WithContext(ctx)
-	for i := range children {
-		pos := i
-		eg.Go(func() error {
-			np := rp
-			// add this childs permissions
-			pset, _ := n.PermissionSet(ctx)
-			node.AddPermissions(&np, &pset)
-			ri, err := children[pos].AsResourceInfo(ctx, &np, mdKeys, fieldMask, utils.IsRelativeReference(ref))
-			if err != nil {
-				return errtypes.InternalError(err.Error())
+
+	numWorkers := fs.o.MaxConcurrency
+	if len(children) < numWorkers {
+		numWorkers = len(children)
+	}
+	work := make(chan *node.Node, len(children))
+	results := make(chan *provider.ResourceInfo, len(children))
+
+	g, ctx := errgroup.WithContext(ctx)
+
+	// Distribute work
+	g.Go(func() error {
+		defer close(work)
+		for _, child := range children {
+			select {
+			case work <- child:
+			case <-ctx.Done():
+				return ctx.Err()
 			}
-			finfos[pos] = ri
+		}
+		return nil
+	})
+
+	// Spawn workers that'll concurrently work the queue
+	for i := 0; i < numWorkers; i++ {
+		g.Go(func() error {
+			for child := range work {
+				np := rp
+				// add this childs permissions
+				pset, _ := n.PermissionSet(ctx)
+				node.AddPermissions(&np, &pset)
+				ri, err := child.AsResourceInfo(ctx, &np, mdKeys, fieldMask, utils.IsRelativeReference(ref))
+				if err != nil {
+					return errtypes.InternalError(err.Error())
+				}
+				select {
+				case results <- ri:
+				case <-ctx.Done():
+					return ctx.Err()
+				}
+			}
 			return nil
 		})
 	}
-	if err := eg.Wait(); err != nil {
+
+	// Wait for things to settle down, then close results chan
+	go func() {
+		_ = g.Wait() // error is checked later
+		close(results)
+	}()
+
+	finfos := make([]*provider.ResourceInfo, len(children))
+	i := 0
+	for fi := range results {
+		finfos[i] = fi
+		i++
+	}
+
+	if err := g.Wait(); err != nil {
 		return nil, err
 	}
 

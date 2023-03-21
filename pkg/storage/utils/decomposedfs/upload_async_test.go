@@ -105,7 +105,7 @@ var _ = Describe("Async file uploads", Ordered, func() {
 
 		// setup fs
 		pub, con = make(chan interface{}), make(chan interface{})
-		tree := tree.New(o.Root, true, true, lu, bs)
+		tree := tree.New(lu, bs, o)
 		fs, err = New(o, lu, NewPermissions(permissions, cs3permissionsclient), tree, stream.Chan{pub, con})
 		Expect(err).ToNot(HaveOccurred())
 

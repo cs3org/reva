@@ -119,7 +119,7 @@ var _ = Describe("File uploads", func() {
 			AddGrant: true,
 		}, nil).Times(1)
 		var err error
-		tree := tree.New(o.Root, true, true, lu, bs)
+		tree := tree.New(lu, bs, o)
 		fs, err = decomposedfs.New(o, lu, decomposedfs.NewPermissions(permissions, cs3permissionsclient), tree, nil)
 		Expect(err).ToNot(HaveOccurred())
 
