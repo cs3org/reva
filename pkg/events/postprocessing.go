@@ -37,8 +37,8 @@ type (
 var (
 	// PPStepAntivirus is the step that scans for viruses
 	PPStepAntivirus Postprocessingstep = "virusscan"
-	// PPStepFTS is the step that indexes files for full text search
-	PPStepFTS Postprocessingstep = "fts"
+	// PPStepPolicies is the step the step that enforces policies
+	PPStepPolicies Postprocessingstep = "policies"
 	// PPStepDelay is the step that processing. Useful for testing or user annoyment
 	PPStepDelay Postprocessingstep = "delay"
 
@@ -64,26 +64,6 @@ type BytesReceived struct {
 // Unmarshal to fulfill umarshaller interface
 func (BytesReceived) Unmarshal(v []byte) (interface{}, error) {
 	e := BytesReceived{}
-	err := json.Unmarshal(v, &e)
-	return e, err
-}
-
-// VirusscanFinished is emitted by the server when it has completed an antivirus scan
-type VirusscanFinished struct {
-	Infected      bool
-	Outcome       PostprocessingOutcome
-	UploadID      string
-	Filename      string
-	ExecutingUser *user.User
-	Description   string
-	Scandate      time.Time
-	ResourceID    *provider.ResourceId
-	ErrorMsg      string // empty when no error
-}
-
-// Unmarshal to fulfill umarshaller interface
-func (VirusscanFinished) Unmarshal(v []byte) (interface{}, error) {
-	e := VirusscanFinished{}
 	err := json.Unmarshal(v, &e)
 	return e, err
 }
@@ -116,7 +96,7 @@ type PostprocessingStepFinished struct {
 	Filename      string
 
 	FinishedStep Postprocessingstep    // name of the step
-	Result       interface{}           // result information
+	Result       interface{}           // result information see VirusscanResult for example
 	Error        error                 // possible error of the step
 	Outcome      PostprocessingOutcome // some services may cause postprocessing to stop
 }
@@ -126,6 +106,15 @@ func (PostprocessingStepFinished) Unmarshal(v []byte) (interface{}, error) {
 	e := PostprocessingStepFinished{}
 	err := json.Unmarshal(v, &e)
 	return e, err
+}
+
+// VirusscanResult is the Result of a PostprocessingStepFinished event from the antivirus
+type VirusscanResult struct {
+	Infected    bool
+	Description string
+	Scandate    time.Time
+	ResourceID  *provider.ResourceId
+	ErrorMsg    string // empty when no error
 }
 
 // PostprocessingFinished is emitted by *some* service which can decide that

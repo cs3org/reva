@@ -169,7 +169,7 @@ func New(o *options.Options, lu *lookup.Lookup, p Permissions, tp Tree, es event
 			return nil, errors.New("need nats for async file processing")
 		}
 
-		ch, err := events.Consume(fs.stream, "dcfs", events.PostprocessingFinished{}, events.VirusscanFinished{})
+		ch, err := events.Consume(fs.stream, "dcfs", events.PostprocessingFinished{}, events.PostprocessingStepFinished{})
 		if err != nil {
 			return nil, err
 		}
@@ -266,9 +266,14 @@ func (fs *Decomposedfs) Postprocessing(ch <-chan events.Event) {
 				log.Error().Err(err).Str("uploadID", ev.UploadID).Msg("Failed to publish UploadReady event")
 			}
 
-		/* LETS KEEP THIS COMMENTED UNTIL VIRUSSCANNING IS BACKMERGED
-		case events.VirusscanFinished:
-			if ev.ErrorMsg != "" {
+		case events.PostprocessingStepFinished:
+			if ev.FinishedStep != events.PPStepAntivirus {
+				// atm we are only interested in antivirus results
+				continue
+			}
+
+			res := ev.Result.(events.VirusscanResult)
+			if res.ErrorMsg != "" {
 				// scan failed somehow
 				// Should we handle this here?
 				continue
@@ -278,6 +283,7 @@ func (fs *Decomposedfs) Postprocessing(ch <-chan events.Event) {
 			switch ev.UploadID {
 			case "":
 				// uploadid is empty -> this was an on-demand scan
+				/* ON DEMAND SCANNING NOT SUPPORTED ATM
 				ctx := ctxpkg.ContextSetUser(context.Background(), ev.ExecutingUser)
 				ref := &provider.Reference{ResourceId: ev.ResourceID}
 
@@ -352,6 +358,7 @@ func (fs *Decomposedfs) Postprocessing(ch <-chan events.Event) {
 					fs.cache.RemoveStat(ev.ExecutingUser.GetId(), &provider.ResourceId{SpaceId: n.SpaceID, OpaqueId: n.ID})
 					continue
 				}
+				*/
 			default:
 				// uploadid is not empty -> this is an async upload
 				up, err := upload.Get(ctx, ev.UploadID, fs.lu, fs.tp, fs.o.Root, fs.stream, fs.o.AsyncFileUploads, fs.o.Tokens)
@@ -360,7 +367,7 @@ func (fs *Decomposedfs) Postprocessing(ch <-chan events.Event) {
 					continue
 				}
 
-				no, err := node.ReadNode(up.Ctx, fs.lu, up.Info.Storage["SpaceRoot"], up.Info.Storage["NodeId"], false)
+				no, err := node.ReadNode(up.Ctx, fs.lu, up.Info.Storage["SpaceRoot"], up.Info.Storage["NodeId"], false, nil, false)
 				if err != nil {
 					log.Error().Err(err).Interface("uploadID", ev.UploadID).Msg("Failed to get node after scan")
 					continue
@@ -369,14 +376,13 @@ func (fs *Decomposedfs) Postprocessing(ch <-chan events.Event) {
 				n = no
 			}
 
-			if err := n.SetScanData(ev.Description, ev.Scandate); err != nil {
-				log.Error().Err(err).Str("uploadID", ev.UploadID).Interface("resourceID", ev.ResourceID).Msg("Failed to set scan results")
+			if err := n.SetScanData(res.Description, res.Scandate); err != nil {
+				log.Error().Err(err).Str("uploadID", ev.UploadID).Interface("resourceID", res.ResourceID).Msg("Failed to set scan results")
 				continue
 			}
 
 			// remove cache entry in gateway
 			fs.cache.RemoveStat(ev.ExecutingUser.GetId(), &provider.ResourceId{SpaceId: n.SpaceID, OpaqueId: n.ID})
-		*/
 		default:
 			log.Error().Interface("event", ev).Msg("Unknown event")
 		}
