@@ -241,10 +241,15 @@ func (h *Handler) listUserShares(r *http.Request, filters []*collaboration.Filte
 	wg.Wait()
 	close(output)
 
+	for s := range output {
+		ocsDataPayload = append(ocsDataPayload, s)
+	}
+
 	if h.listOCMShares {
 		// include the ocm shares
 		ocmShares, err := h.listOutcomingFederatedShares(ctx, client)
 		if err != nil {
+			// TODO (gdelmont): this should not return error, but just log it
 			return nil, nil, err
 		}
 		ocsDataPayload = append(ocsDataPayload, ocmShares...)
