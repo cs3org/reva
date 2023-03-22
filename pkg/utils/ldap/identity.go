@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"strings"
 
+	identityUser "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/go-ldap/ldap/v3"
 	"github.com/google/uuid"
@@ -43,6 +44,7 @@ type userConfig struct {
 	Objectclass         string     `mapstructure:"user_objectclass"`
 	DisableMechanism    string     `mapstructure:"user_disable_mechanism"`
 	EnabledProperty     string     `mapstructure:"user_enabled_property"`
+	UserTypeProperty    string     `mapstructure:"user_type_property"`
 	Schema              userSchema `mapstructure:"user_schema"`
 	SubstringFilterType string     `mapstructure:"user_substring_filter_type"`
 	substringFilterVal  int
@@ -207,6 +209,8 @@ func (i *Identity) GetLDAPUserByFilter(log *zerolog.Logger, lc ldap.Client, filt
 			i.User.Schema.Username,
 			i.User.Schema.UIDNumber,
 			i.User.Schema.GIDNumber,
+			i.User.EnabledProperty,
+			i.User.UserTypeProperty,
 		},
 		nil,
 	)
@@ -246,6 +250,7 @@ func (i *Identity) GetLDAPUserByDN(log *zerolog.Logger, lc ldap.Client, dn strin
 			i.User.Schema.Username,
 			i.User.Schema.UIDNumber,
 			i.User.Schema.GIDNumber,
+			i.User.EnabledProperty,
 		},
 		nil,
 	)
@@ -277,6 +282,8 @@ func (i *Identity) GetLDAPUsers(log *zerolog.Logger, lc ldap.Client, query strin
 			i.User.Schema.DisplayName,
 			i.User.Schema.UIDNumber,
 			i.User.Schema.GIDNumber,
+			i.User.EnabledProperty,
+			i.User.UserTypeProperty,
 		},
 		nil,
 	)
@@ -684,4 +691,17 @@ func (i *Identity) getGroupAttributeFilter(attribute, value string) (string, err
 		attribute,
 		value,
 	), nil
+}
+
+// GetUserType is used to set the proper UserType from ldap entry string
+func (i *Identity) GetUserType(userEntry *ldap.Entry) identityUser.UserType {
+	userTypeString := userEntry.GetEqualFoldAttributeValue(i.User.UserTypeProperty)
+	switch strings.ToLower(userTypeString) {
+	case "member":
+		return identityUser.UserType_USER_TYPE_PRIMARY
+	case "guest":
+		return identityUser.UserType_USER_TYPE_GUEST
+	default:
+		return identityUser.UserType_USER_TYPE_PRIMARY
+	}
 }

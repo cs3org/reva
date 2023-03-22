@@ -261,6 +261,6 @@ func (m *manager) ldapEntryToUserID(entry *ldap.Entry) (*userpb.UserId, error) {
 	return &userpb.UserId{
 		Idp:      m.c.Idp,
 		OpaqueId: uid,
-		Type:     userpb.UserType_USER_TYPE_PRIMARY,
+		Type:     m.c.LDAPIdentity.GetUserType(entry),
 	}, nil
 }
