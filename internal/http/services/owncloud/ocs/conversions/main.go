@@ -215,6 +215,7 @@ type MatchValueData struct {
 	ShareType               int    `json:"shareType" xml:"shareType"`
 	ShareWith               string `json:"shareWith" xml:"shareWith"`
 	ShareWithAdditionalInfo string `json:"shareWithAdditionalInfo" xml:"shareWithAdditionalInfo"`
+	ShareWithUserType       int    `json:"shareWithUserType" xml:"shareWithUserType"`
 }
 
 // CS3Share2ShareData converts a cs3api user share into shareData data model
