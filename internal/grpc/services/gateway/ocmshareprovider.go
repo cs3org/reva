@@ -422,10 +422,19 @@ func getTransferProtocol(share *ocm.ReceivedShare) (*ocm.TransferProtocol, bool)
 	return nil, false
 }
 
+func getWebDAVProtocol(share *ocm.ReceivedShare) (*ocm.WebDAVProtocol, bool) {
+	for _, p := range share.Protocols {
+		if d, ok := p.Term.(*ocm.Protocol_WebdavOptions); ok {
+			return d.WebdavOptions, true
+		}
+	}
+	return nil, false
+}
+
 func (s *svc) createOCMReference(ctx context.Context, share *ocm.ReceivedShare) (*rpc.Status, error) {
 	log := appctx.GetLogger(ctx)
 
-	d, _ := getTransferProtocol(share)
+	d, _ := getWebDAVProtocol(share)
 
 	homeRes, err := s.GetHome(ctx, &provider.GetHomeRequest{})
 	if err != nil {
