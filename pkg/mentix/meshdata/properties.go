@@ -30,6 +30,15 @@ const (
 
 	// PropertyAPIVersion identifies the API version property.
 	PropertyAPIVersion = "api_version"
+
+	// PropertyInfrastructure identifies the infrastructure type of a site.
+	PropertyInfrastructure = "infrastructure"
+	// PropertyCertification identifies the certification status of a site.
+	PropertyCertification = "certification"
+	// PropertyIsInProduction identifies if a service is in production.
+	PropertyIsInProduction = "in_production"
+	// PropertyIsBeta identifies if a service is in beta.
+	PropertyIsBeta = "beta"
 )
 
 // GetPropertyValue performs a case-insensitive search for the given property.

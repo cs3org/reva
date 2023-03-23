@@ -28,19 +28,21 @@ import (
 
 // Site represents a single site managed by Mentix.
 type Site struct {
-	ID           string
-	Name         string
-	FullName     string
-	Organization string
-	Domain       string
-	Homepage     string
-	Email        string
-	Description  string
-	Country      string
-	CountryCode  string
-	Location     string
-	Latitude     float32
-	Longitude    float32
+	ID             string
+	Name           string
+	FullName       string
+	Organization   string
+	Domain         string
+	Infrastructure string
+	Certification  string
+	Homepage       string
+	Email          string
+	Description    string
+	Country        string
+	CountryCode    string
+	Location       string
+	Latitude       float32
+	Longitude      float32
 
 	Services   []*Service
 	Properties map[string]string
