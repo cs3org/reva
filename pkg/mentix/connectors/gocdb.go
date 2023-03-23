@@ -172,21 +172,23 @@ func (connector *GOCDBConnector) querySites(meshData *meshdata.MeshData, op *mes
 		organization := meshdata.GetPropertyValue(properties, meshdata.PropertyOrganization, site.OfficialName)
 
 		meshsite := &meshdata.Site{
-			ID:           siteID,
-			Name:         site.ShortName,
-			FullName:     site.OfficialName,
-			Organization: organization,
-			Domain:       site.Domain,
-			Homepage:     site.Homepage,
-			Email:        site.Email,
-			Description:  site.Description,
-			Country:      site.Country,
-			CountryCode:  site.CountryCode,
-			Longitude:    site.Longitude,
-			Latitude:     site.Latitude,
-			Services:     nil,
-			Properties:   properties,
-			Downtimes:    meshdata.Downtimes{},
+			ID:             siteID,
+			Name:           site.ShortName,
+			FullName:       site.OfficialName,
+			Organization:   organization,
+			Domain:         site.Domain,
+			Infrastructure: site.Infrastructure,
+			Certification:  site.Certification,
+			Homepage:       site.Homepage,
+			Email:          site.Email,
+			Description:    site.Description,
+			Country:        site.Country,
+			CountryCode:    site.CountryCode,
+			Longitude:      site.Longitude,
+			Latitude:       site.Latitude,
+			Services:       nil,
+			Properties:     properties,
+			Downtimes:      meshdata.Downtimes{},
 		}
 		op.Sites = append(op.Sites, meshsite)
 	}

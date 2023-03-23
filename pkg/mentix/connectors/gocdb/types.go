@@ -55,17 +55,19 @@ type NGIs struct {
 
 // Site represents a site in GOCDB.
 type Site struct {
-	ShortName    string     `xml:"SHORT_NAME"`
-	OfficialName string     `xml:"OFFICIAL_NAME"`
-	Description  string     `xml:"SITE_DESCRIPTION"`
-	Homepage     string     `xml:"HOME_URL"`
-	Email        string     `xml:"CONTACT_EMAIL"`
-	Domain       string     `xml:"DOMAIN>DOMAIN_NAME"`
-	Country      string     `xml:"COUNTRY"`
-	CountryCode  string     `xml:"COUNTRY_CODE"`
-	Latitude     float32    `xml:"LATITUDE"`
-	Longitude    float32    `xml:"LONGITUDE"`
-	Extensions   Extensions `xml:"EXTENSIONS"`
+	ShortName      string     `xml:"SHORT_NAME"`
+	OfficialName   string     `xml:"OFFICIAL_NAME"`
+	Description    string     `xml:"SITE_DESCRIPTION"`
+	Homepage       string     `xml:"HOME_URL"`
+	Email          string     `xml:"CONTACT_EMAIL"`
+	Domain         string     `xml:"DOMAIN>DOMAIN_NAME"`
+	Infrastructure string     `xml:"PRODUCTION_INFRASTRUCTURE"`
+	Certification  string     `xml:"CERTIFICATION_STATUS"`
+	Country        string     `xml:"COUNTRY"`
+	CountryCode    string     `xml:"COUNTRY_CODE"`
+	Latitude       float32    `xml:"LATITUDE"`
+	Longitude      float32    `xml:"LONGITUDE"`
+	Extensions     Extensions `xml:"EXTENSIONS"`
 }
 
 // Sites is a list of Site objects.

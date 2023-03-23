@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
@@ -95,7 +96,11 @@ func convertMeshDataToOCMData(meshData *meshdata.MeshData, elevatedServiceTypes 
 				Services:     services,
 				Properties:   site.Properties,
 			}
-			provider.Properties[strings.ToUpper(meshdata.PropertyOperator)] = op.ID // Propagate the operator ID as a property
+			// Propagate the operator ID as a property
+			setPropertyValue(provider.Properties, meshdata.PropertyOperator, op.ID)
+			// Expose additional site details as properties
+			setPropertyValue(provider.Properties, meshdata.PropertyInfrastructure, site.Infrastructure)
+			setPropertyValue(provider.Properties, meshdata.PropertyCertification, site.Certification)
 			providers = append(providers, provider)
 		}
 	}
@@ -103,6 +108,14 @@ func convertMeshDataToOCMData(meshData *meshdata.MeshData, elevatedServiceTypes 
 }
 
 func convertServiceEndpointToOCMData(endpoint *meshdata.ServiceEndpoint, log *zerolog.Logger) *ocmprovider.ServiceEndpoint {
+	properties := make(map[string]string, 10)
+	for k, v := range endpoint.Properties {
+		properties[k] = v
+	}
+	// Expose additional service details as properties
+	setPropertyValue(properties, meshdata.PropertyIsInProduction, strconv.FormatBool(endpoint.IsInProduction))
+	setPropertyValue(properties, meshdata.PropertyIsBeta, strconv.FormatBool(endpoint.IsBeta))
+
 	return &ocmprovider.ServiceEndpoint{
 		Type: &ocmprovider.ServiceType{
 			Name:        endpoint.Type.Name,
@@ -111,6 +124,10 @@ func convertServiceEndpointToOCMData(endpoint *meshdata.ServiceEndpoint, log *ze
 		Name:        endpoint.Name,
 		Path:        normalizeURLPath(endpoint.URL, log),
 		IsMonitored: endpoint.IsMonitored,
-		Properties:  endpoint.Properties,
+		Properties:  properties,
 	}
+}
+
+func setPropertyValue(properties map[string]string, key string, value string) {
+	properties[strings.ToUpper(key)] = value
 }
