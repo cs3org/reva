@@ -89,12 +89,14 @@ type ServiceEndpoints struct {
 
 // Service represents a service in GOCDB.
 type Service struct {
-	Host        string           `xml:"HOSTNAME"`
-	Type        string           `xml:"SERVICE_TYPE"`
-	IsMonitored string           `xml:"NODE_MONITORED"`
-	URL         string           `xml:"URL"`
-	Endpoints   ServiceEndpoints `xml:"ENDPOINTS"`
-	Extensions  Extensions       `xml:"EXTENSIONS"`
+	Host           string           `xml:"HOSTNAME"`
+	Type           string           `xml:"SERVICE_TYPE"`
+	IsInProduction string           `xml:"IN_PRODUCTION"`
+	IsBeta         string           `xml:"BETA"`
+	IsMonitored    string           `xml:"NODE_MONITORED"`
+	URL            string           `xml:"URL"`
+	Endpoints      ServiceEndpoints `xml:"ENDPOINTS"`
+	Extensions     Extensions       `xml:"EXTENSIONS"`
 }
 
 // Services is a list of Service objects.

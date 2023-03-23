@@ -230,7 +230,7 @@ func (connector *GOCDBConnector) queryServices(meshData *meshdata.MeshData, site
 				Name:        endpoint.Name,
 				RawURL:      endpoint.URL,
 				URL:         getServiceURLString(service, endpoint, host),
-				IsMonitored: strings.EqualFold(endpoint.IsMonitored, "Y"),
+				IsMonitored: connector.convertStringToBool(endpoint.IsMonitored),
 				Properties:  connector.extensionsToMap(&endpoint.Extensions),
 			})
 		}
@@ -238,12 +238,14 @@ func (connector *GOCDBConnector) queryServices(meshData *meshdata.MeshData, site
 		// Add the service to the site
 		site.Services = append(site.Services, &meshdata.Service{
 			ServiceEndpoint: &meshdata.ServiceEndpoint{
-				Type:        connector.findServiceType(meshData, service.Type),
-				Name:        service.Type,
-				RawURL:      service.URL,
-				URL:         getServiceURLString(service, nil, host),
-				IsMonitored: strings.EqualFold(service.IsMonitored, "Y"),
-				Properties:  connector.extensionsToMap(&service.Extensions),
+				Type:           connector.findServiceType(meshData, service.Type),
+				Name:           service.Type,
+				RawURL:         service.URL,
+				URL:            getServiceURLString(service, nil, host),
+				IsInProduction: connector.convertStringToBool(service.IsInProduction),
+				IsBeta:         connector.convertStringToBool(service.IsBeta),
+				IsMonitored:    connector.convertStringToBool(service.IsMonitored),
+				Properties:     connector.extensionsToMap(&service.Extensions),
 			},
 			Host:                host,
 			AdditionalEndpoints: endpoints,
@@ -330,6 +332,10 @@ func (connector *GOCDBConnector) getServiceURL(service *gocdb.Service, endpoint 
 	}
 
 	return svcURL, nil
+}
+
+func (connector *GOCDBConnector) convertStringToBool(s string) bool {
+	return strings.EqualFold(s, "Y")
 }
 
 // GetID returns the ID of the connector.
