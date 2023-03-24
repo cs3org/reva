@@ -105,6 +105,19 @@ type PostprocessingStepFinished struct {
 func (PostprocessingStepFinished) Unmarshal(v []byte) (interface{}, error) {
 	e := PostprocessingStepFinished{}
 	err := json.Unmarshal(v, &e)
+	if err != nil {
+		return nil, err
+	}
+
+	switch e.FinishedStep {
+	case PPStepAntivirus:
+		var res VirusscanResult
+		b, _ := json.Marshal(e.Result)
+		err = json.Unmarshal(b, &res)
+		e.Result = res
+	case PPStepPolicies:
+		// nothing to do, but this makes the linter happy
+	}
 	return e, err
 }
 
