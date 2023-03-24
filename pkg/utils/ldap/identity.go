@@ -693,7 +693,7 @@ func (i *Identity) getGroupAttributeFilter(attribute, value string) (string, err
 	), nil
 }
 
-// GetUserType is used to set the proper UserType from ldap entry string
+// GetUserType is used to get the proper UserType from ldap entry string
 func (i *Identity) GetUserType(userEntry *ldap.Entry) identityUser.UserType {
 	userTypeString := userEntry.GetEqualFoldAttributeValue(i.User.UserTypeProperty)
 	switch strings.ToLower(userTypeString) {
