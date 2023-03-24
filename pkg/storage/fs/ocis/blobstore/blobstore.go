@@ -48,32 +48,20 @@ func New(root string) (*Blobstore, error) {
 }
 
 // Upload stores some data in the blobstore under the given key
-func (bs *Blobstore) Upload(node *node.Node, source string) error {
+func (bs *Blobstore) Upload(node *node.Node, data io.Reader) error {
 
-	dest := bs.path(node)
 	// ensure parent path exists
-	if err := os.MkdirAll(filepath.Dir(dest), 0700); err != nil {
+	if err := os.MkdirAll(filepath.Dir(bs.path(node)), 0700); err != nil {
 		return errors.Wrap(err, "Decomposedfs: oCIS blobstore: error creating parent folders for blob")
 	}
 
-	if err := os.Rename(source, dest); err == nil {
-		return nil
-	}
-
-	// Rename failed, file needs to be copied.
-	file, err := os.Open(source)
-	if err != nil {
-		return errors.Wrap(err, "Decomposedfs: oCIS blobstore: Can not open source file to upload")
-	}
-	defer file.Close()
-
-	f, err := os.OpenFile(dest, os.O_CREATE|os.O_WRONLY, 0700)
+	f, err := os.OpenFile(bs.path(node), os.O_CREATE|os.O_WRONLY, 0700)
 	if err != nil {
 		return errors.Wrapf(err, "could not open blob '%s' for writing", bs.path(node))
 	}
 
 	w := bufio.NewWriter(f)
-	_, err = w.ReadFrom(file)
+	_, err = w.ReadFrom(data)
 	if err != nil {
 		return errors.Wrapf(err, "could not write blob '%s'", bs.path(node))
 	}

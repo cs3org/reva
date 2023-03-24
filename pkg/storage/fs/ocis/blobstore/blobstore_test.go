@@ -19,6 +19,7 @@
 package blobstore_test
 
 import (
+	"bytes"
 	"io"
 	"os"
 	"path"
@@ -33,11 +34,10 @@ import (
 
 var _ = Describe("Blobstore", func() {
 	var (
-		tmpRoot     string
-		blobNode    *node.Node
-		blobPath    string
-		blobSrcFile string
-		data        []byte
+		tmpRoot  string
+		blobNode *node.Node
+		blobPath string
+		data     []byte
 
 		bs *blobstore.Blobstore
 	)
@@ -54,8 +54,6 @@ var _ = Describe("Blobstore", func() {
 		}
 		blobPath = path.Join(tmpRoot, "spaces", "wo", "nderfullspace", "blobs", "hu", "uu", "uu", "ge", "blob")
 
-		blobSrcFile = path.Join(tmpRoot, "blobsrc")
-
 		bs, err = blobstore.New(path.Join(tmpRoot))
 		Expect(err).ToNot(HaveOccurred())
 	})
@@ -71,19 +69,14 @@ var _ = Describe("Blobstore", func() {
 		Expect(err).ToNot(HaveOccurred())
 	})
 
-	Context("Blob upload", func() {
-		Describe("Upload", func() {
-			BeforeEach(func() {
-				Expect(os.WriteFile(blobSrcFile, data, 0700)).To(Succeed())
-			})
-			It("writes the blob", func() {
-				err := bs.Upload(blobNode, blobSrcFile)
-				Expect(err).ToNot(HaveOccurred())
+	Describe("Upload", func() {
+		It("writes the blob", func() {
+			err := bs.Upload(blobNode, bytes.NewReader(data))
+			Expect(err).ToNot(HaveOccurred())
 
-				writtenBytes, err := os.ReadFile(blobPath)
-				Expect(err).ToNot(HaveOccurred())
-				Expect(writtenBytes).To(Equal(data))
-			})
+			writtenBytes, err := os.ReadFile(blobPath)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(writtenBytes).To(Equal(data))
 		})
 	})
 

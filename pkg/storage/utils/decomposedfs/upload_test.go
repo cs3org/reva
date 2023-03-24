@@ -245,10 +245,11 @@ var _ = Describe("File uploads", func() {
 
 				uploadRef := &provider.Reference{Path: "/" + uploadIds["simple"]}
 
-				bs.On("Upload", mock.AnythingOfType("*node.Node"), mock.AnythingOfType("string"), mock.Anything).
+				bs.On("Upload", mock.AnythingOfType("*node.Node"), mock.AnythingOfType("*os.File"), mock.Anything).
 					Return(nil).
 					Run(func(args mock.Arguments) {
-						data, err := os.ReadFile(args.Get(1).(string))
+						reader := args.Get(1).(io.Reader)
+						data, err := io.ReadAll(reader)
 
 						Expect(err).ToNot(HaveOccurred())
 						Expect(data).To(Equal([]byte("0123456789")))
@@ -282,10 +283,11 @@ var _ = Describe("File uploads", func() {
 
 				uploadRef := &provider.Reference{Path: "/" + uploadIds["simple"]}
 
-				bs.On("Upload", mock.AnythingOfType("*node.Node"), mock.AnythingOfType("string"), mock.Anything).
+				bs.On("Upload", mock.AnythingOfType("*node.Node"), mock.AnythingOfType("*os.File"), mock.Anything).
 					Return(nil).
 					Run(func(args mock.Arguments) {
-						data, err := os.ReadFile(args.Get(1).(string))
+						reader := args.Get(1).(io.Reader)
+						data, err := io.ReadAll(reader)
 
 						Expect(err).ToNot(HaveOccurred())
 						Expect(data).To(Equal([]byte("")))
