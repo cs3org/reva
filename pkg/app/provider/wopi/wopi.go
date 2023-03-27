@@ -157,7 +157,6 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 	q := httpReq.URL.Query()
 	q.Add("fileid", resource.GetId().OpaqueId)
 	q.Add("endpoint", resource.GetId().StorageId)
-	q.Add("viewmode", viewMode.String())
 	q.Add("appname", p.conf.AppName)
 
 	var ut = invalid
@@ -220,6 +219,12 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 		}
 	}
 	q.Add("usertype", string(ut))
+
+	if viewMode == appprovider.ViewMode_VIEW_MODE_READ_WRITE && (ut != regular || u.Id.OpaqueId != resource.Owner.OpaqueId) {
+		// external users and users on shares (not owners) go to preview mode as opposed to editing mode if supported by the app
+		viewMode = appprovider.ViewMode_VIEW_MODE_PREVIEW
+	}
+	q.Add("viewmode", viewMode.String())
 
 	var viewAppURL string
 	if viewAppURLs, ok := p.appURLs["view"]; ok {
