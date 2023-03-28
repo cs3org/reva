@@ -366,8 +366,9 @@ func (s *svc) handleOpen(openMode int) http.HandlerFunc {
 		}
 
 		lang := r.Form.Get("lang")
-		if lang != "" && !iso6391.ValidCode(lang) {
-			writeError(w, r, appErrorInvalidParameter, "lang parameter does not contain a valid ISO 639-1 language code", nil)
+		parts := strings.Split(lang, "_")
+		if lang != "" && !iso6391.ValidCode(parts[0]) {
+			writeError(w, r, appErrorInvalidParameter, "lang parameter does not contain a valid ISO 639-1 language code in the language tag", nil)
 			return
 		}
 
