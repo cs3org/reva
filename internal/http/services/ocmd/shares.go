@@ -71,7 +71,7 @@ type createShareRequest struct {
 	ShareType         string    `json:"shareType" validate:"required,oneof=user group"` // recipient share type (user or group)
 	ResourceType      string    `json:"resourceType" validate:"required,oneof=file folder"`
 	Expiration        uint64    `json:"expiration"`
-	Protocols         Protocols `json:"protocols" validate:"required"`
+	Protocols         Protocols `json:"protocol" validate:"required"`
 }
 
 // CreateShare sends all the informations to the consumer needed to start

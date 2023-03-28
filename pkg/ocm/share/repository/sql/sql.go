@@ -474,13 +474,13 @@ func storeWebDAVProtocol(tx *sql.Tx, shareID int64, o *ocm.Protocol_WebdavOption
 }
 
 func storeWebappProtocol(tx *sql.Tx, shareID int64, o *ocm.Protocol_WebappOptions) error {
-	pID, err := storeProtocol(tx, shareID, WebappProtcol)
+	pID, err := storeProtocol(tx, shareID, WebappProtocol)
 	if err != nil {
 		return err
 	}
 
-	query := "INSERT INTO ocm_protocol_webapp SET ocm_protocol_id=?, uri_template=?"
-	params := []any{pID, o.WebappOptions.UriTemplate}
+	query := "INSERT INTO ocm_protocol_webapp SET ocm_protocol_id=?, uri_template=?, view_mode=?"
+	params := []any{pID, o.WebappOptions.UriTemplate, o.WebappOptions.ViewMode}
 
 	_, err = tx.Exec(query, params...)
 	return err
@@ -604,7 +604,7 @@ func (m *mgr) getProtocolsIds(ctx context.Context, ids []any) (map[string][]*ocm
 	if len(ids) == 0 {
 		return protocols, nil
 	}
-	query := "SELECT p.ocm_received_share_id, p.type, dav.uri, dav.shared_secret, dav.permissions, app.uri_template, tx.source_uri, tx.shared_secret, tx.size FROM ocm_received_share_protocols as p LEFT JOIN ocm_protocol_webdav as dav ON p.id=dav.ocm_protocol_id LEFT JOIN ocm_protocol_webapp as app ON p.id=app.ocm_protocol_id LEFT JOIN ocm_protocol_transfer as tx ON p.id=tx.ocm_protocol_id WHERE p.ocm_received_share_id IN "
+	query := "SELECT p.ocm_received_share_id, p.type, dav.uri, dav.shared_secret, dav.permissions, app.uri_template, app.view_mode, tx.source_uri, tx.shared_secret, tx.size FROM ocm_received_share_protocols as p LEFT JOIN ocm_protocol_webdav as dav ON p.id=dav.ocm_protocol_id LEFT JOIN ocm_protocol_webapp as app ON p.id=app.ocm_protocol_id LEFT JOIN ocm_protocol_transfer as tx ON p.id=tx.ocm_protocol_id WHERE p.ocm_received_share_id IN "
 	in := strings.Repeat("?,", len(ids))
 	query += "(" + in[:len(in)-1] + ")"
 
@@ -615,7 +615,7 @@ func (m *mgr) getProtocolsIds(ctx context.Context, ids []any) (map[string][]*ocm
 
 	var p dbProtocol
 	for rows.Next() {
-		if err := rows.Scan(&p.ShareID, &p.Type, &p.WebDAVURI, &p.WebDAVSharedSecret, &p.WebDavPermissions, &p.WebappURITemplate, &p.TransferSourceURI, &p.TransferSharedSecret, &p.TransferSize); err != nil {
+		if err := rows.Scan(&p.ShareID, &p.Type, &p.WebDAVURI, &p.WebDAVSharedSecret, &p.WebDavPermissions, &p.WebappURITemplate, &p.WebappViewMode, &p.TransferSourceURI, &p.TransferSharedSecret, &p.TransferSize); err != nil {
 			continue
 		}
 		protocols[p.ShareID] = append(protocols[p.ShareID], convertToCS3Protocol(&p))
@@ -683,7 +683,7 @@ func (m *mgr) getReceivedByKey(ctx context.Context, user *userpb.User, key *ocm.
 }
 
 func (m *mgr) getProtocols(ctx context.Context, id int) ([]*ocm.Protocol, error) {
-	query := "SELECT p.type, dav.uri, dav.shared_secret, dav.permissions, app.uri_template, tx.source_uri, tx.shared_secret, tx.size FROM ocm_received_share_protocols as p LEFT JOIN ocm_protocol_webdav as dav ON p.id=dav.ocm_protocol_id LEFT JOIN ocm_protocol_webapp as app ON p.id=app.ocm_protocol_id LEFT JOIN ocm_protocol_transfer as tx ON p.id=tx.ocm_protocol_id WHERE p.ocm_received_share_id=?"
+	query := "SELECT p.type, dav.uri, dav.shared_secret, dav.permissions, app.uri_template, app.view_mode, tx.source_uri, tx.shared_secret, tx.size FROM ocm_received_share_protocols as p LEFT JOIN ocm_protocol_webdav as dav ON p.id=dav.ocm_protocol_id LEFT JOIN ocm_protocol_webapp as app ON p.id=app.ocm_protocol_id LEFT JOIN ocm_protocol_transfer as tx ON p.id=tx.ocm_protocol_id WHERE p.ocm_received_share_id=?"
 
 	var protocols []*ocm.Protocol
 	rows, err := m.db.QueryContext(ctx, query, id)
@@ -693,7 +693,7 @@ func (m *mgr) getProtocols(ctx context.Context, id int) ([]*ocm.Protocol, error)
 
 	var p dbProtocol
 	for rows.Next() {
-		if err := rows.Scan(&p.Type, &p.WebDAVURI, &p.WebDAVSharedSecret, &p.WebDavPermissions, &p.WebappURITemplate, &p.TransferSourceURI, &p.TransferSharedSecret, &p.TransferSize); err != nil {
+		if err := rows.Scan(&p.Type, &p.WebDAVURI, &p.WebDAVSharedSecret, &p.WebDavPermissions, &p.WebappURITemplate, &p.WebappViewMode, &p.TransferSourceURI, &p.TransferSharedSecret, &p.TransferSize); err != nil {
 			continue
 		}
 		protocols = append(protocols, convertToCS3Protocol(&p))

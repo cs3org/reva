@@ -38,11 +38,12 @@ func NewWebDAVProtocol(uri, shareSecred string, perms *ocm.SharePermissions) *oc
 }
 
 // NewWebappProtocol is an abstraction for creating a Webapp protocol.
-func NewWebappProtocol(uriTemplate string) *ocm.Protocol {
+func NewWebappProtocol(uriTemplate string, viewMode appprovider.ViewMode) *ocm.Protocol {
 	return &ocm.Protocol{
 		Term: &ocm.Protocol_WebappOptions{
 			WebappOptions: &ocm.WebappProtocol{
 				UriTemplate: uriTemplate,
+				ViewMode:    viewMode,
 			},
 		},
 	}

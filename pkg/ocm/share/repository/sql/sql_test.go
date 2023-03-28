@@ -248,6 +248,7 @@ func createReceivedShareTables(ctx *sql.Context, initData []*ocm.ReceivedShare) 
 	webapp := memory.NewTable(ocmProtWebappTable, sql.NewPrimaryKeySchema(sql.Schema{
 		{Name: "ocm_protocol_id", Type: sql.Int64, Source: ocmProtWebappTable, PrimaryKey: true, AutoIncrement: true},
 		{Name: "uri_template", Type: sql.Text, Source: ocmProtWebappTable, Nullable: false},
+		{Name: "view_mode", Type: sql.Int8, Nullable: false, Source: ocmProtWebappTable},
 	}), &kfProtocols)
 	tables[ocmProtWebappTable] = webapp
 
@@ -276,8 +277,8 @@ func createReceivedShareTables(ctx *sql.Context, initData []*ocm.ReceivedShare) 
 				must(protocols.Insert(ctx, sql.NewRow(i, mustInt(share.Id.OpaqueId), int8(WebDAVProtocol))))
 				must(webdav.Insert(ctx, sql.NewRow(i, prot.WebdavOptions.Uri, prot.WebdavOptions.SharedSecret, int64(conversions.RoleFromResourcePermissions(prot.WebdavOptions.Permissions.Permissions).OCSPermissions()))))
 			case *ocm.Protocol_WebappOptions:
-				must(protocols.Insert(ctx, sql.NewRow(i, mustInt(share.Id.OpaqueId), int8(WebappProtcol))))
-				must(webapp.Insert(ctx, sql.NewRow(i, prot.WebappOptions.UriTemplate)))
+				must(protocols.Insert(ctx, sql.NewRow(i, mustInt(share.Id.OpaqueId), int8(WebappProtocol))))
+				must(webapp.Insert(ctx, sql.NewRow(i, prot.WebappOptions.UriTemplate, int8(prot.WebappOptions.ViewMode))))
 			case *ocm.Protocol_TransferOptions:
 				must(protocols.Insert(ctx, sql.NewRow(i, mustInt(share.Id.OpaqueId), int8(TransferProtocol))))
 				must(transfer.Insert(ctx, sql.NewRow(i, prot.TransferOptions.SourceUri, prot.TransferOptions.SharedSecret, int64(prot.TransferOptions.Size))))
@@ -1453,7 +1454,7 @@ func TestGetReceivedShare(t *testing.T) {
 						share.NewWebDAVProtocol("webdav+https//cernbox.cern.ch/dav/ocm/1", "secret", &ocm.SharePermissions{
 							Permissions: conversions.NewEditorRole().CS3ResourcePermissions(),
 						}),
-						share.NewWebappProtocol("https://cernbox.cern.ch/ocm/1234"),
+						share.NewWebappProtocol("https://cernbox.cern.ch/ocm/1234", appprovider.ViewMode_VIEW_MODE_READ_WRITE),
 						share.NewTransferProtocol("webdav+https//cernbox.cern.ch/dav/ocm/1", "secret", 10),
 					},
 				},
@@ -1477,7 +1478,7 @@ func TestGetReceivedShare(t *testing.T) {
 					share.NewWebDAVProtocol("webdav+https//cernbox.cern.ch/dav/ocm/1", "secret", &ocm.SharePermissions{
 						Permissions: conversions.NewEditorRole().CS3ResourcePermissions(),
 					}),
-					share.NewWebappProtocol("https://cernbox.cern.ch/ocm/1234"),
+					share.NewWebappProtocol("https://cernbox.cern.ch/ocm/1234", appprovider.ViewMode_VIEW_MODE_READ_WRITE),
 					share.NewTransferProtocol("webdav+https//cernbox.cern.ch/dav/ocm/1", "secret", 10),
 				},
 			},
@@ -1548,7 +1549,7 @@ func TestListReceviedShares(t *testing.T) {
 						share.NewWebDAVProtocol("webdav+https//cernbox.cern.ch/dav/ocm/1", "secret", &ocm.SharePermissions{
 							Permissions: conversions.NewEditorRole().CS3ResourcePermissions(),
 						}),
-						share.NewWebappProtocol("https://cernbox.cern.ch/ocm/1234"),
+						share.NewWebappProtocol("https://cernbox.cern.ch/ocm/1234", appprovider.ViewMode_VIEW_MODE_READ_WRITE),
 						share.NewTransferProtocol("webdav+https//cernbox.cern.ch/dav/ocm/1", "secret", 10),
 					},
 				},
@@ -1572,7 +1573,7 @@ func TestListReceviedShares(t *testing.T) {
 						share.NewWebDAVProtocol("webdav+https//cernbox.cern.ch/dav/ocm/1", "secret", &ocm.SharePermissions{
 							Permissions: conversions.NewEditorRole().CS3ResourcePermissions(),
 						}),
-						share.NewWebappProtocol("https://cernbox.cern.ch/ocm/1234"),
+						share.NewWebappProtocol("https://cernbox.cern.ch/ocm/1234", appprovider.ViewMode_VIEW_MODE_READ_WRITE),
 						share.NewTransferProtocol("webdav+https//cernbox.cern.ch/dav/ocm/1", "secret", 10),
 					},
 				},
@@ -1597,7 +1598,7 @@ func TestListReceviedShares(t *testing.T) {
 						share.NewWebDAVProtocol("webdav+https//cernbox.cern.ch/dav/ocm/1", "secret", &ocm.SharePermissions{
 							Permissions: conversions.NewEditorRole().CS3ResourcePermissions(),
 						}),
-						share.NewWebappProtocol("https://cernbox.cern.ch/ocm/1234"),
+						share.NewWebappProtocol("https://cernbox.cern.ch/ocm/1234", appprovider.ViewMode_VIEW_MODE_READ_WRITE),
 						share.NewTransferProtocol("webdav+https//cernbox.cern.ch/dav/ocm/1", "secret", 10),
 					},
 				},
@@ -1614,7 +1615,7 @@ func TestListReceviedShares(t *testing.T) {
 					State:        ocm.ShareState_SHARE_STATE_ACCEPTED,
 					ResourceType: providerv1beta1.ResourceType_RESOURCE_TYPE_CONTAINER,
 					Protocols: []*ocm.Protocol{
-						share.NewWebappProtocol("https://cernbox.cern.ch/ocm/54321"),
+						share.NewWebappProtocol("https://cernbox.cern.ch/ocm/54321", appprovider.ViewMode_VIEW_MODE_READ_ONLY),
 					},
 				},
 			},
@@ -1637,7 +1638,7 @@ func TestListReceviedShares(t *testing.T) {
 						share.NewWebDAVProtocol("webdav+https//cernbox.cern.ch/dav/ocm/1", "secret", &ocm.SharePermissions{
 							Permissions: conversions.NewEditorRole().CS3ResourcePermissions(),
 						}),
-						share.NewWebappProtocol("https://cernbox.cern.ch/ocm/1234"),
+						share.NewWebappProtocol("https://cernbox.cern.ch/ocm/1234", appprovider.ViewMode_VIEW_MODE_READ_WRITE),
 						share.NewTransferProtocol("webdav+https//cernbox.cern.ch/dav/ocm/1", "secret", 10),
 					},
 				},
@@ -1655,7 +1656,7 @@ func TestListReceviedShares(t *testing.T) {
 					ResourceType: providerv1beta1.ResourceType_RESOURCE_TYPE_CONTAINER,
 					Expiration:   &typesv1beta1.Timestamp{},
 					Protocols: []*ocm.Protocol{
-						share.NewWebappProtocol("https://cernbox.cern.ch/ocm/54321"),
+						share.NewWebappProtocol("https://cernbox.cern.ch/ocm/54321", appprovider.ViewMode_VIEW_MODE_READ_ONLY),
 					},
 				},
 			},
@@ -1679,7 +1680,7 @@ func TestListReceviedShares(t *testing.T) {
 						share.NewWebDAVProtocol("webdav+https//cernbox.cern.ch/dav/ocm/1", "secret", &ocm.SharePermissions{
 							Permissions: conversions.NewEditorRole().CS3ResourcePermissions(),
 						}),
-						share.NewWebappProtocol("https://cernbox.cern.ch/ocm/1234"),
+						share.NewWebappProtocol("https://cernbox.cern.ch/ocm/1234", appprovider.ViewMode_VIEW_MODE_READ_WRITE),
 						share.NewTransferProtocol("webdav+https//cernbox.cern.ch/dav/ocm/1", "secret", 10),
 					},
 				},
@@ -1696,7 +1697,7 @@ func TestListReceviedShares(t *testing.T) {
 					State:        ocm.ShareState_SHARE_STATE_ACCEPTED,
 					ResourceType: providerv1beta1.ResourceType_RESOURCE_TYPE_CONTAINER,
 					Protocols: []*ocm.Protocol{
-						share.NewWebappProtocol("https://cernbox.cern.ch/ocm/54321"),
+						share.NewWebappProtocol("https://cernbox.cern.ch/ocm/54321", appprovider.ViewMode_VIEW_MODE_READ_WRITE),
 					},
 				},
 			},
@@ -1719,7 +1720,7 @@ func TestListReceviedShares(t *testing.T) {
 						share.NewWebDAVProtocol("webdav+https//cernbox.cern.ch/dav/ocm/1", "secret", &ocm.SharePermissions{
 							Permissions: conversions.NewEditorRole().CS3ResourcePermissions(),
 						}),
-						share.NewWebappProtocol("https://cernbox.cern.ch/ocm/1234"),
+						share.NewWebappProtocol("https://cernbox.cern.ch/ocm/1234", appprovider.ViewMode_VIEW_MODE_READ_WRITE),
 						share.NewTransferProtocol("webdav+https//cernbox.cern.ch/dav/ocm/1", "secret", 10),
 					},
 				},
@@ -1847,7 +1848,7 @@ func TestStoreReceivedShare(t *testing.T) {
 						Permissions: conversions.NewEditorRole().CS3ResourcePermissions(),
 					}),
 					share.NewTransferProtocol("https://transfer.cernbox.cern.ch/ocm/1234", "secret", 100),
-					share.NewWebappProtocol("https://app.cernbox.cern.ch/ocm/1234"),
+					share.NewWebappProtocol("https://app.cernbox.cern.ch/ocm/1234", appprovider.ViewMode_VIEW_MODE_READ_WRITE),
 				},
 			},
 			expected: storeReceivedShareExpected{
@@ -1859,14 +1860,14 @@ func TestStoreReceivedShare(t *testing.T) {
 					{int64(1), int64(1), int8(WebDAVProtocol)},
 					{int64(2), int64(2), int8(WebDAVProtocol)},
 					{int64(3), int64(2), int8(TransferProtocol)},
-					{int64(4), int64(2), int8(WebappProtcol)},
+					{int64(4), int64(2), int8(WebappProtocol)},
 				},
 				webdav: []sql.Row{
 					{int64(1), "webdav+https//cernbox.cern.ch/dav/ocm/1", "secret", int64(15)},
 					{int64(2), "webdav+https//cernbox.cern.ch/dav/ocm/1", "secret", int64(15)},
 				},
 				webapp: []sql.Row{
-					{int64(4), "https://app.cernbox.cern.ch/ocm/1234"},
+					{int64(4), "https://app.cernbox.cern.ch/ocm/1234", int8(3)},
 				},
 				transfer: []sql.Row{
 					{int64(3), "https://transfer.cernbox.cern.ch/ocm/1234", "secret", int64(100)},
