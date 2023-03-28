@@ -1671,7 +1671,7 @@ func (fs *eosfs) CreateDir(ctx context.Context, ref *provider.Reference) error {
 }
 
 // TouchFile as defined in the storage.FS interface
-func (fs *eosfs) TouchFile(ctx context.Context, ref *provider.Reference) error {
+func (fs *eosfs) TouchFile(ctx context.Context, ref *provider.Reference, _ bool) error {
 	log := appctx.GetLogger(ctx)
 
 	fn, auth, err := fs.resolveRefAndGetAuth(ctx, ref)

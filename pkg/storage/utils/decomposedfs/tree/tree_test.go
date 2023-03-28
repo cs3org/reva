@@ -246,7 +246,7 @@ var _ = Describe("Tree", func() {
 				Expect(err).ToNot(HaveOccurred())
 				Expect(fileToBeCreated.Exists).To(BeFalse())
 
-				err = t.TouchFile(env.Ctx, fileToBeCreated)
+				err = t.TouchFile(env.Ctx, fileToBeCreated, false)
 				Expect(err).ToNot(HaveOccurred())
 
 				existingFile, err := env.Lookup.NodeFromResource(env.Ctx, ref)

@@ -794,7 +794,7 @@ func (fs *owncloudsqlfs) CreateDir(ctx context.Context, ref *provider.Reference)
 }
 
 // TouchFile as defined in the storage.FS interface
-func (fs *owncloudsqlfs) TouchFile(ctx context.Context, ref *provider.Reference) error {
+func (fs *owncloudsqlfs) TouchFile(ctx context.Context, ref *provider.Reference, markprocessing bool) error {
 	ip, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return err
