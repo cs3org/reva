@@ -389,6 +389,7 @@ func (h *Handler) updatePublicShare(w http.ResponseWriter, r *http.Request, shar
 				Type: link.UpdatePublicShareRequest_Update_TYPE_PERMISSIONS,
 				Grant: &link.Grant{
 					Permissions: publicSharePermissions,
+					Password:    r.FormValue("password"),
 				},
 			})
 		}
