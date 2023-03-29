@@ -20,6 +20,7 @@ package events
 
 import (
 	"encoding/json"
+	"time"
 
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 )
@@ -66,6 +67,20 @@ type UserFeatureChanged struct {
 // Unmarshal to fulfill umarshaller interface
 func (UserFeatureChanged) Unmarshal(v []byte) (interface{}, error) {
 	e := UserFeatureChanged{}
+	err := json.Unmarshal(v, &e)
+	return e, err
+}
+
+// PersonalDataExtracted is emitted when a user data extraction is finished
+type PersonalDataExtracted struct {
+	Executant *user.UserId
+	Timestamp time.Time
+	ErrorMsg  string
+}
+
+// Unmarshal to fulfill umarshaller interface
+func (PersonalDataExtracted) Unmarshal(v []byte) (interface{}, error) {
+	e := PersonalDataExtracted{}
 	err := json.Unmarshal(v, &e)
 	return e, err
 }
