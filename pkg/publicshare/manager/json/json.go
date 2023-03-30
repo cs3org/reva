@@ -343,8 +343,20 @@ func (m *manager) UpdatePublicShare(ctx context.Context, u *user.User, req *link
 		old, _ := json.Marshal(share.Permissions)
 		new, _ := json.Marshal(req.Update.GetGrant().Permissions)
 
-		if m.writeableShareMustHavePassword && publicshare.IsWriteable(req.GetUpdate().GetGrant().GetPermissions()) && !share.PasswordProtected {
+		if m.writeableShareMustHavePassword &&
+			publicshare.IsWriteable(req.GetUpdate().GetGrant().GetPermissions()) &&
+			(!share.PasswordProtected && req.GetUpdate().GetGrant().GetPassword() == "") {
 			return nil, publicshare.ErrShareNeedsPassword
+		}
+
+		if req.GetUpdate().GetGrant().GetPassword() != "" {
+			passwordChanged = true
+			h, err := bcrypt.GenerateFromPassword([]byte(req.Update.GetGrant().Password), m.passwordHashCost)
+			if err != nil {
+				return nil, errors.Wrap(err, "could not hash share password")
+			}
+			newPasswordEncoded = string(h)
+			share.PasswordProtected = true
 		}
 
 		log.Debug().Str("json", "update grants").Msgf("from: `%v`\nto\n`%v`", old, new)
