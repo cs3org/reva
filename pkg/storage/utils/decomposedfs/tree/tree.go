@@ -124,8 +124,12 @@ func (t *Tree) GetMD(ctx context.Context, n *node.Node) (os.FileInfo, error) {
 }
 
 // TouchFile creates a new empty file
-func (t *Tree) TouchFile(ctx context.Context, n *node.Node) error {
+func (t *Tree) TouchFile(ctx context.Context, n *node.Node, markprocessing bool) error {
 	if n.Exists {
+		if markprocessing {
+			return n.SetXattr(prefixes.StatusPrefix, []byte(node.ProcessingStatus))
+		}
+
 		return errtypes.AlreadyExists(n.ID)
 	}
 
@@ -146,6 +150,10 @@ func (t *Tree) TouchFile(ctx context.Context, n *node.Node) error {
 	err = n.WriteAllNodeMetadata(ctx)
 	if err != nil {
 		return err
+	}
+
+	if markprocessing {
+		_ = n.SetXattr(prefixes.StatusPrefix, []byte(node.ProcessingStatus))
 	}
 
 	// link child name to parent if it is new

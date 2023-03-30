@@ -668,7 +668,7 @@ func (s *service) TouchFile(ctx context.Context, req *provider.TouchFileRequest)
 		}
 	}
 
-	err := s.storage.TouchFile(ctx, req.Ref)
+	err := s.storage.TouchFile(ctx, req.Ref, utils.ExistsInOpaque(req.Opaque, "markprocessing"))
 
 	return &provider.TouchFileResponse{
 		Status: status.NewStatusFromErrType(ctx, "touch file", err),
