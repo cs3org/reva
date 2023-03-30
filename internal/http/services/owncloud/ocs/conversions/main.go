@@ -43,6 +43,9 @@ const (
 	// ShareTypeUser refers to user shares
 	ShareTypeUser ShareType = 0
 
+	// ShareTypeGuestUser refers to guest user shares
+	ShareTypeGuestUser ShareType = 4
+
 	// ShareTypePublicLink refers to public link shares
 	ShareTypePublicLink ShareType = 3
 
@@ -229,7 +232,8 @@ func CS3Share2ShareData(ctx context.Context, share *collaboration.Share) (*Share
 	if share.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER {
 		sd.ShareType = ShareTypeUser
 		sd.ShareWith = LocalUserIDToString(share.Grantee.GetUserId())
-		if share.GetGrantee().GetUserId().GetType() == userpb.UserType_USER_TYPE_LIGHTWEIGHT {
+		shareType := share.GetGrantee().GetUserId().GetType()
+		if shareType == userpb.UserType_USER_TYPE_LIGHTWEIGHT || shareType == userpb.UserType_USER_TYPE_GUEST {
 			sd.ShareWithUserType = ShareWithUserTypeGuest
 		} else {
 			sd.ShareWithUserType = ShareWithUserTypeUser
