@@ -56,7 +56,9 @@ var _ = Describe("The ocs API", func() {
 	)
 	type (
 		share struct {
-			ID string `xml:"id"`
+			ID                string `xml:"id"`
+			ShareType         string `xml:"share_type"`
+			ShareWithUserType string `xml:"share_with_user_type"`
 		}
 		data struct {
 			Shares []share `xml:"element"`
@@ -440,7 +442,109 @@ var _ = Describe("The ocs API", func() {
 			s1 := res.Data.Shares[0]
 			s2 := res.Data.Shares[1]
 			Expect(s1.ID).To(Equal("11"))
+			Expect(s1.ShareType).To(Equal("0"))
+			Expect(s1.ShareWithUserType).To(Equal("0"))
 			Expect(s2.ID).To(Equal("12"))
+			Expect(s2.ShareType).To(Equal("0"))
+			Expect(s2.ShareWithUserType).To(Equal("0"))
+		})
+	})
+	Describe("List Guest Shares", func() {
+		BeforeEach(func() {
+			resID := &provider.ResourceId{
+				StorageId: "share1-storageid",
+				SpaceId:   "space-1",
+				OpaqueId:  "share1",
+			}
+			userGuest := &userpb.User{
+				Id: &userpb.UserId{
+					OpaqueId: helpers.User0ID,
+					Type:     userpb.UserType_USER_TYPE_GUEST,
+				},
+			}
+			client.On("ListReceivedShares", mock.Anything, mock.Anything, mock.Anything).Return(&collaboration.ListReceivedSharesResponse{
+				Status: status.NewOK(context.Background()),
+				Shares: []*collaboration.ReceivedShare{
+					{
+						State: collaboration.ShareState_SHARE_STATE_ACCEPTED,
+						Share: &collaboration.Share{
+							Id: &collaboration.ShareId{OpaqueId: "10"},
+							Grantee: &provider.Grantee{
+								Type: provider.GranteeType_GRANTEE_TYPE_USER,
+								Id: &provider.Grantee_UserId{
+									UserId: userGuest.Id,
+								},
+							},
+							Creator:    user.Id,
+							ResourceId: resID,
+							Permissions: &collaboration.SharePermissions{
+								Permissions: &provider.ResourcePermissions{
+									Stat:          true,
+									ListContainer: true,
+								},
+							},
+						},
+						MountPoint: &provider.Reference{Path: "share1"},
+					},
+				},
+			}, nil)
+
+			client.On("ListShares", mock.Anything, mock.Anything).Return(&collaboration.ListSharesResponse{
+				Status: status.NewOK(context.Background()),
+				Shares: []*collaboration.Share{
+					{
+						Id: &collaboration.ShareId{OpaqueId: "10"},
+						Grantee: &provider.Grantee{
+							Type: provider.GranteeType_GRANTEE_TYPE_USER,
+							Id: &provider.Grantee_UserId{
+								UserId: userGuest.Id,
+							},
+						},
+						Creator:    user.Id,
+						ResourceId: resID,
+						Permissions: &collaboration.SharePermissions{
+							Permissions: &provider.ResourcePermissions{
+								Stat:          true,
+								ListContainer: true,
+							},
+						},
+					},
+				},
+			}, nil)
+
+			client.On("Stat", mock.Anything, mock.Anything).Return(&provider.StatResponse{
+				Status: status.NewOK(context.Background()),
+				Info: &provider.ResourceInfo{
+					Type:  provider.ResourceType_RESOURCE_TYPE_CONTAINER,
+					Path:  "/share1",
+					Id:    resID,
+					Owner: user.Id,
+					PermissionSet: &provider.ResourcePermissions{
+						Stat: true,
+					},
+					Size: 10,
+				},
+			}, nil)
+
+			client.On("GetUser", mock.Anything, mock.Anything).Return(&userpb.GetUserResponse{
+				Status: status.NewOK(context.Background()),
+				User:   user,
+			}, nil)
+		})
+		It("lists guest shares as creator", func() {
+			req := httptest.NewRequest("GET", "/apps/files_sharing/api/v1/shares?reshares=true", nil).WithContext(ctx)
+			w := httptest.NewRecorder()
+			h.ListShares(w, req)
+			Expect(w.Result().StatusCode).To(Equal(200))
+
+			res := &response{}
+			err := xml.Unmarshal(w.Body.Bytes(), res)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(len(res.Data.Shares)).To(Equal(1))
+			s := res.Data.Shares[0]
+			Expect(s.ID).To(Equal("10"))
+			Expect(s.ShareWithUserType).To(Equal("1"))
+			Expect(s.ShareType).To(Equal("0"))
 		})
 	})
 })
