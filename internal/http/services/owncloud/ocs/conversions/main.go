@@ -43,9 +43,6 @@ const (
 	// ShareTypeUser refers to user shares
 	ShareTypeUser ShareType = 0
 
-	// ShareTypeGuestUser refers to guest user shares
-	ShareTypeGuestUser ShareType = 4
-
 	// ShareTypePublicLink refers to public link shares
 	ShareTypePublicLink ShareType = 3
 
@@ -218,6 +215,7 @@ type MatchValueData struct {
 	ShareType               int    `json:"shareType" xml:"shareType"`
 	ShareWith               string `json:"shareWith" xml:"shareWith"`
 	ShareWithAdditionalInfo string `json:"shareWithAdditionalInfo" xml:"shareWithAdditionalInfo"`
+	UserType                int    `json:"userType" xml:"userType"`
 }
 
 // CS3Share2ShareData converts a cs3api user share into shareData data model

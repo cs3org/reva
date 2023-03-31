@@ -100,15 +100,17 @@ func (h *Handler) FindSharees(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) userAsMatch(u *userpb.User) *conversions.MatchData {
-	shareType := conversions.ShareTypeUser
-	if u.Id.Type == userpb.UserType_USER_TYPE_GUEST {
-		shareType = conversions.ShareTypeGuestUser
+	var ocsUserType int
+	if u.Id.Type == userpb.UserType_USER_TYPE_GUEST || u.Id.Type == userpb.UserType_USER_TYPE_LIGHTWEIGHT {
+		ocsUserType = 1
 	}
 
 	return &conversions.MatchData{
 		Label: u.DisplayName,
 		Value: &conversions.MatchValueData{
-			ShareType: int(shareType),
+			ShareType: int(conversions.ShareTypeUser),
+			// api compatibility with oc10: mark guest users in share invite dialogue
+			UserType: ocsUserType,
 			// api compatibility with oc10: always use the username
 			ShareWith:               u.Username,
 			ShareWithAdditionalInfo: h.getAdditionalInfoAttribute(u),
