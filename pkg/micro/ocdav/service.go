@@ -24,6 +24,7 @@ import (
 
 	"github.com/cs3org/reva/v2/internal/http/interceptors/appctx"
 	"github.com/cs3org/reva/v2/internal/http/interceptors/auth"
+	cors2 "github.com/cs3org/reva/v2/internal/http/interceptors/cors"
 	revaLogMiddleware "github.com/cs3org/reva/v2/internal/http/interceptors/log"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
@@ -163,6 +164,16 @@ func useMiddlewares(r *chi.Mux, sopts *Options, svc global.Service, tp trace.Tra
 	// log
 	lm := revaLogMiddleware.New()
 
+	cors, _, err := cors2.New(map[string]interface{}{
+		"allow_credentials": sopts.AllowCredentials,
+		"allowed_methods":   sopts.AllowedMethods,
+		"allowed_headers":   sopts.AllowedHeaders,
+		"allowed_origins":   sopts.AllowedOrigins,
+	})
+	if err != nil {
+		return err
+	}
+
 	// tracing
 	tm := func(h http.Handler) http.Handler { return h }
 	if sopts.TracingEnabled {
@@ -201,7 +212,7 @@ func useMiddlewares(r *chi.Mux, sopts *Options, svc global.Service, tp trace.Tra
 	rm := middleware.RequestID
 
 	// actually register
-	r.Use(pm, tm, lm, authMiddle, rm, cm)
+	r.Use(pm, tm, lm, authMiddle, rm, cm, cors)
 	return nil
 }
 
