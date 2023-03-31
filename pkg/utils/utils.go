@@ -357,8 +357,8 @@ func GetViewMode(viewMode string) gateway.OpenInAppRequest_ViewMode {
 	}
 }
 
-// GetAPViewMode converts a human-readable string to a appprovider view mode for opening a resource in an app.
-func GetAPViewMode(viewMode string) appprovider.ViewMode {
+// GetAppViewMode converts a human-readable string to an appprovider view mode for opening a resource in an app.
+func GetAppViewMode(viewMode string) appprovider.ViewMode {
 	switch viewMode {
 	case "view":
 		return appprovider.ViewMode_VIEW_MODE_VIEW_ONLY

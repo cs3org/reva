@@ -80,7 +80,7 @@ type Webapp struct {
 
 // ToOCMProtocol convert the protocol to a ocm Protocol struct.
 func (w *Webapp) ToOCMProtocol() *ocm.Protocol {
-	return ocmshare.NewWebappProtocol(w.URITemplate, utils.GetAPViewMode(w.ViewMode))
+	return ocmshare.NewWebappProtocol(w.URITemplate, utils.GetAppViewMode(w.ViewMode))
 }
 
 // Datatx contains the parameters for the Datatx protocol.
