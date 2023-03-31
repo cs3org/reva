@@ -56,6 +56,7 @@ type Capabilities struct {
 	Dav          *CapabilitiesDav          `json:"dav" xml:"dav"`
 	FilesSharing *CapabilitiesFilesSharing `json:"files_sharing" xml:"files_sharing" mapstructure:"files_sharing"`
 	Spaces       *Spaces                   `json:"spaces,omitempty" xml:"spaces,omitempty" mapstructure:"spaces"`
+	Graph        *CapabilitiesGraph        `json:"graph,omitempty" xml:"graph,omitempty" mapstructure:"graph"`
 
 	Notifications *CapabilitiesNotifications `json:"notifications,omitempty" xml:"notifications,omitempty"`
 }
@@ -71,10 +72,14 @@ type Spaces struct {
 
 // CapabilitiesCore holds webdav config
 type CapabilitiesCore struct {
-	PollInterval       int     `json:"pollinterval" xml:"pollinterval" mapstructure:"poll_interval"`
-	WebdavRoot         string  `json:"webdav-root,omitempty" xml:"webdav-root,omitempty" mapstructure:"webdav_root"`
-	Status             *Status `json:"status" xml:"status"`
-	SupportURLSigning  ocsBool `json:"support-url-signing" xml:"support-url-signing" mapstructure:"support_url_signing"`
+	PollInterval      int     `json:"pollinterval" xml:"pollinterval" mapstructure:"poll_interval"`
+	WebdavRoot        string  `json:"webdav-root,omitempty" xml:"webdav-root,omitempty" mapstructure:"webdav_root"`
+	Status            *Status `json:"status" xml:"status"`
+	SupportURLSigning ocsBool `json:"support-url-signing" xml:"support-url-signing" mapstructure:"support_url_signing"`
+}
+
+// CapabilitiesGraph holds the graph capabilities
+type CapabilitiesGraph struct {
 	PersonalDataExport ocsBool `json:"personal-data-export" xml:"personal-data-export" mapstructure:"personal_data_export"`
 }
 
