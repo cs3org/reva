@@ -71,10 +71,11 @@ type Spaces struct {
 
 // CapabilitiesCore holds webdav config
 type CapabilitiesCore struct {
-	PollInterval      int     `json:"pollinterval" xml:"pollinterval" mapstructure:"poll_interval"`
-	WebdavRoot        string  `json:"webdav-root,omitempty" xml:"webdav-root,omitempty" mapstructure:"webdav_root"`
-	Status            *Status `json:"status" xml:"status"`
-	SupportURLSigning ocsBool `json:"support-url-signing" xml:"support-url-signing" mapstructure:"support_url_signing"`
+	PollInterval       int     `json:"pollinterval" xml:"pollinterval" mapstructure:"poll_interval"`
+	WebdavRoot         string  `json:"webdav-root,omitempty" xml:"webdav-root,omitempty" mapstructure:"webdav_root"`
+	Status             *Status `json:"status" xml:"status"`
+	SupportURLSigning  ocsBool `json:"support-url-signing" xml:"support-url-signing" mapstructure:"support_url_signing"`
+	PersonalDataExport ocsBool `json:"personal-data-export" xml:"personal-data-export" mapstructure:"personal_data_export"`
 }
 
 // Status holds basic status information
