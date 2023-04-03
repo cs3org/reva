@@ -358,7 +358,19 @@ func (i *Identity) GetLDAPUserGroups(log *zerolog.Logger, lc ldap.Client, userEn
 		// FIXME this makes the users groups use the cn, not an immutable id
 		// FIXME 1. use the memberof or members attribute of a user to get the groups
 		// FIXME 2. ook up the id for each group
-		groups = append(groups, entry.GetEqualFoldAttributeValue(i.Group.Schema.ID))
+		var groupID string
+		if i.Group.Schema.IDIsOctetString {
+			raw := entry.GetEqualFoldRawAttributeValue(i.Group.Schema.ID)
+			value, err := uuid.FromBytes(raw)
+			if err != nil {
+				return nil, err
+			}
+			groupID = value.String()
+		} else {
+			groupID = entry.GetEqualFoldAttributeValue(i.Group.Schema.ID)
+		}
+
+		groups = append(groups, groupID)
 	}
 	return groups, nil
 }
