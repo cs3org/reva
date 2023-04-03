@@ -166,7 +166,7 @@ type NewShareRequest struct {
 	ShareType         string         `json:"shareType"`
 	Expiration        uint64         `json:"expiration"`
 	ResourceType      string         `json:"resourceType"`
-	Protocols         ocmd.Protocols `json:"protocols"`
+	Protocols         ocmd.Protocols `json:"protocol"`
 }
 
 func (r *NewShareRequest) toJSON() (io.Reader, error) {
@@ -183,7 +183,7 @@ type NewShareResponse struct {
 }
 
 // NewShare creates a new share.
-// https://github.com/cs3org/OCM-API/blob/223285aa4d828ed85c361c7382efd08c42b5e719/spec.yaml
+// https://github.com/cs3org/OCM-API/blob/develop/spec.yaml
 func (c *OCMClient) NewShare(ctx context.Context, endpoint string, r *NewShareRequest) (*NewShareResponse, error) {
 	url, err := url.JoinPath(endpoint, "shares")
 	if err != nil {

@@ -70,6 +70,7 @@ CREATE TABLE IF NOT EXISTS ocm_protocol_webdav (
 CREATE TABLE IF NOT EXISTS ocm_protocol_webapp (
     ocm_protocol_id INTEGER NOT NULL PRIMARY KEY,
     uri_template VARCHAR(255) NOT NULL,
+    view_mode INTEGER NOT NULL,
     FOREIGN KEY (ocm_protocol_id) REFERENCES ocm_received_share_protocols(id) ON DELETE CASCADE
 );
 

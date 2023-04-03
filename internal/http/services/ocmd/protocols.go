@@ -20,6 +20,7 @@ package ocmd
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"reflect"
 	"strings"
@@ -27,6 +28,7 @@ import (
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	providerv1beta1 "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	ocmshare "github.com/cs3org/reva/pkg/ocm/share"
+	utils "github.com/cs3org/reva/pkg/utils"
 )
 
 // Protocols is the list of protocols.
@@ -73,11 +75,12 @@ func (w *WebDAV) ToOCMProtocol() *ocm.Protocol {
 // Webapp contains the parameters for the Webapp protocol.
 type Webapp struct {
 	URITemplate string `json:"uriTemplate" validate:"required"`
+	ViewMode    string `json:"viewMode" validate:"required,dive,required,oneof=view read write"`
 }
 
 // ToOCMProtocol convert the protocol to a ocm Protocol struct.
 func (w *Webapp) ToOCMProtocol() *ocm.Protocol {
-	return ocmshare.NewWebappProtocol(w.URITemplate)
+	return ocmshare.NewWebappProtocol(w.URITemplate, utils.GetAppViewMode(w.ViewMode))
 }
 
 // Datatx contains the parameters for the Datatx protocol.
@@ -109,11 +112,22 @@ func (p *Protocols) UnmarshalJSON(data []byte) error {
 
 	for name, d := range prot {
 		var res Protocol
+
+		// we do not support the OCM v1.0 properties for now, therefore just skip or bail out
+		if name == "name" {
+			continue
+		}
+		if name == "options" {
+			var opt map[string]any
+			if err := json.Unmarshal(d, &opt); err != nil || len(opt) > 0 {
+				return fmt.Errorf("protocol options not supported: %s", string(d))
+			}
+			continue
+		}
 		ctype, ok := protocolImpl[name]
 		if !ok {
 			return fmt.Errorf("protocol %s not recognised", name)
 		}
-
 		res = reflect.New(ctype).Interface().(Protocol)
 		if err := json.Unmarshal(d, &res); err != nil {
 			return err
@@ -126,10 +140,16 @@ func (p *Protocols) UnmarshalJSON(data []byte) error {
 
 // MarshalJSON implements the Marshaler interface.
 func (p Protocols) MarshalJSON() ([]byte, error) {
-	d := make(map[string]Protocol)
+	if len(p) == 0 {
+		return nil, errors.New("no protocol defined")
+	}
+	d := make(map[string]any)
 	for _, prot := range p {
 		d[getProtocolName(prot)] = prot
 	}
+	// fill in the OCM v1.0 properties
+	d["name"] = "multi"
+	d["options"] = map[string]any{}
 	return json.Marshal(d)
 }
 

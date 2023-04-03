@@ -23,7 +23,7 @@ import (
 	"strconv"
 	"strings"
 
-	providerv1beta1 "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
+	appprovider "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -78,8 +78,8 @@ const (
 const (
 	// WebDAVProtocol is the WebDav protocol.
 	WebDAVProtocol Protocol = iota
-	// WebappProtcol is the Webapp protocol.
-	WebappProtcol
+	// WebappProtocol is the Webapp protocol.
+	WebappProtocol
 	// TransferProtocol is the Transfer protocol.
 	TransferProtocol
 )
@@ -171,6 +171,7 @@ type dbProtocol struct {
 	WebDAVSharedSecret   *string
 	WebDavPermissions    *int
 	WebappURITemplate    *string
+	WebappViewMode       *int
 	TransferSourceURI    *string
 	TransferSharedSecret *string
 	TransferSize         *int
@@ -272,7 +273,7 @@ func convertToCS3AccessMethod(m *dbAccessMethod) *ocm.AccessMethod {
 	case WebDAVAccessMethod:
 		return share.NewWebDavAccessMethod(conversions.RoleFromOCSPermissions(conversions.Permissions(*m.WebDAVPermissions)).CS3ResourcePermissions())
 	case WebappAccessMethod:
-		return share.NewWebappAccessMethod(providerv1beta1.ViewMode(*m.WebAppViewMode))
+		return share.NewWebappAccessMethod(appprovider.ViewMode(*m.WebAppViewMode))
 	case TransferAccessMethod:
 		return share.NewTransferAccessMethod()
 	}
@@ -285,8 +286,8 @@ func convertToCS3Protocol(p *dbProtocol) *ocm.Protocol {
 		return share.NewWebDAVProtocol(*p.WebDAVURI, *p.WebDAVSharedSecret, &ocm.SharePermissions{
 			Permissions: conversions.RoleFromOCSPermissions(conversions.Permissions(*p.WebDavPermissions)).CS3ResourcePermissions(),
 		})
-	case WebappProtcol:
-		return share.NewWebappProtocol(*p.WebappURITemplate)
+	case WebappProtocol:
+		return share.NewWebappProtocol(*p.WebappURITemplate, appprovider.ViewMode(*p.WebappViewMode))
 	case TransferProtocol:
 		return share.NewTransferProtocol(*p.TransferSourceURI, *p.TransferSharedSecret, uint64(*p.TransferSize))
 	}
