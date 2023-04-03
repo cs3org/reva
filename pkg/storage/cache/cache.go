@@ -26,11 +26,7 @@ import (
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	natsjs "github.com/go-micro/plugins/v4/store/nats-js"
-	"github.com/go-micro/plugins/v4/store/redis"
-	redisopts "github.com/go-redis/redis/v8"
-	"github.com/nats-io/nats.go"
-	microetcd "github.com/owncloud/ocis/v2/ocis-pkg/store/etcd"
+	"github.com/cs3org/reva/v2/pkg/store"
 	"github.com/shamaton/msgpack/v2"
 	microstore "go-micro.dev/v4/store"
 )
@@ -159,75 +155,14 @@ type cacheStore struct {
 	ttl             time.Duration
 }
 
-// NewCache initializes a new CacheStore
-func NewCache(store string, nodes []string, database, table string, ttl time.Duration) Cache {
-	return cacheStore{
-		s:        getStore(store, nodes, database, table, ttl), // some stores use a default ttl so we pass it when initializing
-		database: database,
-		table:    table,
-		ttl:      ttl, // some stores use the ttl on every write, so we remember it here
-	}
-}
-
-func getStore(store string, nodes []string, database, table string, ttl time.Duration) microstore.Store {
-	switch store {
-	case "etcd":
-		return microetcd.NewEtcdStore(
-			microstore.Nodes(nodes...),
-			microstore.Database(database),
-			microstore.Table(table),
-		)
-	case "nats-js":
-		// TODO nats needs a DefaultTTL option as it does not support per Write TTL ...
-		// FIXME nats has restrictions on the key, we cannot use slashes AFAICT
-		// host, port, clusterid
-		return natsjs.NewStore(
-			microstore.Nodes(nodes...),
-			microstore.Database(database),
-			microstore.Table(table),
-			natsjs.NatsOptions(nats.Options{Name: "TODO"}),
-			natsjs.DefaultTTL(ttl),
-		) // TODO test with ocis nats
-	case "redis":
-		return redis.NewStore(
-			microstore.Database(database),
-			microstore.Table(table),
-			microstore.Nodes(nodes...),
-		) // only the first node is taken into account
-	case "redis-sentinel":
-		redisMaster := ""
-		redisNodes := []string{}
-		for _, node := range nodes {
-			parts := strings.SplitN(node, "/", 2)
-			if len(parts) != 2 {
-				return nil
-			}
-			// the first node is used to retrieve the redis master
-			redisNodes = append(redisNodes, parts[0])
-			if redisMaster == "" {
-				redisMaster = parts[1]
-			}
-		}
-
-		return redis.NewStore(
-			microstore.Database(database),
-			microstore.Table(table),
-			microstore.Nodes(redisNodes...),
-			redis.WithRedisOptions(redisopts.UniversalOptions{
-				MasterName: redisMaster,
-			}),
-		)
-	case "memory":
-		return microstore.NewStore(
-			microstore.Database(database),
-			microstore.Table(table),
-		)
-	default:
-		return microstore.NewNoopStore(
-			microstore.Database(database),
-			microstore.Table(table),
-		)
-	}
+func getStore(storeType string, nodes []string, database, table string, ttl time.Duration) microstore.Store {
+	return store.Create(
+		store.Store(storeType),
+		microstore.Nodes(nodes...),
+		microstore.Database(database),
+		microstore.Table(table),
+		store.TTL(ttl),
+	)
 }
 
 // PullFromCache pulls a value from the configured database and table of the underlying store using the given key
