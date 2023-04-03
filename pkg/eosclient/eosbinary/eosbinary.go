@@ -416,7 +416,11 @@ func (c *Client) GetFileInfoByPath(ctx context.Context, auth eosclient.Authoriza
 	}
 
 	if c.opt.VersionInvariant && !isVersionFolder(path) && !info.IsDir {
-		if inode, err := c.getVersionFolderInode(ctx, auth, path); err == nil {
+		ownerAuth := eosclient.Authorization{Role: eosclient.Role{
+			UID: strconv.FormatUint(info.UID, 10),
+			GID: strconv.FormatUint(info.GID, 10),
+		}}
+		if inode, err := c.getVersionFolderInode(ctx, auth, ownerAuth, path); err == nil {
 			info.Inode = inode
 		}
 	}
@@ -837,11 +841,11 @@ func (c *Client) GenerateToken(ctx context.Context, auth eosclient.Authorization
 	return strings.TrimSpace(stdout), err
 }
 
-func (c *Client) getVersionFolderInode(ctx context.Context, auth eosclient.Authorization, p string) (uint64, error) {
+func (c *Client) getVersionFolderInode(ctx context.Context, auth, ownerAuth eosclient.Authorization, p string) (uint64, error) {
 	versionFolder := getVersionFolder(p)
 	md, err := c.getRawFileInfoByPath(ctx, auth, versionFolder)
 	if err != nil {
-		if err = c.CreateDir(ctx, auth, versionFolder); err != nil {
+		if err = c.CreateDir(ctx, ownerAuth, versionFolder); err != nil {
 			return 0, err
 		}
 		md, err = c.getRawFileInfoByPath(ctx, auth, versionFolder)
