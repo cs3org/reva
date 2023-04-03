@@ -36,6 +36,10 @@ func init() {
 type config struct {
 	Prefix                     string     `mapstructure:"prefix"`
 	GatewaySvc                 string     `mapstructure:"gatewaysvc"`
+	Host                       string     `mapstructure:"host"`
+	Provider                   string     `mapstructure:"provider"`
+	EnableWebApp               bool       `mapstructure:"enable_webapp"`
+	EnableDataTx               bool       `mapstructure:"enable_datatx"`
 	Config                     configData `mapstructure:"config"`
 	ExposeRecipientDisplayName bool       `mapstructure:"expose_recipient_display_name"`
 }
@@ -90,7 +94,7 @@ func (s *svc) routerInit() error {
 		return err
 	}
 
-	s.router.Get("/ocm-provider", configHandler.Send) // FIXME: where this endpoint is documented?
+	s.router.Get("/ocm-provider", configHandler.Send)
 	s.router.Post("/shares", sharesHandler.CreateShare)
 	s.router.Post("/notifications", notificationsHandler.SendNotification)
 	s.router.Post("/invite-accepted", invitesHandler.AcceptInvite)

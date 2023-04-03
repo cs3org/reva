@@ -29,20 +29,16 @@ import (
 type configData struct {
 	Enabled       bool            `json:"enabled" xml:"enabled"`
 	APIVersion    string          `json:"apiVersion" xml:"apiVersion"`
-	Host          string          `json:"host" xml:"host"`
 	Endpoint      string          `json:"endPoint" xml:"endPoint"`
 	Provider      string          `json:"provider" xml:"provider"`
 	ResourceTypes []resourceTypes `json:"resourceTypes" xml:"resourceTypes"`
+	Capabilities  []string        `json:"capabilities" xml:"capabilities"`
 }
 
 type resourceTypes struct {
-	Name       string                 `json:"name"`
-	ShareTypes []string               `json:"shareTypes"`
-	Protocols  resourceTypesProtocols `json:"protocols"`
-}
-
-type resourceTypesProtocols struct {
-	Webdav string `json:"webdav"`
+	Name       string            `json:"name"`
+	ShareTypes []string          `json:"shareTypes"`
+	Protocols  map[string]string `json:"protocols"`
 }
 
 type configHandler struct {
@@ -51,28 +47,33 @@ type configHandler struct {
 
 func (h *configHandler) init(c *config) {
 	h.c = c.Config
-	if h.c.APIVersion == "" {
-		h.c.APIVersion = "1.0-proposal1"
-	}
-	if h.c.Host == "" {
-		h.c.Host = "localhost"
-	}
-	if h.c.Provider == "" {
-		h.c.Provider = "cernbox"
-	}
 	h.c.Enabled = true
+	h.c.APIVersion = "1.1.0"
 	if len(c.Prefix) > 0 {
-		h.c.Endpoint = fmt.Sprintf("https://%s/%s", h.c.Host, c.Prefix)
+		h.c.Endpoint = fmt.Sprintf("https://%s/%s", c.Host, c.Prefix)
 	} else {
-		h.c.Endpoint = fmt.Sprintf("https://%s", h.c.Host)
+		h.c.Endpoint = fmt.Sprintf("https://%s", c.Host)
+	}
+	h.c.Provider = c.Provider
+	if c.Provider == "" {
+		h.c.Provider = "reva"
+	}
+	rtProtos := map[string]string{}
+	// webdav is always enabled
+	rtProtos["webdav"] = fmt.Sprintf("https://%s/remote.php/dav/%s", c.Host, c.Prefix)
+	if c.EnableWebApp {
+		rtProtos["webapp"] = fmt.Sprintf("https://%s/external/sciencemesh", c.Host)
+	}
+	if c.EnableDataTx {
+		rtProtos["datatx"] = fmt.Sprintf("https://%s/remote.php/dav/%s", c.Host, c.Prefix)
 	}
 	h.c.ResourceTypes = []resourceTypes{{
-		Name:       "file",
-		ShareTypes: []string{"user"},
-		Protocols: resourceTypesProtocols{
-			Webdav: fmt.Sprintf("/%s/ocm_webdav", h.c.Provider),
-		},
+		Name:       "file",           // so far we only support `file`
+		ShareTypes: []string{"user"}, // so far we only support `user`
+		Protocols:  rtProtos,         // expose the protocols as per configuration
 	}}
+	// for now we hardcode the capabilities, as this is currently only advisory
+	h.c.Capabilities = []string{"/invite-accepted"}
 }
 
 // Send sends the configuration to the caller.
