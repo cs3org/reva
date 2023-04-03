@@ -253,8 +253,7 @@ func (h *VersionsHandler) doDownload(w http.ResponseWriter, r *http.Request, s *
 	w.Header().Set("Content-Transfer-Encoding", "binary")
 
 	down := downloader.NewDownloader(client)
-	down.Download(ctx, resStat.Info.Path, key, w)
-	if err != nil {
+	if err := down.Download(ctx, resStat.Info.Path, key, w); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
