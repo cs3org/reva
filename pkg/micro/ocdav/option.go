@@ -56,8 +56,12 @@ type Options struct {
 	MetricsSubsystem string
 
 	// ocdav.* is internal so we need to set config options individually
-	config     ocdav.Config
-	lockSystem ocdav.LockSystem
+	config           ocdav.Config
+	lockSystem       ocdav.LockSystem
+	AllowCredentials bool
+	AllowedOrigins   []string
+	AllowedHeaders   []string
+	AllowedMethods   []string
 }
 
 // newOptions initializes the available default options.
@@ -273,5 +277,33 @@ func MetricsNamespace(val string) Option {
 func MetricsSubsystem(val string) Option {
 	return func(o *Options) {
 		o.MetricsSubsystem = val
+	}
+}
+
+// AllowCredentials provides a function to set the AllowCredentials option.
+func AllowCredentials(val bool) Option {
+	return func(o *Options) {
+		o.AllowCredentials = val
+	}
+}
+
+// AllowedOrigins provides a function to set the AllowedOrigins option.
+func AllowedOrigins(val []string) Option {
+	return func(o *Options) {
+		o.AllowedOrigins = val
+	}
+}
+
+// AllowedMethods provides a function to set the AllowedMethods option.
+func AllowedMethods(val []string) Option {
+	return func(o *Options) {
+		o.AllowedMethods = val
+	}
+}
+
+// AllowedHeaders provides a function to set the AllowedHeaders option.
+func AllowedHeaders(val []string) Option {
+	return func(o *Options) {
+		o.AllowedHeaders = val
 	}
 }
