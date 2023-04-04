@@ -70,6 +70,10 @@ func ocmShareCreateCommand() *command {
 			return errors.New("IdP cannot be empty: use -idp flag\n" + cmd.Usage())
 		}
 
+		if !*webdav && !*webapp && !*transfer {
+			*webdav = true
+		}
+
 		fn := cmd.Args()[0]
 
 		ctx := getAuthContext()
