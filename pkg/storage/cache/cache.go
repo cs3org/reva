@@ -155,16 +155,6 @@ type cacheStore struct {
 	ttl             time.Duration
 }
 
-func getStore(storeType string, nodes []string, database, table string, ttl time.Duration) microstore.Store {
-	return store.Create(
-		store.Store(storeType),
-		microstore.Nodes(nodes...),
-		microstore.Database(database),
-		microstore.Table(table),
-		store.TTL(ttl),
-	)
-}
-
 // PullFromCache pulls a value from the configured database and table of the underlying store using the given key
 func (cache cacheStore) PullFromCache(key string, dest interface{}) error {
 	r, err := cache.s.Read(key, microstore.ReadFrom(cache.database, cache.table), microstore.ReadLimit(1))
@@ -219,4 +209,14 @@ func (cache cacheStore) Delete(key string, opts ...microstore.DeleteOption) erro
 // Close closes the underlying store
 func (cache cacheStore) Close() error {
 	return cache.s.Close()
+}
+
+func getStore(storeType string, nodes []string, database, table string, ttl time.Duration) microstore.Store {
+	return store.Create(
+		store.Store(storeType),
+		microstore.Nodes(nodes...),
+		microstore.Database(database),
+		microstore.Table(table),
+		store.TTL(ttl),
+	)
 }
