@@ -21,6 +21,7 @@ package ocdav
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"path"
 	"path/filepath"
@@ -253,7 +254,15 @@ func (h *VersionsHandler) doDownload(w http.ResponseWriter, r *http.Request, s *
 	w.Header().Set("Content-Transfer-Encoding", "binary")
 
 	down := downloader.NewDownloader(client)
-	if err := down.Download(ctx, resStat.Info.Path, key, w); err != nil {
+	d, err := down.Download(ctx, resStat.Info.Path, key)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	defer d.Close()
+
+	_, err = io.Copy(w, d)
+	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
