@@ -52,10 +52,11 @@ import (
 // transferClaims are custom claims for a JWT token to be used between the metadata and data gateways.
 type transferClaims struct {
 	jwt.StandardClaims
-	Target string `json:"target"`
+	Target     string `json:"target"`
+	VersionKey string `json:"version_key,omitempty"`
 }
 
-func (s *svc) sign(_ context.Context, target string) (string, error) {
+func (s *svc) sign(_ context.Context, target, versionKey string) (string, error) {
 	// Tus sends a separate request to the datagateway service for every chunk.
 	// For large files, this can take a long time, so we extend the expiration
 	ttl := time.Duration(s.c.TransferExpires) * time.Second
@@ -65,7 +66,8 @@ func (s *svc) sign(_ context.Context, target string) (string, error) {
 			Audience:  "reva",
 			IssuedAt:  time.Now().Unix(),
 		},
-		Target: target,
+		Target:     target,
+		VersionKey: versionKey,
 	}
 
 	t := jwt.NewWithClaims(jwt.GetSigningMethod("HS256"), claims)
@@ -470,6 +472,17 @@ func (s *svc) InitiateFileDownload(ctx context.Context, req *provider.InitiateFi
 	panic("gateway: download: unknown path:" + p)
 }
 
+func versionKey(req *provider.InitiateFileDownloadRequest) string {
+	if req.Opaque == nil || req.Opaque.Map == nil {
+		return ""
+	}
+	val := req.Opaque.Map["version_key"]
+	if val == nil {
+		return ""
+	}
+	return string(val.Value)
+}
+
 func (s *svc) initiateFileDownload(ctx context.Context, req *provider.InitiateFileDownloadRequest) (*gateway.InitiateFileDownloadResponse, error) {
 	// TODO(ishank011): enable downloading references spread across storage providers, eg. /eos
 	c, err := s.find(ctx, req.Ref)
@@ -506,7 +519,7 @@ func (s *svc) initiateFileDownload(ctx context.Context, req *provider.InitiateFi
 
 			// TODO(labkode): calculate signature of the whole request? we only sign the URI now. Maybe worth https://tools.ietf.org/html/draft-cavage-http-signatures-11
 			target := u.String()
-			token, err := s.sign(ctx, target)
+			token, err := s.sign(ctx, target, versionKey(req))
 			if err != nil {
 				return &gateway.InitiateFileDownloadResponse{
 					Status: status.NewInternal(ctx, err, "error creating signature for download"),
@@ -712,7 +725,7 @@ func (s *svc) initiateFileUpload(ctx context.Context, req *provider.InitiateFile
 
 			// TODO(labkode): calculate signature of the whole request? we only sign the URI now. Maybe worth https://tools.ietf.org/html/draft-cavage-http-signatures-11
 			target := u.String()
-			token, err := s.sign(ctx, target)
+			token, err := s.sign(ctx, target, "")
 			if err != nil {
 				return &gateway.InitiateFileUploadResponse{
 					Status: status.NewInternal(ctx, err, "error creating signature for upload"),

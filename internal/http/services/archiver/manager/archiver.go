@@ -168,7 +168,7 @@ func (a *Archiver) CreateTar(ctx context.Context, dst io.Writer) error {
 			}
 
 			if !isDir {
-				err = a.downloader.Download(ctx, path, w)
+				err = a.downloader.Download(ctx, path, "", w)
 				if err != nil {
 					return err
 				}
@@ -239,7 +239,7 @@ func (a *Archiver) CreateZip(ctx context.Context, dst io.Writer) error {
 			}
 
 			if !isDir {
-				err = a.downloader.Download(ctx, path, dst)
+				err = a.downloader.Download(ctx, path, "", dst)
 				if err != nil {
 					return err
 				}

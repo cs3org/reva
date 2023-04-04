@@ -27,6 +27,7 @@ import (
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/datagateway"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rhttp"
@@ -35,7 +36,7 @@ import (
 // Downloader is the interface implemented by the objects that are able to
 // download a path into a destination Writer.
 type Downloader interface {
-	Download(context.Context, string, io.Writer) error
+	Download(ctx context.Context, path string, versionKey string, w io.Writer) error
 }
 
 type revaDownloader struct {
@@ -61,12 +62,23 @@ func getDownloadProtocol(protocols []*gateway.FileDownloadProtocol, prot string)
 }
 
 // Download downloads a resource given the path to the dst Writer.
-func (r *revaDownloader) Download(ctx context.Context, path string, dst io.Writer) error {
-	downResp, err := r.gtw.InitiateFileDownload(ctx, &provider.InitiateFileDownloadRequest{
+func (r *revaDownloader) Download(ctx context.Context, path, versionKey string, dst io.Writer) error {
+	req := &provider.InitiateFileDownloadRequest{
 		Ref: &provider.Reference{
 			Path: path,
 		},
-	})
+	}
+	if versionKey != "" {
+		req.Opaque = &types.Opaque{
+			Map: map[string]*types.OpaqueEntry{
+				"version_key": {
+					Decoder: "plain",
+					Value:   []byte(versionKey),
+				},
+			},
+		}
+	}
+	downResp, err := r.gtw.InitiateFileDownload(ctx, req)
 
 	switch {
 	case err != nil:
