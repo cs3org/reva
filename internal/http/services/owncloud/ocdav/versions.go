@@ -149,6 +149,12 @@ func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request,
 		return
 	}
 	if lvRes.Status.Code != rpc.Code_CODE_OK {
+		if lvRes.Status.Code == rpc.Code_CODE_PERMISSION_DENIED {
+			w.WriteHeader(http.StatusForbidden)
+			b, err := errors.Marshal(http.StatusForbidden, "You have no permission to list file versions on this resource", "")
+			errors.HandleWebdavError(&sublog, w, b, err)
+			return
+		}
 		errors.HandleErrorStatus(&sublog, w, lvRes.Status)
 		return
 	}
@@ -226,6 +232,12 @@ func (h *VersionsHandler) doRestore(w http.ResponseWriter, r *http.Request, s *s
 		return
 	}
 	if res.Status.Code != rpc.Code_CODE_OK {
+		if res.Status.Code == rpc.Code_CODE_PERMISSION_DENIED {
+			w.WriteHeader(http.StatusForbidden)
+			b, err := errors.Marshal(http.StatusForbidden, "You have no permission to restore versions on this resource", "")
+			errors.HandleWebdavError(&sublog, w, b, err)
+			return
+		}
 		errors.HandleErrorStatus(&sublog, w, res.Status)
 		return
 	}
