@@ -45,7 +45,7 @@ type readWriteCloseSeekTruncater interface {
 }
 
 // NewMessagePackBackend returns a new MessagePackBackend instance
-func NewMessagePackBackend(rootPath string, o cache.Options) MessagePackBackend {
+func NewMessagePackBackend(rootPath string, o cache.Config) MessagePackBackend {
 	return MessagePackBackend{
 		rootPath:  filepath.Clean(rootPath),
 		metaCache: cache.GetFileMetadataCache(o.Store, o.Nodes, o.Database, "filemetadata", 24*time.Hour, o.Size),

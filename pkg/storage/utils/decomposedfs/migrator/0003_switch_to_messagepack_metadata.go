@@ -44,7 +44,7 @@ func (m *Migrator) Migration0003() (Result, error) {
 
 	m.log.Info().Str("root", m.lu.InternalRoot()).Msg("Migrating to messagepack metadata backend...")
 	xattrs := metadata.XattrsBackend{}
-	mpk := metadata.NewMessagePackBackend(m.lu.InternalRoot(), cache.Options{})
+	mpk := metadata.NewMessagePackBackend(m.lu.InternalRoot(), cache.Config{})
 
 	spaces, _ := filepath.Glob(filepath.Join(m.lu.InternalRoot(), "spaces", "*", "*"))
 	for _, space := range spaces {

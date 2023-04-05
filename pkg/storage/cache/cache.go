@@ -41,8 +41,8 @@ var (
 	mutex                     sync.Mutex
 )
 
-// Options contains options of configuring a cache
-type Options struct {
+// Config contains the configuring for a cache
+type Config struct {
 	Store    string   `mapstructure:"cache_store"`
 	Nodes    []string `mapstructure:"cache_nodes"`
 	Database string   `mapstructure:"cache_database"`

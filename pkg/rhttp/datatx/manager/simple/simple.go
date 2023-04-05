@@ -46,13 +46,13 @@ func init() {
 }
 
 type manager struct {
-	conf      *cache.Options
+	conf      *cache.Config
 	publisher events.Publisher
 	statCache cache.StatCache
 }
 
-func parseConfig(m map[string]interface{}) (*cache.Options, error) {
-	c := &cache.Options{}
+func parseConfig(m map[string]interface{}) (*cache.Config, error) {
+	c := &cache.Config{}
 	if err := mapstructure.Decode(m, c); err != nil {
 		err = errors.Wrap(err, "error decoding conf")
 		return nil, err
