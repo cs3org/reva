@@ -214,7 +214,7 @@ func (c *OCMClient) NewShare(ctx context.Context, endpoint string, r *NewShareRe
 	// defer resp.Body.Close()
 	// body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		log.Debug().Msgf("OCM response from: %d; could not read body")
+		log.Debug().Msgf("OCM response from: %d; could not read body", resp.StatusCode)
 	}
 	log.Debug().Msgf("OCM response from: %d %s", resp.StatusCode, respBody)
 
