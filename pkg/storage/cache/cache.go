@@ -184,8 +184,15 @@ func (cache cacheStore) PushToCache(key string, src interface{}) error {
 	if err != nil {
 		return err
 	}
+
+	record := &microstore.Record{
+		Key:    key,
+		Value:  b,
+		Expiry: cache.ttl,
+	}
+
 	return cache.s.Write(
-		&microstore.Record{Key: key, Value: b},
+		record,
 		microstore.WriteTo(cache.database, cache.table),
 		microstore.WriteTTL(cache.ttl),
 	)
