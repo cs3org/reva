@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/cs3org/reva/internal/http/services/ocmd"
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/pkg/errors"
@@ -51,7 +52,7 @@ var ErrTokenNotFound = errors.New("token not found")
 
 // ErrInvalidParameters is the error returned by the shares endpoint
 // when the request does not contain required properties.
-var ErrInvalidParameters = errors.New("invalid parameters")
+var ErrInvalidParameters = errors.New("invalid parameters response from other OCM server")
 
 // OCMClient is the client for an OCM provider.
 type OCMClient struct {
@@ -185,6 +186,7 @@ type NewShareResponse struct {
 // NewShare creates a new share.
 // https://github.com/cs3org/OCM-API/blob/develop/spec.yaml
 func (c *OCMClient) NewShare(ctx context.Context, endpoint string, r *NewShareRequest) (*NewShareResponse, error) {
+	log := appctx.GetLogger(ctx)
 	url, err := url.JoinPath(endpoint, "shares")
 	if err != nil {
 		return nil, err
@@ -194,6 +196,7 @@ func (c *OCMClient) NewShare(ctx context.Context, endpoint string, r *NewShareRe
 	if err != nil {
 		return nil, err
 	}
+	log.Debug().Msgf("OCM send to %s: %s", url, body)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, body)
 	if err != nil {
@@ -206,6 +209,14 @@ func (c *OCMClient) NewShare(ctx context.Context, endpoint string, r *NewShareRe
 		return nil, errors.Wrap(err, "error doing request")
 	}
 	defer resp.Body.Close()
+	respBody, err := io.ReadAll(resp.Body)
+
+	// defer resp.Body.Close()
+	// body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		log.Debug().Msgf("OCM response from: %d; could not read body")
+	}
+	log.Debug().Msgf("OCM response from: %d %s", resp.StatusCode, respBody)
 
 	return c.parseNewShareResponse(resp)
 }
