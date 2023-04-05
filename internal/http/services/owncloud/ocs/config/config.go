@@ -42,6 +42,7 @@ type Config struct {
 	ResourceInfoCacheDatabase             string                            `mapstructure:"resource_info_cache_database"`
 	ResourceInfoCacheTable                string                            `mapstructure:"resource_info_cache_table"`
 	ResourceInfoCacheTTL                  int                               `mapstructure:"resource_info_cache_ttl"`
+	ResourceInfoCacheSize                 int                               `mapstructure:"resource_info_cache_size"`
 	UserIdentifierCacheTTL                int                               `mapstructure:"user_identifier_cache_ttl"`
 	MachineAuthAPIKey                     string                            `mapstructure:"machine_auth_apikey"`
 	SkipUpdatingExistingSharesMountpoints bool                              `mapstructure:"skip_updating_existing_shares_mountpoint"`

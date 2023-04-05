@@ -45,21 +45,14 @@ func init() {
 	registry.Register("simple", New)
 }
 
-type config struct {
-	CacheStore    string   `mapstructure:"cache_store"`
-	CacheNodes    []string `mapstructure:"cache_nodes"`
-	CacheDatabase string   `mapstructure:"cache_database"`
-	CacheTable    string   `mapstructure:"cache_table"`
-}
-
 type manager struct {
-	conf      *config
+	conf      *cache.Options
 	publisher events.Publisher
 	statCache cache.StatCache
 }
 
-func parseConfig(m map[string]interface{}) (*config, error) {
-	c := &config{}
+func parseConfig(m map[string]interface{}) (*cache.Options, error) {
+	c := &cache.Options{}
 	if err := mapstructure.Decode(m, c); err != nil {
 		err = errors.Wrap(err, "error decoding conf")
 		return nil, err
@@ -77,7 +70,7 @@ func New(m map[string]interface{}, publisher events.Publisher) (datatx.DataTX, e
 	return &manager{
 		conf:      c,
 		publisher: publisher,
-		statCache: cache.GetStatCache(c.CacheStore, c.CacheNodes, c.CacheDatabase, c.CacheTable, 0),
+		statCache: cache.GetStatCache(c.Store, c.Nodes, c.Database, c.Table, time.Duration(c.TTL)*time.Second, c.Size),
 	}, nil
 }
 

@@ -41,6 +41,16 @@ var (
 	mutex                     sync.Mutex
 )
 
+// Options contains options of configuring a cache
+type Options struct {
+	Store    string   `mapstructure:"cache_store"`
+	Nodes    []string `mapstructure:"cache_nodes"`
+	Database string   `mapstructure:"cache_database"`
+	Table    string   `mapstructure:"cache_table"`
+	TTL      int      `mapstructure:"cache_ttl"`
+	Size     int      `mapstructure:"cache_size"`
+}
+
 // Cache handles key value operations on caches
 type Cache interface {
 	PullFromCache(key string, dest interface{}) error
@@ -85,65 +95,65 @@ type FileMetadataCache interface {
 
 // GetStatCache will return an existing StatCache for the given store, nodes, database and table
 // If it does not exist yet it will be created, different TTLs are ignored
-func GetStatCache(cacheStore string, cacheNodes []string, database, table string, ttl time.Duration) StatCache {
+func GetStatCache(cacheStore string, cacheNodes []string, database, table string, ttl time.Duration, size int) StatCache {
 	mutex.Lock()
 	defer mutex.Unlock()
 
 	key := strings.Join(append(append([]string{cacheStore}, cacheNodes...), database, table), ":")
 	if statCaches[key] == nil {
-		statCaches[key] = NewStatCache(cacheStore, cacheNodes, database, table, ttl)
+		statCaches[key] = NewStatCache(cacheStore, cacheNodes, database, table, ttl, size)
 	}
 	return statCaches[key]
 }
 
 // GetProviderCache will return an existing ProviderCache for the given store, nodes, database and table
 // If it does not exist yet it will be created, different TTLs are ignored
-func GetProviderCache(cacheStore string, cacheNodes []string, database, table string, ttl time.Duration) ProviderCache {
+func GetProviderCache(cacheStore string, cacheNodes []string, database, table string, ttl time.Duration, size int) ProviderCache {
 	mutex.Lock()
 	defer mutex.Unlock()
 
 	key := strings.Join(append(append([]string{cacheStore}, cacheNodes...), database, table), ":")
 	if providerCaches[key] == nil {
-		providerCaches[key] = NewProviderCache(cacheStore, cacheNodes, database, table, ttl)
+		providerCaches[key] = NewProviderCache(cacheStore, cacheNodes, database, table, ttl, size)
 	}
 	return providerCaches[key]
 }
 
 // GetCreateHomeCache will return an existing CreateHomeCache for the given store, nodes, database and table
 // If it does not exist yet it will be created, different TTLs are ignored
-func GetCreateHomeCache(cacheStore string, cacheNodes []string, database, table string, ttl time.Duration) CreateHomeCache {
+func GetCreateHomeCache(cacheStore string, cacheNodes []string, database, table string, ttl time.Duration, size int) CreateHomeCache {
 	mutex.Lock()
 	defer mutex.Unlock()
 
 	key := strings.Join(append(append([]string{cacheStore}, cacheNodes...), database, table), ":")
 	if createHomeCaches[key] == nil {
-		createHomeCaches[key] = NewCreateHomeCache(cacheStore, cacheNodes, database, table, ttl)
+		createHomeCaches[key] = NewCreateHomeCache(cacheStore, cacheNodes, database, table, ttl, size)
 	}
 	return createHomeCaches[key]
 }
 
 // GetCreatePersonalSpaceCache will return an existing CreatePersonalSpaceCache for the given store, nodes, database and table
 // If it does not exist yet it will be created, different TTLs are ignored
-func GetCreatePersonalSpaceCache(cacheStore string, cacheNodes []string, database, table string, ttl time.Duration) CreatePersonalSpaceCache {
+func GetCreatePersonalSpaceCache(cacheStore string, cacheNodes []string, database, table string, ttl time.Duration, size int) CreatePersonalSpaceCache {
 	mutex.Lock()
 	defer mutex.Unlock()
 
 	key := strings.Join(append(append([]string{cacheStore}, cacheNodes...), database, table), ":")
 	if createPersonalSpaceCaches[key] == nil {
-		createPersonalSpaceCaches[key] = NewCreatePersonalSpaceCache(cacheStore, cacheNodes, database, table, ttl)
+		createPersonalSpaceCaches[key] = NewCreatePersonalSpaceCache(cacheStore, cacheNodes, database, table, ttl, size)
 	}
 	return createPersonalSpaceCaches[key]
 }
 
 // GetFileMetadataCache will return an existing GetFileMetadataCache for the given store, nodes, database and table
 // If it does not exist yet it will be created, different TTLs are ignored
-func GetFileMetadataCache(cacheStore string, cacheNodes []string, database, table string, ttl time.Duration) FileMetadataCache {
+func GetFileMetadataCache(cacheStore string, cacheNodes []string, database, table string, ttl time.Duration, size int) FileMetadataCache {
 	mutex.Lock()
 	defer mutex.Unlock()
 
 	key := strings.Join(append(append([]string{cacheStore}, cacheNodes...), database, table), ":")
 	if fileMetadataCaches[key] == nil {
-		fileMetadataCaches[key] = NewFileMetadataCache(cacheStore, cacheNodes, database, table, ttl)
+		fileMetadataCaches[key] = NewFileMetadataCache(cacheStore, cacheNodes, database, table, ttl, size)
 	}
 	return fileMetadataCaches[key]
 }
@@ -211,12 +221,13 @@ func (cache cacheStore) Close() error {
 	return cache.s.Close()
 }
 
-func getStore(storeType string, nodes []string, database, table string, ttl time.Duration) microstore.Store {
+func getStore(storeType string, nodes []string, database, table string, ttl time.Duration, size int) microstore.Store {
 	return store.Create(
 		store.Store(storeType),
 		microstore.Nodes(nodes...),
 		microstore.Database(database),
 		microstore.Table(table),
 		store.TTL(ttl),
+		store.Size(size),
 	)
 }

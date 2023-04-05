@@ -130,7 +130,7 @@ func (h *Handler) Init(c *config.Config) {
 	h.deniable = c.EnableDenials
 	h.resharing = resharing(c)
 
-	h.resourceInfoCache = cache.GetStatCache(c.ResourceInfoCacheStore, c.ResourceInfoCacheNodes, c.ResourceInfoCacheDatabase, "stat", time.Duration(c.ResourceInfoCacheTTL)*time.Second)
+	h.resourceInfoCache = cache.GetStatCache(c.ResourceInfoCacheStore, c.ResourceInfoCacheNodes, c.ResourceInfoCacheDatabase, "stat", time.Duration(c.ResourceInfoCacheTTL)*time.Second, c.ResourceInfoCacheSize)
 	if c.CacheWarmupDriver != "" {
 		cwm, err := getCacheWarmupManager(c)
 		if err == nil {
