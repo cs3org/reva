@@ -1,22 +1,24 @@
 [shared]
-gatewaysvc = "localhost:17000"
+gatewaysvc = "localhost:19000"
 
 [grpc]
-address = "0.0.0.0:17000"
+address = "0.0.0.0:19000"
 
 [grpc.services.gateway]
-authregistrysvc = "localhost:17000"
-storageregistrysvc = "localhost:17000"
-preferencessvc = "localhost:17000"
-userprovidersvc = "localhost:17000"
-usershareprovidersvc = "localhost:17000"
-publicshareprovidersvc = "localhost:17000"
-ocmcoresvc = "localhost:17000"
-ocmshareprovidersvc = "localhost:17000"
-ocminvitemanagersvc = "localhost:17000"
-ocmproviderauthorizersvc = "localhost:17000"
-datagateway = "http://localhost:17001/data"
-transfer_expires = 6 # give it a moment
+authregistrysvc = "localhost:19000"
+appprovidersvc = "localhost:19000"
+appregistry = "localhost:19000"
+storageregistrysvc = "localhost:19000"
+preferencessvc = "localhost:19000"
+userprovidersvc = "localhost:19000"
+usershareprovidersvc = "localhost:19000"
+publicshareprovidersvc = "localhost:19000"
+ocmcoresvc = "localhost:19000"
+ocmshareprovidersvc = "localhost:19000"
+ocminvitemanagersvc = "localhost:19000"
+ocmproviderauthorizersvc = "localhost:19000"
+datagateway = "http://localhost:19001/data"
+transfer_expires = 6                         # give it a moment
 commit_share_to_storage_grant = true
 commit_share_to_storage_ref = true
 
@@ -24,7 +26,9 @@ commit_share_to_storage_ref = true
 driver = "static"
 
 [grpc.services.authregistry.drivers.static.rules]
-basic = "localhost:17000"
+basic = "localhost:19000"
+machine = "localhost:19030"
+ocmshares = "localhost:19020"
 
 [grpc.services.storageregistry]
 driver = "static"
@@ -33,8 +37,12 @@ driver = "static"
 home_provider = "/home"
 
 [grpc.services.storageregistry.drivers.static.rules]
-"/home" = {"address" = "localhost:17000"}
-"123e4567-e89b-12d3-a456-426655440000" = {"address" = "localhost:17000"}
+"/home" = { "address" = "localhost:19000" }
+"123e4567-e89b-12d3-a456-426655440000" = { "address" = "localhost:19000" }
+"/sciencemesh" = { "address" = "localhost:19010" }
+"sciencemesh" = { "address" = "localhost:19010" }
+"/ocm" = { "address" = "localhost:19020" }
+"ocm" = { "address" = "localhost:19020" }
 
 [grpc.services.usershareprovider]
 driver = "memory"
@@ -44,16 +52,22 @@ driver = "json"
 
 # Note that ocmcore and ocmshareprovider should use the same file for storing the shares.
 [grpc.services.ocmcore.drivers.json]
-file = "/var/tmp/reva/shares_server_2.json"
+file = "/var/tmp/reva/shares_server_1.json"
 
 [grpc.services.ocminvitemanager]
 driver = "json"
+provider_domain = "cernbox.cern.ch"
+
+[grpc.services.ocminvitemanager.drivers.json]
+file = "/var/tmp/reva/invites_server_1.json"
 
 [grpc.services.ocmshareprovider]
 driver = "json"
+webdav_endpoint = "http://localhost:19001"
+provider_domain = "cernbox.cern.ch"
 
 [grpc.services.ocmshareprovider.drivers.json]
-file = "/var/tmp/reva/shares_server_2.json"
+file = "/var/tmp/reva/shares_server_1.json"
 
 [grpc.services.ocmproviderauthorizer]
 driver = "json"
@@ -64,12 +78,19 @@ providers = "providers.demo.json"
 [grpc.services.publicshareprovider]
 driver = "memory"
 
+[grpc.services.appregistry]
+driver = "static"
+
+[grpc.services.appprovider]
+driver = "demo"
+app_provider_url = "localhost:19000"
+
 [grpc.services.storageprovider]
 driver = "localhome"
 mount_path = "/home"
 mount_id = "123e4567-e89b-12d3-a456-426655440000"
 expose_data_server = true
-data_server_url = "http://localhost:17001/data"
+data_server_url = "http://localhost:19001/data"
 enable_home_creation = true
 
 [grpc.services.storageprovider.drivers.localhome]
@@ -88,7 +109,7 @@ driver = "json"
 users = "users.demo.json"
 
 [http]
-address = "0.0.0.0:17001"
+address = "0.0.0.0:19001"
 
 [http.services.dataprovider]
 driver = "localhome"
@@ -112,5 +133,7 @@ providers = "providers.demo.json"
 prefix = "ocs"
 
 [http.services.ocdav]
+
+[http.services.appprovider]
 
 [http.middlewares.cors]
