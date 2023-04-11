@@ -1,3 +1,6 @@
+# force makefile to use bash instead of sh.
+SHELL := /usr/bin/env bash
+
 .PHONY: all
 all: revad reva test-go lint gen-doc
 
