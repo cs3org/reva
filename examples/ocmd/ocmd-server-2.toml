@@ -16,7 +16,7 @@ ocmshareprovidersvc = "localhost:17000"
 ocminvitemanagersvc = "localhost:17000"
 ocmproviderauthorizersvc = "localhost:17000"
 datagateway = "http://localhost:17001/data"
-transfer_expires = 6 # give it a moment
+transfer_expires = 6                         # give it a moment
 commit_share_to_storage_grant = true
 commit_share_to_storage_ref = true
 
@@ -33,8 +33,8 @@ driver = "static"
 home_provider = "/home"
 
 [grpc.services.storageregistry.drivers.static.rules]
-"/home" = {"address" = "localhost:17000"}
-"123e4567-e89b-12d3-a456-426655440000" = {"address" = "localhost:17000"}
+"/home" = { "address" = "localhost:17000" }
+"123e4567-e89b-12d3-a456-426655440000" = { "address" = "localhost:17000" }
 
 [grpc.services.usershareprovider]
 driver = "memory"
@@ -48,9 +48,12 @@ file = "/var/tmp/reva/shares_server_2.json"
 
 [grpc.services.ocminvitemanager]
 driver = "json"
+provider_domain = "cesnet.cz"
 
 [grpc.services.ocmshareprovider]
 driver = "json"
+webdav_endpoint = "http://localhost:17001"
+provider_domain = "cesnet.cz"
 
 [grpc.services.ocmshareprovider.drivers.json]
 file = "/var/tmp/reva/shares_server_2.json"
