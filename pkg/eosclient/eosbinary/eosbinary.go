@@ -947,11 +947,15 @@ func getMap(partsBySpace []string) map[string]string {
 }
 
 func (c *Client) parseFind(ctx context.Context, auth eosclient.Authorization, dirPath, raw string) ([]*eosclient.FileInfo, error) {
+	log := appctx.GetLogger(ctx)
+
 	finfos := []*eosclient.FileInfo{}
 	versionFolders := map[string]*eosclient.FileInfo{}
 	rawLines := strings.FieldsFunc(raw, func(c rune) bool {
 		return c == '\n'
 	})
+
+	var ownerAuth *eosclient.Authorization
 
 	var parent *eosclient.FileInfo
 	for _, rl := range rawLines {
@@ -976,6 +980,15 @@ func (c *Client) parseFind(ctx context.Context, auth eosclient.Authorization, di
 			versionFolders[fi.File] = fi
 		}
 
+		if ownerAuth == nil {
+			ownerAuth = &eosclient.Authorization{
+				Role: eosclient.Role{
+					UID: strconv.FormatUint(fi.UID, 10),
+					GID: strconv.FormatUint(fi.GID, 10),
+				},
+			}
+		}
+
 		finfos = append(finfos, fi)
 	}
 
@@ -993,9 +1006,11 @@ func (c *Client) parseFind(ctx context.Context, auth eosclient.Authorization, di
 				for k, v := range vf.Attrs {
 					fi.Attrs[k] = v
 				}
-			} else if err := c.CreateDir(ctx, auth, versionFolderPath); err == nil { // Create the version folder if it doesn't exist
+			} else if err := c.CreateDir(ctx, *ownerAuth, versionFolderPath); err == nil { // Create the version folder if it doesn't exist
 				if md, err := c.getRawFileInfoByPath(ctx, auth, versionFolderPath); err == nil {
 					fi.Inode = md.Inode
+				} else {
+					log.Error().Err(err).Interface("auth", ownerAuth).Str("path", versionFolderPath).Msg("got error creating version folder")
 				}
 			}
 		}
