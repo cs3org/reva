@@ -55,7 +55,7 @@ status:<code:CODE_OK trace:"64a00a149f07ad5d7134b0eeb7c830f6" > invite_token:<to
 
 Each token is valid for 24 hours from the time of creation.
 
-mhe token
+### 4.2 Accept the token
 Now a user on a different mesh provider needs to accept this token in order to initiate file sharing. So we need to call the corresponding endpoint as user marie at CESNET.
 
 ```
