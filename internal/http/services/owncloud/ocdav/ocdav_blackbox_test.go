@@ -71,7 +71,7 @@ var _ = Describe("ocdav", func() {
 			})).Return(&cs3storageprovider.StatResponse{
 				Status: s,
 				Info:   info,
-			}, nil)
+			}, nil).Once()
 		}
 		mockStat = func(ref *cs3storageprovider.Reference, s *cs3rpc.Status, info *cs3storageprovider.ResourceInfo) {
 			client.On("Stat", mock.Anything, mock.MatchedBy(func(req *cs3storageprovider.StatRequest) bool {
@@ -124,6 +124,7 @@ var _ = Describe("ocdav", func() {
 				Size: m["size"].(uint64),
 			}
 		}
+		mReq *cs3storageprovider.MoveRequest
 	)
 
 	BeforeEach(func() {
@@ -574,7 +575,261 @@ var _ = Describe("ocdav", func() {
 			})
 
 		})
+
+		Describe("MOVE", func() {
+
+			BeforeEach(func() {
+				// setup the request
+				rr = httptest.NewRecorder()
+				req, err = http.NewRequest("MOVE", basePath+"/file", strings.NewReader(""))
+				Expect(err).ToNot(HaveOccurred())
+				req = req.WithContext(ctx)
+				req.Header.Set("Destination", basePath+"/newfile")
+				req.Header.Set("Overwrite", "T")
+
+				mReq = &cs3storageprovider.MoveRequest{
+					Source: &cs3storageprovider.Reference{
+						ResourceId: userspace.Root,
+						Path:       "./file",
+					},
+					Destination: &cs3storageprovider.Reference{
+						ResourceId: userspace.Root,
+						Path:       "./newfile",
+					},
+				}
+			})
+
+			When("the gateway returns OK when moving file", func() {
+				It("the source exists, the destination doesn't exists", func() {
+
+					mockPathStat(mReq.Source.Path, status.NewOK(ctx), nil)
+					mockPathStat(mReq.Destination.Path, status.NewNotFound(ctx, ""), nil)
+					mockPathStat(".", status.NewOK(ctx), nil)
+
+					client.On("Move", mock.Anything, mReq).Return(&cs3storageprovider.MoveResponse{
+						Status: status.NewOK(ctx),
+					}, nil)
+
+					mockPathStat(mReq.Destination.Path, status.NewOK(ctx), &cs3storageprovider.ResourceInfo{Id: &cs3storageprovider.ResourceId{}})
+
+					handler.Handler().ServeHTTP(rr, req)
+					Expect(rr).To(HaveHTTPStatus(http.StatusCreated))
+				})
+
+				It("the source and the destination exist", func() {
+
+					mockPathStat(mReq.Source.Path, status.NewOK(ctx), nil)
+					mockPathStat(mReq.Destination.Path, status.NewOK(ctx), nil)
+
+					client.On("Delete", mock.Anything, mock.MatchedBy(func(req *cs3storageprovider.DeleteRequest) bool {
+						return utils.ResourceEqual(req.Ref, mReq.Destination)
+					})).Return(&cs3storageprovider.DeleteResponse{
+						Status: status.NewOK(ctx),
+					}, nil)
+
+					client.On("Move", mock.Anything, mReq).Return(&cs3storageprovider.MoveResponse{
+						Status: status.NewOK(ctx),
+					}, nil)
+
+					mockPathStat(mReq.Destination.Path, status.NewOK(ctx), &cs3storageprovider.ResourceInfo{Id: &cs3storageprovider.ResourceId{}})
+
+					handler.Handler().ServeHTTP(rr, req)
+					Expect(rr).To(HaveHTTPStatus(http.StatusNoContent))
+				})
+			})
+
+			When("the gateway returns error when moving file", func() {
+				It("the source Stat error", func() {
+
+					client.On("Stat", mock.Anything, mock.MatchedBy(func(req *cs3storageprovider.StatRequest) bool {
+						return utils.ResourceEqual(req.Ref, mReq.Source)
+					})).Return(nil, fmt.Errorf("unexpected io error"))
+
+					handler.Handler().ServeHTTP(rr, req)
+					Expect(rr).To(HaveHTTPStatus(http.StatusInternalServerError))
+				})
+
+				It("moves a file. the source not found", func() {
+
+					mockPathStat(mReq.Source.Path, status.NewNotFound(ctx, ""), nil)
+
+					handler.Handler().ServeHTTP(rr, req)
+					Expect(rr).To(HaveHTTPStatus(http.StatusNotFound))
+				})
+
+				It("the destination Stat error", func() {
+
+					mockPathStat(mReq.Source.Path, status.NewOK(ctx), nil)
+
+					client.On("Stat", mock.Anything, mock.MatchedBy(func(req *cs3storageprovider.StatRequest) bool {
+						return utils.ResourceEqual(req.Ref, mReq.Destination)
+					})).Return(nil, fmt.Errorf("unexpected io error"))
+
+					handler.Handler().ServeHTTP(rr, req)
+					Expect(rr).To(HaveHTTPStatus(http.StatusInternalServerError))
+				})
+
+				It("error when the 'Overwrite' header is 'F'", func() {
+
+					req.Header.Set("Overwrite", "F")
+
+					mockPathStat(mReq.Source.Path, status.NewOK(ctx), nil)
+					mockPathStat(mReq.Destination.Path, status.NewOK(ctx), nil)
+
+					handler.Handler().ServeHTTP(rr, req)
+					Expect(rr).To(HaveHTTPStatus(http.StatusPreconditionFailed))
+				})
+
+				It("error when deleting an existing tree", func() {
+
+					mockPathStat(mReq.Source.Path, status.NewOK(ctx), nil)
+					mockPathStat(mReq.Destination.Path, status.NewOK(ctx), nil)
+
+					client.On("Delete", mock.Anything, mock.MatchedBy(func(req *cs3storageprovider.DeleteRequest) bool {
+						return utils.ResourceEqual(req.Ref, mReq.Destination)
+					})).Return(nil, fmt.Errorf("unexpected io error"))
+
+					handler.Handler().ServeHTTP(rr, req)
+					Expect(rr).To(HaveHTTPStatus(http.StatusInternalServerError))
+				})
+
+				It("error when destination Stat returns unexpected code", func() {
+
+					mockPathStat(mReq.Source.Path, status.NewOK(ctx), nil)
+					mockPathStat(mReq.Destination.Path, status.NewInternal(ctx, ""), nil)
+
+					handler.Handler().ServeHTTP(rr, req)
+					Expect(rr).To(HaveHTTPStatus(http.StatusInternalServerError))
+				})
+
+				It("error when Delete returns unexpected code", func() {
+
+					mockPathStat(mReq.Source.Path, status.NewOK(ctx), nil)
+					mockPathStat(mReq.Destination.Path, status.NewOK(ctx), nil)
+
+					client.On("Delete", mock.Anything, mock.MatchedBy(func(req *cs3storageprovider.DeleteRequest) bool {
+						return utils.ResourceEqual(req.Ref, mReq.Destination)
+					})).Return(&cs3storageprovider.DeleteResponse{
+						Status: status.NewInvalid(ctx, ""),
+					}, nil)
+					handler.Handler().ServeHTTP(rr, req)
+					Expect(rr).To(HaveHTTPStatus(http.StatusBadRequest))
+				})
+
+				It("the destination Stat error", func() {
+
+					mockPathStat(mReq.Source.Path, status.NewOK(ctx), nil)
+					mockPathStat(mReq.Destination.Path, status.NewNotFound(ctx, ""), nil)
+					client.On("Stat", mock.Anything, mock.MatchedBy(func(req *cs3storageprovider.StatRequest) bool {
+						return utils.ResourceEqual(req.Ref, &cs3storageprovider.Reference{
+							ResourceId: userspace.Root,
+							Path:       ".",
+						})
+					})).Return(nil, fmt.Errorf("unexpected io error")).Once()
+
+					handler.Handler().ServeHTTP(rr, req)
+					Expect(rr).To(HaveHTTPStatus(http.StatusInternalServerError))
+				})
+
+				It("error when destination Stat is not found", func() {
+
+					mockPathStat(mReq.Source.Path, status.NewOK(ctx), nil)
+					mockPathStat(mReq.Destination.Path, status.NewNotFound(ctx, ""), nil)
+					mockPathStat(".", status.NewNotFound(ctx, ""), nil)
+
+					handler.Handler().ServeHTTP(rr, req)
+					Expect(rr).To(HaveHTTPStatus(http.StatusConflict))
+				})
+
+				It("an unexpected error when destination Stat", func() {
+
+					mockPathStat(mReq.Source.Path, status.NewOK(ctx), nil)
+					mockPathStat(mReq.Destination.Path, status.NewNotFound(ctx, ""), nil)
+					mockPathStat(".", status.NewInvalid(ctx, ""), nil)
+
+					handler.Handler().ServeHTTP(rr, req)
+					Expect(rr).To(HaveHTTPStatus(http.StatusBadRequest))
+				})
+
+				It("error when removing", func() {
+
+					mockPathStat(mReq.Source.Path, status.NewOK(ctx), nil)
+					mockPathStat(mReq.Destination.Path, status.NewNotFound(ctx, ""), nil)
+					mockPathStat(".", status.NewOK(ctx), nil)
+					client.On("Move", mock.Anything, mReq).Return(nil, fmt.Errorf("unexpected io error"))
+
+					handler.Handler().ServeHTTP(rr, req)
+					Expect(rr).To(HaveHTTPStatus(http.StatusInternalServerError))
+				})
+
+				It("status 'Aborted' when removing", func() {
+
+					mockPathStat(mReq.Source.Path, status.NewOK(ctx), nil)
+					mockPathStat(mReq.Destination.Path, status.NewNotFound(ctx, ""), nil)
+					mockPathStat(".", status.NewOK(ctx), nil)
+
+					client.On("Move", mock.Anything, mReq).Return(&cs3storageprovider.MoveResponse{
+						Status: status.NewAborted(ctx, fmt.Errorf("aborted"), ""),
+					}, nil)
+
+					handler.Handler().ServeHTTP(rr, req)
+					Expect(rr).To(HaveHTTPStatus(http.StatusPreconditionFailed))
+				})
+
+				It("status 'Unimplemented' when removing", func() {
+
+					mockPathStat(mReq.Source.Path, status.NewOK(ctx), nil)
+					mockPathStat(mReq.Destination.Path, status.NewNotFound(ctx, ""), nil)
+					mockPathStat(".", status.NewOK(ctx), nil)
+
+					client.On("Move", mock.Anything, mReq).Return(&cs3storageprovider.MoveResponse{
+						Status: status.NewUnimplemented(ctx, fmt.Errorf("unimplemeted"), ""),
+					}, nil)
+
+					handler.Handler().ServeHTTP(rr, req)
+					Expect(rr).To(HaveHTTPStatus(http.StatusBadGateway))
+				})
+
+				It("the destination Stat error after moving", func() {
+
+					mockPathStat(mReq.Source.Path, status.NewOK(ctx), nil)
+					mockPathStat(mReq.Destination.Path, status.NewNotFound(ctx, ""), nil)
+					mockPathStat(".", status.NewOK(ctx), nil)
+
+					client.On("Move", mock.Anything, mReq).Return(&cs3storageprovider.MoveResponse{
+						Status: status.NewOK(ctx),
+					}, nil)
+
+					client.On("Stat", mock.Anything, mock.MatchedBy(func(req *cs3storageprovider.StatRequest) bool {
+						return utils.ResourceEqual(req.Ref, &cs3storageprovider.Reference{
+							ResourceId: userspace.Root,
+							Path:       mReq.Destination.Path,
+						})
+					})).Return(nil, fmt.Errorf("unexpected io error"))
+
+					handler.Handler().ServeHTTP(rr, req)
+					Expect(rr).To(HaveHTTPStatus(http.StatusInternalServerError))
+				})
+
+				It("the destination Stat returned not OK status after moving", func() {
+
+					mockPathStat(mReq.Source.Path, status.NewOK(ctx), nil)
+					mockPathStat(mReq.Destination.Path, status.NewNotFound(ctx, ""), nil)
+					mockPathStat(".", status.NewOK(ctx), nil)
+
+					client.On("Move", mock.Anything, mReq).Return(&cs3storageprovider.MoveResponse{
+						Status: status.NewOK(ctx),
+					}, nil)
+
+					mockPathStat(mReq.Destination.Path, status.NewNotFound(ctx, ""), nil)
+
+					handler.Handler().ServeHTTP(rr, req)
+					Expect(rr).To(HaveHTTPStatus(http.StatusNotFound))
+				})
+			})
+		})
 	})
+
 	Context("at the /dav/avatars endpoint", func() {
 
 		BeforeEach(func() {

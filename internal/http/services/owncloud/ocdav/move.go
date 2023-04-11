@@ -198,7 +198,7 @@ func (s *svc) handleMove(ctx context.Context, w http.ResponseWriter, r *http.Req
 		return
 	}
 	if dstStatRes.Status.Code != rpc.Code_CODE_OK && dstStatRes.Status.Code != rpc.Code_CODE_NOT_FOUND {
-		errors.HandleErrorStatus(&log, w, srcStatRes.Status)
+		errors.HandleErrorStatus(&log, w, dstStatRes.Status)
 		return
 	}
 
