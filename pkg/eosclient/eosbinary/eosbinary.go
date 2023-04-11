@@ -238,10 +238,10 @@ func (c *Client) executeEOS(ctx context.Context, cmdArgs []string, auth eosclien
 		cmd.Env = append(cmd.Env, "KRB5CCNAME=FILE:/dev/null") // do not try to use krb
 	}
 
-	cmd.Args = append(cmd.Args, cmdArgs...)
-
 	// add application label
 	cmd.Args = append(cmd.Args, "-a", "reva_eosclient::meta")
+
+	cmd.Args = append(cmd.Args, cmdArgs...)
 
 	span := trace.SpanFromContext(ctx)
 	cmd.Args = append(cmd.Args, "--comment", span.SpanContext().TraceID().String())
