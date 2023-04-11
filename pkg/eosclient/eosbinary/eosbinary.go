@@ -240,6 +240,9 @@ func (c *Client) executeEOS(ctx context.Context, cmdArgs []string, auth eosclien
 
 	cmd.Args = append(cmd.Args, cmdArgs...)
 
+	// add application label
+	cmd.Args = append(cmd.Args, "-a", "reva_eosclient::meta")
+
 	span := trace.SpanFromContext(ctx)
 	cmd.Args = append(cmd.Args, "--comment", span.SpanContext().TraceID().String())
 
@@ -740,7 +743,7 @@ func (c *Client) Read(ctx context.Context, auth eosclient.Authorization, path st
 	if auth.Token != "" {
 		args[3] += "?authz=" + auth.Token
 	} else if auth.Role.UID != "" && auth.Role.GID != "" {
-		args = append(args, fmt.Sprintf("-OSeos.ruid=%s&eos.rgid=%s", auth.Role.UID, auth.Role.GID))
+		args = append(args, fmt.Sprintf("-OSeos.ruid=%s&eos.rgid=%s&eos.app=reva_eosclient::read", auth.Role.UID, auth.Role.GID))
 	}
 
 	_, _, err := c.executeXRDCopy(ctx, args)
@@ -776,7 +779,7 @@ func (c *Client) WriteFile(ctx context.Context, auth eosclient.Authorization, pa
 	if auth.Token != "" {
 		args[4] += "?authz=" + auth.Token
 	} else if auth.Role.UID != "" && auth.Role.GID != "" {
-		args = append(args, fmt.Sprintf("-ODeos.ruid=%s&eos.rgid=%s", auth.Role.UID, auth.Role.GID))
+		args = append(args, fmt.Sprintf("-ODeos.ruid=%s&eos.rgid=%s&eos.app=reva_eosclient::write", auth.Role.UID, auth.Role.GID))
 	}
 
 	_, _, err := c.executeXRDCopy(ctx, args)
