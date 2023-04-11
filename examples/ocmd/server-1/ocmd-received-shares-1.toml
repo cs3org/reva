@@ -8,6 +8,7 @@ address = "localhost:19010"
 driver = "ocmreceived"
 mount_path = "/sciencemesh"
 mount_id = "sciencemesh"
+expose_data_server = true
 data_server_url = "http://localhost:19011/data"
 
 [http]

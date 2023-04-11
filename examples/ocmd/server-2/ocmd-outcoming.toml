@@ -8,6 +8,7 @@ address = "localhost:17020"
 driver = "ocmoutcoming"
 mount_path = "/ocm"
 mount_id = "ocm"
+expose_data_server = true
 data_server_url = "http://localhost:17021/data"
 
 [grpc.services.storageprovider.drivers.ocmoutcoming]
