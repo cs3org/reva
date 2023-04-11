@@ -27,6 +27,8 @@ driver = "static"
 
 [grpc.services.authregistry.drivers.static.rules]
 basic = "localhost:19000"
+machine = "localhost:19030"
+ocmshares = "localhost:19020"
 
 [grpc.services.storageregistry]
 driver = "static"
@@ -39,6 +41,8 @@ home_provider = "/home"
 "123e4567-e89b-12d3-a456-426655440000" = { "address" = "localhost:19000" }
 "/sciencemesh" = { "address" = "localhost:19010" }
 "sciencemesh" = { "address" = "localhost:19010" }
+"/ocm" = { "address" = "localhost:19020" }
+"ocm" = { "address" = "localhost:19020" }
 
 [grpc.services.usershareprovider]
 driver = "memory"

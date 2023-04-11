@@ -1,0 +1,27 @@
+[shared]
+gatewaysvc = "localhost:19000"
+
+[grpc]
+address = "localhost:19020"
+
+[grpc.services.storageprovider]
+driver = "ocmoutcoming"
+mount_path = "/ocm"
+mount_id = "ocm"
+data_server_url = "http://localhost:19021/data"
+
+[grpc.services.storageprovider.drivers.ocmoutcoming]
+machine_secret = "machine-api-key"
+
+[grpc.services.authprovider]
+auth_manager = "ocmshares"
+
+
+[http]
+address = "localhost:19021"
+
+[http.services.dataprovider]
+driver = "ocmoutcoming"
+
+[http.services.dataprovider.drivers.ocmoutcoming]
+machine_secret = "machine-api-key"
