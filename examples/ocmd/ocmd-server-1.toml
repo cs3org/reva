@@ -52,6 +52,9 @@ file = "/var/tmp/reva/shares_server_1.json"
 driver = "json"
 provider_domain = "cernbox.cern.ch"
 
+[grpc.services.ocminvitemanager.drivers.json]
+file = "/var/tmp/reva/invites_server_1.json"
+
 [grpc.services.ocmshareprovider]
 driver = "json"
 webdav_endpoint = "http://localhost:19001"

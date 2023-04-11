@@ -50,6 +50,9 @@ file = "/var/tmp/reva/shares_server_2.json"
 driver = "json"
 provider_domain = "cesnet.cz"
 
+[grpc.services.ocminvitemanager.drivers.json]
+file = "/var/tmp/reva/invites_server_2.json"
+
 [grpc.services.ocmshareprovider]
 driver = "json"
 webdav_endpoint = "http://localhost:17001"
