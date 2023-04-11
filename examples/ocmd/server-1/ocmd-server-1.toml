@@ -37,6 +37,8 @@ home_provider = "/home"
 [grpc.services.storageregistry.drivers.static.rules]
 "/home" = { "address" = "localhost:19000" }
 "123e4567-e89b-12d3-a456-426655440000" = { "address" = "localhost:19000" }
+"/sciencemesh" = { "address" = "localhost:19010" }
+"sciencemesh" = { "address" = "localhost:19010" }
 
 [grpc.services.usershareprovider]
 driver = "memory"
