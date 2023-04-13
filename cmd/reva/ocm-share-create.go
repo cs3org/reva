@@ -166,11 +166,11 @@ func ocmShareCreateCommand() *command {
 func getOCMSharePerm(p string) (*ocm.SharePermissions, int, error) {
 	if p == viewerPermission {
 		return &ocm.SharePermissions{
-			Permissions: conversions.NewViewerRole().CS3ResourcePermissions(),
+			Permissions: conversions.NewViewerRole(false).CS3ResourcePermissions(),
 		}, 1, nil
 	} else if p == editorPermission {
 		return &ocm.SharePermissions{
-			Permissions: conversions.NewEditorRole().CS3ResourcePermissions(),
+			Permissions: conversions.NewEditorRole(false).CS3ResourcePermissions(),
 		}, 15, nil
 	}
 	return nil, 0, errors.New("invalid rol: " + p)

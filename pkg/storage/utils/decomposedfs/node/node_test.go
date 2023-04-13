@@ -285,13 +285,13 @@ var _ = Describe("Node", func() {
 						UserId: u.Id,
 					},
 				},
-				Permissions: ocsconv.NewEditorRole().CS3ResourcePermissions(),
+				Permissions: ocsconv.NewEditorRole(false).CS3ResourcePermissions(),
 			})
 			Expect(err).ToNot(HaveOccurred())
 			spaceRoot, err := env.Lookup.NodeFromSpaceID(env.Ctx, storageSpace)
 			Expect(err).ToNot(HaveOccurred())
 			permissionsActual, _ := spaceRoot.PermissionSet(env.Ctx)
-			permissionsExpected := ocsconv.NewEditorRole().CS3ResourcePermissions()
+			permissionsExpected := ocsconv.NewEditorRole(false).CS3ResourcePermissions()
 			Expect(grants.PermissionsEqual(&permissionsActual, permissionsExpected)).To(BeTrue())
 			env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(provider.ResourcePermissions{
 				Stat:            true,

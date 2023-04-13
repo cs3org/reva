@@ -150,7 +150,7 @@ func TestPermissions2Role(t *testing.T) {
 	}
 
 	for permissions, role := range table {
-		actual := RoleFromOCSPermissions(permissions, true).Name
+		actual := RoleFromOCSPermissions(permissions).Name
 		checkRole(role, actual)
 	}
 }

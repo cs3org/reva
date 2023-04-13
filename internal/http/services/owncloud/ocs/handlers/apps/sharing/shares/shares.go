@@ -433,7 +433,7 @@ func (h *Handler) extractPermissions(reqRole string, reqPermissions string, ri *
 					Error:   err,
 				}
 			}
-			role = conversions.RoleFromOCSPermissions(perm, h.resharing)
+			role = conversions.RoleFromOCSPermissions(perm)
 		}
 	}
 
@@ -449,7 +449,7 @@ func (h *Handler) extractPermissions(reqRole string, reqPermissions string, ri *
 				Error:   errors.New("cannot set the requested share permissions"),
 			}
 		}
-		role = conversions.RoleFromOCSPermissions(permissions, h.resharing)
+		role = conversions.RoleFromOCSPermissions(permissions)
 	}
 
 	if !sufficientPermissions(ri.PermissionSet, role.CS3ResourcePermissions(), false) && role.Name != conversions.RoleDenied {

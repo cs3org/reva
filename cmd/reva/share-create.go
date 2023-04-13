@@ -159,9 +159,9 @@ func getGrantType(t string) provider.GranteeType {
 func getSharePerm(p string) (*provider.ResourcePermissions, error) {
 	switch p {
 	case viewerPermission:
-		return conversions.NewViewerRole().CS3ResourcePermissions(), nil
+		return conversions.NewViewerRole(false).CS3ResourcePermissions(), nil
 	case editorPermission:
-		return conversions.NewEditorRole().CS3ResourcePermissions(), nil
+		return conversions.NewEditorRole(false).CS3ResourcePermissions(), nil
 	case collabPermission:
 		return conversions.NewManagerRole().CS3ResourcePermissions(), nil
 	case denyPermission:

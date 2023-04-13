@@ -110,7 +110,7 @@ var _ = Describe("SQL manager", func() {
 		}
 		grant = &link.Grant{
 			Permissions: &link.PublicSharePermissions{
-				Permissions: conversions.NewViewerRole().CS3ResourcePermissions(),
+				Permissions: conversions.NewViewerRole(true).CS3ResourcePermissions(),
 			},
 		}
 	})
@@ -449,7 +449,7 @@ var _ = Describe("SQL manager", func() {
 					Ref: ref,
 					Update: &link.UpdatePublicShareRequest_Update{
 						Type:  link.UpdatePublicShareRequest_Update_TYPE_PERMISSIONS,
-						Grant: &link.Grant{Permissions: &link.PublicSharePermissions{Permissions: conversions.NewEditorRole().CS3ResourcePermissions()}},
+						Grant: &link.Grant{Permissions: &link.PublicSharePermissions{Permissions: conversions.NewEditorRole(false).CS3ResourcePermissions()}},
 					},
 				})
 				Expect(err).ToNot(HaveOccurred())
