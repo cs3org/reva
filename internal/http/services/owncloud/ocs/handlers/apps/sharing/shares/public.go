@@ -141,7 +141,7 @@ func (h *Handler) createPublicLinkShare(w http.ResponseWriter, r *http.Request, 
 		permissions := role.OCSPermissions()
 		permissions &^= conversions.PermissionCreate
 		permissions &^= conversions.PermissionDelete
-		newPermissions = conversions.RoleFromOCSPermissions(permissions).CS3ResourcePermissions()
+		newPermissions = conversions.RoleFromOCSPermissions(permissions, h.resharing).CS3ResourcePermissions()
 	}
 
 	if !sufficientPermissions(statInfo.PermissionSet, newPermissions, true) {
@@ -580,7 +580,7 @@ func ocPublicPermToCs3(permKey int, h *Handler) (*provider.ResourcePermissions, 
 		return nil, err
 	}
 
-	return conversions.RoleFromOCSPermissions(perm).CS3ResourcePermissions(), nil
+	return conversions.RoleFromOCSPermissions(perm, h.resharing).CS3ResourcePermissions(), nil
 }
 
 func permissionFromRequest(r *http.Request, h *Handler) (*provider.ResourcePermissions, error) {
