@@ -133,45 +133,24 @@ func (m *manager) Configure(ml map[string]interface{}) error {
 
 	// Since we're starting a subroutine which would take some time to execute,
 	// we can't wait to see if it works before returning the user.Manager object
-	if err := m.fetchAllUsers(); err != nil {
-		return err
-	}
+	// TODO: return err if the fetch fails
+	go m.fetchAllUsers()
 	return nil
 }
 
-func (m *manager) fetchAllUsers() error {
-	errCh := make(chan error, 1)
+func (m *manager) fetchAllUsers() {
+	_ = m.fetchAllUserAccounts()
+	ticker := time.NewTicker(time.Duration(m.conf.UserFetchInterval) * time.Second)
+	work := make(chan os.Signal, 1)
+	signal.Notify(work, syscall.SIGHUP, syscall.SIGINT, syscall.SIGQUIT)
 
-	go func() {
-		defer close(errCh)
-
-		if err := m.fetchAllUserAccounts(); err != nil {
-			errCh <- err
+	for {
+		select {
+		case <-work:
 			return
+		case <-ticker.C:
+			_ = m.fetchAllUserAccounts()
 		}
-
-		ticker := time.NewTicker(time.Duration(m.conf.UserFetchInterval) * time.Second)
-		work := make(chan os.Signal, 1)
-		signal.Notify(work, syscall.SIGHUP, syscall.SIGINT, syscall.SIGQUIT)
-
-		for {
-			select {
-			case <-work:
-				return
-			case <-ticker.C:
-				if err := m.fetchAllUserAccounts(); err != nil {
-					errCh <- err
-					return
-				}
-			}
-		}
-	}()
-
-	select {
-	case err := <-errCh:
-		return err
-	default:
-		return nil
 	}
 }
 
