@@ -80,7 +80,8 @@ type CapabilitiesCore struct {
 
 // CapabilitiesGraph holds the graph capabilities
 type CapabilitiesGraph struct {
-	PersonalDataExport ocsBool `json:"personal-data-export" xml:"personal-data-export" mapstructure:"personal_data_export"`
+	PersonalDataExport     ocsBool  `json:"personal-data-export" xml:"personal-data-export" mapstructure:"personal_data_export"`
+	ReadOnlyUserAttributes []string `json:"read_only_user_attributes" xml:"read_only_user_attributes" mapstructure:"read_only_user_attributes"`
 }
 
 // Status holds basic status information
