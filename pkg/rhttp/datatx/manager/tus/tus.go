@@ -36,6 +36,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/events"
 	"github.com/cs3org/reva/v2/pkg/rhttp/datatx"
 	"github.com/cs3org/reva/v2/pkg/rhttp/datatx/manager/registry"
+	"github.com/cs3org/reva/v2/pkg/rhttp/datatx/metrics"
 	"github.com/cs3org/reva/v2/pkg/storage"
 	"github.com/cs3org/reva/v2/pkg/storage/cache"
 	"github.com/cs3org/reva/v2/pkg/utils"
@@ -144,6 +145,10 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 
 		switch method {
 		case "POST":
+			metrics.UploadsActive.Add(1)
+			defer func() {
+				metrics.UploadsActive.Sub(1)
+			}()
 			// set etag, mtime and file id
 			handler.PostFile(w, r)
 		case "HEAD":
@@ -155,6 +160,10 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 		case "DELETE":
 			handler.DelFile(w, r)
 		case "GET":
+			metrics.DownloadsActive.Add(1)
+			defer func() {
+				metrics.DownloadsActive.Sub(1)
+			}()
 			// NOTE: this is breaking change - allthought it does not seem to be used
 			// We can make a switch here depending on some header value if that is needed
 			// download.GetOrHeadFile(w, r, fs, "")

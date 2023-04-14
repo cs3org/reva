@@ -24,8 +24,6 @@ import (
 
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promauto"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -35,23 +33,12 @@ import (
 	"github.com/cs3org/reva/v2/pkg/events"
 	"github.com/cs3org/reva/v2/pkg/rhttp/datatx"
 	"github.com/cs3org/reva/v2/pkg/rhttp/datatx/manager/registry"
+	"github.com/cs3org/reva/v2/pkg/rhttp/datatx/metrics"
 	"github.com/cs3org/reva/v2/pkg/rhttp/datatx/utils/download"
 	"github.com/cs3org/reva/v2/pkg/storage"
 	"github.com/cs3org/reva/v2/pkg/storage/cache"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/utils"
-)
-
-// Keep track of active uploads/downloads.
-var (
-	downloadsActive = promauto.NewGauge(prometheus.GaugeOpts{
-		Name: "reva_download_active",
-		Help: "Number of active downloads",
-	})
-	uploadsActive = promauto.NewGauge(prometheus.GaugeOpts{
-		Name: "reva_upload_active",
-		Help: "Number of active uploads",
-	})
 )
 
 func init() {
@@ -101,15 +88,17 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 
 		switch r.Method {
 		case "GET", "HEAD":
-			downloadsActive.Add(1)
-			defer func() {
-				downloadsActive.Sub(1)
-			}()
+			if r.Method == "GET" {
+				metrics.DownloadsActive.Add(1)
+				defer func() {
+					metrics.DownloadsActive.Sub(1)
+				}()
+			}
 			download.GetOrHeadFile(w, r, fs, "")
 		case "PUT":
-			uploadsActive.Add(1)
+			metrics.UploadsActive.Add(1)
 			defer func() {
-				uploadsActive.Sub(1)
+				metrics.UploadsActive.Sub(1)
 			}()
 			fn := r.URL.Path
 			defer r.Body.Close()
