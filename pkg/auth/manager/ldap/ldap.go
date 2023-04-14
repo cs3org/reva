@@ -49,14 +49,15 @@ type mgr struct {
 }
 
 type config struct {
-	utils.LDAPConn `mapstructure:",squash"`
-	BaseDN         string     `mapstructure:"base_dn"`
-	UserFilter     string     `mapstructure:"userfilter"`
-	LoginFilter    string     `mapstructure:"loginfilter"`
-	Idp            string     `mapstructure:"idp"`
-	GatewaySvc     string     `mapstructure:"gatewaysvc"`
-	Schema         attributes `mapstructure:"schema"`
-	Nobody         int64      `mapstructure:"nobody"`
+	utils.LDAPConn      `mapstructure:",squash"`
+	BaseDN              string            `mapstructure:"base_dn"`
+	UserFilter          string            `mapstructure:"userfilter"`
+	LoginFilter         string            `mapstructure:"loginfilter"`
+	Idp                 string            `mapstructure:"idp"`
+	GatewaySvc          string            `mapstructure:"gatewaysvc"`
+	Schema              attributes        `mapstructure:"schema"`
+	Nobody              int64             `mapstructure:"nobody"`
+	AccountTypesMapping map[string]string `mapstructure:"account_types_mapping"`
 }
 
 type attributes struct {
@@ -74,6 +75,10 @@ type attributes struct {
 	UIDNumber string `mapstructure:"uidNumber"`
 	// GIDNumber is a numeric id that maps to a filesystem gid, eg. 654321
 	GIDNumber string `mapstructure:"gidNumber"`
+	// AccountType is a (non standard) attribute that contains the type of the account
+	// If not set or not included in the LDAP reponse, the LDAP driver
+	// will make a call to the user driver to discover the user type.
+	AccountType string `mapstructure:"accountType"`
 }
 
 // Default attributes (Active Directory).
@@ -139,12 +144,17 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 	}
 	defer l.Close()
 
+	attributes := []string{am.c.Schema.DN, am.c.Schema.UID, am.c.Schema.CN, am.c.Schema.Mail, am.c.Schema.DisplayName, am.c.Schema.UIDNumber, am.c.Schema.GIDNumber}
+	if am.c.Schema.AccountType != "" {
+		attributes = append(attributes, am.c.Schema.AccountType)
+	}
+
 	// Search for the given clientID
 	searchRequest := ldap.NewSearchRequest(
 		am.c.BaseDN,
 		ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 0, 0, false,
 		am.getLoginFilter(clientID),
-		[]string{am.c.Schema.DN, am.c.Schema.UID, am.c.Schema.CN, am.c.Schema.Mail, am.c.Schema.DisplayName, am.c.Schema.UIDNumber, am.c.Schema.GIDNumber},
+		attributes,
 		nil,
 	)
 
@@ -157,63 +167,78 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 		return nil, nil, errtypes.NotFound(clientID)
 	}
 
-	userdn := sr.Entries[0].DN
+	entry := sr.Entries[0]
 
 	// Bind as the user to verify their password
-	err = l.Bind(userdn, clientSecret)
+	err = l.Bind(entry.DN, clientSecret)
 	if err != nil {
-		log.Debug().Err(err).Interface("userdn", userdn).Msg("bind with user credentials failed")
+		log.Debug().Err(err).Interface("userdn", entry.DN).Msg("bind with user credentials failed")
 		return nil, nil, err
 	}
 
-	userID := &user.UserId{
-		Idp:      am.c.Idp,
-		OpaqueId: sr.Entries[0].GetEqualFoldAttributeValue(am.c.Schema.UID),
-		Type:     user.UserType_USER_TYPE_PRIMARY, // TODO: assign the appropriate user type
-	}
+	var u *user.User
+
 	gwc, err := pool.GetGatewayServiceClient(pool.Endpoint(am.c.GatewaySvc))
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "ldap: error getting gateway grpc client")
 	}
-	getGroupsResp, err := gwc.GetUserGroups(ctx, &user.GetUserGroupsRequest{
-		UserId: userID,
-	})
-	if err != nil {
-		return nil, nil, errors.Wrap(err, "ldap: error getting user groups")
-	}
-	if getGroupsResp.Status.Code != rpc.Code_CODE_OK {
-		return nil, nil, errors.Wrap(err, "ldap: grpc getting user groups failed")
-	}
-	gidNumber := am.c.Nobody
-	gidValue := sr.Entries[0].GetEqualFoldAttributeValue(am.c.Schema.GIDNumber)
-	if gidValue != "" {
-		gidNumber, err = strconv.ParseInt(gidValue, 10, 64)
-		if err != nil {
-			return nil, nil, err
+
+	t, ok := utils.GetUserTypeFromLDAPResponse(entry, am.c.Schema.AccountType, am.c.AccountTypesMapping)
+	if ok {
+		userID := &user.UserId{
+			Idp:      am.c.Idp,
+			OpaqueId: entry.GetEqualFoldAttributeValue(am.c.Schema.UID),
+			Type:     t,
 		}
-	}
-	uidNumber := am.c.Nobody
-	uidValue := sr.Entries[0].GetEqualFoldAttributeValue(am.c.Schema.UIDNumber)
-	if uidValue != "" {
-		uidNumber, err = strconv.ParseInt(uidValue, 10, 64)
+		getGroupsResp, err := gwc.GetUserGroups(ctx, &user.GetUserGroupsRequest{
+			UserId: userID,
+		})
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, errors.Wrap(err, "ldap: error getting user groups")
 		}
-	}
-	u := &user.User{
-		Id: userID,
-		// TODO add more claims from the StandardClaims, eg EmailVerified
-		Username: sr.Entries[0].GetEqualFoldAttributeValue(am.c.Schema.CN),
-		// TODO groups
-		Groups:      getGroupsResp.Groups,
-		Mail:        sr.Entries[0].GetEqualFoldAttributeValue(am.c.Schema.Mail),
-		DisplayName: sr.Entries[0].GetEqualFoldAttributeValue(am.c.Schema.DisplayName),
-		UidNumber:   uidNumber,
-		GidNumber:   gidNumber,
+		if getGroupsResp.Status.Code != rpc.Code_CODE_OK {
+			return nil, nil, errors.Wrap(err, "ldap: grpc getting user groups failed")
+		}
+		gidNumber := am.c.Nobody
+		gidValue := entry.GetEqualFoldAttributeValue(am.c.Schema.GIDNumber)
+		if gidValue != "" {
+			gidNumber, err = strconv.ParseInt(gidValue, 10, 64)
+			if err != nil {
+				return nil, nil, err
+			}
+		}
+		uidNumber := am.c.Nobody
+		uidValue := entry.GetEqualFoldAttributeValue(am.c.Schema.UIDNumber)
+		if uidValue != "" {
+			uidNumber, err = strconv.ParseInt(uidValue, 10, 64)
+			if err != nil {
+				return nil, nil, err
+			}
+		}
+		u = &user.User{
+			Id: userID,
+			// TODO add more claims from the StandardClaims, eg EmailVerified
+			Username:    entry.GetEqualFoldAttributeValue(am.c.Schema.CN),
+			Groups:      getGroupsResp.Groups,
+			Mail:        entry.GetEqualFoldAttributeValue(am.c.Schema.Mail),
+			DisplayName: entry.GetEqualFoldAttributeValue(am.c.Schema.DisplayName),
+			UidNumber:   uidNumber,
+			GidNumber:   gidNumber,
+		}
+	} else {
+		// fall back to the user from the user provider
+		userResp, err := gwc.GetUser(ctx, &user.GetUserRequest{UserId: &user.UserId{Idp: am.c.Idp, OpaqueId: entry.GetEqualFoldAttributeValue(am.c.Schema.UID)}})
+		if err != nil {
+			return nil, nil, errors.Wrap(err, "ldap: error getting user info")
+		}
+		if userResp.Status.Code != rpc.Code_CODE_OK {
+			return nil, nil, errors.Wrap(err, "ldap: grpc getting user info failed")
+		}
+		u = userResp.User
 	}
 
 	var scopes map[string]*authpb.Scope
-	if userID != nil && userID.Type == user.UserType_USER_TYPE_LIGHTWEIGHT {
+	if u.Id != nil && u.Id.Type == user.UserType_USER_TYPE_LIGHTWEIGHT {
 		scopes, err = scope.AddLightweightAccountScope(authpb.Role_ROLE_OWNER, nil)
 		if err != nil {
 			return nil, nil, err
@@ -225,7 +250,7 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 		}
 	}
 
-	log.Debug().Interface("entry", sr.Entries[0]).Interface("user", u).Msg("authenticated user")
+	log.Debug().Interface("entry", entry).Interface("user", u).Msg("authenticated user")
 
 	return u, scopes, nil
 }

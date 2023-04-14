@@ -23,6 +23,9 @@ import (
 	"crypto/x509"
 	"fmt"
 	"os"
+	"strings"
+
+	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 
 	"github.com/go-ldap/ldap/v3"
 	"github.com/pkg/errors"
@@ -67,4 +70,31 @@ func GetLDAPConnection(c *LDAPConn) (*ldap.Conn, error) {
 		}
 	}
 	return l, nil
+}
+
+// GetUserTypeFromLDAPResponse tries to parse the user type defined in the mapping from a non standard
+// attrivute containing the user type.
+func GetUserTypeFromLDAPResponse(entry *ldap.Entry, accountTypeAttr string, accountTypesMapping map[string]string) (user.UserType, bool) {
+	if accountTypeAttr == "" {
+		return user.UserType_USER_TYPE_INVALID, false
+	}
+
+	accountType := entry.GetEqualFoldAttributeValue(accountTypeAttr)
+	if accountType == "" {
+		return user.UserType_USER_TYPE_INVALID, false
+	}
+
+	userTypeStr, ok := accountTypesMapping[accountType]
+	if !ok {
+		return user.UserType_USER_TYPE_INVALID, false
+	}
+
+	// userTypeStr is of type "PRIMARY"
+	// we need "USER_TYPE_PRIMARY" for looking up the user type defined by cs3apis
+	key := "USER_TYPE_" + strings.ToUpper(userTypeStr)
+	userType, ok := user.UserType_value[key]
+	if !ok {
+		return user.UserType_USER_TYPE_INVALID, false
+	}
+	return user.UserType(userType), true
 }

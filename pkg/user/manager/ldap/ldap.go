@@ -49,15 +49,16 @@ type manager struct {
 }
 
 type config struct {
-	utils.LDAPConn  `mapstructure:",squash"`
-	BaseDN          string     `mapstructure:"base_dn"`
-	UserFilter      string     `mapstructure:"userfilter"`
-	AttributeFilter string     `mapstructure:"attributefilter"`
-	FindFilter      string     `mapstructure:"findfilter"`
-	GroupFilter     string     `mapstructure:"groupfilter"`
-	Idp             string     `mapstructure:"idp"`
-	Schema          attributes `mapstructure:"schema"`
-	Nobody          int64      `mapstructure:"nobody"`
+	utils.LDAPConn      `mapstructure:",squash"`
+	BaseDN              string            `mapstructure:"base_dn"`
+	UserFilter          string            `mapstructure:"userfilter"`
+	AttributeFilter     string            `mapstructure:"attributefilter"`
+	FindFilter          string            `mapstructure:"findfilter"`
+	GroupFilter         string            `mapstructure:"groupfilter"`
+	Idp                 string            `mapstructure:"idp"`
+	Schema              attributes        `mapstructure:"schema"`
+	Nobody              int64             `mapstructure:"nobody"`
+	AccountTypesMapping map[string]string `mapstructure:"account_types_mapping"`
 }
 
 type attributes struct {
@@ -75,6 +76,10 @@ type attributes struct {
 	UIDNumber string `mapstructure:"uidNumber"`
 	// GIDNumber is a numeric id that maps to a filesystem gid, eg. 654321
 	GIDNumber string `mapstructure:"gidNumber"`
+	// AccountType is a (non standard) attribute that contains the type of the account
+	// If not set or not included in the LDAP reponse, the LDAP driver
+	// will make a call to the user driver to discover the user type.
+	AccountType string `mapstructure:"accountType"`
 }
 
 // Default attributes (Active Directory).
@@ -149,12 +154,17 @@ func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId, skipFetchingG
 	}
 	defer l.Close()
 
+	attributes := []string{m.c.Schema.DN, m.c.Schema.UID, m.c.Schema.CN, m.c.Schema.Mail, m.c.Schema.DisplayName, m.c.Schema.UIDNumber, m.c.Schema.GIDNumber}
+	if m.c.Schema.AccountType != "" {
+		attributes = append(attributes, m.c.Schema.AccountType)
+	}
+
 	// Search for the given clientID
 	searchRequest := ldap.NewSearchRequest(
 		m.c.BaseDN,
 		ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 0, 0, false,
 		m.getUserFilter(uid),
-		[]string{m.c.Schema.DN, m.c.Schema.UID, m.c.Schema.CN, m.c.Schema.Mail, m.c.Schema.DisplayName, m.c.Schema.UIDNumber, m.c.Schema.GIDNumber},
+		attributes,
 		nil,
 	)
 
@@ -169,10 +179,18 @@ func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId, skipFetchingG
 
 	log.Debug().Interface("entries", sr.Entries).Msg("entries")
 
+	// try to get the type from ldap
+	// if this is not set, could mean that the organization does not
+	// support different user types
+	// we then fall back to primary user type
+	t, ok := utils.GetUserTypeFromLDAPResponse(sr.Entries[0], m.c.Schema.AccountType, m.c.AccountTypesMapping)
+	if !ok {
+		t = userpb.UserType_USER_TYPE_PRIMARY
+	}
 	id := &userpb.UserId{
 		Idp:      m.c.Idp,
 		OpaqueId: sr.Entries[0].GetEqualFoldAttributeValue(m.c.Schema.UID),
-		Type:     userpb.UserType_USER_TYPE_PRIMARY,
+		Type:     t,
 	}
 
 	groups := []string{}
@@ -236,12 +254,17 @@ func (m *manager) GetUserByClaim(ctx context.Context, claim, value string, skipF
 	}
 	defer l.Close()
 
+	attributes := []string{m.c.Schema.DN, m.c.Schema.UID, m.c.Schema.CN, m.c.Schema.Mail, m.c.Schema.DisplayName, m.c.Schema.UIDNumber, m.c.Schema.GIDNumber}
+	if m.c.Schema.AccountType != "" {
+		attributes = append(attributes, m.c.Schema.AccountType)
+	}
+
 	// Search for the given clientID
 	searchRequest := ldap.NewSearchRequest(
 		m.c.BaseDN,
 		ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 0, 0, false,
 		m.getAttributeFilter(claim, value),
-		[]string{m.c.Schema.DN, m.c.Schema.UID, m.c.Schema.CN, m.c.Schema.Mail, m.c.Schema.DisplayName, m.c.Schema.UIDNumber, m.c.Schema.GIDNumber},
+		attributes,
 		nil,
 	)
 
@@ -256,10 +279,14 @@ func (m *manager) GetUserByClaim(ctx context.Context, claim, value string, skipF
 
 	log.Debug().Interface("entries", sr.Entries).Msg("entries")
 
+	t, ok := utils.GetUserTypeFromLDAPResponse(sr.Entries[0], m.c.Schema.AccountType, m.c.AccountTypesMapping)
+	if !ok {
+		t = userpb.UserType_USER_TYPE_PRIMARY
+	}
 	id := &userpb.UserId{
 		Idp:      m.c.Idp,
 		OpaqueId: sr.Entries[0].GetEqualFoldAttributeValue(m.c.Schema.UID),
-		Type:     userpb.UserType_USER_TYPE_PRIMARY,
+		Type:     t,
 	}
 
 	groups := []string{}
