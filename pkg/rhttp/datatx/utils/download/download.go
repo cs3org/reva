@@ -36,6 +36,8 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/utils"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/rs/zerolog"
 )
 
@@ -213,7 +215,6 @@ func GetOrHeadFile(w http.ResponseWriter, r *http.Request, fs storage.FS, spaceI
 			sublog.Error().Int64("copied", c).Int64("size", sendSize).Msg("copied vs size mismatch")
 		}
 	}
-
 }
 
 func handleError(w http.ResponseWriter, log *zerolog.Logger, err error, action string) {
