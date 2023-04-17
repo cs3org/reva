@@ -314,6 +314,7 @@ func (c *Client) RemoveACL(ctx context.Context, auth, rootAuth eosclient.Authori
 		return err
 	}
 
+	a.Permissions = ""
 	sysACL := a.CitrineSerialize()
 	args := []string{"acl", "--sys"}
 	if finfo.IsDir {
