@@ -20,7 +20,6 @@ package store
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"time"
 
@@ -30,7 +29,6 @@ import (
 	"github.com/go-micro/plugins/v4/store/redis"
 	redisopts "github.com/go-redis/redis/v8"
 	"github.com/nats-io/nats.go"
-	"github.com/shamaton/msgpack/v2"
 	"go-micro.dev/v4/logger"
 	microstore "go-micro.dev/v4/store"
 )
@@ -145,67 +143,4 @@ func Create(opts ...microstore.Option) microstore.Store {
 		options.Logger.Logf(logger.ErrorLevel, "unknown store type: '%s', falling back to memory", storeType)
 		return microstore.NewMemoryStore(opts...)
 	}
-}
-
-// CacheStore holds cache store specific configuration
-type cacheStore struct {
-	s               microstore.Store
-	database, table string
-	ttl             time.Duration
-}
-
-// PullFromCache pulls a value from the configured database and table of the underlying store using the given key
-func (cache cacheStore) PullFromCache(key string, dest interface{}) error {
-	r, err := cache.s.Read(key, microstore.ReadFrom(cache.database, cache.table), microstore.ReadLimit(1))
-	if err != nil {
-		return err
-	}
-	if len(r) == 0 {
-		return fmt.Errorf("not found")
-	}
-
-	return msgpack.Unmarshal(r[0].Value, &dest)
-}
-
-// PushToCache pushes a key and value to the configured database and table of the underlying store
-func (cache cacheStore) PushToCache(key string, src interface{}) error {
-	b, err := msgpack.Marshal(src)
-	if err != nil {
-		return err
-	}
-	return cache.s.Write(
-		&microstore.Record{Key: key, Value: b},
-		microstore.WriteTo(cache.database, cache.table),
-		microstore.WriteTTL(cache.ttl),
-	)
-}
-
-// List lists the keys on the configured database and table of the underlying store
-func (cache cacheStore) List(opts ...microstore.ListOption) ([]string, error) {
-	o := []microstore.ListOption{
-		microstore.ListFrom(cache.database, cache.table),
-	}
-	o = append(o, opts...)
-	keys, err := cache.s.List(o...)
-	if err != nil {
-		return nil, err
-	}
-	for i, key := range keys {
-		keys[i] = strings.TrimPrefix(key, cache.table)
-	}
-	return keys, nil
-}
-
-// Delete deletes the given key on the configured database and table of the underlying store
-func (cache cacheStore) Delete(key string, opts ...microstore.DeleteOption) error {
-	o := []microstore.DeleteOption{
-		microstore.DeleteFrom(cache.database, cache.table),
-	}
-	o = append(o, opts...)
-	return cache.s.Delete(key, o...)
-}
-
-// Close closes the underlying store
-func (cache cacheStore) Close() error {
-	return cache.s.Close()
 }
