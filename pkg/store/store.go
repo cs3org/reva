@@ -38,13 +38,20 @@ import (
 var ocMemStore *microstore.Store
 
 const (
-	TypeMemory        = "memory"
-	TypeNoop          = "noop"
-	TypeEtcd          = "etcd"
-	TypeRedis         = "redis"
+	// TypeMemory represents memory stores
+	TypeMemory = "memory"
+	// TypeNoop represents noop stores
+	TypeNoop = "noop"
+	// TypeEtcd represents etcd stores
+	TypeEtcd = "etcd"
+	// TypeRedis represents redis stores
+	TypeRedis = "redis"
+	// TypeRedisSentinel represents redis-sentinel stores
 	TypeRedisSentinel = "redis-sentinel"
-	TypeOCMem         = "ocmem"
-	TypeNatsJS        = "nats-js"
+	// TypeOCMem represents ocmem stores
+	TypeOCMem = "ocmem"
+	// TypeNatsJS represents nats-js stores
+	TypeNatsJS = "nats-js"
 )
 
 // Cache handles key value operations on caches
@@ -71,7 +78,7 @@ func Create(opts ...microstore.Option) microstore.Store {
 	case TypeNoop:
 		return microstore.NewNoopStore(opts...)
 	case TypeEtcd:
-		return etcd.NewEtcdStore(opts...)
+		return etcd.NewStore(opts...)
 	case TypeRedis:
 		// FIXME redis plugin does not support redis cluster or ring -> needs upstream patch or our implementation
 		return redis.NewStore(opts...)
