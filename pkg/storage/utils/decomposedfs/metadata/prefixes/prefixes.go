@@ -16,8 +16,6 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-//go:build !freebsd
-
 package prefixes
 
 // Declare a list of xattr keys
