@@ -390,7 +390,7 @@ func (m *MemStore) Len() (int, bool) {
 	eLen := m.evictionList.Len()
 	pLen := m.preRadix.Len()
 	sLen := m.sufRadix.Len()
-	if eLen == pLen && eLen == sLen {
+	if eLen == pLen && pLen == sLen {
 		return eLen, true
 	}
 	return 0, false
