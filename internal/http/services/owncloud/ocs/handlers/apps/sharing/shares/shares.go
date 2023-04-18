@@ -153,7 +153,7 @@ func (h *Handler) startCacheWarmup(c sharecache.Warmup) {
 		return
 	}
 	for _, r := range infos {
-		key := storagespace.FormatResourceID(*r.Id)
+		key := h.resourceInfoCache.GetKey(r.Owner, &provider.Reference{ResourceId: r.Id}, []string{}, []string{})
 		_ = h.resourceInfoCache.PushToCache(key, r)
 	}
 }
