@@ -768,6 +768,10 @@ func (h *Handler) updateShare(w http.ResponseWriter, r *http.Request, shareID st
 		return
 	}
 
+	if currentUser, ok := ctxpkg.ContextGetUser(ctx); ok {
+		h.resourceInfoCache.RemoveStat(currentUser.Id, shareR.Share.ResourceId)
+	}
+
 	share, err := conversions.CS3Share2ShareData(ctx, uRes.Share)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error mapping share data", err)
@@ -1337,36 +1341,27 @@ func (h *Handler) getAdditionalInfoAttribute(ctx context.Context, u *userIdentif
 }
 
 func (h *Handler) getResourceInfoByReference(ctx context.Context, client gateway.GatewayAPIClient, ref *provider.Reference) (*provider.ResourceInfo, *rpc.Status, error) {
-	var key string
-	if ref.ResourceId == nil {
-		// This is a path based reference
-		key = ref.Path
-	} else {
-		var err error
-		key, err = storagespace.FormatReference(ref)
-		if err != nil {
-			return nil, nil, err
-		}
-	}
-	return h.getResourceInfo(ctx, client, key, ref)
+	return h.getResourceInfo(ctx, client, ref)
 }
 
 func (h *Handler) getResourceInfoByID(ctx context.Context, client gateway.GatewayAPIClient, id *provider.ResourceId) (*provider.ResourceInfo, *rpc.Status, error) {
-	return h.getResourceInfo(ctx, client, storagespace.FormatResourceID(*id), &provider.Reference{ResourceId: id})
+	return h.getResourceInfo(ctx, client, &provider.Reference{ResourceId: id})
 }
 
 // getResourceInfo retrieves the resource info to a target.
 // This method utilizes caching if it is enabled.
-func (h *Handler) getResourceInfo(ctx context.Context, client gateway.GatewayAPIClient, key string, ref *provider.Reference) (*provider.ResourceInfo, *rpc.Status, error) {
+func (h *Handler) getResourceInfo(ctx context.Context, client gateway.GatewayAPIClient, ref *provider.Reference) (*provider.ResourceInfo, *rpc.Status, error) {
 	logger := appctx.GetLogger(ctx)
-
-	pinfo := &provider.ResourceInfo{}
-	if err := h.resourceInfoCache.PullFromCache(key, pinfo); err == nil {
-		logger.Debug().Msgf("cache hit for resource %+v", key)
-		return pinfo, &rpc.Status{Code: rpc.Code_CODE_OK}, nil
+	key := ""
+	if currentUser, ok := ctxpkg.ContextGetUser(ctx); ok {
+		key = h.resourceInfoCache.GetKey(currentUser.Id, ref, []string{}, []string{})
+		pinfo := &provider.ResourceInfo{}
+		if err := h.resourceInfoCache.PullFromCache(key, pinfo); err == nil {
+			return pinfo, &rpc.Status{Code: rpc.Code_CODE_OK}, nil
+		}
 	}
 
-	logger.Debug().Msgf("cache miss for resource %+v, statting", key)
+	logger.Debug().Msgf("cache miss for resource %+v, statting", ref)
 	statReq := &provider.StatRequest{
 		Ref: ref,
 	}
@@ -1380,7 +1375,9 @@ func (h *Handler) getResourceInfo(ctx context.Context, client gateway.GatewayAPI
 		return nil, statRes.Status, nil
 	}
 
-	_ = h.resourceInfoCache.PushToCache(key, *statRes.Info)
+	if key != "" {
+		_ = h.resourceInfoCache.PushToCache(key, *statRes.Info)
+	}
 
 	return statRes.Info, statRes.Status, nil
 }
