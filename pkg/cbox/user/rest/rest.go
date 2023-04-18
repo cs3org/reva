@@ -133,7 +133,11 @@ func (m *manager) Configure(ml map[string]interface{}) error {
 
 	// Since we're starting a subroutine which would take some time to execute,
 	// we can't wait to see if it works before returning the user.Manager object
-	return m.fetchAllUsers()
+	err = m.fetchAllUsers()
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func (m *manager) fetchAllUsers() error {
