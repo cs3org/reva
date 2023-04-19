@@ -37,6 +37,9 @@ import (
 	"github.com/pkg/errors"
 )
 
+// default for resharing
+var _resharing = false
+
 func ocmShareCreateCommand() *command {
 	cmd := newCommand("ocm-share-create")
 	cmd.Description = func() string { return "create OCM share to a user or group" }
@@ -166,11 +169,11 @@ func ocmShareCreateCommand() *command {
 func getOCMSharePerm(p string) (*ocm.SharePermissions, int, error) {
 	if p == viewerPermission {
 		return &ocm.SharePermissions{
-			Permissions: conversions.NewViewerRole(false).CS3ResourcePermissions(),
+			Permissions: conversions.NewViewerRole(_resharing).CS3ResourcePermissions(),
 		}, 1, nil
 	} else if p == editorPermission {
 		return &ocm.SharePermissions{
-			Permissions: conversions.NewEditorRole(false).CS3ResourcePermissions(),
+			Permissions: conversions.NewEditorRole(_resharing).CS3ResourcePermissions(),
 		}, 15, nil
 	}
 	return nil, 0, errors.New("invalid rol: " + p)
