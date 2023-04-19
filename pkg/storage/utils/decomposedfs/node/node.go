@@ -700,7 +700,7 @@ func (n *Node) AsResourceInfo(ctx context.Context, rp *provider.ResourcePermissi
 	}
 
 	var returnAllMetadata bool
-	if _, ok := mdKeysMap["*"]; len(mdKeys) == 0 || ok {
+	if _, ok := mdKeysMap["*"]; ok {
 		returnAllMetadata = true
 	}
 
