@@ -29,6 +29,14 @@ def makeStep(target):
     return {
         "name": "build",
         "image": OC_CI_GOLANG,
+        "environment": {
+            "HTTP_PROXY": {
+                "from_secret": "drone_http_proxy",
+            },
+            "HTTPS_PROXY": {
+                "from_secret": "drone_http_proxy",
+            },
+        },
         "commands": [
             "make %s" % target,
         ],
@@ -726,6 +734,14 @@ def checkGoGenerate():
             {
                 "name": "check-go-generate",
                 "image": OC_CI_GOLANG,
+                "environment": {
+                    "HTTP_PROXY": {
+                        "from_secret": "drone_http_proxy",
+                    },
+                    "HTTPS_PROXY": {
+                        "from_secret": "drone_http_proxy",
+                    },
+                },
                 "commands": [
                     "make go-generate",
                     "git diff --exit-code",
