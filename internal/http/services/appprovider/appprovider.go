@@ -449,19 +449,23 @@ func filterAppsByUserAgent(mimeTypes []*appregistry.MimeTypeInfo, userAgent stri
 }
 
 func resolveViewMode(res *provider.ResourceInfo, vm string) gateway.OpenInAppRequest_ViewMode {
-	if vm != "" {
-		return utils.GetViewMode(vm)
-	}
-
 	var viewMode gateway.OpenInAppRequest_ViewMode
+	if vm != "" {
+		viewMode = utils.GetViewMode(vm)
+	} else {
+		viewMode = gateway.OpenInAppRequest_VIEW_MODE_READ_WRITE
+	}
 	canEdit := res.PermissionSet.InitiateFileUpload
 	canView := res.PermissionSet.InitiateFileDownload
 
 	switch {
 	case canEdit && canView:
-		viewMode = gateway.OpenInAppRequest_VIEW_MODE_READ_WRITE
+		// ok
 	case canView:
-		viewMode = gateway.OpenInAppRequest_VIEW_MODE_READ_ONLY
+		if viewMode == gateway.OpenInAppRequest_VIEW_MODE_READ_WRITE || viewMode == gateway.OpenInAppRequest_VIEW_MODE_PREVIEW {
+			// downgrade to the maximum permitted viewmode
+			viewMode = gateway.OpenInAppRequest_VIEW_MODE_READ_ONLY
+		}
 	default:
 		// no permissions, will return access denied
 		viewMode = gateway.OpenInAppRequest_VIEW_MODE_INVALID
