@@ -217,7 +217,7 @@ var _ = Describe("Node", func() {
 				Expect(err).ToNot(HaveOccurred())
 
 				perms := node.OwnerPermissions()
-				ri, err := n.AsResourceInfo(env.Ctx, &perms, []string{}, []string{}, false)
+				ri, err := n.AsResourceInfo(env.Ctx, &perms, []string{"*"}, []string{}, false)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(ri.Opaque).ToNot(BeNil())
 				Expect(ri.Opaque.Map["lock"]).ToNot(BeNil())
