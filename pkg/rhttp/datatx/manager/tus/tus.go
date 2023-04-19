@@ -154,6 +154,10 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 		case "HEAD":
 			handler.HeadFile(w, r)
 		case "PATCH":
+			metrics.UploadsActive.Add(1)
+			defer func() {
+				metrics.UploadsActive.Sub(1)
+			}()
 			// set etag, mtime and file id
 			setExpiresHeader(fs, w, r)
 			handler.PatchFile(w, r)
