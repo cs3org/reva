@@ -18,10 +18,12 @@
 package ocdav
 
 import (
+	"errors"
 	"testing"
 
 	sprovider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
+	"github.com/test-go/testify/require"
 )
 
 func TestWrapResourceID(t *testing.T) {
@@ -33,54 +35,65 @@ func TestWrapResourceID(t *testing.T) {
 	}
 }
 
-func TestNameNotEmptyRule(t *testing.T) {
-	tests := map[string]bool{
-		"":      false,
-		" ":     false,
-		"\n":    false,
-		"name":  true,
-		"empty": true,
+func TestNameNotEmpty(t *testing.T) {
+	expErr := errors.New("must not be empty")
+	tests := map[string]error{
+		"":      expErr,
+		" ":     expErr,
+		"\n":    expErr,
+		"name":  nil,
+		"empty": nil,
 	}
 
-	rule := nameNotEmpty{}
 	for name, expected := range tests {
-		actual := rule.Test(name)
-		if actual != expected {
-			t.Errorf("For name %s the rule returned %t expected %t", name, actual, expected)
-		}
+		rule := notEmpty()
+		require.Equal(t, expected, rule(name), name)
 	}
 }
 
-func TestNameDoesNotContainRule(t *testing.T) {
+func TestNameDoesNotContain(t *testing.T) {
 	tests := []struct {
-		excludedChars string
-		tests         map[string]bool
+		excludedChars []string
+		tests         map[string]error
 	}{
 		{
-			"a",
-			map[string]bool{
-				"foo": true,
-				"bar": false,
+			[]string{"a"},
+			map[string]error{
+				"foo": nil,
+				"bar": errors.New("must not contain a"),
 			},
 		},
 		{
-			"ab",
-			map[string]bool{
-				"foo": true,
-				"bar": false,
-				"car": false,
-				"bor": false,
+			[]string{"a", "b"},
+			map[string]error{
+				"foo": nil,
+				"bar": errors.New("must not contain a"),
+				"car": errors.New("must not contain a"),
+				"bor": errors.New("must not contain b"),
 			},
 		},
 	}
 
 	for _, tt := range tests {
-		rule := nameDoesNotContain{chars: tt.excludedChars}
+		rule := doesNotContain(tt.excludedChars)
 		for name, expected := range tt.tests {
-			actual := rule.Test(name)
-			if actual != expected {
-				t.Errorf("For name %s the rule returned %t expected %t", name, actual, expected)
-			}
+			require.Equal(t, expected, rule(name), name)
 		}
+	}
+}
+
+func TestNameMaxLength(t *testing.T) {
+	name := "123456789"
+	tests := []struct {
+		MaxLength int
+		Error     error
+	}{
+		{12, nil},
+		{8, errors.New("must be shorter than 8")},
+		{4, errors.New("must be shorter than 4")},
+	}
+	for _, tt := range tests {
+		rule := isShorterThan(tt.MaxLength)
+		require.Equal(t, tt.Error, rule(name), tt.MaxLength)
 	}
 }

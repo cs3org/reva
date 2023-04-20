@@ -137,10 +137,15 @@ var _ = Describe("ocdav", func() {
 		ctx = ctxpkg.ContextSetUser(context.Background(), user)
 		client = &mocks.GatewayAPIClient{}
 
-		handler, err = ocdav.NewWith(&ocdav.Config{
+		cfg := &ocdav.Config{
 			FilesNamespace:  "/users/{{.Username}}",
 			WebdavNamespace: "/users/{{.Username}}",
-		}, nil, ocdav.NewCS3LS(client), nil, trace.NewNoopTracerProvider(), client)
+			NameValidation: ocdav.NameValidation{
+				MaxLength:    255,
+				InvalidChars: []string{"\f", "\r", "\n", "\\"},
+			},
+		}
+		handler, err = ocdav.NewWith(cfg, nil, ocdav.NewCS3LS(client), nil, trace.NewNoopTracerProvider(), client)
 		Expect(err).ToNot(HaveOccurred())
 
 		userspace = &cs3storageprovider.StorageSpace{
