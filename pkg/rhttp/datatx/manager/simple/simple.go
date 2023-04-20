@@ -33,6 +33,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/events"
 	"github.com/cs3org/reva/v2/pkg/rhttp/datatx"
 	"github.com/cs3org/reva/v2/pkg/rhttp/datatx/manager/registry"
+	"github.com/cs3org/reva/v2/pkg/rhttp/datatx/metrics"
 	"github.com/cs3org/reva/v2/pkg/rhttp/datatx/utils/download"
 	"github.com/cs3org/reva/v2/pkg/storage"
 	"github.com/cs3org/reva/v2/pkg/storage/cache"
@@ -87,8 +88,18 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 
 		switch r.Method {
 		case "GET", "HEAD":
+			if r.Method == "GET" {
+				metrics.DownloadsActive.Add(1)
+				defer func() {
+					metrics.DownloadsActive.Sub(1)
+				}()
+			}
 			download.GetOrHeadFile(w, r, fs, "")
 		case "PUT":
+			metrics.UploadsActive.Add(1)
+			defer func() {
+				metrics.UploadsActive.Sub(1)
+			}()
 			fn := r.URL.Path
 			defer r.Body.Close()
 
