@@ -36,6 +36,9 @@ import (
 	"github.com/rogpeppe/go-internal/lockedfile"
 )
 
+// name is the Tracer name used to identify this instrumentation library.
+const tracerName = "decomposedfs.lookup"
+
 // Lookup implements transformations from filepath to node and back
 type Lookup struct {
 	Options *options.Options
@@ -108,6 +111,9 @@ func (lu *Lookup) TypeFromPath(path string) provider.ResourceType {
 
 // NodeFromResource takes in a request path or request id and converts it to a Node
 func (lu *Lookup) NodeFromResource(ctx context.Context, ref *provider.Reference) (*node.Node, error) {
+	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "NodeFromResource")
+	defer span.End()
+
 	if ref.ResourceId != nil {
 		// check if a storage space reference is used
 		// currently, the decomposed fs uses the root node id as the space id

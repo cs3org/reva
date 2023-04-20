@@ -50,6 +50,9 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+// name is the Tracer name used to identify this instrumentation library.
+const tracerName = "decomposedfs.tree"
+
 //go:generate make --no-print-directory -C ../../../../.. mockery NAME=Blobstore
 
 // Blobstore defines an interface for storing blobs in a blobstore
@@ -160,7 +163,7 @@ func (t *Tree) TouchFile(ctx context.Context, n *node.Node, markprocessing bool,
 			return errors.Wrap(err, "Decomposedfs: could not set mtime")
 		}
 	}
-	err = n.SetXattrs(attributes, true)
+	err = n.SetXattrsWithContext(ctx, attributes, true)
 	if err != nil {
 		return err
 	}
@@ -186,6 +189,8 @@ func (t *Tree) TouchFile(ctx context.Context, n *node.Node, markprocessing bool,
 
 // CreateDir creates a new directory entry in the tree
 func (t *Tree) CreateDir(ctx context.Context, n *node.Node) (err error) {
+	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "CreateDir")
+	defer span.End()
 	if n.Exists {
 		return errtypes.AlreadyExists(n.ID) // path?
 	}
@@ -203,7 +208,9 @@ func (t *Tree) CreateDir(ctx context.Context, n *node.Node) (err error) {
 
 	// make child appear in listings
 	relativeNodePath := filepath.Join("../../../../../", lookup.Pathify(n.ID, 4, 2))
+	ctx, subspan := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "os.Symlink")
 	err = os.Symlink(relativeNodePath, filepath.Join(n.ParentPath(), n.Name))
+	subspan.End()
 	if err != nil {
 		// no better way to check unfortunately
 		if !strings.Contains(err.Error(), "file exists") {
@@ -211,7 +218,9 @@ func (t *Tree) CreateDir(ctx context.Context, n *node.Node) (err error) {
 		}
 
 		// try to remove the node
+		ctx, subspan = appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "os.RemoveAll")
 		e := os.RemoveAll(n.InternalPath())
+		subspan.End()
 		if e != nil {
 			appctx.GetLogger(ctx).Debug().Err(e).Msg("cannot delete node")
 		}
@@ -284,7 +293,7 @@ func (t *Tree) Move(ctx context.Context, oldNode *node.Node, newNode *node.Node)
 	attribs := node.Attributes{}
 	attribs.SetString(prefixes.ParentidAttr, newNode.ParentID)
 	attribs.SetString(prefixes.NameAttr, newNode.Name)
-	if err := oldNode.SetXattrs(attribs, true); err != nil {
+	if err := oldNode.SetXattrsWithContext(ctx, attribs, true); err != nil {
 		return errors.Wrap(err, "Decomposedfs: could not update old node attributes")
 	}
 
@@ -576,7 +585,7 @@ func (t *Tree) RestoreRecycleItemFunc(ctx context.Context, spaceid, key, trashPa
 			attrs.SetString(prefixes.ParentidAttr, targetNode.ParentID)
 		}
 
-		if err = recycleNode.SetXattrs(attrs, true); err != nil {
+		if err = recycleNode.SetXattrsWithContext(ctx, attrs, true); err != nil {
 			return errors.Wrap(err, "Decomposedfs: could not update recycle node")
 		}
 
@@ -696,12 +705,15 @@ func (t *Tree) removeNode(path string, n *node.Node) error {
 
 // Propagate propagates changes to the root of the tree
 func (t *Tree) Propagate(ctx context.Context, n *node.Node, sizeDiff int64) (err error) {
+	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "Propagate")
+	defer span.End()
 	sublog := appctx.GetLogger(ctx).With().
 		Str("method", "tree.Propagate").
 		Str("spaceid", n.SpaceID).
 		Str("nodeid", n.ID).
 		Int64("sizeDiff", sizeDiff).
 		Logger()
+
 	if !t.options.TreeTimeAccounting && (!t.options.TreeSizeAccounting || sizeDiff == 0) {
 		// no propagation enabled
 		sublog.Debug().Msg("propagation disabled or nothing to propagate")
@@ -834,7 +846,7 @@ func (t *Tree) Propagate(ctx context.Context, n *node.Node, sizeDiff int64) (err
 			sublog.Debug().Uint64("newSize", newSize).Msg("updated treesize of parent node")
 		}
 
-		if err = n.SetXattrs(attrs, false); err != nil {
+		if err = n.SetXattrsWithContext(ctx, attrs, false); err != nil {
 			sublog.Error().Err(err).Msg("Failed to update extend attributes of parent node")
 			return err
 		}
@@ -925,6 +937,8 @@ func (t *Tree) DeleteBlob(node *node.Node) error {
 
 // TODO check if node exists?
 func (t *Tree) createDirNode(ctx context.Context, n *node.Node) (err error) {
+	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "createDirNode")
+	defer span.End()
 	// create a directory node
 	nodePath := n.InternalPath()
 	if err := os.MkdirAll(nodePath, 0700); err != nil {
@@ -936,7 +950,7 @@ func (t *Tree) createDirNode(ctx context.Context, n *node.Node) (err error) {
 	if t.options.TreeTimeAccounting || t.options.TreeSizeAccounting {
 		attributes[prefixes.PropagationAttr] = []byte("1") // mark the node for propagation
 	}
-	return n.SetXattrs(attributes, true)
+	return n.SetXattrsWithContext(ctx, attributes, true)
 }
 
 var nodeIDRegep = regexp.MustCompile(`.*/nodes/([^.]*).*`)

@@ -146,8 +146,7 @@ func (fs *Decomposedfs) CreateStorageSpace(ctx context.Context, req *provider.Cr
 		metadata.SetString(prefixes.SpaceAliasAttr, alias)
 	}
 
-	// Write node
-	if err := root.SetXattrs(metadata, true); err != nil {
+	if err := root.SetXattrsWithContext(ctx, metadata, true); err != nil {
 		return nil, err
 	}
 
@@ -711,7 +710,7 @@ func (fs *Decomposedfs) UpdateStorageSpace(ctx context.Context, req *provider.Up
 	}
 	metadata[prefixes.TreeMTimeAttr] = []byte(time.Now().UTC().Format(time.RFC3339Nano))
 
-	err = spaceNode.SetXattrs(metadata, true)
+	err = spaceNode.SetXattrsWithContext(ctx, metadata, true)
 	if err != nil {
 		return nil, err
 	}

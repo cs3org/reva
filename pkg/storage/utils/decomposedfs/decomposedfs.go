@@ -256,7 +256,7 @@ func (fs *Decomposedfs) Postprocessing(ch <-chan events.Event) {
 			upload.Cleanup(up, failed, keepUpload)
 
 			// remove cache entry in gateway
-			fs.cache.RemoveStat(ev.ExecutingUser.GetId(), &provider.ResourceId{SpaceId: n.SpaceID, OpaqueId: n.ID})
+			fs.cache.RemoveStatContext(ctx, ev.ExecutingUser.GetId(), &provider.ResourceId{SpaceId: n.SpaceID, OpaqueId: n.ID})
 
 			if err := events.Publish(
 				fs.stream,
@@ -331,7 +331,7 @@ func (fs *Decomposedfs) Postprocessing(ch <-chan events.Event) {
 						}
 
 						// remove cache entry in gateway
-						fs.cache.RemoveStat(ev.ExecutingUser.GetId(), &provider.ResourceId{SpaceId: n.SpaceID, OpaqueId: n.ID})
+						fs.cache.RemoveStatContext(ctx, ev.ExecutingUser.GetId(), &provider.ResourceId{SpaceId: n.SpaceID, OpaqueId: n.ID})
 						continue
 					}
 
@@ -369,7 +369,7 @@ func (fs *Decomposedfs) Postprocessing(ch <-chan events.Event) {
 					}
 
 					// remove cache entry in gateway
-					fs.cache.RemoveStat(ev.ExecutingUser.GetId(), &provider.ResourceId{SpaceId: n.SpaceID, OpaqueId: n.ID})
+					fs.cache.RemoveStatContext(ctx, ev.ExecutingUser.GetId(), &provider.ResourceId{SpaceId: n.SpaceID, OpaqueId: n.ID})
 					continue
 				}
 				*/
@@ -396,7 +396,7 @@ func (fs *Decomposedfs) Postprocessing(ch <-chan events.Event) {
 			}
 
 			// remove cache entry in gateway
-			fs.cache.RemoveStat(ev.ExecutingUser.GetId(), &provider.ResourceId{SpaceId: n.SpaceID, OpaqueId: n.ID})
+			fs.cache.RemoveStatContext(ctx, ev.ExecutingUser.GetId(), &provider.ResourceId{SpaceId: n.SpaceID, OpaqueId: n.ID})
 		default:
 			log.Error().Interface("event", ev).Msg("Unknown event")
 		}
@@ -557,6 +557,9 @@ func (fs *Decomposedfs) GetPathByID(ctx context.Context, id *provider.ResourceId
 
 // CreateDir creates the specified directory
 func (fs *Decomposedfs) CreateDir(ctx context.Context, ref *provider.Reference) (err error) {
+	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "CreateDir")
+	defer span.End()
+
 	name := path.Base(ref.Path)
 	if name == "" || name == "." || name == "/" {
 		return errtypes.BadRequest("Invalid path: " + ref.Path)

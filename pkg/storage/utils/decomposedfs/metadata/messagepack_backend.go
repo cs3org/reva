@@ -19,6 +19,7 @@
 package metadata
 
 import (
+	"context"
 	"io"
 	"os"
 	"path/filepath"
@@ -26,11 +27,15 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cs3org/reva/v2/pkg/appctx"
 	"github.com/cs3org/reva/v2/pkg/storage/cache"
 	"github.com/pkg/xattr"
 	"github.com/rogpeppe/go-internal/lockedfile"
 	"github.com/shamaton/msgpack/v2"
 )
+
+// name is the Tracer name used to identify this instrumentation library.
+const tracerName = "metadata.messagepack"
 
 // MessagePackBackend persists the attributes in messagepack format inside the file
 type MessagePackBackend struct {
@@ -109,9 +114,14 @@ func (b MessagePackBackend) Set(path, key string, val []byte) error {
 	return b.SetMultiple(path, map[string][]byte{key: val}, true)
 }
 
+// SetMultipleWithContext sets a set of attribute for the given path
+func (b MessagePackBackend) SetMultipleWithContext(ctx context.Context, path string, attribs map[string][]byte, acquireLock bool) error {
+	return b.saveAttributesWithContext(ctx, path, attribs, nil, acquireLock)
+}
+
 // SetMultiple sets a set of attribute for the given path
 func (b MessagePackBackend) SetMultiple(path string, attribs map[string][]byte, acquireLock bool) error {
-	return b.saveAttributes(path, attribs, nil, acquireLock)
+	return b.SetMultipleWithContext(context.Background(), path, attribs, acquireLock)
 }
 
 // Remove an extended attribute key
@@ -126,15 +136,25 @@ func (b MessagePackBackend) AllWithLockedSource(path string, source io.Reader) (
 }
 
 func (b MessagePackBackend) saveAttributes(path string, setAttribs map[string][]byte, deleteAttribs []string, acquireLock bool) error {
+	return b.saveAttributesWithContext(context.Background(), path, setAttribs, deleteAttribs, acquireLock)
+}
+
+func (b MessagePackBackend) saveAttributesWithContext(ctx context.Context, path string, setAttribs map[string][]byte, deleteAttribs []string, acquireLock bool) error {
+	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "saveAttributesWithContext")
+	defer span.End()
 	var (
 		f   readWriteCloseSeekTruncater
 		err error
 	)
 	metaPath := b.MetadataPath(path)
 	if acquireLock {
+		_, subspan := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "lockedfile.OpenFile")
 		f, err = lockedfile.OpenFile(metaPath, os.O_RDWR|os.O_CREATE, 0600)
+		subspan.End()
 	} else {
+		_, subspan := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "os.OpenFile")
 		f, err = os.OpenFile(metaPath, os.O_RDWR|os.O_CREATE, 0600)
+		subspan.End()
 	}
 	if err != nil {
 		return err
@@ -142,10 +162,14 @@ func (b MessagePackBackend) saveAttributes(path string, setAttribs map[string][]
 	defer f.Close()
 
 	// Invalidate cache early
+	_, subspan := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "metaCache.RemoveMetadata")
 	_ = b.metaCache.RemoveMetadata(b.cacheKey(path))
+	subspan.End()
 
 	// Read current state
+	_, subspan = appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "io.ReadAll")
 	msgBytes, err := io.ReadAll(f)
+	subspan.End()
 	if err != nil {
 		return err
 	}
@@ -180,12 +204,17 @@ func (b MessagePackBackend) saveAttributes(path string, setAttribs map[string][]
 	if err != nil {
 		return err
 	}
+	_, subspan = appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "f.Write")
 	_, err = f.Write(d)
+	subspan.End()
 	if err != nil {
 		return err
 	}
 
-	return b.metaCache.PushToCache(b.cacheKey(path), attribs)
+	_, subspan = appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "metaCache.PushToCache")
+	err = b.metaCache.PushToCache(b.cacheKey(path), attribs)
+	subspan.End()
+	return err
 }
 
 func (b MessagePackBackend) loadAttributes(path string, source io.Reader) (map[string][]byte, error) {

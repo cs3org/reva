@@ -50,6 +50,9 @@ import (
 	"github.com/pkg/errors"
 )
 
+// name is the Tracer name used to identify this instrumentation library.
+const tracerName = "decomposedfs.node"
+
 // Define keys and values used in the node metadata
 const (
 	LockdiscoveryKey = "DAV:lockdiscovery"
@@ -342,6 +345,9 @@ func readChildNodeFromLink(path string) (string, error) {
 
 // Child returns the child node with the given name
 func (n *Node) Child(ctx context.Context, name string) (*Node, error) {
+	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "Child")
+	defer span.End()
+
 	spaceID := n.SpaceID
 	if spaceID == "" && n.ParentID == "root" {
 		spaceID = n.ID

@@ -19,6 +19,7 @@
 package metadata
 
 import (
+	"context"
 	"io"
 	"os"
 	"path/filepath"
@@ -110,8 +111,12 @@ func (b XattrsBackend) Set(path string, key string, val []byte) (err error) {
 	return b.SetMultiple(path, map[string][]byte{key: val}, true)
 }
 
+func (b XattrsBackend) SetMultiple(path string, attribs map[string][]byte, acquireLock bool) (err error) {
+	return b.SetMultipleWithContext(context.Background(), path, attribs, acquireLock)
+}
+
 // SetMultiple sets a set of attribute for the given path
-func (XattrsBackend) SetMultiple(path string, attribs map[string][]byte, acquireLock bool) (err error) {
+func (XattrsBackend) SetMultipleWithContext(ctx context.Context, path string, attribs map[string][]byte, acquireLock bool) (err error) {
 	if acquireLock {
 		err := os.MkdirAll(filepath.Dir(path), 0600)
 		if err != nil {

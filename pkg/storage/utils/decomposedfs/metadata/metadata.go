@@ -19,6 +19,7 @@
 package metadata
 
 import (
+	"context"
 	"errors"
 	"io"
 )
@@ -36,6 +37,7 @@ type Backend interface {
 	List(path string) (attribs []string, err error)
 	Set(path, key string, val []byte) error
 	SetMultiple(path string, attribs map[string][]byte, acquireLock bool) error
+	SetMultipleWithContext(ctx context.Context, path string, attribs map[string][]byte, acquireLock bool) error
 	Remove(path, key string) error
 
 	Purge(path string) error
@@ -67,6 +69,11 @@ func (NullBackend) List(path string) ([]string, error) { return nil, errUnconfig
 
 // Set sets one attribute for the given path
 func (NullBackend) Set(path string, key string, val []byte) error { return errUnconfiguredError }
+
+// SetMultipleWithContext sets a set of attribute for the given path
+func (NullBackend) SetMultipleWithContext(ctx context.Context, path string, attribs map[string][]byte, acquireLock bool) error {
+	return errUnconfiguredError
+}
 
 // SetMultiple sets a set of attribute for the given path
 func (NullBackend) SetMultiple(path string, attribs map[string][]byte, acquireLock bool) error {

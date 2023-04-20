@@ -19,6 +19,7 @@
 package node
 
 import (
+	"context"
 	"io"
 	"strconv"
 
@@ -49,14 +50,19 @@ func (md Attributes) SetInt64(key string, val int64) {
 }
 
 // SetXattrs sets multiple extended attributes on the write-through cache/node
-func (n *Node) SetXattrs(attribs map[string][]byte, acquireLock bool) (err error) {
+func (n *Node) SetXattrsWithContext(ctx context.Context, attribs map[string][]byte, acquireLock bool) (err error) {
 	if n.xattrsCache != nil {
 		for k, v := range attribs {
 			n.xattrsCache[k] = v
 		}
 	}
 
-	return n.lu.MetadataBackend().SetMultiple(n.InternalPath(), attribs, acquireLock)
+	return n.lu.MetadataBackend().SetMultipleWithContext(ctx, n.InternalPath(), attribs, acquireLock)
+}
+
+// SetXattrs sets multiple extended attributes on the write-through cache/node
+func (n *Node) SetXattrs(attribs map[string][]byte, acquireLock bool) (err error) {
+	return n.SetXattrsWithContext(context.Background(), attribs, acquireLock)
 }
 
 // SetXattr sets an extended attribute on the write-through cache/node
