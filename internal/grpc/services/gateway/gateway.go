@@ -191,10 +191,10 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 		c:                        c,
 		dataGatewayURL:           *u,
 		tokenmgr:                 tokenManager,
-		statCache:                cache.GetStatCache(c.StatCacheStore, c.StatCacheNodes, c.StatCacheDatabase, "stat", time.Duration(c.StatCacheTTL)*time.Second, c.StatCacheSize),
-		providerCache:            cache.GetProviderCache(c.ProviderCacheStore, c.ProviderCacheNodes, c.ProviderCacheDatabase, "provider", time.Duration(c.ProviderCacheTTL)*time.Second, c.ProviderCacheSize),
-		createHomeCache:          cache.GetCreateHomeCache(c.CreateHomeCacheStore, c.CreateHomeCacheNodes, c.CreateHomeCacheDatabase, "createHome", time.Duration(c.CreateHomeCacheTTL)*time.Second, c.CreateHomeCacheSize),
-		createPersonalSpaceCache: cache.GetCreatePersonalSpaceCache(c.CreateHomeCacheStore, c.CreateHomeCacheNodes, c.CreateHomeCacheDatabase, "createPersonalSpace", time.Duration(c.CreateHomeCacheTTL)*time.Second, c.CreateHomeCacheSize),
+		statCache:                cache.GetStatCache(c.StatCacheStore, c.StatCacheNodes, c.StatCacheDatabase, "stat:", time.Duration(c.StatCacheTTL)*time.Second, c.StatCacheSize),
+		providerCache:            cache.GetProviderCache(c.ProviderCacheStore, c.ProviderCacheNodes, c.ProviderCacheDatabase, "provider:", time.Duration(c.ProviderCacheTTL)*time.Second, c.ProviderCacheSize),
+		createHomeCache:          cache.GetCreateHomeCache(c.CreateHomeCacheStore, c.CreateHomeCacheNodes, c.CreateHomeCacheDatabase, "createHome:", time.Duration(c.CreateHomeCacheTTL)*time.Second, c.CreateHomeCacheSize),
+		createPersonalSpaceCache: cache.GetCreatePersonalSpaceCache(c.CreateHomeCacheStore, c.CreateHomeCacheNodes, c.CreateHomeCacheDatabase, "createPersonalSpace:", time.Duration(c.CreateHomeCacheTTL)*time.Second, c.CreateHomeCacheSize),
 	}
 
 	return s, nil

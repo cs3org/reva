@@ -93,7 +93,6 @@ func (c statCache) RemoveStatContext(ctx context.Context, userID *userpb.UserId,
 	}
 
 	wg.Wait()
-
 }
 
 // RemoveStatContext(ctx,  removes a reference from the stat cache
