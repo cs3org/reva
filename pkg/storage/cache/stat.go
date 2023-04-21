@@ -50,7 +50,6 @@ type statCache struct {
 }
 
 func (c statCache) RemoveStatContext(ctx context.Context, userID *userpb.UserId, res *provider.ResourceId) {
-
 	span := trace.SpanFromContext(ctx)
 	tp := span.TracerProvider()
 	_, span = tp.Tracer(tracerName).Start(ctx, "RemoveStatContext")
@@ -61,6 +60,7 @@ func (c statCache) RemoveStatContext(ctx context.Context, userID *userpb.UserId,
 	uid := "uid:" + userID.GetOpaqueId()
 	sid := ""
 	oid := ""
+
 	if res != nil {
 		span.SetAttributes(
 			attribute.String("space.id", res.SpaceId),
@@ -91,7 +91,6 @@ func (c statCache) RemoveStatContext(ctx context.Context, userID *userpb.UserId,
 	}
 
 	wg.Wait()
-
 }
 
 // RemoveStatContext(ctx,  removes a reference from the stat cache

@@ -735,6 +735,7 @@ func (t *Tree) Propagate(ctx context.Context, n *node.Node, sizeDiff int64) (err
 		var f *lockedfile.File
 		// lock parent before reading treesize or tree time
 
+		_, subspan := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "lockedfile.OpenFile")
 		var parentFilename string
 		switch t.lookup.MetadataBackend().(type) {
 		case metadata.MessagePackBackend:
@@ -746,6 +747,7 @@ func (t *Tree) Propagate(ctx context.Context, n *node.Node, sizeDiff int64) (err
 			parentFilename = n.ParentPath() + filelocks.LockFileSuffix
 			f, err = lockedfile.OpenFile(parentFilename, os.O_RDWR|os.O_CREATE, 0600)
 		}
+		subspan.End()
 		if err != nil {
 			sublog.Error().Err(err).
 				Str("parent filename", parentFilename).
@@ -815,7 +817,9 @@ func (t *Tree) Propagate(ctx context.Context, n *node.Node, sizeDiff int64) (err
 			var newSize uint64
 
 			// read treesize
+			_, subspan := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "n.GetTreeSize")
 			treeSize, err := n.GetTreeSize()
+			subspan.End()
 			switch {
 			case metadata.IsAttrUnset(err):
 				// fallback to calculating the treesize
@@ -852,7 +856,9 @@ func (t *Tree) Propagate(ctx context.Context, n *node.Node, sizeDiff int64) (err
 		}
 
 		// Release node lock early, ignore already closed error
+		_, subspan = appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "f.Close")
 		cerr := f.Close()
+		subspan.End()
 		if cerr != nil && !errors.Is(cerr, os.ErrClosed) {
 			sublog.Error().Err(cerr).Msg("Failed to close parent node and release lock")
 			return cerr
@@ -866,6 +872,8 @@ func (t *Tree) Propagate(ctx context.Context, n *node.Node, sizeDiff int64) (err
 }
 
 func (t *Tree) calculateTreeSize(ctx context.Context, childrenPath string) (uint64, error) {
+	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "calculateTreeSize")
+	defer span.End()
 	var size uint64
 
 	f, err := os.Open(childrenPath)

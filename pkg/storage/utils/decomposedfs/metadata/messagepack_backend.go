@@ -53,7 +53,7 @@ type readWriteCloseSeekTruncater interface {
 func NewMessagePackBackend(rootPath string, o cache.Config) MessagePackBackend {
 	return MessagePackBackend{
 		rootPath:  filepath.Clean(rootPath),
-		metaCache: cache.GetFileMetadataCache(o.Store, o.Nodes, o.Database, "filemetadata", time.Duration(o.TTL)*time.Second, o.Size),
+		metaCache: cache.GetFileMetadataCache(o.Store, o.Nodes, o.Database, "filemetadata:", time.Duration(o.TTL)*time.Second, o.Size),
 	}
 }
 
