@@ -196,6 +196,9 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 
 // NewWith returns a new ocdav service
 func NewWith(conf *Config, fm favorite.Manager, ls LockSystem, _ *zerolog.Logger, tp trace.TracerProvider, gwc gateway.GatewayAPIClient) (global.Service, error) {
+	// be safe - init the conf again
+	conf.init()
+
 	s := &svc{
 		c:             conf,
 		webDavHandler: new(WebDavHandler),
