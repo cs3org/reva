@@ -27,7 +27,7 @@ func ValidatorsFromConfig(c *Config) []Validator {
 func ValidateName(name string, validators []Validator) error {
 	for _, v := range validators {
 		if err := v(name); err != nil {
-			return err
+			return fmt.Errorf("name validation failed: %w", err)
 		}
 	}
 	return nil
