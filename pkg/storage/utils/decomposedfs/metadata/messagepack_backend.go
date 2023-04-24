@@ -151,7 +151,7 @@ func (b MessagePackBackend) saveAttributes(path string, setAttribs map[string][]
 	defer f.Close()
 
 	// Invalidate cache early
-	_ = b.metaCache.RemoveMetadata(path)
+	_ = b.metaCache.RemoveMetadata(b.cacheKey(path))
 
 	// Read current state
 	msgBytes, err := io.ReadAll(f)
