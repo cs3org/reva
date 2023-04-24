@@ -8,6 +8,7 @@ require (
 	github.com/BurntSushi/toml v1.2.1
 	github.com/CiscoM31/godata v1.0.5
 	github.com/Masterminds/sprig v2.22.0+incompatible
+	github.com/armon/go-radix v1.0.0
 	github.com/aws/aws-sdk-go v1.44.122
 	github.com/beevik/etree v1.1.0
 	github.com/bluele/gcache v0.0.2
@@ -72,6 +73,7 @@ require (
 	github.com/tus/tusd v1.10.0
 	github.com/wk8/go-ordered-map v1.0.0
 	go-micro.dev/v4 v4.9.0
+	go.etcd.io/etcd/client/v3 v3.5.5
 	go.opencensus.io v0.23.0
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.36.4
 	go.opentelemetry.io/otel v1.11.1
@@ -194,7 +196,6 @@ require (
 	github.com/xrash/smetrics v0.0.0-20201216005158-039620a65673 // indirect
 	go.etcd.io/etcd/api/v3 v3.5.5 // indirect
 	go.etcd.io/etcd/client/pkg/v3 v3.5.5 // indirect
-	go.etcd.io/etcd/client/v3 v3.5.5 // indirect
 	go.mongodb.org/mongo-driver v1.10.3 // indirect
 	go.uber.org/atomic v1.10.0 // indirect
 	go.uber.org/multierr v1.8.0 // indirect
