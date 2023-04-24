@@ -52,6 +52,9 @@ type Config struct {
 }
 
 // Cache handles key value operations on caches
+// It, and the interfaces derived from it, are currently being used
+// for building caches around go-micro stores, encoding the data
+// in the messsagepack format.
 type Cache interface {
 	PullFromCache(key string, dest interface{}) error
 	PushToCache(key string, src interface{}) error
