@@ -52,15 +52,6 @@ const (
 	TypeNatsJS = "nats-js"
 )
 
-// Cache handles key value operations on caches
-type Cache interface {
-	PullFromCache(key string, dest interface{}) error
-	PushToCache(key string, src interface{}) error
-	List(opts ...microstore.ListOption) ([]string, error)
-	Delete(key string, opts ...microstore.DeleteOption) error
-	Close() error
-}
-
 // Create initializes a new store
 func Create(opts ...microstore.Option) microstore.Store {
 	options := &microstore.Options{
