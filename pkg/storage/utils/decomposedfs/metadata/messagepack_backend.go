@@ -57,15 +57,11 @@ func (MessagePackBackend) Name() string { return "messagepack" }
 
 // All reads all extended attributes for a node
 func (b MessagePackBackend) All(path string) (map[string][]byte, error) {
-	path = b.MetadataPath(path)
-
 	return b.loadAttributes(path, nil)
 }
 
 // Get an extended attribute value for the given key
 func (b MessagePackBackend) Get(path, key string) ([]byte, error) {
-	path = b.MetadataPath(path)
-
 	attribs, err := b.loadAttributes(path, nil)
 	if err != nil {
 		return []byte{}, err
@@ -79,8 +75,6 @@ func (b MessagePackBackend) Get(path, key string) ([]byte, error) {
 
 // GetInt64 reads a string as int64 from the xattrs
 func (b MessagePackBackend) GetInt64(path, key string) (int64, error) {
-	path = b.MetadataPath(path)
-
 	attribs, err := b.loadAttributes(path, nil)
 	if err != nil {
 		return 0, err
@@ -99,8 +93,6 @@ func (b MessagePackBackend) GetInt64(path, key string) (int64, error) {
 // List retrieves a list of names of extended attributes associated with the
 // given path in the file system.
 func (b MessagePackBackend) List(path string) ([]string, error) {
-	path = b.MetadataPath(path)
-
 	attribs, err := b.loadAttributes(path, nil)
 	if err != nil {
 		return nil, err
@@ -130,7 +122,6 @@ func (b MessagePackBackend) Remove(path, key string) error {
 // AllWithLockedSource reads all extended attributes from the given reader (if possible).
 // The path argument is used for storing the data in the cache
 func (b MessagePackBackend) AllWithLockedSource(path string, source io.Reader) (map[string][]byte, error) {
-	path = b.MetadataPath(path)
 	return b.loadAttributes(path, source)
 }
 
@@ -139,11 +130,11 @@ func (b MessagePackBackend) saveAttributes(path string, setAttribs map[string][]
 		f   readWriteCloseSeekTruncater
 		err error
 	)
-	path = b.MetadataPath(path)
+	metaPath := b.MetadataPath(path)
 	if acquireLock {
-		f, err = lockedfile.OpenFile(path, os.O_RDWR|os.O_CREATE, 0600)
+		f, err = lockedfile.OpenFile(metaPath, os.O_RDWR|os.O_CREATE, 0600)
 	} else {
-		f, err = os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0600)
+		f, err = os.OpenFile(metaPath, os.O_RDWR|os.O_CREATE, 0600)
 	}
 	if err != nil {
 		return err
@@ -204,15 +195,16 @@ func (b MessagePackBackend) loadAttributes(path string, source io.Reader) (map[s
 		return attribs, err
 	}
 
+	metaPath := b.MetadataPath(path)
 	if source == nil {
-		source, err = lockedfile.Open(path)
+		source, err = lockedfile.Open(metaPath)
 		// // No cached entry found. Read from storage and store in cache
 		if err != nil {
 			if os.IsNotExist(err) {
 				// some of the caller rely on ENOTEXISTS to be returned when the
 				// actual file (not the metafile) does not exist in order to
 				// determine whether a node exists or not -> stat the actual node
-				_, err := os.Stat(strings.TrimSuffix(path, ".mpk"))
+				_, err := os.Stat(path)
 				if err != nil {
 					return nil, err
 				}
