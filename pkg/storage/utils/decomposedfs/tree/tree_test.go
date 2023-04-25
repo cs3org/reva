@@ -263,6 +263,8 @@ var _ = Describe("Tree", func() {
 			JustBeforeEach(func() {
 				trashPath = path.Join(env.Root, "spaces", lookup.Pathify(n.SpaceRoot.ID, 1, 2), "trash", lookup.Pathify(n.ID, 4, 2))
 				Expect(t.Delete(env.Ctx, n)).To(Succeed())
+
+				env.Blobstore.On("Delete", mock.Anything).Return(nil)
 			})
 
 			Describe("PurgeRecycleItemFunc", func() {
@@ -278,10 +280,6 @@ var _ = Describe("Tree", func() {
 				It("removes the file from the trash", func() {
 					_, err := os.Stat(trashPath)
 					Expect(err).To(HaveOccurred())
-				})
-
-				It("does not try to delete a blob from the blobstore", func() {
-					env.Blobstore.AssertNotCalled(GinkgoT(), "Delete", mock.AnythingOfType("*node.Node"))
 				})
 			})
 		})
