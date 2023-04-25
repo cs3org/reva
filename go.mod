@@ -29,7 +29,7 @@ require (
 	github.com/go-micro/plugins/v4/events/natsjs v1.1.0
 	github.com/go-micro/plugins/v4/server/http v1.1.1
 	github.com/go-micro/plugins/v4/store/nats-js v1.1.0
-	github.com/go-micro/plugins/v4/store/redis v1.2.0
+	github.com/go-micro/plugins/v4/store/redis v1.2.1-0.20230405210006-efd9191305c5
 	github.com/go-redis/redis/v8 v8.11.5
 	github.com/go-sql-driver/mysql v1.6.0
 	github.com/gofrs/flock v0.8.1
