@@ -939,19 +939,21 @@ func (t *Tree) readRecycleItem(ctx context.Context, spaceID, key, path string) (
 	if err != nil {
 		return
 	}
-	recycleNode.SetType(t.lookup.TypeFromPath(recycleNode.InternalPath()))
+	recycleNode.SetType(t.lookup.TypeFromPath(deletedNodePath))
 
 	var attrBytes []byte
-	// lookup blobID in extended attributes
-	if attrBytes, err = backend.Get(deletedNodePath, prefixes.BlobIDAttr); err == nil {
-		recycleNode.BlobID = string(attrBytes)
-	} else {
-		return
-	}
+	if recycleNode.Type() == provider.ResourceType_RESOURCE_TYPE_FILE {
+		// lookup blobID in extended attributes
+		if attrBytes, err = backend.Get(deletedNodePath, prefixes.BlobIDAttr); err == nil {
+			recycleNode.BlobID = string(attrBytes)
+		} else {
+			return
+		}
 
-	// lookup blobSize in extended attributes
-	if recycleNode.Blobsize, err = backend.GetInt64(deletedNodePath, prefixes.BlobsizeAttr); err != nil {
-		return
+		// lookup blobSize in extended attributes
+		if recycleNode.Blobsize, err = backend.GetInt64(deletedNodePath, prefixes.BlobsizeAttr); err != nil {
+			return
+		}
 	}
 
 	// lookup parent id in extended attributes
