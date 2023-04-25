@@ -246,13 +246,15 @@ func (b MessagePackBackend) Purge(path string) error {
 
 // Rename moves the data for a given path to a new path
 func (b MessagePackBackend) Rename(oldPath, newPath string) error {
-	data := map[string]string{}
-	_ = b.metaCache.PullFromCache(b.cacheKey(oldPath), &data)
-	err := b.metaCache.RemoveMetadata(b.cacheKey(oldPath))
-	if err != nil {
-		return err
+	data := map[string][]byte{}
+	err := b.metaCache.PullFromCache(b.cacheKey(oldPath), &data)
+	if err == nil {
+		err = b.metaCache.PushToCache(b.cacheKey(newPath), data)
+		if err != nil {
+			return err
+		}
 	}
-	err = b.metaCache.PushToCache(b.cacheKey(newPath), data)
+	err = b.metaCache.RemoveMetadata(b.cacheKey(oldPath))
 	if err != nil {
 		return err
 	}
