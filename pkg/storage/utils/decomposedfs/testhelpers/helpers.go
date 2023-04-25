@@ -231,7 +231,7 @@ func (t *TestEnv) CreateTestFile(name, blobID, parentID, spaceID string, blobSiz
 	if err != nil {
 		return nil, err
 	}
-	err = n.WriteAllNodeMetadata(context.Background())
+	err = n.SetXattrs(n.NodeMetadata(), true)
 	if err != nil {
 		return nil, err
 	}
