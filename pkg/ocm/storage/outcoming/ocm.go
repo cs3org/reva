@@ -176,8 +176,8 @@ func (d *driver) CreateDir(ctx context.Context, ref *provider.Reference) error {
 		return err
 	}
 
-	return d.unwrappedOpFromShareCreator(ctx, share, rel, func(userCtx context.Context, ref *provider.Reference) error {
-		res, err := d.gateway.CreateContainer(userCtx, &provider.CreateContainerRequest{Ref: ref})
+	return d.unwrappedOpFromShareCreator(ctx, share, rel, func(ctx context.Context, ref *provider.Reference) error {
+		res, err := d.gateway.CreateContainer(ctx, &provider.CreateContainerRequest{Ref: ref})
 		switch {
 		case err != nil:
 			return err
@@ -195,8 +195,8 @@ func (d *driver) TouchFile(ctx context.Context, ref *provider.Reference) error {
 		return err
 	}
 
-	return d.unwrappedOpFromShareCreator(ctx, share, rel, func(userCtx context.Context, ref *provider.Reference) error {
-		res, err := d.gateway.TouchFile(userCtx, &provider.TouchFileRequest{Ref: ref})
+	return d.unwrappedOpFromShareCreator(ctx, share, rel, func(ctx context.Context, ref *provider.Reference) error {
+		res, err := d.gateway.TouchFile(ctx, &provider.TouchFileRequest{Ref: ref})
 		switch {
 		case err != nil:
 			return err
@@ -214,8 +214,8 @@ func (d *driver) Delete(ctx context.Context, ref *provider.Reference) error {
 		return err
 	}
 
-	return d.unwrappedOpFromShareCreator(ctx, share, rel, func(userCtx context.Context, ref *provider.Reference) error {
-		res, err := d.gateway.Delete(userCtx, &provider.DeleteRequest{Ref: ref})
+	return d.unwrappedOpFromShareCreator(ctx, share, rel, func(ctx context.Context, ref *provider.Reference) error {
+		res, err := d.gateway.Delete(ctx, &provider.DeleteRequest{Ref: ref})
 		switch {
 		case err != nil:
 			return err
@@ -263,12 +263,12 @@ func (d *driver) opFromUser(ctx context.Context, userID *userv1beta1.UserId, f f
 }
 
 func (d *driver) unwrappedOpFromShareCreator(ctx context.Context, share *ocmv1beta1.Share, rel string, f func(ctx context.Context, ref *provider.Reference) error) error {
-	return d.opFromUser(ctx, share.Creator, func(userCtx context.Context) error {
-		newRef, err := d.translateOCMShareResourceToCS3Ref(userCtx, share.ResourceId, rel)
+	return d.opFromUser(ctx, share.Creator, func(ctx context.Context) error {
+		newRef, err := d.translateOCMShareResourceToCS3Ref(ctx, share.ResourceId, rel)
 		if err != nil {
 			return err
 		}
-		return f(userCtx, newRef)
+		return f(ctx, newRef)
 	})
 }
 
@@ -279,14 +279,13 @@ func (d *driver) GetMD(ctx context.Context, ref *provider.Reference, _ []string)
 	}
 
 	var info *provider.ResourceInfo
-	if err := d.unwrappedOpFromShareCreator(ctx, share, rel, func(userCtx context.Context, newRef *provider.Reference) error {
-		info, err = d.stat(userCtx, newRef)
-		return err
+	if err := d.unwrappedOpFromShareCreator(ctx, share, rel, func(ctx context.Context, newRef *provider.Reference) error {
+		info, err = d.stat(ctx, newRef)
+		if err != nil {
+			return err
+		}
+		return d.augmentResourceInfo(ctx, info, share)
 	}); err != nil {
-		return nil, err
-	}
-
-	if err := d.augmentResourceInfo(ctx, info, share); err != nil {
 		return nil, err
 	}
 
@@ -338,8 +337,8 @@ func (d *driver) ListFolder(ctx context.Context, ref *provider.Reference, _ []st
 	}
 
 	var infos []*provider.ResourceInfo
-	if err := d.unwrappedOpFromShareCreator(ctx, share, rel, func(userCtx context.Context, newRef *provider.Reference) error {
-		lstRes, err := d.gateway.ListContainer(userCtx, &provider.ListContainerRequest{Ref: newRef})
+	if err := d.unwrappedOpFromShareCreator(ctx, share, rel, func(ctx context.Context, newRef *provider.Reference) error {
+		lstRes, err := d.gateway.ListContainer(ctx, &provider.ListContainerRequest{Ref: newRef})
 		switch {
 		case err != nil:
 			return err
@@ -349,19 +348,19 @@ func (d *driver) ListFolder(ctx context.Context, ref *provider.Reference, _ []st
 			return errtypes.InternalError(lstRes.Status.Message)
 		}
 		infos = lstRes.Infos
+
+		shareInfo, err := d.stat(ctx, &provider.Reference{ResourceId: share.ResourceId})
+		if err != nil {
+			return err
+		}
+
+		perms := getPermissionsFromShare(share)
+		for _, info := range infos {
+			fixResourceInfo(info, shareInfo, share, perms)
+		}
 		return nil
 	}); err != nil {
 		return nil, err
-	}
-
-	shareInfo, err := d.stat(ctx, &provider.Reference{ResourceId: share.ResourceId})
-	if err != nil {
-		return nil, err
-	}
-
-	perms := getPermissionsFromShare(share)
-	for _, info := range infos {
-		fixResourceInfo(info, shareInfo, share, perms)
 	}
 
 	return infos, nil
@@ -403,8 +402,8 @@ func (d *driver) Upload(ctx context.Context, ref *provider.Reference, content io
 		return err
 	}
 
-	return d.unwrappedOpFromShareCreator(ctx, share, rel, func(userCtx context.Context, newRef *provider.Reference) error {
-		initRes, err := d.gateway.InitiateFileUpload(userCtx, &provider.InitiateFileUploadRequest{Ref: newRef})
+	return d.unwrappedOpFromShareCreator(ctx, share, rel, func(ctx context.Context, newRef *provider.Reference) error {
+		initRes, err := d.gateway.InitiateFileUpload(ctx, &provider.InitiateFileUploadRequest{Ref: newRef})
 		switch {
 		case err != nil:
 			return err
@@ -417,7 +416,7 @@ func (d *driver) Upload(ctx context.Context, ref *provider.Reference, content io
 			return errtypes.InternalError("simple upload not supported")
 		}
 
-		httpReq, err := rhttp.NewRequest(userCtx, http.MethodPut, endpoint, content)
+		httpReq, err := rhttp.NewRequest(ctx, http.MethodPut, endpoint, content)
 		if err != nil {
 			return errors.Wrap(err, "error creating new request")
 		}
@@ -456,8 +455,8 @@ func (d *driver) Download(ctx context.Context, ref *provider.Reference) (io.Read
 	}
 
 	var r io.ReadCloser
-	if err := d.unwrappedOpFromShareCreator(ctx, share, rel, func(userCtx context.Context, newRef *provider.Reference) error {
-		initRes, err := d.gateway.InitiateFileDownload(userCtx, &provider.InitiateFileDownloadRequest{Ref: newRef})
+	if err := d.unwrappedOpFromShareCreator(ctx, share, rel, func(ctx context.Context, newRef *provider.Reference) error {
+		initRes, err := d.gateway.InitiateFileDownload(ctx, &provider.InitiateFileDownloadRequest{Ref: newRef})
 		switch {
 		case err != nil:
 			return err
@@ -472,7 +471,7 @@ func (d *driver) Download(ctx context.Context, ref *provider.Reference) (io.Read
 			return errtypes.InternalError("simple download not supported")
 		}
 
-		httpReq, err := rhttp.NewRequest(userCtx, http.MethodGet, endpoint, nil)
+		httpReq, err := rhttp.NewRequest(ctx, http.MethodGet, endpoint, nil)
 		if err != nil {
 			return err
 		}
@@ -509,7 +508,7 @@ func (d *driver) SetLock(ctx context.Context, ref *provider.Reference, lock *pro
 		return err
 	}
 
-	return d.unwrappedOpFromShareCreator(ctx, share, rel, func(userCtx context.Context, newRef *provider.Reference) error {
+	return d.unwrappedOpFromShareCreator(ctx, share, rel, func(ctx context.Context, newRef *provider.Reference) error {
 		lockRes, err := d.gateway.SetLock(ctx, &provider.SetLockRequest{
 			Ref:  newRef,
 			Lock: lock,
@@ -535,8 +534,8 @@ func (d *driver) GetLock(ctx context.Context, ref *provider.Reference) (*provide
 	}
 
 	var lock *provider.Lock
-	if err := d.unwrappedOpFromShareCreator(ctx, share, rel, func(userCtx context.Context, newRef *provider.Reference) error {
-		lockRes, err := d.gateway.GetLock(userCtx, &provider.GetLockRequest{Ref: newRef})
+	if err := d.unwrappedOpFromShareCreator(ctx, share, rel, func(ctx context.Context, newRef *provider.Reference) error {
+		lockRes, err := d.gateway.GetLock(ctx, &provider.GetLockRequest{Ref: newRef})
 		switch {
 		case err != nil:
 			return err
@@ -560,8 +559,8 @@ func (d *driver) RefreshLock(ctx context.Context, ref *provider.Reference, lock 
 		return err
 	}
 
-	return d.unwrappedOpFromShareCreator(ctx, share, rel, func(userCtx context.Context, newRef *provider.Reference) error {
-		lockRes, err := d.gateway.RefreshLock(userCtx, &provider.RefreshLockRequest{
+	return d.unwrappedOpFromShareCreator(ctx, share, rel, func(ctx context.Context, newRef *provider.Reference) error {
+		lockRes, err := d.gateway.RefreshLock(ctx, &provider.RefreshLockRequest{
 			Ref:            newRef,
 			ExistingLockId: existingLockID,
 			Lock:           lock,
@@ -586,8 +585,8 @@ func (d *driver) Unlock(ctx context.Context, ref *provider.Reference, lock *prov
 		return err
 	}
 
-	return d.unwrappedOpFromShareCreator(ctx, share, rel, func(userCtx context.Context, newRef *provider.Reference) error {
-		lockRes, err := d.gateway.Unlock(userCtx, &provider.UnlockRequest{
+	return d.unwrappedOpFromShareCreator(ctx, share, rel, func(ctx context.Context, newRef *provider.Reference) error {
+		lockRes, err := d.gateway.Unlock(ctx, &provider.UnlockRequest{
 			Ref:  newRef,
 			Lock: lock,
 		})
@@ -611,8 +610,8 @@ func (d *driver) SetArbitraryMetadata(ctx context.Context, ref *provider.Referen
 		return err
 	}
 
-	return d.unwrappedOpFromShareCreator(ctx, share, rel, func(userCtx context.Context, newRef *provider.Reference) error {
-		res, err := d.gateway.SetArbitraryMetadata(userCtx, &provider.SetArbitraryMetadataRequest{
+	return d.unwrappedOpFromShareCreator(ctx, share, rel, func(ctx context.Context, newRef *provider.Reference) error {
+		res, err := d.gateway.SetArbitraryMetadata(ctx, &provider.SetArbitraryMetadataRequest{
 			Ref:               newRef,
 			ArbitraryMetadata: md,
 		})
@@ -634,8 +633,8 @@ func (d *driver) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Refer
 		return err
 	}
 
-	return d.unwrappedOpFromShareCreator(ctx, share, rel, func(userCtx context.Context, newRef *provider.Reference) error {
-		res, err := d.gateway.UnsetArbitraryMetadata(userCtx, &provider.UnsetArbitraryMetadataRequest{
+	return d.unwrappedOpFromShareCreator(ctx, share, rel, func(ctx context.Context, newRef *provider.Reference) error {
+		res, err := d.gateway.UnsetArbitraryMetadata(ctx, &provider.UnsetArbitraryMetadataRequest{
 			Ref:                   newRef,
 			ArbitraryMetadataKeys: keys,
 		})
