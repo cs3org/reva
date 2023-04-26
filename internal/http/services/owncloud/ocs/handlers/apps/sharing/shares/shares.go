@@ -44,6 +44,7 @@ import (
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/notification/notificationhelper"
 	"github.com/cs3org/reva/pkg/publicshare"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/share"
@@ -74,6 +75,8 @@ type Handler struct {
 	resourceInfoCache      cache.ResourceInfoCache
 	resourceInfoCacheTTL   time.Duration
 	listOCMShares          bool
+	notificationHelper     *notificationhelper.NotificationHelper
+	Log                    *zerolog.Logger
 }
 
 // we only cache the minimal set of data instead of the full user metadata.
@@ -98,7 +101,7 @@ func getCacheManager(c *config.Config) (cache.ResourceInfoCache, error) {
 }
 
 // Init initializes this and any contained handlers.
-func (h *Handler) Init(c *config.Config) {
+func (h *Handler) Init(c *config.Config, l *zerolog.Logger) {
 	h.gatewayAddr = c.GatewaySvc
 	h.storageRegistryAddr = c.StorageregistrySvc
 	h.publicURL = c.Config.Host
@@ -106,7 +109,8 @@ func (h *Handler) Init(c *config.Config) {
 	h.homeNamespace = c.HomeNamespace
 	h.ocmMountPoint = c.OCMMountPoint
 	h.listOCMShares = c.ListOCMShares
-
+	h.Log = l
+	h.notificationHelper = notificationhelper.New("ocs", c.Notifications, l)
 	h.additionalInfoTemplate, _ = template.New("additionalInfo").Parse(c.AdditionalInfoAttribute)
 	h.resourceInfoCacheTTL = time.Second * time.Duration(c.ResourceInfoCacheTTL)
 

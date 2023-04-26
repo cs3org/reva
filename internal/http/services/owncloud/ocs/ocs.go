@@ -62,7 +62,7 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 		router: r,
 	}
 
-	if err := s.routerInit(); err != nil {
+	if err := s.routerInit(log); err != nil {
 		return nil, err
 	}
 
@@ -86,7 +86,7 @@ func (s *svc) Unprotected() []string {
 	return []string{"/v1.php/cloud/capabilities", "/v2.php/cloud/capabilities"}
 }
 
-func (s *svc) routerInit() error {
+func (s *svc) routerInit(l *zerolog.Logger) error {
 	capabilitiesHandler := new(capabilities.Handler)
 	userHandler := new(user.Handler)
 	usersHandler := new(users.Handler)
@@ -97,7 +97,7 @@ func (s *svc) routerInit() error {
 	usersHandler.Init(s.c)
 	userHandler.Init(s.c)
 	configHandler.Init(s.c)
-	sharesHandler.Init(s.c)
+	sharesHandler.Init(s.c, l)
 	shareesHandler.Init(s.c)
 
 	s.router.Route("/v{version:(1|2)}.php", func(r chi.Router) {
