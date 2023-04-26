@@ -31,6 +31,8 @@ import (
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
 	"github.com/cs3org/reva/pkg/appctx"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
+	"github.com/cs3org/reva/pkg/notification"
 	"github.com/cs3org/reva/pkg/publicshare"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/pkg/errors"
@@ -109,6 +111,8 @@ func (h *Handler) createPublicLinkShare(w http.ResponseWriter, r *http.Request, 
 	}
 
 	internal, _ := strconv.ParseBool(r.FormValue("internal"))
+	notifyUploads, _ := strconv.ParseBool(r.FormValue("notifyUploads"))
+	notifyUploadsExtraRecipients := r.FormValue("notifyUploadsExtraRecipients")
 
 	req := link.CreatePublicShareRequest{
 		ResourceInfo: statInfo,
@@ -118,8 +122,10 @@ func (h *Handler) createPublicLinkShare(w http.ResponseWriter, r *http.Request, 
 			},
 			Password: r.FormValue("password"),
 		},
-		Description: r.FormValue("description"),
-		Internal:    internal,
+		Description:                  r.FormValue("description"),
+		Internal:                     internal,
+		NotifyUploads:                notifyUploads,
+		NotifyUploadsExtraRecipients: notifyUploadsExtraRecipients,
 	}
 
 	expireTimeString, ok := r.Form["expireDate"]
@@ -317,6 +323,25 @@ func (h *Handler) updatePublicShare(w http.ResponseWriter, r *http.Request, shar
 				},
 			})
 		}
+
+		// remove notifications when a public link stops having 'uploader' permissions
+		if !isPermissionUploader(newPermissions) {
+			if before.Share.NotifyUploads {
+				updates = append(updates, &link.UpdatePublicShareRequest_Update{
+					Type:          link.UpdatePublicShareRequest_Update_TYPE_NOTIFYUPLOADS,
+					NotifyUploads: false,
+				})
+			}
+
+			if before.Share.NotifyUploadsExtraRecipients != "" {
+				updates = append(updates, &link.UpdatePublicShareRequest_Update{
+					Type:                         link.UpdatePublicShareRequest_Update_TYPE_NOTIFYUPLOADSEXTRARECIPIENTS,
+					NotifyUploadsExtraRecipients: "",
+				})
+			}
+
+			h.notificationHelper.UnregisterNotification(shareID)
+		}
 	}
 
 	// ExpireDate
@@ -369,6 +394,64 @@ func (h *Handler) updatePublicShare(w http.ResponseWriter, r *http.Request, shar
 			Type:        link.UpdatePublicShareRequest_Update_TYPE_DESCRIPTION,
 			Description: description[0],
 		})
+	}
+
+	// NotifyUploads
+	newNotifyUploads, ok := r.Form["notifyUploads"]
+
+	if ok {
+		ok2 := permissionsStayUploader(before, newPermissions)
+		u, ok3 := ctxpkg.ContextGetUser(r.Context())
+
+		if ok2 && ok3 {
+			notifyUploads, _ := strconv.ParseBool(newNotifyUploads[0])
+			updatesFound = true
+
+			logger.Info().Str("shares", "update").Msgf("notify uploads updated to '%v'", notifyUploads)
+			updates = append(updates, &link.UpdatePublicShareRequest_Update{
+				Type:          link.UpdatePublicShareRequest_Update_TYPE_NOTIFYUPLOADS,
+				NotifyUploads: notifyUploads,
+			})
+
+			if notifyUploads {
+				n := &notification.Notification{
+					TemplateName: "sharedfolder-upload-mail",
+					Ref:          shareID,
+					Recipients:   []string{u.Mail},
+				}
+				h.notificationHelper.RegisterNotification(n)
+			} else {
+				h.notificationHelper.UnregisterNotification(shareID)
+			}
+		}
+	}
+
+	// NotifyUploadsExtraRecipients
+	newNotifyUploadsExtraRecipients, ok := r.Form["notifyUploadsExtraRecipients"]
+
+	if ok {
+		ok2 := permissionsStayUploader(before, newPermissions)
+		u, ok3 := ctxpkg.ContextGetUser(r.Context())
+
+		if ok2 && ok3 {
+			notifyUploadsExtraRecipients := newNotifyUploadsExtraRecipients[0]
+			updatesFound = true
+			logger.Info().Str("shares", "update").Msgf("notify uploads extra recipients updated to '%v'", notifyUploadsExtraRecipients)
+
+			updates = append(updates, &link.UpdatePublicShareRequest_Update{
+				Type:                         link.UpdatePublicShareRequest_Update_TYPE_NOTIFYUPLOADSEXTRARECIPIENTS,
+				NotifyUploadsExtraRecipients: notifyUploadsExtraRecipients,
+			})
+
+			if len(notifyUploadsExtraRecipients) > 0 {
+				n := &notification.Notification{
+					TemplateName: "sharedfolder-upload-mail",
+					Ref:          shareID,
+					Recipients:   []string{u.Mail, notifyUploadsExtraRecipients},
+				}
+				h.notificationHelper.RegisterNotification(n)
+			}
+		}
 	}
 
 	publicShare := before.Share
@@ -452,6 +535,8 @@ func (h *Handler) removePublicShare(w http.ResponseWriter, r *http.Request, shar
 		return
 	}
 
+	h.notificationHelper.UnregisterNotification(shareID)
+
 	response.WriteOCSSuccess(w, r, nil)
 }
 
@@ -513,6 +598,21 @@ func permissionFromRequest(r *http.Request, h *Handler) (*provider.ResourcePermi
 		return nil, err
 	}
 	return p, err
+}
+
+func isPermissionUploader(permissions *provider.ResourcePermissions) bool {
+	if permissions == nil {
+		return false
+	}
+
+	publicSharePermissions := &link.PublicSharePermissions{
+		Permissions: permissions,
+	}
+	return conversions.RoleFromResourcePermissions(publicSharePermissions.Permissions).Name == conversions.RoleUploader
+}
+
+func permissionsStayUploader(before *link.GetPublicShareResponse, newPermissions *provider.ResourcePermissions) bool {
+	return (newPermissions == nil && isPermissionUploader(before.Share.GetPermissions().Permissions)) || isPermissionUploader(newPermissions)
 }
 
 // TODO: add mapping for user share permissions to role
