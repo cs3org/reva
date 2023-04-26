@@ -75,7 +75,7 @@ var _ = Describe("The ocs API", func() {
 
 		c := &config.Config{}
 		c.GatewaySvc = "gatewaysvc"
-		c.ResourceInfoCacheDatabase = strconv.FormatInt(rand.Int63(), 10) // Use a fresh database for each test
+		c.StatCacheDatabase = strconv.FormatInt(rand.Int63(), 10) // Use a fresh database for each test
 		c.Init()
 		h.InitWithGetter(c, func() (gateway.GatewayAPIClient, error) {
 			return client, nil
