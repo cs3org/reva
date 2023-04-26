@@ -303,11 +303,11 @@ _requires a [CS3 user provisioning api that can update the quota for a user](htt
 - [coreApiWebdavMove2/moveFile.feature:177](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavMove2/moveFile.feature#L177)
 
 #### [OCIS-storage overwriting a file as share receiver, does not create a new file version for the sharer](https://github.com/owncloud/ocis/issues/766) //todo
-- [coreApiVersions/fileVersions.feature:291](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiVersions/fileVersions.feature#L291)
+- [coreApiVersions/fileVersions.feature:276](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiVersions/fileVersions.feature#L276)
 
 #### [restoring an older version of a shared file deletes the share](https://github.com/owncloud/ocis/issues/765)
 - [coreApiShareManagementToShares/acceptShares.feature:483](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiShareManagementToShares/acceptShares.feature#L483)
-- [coreApiVersions/fileVersions.feature:302](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiVersions/fileVersions.feature#L302)
+- [coreApiVersions/fileVersions.feature:288](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiVersions/fileVersions.feature#L288)
 
 #### [Expiration date for shares is not implemented](https://github.com/owncloud/ocis/issues/1250)
 #### Expiration date of user shares
@@ -397,14 +397,14 @@ _requires a [CS3 user provisioning api that can update the quota for a user](htt
 - [coreApiShareUpdateToShares/updateShare.feature:241](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiShareUpdateToShares/updateShare.feature#L241)
 
 #### [user can access version metadata of a received share before accepting it](https://github.com/owncloud/ocis/issues/760)
-- [coreApiVersions/fileVersions.feature:487](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiVersions/fileVersions.feature#L487)
+- [coreApiVersions/fileVersions.feature:313](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiVersions/fileVersions.feature#L313)
 
 #### [Share lists deleted user as 'user'](https://github.com/owncloud/ocis/issues/903)
 - [coreApiShareManagementBasicToShares/createShareToSharesFolder.feature:676](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiShareManagementBasicToShares/createShareToSharesFolder.feature#L676)
 - [coreApiShareManagementBasicToShares/createShareToSharesFolder.feature:677](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiShareManagementBasicToShares/createShareToSharesFolder.feature#L677)
 
 #### [OCIS-storage overwriting a file as share receiver, does not create a new file version for the sharer](https://github.com/owncloud/ocis/issues/766)
-- [coreApiVersions/fileVersions.feature:499](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiVersions/fileVersions.feature#L499) //todo
+- [coreApiVersions/fileVersions.feature:433](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiVersions/fileVersions.feature#L433) //todo
 
 #### [deleting a share with wrong authentication returns OCS status 996 / HTTP 500](https://github.com/owncloud/ocis/issues/1229)
 - [coreApiShareManagementBasicToShares/deleteShareFromShares.feature:226](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiShareManagementBasicToShares/deleteShareFromShares.feature#L226)
@@ -641,7 +641,7 @@ _ocs: api compatibility, return correct status code_
 #### [Downloading the older version of shared file gives 404](https://github.com/owncloud/ocis/issues/3868)
 - [coreApiVersions/fileVersions.feature:160](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiVersions/fileVersions.feature#L160)
 - [coreApiVersions/fileVersions.feature:178](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiVersions/fileVersions.feature#L178)
-- [coreApiVersions/fileVersions.feature:510](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiVersions/fileVersions.feature#L510)
+- [coreApiVersions/fileVersions.feature:445](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiVersions/fileVersions.feature#L445)
 
 #### [file versions do not report the version author](https://github.com/owncloud/ocis/issues/2914)
 - [coreApiVersions/fileVersionAuthor.feature:12](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiVersions/fileVersionAuthor.feature#L12)
