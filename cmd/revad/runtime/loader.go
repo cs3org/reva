@@ -27,6 +27,7 @@ import (
 	_ "github.com/cs3org/reva/internal/http/interceptors/auth/tokenwriter/loader"
 	_ "github.com/cs3org/reva/internal/http/interceptors/loader"
 	_ "github.com/cs3org/reva/internal/http/services/loader"
+	_ "github.com/cs3org/reva/internal/serverless/services/loader"
 	_ "github.com/cs3org/reva/pkg/app/provider/loader"
 	_ "github.com/cs3org/reva/pkg/app/registry/loader"
 	_ "github.com/cs3org/reva/pkg/appauth/manager/loader"
