@@ -26,7 +26,7 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 )
 
-type configData struct {
+type discoveryData struct {
 	Enabled       bool            `json:"enabled" xml:"enabled"`
 	APIVersion    string          `json:"apiVersion" xml:"apiVersion"`
 	Endpoint      string          `json:"endPoint" xml:"endPoint"`
@@ -41,48 +41,40 @@ type resourceTypes struct {
 	Protocols  map[string]string `json:"protocols"`
 }
 
-type configHandler struct {
-	c configData
+type discoHandler struct {
+	d discoveryData
 }
 
-func (h *configHandler) init(c *config) {
-	h.c = c.Config
-	h.c.Enabled = true
-	h.c.APIVersion = "1.1.0"
-	if len(c.Prefix) > 0 {
-		h.c.Endpoint = fmt.Sprintf("https://%s/%s", c.Host, c.Prefix)
-	} else {
-		h.c.Endpoint = fmt.Sprintf("https://%s", c.Host)
-	}
-	h.c.Provider = c.Provider
-	if c.Provider == "" {
-		h.c.Provider = "reva"
-	}
+func (h *discoHandler) init(c *config) {
+	h.d.Enabled = true
+	h.d.APIVersion = "1.1.0"
+	h.d.Endpoint = fmt.Sprintf("%s/%s", c.Endpoint, c.Prefix)
+	h.d.Provider = c.Provider
 	rtProtos := map[string]string{}
 	// webdav is always enabled
-	rtProtos["webdav"] = fmt.Sprintf("https://%s/remote.php/dav/%s", c.Host, c.Prefix)
+	rtProtos["webdav"] = fmt.Sprintf("%s/remote.php/dav/%s", c.Endpoint, c.Prefix)
 	if c.EnableWebApp {
-		rtProtos["webapp"] = fmt.Sprintf("https://%s/external/sciencemesh", c.Host)
+		rtProtos["webapp"] = fmt.Sprintf("%s/external/sciencemesh", c.Endpoint)
 	}
 	if c.EnableDataTx {
-		rtProtos["datatx"] = fmt.Sprintf("https://%s/remote.php/dav/%s", c.Host, c.Prefix)
+		rtProtos["datatx"] = fmt.Sprintf("%s/remote.php/dav/%s", c.Endpoint, c.Prefix)
 	}
-	h.c.ResourceTypes = []resourceTypes{{
+	h.d.ResourceTypes = []resourceTypes{{
 		Name:       "file",           // so far we only support `file`
 		ShareTypes: []string{"user"}, // so far we only support `user`
 		Protocols:  rtProtos,         // expose the protocols as per configuration
 	}}
 	// for now we hardcode the capabilities, as this is currently only advisory
-	h.c.Capabilities = []string{"/invite-accepted"}
+	h.d.Capabilities = []string{"/invite-accepted"}
 }
 
-// Send sends the configuration to the caller.
-func (h *configHandler) Send(w http.ResponseWriter, r *http.Request) {
+// Send sends the discovery info to the caller.
+func (h *discoHandler) Send(w http.ResponseWriter, r *http.Request) {
 	log := appctx.GetLogger(r.Context())
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	indentedConf, _ := json.MarshalIndent(h.c, "", "   ")
+	indentedConf, _ := json.MarshalIndent(h.d, "", "   ")
 	if _, err := w.Write(indentedConf); err != nil {
 		log.Err(err).Msg("Error writing to ResponseWriter")
 	}
