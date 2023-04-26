@@ -634,8 +634,12 @@ func (fs *Decomposedfs) DeleteStorageSpace(ctx context.Context, req *provider.De
 			return err
 		}
 
-		// FIXME remove space blobs
-		// FIXME invalidate cache
+		// invalidate cache
+		if err := fs.lu.MetadataBackend().Purge(n.InternalPath()); err != nil {
+			return err
+		}
+
+		// TODO remove space blobs with s3 backend by adding a purge method to the Blobstore interface
 
 		return nil
 	}
