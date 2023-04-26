@@ -135,7 +135,7 @@ func (c *config) init() {
 	}
 
 	if c.StatCacheDatabase == "" {
-		c.StatCacheDatabase = "ocis"
+		c.StatCacheDatabase = "reva"
 	}
 
 	if c.ProviderCacheStore == "" {
@@ -143,7 +143,7 @@ func (c *config) init() {
 	}
 
 	if c.ProviderCacheDatabase == "" {
-		c.ProviderCacheDatabase = "ocis"
+		c.ProviderCacheDatabase = "reva"
 	}
 
 	if c.CreateHomeCacheStore == "" {
@@ -151,7 +151,7 @@ func (c *config) init() {
 	}
 
 	if c.CreateHomeCacheDatabase == "" {
-		c.CreateHomeCacheDatabase = "ocis"
+		c.CreateHomeCacheDatabase = "reva"
 	}
 }
 
