@@ -26,6 +26,7 @@ import (
 	"mime"
 	"net/http"
 	"path"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"text/template"
@@ -44,7 +45,10 @@ import (
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
 	"github.com/cs3org/reva/pkg/appctx"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
+	"github.com/cs3org/reva/pkg/notification"
 	"github.com/cs3org/reva/pkg/notification/notificationhelper"
+	"github.com/cs3org/reva/pkg/notification/trigger"
 	"github.com/cs3org/reva/pkg/publicshare"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/share"
@@ -236,6 +240,125 @@ func (h *Handler) CreateShare(w http.ResponseWriter, r *http.Request) {
 	default:
 		response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "unknown share type", nil)
 	}
+}
+
+// NotifyShare handles GET requests on /apps/files_sharing/api/v1/shares/(shareid)/notify.
+func (h *Handler) NotifyShare(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	opaqueID := chi.URLParam(r, "shareid")
+
+	c, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	if err != nil {
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
+		return
+	}
+
+	shareRes, err := c.GetShare(ctx, &collaboration.GetShareRequest{
+		Ref: &collaboration.ShareReference{
+			Spec: &collaboration.ShareReference_Id{
+				Id: &collaboration.ShareId{
+					OpaqueId: opaqueID,
+				},
+			},
+		},
+	})
+	if err != nil || shareRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
+		h.Log.Error().Err(err).Msg("error getting share")
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting share", err)
+		return
+	}
+
+	granter, ok := ctxpkg.ContextGetUser(ctx)
+	if !ok {
+		h.Log.Error().Err(err).Msgf("error getting granter data")
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting granter data", err)
+	}
+
+	resourceID := shareRes.Share.ResourceId
+	statInfo, status, err := h.getResourceInfoByID(ctx, c, resourceID)
+	if err != nil || status.Code != rpc.Code_CODE_OK {
+		h.Log.Error().Err(err).Msg("error mapping share data")
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error mapping share data", err)
+		return
+	}
+
+	var recipient string
+
+	granteeType := shareRes.Share.Grantee.Type
+	if granteeType == provider.GranteeType_GRANTEE_TYPE_USER {
+		granteeID := shareRes.Share.Grantee.GetUserId().OpaqueId
+		granteeRes, err := c.GetUserByClaim(ctx, &userpb.GetUserByClaimRequest{
+			Claim:                  "username",
+			Value:                  granteeID,
+			SkipFetchingUserGroups: true,
+		})
+		if err != nil {
+			response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grantee data", err)
+			return
+		}
+
+		recipient = h.SendShareNotification(opaqueID, granter, granteeRes.User, statInfo)
+	} else if granteeType == provider.GranteeType_GRANTEE_TYPE_GROUP {
+		granteeID := shareRes.Share.Grantee.GetGroupId().OpaqueId
+		granteeRes, err := c.GetGroupByClaim(ctx, &grouppb.GetGroupByClaimRequest{
+			Claim:               "group_name",
+			Value:               granteeID,
+			SkipFetchingMembers: true,
+		})
+		if err != nil {
+			response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grantee data", err)
+			return
+		}
+
+		recipient = h.SendShareNotification(opaqueID, granter, granteeRes.Group, statInfo)
+	}
+
+	w.WriteHeader(http.StatusOK)
+	w.Header().Add("Content-Type", "application/json")
+	rb, _ := json.Marshal(map[string]interface{}{"recipients": []string{recipient}})
+	_, err = w.Write(rb)
+	if err != nil {
+		h.Log.Error().Err(err).Msg("error writing response")
+	}
+}
+
+// SendShareNotification sends a notification with information from a Share.
+func (h *Handler) SendShareNotification(opaqueID string, granter *userpb.User, grantee interface{}, statInfo *provider.ResourceInfo) string {
+	var granteeDisplayName, granteeName, recipient string
+	isGranteeGroup := false
+
+	if u, ok := grantee.(*userpb.User); ok {
+		granteeDisplayName = u.DisplayName
+		granteeName = u.Username
+		recipient = u.Mail
+	} else if g, ok := grantee.(*grouppb.Group); ok {
+		granteeDisplayName = g.DisplayName
+		granteeName = g.GroupName
+		recipient = g.Mail
+		isGranteeGroup = true
+	}
+
+	h.notificationHelper.TriggerNotification(&trigger.Trigger{
+		Notification: &notification.Notification{
+			TemplateName: "share-create-mail",
+			Ref:          opaqueID,
+			Recipients:   []string{recipient},
+		},
+		Ref: opaqueID,
+		TemplateData: map[string]interface{}{
+			"granteeDisplayName": granteeDisplayName,
+			"granteeUserName":    granteeName,
+			"granterDisplayName": granter.DisplayName,
+			"granterUserName":    granter.Username,
+			"path":               statInfo.Path,
+			"isFolder":           statInfo.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER,
+			"isGranteeGroup":     isGranteeGroup,
+			"base":               filepath.Base(statInfo.Path),
+		},
+	})
+	h.Log.Debug().Msgf("notification trigger %s created", opaqueID)
+
+	return recipient
 }
 
 func (h *Handler) extractPermissions(w http.ResponseWriter, r *http.Request, ri *provider.ResourceInfo, defaultPermissions *conversions.Role) (*conversions.Role, []byte, error) {
@@ -1107,33 +1230,34 @@ func (h *Handler) getResourceInfo(ctx context.Context, client gateway.GatewayAPI
 	return pinfo, status, nil
 }
 
-func (h *Handler) createCs3Share(ctx context.Context, w http.ResponseWriter, r *http.Request, client gateway.GatewayAPIClient, req *collaboration.CreateShareRequest, info *provider.ResourceInfo) {
+func (h *Handler) createCs3Share(ctx context.Context, w http.ResponseWriter, r *http.Request, client gateway.GatewayAPIClient, req *collaboration.CreateShareRequest, info *provider.ResourceInfo) (*collaboration.ShareId, bool) {
 	createShareResponse, err := client.CreateShare(ctx, req)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error sending a grpc create share request", err)
-		return
+		return nil, false
 	}
 	if createShareResponse.Status.Code != rpc.Code_CODE_OK {
 		if createShareResponse.Status.Code == rpc.Code_CODE_NOT_FOUND {
 			response.WriteOCSError(w, r, response.MetaNotFound.StatusCode, "not found", nil)
-			return
+			return nil, false
 		}
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "grpc create share request failed", err)
-		return
+		return nil, false
 	}
 	s, err := conversions.CS3Share2ShareData(ctx, createShareResponse.Share)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error mapping share data", err)
-		return
+		return nil, false
 	}
 	err = h.addFileInfo(ctx, s, info)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error adding fileinfo to share", err)
-		return
+		return nil, false
 	}
 	h.mapUserIds(ctx, client, s)
 
 	response.WriteOCSSuccess(w, r, s)
+	return createShareResponse.Share.Id, true
 }
 
 func mapState(state collaboration.ShareState) int {

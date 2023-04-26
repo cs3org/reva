@@ -119,14 +119,10 @@ func (s *svc) routerInit(l *zerolog.Logger) error {
 				})
 				r.Get("/{shareid}", sharesHandler.GetShare)
 				r.Put("/{shareid}", sharesHandler.UpdateShare)
+				r.Get("/{shareid}/notify", sharesHandler.NotifyShare)
 				r.Delete("/{shareid}", sharesHandler.RemoveShare)
 			})
 			r.Get("/sharees", shareesHandler.FindSharees)
-		})
-
-		// placeholder for notifications
-		r.Get("/apps/notifications/api/v1/notifications", func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusOK)
 		})
 
 		r.Get("/config", configHandler.GetConfig)
