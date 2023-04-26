@@ -33,6 +33,7 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/notification/notificationhelper"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/rhttp/global"
@@ -111,6 +112,7 @@ type Config struct {
 	PublicURL              string                            `mapstructure:"public_url"`
 	FavoriteStorageDriver  string                            `mapstructure:"favorite_storage_driver"`
 	FavoriteStorageDrivers map[string]map[string]interface{} `mapstructure:"favorite_storage_drivers"`
+	Notifications          map[string]interface{}            `mapstructure:"notifications" docs:"Settingsg for the Notification Helper"`
 }
 
 func (c *Config) init() {
@@ -127,11 +129,12 @@ func (c *Config) init() {
 }
 
 type svc struct {
-	c                *Config
-	webDavHandler    *WebDavHandler
-	davHandler       *DavHandler
-	favoritesManager favorite.Manager
-	client           *http.Client
+	c                  *Config
+	webDavHandler      *WebDavHandler
+	davHandler         *DavHandler
+	favoritesManager   favorite.Manager
+	client             *http.Client
+	notificationHelper *notificationhelper.NotificationHelper
 }
 
 func getFavoritesManager(c *Config) (favorite.Manager, error) {
@@ -163,8 +166,10 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 			rhttp.Timeout(time.Duration(conf.Timeout*int64(time.Second))),
 			rhttp.Insecure(conf.Insecure),
 		),
-		favoritesManager: fm,
+		favoritesManager:   fm,
+		notificationHelper: notificationhelper.New("ocdav", conf.Notifications, log),
 	}
+
 	// initialize handlers and set default configs
 	if err := s.webDavHandler.init(conf.WebdavNamespace, true); err != nil {
 		return nil, err
@@ -180,6 +185,7 @@ func (s *svc) Prefix() string {
 }
 
 func (s *svc) Close() error {
+	s.notificationHelper.Stop()
 	return nil
 }
 
