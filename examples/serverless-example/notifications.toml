@@ -1,0 +1,32 @@
+[log]
+output = "/var/log/revad/revad-notifications.log"
+mode = "json"
+
+[shared]
+gatewaysvc = "localhost:19000"
+jwt_secret = "Pive-Fumkiu4"
+skip_user_groups_in_token = true
+
+[serverless.services.notifications]
+nats_address = "nats-server-01.example.com"
+nats_token = "secret-token-example"
+nats_template_subject = "reva-notifications-template"
+nats_notification_subject = "reva-notifications-notification"
+nats_trigger_subject = "reva-notifications-trigger"
+storage_driver = "sql"
+grouping_interval = 60
+grouping_maxsize = 100
+
+[serverless.services.notifications.storage_drivers.sql]
+db_username = "username"
+db_password = "password"
+db_host = "database.example.com"
+db_port = 3306
+db_name = "notifications"
+
+[serverless.services.notifications.handlers.email]
+smtp_server = "mx.example.com:25"
+disable_auth = true
+default_sender = "noreply@cernbox.cern.ch"
+
+[tracing]
