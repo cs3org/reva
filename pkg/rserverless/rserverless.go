@@ -75,11 +75,7 @@ func (s *Serverless) isServiceEnabled(svcName string) bool {
 
 // Start starts the serverless service collection.
 func (s *Serverless) Start() error {
-	if err := s.registerServices(); err != nil {
-		return err
-	}
-
-	return nil
+	return s.registerServices()
 }
 
 func (s *Serverless) registerServices() error {
