@@ -82,7 +82,8 @@ func (s *Serverless) registerServices() error {
 	for svcName := range s.conf.Services {
 		if s.isServiceEnabled(svcName) {
 			newFunc := Services[svcName]
-			svc, err := newFunc(s.conf.Services[svcName], &s.log)
+			svcLogger := s.log.With().Str("service", svcName).Logger()
+			svc, err := newFunc(s.conf.Services[svcName], &svcLogger)
 			if err != nil {
 				return errors.Wrapf(err, "serverless service %s could not be initialized", svcName)
 			}
