@@ -989,14 +989,6 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 		space.Quota = &provider.Quota{
 			QuotaMaxBytes: uint64(q),
 			QuotaMaxFiles: math.MaxUint64, // TODO MaxUInt64? = unlimited? why even max files? 0 = unlimited?
-			Opaque: &types.Opaque{
-				Map: map[string]*types.OpaqueEntry{
-					"remaining": {
-						Decoder: "plain",
-						//Value: []byte(strconv.FormatUint(remaining, 10)),
-					},
-				},
-			},
 		}
 
 	}
