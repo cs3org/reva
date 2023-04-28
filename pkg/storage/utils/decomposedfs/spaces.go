@@ -25,6 +25,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -987,7 +988,16 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 		space.Quota = &provider.Quota{
 			QuotaMaxBytes: uint64(q),
 			QuotaMaxFiles: math.MaxUint64, // TODO MaxUInt64? = unlimited? why even max files? 0 = unlimited?
+			Opaque: &types.Opaque{
+				Map: map[string]*types.OpaqueEntry{
+					"remaining": {
+						Decoder: "plain",
+						//Value: []byte(strconv.FormatUint(remaining, 10)),
+					},
+				},
+			},
 		}
+
 	}
 	if si := spaceAttributes.String(prefixes.SpaceImageAttr); si != "" {
 		space.Opaque = utils.AppendPlainToOpaque(space.Opaque, "image", storagespace.FormatResourceID(
@@ -1008,7 +1018,28 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 
 	// add rootinfo
 	ps, _ := n.SpaceRoot.PermissionSet(ctx)
-	space.RootInfo, _ = n.SpaceRoot.AsResourceInfo(ctx, &ps, nil, nil, false)
+	space.RootInfo, _ = n.SpaceRoot.AsResourceInfo(ctx, &ps, []string{"quota"}, nil, false)
+
+	// we cannot put free, used and remaining into the quota, as quota, when set would always imply a quota limit
+	// for now we use opaque properties with a 'quota.' prefix
+	quotaStr := node.QuotaUnknown
+	if space.RootInfo.Opaque != nil && space.RootInfo.Opaque.Map != nil && space.RootInfo.Opaque.Map["quota"] != nil && space.RootInfo.Opaque.Map["quota"].Decoder == "plain" {
+		quotaStr = string(space.RootInfo.Opaque.Map["quota"].Value)
+	}
+
+	// FIXME this reads remaining disk size from the local disk, not the blobstore
+	remaining, err := node.GetAvailableSize(n.InternalPath())
+	if err != nil {
+		return nil, err
+	}
+	total, used, remaining, err := fs.calculateTotalUsedRemaining(quotaStr, space.GetRootInfo().GetSize(), remaining)
+	if err != nil {
+		return nil, err
+	}
+	space.Opaque = utils.AppendPlainToOpaque(space.Opaque, "quota.total", strconv.FormatUint(total, 10))
+	space.Opaque = utils.AppendPlainToOpaque(space.Opaque, "quota.used", strconv.FormatUint(used, 10))
+	space.Opaque = utils.AppendPlainToOpaque(space.Opaque, "quota.remaining", strconv.FormatUint(remaining, 10))
+
 	return space, nil
 }
 
