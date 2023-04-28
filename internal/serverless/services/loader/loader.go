@@ -18,5 +18,8 @@
 
 package loader
 
-// Load core serverless services.
-// Add your own service here.
+import (
+	// Load core serverless services.
+	_ "github.com/cs3org/reva/internal/serverless/services/helloworld"
+	// Add your own service here.
+)
