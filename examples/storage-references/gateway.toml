@@ -34,13 +34,10 @@ appauth = "localhost:15000"
 [grpc.services.appregistry.drivers.static]
 mime_types = [
     {"mime_type" = "text/plain", "extension" = "txt", "name" = "Text file", "description" = "Text file", "allow_creation" = true},
-    {"mime_type" = "text/markdown", "extension" = "md", "name" = "Markdown file", "description" = "Markdown file", "allow_creation" = true},
-    {"mime_type" = "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "extension" = "docx", "name" = "Microsoft Word", "description" = "Microsoft Word document", "allow_creation" = true},
-    {"mime_type" = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "extension" = "xlsx", "name" = "Microsoft Excel", "description" = "Microsoft Excel document", "allow_creation" = true},
-    {"mime_type" = "application/vnd.openxmlformats-officedocument.presentationml.presentation", "extension" = "pptx", "name" = "Microsoft PowerPoint", "description" = "Microsoft PowerPoint document", "allow_creation" = true},
-    {"mime_type" = "application/vnd.oasis.opendocument.text", "extension" = "odt", "name" = "OpenDocument", "description" = "OpenDocument text document", "allow_creation" = true},
-    {"mime_type" = "application/vnd.oasis.opendocument.spreadsheet", "extension" = "ods", "name" = "OpenSpreadsheet", "description" = "OpenDocument spreadsheet document", "allow_creation" = true},
-    {"mime_type" = "application/vnd.oasis.opendocument.presentation", "extension" = "odp", "name" = "OpenPresentation", "description" = "OpenDocument presentation document", "allow_creation" = true},
+    {"mime_type" = "text/markdown", "extension" = "md", "name" = "Markdown file", "description" = "Markdown file", "default_app" = "CodiMD", "allow_creation" = true},
+    {"mime_type" = "application/vnd.oasis.opendocument.text", "extension" = "odt", "name" = "OpenDocument", "description" = "OpenDocument text document", "default_app" = "Collabora", "allow_creation" = true},
+    {"mime_type" = "application/vnd.oasis.opendocument.spreadsheet", "extension" = "ods", "name" = "OpenSpreadsheet", "description" = "OpenDocument spreadsheet document", "default_app" = "Collabora", "allow_creation" = true},
+    {"mime_type" = "application/vnd.oasis.opendocument.presentation", "extension" = "odp", "name" = "OpenPresentation", "description" = "OpenDocument presentation document", "default_app" = "Collabora", "allow_creation" = true},
     {"mime_type" = "application/vnd.jupyter", "extension" = "ipynb", "name" = "Jupyter Notebook", "description" = "Jupyter Notebook"}
 ]
 
