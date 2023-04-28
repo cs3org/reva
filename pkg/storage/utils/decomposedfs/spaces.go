@@ -39,6 +39,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/status"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
+	sdk "github.com/cs3org/reva/v2/pkg/sdk/common"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/lookup"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
@@ -1023,8 +1024,8 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 	// we cannot put free, used and remaining into the quota, as quota, when set would always imply a quota limit
 	// for now we use opaque properties with a 'quota.' prefix
 	quotaStr := node.QuotaUnknown
-	if space.RootInfo.Opaque != nil && space.RootInfo.Opaque.Map != nil && space.RootInfo.Opaque.Map["quota"] != nil && space.RootInfo.Opaque.Map["quota"].Decoder == "plain" {
-		quotaStr = string(space.RootInfo.Opaque.Map["quota"].Value)
+	if quotaInOpaque := sdk.DecodeOpaqueMap(space.RootInfo.Opaque)["quota"]; quotaInOpaque != "" {
+		quotaStr = quotaInOpaque
 	}
 
 	// FIXME this reads remaining disk size from the local disk, not the blobstore
