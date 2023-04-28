@@ -26,12 +26,12 @@ RUN dnf update -y && dnf install -y \
   librbd-devel \
   librados-devel
 
-ADD https://golang.org/dl/go1.19.linux-amd64.tar.gz \
-  go1.19.linux-amd64.tar.gz
+ADD https://golang.org/dl/go1.19.8.linux-amd64.tar.gz \
+  go1.19.8.linux-amd64.tar.gz
 
 RUN rm -rf /usr/local/go && \
-  tar -C /usr/local -xzf go1.19.linux-amd64.tar.gz && \
-  rm go1.19.linux-amd64.tar.gz
+  tar -C /usr/local -xzf go1.19.8.linux-amd64.tar.gz && \
+  rm go1.19.8.linux-amd64.tar.gz
 
 ENV PATH /go/bin:/usr/local/go/bin:$PATH
 ENV GOPATH /go
