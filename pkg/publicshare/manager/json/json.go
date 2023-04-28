@@ -519,7 +519,14 @@ func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []
 		key := strings.Join([]string{local.ResourceId.StorageId, local.ResourceId.OpaqueId}, "!")
 		if _, hit := cache[key]; !hit && !publicshare.IsCreatedByUser(local.PublicShare, u) {
 			sRes, err := client.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{ResourceId: local.ResourceId}})
-			if err != nil || sRes.Status.Code != rpc.Code_CODE_OK {
+			if err != nil {
+				log.Error().
+					Err(err).
+					Interface("resource_id", local.ResourceId).
+					Msg("ListShares: could not stat resource")
+				continue
+			}
+			if sRes.Status.Code != rpc.Code_CODE_OK {
 				log.Error().
 					Err(err).
 					Interface("status", sRes.Status).
