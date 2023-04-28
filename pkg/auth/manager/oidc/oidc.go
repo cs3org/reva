@@ -28,7 +28,7 @@ import (
 	"strings"
 	"time"
 
-	oidc "github.com/coreos/go-oidc"
+	"github.com/coreos/go-oidc/v3/oidc"
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
@@ -41,6 +41,7 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/sharedconf"
+	"github.com/golang-jwt/jwt"
 	"github.com/juliangruber/go-intersect"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
@@ -52,7 +53,8 @@ func init() {
 }
 
 type mgr struct {
-	provider         *oidc.Provider // cached on first request
+	providers map[string]*oidc.Provider
+
 	c                *config
 	oidcUsersMapping map[string]*oidcUserMapping
 }
@@ -103,7 +105,9 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 
 // New returns an auth manager implementation that verifies the oidc token and obtains the user claims.
 func New(m map[string]interface{}) (auth.Manager, error) {
-	manager := &mgr{}
+	manager := &mgr{
+		providers: make(map[string]*oidc.Provider),
+	}
 	err := manager.Configure(m)
 	if err != nil {
 		return nil, err
@@ -144,103 +148,147 @@ func (am *mgr) Configure(m map[string]interface{}) error {
 	return nil
 }
 
+func extractClaims(token string) (jwt.MapClaims, error) {
+	var claims jwt.MapClaims
+	_, _, err := new(jwt.Parser).ParseUnverified(token, &claims)
+	if err != nil {
+		return nil, err
+	}
+	return claims, nil
+}
+
+func extractIssuer(m jwt.MapClaims) (string, bool) {
+	issIface, ok := m["iss"]
+	if !ok {
+		return "", false
+	}
+	iss, _ := issIface.(string)
+	return iss, iss != ""
+}
+
+func (am *mgr) getOIDCProviderForIssuer(ctx context.Context, issuer string) (*oidc.Provider, error) {
+	// FIXME: op not atomic TODO: fix message and make it more clear
+	if am.providers[issuer] == nil {
+		// TODO (gdelmont): the provider should be periodically recreated
+		// as the public key can change over time
+		provider, err := oidc.NewProvider(ctx, am.c.Issuer)
+		if err != nil {
+			return nil, errors.Wrapf(err, "oidc: error creating a new oidc provider")
+		}
+		am.providers[issuer] = provider
+	}
+	return am.providers[issuer], nil
+}
+
+func (am *mgr) isIssuerAllowed(issuer string) bool {
+	if am.c.Issuer == issuer {
+		return true
+	}
+	for _, m := range am.oidcUsersMapping {
+		if m.OIDCIssuer == issuer {
+			return true
+		}
+	}
+	return false
+}
+
+func (am *mgr) doUserMapping(tkn *oidc.IDToken, claims jwt.MapClaims) (string, error) {
+	if len(am.oidcUsersMapping) == 0 {
+		return tkn.Subject, nil
+	}
+	// we need the custom claims for the mapping
+	if claims[am.c.GroupClaim] == nil {
+		// we are required to perform a user mapping but the group claim is not available
+		return tkn.Subject, nil
+	}
+
+	mappings := make([]string, 0, len(am.oidcUsersMapping))
+	for _, m := range am.oidcUsersMapping {
+		if m.OIDCIssuer == tkn.Issuer {
+			mappings = append(mappings, m.OIDCGroup)
+		}
+	}
+
+	intersection := intersect.Simple(claims[am.c.GroupClaim], mappings)
+	if len(intersection) > 1 {
+		// multiple mappings are not implemented as we cannot decide which one to choose
+		return "", errtypes.PermissionDenied("more than one user mapping entry exists for the given group claims")
+	}
+	if len(intersection) == 0 {
+		return "", errtypes.PermissionDenied("no user mapping found for the given group claim(s)")
+	}
+	m := intersection[0].(string)
+	return am.oidcUsersMapping[m].Username, nil
+}
+
 // The clientID would be empty as we only need to validate the clientSecret variable
 // which contains the access token that we can use to contact the UserInfo endpoint
 // and get the user claims.
 func (am *mgr) Authenticate(ctx context.Context, _, clientSecret string) (*user.User, map[string]*authpb.Scope, error) {
-	ctx = am.getOAuthCtx(ctx)
 	log := appctx.GetLogger(ctx)
+	ctx = am.getOAuthCtx(ctx)
 
-	oidcProvider, err := am.getOIDCProvider(ctx)
+	claims, err := extractClaims(clientSecret)
 	if err != nil {
-		return nil, nil, fmt.Errorf("oidc: error creating oidc provider: +%v", err)
+		return nil, nil, errtypes.PermissionDenied("oidc token not valid")
 	}
 
-	oauth2Token := &oauth2.Token{
-		AccessToken: clientSecret,
+	issuer, ok := extractIssuer(claims)
+	if !ok {
+		return nil, nil, errtypes.PermissionDenied("issuer not contained in the token")
 	}
+	log.Debug().Str("issuer", issuer).Msg("extracted issuer from token")
 
-	// query the oidc provider for user info
-	userInfo, err := oidcProvider.UserInfo(ctx, oauth2.StaticTokenSource(oauth2Token))
+	if !am.isIssuerAllowed(issuer) {
+		log.Debug().Str("issuer", issuer).Msg("issuer is not in the whitelist")
+		return nil, nil, errtypes.PermissionDenied("issuer not recognised")
+	}
+	log.Debug().Str("issuer", issuer).Msg("issuer is whitelisted")
+
+	provider, err := am.getOIDCProviderForIssuer(ctx, issuer)
 	if err != nil {
-		return nil, nil, fmt.Errorf("oidc: error getting userinfo: +%v", err)
+		return nil, nil, errors.Wrap(err, "oidc: error creating oidc provider")
 	}
 
-	// claims contains the standard OIDC claims like iss, iat, aud, ... and any other non-standard one.
-	// TODO(labkode): make claims configuration dynamic from the config file so we can add arbitrary mappings from claims to user struct.
-	// For now, only the group claim is dynamic.
-	// TODO(labkode): may do like K8s does it: https://github.com/kubernetes/kubernetes/blob/master/staging/src/k8s.io/apiserver/plugin/pkg/authenticator/token/oidc/oidc.go
-	var claims map[string]interface{}
-	if err := userInfo.Claims(&claims); err != nil {
-		return nil, nil, fmt.Errorf("oidc: error unmarshaling userinfo claims: %v", err)
+	config := &oidc.Config{
+		SkipClientIDCheck: true,
 	}
 
-	log.Debug().Interface("claims", claims).Interface("userInfo", userInfo).Msg("unmarshalled userinfo")
-
-	if claims["iss"] == nil { // This is not set in simplesamlphp
-		claims["iss"] = am.c.Issuer
-	}
-	if claims["email_verified"] == nil { // This is not set in simplesamlphp
-		claims["email_verified"] = false
-	}
-	if claims["preferred_username"] == nil {
-		claims["preferred_username"] = claims[am.c.IDClaim]
-	}
-	if claims["preferred_username"] == nil {
-		claims["preferred_username"] = claims["email"]
-	}
-	if claims["name"] == nil {
-		claims["name"] = claims[am.c.IDClaim]
-	}
-	if claims["name"] == nil {
-		return nil, nil, fmt.Errorf("no \"name\" attribute found in userinfo: maybe the client did not request the oidc \"profile\"-scope")
-	}
-	if claims["email"] == nil {
-		return nil, nil, fmt.Errorf("no \"email\" attribute found in userinfo: maybe the client did not request the oidc \"email\"-scope")
-	}
-
-	err = am.resolveUser(ctx, claims, userInfo.Subject)
+	tkn, err := provider.Verifier(config).Verify(ctx, clientSecret)
 	if err != nil {
-		return nil, nil, errors.Wrapf(err, "oidc: error resolving username for external user '%v'", claims["email"])
+		return nil, nil, errtypes.PermissionDenied(fmt.Sprintf("oidc token not valid: %+v", err))
 	}
 
-	userID := &user.UserId{
-		OpaqueId: claims[am.c.IDClaim].(string), // a stable non reassignable id
-		Idp:      claims["iss"].(string),        // in the scope of this issuer
-		Type:     getUserType(claims[am.c.IDClaim].(string)),
-	}
-
-	gwc, err := pool.GetGatewayServiceClient(pool.Endpoint(am.c.GatewaySvc))
+	sub, err := am.doUserMapping(tkn, claims)
 	if err != nil {
-		return nil, nil, errors.Wrap(err, "oidc: error getting gateway grpc client")
+		return nil, nil, err
 	}
-	getGroupsResp, err := gwc.GetUserGroups(ctx, &user.GetUserGroupsRequest{
-		UserId: userID,
+	log.Debug().Str("sub", sub).Msg("mapped user from token")
+
+	client, err := pool.GetGatewayServiceClient(pool.Endpoint(am.c.GatewaySvc))
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "error getting user provider grpc client")
+	}
+	userRes, err := client.GetUserByClaim(ctx, &user.GetUserByClaimRequest{
+		Claim: "username",
+		Value: sub,
 	})
 	if err != nil {
-		return nil, nil, errors.Wrapf(err, "oidc: error getting user groups for '%+v'", userID)
+		return nil, nil, errors.Wrapf(err, "error getting user by username '%v'", sub)
 	}
-	if getGroupsResp.Status.Code != rpc.Code_CODE_OK {
-		return nil, nil, status.NewErrorFromCode(getGroupsResp.Status.Code, "oidc")
+	if userRes.Status.Code != rpc.Code_CODE_OK {
+		return nil, nil, status.NewErrorFromCode(userRes.Status.Code, "oidc")
 	}
 
-	u := &user.User{
-		Id:           userID,
-		Username:     claims["preferred_username"].(string),
-		Groups:       getGroupsResp.Groups,
-		Mail:         claims["email"].(string),
-		MailVerified: claims["email_verified"].(bool),
-		DisplayName:  claims["name"].(string),
-		UidNumber:    claims[am.c.UIDClaim].(int64),
-		GidNumber:    claims[am.c.GIDClaim].(int64),
-	}
+	u := userRes.GetUser()
 
 	var scopes map[string]*authpb.Scope
-	if userID != nil && (userID.Type == user.UserType_USER_TYPE_LIGHTWEIGHT || userID.Type == user.UserType_USER_TYPE_FEDERATED) {
+	if u.Id.Type == user.UserType_USER_TYPE_LIGHTWEIGHT {
 		scopes, err = scope.AddLightweightAccountScope(authpb.Role_ROLE_OWNER, nil)
 		if err != nil {
 			return nil, nil, err
 		}
+		// TODO (gdelmont): we may want to define a template to prettify the user info for lw account?
 		// strip the `guest:` prefix if present in the email claim (appears to come from LDAP at CERN?)
 		u.Mail = strings.Replace(u.Mail, "guest: ", "", 1)
 		// and decorate the display name with the email domain to make it different from a primary account
@@ -255,15 +303,6 @@ func (am *mgr) Authenticate(ctx context.Context, _, clientSecret string) (*user.
 	return u, scopes, nil
 }
 
-func (am *mgr) getUserID(claims map[string]interface{}) (int64, int64) {
-	uidf, _ := claims[am.c.UIDClaim].(float64)
-	uid := int64(uidf)
-
-	gidf, _ := claims[am.c.GIDClaim].(float64)
-	gid := int64(gidf)
-	return uid, gid
-}
-
 func (am *mgr) getOAuthCtx(ctx context.Context) context.Context {
 	// Sometimes for testing we need to skip the TLS check, that's why we need a
 	// custom HTTP client.
@@ -276,117 +315,4 @@ func (am *mgr) getOAuthCtx(ctx context.Context) context.Context {
 	)
 	ctx = context.WithValue(ctx, oauth2.HTTPClient, customHTTPClient)
 	return ctx
-}
-
-// getOIDCProvider returns a singleton OIDC provider.
-func (am *mgr) getOIDCProvider(ctx context.Context) (*oidc.Provider, error) {
-	ctx = am.getOAuthCtx(ctx)
-	log := appctx.GetLogger(ctx)
-
-	if am.provider != nil {
-		return am.provider, nil
-	}
-
-	// Initialize a provider by specifying the issuer URL.
-	// Once initialized this is a singleton that is reused for further requests.
-	// The provider is responsible to verify the token sent by the client
-	// against the security keys oftentimes available in the .well-known endpoint.
-	provider, err := oidc.NewProvider(ctx, am.c.Issuer)
-
-	if err != nil {
-		log.Error().Err(err).Msg("oidc: error creating a new oidc provider")
-		return nil, fmt.Errorf("oidc: error creating a new oidc provider: %+v", err)
-	}
-
-	am.provider = provider
-	return am.provider, nil
-}
-
-func (am *mgr) resolveUser(ctx context.Context, claims map[string]interface{}, subject string) error {
-	var (
-		value   string
-		resolve bool
-	)
-
-	uid, gid := am.getUserID(claims)
-	if uid != 0 && gid != 0 {
-		claims[am.c.UIDClaim] = uid
-		claims[am.c.GIDClaim] = gid
-	}
-
-	if len(am.oidcUsersMapping) > 0 {
-		// map and discover the user's username when a mapping is defined
-		if claims[am.c.GroupClaim] == nil {
-			// we are required to perform a user mapping but the group claim is not available
-			return fmt.Errorf("no \"%s\" claim found in userinfo to map user", am.c.GroupClaim)
-		}
-		mappings := make([]string, 0, len(am.oidcUsersMapping))
-		for _, m := range am.oidcUsersMapping {
-			if m.OIDCIssuer == claims["iss"] {
-				mappings = append(mappings, m.OIDCGroup)
-			}
-		}
-
-		intersection := intersect.Simple(claims[am.c.GroupClaim], mappings)
-		if len(intersection) > 1 {
-			// multiple mappings are not implemented as we cannot decide which one to choose
-			return errtypes.PermissionDenied("more than one user mapping entry exists for the given group claims")
-		}
-		if len(intersection) == 0 {
-			return errtypes.PermissionDenied("no user mapping found for the given group claim(s)")
-		}
-		for _, m := range intersection {
-			value = am.oidcUsersMapping[m.(string)].Username
-		}
-		resolve = true
-	} else if uid == 0 || gid == 0 {
-		value = subject
-		resolve = true
-	}
-
-	if !resolve {
-		return nil
-	}
-
-	upsc, err := pool.GetGatewayServiceClient(pool.Endpoint(am.c.GatewaySvc))
-	if err != nil {
-		return errors.Wrap(err, "error getting user provider grpc client")
-	}
-	getUserByClaimResp, err := upsc.GetUserByClaim(ctx, &user.GetUserByClaimRequest{
-		Claim: "username",
-		Value: value,
-	})
-	if err != nil {
-		return errors.Wrapf(err, "error getting user by username '%v'", value)
-	}
-	if getUserByClaimResp.Status.Code != rpc.Code_CODE_OK {
-		return status.NewErrorFromCode(getUserByClaimResp.Status.Code, "oidc")
-	}
-
-	// take the properties of the mapped target user to override the claims
-	claims["preferred_username"] = getUserByClaimResp.GetUser().Username
-	claims[am.c.IDClaim] = getUserByClaimResp.GetUser().GetId().OpaqueId
-	claims["iss"] = getUserByClaimResp.GetUser().GetId().Idp
-	claims[am.c.UIDClaim] = getUserByClaimResp.GetUser().UidNumber
-	claims[am.c.GIDClaim] = getUserByClaimResp.GetUser().GidNumber
-	log := appctx.GetLogger(ctx).Debug().Str("username", value).Interface("claims", claims)
-	if uid == 0 || gid == 0 {
-		log.Msgf("resolveUser: claims overridden from '%s'", subject)
-	} else {
-		log.Msg("resolveUser: claims overridden from mapped user")
-	}
-	return nil
-}
-
-func getUserType(upn string) user.UserType {
-	var t user.UserType
-	switch {
-	case strings.HasPrefix(upn, "guest"):
-		t = user.UserType_USER_TYPE_LIGHTWEIGHT
-	case strings.Contains(upn, "@"):
-		t = user.UserType_USER_TYPE_FEDERATED
-	default:
-		t = user.UserType_USER_TYPE_PRIMARY
-	}
-	return t
 }
