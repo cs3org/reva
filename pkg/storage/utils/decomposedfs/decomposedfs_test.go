@@ -19,6 +19,7 @@
 package decomposedfs_test
 
 import (
+	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/stretchr/testify/mock"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -61,6 +62,73 @@ var _ = Describe("Decomposed", func() {
 				"root": env.Root,
 			}, bs, nil)
 			Expect(err).ToNot(HaveOccurred())
+		})
+	})
+
+	Describe("CreateDir", func() {
+		Context("Existing and non existing parent folders", func() {
+			It("CreateDir succeeds", func() {
+				dir2 := &provider.Reference{
+					ResourceId: env.SpaceRootRes,
+					Path:       "/dir2",
+				}
+				env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(provider.ResourcePermissions{CreateContainer: true, Stat: true}, nil)
+				err := env.Fs.CreateDir(env.Ctx, dir2)
+				Expect(err).ToNot(HaveOccurred())
+				ri, err := env.Fs.GetMD(env.Ctx, dir2, []string{}, []string{})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(ri.Path).To(Equal(dir2.Path))
+			})
+			It("CreateDir succeeds in subdir", func() {
+				dir2 := &provider.Reference{
+					ResourceId: env.SpaceRootRes,
+					Path:       "/dir1/dir2",
+				}
+				env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(provider.ResourcePermissions{CreateContainer: true, Stat: true}, nil)
+				err := env.Fs.CreateDir(env.Ctx, dir2)
+				Expect(err).ToNot(HaveOccurred())
+				ri, err := env.Fs.GetMD(env.Ctx, dir2, []string{}, []string{})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(ri.Path).To(Equal(dir2.Path))
+			})
+			It("dir already exists", func() {
+				env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(provider.ResourcePermissions{CreateContainer: true}, nil)
+				err := env.Fs.CreateDir(env.Ctx, ref)
+				Expect(err).To(HaveOccurred())
+				Expect(err).Should(MatchError(errtypes.AlreadyExists("/dir1")))
+			})
+			It("dir already exists in subdir", func() {
+				dir3 := &provider.Reference{
+					ResourceId: env.SpaceRootRes,
+					Path:       "/dir1/dir3",
+				}
+				env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(provider.ResourcePermissions{CreateContainer: true}, nil)
+				err := env.Fs.CreateDir(env.Ctx, dir3)
+				Expect(err).ToNot(HaveOccurred())
+				err = env.Fs.CreateDir(env.Ctx, dir3)
+				Expect(err).To(HaveOccurred())
+				Expect(err).Should(MatchError(errtypes.AlreadyExists("/dir1/dir3")))
+			})
+			It("CreateDir fails in subdir", func() {
+				dir2 := &provider.Reference{
+					ResourceId: env.SpaceRootRes,
+					Path:       "/dir1/dir2/dir3",
+				}
+				env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(provider.ResourcePermissions{CreateContainer: true}, nil)
+				err := env.Fs.CreateDir(env.Ctx, dir2)
+				Expect(err).To(HaveOccurred())
+				Expect(err).Should(MatchError(errtypes.PreconditionFailed("/dir1/dir2")))
+			})
+			It("CreateDir fails in non existing sub subbdir", func() {
+				dir2 := &provider.Reference{
+					ResourceId: env.SpaceRootRes,
+					Path:       "/dir1/dir2/dir3/dir4",
+				}
+				env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(provider.ResourcePermissions{CreateContainer: true}, nil)
+				err := env.Fs.CreateDir(env.Ctx, dir2)
+				Expect(err).To(HaveOccurred())
+				Expect(err).Should(MatchError(errtypes.PreconditionFailed("dir2")))
+			})
 		})
 	})
 

@@ -225,7 +225,7 @@ func (lu *Lookup) WalkPath(ctx context.Context, r *node.Node, p string, followRe
 		}
 
 		if !r.Exists && i < len(segments)-1 {
-			return r, errtypes.NotFound(segments[i])
+			return r, errtypes.PreconditionFailed(segments[i])
 		}
 		if f != nil {
 			if err = f(ctx, r); err != nil {
