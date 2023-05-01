@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"strconv"
 	"time"
@@ -124,7 +125,12 @@ func registerMimeTypes(mappingFile string) error {
 		}
 		// register all mime types that were read
 		for e, m := range mimeTypes {
-			mime.RegisterMime(e, m)
+			if err := mime.RegisterMime(e, m); err != nil {
+				// handle the error here
+				log.Printf("Failed to register mime type for extension '%s': %v\n", e, err)
+				// return the error, or continue processing
+				return err // or continue
+			}
 		}
 	}
 	return nil
