@@ -127,7 +127,7 @@ var _ = Describe("Decomposed", func() {
 				env.Permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(provider.ResourcePermissions{CreateContainer: true}, nil)
 				err := env.Fs.CreateDir(env.Ctx, dir2)
 				Expect(err).To(HaveOccurred())
-				Expect(err).Should(MatchError(errtypes.PreconditionFailed("dir2")))
+				Expect(err).Should(MatchError(errtypes.PreconditionFailed("error: not found: dir2")))
 			})
 		})
 	})
