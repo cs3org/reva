@@ -154,6 +154,7 @@ func (m *manager) fetchAllUsers(ctx context.Context) {
 	}
 }
 
+// Identity contains the information of a single user.
 type Identity struct {
 	PrimaryAccountEmail string `json:"primaryAccountEmail,omitempty"`
 	Type                string `json:"type,omitempty"`
@@ -164,7 +165,9 @@ type Identity struct {
 	GID                 int    `json:"gid,omitempty"`
 }
 
-type IdentityResponse struct {
+// IdentitiesResponse contains the expected response from grappa
+// when getting the list of users.
+type IdentitiesResponse struct {
 	Pagination struct {
 		Links struct {
 			Next *string `json:"next"`
@@ -173,6 +176,7 @@ type IdentityResponse struct {
 	Data []*Identity `json:"data"`
 }
 
+// UserType convert the user type in grappa to CS3APIs.
 func (i *Identity) UserType() userpb.UserType {
 	switch i.Type {
 	case "Application":
@@ -194,7 +198,7 @@ func (i *Identity) UserType() userpb.UserType {
 func (m *manager) fetchAllUserAccounts(ctx context.Context) error {
 	url := fmt.Sprintf("%s/api/v1.0/Identity?field=upn&field=primaryAccountEmail&field=displayName&field=uid&field=gid&field=type&field=source", m.conf.APIBaseURL)
 
-	var r IdentityResponse
+	var r IdentitiesResponse
 	for {
 		if err := m.apiTokenManager.SendAPIGetRequest(ctx, url, false, &r); err != nil {
 			return err
@@ -320,10 +324,13 @@ func isUserAnyType(user *userpb.User, types []userpb.UserType) bool {
 	return false
 }
 
+// Group contains the information about a group.
 type Group struct {
 	DisplayName string `json:"displayName"`
 }
 
+// GroupsResponse contains the expected response from grappa
+// when getting the list of groups.
 type GroupsResponse struct {
 	Pagination struct {
 		Links struct {

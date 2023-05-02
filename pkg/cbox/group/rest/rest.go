@@ -148,6 +148,7 @@ func (m *manager) fetchAllGroups(ctx context.Context) {
 	}
 }
 
+// Group contains the information about a group.
 type Group struct {
 	GroupIdentifier  string `json:"groupIdentifier"`
 	DisplayName      string `json:"displayName"`
@@ -155,6 +156,8 @@ type Group struct {
 	IsComputingGroup bool   `json:"isComputingGroup"`
 }
 
+// GroupsResponse contains the expected response from grappa
+// when getting the list of groups.
 type GroupsResponse struct {
 	Pagination struct {
 		Links struct {
@@ -279,7 +282,7 @@ func (m *manager) GetMembers(ctx context.Context, gid *grouppb.GroupId) ([]*user
 		return nil, err
 	}
 
-	var r user.IdentityResponse
+	var r user.IdentitiesResponse
 	members := []*userpb.UserId{}
 	for {
 		if err := m.apiTokenManager.SendAPIGetRequest(ctx, url, false, &r); err != nil {
