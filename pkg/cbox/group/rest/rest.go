@@ -152,7 +152,7 @@ func (m *manager) fetchAllGroups(ctx context.Context) {
 type Group struct {
 	GroupIdentifier  string `json:"groupIdentifier"`
 	DisplayName      string `json:"displayName"`
-	Gid              int    `json:"gid,omitempty"`
+	GID              int    `json:"gid,omitempty"`
 	IsComputingGroup bool   `json:"isComputingGroup"`
 }
 
@@ -205,7 +205,7 @@ func (m *manager) parseAndCacheGroup(ctx context.Context, g *Group) (*grouppb.Gr
 		GroupName:   g.GroupIdentifier,
 		Mail:        g.GroupIdentifier + "@cern.ch",
 		DisplayName: g.DisplayName,
-		GidNumber:   int64(g.Gid),
+		GidNumber:   int64(g.GID),
 	}
 
 	if err := m.cacheGroupDetails(group); err != nil {
