@@ -523,12 +523,20 @@ func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []
 				log.Error().
 					Err(err).
 					Interface("resource_id", local.ResourceId).
-					Msg("ListShares: could not stat resource")
+					Msg("ListShares: an error occurred during stat on the resource")
 				continue
 			}
 			if sRes.Status.Code != rpc.Code_CODE_OK {
+				if sRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
+					log.Debug().
+						Str("message", sRes.Status.Message).
+						Interface("status", sRes.Status).
+						Interface("resource_id", local.ResourceId).
+						Msg("ListShares: Resource not found")
+					continue
+				}
 				log.Error().
-					Err(err).
+					Str("message", sRes.Status.Message).
 					Interface("status", sRes.Status).
 					Interface("resource_id", local.ResourceId).
 					Msg("ListShares: could not stat resource")
