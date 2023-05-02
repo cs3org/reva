@@ -171,7 +171,7 @@ func (am *mgr) getOIDCProviderForIssuer(ctx context.Context, issuer string) (*oi
 	if am.providers[issuer] == nil {
 		// TODO (gdelmont): the provider should be periodically recreated
 		// as the public key can change over time
-		provider, err := oidc.NewProvider(ctx, am.c.Issuer)
+		provider, err := oidc.NewProvider(ctx, issuer)
 		if err != nil {
 			return nil, errors.Wrapf(err, "oidc: error creating a new oidc provider")
 		}
