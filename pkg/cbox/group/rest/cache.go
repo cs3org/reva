@@ -106,14 +106,6 @@ func (m *manager) getVal(key string) (string, error) {
 	return "", errors.New("rest: unable to get connection from redis pool")
 }
 
-func (m *manager) fetchCachedInternalID(gid *grouppb.GroupId) (string, error) {
-	return m.getVal(groupPrefix + groupInternalIDPrefix + gid.OpaqueId)
-}
-
-func (m *manager) cacheInternalID(gid *grouppb.GroupId, internalID string) error {
-	return m.setVal(groupPrefix+groupInternalIDPrefix+gid.OpaqueId, internalID, -1)
-}
-
 func (m *manager) findCachedGroups(query string) ([]*grouppb.Group, error) {
 	conn := m.redisPool.Get()
 	defer conn.Close()
