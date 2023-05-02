@@ -1,4 +1,4 @@
-Enhancement: Support multiple issuer in OIDC auth driver.
+Enhancement: Support multiple issuer in OIDC auth driver
 
 The OIDC auth driver supports now multiple issuers. Users of
 external providers are then mapped to a local user by a 
