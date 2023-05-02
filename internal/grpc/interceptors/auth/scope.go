@@ -163,6 +163,11 @@ func checkLightweightScope(ctx context.Context, req interface{}, tokenScope map[
 			InitiateFileUpload: true,
 		})
 	case *provider.InitiateFileUploadRequest:
+		if hasPermissions(ctx, client, r.GetRef(), &provider.ResourcePermissions{
+			InitiateFileUpload: true,
+		}) {
+			return true
+		}
 		parent, err := parentOfResource(ctx, client, r.GetRef())
 		if err != nil {
 			return false
