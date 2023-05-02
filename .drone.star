@@ -139,6 +139,14 @@ def coverage():
             {
                 "name": "unit-test",
                 "image": OC_CI_GOLANG,
+                "environment": {
+                    "HTTP_PROXY": {
+                        "from_secret": "drone_http_proxy",
+                    },
+                    "HTTPS_PROXY": {
+                        "from_secret": "drone_http_proxy",
+                    },
+                },
                 "commands": [
                     "make test",
                 ],
@@ -194,6 +202,12 @@ def testIntegration():
                 ],
                 "environment": {
                     "REDIS_ADDRESS": "redis:6379",
+                    "HTTP_PROXY": {
+                        "from_secret": "drone_http_proxy",
+                    },
+                    "HTTPS_PROXY": {
+                        "from_secret": "drone_http_proxy",
+                    },
                 },
             },
         ],
