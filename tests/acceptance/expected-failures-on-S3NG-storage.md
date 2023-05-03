@@ -6,8 +6,8 @@ The expected failures in this file are from features in the owncloud/ocis repo.
 Basic file management like up and download, move, copy, properties, quota, trash, versions and chunking.
 
 #### [invalid webdav responses for unauthorized requests.](https://github.com/owncloud/product/issues/273)
-- [coreApiTrashbin/trashbinFilesFolders.feature:282](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbin/trashbinFilesFolders.feature#L282)
-- [coreApiTrashbin/trashbinFilesFolders.feature:301](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbin/trashbinFilesFolders.feature#L301)
+- [coreApiTrashbin/trashbinFilesFolders.feature:265](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbin/trashbinFilesFolders.feature#L265)
+- [coreApiTrashbin/trashbinFilesFolders.feature:284](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbin/trashbinFilesFolders.feature#L284)
 
 ### [Downloading the older version of shared file gives 404](https://github.com/owncloud/ocis/issues/3868)
 - [coreApiVersions/fileVersions.feature:160](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiVersions/fileVersions.feature#L160)
@@ -438,40 +438,40 @@ API, search, favorites, config, capabilities, not existing endpoints, CORS and o
 - [coreApiMain/main.feature:5](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiMain/main.feature#L5) Scenario: robots.txt file should be accessible
 
 #### [Ability to return error messages in Webdav response bodies](https://github.com/owncloud/ocis/issues/1293)
-- [coreApiAuthOcs/ocsDELETEAuth.feature:8](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiAuthOcs/ocsDELETEAuth.feature#L8) Scenario: send DELETE requests to OCS endpoints as admin with wrong password
-- [coreApiAuthOcs/ocsGETAuth.feature:8](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiAuthOcs/ocsGETAuth.feature#L8) Scenario: using OCS anonymously
-- [coreApiAuthOcs/ocsGETAuth.feature:29](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiAuthOcs/ocsGETAuth.feature#L29) Scenario: ocs config end point accessible by unauthorized users
-- [coreApiAuthOcs/ocsGETAuth.feature:42](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiAuthOcs/ocsGETAuth.feature#L42) Scenario: using OCS with non-admin basic auth
-- [coreApiAuthOcs/ocsGETAuth.feature:73](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiAuthOcs/ocsGETAuth.feature#L73) Scenario: using OCS as normal user with wrong password
-- [coreApiAuthOcs/ocsGETAuth.feature:104](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiAuthOcs/ocsGETAuth.feature#L104) Scenario:using OCS with admin basic auth
-- [coreApiAuthOcs/ocsGETAuth.feature:121](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiAuthOcs/ocsGETAuth.feature#L121) Scenario: using OCS as admin user with wrong password
-- [coreApiAuthOcs/ocsPOSTAuth.feature:8](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiAuthOcs/ocsPOSTAuth.feature#L8) Scenario: send POST requests to OCS endpoints as normal user with wrong password
-- [coreApiAuthOcs/ocsPUTAuth.feature:8](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiAuthOcs/ocsPUTAuth.feature#L8) Scenario: send PUT request to OCS endpoints as admin with wrong password
+- [coreApiAuthOcs/ocsDELETEAuth.feature:11](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiAuthOcs/ocsDELETEAuth.feature#L11) Scenario: send DELETE requests to OCS endpoints as admin with wrong password
+- [coreApiAuthOcs/ocsGETAuth.feature:11](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiAuthOcs/ocsGETAuth.feature#L11) Scenario: using OCS anonymously
+- [coreApiAuthOcs/ocsGETAuth.feature:32](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiAuthOcs/ocsGETAuth.feature#L32) Scenario: ocs config end point accessible by unauthorized users
+- [coreApiAuthOcs/ocsGETAuth.feature:45](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiAuthOcs/ocsGETAuth.feature#L45) Scenario: using OCS with non-admin basic auth
+- [coreApiAuthOcs/ocsGETAuth.feature:76](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiAuthOcs/ocsGETAuth.feature#L76) Scenario: using OCS as normal user with wrong password
+- [coreApiAuthOcs/ocsGETAuth.feature:107](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiAuthOcs/ocsGETAuth.feature#L107) Scenario:using OCS with admin basic auth
+- [coreApiAuthOcs/ocsGETAuth.feature:124](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiAuthOcs/ocsGETAuth.feature#L124) Scenario: using OCS as admin user with wrong password
+- [coreApiAuthOcs/ocsPOSTAuth.feature:11](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiAuthOcs/ocsPOSTAuth.feature#L11) Scenario: send POST requests to OCS endpoints as normal user with wrong password
+- [coreApiAuthOcs/ocsPUTAuth.feature:11](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiAuthOcs/ocsPUTAuth.feature#L11) Scenario: send PUT request to OCS endpoints as admin with wrong password
 
 #### [sending MKCOL requests to another or non-existing user's webDav endpoints as normal user should return 404](https://github.com/owncloud/ocis/issues/5049)
 _ocdav: api compatibility, return correct status code_
-- [coreApiAuthWebDav/webDavDELETEAuth.feature:57](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiAuthWebDav/webDavDELETEAuth.feature#L57) Scenario: send DELETE requests to another user's webDav endpoints as normal user
-- [coreApiAuthWebDav/webDavPROPFINDAuth.feature:55](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiAuthWebDav/webDavPROPFINDAuth.feature#L55)  Scenario: send PROPFIND requests to another user's webDav endpoints as normal user
-- [coreApiAuthWebDav/webDavPROPPATCHAuth.feature:56](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiAuthWebDav/webDavPROPPATCHAuth.feature#L56) Scenario: send PROPPATCH requests to another user's webDav endpoints as normal user
-- [coreApiAuthWebDav/webDavMKCOLAuth.feature:52](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiAuthWebDav/webDavMKCOLAuth.feature#L52) Scenario: send MKCOL requests to another user's webDav endpoints as normal user
-- [coreApiAuthWebDav/webDavMKCOLAuth.feature:63](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiAuthWebDav/webDavMKCOLAuth.feature#L63) Scenario: send MKCOL requests to another user's webDav endpoints as normal user using the spaces WebDAV API
+- [coreApiAuthWebDav/webDavDELETEAuth.feature:61](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiAuthWebDav/webDavDELETEAuth.feature#L61) Scenario: send DELETE requests to another user's webDav endpoints as normal user
+- [coreApiAuthWebDav/webDavPROPFINDAuth.feature:58](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiAuthWebDav/webDavPROPFINDAuth.feature#L58)  Scenario: send PROPFIND requests to another user's webDav endpoints as normal user
+- [coreApiAuthWebDav/webDavPROPPATCHAuth.feature:59](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiAuthWebDav/webDavPROPPATCHAuth.feature#L59) Scenario: send PROPPATCH requests to another user's webDav endpoints as normal user
+- [coreApiAuthWebDav/webDavMKCOLAuth.feature:55](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiAuthWebDav/webDavMKCOLAuth.feature#L55) Scenario: send MKCOL requests to another user's webDav endpoints as normal user
+- [coreApiAuthWebDav/webDavMKCOLAuth.feature:66](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiAuthWebDav/webDavMKCOLAuth.feature#L66) Scenario: send MKCOL requests to another user's webDav endpoints as normal user using the spaces WebDAV API
 
 #### [trying to lock file of another user gives http 200](https://github.com/owncloud/ocis/issues/2176)
-- [coreApiAuthWebDav/webDavLOCKAuth.feature:56](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiAuthWebDav/webDavLOCKAuth.feature#L56) Scenario: send LOCK requests to another user's webDav endpoints as normal user
+- [coreApiAuthWebDav/webDavLOCKAuth.feature:59](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiAuthWebDav/webDavLOCKAuth.feature#L59) Scenario: send LOCK requests to another user's webDav endpoints as normal user
 
 #### [send (MOVE, COPY) requests to another user's webDav endpoints as normal user gives 400 instead of 403](https://github.com/owncloud/ocis/issues/3882)
 _ocdav: api compatibility, return correct status code_
-- [coreApiAuthWebDav/webDavMOVEAuth.feature:55](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiAuthWebDav/webDavMOVEAuth.feature#L55) Scenario: send MOVE requests to another user's webDav endpoints as normal user
-- [coreApiAuthWebDav/webDavCOPYAuth.feature:59](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiAuthWebDav/webDavCOPYAuth.feature#L59)
+- [coreApiAuthWebDav/webDavMOVEAuth.feature:58](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiAuthWebDav/webDavMOVEAuth.feature#L58) Scenario: send MOVE requests to another user's webDav endpoints as normal user
+- [coreApiAuthWebDav/webDavCOPYAuth.feature:58](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiAuthWebDav/webDavCOPYAuth.feature#L58)
 
 #### [send POST requests to another user's webDav endpoints as normal user](https://github.com/owncloud/ocis/issues/1287)
 _ocdav: api compatibility, return correct status code_
-- [coreApiAuthWebDav/webDavPOSTAuth.feature:56](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiAuthWebDav/webDavPOSTAuth.feature#L56)  Scenario: send POST requests to another user's webDav endpoints as normal user
+- [coreApiAuthWebDav/webDavPOSTAuth.feature:59](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiAuthWebDav/webDavPOSTAuth.feature#L59)  Scenario: send POST requests to another user's webDav endpoints as normal user
 
 #### [Using double slash in URL to access a folder gives 501 and other status codes](https://github.com/owncloud/ocis/issues/1667)
-- [coreApiAuthWebDav/webDavSpecialURLs.feature:34](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiAuthWebDav/webDavSpecialURLs.feature#L34)
-- [coreApiAuthWebDav/webDavSpecialURLs.feature:121](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiAuthWebDav/webDavSpecialURLs.feature#L121)
-- [coreApiAuthWebDav/webDavSpecialURLs.feature:163](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiAuthWebDav/webDavSpecialURLs.feature#L163)
+- [coreApiAuthWebDav/webDavSpecialURLs.feature:37](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiAuthWebDav/webDavSpecialURLs.feature#L37)
+- [coreApiAuthWebDav/webDavSpecialURLs.feature:124](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiAuthWebDav/webDavSpecialURLs.feature#L124)
+- [coreApiAuthWebDav/webDavSpecialURLs.feature:166](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiAuthWebDav/webDavSpecialURLs.feature#L166)
 
 #### [Difference in response content of status.php and default capabilities](https://github.com/owncloud/ocis/issues/1286)
 - [coreApiCapabilities/capabilitiesWithNormalUser.feature:11](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiCapabilities/capabilitiesWithNormalUser.feature#L11) Scenario: getting default capabilities with normal user
@@ -528,14 +528,14 @@ _ocdav: api compatibility, return correct status code_
 - [coreApiWebdavOperations/refuseAccess.feature:36](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavOperations/refuseAccess.feature#L36)
 
 #### [App Passwords/Tokens for legacy WebDAV clients](https://github.com/owncloud/ocis/issues/197)
-- [coreApiAuthWebDav/webDavDELETEAuth.feature:135](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiAuthWebDav/webDavDELETEAuth.feature#L135)
+- [coreApiAuthWebDav/webDavDELETEAuth.feature:139](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiAuthWebDav/webDavDELETEAuth.feature#L139)
 
 #### [Sharing a same file twice to the same group](https://github.com/owncloud/ocis/issues/1710)
 - [coreApiShareManagementBasicToShares/createShareToSharesFolder.feature:725](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiShareManagementBasicToShares/createShareToSharesFolder.feature#L725)
 - [coreApiShareManagementBasicToShares/createShareToSharesFolder.feature:724](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiShareManagementBasicToShares/createShareToSharesFolder.feature#L724)
 
 #### [Request to edit non-existing user by authorized admin gets unauthorized in http response](https://github.com/owncloud/ocis/issues/38423)
-- [coreApiAuthOcs/ocsPUTAuth.feature:24](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiAuthOcs/ocsPUTAuth.feature#L24)
+- [coreApiAuthOcs/ocsPUTAuth.feature:27](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiAuthOcs/ocsPUTAuth.feature#L27)
 
 
 ### Won't fix
@@ -694,7 +694,7 @@ _ocs: api compatibility, return correct status code_
 - [coreApiShareManagementToShares/moveReceivedShare.feature:14](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiShareManagementToShares/moveReceivedShare.feature#L14)
 
 #### [HTTP status code differ while listing the contents of another user's trash bin](https://github.com/owncloud/ocis/issues/3561)
-- [coreApiTrashbin/trashbinFilesFolders.feature:263](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbin/trashbinFilesFolders.feature#L263)
+- [coreApiTrashbin/trashbinFilesFolders.feature:246](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbin/trashbinFilesFolders.feature#L246)
 
 #### [Cannot disable the dav propfind depth infinity for resources](https://github.com/owncloud/ocis/issues/3720)
 - [coreApiWebdavOperations/listFiles.feature:364](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavOperations/listFiles.feature#L364)
@@ -722,16 +722,16 @@ _ocs: api compatibility, return correct status code_
 - [coreApiTrashbin/trashbinFilesFolders.feature:95](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbin/trashbinFilesFolders.feature#L95)
 - [coreApiTrashbin/trashbinFilesFolders.feature:131](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbin/trashbinFilesFolders.feature#L131)
 - [coreApiTrashbin/trashbinFilesFolders.feature:154](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbin/trashbinFilesFolders.feature#L154)
-- [coreApiTrashbin/trashbinFilesFolders.feature:320](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbin/trashbinFilesFolders.feature#L320)
-- [coreApiTrashbin/trashbinFilesFolders.feature:321](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbin/trashbinFilesFolders.feature#L321)
-- [coreApiTrashbin/trashbinFilesFolders.feature:322](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbin/trashbinFilesFolders.feature#L322)
-- [coreApiTrashbin/trashbinFilesFolders.feature:323](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbin/trashbinFilesFolders.feature#L323)
-- [coreApiTrashbin/trashbinFilesFolders.feature:324](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbin/trashbinFilesFolders.feature#L324)
-- [coreApiTrashbin/trashbinFilesFolders.feature:319](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbin/trashbinFilesFolders.feature#L319)
-- [coreApiTrashbin/trashbinFilesFolders.feature:346](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbin/trashbinFilesFolders.feature#L346)
-- [coreApiTrashbin/trashbinFilesFolders.feature:366](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbin/trashbinFilesFolders.feature#L366)
-- [coreApiTrashbin/trashbinFilesFolders.feature:420](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbin/trashbinFilesFolders.feature#L420)
-- [coreApiTrashbin/trashbinFilesFolders.feature:457](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbin/trashbinFilesFolders.feature#L457)
+- [coreApiTrashbin/trashbinFilesFolders.feature:302](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbin/trashbinFilesFolders.feature#L302)
+- [coreApiTrashbin/trashbinFilesFolders.feature:303](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbin/trashbinFilesFolders.feature#L303)
+- [coreApiTrashbin/trashbinFilesFolders.feature:305](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbin/trashbinFilesFolders.feature#L305)
+- [coreApiTrashbin/trashbinFilesFolders.feature:306](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbin/trashbinFilesFolders.feature#L306)
+- [coreApiTrashbin/trashbinFilesFolders.feature:307](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbin/trashbinFilesFolders.feature#L307)
+- [coreApiTrashbin/trashbinFilesFolders.feature:304](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbin/trashbinFilesFolders.feature#L304)
+- [coreApiTrashbin/trashbinFilesFolders.feature:349](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbin/trashbinFilesFolders.feature#L349)
+- [coreApiTrashbin/trashbinFilesFolders.feature:329](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbin/trashbinFilesFolders.feature#L329)
+- [coreApiTrashbin/trashbinFilesFolders.feature:403](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbin/trashbinFilesFolders.feature#L403)
+- [coreApiTrashbin/trashbinFilesFolders.feature:440](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbin/trashbinFilesFolders.feature#L440)
 - [coreApiTrashbin/trashbinSharingToShares.feature:23](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbin/trashbinSharingToShares.feature#L23)
 - [coreApiTrashbin/trashbinSharingToShares.feature:206](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbin/trashbinSharingToShares.feature#L206)
 - [coreApiTrashbin/trashbinSharingToShares.feature:230](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbin/trashbinSharingToShares.feature#L230)
@@ -753,44 +753,44 @@ _ocs: api compatibility, return correct status code_
 - [coreApiTrashbinRestore/trashbinRestore.feature:111](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbinRestore/trashbinRestore.feature#L111)
 - [coreApiTrashbinRestore/trashbinRestore.feature:130](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbinRestore/trashbinRestore.feature#L130)
 - [coreApiTrashbinRestore/trashbinRestore.feature:131](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbinRestore/trashbinRestore.feature#L131)
-- [coreApiTrashbinRestore/trashbinRestore.feature:180](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbinRestore/trashbinRestore.feature#L180)
-- [coreApiTrashbinRestore/trashbinRestore.feature:181](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbinRestore/trashbinRestore.feature#L181)
+- [coreApiTrashbinRestore/trashbinRestore.feature:145](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbinRestore/trashbinRestore.feature#L145)
+- [coreApiTrashbinRestore/trashbinRestore.feature:146](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbinRestore/trashbinRestore.feature#L146)
+- [coreApiTrashbinRestore/trashbinRestore.feature:160](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbinRestore/trashbinRestore.feature#L160)
+- [coreApiTrashbinRestore/trashbinRestore.feature:161](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbinRestore/trashbinRestore.feature#L161)
+- [coreApiTrashbinRestore/trashbinRestore.feature:175](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbinRestore/trashbinRestore.feature#L175)
+- [coreApiTrashbinRestore/trashbinRestore.feature:176](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbinRestore/trashbinRestore.feature#L176)
+- [coreApiTrashbinRestore/trashbinRestore.feature:192](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbinRestore/trashbinRestore.feature#L192)
+- [coreApiTrashbinRestore/trashbinRestore.feature:193](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbinRestore/trashbinRestore.feature#L193)
+- [coreApiTrashbinRestore/trashbinRestore.feature:194](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbinRestore/trashbinRestore.feature#L194)
 - [coreApiTrashbinRestore/trashbinRestore.feature:195](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbinRestore/trashbinRestore.feature#L195)
-- [coreApiTrashbinRestore/trashbinRestore.feature:196](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbinRestore/trashbinRestore.feature#L196)
-- [coreApiTrashbinRestore/trashbinRestore.feature:210](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbinRestore/trashbinRestore.feature#L210)
-- [coreApiTrashbinRestore/trashbinRestore.feature:211](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbinRestore/trashbinRestore.feature#L211)
-- [coreApiTrashbinRestore/trashbinRestore.feature:227](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbinRestore/trashbinRestore.feature#L227)
-- [coreApiTrashbinRestore/trashbinRestore.feature:228](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbinRestore/trashbinRestore.feature#L228)
-- [coreApiTrashbinRestore/trashbinRestore.feature:229](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbinRestore/trashbinRestore.feature#L229)
+- [coreApiTrashbinRestore/trashbinRestore.feature:190](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbinRestore/trashbinRestore.feature#L190)
+- [coreApiTrashbinRestore/trashbinRestore.feature:191](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbinRestore/trashbinRestore.feature#L191)
+- [coreApiTrashbinRestore/trashbinRestore.feature:212](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbinRestore/trashbinRestore.feature#L212)
+- [coreApiTrashbinRestore/trashbinRestore.feature:213](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbinRestore/trashbinRestore.feature#L213)
 - [coreApiTrashbinRestore/trashbinRestore.feature:230](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbinRestore/trashbinRestore.feature#L230)
-- [coreApiTrashbinRestore/trashbinRestore.feature:225](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbinRestore/trashbinRestore.feature#L225)
-- [coreApiTrashbinRestore/trashbinRestore.feature:226](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbinRestore/trashbinRestore.feature#L226)
-- [coreApiTrashbinRestore/trashbinRestore.feature:247](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbinRestore/trashbinRestore.feature#L247)
-- [coreApiTrashbinRestore/trashbinRestore.feature:248](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbinRestore/trashbinRestore.feature#L248)
-- [coreApiTrashbinRestore/trashbinRestore.feature:265](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbinRestore/trashbinRestore.feature#L265)
-- [coreApiTrashbinRestore/trashbinRestore.feature:266](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbinRestore/trashbinRestore.feature#L266)
-- [coreApiTrashbinRestore/trashbinRestore.feature:285](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbinRestore/trashbinRestore.feature#L285)
-- [coreApiTrashbinRestore/trashbinRestore.feature:286](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbinRestore/trashbinRestore.feature#L286)
+- [coreApiTrashbinRestore/trashbinRestore.feature:231](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbinRestore/trashbinRestore.feature#L231)
+- [coreApiTrashbinRestore/trashbinRestore.feature:250](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbinRestore/trashbinRestore.feature#L250)
+- [coreApiTrashbinRestore/trashbinRestore.feature:251](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbinRestore/trashbinRestore.feature#L251)
+- [coreApiTrashbinRestore/trashbinRestore.feature:270](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbinRestore/trashbinRestore.feature#L270)
+- [coreApiTrashbinRestore/trashbinRestore.feature:271](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbinRestore/trashbinRestore.feature#L271)
+- [coreApiTrashbinRestore/trashbinRestore.feature:304](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbinRestore/trashbinRestore.feature#L304)
 - [coreApiTrashbinRestore/trashbinRestore.feature:305](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbinRestore/trashbinRestore.feature#L305)
-- [coreApiTrashbinRestore/trashbinRestore.feature:306](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbinRestore/trashbinRestore.feature#L306)
-- [coreApiTrashbinRestore/trashbinRestore.feature:339](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbinRestore/trashbinRestore.feature#L339)
-- [coreApiTrashbinRestore/trashbinRestore.feature:340](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbinRestore/trashbinRestore.feature#L340)
-- [coreApiTrashbinRestore/trashbinRestore.feature:378](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbinRestore/trashbinRestore.feature#L378)
-- [coreApiTrashbinRestore/trashbinRestore.feature:379](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbinRestore/trashbinRestore.feature#L379)
-- [coreApiTrashbinRestore/trashbinRestore.feature:417](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbinRestore/trashbinRestore.feature#L417)
-- [coreApiTrashbinRestore/trashbinRestore.feature:418](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbinRestore/trashbinRestore.feature#L418)
-- [coreApiTrashbinRestore/trashbinRestore.feature:435](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbinRestore/trashbinRestore.feature#L435)
-- [coreApiTrashbinRestore/trashbinRestore.feature:436](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbinRestore/trashbinRestore.feature#L436)
-- [coreApiTrashbinRestore/trashbinRestore.feature:454](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbinRestore/trashbinRestore.feature#L454)
-- [coreApiTrashbinRestore/trashbinRestore.feature:455](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbinRestore/trashbinRestore.feature#L455)
+- [coreApiTrashbinRestore/trashbinRestore.feature:343](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbinRestore/trashbinRestore.feature#L343)
+- [coreApiTrashbinRestore/trashbinRestore.feature:344](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbinRestore/trashbinRestore.feature#L344)
+- [coreApiTrashbinRestore/trashbinRestore.feature:382](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbinRestore/trashbinRestore.feature#L382)
+- [coreApiTrashbinRestore/trashbinRestore.feature:383](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbinRestore/trashbinRestore.feature#L383)
+- [coreApiTrashbinRestore/trashbinRestore.feature:400](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbinRestore/trashbinRestore.feature#L400)
+- [coreApiTrashbinRestore/trashbinRestore.feature:401](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbinRestore/trashbinRestore.feature#L401)
+- [coreApiTrashbinRestore/trashbinRestore.feature:419](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbinRestore/trashbinRestore.feature#L419)
+- [coreApiTrashbinRestore/trashbinRestore.feature:420](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbinRestore/trashbinRestore.feature#L420)
+- [coreApiTrashbinRestore/trashbinRestore.feature:443](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbinRestore/trashbinRestore.feature#L443)
+- [coreApiTrashbinRestore/trashbinRestore.feature:444](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbinRestore/trashbinRestore.feature#L444)
+- [coreApiTrashbinRestore/trashbinRestore.feature:462](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbinRestore/trashbinRestore.feature#L462)
+- [coreApiTrashbinRestore/trashbinRestore.feature:463](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbinRestore/trashbinRestore.feature#L463)
+- [coreApiTrashbinRestore/trashbinRestore.feature:477](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbinRestore/trashbinRestore.feature#L477)
 - [coreApiTrashbinRestore/trashbinRestore.feature:478](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbinRestore/trashbinRestore.feature#L478)
-- [coreApiTrashbinRestore/trashbinRestore.feature:479](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbinRestore/trashbinRestore.feature#L479)
-- [coreApiTrashbinRestore/trashbinRestore.feature:497](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbinRestore/trashbinRestore.feature#L497)
-- [coreApiTrashbinRestore/trashbinRestore.feature:498](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbinRestore/trashbinRestore.feature#L498)
-- [coreApiTrashbinRestore/trashbinRestore.feature:512](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbinRestore/trashbinRestore.feature#L512)
-- [coreApiTrashbinRestore/trashbinRestore.feature:513](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbinRestore/trashbinRestore.feature#L513)
-- [coreApiTrashbinRestore/trashbinRestore.feature:566](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbinRestore/trashbinRestore.feature#L566)
-- [coreApiTrashbinRestore/trashbinRestore.feature:567](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbinRestore/trashbinRestore.feature#L567)
+- [coreApiTrashbinRestore/trashbinRestore.feature:531](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbinRestore/trashbinRestore.feature#L531)
+- [coreApiTrashbinRestore/trashbinRestore.feature:532](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiTrashbinRestore/trashbinRestore.feature#L532)
 - [coreApiWebdavEtagPropagation2/restoreFromTrash.feature:26](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavEtagPropagation2/restoreFromTrash.feature#L26)
 - [coreApiWebdavEtagPropagation2/restoreFromTrash.feature:27](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavEtagPropagation2/restoreFromTrash.feature#L27)
 - [coreApiWebdavEtagPropagation2/restoreFromTrash.feature:49](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavEtagPropagation2/restoreFromTrash.feature#L49)
@@ -813,7 +813,7 @@ _ocs: api compatibility, return correct status code_
 
 #### [WebDAV MOVE with body returns 400 rather than 415](https://github.com/cs3org/reva/issues/3119)
 
-- [coreApiAuthWebDav/webDavMOVEAuth.feature:133](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiAuthWebDav/webDavMOVEAuth.feature#L133)
+- [coreApiAuthWebDav/webDavMOVEAuth.feature:136](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiAuthWebDav/webDavMOVEAuth.feature#L136)
 
 #### [reShareUpdate API tests failing in reva](https://github.com/cs3org/reva/issues/2916)
 
@@ -830,7 +830,7 @@ _ocs: api compatibility, return correct status code_
 - [coreApiSharePublicLink1/createPublicLinkShare.feature:307](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiSharePublicLink1/createPublicLinkShare.feature#L307)
 
 #### [valid WebDAV (DELETE, COPY or MOVE) requests with body must exit with 415](https://github.com/owncloud/ocis/issues/4332)
-- [coreApiAuthWebDav/webDavCOPYAuth.feature:137](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiAuthWebDav/webDavCOPYAuth.feature#L137)
+- [coreApiAuthWebDav/webDavCOPYAuth.feature:136](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiAuthWebDav/webDavCOPYAuth.feature#L136)
 
 #### [PROPFIND on (password protected) public link returns invalid XML](https://github.com/owncloud/ocis/issues/39707)
 The problem has been fixed in reva edge branch but not in reva master
