@@ -157,6 +157,7 @@ func initServerless(mainConf map[string]interface{}, log *zerolog.Logger) *rserv
 		serverless, err := getServerless(mainConf["serverless"], log)
 		if err != nil {
 			log.Error().Err(err).Msg("error")
+			os.Exit(1)
 		}
 		return serverless
 	}
