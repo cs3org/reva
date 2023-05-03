@@ -88,9 +88,8 @@ func (s *Serverless) registerServices() error {
 				return errors.Wrapf(err, "serverless service %s could not be initialized", svcName)
 			}
 
-			go func() {
-				svc.Start()
-			}()
+			go svc.Start()
+
 			s.services[svcName] = svc
 
 			s.log.Info().Msgf("serverless service enabled: %s", svcName)
