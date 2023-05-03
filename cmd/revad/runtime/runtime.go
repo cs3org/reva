@@ -106,6 +106,9 @@ func run(mainConf map[string]interface{}, coreConf *coreConf, logger *zerolog.Lo
 		log.Panic(err)
 	}
 	listeners := initListeners(watcher, servers, logger)
+	if serverless != nil {
+		watcher.SL = serverless
+	}
 
 	start(mainConf, servers, serverless, listeners, logger, watcher)
 }

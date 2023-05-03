@@ -20,6 +20,7 @@ package rserverless
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
@@ -29,6 +30,8 @@ import (
 // Service represents a serverless service.
 type Service interface {
 	Start()
+	GracefulStop() error
+	Stop() error
 }
 
 // Services is a map of service name and its new function.
@@ -76,6 +79,74 @@ func (s *Serverless) isServiceEnabled(svcName string) bool {
 // Start starts the serverless service collection.
 func (s *Serverless) Start() error {
 	return s.registerServices()
+}
+
+func stillRunning(stoppedServices map[string]bool) []string {
+	stillRunning := []string{}
+
+	for svcName, stopped := range stoppedServices {
+		if !stopped {
+			stillRunning = append(stillRunning, svcName)
+		}
+	}
+
+	return stillRunning
+}
+
+// GracefulStop gracefully stops the serverless services.
+func (s *Serverless) GracefulStop() error {
+	stoppedServices := make(map[string]bool, len(s.services))
+
+	for svcName, svc := range s.services {
+		stoppedServices[svcName] = false
+
+		go func(svcName string, svc Service) {
+			s.log.Info().Msgf("trying to stop serverless service %s", svcName)
+			if err := svc.GracefulStop(); err != nil {
+				s.log.Error().Err(err).Msgf("error gracefully stopping service %s, trying hard stop", svcName)
+				if err := svc.Stop(); err != nil {
+					s.log.Error().Err(err).Msgf("error hard stopping service %s", svcName)
+				} else {
+					stoppedServices[svcName] = true
+				}
+			} else {
+				s.log.Info().Msgf("service %s stopped", svcName)
+				stoppedServices[svcName] = true
+			}
+		}(svcName, svc)
+	}
+
+	count := 9 // one second less than the grace watcher deadlne
+	ticker := time.NewTicker(time.Second)
+	for ; true; <-ticker.C {
+		count--
+		stillRunningServices := stillRunning(stoppedServices)
+
+		if len(stillRunningServices) == 0 {
+			s.log.Info().Msg("all services are stopped")
+			return nil
+		}
+
+		if count <= 0 {
+			s.log.Info().Msg("deadline reached before stopping all services")
+			return errors.Errorf("the services %v will stop abruptly", stillRunningServices)
+		}
+	}
+
+	return nil
+}
+
+// Stop stop the serverless services without waiting.
+func (s *Serverless) Stop() error {
+	for svcName, svc := range s.services {
+		if err := svc.Stop(); err != nil {
+			s.log.Error().Err(err).Msgf("error stopping service %s", svcName)
+		} else {
+			s.log.Info().Msgf("service %s stopped", svcName)
+		}
+	}
+
+	return nil
 }
 
 func (s *Serverless) registerServices() error {
