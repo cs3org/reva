@@ -1,3 +1,26 @@
+Changelog for reva 2.13.1 (2023-05-03)
+=======================================
+
+The following sections list the changes in reva 2.13.1 relevant to
+reva users. The changes are ordered by importance.
+
+Summary
+-------
+
+*   Fix #3843: Allow scope check to impersonate space owners
+
+Details
+-------
+
+*   Bugfix #3843: Allow scope check to impersonate space owners
+
+   The publicshare scope check now fakes a user to mint an access token when impersonating a user of
+   type `SPACE_OWNER` which is used for project spaces. This fixes downloading archives from
+   public link shares in project spaces.
+
+   https://github.com/owncloud/ocis/issues/5229
+   https://github.com/cs3org/reva/pull/3843
+
 Changelog for reva 2.13.0 (2023-05-02)
 =======================================
 
@@ -1690,34 +1713,6 @@ Details
 
    https://github.com/cs3org/reva/pull/3083
 
-Changelog for reva 2.7.1 (2022-07-15)
-=======================================
-
-The following sections list the changes in reva 2.7.1 relevant to
-reva users. The changes are ordered by importance.
-
-Summary
--------
-
-*   Fix #3080: Make dataproviders return more headers
-*   Enh #3046: Add user filter
-
-Details
--------
-
-*   Bugfix #3080: Make dataproviders return more headers
-
-   Instead of ocdav doing an additional Stat request we now rely on the dataprovider to return the
-   necessary metadata information as headers.
-
-   https://github.com/owncloud/reva/issues/3080
-
-*   Enhancement #3046: Add user filter
-
-   This PR adds the ability to filter spaces by user-id
-
-   https://github.com/cs3org/reva/pull/3046
-
 Changelog for reva 2.7.0 (2022-07-15)
 =======================================
 
@@ -1849,6 +1844,34 @@ Details
    https://github.com/owncloud/ocis/issues/2144
    https://github.com/owncloud/ocis/issues/3073
    https://github.com/cs3org/reva/pull/2977
+
+Changelog for reva 2.7.1 (2022-07-15)
+=======================================
+
+The following sections list the changes in reva 2.7.1 relevant to
+reva users. The changes are ordered by importance.
+
+Summary
+-------
+
+*   Fix #3080: Make dataproviders return more headers
+*   Enh #3046: Add user filter
+
+Details
+-------
+
+*   Bugfix #3080: Make dataproviders return more headers
+
+   Instead of ocdav doing an additional Stat request we now rely on the dataprovider to return the
+   necessary metadata information as headers.
+
+   https://github.com/owncloud/reva/issues/3080
+
+*   Enhancement #3046: Add user filter
+
+   This PR adds the ability to filter spaces by user-id
+
+   https://github.com/cs3org/reva/pull/3046
 
 Changelog for reva 2.6.1 (2022-06-27)
 =======================================
