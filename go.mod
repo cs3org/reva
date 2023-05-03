@@ -66,7 +66,7 @@ require (
 	go.opentelemetry.io/otel/trace v1.11.2
 	go.step.sm/crypto v0.23.2
 	golang.org/x/crypto v0.5.0
-	golang.org/x/oauth2 v0.0.0-20221014153046-6fdb5e3db783
+	golang.org/x/oauth2 v0.3.0
 	golang.org/x/sync v0.1.0
 	golang.org/x/sys v0.5.0
 	golang.org/x/term v0.5.0
@@ -76,6 +76,8 @@ require (
 	google.golang.org/protobuf v1.28.1
 	gotest.tools v2.2.0+incompatible
 )
+
+require github.com/go-jose/go-jose/v3 v3.0.0 // indirect
 
 require (
 	github.com/Azure/go-ntlmssp v0.0.0-20220621081337-cb9428e4ac1e // indirect
@@ -87,6 +89,7 @@ require (
 	github.com/bmizerany/pat v0.0.0-20170815010413-6226ea591a40 // indirect
 	github.com/cespare/xxhash v1.1.0 // indirect
 	github.com/cespare/xxhash/v2 v2.1.2 // indirect
+	github.com/coreos/go-oidc/v3 v3.5.0
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/dolthub/vitess v0.0.0-20221031111135-9aad77e7b39f // indirect
 	github.com/dustin/go-humanize v1.0.0 // indirect
