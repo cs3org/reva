@@ -61,10 +61,6 @@ type createShareRequest struct {
 	Role              string `json:"role" validate:"oneof=viewer editor"`
 	RecipientUsername string `json:"recipientUsername" validate:"required"`
 	RecipientHost     string `json:"recipientHost" validate:"required"`
-	// FIXME: the client should not authenticate here
-	LoginType     string `json:"loginType" validate:"required"`
-	LoginUsername string `json:"loginUsername" validate:"required"`
-	LoginPassword string `json:"loginPassword" validate:"required"`
 }
 
 // CreateShare creates an OCM share.
