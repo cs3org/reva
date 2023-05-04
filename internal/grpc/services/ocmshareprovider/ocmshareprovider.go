@@ -208,6 +208,14 @@ func (s *service) getWebappProtocol(share *ocm.Share) *ocmd.Webapp {
 	}
 }
 
+func (s *service) getDataTransferProtocol(ctx context.Context, share *ocm.Share) *ocmd.Datatx {
+	// TODO discover the size
+	return &ocmd.Datatx{
+		SourceURI: s.webdavURL(ctx, share),
+		Size:      0,
+	}
+}
+
 func (s *service) getProtocols(ctx context.Context, share *ocm.Share) ocmd.Protocols {
 	var p ocmd.Protocols
 	for _, m := range share.AccessMethods {
@@ -217,7 +225,7 @@ func (s *service) getProtocols(ctx context.Context, share *ocm.Share) ocmd.Proto
 		case *ocm.AccessMethod_WebappOptions:
 			p = append(p, s.getWebappProtocol(share))
 		case *ocm.AccessMethod_TransferOptions:
-			// TODO
+			p = append(p, s.getDataTransferProtocol(ctx, share))
 		}
 	}
 	return p
