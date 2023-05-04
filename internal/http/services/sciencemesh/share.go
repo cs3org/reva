@@ -19,7 +19,6 @@
 package sciencemesh
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"mime"
@@ -35,11 +34,9 @@ import (
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/internal/http/services/reqres"
 	"github.com/cs3org/reva/pkg/appctx"
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/ocm/share"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/go-playground/validator/v10"
-	"google.golang.org/grpc/metadata"
 )
 
 var validate = validator.New()
@@ -74,8 +71,6 @@ func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := r.Context()
-	ctx = ctxpkg.ContextSetToken(ctx, res.Token)
-	ctx = metadata.AppendToOutgoingContext(ctx, ctxpkg.TokenHeader, res.Token)
 
 	statRes, err := h.gatewayClient.Stat(ctx, &providerv1beta1.StatRequest{
 		Ref: &providerv1beta1.Reference{
