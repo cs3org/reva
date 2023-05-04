@@ -73,21 +73,6 @@ func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// FIXME: the client should be already authenticated
-	res, err := h.gatewayClient.Authenticate(context.Background(), &gateway.AuthenticateRequest{
-		Type:         req.LoginType,
-		ClientId:     req.LoginUsername,
-		ClientSecret: req.LoginPassword,
-	})
-	if err != nil {
-		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, "unexpected error", err)
-		return
-	}
-	if res.Status.Code != rpc.Code_CODE_OK {
-		reqres.WriteError(w, r, reqres.APIErrorUnauthenticated, res.Status.Message, errors.New(res.Status.Message))
-		return
-	}
-
 	ctx := r.Context()
 	ctx = ctxpkg.ContextSetToken(ctx, res.Token)
 	ctx = metadata.AppendToOutgoingContext(ctx, ctxpkg.TokenHeader, res.Token)
