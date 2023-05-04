@@ -879,8 +879,13 @@ func (driver *rclone) extractEndpointInfo(ctx context.Context, targetURL string)
 		return nil, errors.Wrap(err, "datatx service: error parsing target resource name")
 	}
 
+	var path string
+	if m["name"] != nil {
+		path = m["name"][0]
+	}
+
 	return &endpoint{
-		filePath:       m["name"][0],
+		filePath:       path,
 		endpoint:       uri.Host + uri.Path,
 		endpointScheme: uri.Scheme,
 		token:          uri.User.String(),

@@ -46,10 +46,10 @@ type config struct {
 	TxDriver  string                            `mapstructure:"txdriver"`
 	TxDrivers map[string]map[string]interface{} `mapstructure:"txdrivers"`
 	// storage driver to persist share/transfer relation
-	StorageDriver       string                            `mapstructure:"storage_driver"`
-	StorageDrivers      map[string]map[string]interface{} `mapstructure:"storage_drivers"`
-	TxSharesFile        string                            `mapstructure:"tx_shares_file"`
-	DataTransfersFolder string                            `mapstructure:"data_transfers_folder"`
+	StorageDriver  string                            `mapstructure:"storage_driver"`
+	StorageDrivers map[string]map[string]interface{} `mapstructure:"storage_drivers"`
+	TxSharesFile   string                            `mapstructure:"tx_shares_file"`
+	RemoveOnCancel bool                              `mapstructure:"remove_on_cancel"`
 }
 
 type service struct {
@@ -80,9 +80,6 @@ func (c *config) init() {
 	}
 	if c.TxSharesFile == "" {
 		c.TxSharesFile = "/var/tmp/reva/datatx-shares.json"
-	}
-	if c.DataTransfersFolder == "" {
-		c.DataTransfersFolder = "/home/DataTransfers"
 	}
 }
 
@@ -211,10 +208,22 @@ func (s *service) CancelTransfer(ctx context.Context, req *datatx.CancelTransfer
 		return nil, errtypes.InternalError("datatx service: transfer not found")
 	}
 
+	transferRemovedMessage := ""
+	if s.conf.RemoveOnCancel {
+		delete(s.txShareDriver.model.TxShares, req.TxId.GetOpaqueId())
+		if err := s.txShareDriver.model.saveTxShare(); err != nil {
+			err = errors.Wrap(err, "datatx service: error deleting transfer: "+datatx.Status_STATUS_INVALID.String())
+			return &datatx.CancelTransferResponse{
+				Status: status.NewInvalid(ctx, "error cancelling transfer"),
+			}, err
+		}
+		transferRemovedMessage = "transfer successfully removed"
+	}
+
 	txInfo, err := s.txManager.CancelTransfer(ctx, req.GetTxId().OpaqueId)
 	if err != nil {
 		txInfo.ShareId = &ocm.ShareId{OpaqueId: txShare.ShareID}
-		err = errors.Wrap(err, "datatx service: error cancelling transfer")
+		err = errors.Wrapf(err, "(%v) datatx service: error cancelling transfer", transferRemovedMessage)
 		return &datatx.CancelTransferResponse{
 			Status: status.NewInternal(ctx, err, "error cancelling transfer"),
 			TxInfo: txInfo,
