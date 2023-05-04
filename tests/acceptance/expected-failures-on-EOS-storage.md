@@ -42,7 +42,7 @@ The expected failures in this file are from features in the owncloud/ocis repo.
 - [coreApiMain/checksums.feature:347](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiMain/checksums.feature#L347)
 
 ### [no robots.txt available](https://github.com/owncloud/ocis/issues/1314)
-- [coreApiMain/main.feature:5](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiMain/main.feature#L5)
+- [coreApiMain/main.feature:8](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiMain/main.feature#L8)
 
 ### [quota query](https://github.com/owncloud/ocis/issues/1313)
 - [coreApiMain/quota.feature:9](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiMain/quota.feature#L9)
