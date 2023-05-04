@@ -19,7 +19,9 @@
 package rserverless
 
 import (
+	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/mitchellh/mapstructure"
@@ -30,8 +32,7 @@ import (
 // Service represents a serverless service.
 type Service interface {
 	Start()
-	GracefulStop() error
-	Stop() error
+	Close(ctx context.Context) error
 }
 
 // Services is a map of service name and its new function.
@@ -78,78 +79,65 @@ func (s *Serverless) isServiceEnabled(svcName string) bool {
 
 // Start starts the serverless service collection.
 func (s *Serverless) Start() error {
-	return s.registerServices()
-}
-
-func stillRunning(stoppedServices map[string]bool) []string {
-	stillRunning := []string{}
-
-	for svcName, stopped := range stoppedServices {
-		if !stopped {
-			stillRunning = append(stillRunning, svcName)
-		}
-	}
-
-	return stillRunning
+	return s.registerAndStartServices()
 }
 
 // GracefulStop gracefully stops the serverless services.
 func (s *Serverless) GracefulStop() error {
-	stoppedServices := make(map[string]bool, len(s.services))
+	var wg sync.WaitGroup
 
 	for svcName, svc := range s.services {
-		stoppedServices[svcName] = false
+		wg.Add(1)
 
 		go func(svcName string, svc Service) {
-			s.log.Info().Msgf("trying to stop serverless service %s", svcName)
-			if err := svc.GracefulStop(); err != nil {
-				s.log.Error().Err(err).Msgf("error gracefully stopping service %s, trying hard stop", svcName)
-				if err := svc.Stop(); err != nil {
-					s.log.Error().Err(err).Msgf("error hard stopping service %s", svcName)
-				} else {
-					stoppedServices[svcName] = true
-				}
+			defer wg.Done()
+
+			s.log.Info().Msgf("Sending stop request to service %s", svcName)
+			ctx := context.Background()
+
+			err := svc.Close(ctx)
+			if err != nil {
+				s.log.Error().Err(err).Msgf("error stopping service %s", svcName)
 			} else {
 				s.log.Info().Msgf("service %s stopped", svcName)
-				stoppedServices[svcName] = true
 			}
 		}(svcName, svc)
 	}
 
-	count := 9 // one second less than the grace watcher deadlne
-	ticker := time.NewTicker(time.Second)
-	for ; true; <-ticker.C {
-		count--
-		stillRunningServices := stillRunning(stoppedServices)
-
-		if len(stillRunningServices) == 0 {
-			s.log.Info().Msg("all services are stopped")
-			return nil
-		}
-
-		if count <= 0 {
-			s.log.Info().Msg("deadline reached before stopping all services")
-			return errors.Errorf("the services %v will stop abruptly", stillRunningServices)
-		}
-	}
+	wg.Wait()
 
 	return nil
 }
 
-// Stop stop the serverless services without waiting.
+// Stop stops the serverless services with a one second deadline.
 func (s *Serverless) Stop() error {
+	var wg sync.WaitGroup
+
 	for svcName, svc := range s.services {
-		if err := svc.Stop(); err != nil {
-			s.log.Error().Err(err).Msgf("error stopping service %s", svcName)
-		} else {
-			s.log.Info().Msgf("service %s stopped", svcName)
-		}
+		wg.Add(1)
+
+		go func(svcName string, svc Service) {
+			defer wg.Done()
+
+			s.log.Info().Msgf("Sending stop request to service %s", svcName)
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			defer cancel()
+
+			err := svc.Close(ctx)
+			if err != nil {
+				s.log.Error().Err(err).Msgf("error stopping service %s", svcName)
+			} else {
+				s.log.Info().Msgf("service %s stopped", svcName)
+			}
+		}(svcName, svc)
 	}
+
+	wg.Wait()
 
 	return nil
 }
 
-func (s *Serverless) registerServices() error {
+func (s *Serverless) registerAndStartServices() error {
 	for svcName := range s.conf.Services {
 		if s.isServiceEnabled(svcName) {
 			newFunc := Services[svcName]
@@ -165,8 +153,7 @@ func (s *Serverless) registerServices() error {
 
 			s.log.Info().Msgf("serverless service enabled: %s", svcName)
 		} else {
-			message := fmt.Sprintf("serverless service %s does not exist", svcName)
-			return errors.New(message)
+			return fmt.Errorf("serverless service %s does not exist", svcName)
 		}
 	}
 

@@ -19,6 +19,7 @@
 package helloworld
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"time"
@@ -29,8 +30,7 @@ import (
 )
 
 type config struct {
-	Outfile    string `mapstructure:"outfile"`
-	DieTimeout int64  `mapstructure:"die_timeout"`
+	Outfile string `mapstructure:"outfile"`
 }
 
 func (c *config) init() {
@@ -75,19 +75,12 @@ func New(m map[string]interface{}, log *zerolog.Logger) (rserverless.Service, er
 
 // Start starts the helloworld service.
 func (s *svc) Start() {
-	s.log.Debug().Msgf("helloworld server started with timeout %d, saying hello at %s", s.conf.DieTimeout, s.conf.Outfile)
+	s.log.Debug().Msgf("helloworld server started, saying hello at %s", s.conf.Outfile)
 	go s.sayHello(s.conf.Outfile)
 }
 
-func (s *svc) GracefulStop() error {
-	s.log.Debug().Msgf("graceful stop requested, simulating delay of %d seconds", s.conf.DieTimeout)
-	time.Sleep(time.Second * time.Duration(s.conf.DieTimeout))
-	return s.file.Close()
-}
-
-// Stop stops the helloworld service.
-func (s *svc) Stop() error {
-	s.log.Debug().Msgf("hard stop requested")
+// Close stops the helloworld service.
+func (s *svc) Close(ctx context.Context) error {
 	return s.file.Close()
 }
 
