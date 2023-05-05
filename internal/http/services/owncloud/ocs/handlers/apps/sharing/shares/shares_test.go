@@ -291,6 +291,53 @@ var _ = Describe("The ocs API", func() {
 				})
 			})
 		})
+
+		It("does not allow adding space members to a personal space", func() {
+			client.On("Stat", mock.Anything, mock.Anything).Return(&provider.StatResponse{
+				Status: status.NewOK(context.Background()),
+				Info: &provider.ResourceInfo{
+					Type: provider.ResourceType_RESOURCE_TYPE_CONTAINER,
+					Path: "/",
+					Id: &provider.ResourceId{
+						StorageId: "storageid",
+						SpaceId:   "spaceid",
+						OpaqueId:  "spaceid",
+					},
+					Owner: user.Id,
+					PermissionSet: &provider.ResourcePermissions{
+						Stat:                 true,
+						GetPath:              true,
+						GetQuota:             true,
+						InitiateFileDownload: true,
+						ListRecycle:          true,
+						ListContainer:        true,
+						AddGrant:             true,
+						UpdateGrant:          true,
+						RemoveGrant:          true,
+					},
+					Size: 10,
+					Space: &provider.StorageSpace{
+						SpaceType: "personal",
+					},
+				},
+			}, nil)
+
+			form := url.Values{}
+			form.Add("shareType", "7")
+			form.Add("path", "/")
+			form.Add("spaceRef", "storageid!spaceid")
+			form.Add("permissions", "1")
+			form.Add("role", "viewer")
+			form.Add("shareWith", "admin")
+			req := httptest.NewRequest("POST", "/apps/files_sharing/api/v1/shares", strings.NewReader(form.Encode()))
+			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			req = req.WithContext(ctx)
+
+			w := httptest.NewRecorder()
+			h.CreateShare(w, req)
+			Expect(w.Result().StatusCode).To(Equal(400))
+			client.AssertNumberOfCalls(GinkgoT(), "CreateShare", 0)
+		})
 	})
 
 	Describe("ListShares", func() {
