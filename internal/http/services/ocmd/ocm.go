@@ -34,10 +34,13 @@ func init() {
 }
 
 type config struct {
-	Prefix                     string     `mapstructure:"prefix"`
-	GatewaySvc                 string     `mapstructure:"gatewaysvc"`
-	Config                     configData `mapstructure:"config"`
-	ExposeRecipientDisplayName bool       `mapstructure:"expose_recipient_display_name"`
+	Prefix                     string `mapstructure:"prefix"`
+	GatewaySvc                 string `mapstructure:"gatewaysvc"`
+	Endpoint                   string `mapstructure:"endpoint"`
+	Provider                   string `mapstructure:"provider"`
+	EnableWebApp               bool   `mapstructure:"enable_webapp"`
+	EnableDataTx               bool   `mapstructure:"enable_datatx"`
+	ExposeRecipientDisplayName bool   `mapstructure:"expose_recipient_display_name"`
 }
 
 func (c *config) init() {
@@ -45,6 +48,12 @@ func (c *config) init() {
 
 	if c.Prefix == "" {
 		c.Prefix = "ocm"
+	}
+	if c.Endpoint == "" {
+		c.Endpoint = "http://localhost"
+	}
+	if c.Provider == "" {
+		c.Provider = "reva"
 	}
 }
 
@@ -76,12 +85,12 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 }
 
 func (s *svc) routerInit() error {
-	configHandler := new(configHandler)
+	discoHandler := new(discoHandler)
 	sharesHandler := new(sharesHandler)
 	notificationsHandler := new(notificationsHandler)
 	invitesHandler := new(invitesHandler)
 
-	configHandler.init(s.Conf)
+	discoHandler.init(s.Conf)
 	if err := sharesHandler.init(s.Conf); err != nil {
 		return err
 	}
@@ -90,7 +99,7 @@ func (s *svc) routerInit() error {
 		return err
 	}
 
-	s.router.Get("/ocm-provider", configHandler.Send) // FIXME: where this endpoint is documented?
+	s.router.Get("/ocm-provider", discoHandler.Send)
 	s.router.Post("/shares", sharesHandler.CreateShare)
 	s.router.Post("/notifications", notificationsHandler.SendNotification)
 	s.router.Post("/invite-accepted", invitesHandler.AcceptInvite)

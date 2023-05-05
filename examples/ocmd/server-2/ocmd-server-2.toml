@@ -113,6 +113,10 @@ user_layout = "{{.Username}}"
 
 [http.services.ocmd]
 prefix = "ocm"
+provider = "reva@cesnet"
+endpoint = "http://localhost:17001"
+enable_webapp = true
+enable_datatx = true
 
 [http.middlewares.providerauthorizer]
 driver = "json"

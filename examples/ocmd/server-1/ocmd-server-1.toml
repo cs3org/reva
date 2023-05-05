@@ -122,6 +122,10 @@ user_layout = "{{.Username}}"
 
 [http.services.ocmd]
 prefix = "ocm"
+provider = "reva@cern"
+endpoint = "http://localhost:19001"
+enable_webapp = true
+enable_datatx = true
 
 [http.middlewares.providerauthorizer]
 driver = "json"
