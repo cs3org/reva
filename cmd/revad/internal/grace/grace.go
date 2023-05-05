@@ -41,6 +41,7 @@ type Watcher struct {
 	ppid      int
 	lns       map[string]net.Listener
 	ss        map[string]Server
+	SL        Serverless
 	pidFile   string
 	childPIDs []int
 }
@@ -254,6 +255,12 @@ type Server interface {
 	Address() string
 }
 
+// Serverless is the interface that the serverless server implements.
+type Serverless interface {
+	Stop() error
+	GracefulStop() error
+}
+
 // TrapSignals captures the OS signal.
 func (w *Watcher) TrapSignals() {
 	signalCh := make(chan os.Signal, 1024)
@@ -293,6 +300,11 @@ func (w *Watcher) TrapSignals() {
 							}
 							w.log.Info().Msgf("fd to %s:%s abruptly closed", s.Network(), s.Address())
 						}
+						err := w.SL.Stop()
+						if err != nil {
+							w.log.Error().Err(err).Msg("error stopping serverless server")
+						}
+						w.log.Info().Msg("serverless services abruptly closed")
 						w.Exit(1)
 					}
 				}
@@ -300,6 +312,14 @@ func (w *Watcher) TrapSignals() {
 			for _, s := range w.ss {
 				w.log.Info().Msgf("fd to %s:%s gracefully closed ", s.Network(), s.Address())
 				err := s.GracefulStop()
+				if err != nil {
+					w.log.Error().Err(err).Msg("error stopping server")
+					w.log.Info().Msg("exit with error code 1")
+					w.Exit(1)
+				}
+			}
+			if w.SL != nil {
+				err := w.SL.GracefulStop()
 				if err != nil {
 					w.log.Error().Err(err).Msg("error stopping server")
 					w.log.Info().Msg("exit with error code 1")
@@ -317,6 +337,12 @@ func (w *Watcher) TrapSignals() {
 					w.log.Error().Err(err).Msg("error stopping server")
 				}
 			}
+			err := w.SL.Stop()
+			if err != nil {
+				w.log.Error().Err(err).Msg("error stopping serverless server")
+			}
+			w.log.Info().Msg("serverless services abruptly closed")
+
 			w.Exit(0)
 		}
 	}
