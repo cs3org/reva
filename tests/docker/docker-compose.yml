@@ -197,7 +197,7 @@ services:
       REVA_LDAP_HOSTNAME: ldap
       TEST_REVA: 'true'
       SEND_SCENARIO_LINE_REFERENCES: 'true'
-      BEHAT_FILTER_TAGS: ~@toImplementOnOCIS&&~comments-app-required&&~@federation-app-required&&~@notifications-app-required&&~systemtags-app-required&&~@provisioning_api-app-required&&~@preview-extension-required&&~@local_storage&&~@skipOnOcis-OCIS-Storage&&~@personalSpace&&~@skipOnGraph&&~@caldav&&~@carddav&&~@skipOnReva&&~@skipOnRevaMaster
+      BEHAT_FILTER_TAGS: ~@provisioning_api-app-required&&~@preview-extension-required&&~@skipOnOcis-OCIS-Storage&&~@personalSpace&&~@skipOnGraph&&~@carddav&&~@skipOnReva&&~@skipOnRevaMaster
       DIVIDE_INTO_NUM_PARTS: ${PARTS:-1}
       RUN_PART: ${PART:-1}
       EXPECTED_FAILURES_FILE: /mnt/acceptance/expected-failures-on-OCIS-storage.md
@@ -266,7 +266,7 @@ services:
       REVA_LDAP_HOSTNAME: ldap
       TEST_REVA: 'true'
       SEND_SCENARIO_LINE_REFERENCES: 'true'
-      BEHAT_FILTER_TAGS: ~@toImplementOnOCIS&&~comments-app-required&&~@federation-app-required&&~@notifications-app-required&&~systemtags-app-required&&~@provisioning_api-app-required&&~@preview-extension-required&&~@local_storage&&~@skipOnOcis-OCIS-Storage&&~@personalSpace&&~&&~@skipOnGraph&&~@caldav&&~@carddav&&~@skipOnReva&&~@skipOnRevaMaster
+      BEHAT_FILTER_TAGS: ~@provisioning_api-app-required&&~@preview-extension-required&&~@skipOnOcis-OCIS-Storage&&~@personalSpace&&~&&~@skipOnGraph&&~@carddav&&~@skipOnReva&&~@skipOnRevaMaster
       DIVIDE_INTO_NUM_PARTS: ${PARTS:-1}
       RUN_PART: ${PART:-1}
       EXPECTED_FAILURES_FILE: /mnt/acceptance/expected-failures-on-S3NG-storage.md
