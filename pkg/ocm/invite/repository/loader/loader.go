@@ -23,5 +23,6 @@ import (
 	_ "github.com/cs3org/reva/pkg/ocm/invite/repository/json"
 	_ "github.com/cs3org/reva/pkg/ocm/invite/repository/memory"
 	_ "github.com/cs3org/reva/pkg/ocm/invite/repository/sql"
+	_ "github.com/cs3org/reva/pkg/ocm/invite/repository/api"
 	// Add your own here.
 )
