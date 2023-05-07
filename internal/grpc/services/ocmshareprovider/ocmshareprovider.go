@@ -299,7 +299,8 @@ func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareReq
 	newShareReq := &client.NewShareRequest{
 		ShareWith:  formatOCMUser(req.Grantee.GetUserId()),
 		Name:       ocmshare.Name,
-		ResourceID: fmt.Sprintf("%s:%s", req.ResourceId.StorageId, req.ResourceId.OpaqueId),
+		// ResourceID: fmt.Sprintf("%s:%s", req.ResourceId.StorageId, req.ResourceId.OpaqueId),
+		ResourceID: ocmshare.Id.OpaqueId,
 		Owner: formatOCMUser(&userpb.UserId{
 			OpaqueId: info.Owner.OpaqueId,
 			Idp:      s.conf.ProviderDomain, // FIXME: this is not generally true in case of resharing
