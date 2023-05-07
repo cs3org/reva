@@ -38,6 +38,7 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/reqres"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/go-playground/validator/v10"
 )
@@ -78,7 +79,7 @@ type createShareRequest struct {
 // synchronization between the two services.
 func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-
+  log := appctx.GetLogger(ctx)
 	req, err := getCreateShareRequest(r)
 	if err != nil {
 		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, err.Error(), nil)
@@ -86,6 +87,7 @@ func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 	}
 
 	_, meshProvider, err := getIDAndMeshProvider(req.Sender)
+	log.Debug().Msgf("Determined Mesh Provider '%s' from req.Sender '%s'", meshProvider, req.Sender)
 	if err != nil {
 		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, err.Error(), nil)
 		return

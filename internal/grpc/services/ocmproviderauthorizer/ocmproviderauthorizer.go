@@ -120,7 +120,7 @@ func (s *service) GetInfoByDomain(ctx context.Context, req *ocmprovider.GetInfoB
 
 func (s *service) IsProviderAllowed(ctx context.Context, req *ocmprovider.IsProviderAllowedRequest) (*ocmprovider.IsProviderAllowedResponse, error) {
 	log := appctx.GetLogger(ctx)
-	log.Debug().Msgf("is provider '%s' allowed?", req.Provider)
+	log.Debug().Msgf("is provider '%s' allowed?", req.Provider.Domain)
 	err := s.pa.IsProviderAllowed(ctx, req.Provider)
 	if err != nil {
 		return &ocmprovider.IsProviderAllowedResponse{
