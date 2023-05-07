@@ -22,6 +22,7 @@ import (
 	"context"
 
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/ocm/provider"
 	"github.com/cs3org/reva/pkg/ocm/provider/authorizer/registry"
@@ -118,6 +119,8 @@ func (s *service) GetInfoByDomain(ctx context.Context, req *ocmprovider.GetInfoB
 }
 
 func (s *service) IsProviderAllowed(ctx context.Context, req *ocmprovider.IsProviderAllowedRequest) (*ocmprovider.IsProviderAllowedResponse, error) {
+	log := appctx.GetLogger(ctx)
+	log.Debug().Msgf("is provider '%s' allowed?", req.Provider)
 	err := s.pa.IsProviderAllowed(ctx, req.Provider)
 	if err != nil {
 		return &ocmprovider.IsProviderAllowedResponse{
