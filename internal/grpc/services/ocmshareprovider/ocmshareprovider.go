@@ -195,6 +195,7 @@ func (s *service) getWebdavProtocol(ctx context.Context, share *ocm.Share, m *oc
 	return &ocmd.WebDAV{
 		Permissions: perms,
 		URL:         s.webdavURL(ctx, share),
+		sharedSecret: share.Token,
 	}
 }
 
@@ -299,6 +300,7 @@ func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareReq
 	newShareReq := &client.NewShareRequest{
 		ShareWith:  formatOCMUser(req.Grantee.GetUserId()),
 		Name:       ocmshare.Name,
+		// FIXME: https://github.com/pondersource/nc-sciencemesh/issues/293#issuecomment-1537528109
 		// ResourceID: fmt.Sprintf("%s:%s", req.ResourceId.StorageId, req.ResourceId.OpaqueId),
 		ResourceID: ocmshare.Id.OpaqueId,
 		Owner: formatOCMUser(&userpb.UserId{
