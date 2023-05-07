@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/cs3org/reva/internal/http/services/ocmd"
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/pkg/errors"
@@ -195,6 +196,8 @@ func (c *OCMClient) NewShare(ctx context.Context, endpoint string, r *NewShareRe
 		return nil, err
 	}
 
+	log := appctx.GetLogger(ctx)
+	log.Debug().Msgf("Sending OCM /shares POST to %s: %s", url, body)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, body)
 	if err != nil {
 		return nil, errors.Wrap(err, "error creating request")

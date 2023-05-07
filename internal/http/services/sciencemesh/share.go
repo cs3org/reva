@@ -103,6 +103,7 @@ func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 
 	perm, viewMode := getPermissionsByRole(req.Role)
 
+	log.Debug().Msg("calling gatewayClient.CreatOCMShare from sciencemesh/share.go")
 	shareRes, err := h.gatewayClient.CreateOCMShare(ctx, &ocm.CreateOCMShareRequest{
 		ResourceId: statRes.Info.Id,
 		Grantee: &providerpb.Grantee{
@@ -120,6 +121,8 @@ func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 			share.NewWebappAccessMethod(viewMode),
 		},
 	})
+	log.Debug().Msg("called gatewayClient.CreatOCMShare from sciencemesh/share.go")
+
 	switch {
 	case err != nil:
 		reqres.WriteError(w, r, reqres.APIErrorServerError, "error sending a grpc CreateOCMShare", err)
