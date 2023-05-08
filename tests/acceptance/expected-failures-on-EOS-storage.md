@@ -23,8 +23,8 @@ The expected failures in this file are from features in the owncloud/ocis repo.
 - [coreApiMain/checksums.feature:158](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiMain/checksums.feature#L158)
 - [coreApiMain/checksums.feature:174](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiMain/checksums.feature#L174)
 - [coreApiMain/checksums.feature:192](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiMain/checksums.feature#L192)
-- [coreApiMain/checksums.feature:217](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiMain/checksums.feature#L217)
-- [coreApiMain/checksums.feature:218](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiMain/checksums.feature#L218)
+- [coreApiMain/checksums.feature:209](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiMain/checksums.feature#L209)
+- [coreApiMain/checksums.feature:210](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiMain/checksums.feature#L210)
 - [coreApiMain/checksums.feature:239](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiMain/checksums.feature#L239)
 - [coreApiMain/checksums.feature:240](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiMain/checksums.feature#L240)
 - [coreApiMain/checksums.feature:258](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiMain/checksums.feature#L258)
@@ -677,7 +677,7 @@ The expected failures in this file are from features in the owncloud/ocis repo.
 - [coreApiWebdavProperties1/copyFile.feature:131](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavProperties1/copyFile.feature#L131)
 - [coreApiWebdavProperties1/copyFile.feature:166](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavProperties1/copyFile.feature#L166)
 - [coreApiWebdavProperties1/copyFile.feature:167](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavProperties1/copyFile.feature#L167)
-- [coreApiWebdavProperties1/copyFile.feature:203](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavProperties1/copyFile.feature#L203)
+- [coreApiWebdavProperties1/copyFile.feature:202](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavProperties1/copyFile.feature#L202)
 - [coreApiWebdavProperties1/copyFile.feature:204](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavProperties1/copyFile.feature#L204)
 - [coreApiWebdavProperties1/copyFile.feature:351](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavProperties1/copyFile.feature#L351)
 - [coreApiWebdavProperties1/copyFile.feature:352](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavProperties1/copyFile.feature#L352)
@@ -937,7 +937,7 @@ Not everything needs to be implemented for ocis. While the oc10 testsuite covers
 - [coreApiWebdavMove2/moveFileToExcludedDirectory.feature:67](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavMove2/moveFileToExcludedDirectory.feature#L67)
 
 ### [blacklisted filenames like .htaccess & file.parts can be uploaded](https://github.com/owncloud/ocis/issues/1345)
-- [coreApiWebdavProperties1/copyFile.feature:103](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavProperties1/copyFile.feature#L103)
+- [coreApiWebdavProperties1/copyFile.feature:102](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavProperties1/copyFile.feature#L102)
 - [coreApiWebdavProperties1/copyFile.feature:104](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavProperties1/copyFile.feature#L104)
 
 ### [blacklisted filenames like .htaccess & file.parts can be uploaded](https://github.com/owncloud/ocis/issues/1345)
