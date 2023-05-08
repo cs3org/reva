@@ -1,3 +1,12 @@
+
+---
+title: "v2.13.2"
+linkTitle: "v2.13.2"
+weight: 40
+description: >
+  Changelog for Reva v2.13.2 (2023-05-08)
+---
+
 Changelog for reva 2.13.2 (2023-05-08)
 =======================================
 
