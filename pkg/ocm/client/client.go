@@ -159,7 +159,7 @@ type NewShareRequest struct {
 	ShareWith         string         `json:"shareWith"`
 	Name              string         `json:"name"`
 	Description       string         `json:"description"`
-	ResourceID        string         `json:"resourceId"`
+	ResourceID        string         `json:"providerId"`
 	Owner             string         `json:"owner"`
 	Sender            string         `json:"sender"`
 	OwnerDisplayName  string         `json:"ownerDisplayName"`

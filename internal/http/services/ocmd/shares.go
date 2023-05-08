@@ -37,8 +37,8 @@ import (
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/reqres"
-	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/go-playground/validator/v10"
 )
@@ -64,7 +64,7 @@ type createShareRequest struct {
 	ShareWith         string    `json:"shareWith" validate:"required"`                  // identifier of the recipient of the share
 	Name              string    `json:"name" validate:"required"`                       // name of the resource
 	Description       string    `json:"description"`                                    // (optional) description of the resource
-	ResourceID        string    `json:"resourceId" validate:"required"`                 // unique identifier of the resource at provider side
+	ResourceID        string    `json:"providerId" validate:"required"`                 // unique identifier of the resource at provider side
 	Owner             string    `json:"owner" validate:"required"`                      // unique identifier of the owner at provider side
 	Sender            string    `json:"sender" validate:"required"`                     // unique indentifier of the user who wants to share the resource at provider side
 	OwnerDisplayName  string    `json:"ownerDisplayName"`                               // display name of the owner of the resource
@@ -79,7 +79,7 @@ type createShareRequest struct {
 // synchronization between the two services.
 func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-  log := appctx.GetLogger(ctx)
+	log := appctx.GetLogger(ctx)
 	req, err := getCreateShareRequest(r)
 	if err != nil {
 		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, err.Error(), nil)
