@@ -464,8 +464,8 @@ var _ = Describe("Nextcloud", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(len(receivedShares)).To(Equal(1))
 			Expect(*receivedShares[0]).To(Equal(ocm.ReceivedShare{
-				Id:         &ocm.ShareId{},
-				ResourceId: &provider.ResourceId{},
+				Id:            &ocm.ShareId{},
+				RemoteShareId: "",
 				Grantee: &provider.Grantee{
 					Id: &provider.Grantee_UserId{
 						UserId: &userpb.UserId{
@@ -520,8 +520,8 @@ var _ = Describe("Nextcloud", func() {
 			})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(*receivedShare).To(Equal(ocm.ReceivedShare{
-				Id:         &ocm.ShareId{},
-				ResourceId: &provider.ResourceId{},
+				Id:            &ocm.ShareId{},
+				RemoteShareId: "",
 				Grantee: &provider.Grantee{
 					Id: &provider.Grantee_UserId{
 						UserId: &userpb.UserId{
@@ -569,8 +569,8 @@ var _ = Describe("Nextcloud", func() {
 
 			receivedShare, err := am.UpdateReceivedShare(ctx, user,
 				&ocm.ReceivedShare{
-					Id:         &ocm.ShareId{},
-					ResourceId: &provider.ResourceId{},
+					Id:            &ocm.ShareId{},
+					RemoteShareId: "",
 					Grantee: &provider.Grantee{
 						Id: &provider.Grantee_UserId{
 							UserId: &userpb.UserId{
@@ -611,8 +611,8 @@ var _ = Describe("Nextcloud", func() {
 				})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(*receivedShare).To(Equal(ocm.ReceivedShare{
-				Id:         &ocm.ShareId{},
-				ResourceId: &provider.ResourceId{},
+				Id:            &ocm.ShareId{},
+				RemoteShareId: "",
 				Grantee: &provider.Grantee{
 					Id: &provider.Grantee_UserId{
 						UserId: &userpb.UserId{

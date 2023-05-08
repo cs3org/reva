@@ -312,8 +312,8 @@ func (sm *Manager) ListReceivedShares(ctx context.Context, user *userpb.User) ([
 			continue
 		}
 		res = append(res, &ocm.ReceivedShare{
-			Id:         altResultShare.ID,
-			ResourceId: altResultShare.ResourceID,
+			Id:            altResultShare.ID,
+			RemoteShareId: altResultShare.ResourceID.OpaqueId,
 			Grantee: &provider.Grantee{
 				Id: altResultShare.Grantee.ID,
 			},
@@ -350,8 +350,8 @@ func (sm *Manager) GetReceivedShare(ctx context.Context, user *userpb.User, ref 
 		}, nil
 	}
 	return &ocm.ReceivedShare{
-		Id:         altResultShare.ID,
-		ResourceId: altResultShare.ResourceID,
+		Id:            altResultShare.ID,
+		RemoteShareId: altResultShare.ResourceID.OpaqueId,
 		Grantee: &provider.Grantee{
 			Id: altResultShare.Grantee.ID,
 		},
@@ -396,8 +396,8 @@ func (sm *Manager) UpdateReceivedShare(ctx context.Context, user *userpb.User, s
 		}, nil
 	}
 	return &ocm.ReceivedShare{
-		Id:         altResultShare.ID,
-		ResourceId: altResultShare.ResourceID,
+		Id:            altResultShare.ID,
+		RemoteShareId: altResultShare.ResourceID.OpaqueId,
 		Grantee: &provider.Grantee{
 			Id: altResultShare.Grantee.ID,
 		},

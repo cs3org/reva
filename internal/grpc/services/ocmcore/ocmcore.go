@@ -117,10 +117,8 @@ func (s *service) CreateOCMCoreShare(ctx context.Context, req *ocmcore.CreateOCM
 	}
 
 	share, err := s.repo.StoreReceivedShare(ctx, &ocm.ReceivedShare{
-		ResourceId: &providerpb.ResourceId{
-			OpaqueId: req.ResourceId,
-		},
-		Name: req.Name,
+		RemoteShareId: req.ResourceId,
+		Name:          req.Name,
 		Grantee: &providerpb.Grantee{
 			Type: providerpb.GranteeType_GRANTEE_TYPE_USER,
 			Id: &providerpb.Grantee_UserId{

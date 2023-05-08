@@ -64,7 +64,7 @@ type createShareRequest struct {
 	ShareWith         string    `json:"shareWith" validate:"required"`                  // identifier of the recipient of the share
 	Name              string    `json:"name" validate:"required"`                       // name of the resource
 	Description       string    `json:"description"`                                    // (optional) description of the resource
-	ResourceID        string    `json:"providerId" validate:"required"`                 // unique identifier of the resource at provider side
+	ProviderID        string    `json:"providerId" validate:"required"`                 // unique identifier of the resource at provider side
 	Owner             string    `json:"owner" validate:"required"`                      // unique identifier of the owner at provider side
 	Sender            string    `json:"sender" validate:"required"`                     // unique indentifier of the user who wants to share the resource at provider side
 	OwnerDisplayName  string    `json:"ownerDisplayName"`                               // display name of the owner of the resource
@@ -152,7 +152,7 @@ func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 	createShareReq := &ocmcore.CreateOCMCoreShareRequest{
 		Description:  req.Description,
 		Name:         req.Name,
-		ResourceId:   req.ResourceID,
+		ResourceId:   req.ProviderID,
 		Owner:        owner,
 		Sender:       sender,
 		ShareWith:    userRes.User.Id,
