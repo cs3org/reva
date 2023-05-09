@@ -549,12 +549,30 @@ func (r *registry) findProvidersForAbsolutePathReference(ctx context.Context, pa
 		var spaces []*providerpb.StorageSpace
 		var err error
 
+		// check if any space in the provider has a valid mountpoint
+		containsRelatedSpace := false
+		for _, space := range provider.Spaces {
+			// either the mountpoint is a prefix of the path
+			if strings.HasPrefix(path, space.MountPoint) {
+				containsRelatedSpace = true
+				break
+			}
+			// or the path is a prefix of the mountpoint
+			if strings.HasPrefix(space.MountPoint, path) {
+				containsRelatedSpace = true
+				break
+			}
+		}
+		if !containsRelatedSpace {
+			continue
+		}
+
 		// when listing paths also return mountpoints
 		filters := []*providerpb.ListStorageSpacesRequest_Filter{
 			{
 				Type: providerpb.ListStorageSpacesRequest_Filter_TYPE_PATH,
 				Term: &providerpb.ListStorageSpacesRequest_Filter_Path{
-					Path: strings.TrimPrefix(path, p.ProviderPath),
+					Path: strings.TrimPrefix(path, p.ProviderPath), // FIXME this no longer has an effect as the p.Providerpath is always empty
 				},
 			},
 			{
