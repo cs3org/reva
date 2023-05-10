@@ -59,8 +59,7 @@ type resourceTypes struct {
 }
 
 type svc struct {
-	conf *config
-	d    *discoveryData
+	data *discoveryData
 }
 
 func (c *config) init() {
@@ -117,10 +116,7 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 	}
 
 	conf.init()
-	return &svc{
-		conf: conf,
-		d:    conf.prepare(),
-	}, nil
+	return &svc{data: conf.prepare()}, nil
 }
 
 // Close performs cleanup.
@@ -142,7 +138,7 @@ func (s *svc) Handler() http.Handler {
 		log := appctx.GetLogger(r.Context())
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		indented, _ := json.MarshalIndent(s.d, "", "   ")
+		indented, _ := json.MarshalIndent(s.data, "", "   ")
 		if _, err := w.Write(indented); err != nil {
 			log.Err(err).Msg("Error writing to ResponseWriter")
 		}
