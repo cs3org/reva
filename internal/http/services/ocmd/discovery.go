@@ -52,12 +52,12 @@ func (h *discoHandler) init(c *config) {
 	h.d.Provider = c.Provider
 	rtProtos := map[string]string{}
 	// webdav is always enabled
-	rtProtos["webdav"] = fmt.Sprintf("%s/remote.php/dav/%s", c.Endpoint, c.Prefix)
+	rtProtos["webdav"] = fmt.Sprintf("%s/%s/%s", c.Endpoint, c.WebDAVRoot, c.Prefix)
 	if c.EnableWebApp {
-		rtProtos["webapp"] = fmt.Sprintf("%s/external/sciencemesh", c.Endpoint)
+		rtProtos["webapp"] = fmt.Sprintf("%s/%s", c.Endpoint, c.WebAppRoot)
 	}
 	if c.EnableDataTx {
-		rtProtos["datatx"] = fmt.Sprintf("%s/remote.php/dav/%s", c.Endpoint, c.Prefix)
+		rtProtos["datatx"] = fmt.Sprintf("%s/%s/%s", c.Endpoint, c.WebDAVRoot, c.Prefix)
 	}
 	h.d.ResourceTypes = []resourceTypes{{
 		Name:       "file",           // so far we only support `file`

@@ -38,6 +38,8 @@ type config struct {
 	GatewaySvc                 string `mapstructure:"gatewaysvc"`
 	Endpoint                   string `mapstructure:"endpoint"`
 	Provider                   string `mapstructure:"provider"`
+	WebDAVRoot		   string `mapstructure:"webdav_root"`
+	WebAppRoot                 string `mapstructure:"webapp_root"`
 	EnableWebApp               bool   `mapstructure:"enable_webapp"`
 	EnableDataTx               bool   `mapstructure:"enable_datatx"`
 	ExposeRecipientDisplayName bool   `mapstructure:"expose_recipient_display_name"`
@@ -54,6 +56,12 @@ func (c *config) init() {
 	}
 	if c.Provider == "" {
 		c.Provider = "reva"
+	}
+	if c.WebDAVRoot == "" {
+		c.WebDAVRoot = "remote.php/dav"
+	}
+	if c.WebAppRoot == "" {
+		c.WebAppRoot = "external/sciencemesh"
 	}
 }
 
