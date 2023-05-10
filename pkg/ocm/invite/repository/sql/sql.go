@@ -24,12 +24,14 @@ import (
 	"fmt"
 	"time"
 
+	gatewayv1beta1 "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	conversions "github.com/cs3org/reva/pkg/cbox/utils"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/ocm/invite"
+	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/go-sql-driver/mysql"
 
 	"github.com/cs3org/reva/pkg/ocm/invite/repository/registry"
@@ -51,8 +53,9 @@ func init() {
 }
 
 type mgr struct {
-	c  *config
-	db *sql.DB
+	c      *config
+	db     *sql.DB
+	client gatewayv1beta1.GatewayAPIClient
 }
 
 type config struct {
@@ -88,9 +91,15 @@ func New(c map[string]interface{}) (invite.Repository, error) {
 		return nil, errors.Wrap(err, "sql: error opening connection to mysql database")
 	}
 
+	gw, err := pool.GetGatewayServiceClient(pool.Endpoint(conf.GatewaySvc))
+	if err != nil {
+		return nil, err
+	}
+
 	mgr := mgr{
-		c:  conf,
-		db: db,
+		c:      conf,
+		db:     db,
+		client: gw,
 	}
 	return &mgr, nil
 }
@@ -124,18 +133,22 @@ func (m *mgr) GetToken(ctx context.Context, token string) (*invitepb.InviteToken
 		}
 		return nil, err
 	}
-	return convertToInviteToken(tkn), nil
+	return m.convertToInviteToken(ctx, tkn)
 }
 
-func convertToInviteToken(tkn dbToken) *invitepb.InviteToken {
+func (m *mgr) convertToInviteToken(ctx context.Context, tkn dbToken) (*invitepb.InviteToken, error) {
+	user, err := conversions.ExtractUserID(ctx, m.client, tkn.Initiator)
+	if err != nil {
+		return nil, err
+	}
 	return &invitepb.InviteToken{
 		Token:  tkn.Token,
-		UserId: conversions.ExtractUserID(tkn.Initiator),
+		UserId: user,
 		Expiration: &types.Timestamp{
 			Seconds: uint64(tkn.Expiration.Unix()),
 		},
 		Description: tkn.Description,
-	}
+	}, nil
 }
 
 func (m *mgr) ListTokens(ctx context.Context, initiator *userpb.UserId) ([]*invitepb.InviteToken, error) {
@@ -152,7 +165,11 @@ func (m *mgr) ListTokens(ctx context.Context, initiator *userpb.UserId) ([]*invi
 		if err := rows.Scan(&tkn.Token, &tkn.Initiator, &tkn.Expiration, &tkn.Description); err != nil {
 			continue
 		}
-		tokens = append(tokens, convertToInviteToken(tkn))
+		token, err := m.convertToInviteToken(ctx, tkn)
+		if err != nil {
+			return nil, err
+		}
+		tokens = append(tokens, token)
 	}
 
 	return tokens, nil

@@ -29,6 +29,7 @@ import (
 	"syscall"
 	"time"
 
+	gatewayv1beta1 "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
@@ -71,8 +72,9 @@ type config struct {
 }
 
 type manager struct {
-	c  *config
-	db *sql.DB
+	c      *config
+	db     *sql.DB
+	client gatewayv1beta1.GatewayAPIClient
 }
 
 func (c *config) init() {
@@ -118,9 +120,15 @@ func New(m map[string]interface{}) (publicshare.Manager, error) {
 		return nil, err
 	}
 
+	gw, err := pool.GetGatewayServiceClient(pool.Endpoint(c.GatewaySvc))
+	if err != nil {
+		return nil, err
+	}
+
 	mgr := manager{
-		c:  c,
-		db: db,
+		c:      c,
+		db:     db,
+		client: gw,
 	}
 	go mgr.startJanitorRun()
 
@@ -275,7 +283,11 @@ func (m *manager) getByToken(ctx context.Context, token string, u *user.User) (*
 		}
 		return nil, "", err
 	}
-	return conversions.ConvertToCS3PublicShare(s), s.ShareWith, nil
+	share, err := conversions.ConvertToCS3PublicShare(ctx, m.client, s)
+	if err != nil {
+		return nil, "", err
+	}
+	return share, s.ShareWith, nil
 }
 
 func (m *manager) getByID(ctx context.Context, id *link.PublicShareId, u *user.User) (*link.PublicShare, string, error) {
@@ -288,7 +300,11 @@ func (m *manager) getByID(ctx context.Context, id *link.PublicShareId, u *user.U
 		}
 		return nil, "", err
 	}
-	return conversions.ConvertToCS3PublicShare(s), s.ShareWith, nil
+	share, err := conversions.ConvertToCS3PublicShare(ctx, m.client, s)
+	if err != nil {
+		return nil, "", err
+	}
+	return share, s.ShareWith, nil
 }
 
 func (m *manager) GetPublicShare(ctx context.Context, u *user.User, ref *link.PublicShareReference, sign bool) (*link.PublicShare, error) {
@@ -385,7 +401,10 @@ func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []
 		if err := rows.Scan(&s.UIDOwner, &s.UIDInitiator, &s.ShareWith, &s.Prefix, &s.ItemSource, &s.ItemType, &s.Token, &s.Expiration, &s.ShareName, &s.ID, &s.STime, &s.Permissions, &s.Quicklink, &s.Description); err != nil {
 			continue
 		}
-		cs3Share := conversions.ConvertToCS3PublicShare(s)
+		cs3Share, err := conversions.ConvertToCS3PublicShare(ctx, m.client, s)
+		if err != nil {
+			return nil, err
+		}
 		if expired(cs3Share) {
 			_ = m.cleanupExpiredShares()
 		} else {
@@ -448,7 +467,10 @@ func (m *manager) GetPublicShareByToken(ctx context.Context, token string, auth 
 		}
 		return nil, err
 	}
-	cs3Share := conversions.ConvertToCS3PublicShare(s)
+	cs3Share, err := conversions.ConvertToCS3PublicShare(ctx, m.client, s)
+	if err != nil {
+		return nil, err
+	}
 	if expired(cs3Share) {
 		if err := m.cleanupExpiredShares(); err != nil {
 			return nil, err
