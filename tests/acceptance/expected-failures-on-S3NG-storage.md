@@ -218,8 +218,8 @@ File and sync features in a shared scenario
 
 #### [Public cannot upload file with mtime set on a public link share with new version of WebDAV API](https://github.com/owncloud/ocis/issues/37605)
 
-- [coreApiSharePublicLink1/createPublicLinkShare.feature:346](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiSharePublicLink1/createPublicLinkShare.feature#L346)
-- [coreApiSharePublicLink1/createPublicLinkShare.feature:356](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiSharePublicLink1/createPublicLinkShare.feature#L356)
+- [coreApiSharePublicLink1/createPublicLinkShare.feature:331](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiSharePublicLink1/createPublicLinkShare.feature#L331)
+- [coreApiSharePublicLink1/createPublicLinkShare.feature:341](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiSharePublicLink1/createPublicLinkShare.feature#L341)
 
 #### [copying a folder within a public link folder to folder with same name as an already existing file overwrites the parent file](https://github.com/owncloud/ocis/issues/1232)
 

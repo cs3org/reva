@@ -83,57 +83,7 @@ var _ = Describe("The ocs API", func() {
 	})
 
 	Describe("CreateShare", func() {
-		var (
-			resID = &provider.ResourceId{
-				StorageId: "share1-storageid",
-				OpaqueId:  "share1",
-			}
-			share = &collaboration.Share{
-				Id: &collaboration.ShareId{OpaqueId: "1"},
-				Grantee: &provider.Grantee{
-					Type: provider.GranteeType_GRANTEE_TYPE_USER,
-				},
-				ResourceId: resID,
-				Permissions: &collaboration.SharePermissions{
-					Permissions: &provider.ResourcePermissions{
-						Stat:          true,
-						ListContainer: true,
-					},
-				},
-			}
-			share2 = &collaboration.Share{
-				Id: &collaboration.ShareId{OpaqueId: "2"},
-				Grantee: &provider.Grantee{
-					Type: provider.GranteeType_GRANTEE_TYPE_USER,
-				},
-				ResourceId: resID,
-				Permissions: &collaboration.SharePermissions{
-					Permissions: &provider.ResourcePermissions{
-						Stat:          true,
-						ListContainer: true,
-					},
-				},
-			}
-		)
-
 		BeforeEach(func() {
-			client.On("Stat", mock.Anything, mock.Anything).Return(&provider.StatResponse{
-				Status: status.NewOK(context.Background()),
-				Info: &provider.ResourceInfo{
-					Type:  provider.ResourceType_RESOURCE_TYPE_CONTAINER,
-					Path:  "/newshare",
-					Id:    resID,
-					Owner: user.Id,
-					PermissionSet: &provider.ResourcePermissions{
-						Stat:        true,
-						AddGrant:    true,
-						UpdateGrant: true,
-						RemoveGrant: true,
-					},
-					Size: 10,
-				},
-			}, nil)
-
 			client.On("GetUserByClaim", mock.Anything, mock.Anything).Return(&userpb.GetUserByClaimResponse{
 				Status: status.NewOK(context.Background()),
 				User:   user,
@@ -146,41 +96,42 @@ var _ = Describe("The ocs API", func() {
 				Status: status.NewOK(context.Background()),
 			}, nil)
 
-			client.On("GetShare", mock.Anything, mock.Anything).Return(&collaboration.GetShareResponse{
-				Status: status.NewOK(context.Background()),
-				Share:  share,
-			}, nil)
-
 			client.On("ListShares", mock.Anything, mock.Anything).Return(&collaboration.ListSharesResponse{
 				Status: status.NewOK(context.Background()),
 			}, nil)
 		})
 
-		Context("when there are no existing shares to the resource yet", func() {
+		Context("when sharing the space root", func() {
 			BeforeEach(func() {
-				client.On("ListReceivedShares", mock.Anything, mock.Anything, mock.Anything).Return(&collaboration.ListReceivedSharesResponse{
+				client.On("Stat", mock.Anything, mock.Anything).Return(&provider.StatResponse{
 					Status: status.NewOK(context.Background()),
-					Shares: []*collaboration.ReceivedShare{
-						{
-							State:      collaboration.ShareState_SHARE_STATE_ACCEPTED,
-							Share:      share,
-							MountPoint: &provider.Reference{Path: ""},
+					Info: &provider.ResourceInfo{
+						Type: provider.ResourceType_RESOURCE_TYPE_CONTAINER,
+						Path: "/",
+						Id: &provider.ResourceId{
+							StorageId: "storageid",
+							SpaceId:   "spaceid",
+							OpaqueId:  "spaceid",
 						},
+						Owner: user.Id,
+						PermissionSet: &provider.ResourcePermissions{
+							Stat:        true,
+							AddGrant:    true,
+							UpdateGrant: true,
+							RemoveGrant: true,
+						},
+						Size: 10,
 					},
 				}, nil)
 			})
 
-			It("creates a new share", func() {
-				client.On("CreateShare", mock.Anything, mock.Anything).Return(&collaboration.CreateShareResponse{
-					Status: status.NewOK(context.Background()),
-					Share:  share,
-				}, nil)
-
+			It("does not create a user share", func() {
 				form := url.Values{}
 				form.Add("shareType", "0")
-				form.Add("path", "/newshare")
-				form.Add("name", "newshare")
-				form.Add("permissions", "16")
+				form.Add("path", "/")
+				form.Add("spaceRef", "storageid!spaceid:spaceid")
+				form.Add("permissions", "1")
+				form.Add("role", "viewer")
 				form.Add("shareWith", "admin")
 				req := httptest.NewRequest("POST", "/apps/files_sharing/api/v1/shares", strings.NewReader(form.Encode()))
 				req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -188,61 +139,204 @@ var _ = Describe("The ocs API", func() {
 
 				w := httptest.NewRecorder()
 				h.CreateShare(w, req)
-				Expect(w.Result().StatusCode).To(Equal(200))
-				client.AssertNumberOfCalls(GinkgoT(), "CreateShare", 1)
+				Expect(w.Result().StatusCode).To(Equal(400))
+				client.AssertNumberOfCalls(GinkgoT(), "CreateShare", 0)
 			})
 		})
 
-		Context("when a share to the same resource already exists", func() {
+		Context("when sharing a resource", func() {
+			var (
+				resID = &provider.ResourceId{
+					StorageId: "share1-storageid",
+					OpaqueId:  "share1",
+				}
+				share = &collaboration.Share{
+					Id: &collaboration.ShareId{OpaqueId: "1"},
+					Grantee: &provider.Grantee{
+						Type: provider.GranteeType_GRANTEE_TYPE_USER,
+					},
+					ResourceId: resID,
+					Permissions: &collaboration.SharePermissions{
+						Permissions: &provider.ResourcePermissions{
+							Stat:          true,
+							ListContainer: true,
+						},
+					},
+				}
+				share2 = &collaboration.Share{
+					Id: &collaboration.ShareId{OpaqueId: "2"},
+					Grantee: &provider.Grantee{
+						Type: provider.GranteeType_GRANTEE_TYPE_USER,
+					},
+					ResourceId: resID,
+					Permissions: &collaboration.SharePermissions{
+						Permissions: &provider.ResourcePermissions{
+							Stat:          true,
+							ListContainer: true,
+						},
+					},
+				}
+			)
+
 			BeforeEach(func() {
-				client.On("ListReceivedShares", mock.Anything, mock.Anything, mock.Anything).Return(&collaboration.ListReceivedSharesResponse{
+				client.On("Stat", mock.Anything, mock.Anything).Return(&provider.StatResponse{
 					Status: status.NewOK(context.Background()),
-					Shares: []*collaboration.ReceivedShare{
-						{
+					Info: &provider.ResourceInfo{
+						Type:  provider.ResourceType_RESOURCE_TYPE_CONTAINER,
+						Path:  "/newshare",
+						Id:    resID,
+						Owner: user.Id,
+						PermissionSet: &provider.ResourcePermissions{
+							Stat:        true,
+							AddGrant:    true,
+							UpdateGrant: true,
+							RemoveGrant: true,
+						},
+						Size: 10,
+					},
+				}, nil)
+
+				client.On("GetShare", mock.Anything, mock.Anything).Return(&collaboration.GetShareResponse{
+					Status: status.NewOK(context.Background()),
+					Share:  share,
+				}, nil)
+			})
+
+			Context("when there are no existing shares to the resource yet", func() {
+				BeforeEach(func() {
+					client.On("ListReceivedShares", mock.Anything, mock.Anything, mock.Anything).Return(&collaboration.ListReceivedSharesResponse{
+						Status: status.NewOK(context.Background()),
+						Shares: []*collaboration.ReceivedShare{
+							{
+								State:      collaboration.ShareState_SHARE_STATE_ACCEPTED,
+								Share:      share,
+								MountPoint: &provider.Reference{Path: ""},
+							},
+						},
+					}, nil)
+				})
+
+				It("creates a new share", func() {
+					client.On("CreateShare", mock.Anything, mock.Anything).Return(&collaboration.CreateShareResponse{
+						Status: status.NewOK(context.Background()),
+						Share:  share,
+					}, nil)
+
+					form := url.Values{}
+					form.Add("shareType", "0")
+					form.Add("path", "/newshare")
+					form.Add("name", "newshare")
+					form.Add("permissions", "16")
+					form.Add("shareWith", "admin")
+					req := httptest.NewRequest("POST", "/apps/files_sharing/api/v1/shares", strings.NewReader(form.Encode()))
+					req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+					req = req.WithContext(ctx)
+
+					w := httptest.NewRecorder()
+					h.CreateShare(w, req)
+					Expect(w.Result().StatusCode).To(Equal(200))
+					client.AssertNumberOfCalls(GinkgoT(), "CreateShare", 1)
+				})
+			})
+
+			Context("when a share to the same resource already exists", func() {
+				BeforeEach(func() {
+					client.On("ListReceivedShares", mock.Anything, mock.Anything, mock.Anything).Return(&collaboration.ListReceivedSharesResponse{
+						Status: status.NewOK(context.Background()),
+						Shares: []*collaboration.ReceivedShare{
+							{
+								State:      collaboration.ShareState_SHARE_STATE_ACCEPTED,
+								Share:      share,
+								MountPoint: &provider.Reference{Path: "some-mountpoint"},
+							},
+							{
+								State: collaboration.ShareState_SHARE_STATE_PENDING,
+								Share: share2,
+							},
+						},
+					}, nil)
+				})
+
+				It("auto-accepts the share and applies the mountpoint", func() {
+					client.On("CreateShare", mock.Anything, mock.Anything).Return(&collaboration.CreateShareResponse{
+						Status: status.NewOK(context.Background()),
+						Share:  share2,
+					}, nil)
+					client.On("UpdateReceivedShare", mock.Anything, mock.MatchedBy(func(req *collaboration.UpdateReceivedShareRequest) bool {
+						return req.Share.Share.Id.OpaqueId == "2" && req.Share.MountPoint.Path == "some-mountpoint" && req.Share.State == collaboration.ShareState_SHARE_STATE_ACCEPTED
+					})).Return(&collaboration.UpdateReceivedShareResponse{
+						Status: status.NewOK(context.Background()),
+						Share: &collaboration.ReceivedShare{
 							State:      collaboration.ShareState_SHARE_STATE_ACCEPTED,
-							Share:      share,
-							MountPoint: &provider.Reference{Path: "some-mountpoint"},
+							Share:      share2,
+							MountPoint: &provider.Reference{Path: "share2"},
 						},
-						{
-							State: collaboration.ShareState_SHARE_STATE_PENDING,
-							Share: share2,
-						},
-					},
-				}, nil)
+					}, nil)
+
+					form := url.Values{}
+					form.Add("shareType", "0")
+					form.Add("path", "/newshare")
+					form.Add("name", "newshare")
+					form.Add("permissions", "16")
+					form.Add("shareWith", "admin")
+					req := httptest.NewRequest("POST", "/apps/files_sharing/api/v1/shares", strings.NewReader(form.Encode()))
+					req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+					req = req.WithContext(ctx)
+
+					w := httptest.NewRecorder()
+					h.CreateShare(w, req)
+					Expect(w.Result().StatusCode).To(Equal(200))
+					client.AssertNumberOfCalls(GinkgoT(), "CreateShare", 1)
+					client.AssertNumberOfCalls(GinkgoT(), "UpdateReceivedShare", 1)
+				})
 			})
+		})
 
-			It("auto-accepts the share and applies the mountpoint", func() {
-				client.On("CreateShare", mock.Anything, mock.Anything).Return(&collaboration.CreateShareResponse{
-					Status: status.NewOK(context.Background()),
-					Share:  share2,
-				}, nil)
-				client.On("UpdateReceivedShare", mock.Anything, mock.MatchedBy(func(req *collaboration.UpdateReceivedShareRequest) bool {
-					return req.Share.Share.Id.OpaqueId == "2" && req.Share.MountPoint.Path == "some-mountpoint" && req.Share.State == collaboration.ShareState_SHARE_STATE_ACCEPTED
-				})).Return(&collaboration.UpdateReceivedShareResponse{
-					Status: status.NewOK(context.Background()),
-					Share: &collaboration.ReceivedShare{
-						State:      collaboration.ShareState_SHARE_STATE_ACCEPTED,
-						Share:      share2,
-						MountPoint: &provider.Reference{Path: "share2"},
+		It("does not allow adding space members to a personal space", func() {
+			client.On("Stat", mock.Anything, mock.Anything).Return(&provider.StatResponse{
+				Status: status.NewOK(context.Background()),
+				Info: &provider.ResourceInfo{
+					Type: provider.ResourceType_RESOURCE_TYPE_CONTAINER,
+					Path: "/",
+					Id: &provider.ResourceId{
+						StorageId: "storageid",
+						SpaceId:   "spaceid",
+						OpaqueId:  "spaceid",
 					},
-				}, nil)
+					Owner: user.Id,
+					PermissionSet: &provider.ResourcePermissions{
+						Stat:                 true,
+						GetPath:              true,
+						GetQuota:             true,
+						InitiateFileDownload: true,
+						ListRecycle:          true,
+						ListContainer:        true,
+						AddGrant:             true,
+						UpdateGrant:          true,
+						RemoveGrant:          true,
+					},
+					Size: 10,
+					Space: &provider.StorageSpace{
+						SpaceType: "personal",
+					},
+				},
+			}, nil)
 
-				form := url.Values{}
-				form.Add("shareType", "0")
-				form.Add("path", "/newshare")
-				form.Add("name", "newshare")
-				form.Add("permissions", "16")
-				form.Add("shareWith", "admin")
-				req := httptest.NewRequest("POST", "/apps/files_sharing/api/v1/shares", strings.NewReader(form.Encode()))
-				req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-				req = req.WithContext(ctx)
+			form := url.Values{}
+			form.Add("shareType", "7")
+			form.Add("path", "/")
+			form.Add("spaceRef", "storageid!spaceid")
+			form.Add("permissions", "1")
+			form.Add("role", "viewer")
+			form.Add("shareWith", "admin")
+			req := httptest.NewRequest("POST", "/apps/files_sharing/api/v1/shares", strings.NewReader(form.Encode()))
+			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			req = req.WithContext(ctx)
 
-				w := httptest.NewRecorder()
-				h.CreateShare(w, req)
-				Expect(w.Result().StatusCode).To(Equal(200))
-				client.AssertNumberOfCalls(GinkgoT(), "CreateShare", 1)
-				client.AssertNumberOfCalls(GinkgoT(), "UpdateReceivedShare", 1)
-			})
+			w := httptest.NewRecorder()
+			h.CreateShare(w, req)
+			Expect(w.Result().StatusCode).To(Equal(400))
+			client.AssertNumberOfCalls(GinkgoT(), "CreateShare", 0)
 		})
 	})
 
