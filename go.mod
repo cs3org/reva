@@ -29,7 +29,7 @@ require (
 	github.com/go-micro/plugins/v4/events/natsjs v1.1.0
 	github.com/go-micro/plugins/v4/server/http v1.1.1
 	github.com/go-micro/plugins/v4/store/nats-js v1.1.0
-	github.com/go-micro/plugins/v4/store/redis v1.2.1-0.20230405210006-efd9191305c5
+	github.com/go-micro/plugins/v4/store/redis v1.2.1-0.20230510195111-07cd57e1bc9d
 	github.com/go-redis/redis/v8 v8.11.5
 	github.com/go-sql-driver/mysql v1.6.0
 	github.com/gofrs/flock v0.8.1
@@ -213,7 +213,4 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
-replace (
-	github.com/cs3org/go-cs3apis => github.com/c0rby/go-cs3apis v0.0.0-20230110100311-5b424f1baa35
-	github.com/go-micro/plugins/v4/store/redis => github.com/dragonchaser/go-micro-plugins/v4/store/redis v0.0.0-20230508144354-06738dcca00f
-)
+replace github.com/cs3org/go-cs3apis => github.com/c0rby/go-cs3apis v0.0.0-20230110100311-5b424f1baa35

@@ -261,8 +261,6 @@ github.com/dgryski/go-farm v0.0.0-20190423205320-6a90982ecee2/go.mod h1:SqUrOPUn
 github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f h1:lO4WD4F/rVNCu3HqELle0jiPLLBs70cWOduZpkS1E78=
 github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f/go.mod h1:cuUVRXasLTGF7a8hSLbxyZXjz+1KgoB3wDUb6vlszIc=
 github.com/docker/go-units v0.4.0/go.mod h1:fgPhTUdO+D/Jk86RDLlptpiXQzgHJF7gydDDbaIK4Dk=
-github.com/dragonchaser/go-micro-plugins/v4/store/redis v0.0.0-20230508144354-06738dcca00f h1:5siFx2qvzmMSIWJvN2JhdJmU0tlqIFzgcfOnJm8sGTg=
-github.com/dragonchaser/go-micro-plugins/v4/store/redis v0.0.0-20230508144354-06738dcca00f/go.mod h1:MbCG0YiyPqETTtm7uHFmxQNCaW1o9hBoYtFwhbVjLUg=
 github.com/dustin/go-humanize v1.0.0 h1:VSnTsYCnlFHaM2/igO1h6X3HA71jcobQuxemgkq4zYo=
 github.com/dustin/go-humanize v1.0.0/go.mod h1:HtrtbFcZ19U5GC7JDqmcUSB87Iq5E25KnS6fMYU6eOk=
 github.com/emirpasic/gods v1.12.0/go.mod h1:YfzfFFoVP/catgzJb4IKIqXjX78Ha8FMSDh3ymbK86o=
@@ -353,6 +351,8 @@ github.com/go-micro/plugins/v4/server/http v1.1.1 h1:n45l9rrJUWXT25W3DmTBl9DJoc3
 github.com/go-micro/plugins/v4/server/http v1.1.1/go.mod h1:ZjVZi1l16RjzyT3IISirh9BEZdqzaLLwiE/1fvdSbnI=
 github.com/go-micro/plugins/v4/store/nats-js v1.1.0 h1:6Fe1/eLtg8kRyaGvMILp4olYtTDGwYNBXyb1sYfAWGk=
 github.com/go-micro/plugins/v4/store/nats-js v1.1.0/go.mod h1:jJf7Gm39OafZlT3s3UE2/9NIYj6OlI2fmZ4czSA3gvo=
+github.com/go-micro/plugins/v4/store/redis v1.2.1-0.20230510195111-07cd57e1bc9d h1:HQoDDVyMfdkrgXNo03ZY4vzhoOXMDZVZ4SnpBDVID6E=
+github.com/go-micro/plugins/v4/store/redis v1.2.1-0.20230510195111-07cd57e1bc9d/go.mod h1:MbCG0YiyPqETTtm7uHFmxQNCaW1o9hBoYtFwhbVjLUg=
 github.com/go-openapi/analysis v0.21.2/go.mod h1:HZwRk4RRisyG8vx2Oe6aqeSQcoxRp47Xkp3+K6q+LdY=
 github.com/go-openapi/errors v0.19.8/go.mod h1:cM//ZKUKyO06HSwqAelJ5NsEMMcpa6VpXe8DOa1Mi1M=
 github.com/go-openapi/errors v0.19.9/go.mod h1:cM//ZKUKyO06HSwqAelJ5NsEMMcpa6VpXe8DOa1Mi1M=
