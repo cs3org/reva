@@ -43,6 +43,7 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/publicshare"
+	"github.com/cs3org/reva/pkg/rhttp/router"
 	"github.com/cs3org/reva/pkg/share"
 	rtrace "github.com/cs3org/reva/pkg/trace"
 	"github.com/cs3org/reva/pkg/utils"
@@ -501,6 +502,16 @@ func (s *svc) newPropRaw(key, val string) *propertyXML {
 	}
 }
 
+func fixForOldOCM(ctx context.Context, md *provider.ResourceInfo) {
+	oldOCM := ctx.Value(ctxOldVersionOCM).(bool)
+	if oldOCM {
+		// the path is something like /<token>/...
+		// we need to strip the token part as this
+		// is passed as username in the basic auth
+		_, md.Path = router.ShiftPath(md.Path)
+	}
+}
+
 // mdToPropResponse converts the CS3 metadata into a webdav PropResponse
 // ns is the CS3 namespace that needs to be removed from the CS3 path before
 // prefixing it with the baseURI.
@@ -510,6 +521,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 
 	baseURI := ctx.Value(ctxKeyBaseURI).(string)
 
+	fixForOldOCM(ctx, md)
 	ref := path.Join(baseURI, md.Path)
 	if md.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
 		ref += "/"
