@@ -198,8 +198,8 @@ func (i *Identity) UserType() userpb.UserType {
 func (m *manager) fetchAllUserAccounts(ctx context.Context) error {
 	url := fmt.Sprintf("%s/api/v1.0/Identity?field=upn&field=primaryAccountEmail&field=displayName&field=uid&field=gid&field=type&field=source", m.conf.APIBaseURL)
 
-	var r IdentitiesResponse
 	for {
+		var r IdentitiesResponse
 		if err := m.apiTokenManager.SendAPIGetRequest(ctx, url, false, &r); err != nil {
 			return err
 		}

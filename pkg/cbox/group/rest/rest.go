@@ -170,8 +170,8 @@ type GroupsResponse struct {
 func (m *manager) fetchAllGroupAccounts(ctx context.Context) error {
 	url := fmt.Sprintf("%s/api/v1.0/Group?field=groupIdentifier&field=displayName&field=gid&field=isComputingGroup", m.conf.APIBaseURL)
 
-	var r GroupsResponse
 	for {
+		var r GroupsResponse
 		if err := m.apiTokenManager.SendAPIGetRequest(ctx, url, false, &r); err != nil {
 			return err
 		}
