@@ -9,7 +9,7 @@ description: >
 # _struct: config_
 
 {{% dir name="redis_address" type="string" default="localhost:6379" %}}
-The address at which the redis server is running [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/cbox/group/rest/rest.go#L54)
+The address at which the redis server is running [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/cbox/group/rest/rest.go#L56)
 {{< highlight toml >}}
 [cbox.group.rest]
 redis_address = "localhost:6379"
@@ -17,7 +17,7 @@ redis_address = "localhost:6379"
 {{% /dir %}}
 
 {{% dir name="group_members_cache_expiration" type="int" default=5 %}}
-The time in minutes for which the members of a group would be cached [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/cbox/group/rest/rest.go#L60)
+The time in minutes for which the members of a group would be cached [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/cbox/group/rest/rest.go#L62)
 {{< highlight toml >}}
 [cbox.group.rest]
 group_members_cache_expiration = 5
@@ -25,7 +25,7 @@ group_members_cache_expiration = 5
 {{% /dir %}}
 
 {{% dir name="id_provider" type="string" default="http://cernbox.cern.ch" %}}
-The OIDC Provider [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/cbox/group/rest/rest.go#L62)
+The OIDC Provider [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/cbox/group/rest/rest.go#L64)
 {{< highlight toml >}}
 [cbox.group.rest]
 id_provider = "http://cernbox.cern.ch"
@@ -33,7 +33,7 @@ id_provider = "http://cernbox.cern.ch"
 {{% /dir %}}
 
 {{% dir name="api_base_url" type="string" default="https://authorization-service-api-dev.web.cern.ch" %}}
-Base API Endpoint [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/cbox/group/rest/rest.go#L64)
+Base API Endpoint [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/cbox/group/rest/rest.go#L66)
 {{< highlight toml >}}
 [cbox.group.rest]
 api_base_url = "https://authorization-service-api-dev.web.cern.ch"
@@ -41,7 +41,7 @@ api_base_url = "https://authorization-service-api-dev.web.cern.ch"
 {{% /dir %}}
 
 {{% dir name="client_id" type="string" default="-" %}}
-Client ID needed to authenticate [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/cbox/group/rest/rest.go#L66)
+Client ID needed to authenticate [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/cbox/group/rest/rest.go#L68)
 {{< highlight toml >}}
 [cbox.group.rest]
 client_id = "-"
@@ -49,7 +49,7 @@ client_id = "-"
 {{% /dir %}}
 
 {{% dir name="client_secret" type="string" default="-" %}}
-Client Secret [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/cbox/group/rest/rest.go#L68)
+Client Secret [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/cbox/group/rest/rest.go#L70)
 {{< highlight toml >}}
 [cbox.group.rest]
 client_secret = "-"
@@ -57,7 +57,7 @@ client_secret = "-"
 {{% /dir %}}
 
 {{% dir name="oidc_token_endpoint" type="string" default="https://keycloak-dev.cern.ch/auth/realms/cern/api-access/token" %}}
-Endpoint to generate token to access the API [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/cbox/group/rest/rest.go#L71)
+Endpoint to generate token to access the API [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/cbox/group/rest/rest.go#L73)
 {{< highlight toml >}}
 [cbox.group.rest]
 oidc_token_endpoint = "https://keycloak-dev.cern.ch/auth/realms/cern/api-access/token"
@@ -65,7 +65,7 @@ oidc_token_endpoint = "https://keycloak-dev.cern.ch/auth/realms/cern/api-access/
 {{% /dir %}}
 
 {{% dir name="target_api" type="string" default="authorization-service-api" %}}
-The target application for which token needs to be generated [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/cbox/group/rest/rest.go#L73)
+The target application for which token needs to be generated [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/cbox/group/rest/rest.go#L75)
 {{< highlight toml >}}
 [cbox.group.rest]
 target_api = "authorization-service-api"
@@ -73,7 +73,7 @@ target_api = "authorization-service-api"
 {{% /dir %}}
 
 {{% dir name="group_fetch_interval" type="int" default=3600 %}}
-The time in seconds between bulk fetch of groups [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/cbox/group/rest/rest.go#L75)
+The time in seconds between bulk fetch of groups [[Ref]](https://github.com/cs3org/reva/tree/master/pkg/cbox/group/rest/rest.go#L77)
 {{< highlight toml >}}
 [cbox.group.rest]
 group_fetch_interval = 3600
