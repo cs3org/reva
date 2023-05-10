@@ -21,6 +21,7 @@ package ocdav
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"path"
@@ -184,7 +185,7 @@ func (s *svc) Close() error {
 }
 
 func (s *svc) Unprotected() []string {
-	return []string{"/status.php", "/remote.php/dav/public-files/", "/apps/files/", "/index.php/f/", "/index.php/s/", "/remote.php/dav/ocm/"}
+	return []string{"/status.php", "/remote.php/dav/public-files/", "/apps/files/", "/index.php/f/", "/index.php/s/", "/remote.php/dav/ocm/", "/ocm-provider"}
 }
 
 func (s *svc) Handler() http.Handler {
@@ -233,7 +234,45 @@ func (s *svc) Handler() http.Handler {
 				http.Redirect(w, r, rURL, http.StatusMovedPermanently)
 				return
 			}
+		case "ocm-provider":
+			// Reverse proxy of /ocm/ocm-provider, assuming it is exposed in localhost. When not configured, returns 404.
+			// TODO(lopresti) this as well as other endpoints here should go to some common place for
+			// routes served from the root, including the reverseproxy service (which if configured
+			// together with ocdav would just override it!).
+			proto := "https"
+			if s.c.Insecure {
+				proto = "http"
+			}
+			ocmEP := fmt.Sprintf("%s://localhost/ocm/ocm-provider", proto)
+			httpReq, err := rhttp.NewRequest(ctx, http.MethodGet, ocmEP, nil)
+			if err != nil {
+				log.Error().Msg("ocm-provider: failed to create forward request")
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			httpRes, err := rhttp.GetHTTPClient(rhttp.Context(ctx), rhttp.Insecure(s.c.Insecure)).Do(httpReq)
+			if err != nil {
+				log.Warn().Msg("ocm-provider: error attempting to call /ocm/ocm-provider")
+				w.WriteHeader(http.StatusNotFound)
+				return
+			}
+			defer httpRes.Body.Close()
+			payload, err := io.ReadAll(httpRes.Body)
+			if err != nil {
+				log.Warn().Msg("ocm-provider: error attempting to read payload")
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			if _, err = w.Write(payload); err != nil {
+				log.Error().Msg("ocm-provider: failed to return payload")
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			return
 		}
+
 		switch head {
 		// the old `/webdav` endpoint uses remote.php/webdav/$path
 		case "webdav":
