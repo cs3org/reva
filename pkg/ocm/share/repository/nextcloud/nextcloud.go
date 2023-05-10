@@ -79,7 +79,7 @@ type GranteeAltMap struct {
 // ShareAltMap is an alternative map to JSON-unmarshal a Share.
 type ShareAltMap struct {
 	ID          *ocm.ShareId          `json:"id"`
-	ResourceID  *provider.ResourceId  `json:"resource_id"`
+	RemoteShareId  string  `json:"remote_share_id"`
 	Permissions *ocm.SharePermissions `json:"permissions"`
 	Grantee     *GranteeAltMap        `json:"grantee"`
 	Owner       *userpb.UserId        `json:"owner"`
@@ -180,7 +180,6 @@ func (sm *Manager) GetShare(ctx context.Context, user *userpb.User, ref *ocm.Sha
 	}
 	return &ocm.Share{
 		Id:         altResult.ID,
-		ResourceId: altResult.ResourceID,
 		Grantee: &provider.Grantee{
 			Id: altResult.Grantee.ID,
 		},
@@ -228,7 +227,6 @@ func (sm *Manager) UpdateShare(ctx context.Context, user *userpb.User, ref *ocm.
 	}
 	return &ocm.Share{
 		Id:         altResult.ID,
-		ResourceId: altResult.ResourceID,
 		Grantee: &provider.Grantee{
 			Id: altResult.Grantee.ID,
 		},
@@ -261,7 +259,6 @@ func (sm *Manager) ListShares(ctx context.Context, user *userpb.User, filters []
 	for _, altResult := range respArr {
 		lst = append(lst, &ocm.Share{
 			Id:         altResult.ID,
-			ResourceId: altResult.ResourceID,
 			Grantee: &provider.Grantee{
 				Id: altResult.Grantee.ID,
 			},
@@ -313,7 +310,7 @@ func (sm *Manager) ListReceivedShares(ctx context.Context, user *userpb.User) ([
 		}
 		res = append(res, &ocm.ReceivedShare{
 			Id:            altResultShare.ID,
-			RemoteShareId: altResultShare.ResourceID.OpaqueId,
+			RemoteShareId: altResultShare.RemoteShareId,
 			Grantee: &provider.Grantee{
 				Id: altResultShare.Grantee.ID,
 			},
@@ -351,7 +348,7 @@ func (sm *Manager) GetReceivedShare(ctx context.Context, user *userpb.User, ref 
 	}
 	return &ocm.ReceivedShare{
 		Id:            altResultShare.ID,
-		RemoteShareId: altResultShare.ResourceID.OpaqueId,
+		RemoteShareId: altResultShare.RemoteShareId,
 		Grantee: &provider.Grantee{
 			Id: altResultShare.Grantee.ID,
 		},
@@ -397,7 +394,7 @@ func (sm *Manager) UpdateReceivedShare(ctx context.Context, user *userpb.User, s
 	}
 	return &ocm.ReceivedShare{
 		Id:            altResultShare.ID,
-		RemoteShareId: altResultShare.ResourceID.OpaqueId,
+		RemoteShareId: altResultShare.RemoteShareId,
 		Grantee: &provider.Grantee{
 			Id: altResultShare.Grantee.ID,
 		},
