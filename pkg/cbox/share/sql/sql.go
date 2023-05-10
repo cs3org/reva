@@ -347,7 +347,7 @@ func (m *mgr) ListShares(ctx context.Context, filters []*collaboration.Filter) (
 		}
 		share, err := conversions.ConvertToCS3Share(ctx, m.client, s)
 		if err != nil {
-			return nil, err
+			continue
 		}
 		shares = append(shares, share)
 	}
@@ -404,7 +404,7 @@ func (m *mgr) ListReceivedShares(ctx context.Context, filters []*collaboration.F
 		}
 		share, err := conversions.ConvertToCS3ReceivedShare(ctx, m.client, s)
 		if err != nil {
-			return nil, err
+			continue
 		}
 		shares = append(shares, share)
 	}

@@ -410,7 +410,7 @@ func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []
 		} else {
 			if cs3Share.PasswordProtected && sign {
 				if err := publicshare.AddSignature(cs3Share, s.ShareWith); err != nil {
-					return nil, err
+					continue
 				}
 			}
 			shares = append(shares, cs3Share)
