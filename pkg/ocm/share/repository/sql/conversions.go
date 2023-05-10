@@ -148,19 +148,18 @@ type dbAccessMethod struct {
 }
 
 type dbReceivedShare struct {
-	ID         int
-	Name       string
-	Prefix     string
-	ItemSource string
-	ItemType   ItemType
-	ShareWith  string
-	Owner      string
-	Initiator  string
-	Ctime      int
-	Mtime      int
-	Expiration sql.NullInt64
-	Type       ShareType
-	State      ShareState
+	ID            int
+	Name          string
+	RemoteShareID string
+	ItemType      ItemType
+	ShareWith     string
+	Owner         string
+	Initiator     string
+	Ctime         int
+	Mtime         int
+	Expiration    sql.NullInt64
+	Type          ShareType
+	State         ShareState
 }
 
 type dbProtocol struct {
@@ -234,11 +233,8 @@ func convertToCS3OCMReceivedShare(s *dbReceivedShare, p []*ocm.Protocol) *ocm.Re
 		Id: &ocm.ShareId{
 			OpaqueId: strconv.Itoa(s.ID),
 		},
-		ResourceId: &provider.ResourceId{
-			StorageId: s.Prefix,
-			OpaqueId:  s.ItemSource,
-		},
-		Name: s.Name,
+		RemoteShareId: s.RemoteShareID,
+		Name:          s.Name,
 		Grantee: &provider.Grantee{
 			Type: provider.GranteeType_GRANTEE_TYPE_USER,
 			Id: &provider.Grantee_UserId{

@@ -219,7 +219,7 @@ func (s *svc) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateReceive
 			case ocm.ShareState_SHARE_STATE_PENDING:
 				// currently no consequences
 			case ocm.ShareState_SHARE_STATE_REJECTED:
-				s.removeReference(ctx, share.ResourceId) // error is logged inside removeReference
+				// TODO
 				// FIXME we are ignoring an error from removeReference here
 				return res, nil
 			}

@@ -257,8 +257,7 @@ var _ = Describe("Nextcloud", func() {
 			})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(*share).To(Equal(ocm.Share{
-				Id:         &ocm.ShareId{},
-				ResourceId: &provider.ResourceId{},
+				Id: &ocm.ShareId{},
 				Grantee: &provider.Grantee{
 					Id: &provider.Grantee_UserId{
 						UserId: &userpb.UserId{
@@ -353,8 +352,7 @@ var _ = Describe("Nextcloud", func() {
 				})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(*share).To(Equal(ocm.Share{
-				Id:         &ocm.ShareId{},
-				ResourceId: &provider.ResourceId{},
+				Id: &ocm.ShareId{},
 				Grantee: &provider.Grantee{
 					Id: &provider.Grantee_UserId{
 						UserId: &userpb.UserId{
@@ -414,8 +412,7 @@ var _ = Describe("Nextcloud", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(len(shares)).To(Equal(1))
 			Expect(*shares[0]).To(Equal(ocm.Share{
-				Id:         &ocm.ShareId{},
-				ResourceId: &provider.ResourceId{},
+				Id: &ocm.ShareId{},
 				Grantee: &provider.Grantee{
 					Id: &provider.Grantee_UserId{
 						UserId: &userpb.UserId{
@@ -464,8 +461,8 @@ var _ = Describe("Nextcloud", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(len(receivedShares)).To(Equal(1))
 			Expect(*receivedShares[0]).To(Equal(ocm.ReceivedShare{
-				Id:         &ocm.ShareId{},
-				ResourceId: &provider.ResourceId{},
+				Id:            &ocm.ShareId{},
+				RemoteShareId: "",
 				Grantee: &provider.Grantee{
 					Id: &provider.Grantee_UserId{
 						UserId: &userpb.UserId{
@@ -520,8 +517,8 @@ var _ = Describe("Nextcloud", func() {
 			})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(*receivedShare).To(Equal(ocm.ReceivedShare{
-				Id:         &ocm.ShareId{},
-				ResourceId: &provider.ResourceId{},
+				Id:            &ocm.ShareId{},
+				RemoteShareId: "",
 				Grantee: &provider.Grantee{
 					Id: &provider.Grantee_UserId{
 						UserId: &userpb.UserId{
@@ -569,8 +566,8 @@ var _ = Describe("Nextcloud", func() {
 
 			receivedShare, err := am.UpdateReceivedShare(ctx, user,
 				&ocm.ReceivedShare{
-					Id:         &ocm.ShareId{},
-					ResourceId: &provider.ResourceId{},
+					Id:            &ocm.ShareId{},
+					RemoteShareId: "",
 					Grantee: &provider.Grantee{
 						Id: &provider.Grantee_UserId{
 							UserId: &userpb.UserId{
@@ -611,8 +608,8 @@ var _ = Describe("Nextcloud", func() {
 				})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(*receivedShare).To(Equal(ocm.ReceivedShare{
-				Id:         &ocm.ShareId{},
-				ResourceId: &provider.ResourceId{},
+				Id:            &ocm.ShareId{},
+				RemoteShareId: "",
 				Grantee: &provider.Grantee{
 					Id: &provider.Grantee_UserId{
 						UserId: &userpb.UserId{
@@ -648,7 +645,7 @@ var _ = Describe("Nextcloud", func() {
 				},
 				State: ocm.ShareState_SHARE_STATE_ACCEPTED,
 			}))
-			checkCalled(called, `POST /apps/sciencemesh/~tester/api/ocm/UpdateReceivedShare {"received_share":{"id":{},"resource_id":{},"grantee":{"Id":{"UserId":{"idp":"0.0.0.0:19000","opaque_id":"f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c","type":1}}},"owner":{"idp":"0.0.0.0:19000","opaque_id":"f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c","type":1},"creator":{"idp":"0.0.0.0:19000","opaque_id":"f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c","type":1},"ctime":{"seconds":1234567890},"mtime":{"seconds":1234567890},"state":2},"field_mask":{"paths":["state"]}}`)
+			checkCalled(called, `POST /apps/sciencemesh/~tester/api/ocm/UpdateReceivedShare {"received_share":{"id":{},"grantee":{"Id":{"UserId":{"idp":"0.0.0.0:19000","opaque_id":"f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c","type":1}}},"owner":{"idp":"0.0.0.0:19000","opaque_id":"f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c","type":1},"creator":{"idp":"0.0.0.0:19000","opaque_id":"f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c","type":1},"ctime":{"seconds":1234567890},"mtime":{"seconds":1234567890},"state":2},"field_mask":{"paths":["state"]}}`)
 		})
 	})
 
