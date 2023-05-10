@@ -33,6 +33,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/rhttp/router"
+	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"google.golang.org/grpc/metadata"
 )
@@ -51,7 +52,7 @@ type DavHandler struct {
 	MetaHandler         *MetaHandler
 	TrashbinHandler     *TrashbinHandler
 	SpacesHandler       *SpacesHandler
-	PublicFolderHandler *WebDavHandler
+	PublicFolderHandler *SpacesHandler
 	PublicFileHandler   *PublicFileHandler
 	SharesHandler       *WebDavHandler
 }
@@ -83,8 +84,8 @@ func (h *DavHandler) init(c *Config) error {
 		return err
 	}
 
-	h.PublicFolderHandler = new(WebDavHandler)
-	if err := h.PublicFolderHandler.init("public", true); err != nil { // jail public file requests to /public/ prefix
+	h.PublicFolderHandler = new(SpacesHandler)
+	if err := h.PublicFolderHandler.init(c); err != nil { // jail public file requests to /public/ prefix
 		return err
 	}
 
@@ -260,7 +261,18 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 				r = r.WithContext(ctx)
 				h.PublicFileHandler.Handler(s).ServeHTTP(w, r)
 			} else {
-				h.PublicFolderHandler.Handler(s).ServeHTTP(w, r)
+				// rewrite path for spaces handler
+				token, r.URL.Path = router.ShiftPath(r.URL.Path)
+				r.URL.Path, _ = storagespace.FormatReference(
+					&provider.Reference{
+						ResourceId: &provider.ResourceId{
+							StorageId: utils.PublicStorageProviderID,
+							SpaceId:   utils.PublicStorageSpaceID,
+							OpaqueId:  token,
+						},
+						Path: r.URL.Path,
+					})
+				h.PublicFolderHandler.Handler(s, nil).ServeHTTP(w, r)
 			}
 
 		default:
