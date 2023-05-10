@@ -62,6 +62,7 @@ driver = "localhome"
 [http.services.datagateway]
 [http.services.prometheus]
 [http.services.ocmd]
+[http.services.ocmprovider]
 [http.services.ocs]
 [http.services.ocdav]
 enable_http_tpc = true

@@ -54,6 +54,7 @@ address = "0.0.0.0:19001"
 [http.services.datagateway]
 [http.services.prometheus]
 [http.services.ocmd]
+[http.services.ocmprovider]
 provider = "Reva-Server-1"
 endpoint = "http://localhost:19001"
 enable_webapp = true
