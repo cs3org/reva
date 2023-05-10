@@ -15,7 +15,7 @@ require (
 	github.com/ceph/go-ceph v0.15.0
 	github.com/cheggaaa/pb v1.0.29
 	github.com/cs3org/cato v0.0.0-20200828125504-e418fc54dd5e
-	github.com/cs3org/go-cs3apis v0.0.0-20230331073620-011a5b8a3115
+	github.com/cs3org/go-cs3apis v0.0.0-20230508132523-e0d062e63b3b
 	github.com/dgraph-io/ristretto v0.1.1
 	github.com/dolthub/go-mysql-server v0.14.0
 	github.com/eventials/go-tus v0.0.0-20200718001131-45c7ec8f5d59
@@ -181,7 +181,6 @@ require (
 go 1.19
 
 replace (
-	github.com/cs3org/go-cs3apis => github.com/gmgigi96/go-cs3apis v0.0.0-20230508122407-26b2c32caabc
 	github.com/eventials/go-tus => github.com/andrewmostello/go-tus v0.0.0-20200314041820-904a9904af9a
 	github.com/oleiade/reflections => github.com/oleiade/reflections v1.0.1
 )
