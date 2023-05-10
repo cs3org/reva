@@ -130,7 +130,7 @@ user_layout = "{{.Username}}"
 [http.services.ocmprovider]
 provider = "Reva-Nextcloud"
 endpoint = "http://localhost"
-webdav_root = "/remote.php/dav"
+webdav_root = "/remote.php/dav/ocm"
 enable_webapp = true
 enable_datatx = true
 

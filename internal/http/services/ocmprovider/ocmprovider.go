@@ -25,7 +25,6 @@ import (
 
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp/global"
-	"github.com/go-chi/chi/v5"
 	"github.com/mitchellh/mapstructure"
 	"github.com/rs/zerolog"
 )
@@ -35,18 +34,13 @@ func init() {
 }
 
 type config struct {
-	OCMPrefix    string `mapstructure:"ocm_prefix"`
-	Endpoint     string `mapstructure:"endpoint"`
-	Provider     string `mapstructure:"provider"`
-	WebDAVRoot   string `mapstructure:"webdav_root"`
-	WebAppRoot   string `mapstructure:"webapp_root"`
-	EnableWebApp bool   `mapstructure:"enable_webapp"`
-	EnableDataTx bool   `mapstructure:"enable_datatx"`
-}
-
-type svc struct {
-	Conf   *config
-	router chi.Router
+	OCMPrefix    string `mapstructure:"ocm_prefix" docs:"ocm;The prefix URL where the OCM API is served."`
+	Endpoint     string `mapstructure:"endpoint" docs:"http://localhost;This host's URL."`
+	Provider     string `mapstructure:"provider" docs:"reva;A friendly name that defines this service."`
+	WebdavRoot   string `mapstructure:"webdav_root" docs:"/remote.php/dav/ocm;The root URL of the WebDAV endpoint to serve OCM shares."`
+	WebappRoot   string `mapstructure:"webapp_root" docs:"/external/sciencemesh;The root URL to serve Web apps via OCM."`
+	EnableWebapp bool   `mapstructure:"enable_webapp" docs:"false;Whether web apps are enabled in OCM shares."`
+	EnableDatatx bool   `mapstructure:"enable_datatx" docs:"false;Whether data transfers are enabled in OCM shares."`
 }
 
 type discoveryData struct {
@@ -64,8 +58,9 @@ type resourceTypes struct {
 	Protocols  map[string]string `json:"protocols"`
 }
 
-type discoHandler struct {
-	d discoveryData
+type svc struct {
+	conf *config
+	d    *discoveryData
 }
 
 func (c *config) init() {
@@ -78,35 +73,38 @@ func (c *config) init() {
 	if c.Provider == "" {
 		c.Provider = "reva"
 	}
-	if c.WebDAVRoot == "" {
-		c.WebDAVRoot = "remote.php/dav"
+	if c.WebdavRoot == "" {
+		c.WebdavRoot = "/remote.php/dav/ocm"
 	}
-	if c.WebAppRoot == "" {
-		c.WebAppRoot = "external/sciencemesh"
+	if c.WebappRoot == "" {
+		c.WebappRoot = "/external/sciencemesh"
 	}
 }
 
-func (h *discoHandler) init(c *config) {
-	h.d.Enabled = true
-	h.d.APIVersion = "1.1.0"
-	h.d.Endpoint = fmt.Sprintf("%s/%s", c.Endpoint, c.OCMPrefix)
-	h.d.Provider = c.Provider
+func (c *config) prepare() *discoveryData {
+	// generates the (static) data structure to be exposed by /ocm-provider
+	d := &discoveryData{}
+	d.Enabled = true
+	d.APIVersion = "1.1.0"
+	d.Endpoint = fmt.Sprintf("%s/%s", c.Endpoint, c.OCMPrefix)
+	d.Provider = c.Provider
 	rtProtos := map[string]string{}
 	// webdav is always enabled
-	rtProtos["webdav"] = fmt.Sprintf("%s/%s/%s", c.Endpoint, c.WebDAVRoot, c.OCMPrefix)
-	if c.EnableWebApp {
-		rtProtos["webapp"] = fmt.Sprintf("%s/%s", c.Endpoint, c.WebAppRoot)
+	rtProtos["webdav"] = fmt.Sprintf("%s%s", c.Endpoint, c.WebdavRoot)
+	if c.EnableWebapp {
+		rtProtos["webapp"] = fmt.Sprintf("%s%s", c.Endpoint, c.WebappRoot)
 	}
-	if c.EnableDataTx {
-		rtProtos["datatx"] = fmt.Sprintf("%s/%s/%s", c.Endpoint, c.WebDAVRoot, c.OCMPrefix)
+	if c.EnableDatatx {
+		rtProtos["datatx"] = fmt.Sprintf("%s%s", c.Endpoint, c.WebdavRoot)
 	}
-	h.d.ResourceTypes = []resourceTypes{{
+	d.ResourceTypes = []resourceTypes{{
 		Name:       "file",           // so far we only support `file`
 		ShareTypes: []string{"user"}, // so far we only support `user`
 		Protocols:  rtProtos,         // expose the protocols as per configuration
 	}}
 	// for now we hardcode the capabilities, as this is currently only advisory
-	h.d.Capabilities = []string{"/invite-accepted"}
+	d.Capabilities = []string{"/invite-accepted"}
+	return d
 }
 
 // New returns a new ocmprovider object, that implements
@@ -117,26 +115,12 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 	if err := mapstructure.Decode(m, conf); err != nil {
 		return nil, err
 	}
+
 	conf.init()
-
-	r := chi.NewRouter()
-	s := &svc{
-		Conf:   conf,
-		router: r,
-	}
-
-	if err := s.routerInit(); err != nil {
-		return nil, err
-	}
-
-	return s, nil
-}
-
-func (s *svc) routerInit() error {
-	discoHandler := new(discoHandler)
-	discoHandler.init(s.Conf)
-	s.router.Get(".", discoHandler.Send)
-	return nil
+	return &svc{
+		conf: conf,
+		d:    conf.prepare(),
+	}, nil
 }
 
 // Close performs cleanup.
@@ -150,28 +134,17 @@ func (s *svc) Prefix() string {
 }
 
 func (s *svc) Unprotected() []string {
-	return []string{"."}
+	return []string{"/"}
 }
 
 func (s *svc) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		log := appctx.GetLogger(r.Context())
-		log.Debug().Str("path", r.URL.Path).Msg("ocm-provider routing")
-
-		// unset raw path, otherwise chi may use it to route and then failto match percent encoded path segments
-		r.URL.RawPath = ""
-		s.router.ServeHTTP(w, r)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		indented, _ := json.MarshalIndent(s.d, "", "   ")
+		if _, err := w.Write(indented); err != nil {
+			log.Err(err).Msg("Error writing to ResponseWriter")
+		}
 	})
-}
-
-// Send sends the discovery info to the caller.
-func (h *discoHandler) Send(w http.ResponseWriter, r *http.Request) {
-	log := appctx.GetLogger(r.Context())
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	indentedConf, _ := json.MarshalIndent(h.d, "", "   ")
-	if _, err := w.Write(indentedConf); err != nil {
-		log.Err(err).Msg("Error writing to ResponseWriter")
-	}
 }
