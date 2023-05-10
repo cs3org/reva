@@ -22,6 +22,7 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"path/filepath"
 	"strings"
 	"text/template"
 	"time"
@@ -265,7 +266,7 @@ func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareReq
 
 	ocmshare := &ocm.Share{
 		Token:         tkn,
-		Name:          req.ResourceId.OpaqueId[len("fileid-/home"):],
+		Name:          filepath.Base(info.Path),
 		ResourceId:    req.ResourceId,
 		Grantee:       req.Grantee,
 		ShareType:     ocm.ShareType_SHARE_TYPE_USER,
