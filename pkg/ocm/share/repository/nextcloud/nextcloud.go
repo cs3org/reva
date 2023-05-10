@@ -79,7 +79,7 @@ type GranteeAltMap struct {
 // ShareAltMap is an alternative map to JSON-unmarshal a Share.
 type ShareAltMap struct {
 	ID            *ocm.ShareId          `json:"id"`
-	RemoteShareId string                `json:"remote_share_id"`
+	RemoteShareID string                `json:"remote_share_id"`
 	Permissions   *ocm.SharePermissions `json:"permissions"`
 	Grantee       *GranteeAltMap        `json:"grantee"`
 	Owner         *userpb.UserId        `json:"owner"`
@@ -310,7 +310,7 @@ func (sm *Manager) ListReceivedShares(ctx context.Context, user *userpb.User) ([
 		}
 		res = append(res, &ocm.ReceivedShare{
 			Id:            altResultShare.ID,
-			RemoteShareId: altResultShare.RemoteShareId,
+			RemoteShareId: altResultShare.RemoteShareID, // sic, see https://github.com/cs3org/reva/pull/3852#discussion_r1189681465
 			Grantee: &provider.Grantee{
 				Id: altResultShare.Grantee.ID,
 			},
@@ -348,7 +348,7 @@ func (sm *Manager) GetReceivedShare(ctx context.Context, user *userpb.User, ref 
 	}
 	return &ocm.ReceivedShare{
 		Id:            altResultShare.ID,
-		RemoteShareId: altResultShare.RemoteShareId,
+		RemoteShareId: altResultShare.RemoteShareID, // sic, see https://github.com/cs3org/reva/pull/3852#discussion_r1189681465
 		Grantee: &provider.Grantee{
 			Id: altResultShare.Grantee.ID,
 		},
@@ -394,7 +394,7 @@ func (sm *Manager) UpdateReceivedShare(ctx context.Context, user *userpb.User, s
 	}
 	return &ocm.ReceivedShare{
 		Id:            altResultShare.ID,
-		RemoteShareId: altResultShare.RemoteShareId,
+		RemoteShareId: altResultShare.RemoteShareID, // sic, see https://github.com/cs3org/reva/pull/3852#discussion_r1189681465
 		Grantee: &provider.Grantee{
 			Id: altResultShare.Grantee.ID,
 		},
