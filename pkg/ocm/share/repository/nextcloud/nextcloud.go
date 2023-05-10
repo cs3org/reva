@@ -78,14 +78,14 @@ type GranteeAltMap struct {
 
 // ShareAltMap is an alternative map to JSON-unmarshal a Share.
 type ShareAltMap struct {
-	ID          *ocm.ShareId          `json:"id"`
-	RemoteShareId  string  `json:"remote_share_id"`
-	Permissions *ocm.SharePermissions `json:"permissions"`
-	Grantee     *GranteeAltMap        `json:"grantee"`
-	Owner       *userpb.UserId        `json:"owner"`
-	Creator     *userpb.UserId        `json:"creator"`
-	Ctime       *typespb.Timestamp    `json:"ctime"`
-	Mtime       *typespb.Timestamp    `json:"mtime"`
+	ID            *ocm.ShareId          `json:"id"`
+	RemoteShareId string                `json:"remote_share_id"`
+	Permissions   *ocm.SharePermissions `json:"permissions"`
+	Grantee       *GranteeAltMap        `json:"grantee"`
+	Owner         *userpb.UserId        `json:"owner"`
+	Creator       *userpb.UserId        `json:"creator"`
+	Ctime         *typespb.Timestamp    `json:"ctime"`
+	Mtime         *typespb.Timestamp    `json:"mtime"`
 }
 
 // ReceivedShareAltMap is an alternative map to JSON-unmarshal a ReceivedShare.
@@ -179,7 +179,7 @@ func (sm *Manager) GetShare(ctx context.Context, user *userpb.User, ref *ocm.Sha
 		return nil, err
 	}
 	return &ocm.Share{
-		Id:         altResult.ID,
+		Id: altResult.ID,
 		Grantee: &provider.Grantee{
 			Id: altResult.Grantee.ID,
 		},
@@ -226,7 +226,7 @@ func (sm *Manager) UpdateShare(ctx context.Context, user *userpb.User, ref *ocm.
 		return nil, err
 	}
 	return &ocm.Share{
-		Id:         altResult.ID,
+		Id: altResult.ID,
 		Grantee: &provider.Grantee{
 			Id: altResult.Grantee.ID,
 		},
@@ -258,7 +258,7 @@ func (sm *Manager) ListShares(ctx context.Context, user *userpb.User, filters []
 	var lst = make([]*ocm.Share, 0, len(respArr))
 	for _, altResult := range respArr {
 		lst = append(lst, &ocm.Share{
-			Id:         altResult.ID,
+			Id: altResult.ID,
 			Grantee: &provider.Grantee{
 				Id: altResult.Grantee.ID,
 			},

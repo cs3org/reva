@@ -257,7 +257,7 @@ var _ = Describe("Nextcloud", func() {
 			})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(*share).To(Equal(ocm.Share{
-				Id:         &ocm.ShareId{},
+				Id: &ocm.ShareId{},
 				Grantee: &provider.Grantee{
 					Id: &provider.Grantee_UserId{
 						UserId: &userpb.UserId{
@@ -352,7 +352,7 @@ var _ = Describe("Nextcloud", func() {
 				})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(*share).To(Equal(ocm.Share{
-				Id:         &ocm.ShareId{},
+				Id: &ocm.ShareId{},
 				Grantee: &provider.Grantee{
 					Id: &provider.Grantee_UserId{
 						UserId: &userpb.UserId{
@@ -412,7 +412,7 @@ var _ = Describe("Nextcloud", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(len(shares)).To(Equal(1))
 			Expect(*shares[0]).To(Equal(ocm.Share{
-				Id:         &ocm.ShareId{},
+				Id: &ocm.ShareId{},
 				Grantee: &provider.Grantee{
 					Id: &provider.Grantee_UserId{
 						UserId: &userpb.UserId{
