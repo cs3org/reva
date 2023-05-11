@@ -21,7 +21,6 @@ package rest
 import (
 	"context"
 	"fmt"
-	"net/url"
 	"os"
 	"os/signal"
 	"strings"
@@ -277,10 +276,7 @@ func (m *manager) GetMembers(ctx context.Context, gid *grouppb.GroupId) ([]*user
 		return users, nil
 	}
 
-	url, err := url.JoinPath(m.conf.APIBaseURL, "/api/v1.0/Group", gid.OpaqueId, "/memberidentities/precomputed?limit=10&field=upn&field=primaryAccountEmail&field=displayName&field=uid&field=gid&field=type&field=source")
-	if err != nil {
-		return nil, err
-	}
+	url := fmt.Sprintf("%s/api/v1.0/Group/%s/memberidentities/precomputed?limit=10&field=upn&field=primaryAccountEmail&field=displayName&field=uid&field=gid&field=type&field=source", m.conf.APIBaseURL, gid.OpaqueId)
 
 	var r user.IdentitiesResponse
 	members := []*userpb.UserId{}
