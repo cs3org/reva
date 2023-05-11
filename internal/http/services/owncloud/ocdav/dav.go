@@ -199,7 +199,7 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 				ctx = context.WithValue(ctx, ctxOCM10, true)
 			} else {
 				token, _ = router.ShiftPath(r.URL.Path)
-				ctx = context.WithValue(ctx, ctxOldVersionOCM, false)
+				ctx = context.WithValue(ctx, ctxOCM10, false)
 			}
 
 			authRes, err := handleOCMAuth(ctx, c, token)
