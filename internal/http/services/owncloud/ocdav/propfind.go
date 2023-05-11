@@ -502,9 +502,9 @@ func (s *svc) newPropRaw(key, val string) *propertyXML {
 	}
 }
 
-func fixForOldOCM(ctx context.Context, md *provider.ResourceInfo) {
-	oldOCM := ctx.Value(ctxOldVersionOCM).(bool)
-	if oldOCM {
+func supportLegacyOCMAccess(ctx context.Context, md *provider.ResourceInfo) {
+	ocm10 := ctx.Value(ctxOCM10).(bool)
+	if ocm10 {
 		// the path is something like /<token>/...
 		// we need to strip the token part as this
 		// is passed as username in the basic auth
