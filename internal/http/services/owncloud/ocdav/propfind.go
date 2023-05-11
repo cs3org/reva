@@ -521,7 +521,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 
 	baseURI := ctx.Value(ctxKeyBaseURI).(string)
 
-	fixForOldOCM(ctx, md)
+	supportLegacyOCMAccess(ctx, md)
 	ref := path.Join(baseURI, md.Path)
 	if md.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
 		ref += "/"
