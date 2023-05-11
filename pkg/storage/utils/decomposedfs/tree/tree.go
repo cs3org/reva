@@ -41,7 +41,6 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/options"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/filelocks"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
@@ -63,6 +62,7 @@ type Blobstore interface {
 type PathLookup interface {
 	NodeFromResource(ctx context.Context, ref *provider.Reference) (*node.Node, error)
 	NodeFromID(ctx context.Context, id *provider.ResourceId) (n *node.Node, err error)
+	LockAndRead(ctx context.Context, id *provider.ResourceId, spaceRoot *node.Node) (*lockedfile.File, *node.Node, error)
 
 	InternalRoot() string
 	InternalPath(spaceID, nodeID string) string
@@ -376,7 +376,7 @@ func (t *Tree) ListFolder(ctx context.Context, n *node.Node) ([]*node.Node, erro
 					}
 				}
 
-				child, err := node.ReadNode(ctx, t.lookup, n.SpaceID, nodeID, false, n, true)
+				child, err := node.ReadNode(ctx, t.lookup, n.SpaceID, nodeID, false, n, true, nil)
 				if err != nil {
 					return err
 				}
@@ -709,19 +709,8 @@ func (t *Tree) Propagate(ctx context.Context, n *node.Node, sizeDiff int64) (err
 
 		attrs := node.Attributes{}
 
-		var f *lockedfile.File
-		// lock parent before reading treesize or tree time
-		switch t.lookup.MetadataBackend().(type) {
-		case metadata.MessagePackBackend:
-			f, err = lockedfile.OpenFile(t.lookup.MetadataBackend().MetadataPath(n.ParentPath()), os.O_RDWR|os.O_CREATE, 0600)
-		case metadata.XattrsBackend:
-			// we have to use dedicated lockfiles to lock directories
-			// this only works because the xattr backend also locks folders with separate lock files
-			f, err = lockedfile.OpenFile(n.ParentPath()+filelocks.LockFileSuffix, os.O_RDWR|os.O_CREATE, 0600)
-		}
-		if err != nil {
-			return err
-		}
+		var f io.Closer
+		f, n, err = t.lookup.LockAndRead(ctx, &provider.ResourceId{SpaceId: n.SpaceID, OpaqueId: n.ParentID}, n.SpaceRoot)
 		// always log error if closing node fails
 		defer func() {
 			// ignore already closed error
@@ -730,10 +719,6 @@ func (t *Tree) Propagate(ctx context.Context, n *node.Node, sizeDiff int64) (err
 				err = cerr // only overwrite err with en error from close if the former was nil
 			}
 		}()
-
-		if n, err = n.Parent(); err != nil {
-			return err
-		}
 
 		// TODO none, sync and async?
 		if !n.HasPropagation() {
@@ -933,7 +918,7 @@ func (t *Tree) readRecycleItem(ctx context.Context, spaceID, key, path string) (
 	nodeID = strings.ReplaceAll(nodeID, "/", "")
 
 	recycleNode = node.New(spaceID, nodeID, "", "", 0, "", provider.ResourceType_RESOURCE_TYPE_INVALID, nil, t.lookup)
-	recycleNode.SpaceRoot, err = node.ReadNode(ctx, t.lookup, spaceID, spaceID, false, nil, false)
+	recycleNode.SpaceRoot, err = node.ReadNode(ctx, t.lookup, spaceID, spaceID, false, nil, false, nil)
 	if err != nil {
 		return
 	}

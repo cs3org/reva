@@ -327,7 +327,7 @@ func (upload *Upload) Finalize() (err error) {
 	n := upload.Node
 	if n == nil {
 		var err error
-		n, err = node.ReadNode(upload.Ctx, upload.lu, upload.Info.Storage["SpaceRoot"], upload.Info.Storage["NodeId"], false, nil, false)
+		n, err = node.ReadNode(upload.Ctx, upload.lu, upload.Info.Storage["SpaceRoot"], upload.Info.Storage["NodeId"], false, nil, false, nil)
 		if err != nil {
 			return err
 		}

@@ -256,7 +256,7 @@ func CreateNodeForUpload(upload *Upload, initAttrs node.Attributes) (*node.Node,
 		nil,
 		upload.lu,
 	)
-	n.SpaceRoot, err = node.ReadNode(upload.Ctx, upload.lu, spaceID, spaceID, false, nil, false)
+	n.SpaceRoot, err = node.ReadNode(upload.Ctx, upload.lu, spaceID, spaceID, false, nil, false, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -372,7 +372,7 @@ func initNewNode(upload *Upload, n *node.Node, fsize uint64) (*lockedfile.File, 
 }
 
 func updateExistingNode(upload *Upload, n *node.Node, spaceID string, fsize uint64) (*lockedfile.File, error) {
-	old, _ := node.ReadNode(upload.Ctx, upload.lu, spaceID, n.ID, false, nil, false)
+	old, _ := node.ReadNode(upload.Ctx, upload.lu, spaceID, n.ID, false, nil, false, nil)
 	if _, err := node.CheckQuota(n.SpaceRoot, true, uint64(old.Blobsize), fsize); err != nil {
 		return nil, err
 	}

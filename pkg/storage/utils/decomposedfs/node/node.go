@@ -48,6 +48,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
+	"github.com/rogpeppe/go-internal/lockedfile"
 )
 
 // Define keys and values used in the node metadata
@@ -99,6 +100,7 @@ type PathLookup interface {
 	MetadataBackend() metadata.Backend
 	ReadBlobSizeAttr(path string) (int64, error)
 	ReadBlobIDAttr(path string) (string, error)
+	LockAndRead(ctx context.Context, id *provider.ResourceId, spaceRoot *Node) (*lockedfile.File, *Node, error)
 }
 
 // New returns a new instance of Node
@@ -205,7 +207,7 @@ func (n *Node) SpaceOwnerOrManager(ctx context.Context) *userpb.UserId {
 }
 
 // ReadNode creates a new instance from an id and checks if it exists
-func ReadNode(ctx context.Context, lu PathLookup, spaceID, nodeID string, canListDisabledSpace bool, spaceRoot *Node, skipParentCheck bool) (*Node, error) {
+func ReadNode(ctx context.Context, lu PathLookup, spaceID, nodeID string, canListDisabledSpace bool, spaceRoot *Node, skipParentCheck bool, r io.ReadCloser) (*Node, error) {
 	var err error
 
 	if spaceRoot == nil {
@@ -276,7 +278,12 @@ func ReadNode(ctx context.Context, lu PathLookup, spaceID, nodeID string, canLis
 		}
 	}()
 
-	attrs, err := n.Xattrs()
+	var attrs Attributes
+	if r != nil {
+		attrs, err = n.XattrsWithReader(r)
+	} else {
+		attrs, err = n.Xattrs()
+	}
 	switch {
 	case metadata.IsNotExist(err):
 		return n, nil // swallow not found, the node defaults to exists = false
@@ -397,7 +404,7 @@ func (n *Node) Child(ctx context.Context, name string) (*Node, error) {
 	}
 
 	var c *Node
-	c, err = ReadNode(ctx, n.lu, spaceID, nodeID, false, n.SpaceRoot, true)
+	c, err = ReadNode(ctx, n.lu, spaceID, nodeID, false, n.SpaceRoot, true, nil)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not read child node")
 	}

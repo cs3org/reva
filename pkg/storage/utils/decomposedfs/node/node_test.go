@@ -74,7 +74,7 @@ var _ = Describe("Node", func() {
 			})
 			Expect(err).ToNot(HaveOccurred())
 
-			n, err := node.ReadNode(env.Ctx, env.Lookup, lookupNode.SpaceID, lookupNode.ID, false, nil, false)
+			n, err := node.ReadNode(env.Ctx, env.Lookup, lookupNode.SpaceID, lookupNode.ID, false, nil, false, nil)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(n.BlobID).To(Equal("file1-blobid"))
 		})
@@ -327,7 +327,7 @@ var _ = Describe("Node", func() {
 			})
 			Expect(err).ToNot(HaveOccurred())
 			// checking that the path "subpath" is denied properly
-			subfolder, err = node.ReadNode(env.Ctx, env.Lookup, subfolder.SpaceID, subfolder.ID, false, nil, false)
+			subfolder, err = node.ReadNode(env.Ctx, env.Lookup, subfolder.SpaceID, subfolder.ID, false, nil, false, nil)
 			Expect(err).ToNot(HaveOccurred())
 			subfolderActual, denied := subfolder.PermissionSet(env.Ctx)
 			subfolderExpected := ocsconv.NewDeniedRole().CS3ResourcePermissions()

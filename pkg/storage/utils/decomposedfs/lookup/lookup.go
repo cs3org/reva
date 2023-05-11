@@ -32,6 +32,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/options"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/filelocks"
 	"github.com/pkg/errors"
 	"github.com/rogpeppe/go-internal/lockedfile"
 )
@@ -143,7 +144,33 @@ func (lu *Lookup) NodeFromID(ctx context.Context, id *provider.ResourceId) (n *n
 		// The Resource references the root of a space
 		return lu.NodeFromSpaceID(ctx, id)
 	}
-	return node.ReadNode(ctx, lu, id.SpaceId, id.OpaqueId, false, nil, false)
+	return node.ReadNode(ctx, lu, id.SpaceId, id.OpaqueId, false, nil, false, nil)
+}
+
+// LockAndRead locks and reads the given node
+func (lu *Lookup) LockAndRead(ctx context.Context, id *provider.ResourceId, spaceRoot *node.Node) (*lockedfile.File, *node.Node, error) {
+	if id == nil {
+		return nil, nil, fmt.Errorf("invalid resource id %+v", id)
+	}
+	if id.OpaqueId == "" {
+		return nil, nil, fmt.Errorf("missing opaque id %+v", id)
+	}
+	var f *lockedfile.File
+	var err error
+	// lock parent before reading treesize or tree time
+	switch lu.MetadataBackend().(type) {
+	case metadata.MessagePackBackend:
+		f, err = lockedfile.OpenFile(lu.MetadataBackend().MetadataPath(lu.InternalPath(id.SpaceId, id.OpaqueId)), os.O_RDWR, 0600)
+	case metadata.XattrsBackend:
+		// we have to use dedicated lockfiles to lock directories
+		// this only works because the xattr backend also locks folders with separate lock files
+		f, err = lockedfile.OpenFile(lu.InternalPath(id.SpaceId, id.OpaqueId)+filelocks.LockFileSuffix, os.O_RDWR|os.O_CREATE, 0600)
+	}
+	if err != nil {
+		return nil, nil, err
+	}
+	n, err := node.ReadNode(ctx, lu, id.SpaceId, id.OpaqueId, false, spaceRoot, false, f)
+	return f, n, err
 }
 
 // Pathify segments the beginning of a string into depth segments of width length
@@ -164,7 +191,7 @@ func Pathify(id string, depth, width int) string {
 
 // NodeFromSpaceID converts a resource id without an opaque id into a Node
 func (lu *Lookup) NodeFromSpaceID(ctx context.Context, id *provider.ResourceId) (n *node.Node, err error) {
-	node, err := node.ReadNode(ctx, lu, id.SpaceId, id.OpaqueId, false, nil, false)
+	node, err := node.ReadNode(ctx, lu, id.SpaceId, id.OpaqueId, false, nil, false, nil)
 	if err != nil {
 		return nil, err
 	}
