@@ -503,7 +503,7 @@ func (s *svc) newPropRaw(key, val string) *propertyXML {
 }
 
 func supportLegacyOCMAccess(ctx context.Context, md *provider.ResourceInfo) {
-	ocm10 := ctx.Value(ctxOCM10).(bool)
+	ocm10, _ := ctx.Value(ctxOCM10).(bool)
 	if ocm10 {
 		// the path is something like /<token>/...
 		// we need to strip the token part as this
