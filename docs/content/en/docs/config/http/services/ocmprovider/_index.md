@@ -16,11 +16,11 @@ ocm_prefix = "ocm"
 {{< /highlight >}}
 {{% /dir %}}
 
-{{% dir name="endpoint" type="string" default="http://localhost" %}}
-This host's URL. [[Ref]](https://github.com/cs3org/reva/tree/master/internal/http/services/ocmprovider/ocmprovider.go#L38)
+{{% dir name="endpoint" type="string" default="This host's URL. If it's not configured, it is assumed OCM is not available." %}}
+ [[Ref]](https://github.com/cs3org/reva/tree/master/internal/http/services/ocmprovider/ocmprovider.go#L38)
 {{< highlight toml >}}
 [http.services.ocmprovider]
-endpoint = "http://localhost"
+endpoint = "This host's URL. If it's not configured, it is assumed OCM is not available."
 {{< /highlight >}}
 {{% /dir %}}
 
