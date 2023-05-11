@@ -35,7 +35,7 @@ func init() {
 
 type config struct {
 	OCMPrefix    string `mapstructure:"ocm_prefix" docs:"ocm;The prefix URL where the OCM API is served."`
-	Endpoint     string `mapstructure:"endpoint" docs:"http://localhost;This host's URL."`
+	Endpoint     string `mapstructure:"endpoint" docs:"This host's URL. If it's not configured, it is assumed OCM is not available."`
 	Provider     string `mapstructure:"provider" docs:"reva;A friendly name that defines this service."`
 	WebdavRoot   string `mapstructure:"webdav_root" docs:"/remote.php/dav/ocm;The root URL of the WebDAV endpoint to serve OCM shares."`
 	WebappRoot   string `mapstructure:"webapp_root" docs:"/external/sciencemesh;The root URL to serve Web apps via OCM."`
@@ -66,9 +66,6 @@ func (c *config) init() {
 	if c.OCMPrefix == "" {
 		c.OCMPrefix = "ocm"
 	}
-	if c.Endpoint == "" {
-		c.Endpoint = "http://localhost"
-	}
 	if c.Provider == "" {
 		c.Provider = "reva"
 	}
@@ -83,6 +80,19 @@ func (c *config) init() {
 func (c *config) prepare() *discoveryData {
 	// generates the (static) data structure to be exposed by /ocm-provider
 	d := &discoveryData{}
+	if c.Endpoint == "" {
+		d.Enabled = false
+		d.Endpoint = ""
+		d.APIVersion = "1.1.0"
+		d.Provider = c.Provider
+		d.ResourceTypes = []resourceTypes{{
+			Name:       "file",
+			ShareTypes: []string{},
+			Protocols:  map[string]string{},
+		}}
+		d.Capabilities = []string{}
+		return d
+	}
 	d.Enabled = true
 	d.APIVersion = "1.1.0"
 	d.Endpoint = fmt.Sprintf("%s/%s", c.Endpoint, c.OCMPrefix)
