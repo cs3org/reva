@@ -28,12 +28,14 @@ driver = "json"
 providers = "providers.demo.json"
 
 [http]
-enabled_services = ["ocmd"]
+enabled_services = ["ocmd", "ocmprovider"]
 enabled_middlewares = ["providerauthorizer", "cors"]
 address = "0.0.0.0:13001"
 
 [http.services.ocmd]
 prefix = "ocm"
+
+[http.services.ocmprovider]
 endpoint = "http://localhost:13001"
 
 [http.middlewares.providerauthorizer]

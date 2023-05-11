@@ -122,6 +122,9 @@ user_layout = "{{.Username}}"
 
 [http.services.ocmd]
 prefix = "ocm"
+
+[http.services.ocmprovider]
+ocm_prefix = "ocm"
 provider = "reva@cern"
 endpoint = "http://localhost:19001"
 enable_webapp = true

@@ -21,6 +21,7 @@ package ocdav
 import (
 	"context"
 	"net/http"
+	"net/url"
 	"path"
 	"strings"
 
@@ -187,7 +188,20 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 				return
 			}
 
-			token, _ := router.ShiftPath(r.URL.Path)
+			// OC10 and Nextcloud (OCM 1.0) are using basic auth for carrying the
+			// shared token.
+			var token string
+			username, _, ok := r.BasicAuth()
+			if ok {
+				// OCM 1.0
+				token = username
+				r.URL.Path, _ = url.JoinPath("/", token, r.URL.Path)
+				ctx = context.WithValue(ctx, ctxOCM10, true)
+			} else {
+				token, _ = router.ShiftPath(r.URL.Path)
+				ctx = context.WithValue(ctx, ctxOCM10, false)
+			}
+
 			authRes, err := handleOCMAuth(ctx, c, token)
 			switch {
 			case err != nil:

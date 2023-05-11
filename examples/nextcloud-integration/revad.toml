@@ -112,7 +112,7 @@ driver = "nextcloud"
 endpoint = "http://localhost/apps/sciencemesh/"
 
 [http]
-enabled_services = ["ocmd"]
+enabled_services = ["ocmd", "ocmprovider"]
 enabled_middlewares = ["providerauthorizer", "cors"]
 address = "0.0.0.0:19001"
 
@@ -126,9 +126,11 @@ driver = "nextcloud"
 user_layout = "{{.Username}}"
 
 [http.services.ocmd]
-prefix = "ocm"
+
+[http.services.ocmprovider]
 provider = "Reva-Nextcloud"
 endpoint = "http://localhost"
+webdav_root = "/remote.php/dav/ocm"
 enable_webapp = true
 enable_datatx = true
 
