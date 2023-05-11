@@ -50,7 +50,7 @@ type ctxKey int
 
 const (
 	ctxKeyBaseURI ctxKey = iota
-	ctxOldVersionOCM
+	ctxOCM10
 )
 
 var (
