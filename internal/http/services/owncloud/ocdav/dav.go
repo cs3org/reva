@@ -196,7 +196,7 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 				// OCM 1.0
 				token = username
 				r.URL.Path, _ = url.JoinPath("/", token, r.URL.Path)
-				ctx = context.WithValue(ctx, ctxOldVersionOCM, true)
+				ctx = context.WithValue(ctx, ctxOCM10, true)
 			} else {
 				token, _ = router.ShiftPath(r.URL.Path)
 				ctx = context.WithValue(ctx, ctxOldVersionOCM, false)
