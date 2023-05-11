@@ -422,7 +422,7 @@ The expected failures in this file are from features in the owncloud/ocis repo.
 - [coreApiSharePublicLink1/createPublicLinkShare.feature:553](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiSharePublicLink1/createPublicLinkShare.feature#L553)
 - [coreApiSharePublicLink1/createPublicLinkShare.feature:554](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiSharePublicLink1/createPublicLinkShare.feature#L554)
 - [coreApiSharePublicLink1/createPublicLinkShare.feature:590](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiSharePublicLink1/createPublicLinkShare.feature#L590)
-- [coreApiSharePublicLink1/createPublicLinkShare.feature:403](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiSharePublicLink1/createPublicLinkShare.feature#L403)
+- [coreApiSharePublicLink1/createPublicLinkShare.feature:402](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiSharePublicLink1/createPublicLinkShare.feature#L402)
 - [coreApiSharePublicLink1/createPublicLinkShare.feature:714](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiSharePublicLink1/createPublicLinkShare.feature#L714)
 - [coreApiSharePublicLink1/createPublicLinkShare.feature:715](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiSharePublicLink1/createPublicLinkShare.feature#L715)
 - [coreApiSharePublicLink2/uploadToPublicLinkShare.feature:180](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiSharePublicLink2/uploadToPublicLinkShare.feature#L180)
