@@ -29,12 +29,15 @@ import (
 	"strings"
 	"time"
 
+	gatewayv1beta1 "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	conversions "github.com/cs3org/reva/pkg/cbox/utils"
 	"github.com/cs3org/reva/pkg/ocm/invite"
+	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/ocm/invite/repository/registry"
+	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )
@@ -49,11 +52,13 @@ func init() {
 type Client struct {
 	Config    *config
 	HTTPClient *http.Client
+	GatewayClient gatewayv1beta1.GatewayAPIClient
 }
 
 type config struct {
 	BaseURL string `mapstructure:"base_url"`
 	ApiKey string `mapstructure:"api_key"`
+	GatewaySvc string `mapstructure:"gatewaysvc"`
 }
 
 type apiToken struct {
@@ -77,12 +82,22 @@ func New(m map[string]interface{}) (invite.Repository, error) {
 		return nil, errors.Wrap(err, "error parsing config for api invite repository")
 	}
 
+	gw, err := pool.GetGatewayServiceClient(pool.Endpoint(config.GatewaySvc))
+	if err != nil {
+		return nil, err
+	}
+
 	client := &Client{
 		Config: config,
 		HTTPClient:   &http.Client{},
+		GatewayClient: gw,
 	}
 
 	return client, nil
+}
+
+func (c *config) init() {
+	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
 }
 
 func (c *Client) init() {
@@ -115,19 +130,23 @@ func normalizeDomain(d string) (string, error) {
 	return u.Hostname(), nil
 }
 
-func timestampToTime(t *types.Timestamp) time.Time {
+func timestampToTime(ctx context.Context, t *types.Timestamp) time.Time {
 	return time.Unix(int64(t.Seconds), int64(t.Nanos))
 }
 
-func convertToInviteToken(tkn *apiToken) *invitepb.InviteToken {
+func (c *Client) convertToInviteToken(ctx context.Context, tkn *apiToken) (*invitepb.InviteToken, error) {
+	usr, err := conversions.ExtractUserID(ctx, c.GatewayClient, tkn.Initiator)
+	if err != nil {
+		return nil, err
+	}
 	return &invitepb.InviteToken{
 		Token:  tkn.Token,
-		UserId: conversions.ExtractUserID(tkn.Initiator),
+		UserId: usr,
 		Expiration: &types.Timestamp{
 			Seconds: uint64(tkn.Expiration.Unix()),
 		},
 		Description: tkn.Description,
-	}
+	}, nil
 }
 
 func (u *apiOCMUser) toCS3User() *userpb.User {
@@ -341,7 +360,7 @@ func (c *Client) doGetAllRemoteUsers(initiator string, search string) ([]*apiOCM
 
 // AddToken stores the token in the external repository.
 func (c *Client) AddToken(ctx context.Context, token *invitepb.InviteToken) error {
-	result , err := c.doPostToken(token.Token, conversions.FormatUserID(token.UserId), token.Description, timestampToTime(token.Expiration))
+	result , err := c.doPostToken(token.Token, conversions.FormatUserID(token.UserId), token.Description, timestampToTime(ctx, token.Expiration))
 	if result != true {
 		return err
 	}
@@ -354,7 +373,12 @@ func (c *Client) GetToken(ctx context.Context, token string) (*invitepb.InviteTo
 	if err != nil{
 		return nil, err
 	}
-	return convertToInviteToken(t), nil
+
+	it, cerr := c.convertToInviteToken(ctx, t)
+	if cerr != nil{
+		return nil, cerr
+	}
+	return it, nil
 }
 
 func (c *Client) ListTokens(ctx context.Context, initiator *userpb.UserId) ([]*invitepb.InviteToken, error) {
@@ -365,7 +389,11 @@ func (c *Client) ListTokens(ctx context.Context, initiator *userpb.UserId) ([]*i
 	}
 
 	for _, row := range rows{
-		tokens = append(tokens, convertToInviteToken(row))
+		it, cerr := c.convertToInviteToken(ctx, row)
+		if cerr != nil{
+			return nil, cerr
+		}
+		tokens = append(tokens, it)
 	}
 
 	return tokens, nil
