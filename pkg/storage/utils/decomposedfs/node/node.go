@@ -218,6 +218,19 @@ func ReadNode(ctx context.Context, lu PathLookup, spaceID, nodeID string, canLis
 			ID:      spaceID,
 		}
 		spaceRoot.SpaceRoot = spaceRoot
+
+		// Initialize node attribute cache from the given reader if possible
+		if nodeID == spaceID && r != nil {
+			_, err = spaceRoot.XattrsWithReader(r)
+		} else {
+			_, err = spaceRoot.Xattrs()
+		}
+		switch {
+		case metadata.IsNotExist(err):
+			return spaceRoot, nil // swallow not found, the node defaults to exists = false
+		case err != nil:
+			return nil, err
+		}
 		spaceRoot.owner, err = spaceRoot.readOwner()
 		switch {
 		case metadata.IsNotExist(err):

@@ -710,7 +710,14 @@ func (t *Tree) Propagate(ctx context.Context, n *node.Node, sizeDiff int64) (err
 		attrs := node.Attributes{}
 
 		var f io.Closer
-		f, n, err = t.lookup.LockAndRead(ctx, &provider.ResourceId{SpaceId: n.SpaceID, OpaqueId: n.ParentID}, n.SpaceRoot)
+
+		sr := n.SpaceRoot
+		if n.ParentID == n.SpaceRoot.ID {
+			sr = nil
+		}
+
+		f, n, err = t.lookup.LockAndRead(ctx, &provider.ResourceId{SpaceId: n.SpaceID, OpaqueId: n.ParentID}, sr)
+
 		// always log error if closing node fails
 		defer func() {
 			// ignore already closed error
