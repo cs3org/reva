@@ -33,8 +33,10 @@ import (
 	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	conversions "github.com/cs3org/reva/pkg/cbox/utils"
+	"github.com/cs3org/reva/pkg/ocm/invite"
 	"github.com/cs3org/reva/pkg/ocm/invite/repository/registry"
 	"github.com/mitchellh/mapstructure"
+	"github.com/pkg/errors"
 )
 
 // This module implement the invite.Repository interface as an api(call with external API) driver.
@@ -58,14 +60,29 @@ type apiToken struct {
 	Token     string `json:"token"`
 	Initiator string `json:"initiator"`
 	Description string `json:"description"`
-	Expiration time.Time `json:"expiration"`
+	Expiration time.Time `json:"expiry_date"`
 }
 
 type apiOCMUser struct {
-	OpaqueUserID string
-	Idp          string
-	Email        string
-	DisplayName  string
+	OpaqueUserID string `json:"opaqueUserId"`
+	Idp          string `json:"idp"`
+	Email        string `json:"email"`
+	DisplayName  string `json:"displayName"`
+}
+
+// New returns a new invite manager object.
+func New(m map[string]interface{}) (invite.Repository, error) {
+	config, err := parseConfig(m)
+	if err != nil {
+		return nil, errors.Wrap(err, "error parsing config for api invite repository")
+	}
+
+	client := &Client{
+		Config: config,
+		HTTPClient:   &http.Client{},
+	}
+
+	return client, nil
 }
 
 func (c *Client) init() {
@@ -102,7 +119,7 @@ func timestampToTime(t *types.Timestamp) time.Time {
 	return time.Unix(int64(t.Seconds), int64(t.Nanos))
 }
 
-func convertToInviteToken(tkn dbToken) *invitepb.InviteToken {
+func convertToInviteToken(tkn *apiToken) *invitepb.InviteToken {
 	return &invitepb.InviteToken{
 		Token:  tkn.Token,
 		UserId: conversions.ExtractUserID(tkn.Initiator),
@@ -138,11 +155,13 @@ func (c *Client) doPostToken(token string, initiator string, description string,
 		return false, err
 	}
 
-	req, err := http.NewRequest(http.MethodPost, c.Config.BaseURL, strings.NewReader(string(bodyStr)))
+	requestUrl := c.Config.BaseURL + "/api/v1/add_token/" + initiator
+
+	req, err := http.NewRequest(http.MethodPost, requestUrl, strings.NewReader(string(bodyStr)))
 	if err != nil {
 		return false, err
 	}
-	req.Header.Set("ApiKey", c.Config.ApiKey)
+	req.Header.Set("apikey", c.Config.ApiKey)
 
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := c.HTTPClient.Do(req)
@@ -157,12 +176,12 @@ func (c *Client) doPostToken(token string, initiator string, description string,
 }
 
 func (c *Client) doGetToken(token string) (*apiToken, error) {
-	requestUrl := c.Config.BaseURL + "/" + token
+	requestUrl := c.Config.BaseURL + "/api/v1/get_token"  + "?token=" + token
 	req, err := http.NewRequest(http.MethodGet, requestUrl, nil)
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("ApiKey", c.Config.ApiKey)
+	req.Header.Set("apikey", c.Config.ApiKey)
 
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := c.HTTPClient.Do(req)
@@ -190,12 +209,12 @@ func (c *Client) doGetToken(token string) (*apiToken, error) {
 }
 
 func (c *Client) doGetAllTokens(initiator string) ([]*apiToken, error) {
-	requestUrl := c.Config.BaseURL + "/list/" + initiator
+	requestUrl := c.Config.BaseURL + "/api/v1/tokens_list/" + initiator
 	req, err := http.NewRequest(http.MethodGet, requestUrl, nil)
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("ApiKey", c.Config.ApiKey)
+	req.Header.Set("apikey", c.Config.ApiKey)
 
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := c.HTTPClient.Do(req)
@@ -234,12 +253,12 @@ func (c *Client) doPostRemoteUser(initiator string, opaque_user_id string, idp s
 	if err != nil {
 		return false, err
 	}
-	requestUrl := c.Config.BaseURL + "/" + initiator
+	requestUrl := c.Config.BaseURL + "/api/v1/add_remote_user/" + initiator
 	req, err := http.NewRequest(http.MethodPost, requestUrl, strings.NewReader(string(bodyStr)))
 	if err != nil {
 		return false, err
 	}
-	req.Header.Set("ApiKey", c.Config.ApiKey)
+	req.Header.Set("apikey", c.Config.ApiKey)
 
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := c.HTTPClient.Do(req)
@@ -254,12 +273,12 @@ func (c *Client) doPostRemoteUser(initiator string, opaque_user_id string, idp s
 }
 
 func (c *Client) doGetRemoteUser(initiator string, opaque_user_id string, idp string) (*apiOCMUser, error) {
-	requestUrl := c.Config.BaseURL + "/" + initiator + "?userId=" + opaque_user_id + "&idp=" + idp
+	requestUrl := c.Config.BaseURL + "/api/v1/get_remote_user/" + initiator + "?userId=" + opaque_user_id + "&idp=" + idp
 	req, err := http.NewRequest(http.MethodGet, requestUrl, nil)
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("ApiKey", c.Config.ApiKey)
+	req.Header.Set("apikey", c.Config.ApiKey)
 
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := c.HTTPClient.Do(req)
@@ -287,12 +306,12 @@ func (c *Client) doGetRemoteUser(initiator string, opaque_user_id string, idp st
 }
 
 func (c *Client) doGetAllRemoteUsers(initiator string, search string) ([]*apiOCMUser, error) {
-	requestUrl := c.Config.BaseURL + "/user/list/" + initiator + "?search=" + search
+	requestUrl := c.Config.BaseURL + "/api/v1/find_remote_user/" + initiator + "?search=" + search
 	req, err := http.NewRequest(http.MethodGet, requestUrl, nil)
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("ApiKey", c.Config.ApiKey)
+	req.Header.Set("apikey", c.Config.ApiKey)
 
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := c.HTTPClient.Do(req)
@@ -322,7 +341,7 @@ func (c *Client) doGetAllRemoteUsers(initiator string, search string) ([]*apiOCM
 
 // AddToken stores the token in the external repository.
 func (c *Client) AddToken(ctx context.Context, token *invitepb.InviteToken) error {
-	result , err := c.DoPostToken(token.Token, conversions.FormatUserID(token.UserId), token.Description, timestampToTime(token.Expiration))
+	result , err := c.doPostToken(token.Token, conversions.FormatUserID(token.UserId), token.Description, timestampToTime(token.Expiration))
 	if result != true {
 		return err
 	}
@@ -376,7 +395,7 @@ func (c *Client) FindRemoteUsers(ctx context.Context, initiator *userpb.UserId, 
 		return nil, err
 	}
 
-	result := []*apiOCMUser{}
+	result := []*userpb.User{}
 
 	for _, row := range rows{
 		result = append(result, row.toCS3User())
