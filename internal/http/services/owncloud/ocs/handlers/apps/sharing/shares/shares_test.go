@@ -29,7 +29,10 @@ import (
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	permissions "github.com/cs3org/go-cs3apis/cs3/permissions/v1beta1"
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
+	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocs/config"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocs/handlers/apps/sharing/shares"
@@ -101,7 +104,7 @@ var _ = Describe("The ocs API", func() {
 			}, nil)
 		})
 
-		Context("when sharing the space root", func() {
+		Context("when sharing the personal space root", func() {
 			BeforeEach(func() {
 				client.On("Stat", mock.Anything, mock.Anything).Return(&provider.StatResponse{
 					Status: status.NewOK(context.Background()),
@@ -121,6 +124,9 @@ var _ = Describe("The ocs API", func() {
 							RemoveGrant: true,
 						},
 						Size: 10,
+						Space: &provider.StorageSpace{
+							SpaceType: "personal",
+						},
 					},
 				}, nil)
 			})
@@ -141,6 +147,71 @@ var _ = Describe("The ocs API", func() {
 				h.CreateShare(w, req)
 				Expect(w.Result().StatusCode).To(Equal(400))
 				client.AssertNumberOfCalls(GinkgoT(), "CreateShare", 0)
+			})
+		})
+
+		Context("when sharing a project space root via link", func() {
+			BeforeEach(func() {
+				var (
+					resID = &provider.ResourceId{
+						StorageId: "share1-storageid",
+						OpaqueId:  "share1",
+					}
+				)
+
+				client.On("Stat", mock.Anything, mock.Anything).Return(&provider.StatResponse{
+					Status: status.NewOK(context.Background()),
+					Info: &provider.ResourceInfo{
+						Type:  provider.ResourceType_RESOURCE_TYPE_CONTAINER,
+						Path:  "/",
+						Id:    resID,
+						Owner: user.Id,
+						PermissionSet: &provider.ResourcePermissions{
+							Stat:                 true,
+							ListContainer:        true,
+							GetPath:              true,
+							GetQuota:             true,
+							InitiateFileDownload: true,
+							AddGrant:             true,
+							ListGrants:           true,
+							ListRecycle:          true,
+							UpdateGrant:          true,
+							RemoveGrant:          true,
+						},
+						Size: 10,
+						Space: &provider.StorageSpace{
+							SpaceType: "project",
+						},
+					},
+				}, nil)
+
+				client.On("CheckPermission", mock.Anything, mock.Anything, mock.Anything).Return(&permissions.CheckPermissionResponse{
+					Status: &rpc.Status{Code: rpc.Code_CODE_OK},
+				}, nil)
+
+				client.On("CreatePublicShare", mock.Anything, mock.Anything).Return(&link.CreatePublicShareResponse{
+					Status: status.NewOK(context.Background()),
+					Share: &link.PublicShare{
+						Token:   "foo",
+						Creator: user.Id,
+						Owner:   user.Id,
+					},
+				}, nil)
+			})
+
+			It("creates a link share", func() {
+				form := url.Values{}
+				form.Add("shareType", "3")
+				form.Add("path", "/")
+				form.Add("space", "storageid!spaceid")
+				form.Add("permissions", "1")
+				req := httptest.NewRequest("POST", "/apps/files_sharing/api/v1/shares", strings.NewReader(form.Encode()))
+				req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+				req = req.WithContext(ctx)
+
+				w := httptest.NewRecorder()
+				h.CreateShare(w, req)
+				Expect(w.Result().StatusCode).To(Equal(200))
 			})
 		})
 
