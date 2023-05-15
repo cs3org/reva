@@ -62,15 +62,14 @@ func (s *svc) Close() error {
 }
 
 type config struct {
-	Prefix             string                      `mapstructure:"prefix"`
-	SMTPCredentials    *smtpclient.SMTPCredentials `mapstructure:"smtp_credentials"`
-	GatewaySvc         string                      `mapstructure:"gatewaysvc"`
-	MeshDirectoryURL   string                      `mapstructure:"mesh_directory_url"`
-	ProviderDomain     string                      `mapstructure:"provider_domain"`
-	SubjectTemplate    string                      `mapstructure:"subject_template"`
-	BodyTemplatePath   string                      `mapstructure:"body_template_path"`
-	OCMMountPoint      string                      `mapstructure:"ocm_mount_point"`
-	InviteLinkTemplate string                      `mapstructure:"invite_link_template"`
+	Prefix           string                      `mapstructure:"prefix"`
+	SMTPCredentials  *smtpclient.SMTPCredentials `mapstructure:"smtp_credentials"`
+	GatewaySvc       string                      `mapstructure:"gatewaysvc"`
+	MeshDirectoryURL string                      `mapstructure:"mesh_directory_url"`
+	ProviderDomain   string                      `mapstructure:"provider_domain"`
+	SubjectTemplate  string                      `mapstructure:"subject_template"`
+	BodyTemplatePath string                      `mapstructure:"body_template_path"`
+	OCMMountPoint    string                      `mapstructure:"ocm_mount_point"`
 }
 
 func (c *config) init() {

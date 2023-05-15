@@ -119,14 +119,7 @@ func (h *tokenHandler) initSubjectTemplate(subjTempl string) error {
 }
 
 func (h *tokenHandler) initInviteLinkTemplate(inviteTempl string) error {
-	var t string
-	if inviteTempl == "" {
-		t = defaultInviteLink
-	} else {
-		t = inviteTempl
-	}
-
-	tpl, err := template.New("tpl_invite").Parse(t)
+	tpl, err := template.New("tpl_invite").Parse(inviteTempl)
 	if err != nil {
 		return err
 	}

@@ -38,7 +38,7 @@ import (
 	"github.com/cs3org/reva/pkg/smtpclient"
 )
 
-const defaultInviteLink = "{{.MeshDirectoryURL}}?token={{.Token}}&providerDomain={{.User.Id.Idp}}"
+const defaultInviteLinkPrefix = "{{.MeshDirectoryURL}}?token={{.Token}}&providerDomain="
 
 type tokenHandler struct {
 	gatewayClient    gateway.GatewayAPIClient
@@ -71,7 +71,10 @@ func (h *tokenHandler) init(c *config) error {
 		return err
 	}
 
-	return h.initInviteLinkTemplate(c.InviteLinkTemplate)
+	if c.ProviderDomain == "" {
+		return errors.New("provider_domain missing from configuration")
+	}
+	return h.initInviteLinkTemplate(defaultInviteLinkPrefix + c.ProviderDomain)
 }
 
 type token struct {
