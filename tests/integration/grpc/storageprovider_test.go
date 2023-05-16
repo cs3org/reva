@@ -608,7 +608,7 @@ var _ = Describe("storage providers", func() {
 					Ref: subdirRef,
 				})
 				Expect(err).ToNot(HaveOccurred())
-				Expect(delRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_PERMISSION_DENIED))
+				Expect(delRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_LOCKED))
 
 				unlockRes, err := serviceClient.Unlock(ctx, &storagep.UnlockRequest{
 					Ref:  subdirRef,
@@ -652,7 +652,7 @@ var _ = Describe("storage providers", func() {
 						Ref: subdirRef,
 					})
 					Expect(err).ToNot(HaveOccurred())
-					Expect(delRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_PERMISSION_DENIED))
+					Expect(delRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_LOCKED))
 				})
 			})
 
