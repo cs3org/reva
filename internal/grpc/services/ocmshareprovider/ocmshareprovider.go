@@ -44,6 +44,7 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/sharedconf"
+	"github.com/cs3org/reva/pkg/storage/utils/walker"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
@@ -71,6 +72,7 @@ type service struct {
 	client     *client.OCMClient
 	gateway    gateway.GatewayAPIClient
 	webappTmpl *template.Template
+	walker     walker.Walker
 }
 
 func (c *config) init() {
@@ -134,6 +136,7 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 	if err != nil {
 		return nil, err
 	}
+	walker := walker.NewWalker(gateway)
 
 	service := &service{
 		conf:       c,
@@ -141,6 +144,7 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 		client:     client,
 		gateway:    gateway,
 		webappTmpl: tpl,
+		walker:     walker,
 	}
 
 	return service, nil
@@ -210,11 +214,36 @@ func (s *service) getWebappProtocol(share *ocm.Share) *ocmd.Webapp {
 }
 
 func (s *service) getDataTransferProtocol(ctx context.Context, share *ocm.Share) *ocmd.Datatx {
-	// TODO discover the size
+	var size uint64
+	// get the path of the share
+	statRes, err := s.gateway.Stat(ctx, &providerpb.StatRequest{
+		Ref: &providerpb.Reference{
+			ResourceId: share.ResourceId,
+		},
+	})
+	if err != nil {
+		panic(err)
+	}
+
+	path := statRes.GetInfo().Path
+	err = s.walk(ctx, path, func(path string, info *providerpb.ResourceInfo, err error) error {
+		if info.Type == providerpb.ResourceType_RESOURCE_TYPE_FILE {
+			size = size + uint64(info.Size)
+		}
+		return nil
+	})
+	if err != nil {
+		panic(err)
+	}
 	return &ocmd.Datatx{
 		SourceURI: s.webdavURL(ctx, share),
-		Size:      0,
+		Size:      uint64(size),
 	}
+}
+
+// walk traverses the path recursively to discover all resources in the tree
+func (s *service) walk(ctx context.Context, path string, fn walker.WalkFunc) error {
+	return s.walker.Walk(ctx, path, fn)
 }
 
 func (s *service) getProtocols(ctx context.Context, share *ocm.Share) ocmd.Protocols {
