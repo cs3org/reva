@@ -228,7 +228,7 @@ func (s *service) getDataTransferProtocol(ctx context.Context, share *ocm.Share)
 	path := statRes.GetInfo().Path
 	err = s.walk(ctx, path, func(path string, info *providerpb.ResourceInfo, err error) error {
 		if info.Type == providerpb.ResourceType_RESOURCE_TYPE_FILE {
-			size = size + uint64(info.Size)
+			size += info.Size
 		}
 		return nil
 	})
@@ -237,11 +237,11 @@ func (s *service) getDataTransferProtocol(ctx context.Context, share *ocm.Share)
 	}
 	return &ocmd.Datatx{
 		SourceURI: s.webdavURL(ctx, share),
-		Size:      uint64(size),
+		Size:      size,
 	}
 }
 
-// walk traverses the path recursively to discover all resources in the tree
+// walk traverses the path recursively to discover all resources in the tree.
 func (s *service) walk(ctx context.Context, path string, fn walker.WalkFunc) error {
 	return s.walker.Walk(ctx, path, fn)
 }
