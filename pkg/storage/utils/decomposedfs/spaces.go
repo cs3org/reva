@@ -652,18 +652,21 @@ func (fs *Decomposedfs) DeleteStorageSpace(ctx context.Context, req *provider.De
 		return errtypes.InternalError(fmt.Sprintf("space %s does not have a spacetype, possible corrupt decompsedfs", n.ID))
 	}
 
-	// - a User with the "delete-all-spaces" permission can delete any space
-	// - spaces of type personal can also be deleted by users with the "delete-all-home-spaces" permission
-	// - otherwise a space can be deleted by its manager (i.e. users have the "remove" grant)
+	// - spaces of type personal can be deleted by users with the "delete-all-home-spaces" permission
+	// - a User with the "delete-all-spaces" permission can delete any project space
+	// - otherwise a space can be disabled by its manager (i.e. users have the "remove" grant) or a user with "Drive.ReadWriteEnabled"
 	switch {
-	case fs.p.DeleteAllSpaces(ctx):
-		// We are allowed to delete any space, no further permission checks needed
 	case st == "personal":
 		if !fs.p.DeleteAllHomeSpaces(ctx) {
 			return errtypes.PermissionDenied(fmt.Sprintf("user is not allowed to delete home space %s", n.ID))
 		}
-	default:
-		// managers and users with 'space ability' permission are allowed to disable or purge a drive
+	case purge:
+		// We are trying to purge a space - delete permission is needed for that
+		if !fs.p.DeleteAllSpaces(ctx) {
+			return errtypes.PermissionDenied(fmt.Sprintf("user is not allowed to purge space %s", n.ID))
+		}
+	default: // aka "disable a non-personal space"
+		// managers and users with 'space ability' permission are allowed to disable a drive
 		if !fs.p.SpaceAbility(ctx, spaceID) {
 			rp, err := fs.p.AssemblePermissions(ctx, n)
 			if err != nil || !IsManager(rp) {
