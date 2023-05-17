@@ -1421,10 +1421,7 @@ func (h *Handler) createCs3Share(ctx context.Context, w http.ResponseWriter, r *
 				Error:   err,
 			}
 		}
-		req.Grant.Expiration = &types.Timestamp{
-			Seconds: uint64(ts.Unix()),
-			Nanos:   0,
-		}
+		req.Grant.Expiration = utils.TimeToTS(ts)
 	}
 
 	createShareResponse, err := client.CreateShare(ctx, req)
