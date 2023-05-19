@@ -234,6 +234,9 @@ func (t *Tree) Move(ctx context.Context, oldNode *node.Node, newNode *node.Node)
 		}
 	}
 
+	// remove cache entry in any case to avoid inconsistencies
+	t.idCache.Remove(filepath.Join(oldNode.ParentPath(), oldNode.Name))
+
 	// Always target the old node ID for xattr updates.
 	// The new node id is empty if the target does not exist
 	// and we need to overwrite the new one when overwriting an existing path.
@@ -271,7 +274,6 @@ func (t *Tree) Move(ctx context.Context, oldNode *node.Node, newNode *node.Node)
 	if err != nil {
 		return errors.Wrap(err, "Decomposedfs: could not move child")
 	}
-	t.idCache.Remove(filepath.Join(oldNode.ParentPath(), oldNode.Name))
 
 	// update target parentid and name
 	attribs := node.Attributes{}
@@ -416,6 +418,10 @@ func (t *Tree) ListFolder(ctx context.Context, n *node.Node) ([]*node.Node, erro
 
 // Delete deletes a node in the tree by moving it to the trash
 func (t *Tree) Delete(ctx context.Context, n *node.Node) (err error) {
+	path := filepath.Join(n.ParentPath(), n.Name)
+	// remove entry from cache immediately to avoid inconsistencies
+	t.idCache.Remove(path)
+
 	deletingSharedResource := ctx.Value(appctx.DeletingSharedResource)
 
 	if deletingSharedResource != nil && deletingSharedResource.(bool) {
@@ -492,10 +498,7 @@ func (t *Tree) Delete(ctx context.Context, n *node.Node) (err error) {
 	_ = os.Remove(n.LockFilePath())
 
 	// finally remove the entry from the parent dir
-	path := filepath.Join(n.ParentPath(), n.Name)
-	err = os.Remove(path)
-	t.idCache.Remove(path)
-	if err != nil {
+	if err = os.Remove(path); err != nil {
 		// To roll back changes
 		// TODO revert the rename
 		// TODO remove symlink
