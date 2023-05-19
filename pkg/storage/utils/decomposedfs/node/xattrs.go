@@ -91,7 +91,7 @@ func (n *Node) XattrsWithReader(r io.Reader) (Attributes, error) {
 	if n.ID == "" {
 		// Do not try to read the attribute of an empty node. The InternalPath points to the
 		// base nodes directory in this case.
-		return Attributes{}, &xattr.Error{Op: "xattr.all", Path: n.InternalPath(), Err: xattr.ENOATTR}
+		return Attributes{}, &xattr.Error{Op: "node.XattrsWithReader", Path: n.InternalPath(), Err: xattr.ENOATTR}
 	}
 
 	if n.xattrsCache != nil {
@@ -125,7 +125,7 @@ func (n *Node) Xattr(key string) ([]byte, error) {
 	if n.ID == "" {
 		// Do not try to read the attribute of an empty node. The InternalPath points to the
 		// base nodes directory in this case.
-		return []byte{}, &xattr.Error{Op: "xattr.get", Path: n.InternalPath(), Name: key, Err: xattr.ENOATTR}
+		return []byte{}, &xattr.Error{Op: "node.Xattr", Path: n.InternalPath(), Name: key, Err: xattr.ENOATTR}
 	}
 
 	if n.xattrsCache == nil {
@@ -140,7 +140,7 @@ func (n *Node) Xattr(key string) ([]byte, error) {
 		return val, nil
 	}
 	// wrap the error as xattr does
-	return []byte{}, &xattr.Error{Op: "xattr.get", Path: n.InternalPath(), Name: key, Err: xattr.ENOATTR}
+	return []byte{}, &xattr.Error{Op: "node.Xattr", Path: n.InternalPath(), Name: key, Err: xattr.ENOATTR}
 }
 
 // XattrString returns the string representation of an attribute
