@@ -25,16 +25,18 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"time"
 
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/jaeger"
-	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/insecure"
 
 	"go.opentelemetry.io/otel/trace"
 )
@@ -189,24 +191,44 @@ func parseAgentConfig(ae string) (string, string, error) {
 // getOtelTracerProvider returns a new TracerProvider, configure for the specified service
 func getOtlpTracerProvider(options Options) trace.TracerProvider {
 
-	opts := []otlptracegrpc.Option{
-		otlptracegrpc.WithEndpoint(options.Endpoint),
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	conn, err := grpc.DialContext(ctx, options.Endpoint,
+		// Note the use of insecure transport here. TLS is recommended in production.
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithBlock(),
+	)
+	if err != nil {
+		panic(fmt.Errorf("failed to create gRPC connection to collector: %w", err))
 	}
-	if options.TransportCredentials != nil {
-		opts = append(opts, otlptracegrpc.WithTLSCredentials(options.TransportCredentials))
-	}
-	if options.Insecure {
-		opts = append(opts, otlptracegrpc.WithInsecure())
-	}
-
-	exporter, err := otlptrace.New(
+	exporter, err := otlptracegrpc.New(
 		context.Background(),
-		otlptracegrpc.NewClient(opts...),
+		otlptracegrpc.WithGRPCConn(conn),
 	)
 
 	if err != nil {
 		panic(err)
 	}
+	/*
+		opts := []otlptracegrpc.Option{
+			otlptracegrpc.WithEndpoint(options.Endpoint),
+		}
+		if options.TransportCredentials != nil {
+			opts = append(opts, otlptracegrpc.WithTLSCredentials(options.TransportCredentials))
+		}
+		if options.Insecure {
+			opts = append(opts, otlptracegrpc.WithInsecure())
+		}
+
+		exporter, err := otlptrace.New(
+			context.Background(),
+			otlptracegrpc.NewClient(opts...),
+		)
+
+		if err != nil {
+			panic(err)
+		}
+	*/
 	resources, err := resource.New(
 		context.Background(),
 		resource.WithAttributes(
