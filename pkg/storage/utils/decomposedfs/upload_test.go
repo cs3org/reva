@@ -41,6 +41,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/tree"
 	treemocks "github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/tree/mocks"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
+	"github.com/cs3org/reva/v2/pkg/store"
 	"github.com/cs3org/reva/v2/tests/helpers"
 	"github.com/stretchr/testify/mock"
 
@@ -119,7 +120,7 @@ var _ = Describe("File uploads", func() {
 			AddGrant: true,
 		}, nil).Times(1)
 		var err error
-		tree := tree.New(lu, bs, o)
+		tree := tree.New(lu, bs, o, store.Create())
 		fs, err = decomposedfs.New(o, lu, decomposedfs.NewPermissions(permissions, cs3permissionsclient), tree, nil)
 		Expect(err).ToNot(HaveOccurred())
 

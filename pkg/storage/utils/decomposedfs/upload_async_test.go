@@ -22,6 +22,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/tree"
 	treemocks "github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/tree/mocks"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
+	"github.com/cs3org/reva/v2/pkg/store"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/cs3org/reva/v2/tests/helpers"
 	"github.com/stretchr/testify/mock"
@@ -105,7 +106,7 @@ var _ = Describe("Async file uploads", Ordered, func() {
 
 		// setup fs
 		pub, con = make(chan interface{}), make(chan interface{})
-		tree := tree.New(lu, bs, o)
+		tree := tree.New(lu, bs, o, store.Create())
 		fs, err = New(o, lu, NewPermissions(permissions, cs3permissionsclient), tree, stream.Chan{pub, con})
 		Expect(err).ToNot(HaveOccurred())
 
