@@ -252,11 +252,6 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 		q.Add("appinturl", p.conf.AppIntURL)
 	}
 
-	if _, ok := opaqueMap["forcelock"]; ok {
-		// this is to work around an issue with Microsoft Office, cf. cs3org/wopiserver#106
-		q.Add("forcelock", "1")
-	}
-
 	httpReq.URL.RawQuery = q.Encode()
 
 	if p.conf.AppAPIKey != "" {
