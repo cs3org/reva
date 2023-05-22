@@ -5,3 +5,4 @@ properly cleaned, but when renaming a file (= move with same parent) the cache w
 uploading files with the same name and renaming them
 
 https://github.com/cs3org/reva/pull/3903
+https://github.com/cs3org/reva/pull/3910
