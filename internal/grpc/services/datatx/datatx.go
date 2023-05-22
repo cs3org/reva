@@ -46,10 +46,10 @@ type config struct {
 	TxDriver  string                            `mapstructure:"txdriver"`
 	TxDrivers map[string]map[string]interface{} `mapstructure:"txdrivers"`
 	// storage driver to persist share/transfer relation
-	StorageDriver  string                            `mapstructure:"storage_driver"`
-	StorageDrivers map[string]map[string]interface{} `mapstructure:"storage_drivers"`
-	TxSharesFile   string                            `mapstructure:"tx_shares_file"`
-	RemoveOnCancel bool                              `mapstructure:"remove_on_cancel"`
+	StorageDriver          string                            `mapstructure:"storage_driver"`
+	StorageDrivers         map[string]map[string]interface{} `mapstructure:"storage_drivers"`
+	TxSharesFile           string                            `mapstructure:"tx_shares_file"`
+	RemoveTransferOnCancel bool                              `mapstructure:"remove_transfer_on_cancel"`
 }
 
 type service struct {
@@ -209,7 +209,7 @@ func (s *service) CancelTransfer(ctx context.Context, req *datatx.CancelTransfer
 	}
 
 	transferRemovedMessage := ""
-	if s.conf.RemoveOnCancel {
+	if s.conf.RemoveTransferOnCancel {
 		delete(s.txShareDriver.model.TxShares, req.TxId.GetOpaqueId())
 		if err := s.txShareDriver.model.saveTxShare(); err != nil {
 			err = errors.Wrap(err, "datatx service: error deleting transfer: "+datatx.Status_STATUS_INVALID.String())

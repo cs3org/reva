@@ -170,7 +170,7 @@ func (s *svc) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateReceive
 		}, nil
 	}
 
-	// retrieve the persisted received share
+	// retrieve the current received share
 	getShareReq := &ocm.GetReceivedOCMShareRequest{
 		Ref: &ocm.ShareReference{
 			Spec: &ocm.ShareReference_Id{
@@ -234,7 +234,16 @@ func (s *svc) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateReceive
 		}
 	}
 	// handle transfer in case it has not already been accepted
-	if s.isTransferShare(share) && req.GetShare().State == ocm.ShareState_SHARE_STATE_ACCEPTED && share.State != ocm.ShareState_SHARE_STATE_ACCEPTED {
+	if s.isTransferShare(share) && req.GetShare().State == ocm.ShareState_SHARE_STATE_ACCEPTED {
+		if share.State == ocm.ShareState_SHARE_STATE_ACCEPTED {
+			log.Err(err).Msg("gateway: error calling UpdateReceivedShare, share already accepted.")
+			return &ocm.UpdateReceivedOCMShareResponse{
+				Status: &rpc.Status{
+					Code:    rpc.Code_CODE_FAILED_PRECONDITION,
+					Message: "Share already accepted.",
+				},
+			}, err
+		}
 		// get provided destination path
 		transferDestinationPath, err := s.getTransferDestinationPath(ctx, req)
 		if err != nil {

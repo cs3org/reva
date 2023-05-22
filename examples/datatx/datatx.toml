@@ -13,6 +13,9 @@ txdriver = "rclone"
 tx_shares_file = ""
 # base folder of the data transfers (eg. /home/DataTransfers)
 data_transfers_folder = ""
+# if set to 'true' the transfer will always be removed from the db upon cancel request
+# recommended value is true
+remove_transfer_on_cancel = true
 
 # rclone driver
 [grpc.services.datatx.txdrivers.rclone]
@@ -33,6 +36,9 @@ file = ""
 job_status_check_interval = 2000
 # the job timeout in milliseconds (must be long enough for big transfers!)
 job_timeout = 120000
+# if set to 'true' the transfer job will always be removed from the db upon transfer cancel request
+# recommended value is true
+remove_transfer_job_on_cancel = true
 
 [http.services.ocdav]
 # reva supports http third party copy
