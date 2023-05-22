@@ -235,7 +235,7 @@ func (t *Tree) Move(ctx context.Context, oldNode *node.Node, newNode *node.Node)
 	}
 
 	// remove cache entry in any case to avoid inconsistencies
-	_ = t.idCache.Delete(filepath.Join(oldNode.ParentPath(), oldNode.Name))
+	defer func() { _ = t.idCache.Delete(filepath.Join(oldNode.ParentPath(), oldNode.Name)) }()
 
 	// Always target the old node ID for xattr updates.
 	// The new node id is empty if the target does not exist
@@ -418,7 +418,7 @@ func (t *Tree) ListFolder(ctx context.Context, n *node.Node) ([]*node.Node, erro
 func (t *Tree) Delete(ctx context.Context, n *node.Node) (err error) {
 	path := filepath.Join(n.ParentPath(), n.Name)
 	// remove entry from cache immediately to avoid inconsistencies
-	_ = t.idCache.Delete(path)
+	defer func() { _ = t.idCache.Delete(path) }()
 
 	deletingSharedResource := ctx.Value(appctx.DeletingSharedResource)
 

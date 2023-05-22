@@ -4,4 +4,5 @@ decomposedfs' subpackage `tree` uses an idCache to avoid reading too often from 
 properly cleaned, but when renaming a file (= move with same parent) the cache wasn't cleaned. This lead to strange behaviour when
 uploading files with the same name and renaming them
 
+https://github.com/cs3org/reva/pull/3911
 https://github.com/cs3org/reva/pull/3903
