@@ -28,6 +28,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
+	"github.com/cs3org/reva/v2/pkg/store"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/mock"
 
@@ -156,7 +157,7 @@ func NewTestEnv(config map[string]interface{}) (*TestEnv, error) {
 	permissions := &mocks.PermissionsChecker{}
 	cs3permissionsclient := &mocks.CS3PermissionsClient{}
 	bs := &treemocks.Blobstore{}
-	tree := tree.New(lu, bs, o)
+	tree := tree.New(lu, bs, o, store.Create())
 	fs, err := decomposedfs.New(o, lu, decomposedfs.NewPermissions(permissions, cs3permissionsclient), tree, nil)
 	if err != nil {
 		return nil, err
