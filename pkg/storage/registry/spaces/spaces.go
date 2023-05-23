@@ -552,13 +552,20 @@ func (r *registry) findProvidersForAbsolutePathReference(ctx context.Context, pa
 		// check if any space in the provider has a valid mountpoint
 		containsRelatedSpace := false
 		for _, space := range provider.Spaces {
+			spacePath, err := space.SpacePath(currentUser, nil)
+			if err != nil || strings.Contains(spacePath, "{{") {
+				// couldn't fully evaluate the template. opt on the safe side
+				// and consider the provider relevant
+				containsRelatedSpace = true
+				break
+			}
 			// either the mountpoint is a prefix of the path
-			if strings.HasPrefix(path, space.MountPoint) {
+			if strings.HasPrefix(path, spacePath) {
 				containsRelatedSpace = true
 				break
 			}
 			// or the path is a prefix of the mountpoint
-			if strings.HasPrefix(space.MountPoint, path) {
+			if strings.HasPrefix(spacePath, path) {
 				containsRelatedSpace = true
 				break
 			}
