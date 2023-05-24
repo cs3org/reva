@@ -9,10 +9,8 @@ data_transfers_folder = ""
 [grpc.services.datatx]
 # rclone is currently the only data transfer driver implementation
 txdriver = "rclone"
-# the shares,transfers db file (default: /var/tmp/reva/datatx-shares.json)
-tx_shares_file = ""
-# base folder of the data transfers (eg. /home/DataTransfers)
-data_transfers_folder = ""
+# the storage driver
+storagedriver = "json"
 # if set to 'true' the transfer will always be removed from the db upon cancel request
 # recommended value is true
 remove_transfer_on_cancel = true
@@ -30,15 +28,23 @@ auth_pass = "{rclone user secret}"
 #   "x-access-token"      will result in rclone using request header:   X-Access-Token: "...token..."
 # If not set "bearer" is assumed
 auth_header = "x-access-token"
-# the transfers(jobs) db file (default: /var/tmp/reva/datatx-transfers.json)
-file = ""
 # check status job interval in milliseconds
 job_status_check_interval = 2000
 # the job timeout in milliseconds (must be long enough for big transfers!)
 job_timeout = 120000
+# the storage driver
+storagedriver = "json"
 # if set to 'true' the transfer job will always be removed from the db upon transfer cancel request
 # recommended value is true
 remove_transfer_job_on_cancel = true
+
+[grpc.services.datatx.storagedrivers.json]
+# the datatx transfers db file (defaults to: /var/tmp/reva/datatx-transfers.json)
+file = ""
+
+[grpc.services.datatx.txdrivers.rclone.storagedrivers.json]
+# the transfers jobs db file (defaults to: /var/tmp/reva/transfer-jobs.json)
+file = ""
 
 [http.services.ocdav]
 # reva supports http third party copy

@@ -16,12 +16,29 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package loader
+package repository
 
 import (
-	// Load datatx drivers.
-	_ "github.com/cs3org/reva/pkg/datatx/manager/rclone"
-	_ "github.com/cs3org/reva/pkg/datatx/manager/rclone/repository/json"
-	_ "github.com/cs3org/reva/pkg/datatx/repository/json"
-	// Add your own here.
+	datatx "github.com/cs3org/go-cs3apis/cs3/tx/v1beta1"
 )
+
+// Job represents transfer job.
+type Job struct {
+	TransferID     string
+	JobID          int64
+	TransferStatus datatx.Status
+	SrcToken       string
+	SrcRemote      string
+	SrcPath        string
+	DestToken      string
+	DestRemote     string
+	DestPath       string
+	Ctime          string
+}
+
+// Repository the interface that any storage driver should implement.
+type Repository interface {
+	StoreJob(job *Job) error
+	GetJob(transferID string) (*Job, error)
+	DeleteJob(job *Job) error
+}

@@ -167,3 +167,5 @@ remove_transfer_on_cancel = true
 remove_transfer_job_on_cancel = true
 ```
 Currently this setting is recommended.
+
+*Note that with these settings `transfer-cancel` will remove transfers & jobs even when a transfer cannot actually be cancelled because it was already in an end-state, eg. `finished` or `failed`. So `transfer-cancel` will act like a 'delete' function.

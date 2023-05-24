@@ -16,12 +16,21 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package loader
+package registry
 
 import (
-	// Load datatx drivers.
-	_ "github.com/cs3org/reva/pkg/datatx/manager/rclone"
-	_ "github.com/cs3org/reva/pkg/datatx/manager/rclone/repository/json"
-	_ "github.com/cs3org/reva/pkg/datatx/repository/json"
-	// Add your own here.
+	"github.com/cs3org/reva/pkg/datatx"
 )
+
+// NewFunc is the function that datatx repository implementations
+// should register at init time.
+type NewFunc func(map[string]interface{}) (datatx.Repository, error)
+
+// NewFuncs is a map containing all the registered datatx repository backends.
+var NewFuncs = map[string]NewFunc{}
+
+// Register registers a new datatx repository backend new function.
+// Not safe for concurrent use. Safe for use from package init.
+func Register(name string, f NewFunc) {
+	NewFuncs[name] = f
+}

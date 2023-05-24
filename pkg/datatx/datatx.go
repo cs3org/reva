@@ -21,6 +21,7 @@ package datatx
 import (
 	"context"
 
+	userv1beta1 "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	datatx "github.com/cs3org/go-cs3apis/cs3/tx/v1beta1"
 )
 
@@ -36,4 +37,25 @@ type Manager interface {
 	// RetryTransfer retries the transfer and returns a TxInfo object and error if any.
 	// Note that tokens must still be valid.
 	RetryTransfer(ctx context.Context, transferID string) (*datatx.TxInfo, error)
+}
+
+// Transfer represents datatx transfer.
+type Transfer struct {
+	TxID          string
+	SrcTargetURI  string
+	DestTargetURI string
+	ShareID       string
+	UserID        *userv1beta1.UserId
+}
+
+// Repository the interface that any storage driver should implement.
+type Repository interface {
+	// StoreTransfer stores the transfer by its TxID
+	StoreTransfer(transfer *Transfer) error
+	// StoreTransfer deletes the transfer by its TxID
+	DeleteTransfer(transfer *Transfer) error
+	// GetTransfer returns the transfer with the specified transfer id
+	GetTransfer(txID string) (*Transfer, error)
+	// ListTransfers returns a filtered list of transfers
+	ListTransfers(Filters []*datatx.ListTransfersRequest_Filter, UserID *userv1beta1.UserId) ([]*Transfer, error)
 }
