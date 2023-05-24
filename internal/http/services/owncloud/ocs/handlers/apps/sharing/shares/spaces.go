@@ -143,6 +143,24 @@ func (h *Handler) addSpaceMember(w http.ResponseWriter, r *http.Request, info *p
 	response.WriteOCSSuccess(w, r, nil)
 }
 
+func (h *Handler) isSpaceShare(r *http.Request, spaceID string) bool {
+	ref, err := storagespace.ParseReference(spaceID)
+	if err != nil {
+		return false
+	}
+
+	if ref.ResourceId.OpaqueId == "" {
+		ref.ResourceId.OpaqueId = ref.ResourceId.SpaceId
+	}
+
+	_, err = h.findProvider(r.Context(), &ref)
+	if err != nil {
+		return false
+	}
+
+	return true
+}
+
 func (h *Handler) removeSpaceMember(w http.ResponseWriter, r *http.Request, spaceID string) {
 	ctx := r.Context()
 

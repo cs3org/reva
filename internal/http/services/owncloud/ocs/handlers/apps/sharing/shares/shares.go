@@ -821,9 +821,11 @@ func (h *Handler) RemoveShare(w http.ResponseWriter, r *http.Request) {
 		h.removePublicShare(w, r, shareID)
 	case h.isUserShare(r, shareID):
 		h.removeUserShare(w, r, shareID)
-	default:
+	case h.isSpaceShare(r, shareID):
 		// The request is a remove space member request.
 		h.removeSpaceMember(w, r, shareID)
+	default:
+		response.WriteOCSError(w, r, response.MetaPathNotFound.StatusCode, "cannot find share", nil)
 	}
 }
 
