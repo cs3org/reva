@@ -242,7 +242,7 @@ func (s *svc) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSp
 		filters["mask"] = mask
 	}
 	path := utils.ReadPlainFromOpaque(req.Opaque, "path")
-	if mask != "" {
+	if path != "" {
 		// TODO check for allowed filters
 		filters["path"] = path
 	}
