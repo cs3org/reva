@@ -688,7 +688,7 @@ func (h *Handler) UpdateShare(w http.ResponseWriter, r *http.Request) {
 		h.updateShare(w, r, share) // TODO PUT is used with incomplete data to update a share}
 		return
 	}
-	response.WriteOCSError(w, r, response.MetaPathNotFound.StatusCode, "cannot find share", nil)
+	response.WriteOCSError(w, r, response.MetaNotFound.StatusCode, "cannot find share", nil)
 }
 
 func (h *Handler) updateShare(w http.ResponseWriter, r *http.Request, share *collaboration.Share) {
@@ -814,7 +814,7 @@ func (h *Handler) RemoveShare(w http.ResponseWriter, r *http.Request) {
 		h.removeSpaceMember(w, r, shareID, prov)
 		return
 	}
-	response.WriteOCSError(w, r, response.MetaPathNotFound.StatusCode, "cannot find share", nil)
+	response.WriteOCSError(w, r, response.MetaNotFound.StatusCode, "cannot find share", nil)
 }
 
 // ListShares handles GET requests on /apps/files_sharing/api/v1/shares
