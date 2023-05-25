@@ -20,7 +20,6 @@ package json
 
 import (
 	"encoding/json"
-	"fmt"
 	"io"
 	"os"
 	"sync"
@@ -131,9 +130,7 @@ func (m *mgr) ListTransfers(filters []*txv1beta.ListTransfersRequest_Filter, use
 	if userID == nil {
 		return transfers, errors.New("datatx repository json driver: error listing transfers, userID must be provided")
 	}
-	fmt.Printf("transfers: %v\n", m.model.Transfers)
 	for _, transfer := range m.model.Transfers {
-		fmt.Printf("txId %v comparing %v == %v\n", transfer.TxID, transfer.UserID.OpaqueId, userID.OpaqueId)
 		if transfer.UserID.OpaqueId == userID.OpaqueId {
 			if len(filters) == 0 {
 				transfers = append(transfers, &datatx.Transfer{
