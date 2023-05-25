@@ -209,26 +209,7 @@ func getOtlpTracerProvider(options Options) trace.TracerProvider {
 	if err != nil {
 		panic(err)
 	}
-	/*
-		opts := []otlptracegrpc.Option{
-			otlptracegrpc.WithEndpoint(options.Endpoint),
-		}
-		if options.TransportCredentials != nil {
-			opts = append(opts, otlptracegrpc.WithTLSCredentials(options.TransportCredentials))
-		}
-		if options.Insecure {
-			opts = append(opts, otlptracegrpc.WithInsecure())
-		}
 
-		exporter, err := otlptrace.New(
-			context.Background(),
-			otlptracegrpc.NewClient(opts...),
-		)
-
-		if err != nil {
-			panic(err)
-		}
-	*/
 	resources, err := resource.New(
 		context.Background(),
 		resource.WithAttributes(
