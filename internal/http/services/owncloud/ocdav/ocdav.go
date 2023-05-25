@@ -45,7 +45,6 @@ import (
 	"github.com/jellydator/ttlcache/v2"
 	"github.com/mitchellh/mapstructure"
 	"github.com/rs/zerolog"
-	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
@@ -149,7 +148,6 @@ type svc struct {
 	// LockSystem is the lock management system.
 	LockSystem          LockSystem
 	userIdentifierCache *ttlcache.Cache
-	tracerProvider      trace.TracerProvider
 	nameValidators      []Validator
 }
 
