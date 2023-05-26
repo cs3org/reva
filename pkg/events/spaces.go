@@ -26,6 +26,7 @@ import (
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 )
 
 // SpaceCreated is emitted when a space is created
@@ -53,6 +54,7 @@ type SpaceRenamed struct {
 	ID        *provider.StorageSpaceId
 	Owner     *user.UserId
 	Name      string
+	TimeStamp *typesv1beta1.Timestamp
 }
 
 // Unmarshal to fulfill umarshaller interface
@@ -81,6 +83,7 @@ type SpaceEnabled struct {
 	Executant *user.UserId
 	ID        *provider.StorageSpaceId
 	Owner     *user.UserId
+	TimeStamp *types.Timestamp
 }
 
 // Unmarshal to fulfill umarshaller interface
@@ -144,6 +147,7 @@ type SpaceUpdated struct {
 	Executant *user.UserId
 	ID        *provider.StorageSpaceId
 	Space     *provider.StorageSpace
+	TimeStamp *typesv1beta1.Timestamp
 }
 
 // Unmarshal to fulfill umarshaller interface
@@ -162,6 +166,7 @@ type SpaceMembershipExpired struct {
 	// split the protobuf Grantee oneof so we can use stdlib encoding/json
 	GranteeUserID  *user.UserId
 	GranteeGroupID *group.GroupId
+	TimeStamp      *typesv1beta1.Timestamp
 }
 
 // Unmarshal to fulfill umarshaller interface

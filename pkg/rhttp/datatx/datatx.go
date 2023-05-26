@@ -47,7 +47,7 @@ func EmitFileUploadedEvent(spaceOwnerOrManager, executant *userv1beta1.UserId, r
 		Owner:      spaceOwnerOrManager,
 		Executant:  executant,
 		Ref:        ref,
-		TimeStamp:  utils.TSNow(),
+		Timestamp:  utils.TSNow(),
 	}
 
 	return events.Publish(publisher, uploadedEv)
