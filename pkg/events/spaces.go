@@ -54,7 +54,7 @@ type SpaceRenamed struct {
 	ID        *provider.StorageSpaceId
 	Owner     *user.UserId
 	Name      string
-	TimeStamp *typesv1beta1.Timestamp
+	Timestamp *typesv1beta1.Timestamp
 }
 
 // Unmarshal to fulfill umarshaller interface
@@ -83,7 +83,7 @@ type SpaceEnabled struct {
 	Executant *user.UserId
 	ID        *provider.StorageSpaceId
 	Owner     *user.UserId
-	TimeStamp *types.Timestamp
+	Timestamp *types.Timestamp
 }
 
 // Unmarshal to fulfill umarshaller interface
@@ -147,7 +147,7 @@ type SpaceUpdated struct {
 	Executant *user.UserId
 	ID        *provider.StorageSpaceId
 	Space     *provider.StorageSpace
-	TimeStamp *typesv1beta1.Timestamp
+	Timestamp *typesv1beta1.Timestamp
 }
 
 // Unmarshal to fulfill umarshaller interface
@@ -166,7 +166,7 @@ type SpaceMembershipExpired struct {
 	// split the protobuf Grantee oneof so we can use stdlib encoding/json
 	GranteeUserID  *user.UserId
 	GranteeGroupID *group.GroupId
-	TimeStamp      *typesv1beta1.Timestamp
+	Timestamp      *typesv1beta1.Timestamp
 }
 
 // Unmarshal to fulfill umarshaller interface
