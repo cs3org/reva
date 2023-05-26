@@ -138,7 +138,7 @@ var _ = Describe("Grants", func() {
 					Path:       "/dir1",
 				})
 				Expect(err).ToNot(HaveOccurred())
-				attr, err := n.XattrString(prefixes.GrantUserAcePrefix + grant.Grantee.GetUserId().OpaqueId)
+				attr, err := n.XattrString(env.Ctx, prefixes.GrantUserAcePrefix+grant.Grantee.GetUserId().OpaqueId)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(attr).To(Equal(fmt.Sprintf("\x00t=A:f=:p=rw:c=%s:e=0\n", o.GetOpaqueId()))) // NOTE: this tests ace package
 			})

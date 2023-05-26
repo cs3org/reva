@@ -1,6 +1,7 @@
 package migrator_test
 
 import (
+	"context"
 	"io"
 	"os"
 
@@ -101,7 +102,7 @@ var _ = Describe("Migrator", func() {
 
 				_, err = os.Stat(path + ".mpk")
 				Expect(err).ToNot(HaveOccurred())
-				nameAttr, err = backend.Get(path, prefixes.NameAttr)
+				nameAttr, err = backend.Get(context.Background(), path, prefixes.NameAttr)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(string(nameAttr)).To(Equal("file1"))
 			})

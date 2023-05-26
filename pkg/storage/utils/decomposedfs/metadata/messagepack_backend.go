@@ -61,13 +61,13 @@ func NewMessagePackBackend(rootPath string, o cache.Config) MessagePackBackend {
 func (MessagePackBackend) Name() string { return "messagepack" }
 
 // All reads all extended attributes for a node
-func (b MessagePackBackend) All(path string) (map[string][]byte, error) {
-	return b.loadAttributes(path, nil)
+func (b MessagePackBackend) All(ctx context.Context, path string) (map[string][]byte, error) {
+	return b.loadAttributes(ctx, path, nil)
 }
 
 // Get an extended attribute value for the given key
-func (b MessagePackBackend) Get(path, key string) ([]byte, error) {
-	attribs, err := b.loadAttributes(path, nil)
+func (b MessagePackBackend) Get(ctx context.Context, path, key string) ([]byte, error) {
+	attribs, err := b.loadAttributes(ctx, path, nil)
 	if err != nil {
 		return []byte{}, err
 	}
@@ -79,8 +79,8 @@ func (b MessagePackBackend) Get(path, key string) ([]byte, error) {
 }
 
 // GetInt64 reads a string as int64 from the xattrs
-func (b MessagePackBackend) GetInt64(path, key string) (int64, error) {
-	attribs, err := b.loadAttributes(path, nil)
+func (b MessagePackBackend) GetInt64(ctx context.Context, path, key string) (int64, error) {
+	attribs, err := b.loadAttributes(ctx, path, nil)
 	if err != nil {
 		return 0, err
 	}
@@ -97,8 +97,8 @@ func (b MessagePackBackend) GetInt64(path, key string) (int64, error) {
 
 // List retrieves a list of names of extended attributes associated with the
 // given path in the file system.
-func (b MessagePackBackend) List(path string) ([]string, error) {
-	attribs, err := b.loadAttributes(path, nil)
+func (b MessagePackBackend) List(ctx context.Context, path string) ([]string, error) {
+	attribs, err := b.loadAttributes(ctx, path, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -110,37 +110,28 @@ func (b MessagePackBackend) List(path string) ([]string, error) {
 }
 
 // Set sets one attribute for the given path
-func (b MessagePackBackend) Set(path, key string, val []byte) error {
-	return b.SetMultiple(path, map[string][]byte{key: val}, true)
-}
-
-// SetMultipleWithContext sets a set of attribute for the given path
-func (b MessagePackBackend) SetMultipleWithContext(ctx context.Context, path string, attribs map[string][]byte, acquireLock bool) error {
-	return b.saveAttributesWithContext(ctx, path, attribs, nil, acquireLock)
+func (b MessagePackBackend) Set(ctx context.Context, path, key string, val []byte) error {
+	return b.SetMultiple(ctx, path, map[string][]byte{key: val}, true)
 }
 
 // SetMultiple sets a set of attribute for the given path
-func (b MessagePackBackend) SetMultiple(path string, attribs map[string][]byte, acquireLock bool) error {
-	return b.SetMultipleWithContext(context.Background(), path, attribs, acquireLock)
+func (b MessagePackBackend) SetMultiple(ctx context.Context, path string, attribs map[string][]byte, acquireLock bool) error {
+	return b.saveAttributes(ctx, path, attribs, nil, acquireLock)
 }
 
 // Remove an extended attribute key
-func (b MessagePackBackend) Remove(path, key string) error {
-	return b.saveAttributes(path, nil, []string{key}, true)
+func (b MessagePackBackend) Remove(ctx context.Context, path, key string) error {
+	return b.saveAttributes(ctx, path, nil, []string{key}, true)
 }
 
 // AllWithLockedSource reads all extended attributes from the given reader (if possible).
 // The path argument is used for storing the data in the cache
-func (b MessagePackBackend) AllWithLockedSource(path string, source io.Reader) (map[string][]byte, error) {
-	return b.loadAttributes(path, source)
+func (b MessagePackBackend) AllWithLockedSource(ctx context.Context, path string, source io.Reader) (map[string][]byte, error) {
+	return b.loadAttributes(ctx, path, source)
 }
 
-func (b MessagePackBackend) saveAttributes(path string, setAttribs map[string][]byte, deleteAttribs []string, acquireLock bool) error {
-	return b.saveAttributesWithContext(context.Background(), path, setAttribs, deleteAttribs, acquireLock)
-}
-
-func (b MessagePackBackend) saveAttributesWithContext(ctx context.Context, path string, setAttribs map[string][]byte, deleteAttribs []string, acquireLock bool) error {
-	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "saveAttributesWithContext")
+func (b MessagePackBackend) saveAttributes(ctx context.Context, path string, setAttribs map[string][]byte, deleteAttribs []string, acquireLock bool) error {
+	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "saveAttributes")
 	defer span.End()
 	var (
 		f   readWriteCloseSeekTruncater
@@ -217,7 +208,7 @@ func (b MessagePackBackend) saveAttributesWithContext(ctx context.Context, path 
 	return err
 }
 
-func (b MessagePackBackend) loadAttributes(path string, source io.Reader) (map[string][]byte, error) {
+func (b MessagePackBackend) loadAttributes(ctx context.Context, path string, source io.Reader) (map[string][]byte, error) {
 	attribs := map[string][]byte{}
 	err := b.metaCache.PullFromCache(b.cacheKey(path), &attribs)
 	if err == nil {
