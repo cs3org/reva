@@ -20,6 +20,7 @@ package loader
 
 import (
 	// Load core app registry drivers.
+	_ "github.com/cs3org/reva/v2/pkg/app/registry/micro"
 	_ "github.com/cs3org/reva/v2/pkg/app/registry/static"
 	// Add your own here
 )
