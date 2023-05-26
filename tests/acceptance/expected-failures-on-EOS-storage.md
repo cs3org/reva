@@ -62,7 +62,7 @@ The expected failures in this file are from features in the owncloud/ocis repo.
 -   [coreApiWebdavProperties1/getQuota.feature:48](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavProperties1/getQuota.feature#L48)
 -   [coreApiWebdavProperties1/getQuota.feature:49](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavProperties1/getQuota.feature#L49)
 -   [coreApiWebdavProperties1/getQuota.feature:61](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavProperties1/getQuota.feature#L61)
--   [coreApiWebdavProperties1/getQuota.feature:62](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavProperties1/getQuota.feature#L62)
+-   [coreApiWebdavProperties1/getQuota.feature:54](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavProperties1/getQuota.feature#L54)
 -   [coreApiWebdavProperties1/getQuota.feature:77](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavProperties1/getQuota.feature#L77)
 -   [coreApiWebdavProperties1/getQuota.feature:78](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavProperties1/getQuota.feature#L78)
 ### [no command equivalent to occ](https://github.com/owncloud/ocis/issues/1317)
