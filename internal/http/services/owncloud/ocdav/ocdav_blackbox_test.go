@@ -40,7 +40,6 @@ import (
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/cs3org/reva/v2/tests/cs3mocks/mocks"
 	"github.com/stretchr/testify/mock"
-	"go.opentelemetry.io/otel/trace"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -145,7 +144,7 @@ var _ = Describe("ocdav", func() {
 				InvalidChars: []string{"\f", "\r", "\n", "\\"},
 			},
 		}
-		handler, err = ocdav.NewWith(cfg, nil, ocdav.NewCS3LS(client), nil, trace.NewNoopTracerProvider(), client)
+		handler, err = ocdav.NewWith(cfg, nil, ocdav.NewCS3LS(client), nil, client)
 		Expect(err).ToNot(HaveOccurred())
 
 		userspace = &cs3storageprovider.StorageSpace{
