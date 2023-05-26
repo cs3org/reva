@@ -209,6 +209,8 @@ func (b MessagePackBackend) saveAttributes(ctx context.Context, path string, set
 }
 
 func (b MessagePackBackend) loadAttributes(ctx context.Context, path string, source io.Reader) (map[string][]byte, error) {
+	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "loadAttributes")
+	defer span.End()
 	attribs := map[string][]byte{}
 	err := b.metaCache.PullFromCache(b.cacheKey(path), &attribs)
 	if err == nil {
@@ -217,7 +219,9 @@ func (b MessagePackBackend) loadAttributes(ctx context.Context, path string, sou
 
 	metaPath := b.MetadataPath(path)
 	if source == nil {
+		_, subspan := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "lockedfile.Open")
 		source, err = lockedfile.Open(metaPath)
+		subspan.End()
 		// // No cached entry found. Read from storage and store in cache
 		if err != nil {
 			if os.IsNotExist(err) {
@@ -234,7 +238,9 @@ func (b MessagePackBackend) loadAttributes(ctx context.Context, path string, sou
 		defer source.(*lockedfile.File).Close()
 	}
 
+	ctx, subspan := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "io.ReadAll")
 	msgBytes, err := io.ReadAll(source)
+	subspan.End()
 	if err != nil {
 		return nil, err
 	}
@@ -245,7 +251,9 @@ func (b MessagePackBackend) loadAttributes(ctx context.Context, path string, sou
 		}
 	}
 
+	_, subspan = appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "metaCache.PushToCache")
 	err = b.metaCache.PushToCache(b.cacheKey(path), attribs)
+	subspan.End()
 	if err != nil {
 		return nil, err
 	}
