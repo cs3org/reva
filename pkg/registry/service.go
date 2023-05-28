@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2023 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,29 +16,20 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package memory
+package registry
 
-import "fmt"
+import (
+	mRegistry "go-micro.dev/v4/registry"
+	"go-micro.dev/v4/selector"
+)
 
-// node implements the registry.Node interface.
-type node struct {
-	id       string
-	address  string
-	metadata map[string]string
-}
+// GetNodeAddress returns a random address from the service nodes
+func GetNodeAddress(services []*mRegistry.Service) (string, error) {
+	next := selector.Random(services)
+	node, err := next()
+	if err != nil {
+		return "", err
+	}
 
-func (n node) Address() string {
-	return n.address
-}
-
-func (n node) Metadata() map[string]string {
-	return n.metadata
-}
-
-func (n node) String() string {
-	return fmt.Sprintf("%v-%v", n.id, n.address)
-}
-
-func (n node) ID() string {
-	return n.id
+	return node.Address, err
 }
