@@ -33,6 +33,7 @@ import (
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/net"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/propfind"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/status"
+	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/cs3org/reva/v2/tests/cs3mocks/mocks"
@@ -42,6 +43,14 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
+
+type selector struct {
+	client gateway.GatewayAPIClient
+}
+
+func (s selector) Next(opts ...pool.Option) (gateway.GatewayAPIClient, error) {
+	return s.client, nil
+}
 
 var _ = Describe("Propfind", func() {
 	var (
@@ -93,9 +102,10 @@ var _ = Describe("Propfind", func() {
 	JustBeforeEach(func() {
 		ctx = context.WithValue(context.Background(), net.CtxKeyBaseURI, "http://127.0.0.1:3000")
 		client = &mocks.GatewayAPIClient{}
-		handler = propfind.NewHandler("127.0.0.1:3000", func() (gateway.GatewayAPIClient, error) {
-			return client, nil
-		})
+		sel := selector{
+			client: client,
+		}
+		handler = propfind.NewHandler("127.0.0.1:3000", sel)
 
 		foospace = &sprovider.StorageSpace{
 			Opaque: &typesv1beta1.Opaque{
