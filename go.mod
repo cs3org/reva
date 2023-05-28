@@ -27,6 +27,7 @@ require (
 	github.com/go-chi/chi/v5 v5.0.7
 	github.com/go-ldap/ldap/v3 v3.4.4
 	github.com/go-micro/plugins/v4/events/natsjs v1.1.0
+	github.com/go-micro/plugins/v4/registry/memory v1.1.0
 	github.com/go-micro/plugins/v4/server/http v1.1.1
 	github.com/go-micro/plugins/v4/store/nats-js v1.1.0
 	github.com/go-micro/plugins/v4/store/redis v1.2.1-0.20230510195111-07cd57e1bc9d
@@ -78,7 +79,6 @@ require (
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.36.4
 	go.opentelemetry.io/otel v1.11.1
 	go.opentelemetry.io/otel/exporters/jaeger v1.11.1
-	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.11.1
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.11.1
 	go.opentelemetry.io/otel/sdk v1.11.1
 	go.opentelemetry.io/otel/trace v1.11.1
@@ -130,7 +130,6 @@ require (
 	github.com/go-micro/plugins/v4/registry/etcd v1.1.0 // indirect
 	github.com/go-micro/plugins/v4/registry/kubernetes v1.1.0 // indirect
 	github.com/go-micro/plugins/v4/registry/mdns v1.1.0 // indirect
-	github.com/go-micro/plugins/v4/registry/memory v1.1.0 // indirect
 	github.com/go-micro/plugins/v4/registry/nats v1.1.0 // indirect
 	github.com/go-openapi/errors v0.20.2 // indirect
 	github.com/go-openapi/strfmt v0.21.2 // indirect
@@ -202,6 +201,7 @@ require (
 	go.etcd.io/etcd/client/pkg/v3 v3.5.5 // indirect
 	go.mongodb.org/mongo-driver v1.10.3 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/internal/retry v1.11.1 // indirect
+	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.11.1 // indirect
 	go.opentelemetry.io/proto/otlp v0.19.0 // indirect
 	go.uber.org/atomic v1.10.0 // indirect
 	go.uber.org/multierr v1.8.0 // indirect
