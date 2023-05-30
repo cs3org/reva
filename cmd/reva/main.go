@@ -81,7 +81,6 @@ var (
 		shareUpdateCommand(),
 		shareListReceivedCommand(),
 		shareUpdateReceivedCommand(),
-		transferCreateCommand(),
 		transferGetStatusCommand(),
 		transferCancelCommand(),
 		transferListCommand(),
