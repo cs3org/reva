@@ -36,9 +36,10 @@ At this point you should have a two Reva daemon setup between which we will esta
 
 Creating a transfer is similar to creating a regular OCM share through the `ocm-share-create` command with the addition of the `-datatx` flag. The `-datatx` flag signifies that this is a data transfer. 
 <br>The `ocm-share-create` command makes (see example below), via an OCM share, the contents of folder `/home/my-data` available for transferring to the grantee.
-<br>*Note that only a folder can be transferred!
+<br>use `whoami` in the second Reva to see remote user information, set `-idp` to the `idp` value you see on the remote Reva, and `-grantee` to `opaqueId` of the remote user. 
+<br>**Note that only a folder can be transferred!**
 ```
->> ocm-share-create -grantee f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c -idp cesnet.cz -transfer /home/my-data
+>> ocm-share-create -grantee f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c -idp cesnet.cz -datatx /home/my-data
 +--------------------------------------+-----------------+--------------------------------------+--------------------------------------------------------------------------------------------+-------------------+-------------+--------------------------------------+--------------------------------+--------------------------------+
 | #                                    | OWNER.IDP       | OWNER.OPAQUEID                       | RESOURCEID                                                                                 | TYPE              | GRANTEE.IDP | GRANTEE.OPAQUEID                     | CREATED                        | UPDATED                        |
 +--------------------------------------+-----------------+--------------------------------------+--------------------------------------------------------------------------------------------+-------------------+-------------+--------------------------------------+--------------------------------+--------------------------------+
