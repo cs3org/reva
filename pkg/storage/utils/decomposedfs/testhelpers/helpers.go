@@ -24,6 +24,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/lookup"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
@@ -45,6 +46,14 @@ import (
 	treemocks "github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/tree/mocks"
 	"github.com/cs3org/reva/v2/tests/helpers"
 )
+
+type permissionsSelector struct {
+	client cs3permissions.PermissionsAPIClient
+}
+
+func (s permissionsSelector) Next(opts ...pool.Option) (cs3permissions.PermissionsAPIClient, error) {
+	return s.client, nil
+}
 
 // TestEnv represents a test environment for unit tests
 type TestEnv struct {
@@ -156,9 +165,12 @@ func NewTestEnv(config map[string]interface{}) (*TestEnv, error) {
 
 	permissions := &mocks.PermissionsChecker{}
 	cs3permissionsclient := &mocks.CS3PermissionsClient{}
+	ps := permissionsSelector{
+		client: cs3permissionsclient,
+	}
 	bs := &treemocks.Blobstore{}
 	tree := tree.New(lu, bs, o, store.Create())
-	fs, err := decomposedfs.New(o, lu, decomposedfs.NewPermissions(permissions, cs3permissionsclient), tree, nil)
+	fs, err := decomposedfs.New(o, lu, decomposedfs.NewPermissions(permissions, ps), tree, nil)
 	if err != nil {
 		return nil, err
 	}

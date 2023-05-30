@@ -162,9 +162,13 @@ func NewDefault(m map[string]interface{}) (share.Manager, error) {
 		return nil, err
 	}
 
-	gc, err := pool.GetGatewayServiceClient(c.GatewayAddr)
+	selector, err := pool.GatewaySelector(c.GatewayAddr)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "error getting gateway selector")
+	}
+	gc, err := selector.Next()
+	if err != nil {
+		return nil, errors.Wrap(err, "error selecting next gateway client")
 	}
 
 	var es events.Stream

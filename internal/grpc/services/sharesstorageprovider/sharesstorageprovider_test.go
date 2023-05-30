@@ -31,6 +31,7 @@ import (
 	provider "github.com/cs3org/reva/v2/internal/grpc/services/sharesstorageprovider"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/status"
+	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
 	_ "github.com/cs3org/reva/v2/pkg/share/manager/loader"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	cs3mocks "github.com/cs3org/reva/v2/tests/cs3mocks/mocks"
@@ -40,6 +41,22 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/stretchr/testify/mock"
 )
+
+type gatewaySelector struct {
+	client gateway.GatewayAPIClient
+}
+
+func (s gatewaySelector) Next(opts ...pool.Option) (gateway.GatewayAPIClient, error) {
+	return s.client, nil
+}
+
+type sharesProviderSelector struct {
+	client collaboration.CollaborationAPIClient
+}
+
+func (s sharesProviderSelector) Next(opts ...pool.Option) (collaboration.CollaborationAPIClient, error) {
+	return s.client, nil
+}
 
 var (
 	ShareJail                *sprovider.ResourceId
@@ -294,7 +311,13 @@ var _ = Describe("Sharesstorageprovider", func() {
 	})
 
 	JustBeforeEach(func() {
-		p, err := provider.New(gw, sharesProviderClient)
+		gws := gatewaySelector{
+			client: gw,
+		}
+		sps := sharesProviderSelector{
+			client: sharesProviderClient,
+		}
+		p, err := provider.New(gws, sps)
 		Expect(err).ToNot(HaveOccurred())
 		s = p.(sprovider.ProviderAPIServer)
 		Expect(s).ToNot(BeNil())

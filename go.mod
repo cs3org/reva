@@ -27,7 +27,6 @@ require (
 	github.com/go-chi/chi/v5 v5.0.7
 	github.com/go-ldap/ldap/v3 v3.4.4
 	github.com/go-micro/plugins/v4/events/natsjs v1.1.0
-	github.com/go-micro/plugins/v4/registry/memory v1.1.0
 	github.com/go-micro/plugins/v4/server/http v1.1.1
 	github.com/go-micro/plugins/v4/store/nats-js v1.1.0
 	github.com/go-micro/plugins/v4/store/redis v1.2.1-0.20230510195111-07cd57e1bc9d
@@ -91,7 +90,6 @@ require (
 	google.golang.org/genproto v0.0.0-20221024183307-1bc688fe9f3e
 	google.golang.org/grpc v1.50.1
 	google.golang.org/protobuf v1.28.1
-	gotest.tools v2.2.0+incompatible
 )
 
 require (
@@ -126,11 +124,18 @@ require (
 	github.com/go-logfmt/logfmt v0.5.1 // indirect
 	github.com/go-logr/logr v1.2.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
+	github.com/go-micro/plugins/v4/client/grpc v1.1.0 // indirect
+	github.com/go-micro/plugins/v4/logger/zerolog v1.1.0 // indirect
 	github.com/go-micro/plugins/v4/registry/consul v1.1.0 // indirect
 	github.com/go-micro/plugins/v4/registry/etcd v1.1.0 // indirect
 	github.com/go-micro/plugins/v4/registry/kubernetes v1.1.0 // indirect
 	github.com/go-micro/plugins/v4/registry/mdns v1.1.0 // indirect
+	github.com/go-micro/plugins/v4/registry/memory v1.1.0 // indirect
 	github.com/go-micro/plugins/v4/registry/nats v1.1.0 // indirect
+	github.com/go-micro/plugins/v4/server/grpc v1.1.1 // indirect
+	github.com/go-micro/plugins/v4/wrapper/breaker/gobreaker v1.1.0 // indirect
+	github.com/go-micro/plugins/v4/wrapper/monitoring/prometheus v1.1.0 // indirect
+	github.com/go-micro/plugins/v4/wrapper/trace/opencensus v1.1.0 // indirect
 	github.com/go-openapi/errors v0.20.2 // indirect
 	github.com/go-openapi/strfmt v0.21.2 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
@@ -192,6 +197,7 @@ require (
 	github.com/shurcooL/httpfs v0.0.0-20190707220628-8d4bc4ba7749 // indirect
 	github.com/shurcooL/vfsgen v0.0.0-20200824052919-0d455de96546 // indirect
 	github.com/sirupsen/logrus v1.9.0 // indirect
+	github.com/sony/gobreaker v0.5.0 // indirect
 	github.com/stretchr/objx v0.5.0 // indirect
 	github.com/tidwall/pretty v1.2.1 // indirect
 	github.com/urfave/cli/v2 v2.20.3 // indirect

@@ -116,7 +116,9 @@ var _ = PDescribe("gateway using a static registry and a shard setup", func() {
 		revads, err = startRevads(dependencies, variables)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(revads["gateway"]).ToNot(BeNil())
-		serviceClient, err = pool.GetGatewayServiceClient(revads["gateway"].GrpcAddress)
+		selector, err := pool.GatewaySelector(revads["gateway"].GrpcAddress)
+		Expect(err).ToNot(HaveOccurred())
+		serviceClient, err = selector.Next()
 		Expect(err).ToNot(HaveOccurred())
 	})
 

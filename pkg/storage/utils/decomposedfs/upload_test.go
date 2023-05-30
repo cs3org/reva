@@ -30,6 +30,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	ruser "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
+	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v2/pkg/storage"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/lookup"
@@ -48,6 +49,14 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
+
+type permissionsSelector struct {
+	client cs3permissions.PermissionsAPIClient
+}
+
+func (s permissionsSelector) Next(opts ...pool.Option) (cs3permissions.PermissionsAPIClient, error) {
+	return s.client, nil
+}
 
 var _ = Describe("File uploads", func() {
 	var (
@@ -112,6 +121,9 @@ var _ = Describe("File uploads", func() {
 	})
 
 	BeforeEach(func() {
+		ps := permissionsSelector{
+			client: cs3permissionsclient,
+		}
 		cs3permissionsclient.On("CheckPermission", mock.Anything, mock.Anything, mock.Anything).Return(&cs3permissions.CheckPermissionResponse{
 			Status: &v1beta11.Status{Code: v1beta11.Code_CODE_OK},
 		}, nil)
@@ -121,7 +133,7 @@ var _ = Describe("File uploads", func() {
 		}, nil).Times(1)
 		var err error
 		tree := tree.New(lu, bs, o, store.Create())
-		fs, err = decomposedfs.New(o, lu, decomposedfs.NewPermissions(permissions, cs3permissionsclient), tree, nil)
+		fs, err = decomposedfs.New(o, lu, decomposedfs.NewPermissions(permissions, ps), tree, nil)
 		Expect(err).ToNot(HaveOccurred())
 
 		resp, err := fs.CreateStorageSpace(ctx, &provider.CreateStorageSpaceRequest{Owner: user, Type: "personal"})

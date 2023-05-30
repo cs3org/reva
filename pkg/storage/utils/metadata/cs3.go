@@ -416,15 +416,22 @@ func (cs3 *CS3) ResolveSymlink(ctx context.Context, name string) (string, error)
 }
 
 func (cs3 *CS3) providerClient() (provider.ProviderAPIClient, error) {
-	return pool.GetStorageProviderServiceClient(cs3.providerAddr)
-}
-
-func (cs3 *CS3) getAuthContext(ctx context.Context) (context.Context, error) {
-	client, err := pool.GetGatewayServiceClient(cs3.gatewayAddr)
+	selector, err := pool.StorageProviderSelector(cs3.providerAddr)
 	if err != nil {
 		return nil, err
 	}
+	return selector.Next()
+}
 
+func (cs3 *CS3) getAuthContext(ctx context.Context) (context.Context, error) {
+	selector, err := pool.GatewaySelector(cs3.gatewayAddr)
+	if err != nil {
+		return nil, err
+	}
+	client, err := selector.Next()
+	if err != nil {
+		return nil, err
+	}
 	authCtx := ctxpkg.ContextSetUser(context.Background(), cs3.serviceUser)
 	authRes, err := client.Authenticate(authCtx, &gateway.AuthenticateRequest{
 		Type:         "machine",
