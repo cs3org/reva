@@ -49,13 +49,13 @@ var _ = Describe("Spaces", func() {
 			Expect(err).ToNot(HaveOccurred())
 			env.PermissionsClient.On("CheckPermission", mock.Anything, mock.Anything, mock.Anything).Return(
 				func(ctx context.Context, in *cs3permissions.CheckPermissionRequest, opts ...grpc.CallOption) *cs3permissions.CheckPermissionResponse {
-					if in.Permission == "delete-all-home-spaces" && ctxpkg.ContextMustGetUser(ctx).Id.GetOpaqueId() == env.DeleteHomeSpacesUser.Id.OpaqueId {
+					if in.Permission == "Drives.DeletePersonal" && ctxpkg.ContextMustGetUser(ctx).Id.GetOpaqueId() == env.DeleteHomeSpacesUser.Id.OpaqueId {
 						return &cs3permissions.CheckPermissionResponse{Status: &rpcv1beta1.Status{Code: rpcv1beta1.Code_CODE_OK}}
 					}
-					if in.Permission == "delete-all-spaces" && ctxpkg.ContextMustGetUser(ctx).Id.GetOpaqueId() == env.DeleteAllSpacesUser.Id.OpaqueId {
+					if in.Permission == "Drives.DeleteProject" && ctxpkg.ContextMustGetUser(ctx).Id.GetOpaqueId() == env.DeleteAllSpacesUser.Id.OpaqueId {
 						return &cs3permissions.CheckPermissionResponse{Status: &rpcv1beta1.Status{Code: rpcv1beta1.Code_CODE_OK}}
 					}
-					if (in.Permission == "create-space" || in.Permission == "list-all-spaces") && ctxpkg.ContextMustGetUser(ctx).Id.GetOpaqueId() == helpers.OwnerID {
+					if (in.Permission == "Drives.Create" || in.Permission == "Drives.List") && ctxpkg.ContextMustGetUser(ctx).Id.GetOpaqueId() == helpers.OwnerID {
 						return &cs3permissions.CheckPermissionResponse{Status: &rpcv1beta1.Status{Code: rpcv1beta1.Code_CODE_OK}}
 					}
 					// any other user
@@ -316,7 +316,7 @@ var _ = Describe("Spaces", func() {
 					switch ctxpkg.ContextMustGetUser(ctx).GetId().GetOpaqueId() {
 					case manager.GetId().GetOpaqueId():
 						switch in.Permission {
-						case "create-space":
+						case "Drives.Create":
 							return &cs3permissions.CheckPermissionResponse{Status: &rpcv1beta1.Status{Code: rpcv1beta1.Code_CODE_OK}}
 						default:
 							return &cs3permissions.CheckPermissionResponse{Status: &rpcv1beta1.Status{Code: rpcv1beta1.Code_CODE_PERMISSION_DENIED}}
