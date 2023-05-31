@@ -31,6 +31,7 @@ import (
 	identityGroup "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	identityUser "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	ocmCore "github.com/cs3org/go-cs3apis/cs3/ocm/core/v1beta1"
+	ocmInvite "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
 	ocmProvider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	permissions "github.com/cs3org/go-cs3apis/cs3/permissions/v1beta1"
 	preferences "github.com/cs3org/go-cs3apis/cs3/preferences/v1beta1"
@@ -248,6 +249,15 @@ func OCMCoreSelector(id string, options ...Option) (*Selector[ocmCore.OcmCoreAPI
 	return &Selector[ocmCore.OcmCoreAPIClient]{
 		id:            id,
 		clientFactory: ocmCore.NewOcmCoreAPIClient,
+		options:       options,
+	}, nil
+}
+
+// OCMInviteSelector returns a Selector[ocmInvite.InviteAPIClient].
+func OCMInviteSelector(id string, options ...Option) (*Selector[ocmInvite.InviteAPIClient], error) {
+	return &Selector[ocmInvite.InviteAPIClient]{
+		id:            id,
+		clientFactory: ocmInvite.NewInviteAPIClient,
 		options:       options,
 	}, nil
 }
