@@ -68,14 +68,18 @@ func (s *Selector[T]) Next(opts ...Option) (T, error) {
 		opt(&options)
 	}
 	var services []*mRegistry.Service
+	//var err error
 	if options.registry != nil {
 		services, _ = options.registry.GetService(s.id)
 	} else {
 		services, _ = registry.DiscoverServices(s.id)
 	}
+	//if err != nil {
+	//	return *new(T), errors.Wrap(err, fmt.Sprintf("could not get service for %s", s.id))
+	//}
 	address, err := registry.GetNodeAddress(services)
 	if err != nil || address == "" {
-		return *new(T), errors.Wrap(err, fmt.Sprintf("could not get node addresses for %s", s.id))
+		address = s.id
 	}
 
 	existingClient, ok := s.clientMap.Load(address)

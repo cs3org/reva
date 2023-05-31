@@ -45,7 +45,7 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 	c, err := s.findAuthProvider(ctx, req.Type)
 	if err != nil {
 		return &gateway.AuthenticateResponse{
-			Status: status.NewInternal(ctx, "error getting auth provider client"),
+			Status: status.NewInternal(ctx, fmt.Sprintf("error getting auth provider client %s", err.Error())),
 		}, nil
 	}
 
@@ -170,9 +170,15 @@ func (s *svc) WhoAmI(ctx context.Context, req *gateway.WhoAmIRequest) (*gateway.
 }
 
 func (s *svc) findAuthProvider(ctx context.Context, authType string) (authpb.ProviderAPIClient, error) {
-	c, err := pool.GetAuthRegistryServiceClient(s.c.AuthRegistryEndpoint)
+	sel, err := pool.AuthRegistrySelector(s.c.AuthRegistryEndpoint)
 	if err != nil {
-		err = errors.Wrap(err, "gateway: error getting auth registry client")
+		err = errors.Wrap(err, "gateway: error getting AuthRegistrySelector")
+		return nil, err
+	}
+
+	c, err := sel.Next()
+	if err != nil {
+		err = errors.Wrap(err, "gateway: error selecting next AuthRegistry client")
 		return nil, err
 	}
 
@@ -187,9 +193,14 @@ func (s *svc) findAuthProvider(ctx context.Context, authType string) (authpb.Pro
 
 	if res.Status.Code == rpc.Code_CODE_OK && res.Providers != nil && len(res.Providers) > 0 {
 		// TODO(labkode): check for capabilities here
-		c, err := pool.GetAuthProviderServiceClient(res.Providers[0].Address)
+		sel, err := pool.AuthProviderSelector(res.Providers[0].Address)
 		if err != nil {
-			err = errors.Wrap(err, "gateway: error getting an auth provider client")
+			err = errors.Wrap(err, fmt.Sprintf("gateway: error getting an '%s' auth provider selector for %s", authType, res.Providers[0].Address))
+			return nil, err
+		}
+		c, err := sel.Next()
+		if err != nil {
+			err = errors.Wrap(err, fmt.Sprintf("gateway: error selecting next '%s' auth provider client for %s", authType, res.Providers[0].Address))
 			return nil, err
 		}
 
