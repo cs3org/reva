@@ -19,6 +19,7 @@
 package pool
 
 import (
+	"fmt"
 	"sync"
 
 	appProvider "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
@@ -40,6 +41,7 @@ import (
 	storageRegistry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 	tx "github.com/cs3org/go-cs3apis/cs3/tx/v1beta1"
 	"github.com/cs3org/reva/v2/pkg/registry"
+	"github.com/pkg/errors"
 	mRegistry "go-micro.dev/v4/registry"
 	"google.golang.org/grpc"
 )
@@ -73,7 +75,7 @@ func (s *Selector[T]) Next(opts ...Option) (T, error) {
 	}
 	address, err := registry.GetNodeAddress(services)
 	if err != nil || address == "" {
-		return *new(T), err
+		return *new(T), errors.Wrap(err, fmt.Sprintf("could not get node addresses for %s", s.id))
 	}
 
 	existingClient, ok := s.clientMap.Load(address)
@@ -84,7 +86,7 @@ func (s *Selector[T]) Next(opts ...Option) (T, error) {
 	conn, err := NewConn(address, append(s.options, opts...)...)
 
 	if err != nil {
-		return *new(T), err
+		return *new(T), errors.Wrap(err, fmt.Sprintf("could not create connection for %s to %s", s.id, address))
 	}
 
 	newClient := s.clientFactory(conn)
