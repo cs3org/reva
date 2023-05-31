@@ -40,6 +40,7 @@ import (
 	storageRegistry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 	tx "github.com/cs3org/go-cs3apis/cs3/tx/v1beta1"
 	"github.com/cs3org/reva/v2/pkg/registry"
+	mRegistry "go-micro.dev/v4/registry"
 	"google.golang.org/grpc"
 )
 
@@ -54,11 +55,25 @@ type Selector[T any] struct {
 	options       []Option
 }
 
-func (s *Selector[T]) Next(options ...Option) (T, error) {
-	services, _ := registry.DiscoverServices(s.id)
+func (s *Selector[T]) Next(opts ...Option) (T, error) {
+	options := ClientOptions{}
+	// first use selector options
+	for _, opt := range s.options {
+		opt(&options)
+	}
+	// then overwrite with supplied
+	for _, opt := range opts {
+		opt(&options)
+	}
+	var services []*mRegistry.Service
+	if options.registry != nil {
+		services, _ = options.registry.GetService(s.id)
+	} else {
+		services, _ = registry.DiscoverServices(s.id)
+	}
 	address, err := registry.GetNodeAddress(services)
 	if err != nil || address == "" {
-		address = s.id
+		return *new(T), err
 	}
 
 	existingClient, ok := s.clientMap.Load(address)
@@ -66,7 +81,7 @@ func (s *Selector[T]) Next(options ...Option) (T, error) {
 		return existingClient.(T), nil
 	}
 
-	conn, err := NewConn(s.id, append(s.options, options...)...)
+	conn, err := NewConn(address, append(s.options, opts...)...)
 
 	if err != nil {
 		return *new(T), err
