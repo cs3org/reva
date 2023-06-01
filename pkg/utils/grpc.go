@@ -37,10 +37,31 @@ func GetUser(userID *user.UserId, gwc gateway.GatewayAPIClient, machineAuthAPIKe
 
 // ImpersonateUser impersonates the given user
 func ImpersonateUser(usr *user.User, gwc gateway.GatewayAPIClient, machineAuthAPIKey string) (context.Context, error) {
+	if true {
+		return ImpersonateServiceUser("service-user-id", gwc, "secret-string")
+	}
 	ctx := revactx.ContextSetUser(context.Background(), usr)
 	authRes, err := gwc.Authenticate(ctx, &gateway.AuthenticateRequest{
 		Type:         "machine",
 		ClientId:     "userid:" + usr.GetId().GetOpaqueId(),
+		ClientSecret: machineAuthAPIKey,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if authRes.GetStatus().GetCode() != rpc.Code_CODE_OK {
+		return nil, fmt.Errorf("error impersonating user: %s", authRes.Status.Message)
+	}
+
+	return metadata.AppendToOutgoingContext(ctx, revactx.TokenHeader, authRes.Token), nil
+}
+
+// ImpersonateServiceUser impersonates the given user
+func ImpersonateServiceUser(userID string, gwc gateway.GatewayAPIClient, machineAuthAPIKey string) (context.Context, error) {
+	ctx := context.Background()
+	authRes, err := gwc.Authenticate(ctx, &gateway.AuthenticateRequest{
+		Type:         "serviceaccounts",
+		ClientId:     userID,
 		ClientSecret: machineAuthAPIKey,
 	})
 	if err != nil {
