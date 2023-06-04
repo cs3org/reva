@@ -37,7 +37,8 @@ func DiscoverServices(id string) ([]*mRegistry.Service, error) {
 	isAddress := len(strings.Split(id, ":")) > 1
 
 	if isAddress {
-		return discoverServicesByAddress(id)
+		//return discoverServicesByAddress(id)
+		return services, nil
 	}
 
 	return gRegistry.GetService(id)
