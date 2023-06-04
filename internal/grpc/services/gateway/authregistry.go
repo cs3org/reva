@@ -25,18 +25,10 @@ import (
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/status"
-	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
 )
 
 func (s *svc) ListAuthProviders(ctx context.Context, req *registry.ListAuthProvidersRequest) (*gateway.ListAuthProvidersResponse, error) {
-	sel, err := pool.AuthRegistrySelector(s.c.AuthRegistryEndpoint)
-	if err != nil {
-		return &gateway.ListAuthProvidersResponse{
-			Status: status.NewInternal(ctx, "gateway"),
-		}, nil
-	}
-
-	c, err := sel.Next()
+	c, err := s.authRegistrySelector.Next()
 	if err != nil {
 		return &gateway.ListAuthProvidersResponse{
 			Status: status.NewInternal(ctx, "gateway"),
