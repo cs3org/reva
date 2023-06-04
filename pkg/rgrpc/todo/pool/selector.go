@@ -51,6 +51,25 @@ type Selectable[T any] interface {
 	Next(opts ...Option) (T, error)
 }
 
+var selectors sync.Map
+
+func getSelector[T any](k string, id string, f func(cc *grpc.ClientConn) T, options ...Option) *Selector[T] {
+	existingSelector, ok := selectors.Load(k + id)
+	if ok {
+		return existingSelector.(*Selector[T])
+	}
+
+	newSelector := &Selector[T]{
+		id:            id,
+		clientFactory: f,
+		options:       options,
+	}
+
+	selectors.Store(k+id, newSelector)
+
+	return newSelector
+}
+
 type Selector[T any] struct {
 	id            string
 	clientFactory func(cc *grpc.ClientConn) T
@@ -102,171 +121,190 @@ func (s *Selector[T]) Next(opts ...Option) (T, error) {
 
 // GatewaySelector returns a Selector[gateway.GatewayAPIClient].
 func GatewaySelector(id string, options ...Option) (*Selector[gateway.GatewayAPIClient], error) {
-	return &Selector[gateway.GatewayAPIClient]{
-		id:            id,
-		clientFactory: gateway.NewGatewayAPIClient,
-		options:       options,
-	}, nil
+	return getSelector[gateway.GatewayAPIClient](
+		"GatewaySelector",
+		id,
+		gateway.NewGatewayAPIClient,
+		options...,
+	), nil
 }
 
 // IdentityUserSelector returns a Selector[identityUser.UserAPIClient].
 func IdentityUserSelector(id string, options ...Option) (*Selector[identityUser.UserAPIClient], error) {
-	return &Selector[identityUser.UserAPIClient]{
-		id:            id,
-		clientFactory: identityUser.NewUserAPIClient,
-		options:       options,
-	}, nil
+	return getSelector[identityUser.UserAPIClient](
+		"IdentityUserSelector",
+		id,
+		identityUser.NewUserAPIClient,
+		options...,
+	), nil
 }
 
 // IdentityGroupSelector returns a Selector[identityGroup.GroupAPIClient].
 func IdentityGroupSelector(id string, options ...Option) (*Selector[identityGroup.GroupAPIClient], error) {
-	return &Selector[identityGroup.GroupAPIClient]{
-		id:            id,
-		clientFactory: identityGroup.NewGroupAPIClient,
-		options:       options,
-	}, nil
+	return getSelector[identityGroup.GroupAPIClient](
+		"IdentityGroupSelector",
+		id,
+		identityGroup.NewGroupAPIClient,
+		options...,
+	), nil
 }
 
 // StorageProviderSelector returns a Selector[storageProvider.ProviderAPIClient].
 func StorageProviderSelector(id string, options ...Option) (*Selector[storageProvider.ProviderAPIClient], error) {
-	return &Selector[storageProvider.ProviderAPIClient]{
-		id:            id,
-		clientFactory: storageProvider.NewProviderAPIClient,
-		options:       options,
-	}, nil
+	return getSelector[storageProvider.ProviderAPIClient](
+		"StorageProviderSelector",
+		id,
+		storageProvider.NewProviderAPIClient,
+		options...,
+	), nil
 }
 
 // AuthRegistrySelector returns a Selector[authRegistry.RegistryAPIClient].
 func AuthRegistrySelector(id string, options ...Option) (*Selector[authRegistry.RegistryAPIClient], error) {
-	return &Selector[authRegistry.RegistryAPIClient]{
-		id:            id,
-		clientFactory: authRegistry.NewRegistryAPIClient,
-		options:       options,
-	}, nil
+	return getSelector[authRegistry.RegistryAPIClient](
+		"AuthRegistrySelector",
+		id,
+		authRegistry.NewRegistryAPIClient,
+		options...,
+	), nil
 }
 
 // AuthProviderSelector returns a Selector[authProvider.RegistryAPIClient].
 func AuthProviderSelector(id string, options ...Option) (*Selector[authProvider.ProviderAPIClient], error) {
-	return &Selector[authProvider.ProviderAPIClient]{
-		id:            id,
-		clientFactory: authProvider.NewProviderAPIClient,
-		options:       options,
-	}, nil
+	return getSelector[authProvider.ProviderAPIClient](
+		"AuthProviderSelector",
+		id,
+		authProvider.NewProviderAPIClient,
+		options...,
+	), nil
 }
 
 // AuthApplicationSelector returns a Selector[authApplication.ApplicationsAPIClient].
 func AuthApplicationSelector(id string, options ...Option) (*Selector[authApplication.ApplicationsAPIClient], error) {
-	return &Selector[authApplication.ApplicationsAPIClient]{
-		id:            id,
-		clientFactory: authApplication.NewApplicationsAPIClient,
-		options:       options,
-	}, nil
+	return getSelector[authApplication.ApplicationsAPIClient](
+		"AuthApplicationSelector",
+		id,
+		authApplication.NewApplicationsAPIClient,
+		options...,
+	), nil
 }
 
 // SharingCollaborationSelector returns a Selector[sharingCollaboration.ApplicationsAPIClient].
 func SharingCollaborationSelector(id string, options ...Option) (*Selector[sharingCollaboration.CollaborationAPIClient], error) {
-	return &Selector[sharingCollaboration.CollaborationAPIClient]{
-		id:            id,
-		clientFactory: sharingCollaboration.NewCollaborationAPIClient,
-		options:       options,
-	}, nil
+	return getSelector[sharingCollaboration.CollaborationAPIClient](
+		"SharingCollaborationSelector",
+		id,
+		sharingCollaboration.NewCollaborationAPIClient,
+		options...,
+	), nil
 }
 
 // SharingOCMSelector returns a Selector[sharingOCM.OcmAPIClient].
 func SharingOCMSelector(id string, options ...Option) (*Selector[sharingOCM.OcmAPIClient], error) {
-	return &Selector[sharingOCM.OcmAPIClient]{
-		id:            id,
-		clientFactory: sharingOCM.NewOcmAPIClient,
-		options:       options,
-	}, nil
+	return getSelector[sharingOCM.OcmAPIClient](
+		"SharingOCMSelector",
+		id,
+		sharingOCM.NewOcmAPIClient,
+		options...,
+	), nil
 }
 
 // SharingLinkSelector returns a Selector[sharingLink.LinkAPIClient].
 func SharingLinkSelector(id string, options ...Option) (*Selector[sharingLink.LinkAPIClient], error) {
-	return &Selector[sharingLink.LinkAPIClient]{
-		id:            id,
-		clientFactory: sharingLink.NewLinkAPIClient,
-		options:       options,
-	}, nil
+	return getSelector[sharingLink.LinkAPIClient](
+		"SharingLinkSelector",
+		id,
+		sharingLink.NewLinkAPIClient,
+		options...,
+	), nil
 }
 
 // PreferencesSelector returns a Selector[preferences.PreferencesAPIClient].
 func PreferencesSelector(id string, options ...Option) (*Selector[preferences.PreferencesAPIClient], error) {
-	return &Selector[preferences.PreferencesAPIClient]{
-		id:            id,
-		clientFactory: preferences.NewPreferencesAPIClient,
-		options:       options,
-	}, nil
+	return getSelector[preferences.PreferencesAPIClient](
+		"PreferencesSelector",
+		id,
+		preferences.NewPreferencesAPIClient,
+		options...,
+	), nil
 }
 
 // PermissionsSelector returns a Selector[permissions.PermissionsAPIClient].
 func PermissionsSelector(id string, options ...Option) (*Selector[permissions.PermissionsAPIClient], error) {
-	return &Selector[permissions.PermissionsAPIClient]{
-		id:            id,
-		clientFactory: permissions.NewPermissionsAPIClient,
-		options:       options,
-	}, nil
+	return getSelector[permissions.PermissionsAPIClient](
+		"PermissionsSelector",
+		id,
+		permissions.NewPermissionsAPIClient,
+		options...,
+	), nil
 }
 
 // AppRegistrySelector returns a Selector[appRegistry.RegistryAPIClient].
 func AppRegistrySelector(id string, options ...Option) (*Selector[appRegistry.RegistryAPIClient], error) {
-	return &Selector[appRegistry.RegistryAPIClient]{
-		id:            id,
-		clientFactory: appRegistry.NewRegistryAPIClient,
-		options:       options,
-	}, nil
+	return getSelector[appRegistry.RegistryAPIClient](
+		"AppRegistrySelector",
+		id,
+		appRegistry.NewRegistryAPIClient,
+		options...,
+	), nil
 }
 
 // AppProviderSelector returns a Selector[appProvider.ProviderAPIClient].
 func AppProviderSelector(id string, options ...Option) (*Selector[appProvider.ProviderAPIClient], error) {
-	return &Selector[appProvider.ProviderAPIClient]{
-		id:            id,
-		clientFactory: appProvider.NewProviderAPIClient,
-		options:       options,
-	}, nil
+	return getSelector[appProvider.ProviderAPIClient](
+		"AppProviderSelector",
+		id,
+		appProvider.NewProviderAPIClient,
+		options...,
+	), nil
 }
 
 // StorageRegistrySelector returns a Selector[storageRegistry.RegistryAPIClient].
 func StorageRegistrySelector(id string, options ...Option) (*Selector[storageRegistry.RegistryAPIClient], error) {
-	return &Selector[storageRegistry.RegistryAPIClient]{
-		id:            id,
-		clientFactory: storageRegistry.NewRegistryAPIClient,
-		options:       options,
-	}, nil
+	return getSelector[storageRegistry.RegistryAPIClient](
+		"StorageRegistrySelector",
+		id,
+		storageRegistry.NewRegistryAPIClient,
+		options...,
+	), nil
 }
 
 // OCMProviderSelector returns a Selector[storageRegistry.RegistryAPIClient].
 func OCMProviderSelector(id string, options ...Option) (*Selector[ocmProvider.ProviderAPIClient], error) {
-	return &Selector[ocmProvider.ProviderAPIClient]{
-		id:            id,
-		clientFactory: ocmProvider.NewProviderAPIClient,
-		options:       options,
-	}, nil
+	return getSelector[ocmProvider.ProviderAPIClient](
+		"OCMProviderSelector",
+		id,
+		ocmProvider.NewProviderAPIClient,
+		options...,
+	), nil
 }
 
 // OCMCoreSelector returns a Selector[ocmCore.OcmCoreAPIClient].
 func OCMCoreSelector(id string, options ...Option) (*Selector[ocmCore.OcmCoreAPIClient], error) {
-	return &Selector[ocmCore.OcmCoreAPIClient]{
-		id:            id,
-		clientFactory: ocmCore.NewOcmCoreAPIClient,
-		options:       options,
-	}, nil
+	return getSelector[ocmCore.OcmCoreAPIClient](
+		"OCMCoreSelector",
+		id,
+		ocmCore.NewOcmCoreAPIClient,
+		options...,
+	), nil
 }
 
 // OCMInviteSelector returns a Selector[ocmInvite.InviteAPIClient].
 func OCMInviteSelector(id string, options ...Option) (*Selector[ocmInvite.InviteAPIClient], error) {
-	return &Selector[ocmInvite.InviteAPIClient]{
-		id:            id,
-		clientFactory: ocmInvite.NewInviteAPIClient,
-		options:       options,
-	}, nil
+	return getSelector[ocmInvite.InviteAPIClient](
+		"OCMInviteSelector",
+		id,
+		ocmInvite.NewInviteAPIClient,
+		options...,
+	), nil
 }
 
 // TXSelector returns a Selector[tx.TxAPIClient].
 func TXSelector(id string, options ...Option) (*Selector[tx.TxAPIClient], error) {
-	return &Selector[tx.TxAPIClient]{
-		id:            id,
-		clientFactory: tx.NewTxAPIClient,
-		options:       options,
-	}, nil
+	return getSelector[tx.TxAPIClient](
+		"TXSelector",
+		id,
+		tx.NewTxAPIClient,
+		options...,
+	), nil
 }

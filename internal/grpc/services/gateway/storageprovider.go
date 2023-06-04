@@ -1118,7 +1118,7 @@ func (s *svc) getStorageProviderClient(_ context.Context, p *registry.ProviderIn
 }
 
 func (s *svc) getStorageRegistryClient(_ context.Context, address string) (registry.RegistryAPIClient, error) {
-	c, err := pool.GetStorageRegistryClient(address)
+	c, err := s.storageRegistrySelector.Next()
 	if err != nil {
 		return nil, err
 	}

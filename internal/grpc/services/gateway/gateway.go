@@ -24,9 +24,12 @@ import (
 	"strings"
 	"time"
 
+	auth "github.com/cs3org/go-cs3apis/cs3/auth/registry/v1beta1"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+	storage "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/rgrpc"
+	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v2/pkg/sharedconf"
 	"github.com/cs3org/reva/v2/pkg/storage/cache"
 	"github.com/cs3org/reva/v2/pkg/token"
@@ -163,6 +166,8 @@ type svc struct {
 	providerCache            cache.ProviderCache
 	createHomeCache          cache.CreateHomeCache
 	createPersonalSpaceCache cache.CreatePersonalSpaceCache
+	authRegistrySelector     pool.Selectable[auth.RegistryAPIClient]
+	storageRegistrySelector  pool.Selectable[storage.RegistryAPIClient]
 }
 
 // New creates a new gateway svc that acts as a proxy for any grpc operation.
@@ -186,6 +191,14 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 	if err != nil {
 		return nil, err
 	}
+	authRegistrySelector, err := pool.AuthRegistrySelector(c.AuthRegistryEndpoint)
+	if err != nil {
+		return nil, err
+	}
+	storageRegistrySelector, err := pool.StorageRegistrySelector(c.StorageRegistryEndpoint)
+	if err != nil {
+		return nil, err
+	}
 
 	s := &svc{
 		c:                        c,
@@ -195,6 +208,8 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 		providerCache:            cache.GetProviderCache(c.ProviderCacheStore, c.ProviderCacheNodes, c.ProviderCacheDatabase, "provider", time.Duration(c.ProviderCacheTTL)*time.Second, c.ProviderCacheSize),
 		createHomeCache:          cache.GetCreateHomeCache(c.CreateHomeCacheStore, c.CreateHomeCacheNodes, c.CreateHomeCacheDatabase, "createHome", time.Duration(c.CreateHomeCacheTTL)*time.Second, c.CreateHomeCacheSize),
 		createPersonalSpaceCache: cache.GetCreatePersonalSpaceCache(c.CreateHomeCacheStore, c.CreateHomeCacheNodes, c.CreateHomeCacheDatabase, "createPersonalSpace", time.Duration(c.CreateHomeCacheTTL)*time.Second, c.CreateHomeCacheSize),
+		authRegistrySelector:     authRegistrySelector,
+		storageRegistrySelector:  storageRegistrySelector,
 	}
 
 	return s, nil

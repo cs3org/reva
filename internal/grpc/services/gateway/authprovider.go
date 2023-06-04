@@ -170,13 +170,7 @@ func (s *svc) WhoAmI(ctx context.Context, req *gateway.WhoAmIRequest) (*gateway.
 }
 
 func (s *svc) findAuthProvider(ctx context.Context, authType string) (authpb.ProviderAPIClient, error) {
-	sel, err := pool.AuthRegistrySelector(s.c.AuthRegistryEndpoint)
-	if err != nil {
-		err = errors.Wrap(err, "gateway: error getting AuthRegistrySelector")
-		return nil, err
-	}
-
-	c, err := sel.Next()
+	c, err := s.authRegistrySelector.Next()
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error selecting next AuthRegistry client")
 		return nil, err
