@@ -23,7 +23,9 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+	"time"
 
+	"github.com/cs3org/reva/v2/pkg/storage/cache"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
@@ -57,16 +59,19 @@ func init() {
 }
 
 type config struct {
-	GatewayAddr               string `mapstructure:"gateway_addr"`
-	UserShareProviderEndpoint string `mapstructure:"usershareprovidersvc"`
+	GatewayAddr               string       `mapstructure:"gateway_addr"`
+	UserShareProviderEndpoint string       `mapstructure:"usershareprovidersvc"`
+	StatCache                 cache.Config `mapstructure:"statcache"`
 }
 
 type service struct {
 	gateway              gateway.GatewayAPIClient
 	sharesProviderClient collaboration.CollaborationAPIClient
+	statCache            cache.StatCache
 }
 
 func (s *service) Close() error {
+	s.statCache.Close()
 	return nil
 }
 
@@ -86,6 +91,13 @@ func NewDefault(m map[string]interface{}, _ *grpc.Server) (rgrpc.Service, error)
 		return nil, err
 	}
 
+	if c.StatCache.Store == "" {
+		c.StatCache.Store = "noop"
+	}
+	if c.StatCache.TTL == 0 {
+		c.StatCache.TTL = 30 // 30sec is the default desktop client poll interval
+	}
+
 	gateway, err := pool.GetGatewayServiceClient(sharedconf.GetGatewaySVC(c.GatewayAddr))
 	if err != nil {
 		return nil, err
@@ -96,14 +108,24 @@ func NewDefault(m map[string]interface{}, _ *grpc.Server) (rgrpc.Service, error)
 		return nil, errors.Wrap(err, "sharesstorageprovider: error getting UserShareProvider client")
 	}
 
-	return New(gateway, client)
+	return New(
+		WithGatewayAPIClient(gateway),
+		WithCollaborationAPIClient(client),
+		WithStatCache(cache.GetStatCache(c.StatCache.Store, c.StatCache.Nodes, c.StatCache.Database, "stat", time.Duration(c.StatCache.TTL)*time.Second, c.StatCache.Size)),
+	)
 }
 
 // New returns a new instance of the SharesStorageProvider service
-func New(gateway gateway.GatewayAPIClient, c collaboration.CollaborationAPIClient) (rgrpc.Service, error) {
+func New(opts ...Option) (rgrpc.Service, error) {
+	options := Options{}
+	// first use selector options
+	for _, opt := range opts {
+		opt(&options)
+	}
 	s := &service{
-		gateway:              gateway,
-		sharesProviderClient: c,
+		gateway:              options.GatewayAPIClient,
+		sharesProviderClient: options.CollaborationAPIClient,
+		statCache:            options.StatCache,
 	}
 	return s, nil
 }
@@ -356,7 +378,7 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 	var shareInfo map[string]*provider.ResourceInfo
 	var err error
 	if fetchShares {
-		receivedShares, shareInfo, err = s.fetchShares(ctx)
+		receivedShares, shareInfo, err = s.fetchShares(ctx) // we should cache the stat for the share jail per user
 		if err != nil {
 			return nil, errors.Wrap(err, "sharesstorageprovider: error calling ListReceivedSharesRequest")
 		}
@@ -1029,7 +1051,16 @@ func (s *service) fetchShares(ctx context.Context) ([]*collaboration.ReceivedSha
 			// convert backwards compatible share id
 			rs.Share.ResourceId.StorageId, rs.Share.ResourceId.SpaceId = storagespace.SplitStorageID(rs.Share.ResourceId.StorageId)
 		}
-		sRes, err := s.gateway.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{ResourceId: rs.Share.ResourceId}})
+		ref := &provider.Reference{ResourceId: rs.Share.ResourceId}
+		key := s.statCache.GetKey(ctxpkg.ContextMustGetUser(ctx).GetId(), ref, []string{}, []string{})
+		if key != "" {
+			info := &provider.ResourceInfo{}
+			if err := s.statCache.PullFromCache(key, info); err == nil {
+				shareMetaData[rs.Share.Id.OpaqueId] = info
+				continue
+			}
+		}
+		sRes, err := s.gateway.Stat(ctx, &provider.StatRequest{Ref: ref})
 		if err != nil {
 			appctx.GetLogger(ctx).Error().
 				Err(err).
@@ -1044,6 +1075,7 @@ func (s *service) fetchShares(ctx context.Context) ([]*collaboration.ReceivedSha
 				Msg("ListRecievedShares: failed to stat the resource")
 			continue
 		}
+		_ = s.statCache.PushToCache(key, sRes.Info)
 		shareMetaData[rs.Share.Id.OpaqueId] = sRes.Info
 	}
 

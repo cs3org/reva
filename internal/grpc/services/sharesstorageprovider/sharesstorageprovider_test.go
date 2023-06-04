@@ -294,7 +294,10 @@ var _ = Describe("Sharesstorageprovider", func() {
 	})
 
 	JustBeforeEach(func() {
-		p, err := provider.New(gw, sharesProviderClient)
+		p, err := provider.New(
+			provider.WithCollaborationAPIClient(sharesProviderClient),
+			provider.WithGatewayAPIClient(gw),
+		)
 		Expect(err).ToNot(HaveOccurred())
 		s = p.(sprovider.ProviderAPIServer)
 		Expect(s).ToNot(BeNil())
