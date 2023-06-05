@@ -54,23 +54,11 @@ func ocmShareUpdateCommand() *command {
 			return err
 		}
 
-		perm, err := getOCMSharePerm(*rol)
-		if err != nil {
-			return err
-		}
-
 		shareRequest := &ocm.UpdateOCMShareRequest{
 			Ref: &ocm.ShareReference{
 				Spec: &ocm.ShareReference_Id{
 					Id: &ocm.ShareId{
 						OpaqueId: id,
-					},
-				},
-			},
-			Field: &ocm.UpdateOCMShareRequest_UpdateField{
-				Field: &ocm.UpdateOCMShareRequest_UpdateField_Permissions{
-					Permissions: &ocm.SharePermissions{
-						Permissions: perm,
 					},
 				},
 			},
