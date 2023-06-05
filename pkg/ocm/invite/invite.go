@@ -45,6 +45,9 @@ type Repository interface {
 
 	// FindRemoteUsers finds remote users who have accepted invites based on their attributes.
 	FindRemoteUsers(ctx context.Context, initiator *userpb.UserId, query string) ([]*userpb.User, error)
+
+	// DeleteRemoteUser removes from the remote user from the initiator's list.
+	DeleteRemoteUser(ctx context.Context, initiator *userpb.UserId, remoteUser *userpb.UserId) error
 }
 
 // ErrTokenNotFound is the error returned when the token does not exist.

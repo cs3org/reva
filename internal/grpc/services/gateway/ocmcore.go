@@ -42,3 +42,35 @@ func (s *svc) CreateOCMCoreShare(ctx context.Context, req *ocmcore.CreateOCMCore
 
 	return res, nil
 }
+
+func (s *svc) UpdateOCMCoreShare(ctx context.Context, req *ocmcore.UpdateOCMCoreShareRequest) (*ocmcore.UpdateOCMCoreShareResponse, error) {
+	c, err := pool.GetOCMCoreClient(pool.Endpoint(s.c.OCMCoreEndpoint))
+	if err != nil {
+		return &ocmcore.UpdateOCMCoreShareResponse{
+			Status: status.NewInternal(ctx, err, "error getting ocm core client"),
+		}, nil
+	}
+
+	res, err := c.UpdateOCMCoreShare(ctx, req)
+	if err != nil {
+		return nil, errors.Wrap(err, "gateway: error calling UpdateOCMCoreShare")
+	}
+
+	return res, nil
+}
+
+func (s *svc) DeleteOCMCoreShare(ctx context.Context, req *ocmcore.DeleteOCMCoreShareRequest) (*ocmcore.DeleteOCMCoreShareResponse, error) {
+	c, err := pool.GetOCMCoreClient(pool.Endpoint(s.c.OCMCoreEndpoint))
+	if err != nil {
+		return &ocmcore.DeleteOCMCoreShareResponse{
+			Status: status.NewInternal(ctx, err, "error getting ocm core client"),
+		}, nil
+	}
+
+	res, err := c.DeleteOCMCoreShare(ctx, req)
+	if err != nil {
+		return nil, errors.Wrap(err, "gateway: error calling UpdateOCMCoreShare")
+	}
+
+	return res, nil
+}

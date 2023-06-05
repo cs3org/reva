@@ -148,3 +148,11 @@ func (s *service) CreateOCMCoreShare(ctx context.Context, req *ocmcore.CreateOCM
 		Created: share.Ctime,
 	}, nil
 }
+
+func (s *service) UpdateOCMCoreShare(ctx context.Context, req *ocmcore.UpdateOCMCoreShareRequest) (*ocmcore.UpdateOCMCoreShareResponse, error) {
+	return nil, errtypes.NotSupported("not implemented")
+}
+
+func (s *service) DeleteOCMCoreShare(ctx context.Context, req *ocmcore.DeleteOCMCoreShareRequest) (*ocmcore.DeleteOCMCoreShareResponse, error) {
+	return nil, errtypes.NotSupported("not implemented")
+}

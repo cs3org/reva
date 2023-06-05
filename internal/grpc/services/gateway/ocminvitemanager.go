@@ -122,3 +122,19 @@ func (s *svc) FindAcceptedUsers(ctx context.Context, req *invitepb.FindAcceptedU
 
 	return res, nil
 }
+
+func (s *svc) DeleteAcceptedUser(ctx context.Context, req *invitepb.DeleteAcceptedUserRequest) (*invitepb.DeleteAcceptedUserResponse, error) {
+	c, err := pool.GetOCMInviteManagerClient(pool.Endpoint(s.c.OCMInviteManagerEndpoint))
+	if err != nil {
+		return &invitepb.DeleteAcceptedUserResponse{
+			Status: status.NewInternal(ctx, err, "error getting user invite provider client"),
+		}, nil
+	}
+
+	res, err := c.DeleteAcceptedUser(ctx, req)
+	if err != nil {
+		return nil, errors.Wrap(err, "gateway: error calling FindAcceptedUsers")
+	}
+
+	return res, nil
+}

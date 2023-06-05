@@ -34,6 +34,7 @@ import (
 	"github.com/cs3org/reva/pkg/ocm/invite"
 	"github.com/cs3org/reva/pkg/ocm/invite/repository/registry"
 	"github.com/cs3org/reva/pkg/utils"
+	"github.com/cs3org/reva/pkg/utils/list"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )
@@ -238,4 +239,24 @@ func userContains(u *userpb.User, query string) bool {
 	query = strings.ToLower(query)
 	return strings.Contains(strings.ToLower(u.Username), query) || strings.Contains(strings.ToLower(u.DisplayName), query) ||
 		strings.Contains(strings.ToLower(u.Mail), query) || strings.Contains(strings.ToLower(u.Id.OpaqueId), query)
+}
+
+func (m *manager) DeleteRemoteUser(ctx context.Context, initiator *userpb.UserId, remoteUser *userpb.UserId) error {
+	m.Lock()
+	defer m.Unlock()
+
+	acceptedUsers, ok := m.model.AcceptedUsers[initiator.GetOpaqueId()]
+	if !ok {
+		return nil
+	}
+
+	for i, user := range acceptedUsers {
+		if (user.Id.GetOpaqueId() == remoteUser.OpaqueId) && (remoteUser.Idp == "" || user.Id.GetIdp() == remoteUser.Idp) {
+			acceptedUsers = list.Remove(acceptedUsers, i)
+			m.model.AcceptedUsers[initiator.GetOpaqueId()] = acceptedUsers
+			_ = m.model.save()
+			return nil
+		}
+	}
+	return nil
 }

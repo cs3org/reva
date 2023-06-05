@@ -252,3 +252,9 @@ func (m *mgr) FindRemoteUsers(ctx context.Context, initiator *userpb.UserId, att
 
 	return users, nil
 }
+
+func (m *mgr) DeleteRemoteUser(ctx context.Context, initiator *userpb.UserId, remoteUser *userpb.UserId) error {
+	query := "DELETE FROM ocm_remote_users WHERE initiator=? AND opaque_user_id=? AND idp=?"
+	_, err := m.db.ExecContext(ctx, query, conversions.FormatUserID(initiator), conversions.FormatUserID(remoteUser), remoteUser.Idp)
+	return err
+}
