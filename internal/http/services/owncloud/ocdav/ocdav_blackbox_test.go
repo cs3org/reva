@@ -27,6 +27,7 @@ import (
 	"strings"
 
 	cs3gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	cs3user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	cs3rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	cs3storageprovider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -35,6 +36,7 @@ import (
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/net"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/status"
+	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v2/pkg/rhttp/global"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/utils"
@@ -44,6 +46,14 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
+
+type selector struct {
+	client gateway.GatewayAPIClient
+}
+
+func (s selector) Next(opts ...pool.Option) (gateway.GatewayAPIClient, error) {
+	return s.client, nil
+}
 
 // TODO for now we have to test all of ocdav. when this testsuite is complete we can move
 // the handlers to dedicated packages to reduce the amount of complexity to get a test environment up
@@ -144,7 +154,10 @@ var _ = Describe("ocdav", func() {
 				InvalidChars: []string{"\f", "\r", "\n", "\\"},
 			},
 		}
-		handler, err = ocdav.NewWith(cfg, nil, ocdav.NewCS3LS(client), nil, client)
+		sel := selector{
+			client: client,
+		}
+		handler, err = ocdav.NewWith(cfg, nil, ocdav.NewCS3LS(sel), nil, sel)
 		Expect(err).ToNot(HaveOccurred())
 
 		userspace = &cs3storageprovider.StorageSpace{

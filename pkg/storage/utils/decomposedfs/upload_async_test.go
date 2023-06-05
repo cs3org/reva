@@ -14,6 +14,7 @@ import (
 	ruser "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/events"
 	"github.com/cs3org/reva/v2/pkg/events/stream"
+	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v2/pkg/storage"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/lookup"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata"
@@ -30,6 +31,14 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
+
+type permissionsSelector struct {
+	client cs3permissions.PermissionsAPIClient
+}
+
+func (s permissionsSelector) Next(opts ...pool.Option) (cs3permissions.PermissionsAPIClient, error) {
+	return s.client, nil
+}
 
 var _ = Describe("Async file uploads", Ordered, func() {
 	var (
@@ -104,10 +113,13 @@ var _ = Describe("Async file uploads", Ordered, func() {
 				ListFileVersions:   true,
 			}, nil)
 
+		ps := permissionsSelector{
+			client: cs3permissionsclient,
+		}
 		// setup fs
 		pub, con = make(chan interface{}), make(chan interface{})
 		tree := tree.New(lu, bs, o, store.Create())
-		fs, err = New(o, lu, NewPermissions(permissions, cs3permissionsclient), tree, stream.Chan{pub, con})
+		fs, err = New(o, lu, NewPermissions(permissions, ps), tree, stream.Chan{pub, con})
 		Expect(err).ToNot(HaveOccurred())
 
 		resp, err := fs.CreateStorageSpace(ctx, &provider.CreateStorageSpaceRequest{Owner: user, Type: "personal"})
