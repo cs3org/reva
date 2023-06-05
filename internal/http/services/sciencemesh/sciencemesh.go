@@ -115,6 +115,7 @@ func (s *svc) routerInit() error {
 	s.router.Get("/list-invite", tokenHandler.ListInvite)
 	s.router.Post("/accept-invite", tokenHandler.AcceptInvite)
 	s.router.Get("/find-accepted-users", tokenHandler.FindAccepted)
+	s.router.Delete("/delete-accepted-user", tokenHandler.DeleteAccepted)
 	s.router.Get("/list-providers", providersHandler.ListProviders)
 	s.router.Post("/create-share", sharesHandler.CreateShare)
 	s.router.Post("/open-in-app", appsHandler.OpenInApp)
