@@ -209,11 +209,11 @@ func NewDefault(m map[string]interface{}) (share.Manager, error) {
 		}
 	}
 
-	return New(s, gc, c.CacheTTL, es)
+	return New(s, gc, c.CacheTTL, es, c.MaxConcurrency)
 }
 
 // New returns a new manager instance.
-func New(s metadata.Storage, gc gatewayv1beta1.GatewayAPIClient, ttlSeconds int, es events.Stream) (*Manager, error) {
+func New(s metadata.Storage, gc gatewayv1beta1.GatewayAPIClient, ttlSeconds int, es events.Stream, maxconcurrency int) (*Manager, error) {
 	ttl := time.Duration(ttlSeconds) * time.Second
 	return &Manager{
 		Cache:              providercache.New(s, ttl),
@@ -223,6 +223,7 @@ func New(s metadata.Storage, gc gatewayv1beta1.GatewayAPIClient, ttlSeconds int,
 		storage:            s,
 		gateway:            gc,
 		eventStream:        es,
+		MaxConcurrency:     maxconcurrency,
 	}, nil
 }
 
@@ -754,7 +755,7 @@ func (m *Manager) ListReceivedShares(ctx context.Context, filters []*collaborati
 	}
 
 	numWorkers := m.MaxConcurrency
-	if len(ssids) < numWorkers {
+	if numWorkers == 0 || len(ssids) < numWorkers {
 		numWorkers = len(ssids)
 	}
 
