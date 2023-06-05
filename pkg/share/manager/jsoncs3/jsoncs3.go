@@ -448,7 +448,7 @@ func (m *Manager) GetShare(ctx context.Context, ref *collaboration.ShareReferenc
 			log.Error().Err(err).
 				Msg("failed to publish share expired event")
 		}
-		return nil, errors.Errorf("Share is expired: %s\n", s.GetId())
+		return nil, errors.Errorf("share is expired: %s", s.GetId())
 	}
 	// check if we are the creator or the grantee
 	// TODO allow manager to get shares in a space created by other users
