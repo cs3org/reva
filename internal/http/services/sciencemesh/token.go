@@ -244,7 +244,7 @@ func (h *tokenHandler) DeleteAccepted(w http.ResponseWriter, r *http.Request) {
 	res, err := h.gatewayClient.DeleteAcceptedUser(ctx, &invitepb.DeleteAcceptedUserRequest{
 		RemoteUserId: &userpb.UserId{
 			Idp:      req.Idp,
-			OpaqueId: req.UserId,
+			OpaqueId: req.UserID,
 		},
 	})
 	if err != nil {
@@ -260,7 +260,7 @@ func (h *tokenHandler) DeleteAccepted(w http.ResponseWriter, r *http.Request) {
 
 type deleteAcceptedRequest struct {
 	Idp    string `json:"idp"`
-	UserId string `json:"user_id"`
+	UserID string `json:"user_id"`
 }
 
 func getDeleteAcceptedRequest(r *http.Request) (*deleteAcceptedRequest, error) {
@@ -271,7 +271,7 @@ func getDeleteAcceptedRequest(r *http.Request) (*deleteAcceptedRequest, error) {
 			return nil, err
 		}
 	} else {
-		req.Idp, req.UserId = r.FormValue("idp"), r.FormValue("user_id")
+		req.Idp, req.UserID = r.FormValue("idp"), r.FormValue("user_id")
 	}
 	return &req, nil
 }
