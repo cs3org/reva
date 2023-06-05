@@ -730,8 +730,8 @@ func (m *Manager) ListReceivedShares(ctx context.Context, filters []*collaborati
 		return nil, err
 	}
 
-	m.Lock()
-	defer m.Unlock()
+	m.RLock()
+	defer m.RUnlock()
 
 	user := ctxpkg.ContextMustGetUser(ctx)
 
