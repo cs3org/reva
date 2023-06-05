@@ -914,10 +914,12 @@ func (m *Manager) getReceived(ctx context.Context, ref *collaboration.ShareRefer
 	defer m.RUnlock()
 	s, err := m.get(ctx, ref)
 	if err != nil {
+		m.RUnlock()
 		return nil, err
 	}
 	user := ctxpkg.ContextMustGetUser(ctx)
 	if !share.IsGrantedToUser(s, user) {
+		m.RUnlock()
 		return nil, errtypes.NotFound(ref.String())
 	}
 	if share.IsExpired(s) {
