@@ -144,3 +144,7 @@ prefix = "ocs"
 [http.services.appprovider]
 
 [http.middlewares.cors]
+
+[http.middlewares.auth]
+credential_chain = ["publicshares", "ocmshares", "basic", "bearer"]
+

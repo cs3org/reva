@@ -131,3 +131,7 @@ prefix = "ocs"
 [http.services.ocdav]
 
 [http.middlewares.cors]
+
+[http.middlewares.auth]
+credential_chain = ["publicshares", "ocmshares", "basic", "bearer"]
+
