@@ -910,8 +910,8 @@ func (m *Manager) getReceived(ctx context.Context, ref *collaboration.ShareRefer
 	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "getReceived")
 	defer span.End()
 
-	m.Lock()
-	defer m.Unlock()
+	m.RLock()
+	defer m.RUnlock()
 	s, err := m.get(ctx, ref)
 	if err != nil {
 		return nil, err
@@ -921,10 +921,14 @@ func (m *Manager) getReceived(ctx context.Context, ref *collaboration.ShareRefer
 		return nil, errtypes.NotFound(ref.String())
 	}
 	if share.IsExpired(s) {
+		m.RUnlock()
+		m.Lock()
 		if err := m.removeShare(ctx, s); err != nil {
 			log.Error().Err(err).
 				Msg("failed to unshare expired share")
 		}
+		m.Unlock()
+		m.RLock()
 		if err := events.Publish(m.eventStream, events.ShareExpired{
 			ShareOwner:     s.GetOwner(),
 			ItemID:         s.GetResourceId(),
@@ -936,7 +940,10 @@ func (m *Manager) getReceived(ctx context.Context, ref *collaboration.ShareRefer
 				Msg("failed to publish share expired event")
 		}
 	}
-	return m.convert(ctx, user.Id.GetOpaqueId(), s), nil
+
+	val := m.convert(ctx, user.Id.GetOpaqueId(), s)
+	m.RUnlock()
+	return val, nil
 }
 
 // UpdateReceivedShare updates the received share with share state.
