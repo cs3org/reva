@@ -23,6 +23,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"fmt"
 	"io"
 	"os"
 	"strings"
@@ -429,17 +430,14 @@ func (m *Manager) GetShare(ctx context.Context, ref *collaboration.ShareReferenc
 		return nil, err
 	}
 
-	m.Lock()
-	defer m.Unlock()
+	m.RLock()
+	defer m.RUnlock()
 	s, err := m.get(ctx, ref)
 	if err != nil {
 		return nil, err
 	}
 	if share.IsExpired(s) {
-		if err := m.removeShare(ctx, s); err != nil {
-			log.Error().Err(err).
-				Msg("failed to unshare expired share")
-		}
+		// TODO: Check if this floods the user
 		if err := events.Publish(m.eventStream, events.ShareExpired{
 			ShareID:        s.GetId(),
 			ShareOwner:     s.GetOwner(),
@@ -451,6 +449,7 @@ func (m *Manager) GetShare(ctx context.Context, ref *collaboration.ShareReferenc
 			log.Error().Err(err).
 				Msg("failed to publish share expired event")
 		}
+		return nil, errors.New(fmt.Sprintf("Share is expired: %s\n", s.GetId()))
 	}
 	// check if we are the creator or the grantee
 	// TODO allow manager to get shares in a space created by other users
@@ -590,8 +589,8 @@ func (m *Manager) ListShares(ctx context.Context, filters []*collaboration.Filte
 		return nil, err
 	}
 
-	m.Lock()
-	defer m.Unlock()
+	m.RLock()
+	defer m.RUnlock()
 
 	user := ctxpkg.ContextMustGetUser(ctx)
 
@@ -629,10 +628,7 @@ func (m *Manager) listSharesByIDs(ctx context.Context, user *userv1beta1.User, f
 
 			for _, s := range shares.Shares {
 				if share.IsExpired(s) {
-					if err := m.removeShare(ctx, s); err != nil {
-						log.Error().Err(err).
-							Msg("failed to unshare expired share")
-					}
+					// TODO: Check if this floods the user
 					if err := events.Publish(m.eventStream, events.ShareExpired{
 						ShareOwner:     s.GetOwner(),
 						ItemID:         s.GetResourceId(),
@@ -694,10 +690,7 @@ func (m *Manager) listCreatedShares(ctx context.Context, user *userv1beta1.User,
 				continue
 			}
 			if share.IsExpired(s) {
-				if err := m.removeShare(ctx, s); err != nil {
-					log.Error().Err(err).
-						Msg("failed to unshare expired share")
-				}
+				// TODO: Check if this floods the user
 				if err := events.Publish(m.eventStream, events.ShareExpired{
 					ShareOwner:     s.GetOwner(),
 					ItemID:         s.GetResourceId(),
@@ -719,6 +712,27 @@ func (m *Manager) listCreatedShares(ctx context.Context, user *userv1beta1.User,
 	}
 
 	return ss, nil
+}
+
+// call in locked context (write lock)
+func (m *Manager) invalidateCache(ctx context.Context, expiredShares []*collaboration.Share) {
+
+	for _, s := range expiredShares {
+		if err := m.removeShare(ctx, s); err != nil {
+			log.Error().Err(err).
+				Msg("failed to unshare expired share")
+		}
+		if err := events.Publish(m.eventStream, events.ShareExpired{
+			ShareOwner:     s.GetOwner(),
+			ItemID:         s.GetResourceId(),
+			ExpiredAt:      time.Unix(int64(s.GetExpiration().GetSeconds()), int64(s.GetExpiration().GetNanos())),
+			GranteeUserID:  s.GetGrantee().GetUserId(),
+			GranteeGroupID: s.GetGrantee().GetGroupId(),
+		}); err != nil {
+			log.Error().Err(err).
+				Msg("failed to publish share expired event")
+		}
+	}
 }
 
 // ListReceivedShares returns the list of shares the user has access to.
@@ -821,10 +835,6 @@ func (m *Manager) ListReceivedShares(ctx context.Context, filters []*collaborati
 						continue
 					}
 					if share.IsExpired(s) {
-						if err := m.removeShare(ctx, s); err != nil {
-							log.Error().Err(err).
-								Msg("failed to unshare expired share")
-						}
 						if err := events.Publish(m.eventStream, events.ShareExpired{
 							ShareOwner:     s.GetOwner(),
 							ItemID:         s.GetResourceId(),
@@ -914,23 +924,16 @@ func (m *Manager) getReceived(ctx context.Context, ref *collaboration.ShareRefer
 	defer m.RUnlock()
 	s, err := m.get(ctx, ref)
 	if err != nil {
-		m.RUnlock()
 		return nil, err
 	}
 	user := ctxpkg.ContextMustGetUser(ctx)
 	if !share.IsGrantedToUser(s, user) {
-		m.RUnlock()
 		return nil, errtypes.NotFound(ref.String())
 	}
+
 	if share.IsExpired(s) {
-		m.RUnlock()
-		m.Lock()
-		if err := m.removeShare(ctx, s); err != nil {
-			log.Error().Err(err).
-				Msg("failed to unshare expired share")
-		}
-		m.Unlock()
-		m.RLock()
+		// send an event to notify
+		// TODO: Check if this is a flooding problem if we never write new shares
 		if err := events.Publish(m.eventStream, events.ShareExpired{
 			ShareOwner:     s.GetOwner(),
 			ItemID:         s.GetResourceId(),
@@ -941,10 +944,10 @@ func (m *Manager) getReceived(ctx context.Context, ref *collaboration.ShareRefer
 			log.Error().Err(err).
 				Msg("failed to publish share expired event")
 		}
+		return nil, errors.New(fmt.Sprintf("Share is expired: %s\n", s.GetId()))
 	}
 
 	val := m.convert(ctx, user.Id.GetOpaqueId(), s)
-	m.RUnlock()
 	return val, nil
 }
 
