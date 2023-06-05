@@ -510,6 +510,10 @@ func (m *Manager) UpdateShare(ctx context.Context, ref *collaboration.ShareRefer
 	m.Lock()
 	defer m.Unlock()
 
+	user := ctxpkg.ContextMustGetUser(ctx)
+
+	m.invalidateCache(ctx, user)
+
 	var toUpdate *collaboration.Share
 
 	if ref != nil {
@@ -539,7 +543,6 @@ func (m *Manager) UpdateShare(ctx context.Context, ref *collaboration.ShareRefer
 		}
 	}
 
-	user := ctxpkg.ContextMustGetUser(ctx)
 	if !share.IsCreatedByUser(toUpdate, user) {
 		req := &provider.StatRequest{
 			Ref: &provider.Reference{ResourceId: toUpdate.ResourceId},
@@ -715,22 +718,47 @@ func (m *Manager) listCreatedShares(ctx context.Context, user *userv1beta1.User,
 }
 
 // call in locked context (write lock)
-func (m *Manager) invalidateCache(ctx context.Context, expiredShares []*collaboration.Share) {
+func (m *Manager) invalidateCache(ctx context.Context, user *userv1beta1.User) {
+	ssids := map[string]*receivedsharecache.Space{}
 
-	for _, s := range expiredShares {
-		if err := m.removeShare(ctx, s); err != nil {
-			log.Error().Err(err).
-				Msg("failed to unshare expired share")
+	for _, group := range user.Groups {
+		if err := m.GroupReceivedCache.Sync(ctx, group); err != nil {
+			continue // ignore error, cache will be updated on next read
 		}
-		if err := events.Publish(m.eventStream, events.ShareExpired{
-			ShareOwner:     s.GetOwner(),
-			ItemID:         s.GetResourceId(),
-			ExpiredAt:      time.Unix(int64(s.GetExpiration().GetSeconds()), int64(s.GetExpiration().GetNanos())),
-			GranteeUserID:  s.GetGrantee().GetUserId(),
-			GranteeGroupID: s.GetGrantee().GetGroupId(),
-		}); err != nil {
-			log.Error().Err(err).
-				Msg("failed to publish share expired event")
+
+		for ssid, spaceShareIDs := range m.GroupReceivedCache.List(group) {
+			// add a pending entry, the state will be updated
+			// when reading the received shares below if they have already been accepted or denied
+			var rs *receivedsharecache.Space
+			var ok bool
+			if rs, ok = ssids[ssid]; !ok {
+				rs = &receivedsharecache.Space{
+					Mtime:  spaceShareIDs.Mtime,
+					States: make(map[string]*receivedsharecache.State, len(spaceShareIDs.IDs)),
+				}
+				ssids[ssid] = rs
+			}
+
+			for shareid := range spaceShareIDs.IDs {
+				rs.States[shareid] = &receivedsharecache.State{
+					State: collaboration.ShareState_SHARE_STATE_PENDING,
+				}
+			}
+		}
+	}
+
+	for _, s := range ssids {
+		for sid := range s.States {
+			sh, err := m.getByID(ctx, &collaboration.ShareId{
+				OpaqueId: sid,
+			})
+
+			if err != nil && share.IsExpired(sh) {
+				if err := m.removeShare(ctx, sh); err != nil {
+					log.Error().Err(err).
+						Msg("failed to unshare expired share")
+				}
+			}
 		}
 	}
 }
