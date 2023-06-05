@@ -654,6 +654,8 @@ func (h *Handler) RemoveShare(w http.ResponseWriter, r *http.Request) {
 		h.removePublicShare(w, r, shareID)
 	case h.isUserShare(r, shareID):
 		h.removeUserShare(w, r, shareID)
+	case h.isFederatedShare(r, shareID):
+		h.removeFederatedShare(w, r, shareID)
 	default:
 		// The request is a remove space member request.
 		h.removeSpaceMember(w, r, shareID)
