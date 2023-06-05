@@ -75,19 +75,16 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 
 func (s *svc) routerInit() error {
 	sharesHandler := new(sharesHandler)
-	notificationsHandler := new(notificationsHandler)
 	invitesHandler := new(invitesHandler)
 
 	if err := sharesHandler.init(s.Conf); err != nil {
 		return err
 	}
-	notificationsHandler.init(s.Conf)
 	if err := invitesHandler.init(s.Conf); err != nil {
 		return err
 	}
 
 	s.router.Post("/shares", sharesHandler.CreateShare)
-	s.router.Post("/notifications", notificationsHandler.SendNotification)
 	s.router.Post("/invite-accepted", invitesHandler.AcceptInvite)
 	return nil
 }

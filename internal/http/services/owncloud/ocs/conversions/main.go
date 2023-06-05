@@ -149,6 +149,10 @@ type ShareData struct {
 	Quicklink bool `json:"quicklink,omitempty" xml:"quicklink,omitempty"`
 	// Description of the public share
 	Description string `json:"description" xml:"description"`
+	// Whether to notify owner of file uploads to the public share
+	NotifyUploads bool `json:"notify_uploads" xml:"notify_uploads"`
+	// Additional recipients for the file upload to public share notification
+	NotifyUploadsExtraRecipients string `json:"notify_uploads_extra_recipients" xml:"notify_uploads_extra_recipients"`
 }
 
 // ShareeData holds share recipient search results.
@@ -214,15 +218,17 @@ func PublicShare2ShareData(share *link.PublicShare, r *http.Request, publicURL s
 	sd := &ShareData{
 		// share.permissions are mapped below
 		// Displaynames are added later
-		ShareType:    ShareTypePublicLink,
-		Token:        share.Token,
-		Name:         share.DisplayName,
-		MailSend:     0,
-		URL:          publicURL + path.Join("/", "s/"+share.Token),
-		UIDOwner:     LocalUserIDToString(share.Creator),
-		UIDFileOwner: LocalUserIDToString(share.Owner),
-		Quicklink:    share.Quicklink,
-		Description:  share.Description,
+		ShareType:                    ShareTypePublicLink,
+		Token:                        share.Token,
+		Name:                         share.DisplayName,
+		MailSend:                     0,
+		URL:                          publicURL + path.Join("/", "s/"+share.Token),
+		UIDOwner:                     LocalUserIDToString(share.Creator),
+		UIDFileOwner:                 LocalUserIDToString(share.Owner),
+		Quicklink:                    share.Quicklink,
+		Description:                  share.Description,
+		NotifyUploads:                share.NotifyUploads,
+		NotifyUploadsExtraRecipients: share.NotifyUploadsExtraRecipients,
 	}
 	if share.Id != nil {
 		sd.ID = share.Id.OpaqueId

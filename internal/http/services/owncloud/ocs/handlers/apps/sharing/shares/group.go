@@ -20,6 +20,7 @@ package shares
 
 import (
 	"net/http"
+	"strconv"
 
 	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
@@ -28,6 +29,7 @@ import (
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 )
 
@@ -80,5 +82,13 @@ func (h *Handler) createGroupShare(w http.ResponseWriter, r *http.Request, statI
 		},
 	}
 
-	h.createCs3Share(ctx, w, r, c, createShareReq, statInfo)
+	if shareID, ok := h.createCs3Share(ctx, w, r, c, createShareReq, statInfo); ok {
+		notify, _ := strconv.ParseBool(r.FormValue("notify"))
+		if notify {
+			granter, ok := ctxpkg.ContextGetUser(ctx)
+			if ok {
+				h.SendShareNotification(shareID.OpaqueId, granter, groupRes.Group, statInfo)
+			}
+		}
+	}
 }

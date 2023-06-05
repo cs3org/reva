@@ -16,11 +16,16 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package loader
+package sql_test
 
 import (
-	// Load core serverless services.
-	_ "github.com/cs3org/reva/internal/serverless/services/helloworld"
-	_ "github.com/cs3org/reva/internal/serverless/services/notifications"
-	// Add your own service here.
+	"testing"
+
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
 )
+
+func TestSql(t *testing.T) {
+	RegisterFailHandler(Fail)
+	RunSpecs(t, "Sql Suite")
+}

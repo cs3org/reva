@@ -145,7 +145,7 @@ func (s *service) CreatePublicShare(ctx context.Context, req *link.CreatePublicS
 		log.Error().Msg("error getting user from context")
 	}
 
-	share, err := s.sm.CreatePublicShare(ctx, u, req.ResourceInfo, req.Grant, req.Description, req.Internal)
+	share, err := s.sm.CreatePublicShare(ctx, u, req.ResourceInfo, req.Grant, req.Description, req.Internal, req.NotifyUploads, req.NotifyUploadsExtraRecipients)
 	switch err.(type) {
 	case nil:
 		return &link.CreatePublicShareResponse{

@@ -45,6 +45,7 @@ type Config struct {
 	AllowedLanguages         []string                          `mapstructure:"allowed_languages"`
 	OCMMountPoint            string                            `mapstructure:"ocm_mount_point"`
 	ListOCMShares            bool                              `mapstructure:"list_ocm_shares"`
+	Notifications            map[string]interface{}            `mapstructure:"notifications"`
 }
 
 // Init sets sane defaults.

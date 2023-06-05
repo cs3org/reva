@@ -36,23 +36,25 @@ import (
 
 // DBShare stores information about user and public shares.
 type DBShare struct {
-	ID           string
-	UIDOwner     string
-	UIDInitiator string
-	Prefix       string
-	ItemSource   string
-	ItemType     string
-	ShareWith    string
-	Token        string
-	Expiration   string
-	Permissions  int
-	ShareType    int
-	ShareName    string
-	STime        int
-	FileTarget   string
-	State        int
-	Quicklink    bool
-	Description  string
+	ID                           string
+	UIDOwner                     string
+	UIDInitiator                 string
+	Prefix                       string
+	ItemSource                   string
+	ItemType                     string
+	ShareWith                    string
+	Token                        string
+	Expiration                   string
+	Permissions                  int
+	ShareType                    int
+	ShareName                    string
+	STime                        int
+	FileTarget                   string
+	State                        int
+	Quicklink                    bool
+	Description                  string
+	NotifyUploads                bool
+	NotifyUploadsExtraRecipients string
 }
 
 // FormatGrantee formats a CS3API grantee to a string.
@@ -292,16 +294,18 @@ func ConvertToCS3PublicShare(ctx context.Context, gateway gatewayv1beta1.Gateway
 			StorageId: s.Prefix,
 			OpaqueId:  s.ItemSource,
 		},
-		Permissions:       &link.PublicSharePermissions{Permissions: IntTosharePerm(s.Permissions, s.ItemType)},
-		Owner:             owner,
-		Creator:           creator,
-		Token:             s.Token,
-		DisplayName:       s.ShareName,
-		PasswordProtected: pwd,
-		Expiration:        expires,
-		Ctime:             ts,
-		Mtime:             ts,
-		Quicklink:         s.Quicklink,
-		Description:       s.Description,
+		Permissions:                  &link.PublicSharePermissions{Permissions: IntTosharePerm(s.Permissions, s.ItemType)},
+		Owner:                        owner,
+		Creator:                      creator,
+		Token:                        s.Token,
+		DisplayName:                  s.ShareName,
+		PasswordProtected:            pwd,
+		Expiration:                   expires,
+		Ctime:                        ts,
+		Mtime:                        ts,
+		Quicklink:                    s.Quicklink,
+		Description:                  s.Description,
+		NotifyUploads:                s.NotifyUploads,
+		NotifyUploadsExtraRecipients: s.NotifyUploadsExtraRecipients,
 	}, nil
 }

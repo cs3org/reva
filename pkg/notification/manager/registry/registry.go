@@ -16,11 +16,21 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package loader
+package registry
 
-import (
-	// Load core serverless services.
-	_ "github.com/cs3org/reva/internal/serverless/services/helloworld"
-	_ "github.com/cs3org/reva/internal/serverless/services/notifications"
-	// Add your own service here.
-)
+import "github.com/cs3org/reva/pkg/notification"
+
+// import "github.com/cs3org/reva/pkg/share"
+
+// NewFunc is the function that notification managers
+// should register at init time.
+type NewFunc func(map[string]interface{}) (notification.Manager, error)
+
+// NewFuncs is a map containing all the registered notification managers.
+var NewFuncs = map[string]NewFunc{}
+
+// Register registers a new notification manager new function.
+// Not safe for concurrent use. Safe for use from package init.
+func Register(name string, f NewFunc) {
+	NewFuncs[name] = f
+}

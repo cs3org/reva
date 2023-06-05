@@ -37,6 +37,8 @@ import (
 	_ "github.com/cs3org/reva/pkg/datatx/manager/loader"
 	_ "github.com/cs3org/reva/pkg/group/manager/loader"
 	_ "github.com/cs3org/reva/pkg/metrics/driver/loader"
+	_ "github.com/cs3org/reva/pkg/notification/handler/loader"
+	_ "github.com/cs3org/reva/pkg/notification/manager/loader"
 	_ "github.com/cs3org/reva/pkg/ocm/invite/repository/loader"
 	_ "github.com/cs3org/reva/pkg/ocm/provider/authorizer/loader"
 	_ "github.com/cs3org/reva/pkg/ocm/share/repository/loader"

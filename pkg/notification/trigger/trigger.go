@@ -16,19 +16,26 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package ocmd
+package trigger
 
 import (
-	"net/http"
+	"github.com/cs3org/reva/pkg/notification"
 )
 
-type notificationsHandler struct {
+// Trigger represents a notification Trigger.
+type Trigger struct {
+	Notification *notification.Notification
+	Ref          string
+	Sender       string
+	TemplateData map[string]interface{}
 }
 
-func (h *notificationsHandler) init(c *config) {
-}
+// Send is the method run when a notification is triggered.
+func (t *Trigger) Send() error {
+	err := t.Notification.Send(t.Sender, t.TemplateData)
+	if err != nil {
+		return err
+	}
 
-// SendNotification is used to let the provider know that a user has removed a share.
-func (h *notificationsHandler) SendNotification(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusNotImplemented)
+	return nil
 }

@@ -16,11 +16,9 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package loader
+package handler
 
-import (
-	// Load core serverless services.
-	_ "github.com/cs3org/reva/internal/serverless/services/helloworld"
-	_ "github.com/cs3org/reva/internal/serverless/services/notifications"
-	// Add your own service here.
-)
+// Handler is the interface notification handlers have to implement.
+type Handler interface {
+	Send(sender, recipient, subject, body string) error
+}
