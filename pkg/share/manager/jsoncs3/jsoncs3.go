@@ -23,7 +23,6 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
-	"fmt"
 	"io"
 	"os"
 	"strings"
@@ -449,7 +448,7 @@ func (m *Manager) GetShare(ctx context.Context, ref *collaboration.ShareReferenc
 			log.Error().Err(err).
 				Msg("failed to publish share expired event")
 		}
-		return nil, errors.New(fmt.Sprintf("Share is expired: %s\n", s.GetId()))
+		return nil, errors.Errorf("Share is expired: %s\n", s.GetId())
 	}
 	// check if we are the creator or the grantee
 	// TODO allow manager to get shares in a space created by other users
@@ -972,7 +971,7 @@ func (m *Manager) getReceived(ctx context.Context, ref *collaboration.ShareRefer
 			log.Error().Err(err).
 				Msg("failed to publish share expired event")
 		}
-		return nil, errors.New(fmt.Sprintf("Share is expired: %s\n", s.GetId()))
+		return nil, errors.Errorf("Share is expired: %s\n", s.GetId())
 	}
 
 	val := m.convert(ctx, user.Id.GetOpaqueId(), s)
