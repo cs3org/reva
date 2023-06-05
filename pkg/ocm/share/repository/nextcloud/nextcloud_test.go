@@ -326,30 +326,7 @@ var _ = Describe("Nextcloud", func() {
 						OpaqueId: "some-share-id",
 					},
 				},
-			},
-				&ocm.SharePermissions{
-					Permissions: &provider.ResourcePermissions{
-						AddGrant:             true,
-						CreateContainer:      true,
-						Delete:               true,
-						GetPath:              true,
-						GetQuota:             true,
-						InitiateFileDownload: true,
-						InitiateFileUpload:   true,
-						ListGrants:           true,
-						ListContainer:        true,
-						ListFileVersions:     true,
-						ListRecycle:          true,
-						Move:                 true,
-						RemoveGrant:          true,
-						PurgeRecycle:         true,
-						RestoreFileVersion:   true,
-						RestoreRecycleItem:   true,
-						Stat:                 true,
-						UpdateGrant:          true,
-						DenyGrant:            true,
-					},
-				})
+			})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(*share).To(Equal(ocm.Share{
 				Id: &ocm.ShareId{},

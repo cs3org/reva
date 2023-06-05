@@ -383,7 +383,7 @@ func receivedShareEqual(ref *ocm.ShareReference, s *ocm.ReceivedShare) bool {
 	return false
 }
 
-func (m *mgr) UpdateShare(ctx context.Context, user *userpb.User, ref *ocm.ShareReference, p *ocm.SharePermissions) (*ocm.Share, error) {
+func (m *mgr) UpdateShare(ctx context.Context, user *userpb.User, ref *ocm.ShareReference, f ...*ocm.UpdateOCMShareRequest_UpdateField) (*ocm.Share, error) {
 	return nil, errtypes.NotSupported("not yet implemented")
 }
 

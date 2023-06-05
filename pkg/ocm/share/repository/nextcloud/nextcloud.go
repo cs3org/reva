@@ -202,14 +202,13 @@ func (sm *Manager) DeleteShare(ctx context.Context, user *userpb.User, ref *ocm.
 }
 
 // UpdateShare updates the mode of the given share.
-func (sm *Manager) UpdateShare(ctx context.Context, user *userpb.User, ref *ocm.ShareReference, p *ocm.SharePermissions) (*ocm.Share, error) {
+func (sm *Manager) UpdateShare(ctx context.Context, user *userpb.User, ref *ocm.ShareReference, f ...*ocm.UpdateOCMShareRequest_UpdateField) (*ocm.Share, error) {
 	type paramsObj struct {
 		Ref *ocm.ShareReference   `json:"ref"`
 		P   *ocm.SharePermissions `json:"p"`
 	}
 	bodyObj := &paramsObj{
 		Ref: ref,
-		P:   p,
 	}
 	data, err := json.Marshal(bodyObj)
 	if err != nil {

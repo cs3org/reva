@@ -24,9 +24,11 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
+	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/pkg/cbox/utils"
 	"github.com/cs3org/reva/pkg/errtypes"
@@ -327,7 +329,7 @@ func (m *mgr) deleteByKey(ctx context.Context, user *userpb.User, key *ocm.Share
 }
 
 // UpdateShare updates the mode of the given share.
-func (m *mgr) UpdateShare(ctx context.Context, user *userpb.User, ref *ocm.ShareReference, p *ocm.SharePermissions) (*ocm.Share, error) {
+func (m *mgr) UpdateShare(ctx context.Context, user *userpb.User, ref *ocm.ShareReference, f ...*ocm.UpdateOCMShareRequest_UpdateField) (*ocm.Share, error) {
 	return nil, errtypes.NotSupported("not yet implemented")
 }
 
@@ -681,5 +683,48 @@ func (m *mgr) getProtocols(ctx context.Context, id int) ([]*ocm.Protocol, error)
 
 // UpdateReceivedShare updates the received share with share state.
 func (m *mgr) UpdateReceivedShare(ctx context.Context, user *userpb.User, share *ocm.ReceivedShare, fieldMask *field_mask.FieldMask) (*ocm.ReceivedShare, error) {
-	return nil, errtypes.NotSupported("not yet implemented")
+	query := "UPDATE ocm_received_shares SET "
+	params := []any{}
+
+	fquery, fparams, updatedShare, err := translateUpdateFieldMask(share, fieldMask)
+	if err != nil {
+		return nil, err
+	}
+
+	query = fmt.Sprintf("%s %s WHERE id=?", query, fquery)
+	params = append(params, fparams...)
+	params = append(params, share.Id.OpaqueId)
+
+	_, err = m.db.ExecContext(ctx, query, params...)
+	return updatedShare, err
+}
+
+func translateUpdateFieldMask(share *ocm.ReceivedShare, fieldMask *field_mask.FieldMask) (string, []any, *ocm.ReceivedShare, error) {
+	var (
+		query  strings.Builder
+		params []any
+	)
+
+	newShare := *share
+
+	for _, mask := range fieldMask.Paths {
+		switch mask {
+		case "state":
+			query.WriteString("state=?")
+			params = append(params, share.State)
+			newShare.State = share.State
+		default:
+			return "", nil, nil, errtypes.NotSupported("updating " + mask + " is not supported")
+		}
+		query.WriteString(",")
+	}
+
+	now := time.Now().Unix()
+	query.WriteString("mtime=?")
+	params = append(params, now)
+	newShare.Mtime = &typesv1beta1.Timestamp{
+		Seconds: uint64(now),
+	}
+
+	return query.String(), params, &newShare, nil
 }
