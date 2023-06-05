@@ -971,7 +971,7 @@ func (m *Manager) getReceived(ctx context.Context, ref *collaboration.ShareRefer
 			log.Error().Err(err).
 				Msg("failed to publish share expired event")
 		}
-		return nil, errors.Errorf("Share is expired: %s\n", s.GetId())
+		return nil, errors.Errorf("share is expired: %s", s.GetId())
 	}
 
 	val := m.convert(ctx, user.Id.GetOpaqueId(), s)
