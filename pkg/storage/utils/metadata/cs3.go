@@ -37,6 +37,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/status"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
+	rtrace "github.com/cs3org/reva/v2/pkg/trace"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"google.golang.org/grpc/metadata"
 )
@@ -454,6 +455,13 @@ func (cs3 *CS3) providerClient() (provider.ProviderAPIClient, error) {
 }
 
 func (cs3 *CS3) getAuthContext(ctx context.Context) (context.Context, error) {
+	// Authenticate panics when being fed with certain context keys
+	// This should be fixed in authenticate handler, meanwhile we
+	// copy trace context keys to new context
+	tp := rtrace.ContextGetTracerProvider(ctx)
+	ctx = context.Background()
+	rtrace.ContextSetTracerProvider(ctx, tp)
+
 	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "getAuthContext")
 	defer span.End()
 
