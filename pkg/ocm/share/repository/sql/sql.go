@@ -50,6 +50,19 @@ func New(c map[string]interface{}) (share.Repository, error) {
 	if err != nil {
 		return nil, err
 	}
+	return NewFromConfig(conf)
+}
+
+type mgr struct {
+	c   *config
+	db  *sql.DB
+	now func() time.Time
+}
+
+func NewFromConfig(conf *config) (share.Repository, error) {
+	if conf.now == nil {
+		conf.now = time.Now
+	}
 
 	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s)/%s", conf.DBUsername, conf.DBPassword, conf.DBAddress, conf.DBName))
 	if err != nil {
@@ -57,15 +70,11 @@ func New(c map[string]interface{}) (share.Repository, error) {
 	}
 
 	m := &mgr{
-		c:  conf,
-		db: db,
+		c:   conf,
+		db:  db,
+		now: conf.now,
 	}
 	return m, nil
-}
-
-type mgr struct {
-	c  *config
-	db *sql.DB
 }
 
 type config struct {
@@ -73,6 +82,8 @@ type config struct {
 	DBPassword string `mapstructure:"db_password"`
 	DBAddress  string `mapstructure:"db_address"`
 	DBName     string `mapstructure:"db_name"`
+
+	now func() time.Time // set only from tests
 }
 
 func parseConfig(conf map[string]interface{}) (*config, error) {
@@ -377,7 +388,7 @@ func (m *mgr) queriesUpdatesOnShare(ctx context.Context, id *ocm.ShareId, f ...*
 				if err != nil {
 					return "", nil, nil, nil, err
 				}
-				q := "UPDATE ocm_access_method_webapp SET view_mode WHERE ocm_access_method_id=?"
+				q := "UPDATE ocm_access_method_webapp SET view_mode=? WHERE ocm_access_method_id=?"
 				qe = append(qe, q)
 				eparams = append(eparams, []any{t.WebappOptions.ViewMode, am})
 			}
@@ -389,7 +400,7 @@ func (m *mgr) queriesUpdatesOnShare(ctx context.Context, id *ocm.ShareId, f ...*
 func (m *mgr) updateShareByID(ctx context.Context, user *userpb.User, id *ocm.ShareId, f ...*ocm.UpdateOCMShareRequest_UpdateField) (*ocm.Share, error) {
 	var query strings.Builder
 
-	now := time.Now().Unix()
+	now := m.now().Unix()
 	query.WriteString("UPDATE ocm_shares SET ")
 	params := []any{}
 
@@ -432,7 +443,7 @@ func (m *mgr) updateShareByKey(ctx context.Context, user *userpb.User, key *ocm.
 	if err != nil {
 		return nil, err
 	}
-	return m.updateShareByID(ctx, user, share.Id)
+	return m.updateShareByID(ctx, user, share.Id, f...)
 }
 
 func translateFilters(filters []*ocm.ListOCMSharesRequest_Filter) (string, []any, error) {
@@ -788,7 +799,7 @@ func (m *mgr) UpdateReceivedShare(ctx context.Context, user *userpb.User, share 
 	query := "UPDATE ocm_received_shares SET "
 	params := []any{}
 
-	fquery, fparams, updatedShare, err := translateUpdateFieldMask(share, fieldMask)
+	fquery, fparams, updatedShare, err := m.translateUpdateFieldMask(share, fieldMask)
 	if err != nil {
 		return nil, err
 	}
@@ -801,7 +812,7 @@ func (m *mgr) UpdateReceivedShare(ctx context.Context, user *userpb.User, share 
 	return updatedShare, err
 }
 
-func translateUpdateFieldMask(share *ocm.ReceivedShare, fieldMask *field_mask.FieldMask) (string, []any, *ocm.ReceivedShare, error) {
+func (m *mgr) translateUpdateFieldMask(share *ocm.ReceivedShare, fieldMask *field_mask.FieldMask) (string, []any, *ocm.ReceivedShare, error) {
 	var (
 		query  strings.Builder
 		params []any
@@ -821,7 +832,7 @@ func translateUpdateFieldMask(share *ocm.ReceivedShare, fieldMask *field_mask.Fi
 		query.WriteString(",")
 	}
 
-	now := time.Now().Unix()
+	now := m.now().Unix()
 	query.WriteString("mtime=?")
 	params = append(params, now)
 	newShare.Mtime = &typesv1beta1.Timestamp{
