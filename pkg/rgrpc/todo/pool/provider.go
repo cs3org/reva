@@ -18,43 +18,8 @@
 
 package pool
 
-import (
-	"sync"
-)
-
 // TODO(labkode): is concurrent access to the maps safe?
 // var storageProviders = map[string]storageprovider.ProviderAPIClient{}
 var (
-	storageProviders       = newProvider()
-	authProviders          = newProvider()
-	appAuthProviders       = newProvider()
-	authRegistries         = newProvider()
-	userShareProviders     = newProvider()
-	ocmShareProviders      = newProvider()
-	ocmInviteManagers      = newProvider()
-	ocmProviderAuthorizers = newProvider()
-	ocmCores               = newProvider()
-	publicShareProviders   = newProvider()
-	preferencesProviders   = newProvider()
-	permissionsProviders   = newProvider()
-	appRegistries          = newProvider()
-	appProviders           = newProvider()
-	storageRegistries      = newProvider()
-	gatewayProviders       = newProvider()
-	userProviders          = newProvider()
-	groupProviders         = newProvider()
-	dataTxs                = newProvider()
-	maxCallRecvMsgSize     = 10240000
+	maxCallRecvMsgSize = 10240000
 )
-
-type provider struct {
-	m    sync.Mutex
-	conn map[string]interface{}
-}
-
-func newProvider() provider {
-	return provider{
-		sync.Mutex{},
-		make(map[string]interface{}),
-	}
-}

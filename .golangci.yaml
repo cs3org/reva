@@ -25,7 +25,7 @@ linters:
     - typecheck
     - unused
     - varcheck
-    - depguard
+    #- depguard
     - revive
     - goimports
     - unconvert
