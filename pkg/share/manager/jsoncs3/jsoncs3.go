@@ -844,16 +844,6 @@ func (m *Manager) ListReceivedShares(ctx context.Context, filters []*collaborati
 						continue
 					}
 					if share.IsExpired(s) {
-						if err := events.Publish(m.eventStream, events.ShareExpired{
-							ShareOwner:     s.GetOwner(),
-							ItemID:         s.GetResourceId(),
-							ExpiredAt:      time.Unix(int64(s.GetExpiration().GetSeconds()), int64(s.GetExpiration().GetNanos())),
-							GranteeUserID:  s.GetGrantee().GetUserId(),
-							GranteeGroupID: s.GetGrantee().GetGroupId(),
-						}); err != nil {
-							log.Error().Err(err).
-								Msg("failed to publish share expired event")
-						}
 						continue
 					}
 
@@ -941,18 +931,6 @@ func (m *Manager) getReceived(ctx context.Context, ref *collaboration.ShareRefer
 	}
 
 	if share.IsExpired(s) {
-		// send an event to notify
-		// TODO: Check if this is a flooding problem if we never write new shares
-		if err := events.Publish(m.eventStream, events.ShareExpired{
-			ShareOwner:     s.GetOwner(),
-			ItemID:         s.GetResourceId(),
-			ExpiredAt:      time.Unix(int64(s.GetExpiration().GetSeconds()), int64(s.GetExpiration().GetNanos())),
-			GranteeUserID:  s.GetGrantee().GetUserId(),
-			GranteeGroupID: s.GetGrantee().GetGroupId(),
-		}); err != nil {
-			log.Error().Err(err).
-				Msg("failed to publish share expired event")
-		}
 		return nil, errors.Errorf("share is expired: %s", s.GetId())
 	}
 
