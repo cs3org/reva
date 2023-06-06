@@ -462,7 +462,7 @@ func (cs3 *CS3) getAuthContext(ctx context.Context) (context.Context, error) {
 		return nil, err
 	}
 
-	authCtx := ctxpkg.ContextSetUser(context.Background(), cs3.serviceUser)
+	authCtx := ctxpkg.ContextSetUser(ctx, cs3.serviceUser)
 	authRes, err := client.Authenticate(authCtx, &gateway.AuthenticateRequest{
 		Type:         "machine",
 		ClientId:     "userid:" + cs3.serviceUser.Id.OpaqueId,
