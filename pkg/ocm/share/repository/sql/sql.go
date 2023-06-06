@@ -330,7 +330,109 @@ func (m *mgr) deleteByKey(ctx context.Context, user *userpb.User, key *ocm.Share
 
 // UpdateShare updates the mode of the given share.
 func (m *mgr) UpdateShare(ctx context.Context, user *userpb.User, ref *ocm.ShareReference, f ...*ocm.UpdateOCMShareRequest_UpdateField) (*ocm.Share, error) {
-	return nil, errtypes.NotSupported("not yet implemented")
+	switch {
+	case ref.GetId() != nil:
+		return m.updateShareByID(ctx, user, ref.GetId(), f...)
+	case ref.GetKey() != nil:
+		return m.updateShareByKey(ctx, user, ref.GetKey(), f...)
+	default:
+		return nil, errtypes.NotFound(ref.String())
+	}
+}
+
+func (m *mgr) getAccessMethod(ctx context.Context, id *ocm.ShareId, t AccessMethod) (int, error) {
+	var am int
+	if err := m.db.QueryRowContext(ctx, "SELECT id FROM ocm_shares_access_methods WHERE ocm_share_id=? AND type=?", id.OpaqueId, t).Scan(&am); err != nil {
+		return 0, err
+	}
+	return am, nil
+}
+
+func (m *mgr) queriesUpdatesOnShare(ctx context.Context, id *ocm.ShareId, f ...*ocm.UpdateOCMShareRequest_UpdateField) (string, []string, []any, [][]any, error) {
+	var qi strings.Builder
+	params := []any{}
+
+	qe := []string{}
+	eparams := [][]any{}
+
+	for _, field := range f {
+		switch u := field.Field.(type) {
+		case *ocm.UpdateOCMShareRequest_UpdateField_Expiration:
+			qi.WriteString("expiration=?")
+			params = append(params, u.Expiration.Seconds)
+		case *ocm.UpdateOCMShareRequest_UpdateField_AccessMethods:
+			// TODO: access method can be added or removed as well
+			// now they can only be updated
+			switch t := u.AccessMethods.Term.(type) {
+			case *ocm.AccessMethod_WebdavOptions:
+				am, err := m.getAccessMethod(ctx, id, WebDAVAccessMethod)
+				if err != nil {
+					return "", nil, nil, nil, err
+				}
+				q := "UPDATE ocm_access_method_webdav SET permissions=? WHERE ocm_access_method_id=?"
+				qe = append(qe, q)
+				eparams = append(eparams, []any{utils.SharePermToInt(t.WebdavOptions.Permissions), am})
+			case *ocm.AccessMethod_WebappOptions:
+				am, err := m.getAccessMethod(ctx, id, WebappAccessMethod)
+				if err != nil {
+					return "", nil, nil, nil, err
+				}
+				q := "UPDATE ocm_access_method_webapp SET view_mode WHERE ocm_access_method_id=?"
+				qe = append(qe, q)
+				eparams = append(eparams, []any{t.WebappOptions.ViewMode, am})
+			}
+		}
+	}
+	return qi.String(), qe, params, eparams, nil
+}
+
+func (m *mgr) updateShareByID(ctx context.Context, user *userpb.User, id *ocm.ShareId, f ...*ocm.UpdateOCMShareRequest_UpdateField) (*ocm.Share, error) {
+	var query strings.Builder
+
+	now := time.Now().Unix()
+	query.WriteString("UPDATE ocm_shares SET ")
+	params := []any{}
+
+	squery, am, sparams, paramsAm, err := m.queriesUpdatesOnShare(ctx, id, f...)
+	if err != nil {
+		return nil, err
+	}
+
+	if squery != "" {
+		query.WriteString(squery)
+		query.WriteString(", ")
+	}
+
+	query.WriteString("mtime=? WHERE id=? AND (initiator=? OR owner=?)")
+	params = append(params, sparams...)
+	params = append(params, now, id.OpaqueId, user.Id.OpaqueId, user.Id.OpaqueId)
+
+	if err := transaction(ctx, m.db, func(tx *sql.Tx) error {
+		if _, err := tx.ExecContext(ctx, query.String(), params...); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return share.ErrShareNotFound
+			}
+		}
+
+		for i, q := range am {
+			if _, err := tx.ExecContext(ctx, q, paramsAm[i]...); err != nil {
+				return err
+			}
+		}
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+
+	return m.getByID(ctx, user, id)
+}
+
+func (m *mgr) updateShareByKey(ctx context.Context, user *userpb.User, key *ocm.ShareKey, f ...*ocm.UpdateOCMShareRequest_UpdateField) (*ocm.Share, error) {
+	share, err := m.getByKey(ctx, user, key)
+	if err != nil {
+		return nil, err
+	}
+	return m.updateShareByID(ctx, user, share.Id)
 }
 
 func translateFilters(filters []*ocm.ListOCMSharesRequest_Filter) (string, []any, error) {
