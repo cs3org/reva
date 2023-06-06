@@ -28,6 +28,10 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
+var (
+	maxCallRecvMsgSize = 10240000
+)
+
 // NewConn creates a new connection to a grpc server
 // with open census tracing support.
 // TODO(labkode): make grpc tls configurable.
