@@ -1,6 +1,6 @@
 module github.com/cs3org/reva/v2
 
-go 1.19
+go 1.20
 
 require (
 	bou.ke/monkey v1.0.2
