@@ -292,6 +292,9 @@ func (m *Manager) Share(ctx context.Context, md *provider.ResourceInfo, g *colla
 
 	m.Lock()
 	defer m.Unlock()
+
+	m.invalidateCache(ctx, user)
+
 	_, err := m.getByKey(ctx, key)
 	if err == nil {
 		// share already exists
@@ -471,6 +474,8 @@ func (m *Manager) Unshare(ctx context.Context, ref *collaboration.ShareReference
 	m.Lock()
 	defer m.Unlock()
 	user := ctxpkg.ContextMustGetUser(ctx)
+
+	m.invalidateCache(ctx, user)
 
 	s, err := m.get(ctx, ref)
 	if err != nil {
@@ -971,6 +976,9 @@ func (m *Manager) UpdateReceivedShare(ctx context.Context, receivedShare *collab
 
 	m.Lock()
 	defer m.Unlock()
+	userID := ctxpkg.ContextMustGetUser(ctx)
+
+	m.invalidateCache(ctx, userID)
 
 	for i := range fieldMask.Paths {
 		switch fieldMask.Paths[i] {
@@ -984,9 +992,6 @@ func (m *Manager) UpdateReceivedShare(ctx context.Context, receivedShare *collab
 	}
 
 	// write back
-
-	userID := ctxpkg.ContextMustGetUser(ctx)
-
 	err = m.UserReceivedStates.Add(ctx, userID.GetId().GetOpaqueId(), rs.Share.ResourceId.StorageId+shareid.IDDelimiter+rs.Share.ResourceId.SpaceId, rs)
 	if _, ok := err.(errtypes.IsPreconditionFailed); ok {
 		// when persisting fails, download, readd and persist again
