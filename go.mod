@@ -66,7 +66,7 @@ require (
 	github.com/sciencemesh/meshdirectory-web v1.0.4
 	github.com/sethvargo/go-password v0.2.0
 	github.com/shamaton/msgpack/v2 v2.1.1
-	github.com/stretchr/testify v1.8.3
+	github.com/stretchr/testify v1.8.1
 	github.com/studio-b12/gowebdav v0.0.0-20221015232716-17255f2e7423
 	github.com/test-go/testify v1.1.4
 	github.com/thanhpk/randstr v1.0.4
@@ -76,11 +76,11 @@ require (
 	go.etcd.io/etcd/client/v3 v3.5.5
 	go.opencensus.io v0.23.0
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.36.4
-	go.opentelemetry.io/otel v1.16.0
+	go.opentelemetry.io/otel v1.11.1
 	go.opentelemetry.io/otel/exporters/jaeger v1.11.1
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.11.1
 	go.opentelemetry.io/otel/sdk v1.11.1
-	go.opentelemetry.io/otel/trace v1.16.0
+	go.opentelemetry.io/otel/trace v1.11.1
 	golang.org/x/crypto v0.1.0
 	golang.org/x/oauth2 v0.1.0
 	golang.org/x/sync v0.1.0
@@ -122,7 +122,7 @@ require (
 	github.com/go-git/go-git/v5 v5.4.2 // indirect
 	github.com/go-kit/log v0.2.1 // indirect
 	github.com/go-logfmt/logfmt v0.5.1 // indirect
-	github.com/go-logr/logr v1.2.4 // indirect
+	github.com/go-logr/logr v1.2.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-micro/plugins/v4/registry/consul v1.1.0 // indirect
 	github.com/go-micro/plugins/v4/registry/etcd v1.1.0 // indirect
@@ -201,7 +201,6 @@ require (
 	go.mongodb.org/mongo-driver v1.10.3 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/internal/retry v1.11.1 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.11.1 // indirect
-	go.opentelemetry.io/otel/metric v1.16.0 // indirect
 	go.opentelemetry.io/proto/otlp v0.19.0 // indirect
 	go.uber.org/atomic v1.10.0 // indirect
 	go.uber.org/multierr v1.8.0 // indirect
