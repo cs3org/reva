@@ -436,18 +436,6 @@ func (m *Manager) GetShare(ctx context.Context, ref *collaboration.ShareReferenc
 		return nil, err
 	}
 	if share.IsExpired(s) {
-		// TODO: Check if this floods the user
-		if err := events.Publish(m.eventStream, events.ShareExpired{
-			ShareID:        s.GetId(),
-			ShareOwner:     s.GetOwner(),
-			ItemID:         s.GetResourceId(),
-			ExpiredAt:      time.Unix(int64(s.GetExpiration().GetSeconds()), int64(s.GetExpiration().GetNanos())),
-			GranteeUserID:  s.GetGrantee().GetUserId(),
-			GranteeGroupID: s.GetGrantee().GetGroupId(),
-		}); err != nil {
-			log.Error().Err(err).
-				Msg("failed to publish share expired event")
-		}
 		return nil, errors.Errorf("share is expired: %s", s.GetId())
 	}
 	// check if we are the creator or the grantee
@@ -630,17 +618,6 @@ func (m *Manager) listSharesByIDs(ctx context.Context, user *userv1beta1.User, f
 
 			for _, s := range shares.Shares {
 				if share.IsExpired(s) {
-					// TODO: Check if this floods the user
-					if err := events.Publish(m.eventStream, events.ShareExpired{
-						ShareOwner:     s.GetOwner(),
-						ItemID:         s.GetResourceId(),
-						ExpiredAt:      time.Unix(int64(s.GetExpiration().GetSeconds()), int64(s.GetExpiration().GetNanos())),
-						GranteeUserID:  s.GetGrantee().GetUserId(),
-						GranteeGroupID: s.GetGrantee().GetGroupId(),
-					}); err != nil {
-						log.Error().Err(err).
-							Msg("failed to publish share expired event")
-					}
 					continue
 				}
 				if !share.MatchesFilters(s, filters) {
@@ -692,17 +669,6 @@ func (m *Manager) listCreatedShares(ctx context.Context, user *userv1beta1.User,
 				continue
 			}
 			if share.IsExpired(s) {
-				// TODO: Check if this floods the user
-				if err := events.Publish(m.eventStream, events.ShareExpired{
-					ShareOwner:     s.GetOwner(),
-					ItemID:         s.GetResourceId(),
-					ExpiredAt:      time.Unix(int64(s.GetExpiration().GetSeconds()), int64(s.GetExpiration().GetNanos())),
-					GranteeUserID:  s.GetGrantee().GetUserId(),
-					GranteeGroupID: s.GetGrantee().GetGroupId(),
-				}); err != nil {
-					log.Error().Err(err).
-						Msg("failed to publish share expired event")
-				}
 				continue
 			}
 			if utils.UserEqual(user.GetId(), s.GetCreator()) {
@@ -756,6 +722,17 @@ func (m *Manager) invalidateCache(ctx context.Context, user *userv1beta1.User) {
 				if err := m.removeShare(ctx, sh); err != nil {
 					log.Error().Err(err).
 						Msg("failed to unshare expired share")
+				}
+				if err := events.Publish(m.eventStream, events.ShareExpired{
+					ShareID:        sh.GetId(),
+					ShareOwner:     sh.GetOwner(),
+					ItemID:         sh.GetResourceId(),
+					ExpiredAt:      time.Unix(int64(sh.GetExpiration().GetSeconds()), int64(sh.GetExpiration().GetNanos())),
+					GranteeUserID:  sh.GetGrantee().GetUserId(),
+					GranteeGroupID: sh.GetGrantee().GetGroupId(),
+				}); err != nil {
+					log.Error().Err(err).
+						Msg("failed to publish share expired event")
 				}
 			}
 		}
