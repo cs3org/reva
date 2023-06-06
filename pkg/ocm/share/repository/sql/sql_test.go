@@ -25,6 +25,7 @@ import (
 	"strconv"
 	"sync"
 	"testing"
+	"time"
 
 	appprovider "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -1258,6 +1259,318 @@ func TestStoreShare(t *testing.T) {
 				checkShares(ctx, engine, tt.expected, t)
 			}
 		})
+	}
+}
+
+func TestUpdateShare(t *testing.T) {
+	fixedTime := time.Date(2023, time.December, 12, 12, 12, 0, 0, time.UTC)
+
+	tests := []struct {
+		description string
+		init        []*ocm.Share
+		user        *userpb.User
+		ref         *ocm.ShareReference
+		fields      []*ocm.UpdateOCMShareRequest_UpdateField
+		err         error
+		expected    storeShareExpected
+	}{
+		{
+			description: "update only expiration - by id",
+			init: []*ocm.Share{
+				{
+					Id:         &ocm.ShareId{OpaqueId: "10"},
+					ResourceId: &providerv1beta1.ResourceId{StorageId: "storage", OpaqueId: "resource-id1"},
+					Name:       "file-name",
+					Token:      "qwerty",
+					Grantee:    &providerv1beta1.Grantee{Type: providerv1beta1.GranteeType_GRANTEE_TYPE_USER, Id: &providerv1beta1.Grantee_UserId{UserId: &userpb.UserId{Idp: "cesnet", OpaqueId: "richard", Type: userpb.UserType_USER_TYPE_FEDERATED}}},
+					Owner:      &userpb.UserId{OpaqueId: "einstein"},
+					Creator:    &userpb.UserId{OpaqueId: "marie"},
+					Ctime:      &typesv1beta1.Timestamp{Seconds: 1686061921},
+					Mtime:      &typesv1beta1.Timestamp{Seconds: 1686061921},
+					ShareType:  ocm.ShareType_SHARE_TYPE_USER,
+					AccessMethods: []*ocm.AccessMethod{
+						share.NewWebDavAccessMethod(conversions.NewViewerRole().CS3ResourcePermissions()),
+						share.NewWebappAccessMethod(appprovider.ViewMode_VIEW_MODE_READ_ONLY),
+					},
+				},
+			},
+			user:   &userpb.User{Id: &userpb.UserId{OpaqueId: "marie"}},
+			ref:    &ocm.ShareReference{Spec: &ocm.ShareReference_Id{Id: &ocm.ShareId{OpaqueId: "10"}}},
+			fields: []*ocm.UpdateOCMShareRequest_UpdateField{{Field: &ocm.UpdateOCMShareRequest_UpdateField_Expiration{Expiration: &typesv1beta1.Timestamp{Seconds: uint64(fixedTime.Unix())}}}},
+			expected: storeShareExpected{
+				shares: []sql.Row{{int64(10), "qwerty", "storage", "resource-id1", "file-name", "richard@cesnet", "einstein", "marie", uint64(1686061921), uint64(fixedTime.Unix()), uint64(fixedTime.Unix()), int8(0)}},
+				accessmethods: []sql.Row{
+					{int64(1), int64(10), int8(0)},
+					{int64(2), int64(10), int8(1)},
+				},
+				webdav: []sql.Row{{int64(1), int64(1)}},
+				webapp: []sql.Row{{int64(2), int8(2)}},
+			},
+		},
+		{
+			description: "update access methods - by id",
+			init: []*ocm.Share{
+				{
+					Id:         &ocm.ShareId{OpaqueId: "10"},
+					ResourceId: &providerv1beta1.ResourceId{StorageId: "storage", OpaqueId: "resource-id1"},
+					Name:       "file-name",
+					Token:      "qwerty",
+					Grantee:    &providerv1beta1.Grantee{Type: providerv1beta1.GranteeType_GRANTEE_TYPE_USER, Id: &providerv1beta1.Grantee_UserId{UserId: &userpb.UserId{Idp: "cesnet", OpaqueId: "richard", Type: userpb.UserType_USER_TYPE_FEDERATED}}},
+					Owner:      &userpb.UserId{OpaqueId: "einstein"},
+					Creator:    &userpb.UserId{OpaqueId: "marie"},
+					Ctime:      &typesv1beta1.Timestamp{Seconds: 1686061921},
+					Mtime:      &typesv1beta1.Timestamp{Seconds: 1686061921},
+					ShareType:  ocm.ShareType_SHARE_TYPE_USER,
+					AccessMethods: []*ocm.AccessMethod{
+						share.NewWebDavAccessMethod(conversions.NewViewerRole().CS3ResourcePermissions()),
+						share.NewWebappAccessMethod(appprovider.ViewMode_VIEW_MODE_READ_ONLY),
+					},
+				},
+			},
+			user: &userpb.User{Id: &userpb.UserId{OpaqueId: "marie"}},
+			ref:  &ocm.ShareReference{Spec: &ocm.ShareReference_Id{Id: &ocm.ShareId{OpaqueId: "10"}}},
+			fields: []*ocm.UpdateOCMShareRequest_UpdateField{
+				{
+					Field: &ocm.UpdateOCMShareRequest_UpdateField_AccessMethods{
+						AccessMethods: share.NewWebDavAccessMethod(conversions.NewEditorRole().CS3ResourcePermissions()),
+					},
+				},
+				{
+					Field: &ocm.UpdateOCMShareRequest_UpdateField_AccessMethods{
+						AccessMethods: share.NewWebappAccessMethod(appprovider.ViewMode_VIEW_MODE_READ_WRITE),
+					},
+				},
+			},
+			expected: storeShareExpected{
+				shares: []sql.Row{{int64(10), "qwerty", "storage", "resource-id1", "file-name", "richard@cesnet", "einstein", "marie", uint64(1686061921), uint64(fixedTime.Unix()), uint64(0), int8(0)}},
+				accessmethods: []sql.Row{
+					{int64(1), int64(10), int8(0)},
+					{int64(2), int64(10), int8(1)},
+				},
+				webdav: []sql.Row{{int64(1), int64(15)}},
+				webapp: []sql.Row{{int64(2), int8(3)}},
+			},
+		},
+		{
+			description: "update only expiration - by key",
+			init: []*ocm.Share{
+				{
+					Id:         &ocm.ShareId{OpaqueId: "10"},
+					ResourceId: &providerv1beta1.ResourceId{StorageId: "storage", OpaqueId: "resource-id1"},
+					Name:       "file-name",
+					Token:      "qwerty",
+					Grantee:    &providerv1beta1.Grantee{Type: providerv1beta1.GranteeType_GRANTEE_TYPE_USER, Id: &providerv1beta1.Grantee_UserId{UserId: &userpb.UserId{Idp: "cesnet", OpaqueId: "richard", Type: userpb.UserType_USER_TYPE_FEDERATED}}},
+					Owner:      &userpb.UserId{OpaqueId: "einstein"},
+					Creator:    &userpb.UserId{OpaqueId: "marie"},
+					Ctime:      &typesv1beta1.Timestamp{Seconds: 1686061921},
+					Mtime:      &typesv1beta1.Timestamp{Seconds: 1686061921},
+					ShareType:  ocm.ShareType_SHARE_TYPE_USER,
+					AccessMethods: []*ocm.AccessMethod{
+						share.NewWebDavAccessMethod(conversions.NewViewerRole().CS3ResourcePermissions()),
+						share.NewWebappAccessMethod(appprovider.ViewMode_VIEW_MODE_READ_ONLY),
+					},
+				},
+			},
+			user: &userpb.User{Id: &userpb.UserId{OpaqueId: "marie"}},
+			ref: &ocm.ShareReference{Spec: &ocm.ShareReference_Key{Key: &ocm.ShareKey{
+				Owner:      &userpb.UserId{OpaqueId: "einstein"},
+				ResourceId: &providerv1beta1.ResourceId{StorageId: "storage", OpaqueId: "resource-id1"},
+				Grantee:    &providerv1beta1.Grantee{Type: providerv1beta1.GranteeType_GRANTEE_TYPE_USER, Id: &providerv1beta1.Grantee_UserId{UserId: &userpb.UserId{Idp: "cesnet", OpaqueId: "richard", Type: userpb.UserType_USER_TYPE_FEDERATED}}},
+			}}},
+			fields: []*ocm.UpdateOCMShareRequest_UpdateField{{Field: &ocm.UpdateOCMShareRequest_UpdateField_Expiration{Expiration: &typesv1beta1.Timestamp{Seconds: uint64(fixedTime.Unix())}}}},
+			expected: storeShareExpected{
+				shares: []sql.Row{{int64(10), "qwerty", "storage", "resource-id1", "file-name", "richard@cesnet", "einstein", "marie", uint64(1686061921), uint64(fixedTime.Unix()), uint64(fixedTime.Unix()), int8(0)}},
+				accessmethods: []sql.Row{
+					{int64(1), int64(10), int8(0)},
+					{int64(2), int64(10), int8(1)},
+				},
+				webdav: []sql.Row{{int64(1), int64(1)}},
+				webapp: []sql.Row{{int64(2), int8(2)}},
+			},
+		},
+		{
+			description: "update access methods - by key",
+			init: []*ocm.Share{
+				{
+					Id:         &ocm.ShareId{OpaqueId: "10"},
+					ResourceId: &providerv1beta1.ResourceId{StorageId: "storage", OpaqueId: "resource-id1"},
+					Name:       "file-name",
+					Token:      "qwerty",
+					Grantee:    &providerv1beta1.Grantee{Type: providerv1beta1.GranteeType_GRANTEE_TYPE_USER, Id: &providerv1beta1.Grantee_UserId{UserId: &userpb.UserId{Idp: "cesnet", OpaqueId: "richard", Type: userpb.UserType_USER_TYPE_FEDERATED}}},
+					Owner:      &userpb.UserId{OpaqueId: "einstein"},
+					Creator:    &userpb.UserId{OpaqueId: "marie"},
+					Ctime:      &typesv1beta1.Timestamp{Seconds: 1686061921},
+					Mtime:      &typesv1beta1.Timestamp{Seconds: 1686061921},
+					ShareType:  ocm.ShareType_SHARE_TYPE_USER,
+					AccessMethods: []*ocm.AccessMethod{
+						share.NewWebDavAccessMethod(conversions.NewViewerRole().CS3ResourcePermissions()),
+						share.NewWebappAccessMethod(appprovider.ViewMode_VIEW_MODE_READ_ONLY),
+					},
+				},
+			},
+			user: &userpb.User{Id: &userpb.UserId{OpaqueId: "marie"}},
+			ref: &ocm.ShareReference{Spec: &ocm.ShareReference_Key{Key: &ocm.ShareKey{
+				Owner:      &userpb.UserId{OpaqueId: "einstein"},
+				ResourceId: &providerv1beta1.ResourceId{StorageId: "storage", OpaqueId: "resource-id1"},
+				Grantee:    &providerv1beta1.Grantee{Type: providerv1beta1.GranteeType_GRANTEE_TYPE_USER, Id: &providerv1beta1.Grantee_UserId{UserId: &userpb.UserId{Idp: "cesnet", OpaqueId: "richard", Type: userpb.UserType_USER_TYPE_FEDERATED}}},
+			}}},
+			fields: []*ocm.UpdateOCMShareRequest_UpdateField{
+				{
+					Field: &ocm.UpdateOCMShareRequest_UpdateField_AccessMethods{
+						AccessMethods: share.NewWebDavAccessMethod(conversions.NewEditorRole().CS3ResourcePermissions()),
+					},
+				},
+				{
+					Field: &ocm.UpdateOCMShareRequest_UpdateField_AccessMethods{
+						AccessMethods: share.NewWebappAccessMethod(appprovider.ViewMode_VIEW_MODE_READ_WRITE),
+					},
+				},
+			},
+			expected: storeShareExpected{
+				shares: []sql.Row{{int64(10), "qwerty", "storage", "resource-id1", "file-name", "richard@cesnet", "einstein", "marie", uint64(1686061921), uint64(fixedTime.Unix()), uint64(0), int8(0)}},
+				accessmethods: []sql.Row{
+					{int64(1), int64(10), int8(0)},
+					{int64(2), int64(10), int8(1)},
+				},
+				webdav: []sql.Row{{int64(1), int64(15)}},
+				webapp: []sql.Row{{int64(2), int8(3)}},
+			},
+		},
+		{
+			description: "update only expiration - id not exists",
+			init: []*ocm.Share{
+				{
+					Id:         &ocm.ShareId{OpaqueId: "10"},
+					ResourceId: &providerv1beta1.ResourceId{StorageId: "storage", OpaqueId: "resource-id1"},
+					Name:       "file-name",
+					Token:      "qwerty",
+					Grantee:    &providerv1beta1.Grantee{Type: providerv1beta1.GranteeType_GRANTEE_TYPE_USER, Id: &providerv1beta1.Grantee_UserId{UserId: &userpb.UserId{Idp: "cesnet", OpaqueId: "richard", Type: userpb.UserType_USER_TYPE_FEDERATED}}},
+					Owner:      &userpb.UserId{OpaqueId: "einstein"},
+					Creator:    &userpb.UserId{OpaqueId: "marie"},
+					Ctime:      &typesv1beta1.Timestamp{Seconds: 1686061921},
+					Mtime:      &typesv1beta1.Timestamp{Seconds: 1686061921},
+					ShareType:  ocm.ShareType_SHARE_TYPE_USER,
+					AccessMethods: []*ocm.AccessMethod{
+						share.NewWebDavAccessMethod(conversions.NewViewerRole().CS3ResourcePermissions()),
+						share.NewWebappAccessMethod(appprovider.ViewMode_VIEW_MODE_READ_ONLY),
+					},
+				},
+			},
+			user:   &userpb.User{Id: &userpb.UserId{OpaqueId: "marie"}},
+			ref:    &ocm.ShareReference{Spec: &ocm.ShareReference_Id{Id: &ocm.ShareId{OpaqueId: "not-existing-id"}}},
+			fields: []*ocm.UpdateOCMShareRequest_UpdateField{{Field: &ocm.UpdateOCMShareRequest_UpdateField_Expiration{Expiration: &typesv1beta1.Timestamp{Seconds: uint64(fixedTime.Unix())}}}},
+			err:    share.ErrShareNotFound,
+		},
+		{
+			description: "update access methods - key not exists",
+			init: []*ocm.Share{
+				{
+					Id:         &ocm.ShareId{OpaqueId: "10"},
+					ResourceId: &providerv1beta1.ResourceId{StorageId: "storage", OpaqueId: "resource-id1"},
+					Name:       "file-name",
+					Token:      "qwerty",
+					Grantee:    &providerv1beta1.Grantee{Type: providerv1beta1.GranteeType_GRANTEE_TYPE_USER, Id: &providerv1beta1.Grantee_UserId{UserId: &userpb.UserId{Idp: "cesnet", OpaqueId: "richard", Type: userpb.UserType_USER_TYPE_FEDERATED}}},
+					Owner:      &userpb.UserId{OpaqueId: "einstein"},
+					Creator:    &userpb.UserId{OpaqueId: "marie"},
+					Ctime:      &typesv1beta1.Timestamp{Seconds: 1686061921},
+					Mtime:      &typesv1beta1.Timestamp{Seconds: 1686061921},
+					ShareType:  ocm.ShareType_SHARE_TYPE_USER,
+					AccessMethods: []*ocm.AccessMethod{
+						share.NewWebDavAccessMethod(conversions.NewViewerRole().CS3ResourcePermissions()),
+						share.NewWebappAccessMethod(appprovider.ViewMode_VIEW_MODE_READ_ONLY),
+					},
+				},
+			},
+			user: &userpb.User{Id: &userpb.UserId{OpaqueId: "marie"}},
+			ref: &ocm.ShareReference{Spec: &ocm.ShareReference_Key{Key: &ocm.ShareKey{
+				Owner:      &userpb.UserId{OpaqueId: "non-existing-user"},
+				ResourceId: &providerv1beta1.ResourceId{StorageId: "storage", OpaqueId: "resource-id1"},
+				Grantee:    &providerv1beta1.Grantee{Type: providerv1beta1.GranteeType_GRANTEE_TYPE_USER, Id: &providerv1beta1.Grantee_UserId{UserId: &userpb.UserId{Idp: "cesnet", OpaqueId: "richard", Type: userpb.UserType_USER_TYPE_FEDERATED}}},
+			}}},
+			fields: []*ocm.UpdateOCMShareRequest_UpdateField{
+				{
+					Field: &ocm.UpdateOCMShareRequest_UpdateField_AccessMethods{
+						AccessMethods: share.NewWebDavAccessMethod(conversions.NewEditorRole().CS3ResourcePermissions()),
+					},
+				},
+				{
+					Field: &ocm.UpdateOCMShareRequest_UpdateField_AccessMethods{
+						AccessMethods: share.NewWebappAccessMethod(appprovider.ViewMode_VIEW_MODE_READ_WRITE),
+					},
+				},
+			},
+			err: share.ErrShareNotFound,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.description, func(t *testing.T) {
+			ctx := sql.NewEmptyContext()
+			tables := createShareTables(ctx, tt.init)
+			engine, port, cleanup := startDatabase(ctx, tables)
+			t.Cleanup(cleanup)
+
+			r, err := NewFromConfig(
+				&config{
+					DBUsername: "root",
+					DBPassword: "",
+					DBAddress:  fmt.Sprintf("%s:%d", address, port),
+					DBName:     dbName,
+					now:        func() time.Time { return fixedTime },
+				},
+			)
+
+			if err != nil {
+				t.Fatalf("not expected error while creating share repository driver: %+v", err)
+			}
+
+			_, err = r.UpdateShare(context.TODO(), tt.user, tt.ref, tt.fields...)
+			if err != tt.err {
+				t.Fatalf("not expected error updating share. got=%+v expected=%+v", err, tt.err)
+			}
+
+			if tt.err == nil {
+				checkShares(ctx, engine, tt.expected, t)
+			}
+		})
+	}
+}
+
+func TestDeleteShare(t *testing.T) {
+	tests := []struct {
+		description string
+		init        []*ocm.Share
+		toDelete    *ocm.ShareReference
+		user        *userpb.User
+		err         error
+		expected    storeShareExpected
+	}{}
+
+	for _, tt := range tests {
+		ctx := sql.NewEmptyContext()
+		tables := createShareTables(ctx, tt.init)
+		engine, port, cleanup := startDatabase(ctx, tables)
+		t.Cleanup(cleanup)
+
+		r, err := New(map[string]interface{}{
+			"db_username": "root",
+			"db_password": "",
+			"db_address":  fmt.Sprintf("%s:%d", address, port),
+			"db_name":     dbName,
+		})
+
+		if err != nil {
+			t.Fatalf("not expected error while creating share repository driver: %+v", err)
+		}
+
+		err = r.DeleteShare(context.TODO(), tt.user, tt.toDelete)
+		if err != tt.err {
+			t.Fatalf("not expected error deleting share. got=%+v expected=%+v", err, tt.err)
+		}
+
+		if tt.err == nil {
+			checkShares(ctx, engine, tt.expected, t)
+		}
 	}
 }
 
