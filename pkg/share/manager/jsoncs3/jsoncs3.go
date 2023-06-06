@@ -956,8 +956,7 @@ func (m *Manager) getReceived(ctx context.Context, ref *collaboration.ShareRefer
 		return nil, errors.Errorf("share is expired: %s", s.GetId())
 	}
 
-	val := m.convert(ctx, user.Id.GetOpaqueId(), s)
-	return val, nil
+	return m.convert(ctx, user.Id.GetOpaqueId(), s), nil
 }
 
 // UpdateReceivedShare updates the received share with share state.
