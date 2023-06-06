@@ -20,6 +20,7 @@ package registry
 
 import (
 	mRegistry "go-micro.dev/v4/registry"
+	"go-micro.dev/v4/selector"
 )
 
 var (
@@ -37,6 +38,18 @@ func Init(nRegistry mRegistry.Registry) error {
 	return nil
 }
 
+// GetRegistry exposes the registry
 func GetRegistry() mRegistry.Registry {
 	return gRegistry
+}
+
+// GetNodeAddress returns a random address from the service nodes
+func GetNodeAddress(services []*mRegistry.Service) (string, error) {
+	next := selector.Random(services)
+	node, err := next()
+	if err != nil {
+		return "", err
+	}
+
+	return node.Address, nil
 }
