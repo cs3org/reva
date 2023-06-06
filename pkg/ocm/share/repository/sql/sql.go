@@ -59,6 +59,7 @@ type mgr struct {
 	now func() time.Time
 }
 
+// NewFromConfig creates a Repository with a SQL driver using the given config.
 func NewFromConfig(conf *config) (share.Repository, error) {
 	if conf.now == nil {
 		conf.now = time.Now
