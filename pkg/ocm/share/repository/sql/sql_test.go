@@ -64,6 +64,7 @@ func startDatabase(ctx *sql.Context, tables map[string]*memory.Table) (engine *s
 	defer m.Unlock()
 
 	db := memory.NewDatabase(dbName)
+	db.EnablePrimaryKeyIndexes()
 	for name, table := range tables {
 		db.AddTable(name, table)
 	}
@@ -133,8 +134,9 @@ func createShareTables(ctx *sql.Context, initData []*ocm.Share) map[string]*memo
 	var fkAccessMethods memory.ForeignKeyCollection
 	fkAccessMethods.AddFK(sql.ForeignKeyConstraint{
 		Columns:       []string{"ocm_share_id"},
-		ParentTable:   "ocm_shares",
+		ParentTable:   ocmShareTable,
 		ParentColumns: []string{"id"},
+		OnDelete:      sql.ForeignKeyReferentialAction_Cascade,
 	})
 	accessMethods := memory.NewTable(ocmAccessMethodTable, sql.NewPrimaryKeySchema(sql.Schema{
 		{Name: "id", Type: sql.Int64, Nullable: false, Source: ocmAccessMethodTable, PrimaryKey: true, AutoIncrement: true},
@@ -153,6 +155,7 @@ func createShareTables(ctx *sql.Context, initData []*ocm.Share) map[string]*memo
 		Columns:       []string{"ocm_access_method_id"},
 		ParentTable:   ocmAccessMethodTable,
 		ParentColumns: []string{"id"},
+		OnDelete:      sql.ForeignKeyReferentialAction_Cascade,
 	})
 
 	webdav := memory.NewTable(ocmAMWebDAVTable, sql.NewPrimaryKeySchema(sql.Schema{
@@ -221,6 +224,7 @@ func createReceivedShareTables(ctx *sql.Context, initData []*ocm.ReceivedShare) 
 		Columns:       []string{"ocm_received_share_id"},
 		ParentTable:   "ocm_received_shares",
 		ParentColumns: []string{"id"},
+		OnDelete:      sql.ForeignKeyReferentialAction_Cascade,
 	})
 	protocols := memory.NewTable(ocmReceivedProtocols, sql.NewPrimaryKeySchema(sql.Schema{
 		{Name: "id", Type: sql.Int64, Nullable: false, Source: ocmReceivedProtocols, PrimaryKey: true, AutoIncrement: true},
@@ -235,6 +239,7 @@ func createReceivedShareTables(ctx *sql.Context, initData []*ocm.ReceivedShare) 
 		Columns:       []string{"ocm_protocol_id"},
 		ParentTable:   ocmReceivedProtocols,
 		ParentColumns: []string{"id"},
+		OnDelete:      sql.ForeignKeyReferentialAction_Cascade,
 	})
 	webdav := memory.NewTable(ocmProtWebDAVTable, sql.NewPrimaryKeySchema(sql.Schema{
 		{Name: "ocm_protocol_id", Type: sql.Int64, Source: ocmProtWebDAVTable, PrimaryKey: true, AutoIncrement: true},
@@ -1533,44 +1538,6 @@ func TestUpdateShare(t *testing.T) {
 				checkShares(ctx, engine, tt.expected, t)
 			}
 		})
-	}
-}
-
-func TestDeleteShare(t *testing.T) {
-	tests := []struct {
-		description string
-		init        []*ocm.Share
-		toDelete    *ocm.ShareReference
-		user        *userpb.User
-		err         error
-		expected    storeShareExpected
-	}{}
-
-	for _, tt := range tests {
-		ctx := sql.NewEmptyContext()
-		tables := createShareTables(ctx, tt.init)
-		engine, port, cleanup := startDatabase(ctx, tables)
-		t.Cleanup(cleanup)
-
-		r, err := New(map[string]interface{}{
-			"db_username": "root",
-			"db_password": "",
-			"db_address":  fmt.Sprintf("%s:%d", address, port),
-			"db_name":     dbName,
-		})
-
-		if err != nil {
-			t.Fatalf("not expected error while creating share repository driver: %+v", err)
-		}
-
-		err = r.DeleteShare(context.TODO(), tt.user, tt.toDelete)
-		if err != tt.err {
-			t.Fatalf("not expected error deleting share. got=%+v expected=%+v", err, tt.err)
-		}
-
-		if tt.err == nil {
-			checkShares(ctx, engine, tt.expected, t)
-		}
 	}
 }
 
