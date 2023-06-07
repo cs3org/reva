@@ -38,10 +38,16 @@ func ConnectToNats(natsAddress, natsToken string, log zerolog.Logger) (*nats.Con
 			log.Error().Err(err).Msgf("nats error")
 		}),
 		nats.ClosedHandler(func(c *nats.Conn) {
-			log.Error().Err(c.LastError()).Msgf("connection to nats server closed")
+			if c.LastError() != nil {
+				log.Error().Err(c.LastError()).Msgf("connection to nats server closed")
+			} else {
+				log.Debug().Msgf("connection to nats server closed")
+			}
 		}),
 		nats.DisconnectErrHandler(func(_ *nats.Conn, err error) {
-			log.Error().Err(err).Msgf("connection to nats server disconnected")
+			if err != nil {
+				log.Error().Err(err).Msgf("connection to nats server disconnected")
+			}
 		}),
 		nats.CustomReconnectDelay(func(attempts int) time.Duration {
 			if attempts%3 == 0 {
