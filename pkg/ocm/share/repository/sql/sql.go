@@ -352,14 +352,6 @@ func (m *mgr) UpdateShare(ctx context.Context, user *userpb.User, ref *ocm.Share
 	}
 }
 
-func (m *mgr) getAccessMethod(ctx context.Context, id *ocm.ShareId, t AccessMethod) (int, error) {
-	var am int
-	if err := m.db.QueryRowContext(ctx, "SELECT id FROM ocm_shares_access_methods WHERE ocm_share_id=? AND type=?", id.OpaqueId, t).Scan(&am); err != nil {
-		return 0, err
-	}
-	return am, nil
-}
-
 func (m *mgr) queriesUpdatesOnShare(ctx context.Context, id *ocm.ShareId, f ...*ocm.UpdateOCMShareRequest_UpdateField) (string, []string, []any, [][]any, error) {
 	var qi strings.Builder
 	params := []any{}
@@ -377,21 +369,13 @@ func (m *mgr) queriesUpdatesOnShare(ctx context.Context, id *ocm.ShareId, f ...*
 			// now they can only be updated
 			switch t := u.AccessMethods.Term.(type) {
 			case *ocm.AccessMethod_WebdavOptions:
-				am, err := m.getAccessMethod(ctx, id, WebDAVAccessMethod)
-				if err != nil {
-					return "", nil, nil, nil, err
-				}
-				q := "UPDATE ocm_access_method_webdav SET permissions=? WHERE ocm_access_method_id=?"
+				q := "UPDATE ocm_access_method_webdav SET permissions=? WHERE ocm_access_method_id=(SELECT id FROM ocm_shares_access_methods WHERE ocm_share_id=? AND type=?)"
 				qe = append(qe, q)
-				eparams = append(eparams, []any{utils.SharePermToInt(t.WebdavOptions.Permissions), am})
+				eparams = append(eparams, []any{utils.SharePermToInt(t.WebdavOptions.Permissions), id.OpaqueId, WebDAVAccessMethod})
 			case *ocm.AccessMethod_WebappOptions:
-				am, err := m.getAccessMethod(ctx, id, WebappAccessMethod)
-				if err != nil {
-					return "", nil, nil, nil, err
-				}
-				q := "UPDATE ocm_access_method_webapp SET view_mode=? WHERE ocm_access_method_id=?"
+				q := "UPDATE ocm_access_method_webapp SET view_mode=? WHERE ocm_access_method_id=(SELECT id FROM ocm_shares_access_methods WHERE ocm_share_id=? AND type=?)"
 				qe = append(qe, q)
-				eparams = append(eparams, []any{t.WebappOptions.ViewMode, am})
+				eparams = append(eparams, []any{t.WebappOptions.ViewMode, id.OpaqueId, WebappAccessMethod})
 			}
 		}
 	}
