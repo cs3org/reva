@@ -201,6 +201,31 @@ func (h *Handler) isFederatedShare(r *http.Request, shareID string) bool {
 	return getShareRes.GetShare() != nil
 }
 
+func (h *Handler) isFederatedReceivedShare(r *http.Request, shareID string) bool {
+	log := appctx.GetLogger(r.Context())
+	client, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	if err != nil {
+		log.Err(err).Send()
+		return false
+	}
+
+	getShareRes, err := client.GetReceivedOCMShare(r.Context(), &ocmpb.GetReceivedOCMShareRequest{
+		Ref: &ocmpb.ShareReference{
+			Spec: &ocmpb.ShareReference_Id{
+				Id: &ocmpb.ShareId{
+					OpaqueId: shareID,
+				},
+			},
+		},
+	})
+	if err != nil {
+		log.Err(err).Send()
+		return false
+	}
+
+	return getShareRes.GetShare() != nil
+}
+
 func (h *Handler) removeFederatedShare(w http.ResponseWriter, r *http.Request, shareID string) {
 	ctx := r.Context()
 

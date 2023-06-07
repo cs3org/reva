@@ -37,7 +37,7 @@ import (
 // AcceptReceivedShare handles Post Requests on /apps/files_sharing/api/v1/shares/{shareid}.
 func (h *Handler) AcceptReceivedShare(w http.ResponseWriter, r *http.Request) {
 	shareID := chi.URLParam(r, "shareid")
-	if h.isFederatedShare(r, shareID) {
+	if h.isFederatedReceivedShare(r, shareID) {
 		h.updateReceivedFederatedShare(w, r, shareID, false)
 	} else {
 		h.updateReceivedShare(w, r, shareID, false)
@@ -47,7 +47,7 @@ func (h *Handler) AcceptReceivedShare(w http.ResponseWriter, r *http.Request) {
 // RejectReceivedShare handles DELETE Requests on /apps/files_sharing/api/v1/shares/{shareid}.
 func (h *Handler) RejectReceivedShare(w http.ResponseWriter, r *http.Request) {
 	shareID := chi.URLParam(r, "shareid")
-	if h.isFederatedShare(r, shareID) {
+	if h.isFederatedReceivedShare(r, shareID) {
 		h.updateReceivedFederatedShare(w, r, shareID, true)
 	} else {
 		h.updateReceivedShare(w, r, shareID, true)
