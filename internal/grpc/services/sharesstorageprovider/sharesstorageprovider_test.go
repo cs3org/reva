@@ -53,8 +53,9 @@ var (
 var _ = Describe("Sharesstorageprovider", func() {
 	var (
 		config = map[string]interface{}{
-			"gateway_addr": "127.0.0.1:1234",
-			"driver":       "json",
+			"gateway_addr":         "127.0.0.1:1234",
+			"driver":               "json",
+			"usershareprovidersvc": "any",
 			"drivers": map[string]map[string]interface{}{
 				"json": {},
 			},

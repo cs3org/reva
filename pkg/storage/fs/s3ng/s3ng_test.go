@@ -39,14 +39,15 @@ var _ = Describe("S3ng", func() {
 		Expect(err).ToNot(HaveOccurred())
 
 		options = map[string]interface{}{
-			"root":          tmpRoot,
-			"enable_home":   true,
-			"share_folder":  "/Shares",
-			"s3.endpoint":   "http://1.2.3.4:5000",
-			"s3.region":     "default",
-			"s3.bucket":     "the-bucket",
-			"s3.access_key": "foo",
-			"s3.secret_key": "bar",
+			"root":           tmpRoot,
+			"enable_home":    true,
+			"share_folder":   "/Shares",
+			"permissionssvc": "any",
+			"s3.endpoint":    "http://1.2.3.4:5000",
+			"s3.region":      "default",
+			"s3.bucket":      "the-bucket",
+			"s3.access_key":  "foo",
+			"s3.secret_key":  "bar",
 		}
 	})
 

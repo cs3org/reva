@@ -59,7 +59,8 @@ var _ = Describe("Decomposed", func() {
 		It("works", func() {
 			bs := &treemocks.Blobstore{}
 			_, err := decomposedfs.NewDefault(map[string]interface{}{
-				"root": env.Root,
+				"root":           env.Root,
+				"permissionssvc": "any",
 			}, bs, nil)
 			Expect(err).ToNot(HaveOccurred())
 		})
