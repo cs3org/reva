@@ -551,6 +551,7 @@ func (h *Handler) UpdateShare(w http.ResponseWriter, r *http.Request) {
 	}
 	if h.isFederatedShare(r, shareID) {
 		h.updateFederatedShare(w, r, shareID)
+		return
 	}
 	h.updateShare(w, r, shareID) // TODO PUT is used with incomplete data to update a share}
 
@@ -689,7 +690,7 @@ func (h *Handler) updateFederatedShare(w http.ResponseWriter, r *http.Request, s
 		Ref: &ocmv1beta1.ShareReference{
 			Spec: &ocmv1beta1.ShareReference_Id{
 				Id: &ocmv1beta1.ShareId{
-					OpaqueId: h.sharePrefix,
+					OpaqueId: shareID,
 				},
 			},
 		},
