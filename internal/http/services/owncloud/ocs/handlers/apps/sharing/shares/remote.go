@@ -162,7 +162,7 @@ func (h *Handler) ListFederatedShares(w http.ResponseWriter, r *http.Request) {
 	// TODO Implement response with HAL schemating
 }
 
-func (h *Handler) listReceivedFederatedShares(ctx context.Context, gw gatewayv1beta1.GatewayAPIClient) ([]*conversions.ShareData, error) {
+func (h *Handler) listReceivedFederatedShares(ctx context.Context, gw gatewayv1beta1.GatewayAPIClient, state ocm.ShareState) ([]*conversions.ShareData, error) {
 	listRes, err := gw.ListReceivedOCMShares(ctx, &ocm.ListReceivedOCMSharesRequest{})
 	if err != nil {
 		return nil, err
@@ -170,6 +170,9 @@ func (h *Handler) listReceivedFederatedShares(ctx context.Context, gw gatewayv1b
 
 	shares := []*conversions.ShareData{}
 	for _, s := range listRes.Shares {
+		if state != ocsStateUnknown && s.State != state {
+			continue
+		}
 		sd, err := conversions.ReceivedOCMShare2ShareData(s, h.ocmLocalMount(s))
 		if err != nil {
 			continue

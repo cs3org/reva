@@ -777,7 +777,8 @@ const (
 
 func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 	// which pending state to list
-	stateFilter := getStateFilter(r.FormValue("state"))
+	state := r.FormValue("state")
+	stateFilter := getStateFilter(state)
 
 	log := appctx.GetLogger(r.Context())
 	client, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
@@ -963,7 +964,8 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 
 	if h.listOCMShares {
 		// include ocm shares in the response
-		lst, err := h.listReceivedFederatedShares(ctx, client)
+		stateFilter := getOCMStateFilter(state)
+		lst, err := h.listReceivedFederatedShares(ctx, client, stateFilter)
 		if err != nil {
 			log.Err(err).Msg("error listing received ocm shares")
 			response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error listing received ocm shares", err)
@@ -1382,4 +1384,19 @@ func getStateFilter(s string) collaboration.ShareState {
 		stateFilter = collaboration.ShareState_SHARE_STATE_ACCEPTED
 	}
 	return stateFilter
+}
+
+func getOCMStateFilter(s string) ocmv1beta1.ShareState {
+	switch s {
+	case "all":
+		return ocsStateUnknown // no filter
+	case "0": // accepted
+		return ocmv1beta1.ShareState_SHARE_STATE_ACCEPTED
+	case "1": // pending
+		return ocmv1beta1.ShareState_SHARE_STATE_PENDING
+	case "2": // rejected
+		return ocmv1beta1.ShareState_SHARE_STATE_REJECTED
+	default:
+		return ocmv1beta1.ShareState_SHARE_STATE_ACCEPTED
+	}
 }
