@@ -38,6 +38,7 @@ import (
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocs/handlers/apps/sharing/shares"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/status"
+	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
 	helpers "github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/testhelpers"
 	cs3mocks "github.com/cs3org/reva/v2/tests/cs3mocks/mocks"
 	"github.com/stretchr/testify/mock"
@@ -48,8 +49,8 @@ import (
 
 var _ = Describe("The ocs API", func() {
 	var (
-		h      *shares.Handler
-		client *cs3mocks.GatewayAPIClient
+		h             *shares.Handler
+		gatewayClient *cs3mocks.GatewayAPIClient
 
 		user = &userpb.User{
 			Id: &userpb.UserId{
@@ -74,39 +75,40 @@ var _ = Describe("The ocs API", func() {
 	)
 	BeforeEach(func() {
 		h = &shares.Handler{}
-		client = &cs3mocks.GatewayAPIClient{}
+		pool.RemoveSelector("GatewaySelector" + "any")
+		gatewayClient = &cs3mocks.GatewayAPIClient{}
 
 		c := &config.Config{}
 		c.GatewaySvc = "gatewaysvc"
 		c.StatCacheDatabase = strconv.FormatInt(rand.Int63(), 10) // Use a fresh database for each test
 		c.Init()
 		h.InitWithGetter(c, func() (gateway.GatewayAPIClient, error) {
-			return client, nil
+			return gatewayClient, nil
 		})
 	})
 
 	Describe("CreateShare", func() {
 		BeforeEach(func() {
-			client.On("GetUserByClaim", mock.Anything, mock.Anything).Return(&userpb.GetUserByClaimResponse{
+			gatewayClient.On("GetUserByClaim", mock.Anything, mock.Anything).Return(&userpb.GetUserByClaimResponse{
 				Status: status.NewOK(context.Background()),
 				User:   user,
 			}, nil)
-			client.On("GetUser", mock.Anything, mock.Anything).Return(&userpb.GetUserResponse{
+			gatewayClient.On("GetUser", mock.Anything, mock.Anything).Return(&userpb.GetUserResponse{
 				Status: status.NewOK(context.Background()),
 				User:   user,
 			}, nil)
-			client.On("Authenticate", mock.Anything, mock.Anything).Return(&gateway.AuthenticateResponse{
+			gatewayClient.On("Authenticate", mock.Anything, mock.Anything).Return(&gateway.AuthenticateResponse{
 				Status: status.NewOK(context.Background()),
 			}, nil)
 
-			client.On("ListShares", mock.Anything, mock.Anything).Return(&collaboration.ListSharesResponse{
+			gatewayClient.On("ListShares", mock.Anything, mock.Anything).Return(&collaboration.ListSharesResponse{
 				Status: status.NewOK(context.Background()),
 			}, nil)
 		})
 
 		Context("when sharing the personal space root", func() {
 			BeforeEach(func() {
-				client.On("Stat", mock.Anything, mock.Anything).Return(&provider.StatResponse{
+				gatewayClient.On("Stat", mock.Anything, mock.Anything).Return(&provider.StatResponse{
 					Status: status.NewOK(context.Background()),
 					Info: &provider.ResourceInfo{
 						Type: provider.ResourceType_RESOURCE_TYPE_CONTAINER,
@@ -146,7 +148,7 @@ var _ = Describe("The ocs API", func() {
 				w := httptest.NewRecorder()
 				h.CreateShare(w, req)
 				Expect(w.Result().StatusCode).To(Equal(400))
-				client.AssertNumberOfCalls(GinkgoT(), "CreateShare", 0)
+				gatewayClient.AssertNumberOfCalls(GinkgoT(), "CreateShare", 0)
 			})
 		})
 
@@ -159,7 +161,7 @@ var _ = Describe("The ocs API", func() {
 					}
 				)
 
-				client.On("Stat", mock.Anything, mock.Anything).Return(&provider.StatResponse{
+				gatewayClient.On("Stat", mock.Anything, mock.Anything).Return(&provider.StatResponse{
 					Status: status.NewOK(context.Background()),
 					Info: &provider.ResourceInfo{
 						Type:  provider.ResourceType_RESOURCE_TYPE_CONTAINER,
@@ -185,11 +187,11 @@ var _ = Describe("The ocs API", func() {
 					},
 				}, nil)
 
-				client.On("CheckPermission", mock.Anything, mock.Anything, mock.Anything).Return(&permissions.CheckPermissionResponse{
+				gatewayClient.On("CheckPermission", mock.Anything, mock.Anything, mock.Anything).Return(&permissions.CheckPermissionResponse{
 					Status: &rpc.Status{Code: rpc.Code_CODE_OK},
 				}, nil)
 
-				client.On("CreatePublicShare", mock.Anything, mock.Anything).Return(&link.CreatePublicShareResponse{
+				gatewayClient.On("CreatePublicShare", mock.Anything, mock.Anything).Return(&link.CreatePublicShareResponse{
 					Status: status.NewOK(context.Background()),
 					Share: &link.PublicShare{
 						Token:   "foo",
@@ -250,7 +252,7 @@ var _ = Describe("The ocs API", func() {
 			)
 
 			BeforeEach(func() {
-				client.On("Stat", mock.Anything, mock.Anything).Return(&provider.StatResponse{
+				gatewayClient.On("Stat", mock.Anything, mock.Anything).Return(&provider.StatResponse{
 					Status: status.NewOK(context.Background()),
 					Info: &provider.ResourceInfo{
 						Type:  provider.ResourceType_RESOURCE_TYPE_CONTAINER,
@@ -267,7 +269,7 @@ var _ = Describe("The ocs API", func() {
 					},
 				}, nil)
 
-				client.On("GetShare", mock.Anything, mock.Anything).Return(&collaboration.GetShareResponse{
+				gatewayClient.On("GetShare", mock.Anything, mock.Anything).Return(&collaboration.GetShareResponse{
 					Status: status.NewOK(context.Background()),
 					Share:  share,
 				}, nil)
@@ -275,7 +277,7 @@ var _ = Describe("The ocs API", func() {
 
 			Context("when there are no existing shares to the resource yet", func() {
 				BeforeEach(func() {
-					client.On("ListReceivedShares", mock.Anything, mock.Anything, mock.Anything).Return(&collaboration.ListReceivedSharesResponse{
+					gatewayClient.On("ListReceivedShares", mock.Anything, mock.Anything, mock.Anything).Return(&collaboration.ListReceivedSharesResponse{
 						Status: status.NewOK(context.Background()),
 						Shares: []*collaboration.ReceivedShare{
 							{
@@ -288,7 +290,7 @@ var _ = Describe("The ocs API", func() {
 				})
 
 				It("creates a new share", func() {
-					client.On("CreateShare", mock.Anything, mock.Anything).Return(&collaboration.CreateShareResponse{
+					gatewayClient.On("CreateShare", mock.Anything, mock.Anything).Return(&collaboration.CreateShareResponse{
 						Status: status.NewOK(context.Background()),
 						Share:  share,
 					}, nil)
@@ -306,13 +308,13 @@ var _ = Describe("The ocs API", func() {
 					w := httptest.NewRecorder()
 					h.CreateShare(w, req)
 					Expect(w.Result().StatusCode).To(Equal(200))
-					client.AssertNumberOfCalls(GinkgoT(), "CreateShare", 1)
+					gatewayClient.AssertNumberOfCalls(GinkgoT(), "CreateShare", 1)
 				})
 			})
 
 			Context("when a share to the same resource already exists", func() {
 				BeforeEach(func() {
-					client.On("ListReceivedShares", mock.Anything, mock.Anything, mock.Anything).Return(&collaboration.ListReceivedSharesResponse{
+					gatewayClient.On("ListReceivedShares", mock.Anything, mock.Anything, mock.Anything).Return(&collaboration.ListReceivedSharesResponse{
 						Status: status.NewOK(context.Background()),
 						Shares: []*collaboration.ReceivedShare{
 							{
@@ -329,11 +331,11 @@ var _ = Describe("The ocs API", func() {
 				})
 
 				It("auto-accepts the share and applies the mountpoint", func() {
-					client.On("CreateShare", mock.Anything, mock.Anything).Return(&collaboration.CreateShareResponse{
+					gatewayClient.On("CreateShare", mock.Anything, mock.Anything).Return(&collaboration.CreateShareResponse{
 						Status: status.NewOK(context.Background()),
 						Share:  share2,
 					}, nil)
-					client.On("UpdateReceivedShare", mock.Anything, mock.MatchedBy(func(req *collaboration.UpdateReceivedShareRequest) bool {
+					gatewayClient.On("UpdateReceivedShare", mock.Anything, mock.MatchedBy(func(req *collaboration.UpdateReceivedShareRequest) bool {
 						return req.Share.Share.Id.OpaqueId == "2" && req.Share.MountPoint.Path == "some-mountpoint" && req.Share.State == collaboration.ShareState_SHARE_STATE_ACCEPTED
 					})).Return(&collaboration.UpdateReceivedShareResponse{
 						Status: status.NewOK(context.Background()),
@@ -357,14 +359,14 @@ var _ = Describe("The ocs API", func() {
 					w := httptest.NewRecorder()
 					h.CreateShare(w, req)
 					Expect(w.Result().StatusCode).To(Equal(200))
-					client.AssertNumberOfCalls(GinkgoT(), "CreateShare", 1)
-					client.AssertNumberOfCalls(GinkgoT(), "UpdateReceivedShare", 1)
+					gatewayClient.AssertNumberOfCalls(GinkgoT(), "CreateShare", 1)
+					gatewayClient.AssertNumberOfCalls(GinkgoT(), "UpdateReceivedShare", 1)
 				})
 			})
 		})
 
 		It("does not allow adding space members to a personal space", func() {
-			client.On("Stat", mock.Anything, mock.Anything).Return(&provider.StatResponse{
+			gatewayClient.On("Stat", mock.Anything, mock.Anything).Return(&provider.StatResponse{
 				Status: status.NewOK(context.Background()),
 				Info: &provider.ResourceInfo{
 					Type: provider.ResourceType_RESOURCE_TYPE_CONTAINER,
@@ -407,7 +409,7 @@ var _ = Describe("The ocs API", func() {
 			w := httptest.NewRecorder()
 			h.CreateShare(w, req)
 			Expect(w.Result().StatusCode).To(Equal(400))
-			client.AssertNumberOfCalls(GinkgoT(), "CreateShare", 0)
+			gatewayClient.AssertNumberOfCalls(GinkgoT(), "CreateShare", 0)
 		})
 	})
 
@@ -418,7 +420,7 @@ var _ = Describe("The ocs API", func() {
 				SpaceId:   "space-1",
 				OpaqueId:  "share1",
 			}
-			client.On("ListReceivedShares", mock.Anything, mock.Anything, mock.Anything).Return(&collaboration.ListReceivedSharesResponse{
+			gatewayClient.On("ListReceivedShares", mock.Anything, mock.Anything, mock.Anything).Return(&collaboration.ListReceivedSharesResponse{
 				Status: status.NewOK(context.Background()),
 				Shares: []*collaboration.ReceivedShare{
 					{
@@ -442,7 +444,7 @@ var _ = Describe("The ocs API", func() {
 				},
 			}, nil)
 
-			client.On("ListShares", mock.Anything, mock.Anything).Return(&collaboration.ListSharesResponse{
+			gatewayClient.On("ListShares", mock.Anything, mock.Anything).Return(&collaboration.ListSharesResponse{
 				Status: status.NewOK(context.Background()),
 				Shares: []*collaboration.Share{
 					{
@@ -462,7 +464,7 @@ var _ = Describe("The ocs API", func() {
 				},
 			}, nil)
 
-			client.On("Stat", mock.Anything, mock.Anything).Return(&provider.StatResponse{
+			gatewayClient.On("Stat", mock.Anything, mock.Anything).Return(&provider.StatResponse{
 				Status: status.NewOK(context.Background()),
 				Info: &provider.ResourceInfo{
 					Type:  provider.ResourceType_RESOURCE_TYPE_CONTAINER,
@@ -476,7 +478,7 @@ var _ = Describe("The ocs API", func() {
 				},
 			}, nil)
 
-			client.On("GetUser", mock.Anything, mock.Anything).Return(&userpb.GetUserResponse{
+			gatewayClient.On("GetUser", mock.Anything, mock.Anything).Return(&userpb.GetUserResponse{
 				Status: status.NewOK(context.Background()),
 				User:   user,
 			}, nil)
@@ -535,7 +537,7 @@ var _ = Describe("The ocs API", func() {
 				SpaceId:   "space-1",
 				OpaqueId:  "share1",
 			}
-			client.On("ListShares", mock.Anything, mock.Anything).Return(&collaboration.ListSharesResponse{
+			gatewayClient.On("ListShares", mock.Anything, mock.Anything).Return(&collaboration.ListSharesResponse{
 				Status: status.NewOK(context.Background()),
 				Shares: []*collaboration.Share{
 					{
@@ -571,7 +573,7 @@ var _ = Describe("The ocs API", func() {
 				},
 			}, nil)
 
-			client.On("Stat", mock.Anything, mock.Anything).Return(&provider.StatResponse{
+			gatewayClient.On("Stat", mock.Anything, mock.Anything).Return(&provider.StatResponse{
 				Status: status.NewOK(context.Background()),
 				Info: &provider.ResourceInfo{
 					Type:  provider.ResourceType_RESOURCE_TYPE_CONTAINER,
@@ -586,7 +588,7 @@ var _ = Describe("The ocs API", func() {
 				},
 			}, nil)
 
-			client.On("GetUser", mock.Anything, mock.Anything).Return(&userpb.GetUserResponse{
+			gatewayClient.On("GetUser", mock.Anything, mock.Anything).Return(&userpb.GetUserResponse{
 				Status: status.NewOK(context.Background()),
 				User:   user,
 			}, nil)
@@ -630,7 +632,7 @@ var _ = Describe("The ocs API", func() {
 					Type:     userpb.UserType_USER_TYPE_GUEST,
 				},
 			}
-			client.On("ListReceivedShares", mock.Anything, mock.Anything, mock.Anything).Return(&collaboration.ListReceivedSharesResponse{
+			gatewayClient.On("ListReceivedShares", mock.Anything, mock.Anything, mock.Anything).Return(&collaboration.ListReceivedSharesResponse{
 				Status: status.NewOK(context.Background()),
 				Shares: []*collaboration.ReceivedShare{
 					{
@@ -657,7 +659,7 @@ var _ = Describe("The ocs API", func() {
 				},
 			}, nil)
 
-			client.On("ListShares", mock.Anything, mock.Anything).Return(&collaboration.ListSharesResponse{
+			gatewayClient.On("ListShares", mock.Anything, mock.Anything).Return(&collaboration.ListSharesResponse{
 				Status: status.NewOK(context.Background()),
 				Shares: []*collaboration.Share{
 					{
@@ -680,7 +682,7 @@ var _ = Describe("The ocs API", func() {
 				},
 			}, nil)
 
-			client.On("Stat", mock.Anything, mock.Anything).Return(&provider.StatResponse{
+			gatewayClient.On("Stat", mock.Anything, mock.Anything).Return(&provider.StatResponse{
 				Status: status.NewOK(context.Background()),
 				Info: &provider.ResourceInfo{
 					Type:  provider.ResourceType_RESOURCE_TYPE_CONTAINER,
@@ -694,7 +696,7 @@ var _ = Describe("The ocs API", func() {
 				},
 			}, nil)
 
-			client.On("GetUser", mock.Anything, mock.Anything).Return(&userpb.GetUserResponse{
+			gatewayClient.On("GetUser", mock.Anything, mock.Anything).Return(&userpb.GetUserResponse{
 				Status: status.NewOK(context.Background()),
 				User:   user,
 			}, nil)
