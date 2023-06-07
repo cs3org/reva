@@ -178,6 +178,7 @@ func (h *Handler) listReceivedFederatedShares(ctx context.Context, gw gatewayv1b
 			continue
 		}
 		h.mapUserIdsReceivedFederatedShare(ctx, gw, sd)
+		sd.State = mapOCMState(s.State)
 		shares = append(shares, sd)
 	}
 	return shares, nil

@@ -179,12 +179,12 @@ func (h *Handler) updateReceivedFederatedShare(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	share.Share.State = req.Share.State
 	data, err := conversions.ReceivedOCMShare2ShareData(share.Share, h.ocmLocalMount(share.Share))
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "grpc update received share request failed", err)
 		return
 	}
 	h.mapUserIdsReceivedFederatedShare(ctx, client, data)
+	data.State = mapOCMState(req.Share.State)
 	response.WriteOCSSuccess(w, r, []*conversions.ShareData{data})
 }

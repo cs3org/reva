@@ -1369,6 +1369,19 @@ func mapState(state collaboration.ShareState) int {
 	return mapped
 }
 
+func mapOCMState(state ocmv1beta1.ShareState) int {
+	switch state {
+	case ocmv1beta1.ShareState_SHARE_STATE_PENDING:
+		return ocsStatePending
+	case ocmv1beta1.ShareState_SHARE_STATE_ACCEPTED:
+		return ocsStateAccepted
+	case ocmv1beta1.ShareState_SHARE_STATE_REJECTED:
+		return ocsStateRejected
+	default:
+		return ocsStateUnknown
+	}
+}
+
 func getStateFilter(s string) collaboration.ShareState {
 	var stateFilter collaboration.ShareState
 	switch s {
