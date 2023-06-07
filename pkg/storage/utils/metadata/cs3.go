@@ -461,7 +461,9 @@ func (cs3 *CS3) providerClient() (provider.ProviderAPIClient, error) {
 }
 
 func (cs3 *CS3) getAuthContext(ctx context.Context) (context.Context, error) {
-	ctx, span := tracer.Start(ctx, "getAuthContext")
+	// we need to start a new context to get rid of an existing x-access-token in the outgoing context
+	authCtx := context.Background()
+	authCtx, span := tracer.Start(authCtx, "getAuthContext", trace.WithLinks(trace.LinkFromContext(ctx)))
 	defer span.End()
 
 	client, err := pool.GetGatewayServiceClient(cs3.gatewayAddr)
@@ -469,7 +471,7 @@ func (cs3 *CS3) getAuthContext(ctx context.Context) (context.Context, error) {
 		return nil, err
 	}
 
-	authCtx := ctxpkg.ContextSetUser(ctx, cs3.serviceUser)
+	authCtx = ctxpkg.ContextSetUser(authCtx, cs3.serviceUser)
 	authRes, err := client.Authenticate(authCtx, &gateway.AuthenticateRequest{
 		Type:         "machine",
 		ClientId:     "userid:" + cs3.serviceUser.Id.OpaqueId,
