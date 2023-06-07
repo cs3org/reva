@@ -24,6 +24,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/lookup"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
@@ -31,6 +32,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/store"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/mock"
+	"google.golang.org/grpc"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	cs3permissions "github.com/cs3org/go-cs3apis/cs3/permissions/v1beta1"
@@ -155,10 +157,20 @@ func NewTestEnv(config map[string]interface{}) (*TestEnv, error) {
 	}
 
 	permissions := &mocks.PermissionsChecker{}
+
 	cs3permissionsclient := &mocks.CS3PermissionsClient{}
+	pool.RemoveSelector("PermissionsSelector" + "any")
+	permissionsSelector := pool.GetSelector[cs3permissions.PermissionsAPIClient](
+		"PermissionsSelector",
+		"any",
+		func(cc *grpc.ClientConn) cs3permissions.PermissionsAPIClient {
+			return cs3permissionsclient
+		},
+	)
+
 	bs := &treemocks.Blobstore{}
 	tree := tree.New(lu, bs, o, store.Create())
-	fs, err := decomposedfs.New(o, lu, decomposedfs.NewPermissions(permissions, cs3permissionsclient), tree, nil)
+	fs, err := decomposedfs.New(o, lu, decomposedfs.NewPermissions(permissions, permissionsSelector), tree, nil)
 	if err != nil {
 		return nil, err
 	}

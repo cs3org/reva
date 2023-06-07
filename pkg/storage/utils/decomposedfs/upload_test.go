@@ -30,6 +30,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	ruser "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
+	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v2/pkg/storage"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/lookup"
@@ -44,6 +45,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/store"
 	"github.com/cs3org/reva/v2/tests/helpers"
 	"github.com/stretchr/testify/mock"
+	"google.golang.org/grpc"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -61,6 +63,7 @@ var _ = Describe("File uploads", func() {
 		lu                   *lookup.Lookup
 		permissions          *mocks.PermissionsChecker
 		cs3permissionsclient *mocks.CS3PermissionsClient
+		permissionsSelector  pool.Selectable[cs3permissions.PermissionsAPIClient]
 		bs                   *treemocks.Blobstore
 	)
 
@@ -101,6 +104,15 @@ var _ = Describe("File uploads", func() {
 		lu = lookup.New(metadata.XattrsBackend{}, o)
 		permissions = &mocks.PermissionsChecker{}
 		cs3permissionsclient = &mocks.CS3PermissionsClient{}
+		pool.RemoveSelector("PermissionsSelector" + "any")
+		permissionsSelector = pool.GetSelector[cs3permissions.PermissionsAPIClient](
+			"PermissionsSelector",
+			"any",
+			func(cc *grpc.ClientConn) cs3permissions.PermissionsAPIClient {
+				return cs3permissionsclient
+			},
+		)
+
 		bs = &treemocks.Blobstore{}
 	})
 
@@ -121,7 +133,7 @@ var _ = Describe("File uploads", func() {
 		}, nil).Times(1)
 		var err error
 		tree := tree.New(lu, bs, o, store.Create())
-		fs, err = decomposedfs.New(o, lu, decomposedfs.NewPermissions(permissions, cs3permissionsclient), tree, nil)
+		fs, err = decomposedfs.New(o, lu, decomposedfs.NewPermissions(permissions, permissionsSelector), tree, nil)
 		Expect(err).ToNot(HaveOccurred())
 
 		resp, err := fs.CreateStorageSpace(ctx, &provider.CreateStorageSpaceRequest{Owner: user, Type: "personal"})

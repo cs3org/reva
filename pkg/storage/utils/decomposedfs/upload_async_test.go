@@ -14,6 +14,7 @@ import (
 	ruser "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/events"
 	"github.com/cs3org/reva/v2/pkg/events/stream"
+	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v2/pkg/storage"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/lookup"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata"
@@ -26,6 +27,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/cs3org/reva/v2/tests/helpers"
 	"github.com/stretchr/testify/mock"
+	"google.golang.org/grpc"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -70,6 +72,7 @@ var _ = Describe("Async file uploads", Ordered, func() {
 		lu                   *lookup.Lookup
 		permissions          *mocks.PermissionsChecker
 		cs3permissionsclient *mocks.CS3PermissionsClient
+		permissionsSelector  pool.Selectable[cs3permissions.PermissionsAPIClient]
 		bs                   *treemocks.Blobstore
 	)
 
@@ -86,7 +89,16 @@ var _ = Describe("Async file uploads", Ordered, func() {
 
 		lu = lookup.New(metadata.XattrsBackend{}, o)
 		permissions = &mocks.PermissionsChecker{}
+
 		cs3permissionsclient = &mocks.CS3PermissionsClient{}
+		pool.RemoveSelector("PermissionsSelector" + "any")
+		permissionsSelector = pool.GetSelector[cs3permissions.PermissionsAPIClient](
+			"PermissionsSelector",
+			"any",
+			func(cc *grpc.ClientConn) cs3permissions.PermissionsAPIClient {
+				return cs3permissionsclient
+			},
+		)
 		bs = &treemocks.Blobstore{}
 
 		// create space uses CheckPermission endpoint
@@ -107,7 +119,7 @@ var _ = Describe("Async file uploads", Ordered, func() {
 		// setup fs
 		pub, con = make(chan interface{}), make(chan interface{})
 		tree := tree.New(lu, bs, o, store.Create())
-		fs, err = New(o, lu, NewPermissions(permissions, cs3permissionsclient), tree, stream.Chan{pub, con})
+		fs, err = New(o, lu, NewPermissions(permissions, permissionsSelector), tree, stream.Chan{pub, con})
 		Expect(err).ToNot(HaveOccurred())
 
 		resp, err := fs.CreateStorageSpace(ctx, &provider.CreateStorageSpaceRequest{Owner: user, Type: "personal"})
