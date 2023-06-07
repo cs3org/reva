@@ -56,6 +56,7 @@ var (
 		moveCommand(),
 		mkdirCommand(),
 		ocmFindAcceptedUsersCommand(),
+		ocmRemoveAcceptedUser(),
 		ocmInviteGenerateCommand(),
 		ocmInviteForwardCommand(),
 		ocmShareCreateCommand(),
