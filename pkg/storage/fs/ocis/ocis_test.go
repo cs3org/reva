@@ -39,9 +39,10 @@ var _ = Describe("Ocis", func() {
 		Expect(err).ToNot(HaveOccurred())
 
 		options = map[string]interface{}{
-			"root":         tmpRoot,
-			"enable_home":  true,
-			"share_folder": "/Shares",
+			"root":           tmpRoot,
+			"enable_home":    true,
+			"share_folder":   "/Shares",
+			"permissionssvc": "any",
 		}
 	})
 

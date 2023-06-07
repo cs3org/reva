@@ -81,20 +81,20 @@ func (s *Selector[T]) Next(opts ...Option) (T, error) {
 		registry: registry.GetRegistry(),
 	}
 
-	// first use selector options
-	for _, opt := range s.options {
+	allOpts := append([]Option{}, s.options...)
+	allOpts = append(allOpts, opts...)
+
+	for _, opt := range allOpts {
 		opt(&options)
 	}
 
-	// then overwrite with supplied
-	for _, opt := range opts {
-		opt(&options)
-	}
-
-	services, _ := options.registry.GetService(s.id)
-	address, err := registry.GetNodeAddress(services)
-	if err != nil || address == "" {
-		address = s.id
+	address := s.id
+	if options.registry != nil {
+		services, _ := options.registry.GetService(s.id)
+		nodeAddress, err := registry.GetNodeAddress(services)
+		if err == nil && nodeAddress != "" {
+			address = nodeAddress
+		}
 	}
 
 	existingClient, ok := s.clientMap.Load(address)
@@ -102,7 +102,7 @@ func (s *Selector[T]) Next(opts ...Option) (T, error) {
 		return existingClient.(T), nil
 	}
 
-	conn, err := NewConn(address, append(s.options, opts...)...)
+	conn, err := NewConn(address, allOpts...)
 	if err != nil {
 		return *new(T), errors.Wrap(err, fmt.Sprintf("could not create connection for %s to %s", s.id, address))
 	}
