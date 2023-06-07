@@ -33,6 +33,8 @@ import (
 	providerv1beta1 "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
+	"google.golang.org/genproto/protobuf/field_mask"
+	"google.golang.org/protobuf/types/known/fieldmaskpb"
 
 	"github.com/cs3org/reva/pkg/ocm/share"
 	sqle "github.com/dolthub/go-mysql-server"
@@ -1705,6 +1707,117 @@ func TestGetReceivedShare(t *testing.T) {
 				if !reflect.DeepEqual(got, tt.expected) {
 					t.Fatalf("shares do not match. got=%+v expected=%+v", render.AsCode(got), render.AsCode(tt.expected))
 				}
+			}
+		})
+	}
+}
+
+func TestUpdateReceivedShare(t *testing.T) {
+	fixedTime := time.Date(2024, 12, 12, 12, 12, 0, 0, time.UTC)
+
+	tests := []struct {
+		description string
+		shares      []*ocm.ReceivedShare
+		user        *userpb.User
+		newShare    *ocm.ReceivedShare
+		mask        *field_mask.FieldMask
+		err         error
+		expected    storeReceivedShareExpected
+	}{
+		{
+			description: "update existing share",
+			shares: []*ocm.ReceivedShare{
+				{
+					Id:            &ocm.ShareId{OpaqueId: "1"},
+					RemoteShareId: "1-remote",
+					Name:          "file-name",
+					Grantee:       &providerv1beta1.Grantee{Type: providerv1beta1.GranteeType_GRANTEE_TYPE_USER, Id: &providerv1beta1.Grantee_UserId{UserId: &userpb.UserId{Idp: "cesnet", OpaqueId: "marie"}}},
+					Owner:         &userpb.UserId{Idp: "cernbox", OpaqueId: "einstein"},
+					Creator:       &userpb.UserId{Idp: "cernbox", OpaqueId: "einstein"},
+					Ctime:         &typesv1beta1.Timestamp{Seconds: 1670859468},
+					Mtime:         &typesv1beta1.Timestamp{Seconds: 1670859468},
+					ShareType:     ocm.ShareType_SHARE_TYPE_USER,
+					State:         ocm.ShareState_SHARE_STATE_PENDING,
+					ResourceType:  providerv1beta1.ResourceType_RESOURCE_TYPE_FILE,
+					Protocols: []*ocm.Protocol{
+						share.NewWebDAVProtocol("webdav+https//cernbox.cern.ch/dav/ocm/1", "secret", &ocm.SharePermissions{
+							Permissions: conversions.NewEditorRole().CS3ResourcePermissions(),
+						}),
+					},
+				},
+			},
+			user: &userpb.User{Id: &userpb.UserId{Idp: "cernbox", OpaqueId: "einstein"}},
+			newShare: &ocm.ReceivedShare{
+				Id:    &ocm.ShareId{OpaqueId: "1"},
+				State: ocm.ShareState_SHARE_STATE_ACCEPTED,
+			},
+			mask: &fieldmaskpb.FieldMask{Paths: []string{"state"}},
+			expected: storeReceivedShareExpected{
+				shares:    []sql.Row{{int64(1), "file-name", "1-remote", int8(0), "marie", "einstein@cernbox", "einstein@cernbox", uint64(1670859468), uint64(fixedTime.Unix()), uint64(0), int8(ShareTypeUser), int8(ShareStateAccepted)}},
+				protocols: []sql.Row{{int64(1), int64(1), int8(0)}},
+				webdav:    []sql.Row{{int64(1), "webdav+https//cernbox.cern.ch/dav/ocm/1", "secret", int64(15)}},
+				webapp:    []sql.Row{},
+				transfer:  []sql.Row{},
+			},
+		},
+		{
+			description: "update non existing share",
+			shares: []*ocm.ReceivedShare{
+				{
+					Id:            &ocm.ShareId{OpaqueId: "1"},
+					RemoteShareId: "1-remote",
+					Name:          "file-name",
+					Grantee:       &providerv1beta1.Grantee{Type: providerv1beta1.GranteeType_GRANTEE_TYPE_USER, Id: &providerv1beta1.Grantee_UserId{UserId: &userpb.UserId{Idp: "cesnet", OpaqueId: "marie"}}},
+					Owner:         &userpb.UserId{Idp: "cernbox", OpaqueId: "einstein"},
+					Creator:       &userpb.UserId{Idp: "cernbox", OpaqueId: "einstein"},
+					Ctime:         &typesv1beta1.Timestamp{Seconds: 1670859468},
+					Mtime:         &typesv1beta1.Timestamp{Seconds: 1670859468},
+					ShareType:     ocm.ShareType_SHARE_TYPE_USER,
+					State:         ocm.ShareState_SHARE_STATE_PENDING,
+					ResourceType:  providerv1beta1.ResourceType_RESOURCE_TYPE_FILE,
+					Protocols: []*ocm.Protocol{
+						share.NewWebDAVProtocol("webdav+https//cernbox.cern.ch/dav/ocm/1", "secret", &ocm.SharePermissions{
+							Permissions: conversions.NewEditorRole().CS3ResourcePermissions(),
+						}),
+					},
+				},
+			},
+			user: &userpb.User{Id: &userpb.UserId{Idp: "cernbox", OpaqueId: "einstein"}},
+			newShare: &ocm.ReceivedShare{
+				Id:    &ocm.ShareId{OpaqueId: "not-existing-share-id"},
+				State: ocm.ShareState_SHARE_STATE_ACCEPTED,
+			},
+			mask: &fieldmaskpb.FieldMask{Paths: []string{"state"}},
+			err:  share.ErrShareNotFound,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.description, func(t *testing.T) {
+			ctx := sql.NewEmptyContext()
+			tables := createReceivedShareTables(ctx, tt.shares)
+			engine, port, cleanup := startDatabase(ctx, tables)
+			t.Cleanup(cleanup)
+
+			r, err := NewFromConfig(&config{
+				DBUsername: "root",
+				DBPassword: "",
+				DBAddress:  fmt.Sprintf("%s:%d", address, port),
+				DBName:     dbName,
+				now:        func() time.Time { return fixedTime },
+			})
+
+			if err != nil {
+				t.Fatalf("not expected error while creating share repository driver: %+v", err)
+			}
+
+			_, err = r.UpdateReceivedShare(context.TODO(), tt.user, tt.newShare, tt.mask)
+			if err != tt.err {
+				t.Fatalf("not expected error getting share. got=%+v expected=%+v", err, tt.err)
+			}
+
+			if tt.err == nil {
+				checkReceivedShares(ctx, engine, tt.expected, t)
 			}
 		})
 	}

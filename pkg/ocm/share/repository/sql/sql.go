@@ -780,21 +780,27 @@ func (m *mgr) getProtocols(ctx context.Context, id int) ([]*ocm.Protocol, error)
 }
 
 // UpdateReceivedShare updates the received share with share state.
-func (m *mgr) UpdateReceivedShare(ctx context.Context, user *userpb.User, share *ocm.ReceivedShare, fieldMask *field_mask.FieldMask) (*ocm.ReceivedShare, error) {
-	query := "UPDATE ocm_received_shares SET "
+func (m *mgr) UpdateReceivedShare(ctx context.Context, user *userpb.User, s *ocm.ReceivedShare, fieldMask *field_mask.FieldMask) (*ocm.ReceivedShare, error) {
+	query := "UPDATE ocm_received_shares SET"
 	params := []any{}
 
-	fquery, fparams, updatedShare, err := m.translateUpdateFieldMask(share, fieldMask)
+	fquery, fparams, updatedShare, err := m.translateUpdateFieldMask(s, fieldMask)
 	if err != nil {
 		return nil, err
 	}
 
 	query = fmt.Sprintf("%s %s WHERE id=?", query, fquery)
 	params = append(params, fparams...)
-	params = append(params, share.Id.OpaqueId)
+	params = append(params, s.Id.OpaqueId)
 
-	_, err = m.db.ExecContext(ctx, query, params...)
-	return updatedShare, err
+	res, err := m.db.ExecContext(ctx, query, params...)
+	if err != nil {
+		return nil, err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return nil, share.ErrShareNotFound
+	}
+	return updatedShare, nil
 }
 
 func (m *mgr) translateUpdateFieldMask(share *ocm.ReceivedShare, fieldMask *field_mask.FieldMask) (string, []any, *ocm.ReceivedShare, error) {
@@ -809,7 +815,7 @@ func (m *mgr) translateUpdateFieldMask(share *ocm.ReceivedShare, fieldMask *fiel
 		switch mask {
 		case "state":
 			query.WriteString("state=?")
-			params = append(params, share.State)
+			params = append(params, convertFromCS3OCMShareState(share.State))
 			newShare.State = share.State
 		default:
 			return "", nil, nil, errtypes.NotSupported("updating " + mask + " is not supported")
