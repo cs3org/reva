@@ -26,7 +26,6 @@ import (
 	"net/http"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
-	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
@@ -107,12 +106,7 @@ func (h *tokenHandler) Generate(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	tknRes, err := h.prepareGenerateTokenResponse(user, token.InviteToken)
-	if err != nil {
-		reqres.WriteError(w, r, reqres.APIErrorServerError, "error generating response", err)
-		return
-	}
-
+	tknRes := h.prepareGenerateTokenResponse(token.InviteToken)
 	if err := json.NewEncoder(w).Encode(tknRes); err != nil {
 		reqres.WriteError(w, r, reqres.APIErrorServerError, "error marshalling token data", err)
 		return
@@ -122,22 +116,17 @@ func (h *tokenHandler) Generate(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-func (h *tokenHandler) generateInviteLink(token *invitepb.InviteToken) string {
-	return h.meshDirectoryURL + "?token=" + token.Token + "&providerDomain=" + h.providerDomain
-}
-
-func (h *tokenHandler) prepareGenerateTokenResponse(user *userpb.User, tkn *invitepb.InviteToken) (*token, error) {
-	inviteLink := h.generateInviteLink(tkn)
+func (h *tokenHandler) prepareGenerateTokenResponse(tkn *invitepb.InviteToken) *token {
 	res := &token{
 		Token:       tkn.Token,
 		Description: tkn.Description,
-		InviteLink:  inviteLink,
+		InviteLink:  h.meshDirectoryURL + "?token=" + tkn.Token + "&providerDomain=" + h.providerDomain,
 	}
 	if tkn.Expiration != nil {
 		res.Expiration = tkn.Expiration.Seconds
 	}
 
-	return res, nil
+	return res
 }
 
 type acceptInviteRequest struct {
@@ -258,20 +247,7 @@ func (h *tokenHandler) ListInvite(w http.ResponseWriter, r *http.Request) {
 
 	tokens := make([]*token, 0, len(res.InviteTokens))
 	for _, tkn := range res.InviteTokens {
-		inviteURL := h.generateInviteLink(tkn)
-		if err != nil {
-			reqres.WriteError(w, r, reqres.APIErrorServerError, "error generating invite URL from OCM token", err)
-			return
-		}
-		t := &token{
-			Token:       tkn.Token,
-			Description: tkn.Description,
-			InviteLink:  inviteURL,
-		}
-		if tkn.Expiration != nil {
-			t.Expiration = tkn.Expiration.Seconds
-		}
-		tokens = append(tokens, t)
+		tokens = append(tokens, h.prepareGenerateTokenResponse(tkn))
 	}
 
 	if err := json.NewEncoder(w).Encode(tokens); err != nil {
