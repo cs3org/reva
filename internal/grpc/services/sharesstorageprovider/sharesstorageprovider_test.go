@@ -31,6 +31,7 @@ import (
 	provider "github.com/cs3org/reva/v2/internal/grpc/services/sharesstorageprovider"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/status"
+	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
 	_ "github.com/cs3org/reva/v2/pkg/share/manager/loader"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	cs3mocks "github.com/cs3org/reva/v2/tests/cs3mocks/mocks"
@@ -67,9 +68,11 @@ var _ = Describe("Sharesstorageprovider", func() {
 			Username: "alice",
 		})
 
-		s                    sprovider.ProviderAPIServer
-		gw                   *cs3mocks.GatewayAPIClient
-		sharesProviderClient *cs3mocks.CollaborationAPIClient
+		s                            sprovider.ProviderAPIServer
+		gatewayClient                *cs3mocks.GatewayAPIClient
+		gatewaySelector              pool.Selectable[gateway.GatewayAPIClient]
+		sharingCollaborationClient   *cs3mocks.CollaborationAPIClient
+		sharingCollaborationSelector pool.Selectable[collaboration.CollaborationAPIClient]
 	)
 
 	BeforeEach(func() {
@@ -160,13 +163,29 @@ var _ = Describe("Sharesstorageprovider", func() {
 			},
 		}
 
-		sharesProviderClient = &cs3mocks.CollaborationAPIClient{}
+		pool.RemoveSelector("GatewaySelector" + "any")
+		gatewayClient = &cs3mocks.GatewayAPIClient{}
+		gatewaySelector = pool.GetSelector[gateway.GatewayAPIClient](
+			"GatewaySelector",
+			"any",
+			func(cc *grpc.ClientConn) gateway.GatewayAPIClient {
+				return gatewayClient
+			},
+		)
 
-		gw = &cs3mocks.GatewayAPIClient{}
+		pool.RemoveSelector("SharingCollaborationSelector" + "any")
+		sharingCollaborationClient = &cs3mocks.CollaborationAPIClient{}
+		sharingCollaborationSelector = pool.GetSelector[collaboration.CollaborationAPIClient](
+			"SharingCollaborationSelector",
+			"any",
+			func(cc *grpc.ClientConn) collaboration.CollaborationAPIClient {
+				return sharingCollaborationClient
+			},
+		)
 
 		// mock stat requests
 		// some-provider-id
-		gw.On("Stat", mock.Anything, mock.AnythingOfType("*providerv1beta1.StatRequest")).Return(
+		gatewayClient.On("Stat", mock.Anything, mock.AnythingOfType("*providerv1beta1.StatRequest")).Return(
 			func(_ context.Context, req *sprovider.StatRequest, _ ...grpc.CallOption) *sprovider.StatResponse {
 				switch req.Ref.GetPath() {
 				case "./share1-shareddir":
@@ -245,7 +264,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 			},
 			nil)
 
-		gw.On("ListContainer", mock.Anything, mock.AnythingOfType("*providerv1beta1.ListContainerRequest")).Return(
+		gatewayClient.On("ListContainer", mock.Anything, mock.AnythingOfType("*providerv1beta1.ListContainerRequest")).Return(
 			func(_ context.Context, req *sprovider.ListContainerRequest, _ ...grpc.CallOption) *sprovider.ListContainerResponse {
 				switch {
 				case utils.ResourceIDEqual(req.Ref.ResourceId, BaseShare.Share.ResourceId):
@@ -295,7 +314,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 	})
 
 	JustBeforeEach(func() {
-		p, err := provider.New(gw, sharesProviderClient)
+		p, err := provider.New(gatewaySelector, sharingCollaborationSelector)
 		Expect(err).ToNot(HaveOccurred())
 		s = p.(sprovider.ProviderAPIServer)
 		Expect(s).ToNot(BeNil())
@@ -321,7 +340,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 
 	Describe("ListContainer", func() {
 		It("lists accepted shares", func() {
-			sharesProviderClient.On("GetReceivedShare", mock.Anything, mock.Anything).Return(&collaboration.GetReceivedShareResponse{
+			sharingCollaborationClient.On("GetReceivedShare", mock.Anything, mock.Anything).Return(&collaboration.GetReceivedShareResponse{
 				Status: status.NewOK(context.Background()),
 				Share: &collaboration.ReceivedShare{
 					Share: BaseShare.Share,
@@ -334,7 +353,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 			Expect(len(res.Infos)).To(Equal(1))
 		})
 		It("ignores invalid shares", func() {
-			sharesProviderClient.On("GetReceivedShare", mock.Anything, mock.Anything).Return(&collaboration.GetReceivedShareResponse{
+			sharingCollaborationClient.On("GetReceivedShare", mock.Anything, mock.Anything).Return(&collaboration.GetReceivedShareResponse{
 				Status: status.NewOK(context.Background()),
 				Share: &collaboration.ReceivedShare{
 					Share: &collaboration.Share{ResourceId: &sprovider.ResourceId{}},
@@ -347,7 +366,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 			Expect(len(res.Infos)).To(Equal(0))
 		})
 		It("ignores pending shares", func() {
-			sharesProviderClient.On("GetReceivedShare", mock.Anything, mock.Anything).Return(&collaboration.GetReceivedShareResponse{
+			sharingCollaborationClient.On("GetReceivedShare", mock.Anything, mock.Anything).Return(&collaboration.GetReceivedShareResponse{
 				Status: status.NewOK(context.Background()),
 				Share: &collaboration.ReceivedShare{
 					Share: &collaboration.Share{ResourceId: &sprovider.ResourceId{}},
@@ -360,7 +379,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 			Expect(len(res.Infos)).To(Equal(0))
 		})
 		It("ignores rejected shares", func() {
-			sharesProviderClient.On("GetReceivedShare", mock.Anything, mock.Anything).Return(&collaboration.GetReceivedShareResponse{
+			sharingCollaborationClient.On("GetReceivedShare", mock.Anything, mock.Anything).Return(&collaboration.GetReceivedShareResponse{
 				Status: status.NewOK(context.Background()),
 				Share: &collaboration.ReceivedShare{
 					Share: &collaboration.Share{ResourceId: &sprovider.ResourceId{}},
@@ -376,11 +395,11 @@ var _ = Describe("Sharesstorageprovider", func() {
 
 	Context("with two accepted shares", func() {
 		BeforeEach(func() {
-			sharesProviderClient.On("ListReceivedShares", mock.Anything, mock.Anything).Return(&collaboration.ListReceivedSharesResponse{
+			sharingCollaborationClient.On("ListReceivedShares", mock.Anything, mock.Anything).Return(&collaboration.ListReceivedSharesResponse{
 				Status: status.NewOK(context.Background()),
 				Shares: []*collaboration.ReceivedShare{BaseShare, BaseShareTwo},
 			}, nil)
-			sharesProviderClient.On("GetReceivedShare", mock.Anything, mock.Anything).Return(
+			sharingCollaborationClient.On("GetReceivedShare", mock.Anything, mock.Anything).Return(
 				func(_ context.Context, req *collaboration.GetReceivedShareRequest, _ ...grpc.CallOption) *collaboration.GetReceivedShareResponse {
 					switch req.Ref.GetId().GetOpaqueId() {
 					case BaseShare.Share.Id.OpaqueId:
@@ -468,11 +487,11 @@ var _ = Describe("Sharesstorageprovider", func() {
 					MountPoint: &sprovider.Reference{Path: "share2-shareddir"},
 				}
 
-				sharesProviderClient.On("ListReceivedShares", mock.Anything, mock.Anything).Return(&collaboration.ListReceivedSharesResponse{
+				sharingCollaborationClient.On("ListReceivedShares", mock.Anything, mock.Anything).Return(&collaboration.ListReceivedSharesResponse{
 					Status: status.NewOK(context.Background()),
 					Shares: []*collaboration.ReceivedShare{s1, s2},
 				}, nil)
-				sharesProviderClient.On("GetReceivedShare", mock.Anything, mock.Anything).Return(
+				sharingCollaborationClient.On("GetReceivedShare", mock.Anything, mock.Anything).Return(
 					func(_ context.Context, req *collaboration.GetReceivedShareRequest, _ ...grpc.CallOption) *collaboration.GetReceivedShareResponse {
 						switch req.Ref.GetId().GetOpaqueId() {
 						case BaseShare.Share.Id.OpaqueId:
@@ -559,7 +578,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 
 		Describe("InitiateFileDownload", func() {
 			It("returns not found when not found", func() {
-				gw.On("InitiateFileDownload", mock.Anything, mock.Anything).Return(&gateway.InitiateFileDownloadResponse{
+				gatewayClient.On("InitiateFileDownload", mock.Anything, mock.Anything).Return(&gateway.InitiateFileDownloadResponse{
 					Status: status.NewNotFound(ctx, "gateway: file not found"),
 				}, nil)
 
@@ -576,7 +595,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 			})
 
 			It("initiates the download of an existing file", func() {
-				gw.On("InitiateFileDownload", mock.Anything, mock.Anything).Return(&gateway.InitiateFileDownloadResponse{
+				gatewayClient.On("InitiateFileDownload", mock.Anything, mock.Anything).Return(&gateway.InitiateFileDownloadResponse{
 					Status: status.NewOK(ctx),
 					Protocols: []*gateway.FileDownloadProtocol{
 						{
@@ -604,7 +623,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 
 		Describe("CreateContainer", func() {
 			BeforeEach(func() {
-				gw.On("CreateContainer", mock.Anything, mock.Anything).Return(&sprovider.CreateContainerResponse{
+				gatewayClient.On("CreateContainer", mock.Anything, mock.Anything).Return(&sprovider.CreateContainerResponse{
 					Status: status.NewOK(ctx),
 				}, nil)
 			})
@@ -616,7 +635,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 					},
 				}
 				res, err := s.CreateContainer(ctx, req)
-				gw.AssertNotCalled(GinkgoT(), "CreateContainer", mock.Anything, mock.Anything)
+				gatewayClient.AssertNotCalled(GinkgoT(), "CreateContainer", mock.Anything, mock.Anything)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(res).ToNot(BeNil())
 				Expect(res.Status.Code).To(Equal(rpc.Code_CODE_INVALID_ARGUMENT))
@@ -630,7 +649,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 					},
 				}
 				res, err := s.CreateContainer(ctx, req)
-				gw.AssertCalled(GinkgoT(), "CreateContainer", mock.Anything, mock.Anything)
+				gatewayClient.AssertCalled(GinkgoT(), "CreateContainer", mock.Anything, mock.Anything)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(res).ToNot(BeNil())
 			})
@@ -638,7 +657,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 
 		Describe("TouchFile", func() {
 			BeforeEach(func() {
-				gw.On("TouchFile", mock.Anything, mock.Anything).Return(
+				gatewayClient.On("TouchFile", mock.Anything, mock.Anything).Return(
 					&sprovider.TouchFileResponse{Status: status.NewOK(ctx)}, nil)
 			})
 
@@ -650,7 +669,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 					},
 				}
 				res, err := s.TouchFile(ctx, req)
-				gw.AssertCalled(GinkgoT(), "TouchFile", mock.Anything, mock.Anything)
+				gatewayClient.AssertCalled(GinkgoT(), "TouchFile", mock.Anything, mock.Anything)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(res).ToNot(BeNil())
 				Expect(res.Status.Code).To(Equal(rpc.Code_CODE_OK))
@@ -659,12 +678,12 @@ var _ = Describe("Sharesstorageprovider", func() {
 
 		Describe("Delete", func() {
 			BeforeEach(func() {
-				gw.On("Delete", mock.Anything, mock.Anything).Return(
+				gatewayClient.On("Delete", mock.Anything, mock.Anything).Return(
 					&sprovider.DeleteResponse{Status: status.NewOK(ctx)}, nil)
 			})
 
 			It("rejects the share when deleting a share", func() {
-				sharesProviderClient.On("UpdateReceivedShare", mock.Anything, mock.Anything).Return(
+				sharingCollaborationClient.On("UpdateReceivedShare", mock.Anything, mock.Anything).Return(
 					&collaboration.UpdateReceivedShareResponse{Status: status.NewOK(ctx)}, nil)
 				req := &sprovider.DeleteRequest{
 					Ref: &sprovider.Reference{
@@ -677,12 +696,12 @@ var _ = Describe("Sharesstorageprovider", func() {
 					},
 				}
 				res, err := s.Delete(ctx, req)
-				gw.AssertNotCalled(GinkgoT(), "Delete", mock.Anything, mock.Anything)
+				gatewayClient.AssertNotCalled(GinkgoT(), "Delete", mock.Anything, mock.Anything)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(res).ToNot(BeNil())
 				Expect(res.Status.Code).To(Equal(rpc.Code_CODE_OK))
 
-				sharesProviderClient.AssertCalled(GinkgoT(), "UpdateReceivedShare", mock.Anything, mock.Anything)
+				sharingCollaborationClient.AssertCalled(GinkgoT(), "UpdateReceivedShare", mock.Anything, mock.Anything)
 			})
 
 			It("deletes a file", func() {
@@ -693,7 +712,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 					},
 				}
 				res, err := s.Delete(ctx, req)
-				gw.AssertCalled(GinkgoT(), "Delete", mock.Anything, mock.Anything)
+				gatewayClient.AssertCalled(GinkgoT(), "Delete", mock.Anything, mock.Anything)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(res).ToNot(BeNil())
 				Expect(res.Status.Code).To(Equal(rpc.Code_CODE_OK))
@@ -702,13 +721,13 @@ var _ = Describe("Sharesstorageprovider", func() {
 
 		Describe("Move", func() {
 			BeforeEach(func() {
-				gw.On("Move", mock.Anything, mock.Anything).Return(&sprovider.MoveResponse{
+				gatewayClient.On("Move", mock.Anything, mock.Anything).Return(&sprovider.MoveResponse{
 					Status: status.NewOK(ctx),
 				}, nil)
 			})
 
 			It("renames a share", func() {
-				sharesProviderClient.On("UpdateReceivedShare", mock.Anything, mock.Anything).Return(nil, nil)
+				sharingCollaborationClient.On("UpdateReceivedShare", mock.Anything, mock.Anything).Return(nil, nil)
 
 				req := &sprovider.MoveRequest{
 					Source: &sprovider.Reference{
@@ -725,15 +744,15 @@ var _ = Describe("Sharesstorageprovider", func() {
 					},
 				}
 				res, err := s.Move(ctx, req)
-				gw.AssertNotCalled(GinkgoT(), "Move", mock.Anything, mock.Anything)
+				gatewayClient.AssertNotCalled(GinkgoT(), "Move", mock.Anything, mock.Anything)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(res).ToNot(BeNil())
 				Expect(res.Status.Code).To(Equal(rpc.Code_CODE_OK))
-				sharesProviderClient.AssertCalled(GinkgoT(), "UpdateReceivedShare", mock.Anything, mock.Anything)
+				sharingCollaborationClient.AssertCalled(GinkgoT(), "UpdateReceivedShare", mock.Anything, mock.Anything)
 			})
 
 			It("renames a sharejail entry", func() {
-				sharesProviderClient.On("UpdateReceivedShare", mock.Anything, mock.Anything).Return(nil, nil)
+				sharingCollaborationClient.On("UpdateReceivedShare", mock.Anything, mock.Anything).Return(nil, nil)
 
 				req := &sprovider.MoveRequest{
 					Source: &sprovider.Reference{
@@ -746,11 +765,11 @@ var _ = Describe("Sharesstorageprovider", func() {
 					},
 				}
 				res, err := s.Move(ctx, req)
-				gw.AssertNotCalled(GinkgoT(), "Move", mock.Anything, mock.Anything)
+				gatewayClient.AssertNotCalled(GinkgoT(), "Move", mock.Anything, mock.Anything)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(res).ToNot(BeNil())
 				Expect(res.Status.Code).To(Equal(rpc.Code_CODE_OK))
-				sharesProviderClient.AssertCalled(GinkgoT(), "UpdateReceivedShare", mock.Anything, mock.Anything)
+				sharingCollaborationClient.AssertCalled(GinkgoT(), "UpdateReceivedShare", mock.Anything, mock.Anything)
 			})
 
 			It("refuses to move a file between shares", func() {
@@ -763,7 +782,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 					},
 				}
 				res, err := s.Move(ctx, req)
-				gw.AssertNotCalled(GinkgoT(), "Move", mock.Anything, mock.Anything)
+				gatewayClient.AssertNotCalled(GinkgoT(), "Move", mock.Anything, mock.Anything)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(res).ToNot(BeNil())
 				Expect(res.Status.Code).To(Equal(rpc.Code_CODE_INVALID_ARGUMENT))
@@ -781,7 +800,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 					},
 				}
 				res, err := s.Move(ctx, req)
-				gw.AssertCalled(GinkgoT(), "Move", mock.Anything, mock.Anything)
+				gatewayClient.AssertCalled(GinkgoT(), "Move", mock.Anything, mock.Anything)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(res).ToNot(BeNil())
 				Expect(res.Status.Code).To(Equal(rpc.Code_CODE_OK))
@@ -790,7 +809,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 
 		Describe("ListFileVersions", func() {
 			BeforeEach(func() {
-				gw.On("ListFileVersions", mock.Anything, mock.Anything).Return(
+				gatewayClient.On("ListFileVersions", mock.Anything, mock.Anything).Return(
 					&sprovider.ListFileVersionsResponse{
 						Status: status.NewOK(ctx),
 						Versions: []*sprovider.FileVersion{
@@ -817,7 +836,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 					},
 				}
 				res, err := s.ListFileVersions(ctx, req)
-				gw.AssertNotCalled(GinkgoT(), "ListFileVersions", mock.Anything, mock.Anything)
+				gatewayClient.AssertNotCalled(GinkgoT(), "ListFileVersions", mock.Anything, mock.Anything)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(res).ToNot(BeNil())
 				Expect(res.Status.Code).To(Equal(rpc.Code_CODE_INVALID_ARGUMENT))
@@ -828,7 +847,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 					},
 				}
 				res, err = s.ListFileVersions(ctx, req)
-				gw.AssertNotCalled(GinkgoT(), "ListFileVersions", mock.Anything, mock.Anything)
+				gatewayClient.AssertNotCalled(GinkgoT(), "ListFileVersions", mock.Anything, mock.Anything)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(res).ToNot(BeNil())
 				Expect(res.Status.Code).To(Equal(rpc.Code_CODE_INVALID_ARGUMENT))
@@ -842,7 +861,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 					},
 				}
 				res, err := s.ListFileVersions(ctx, req)
-				gw.AssertCalled(GinkgoT(), "ListFileVersions", mock.Anything, mock.Anything)
+				gatewayClient.AssertCalled(GinkgoT(), "ListFileVersions", mock.Anything, mock.Anything)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(res).ToNot(BeNil())
 				Expect(res.Status.Code).To(Equal(rpc.Code_CODE_OK))
@@ -857,7 +876,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 
 		Describe("RestoreFileVersion", func() {
 			BeforeEach(func() {
-				gw.On("RestoreFileVersion", mock.Anything, mock.Anything).Return(
+				gatewayClient.On("RestoreFileVersion", mock.Anything, mock.Anything).Return(
 					&sprovider.RestoreFileVersionResponse{
 						Status: status.NewOK(ctx),
 					}, nil)
@@ -872,7 +891,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 					Key: "1",
 				}
 				res, err := s.RestoreFileVersion(ctx, req)
-				gw.AssertCalled(GinkgoT(), "RestoreFileVersion", mock.Anything, mock.Anything)
+				gatewayClient.AssertCalled(GinkgoT(), "RestoreFileVersion", mock.Anything, mock.Anything)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(res).ToNot(BeNil())
 				Expect(res.Status.Code).To(Equal(rpc.Code_CODE_OK))
@@ -881,7 +900,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 
 		Describe("InitiateFileUpload", func() {
 			BeforeEach(func() {
-				gw.On("InitiateFileUpload", mock.Anything, mock.Anything).Return(
+				gatewayClient.On("InitiateFileUpload", mock.Anything, mock.Anything).Return(
 					&gateway.InitiateFileUploadResponse{
 						Status: status.NewOK(ctx),
 						Protocols: []*gateway.FileUploadProtocol{
@@ -903,7 +922,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 					},
 				}
 				res, err := s.InitiateFileUpload(ctx, req)
-				gw.AssertCalled(GinkgoT(), "InitiateFileUpload", mock.Anything, mock.Anything)
+				gatewayClient.AssertCalled(GinkgoT(), "InitiateFileUpload", mock.Anything, mock.Anything)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(res).ToNot(BeNil())
 				Expect(res.Status.Code).To(Equal(rpc.Code_CODE_OK))
@@ -915,7 +934,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 
 		Describe("SetArbitraryMetadata", func() {
 			BeforeEach(func() {
-				gw.On("SetArbitraryMetadata", mock.Anything, mock.Anything).Return(&sprovider.SetArbitraryMetadataResponse{
+				gatewayClient.On("SetArbitraryMetadata", mock.Anything, mock.Anything).Return(&sprovider.SetArbitraryMetadataResponse{
 					Status: status.NewOK(ctx),
 				}, nil)
 			})
@@ -933,7 +952,7 @@ var _ = Describe("Sharesstorageprovider", func() {
 					},
 				}
 				res, err := s.SetArbitraryMetadata(ctx, req)
-				gw.AssertCalled(GinkgoT(), "SetArbitraryMetadata", mock.Anything, mock.Anything)
+				gatewayClient.AssertCalled(GinkgoT(), "SetArbitraryMetadata", mock.Anything, mock.Anything)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(res).ToNot(BeNil())
 				Expect(res.Status.Code).To(Equal(rpc.Code_CODE_OK))
