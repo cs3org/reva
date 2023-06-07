@@ -90,11 +90,17 @@ func (s *Selector[T]) Next(opts ...Option) (T, error) {
 
 	address := s.id
 	if options.registry != nil {
-		services, _ := options.registry.GetService(s.id)
-		nodeAddress, err := registry.GetNodeAddress(services)
-		if err == nil && nodeAddress != "" {
-			address = nodeAddress
+		services, err := options.registry.GetService(s.id)
+		if err != nil {
+			return *new(T), fmt.Errorf("%s: %w", s.id, err)
 		}
+
+		nodeAddress, err := registry.GetNodeAddress(services)
+		if err != nil {
+			return *new(T), fmt.Errorf("%s: %w", s.id, err)
+		}
+
+		address = nodeAddress
 	}
 
 	existingClient, ok := s.clientMap.Load(address)
