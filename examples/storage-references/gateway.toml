@@ -48,3 +48,16 @@ mime_types = [
 [http.services.ocdav]
 [http.services.ocs]
 [http.services.appprovider]
+
+[http.services.sciencemesh]
+mesh_directory_url = 'https://sciencemesh.cesnet.cz/iop/meshdir'
+provider_domain = 'your-domain.org'
+body_template_path = '/etc/revad/sciencemesh_email_body'
+ocm_mount_point = '/sciencemesh'
+
+[http.services.sciencemesh.smtp_credentials]
+disable_auth = true
+sender_mail = "sciencemesh@your-domain.org"
+smtp_server = "your-smtp-server.your-domain.org"
+smtp_port = 25
+
