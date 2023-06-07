@@ -19,6 +19,7 @@
 package sciencemesh
 
 import (
+	"errors"
 	"net/http"
 
 	"github.com/cs3org/reva/pkg/appctx"
@@ -42,6 +43,9 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 	}
 
 	conf.init()
+	if conf.ProviderDomain == "" {
+		return nil, errors.New("provider_domain missing from configuration")
+	}
 
 	r := chi.NewRouter()
 	s := &svc{

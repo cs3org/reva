@@ -42,9 +42,8 @@ type tokenHandler struct {
 	smtpCredentials  *smtpclient.SMTPCredentials
 	meshDirectoryURL string
 	providerDomain   string
-
-	tplSubj *template.Template
-	tplBody *template.Template
+	tplSubj          *template.Template
+	tplBody          *template.Template
 }
 
 func (h *tokenHandler) init(c *config) error {
@@ -59,6 +58,7 @@ func (h *tokenHandler) init(c *config) error {
 	}
 
 	h.meshDirectoryURL = c.MeshDirectoryURL
+	h.providerDomain = c.ProviderDomain
 
 	if err := h.initSubjectTemplate(c.SubjectTemplate); err != nil {
 		return err
@@ -68,10 +68,6 @@ func (h *tokenHandler) init(c *config) error {
 		return err
 	}
 
-	if c.ProviderDomain == "" {
-		return errors.New("provider_domain missing from configuration")
-	}
-	h.providerDomain = c.ProviderDomain
 	return nil
 }
 
