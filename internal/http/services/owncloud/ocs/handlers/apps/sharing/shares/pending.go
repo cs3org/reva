@@ -128,6 +128,28 @@ func (h *Handler) updateReceivedFederatedShare(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	share, err := client.GetReceivedOCMShare(ctx, &ocmv1beta1.GetReceivedOCMShareRequest{
+		Ref: &ocmv1beta1.ShareReference{
+			Spec: &ocmv1beta1.ShareReference_Id{
+				Id: &ocmv1beta1.ShareId{
+					OpaqueId: shareID,
+				},
+			},
+		},
+	})
+	if err != nil {
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "grpc update received share request failed", err)
+		return
+	}
+	if share.Status.Code != rpc.Code_CODE_OK {
+		if share.Status.Code == rpc.Code_CODE_NOT_FOUND {
+			response.WriteOCSError(w, r, response.MetaNotFound.StatusCode, "not found", nil)
+			return
+		}
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "grpc update received share request failed", errors.Errorf("code: %d, message: %s", share.Status.Code, share.Status.Message))
+		return
+	}
+
 	req := &ocmv1beta1.UpdateReceivedOCMShareRequest{
 		Share: &ocmv1beta1.ReceivedShare{
 			Id: &ocmv1beta1.ShareId{
@@ -157,5 +179,12 @@ func (h *Handler) updateReceivedFederatedShare(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	response.WriteOCSSuccess(w, r, []*conversions.ShareData{})
+	share.Share.State = req.Share.State
+	data, err := conversions.ReceivedOCMShare2ShareData(share.Share, h.ocmLocalMount(share.Share))
+	if err != nil {
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "grpc update received share request failed", err)
+		return
+	}
+	h.mapUserIdsReceivedFederatedShare(ctx, client, data)
+	response.WriteOCSSuccess(w, r, []*conversions.ShareData{data})
 }
