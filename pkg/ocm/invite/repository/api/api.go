@@ -65,7 +65,7 @@ type apiToken struct {
 	Token     string `json:"token"`
 	Initiator string `json:"initiator"`
 	Description string `json:"description"`
-	Expiration time.Time `json:"expiry_date"`
+	Expiration time.Time `json:"expiration"`
 }
 
 type apiOCMUser struct {
