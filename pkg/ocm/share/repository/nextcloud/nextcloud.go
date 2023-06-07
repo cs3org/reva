@@ -181,10 +181,17 @@ func (sm *Manager) GetShare(ctx context.Context, user *userpb.User, ref *ocm.Sha
 	return &ocm.Share{
 		Id: altResult.ID,
 		Grantee: &provider.Grantee{
+			Type: provider.GranteeType_GRANTEE_TYPE_USER,
 			Id: altResult.Grantee.ID,
 		},
-		Owner:   altResult.Owner,
-		Creator: altResult.Creator,
+		Owner: &userpb.UserId{
+			OpaqueId: altResult.Owner.OpaqueId,
+			Idp: altResult.Owner.Idp,
+		},
+		Creator: &userpb.UserId{
+			OpaqueId: altResult.Creator.OpaqueId,
+			Idp: altResult.Creator.Idp,
+		},
 		Ctime:   altResult.Ctime,
 		Mtime:   altResult.Mtime,
 	}, nil

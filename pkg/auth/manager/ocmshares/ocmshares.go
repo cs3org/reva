@@ -109,7 +109,11 @@ func (m *manager) Authenticate(ctx context.Context, token, _ string) (*userpb.Us
 	// the user authenticated using the ocmshares authentication method
 	// is the recipient of the share
 	u := shareRes.Share.Grantee.GetUserId()
-
+	jsonStr, err := utils.MarshalProtoV1ToJSON(shareRes)
+	if err != nil {
+		return nil, nil, err
+	}
+	log.Debug().Msgf("ocmshares found grantee '%s' at '%s' from: %s", u.OpaqueId, u.Idp, jsonStr)
 	d, err := utils.MarshalProtoV1ToJSON(shareRes.GetShare().Creator)
 	if err != nil {
 		return nil, nil, err
