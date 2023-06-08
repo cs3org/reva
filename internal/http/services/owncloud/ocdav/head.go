@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/cs3org/reva/v2/pkg/storagespace"
+	"go.opentelemetry.io/otel/trace"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -41,7 +42,10 @@ import (
 )
 
 func (s *svc) handlePathHead(w http.ResponseWriter, r *http.Request, ns string) {
-	ctx, span := appctx.GetTracerProvider(r.Context()).Tracer(tracerName).Start(r.Context(), "head")
+	spanOpts := []trace.SpanStartOption{
+		trace.WithSpanKind(trace.SpanKindServer),
+	}
+	ctx, span := appctx.GetTracerProvider(r.Context()).Tracer(tracerName).Start(r.Context(), "head", spanOpts...)
 	defer span.End()
 
 	fn := path.Join(ns, r.URL.Path)
@@ -100,7 +104,10 @@ func (s *svc) handleHead(ctx context.Context, w http.ResponseWriter, r *http.Req
 }
 
 func (s *svc) handleSpacesHead(w http.ResponseWriter, r *http.Request, spaceID string) {
-	ctx, span := appctx.GetTracerProvider(r.Context()).Tracer(tracerName).Start(r.Context(), "spaces_head")
+	spanOpts := []trace.SpanStartOption{
+		trace.WithSpanKind(trace.SpanKindServer),
+	}
+	ctx, span := appctx.GetTracerProvider(r.Context()).Tracer(tracerName).Start(r.Context(), "spaces_head", spanOpts...)
 	defer span.End()
 
 	sublog := appctx.GetLogger(ctx).With().Str("spaceid", spaceID).Str("path", r.URL.Path).Logger()

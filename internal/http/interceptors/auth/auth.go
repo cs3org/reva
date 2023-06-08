@@ -178,7 +178,10 @@ func New(m map[string]interface{}, unprotected []string, tp trace.TracerProvider
 			span := trace.SpanFromContext(ctx)
 			defer span.End()
 			if !span.SpanContext().HasTraceID() {
-				_, span = tp.Tracer(tracerName).Start(ctx, "http auth interceptor")
+				spanOpts := []trace.SpanStartOption{
+					trace.WithSpanKind(trace.SpanKindServer),
+				}
+				_, span = tp.Tracer(tracerName).Start(ctx, "http auth interceptor", spanOpts...)
 			}
 
 			if r.Method == "OPTIONS" {

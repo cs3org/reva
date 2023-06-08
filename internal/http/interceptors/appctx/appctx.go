@@ -48,7 +48,10 @@ func handler(log zerolog.Logger, tp trace.TracerProvider, h http.Handler) http.H
 		span := trace.SpanFromContext(ctx)
 		defer span.End()
 		if !span.SpanContext().HasTraceID() {
-			ctx, span = tp.Tracer(tracerName).Start(ctx, "http interceptor")
+			spanOpts := []trace.SpanStartOption{
+				trace.WithSpanKind(trace.SpanKindServer),
+			}
+			ctx, span = tp.Tracer(tracerName).Start(ctx, "http interceptor", spanOpts...)
 		}
 
 		sub := log.With().Str("traceid", span.SpanContext().TraceID().String()).Logger()

@@ -53,6 +53,7 @@ import (
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
 )
 
@@ -721,7 +722,10 @@ func (s *service) Move(ctx context.Context, req *provider.MoveRequest) (*provide
 }
 
 func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provider.StatResponse, error) {
-	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "stat")
+	spanOpts := []trace.SpanStartOption{
+		trace.WithSpanKind(trace.SpanKindServer),
+	}
+	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "stat", spanOpts...)
 	defer span.End()
 
 	span.SetAttributes(attribute.KeyValue{

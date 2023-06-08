@@ -40,10 +40,15 @@ import (
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	rstatus "github.com/cs3org/reva/v2/pkg/rgrpc/status"
 	"github.com/rs/zerolog"
+	"go.opentelemetry.io/otel/trace"
 )
 
 func (s *svc) handlePathProppatch(w http.ResponseWriter, r *http.Request, ns string) (status int, err error) {
-	ctx, span := appctx.GetTracerProvider(r.Context()).Tracer(tracerName).Start(r.Context(), "proppatch")
+	spanOpts := []trace.SpanStartOption{
+		trace.WithSpanKind(trace.SpanKindServer),
+	}
+	ctx, span := appctx.GetTracerProvider(r.Context()).Tracer(tracerName).Start(
+		r.Context(), "proppatch", spanOpts...)
 	defer span.End()
 
 	fn := path.Join(ns, r.URL.Path)
@@ -93,7 +98,11 @@ func (s *svc) handlePathProppatch(w http.ResponseWriter, r *http.Request, ns str
 }
 
 func (s *svc) handleSpacesProppatch(w http.ResponseWriter, r *http.Request, spaceID string) (status int, err error) {
-	ctx, span := appctx.GetTracerProvider(r.Context()).Tracer(tracerName).Start(r.Context(), "spaces_proppatch")
+	spanOpts := []trace.SpanStartOption{
+		trace.WithSpanKind(trace.SpanKindServer),
+	}
+	ctx, span := appctx.GetTracerProvider(r.Context()).Tracer(tracerName).Start(
+		r.Context(), "spaces_proppatch", spanOpts...)
 	defer span.End()
 
 	sublog := appctx.GetLogger(ctx).With().Str("path", r.URL.Path).Str("spaceid", spaceID).Logger()

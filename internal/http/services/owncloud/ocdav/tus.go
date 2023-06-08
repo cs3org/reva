@@ -42,10 +42,15 @@ import (
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/rs/zerolog"
 	tusd "github.com/tus/tusd/pkg/handler"
+	"go.opentelemetry.io/otel/trace"
 )
 
 func (s *svc) handlePathTusPost(w http.ResponseWriter, r *http.Request, ns string) {
-	ctx, span := appctx.GetTracerProvider(r.Context()).Tracer(tracerName).Start(r.Context(), "tus-post")
+	spanOpts := []trace.SpanStartOption{
+		trace.WithSpanKind(trace.SpanKindServer),
+	}
+	ctx, span := appctx.GetTracerProvider(r.Context()).Tracer(tracerName).Start(
+		r.Context(), "tus-post", spanOpts...)
 	defer span.End()
 
 	// read filename from metadata
@@ -69,7 +74,11 @@ func (s *svc) handlePathTusPost(w http.ResponseWriter, r *http.Request, ns strin
 }
 
 func (s *svc) handleSpacesTusPost(w http.ResponseWriter, r *http.Request, spaceID string) {
-	ctx, span := appctx.GetTracerProvider(r.Context()).Tracer(tracerName).Start(r.Context(), "spaces-tus-post")
+	spanOpts := []trace.SpanStartOption{
+		trace.WithSpanKind(trace.SpanKindServer),
+	}
+	ctx, span := appctx.GetTracerProvider(r.Context()).Tracer(tracerName).Start(
+		r.Context(), "spaces-tus-post", spanOpts...)
 	defer span.End()
 
 	// read filename from metadata

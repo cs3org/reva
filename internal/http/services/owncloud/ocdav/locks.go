@@ -43,6 +43,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/google/uuid"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // Most of this is taken from https://github.com/golang/net/blob/master/webdav/lock.go
@@ -380,7 +381,13 @@ The LockManager also defaults to exclusive locks:
 	}
 */
 func (s *svc) handleLock(w http.ResponseWriter, r *http.Request, ns string) (retStatus int, retErr error) {
-	ctx, span := appctx.GetTracerProvider(r.Context()).Tracer(tracerName).Start(r.Context(), fmt.Sprintf("%s %v", r.Method, r.URL.Path))
+	spanOpts := []trace.SpanStartOption{
+		trace.WithSpanKind(trace.SpanKindServer),
+	}
+	ctx, span := appctx.GetTracerProvider(r.Context()).Tracer(tracerName).Start(
+		r.Context(),
+		fmt.Sprintf("%s %v", r.Method, r.URL.Path), spanOpts...,
+	)
 	defer span.End()
 
 	span.SetAttributes(attribute.String("component", "ocdav"))
@@ -400,7 +407,13 @@ func (s *svc) handleLock(w http.ResponseWriter, r *http.Request, ns string) (ret
 }
 
 func (s *svc) handleSpacesLock(w http.ResponseWriter, r *http.Request, spaceID string) (retStatus int, retErr error) {
-	ctx, span := appctx.GetTracerProvider(r.Context()).Tracer(tracerName).Start(r.Context(), fmt.Sprintf("%s %v", r.Method, r.URL.Path))
+	spanOpts := []trace.SpanStartOption{
+		trace.WithSpanKind(trace.SpanKindServer),
+	}
+	ctx, span := appctx.GetTracerProvider(r.Context()).Tracer(tracerName).Start(
+		r.Context(),
+		fmt.Sprintf("%s %v", r.Method, r.URL.Path), spanOpts...,
+	)
 	defer span.End()
 
 	span.SetAttributes(attribute.String("component", "ocdav"))
@@ -558,7 +571,13 @@ func writeLockInfo(w io.Writer, token string, ld LockDetails) (int, error) {
 }
 
 func (s *svc) handleUnlock(w http.ResponseWriter, r *http.Request, ns string) (status int, err error) {
-	ctx, span := appctx.GetTracerProvider(r.Context()).Tracer(tracerName).Start(r.Context(), fmt.Sprintf("%s %v", r.Method, r.URL.Path))
+	spanOpts := []trace.SpanStartOption{
+		trace.WithSpanKind(trace.SpanKindServer),
+	}
+	ctx, span := appctx.GetTracerProvider(r.Context()).Tracer(tracerName).Start(
+		r.Context(),
+		fmt.Sprintf("%s %v", r.Method, r.URL.Path), spanOpts...,
+	)
 	defer span.End()
 
 	span.SetAttributes(attribute.String("component", "ocdav"))

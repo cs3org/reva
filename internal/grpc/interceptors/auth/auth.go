@@ -115,7 +115,10 @@ func NewUnary(m map[string]interface{}, unprotected []string, tp trace.TracerPro
 		span := trace.SpanFromContext(ctx)
 		defer span.End()
 		if !span.SpanContext().HasTraceID() {
-			ctx, span = tp.Tracer(tracerName).Start(ctx, "grpc auth unary")
+			spanOpts := []trace.SpanStartOption{
+				trace.WithSpanKind(trace.SpanKindServer),
+			}
+			ctx, span = tp.Tracer(tracerName).Start(ctx, "grpc auth unary", spanOpts...)
 		}
 
 		if utils.Skip(info.FullMethod, unprotected) {
@@ -202,7 +205,10 @@ func NewStream(m map[string]interface{}, unprotected []string, tp trace.TracerPr
 		span := trace.SpanFromContext(ctx)
 		defer span.End()
 		if !span.SpanContext().HasTraceID() {
-			ctx, span = tp.Tracer(tracerName).Start(ctx, "grpc auth new stream")
+			spanOpts := []trace.SpanStartOption{
+				trace.WithSpanKind(trace.SpanKindServer),
+			}
+			ctx, span = tp.Tracer(tracerName).Start(ctx, "grpc auth new stream", spanOpts...)
 		}
 
 		if utils.Skip(info.FullMethod, unprotected) {

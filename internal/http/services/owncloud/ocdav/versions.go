@@ -28,6 +28,7 @@ import (
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/propfind"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/utils"
+	"go.opentelemetry.io/otel/trace"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -110,7 +111,11 @@ func (h *VersionsHandler) Handler(s *svc, rid *provider.ResourceId) http.Handler
 }
 
 func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request, s *svc, rid *provider.ResourceId) {
-	ctx, span := appctx.GetTracerProvider(r.Context()).Tracer(tracerName).Start(r.Context(), "listVersions")
+	spanOpts := []trace.SpanStartOption{
+		trace.WithSpanKind(trace.SpanKindServer),
+	}
+	ctx, span := appctx.GetTracerProvider(r.Context()).Tracer(tracerName).Start(
+		r.Context(), "listVersions", spanOpts...)
 	defer span.End()
 
 	sublog := appctx.GetLogger(ctx).With().Interface("resourceid", rid).Logger()
@@ -215,7 +220,11 @@ func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request,
 }
 
 func (h *VersionsHandler) doRestore(w http.ResponseWriter, r *http.Request, s *svc, rid *provider.ResourceId, key string) {
-	ctx, span := appctx.GetTracerProvider(r.Context()).Tracer(tracerName).Start(r.Context(), "restore")
+	spanOpts := []trace.SpanStartOption{
+		trace.WithSpanKind(trace.SpanKindServer),
+	}
+	ctx, span := appctx.GetTracerProvider(r.Context()).Tracer(tracerName).Start(
+		r.Context(), "restore", spanOpts...)
 	defer span.End()
 
 	sublog := appctx.GetLogger(ctx).With().Interface("resourceid", rid).Str("key", key).Logger()

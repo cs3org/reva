@@ -36,10 +36,15 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/rs/zerolog"
+	"go.opentelemetry.io/otel/trace"
 )
 
 func (s *svc) handlePathMove(w http.ResponseWriter, r *http.Request, ns string) {
-	ctx, span := appctx.GetTracerProvider(r.Context()).Tracer(tracerName).Start(r.Context(), "move")
+	spanOpts := []trace.SpanStartOption{
+		trace.WithSpanKind(trace.SpanKindServer),
+	}
+	ctx, span := appctx.GetTracerProvider(r.Context()).Tracer(tracerName).Start(
+		r.Context(), "move", spanOpts...)
 	defer span.End()
 
 	if r.Body != http.NoBody {
@@ -103,7 +108,11 @@ func (s *svc) handlePathMove(w http.ResponseWriter, r *http.Request, ns string) 
 }
 
 func (s *svc) handleSpacesMove(w http.ResponseWriter, r *http.Request, srcSpaceID string) {
-	ctx, span := appctx.GetTracerProvider(r.Context()).Tracer(tracerName).Start(r.Context(), "spaces_move")
+	spanOpts := []trace.SpanStartOption{
+		trace.WithSpanKind(trace.SpanKindServer),
+	}
+	ctx, span := appctx.GetTracerProvider(r.Context()).Tracer(tracerName).Start(
+		r.Context(), "spaces_move", spanOpts...)
 	defer span.End()
 
 	if r.Body != http.NoBody {

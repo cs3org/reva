@@ -41,6 +41,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/rs/zerolog"
+	"go.opentelemetry.io/otel/trace"
 )
 
 type copy struct {
@@ -52,7 +53,10 @@ type copy struct {
 }
 
 func (s *svc) handlePathCopy(w http.ResponseWriter, r *http.Request, ns string) {
-	ctx, span := appctx.GetTracerProvider(r.Context()).Tracer(tracerName).Start(r.Context(), "copy")
+	spanOpts := []trace.SpanStartOption{
+		trace.WithSpanKind(trace.SpanKindServer),
+	}
+	ctx, span := appctx.GetTracerProvider(r.Context()).Tracer(tracerName).Start(r.Context(), "copy", spanOpts...)
 	defer span.End()
 
 	if r.Body != http.NoBody {
@@ -315,7 +319,10 @@ func (s *svc) executePathCopy(ctx context.Context, client gateway.GatewayAPIClie
 }
 
 func (s *svc) handleSpacesCopy(w http.ResponseWriter, r *http.Request, spaceID string) {
-	ctx, span := appctx.GetTracerProvider(r.Context()).Tracer(tracerName).Start(r.Context(), "spaces_copy")
+	spanOpts := []trace.SpanStartOption{
+		trace.WithSpanKind(trace.SpanKindServer),
+	}
+	ctx, span := appctx.GetTracerProvider(r.Context()).Tracer(tracerName).Start(r.Context(), "spaces_copy", spanOpts...)
 	defer span.End()
 
 	if r.Body != http.NoBody {
