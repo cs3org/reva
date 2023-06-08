@@ -245,6 +245,7 @@ func (h *tokenHandler) DeleteAccepted(w http.ResponseWriter, r *http.Request) {
 		RemoteUserId: &userpb.UserId{
 			Idp:      req.Idp,
 			OpaqueId: req.UserID,
+			Type:     userpb.UserType_USER_TYPE_FEDERATED,
 		},
 	})
 	if err != nil {
