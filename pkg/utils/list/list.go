@@ -29,7 +29,7 @@ func Map[T, V any](l []T, f func(T) V) []V {
 }
 
 // Remove removes the element in position i from the list.
-// It does not preserve the order of the original slice
+// It does not preserve the order of the original slice.
 func Remove[T any](l []T, i int) []T {
 	l[i] = l[len(l)-1]
 	return l[:len(l)-1]

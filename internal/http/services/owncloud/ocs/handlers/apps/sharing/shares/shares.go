@@ -554,7 +554,6 @@ func (h *Handler) UpdateShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.updateShare(w, r, shareID) // TODO PUT is used with incomplete data to update a share}
-
 }
 
 func (h *Handler) updateShare(w http.ResponseWriter, r *http.Request, shareID string) {
