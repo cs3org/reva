@@ -38,6 +38,7 @@ import (
 	"github.com/cs3org/reva/pkg/token"
 	jwt "github.com/cs3org/reva/pkg/token/manager/jwt"
 	"github.com/cs3org/reva/pkg/utils"
+	"github.com/cs3org/reva/pkg/utils/list"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"google.golang.org/grpc/metadata"
@@ -335,7 +336,25 @@ var _ = Describe("ocm invitation workflow", func() {
 				return res.StatusCode
 			}
 
-			findAccepted := func(revaToken, domain string) ([]*userpb.User, int) {
+			type remoteUser struct {
+				DisplayName string `json:"display_name"`
+				Idp         string `json:"idp"`
+				UserID      string `json:"user_id"`
+				Mail        string `json:"mail"`
+			}
+
+			remoteToCs3User := func(u *remoteUser) *userpb.User {
+				return &userpb.User{
+					Id: &userpb.UserId{
+						Idp:      u.Idp,
+						OpaqueId: u.UserID,
+					},
+					DisplayName: u.DisplayName,
+					Mail:        u.Mail,
+				}
+			}
+
+			findAccepted := func(revaToken, domain string) ([]*remoteUser, int) {
 				req, err := http.NewRequestWithContext(context.TODO(), http.MethodGet, fmt.Sprintf("http://%s/sciencemesh/find-accepted-users", domain), nil)
 				Expect(err).ToNot(HaveOccurred())
 				req.Header.Set("x-access-token", revaToken)
@@ -344,7 +363,7 @@ var _ = Describe("ocm invitation workflow", func() {
 				Expect(err).ToNot(HaveOccurred())
 				defer res.Body.Close()
 
-				var users []*userpb.User
+				var users []*remoteUser
 				_ = json.NewDecoder(res.Body).Decode(&users)
 				return users, res.StatusCode
 			}
@@ -374,14 +393,14 @@ var _ = Describe("ocm invitation workflow", func() {
 				It("complete the invitation workflow", func() {
 					users, code := findAccepted(tknEinstein, cernboxURL)
 					Expect(code).To(Equal(http.StatusOK))
-					Expect(ocmUsersEqual(users, []*userpb.User{})).To(BeTrue())
+					Expect(ocmUsersEqual(list.Map(users, remoteToCs3User), []*userpb.User{})).To(BeTrue())
 
 					code = acceptInvite(tknMarie, cesnetURL, "cernbox.cern.ch", token)
 					Expect(code).To(Equal(http.StatusOK))
 
 					users, code = findAccepted(tknEinstein, cernboxURL)
 					Expect(code).To(Equal(http.StatusOK))
-					Expect(ocmUsersEqual(users, []*userpb.User{marie})).To(BeTrue())
+					Expect(ocmUsersEqual(list.Map(users, remoteToCs3User), []*userpb.User{marie})).To(BeTrue())
 				})
 			})
 
@@ -402,14 +421,14 @@ var _ = Describe("ocm invitation workflow", func() {
 				It("fails the invitation workflow", func() {
 					users, code := findAccepted(tknEinstein, cernboxURL)
 					Expect(code).To(Equal(http.StatusOK))
-					Expect(ocmUsersEqual(users, []*userpb.User{marie})).To(BeTrue())
+					Expect(ocmUsersEqual(list.Map(users, remoteToCs3User), []*userpb.User{marie})).To(BeTrue())
 
 					code = acceptInvite(tknMarie, cesnetURL, "cernbox.cern.ch", token)
 					Expect(code).To(Equal(http.StatusConflict))
 
 					users, code = findAccepted(tknEinstein, cernboxURL)
 					Expect(code).To(Equal(http.StatusOK))
-					Expect(ocmUsersEqual(users, []*userpb.User{marie})).To(BeTrue())
+					Expect(ocmUsersEqual(list.Map(users, remoteToCs3User), []*userpb.User{marie})).To(BeTrue())
 				})
 			})
 
@@ -436,14 +455,14 @@ var _ = Describe("ocm invitation workflow", func() {
 				It("will not complete the invitation workflow", func() {
 					users, code := findAccepted(tknEinstein, cernboxURL)
 					Expect(code).To(Equal(http.StatusOK))
-					Expect(ocmUsersEqual(users, []*userpb.User{})).To(BeTrue())
+					Expect(ocmUsersEqual(list.Map(users, remoteToCs3User), []*userpb.User{})).To(BeTrue())
 
 					code = acceptInvite(tknMarie, cesnetURL, "cernbox.cern.ch", expiredToken.Token)
 					Expect(code).To(Equal(http.StatusBadRequest))
 
 					users, code = findAccepted(tknEinstein, cernboxURL)
 					Expect(code).To(Equal(http.StatusOK))
-					Expect(ocmUsersEqual(users, []*userpb.User{})).To(BeTrue())
+					Expect(ocmUsersEqual(list.Map(users, remoteToCs3User), []*userpb.User{})).To(BeTrue())
 				})
 			})
 
@@ -461,7 +480,7 @@ var _ = Describe("ocm invitation workflow", func() {
 				It("succeeds", func() {
 					users, code := findAccepted(tknEinstein, cernboxURL)
 					Expect(code).To(Equal(http.StatusOK))
-					Expect(ocmUsersEqual(users, []*userpb.User{})).To(BeTrue())
+					Expect(ocmUsersEqual(list.Map(users, remoteToCs3User), []*userpb.User{})).To(BeTrue())
 
 					ocmToken, code := generateToken(tknEinstein, cernboxURL)
 					Expect(code).To(Equal(http.StatusOK))
@@ -471,7 +490,7 @@ var _ = Describe("ocm invitation workflow", func() {
 
 					users, code = findAccepted(tknEinstein, cernboxURL)
 					Expect(code).To(Equal(http.StatusOK))
-					Expect(ocmUsersEqual(users, []*userpb.User{marie})).To(BeTrue())
+					Expect(ocmUsersEqual(list.Map(users, remoteToCs3User), []*userpb.User{marie})).To(BeTrue())
 				})
 			})
 
