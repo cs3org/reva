@@ -1192,16 +1192,16 @@ func (c *Client) mapToFileInfo(ctx context.Context, kv, attrs map[string]string,
 
 	var ctimesec, ctimenanos uint64
 	if val, ok := kv["ctime"]; ok && val != "" {
-		stimeSplit := strings.Split(val, ".")
-		ctimesec, err = strconv.ParseUint(stimeSplit[0], 10, 64)
-		ctimenanos, err = strconv.ParseUint(stimeSplit[1], 10, 32)
+		split := strings.Split(val, ".")
+		ctimesec, err = strconv.ParseUint(split[0], 10, 64)
+		ctimenanos, err = strconv.ParseUint(split[1], 10, 32)
 	}
 
 	var atimesec, atimenanos uint64
 	if val, ok := kv["atime"]; ok && val != "" {
-		stimeSplit := strings.Split(val, ".")
-		atimesec, err = strconv.ParseUint(stimeSplit[0], 10, 64)
-		atimenanos, err = strconv.ParseUint(stimeSplit[1], 10, 32)
+		split := strings.Split(val, ".")
+		atimesec, err = strconv.ParseUint(split[0], 10, 64)
+		atimenanos, err = strconv.ParseUint(split[1], 10, 32)
 	}
 
 	isDir := false
