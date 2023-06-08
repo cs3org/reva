@@ -26,6 +26,7 @@ import (
 	"net/http"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
@@ -34,6 +35,7 @@ import (
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/smtpclient"
+	"github.com/cs3org/reva/pkg/utils/list"
 )
 
 type tokenHandler struct {
@@ -211,6 +213,13 @@ func getAcceptInviteRequest(r *http.Request) (*acceptInviteRequest, error) {
 	return &req, nil
 }
 
+type remoteUser struct {
+	DisplayName string `json:"display_name"`
+	Idp         string `json:"idp"`
+	UserID      string `json:"user_id"`
+	Mail        string `json:"mail"`
+}
+
 // FindAccepted returns the list of all the users that accepted the invitation
 // to the authenticated user.
 func (h *tokenHandler) FindAccepted(w http.ResponseWriter, r *http.Request) {
@@ -222,7 +231,16 @@ func (h *tokenHandler) FindAccepted(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := json.NewEncoder(w).Encode(res.AcceptedUsers); err != nil {
+	users := list.Map(res.AcceptedUsers, func(u *userpb.User) *remoteUser {
+		return &remoteUser{
+			DisplayName: u.DisplayName,
+			Idp:         u.Id.Idp,
+			UserID:      u.Id.OpaqueId,
+			Mail:        u.Mail,
+		}
+	})
+
+	if err := json.NewEncoder(w).Encode(users); err != nil {
 		reqres.WriteError(w, r, reqres.APIErrorServerError, "error marshalling token data", err)
 		return
 	}
