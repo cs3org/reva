@@ -108,7 +108,31 @@ func (h *Handler) createFederatedCloudShare(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	response.WriteOCSSuccess(w, r, "OCM Share created")
+	s := createShareResponse.Share
+	data, err := conversions.OCMShare2ShareData(s)
+	if err != nil {
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error converting share", err)
+		return
+	}
+	h.mapUserIdsFederatedShare(ctx, c, data)
+
+	info, status, err := h.getResourceInfoByID(ctx, c, s.ResourceId)
+	if err != nil {
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error statting resource id", err)
+		return
+	}
+	if status.Code != rpc.Code_CODE_OK {
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error statting resource id", errors.New(status.Message))
+		return
+	}
+
+	err = h.addFileInfo(ctx, data, info)
+	if err != nil {
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error statting resource id", err)
+		return
+	}
+
+	response.WriteOCSSuccess(w, r, data)
 }
 
 func getViewModeFromRole(role *conversions.Role) providerv1beta1.ViewMode {
@@ -162,7 +186,7 @@ func (h *Handler) ListFederatedShares(w http.ResponseWriter, r *http.Request) {
 	// TODO Implement response with HAL schemating
 }
 
-func (h *Handler) listReceivedFederatedShares(ctx context.Context, gw gatewayv1beta1.GatewayAPIClient) ([]*conversions.ShareData, error) {
+func (h *Handler) listReceivedFederatedShares(ctx context.Context, gw gatewayv1beta1.GatewayAPIClient, state ocm.ShareState) ([]*conversions.ShareData, error) {
 	listRes, err := gw.ListReceivedOCMShares(ctx, &ocm.ListReceivedOCMSharesRequest{})
 	if err != nil {
 		return nil, err
@@ -170,11 +194,15 @@ func (h *Handler) listReceivedFederatedShares(ctx context.Context, gw gatewayv1b
 
 	shares := []*conversions.ShareData{}
 	for _, s := range listRes.Shares {
+		if state != ocsStateUnknown && s.State != state {
+			continue
+		}
 		sd, err := conversions.ReceivedOCMShare2ShareData(s, h.ocmLocalMount(s))
 		if err != nil {
 			continue
 		}
 		h.mapUserIdsReceivedFederatedShare(ctx, gw, sd)
+		sd.State = mapOCMState(s.State)
 		shares = append(shares, sd)
 	}
 	return shares, nil

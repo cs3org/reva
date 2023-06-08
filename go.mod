@@ -15,7 +15,7 @@ require (
 	github.com/ceph/go-ceph v0.15.0
 	github.com/cheggaaa/pb v1.0.29
 	github.com/cs3org/cato v0.0.0-20200828125504-e418fc54dd5e
-	github.com/cs3org/go-cs3apis v0.0.0-20230508132523-e0d062e63b3b
+	github.com/cs3org/go-cs3apis v0.0.0-20230606135123-b799d47a6648
 	github.com/dgraph-io/ristretto v0.1.1
 	github.com/dolthub/go-mysql-server v0.14.0
 	github.com/eventials/go-tus v0.0.0-20200718001131-45c7ec8f5d59

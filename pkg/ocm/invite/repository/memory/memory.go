@@ -29,6 +29,7 @@ import (
 	"github.com/cs3org/reva/pkg/ocm/invite"
 	"github.com/cs3org/reva/pkg/ocm/invite/repository/registry"
 	"github.com/cs3org/reva/pkg/utils"
+	"github.com/cs3org/reva/pkg/utils/list"
 )
 
 func init() {
@@ -126,4 +127,20 @@ func userContains(u *userpb.User, query string) bool {
 	query = strings.ToLower(query)
 	return strings.Contains(strings.ToLower(u.Username), query) || strings.Contains(strings.ToLower(u.DisplayName), query) ||
 		strings.Contains(strings.ToLower(u.Mail), query) || strings.Contains(strings.ToLower(u.Id.OpaqueId), query)
+}
+
+func (m *manager) DeleteRemoteUser(ctx context.Context, initiator *userpb.UserId, remoteUser *userpb.UserId) error {
+	usersList, ok := m.AcceptedUsers.Load(initiator)
+	if !ok {
+		return nil
+	}
+
+	acceptedUsers := usersList.([]*userpb.User)
+	for i, user := range acceptedUsers {
+		if (user.Id.GetOpaqueId() == remoteUser.OpaqueId) && (remoteUser.Idp == "" || user.Id.GetIdp() == remoteUser.Idp) {
+			m.AcceptedUsers.Store(initiator, list.Remove(acceptedUsers, i))
+			return nil
+		}
+	}
+	return nil
 }

@@ -31,30 +31,26 @@ func ocmShareUpdateCommand() *command {
 	cmd := newCommand("ocm-share-update")
 	cmd.Description = func() string { return "update an OCM share" }
 	cmd.Usage = func() string { return "Usage: ocm-share-update [-flags] <share_id>" }
-	rol := cmd.String("rol", "viewer", "the permission for the share (viewer or editor)")
+
+	webdavRol := cmd.String("webdav-rol", "viewer", "the permission for the WebDAV access method (viewer or editor)")
+	webappViewMode := cmd.String("webapp-mode", "view", "the view mode for the Webapp access method (read or write)")
 
 	cmd.ResetFlags = func() {
-		*rol = "viewer"
+		*webdavRol, *webappViewMode = "viewer", "read"
 	}
 	cmd.Action = func(w ...io.Writer) error {
 		if cmd.NArg() < 1 {
 			return errors.New("Invalid arguments: " + cmd.Usage())
 		}
 
-		// validate flags
-		if *rol != viewerPermission && *rol != editorPermission {
-			return errors.New("Invalid rol: rol must be viewer or editor\n" + cmd.Usage())
-		}
-
 		id := cmd.Args()[0]
+
+		if *webdavRol == "" && *webappViewMode == "" {
+			return errors.New("use at least one of -webdav-rol or -webapp-mode flag")
+		}
 
 		ctx := getAuthContext()
 		shareClient, err := getClient()
-		if err != nil {
-			return err
-		}
-
-		perm, err := getOCMSharePerm(*rol)
 		if err != nil {
 			return err
 		}
@@ -67,13 +63,42 @@ func ocmShareUpdateCommand() *command {
 					},
 				},
 			},
-			Field: &ocm.UpdateOCMShareRequest_UpdateField{
-				Field: &ocm.UpdateOCMShareRequest_UpdateField_Permissions{
-					Permissions: &ocm.SharePermissions{
-						Permissions: perm,
+		}
+
+		if *webdavRol != "" {
+			perm, err := getOCMSharePerm(*webdavRol)
+			if err != nil {
+				return err
+			}
+			shareRequest.Field = append(shareRequest.Field, &ocm.UpdateOCMShareRequest_UpdateField{
+				Field: &ocm.UpdateOCMShareRequest_UpdateField_AccessMethods{
+					AccessMethods: &ocm.AccessMethod{
+						Term: &ocm.AccessMethod_WebdavOptions{
+							WebdavOptions: &ocm.WebDAVAccessMethod{
+								Permissions: perm,
+							},
+						},
 					},
 				},
-			},
+			})
+		}
+
+		if *webappViewMode != "" {
+			mode, err := getOCMViewMode(*webappViewMode)
+			if err != nil {
+				return err
+			}
+			shareRequest.Field = append(shareRequest.Field, &ocm.UpdateOCMShareRequest_UpdateField{
+				Field: &ocm.UpdateOCMShareRequest_UpdateField_AccessMethods{
+					AccessMethods: &ocm.AccessMethod{
+						Term: &ocm.AccessMethod_WebappOptions{
+							WebappOptions: &ocm.WebappAccessMethod{
+								ViewMode: mode,
+							},
+						},
+					},
+				},
+			})
 		}
 
 		shareRes, err := shareClient.UpdateOCMShare(ctx, shareRequest)

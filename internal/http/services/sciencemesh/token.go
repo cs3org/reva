@@ -26,6 +26,7 @@ import (
 	"net/http"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
@@ -229,6 +230,52 @@ func (h *tokenHandler) FindAccepted(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
+}
+
+// DeleteAccepted deletes the given user from the list of the accepted users.
+func (h *tokenHandler) DeleteAccepted(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	req, err := getDeleteAcceptedRequest(r)
+	if err != nil {
+		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, "missing parameters in request", err)
+		return
+	}
+
+	res, err := h.gatewayClient.DeleteAcceptedUser(ctx, &invitepb.DeleteAcceptedUserRequest{
+		RemoteUserId: &userpb.UserId{
+			Idp:      req.Idp,
+			OpaqueId: req.UserID,
+			Type:     userpb.UserType_USER_TYPE_FEDERATED,
+		},
+	})
+	if err != nil {
+		reqres.WriteError(w, r, reqres.APIErrorServerError, "error sending a grpc get invite by domain info request", err)
+		return
+	}
+	if res.Status.Code != rpc.Code_CODE_OK {
+		reqres.WriteError(w, r, reqres.APIErrorServerError, "grpc forward invite request failed", errors.New(res.Status.Message))
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+}
+
+type deleteAcceptedRequest struct {
+	Idp    string `json:"idp"`
+	UserID string `json:"user_id"`
+}
+
+func getDeleteAcceptedRequest(r *http.Request) (*deleteAcceptedRequest, error) {
+	var req deleteAcceptedRequest
+	contentType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	if err == nil && contentType == "application/json" {
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			return nil, err
+		}
+	} else {
+		req.Idp, req.UserID = r.FormValue("idp"), r.FormValue("user_id")
+	}
+	return &req, nil
 }
 
 func (h *tokenHandler) ListInvite(w http.ResponseWriter, r *http.Request) {

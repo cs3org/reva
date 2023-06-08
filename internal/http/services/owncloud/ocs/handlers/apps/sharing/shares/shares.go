@@ -33,12 +33,14 @@ import (
 	"time"
 
 	"github.com/ReneKroon/ttlcache/v2"
+	providerv1beta1 "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
+	ocmv1beta1 "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocdav"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/config"
@@ -547,6 +549,10 @@ func (h *Handler) UpdateShare(w http.ResponseWriter, r *http.Request) {
 		h.updatePublicShare(w, r, shareID)
 		return
 	}
+	if h.isFederatedShare(r, shareID) {
+		h.updateFederatedShare(w, r, shareID)
+		return
+	}
 	h.updateShare(w, r, shareID) // TODO PUT is used with incomplete data to update a share}
 }
 
@@ -646,6 +652,89 @@ func (h *Handler) updateShare(w http.ResponseWriter, r *http.Request, shareID st
 	response.WriteOCSSuccess(w, r, share)
 }
 
+func permissionsToViewMode(pint int) providerv1beta1.ViewMode {
+	if pint == 15 {
+		return providerv1beta1.ViewMode_VIEW_MODE_READ_WRITE
+	}
+	return providerv1beta1.ViewMode_VIEW_MODE_READ_ONLY
+}
+
+func (h *Handler) updateFederatedShare(w http.ResponseWriter, r *http.Request, shareID string) {
+	ctx := r.Context()
+
+	pval := r.FormValue("permissions")
+	if pval == "" {
+		response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "permissions missing", nil)
+		return
+	}
+
+	pint, err := strconv.Atoi(pval)
+	if err != nil {
+		response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "permissions must be an integer", nil)
+		return
+	}
+	permissions, err := conversions.NewPermissions(pint)
+	if err != nil {
+		response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, err.Error(), nil)
+		return
+	}
+
+	client, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	if err != nil {
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
+		return
+	}
+
+	updateRes, err := client.UpdateOCMShare(ctx, &ocmv1beta1.UpdateOCMShareRequest{
+		Ref: &ocmv1beta1.ShareReference{
+			Spec: &ocmv1beta1.ShareReference_Id{
+				Id: &ocmv1beta1.ShareId{
+					OpaqueId: shareID,
+				},
+			},
+		},
+		Field: []*ocmv1beta1.UpdateOCMShareRequest_UpdateField{
+			{
+				Field: &ocmv1beta1.UpdateOCMShareRequest_UpdateField_AccessMethods{
+					AccessMethods: &ocmv1beta1.AccessMethod{
+						Term: &ocmv1beta1.AccessMethod_WebdavOptions{
+							WebdavOptions: &ocmv1beta1.WebDAVAccessMethod{
+								Permissions: conversions.RoleFromOCSPermissions(permissions).CS3ResourcePermissions(),
+							},
+						},
+					},
+				},
+			},
+			{
+				Field: &ocmv1beta1.UpdateOCMShareRequest_UpdateField_AccessMethods{
+					AccessMethods: &ocmv1beta1.AccessMethod{
+						Term: &ocmv1beta1.AccessMethod_WebappOptions{
+							WebappOptions: &ocmv1beta1.WebappAccessMethod{
+								ViewMode: permissionsToViewMode(pint),
+							},
+						},
+					},
+				},
+			},
+		},
+	})
+	if err != nil {
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error sending a grpc update share request", err)
+		return
+	}
+
+	if updateRes.Status.Code != rpc.Code_CODE_OK {
+		if updateRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
+			response.WriteOCSError(w, r, response.MetaNotFound.StatusCode, "not found", nil)
+			return
+		}
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "grpc update share request failed", err)
+		return
+	}
+
+	response.WriteOCSSuccess(w, r, []*conversions.ShareData{})
+}
+
 // RemoveShare handles DELETE requests on /apps/files_sharing/api/v1/shares/(shareid).
 func (h *Handler) RemoveShare(w http.ResponseWriter, r *http.Request) {
 	shareID := chi.URLParam(r, "shareid")
@@ -654,6 +743,8 @@ func (h *Handler) RemoveShare(w http.ResponseWriter, r *http.Request) {
 		h.removePublicShare(w, r, shareID)
 	case h.isUserShare(r, shareID):
 		h.removeUserShare(w, r, shareID)
+	case h.isFederatedShare(r, shareID):
+		h.removeFederatedShare(w, r, shareID)
 	default:
 		// The request is a remove space member request.
 		h.removeSpaceMember(w, r, shareID)
@@ -685,7 +776,8 @@ const (
 
 func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 	// which pending state to list
-	stateFilter := getStateFilter(r.FormValue("state"))
+	state := r.FormValue("state")
+	stateFilter := getStateFilter(state)
 
 	log := appctx.GetLogger(r.Context())
 	client, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
@@ -871,7 +963,8 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 
 	if h.listOCMShares {
 		// include ocm shares in the response
-		lst, err := h.listReceivedFederatedShares(ctx, client)
+		stateFilter := getOCMStateFilter(state)
+		lst, err := h.listReceivedFederatedShares(ctx, client, stateFilter)
 		if err != nil {
 			log.Err(err).Msg("error listing received ocm shares")
 			response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error listing received ocm shares", err)
@@ -1275,6 +1368,19 @@ func mapState(state collaboration.ShareState) int {
 	return mapped
 }
 
+func mapOCMState(state ocmv1beta1.ShareState) int {
+	switch state {
+	case ocmv1beta1.ShareState_SHARE_STATE_PENDING:
+		return ocsStatePending
+	case ocmv1beta1.ShareState_SHARE_STATE_ACCEPTED:
+		return ocsStateAccepted
+	case ocmv1beta1.ShareState_SHARE_STATE_REJECTED:
+		return ocsStateRejected
+	default:
+		return ocsStateUnknown
+	}
+}
+
 func getStateFilter(s string) collaboration.ShareState {
 	var stateFilter collaboration.ShareState
 	switch s {
@@ -1290,4 +1396,19 @@ func getStateFilter(s string) collaboration.ShareState {
 		stateFilter = collaboration.ShareState_SHARE_STATE_ACCEPTED
 	}
 	return stateFilter
+}
+
+func getOCMStateFilter(s string) ocmv1beta1.ShareState {
+	switch s {
+	case "all":
+		return ocsStateUnknown // no filter
+	case "0": // accepted
+		return ocmv1beta1.ShareState_SHARE_STATE_ACCEPTED
+	case "1": // pending
+		return ocmv1beta1.ShareState_SHARE_STATE_PENDING
+	case "2": // rejected
+		return ocmv1beta1.ShareState_SHARE_STATE_REJECTED
+	default:
+		return ocmv1beta1.ShareState_SHARE_STATE_ACCEPTED
+	}
 }

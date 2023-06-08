@@ -369,3 +369,16 @@ func (s *service) FindAcceptedUsers(ctx context.Context, req *invitepb.FindAccep
 		AcceptedUsers: acceptedUsers,
 	}, nil
 }
+
+func (s *service) DeleteAcceptedUser(ctx context.Context, req *invitepb.DeleteAcceptedUserRequest) (*invitepb.DeleteAcceptedUserResponse, error) {
+	user := ctxpkg.ContextMustGetUser(ctx)
+	if err := s.repo.DeleteRemoteUser(ctx, user.Id, req.RemoteUserId); err != nil {
+		return &invitepb.DeleteAcceptedUserResponse{
+			Status: status.NewInternal(ctx, err, "error deleting remote users: "+err.Error()),
+		}, nil
+	}
+
+	return &invitepb.DeleteAcceptedUserResponse{
+		Status: status.NewOK(ctx),
+	}, nil
+}

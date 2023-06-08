@@ -459,7 +459,12 @@ func (s *service) ListOCMShares(ctx context.Context, req *ocm.ListOCMSharesReque
 
 func (s *service) UpdateOCMShare(ctx context.Context, req *ocm.UpdateOCMShareRequest) (*ocm.UpdateOCMShareResponse, error) {
 	user := ctxpkg.ContextMustGetUser(ctx)
-	_, err := s.repo.UpdateShare(ctx, user, req.Ref, req.Field.GetPermissions()) // TODO(labkode): check what to update
+	if len(req.Field) == 0 {
+		return &ocm.UpdateOCMShareResponse{
+			Status: status.NewOK(ctx),
+		}, nil
+	}
+	_, err := s.repo.UpdateShare(ctx, user, req.Ref, req.Field...)
 	if err != nil {
 		if errors.Is(err, share.ErrShareNotFound) {
 			return &ocm.UpdateOCMShareResponse{
@@ -495,7 +500,7 @@ func (s *service) ListReceivedOCMShares(ctx context.Context, req *ocm.ListReceiv
 
 func (s *service) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateReceivedOCMShareRequest) (*ocm.UpdateReceivedOCMShareResponse, error) {
 	user := ctxpkg.ContextMustGetUser(ctx)
-	_, err := s.repo.UpdateReceivedShare(ctx, user, req.Share, req.UpdateMask) // TODO(labkode): check what to update
+	_, err := s.repo.UpdateReceivedShare(ctx, user, req.Share, req.UpdateMask)
 	if err != nil {
 		if errors.Is(err, share.ErrShareNotFound) {
 			return &ocm.UpdateReceivedOCMShareResponse{
