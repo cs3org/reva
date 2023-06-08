@@ -74,13 +74,17 @@ type Attribute struct {
 // FileInfo represents the metadata information returned by querying the EOS namespace.
 type FileInfo struct {
 	IsDir      bool
-	MTimeNanos uint32
 	Inode      uint64            `json:"inode"`
 	FID        uint64            `json:"fid"`
 	UID        uint64            `json:"uid"`
 	GID        uint64            `json:"gid"`
 	TreeSize   uint64            `json:"tree_size"`
 	MTimeSec   uint64            `json:"mtime_sec"`
+	MTimeNanos uint32            `json:"mtime_nanos"`
+	ATimeSec   uint64            `json:"atime_sec"`
+	ATimeNanos uint32            `json:"atime_nanos"`
+	CTimeSec   uint64            `json:"ctime_sec"`
+	CTimeNanos uint32            `json:"ctime_nanos"`
 	Size       uint64            `json:"size"`
 	TreeCount  uint64            `json:"tree_count"`
 	File       string            `json:"eos_file"`

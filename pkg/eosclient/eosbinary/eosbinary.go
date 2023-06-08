@@ -1190,6 +1190,20 @@ func (c *Client) mapToFileInfo(ctx context.Context, kv, attrs map[string]string,
 		}
 	}
 
+	var ctimesec, ctimenanos uint64
+	if val, ok := kv["ctime"]; ok && val != "" {
+		stimeSplit := strings.Split(val, ".")
+		ctimesec, err = strconv.ParseUint(stimeSplit[0], 10, 64)
+		ctimenanos, err = strconv.ParseUint(stimeSplit[1], 10, 32)
+	}
+
+	var atimesec, atimenanos uint64
+	if val, ok := kv["atime"]; ok && val != "" {
+		stimeSplit := strings.Split(val, ".")
+		atimesec, err = strconv.ParseUint(stimeSplit[0], 10, 64)
+		atimenanos, err = strconv.ParseUint(stimeSplit[1], 10, 32)
+	}
+
 	isDir := false
 	var xs *eosclient.Checksum
 	if _, ok := kv["files"]; ok {
@@ -1239,6 +1253,10 @@ func (c *Client) mapToFileInfo(ctx context.Context, kv, attrs map[string]string,
 		TreeSize:   treeSize,
 		MTimeSec:   mtimesec,
 		MTimeNanos: uint32(mtimenanos),
+		CTimeSec:   ctimesec,
+		CTimeNanos: uint32(ctimenanos),
+		ATimeSec:   atimesec,
+		ATimeNanos: uint32(atimenanos),
 		IsDir:      isDir,
 		Instance:   c.opt.URL,
 		SysACL:     sysACL,
