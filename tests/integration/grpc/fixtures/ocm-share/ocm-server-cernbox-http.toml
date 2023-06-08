@@ -10,6 +10,8 @@ address = "{{grpc_address}}"
 [http.services.ocmd]
 
 [http.services.sciencemesh]
+provider_domain = "{{cernboxhttp_address}}"
+mesh_directory_url = "http://meshdir"
 
 [http.middlewares.cors]
 

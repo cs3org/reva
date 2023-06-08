@@ -24,10 +24,8 @@ import (
 	"html/template"
 	"mime"
 	"net/http"
-	"strings"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
-	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	invitepb "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
 	ocmprovider "github.com/cs3org/go-cs3apis/cs3/ocm/provider/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
@@ -38,16 +36,13 @@ import (
 	"github.com/cs3org/reva/pkg/smtpclient"
 )
 
-const defaultInviteLink = "{{.MeshDirectoryURL}}?token={{.Token}}&providerDomain={{.User.Id.Idp}}"
-
 type tokenHandler struct {
 	gatewayClient    gateway.GatewayAPIClient
 	smtpCredentials  *smtpclient.SMTPCredentials
 	meshDirectoryURL string
-
-	tplSubj       *template.Template
-	tplBody       *template.Template
-	tplInviteLink *template.Template
+	providerDomain   string
+	tplSubj          *template.Template
+	tplBody          *template.Template
 }
 
 func (h *tokenHandler) init(c *config) error {
@@ -62,6 +57,7 @@ func (h *tokenHandler) init(c *config) error {
 	}
 
 	h.meshDirectoryURL = c.MeshDirectoryURL
+	h.providerDomain = c.ProviderDomain
 
 	if err := h.initSubjectTemplate(c.SubjectTemplate); err != nil {
 		return err
@@ -71,7 +67,7 @@ func (h *tokenHandler) init(c *config) error {
 		return err
 	}
 
-	return h.initInviteLinkTemplate(c.InviteLinkTemplate)
+	return nil
 }
 
 type token struct {
@@ -79,12 +75,6 @@ type token struct {
 	Description string `json:"description,omitempty"`
 	Expiration  uint64 `json:"expiration,omitempty"`
 	InviteLink  string `json:"invite_link"`
-}
-
-type inviteLinkParams struct {
-	User             *userpb.User
-	Token            string
-	MeshDirectoryURL string
 }
 
 // Generate generates an invitation token and if a recipient is specified,
@@ -116,12 +106,7 @@ func (h *tokenHandler) Generate(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	tknRes, err := h.prepareGenerateTokenResponse(user, token.InviteToken)
-	if err != nil {
-		reqres.WriteError(w, r, reqres.APIErrorServerError, "error generating response", err)
-		return
-	}
-
+	tknRes := h.prepareGenerateTokenResponse(token.InviteToken)
 	if err := json.NewEncoder(w).Encode(tknRes); err != nil {
 		reqres.WriteError(w, r, reqres.APIErrorServerError, "error marshalling token data", err)
 		return
@@ -131,34 +116,17 @@ func (h *tokenHandler) Generate(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-func (h *tokenHandler) generateInviteLink(user *userpb.User, token *invitepb.InviteToken) (string, error) {
-	var inviteLink strings.Builder
-	if err := h.tplInviteLink.Execute(&inviteLink, inviteLinkParams{
-		User:             user,
-		Token:            token.Token,
-		MeshDirectoryURL: h.meshDirectoryURL,
-	}); err != nil {
-		return "", err
-	}
-
-	return inviteLink.String(), nil
-}
-
-func (h *tokenHandler) prepareGenerateTokenResponse(user *userpb.User, tkn *invitepb.InviteToken) (*token, error) {
-	inviteLink, err := h.generateInviteLink(user, tkn)
-	if err != nil {
-		return nil, err
-	}
+func (h *tokenHandler) prepareGenerateTokenResponse(tkn *invitepb.InviteToken) *token {
 	res := &token{
 		Token:       tkn.Token,
 		Description: tkn.Description,
-		InviteLink:  inviteLink,
+		InviteLink:  h.meshDirectoryURL + "?token=" + tkn.Token + "&providerDomain=" + h.providerDomain,
 	}
 	if tkn.Expiration != nil {
 		res.Expiration = tkn.Expiration.Seconds
 	}
 
-	return res, nil
+	return res
 }
 
 type acceptInviteRequest struct {
@@ -278,22 +246,8 @@ func (h *tokenHandler) ListInvite(w http.ResponseWriter, r *http.Request) {
 	}
 
 	tokens := make([]*token, 0, len(res.InviteTokens))
-	user := ctxpkg.ContextMustGetUser(ctx)
 	for _, tkn := range res.InviteTokens {
-		inviteURL, err := h.generateInviteLink(user, tkn)
-		if err != nil {
-			reqres.WriteError(w, r, reqres.APIErrorServerError, "error generating invite URL from OCM token", err)
-			return
-		}
-		t := &token{
-			Token:       tkn.Token,
-			Description: tkn.Description,
-			InviteLink:  inviteURL,
-		}
-		if tkn.Expiration != nil {
-			t.Expiration = tkn.Expiration.Seconds
-		}
-		tokens = append(tokens, t)
+		tokens = append(tokens, h.prepareGenerateTokenResponse(tkn))
 	}
 
 	if err := json.NewEncoder(w).Encode(tokens); err != nil {
