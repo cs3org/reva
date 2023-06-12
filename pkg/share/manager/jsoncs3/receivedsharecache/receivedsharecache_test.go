@@ -63,7 +63,7 @@ var _ = Describe("Cache", func() {
 		Expect(err).ToNot(HaveOccurred())
 
 		c = receivedsharecache.New(storage, 0*time.Second)
-		Expect(c).ToNot(BeNil())
+		Expect(c).ToNot(BeNil()) // nolint:copylocks
 	})
 
 	AfterEach(func() {
