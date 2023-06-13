@@ -81,9 +81,11 @@ type ShareAltMap struct {
 	ID            *ocm.ShareId          `json:"id"`
 	RemoteShareID string                `json:"remote_share_id"`
 	Permissions   *ocm.SharePermissions `json:"permissions"`
-	Grantee       *GranteeAltMap        `json:"grantee"`
-	Owner         *userpb.UserId        `json:"owner"`
-	Creator       *userpb.UserId        `json:"creator"`
+	Grantee       struct {
+		ID *userpb.UserId `json:"id"`
+	}                                   `json:"grantee"`
+	Owner         *userpb.User          `json:"owner"`
+	Creator       *userpb.User          `json:"creator"`
 	Ctime         *typespb.Timestamp    `json:"ctime"`
 	Mtime         *typespb.Timestamp    `json:"mtime"`
 }
@@ -166,25 +168,40 @@ func (sm *Manager) StoreShare(ctx context.Context, share *ocm.Share) (*ocm.Share
 // GetShare gets the information for a share by the given ref.
 func (sm *Manager) GetShare(ctx context.Context, user *userpb.User, ref *ocm.ShareReference) (*ocm.Share, error) {
 	data, err := json.Marshal(ref)
+	log := appctx.GetLogger(ctx)
 	if err != nil {
 		return nil, err
 	}
-	_, body, err := sm.do(ctx, Action{"GetShare", string(data)}, getUsername(user))
+	_, body, err := sm.do(ctx, Action{"GetSentShareByToken", string(data)}, "nobody") // getUsername(user))
 	if err != nil {
 		return nil, err
 	}
 
-	altResult := &ShareAltMap{}
+	altResult := ShareAltMap{}
 	if err := json.Unmarshal(body, &altResult); err != nil {
 		return nil, err
 	}
+	rejson, err := json.Marshal(altResult)
+	if err != nil {
+		return nil, err
+	}
+	log.Debug().Msgf("Found ShareAltMap %s", rejson)
 	return &ocm.Share{
 		Id: altResult.ID,
 		Grantee: &provider.Grantee{
-			Id: altResult.Grantee.ID,
+			Type: provider.GranteeType_GRANTEE_TYPE_USER,
+			Id: &provider.Grantee_UserId{
+				UserId: altResult.Grantee.ID,
+			},
 		},
-		Owner:   altResult.Owner,
-		Creator: altResult.Creator,
+		Owner: &userpb.UserId{
+			OpaqueId: altResult.Owner.Id.OpaqueId,
+			Idp: altResult.Owner.Id.Idp,
+		},
+		Creator: &userpb.UserId{
+			OpaqueId: altResult.Creator.Id.OpaqueId,
+			Idp: altResult.Creator.Id.Idp,
+		},
 		Ctime:   altResult.Ctime,
 		Mtime:   altResult.Mtime,
 	}, nil
@@ -227,10 +244,12 @@ func (sm *Manager) UpdateShare(ctx context.Context, user *userpb.User, ref *ocm.
 	return &ocm.Share{
 		Id: altResult.ID,
 		Grantee: &provider.Grantee{
-			Id: altResult.Grantee.ID,
+			Id: &provider.Grantee_UserId{
+				UserId: altResult.Grantee.ID,
+			},
 		},
-		Owner:   altResult.Owner,
-		Creator: altResult.Creator,
+		Owner:   altResult.Owner.Id,
+		Creator: altResult.Creator.Id,
 		Ctime:   altResult.Ctime,
 		Mtime:   altResult.Mtime,
 	}, nil
@@ -259,10 +278,12 @@ func (sm *Manager) ListShares(ctx context.Context, user *userpb.User, filters []
 		lst = append(lst, &ocm.Share{
 			Id: altResult.ID,
 			Grantee: &provider.Grantee{
-				Id: altResult.Grantee.ID,
+				Id: &provider.Grantee_UserId{
+					UserId: altResult.Grantee.ID,
+				},
 			},
-			Owner:   altResult.Owner,
-			Creator: altResult.Creator,
+			Owner:   altResult.Owner.Id,
+			Creator: altResult.Creator.Id,
 			Ctime:   altResult.Ctime,
 			Mtime:   altResult.Mtime,
 		})
@@ -311,10 +332,12 @@ func (sm *Manager) ListReceivedShares(ctx context.Context, user *userpb.User) ([
 			Id:            altResultShare.ID,
 			RemoteShareId: altResultShare.RemoteShareID, // sic, see https://github.com/cs3org/reva/pull/3852#discussion_r1189681465
 			Grantee: &provider.Grantee{
-				Id: altResultShare.Grantee.ID,
+				Id: &provider.Grantee_UserId{
+					UserId: altResultShare.Grantee.ID,
+				},
 			},
-			Owner:   altResultShare.Owner,
-			Creator: altResultShare.Creator,
+			Owner:   altResultShare.Owner.Id,
+			Creator: altResultShare.Creator.Id,
 			Ctime:   altResultShare.Ctime,
 			Mtime:   altResultShare.Mtime,
 			State:   share.State,
@@ -349,10 +372,12 @@ func (sm *Manager) GetReceivedShare(ctx context.Context, user *userpb.User, ref 
 		Id:            altResultShare.ID,
 		RemoteShareId: altResultShare.RemoteShareID, // sic, see https://github.com/cs3org/reva/pull/3852#discussion_r1189681465
 		Grantee: &provider.Grantee{
-			Id: altResultShare.Grantee.ID,
+			Id: &provider.Grantee_UserId{
+				UserId: altResultShare.Grantee.ID,
+			},
 		},
-		Owner:   altResultShare.Owner,
-		Creator: altResultShare.Creator,
+		Owner:   altResultShare.Owner.Id,
+		Creator: altResultShare.Creator.Id,
 		Ctime:   altResultShare.Ctime,
 		Mtime:   altResultShare.Mtime,
 		State:   altResult.State,
@@ -395,10 +420,12 @@ func (sm *Manager) UpdateReceivedShare(ctx context.Context, user *userpb.User, s
 		Id:            altResultShare.ID,
 		RemoteShareId: altResultShare.RemoteShareID, // sic, see https://github.com/cs3org/reva/pull/3852#discussion_r1189681465
 		Grantee: &provider.Grantee{
-			Id: altResultShare.Grantee.ID,
+			Id: &provider.Grantee_UserId{
+				UserId: altResultShare.Grantee.ID,
+			},
 		},
-		Owner:   altResultShare.Owner,
-		Creator: altResultShare.Creator,
+		Owner:   altResultShare.Owner.Id,
+		Creator: altResultShare.Creator.Id,
 		Ctime:   altResultShare.Ctime,
 		Mtime:   altResultShare.Mtime,
 		State:   altResult.State,
