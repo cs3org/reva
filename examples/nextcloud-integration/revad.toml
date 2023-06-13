@@ -134,6 +134,8 @@ webdav_root = "/remote.php/dav/ocm"
 enable_webapp = true
 enable_datatx = true
 
+[http.services.ocsprovider]
+
 [http.middlewares.providerauthorizer]
 driver = "json"
 

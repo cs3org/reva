@@ -119,6 +119,8 @@ endpoint = "http://localhost:17001"
 enable_webapp = true
 enable_datatx = true
 
+[http.services.ocsprovider]
+
 [http.middlewares.providerauthorizer]
 driver = "json"
 
@@ -131,3 +133,7 @@ prefix = "ocs"
 [http.services.ocdav]
 
 [http.middlewares.cors]
+
+[http.middlewares.auth]
+credential_chain = ["publicshares", "ocmshares", "basic", "bearer"]
+

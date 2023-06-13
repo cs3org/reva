@@ -25,6 +25,7 @@ file = "/var/tmp/reva/shares_server_1.json"
 [http.services.prometheus]
 [http.services.ocmd]
 [http.services.ocmprovider]
+[http.services.ocsprovider]
 [http.services.ocdav]
 [http.services.ocs]
 
