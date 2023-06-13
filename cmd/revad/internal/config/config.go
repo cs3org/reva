@@ -20,25 +20,47 @@ package config
 
 import (
 	"io"
+	"reflect"
 
 	"github.com/BurntSushi/toml"
 	"github.com/pkg/errors"
 )
 
-// Read reads the configuration from the reader.
-func Read(r io.Reader) (map[string]interface{}, error) {
-	data, err := io.ReadAll(r)
-	if err != nil {
-		err = errors.Wrap(err, "config: error reading from reader")
+type Config struct {
+	raw map[string]any
+
+	GRPC *GRPC `key:"grpc"`
+	// Serverless *Serverless // TODO
+
+	// TODO: add log, shared, core
+}
+
+type Serverless struct {
+}
+
+// Load loads the configuration from the reader.
+func Load(r io.Reader) (*Config, error) {
+	var c Config
+	if _, err := toml.NewDecoder(r).Decode(&c.raw); err != nil {
+		return nil, errors.Wrap(err, "config: error decoding toml data")
+	}
+	if err := c.parse(); err != nil {
 		return nil, err
 	}
+	return &c, nil
+}
 
-	v := map[string]interface{}{}
-	err = toml.Unmarshal(data, &v)
-	if err != nil {
-		err = errors.Wrap(err, "config: error decoding toml data")
-		return nil, err
+func (c *Config) parse() error {
+	if err := c.parseGRPC(); err != nil {
+		return err
 	}
+	return nil
+}
 
-	return v, nil
+func (c *Config) ApplyTemplates() error {
+	return nil
+}
+
+func (c *Config) lookup(key string) (any, error) {
+	return lookupStruct(key, reflect.ValueOf(c))
 }
