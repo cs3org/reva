@@ -75,8 +75,6 @@ require (
 	google.golang.org/grpc v1.52.0
 	google.golang.org/protobuf v1.28.1
 	gotest.tools v2.2.0+incompatible
-)
-
 	github.com/go-jose/go-jose/v3 v3.0.0 // indirect
 	github.com/hashicorp/go-msgpack/v2 v2.1.0 // indirect
 	golang.org/x/time v0.0.0-20220922220347-f3bd1da661af // indirect
