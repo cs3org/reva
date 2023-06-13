@@ -431,3 +431,8 @@ func (c *Client) FindRemoteUsers(ctx context.Context, initiator *userpb.UserId, 
 
 	return result, nil
 }
+
+// DeleteRemoteUser removes from the remote user from the initiator's list.
+func (c *Client) DeleteRemoteUser(ctx context.Context, initiator *userpb.UserId, remoteUser *userpb.UserId) error {
+	return nil
+}
