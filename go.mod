@@ -77,9 +77,9 @@ require (
 	gotest.tools v2.2.0+incompatible
 )
 
-require (
 	github.com/go-jose/go-jose/v3 v3.0.0 // indirect
 	github.com/hashicorp/go-msgpack/v2 v2.1.0 // indirect
+	golang.org/x/time v0.0.0-20220922220347-f3bd1da661af // indirect
 )
 
 require (

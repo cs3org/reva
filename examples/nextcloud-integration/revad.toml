@@ -47,6 +47,10 @@ driver = "json"
 [grpc.services.ocmcore.drivers.json]
 file = "/var/tmp/reva/shares_server_1.json"
 
+[grpc.services.ocminvitemanager.drivers.api]
+base_url = "http://localhost/"
+api_key = "put_api_key_here"
+
 [grpc.services.ocminvitemanager]
 driver = "json"
 
