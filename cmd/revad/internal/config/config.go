@@ -27,35 +27,34 @@ import (
 )
 
 type Config struct {
-	raw map[string]any
-
-	GRPC *GRPC `key:"grpc"`
-	HTTP *HTTP `key:"http"`
-	// Serverless *Serverless // TODO
+	GRPC       *GRPC       `key:"grpc"`
+	HTTP       *HTTP       `key:"http"`
+	Serverless *Serverless `key:"serverless"`
 
 	// TODO: add log, shared, core
-}
-
-type Serverless struct {
 }
 
 // Load loads the configuration from the reader.
 func Load(r io.Reader) (*Config, error) {
 	var c Config
-	if _, err := toml.NewDecoder(r).Decode(&c.raw); err != nil {
+	var raw map[string]any
+	if _, err := toml.NewDecoder(r).Decode(&raw); err != nil {
 		return nil, errors.Wrap(err, "config: error decoding toml data")
 	}
-	if err := c.parse(); err != nil {
+	if err := c.parse(raw); err != nil {
 		return nil, err
 	}
 	return &c, nil
 }
 
-func (c *Config) parse() error {
-	if err := c.parseGRPC(); err != nil {
+func (c *Config) parse(raw map[string]any) error {
+	if err := c.parseGRPC(raw); err != nil {
 		return err
 	}
-	if err := c.parseHTTP(); err != nil {
+	if err := c.parseHTTP(raw); err != nil {
+		return err
+	}
+	if err := c.parseServerless(raw); err != nil {
 		return err
 	}
 	return nil

@@ -20,8 +20,8 @@ type HTTP struct {
 func (h *HTTP) services() map[string]ServicesConfig     { return h._services }
 func (h *HTTP) interceptors() map[string]map[string]any { return h._middlewares }
 
-func (c *Config) parseHTTP() error {
-	cfg, ok := c.raw["http"]
+func (c *Config) parseHTTP(raw map[string]any) error {
+	cfg, ok := raw["http"]
 	if !ok {
 		return nil
 	}
