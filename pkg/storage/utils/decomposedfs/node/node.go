@@ -929,7 +929,7 @@ func (n *Node) IsDisabled(ctx context.Context) bool {
 func (n *Node) GetTreeSize(ctx context.Context) (treesize uint64, err error) {
 	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "GetTreeSize")
 	defer span.End()
-	s, err := n.XattrUint64(prefixes.TreesizeAttr)
+	s, err := n.XattrUint64(ctx, prefixes.TreesizeAttr)
 	if err != nil {
 		return 0, err
 	}

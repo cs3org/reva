@@ -182,8 +182,8 @@ func (n *Node) XattrInt64(ctx context.Context, key string) (int64, error) {
 }
 
 // XattrUint64 returns the uint64 representation of an attribute
-func (n *Node) XattrUint64(key string) (uint64, error) {
-	b, err := n.XattrString(key)
+func (n *Node) XattrUint64(ctx context.Context, key string) (uint64, error) {
+	b, err := n.XattrString(ctx, key)
 	if err != nil {
 		return 0, err
 	}
