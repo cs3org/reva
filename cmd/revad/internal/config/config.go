@@ -31,10 +31,10 @@ type Config struct {
 	GRPC       *GRPC       `key:"grpc"       mapsrtcuture:"-"`
 	HTTP       *HTTP       `key:"http"       mapstructure:"-"`
 	Serverless *Serverless `key:"serverless" mapstructure:"-"`
-	Shared     *Shared     `key:"shared"     mapstructure:"shared"`
-	Log        *Log        `key:"log"        mapstructure:"log"`
-	Core       *Core       `key:"core"       mapstructure:"core"`
-	Vars       Vars        `key:"vars"       mapstructure:"vars"`
+	Shared     *Shared     `key:"shared"     mapstructure:"shared" template:"-"`
+	Log        *Log        `key:"log"        mapstructure:"log"    template:"-"`
+	Core       *Core       `key:"core"       mapstructure:"core"   template:"-"`
+	Vars       Vars        `key:"vars"       mapstructure:"vars"   template:"-"`
 }
 
 type Log struct {
@@ -93,9 +93,9 @@ func (c *Config) parse(raw map[string]any) error {
 }
 
 func (c *Config) ApplyTemplates() error {
-	return nil
+	return c.applyTemplateByType(reflect.ValueOf(c))
 }
 
 func (c *Config) lookup(key string) (any, error) {
-	return lookupStruct(key, reflect.ValueOf(c))
+	return lookupByType(key, reflect.ValueOf(c))
 }

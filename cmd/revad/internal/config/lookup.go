@@ -10,8 +10,6 @@ import (
 var ErrKeyNotFound = errors.New("key not found")
 
 func lookupStruct(key string, v reflect.Value) (any, error) {
-	v = resolveRef(v)
-
 	if v.Kind() != reflect.Struct {
 		panic("called lookupStruct on non struct type")
 	}
@@ -49,7 +47,6 @@ func lookupStruct(key string, v reflect.Value) (any, error) {
 }
 
 func lookupByType(key string, v reflect.Value) (any, error) {
-	v = resolveRef(v)
 	switch v.Kind() {
 	case reflect.Bool, reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
 		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
@@ -61,15 +58,13 @@ func lookupByType(key string, v reflect.Value) (any, error) {
 		return lookupStruct(key, v)
 	case reflect.Map:
 		return lookupMap(key, v)
-	case reflect.Interface:
+	case reflect.Interface, reflect.Pointer:
 		return lookupByType(key, v.Elem())
 	}
 	panic("type not supported: " + v.Kind().String())
 }
 
 func lookupMap(key string, v reflect.Value) (any, error) {
-	v = resolveRef(v)
-
 	if v.Kind() != reflect.Map {
 		panic("called lookupMap on non map type")
 	}
@@ -97,8 +92,6 @@ func lookupMap(key string, v reflect.Value) (any, error) {
 }
 
 func lookupList(key string, v reflect.Value) (any, error) {
-	v = resolveRef(v)
-
 	if v.Kind() != reflect.Slice && v.Kind() != reflect.Array {
 		panic("called lookupList on non array/slice type")
 	}
@@ -135,7 +128,6 @@ func lookupList(key string, v reflect.Value) (any, error) {
 }
 
 func lookupPrimitive(key string, v reflect.Value) (any, error) {
-	v = resolveRef(v)
 	if v.Kind() != reflect.Bool && v.Kind() != reflect.Int && v.Kind() != reflect.Int8 &&
 		v.Kind() != reflect.Int16 && v.Kind() != reflect.Int32 && v.Kind() != reflect.Int64 &&
 		v.Kind() != reflect.Uint && v.Kind() != reflect.Uint8 && v.Kind() != reflect.Uint16 &&
@@ -153,11 +145,4 @@ func lookupPrimitive(key string, v reflect.Value) (any, error) {
 	}
 
 	return nil, errors.New("cannot address a value of type " + v.Kind().String())
-}
-
-func resolveRef(v reflect.Value) reflect.Value {
-	if v.Kind() == reflect.Pointer {
-		return resolveRef(v.Elem())
-	}
-	return v
 }
