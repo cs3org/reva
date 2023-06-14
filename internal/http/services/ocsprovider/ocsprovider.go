@@ -63,21 +63,29 @@ func (c *config) init() {
 }
 
 func (c *config) prepare() *ocsDiscoveryData {
-	// generates the (static) data structure to be exposed by /ocs-provider:
-	// here we only populate the federated sharing part and leave the rest empty
-	var fedSharingData = map[string]any{
-		"version": 1,
-		"endpoints": map[string]string{
-			"webdav": c.WebdavRoot,
-		},
-	}
+	// generates a minimal static data structure to be exposed by /ocs-provider
 	d := &ocsDiscoveryData{}
 	d.Version = 2
 	d.Services = ocsServices{
-		PrivateData:      map[string]any{},
-		Sharing:          map[string]any{},
-		FederatedSharing: fedSharingData,
-		Provisioning:     map[string]any{},
+		PrivateData: map[string]any{
+			"version":   1,
+			"endpoints": map[string]any{},
+		},
+		Sharing: map[string]any{
+			"version":   1,
+			"endpoints": map[string]any{},
+		},
+		FederatedSharing: map[string]any{
+			"version": 1,
+			"endpoints": map[string]string{
+				"share":  c.WebdavRoot,
+				"webdav": c.WebdavRoot,
+			},
+		},
+		Provisioning: map[string]any{
+			"version":   1,
+			"endpoints": map[string]any{},
+		},
 	}
 	return d
 }
