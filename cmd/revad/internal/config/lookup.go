@@ -32,6 +32,10 @@ func lookupStruct(key string, v reflect.Value) (any, error) {
 		val := v.Field(i)
 		field := t.Field(i)
 
+		if !field.IsExported() {
+			continue
+		}
+
 		tag := field.Tag.Get("key")
 		if tag == "" {
 			continue
