@@ -28,7 +28,7 @@ import (
 )
 
 type Config struct {
-	GRPC       *GRPC       `key:"grpc"       mapsrtcuture:"-"`
+	GRPC       *GRPC       `key:"grpc"       mapstructure:"-"`
 	HTTP       *HTTP       `key:"http"       mapstructure:"-"`
 	Serverless *Serverless `key:"serverless" mapstructure:"-"`
 	Shared     *Shared     `key:"shared"     mapstructure:"shared" template:"-"`
