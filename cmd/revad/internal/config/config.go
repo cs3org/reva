@@ -93,7 +93,7 @@ func (c *Config) parse(raw map[string]any) error {
 }
 
 func (c *Config) ApplyTemplates() error {
-	return c.applyTemplateByType(reflect.ValueOf(c))
+	return c.applyTemplateByType(nil, reflect.ValueOf(c))
 }
 
 func (c *Config) lookup(key string) (any, error) {

@@ -11,14 +11,14 @@ type HTTP struct {
 	CertFile string `mapstructure:"certfile" key:"certfile"`
 	KeyFile  string `mapstructure:"keyfile" key:"keyfile"`
 
-	_services    map[string]ServicesConfig `key:"services"`
-	_middlewares map[string]map[string]any `key:"middlewares"`
+	Services    map[string]ServicesConfig `key:"services"`
+	Middlewares map[string]map[string]any `key:"middlewares"`
 
 	iterableImpl
 }
 
-func (h *HTTP) services() map[string]ServicesConfig     { return h._services }
-func (h *HTTP) interceptors() map[string]map[string]any { return h._middlewares }
+func (h *HTTP) services() map[string]ServicesConfig     { return h.Services }
+func (h *HTTP) interceptors() map[string]map[string]any { return h.Middlewares }
 
 func (c *Config) parseHTTP(raw map[string]any) error {
 	cfg, ok := raw["http"]
@@ -45,12 +45,12 @@ func (c *Config) parseHTTP(raw map[string]any) error {
 		return err
 	}
 
-	http._services = services
-	http._middlewares = middlewares
+	http.Services = services
+	http.Middlewares = middlewares
 	http.iterableImpl = iterableImpl{&http}
 	c.HTTP = &http
 
-	for _, c := range http._services {
+	for _, c := range http.Services {
 		for _, cfg := range c {
 			cfg.Address = addressForService(http.Address, cfg.Config)
 		}

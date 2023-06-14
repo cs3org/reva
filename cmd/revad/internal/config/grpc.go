@@ -11,14 +11,14 @@ type GRPC struct {
 	ShutdownDeadline int    `mapstructure:"shutdown_deadline" key:"shutdown_deadline"`
 	EnableReflection bool   `mapstructure:"enable_reflection" key:"enable_reflection"`
 
-	_services     map[string]ServicesConfig `key:"services"`
-	_interceptors map[string]map[string]any `key:"interceptors"`
+	Services     map[string]ServicesConfig `key:"services"`
+	Interceptors map[string]map[string]any `key:"interceptors"`
 
 	iterableImpl
 }
 
-func (g *GRPC) services() map[string]ServicesConfig     { return g._services }
-func (g *GRPC) interceptors() map[string]map[string]any { return g._interceptors }
+func (g *GRPC) services() map[string]ServicesConfig     { return g.Services }
+func (g *GRPC) interceptors() map[string]map[string]any { return g.Interceptors }
 
 func (c *Config) parseGRPC(raw map[string]any) error {
 	cfg, ok := raw["grpc"]
@@ -45,12 +45,12 @@ func (c *Config) parseGRPC(raw map[string]any) error {
 		return err
 	}
 
-	grpc._services = services
-	grpc._interceptors = interceptors
+	grpc.Services = services
+	grpc.Interceptors = interceptors
 	grpc.iterableImpl = iterableImpl{&grpc}
 	c.GRPC = &grpc
 
-	for _, c := range grpc._services {
+	for _, c := range grpc.Services {
 		for _, cfg := range c {
 			cfg.Address = addressForService(grpc.Address, cfg.Config)
 		}
