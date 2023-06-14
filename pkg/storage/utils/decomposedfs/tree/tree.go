@@ -324,7 +324,9 @@ func (t *Tree) Move(ctx context.Context, oldNode *node.Node, newNode *node.Node)
 	return nil
 }
 
-func readChildNodeFromLink(path string) (string, error) {
+func readChildNodeFromLink(ctx context.Context, path string) (string, error) {
+	_, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "readChildNodeFromLink")
+	defer span.End()
 	link, err := os.Readlink(path)
 	if err != nil {
 		return "", err
@@ -336,8 +338,13 @@ func readChildNodeFromLink(path string) (string, error) {
 
 // ListFolder lists the content of a folder node
 func (t *Tree) ListFolder(ctx context.Context, n *node.Node) ([]*node.Node, error) {
+	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "ListFolder")
+	defer span.End()
 	dir := n.InternalPath()
+
+	_, subspan := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "os.Open")
 	f, err := os.Open(dir)
+	subspan.End()
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
 			return nil, errtypes.NotFound(dir)
@@ -346,7 +353,9 @@ func (t *Tree) ListFolder(ctx context.Context, n *node.Node) ([]*node.Node, erro
 	}
 	defer f.Close()
 
+	_, subspan = appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "f.Readdirnames")
 	names, err := f.Readdirnames(0)
+	subspan.End()
 	if err != nil {
 		return nil, err
 	}
@@ -378,13 +387,13 @@ func (t *Tree) ListFolder(ctx context.Context, n *node.Node) ([]*node.Node, erro
 		g.Go(func() error {
 			for name := range work {
 				path := filepath.Join(dir, name)
-				nodeID := getNodeIDFromCache(path, t.idCache)
+				nodeID := getNodeIDFromCache(ctx, path, t.idCache)
 				if nodeID == "" {
-					nodeID, err = readChildNodeFromLink(path)
+					nodeID, err = readChildNodeFromLink(ctx, path)
 					if err != nil {
 						return err
 					}
-					err = storeNodeIDInCache(path, nodeID, t.idCache)
+					err = storeNodeIDInCache(ctx, path, nodeID, t.idCache)
 					if err != nil {
 						return err
 					}
@@ -1031,7 +1040,9 @@ func (t *Tree) readRecycleItem(ctx context.Context, spaceID, key, path string) (
 	return
 }
 
-func getNodeIDFromCache(path string, cache store.Store) string {
+func getNodeIDFromCache(ctx context.Context, path string, cache store.Store) string {
+	_, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "getNodeIDFromCache")
+	defer span.End()
 	recs, err := cache.Read(path)
 	if err == nil && len(recs) > 0 {
 		return string(recs[0].Value)
@@ -1039,7 +1050,9 @@ func getNodeIDFromCache(path string, cache store.Store) string {
 	return ""
 }
 
-func storeNodeIDInCache(path string, nodeID string, cache store.Store) error {
+func storeNodeIDInCache(ctx context.Context, path string, nodeID string, cache store.Store) error {
+	_, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "storeNodeIDInCache")
+	defer span.End()
 	return cache.Write(&store.Record{
 		Key:   path,
 		Value: []byte(nodeID),
