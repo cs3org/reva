@@ -23,16 +23,44 @@ import (
 	"reflect"
 
 	"github.com/BurntSushi/toml"
+	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )
 
 type Config struct {
-	GRPC       *GRPC       `key:"grpc"`
-	HTTP       *HTTP       `key:"http"`
-	Serverless *Serverless `key:"serverless"`
-
-	// TODO: add log, shared, core
+	GRPC       *GRPC       `key:"grpc"       mapsrtcuture:"-"`
+	HTTP       *HTTP       `key:"http"       mapstructure:"-"`
+	Serverless *Serverless `key:"serverless" mapstructure:"-"`
+	Shared     *Shared     `key:"shared"     mapstructure:"shared"`
+	Log        *Log        `key:"log"        mapstructure:"log"`
+	Core       *Core       `key:"core"       mapstructure:"core"`
+	Vars       Vars        `key:"vars"       mapstructure:"vars"`
 }
+
+type Log struct {
+	Output string `key:"output" mapstructure:"output"`
+	Mode   string `key:"mode"   mapstructure:"mode"`
+	Level  string `key:"level"  mapstructure:"level"`
+}
+
+type Shared struct {
+	JWTSecret             string   `key:"jwt_secret"                mapstructure:"jwt_secret"`
+	GatewaySVC            string   `key:"gatewaysvc"                mapstructure:"gatewaysvc"`
+	DataGateway           string   `key:"datagateway"               mapstructure:"datagateway"`
+	SkipUserGroupsInToken bool     `key:"skip_user_groups_in_token" mapstructure:"skip_user_groups_in_token"`
+	BlockedUsers          []string `key:"blocked_users"             mapstructure:"blocked_users"`
+}
+
+type Core struct {
+	MaxCPUs            string `key:"max_cpus"             mapstructure:"max_cpus"`
+	TracingEnabled     bool   `key:"tracing_enabled"      mapstructure:"tracing_enabled"`
+	TracingEndpoint    string `key:"tracing_endpoint"     mapstructure:"tracing_endpoint"`
+	TracingCollector   string `key:"tracing_collector"    mapstructure:"tracing_collector"`
+	TracingServiceName string `key:"tracing_service_name" mapstructure:"tracing_service_name"`
+	TracingService     string `key:"tracing_service"      mapstructure:"tracing_service"`
+}
+
+type Vars map[string]any
 
 // Load loads the configuration from the reader.
 func Load(r io.Reader) (*Config, error) {
@@ -44,6 +72,7 @@ func Load(r io.Reader) (*Config, error) {
 	if err := c.parse(raw); err != nil {
 		return nil, err
 	}
+	c.Vars = make(Vars)
 	return &c, nil
 }
 
@@ -55,6 +84,9 @@ func (c *Config) parse(raw map[string]any) error {
 		return err
 	}
 	if err := c.parseServerless(raw); err != nil {
+		return err
+	}
+	if err := mapstructure.Decode(raw, c); err != nil {
 		return err
 	}
 	return nil
