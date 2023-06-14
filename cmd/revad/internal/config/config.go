@@ -30,6 +30,7 @@ type Config struct {
 	raw map[string]any
 
 	GRPC *GRPC `key:"grpc"`
+	HTTP *HTTP `key:"http"`
 	// Serverless *Serverless // TODO
 
 	// TODO: add log, shared, core
@@ -52,6 +53,9 @@ func Load(r io.Reader) (*Config, error) {
 
 func (c *Config) parse() error {
 	if err := c.parseGRPC(); err != nil {
+		return err
+	}
+	if err := c.parseHTTP(); err != nil {
 		return err
 	}
 	return nil
