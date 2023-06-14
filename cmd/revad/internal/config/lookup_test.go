@@ -3,6 +3,8 @@ package config
 import (
 	"reflect"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 type SimpleStruct struct {
@@ -121,13 +123,9 @@ func TestLookupStruct(t *testing.T) {
 
 	for _, tt := range tests {
 		got, err := lookupStruct(tt.key, reflect.ValueOf(tt.in))
-		if err != tt.err {
-			t.Fatalf("got not expected error: got=%v exp=%v", err, tt.err)
-		}
+		assert.Equal(t, err, tt.err, "got not expected error")
 		if tt.err == nil {
-			if !reflect.DeepEqual(tt.val, got) {
-				t.Fatalf("got not expected result. got=%v exp=%v", got, tt.val)
-			}
+			assert.Equal(t, tt.val, got)
 		}
 	}
 

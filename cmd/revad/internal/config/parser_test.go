@@ -1,32 +1,31 @@
 package config
 
 import (
-	"reflect"
 	"testing"
 
-	"github.com/gdexlab/go-render/render"
+	"gotest.tools/assert"
 )
 
 func TestSplit(t *testing.T) {
 	tests := []struct {
-		key      string
-		exptoken string
-		expnext  string
+		key   string
+		token string
+		next  string
 	}{
 		{
-			key:      ".grpc.services.authprovider[1].address",
-			exptoken: "grpc",
-			expnext:  ".services.authprovider[1].address",
+			key:   ".grpc.services.authprovider[1].address",
+			token: "grpc",
+			next:  ".services.authprovider[1].address",
 		},
 		{
-			key:      "[1].address",
-			exptoken: "1",
-			expnext:  ".address",
+			key:   "[1].address",
+			token: "1",
+			next:  ".address",
 		},
 		{
-			key:      "[100].address",
-			exptoken: "100",
-			expnext:  ".address",
+			key:   "[100].address",
+			token: "100",
+			next:  ".address",
 		},
 		{
 			key: "",
@@ -35,45 +34,46 @@ func TestSplit(t *testing.T) {
 
 	for _, tt := range tests {
 		token, next := split(tt.key)
-		if token != tt.exptoken || next != tt.expnext {
-			t.Fatalf("unexpected result: token=%s exp=%s | next=%s exp=%s", token, tt.exptoken, next, tt.expnext)
-		}
+		assert.Equal(t, token, tt.token)
+		assert.Equal(t, next, tt.next)
 	}
 }
 
 func TestParseNext(t *testing.T) {
 	tests := []struct {
-		key     string
-		expcmd  Command
-		expnext string
-		experr  error
+		key  string
+		cmd  Command
+		next string
+		err  error
 	}{
 		{
-			key:     ".grpc.services.authprovider[1].address",
-			expcmd:  FieldByKey{Key: "grpc"},
-			expnext: ".services.authprovider[1].address",
+			key:  ".grpc.services.authprovider[1].address",
+			cmd:  FieldByKey{Key: "grpc"},
+			next: ".services.authprovider[1].address",
 		},
 		{
-			key:     ".authprovider[1].address",
-			expcmd:  FieldByKey{Key: "authprovider"},
-			expnext: "[1].address",
+			key:  ".authprovider[1].address",
+			cmd:  FieldByKey{Key: "authprovider"},
+			next: "[1].address",
 		},
 		{
-			key:     "[1].authprovider.address",
-			expcmd:  FieldByIndex{Index: 1},
-			expnext: ".authprovider.address",
+			key:  "[1].authprovider.address",
+			cmd:  FieldByIndex{Index: 1},
+			next: ".authprovider.address",
 		},
 		{
-			key:     ".authprovider",
-			expcmd:  FieldByKey{Key: "authprovider"},
-			expnext: "",
+			key:  ".authprovider",
+			cmd:  FieldByKey{Key: "authprovider"},
+			next: "",
 		},
 	}
 
 	for _, tt := range tests {
 		cmd, next, err := parseNext(tt.key)
-		if err != tt.experr || !reflect.DeepEqual(cmd, tt.expcmd) || next != tt.expnext {
-			t.Fatalf("unexpected result: err=%v exp=%v | cmd=%s exp=%s | next=%s exp=%s", err, tt.experr, render.AsCode(cmd), render.AsCode(tt.expcmd), next, tt.expnext)
+		assert.Equal(t, err, tt.err)
+		if tt.err == nil {
+			assert.Equal(t, cmd, tt.cmd)
+			assert.Equal(t, next, tt.next)
 		}
 	}
 }

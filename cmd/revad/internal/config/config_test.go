@@ -72,7 +72,7 @@ something = "test"`
 			},
 		},
 	}
-	assert.Equal(t, exp, c.GRPC.services)
+	assert.Equal(t, exp, c.GRPC._services)
 }
 
 func TestLoadNoGRPCDefaultAddress(t *testing.T) {
@@ -136,5 +136,5 @@ something = "test"`
 			},
 		},
 	}
-	assert.Equal(t, exp, c.GRPC.services)
+	assert.Equal(t, exp, c.GRPC._services)
 }
