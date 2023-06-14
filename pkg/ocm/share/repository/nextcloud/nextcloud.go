@@ -433,10 +433,10 @@ func (sm *Manager) UpdateReceivedShare(ctx context.Context, user *userpb.User, s
 }
 
 func getUsername(user *userpb.User) string {
-	if len(user.Username) > 0 {
+	if user != nil && len(user.Username) > 0 {
 		return user.Username
 	}
-	if len(user.Id.OpaqueId) > 0 {
+	if user != nil && len(user.Id.OpaqueId) > 0 {
 		return user.Id.OpaqueId
 	}
 

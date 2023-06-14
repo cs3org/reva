@@ -19,8 +19,6 @@
 -- This file can be used to make the required changes to the MySQL DB. This is
 -- not a proper migration but it should work on most situations.
 
-USE cernboxngcopy;
-
 CREATE TABLE `cbox_notifications` (
 	`id` INT PRIMARY KEY AUTO_INCREMENT,
 	`ref` VARCHAR(3072) UNIQUE NOT NULL,
@@ -45,7 +43,7 @@ CREATE INDEX `cbox_notifications_ix0` ON `cbox_notifications` (`ref`);
 CREATE INDEX `cbox_notification_recipients_ix0` ON `cbox_notification_recipients` (`notification_id`);
 CREATE INDEX `cbox_notification_recipients_ix1` ON `cbox_notification_recipients` (`user_name`);
 
--- changes for added notifications on ocm shares
+-- changes for added notifications on oc shares
 
 ALTER TABLE cernboxngcopy.oc_share ADD notify_uploads BOOL DEFAULT false;
 
