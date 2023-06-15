@@ -19,6 +19,7 @@
 package config
 
 import (
+	"fmt"
 	"io"
 	"reflect"
 
@@ -93,6 +94,15 @@ func (c *Config) parse(raw map[string]any) error {
 
 func (c *Config) ApplyTemplates() error {
 	return c.applyTemplateByType(nil, reflect.ValueOf(c))
+}
+
+func (c *Config) Dump() map[string]any {
+	v := dumpByType(reflect.ValueOf(c))
+	dump, ok := v.(map[string]any)
+	if !ok {
+		panic(fmt.Sprintf("dump should be a map: got %T", dump))
+	}
+	return dump
 }
 
 func (c *Config) lookup(key string) (any, error) {

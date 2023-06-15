@@ -6,7 +6,7 @@ import (
 )
 
 type Serverless struct {
-	Services map[string]map[string]any `mapstructure:"services"`
+	Services map[string]map[string]any `key:"services" mapstructure:"services"`
 }
 
 func (c *Config) parseServerless(raw map[string]any) error {

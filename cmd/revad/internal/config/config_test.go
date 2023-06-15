@@ -326,3 +326,214 @@ func assertHTTPEqual(t *testing.T, h1, h2 *HTTP) {
 	assert.Equal(t, h1.Services, h2.Services)
 	assert.Equal(t, h1.Middlewares, h2.Middlewares)
 }
+
+func TestDump(t *testing.T) {
+	config := &Config{
+		Shared: &Shared{
+			GatewaySVC: "localhost:9142",
+			JWTSecret:  "secret",
+		},
+		Log: &Log{
+			Output: "/var/log/revad/revad-gateway.log",
+			Mode:   "json",
+			Level:  "trace",
+		},
+		Core: &Core{
+			MaxCPUs:        1,
+			TracingEnabled: true,
+		},
+		Vars: Vars{
+			"db_username": "root",
+			"db_password": "secretpassword",
+		},
+		GRPC: &GRPC{
+			ShutdownDeadline: 10,
+			EnableReflection: true,
+			Interceptors:     make(map[string]map[string]any),
+			Services: map[string]ServicesConfig{
+				"gateway": {
+					{
+						Config: map[string]any{
+							"authregistrysvc": "localhost:19000",
+						},
+					},
+				},
+				"authregistry": {
+					{
+						Address: "localhost:19000",
+						Config: map[string]any{
+							"driver": "static",
+							"drivers": map[string]any{
+								"static": map[string]any{
+									"rules": map[string]any{
+										"basic":   "localhost:19001",
+										"machine": "localhost:19002",
+									},
+								},
+							},
+						},
+					},
+				},
+				"authprovider": {
+					{
+						Address: "localhost:19001",
+						Config: map[string]any{
+							"driver":  "ldap",
+							"address": "localhost:19001",
+							"drivers": map[string]any{
+								"ldap": map[string]any{
+									"password": "ldap",
+								},
+							},
+						},
+					},
+					{
+						Address: "localhost:19002",
+						Config: map[string]any{
+							"driver":  "machine",
+							"address": "localhost:19002",
+							"drivers": map[string]any{
+								"machine": map[string]any{
+									"api_key": "secretapikey",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		HTTP: &HTTP{
+			Address:     "localhost:19003",
+			Middlewares: make(map[string]map[string]any),
+			Services: map[string]ServicesConfig{
+				"dataprovider": {
+					{
+						Address: "localhost:19003",
+						Config: map[string]any{
+							"driver": "localhome",
+						},
+					},
+				},
+				"sysinfo": {
+					{
+						Address: "localhost:19003",
+						Config:  map[string]any{},
+					},
+				},
+			},
+		},
+		Serverless: &Serverless{
+			Services: map[string]map[string]any{
+				"notifications": {
+					"nats_address": "nats-server-01.example.com",
+					"nats_token":   "secret-token-example",
+				},
+			},
+		},
+	}
+
+	m := config.Dump()
+	assert.Equal(t, map[string]any{
+		"shared": map[string]any{
+			"jwt_secret":                "secret",
+			"gatewaysvc":                "localhost:9142",
+			"datagateway":               "",
+			"skip_user_groups_in_token": false,
+			"blocked_users":             []any{},
+		},
+		"log": map[string]any{
+			"output": "/var/log/revad/revad-gateway.log",
+			"mode":   "json",
+			"level":  "trace",
+		},
+		"core": map[string]any{
+			"max_cpus":             1,
+			"tracing_enabled":      true,
+			"tracing_endpoint":     "",
+			"tracing_collector":    "",
+			"tracing_service_name": "",
+			"tracing_service":      "",
+		},
+		"vars": map[string]any{
+			"db_username": "root",
+			"db_password": "secretpassword",
+		},
+		"grpc": map[string]any{
+			"address":           "",
+			"network":           "",
+			"shutdown_deadline": 10,
+			"enable_reflection": true,
+			"interceptors":      map[string]any{},
+			"services": map[string]any{
+				"gateway": []any{
+					map[string]any{
+						"address":         "",
+						"authregistrysvc": "localhost:19000",
+					},
+				},
+				"authregistry": []any{
+					map[string]any{
+						"address": "localhost:19000",
+						"driver":  "static",
+						"drivers": map[string]any{
+							"static": map[string]any{
+								"rules": map[string]any{
+									"basic":   "localhost:19001",
+									"machine": "localhost:19002",
+								},
+							},
+						},
+					},
+				},
+				"authprovider": []any{
+					map[string]any{
+						"address": "localhost:19001",
+						"driver":  "ldap",
+						"drivers": map[string]any{
+							"ldap": map[string]any{
+								"password": "ldap",
+							},
+						},
+					},
+					map[string]any{
+						"address": "localhost:19002",
+						"driver":  "machine",
+						"drivers": map[string]any{
+							"machine": map[string]any{
+								"api_key": "secretapikey",
+							},
+						},
+					},
+				},
+			},
+		},
+		"http": map[string]any{
+			"network":     "",
+			"address":     "localhost:19003",
+			"certfile":    "",
+			"keyfile":     "",
+			"middlewares": map[string]any{},
+			"services": map[string]any{
+				"dataprovider": []any{
+					map[string]any{
+						"address": "localhost:19003",
+						"driver":  "localhome",
+					},
+				},
+				"sysinfo": []any{
+					map[string]any{
+						"address": "localhost:19003",
+					},
+				},
+			},
+		},
+		"serverless": map[string]any{
+			"services": map[string]any{
+				"notifications": map[string]any{
+					"nats_address": "nats-server-01.example.com",
+					"nats_token":   "secret-token-example",
+				},
+			},
+		},
+	}, m)
+}
