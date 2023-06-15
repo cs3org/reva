@@ -35,11 +35,6 @@ address = "0.0.0.0:13001"
 [http.services.ocmd]
 prefix = "ocm"
 
-[http.services.ocmprovider]
-endpoint = "http://localhost:13001"
-
-[http.services.ocsprovider]
-
 [http.middlewares.providerauthorizer]
 driver = "json"
 
