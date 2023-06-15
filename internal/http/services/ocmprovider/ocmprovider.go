@@ -154,6 +154,12 @@ func (s *svc) Handler() http.Handler {
 		log := appctx.GetLogger(r.Context())
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
+		if r.UserAgent() == "Nextcloud Server Crawler" {
+			// TODO(lopresti) remove this hack once Nextcloud is able to talk OCM!
+			s.data.APIVersion = "1.0-proposal1"
+		} else {
+			s.data.APIVersion = "1.1.0"
+		}
 		indented, _ := json.MarshalIndent(s.data, "", "   ")
 		if _, err := w.Write(indented); err != nil {
 			log.Err(err).Msg("Error writing to ResponseWriter")
