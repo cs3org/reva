@@ -7,6 +7,8 @@ import (
 	"github.com/pkg/errors"
 )
 
+// ErrKeyNotFound is the error returned when a key does not exist
+// in the configuration.
 var ErrKeyNotFound = errors.New("key not found")
 
 func lookupStruct(key string, v reflect.Value) (any, error) {

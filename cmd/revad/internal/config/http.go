@@ -5,6 +5,7 @@ import (
 	"github.com/pkg/errors"
 )
 
+// HTTP holds the configuration for the HTTP services.
 type HTTP struct {
 	Network  string `mapstructure:"network" key:"network"`
 	Address  string `mapstructure:"address" key:"address"`

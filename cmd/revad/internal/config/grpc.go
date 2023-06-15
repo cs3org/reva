@@ -5,6 +5,7 @@ import (
 	"github.com/pkg/errors"
 )
 
+// GRPC holds the configuration for the GRPC services.
 type GRPC struct {
 	Address          string `mapstructure:"address" key:"address"`
 	Network          string `mapstructure:"network" key:"network"`

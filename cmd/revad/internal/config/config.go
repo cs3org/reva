@@ -28,6 +28,7 @@ import (
 	"github.com/pkg/errors"
 )
 
+// Config holds the reva configuration.
 type Config struct {
 	GRPC       *GRPC       `key:"grpc"       mapstructure:"-"`
 	HTTP       *HTTP       `key:"http"       mapstructure:"-"`
@@ -38,12 +39,14 @@ type Config struct {
 	Vars       Vars        `key:"vars"       mapstructure:"vars"   template:"-"`
 }
 
+// Log holds the configuration for the logger.
 type Log struct {
 	Output string `key:"output" mapstructure:"output"`
 	Mode   string `key:"mode"   mapstructure:"mode"`
 	Level  string `key:"level"  mapstructure:"level"`
 }
 
+// Shared holds the shared configuration.
 type Shared struct {
 	JWTSecret             string   `key:"jwt_secret"                mapstructure:"jwt_secret"`
 	GatewaySVC            string   `key:"gatewaysvc"                mapstructure:"gatewaysvc"`
@@ -52,6 +55,7 @@ type Shared struct {
 	BlockedUsers          []string `key:"blocked_users"             mapstructure:"blocked_users"`
 }
 
+// Core holds the core configuration.
 type Core struct {
 	MaxCPUs            int    `key:"max_cpus"             mapstructure:"max_cpus"`
 	TracingEnabled     bool   `key:"tracing_enabled"      mapstructure:"tracing_enabled"`
@@ -61,6 +65,8 @@ type Core struct {
 	TracingService     string `key:"tracing_service"      mapstructure:"tracing_service"`
 }
 
+// Vars holds the a set of configuration paramenters that
+// can be references by other parts of the configuration.
 type Vars map[string]any
 
 // Load loads the configuration from the reader.
@@ -92,10 +98,13 @@ func (c *Config) parse(raw map[string]any) error {
 	return nil
 }
 
+// ApplyTemplates applies the templates defined in the configuration,
+// replacing the template string with the value pointed by the given key.
 func (c *Config) ApplyTemplates() error {
 	return c.applyTemplateByType(nil, reflect.ValueOf(c))
 }
 
+// Dump returns the configuration as a map.
 func (c *Config) Dump() map[string]any {
 	v := dumpByType(reflect.ValueOf(c))
 	dump, ok := v.(map[string]any)

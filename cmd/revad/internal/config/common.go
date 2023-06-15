@@ -14,10 +14,13 @@ type iterable interface {
 
 type iterableImpl struct{ i iterable }
 
+// ServicesConfig holds the configuration for reva services.
 type ServicesConfig []*DriverConfig
 
+// DriversNumber return the number of driver configured for the service.
 func (c ServicesConfig) DriversNumber() int { return len(c) }
 
+// DriverConfig holds the configuration for a driver.
 type DriverConfig struct {
 	Config  map[string]any `key:",squash"`
 	Address string         `key:"address"`
@@ -79,6 +82,7 @@ func parseMiddlwares(cfg map[string]any, key string) (map[string]map[string]any,
 	return m, nil
 }
 
+// Service contains the configuration for a service.
 type Service struct {
 	Address string
 	Name    string
@@ -87,18 +91,24 @@ type Service struct {
 	raw *DriverConfig
 }
 
+// SetAddress sets the address for the service in the configuration.
 func (s *Service) SetAddress(address string) {
 	s.Address = address
 	s.raw.Address = address
 }
 
+// ServiceFunc is an helper function used to pass the service config
+// to the ForEachService func.
 type ServiceFunc func(*Service)
 
+// Interceptor contains the configuration for an interceptor.
 type Interceptor struct {
 	Name   string
 	Config map[string]any
 }
 
+// InterceptorFunc is an helper function used to pass the interface config
+// to the ForEachInterceptor func.
 type InterceptorFunc func(*Interceptor)
 
 // ForEachService iterates to each service/driver calling the function f.
@@ -115,7 +125,7 @@ func (i iterableImpl) ForEachService(f ServiceFunc) {
 	}
 }
 
-// ForEachInterceptor iterates to each middlware calling the function f.
+// ForEachInterceptor iterates to each middleware calling the function f.
 func (i iterableImpl) ForEachInterceptor(f InterceptorFunc) {
 	for name, c := range i.i.interceptors() {
 		f(&Interceptor{

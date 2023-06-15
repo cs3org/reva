@@ -8,19 +8,16 @@ import (
 	"github.com/pkg/errors"
 )
 
-type Command interface {
-	isCommand()
-}
+// Command is the command to execute after parsing the template.
+type Command interface{ isCommand() }
 
-type FieldByKey struct {
-	Key string
-}
+// FieldByKey instructs the template runner to get a field by a key.
+type FieldByKey struct{ Key string }
 
 func (FieldByKey) isCommand() {}
 
-type FieldByIndex struct {
-	Index int
-}
+// FieldByIndex instructs the template runner to get a field by an index.
+type FieldByIndex struct{ Index int }
 
 func (FieldByIndex) isCommand() {}
 
