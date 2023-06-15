@@ -14,7 +14,7 @@ type GRPC struct {
 	Services     map[string]ServicesConfig `mapstructure:"-" key:"services"`
 	Interceptors map[string]map[string]any `mapstructure:"-" key:"interceptors"`
 
-	iterablecmd/revad/internal/config/config_test.gocmd/revad/internal/config/config_test.goImpl
+	iterableImpl
 }
 
 func (g *GRPC) services() map[string]ServicesConfig     { return g.Services }
