@@ -464,4 +464,10 @@ func registerPermissions(m *mocks.PermissionsChecker, uid string, exp *provider.
 		}),
 		mock.Anything,
 	).Return(p, nil)
+	m.On("AssembleTrashPermissions",
+		mock.MatchedBy(func(ctx context.Context) bool {
+			return uid == "" || ctxpkg.ContextMustGetUser(ctx).Id.OpaqueId == uid
+		}),
+		mock.Anything,
+	).Return(p, nil)
 }
