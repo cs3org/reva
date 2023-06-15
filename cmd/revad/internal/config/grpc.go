@@ -11,10 +11,10 @@ type GRPC struct {
 	ShutdownDeadline int    `mapstructure:"shutdown_deadline" key:"shutdown_deadline"`
 	EnableReflection bool   `mapstructure:"enable_reflection" key:"enable_reflection"`
 
-	Services     map[string]ServicesConfig `key:"services"`
-	Interceptors map[string]map[string]any `key:"interceptors"`
+	Services     map[string]ServicesConfig `mapstructure:"-" key:"services"`
+	Interceptors map[string]map[string]any `mapstructure:"-" key:"interceptors"`
 
-	iterableImpl
+	iterablecmd/revad/internal/config/config_test.gocmd/revad/internal/config/config_test.goImpl
 }
 
 func (g *GRPC) services() map[string]ServicesConfig     { return g.Services }

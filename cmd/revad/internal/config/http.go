@@ -11,8 +11,8 @@ type HTTP struct {
 	CertFile string `mapstructure:"certfile" key:"certfile"`
 	KeyFile  string `mapstructure:"keyfile" key:"keyfile"`
 
-	Services    map[string]ServicesConfig `key:"services"`
-	Middlewares map[string]map[string]any `key:"middlewares"`
+	Services    map[string]ServicesConfig `mapstructure:"-" key:"services"`
+	Middlewares map[string]map[string]any `mapstructure:"-" key:"middlewares"`
 
 	iterableImpl
 }
