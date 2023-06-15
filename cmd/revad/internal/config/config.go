@@ -52,7 +52,7 @@ type Shared struct {
 }
 
 type Core struct {
-	MaxCPUs            string `key:"max_cpus"             mapstructure:"max_cpus"`
+	MaxCPUs            int    `key:"max_cpus"             mapstructure:"max_cpus"`
 	TracingEnabled     bool   `key:"tracing_enabled"      mapstructure:"tracing_enabled"`
 	TracingEndpoint    string `key:"tracing_endpoint"     mapstructure:"tracing_endpoint"`
 	TracingCollector   string `key:"tracing_collector"    mapstructure:"tracing_collector"`
@@ -72,7 +72,6 @@ func Load(r io.Reader) (*Config, error) {
 	if err := c.parse(raw); err != nil {
 		return nil, err
 	}
-	c.Vars = make(Vars)
 	return &c, nil
 }
 
