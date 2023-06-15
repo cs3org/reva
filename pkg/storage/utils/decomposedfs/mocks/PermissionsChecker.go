@@ -59,6 +59,30 @@ func (_m *PermissionsChecker) AssemblePermissions(ctx context.Context, n *node.N
 	return r0, r1
 }
 
+// AssembleTrashPermissions provides a mock function with given fields: ctx, n
+func (_m *PermissionsChecker) AssembleTrashPermissions(ctx context.Context, n *node.Node) (providerv1beta1.ResourcePermissions, error) {
+	ret := _m.Called(ctx, n)
+
+	var r0 providerv1beta1.ResourcePermissions
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, *node.Node) (providerv1beta1.ResourcePermissions, error)); ok {
+		return rf(ctx, n)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, *node.Node) providerv1beta1.ResourcePermissions); ok {
+		r0 = rf(ctx, n)
+	} else {
+		r0 = ret.Get(0).(providerv1beta1.ResourcePermissions)
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, *node.Node) error); ok {
+		r1 = rf(ctx, n)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
 type mockConstructorTestingTNewPermissionsChecker interface {
 	mock.TestingT
 	Cleanup(func())
