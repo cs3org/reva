@@ -65,7 +65,7 @@ func (fs *Decomposedfs) ListRecycle(ctx context.Context, ref *provider.Reference
 	rp, err := fs.p.AssemblePermissions(ctx, trashnode)
 	switch {
 	case err != nil:
-		return nil, errtypes.InternalError(err.Error())
+		return nil, err
 	case !rp.ListRecycle:
 		if rp.Stat {
 			return nil, errtypes.PermissionDenied(key)
@@ -303,7 +303,7 @@ func (fs *Decomposedfs) RestoreRecycleItem(ctx context.Context, ref *provider.Re
 	rp, err := fs.p.AssemblePermissions(ctx, rn)
 	switch {
 	case err != nil:
-		return errtypes.InternalError(err.Error())
+		return err
 	case !rp.RestoreRecycleItem:
 		if rp.Stat {
 			return errtypes.PermissionDenied(key)
@@ -318,7 +318,7 @@ func (fs *Decomposedfs) RestoreRecycleItem(ctx context.Context, ref *provider.Re
 	pp, err := fs.p.AssemblePermissions(ctx, parent)
 	switch {
 	case err != nil:
-		return errtypes.InternalError(err.Error())
+		return err
 	case !pp.InitiateFileUpload:
 		// share receiver cannot restore to a shared resource to which she does not have write permissions.
 		if rp.Stat {
@@ -349,7 +349,7 @@ func (fs *Decomposedfs) PurgeRecycleItem(ctx context.Context, ref *provider.Refe
 	rp, err := fs.p.AssemblePermissions(ctx, rn)
 	switch {
 	case err != nil:
-		return errtypes.InternalError(err.Error())
+		return err
 	case !rp.PurgeRecycle:
 		if rp.Stat {
 			return errtypes.PermissionDenied(key)

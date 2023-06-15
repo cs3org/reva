@@ -116,9 +116,7 @@ func (p *Permissions) AssemblePermissions(ctx context.Context, n *Node) (ap prov
 
 	// determine root
 	rn := n.SpaceRoot
-
 	cn := n
-
 	ap = provider.ResourcePermissions{}
 
 	// for an efficient group lookup convert the list of groups to a map
