@@ -25,6 +25,16 @@ type StructWithNestedList struct {
 	List []SimpleStruct `key:"list"`
 }
 
+type Squashed struct {
+	Squashed SimpleStruct `key:",squash"`
+	Simple   SimpleStruct
+}
+
+type SquashedMap struct {
+	Squashed map[string]any `key:",squash"`
+	Simple   SimpleStruct   `key:"simple"`
+}
+
 func TestLookupStruct(t *testing.T) {
 	tests := []struct {
 		in  any
@@ -118,6 +128,34 @@ func TestLookupStruct(t *testing.T) {
 				KeyA: "val_a[2]",
 				KeyB: "val_b[2]",
 			},
+		},
+		{
+			in: Squashed{
+				Squashed: SimpleStruct{
+					KeyA: "val_a[1]",
+					KeyB: "val_b[1]",
+				},
+				Simple: SimpleStruct{
+					KeyA: "val_a[2]",
+					KeyB: "val_b[2]",
+				},
+			},
+			key: ".keya",
+			val: "val_a[1]",
+		},
+		{
+			in: SquashedMap{
+				Squashed: map[string]any{
+					"keya": "val_a[1]",
+					"keyb": "val_b[1]",
+				},
+				Simple: SimpleStruct{
+					KeyA: "val_a[2]",
+					KeyB: "val_b[2]",
+				},
+			},
+			key: ".keya",
+			val: "val_a[1]",
 		},
 	}
 

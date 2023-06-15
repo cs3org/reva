@@ -41,6 +41,31 @@ func lookupStruct(key string, v reflect.Value) (any, error) {
 			continue
 		}
 
+		if tag[1:] == "squash" {
+			if val.Kind() == reflect.Pointer {
+				val = val.Elem()
+			}
+
+			var (
+				v   any
+				err error
+			)
+			if val.Kind() == reflect.Struct {
+				v, err = lookupStruct(key, val)
+			} else if val.Kind() == reflect.Map {
+				v, err = lookupMap(key, val)
+			} else {
+				panic("squash not allowed on non map/struct types")
+			}
+			if errors.Is(err, ErrKeyNotFound) {
+				continue
+			}
+			if err != nil {
+				return nil, err
+			}
+			return v, nil
+		}
+
 		if tag != c.Key {
 			continue
 		}

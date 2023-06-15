@@ -19,8 +19,8 @@ type ServicesConfig []*DriverConfig
 func (c ServicesConfig) DriversNumber() int { return len(c) }
 
 type DriverConfig struct {
-	Config  map[string]any
-	Address string
+	Config  map[string]any `key:",squash"`
+	Address string         `key:"address"`
 }
 
 func newSvcConfigFromList(l []map[string]any) (ServicesConfig, error) {
