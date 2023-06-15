@@ -376,7 +376,7 @@ func (t *Tree) ListFolder(ctx context.Context, n *node.Node) ([]*node.Node, erro
 					}
 				}
 
-				child, err := node.ReadNode(ctx, t.lookup, n.SpaceID, nodeID, false, n, true)
+				child, err := node.ReadNode(ctx, t.lookup, n.SpaceID, nodeID, false, n.SpaceRoot, true)
 				if err != nil {
 					return err
 				}
