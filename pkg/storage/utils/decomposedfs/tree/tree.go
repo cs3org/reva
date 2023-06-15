@@ -754,10 +754,12 @@ func (t *Tree) Propagate(ctx context.Context, n *node.Node, sizeDiff int64) (err
 		switch t.lookup.MetadataBackend().(type) {
 		case metadata.MessagePackBackend:
 			parentFilename = t.lookup.MetadataBackend().MetadataPath(n.ParentPath())
-			f, err = lockedfile.OpenFile(parentFilename, os.O_RDWR|os.O_CREATE, 0600)
+			// no need to O_CREATE the file, we can use the metadata file. Actually, we want to error if the parent does not exist!
+			f, err = lockedfile.OpenFile(parentFilename, os.O_RDWR, 0600)
 		case metadata.XattrsBackend:
 			// we have to use dedicated lockfiles to lock directories
 			// this only works because the xattr backend also locks folders with separate lock files
+			// we need to O_CREATE a lockfile if it does not exist, yet
 			parentFilename = n.ParentPath() + filelocks.LockFileSuffix
 			f, err = lockedfile.OpenFile(parentFilename, os.O_RDWR|os.O_CREATE, 0600)
 		}
