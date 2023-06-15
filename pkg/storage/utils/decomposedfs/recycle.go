@@ -62,7 +62,7 @@ func (fs *Decomposedfs) ListRecycle(ctx context.Context, ref *provider.Reference
 	if err != nil {
 		return nil, err
 	}
-	rp, err := fs.p.AssemblePermissions(ctx, trashnode)
+	rp, err := fs.p.AssembleTrashPermissions(ctx, trashnode)
 	switch {
 	case err != nil:
 		return nil, err
@@ -300,7 +300,7 @@ func (fs *Decomposedfs) RestoreRecycleItem(ctx context.Context, ref *provider.Re
 	}
 
 	// check permissions of deleted node
-	rp, err := fs.p.AssemblePermissions(ctx, rn)
+	rp, err := fs.p.AssembleTrashPermissions(ctx, rn)
 	switch {
 	case err != nil:
 		return err
@@ -346,7 +346,7 @@ func (fs *Decomposedfs) PurgeRecycleItem(ctx context.Context, ref *provider.Refe
 	}
 
 	// check permissions of deleted node
-	rp, err := fs.p.AssemblePermissions(ctx, rn)
+	rp, err := fs.p.AssembleTrashPermissions(ctx, rn)
 	switch {
 	case err != nil:
 		return err

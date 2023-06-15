@@ -98,6 +98,16 @@ func NewPermissions(lu PathLookup) *Permissions {
 
 // AssemblePermissions will assemble the permissions for the current user on the given node, taking into account all parent nodes
 func (p *Permissions) AssemblePermissions(ctx context.Context, n *Node) (ap provider.ResourcePermissions, err error) {
+	return p.assemblePermissions(ctx, n, true)
+}
+
+// AssembleTrashPermissions will assemble the permissions for the current user on the given node, taking into account all parent nodes
+func (p *Permissions) AssembleTrashPermissions(ctx context.Context, n *Node) (ap provider.ResourcePermissions, err error) {
+	return p.assemblePermissions(ctx, n, false)
+}
+
+// assemblePermissions will assemble the permissions for the current user on the given node, taking into account all parent nodes
+func (p *Permissions) assemblePermissions(ctx context.Context, n *Node, failOnTrashedSubtree bool) (ap provider.ResourcePermissions, err error) {
 	u, ok := ctxpkg.ContextGetUser(ctx)
 	if !ok {
 		return NoPermissions(), nil
@@ -147,7 +157,7 @@ func (p *Permissions) AssemblePermissions(ctx context.Context, n *Node) (ap prov
 			// We do not have a parent, so we assume the next valid parent is the spaceRoot (which must always exist)
 			cn = n.SpaceRoot
 		}
-		if !cn.Exists {
+		if failOnTrashedSubtree && !cn.Exists {
 			return NoPermissions(), errtypes.NotFound(n.ID)
 		}
 
