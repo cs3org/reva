@@ -114,12 +114,7 @@ func (p *Permissions) AssemblePermissions(ctx context.Context, n *Node) (ap prov
 		n.ID = kp[0]
 	}
 
-	// check if the current user is the owner
-	if utils.UserIDEqual(u.Id, n.Owner()) {
-		return OwnerPermissions(), nil
-	}
 	// determine root
-
 	rn := n.SpaceRoot
 
 	cn := n
@@ -154,6 +149,10 @@ func (p *Permissions) AssemblePermissions(ctx context.Context, n *Node) (ap prov
 			// We do not have a parent, so we assume the next valid parent is the spaceRoot (which must always exist)
 			cn = n.SpaceRoot
 		}
+		if !cn.Exists {
+			return NoPermissions(), errtypes.NotFound(n.ID)
+		}
+
 	}
 
 	// for the root node
@@ -165,6 +164,11 @@ func (p *Permissions) AssemblePermissions(ctx context.Context, n *Node) (ap prov
 		AddPermissions(&ap, &np)
 	} else {
 		appctx.GetLogger(ctx).Error().Err(err).Interface("node", cn.ID).Msg("error reading root node permissions")
+	}
+
+	// check if the current user is the owner
+	if utils.UserIDEqual(u.Id, n.Owner()) {
+		return OwnerPermissions(), nil
 	}
 
 	appctx.GetLogger(ctx).Debug().Interface("permissions", ap).Interface("node", n.ID).Interface("user", u).Msg("returning agregated permissions")
