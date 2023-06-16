@@ -114,6 +114,6 @@ func (c *Config) Dump() map[string]any {
 	return dump
 }
 
-func (c *Config) lookup(key string) (any, error) {
+func (c *Config) Lookup(key string) (any, error) {
 	return lookupByType(key, reflect.ValueOf(c))
 }

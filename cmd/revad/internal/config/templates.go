@@ -129,7 +129,7 @@ func (c *Config) applyTemplateInterface(p parent, v reflect.Value) error {
 	}
 
 	key := keyFromTemplate(s)
-	val, err := c.lookup(key)
+	val, err := c.Lookup(key)
 	if err != nil {
 		return err
 	}
@@ -154,7 +154,7 @@ func (c *Config) applyTemplateString(p parent, v reflect.Value) error {
 	}
 
 	key := keyFromTemplate(s)
-	val, err := c.lookup(key)
+	val, err := c.Lookup(key)
 	if err != nil {
 		return err
 	}
