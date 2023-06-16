@@ -89,7 +89,7 @@ func (c *config) prepare() *discoveryData {
 	if c.Endpoint == "" {
 		d.Enabled = false
 		d.Endpoint = ""
-		d.APIVersion = "1.1.0"
+		d.APIVersion = "1.0-proposal1"
 		d.Provider = c.Provider
 		d.ResourceTypes = []resourceTypes{{
 			Name:       "file",
