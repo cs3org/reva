@@ -151,7 +151,7 @@ mode = "json"
 level = "trace"
 
 [core]
-max_cpus = 1
+max_cpus = "1"
 tracing_enabled = true
 
 [vars]
@@ -213,7 +213,7 @@ nats_token = "secret-token-example"`
 	})
 
 	assert.Equal(t, c2.Core, &Core{
-		MaxCPUs:        1,
+		MaxCPUs:        "1",
 		TracingEnabled: true,
 	})
 
@@ -339,7 +339,7 @@ func TestDump(t *testing.T) {
 			Level:  "trace",
 		},
 		Core: &Core{
-			MaxCPUs:        1,
+			MaxCPUs:        "1",
 			TracingEnabled: true,
 		},
 		Vars: Vars{
@@ -447,7 +447,7 @@ func TestDump(t *testing.T) {
 			"level":  "trace",
 		},
 		"core": map[string]any{
-			"max_cpus":             1,
+			"max_cpus":             "1",
 			"tracing_enabled":      true,
 			"tracing_endpoint":     "",
 			"tracing_collector":    "",

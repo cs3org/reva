@@ -57,7 +57,7 @@ type Shared struct {
 
 // Core holds the core configuration.
 type Core struct {
-	MaxCPUs            int    `key:"max_cpus"             mapstructure:"max_cpus"`
+	MaxCPUs            string `key:"max_cpus"             mapstructure:"max_cpus"`
 	TracingEnabled     bool   `key:"tracing_enabled"      mapstructure:"tracing_enabled"`
 	TracingEndpoint    string `key:"tracing_endpoint"     mapstructure:"tracing_endpoint"`
 	TracingCollector   string `key:"tracing_collector"    mapstructure:"tracing_collector"`
