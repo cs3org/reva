@@ -121,3 +121,18 @@ func (c *Config) Dump() map[string]any {
 func (c *Config) Lookup(key string) (any, error) {
 	return lookupByType(key, reflect.ValueOf(c))
 }
+
+// MultiConfigLookuper implements the Lookuper interface,
+// to lookup a key from different configs.
+type MultiConfigLookuper struct {
+	configs []*Config
+}
+
+// NewMultiConfigLookuper creates a new MultiConfigLookuper.
+func NewMultiConfigLookuper(c ...*Config) MultiConfigLookuper {
+	return MultiConfigLookuper{configs: c}
+}
+
+func (m MultiConfigLookuper) Lookup(key string) (any, error) {
+	return nil, nil
+}
