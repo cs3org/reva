@@ -1,0 +1,40 @@
+[shared]
+gatewaysvc = "reva:20000"
+jwt_secret = "secret"
+
+[grpc]
+address = "0.0.0.0:21000"
+
+[http]
+address = "0.0.0.0:21001"
+
+
+# BASIC AUTH PROVIDER
+
+[grpc.services.authprovider]
+auth_manager = "json"
+
+[grpc.services.authprovider.auth_managers.json]
+users = "/etc/revad/users.demo.json"
+gateway_addr = "reva:20000"
+
+
+# STORAGE PROVIDER
+
+[grpc.services.storageprovider]
+driver = "localhome"
+mount_path = "/"
+mount_id = "123e4567-e89b-12d3-a456-426655440000"
+expose_data_server = true
+data_server_url = "http://reva-extra:21001/data"
+enable_home_creation = true
+
+[grpc.services.storageprovider.drivers.localhome]
+user_layout = "{{.Username}}"
+
+
+[http.services.dataprovider]
+driver = "localhome"
+
+[http.services.dataprovider.drivers.localhome]
+user_layout = "{{.Username}}"
