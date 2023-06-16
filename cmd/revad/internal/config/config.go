@@ -69,6 +69,10 @@ type Core struct {
 // can be references by other parts of the configuration.
 type Vars map[string]any
 
+type Lookuper interface {
+	Lookup(key string) (any, error)
+}
+
 // Load loads the configuration from the reader.
 func Load(r io.Reader) (*Config, error) {
 	var c Config
@@ -100,8 +104,8 @@ func (c *Config) parse(raw map[string]any) error {
 
 // ApplyTemplates applies the templates defined in the configuration,
 // replacing the template string with the value pointed by the given key.
-func (c *Config) ApplyTemplates() error {
-	return c.applyTemplateByType(nil, reflect.ValueOf(c))
+func (c *Config) ApplyTemplates(l Lookuper) error {
+	return applyTemplateByType(l, nil, reflect.ValueOf(c))
 }
 
 // Dump returns the configuration as a map.

@@ -30,7 +30,7 @@ func TestApplyTemplate(t *testing.T) {
 			},
 		},
 	}
-	err := cfg1.ApplyTemplates()
+	err := cfg1.ApplyTemplates(cfg1)
 	assert.ErrorIs(t, err, nil)
 	assert.Equal(t, cfg1.GRPC.Services["authregistry"][0].Config["drivers"].(map[string]any)["static"].(map[string]any)["demo"], "localhost:1900")
 
@@ -59,7 +59,7 @@ func TestApplyTemplate(t *testing.T) {
 		},
 	}
 
-	err = cfg2.ApplyTemplates()
+	err = cfg2.ApplyTemplates(cfg2)
 	assert.ErrorIs(t, err, nil)
 	assert.Equal(t, cfg2.GRPC.Services["authregistry"][0].Config["drivers"].(map[string]any)["sql"],
 		map[string]any{
