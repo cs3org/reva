@@ -34,3 +34,15 @@ func Remove[T any](l []T, i int) []T {
 	l[i] = l[len(l)-1]
 	return l[:len(l)-1]
 }
+
+// TakeFirst returns the first elemen, if any, that satisfies
+// the predicate p.
+func TakeFirst[T any](l []T, p func(T) bool) (T, bool) {
+	for _, e := range l {
+		if p(e) {
+			return e, true
+		}
+	}
+	var z T
+	return z, false
+}
