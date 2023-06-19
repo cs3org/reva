@@ -216,6 +216,7 @@ func (m *manager) GetRemoteUser(ctx context.Context, initiator *userpb.UserId, r
 			acceptedUser.Id.GetIdp(),
 		)
 		if (acceptedUser.Id.GetOpaqueId() == remoteUserID.OpaqueId) && (remoteUserID.Idp == "" || acceptedUser.Id.GetIdp() == remoteUserID.Idp) {
+			acceptedUser.Id.Type = userpb.UserType_USER_TYPE_FEDERATED
 			return acceptedUser, nil
 		}
 	}
