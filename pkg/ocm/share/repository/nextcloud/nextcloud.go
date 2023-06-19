@@ -88,6 +88,7 @@ type ShareAltMap struct {
 	Creator       *userpb.User          `json:"creator"`
 	Ctime         *typespb.Timestamp    `json:"ctime"`
 	Mtime         *typespb.Timestamp    `json:"mtime"`
+	Token         string                `json:"token"`
 }
 
 // ReceivedShareAltMap is an alternative map to JSON-unmarshal a ReceivedShare.
@@ -204,6 +205,7 @@ func (sm *Manager) GetShare(ctx context.Context, user *userpb.User, ref *ocm.Sha
 		},
 		Ctime:   altResult.Ctime,
 		Mtime:   altResult.Mtime,
+		Token:   altResult.Token,
 	}, nil
 }
 
