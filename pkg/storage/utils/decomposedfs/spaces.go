@@ -439,7 +439,7 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 	// Distribute work
 	errg.Go(func() error {
 		defer close(work)
-		for match, _ := range matches {
+		for match := range matches {
 			select {
 			case work <- match:
 			case <-ctx.Done():
