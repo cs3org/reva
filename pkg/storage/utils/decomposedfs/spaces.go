@@ -299,27 +299,27 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 	matches := map[string]struct{}{}
 
 	if requestedUserID != nil {
+		allMatches := map[string]string{}
 		indexPath := filepath.Join(fs.o.Root, "indexes", "by-user-id", requestedUserID.GetOpaqueId())
 		fi, err := os.Stat(indexPath)
-		if err != nil {
-			return nil, err
-		}
-		allMatches, err := fs.spaceIDCache.LoadOrStore("by-user-id:"+requestedUserID.GetOpaqueId(), fi.ModTime(), func() (map[string]string, error) {
-			path := filepath.Join(fs.o.Root, "indexes", "by-user-id", requestedUserID.GetOpaqueId(), "*")
-			m, err := filepath.Glob(path)
-			if err != nil {
-				return nil, err
-			}
-			matches := map[string]string{}
-			for _, match := range m {
-				link, err := os.Readlink(match)
+		if err == nil {
+			allMatches, err = fs.spaceIDCache.LoadOrStore("by-user-id:"+requestedUserID.GetOpaqueId(), fi.ModTime(), func() (map[string]string, error) {
+				path := filepath.Join(fs.o.Root, "indexes", "by-user-id", requestedUserID.GetOpaqueId(), "*")
+				m, err := filepath.Glob(path)
 				if err != nil {
-					continue
+					return nil, err
 				}
-				matches[match] = link
-			}
-			return matches, nil
-		})
+				matches := map[string]string{}
+				for _, match := range m {
+					link, err := os.Readlink(match)
+					if err != nil {
+						continue
+					}
+					matches[match] = link
+				}
+				return matches, nil
+			})
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -381,10 +381,13 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 
 	if requestedUserID == nil {
 		for spaceType := range spaceTypes {
-			indexPath := filepath.Join(fs.o.Root, "indexes", "by-type", spaceType)
+			indexPath := filepath.Join(fs.o.Root, "indexes", "by-type")
+			if spaceType != spaceTypeAny {
+				indexPath = filepath.Join(indexPath, spaceType)
+			}
 			fi, err := os.Stat(indexPath)
 			if err != nil {
-				return nil, err
+				continue
 			}
 			allMatches, err := fs.spaceIDCache.LoadOrStore("by-type:"+spaceType, fi.ModTime(), func() (map[string]string, error) {
 				path := filepath.Join(fs.o.Root, "indexes", "by-type", spaceType, "*")
