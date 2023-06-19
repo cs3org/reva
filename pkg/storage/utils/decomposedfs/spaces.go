@@ -22,6 +22,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"math"
 	"os"
 	"path/filepath"
@@ -50,6 +51,8 @@ import (
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
+	"github.com/rogpeppe/go-internal/lockedfile"
+	"github.com/shamaton/msgpack/v2"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -301,28 +304,75 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 
 	if requestedUserID != nil {
 		allMatches := map[string]string{}
-		indexPath := filepath.Join(fs.o.Root, "indexes", "by-user-id", requestedUserID.GetOpaqueId())
+		indexPath := filepath.Join(fs.o.Root, "indexes", "by-user-id", requestedUserID.GetOpaqueId()+".mpk")
 		fi, err := os.Stat(indexPath)
 		if err == nil {
 			allMatches, err = fs.spaceIDCache.LoadOrStore("by-user-id:"+requestedUserID.GetOpaqueId(), fi.ModTime(), func() (map[string]string, error) {
-				path := filepath.Join(fs.o.Root, "indexes", "by-user-id", requestedUserID.GetOpaqueId(), "*")
-				m, err := filepath.Glob(path)
+				// Acquire a read log on the index file
+				f, err := lockedfile.Open(indexPath)
 				if err != nil {
-					return nil, err
+					return nil, errors.Wrap(err, "unable to lock index to read")
 				}
-				matches := map[string]string{}
-				for _, match := range m {
-					link, err := os.Readlink(match)
-					if err != nil {
-						continue
+				defer func() {
+					rerr := f.Close()
+
+					// if err is non nil we do not overwrite that
+					if err == nil {
+						err = rerr
 					}
-					matches[match] = link
+				}()
+
+				// Read current state
+				msgBytes, err := io.ReadAll(f)
+				if err != nil {
+					return nil, errors.Wrap(err, "unable to read index")
 				}
-				return matches, nil
+				links := map[string]string{}
+				if len(msgBytes) > 0 {
+					err = msgpack.Unmarshal(msgBytes, &links)
+					if err != nil {
+						return nil, errors.Wrap(err, "unable to parse index")
+					}
+				}
+				return links, nil
 			})
-		}
-		if err != nil {
-			return nil, err
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			indexPath := filepath.Join(fs.o.Root, "indexes", "by-user-id", requestedUserID.GetOpaqueId())
+			fi, err := os.Stat(indexPath)
+			if err == nil {
+				allMatches, err = fs.spaceIDCache.LoadOrStore("by-user-id:"+requestedUserID.GetOpaqueId(), fi.ModTime(), func() (map[string]string, error) {
+					links := map[string]string{}
+					dirIndexPath := filepath.Join(fs.o.Root, "indexes", "by-user-id", requestedUserID.GetOpaqueId())
+					m, err := filepath.Glob(dirIndexPath + "/*")
+					if err != nil {
+						return nil, err
+					}
+					for _, match := range m {
+						link, err := os.Readlink(match)
+						if err != nil {
+							continue
+						}
+						links[match] = link
+					}
+
+					// rewrite index as file
+					err = fs.writeIndex(indexPath+".mpk", links, nil)
+					if err != nil {
+						return nil, err
+					}
+					err = os.RemoveAll(dirIndexPath)
+					if err != nil {
+						appctx.GetLogger(ctx).Error().Err(err).Str("space", spaceID).Str("user-id", requestedUserID.GetOpaqueId()).Msg("error migrating by user index, continuing")
+					}
+					return links, nil
+				})
+			}
+			if err != nil {
+				return nil, err
+			}
 		}
 
 		if nodeID == spaceIDAny {
@@ -546,6 +596,38 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 
 	return spaces, nil
 
+}
+
+func (*Decomposedfs) writeIndex(indexPath string, links map[string]string, writer io.Writer) error {
+	if writer == nil {
+		var err error
+		// aquire writelock
+		var f io.WriteCloser
+		f, err = lockedfile.OpenFile(indexPath, os.O_RDWR|os.O_CREATE, 0600)
+		if err != nil {
+			return errors.Wrap(err, "unable to lock index to write")
+		}
+		defer func() {
+			rerr := f.Close()
+
+			// if err is non nil we do not overwrite that
+			if err == nil {
+				err = rerr
+			}
+		}()
+		writer = f
+	}
+
+	// Write new metadata to file
+	d, err := msgpack.Marshal(links)
+	if err != nil {
+		return errors.Wrap(err, "unable to marshal index")
+	}
+	_, err = writer.Write(d)
+	if err != nil {
+		return errors.Wrap(err, "unable to write index")
+	}
+	return nil
 }
 
 // UserIDToUserAndGroups converts a user ID to a user with groups
@@ -820,24 +902,60 @@ func (fs *Decomposedfs) linkSpaceByUser(ctx context.Context, userID, spaceID str
 	if userID == "" {
 		return nil
 	}
+
 	// create user index dir
-	// TODO: pathify userID
-	if err := os.MkdirAll(filepath.Join(fs.o.Root, "indexes", "by-user-id", userID), 0700); err != nil {
+	if err := os.MkdirAll(filepath.Join(fs.o.Root, "indexes", "by-user-id"), 0700); err != nil {
 		return err
 	}
 
-	err := os.Symlink("../../../spaces/"+lookup.Pathify(spaceID, 1, 2)+"/nodes/"+lookup.Pathify(spaceID, 4, 2), filepath.Join(fs.o.Root, "indexes/by-user-id", userID, spaceID))
+	indexPath := filepath.Join(fs.o.Root, "indexes", "by-user-id", userID+".mpk")
+	// Acquire a write log on the index file
+	f, err := lockedfile.OpenFile(indexPath, os.O_RDWR|os.O_CREATE, 0600)
 	if err != nil {
-		if isAlreadyExists(err) {
-			appctx.GetLogger(ctx).Debug().Err(err).Str("space", spaceID).Str("user-id", userID).Msg("symlink already exists")
-			// FIXME: is it ok to wipe this err if the symlink already exists?
-			err = nil //nolint
-		} else {
-			// TODO how should we handle error cases here?
-			appctx.GetLogger(ctx).Error().Err(err).Str("space", spaceID).Str("user-id", userID).Msg("could not create symlink")
+		return errors.Wrap(err, "unable to lock index to write")
+	}
+	defer func() {
+		rerr := f.Close()
+
+		// if err is non nil we do not overwrite that
+		if err == nil {
+			err = rerr
+		}
+	}()
+
+	// Read current state
+	msgBytes, err := io.ReadAll(f)
+	if err != nil {
+		return errors.Wrap(err, "unable to read index")
+	}
+	links := map[string]string{}
+	if len(msgBytes) > 0 {
+		err = msgpack.Unmarshal(msgBytes, &links)
+		if err != nil {
+			return errors.Wrap(err, "unable to parse index")
+		}
+	} else {
+		// try reading dir index path
+		dirIndexPath := filepath.Join(fs.o.Root, "indexes", "by-user-id", userID)
+		m, _ := filepath.Glob(dirIndexPath + "/*")
+		for _, match := range m {
+			link, err := os.Readlink(match)
+			if err != nil {
+				continue
+			}
+			links[match] = link
+		}
+		err = os.RemoveAll(dirIndexPath)
+		if err != nil {
+			appctx.GetLogger(ctx).Error().Err(err).Str("space", spaceID).Str("user-id", userID).Msg("error migrating by user index")
 		}
 	}
-	return nil
+
+	// add new entry
+	links[spaceID] = "../../../spaces/" + lookup.Pathify(spaceID, 1, 2) + "/nodes/" + lookup.Pathify(spaceID, 4, 2)
+	err = fs.writeIndex(indexPath, links, f)
+
+	return err
 }
 
 func (fs *Decomposedfs) linkSpaceByGroup(ctx context.Context, groupID, spaceID string) error {
