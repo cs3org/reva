@@ -19,21 +19,17 @@
 package rgrpc
 
 import (
-	"fmt"
 	"io"
 	"net"
 	"sort"
 
 	"github.com/cs3org/reva/internal/grpc/interceptors/appctx"
-	"github.com/cs3org/reva/internal/grpc/interceptors/auth"
 	"github.com/cs3org/reva/internal/grpc/interceptors/log"
 	"github.com/cs3org/reva/internal/grpc/interceptors/recovery"
 	"github.com/cs3org/reva/internal/grpc/interceptors/token"
 	"github.com/cs3org/reva/internal/grpc/interceptors/useragent"
-	"github.com/cs3org/reva/pkg/sharedconf"
 	rtrace "github.com/cs3org/reva/pkg/trace"
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
-	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
@@ -94,51 +90,30 @@ type streamInterceptorTriple struct {
 	Interceptor grpc.StreamServerInterceptor
 }
 
-type config struct {
-	Network          string                            `mapstructure:"network"`
-	Address          string                            `mapstructure:"address"`
-	ShutdownDeadline int                               `mapstructure:"shutdown_deadline"`
-	Services         map[string]map[string]interface{} `mapstructure:"services"`
-	Interceptors     map[string]map[string]interface{} `mapstructure:"interceptors"`
-	EnableReflection bool                              `mapstructure:"enable_reflection"`
-}
-
-func (c *config) init() {
-	if c.Network == "" {
-		c.Network = "tcp"
-	}
-
-	if c.Address == "" {
-		c.Address = sharedconf.GetGatewaySVC("0.0.0.0:19000")
-	}
-}
-
 // Server is a gRPC server.
 type Server struct {
+	ShutdownDeadline int
+	EnableReflection bool
+
 	s        *grpc.Server
-	conf     *config
 	listener net.Listener
 	log      zerolog.Logger
 	services map[string]Service
 }
 
 // NewServer returns a new Server.
-func NewServer(m interface{}, log zerolog.Logger) (*Server, error) {
-	conf := &config{}
-	if err := mapstructure.Decode(m, conf); err != nil {
-		return nil, err
+func NewServer(o ...Option) (*Server, error) {
+	server := &Server{}
+	for _, oo := range o {
+		oo(server)
 	}
-
-	conf.init()
-
-	server := &Server{conf: conf, log: log, services: map[string]Service{}}
 
 	return server, nil
 }
 
 // Start starts the server.
 func (s *Server) Start(ln net.Listener) error {
-	if err := s.registerServices(); err != nil {
+	if err := s.initServices(); err != nil {
 		err = errors.Wrap(err, "unable to register services")
 		return err
 	}
@@ -153,39 +128,30 @@ func (s *Server) Start(ln net.Listener) error {
 	return nil
 }
 
-func (s *Server) isInterceptorEnabled(name string) bool {
-	for k := range s.conf.Interceptors {
-		if k == name {
-			return true
-		}
-	}
-	return false
-}
+// func (s *Server) isInterceptorEnabled(name string) bool {
+// 	for k := range s.iunterceptors {
+// 		if k == name {
+// 			return true
+// 		}
+// 	}
+// 	return false
+// }
 
-func (s *Server) isServiceEnabled(svcName string) bool {
-	for key := range Services {
-		if key == svcName {
-			return true
-		}
-	}
-	return false
-}
-
-func (s *Server) registerServices() error {
-	for svcName := range s.conf.Services {
-		if s.isServiceEnabled(svcName) {
-			newFunc := Services[svcName]
-			svc, err := newFunc(s.conf.Services[svcName], s.s)
-			if err != nil {
-				return errors.Wrapf(err, "rgrpc: grpc service %s could not be started,", svcName)
-			}
-			s.services[svcName] = svc
-			s.log.Info().Msgf("rgrpc: grpc service enabled: %s", svcName)
-		} else {
-			message := fmt.Sprintf("rgrpc: grpc service %s does not exist", svcName)
-			return errors.New(message)
-		}
-	}
+func (s *Server) initServices() error {
+	// for svcName := range s.conf.Services {
+	// 	if s.isServiceEnabled(svcName) {
+	// 		newFunc := Services[svcName]
+	// 		svc, err := newFunc(s.conf.Services[svcName], s.s)
+	// 		if err != nil {
+	// 			return errors.Wrapf(err, "rgrpc: grpc service %s could not be started,", svcName)
+	// 		}
+	// 		s.services[svcName] = svc
+	// 		s.log.Info().Msgf("rgrpc: grpc service enabled: %s", svcName)
+	// 	} else {
+	// 		message := fmt.Sprintf("rgrpc: grpc service %s does not exist", svcName)
+	// 		return errors.New(message)
+	// 	}
+	// }
 
 	// obtain list of unprotected endpoints
 	unprotected := []string{}
@@ -203,7 +169,7 @@ func (s *Server) registerServices() error {
 		svc.Register(grpcServer)
 	}
 
-	if s.conf.EnableReflection {
+	if s.EnableReflection {
 		s.log.Info().Msg("rgrpc: grpc server reflection enabled")
 		reflection.Register(grpcServer)
 	}
@@ -240,43 +206,43 @@ func (s *Server) GracefulStop() error {
 
 // Network returns the network type.
 func (s *Server) Network() string {
-	return s.conf.Network
+	return s.listener.Addr().Network()
 }
 
 // Address returns the network address.
 func (s *Server) Address() string {
-	return s.conf.Address
+	return s.listener.Addr().String()
 }
 
 func (s *Server) getInterceptors(unprotected []string) ([]grpc.ServerOption, error) {
 	unaryTriples := []*unaryInterceptorTriple{}
-	for name, newFunc := range UnaryInterceptors {
-		if s.isInterceptorEnabled(name) {
-			inter, prio, err := newFunc(s.conf.Interceptors[name])
-			if err != nil {
-				err = errors.Wrapf(err, "rgrpc: error creating unary interceptor: %s,", name)
-				return nil, err
-			}
-			triple := &unaryInterceptorTriple{
-				Name:        name,
-				Priority:    prio,
-				Interceptor: inter,
-			}
-			unaryTriples = append(unaryTriples, triple)
-		}
-	}
+	// for name, newFunc := range UnaryInterceptors {
+	// 	if s.isInterceptorEnabled(name) {
+	// 		inter, prio, err := newFunc(s.conf.Interceptors[name])
+	// 		if err != nil {
+	// 			err = errors.Wrapf(err, "rgrpc: error creating unary interceptor: %s,", name)
+	// 			return nil, err
+	// 		}
+	// 		triple := &unaryInterceptorTriple{
+	// 			Name:        name,
+	// 			Priority:    prio,
+	// 			Interceptor: inter,
+	// 		}
+	// 		unaryTriples = append(unaryTriples, triple)
+	// 	}
+	// }
 
 	// sort unary triples
 	sort.SliceStable(unaryTriples, func(i, j int) bool {
 		return unaryTriples[i].Priority < unaryTriples[j].Priority
 	})
 
-	authUnary, err := auth.NewUnary(s.conf.Interceptors["auth"], unprotected)
-	if err != nil {
-		return nil, errors.Wrap(err, "rgrpc: error creating unary auth interceptor")
-	}
+	// authUnary, err := auth.NewUnary(s.conf.Interceptors["auth"], unprotected)
+	// if err != nil {
+	// 	return nil, errors.Wrap(err, "rgrpc: error creating unary auth interceptor")
+	// }
 
-	unaryInterceptors := []grpc.UnaryServerInterceptor{authUnary}
+	unaryInterceptors := []grpc.UnaryServerInterceptor{} // TODO: add auth unary
 	for _, t := range unaryTriples {
 		unaryInterceptors = append(unaryInterceptors, t.Interceptor)
 		s.log.Info().Msgf("rgrpc: chaining grpc unary interceptor %s with priority %d", t.Name, t.Priority)
@@ -298,39 +264,39 @@ func (s *Server) getInterceptors(unprotected []string) ([]grpc.ServerOption, err
 	unaryChain := grpc_middleware.ChainUnaryServer(unaryInterceptors...)
 
 	streamTriples := []*streamInterceptorTriple{}
-	for name, newFunc := range StreamInterceptors {
-		if s.isInterceptorEnabled(name) {
-			inter, prio, err := newFunc(s.conf.Interceptors[name])
-			if err != nil {
-				err = errors.Wrapf(err, "rgrpc: error creating streaming interceptor: %s,", name)
-				return nil, err
-			}
-			triple := &streamInterceptorTriple{
-				Name:        name,
-				Priority:    prio,
-				Interceptor: inter,
-			}
-			streamTriples = append(streamTriples, triple)
-		}
-	}
+	// for name, newFunc := range StreamInterceptors {
+	// 	if s.isInterceptorEnabled(name) {
+	// 		inter, prio, err := newFunc(s.conf.Interceptors[name])
+	// 		if err != nil {
+	// 			err = errors.Wrapf(err, "rgrpc: error creating streaming interceptor: %s,", name)
+	// 			return nil, err
+	// 		}
+	// 		triple := &streamInterceptorTriple{
+	// 			Name:        name,
+	// 			Priority:    prio,
+	// 			Interceptor: inter,
+	// 		}
+	// 		streamTriples = append(streamTriples, triple)
+	// 	}
+	// }
 	// sort stream triples
 	sort.SliceStable(streamTriples, func(i, j int) bool {
 		return streamTriples[i].Priority < streamTriples[j].Priority
 	})
 
-	authStream, err := auth.NewStream(s.conf.Interceptors["auth"], unprotected)
-	if err != nil {
-		return nil, errors.Wrap(err, "rgrpc: error creating stream auth interceptor")
-	}
+	// authStream, err := auth.NewStream(s.conf.Interceptors["auth"], unprotected)
+	// if err != nil {
+	// 	return nil, errors.Wrap(err, "rgrpc: error creating stream auth interceptor")
+	// }
 
-	streamInterceptors := []grpc.StreamServerInterceptor{authStream}
+	streamInterceptors := []grpc.StreamServerInterceptor{}
 	for _, t := range streamTriples {
 		streamInterceptors = append(streamInterceptors, t.Interceptor)
 		s.log.Info().Msgf("rgrpc: chaining grpc streaming interceptor %s with priority %d", t.Name, t.Priority)
 	}
 
 	streamInterceptors = append([]grpc.StreamServerInterceptor{
-		authStream,
+		// authStream,
 		appctx.NewStream(s.log),
 		token.NewStream(),
 		useragent.NewStream(),
