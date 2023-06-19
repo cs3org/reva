@@ -29,8 +29,6 @@ var _ = Describe("Mtimesyncedcache", func() {
 			err := cache.Store(key, time, value)
 			Expect(err).ToNot(HaveOccurred())
 		})
-
-		PIt("returns an error when the mtime is older")
 	})
 
 	Describe("Load", func() {
@@ -38,13 +36,14 @@ var _ = Describe("Mtimesyncedcache", func() {
 			err := cache.Store(key, time.Now(), value)
 			Expect(err).ToNot(HaveOccurred())
 
-			v := cache.Load(key)
+			v, ok := cache.Load(key)
+			Expect(ok).To(BeTrue())
 			Expect(v).To(Equal(value))
 		})
 
-		PIt("fails the value doesn't exist", func() {
-			v := cache.Load(key)
-			Expect(v).To(Equal(value))
+		It("reports when the key doesn't exist", func() {
+			_, ok := cache.Load("doesnotexist")
+			Expect(ok).To(BeFalse())
 		})
 	})
 

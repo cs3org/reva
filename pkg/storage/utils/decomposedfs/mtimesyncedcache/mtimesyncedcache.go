@@ -30,9 +30,13 @@ func (c *Cache[K, T]) Store(key K, mtime time.Time, value T) error {
 	return nil
 }
 
-func (c *Cache[K, T]) Load(key K) T {
-	entry, _ := c.entries.Load(key)
-	return entry.value
+func (c *Cache[K, T]) Load(key K) (T, bool) {
+	entry, ok := c.entries.Load(key)
+	if !ok {
+		var t T
+		return t, false
+	}
+	return entry.value, true
 }
 
 func (c *Cache[K, T]) LoadOrStore(key K, mtime time.Time, f func() (T, error)) (T, error) {
