@@ -29,7 +29,6 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -548,7 +547,7 @@ func getPathForExternalLink(ctx context.Context, scopes map[string]*authpb.Scope
 		return "", err
 	}
 
-	if statRes.Info.Path == resource.Path || reflect.DeepEqual(statRes.Info.Id, resource.Id) {
+	if statRes.Info.Path == resource.Path || utils.ResourceIDEqual(statRes.Info.Id, resource.Id) {
 		// this is a direct link to the resource
 		return pathPrefix + token, nil
 	}
