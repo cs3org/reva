@@ -48,9 +48,9 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/lookup"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/migrator"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/mtimesyncedcache"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/options"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/spaceidindex"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/tree"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/upload"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/filelocks"
@@ -104,8 +104,10 @@ type Decomposedfs struct {
 	stream       events.Stream
 	cache        cache.StatCache
 
-	UserCache    *ttlcache.Cache
-	spaceIDCache mtimesyncedcache.Cache[string, map[string][]byte]
+	UserCache       *ttlcache.Cache
+	userSpaceIndex  *spaceidindex.Index
+	groupSpaceIndex *spaceidindex.Index
+	spaceTypeIndex  *spaceidindex.Index
 }
 
 // NewDefault returns an instance with default components
@@ -171,14 +173,17 @@ func New(o *options.Options, lu *lookup.Lookup, p Permissions, tp Tree, es event
 	}
 
 	fs := &Decomposedfs{
-		tp:           tp,
-		lu:           lu,
-		o:            o,
-		p:            p,
-		chunkHandler: chunking.NewChunkHandler(filepath.Join(o.Root, "uploads")),
-		stream:       es,
-		cache:        cache.GetStatCache(o.StatCache.Store, o.StatCache.Nodes, o.StatCache.Database, "stat", time.Duration(o.StatCache.TTL)*time.Second, o.StatCache.Size),
-		UserCache:    ttlcache.NewCache(),
+		tp:              tp,
+		lu:              lu,
+		o:               o,
+		p:               p,
+		chunkHandler:    chunking.NewChunkHandler(filepath.Join(o.Root, "uploads")),
+		stream:          es,
+		cache:           cache.GetStatCache(o.StatCache.Store, o.StatCache.Nodes, o.StatCache.Database, "stat", time.Duration(o.StatCache.TTL)*time.Second, o.StatCache.Size),
+		UserCache:       ttlcache.NewCache(),
+		userSpaceIndex:  spaceidindex.New(filepath.Join(o.Root, "indexes"), "by-user-id"),
+		groupSpaceIndex: spaceidindex.New(filepath.Join(o.Root, "indexes"), "by-group-id"),
+		spaceTypeIndex:  spaceidindex.New(filepath.Join(o.Root, "indexes"), "by-type"),
 	}
 
 	if o.AsyncFileUploads {

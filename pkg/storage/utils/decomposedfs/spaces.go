@@ -308,14 +308,10 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 
 	matches := map[string]struct{}{}
 	var allMatches map[string][]byte
+	var err error
 
 	if requestedUserID != nil {
-		indexPath := filepath.Join(fs.o.Root, "indexes", "by-user-id", requestedUserID.GetOpaqueId()+".mpk")
-		fi, err := os.Stat(indexPath)
-		if err != nil {
-			return nil, err
-		}
-		allMatches, err = fs.readSpaceIndex(indexPath, "by-user-id:"+requestedUserID.GetOpaqueId(), fi.ModTime())
+		allMatches, err = fs.userSpaceIndex.Load(requestedUserID.GetOpaqueId())
 		if err != nil {
 			return nil, errors.Wrap(err, "error reading user index")
 		}
@@ -339,14 +335,11 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 		}
 
 		for _, group := range user.Groups {
-			indexPath := filepath.Join(fs.o.Root, "indexes", "by-group-id", group+".mpk")
-			fi, err := os.Stat(indexPath)
+			allMatches, err = fs.groupSpaceIndex.Load(group)
 			if err != nil {
-				// no spaces for this group
-				continue
-			}
-			allMatches, err = fs.readSpaceIndex(indexPath, "by-group-id:"+group, fi.ModTime())
-			if err != nil {
+				if os.IsNotExist(err) {
+					continue // no spaces for this group
+				}
 				return nil, errors.Wrap(err, "error reading group index")
 			}
 
@@ -372,15 +365,11 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 		}
 
 		for spaceType := range spaceTypes {
-			indexPath := filepath.Join(fs.o.Root, "indexes", "by-type", spaceType+".mpk")
-
-			fi, err := os.Stat(indexPath)
+			allMatches, err = fs.spaceTypeIndex.Load(spaceType)
 			if err != nil {
-				// no spaces for this type
-				continue
-			}
-			allMatches, err = fs.readSpaceIndex(indexPath, "by-type:"+spaceType, fi.ModTime())
-			if err != nil {
+				if os.IsNotExist(err) {
+					continue // no spaces for this space type
+				}
 				return nil, errors.Wrap(err, "error reading type index")
 			}
 
@@ -1292,36 +1281,4 @@ func canDeleteSpace(ctx context.Context, spaceID string, typ string, purge bool,
 	}
 
 	return errtypes.PermissionDenied(fmt.Sprintf("user is not allowed to delete space %s", n.ID))
-}
-
-func (fs *Decomposedfs) readSpaceIndex(indexPath, cacheKey string, mtime time.Time) (map[string][]byte, error) {
-	return fs.spaceIDCache.LoadOrStore(cacheKey, mtime, func() (map[string][]byte, error) {
-		// Acquire a read log on the index file
-		f, err := lockedfile.Open(indexPath)
-		if err != nil {
-			return nil, errors.Wrap(err, "unable to lock index to read")
-		}
-		defer func() {
-			rerr := f.Close()
-
-			// if err is non nil we do not overwrite that
-			if err == nil {
-				err = rerr
-			}
-		}()
-
-		// Read current state
-		msgBytes, err := io.ReadAll(f)
-		if err != nil {
-			return nil, errors.Wrap(err, "unable to read index")
-		}
-		links := map[string][]byte{}
-		if len(msgBytes) > 0 {
-			err = msgpack.Unmarshal(msgBytes, &links)
-			if err != nil {
-				return nil, errors.Wrap(err, "unable to parse index")
-			}
-		}
-		return links, nil
-	})
 }
