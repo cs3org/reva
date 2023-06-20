@@ -46,7 +46,6 @@ var _ = Describe("Grants", func() {
 		env   *helpers.TestEnv
 		ref   *provider.Reference
 		grant *provider.Grant
-		tfs   = &testFS{}
 	)
 
 	BeforeEach(func() {
@@ -147,11 +146,9 @@ var _ = Describe("Grants", func() {
 				err := env.Fs.AddGrant(env.Ctx, ref, grant)
 				Expect(err).ToNot(HaveOccurred())
 
-				spaceTypesPath := filepath.Join(env.Root, "indexes", "by-type")
-				tfs.root = spaceTypesPath
-				entries, err := fs.ReadDir(tfs, "share")
+				indexPath := filepath.Join(env.Root, "indexes", "by-type", "share.mpk")
+				_, err = os.Stat(indexPath)
 				Expect(err).ToNot(HaveOccurred())
-				Expect(len(entries)).To(BeNumerically(">=", 1))
 			})
 		})
 
