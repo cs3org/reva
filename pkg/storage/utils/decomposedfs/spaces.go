@@ -66,6 +66,12 @@ const (
 	quotaUnrestricted = 0
 )
 
+type readWriteCloseSeekTruncater interface {
+	io.ReadWriteCloser
+	io.Seeker
+	Truncate(int64) error
+}
+
 // CreateStorageSpace creates a storage space
 func (fs *Decomposedfs) CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error) {
 	ctx = context.WithValue(ctx, utils.SpaceGrant, struct{}{})
@@ -701,11 +707,11 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 
 }
 
-func (*Decomposedfs) writeIndex(indexPath string, links map[string][]byte, writer io.Writer) error {
+func (*Decomposedfs) writeIndex(indexPath string, links map[string][]byte, writer readWriteCloseSeekTruncater) error {
 	if writer == nil {
 		var err error
 		// aquire writelock
-		var f io.WriteCloser
+		var f readWriteCloseSeekTruncater
 		f, err = lockedfile.OpenFile(indexPath, os.O_RDWR|os.O_CREATE, 0600)
 		if err != nil {
 			return errors.Wrap(err, "unable to lock index to write")
@@ -719,6 +725,16 @@ func (*Decomposedfs) writeIndex(indexPath string, links map[string][]byte, write
 			}
 		}()
 		writer = f
+	}
+
+	// Truncate file
+	_, err := writer.Seek(0, io.SeekStart)
+	if err != nil {
+		return err
+	}
+	err = writer.Truncate(0)
+	if err != nil {
+		return err
 	}
 
 	// Write new metadata to file
