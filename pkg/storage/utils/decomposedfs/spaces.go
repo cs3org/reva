@@ -312,21 +312,12 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 	if requestedUserID != nil {
 		indexPath := filepath.Join(fs.o.Root, "indexes", "by-user-id", requestedUserID.GetOpaqueId()+".mpk")
 		fi, err := os.Stat(indexPath)
-		if err == nil {
-			allMatches, err = fs.readSpaceIndex(indexPath, "by-user-id:"+requestedUserID.GetOpaqueId(), fi.ModTime())
-			if err != nil {
-				return nil, errors.Wrap(err, "error reading user index")
-			}
-		} else {
-			dirIndexPath := filepath.Join(fs.o.Root, "indexes", "by-user-id", requestedUserID.GetOpaqueId())
-			fi, err := os.Stat(dirIndexPath)
-			if err != nil {
-				return nil, err
-			}
-			allMatches, err = fs.migrateSpaceIndex(indexPath, dirIndexPath, "by-user-id:"+requestedUserID.GetOpaqueId(), fi.ModTime())
-			if err != nil {
-				appctx.GetLogger(ctx).Error().Err(err).Str("space", spaceID).Str("user-id", requestedUserID.GetOpaqueId()).Msg("error migrating by user index, continuing")
-			}
+		if err != nil {
+			return nil, err
+		}
+		allMatches, err = fs.readSpaceIndex(indexPath, "by-user-id:"+requestedUserID.GetOpaqueId(), fi.ModTime())
+		if err != nil {
+			return nil, errors.Wrap(err, "error reading user index")
 		}
 
 		if nodeID == spaceIDAny {
@@ -350,22 +341,13 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 		for _, group := range user.Groups {
 			indexPath := filepath.Join(fs.o.Root, "indexes", "by-group-id", group+".mpk")
 			fi, err := os.Stat(indexPath)
-			if err == nil {
-				allMatches, err = fs.readSpaceIndex(indexPath, "by-group-id:"+group, fi.ModTime())
-				if err != nil {
-					return nil, errors.Wrap(err, "error reading group index")
-				}
-			} else {
-				dirIndexPath := filepath.Join(fs.o.Root, "indexes", "by-group-id", group)
-				fi, err := os.Stat(dirIndexPath)
-				if err != nil {
-					// no spaces for this group
-					continue
-				}
-				allMatches, err = fs.migrateSpaceIndex(indexPath, dirIndexPath, "by-group-id:"+group, fi.ModTime())
-				if err != nil {
-					appctx.GetLogger(ctx).Error().Err(err).Str("space", spaceID).Str("group-id", group).Msg("error migrating by group index, continuing")
-				}
+			if err != nil {
+				// no spaces for this group
+				continue
+			}
+			allMatches, err = fs.readSpaceIndex(indexPath, "by-group-id:"+group, fi.ModTime())
+			if err != nil {
+				return nil, errors.Wrap(err, "error reading group index")
 			}
 
 			if nodeID == spaceIDAny {
@@ -390,25 +372,16 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 		}
 
 		for spaceType := range spaceTypes {
-			indexPath := filepath.Join(fs.o.Root, "indexes", "by-type:", spaceType+".mpk")
+			indexPath := filepath.Join(fs.o.Root, "indexes", "by-type", spaceType+".mpk")
 
 			fi, err := os.Stat(indexPath)
-			if err == nil {
-				allMatches, err = fs.readSpaceIndex(indexPath, "by-type:"+spaceType, fi.ModTime())
-				if err != nil {
-					return nil, errors.Wrap(err, "error reading type index")
-				}
-			} else {
-				dirIndexPath := filepath.Join(fs.o.Root, "indexes", "by-type:", spaceType)
-				fi, err := os.Stat(dirIndexPath)
-				if err != nil {
-					// no spaces for this type
-					continue
-				}
-				allMatches, err = fs.migrateSpaceIndex(indexPath, dirIndexPath, "by-type:"+spaceType, fi.ModTime())
-				if err != nil {
-					appctx.GetLogger(ctx).Error().Err(err).Str("space", spaceID).Str("type", spaceType).Msg("error migrating by type index, continuing")
-				}
+			if err != nil {
+				// no spaces for this type
+				continue
+			}
+			allMatches, err = fs.readSpaceIndex(indexPath, "by-type:"+spaceType, fi.ModTime())
+			if err != nil {
+				return nil, errors.Wrap(err, "error reading type index")
 			}
 
 			if nodeID == spaceIDAny {
@@ -1350,29 +1323,5 @@ func (fs *Decomposedfs) readSpaceIndex(indexPath, cacheKey string, mtime time.Ti
 			}
 		}
 		return links, nil
-	})
-}
-
-func (fs *Decomposedfs) migrateSpaceIndex(indexPath, dirIndexPath, cacheKey string, mtime time.Time) (map[string][]byte, error) {
-	return fs.spaceIDCache.LoadOrStore(cacheKey, mtime, func() (map[string][]byte, error) {
-		links := map[string][]byte{}
-		m, err := filepath.Glob(dirIndexPath + "/*")
-		if err != nil {
-			return nil, err
-		}
-		for _, match := range m {
-			link, err := os.Readlink(match)
-			if err != nil {
-				continue
-			}
-			links[match] = []byte(link)
-		}
-
-		// rewrite index as file
-		err = fs.writeIndex(indexPath, links, nil)
-		if err != nil {
-			return nil, err
-		}
-		return links, os.RemoveAll(dirIndexPath)
 	})
 }
