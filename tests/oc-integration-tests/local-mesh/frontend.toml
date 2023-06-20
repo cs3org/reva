@@ -74,12 +74,13 @@ multiple = true
 supports_upload_only = true
 
 [http.services.ocs.capabilities.capabilities.files_sharing.public.password]
-enforced = true
+enforced = false
 
 [http.services.ocs.capabilities.capabilities.files_sharing.public.password.enforced_for]
-read_only = true
-read_write = true
-upload_only = true
+read_only = false
+read_write = false
+read_write_delete = false
+upload_only = false
 
 [http.services.ocs.capabilities.capabilities.files_sharing.public.expire_date]
 enabled = true
