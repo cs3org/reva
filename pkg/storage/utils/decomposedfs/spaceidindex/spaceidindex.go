@@ -15,7 +15,7 @@ import (
 type Index struct {
 	root  string
 	name  string
-	cache mtimesyncedcache.Cache[string, map[string][]byte]
+	cache mtimesyncedcache.Cache[string, map[string]string]
 }
 
 type readWriteCloseSeekTruncater interface {
@@ -36,7 +36,7 @@ func (i *Index) Init() error {
 	return os.MkdirAll(filepath.Join(i.root, i.name), 0700)
 }
 
-func (i *Index) Load(index string) (map[string][]byte, error) {
+func (i *Index) Load(index string) (map[string]string, error) {
 	indexPath := filepath.Join(i.root, i.name, index+".mpk")
 	fi, err := os.Stat(indexPath)
 	if err != nil {
@@ -47,15 +47,15 @@ func (i *Index) Load(index string) (map[string][]byte, error) {
 
 // func (i *Index) RemoveFromIndex(key, entry string) os.LinkError {
 
-func (i *Index) Add(index, key string, value []byte) error {
-	return i.UpdateIndex(index, map[string][]byte{key: value}, []string{})
+func (i *Index) Add(index, key string, value string) error {
+	return i.UpdateIndex(index, map[string]string{key: value}, []string{})
 }
 
 func (i *Index) Remove(index, key string) error {
-	return i.UpdateIndex(index, map[string][]byte{}, []string{key})
+	return i.UpdateIndex(index, map[string]string{}, []string{key})
 }
 
-func (i *Index) UpdateIndex(index string, addLinks map[string][]byte, removeLinks []string) error {
+func (i *Index) UpdateIndex(index string, addLinks map[string]string, removeLinks []string) error {
 	indexPath := filepath.Join(i.root, i.name, index+".mpk")
 
 	var err error
@@ -79,7 +79,7 @@ func (i *Index) UpdateIndex(index string, addLinks map[string][]byte, removeLink
 	if err != nil {
 		return err
 	}
-	links := map[string][]byte{}
+	links := map[string]string{}
 	if len(msgBytes) > 0 {
 		err = msgpack.Unmarshal(msgBytes, &links)
 		if err != nil {
@@ -116,8 +116,8 @@ func (i *Index) UpdateIndex(index string, addLinks map[string][]byte, removeLink
 	return nil
 }
 
-func (i *Index) readSpaceIndex(indexPath, cacheKey string, mtime time.Time) (map[string][]byte, error) {
-	return i.cache.LoadOrStore(cacheKey, mtime, func() (map[string][]byte, error) {
+func (i *Index) readSpaceIndex(indexPath, cacheKey string, mtime time.Time) (map[string]string, error) {
+	return i.cache.LoadOrStore(cacheKey, mtime, func() (map[string]string, error) {
 		// Acquire a read log on the index file
 		f, err := lockedfile.Open(indexPath)
 		if err != nil {
@@ -137,7 +137,7 @@ func (i *Index) readSpaceIndex(indexPath, cacheKey string, mtime time.Time) (map
 		if err != nil {
 			return nil, errors.Wrap(err, "unable to read index")
 		}
-		links := map[string][]byte{}
+		links := map[string]string{}
 		if len(msgBytes) > 0 {
 			err = msgpack.Unmarshal(msgBytes, &links)
 			if err != nil {

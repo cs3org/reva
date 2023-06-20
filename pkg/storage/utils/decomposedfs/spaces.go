@@ -298,7 +298,7 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 	}
 
 	matches := map[string]struct{}{}
-	var allMatches map[string][]byte
+	var allMatches map[string]string
 	var err error
 
 	if requestedUserID != nil {
@@ -770,17 +770,17 @@ func (fs *Decomposedfs) updateIndexes(ctx context.Context, grantee *provider.Gra
 }
 
 func (fs *Decomposedfs) linkSpaceByUser(ctx context.Context, userID, spaceID string) error {
-	target := []byte("../../../spaces/" + lookup.Pathify(spaceID, 1, 2) + "/nodes/" + lookup.Pathify(spaceID, 4, 2))
+	target := "../../../spaces/" + lookup.Pathify(spaceID, 1, 2) + "/nodes/" + lookup.Pathify(spaceID, 4, 2)
 	return fs.userSpaceIndex.Add(userID, spaceID, target)
 }
 
 func (fs *Decomposedfs) linkSpaceByGroup(ctx context.Context, groupID, spaceID string) error {
-	target := []byte("../../../spaces/" + lookup.Pathify(spaceID, 1, 2) + "/nodes/" + lookup.Pathify(spaceID, 4, 2))
+	target := "../../../spaces/" + lookup.Pathify(spaceID, 1, 2) + "/nodes/" + lookup.Pathify(spaceID, 4, 2)
 	return fs.groupSpaceIndex.Add(groupID, spaceID, target)
 }
 
 func (fs *Decomposedfs) linkStorageSpaceType(ctx context.Context, spaceType string, spaceID string) error {
-	target := []byte("../../../spaces/" + lookup.Pathify(spaceID, 1, 2) + "/nodes/" + lookup.Pathify(spaceID, 4, 2))
+	target := "../../../spaces/" + lookup.Pathify(spaceID, 1, 2) + "/nodes/" + lookup.Pathify(spaceID, 4, 2)
 	return fs.spaceTypeIndex.Add(spaceType, spaceID, target)
 }
 
