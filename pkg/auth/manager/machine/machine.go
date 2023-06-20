@@ -26,6 +26,7 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	"github.com/cs3org/reva/pkg/auth"
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/auth/manager/registry"
 	"github.com/cs3org/reva/pkg/auth/scope"
 	"github.com/cs3org/reva/pkg/errtypes"
@@ -71,6 +72,8 @@ func New(conf map[string]interface{}) (auth.Manager, error) {
 
 // Authenticate impersonate an user if the provided secret is equal to the api-key.
 func (m *manager) Authenticate(ctx context.Context, user, secret string) (*userpb.User, map[string]*authpb.Scope, error) {
+	log := appctx.GetLogger(ctx)
+	log.Debug().Msgf("Machine Authenticate user '%s' secret '%s'", user, secret)
 	if m.APIKey != secret {
 		return nil, nil, errtypes.InvalidCredentials("")
 	}
