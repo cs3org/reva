@@ -6,6 +6,7 @@ address = "0.0.0.0:17000"
 
 [grpc.services.gateway]
 authregistrysvc = "localhost:17000"
+appregistrysvc = "localhost:17000"
 storageregistrysvc = "localhost:17000"
 preferencessvc = "localhost:17000"
 userprovidersvc = "localhost:17000"
@@ -19,6 +20,29 @@ datagateway = "http://localhost:17001/data"
 transfer_expires = 6                         # give it a moment
 commit_share_to_storage_grant = true
 commit_share_to_storage_ref = true
+
+[grpc.services.appregistry]
+driver = "static"
+
+[grpc.services.appregistry.drivers.static]
+mime_types = [
+    {"mime_type" = "text/plain", "extension" = "txt", "name" = "Text file", "description" = "Text file", "allow_creation" = true},
+    {"mime_type" = "text/markdown", "extension" = "md", "name" = "Markdown file", "description" = "Markdown file", "allow_creation" = true},
+    {"mime_type" = "application/vnd.oasis.opendocument.text", "extension" = "odt", "name" = "OpenDocument", "description" = "OpenDocument text document", "default_app" = "Collabora", "allow_creation" = true},
+    {"mime_type" = "application/vnd.oasis.opendocument.spreadsheet", "extension" = "ods", "name" = "OpenSpreadsheet", "description" = "OpenDocument spreadsheet document", "default_app" = "Collabora", "allow_creation" = true},
+    {"mime_type" = "application/vnd.oasis.opendocument.presentation", "extension" = "odp", "name" = "OpenPresentation", "description" = "OpenDocument presentation document", "default_app" = "Collabora", "allow_creation" = true},
+    {"mime_type" = "application/vnd.jupyter", "extension" = "ipynb", "name" = "Jupyter Notebook", "description" = "Jupyter Notebook"}
+]
+
+[grpc.services.appprovider]
+driver = "wopi"
+app_provider_url = "localhost:17000"
+
+[grpc.services.appprovider.drivers.wopi]
+iop_secret = "shared-secret-with-wopiserver"
+wopi_url = "http://0.0.0.0:8880/"
+app_name = "Collabora"
+app_url = "https://your-collabora-server.org:9980"
 
 [grpc.services.authregistry]
 driver = "static"
@@ -102,6 +126,8 @@ users = "users.demo.json"
 [http]
 address = "0.0.0.0:17001"
 
+[http.services.appprovider]
+
 [http.services.dataprovider]
 driver = "localhome"
 
@@ -130,4 +156,13 @@ prefix = "ocs"
 
 [http.services.ocdav]
 
+[http.services.sciencemesh]
+mesh_directory_url = 'https://sciencemesh.cesnet.cz/iop/meshdir'
+provider_domain = 'your-domain.org'
+ocm_mount_point = '/sciencemesh'
+
 [http.middlewares.cors]
+
+[http.middlewares.auth]
+credential_chain = ["publicshares", "ocmshares", "basic", "bearer"]
+

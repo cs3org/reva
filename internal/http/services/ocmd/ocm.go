@@ -76,6 +76,7 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 func (s *svc) routerInit() error {
 	sharesHandler := new(sharesHandler)
 	invitesHandler := new(invitesHandler)
+	notifHandler := new(notifHandler)
 
 	if err := sharesHandler.init(s.Conf); err != nil {
 		return err
@@ -83,9 +84,13 @@ func (s *svc) routerInit() error {
 	if err := invitesHandler.init(s.Conf); err != nil {
 		return err
 	}
+	if err := notifHandler.init(s.Conf); err != nil {
+		return err
+	}
 
 	s.router.Post("/shares", sharesHandler.CreateShare)
 	s.router.Post("/invite-accepted", invitesHandler.AcceptInvite)
+	s.router.Post("/notifications", notifHandler.Notifications)
 	return nil
 }
 
@@ -99,7 +104,7 @@ func (s *svc) Prefix() string {
 }
 
 func (s *svc) Unprotected() []string {
-	return []string{"/invite-accepted", "/shares", "/ocm-provider", "/notifications"}
+	return []string{"/invite-accepted", "/shares", "/notifications"}
 }
 
 func (s *svc) Handler() http.Handler {

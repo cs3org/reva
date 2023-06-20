@@ -70,10 +70,16 @@ func (c *config) init() {
 		c.Provider = "reva"
 	}
 	if c.WebdavRoot == "" {
-		c.WebdavRoot = "/remote.php/dav/ocm"
+		c.WebdavRoot = "/remote.php/dav/ocm/"
+	}
+	if c.WebdavRoot[len(c.WebdavRoot)-1:] != "/" {
+		c.WebdavRoot += "/"
 	}
 	if c.WebappRoot == "" {
-		c.WebappRoot = "/external/sciencemesh"
+		c.WebappRoot = "/external/sciencemesh/"
+	}
+	if c.WebappRoot[len(c.WebappRoot)-1:] != "/" {
+		c.WebappRoot += "/"
 	}
 }
 
@@ -99,12 +105,12 @@ func (c *config) prepare() *discoveryData {
 	d.Provider = c.Provider
 	rtProtos := map[string]string{}
 	// webdav is always enabled
-	rtProtos["webdav"] = fmt.Sprintf("%s%s", c.Endpoint, c.WebdavRoot)
+	rtProtos["webdav"] = c.WebdavRoot
 	if c.EnableWebapp {
-		rtProtos["webapp"] = fmt.Sprintf("%s%s", c.Endpoint, c.WebappRoot)
+		rtProtos["webapp"] = c.WebappRoot
 	}
 	if c.EnableDatatx {
-		rtProtos["datatx"] = fmt.Sprintf("%s%s", c.Endpoint, c.WebdavRoot)
+		rtProtos["datatx"] = c.WebdavRoot
 	}
 	d.ResourceTypes = []resourceTypes{{
 		Name:       "file",           // so far we only support `file`
@@ -148,6 +154,12 @@ func (s *svc) Handler() http.Handler {
 		log := appctx.GetLogger(r.Context())
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
+		if r.UserAgent() == "Nextcloud Server Crawler" {
+			// TODO(lopresti) remove this hack once Nextcloud is able to talk OCM!
+			s.data.APIVersion = "1.0-proposal1"
+		} else {
+			s.data.APIVersion = "1.1.0"
+		}
 		indented, _ := json.MarshalIndent(s.data, "", "   ")
 		if _, err := w.Write(indented); err != nil {
 			log.Err(err).Msg("Error writing to ResponseWriter")

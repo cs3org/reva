@@ -51,6 +51,7 @@ import (
 	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/utils"
+	gomime "github.com/glpatcern/go-mime"
 	"github.com/golang-jwt/jwt"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
@@ -192,7 +193,7 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 		ut = anonymous
 		rPath, pathErr = getPathForExternalLink(ctx, scopes, resource, publicLinkURLPrefix)
 		if pathErr != nil {
-			log.Warn().Err(pathErr).Msg("wopi: failed to extract relative path from public link scope")
+			log.Warn().Interface("resId", resource.Id).Interface("path", resource.Path).Err(pathErr).Msg("wopi: failed to extract relative path from public link scope")
 		}
 	case ocmrole:
 		// OCM users have no username: use displayname@Idp
@@ -201,7 +202,21 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 		// and resolve the folder
 		rPath, pathErr = getPathForExternalLink(ctx, scopes, resource, ocmLinkURLPrefix)
 		if pathErr != nil {
-			log.Warn().Err(pathErr).Msg("wopi: failed to extract relative path from ocm link scope")
+			log.Warn().Interface("resId", resource.Id).Interface("path", resource.Path).Err(pathErr).Msg("wopi: failed to extract relative path from ocm link scope")
+		}
+		if ext == "" {
+			// this is a single-file share, and we have to re-resolve the extension from the mime type
+			exts := gomime.ExtensionsByType(resource.MimeType)
+			for _, e := range exts {
+				if len(e) < len(ext) || len(ext) == 0 {
+					ext = e // heuristically we know we want the shortest file extension
+				}
+			}
+			ext = "." + ext
+			log.Debug().Interface("mime", resource.MimeType).Interface("ext", ext).Msg("wopi: resolved extension for single-file OCM share")
+		}
+		if ext == "" {
+			return nil, errors.New("wopi: failed to resolve extension from OCM file's mime type %s" + resource.MimeType)
 		}
 	default:
 		// in all other cases use the resource's path
@@ -246,7 +261,7 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 		q.Add("appurl", viewAppURL)
 	}
 	if q.Get("appurl") == "" && q.Get("appviewurl") == "" {
-		return nil, errors.New("wopi: neither edit nor view app url found")
+		return nil, errors.New("wopi: neither edit nor view app url found for type " + ext)
 	}
 	if p.conf.AppIntURL != "" {
 		q.Add("appinturl", p.conf.AppIntURL)
@@ -532,17 +547,17 @@ func getPathForExternalLink(ctx context.Context, scopes map[string]*authpb.Scope
 		return "", err
 	}
 
-	if statRes.Info.Path == resource.Path {
+	if statRes.Info.Path == resource.Path || utils.ResourceIDEqual(statRes.Info.Id, resource.Id) {
 		// this is a direct link to the resource
 		return pathPrefix + token, nil
 	}
-	// otherwise we are in a subfolder of the public link
+	// otherwise we are in a subfolder of the link
 	relPath, err := filepath.Rel(statRes.Info.Path, resource.Path)
 	if err != nil {
 		return "", err
 	}
 	if strings.HasPrefix(relPath, "../") {
-		return "", errors.New("Scope path does not contain target resource")
+		return "", errors.New("Scope path does not contain target resource path " + statRes.Info.Path)
 	}
 	return path.Join(pathPrefix+token, path.Dir(relPath)), nil
 }
