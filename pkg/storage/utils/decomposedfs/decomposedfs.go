@@ -105,7 +105,7 @@ type Decomposedfs struct {
 	cache        cache.StatCache
 
 	UserCache    *ttlcache.Cache
-	spaceIDCache mtimesyncedcache.Cache[string, map[string]string]
+	spaceIDCache mtimesyncedcache.Cache[string, map[string][]byte]
 }
 
 // NewDefault returns an instance with default components
