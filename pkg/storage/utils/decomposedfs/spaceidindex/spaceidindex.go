@@ -24,11 +24,16 @@ type readWriteCloseSeekTruncater interface {
 	Truncate(int64) error
 }
 
-func New(root, index string) *Index {
+func New(root, name string) *Index {
 	return &Index{
 		root: root,
-		name: index,
+		name: name,
 	}
+}
+
+func (i *Index) Init() error {
+	// Make sure to work on an existing tree
+	return os.MkdirAll(filepath.Join(i.root, i.name), 0700)
 }
 
 func (i *Index) Load(index string) (map[string][]byte, error) {

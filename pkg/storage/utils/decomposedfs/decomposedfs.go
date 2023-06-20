@@ -171,6 +171,21 @@ func New(o *options.Options, lu *lookup.Lookup, p Permissions, tp Tree, es event
 	if o.LockCycleDurationFactor != 0 {
 		filelocks.SetLockCycleDurationFactor(o.LockCycleDurationFactor)
 	}
+	userSpaceIndex := spaceidindex.New(filepath.Join(o.Root, "indexes"), "by-user-id")
+	err = userSpaceIndex.Init()
+	if err != nil {
+		return nil, err
+	}
+	groupSpaceIndex := spaceidindex.New(filepath.Join(o.Root, "indexes"), "by-group-id")
+	err = groupSpaceIndex.Init()
+	if err != nil {
+		return nil, err
+	}
+	spaceTypeIndex := spaceidindex.New(filepath.Join(o.Root, "indexes"), "by-type")
+	err = spaceTypeIndex.Init()
+	if err != nil {
+		return nil, err
+	}
 
 	fs := &Decomposedfs{
 		tp:              tp,
@@ -181,9 +196,9 @@ func New(o *options.Options, lu *lookup.Lookup, p Permissions, tp Tree, es event
 		stream:          es,
 		cache:           cache.GetStatCache(o.StatCache.Store, o.StatCache.Nodes, o.StatCache.Database, "stat", time.Duration(o.StatCache.TTL)*time.Second, o.StatCache.Size),
 		UserCache:       ttlcache.NewCache(),
-		userSpaceIndex:  spaceidindex.New(filepath.Join(o.Root, "indexes"), "by-user-id"),
-		groupSpaceIndex: spaceidindex.New(filepath.Join(o.Root, "indexes"), "by-group-id"),
-		spaceTypeIndex:  spaceidindex.New(filepath.Join(o.Root, "indexes"), "by-type"),
+		userSpaceIndex:  userSpaceIndex,
+		groupSpaceIndex: groupSpaceIndex,
+		spaceTypeIndex:  spaceTypeIndex,
 	}
 
 	if o.AsyncFileUploads {
