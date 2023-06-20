@@ -12,6 +12,7 @@ import (
 	"github.com/shamaton/msgpack/v2"
 )
 
+// Index holds space id indexes
 type Index struct {
 	root  string
 	name  string
@@ -24,6 +25,7 @@ type readWriteCloseSeekTruncater interface {
 	Truncate(int64) error
 }
 
+// New returns a new index instance
 func New(root, name string) *Index {
 	return &Index{
 		root: root,
@@ -31,11 +33,13 @@ func New(root, name string) *Index {
 	}
 }
 
+// Init initializes the index and makes sure it can be used
 func (i *Index) Init() error {
 	// Make sure to work on an existing tree
 	return os.MkdirAll(filepath.Join(i.root, i.name), 0700)
 }
 
+// Load returns the content of an index
 func (i *Index) Load(index string) (map[string]string, error) {
 	indexPath := filepath.Join(i.root, i.name, index+".mpk")
 	fi, err := os.Stat(indexPath)
@@ -45,21 +49,21 @@ func (i *Index) Load(index string) (map[string]string, error) {
 	return i.readSpaceIndex(indexPath, i.name+":"+index, fi.ModTime())
 }
 
-// func (i *Index) RemoveFromIndex(key, entry string) os.LinkError {
-
+// Add adds an entry to an index
 func (i *Index) Add(index, key string, value string) error {
-	return i.UpdateIndex(index, map[string]string{key: value}, []string{})
+	return i.updateIndex(index, map[string]string{key: value}, []string{})
 }
 
+// Remove removes an entry from the index
 func (i *Index) Remove(index, key string) error {
-	return i.UpdateIndex(index, map[string]string{}, []string{key})
+	return i.updateIndex(index, map[string]string{}, []string{key})
 }
 
-func (i *Index) UpdateIndex(index string, addLinks map[string]string, removeLinks []string) error {
+func (i *Index) updateIndex(index string, addLinks map[string]string, removeLinks []string) error {
 	indexPath := filepath.Join(i.root, i.name, index+".mpk")
 
 	var err error
-	// aquire writelock
+	// acquire writelock
 	var f readWriteCloseSeekTruncater
 	f, err = lockedfile.OpenFile(indexPath, os.O_RDWR|os.O_CREATE, 0600)
 	if err != nil {

@@ -112,7 +112,7 @@ func migrateSpaceIndex(indexPath, dirIndexPath, cacheKey string) error {
 	if err != nil {
 		return err
 	}
-	os.WriteFile(indexPath, d, 0600)
+	err = os.WriteFile(indexPath, d, 0600)
 	if err != nil {
 		return err
 	}

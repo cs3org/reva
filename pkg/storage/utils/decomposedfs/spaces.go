@@ -309,10 +309,10 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 
 		if nodeID == spaceIDAny {
 			for _, match := range allMatches {
-				matches[string(match)] = struct{}{}
+				matches[match] = struct{}{}
 			}
 		} else {
-			matches[string(allMatches[nodeID])] = struct{}{}
+			matches[allMatches[nodeID]] = struct{}{}
 		}
 
 		// get Groups for userid
@@ -336,10 +336,10 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 
 			if nodeID == spaceIDAny {
 				for _, match := range allMatches {
-					matches[string(match)] = struct{}{}
+					matches[match] = struct{}{}
 				}
 			} else {
-				matches[string(allMatches[nodeID])] = struct{}{}
+				matches[allMatches[nodeID]] = struct{}{}
 			}
 		}
 
@@ -366,10 +366,10 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 
 			if nodeID == spaceIDAny {
 				for _, match := range allMatches {
-					matches[string(match)] = struct{}{}
+					matches[match] = struct{}{}
 				}
 			} else {
-				matches[string(allMatches[nodeID])] = struct{}{}
+				matches[allMatches[nodeID]] = struct{}{}
 			}
 		}
 	}

@@ -20,7 +20,6 @@ package decomposedfs_test
 
 import (
 	"fmt"
-	"io/fs"
 	"os"
 	"path/filepath"
 
@@ -32,14 +31,6 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/stretchr/testify/mock"
 )
-
-type testFS struct {
-	root string
-}
-
-func (t testFS) Open(name string) (fs.File, error) {
-	return os.Open(filepath.Join(t.root, name))
-}
 
 var _ = Describe("Grants", func() {
 	var (

@@ -32,7 +32,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
@@ -533,17 +532,6 @@ func (fs *Decomposedfs) CreateHome(ctx context.Context) (err error) {
 		return errtypes.NewErrtypeFromStatus(res.Status)
 	}
 	return nil
-}
-
-// The os not exists error is buried inside the xattr error,
-// so we cannot just use os.IsNotExists().
-func isAlreadyExists(err error) bool {
-	if xerr, ok := err.(*os.LinkError); ok {
-		if serr, ok2 := xerr.Err.(syscall.Errno); ok2 {
-			return serr == syscall.EEXIST
-		}
-	}
-	return false
 }
 
 // GetHome is called to look up the home path for a user
