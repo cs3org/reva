@@ -718,14 +718,12 @@ func (fs *Decomposedfs) DeleteStorageSpace(ctx context.Context, req *provider.De
 			return errtypes.NewErrtypeFromStatus(status.NewInvalid(ctx, "can't purge enabled space"))
 		}
 
+		// TODO invalidate ALL indexes in msgpack, not only by type
 		spaceType, err := n.XattrString(ctx, prefixes.SpaceTypeAttr)
 		if err != nil {
 			return err
 		}
-		// remove type index
-		// TODO invalidate ALL indexes in msgpack, not only by type
-		spaceTypePath := filepath.Join(fs.o.Root, "indexes", "by-type", spaceType, spaceID)
-		if err := os.Remove(spaceTypePath); err != nil {
+		if err := fs.spaceTypeIndex.Remove(spaceType, spaceID); err != nil {
 			return err
 		}
 
