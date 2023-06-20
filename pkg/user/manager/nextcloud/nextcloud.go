@@ -124,7 +124,9 @@ func getUser(ctx context.Context) (*userpb.User, error) {
 }
 
 func (um *Manager) do(ctx context.Context, a Action, username string) (int, []byte, error) {
+	log := appctx.GetLogger(ctx)
 	url := um.endPoint + "~" + username + "/api/user/" + a.verb
+	log.Info().Msgf("um.do req %s %s", url, a.argS)
 	req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(a.argS))
 	if err != nil {
 		panic(err)
@@ -140,6 +142,7 @@ func (um *Manager) do(ctx context.Context, a Action, username string) (int, []by
 
 	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)
+	log.Info().Msgf("um.do res %s %s", url, string(body))
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 		return 0, nil, fmt.Errorf("Unexpected response code from EFSS API: " + strconv.Itoa(resp.StatusCode))
 	}
