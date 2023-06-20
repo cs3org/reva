@@ -102,7 +102,6 @@ enable_webapp = true
 enable_datatx = true
 
 [http.services.ocdav]
-[http.services.ocsprovider]
 [http.services.ocs]
 
 [http.services.sciencemesh]

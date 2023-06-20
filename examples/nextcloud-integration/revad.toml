@@ -135,8 +135,6 @@ webdav_root = "/remote.php/dav/ocm"
 enable_webapp = true
 enable_datatx = true
 
-[http.services.ocsprovider]
-
 [http.services.sciencemesh]
 mesh_directory_url = 'https://sciencemesh.cesnet.cz/iop/meshdir'
 provider_domain = 'your-domain.org'

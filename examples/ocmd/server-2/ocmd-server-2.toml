@@ -145,8 +145,6 @@ endpoint = "http://localhost:17001"
 enable_webapp = true
 enable_datatx = true
 
-[http.services.ocsprovider]
-
 [http.middlewares.providerauthorizer]
 driver = "json"
 
