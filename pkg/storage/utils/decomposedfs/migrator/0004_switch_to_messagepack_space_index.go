@@ -104,7 +104,7 @@ func migrateSpaceIndex(indexPath, dirIndexPath, cacheKey string) error {
 		if err != nil {
 			continue
 		}
-		links[match] = []byte(link)
+		links[filepath.Base(match)] = []byte(link)
 	}
 
 	// rewrite index as file
