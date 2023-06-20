@@ -36,6 +36,7 @@ import (
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	// "github.com/cs3org/reva/pkg/errtypes".
+	// "github.com/gdexlab/go-render/render"
 )
 
 func init() {
@@ -176,6 +177,9 @@ func (um *Manager) GetUserByClaim(ctx context.Context, claim, value string, skip
 		Claim string `json:"claim"`
 		Value string `json:"value"`
 	}
+	log := appctx.GetLogger(ctx)
+	log.Debug().Msgf("NC-based user manager GetUserByClaim - claim '%s', value '%s'", claim, value)
+
 	bodyObj := &paramsObj{
 		Claim: claim,
 		Value: value,
