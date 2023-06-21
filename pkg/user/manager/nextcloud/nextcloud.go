@@ -119,7 +119,7 @@ func (um *Manager) SetHTTPClient(c *http.Client) {
 func getUser(ctx context.Context) (*userpb.User, error) {
 	u, ok := ctxpkg.ContextGetUser(ctx)
 	if !ok {
-		err := errors.Wrap(errtypes.UserRequired(""), "nextcloud storage driver: error getting user from ctx")
+		err := errors.Wrap(errtypes.UserRequired(""), "nextcloud user manager: error getting user from ctx")
 		return nil, err
 	}
 	return u, nil
@@ -184,10 +184,10 @@ func (um *Manager) GetUserByClaim(ctx context.Context, claim, value string, skip
 		Claim: claim,
 		Value: value,
 	}
-	user, err := getUser(ctx)
-	if err != nil {
-		return nil, err
-	}
+	// user, err := getUser(ctx)
+	// if err != nil {
+	// 	return nil, err
+	// }
 
 	bodyStr, _ := json.Marshal(bodyObj)
 	_, respBody, err := um.do(ctx, Action{"GetUserByClaim", string(bodyStr)}, user.Username)
