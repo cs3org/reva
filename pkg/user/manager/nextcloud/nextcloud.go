@@ -190,7 +190,7 @@ func (um *Manager) GetUserByClaim(ctx context.Context, claim, value string, skip
 	// }
 
 	bodyStr, _ := json.Marshal(bodyObj)
-	_, respBody, err := um.do(ctx, Action{"GetUserByClaim", string(bodyStr)}, user.Username)
+	_, respBody, err := um.do(ctx, Action{"GetUserByClaim", string(bodyStr)}, value)
 	if err != nil {
 		return nil, err
 	}
