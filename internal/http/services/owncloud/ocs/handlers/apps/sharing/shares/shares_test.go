@@ -204,6 +204,11 @@ var _ = Describe("The ocs API", func() {
 			})
 
 			It("creates a link share", func() {
+				gatewayClient.On("GetPath", mock.Anything, mock.Anything, mock.Anything).Return(&provider.GetPathResponse{
+					Status: &rpc.Status{Code: rpc.Code_CODE_OK},
+					Path:   "path/to/file",
+				}, nil)
+
 				form := url.Values{}
 				form.Add("shareType", "3")
 				form.Add("path", "/")
