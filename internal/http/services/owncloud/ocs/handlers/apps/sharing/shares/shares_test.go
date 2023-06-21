@@ -35,12 +35,14 @@ import (
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocs/config"
+	cdata "github.com/cs3org/reva/v2/internal/http/services/owncloud/ocs/data"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocs/handlers/apps/sharing/shares"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/status"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
 	helpers "github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/testhelpers"
 	cs3mocks "github.com/cs3org/reva/v2/tests/cs3mocks/mocks"
+	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/mock"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -410,6 +412,297 @@ var _ = Describe("The ocs API", func() {
 			h.CreateShare(w, req)
 			Expect(w.Result().StatusCode).To(Equal(400))
 			gatewayClient.AssertNumberOfCalls(GinkgoT(), "CreateShare", 0)
+		})
+	})
+
+	Describe("UpdatePublicShare", func() {
+		BeforeEach(func() {
+			gatewayClient.On("GetUserByClaim", mock.Anything, mock.Anything).Return(&userpb.GetUserByClaimResponse{
+				Status: status.NewOK(context.Background()),
+				User:   user,
+			}, nil)
+			gatewayClient.On("GetUser", mock.Anything, mock.Anything).Return(&userpb.GetUserResponse{
+				Status: status.NewOK(context.Background()),
+				User:   user,
+			}, nil)
+			gatewayClient.On("Authenticate", mock.Anything, mock.Anything).Return(&gateway.AuthenticateResponse{
+				Status: status.NewOK(context.Background()),
+			}, nil)
+		})
+
+		Context("Password Enforced when update a share", func() {
+			var (
+				resID = &provider.ResourceId{
+					StorageId: "share1-storageid",
+					OpaqueId:  "share1",
+				}
+				share2 = &link.PublicShare{
+					Id:                &link.PublicShareId{OpaqueId: "2"},
+					ResourceId:        resID,
+					Owner:             user.Id,
+					Quicklink:         true,
+					PasswordProtected: false,
+				}
+
+				statResponse = &provider.StatResponse{
+					Status: status.NewOK(context.Background()),
+					Info: &provider.ResourceInfo{
+						Type:  provider.ResourceType_RESOURCE_TYPE_FILE,
+						Path:  "/2",
+						Id:    resID,
+						Owner: user.Id,
+						PermissionSet: &provider.ResourcePermissions{
+							GetPath:              true,
+							GetQuota:             true,
+							InitiateFileDownload: true,
+							InitiateFileUpload:   true,
+							ListContainer:        true,
+							ListRecycle:          true,
+							RestoreRecycleItem:   true,
+							Stat:                 true,
+						},
+						Size: 10,
+					},
+				}
+			)
+
+			BeforeEach(func() {
+				h = &shares.Handler{}
+				pool.RemoveSelector("GatewaySelector" + "any")
+				gatewayClient = &cs3mocks.GatewayAPIClient{}
+
+				c := &config.Config{}
+				c.GatewaySvc = "gatewaysvc"
+				c.StatCacheDatabase = strconv.FormatInt(rand.Int63(), 10) // Use a fresh database for each test
+				// this is equivalent of the ocis OCIS_SHARING_PUBLIC_WRITEABLE_SHARE_MUST_HAVE_PASSWORD=true
+				c.Capabilities = cdata.CapabilitiesData{
+					Capabilities: &cdata.Capabilities{FilesSharing: &cdata.CapabilitiesFilesSharing{Public: &cdata.CapabilitiesFilesSharingPublic{
+						Password: &cdata.CapabilitiesFilesSharingPublicPassword{
+							EnforcedFor: &cdata.CapabilitiesFilesSharingPublicPasswordEnforcedFor{
+								ReadOnly:        false,
+								ReadWrite:       true,
+								ReadWriteDelete: true,
+								UploadOnly:      true,
+							},
+						}}}},
+				}
+				c.Init()
+				h.InitWithGetter(c, func() (gateway.GatewayAPIClient, error) {
+					return gatewayClient, nil
+				})
+				gatewayClient.On("GetPublicShare", mock.Anything, mock.Anything).Return(&link.GetPublicShareResponse{
+					Status: status.NewOK(context.Background()),
+					Share:  share2,
+				}, nil)
+
+				gatewayClient.On("CheckPermission", mock.Anything, mock.Anything, mock.Anything).Return(&permissions.CheckPermissionResponse{
+					Status: &rpc.Status{Code: rpc.Code_CODE_OK},
+				}, nil)
+
+				gatewayClient.On("Stat", mock.Anything, mock.Anything).Return(statResponse, nil)
+
+				gatewayClient.On("UpdatePublicShare", mock.Anything, mock.Anything).Return(&link.UpdatePublicShareResponse{
+					Status: &rpc.Status{Code: rpc.Code_CODE_OK},
+					Share:  share2,
+				}, nil)
+
+				gatewayClient.On("GetUser", mock.Anything, mock.Anything).Return(&userpb.GetUserResponse{
+					Status: status.NewOK(context.Background()),
+					User:   user,
+				}, nil)
+			})
+
+			Context("when change the permission to 3", func() {
+
+				It("the password exists. update succeed", func() {
+					form := url.Values{}
+					form.Add("permissions", "3")
+					form.Add("password", "passwass")
+					req := httptest.NewRequest("PUT", "/ocs/v1.php/apps/files_sharing/api/v1/shares", strings.NewReader(form.Encode()))
+					req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+					rctx := chi.NewRouteContext()
+					rctx.URLParams.Add("shareid", "2")
+					req = req.WithContext(context.WithValue(ctx, chi.RouteCtxKey, rctx))
+
+					w := httptest.NewRecorder()
+					h.UpdateShare(w, req)
+					Expect(w.Result().StatusCode).To(Equal(200))
+					gatewayClient.AssertNumberOfCalls(GinkgoT(), "UpdatePublicShare", 2)
+				})
+
+				It("the password doesn't exist. update failed", func() {
+					form := url.Values{}
+					form.Add("permissions", "3")
+					req := httptest.NewRequest("PUT", "/ocs/v1.php/apps/files_sharing/api/v1/shares", strings.NewReader(form.Encode()))
+					req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+					rctx := chi.NewRouteContext()
+					rctx.URLParams.Add("shareid", "2")
+					req = req.WithContext(context.WithValue(ctx, chi.RouteCtxKey, rctx))
+
+					w := httptest.NewRecorder()
+					h.UpdateShare(w, req)
+					Expect(w.Result().StatusCode).To(Equal(400))
+					gatewayClient.AssertNumberOfCalls(GinkgoT(), "UpdatePublicShare", 0)
+				})
+
+				It("permissions=1, the password doesn't exist. update succeed", func() {
+					form := url.Values{}
+					form.Add("permissions", "1")
+					req := httptest.NewRequest("PUT", "/ocs/v1.php/apps/files_sharing/api/v1/shares", strings.NewReader(form.Encode()))
+					req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+					rctx := chi.NewRouteContext()
+					rctx.URLParams.Add("shareid", "2")
+					req = req.WithContext(context.WithValue(ctx, chi.RouteCtxKey, rctx))
+
+					w := httptest.NewRecorder()
+					h.UpdateShare(w, req)
+					Expect(w.Result().StatusCode).To(Equal(200))
+					gatewayClient.AssertNumberOfCalls(GinkgoT(), "UpdatePublicShare", 1)
+				})
+			})
+		})
+
+		Context("Password Enforced when update a share", func() {
+			var (
+				resID = &provider.ResourceId{
+					StorageId: "share1-storageid",
+					OpaqueId:  "share1",
+				}
+				share2 = &link.PublicShare{
+					Id:                &link.PublicShareId{OpaqueId: "3"},
+					ResourceId:        resID,
+					Owner:             user.Id,
+					Quicklink:         true,
+					PasswordProtected: false,
+				}
+
+				statResponse = &provider.StatResponse{
+					Status: status.NewOK(context.Background()),
+					Info: &provider.ResourceInfo{
+						Type:  provider.ResourceType_RESOURCE_TYPE_CONTAINER,
+						Path:  "/3",
+						Id:    resID,
+						Owner: user.Id,
+						PermissionSet: &provider.ResourcePermissions{
+							AddGrant:             true,
+							CreateContainer:      true,
+							Delete:               true,
+							GetPath:              true,
+							GetQuota:             true,
+							InitiateFileDownload: true,
+							InitiateFileUpload:   true,
+							ListGrants:           true,
+							ListContainer:        true,
+							ListRecycle:          true,
+							Move:                 true,
+							RemoveGrant:          true,
+							PurgeRecycle:         true,
+							RestoreFileVersion:   true,
+							RestoreRecycleItem:   true,
+							Stat:                 true,
+							UpdateGrant:          true,
+							DenyGrant:            true,
+						},
+					},
+				}
+			)
+
+			BeforeEach(func() {
+				h = &shares.Handler{}
+				pool.RemoveSelector("GatewaySelector" + "any")
+				gatewayClient = &cs3mocks.GatewayAPIClient{}
+
+				c := &config.Config{}
+				c.GatewaySvc = "gatewaysvc"
+				c.StatCacheDatabase = strconv.FormatInt(rand.Int63(), 10) // Use a fresh database for each test
+				// this is equivalent of the ocis OCIS_SHARING_PUBLIC_WRITEABLE_SHARE_MUST_HAVE_PASSWORD=true
+				c.Capabilities = cdata.CapabilitiesData{
+					Capabilities: &cdata.Capabilities{FilesSharing: &cdata.CapabilitiesFilesSharing{Public: &cdata.CapabilitiesFilesSharingPublic{
+						Password: &cdata.CapabilitiesFilesSharingPublicPassword{
+							EnforcedFor: &cdata.CapabilitiesFilesSharingPublicPasswordEnforcedFor{
+								ReadOnly:        false,
+								ReadWrite:       true,
+								ReadWriteDelete: true,
+								UploadOnly:      true,
+							},
+						}}}},
+				}
+				c.Init()
+				h.InitWithGetter(c, func() (gateway.GatewayAPIClient, error) {
+					return gatewayClient, nil
+				})
+				gatewayClient.On("GetPublicShare", mock.Anything, mock.Anything).Return(&link.GetPublicShareResponse{
+					Status: status.NewOK(context.Background()),
+					Share:  share2,
+				}, nil)
+
+				gatewayClient.On("CheckPermission", mock.Anything, mock.Anything, mock.Anything).Return(&permissions.CheckPermissionResponse{
+					Status: &rpc.Status{Code: rpc.Code_CODE_OK},
+				}, nil)
+
+				gatewayClient.On("Stat", mock.Anything, mock.Anything).Return(statResponse, nil)
+
+				gatewayClient.On("UpdatePublicShare", mock.Anything, mock.Anything).Return(&link.UpdatePublicShareResponse{
+					Status: &rpc.Status{Code: rpc.Code_CODE_OK},
+					Share:  share2,
+				}, nil)
+
+				gatewayClient.On("GetUser", mock.Anything, mock.Anything).Return(&userpb.GetUserResponse{
+					Status: status.NewOK(context.Background()),
+					User:   user,
+				}, nil)
+			})
+
+			Context("when change the permission", func() {
+				for _, perm := range []string{"4", "5", "15"} {
+					perm := perm
+					It("the password exists. update succeed", func() {
+						form := url.Values{}
+						form.Add("permissions", perm)
+						form.Add("password", "passwass")
+						req := httptest.NewRequest("PUT", "/ocs/v1.php/apps/files_sharing/api/v1/shares", strings.NewReader(form.Encode()))
+						req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+						rctx := chi.NewRouteContext()
+						rctx.URLParams.Add("shareid", "3")
+						req = req.WithContext(context.WithValue(ctx, chi.RouteCtxKey, rctx))
+
+						w := httptest.NewRecorder()
+						h.UpdateShare(w, req)
+						Expect(w.Result().StatusCode).To(Equal(200))
+						gatewayClient.AssertNumberOfCalls(GinkgoT(), "UpdatePublicShare", 2)
+					})
+				}
+
+				It("the password doesn't exist. update failed", func() {
+					form := url.Values{}
+					form.Add("permissions", "3")
+					req := httptest.NewRequest("PUT", "/ocs/v1.php/apps/files_sharing/api/v1/shares", strings.NewReader(form.Encode()))
+					req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+					rctx := chi.NewRouteContext()
+					rctx.URLParams.Add("shareid", "3")
+					req = req.WithContext(context.WithValue(ctx, chi.RouteCtxKey, rctx))
+
+					w := httptest.NewRecorder()
+					h.UpdateShare(w, req)
+					Expect(w.Result().StatusCode).To(Equal(400))
+					gatewayClient.AssertNumberOfCalls(GinkgoT(), "UpdatePublicShare", 0)
+				})
+
+				It("permissions=1, the password doesn't exist. update succeed", func() {
+					form := url.Values{}
+					form.Add("permissions", "1")
+					req := httptest.NewRequest("PUT", "/ocs/v1.php/apps/files_sharing/api/v1/shares", strings.NewReader(form.Encode()))
+					req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+					rctx := chi.NewRouteContext()
+					rctx.URLParams.Add("shareid", "3")
+					req = req.WithContext(context.WithValue(ctx, chi.RouteCtxKey, rctx))
+
+					w := httptest.NewRecorder()
+					h.UpdateShare(w, req)
+					Expect(w.Result().StatusCode).To(Equal(200))
+					gatewayClient.AssertNumberOfCalls(GinkgoT(), "UpdatePublicShare", 1)
+				})
+			})
 		})
 	})
 
