@@ -348,6 +348,8 @@ type Serverless interface {
 	GracefulStop() error
 }
 
+func (w *Watcher) SetServers(s map[string]Server) { w.ss = s }
+
 // TrapSignals captures the OS signal.
 func (w *Watcher) TrapSignals() {
 	signalCh := make(chan os.Signal, 1024)
