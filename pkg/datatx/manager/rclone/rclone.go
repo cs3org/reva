@@ -23,19 +23,18 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
-	"os"
 	"path"
 	"strconv"
-	"sync"
 	"time"
 
 	datatx "github.com/cs3org/go-cs3apis/cs3/tx/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	txdriver "github.com/cs3org/reva/pkg/datatx"
+	"github.com/cs3org/reva/pkg/datatx/manager/rclone/repository"
+	repoRegistry "github.com/cs3org/reva/pkg/datatx/manager/rclone/repository/registry"
 	registry "github.com/cs3org/reva/pkg/datatx/manager/registry"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rhttp"
@@ -50,9 +49,6 @@ func init() {
 
 func (c *config) init(m map[string]interface{}) {
 	// set sane defaults
-	if c.File == "" {
-		c.File = "/var/tmp/reva/datatx-transfers.json"
-	}
 	if c.JobStatusCheckInterval == 0 {
 		c.JobStatusCheckInterval = 2000
 	}
@@ -62,20 +58,22 @@ func (c *config) init(m map[string]interface{}) {
 }
 
 type config struct {
-	Endpoint               string `mapstructure:"endpoint"`
-	AuthUser               string `mapstructure:"auth_user"` // rclone basicauth user
-	AuthPass               string `mapstructure:"auth_pass"` // rclone basicauth pass
-	AuthHeader             string `mapstructure:"auth_header"`
-	File                   string `mapstructure:"file"`
-	JobStatusCheckInterval int    `mapstructure:"job_status_check_interval"`
-	JobTimeout             int    `mapstructure:"job_timeout"`
-	Insecure               bool   `mapstructure:"insecure"`
+	Endpoint                  string                            `mapstructure:"endpoint"`
+	AuthUser                  string                            `mapstructure:"auth_user"` // rclone basicauth user
+	AuthPass                  string                            `mapstructure:"auth_pass"` // rclone basicauth pass
+	AuthHeader                string                            `mapstructure:"auth_header"`
+	JobStatusCheckInterval    int                               `mapstructure:"job_status_check_interval"`
+	JobTimeout                int                               `mapstructure:"job_timeout"`
+	Insecure                  bool                              `mapstructure:"insecure"`
+	RemoveTransferJobOnCancel bool                              `mapstructure:"remove_transfer_job_on_cancel"`
+	StorageDriver             string                            `mapstructure:"storagedriver"`
+	StorageDrivers            map[string]map[string]interface{} `mapstructure:"storagedrivers"`
 }
 
 type rclone struct {
 	config  *config
 	client  *http.Client
-	pDriver *pDriver
+	storage repository.Repository
 }
 
 type rcloneHTTPErrorRes struct {
@@ -83,30 +81,6 @@ type rcloneHTTPErrorRes struct {
 	Input  map[string]interface{} `json:"input"`
 	Path   string                 `json:"path"`
 	Status int                    `json:"status"`
-}
-
-type transferModel struct {
-	File      string
-	Transfers map[string]*transfer `json:"transfers"`
-}
-
-// persistency driver.
-type pDriver struct {
-	sync.Mutex // concurrent access to the file
-	model      *transferModel
-}
-
-type transfer struct {
-	TransferID     string
-	JobID          int64
-	TransferStatus datatx.Status
-	SrcToken       string
-	SrcRemote      string
-	SrcPath        string
-	DestToken      string
-	DestRemote     string
-	DestPath       string
-	Ctime          string
 }
 
 // txEndStatuses final statuses that cannot be changed anymore.
@@ -137,21 +111,15 @@ func New(m map[string]interface{}) (txdriver.Manager, error) {
 
 	client := rhttp.GetHTTPClient(rhttp.Insecure(c.Insecure))
 
-	// The persistency driver
-	// Load or create 'db'
-	model, err := loadOrCreate(c.File)
+	storage, err := getStorageManager(c)
 	if err != nil {
-		err = errors.Wrap(err, "error loading the file containing the transfers")
 		return nil, err
-	}
-	pDriver := &pDriver{
-		model: model,
 	}
 
 	return &rclone{
 		config:  c,
 		client:  client,
-		pDriver: pDriver,
+		storage: storage,
 	}, nil
 }
 
@@ -164,63 +132,16 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 	return c, nil
 }
 
-func loadOrCreate(file string) (*transferModel, error) {
-	_, err := os.Stat(file)
-	if os.IsNotExist(err) {
-		if err := os.WriteFile(file, []byte("{}"), 0700); err != nil {
-			err = errors.Wrap(err, "error creating the transfers storage file: "+file)
-			return nil, err
-		}
+func getStorageManager(c *config) (repository.Repository, error) {
+	if f, ok := repoRegistry.NewFuncs[c.StorageDriver]; ok {
+		return f(c.StorageDrivers[c.StorageDriver])
 	}
-
-	fd, err := os.OpenFile(file, os.O_CREATE, 0644)
-	if err != nil {
-		err = errors.Wrap(err, "error opening the transfers storage file: "+file)
-		return nil, err
-	}
-	defer fd.Close()
-
-	data, err := io.ReadAll(fd)
-	if err != nil {
-		err = errors.Wrap(err, "error reading the data")
-		return nil, err
-	}
-
-	model := &transferModel{}
-	if err := json.Unmarshal(data, model); err != nil {
-		err = errors.Wrap(err, "error decoding transfers data to json")
-		return nil, err
-	}
-
-	if model.Transfers == nil {
-		model.Transfers = make(map[string]*transfer)
-	}
-
-	model.File = file
-	return model, nil
-}
-
-// saveTransfer saves the transfer. If an error is specified than that error will be returned, possibly wrapped with additional errors.
-func (m *transferModel) saveTransfer(e error) error {
-	data, err := json.Marshal(m)
-	if err != nil {
-		e = errors.Wrap(err, "error encoding transfer data to json")
-		return e
-	}
-
-	if err := os.WriteFile(m.File, data, 0644); err != nil {
-		e = errors.Wrap(err, "error writing transfer data to file: "+m.File)
-		return e
-	}
-
-	return e
+	return nil, errtypes.NotFound("rclone service: storage driver not found: " + c.StorageDriver)
 }
 
 // CreateTransfer creates a transfer job and returns a TxInfo object that includes a unique transfer id.
 // Specified target URIs are of form scheme://userinfo@host:port?name={path}
 func (driver *rclone) CreateTransfer(ctx context.Context, srcTargetURI string, dstTargetURI string) (*datatx.TxInfo, error) {
-	logger := appctx.GetLogger(ctx)
-
 	srcEp, err := driver.extractEndpointInfo(ctx, srcTargetURI)
 	if err != nil {
 		return nil, err
@@ -238,9 +159,6 @@ func (driver *rclone) CreateTransfer(ctx context.Context, srcTargetURI string, d
 	// we always set the userinfo part of the destination url for rclone tpc push support
 	dstRemote := fmt.Sprintf("%s://%s@%s", destEp.endpointScheme, dstToken, destEp.endpoint)
 
-	logger.Debug().Msgf("destination target URI: %v", dstTargetURI)
-	logger.Debug().Msgf("destination remote: %v", dstRemote)
-
 	return driver.startJob(ctx, "", srcRemote, srcPath, srcToken, dstRemote, dstPath, dstToken)
 }
 
@@ -248,50 +166,54 @@ func (driver *rclone) CreateTransfer(ctx context.Context, srcTargetURI string, d
 func (driver *rclone) startJob(ctx context.Context, transferID string, srcRemote string, srcPath string, srcToken string, destRemote string, destPath string, destToken string) (*datatx.TxInfo, error) {
 	logger := appctx.GetLogger(ctx)
 
-	driver.pDriver.Lock()
-	defer driver.pDriver.Unlock()
-
 	var txID string
 	var cTime *typespb.Timestamp
 
 	if transferID == "" {
 		txID = uuid.New().String()
 		cTime = &typespb.Timestamp{Seconds: uint64(time.Now().Unix())}
-	} else { // restart existing transfer if transferID is specified
-		logger.Debug().Msgf("Restarting transfer (txID: %s)", transferID)
+	} else { // restart existing transfer job if transferID is specified
+		logger.Debug().Msgf("Restarting transfer job (txID: %s)", transferID)
 		txID = transferID
-		transfer, err := driver.pDriver.model.getTransfer(txID)
+		job, err := driver.storage.GetJob(txID)
 		if err != nil {
-			err = errors.Wrap(err, "rclone: error retrying transfer (transferID:  "+txID+")")
+			err = errors.Wrap(err, "rclone: error retrying transfer job (transferID:  "+txID+")")
 			return &datatx.TxInfo{
 				Id:     &datatx.TxId{OpaqueId: txID},
 				Status: datatx.Status_STATUS_INVALID,
 				Ctime:  nil,
 			}, err
 		}
-		seconds, _ := strconv.ParseInt(transfer.Ctime, 10, 64)
+		seconds, _ := strconv.ParseInt(job.Ctime, 10, 64)
 		cTime = &typespb.Timestamp{Seconds: uint64(seconds)}
-		_, endStatusFound := txEndStatuses[transfer.TransferStatus.String()]
+		_, endStatusFound := txEndStatuses[job.TransferStatus.String()]
 		if !endStatusFound {
-			err := errors.New("rclone: transfer still running, unable to restart")
+			err := errors.New("rclone: job still running, unable to restart")
 			return &datatx.TxInfo{
 				Id:     &datatx.TxId{OpaqueId: txID},
-				Status: transfer.TransferStatus,
+				Status: job.TransferStatus,
 				Ctime:  cTime,
 			}, err
 		}
-		srcToken = transfer.SrcToken
-		srcRemote = transfer.SrcRemote
-		srcPath = transfer.SrcPath
-		destToken = transfer.DestToken
-		destRemote = transfer.DestRemote
-		destPath = transfer.DestPath
-		delete(driver.pDriver.model.Transfers, txID)
+		srcToken = job.SrcToken
+		srcRemote = job.SrcRemote
+		srcPath = job.SrcPath
+		destToken = job.DestToken
+		destRemote = job.DestRemote
+		destPath = job.DestPath
+		if err := driver.storage.DeleteJob(job); err != nil {
+			err = errors.Wrap(err, "rclone: transfer still running, unable to restart")
+			return &datatx.TxInfo{
+				Id:     &datatx.TxId{OpaqueId: txID},
+				Status: job.TransferStatus,
+				Ctime:  cTime,
+			}, err
+		}
 	}
 
 	transferStatus := datatx.Status_STATUS_TRANSFER_NEW
 
-	transfer := &transfer{
+	job := &repository.Job{
 		TransferID:     txID,
 		JobID:          int64(-1),
 		TransferStatus: transferStatus,
@@ -304,14 +226,10 @@ func (driver *rclone) startJob(ctx context.Context, transferID string, srcRemote
 		Ctime:          fmt.Sprint(cTime.Seconds), // TODO do we need nanos here?
 	}
 
-	driver.pDriver.model.Transfers[txID] = transfer
-
 	type rcloneAsyncReqJSON struct {
 		SrcFs string `json:"srcFs"`
-		// SrcToken string `json:"srcToken"`
 		DstFs string `json:"dstFs"`
-		// DstToken string `json:"destToken"`
-		Async bool `json:"_async"`
+		Async bool   `json:"_async"`
 	}
 	// bearer is the default authentication scheme for reva
 	srcAuthHeader := fmt.Sprintf("bearer_token=\"%v\"", srcToken)
@@ -331,70 +249,94 @@ func (driver *rclone) startJob(ctx context.Context, transferID string, srcRemote
 	}
 	data, err := json.Marshal(rcloneReq)
 	if err != nil {
-		err = errors.Wrap(err, "rclone: error pulling transfer: error marshalling rclone req data")
-		transfer.TransferStatus = datatx.Status_STATUS_INVALID
+		err = errors.Wrap(err, "rclone: transfer job error: error marshalling rclone req data")
+		job.TransferStatus = datatx.Status_STATUS_INVALID
+		var e error
+		if e = driver.storage.StoreJob(job); e != nil {
+			e = errors.Wrap(e, err.Error())
+		}
 		return &datatx.TxInfo{
 			Id:     &datatx.TxId{OpaqueId: txID},
-			Status: datatx.Status_STATUS_INVALID,
+			Status: job.TransferStatus,
 			Ctime:  cTime,
-		}, driver.pDriver.model.saveTransfer(err)
+		}, e
 	}
 
 	transferFileMethod := "/sync/copy"
 	remotePathIsFolder, err := driver.remotePathIsFolder(srcRemote, srcPath, srcToken)
 	if err != nil {
-		err = errors.Wrap(err, "rclone: error pulling transfer: error stating src path")
-		transfer.TransferStatus = datatx.Status_STATUS_INVALID
+		err = errors.Wrap(err, "rclone: transfer job error: error stating src path")
+		job.TransferStatus = datatx.Status_STATUS_INVALID
+		var e error
+		if e = driver.storage.StoreJob(job); e != nil {
+			e = errors.Wrap(e, err.Error())
+		}
 		return &datatx.TxInfo{
 			Id:     &datatx.TxId{OpaqueId: txID},
-			Status: datatx.Status_STATUS_INVALID,
+			Status: job.TransferStatus,
 			Ctime:  cTime,
-		}, driver.pDriver.model.saveTransfer(err)
+		}, e
 	}
 	if !remotePathIsFolder {
-		err = errors.Wrap(err, "rclone: error pulling transfer: path is a file, only folder transfer is implemented")
-		transfer.TransferStatus = datatx.Status_STATUS_INVALID
+		err = errors.Wrap(err, "rclone: transfer job error: path is a file, only folder transfer is implemented")
+		job.TransferStatus = datatx.Status_STATUS_INVALID
+		var e error
+		if e = driver.storage.StoreJob(job); e != nil {
+			e = errors.Wrap(e, err.Error())
+		}
 		return &datatx.TxInfo{
 			Id:     &datatx.TxId{OpaqueId: txID},
-			Status: datatx.Status_STATUS_INVALID,
+			Status: job.TransferStatus,
 			Ctime:  cTime,
-		}, driver.pDriver.model.saveTransfer(err)
+		}, e
 	}
 
 	u, err := url.Parse(driver.config.Endpoint)
 	if err != nil {
-		err = errors.Wrap(err, "rclone: error pulling transfer: error parsing driver endpoint")
-		transfer.TransferStatus = datatx.Status_STATUS_INVALID
+		err = errors.Wrap(err, "rclone: transfer job error: error parsing driver endpoint")
+		job.TransferStatus = datatx.Status_STATUS_INVALID
+		var e error
+		if e = driver.storage.StoreJob(job); e != nil {
+			e = errors.Wrap(e, err.Error())
+		}
 		return &datatx.TxInfo{
 			Id:     &datatx.TxId{OpaqueId: txID},
-			Status: datatx.Status_STATUS_INVALID,
+			Status: job.TransferStatus,
 			Ctime:  cTime,
-		}, driver.pDriver.model.saveTransfer(err)
+		}, e
 	}
 	u.Path = path.Join(u.Path, transferFileMethod)
 	requestURL := u.String()
 	req, err := http.NewRequest(http.MethodPost, requestURL, bytes.NewReader(data))
 	if err != nil {
-		err = errors.Wrap(err, "rclone: error pulling transfer: error framing post request")
-		transfer.TransferStatus = datatx.Status_STATUS_TRANSFER_FAILED
+		err = errors.Wrap(err, "rclone: transfer job error: error framing post request")
+		job.TransferStatus = datatx.Status_STATUS_TRANSFER_FAILED
+		var e error
+		if e = driver.storage.StoreJob(job); e != nil {
+			e = errors.Wrap(e, err.Error())
+		}
 		return &datatx.TxInfo{
 			Id:     &datatx.TxId{OpaqueId: txID},
-			Status: transfer.TransferStatus,
+			Status: job.TransferStatus,
 			Ctime:  cTime,
-		}, driver.pDriver.model.saveTransfer(err)
+		}, e
 	}
 
 	req.Header.Set("Content-Type", "application/json")
 	req.SetBasicAuth(driver.config.AuthUser, driver.config.AuthPass)
 	res, err := driver.client.Do(req)
 	if err != nil {
-		err = errors.Wrap(err, "rclone: error pulling transfer: error sending post request")
-		transfer.TransferStatus = datatx.Status_STATUS_TRANSFER_FAILED
+		err = errors.Wrap(err, "rclone: transfer job error: error sending post request")
+		job.TransferStatus = datatx.Status_STATUS_TRANSFER_FAILED
+		var e error
+		if e = driver.storage.StoreJob(job); e != nil {
+			e = errors.Wrap(e, err.Error())
+		}
 		return &datatx.TxInfo{
 			Id:     &datatx.TxId{OpaqueId: txID},
-			Status: transfer.TransferStatus,
+			Status: job.TransferStatus,
 			Ctime:  cTime,
-		}, driver.pDriver.model.saveTransfer(err)
+		}, e
 	}
 
 	defer res.Body.Close()
@@ -402,21 +344,29 @@ func (driver *rclone) startJob(ctx context.Context, transferID string, srcRemote
 	if res.StatusCode != http.StatusOK {
 		var errorResData rcloneHTTPErrorRes
 		if err = json.NewDecoder(res.Body).Decode(&errorResData); err != nil {
-			err = errors.Wrap(err, "rclone driver: error decoding response data")
-			transfer.TransferStatus = datatx.Status_STATUS_TRANSFER_FAILED
+			err = errors.Wrap(err, "rclone driver: error decoding rclone response data")
+			job.TransferStatus = datatx.Status_STATUS_TRANSFER_FAILED
+			var e error
+			if e = driver.storage.StoreJob(job); e != nil {
+				e = errors.Wrap(e, err.Error())
+			}
 			return &datatx.TxInfo{
 				Id:     &datatx.TxId{OpaqueId: txID},
-				Status: transfer.TransferStatus,
+				Status: job.TransferStatus,
 				Ctime:  cTime,
-			}, driver.pDriver.model.saveTransfer(err)
+			}, e
 		}
-		e := errors.New("rclone: rclone request responded with error, " + fmt.Sprintf(" status: %v, error: %v", errorResData.Status, errorResData.Error))
-		transfer.TransferStatus = datatx.Status_STATUS_TRANSFER_FAILED
+		err := errors.New("rclone driver: rclone request responded with error, " + fmt.Sprintf(" status: %v, error: %v", errorResData.Status, errorResData.Error))
+		job.TransferStatus = datatx.Status_STATUS_TRANSFER_FAILED
+		var e error
+		if e = driver.storage.StoreJob(job); e != nil {
+			e = errors.Wrap(e, err.Error())
+		}
 		return &datatx.TxInfo{
 			Id:     &datatx.TxId{OpaqueId: txID},
-			Status: transfer.TransferStatus,
+			Status: job.TransferStatus,
 			Ctime:  cTime,
-		}, driver.pDriver.model.saveTransfer(e)
+		}, e
 	}
 
 	type rcloneAsyncResJSON struct {
@@ -424,19 +374,33 @@ func (driver *rclone) startJob(ctx context.Context, transferID string, srcRemote
 	}
 	var resData rcloneAsyncResJSON
 	if err = json.NewDecoder(res.Body).Decode(&resData); err != nil {
-		err = errors.Wrap(err, "rclone: error decoding response data")
-		transfer.TransferStatus = datatx.Status_STATUS_TRANSFER_FAILED
+		err = errors.Wrap(err, "rclone driver: error decoding response data")
+		job.TransferStatus = datatx.Status_STATUS_TRANSFER_FAILED
+		var e error
+		if e = driver.storage.StoreJob(job); e != nil {
+			e = errors.Wrap(e, err.Error())
+		}
 		return &datatx.TxInfo{
 			Id:     &datatx.TxId{OpaqueId: txID},
-			Status: transfer.TransferStatus,
+			Status: job.TransferStatus,
 			Ctime:  cTime,
-		}, driver.pDriver.model.saveTransfer(err)
+		}, e
 	}
 
-	transfer.JobID = resData.JobID
+	job.JobID = resData.JobID
 
-	if err := driver.pDriver.model.saveTransfer(nil); err != nil {
-		err = errors.Wrap(err, "rclone: error pulling transfer")
+	if err := driver.storage.StoreJob(job); err != nil {
+		err = errors.Wrap(err, "rclone driver: transfer job error")
+		return &datatx.TxInfo{
+			Id:     &datatx.TxId{OpaqueId: txID},
+			Status: datatx.Status_STATUS_INVALID,
+			Ctime:  cTime,
+		}, err
+	}
+
+	// the initial save when everything went ok
+	if err := driver.storage.StoreJob(job); err != nil {
+		err = errors.Wrap(err, "rclone driver: error starting transfer job")
 		return &datatx.TxInfo{
 			Id:     &datatx.TxId{OpaqueId: txID},
 			Status: datatx.Status_STATUS_INVALID,
@@ -450,22 +414,17 @@ func (driver *rclone) startJob(ctx context.Context, transferID string, srcRemote
 		startTimeMs := time.Now().Nanosecond() / 1000
 		timeout := driver.config.JobTimeout
 
-		driver.pDriver.Lock()
-		defer driver.pDriver.Unlock()
-
 		for {
-			transfer, err := driver.pDriver.model.getTransfer(txID)
+			job, err := driver.storage.GetJob(txID)
 			if err != nil {
-				transfer.TransferStatus = datatx.Status_STATUS_INVALID
-				err = driver.pDriver.model.saveTransfer(err)
-				logger.Error().Err(err).Msgf("rclone driver: unable to retrieve transfer with id: %v", txID)
+				logger.Error().Err(err).Msgf("rclone driver: unable to retrieve transfer job with id: %v", txID)
 				break
 			}
 
 			// check for end status first
-			_, endStatusFound := txEndStatuses[transfer.TransferStatus.String()]
-			if endStatusFound {
-				logger.Info().Msgf("rclone driver: transfer endstatus reached: %v", transfer.TransferStatus)
+			_, endStatusreached := txEndStatuses[job.TransferStatus.String()]
+			if endStatusreached {
+				logger.Info().Msgf("rclone driver: transfer job endstatus reached: %v", job.TransferStatus)
 				break
 			}
 
@@ -474,16 +433,16 @@ func (driver *rclone) startJob(ctx context.Context, transferID string, srcRemote
 			timePastMs := currentTimeMs - startTimeMs
 
 			if timePastMs > timeout {
-				logger.Info().Msgf("rclone driver: transfer timed out: %vms (timeout = %v)", timePastMs, timeout)
+				logger.Info().Msgf("rclone driver: transfer job timed out: %vms (timeout = %v)", timePastMs, timeout)
 				// set status to EXPIRED and save
-				transfer.TransferStatus = datatx.Status_STATUS_TRANSFER_EXPIRED
-				if err := driver.pDriver.model.saveTransfer(nil); err != nil {
-					logger.Error().Err(err).Msgf("rclone driver: save transfer failed: %v", err)
+				job.TransferStatus = datatx.Status_STATUS_TRANSFER_EXPIRED
+				if err := driver.storage.StoreJob(job); err != nil {
+					logger.Error().Err(err).Msgf("rclone driver: save transfer job failed: %v", err)
 				}
 				break
 			}
 
-			jobID := transfer.JobID
+			jobID := job.JobID
 			type rcloneStatusReqJSON struct {
 				JobID int64 `json:"jobid"`
 			}
@@ -494,9 +453,9 @@ func (driver *rclone) startJob(ctx context.Context, transferID string, srcRemote
 			data, err := json.Marshal(rcloneStatusReq)
 			if err != nil {
 				logger.Error().Err(err).Msgf("rclone driver: marshalling request failed: %v", err)
-				transfer.TransferStatus = datatx.Status_STATUS_INVALID
-				if err := driver.pDriver.model.saveTransfer(nil); err != nil {
-					logger.Error().Err(err).Msgf("rclone driver: save transfer failed: %v", err)
+				job.TransferStatus = datatx.Status_STATUS_INVALID
+				if err := driver.storage.StoreJob(job); err != nil {
+					logger.Error().Err(err).Msgf("rclone driver: save transfer job failed: %v", err)
 				}
 				break
 			}
@@ -506,9 +465,9 @@ func (driver *rclone) startJob(ctx context.Context, transferID string, srcRemote
 			u, err := url.Parse(driver.config.Endpoint)
 			if err != nil {
 				logger.Error().Err(err).Msgf("rclone driver: could not parse driver endpoint: %v", err)
-				transfer.TransferStatus = datatx.Status_STATUS_INVALID
-				if err := driver.pDriver.model.saveTransfer(nil); err != nil {
-					logger.Error().Err(err).Msgf("rclone driver: save transfer failed: %v", err)
+				job.TransferStatus = datatx.Status_STATUS_INVALID
+				if err := driver.storage.StoreJob(job); err != nil {
+					logger.Error().Err(err).Msgf("rclone driver: save transfer job failed: %v", err)
 				}
 				break
 			}
@@ -518,9 +477,9 @@ func (driver *rclone) startJob(ctx context.Context, transferID string, srcRemote
 			req, err := http.NewRequest(http.MethodPost, requestURL, bytes.NewReader(data))
 			if err != nil {
 				logger.Error().Err(err).Msgf("rclone driver: error framing post request: %v", err)
-				transfer.TransferStatus = datatx.Status_STATUS_INVALID
-				if err := driver.pDriver.model.saveTransfer(nil); err != nil {
-					logger.Error().Err(err).Msgf("rclone driver: save transfer failed: %v", err)
+				job.TransferStatus = datatx.Status_STATUS_INVALID
+				if err := driver.storage.StoreJob(job); err != nil {
+					logger.Error().Err(err).Msgf("rclone driver: save transfer job failed: %v", err)
 				}
 				break
 			}
@@ -529,9 +488,9 @@ func (driver *rclone) startJob(ctx context.Context, transferID string, srcRemote
 			res, err := driver.client.Do(req)
 			if err != nil {
 				logger.Error().Err(err).Msgf("rclone driver: error sending post request: %v", err)
-				transfer.TransferStatus = datatx.Status_STATUS_INVALID
-				if err := driver.pDriver.model.saveTransfer(nil); err != nil {
-					logger.Error().Err(err).Msgf("rclone driver: save transfer failed: %v", err)
+				job.TransferStatus = datatx.Status_STATUS_INVALID
+				if err := driver.storage.StoreJob(job); err != nil {
+					logger.Error().Err(err).Msgf("rclone driver: save transfer job failed: %v", err)
 				}
 				break
 			}
@@ -545,9 +504,9 @@ func (driver *rclone) startJob(ctx context.Context, transferID string, srcRemote
 					logger.Error().Err(err).Msgf("rclone driver: error reading response body: %v", err)
 				}
 				logger.Error().Err(err).Msgf("rclone driver: rclone request responded with error, status: %v, error: %v", errorResData.Status, errorResData.Error)
-				transfer.TransferStatus = datatx.Status_STATUS_INVALID
-				if err := driver.pDriver.model.saveTransfer(nil); err != nil {
-					logger.Error().Err(err).Msgf("rclone driver: save transfer failed: %v", err)
+				job.TransferStatus = datatx.Status_STATUS_INVALID
+				if err := driver.storage.StoreJob(job); err != nil {
+					logger.Error().Err(err).Msgf("rclone driver: save transfer job failed: %v", err)
 				}
 				break
 			}
@@ -572,9 +531,9 @@ func (driver *rclone) startJob(ctx context.Context, transferID string, srcRemote
 
 			if resData.Error != "" {
 				logger.Error().Err(err).Msgf("rclone driver: rclone responded with error: %v", resData.Error)
-				transfer.TransferStatus = datatx.Status_STATUS_TRANSFER_FAILED
-				if err := driver.pDriver.model.saveTransfer(nil); err != nil {
-					logger.Error().Err(err).Msgf("rclone driver: error saving transfer: %v", err)
+				job.TransferStatus = datatx.Status_STATUS_TRANSFER_FAILED
+				if err := driver.storage.StoreJob(job); err != nil {
+					logger.Error().Err(err).Msgf("rclone driver: error saving transfer job: %v", err)
 					break
 				}
 				break
@@ -583,9 +542,9 @@ func (driver *rclone) startJob(ctx context.Context, transferID string, srcRemote
 			// transfer complete
 			if resData.Finished && resData.Success {
 				logger.Info().Msg("rclone driver: transfer job finished")
-				transfer.TransferStatus = datatx.Status_STATUS_TRANSFER_COMPLETE
-				if err := driver.pDriver.model.saveTransfer(nil); err != nil {
-					logger.Error().Err(err).Msgf("rclone driver: error saving transfer: %v", err)
+				job.TransferStatus = datatx.Status_STATUS_TRANSFER_COMPLETE
+				if err := driver.storage.StoreJob(job); err != nil {
+					logger.Error().Err(err).Msgf("rclone driver: error saving transfer job: %v", err)
 					break
 				}
 				break
@@ -594,9 +553,9 @@ func (driver *rclone) startJob(ctx context.Context, transferID string, srcRemote
 			// transfer completed unsuccessfully without error
 			if resData.Finished && !resData.Success {
 				logger.Info().Msgf("rclone driver: transfer job failed")
-				transfer.TransferStatus = datatx.Status_STATUS_TRANSFER_FAILED
-				if err := driver.pDriver.model.saveTransfer(nil); err != nil {
-					logger.Error().Err(err).Msgf("rclone driver: error saving transfer: %v", err)
+				job.TransferStatus = datatx.Status_STATUS_TRANSFER_FAILED
+				if err := driver.storage.StoreJob(job); err != nil {
+					logger.Error().Err(err).Msgf("rclone driver: error saving transfer job: %v", err)
 					break
 				}
 				break
@@ -605,9 +564,9 @@ func (driver *rclone) startJob(ctx context.Context, transferID string, srcRemote
 			// transfer not yet finished: continue
 			if !resData.Finished {
 				logger.Info().Msgf("rclone driver: transfer job in progress")
-				transfer.TransferStatus = datatx.Status_STATUS_TRANSFER_IN_PROGRESS
-				if err := driver.pDriver.model.saveTransfer(nil); err != nil {
-					logger.Error().Err(err).Msgf("rclone driver: error saving transfer: %v", err)
+				job.TransferStatus = datatx.Status_STATUS_TRANSFER_IN_PROGRESS
+				if err := driver.storage.StoreJob(job); err != nil {
+					logger.Error().Err(err).Msgf("rclone driver: error saving transfer job: %v", err)
 					break
 				}
 			}
@@ -625,7 +584,7 @@ func (driver *rclone) startJob(ctx context.Context, transferID string, srcRemote
 
 // GetTransferStatus returns the status of the transfer with the specified job id.
 func (driver *rclone) GetTransferStatus(ctx context.Context, transferID string) (*datatx.TxInfo, error) {
-	transfer, err := driver.pDriver.model.getTransfer(transferID)
+	job, err := driver.storage.GetJob(transferID)
 	if err != nil {
 		return &datatx.TxInfo{
 			Id:     &datatx.TxId{OpaqueId: transferID},
@@ -633,17 +592,17 @@ func (driver *rclone) GetTransferStatus(ctx context.Context, transferID string) 
 			Ctime:  nil,
 		}, err
 	}
-	cTime, _ := strconv.ParseInt(transfer.Ctime, 10, 64)
+	cTime, _ := strconv.ParseInt(job.Ctime, 10, 64)
 	return &datatx.TxInfo{
 		Id:     &datatx.TxId{OpaqueId: transferID},
-		Status: transfer.TransferStatus,
+		Status: job.TransferStatus,
 		Ctime:  &typespb.Timestamp{Seconds: uint64(cTime)},
 	}, nil
 }
 
 // CancelTransfer cancels the transfer with the specified transfer id.
 func (driver *rclone) CancelTransfer(ctx context.Context, transferID string) (*datatx.TxInfo, error) {
-	transfer, err := driver.pDriver.model.getTransfer(transferID)
+	job, err := driver.storage.GetJob(transferID)
 	if err != nil {
 		return &datatx.TxInfo{
 			Id:     &datatx.TxId{OpaqueId: transferID},
@@ -651,10 +610,24 @@ func (driver *rclone) CancelTransfer(ctx context.Context, transferID string) (*d
 			Ctime:  nil,
 		}, err
 	}
-	cTime, _ := strconv.ParseInt(transfer.Ctime, 10, 64)
-	_, endStatusFound := txEndStatuses[transfer.TransferStatus.String()]
+
+	cTime, _ := strconv.ParseInt(job.Ctime, 10, 64)
+	// rclone cancel may fail so remove job from model first to be sure
+	transferRemovedMessage := ""
+	if driver.config.RemoveTransferJobOnCancel {
+		if err := driver.storage.DeleteJob(job); err != nil {
+			return &datatx.TxInfo{
+				Id:     &datatx.TxId{OpaqueId: transferID},
+				Status: datatx.Status_STATUS_INVALID,
+				Ctime:  &typespb.Timestamp{Seconds: uint64(cTime)},
+			}, err
+		}
+		transferRemovedMessage = "(transfer job successfully removed)"
+	}
+
+	_, endStatusFound := txEndStatuses[job.TransferStatus.String()]
 	if endStatusFound {
-		err := errors.New("rclone driver: transfer already in end state")
+		err := errors.Wrapf(errors.New("rclone driver: job already in end state"), transferRemovedMessage)
 		return &datatx.TxInfo{
 			Id:     &datatx.TxId{OpaqueId: transferID},
 			Status: datatx.Status_STATUS_INVALID,
@@ -667,12 +640,12 @@ func (driver *rclone) CancelTransfer(ctx context.Context, transferID string) (*d
 		JobID int64 `json:"jobid"`
 	}
 	rcloneCancelTransferReq := &rcloneStopRequest{
-		JobID: transfer.JobID,
+		JobID: job.JobID,
 	}
 
 	data, err := json.Marshal(rcloneCancelTransferReq)
 	if err != nil {
-		err = errors.Wrap(err, "rclone driver: error marshalling rclone req data")
+		err := errors.Wrapf(errors.New("rclone driver: error marshalling rclone job/stop req data"), transferRemovedMessage)
 		return &datatx.TxInfo{
 			Id:     &datatx.TxId{OpaqueId: transferID},
 			Status: datatx.Status_STATUS_INVALID,
@@ -684,7 +657,7 @@ func (driver *rclone) CancelTransfer(ctx context.Context, transferID string) (*d
 
 	u, err := url.Parse(driver.config.Endpoint)
 	if err != nil {
-		err = errors.Wrap(err, "rclone driver: error parsing driver endpoint")
+		err := errors.Wrapf(errors.New("rclone driver: error parsing driver endpoint"), transferRemovedMessage)
 		return &datatx.TxInfo{
 			Id:     &datatx.TxId{OpaqueId: transferID},
 			Status: datatx.Status_STATUS_INVALID,
@@ -696,7 +669,7 @@ func (driver *rclone) CancelTransfer(ctx context.Context, transferID string) (*d
 
 	req, err := http.NewRequest(http.MethodPost, requestURL, bytes.NewReader(data))
 	if err != nil {
-		err = errors.Wrap(err, "rclone driver: error framing post request")
+		err := errors.Wrapf(errors.New("rclone driver: error framing post request"), transferRemovedMessage)
 		return &datatx.TxInfo{
 			Id:     &datatx.TxId{OpaqueId: transferID},
 			Status: datatx.Status_STATUS_INVALID,
@@ -709,7 +682,7 @@ func (driver *rclone) CancelTransfer(ctx context.Context, transferID string) (*d
 
 	res, err := driver.client.Do(req)
 	if err != nil {
-		err = errors.Wrap(err, "rclone driver: error sending post request")
+		err := errors.Wrapf(errors.New("rclone driver: error sending post request"), transferRemovedMessage)
 		return &datatx.TxInfo{
 			Id:     &datatx.TxId{OpaqueId: transferID},
 			Status: datatx.Status_STATUS_INVALID,
@@ -722,14 +695,14 @@ func (driver *rclone) CancelTransfer(ctx context.Context, transferID string) (*d
 	if res.StatusCode != http.StatusOK {
 		var errorResData rcloneHTTPErrorRes
 		if err = json.NewDecoder(res.Body).Decode(&errorResData); err != nil {
-			err = errors.Wrap(err, "rclone driver: error decoding response data")
+			err := errors.Wrapf(errors.New("rclone driver: error decoding response data"), transferRemovedMessage)
 			return &datatx.TxInfo{
 				Id:     &datatx.TxId{OpaqueId: transferID},
 				Status: datatx.Status_STATUS_INVALID,
 				Ctime:  &typespb.Timestamp{Seconds: uint64(cTime)},
 			}, err
 		}
-		err = errors.Wrap(errors.Errorf("status: %v, error: %v", errorResData.Status, errorResData.Error), "rclone driver: rclone request responded with error")
+		err = errors.Wrap(errors.Errorf("%v, status: %v, error: %v", transferRemovedMessage, errorResData.Status, errorResData.Error), "rclone driver: rclone request responded with error")
 		return &datatx.TxInfo{
 			Id:     &datatx.TxId{OpaqueId: transferID},
 			Status: datatx.Status_STATUS_INVALID,
@@ -751,7 +724,7 @@ func (driver *rclone) CancelTransfer(ctx context.Context, transferID string) (*d
 	}
 	var resData rcloneCancelTransferResJSON
 	if err = json.NewDecoder(res.Body).Decode(&resData); err != nil {
-		err = errors.Wrap(err, "rclone driver: error decoding response data")
+		err := errors.Wrapf(errors.New("rclone driver: error decoding response data"), transferRemovedMessage)
 		return &datatx.TxInfo{
 			Id:     &datatx.TxId{OpaqueId: transferID},
 			Status: datatx.Status_STATUS_INVALID,
@@ -767,13 +740,16 @@ func (driver *rclone) CancelTransfer(ctx context.Context, transferID string) (*d
 		}, errors.New(resData.Error)
 	}
 
-	transfer.TransferStatus = datatx.Status_STATUS_TRANSFER_CANCELLED
-	if err := driver.pDriver.model.saveTransfer(nil); err != nil {
-		return &datatx.TxInfo{
-			Id:     &datatx.TxId{OpaqueId: transferID},
-			Status: datatx.Status_STATUS_INVALID,
-			Ctime:  &typespb.Timestamp{Seconds: uint64(cTime)},
-		}, err
+	// only update when job's not removed
+	if !driver.config.RemoveTransferJobOnCancel {
+		job.TransferStatus = datatx.Status_STATUS_TRANSFER_CANCELLED
+		if err := driver.storage.StoreJob(job); err != nil {
+			return &datatx.TxInfo{
+				Id:     &datatx.TxId{OpaqueId: transferID},
+				Status: datatx.Status_STATUS_INVALID,
+				Ctime:  &typespb.Timestamp{Seconds: uint64(cTime)},
+			}, err
+		}
 	}
 
 	return &datatx.TxInfo{
@@ -787,15 +763,6 @@ func (driver *rclone) CancelTransfer(ctx context.Context, transferID string) (*d
 // Note that tokens must still be valid.
 func (driver *rclone) RetryTransfer(ctx context.Context, transferID string) (*datatx.TxInfo, error) {
 	return driver.startJob(ctx, transferID, "", "", "", "", "", "")
-}
-
-// getTransfer returns the transfer with the specified transfer ID.
-func (m *transferModel) getTransfer(transferID string) (*transfer, error) {
-	transfer, ok := m.Transfers[transferID]
-	if !ok {
-		return nil, errors.New("rclone driver: invalid transfer ID")
-	}
-	return transfer, nil
 }
 
 func (driver *rclone) remotePathIsFolder(remote string, remotePath string, remoteToken string) (bool, error) {
@@ -886,8 +853,13 @@ func (driver *rclone) extractEndpointInfo(ctx context.Context, targetURL string)
 		return nil, errors.Wrap(err, "datatx service: error parsing target resource name")
 	}
 
+	var path string
+	if m["name"] != nil {
+		path = m["name"][0]
+	}
+
 	return &endpoint{
-		filePath:       m["name"][0],
+		filePath:       path,
 		endpoint:       uri.Host + uri.Path,
 		endpointScheme: uri.Scheme,
 		token:          uri.User.String(),

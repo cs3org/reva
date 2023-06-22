@@ -81,10 +81,6 @@ func (c *config) init() {
 
 	c.ShareFolder = strings.Trim(c.ShareFolder, "/")
 
-	if c.DataTransfersFolder == "" {
-		c.DataTransfersFolder = "DataTransfers"
-	}
-
 	if c.TokenManager == "" {
 		c.TokenManager = "jwt"
 	}

@@ -65,7 +65,7 @@ var _ = Describe("user providers", func() {
 		ctx = metadata.AppendToOutgoingContext(ctx, ctxpkg.TokenHeader, t)
 		ctx = ctxpkg.ContextSetUser(ctx, user)
 
-		revads, err = startRevads(dependencies, map[string]string{})
+		revads, err = startRevads(dependencies, nil, nil, map[string]string{})
 		Expect(err).ToNot(HaveOccurred())
 		serviceClient, err = pool.GetUserProviderServiceClient(pool.Endpoint(revads["users"].GrpcAddress))
 		Expect(err).ToNot(HaveOccurred())

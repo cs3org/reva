@@ -129,8 +129,6 @@ func (s *svc) RemoveShare(ctx context.Context, req *collaboration.RemoveShareReq
 		return nil, errors.Wrap(err, "gateway: error calling RemoveShare")
 	}
 
-	s.removeReference(ctx, share.ResourceId)
-
 	// if we don't need to commit we return earlier
 	if !s.c.CommitShareToStorageGrant && !s.c.CommitShareToStorageRef {
 		return res, nil

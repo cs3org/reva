@@ -1,0 +1,22 @@
+[log]
+mode = "json"
+
+[shared]
+gatewaysvc = "{{cernboxgw_address}}"
+
+[http]
+address = "{{grpc_address}}"
+
+[http.services.ocmd]
+
+[http.services.sciencemesh]
+provider_domain = "{{cernboxhttp_address}}"
+mesh_directory_url = "http://meshdir"
+
+[http.middlewares.cors]
+
+[http.middlewares.providerauthorizer]
+driver = "json"
+
+[http.middlewares.providerauthorizer.drivers.json]
+providers = "fixtures/ocm-providers.demo.json"

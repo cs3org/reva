@@ -31,22 +31,44 @@ appauth = "localhost:15000"
 [grpc.services.ocmproviderauthorizer]
 
 [grpc.services.appregistry]
+driver = "static"
+
 [grpc.services.appregistry.drivers.static]
 mime_types = [
     {"mime_type" = "text/plain", "extension" = "txt", "name" = "Text file", "description" = "Text file", "allow_creation" = true},
-    {"mime_type" = "text/markdown", "extension" = "md", "name" = "Markdown file", "description" = "Markdown file", "allow_creation" = true},
-    {"mime_type" = "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "extension" = "docx", "name" = "Microsoft Word", "description" = "Microsoft Word document", "allow_creation" = true},
-    {"mime_type" = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "extension" = "xlsx", "name" = "Microsoft Excel", "description" = "Microsoft Excel document", "allow_creation" = true},
-    {"mime_type" = "application/vnd.openxmlformats-officedocument.presentationml.presentation", "extension" = "pptx", "name" = "Microsoft PowerPoint", "description" = "Microsoft PowerPoint document", "allow_creation" = true},
-    {"mime_type" = "application/vnd.oasis.opendocument.text", "extension" = "odt", "name" = "OpenDocument", "description" = "OpenDocument text document", "allow_creation" = true},
-    {"mime_type" = "application/vnd.oasis.opendocument.spreadsheet", "extension" = "ods", "name" = "OpenSpreadsheet", "description" = "OpenDocument spreadsheet document", "allow_creation" = true},
-    {"mime_type" = "application/vnd.oasis.opendocument.presentation", "extension" = "odp", "name" = "OpenPresentation", "description" = "OpenDocument presentation document", "allow_creation" = true},
+    {"mime_type" = "text/markdown", "extension" = "md", "name" = "Markdown file", "description" = "Markdown file", "default_app" = "CodiMD", "allow_creation" = true},
+    {"mime_type" = "application/vnd.oasis.opendocument.text", "extension" = "odt", "name" = "OpenDocument", "description" = "OpenDocument text document", "default_app" = "Collabora", "allow_creation" = true},
+    {"mime_type" = "application/vnd.oasis.opendocument.spreadsheet", "extension" = "ods", "name" = "OpenSpreadsheet", "description" = "OpenDocument spreadsheet document", "default_app" = "Collabora", "allow_creation" = true},
+    {"mime_type" = "application/vnd.oasis.opendocument.presentation", "extension" = "odp", "name" = "OpenPresentation", "description" = "OpenDocument presentation document", "default_app" = "Collabora", "allow_creation" = true},
     {"mime_type" = "application/vnd.jupyter", "extension" = "ipynb", "name" = "Jupyter Notebook", "description" = "Jupyter Notebook"}
 ]
+
+[grpc.services.appprovider]
+driver = "wopi"
+appregistrysvc = "localhost:19000"
+custom_mime_types_json = "/etc/revad/custom-mime-types-demo.json"
+
+[grpc.services.appprovider.drivers.wopi]
+iop_secret = "shared-secret-with-wopiserver"
+wopi_url = "http://0.0.0.0:8880/"
+app_name = "Collabora"
+app_url = "https://your-collabora-server.org:9980"
 
 [http.services.datagateway]
 [http.services.prometheus]
 [http.services.ocmd]
+[http.services.ocmprovider]
 [http.services.ocdav]
 [http.services.ocs]
-[http.services.appprovider]
+
+[http.services.sciencemesh]
+mesh_directory_url = 'https://sciencemesh.cesnet.cz/iop/meshdir'
+provider_domain = 'your-domain.org'
+body_template_path = '/etc/revad/sciencemesh_email_body'
+ocm_mount_point = '/sciencemesh'
+
+[http.services.sciencemesh.smtp_credentials]
+disable_auth = true
+sender_mail = "sciencemesh@your-domain.org"
+smtp_server = "your-smtp-server.your-domain.org"
+smtp_port = 25

@@ -1,3 +1,9 @@
+[submodule "tests/ocis"]
+	path = tests/ocis
+	url = https://github.com/owncloud/ocis.git
+[submodule "tests/testing"]
+	path = tests/testing
+	url = https://github.com/owncloud/testing.git
 [submodule "docs/themes/docsy"]
 	path = docs/themes/docsy
-	url = https://github.com/google/docsy
+	url = https://github.com/google/docsy.git

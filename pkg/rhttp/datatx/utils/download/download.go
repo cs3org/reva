@@ -20,6 +20,7 @@
 package download
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"mime/multipart"
@@ -68,30 +69,57 @@ func GetOrHeadFile(w http.ResponseWriter, r *http.Request, fs storage.FS, spaceI
 	}
 	// TODO check preconditions like If-Range, If-Match ...
 
-	var md *provider.ResourceInfo
-	var err error
+	var (
+		md      *provider.ResourceInfo
+		content io.ReadCloser
+		size    int64
+		err     error
+	)
 
-	// do a stat to set a Content-Length header
-
+	// do a stat to get the mime type
 	if md, err = fs.GetMD(ctx, ref, nil); err != nil {
 		handleError(w, &sublog, err, "stat")
 		return
 	}
+	mimeType := md.MimeType
+
+	if versionKey := r.URL.Query().Get("version_key"); versionKey != "" {
+		// the request is for a version file
+		stat, err := statRevision(ctx, fs, ref, versionKey)
+		if err != nil {
+			handleError(w, &sublog, err, "stat revision")
+			return
+		}
+		size = int64(stat.Size)
+		content, err = fs.DownloadRevision(ctx, ref, versionKey)
+		if err != nil {
+			handleError(w, &sublog, err, "download revision")
+			return
+		}
+	} else {
+		size = int64(md.Size)
+		content, err = fs.Download(ctx, ref)
+		if err != nil {
+			handleError(w, &sublog, err, "download")
+			return
+		}
+	}
+	defer content.Close()
 
 	var ranges []HTTPRange
 
 	if r.Header.Get("Range") != "" {
-		ranges, err = ParseRange(r.Header.Get("Range"), int64(md.Size))
+		ranges, err = ParseRange(r.Header.Get("Range"), size)
 		if err != nil {
 			if err == ErrNoOverlap {
-				w.Header().Set("Content-Range", fmt.Sprintf("bytes */%d", md.Size))
+				w.Header().Set("Content-Range", fmt.Sprintf("bytes */%d", size))
 			}
 			sublog.Error().Err(err).Interface("md", md).Interface("ranges", ranges).Msg("range request not satisfiable")
 			w.WriteHeader(http.StatusRequestedRangeNotSatisfiable)
 
 			return
 		}
-		if SumRangesSize(ranges) > int64(md.Size) {
+		if SumRangesSize(ranges) > size {
 			// The total number of bytes in all the ranges
 			// is larger than the size of the file by
 			// itself, so this is probably an attack, or a
@@ -100,15 +128,8 @@ func GetOrHeadFile(w http.ResponseWriter, r *http.Request, fs storage.FS, spaceI
 		}
 	}
 
-	content, err := fs.Download(ctx, ref)
-	if err != nil {
-		handleError(w, &sublog, err, "download")
-		return
-	}
-	defer content.Close()
-
 	code := http.StatusOK
-	sendSize := int64(md.Size)
+	sendSize := size
 	var sendContent io.Reader = content
 
 	var s io.Seeker
@@ -146,9 +167,9 @@ func GetOrHeadFile(w http.ResponseWriter, r *http.Request, fs storage.FS, spaceI
 			}
 			sendSize = ra.Length
 			code = http.StatusPartialContent
-			w.Header().Set("Content-Range", ra.ContentRange(int64(md.Size)))
+			w.Header().Set("Content-Range", ra.ContentRange(size))
 		case len(ranges) > 1:
-			sendSize = RangesMIMESize(ranges, md.MimeType, int64(md.Size))
+			sendSize = RangesMIMESize(ranges, mimeType, size)
 			code = http.StatusPartialContent
 
 			pr, pw := io.Pipe()
@@ -158,7 +179,7 @@ func GetOrHeadFile(w http.ResponseWriter, r *http.Request, fs storage.FS, spaceI
 			defer pr.Close() // cause writing goroutine to fail and exit if CopyN doesn't finish.
 			go func() {
 				for _, ra := range ranges {
-					part, err := mw.CreatePart(ra.MimeHeader(md.MimeType, int64(md.Size)))
+					part, err := mw.CreatePart(ra.MimeHeader(mimeType, size))
 					if err != nil {
 						_ = pw.CloseWithError(err) // CloseWithError always returns nil
 						return
@@ -195,6 +216,19 @@ func GetOrHeadFile(w http.ResponseWriter, r *http.Request, fs storage.FS, spaceI
 			sublog.Error().Int64("copied", c).Int64("size", sendSize).Msg("copied vs size mismatch")
 		}
 	}
+}
+
+func statRevision(ctx context.Context, fs storage.FS, ref *provider.Reference, revisionKey string) (*provider.FileVersion, error) {
+	versions, err := fs.ListRevisions(ctx, ref)
+	if err != nil {
+		return nil, err
+	}
+	for _, v := range versions {
+		if v.Key == revisionKey {
+			return v, nil
+		}
+	}
+	return nil, errtypes.NotFound("version not found")
 }
 
 func handleError(w http.ResponseWriter, log *zerolog.Logger, err error, action string) {

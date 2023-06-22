@@ -51,9 +51,24 @@ import (
 	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/utils"
+	gomime "github.com/glpatcern/go-mime"
 	"github.com/golang-jwt/jwt"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
+)
+
+const publicLinkURLPrefix = "/files/link/public/"
+
+const ocmLinkURLPrefix = "/files/spaces/sciencemesh/"
+
+type userType string
+
+const (
+	invalid   userType = "invalid"
+	regular   userType = "regular"
+	federated userType = "federated"
+	ocm       userType = "ocm"
+	anonymous userType = "anonymous"
 )
 
 func init() {
@@ -111,7 +126,7 @@ func New(m map[string]interface{}) (app.Provider, error) {
 	}
 
 	wopiClient := rhttp.GetHTTPClient(
-		rhttp.Timeout(time.Duration(5*int64(time.Second))),
+		rhttp.Timeout(time.Duration(10*int64(time.Second))),
 		rhttp.Insecure(c.InsecureConnections),
 	)
 	wopiClient.CheckRedirect = func(req *http.Request, via []*http.Request) error {
@@ -125,7 +140,7 @@ func New(m map[string]interface{}) (app.Provider, error) {
 	}, nil
 }
 
-func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.ResourceInfo, viewMode appprovider.OpenInAppRequest_ViewMode, token string, opaqueMap map[string]*typespb.OpaqueEntry, language string) (*appprovider.OpenInAppURL, error) {
+func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.ResourceInfo, viewMode appprovider.ViewMode, token string, opaqueMap map[string]*typespb.OpaqueEntry, language string) (*appprovider.OpenInAppURL, error) {
 	log := appctx.GetLogger(ctx)
 
 	ext := path.Ext(resource.Path)
@@ -146,6 +161,7 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 	q.Add("viewmode", viewMode.String())
 	q.Add("appname", p.conf.AppName)
 
+	var ut = invalid
 	u, ok := ctxpkg.ContextGetUser(ctx)
 	if !ok {
 		// we must have been authenticated
@@ -153,10 +169,10 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 	}
 	if u.Id.Type == userpb.UserType_USER_TYPE_LIGHTWEIGHT || u.Id.Type == userpb.UserType_USER_TYPE_FEDERATED {
 		q.Add("userid", resource.Owner.OpaqueId+"@"+resource.Owner.Idp)
+		ut = federated
 	} else {
 		q.Add("userid", u.Id.OpaqueId+"@"+u.Id.Idp)
 	}
-	q.Add("username", u.DisplayName)
 
 	scopes, ok := ctxpkg.ContextGetScopes(ctx)
 	if !ok {
@@ -166,19 +182,49 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 
 	// TODO (lopresti) consolidate with the templating implemented in the edge branch;
 	// here we assume the FolderBaseURL looks like `https://<hostname>` and we
-	// either append `/files/spaces/<full_path>` or `/s/<pltoken>/<relative_path>`
+	// either append `/files/spaces/<full_path>` or the proper URL prefix + `/<relative_path>`
 	var rPath string
-	if _, ok := utils.HasPublicShareRole(u); ok {
-		// we are in a public link
-		q.Del("username") // on public shares default to "Guest xyz"
-		var err error
-		rPath, err = getPathForPublicLink(ctx, scopes, resource)
-		if err != nil {
-			log.Warn().Err(err).Msg("wopi: failed to extract relative path from public link scope")
+	var pathErr error
+	_, pubrole := utils.HasPublicShareRole(u)
+	_, ocmrole := utils.HasOCMShareRole(u)
+	switch {
+	case pubrole:
+		// we are in a public link, username is not set so it will default to "Guest xyz"
+		ut = anonymous
+		rPath, pathErr = getPathForExternalLink(ctx, scopes, resource, publicLinkURLPrefix)
+		if pathErr != nil {
+			log.Warn().Interface("resId", resource.Id).Interface("path", resource.Path).Err(pathErr).Msg("wopi: failed to extract relative path from public link scope")
 		}
-	} else {
+	case ocmrole:
+		// OCM users have no username: use displayname@Idp
+		ut = ocm
+		q.Add("username", u.DisplayName+" @ "+u.Id.Idp)
+		// and resolve the folder
+		rPath, pathErr = getPathForExternalLink(ctx, scopes, resource, ocmLinkURLPrefix)
+		if pathErr != nil {
+			log.Warn().Interface("resId", resource.Id).Interface("path", resource.Path).Err(pathErr).Msg("wopi: failed to extract relative path from ocm link scope")
+		}
+		if ext == "" {
+			// this is a single-file share, and we have to re-resolve the extension from the mime type
+			exts := gomime.ExtensionsByType(resource.MimeType)
+			for _, e := range exts {
+				if len(e) < len(ext) || len(ext) == 0 {
+					ext = e // heuristically we know we want the shortest file extension
+				}
+			}
+			ext = "." + ext
+			log.Debug().Interface("mime", resource.MimeType).Interface("ext", ext).Msg("wopi: resolved extension for single-file OCM share")
+		}
+		if ext == "" {
+			return nil, errors.New("wopi: failed to resolve extension from OCM file's mime type %s" + resource.MimeType)
+		}
+	default:
 		// in all other cases use the resource's path
+		if ut == invalid {
+			ut = regular
+		}
 		rPath = "/files/spaces/" + path.Dir(resource.Path)
+		q.Add("username", u.DisplayName)
 	}
 	if rPath != "" {
 		fu, err := url.JoinPath(p.conf.FolderBaseURL, rPath)
@@ -188,6 +234,7 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 			q.Add("folderurl", fu)
 		}
 	}
+	q.Add("usertype", string(ut))
 
 	var viewAppURL string
 	if viewAppURLs, ok := p.appURLs["view"]; ok {
@@ -214,15 +261,10 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 		q.Add("appurl", viewAppURL)
 	}
 	if q.Get("appurl") == "" && q.Get("appviewurl") == "" {
-		return nil, errors.New("wopi: neither edit nor view app url found")
+		return nil, errors.New("wopi: neither edit nor view app url found for type " + ext)
 	}
 	if p.conf.AppIntURL != "" {
 		q.Add("appinturl", p.conf.AppIntURL)
-	}
-
-	if _, ok := opaqueMap["forcelock"]; ok {
-		// this is to work around an issue with Microsoft Office, cf. cs3org/wopiserver#106
-		q.Add("forcelock", "1")
 	}
 
 	httpReq.URL.RawQuery = q.Encode()
@@ -470,13 +512,26 @@ func parseWopiDiscovery(body io.Reader) (map[string]map[string]string, error) {
 	return appURLs, nil
 }
 
-func getPathForPublicLink(ctx context.Context, scopes map[string]*authpb.Scope, resource *provider.ResourceInfo) (string, error) {
+func getPathForExternalLink(ctx context.Context, scopes map[string]*authpb.Scope, resource *provider.ResourceInfo, pathPrefix string) (string, error) {
 	pubShares, err := scope.GetPublicSharesFromScopes(scopes)
 	if err != nil {
 		return "", err
 	}
-	if len(pubShares) > 1 {
-		return "", errors.New("More than one public share found in the scope, lookup not implemented")
+	ocmShares, err := scope.GetOCMSharesFromScopes(scopes)
+	if err != nil {
+		return "", err
+	}
+	var resID *provider.ResourceId
+	var token string
+	switch {
+	case len(pubShares) == 1:
+		resID = pubShares[0].ResourceId
+		token = pubShares[0].Token
+	case len(ocmShares) == 1:
+		resID = ocmShares[0].ResourceId
+		token = ocmShares[0].Token
+	default:
+		return "", errors.New("Either one public xor OCM share is supported, lookups not implemented")
 	}
 
 	client, err := pool.GetGatewayServiceClient(pool.Endpoint(sharedconf.GetGatewaySVC("")))
@@ -485,24 +540,24 @@ func getPathForPublicLink(ctx context.Context, scopes map[string]*authpb.Scope, 
 	}
 	statRes, err := client.Stat(ctx, &provider.StatRequest{
 		Ref: &provider.Reference{
-			ResourceId: pubShares[0].ResourceId,
+			ResourceId: resID,
 		},
 	})
 	if err != nil {
 		return "", err
 	}
 
-	if statRes.Info.Path == resource.Path {
+	if statRes.Info.Path == resource.Path || utils.ResourceIDEqual(statRes.Info.Id, resource.Id) {
 		// this is a direct link to the resource
-		return "/s/" + pubShares[0].Token, nil
+		return pathPrefix + token, nil
 	}
-	// otherwise we are in a subfolder of the public link
+	// otherwise we are in a subfolder of the link
 	relPath, err := filepath.Rel(statRes.Info.Path, resource.Path)
 	if err != nil {
 		return "", err
 	}
 	if strings.HasPrefix(relPath, "../") {
-		return "", errors.New("Scope path does not contain target resource")
+		return "", errors.New("Scope path does not contain target resource path " + statRes.Info.Path)
 	}
-	return path.Join("/files/public/show/"+pubShares[0].Token, path.Dir(relPath)), nil
+	return path.Join(pathPrefix+token, path.Dir(relPath)), nil
 }

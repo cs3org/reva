@@ -28,8 +28,8 @@ Follow the instructions in https://reva.link/docs/getting-started/install-reva/ 
 Now we need to start two Reva daemons corresponding to two different mesh providers, thus enabling sharing of files between users belonging to these two providers. For our example,  we consider the example of CERNBox deployed at localhost:19000 and the CESNET owncloud at localhost:17000. Follow these steps:
 
 ```
-cd examples/ocmd/ && mkdir -p /var/tmp/reva/data/einstein/home
-../../cmd/revad/revad -c ocmd-server-1.toml & ../../cmd/revad/revad -c ocmd-server-2.toml &
+mkdir -p /var/tmp/reva && cd examples/ocmd/
+../../cmd/revad/revad -dev-dir server-1 & ../../cmd/revad/revad -dev-dir server-2 &
 ```
 
 This should start two Reva daemon (revad) services at the aforementioned endpoints.
@@ -114,13 +114,12 @@ Call the ocm-share-create method with the required options. The user can list wh
 | f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c | cesnet.cz | marie@cesnet.cz | Marie Curie |
 +--------------------------------------+-----------+-----------------+-------------+
 
->> ocm-share-create -grantee f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c -idp cesnet.cz /home/my-folder
-+--------------------------------------+-----------------+--------------------------------------+--------------------------------------------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------+-------------------+-------------+--------------------------------------+-------------------------------+-------------------------------+
-| #                                    | OWNER.IDP       | OWNER.OPAQUEID                       | RESOURCEID                                                                                 | PERMISSIONS                                                                                                     | TYPE              | GRANTEE.IDP | GRANTEE.OPAQUEID                     | CREATED                       | UPDATED                       |
-+--------------------------------------+-----------------+--------------------------------------+--------------------------------------------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------+-------------------+-------------+--------------------------------------+-------------------------------+-------------------------------+
-| 23498b71-363e-4804-9f22-8c35dc070a06 | cernbox.cern.ch | 4c510ada-c86b-4815-8820-42cdf82c3d51 | storage_id:"123e4567-e89b-12d3-a456-426655440000" opaque_id:"fileid-einstein%2Fmy-folder"  | permissions:<get_path:true initiate_file_download:true list_container:true list_file_versions:true stat:true >  | GRANTEE_TYPE_USER | cesnet.cz   | f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c | 2021-03-26 13:30:12 +0100 CET | 2021-03-26 13:30:12 +0100 CET |
-+--------------------------------------+-----------------+--------------------------------------+--------------------------------------------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------+-------------------+-------------+--------------------------------------+-------------------------------+-------------------------------+
-
+>> ocm-share-create -grantee f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c -idp cesnet.cz -rol editor /home/my-folder
++--------------------------------------+-----------------+--------------------------------------+--------------------------------------------------------------------------------------------+-------------------+-------------+--------------------------------------+--------------------------------+--------------------------------+
+| #                                    | OWNER.IDP       | OWNER.OPAQUEID                       | RESOURCEID                                                                                 | TYPE              | GRANTEE.IDP | GRANTEE.OPAQUEID                     | CREATED                        | UPDATED                        |
++--------------------------------------+-----------------+--------------------------------------+--------------------------------------------------------------------------------------------+-------------------+-------------+--------------------------------------+--------------------------------+--------------------------------+
+| edc8f1c3-5f12-4430-8680-95b9034d6592 | cernbox.cern.ch | 4c510ada-c86b-4815-8820-42cdf82c3d51 | storage_id:"123e4567-e89b-12d3-a456-426655440000" opaque_id:"fileid-einstein%2Fmy-folder"  | GRANTEE_TYPE_USER | cesnet.cz   | f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c | 2023-04-11 11:52:08 +0200 CEST | 2023-04-11 11:52:08 +0200 CEST |
++--------------------------------------+-----------------+--------------------------------------+--------------------------------------------------------------------------------------------+-------------------+-------------+--------------------------------------+--------------------------------+--------------------------------+
 ```
 This would create a local share on einstein's mesh provider and call the unprotected endpoint `/ocm/shares` on the recipient's provider to create a remote share.
 
@@ -137,12 +136,58 @@ OK
 ```
 
 #### 5.2.2 Access the list of received shares
-Call the ocm-share-list-received method.
+Call the `ocm-share-list-received` method.
 ```
 >> ocm-share-list-received
-+--------------------------------------+-----------------+--------------------------------------+--------------------------------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------+-------------------+-------------+--------------------------------------+-------------------------------+-------------------------------+---------------------+
-| #                                    | OWNER.IDP       | OWNER.OPAQUEID                       | RESOURCEID                                                                                 | PERMISSIONS                                                                                                                                                       | TYPE              | GRANTEE.IDP | GRANTEE.OPAQUEID                     | CREATED                       | UPDATED                       | STATE               |
-+--------------------------------------+-----------------+--------------------------------------+--------------------------------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------+-------------------+-------------+--------------------------------------+-------------------------------+-------------------------------+---------------------+
-| 48bf1892-da3f-4e18-b9af-766595683689 | cernbox.cern.ch | 4c510ada-c86b-4815-8820-42cdf82c3d51 | storage_id:"123e4567-e89b-12d3-a456-426655440000" opaque_id:"fileid-einstein%2Fmy-folder"  | permissions:<get_path:true get_quota:true initiate_file_download:true list_grants:true list_container:true list_file_versions:true list_recycle:true stat:true >  | GRANTEE_TYPE_USER | cesnet.cz   | f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c | 2021-03-26 13:30:12 +0100 CET | 2021-03-26 13:30:12 +0100 CET | SHARE_STATE_PENDING |
-+--------------------------------------+-----------------+--------------------------------------+--------------------------------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------+-------------------+-------------+--------------------------------------+-------------------------------+-------------------------------+---------------------+
++--------------------------------------+-----------------+--------------------------------------+-------------------------------------------------------------------------------+-------------------+-------------+--------------------------------------+--------------------------------+--------------------------------+---------------------+-----------------+
+| #                                    | OWNER.IDP       | OWNER.OPAQUEID                       | RESOURCEID                                                                    | TYPE              | GRANTEE.IDP | GRANTEE.OPAQUEID                     | CREATED                        | UPDATED                        | STATE               | SHARETYPE       |
++--------------------------------------+-----------------+--------------------------------------+-------------------------------------------------------------------------------+-------------------+-------------+--------------------------------------+--------------------------------+--------------------------------+---------------------+-----------------+
+| ef05c999-8ae2-41af-ba0d-a886b061011f | cernbox.cern.ch | 4c510ada-c86b-4815-8820-42cdf82c3d51 | opaque_id:"123e4567-e89b-12d3-a456-426655440000:fileid-einstein%2Fmy-folder"  | GRANTEE_TYPE_USER | cesnet.cz   | f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c | 2023-04-11 11:52:08 +0200 CEST | 2023-04-11 11:52:08 +0200 CEST | SHARE_STATE_PENDING | SHARE_TYPE_USER |
++--------------------------------------+-----------------+--------------------------------------+-------------------------------------------------------------------------------+-------------------+-------------+--------------------------------------+--------------------------------+--------------------------------+---------------------+-----------------+
+```
+
+The share's recipien has received the share `ef05c999-8ae2-41af-ba0d-a886b061011f`. The user can get more informations about the share using the `ocm-share-get-received` command.
+
+```
+ocm-share-get-received ef05c999-8ae2-41af-ba0d-a886b061011f
+{"id":{"opaqueId":"ef05c999-8ae2-41af-ba0d-a886b061011f"}, "name":"my-folder", "resourceId":{"opaqueId":"123e4567-e89b-12d3-a456-426655440000:fileid-einstein%2Fmy-folder"}, "grantee":{"type":"GRANTEE_TYPE_USER", "userId":{"idp":"cesnet.cz", "opaqueId":"f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c", "type":"USER_TYPE_PRIMARY"}}, "owner":{"idp":"cernbox.cern.ch", "opaqueId":"4c510ada-c86b-4815-8820-42cdf82c3d51", "type":"USER_TYPE_FEDERATED"}, "creator":{"idp":"cernbox.cern.ch", "opaqueId":"4c510ada-c86b-4815-8820-42cdf82c3d51", "type":"USER_TYPE_FEDERATED"}, "ctime":{"seconds":"1681206728", "nanos":346009879}, "mtime":{"seconds":"1681206728", "nanos":346009879}, "shareType":"SHARE_TYPE_USER", "protocols":[{"webdavOptions":{"permissions":{"permissions":{"getPath":true, "initiateFileDownload":true, "initiateFileUpload":true, "listContainer":true, "stat":true}}, "uri":"http://localhost:19001/remote.php/dav/ocm/eSWNjTWjorFmZEGQNZVyrU3TyxdWEr1D"}}], "state":"SHARE_STATE_PENDING", "resourceType":"RESOURCE_TYPE_CONTAINER"}
+```
+
+In this case, the share can be accessed using the WebDAV protocol (multiple access methods are available, like WebDAV, Webapp and Datatx) using the URL `http://localhost:19001/remote.php/dav/ocm/eSWNjTWjorFmZEGQNZVyrU3TyxdWEr1D`, and every WebDAV client can be used to access the received share resource.
+
+For example:
+```
+# curl -X PROPFIND http://localhost:19001/remote.php/dav/ocm/eSWNjTWjorFmZEGQNZVyrU3TyxdWEr1D
+<?xml version="1.0" encoding="utf-8"?><d:multistatus xmlns:d="DAV:" xmlns:s="http://sabredav.org/ns" xmlns:oc="http://owncloud.org/ns"><d:response><d:href>/remote.php/dav/ocm/eSWNjTWjorFmZEGQNZVyrU3TyxdWEr1D/</d:href><d:propstat><d:prop><oc:id>123e4567-e89b-12d3-a456-426655440000!fileid-einstein%2Fmy-folder</oc:id><oc:fileid>123e4567-e89b-12d3-a456-426655440000!fileid-einstein%2Fmy-folder</oc:fileid><d:getetag>&#34;e35fa97883e0481aabf235abb8eb6b1f&#34;</d:getetag><oc:permissions>SDNVCK</oc:permissions><d:resourcetype><d:collection/></d:resourcetype><oc:size>25</oc:size><d:getlastmodified>Tue, 11 Apr 2023 09:56:29 GMT</d:getlastmodified><oc:favorite>0</oc:favorite></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response><d:response><d:href>/remote.php/dav/ocm/eSWNjTWjorFmZEGQNZVyrU3TyxdWEr1D/example.txt</d:href><d:propstat><d:prop><oc:id>123e4567-e89b-12d3-a456-426655440000!fileid-einstein%2Fmy-folder%2Fexample.txt</oc:id><oc:fileid>123e4567-e89b-12d3-a456-426655440000!fileid-einstein%2Fmy-folder%2Fexample.txt</oc:fileid><d:getetag>&#34;bf73fa7d3ebf18b3cff6d64ed25a7de0&#34;</d:getetag><oc:permissions>SDNVW</oc:permissions><d:resourcetype></d:resourcetype><d:getcontentlength>33</d:getcontentlength><d:getcontenttype>text/plain</d:getcontenttype><d:getlastmodified>Tue, 11 Apr 2023 09:56:29 GMT</d:getlastmodified><oc:favorite>0</oc:favorite></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response></d:multistatus>
+```
+
+In particular, reva allows an user to navigate the received shares in a more user-friendly way, exposing the shares under the `/sciencemesh` mount point. The format to access a received share is `/sciencemesh/<share-id>[/<relative-path>]`.
+
+```
+>> ls /sciencemesh/ef05c999-8ae2-41af-ba0d-a886b061011f
+example.txt
+>> stat /sciencemesh/ef05c999-8ae2-41af-ba0d-a886b061011f/example.txt
+type:RESOURCE_TYPE_FILE id:<storage_id:"sciencemesh" opaque_id:"ef05c999-8ae2-41af-ba0d-a886b061011f:/example.txt" > checksum:<> mime_type:"application/octet-stream" mtime:<seconds:1681206685 > path:"/sciencemesh/ef05c999-8ae2-41af-ba0d-a886b061011f/example.txt" permission_set:<get_path:true initiate_file_download:true initiate_file_upload:true list_container:true stat:true > size:13 owner:<idp:"cernbox.cern.ch" opaque_id:"4c510ada-c86b-4815-8820-42cdf82c3d51" type:USER_TYPE_FEDERATED >
+>> download /sciencemesh/ef05c999-8ae2-41af-ba0d-a886b061011f/example.txt /tmp/example.txt
+Downloading from: http://localhost:17011/data/simple/ef05c999-8ae2-41af-ba0d-a886b061011f/example.txt
+ 13 B / 13 B [====================================================================================================================================] 100.00% 0s
+>> Ctrl-D
+# cat /tmp/example.txt
+Example file
+```
+
+As the share was created by Einstein with the editor role, Marie edit the resources contained in the shared folder:
+
+```
+# echo "Modified from Marie" >> /tmp/example.txt
+# ./cmd/reva/reva -host localhost:17000 -insecure
+reva-cli v1.23.0-23-gf13ffef (rev-f13ffef)
+Please use `exit` or `Ctrl-D` to exit this program.
+>> upload -protocol simple /tmp/example.txt /sciencemesh/ef05c999-8ae2-41af-ba0d-a886b061011f/example.txt
+Local file size: 33 bytes
+Data server: http://localhost:17011/data/simple/ef05c999-8ae2-41af-ba0d-a886b061011f/example.txt
+Allowed checksums: [type:RESOURCE_CHECKSUM_TYPE_MD5 priority:100  type:RESOURCE_CHECKSUM_TYPE_UNSET priority:1000 ]
+Checksum selected: RESOURCE_CHECKSUM_TYPE_MD5
+Local XS: RESOURCE_CHECKSUM_TYPE_MD5:b95a504e7103e0ca0e504e6f86dc36b6
+File uploaded: sciencemesh:ef05c999-8ae2-41af-ba0d-a886b061011f:/example.txt 33 /sciencemesh/ef05c999-8ae2-41af-ba0d-a886b061011f/example.txt
 ```

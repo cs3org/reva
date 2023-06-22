@@ -32,9 +32,9 @@ import (
 	utils "github.com/cs3org/reva/pkg/cbox/utils"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/cs3org/reva/pkg/user/manager/registry"
+	"github.com/cs3org/reva/pkg/utils/list"
 	"github.com/gomodule/redigo/redis"
 	"github.com/mitchellh/mapstructure"
-	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 )
 
@@ -134,12 +134,12 @@ func (m *manager) Configure(ml map[string]interface{}) error {
 	// Since we're starting a subroutine which would take some time to execute,
 	// we can't wait to see if it works before returning the user.Manager object
 	// TODO: return err if the fetch fails
-	go m.fetchAllUsers()
+	go m.fetchAllUsers(context.Background())
 	return nil
 }
 
-func (m *manager) fetchAllUsers() {
-	_ = m.fetchAllUserAccounts()
+func (m *manager) fetchAllUsers(ctx context.Context) {
+	_ = m.fetchAllUserAccounts(ctx)
 	ticker := time.NewTicker(time.Duration(m.conf.UserFetchInterval) * time.Second)
 	work := make(chan os.Signal, 1)
 	signal.Notify(work, syscall.SIGHUP, syscall.SIGINT, syscall.SIGQUIT)
@@ -149,79 +149,94 @@ func (m *manager) fetchAllUsers() {
 		case <-work:
 			return
 		case <-ticker.C:
-			_ = m.fetchAllUserAccounts()
+			_ = m.fetchAllUserAccounts(ctx)
 		}
 	}
 }
 
-func (m *manager) fetchAllUserAccounts() error {
-	ctx := context.Background()
-	url := fmt.Sprintf("%s/api/v1.0/Identity?field=upn&field=primaryAccountEmail&field=displayName&field=uid&field=gid&field=type", m.conf.APIBaseURL)
+// Identity contains the information of a single user.
+type Identity struct {
+	PrimaryAccountEmail string `json:"primaryAccountEmail,omitempty"`
+	Type                string `json:"type,omitempty"`
+	Upn                 string `json:"upn"`
+	DisplayName         string `json:"displayName"`
+	Source              string `json:"source,omitempty"`
+	UID                 int    `json:"uid,omitempty"`
+	GID                 int    `json:"gid,omitempty"`
+}
 
-	for url != "" {
-		result, err := m.apiTokenManager.SendAPIGetRequest(ctx, url, false)
-		if err != nil {
+// IdentitiesResponse contains the expected response from grappa
+// when getting the list of users.
+type IdentitiesResponse struct {
+	Pagination struct {
+		Links struct {
+			Next *string `json:"next"`
+		} `json:"links"`
+	} `json:"pagination"`
+	Data []*Identity `json:"data"`
+}
+
+// UserType convert the user type in grappa to CS3APIs.
+func (i *Identity) UserType() userpb.UserType {
+	switch i.Type {
+	case "Application":
+		return userpb.UserType_USER_TYPE_APPLICATION
+	case "Service":
+		return userpb.UserType_USER_TYPE_SERVICE
+	case "Secondary":
+		return userpb.UserType_USER_TYPE_SECONDARY
+	case "Person":
+		if i.Source == "cern" {
+			return userpb.UserType_USER_TYPE_PRIMARY
+		}
+		return userpb.UserType_USER_TYPE_LIGHTWEIGHT
+	default:
+		return userpb.UserType_USER_TYPE_INVALID
+	}
+}
+
+func (m *manager) fetchAllUserAccounts(ctx context.Context) error {
+	url := fmt.Sprintf("%s/api/v1.0/Identity?field=upn&field=primaryAccountEmail&field=displayName&field=uid&field=gid&field=type&field=source", m.conf.APIBaseURL)
+
+	for {
+		var r IdentitiesResponse
+		if err := m.apiTokenManager.SendAPIGetRequest(ctx, url, false, &r); err != nil {
 			return err
 		}
 
-		responseData, ok := result["data"].([]interface{})
-		if !ok {
-			return errors.New("rest: error in type assertion")
-		}
-		for _, usr := range responseData {
-			userData, ok := usr.(map[string]interface{})
-			if !ok {
-				continue
-			}
-
-			_, err = m.parseAndCacheUser(ctx, userData)
-			if err != nil {
+		for _, usr := range r.Data {
+			if _, err := m.parseAndCacheUser(ctx, usr); err != nil {
 				continue
 			}
 		}
 
-		url = ""
-		if pagination, ok := result["pagination"].(map[string]interface{}); ok {
-			if links, ok := pagination["links"].(map[string]interface{}); ok {
-				if next, ok := links["next"].(string); ok {
-					url = fmt.Sprintf("%s%s", m.conf.APIBaseURL, next)
-				}
-			}
+		if r.Pagination.Links.Next == nil {
+			break
 		}
+		url = fmt.Sprintf("%s%s", m.conf.APIBaseURL, *r.Pagination.Links.Next)
 	}
 
 	return nil
 }
 
-func (m *manager) parseAndCacheUser(ctx context.Context, userData map[string]interface{}) (*userpb.User, error) {
-	upn, ok := userData["upn"].(string)
-	if !ok {
-		return nil, errors.New("rest: missing upn in user data")
-	}
-	mail, _ := userData["primaryAccountEmail"].(string)
-	name, _ := userData["displayName"].(string)
-	uidNumber, _ := userData["uid"].(float64)
-	gidNumber, _ := userData["gid"].(float64)
-	t, _ := userData["type"].(string)
-	userType := getUserType(t, upn)
-
-	userID := &userpb.UserId{
-		OpaqueId: upn,
-		Idp:      m.conf.IDProvider,
-		Type:     userType,
-	}
+func (m *manager) parseAndCacheUser(ctx context.Context, i *Identity) (*userpb.User, error) {
 	u := &userpb.User{
-		Id:          userID,
-		Username:    upn,
-		Mail:        mail,
-		DisplayName: name,
-		UidNumber:   int64(uidNumber),
-		GidNumber:   int64(gidNumber),
+		Id: &userpb.UserId{
+			OpaqueId: i.Upn,
+			Idp:      m.conf.IDProvider,
+			Type:     i.UserType(),
+		},
+		Username:    i.Upn,
+		Mail:        i.PrimaryAccountEmail,
+		DisplayName: i.DisplayName,
+		UidNumber:   int64(i.UID),
+		GidNumber:   int64(i.GID),
 	}
 
 	if err := m.cacheUserDetails(u); err != nil {
 		log.Error().Err(err).Msg("rest: error caching user details")
 	}
+
 	return u, nil
 }
 
@@ -309,31 +324,37 @@ func isUserAnyType(user *userpb.User, types []userpb.UserType) bool {
 	return false
 }
 
+// Group contains the information about a group.
+type Group struct {
+	DisplayName string `json:"displayName"`
+}
+
+// GroupsResponse contains the expected response from grappa
+// when getting the list of groups.
+type GroupsResponse struct {
+	Pagination struct {
+		Links struct {
+			Next *string `json:"next"`
+		} `json:"links"`
+	} `json:"pagination"`
+	Data []Group `json:"data"`
+}
+
 func (m *manager) GetUserGroups(ctx context.Context, uid *userpb.UserId) ([]string, error) {
 	groups, err := m.fetchCachedUserGroups(uid)
 	if err == nil {
 		return groups, nil
 	}
 
-	url := fmt.Sprintf("%s/api/v1.0/Identity/%s/groups?recursive=true", m.conf.APIBaseURL, uid.OpaqueId)
-	result, err := m.apiTokenManager.SendAPIGetRequest(ctx, url, false)
-	if err != nil {
+	// TODO (gdelmont): support pagination! we may have problems with users having more than 1000 groups
+	url := fmt.Sprintf("%s/api/v1.0/Identity/%s/groups?field=displayName&recursive=true", m.conf.APIBaseURL, uid.OpaqueId)
+
+	var r GroupsResponse
+	if err := m.apiTokenManager.SendAPIGetRequest(ctx, url, false, &r); err != nil {
 		return nil, err
 	}
 
-	groupData := result["data"].([]interface{})
-	groups = []string{}
-
-	for _, g := range groupData {
-		groupInfo, ok := g.(map[string]interface{})
-		if !ok {
-			return nil, errors.New("rest: error in type assertion")
-		}
-		name, ok := groupInfo["displayName"].(string)
-		if ok {
-			groups = append(groups, name)
-		}
-	}
+	groups = list.Map(r.Data, func(g Group) string { return g.DisplayName })
 
 	if err = m.cacheUserGroups(uid, groups); err != nil {
 		log := appctx.GetLogger(ctx)
@@ -344,6 +365,8 @@ func (m *manager) GetUserGroups(ctx context.Context, uid *userpb.UserId) ([]stri
 }
 
 func (m *manager) IsInGroup(ctx context.Context, uid *userpb.UserId, group string) (bool, error) {
+	// TODO (gdelmont): this can be improved storing the groups a user belong to as a list in redis
+	// and, instead of returning all the groups, use the redis apis to check if the group is in the list.
 	userGroups, err := m.GetUserGroups(ctx, uid)
 	if err != nil {
 		return false, err
@@ -355,28 +378,4 @@ func (m *manager) IsInGroup(ctx context.Context, uid *userpb.UserId, group strin
 		}
 	}
 	return false, nil
-}
-
-func getUserType(userType, upn string) userpb.UserType {
-	var t userpb.UserType
-	switch userType {
-	case "Application":
-		t = userpb.UserType_USER_TYPE_APPLICATION
-	case "Service":
-		t = userpb.UserType_USER_TYPE_SERVICE
-	case "Secondary":
-		t = userpb.UserType_USER_TYPE_SECONDARY
-	case "Person":
-		switch {
-		case strings.HasPrefix(upn, "guest"):
-			t = userpb.UserType_USER_TYPE_LIGHTWEIGHT
-		case strings.Contains(upn, "@"):
-			t = userpb.UserType_USER_TYPE_FEDERATED
-		default:
-			t = userpb.UserType_USER_TYPE_PRIMARY
-		}
-	default:
-		t = userpb.UserType_USER_TYPE_INVALID
-	}
-	return t
 }

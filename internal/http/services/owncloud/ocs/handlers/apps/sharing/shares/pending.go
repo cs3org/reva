@@ -24,6 +24,7 @@ import (
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
+	ocmv1beta1 "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
 	"github.com/cs3org/reva/pkg/appctx"
@@ -36,13 +37,21 @@ import (
 // AcceptReceivedShare handles Post Requests on /apps/files_sharing/api/v1/shares/{shareid}.
 func (h *Handler) AcceptReceivedShare(w http.ResponseWriter, r *http.Request) {
 	shareID := chi.URLParam(r, "shareid")
-	h.updateReceivedShare(w, r, shareID, false)
+	if h.isFederatedReceivedShare(r, shareID) {
+		h.updateReceivedFederatedShare(w, r, shareID, false)
+	} else {
+		h.updateReceivedShare(w, r, shareID, false)
+	}
 }
 
 // RejectReceivedShare handles DELETE Requests on /apps/files_sharing/api/v1/shares/{shareid}.
 func (h *Handler) RejectReceivedShare(w http.ResponseWriter, r *http.Request) {
 	shareID := chi.URLParam(r, "shareid")
-	h.updateReceivedShare(w, r, shareID, true)
+	if h.isFederatedReceivedShare(r, shareID) {
+		h.updateReceivedFederatedShare(w, r, shareID, true)
+	} else {
+		h.updateReceivedShare(w, r, shareID, true)
+	}
 }
 
 func (h *Handler) updateReceivedShare(w http.ResponseWriter, r *http.Request, shareID string, rejectShare bool) {
@@ -107,5 +116,75 @@ func (h *Handler) updateReceivedShare(w http.ResponseWriter, r *http.Request, sh
 		data.Path = path.Join(h.sharePrefix, path.Base(info.Path))
 	}
 
+	response.WriteOCSSuccess(w, r, []*conversions.ShareData{data})
+}
+
+func (h *Handler) updateReceivedFederatedShare(w http.ResponseWriter, r *http.Request, shareID string, rejectShare bool) {
+	ctx := r.Context()
+
+	client, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	if err != nil {
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
+		return
+	}
+
+	share, err := client.GetReceivedOCMShare(ctx, &ocmv1beta1.GetReceivedOCMShareRequest{
+		Ref: &ocmv1beta1.ShareReference{
+			Spec: &ocmv1beta1.ShareReference_Id{
+				Id: &ocmv1beta1.ShareId{
+					OpaqueId: shareID,
+				},
+			},
+		},
+	})
+	if err != nil {
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "grpc update received share request failed", err)
+		return
+	}
+	if share.Status.Code != rpc.Code_CODE_OK {
+		if share.Status.Code == rpc.Code_CODE_NOT_FOUND {
+			response.WriteOCSError(w, r, response.MetaNotFound.StatusCode, "not found", nil)
+			return
+		}
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "grpc update received share request failed", errors.Errorf("code: %d, message: %s", share.Status.Code, share.Status.Message))
+		return
+	}
+
+	req := &ocmv1beta1.UpdateReceivedOCMShareRequest{
+		Share: &ocmv1beta1.ReceivedShare{
+			Id: &ocmv1beta1.ShareId{
+				OpaqueId: shareID,
+			},
+		},
+		UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"state"}},
+	}
+	if rejectShare {
+		req.Share.State = ocmv1beta1.ShareState_SHARE_STATE_REJECTED
+	} else {
+		req.Share.State = ocmv1beta1.ShareState_SHARE_STATE_ACCEPTED
+	}
+
+	updateRes, err := client.UpdateReceivedOCMShare(ctx, req)
+	if err != nil {
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "grpc update received share request failed", err)
+		return
+	}
+
+	if updateRes.Status.Code != rpc.Code_CODE_OK {
+		if updateRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
+			response.WriteOCSError(w, r, response.MetaNotFound.StatusCode, "not found", nil)
+			return
+		}
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "grpc update received share request failed", errors.Errorf("code: %d, message: %s", updateRes.Status.Code, updateRes.Status.Message))
+		return
+	}
+
+	data, err := conversions.ReceivedOCMShare2ShareData(share.Share, h.ocmLocalMount(share.Share))
+	if err != nil {
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "grpc update received share request failed", err)
+		return
+	}
+	h.mapUserIdsReceivedFederatedShare(ctx, client, data)
+	data.State = mapOCMState(req.Share.State)
 	response.WriteOCSSuccess(w, r, []*conversions.ShareData{data})
 }

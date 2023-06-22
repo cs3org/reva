@@ -20,7 +20,6 @@ package utils
 
 import (
 	"fmt"
-	"math/rand"
 	"net"
 	"net/http"
 	"net/url"
@@ -32,6 +31,7 @@ import (
 	"strings"
 	"time"
 
+	appprovider "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -39,6 +39,7 @@ import (
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/registry"
 	"github.com/cs3org/reva/pkg/registry/memory"
+	"go.step.sm/crypto/randutil"
 
 	// gocritic is disabled because google.golang.org/protobuf/proto does not provide a method to convert MessageV1 to MessageV2.
 	"github.com/golang/protobuf/proto" //nolint:staticcheck
@@ -112,13 +113,11 @@ func ResolvePath(path string) (string, error) {
 
 // RandString is a helper to create tokens.
 func RandString(n int) string {
-	rand.Seed(time.Now().UTC().UnixNano())
-	var l = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
-	b := make([]rune, n)
-	for i := range b {
-		b[i] = l[rand.Intn(len(l))]
+	s, err := randutil.Alphanumeric(n)
+	if err != nil {
+		panic(err)
 	}
-	return string(b)
+	return s
 }
 
 // TSToUnixNano converts a protobuf Timestamp to uint64
@@ -358,6 +357,22 @@ func GetViewMode(viewMode string) gateway.OpenInAppRequest_ViewMode {
 	}
 }
 
+// GetAppViewMode converts a human-readable string to an appprovider view mode for opening a resource in an app.
+func GetAppViewMode(viewMode string) appprovider.ViewMode {
+	switch viewMode {
+	case "view":
+		return appprovider.ViewMode_VIEW_MODE_VIEW_ONLY
+	case "read":
+		return appprovider.ViewMode_VIEW_MODE_READ_ONLY
+	case "write":
+		return appprovider.ViewMode_VIEW_MODE_READ_WRITE
+	case "preview":
+		return appprovider.ViewMode_VIEW_MODE_PREVIEW
+	default:
+		return appprovider.ViewMode_VIEW_MODE_INVALID
+	}
+}
+
 // HasPublicShareRole return true if the user has a public share role.
 // If yes, the string is the type of role, viewer, editor or uploader.
 func HasPublicShareRole(u *userpb.User) (string, bool) {
@@ -370,7 +385,19 @@ func HasPublicShareRole(u *userpb.User) (string, bool) {
 	return "", false
 }
 
-// HasPermissions returns true if all permissions defined in the stuict toCheck
+// HasOCMShareRole return true if the user has a ocm share role.
+// If yes, the string is the type of role, viewer, editor or uploader.
+func HasOCMShareRole(u *userpb.User) (string, bool) {
+	if u.Opaque == nil {
+		return "", false
+	}
+	if ocmShare, ok := u.Opaque.Map["ocm-share-role"]; ok {
+		return string(ocmShare.Value), true
+	}
+	return "", false
+}
+
+// HasPermissions returns true if all permissions defined in the struct toCheck
 // are set in the target.
 func HasPermissions(target, toCheck *provider.ResourcePermissions) bool {
 	targetStruct := reflect.ValueOf(target).Elem()
@@ -385,7 +412,7 @@ func HasPermissions(target, toCheck *provider.ResourcePermissions) bool {
 	return true
 }
 
-// UserIsLightweight returns true if the user is a lightweith
+// UserIsLightweight returns true if the user is a lightweight
 // or federated account.
 func UserIsLightweight(u *userpb.User) bool {
 	return u.Id.Type == userpb.UserType_USER_TYPE_FEDERATED ||

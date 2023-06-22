@@ -30,8 +30,11 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
+	ocm "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/mime"
 	"github.com/cs3org/reva/pkg/publicshare"
 	publicsharemgr "github.com/cs3org/reva/pkg/publicshare/manager/registry"
 	"github.com/cs3org/reva/pkg/user"
@@ -146,6 +149,10 @@ type ShareData struct {
 	Quicklink bool `json:"quicklink,omitempty" xml:"quicklink,omitempty"`
 	// Description of the public share
 	Description string `json:"description" xml:"description"`
+	// Whether to notify owner of file uploads to the public share
+	NotifyUploads bool `json:"notify_uploads" xml:"notify_uploads"`
+	// Additional recipients for the file upload to public share notification
+	NotifyUploadsExtraRecipients string `json:"notify_uploads_extra_recipients" xml:"notify_uploads_extra_recipients"`
 }
 
 // ShareeData holds share recipient search results.
@@ -173,6 +180,7 @@ type MatchData struct {
 type MatchValueData struct {
 	ShareType               int    `json:"shareType" xml:"shareType"`
 	ShareWith               string `json:"shareWith" xml:"shareWith"`
+	ShareWithProvider       string `json:"shareWithProvider" xml:"shareWithProvider"`
 	ShareWithAdditionalInfo string `json:"shareWithAdditionalInfo" xml:"shareWithAdditionalInfo"`
 }
 
@@ -210,15 +218,17 @@ func PublicShare2ShareData(share *link.PublicShare, r *http.Request, publicURL s
 	sd := &ShareData{
 		// share.permissions are mapped below
 		// Displaynames are added later
-		ShareType:    ShareTypePublicLink,
-		Token:        share.Token,
-		Name:         share.DisplayName,
-		MailSend:     0,
-		URL:          publicURL + path.Join("/", "s/"+share.Token),
-		UIDOwner:     LocalUserIDToString(share.Creator),
-		UIDFileOwner: LocalUserIDToString(share.Owner),
-		Quicklink:    share.Quicklink,
-		Description:  share.Description,
+		ShareType:                    ShareTypePublicLink,
+		Token:                        share.Token,
+		Name:                         share.DisplayName,
+		MailSend:                     0,
+		URL:                          publicURL + path.Join("/", "s/"+share.Token),
+		UIDOwner:                     LocalUserIDToString(share.Creator),
+		UIDFileOwner:                 LocalUserIDToString(share.Owner),
+		Quicklink:                    share.Quicklink,
+		Description:                  share.Description,
+		NotifyUploads:                share.NotifyUploads,
+		NotifyUploadsExtraRecipients: share.NotifyUploadsExtraRecipients,
 	}
 	if share.Id != nil {
 		sd.ID = share.Id.OpaqueId
@@ -240,6 +250,82 @@ func PublicShare2ShareData(share *link.PublicShare, r *http.Request, publicURL s
 	}
 
 	return sd
+}
+
+func formatRemoteUser(u *userpb.UserId) string {
+	return fmt.Sprintf("%s@%s", u.OpaqueId, u.Idp)
+}
+
+func webdavInfo(protocols []*ocm.Protocol) (*ocm.WebDAVProtocol, bool) {
+	for _, p := range protocols {
+		if opt, ok := p.Term.(*ocm.Protocol_WebdavOptions); ok {
+			return opt.WebdavOptions, true
+		}
+	}
+	return nil, false
+}
+
+// ReceivedOCMShare2ShareData converts a cs3 ocm received share into a share data model.
+func ReceivedOCMShare2ShareData(share *ocm.ReceivedShare, path string) (*ShareData, error) {
+	webdav, ok := webdavInfo(share.Protocols)
+	if !ok {
+		return nil, errtypes.InternalError("webdav endpoint not in share")
+	}
+
+	s := &ShareData{
+		ID:           share.Id.OpaqueId,
+		UIDOwner:     formatRemoteUser(share.Creator),
+		UIDFileOwner: formatRemoteUser(share.Owner),
+		ShareWith:    share.Grantee.GetUserId().OpaqueId,
+		Permissions:  RoleFromResourcePermissions(webdav.Permissions.Permissions).OCSPermissions(),
+		ShareType:    ShareTypeFederatedCloudShare,
+		Path:         path,
+		FileTarget:   path,
+		MimeType:     mime.Detect(share.ResourceType == provider.ResourceType_RESOURCE_TYPE_CONTAINER, share.Name),
+		ItemType:     ResourceType(share.ResourceType).String(),
+		ItemSource:   path,
+		STime:        share.Ctime.Seconds,
+		Name:         share.Name,
+	}
+
+	if share.Expiration != nil {
+		s.Expiration = timestampToExpiration(share.Expiration)
+	}
+	return s, nil
+}
+
+func webdavAMInfo(methods []*ocm.AccessMethod) (*ocm.WebDAVAccessMethod, bool) {
+	for _, a := range methods {
+		if opt, ok := a.Term.(*ocm.AccessMethod_WebdavOptions); ok {
+			return opt.WebdavOptions, true
+		}
+	}
+	return nil, false
+}
+
+// OCMShare2ShareData converts a cs3 ocm share into a share data model.
+func OCMShare2ShareData(share *ocm.Share) (*ShareData, error) {
+	webdav, ok := webdavAMInfo(share.AccessMethods)
+	if !ok {
+		return nil, errtypes.InternalError("webdav endpoint not in share")
+	}
+
+	s := &ShareData{
+		ID:           share.Id.OpaqueId,
+		UIDOwner:     share.Creator.OpaqueId,
+		UIDFileOwner: share.Owner.OpaqueId,
+		ShareWith:    formatRemoteUser(share.Grantee.GetUserId()),
+		Permissions:  RoleFromResourcePermissions(webdav.Permissions).OCSPermissions(),
+		ShareType:    ShareTypeFederatedCloudShare,
+		STime:        share.Ctime.Seconds,
+		Name:         share.Name,
+	}
+
+	if share.Expiration != nil {
+		s.Expiration = timestampToExpiration(share.Expiration)
+	}
+
+	return s, nil
 }
 
 // LocalUserIDToString transforms a cs3api user id into an ocs data model without domain name

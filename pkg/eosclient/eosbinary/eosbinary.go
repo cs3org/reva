@@ -110,6 +110,9 @@ type Options struct {
 
 	// SecProtocol is the comma separated list of security protocols used by xrootd.
 	// For example: "sss, unix"
+	// DEPRECATED
+	// This variable is no longer used. Only sss and unix protocols are possible.
+	// If UseKeytab is set to true the protocol will be set to "sss", else to "unix"
 	SecProtocol string
 
 	// TokenExpiry stores in seconds the time after which generated tokens will expire
@@ -168,8 +171,11 @@ func (c *Client) executeXRDCopy(ctx context.Context, cmdArgs []string) (string, 
 	}
 
 	if c.opt.UseKeytab {
-		cmd.Env = append(cmd.Env, "XrdSecPROTOCOL="+c.opt.SecProtocol)
+		cmd.Env = append(cmd.Env, "XrdSecPROTOCOL=sss")
 		cmd.Env = append(cmd.Env, "XrdSecSSSKT="+c.opt.Keytab)
+	} else { // we are a trusted gateway
+		cmd.Env = append(cmd.Env, "XrdSecPROTOCOL=unix")
+		cmd.Env = append(cmd.Env, "KRB5CCNAME=FILE:/dev/null") // do not try to use krb
 	}
 
 	err := cmd.Run()
@@ -225,9 +231,15 @@ func (c *Client) executeEOS(ctx context.Context, cmdArgs []string, auth eosclien
 	}
 
 	if c.opt.UseKeytab {
-		cmd.Env = append(cmd.Env, "XrdSecPROTOCOL="+c.opt.SecProtocol)
+		cmd.Env = append(cmd.Env, "XrdSecPROTOCOL=sss")
 		cmd.Env = append(cmd.Env, "XrdSecSSSKT="+c.opt.Keytab)
+	} else { // we are a trusted gateway
+		cmd.Env = append(cmd.Env, "XrdSecPROTOCOL=unix")
+		cmd.Env = append(cmd.Env, "KRB5CCNAME=FILE:/dev/null") // do not try to use krb
 	}
+
+	// add application label
+	cmd.Args = append(cmd.Args, "-a", "reva_eosclient::meta")
 
 	cmd.Args = append(cmd.Args, cmdArgs...)
 
@@ -302,6 +314,7 @@ func (c *Client) RemoveACL(ctx context.Context, auth, rootAuth eosclient.Authori
 		return err
 	}
 
+	a.Permissions = ""
 	sysACL := a.CitrineSerialize()
 	args := []string{"acl", "--sys"}
 	if finfo.IsDir {
@@ -407,7 +420,11 @@ func (c *Client) GetFileInfoByPath(ctx context.Context, auth eosclient.Authoriza
 	}
 
 	if c.opt.VersionInvariant && !isVersionFolder(path) && !info.IsDir {
-		if inode, err := c.getVersionFolderInode(ctx, auth, path); err == nil {
+		ownerAuth := eosclient.Authorization{Role: eosclient.Role{
+			UID: strconv.FormatUint(info.UID, 10),
+			GID: strconv.FormatUint(info.GID, 10),
+		}}
+		if inode, err := c.getVersionFolderInode(ctx, auth, ownerAuth, path); err == nil {
 			info.Inode = inode
 		}
 	}
@@ -727,7 +744,7 @@ func (c *Client) Read(ctx context.Context, auth eosclient.Authorization, path st
 	if auth.Token != "" {
 		args[3] += "?authz=" + auth.Token
 	} else if auth.Role.UID != "" && auth.Role.GID != "" {
-		args = append(args, fmt.Sprintf("-OSeos.ruid=%s&eos.rgid=%s", auth.Role.UID, auth.Role.GID))
+		args = append(args, fmt.Sprintf("-OSeos.ruid=%s&eos.rgid=%s&eos.app=reva_eosclient::read", auth.Role.UID, auth.Role.GID))
 	}
 
 	_, _, err := c.executeXRDCopy(ctx, args)
@@ -763,7 +780,7 @@ func (c *Client) WriteFile(ctx context.Context, auth eosclient.Authorization, pa
 	if auth.Token != "" {
 		args[4] += "?authz=" + auth.Token
 	} else if auth.Role.UID != "" && auth.Role.GID != "" {
-		args = append(args, fmt.Sprintf("-ODeos.ruid=%s&eos.rgid=%s", auth.Role.UID, auth.Role.GID))
+		args = append(args, fmt.Sprintf("-ODeos.ruid=%s&eos.rgid=%s&eos.app=reva_eosclient::write", auth.Role.UID, auth.Role.GID))
 	}
 
 	_, _, err := c.executeXRDCopy(ctx, args)
@@ -828,11 +845,11 @@ func (c *Client) GenerateToken(ctx context.Context, auth eosclient.Authorization
 	return strings.TrimSpace(stdout), err
 }
 
-func (c *Client) getVersionFolderInode(ctx context.Context, auth eosclient.Authorization, p string) (uint64, error) {
+func (c *Client) getVersionFolderInode(ctx context.Context, auth, ownerAuth eosclient.Authorization, p string) (uint64, error) {
 	versionFolder := getVersionFolder(p)
 	md, err := c.getRawFileInfoByPath(ctx, auth, versionFolder)
 	if err != nil {
-		if err = c.CreateDir(ctx, auth, versionFolder); err != nil {
+		if err = c.CreateDir(ctx, ownerAuth, versionFolder); err != nil {
 			return 0, err
 		}
 		md, err = c.getRawFileInfoByPath(ctx, auth, versionFolder)
@@ -931,11 +948,15 @@ func getMap(partsBySpace []string) map[string]string {
 }
 
 func (c *Client) parseFind(ctx context.Context, auth eosclient.Authorization, dirPath, raw string) ([]*eosclient.FileInfo, error) {
+	log := appctx.GetLogger(ctx)
+
 	finfos := []*eosclient.FileInfo{}
 	versionFolders := map[string]*eosclient.FileInfo{}
 	rawLines := strings.FieldsFunc(raw, func(c rune) bool {
 		return c == '\n'
 	})
+
+	var ownerAuth *eosclient.Authorization
 
 	var parent *eosclient.FileInfo
 	for _, rl := range rawLines {
@@ -960,6 +981,15 @@ func (c *Client) parseFind(ctx context.Context, auth eosclient.Authorization, di
 			versionFolders[fi.File] = fi
 		}
 
+		if ownerAuth == nil {
+			ownerAuth = &eosclient.Authorization{
+				Role: eosclient.Role{
+					UID: strconv.FormatUint(fi.UID, 10),
+					GID: strconv.FormatUint(fi.GID, 10),
+				},
+			}
+		}
+
 		finfos = append(finfos, fi)
 	}
 
@@ -977,9 +1007,11 @@ func (c *Client) parseFind(ctx context.Context, auth eosclient.Authorization, di
 				for k, v := range vf.Attrs {
 					fi.Attrs[k] = v
 				}
-			} else if err := c.CreateDir(ctx, auth, versionFolderPath); err == nil { // Create the version folder if it doesn't exist
+			} else if err := c.CreateDir(ctx, *ownerAuth, versionFolderPath); err == nil { // Create the version folder if it doesn't exist
 				if md, err := c.getRawFileInfoByPath(ctx, auth, versionFolderPath); err == nil {
 					fi.Inode = md.Inode
+				} else {
+					log.Error().Err(err).Interface("auth", ownerAuth).Str("path", versionFolderPath).Msg("got error creating version folder")
 				}
 			}
 		}
@@ -1158,6 +1190,32 @@ func (c *Client) mapToFileInfo(ctx context.Context, kv, attrs map[string]string,
 		}
 	}
 
+	var ctimesec, ctimenanos uint64
+	if val, ok := kv["ctime"]; ok && val != "" {
+		split := strings.Split(val, ".")
+		ctimesec, err = strconv.ParseUint(split[0], 10, 64)
+		if err != nil {
+			return nil, err
+		}
+		ctimenanos, _ = strconv.ParseUint(split[1], 10, 32)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	var atimesec, atimenanos uint64
+	if val, ok := kv["atime"]; ok && val != "" {
+		split := strings.Split(val, ".")
+		atimesec, err = strconv.ParseUint(split[0], 10, 64)
+		if err != nil {
+			return nil, err
+		}
+		atimenanos, err = strconv.ParseUint(split[1], 10, 32)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	isDir := false
 	var xs *eosclient.Checksum
 	if _, ok := kv["files"]; ok {
@@ -1207,6 +1265,10 @@ func (c *Client) mapToFileInfo(ctx context.Context, kv, attrs map[string]string,
 		TreeSize:   treeSize,
 		MTimeSec:   mtimesec,
 		MTimeNanos: uint32(mtimenanos),
+		CTimeSec:   ctimesec,
+		CTimeNanos: uint32(ctimenanos),
+		ATimeSec:   atimesec,
+		ATimeNanos: uint32(atimenanos),
 		IsDir:      isDir,
 		Instance:   c.opt.URL,
 		SysACL:     sysACL,

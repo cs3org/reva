@@ -52,7 +52,8 @@ func init() {
 // transferClaims are custom claims for a JWT token to be used between the metadata and data gateways.
 type transferClaims struct {
 	jwt.StandardClaims
-	Target string `json:"target"`
+	Target     string `json:"target"`
+	VersionKey string `json:"version_key,omitempty"`
 }
 type config struct {
 	Prefix               string `mapstructure:"prefix"`
@@ -191,6 +192,12 @@ func (s *svc) doHead(w http.ResponseWriter, r *http.Request) {
 	}
 	httpReq.Header = r.Header
 
+	if claims.VersionKey != "" {
+		q := httpReq.URL.Query()
+		q.Add("version_key", claims.VersionKey)
+		httpReq.URL.RawQuery = q.Encode()
+	}
+
 	httpRes, err := httpClient.Do(httpReq)
 	if err != nil {
 		log.Error().Err(err).Msg("error doing HEAD request to data service")
@@ -236,6 +243,12 @@ func (s *svc) doGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpReq.Header = r.Header
+
+	if claims.VersionKey != "" {
+		q := httpReq.URL.Query()
+		q.Add("version_key", claims.VersionKey)
+		httpReq.URL.RawQuery = q.Encode()
+	}
 
 	httpRes, err := httpClient.Do(httpReq)
 	if err != nil {

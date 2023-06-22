@@ -58,7 +58,7 @@ var (
 )
 
 // CreatePublicShare adds a new entry to manager.shares.
-func (m *manager) CreatePublicShare(ctx context.Context, u *user.User, rInfo *provider.ResourceInfo, g *link.Grant, description string, internal bool) (*link.PublicShare, error) {
+func (m *manager) CreatePublicShare(ctx context.Context, u *user.User, rInfo *provider.ResourceInfo, g *link.Grant, description string, internal bool, notifyUploads bool, notifyUploadsExtraRecipients string) (*link.PublicShare, error) {
 	id := &link.PublicShareId{
 		OpaqueId: randString(15),
 	}
@@ -86,18 +86,20 @@ func (m *manager) CreatePublicShare(ctx context.Context, u *user.User, rInfo *pr
 	}
 
 	s := link.PublicShare{
-		Id:                id,
-		Owner:             rInfo.GetOwner(),
-		Creator:           u.Id,
-		ResourceId:        rInfo.Id,
-		Token:             tkn,
-		Permissions:       g.Permissions,
-		Ctime:             createdAt,
-		Mtime:             modifiedAt,
-		PasswordProtected: passwordProtected,
-		Expiration:        g.Expiration,
-		DisplayName:       displayName,
-		Description:       description,
+		Id:                           id,
+		Owner:                        rInfo.GetOwner(),
+		Creator:                      u.Id,
+		ResourceId:                   rInfo.Id,
+		Token:                        tkn,
+		Permissions:                  g.Permissions,
+		Ctime:                        createdAt,
+		Mtime:                        modifiedAt,
+		PasswordProtected:            passwordProtected,
+		Expiration:                   g.Expiration,
+		DisplayName:                  displayName,
+		Description:                  description,
+		NotifyUploads:                notifyUploads,
+		NotifyUploadsExtraRecipients: notifyUploadsExtraRecipients,
 	}
 
 	m.shares.Store(s.Token, &s)

@@ -92,12 +92,14 @@ func (serviceType *ServiceType) Verify() error {
 
 // ServiceEndpoint represents a service endpoint managed by Mentix.
 type ServiceEndpoint struct {
-	Type        *ServiceType
-	Name        string
-	RawURL      string
-	URL         string
-	IsMonitored bool
-	Properties  map[string]string
+	Type           *ServiceType
+	Name           string
+	RawURL         string
+	URL            string
+	IsInProduction bool
+	IsBeta         bool
+	IsMonitored    bool
+	Properties     map[string]string
 }
 
 // InferMissingData infers missing data from other data where possible.

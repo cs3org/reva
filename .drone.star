@@ -1,9 +1,7 @@
 OC_CI_GOLANG = "owncloudci/golang:1.19"
 OC_CI_ALPINE = "owncloudci/alpine:latest"
 OSIXIA_OPEN_LDAP = "osixia/openldap:1.3.0"
-OC_CI_PHP = "owncloudci/php:7.4"
-OC_LITMUS = "owncloud/litmus:latest"
-OC_CS3_API_VALIDATOR = "owncloud/cs3api-validator:0.2.0"
+OC_CI_PHP = "cs3org/behat:latest"
 OC_CI_BAZEL_BUILDIFIER = "owncloudci/bazel-buildifier:latest"
 
 def makeStep():
@@ -11,20 +9,20 @@ def makeStep():
         "name": "build",
         "image": OC_CI_GOLANG,
         "commands": [
-            "make build",
+            "make revad",
         ],
     }
 
-def cloneOc10TestReposStep():
+def cloneApiTestReposStep():
     return {
-        "name": "clone-oC10-test-repos",
+        "name": "clone-api-test-repos",
         "image": OC_CI_ALPINE,
         "commands": [
             "source /drone/src/.drone.env",
             "git clone -b master --depth=1 https://github.com/owncloud/testing.git /drone/src/tmp/testing",
-            "git clone -b $CORE_BRANCH --single-branch --no-tags https://github.com/owncloud/core.git /drone/src/tmp/testrunner",
+            "git clone -b $APITESTS_BRANCH --single-branch --no-tags $APITESTS_REPO_GIT_URL /drone/src/tmp/testrunner",
             "cd /drone/src/tmp/testrunner",
-            "git checkout $CORE_COMMITID",
+            "git checkout $APITESTS_COMMITID",
         ],
     }
 
@@ -64,79 +62,16 @@ def cephService():
 
 # Pipeline definitions
 def main(ctx):
-    # In order to run specific parts only, specify the parts as
-    # ocisIntegrationTests(6, [1, 4])     - this will only run 1st and 4th parts
-    # implemented for: ocisIntegrationTests and s3ngIntegrationTests
     return [
         checkStarlark(),
-        litmusOcisSpacesDav(),
-        virtualViews(),
-    ] + ocisIntegrationTests(6) + s3ngIntegrationTests(12)
+        ocisIntegrationTest(),
+    ] + s3ngIntegrationTests()
 
-def virtualViews():
+def ocisIntegrationTest():
     return {
         "kind": "pipeline",
         "type": "docker",
-        "name": "virtual-views",
-        "platform": {
-            "os": "linux",
-            "arch": "amd64",
-        },
-        "trigger": {
-            "event": {
-                "include": [
-                    "pull_request",
-                    "tag",
-                ],
-            },
-        },
-        "steps": [
-            makeStep(),
-            {
-                "name": "revad-services",
-                "image": OC_CI_GOLANG,
-                "detach": True,
-                "commands": [
-                    "cd /drone/src/tests/oc-integration-tests/drone/",
-                    "/drone/src/cmd/revad/revad -c frontend-global.toml &",
-                    "/drone/src/cmd/revad/revad -c gateway.toml &",
-                    "/drone/src/cmd/revad/revad -c storage-home-ocis.toml &",
-                    "/drone/src/cmd/revad/revad -c storage-local-1.toml &",
-                    "/drone/src/cmd/revad/revad -c storage-local-2.toml &",
-                    "/drone/src/cmd/revad/revad -c users.toml",
-                ],
-            },
-            cloneOc10TestReposStep(),
-            {
-                "name": "oC10APIAcceptanceTestsOcisStorage",
-                "image": OC_CI_PHP,
-                "commands": [
-                    "cd /drone/src",
-                    "composer self-update",
-                    "composer --version",
-                    "make test-acceptance-api",
-                ],
-                "environment": {
-                    "PATH_TO_CORE": "/drone/src/tmp/testrunner",
-                    "TEST_SERVER_URL": "http://revad-services:20180",
-                    "OCIS_REVA_DATA_ROOT": "/drone/src/tmp/reva/data/",
-                    "DELETE_USER_DATA_CMD": "rm -rf /drone/src/tmp/reva/data/nodes/root/* /drone/src/tmp/reva/data/nodes/*-*-*-* /drone/src/tmp/reva/data/blobs/*",
-                    "STORAGE_DRIVER": "OCIS",
-                    "SKELETON_DIR": "/drone/src/tmp/testing/data/apiSkeleton",
-                    "TEST_REVA": "true",
-                    "REGULAR_USER_PASSWORD": "relativity",
-                    "SEND_SCENARIO_LINE_REFERENCES": "true",
-                    "BEHAT_SUITE": "apiVirtualViews",
-                },
-            },
-        ],
-    }
-
-def litmusOcisSpacesDav():
-    return {
-        "kind": "pipeline",
-        "type": "docker",
-        "name": "litmus-owncloud-spaces-dav",
+        "name": "ocis-integration-tests-2",
         "platform": {
             "os": "linux",
             "arch": "amd64",
@@ -159,118 +94,48 @@ def litmusOcisSpacesDav():
                     "cd /drone/src/tests/oc-integration-tests/drone/",
                     "/drone/src/cmd/revad/revad -c frontend.toml &",
                     "/drone/src/cmd/revad/revad -c gateway.toml &",
+                    "/drone/src/cmd/revad/revad -c shares.toml &",
                     "/drone/src/cmd/revad/revad -c storage-home-ocis.toml &",
                     "/drone/src/cmd/revad/revad -c storage-users-ocis.toml &",
-                    "/drone/src/cmd/revad/revad -c permissions-ocis-ci.toml &",
-                    "/drone/src/cmd/revad/revad -c users.toml",
+                    "/drone/src/cmd/revad/revad -c storage-publiclink.toml &",
+                    "/drone/src/cmd/revad/revad -c ldap-users.toml",
                 ],
             },
+            cloneApiTestReposStep(),
             {
-                "name": "sleep-for-revad-start",
-                "image": OC_CI_GOLANG,
+                "name": "APIAcceptanceTestsOcisStorage",
+                "image": OC_CI_PHP,
                 "commands": [
-                    "sleep 5",
+                    "cd /drone/src/tmp/testrunner",
+                    "make test-acceptance-from-core-api",
                 ],
-            },
-            {
-                "name": "litmus-owncloud-spaces-dav",
-                "image": OC_LITMUS,
                 "environment": {
-                    "LITMUS_USERNAME": "einstein",
-                    "LITMUS_PASSWORD": "relativity",
-                    "TESTS": "basic http copymove props",
+                    "TEST_SERVER_URL": "http://revad-services:20080",
+                    "OCIS_REVA_DATA_ROOT": "/drone/src/tmp/reva/data/",
+                    "DELETE_USER_DATA_CMD": "rm -rf /drone/src/tmp/reva/data/nodes/root/* /drone/src/tmp/reva/data/nodes/*-*-*-* /drone/src/tmp/reva/data/blobs/*",
+                    "STORAGE_DRIVER": "OCIS",
+                    "SKELETON_DIR": "/drone/src/tmp/testing/data/apiSkeleton",
+                    "TEST_WITH_LDAP": "true",
+                    "REVA_LDAP_HOSTNAME": "ldap",
+                    "TEST_REVA": "true",
+                    "SEND_SCENARIO_LINE_REFERENCES": "true",
+                    "BEHAT_FILTER_TAGS": "~@provisioning_api-app-required&&~@preview-extension-required&&~@skipOnOcis-OCIS-Storage&&~@personalSpace&&~@skipOnGraph&&~@carddav&&~@skipOnReva&&~@skipOnRevaMaster",
+                    "DIVIDE_INTO_NUM_PARTS": 6,
+                    "RUN_PART": 2,
+                    "EXPECTED_FAILURES_FILE": "/drone/src/tests/acceptance/expected-failures-on-OCIS-storage.md",
                 },
-                "commands": [
-                    # The spaceid is randomly generated during the first login so we need this hack to construct the correct url.
-                    "curl -s -k -u einstein:relativity -I http://revad-services:20080/remote.php/dav/files/einstein",
-                    "export LITMUS_URL=http://revad-services:20080/remote.php/dav/spaces/123e4567-e89b-12d3-a456-426655440000!$(ls /drone/src/tmp/reva/data/spaces/personal/)",
-                    "/usr/local/bin/litmus-wrapper",
-                ],
             },
+        ],
+        "services": [
+            ldapService(),
         ],
     }
 
-def ocisIntegrationTests(parallelRuns, skipExceptParts = []):
+def s3ngIntegrationTests():
+    parallelRuns = 12
     pipelines = []
-    debugPartsEnabled = (len(skipExceptParts) != 0)
     for runPart in range(1, parallelRuns + 1):
-        if debugPartsEnabled and runPart not in skipExceptParts:
-            continue
-
-        pipelines.append(
-            {
-                "kind": "pipeline",
-                "type": "docker",
-                "name": "ocis-integration-tests-%s" % runPart,
-                "platform": {
-                    "os": "linux",
-                    "arch": "amd64",
-                },
-                "trigger": {
-                    "event": {
-                        "include": [
-                            "pull_request",
-                            "tag",
-                        ],
-                    },
-                },
-                "steps": [
-                    makeStep(),
-                    {
-                        "name": "revad-services",
-                        "image": OC_CI_GOLANG,
-                        "detach": True,
-                        "commands": [
-                            "cd /drone/src/tests/oc-integration-tests/drone/",
-                            "/drone/src/cmd/revad/revad -c frontend.toml &",
-                            "/drone/src/cmd/revad/revad -c gateway.toml &",
-                            "/drone/src/cmd/revad/revad -c shares.toml &",
-                            "/drone/src/cmd/revad/revad -c storage-home-ocis.toml &",
-                            "/drone/src/cmd/revad/revad -c storage-users-ocis.toml &",
-                            "/drone/src/cmd/revad/revad -c storage-publiclink.toml &",
-                            "/drone/src/cmd/revad/revad -c ldap-users.toml",
-                        ],
-                    },
-                    cloneOc10TestReposStep(),
-                    {
-                        "name": "oC10APIAcceptanceTestsOcisStorage",
-                        "image": OC_CI_PHP,
-                        "commands": [
-                            "cd /drone/src/tmp/testrunner",
-                            "composer self-update",
-                            "composer --version",
-                            "make test-acceptance-api",
-                        ],
-                        "environment": {
-                            "TEST_SERVER_URL": "http://revad-services:20080",
-                            "OCIS_REVA_DATA_ROOT": "/drone/src/tmp/reva/data/",
-                            "DELETE_USER_DATA_CMD": "rm -rf /drone/src/tmp/reva/data/nodes/root/* /drone/src/tmp/reva/data/nodes/*-*-*-* /drone/src/tmp/reva/data/blobs/*",
-                            "STORAGE_DRIVER": "OCIS",
-                            "SKELETON_DIR": "/drone/src/tmp/testing/data/apiSkeleton",
-                            "TEST_WITH_LDAP": "true",
-                            "REVA_LDAP_HOSTNAME": "ldap",
-                            "TEST_REVA": "true",
-                            "SEND_SCENARIO_LINE_REFERENCES": "true",
-                            "BEHAT_FILTER_TAGS": "~@notToImplementOnOCIS&&~@toImplementOnOCIS&&~comments-app-required&&~@federation-app-required&&~@notifications-app-required&&~systemtags-app-required&&~@provisioning_api-app-required&&~@preview-extension-required&&~@local_storage&&~@skipOnOcis-OCIS-Storage&&~@skipOnOcis&&~@personalSpace&&~@issue-ocis-3023&&~@skipOnGraph&&~@caldav&&~@carddav&&~@skipOnReva",
-                            "DIVIDE_INTO_NUM_PARTS": parallelRuns,
-                            "RUN_PART": runPart,
-                            "EXPECTED_FAILURES_FILE": "/drone/src/tests/acceptance/expected-failures-on-OCIS-storage.md",
-                        },
-                    },
-                ],
-                "services": [
-                    ldapService(),
-                ],
-            },
-        )
-
-    return pipelines
-
-def s3ngIntegrationTests(parallelRuns, skipExceptParts = []):
-    pipelines = []
-    debugPartsEnabled = (len(skipExceptParts) != 0)
-    for runPart in range(1, parallelRuns + 1):
-        if debugPartsEnabled and runPart not in skipExceptParts:
+        if runPart in [9]:
             continue
 
         pipelines.append(
@@ -307,15 +172,13 @@ def s3ngIntegrationTests(parallelRuns, skipExceptParts = []):
                             "/drone/src/cmd/revad/revad -c ldap-users.toml",
                         ],
                     },
-                    cloneOc10TestReposStep(),
+                    cloneApiTestReposStep(),
                     {
-                        "name": "oC10APIAcceptanceTestsS3ngStorage",
+                        "name": "APIAcceptanceTestsS3ngStorage",
                         "image": OC_CI_PHP,
                         "commands": [
                             "cd /drone/src/tmp/testrunner",
-                            "composer self-update",
-                            "composer --version",
-                            "make test-acceptance-api",
+                            "make test-acceptance-from-core-api",
                         ],
                         "environment": {
                             "TEST_SERVER_URL": "http://revad-services:20080",
@@ -327,7 +190,7 @@ def s3ngIntegrationTests(parallelRuns, skipExceptParts = []):
                             "REVA_LDAP_HOSTNAME": "ldap",
                             "TEST_REVA": "true",
                             "SEND_SCENARIO_LINE_REFERENCES": "true",
-                            "BEHAT_FILTER_TAGS": "~@notToImplementOnOCIS&&~@toImplementOnOCIS&&~comments-app-required&&~@federation-app-required&&~@notifications-app-required&&~systemtags-app-required&&~@provisioning_api-app-required&&~@preview-extension-required&&~@local_storage&&~@skipOnOcis-OCIS-Storage&&~@skipOnOcis&&~@personalSpace&&~@issue-ocis-3023&&~&&~@skipOnGraph&&~@caldav&&~@carddav&&~@skipOnReva",
+                            "BEHAT_FILTER_TAGS": "~@provisioning_api-app-required&&~@preview-extension-required&&~@skipOnOcis-OCIS-Storage&&~@personalSpace&&~@skipOnGraph&&~@carddav&&~@skipOnReva&&~@skipOnRevaMaster",
                             "DIVIDE_INTO_NUM_PARTS": parallelRuns,
                             "RUN_PART": runPart,
                             "EXPECTED_FAILURES_FILE": "/drone/src/tests/acceptance/expected-failures-on-S3NG-storage.md",

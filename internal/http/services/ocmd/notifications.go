@@ -19,27 +19,88 @@
 package ocmd
 
 import (
+	"io"
+	"mime"
 	"net/http"
 
+	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
+
+	"github.com/cs3org/reva/internal/http/services/reqres"
 	"github.com/cs3org/reva/pkg/appctx"
-	"github.com/cs3org/reva/pkg/rhttp/router"
+	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 )
 
-type notificationsHandler struct {
+// var validate = validator.New()
+
+type notifHandler struct {
+	gatewayClient gateway.GatewayAPIClient
 }
 
-func (h *notificationsHandler) init(c *Config) {
+func (h *notifHandler) init(c *config) error {
+	var err error
+	h.gatewayClient, err = pool.GetGatewayServiceClient(pool.Endpoint(c.GatewaySvc))
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
-func (h *notificationsHandler) Handler() http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		log := appctx.GetLogger(r.Context())
+// type notificationRequest struct {
+//	NotificationType string `json:"notificationType" validate:"required"`
+//	ResourceType     string `json:"resourceType" validate:"required"`
+//	ProviderId       string `json:"providerId" validate:"required"`
+//	Notification 	 ...	`json:"notification"`
+//}
 
-		var head string
-		head, r.URL.Path = router.ShiftPath(r.URL.Path)
+// Example of payload from Nextcloud:
+// {
+//   "notificationType": <one of "SHARE_ACCEPTED", "SHARE_DECLINED", "REQUEST_RESHARE", "SHARE_UNSHARED", "RESHARE_UNDO", "RESHARE_CHANGE_PERMISSION">,
+//   "resourceType" : "file",
+//   "providerId" : <shareId>,
+//   "notification" : {
+//  	"sharedSecret" : <token>,
+//  	"message" : "human-readable message",
+//  	"shareWith" : <user>,
+// 	"senderId" : <user>,
+//  	"shareType" : <type>
+//   }
+// }
 
-		log.Debug().Str("head", head).Str("tail", r.URL.Path).Msg("http routing")
+// Notifications dispatches any notifications received from remote OCM sites
+// according to the specifications at:
+// https://cs3org.github.io/OCM-API/docs.html?branch=v1.1.0&repo=OCM-API&user=cs3org#/paths/~1notifications/post
+func (h *notifHandler) Notifications(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	log := appctx.GetLogger(ctx)
+	req, err := getNotification(r)
+	if err != nil {
+		reqres.WriteError(w, r, reqres.APIErrorInvalidParameter, err.Error(), nil)
+		return
+	}
 
-		w.WriteHeader(http.StatusOK)
-	})
+	// TODO(lopresti) this is all to be implemented. For now we just log what we got
+	log.Debug().Msgf("Received OCM notification: %+v", req)
+
+	// this is to please Nextcloud
+	w.WriteHeader(http.StatusCreated)
+}
+
+func getNotification(r *http.Request) (string, error) { // (*notificationRequest, error)
+	// var req notificationRequest
+	contentType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	if err == nil && contentType == "application/json" {
+		bytes, _ := io.ReadAll(r.Body)
+		return string(bytes), nil
+		// if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		//	return nil, err
+		//}
+		// } else {
+		//	return nil, errors.New("body request not recognised")
+	}
+	return "", nil
+	// validate the request
+	// if err := validate.Struct(req); err != nil {
+	//	return nil, err
+	//}
+	// return &req, nil
 }

@@ -338,22 +338,24 @@ func (s *svc) handleOpen(w http.ResponseWriter, r *http.Request) {
 
 	fileID := r.Form.Get("file_id")
 
+	var fileRef provider.Reference
 	if fileID == "" {
-		writeError(w, r, appErrorInvalidParameter, "missing file ID", nil)
-		return
+		path := r.Form.Get("path")
+		if path == "" {
+			writeError(w, r, appErrorInvalidParameter, "missing file ID or path", nil)
+			return
+		}
+		fileRef.Path = path
+	} else {
+		resourceID := resourceid.OwnCloudResourceIDUnwrap(fileID)
+		if resourceID == nil {
+			writeError(w, r, appErrorInvalidParameter, "invalid file ID", nil)
+			return
+		}
+		fileRef.ResourceId = resourceID
 	}
 
-	resourceID := resourceid.OwnCloudResourceIDUnwrap(fileID)
-	if resourceID == nil {
-		writeError(w, r, appErrorInvalidParameter, "invalid file ID", nil)
-		return
-	}
-
-	fileRef := &provider.Reference{
-		ResourceId: resourceID,
-	}
-
-	statRes, err := client.Stat(ctx, &provider.StatRequest{Ref: fileRef})
+	statRes, err := client.Stat(ctx, &provider.StatRequest{Ref: &fileRef})
 	if err != nil {
 		writeError(w, r, appErrorServerError, "Internal error accessing the file, please try again later", err)
 		return
@@ -389,7 +391,7 @@ func (s *svc) handleOpen(w http.ResponseWriter, r *http.Request) {
 	}
 
 	openReq := gateway.OpenInAppRequest{
-		Ref:      fileRef,
+		Ref:      &fileRef,
 		ViewMode: viewMode,
 		App:      r.Form.Get("app_name"),
 		Opaque:   &typespb.Opaque{Map: opaqueMap},
@@ -447,19 +449,23 @@ func filterAppsByUserAgent(mimeTypes []*appregistry.MimeTypeInfo, userAgent stri
 }
 
 func resolveViewMode(res *provider.ResourceInfo, vm string) gateway.OpenInAppRequest_ViewMode {
-	if vm != "" {
-		return utils.GetViewMode(vm)
-	}
-
 	var viewMode gateway.OpenInAppRequest_ViewMode
+	if vm != "" {
+		viewMode = utils.GetViewMode(vm)
+	} else {
+		viewMode = gateway.OpenInAppRequest_VIEW_MODE_READ_WRITE
+	}
 	canEdit := res.PermissionSet.InitiateFileUpload
 	canView := res.PermissionSet.InitiateFileDownload
 
 	switch {
 	case canEdit && canView:
-		viewMode = gateway.OpenInAppRequest_VIEW_MODE_READ_WRITE
+		// ok
 	case canView:
-		viewMode = gateway.OpenInAppRequest_VIEW_MODE_READ_ONLY
+		if viewMode == gateway.OpenInAppRequest_VIEW_MODE_READ_WRITE || viewMode == gateway.OpenInAppRequest_VIEW_MODE_PREVIEW {
+			// downgrade to the maximum permitted viewmode
+			viewMode = gateway.OpenInAppRequest_VIEW_MODE_READ_ONLY
+		}
 	default:
 		// no permissions, will return access denied
 		viewMode = gateway.OpenInAppRequest_VIEW_MODE_INVALID

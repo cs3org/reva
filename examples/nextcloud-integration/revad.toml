@@ -7,7 +7,7 @@ address = "0.0.0.0:19000"
 [grpc.services.gateway]
 authregistrysvc = "localhost:19000"
 appprovidersvc = "localhost:19000"
-appregistry = "localhost:19000"
+appregistrysvc = "localhost:19000"
 storageregistrysvc = "localhost:19000"
 preferencessvc = "localhost:19000"
 userprovidersvc = "localhost:19000"
@@ -20,6 +20,29 @@ ocmproviderauthorizersvc = "localhost:19000"
 commit_share_to_storage_grant = false
 datagateway = "http://localhost:19001/data"
 transfer_expires = 6 # give it a moment
+
+[grpc.services.appregistry]
+driver = "static"
+
+[grpc.services.appregistry.drivers.static]
+mime_types = [
+    {"mime_type" = "text/plain", "extension" = "txt", "name" = "Text file", "description" = "Text file", "allow_creation" = true},
+    {"mime_type" = "text/markdown", "extension" = "md", "name" = "Markdown file", "description" = "Markdown file", "allow_creation" = true},
+    {"mime_type" = "application/vnd.oasis.opendocument.text", "extension" = "odt", "name" = "OpenDocument", "description" = "OpenDocument text document", "default_app" = "Collabora", "allow_creation" = true},
+    {"mime_type" = "application/vnd.oasis.opendocument.spreadsheet", "extension" = "ods", "name" = "OpenSpreadsheet", "description" = "OpenDocument spreadsheet document", "default_app" = "Collabora", "allow_creation" = true},
+    {"mime_type" = "application/vnd.oasis.opendocument.presentation", "extension" = "odp", "name" = "OpenPresentation", "description" = "OpenDocument presentation document", "default_app" = "Collabora", "allow_creation" = true},
+    {"mime_type" = "application/vnd.jupyter", "extension" = "ipynb", "name" = "Jupyter Notebook", "description" = "Jupyter Notebook"}
+]
+
+[grpc.services.appprovider]
+driver = "wopi"
+app_provider_url = "localhost:19000"
+
+[grpc.services.appprovider.drivers.wopi]
+iop_secret = "shared-secret-with-wopiserver"
+wopi_url = "http://0.0.0.0:8880/"
+app_name = "Collabora"
+app_url = "https://your-collabora-server.org:9980"
 
 [grpc.services.authregistry]
 driver = "static"
@@ -65,27 +88,6 @@ providers = "/etc/revad/providers.json"
 [grpc.services.publicshareprovider]
 driver = "memory"
 
-[grpc.services.appprovider]
-driver = "wopi"
-custom_mime_types_json = "custom-mime-types-demo.json"
-
-[grpc.services.appprovider.drivers.wopi]
-iop_secret = "hello"
-wopi_url = "http://0.0.0.0:8880/"
-app_name = "Collabora"
-app_url = "https://your-collabora-server.org:9980"
-
-[grpc.services.appregistry]
-driver = "static"
-
-[grpc.services.appregistry.static.rules]
-"text/plain" = "localhost:19000"
-"text/markdown" = "localhost:19000"
-"application/compressed-markdown" = "localhost:19000"
-"application/vnd.oasis.opendocument.text" = "localhost:19000"
-"application/vnd.oasis.opendocument.spreadsheet" = "localhost:19000"
-"application/vnd.oasis.opendocument.presentation" = "localhost:19000"
-
 [grpc.services.storageprovider]
 driver = "nextcloud"
 mount_path = "/home"
@@ -100,7 +102,6 @@ custom_mime_types_json = "custom-mime-types-demo.json"
 endpoint = "http://localhost/apps/sciencemesh/"
 user_layout = "{{.Username}}"
 
-
 [grpc.services.authprovider]
 auth_manager = "nextcloud"
 [grpc.services.authprovider.drivers.nextcloud]
@@ -112,9 +113,9 @@ driver = "nextcloud"
 endpoint = "http://localhost/apps/sciencemesh/"
 
 [http]
-enabled_services = ["ocmd"]
-enabled_middlewares = ["providerauthorizer", "cors"]
 address = "0.0.0.0:19001"
+
+[http.services.appprovider]
 
 [http.services.dataprovider]
 driver = "nextcloud"
@@ -126,7 +127,18 @@ driver = "nextcloud"
 user_layout = "{{.Username}}"
 
 [http.services.ocmd]
-prefix = "ocm"
+
+[http.services.ocmprovider]
+provider = "Reva-Nextcloud"
+endpoint = "http://localhost"
+webdav_root = "/remote.php/dav/ocm"
+enable_webapp = true
+enable_datatx = true
+
+[http.services.sciencemesh]
+mesh_directory_url = 'https://sciencemesh.cesnet.cz/iop/meshdir'
+provider_domain = 'your-domain.org'
+ocm_mount_point = '/sciencemesh'
 
 [http.middlewares.providerauthorizer]
 driver = "json"

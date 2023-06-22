@@ -21,6 +21,7 @@ package ocdav
 import (
 	"context"
 	"net/http"
+	"net/url"
 	"path"
 	"strings"
 
@@ -47,6 +48,7 @@ type DavHandler struct {
 	SpacesHandler       *SpacesHandler
 	PublicFolderHandler *WebDavHandler
 	PublicFileHandler   *PublicFileHandler
+	OCMSharesHandler    *WebDavHandler
 }
 
 func (h *DavHandler) init(c *Config) error {
@@ -80,6 +82,11 @@ func (h *DavHandler) init(c *Config) error {
 
 	h.PublicFileHandler = new(PublicFileHandler)
 	if err := h.PublicFileHandler.init("public"); err != nil { // jail public file requests to /public/ prefix
+		return err
+	}
+
+	h.OCMSharesHandler = new(WebDavHandler)
+	if err := h.OCMSharesHandler.init(c.OCMNamespace, false); err != nil {
 		return err
 	}
 
@@ -171,6 +178,61 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 			ctx := context.WithValue(ctx, ctxKeyBaseURI, base)
 			r = r.WithContext(ctx)
 			h.SpacesHandler.Handler(s).ServeHTTP(w, r)
+		case "ocm":
+			base := path.Join(ctx.Value(ctxKeyBaseURI).(string), "ocm")
+			ctx := context.WithValue(ctx, ctxKeyBaseURI, base)
+
+			c, err := pool.GetGatewayServiceClient(pool.Endpoint(s.c.GatewaySvc))
+			if err != nil {
+				w.WriteHeader(http.StatusNotFound)
+				return
+			}
+
+			// OC10 and Nextcloud (OCM 1.0) are using basic auth for carrying the
+			// shared token.
+			var token string
+			username, _, ok := r.BasicAuth()
+			if ok {
+				// OCM 1.0
+				token = username
+				r.URL.Path, _ = url.JoinPath("/", token, r.URL.Path)
+				ctx = context.WithValue(ctx, ctxOCM10, true)
+			} else {
+				token, _ = router.ShiftPath(r.URL.Path)
+				ctx = context.WithValue(ctx, ctxOCM10, false)
+			}
+
+			authRes, err := handleOCMAuth(ctx, c, token)
+			switch {
+			case err != nil:
+				log.Error().Err(err).Msg("error during ocm authentication")
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			case authRes.Status.Code == rpc.Code_CODE_PERMISSION_DENIED:
+				log.Debug().Str("token", token).Msg("permission denied")
+				fallthrough
+			case authRes.Status.Code == rpc.Code_CODE_UNAUTHENTICATED:
+				log.Debug().Str("token", token).Msg("unauthorized")
+				w.WriteHeader(http.StatusUnauthorized)
+				return
+			case authRes.Status.Code == rpc.Code_CODE_NOT_FOUND:
+				log.Debug().Str("token", token).Msg("not found")
+				w.WriteHeader(http.StatusNotFound)
+				return
+			case authRes.Status.Code != rpc.Code_CODE_OK:
+				log.Error().Str("token", token).Interface("status", authRes.Status).Msg("grpc auth request failed")
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+
+			ctx = ctxpkg.ContextSetToken(ctx, authRes.Token)
+			ctx = ctxpkg.ContextSetUser(ctx, authRes.User)
+			ctx = metadata.AppendToOutgoingContext(ctx, ctxpkg.TokenHeader, authRes.Token)
+
+			log.Debug().Str("token", token).Interface("user", authRes.User).Msg("OCM user authenticated")
+
+			r = r.WithContext(ctx)
+			h.OCMSharesHandler.Handler(s).ServeHTTP(w, r)
 		case "public-files":
 			base := path.Join(ctx.Value(ctxKeyBaseURI).(string), "public-files")
 			ctx = context.WithValue(ctx, ctxKeyBaseURI, base)
@@ -283,4 +345,11 @@ func handleSignatureAuth(ctx context.Context, c gatewayv1beta1.GatewayAPIClient,
 	}
 
 	return c.Authenticate(ctx, &authenticateRequest)
+}
+
+func handleOCMAuth(ctx context.Context, c gatewayv1beta1.GatewayAPIClient, token string) (*gatewayv1beta1.AuthenticateResponse, error) {
+	return c.Authenticate(ctx, &gatewayv1beta1.AuthenticateRequest{
+		Type:     "ocmshares",
+		ClientId: token,
+	})
 }

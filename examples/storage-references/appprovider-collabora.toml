@@ -1,0 +1,19 @@
+[shared]
+gatewaysvc = "localhost:your-revad-gateway-port"
+
+[grpc]
+address = "0.0.0.0:12346"
+
+[grpc.services.appprovider]
+driver = "wopi"
+mime_types = ["application/vnd.oasis.opendocument.text", "application/vnd.oasis.opendocument.spreadsheet", "application/vnd.oasis.opendocument.presentation"]
+app_provider_url = "localhost:12346"
+language = "en-GB"
+
+[grpc.services.appprovider.drivers.wopi]
+iop_secret = "hello"
+wopi_url = "http://0.0.0.0:8880/"
+app_name = "Collabora"
+app_url = "https://your-collabora-server.org:9980"
+app_int_url = "https://your-collabora-server.org:9980"
+folder_base_url = "https://your-reva-frontend.org"

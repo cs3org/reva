@@ -26,24 +26,31 @@ import (
 	"mime"
 	"net/http"
 	"path"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"text/template"
 	"time"
 
 	"github.com/ReneKroon/ttlcache/v2"
+	providerv1beta1 "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	link "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
+	ocmv1beta1 "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocdav"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/config"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
 	"github.com/cs3org/reva/pkg/appctx"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
+	"github.com/cs3org/reva/pkg/notification"
+	"github.com/cs3org/reva/pkg/notification/notificationhelper"
+	"github.com/cs3org/reva/pkg/notification/trigger"
 	"github.com/cs3org/reva/pkg/publicshare"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/share"
@@ -68,10 +75,14 @@ type Handler struct {
 	publicURL              string
 	sharePrefix            string
 	homeNamespace          string
+	ocmMountPoint          string
 	additionalInfoTemplate *template.Template
 	userIdentifierCache    *ttlcache.Cache
 	resourceInfoCache      cache.ResourceInfoCache
 	resourceInfoCacheTTL   time.Duration
+	listOCMShares          bool
+	notificationHelper     *notificationhelper.NotificationHelper
+	Log                    *zerolog.Logger
 }
 
 // we only cache the minimal set of data instead of the full user metadata.
@@ -96,13 +107,16 @@ func getCacheManager(c *config.Config) (cache.ResourceInfoCache, error) {
 }
 
 // Init initializes this and any contained handlers.
-func (h *Handler) Init(c *config.Config) {
+func (h *Handler) Init(c *config.Config, l *zerolog.Logger) {
 	h.gatewayAddr = c.GatewaySvc
 	h.storageRegistryAddr = c.StorageregistrySvc
 	h.publicURL = c.Config.Host
 	h.sharePrefix = c.SharePrefix
 	h.homeNamespace = c.HomeNamespace
-
+	h.ocmMountPoint = c.OCMMountPoint
+	h.listOCMShares = c.ListOCMShares
+	h.Log = l
+	h.notificationHelper = notificationhelper.New("ocs", c.Notifications, l)
 	h.additionalInfoTemplate, _ = template.New("additionalInfo").Parse(c.AdditionalInfoAttribute)
 	h.resourceInfoCacheTTL = time.Second * time.Duration(c.ResourceInfoCacheTTL)
 
@@ -228,6 +242,125 @@ func (h *Handler) CreateShare(w http.ResponseWriter, r *http.Request) {
 	default:
 		response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "unknown share type", nil)
 	}
+}
+
+// NotifyShare handles GET requests on /apps/files_sharing/api/v1/shares/(shareid)/notify.
+func (h *Handler) NotifyShare(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	opaqueID := chi.URLParam(r, "shareid")
+
+	c, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	if err != nil {
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
+		return
+	}
+
+	shareRes, err := c.GetShare(ctx, &collaboration.GetShareRequest{
+		Ref: &collaboration.ShareReference{
+			Spec: &collaboration.ShareReference_Id{
+				Id: &collaboration.ShareId{
+					OpaqueId: opaqueID,
+				},
+			},
+		},
+	})
+	if err != nil || shareRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
+		h.Log.Error().Err(err).Msg("error getting share")
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting share", err)
+		return
+	}
+
+	granter, ok := ctxpkg.ContextGetUser(ctx)
+	if !ok {
+		h.Log.Error().Err(err).Msgf("error getting granter data")
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting granter data", err)
+	}
+
+	resourceID := shareRes.Share.ResourceId
+	statInfo, status, err := h.getResourceInfoByID(ctx, c, resourceID)
+	if err != nil || status.Code != rpc.Code_CODE_OK {
+		h.Log.Error().Err(err).Msg("error mapping share data")
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error mapping share data", err)
+		return
+	}
+
+	var recipient string
+
+	granteeType := shareRes.Share.Grantee.Type
+	if granteeType == provider.GranteeType_GRANTEE_TYPE_USER {
+		granteeID := shareRes.Share.Grantee.GetUserId().OpaqueId
+		granteeRes, err := c.GetUserByClaim(ctx, &userpb.GetUserByClaimRequest{
+			Claim:                  "username",
+			Value:                  granteeID,
+			SkipFetchingUserGroups: true,
+		})
+		if err != nil {
+			response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grantee data", err)
+			return
+		}
+
+		recipient = h.SendShareNotification(opaqueID, granter, granteeRes.User, statInfo)
+	} else if granteeType == provider.GranteeType_GRANTEE_TYPE_GROUP {
+		granteeID := shareRes.Share.Grantee.GetGroupId().OpaqueId
+		granteeRes, err := c.GetGroupByClaim(ctx, &grouppb.GetGroupByClaimRequest{
+			Claim:               "group_name",
+			Value:               granteeID,
+			SkipFetchingMembers: true,
+		})
+		if err != nil {
+			response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grantee data", err)
+			return
+		}
+
+		recipient = h.SendShareNotification(opaqueID, granter, granteeRes.Group, statInfo)
+	}
+
+	w.WriteHeader(http.StatusOK)
+	w.Header().Add("Content-Type", "application/json")
+	rb, _ := json.Marshal(map[string]interface{}{"recipients": []string{recipient}})
+	_, err = w.Write(rb)
+	if err != nil {
+		h.Log.Error().Err(err).Msg("error writing response")
+	}
+}
+
+// SendShareNotification sends a notification with information from a Share.
+func (h *Handler) SendShareNotification(opaqueID string, granter *userpb.User, grantee interface{}, statInfo *provider.ResourceInfo) string {
+	var granteeDisplayName, granteeName, recipient string
+	isGranteeGroup := false
+
+	if u, ok := grantee.(*userpb.User); ok {
+		granteeDisplayName = u.DisplayName
+		granteeName = u.Username
+		recipient = u.Mail
+	} else if g, ok := grantee.(*grouppb.Group); ok {
+		granteeDisplayName = g.DisplayName
+		granteeName = g.GroupName
+		recipient = g.Mail
+		isGranteeGroup = true
+	}
+
+	h.notificationHelper.TriggerNotification(&trigger.Trigger{
+		Notification: &notification.Notification{
+			TemplateName: "share-create-mail",
+			Ref:          opaqueID,
+			Recipients:   []string{recipient},
+		},
+		Ref: opaqueID,
+		TemplateData: map[string]interface{}{
+			"granteeDisplayName": granteeDisplayName,
+			"granteeUserName":    granteeName,
+			"granterDisplayName": granter.DisplayName,
+			"granterUserName":    granter.Username,
+			"path":               statInfo.Path,
+			"isFolder":           statInfo.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER,
+			"isGranteeGroup":     isGranteeGroup,
+			"base":               filepath.Base(statInfo.Path),
+		},
+	})
+	h.Log.Debug().Msgf("notification trigger %s created", opaqueID)
+
+	return recipient
 }
 
 func (h *Handler) extractPermissions(w http.ResponseWriter, r *http.Request, ri *provider.ResourceInfo, defaultPermissions *conversions.Role) (*conversions.Role, []byte, error) {
@@ -416,6 +549,10 @@ func (h *Handler) UpdateShare(w http.ResponseWriter, r *http.Request) {
 		h.updatePublicShare(w, r, shareID)
 		return
 	}
+	if h.isFederatedShare(r, shareID) {
+		h.updateFederatedShare(w, r, shareID)
+		return
+	}
 	h.updateShare(w, r, shareID) // TODO PUT is used with incomplete data to update a share}
 }
 
@@ -515,6 +652,89 @@ func (h *Handler) updateShare(w http.ResponseWriter, r *http.Request, shareID st
 	response.WriteOCSSuccess(w, r, share)
 }
 
+func permissionsToViewMode(pint int) providerv1beta1.ViewMode {
+	if pint == 15 {
+		return providerv1beta1.ViewMode_VIEW_MODE_READ_WRITE
+	}
+	return providerv1beta1.ViewMode_VIEW_MODE_READ_ONLY
+}
+
+func (h *Handler) updateFederatedShare(w http.ResponseWriter, r *http.Request, shareID string) {
+	ctx := r.Context()
+
+	pval := r.FormValue("permissions")
+	if pval == "" {
+		response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "permissions missing", nil)
+		return
+	}
+
+	pint, err := strconv.Atoi(pval)
+	if err != nil {
+		response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "permissions must be an integer", nil)
+		return
+	}
+	permissions, err := conversions.NewPermissions(pint)
+	if err != nil {
+		response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, err.Error(), nil)
+		return
+	}
+
+	client, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	if err != nil {
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
+		return
+	}
+
+	updateRes, err := client.UpdateOCMShare(ctx, &ocmv1beta1.UpdateOCMShareRequest{
+		Ref: &ocmv1beta1.ShareReference{
+			Spec: &ocmv1beta1.ShareReference_Id{
+				Id: &ocmv1beta1.ShareId{
+					OpaqueId: shareID,
+				},
+			},
+		},
+		Field: []*ocmv1beta1.UpdateOCMShareRequest_UpdateField{
+			{
+				Field: &ocmv1beta1.UpdateOCMShareRequest_UpdateField_AccessMethods{
+					AccessMethods: &ocmv1beta1.AccessMethod{
+						Term: &ocmv1beta1.AccessMethod_WebdavOptions{
+							WebdavOptions: &ocmv1beta1.WebDAVAccessMethod{
+								Permissions: conversions.RoleFromOCSPermissions(permissions).CS3ResourcePermissions(),
+							},
+						},
+					},
+				},
+			},
+			{
+				Field: &ocmv1beta1.UpdateOCMShareRequest_UpdateField_AccessMethods{
+					AccessMethods: &ocmv1beta1.AccessMethod{
+						Term: &ocmv1beta1.AccessMethod_WebappOptions{
+							WebappOptions: &ocmv1beta1.WebappAccessMethod{
+								ViewMode: permissionsToViewMode(pint),
+							},
+						},
+					},
+				},
+			},
+		},
+	})
+	if err != nil {
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error sending a grpc update share request", err)
+		return
+	}
+
+	if updateRes.Status.Code != rpc.Code_CODE_OK {
+		if updateRes.Status.Code == rpc.Code_CODE_NOT_FOUND {
+			response.WriteOCSError(w, r, response.MetaNotFound.StatusCode, "not found", nil)
+			return
+		}
+		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "grpc update share request failed", err)
+		return
+	}
+
+	response.WriteOCSSuccess(w, r, []*conversions.ShareData{})
+}
+
 // RemoveShare handles DELETE requests on /apps/files_sharing/api/v1/shares/(shareid).
 func (h *Handler) RemoveShare(w http.ResponseWriter, r *http.Request) {
 	shareID := chi.URLParam(r, "shareid")
@@ -523,6 +743,8 @@ func (h *Handler) RemoveShare(w http.ResponseWriter, r *http.Request) {
 		h.removePublicShare(w, r, shareID)
 	case h.isUserShare(r, shareID):
 		h.removeUserShare(w, r, shareID)
+	case h.isFederatedShare(r, shareID):
+		h.removeFederatedShare(w, r, shareID)
 	default:
 		// The request is a remove space member request.
 		h.removeSpaceMember(w, r, shareID)
@@ -554,7 +776,8 @@ const (
 
 func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 	// which pending state to list
-	stateFilter := getStateFilter(r.FormValue("state"))
+	state := r.FormValue("state")
+	stateFilter := getStateFilter(state)
 
 	log := appctx.GetLogger(r.Context())
 	client, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
@@ -736,6 +959,18 @@ func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
 
 		shares = append(shares, data)
 		log.Debug().Msgf("share: %+v", *data)
+	}
+
+	if h.listOCMShares {
+		// include ocm shares in the response
+		stateFilter := getOCMStateFilter(state)
+		lst, err := h.listReceivedFederatedShares(ctx, client, stateFilter)
+		if err != nil {
+			log.Err(err).Msg("error listing received ocm shares")
+			response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error listing received ocm shares", err)
+			return
+		}
+		shares = append(shares, lst...)
 	}
 
 	response.WriteOCSSuccess(w, r, shares)
@@ -1088,33 +1323,34 @@ func (h *Handler) getResourceInfo(ctx context.Context, client gateway.GatewayAPI
 	return pinfo, status, nil
 }
 
-func (h *Handler) createCs3Share(ctx context.Context, w http.ResponseWriter, r *http.Request, client gateway.GatewayAPIClient, req *collaboration.CreateShareRequest, info *provider.ResourceInfo) {
+func (h *Handler) createCs3Share(ctx context.Context, w http.ResponseWriter, r *http.Request, client gateway.GatewayAPIClient, req *collaboration.CreateShareRequest, info *provider.ResourceInfo) (*collaboration.ShareId, bool) {
 	createShareResponse, err := client.CreateShare(ctx, req)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error sending a grpc create share request", err)
-		return
+		return nil, false
 	}
 	if createShareResponse.Status.Code != rpc.Code_CODE_OK {
 		if createShareResponse.Status.Code == rpc.Code_CODE_NOT_FOUND {
 			response.WriteOCSError(w, r, response.MetaNotFound.StatusCode, "not found", nil)
-			return
+			return nil, false
 		}
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "grpc create share request failed", err)
-		return
+		return nil, false
 	}
 	s, err := conversions.CS3Share2ShareData(ctx, createShareResponse.Share)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error mapping share data", err)
-		return
+		return nil, false
 	}
 	err = h.addFileInfo(ctx, s, info)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error adding fileinfo to share", err)
-		return
+		return nil, false
 	}
 	h.mapUserIds(ctx, client, s)
 
 	response.WriteOCSSuccess(w, r, s)
+	return createShareResponse.Share.Id, true
 }
 
 func mapState(state collaboration.ShareState) int {
@@ -1132,6 +1368,19 @@ func mapState(state collaboration.ShareState) int {
 	return mapped
 }
 
+func mapOCMState(state ocmv1beta1.ShareState) int {
+	switch state {
+	case ocmv1beta1.ShareState_SHARE_STATE_PENDING:
+		return ocsStatePending
+	case ocmv1beta1.ShareState_SHARE_STATE_ACCEPTED:
+		return ocsStateAccepted
+	case ocmv1beta1.ShareState_SHARE_STATE_REJECTED:
+		return ocsStateRejected
+	default:
+		return ocsStateUnknown
+	}
+}
+
 func getStateFilter(s string) collaboration.ShareState {
 	var stateFilter collaboration.ShareState
 	switch s {
@@ -1147,4 +1396,19 @@ func getStateFilter(s string) collaboration.ShareState {
 		stateFilter = collaboration.ShareState_SHARE_STATE_ACCEPTED
 	}
 	return stateFilter
+}
+
+func getOCMStateFilter(s string) ocmv1beta1.ShareState {
+	switch s {
+	case "all":
+		return ocsStateUnknown // no filter
+	case "0": // accepted
+		return ocmv1beta1.ShareState_SHARE_STATE_ACCEPTED
+	case "1": // pending
+		return ocmv1beta1.ShareState_SHARE_STATE_PENDING
+	case "2": // rejected
+		return ocmv1beta1.ShareState_SHARE_STATE_REJECTED
+	default:
+		return ocmv1beta1.ShareState_SHARE_STATE_ACCEPTED
+	}
 }

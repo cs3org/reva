@@ -33,6 +33,7 @@ import (
 	"github.com/cs3org/reva/pkg/registry/memory"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rhttp"
+	"github.com/cs3org/reva/pkg/rserverless"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	rtrace "github.com/cs3org/reva/pkg/trace"
 	"github.com/cs3org/reva/pkg/utils"
@@ -93,13 +94,23 @@ func run(mainConf map[string]interface{}, coreConf *coreConf, logger *zerolog.Lo
 	initCPUCount(coreConf, logger)
 
 	servers := initServers(mainConf, logger)
+	serverless := initServerless(mainConf, logger)
+
+	if len(servers) == 0 && serverless == nil {
+		logger.Info().Msg("nothing to do, no grpc/http/serverless enabled_services declared in config")
+		os.Exit(1)
+	}
+
 	watcher, err := initWatcher(logger, filename)
 	if err != nil {
 		log.Panic(err)
 	}
 	listeners := initListeners(watcher, servers, logger)
+	if serverless != nil {
+		watcher.SL = serverless
+	}
 
-	start(mainConf, servers, listeners, logger, watcher)
+	start(mainConf, servers, serverless, listeners, logger, watcher)
 }
 
 func initListeners(watcher *grace.Watcher, servers map[string]grace.Server, log *zerolog.Logger) map[string]net.Listener {
@@ -141,11 +152,20 @@ func initServers(mainConf map[string]interface{}, log *zerolog.Logger) map[strin
 		servers["grpc"] = s
 	}
 
-	if len(servers) == 0 {
-		log.Info().Msg("nothing to do, no grpc/http enabled_services declared in config")
-		os.Exit(1)
-	}
 	return servers
+}
+
+func initServerless(mainConf map[string]interface{}, log *zerolog.Logger) *rserverless.Serverless {
+	if isEnabledServerless(mainConf) {
+		serverless, err := getServerless(mainConf["serverless"], log)
+		if err != nil {
+			log.Error().Err(err).Msg("error")
+			os.Exit(1)
+		}
+		return serverless
+	}
+
+	return nil
 }
 
 func initTracing(conf *coreConf) {
@@ -184,7 +204,7 @@ func handlePIDFlag(l *zerolog.Logger, pidFile string) (*grace.Watcher, error) {
 	return w, nil
 }
 
-func start(mainConf map[string]interface{}, servers map[string]grace.Server, listeners map[string]net.Listener, log *zerolog.Logger, watcher *grace.Watcher) {
+func start(mainConf map[string]interface{}, servers map[string]grace.Server, serverless *rserverless.Serverless, listeners map[string]net.Listener, log *zerolog.Logger, watcher *grace.Watcher) {
 	if isEnabledHTTP(mainConf) {
 		go func() {
 			if err := servers["http"].(*rhttp.Server).Start(listeners["http"]); err != nil {
@@ -201,6 +221,13 @@ func start(mainConf map[string]interface{}, servers map[string]grace.Server, lis
 			}
 		}()
 	}
+	if isEnabledServerless(mainConf) {
+		if err := serverless.Start(); err != nil {
+			log.Error().Err(err).Msg("error starting serverless services")
+			watcher.Exit(1)
+		}
+	}
+
 	watcher.TrapSignals()
 }
 
@@ -262,6 +289,11 @@ func getHTTPServer(conf interface{}, l *zerolog.Logger) (*rhttp.Server, error) {
 		return nil, err
 	}
 	return s, nil
+}
+
+func getServerless(conf interface{}, l *zerolog.Logger) (*rserverless.Serverless, error) {
+	sub := l.With().Str("pkg", "rserverless").Logger()
+	return rserverless.New(conf, sub)
 }
 
 //	adjustCPU parses string cpu and sets GOMAXPROCS
@@ -363,6 +395,10 @@ func isEnabledHTTP(conf map[string]interface{}) bool {
 
 func isEnabledGRPC(conf map[string]interface{}) bool {
 	return isEnabled("grpc", conf)
+}
+
+func isEnabledServerless(conf map[string]interface{}) bool {
+	return isEnabled("serverless", conf)
 }
 
 func isEnabled(key string, conf map[string]interface{}) bool {
