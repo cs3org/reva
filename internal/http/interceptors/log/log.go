@@ -55,7 +55,7 @@ func (h loggingHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	logger := makeLogger(w)
 	url := *req.URL
 	h.handler.ServeHTTP(logger, req)
-	writeLog(log, req, url, t, logger.Status(), logger.Size())
+	writeLog(log, req, url, t, logger.Status(), logger.Size(), logger.Header())
 }
 
 func makeLogger(w http.ResponseWriter) loggingResponseWriter {
@@ -70,7 +70,7 @@ func makeLogger(w http.ResponseWriter) loggingResponseWriter {
 	return logger
 }
 
-func writeLog(log *zerolog.Logger, req *http.Request, url url.URL, ts time.Time, status, size int) {
+func writeLog(log *zerolog.Logger, req *http.Request, url url.URL, ts time.Time, status, size int, resHeaders http.Header) {
 	end := time.Now()
 	host, _, err := net.SplitHostPort(req.RemoteAddr)
 
@@ -79,8 +79,6 @@ func writeLog(log *zerolog.Logger, req *http.Request, url url.URL, ts time.Time,
 	}
 
 	uri := req.RequestURI
-	u := req.URL.String()
-
 	if req.ProtoMajor == 2 && req.Method == "CONNECT" {
 		uri = req.Host
 	}
@@ -93,16 +91,18 @@ func writeLog(log *zerolog.Logger, req *http.Request, url url.URL, ts time.Time,
 	var event *zerolog.Event
 	switch {
 	case status < 400:
-		event = log.Debug()
+		event = log.Info()
 	case status < 500:
 		event = log.Warn()
 	default:
 		event = log.Error()
 	}
+	event.Str("host", host).Str("method", req.Method).Str("uri", uri).Int("status", status).
+		Msg("processed http request")
 
-	event.Str("host", host).Str("method", req.Method).
-		Str("uri", uri).Str("url", u).Str("proto", req.Proto).Int("status", status).
-		Int("size", size).
+	log.Trace().Str("host", host).Str("method", req.Method).
+		Str("uri", uri).Str("proto", req.Proto).Interface("req_headers", req.Header).
+		Int("status", status).Int("size", size).Interface("res_headers", resHeaders).
 		Str("start", ts.Format("02/Jan/2006:15:04:05 -0700")).
 		Str("end", end.Format("02/Jan/2006:15:04:05 -0700")).Int("time_ns", int(diff)).
 		Msg("http")
