@@ -427,10 +427,11 @@ func TestCreateTar(t *testing.T) {
 
 			var tarFile bytes.Buffer
 
-			err = arch.CreateTar(ctx, io.Writer(&tarFile))
+			cl, err := arch.CreateTar(ctx, &tarFile)
 			if err != tt.err {
 				t.Fatalf("error result different from expected: got=%v, expected=%v", err, tt.err)
 			}
+			cl()
 
 			tarTmpDir, cleanup, err := test.TmpDir()
 			if err != nil {
@@ -875,10 +876,11 @@ func TestCreateZip(t *testing.T) {
 
 			var zipFile bytes.Buffer
 
-			err = arch.CreateZip(ctx, io.Writer(&zipFile))
+			cl, err := arch.CreateZip(ctx, &zipFile)
 			if err != tt.err {
 				t.Fatalf("error result different from expected: got=%v, expected=%v", err, tt.err)
 			}
+			cl()
 
 			if tt.expected != nil {
 				zipTmpDir, cleanup, err := test.TmpDir()
