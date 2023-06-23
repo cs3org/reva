@@ -32,11 +32,14 @@ import (
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	rstatus "github.com/cs3org/reva/v2/pkg/rgrpc/status"
 	"github.com/cs3org/reva/v2/pkg/utils"
+	"go.opentelemetry.io/otel/trace"
 )
 
 func (s *svc) handlePathDelete(w http.ResponseWriter, r *http.Request, ns string) (status int, err error) {
-	ctx := r.Context()
-	ctx, span := appctx.GetTracerProvider(r.Context()).Tracer(tracerName).Start(ctx, "path_delete")
+	spanOpts := []trace.SpanStartOption{
+		trace.WithSpanKind(trace.SpanKindServer),
+	}
+	ctx, span := appctx.GetTracerProvider(r.Context()).Tracer(tracerName).Start(r.Context(), "path_delete", spanOpts...)
 	defer span.End()
 
 	if r.Body != http.NoBody {
@@ -58,7 +61,10 @@ func (s *svc) handlePathDelete(w http.ResponseWriter, r *http.Request, ns string
 }
 
 func (s *svc) handleDelete(ctx context.Context, w http.ResponseWriter, r *http.Request, ref *provider.Reference) (status int, err error) {
-	ctx, span := appctx.GetTracerProvider(r.Context()).Tracer(tracerName).Start(ctx, "delete")
+	spanOpts := []trace.SpanStartOption{
+		trace.WithSpanKind(trace.SpanKindServer),
+	}
+	ctx, span := appctx.GetTracerProvider(r.Context()).Tracer(tracerName).Start(ctx, "delete", spanOpts...)
 	defer span.End()
 
 	req := &provider.DeleteRequest{Ref: ref}
@@ -119,8 +125,11 @@ func (s *svc) handleDelete(ctx context.Context, w http.ResponseWriter, r *http.R
 }
 
 func (s *svc) handleSpacesDelete(w http.ResponseWriter, r *http.Request, spaceID string) (status int, err error) {
-	ctx := r.Context()
-	ctx, span := appctx.GetTracerProvider(r.Context()).Tracer(tracerName).Start(ctx, "spaces_delete")
+
+	spanOpts := []trace.SpanStartOption{
+		trace.WithSpanKind(trace.SpanKindServer),
+	}
+	ctx, span := appctx.GetTracerProvider(r.Context()).Tracer(tracerName).Start(r.Context(), "spaces_delete", spanOpts...)
 	defer span.End()
 
 	if r.Body != http.NoBody {

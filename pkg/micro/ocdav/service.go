@@ -232,8 +232,10 @@ func traceHandler(tp trace.TracerProvider, name string) func(http.Handler) http.
 	return func(h http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ctx := rtrace.Propagator.Extract(r.Context(), propagation.HeaderCarrier(r.Header))
-			t := tp.Tracer("reva")
-			ctx, span := t.Start(ctx, name)
+			spanOpts := []trace.SpanStartOption{
+				trace.WithSpanKind(trace.SpanKindServer),
+			}
+			ctx, span := tp.Tracer("reva").Start(ctx, name, spanOpts...)
 			defer span.End()
 
 			rtrace.Propagator.Inject(ctx, propagation.HeaderCarrier(r.Header))

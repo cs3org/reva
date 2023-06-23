@@ -55,6 +55,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
+	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/protobuf/types/known/fieldmaskpb"
 )
@@ -181,7 +182,13 @@ func NewHandler(publicURL string, selector pool.Selectable[gateway.GatewayAPICli
 // HandlePathPropfind handles a path based propfind request
 // ns is the namespace that is prefixed to the path in the cs3 namespace
 func (p *Handler) HandlePathPropfind(w http.ResponseWriter, r *http.Request, ns string) {
-	ctx, span := appctx.GetTracerProvider(r.Context()).Tracer(tracerName).Start(r.Context(), fmt.Sprintf("%s %v", r.Method, r.URL.Path))
+	spanOpts := []trace.SpanStartOption{
+		trace.WithSpanKind(trace.SpanKindServer),
+	}
+	ctx, span := appctx.GetTracerProvider(r.Context()).Tracer(tracerName).Start(
+		r.Context(),
+		fmt.Sprintf("%s %v", r.Method, r.URL.Path), spanOpts...,
+	)
 	defer span.End()
 
 	fn := path.Join(ns, r.URL.Path) // TODO do we still need to jail if we query the registry about the spaces?
@@ -225,7 +232,11 @@ func (p *Handler) HandlePathPropfind(w http.ResponseWriter, r *http.Request, ns 
 
 // HandleSpacesPropfind handles a spaces based propfind request
 func (p *Handler) HandleSpacesPropfind(w http.ResponseWriter, r *http.Request, spaceID string) {
-	ctx, span := appctx.GetTracerProvider(r.Context()).Tracer(tracerName).Start(r.Context(), "spaces_propfind")
+	spanOpts := []trace.SpanStartOption{
+		trace.WithSpanKind(trace.SpanKindServer),
+	}
+	ctx, span := appctx.GetTracerProvider(r.Context()).Tracer(tracerName).Start(
+		r.Context(), "spaces_propfind", spanOpts...)
 	defer span.End()
 
 	sublog := appctx.GetLogger(ctx).With().Str("path", r.URL.Path).Str("spaceid", spaceID).Logger()
@@ -365,7 +376,11 @@ func (p *Handler) HandleSpacesPropfind(w http.ResponseWriter, r *http.Request, s
 }
 
 func (p *Handler) propfindResponse(ctx context.Context, w http.ResponseWriter, r *http.Request, namespace string, pf XML, sendTusHeaders bool, resourceInfos []*provider.ResourceInfo, log zerolog.Logger) {
-	ctx, span := appctx.GetTracerProvider(r.Context()).Tracer(tracerName).Start(ctx, "propfind_response")
+	spanOpts := []trace.SpanStartOption{
+		trace.WithSpanKind(trace.SpanKindServer),
+	}
+	ctx, span := appctx.GetTracerProvider(r.Context()).Tracer(tracerName).Start(
+		ctx, "propfind_response", spanOpts...)
 	defer span.End()
 
 	var linkshares map[string]struct{}
@@ -448,7 +463,10 @@ func (p *Handler) statSpace(ctx context.Context, client gateway.GatewayAPIClient
 }
 
 func (p *Handler) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *http.Request, pf XML, spaces []*provider.StorageSpace, requestPath string, log zerolog.Logger) ([]*provider.ResourceInfo, bool, bool) {
-	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "get_resource_infos")
+	spanOpts := []trace.SpanStartOption{
+		trace.WithSpanKind(trace.SpanKindServer),
+	}
+	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "get_resource_infos", spanOpts...)
 	span.SetAttributes(attribute.KeyValue{Key: "requestPath", Value: attribute.StringValue(requestPath)})
 	defer span.End()
 
@@ -668,7 +686,10 @@ func (p *Handler) getResourceInfos(ctx context.Context, w http.ResponseWriter, r
 }
 
 func (p *Handler) getSpaceResourceInfos(ctx context.Context, w http.ResponseWriter, r *http.Request, pf XML, ref *provider.Reference, requestPath string, depth net.Depth, log zerolog.Logger) ([]*provider.ResourceInfo, bool) {
-	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "get_space_resource_infos")
+	spanOpts := []trace.SpanStartOption{
+		trace.WithSpanKind(trace.SpanKindServer),
+	}
+	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "get_space_resource_infos", spanOpts...)
 	span.SetAttributes(attribute.KeyValue{Key: "requestPath", Value: attribute.StringValue(requestPath)})
 	span.SetAttributes(attribute.KeyValue{Key: "depth", Value: attribute.StringValue(depth.String())})
 	defer span.End()
@@ -955,7 +976,10 @@ func MultistatusResponse(ctx context.Context, pf *XML, mds []*provider.ResourceI
 // ns is the CS3 namespace that needs to be removed from the CS3 path before
 // prefixing it with the baseURI
 func mdToPropResponse(ctx context.Context, pf *XML, md *provider.ResourceInfo, publicURL, ns string, linkshares map[string]struct{}, returnMinimal bool) (*ResponseXML, error) {
-	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "md_to_prop_response")
+	spanOpts := []trace.SpanStartOption{
+		trace.WithSpanKind(trace.SpanKindServer),
+	}
+	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "md_to_prop_response", spanOpts...)
 	span.SetAttributes(attribute.KeyValue{Key: "publicURL", Value: attribute.StringValue(publicURL)})
 	span.SetAttributes(attribute.KeyValue{Key: "ns", Value: attribute.StringValue(ns)})
 	defer span.End()

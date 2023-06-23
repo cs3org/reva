@@ -308,8 +308,10 @@ func (s *Server) getHandler() (http.Handler, error) {
 func traceHandler(name string, h http.Handler, tp trace.TracerProvider) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := rtrace.Propagator.Extract(r.Context(), propagation.HeaderCarrier(r.Header))
-		t := tp.Tracer(tracerName)
-		ctx, span := t.Start(ctx, name)
+		spanOpts := []trace.SpanStartOption{
+			trace.WithSpanKind(trace.SpanKindServer),
+		}
+		ctx, span := tp.Tracer(tracerName).Start(ctx, name, spanOpts...)
 		defer span.End()
 
 		rtrace.Propagator.Inject(ctx, propagation.HeaderCarrier(r.Header))

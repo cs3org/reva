@@ -29,6 +29,7 @@ import (
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/propfind"
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	"github.com/cs3org/reva/v2/pkg/rhttp/router"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // PublicFileHandler handles requests on a shared file. it needs to be wrapped in a collection
@@ -89,7 +90,11 @@ func (h *PublicFileHandler) Handler(s *svc) http.Handler {
 
 // ns is the namespace that is prefixed to the path in the cs3 namespace
 func (s *svc) handlePropfindOnToken(w http.ResponseWriter, r *http.Request, ns string, onContainer bool) {
-	ctx, span := appctx.GetTracerProvider(r.Context()).Tracer(tracerName).Start(r.Context(), "token_propfind")
+	spanOpts := []trace.SpanStartOption{
+		trace.WithSpanKind(trace.SpanKindServer),
+	}
+	ctx, span := appctx.GetTracerProvider(r.Context()).Tracer(tracerName).Start(
+		r.Context(), "token_propfind", spanOpts...)
 	defer span.End()
 
 	tokenStatInfo := ctx.Value(tokenStatInfoKey{}).(*provider.ResourceInfo)

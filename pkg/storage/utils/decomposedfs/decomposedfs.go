@@ -62,6 +62,7 @@ import (
 	"github.com/jellydator/ttlcache/v2"
 	"github.com/pkg/errors"
 	microstore "go-micro.dev/v4/store"
+	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -782,7 +783,10 @@ func (fs *Decomposedfs) ListFolder(ctx context.Context, ref *provider.Reference,
 		return nil, err
 	}
 
-	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "ListFolder")
+	spanOpts := []trace.SpanStartOption{
+		trace.WithSpanKind(trace.SpanKindServer),
+	}
+	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "ListFolder", spanOpts...)
 	defer span.End()
 
 	if !n.Exists {

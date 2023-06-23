@@ -38,7 +38,10 @@ func NewUnary(log zerolog.Logger, tp trace.TracerProvider) grpc.UnaryServerInter
 		span := trace.SpanFromContext(ctx)
 		defer span.End()
 		if !span.SpanContext().HasTraceID() {
-			ctx, span = tp.Tracer(tracerName).Start(ctx, "grpc unary")
+			spanOpts := []trace.SpanStartOption{
+				trace.WithSpanKind(trace.SpanKindServer),
+			}
+			ctx, span = tp.Tracer(tracerName).Start(ctx, "grpc unary", spanOpts...)
 		}
 		_, file, _, ok := runtime.Caller(1)
 		if ok {
@@ -63,7 +66,10 @@ func NewStream(log zerolog.Logger, tp trace.TracerProvider) grpc.StreamServerInt
 		defer span.End()
 
 		if !span.SpanContext().HasTraceID() {
-			ctx, span = tp.Tracer(tracerName).Start(ctx, "grpc stream")
+			spanOpts := []trace.SpanStartOption{
+				trace.WithSpanKind(trace.SpanKindServer),
+			}
+			ctx, span = tp.Tracer(tracerName).Start(ctx, "grpc stream", spanOpts...)
 		}
 		_, file, _, ok := runtime.Caller(1)
 		if ok {
