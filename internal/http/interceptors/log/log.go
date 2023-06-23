@@ -91,14 +91,16 @@ func writeLog(log *zerolog.Logger, req *http.Request, url url.URL, ts time.Time,
 	var event *zerolog.Event
 	switch {
 	case status < 400:
-		event = log.Debug()
+		event = log.Info()
 	case status < 500:
 		event = log.Warn()
 	default:
 		event = log.Error()
 	}
+	event.Str("host", host).Str("method", req.Method).Str("uri", uri).Int("status", status).
+		Msg("processed http request")
 
-	event.Str("host", host).Str("method", req.Method).
+	log.Trace().Str("host", host).Str("method", req.Method).
 		Str("uri", uri).Str("proto", req.Proto).Interface("req_headers", req.Header).
 		Int("status", status).Int("size", size).Interface("res_headers", resHeaders).
 		Str("start", ts.Format("02/Jan/2006:15:04:05 -0700")).
