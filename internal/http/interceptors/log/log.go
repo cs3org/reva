@@ -55,7 +55,7 @@ func (h loggingHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	logger := makeLogger(w)
 	url := *req.URL
 	h.handler.ServeHTTP(logger, req)
-	writeLog(log, req, url, t, logger.Status(), logger.Size(), w.Header())
+	writeLog(log, req, url, t, logger.Status(), logger.Size(), logger.Header())
 }
 
 func makeLogger(w http.ResponseWriter) loggingResponseWriter {
