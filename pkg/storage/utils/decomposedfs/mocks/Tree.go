@@ -278,13 +278,13 @@ func (_m *Tree) Setup() error {
 	return r0
 }
 
-// TouchFile provides a mock function with given fields: ctx, _a1, markprocessing
-func (_m *Tree) TouchFile(ctx context.Context, _a1 *node.Node, markprocessing bool) error {
-	ret := _m.Called(ctx, _a1, markprocessing)
+// TouchFile provides a mock function with given fields: ctx, _a1, markprocessing, mtime
+func (_m *Tree) TouchFile(ctx context.Context, _a1 *node.Node, markprocessing bool, mtime string) error {
+	ret := _m.Called(ctx, _a1, markprocessing, mtime)
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, *node.Node, bool) error); ok {
-		r0 = rf(ctx, _a1, markprocessing)
+	if rf, ok := ret.Get(0).(func(context.Context, *node.Node, bool, string) error); ok {
+		r0 = rf(ctx, _a1, markprocessing, mtime)
 	} else {
 		r0 = ret.Error(0)
 	}
