@@ -31,9 +31,11 @@ func init() {
 }
 
 type config struct {
-	Root        string `mapstructure:"root" docs:"/var/tmp/reva/;Path of root directory for user storage."`
-	ShareFolder string `mapstructure:"share_folder" docs:"/MyShares;Path for storing share references."`
-	UserLayout  string `mapstructure:"user_layout" docs:"{{.Username}};Template for user home directories"`
+	Root          string `mapstructure:"root" docs:"/var/tmp/reva/;Path of root directory for user storage."`
+	ShareFolder   string `mapstructure:"share_folder" docs:"/MyShares;Path for storing share references."`
+	UserLayout    string `mapstructure:"user_layout" docs:"{{.Username}};Template for user home directories"`
+	DataDirectory string `mapstructure:"data_directory" docs:"/data;Path for storing data"`
+	Shadow        string `mapstructure:"shadow" docs:"/.shadow;Path for shadow directory"`
 }
 
 func parseConfig(m map[string]interface{}) (*config, error) {
@@ -54,9 +56,11 @@ func New(m map[string]interface{}) (storage.FS, error) {
 	}
 
 	conf := localfs.Config{
-		Root:        c.Root,
-		ShareFolder: c.ShareFolder,
-		UserLayout:  c.UserLayout,
+		Root:          c.Root,
+		ShareFolder:   c.ShareFolder,
+		UserLayout:    c.UserLayout,
+		DataDirectory: c.DataDirectory,
+		Shadow:        c.Shadow,
 	}
 	return localfs.NewLocalFS(&conf)
 }
