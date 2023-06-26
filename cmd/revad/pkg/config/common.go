@@ -24,6 +24,7 @@ func (c ServicesConfig) DriversNumber() int { return len(c) }
 type DriverConfig struct {
 	Config  map[string]any `key:",squash"`
 	Address string         `key:"address"`
+	Network string         `key:"network"`
 }
 
 func newSvcConfigFromList(l []map[string]any) (ServicesConfig, error) {
@@ -116,15 +117,24 @@ type InterceptorFunc func(*Interceptor)
 // ForEachService iterates to each service/driver calling the function f.
 func (i iterableImpl) ForEachService(f ServiceFunc) {
 	for name, c := range i.i.services() {
-		for _, cfg := range c {
+		for i, cfg := range c {
 			f(&Service{
 				raw:     cfg,
 				Address: cfg.Address,
+				Network: cfg.Network,
+				Label:   label(name, i, len(c)),
 				Name:    name,
 				Config:  cfg.Config,
 			})
 		}
 	}
+}
+
+func label(name string, i, tot int) string {
+	if tot == 1 {
+		return name
+	}
+	return fmt.Sprintf("%s_%d", name, i)
 }
 
 // ForEachInterceptor iterates to each middleware calling the function f.
