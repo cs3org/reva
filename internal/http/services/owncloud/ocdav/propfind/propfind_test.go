@@ -862,25 +862,12 @@ var _ = Describe("Propfind", func() {
 			req = req.WithContext(ctx)
 
 			spaceID := storagespace.FormatResourceID(sprovider.ResourceId{StorageId: "provider-1", SpaceId: "foospace", OpaqueId: "root"})
-			spaceIDUrl := net.EncodePath(spaceID)
 			handler.HandleSpacesPropfind(rr, req, spaceID)
-			Expect(rr.Code).To(Equal(http.StatusMultiStatus))
+			Expect(rr.Code).To(Equal(http.StatusBadRequest))
 
-			res, _, err := readResponse(rr.Result().Body)
-			Expect(err).ToNot(HaveOccurred())
-			Expect(len(res.Responses)).To(Equal(5))
+			_, _, err = readResponse(rr.Result().Body)
+			Expect(err).To(HaveOccurred())
 
-			paths := []string{}
-			for _, r := range res.Responses {
-				paths = append(paths, r.Href)
-			}
-			Expect(paths).To(ConsistOf(
-				"http:/127.0.0.1:3000/"+spaceIDUrl+"/",
-				"http:/127.0.0.1:3000/"+spaceIDUrl+"/bar",
-				"http:/127.0.0.1:3000/"+spaceIDUrl+"/baz",
-				"http:/127.0.0.1:3000/"+spaceIDUrl+"/dir/",
-				"http:/127.0.0.1:3000/"+spaceIDUrl+"/dir/entry",
-			))
 		})
 	})
 })
