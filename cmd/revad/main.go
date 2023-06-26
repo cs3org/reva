@@ -28,11 +28,10 @@ import (
 	"sync"
 	"syscall"
 
-	"github.com/cs3org/reva/cmd/revad/internal/config"
-	"github.com/cs3org/reva/cmd/revad/internal/grace"
+	"github.com/cs3org/reva/cmd/revad/pkg/config"
+	"github.com/cs3org/reva/cmd/revad/pkg/grace"
 	"github.com/cs3org/reva/cmd/revad/runtime"
 	"github.com/cs3org/reva/pkg/sysinfo"
-	"github.com/google/uuid"
 )
 
 var (
@@ -46,6 +45,10 @@ var (
 
 	// Compile time variables initialized with gcc flags.
 	gitCommit, buildDate, version, goVersion string
+)
+
+var (
+	revaProcs []*runtime.Reva
 )
 
 func main() {
@@ -134,7 +137,7 @@ func handleSignalFlag() {
 	}
 }
 
-func getConfigs() ([]map[string]interface{}, error) {
+func getConfigs() ([]*config.Config, error) {
 	var confs []string
 	// give priority to read from dev-dir
 	if *dirFlag != "" {
@@ -186,8 +189,8 @@ func getConfigsFromDir(dir string) (confs []string, err error) {
 	return
 }
 
-func readConfigs(files []string) ([]map[string]interface{}, error) {
-	confs := make([]map[string]interface{}, 0, len(files))
+func readConfigs(files []string) ([]*config.Config, error) {
+	confs := make([]*config.Config, 0, len(files))
 	for _, conf := range files {
 		fd, err := os.Open(conf)
 		if err != nil {
@@ -195,16 +198,16 @@ func readConfigs(files []string) ([]map[string]interface{}, error) {
 		}
 		defer fd.Close()
 
-		v, err := config.Read(fd)
+		c, err := config.Load(fd)
 		if err != nil {
 			return nil, err
 		}
-		confs = append(confs, v)
+		confs = append(confs, c)
 	}
 	return confs, nil
 }
 
-func runConfigs(confs []map[string]interface{}) {
+func runConfigs(confs []*config.Config) {
 	if len(confs) == 1 {
 		runSingle(confs[0])
 		return
@@ -213,29 +216,27 @@ func runConfigs(confs []map[string]interface{}) {
 	runMultiple(confs)
 }
 
-func runSingle(conf map[string]interface{}) {
-	if *pidFlag == "" {
-		*pidFlag = getPidfile()
+func registerReva(r *runtime.Reva) {
+	revaProcs = append(revaProcs, r)
+}
+
+func runSingle(conf *config.Config) {
+	reva, err := runtime.New(conf)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, err.Error())
+		os.Exit(1)
 	}
-
-	runtime.Run(conf, *pidFlag, *logFlag)
+	registerReva(reva)
+	reva.Start()
 }
 
-func getPidfile() string {
-	uuid := uuid.New().String()
-	name := fmt.Sprintf("revad-%s.pid", uuid)
-
-	return path.Join(os.TempDir(), name)
-}
-
-func runMultiple(confs []map[string]interface{}) {
+func runMultiple(confs []*config.Config) {
 	var wg sync.WaitGroup
 	for _, conf := range confs {
 		wg.Add(1)
-		pidfile := getPidfile()
-		go func(wg *sync.WaitGroup, conf map[string]interface{}) {
+		go func(wg *sync.WaitGroup, conf *config.Config) {
 			defer wg.Done()
-			runtime.Run(conf, pidfile, *logFlag)
+			runSingle(conf)
 		}(&wg, conf)
 	}
 	wg.Wait()
