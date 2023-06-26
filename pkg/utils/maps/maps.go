@@ -10,3 +10,11 @@ func Merge[K comparable, T any](m, n map[K]T) map[K]T {
 	}
 	return r
 }
+
+func MapValues[K comparable, T, V any](m map[K]T, f func(T) V) map[K]V {
+	r := make(map[K]V, len(m))
+	for k, v := range m {
+		r[k] = f(v)
+	}
+	return r
+}

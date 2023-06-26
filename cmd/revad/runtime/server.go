@@ -7,6 +7,8 @@ import (
 	"github.com/cs3org/reva/cmd/revad/pkg/grace"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rhttp"
+	"github.com/cs3org/reva/pkg/rhttp/global"
+	"github.com/cs3org/reva/pkg/utils/maps"
 	"github.com/rs/zerolog"
 )
 
@@ -38,7 +40,8 @@ func newServers(grpc map[string]*config.GRPC, http map[string]*config.HTTP, log 
 			return nil, err
 		}
 		server := &Server{
-			server: s,
+			server:   s,
+			services: maps.MapValues(services, func(s rgrpc.Service) any { return s }),
 		}
 		servers = append(servers, server)
 	}
@@ -57,7 +60,8 @@ func newServers(grpc map[string]*config.GRPC, http map[string]*config.HTTP, log 
 			return nil, err
 		}
 		server := &Server{
-			server: s,
+			server:   s,
+			services: maps.MapValues(services, func(s global.Service) any { return s }),
 		}
 		servers = append(servers, server)
 	}
