@@ -82,7 +82,7 @@ func New(config *config.Config, opt ...Option) (*Reva, error) {
 		return nil, err
 	}
 
-	servers, err := newServers(grpc, http)
+	servers, err := newServers(grpc, http, log)
 	if err != nil {
 		watcher.Exit(1)
 		return nil, err

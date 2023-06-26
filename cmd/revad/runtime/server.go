@@ -13,7 +13,6 @@ import (
 type Server struct {
 	server   grace.Server
 	listener net.Listener
-	logger   *zerolog.Logger
 
 	services map[string]any
 }
@@ -22,7 +21,7 @@ func (s *Server) Start() error {
 	return s.server.Start(s.listener)
 }
 
-func newServers(grpc map[string]*config.GRPC, http map[string]*config.HTTP) ([]*Server, error) {
+func newServers(grpc map[string]*config.GRPC, http map[string]*config.HTTP, log *zerolog.Logger) ([]*Server, error) {
 	var servers []*Server
 	for _, cfg := range grpc {
 		services, err := rgrpc.InitServices(cfg.Services)
@@ -32,7 +31,7 @@ func newServers(grpc map[string]*config.GRPC, http map[string]*config.HTTP) ([]*
 		s, err := rgrpc.NewServer(
 			rgrpc.EnableReflection(cfg.EnableReflection),
 			rgrpc.WithShutdownDeadline(cfg.ShutdownDeadline),
-			rgrpc.WithLogger(zerolog.Nop()), // TODO: set logger
+			rgrpc.WithLogger(log.With().Str("pkg", "grpc").Logger()),
 			rgrpc.WithServices(services),
 		)
 		if err != nil {
@@ -50,7 +49,7 @@ func newServers(grpc map[string]*config.GRPC, http map[string]*config.HTTP) ([]*
 		}
 		s, err := rhttp.New(
 			rhttp.WithServices(services),
-			rhttp.WithLogger(zerolog.Nop()), // TODO: set logger
+			rhttp.WithLogger(log.With().Str("pkg", "http").Logger()),
 			rhttp.WithCertAndKeyFiles(cfg.CertFile, cfg.KeyFile),
 			// rhttp.WithMiddlewares(cfg.Middlewares),
 		)
