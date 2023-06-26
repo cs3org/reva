@@ -22,19 +22,11 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"sort"
 
 	"github.com/cs3org/reva/cmd/revad/pkg/config"
-	"github.com/cs3org/reva/internal/grpc/interceptors/appctx"
-	"github.com/cs3org/reva/internal/grpc/interceptors/log"
-	"github.com/cs3org/reva/internal/grpc/interceptors/recovery"
-	"github.com/cs3org/reva/internal/grpc/interceptors/token"
-	"github.com/cs3org/reva/internal/grpc/interceptors/useragent"
-	rtrace "github.com/cs3org/reva/pkg/trace"
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
-	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 )
@@ -80,22 +72,12 @@ type Service interface {
 	UnprotectedEndpoints() []string
 }
 
-type unaryInterceptorTriple struct {
-	Name        string
-	Priority    int
-	Interceptor grpc.UnaryServerInterceptor
-}
-
-type streamInterceptorTriple struct {
-	Name        string
-	Priority    int
-	Interceptor grpc.StreamServerInterceptor
-}
-
 // Server is a gRPC server.
 type Server struct {
-	ShutdownDeadline int
-	EnableReflection bool
+	ShutdownDeadline         int
+	EnableReflection         bool
+	UnaryServerInterceptors  []grpc.UnaryServerInterceptor
+	StreamServerInterceptors []grpc.StreamServerInterceptor
 
 	s        *grpc.Server
 	listener net.Listener
@@ -149,27 +131,8 @@ func (s *Server) Start(ln net.Listener) error {
 	return nil
 }
 
-// func (s *Server) isInterceptorEnabled(name string) bool {
-// 	for k := range s.iunterceptors {
-// 		if k == name {
-// 			return true
-// 		}
-// 	}
-// 	return false
-// }
-
 func (s *Server) initServices() error {
-
-	// obtain list of unprotected endpoints
-	unprotected := []string{}
-	for _, svc := range s.services {
-		unprotected = append(unprotected, svc.UnprotectedEndpoints()...)
-	}
-
-	opts, err := s.getInterceptors(unprotected)
-	if err != nil {
-		return err
-	}
+	opts := s.getInterceptors()
 	grpcServer := grpc.NewServer(opts...)
 
 	for _, svc := range s.services {
@@ -221,101 +184,12 @@ func (s *Server) Address() string {
 	return s.listener.Addr().String()
 }
 
-func (s *Server) getInterceptors(unprotected []string) ([]grpc.ServerOption, error) {
-	unaryTriples := []*unaryInterceptorTriple{}
-	// for name, newFunc := range UnaryInterceptors {
-	// 	if s.isInterceptorEnabled(name) {
-	// 		inter, prio, err := newFunc(s.conf.Interceptors[name])
-	// 		if err != nil {
-	// 			err = errors.Wrapf(err, "rgrpc: error creating unary interceptor: %s,", name)
-	// 			return nil, err
-	// 		}
-	// 		triple := &unaryInterceptorTriple{
-	// 			Name:        name,
-	// 			Priority:    prio,
-	// 			Interceptor: inter,
-	// 		}
-	// 		unaryTriples = append(unaryTriples, triple)
-	// 	}
-	// }
+func (s *Server) getInterceptors() []grpc.ServerOption {
+	unaryChain := grpc_middleware.ChainUnaryServer(s.UnaryServerInterceptors...)
+	streamChain := grpc_middleware.ChainStreamServer(s.StreamServerInterceptors...)
 
-	// sort unary triples
-	sort.SliceStable(unaryTriples, func(i, j int) bool {
-		return unaryTriples[i].Priority < unaryTriples[j].Priority
-	})
-
-	// authUnary, err := auth.NewUnary(s.conf.Interceptors["auth"], unprotected)
-	// if err != nil {
-	// 	return nil, errors.Wrap(err, "rgrpc: error creating unary auth interceptor")
-	// }
-
-	unaryInterceptors := []grpc.UnaryServerInterceptor{} // TODO: add auth unary
-	for _, t := range unaryTriples {
-		unaryInterceptors = append(unaryInterceptors, t.Interceptor)
-		s.log.Info().Msgf("rgrpc: chaining grpc unary interceptor %s with priority %d", t.Name, t.Priority)
-	}
-
-	unaryInterceptors = append(unaryInterceptors,
-		otelgrpc.UnaryServerInterceptor(
-			otelgrpc.WithTracerProvider(rtrace.Provider),
-			otelgrpc.WithPropagators(rtrace.Propagator)),
-	)
-
-	unaryInterceptors = append([]grpc.UnaryServerInterceptor{
-		appctx.NewUnary(s.log),
-		token.NewUnary(),
-		useragent.NewUnary(),
-		log.NewUnary(),
-		recovery.NewUnary(),
-	}, unaryInterceptors...)
-	unaryChain := grpc_middleware.ChainUnaryServer(unaryInterceptors...)
-
-	streamTriples := []*streamInterceptorTriple{}
-	// for name, newFunc := range StreamInterceptors {
-	// 	if s.isInterceptorEnabled(name) {
-	// 		inter, prio, err := newFunc(s.conf.Interceptors[name])
-	// 		if err != nil {
-	// 			err = errors.Wrapf(err, "rgrpc: error creating streaming interceptor: %s,", name)
-	// 			return nil, err
-	// 		}
-	// 		triple := &streamInterceptorTriple{
-	// 			Name:        name,
-	// 			Priority:    prio,
-	// 			Interceptor: inter,
-	// 		}
-	// 		streamTriples = append(streamTriples, triple)
-	// 	}
-	// }
-	// sort stream triples
-	sort.SliceStable(streamTriples, func(i, j int) bool {
-		return streamTriples[i].Priority < streamTriples[j].Priority
-	})
-
-	// authStream, err := auth.NewStream(s.conf.Interceptors["auth"], unprotected)
-	// if err != nil {
-	// 	return nil, errors.Wrap(err, "rgrpc: error creating stream auth interceptor")
-	// }
-
-	streamInterceptors := []grpc.StreamServerInterceptor{}
-	for _, t := range streamTriples {
-		streamInterceptors = append(streamInterceptors, t.Interceptor)
-		s.log.Info().Msgf("rgrpc: chaining grpc streaming interceptor %s with priority %d", t.Name, t.Priority)
-	}
-
-	streamInterceptors = append([]grpc.StreamServerInterceptor{
-		// authStream,
-		appctx.NewStream(s.log),
-		token.NewStream(),
-		useragent.NewStream(),
-		log.NewStream(),
-		recovery.NewStream(),
-	}, streamInterceptors...)
-	streamChain := grpc_middleware.ChainStreamServer(streamInterceptors...)
-
-	opts := []grpc.ServerOption{
+	return []grpc.ServerOption{
 		grpc.UnaryInterceptor(unaryChain),
 		grpc.StreamInterceptor(streamChain),
 	}
-
-	return opts, nil
 }
