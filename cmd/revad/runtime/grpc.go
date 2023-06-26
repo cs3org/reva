@@ -2,11 +2,8 @@ package runtime
 
 import (
 	"fmt"
-	"net"
 	"sort"
 
-	"github.com/cs3org/reva/cmd/revad/pkg/config"
-	"github.com/cs3org/reva/cmd/revad/pkg/grace"
 	"github.com/cs3org/reva/internal/grpc/interceptors/appctx"
 	"github.com/cs3org/reva/internal/grpc/interceptors/auth"
 	"github.com/cs3org/reva/internal/grpc/interceptors/log"
@@ -14,25 +11,23 @@ import (
 	"github.com/cs3org/reva/internal/grpc/interceptors/token"
 	"github.com/cs3org/reva/internal/grpc/interceptors/useragent"
 	"github.com/cs3org/reva/pkg/rgrpc"
-	"github.com/cs3org/reva/pkg/rhttp"
-	"github.com/cs3org/reva/pkg/rhttp/global"
 	rtrace "github.com/cs3org/reva/pkg/trace"
-	"github.com/cs3org/reva/pkg/utils/maps"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"google.golang.org/grpc"
 )
 
-type Server struct {
-	server   grace.Server
-	listener net.Listener
-
-	services map[string]any
+type unaryInterceptorTriple struct {
+	Name        string
+	Priority    int
+	Interceptor grpc.UnaryServerInterceptor
 }
 
-func (s *Server) Start() error {
-	return s.server.Start(s.listener)
+type streamInterceptorTriple struct {
+	Name        string
+	Priority    int
+	Interceptor grpc.StreamServerInterceptor
 }
 
 func initGRPCInterceptors(conf map[string]map[string]any, unprotected []string, logger *zerolog.Logger) ([]grpc.UnaryServerInterceptor, []grpc.StreamServerInterceptor, error) {
@@ -136,67 +131,4 @@ func grpcUnprotected(s map[string]rgrpc.Service) (unprotected []string) {
 		unprotected = append(unprotected, svc.UnprotectedEndpoints()...)
 	}
 	return
-}
-
-func newServers(grpc map[string]*config.GRPC, http map[string]*config.HTTP, log *zerolog.Logger) ([]*Server, error) {
-	var servers []*Server
-	for _, cfg := range grpc {
-		services, err := rgrpc.InitServices(cfg.Services)
-		if err != nil {
-			return nil, err
-		}
-		unaryChain, streamChain, err := initGRPCInterceptors(cfg.Interceptors, grpcUnprotected(services), log)
-		if err != nil {
-			return nil, err
-		}
-		s, err := rgrpc.NewServer(
-			rgrpc.EnableReflection(cfg.EnableReflection),
-			rgrpc.WithShutdownDeadline(cfg.ShutdownDeadline),
-			rgrpc.WithLogger(log.With().Str("pkg", "grpc").Logger()),
-			rgrpc.WithServices(services),
-			rgrpc.WithUnaryServerInterceptors(unaryChain),
-			rgrpc.WithStreamServerInterceptors(streamChain),
-		)
-		if err != nil {
-			return nil, err
-		}
-		server := &Server{
-			server:   s,
-			services: maps.MapValues(services, func(s rgrpc.Service) any { return s }),
-		}
-		servers = append(servers, server)
-	}
-	for _, cfg := range http {
-		services, err := rhttp.InitServices(cfg.Services)
-		if err != nil {
-			return nil, err
-		}
-		s, err := rhttp.New(
-			rhttp.WithServices(services),
-			rhttp.WithLogger(log.With().Str("pkg", "http").Logger()),
-			rhttp.WithCertAndKeyFiles(cfg.CertFile, cfg.KeyFile),
-			// rhttp.WithMiddlewares(cfg.Middlewares),
-		)
-		if err != nil {
-			return nil, err
-		}
-		server := &Server{
-			server:   s,
-			services: maps.MapValues(services, func(s global.Service) any { return s }),
-		}
-		servers = append(servers, server)
-	}
-	return servers, nil
-}
-
-type unaryInterceptorTriple struct {
-	Name        string
-	Priority    int
-	Interceptor grpc.UnaryServerInterceptor
-}
-
-type streamInterceptorTriple struct {
-	Name        string
-	Priority    int
-	Interceptor grpc.StreamServerInterceptor
 }

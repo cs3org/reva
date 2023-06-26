@@ -24,7 +24,6 @@ import (
 	"net"
 	"net/http"
 	"path"
-	"sort"
 	"strings"
 	"time"
 
@@ -44,7 +43,7 @@ func WithServices(services map[string]global.Service) Config {
 	}
 }
 
-func WithMiddlewares(middlewares []*MiddlewareTriple) Config {
+func WithMiddlewares(middlewares []global.Middleware) Config {
 	return func(s *Server) {
 		s.middlewares = middlewares
 	}
@@ -91,6 +90,7 @@ func New(c ...Config) (*Server, error) {
 		svcs:        map[string]global.Service{},
 		unprotected: []string{},
 		handlers:    map[string]http.Handler{},
+		middlewares: []global.Middleware{},
 	}
 	for _, cc := range c {
 		cc(s)
@@ -110,7 +110,7 @@ type Server struct {
 	svcs        map[string]global.Service // map key is svc Prefix
 	unprotected []string
 	handlers    map[string]http.Handler
-	middlewares []*MiddlewareTriple
+	middlewares []global.Middleware
 	log         zerolog.Logger
 }
 
@@ -128,7 +128,7 @@ func (s *Server) Start(ln net.Listener) error {
 		s.log.Info().Msgf("https server listening at https://%s using cert file '%s' and key file '%s'", s.listener.Addr(), s.CertFile, s.KeyFile)
 		err = s.httpServer.ServeTLS(s.listener, s.CertFile, s.KeyFile)
 	} else {
-		s.log.Info().Msgf("http server listening at http://%s '%s' '%s'", s.listener.Addr())
+		s.log.Info().Msgf("http server listening at http://%s", s.listener.Addr())
 		err = s.httpServer.Serve(s.listener)
 	}
 	if err == nil || err == http.ErrServerClosed {
@@ -174,40 +174,6 @@ func (s *Server) GracefulStop() error {
 	s.closeServices()
 	return s.httpServer.Shutdown(context.Background())
 }
-
-// MiddlewareTriple represents a middleware with the
-// priority to be chained.
-type MiddlewareTriple struct {
-	Name       string
-	Priority   int
-	Middleware global.Middleware
-}
-
-// func (s *Server) registerMiddlewares() error {
-// 	middlewares := []*middlewareTriple{}
-// 	for name, newFunc := range global.NewMiddlewares {
-// 		if s.isMiddlewareEnabled(name) {
-// 			m, prio, err := newFunc(s.conf.Middlewares[name])
-// 			if err != nil {
-// 				err = errors.Wrapf(err, "error creating new middleware: %s,", name)
-// 				return err
-// 			}
-// 			middlewares = append(middlewares, &middlewareTriple{
-// 				Name:       name,
-// 				Priority:   prio,
-// 				Middleware: m,
-// 			})
-// 			s.log.Info().Msgf("http middleware enabled: %s", name)
-// 		}
-// 	}
-// 	s.middlewares = middlewares
-// 	return nil
-// }
-
-// func (s *Server) isMiddlewareEnabled(name string) bool {
-// 	_, ok := s.conf.Middlewares[name]
-// 	return ok
-// }
 
 func (s *Server) registerServices() {
 	for name, svc := range s.Services {
@@ -305,41 +271,10 @@ func (s *Server) getHandler() (http.Handler, error) {
 		w.WriteHeader(http.StatusNotFound)
 	})
 
-	// sort middlewares by priority.
-	sort.SliceStable(s.middlewares, func(i, j int) bool {
-		return s.middlewares[i].Priority > s.middlewares[j].Priority
-	})
-
 	handler := http.Handler(h)
-
-	for _, triple := range s.middlewares {
-		s.log.Info().Msgf("chaining http middleware %s with priority  %d", triple.Name, triple.Priority)
-		handler = triple.Middleware(traceHandler(triple.Name, handler))
+	for _, m := range s.middlewares {
+		handler = m(handler)
 	}
-
-	for _, v := range s.unprotected {
-		s.log.Info().Msgf("unprotected URL: %s", v)
-	}
-
-	for _, triple := range s.middlewares {
-		handler = triple.Middleware(handler)
-	}
-	// authMiddle, err := auth.New(s.Middlewares["auth"], s.unprotected)
-	// if err != nil {
-	// 	return nil, errors.Wrap(err, "rhttp: error creating auth middleware")
-	// }
-
-	// // add always the logctx middleware as most priority, this middleware is internal
-	// // and cannot be configured from the configuration.
-	// coreMiddlewares := []*middlewareTriple{}
-
-	// coreMiddlewares = append(coreMiddlewares, &middlewareTriple{Middleware: authMiddle, Name: "auth"})
-	// coreMiddlewares = append(coreMiddlewares, &middlewareTriple{Middleware: log.New(), Name: "log"})
-	// coreMiddlewares = append(coreMiddlewares, &middlewareTriple{Middleware: appctx.New(s.log), Name: "appctx"})
-
-	// for _, triple := range coreMiddlewares {
-	// 	handler = triple.Middleware(traceHandler(triple.Name, handler))
-	// }
 
 	return handler, nil
 }
