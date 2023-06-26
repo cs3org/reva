@@ -244,6 +244,18 @@ func (p *Handler) HandleSpacesPropfind(w http.ResponseWriter, r *http.Request, s
 		return
 	}
 
+	if depth == net.DepthInfinity {
+		span.RecordError(errors.ErrInvalidDepth)
+		span.SetStatus(codes.Error, "DEPTH: infinity is not supported")
+		span.SetAttributes(semconv.HTTPStatusCodeKey.Int(http.StatusBadRequest))
+		sublog.Debug().Str("depth", dh).Msg(errors.ErrInvalidDepth.Error())
+		w.WriteHeader(http.StatusBadRequest)
+		m := fmt.Sprintf("Invalid Depth header value: %v", dh)
+		b, err := errors.Marshal(http.StatusBadRequest, m, "")
+		errors.HandleWebdavError(&sublog, w, b, err)
+		return
+	}
+
 	pf, status, err := ReadPropfind(r.Body)
 	if err != nil {
 		sublog.Debug().Err(err).Msg("error reading propfind request")
