@@ -19,51 +19,49 @@
 package sharedconf
 
 import (
-	"fmt"
-	"os"
+	"sync"
 
-	"github.com/mitchellh/mapstructure"
+	"github.com/cs3org/reva/cmd/revad/pkg/config"
 )
 
-var sharedConf = &conf{}
+var sharedConf *config.Shared
+var once sync.Once
 
-type conf struct {
-	JWTSecret             string   `mapstructure:"jwt_secret"`
-	GatewaySVC            string   `mapstructure:"gatewaysvc"`
-	DataGateway           string   `mapstructure:"datagateway"`
-	SkipUserGroupsInToken bool     `mapstructure:"skip_user_groups_in_token"`
-	BlockedUsers          []string `mapstructure:"blocked_users"`
+func Init(c *config.Shared) {
+	once.Do(func() {
+		sharedConf = c
+	})
 }
 
-// Decode decodes the configuration.
-func Decode(v interface{}) error {
-	if err := mapstructure.Decode(v, sharedConf); err != nil {
-		return err
-	}
+// // Decode decodes the configuration.
+// func Decode(v interface{}) error {
+// 	if err := mapstructure.Decode(v, sharedConf); err != nil {
+// 		return err
+// 	}
 
-	// add some defaults
-	if sharedConf.GatewaySVC == "" {
-		sharedConf.GatewaySVC = "0.0.0.0:19000"
-	}
+// 	// add some defaults
+// 	if sharedConf.GatewaySVC == "" {
+// 		sharedConf.GatewaySVC = "0.0.0.0:19000"
+// 	}
 
-	// this is the default address we use for the data gateway HTTP service
-	if sharedConf.DataGateway == "" {
-		host, err := os.Hostname()
-		if err != nil || host == "" {
-			sharedConf.DataGateway = "http://0.0.0.0:19001/datagateway"
-		} else {
-			sharedConf.DataGateway = fmt.Sprintf("http://%s:19001/datagateway", host)
-		}
-	}
+// 	// this is the default address we use for the data gateway HTTP service
+// 	if sharedConf.DataGateway == "" {
+// 		host, err := os.Hostname()
+// 		if err != nil || host == "" {
+// 			sharedConf.DataGateway = "http://0.0.0.0:19001/datagateway"
+// 		} else {
+// 			sharedConf.DataGateway = fmt.Sprintf("http://%s:19001/datagateway", host)
+// 		}
+// 	}
 
-	// TODO(labkode): would be cool to autogenerate one secret and print
-	// it on init time.
-	if sharedConf.JWTSecret == "" {
-		sharedConf.JWTSecret = "changemeplease"
-	}
+// 	// TODO(labkode): would be cool to autogenerate one secret and print
+// 	// it on init time.
+// 	if sharedConf.JWTSecret == "" {
+// 		sharedConf.JWTSecret = "changemeplease"
+// 	}
 
-	return nil
-}
+// 	return nil
+// }
 
 // GetJWTSecret returns the package level configured jwt secret if not overwritten.
 func GetJWTSecret(val string) string {

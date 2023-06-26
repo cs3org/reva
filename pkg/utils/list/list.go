@@ -46,3 +46,13 @@ func TakeFirst[T any](l []T, p func(T) bool) (T, bool) {
 	var z T
 	return z, false
 }
+
+// ToMap returns a map from l where the keys are obtainined applying
+// the func k to the elements of l.
+func ToMap[K comparable, T any](l []T, k func(T) K) map[K]T {
+	m := make(map[K]T, len(l))
+	for _, e := range l {
+		m[k(e)] = e
+	}
+	return m
+}

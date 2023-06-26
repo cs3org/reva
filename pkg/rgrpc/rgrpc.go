@@ -19,10 +19,12 @@
 package rgrpc
 
 import (
+	"fmt"
 	"io"
 	"net"
 	"sort"
 
+	"github.com/cs3org/reva/cmd/revad/pkg/config"
 	"github.com/cs3org/reva/internal/grpc/interceptors/appctx"
 	"github.com/cs3org/reva/internal/grpc/interceptors/log"
 	"github.com/cs3org/reva/internal/grpc/interceptors/recovery"
@@ -69,7 +71,7 @@ func Register(name string, newFunc NewService) {
 
 // NewService is the function that gRPC services need to register at init time.
 // It returns an io.Closer to close the service and a list of service endpoints that need to be unprotected.
-type NewService func(conf map[string]interface{}, ss *grpc.Server) (Service, error)
+type NewService func(conf map[string]interface{}) (Service, error)
 
 // Service represents a grpc service.
 type Service interface {
@@ -99,6 +101,25 @@ type Server struct {
 	listener net.Listener
 	log      zerolog.Logger
 	services map[string]Service
+}
+
+func InitServices(services map[string]config.ServicesConfig) (map[string]Service, error) {
+	s := make(map[string]Service)
+	for name, cfg := range services {
+		new, ok := Services[name]
+		if !ok {
+			return nil, fmt.Errorf("rgrpc: grpc service %s does not exist", name)
+		}
+		if cfg.DriversNumber() > 1 {
+			return nil, fmt.Errorf("rgrp: service %s cannot have more than one driver in same server", name)
+		}
+		svc, err := new(cfg[0].Config)
+		if err != nil {
+			return nil, errors.Wrapf(err, "rgrpc: grpc service %s could not be started,", name)
+		}
+		s[name] = svc
+	}
+	return s, nil
 }
 
 // NewServer returns a new Server.
@@ -138,20 +159,6 @@ func (s *Server) Start(ln net.Listener) error {
 // }
 
 func (s *Server) initServices() error {
-	// for svcName := range s.conf.Services {
-	// 	if s.isServiceEnabled(svcName) {
-	// 		newFunc := Services[svcName]
-	// 		svc, err := newFunc(s.conf.Services[svcName], s.s)
-	// 		if err != nil {
-	// 			return errors.Wrapf(err, "rgrpc: grpc service %s could not be started,", svcName)
-	// 		}
-	// 		s.services[svcName] = svc
-	// 		s.log.Info().Msgf("rgrpc: grpc service enabled: %s", svcName)
-	// 	} else {
-	// 		message := fmt.Sprintf("rgrpc: grpc service %s does not exist", svcName)
-	// 		return errors.New(message)
-	// 	}
-	// }
 
 	// obtain list of unprotected endpoints
 	unprotected := []string{}

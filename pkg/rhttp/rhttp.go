@@ -20,6 +20,7 @@ package rhttp
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"net/http"
 	"path"
@@ -27,6 +28,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cs3org/reva/cmd/revad/pkg/config"
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	rtrace "github.com/cs3org/reva/pkg/trace"
 	"github.com/pkg/errors"
@@ -59,6 +61,26 @@ func WithLogger(log zerolog.Logger) Config {
 	return func(s *Server) {
 		s.log = log
 	}
+}
+
+func InitServices(services map[string]config.ServicesConfig) (map[string]global.Service, error) {
+	s := make(map[string]global.Service)
+	for name, cfg := range services {
+		new, ok := global.Services[name]
+		if !ok {
+			return nil, fmt.Errorf("http service %s does not exist", name)
+		}
+		if cfg.DriversNumber() > 1 {
+			return nil, fmt.Errorf("service %s cannot have more than one driver in the same server", name)
+		}
+		log := zerolog.Nop() // TODO: pass correct log
+		svc, err := new(cfg[0].Config, &log)
+		if err != nil {
+			return nil, errors.Wrapf(err, "http service %s could not be started", name)
+		}
+		s[name] = svc
+	}
+	return s, nil
 }
 
 // New returns a new server.
@@ -196,31 +218,6 @@ func (s *Server) registerServices() {
 		s.unprotected = append(s.unprotected, getUnprotected(svc.Prefix(), svc.Unprotected())...)
 	}
 }
-
-// if s.isServiceEnabled(svcName) {
-// 	newFunc := global.Services[svcName]
-// 	svcLogger := s.log.With().Str("service", svcName).Logger()
-// 	svc, err := newFunc(s.conf.Services[svcName], &svcLogger)
-// 	if err != nil {
-// 		err = errors.Wrapf(err, "http service %s could not be started,", svcName)
-// 		return err
-// 	}
-
-// 	// instrument services with opencensus tracing.
-// 	h := traceHandler(svcName, svc.Handler())
-// 	s.handlers[svc.Prefix()] = h
-// 	s.svcs[svc.Prefix()] = svc
-// 	s.unprotected = append(s.unprotected, getUnprotected(svc.Prefix(), svc.Unprotected())...)
-// 	s.log.Info().Msgf("http service enabled: %s@/%s", svcName, svc.Prefix())
-// } else {
-// 	message := fmt.Sprintf("http service %s does not exist", svcName)
-// 	return errors.New(message)
-// }
-
-// func (s *Server) isServiceEnabled(svcName string) bool {
-// 	_, ok := global.Services[svcName]
-// 	return ok
-// }
 
 // TODO(labkode): if the http server is exposed under a basename we need to prepend
 // to prefix.
