@@ -32,6 +32,7 @@ import (
 	"github.com/cs3org/reva/cmd/revad/pkg/grace"
 	"github.com/cs3org/reva/cmd/revad/runtime"
 	"github.com/cs3org/reva/pkg/sysinfo"
+	"github.com/google/uuid"
 )
 
 var (
@@ -40,7 +41,6 @@ var (
 	signalFlag  = flag.String("s", "", "send signal to a master process: stop, quit, reload")
 	configFlag  = flag.String("c", "/etc/revad/revad.toml", "set configuration file")
 	pidFlag     = flag.String("p", "", "pid file. If empty defaults to a random file in the OS temporary directory")
-	logFlag     = flag.String("log", "", "log messages with the given severity or above. One of: [trace, debug, info, warn, error, fatal, panic]")
 	dirFlag     = flag.String("dev-dir", "", "runs any toml file in the specified directory. Intended for development use only")
 
 	// Compile time variables initialized with gcc flags.
@@ -208,8 +208,9 @@ func readConfigs(files []string) ([]*config.Config, error) {
 }
 
 func runConfigs(confs []*config.Config) {
+	pidfile := getPidfile()
 	if len(confs) == 1 {
-		runSingle(confs[0])
+		runSingle(confs[0], pidfile)
 		return
 	}
 
@@ -220,10 +221,10 @@ func registerReva(r *runtime.Reva) {
 	revaProcs = append(revaProcs, r)
 }
 
-func runSingle(conf *config.Config) {
-	reva, err := runtime.New(conf)
+func runSingle(conf *config.Config, pidfile string) {
+	reva, err := runtime.New(conf, runtime.WithPidFile(pidfile))
 	if err != nil {
-		fmt.Fprintf(os.Stderr, err.Error())
+		fmt.Fprint(os.Stderr, err.Error())
 		os.Exit(1)
 	}
 	registerReva(reva)
@@ -232,13 +233,22 @@ func runSingle(conf *config.Config) {
 
 func runMultiple(confs []*config.Config) {
 	var wg sync.WaitGroup
+	pidfile := getPidfile()
+
 	for _, conf := range confs {
 		wg.Add(1)
 		go func(wg *sync.WaitGroup, conf *config.Config) {
 			defer wg.Done()
-			runSingle(conf)
+			runSingle(conf, pidfile)
 		}(&wg, conf)
 	}
 	wg.Wait()
 	os.Exit(0)
+}
+
+func getPidfile() string {
+	uuid := uuid.New().String()
+	name := fmt.Sprintf("revad-%s.pid", uuid)
+
+	return path.Join(os.TempDir(), name)
 }

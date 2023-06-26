@@ -10,10 +10,13 @@ import (
 	"github.com/rs/zerolog"
 )
 
-func initLogger(conf *config.Log) *zerolog.Logger {
+func initLogger(conf *config.Log, opts Options) *zerolog.Logger {
+	if opts.Logger != nil {
+		return opts.Logger
+	}
 	log, err := newLogger(conf)
 	if err != nil {
-		abort("error creating logger: %w", err)
+		abort("error creating logger: %v", err)
 	}
 	return log
 }

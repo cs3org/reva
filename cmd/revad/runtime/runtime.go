@@ -22,16 +22,16 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"path"
 	"runtime"
 	"strconv"
 	"strings"
+
+	"github.com/pkg/errors"
 
 	"github.com/cs3org/reva/cmd/revad/pkg/config"
 	"github.com/cs3org/reva/cmd/revad/pkg/grace"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/utils/maps"
-	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 	"golang.org/x/sync/errgroup"
 )
@@ -42,29 +42,49 @@ type Reva struct {
 	servers []*Server
 	watcher *grace.Watcher
 	lns     map[string]net.Listener
+
+	pidfile string
+	log     *zerolog.Logger
 }
 
-func New(config *config.Config) (*Reva, error) {
-	_ = initLogger(config.Log)
+func New(config *config.Config, opt ...Option) (*Reva, error) {
+	opts := newOptions(opt...)
+
+	log := initLogger(config.Log, opts)
 	initSharedConf(config)
 
-	pidfile := getPidfile()
+	if err := initCPUCount(config.Core, log); err != nil {
+		return nil, err
+	}
 
 	grpc, addrGRPC := groupGRPCByAddress(config)
 	http, addrHTTP := groupHTTPByAddress(config)
 
-	log := zerolog.Nop()
-	watcher, err := initWatcher(&log, pidfile)
+	if opts.PidFile == "" {
+		return nil, errors.New("pid file not provided")
+	}
+
+	watcher, err := initWatcher(opts.PidFile, log)
 	if err != nil {
 		return nil, err
 	}
 
-	listeners := initListeners(watcher, maps.Merge(addrGRPC, addrHTTP), &log)
-	setRandomAddresses(config, listeners)
-	applyTemplates(config)
+	listeners, err := watcher.GetListeners(maps.Merge(addrGRPC, addrHTTP))
+	if err != nil {
+		watcher.Exit(1)
+		return nil, err
+	}
+
+	setRandomAddresses(config, listeners, log)
+
+	if err := applyTemplates(config); err != nil {
+		watcher.Exit(1)
+		return nil, err
+	}
 
 	servers, err := newServers(grpc, http)
 	if err != nil {
+		watcher.Exit(1)
 		return nil, err
 	}
 
@@ -73,31 +93,24 @@ func New(config *config.Config) (*Reva, error) {
 		servers: servers,
 		watcher: watcher,
 		lns:     listeners,
+		pidfile: opts.PidFile,
+		log:     log,
 	}, nil
 }
 
-func setRandomAddresses(c *config.Config, lns map[string]net.Listener) {
+func setRandomAddresses(c *config.Config, lns map[string]net.Listener, log *zerolog.Logger) {
 	f := func(s *config.Service) {
 		if s.Address != "" {
 			return
 		}
 		ln, ok := lns[s.Label]
 		if !ok {
-			abort("port not assigned for service %s", s.Label)
+			log.Fatal().Msg("port not assigned for service " + s.Label)
 		}
 		s.SetAddress(ln.Addr().String())
 	}
 	c.GRPC.ForEachService(f)
 	c.HTTP.ForEachService(f)
-}
-
-func initListeners(watcher *grace.Watcher, servers map[string]grace.Addressable, log *zerolog.Logger) map[string]net.Listener {
-	listeners, err := watcher.GetListeners(servers)
-	if err != nil {
-		log.Error().Err(err).Msg("error getting sockets")
-		watcher.Exit(1)
-	}
-	return listeners
 }
 
 type addr struct {
@@ -121,14 +134,14 @@ func groupGRPCByAddress(cfg *config.Config) (map[string]*config.GRPC, map[string
 		if _, ok := g[s.Address]; !ok {
 			g[s.Address] = &config.GRPC{
 				Address:          s.Address,
-				Network:          "tcp", // TODO: configure this as well
+				Network:          s.Network,
 				ShutdownDeadline: cfg.GRPC.ShutdownDeadline,
 				EnableReflection: cfg.GRPC.EnableReflection,
 				Services:         make(map[string]config.ServicesConfig),
 				Interceptors:     cfg.GRPC.Interceptors,
 			}
 			if s.Address == "" {
-				a[s.Label] = &addr{address: s.Address, network: "tcp"}
+				a[s.Label] = &addr{address: s.Address, network: s.Network}
 			}
 		}
 		g[s.Address].Services[s.Name] = config.ServicesConfig{
@@ -145,14 +158,14 @@ func groupHTTPByAddress(cfg *config.Config) (map[string]*config.HTTP, map[string
 		if _, ok := g[s.Address]; !ok {
 			g[s.Address] = &config.HTTP{
 				Address:     s.Address,
-				Network:     "tpc", // TODO: configure this as well
+				Network:     s.Network,
 				CertFile:    cfg.HTTP.CertFile,
 				KeyFile:     cfg.HTTP.KeyFile,
 				Services:    make(map[string]config.ServicesConfig),
 				Middlewares: cfg.HTTP.Middlewares,
 			}
 			if s.Address == "" {
-				a[s.Label] = &addr{address: s.Address, network: "tcp"}
+				a[s.Label] = &addr{address: s.Address, network: s.Network}
 			}
 		}
 		g[s.Address].Services[s.Name] = config.ServicesConfig{
@@ -162,7 +175,7 @@ func groupHTTPByAddress(cfg *config.Config) (map[string]*config.HTTP, map[string
 	return g, a
 }
 
-func (r *Reva) Start() {
+func (r *Reva) Start() error {
 	var g errgroup.Group
 	for _, server := range r.servers {
 		server := server
@@ -172,70 +185,29 @@ func (r *Reva) Start() {
 	}
 
 	r.watcher.TrapSignals()
-	if err := g.Wait(); err != nil {
-		// TODO: log error
-	}
-}
-
-func getPidfile() string {
-	uuid := uuid.New().String()
-	name := fmt.Sprintf("revad-%s.pid", uuid)
-
-	return path.Join(os.TempDir(), name)
+	return g.Wait()
 }
 
 func initSharedConf(config *config.Config) {
 	sharedconf.Init(config.Shared)
 }
 
-func initWatcher(log *zerolog.Logger, filename string) (*grace.Watcher, error) {
-	watcher, err := handlePIDFlag(log, filename)
+func initWatcher(filename string, log *zerolog.Logger) (*grace.Watcher, error) {
+	return handlePIDFlag(log, filename)
 	// TODO(labkode): maybe pidfile can be created later on? like once a server is going to be created?
-	if err != nil {
-		log.Error().Err(err).Msg("error creating grace watcher")
-		os.Exit(1)
-	}
-	return watcher, err
 }
 
-func assignRandomAddress(configs []*config.Config) (addr []net.Listener) {
-	assign := func(s *config.Service) {
-		if s.Address == "" {
-			random, err := randomListener("tpc") // TODO: take from config
-			if err != nil {
-				abort("error assigning random port to service %s: %v", s.Name, err)
-			}
-			s.SetAddress(random.Addr().String())
-			addr = append(addr, random)
-		}
-	}
-	for _, c := range configs {
-		c.GRPC.ForEachService(assign)
-		c.HTTP.ForEachService(assign)
-	}
-	return
+func applyTemplates(config *config.Config) error {
+	return config.ApplyTemplates(config)
 }
 
-func randomListener(network string) (net.Listener, error) {
-	return net.Listen(network, ":0")
-}
-
-func applyTemplates(config *config.Config) {
-	// TODO: we might want to prefer before the actual config in the lookup
-	// and then the others
-	if err := config.ApplyTemplates(config); err != nil {
-		abort("error applying templated to config: %v", err)
-	}
-}
-
-func initCPUCount(conf *config.Core, log *zerolog.Logger) {
+func initCPUCount(conf *config.Core, log *zerolog.Logger) error {
 	ncpus, err := adjustCPU(conf.MaxCPUs)
 	if err != nil {
-		log.Error().Err(err).Msg("error adjusting number of cpus")
-		os.Exit(1)
+		return errors.Wrap(err, "error adjusting number of cpus")
 	}
-	// log.Info().Msgf("%s", getVersionString())
 	log.Info().Msgf("running on %d cpus", ncpus)
+	return nil
 }
 
 func abort(msg string, args ...any) {

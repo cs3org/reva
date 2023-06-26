@@ -85,6 +85,7 @@ func parseMiddlwares(cfg map[string]any, key string) (map[string]map[string]any,
 // Service contains the configuration for a service.
 type Service struct {
 	Address string
+	Network string
 	Name    string
 	Label   string
 	Config  map[string]any
