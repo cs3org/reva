@@ -44,7 +44,7 @@ type Config struct {
 type Log struct {
 	Output string `key:"output" mapstructure:"output" default:"stdout"`
 	Mode   string `key:"mode"   mapstructure:"mode"   default:"console"`
-	Level  string `key:"level"  mapstructure:"level"  default:"info"`
+	Level  string `key:"level"  mapstructure:"level"  default:"trace"`
 }
 
 // Shared holds the shared configuration.

@@ -35,7 +35,10 @@ type Options struct {
 
 // newOptions initializes the available default options.
 func newOptions(opts ...Option) Options {
-	opt := Options{}
+	l := zerolog.Nop()
+	opt := Options{
+		Logger: &l,
+	}
 
 	for _, o := range opts {
 		o(&opt)

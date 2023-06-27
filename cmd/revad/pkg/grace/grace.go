@@ -84,13 +84,18 @@ func NewWatcher(opts ...Option) *Watcher {
 // Exit exits the current process cleaning up
 // existing pid files.
 func (w *Watcher) Exit(errc int) {
+	w.Clean()
+	os.Exit(errc)
+}
+
+// Clean cleans up existing pid files.
+func (w *Watcher) Clean() {
 	err := w.clean()
 	if err != nil {
 		w.log.Warn().Err(err).Msg("error removing pid file")
 	} else {
 		w.log.Info().Msgf("pid file %q got removed", w.pidFile)
 	}
-	os.Exit(errc)
 }
 
 func (w *Watcher) clean() error {

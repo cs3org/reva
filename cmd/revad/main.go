@@ -21,6 +21,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path"
@@ -31,8 +32,11 @@ import (
 	"github.com/cs3org/reva/cmd/revad/pkg/config"
 	"github.com/cs3org/reva/cmd/revad/pkg/grace"
 	"github.com/cs3org/reva/cmd/revad/runtime"
+	"github.com/cs3org/reva/pkg/logger"
 	"github.com/cs3org/reva/pkg/sysinfo"
 	"github.com/google/uuid"
+	"github.com/pkg/errors"
+	"github.com/rs/zerolog"
 )
 
 var (
@@ -222,16 +226,22 @@ func registerReva(r *runtime.Reva) {
 }
 
 func runSingle(conf *config.Config, pidfile string) {
-	reva, err := runtime.New(conf, runtime.WithPidFile(pidfile))
+	log := initLogger(conf.Log)
+	reva, err := runtime.New(conf,
+		runtime.WithPidFile(pidfile),
+		runtime.WithLogger(log),
+	)
 	if err != nil {
-		fmt.Fprint(os.Stderr, err.Error())
-		os.Exit(1)
+		abort(log, "error creating reva runtime: %v", err)
 	}
 	registerReva(reva)
 	if err := reva.Start(); err != nil {
-		fmt.Fprint(os.Stderr, err.Error())
-		os.Exit(1)
+		abort(log, "error starting reva: %v", err)
 	}
+}
+
+func abort(log *zerolog.Logger, format string, a ...any) {
+	log.Fatal().Msgf(format, a...)
 }
 
 func runMultiple(confs []*config.Config) {
@@ -254,4 +264,52 @@ func getPidfile() string {
 	name := fmt.Sprintf("revad-%s.pid", uuid)
 
 	return path.Join(os.TempDir(), name)
+}
+
+func initLogger(conf *config.Log) *zerolog.Logger {
+	log, err := newLogger(conf)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error creating logger: %v", err)
+		os.Exit(1)
+	}
+	return log
+}
+
+func newLogger(conf *config.Log) (*zerolog.Logger, error) {
+	// TODO(labkode): use debug level rather than info as default until reaching a stable version.
+	// Helps having smaller development files.
+	if conf.Level == "" {
+		conf.Level = zerolog.DebugLevel.String()
+	}
+
+	var opts []logger.Option
+	opts = append(opts, logger.WithLevel(conf.Level))
+
+	w, err := getWriter(conf.Output)
+	if err != nil {
+		return nil, err
+	}
+
+	opts = append(opts, logger.WithWriter(w, logger.Mode(conf.Mode)))
+
+	l := logger.New(opts...)
+	sub := l.With().Int("pid", os.Getpid()).Logger()
+	return &sub, nil
+}
+
+func getWriter(out string) (io.Writer, error) {
+	if out == "stderr" || out == "" {
+		return os.Stderr, nil
+	}
+
+	if out == "stdout" {
+		return os.Stdout, nil
+	}
+
+	fd, err := os.OpenFile(out, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return nil, errors.Wrap(err, "error creating log file: "+out)
+	}
+
+	return fd, nil
 }

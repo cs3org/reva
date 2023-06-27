@@ -65,8 +65,8 @@ func (s *Server) Start() error {
 
 func New(config *config.Config, opt ...Option) (*Reva, error) {
 	opts := newOptions(opt...)
+	log := opts.Logger
 
-	log := initLogger(config.Log, opts)
 	initSharedConf(config)
 
 	if err := initCPUCount(config.Core, log); err != nil {
@@ -87,26 +87,26 @@ func New(config *config.Config, opt ...Option) (*Reva, error) {
 
 	listeners, err := watcher.GetListeners(maps.Merge(addrGRPC, addrHTTP))
 	if err != nil {
-		watcher.Exit(1)
+		watcher.Clean()
 		return nil, err
 	}
 
 	setRandomAddresses(config, listeners, log)
 
 	if err := applyTemplates(config); err != nil {
-		watcher.Exit(1)
+		watcher.Clean()
 		return nil, err
 	}
 
 	servers, err := newServers(grpc, http, log)
 	if err != nil {
-		watcher.Exit(1)
+		watcher.Clean()
 		return nil, err
 	}
 
 	serverless, err := newServerless(config, log)
 	if err != nil {
-		watcher.Exit(1)
+		watcher.Clean()
 		return nil, err
 	}
 
@@ -272,10 +272,10 @@ func abort(msg string, args ...any) {
 }
 
 func handlePIDFlag(l *zerolog.Logger, pidFile string) (*grace.Watcher, error) {
-	var opts []grace.Option
-	opts = append(opts, grace.WithPIDFile(pidFile))
-	opts = append(opts, grace.WithLogger(l.With().Str("pkg", "grace").Logger()))
-	w := grace.NewWatcher(opts...)
+	w := grace.NewWatcher(
+		grace.WithPIDFile(pidFile),
+		grace.WithLogger(l.With().Str("pkg", "grace").Logger()),
+	)
 	err := w.WritePID()
 	if err != nil {
 		return nil, err

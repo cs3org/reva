@@ -134,6 +134,9 @@ type InterceptorFunc func(*Interceptor)
 
 // ForEachService iterates to each service/driver calling the function f.
 func (i iterableImpl) ForEachService(f ServiceFunc) {
+	if i.i == nil {
+		return
+	}
 	for name, c := range i.i.services() {
 		for i, cfg := range c {
 			f(&Service{
