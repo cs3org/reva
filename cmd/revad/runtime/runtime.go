@@ -21,7 +21,6 @@ package runtime
 import (
 	"fmt"
 	"net"
-	"os"
 	"runtime"
 	"strconv"
 	"strings"
@@ -35,6 +34,7 @@ import (
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/rserverless"
 	"github.com/cs3org/reva/pkg/sharedconf"
+	"github.com/cs3org/reva/pkg/utils/list"
 	"github.com/cs3org/reva/pkg/utils/maps"
 	"github.com/rs/zerolog"
 	"golang.org/x/sync/errgroup"
@@ -98,11 +98,12 @@ func New(config *config.Config, opt ...Option) (*Reva, error) {
 		return nil, err
 	}
 
-	servers, err := newServers(grpc, http, log)
+	servers, err := newServers(grpc, http, listeners, log)
 	if err != nil {
 		watcher.Clean()
 		return nil, err
 	}
+	watcher.SetServers(list.Map(servers, func(s *Server) grace.Server { return s.server }))
 
 	serverless, err := newServerless(config, log)
 	if err != nil {
@@ -192,9 +193,7 @@ func groupGRPCByAddress(cfg *config.Config) (map[string]*config.GRPC, map[string
 				Services:         make(map[string]config.ServicesConfig),
 				Interceptors:     cfg.GRPC.Interceptors,
 			}
-			if s.Address == "" {
-				a[s.Label] = &addr{address: s.Address, network: s.Network}
-			}
+			a[s.Label] = &addr{address: s.Address, network: s.Network}
 		}
 		g[s.Address].Services[s.Name] = config.ServicesConfig{
 			{Config: s.Config},
@@ -216,9 +215,7 @@ func groupHTTPByAddress(cfg *config.Config) (map[string]*config.HTTP, map[string
 				Services:    make(map[string]config.ServicesConfig),
 				Middlewares: cfg.HTTP.Middlewares,
 			}
-			if s.Address == "" {
-				a[s.Label] = &addr{address: s.Address, network: s.Network}
-			}
+			a[s.Label] = &addr{address: s.Address, network: s.Network}
 		}
 		g[s.Address].Services[s.Name] = config.ServicesConfig{
 			{Config: s.Config},
@@ -264,11 +261,6 @@ func initCPUCount(conf *config.Core, log *zerolog.Logger) error {
 	}
 	log.Info().Msgf("running on %d cpus", ncpus)
 	return nil
-}
-
-func abort(msg string, args ...any) {
-	fmt.Fprintf(os.Stderr, msg, args...)
-	os.Exit(1)
 }
 
 func handlePIDFlag(l *zerolog.Logger, pidFile string) (*grace.Watcher, error) {
@@ -324,7 +316,27 @@ func adjustCPU(cpu string) (int, error) {
 	return numCPU, nil
 }
 
-func newServers(grpc map[string]*config.GRPC, http map[string]*config.HTTP, log *zerolog.Logger) ([]*Server, error) {
+func firstKey[K comparable, V any](m map[K]V) (K, bool) {
+	for k := range m {
+		return k, true
+	}
+	var k K
+	return k, false
+}
+
+func listenerFromServices[V any](lns map[string]net.Listener, svcs map[string]V) net.Listener {
+	svc, ok := firstKey(svcs)
+	if !ok {
+		panic("services map should be not empty")
+	}
+	ln, ok := lns[svc]
+	if !ok {
+		panic("listener not assigned for service " + svc)
+	}
+	return ln
+}
+
+func newServers(grpc map[string]*config.GRPC, http map[string]*config.HTTP, lns map[string]net.Listener, log *zerolog.Logger) ([]*Server, error) {
 	servers := make([]*Server, 0, len(grpc)+len(http))
 	for _, cfg := range grpc {
 		services, err := rgrpc.InitServices(cfg.Services)
@@ -348,6 +360,7 @@ func newServers(grpc map[string]*config.GRPC, http map[string]*config.HTTP, log 
 		}
 		server := &Server{
 			server:   s,
+			listener: listenerFromServices(lns, services),
 			services: maps.MapValues(services, func(s rgrpc.Service) any { return s }),
 		}
 		servers = append(servers, server)
@@ -372,6 +385,7 @@ func newServers(grpc map[string]*config.GRPC, http map[string]*config.HTTP, log 
 		}
 		server := &Server{
 			server:   s,
+			listener: listenerFromServices(lns, services),
 			services: maps.MapValues(services, func(s global.Service) any { return s }),
 		}
 		servers = append(servers, server)

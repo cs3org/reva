@@ -174,3 +174,10 @@ func addressForService(global string, cfg map[string]any) string {
 	}
 	return global
 }
+
+func networkForService(global string, cfg map[string]any) string {
+	if network, ok := cfg["network"].(string); ok {
+		return network
+	}
+	return global
+}

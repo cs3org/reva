@@ -40,7 +40,7 @@ type Watcher struct {
 	graceful  bool
 	ppid      int
 	lns       map[string]net.Listener
-	ss        map[string]Server
+	ss        []Server
 	SL        Serverless
 	pidFile   string
 	childPIDs []int
@@ -71,7 +71,7 @@ func NewWatcher(opts ...Option) *Watcher {
 		log:      zerolog.Nop(),
 		graceful: os.Getenv("GRACEFUL") == "true",
 		ppid:     os.Getppid(),
-		ss:       make(map[string]Server),
+		ss:       make([]Server, 0),
 	}
 
 	for _, opt := range opts {
@@ -324,6 +324,12 @@ func (w *Watcher) GetListeners(servers map[string]Addressable) (map[string]net.L
 	// no graceful
 	for svc, s := range servers {
 		network, addr := s.Network(), getAddress(s.Address())
+		// multiple services may have the same listener
+		ln, ok := get(lns, addr, network)
+		if ok {
+			lns[svc] = ln
+			continue
+		}
 		ln, err := newListener(network, addr)
 		if err != nil {
 			return nil, err
@@ -332,6 +338,15 @@ func (w *Watcher) GetListeners(servers map[string]Addressable) (map[string]net.L
 	}
 	w.lns = lns
 	return lns, nil
+}
+
+func get(lns map[string]net.Listener, address, network string) (net.Listener, bool) {
+	for _, ln := range lns {
+		if ln.Addr().Network() == network && ln.Addr().String() == address {
+			return ln, true
+		}
+	}
+	return nil, false
 }
 
 type Addressable interface {
@@ -353,7 +368,7 @@ type Serverless interface {
 	GracefulStop() error
 }
 
-func (w *Watcher) SetServers(s map[string]Server) { w.ss = s }
+func (w *Watcher) SetServers(s []Server) { w.ss = s }
 
 // TrapSignals captures the OS signal.
 func (w *Watcher) TrapSignals() {

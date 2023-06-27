@@ -25,7 +25,7 @@ import (
 
 // GRPC holds the configuration for the GRPC services.
 type GRPC struct {
-	Address          string `mapstructure:"address"           key:"address"           default:"0.0.0.0:19000"`
+	Address          string `mapstructure:"address"           key:"address"`
 	Network          string `mapstructure:"network"           key:"network"           default:"tcp"`
 	ShutdownDeadline int    `mapstructure:"shutdown_deadline" key:"shutdown_deadline"`
 	EnableReflection bool   `mapstructure:"enable_reflection" key:"enable_reflection"`
@@ -70,6 +70,7 @@ func (c *Config) parseGRPC(raw map[string]any) error {
 	for _, svc := range c.GRPC.Services {
 		for _, cfg := range svc {
 			cfg.Address = addressForService(c.GRPC.Address, cfg.Config)
+			cfg.Network = networkForService(c.HTTP.Network, cfg.Config)
 		}
 	}
 	return nil

@@ -26,7 +26,7 @@ import (
 // HTTP holds the configuration for the HTTP services.
 type HTTP struct {
 	Network  string `mapstructure:"network"  key:"network"  default:"tcp"`
-	Address  string `mapstructure:"address"  key:"address"  default:"0.0.0.0:19001"`
+	Address  string `mapstructure:"address"  key:"address"`
 	CertFile string `mapstructure:"certfile" key:"certfile"`
 	KeyFile  string `mapstructure:"keyfile"  key:"keyfile"`
 
@@ -70,6 +70,7 @@ func (c *Config) parseHTTP(raw map[string]any) error {
 	for _, svc := range c.HTTP.Services {
 		for _, cfg := range svc {
 			cfg.Address = addressForService(c.HTTP.Address, cfg.Config)
+			cfg.Network = networkForService(c.HTTP.Network, cfg.Config)
 		}
 	}
 	return nil
