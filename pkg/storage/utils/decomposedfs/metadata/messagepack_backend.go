@@ -200,10 +200,9 @@ func (b MessagePackBackend) saveAttributes(ctx context.Context, path string, set
 	}
 	subspan.End()
 
-	_, subspan = tracer.Start(ctx, "metaCache.PushToCache")
-	err = b.metaCache.PushToCache(b.cacheKey(path), attribs)
-	subspan.End()
-	return err
+	go func() { _ = b.metaCache.PushToCache(b.cacheKey(path), attribs) }()
+
+	return f.Close()
 }
 
 func (b MessagePackBackend) loadAttributes(ctx context.Context, path string, source io.Reader) (map[string][]byte, error) {
@@ -259,12 +258,7 @@ func (b MessagePackBackend) loadAttributes(ctx context.Context, path string, sou
 		}
 	}
 
-	_, subspan := tracer.Start(ctx, "metaCache.PushToCache")
-	err = b.metaCache.PushToCache(b.cacheKey(path), attribs)
-	subspan.End()
-	if err != nil {
-		return nil, err
-	}
+	go func() { _ = b.metaCache.PushToCache(b.cacheKey(path), attribs) }()
 
 	return attribs, nil
 }
