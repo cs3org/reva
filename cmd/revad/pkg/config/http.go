@@ -44,8 +44,7 @@ func (c *Config) parseHTTP(raw map[string]any) error {
 	if !ok {
 		return nil
 	}
-	var http HTTP
-	if err := mapstructure.Decode(cfg, &http); err != nil {
+	if err := mapstructure.Decode(cfg, c.HTTP); err != nil {
 		return errors.Wrap(err, "config: error decoding http config")
 	}
 
@@ -64,14 +63,13 @@ func (c *Config) parseHTTP(raw map[string]any) error {
 		return err
 	}
 
-	http.Services = services
-	http.Middlewares = middlewares
-	http.iterableImpl = iterableImpl{&http}
-	c.HTTP = &http
+	c.HTTP.Services = services
+	c.HTTP.Middlewares = middlewares
+	c.HTTP.iterableImpl = iterableImpl{c.HTTP}
 
-	for _, c := range http.Services {
-		for _, cfg := range c {
-			cfg.Address = addressForService(http.Address, cfg.Config)
+	for _, svc := range c.HTTP.Services {
+		for _, cfg := range svc {
+			cfg.Address = addressForService(c.HTTP.Address, cfg.Config)
 		}
 	}
 	return nil

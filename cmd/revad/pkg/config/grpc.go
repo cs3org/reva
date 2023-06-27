@@ -44,8 +44,7 @@ func (c *Config) parseGRPC(raw map[string]any) error {
 	if !ok {
 		return nil
 	}
-	var grpc GRPC
-	if err := mapstructure.Decode(cfg, &grpc); err != nil {
+	if err := mapstructure.Decode(cfg, c.GRPC); err != nil {
 		return errors.Wrap(err, "config: error decoding grpc config")
 	}
 
@@ -64,14 +63,13 @@ func (c *Config) parseGRPC(raw map[string]any) error {
 		return err
 	}
 
-	grpc.Services = services
-	grpc.Interceptors = interceptors
-	grpc.iterableImpl = iterableImpl{&grpc}
-	c.GRPC = &grpc
+	c.GRPC.Services = services
+	c.GRPC.Interceptors = interceptors
+	c.GRPC.iterableImpl = iterableImpl{c.GRPC}
 
-	for _, c := range grpc.Services {
-		for _, cfg := range c {
-			cfg.Address = addressForService(grpc.Address, cfg.Config)
+	for _, svc := range c.GRPC.Services {
+		for _, cfg := range svc {
+			cfg.Address = addressForService(c.GRPC.Address, cfg.Config)
 		}
 	}
 	return nil
