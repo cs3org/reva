@@ -486,12 +486,14 @@ func TestDump(t *testing.T) {
 				"gateway": []any{
 					map[string]any{
 						"address":         "",
+						"network":         "",
 						"authregistrysvc": "localhost:19000",
 					},
 				},
 				"authregistry": []any{
 					map[string]any{
 						"address": "localhost:19000",
+						"network": "",
 						"driver":  "static",
 						"drivers": map[string]any{
 							"static": map[string]any{
@@ -506,6 +508,7 @@ func TestDump(t *testing.T) {
 				"authprovider": []any{
 					map[string]any{
 						"address": "localhost:19001",
+						"network": "",
 						"driver":  "ldap",
 						"drivers": map[string]any{
 							"ldap": map[string]any{
@@ -515,6 +518,7 @@ func TestDump(t *testing.T) {
 					},
 					map[string]any{
 						"address": "localhost:19002",
+						"network": "",
 						"driver":  "machine",
 						"drivers": map[string]any{
 							"machine": map[string]any{
@@ -535,12 +539,14 @@ func TestDump(t *testing.T) {
 				"dataprovider": []any{
 					map[string]any{
 						"address": "localhost:19003",
+						"network": "",
 						"driver":  "localhome",
 					},
 				},
 				"sysinfo": []any{
 					map[string]any{
 						"address": "localhost:19003",
+						"network": "",
 					},
 				},
 			},
