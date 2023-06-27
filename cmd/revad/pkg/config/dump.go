@@ -43,11 +43,12 @@ func dumpStruct(v reflect.Value) map[string]any {
 			}
 
 			var mm map[string]any
-			if e.Kind() == reflect.Struct {
+			switch e.Kind() {
+			case reflect.Struct:
 				mm = dumpStruct(e)
-			} else if e.Kind() == reflect.Map {
+			case reflect.Map:
 				mm = dumpMap(e)
-			} else {
+			default:
 				panic("squash not allowed on non map/struct types")
 			}
 			for k, v := range mm {

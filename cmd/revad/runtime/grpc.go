@@ -114,7 +114,6 @@ func initGRPCInterceptors(conf map[string]map[string]any, unprotected []string, 
 			}
 			streamTriples = append(streamTriples, triple)
 		}
-
 	}
 	// sort stream triples
 	sort.SliceStable(streamTriples, func(i, j int) bool {

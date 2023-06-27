@@ -70,11 +70,12 @@ func lookupStruct(key string, v reflect.Value) (any, error) {
 				v   any
 				err error
 			)
-			if val.Kind() == reflect.Struct {
+			switch val.Kind() {
+			case reflect.Struct:
 				v, err = lookupStruct(key, val)
-			} else if val.Kind() == reflect.Map {
+			case reflect.Map:
 				v, err = lookupMap(key, val)
-			} else {
+			default:
 				panic("squash not allowed on non map/struct types")
 			}
 			if errors.Is(err, ErrKeyNotFound) {

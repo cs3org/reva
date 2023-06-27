@@ -188,7 +188,7 @@ func newListener(network, addr string) (net.Listener, error) {
 	return net.Listen(network, addr)
 }
 
-// implements the net.Listener interface
+// implements the net.Listener interface.
 type inherited struct {
 	f  *os.File
 	ln net.Listener

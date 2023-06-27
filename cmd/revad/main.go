@@ -228,7 +228,10 @@ func runSingle(conf *config.Config, pidfile string) {
 		os.Exit(1)
 	}
 	registerReva(reva)
-	reva.Start()
+	if err := reva.Start(); err != nil {
+		fmt.Fprint(os.Stderr, err.Error())
+		os.Exit(1)
+	}
 }
 
 func runMultiple(confs []*config.Config) {

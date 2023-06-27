@@ -325,7 +325,7 @@ func adjustCPU(cpu string) (int, error) {
 }
 
 func newServers(grpc map[string]*config.GRPC, http map[string]*config.HTTP, log *zerolog.Logger) ([]*Server, error) {
-	var servers []*Server
+	servers := make([]*Server, 0, len(grpc)+len(http))
 	for _, cfg := range grpc {
 		services, err := rgrpc.InitServices(cfg.Services)
 		if err != nil {

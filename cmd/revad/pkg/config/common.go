@@ -46,7 +46,7 @@ type DriverConfig struct {
 }
 
 func newSvcConfigFromList(l []map[string]any) (ServicesConfig, error) {
-	var cfg ServicesConfig
+	cfg := make(ServicesConfig, 0, len(l))
 	for _, c := range l {
 		cfg = append(cfg, &DriverConfig{Config: c})
 	}

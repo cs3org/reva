@@ -85,5 +85,4 @@ func TestApplyTemplate(t *testing.T) {
 			"db_password": "secretpassword",
 			"key":         "value",
 		})
-
 }

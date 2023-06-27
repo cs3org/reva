@@ -125,4 +125,3 @@ func (s *Serverless) Stop() error {
 
 	return nil
 }
-

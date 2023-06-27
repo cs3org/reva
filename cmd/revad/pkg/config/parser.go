@@ -58,7 +58,7 @@ func parseNext(key string) (Command, string, error) {
 		tkn, next := split(key)
 		index, err := strconv.ParseInt(tkn, 10, 64)
 		if err != nil {
-			return nil, "", errors.Wrap(err, "parsing error:")
+			return nil, "", errors.Wrap(err, "parsing error")
 		}
 		return FieldByIndex{Index: int(index)}, next, nil
 	}

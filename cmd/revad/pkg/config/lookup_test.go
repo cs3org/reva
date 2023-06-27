@@ -184,5 +184,4 @@ func TestLookupStruct(t *testing.T) {
 			assert.Equal(t, tt.val, got)
 		}
 	}
-
 }
