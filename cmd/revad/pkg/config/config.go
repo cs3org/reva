@@ -24,35 +24,36 @@ import (
 	"reflect"
 
 	"github.com/BurntSushi/toml"
+	"github.com/creasty/defaults"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )
 
 // Config holds the reva configuration.
 type Config struct {
-	GRPC       *GRPC       `key:"grpc"       mapstructure:"-"`
-	HTTP       *HTTP       `key:"http"       mapstructure:"-"`
-	Serverless *Serverless `key:"serverless" mapstructure:"-"`
-	Shared     *Shared     `key:"shared"     mapstructure:"shared" template:"-"`
-	Log        *Log        `key:"log"        mapstructure:"log"    template:"-"`
-	Core       *Core       `key:"core"       mapstructure:"core"   template:"-"`
-	Vars       Vars        `key:"vars"       mapstructure:"vars"   template:"-"`
+	GRPC       *GRPC       `key:"grpc"       mapstructure:"-"      default:"{}"`
+	HTTP       *HTTP       `key:"http"       mapstructure:"-"      default:"{}"`
+	Serverless *Serverless `key:"serverless" mapstructure:"-"      default:"{}"`
+	Shared     *Shared     `key:"shared"     mapstructure:"shared" default:"{}" template:"-"`
+	Log        *Log        `key:"log"        mapstructure:"log"    default:"{}" template:"-"`
+	Core       *Core       `key:"core"       mapstructure:"core"   default:"{}" template:"-"`
+	Vars       Vars        `key:"vars"       mapstructure:"vars"   default:"{}" template:"-"`
 }
 
 // Log holds the configuration for the logger.
 type Log struct {
-	Output string `key:"output" mapstructure:"output"`
-	Mode   string `key:"mode"   mapstructure:"mode"`
-	Level  string `key:"level"  mapstructure:"level"`
+	Output string `key:"output" mapstructure:"output" default:"stdout"`
+	Mode   string `key:"mode"   mapstructure:"mode"   default:"console"`
+	Level  string `key:"level"  mapstructure:"level"  default:"info"`
 }
 
 // Shared holds the shared configuration.
 type Shared struct {
-	JWTSecret             string   `key:"jwt_secret"                mapstructure:"jwt_secret"`
-	GatewaySVC            string   `key:"gatewaysvc"                mapstructure:"gatewaysvc"`
-	DataGateway           string   `key:"datagateway"               mapstructure:"datagateway"`
+	JWTSecret             string   `key:"jwt_secret"                mapstructure:"jwt_secret"                default:"changemeplease"`
+	GatewaySVC            string   `key:"gatewaysvc"                mapstructure:"gatewaysvc"                default:"0.0.0.0:19000"`
+	DataGateway           string   `key:"datagateway"               mapstructure:"datagateway"               default:"http://0.0.0.0:19001/datagateway"`
 	SkipUserGroupsInToken bool     `key:"skip_user_groups_in_token" mapstructure:"skip_user_groups_in_token"`
-	BlockedUsers          []string `key:"blocked_users"             mapstructure:"blocked_users"`
+	BlockedUsers          []string `key:"blocked_users"             mapstructure:"blocked_users"             default:"[]"`
 }
 
 // Core holds the core configuration.
@@ -76,6 +77,9 @@ type Lookuper interface {
 // Load loads the configuration from the reader.
 func Load(r io.Reader) (*Config, error) {
 	var c Config
+	if err := defaults.Set(&c); err != nil {
+		return nil, err
+	}
 	var raw map[string]any
 	if _, err := toml.NewDecoder(r).Decode(&raw); err != nil {
 		return nil, errors.Wrap(err, "config: error decoding toml data")
