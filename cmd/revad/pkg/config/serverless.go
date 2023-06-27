@@ -44,8 +44,11 @@ func (c *Config) parseServerless(raw map[string]any) error {
 }
 
 // ForEach iterates to each service calling the function f.
-func (s *Serverless) ForEach(f func(name string, config map[string]any)) {
+func (s *Serverless) ForEach(f func(name string, config map[string]any) error) error {
 	for name, cfg := range s.Services {
-		f(name, cfg)
+		if err := f(name, cfg); err != nil {
+			return err
+		}
 	}
+	return nil
 }

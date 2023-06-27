@@ -20,12 +20,9 @@ package rserverless
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"time"
 
-	"github.com/mitchellh/mapstructure"
-	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 )
 
@@ -48,45 +45,37 @@ type NewService func(conf map[string]interface{}, log *zerolog.Logger) (Service,
 
 // Serverless contains the serveless collection of services.
 type Serverless struct {
-	conf     *config
-	log      zerolog.Logger
-	services map[string]Service
-}
-
-type config struct {
-	Services map[string]map[string]interface{} `mapstructure:"services"`
+	log      *zerolog.Logger
+	Services map[string]Service
 }
 
 // New returns a new serverless collection of services.
-func New(m interface{}, l zerolog.Logger) (*Serverless, error) {
-	conf := &config{}
-	if err := mapstructure.Decode(m, conf); err != nil {
-		return nil, err
-	}
-
+func New(opt ...Option) (*Serverless, error) {
+	l := zerolog.Nop()
 	n := &Serverless{
-		conf:     conf,
-		log:      l,
-		services: map[string]Service{},
+		Services: map[string]Service{},
+		log:      &l,
+	}
+	for _, o := range opt {
+		o(n)
 	}
 	return n, nil
 }
 
-func (s *Serverless) isServiceEnabled(svcName string) bool {
-	_, ok := Services[svcName]
-	return ok
-}
-
 // Start starts the serverless service collection.
 func (s *Serverless) Start() error {
-	return s.registerAndStartServices()
+	for name, svc := range s.Services {
+		go svc.Start()
+		s.log.Info().Msgf("serverless service enabled: %s", name)
+	}
+	return nil
 }
 
 // GracefulStop gracefully stops the serverless services.
 func (s *Serverless) GracefulStop() error {
 	var wg sync.WaitGroup
 
-	for svcName, svc := range s.services {
+	for svcName, svc := range s.Services {
 		wg.Add(1)
 
 		go func(svcName string, svc Service) {
@@ -113,7 +102,7 @@ func (s *Serverless) GracefulStop() error {
 func (s *Serverless) Stop() error {
 	var wg sync.WaitGroup
 
-	for svcName, svc := range s.services {
+	for svcName, svc := range s.Services {
 		wg.Add(1)
 
 		go func(svcName string, svc Service) {
@@ -137,25 +126,3 @@ func (s *Serverless) Stop() error {
 	return nil
 }
 
-func (s *Serverless) registerAndStartServices() error {
-	for svcName := range s.conf.Services {
-		if s.isServiceEnabled(svcName) {
-			newFunc := Services[svcName]
-			svcLogger := s.log.With().Str("service", svcName).Logger()
-			svc, err := newFunc(s.conf.Services[svcName], &svcLogger)
-			if err != nil {
-				return errors.Wrapf(err, "serverless service %s could not be initialized", svcName)
-			}
-
-			go svc.Start()
-
-			s.services[svcName] = svc
-
-			s.log.Info().Msgf("serverless service enabled: %s", svcName)
-		} else {
-			return fmt.Errorf("serverless service %s does not exist", svcName)
-		}
-	}
-
-	return nil
-}

@@ -33,6 +33,7 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/rhttp/global"
+	"github.com/cs3org/reva/pkg/rserverless"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/utils/maps"
 	"github.com/rs/zerolog"
@@ -42,9 +43,10 @@ import (
 type Reva struct {
 	config *config.Config
 
-	servers []*Server
-	watcher *grace.Watcher
-	lns     map[string]net.Listener
+	servers    []*Server
+	serverless *rserverless.Serverless
+	watcher    *grace.Watcher
+	lns        map[string]net.Listener
 
 	pidfile string
 	log     *zerolog.Logger
@@ -102,14 +104,50 @@ func New(config *config.Config, opt ...Option) (*Reva, error) {
 		return nil, err
 	}
 
+	serverless, err := newServerless(config, log)
+	if err != nil {
+		watcher.Exit(1)
+		return nil, err
+	}
+
 	return &Reva{
-		config:  config,
-		servers: servers,
-		watcher: watcher,
-		lns:     listeners,
-		pidfile: opts.PidFile,
-		log:     log,
+		config:     config,
+		servers:    servers,
+		serverless: serverless,
+		watcher:    watcher,
+		lns:        listeners,
+		pidfile:    opts.PidFile,
+		log:        log,
 	}, nil
+}
+
+func newServerless(config *config.Config, log *zerolog.Logger) (*rserverless.Serverless, error) {
+	sl := make(map[string]rserverless.Service)
+	logger := log.With().Str("pkg", "serverless").Logger()
+	if err := config.Serverless.ForEach(func(name string, config map[string]any) error {
+		new, ok := rserverless.Services[name]
+		if !ok {
+			return fmt.Errorf("serverless service %s does not exist", name)
+		}
+		log := logger.With().Str("service", name).Logger()
+		svc, err := new(config, &log)
+		if err != nil {
+			return errors.Wrapf(err, "serverless service %s could not be initialized", name)
+		}
+		sl[name] = svc
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+
+	ss, err := rserverless.New(
+		rserverless.WithLogger(&logger),
+		rserverless.WithServices(sl),
+	)
+	if err != nil {
+		return nil, err
+	}
+	return ss, nil
 }
 
 func setRandomAddresses(c *config.Config, lns map[string]net.Listener, log *zerolog.Logger) {
@@ -197,6 +235,10 @@ func (r *Reva) Start() error {
 			return server.Start()
 		})
 	}
+
+	g.Go(func() error {
+		return r.serverless.Start()
+	})
 
 	r.watcher.TrapSignals()
 	return g.Wait()
