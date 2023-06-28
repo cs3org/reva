@@ -223,7 +223,6 @@ func (b MessagePackBackend) loadAttributes(ctx context.Context, path string, sou
 		// source, err = lockedfile.Open(metaPath)
 		source, err = os.Open(metaPath)
 		subspan.End()
-		// // No cached entry found. Read from storage and store in cache
 		if err != nil {
 			if os.IsNotExist(err) {
 				// some of the caller rely on ENOTEXISTS to be returned when the
