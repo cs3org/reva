@@ -241,7 +241,9 @@ func (b MessagePackBackend) loadAttributes(ctx context.Context, path string, sou
 				// some of the caller rely on ENOTEXISTS to be returned when the
 				// actual file (not the metafile) does not exist in order to
 				// determine whether a node exists or not -> stat the actual node
+				_, subspan := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "os.Stat")
 				_, err := os.Stat(path)
+				subspan.End()
 				if err != nil {
 					return nil, err
 				}
@@ -251,7 +253,7 @@ func (b MessagePackBackend) loadAttributes(ctx context.Context, path string, sou
 		defer source.(*lockedfile.File).Close()
 	}
 
-	ctx, subspan := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "io.ReadAll")
+	_, subspan := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "io.ReadAll")
 	msgBytes, err := io.ReadAll(source)
 	subspan.End()
 	if err != nil {
