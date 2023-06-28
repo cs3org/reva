@@ -188,8 +188,8 @@ func groupGRPCByAddress(cfg *config.Config) (map[string]*config.GRPC, map[string
 				Services:         make(map[string]config.ServicesConfig),
 				Interceptors:     cfg.GRPC.Interceptors,
 			}
-			a[s.Label] = &addr{address: s.Address, network: s.Network}
 		}
+		a[s.Label] = &addr{address: s.Address, network: s.Network}
 		g[s.Address].Services[s.Name] = config.ServicesConfig{
 			{Config: s.Config},
 		}
@@ -210,8 +210,8 @@ func groupHTTPByAddress(cfg *config.Config) (map[string]*config.HTTP, map[string
 				Services:    make(map[string]config.ServicesConfig),
 				Middlewares: cfg.HTTP.Middlewares,
 			}
-			a[s.Label] = &addr{address: s.Address, network: s.Network}
 		}
+		a[s.Label] = &addr{address: s.Address, network: s.Network}
 		g[s.Address].Services[s.Name] = config.ServicesConfig{
 			{Config: s.Config},
 		}
