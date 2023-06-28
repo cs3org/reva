@@ -45,17 +45,31 @@ func TestApplyTemplate(t *testing.T) {
 						},
 					},
 				},
+				"other": {
+					{
+						Address: "localhost:1902",
+						Config: map[string]any{
+							"drivers": map[string]any{
+								"static": map[string]any{
+									"demo": "https://{{ grpc.services.authprovider.address }}/data",
+								},
+							},
+						},
+					},
+				},
 			},
 		},
 	}
 	err := cfg1.ApplyTemplates(cfg1)
 	assert.ErrorIs(t, err, nil)
-	assert.Equal(t, cfg1.GRPC.Services["authregistry"][0].Config["drivers"].(map[string]any)["static"].(map[string]any)["demo"], "localhost:1900")
+	assert.Equal(t, "localhost:1900", cfg1.GRPC.Services["authregistry"][0].Config["drivers"].(map[string]any)["static"].(map[string]any)["demo"])
+	assert.Equal(t, "https://localhost:1900/data", cfg1.GRPC.Services["other"][0].Config["drivers"].(map[string]any)["static"].(map[string]any)["demo"])
 
 	cfg2 := &Config{
 		Vars: Vars{
 			"db_username": "root",
 			"db_password": "secretpassword",
+			"integer":     10,
 		},
 		GRPC: &GRPC{
 			Services: map[string]ServicesConfig{
@@ -68,6 +82,19 @@ func TestApplyTemplate(t *testing.T) {
 									"db_username": "{{ vars.db_username }}",
 									"db_password": "{{ vars.db_password }}",
 									"key":         "value",
+									"int":         "{{ vars.integer }}",
+								},
+							},
+						},
+					},
+				},
+				"other": {
+					{
+						Address: "localhost:1902",
+						Config: map[string]any{
+							"drivers": map[string]any{
+								"sql": map[string]any{
+									"db_host": "http://localhost:{{ vars.integer }}",
 								},
 							},
 						},
@@ -79,10 +106,13 @@ func TestApplyTemplate(t *testing.T) {
 
 	err = cfg2.ApplyTemplates(cfg2)
 	assert.ErrorIs(t, err, nil)
-	assert.Equal(t, cfg2.GRPC.Services["authregistry"][0].Config["drivers"].(map[string]any)["sql"],
-		map[string]any{
-			"db_username": "root",
-			"db_password": "secretpassword",
-			"key":         "value",
-		})
+	assert.Equal(t, map[string]any{
+		"db_username": "root",
+		"db_password": "secretpassword",
+		"key":         "value",
+		"int":         10,
+	}, cfg2.GRPC.Services["authregistry"][0].Config["drivers"].(map[string]any)["sql"])
+	assert.Equal(t, map[string]any{
+		"db_host": "http://localhost:10",
+	}, cfg2.GRPC.Services["other"][0].Config["drivers"].(map[string]any)["sql"])
 }

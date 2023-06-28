@@ -19,10 +19,11 @@
 package config
 
 import (
+	"fmt"
 	"reflect"
+	"regexp"
+	"strconv"
 	"strings"
-
-	"github.com/pkg/errors"
 )
 
 func applyTemplateStruct(l Lookuper, p setter, v reflect.Value) error {
@@ -53,8 +54,6 @@ func applyTemplateStruct(l Lookuper, p setter, v reflect.Value) error {
 
 func applyTemplateByType(l Lookuper, p setter, v reflect.Value) error {
 	switch v.Kind() {
-	case reflect.String:
-		return applyTemplateString(l, p, v)
 	case reflect.Array, reflect.Slice:
 		return applyTemplateList(l, p, v)
 	case reflect.Struct:
@@ -109,57 +108,74 @@ func applyTemplateInterface(l Lookuper, p setter, v reflect.Value) error {
 		return applyTemplateByType(l, p, v.Elem())
 	}
 
-	if !isTemplate(s) {
+	tmpl, is := isTemplate(s)
+	if !is {
 		// nothing to do
 		return nil
 	}
 
-	key := keyFromTemplate(s)
+	key := keyFromTemplate(tmpl)
 	val, err := l.Lookup(key)
 	if err != nil {
 		return err
 	}
 
-	p.SetValue(val)
+	new, err := replaceTemplate(s, tmpl, val)
+	if err != nil {
+		return err
+	}
+	p.SetValue(new)
 	return nil
 }
 
-func applyTemplateString(l Lookuper, p setter, v reflect.Value) error {
-	if v.Kind() != reflect.String {
-		panic("called applyTemplateString on non string type")
+func replaceTemplate(original, tmpl string, val any) (any, error) {
+	if strings.TrimSpace(original) == tmpl {
+		// the value was directly a template, i.e. "{{ grpc.services.gateway.address }}"
+		return val, nil
 	}
-
-	s := v.Interface().(string)
-	if !isTemplate(s) {
-		// nothing to do
-		return nil
+	// the value is of something like "something {{ template }} something else"
+	// in this case we need to replace the template string with the value, converted
+	// as string in the original val
+	s, ok := convertToString(val)
+	if !ok {
+		return nil, fmt.Errorf("value %v cannot be converted as string in the template %s", val, original)
 	}
-
-	if !v.CanSet() {
-		panic("value is not addressable")
-	}
-
-	key := keyFromTemplate(s)
-	val, err := l.Lookup(key)
-	if err != nil {
-		return err
-	}
-	if val == nil {
-		return nil
-	}
-
-	str, ok := val.(string)
-	if ok {
-		p.SetValue(str)
-		return nil
-	}
-
-	return errors.New("value cannot be set on a non string type")
+	return strings.Replace(original, tmpl, s, 1), nil
 }
 
-func isTemplate(s string) bool {
-	s = strings.TrimSpace(s)
-	return strings.HasPrefix(s, "{{") && strings.HasSuffix(s, "}}")
+func convertToString(val any) (string, bool) {
+	switch v := val.(type) {
+	case string:
+		return v, true
+	case int:
+		return strconv.FormatInt(int64(v), 10), true
+	case int8:
+		return strconv.FormatInt(int64(v), 10), true
+	case int16:
+		return strconv.FormatInt(int64(v), 10), true
+	case int32:
+		return strconv.FormatInt(int64(v), 10), true
+	case uint:
+		return strconv.FormatUint(uint64(v), 10), true
+	case uint8:
+		return strconv.FormatUint(uint64(v), 10), true
+	case uint16:
+		return strconv.FormatUint(uint64(v), 10), true
+	case uint32:
+		return strconv.FormatUint(uint64(v), 10), true
+	case uint64:
+		return strconv.FormatUint(uint64(v), 10), true
+	case bool:
+		return strconv.FormatBool(v), true
+	}
+	return "", false
+}
+
+var templateRegex = regexp.MustCompile("{{.{1,}}}")
+
+func isTemplate(s string) (string, bool) {
+	m := templateRegex.FindString(s)
+	return m, m != ""
 }
 
 func keyFromTemplate(s string) string {
