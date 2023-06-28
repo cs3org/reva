@@ -246,10 +246,10 @@ func abort(log *zerolog.Logger, format string, a ...any) {
 
 func runMultiple(confs []*config.Config) {
 	var wg sync.WaitGroup
-	pidfile := getPidfile()
 
 	for _, conf := range confs {
 		wg.Add(1)
+		pidfile := getPidfile()
 		go func(wg *sync.WaitGroup, conf *config.Config) {
 			defer wg.Done()
 			runSingle(conf, pidfile)
