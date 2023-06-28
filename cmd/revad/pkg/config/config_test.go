@@ -67,6 +67,8 @@ something = "test"`
 					},
 					"address": "localhost:9000",
 				},
+				Network: "tcp",
+				Label:   "grpc_authprovider_0",
 			},
 			{
 				Address: "localhost:9001",
@@ -79,6 +81,8 @@ something = "test"`
 						},
 					},
 				},
+				Network: "tcp",
+				Label:   "grpc_authprovider_1",
 			},
 		},
 		"gateway": []*DriverConfig{
@@ -87,6 +91,8 @@ something = "test"`
 				Config: map[string]any{
 					"something": "test",
 				},
+				Network: "tcp",
+				Label:   "grpc_gateway",
 			},
 		},
 	}
@@ -132,6 +138,8 @@ something = "test"`
 					},
 					"address": "localhost:9000",
 				},
+				Network: "tcp",
+				Label:   "grpc_authprovider_0",
 			},
 			{
 				Address: "localhost:9001",
@@ -144,6 +152,8 @@ something = "test"`
 						},
 					},
 				},
+				Network: "tcp",
+				Label:   "grpc_authprovider_1",
 			},
 		},
 		"gateway": []*DriverConfig{
@@ -151,6 +161,8 @@ something = "test"`
 				Config: map[string]any{
 					"something": "test",
 				},
+				Network: "tcp",
+				Label:   "grpc_gateway",
 			},
 		},
 	}
@@ -219,30 +231,33 @@ nats_token = "secret-token-example"`
 	c2, err := Load(strings.NewReader(config))
 	assert.ErrorIs(t, err, nil)
 
-	assert.Equal(t, c2.Shared, &Shared{
-		GatewaySVC: "localhost:9142",
-		JWTSecret:  "secret",
-	})
+	assert.Equal(t, &Shared{
+		GatewaySVC:   "localhost:9142",
+		JWTSecret:    "secret",
+		DataGateway:  "http://0.0.0.0:19001/datagateway",
+		BlockedUsers: []string{},
+	}, c2.Shared)
 
-	assert.Equal(t, c2.Log, &Log{
+	assert.Equal(t, &Log{
 		Output: "/var/log/revad/revad-gateway.log",
 		Mode:   "json",
 		Level:  "trace",
-	})
+	}, c2.Log)
 
-	assert.Equal(t, c2.Core, &Core{
+	assert.Equal(t, &Core{
 		MaxCPUs:        "1",
 		TracingEnabled: true,
-	})
+	}, c2.Core)
 
-	assert.Equal(t, c2.Vars, Vars{
+	assert.Equal(t, Vars{
 		"db_username": "root",
 		"db_password": "secretpassword",
-	})
+	}, c2.Vars)
 
-	assertGRPCEqual(t, c2.GRPC, &GRPC{
+	assertGRPCEqual(t, &GRPC{
 		ShutdownDeadline: 10,
 		EnableReflection: true,
+		Network:          "tcp",
 		Interceptors:     make(map[string]map[string]any),
 		Services: map[string]ServicesConfig{
 			"gateway": {
@@ -250,6 +265,8 @@ nats_token = "secret-token-example"`
 					Config: map[string]any{
 						"authregistrysvc": "{{ grpc.services.authregistry.address }}",
 					},
+					Label:   "grpc_gateway",
+					Network: "tcp",
 				},
 			},
 			"authregistry": {
@@ -265,6 +282,8 @@ nats_token = "secret-token-example"`
 							},
 						},
 					},
+					Label:   "grpc_authregistry",
+					Network: "tcp",
 				},
 			},
 			"authprovider": {
@@ -279,6 +298,8 @@ nats_token = "secret-token-example"`
 							},
 						},
 					},
+					Label:   "grpc_authprovider_0",
+					Network: "tcp",
 				},
 				{
 					Address: "localhost:19001",
@@ -291,13 +312,16 @@ nats_token = "secret-token-example"`
 							},
 						},
 					},
+					Label:   "grpc_authprovider_1",
+					Network: "tcp",
 				},
 			},
 		},
-	})
+	}, c2.GRPC)
 
-	assertHTTPEqual(t, c2.HTTP, &HTTP{
+	assertHTTPEqual(t, &HTTP{
 		Address:     "localhost:19002",
+		Network:     "tcp",
 		Middlewares: make(map[string]map[string]any),
 		Services: map[string]ServicesConfig{
 			"dataprovider": {
@@ -306,25 +330,29 @@ nats_token = "secret-token-example"`
 					Config: map[string]any{
 						"driver": "localhome",
 					},
+					Network: "tcp",
+					Label:   "http_dataprovider",
 				},
 			},
 			"sysinfo": {
 				{
 					Address: "localhost:19002",
 					Config:  map[string]any{},
+					Network: "tcp",
+					Label:   "http_sysinfo",
 				},
 			},
 		},
-	})
+	}, c2.HTTP)
 
-	assert.Equal(t, c2.Serverless, &Serverless{
+	assert.Equal(t, &Serverless{
 		Services: map[string]map[string]any{
 			"notifications": {
 				"nats_address": "nats-server-01.example.com",
 				"nats_token":   "secret-token-example",
 			},
 		},
-	})
+	}, c2.Serverless)
 }
 
 func assertGRPCEqual(t *testing.T, g1, g2 *GRPC) {

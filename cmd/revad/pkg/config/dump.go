@@ -57,7 +57,12 @@ func dumpStruct(v reflect.Value) map[string]any {
 			continue
 		}
 
-		m[fieldName(f)] = dumpByType(e)
+		n := fieldName(f)
+		if n == "-" {
+			continue
+		}
+
+		m[n] = dumpByType(e)
 	}
 	return m
 }
