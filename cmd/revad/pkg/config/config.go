@@ -35,7 +35,7 @@ type Config struct {
 	GRPC       *GRPC       `key:"grpc"       mapstructure:"-"      default:"{}"`
 	HTTP       *HTTP       `key:"http"       mapstructure:"-"      default:"{}"`
 	Serverless *Serverless `key:"serverless" mapstructure:"-"      default:"{}"`
-	Shared     *Shared     `key:"shared"     mapstructure:"shared" default:"{}" template:"-"`
+	Shared     *Shared     `key:"shared"     mapstructure:"shared" default:"{}"`
 	Log        *Log        `key:"log"        mapstructure:"log"    default:"{}" template:"-"`
 	Core       *Core       `key:"core"       mapstructure:"core"   default:"{}" template:"-"`
 	Vars       Vars        `key:"vars"       mapstructure:"vars"   default:"{}" template:"-"`
