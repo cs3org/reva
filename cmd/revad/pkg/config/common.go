@@ -43,18 +43,33 @@ type DriverConfig struct {
 	Config  map[string]any `key:",squash"`
 	Address string         `key:"address"`
 	Network string         `key:"network"`
+	Label   string         `key:"-"`
 }
 
-func newSvcConfigFromList(l []map[string]any) (ServicesConfig, error) {
+func (s *ServicesConfig) Add(svc string, c *DriverConfig) {
+	l := len(*s)
+	if l == 0 {
+		// the label is simply the service name
+		c.Label = svc
+	} else {
+		c.Label = label(svc, l)
+		if l == 1 {
+			(*s)[0].Label = label(svc, 0)
+		}
+	}
+	*s = append(*s, c)
+}
+
+func newSvcConfigFromList(name string, l []map[string]any) (ServicesConfig, error) {
 	cfg := make(ServicesConfig, 0, len(l))
 	for _, c := range l {
-		cfg = append(cfg, &DriverConfig{Config: c})
+		cfg.Add(name, &DriverConfig{Config: c})
 	}
 	return cfg, nil
 }
 
-func newSvcConfigFromMap(m map[string]any) ServicesConfig {
-	s, _ := newSvcConfigFromList([]map[string]any{m})
+func newSvcConfigFromMap(name string, m map[string]any) ServicesConfig {
+	s, _ := newSvcConfigFromList(name, []map[string]any{m})
 	return s
 }
 
@@ -70,7 +85,7 @@ func parseServices(cfg map[string]any) (map[string]ServicesConfig, error) {
 		// cfg can be a list or a map
 		cfgLst, ok := cfg.([]map[string]any)
 		if ok {
-			s, err := newSvcConfigFromList(cfgLst)
+			s, err := newSvcConfigFromList(name, cfgLst)
 			if err != nil {
 				return nil, err
 			}
@@ -81,7 +96,7 @@ func parseServices(cfg map[string]any) (map[string]ServicesConfig, error) {
 		if !ok {
 			return nil, fmt.Errorf("grpc.services.%s must be a list or a map. got %T", name, cfg)
 		}
-		services[name] = newSvcConfigFromMap(cfgMap)
+		services[name] = newSvcConfigFromMap(name, cfgMap)
 	}
 
 	return services, nil
@@ -138,12 +153,12 @@ func (i iterableImpl) ForEachService(f ServiceFunc) {
 		return
 	}
 	for name, c := range i.i.services() {
-		for i, cfg := range c {
+		for _, cfg := range c {
 			f(&Service{
 				raw:     cfg,
 				Address: cfg.Address,
 				Network: cfg.Network,
-				Label:   label(name, i, len(c)),
+				Label:   cfg.Label,
 				Name:    name,
 				Config:  cfg.Config,
 			})
@@ -151,10 +166,7 @@ func (i iterableImpl) ForEachService(f ServiceFunc) {
 	}
 }
 
-func label(name string, i, tot int) string {
-	if tot == 1 {
-		return name
-	}
+func label(name string, i int) string {
 	return fmt.Sprintf("%s_%d", name, i)
 }
 

@@ -36,6 +36,7 @@ import (
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/utils/list"
 	"github.com/cs3org/reva/pkg/utils/maps"
+	netutil "github.com/cs3org/reva/pkg/utils/net"
 	"github.com/rs/zerolog"
 	"golang.org/x/sync/errgroup"
 )
@@ -71,9 +72,6 @@ func New(config *config.Config, opt ...Option) (*Reva, error) {
 		return nil, err
 	}
 
-	grpc, addrGRPC := groupGRPCByAddress(config)
-	http, addrHTTP := groupHTTPByAddress(config)
-
 	if opts.PidFile == "" {
 		return nil, errors.New("pid file not provided")
 	}
@@ -83,7 +81,7 @@ func New(config *config.Config, opt ...Option) (*Reva, error) {
 		return nil, err
 	}
 
-	listeners, err := watcher.GetListeners(maps.Merge(addrGRPC, addrHTTP))
+	listeners, err := watcher.GetListeners(servicesAddresses(config))
 	if err != nil {
 		return nil, err
 	}
@@ -95,6 +93,8 @@ func New(config *config.Config, opt ...Option) (*Reva, error) {
 	}
 	initSharedConf(config)
 
+	grpc := groupGRPCByAddress(config)
+	http := groupHTTPByAddress(config)
 	servers, err := newServers(grpc, http, listeners, log)
 	if err != nil {
 		return nil, err
@@ -114,6 +114,17 @@ func New(config *config.Config, opt ...Option) (*Reva, error) {
 		pidfile:    opts.PidFile,
 		log:        log,
 	}, nil
+}
+
+func servicesAddresses(cfg *config.Config) map[string]grace.Addressable {
+	a := make(map[string]grace.Addressable)
+	cfg.GRPC.ForEachService(func(s *config.Service) {
+		a[s.Label] = &addr{address: s.Address, network: s.Network}
+	})
+	cfg.HTTP.ForEachService(func(s *config.Service) {
+		a[s.Label] = &addr{address: s.Address, network: s.Network}
+	})
+	return a
 }
 
 func newServerless(config *config.Config, log *zerolog.Logger) (*rserverless.Serverless, error) {
@@ -155,6 +166,8 @@ func setRandomAddresses(c *config.Config, lns map[string]net.Listener, log *zero
 			log.Fatal().Msg("port not assigned for service " + s.Label)
 		}
 		s.SetAddress(ln.Addr().String())
+		log.Debug().
+			Msgf("set random address %s:%s to service %s", ln.Addr().Network(), ln.Addr().String(), s.Label)
 	}
 	c.GRPC.ForEachService(f)
 	c.HTTP.ForEachService(f)
@@ -173,10 +186,9 @@ func (a *addr) Network() string {
 	return a.network
 }
 
-func groupGRPCByAddress(cfg *config.Config) (map[string]*config.GRPC, map[string]grace.Addressable) {
+func groupGRPCByAddress(cfg *config.Config) []*config.GRPC {
 	// TODO: same address cannot be used in different configurations
 	g := map[string]*config.GRPC{}
-	a := map[string]grace.Addressable{}
 	cfg.GRPC.ForEachService(func(s *config.Service) {
 		if _, ok := g[s.Address]; !ok {
 			g[s.Address] = &config.GRPC{
@@ -188,17 +200,19 @@ func groupGRPCByAddress(cfg *config.Config) (map[string]*config.GRPC, map[string
 				Interceptors:     cfg.GRPC.Interceptors,
 			}
 		}
-		a[s.Label] = &addr{address: s.Address, network: s.Network}
 		g[s.Address].Services[s.Name] = config.ServicesConfig{
-			{Config: s.Config, Address: s.Address, Network: s.Network},
+			{Config: s.Config, Address: s.Address, Network: s.Network, Label: s.Label},
 		}
 	})
-	return g, a
+	l := make([]*config.GRPC, 0, len(g))
+	for _, c := range g {
+		l = append(l, c)
+	}
+	return l
 }
 
-func groupHTTPByAddress(cfg *config.Config) (map[string]*config.HTTP, map[string]grace.Addressable) {
+func groupHTTPByAddress(cfg *config.Config) []*config.HTTP {
 	g := map[string]*config.HTTP{}
-	a := map[string]grace.Addressable{}
 	cfg.HTTP.ForEachService(func(s *config.Service) {
 		if _, ok := g[s.Address]; !ok {
 			g[s.Address] = &config.HTTP{
@@ -210,12 +224,15 @@ func groupHTTPByAddress(cfg *config.Config) (map[string]*config.HTTP, map[string
 				Middlewares: cfg.HTTP.Middlewares,
 			}
 		}
-		a[s.Label] = &addr{address: s.Address, network: s.Network}
 		g[s.Address].Services[s.Name] = config.ServicesConfig{
-			{Config: s.Config, Address: s.Address, Network: s.Network},
+			{Config: s.Config, Address: s.Address, Network: s.Network, Label: s.Label},
 		}
 	})
-	return g, a
+	l := make([]*config.HTTP, 0, len(g))
+	for _, c := range g {
+		l = append(l, c)
+	}
+	return l
 }
 
 func (r *Reva) Start() error {
@@ -314,27 +331,16 @@ func adjustCPU(cpu string) (int, error) {
 	return numCPU, nil
 }
 
-func firstKey[K comparable, V any](m map[K]V) (K, bool) {
-	for k := range m {
-		return k, true
+func listenerFromAddress(lns map[string]net.Listener, network, address string) net.Listener {
+	for _, ln := range lns {
+		if netutil.AddressEqual(ln.Addr(), network, address) {
+			return ln
+		}
 	}
-	var k K
-	return k, false
+	panic(fmt.Sprintf("listener not found for address %s:%s", network, address))
 }
 
-func listenerFromServices[V any](lns map[string]net.Listener, svcs map[string]V) net.Listener {
-	svc, ok := firstKey(svcs)
-	if !ok {
-		panic("services map should be not empty")
-	}
-	ln, ok := lns[svc]
-	if !ok {
-		panic("listener not assigned for service " + svc)
-	}
-	return ln
-}
-
-func newServers(grpc map[string]*config.GRPC, http map[string]*config.HTTP, lns map[string]net.Listener, log *zerolog.Logger) ([]*Server, error) {
+func newServers(grpc []*config.GRPC, http []*config.HTTP, lns map[string]net.Listener, log *zerolog.Logger) ([]*Server, error) {
 	servers := make([]*Server, 0, len(grpc)+len(http))
 	for _, cfg := range grpc {
 		services, err := rgrpc.InitServices(cfg.Services)
@@ -356,7 +362,7 @@ func newServers(grpc map[string]*config.GRPC, http map[string]*config.HTTP, lns 
 		if err != nil {
 			return nil, err
 		}
-		ln := listenerFromServices(lns, services)
+		ln := listenerFromAddress(lns, cfg.Network, cfg.Address)
 		server := &Server{
 			server:   s,
 			listener: ln,
@@ -385,7 +391,7 @@ func newServers(grpc map[string]*config.GRPC, http map[string]*config.HTTP, lns 
 		if err != nil {
 			return nil, err
 		}
-		ln := listenerFromServices(lns, services)
+		ln := listenerFromAddress(lns, cfg.Network, cfg.Address)
 		server := &Server{
 			server:   s,
 			listener: ln,

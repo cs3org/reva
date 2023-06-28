@@ -29,6 +29,7 @@ import (
 	"syscall"
 	"time"
 
+	netutil "github.com/cs3org/reva/pkg/utils/net"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 )
@@ -343,41 +344,11 @@ func (w *Watcher) GetListeners(servers map[string]Addressable) (map[string]net.L
 
 func get(lns map[string]net.Listener, address, network string) (net.Listener, bool) {
 	for _, ln := range lns {
-		if addressEqual(ln.Addr(), network, address) {
+		if netutil.AddressEqual(ln.Addr(), network, address) {
 			return ln, true
 		}
 	}
 	return nil, false
-}
-
-func addressEqual(a net.Addr, network, address string) bool {
-	if a.Network() != network {
-		return false
-	}
-
-	switch network {
-	case "tcp":
-		t, err := net.ResolveTCPAddr(network, address)
-		if err != nil {
-			return false
-		}
-		return tcpAddressEqual(a.(*net.TCPAddr), t)
-	case "unix":
-		t, err := net.ResolveUnixAddr(network, address)
-		if err != nil {
-			return false
-		}
-		return unixAddressEqual(a.(*net.UnixAddr), t)
-	}
-	return false
-}
-
-func tcpAddressEqual(a1, a2 *net.TCPAddr) bool {
-	return a1.Port == a2.Port
-}
-
-func unixAddressEqual(a1, a2 *net.UnixAddr) bool {
-	return a1.Name == a2.Name && a1.Net == a2.Net
 }
 
 type Addressable interface {
