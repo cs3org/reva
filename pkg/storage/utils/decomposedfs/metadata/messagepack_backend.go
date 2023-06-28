@@ -32,6 +32,7 @@ import (
 	"github.com/pkg/xattr"
 	"github.com/rogpeppe/go-internal/lockedfile"
 	"github.com/shamaton/msgpack/v2"
+	"go.opentelemetry.io/otel/codes"
 )
 
 // name is the Tracer name used to identify this instrumentation library.
@@ -131,12 +132,20 @@ func (b MessagePackBackend) AllWithLockedSource(ctx context.Context, path string
 }
 
 func (b MessagePackBackend) saveAttributes(ctx context.Context, path string, setAttribs map[string][]byte, deleteAttribs []string, acquireLock bool) error {
-	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "saveAttributes")
-	defer span.End()
 	var (
-		f   readWriteCloseSeekTruncater
 		err error
+		f   readWriteCloseSeekTruncater
 	)
+	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "saveAttributes")
+	defer func() {
+		if err != nil {
+			span.SetStatus(codes.Error, err.Error())
+		} else {
+			span.SetStatus(codes.Ok, "")
+		}
+		span.End()
+	}()
+
 	metaPath := b.MetadataPath(path)
 	if acquireLock {
 		_, subspan := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "lockedfile.OpenFile")
@@ -159,7 +168,8 @@ func (b MessagePackBackend) saveAttributes(ctx context.Context, path string, set
 
 	// Read current state
 	_, subspan = appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "io.ReadAll")
-	msgBytes, err := io.ReadAll(f)
+	var msgBytes []byte
+	msgBytes, err = io.ReadAll(f)
 	subspan.End()
 	if err != nil {
 		return err
@@ -185,13 +195,16 @@ func (b MessagePackBackend) saveAttributes(ctx context.Context, path string, set
 	if err != nil {
 		return err
 	}
+	_, subspan = appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "f.Truncate")
 	err = f.Truncate(0)
+	subspan.End()
 	if err != nil {
 		return err
 	}
 
 	// Write new metadata to file
-	d, err := msgpack.Marshal(attribs)
+	var d []byte
+	d, err = msgpack.Marshal(attribs)
 	if err != nil {
 		return err
 	}
