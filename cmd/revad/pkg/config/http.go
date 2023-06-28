@@ -53,7 +53,7 @@ func (c *Config) parseHTTP(raw map[string]any) error {
 		return errors.New("http must be a map")
 	}
 
-	services, err := parseServices(cfgHTTP)
+	services, err := parseServices("http", cfgHTTP)
 	if err != nil {
 		return err
 	}

@@ -22,7 +22,6 @@ import (
 	"fmt"
 
 	"github.com/mitchellh/mapstructure"
-	"github.com/pkg/errors"
 )
 
 type iterable interface {
@@ -46,38 +45,38 @@ type DriverConfig struct {
 	Label   string         `key:"-"`
 }
 
-func (s *ServicesConfig) Add(svc string, c *DriverConfig) {
+func (s *ServicesConfig) Add(domain, svc string, c *DriverConfig) {
 	l := len(*s)
 	if l == 0 {
 		// the label is simply the service name
-		c.Label = svc
+		c.Label = domain + "_" + svc
 	} else {
-		c.Label = label(svc, l)
+		c.Label = label(domain, svc, l)
 		if l == 1 {
-			(*s)[0].Label = label(svc, 0)
+			(*s)[0].Label = label(domain, svc, 0)
 		}
 	}
 	*s = append(*s, c)
 }
 
-func newSvcConfigFromList(name string, l []map[string]any) (ServicesConfig, error) {
+func newSvcConfigFromList(domain, name string, l []map[string]any) (ServicesConfig, error) {
 	cfg := make(ServicesConfig, 0, len(l))
 	for _, c := range l {
-		cfg.Add(name, &DriverConfig{Config: c})
+		cfg.Add(domain, name, &DriverConfig{Config: c})
 	}
 	return cfg, nil
 }
 
-func newSvcConfigFromMap(name string, m map[string]any) ServicesConfig {
-	s, _ := newSvcConfigFromList(name, []map[string]any{m})
+func newSvcConfigFromMap(domain, name string, m map[string]any) ServicesConfig {
+	s, _ := newSvcConfigFromList(domain, name, []map[string]any{m})
 	return s
 }
 
-func parseServices(cfg map[string]any) (map[string]ServicesConfig, error) {
+func parseServices(domain string, cfg map[string]any) (map[string]ServicesConfig, error) {
 	// parse services
 	svcCfg, ok := cfg["services"].(map[string]any)
 	if !ok {
-		return nil, errors.New("grpc.services must be a map")
+		return nil, fmt.Errorf("%s.services must be a map", domain)
 	}
 
 	services := make(map[string]ServicesConfig)
@@ -85,7 +84,7 @@ func parseServices(cfg map[string]any) (map[string]ServicesConfig, error) {
 		// cfg can be a list or a map
 		cfgLst, ok := cfg.([]map[string]any)
 		if ok {
-			s, err := newSvcConfigFromList(name, cfgLst)
+			s, err := newSvcConfigFromList(domain, name, cfgLst)
 			if err != nil {
 				return nil, err
 			}
@@ -94,9 +93,9 @@ func parseServices(cfg map[string]any) (map[string]ServicesConfig, error) {
 		}
 		cfgMap, ok := cfg.(map[string]any)
 		if !ok {
-			return nil, fmt.Errorf("grpc.services.%s must be a list or a map. got %T", name, cfg)
+			return nil, fmt.Errorf("%s.services.%s must be a list or a map. got %T", domain, name, cfg)
 		}
-		services[name] = newSvcConfigFromMap(name, cfgMap)
+		services[name] = newSvcConfigFromMap(domain, name, cfgMap)
 	}
 
 	return services, nil
@@ -166,8 +165,8 @@ func (i iterableImpl) ForEachService(f ServiceFunc) {
 	}
 }
 
-func label(name string, i int) string {
-	return fmt.Sprintf("%s_%d", name, i)
+func label(domain, name string, i int) string {
+	return fmt.Sprintf("%s_%s_%d", domain, name, i)
 }
 
 // ForEachInterceptor iterates to each middleware calling the function f.

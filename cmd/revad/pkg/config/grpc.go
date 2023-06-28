@@ -53,7 +53,7 @@ func (c *Config) parseGRPC(raw map[string]any) error {
 		return errors.New("grpc must be a map")
 	}
 
-	services, err := parseServices(cfgGRPC)
+	services, err := parseServices("grpc", cfgGRPC)
 	if err != nil {
 		return err
 	}
