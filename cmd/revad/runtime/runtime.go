@@ -67,8 +67,6 @@ func New(config *config.Config, opt ...Option) (*Reva, error) {
 	opts := newOptions(opt...)
 	log := opts.Logger
 
-	initSharedConf(config)
-
 	if err := initCPUCount(config.Core, log); err != nil {
 		return nil, err
 	}
@@ -95,6 +93,7 @@ func New(config *config.Config, opt ...Option) (*Reva, error) {
 	if err := applyTemplates(config); err != nil {
 		return nil, err
 	}
+	initSharedConf(config)
 
 	servers, err := newServers(grpc, http, listeners, log)
 	if err != nil {
