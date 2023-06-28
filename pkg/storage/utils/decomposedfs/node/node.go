@@ -233,13 +233,16 @@ func ReadNode(ctx context.Context, lu PathLookup, spaceID, nodeID string, canLis
 		case err != nil:
 			return nil, err
 		}
-		spaceRoot.Exists = true
 
 		// lookup name in extended attributes
 		spaceRoot.Name, err = spaceRoot.XattrString(ctx, prefixes.NameAttr)
-		if err != nil {
+		switch {
+		case metadata.IsAttrUnset(err):
+			return spaceRoot, nil // empty metadata. create from scratch
+		case err != nil:
 			return nil, err
 		}
+		spaceRoot.Exists = true
 	}
 
 	// TODO ReadNode should not check permissions
