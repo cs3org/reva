@@ -27,7 +27,13 @@ import (
 
 // ErrKeyNotFound is the error returned when a key does not exist
 // in the configuration.
-var ErrKeyNotFound = errors.New("key not found")
+type ErrKeyNotFound struct {
+	Key string
+}
+
+func (e ErrKeyNotFound) Error() string {
+	return "key '" + e.Key + "' not found in the configuration"
+}
 
 func lookupStruct(key string, v reflect.Value) (any, error) {
 	if v.Kind() != reflect.Struct {
@@ -78,7 +84,8 @@ func lookupStruct(key string, v reflect.Value) (any, error) {
 			default:
 				panic("squash not allowed on non map/struct types")
 			}
-			if errors.Is(err, ErrKeyNotFound) {
+			var e ErrKeyNotFound
+			if errors.As(err, &e) {
 				continue
 			}
 			if err != nil {
@@ -93,7 +100,7 @@ func lookupStruct(key string, v reflect.Value) (any, error) {
 
 		return lookupByType(next, val)
 	}
-	return nil, ErrKeyNotFound
+	return nil, ErrKeyNotFound{Key: key}
 }
 
 func lookupByType(key string, v reflect.Value) (any, error) {
@@ -135,7 +142,7 @@ func lookupMap(key string, v reflect.Value) (any, error) {
 	// lookup elemen in the map
 	el := v.MapIndex(reflect.ValueOf(c.Key))
 	if !el.IsValid() {
-		return nil, ErrKeyNotFound
+		return nil, ErrKeyNotFound{Key: key}
 	}
 
 	return lookupByType(next, el)

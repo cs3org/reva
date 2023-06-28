@@ -144,6 +144,9 @@ func applyTemplateString(l Lookuper, p setter, v reflect.Value) error {
 	if err != nil {
 		return err
 	}
+	if val == nil {
+		return nil
+	}
 
 	str, ok := val.(string)
 	if ok {

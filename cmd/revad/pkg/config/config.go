@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"reflect"
+	"strings"
 
 	"github.com/BurntSushi/toml"
 	"github.com/creasty/defaults"
@@ -123,5 +124,26 @@ func (c *Config) Dump() map[string]any {
 }
 
 func (c *Config) Lookup(key string) (any, error) {
+	// check thet key is valid, meaning it starts with one of
+	// the fields of the config struct
+	if !c.isValidKey(key) {
+		return nil, nil
+	}
 	return lookupByType(key, reflect.ValueOf(c))
+}
+
+func (c *Config) isValidKey(key string) bool {
+	e := reflect.TypeOf(c).Elem()
+	k := strings.TrimPrefix(key, ".")
+	for i := 0; i < e.NumField(); i++ {
+		f := e.Field(i)
+		prefix := f.Tag.Get("key")
+		if prefix == "" || prefix == "-" {
+			continue
+		}
+		if strings.HasPrefix(k, prefix) {
+			return true
+		}
+	}
+	return false
 }
