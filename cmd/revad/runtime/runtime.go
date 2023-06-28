@@ -356,11 +356,15 @@ func newServers(grpc map[string]*config.GRPC, http map[string]*config.HTTP, lns 
 		if err != nil {
 			return nil, err
 		}
+		ln := listenerFromServices(lns, services)
 		server := &Server{
 			server:   s,
-			listener: listenerFromServices(lns, services),
+			listener: ln,
 			services: maps.MapValues(services, func(s rgrpc.Service) any { return s }),
 		}
+		log.Debug().
+			Interface("services", maps.Keys(cfg.Services)).
+			Msgf("spawned grpc server for services listening at %s:%s", ln.Addr().Network(), ln.Addr().String())
 		servers = append(servers, server)
 	}
 	for _, cfg := range http {
@@ -381,11 +385,15 @@ func newServers(grpc map[string]*config.GRPC, http map[string]*config.HTTP, lns 
 		if err != nil {
 			return nil, err
 		}
+		ln := listenerFromServices(lns, services)
 		server := &Server{
 			server:   s,
-			listener: listenerFromServices(lns, services),
+			listener: ln,
 			services: maps.MapValues(services, func(s global.Service) any { return s }),
 		}
+		log.Debug().
+			Interface("services", maps.Keys(cfg.Services)).
+			Msgf("spawned http server for services listening at %s:%s", ln.Addr().Network(), ln.Addr().String())
 		servers = append(servers, server)
 	}
 	return servers, nil

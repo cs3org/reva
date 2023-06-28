@@ -321,19 +321,20 @@ func (w *Watcher) GetListeners(servers map[string]Addressable) (map[string]net.L
 		return lns, nil
 	}
 
+	var err error
 	// no graceful
 	for svc, s := range servers {
 		network, addr := s.Network(), getAddress(s.Address())
 		// multiple services may have the same listener
 		ln, ok := get(lns, addr, network)
-		if ok {
-			lns[svc] = ln
-			continue
+		if !ok {
+			ln, err = newListener(network, addr)
+			if err != nil {
+				return nil, err
+			}
 		}
-		ln, err := newListener(network, addr)
-		if err != nil {
-			return nil, err
-		}
+		w.log.Debug().
+			Msgf("listener for %s assigned to %s:%s", svc, ln.Addr().Network(), ln.Addr().String())
 		lns[svc] = ln
 	}
 	w.lns = lns

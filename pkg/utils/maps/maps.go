@@ -40,3 +40,11 @@ func MapValues[K comparable, T, V any](m map[K]T, f func(T) V) map[K]V {
 	}
 	return r
 }
+
+func Keys[K comparable, V any](m map[K]V) []K {
+	l := make([]K, 0, len(m))
+	for k := range m {
+		l = append(l, k)
+	}
+	return l
+}
