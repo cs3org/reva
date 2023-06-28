@@ -190,7 +190,7 @@ func groupGRPCByAddress(cfg *config.Config) (map[string]*config.GRPC, map[string
 		}
 		a[s.Label] = &addr{address: s.Address, network: s.Network}
 		g[s.Address].Services[s.Name] = config.ServicesConfig{
-			{Config: s.Config},
+			{Config: s.Config, Address: s.Address, Network: s.Network},
 		}
 	})
 	return g, a
@@ -212,7 +212,7 @@ func groupHTTPByAddress(cfg *config.Config) (map[string]*config.HTTP, map[string
 		}
 		a[s.Label] = &addr{address: s.Address, network: s.Network}
 		g[s.Address].Services[s.Name] = config.ServicesConfig{
-			{Config: s.Config},
+			{Config: s.Config, Address: s.Address, Network: s.Network},
 		}
 	})
 	return g, a
