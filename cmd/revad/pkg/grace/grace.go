@@ -368,7 +368,8 @@ type Serverless interface {
 	GracefulStop() error
 }
 
-func (w *Watcher) SetServers(s []Server) { w.ss = s }
+func (w *Watcher) SetServers(s []Server)      { w.ss = s }
+func (w *Watcher) SetServerless(s Serverless) { w.SL = s }
 
 // TrapSignals captures the OS signal.
 func (w *Watcher) TrapSignals() {

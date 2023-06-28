@@ -87,27 +87,22 @@ func New(config *config.Config, opt ...Option) (*Reva, error) {
 
 	listeners, err := watcher.GetListeners(maps.Merge(addrGRPC, addrHTTP))
 	if err != nil {
-		watcher.Clean()
 		return nil, err
 	}
 
 	setRandomAddresses(config, listeners, log)
 
 	if err := applyTemplates(config); err != nil {
-		watcher.Clean()
 		return nil, err
 	}
 
 	servers, err := newServers(grpc, http, listeners, log)
 	if err != nil {
-		watcher.Clean()
 		return nil, err
 	}
-	watcher.SetServers(list.Map(servers, func(s *Server) grace.Server { return s.server }))
 
 	serverless, err := newServerless(config, log)
 	if err != nil {
-		watcher.Clean()
 		return nil, err
 	}
 
@@ -225,6 +220,10 @@ func groupHTTPByAddress(cfg *config.Config) (map[string]*config.HTTP, map[string
 }
 
 func (r *Reva) Start() error {
+	defer r.watcher.Clean()
+	r.watcher.SetServers(list.Map(r.servers, func(s *Server) grace.Server { return s.server }))
+	r.watcher.SetServerless(r.serverless)
+
 	var g errgroup.Group
 	for _, server := range r.servers {
 		server := server
