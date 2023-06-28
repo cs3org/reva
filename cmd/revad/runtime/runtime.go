@@ -83,12 +83,14 @@ func New(config *config.Config, opt ...Option) (*Reva, error) {
 
 	listeners, err := watcher.GetListeners(servicesAddresses(config))
 	if err != nil {
+		watcher.Clean()
 		return nil, err
 	}
 
 	setRandomAddresses(config, listeners, log)
 
 	if err := applyTemplates(config); err != nil {
+		watcher.Clean()
 		return nil, err
 	}
 	initSharedConf(config)
@@ -97,11 +99,13 @@ func New(config *config.Config, opt ...Option) (*Reva, error) {
 	http := groupHTTPByAddress(config)
 	servers, err := newServers(grpc, http, listeners, log)
 	if err != nil {
+		watcher.Clean()
 		return nil, err
 	}
 
 	serverless, err := newServerless(config, log)
 	if err != nil {
+		watcher.Clean()
 		return nil, err
 	}
 
