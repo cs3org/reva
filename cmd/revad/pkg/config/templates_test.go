@@ -79,6 +79,9 @@ func TestApplyTemplate(t *testing.T) {
 	assert.Equal(t, "https://cern.ch:1900/data", cfg1.GRPC.Services["port"][0].Config["drivers"].(map[string]any)["static"].(map[string]any)["demo"])
 
 	cfg2 := &Config{
+		Shared: &Shared{
+			GatewaySVC: "{{ grpc.services.authregistry.address }}",
+		},
 		Vars: Vars{
 			"db_username": "root",
 			"db_password": "secretpassword",
@@ -119,6 +122,7 @@ func TestApplyTemplate(t *testing.T) {
 
 	err = cfg2.ApplyTemplates(cfg2)
 	assert.ErrorIs(t, err, nil)
+	assert.Equal(t, "localhost:1901", cfg2.Shared.GatewaySVC)
 	assert.Equal(t, map[string]any{
 		"db_username": "root",
 		"db_password": "secretpassword",

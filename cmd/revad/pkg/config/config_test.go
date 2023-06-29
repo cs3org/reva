@@ -320,7 +320,7 @@ nats_token = "secret-token-example"`
 	}, c2.GRPC)
 
 	assertHTTPEqual(t, &HTTP{
-		Address:     "localhost:19002",
+		Address:     Address("localhost:19002"),
 		Network:     "tcp",
 		Middlewares: make(map[string]map[string]any),
 		Services: map[string]ServicesConfig{
@@ -535,7 +535,7 @@ func TestDump(t *testing.T) {
 				},
 				"authprovider": []any{
 					map[string]any{
-						"address": Address("localhost:19001"),
+						"address": "localhost:19001",
 						"network": "",
 						"driver":  "ldap",
 						"drivers": map[string]any{
@@ -545,7 +545,7 @@ func TestDump(t *testing.T) {
 						},
 					},
 					map[string]any{
-						"address": Address("localhost:19002"),
+						"address": "localhost:19002",
 						"network": "",
 						"driver":  "machine",
 						"drivers": map[string]any{

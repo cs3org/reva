@@ -62,6 +62,8 @@ func applyTemplateByType(l Lookuper, p setter, v reflect.Value) error {
 		return applyTemplateMap(l, p, v)
 	case reflect.Interface:
 		return applyTemplateInterface(l, p, v)
+	case reflect.String:
+		return applyTemplateString(l, p, v)
 	case reflect.Pointer:
 		return applyTemplateByType(l, p, v.Elem())
 	}
@@ -95,6 +97,36 @@ func applyTemplateMap(l Lookuper, p setter, v reflect.Value) error {
 			return err
 		}
 	}
+	return nil
+}
+
+func applyTemplateString(l Lookuper, p setter, v reflect.Value) error {
+	if v.Kind() != reflect.String {
+		panic("called applyTemplateString on non string type")
+	}
+	s := v.String()
+	tmpl, is := isTemplate(s)
+	if !is {
+		// nothing to do
+		return nil
+	}
+
+	key := keyFromTemplate(tmpl)
+	val, err := l.Lookup(key)
+	if err != nil {
+		return err
+	}
+
+	new, err := replaceTemplate(s, tmpl, val)
+	if err != nil {
+		return err
+	}
+	str, ok := convertToString(new)
+	if !ok {
+		return fmt.Errorf("value %v cannot be converted as string in the template %s", val, new)
+	}
+
+	p.SetValue(str)
 	return nil
 }
 
