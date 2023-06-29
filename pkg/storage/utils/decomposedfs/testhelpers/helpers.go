@@ -244,7 +244,7 @@ func (t *TestEnv) CreateTestFile(name, blobID, parentID, spaceID string, blobSiz
 	if err != nil {
 		return nil, err
 	}
-	err = n.SetXattrs(n.NodeMetadata(), true)
+	err = n.SetXattrs(n.NodeMetadata(t.Ctx), true)
 	if err != nil {
 		return nil, err
 	}
@@ -254,11 +254,11 @@ func (t *TestEnv) CreateTestFile(name, blobID, parentID, spaceID string, blobSiz
 	if err != nil {
 		return nil, err
 	}
-	if err := n.FindStorageSpaceRoot(); err != nil {
+	if err := n.FindStorageSpaceRoot(t.Ctx); err != nil {
 		return nil, err
 	}
 
-	return n, t.Tree.Propagate(context.Background(), n, blobSize)
+	return n, t.Tree.Propagate(t.Ctx, n, blobSize)
 
 }
 
@@ -302,7 +302,7 @@ func (t *TestEnv) CreateTestStorageSpace(typ string, quota *providerv1beta1.Quot
 	if err != nil {
 		return nil, err
 	}
-	if err = h.SetXattr(prefixes.SpaceNameAttr, []byte("username")); err != nil {
+	if err = h.SetXattr(t.Ctx, prefixes.SpaceNameAttr, []byte("username")); err != nil {
 		return nil, err
 	}
 

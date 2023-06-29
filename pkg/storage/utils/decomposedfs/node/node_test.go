@@ -94,7 +94,7 @@ var _ = Describe("Node", func() {
 			n.BlobID = "TestBlobID"
 			n.Blobsize = blobsize
 
-			err = n.SetXattrs(n.NodeMetadata(), true)
+			err = n.SetXattrs(n.NodeMetadata(env.Ctx), true)
 			Expect(err).ToNot(HaveOccurred())
 			n2, err := env.Lookup.NodeFromResource(env.Ctx, ref)
 			Expect(err).ToNot(HaveOccurred())
@@ -113,7 +113,7 @@ var _ = Describe("Node", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(child).ToNot(BeNil())
 
-			parent, err := child.Parent()
+			parent, err := child.Parent(env.Ctx)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(parent).ToNot(BeNil())
 			Expect(parent.ID).To(Equal(child.ParentID))
@@ -199,7 +199,7 @@ var _ = Describe("Node", func() {
 				before := ri.Etag
 
 				tmtime := time.Now()
-				Expect(n.SetTMTime(&tmtime)).To(Succeed())
+				Expect(n.SetTMTime(env.Ctx, &tmtime)).To(Succeed())
 
 				ri, err = n.AsResourceInfo(env.Ctx, &perms, []string{}, []string{}, false)
 				Expect(err).ToNot(HaveOccurred())

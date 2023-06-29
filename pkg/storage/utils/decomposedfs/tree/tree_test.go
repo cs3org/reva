@@ -122,7 +122,7 @@ var _ = Describe("Tree", func() {
 					resolveTrashPath, err := filepath.EvalSymlinks(trashPath)
 					Expect(err).ToNot(HaveOccurred())
 
-					attr, err := env.Lookup.MetadataBackend().Get(resolveTrashPath, prefixes.TrashOriginAttr)
+					attr, err := env.Lookup.MetadataBackend().Get(env.Ctx, resolveTrashPath, prefixes.TrashOriginAttr)
 					Expect(err).ToNot(HaveOccurred())
 					Expect(string(attr)).To(Equal("/dir1/file1"))
 				})
@@ -335,7 +335,7 @@ var _ = Describe("Tree", func() {
 					OpaqueId:  dir.ID,
 				})
 				Expect(err).ToNot(HaveOccurred())
-				size, err := dir.GetTreeSize()
+				size, err := dir.GetTreeSize(env.Ctx)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(size).To(Equal(uint64(1)))
 			})
@@ -352,7 +352,7 @@ var _ = Describe("Tree", func() {
 					OpaqueId:  dir.ID,
 				})
 				Expect(err).ToNot(HaveOccurred())
-				size, err := dir.GetTreeSize()
+				size, err := dir.GetTreeSize(env.Ctx)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(size).To(Equal(uint64(101)))
 			})
@@ -360,7 +360,7 @@ var _ = Describe("Tree", func() {
 			It("adds the size of child directories", func() {
 				subdir, err := env.CreateTestDir("testdir/200bytes", &provider.Reference{ResourceId: env.SpaceRootRes})
 				Expect(err).ToNot(HaveOccurred())
-				err = subdir.SetTreeSize(uint64(200))
+				err = subdir.SetTreeSize(env.Ctx, uint64(200))
 				Expect(err).ToNot(HaveOccurred())
 				err = env.Tree.Propagate(env.Ctx, subdir, 200)
 				Expect(err).ToNot(HaveOccurred())
@@ -374,7 +374,7 @@ var _ = Describe("Tree", func() {
 					OpaqueId:  dir.ID,
 				})
 				Expect(err).ToNot(HaveOccurred())
-				size, err := dir.GetTreeSize()
+				size, err := dir.GetTreeSize(env.Ctx)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(size).To(Equal(uint64(201)))
 			})
@@ -382,7 +382,7 @@ var _ = Describe("Tree", func() {
 			It("stops at nodes with no propagation flag", func() {
 				subdir, err := env.CreateTestDir("testdir/200bytes", &provider.Reference{ResourceId: env.SpaceRootRes})
 				Expect(err).ToNot(HaveOccurred())
-				err = subdir.SetTreeSize(uint64(200))
+				err = subdir.SetTreeSize(env.Ctx, uint64(200))
 				Expect(err).ToNot(HaveOccurred())
 				err = env.Tree.Propagate(env.Ctx, subdir, 200)
 				Expect(err).ToNot(HaveOccurred())
@@ -393,17 +393,17 @@ var _ = Describe("Tree", func() {
 					OpaqueId:  dir.ID,
 				})
 				Expect(err).ToNot(HaveOccurred())
-				size, err := dir.GetTreeSize()
+				size, err := dir.GetTreeSize(env.Ctx)
 				Expect(size).To(Equal(uint64(200)))
 				Expect(err).ToNot(HaveOccurred())
 
 				stopdir, err := env.CreateTestDir("testdir/stophere", &provider.Reference{ResourceId: env.SpaceRootRes})
 				Expect(err).ToNot(HaveOccurred())
-				err = stopdir.SetXattrString(prefixes.PropagationAttr, "0")
+				err = stopdir.SetXattrString(env.Ctx, prefixes.PropagationAttr, "0")
 				Expect(err).ToNot(HaveOccurred())
 				otherdir, err := env.CreateTestDir("testdir/stophere/lotsofbytes", &provider.Reference{ResourceId: env.SpaceRootRes})
 				Expect(err).ToNot(HaveOccurred())
-				err = otherdir.SetTreeSize(uint64(100000))
+				err = otherdir.SetTreeSize(env.Ctx, uint64(100000))
 				Expect(err).ToNot(HaveOccurred())
 				err = env.Tree.Propagate(env.Ctx, otherdir, 100000)
 				Expect(err).ToNot(HaveOccurred())
@@ -414,7 +414,7 @@ var _ = Describe("Tree", func() {
 					OpaqueId:  dir.ID,
 				})
 				Expect(err).ToNot(HaveOccurred())
-				size, err = dir.GetTreeSize()
+				size, err = dir.GetTreeSize(env.Ctx)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(size).To(Equal(uint64(200)))
 			})

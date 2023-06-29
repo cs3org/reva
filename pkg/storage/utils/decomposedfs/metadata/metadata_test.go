@@ -19,6 +19,7 @@
 package metadata_test
 
 import (
+	"context"
 	"os"
 	"path"
 
@@ -66,43 +67,43 @@ var _ = Describe("Backend", func() {
 		Describe("Set", func() {
 			It("sets an attribute", func() {
 				data := []byte(`bar\`)
-				err := backend.Set(file, "foo", data)
+				err := backend.Set(context.Background(), file, "foo", data)
 				Expect(err).ToNot(HaveOccurred())
 
-				readData, err := backend.Get(file, "foo")
+				readData, err := backend.Get(context.Background(), file, "foo")
 				Expect(err).ToNot(HaveOccurred())
 				Expect(readData).To(Equal(data))
 			})
 
 			It("handles funny strings", func() {
 				data := []byte(`bar\`)
-				err := backend.Set(file, "foo", data)
+				err := backend.Set(context.Background(), file, "foo", data)
 				Expect(err).ToNot(HaveOccurred())
 
-				readData, err := backend.Get(file, "foo")
+				readData, err := backend.Get(context.Background(), file, "foo")
 				Expect(err).ToNot(HaveOccurred())
 				Expect(readData).To(Equal(data))
 			})
 
 			It("updates an attribute", func() {
-				err := backend.Set(file, "foo", []byte("bar"))
+				err := backend.Set(context.Background(), file, "foo", []byte("bar"))
 				Expect(err).ToNot(HaveOccurred())
-				err = backend.Set(file, "foo", []byte("baz"))
+				err = backend.Set(context.Background(), file, "foo", []byte("baz"))
 				Expect(err).ToNot(HaveOccurred())
 
-				readData, err := backend.Get(file, "foo")
+				readData, err := backend.Get(context.Background(), file, "foo")
 				Expect(err).ToNot(HaveOccurred())
 				Expect(readData).To(Equal([]byte("baz")))
 			})
 
 			It("sets an empty attribute", func() {
-				_, err := backend.Get(file, "foo")
+				_, err := backend.Get(context.Background(), file, "foo")
 				Expect(err).To(HaveOccurred())
 
-				err = backend.Set(file, "foo", []byte{})
+				err = backend.Set(context.Background(), file, "foo", []byte{})
 				Expect(err).ToNot(HaveOccurred())
 
-				v, err := backend.Get(file, "foo")
+				v, err := backend.Get(context.Background(), file, "foo")
 				Expect(err).ToNot(HaveOccurred())
 				Expect(v).To(Equal([]byte{}))
 			})
@@ -111,23 +112,23 @@ var _ = Describe("Backend", func() {
 		Describe("SetMultiple", func() {
 			It("sets attributes", func() {
 				data := map[string][]byte{"foo": []byte("bar"), "baz": []byte("qux")}
-				err := backend.SetMultiple(file, data, true)
+				err := backend.SetMultiple(context.Background(), file, data, true)
 				Expect(err).ToNot(HaveOccurred())
 
-				readData, err := backend.All(file)
+				readData, err := backend.All(context.Background(), file)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(readData).To(Equal(data))
 			})
 
 			It("updates an attribute", func() {
-				err := backend.Set(file, "foo", []byte("something"))
+				err := backend.Set(context.Background(), file, "foo", []byte("something"))
 
 				data := map[string][]byte{"foo": []byte("bar"), "baz": []byte("qux")}
 				Expect(err).ToNot(HaveOccurred())
-				err = backend.SetMultiple(file, data, true)
+				err = backend.SetMultiple(context.Background(), file, data, true)
 				Expect(err).ToNot(HaveOccurred())
 
-				readData, err := backend.All(file)
+				readData, err := backend.All(context.Background(), file)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(readData).To(Equal(data))
 			})
@@ -136,10 +137,10 @@ var _ = Describe("Backend", func() {
 		Describe("All", func() {
 			It("returns the entries", func() {
 				data := map[string][]byte{"foo": []byte("123"), "bar": []byte("baz")}
-				err := backend.SetMultiple(file, data, true)
+				err := backend.SetMultiple(context.Background(), file, data, true)
 				Expect(err).ToNot(HaveOccurred())
 
-				v, err := backend.All(file)
+				v, err := backend.All(context.Background(), file)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(v)).To(Equal(2))
 				Expect(v["foo"]).To(Equal([]byte("123")))
@@ -147,7 +148,7 @@ var _ = Describe("Backend", func() {
 			})
 
 			It("returns an empty map", func() {
-				v, err := backend.All(file)
+				v, err := backend.All(context.Background(), file)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(v).To(Equal(map[string][]byte{}))
 			})
@@ -156,16 +157,16 @@ var _ = Describe("Backend", func() {
 		Describe("List", func() {
 			It("returns the entries", func() {
 				data := map[string][]byte{"foo": []byte("123"), "bar": []byte("baz")}
-				err := backend.SetMultiple(file, data, true)
+				err := backend.SetMultiple(context.Background(), file, data, true)
 				Expect(err).ToNot(HaveOccurred())
 
-				v, err := backend.List(file)
+				v, err := backend.List(context.Background(), file)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(v).To(ConsistOf("foo", "bar"))
 			})
 
 			It("returns an empty list", func() {
-				v, err := backend.List(file)
+				v, err := backend.List(context.Background(), file)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(v).To(Equal([]string{}))
 			})
@@ -174,16 +175,16 @@ var _ = Describe("Backend", func() {
 		Describe("Get", func() {
 			It("returns the attribute", func() {
 				data := map[string][]byte{"foo": []byte("bar")}
-				err := backend.SetMultiple(file, data, true)
+				err := backend.SetMultiple(context.Background(), file, data, true)
 				Expect(err).ToNot(HaveOccurred())
 
-				v, err := backend.Get(file, "foo")
+				v, err := backend.Get(context.Background(), file, "foo")
 				Expect(err).ToNot(HaveOccurred())
 				Expect(v).To(Equal([]byte("bar")))
 			})
 
 			It("returns an error on unknown attributes", func() {
-				_, err := backend.Get(file, "foo")
+				_, err := backend.Get(context.Background(), file, "foo")
 				Expect(err).To(HaveOccurred())
 			})
 		})
@@ -191,16 +192,16 @@ var _ = Describe("Backend", func() {
 		Describe("GetInt64", func() {
 			It("returns the attribute", func() {
 				data := map[string][]byte{"foo": []byte("123")}
-				err := backend.SetMultiple(file, data, true)
+				err := backend.SetMultiple(context.Background(), file, data, true)
 				Expect(err).ToNot(HaveOccurred())
 
-				v, err := backend.GetInt64(file, "foo")
+				v, err := backend.GetInt64(context.Background(), file, "foo")
 				Expect(err).ToNot(HaveOccurred())
 				Expect(v).To(Equal(int64(123)))
 			})
 
 			It("returns an error on unknown attributes", func() {
-				_, err := backend.GetInt64(file, "foo")
+				_, err := backend.GetInt64(context.Background(), file, "foo")
 				Expect(err).To(HaveOccurred())
 			})
 		})
@@ -208,17 +209,17 @@ var _ = Describe("Backend", func() {
 		Describe("Remove", func() {
 			It("deletes an attribute", func() {
 				data := map[string][]byte{"foo": []byte("bar")}
-				err := backend.SetMultiple(file, data, true)
+				err := backend.SetMultiple(context.Background(), file, data, true)
 				Expect(err).ToNot(HaveOccurred())
 
-				v, err := backend.Get(file, "foo")
+				v, err := backend.Get(context.Background(), file, "foo")
 				Expect(err).ToNot(HaveOccurred())
 				Expect(v).To(Equal([]byte("bar")))
 
-				err = backend.Remove(file, "foo")
+				err = backend.Remove(context.Background(), file, "foo")
 				Expect(err).ToNot(HaveOccurred())
 
-				_, err = backend.Get(file, "foo")
+				_, err = backend.Get(context.Background(), file, "foo")
 				Expect(err).To(HaveOccurred())
 			})
 		})

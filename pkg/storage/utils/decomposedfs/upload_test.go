@@ -154,7 +154,7 @@ var _ = Describe("File uploads", func() {
 		When("the user wants to initiate a file upload", func() {
 			It("fails", func() {
 				var originalFunc = node.CheckQuota
-				node.CheckQuota = func(spaceRoot *node.Node, overwrite bool, oldSize, newSize uint64) (quotaSufficient bool, err error) {
+				node.CheckQuota = func(ctx context.Context, spaceRoot *node.Node, overwrite bool, oldSize, newSize uint64) (quotaSufficient bool, err error) {
 					return false, errtypes.InsufficientStorage("quota exceeded")
 				}
 				_, err := fs.InitiateUpload(ctx, ref, 10, map[string]string{})
@@ -186,7 +186,7 @@ var _ = Describe("File uploads", func() {
 			// the space name attribute is the stop condition in the lookup
 			h, err := lu.NodeFromResource(ctx, rootRef)
 			Expect(err).ToNot(HaveOccurred())
-			err = h.SetXattrString(prefixes.SpaceNameAttr, "username")
+			err = h.SetXattrString(ctx, prefixes.SpaceNameAttr, "username")
 			Expect(err).ToNot(HaveOccurred())
 			permissions.On("AssemblePermissions", mock.Anything, mock.Anything, mock.Anything).Return(provider.ResourcePermissions{
 				Stat: true,
