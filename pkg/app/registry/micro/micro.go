@@ -21,22 +21,25 @@ package micro
 import (
 	"container/heap"
 	"context"
+	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	registrypb "github.com/cs3org/go-cs3apis/cs3/app/registry/v1beta1"
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	"github.com/cs3org/reva/v2/pkg/app"
-	"github.com/cs3org/reva/v2/pkg/app/registry/registry"
-	"github.com/cs3org/reva/v2/pkg/appctx"
-	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/google/uuid"
 	"github.com/mitchellh/mapstructure"
 	oreg "github.com/owncloud/ocis/v2/ocis-pkg/registry"
 	"github.com/rs/zerolog/log"
 	orderedmap "github.com/wk8/go-ordered-map"
 	mreg "go-micro.dev/v4/registry"
+
+	"github.com/cs3org/reva/v2/pkg/app"
+	"github.com/cs3org/reva/v2/pkg/app/registry/registry"
+	"github.com/cs3org/reva/v2/pkg/appctx"
+	"github.com/cs3org/reva/v2/pkg/errtypes"
 )
 
 func init() {
@@ -79,6 +82,7 @@ type manager struct {
 	namespace string
 	mimetypes *orderedmap.OrderedMap // map[string]*mimeTypeConfig  ->  map the mime type to the addresses of the corresponding providers
 	sync.RWMutex
+	providers map[string]interface{}
 }
 
 // New returns an implementation of the app.Registry interface.
@@ -97,7 +101,9 @@ func New(m map[string]interface{}) (app.Registry, error) {
 
 	newManager := manager{
 		mimetypes: mimetypes,
+		namespace: "bazFoo",
 	}
+
 	return &newManager, nil
 }
 
@@ -192,7 +198,7 @@ func (m *manager) AddProvider(ctx context.Context, p *registrypb.ProviderInfo) e
 
 	reg := oreg.GetRegistry()
 
-	serviceID := m.namespace + "app-provider"
+	serviceID := m.namespace + ".api.app-provider"
 
 	node := &mreg.Node{
 		Id:       serviceID + "-" + uuid.New().String(),
@@ -225,12 +231,12 @@ func (m *manager) AddProvider(ctx context.Context, p *registrypb.ProviderInfo) e
 
 	log.Info().Msgf("registering external service %v@%v", node.Id, node.Address)
 
-	rOpts := []mreg.RegisterOption{mreg.RegisterTTL(time.Minute)}
+	rOpts := []mreg.RegisterOption{mreg.RegisterTTL(time.Minute)} // TODO: this should be configurable
 	if err := reg.Register(service, rOpts...); err != nil {
 		log.Fatal().Err(err).Msgf("Registration error for external service %v", serviceID)
 	}
 
-	t := time.NewTicker(time.Second * 30)
+	t := time.NewTicker(time.Millisecond)
 
 	go func() {
 		for {
@@ -249,6 +255,7 @@ func (m *manager) AddProvider(ctx context.Context, p *registrypb.ProviderInfo) e
 					log.Err(err).Msgf("Error unregistering external service %v", serviceID)
 				}
 				// FIXME how do we end this when a provider reregisters?
+				// Proposal: use manager.providers and register function there aswell
 			}
 		}
 	}()
@@ -258,6 +265,8 @@ func (m *manager) AddProvider(ctx context.Context, p *registrypb.ProviderInfo) e
 
 func (m *manager) ListProviders(ctx context.Context) ([]*registrypb.ProviderInfo, error) {
 	reg := oreg.GetRegistry()
+	// FIXME: for some reason it can not get the service
+	// seems like an issue with registering with grpc
 	services, err := reg.GetService(m.namespace+".api.app-provider", mreg.GetContext(ctx))
 	if err != nil {
 		return nil, err
@@ -328,7 +337,7 @@ func (m *manager) SetDefaultProviderForMimeType(ctx context.Context, mimeType st
 		mime := mimeInterface.(*mimeTypeConfig)
 		mime.DefaultApp = p.Address
 
-		registerProvider(p, mime)
+		m.registerProvider(p, mime)
 	} else {
 		// the mime type should be already registered as config in the AppRegistry
 		// we will create a new entry fot the mimetype, but leaving a warning for
@@ -339,12 +348,21 @@ func (m *manager) SetDefaultProviderForMimeType(ctx context.Context, mimeType st
 	return nil
 }
 
+func (m *manager) registerProvider(p *registrypb.ProviderInfo, mime *mimeTypeConfig) {
+	m.AddProvider(context.Background(), p)
+}
+
 func dummyMimeType(m string, apps []*registrypb.ProviderInfo) *mimeTypeConfig {
 	appsHeap := providerHeap{}
 	for _, p := range apps {
+		prio, err := strconv.ParseUint(getPriority(p), 10, 64)
+		if err != nil {
+			// TODO: maybe add some log here, providers might get lost
+			continue
+		}
 		heap.Push(&appsHeap, providerWithPriority{
 			provider: p,
-			priority: getPriority(p),
+			priority: prio,
 		})
 	}
 
@@ -366,13 +384,13 @@ func (m *manager) GetDefaultProviderForMimeType(ctx context.Context, mimeType st
 		mime := mimeInterface.(*mimeTypeConfig)
 		// default by provider address
 		if p, ok := m.providers[mime.DefaultApp]; ok {
-			return p, nil
+			return p.(*registrypb.ProviderInfo), nil
 		}
 
 		// default by provider name
 		for _, p := range m.providers {
-			if p.Name == mime.DefaultApp {
-				return p, nil
+			if p.(*registrypb.ProviderInfo).Name == mime.DefaultApp {
+				return p.(*registrypb.ProviderInfo), nil
 			}
 		}
 	}
@@ -405,6 +423,7 @@ func (h providerHeap) Swap(i, j int) {
 
 func (h *providerHeap) Push(x interface{}) {
 	*h = append(*h, x.(providerWithPriority))
+	fmt.Printf("Heap len: %d\n", h.Len())
 }
 
 func (h *providerHeap) Pop() interface{} {
