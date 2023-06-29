@@ -19,7 +19,6 @@
 package runtime
 
 import (
-	"fmt"
 	"path"
 	"sort"
 
@@ -44,7 +43,7 @@ func initHTTPMiddlewares(conf map[string]map[string]any, unprotected []string, l
 	for name, c := range conf {
 		new, ok := global.NewMiddlewares[name]
 		if !ok {
-			return nil, fmt.Errorf("http middleware %s not found", name)
+			continue
 		}
 		m, prio, err := new(c)
 		if err != nil {

@@ -19,7 +19,6 @@
 package runtime
 
 import (
-	"fmt"
 	"sort"
 
 	"github.com/cs3org/reva/internal/grpc/interceptors/appctx"
@@ -53,7 +52,7 @@ func initGRPCInterceptors(conf map[string]map[string]any, unprotected []string, 
 	for name, c := range conf {
 		new, ok := rgrpc.UnaryInterceptors[name]
 		if !ok {
-			return nil, nil, fmt.Errorf("unary interceptor %s not found", name)
+			continue
 		}
 		inter, prio, err := new(c)
 		if err != nil {
@@ -100,7 +99,7 @@ func initGRPCInterceptors(conf map[string]map[string]any, unprotected []string, 
 	for name, c := range conf {
 		new, ok := rgrpc.StreamInterceptors[name]
 		if !ok {
-			return nil, nil, fmt.Errorf("stream interceptor %s not found", name)
+			continue
 		}
 		inter, prio, err := new(c)
 		if err != nil {
