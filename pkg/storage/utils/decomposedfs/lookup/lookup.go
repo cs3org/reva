@@ -34,10 +34,15 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/options"
 	"github.com/pkg/errors"
 	"github.com/rogpeppe/go-internal/lockedfile"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/trace"
 )
 
-// name is the Tracer name used to identify this instrumentation library.
-const tracerName = "decomposedfs.lookup"
+var tracer trace.Tracer
+
+func init() {
+	tracer = otel.Tracer("github.com/cs3org/reva/pkg/storage/utils/decomposedfs/lookup")
+}
 
 // Lookup implements transformations from filepath to node and back
 type Lookup struct {
@@ -111,7 +116,7 @@ func (lu *Lookup) TypeFromPath(ctx context.Context, path string) provider.Resour
 
 // NodeFromResource takes in a request path or request id and converts it to a Node
 func (lu *Lookup) NodeFromResource(ctx context.Context, ref *provider.Reference) (*node.Node, error) {
-	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "NodeFromResource")
+	ctx, span := tracer.Start(ctx, "NodeFromResource")
 	defer span.End()
 
 	if ref.ResourceId != nil {
@@ -142,7 +147,7 @@ func (lu *Lookup) NodeFromResource(ctx context.Context, ref *provider.Reference)
 
 // NodeFromID returns the internal path for the id
 func (lu *Lookup) NodeFromID(ctx context.Context, id *provider.ResourceId) (n *node.Node, err error) {
-	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "NodeFromID")
+	ctx, span := tracer.Start(ctx, "NodeFromID")
 	defer span.End()
 	if id == nil {
 		return nil, fmt.Errorf("invalid resource id %+v", id)

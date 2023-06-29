@@ -27,13 +27,17 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"go-micro.dev/v4/store"
+	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	semconv "go.opentelemetry.io/otel/semconv/v1.10.0"
 	"go.opentelemetry.io/otel/trace"
 )
 
-// name is the Tracer name used to identify this instrumentation library.
-const tracerName = "cache"
+var tracer trace.Tracer
+
+func init() {
+	tracer = otel.Tracer("github.com/cs3org/reva/pkg/storage/utils/decomposedfs/lookup")
+}
 
 // NewStatCache creates a new StatCache
 func NewStatCache(store string, nodes []string, database, table string, ttl time.Duration, size int) StatCache {
@@ -50,9 +54,7 @@ type statCache struct {
 }
 
 func (c statCache) RemoveStatContext(ctx context.Context, userID *userpb.UserId, res *provider.ResourceId) {
-	span := trace.SpanFromContext(ctx)
-	tp := span.TracerProvider()
-	_, span = tp.Tracer(tracerName).Start(ctx, "RemoveStatContext")
+	_, span := tracer.Start(ctx, "RemoveStatContext")
 	defer span.End()
 
 	span.SetAttributes(semconv.EnduserIDKey.String(userID.GetOpaqueId()))

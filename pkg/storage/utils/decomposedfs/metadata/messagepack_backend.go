@@ -27,16 +27,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cs3org/reva/v2/pkg/appctx"
 	"github.com/cs3org/reva/v2/pkg/storage/cache"
 	"github.com/pkg/xattr"
 	"github.com/rogpeppe/go-internal/lockedfile"
 	"github.com/shamaton/msgpack/v2"
 	"go.opentelemetry.io/otel/codes"
 )
-
-// name is the Tracer name used to identify this instrumentation library.
-const tracerName = "metadata.messagepack"
 
 // MessagePackBackend persists the attributes in messagepack format inside the file
 type MessagePackBackend struct {
@@ -136,7 +132,7 @@ func (b MessagePackBackend) saveAttributes(ctx context.Context, path string, set
 		err error
 		f   readWriteCloseSeekTruncater
 	)
-	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "saveAttributes")
+	ctx, span := tracer.Start(ctx, "saveAttributes")
 	defer func() {
 		if err != nil {
 			span.SetStatus(codes.Error, err.Error())
@@ -148,11 +144,11 @@ func (b MessagePackBackend) saveAttributes(ctx context.Context, path string, set
 
 	metaPath := b.MetadataPath(path)
 	if acquireLock {
-		_, subspan := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "lockedfile.OpenFile")
+		_, subspan := tracer.Start(ctx, "lockedfile.OpenFile")
 		f, err = lockedfile.OpenFile(metaPath, os.O_RDWR|os.O_CREATE, 0600)
 		subspan.End()
 	} else {
-		_, subspan := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "os.OpenFile")
+		_, subspan := tracer.Start(ctx, "os.OpenFile")
 		f, err = os.OpenFile(metaPath, os.O_RDWR|os.O_CREATE, 0600)
 		subspan.End()
 	}
@@ -162,12 +158,12 @@ func (b MessagePackBackend) saveAttributes(ctx context.Context, path string, set
 	defer f.Close()
 
 	// Invalidate cache early
-	_, subspan := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "metaCache.RemoveMetadata")
+	_, subspan := tracer.Start(ctx, "metaCache.RemoveMetadata")
 	_ = b.metaCache.RemoveMetadata(b.cacheKey(path))
 	subspan.End()
 
 	// Read current state
-	_, subspan = appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "io.ReadAll")
+	_, subspan = tracer.Start(ctx, "io.ReadAll")
 	var msgBytes []byte
 	msgBytes, err = io.ReadAll(f)
 	subspan.End()
@@ -195,7 +191,7 @@ func (b MessagePackBackend) saveAttributes(ctx context.Context, path string, set
 	if err != nil {
 		return err
 	}
-	_, subspan = appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "f.Truncate")
+	_, subspan = tracer.Start(ctx, "f.Truncate")
 	err = f.Truncate(0)
 	subspan.End()
 	if err != nil {
@@ -208,21 +204,21 @@ func (b MessagePackBackend) saveAttributes(ctx context.Context, path string, set
 	if err != nil {
 		return err
 	}
-	_, subspan = appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "f.Write")
+	_, subspan = tracer.Start(ctx, "f.Write")
 	_, err = f.Write(d)
 	subspan.End()
 	if err != nil {
 		return err
 	}
 
-	_, subspan = appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "metaCache.PushToCache")
+	_, subspan = tracer.Start(ctx, "metaCache.PushToCache")
 	err = b.metaCache.PushToCache(b.cacheKey(path), attribs)
 	subspan.End()
 	return err
 }
 
 func (b MessagePackBackend) loadAttributes(ctx context.Context, path string, source io.Reader) (map[string][]byte, error) {
-	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "loadAttributes")
+	ctx, span := tracer.Start(ctx, "loadAttributes")
 	defer span.End()
 	attribs := map[string][]byte{}
 	err := b.metaCache.PullFromCache(b.cacheKey(path), &attribs)
@@ -232,7 +228,7 @@ func (b MessagePackBackend) loadAttributes(ctx context.Context, path string, sou
 
 	metaPath := b.MetadataPath(path)
 	if source == nil {
-		_, subspan := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "lockedfile.Open")
+		_, subspan := tracer.Start(ctx, "lockedfile.Open")
 		source, err = lockedfile.Open(metaPath)
 		subspan.End()
 		// // No cached entry found. Read from storage and store in cache
@@ -241,7 +237,7 @@ func (b MessagePackBackend) loadAttributes(ctx context.Context, path string, sou
 				// some of the caller rely on ENOTEXISTS to be returned when the
 				// actual file (not the metafile) does not exist in order to
 				// determine whether a node exists or not -> stat the actual node
-				_, subspan := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "os.Stat")
+				_, subspan := tracer.Start(ctx, "os.Stat")
 				_, err := os.Stat(path)
 				subspan.End()
 				if err != nil {
@@ -253,7 +249,7 @@ func (b MessagePackBackend) loadAttributes(ctx context.Context, path string, sou
 		defer source.(*lockedfile.File).Close()
 	}
 
-	_, subspan := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "io.ReadAll")
+	_, subspan := tracer.Start(ctx, "io.ReadAll")
 	msgBytes, err := io.ReadAll(source)
 	subspan.End()
 	if err != nil {
@@ -266,7 +262,7 @@ func (b MessagePackBackend) loadAttributes(ctx context.Context, path string, sou
 		}
 	}
 
-	_, subspan = appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "metaCache.PushToCache")
+	_, subspan = tracer.Start(ctx, "metaCache.PushToCache")
 	err = b.metaCache.PushToCache(b.cacheKey(path), attribs)
 	subspan.End()
 	if err != nil {

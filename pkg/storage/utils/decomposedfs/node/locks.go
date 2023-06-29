@@ -255,7 +255,7 @@ func (n *Node) Unlock(ctx context.Context, lock *provider.Lock) error {
 
 // CheckLock compares the context lock with the node lock
 func (n *Node) CheckLock(ctx context.Context) error {
-	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "CheckLock")
+	ctx, span := tracer.Start(ctx, "CheckLock")
 	defer span.End()
 	contextLock, _ := ctxpkg.ContextGetLockID(ctx)
 	diskLock, _ := n.ReadLock(ctx, false)

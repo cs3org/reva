@@ -47,11 +47,16 @@ import (
 	"github.com/rogpeppe/go-internal/lockedfile"
 	"github.com/rs/zerolog/log"
 	"go-micro.dev/v4/store"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/sync/errgroup"
 )
 
-// name is the Tracer name used to identify this instrumentation library.
-const tracerName = "decomposedfs.tree"
+var tracer trace.Tracer
+
+func init() {
+	tracer = otel.Tracer("github.com/cs3org/reva/pkg/storage/utils/decomposedfs/tree")
+}
 
 //go:generate make --no-print-directory -C ../../../../.. mockery NAME=Blobstore
 
@@ -189,7 +194,7 @@ func (t *Tree) TouchFile(ctx context.Context, n *node.Node, markprocessing bool,
 
 // CreateDir creates a new directory entry in the tree
 func (t *Tree) CreateDir(ctx context.Context, n *node.Node) (err error) {
-	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "CreateDir")
+	ctx, span := tracer.Start(ctx, "CreateDir")
 	defer span.End()
 	if n.Exists {
 		return errtypes.AlreadyExists(n.ID) // path?
@@ -208,7 +213,7 @@ func (t *Tree) CreateDir(ctx context.Context, n *node.Node) (err error) {
 
 	// make child appear in listings
 	relativeNodePath := filepath.Join("../../../../../", lookup.Pathify(n.ID, 4, 2))
-	ctx, subspan := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "os.Symlink")
+	ctx, subspan := tracer.Start(ctx, "os.Symlink")
 	err = os.Symlink(relativeNodePath, filepath.Join(n.ParentPath(), n.Name))
 	subspan.End()
 	if err != nil {
@@ -218,7 +223,7 @@ func (t *Tree) CreateDir(ctx context.Context, n *node.Node) (err error) {
 		}
 
 		// try to remove the node
-		ctx, subspan = appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "os.RemoveAll")
+		ctx, subspan = tracer.Start(ctx, "os.RemoveAll")
 		e := os.RemoveAll(n.InternalPath())
 		subspan.End()
 		if e != nil {
@@ -325,7 +330,7 @@ func (t *Tree) Move(ctx context.Context, oldNode *node.Node, newNode *node.Node)
 }
 
 func readChildNodeFromLink(ctx context.Context, path string) (string, error) {
-	_, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "readChildNodeFromLink")
+	_, span := tracer.Start(ctx, "readChildNodeFromLink")
 	defer span.End()
 	link, err := os.Readlink(path)
 	if err != nil {
@@ -338,11 +343,11 @@ func readChildNodeFromLink(ctx context.Context, path string) (string, error) {
 
 // ListFolder lists the content of a folder node
 func (t *Tree) ListFolder(ctx context.Context, n *node.Node) ([]*node.Node, error) {
-	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "ListFolder")
+	ctx, span := tracer.Start(ctx, "ListFolder")
 	defer span.End()
 	dir := n.InternalPath()
 
-	_, subspan := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "os.Open")
+	_, subspan := tracer.Start(ctx, "os.Open")
 	f, err := os.Open(dir)
 	subspan.End()
 	if err != nil {
@@ -353,7 +358,7 @@ func (t *Tree) ListFolder(ctx context.Context, n *node.Node) ([]*node.Node, erro
 	}
 	defer f.Close()
 
-	_, subspan = appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "f.Readdirnames")
+	_, subspan = tracer.Start(ctx, "f.Readdirnames")
 	names, err := f.Readdirnames(0)
 	subspan.End()
 	if err != nil {
@@ -714,7 +719,7 @@ func (t *Tree) removeNode(ctx context.Context, path string, n *node.Node) error 
 
 // Propagate propagates changes to the root of the tree
 func (t *Tree) Propagate(ctx context.Context, n *node.Node, sizeDiff int64) (err error) {
-	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "Propagate")
+	ctx, span := tracer.Start(ctx, "Propagate")
 	defer span.End()
 	sublog := appctx.GetLogger(ctx).With().
 		Str("method", "tree.Propagate").
@@ -744,7 +749,7 @@ func (t *Tree) Propagate(ctx context.Context, n *node.Node, sizeDiff int64) (err
 		var f *lockedfile.File
 		// lock parent before reading treesize or tree time
 
-		_, subspan := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "lockedfile.OpenFile")
+		_, subspan := tracer.Start(ctx, "lockedfile.OpenFile")
 		var parentFilename string
 		switch t.lookup.MetadataBackend().(type) {
 		case metadata.MessagePackBackend:
@@ -863,7 +868,7 @@ func (t *Tree) Propagate(ctx context.Context, n *node.Node, sizeDiff int64) (err
 		}
 
 		// Release node lock early, ignore already closed error
-		_, subspan = appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "f.Close")
+		_, subspan = tracer.Start(ctx, "f.Close")
 		cerr := f.Close()
 		subspan.End()
 		if cerr != nil && !errors.Is(cerr, os.ErrClosed) {
@@ -879,7 +884,7 @@ func (t *Tree) Propagate(ctx context.Context, n *node.Node, sizeDiff int64) (err
 }
 
 func (t *Tree) calculateTreeSize(ctx context.Context, childrenPath string) (uint64, error) {
-	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "calculateTreeSize")
+	ctx, span := tracer.Start(ctx, "calculateTreeSize")
 	defer span.End()
 	var size uint64
 
@@ -952,7 +957,7 @@ func (t *Tree) DeleteBlob(node *node.Node) error {
 
 // TODO check if node exists?
 func (t *Tree) createDirNode(ctx context.Context, n *node.Node) (err error) {
-	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "createDirNode")
+	ctx, span := tracer.Start(ctx, "createDirNode")
 	defer span.End()
 	// create a directory node
 	nodePath := n.InternalPath()
@@ -1041,7 +1046,7 @@ func (t *Tree) readRecycleItem(ctx context.Context, spaceID, key, path string) (
 }
 
 func getNodeIDFromCache(ctx context.Context, path string, cache store.Store) string {
-	_, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "getNodeIDFromCache")
+	_, span := tracer.Start(ctx, "getNodeIDFromCache")
 	defer span.End()
 	recs, err := cache.Read(path)
 	if err == nil && len(recs) > 0 {
@@ -1051,7 +1056,7 @@ func getNodeIDFromCache(ctx context.Context, path string, cache store.Store) str
 }
 
 func storeNodeIDInCache(ctx context.Context, path string, nodeID string, cache store.Store) error {
-	_, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "storeNodeIDInCache")
+	_, span := tracer.Start(ctx, "storeNodeIDInCache")
 	defer span.End()
 	return cache.Write(&store.Record{
 		Key:   path,

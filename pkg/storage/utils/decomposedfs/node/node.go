@@ -48,10 +48,15 @@ import (
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/trace"
 )
 
-// name is the Tracer name used to identify this instrumentation library.
-const tracerName = "decomposedfs.node"
+var tracer trace.Tracer
+
+func init() {
+	tracer = otel.Tracer("github.com/cs3org/reva/pkg/storage/utils/decomposedfs/node")
+}
 
 // Define keys and values used in the node metadata
 const (
@@ -209,7 +214,7 @@ func (n *Node) SpaceOwnerOrManager(ctx context.Context) *userpb.UserId {
 
 // ReadNode creates a new instance from an id and checks if it exists
 func ReadNode(ctx context.Context, lu PathLookup, spaceID, nodeID string, canListDisabledSpace bool, spaceRoot *Node, skipParentCheck bool) (*Node, error) {
-	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "ReadNode")
+	ctx, span := tracer.Start(ctx, "ReadNode")
 	defer span.End()
 	var err error
 
@@ -347,7 +352,7 @@ func readChildNodeFromLink(path string) (string, error) {
 
 // Child returns the child node with the given name
 func (n *Node) Child(ctx context.Context, name string) (*Node, error) {
-	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "Child")
+	ctx, span := tracer.Start(ctx, "Child")
 	defer span.End()
 
 	spaceID := n.SpaceID
@@ -927,7 +932,7 @@ func (n *Node) IsDisabled(ctx context.Context) bool {
 
 // GetTreeSize reads the treesize from the extended attributes
 func (n *Node) GetTreeSize(ctx context.Context) (treesize uint64, err error) {
-	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "GetTreeSize")
+	ctx, span := tracer.Start(ctx, "GetTreeSize")
 	defer span.End()
 	s, err := n.XattrUint64(ctx, prefixes.TreesizeAttr)
 	if err != nil {
