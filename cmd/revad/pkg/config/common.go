@@ -40,10 +40,10 @@ func (c ServicesConfig) DriversNumber() int { return len(c) }
 
 // DriverConfig holds the configuration for a driver.
 type DriverConfig struct {
-	Config  map[string]any `key:",squash"`
 	Address Address        `key:"address"`
 	Network string         `key:"network"`
 	Label   string         `key:"-"`
+	Config  map[string]any `key:",squash"` // this must be at the bottom!
 }
 
 func (s *ServicesConfig) Add(domain, svc string, c *DriverConfig) {
