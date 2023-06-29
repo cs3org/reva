@@ -129,7 +129,11 @@ func (c *Config) Lookup(key string) (any, error) {
 	if !c.isValidKey(key) {
 		return nil, nil
 	}
-	return lookupByType(key, reflect.ValueOf(c))
+	val, err := lookupByType(key, reflect.ValueOf(c))
+	if err != nil {
+		return nil, errors.Wrapf(err, "lookup: error on key '%s'", key)
+	}
+	return val, nil
 }
 
 func (c *Config) isValidKey(key string) bool {
