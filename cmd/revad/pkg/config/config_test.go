@@ -52,7 +52,7 @@ something = "test"`
 		t.Fatalf("not expected error: %v", err)
 	}
 
-	assert.Equal(t, "localhost:9142", c.GRPC.Address)
+	assert.Equal(t, Address("localhost:9142"), c.GRPC.Address)
 
 	exp := map[string]ServicesConfig{
 		"authprovider": []*DriverConfig{
@@ -123,7 +123,7 @@ something = "test"`
 		t.Fatalf("not expected error: %v", err)
 	}
 
-	assert.Equal(t, "", c.GRPC.Address)
+	assert.Equal(t, Address(""), c.GRPC.Address)
 
 	exp := map[string]ServicesConfig{
 		"authprovider": []*DriverConfig{
@@ -505,7 +505,7 @@ func TestDump(t *testing.T) {
 			"db_password": "secretpassword",
 		},
 		"grpc": map[string]any{
-			"address":           "",
+			"address":           Address(""),
 			"network":           "",
 			"shutdown_deadline": 10,
 			"enable_reflection": true,
@@ -513,14 +513,14 @@ func TestDump(t *testing.T) {
 			"services": map[string]any{
 				"gateway": []any{
 					map[string]any{
-						"address":         "",
+						"address":         Address(""),
 						"network":         "",
 						"authregistrysvc": "localhost:19000",
 					},
 				},
 				"authregistry": []any{
 					map[string]any{
-						"address": "localhost:19000",
+						"address": Address("localhost:19000"),
 						"network": "",
 						"driver":  "static",
 						"drivers": map[string]any{
@@ -535,7 +535,7 @@ func TestDump(t *testing.T) {
 				},
 				"authprovider": []any{
 					map[string]any{
-						"address": "localhost:19001",
+						"address": Address("localhost:19001"),
 						"network": "",
 						"driver":  "ldap",
 						"drivers": map[string]any{
@@ -545,7 +545,7 @@ func TestDump(t *testing.T) {
 						},
 					},
 					map[string]any{
-						"address": "localhost:19002",
+						"address": Address("localhost:19002"),
 						"network": "",
 						"driver":  "machine",
 						"drivers": map[string]any{
@@ -559,21 +559,21 @@ func TestDump(t *testing.T) {
 		},
 		"http": map[string]any{
 			"network":     "",
-			"address":     "localhost:19003",
+			"address":     Address("localhost:19003"),
 			"certfile":    "",
 			"keyfile":     "",
 			"middlewares": map[string]any{},
 			"services": map[string]any{
 				"dataprovider": []any{
 					map[string]any{
-						"address": "localhost:19003",
+						"address": Address("localhost:19003"),
 						"network": "",
 						"driver":  "localhome",
 					},
 				},
 				"sysinfo": []any{
 					map[string]any{
-						"address": "localhost:19003",
+						"address": Address("localhost:19003"),
 						"network": "",
 					},
 				},

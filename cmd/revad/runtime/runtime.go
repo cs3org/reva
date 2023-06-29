@@ -123,10 +123,10 @@ func New(config *config.Config, opt ...Option) (*Reva, error) {
 func servicesAddresses(cfg *config.Config) map[string]grace.Addressable {
 	a := make(map[string]grace.Addressable)
 	cfg.GRPC.ForEachService(func(s *config.Service) {
-		a[s.Label] = &addr{address: s.Address, network: s.Network}
+		a[s.Label] = &addr{address: s.Address.String(), network: s.Network}
 	})
 	cfg.HTTP.ForEachService(func(s *config.Service) {
-		a[s.Label] = &addr{address: s.Address, network: s.Network}
+		a[s.Label] = &addr{address: s.Address.String(), network: s.Network}
 	})
 	return a
 }
@@ -169,7 +169,7 @@ func setRandomAddresses(c *config.Config, lns map[string]net.Listener, log *zero
 		if !ok {
 			log.Fatal().Msg("port not assigned for service " + s.Label)
 		}
-		s.SetAddress(ln.Addr().String())
+		s.SetAddress(config.Address(ln.Addr().String()))
 		log.Debug().
 			Msgf("set random address %s:%s to service %s", ln.Addr().Network(), ln.Addr().String(), s.Label)
 	}
@@ -194,9 +194,9 @@ func groupGRPCByAddress(cfg *config.Config) []*config.GRPC {
 	// TODO: same address cannot be used in different configurations
 	g := map[string]*config.GRPC{}
 	cfg.GRPC.ForEachService(func(s *config.Service) {
-		if _, ok := g[s.Address]; !ok {
-			g[s.Address] = &config.GRPC{
-				Address:          s.Address,
+		if _, ok := g[s.Address.String()]; !ok {
+			g[s.Address.String()] = &config.GRPC{
+				Address:          config.Address(s.Address),
 				Network:          s.Network,
 				ShutdownDeadline: cfg.GRPC.ShutdownDeadline,
 				EnableReflection: cfg.GRPC.EnableReflection,
@@ -204,7 +204,7 @@ func groupGRPCByAddress(cfg *config.Config) []*config.GRPC {
 				Interceptors:     cfg.GRPC.Interceptors,
 			}
 		}
-		g[s.Address].Services[s.Name] = config.ServicesConfig{
+		g[s.Address.String()].Services[s.Name] = config.ServicesConfig{
 			{Config: s.Config, Address: s.Address, Network: s.Network, Label: s.Label},
 		}
 	})
@@ -218,8 +218,8 @@ func groupGRPCByAddress(cfg *config.Config) []*config.GRPC {
 func groupHTTPByAddress(cfg *config.Config) []*config.HTTP {
 	g := map[string]*config.HTTP{}
 	cfg.HTTP.ForEachService(func(s *config.Service) {
-		if _, ok := g[s.Address]; !ok {
-			g[s.Address] = &config.HTTP{
+		if _, ok := g[s.Address.String()]; !ok {
+			g[s.Address.String()] = &config.HTTP{
 				Address:     s.Address,
 				Network:     s.Network,
 				CertFile:    cfg.HTTP.CertFile,
@@ -228,7 +228,7 @@ func groupHTTPByAddress(cfg *config.Config) []*config.HTTP {
 				Middlewares: cfg.HTTP.Middlewares,
 			}
 		}
-		g[s.Address].Services[s.Name] = config.ServicesConfig{
+		g[s.Address.String()].Services[s.Name] = config.ServicesConfig{
 			{Config: s.Config, Address: s.Address, Network: s.Network, Label: s.Label},
 		}
 	})
@@ -335,9 +335,9 @@ func adjustCPU(cpu string) (int, error) {
 	return numCPU, nil
 }
 
-func listenerFromAddress(lns map[string]net.Listener, network, address string) net.Listener {
+func listenerFromAddress(lns map[string]net.Listener, network string, address config.Address) net.Listener {
 	for _, ln := range lns {
-		if netutil.AddressEqual(ln.Addr(), network, address) {
+		if netutil.AddressEqual(ln.Addr(), network, address.String()) {
 			return ln
 		}
 	}

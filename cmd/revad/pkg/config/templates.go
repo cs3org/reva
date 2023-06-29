@@ -147,6 +147,8 @@ func convertToString(val any) (string, bool) {
 	switch v := val.(type) {
 	case string:
 		return v, true
+	case fmt.Stringer:
+		return v.String(), true
 	case int:
 		return strconv.FormatInt(int64(v), 10), true
 	case int8:

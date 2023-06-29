@@ -25,10 +25,10 @@ import (
 
 // GRPC holds the configuration for the GRPC services.
 type GRPC struct {
-	Address          string `mapstructure:"address"           key:"address"`
-	Network          string `mapstructure:"network"           key:"network"           default:"tcp"`
-	ShutdownDeadline int    `mapstructure:"shutdown_deadline" key:"shutdown_deadline"`
-	EnableReflection bool   `mapstructure:"enable_reflection" key:"enable_reflection"`
+	Address          Address `mapstructure:"address"           key:"address"`
+	Network          string  `mapstructure:"network"           key:"network"           default:"tcp"`
+	ShutdownDeadline int     `mapstructure:"shutdown_deadline" key:"shutdown_deadline"`
+	EnableReflection bool    `mapstructure:"enable_reflection" key:"enable_reflection"`
 
 	Services     map[string]ServicesConfig `mapstructure:"-" key:"services"`
 	Interceptors map[string]map[string]any `mapstructure:"-" key:"interceptors"`

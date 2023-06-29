@@ -57,13 +57,26 @@ func TestApplyTemplate(t *testing.T) {
 						},
 					},
 				},
+				"port": {
+					{
+
+						Config: map[string]any{
+							"drivers": map[string]any{
+								"static": map[string]any{
+									"demo": "https://cern.ch:{{ grpc.services.authprovider.address.port }}/data",
+								},
+							},
+						},
+					},
+				},
 			},
 		},
 	}
 	err := cfg1.ApplyTemplates(cfg1)
 	assert.ErrorIs(t, err, nil)
-	assert.Equal(t, "localhost:1900", cfg1.GRPC.Services["authregistry"][0].Config["drivers"].(map[string]any)["static"].(map[string]any)["demo"])
+	assert.Equal(t, Address("localhost:1900"), cfg1.GRPC.Services["authregistry"][0].Config["drivers"].(map[string]any)["static"].(map[string]any)["demo"])
 	assert.Equal(t, "https://localhost:1900/data", cfg1.GRPC.Services["other"][0].Config["drivers"].(map[string]any)["static"].(map[string]any)["demo"])
+	assert.Equal(t, "https://cern.ch:1900/data", cfg1.GRPC.Services["port"][0].Config["drivers"].(map[string]any)["static"].(map[string]any)["demo"])
 
 	cfg2 := &Config{
 		Vars: Vars{

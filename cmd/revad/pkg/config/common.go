@@ -20,6 +20,7 @@ package config
 
 import (
 	"fmt"
+	"net"
 
 	"github.com/mitchellh/mapstructure"
 )
@@ -40,7 +41,7 @@ func (c ServicesConfig) DriversNumber() int { return len(c) }
 // DriverConfig holds the configuration for a driver.
 type DriverConfig struct {
 	Config  map[string]any `key:",squash"`
-	Address string         `key:"address"`
+	Address Address        `key:"address"`
 	Network string         `key:"network"`
 	Label   string         `key:"-"`
 }
@@ -117,7 +118,7 @@ func parseMiddlwares(cfg map[string]any, key string) (map[string]map[string]any,
 
 // Service contains the configuration for a service.
 type Service struct {
-	Address string
+	Address Address
 	Network string
 	Name    string
 	Label   string
@@ -127,7 +128,7 @@ type Service struct {
 }
 
 // SetAddress sets the address for the service in the configuration.
-func (s *Service) SetAddress(address string) {
+func (s *Service) SetAddress(address Address) {
 	s.Address = address
 	s.raw.Address = address
 }
@@ -179,9 +180,9 @@ func (i iterableImpl) ForEachInterceptor(f InterceptorFunc) {
 	}
 }
 
-func addressForService(global string, cfg map[string]any) string {
+func addressForService(global Address, cfg map[string]any) Address {
 	if address, ok := cfg["address"].(string); ok {
-		return address
+		return Address(address)
 	}
 	return global
 }
@@ -191,4 +192,26 @@ func networkForService(global string, cfg map[string]any) string {
 		return network
 	}
 	return global
+}
+
+type Address string
+
+func (a Address) String() string { return string(a) }
+
+func (a Address) Get(k string) (any, error) {
+	switch k {
+	case "port":
+		t, err := net.ResolveTCPAddr("tcp", a.String())
+		if err != nil {
+			return nil, err
+		}
+		return t.Port, nil
+	case "ip":
+		t, err := net.ResolveTCPAddr("tcp", a.String())
+		if err != nil {
+			return nil, err
+		}
+		return t.IP.String(), nil
+	}
+	return nil, ErrKeyNotFound{Key: k}
 }

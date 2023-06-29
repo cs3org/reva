@@ -35,6 +35,10 @@ func (e ErrKeyNotFound) Error() string {
 	return "key '" + e.Key + "' not found in the configuration"
 }
 
+type Getter interface {
+	Get(k string) (any, error)
+}
+
 func lookupStruct(key string, v reflect.Value) (any, error) {
 	if v.Kind() != reflect.Struct {
 		panic("called lookupStruct on non struct type")
@@ -103,7 +107,12 @@ func lookupStruct(key string, v reflect.Value) (any, error) {
 	return nil, ErrKeyNotFound{Key: key}
 }
 
+var typeGetter = reflect.TypeOf((*Getter)(nil)).Elem()
+
 func lookupByType(key string, v reflect.Value) (any, error) {
+	if v.Type().Implements(typeGetter) {
+		return lookupGetter(key, v)
+	}
 	switch v.Kind() {
 	case reflect.Bool, reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
 		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
@@ -119,6 +128,28 @@ func lookupByType(key string, v reflect.Value) (any, error) {
 		return lookupByType(key, v.Elem())
 	}
 	panic("type not supported: " + v.Kind().String())
+}
+
+func lookupGetter(key string, v reflect.Value) (any, error) {
+	g, ok := v.Interface().(Getter)
+	if !ok {
+		panic("called lookupGetter on type not implementing Getter interface")
+	}
+
+	cmd, _, err := parseNext(key)
+	if errors.Is(err, io.EOF) {
+		return v.Interface(), nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	c, ok := cmd.(FieldByKey)
+	if !ok {
+		return nil, errors.New("call of index on getter type")
+	}
+
+	return g.Get(c.Key)
 }
 
 func lookupMap(key string, v reflect.Value) (any, error) {

@@ -53,6 +53,10 @@ type SquashedMap struct {
 	Simple   SimpleStruct   `key:"simple"`
 }
 
+type StructWithAddress struct {
+	Address Address `key:"address"`
+}
+
 func TestLookupStruct(t *testing.T) {
 	tests := []struct {
 		in  any
@@ -174,6 +178,13 @@ func TestLookupStruct(t *testing.T) {
 			},
 			key: ".keya",
 			val: "val_a[1]",
+		},
+		{
+			in: StructWithAddress{
+				Address: "188.184.37.219:9142",
+			},
+			key: ".address.port",
+			val: 9142,
 		},
 	}
 
