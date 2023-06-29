@@ -39,6 +39,9 @@ type FieldByIndex struct{ Index int }
 
 func (FieldByIndex) isCommand() {}
 
+// parseNext reads the next token from the key and
+// assings a command.
+// If the key is empty io.EOF is returned.
 func parseNext(key string) (Command, string, error) {
 	// key = ".grpc.services.authprovider[1].address"
 
@@ -63,7 +66,7 @@ func parseNext(key string) (Command, string, error) {
 		return FieldByIndex{Index: int(index)}, next, nil
 	}
 
-	return nil, "", errors.New("parsing error: operator not recognised")
+	return nil, "", errors.New("parsing error: operator not recognised in key " + key)
 }
 
 func split(key string) (token string, next string) {

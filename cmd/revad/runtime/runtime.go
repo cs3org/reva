@@ -41,6 +41,7 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+// Reva represents a full instance of reva.
 type Reva struct {
 	config *config.Config
 
@@ -53,6 +54,7 @@ type Reva struct {
 	log     *zerolog.Logger
 }
 
+// Server represents a reva server (grpc or http).
 type Server struct {
 	server   grace.Server
 	listener net.Listener
@@ -60,10 +62,12 @@ type Server struct {
 	services map[string]any
 }
 
+// Start starts the server listening on the assigned listener.
 func (s *Server) Start() error {
 	return s.server.Start(s.listener)
 }
 
+// New creates a new reva instance.
 func New(config *config.Config, opt ...Option) (*Reva, error) {
 	opts := newOptions(opt...)
 	log := opts.Logger
@@ -239,6 +243,7 @@ func groupHTTPByAddress(cfg *config.Config) []*config.HTTP {
 	return l
 }
 
+// Start starts all the reva services and waits for a signal.
 func (r *Reva) Start() error {
 	defer r.watcher.Clean()
 	r.watcher.SetServers(list.Map(r.servers, func(s *Server) grace.Server { return s.server }))

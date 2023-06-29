@@ -71,7 +71,11 @@ type Core struct {
 // can be references by other parts of the configuration.
 type Vars map[string]any
 
+// Lookuper is the interface for getting the value
+// associated with a given key.
 type Lookuper interface {
+	// Lookup get the value associated to thye given key.
+	// It returns ErrKeyNotFound if the key does not exists.
 	Lookup(key string) (any, error)
 }
 
@@ -123,6 +127,11 @@ func (c *Config) Dump() map[string]any {
 	return dump
 }
 
+// Lookup gets the value associated to the given key in the config.
+// The key is in the form <subkey1>.<subkey2>[<index>], allowing accessing
+// recursively the config on subfields, in case of maps or structs or
+// types implementing the Getter interface, or elements in a list by the
+// given index.
 func (c *Config) Lookup(key string) (any, error) {
 	// check thet key is valid, meaning it starts with one of
 	// the fields of the config struct

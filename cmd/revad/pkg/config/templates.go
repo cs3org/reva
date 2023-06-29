@@ -26,6 +26,11 @@ import (
 	"strings"
 )
 
+// applyTemplateStruct applies recursively to all its fields all the template
+// strings to the struct v.
+// It panics if the value is not a struct.
+// A field in the struct is skipped for applying all the templates
+// if a tag "template" has teh value "-".
 func applyTemplateStruct(l Lookuper, p setter, v reflect.Value) error {
 	if v.Kind() != reflect.Struct {
 		panic("called applyTemplateStruct on non struct type")
@@ -52,6 +57,7 @@ func applyTemplateStruct(l Lookuper, p setter, v reflect.Value) error {
 	return nil
 }
 
+// applyTemplateByType applies the template string to a generic type.
 func applyTemplateByType(l Lookuper, p setter, v reflect.Value) error {
 	switch v.Kind() {
 	case reflect.Array, reflect.Slice:
@@ -70,6 +76,9 @@ func applyTemplateByType(l Lookuper, p setter, v reflect.Value) error {
 	return nil
 }
 
+// applyTemplateList recursively applies in all the elements of the list
+// the template strings.
+// It panics if the given value is not a list.
 func applyTemplateList(l Lookuper, p setter, v reflect.Value) error {
 	if v.Kind() != reflect.Array && v.Kind() != reflect.Slice {
 		panic("called applyTemplateList on non array/slice type")
@@ -84,6 +93,9 @@ func applyTemplateList(l Lookuper, p setter, v reflect.Value) error {
 	return nil
 }
 
+// applyTemplateMap recursively applies in all the elements of the map
+// the template strings.
+// It panics if the given value is not a map.
 func applyTemplateMap(l Lookuper, p setter, v reflect.Value) error {
 	if v.Kind() != reflect.Map {
 		panic("called applyTemplateMap on non map type")
@@ -100,6 +112,8 @@ func applyTemplateMap(l Lookuper, p setter, v reflect.Value) error {
 	return nil
 }
 
+// applyTemplateString applies to the string the template string, if any.
+// It panics if the given value is not a string.
 func applyTemplateString(l Lookuper, p setter, v reflect.Value) error {
 	if v.Kind() != reflect.String {
 		panic("called applyTemplateString on non string type")
@@ -130,6 +144,8 @@ func applyTemplateString(l Lookuper, p setter, v reflect.Value) error {
 	return nil
 }
 
+// applyTemplateInterface applies to the interface the template string, if any.
+// It panics if the given value is not an interface.
 func applyTemplateInterface(l Lookuper, p setter, v reflect.Value) error {
 	if v.Kind() != reflect.Interface {
 		panic("called applyTemplateInterface on non interface value")
@@ -220,6 +236,7 @@ func keyFromTemplate(s string) string {
 }
 
 type setter interface {
+	// SetValue sets the value v in a container.
 	SetValue(v any)
 }
 
@@ -238,15 +255,19 @@ type setterStruct struct {
 	Field  int
 }
 
+// SetValue sets the value v in the <index> element
+// of the list.
 func (s setterList) SetValue(v any) {
 	el := s.List.Index(s.Index)
 	el.Set(reflect.ValueOf(v))
 }
 
+// SetValue sets the value v to the <key> element of the map.
 func (s setterMap) SetValue(v any) {
 	s.Map.SetMapIndex(reflect.ValueOf(s.Key), reflect.ValueOf(v))
 }
 
+// SetValue sets the value v to the field in the struct.
 func (s setterStruct) SetValue(v any) {
 	s.Struct.Field(s.Field).Set(reflect.ValueOf(v))
 }

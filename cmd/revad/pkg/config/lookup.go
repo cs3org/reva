@@ -31,14 +31,19 @@ type ErrKeyNotFound struct {
 	Key string
 }
 
+// Error returns a string representation of the ErrKeyNotFound error.
 func (e ErrKeyNotFound) Error() string {
 	return "key '" + e.Key + "' not found in the configuration"
 }
 
-type Getter interface {
-	Get(k string) (any, error)
-}
-
+// lookupStruct recursively looks up the key in the struct v.
+// It panics if the value in v is not a struct.
+// Only fields are allowed to be accessed. It bails out if
+// an user wants to access by index.
+// The struct is traversed considering the field tags. If the tag
+// "key" is not specified for a field, the field is skipped in
+// the lookup. If the tag specifies "squash", the field is treated
+// as squashed.
 func lookupStruct(key string, v reflect.Value) (any, error) {
 	if v.Kind() != reflect.Struct {
 		panic("called lookupStruct on non struct type")
@@ -107,11 +112,14 @@ func lookupStruct(key string, v reflect.Value) (any, error) {
 	return nil, ErrKeyNotFound{Key: key}
 }
 
-var typeGetter = reflect.TypeOf((*Getter)(nil)).Elem()
+var typeLookuper = reflect.TypeOf((*Lookuper)(nil)).Elem()
 
+// lookupByType recursively looks up the given key in v.
 func lookupByType(key string, v reflect.Value) (any, error) {
-	if v.Type().Implements(typeGetter) {
-		return lookupGetter(key, v)
+	if v.Type().Implements(typeLookuper) {
+		if v, err := lookupFromLookuper(key, v); err == nil {
+			return v, nil
+		}
 	}
 	switch v.Kind() {
 	case reflect.Bool, reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
@@ -130,10 +138,11 @@ func lookupByType(key string, v reflect.Value) (any, error) {
 	panic("type not supported: " + v.Kind().String())
 }
 
-func lookupGetter(key string, v reflect.Value) (any, error) {
-	g, ok := v.Interface().(Getter)
+// lookupFromLookuper looks up the key in a Lookup value.
+func lookupFromLookuper(key string, v reflect.Value) (any, error) {
+	g, ok := v.Interface().(Lookuper)
 	if !ok {
-		panic("called lookupGetter on type not implementing Getter interface")
+		panic("called lookupFromLookuper on type not implementing Lookup interface")
 	}
 
 	cmd, _, err := parseNext(key)
@@ -149,9 +158,12 @@ func lookupGetter(key string, v reflect.Value) (any, error) {
 		return nil, errors.New("call of index on getter type")
 	}
 
-	return g.Get(c.Key)
+	return g.Lookup(c.Key)
 }
 
+// lookupMap recursively looks up the given key in the map v.
+// It panics if the value in v is not a map.
+// Works similarly to lookupStruct.
 func lookupMap(key string, v reflect.Value) (any, error) {
 	if v.Kind() != reflect.Map {
 		panic("called lookupMap on non map type")
@@ -179,6 +191,12 @@ func lookupMap(key string, v reflect.Value) (any, error) {
 	return lookupByType(next, el)
 }
 
+// lookupList recursively looks up the given key in the list v,
+// in all the elements contained in the list.
+// It panics if the value v is not a list.
+// The elements can be addressed in general by index, but
+// access by key is only allowed if the list contains exactly
+// one element.
 func lookupList(key string, v reflect.Value) (any, error) {
 	if v.Kind() != reflect.Slice && v.Kind() != reflect.Array {
 		panic("called lookupList on non array/slice type")
@@ -215,6 +233,9 @@ func lookupList(key string, v reflect.Value) (any, error) {
 	return lookupByType(next, el)
 }
 
+// lookupPrimitive gets the value from v.
+// If the key tries to access by field or by index the value,
+// an error is returned.
 func lookupPrimitive(key string, v reflect.Value) (any, error) {
 	if v.Kind() != reflect.Bool && v.Kind() != reflect.Int && v.Kind() != reflect.Int8 &&
 		v.Kind() != reflect.Int16 && v.Kind() != reflect.Int32 && v.Kind() != reflect.Int64 &&

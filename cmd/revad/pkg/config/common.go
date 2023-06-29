@@ -46,6 +46,7 @@ type DriverConfig struct {
 	Config  map[string]any `key:",squash"` // this must be at the bottom!
 }
 
+// Add appends the driver configuration to the given list of services.
 func (s *ServicesConfig) Add(domain, svc string, c *DriverConfig) {
 	l := len(*s)
 	if l == 0 {
@@ -194,11 +195,19 @@ func networkForService(global string, cfg map[string]any) string {
 	return global
 }
 
+// Address is the data structure holding an address.
 type Address string
 
+// ensure Address implements the Lookuper interface.
+var _ Lookuper = (*Address)(nil)
+
+// String return the string representation of the address.
 func (a Address) String() string { return string(a) }
 
-func (a Address) Get(k string) (any, error) {
+// Get returns the value associated to the given key.
+// The key available for an Address type are "port" and "ip",
+// allowing respectively to get the port and the ip from the address.
+func (a Address) Lookup(k string) (any, error) {
 	switch k {
 	case "port":
 		t, err := net.ResolveTCPAddr("tcp", a.String())

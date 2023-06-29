@@ -351,6 +351,7 @@ func get(lns map[string]net.Listener, address, network string) (net.Listener, bo
 	return nil, false
 }
 
+// Addressable is the interface for exposing address info.
 type Addressable interface {
 	Network() string
 	Address() string
@@ -370,7 +371,10 @@ type Serverless interface {
 	GracefulStop() error
 }
 
-func (w *Watcher) SetServers(s []Server)      { w.ss = s }
+// SetServers sets the list of servers that have to be watched.
+func (w *Watcher) SetServers(s []Server) { w.ss = s }
+
+// SetServerless sets the serverless that has to be watched.
 func (w *Watcher) SetServerless(s Serverless) { w.SL = s }
 
 // TrapSignals captures the OS signal.
