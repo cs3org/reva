@@ -20,6 +20,7 @@ package metadata
 
 import (
 	"context"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -28,6 +29,7 @@ import (
 	"time"
 
 	"github.com/cs3org/reva/v2/pkg/storage/cache"
+	"github.com/google/renameio/v2"
 	"github.com/pkg/xattr"
 	"github.com/rogpeppe/go-internal/lockedfile"
 	"github.com/shamaton/msgpack/v2"
@@ -142,14 +144,15 @@ func (b MessagePackBackend) saveAttributes(ctx context.Context, path string, set
 		span.End()
 	}()
 
+	lockPath := b.lockFilePath(path)
 	metaPath := b.MetadataPath(path)
 	if acquireLock {
 		_, subspan := tracer.Start(ctx, "lockedfile.OpenFile")
-		f, err = lockedfile.OpenFile(metaPath, os.O_RDWR|os.O_CREATE, 0600)
+		f, err = lockedfile.OpenFile(lockPath, os.O_RDWR|os.O_CREATE, 0600)
 		subspan.End()
 	} else {
 		_, subspan := tracer.Start(ctx, "os.OpenFile")
-		f, err = os.OpenFile(metaPath, os.O_RDWR|os.O_CREATE, 0600)
+		f, err = os.OpenFile(lockPath, os.O_RDWR|os.O_CREATE, 0600)
 		subspan.End()
 	}
 	if err != nil {
@@ -163,53 +166,42 @@ func (b MessagePackBackend) saveAttributes(ctx context.Context, path string, set
 	subspan.End()
 
 	// Read current state
-	_, subspan = tracer.Start(ctx, "io.ReadAll")
+	_, subspan = tracer.Start(ctx, "os.ReadFile")
 	var msgBytes []byte
-	msgBytes, err = io.ReadAll(f)
+	msgBytes, err = os.ReadFile(metaPath)
 	subspan.End()
 	if err != nil {
 		return err
 	}
 	attribs := map[string][]byte{}
-	if len(msgBytes) > 0 {
-		err = msgpack.Unmarshal(msgBytes, &attribs)
-		if err != nil {
-			return err
-		}
+
+	if len(msgBytes) == 0 {
+		// ugh. an empty file? bail out
+		return errors.New("encountered empty metadata file")
 	}
 
-	// set new metadata
+	err = msgpack.Unmarshal(msgBytes, &attribs)
+	if err != nil {
+		return err
+	}
+
+	// prepare metadata
 	for key, val := range setAttribs {
 		attribs[key] = val
 	}
 	for _, key := range deleteAttribs {
 		delete(attribs, key)
 	}
-
-	// Truncate file
-	_, err = f.Seek(0, io.SeekStart)
-	if err != nil {
-		return err
-	}
-	_, subspan = tracer.Start(ctx, "f.Truncate")
-	err = f.Truncate(0)
-	subspan.End()
-	if err != nil {
-		return err
-	}
-
-	// Write new metadata to file
 	var d []byte
 	d, err = msgpack.Marshal(attribs)
 	if err != nil {
 		return err
 	}
-	_, subspan = tracer.Start(ctx, "f.Write")
-	_, err = f.Write(d)
+
+	// overwrite file atomically
+	_, subspan = tracer.Start(ctx, "renameio.Writefile")
+	err = renameio.WriteFile(metaPath, d, 0600)
 	subspan.End()
-	if err != nil {
-		return err
-	}
 
 	_, subspan = tracer.Start(ctx, "metaCache.PushToCache")
 	err = b.metaCache.PushToCache(b.cacheKey(path), attribs)
@@ -227,9 +219,13 @@ func (b MessagePackBackend) loadAttributes(ctx context.Context, path string, sou
 	}
 
 	metaPath := b.MetadataPath(path)
+	var msgBytes []byte
+
 	if source == nil {
-		_, subspan := tracer.Start(ctx, "lockedfile.Open")
-		source, err = lockedfile.Open(metaPath)
+		// // No cached entry found. Read from storage and store in cache
+		_, subspan := tracer.Start(ctx, "os.OpenFile")
+		// source, err = lockedfile.Open(metaPath)
+		source, err = os.Open(metaPath)
 		subspan.End()
 		// // No cached entry found. Read from storage and store in cache
 		if err != nil {
@@ -246,12 +242,16 @@ func (b MessagePackBackend) loadAttributes(ctx context.Context, path string, sou
 				return attribs, nil // no attributes set yet
 			}
 		}
-		defer source.(*lockedfile.File).Close()
+		_, subspan = tracer.Start(ctx, "io.ReadAll")
+		msgBytes, err = io.ReadAll(source)
+		source.(*os.File).Close()
+		subspan.End()
+	} else {
+		_, subspan := tracer.Start(ctx, "io.ReadAll")
+		msgBytes, err = io.ReadAll(source)
+		subspan.End()
 	}
 
-	_, subspan := tracer.Start(ctx, "io.ReadAll")
-	msgBytes, err := io.ReadAll(source)
-	subspan.End()
 	if err != nil {
 		return nil, err
 	}
@@ -262,7 +262,7 @@ func (b MessagePackBackend) loadAttributes(ctx context.Context, path string, sou
 		}
 	}
 
-	_, subspan = tracer.Start(ctx, "metaCache.PushToCache")
+	_, subspan := tracer.Start(ctx, "metaCache.PushToCache")
 	err = b.metaCache.PushToCache(b.cacheKey(path), attribs)
 	subspan.End()
 	if err != nil {
@@ -303,6 +303,8 @@ func (b MessagePackBackend) Rename(oldPath, newPath string) error {
 
 // MetadataPath returns the path of the file holding the metadata for the given path
 func (MessagePackBackend) MetadataPath(path string) string { return path + ".mpk" }
+
+func (MessagePackBackend) lockFilePath(path string) string { return path + ".mpk.lock" }
 
 func (b MessagePackBackend) cacheKey(path string) string {
 	// rootPath is guaranteed to have no trailing slash

@@ -753,7 +753,7 @@ func (t *Tree) Propagate(ctx context.Context, n *node.Node, sizeDiff int64) (err
 		var parentFilename string
 		switch t.lookup.MetadataBackend().(type) {
 		case metadata.MessagePackBackend:
-			parentFilename = t.lookup.MetadataBackend().MetadataPath(n.ParentPath())
+			parentFilename = t.lookup.MetadataBackend().MetadataPath(n.ParentPath()) + ".lock"
 			f, err = lockedfile.OpenFile(parentFilename, os.O_RDWR|os.O_CREATE, 0600)
 		case metadata.XattrsBackend:
 			// we have to use dedicated lockfiles to lock directories
