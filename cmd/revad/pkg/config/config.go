@@ -59,8 +59,8 @@ type Shared struct {
 // Core holds the core configuration.
 type Core struct {
 	MaxCPUs            string `key:"max_cpus"             mapstructure:"max_cpus"`
-	TracingEnabled     bool   `key:"tracing_enabled"      mapstructure:"tracing_enabled"`
-	TracingEndpoint    string `key:"tracing_endpoint"     mapstructure:"tracing_endpoint"`
+	TracingEnabled     bool   `key:"tracing_enabled"      mapstructure:"tracing_enabled"      default:"true"`
+	TracingEndpoint    string `key:"tracing_endpoint"     mapstructure:"tracing_endpoint"     default:"localhost:6831"`
 	TracingCollector   string `key:"tracing_collector"    mapstructure:"tracing_collector"`
 	TracingServiceName string `key:"tracing_service_name" mapstructure:"tracing_service_name"`
 	TracingService     string `key:"tracing_service"      mapstructure:"tracing_service"`
