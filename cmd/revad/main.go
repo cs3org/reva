@@ -133,7 +133,7 @@ func handleSignalFlag() {
 
 		// kill process with signal
 		if err := process.Signal(signal); err != nil {
-			fmt.Fprintf(os.Stderr, "error signaling process %d with signal %s\n", process.Pid, signal)
+			fmt.Fprintf(os.Stderr, "error signaling process %d with signal %s: %v\n", process.Pid, signal, err)
 			os.Exit(1)
 		}
 

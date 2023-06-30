@@ -227,7 +227,7 @@ func inheritedListeners() map[string]net.Listener {
 			if len(s) != 2 {
 				continue
 			}
-			svcname := s[0]
+			svcname := strings.ToLower(s[0])
 			fd, err := strconv.ParseUint(s[1], 10, 64)
 			if err != nil {
 				continue
@@ -263,6 +263,8 @@ func (w *Watcher) GetListeners(servers map[string]Addressable) (map[string]net.L
 		w.log.Info().Msg("graceful restart, inheriting parent listener fds for grpc and http services")
 
 		inherited := inheritedListeners()
+		logListeners(inherited, "inherited", &w.log)
+
 		for svc, ln := range inherited {
 			addr, ok := servers[svc]
 			if !ok {
@@ -270,7 +272,8 @@ func (w *Watcher) GetListeners(servers map[string]Addressable) (map[string]net.L
 			}
 			// for services with random addresses, check and assign if available from inherited
 			// from the assigned addresses, assing the listener if address correspond
-			if isRandomAddress(addr.Address()) || addr.Address() == ln.Addr().String() { // TODO: check which is the host here
+			if isRandomAddress(addr.Address()) ||
+				netutil.AddressEqual(ln.Addr(), addr.Network(), addr.Address()) {
 				lns[svc] = ln
 			}
 		}
@@ -278,23 +281,32 @@ func (w *Watcher) GetListeners(servers map[string]Addressable) (map[string]net.L
 		// close all the listeners not used from inherited
 		for svc, ln := range inherited {
 			if _, ok := lns[svc]; !ok {
+				w.log.Debug().Msgf("closing inherited listener %s:%s for service %s", ln.Addr().Network(), ln.Addr().String(), svc)
 				if err := ln.Close(); err != nil {
-					w.log.Error().Err(err).Msgf("error closing inherited listener %s", ln.Addr().String())
+					w.log.Error().Err(err).Msgf("error closing inherited listener %s:%s", ln.Addr().Network(), ln.Addr().String())
 					return nil, errors.Wrap(err, "error closing inherited listener")
 				}
 			}
 		}
 
+		var err error
 		// create assigned/random listeners for the missing services
-		for svc, addr := range servers {
+		for svc, a := range servers {
 			_, ok := lns[svc]
 			if ok {
 				continue
 			}
-			a := getAddress(addr.Address())
-			ln, err := newListener(addr.Network(), a)
+			network, addr := a.Network(), getAddress(a.Address())
+			// multiple services may have the same listener
+			ln, ok := get(lns, addr, network)
+			if !ok {
+				ln, err = newListener(network, addr)
+				if err != nil {
+					return nil, err
+				}
+			}
 			if err != nil {
-				w.log.Error().Err(err).Msgf("error getting listener on %s", a)
+				w.log.Error().Err(err).Msgf("error getting listener on %s", addr)
 				return nil, errors.Wrap(err, "error getting listener")
 			}
 			lns[svc] = ln
@@ -340,6 +352,14 @@ func (w *Watcher) GetListeners(servers map[string]Addressable) (map[string]net.L
 	}
 	w.lns = lns
 	return lns, nil
+}
+
+func logListeners(lns map[string]net.Listener, info string, log *zerolog.Logger) {
+	r := make(map[string]string, len(lns))
+	for n, ln := range lns {
+		r[n] = fmt.Sprintf("%s:%s", ln.Addr().Network(), ln.Addr().String())
+	}
+	log.Debug().Interface(info, r).Send()
 }
 
 func get(lns map[string]net.Listener, address, network string) (net.Listener, bool) {
