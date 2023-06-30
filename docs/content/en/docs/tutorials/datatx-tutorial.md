@@ -38,7 +38,7 @@ Creating a transfer is similar to creating a regular OCM share through the `ocm-
 <br>The `ocm-share-create` command makes (see example below), via an OCM share, the contents of folder `/home/my-data` available for transferring to the grantee.
 <br>*Note that only a folder can be transferred!
 ```
->> ocm-share-create -grantee f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c -idp cesnet.cz -transfer /home/my-data
+>> ocm-share-create -grantee f7fbf8c8-139b-4376-b307-cf0a8c2d0d9c -idp cesnet.cz -datatx /home/my-data
 +--------------------------------------+-----------------+--------------------------------------+--------------------------------------------------------------------------------------------+-------------------+-------------+--------------------------------------+--------------------------------+--------------------------------+
 | #                                    | OWNER.IDP       | OWNER.OPAQUEID                       | RESOURCEID                                                                                 | TYPE              | GRANTEE.IDP | GRANTEE.OPAQUEID                     | CREATED                        | UPDATED                        |
 +--------------------------------------+-----------------+--------------------------------------+--------------------------------------------------------------------------------------------+-------------------+-------------+--------------------------------------+--------------------------------+--------------------------------+
