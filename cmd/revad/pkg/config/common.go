@@ -36,7 +36,7 @@ type iterableImpl struct{ i iterable }
 type ServicesConfig []*DriverConfig
 
 // DriversNumber return the number of driver configured for the service.
-func (c ServicesConfig) DriversNumber() int { return len(c) }
+func (s ServicesConfig) DriversNumber() int { return len(s) }
 
 // DriverConfig holds the configuration for a driver.
 type DriverConfig struct {

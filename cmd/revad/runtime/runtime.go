@@ -200,7 +200,7 @@ func groupGRPCByAddress(cfg *config.Config) []*config.GRPC {
 	cfg.GRPC.ForEachService(func(s *config.Service) {
 		if _, ok := g[s.Address.String()]; !ok {
 			g[s.Address.String()] = &config.GRPC{
-				Address:          config.Address(s.Address),
+				Address:          s.Address,
 				Network:          s.Network,
 				ShutdownDeadline: cfg.GRPC.ShutdownDeadline,
 				EnableReflection: cfg.GRPC.EnableReflection,

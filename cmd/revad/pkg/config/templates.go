@@ -30,7 +30,7 @@ import (
 // strings to the struct v.
 // It panics if the value is not a struct.
 // A field in the struct is skipped for applying all the templates
-// if a tag "template" has teh value "-".
+// if a tag "template" has the value "-".
 func applyTemplateStruct(l Lookuper, p setter, v reflect.Value) error {
 	if v.Kind() != reflect.Struct {
 		panic("called applyTemplateStruct on non struct type")
@@ -214,7 +214,7 @@ func convertToString(val any) (string, bool) {
 	case uint32:
 		return strconv.FormatUint(uint64(v), 10), true
 	case uint64:
-		return strconv.FormatUint(uint64(v), 10), true
+		return strconv.FormatUint(v, 10), true
 	case bool:
 		return strconv.FormatBool(v), true
 	}
