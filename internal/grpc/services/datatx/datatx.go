@@ -27,6 +27,7 @@ import (
 	txdriver "github.com/cs3org/reva/pkg/datatx"
 	txregistry "github.com/cs3org/reva/pkg/datatx/manager/registry"
 	repoRegistry "github.com/cs3org/reva/pkg/datatx/repository/registry"
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
@@ -124,6 +125,8 @@ func (s *service) UnprotectedEndpoints() []string {
 
 func (s *service) CreateTransfer(ctx context.Context, req *datatx.CreateTransferRequest) (*datatx.CreateTransferResponse, error) {
 	txInfo, startTransferErr := s.txManager.CreateTransfer(ctx, req.SrcTargetUri, req.DestTargetUri)
+	log := appctx.GetLogger(ctx)
+	log.Debug().Msg("CreateTransfer in internal/grpc/services/datatx/datatx.go!")
 
 	// we always save the transfer regardless of start transfer outcome
 	// only then, if starting fails, can we try to restart it
@@ -135,6 +138,15 @@ func (s *service) CreateTransfer(ctx context.Context, req *datatx.CreateTransfer
 		ShareID:       req.GetShareId().OpaqueId,
 		UserID:        userID,
 	}
+
+	log.Debug().Msgf("CreateTransfer TxID '%s', SrcTargetURI '%s', DestTargetURI '%s', ShareID '%s', UserID '%s'@'%s'",
+		txInfo.GetId().OpaqueId,
+		req.SrcTargetUri,
+		req.DestTargetUri,
+		req.GetShareId().OpaqueId,
+		userID.OpaqueId,
+		userID.Idp)
+
 	if err := s.storageDriver.StoreTransfer(transfer); err != nil {
 		err = errors.Wrap(err, "datatx service: error NEW saving transfer share: "+datatx.Status_STATUS_INVALID.String())
 		return &datatx.CreateTransferResponse{

@@ -22,12 +22,16 @@ import (
 	"context"
 
 	datatx "github.com/cs3org/go-cs3apis/cs3/tx/v1beta1"
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/pkg/errors"
 )
 
 func (s *svc) CreateTransfer(ctx context.Context, req *datatx.CreateTransferRequest) (*datatx.CreateTransferResponse, error) {
+	log := appctx.GetLogger(ctx)
+	log.Debug().Msg("CreateTransfer in grpc gateway!")
+
 	c, err := pool.GetDataTxClient(pool.Endpoint(s.c.DataTxEndpoint))
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetDataTxClient")
