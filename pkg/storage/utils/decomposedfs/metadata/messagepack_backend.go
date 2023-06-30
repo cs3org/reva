@@ -22,6 +22,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -170,19 +171,21 @@ func (b MessagePackBackend) saveAttributes(ctx context.Context, path string, set
 	var msgBytes []byte
 	msgBytes, err = os.ReadFile(metaPath)
 	subspan.End()
-	if err != nil {
-		return err
-	}
 	attribs := map[string][]byte{}
-
-	if len(msgBytes) == 0 {
+	switch {
+	case err != nil:
+		if _, ok := err.(*fs.PathError); !ok {
+			return err
+		}
+	case len(msgBytes) == 0:
 		// ugh. an empty file? bail out
 		return errors.New("encountered empty metadata file")
-	}
-
-	err = msgpack.Unmarshal(msgBytes, &attribs)
-	if err != nil {
-		return err
+	default:
+		// only unmarshal if we read data
+		err = msgpack.Unmarshal(msgBytes, &attribs)
+		if err != nil {
+			return err
+		}
 	}
 
 	// prepare metadata
