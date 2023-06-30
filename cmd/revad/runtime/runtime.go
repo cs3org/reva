@@ -383,17 +383,18 @@ func newServers(grpc []*config.GRPC, http []*config.HTTP, lns map[string]net.Lis
 		servers = append(servers, server)
 	}
 	for _, cfg := range http {
-		services, err := rhttp.InitServices(cfg.Services)
+		log := log.With().Str("pkg", "http").Logger()
+		services, err := rhttp.InitServices(cfg.Services, &log)
 		if err != nil {
 			return nil, err
 		}
-		middlewares, err := initHTTPMiddlewares(cfg.Middlewares, httpUnprotected(services), log)
+		middlewares, err := initHTTPMiddlewares(cfg.Middlewares, httpUnprotected(services), &log)
 		if err != nil {
 			return nil, err
 		}
 		s, err := rhttp.New(
 			rhttp.WithServices(services),
-			rhttp.WithLogger(log.With().Str("pkg", "http").Logger()),
+			rhttp.WithLogger(log),
 			rhttp.WithCertAndKeyFiles(cfg.CertFile, cfg.KeyFile),
 			rhttp.WithMiddlewares(middlewares),
 		)

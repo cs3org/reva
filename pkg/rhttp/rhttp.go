@@ -62,7 +62,7 @@ func WithLogger(log zerolog.Logger) Config {
 	}
 }
 
-func InitServices(services map[string]config.ServicesConfig) (map[string]global.Service, error) {
+func InitServices(services map[string]config.ServicesConfig, log *zerolog.Logger) (map[string]global.Service, error) {
 	s := make(map[string]global.Service)
 	for name, cfg := range services {
 		new, ok := global.Services[name]
@@ -72,7 +72,7 @@ func InitServices(services map[string]config.ServicesConfig) (map[string]global.
 		if cfg.DriversNumber() > 1 {
 			return nil, fmt.Errorf("service %s cannot have more than one driver in the same server", name)
 		}
-		log := zerolog.Nop() // TODO: pass correct log
+		log := log.With().Str("service", name).Logger()
 		svc, err := new(cfg[0].Config, &log)
 		if err != nil {
 			return nil, errors.Wrapf(err, "http service %s could not be started", name)
@@ -86,6 +86,7 @@ func InitServices(services map[string]config.ServicesConfig) (map[string]global.
 func New(c ...Config) (*Server, error) {
 	httpServer := &http.Server{}
 	s := &Server{
+		log:         zerolog.Nop(),
 		httpServer:  httpServer,
 		svcs:        map[string]global.Service{},
 		unprotected: []string{},
@@ -182,6 +183,7 @@ func (s *Server) registerServices() {
 		s.handlers[svc.Prefix()] = h
 		s.svcs[svc.Prefix()] = svc
 		s.unprotected = append(s.unprotected, getUnprotected(svc.Prefix(), svc.Unprotected())...)
+		s.log.Info().Msgf("http service enabled: %s@/%s", name, svc.Prefix())
 	}
 }
 
