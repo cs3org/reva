@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"io"
 	"reflect"
-	"strings"
 
 	"github.com/BurntSushi/toml"
 	"github.com/creasty/defaults"
@@ -146,15 +145,23 @@ func (c *Config) Lookup(key string) (any, error) {
 }
 
 func (c *Config) isValidKey(key string) bool {
+	cmd, _, err := parseNext(key)
+	if err != nil {
+		return false
+	}
+	f, ok := cmd.(FieldByKey)
+	if !ok {
+		return false
+	}
+	k := f.Key
 	e := reflect.TypeOf(c).Elem()
-	k := strings.TrimPrefix(key, ".")
 	for i := 0; i < e.NumField(); i++ {
 		f := e.Field(i)
 		prefix := f.Tag.Get("key")
 		if prefix == "" || prefix == "-" {
 			continue
 		}
-		if strings.HasPrefix(k, prefix) {
+		if k == prefix {
 			return true
 		}
 	}

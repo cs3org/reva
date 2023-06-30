@@ -117,7 +117,7 @@ var typeLookuper = reflect.TypeOf((*Lookuper)(nil)).Elem()
 // lookupByType recursively looks up the given key in v.
 func lookupByType(key string, v reflect.Value) (any, error) {
 	if v.Type().Implements(typeLookuper) {
-		if v, err := lookupFromLookuper(key, v); err == nil {
+		if v, err := lookupFromLookuper(key, v); err == nil && v != nil {
 			return v, nil
 		}
 	}
