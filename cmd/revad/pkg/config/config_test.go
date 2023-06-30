@@ -245,8 +245,9 @@ nats_token = "secret-token-example"`
 	}, c2.Log)
 
 	assert.Equal(t, &Core{
-		MaxCPUs:        "1",
-		TracingEnabled: true,
+		MaxCPUs:         "1",
+		TracingEnabled:  true,
+		TracingEndpoint: "localhost:6831",
 	}, c2.Core)
 
 	assert.Equal(t, Vars{
