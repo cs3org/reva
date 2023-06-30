@@ -20,7 +20,6 @@ package metadata
 
 import (
 	"context"
-	"errors"
 	"io"
 	"io/fs"
 	"os"
@@ -170,7 +169,7 @@ func (b MessagePackBackend) saveAttributes(ctx context.Context, path string, set
 		}
 	case len(msgBytes) == 0:
 		// ugh. an empty file? bail out
-		return errors.New("encountered empty metadata file")
+		// return errors.New("encountered empty metadata file") // actually this is normal when we write new files, because initNewNode creates an empty file for the mtime
 	default:
 		// only unmarshal if we read data
 		err = msgpack.Unmarshal(msgBytes, &attribs)
