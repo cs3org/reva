@@ -130,6 +130,9 @@ func applyTemplateString(l Lookuper, p setter, v reflect.Value) error {
 	if err != nil {
 		return err
 	}
+	if val == nil {
+		return nil
+	}
 
 	new, err := replaceTemplate(s, tmpl, val)
 	if err != nil {
@@ -166,6 +169,9 @@ func applyTemplateInterface(l Lookuper, p setter, v reflect.Value) error {
 	val, err := l.Lookup(key)
 	if err != nil {
 		return err
+	}
+	if val == nil {
+		return nil
 	}
 
 	new, err := replaceTemplate(s, tmpl, val)
