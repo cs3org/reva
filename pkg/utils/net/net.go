@@ -21,7 +21,7 @@ package net
 import "net"
 
 // AddressEqual return true if the addresses are equal.
-// For tpc addressess only the port is compared, for unix
+// For tpc addresses only the port is compared, for unix
 // the name and net are compared.
 func AddressEqual(a net.Addr, network, address string) bool {
 	if a.Network() != network {
