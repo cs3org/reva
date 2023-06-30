@@ -26,7 +26,7 @@ TPC allows for direct (ie. efficient) Reva to Reva transfers as opposed to strea
 ## 2. Reva daemons setup
 Follow the setup ([prerequisites](https://reva.link/docs/tutorials/share-tutorial/#prerequisites), [building](https://reva.link/docs/tutorials/share-tutorial/#2-build-reva), [running](https://reva.link/docs/tutorials/share-tutorial/#3-run-reva)) of the OCM share [tutorial](https://reva.link/docs/tutorials/share-tutorial/).
 
-Use the [data transfer example config](https://github.com/cs3org/reva/blob/master/examples/datatx/datatx.toml) for the relevant settings to enable rclone driven data transfer.
+Use the [data transfer example config](https://github.com/cs3org/reva/blob/master/examples/datatx/datatx.toml) for the relevant settings to enable rclone driven data transfer. Be careful when applying this to the ocmd tutorial configs, that in server-2 of that tutorial the port number of the grpc gateway is 17000 and not 19000.
 
 At this point you should have a two Reva daemon setup between which we will establish a data transfer driven by rclone.
 
