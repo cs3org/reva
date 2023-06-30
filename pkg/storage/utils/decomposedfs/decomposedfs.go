@@ -826,7 +826,7 @@ func (fs *Decomposedfs) GetMD(ctx context.Context, ref *provider.Reference, mdKe
 		return nil, err
 	}
 
-	addSpace := len(fieldMask) == 0
+	addSpace := false
 	for _, p := range fieldMask {
 		if p == "space" || p == "*" {
 			addSpace = true
