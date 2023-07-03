@@ -22,10 +22,14 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"os"
+	"os/signal"
 	"runtime"
 	"strconv"
 	"strings"
+	"syscall"
 
+	"github.com/BurntSushi/toml"
 	"github.com/pkg/errors"
 
 	"github.com/cs3org/reva/cmd/revad/pkg/config"
@@ -121,7 +125,7 @@ func New(config *config.Config, opt ...Option) (*Reva, error) {
 		return nil, err
 	}
 
-	return &Reva{
+	r := &Reva{
 		ctx:        ctx,
 		config:     config,
 		servers:    servers,
@@ -130,7 +134,40 @@ func New(config *config.Config, opt ...Option) (*Reva, error) {
 		lns:        listeners,
 		pidfile:    opts.PidFile,
 		log:        log,
-	}, nil
+	}
+	r.initConfigDumper()
+	return r, nil
+}
+
+func (r *Reva) initConfigDumper() {
+	// dump the config when the process receives a SIGUSR1 signal
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, syscall.SIGUSR1)
+
+	go func() {
+		for {
+			<-sigs
+			r.dumpConfig()
+		}
+	}()
+}
+
+func (r *Reva) dumpConfig() {
+	cfg := r.config.Dump()
+	out := r.config.Core.ConfigDumpFile
+	f, err := os.OpenFile(out, os.O_WRONLY|os.O_TRUNC|os.O_CREATE, 0644)
+	if err != nil {
+		r.log.Error().Err(err).Msgf("error opening file %s for dumping the config", out)
+		return
+	}
+	defer f.Close()
+
+	enc := toml.NewEncoder(f)
+	if err := enc.Encode(cfg); err != nil {
+		r.log.Error().Err(err).Msg("error encoding config")
+		return
+	}
+	r.log.Debug().Msgf("config dumped successfully in %s", out)
 }
 
 func servicesAddresses(cfg *config.Config) map[string]grace.Addressable {

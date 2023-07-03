@@ -59,6 +59,7 @@ type Shared struct {
 // Core holds the core configuration.
 type Core struct {
 	MaxCPUs            string `key:"max_cpus"             mapstructure:"max_cpus"`
+	ConfigDumpFile     string `key:"config_dump_file"     mapstructure:"config_dump_file"     default:"/tmp/reva-dump.toml"`
 	TracingEnabled     bool   `key:"tracing_enabled"      mapstructure:"tracing_enabled"      default:"true"`
 	TracingEndpoint    string `key:"tracing_endpoint"     mapstructure:"tracing_endpoint"     default:"localhost:6831"`
 	TracingCollector   string `key:"tracing_collector"    mapstructure:"tracing_collector"`
