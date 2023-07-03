@@ -30,11 +30,15 @@ type Option func(o *Options)
 type Options struct {
 	Logger   *zerolog.Logger
 	Registry registry.Registry
+	PidFile  string
 }
 
 // newOptions initializes the available default options.
 func newOptions(opts ...Option) Options {
-	opt := Options{}
+	l := zerolog.Nop()
+	opt := Options{
+		Logger: &l,
+	}
 
 	for _, o := range opts {
 		o(&opt)
@@ -47,6 +51,13 @@ func newOptions(opts ...Option) Options {
 func WithLogger(logger *zerolog.Logger) Option {
 	return func(o *Options) {
 		o.Logger = logger
+	}
+}
+
+// WithPidFile sets to pidfile to use.
+func WithPidFile(pidfile string) Option {
+	return func(o *Options) {
+		o.PidFile = pidfile
 	}
 }
 

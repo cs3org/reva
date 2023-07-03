@@ -355,7 +355,7 @@ func TestNew(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := New(tt.m, nil)
+			got, err := New(tt.m)
 			if err != nil {
 				assert.Equal(t, tt.wantErr, err.Error())
 				assert.Nil(t, got)

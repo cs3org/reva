@@ -77,6 +77,7 @@ require (
 )
 
 require (
+	github.com/creasty/defaults v1.7.0 // indirect
 	github.com/go-jose/go-jose/v3 v3.0.0 // indirect
 	github.com/hashicorp/go-msgpack/v2 v2.1.0 // indirect
 )

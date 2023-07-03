@@ -16,29 +16,35 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package config
+package maps
 
-import (
-	"io"
-
-	"github.com/BurntSushi/toml"
-	"github.com/pkg/errors"
-)
-
-// Read reads the configuration from the reader.
-func Read(r io.Reader) (map[string]interface{}, error) {
-	data, err := io.ReadAll(r)
-	if err != nil {
-		err = errors.Wrap(err, "config: error reading from reader")
-		return nil, err
+// Merge returns a map containing the keys and values from both maps.
+// If the two maps share a set of keys, the result map will contain
+// only the value of the second map.
+func Merge[K comparable, T any](m, n map[K]T) map[K]T {
+	r := make(map[K]T, len(m)+len(n))
+	for k, v := range m {
+		r[k] = v
 	}
-
-	v := map[string]interface{}{}
-	err = toml.Unmarshal(data, &v)
-	if err != nil {
-		err = errors.Wrap(err, "config: error decoding toml data")
-		return nil, err
+	for k, v := range n {
+		r[k] = v
 	}
+	return r
+}
 
-	return v, nil
+// MapValues returns a map with vales mapped using the function f.
+func MapValues[K comparable, T, V any](m map[K]T, f func(T) V) map[K]V {
+	r := make(map[K]V, len(m))
+	for k, v := range m {
+		r[k] = f(v)
+	}
+	return r
+}
+
+func Keys[K comparable, V any](m map[K]V) []K {
+	l := make([]K, 0, len(m))
+	for k := range m {
+		l = append(l, k)
+	}
+	return l
 }

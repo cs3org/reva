@@ -29,6 +29,7 @@ import (
 	"syscall"
 	"time"
 
+	netutil "github.com/cs3org/reva/pkg/utils/net"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 )
@@ -40,11 +41,13 @@ type Watcher struct {
 	graceful  bool
 	ppid      int
 	lns       map[string]net.Listener
-	ss        map[string]Server
+	ss        []Server
 	SL        Serverless
 	pidFile   string
 	childPIDs []int
 }
+
+const revaEnvPrefix = "REVA_FD_"
 
 // Option represent an option.
 type Option func(w *Watcher)
@@ -69,7 +72,7 @@ func NewWatcher(opts ...Option) *Watcher {
 		log:      zerolog.Nop(),
 		graceful: os.Getenv("GRACEFUL") == "true",
 		ppid:     os.Getppid(),
-		ss:       map[string]Server{},
+		ss:       make([]Server, 0),
 	}
 
 	for _, opt := range opts {
@@ -82,13 +85,18 @@ func NewWatcher(opts ...Option) *Watcher {
 // Exit exits the current process cleaning up
 // existing pid files.
 func (w *Watcher) Exit(errc int) {
+	w.Clean()
+	os.Exit(errc)
+}
+
+// Clean cleans up existing pid files.
+func (w *Watcher) Clean() {
 	err := w.clean()
 	if err != nil {
 		w.log.Warn().Err(err).Msg("error removing pid file")
 	} else {
 		w.log.Info().Msgf("pid file %q got removed", w.pidFile)
 	}
-	os.Exit(errc)
 }
 
 func (w *Watcher) clean() error {
@@ -186,29 +194,122 @@ func newListener(network, addr string) (net.Listener, error) {
 	return net.Listen(network, addr)
 }
 
-// GetListeners return grpc listener first and http listener second.
-func (w *Watcher) GetListeners(servers map[string]Server) (map[string]net.Listener, error) {
-	w.ss = servers
-	lns := map[string]net.Listener{}
-	if w.graceful {
-		w.log.Info().Msg("graceful restart, inheriting parent ln fds for grpc and http")
-		count := 3
-		for k, s := range servers {
-			network, addr := s.Network(), s.Address()
-			fd := os.NewFile(uintptr(count), "") // 3 because ExtraFile passed to new process
-			count++
-			ln, err := net.FileListener(fd)
+// implements the net.Listener interface.
+type inherited struct {
+	f  *os.File
+	ln net.Listener
+}
+
+func (i *inherited) Accept() (net.Conn, error) {
+	return i.ln.Accept()
+}
+
+func (i *inherited) Close() error {
+	// TODO: improve this: if file close has error
+	// the listener is not closed
+	if err := i.f.Close(); err != nil {
+		return err
+	}
+	return i.ln.Close()
+}
+
+func (i *inherited) Addr() net.Addr {
+	return i.ln.Addr()
+}
+
+func inheritedListeners() map[string]net.Listener {
+	lns := make(map[string]net.Listener)
+	for _, val := range os.Environ() {
+		if strings.HasPrefix(val, revaEnvPrefix) {
+			// env variable is of type REVA_FD_<svcname>=<fd>
+			env := strings.TrimPrefix(val, revaEnvPrefix)
+			s := strings.Split(env, "=")
+			if len(s) != 2 {
+				continue
+			}
+			svcname := strings.ToLower(s[0])
+			fd, err := strconv.ParseUint(s[1], 10, 64)
 			if err != nil {
-				w.log.Error().Err(err).Msg("error creating net.Listener from fd")
-				// create new fd
-				ln, err := newListener(network, addr)
+				continue
+			}
+			f := os.NewFile(uintptr(fd), "")
+			ln, err := net.FileListener(f)
+			if err != nil {
+				// TODO: log error
+				continue
+			}
+			lns[svcname] = &inherited{f: f, ln: ln}
+		}
+	}
+	return lns
+}
+
+func isRandomAddress(addr string) bool {
+	return addr == ""
+}
+
+func getAddress(addr string) string {
+	if isRandomAddress(addr) {
+		return ":0"
+	}
+	return addr
+}
+
+// GetListeners return grpc listener first and http listener second.
+func (w *Watcher) GetListeners(servers map[string]Addressable) (map[string]net.Listener, error) {
+	lns := make(map[string]net.Listener)
+
+	if w.graceful {
+		w.log.Info().Msg("graceful restart, inheriting parent listener fds for grpc and http services")
+
+		inherited := inheritedListeners()
+		logListeners(inherited, "inherited", &w.log)
+
+		for svc, ln := range inherited {
+			addr, ok := servers[svc]
+			if !ok {
+				continue
+			}
+			// for services with random addresses, check and assign if available from inherited
+			// from the assigned addresses, assing the listener if address correspond
+			if isRandomAddress(addr.Address()) ||
+				netutil.AddressEqual(ln.Addr(), addr.Network(), addr.Address()) {
+				lns[svc] = ln
+			}
+		}
+
+		// close all the listeners not used from inherited
+		for svc, ln := range inherited {
+			if _, ok := lns[svc]; !ok {
+				w.log.Debug().Msgf("closing inherited listener %s:%s for service %s", ln.Addr().Network(), ln.Addr().String(), svc)
+				if err := ln.Close(); err != nil {
+					w.log.Error().Err(err).Msgf("error closing inherited listener %s:%s", ln.Addr().Network(), ln.Addr().String())
+					return nil, errors.Wrap(err, "error closing inherited listener")
+				}
+			}
+		}
+
+		var err error
+		// create assigned/random listeners for the missing services
+		for svc, a := range servers {
+			_, ok := lns[svc]
+			if ok {
+				continue
+			}
+			network, addr := a.Network(), getAddress(a.Address())
+			// multiple services may have the same listener
+			ln, ok := get(lns, addr, network)
+			if !ok {
+				ln, err = newListener(network, addr)
 				if err != nil {
 					return nil, err
 				}
-				lns[k] = ln
-			} else {
-				lns[k] = ln
 			}
+			if err != nil {
+				w.log.Error().Err(err).Msgf("error getting listener on %s", addr)
+				return nil, errors.Wrap(err, "error getting listener")
+			}
+			lns[svc] = ln
 		}
 
 		// kill parent
@@ -233,26 +334,55 @@ func (w *Watcher) GetListeners(servers map[string]Server) (map[string]net.Listen
 		return lns, nil
 	}
 
-	// create two listeners for grpc and http
-	for k, s := range servers {
-		network, addr := s.Network(), s.Address()
-		ln, err := newListener(network, addr)
-		if err != nil {
-			return nil, err
+	var err error
+	// no graceful
+	for svc, s := range servers {
+		network, addr := s.Network(), getAddress(s.Address())
+		// multiple services may have the same listener
+		ln, ok := get(lns, addr, network)
+		if !ok {
+			ln, err = newListener(network, addr)
+			if err != nil {
+				return nil, err
+			}
 		}
-		lns[k] = ln
+		w.log.Debug().
+			Msgf("listener for %s assigned to %s:%s", svc, ln.Addr().Network(), ln.Addr().String())
+		lns[svc] = ln
 	}
 	w.lns = lns
 	return lns, nil
 }
 
+func logListeners(lns map[string]net.Listener, info string, log *zerolog.Logger) {
+	r := make(map[string]string, len(lns))
+	for n, ln := range lns {
+		r[n] = fmt.Sprintf("%s:%s", ln.Addr().Network(), ln.Addr().String())
+	}
+	log.Debug().Interface(info, r).Send()
+}
+
+func get(lns map[string]net.Listener, address, network string) (net.Listener, bool) {
+	for _, ln := range lns {
+		if netutil.AddressEqual(ln.Addr(), network, address) {
+			return ln, true
+		}
+	}
+	return nil, false
+}
+
+// Addressable is the interface for exposing address info.
+type Addressable interface {
+	Network() string
+	Address() string
+}
+
 // Server is the interface that servers like HTTP or gRPC
 // servers need to implement.
 type Server interface {
-	Stop() error
-	GracefulStop() error
-	Network() string
-	Address() string
+	Start(net.Listener) error
+	Serverless
+	Addressable
 }
 
 // Serverless is the interface that the serverless server implements.
@@ -260,6 +390,12 @@ type Serverless interface {
 	Stop() error
 	GracefulStop() error
 }
+
+// SetServers sets the list of servers that have to be watched.
+func (w *Watcher) SetServers(s []Server) { w.ss = s }
+
+// SetServerless sets the serverless that has to be watched.
+func (w *Watcher) SetServerless(s Serverless) { w.SL = s }
 
 // TrapSignals captures the OS signal.
 func (w *Watcher) TrapSignals() {
@@ -350,6 +486,8 @@ func (w *Watcher) TrapSignals() {
 
 func getListenerFile(ln net.Listener) (*os.File, error) {
 	switch t := ln.(type) {
+	case *inherited:
+		return t.f, nil
 	case *net.TCPListener:
 		return t.File()
 	case *net.UnixListener:
@@ -361,13 +499,13 @@ func getListenerFile(ln net.Listener) (*os.File, error) {
 func forkChild(lns map[string]net.Listener) (*os.Process, error) {
 	// Get the file descriptor for the listener and marshal the metadata to pass
 	// to the child in the environment.
-	fds := map[string]*os.File{}
-	for k, ln := range lns {
+	fds := make(map[string]*os.File, 0)
+	for name, ln := range lns {
 		fd, err := getListenerFile(ln)
 		if err != nil {
 			return nil, err
 		}
-		fds[k] = fd
+		fds[name] = fd
 	}
 
 	// Pass stdin, stdout, and stderr along with the listener file to the child
@@ -379,10 +517,10 @@ func forkChild(lns map[string]net.Listener) (*os.Process, error) {
 
 	// Get current environment and add in the listener to it.
 	environment := append(os.Environ(), "GRACEFUL=true")
-	var counter = 3
+	counter := 3
 	for k, fd := range fds {
 		k = strings.ToUpper(k)
-		environment = append(environment, k+"FD="+fmt.Sprintf("%d", counter))
+		environment = append(environment, fmt.Sprintf("%s%s=%d", revaEnvPrefix, k, counter))
 		files = append(files, fd)
 		counter++
 	}
@@ -402,7 +540,7 @@ func forkChild(lns map[string]net.Listener) (*os.Process, error) {
 		Sys:   &syscall.SysProcAttr{},
 	})
 
-	// TODO(labkode): if the process dies (because config changed and is wrong
+	// TODO(labkode): if the process dies (because config changed and is wrong)
 	// we need to return an error
 	if err != nil {
 		return nil, err

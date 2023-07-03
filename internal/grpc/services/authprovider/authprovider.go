@@ -100,7 +100,7 @@ func getAuthManager(manager string, m map[string]map[string]interface{}) (auth.M
 }
 
 // New returns a new AuthProviderServiceServer.
-func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
+func New(m map[string]interface{}) (rgrpc.Service, error) {
 	c, err := parseConfig(m)
 	if err != nil {
 		return nil, err
