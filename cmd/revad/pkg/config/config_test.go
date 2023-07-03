@@ -248,6 +248,7 @@ nats_token = "secret-token-example"`
 		MaxCPUs:         "1",
 		TracingEnabled:  true,
 		TracingEndpoint: "localhost:6831",
+		ConfigDumpFile:  "/tmp/reva-dump.toml",
 	}, c2.Core)
 
 	assert.Equal(t, Vars{
@@ -500,6 +501,7 @@ func TestDump(t *testing.T) {
 			"tracing_collector":    "",
 			"tracing_service_name": "",
 			"tracing_service":      "",
+			"config_dump_file":     "",
 		},
 		"vars": map[string]any{
 			"db_username": "root",
