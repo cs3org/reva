@@ -19,6 +19,7 @@
 package s3ng
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/cs3org/reva/pkg/storage"
@@ -33,7 +34,7 @@ func init() {
 
 // New returns an implementation to of the storage.FS interface that talk to
 // a local filesystem.
-func New(m map[string]interface{}) (storage.FS, error) {
+func New(ctx context.Context, m map[string]interface{}) (storage.FS, error) {
 	o, err := parseConfig(m)
 	if err != nil {
 		return nil, err

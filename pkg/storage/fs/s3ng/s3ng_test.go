@@ -19,6 +19,7 @@
 package s3ng_test
 
 import (
+	"context"
 	"os"
 
 	"github.com/cs3org/reva/pkg/storage/fs/s3ng"
@@ -57,12 +58,12 @@ var _ = Describe("S3ng", func() {
 
 	Describe("New", func() {
 		It("fails on missing s3 configuration", func() {
-			_, err := s3ng.New(map[string]interface{}{})
+			_, err := s3ng.New(context.Background(), map[string]interface{}{})
 			Expect(err).To(MatchError("s3 configuration incomplete"))
 		})
 
 		It("works with complete configuration", func() {
-			_, err := s3ng.New(options)
+			_, err := s3ng.New(context.Background(), options)
 			Expect(err).ToNot(HaveOccurred())
 		})
 	})

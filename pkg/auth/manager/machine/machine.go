@@ -60,7 +60,7 @@ func (m *manager) Configure(conf map[string]interface{}) error {
 }
 
 // New creates a new manager for the 'machine' authentication.
-func New(conf map[string]interface{}) (auth.Manager, error) {
+func New(ctx context.Context, conf map[string]interface{}) (auth.Manager, error) {
 	m := &manager{}
 	err := m.Configure(conf)
 	if err != nil {

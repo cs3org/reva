@@ -19,6 +19,7 @@
 package appprovider
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"path"
@@ -40,7 +41,6 @@ import (
 	ua "github.com/mileusna/useragent"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
-	"github.com/rs/zerolog"
 )
 
 func init() {
@@ -67,7 +67,7 @@ type svc struct {
 }
 
 // New returns a new ocmd object.
-func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) {
+func New(ctx context.Context, m map[string]interface{}) (global.Service, error) {
 	conf := &Config{}
 	if err := mapstructure.Decode(m, conf); err != nil {
 		return nil, err

@@ -49,7 +49,7 @@ func init() {
 }
 
 // New returns a new filesystem public shares manager.
-func New(c map[string]interface{}) (publicshare.Manager, error) {
+func New(ctx context.Context, c map[string]interface{}) (publicshare.Manager, error) {
 	conf := &config{}
 	if err := mapstructure.Decode(c, conf); err != nil {
 		return nil, err

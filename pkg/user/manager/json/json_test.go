@@ -57,7 +57,7 @@ func TestUserManager(t *testing.T) {
 	input := map[string]interface{}{
 		"users": file.Name(),
 	}
-	_, err = New(input)
+	_, err = New(context.TODO(), input)
 	if err == nil {
 		t.Fatalf("no error (but we expected one) while get manager")
 	}
@@ -85,7 +85,7 @@ func TestUserManager(t *testing.T) {
 	input = map[string]interface{}{
 		"users": file.Name(),
 	}
-	manager, _ := New(input)
+	manager, _ := New(context.TODO(), input)
 
 	// setup test data
 	uidEinstein := &userpb.UserId{Idp: "localhost", OpaqueId: "einstein", Type: userpb.UserType_USER_TYPE_PRIMARY}

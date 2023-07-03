@@ -59,7 +59,7 @@ func (c *config) init() {
 }
 
 // New creates a new ocmshares authentication manager.
-func New(m map[string]interface{}) (auth.Manager, error) {
+func New(ctx context.Context, m map[string]interface{}) (auth.Manager, error) {
 	var mgr manager
 	if err := mgr.Configure(m); err != nil {
 		return nil, err

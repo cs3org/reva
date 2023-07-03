@@ -59,7 +59,7 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 }
 
 // New returns a new auth Manager.
-func New(m map[string]interface{}) (auth.Manager, error) {
+func New(ctx context.Context, m map[string]interface{}) (auth.Manager, error) {
 	mgr := &manager{}
 	err := mgr.Configure(m)
 	if err != nil {

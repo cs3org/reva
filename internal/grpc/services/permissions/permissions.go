@@ -55,7 +55,7 @@ type service struct {
 }
 
 // New returns a new PermissionsServiceServer.
-func New(m map[string]interface{}) (rgrpc.Service, error) {
+func New(ctx context.Context, m map[string]interface{}) (rgrpc.Service, error) {
 	c, err := parseConfig(m)
 	if err != nil {
 		return nil, err
@@ -65,7 +65,7 @@ func New(m map[string]interface{}) (rgrpc.Service, error) {
 	if !ok {
 		return nil, fmt.Errorf("could not get permission manager '%s'", c.Driver)
 	}
-	manager, err := f(c.Drivers[c.Driver])
+	manager, err := f(ctx, c.Drivers[c.Driver])
 	if err != nil {
 		return nil, err
 	}

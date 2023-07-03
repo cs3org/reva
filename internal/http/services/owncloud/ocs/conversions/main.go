@@ -346,18 +346,18 @@ func LocalGroupIDToString(groupID *grouppb.GroupId) string {
 }
 
 // GetUserManager returns a connection to a user share manager.
-func GetUserManager(manager string, m map[string]map[string]interface{}) (user.Manager, error) {
+func GetUserManager(ctx context.Context, manager string, m map[string]map[string]interface{}) (user.Manager, error) {
 	if f, ok := usermgr.NewFuncs[manager]; ok {
-		return f(m[manager])
+		return f(ctx, m[manager])
 	}
 
 	return nil, fmt.Errorf("driver %s not found for user manager", manager)
 }
 
 // GetPublicShareManager returns a connection to a public share manager.
-func GetPublicShareManager(manager string, m map[string]map[string]interface{}) (publicshare.Manager, error) {
+func GetPublicShareManager(ctx context.Context, manager string, m map[string]map[string]interface{}) (publicshare.Manager, error) {
 	if f, ok := publicsharemgr.NewFuncs[manager]; ok {
-		return f(m[manager])
+		return f(ctx, m[manager])
 	}
 
 	return nil, fmt.Errorf("driver %s not found for public shares manager", manager)

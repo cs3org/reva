@@ -38,7 +38,7 @@ type mgr struct {
 }
 
 // New returns an instance of the in-memory preferences manager.
-func New(m map[string]interface{}) (preferences.Manager, error) {
+func New(ctx context.Context, m map[string]interface{}) (preferences.Manager, error) {
 	return &mgr{keys: make(map[string]map[string]string)}, nil
 }
 

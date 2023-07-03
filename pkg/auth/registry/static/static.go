@@ -79,7 +79,7 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 }
 
 // New returns an implementation of the auth.Registry interface.
-func New(m map[string]interface{}) (auth.Registry, error) {
+func New(ctx context.Context, m map[string]interface{}) (auth.Registry, error) {
 	c, err := parseConfig(m)
 	if err != nil {
 		return nil, err

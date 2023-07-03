@@ -18,11 +18,15 @@
 
 package registry
 
-import "github.com/cs3org/reva/pkg/preferences"
+import (
+	"context"
+
+	"github.com/cs3org/reva/pkg/preferences"
+)
 
 // NewFunc is the function that preferences implementations
 // should register at init time.
-type NewFunc func(map[string]interface{}) (preferences.Manager, error)
+type NewFunc func(context.Context, map[string]interface{}) (preferences.Manager, error)
 
 // NewFuncs is a map containing all the registered preferences implementations.
 var NewFuncs = map[string]NewFunc{}

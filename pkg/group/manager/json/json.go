@@ -64,7 +64,7 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 }
 
 // New returns a group manager implementation that reads a json file to provide group metadata.
-func New(m map[string]interface{}) (group.Manager, error) {
+func New(ctx context.Context, m map[string]interface{}) (group.Manager, error) {
 	c, err := parseConfig(m)
 	if err != nil {
 		return nil, err

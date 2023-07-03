@@ -61,7 +61,7 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 	return c, nil
 }
 
-func getDriver(c *config) (user.Manager, *plugin.RevaPlugin, error) {
+func getDriver(ctx context.Context, c *config) (user.Manager, *plugin.RevaPlugin, error) {
 	p, err := plugin.Load("userprovider", c.Driver)
 	if err == nil {
 		manager, ok := p.Plugin.(user.Manager)
@@ -77,7 +77,7 @@ func getDriver(c *config) (user.Manager, *plugin.RevaPlugin, error) {
 	} else if _, ok := err.(errtypes.NotFound); ok {
 		// plugin not found, fetch the driver from the in-memory registry
 		if f, ok := registry.NewFuncs[c.Driver]; ok {
-			mgr, err := f(c.Drivers[c.Driver])
+			mgr, err := f(ctx, c.Drivers[c.Driver])
 			return mgr, nil, err
 		}
 	} else {
@@ -87,12 +87,12 @@ func getDriver(c *config) (user.Manager, *plugin.RevaPlugin, error) {
 }
 
 // New returns a new UserProviderServiceServer.
-func New(m map[string]interface{}) (rgrpc.Service, error) {
+func New(ctx context.Context, m map[string]interface{}) (rgrpc.Service, error) {
 	c, err := parseConfig(m)
 	if err != nil {
 		return nil, err
 	}
-	userManager, plug, err := getDriver(c)
+	userManager, plug, err := getDriver(ctx, c)
 	if err != nil {
 		return nil, err
 	}

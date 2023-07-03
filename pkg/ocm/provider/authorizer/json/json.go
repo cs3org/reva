@@ -41,7 +41,7 @@ func init() {
 }
 
 // New returns a new authorizer object.
-func New(m map[string]interface{}) (provider.Authorizer, error) {
+func New(ctx context.Context, m map[string]interface{}) (provider.Authorizer, error) {
 	c := &config{}
 	if err := mapstructure.Decode(m, c); err != nil {
 		err = errors.Wrap(err, "error decoding conf")

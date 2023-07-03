@@ -19,6 +19,7 @@
 package preferences
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 
@@ -30,7 +31,6 @@ import (
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/go-chi/chi/v5"
 	"github.com/mitchellh/mapstructure"
-	"github.com/rs/zerolog"
 )
 
 func init() {
@@ -56,7 +56,7 @@ type svc struct {
 }
 
 // New returns a new ocmd object.
-func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) {
+func New(ctx context.Context, m map[string]interface{}) (global.Service, error) {
 	conf := &Config{}
 	if err := mapstructure.Decode(m, conf); err != nil {
 		return nil, err

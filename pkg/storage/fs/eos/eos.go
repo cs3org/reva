@@ -19,6 +19,8 @@
 package eos
 
 import (
+	"context"
+
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
 	"github.com/cs3org/reva/pkg/storage/utils/eosfs"
@@ -46,11 +48,11 @@ func parseConfig(m map[string]interface{}) (*eosfs.Config, error) {
 }
 
 // New returns a new implementation of the storage.FS interface that connects to EOS.
-func New(m map[string]interface{}) (storage.FS, error) {
+func New(ctx context.Context, m map[string]interface{}) (storage.FS, error) {
 	c, err := parseConfig(m)
 	if err != nil {
 		return nil, err
 	}
 
-	return eosfs.NewEOSFS(c)
+	return eosfs.NewEOSFS(ctx, c)
 }

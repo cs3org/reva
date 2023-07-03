@@ -70,7 +70,7 @@ type mgr struct {
 }
 
 // NewMysql returns a new share manager connection to a mysql database.
-func NewMysql(m map[string]interface{}) (share.Manager, error) {
+func NewMysql(ctx context.Context, m map[string]interface{}) (share.Manager, error) {
 	c, err := parseConfig(m)
 	if err != nil {
 		err = errors.Wrap(err, "error creating a new manager")

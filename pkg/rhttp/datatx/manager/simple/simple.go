@@ -19,6 +19,7 @@
 package simple
 
 import (
+	"context"
 	"net/http"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -52,7 +53,7 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 }
 
 // New returns a datatx manager implementation that relies on HTTP PUT/GET.
-func New(m map[string]interface{}) (datatx.DataTX, error) {
+func New(ctx context.Context, m map[string]interface{}) (datatx.DataTX, error) {
 	c, err := parseConfig(m)
 	if err != nil {
 		return nil, err

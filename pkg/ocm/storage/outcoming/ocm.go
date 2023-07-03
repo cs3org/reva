@@ -72,7 +72,7 @@ func (c *config) init() {
 }
 
 // New creates an OCM storage driver.
-func New(c map[string]interface{}) (storage.FS, error) {
+func New(ctx context.Context, c map[string]interface{}) (storage.FS, error) {
 	conf, err := parseConfig(c)
 	if err != nil {
 		return nil, errors.Wrapf(err, "error decoding config")

@@ -19,6 +19,8 @@
 package localhome
 
 import (
+	"context"
+
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
 	"github.com/cs3org/reva/pkg/storage/utils/localfs"
@@ -47,7 +49,7 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 
 // New returns an implementation to of the storage.FS interface that talks to
 // a local filesystem with user homes.
-func New(m map[string]interface{}) (storage.FS, error) {
+func New(ctx context.Context, m map[string]interface{}) (storage.FS, error) {
 	c, err := parseConfig(m)
 	if err != nil {
 		return nil, err

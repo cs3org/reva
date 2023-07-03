@@ -76,7 +76,7 @@ func parseConfig(m map[string]interface{}) (*AuthManagerConfig, error) {
 }
 
 // New returns an auth manager implementation that verifies against a Nextcloud backend.
-func New(m map[string]interface{}) (auth.Manager, error) {
+func New(ctx context.Context, m map[string]interface{}) (auth.Manager, error) {
 	c, err := parseConfig(m)
 	if err != nil {
 		return nil, err

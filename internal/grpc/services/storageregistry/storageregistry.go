@@ -64,7 +64,7 @@ func (c *config) init() {
 }
 
 // New creates a new StorageBrokerService.
-func New(m map[string]interface{}) (rgrpc.Service, error) {
+func New(ctx context.Context, m map[string]interface{}) (rgrpc.Service, error) {
 	c, err := parseConfig(m)
 	if err != nil {
 		return nil, err
@@ -72,7 +72,7 @@ func New(m map[string]interface{}) (rgrpc.Service, error) {
 
 	c.init()
 
-	reg, err := getRegistry(c)
+	reg, err := getRegistry(ctx, c)
 	if err != nil {
 		return nil, err
 	}
@@ -92,9 +92,9 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 	return c, nil
 }
 
-func getRegistry(c *config) (storage.Registry, error) {
+func getRegistry(ctx context.Context, c *config) (storage.Registry, error) {
 	if f, ok := registry.NewFuncs[c.Driver]; ok {
-		return f(c.Drivers[c.Driver])
+		return f(ctx, c.Drivers[c.Driver])
 	}
 	return nil, errtypes.NotFound("driver not found: " + c.Driver)
 }

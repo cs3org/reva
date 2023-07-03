@@ -108,7 +108,7 @@ func (m *manager) startJanitorRun() {
 }
 
 // New returns a new public share manager.
-func New(m map[string]interface{}) (publicshare.Manager, error) {
+func New(ctx context.Context, m map[string]interface{}) (publicshare.Manager, error) {
 	c := &config{}
 	if err := mapstructure.Decode(m, c); err != nil {
 		return nil, err

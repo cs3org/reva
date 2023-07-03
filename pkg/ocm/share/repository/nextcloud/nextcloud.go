@@ -107,7 +107,7 @@ func parseConfig(m map[string]interface{}) (*ShareManagerConfig, error) {
 }
 
 // New returns a share manager implementation that verifies against a Nextcloud backend.
-func New(m map[string]interface{}) (share.Repository, error) {
+func New(ctx context.Context, m map[string]interface{}) (share.Repository, error) {
 	c, err := parseConfig(m)
 	if err != nil {
 		return nil, err

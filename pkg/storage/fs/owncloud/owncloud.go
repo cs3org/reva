@@ -158,7 +158,7 @@ func (c *config) init(m map[string]interface{}) {
 
 // New returns an implementation to of the storage.FS interface that talk to
 // a local filesystem.
-func New(m map[string]interface{}) (storage.FS, error) {
+func New(ctx context.Context, m map[string]interface{}) (storage.FS, error) {
 	c, err := parseConfig(m)
 	if err != nil {
 		return nil, err

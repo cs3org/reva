@@ -162,7 +162,7 @@ func registerMimeTypes(mappingFile string) error {
 }
 
 // New creates a new storage provider svc.
-func New(m map[string]interface{}) (rgrpc.Service, error) {
+func New(ctx context.Context, m map[string]interface{}) (rgrpc.Service, error) {
 	c, err := parseConfig(m)
 	if err != nil {
 		return nil, err
@@ -177,7 +177,7 @@ func New(m map[string]interface{}) (rgrpc.Service, error) {
 	mountPath := c.MountPath
 	mountID := c.MountID
 
-	fs, err := getFS(c)
+	fs, err := getFS(ctx, c)
 	if err != nil {
 		return nil, err
 	}
@@ -1538,9 +1538,9 @@ func (s *service) GetQuota(ctx context.Context, req *provider.GetQuotaRequest) (
 	return res, nil
 }
 
-func getFS(c *config) (storage.FS, error) {
+func getFS(ctx context.Context, c *config) (storage.FS, error) {
 	if f, ok := registry.NewFuncs[c.Driver]; ok {
-		return f(c.Drivers[c.Driver])
+		return f(ctx, c.Drivers[c.Driver])
 	}
 	return nil, errtypes.NotFound("driver not found: " + c.Driver)
 }

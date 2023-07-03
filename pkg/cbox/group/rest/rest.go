@@ -109,7 +109,7 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 }
 
 // New returns a user manager implementation that makes calls to the GRAPPA API.
-func New(m map[string]interface{}) (group.Manager, error) {
+func New(ctx context.Context, m map[string]interface{}) (group.Manager, error) {
 	c, err := parseConfig(m)
 	if err != nil {
 		return nil, err

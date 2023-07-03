@@ -18,11 +18,15 @@
 
 package registry
 
-import "github.com/cs3org/reva/pkg/storage"
+import (
+	"context"
+
+	"github.com/cs3org/reva/pkg/storage"
+)
 
 // NewFunc is the function that storage broker implementations
 // should register at init time.
-type NewFunc func(map[string]interface{}) (storage.Registry, error)
+type NewFunc func(context.Context, map[string]interface{}) (storage.Registry, error)
 
 // NewFuncs is a map containing all the registered storage backends.
 var NewFuncs = map[string]NewFunc{}

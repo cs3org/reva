@@ -22,6 +22,7 @@ package metrics
 This service initializes the metrics package according to the metrics configuration.
 */
 import (
+	"context"
 	"net/http"
 	"os"
 
@@ -30,7 +31,6 @@ import (
 	"github.com/cs3org/reva/pkg/metrics/config"
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/mitchellh/mapstructure"
-	"github.com/rs/zerolog"
 )
 
 func init() {
@@ -69,7 +69,7 @@ func (s *svc) Handler() http.Handler {
 }
 
 // New returns a new metrics service.
-func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) {
+func New(ctx context.Context, m map[string]interface{}) (global.Service, error) {
 	// Prepare the configuration
 	conf := &config.Config{}
 	if err := mapstructure.Decode(m, conf); err != nil {

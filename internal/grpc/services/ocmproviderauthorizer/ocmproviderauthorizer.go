@@ -57,9 +57,9 @@ func (s *service) Register(ss *grpc.Server) {
 	ocmprovider.RegisterProviderAPIServer(ss, s)
 }
 
-func getProviderAuthorizer(c *config) (provider.Authorizer, error) {
+func getProviderAuthorizer(ctx context.Context, c *config) (provider.Authorizer, error) {
 	if f, ok := registry.NewFuncs[c.Driver]; ok {
-		return f(c.Drivers[c.Driver])
+		return f(ctx, c.Drivers[c.Driver])
 	}
 	return nil, errtypes.NotFound("driver not found: " + c.Driver)
 }
@@ -74,14 +74,14 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 }
 
 // New creates a new OCM provider authorizer svc.
-func New(m map[string]interface{}) (rgrpc.Service, error) {
+func New(ctx context.Context, m map[string]interface{}) (rgrpc.Service, error) {
 	c, err := parseConfig(m)
 	if err != nil {
 		return nil, err
 	}
 	c.init()
 
-	pa, err := getProviderAuthorizer(c)
+	pa, err := getProviderAuthorizer(ctx, c)
 	if err != nil {
 		return nil, err
 	}

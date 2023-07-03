@@ -83,7 +83,7 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 }
 
 // New creates a new AppProviderService.
-func New(m map[string]interface{}) (rgrpc.Service, error) {
+func New(ctx context.Context, m map[string]interface{}) (rgrpc.Service, error) {
 	c, err := parseConfig(m)
 	if err != nil {
 		return nil, err
@@ -95,7 +95,7 @@ func New(m map[string]interface{}) (rgrpc.Service, error) {
 		return nil, err
 	}
 
-	provider, err := getProvider(c)
+	provider, err := getProvider(ctx, c)
 	if err != nil {
 		return nil, err
 	}
@@ -196,7 +196,7 @@ func (s *service) Register(ss *grpc.Server) {
 	providerpb.RegisterProviderAPIServer(ss, s)
 }
 
-func getProvider(c *config) (app.Provider, error) {
+func getProvider(ctx context.Context, c *config) (app.Provider, error) {
 	if f, ok := registry.NewFuncs[c.Driver]; ok {
 		driverConf := c.Drivers[c.Driver]
 		if c.MimeTypes != nil {
@@ -206,7 +206,7 @@ func getProvider(c *config) (app.Provider, error) {
 			}
 			driverConf["mime_types"] = c.MimeTypes
 		}
-		return f(driverConf)
+		return f(ctx, driverConf)
 	}
 	return nil, errtypes.NotFound("driver not found: " + c.Driver)
 }

@@ -19,12 +19,13 @@
 package ldap
 
 import (
+	"context"
 	"testing"
 )
 
 func TestUserManager(t *testing.T) {
 	// negative test for parseConfig
-	_, err := New(map[string]interface{}{"hostname": 42})
+	_, err := New(context.Background(), map[string]interface{}{"hostname": 42})
 	if err == nil {
 		t.Fatal("expected error but got none")
 	}
@@ -64,7 +65,7 @@ func TestUserManager(t *testing.T) {
 	}
 
 	// positive tests for New
-	_, err = New(map[string]interface{}{})
+	_, err = New(context.Background(), map[string]interface{}{})
 	if err != nil {
 		t.Fatalf(err.Error())
 	}

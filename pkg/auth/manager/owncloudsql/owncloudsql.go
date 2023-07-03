@@ -65,7 +65,7 @@ type config struct {
 }
 
 // NewMysql returns a new auth manager connection to an owncloud mysql database.
-func NewMysql(m map[string]interface{}) (auth.Manager, error) {
+func NewMysql(ctx context.Context, m map[string]interface{}) (auth.Manager, error) {
 	mgr := &manager{}
 	err := mgr.Configure(m)
 	if err != nil {
