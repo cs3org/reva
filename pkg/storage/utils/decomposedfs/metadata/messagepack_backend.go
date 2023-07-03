@@ -169,7 +169,7 @@ func (b MessagePackBackend) saveAttributes(ctx context.Context, path string, set
 	attribs := map[string][]byte{}
 	switch {
 	case err != nil:
-		if _, ok := err.(*fs.PathError); !ok {
+		if !errors.Is(err, fs.ErrNotExist) {
 			return err
 		}
 	case len(msgBytes) == 0:
