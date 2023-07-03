@@ -60,7 +60,7 @@ type config struct {
 	CredentialsByUserAgent map[string]string                 `mapstructure:"credentials_by_user_agent"`
 	CredentialChain        []string                          `mapstructure:"credential_chain"`
 	CredentialStrategies   map[string]map[string]interface{} `mapstructure:"credential_strategies"`
-	TokenStrategy          string                            `mapstructure:"token_strategy"`
+	TokenStrategyChain     []string                          `mapstructure:"token_strategy_chain"`
 	TokenStrategies        map[string]map[string]interface{} `mapstructure:"token_strategies"`
 	TokenManager           string                            `mapstructure:"token_manager"`
 	TokenManagers          map[string]map[string]interface{} `mapstructure:"token_managers"`
@@ -87,8 +87,8 @@ func New(m map[string]interface{}, unprotected []string) (global.Middleware, err
 	conf.GatewaySvc = sharedconf.GetGatewaySVC(conf.GatewaySvc)
 
 	// set defaults
-	if conf.TokenStrategy == "" {
-		conf.TokenStrategy = "header"
+	if len(conf.TokenStrategyChain) == 0 {
+		conf.TokenStrategyChain = []string{"header"}
 	}
 
 	if conf.TokenWriter == "" {
@@ -123,19 +123,22 @@ func New(m map[string]interface{}, unprotected []string) (global.Middleware, err
 		credChain[key] = credStrategy
 	}
 
-	g, ok := tokenregistry.NewTokenFuncs[conf.TokenStrategy]
-	if !ok {
-		return nil, fmt.Errorf("token strategy not found: %s", conf.TokenStrategy)
-	}
-
-	tokenStrategy, err := g(conf.TokenStrategies[conf.TokenStrategy])
-	if err != nil {
-		return nil, err
+	tokenStrategyChain := make([]auth.TokenStrategy, 0, len(conf.TokenStrategyChain))
+	for _, strategy := range conf.TokenStrategyChain {
+		g, ok := tokenregistry.NewTokenFuncs[strategy]
+		if !ok {
+			return nil, fmt.Errorf("token strategy not found: %s", strategy)
+		}
+		tokenStrategy, err := g(conf.TokenStrategies[strategy])
+		if err != nil {
+			return nil, err
+		}
+		tokenStrategyChain = append(tokenStrategyChain, tokenStrategy)
 	}
 
 	h, ok := tokenmgr.NewFuncs[conf.TokenManager]
 	if !ok {
-		return nil, fmt.Errorf("token manager not found: %s", conf.TokenStrategy)
+		return nil, fmt.Errorf("token manager not found: %s", conf.TokenManager)
 	}
 
 	tokenManager, err := h(conf.TokenManagers[conf.TokenManager])
@@ -173,7 +176,7 @@ func New(m map[string]interface{}, unprotected []string) (global.Middleware, err
 				isUnprotectedEndpoint = true
 			}
 
-			ctx, err := authenticateUser(w, r, conf, tokenStrategy, tokenManager, tokenWriter, credChain, isUnprotectedEndpoint)
+			ctx, err := authenticateUser(w, r, conf, tokenStrategyChain, tokenManager, tokenWriter, credChain, isUnprotectedEndpoint)
 			if err != nil {
 				if !isUnprotectedEndpoint {
 					return
@@ -187,7 +190,7 @@ func New(m map[string]interface{}, unprotected []string) (global.Middleware, err
 	return chain, nil
 }
 
-func authenticateUser(w http.ResponseWriter, r *http.Request, conf *config, tokenStrategy auth.TokenStrategy, tokenManager token.Manager, tokenWriter auth.TokenWriter, credChain map[string]auth.CredentialStrategy, isUnprotectedEndpoint bool) (context.Context, error) {
+func authenticateUser(w http.ResponseWriter, r *http.Request, conf *config, tokenStrategies []auth.TokenStrategy, tokenManager token.Manager, tokenWriter auth.TokenWriter, credChain map[string]auth.CredentialStrategy, isUnprotectedEndpoint bool) (context.Context, error) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
@@ -203,19 +206,20 @@ func authenticateUser(w http.ResponseWriter, r *http.Request, conf *config, toke
 	// reva token or auth token can be passed using the same tecnique (for example bearer)
 	// before validating it against an auth provider, we can check directly if it's a reva
 	// token and if not try to use it for authenticating the user.
-
-	token := tokenStrategy.GetToken(r)
-	if token != "" {
-		if user, ok := isTokenValid(r, tokenManager, token); ok {
-			if err := insertGroupsInUser(ctx, userGroupsCache, client, user); err != nil {
-				logError(isUnprotectedEndpoint, log, err, "got an error retrieving groups for user "+user.Username, http.StatusInternalServerError, w)
-				return nil, err
+	for _, tokenStrategy := range tokenStrategies {
+		token := tokenStrategy.GetToken(r)
+		if token != "" {
+			if user, ok := isTokenValid(r, tokenManager, token); ok {
+				if err := insertGroupsInUser(ctx, userGroupsCache, client, user); err != nil {
+					logError(isUnprotectedEndpoint, log, err, "got an error retrieving groups for user "+user.Username, http.StatusInternalServerError, w)
+					return nil, err
+				}
+				return ctxWithUserInfo(ctx, r, user, token), nil
 			}
-			return ctxWithUserInfo(ctx, r, user, token), nil
 		}
 	}
 
-	log.Warn().Msg("core access token not set")
+	log.Warn().Msg("core access token not set or invalid")
 
 	userAgentCredKeys := getCredsForUserAgent(r.UserAgent(), conf.CredentialsByUserAgent, conf.CredentialChain)
 
@@ -271,7 +275,7 @@ func authenticateUser(w http.ResponseWriter, r *http.Request, conf *config, toke
 	log.Info().Msg("core access token generated")
 
 	// write token to response
-	token = res.Token
+	token := res.Token
 	tokenWriter.WriteToken(token, w)
 
 	// validate token
