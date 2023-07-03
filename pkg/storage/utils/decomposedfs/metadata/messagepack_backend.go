@@ -20,6 +20,7 @@ package metadata
 
 import (
 	"context"
+	"errors"
 	"io"
 	"io/fs"
 	"os"
