@@ -21,6 +21,8 @@ package config
 import (
 	"fmt"
 	"io"
+	"os"
+	"path/filepath"
 	"reflect"
 
 	"github.com/BurntSushi/toml"
@@ -59,7 +61,7 @@ type Shared struct {
 // Core holds the core configuration.
 type Core struct {
 	MaxCPUs            string `key:"max_cpus"             mapstructure:"max_cpus"`
-	ConfigDumpFile     string `key:"config_dump_file"     mapstructure:"config_dump_file"     default:"/tmp/reva-dump.toml"`
+	ConfigDumpFile     string `key:"config_dump_file"     mapstructure:"config_dump_file"`
 	TracingEnabled     bool   `key:"tracing_enabled"      mapstructure:"tracing_enabled"      default:"true"`
 	TracingEndpoint    string `key:"tracing_endpoint"     mapstructure:"tracing_endpoint"     default:"localhost:6831"`
 	TracingCollector   string `key:"tracing_collector"    mapstructure:"tracing_collector"`
@@ -79,12 +81,19 @@ type Lookuper interface {
 	Lookup(key string) (any, error)
 }
 
+func (c *Config) init() {
+	if c.Core.ConfigDumpFile == "" {
+		c.Core.ConfigDumpFile = filepath.Join(os.TempDir(), "reva-dump.toml")
+	}
+}
+
 // Load loads the configuration from the reader.
 func Load(r io.Reader) (*Config, error) {
 	var c Config
 	if err := defaults.Set(&c); err != nil {
 		return nil, err
 	}
+	c.init()
 	var raw map[string]any
 	if _, err := toml.NewDecoder(r).Decode(&raw); err != nil {
 		return nil, errors.Wrap(err, "config: error decoding toml data")
