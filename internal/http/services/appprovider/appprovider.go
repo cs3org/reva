@@ -29,6 +29,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/datagateway"
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp"
@@ -91,6 +92,7 @@ func (s *svc) routerInit() error {
 	s.router.Get("/list", s.handleList)
 	s.router.Post("/new", s.handleNew)
 	s.router.Post("/open", s.handleOpen)
+	s.router.Post("/notify", s.handleNotify)
 	return nil
 }
 
@@ -419,12 +421,47 @@ func (s *svc) handleOpen(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	log := appctx.GetLogger(ctx)
+	log.Info().Str("url", openRes.AppUrl.AppUrl).Interface("resource", fileRef).Msg("returning app URL for file")
+
 	w.Header().Set("Content-Type", "application/json")
 	if _, err = w.Write(js); err != nil {
 		writeError(w, r, appErrorServerError, "Internal error with JSON payload",
 			errors.Wrap(err, "error writing JSON response"))
 		return
 	}
+}
+
+func (s *svc) handleNotify(w http.ResponseWriter, r *http.Request) {
+	err := r.ParseForm()
+	if err != nil {
+		writeError(w, r, appErrorInvalidParameter, "parameters could not be parsed", nil)
+	}
+
+	fileID := r.Form.Get("file_id")
+	var fileRef provider.Reference
+	if fileID == "" {
+		path := r.Form.Get("path")
+		if path == "" {
+			writeError(w, r, appErrorInvalidParameter, "missing file ID or path", nil)
+			return
+		}
+		fileRef.Path = path
+	} else {
+		resourceID := resourceid.OwnCloudResourceIDUnwrap(fileID)
+		if resourceID == nil {
+			writeError(w, r, appErrorInvalidParameter, "invalid file ID", nil)
+			return
+		}
+		fileRef.ResourceId = resourceID
+	}
+
+	// log the fileid for later correlation / monitoring
+	ctx := r.Context()
+	log := appctx.GetLogger(ctx)
+	log.Info().Interface("resource", fileRef).Msg("file successfully opened in app")
+
+	w.WriteHeader(http.StatusOK)
 }
 
 func filterAppsByUserAgent(mimeTypes []*appregistry.MimeTypeInfo, userAgent string) []*appregistry.MimeTypeInfo {
