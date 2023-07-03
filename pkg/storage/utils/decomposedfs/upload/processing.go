@@ -329,7 +329,7 @@ func initNewNode(upload *Upload, n *node.Node, fsize uint64) (*lockedfile.File, 
 	}
 
 	// create and write lock new node metadata
-	f, err := lockedfile.OpenFile(upload.lu.MetadataBackend().MetadataPath(n.InternalPath()), os.O_RDWR|os.O_CREATE, 0600)
+	f, err := lockedfile.OpenFile(upload.lu.MetadataBackend().MetadataPath(n.InternalPath())+".lock", os.O_RDWR|os.O_CREATE, 0600)
 	if err != nil {
 		return nil, err
 	}
@@ -403,7 +403,7 @@ func updateExistingNode(upload *Upload, n *node.Node, spaceID string, fsize uint
 	targetPath := n.InternalPath()
 
 	// write lock existing node before reading treesize or tree time
-	f, err := lockedfile.OpenFile(upload.lu.MetadataBackend().MetadataPath(targetPath), os.O_RDWR, 0600)
+	f, err := lockedfile.OpenFile(upload.lu.MetadataBackend().MetadataPath(targetPath)+".lock", os.O_RDWR|os.O_CREATE, 0600)
 	if err != nil {
 		return nil, err
 	}

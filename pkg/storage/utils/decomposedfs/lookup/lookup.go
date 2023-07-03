@@ -312,7 +312,7 @@ func (lu *Lookup) CopyMetadataWithSourceLock(ctx context.Context, sourcePath, ta
 	switch {
 	case lockedSource == nil:
 		return errors.New("no lock provided")
-	case lockedSource.File.Name() != lu.MetadataBackend().MetadataPath(sourcePath):
+	case lockedSource.File.Name() != lu.MetadataBackend().MetadataPath(sourcePath)+".lock":
 		return errors.New("lockpath does not match filepath")
 	}
 

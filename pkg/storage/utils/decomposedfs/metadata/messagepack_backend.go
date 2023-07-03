@@ -150,15 +150,11 @@ func (b MessagePackBackend) saveAttributes(ctx context.Context, path string, set
 		_, subspan := tracer.Start(ctx, "lockedfile.OpenFile")
 		f, err = lockedfile.OpenFile(lockPath, os.O_RDWR|os.O_CREATE, 0600)
 		subspan.End()
-	} else {
-		_, subspan := tracer.Start(ctx, "os.OpenFile")
-		f, err = os.OpenFile(lockPath, os.O_RDWR|os.O_CREATE, 0600)
-		subspan.End()
+		defer f.Close()
 	}
 	if err != nil {
 		return err
 	}
-	defer f.Close()
 
 	// Invalidate cache early
 	_, subspan := tracer.Start(ctx, "metaCache.RemoveMetadata")
