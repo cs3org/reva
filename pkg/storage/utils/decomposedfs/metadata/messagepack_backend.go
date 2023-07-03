@@ -201,7 +201,7 @@ func (b MessagePackBackend) saveAttributes(ctx context.Context, path string, set
 
 	go func() { _ = b.metaCache.PushToCache(b.cacheKey(path), attribs) }()
 
-	return f.Close()
+	return nil
 }
 
 func (b MessagePackBackend) loadAttributes(ctx context.Context, path string, source io.Reader) (map[string][]byte, error) {
