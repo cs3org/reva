@@ -200,6 +200,9 @@ func (b MessagePackBackend) saveAttributes(ctx context.Context, path string, set
 	// overwrite file atomically
 	_, subspan = tracer.Start(ctx, "renameio.Writefile")
 	err = renameio.WriteFile(metaPath, d, 0600)
+	if err != nil {
+		return err
+	}
 	subspan.End()
 
 	_, subspan = tracer.Start(ctx, "metaCache.PushToCache")
