@@ -31,12 +31,11 @@ import (
 	"github.com/cs3org/reva/pkg/auth/manager/registry"
 	"github.com/cs3org/reva/pkg/auth/scope"
 	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/logger"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/utils"
+	"github.com/cs3org/reva/pkg/utils/cfg"
 	"github.com/go-ldap/ldap/v3"
-	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )
 
@@ -87,17 +86,6 @@ var ldapDefaults = attributes{
 	GIDNumber:   "gidNumber",
 }
 
-func parseConfig(m map[string]interface{}) (*config, error) {
-	c := &config{
-		Schema: ldapDefaults,
-	}
-	if err := mapstructure.Decode(m, c); err != nil {
-		err = errors.Wrap(err, "error decoding conf")
-		return nil, err
-	}
-	return c, nil
-}
-
 // New returns an auth manager implementation that connects to a LDAP server to validate the user.
 func New(ctx context.Context, m map[string]interface{}) (auth.Manager, error) {
 	manager := &mgr{}
@@ -105,19 +93,12 @@ func New(ctx context.Context, m map[string]interface{}) (auth.Manager, error) {
 	if err != nil {
 		return nil, err
 	}
+	// backwards compatibility
+	appctx.GetLogger(ctx).Warn().Msg("userfilter is deprecated, use a loginfilter like `(&(objectclass=posixAccount)(|(cn={{login}}))(mail={{login}}))`")
 	return manager, nil
 }
 
-func (am *mgr) Configure(m map[string]interface{}) error {
-	c, err := parseConfig(m)
-	if err != nil {
-		return err
-	}
-
-	// backwards compatibility
-	if c.UserFilter != "" {
-		logger.New().Warn().Msg("userfilter is deprecated, use a loginfilter like `(&(objectclass=posixAccount)(|(cn={{login}}))(mail={{login}}))`")
-	}
+func (c *config) ApplyDefaults() {
 	if c.LoginFilter == "" {
 		c.LoginFilter = c.UserFilter
 		c.LoginFilter = strings.ReplaceAll(c.LoginFilter, "%s", "{{login}}")
@@ -127,7 +108,15 @@ func (am *mgr) Configure(m map[string]interface{}) error {
 	}
 
 	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
-	am.c = c
+}
+
+func (am *mgr) Configure(m map[string]interface{}) error {
+	var c config
+	c.Schema = ldapDefaults
+	if err := cfg.Decode(m, &c); err != nil {
+		return err
+	}
+	am.c = &c
 	return nil
 }
 

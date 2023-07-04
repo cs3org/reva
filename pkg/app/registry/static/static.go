@@ -30,7 +30,7 @@ import (
 	"github.com/cs3org/reva/pkg/app"
 	"github.com/cs3org/reva/pkg/app/registry/registry"
 	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/mitchellh/mapstructure"
+	"github.com/cs3org/reva/pkg/utils/cfg"
 	"github.com/rs/zerolog/log"
 	orderedmap "github.com/wk8/go-ordered-map"
 )
@@ -57,20 +57,6 @@ type config struct {
 	MimeTypes []*mimeTypeConfig          `mapstructure:"mime_types"`
 }
 
-func (c *config) init() {
-	if len(c.Providers) == 0 {
-		c.Providers = []*registrypb.ProviderInfo{}
-	}
-}
-
-func parseConfig(m map[string]interface{}) (*config, error) {
-	c := &config{}
-	if err := mapstructure.Decode(m, c); err != nil {
-		return nil, err
-	}
-	return c, nil
-}
-
 type manager struct {
 	providers map[string]*registrypb.ProviderInfo
 	mimetypes *orderedmap.OrderedMap // map[string]*mimeTypeConfig  ->  map the mime type to the addresses of the corresponding providers
@@ -79,11 +65,10 @@ type manager struct {
 
 // New returns an implementation of the app.Registry interface.
 func New(ctx context.Context, m map[string]interface{}) (app.Registry, error) {
-	c, err := parseConfig(m)
-	if err != nil {
+	var c config
+	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
-	c.init()
 
 	mimetypes := orderedmap.New()
 

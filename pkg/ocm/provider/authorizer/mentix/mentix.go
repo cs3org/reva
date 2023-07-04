@@ -34,7 +34,7 @@ import (
 	"github.com/cs3org/reva/pkg/ocm/provider"
 	"github.com/cs3org/reva/pkg/ocm/provider/authorizer/registry"
 	"github.com/cs3org/reva/pkg/rhttp"
-	"github.com/mitchellh/mapstructure"
+	"github.com/cs3org/reva/pkg/utils/cfg"
 	"github.com/pkg/errors"
 )
 
@@ -50,12 +50,10 @@ type Client struct {
 
 // New returns a new authorizer object.
 func New(ctx context.Context, m map[string]interface{}) (provider.Authorizer, error) {
-	c := &config{}
-	if err := mapstructure.Decode(m, c); err != nil {
-		err = errors.Wrap(err, "error decoding conf")
+	var c config
+	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
-	c.init()
 
 	client := &Client{
 		BaseURL: c.URL,
@@ -69,7 +67,7 @@ func New(ctx context.Context, m map[string]interface{}) (provider.Authorizer, er
 	return &authorizer{
 		client:      client,
 		providerIPs: sync.Map{},
-		conf:        c,
+		conf:        &c,
 	}, nil
 }
 
@@ -81,7 +79,7 @@ type config struct {
 	Insecure              bool   `mapstructure:"insecure" docs:"false;Whether to skip certificate checks when sending requests."`
 }
 
-func (c *config) init() {
+func (c *config) ApplyDefaults() {
 	if c.URL == "" {
 		c.URL = "http://localhost:9600/mentix/cs3"
 	}

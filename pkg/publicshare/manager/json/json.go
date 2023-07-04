@@ -38,7 +38,7 @@ import (
 	"github.com/cs3org/reva/pkg/publicshare"
 	"github.com/cs3org/reva/pkg/publicshare/manager/registry"
 	"github.com/cs3org/reva/pkg/utils"
-	"github.com/mitchellh/mapstructure"
+	"github.com/cs3org/reva/pkg/utils/cfg"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 	"golang.org/x/crypto/bcrypt"
@@ -49,45 +49,43 @@ func init() {
 }
 
 // New returns a new filesystem public shares manager.
-func New(ctx context.Context, c map[string]interface{}) (publicshare.Manager, error) {
-	conf := &config{}
-	if err := mapstructure.Decode(c, conf); err != nil {
+func New(ctx context.Context, m map[string]interface{}) (publicshare.Manager, error) {
+	var c config
+	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
 
-	conf.init()
-
-	m := manager{
+	mgr := manager{
 		mutex:                      &sync.Mutex{},
-		file:                       conf.File,
-		passwordHashCost:           conf.SharePasswordHashCost,
-		janitorRunInterval:         conf.JanitorRunInterval,
-		enableExpiredSharesCleanup: conf.EnableExpiredSharesCleanup,
+		file:                       c.File,
+		passwordHashCost:           c.SharePasswordHashCost,
+		janitorRunInterval:         c.JanitorRunInterval,
+		enableExpiredSharesCleanup: c.EnableExpiredSharesCleanup,
 	}
 
 	// attempt to create the db file
 	var fi os.FileInfo
 	var err error
-	if fi, err = os.Stat(m.file); os.IsNotExist(err) {
-		folder := filepath.Dir(m.file)
+	if fi, err = os.Stat(mgr.file); os.IsNotExist(err) {
+		folder := filepath.Dir(mgr.file)
 		if err := os.MkdirAll(folder, 0755); err != nil {
 			return nil, err
 		}
-		if _, err := os.Create(m.file); err != nil {
+		if _, err := os.Create(mgr.file); err != nil {
 			return nil, err
 		}
 	}
 
 	if fi == nil || fi.Size() == 0 {
-		err := os.WriteFile(m.file, []byte("{}"), 0644)
+		err := os.WriteFile(mgr.file, []byte("{}"), 0644)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	go m.startJanitorRun()
+	go mgr.startJanitorRun()
 
-	return &m, nil
+	return &mgr, nil
 }
 
 type config struct {
@@ -97,7 +95,7 @@ type config struct {
 	EnableExpiredSharesCleanup bool   `mapstructure:"enable_expired_shares_cleanup"`
 }
 
-func (c *config) init() {
+func (c *config) ApplyDefaults() {
 	if c.File == "" {
 		c.File = "/var/tmp/reva/publicshares"
 	}

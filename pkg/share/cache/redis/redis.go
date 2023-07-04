@@ -25,8 +25,8 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/share/cache"
 	"github.com/cs3org/reva/pkg/share/cache/registry"
+	"github.com/cs3org/reva/pkg/utils/cfg"
 	"github.com/gomodule/redigo/redis"
-	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )
 
@@ -44,15 +44,17 @@ type manager struct {
 	redisPool *redis.Pool
 }
 
-// New returns an implementation of a resource info cache that stores the objects in a redis cluster.
-func New(m map[string]interface{}) (cache.ResourceInfoCache, error) {
-	c := &config{}
-	if err := mapstructure.Decode(m, c); err != nil {
-		return nil, errors.Wrap(err, "error decoding conf")
-	}
-
+func (c *config) ApplyDefaults() {
 	if c.RedisAddress == "" {
 		c.RedisAddress = "localhost:6379"
+	}
+}
+
+// New returns an implementation of a resource info cache that stores the objects in a redis cluster.
+func New(m map[string]interface{}) (cache.ResourceInfoCache, error) {
+	var c config
+	if err := cfg.Decode(m, &c); err != nil {
+		return nil, err
 	}
 
 	pool := &redis.Pool{

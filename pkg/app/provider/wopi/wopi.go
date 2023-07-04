@@ -51,9 +51,9 @@ import (
 	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/utils"
+	"github.com/cs3org/reva/pkg/utils/cfg"
 	gomime "github.com/glpatcern/go-mime"
 	"github.com/golang-jwt/jwt"
-	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )
 
@@ -90,12 +90,15 @@ type config struct {
 	InsecureConnections bool     `mapstructure:"insecure_connections"`
 }
 
-func parseConfig(m map[string]interface{}) (*config, error) {
-	c := &config{}
-	if err := mapstructure.Decode(m, c); err != nil {
-		return nil, err
+func (c *config) ApplyDefaults() {
+	if c.AppIntURL == "" {
+		c.AppIntURL = c.AppURL
 	}
-	return c, nil
+	if c.IOPSecret == "" {
+		c.IOPSecret = os.Getenv("REVA_APPPROVIDER_IOPSECRET")
+	}
+	c.JWTSecret = sharedconf.GetJWTSecret(c.JWTSecret)
+
 }
 
 type wopiProvider struct {
@@ -107,20 +110,12 @@ type wopiProvider struct {
 // New returns an implementation of the app.Provider interface that
 // connects to an application in the backend.
 func New(ctx context.Context, m map[string]interface{}) (app.Provider, error) {
-	c, err := parseConfig(m)
-	if err != nil {
+	var c config
+	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
 
-	if c.AppIntURL == "" {
-		c.AppIntURL = c.AppURL
-	}
-	if c.IOPSecret == "" {
-		c.IOPSecret = os.Getenv("REVA_APPPROVIDER_IOPSECRET")
-	}
-	c.JWTSecret = sharedconf.GetJWTSecret(c.JWTSecret)
-
-	appURLs, err := getAppURLs(c)
+	appURLs, err := getAppURLs(&c)
 	if err != nil {
 		return nil, err
 	}
@@ -134,7 +129,7 @@ func New(ctx context.Context, m map[string]interface{}) (app.Provider, error) {
 	}
 
 	return &wopiProvider{
-		conf:       c,
+		conf:       &c,
 		wopiClient: wopiClient,
 		appURLs:    appURLs,
 	}, nil

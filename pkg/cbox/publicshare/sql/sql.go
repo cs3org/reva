@@ -42,7 +42,7 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/utils"
-	"github.com/mitchellh/mapstructure"
+	"github.com/cs3org/reva/pkg/utils/cfg"
 	"github.com/pkg/errors"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -77,7 +77,7 @@ type manager struct {
 	client gatewayv1beta1.GatewayAPIClient
 }
 
-func (c *config) init() {
+func (c *config) ApplyDefaults() {
 	if c.SharePasswordHashCost == 0 {
 		c.SharePasswordHashCost = 11
 	}
@@ -109,11 +109,10 @@ func (m *manager) startJanitorRun() {
 
 // New returns a new public share manager.
 func New(ctx context.Context, m map[string]interface{}) (publicshare.Manager, error) {
-	c := &config{}
-	if err := mapstructure.Decode(m, c); err != nil {
+	var c config
+	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
-	c.init()
 
 	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%d)/%s", c.DBUsername, c.DBPassword, c.DBHost, c.DBPort, c.DBName))
 	if err != nil {
@@ -126,7 +125,7 @@ func New(ctx context.Context, m map[string]interface{}) (publicshare.Manager, er
 	}
 
 	mgr := manager{
-		c:      c,
+		c:      &c,
 		db:     db,
 		client: gw,
 	}

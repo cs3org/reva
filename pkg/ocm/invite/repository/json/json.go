@@ -34,8 +34,8 @@ import (
 	"github.com/cs3org/reva/pkg/ocm/invite"
 	"github.com/cs3org/reva/pkg/ocm/invite/repository/registry"
 	"github.com/cs3org/reva/pkg/utils"
+	"github.com/cs3org/reva/pkg/utils/cfg"
 	"github.com/cs3org/reva/pkg/utils/list"
-	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )
 
@@ -59,45 +59,31 @@ func init() {
 	registry.Register("json", New)
 }
 
-func (c *config) init() error {
+func (c *config) ApplyDefaults() {
 	if c.File == "" {
 		c.File = "/var/tmp/reva/ocm-invites.json"
 	}
-
-	return nil
 }
 
 // New returns a new invite manager object.
 func New(ctx context.Context, m map[string]interface{}) (invite.Repository, error) {
-	config, err := parseConfig(m)
-	if err != nil {
-		return nil, errors.Wrap(err, "error parsing config for json invite repository")
-	}
-	err = config.init()
-	if err != nil {
-		return nil, errors.Wrap(err, "error setting config defaults for json invite repository")
+	var c config
+	if err := cfg.Decode(m, &c); err != nil {
+		return nil, err
 	}
 
 	// load or create file
-	model, err := loadOrCreate(config.File)
+	model, err := loadOrCreate(c.File)
 	if err != nil {
 		return nil, errors.Wrap(err, "error loading the file containing the invites")
 	}
 
 	manager := &manager{
-		config: config,
+		config: &c,
 		model:  model,
 	}
 
 	return manager, nil
-}
-
-func parseConfig(m map[string]interface{}) (*config, error) {
-	c := &config{}
-	if err := mapstructure.Decode(m, c); err != nil {
-		return nil, err
-	}
-	return c, nil
 }
 
 func loadOrCreate(file string) (*inviteModel, error) {

@@ -26,6 +26,7 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/notification"
 	"github.com/cs3org/reva/pkg/notification/handler"
@@ -46,7 +47,7 @@ type config struct {
 	NatsAddress      string                            `mapstructure:"nats_address" docs:";The NATS server address."`
 	NatsToken        string                            `mapstructure:"nats_token" docs:"The token to authenticate against the NATS server"`
 	NatsPrefix       string                            `mapstructure:"nats_prefix" docs:"reva-notifications;The notifications NATS stream."`
-	HandlerConf      map[string]interface{}            `mapstructure:"handlers" docs:";Settings for the different notification handlers."`
+	HandlerConf      map[string]map[string]interface{} `mapstructure:"handlers" docs:";Settings for the different notification handlers."`
 	GroupingInterval int                               `mapstructure:"grouping_interval" docs:"60;Time in seconds to group incoming notification triggers"`
 	GroupingMaxSize  int                               `mapstructure:"grouping_max_size" docs:"100;Maximum number of notifications to group"`
 	StorageDriver    string                            `mapstructure:"storage_driver" docs:"mysql;The driver used to store notifications"`
@@ -63,6 +64,7 @@ func defaultConfig() *config {
 }
 
 type svc struct {
+	ctx          context.Context
 	nc           *nats.Conn
 	js           nats.JetStreamContext
 	kv           nats.KeyValue
@@ -78,28 +80,30 @@ func init() {
 	rserverless.Register("notifications", New)
 }
 
-func getNotificationManager(c *config, l *zerolog.Logger) (notification.Manager, error) {
+func getNotificationManager(ctx context.Context, c *config) (notification.Manager, error) {
 	if f, ok := notificationManagerRegistry.NewFuncs[c.StorageDriver]; ok {
-		return f(c.StorageDrivers[c.StorageDriver])
+		return f(ctx, c.StorageDrivers[c.StorageDriver])
 	}
 	return nil, errtypes.NotFound(fmt.Sprintf("storage driver %s not found", c.StorageDriver))
 }
 
 // New returns a new Notifications service.
-func New(m map[string]interface{}, log *zerolog.Logger) (rserverless.Service, error) {
+func New(ctx context.Context, m map[string]interface{}) (rserverless.Service, error) {
 	conf := defaultConfig()
 
 	if err := mapstructure.Decode(m, conf); err != nil {
 		return nil, err
 	}
 
-	nm, err := getNotificationManager(conf, log)
+	log := appctx.GetLogger(ctx)
+	nm, err := getNotificationManager(ctx, conf)
 	if err != nil {
 		return nil, err
 	}
 	log.Info().Msgf("notification storage %s initialized", conf.StorageDriver)
 
 	s := &svc{
+		ctx:  ctx,
 		conf: conf,
 		log:  log,
 		nm:   nm,
@@ -111,7 +115,7 @@ func New(m map[string]interface{}, log *zerolog.Logger) (rserverless.Service, er
 // Start starts the Notifications service.
 func (s *svc) Start() {
 	s.templates = *templateRegistry.New()
-	s.handlers = handlerRegistry.InitHandlers(s.conf.HandlerConf, s.log)
+	s.handlers = handlerRegistry.InitHandlers(s.ctx, s.conf.HandlerConf)
 	s.accumulators = make(map[string]*accumulator.Accumulator[trigger.Trigger])
 
 	s.log.Debug().Msgf("connecting to nats server at %s", s.conf.NatsAddress)

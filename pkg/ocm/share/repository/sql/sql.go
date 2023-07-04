@@ -34,8 +34,8 @@ import (
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/ocm/share"
 	"github.com/cs3org/reva/pkg/ocm/share/repository/registry"
+	"github.com/cs3org/reva/pkg/utils/cfg"
 	"github.com/go-sql-driver/mysql"
-	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"google.golang.org/genproto/protobuf/field_mask"
 )
@@ -45,12 +45,12 @@ func init() {
 }
 
 // New creates a Repository with a SQL driver.
-func New(ctx context.Context, c map[string]interface{}) (share.Repository, error) {
-	conf, err := parseConfig(c)
-	if err != nil {
+func New(ctx context.Context, m map[string]interface{}) (share.Repository, error) {
+	var c config
+	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
-	return NewFromConfig(ctx, conf)
+	return NewFromConfig(ctx, &c)
 }
 
 type mgr struct {
@@ -85,14 +85,6 @@ type config struct {
 	DBName     string `mapstructure:"db_name"`
 
 	now func() time.Time // set only from tests
-}
-
-func parseConfig(conf map[string]interface{}) (*config, error) {
-	var c config
-	if err := mapstructure.Decode(conf, &c); err != nil {
-		return nil, errors.Wrap(err, "error decoding config")
-	}
-	return &c, nil
 }
 
 func formatUserID(u *userpb.UserId) string {

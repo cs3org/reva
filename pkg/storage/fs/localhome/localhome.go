@@ -38,6 +38,18 @@ type config struct {
 	UserLayout  string `mapstructure:"user_layout" docs:"{{.Username}};Template for user home directories"`
 }
 
+func (c *config) ApplyDefaults() {
+	if c.Root == "" {
+		c.Root = "/var/tmp/reva"
+	}
+	if c.ShareFolder == "" {
+		c.ShareFolder = "/MyShares"
+	}
+	if c.UserLayout == "" {
+		c.UserLayout = "{{.Username}}"
+	}
+}
+
 func parseConfig(m map[string]interface{}) (*config, error) {
 	c := &config{}
 	if err := mapstructure.Decode(m, c); err != nil {

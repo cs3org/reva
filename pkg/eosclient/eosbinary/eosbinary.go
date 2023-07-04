@@ -120,7 +120,7 @@ type Options struct {
 	TokenExpiry int
 }
 
-func (opt *Options) init() {
+func (opt *Options) ApplyDefaults() {
 	if opt.ForceSingleUserMode && opt.SingleUsername != "" {
 		opt.SingleUsername = "apache"
 	}
@@ -150,7 +150,7 @@ type Client struct {
 
 // New creates a new client with the given options.
 func New(opt *Options) (*Client, error) {
-	opt.init()
+	opt.ApplyDefaults()
 	c := new(Client)
 	c.opt = opt
 	return c, nil

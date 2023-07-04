@@ -24,9 +24,11 @@ import (
 	"os"
 	"time"
 
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rserverless"
 	"github.com/mitchellh/mapstructure"
 	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 )
 
 type config struct {
@@ -50,7 +52,7 @@ func init() {
 }
 
 // New returns a new helloworld service.
-func New(m map[string]interface{}, log *zerolog.Logger) (rserverless.Service, error) {
+func New(ctx context.Context, m map[string]interface{}) (rserverless.Service, error) {
 	conf := &config{}
 	conf.init()
 
@@ -64,6 +66,7 @@ func New(m map[string]interface{}, log *zerolog.Logger) (rserverless.Service, er
 		return nil, err
 	}
 
+	log := appctx.GetLogger(ctx)
 	s := &svc{
 		conf: conf,
 		log:  log,

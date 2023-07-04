@@ -29,7 +29,7 @@ import (
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/app"
 	"github.com/cs3org/reva/pkg/app/provider/registry"
-	"github.com/mitchellh/mapstructure"
+	"github.com/cs3org/reva/pkg/utils/cfg"
 )
 
 func init() {
@@ -58,19 +58,11 @@ type config struct {
 	IFrameUIProvider string `mapstructure:"iframe_ui_provider"`
 }
 
-func parseConfig(m map[string]interface{}) (*config, error) {
-	c := &config{}
-	if err := mapstructure.Decode(m, c); err != nil {
-		return nil, err
-	}
-	return c, nil
-}
-
 // New returns an implementation to of the app.Provider interface that
 // connects to an application in the backend.
 func New(ctx context.Context, m map[string]interface{}) (app.Provider, error) {
-	c, err := parseConfig(m)
-	if err != nil {
+	var c config
+	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
 	return &demoProvider{iframeUIProvider: c.IFrameUIProvider}, nil

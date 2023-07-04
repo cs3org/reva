@@ -41,9 +41,9 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/sharedconf"
+	"github.com/cs3org/reva/pkg/utils/cfg"
 	"github.com/golang-jwt/jwt"
 	"github.com/juliangruber/go-intersect"
-	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"golang.org/x/oauth2"
 )
@@ -76,7 +76,7 @@ type oidcUserMapping struct {
 	Username   string `mapstructure:"username" json:"username"`
 }
 
-func (c *config) init() {
+func (c *config) ApplyDefaults() {
 	if c.IDClaim == "" {
 		// sub is stable and defined as unique. the user manager needs to take care of the sub to user metadata lookup
 		c.IDClaim = "sub"
@@ -94,15 +94,6 @@ func (c *config) init() {
 	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
 }
 
-func parseConfig(m map[string]interface{}) (*config, error) {
-	c := &config{}
-	if err := mapstructure.Decode(m, c); err != nil {
-		err = errors.Wrap(err, "error decoding conf")
-		return nil, err
-	}
-	return c, nil
-}
-
 // New returns an auth manager implementation that verifies the oidc token and obtains the user claims.
 func New(ctx context.Context, m map[string]interface{}) (auth.Manager, error) {
 	manager := &mgr{
@@ -116,12 +107,11 @@ func New(ctx context.Context, m map[string]interface{}) (auth.Manager, error) {
 }
 
 func (am *mgr) Configure(m map[string]interface{}) error {
-	c, err := parseConfig(m)
-	if err != nil {
+	var c config
+	if err := cfg.Decode(m, &c); err != nil {
 		return err
 	}
-	c.init()
-	am.c = c
+	am.c = &c
 
 	am.oidcUsersMapping = map[string]*oidcUserMapping{}
 	if c.UsersMapping == "" {

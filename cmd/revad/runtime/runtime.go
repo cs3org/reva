@@ -115,7 +115,7 @@ func New(config *config.Config, opt ...Option) (*Reva, error) {
 		return nil, err
 	}
 
-	serverless, err := newServerless(config, log)
+	serverless, err := newServerless(ctx, config, log)
 	if err != nil {
 		watcher.Clean()
 		return nil, err
@@ -144,7 +144,7 @@ func servicesAddresses(cfg *config.Config) map[string]grace.Addressable {
 	return a
 }
 
-func newServerless(config *config.Config, log *zerolog.Logger) (*rserverless.Serverless, error) {
+func newServerless(ctx context.Context, config *config.Config, log *zerolog.Logger) (*rserverless.Serverless, error) {
 	sl := make(map[string]rserverless.Service)
 	logger := log.With().Str("pkg", "serverless").Logger()
 	if err := config.Serverless.ForEach(func(name string, config map[string]any) error {
@@ -153,7 +153,8 @@ func newServerless(config *config.Config, log *zerolog.Logger) (*rserverless.Ser
 			return fmt.Errorf("serverless service %s does not exist", name)
 		}
 		log := logger.With().Str("service", name).Logger()
-		svc, err := new(config, &log)
+		ctx := appctx.WithLogger(ctx, &log)
+		svc, err := new(ctx, config)
 		if err != nil {
 			return errors.Wrapf(err, "serverless service %s could not be initialized", name)
 		}
