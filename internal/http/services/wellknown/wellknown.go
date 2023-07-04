@@ -25,7 +25,7 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/rhttp/router"
-	"github.com/mitchellh/mapstructure"
+	"github.com/cs3org/reva/pkg/utils/cfg"
 )
 
 func init() {
@@ -44,7 +44,7 @@ type config struct {
 	EndSessionEndpoint    string `mapstructure:"end_session_endpoint"`
 }
 
-func (c *config) init() {
+func (c *config) ApplyDefaults() {
 	if c.Prefix == "" {
 		c.Prefix = ".well-known"
 	}
@@ -57,15 +57,13 @@ type svc struct {
 
 // New returns a new webuisvc.
 func New(ctx context.Context, m map[string]interface{}) (global.Service, error) {
-	conf := &config{}
-	if err := mapstructure.Decode(m, conf); err != nil {
+	var c config
+	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
 
-	conf.init()
-
 	s := &svc{
-		conf: conf,
+		conf: &c,
 	}
 	s.setHandler()
 	return s, nil

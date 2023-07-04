@@ -25,8 +25,7 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/sysinfo"
-	"github.com/mitchellh/mapstructure"
-	"github.com/pkg/errors"
+	"github.com/cs3org/reva/pkg/utils/cfg"
 )
 
 func init() {
@@ -35,6 +34,12 @@ func init() {
 
 type config struct {
 	Prefix string `mapstructure:"prefix"`
+}
+
+func (c *config) ApplyDefaults() {
+	if c.Prefix == "" {
+		c.Prefix = serviceName
+	}
 }
 
 type svc struct {
@@ -78,32 +83,16 @@ func (s *svc) getJSONData() string {
 	return ""
 }
 
-func parseConfig(m map[string]interface{}) (*config, error) {
-	cfg := &config{}
-	if err := mapstructure.Decode(m, &cfg); err != nil {
-		return nil, errors.Wrap(err, "sysinfo: error decoding configuration")
-	}
-	applyDefaultConfig(cfg)
-	return cfg, nil
-}
-
-func applyDefaultConfig(conf *config) {
-	if conf.Prefix == "" {
-		conf.Prefix = serviceName
-	}
-}
-
 // New returns a new SysInfo service.
 func New(ctx context.Context, m map[string]interface{}) (global.Service, error) {
-	// Prepare the configuration
-	conf, err := parseConfig(m)
-	if err != nil {
+	var c config
+	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
 
 	// Create the service
 	s := &svc{
-		conf: conf,
+		conf: &c,
 	}
 	return s, nil
 }

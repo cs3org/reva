@@ -25,8 +25,8 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/sharedconf"
+	"github.com/cs3org/reva/pkg/utils/cfg"
 	"github.com/go-chi/chi/v5"
-	"github.com/mitchellh/mapstructure"
 )
 
 func init() {
@@ -39,7 +39,7 @@ type config struct {
 	ExposeRecipientDisplayName bool   `mapstructure:"expose_recipient_display_name"`
 }
 
-func (c *config) init() {
+func (c *config) ApplyDefaults() {
 	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
 	if c.Prefix == "" {
 		c.Prefix = "ocm"
@@ -54,15 +54,14 @@ type svc struct {
 // New returns a new ocmd object, that implements
 // the OCM APIs specified in https://cs3org.github.io/OCM-API/docs.html
 func New(ctx context.Context, m map[string]interface{}) (global.Service, error) {
-	conf := &config{}
-	if err := mapstructure.Decode(m, conf); err != nil {
+	var c config
+	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
-	conf.init()
 
 	r := chi.NewRouter()
 	s := &svc{
-		Conf:   conf,
+		Conf:   &c,
 		router: r,
 	}
 

@@ -30,7 +30,7 @@ import (
 	"github.com/cs3org/reva/pkg/metrics"
 	"github.com/cs3org/reva/pkg/metrics/config"
 	"github.com/cs3org/reva/pkg/rhttp/global"
-	"github.com/mitchellh/mapstructure"
+	"github.com/cs3org/reva/pkg/utils/cfg"
 )
 
 func init() {
@@ -70,16 +70,13 @@ func (s *svc) Handler() http.Handler {
 
 // New returns a new metrics service.
 func New(ctx context.Context, m map[string]interface{}) (global.Service, error) {
-	// Prepare the configuration
-	conf := &config.Config{}
-	if err := mapstructure.Decode(m, conf); err != nil {
+	var c config.Config
+	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
 
-	conf.Init()
-
 	// initialize metrics using the configuration
-	err := metrics.Init(conf)
+	err := metrics.Init(&c)
 	if err != nil {
 		return nil, err
 	}

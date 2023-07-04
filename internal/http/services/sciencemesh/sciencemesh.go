@@ -20,15 +20,14 @@ package sciencemesh
 
 import (
 	"context"
-	"errors"
 	"net/http"
 
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/smtpclient"
+	"github.com/cs3org/reva/pkg/utils/cfg"
 	"github.com/go-chi/chi/v5"
-	"github.com/mitchellh/mapstructure"
 )
 
 func init() {
@@ -37,22 +36,20 @@ func init() {
 
 // New returns a new sciencemesh service.
 func New(ctx context.Context, m map[string]interface{}) (global.Service, error) {
-	conf := &config{}
-	if err := mapstructure.Decode(m, conf); err != nil {
+	var c config
+	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
-
-	conf.init()
-	if conf.ProviderDomain == "" {
-		return nil, errors.New("sciencemesh: provider_domain is missing from configuration")
-	}
-	if conf.MeshDirectoryURL == "" {
-		return nil, errors.New("sciencemesh: mesh_directory_url is missing from configuration")
-	}
+	// if conf.ProviderDomain == "" {
+	// 	return nil, errors.New("sciencemesh: provider_domain is missing from configuration")
+	// }
+	// if conf.MeshDirectoryURL == "" {
+	// 	return nil, errors.New("sciencemesh: mesh_directory_url is missing from configuration")
+	// }
 
 	r := chi.NewRouter()
 	s := &svc{
-		conf:   conf,
+		conf:   &c,
 		router: r,
 	}
 
@@ -79,7 +76,7 @@ type config struct {
 	OCMMountPoint    string                      `mapstructure:"ocm_mount_point"`
 }
 
-func (c *config) init() {
+func (c *config) ApplyDefaults() {
 	if c.Prefix == "" {
 		c.Prefix = "sciencemesh"
 	}
