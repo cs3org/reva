@@ -56,7 +56,7 @@ type transferClaims struct {
 }
 type config struct {
 	Prefix               string `mapstructure:"prefix"`
-	TransferSharedSecret string `mapstructure:"transfer_shared_secret"`
+	TransferSharedSecret string `mapstructure:"transfer_shared_secret" validate:"required"`
 	Timeout              int64  `mapstructure:"timeout"`
 	Insecure             bool   `mapstructure:"insecure" docs:"false;Whether to skip certificate checks when sending requests."`
 }

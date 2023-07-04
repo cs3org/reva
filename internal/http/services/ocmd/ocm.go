@@ -35,7 +35,7 @@ func init() {
 
 type config struct {
 	Prefix                     string `mapstructure:"prefix"`
-	GatewaySvc                 string `mapstructure:"gatewaysvc"`
+	GatewaySvc                 string `mapstructure:"gatewaysvc"                    validate:"required"`
 	ExposeRecipientDisplayName bool   `mapstructure:"expose_recipient_display_name"`
 }
 

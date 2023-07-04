@@ -56,12 +56,12 @@ type svc struct {
 // Config holds the config options that need to be passed down to all ocdav handlers.
 type Config struct {
 	Prefix         string   `mapstructure:"prefix"`
-	GatewaySvc     string   `mapstructure:"gatewaysvc"`
+	GatewaySvc     string   `mapstructure:"gatewaysvc"      validate:"required"`
 	Timeout        int64    `mapstructure:"timeout"`
 	Insecure       bool     `mapstructure:"insecure" docs:"false;Whether to skip certificate checks when sending requests."`
 	Name           string   `mapstructure:"name"`
-	MaxNumFiles    int64    `mapstructure:"max_num_files"`
-	MaxSize        int64    `mapstructure:"max_size"`
+	MaxNumFiles    int64    `mapstructure:"max_num_files"   validate:"required,gt=0"`
+	MaxSize        int64    `mapstructure:"max_size"        validate:"required,gt=0"`
 	AllowedFolders []string `mapstructure:"allowed_folders"`
 }
 

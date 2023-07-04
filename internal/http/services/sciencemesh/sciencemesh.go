@@ -40,12 +40,6 @@ func New(ctx context.Context, m map[string]interface{}) (global.Service, error) 
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
-	// if conf.ProviderDomain == "" {
-	// 	return nil, errors.New("sciencemesh: provider_domain is missing from configuration")
-	// }
-	// if conf.MeshDirectoryURL == "" {
-	// 	return nil, errors.New("sciencemesh: mesh_directory_url is missing from configuration")
-	// }
 
 	r := chi.NewRouter()
 	s := &svc{
@@ -67,10 +61,10 @@ func (s *svc) Close() error {
 
 type config struct {
 	Prefix           string                      `mapstructure:"prefix"`
-	SMTPCredentials  *smtpclient.SMTPCredentials `mapstructure:"smtp_credentials"`
-	GatewaySvc       string                      `mapstructure:"gatewaysvc"`
-	MeshDirectoryURL string                      `mapstructure:"mesh_directory_url"`
-	ProviderDomain   string                      `mapstructure:"provider_domain"`
+	SMTPCredentials  *smtpclient.SMTPCredentials `mapstructure:"smtp_credentials"   validate:"required"`
+	GatewaySvc       string                      `mapstructure:"gatewaysvc"         validate:"required"`
+	MeshDirectoryURL string                      `mapstructure:"mesh_directory_url" validate:"required"`
+	ProviderDomain   string                      `mapstructure:"provider_domain"    validate:"required"`
 	SubjectTemplate  string                      `mapstructure:"subject_template"`
 	BodyTemplatePath string                      `mapstructure:"body_template_path"`
 	OCMMountPoint    string                      `mapstructure:"ocm_mount_point"`
@@ -79,6 +73,9 @@ type config struct {
 func (c *config) ApplyDefaults() {
 	if c.Prefix == "" {
 		c.Prefix = "sciencemesh"
+	}
+	if c.OCMMountPoint == "" {
+		c.OCMMountPoint = "/ocm"
 	}
 
 	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
