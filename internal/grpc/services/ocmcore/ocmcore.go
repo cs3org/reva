@@ -32,8 +32,7 @@ import (
 	"github.com/cs3org/reva/pkg/ocm/share/repository/registry"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
-	"github.com/mitchellh/mapstructure"
-	"github.com/pkg/errors"
+	"github.com/cs3org/reva/pkg/utils/cfg"
 	"google.golang.org/grpc"
 )
 
@@ -51,7 +50,7 @@ type service struct {
 	repo share.Repository
 }
 
-func (c *config) init() {
+func (c *config) ApplyDefaults() {
 	if c.Driver == "" {
 		c.Driver = "json"
 	}
@@ -68,30 +67,20 @@ func getShareRepository(ctx context.Context, c *config) (share.Repository, error
 	return nil, errtypes.NotFound(fmt.Sprintf("driver not found: %s", c.Driver))
 }
 
-func parseConfig(m map[string]interface{}) (*config, error) {
-	c := &config{}
-	if err := mapstructure.Decode(m, c); err != nil {
-		err = errors.Wrap(err, "error decoding conf")
-		return nil, err
-	}
-	return c, nil
-}
-
 // New creates a new ocm core svc.
 func New(ctx context.Context, m map[string]interface{}) (rgrpc.Service, error) {
-	c, err := parseConfig(m)
-	if err != nil {
+	var c config
+	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
-	c.init()
 
-	repo, err := getShareRepository(ctx, c)
+	repo, err := getShareRepository(ctx, &c)
 	if err != nil {
 		return nil, err
 	}
 
 	service := &service{
-		conf: c,
+		conf: &c,
 		repo: repo,
 	}
 

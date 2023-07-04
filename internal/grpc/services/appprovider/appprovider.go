@@ -40,8 +40,8 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/sharedconf"
+	"github.com/cs3org/reva/pkg/utils/cfg"
 	"github.com/juliangruber/go-intersect"
-	"github.com/mitchellh/mapstructure"
 	"google.golang.org/grpc"
 )
 
@@ -65,7 +65,7 @@ type config struct {
 	Language            string                            `mapstructure:"language"`
 }
 
-func (c *config) init() {
+func (c *config) ApplyDefaults() {
 	if c.Driver == "" {
 		c.Driver = "demo"
 	}
@@ -73,35 +73,25 @@ func (c *config) init() {
 	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
 }
 
-func parseConfig(m map[string]interface{}) (*config, error) {
-	c := &config{}
-	if err := mapstructure.Decode(m, c); err != nil {
-		return nil, err
-	}
-	c.init()
-	return c, nil
-}
-
 // New creates a new AppProviderService.
 func New(ctx context.Context, m map[string]interface{}) (rgrpc.Service, error) {
-	c, err := parseConfig(m)
-	if err != nil {
+	var c config
+	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
 
 	// read and register custom mime types if configured
-	err = registerMimeTypes(c.CustomMimeTypesJSON)
-	if err != nil {
+	if err := registerMimeTypes(c.CustomMimeTypesJSON); err != nil {
 		return nil, err
 	}
 
-	provider, err := getProvider(ctx, c)
+	provider, err := getProvider(ctx, &c)
 	if err != nil {
 		return nil, err
 	}
 
 	service := &service{
-		conf:     c,
+		conf:     &c,
 		provider: provider,
 	}
 

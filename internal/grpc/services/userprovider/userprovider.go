@@ -31,7 +31,7 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/cs3org/reva/pkg/user/manager/registry"
-	"github.com/mitchellh/mapstructure"
+	"github.com/cs3org/reva/pkg/utils/cfg"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 )
@@ -45,20 +45,10 @@ type config struct {
 	Drivers map[string]map[string]interface{} `mapstructure:"drivers"`
 }
 
-func (c *config) init() {
+func (c *config) ApplyDefaults() {
 	if c.Driver == "" {
 		c.Driver = "json"
 	}
-}
-
-func parseConfig(m map[string]interface{}) (*config, error) {
-	c := &config{}
-	if err := mapstructure.Decode(m, c); err != nil {
-		err = errors.Wrap(err, "error decoding conf")
-		return nil, err
-	}
-	c.init()
-	return c, nil
 }
 
 func getDriver(ctx context.Context, c *config) (user.Manager, *plugin.RevaPlugin, error) {
@@ -88,11 +78,11 @@ func getDriver(ctx context.Context, c *config) (user.Manager, *plugin.RevaPlugin
 
 // New returns a new UserProviderServiceServer.
 func New(ctx context.Context, m map[string]interface{}) (rgrpc.Service, error) {
-	c, err := parseConfig(m)
-	if err != nil {
+	var c config
+	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
-	userManager, plug, err := getDriver(ctx, c)
+	userManager, plug, err := getDriver(ctx, &c)
 	if err != nil {
 		return nil, err
 	}

@@ -36,7 +36,7 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/utils"
-	"github.com/mitchellh/mapstructure"
+	"github.com/cs3org/reva/pkg/utils/cfg"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 )
@@ -63,7 +63,7 @@ type service struct {
 	ocmClient *client.OCMClient
 }
 
-func (c *config) init() error {
+func (c *config) ApplyDefaults() error {
 	if c.Driver == "" {
 		c.Driver = "json"
 	}
@@ -93,32 +93,20 @@ func getInviteRepository(ctx context.Context, c *config) (invite.Repository, err
 	return nil, errtypes.NotFound("driver not found: " + c.Driver)
 }
 
-func parseConfig(m map[string]interface{}) (*config, error) {
-	c := &config{}
-	if err := mapstructure.Decode(m, c); err != nil {
-		err = errors.Wrap(err, "error decoding conf")
-		return nil, err
-	}
-	return c, nil
-}
-
 // New creates a new OCM invite manager svc.
 func New(ctx context.Context, m map[string]interface{}) (rgrpc.Service, error) {
-	c, err := parseConfig(m)
-	if err != nil {
-		return nil, err
-	}
-	if err := c.init(); err != nil {
+	var c config
+	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
 
-	repo, err := getInviteRepository(ctx, c)
+	repo, err := getInviteRepository(ctx, &c)
 	if err != nil {
 		return nil, err
 	}
 
 	service := &service{
-		conf: c,
+		conf: &c,
 		repo: repo,
 		ocmClient: client.New(&client.Config{
 			Timeout:  time.Duration(c.OCMClientTimeout) * time.Second,

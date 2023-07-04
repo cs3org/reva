@@ -38,10 +38,10 @@ import (
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/storage/utils/downloader"
 	"github.com/cs3org/reva/pkg/storage/utils/walker"
+	"github.com/cs3org/reva/pkg/utils/cfg"
 	"github.com/cs3org/reva/pkg/utils/resourceid"
 	"github.com/gdexlab/go-render/render"
 	ua "github.com/mileusna/useragent"
-	"github.com/mitchellh/mapstructure"
 )
 
 type svc struct {
@@ -71,13 +71,10 @@ func init() {
 
 // New creates a new archiver service.
 func New(ctx context.Context, conf map[string]interface{}) (global.Service, error) {
-	c := &Config{}
-	err := mapstructure.Decode(conf, c)
-	if err != nil {
+	var c Config
+	if err := cfg.Decode(conf, &c); err != nil {
 		return nil, err
 	}
-
-	c.init()
 
 	gtw, err := pool.GetGatewayServiceClient(pool.Endpoint(c.GatewaySvc))
 	if err != nil {
@@ -95,7 +92,7 @@ func New(ctx context.Context, conf map[string]interface{}) (global.Service, erro
 	}
 
 	return &svc{
-		config:         c,
+		config:         &c,
 		gtwClient:      gtw,
 		downloader:     downloader.NewDownloader(gtw, rhttp.Insecure(c.Insecure), rhttp.Timeout(time.Duration(c.Timeout*int64(time.Second)))),
 		walker:         walker.NewWalker(gtw),
@@ -103,7 +100,7 @@ func New(ctx context.Context, conf map[string]interface{}) (global.Service, erro
 	}, nil
 }
 
-func (c *Config) init() {
+func (c *Config) ApplyDefaults() {
 	if c.Prefix == "" {
 		c.Prefix = "download_archive"
 	}

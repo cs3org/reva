@@ -27,8 +27,7 @@ import (
 	"github.com/cs3org/reva/pkg/preferences/registry"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
-	"github.com/mitchellh/mapstructure"
-	"github.com/pkg/errors"
+	"github.com/cs3org/reva/pkg/utils/cfg"
 	"google.golang.org/grpc"
 )
 
@@ -41,7 +40,7 @@ type config struct {
 	Drivers map[string]map[string]interface{} `mapstructure:"drivers"`
 }
 
-func (c *config) init() {
+func (c *config) ApplyDefaults() {
 	if c.Driver == "" {
 		c.Driver = "memory"
 	}
@@ -59,31 +58,20 @@ func getPreferencesManager(ctx context.Context, c *config) (preferences.Manager,
 	return nil, errtypes.NotFound("driver not found: " + c.Driver)
 }
 
-func parseConfig(m map[string]interface{}) (*config, error) {
-	c := &config{}
-	if err := mapstructure.Decode(m, c); err != nil {
-		err = errors.Wrap(err, "error decoding conf")
-		return nil, err
-	}
-	return c, nil
-}
-
 // New returns a new PreferencesServiceServer.
 func New(ctx context.Context, m map[string]interface{}) (rgrpc.Service, error) {
-	c, err := parseConfig(m)
-	if err != nil {
+	var c config
+	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
 
-	c.init()
-
-	pm, err := getPreferencesManager(ctx, c)
+	pm, err := getPreferencesManager(ctx, &c)
 	if err != nil {
 		return nil, err
 	}
 
 	return &service{
-		conf: c,
+		conf: &c,
 		pm:   pm,
 	}, nil
 }

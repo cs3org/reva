@@ -27,7 +27,7 @@ import (
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
-	"github.com/mitchellh/mapstructure"
+	"github.com/cs3org/reva/pkg/utils/cfg"
 	"google.golang.org/grpc"
 )
 
@@ -56,7 +56,7 @@ type config struct {
 	Drivers map[string]map[string]interface{} `mapstructure:"drivers"`
 }
 
-func (c *config) init() {
+func (c *config) ApplyDefaults() {
 	if c.Driver == "" {
 		c.Driver = "static"
 	}
@@ -64,12 +64,12 @@ func (c *config) init() {
 
 // New creates a new StorageRegistryService.
 func New(ctx context.Context, m map[string]interface{}) (rgrpc.Service, error) {
-	c, err := parseConfig(m)
-	if err != nil {
+	var c config
+	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
 
-	reg, err := getRegistry(ctx, c)
+	reg, err := getRegistry(ctx, &c)
 	if err != nil {
 		return nil, err
 	}
@@ -79,15 +79,6 @@ func New(ctx context.Context, m map[string]interface{}) (rgrpc.Service, error) {
 	}
 
 	return svc, nil
-}
-
-func parseConfig(m map[string]interface{}) (*config, error) {
-	c := &config{}
-	if err := mapstructure.Decode(m, c); err != nil {
-		return nil, err
-	}
-	c.init()
-	return c, nil
 }
 
 func getRegistry(ctx context.Context, c *config) (app.Registry, error) {

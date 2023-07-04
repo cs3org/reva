@@ -46,7 +46,7 @@ import (
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/storage/utils/walker"
 	"github.com/cs3org/reva/pkg/utils"
-	"github.com/mitchellh/mapstructure"
+	"github.com/cs3org/reva/pkg/utils/cfg"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 )
@@ -75,7 +75,7 @@ type service struct {
 	walker     walker.Walker
 }
 
-func (c *config) init() {
+func (c *config) ApplyDefaults() {
 	if c.Driver == "" {
 		c.Driver = "json"
 	}
@@ -100,24 +100,14 @@ func getShareRepository(ctx context.Context, c *config) (share.Repository, error
 	return nil, errtypes.NotFound("driver not found: " + c.Driver)
 }
 
-func parseConfig(m map[string]interface{}) (*config, error) {
-	c := &config{}
-	if err := mapstructure.Decode(m, c); err != nil {
-		err = errors.Wrap(err, "error decoding conf")
-		return nil, err
-	}
-	return c, nil
-}
-
 // New creates a new ocm share provider svc.
 func New(ctx context.Context, m map[string]interface{}) (rgrpc.Service, error) {
-	c, err := parseConfig(m)
-	if err != nil {
+	var c config
+	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
-	c.init()
 
-	repo, err := getShareRepository(ctx, c)
+	repo, err := getShareRepository(ctx, &c)
 	if err != nil {
 		return nil, err
 	}
@@ -139,7 +129,7 @@ func New(ctx context.Context, m map[string]interface{}) (rgrpc.Service, error) {
 	walker := walker.NewWalker(gateway)
 
 	service := &service{
-		conf:       c,
+		conf:       &c,
 		repo:       repo,
 		client:     client,
 		gateway:    gateway,
