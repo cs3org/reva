@@ -18,7 +18,7 @@
 
 FROM quay.io/ceph/ceph:v16
 
-RUN dnf update -y && dnf install -y \
+RUN dnf update --exclude=ceph-iscsi -y && dnf install -y \
   git \
   gcc \
   make \
