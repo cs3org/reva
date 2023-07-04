@@ -50,7 +50,7 @@ func init() {
 
 // New returns an implementation to the storage.FS interface that talks to
 // cback.
-func New(m map[string]interface{}) (fs storage.FS, err error) {
+func New(ctx context.Context, m map[string]interface{}) (fs storage.FS, err error) {
 	c := &Options{}
 	if err = mapstructure.Decode(m, c); err != nil {
 		return nil, errors.Wrap(err, "Error Decoding Configuration")

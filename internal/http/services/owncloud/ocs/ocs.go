@@ -19,6 +19,7 @@
 package ocs
 
 import (
+	"context"
 	"net/http"
 	"time"
 
@@ -48,7 +49,7 @@ type svc struct {
 	warmupCacheTracker *ttlcache.Cache
 }
 
-func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) {
+func New(ctx context.Context, m map[string]interface{}) (global.Service, error) {
 	conf := &config.Config{}
 	if err := mapstructure.Decode(m, conf); err != nil {
 		return nil, err
@@ -62,6 +63,7 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 		router: r,
 	}
 
+	log := appctx.GetLogger(ctx)
 	if err := s.routerInit(log); err != nil {
 		return nil, err
 	}

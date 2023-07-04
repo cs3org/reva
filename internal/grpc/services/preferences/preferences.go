@@ -52,9 +52,9 @@ type service struct {
 	pm   preferences.Manager
 }
 
-func getPreferencesManager(c *config) (preferences.Manager, error) {
+func getPreferencesManager(ctx context.Context, c *config) (preferences.Manager, error) {
 	if f, ok := registry.NewFuncs[c.Driver]; ok {
-		return f(c.Drivers[c.Driver])
+		return f(ctx, c.Drivers[c.Driver])
 	}
 	return nil, errtypes.NotFound("driver not found: " + c.Driver)
 }
@@ -69,7 +69,7 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 }
 
 // New returns a new PreferencesServiceServer.
-func New(m map[string]interface{}) (rgrpc.Service, error) {
+func New(ctx context.Context, m map[string]interface{}) (rgrpc.Service, error) {
 	c, err := parseConfig(m)
 	if err != nil {
 		return nil, err
@@ -77,7 +77,7 @@ func New(m map[string]interface{}) (rgrpc.Service, error) {
 
 	c.init()
 
-	pm, err := getPreferencesManager(c)
+	pm, err := getPreferencesManager(ctx, c)
 	if err != nil {
 		return nil, err
 	}

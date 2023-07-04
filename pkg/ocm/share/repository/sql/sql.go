@@ -45,12 +45,12 @@ func init() {
 }
 
 // New creates a Repository with a SQL driver.
-func New(c map[string]interface{}) (share.Repository, error) {
+func New(ctx context.Context, c map[string]interface{}) (share.Repository, error) {
 	conf, err := parseConfig(c)
 	if err != nil {
 		return nil, err
 	}
-	return NewFromConfig(conf)
+	return NewFromConfig(ctx, conf)
 }
 
 type mgr struct {
@@ -60,7 +60,7 @@ type mgr struct {
 }
 
 // NewFromConfig creates a Repository with a SQL driver using the given config.
-func NewFromConfig(conf *config) (share.Repository, error) {
+func NewFromConfig(ctx context.Context, conf *config) (share.Repository, error) {
 	if conf.now == nil {
 		conf.now = time.Now
 	}

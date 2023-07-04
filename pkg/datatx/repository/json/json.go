@@ -19,6 +19,7 @@
 package json
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"os"
@@ -66,7 +67,7 @@ func (c *config) init() {
 }
 
 // New returns a json storage driver.
-func New(m map[string]interface{}) (datatx.Repository, error) {
+func New(ctx context.Context, m map[string]interface{}) (datatx.Repository, error) {
 	c, err := parseConfig(m)
 	if err != nil {
 		return nil, err

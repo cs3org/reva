@@ -19,8 +19,10 @@
 package mentix
 
 import (
+	"context"
 	"net/http"
 
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/mentix"
 	"github.com/cs3org/reva/pkg/mentix/config"
 	"github.com/cs3org/reva/pkg/mentix/exchangers"
@@ -166,7 +168,7 @@ func applyDefaultConfig(conf *config.Configuration) {
 }
 
 // New returns a new Mentix service.
-func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) {
+func New(ctx context.Context, m map[string]interface{}) (global.Service, error) {
 	// Prepare the configuration
 	conf, err := parseConfig(m)
 	if err != nil {
@@ -176,6 +178,7 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 	conf.Init()
 
 	// Create the Mentix instance
+	log := appctx.GetLogger(ctx)
 	mntx, err := mentix.New(conf, log)
 	if err != nil {
 		return nil, errors.Wrap(err, "mentix: error creating Mentix")

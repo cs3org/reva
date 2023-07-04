@@ -19,6 +19,7 @@
 package tus
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/cs3org/reva/pkg/errtypes"
@@ -51,7 +52,7 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 }
 
 // New returns a datatx manager implementation that relies on HTTP PUT/GET.
-func New(m map[string]interface{}) (datatx.DataTX, error) {
+func New(ctx context.Context, m map[string]interface{}) (datatx.DataTX, error) {
 	c, err := parseConfig(m)
 	if err != nil {
 		return nil, err

@@ -19,8 +19,10 @@
 package siteacc
 
 import (
+	"context"
 	"net/http"
 
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/siteacc"
 	"github.com/cs3org/reva/pkg/siteacc/config"
@@ -103,7 +105,7 @@ func applyDefaultConfig(conf *config.Configuration) {
 }
 
 // New returns a new Site Accounts service.
-func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) {
+func New(ctx context.Context, m map[string]interface{}) (global.Service, error) {
 	// Prepare the configuration
 	conf, err := parseConfig(m)
 	if err != nil {
@@ -111,6 +113,7 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 	}
 
 	// Create the sites accounts instance
+	log := appctx.GetLogger(ctx)
 	siteacc, err := siteacc.New(conf, log)
 	if err != nil {
 		return nil, errors.Wrap(err, "error creating the sites accounts service")

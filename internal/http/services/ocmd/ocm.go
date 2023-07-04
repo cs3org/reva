@@ -19,6 +19,7 @@
 package ocmd
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/cs3org/reva/pkg/appctx"
@@ -26,7 +27,6 @@ import (
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/go-chi/chi/v5"
 	"github.com/mitchellh/mapstructure"
-	"github.com/rs/zerolog"
 )
 
 func init() {
@@ -53,7 +53,7 @@ type svc struct {
 
 // New returns a new ocmd object, that implements
 // the OCM APIs specified in https://cs3org.github.io/OCM-API/docs.html
-func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) {
+func New(ctx context.Context, m map[string]interface{}) (global.Service, error) {
 	conf := &config{}
 	if err := mapstructure.Decode(m, conf); err != nil {
 		return nil, err

@@ -58,7 +58,7 @@ func TestUserManager(t *testing.T) {
 	input := map[string]interface{}{
 		"groups": file.Name(),
 	}
-	_, err = New(input)
+	_, err = New(context.Background(), input)
 	if err == nil {
 		t.Fatalf("no error (but we expected one) while get manager")
 	}
@@ -86,7 +86,7 @@ func TestUserManager(t *testing.T) {
 	input = map[string]interface{}{
 		"groups": file.Name(),
 	}
-	manager, _ := New(input)
+	manager, _ := New(context.Background(), input)
 
 	// setup test data
 	gid := &grouppb.GroupId{OpaqueId: "sailing-lovers"}

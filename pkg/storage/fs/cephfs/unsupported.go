@@ -22,6 +22,8 @@
 package cephfs
 
 import (
+	"context"
+
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
 	"github.com/pkg/errors"
@@ -33,6 +35,6 @@ func init() {
 
 // New returns an implementation to of the storage.FS interface that talk to
 // a ceph filesystem.
-func New(m map[string]interface{}) (storage.FS, error) {
+func New(ctx context.Context, m map[string]interface{}) (storage.FS, error) {
 	return nil, errors.New("cephfs: revad was compiled without CephFS support")
 }

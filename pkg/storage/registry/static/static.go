@@ -80,7 +80,7 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 
 // New returns an implementation of the storage.Registry interface that
 // redirects requests to corresponding storage drivers.
-func New(m map[string]interface{}) (storage.Registry, error) {
+func New(ctx context.Context, m map[string]interface{}) (storage.Registry, error) {
 	c, err := parseConfig(m)
 	if err != nil {
 		return nil, err

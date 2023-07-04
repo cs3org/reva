@@ -99,7 +99,7 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 }
 
 // New returns an auth manager implementation that connects to a LDAP server to validate the user.
-func New(m map[string]interface{}) (auth.Manager, error) {
+func New(ctx context.Context, m map[string]interface{}) (auth.Manager, error) {
 	manager := &mgr{}
 	err := manager.Configure(m)
 	if err != nil {

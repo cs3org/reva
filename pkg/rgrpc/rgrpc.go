@@ -19,11 +19,13 @@
 package rgrpc
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net"
 
 	"github.com/cs3org/reva/cmd/revad/pkg/config"
+	"github.com/cs3org/reva/pkg/appctx"
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -63,7 +65,7 @@ func Register(name string, newFunc NewService) {
 
 // NewService is the function that gRPC services need to register at init time.
 // It returns an io.Closer to close the service and a list of service endpoints that need to be unprotected.
-type NewService func(conf map[string]interface{}) (Service, error)
+type NewService func(context.Context, map[string]any) (Service, error)
 
 // Service represents a grpc service.
 type Service interface {
@@ -85,7 +87,7 @@ type Server struct {
 	services map[string]Service
 }
 
-func InitServices(services map[string]config.ServicesConfig) (map[string]Service, error) {
+func InitServices(ctx context.Context, services map[string]config.ServicesConfig) (map[string]Service, error) {
 	s := make(map[string]Service)
 	for name, cfg := range services {
 		new, ok := Services[name]
@@ -95,7 +97,9 @@ func InitServices(services map[string]config.ServicesConfig) (map[string]Service
 		if cfg.DriversNumber() > 1 {
 			return nil, fmt.Errorf("rgrp: service %s cannot have more than one driver in same server", name)
 		}
-		svc, err := new(cfg[0].Config)
+		log := appctx.GetLogger(ctx).With().Str("service", name).Logger()
+		ctx := appctx.WithLogger(ctx, &log)
+		svc, err := new(ctx, cfg[0].Config)
 		if err != nil {
 			return nil, errors.Wrapf(err, "rgrpc: grpc service %s could not be started,", name)
 		}

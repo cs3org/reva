@@ -68,7 +68,7 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 
 // New returns an implementation to of the app.Provider interface that
 // connects to an application in the backend.
-func New(m map[string]interface{}) (app.Provider, error) {
+func New(ctx context.Context, m map[string]interface{}) (app.Provider, error) {
 	c, err := parseConfig(m)
 	if err != nil {
 		return nil, err

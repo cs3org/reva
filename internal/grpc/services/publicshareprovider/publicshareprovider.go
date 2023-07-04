@@ -58,9 +58,9 @@ type service struct {
 	allowedPathsForShares []*regexp.Regexp
 }
 
-func getShareManager(c *config) (publicshare.Manager, error) {
+func getShareManager(ctx context.Context, c *config) (publicshare.Manager, error) {
 	if f, ok := registry.NewFuncs[c.Driver]; ok {
-		return f(c.Drivers[c.Driver])
+		return f(ctx, c.Drivers[c.Driver])
 	}
 	return nil, errtypes.NotFound("driver not found: " + c.Driver)
 }
@@ -87,7 +87,7 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 }
 
 // New creates a new user share provider svc.
-func New(m map[string]interface{}) (rgrpc.Service, error) {
+func New(ctx context.Context, m map[string]interface{}) (rgrpc.Service, error) {
 	c, err := parseConfig(m)
 	if err != nil {
 		return nil, err
@@ -95,7 +95,7 @@ func New(m map[string]interface{}) (rgrpc.Service, error) {
 
 	c.init()
 
-	sm, err := getShareManager(c)
+	sm, err := getShareManager(ctx, c)
 	if err != nil {
 		return nil, err
 	}

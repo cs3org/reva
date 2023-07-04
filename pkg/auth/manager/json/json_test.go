@@ -60,7 +60,7 @@ func TestGetManagerWithInvalidUser(t *testing.T) {
 				"users": tt.user,
 			}
 
-			manager, err := New(input)
+			manager, err := New(ctx, input)
 
 			assert.Empty(t, manager)
 			assert.EqualError(t, err, tt.expectedError)
@@ -117,7 +117,7 @@ func TestGetManagerWithJSONObject(t *testing.T) {
 				"users": tmpFile.Name(),
 			}
 
-			manager, err := New(input)
+			manager, err := New(ctx, input)
 
 			if tt.expectManager {
 				assert.Equal(t, nil, err)
@@ -180,7 +180,7 @@ func TestGetAuthenticatedManager(t *testing.T) {
 	input := map[string]interface{}{
 		"users": tempFile.Name(),
 	}
-	manager, _ := New(input)
+	manager, _ := New(ctx, input)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

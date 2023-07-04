@@ -48,7 +48,7 @@ type mgr struct {
 }
 
 // New returns an instance of the cbox sql preferences manager.
-func New(m map[string]interface{}) (preferences.Manager, error) {
+func New(ctx context.Context, m map[string]interface{}) (preferences.Manager, error) {
 	c := &config{}
 	if err := mapstructure.Decode(m, c); err != nil {
 		return nil, err

@@ -18,11 +18,15 @@
 
 package registry
 
-import "github.com/cs3org/reva/pkg/app"
+import (
+	"context"
+
+	"github.com/cs3org/reva/pkg/app"
+)
 
 // NewFunc is the function that app provider implementations
 // should register to at init time.
-type NewFunc func(map[string]interface{}) (app.Provider, error)
+type NewFunc func(context.Context, map[string]interface{}) (app.Provider, error)
 
 // NewFuncs is a map containing all the registered app providers.
 var NewFuncs = map[string]NewFunc{}

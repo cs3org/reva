@@ -79,7 +79,7 @@ func parseConfig(c map[string]interface{}) (*config, error) {
 }
 
 // New creates a sql repository for ocm tokens and users.
-func New(c map[string]interface{}) (invite.Repository, error) {
+func New(ctx context.Context, c map[string]interface{}) (invite.Repository, error) {
 	conf, err := parseConfig(c)
 	if err != nil {
 		return nil, errors.Wrap(err, "sql: error parsing config")

@@ -77,7 +77,7 @@ type mgr struct {
 }
 
 // New returns a new share manager.
-func New(m map[string]interface{}) (share.Manager, error) {
+func New(ctx context.Context, m map[string]interface{}) (share.Manager, error) {
 	c, err := parseConfig(m)
 	if err != nil {
 		err = errors.Wrap(err, "error creating a new manager")

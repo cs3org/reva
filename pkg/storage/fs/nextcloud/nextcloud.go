@@ -69,7 +69,7 @@ func parseConfig(m map[string]interface{}) (*StorageDriverConfig, error) {
 
 // New returns an implementation to of the storage.FS interface that talks to
 // a Nextcloud instance over http.
-func New(m map[string]interface{}) (storage.FS, error) {
+func New(ctx context.Context, m map[string]interface{}) (storage.FS, error) {
 	conf, err := parseConfig(m)
 	if err != nil {
 		return nil, err

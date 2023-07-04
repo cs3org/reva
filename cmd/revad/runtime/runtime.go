@@ -19,6 +19,7 @@
 package runtime
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"runtime"
@@ -29,8 +30,10 @@ import (
 
 	"github.com/cs3org/reva/cmd/revad/pkg/config"
 	"github.com/cs3org/reva/cmd/revad/pkg/grace"
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rhttp"
+
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/rserverless"
 	"github.com/cs3org/reva/pkg/sharedconf"
@@ -44,6 +47,7 @@ import (
 
 // Reva represents a full instance of reva.
 type Reva struct {
+	ctx    context.Context
 	config *config.Config
 
 	servers    []*Server
@@ -72,6 +76,8 @@ func (s *Server) Start() error {
 func New(config *config.Config, opt ...Option) (*Reva, error) {
 	opts := newOptions(opt...)
 	log := opts.Logger
+
+	ctx := appctx.WithLogger(opts.Ctx, log)
 
 	if err := initCPUCount(config.Core, log); err != nil {
 		return nil, err
@@ -103,7 +109,7 @@ func New(config *config.Config, opt ...Option) (*Reva, error) {
 
 	grpc := groupGRPCByAddress(config)
 	http := groupHTTPByAddress(config)
-	servers, err := newServers(grpc, http, listeners, log)
+	servers, err := newServers(ctx, grpc, http, listeners, log)
 	if err != nil {
 		watcher.Clean()
 		return nil, err
@@ -116,6 +122,7 @@ func New(config *config.Config, opt ...Option) (*Reva, error) {
 	}
 
 	return &Reva{
+		ctx:        ctx,
 		config:     config,
 		servers:    servers,
 		serverless: serverless,
@@ -357,10 +364,12 @@ func listenerFromAddress(lns map[string]net.Listener, network string, address co
 	panic(fmt.Sprintf("listener not found for address %s:%s", network, address))
 }
 
-func newServers(grpc []*config.GRPC, http []*config.HTTP, lns map[string]net.Listener, log *zerolog.Logger) ([]*Server, error) {
+func newServers(ctx context.Context, grpc []*config.GRPC, http []*config.HTTP, lns map[string]net.Listener, log *zerolog.Logger) ([]*Server, error) {
 	servers := make([]*Server, 0, len(grpc)+len(http))
 	for _, cfg := range grpc {
-		services, err := rgrpc.InitServices(cfg.Services)
+		logger := log.With().Str("pkg", "grpc").Logger()
+		ctx := appctx.WithLogger(ctx, &logger)
+		services, err := rgrpc.InitServices(ctx, cfg.Services)
 		if err != nil {
 			return nil, err
 		}
@@ -371,7 +380,7 @@ func newServers(grpc []*config.GRPC, http []*config.HTTP, lns map[string]net.Lis
 		s, err := rgrpc.NewServer(
 			rgrpc.EnableReflection(cfg.EnableReflection),
 			rgrpc.WithShutdownDeadline(cfg.ShutdownDeadline),
-			rgrpc.WithLogger(log.With().Str("pkg", "grpc").Logger()),
+			rgrpc.WithLogger(logger),
 			rgrpc.WithServices(services),
 			rgrpc.WithUnaryServerInterceptors(unaryChain),
 			rgrpc.WithStreamServerInterceptors(streamChain),
@@ -391,18 +400,19 @@ func newServers(grpc []*config.GRPC, http []*config.HTTP, lns map[string]net.Lis
 		servers = append(servers, server)
 	}
 	for _, cfg := range http {
-		log := log.With().Str("pkg", "http").Logger()
-		services, err := rhttp.InitServices(cfg.Services, &log)
+		logger := log.With().Str("pkg", "http").Logger()
+		ctx := appctx.WithLogger(ctx, &logger)
+		services, err := rhttp.InitServices(ctx, cfg.Services)
 		if err != nil {
 			return nil, err
 		}
-		middlewares, err := initHTTPMiddlewares(cfg.Middlewares, httpUnprotected(services), &log)
+		middlewares, err := initHTTPMiddlewares(cfg.Middlewares, httpUnprotected(services), &logger)
 		if err != nil {
 			return nil, err
 		}
 		s, err := rhttp.New(
 			rhttp.WithServices(services),
-			rhttp.WithLogger(log),
+			rhttp.WithLogger(logger),
 			rhttp.WithCertAndKeyFiles(cfg.CertFile, cfg.KeyFile),
 			rhttp.WithMiddlewares(middlewares),
 		)

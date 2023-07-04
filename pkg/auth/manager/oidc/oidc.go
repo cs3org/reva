@@ -104,7 +104,7 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 }
 
 // New returns an auth manager implementation that verifies the oidc token and obtains the user claims.
-func New(m map[string]interface{}) (auth.Manager, error) {
+func New(ctx context.Context, m map[string]interface{}) (auth.Manager, error) {
 	manager := &mgr{
 		providers: make(map[string]*oidc.Provider),
 	}

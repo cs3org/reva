@@ -78,7 +78,7 @@ type manager struct {
 }
 
 // New returns an implementation of the app.Registry interface.
-func New(m map[string]interface{}) (app.Registry, error) {
+func New(ctx context.Context, m map[string]interface{}) (app.Registry, error) {
 	c, err := parseConfig(m)
 	if err != nil {
 		return nil, err

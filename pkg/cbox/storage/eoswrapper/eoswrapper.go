@@ -82,13 +82,13 @@ func parseConfig(m map[string]interface{}) (*eosfs.Config, string, error) {
 
 // New returns an implementation of the storage.FS interface that forms a wrapper
 // around separate connections to EOS.
-func New(m map[string]interface{}) (storage.FS, error) {
+func New(ctx context.Context, m map[string]interface{}) (storage.FS, error) {
 	c, t, err := parseConfig(m)
 	if err != nil {
 		return nil, err
 	}
 
-	eos, err := eosfs.NewEOSFS(c)
+	eos, err := eosfs.NewEOSFS(ctx, c)
 	if err != nil {
 		return nil, err
 	}

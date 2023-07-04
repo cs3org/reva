@@ -161,7 +161,7 @@ type eosfs struct {
 }
 
 // NewEOSFS returns a storage.FS interface implementation that connects to an EOS instance.
-func NewEOSFS(c *Config) (storage.FS, error) {
+func NewEOSFS(ctx context.Context, c *Config) (storage.FS, error) {
 	c.init()
 
 	// bail out if keytab is not found.

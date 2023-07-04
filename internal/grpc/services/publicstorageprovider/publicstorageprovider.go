@@ -83,7 +83,7 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 }
 
 // New creates a new IsPublic Storage Provider service.
-func New(m map[string]interface{}) (rgrpc.Service, error) {
+func New(ctx context.Context, m map[string]interface{}) (rgrpc.Service, error) {
 	c, err := parseConfig(m)
 	if err != nil {
 		return nil, err

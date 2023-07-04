@@ -64,16 +64,16 @@ func (s *service) Register(ss *grpc.Server) {
 	datatx.RegisterTxAPIServer(ss, s)
 }
 
-func getDatatxManager(c *config) (txdriver.Manager, error) {
+func getDatatxManager(ctx context.Context, c *config) (txdriver.Manager, error) {
 	if f, ok := txregistry.NewFuncs[c.TxDriver]; ok {
-		return f(c.TxDrivers[c.TxDriver])
+		return f(ctx, c.TxDrivers[c.TxDriver])
 	}
 	return nil, errtypes.NotFound("datatx service: driver not found: " + c.TxDriver)
 }
 
-func getStorageManager(c *config) (txdriver.Repository, error) {
+func getStorageManager(ctx context.Context, c *config) (txdriver.Repository, error) {
 	if f, ok := repoRegistry.NewFuncs[c.StorageDriver]; ok {
-		return f(c.StorageDrivers[c.StorageDriver])
+		return f(ctx, c.StorageDrivers[c.StorageDriver])
 	}
 	return nil, errtypes.NotFound("datatx service: driver not found: " + c.StorageDriver)
 }
@@ -88,19 +88,19 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 }
 
 // New creates a new datatx svc.
-func New(m map[string]interface{}) (rgrpc.Service, error) {
+func New(ctx context.Context, m map[string]interface{}) (rgrpc.Service, error) {
 	c, err := parseConfig(m)
 	if err != nil {
 		return nil, err
 	}
 	c.init()
 
-	txManager, err := getDatatxManager(c)
+	txManager, err := getDatatxManager(ctx, c)
 	if err != nil {
 		return nil, err
 	}
 
-	storageDriver, err := getStorageManager(c)
+	storageDriver, err := getStorageManager(ctx, c)
 	if err != nil {
 		return nil, err
 	}

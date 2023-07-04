@@ -19,6 +19,7 @@
 package sysinfo
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/cs3org/reva/pkg/appctx"
@@ -26,7 +27,6 @@ import (
 	"github.com/cs3org/reva/pkg/sysinfo"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
-	"github.com/rs/zerolog"
 )
 
 func init() {
@@ -94,7 +94,7 @@ func applyDefaultConfig(conf *config) {
 }
 
 // New returns a new SysInfo service.
-func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) {
+func New(ctx context.Context, m map[string]interface{}) (global.Service, error) {
 	// Prepare the configuration
 	conf, err := parseConfig(m)
 	if err != nil {

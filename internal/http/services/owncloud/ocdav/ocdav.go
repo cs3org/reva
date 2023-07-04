@@ -44,7 +44,6 @@ import (
 	"github.com/cs3org/reva/pkg/storage/utils/templates"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
-	"github.com/rs/zerolog"
 )
 
 type ctxKey int
@@ -145,7 +144,7 @@ func getFavoritesManager(c *Config) (favorite.Manager, error) {
 }
 
 // New returns a new ocdav.
-func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) {
+func New(ctx context.Context, m map[string]interface{}) (global.Service, error) {
 	conf := &Config{}
 	if err := mapstructure.Decode(m, conf); err != nil {
 		return nil, err
@@ -158,6 +157,7 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 		return nil, err
 	}
 
+	log := appctx.GetLogger(ctx)
 	s := &svc{
 		c:             conf,
 		webDavHandler: new(WebDavHandler),

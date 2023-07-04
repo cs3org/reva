@@ -45,7 +45,7 @@ func init() {
 }
 
 // New returns a new authorizer object.
-func New(m map[string]interface{}) (share.Repository, error) {
+func New(ctx context.Context, m map[string]interface{}) (share.Repository, error) {
 	c, err := parseConfig(m)
 	if err != nil {
 		err = errors.Wrap(err, "error creating a new manager")

@@ -43,7 +43,7 @@ func init() {
 }
 
 // New returns a new memory manager.
-func New(c map[string]interface{}) (publicshare.Manager, error) {
+func New(_ context.Context, c map[string]interface{}) (publicshare.Manager, error) {
 	return &manager{
 		shares: sync.Map{},
 	}, nil

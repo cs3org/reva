@@ -106,7 +106,7 @@ type wopiProvider struct {
 
 // New returns an implementation of the app.Provider interface that
 // connects to an application in the backend.
-func New(m map[string]interface{}) (app.Provider, error) {
+func New(ctx context.Context, m map[string]interface{}) (app.Provider, error) {
 	c, err := parseConfig(m)
 	if err != nil {
 		return nil, err

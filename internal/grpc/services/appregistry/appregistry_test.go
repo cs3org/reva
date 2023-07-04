@@ -122,7 +122,7 @@ func Test_ListAppProviders(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			rr, err := static.New(map[string]interface{}{"providers": tt.providers, "mime_types": tt.mimeTypes})
+			rr, err := static.New(context.Background(), map[string]interface{}{"providers": tt.providers, "mime_types": tt.mimeTypes})
 			if err != nil {
 				t.Errorf("could not create registry error = %v", err)
 				return
@@ -296,7 +296,7 @@ func Test_GetAppProviders(t *testing.T) {
 		},
 	}
 
-	rr, err := static.New(map[string]interface{}{"providers": providers, "mime_types": mimeTypes})
+	rr, err := static.New(context.Background(), map[string]interface{}{"providers": providers, "mime_types": mimeTypes})
 	if err != nil {
 		t.Errorf("could not create registry error = %v", err)
 		return
@@ -355,7 +355,7 @@ func TestNew(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := New(tt.m)
+			got, err := New(context.Background(), tt.m)
 			if err != nil {
 				assert.Equal(t, tt.wantErr, err.Error())
 				assert.Nil(t, got)

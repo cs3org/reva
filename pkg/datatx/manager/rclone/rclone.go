@@ -102,7 +102,7 @@ type endpoint struct {
 }
 
 // New returns a new rclone driver.
-func New(m map[string]interface{}) (txdriver.Manager, error) {
+func New(ctx context.Context, m map[string]interface{}) (txdriver.Manager, error) {
 	c, err := parseConfig(m)
 	if err != nil {
 		return nil, err

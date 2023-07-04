@@ -33,8 +33,8 @@ import (
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/app"
 	"github.com/cs3org/reva/pkg/app/provider/registry"
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/logger"
 	"github.com/cs3org/reva/pkg/mime"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
@@ -83,7 +83,7 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 }
 
 // New creates a new AppProviderService.
-func New(m map[string]interface{}) (rgrpc.Service, error) {
+func New(ctx context.Context, m map[string]interface{}) (rgrpc.Service, error) {
 	c, err := parseConfig(m)
 	if err != nil {
 		return nil, err
@@ -95,7 +95,7 @@ func New(m map[string]interface{}) (rgrpc.Service, error) {
 		return nil, err
 	}
 
-	provider, err := getProvider(c)
+	provider, err := getProvider(ctx, c)
 	if err != nil {
 		return nil, err
 	}
@@ -105,7 +105,7 @@ func New(m map[string]interface{}) (rgrpc.Service, error) {
 		provider: provider,
 	}
 
-	go service.registerProvider()
+	go service.registerProvider(ctx)
 	return service, nil
 }
 
@@ -130,13 +130,12 @@ func registerMimeTypes(mappingFile string) error {
 	return nil
 }
 
-func (s *service) registerProvider() {
+func (s *service) registerProvider(ctx context.Context) {
 	// Give the appregistry service time to come up
 	// TODO(lopresti) we should register the appproviders after all other microservices
 	time.Sleep(3 * time.Second)
 
-	ctx := context.Background()
-	log := logger.New().With().Int("pid", os.Getpid()).Logger()
+	log := appctx.GetLogger(ctx)
 	pInfo, err := s.provider.GetAppProviderInfo(ctx)
 	if err != nil {
 		log.Error().Err(err).Msgf("error registering app provider: could not get provider info")
@@ -196,7 +195,7 @@ func (s *service) Register(ss *grpc.Server) {
 	providerpb.RegisterProviderAPIServer(ss, s)
 }
 
-func getProvider(c *config) (app.Provider, error) {
+func getProvider(ctx context.Context, c *config) (app.Provider, error) {
 	if f, ok := registry.NewFuncs[c.Driver]; ok {
 		driverConf := c.Drivers[c.Driver]
 		if c.MimeTypes != nil {
@@ -206,7 +205,7 @@ func getProvider(c *config) (app.Provider, error) {
 			}
 			driverConf["mime_types"] = c.MimeTypes
 		}
-		return f(driverConf)
+		return f(ctx, driverConf)
 	}
 	return nil, errtypes.NotFound("driver not found: " + c.Driver)
 }

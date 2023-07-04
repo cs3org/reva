@@ -93,9 +93,9 @@ func (s *service) Register(ss *grpc.Server) {
 	ocm.RegisterOcmAPIServer(ss, s)
 }
 
-func getShareRepository(c *config) (share.Repository, error) {
+func getShareRepository(ctx context.Context, c *config) (share.Repository, error) {
 	if f, ok := registry.NewFuncs[c.Driver]; ok {
-		return f(c.Drivers[c.Driver])
+		return f(ctx, c.Drivers[c.Driver])
 	}
 	return nil, errtypes.NotFound("driver not found: " + c.Driver)
 }
@@ -110,14 +110,14 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 }
 
 // New creates a new ocm share provider svc.
-func New(m map[string]interface{}) (rgrpc.Service, error) {
+func New(ctx context.Context, m map[string]interface{}) (rgrpc.Service, error) {
 	c, err := parseConfig(m)
 	if err != nil {
 		return nil, err
 	}
 	c.init()
 
-	repo, err := getShareRepository(c)
+	repo, err := getShareRepository(ctx, c)
 	if err != nil {
 		return nil, err
 	}

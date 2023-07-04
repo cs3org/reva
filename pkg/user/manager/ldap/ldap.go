@@ -101,7 +101,7 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 }
 
 // New returns a user manager implementation that connects to a LDAP server to provide user metadata.
-func New(m map[string]interface{}) (user.Manager, error) {
+func New(ctx context.Context, m map[string]interface{}) (user.Manager, error) {
 	mgr := &manager{}
 	err := mgr.Configure(m)
 	if err != nil {

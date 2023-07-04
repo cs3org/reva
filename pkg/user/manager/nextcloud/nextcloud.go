@@ -79,7 +79,7 @@ type Action struct {
 }
 
 // New returns a user manager implementation that reads a json file to provide user metadata.
-func New(m map[string]interface{}) (user.Manager, error) {
+func New(ctx context.Context, m map[string]interface{}) (user.Manager, error) {
 	c, err := parseConfig(m)
 	if err != nil {
 		return nil, err

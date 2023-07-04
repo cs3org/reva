@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/cs3org/reva/cmd/revad/pkg/config"
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	rtrace "github.com/cs3org/reva/pkg/trace"
 	"github.com/pkg/errors"
@@ -62,7 +63,7 @@ func WithLogger(log zerolog.Logger) Config {
 	}
 }
 
-func InitServices(services map[string]config.ServicesConfig, log *zerolog.Logger) (map[string]global.Service, error) {
+func InitServices(ctx context.Context, services map[string]config.ServicesConfig) (map[string]global.Service, error) {
 	s := make(map[string]global.Service)
 	for name, cfg := range services {
 		new, ok := global.Services[name]
@@ -72,8 +73,9 @@ func InitServices(services map[string]config.ServicesConfig, log *zerolog.Logger
 		if cfg.DriversNumber() > 1 {
 			return nil, fmt.Errorf("service %s cannot have more than one driver in the same server", name)
 		}
-		log := log.With().Str("service", name).Logger()
-		svc, err := new(cfg[0].Config, &log)
+		log := appctx.GetLogger(ctx).With().Str("service", name).Logger()
+		ctx := appctx.WithLogger(ctx, &log)
+		svc, err := new(ctx, cfg[0].Config)
 		if err != nil {
 			return nil, errors.Wrapf(err, "http service %s could not be started", name)
 		}

@@ -64,7 +64,7 @@ func init() {
 
 // New returns an implementation to of the storage.FS interface that talk to
 // a ceph filesystem.
-func New(m map[string]interface{}) (fs storage.FS, err error) {
+func New(ctx context.Context, m map[string]interface{}) (fs storage.FS, err error) {
 	c := &Options{}
 	if err = mapstructure.Decode(m, c); err != nil {
 		return nil, errors.Wrap(err, "error decoding conf")

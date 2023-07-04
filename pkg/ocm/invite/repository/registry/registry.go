@@ -18,11 +18,15 @@
 
 package registry
 
-import "github.com/cs3org/reva/pkg/ocm/invite"
+import (
+	"context"
+
+	"github.com/cs3org/reva/pkg/ocm/invite"
+)
 
 // NewFunc is the function that invite repositories
 // should register at init time.
-type NewFunc func(map[string]interface{}) (invite.Repository, error)
+type NewFunc func(context.Context, map[string]interface{}) (invite.Repository, error)
 
 // NewFuncs is a map containing all the registered invite repositories.
 var NewFuncs = map[string]NewFunc{}
