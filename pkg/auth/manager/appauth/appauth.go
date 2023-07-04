@@ -31,6 +31,7 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/utils/cfg"
+	"github.com/pkg/errors"
 )
 
 func init() {
@@ -56,7 +57,8 @@ func New(ctx context.Context, m map[string]interface{}) (auth.Manager, error) {
 }
 
 func (m *manager) Configure(ml map[string]interface{}) error {
-	return cfg.Decode(ml, m)
+	err := cfg.Decode(ml, m)
+	return errors.Wrap(err, "appauth: error decoding config")
 }
 
 func (m *manager) Authenticate(ctx context.Context, username, password string) (*user.User, map[string]*authpb.Scope, error) {

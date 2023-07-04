@@ -32,6 +32,7 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/utils/cfg"
+	"github.com/pkg/errors"
 )
 
 // 'machine' is an authentication method used to impersonate users.
@@ -56,7 +57,8 @@ func (m *manager) ApplyDefaults() {
 
 // Configure parses the map conf.
 func (m *manager) Configure(conf map[string]interface{}) error {
-	return cfg.Decode(conf, m)
+	err := cfg.Decode(conf, m)
+	return errors.Wrap(err, "machine: error decoding config")
 }
 
 // New creates a new manager for the 'machine' authentication.

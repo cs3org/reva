@@ -114,7 +114,7 @@ func (am *mgr) Configure(m map[string]interface{}) error {
 	var c config
 	c.Schema = ldapDefaults
 	if err := cfg.Decode(m, &c); err != nil {
-		return err
+		return errors.Wrap(err, "ldap: error decoding config")
 	}
 	am.c = &c
 	return nil

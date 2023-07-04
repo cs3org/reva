@@ -33,10 +33,9 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/user"
-	"github.com/mitchellh/mapstructure"
+	"github.com/cs3org/reva/pkg/utils/cfg"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
-	
 )
 
 func init() {
@@ -49,7 +48,7 @@ type config struct {
 	blockedUsers []string
 }
 
-func (c *config) init() {
+func (c *config) ApplyDefaults() {
 	if c.AuthManager == "" {
 		c.AuthManager = "json"
 	}
@@ -61,16 +60,6 @@ type service struct {
 	conf         *config
 	plugin       *plugin.RevaPlugin
 	blockedUsers user.BlockedUsers
-}
-
-func parseConfig(m map[string]interface{}) (*config, error) {
-	c := &config{}
-	if err := mapstructure.Decode(m, c); err != nil {
-		err = errors.Wrap(err, "error decoding conf")
-		return nil, err
-	}
-	c.init()
-	return c, nil
 }
 
 func getAuthManager(ctx context.Context, manager string, m map[string]map[string]interface{}) (auth.Manager, *plugin.RevaPlugin, error) {
@@ -102,8 +91,8 @@ func getAuthManager(ctx context.Context, manager string, m map[string]map[string
 
 // New returns a new AuthProviderServiceServer.
 func New(ctx context.Context, m map[string]interface{}) (rgrpc.Service, error) {
-	c, err := parseConfig(m)
-	if err != nil {
+	var c config
+	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
 
@@ -113,7 +102,7 @@ func New(ctx context.Context, m map[string]interface{}) (rgrpc.Service, error) {
 	}
 
 	svc := &service{
-		conf:         c,
+		conf:         &c,
 		authmgr:      authManager,
 		plugin:       plug,
 		blockedUsers: user.NewBlockedUsersSet(c.blockedUsers),

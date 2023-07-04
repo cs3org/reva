@@ -67,7 +67,7 @@ func New(ctx context.Context, m map[string]interface{}) (auth.Manager, error) {
 func (m *manager) Configure(ml map[string]interface{}) error {
 	var c config
 	if err := cfg.Decode(ml, &c); err != nil {
-		return err
+		return errors.Wrap(err, "publicshares: error decoding config")
 	}
 	m.c = &c
 	return nil

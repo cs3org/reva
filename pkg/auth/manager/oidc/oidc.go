@@ -109,7 +109,7 @@ func New(ctx context.Context, m map[string]interface{}) (auth.Manager, error) {
 func (am *mgr) Configure(m map[string]interface{}) error {
 	var c config
 	if err := cfg.Decode(m, &c); err != nil {
-		return err
+		return errors.Wrap(err, "oidc: error decoding config")
 	}
 	am.c = &c
 

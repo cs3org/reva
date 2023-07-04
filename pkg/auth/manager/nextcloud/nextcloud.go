@@ -67,7 +67,7 @@ type Action struct {
 func New(ctx context.Context, m map[string]interface{}) (auth.Manager, error) {
 	var c AuthManagerConfig
 	if err := cfg.Decode(m, &c); err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "nextcloud: error decoding config")
 	}
 
 	return NewAuthManager(&c)

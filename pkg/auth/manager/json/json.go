@@ -31,6 +31,7 @@ import (
 	"github.com/cs3org/reva/pkg/auth/scope"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/utils/cfg"
+	"github.com/pkg/errors"
 )
 
 func init() {
@@ -79,7 +80,7 @@ func New(ctx context.Context, m map[string]interface{}) (auth.Manager, error) {
 func (m *manager) Configure(ml map[string]interface{}) error {
 	var c config
 	if err := cfg.Decode(ml, &c); err != nil {
-		return err
+		return errors.Wrap(err, "json: error decoding config")
 	}
 
 	m.credentials = map[string]*Credentials{}
