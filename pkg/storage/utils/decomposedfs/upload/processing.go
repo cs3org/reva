@@ -333,13 +333,6 @@ func initNewNode(upload *Upload, n *node.Node, fsize uint64) (*lockedfile.File, 
 		return nil, err
 	}
 
-	// we also need to touch the actual node file here it stores the mtime of the resource
-	h, err := os.OpenFile(n.InternalPath(), os.O_CREATE, 0600)
-	if err != nil {
-		return f, err
-	}
-	h.Close()
-
 	if _, err := node.CheckQuota(upload.Ctx, n.SpaceRoot, false, 0, fsize); err != nil {
 		return f, err
 	}
@@ -401,11 +394,6 @@ func updateExistingNode(upload *Upload, n *node.Node, spaceID string, fsize uint
 		return nil, err
 	}
 
-	// create version node
-	if _, err := os.Create(upload.versionsPath); err != nil {
-		return f, err
-	}
-
 	// copy blob metadata to version node
 	if err := upload.lu.CopyMetadataWithSourceLock(upload.Ctx, targetPath, upload.versionsPath, func(attributeName string) bool {
 		return strings.HasPrefix(attributeName, prefixes.ChecksumPrefix) ||
@@ -417,13 +405,13 @@ func updateExistingNode(upload *Upload, n *node.Node, spaceID string, fsize uint
 	}
 
 	// keep mtime from previous version
-	if err := os.Chtimes(upload.versionsPath, tmtime, tmtime); err != nil {
+	if err := os.Chtimes(upload.lu.MetadataBackend().MetadataPath(upload.versionsPath), tmtime, tmtime); err != nil {
 		return f, errtypes.InternalError(fmt.Sprintf("failed to change mtime of version node: %s", err))
 	}
 
 	// update mtime of current version
 	mtime := time.Now()
-	if err := os.Chtimes(n.InternalPath(), mtime, mtime); err != nil {
+	if err := os.Chtimes(upload.lu.MetadataBackend().MetadataPath(n.InternalPath()), mtime, mtime); err != nil {
 		return nil, err
 	}
 

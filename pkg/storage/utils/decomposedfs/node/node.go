@@ -542,9 +542,8 @@ func (n *Node) SetMtimeString(mtime string) error {
 
 // SetMtime sets the mtime and atime of a node
 func (n *Node) SetMtime(mtime time.Time) error {
-	nodePath := n.InternalPath()
 	// updating mtime also updates atime
-	return os.Chtimes(nodePath, mtime, mtime)
+	return os.Chtimes(n.lu.MetadataBackend().MetadataPath(n.InternalPath()), mtime, mtime)
 }
 
 // SetEtag sets the temporary etag of a node if it differs from the current etag
@@ -888,7 +887,7 @@ func (n *Node) GetTMTime(ctx context.Context) (time.Time, error) {
 
 // GetMTime reads the mtime from disk
 func (n *Node) GetMTime() (time.Time, error) {
-	fi, err := os.Lstat(n.InternalPath())
+	fi, err := os.Stat(n.lu.MetadataBackend().MetadataPath(n.InternalPath()))
 	if err != nil {
 		return time.Time{}, err
 	}

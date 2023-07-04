@@ -925,6 +925,7 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 			Id: n.Owner(),
 		}
 	}
+	metadataPath := fs.lu.MetadataBackend().MetadataPath(n.InternalPath())
 
 	// we set the space mtime to the root item mtime
 	// override the stat mtime with a tmtime if it is present
@@ -936,7 +937,7 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 			Seconds: uint64(un / 1000000000),
 			Nanos:   uint32(un % 1000000000),
 		}
-	} else if fi, err := os.Stat(n.InternalPath()); err == nil {
+	} else if fi, err := os.Stat(metadataPath); err == nil {
 		// fall back to stat mtime
 		tmtime = fi.ModTime()
 		un := fi.ModTime().UnixNano()
@@ -1002,7 +1003,7 @@ func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, n *node.Node, 
 	}
 
 	// FIXME this reads remaining disk size from the local disk, not the blobstore
-	remaining, err := node.GetAvailableSize(n.InternalPath())
+	remaining, err := node.GetAvailableSize(metadataPath)
 	if err != nil {
 		return nil, err
 	}
