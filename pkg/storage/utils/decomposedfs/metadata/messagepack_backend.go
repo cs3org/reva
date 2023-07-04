@@ -257,7 +257,12 @@ func (b MessagePackBackend) loadAttributes(ctx context.Context, path string, sou
 		}
 	}
 
-	go func() { _ = b.metaCache.PushToCache(b.cacheKey(path), attribs) }()
+	// Prepare a copy to push to cache. Pushing the original map isn't thread-safe
+	attribsCopy := map[string][]byte{}
+	for k, v := range attribs {
+		attribsCopy[k] = v
+	}
+	go func() { _ = b.metaCache.PushToCache(b.cacheKey(path), attribsCopy) }()
 
 	return attribs, nil
 }
