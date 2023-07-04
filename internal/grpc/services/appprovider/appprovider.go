@@ -33,8 +33,8 @@ import (
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/app"
 	"github.com/cs3org/reva/pkg/app/provider/registry"
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/logger"
 	"github.com/cs3org/reva/pkg/mime"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
@@ -105,7 +105,7 @@ func New(ctx context.Context, m map[string]interface{}) (rgrpc.Service, error) {
 		provider: provider,
 	}
 
-	go service.registerProvider()
+	go service.registerProvider(ctx)
 	return service, nil
 }
 
@@ -130,13 +130,12 @@ func registerMimeTypes(mappingFile string) error {
 	return nil
 }
 
-func (s *service) registerProvider() {
+func (s *service) registerProvider(ctx context.Context) {
 	// Give the appregistry service time to come up
 	// TODO(lopresti) we should register the appproviders after all other microservices
 	time.Sleep(3 * time.Second)
 
-	ctx := context.Background()
-	log := logger.New().With().Int("pid", os.Getpid()).Logger()
+	log := appctx.GetLogger(ctx)
 	pInfo, err := s.provider.GetAppProviderInfo(ctx)
 	if err != nil {
 		log.Error().Err(err).Msgf("error registering app provider: could not get provider info")
