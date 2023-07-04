@@ -31,9 +31,8 @@ import (
 
 var _ = Describe("Backend", func() {
 	var (
-		tmpdir   string
-		file     string
-		metafile string
+		tmpdir string
+		file   string
 
 		backend metadata.Backend
 	)
@@ -46,9 +45,6 @@ var _ = Describe("Backend", func() {
 
 	JustBeforeEach(func() {
 		file = path.Join(tmpdir, "file")
-		metafile = backend.MetadataPath(file)
-		_, err := os.Create(metafile)
-		Expect(err).ToNot(HaveOccurred())
 	})
 
 	AfterEach(func() {
@@ -147,10 +143,9 @@ var _ = Describe("Backend", func() {
 				Expect(v["bar"]).To(Equal([]byte("baz")))
 			})
 
-			It("returns an empty map", func() {
-				v, err := backend.All(context.Background(), file)
-				Expect(err).ToNot(HaveOccurred())
-				Expect(v).To(Equal(map[string][]byte{}))
+			It("fails when the metafile does not exist", func() {
+				_, err := backend.All(context.Background(), file)
+				Expect(err).To(HaveOccurred())
 			})
 		})
 
@@ -165,10 +160,9 @@ var _ = Describe("Backend", func() {
 				Expect(v).To(ConsistOf("foo", "bar"))
 			})
 
-			It("returns an empty list", func() {
-				v, err := backend.List(context.Background(), file)
-				Expect(err).ToNot(HaveOccurred())
-				Expect(v).To(Equal([]string{}))
+			It("fails when the metafile does not exist", func() {
+				_, err := backend.List(context.Background(), file)
+				Expect(err).To(HaveOccurred())
 			})
 		})
 
