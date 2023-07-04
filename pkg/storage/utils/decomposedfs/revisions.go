@@ -237,7 +237,7 @@ func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Refer
 				attributeName == prefixes.BlobsizeAttr
 		})
 		if err != nil {
-			return errtypes.InternalError("failed to copy blob xattrs to version node")
+			return errtypes.InternalError("failed to copy blob xattrs to version node: " + err.Error())
 		}
 
 		// remember mtime from node as new revision mtime
@@ -256,7 +256,7 @@ func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Refer
 				attributeName == prefixes.BlobsizeAttr
 		})
 		if err != nil {
-			return errtypes.InternalError("failed to copy blob xattrs to old revision to node")
+			return errtypes.InternalError("failed to copy blob xattrs to old revision to node: " + err.Error())
 		}
 
 		revisionSize, err := fs.lu.MetadataBackend().GetInt64(ctx, restoredRevisionPath, prefixes.BlobsizeAttr)
