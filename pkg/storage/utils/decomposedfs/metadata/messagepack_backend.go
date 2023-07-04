@@ -145,7 +145,7 @@ func (b MessagePackBackend) saveAttributes(ctx context.Context, path string, set
 		span.End()
 	}()
 
-	lockPath := b.lockFilePath(path)
+	lockPath := b.LockfilePath(path)
 	metaPath := b.MetadataPath(path)
 	if acquireLock {
 		_, subspan := tracer.Start(ctx, "lockedfile.OpenFile")
@@ -308,7 +308,8 @@ func (b MessagePackBackend) Rename(oldPath, newPath string) error {
 // MetadataPath returns the path of the file holding the metadata for the given path
 func (MessagePackBackend) MetadataPath(path string) string { return path + ".mpk" }
 
-func (MessagePackBackend) lockFilePath(path string) string { return path + ".mpk.lock" }
+// LockfilePath returns the path of the lock file
+func (MessagePackBackend) LockfilePath(path string) string { return path + ".mpk.lock" }
 
 func (b MessagePackBackend) cacheKey(path string) string {
 	// rootPath is guaranteed to have no trailing slash
