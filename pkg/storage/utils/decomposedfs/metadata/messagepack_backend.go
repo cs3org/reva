@@ -275,7 +275,9 @@ func (b MessagePackBackend) loadAttributes(ctx context.Context, path string, sou
 }
 
 // IsMetaFile returns whether the given path represents a meta file
-func (MessagePackBackend) IsMetaFile(path string) bool { return strings.HasSuffix(path, ".mpk") }
+func (MessagePackBackend) IsMetaFile(path string) bool {
+	return strings.HasSuffix(path, ".mpk") || strings.HasSuffix(path, ".mpk.lock")
+}
 
 // Purge purges the data of a given path
 func (b MessagePackBackend) Purge(path string) error {
