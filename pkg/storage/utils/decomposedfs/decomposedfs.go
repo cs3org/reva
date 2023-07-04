@@ -32,7 +32,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 
 	rpcv1beta1 "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
@@ -48,9 +47,9 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/lookup"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/migrator"
-	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/mtimesyncedcache"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/options"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/spaceidindex"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/tree"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/upload"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/filelocks"
@@ -104,8 +103,10 @@ type Decomposedfs struct {
 	stream       events.Stream
 	cache        cache.StatCache
 
-	UserCache    *ttlcache.Cache
-	spaceIDCache mtimesyncedcache.Cache[string, map[string]string]
+	UserCache       *ttlcache.Cache
+	userSpaceIndex  *spaceidindex.Index
+	groupSpaceIndex *spaceidindex.Index
+	spaceTypeIndex  *spaceidindex.Index
 }
 
 // NewDefault returns an instance with default components
@@ -169,16 +170,34 @@ func New(o *options.Options, lu *lookup.Lookup, p Permissions, tp Tree, es event
 	if o.LockCycleDurationFactor != 0 {
 		filelocks.SetLockCycleDurationFactor(o.LockCycleDurationFactor)
 	}
+	userSpaceIndex := spaceidindex.New(filepath.Join(o.Root, "indexes"), "by-user-id")
+	err = userSpaceIndex.Init()
+	if err != nil {
+		return nil, err
+	}
+	groupSpaceIndex := spaceidindex.New(filepath.Join(o.Root, "indexes"), "by-group-id")
+	err = groupSpaceIndex.Init()
+	if err != nil {
+		return nil, err
+	}
+	spaceTypeIndex := spaceidindex.New(filepath.Join(o.Root, "indexes"), "by-type")
+	err = spaceTypeIndex.Init()
+	if err != nil {
+		return nil, err
+	}
 
 	fs := &Decomposedfs{
-		tp:           tp,
-		lu:           lu,
-		o:            o,
-		p:            p,
-		chunkHandler: chunking.NewChunkHandler(filepath.Join(o.Root, "uploads")),
-		stream:       es,
-		cache:        cache.GetStatCache(o.StatCache.Store, o.StatCache.Nodes, o.StatCache.Database, "stat", time.Duration(o.StatCache.TTL)*time.Second, o.StatCache.Size),
-		UserCache:    ttlcache.NewCache(),
+		tp:              tp,
+		lu:              lu,
+		o:               o,
+		p:               p,
+		chunkHandler:    chunking.NewChunkHandler(filepath.Join(o.Root, "uploads")),
+		stream:          es,
+		cache:           cache.GetStatCache(o.StatCache.Store, o.StatCache.Nodes, o.StatCache.Database, "stat", time.Duration(o.StatCache.TTL)*time.Second, o.StatCache.Size),
+		UserCache:       ttlcache.NewCache(),
+		userSpaceIndex:  userSpaceIndex,
+		groupSpaceIndex: groupSpaceIndex,
+		spaceTypeIndex:  spaceTypeIndex,
 	}
 
 	if o.AsyncFileUploads {
@@ -513,17 +532,6 @@ func (fs *Decomposedfs) CreateHome(ctx context.Context) (err error) {
 		return errtypes.NewErrtypeFromStatus(res.Status)
 	}
 	return nil
-}
-
-// The os not exists error is buried inside the xattr error,
-// so we cannot just use os.IsNotExists().
-func isAlreadyExists(err error) bool {
-	if xerr, ok := err.(*os.LinkError); ok {
-		if serr, ok2 := xerr.Err.(syscall.Errno); ok2 {
-			return serr == syscall.EEXIST
-		}
-	}
-	return false
 }
 
 // GetHome is called to look up the home path for a user

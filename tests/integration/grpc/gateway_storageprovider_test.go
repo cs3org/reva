@@ -306,12 +306,15 @@ var _ = Describe("gateway", func() {
 				listRes, err := serviceClient.ListContainer(ctx, &storagep.ListContainerRequest{Ref: ref})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(listRes.Status.Code).To(Equal(rpcv1beta1.Code_CODE_OK))
+
 				ssid, err := storagespace.ParseID(space.Id.OpaqueId)
 				Expect(err).ToNot(HaveOccurred())
-				_, err = os.Stat(path.Join(revads["storage"].StorageRoot, "/indexes/by-type/project", ssid.SpaceId))
-				Expect(err).To(HaveOccurred())
-				_, err = os.Stat(path.Join(revads["storage2"].StorageRoot, "/indexes/by-type/project", ssid.SpaceId))
+				mpk1, err := os.ReadFile(path.Join(revads["storage"].StorageRoot, "/indexes/by-type/project.mpk"))
 				Expect(err).ToNot(HaveOccurred())
+				Expect(string(mpk1)).ToNot(ContainSubstring(ssid.OpaqueId))
+				mpk2, err := os.ReadFile(path.Join(revads["storage2"].StorageRoot, "/indexes/by-type/project.mpk"))
+				Expect(err).ToNot(HaveOccurred())
+				Expect(string(mpk2)).To(ContainSubstring(ssid.OpaqueId))
 			})
 
 			PIt("deletes spaces", func() {})

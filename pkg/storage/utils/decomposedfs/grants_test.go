@@ -20,7 +20,6 @@ package decomposedfs_test
 
 import (
 	"fmt"
-	"io/fs"
 	"os"
 	"path/filepath"
 
@@ -33,20 +32,11 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
-type testFS struct {
-	root string
-}
-
-func (t testFS) Open(name string) (fs.File, error) {
-	return os.Open(filepath.Join(t.root, name))
-}
-
 var _ = Describe("Grants", func() {
 	var (
 		env   *helpers.TestEnv
 		ref   *provider.Reference
 		grant *provider.Grant
-		tfs   = &testFS{}
 	)
 
 	BeforeEach(func() {
@@ -147,11 +137,9 @@ var _ = Describe("Grants", func() {
 				err := env.Fs.AddGrant(env.Ctx, ref, grant)
 				Expect(err).ToNot(HaveOccurred())
 
-				spaceTypesPath := filepath.Join(env.Root, "indexes", "by-type")
-				tfs.root = spaceTypesPath
-				entries, err := fs.ReadDir(tfs, "share")
+				indexPath := filepath.Join(env.Root, "indexes", "by-type", "share.mpk")
+				_, err = os.Stat(indexPath)
 				Expect(err).ToNot(HaveOccurred())
-				Expect(len(entries)).To(BeNumerically(">=", 1))
 			})
 		})
 
