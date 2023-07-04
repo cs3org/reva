@@ -70,7 +70,7 @@ func (fs *Decomposedfs) ListRevisions(ctx context.Context, ref *provider.Referen
 	np := n.InternalPath()
 	if items, err := filepath.Glob(np + node.RevisionIDDelimiter + "*"); err == nil {
 		for i := range items {
-			if fs.lu.MetadataBackend().IsMetaFile(items[i]) {
+			if fs.lu.MetadataBackend().IsMetaFile(items[i]) || strings.HasSuffix(items[i], ".lock") {
 				continue
 			}
 
