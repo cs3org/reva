@@ -101,7 +101,7 @@ func InitServices(ctx context.Context, services map[string]config.ServicesConfig
 		ctx := appctx.WithLogger(ctx, &log)
 		svc, err := new(ctx, cfg[0].Config)
 		if err != nil {
-			return nil, errors.Wrapf(err, "rgrpc: grpc service %s could not be started,", name)
+			return nil, errors.Wrapf(err, "rgrpc: grpc service %s could not be started", name)
 		}
 		s[name] = svc
 	}
