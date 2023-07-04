@@ -19,7 +19,12 @@
 package cfg
 
 import (
+	"errors"
+
+	"github.com/go-playground/locales/en"
+	ut "github.com/go-playground/universal-translator"
 	"github.com/go-playground/validator/v10"
+	en_translations "github.com/go-playground/validator/v10/translations/en"
 	"github.com/mitchellh/mapstructure"
 )
 
@@ -31,6 +36,10 @@ type Setter interface {
 }
 
 var validate = validator.New()
+var english = en.New()
+var uni = ut.New(english, english)
+var trans, _ = uni.GetTranslator("en")
+var _ = en_translations.RegisterDefaultTranslations(validate, trans)
 
 // Decode decodes the given raw input interface to the target pointer c.
 // It applies the default configuration if the target struct
@@ -53,5 +62,17 @@ func Decode(input map[string]any, c any) error {
 		return err
 	}
 
-	return validate.Struct(c)
+	return translateError(validate.Struct(c), trans)
+}
+
+func translateError(err error, trans ut.Translator) error {
+	if err == nil {
+		return nil
+	}
+	errs := err.(validator.ValidationErrors)
+	translated := make([]error, 0, len(errs))
+	for _, err := range errs {
+		translated = append(translated, errors.New(err.Translate(trans)))
+	}
+	return errors.Join(translated...)
 }
