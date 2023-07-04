@@ -47,6 +47,7 @@ import (
 
 // Reva represents a full instance of reva.
 type Reva struct {
+	ctx    context.Context
 	config *config.Config
 
 	servers    []*Server
@@ -60,7 +61,6 @@ type Reva struct {
 
 // Server represents a reva server (grpc or http).
 type Server struct {
-	ctx      context.Context
 	server   grace.Server
 	listener net.Listener
 
@@ -77,8 +77,7 @@ func New(config *config.Config, opt ...Option) (*Reva, error) {
 	opts := newOptions(opt...)
 	log := opts.Logger
 
-	ctx := context.Background()
-	ctx = appctx.WithLogger(ctx, log)
+	ctx := appctx.WithLogger(opts.Ctx, log)
 
 	if err := initCPUCount(config.Core, log); err != nil {
 		return nil, err
@@ -123,6 +122,7 @@ func New(config *config.Config, opt ...Option) (*Reva, error) {
 	}
 
 	return &Reva{
+		ctx:        ctx,
 		config:     config,
 		servers:    servers,
 		serverless: serverless,

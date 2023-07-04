@@ -19,6 +19,8 @@
 package runtime
 
 import (
+	"context"
+
 	"github.com/cs3org/reva/pkg/registry"
 	"github.com/rs/zerolog"
 )
@@ -31,6 +33,7 @@ type Options struct {
 	Logger   *zerolog.Logger
 	Registry registry.Registry
 	PidFile  string
+	Ctx      context.Context
 }
 
 // newOptions initializes the available default options.
@@ -38,6 +41,7 @@ func newOptions(opts ...Option) Options {
 	l := zerolog.Nop()
 	opt := Options{
 		Logger: &l,
+		Ctx:    context.TODO(),
 	}
 
 	for _, o := range opts {
@@ -65,5 +69,12 @@ func WithPidFile(pidfile string) Option {
 func WithRegistry(r registry.Registry) Option {
 	return func(o *Options) {
 		o.Registry = r
+	}
+}
+
+// WithContext sets the context to use.
+func WithContext(ctx context.Context) Option {
+	return func(o *Options) {
+		o.Ctx = ctx
 	}
 }
