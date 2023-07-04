@@ -115,6 +115,8 @@ func handleSignalFlag() {
 			signal = syscall.SIGQUIT
 		case "stop":
 			signal = syscall.SIGTERM
+		case "dump":
+			signal = syscall.SIGUSR1
 		default:
 			fmt.Fprintf(os.Stderr, "unknown signal %q\n", *signalFlag)
 			os.Exit(1)
