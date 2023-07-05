@@ -169,7 +169,7 @@ func (XattrsBackend) Rename(oldPath, newPath string) error { return nil }
 func (XattrsBackend) MetadataPath(path string) string { return path }
 
 // LockfilePath returns the path of the lock file
-func (XattrsBackend) LockfilePath(path string) string { return path + ".meta.lock" }
+func (XattrsBackend) LockfilePath(path string) string { return path + ".mlock" }
 
 func cleanupLockfile(f *lockedfile.File) {
 	_ = f.Close()
