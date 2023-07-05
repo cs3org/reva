@@ -75,12 +75,12 @@ func New(ctx context.Context, m map[string]interface{}) (fs storage.FS, err erro
 		return nil, errors.New("cephfs: can't create caches")
 	}
 
-	adminConn := newAdminConn(c)
+	adminConn := newAdminConn(&o)
 	if adminConn == nil {
 		return nil, errors.Wrap(err, "cephfs: Couldn't create admin connections")
 	}
 
-	for _, dir := range []string{c.ShadowFolder, c.UploadFolder} {
+	for _, dir := range []string{o.ShadowFolder, o.UploadFolder} {
 		err = adminConn.adminMount.MakeDir(dir, dirPermFull)
 		if err != nil && err.Error() != errFileExists {
 			return nil, errors.New("cephfs: can't initialise system dir " + dir + ":" + err.Error())
@@ -88,7 +88,7 @@ func New(ctx context.Context, m map[string]interface{}) (fs storage.FS, err erro
 	}
 
 	return &cephfs{
-		conf:      c,
+		conf:      &o,
 		conn:      cache,
 		adminConn: adminConn,
 	}, nil
