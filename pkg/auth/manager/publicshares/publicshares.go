@@ -33,7 +33,8 @@ import (
 	"github.com/cs3org/reva/pkg/auth/scope"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
-	"github.com/mitchellh/mapstructure"
+	"github.com/cs3org/reva/pkg/sharedconf"
+	"github.com/cs3org/reva/pkg/utils/cfg"
 	"github.com/pkg/errors"
 )
 
@@ -46,16 +47,11 @@ type manager struct {
 }
 
 type config struct {
-	GatewayAddr string `mapstructure:"gateway_addr"`
+	GatewayAddr string `mapstructure:"gatewaysvc"`
 }
 
-func parseConfig(m map[string]interface{}) (*config, error) {
-	c := &config{}
-	if err := mapstructure.Decode(m, c); err != nil {
-		err = errors.Wrap(err, "error decoding conf")
-		return nil, err
-	}
-	return c, nil
+func (c *config) ApplyDefaults() {
+	c.GatewayAddr = sharedconf.GetGatewaySVC(c.GatewayAddr)
 }
 
 // New returns a new auth Manager.
@@ -69,11 +65,11 @@ func New(ctx context.Context, m map[string]interface{}) (auth.Manager, error) {
 }
 
 func (m *manager) Configure(ml map[string]interface{}) error {
-	conf, err := parseConfig(ml)
-	if err != nil {
-		return err
+	var c config
+	if err := cfg.Decode(ml, &c); err != nil {
+		return errors.Wrap(err, "publicshares: error decoding config")
 	}
-	m.c = conf
+	m.c = &c
 	return nil
 }
 

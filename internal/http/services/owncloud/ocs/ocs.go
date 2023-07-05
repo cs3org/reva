@@ -34,8 +34,8 @@ import (
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp/global"
+	"github.com/cs3org/reva/pkg/utils/cfg"
 	"github.com/go-chi/chi/v5"
-	"github.com/mitchellh/mapstructure"
 	"github.com/rs/zerolog"
 )
 
@@ -50,16 +50,14 @@ type svc struct {
 }
 
 func New(ctx context.Context, m map[string]interface{}) (global.Service, error) {
-	conf := &config.Config{}
-	if err := mapstructure.Decode(m, conf); err != nil {
+	var c config.Config
+	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
 
-	conf.Init()
-
 	r := chi.NewRouter()
 	s := &svc{
-		c:      conf,
+		c:      &c,
 		router: r,
 	}
 
@@ -68,9 +66,9 @@ func New(ctx context.Context, m map[string]interface{}) (global.Service, error) 
 		return nil, err
 	}
 
-	if conf.CacheWarmupDriver == "first-request" && conf.ResourceInfoCacheTTL > 0 {
+	if c.CacheWarmupDriver == "first-request" && c.ResourceInfoCacheTTL > 0 {
 		s.warmupCacheTracker = ttlcache.NewCache()
-		_ = s.warmupCacheTracker.SetTTL(time.Second * time.Duration(conf.ResourceInfoCacheTTL))
+		_ = s.warmupCacheTracker.SetTTL(time.Second * time.Duration(c.ResourceInfoCacheTTL))
 	}
 
 	return s, nil

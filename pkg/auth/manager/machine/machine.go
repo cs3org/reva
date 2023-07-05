@@ -30,7 +30,8 @@ import (
 	"github.com/cs3org/reva/pkg/auth/scope"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
-	"github.com/mitchellh/mapstructure"
+	"github.com/cs3org/reva/pkg/sharedconf"
+	"github.com/cs3org/reva/pkg/utils/cfg"
 	"github.com/pkg/errors"
 )
 
@@ -43,20 +44,21 @@ var claims = []string{"mail", "uid", "username", "gid", "userid"}
 
 type manager struct {
 	APIKey      string `mapstructure:"api_key"`
-	GatewayAddr string `mapstructure:"gateway_addr"`
+	GatewayAddr string `mapstructure:"gatewaysvc"`
 }
 
 func init() {
 	registry.Register("machine", New)
 }
 
+func (m *manager) ApplyDefaults() {
+	m.GatewayAddr = sharedconf.GetGatewaySVC(m.GatewayAddr)
+}
+
 // Configure parses the map conf.
 func (m *manager) Configure(conf map[string]interface{}) error {
-	err := mapstructure.Decode(conf, m)
-	if err != nil {
-		return errors.Wrap(err, "error decoding conf")
-	}
-	return nil
+	err := cfg.Decode(conf, m)
+	return errors.Wrap(err, "machine: error decoding config")
 }
 
 // New creates a new manager for the 'machine' authentication.

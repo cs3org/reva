@@ -29,8 +29,8 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/sharedconf"
+	"github.com/cs3org/reva/pkg/utils/cfg"
 	"github.com/go-chi/chi/v5"
-	"github.com/mitchellh/mapstructure"
 )
 
 func init() {
@@ -43,7 +43,7 @@ type Config struct {
 	GatewaySvc string `mapstructure:"gatewaysvc"`
 }
 
-func (c *Config) init() {
+func (c *Config) ApplyDefaults() {
 	if c.Prefix == "" {
 		c.Prefix = "preferences"
 	}
@@ -57,15 +57,14 @@ type svc struct {
 
 // New returns a new ocmd object.
 func New(ctx context.Context, m map[string]interface{}) (global.Service, error) {
-	conf := &Config{}
-	if err := mapstructure.Decode(m, conf); err != nil {
+	var c Config
+	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
-	conf.init()
 
 	r := chi.NewRouter()
 	s := &svc{
-		conf:   conf,
+		conf:   &c,
 		router: r,
 	}
 

@@ -41,7 +41,7 @@ func Register(name string, newFunc NewService) {
 }
 
 // NewService is the function that serverless services need to register at init time.
-type NewService func(conf map[string]interface{}, log *zerolog.Logger) (Service, error)
+type NewService func(context.Context, map[string]interface{}) (Service, error)
 
 // Serverless contains the serveless collection of services.
 type Serverless struct {

@@ -16,23 +16,27 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package registry
+package errtypes
 
 import (
-	"context"
-
-	"github.com/cs3org/reva/pkg/datatx/manager/rclone/repository"
+	"strings"
 )
 
-// NewFunc is the function that rclone repository implementations
-// should register at init time.
-type NewFunc func(context.Context, map[string]interface{}) (repository.Repository, error)
+type joinErrors []error
 
-// NewFuncs is a map containing all the registered datatx backends.
-var NewFuncs = map[string]NewFunc{}
+// Join returns an error representing a list of errors.
+func Join(err ...error) error {
+	return joinErrors(err)
+}
 
-// Register registers a new datatx backend new function.
-// Not safe for concurrent use. Safe for use from package init.
-func Register(name string, f NewFunc) {
-	NewFuncs[name] = f
+// Error return a string comma (,) separated of all the errors.
+func (e joinErrors) Error() string {
+	var b strings.Builder
+	for i, err := range e {
+		b.WriteString(err.Error())
+		if i != len(e)-1 {
+			b.WriteString(", ")
+		}
+	}
+	return b.String()
 }

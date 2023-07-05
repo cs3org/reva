@@ -34,8 +34,8 @@ import (
 	"github.com/cs3org/reva/pkg/group"
 	"github.com/cs3org/reva/pkg/group/manager/registry"
 	"github.com/cs3org/reva/pkg/utils"
+	"github.com/cs3org/reva/pkg/utils/cfg"
 	"github.com/go-ldap/ldap/v3"
-	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )
 
@@ -86,22 +86,11 @@ var ldapDefaults = attributes{
 	GIDNumber:   "gidNumber",
 }
 
-func parseConfig(m map[string]interface{}) (*config, error) {
-	c := config{
-		Schema: ldapDefaults,
-	}
-	if err := mapstructure.Decode(m, &c); err != nil {
-		err = errors.Wrap(err, "error decoding conf")
-		return nil, err
-	}
-
-	return &c, nil
-}
-
 // New returns a group manager implementation that connects to a LDAP server to provide group metadata.
 func New(ctx context.Context, m map[string]interface{}) (group.Manager, error) {
-	c, err := parseConfig(m)
-	if err != nil {
+	var c config
+	c.Schema = ldapDefaults
+	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
 
@@ -112,9 +101,10 @@ func New(ctx context.Context, m map[string]interface{}) (group.Manager, error) {
 	c.MemberFilter = strings.ReplaceAll(c.MemberFilter, "%s", "{{.OpaqueId}}")
 
 	mgr := &manager{
-		c: c,
+		c: &c,
 	}
 
+	var err error
 	mgr.groupfilter, err = template.New("gf").Funcs(sprig.TxtFuncMap()).Parse(c.GroupFilter)
 	if err != nil {
 		err := errors.Wrap(err, fmt.Sprintf("error parsing groupfilter tpl:%s", c.GroupFilter))

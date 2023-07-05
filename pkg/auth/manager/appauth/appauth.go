@@ -29,7 +29,8 @@ import (
 	"github.com/cs3org/reva/pkg/auth/manager/registry"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
-	"github.com/mitchellh/mapstructure"
+	"github.com/cs3org/reva/pkg/sharedconf"
+	"github.com/cs3org/reva/pkg/utils/cfg"
 	"github.com/pkg/errors"
 )
 
@@ -38,7 +39,11 @@ func init() {
 }
 
 type manager struct {
-	GatewayAddr string `mapstructure:"gateway_addr"`
+	GatewayAddr string `mapstructure:"gatewaysvc"`
+}
+
+func (m *manager) ApplyDefaults() {
+	m.GatewayAddr = sharedconf.GetGatewaySVC(m.GatewayAddr)
 }
 
 // New returns a new auth Manager.
@@ -52,11 +57,8 @@ func New(ctx context.Context, m map[string]interface{}) (auth.Manager, error) {
 }
 
 func (m *manager) Configure(ml map[string]interface{}) error {
-	err := mapstructure.Decode(ml, m)
-	if err != nil {
-		return errors.Wrap(err, "error decoding conf")
-	}
-	return nil
+	err := cfg.Decode(ml, m)
+	return errors.Wrap(err, "appauth: error decoding config")
 }
 
 func (m *manager) Authenticate(ctx context.Context, username, password string) (*user.User, map[string]*authpb.Scope, error) {

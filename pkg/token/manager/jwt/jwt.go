@@ -28,8 +28,8 @@ import (
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/token"
 	"github.com/cs3org/reva/pkg/token/manager/registry"
+	"github.com/cs3org/reva/pkg/utils/cfg"
 	"github.com/golang-jwt/jwt"
-	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )
 
@@ -56,34 +56,27 @@ type claims struct {
 	Scope map[string]*auth.Scope `json:"scope"`
 }
 
-func parseConfig(m map[string]interface{}) (*config, error) {
-	c := &config{}
-	if err := mapstructure.Decode(m, c); err != nil {
-		err = errors.Wrap(err, "error decoding conf")
-		return nil, err
-	}
-	return c, nil
-}
-
-// New returns an implementation of the token manager that uses JWT as tokens.
-func New(value map[string]interface{}) (token.Manager, error) {
-	c, err := parseConfig(value)
-	if err != nil {
-		return nil, errors.Wrap(err, "error parsing config")
-	}
-
+func (c *config) ApplyDefaults() {
 	if c.Expires == 0 {
 		c.Expires = defaultExpiration
 	}
 
 	c.Secret = sharedconf.GetJWTSecret(c.Secret)
+}
+
+// New returns an implementation of the token manager that uses JWT as tokens.
+func New(m map[string]interface{}) (token.Manager, error) {
+	var c config
+	if err := cfg.Decode(m, &c); err != nil {
+		return nil, err
+	}
 
 	if c.Secret == "" {
 		return nil, errors.New("jwt: secret for signing payloads is not defined in config")
 	}
 
-	m := &manager{conf: c}
-	return m, nil
+	mgr := &manager{conf: &c}
+	return mgr, nil
 }
 
 func (m *manager) MintToken(ctx context.Context, u *user.User, scope map[string]*auth.Scope) (string, error) {

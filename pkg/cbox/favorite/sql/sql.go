@@ -29,7 +29,7 @@ import (
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/storage/favorite"
 	"github.com/cs3org/reva/pkg/storage/favorite/registry"
-	"github.com/mitchellh/mapstructure"
+	"github.com/cs3org/reva/pkg/utils/cfg"
 )
 
 func init() {
@@ -51,8 +51,8 @@ type mgr struct {
 
 // New returns an instance of the cbox sql favorites manager.
 func New(m map[string]interface{}) (favorite.Manager, error) {
-	c := &config{}
-	if err := mapstructure.Decode(m, c); err != nil {
+	var c config
+	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
 
@@ -62,7 +62,7 @@ func New(m map[string]interface{}) (favorite.Manager, error) {
 	}
 
 	return &mgr{
-		c:  c,
+		c:  &c,
 		db: db,
 	}, nil
 }

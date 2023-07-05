@@ -32,11 +32,11 @@ import (
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/ocm/invite"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/pkg/utils/cfg"
 	"github.com/go-sql-driver/mysql"
 
 	"github.com/cs3org/reva/pkg/ocm/invite/repository/registry"
 	"github.com/cs3org/reva/pkg/sharedconf"
-	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )
 
@@ -66,38 +66,29 @@ type config struct {
 	GatewaySvc string `mapstructure:"gatewaysvc"`
 }
 
-func (c *config) init() {
+func (c *config) ApplyDefaults() {
 	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
 }
 
-func parseConfig(c map[string]interface{}) (*config, error) {
-	var conf config
-	if err := mapstructure.Decode(c, &conf); err != nil {
+// New creates a sql repository for ocm tokens and users.
+func New(ctx context.Context, m map[string]interface{}) (invite.Repository, error) {
+	var c config
+	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
-	return &conf, nil
-}
 
-// New creates a sql repository for ocm tokens and users.
-func New(ctx context.Context, c map[string]interface{}) (invite.Repository, error) {
-	conf, err := parseConfig(c)
-	if err != nil {
-		return nil, errors.Wrap(err, "sql: error parsing config")
-	}
-	conf.init()
-
-	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s)/%s?parseTime=true", conf.DBUsername, conf.DBPassword, conf.DBAddress, conf.DBName))
+	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s)/%s?parseTime=true", c.DBUsername, c.DBPassword, c.DBAddress, c.DBName))
 	if err != nil {
 		return nil, errors.Wrap(err, "sql: error opening connection to mysql database")
 	}
 
-	gw, err := pool.GetGatewayServiceClient(pool.Endpoint(conf.GatewaySvc))
+	gw, err := pool.GetGatewayServiceClient(pool.Endpoint(c.GatewaySvc))
 	if err != nil {
 		return nil, err
 	}
 
 	mgr := mgr{
-		c:      conf,
+		c:      &c,
 		db:     db,
 		client: gw,
 	}

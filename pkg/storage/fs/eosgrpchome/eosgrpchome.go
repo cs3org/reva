@@ -24,37 +24,26 @@ import (
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
 	"github.com/cs3org/reva/pkg/storage/utils/eosfs"
-	"github.com/mitchellh/mapstructure"
-	"github.com/pkg/errors"
+	"github.com/cs3org/reva/pkg/utils/cfg"
 )
 
 func init() {
 	registry.Register("eosgrpchome", New)
 }
 
-func parseConfig(m map[string]interface{}) (*eosfs.Config, error) {
-	c := &eosfs.Config{}
-	if err := mapstructure.Decode(m, c); err != nil {
-		err = errors.Wrap(err, "error decoding conf")
+// New returns a new implementation of the storage.FS interface that connects to EOS.
+func New(ctx context.Context, m map[string]interface{}) (storage.FS, error) {
+	var c eosfs.Config
+	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
+	c.UseGRPC = true
+	c.EnableHome = true
 
 	// default to version invariance if not configured
 	if _, ok := m["version_invariant"]; !ok {
 		c.VersionInvariant = true
 	}
 
-	return c, nil
-}
-
-// New returns a new implementation of the storage.FS interface that connects to EOS.
-func New(ctx context.Context, m map[string]interface{}) (storage.FS, error) {
-	c, err := parseConfig(m)
-	if err != nil {
-		return nil, err
-	}
-	c.UseGRPC = true
-	c.EnableHome = true
-
-	return eosfs.NewEOSFS(ctx, c)
+	return eosfs.NewEOSFS(ctx, &c)
 }

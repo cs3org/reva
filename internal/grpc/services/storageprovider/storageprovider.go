@@ -42,8 +42,8 @@ import (
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
 	rtrace "github.com/cs3org/reva/pkg/trace"
 	"github.com/cs3org/reva/pkg/utils"
+	"github.com/cs3org/reva/pkg/utils/cfg"
 	"github.com/google/uuid"
-	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"go.opentelemetry.io/otel/attribute"
 	"google.golang.org/grpc"
@@ -66,7 +66,7 @@ type config struct {
 	MinimunAllowedPathLevelForShare int                               `mapstructure:"minimum_allowed_path_level_for_share"`
 }
 
-func (c *config) init() {
+func (c *config) ApplyDefaults() {
 	if c.Driver == "" {
 		c.Driver = "localhome"
 	}
@@ -133,15 +133,6 @@ func parseXSTypes(xsTypes map[string]uint32) ([]*provider.ResourceChecksumPriori
 	return types, nil
 }
 
-func parseConfig(m map[string]interface{}) (*config, error) {
-	c := &config{}
-	if err := mapstructure.Decode(m, c); err != nil {
-		err = errors.Wrap(err, "error decoding conf")
-		return nil, err
-	}
-	return c, nil
-}
-
 func registerMimeTypes(mappingFile string) error {
 	if mappingFile != "" {
 		f, err := os.ReadFile(mappingFile)
@@ -163,12 +154,10 @@ func registerMimeTypes(mappingFile string) error {
 
 // New creates a new storage provider svc.
 func New(ctx context.Context, m map[string]interface{}) (rgrpc.Service, error) {
-	c, err := parseConfig(m)
-	if err != nil {
+	var c config
+	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
-
-	c.init()
 
 	if err := os.MkdirAll(c.TmpFolder, 0755); err != nil {
 		return nil, err
@@ -177,7 +166,7 @@ func New(ctx context.Context, m map[string]interface{}) (rgrpc.Service, error) {
 	mountPath := c.MountPath
 	mountID := c.MountID
 
-	fs, err := getFS(ctx, c)
+	fs, err := getFS(ctx, &c)
 	if err != nil {
 		return nil, err
 	}
@@ -205,7 +194,7 @@ func New(ctx context.Context, m map[string]interface{}) (rgrpc.Service, error) {
 	}
 
 	service := &service{
-		conf:          c,
+		conf:          &c,
 		storage:       fs,
 		tmpFolder:     c.TmpFolder,
 		mountPath:     mountPath,

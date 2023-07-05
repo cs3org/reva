@@ -26,7 +26,7 @@ import (
 
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp/global"
-	"github.com/mitchellh/mapstructure"
+	"github.com/cs3org/reva/pkg/utils/cfg"
 )
 
 func init() {
@@ -62,7 +62,7 @@ type svc struct {
 	data *discoveryData
 }
 
-func (c *config) init() {
+func (c *config) ApplyDefaults() {
 	if c.OCMPrefix == "" {
 		c.OCMPrefix = "ocm"
 	}
@@ -126,13 +126,11 @@ func (c *config) prepare() *discoveryData {
 // the OCM discovery endpoint specified in
 // https://cs3org.github.io/OCM-API/docs.html?repo=OCM-API&user=cs3org#/paths/~1ocm-provider/get
 func New(ctx context.Context, m map[string]interface{}) (global.Service, error) {
-	conf := &config{}
-	if err := mapstructure.Decode(m, conf); err != nil {
+	var c config
+	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
-
-	conf.init()
-	return &svc{data: conf.prepare()}, nil
+	return &svc{data: c.prepare()}, nil
 }
 
 // Close performs cleanup.

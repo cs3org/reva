@@ -19,14 +19,16 @@
 package emailhandler
 
 import (
+	"context"
 	"fmt"
 	"net/smtp"
 	"regexp"
 	"strings"
 
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/notification/handler"
 	"github.com/cs3org/reva/pkg/notification/handler/registry"
-	"github.com/mitchellh/mapstructure"
+	"github.com/cs3org/reva/pkg/utils/cfg"
 	"github.com/rs/zerolog"
 )
 
@@ -37,7 +39,7 @@ func init() {
 // EmailHandler is the notification handler for emails.
 type EmailHandler struct {
 	conf *config
-	Log  *zerolog.Logger
+	log  *zerolog.Logger
 }
 
 type config struct {
@@ -48,22 +50,23 @@ type config struct {
 	DefaultSender  string `mapstructure:"default_sender" docs:"no-reply@cernbox.cern.ch;Default sender when not specified in the trigger."`
 }
 
-func defaultConfig() *config {
-	return &config{
-		DefaultSender: "no-reply@cernbox.cern.ch",
+func (c *config) ApplyDefaults() {
+	if c.DefaultSender == "" {
+		c.DefaultSender = "no-reply@cernbox.cern.ch"
 	}
 }
 
 // New returns a new email handler.
-func New(log *zerolog.Logger, conf interface{}) (handler.Handler, error) {
-	c := defaultConfig()
-	if err := mapstructure.Decode(conf, c); err != nil {
+func New(ctx context.Context, m map[string]any) (handler.Handler, error) {
+	var c config
+	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
 
+	log := appctx.GetLogger(ctx)
 	return &EmailHandler{
-		conf: c,
-		Log:  log,
+		conf: &c,
+		log:  log,
 	}, nil
 }
 
@@ -79,7 +82,7 @@ func (e *EmailHandler) Send(sender, recipient, subject, body string) error {
 		return err
 	}
 
-	e.Log.Debug().Msgf("mail sent to recipient %s", recipient)
+	e.log.Debug().Msgf("mail sent to recipient %s", recipient)
 
 	return nil
 }

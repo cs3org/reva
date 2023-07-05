@@ -19,12 +19,13 @@
 package sql
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 
 	"github.com/cs3org/reva/pkg/notification"
 	"github.com/cs3org/reva/pkg/notification/manager/registry"
-	"github.com/mitchellh/mapstructure"
+	"github.com/cs3org/reva/pkg/utils/cfg"
 )
 
 func init() {
@@ -37,7 +38,6 @@ type config struct {
 	DBHost     string `mapstructure:"db_host"`
 	DBPort     int    `mapstructure:"db_port"`
 	DBName     string `mapstructure:"db_name"`
-	GatewaySvc string `mapstructure:"gatewaysvc"`
 }
 
 type mgr struct {
@@ -46,9 +46,9 @@ type mgr struct {
 }
 
 // NewMysql returns an instance of the sql notifications manager.
-func NewMysql(m map[string]interface{}) (notification.Manager, error) {
-	c := &config{}
-	if err := mapstructure.Decode(m, c); err != nil {
+func NewMysql(ctx context.Context, m map[string]interface{}) (notification.Manager, error) {
+	var c config
+	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
 

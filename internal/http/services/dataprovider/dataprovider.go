@@ -29,7 +29,7 @@ import (
 	"github.com/cs3org/reva/pkg/rhttp/router"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
-	"github.com/mitchellh/mapstructure"
+	"github.com/cs3org/reva/pkg/utils/cfg"
 )
 
 func init() {
@@ -45,7 +45,7 @@ type config struct {
 	Insecure bool                              `mapstructure:"insecure" docs:"false;Whether to skip certificate checks when sending requests."`
 }
 
-func (c *config) init() {
+func (c *config) ApplyDefaults() {
 	if c.Prefix == "" {
 		c.Prefix = "data"
 	}
@@ -63,26 +63,24 @@ type svc struct {
 
 // New returns a new datasvc.
 func New(ctx context.Context, m map[string]interface{}) (global.Service, error) {
-	conf := &config{}
-	if err := mapstructure.Decode(m, conf); err != nil {
+	var c config
+	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
 
-	conf.init()
-
-	fs, err := getFS(ctx, conf)
+	fs, err := getFS(ctx, &c)
 	if err != nil {
 		return nil, err
 	}
 
-	dataTXs, err := getDataTXs(ctx, conf, fs)
+	dataTXs, err := getDataTXs(ctx, &c, fs)
 	if err != nil {
 		return nil, err
 	}
 
 	s := &svc{
 		storage: fs,
-		conf:    conf,
+		conf:    &c,
 		dataTXs: dataTXs,
 	}
 

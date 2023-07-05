@@ -84,7 +84,7 @@ const LockTypeKey = "reva.lock.type"
 
 var hiddenReg = regexp.MustCompile(`\.sys\..#.`)
 
-func (c *Config) init() {
+func (c *Config) ApplyDefaults() {
 	c.Namespace = path.Clean(c.Namespace)
 	if !strings.HasPrefix(c.Namespace, "/") {
 		c.Namespace = "/"
@@ -162,7 +162,7 @@ type eosfs struct {
 
 // NewEOSFS returns a storage.FS interface implementation that connects to an EOS instance.
 func NewEOSFS(ctx context.Context, c *Config) (storage.FS, error) {
-	c.init()
+	c.ApplyDefaults()
 
 	// bail out if keytab is not found.
 	if c.UseKeytab {

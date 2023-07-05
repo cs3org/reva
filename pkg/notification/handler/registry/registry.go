@@ -19,13 +19,15 @@
 package registry
 
 import (
+	"context"
+
+	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/notification/handler"
-	"github.com/rs/zerolog"
 )
 
 // NewHandlerFunc is the function that notification handlers should register to
 // at init time.
-type NewHandlerFunc func(Log *zerolog.Logger, conf interface{}) (handler.Handler, error)
+type NewHandlerFunc func(context.Context, map[string]any) (handler.Handler, error)
 
 // NewHandlerFuncs is a map containing all the registered notification handlers.
 var NewHandlerFuncs = map[string]NewHandlerFunc{}
@@ -38,13 +40,16 @@ func Register(name string, f NewHandlerFunc) {
 
 // InitHandlers initializes the notification handlers with the configuration
 // and the log from a service.
-func InitHandlers(handlerConf map[string]interface{}, log *zerolog.Logger) map[string]handler.Handler {
+func InitHandlers(ctx context.Context, handlerConf map[string]map[string]any) map[string]handler.Handler {
 	handlers := make(map[string]handler.Handler)
 	hCount := 0
 
+	log := appctx.GetLogger(ctx)
 	for n, f := range NewHandlerFuncs {
 		if c, ok := handlerConf[n]; ok {
-			nh, err := f(log, c)
+			l := log.With().Str("service", n).Logger()
+			ctx := appctx.WithLogger(ctx, &l)
+			nh, err := f(ctx, c)
 			if err != nil {
 				log.Err(err).Msgf("error initializing notification handler %s", n)
 			}

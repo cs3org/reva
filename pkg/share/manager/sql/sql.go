@@ -34,11 +34,12 @@ import (
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/share"
 	"github.com/cs3org/reva/pkg/share/manager/registry"
+	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/utils"
+	"github.com/cs3org/reva/pkg/utils/cfg"
 
 	// Provides mysql drivers.
 	_ "github.com/go-sql-driver/mysql"
-	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"google.golang.org/genproto/protobuf/field_mask"
 )
@@ -53,13 +54,17 @@ func init() {
 }
 
 type config struct {
-	GatewayAddr    string `mapstructure:"gateway_addr"`
+	GatewayAddr    string `mapstructure:"gatewaysvc"`
 	StorageMountID string `mapstructure:"storage_mount_id"`
 	DBUsername     string `mapstructure:"db_username"`
 	DBPassword     string `mapstructure:"db_password"`
 	DBHost         string `mapstructure:"db_host"`
 	DBPort         int    `mapstructure:"db_port"`
 	DBName         string `mapstructure:"db_name"`
+}
+
+func (c *config) ApplyDefaults() {
+	c.GatewayAddr = sharedconf.GetGatewaySVC(c.GatewayAddr)
 }
 
 type mgr struct {
@@ -71,9 +76,8 @@ type mgr struct {
 
 // NewMysql returns a new share manager connection to a mysql database.
 func NewMysql(ctx context.Context, m map[string]interface{}) (share.Manager, error) {
-	c, err := parseConfig(m)
-	if err != nil {
-		err = errors.Wrap(err, "error creating a new manager")
+	var c config
+	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
 
@@ -95,14 +99,6 @@ func New(driver string, db *sql.DB, storageMountID string, userConverter UserCon
 		storageMountID: storageMountID,
 		userConverter:  userConverter,
 	}, nil
-}
-
-func parseConfig(m map[string]interface{}) (*config, error) {
-	c := &config{}
-	if err := mapstructure.Decode(m, c); err != nil {
-		return nil, err
-	}
-	return c, nil
 }
 
 func (m *mgr) Share(ctx context.Context, md *provider.ResourceInfo, g *collaboration.ShareGrant) (*collaboration.Share, error) {

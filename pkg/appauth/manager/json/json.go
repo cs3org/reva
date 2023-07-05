@@ -34,7 +34,7 @@ import (
 	"github.com/cs3org/reva/pkg/appauth/manager/registry"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/mitchellh/mapstructure"
+	"github.com/cs3org/reva/pkg/utils/cfg"
 	"github.com/pkg/errors"
 	"github.com/sethvargo/go-password/password"
 	"golang.org/x/crypto/bcrypt"
@@ -59,12 +59,10 @@ type jsonManager struct {
 
 // New returns a new mgr.
 func New(ctx context.Context, m map[string]interface{}) (appauth.Manager, error) {
-	c, err := parseConfig(m)
-	if err != nil {
-		return nil, errors.Wrap(err, "error creating a new manager")
+	var c config
+	if err := cfg.Decode(m, &c); err != nil {
+		return nil, err
 	}
-
-	c.init()
 
 	// load or create file
 	manager, err := loadOrCreate(c.File)
@@ -72,12 +70,12 @@ func New(ctx context.Context, m map[string]interface{}) (appauth.Manager, error)
 		return nil, errors.Wrap(err, "error loading the file containing the application passwords")
 	}
 
-	manager.config = c
+	manager.config = &c
 
 	return manager, nil
 }
 
-func (c *config) init() {
+func (c *config) ApplyDefaults() {
 	if c.File == "" {
 		c.File = "/var/tmp/reva/appauth.json"
 	}
@@ -87,14 +85,6 @@ func (c *config) init() {
 	if c.PasswordHashCost == 0 {
 		c.PasswordHashCost = 11
 	}
-}
-
-func parseConfig(m map[string]interface{}) (*config, error) {
-	c := &config{}
-	if err := mapstructure.Decode(m, c); err != nil {
-		return nil, err
-	}
-	return c, nil
 }
 
 func loadOrCreate(file string) (*jsonManager, error) {

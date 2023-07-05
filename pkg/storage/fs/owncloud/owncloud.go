@@ -49,9 +49,9 @@ import (
 	"github.com/cs3org/reva/pkg/storage/utils/ace"
 	"github.com/cs3org/reva/pkg/storage/utils/chunking"
 	"github.com/cs3org/reva/pkg/storage/utils/templates"
+	"github.com/cs3org/reva/pkg/utils/cfg"
 	"github.com/gomodule/redigo/redis"
 	"github.com/google/uuid"
-	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"github.com/pkg/xattr"
 )
@@ -120,16 +120,7 @@ type config struct {
 	UserProviderEndpoint     string `mapstructure:"userprovidersvc"`
 }
 
-func parseConfig(m map[string]interface{}) (*config, error) {
-	c := &config{}
-	if err := mapstructure.Decode(m, c); err != nil {
-		err = errors.Wrap(err, "error decoding conf")
-		return nil, err
-	}
-	return c, nil
-}
-
-func (c *config) init(m map[string]interface{}) {
+func (c *config) ApplyDefaults() {
 	if c.Redis == "" {
 		c.Redis = ":6379"
 	}
@@ -149,27 +140,27 @@ func (c *config) init(m map[string]interface{}) {
 	// ensure share folder always starts with slash
 	c.ShareFolder = filepath.Join("/", c.ShareFolder)
 
-	// default to scanning if not configured
-	if _, ok := m["scan"]; !ok {
+	if !c.Scan {
+		// TODO: check if it was set in the config
 		c.Scan = true
 	}
+
 	c.UserProviderEndpoint = sharedconf.GetGatewaySVC(c.UserProviderEndpoint)
 }
 
 // New returns an implementation to of the storage.FS interface that talk to
 // a local filesystem.
 func New(ctx context.Context, m map[string]interface{}) (storage.FS, error) {
-	c, err := parseConfig(m)
-	if err != nil {
+	var c config
+	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
-	c.init(m)
 
 	// c.DataDirectory should never end in / unless it is the root?
 	c.DataDirectory = filepath.Clean(c.DataDirectory)
 
 	// create datadir if it does not exist
-	err = os.MkdirAll(c.DataDirectory, 0700)
+	err := os.MkdirAll(c.DataDirectory, 0700)
 	if err != nil {
 		logger.New().Error().Err(err).
 			Str("path", c.DataDirectory).
@@ -203,7 +194,7 @@ func New(ctx context.Context, m map[string]interface{}) (storage.FS, error) {
 	}
 
 	return &ocfs{
-		c:            c,
+		c:            &c,
 		pool:         pool,
 		chunkHandler: chunking.NewChunkHandler(c.UploadInfoDir),
 	}, nil

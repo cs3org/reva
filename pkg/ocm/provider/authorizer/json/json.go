@@ -32,7 +32,7 @@ import (
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/ocm/provider"
 	"github.com/cs3org/reva/pkg/ocm/provider/authorizer/registry"
-	"github.com/mitchellh/mapstructure"
+	"github.com/cs3org/reva/pkg/utils/cfg"
 	"github.com/pkg/errors"
 )
 
@@ -42,12 +42,10 @@ func init() {
 
 // New returns a new authorizer object.
 func New(ctx context.Context, m map[string]interface{}) (provider.Authorizer, error) {
-	c := &config{}
-	if err := mapstructure.Decode(m, c); err != nil {
-		err = errors.Wrap(err, "error decoding conf")
+	var c config
+	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
-	c.init()
 
 	f, err := os.ReadFile(c.Providers)
 	if err != nil {
@@ -61,7 +59,7 @@ func New(ctx context.Context, m map[string]interface{}) (provider.Authorizer, er
 
 	a := &authorizer{
 		providerIPs: sync.Map{},
-		conf:        c,
+		conf:        &c,
 	}
 	a.providers = a.getOCMProviders(providers)
 
@@ -73,7 +71,7 @@ type config struct {
 	VerifyRequestHostname bool   `mapstructure:"verify_request_hostname"`
 }
 
-func (c *config) init() {
+func (c *config) ApplyTemplates() {
 	if c.Providers == "" {
 		c.Providers = "/etc/revad/ocm-providers.json"
 	}

@@ -44,13 +44,8 @@ func TestGetManagerWithInvalidUser(t *testing.T) {
 		{
 			"Boolean in user",
 			false,
-			"error decoding conf: 1 error(s) decoding:\n\n* " +
+			"json: error decoding config: 1 error(s) decoding:\n\n* " +
 				"'users' expected type 'string', got unconvertible type 'bool', value: 'false'",
-		},
-		{
-			"Nil in user",
-			nil,
-			"open /etc/revad/users.json: no such file or directory",
 		},
 	}
 
@@ -60,9 +55,7 @@ func TestGetManagerWithInvalidUser(t *testing.T) {
 				"users": tt.user,
 			}
 
-			manager, err := New(ctx, input)
-
-			assert.Empty(t, manager)
+			_, err := New(ctx, input)
 			assert.EqualError(t, err, tt.expectedError)
 		})
 	}

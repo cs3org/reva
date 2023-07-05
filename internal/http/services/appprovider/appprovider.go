@@ -36,10 +36,10 @@ import (
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/utils"
+	"github.com/cs3org/reva/pkg/utils/cfg"
 	"github.com/cs3org/reva/pkg/utils/resourceid"
 	"github.com/go-chi/chi/v5"
 	ua "github.com/mileusna/useragent"
-	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )
 
@@ -50,11 +50,11 @@ func init() {
 // Config holds the config options for the HTTP appprovider service.
 type Config struct {
 	Prefix     string `mapstructure:"prefix"`
-	GatewaySvc string `mapstructure:"gatewaysvc"`
+	GatewaySvc string `mapstructure:"gatewaysvc" validate:"required"`
 	Insecure   bool   `mapstructure:"insecure" docs:"false;Whether to skip certificate checks when sending requests."`
 }
 
-func (c *Config) init() {
+func (c *Config) ApplyDefaults() {
 	if c.Prefix == "" {
 		c.Prefix = "app"
 	}
@@ -68,15 +68,14 @@ type svc struct {
 
 // New returns a new ocmd object.
 func New(ctx context.Context, m map[string]interface{}) (global.Service, error) {
-	conf := &Config{}
-	if err := mapstructure.Decode(m, conf); err != nil {
+	var c Config
+	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
 	}
-	conf.init()
 
 	r := chi.NewRouter()
 	s := &svc{
-		conf:   conf,
+		conf:   &c,
 		router: r,
 	}
 

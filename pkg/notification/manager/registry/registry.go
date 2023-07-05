@@ -18,13 +18,17 @@
 
 package registry
 
-import "github.com/cs3org/reva/pkg/notification"
+import (
+	"context"
+
+	"github.com/cs3org/reva/pkg/notification"
+)
 
 // import "github.com/cs3org/reva/pkg/share"
 
 // NewFunc is the function that notification managers
 // should register at init time.
-type NewFunc func(map[string]interface{}) (notification.Manager, error)
+type NewFunc func(context.Context, map[string]interface{}) (notification.Manager, error)
 
 // NewFuncs is a map containing all the registered notification managers.
 var NewFuncs = map[string]NewFunc{}

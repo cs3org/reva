@@ -37,7 +37,7 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/utils"
-	"github.com/mitchellh/mapstructure"
+	"github.com/cs3org/reva/pkg/utils/cfg"
 	"github.com/pkg/errors"
 )
 
@@ -51,10 +51,10 @@ type manager struct {
 }
 
 type config struct {
-	GatewayAddr string `mapstructure:"gateway_addr"`
+	GatewayAddr string `mapstructure:"gatewaysvc"`
 }
 
-func (c *config) init() {
+func (c *config) ApplyDefaults() {
 	c.GatewayAddr = sharedconf.GetGatewaySVC(c.GatewayAddr)
 }
 
@@ -64,24 +64,21 @@ func New(ctx context.Context, m map[string]interface{}) (auth.Manager, error) {
 	if err := mgr.Configure(m); err != nil {
 		return nil, err
 	}
+	gw, err := pool.GetGatewayServiceClient(pool.Endpoint(mgr.c.GatewayAddr))
+	if err != nil {
+		return nil, err
+	}
+	mgr.gw = gw
 
 	return &mgr, nil
 }
 
 func (m *manager) Configure(ml map[string]interface{}) error {
 	var c config
-	if err := mapstructure.Decode(ml, &c); err != nil {
-		return errors.Wrap(err, "error decoding config")
+	if err := cfg.Decode(ml, &c); err != nil {
+		return errors.Wrap(err, "ocmshares: error decoding config")
 	}
-	c.init()
 	m.c = &c
-
-	gw, err := pool.GetGatewayServiceClient(pool.Endpoint(c.GatewayAddr))
-	if err != nil {
-		return err
-	}
-	m.gw = gw
-
 	return nil
 }
 

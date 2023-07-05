@@ -58,6 +58,7 @@ providers = "{{file_providers}}"
 [grpc.services.ocmshareprovider]
 driver = "json"
 webdav_endpoint = "http://{{cernboxwebdav_address}}"
+provider_domain = "cernbox.cern.ch"
 
 [grpc.services.ocmshareprovider.drivers.json]
 file = "{{ocm_share_cernbox_file}}"
