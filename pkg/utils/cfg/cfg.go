@@ -20,7 +20,9 @@ package cfg
 
 import (
 	"errors"
+	"reflect"
 
+	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/go-playground/locales/en"
 	ut "github.com/go-playground/universal-translator"
 	"github.com/go-playground/validator/v10"
@@ -40,6 +42,16 @@ var english = en.New()
 var uni = ut.New(english, english)
 var trans, _ = uni.GetTranslator("en")
 var _ = en_translations.RegisterDefaultTranslations(validate, trans)
+
+func init() {
+	validate.RegisterTagNameFunc(func(field reflect.StructField) string {
+		if k := field.Tag.Get("mapstructure"); k != "" {
+			return k
+		}
+		// if not specified, fall back to field name
+		return field.Name
+	})
+}
 
 // Decode decodes the given raw input interface to the target pointer c.
 // It applies the default configuration if the target struct
@@ -74,5 +86,5 @@ func translateError(err error, trans ut.Translator) error {
 	for _, err := range errs {
 		translated = append(translated, errors.New(err.Translate(trans)))
 	}
-	return errors.Join(translated...)
+	return errtypes.Join(translated...)
 }
