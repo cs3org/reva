@@ -60,7 +60,7 @@ type FileNotFoundError struct {
 }
 
 // Error returns the string error msg for FileNotFoundError.
-func (t *FileNotFoundError) Error() string {
+func (t FileNotFoundError) Error() string {
 	return fmt.Sprintf("template file %s not found", t.TemplateFileName)
 }
 

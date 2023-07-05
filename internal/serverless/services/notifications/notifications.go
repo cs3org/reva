@@ -221,14 +221,13 @@ func (s *svc) handleMsgTemplate(msg []byte) {
 
 	name, err := s.templates.Put(msg, s.handlers)
 	if err != nil {
-		s.log.Error().Err(err).Msgf("template registration failed %v", err)
+		s.log.Error().Err(err).Msg("template registration failed")
 
 		// If a template file was not found, delete that template from the registry altogether,
 		// this way we ensure templates that are deleted from the config are deleted from the
 		// store too.
-		wrappedErr := errors.Unwrap(errors.Unwrap(err))
-		_, isFileNotFoundError := wrappedErr.(*template.FileNotFoundError)
-		if isFileNotFoundError && name != "" {
+		var e *template.FileNotFoundError
+		if errors.As(err, &e) && name != "" {
 			err := s.kv.Purge(name)
 			if err != nil {
 				s.log.Error().Err(err).Msgf("deletion of template %s from store failed", name)
@@ -274,8 +273,8 @@ func (s *svc) handleMsgUnregisterNotification(msg *nats.Msg) {
 
 	err := s.nm.DeleteNotification(ref)
 	if err != nil {
-		_, isNotFoundError := err.(*notification.NotFoundError)
-		if isNotFoundError {
+		var e *notification.NotFoundError
+		if errors.As(err, &e) {
 			s.log.Debug().Msgf("a notification with ref %s does not exist", ref)
 		} else {
 			s.log.Error().Err(err).Msgf("notification unregister failed")
@@ -322,8 +321,8 @@ func (s *svc) handleMsgTrigger(msg *nats.Msg) {
 	if notif == nil {
 		notif, err = s.nm.GetNotification(tr.Ref)
 		if err != nil {
-			_, isNotFoundError := err.(*notification.NotFoundError)
-			if isNotFoundError {
+			var e *notification.NotFoundError
+			if errors.As(err, &e) {
 				s.log.Debug().Msgf("trigger %s does not have a notification attached", tr.Ref)
 				return
 			}
