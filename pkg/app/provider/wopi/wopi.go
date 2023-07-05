@@ -98,7 +98,6 @@ func (c *config) ApplyDefaults() {
 		c.IOPSecret = os.Getenv("REVA_APPPROVIDER_IOPSECRET")
 	}
 	c.JWTSecret = sharedconf.GetJWTSecret(c.JWTSecret)
-
 }
 
 type wopiProvider struct {
