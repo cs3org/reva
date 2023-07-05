@@ -309,7 +309,7 @@ func (b MessagePackBackend) Rename(oldPath, newPath string) error {
 func (MessagePackBackend) MetadataPath(path string) string { return path + ".mpk" }
 
 // LockfilePath returns the path of the lock file
-func (MessagePackBackend) LockfilePath(path string) string { return path + ".mpk.lock" }
+func (MessagePackBackend) LockfilePath(path string) string { return path + ".mlock" }
 
 func (b MessagePackBackend) cacheKey(path string) string {
 	// rootPath is guaranteed to have no trailing slash
