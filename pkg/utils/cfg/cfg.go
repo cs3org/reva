@@ -67,11 +67,11 @@ func Decode(input map[string]any, c any) error {
 	if err != nil {
 		return err
 	}
-	if s, ok := c.(Setter); ok {
-		s.ApplyDefaults()
-	}
 	if err := decoder.Decode(input); err != nil {
 		return err
+	}
+	if s, ok := c.(Setter); ok {
+		s.ApplyDefaults()
 	}
 
 	return translateError(validate.Struct(c), trans)
