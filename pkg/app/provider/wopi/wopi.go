@@ -332,7 +332,6 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 		}
 	}
 
-	log.Info().Str("url", appFullURL).Str("resource", resource.Path).Msg("wopi: returning URL for file")
 	return &appprovider.OpenInAppURL{
 		AppUrl:         appFullURL,
 		Method:         method,
