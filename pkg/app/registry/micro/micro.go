@@ -236,7 +236,7 @@ func (m *manager) AddProvider(ctx context.Context, p *registrypb.ProviderInfo) e
 		log.Fatal().Err(err).Msgf("Registration error for external service %v", serviceID)
 	}
 
-	t := time.NewTicker(time.Millisecond)
+	t := time.NewTicker(time.Second * 30)
 
 	go func() {
 		for {
