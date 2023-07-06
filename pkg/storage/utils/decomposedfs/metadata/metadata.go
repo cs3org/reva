@@ -89,11 +89,6 @@ func (NullBackend) Set(ctx context.Context, path string, key string, val []byte)
 	return errUnconfiguredError
 }
 
-// SetMultipleWithContext sets a set of attribute for the given path
-func (NullBackend) SetMultipleWithContext(ctx context.Context, path string, attribs map[string][]byte, acquireLock bool) error {
-	return errUnconfiguredError
-}
-
 // SetMultiple sets a set of attribute for the given path
 func (NullBackend) SetMultiple(ctx context.Context, path string, attribs map[string][]byte, acquireLock bool) error {
 	return errUnconfiguredError
