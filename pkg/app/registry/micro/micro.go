@@ -101,7 +101,7 @@ func New(m map[string]interface{}) (app.Registry, error) {
 
 	newManager := manager{
 		mimetypes: mimetypes,
-		namespace: "bazFoo",
+		namespace: c.Namespace,
 	}
 
 	return &newManager, nil
@@ -186,7 +186,7 @@ func (m *manager) FindProviders(ctx context.Context, mimeType string) ([]*regist
 		}
 	}
 
-	// TODO sort by priority?
+	// TODO: sort by priority?
 
 	return providers, nil
 }
@@ -398,8 +398,18 @@ func (m *manager) GetDefaultProviderForMimeType(ctx context.Context, mimeType st
 	return nil, errtypes.NotFound("default application provider not set for mime type " + mimeType)
 }
 
+//func equalsProviderInfo(p1, p2 *registrypb.ProviderInfo) bool {
+//	return p1.Name == p2.Name
+//}
+
 func equalsProviderInfo(p1, p2 *registrypb.ProviderInfo) bool {
-	return p1.Name == p2.Name
+	sameName := p1.Name == p2.Name
+	sameAddress := p1.Address == p2.Address
+
+	if sameName && sameAddress {
+		return true
+	}
+	return false
 }
 
 type providerWithPriority struct {
