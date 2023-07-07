@@ -157,13 +157,8 @@ func (b MessagePackBackend) saveAttributes(ctx context.Context, path string, set
 		return err
 	}
 
-	// Invalidate cache early
-	_, subspan := tracer.Start(ctx, "metaCache.RemoveMetadata")
-	_ = b.metaCache.RemoveMetadata(b.cacheKey(path))
-	subspan.End()
-
 	// Read current state
-	_, subspan = tracer.Start(ctx, "os.ReadFile")
+	_, subspan := tracer.Start(ctx, "os.ReadFile")
 	var msgBytes []byte
 	msgBytes, err = os.ReadFile(metaPath)
 	subspan.End()
