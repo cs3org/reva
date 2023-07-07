@@ -767,7 +767,7 @@ func (t *Tree) Propagate(ctx context.Context, n *node.Node, sizeDiff int64) (err
 			}
 		}()
 
-		if n, err = n.ParentWithReader(ctx, f); err != nil {
+		if n, err = n.Parent(ctx); err != nil {
 			sublog.Error().Err(err).
 				Msg("Propagation failed. Could not read parent node.")
 			return err
