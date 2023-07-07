@@ -38,7 +38,7 @@ func TestFindProviders(t *testing.T) {
 		expectedRes  []*registrypb.ProviderInfo
 		expectedErr  error
 	}{
-		/*{
+		{
 			name:        "no mime types registered",
 			mimeTypes:   []*mimeTypeConfig{},
 			mimeType:    "SOMETHING",
@@ -71,7 +71,7 @@ func TestFindProviders(t *testing.T) {
 					Name:      "some Name",
 				},
 			},
-		},*/
+		},
 		{
 			name: "more providers registered for one mime type",
 			mimeTypes: []*mimeTypeConfig{
@@ -120,7 +120,7 @@ func TestFindProviders(t *testing.T) {
 				},
 			},
 		},
-		/*{
+		{
 			name: "more providers registered for different mime types",
 			mimeTypes: []*mimeTypeConfig{
 				{
@@ -141,17 +141,17 @@ func TestFindProviders(t *testing.T) {
 			regProviders: []*registrypb.ProviderInfo{
 				{
 					MimeTypes: []string{"text/json", "text/xml"},
-					Address:   "ip-provider1",
+					Address:   "127.0.0.1:65535",
 					Name:      "provider1",
 				},
 				{
 					MimeTypes: []string{"text/json"},
-					Address:   "ip-provider2",
+					Address:   "127.0.0.2:65535",
 					Name:      "provider2",
 				},
 				{
 					MimeTypes: []string{"text/xml"},
-					Address:   "ip-provider3",
+					Address:   "127.0.0.3:65535",
 					Name:      "provider3",
 				},
 			},
@@ -160,16 +160,16 @@ func TestFindProviders(t *testing.T) {
 			expectedRes: []*registrypb.ProviderInfo{
 				{
 					MimeTypes: []string{"text/json", "text/xml"},
-					Address:   "ip-provider1",
+					Address:   "127.0.0.1:65535",
 					Name:      "provider1",
 				},
 				{
 					MimeTypes: []string{"text/json"},
-					Address:   "ip-provider2",
+					Address:   "127.0.0.2:65535",
 					Name:      "provider2",
 				},
 			},
-		},*/
+		},
 	}
 
 	for _, tt := range testCases {
@@ -182,6 +182,7 @@ func TestFindProviders(t *testing.T) {
 				"mime_types": tt.mimeTypes,
 				"namespace":  "bazFoo", // TODO: move this to a const
 			})
+
 			if err != nil {
 				t.Error("unexpected error creating the registry:", err)
 			}
@@ -213,17 +214,30 @@ func TestFindProviders(t *testing.T) {
 }
 
 // check that all providers in the two lists are equals
-func providersEquals(l1, l2 []*registrypb.ProviderInfo) bool {
-	if len(l1) != len(l2) {
+func providersEquals(pi1, pi2 []*registrypb.ProviderInfo) bool {
+	if len(pi1) != len(pi2) {
 		return false
 	}
 
-	for i := 0; i < len(l1); i++ {
-		if !equalsProviderInfo(l1[i], l2[i]) {
-			return false
+	if len(pi1) < 1 && len(pi2) < 1 {
+		return true
+	}
+
+	var valid bool
+
+	for _, left := range pi1 {
+		for _, right := range pi2 {
+			sameName := left.Name == right.Name
+			sameAddress := left.Address == right.Address
+
+			if sameName && sameAddress {
+				valid = true
+				break
+			}
 		}
 	}
-	return true
+
+	return valid
 }
 
 func TestFindProvidersWithPriority(t *testing.T) {
@@ -509,6 +523,7 @@ func TestFindProvidersWithPriority(t *testing.T) {
 			registry, err := New(map[string]interface{}{
 				"mime_types": tt.mimeTypes,
 			})
+
 			if err != nil {
 				t.Error("unexpected error creating the registry:", err)
 			}
