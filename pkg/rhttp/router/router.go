@@ -16,12 +16,56 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package router
+package mux
 
 import (
+	"context"
+	"net/http"
 	"path"
 	"strings"
 )
+
+type Option int
+
+const (
+	Unprotected Option = iota
+)
+
+type Params map[string]string
+
+func (p Params) Get(key string) (string, bool) {
+	if p == nil {
+		return "", false
+	}
+	v, ok := p[key]
+	return v, ok
+}
+
+// Router allows registering HTTP services.
+type Router interface {
+	http.Handler
+	Walker
+
+	// Route mounts a sub-Router along a path string.
+	Route(path string, f func(Router))
+	// Handle routes for path that matches the HTTP method.
+	Handle(method, path string, handler http.Handler)
+
+	// HTTP-method routing along path.
+	Get(path string, handler http.Handler)
+	Head(path string, handler http.Handler)
+	Post(path string, handler http.Handler)
+	Put(path string, handler http.Handler)
+	Delete(path string, handler http.Handler)
+	Connect(path string, handler http.Handler)
+	Options(path string, handler http.Handler)
+}
+
+type WalkFunc func(method, path string, handler http.Handler)
+
+type Walker interface {
+	Walk(ctx context.Context, f WalkFunc)
+}
 
 // ShiftPath splits off the first component of p, which will be cleaned of
 // relative components before processing. head will never contain a slash and
@@ -38,4 +82,9 @@ func ShiftPath(p string) (head, tail string) {
 		return p, "/"
 	}
 	return p[:i], p[i:]
+}
+
+func ParamsFromContext(ctx context.Context) Params {
+	p, _ := ctx.Value(paramsKey{}).(Params)
+	return p
 }
