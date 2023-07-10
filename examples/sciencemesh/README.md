@@ -5,11 +5,16 @@
 These scripts will create a Docker testnet which simulates the [ScienceMesh](https://sciencemesh.io).
 It is useful for all kinds of ScienceMesh-related development and (manual) testing scenarios.
 
+Prerequisites: bash, git, Docker.
+
 ```
-./scripts/init-sciencemesh.sh
-./tests/nrro.sh
-./scripts/clean.sh
-./tests/orro.sh
+git clone --branch=sciencemesh-testing https://github.com/cs3org/reva
+cd reva
+cd examples/sciencemesh
+./init-sciencemesh.sh
+./nrro.sh
+./clean.sh # Careful! This will kill and remove all your Docker containers on the current host system! Also unrelated ones if present.
+./orro.sh
 ```
 
 ## Reva-to-reva

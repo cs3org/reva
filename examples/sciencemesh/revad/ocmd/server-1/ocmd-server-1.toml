@@ -1,0 +1,146 @@
+[shared]
+gatewaysvc = "revad1.docker:19000"
+
+[grpc]
+address = "0.0.0.0:19000"
+
+[grpc.services.gateway]
+authregistrysvc = "revad1.docker:19000"
+appprovidersvc = "revad1.docker:19000"
+appregistry = "revad1.docker:19000"
+storageregistrysvc = "revad1.docker:19000"
+preferencessvc = "revad1.docker:19000"
+userprovidersvc = "revad1.docker:19000"
+usershareprovidersvc = "revad1.docker:19000"
+publicshareprovidersvc = "revad1.docker:19000"
+ocmcoresvc = "revad1.docker:19000"
+ocmshareprovidersvc = "revad1.docker:19000"
+ocminvitemanagersvc = "revad1.docker:19000"
+ocmproviderauthorizersvc = "revad1.docker:19000"
+datagateway = "http://revad1.docker:19001/data"
+transfer_expires = 6                         # give it a moment
+commit_share_to_storage_grant = true
+commit_share_to_storage_ref = true
+
+[grpc.services.authregistry]
+driver = "static"
+
+[grpc.services.authregistry.drivers.static.rules]
+basic = "revad1.docker:19000"
+machine = "revad1.docker:19030"
+ocmshares = "revad1.docker:19020"
+
+[grpc.services.storageregistry]
+driver = "static"
+
+[grpc.services.storageregistry.drivers.static]
+home_provider = "/home"
+
+[grpc.services.storageregistry.drivers.static.rules]
+"/home" = { "address" = "revad1.docker:19000" }
+"123e4567-e89b-12d3-a456-426655440000" = { "address" = "revad1.docker:19000" }
+"/sciencemesh" = { "address" = "revad1.docker:19010" }
+"sciencemesh" = { "address" = "revad1.docker:19010" }
+"/ocm" = { "address" = "revad1.docker:19020" }
+"ocm" = { "address" = "revad1.docker:19020" }
+
+[grpc.services.usershareprovider]
+driver = "memory"
+
+[grpc.services.ocmcore]
+driver = "json"
+
+# Note that ocmcore and ocmshareprovider should use the same file for storing the shares.
+[grpc.services.ocmcore.drivers.json]
+file = "/var/tmp/reva/shares_server_1.json"
+
+[grpc.services.ocminvitemanager]
+driver = "json"
+provider_domain = "cernbox.cern.ch"
+
+[grpc.services.ocminvitemanager.drivers.json]
+file = "/var/tmp/reva/invites_server_1.json"
+
+[grpc.services.ocmshareprovider]
+driver = "json"
+webdav_endpoint = "http://revad1.docker:19001"
+provider_domain = "cernbox.cern.ch"
+
+[grpc.services.ocmshareprovider.drivers.json]
+file = "/var/tmp/reva/shares_server_1.json"
+
+[grpc.services.ocmproviderauthorizer]
+driver = "json"
+
+[grpc.services.ocmproviderauthorizer.drivers.json]
+providers = "providers.demo.json"
+
+[grpc.services.publicshareprovider]
+driver = "memory"
+
+[grpc.services.appregistry]
+driver = "static"
+
+[grpc.services.appprovider]
+driver = "demo"
+app_provider_url = "revad1.docker:19000"
+
+[grpc.services.storageprovider]
+driver = "localhome"
+mount_path = "/home"
+mount_id = "123e4567-e89b-12d3-a456-426655440000"
+expose_data_server = true
+data_server_url = "http://revad1.docker:19001/data"
+enable_home_creation = true
+
+[grpc.services.storageprovider.drivers.localhome]
+user_layout = "{{.Username}}"
+
+[grpc.services.authprovider]
+auth_manager = "json"
+
+[grpc.services.authprovider.auth_managers.json]
+users = "users.demo.json"
+
+[grpc.services.userprovider]
+driver = "json"
+
+[grpc.services.userprovider.drivers.json]
+users = "users.demo.json"
+
+[http]
+address = "0.0.0.0:19001"
+
+[http.services.dataprovider]
+driver = "localhome"
+
+[http.services.prometheus]
+[http.services.sysinfo]
+
+[http.services.dataprovider.drivers.localhome]
+user_layout = "{{.Username}}"
+
+[http.services.ocmd]
+prefix = "ocm"
+
+[http.services.ocmprovider]
+ocm_prefix = "ocm"
+provider = "reva@cern"
+endpoint = "http://revad1.docker:19001"
+enable_webapp = true
+enable_datatx = true
+
+[http.middlewares.providerauthorizer]
+driver = "json"
+
+[http.middlewares.providerauthorizer.drivers.json]
+providers = "providers.demo.json"
+
+[http.services.ocs]
+prefix = "ocs"
+
+[http.services.ocdav]
+
+[http.services.appprovider]
+
+[http.middlewares.cors]

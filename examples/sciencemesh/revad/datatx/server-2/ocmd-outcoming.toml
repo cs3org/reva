@@ -1,0 +1,28 @@
+[shared]
+gatewaysvc = "revad2.docker:17000"
+
+[grpc]
+address = "revad2.docker:17020"
+
+[grpc.services.storageprovider]
+driver = "ocmoutcoming"
+mount_path = "/ocm"
+mount_id = "ocm"
+expose_data_server = true
+data_server_url = "http://revad2.docker:17021/data"
+
+[grpc.services.storageprovider.drivers.ocmoutcoming]
+machine_secret = "machine-api-key"
+
+[grpc.services.authprovider]
+auth_manager = "ocmshares"
+
+
+[http]
+address = "revad2.docker:17021"
+
+[http.services.dataprovider]
+driver = "ocmoutcoming"
+
+[http.services.dataprovider.drivers.ocmoutcoming]
+machine_secret = "machine-api-key"

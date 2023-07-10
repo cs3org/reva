@@ -1,0 +1,213 @@
+[log]
+level = "debug"
+
+[shared]
+gatewaysvc = "your.revad.com:19000"
+
+[grpc]
+address = "0.0.0.0:19000"
+
+[grpc.services.gateway]
+authregistrysvc = "your.revad.com:19000"
+appprovidersvc = "your.revad.com:19000"
+appregistrysvc = "your.revad.com:19000"
+storageregistrysvc = "your.revad.com:19000"
+preferencessvc = "your.revad.com:19000"
+userprovidersvc = "your.revad.com:19000"
+usershareprovidersvc = "your.revad.com:19000"
+publicshareprovidersvc = "your.revad.com:19000"
+ocmcoresvc = "your.revad.com:19000"
+ocmshareprovidersvc = "your.revad.com:19000"
+ocminvitemanagersvc = "your.revad.com:19000"
+ocmproviderauthorizersvc = "your.revad.com:19000"
+commit_share_to_storage_grant = false
+datagateway = "https://your.revad.com/data"
+transfer_expires = 6 # give it a moment
+
+[grpc.services.appregistry]
+driver = "static"
+
+[grpc.services.appregistry.drivers.static]
+mime_types = [
+    {"mime_type" = "text/plain", "extension" = "txt", "name" = "Text file", "description" = "Text file", "allow_creation" = true},
+    {"mime_type" = "text/markdown", "extension" = "md", "name" = "Markdown file", "description" = "Markdown file", "allow_creation" = true},
+    {"mime_type" = "application/vnd.oasis.opendocument.text", "extension" = "odt", "name" = "OpenDocument", "description" = "OpenDocument text document", "default_app" = "Collabora", "allow_creation" = true},
+    {"mime_type" = "application/vnd.oasis.opendocument.spreadsheet", "extension" = "ods", "name" = "OpenSpreadsheet", "description" = "OpenDocument spreadsheet document", "default_app" = "Collabora", "allow_creation" = true},
+    {"mime_type" = "application/vnd.oasis.opendocument.presentation", "extension" = "odp", "name" = "OpenPresentation", "description" = "OpenDocument presentation document", "default_app" = "Collabora", "allow_creation" = true},
+    {"mime_type" = "application/vnd.jupyter", "extension" = "ipynb", "name" = "Jupyter Notebook", "description" = "Jupyter Notebook"}
+]
+
+[grpc.services.appprovider]
+driver = "wopi"
+custom_mime_types_json = "custom-mime-types-demo.json"
+mime_types = ["application/vnd.oasis.opendocument.text", "application/vnd.oasis.opendocument.spreadsheet", "application/vnd.oasis.opendocument.presentation", "text/rtf"]
+app_provider_url = "localhost:19000"
+language = "en-GB"
+
+[grpc.services.appprovider.drivers.wopi]
+iop_secret = "hello"
+wopi_url = "http://wopi.docker:8880/"
+app_name = "Collabora"
+app_url = "http://collabora.docker:9980"
+app_int_url = "http://collabora.docker:9980"
+
+[grpc.services.authregistry]
+driver = "static"
+
+[grpc.services.authregistry.drivers.static.rules]
+basic = "your.revad.com:19000"
+ocmshares = "your.revad.com:19001"
+machine = "your.revad.com:19030"
+
+[grpc.services.authprovider]
+auth_manager = "nextcloud"
+
+[grpc.services.authprovider.auth_managers.nextcloud]
+endpoint = "https://your.efss.com/index.php/apps/sciencemesh/"
+shared_secret = "shared-secret-1"
+mock_http = false
+
+[grpc.services.storageregistry]
+driver = "static"
+
+[grpc.services.storageregistry.drivers.static]
+home_provider = "/home"
+
+[grpc.services.storageregistry.drivers.static.rules]
+"/home" = {"address" = "your.revad.com:19000"}
+"/ocm" = {"address" = "your.revad.com:19001"}
+"00000000-0000-0000-0000-000000000000" = {"address" = "your.revad.com:19000"}
+
+[grpc.services.usershareprovider]
+driver = "memory"
+
+[grpc.services.ocmcore]
+driver = "nextcloud"
+
+[grpc.services.ocmcore.drivers.nextcloud]
+host = "https://your.revad.com/"
+endpoint = "https://your.efss.com/index.php/apps/sciencemesh/"
+shared_secret = "shared-secret-1"
+mock_http = false
+
+[grpc.services.ocminvitemanager]
+driver = "json"
+provider_domain = "your.revad.com"
+
+[grpc.services.ocmshareprovider]
+driver = "nextcloud"
+provider_domain = "your.revad.com"
+endpoint = "https://your.revad.com/"
+webdav_endpoint = "https://your.revad.com/"
+webdav_prefix = "https://your.revad.com/remote.php/dav/files"
+
+[grpc.services.ocmshareprovider.drivers.nextcloud]
+webdav_host = "https://your.revad.com/"
+endpoint = "https://your.efss.com/index.php/apps/sciencemesh/"
+shared_secret = "shared-secret-1"
+mock_http = false
+
+[grpc.services.ocmproviderauthorizer]
+driver = "json"
+
+[grpc.services.ocmproviderauthorizer.drivers.json]
+providers = "providers.testnet.json"
+verify_request_hostname = true
+
+[grpc.services.publicshareprovider]
+driver = "memory"
+
+[grpc.services.storageprovider]
+driver = "nextcloud"
+expose_data_server = true
+data_server_url = "https://your.revad.com/data"
+enable_home_creation = true
+
+[grpc.services.storageprovider.drivers.nextcloud]
+endpoint = "https://your.efss.com/index.php/apps/sciencemesh/"
+shared_secret = "shared-secret-1"
+mock_http = false
+
+[grpc.services.userprovider]
+driver = "nextcloud"
+
+[grpc.services.userprovider.drivers.nextcloud]
+endpoint = "https://your.efss.com/index.php/apps/sciencemesh/"
+shared_secret = "shared-secret-1"
+mock_http = false
+
+[grpc.services.datatx]
+txdriver = "rclone"
+storagedriver = "json"
+remove_transfer_on_cancel = true
+
+[grpc.services.datatx.txdrivers.rclone]
+# rclone endpoint
+endpoint = "http://rclone.docker"
+# basic auth is used
+auth_user = "rcloneuser"
+auth_pass = "eilohtho9oTahsuongeeTh7reedahPo1Ohwi3aek"
+auth_header = "x-access-token"
+job_status_check_interval = 2000
+job_timeout = 120000
+storagedriver = "json"
+remove_transfer_job_on_cancel = true
+
+[grpc.services.datatx.storagedrivers.json]
+file = ""
+
+[grpc.services.datatx.txdrivers.rclone.storagedrivers.json]
+file = ""
+
+[http]
+address = "0.0.0.0:443"
+certfile = "/etc/revad/tls/your.revad.ssl.crt"
+keyfile = "/etc/revad/tls/your.revad.ssl.key"
+
+[http.services.appprovider]
+insecure = true
+
+[http.services.sciencemesh]
+provider_domain = "your.revad.com"
+mesh_directory_url = "https://meshdir.docker/meshdir"
+
+[http.services.dataprovider]
+driver = "nextcloud"
+
+[http.services.prometheus]
+[http.services.sysinfo]
+
+[http.services.dataprovider.drivers.nextcloud]
+endpoint = "https://your.efss.com/index.php/apps/sciencemesh/"
+shared_secret = "shared-secret-1"
+mock_http = false
+
+[http.services.ocmprovider]
+ocm_prefix = "ocm"
+provider = "Reva OCM"
+endpoint = "https://your.revad.com"
+enable_webapp = true
+enable_datatx = true
+
+[http.services.ocsprovider]
+
+[http.services.ocmd]
+prefix = "ocm"
+
+[http.services.ocmd.config]
+host = "your.revad.com"
+
+[http.services.ocs]
+prefix = "ocs"
+
+[http.services.ocdav]
+[http.middlewares.cors]
+[http.middlewares.providerauthorizer]
+driver = "mentix"
+
+[http.middlewares.providerauthorizer.drivers.mentix]
+url = "https://iop.sciencemesh.uni-muenster.de/iop/mentix/cs3"
+verify_request_hostname = true
+insecure = false
+timeout = 10
+refresh = 900
