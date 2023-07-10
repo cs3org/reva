@@ -23,8 +23,8 @@ function waitForPort {
 [ ! -d "${ENV_ROOT}/temp" ] && mkdir --parents "${ENV_ROOT}/temp"
 
 # copy init files.
-cp --force ./scripts/init-owncloud-sciencemesh.sh  ./temp/oc.sh
-cp --force ./scripts/init-nextcloud-sciencemesh.sh ./temp/nc.sh
+cp --force ./scripts/init-owncloud-sciencemesh.sh  ./temp/owncloud.sh
+cp --force ./scripts/init-nextcloud-sciencemesh.sh ./temp/nextcloud.sh
 
 # make sure scripts are executable.
 chmod +x "${ENV_ROOT}/scripts/reva-run.sh"
@@ -61,27 +61,28 @@ docker run --detach --network=testnet                                 \
   --innodb-file-per-table=1                                           \
   --skip-innodb-read-only-compressed
 
-docker run --detach --network=testnet                                         \
-  --name="${EFSS1}1.docker"                                                   \
-  --add-host "host.docker.internal:host-gateway"                              \
-  -e HOST="${EFSS1}1"                                                         \
-  -e DBHOST="maria1.docker"                                                   \
-  -e USER="einstein"                                                          \
-  -e PASS="relativity"                                                        \
+docker run --detach --network=testnet                                        \
+  --name="${EFSS1}1.docker"                                                  \
+  --add-host "host.docker.internal:host-gateway"                             \
+  -e HOST="${EFSS1}1"                                                        \
+  -e DBHOST="maria1.docker"                                                  \
+  -e USER="einstein"                                                         \
+  -e PASS="relativity"                                                       \
   -v "${ENV_ROOT}/temp/${EFSS1}.sh:/${EFSS1}-init.sh"                        \
   -v "${ENV_ROOT}/$EFSS1-sciencemesh:/var/www/html/apps/sciencemesh"         \
+  -v "${ENV_ROOT}/tls:/tls"                                                   \
   "pondersource/dev-stock-${EFSS1}-sciencemesh"
 
 # EFSS2
 docker run --detach --network=testnet                                         \
   --name="reva${EFSS2}2.docker"                                               \
   -e HOST="reva${EFSS2}2"                                                     \
-  -v "${ENV_ROOT}/reva:/reva"                                                \
-  -v "${ENV_ROOT}/docker/revad:/etc/revad"                                   \
-  -v "${ENV_ROOT}/docker/tls:/etc/revad/tls"                                 \
-  -v "${ENV_ROOT}/scripts/reva-run.sh:/usr/bin/reva-run.sh"           \
-  -v "${ENV_ROOT}/scripts/reva-kill.sh:/usr/bin/reva-kill.sh"         \
-  -v "${ENV_ROOT}/scripts/reva-entrypoint.sh:/entrypoint.sh"          \
+  -v "${ENV_ROOT}/reva:/reva"                                                 \
+  -v "${ENV_ROOT}/revad:/etc/revad"                                           \
+  -v "${ENV_ROOT}/tls:/etc/revad/tls"                                         \
+  -v "${ENV_ROOT}/scripts/reva-run.sh:/usr/bin/reva-run.sh"                   \
+  -v "${ENV_ROOT}/scripts/reva-kill.sh:/usr/bin/reva-kill.sh"                 \
+  -v "${ENV_ROOT}/scripts/reva-entrypoint.sh:/entrypoint.sh"                  \
   pondersource/dev-stock-revad
 
 docker run --detach --network=testnet                                         \
@@ -100,8 +101,9 @@ docker run --detach --network=testnet                                         \
   -e DBHOST="maria2.docker"                                                   \
   -e USER="marie"                                                             \
   -e PASS="radioactivity"                                                     \
-  -v "${ENV_ROOT}/temp/${EFSS2}.sh:/${EFSS2}-init.sh"                        \
-  -v "${ENV_ROOT}/$EFSS2-sciencemesh:/var/www/html/apps/sciencemesh"         \
+  -v "${ENV_ROOT}/temp/${EFSS2}.sh:/${EFSS2}-init.sh"                         \
+  -v "${ENV_ROOT}/$EFSS2-sciencemesh:/var/www/html/apps/sciencemesh"          \
+  -v "${ENV_ROOT}/tls:/tls"                                                   \
   "pondersource/dev-stock-${EFSS2}-sciencemesh"
 
 # EFSS1
