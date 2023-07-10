@@ -1,7 +1,5 @@
 ## ScienceMesh Development Setup
 
-(under construction!)
-
 These scripts will create a Docker testnet which simulates the [ScienceMesh](https://sciencemesh.io).
 It is useful for all kinds of ScienceMesh-related development and (manual) testing scenarios.
 
@@ -13,6 +11,8 @@ cd reva
 cd examples/sciencemesh
 ./init-sciencemesh.sh # This will build reva and revad in the current repo
 ./nrro.sh
+./einstein.sh nextcloud1
+./maria2.sh
 ./clean.sh # Careful! This will kill and remove all your Docker containers on the current host system! Also unrelated ones if present.
 ./orro.sh
 ```

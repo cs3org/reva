@@ -157,7 +157,7 @@ docker run --detach --network=testnet                                 \
 docker run --detach --network=testnet                                         \
   --name="reva${EFSS2}2.docker"                                               \
   -e HOST="reva${EFSS2}2"                                                     \
-  -v "${ENV_ROOT}/reva:/reva"                                                 \
+  -v "${ENV_ROOT}/../..:/reva"                                                 \
   -v "${ENV_ROOT}/revad:/etc/revad"                                           \
   -v "${ENV_ROOT}/tls:/etc/revad/tls"                                         \
   -v "${ENV_ROOT}/scripts/reva-run.sh:/usr/bin/reva-run.sh"                   \
