@@ -22,6 +22,7 @@ import (
 	"context"
 
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
+	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/net"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 
@@ -43,17 +44,50 @@ var _ = Describe("Net", func() {
 			},
 			Username: "bob",
 		}
+		spaceManager = &userpb.User{
+			Id: &userpb.UserId{
+				OpaqueId: "space-id",
+			},
+			Username: "virtual",
+		}
+		mdSpaceManager = &provider.ResourceInfo{
+			Owner: &userpb.UserId{
+				OpaqueId: "user-1",
+				Type:     userpb.UserType_USER_TYPE_SPACE_OWNER,
+			},
+			PermissionSet: &provider.ResourcePermissions{
+				AddGrant: true,
+			},
+		}
+
+		mdSpaceViewer = &provider.ResourceInfo{
+			Owner: &userpb.UserId{
+				OpaqueId: "user-1",
+				Type:     userpb.UserType_USER_TYPE_SPACE_OWNER,
+			},
+			PermissionSet: &provider.ResourcePermissions{
+				ListContainer: true,
+			},
+		}
 		aliceCtx = ctxpkg.ContextSetUser(context.Background(), alice)
 		bobCtx   = ctxpkg.ContextSetUser(context.Background(), bob)
 	)
 
-	Describe("IsCurrentUserOwner", func() {
+	Describe("IsCurrentUserOwnerOrManager", func() {
 		It("returns true", func() {
-			Expect(net.IsCurrentUserOwner(aliceCtx, alice.Id)).To(BeTrue())
+			Expect(net.IsCurrentUserOwnerOrManager(aliceCtx, alice.Id, nil)).To(BeTrue())
 		})
 
 		It("returns false", func() {
-			Expect(net.IsCurrentUserOwner(bobCtx, alice.Id)).To(BeFalse())
+			Expect(net.IsCurrentUserOwnerOrManager(bobCtx, alice.Id, nil)).To(BeFalse())
+		})
+
+		It("user is space manager", func() {
+			Expect(net.IsCurrentUserOwnerOrManager(bobCtx, spaceManager.Id, mdSpaceManager)).To(BeTrue())
+		})
+
+		It("user is space viewer", func() {
+			Expect(net.IsCurrentUserOwnerOrManager(bobCtx, spaceManager.Id, mdSpaceViewer)).To(BeFalse())
 		})
 	})
 })
