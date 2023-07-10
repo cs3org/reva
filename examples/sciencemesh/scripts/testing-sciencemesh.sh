@@ -3,10 +3,10 @@
 ENV_ROOT=$(pwd)
 export ENV_ROOT=${ENV_ROOT}
 [ ! -d "./scripts" ] && echo "Directory ./scripts DOES NOT exist inside $ENV_ROOT, are you running this from the repo root?" && exit 1
-[ ! -d "./nc-sciencemesh" ] && echo "Directory ./nc-sciencemesh DOES NOT exist inside $ENV_ROOT, did you run ./scripts/init-sciencemesh.sh?" && exit 1
-[ ! -d "./nc-sciencemesh/vendor" ] && echo "Directory ./nc-sciencemesh/vendor DOES NOT exist inside $ENV_ROOT. Try: rmdir ./nc-sciencemesh ; ./scripts/init-sciencemesh.sh" && exit 1
-[ ! -d "./oc-sciencemesh" ] && echo "Directory ./oc-sciencemesh DOES NOT exist inside $ENV_ROOT, did you run ./scripts/init-sciencemesh.sh?" && exit 1
-[ ! -d "./oc-sciencemesh/vendor" ] && echo "Directory ./oc-sciencemesh/vendor DOES NOT exist inside $ENV_ROOT. Try: rmdir ./oc-sciencemesh ; ./scripts/init-sciencemesh.sh" && exit 1
+[ ! -d "./nextcloud-sciencemesh" ] && echo "Directory ./nextcloud-sciencemesh DOES NOT exist inside $ENV_ROOT, did you run ./scripts/init-sciencemesh.sh?" && exit 1
+[ ! -d "./nextcloud-sciencemesh/vendor" ] && echo "Directory ./nextcloud-sciencemesh/vendor DOES NOT exist inside $ENV_ROOT. Try: rmdir ./nextcloud-sciencemesh ; ./scripts/init-sciencemesh.sh" && exit 1
+[ ! -d "./owncloud-sciencemesh" ] && echo "Directory ./owncloud-sciencemesh DOES NOT exist inside $ENV_ROOT, did you run ./scripts/init-sciencemesh.sh?" && exit 1
+[ ! -d "./owncloud-sciencemesh/vendor" ] && echo "Directory ./owncloud-sciencemesh/vendor DOES NOT exist inside $ENV_ROOT. Try: rmdir ./owncloud-sciencemesh ; ./scripts/init-sciencemesh.sh" && exit 1
 
 function waitForPort {
   x=$(docker exec -it "${1}" ss -tulpn | grep -c "${2}")
@@ -41,24 +41,24 @@ docker run --detach --name=firefox-legacy   --network=testnet -p 5900:5800  --sh
 
 
 # EFSS1
-docker run --detach --network=testnet                                         \
-  --name="reva${EFSS1}1.docker"                                               \
-  -e HOST="reva${EFSS1}1"                                                     \
-  -v "${ENV_ROOT}/reva:/reva"                                                \
-  -v "${ENV_ROOT}/docker/revad:/etc/revad"                                   \
-  -v "${ENV_ROOT}/docker/tls:/etc/revad/tls"                                 \
-  -v "${ENV_ROOT}/docker/scripts/reva-run.sh:/usr/bin/reva-run.sh"           \
-  -v "${ENV_ROOT}/docker/scripts/reva-kill.sh:/usr/bin/reva-kill.sh"         \
-  -v "${ENV_ROOT}/docker/scripts/reva-entrypoint.sh:/entrypoint.sh"          \
+docker run --detach --network=testnet                                 \
+  --name="reva${EFSS1}1.docker"                                       \
+  -e HOST="reva${EFSS1}1"                                             \
+  -v "${ENV_ROOT}/../..:/reva"                                        \
+  -v "${ENV_ROOT}/revad:/etc/revad"                                   \
+  -v "${ENV_ROOT}/tls:/etc/revad/tls"                                 \
+  -v "${ENV_ROOT}/scripts/reva-run.sh:/usr/bin/reva-run.sh"           \
+  -v "${ENV_ROOT}/scripts/reva-kill.sh:/usr/bin/reva-kill.sh"         \
+  -v "${ENV_ROOT}/scripts/reva-entrypoint.sh:/entrypoint.sh"          \
   pondersource/dev-stock-revad
 
-docker run --detach --network=testnet                                         \
-  --name=maria1.docker                                                        \
-  -e MARIADB_ROOT_PASSWORD=eilohtho9oTahsuongeeTh7reedahPo1Ohwi3aek           \
-  mariadb                                                                     \
-  --transaction-isolation=READ-COMMITTED                                      \
-  --binlog-format=ROW                                                         \
-  --innodb-file-per-table=1                                                   \
+docker run --detach --network=testnet                                 \
+  --name=maria1.docker                                                \
+  -e MARIADB_ROOT_PASSWORD=eilohtho9oTahsuongeeTh7reedahPo1Ohwi3aek   \
+  mariadb                                                             \
+  --transaction-isolation=READ-COMMITTED                              \
+  --binlog-format=ROW                                                 \
+  --innodb-file-per-table=1                                           \
   --skip-innodb-read-only-compressed
 
 docker run --detach --network=testnet                                         \
@@ -70,8 +70,6 @@ docker run --detach --network=testnet                                         \
   -e PASS="relativity"                                                        \
   -v "${ENV_ROOT}/temp/${EFSS1}.sh:/${EFSS1}-init.sh"                        \
   -v "${ENV_ROOT}/$EFSS1-sciencemesh:/var/www/html/apps/sciencemesh"         \
-  -v "${ENV_ROOT}/docker/configs/20-xdebug.ini:/etc/php/7.4/cli/conf.d/20-xdebug.ini" \
-  -v "${ENV_ROOT}/docker/configs/20-xdebug.ini:/etc/php/8.2/cli/conf.d/20-xdebug.ini" \
   "pondersource/dev-stock-${EFSS1}-sciencemesh"
 
 # EFSS2
@@ -81,9 +79,9 @@ docker run --detach --network=testnet                                         \
   -v "${ENV_ROOT}/reva:/reva"                                                \
   -v "${ENV_ROOT}/docker/revad:/etc/revad"                                   \
   -v "${ENV_ROOT}/docker/tls:/etc/revad/tls"                                 \
-  -v "${ENV_ROOT}/docker/scripts/reva-run.sh:/usr/bin/reva-run.sh"           \
-  -v "${ENV_ROOT}/docker/scripts/reva-kill.sh:/usr/bin/reva-kill.sh"         \
-  -v "${ENV_ROOT}/docker/scripts/reva-entrypoint.sh:/entrypoint.sh"          \
+  -v "${ENV_ROOT}/scripts/reva-run.sh:/usr/bin/reva-run.sh"           \
+  -v "${ENV_ROOT}/scripts/reva-kill.sh:/usr/bin/reva-kill.sh"         \
+  -v "${ENV_ROOT}/scripts/reva-entrypoint.sh:/entrypoint.sh"          \
   pondersource/dev-stock-revad
 
 docker run --detach --network=testnet                                         \
@@ -104,8 +102,6 @@ docker run --detach --network=testnet                                         \
   -e PASS="radioactivity"                                                     \
   -v "${ENV_ROOT}/temp/${EFSS2}.sh:/${EFSS2}-init.sh"                        \
   -v "${ENV_ROOT}/$EFSS2-sciencemesh:/var/www/html/apps/sciencemesh"         \
-  -v "${ENV_ROOT}/docker/configs/20-xdebug.ini:/etc/php/7.4/cli/conf.d/20-xdebug.ini" \
-  -v "${ENV_ROOT}/docker/configs/20-xdebug.ini:/etc/php/8.2/cli/conf.d/20-xdebug.ini" \
   "pondersource/dev-stock-${EFSS2}-sciencemesh"
 
 # EFSS1
