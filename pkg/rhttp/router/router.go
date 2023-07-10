@@ -88,3 +88,7 @@ func ParamsFromContext(ctx context.Context) Params {
 	p, _ := ctx.Value(paramsKey{}).(Params)
 	return p
 }
+
+func ParamsFromRequest(r *http.Request) Params {
+	return ParamsFromContext(r.Context())
+}
