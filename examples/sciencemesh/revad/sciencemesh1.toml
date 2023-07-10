@@ -161,8 +161,8 @@ file = ""
 
 [http]
 address = "0.0.0.0:443"
-certfile = "/etc/revad/tls/your.revad.ssl.crt"
-keyfile = "/etc/revad/tls/your.revad.ssl.key"
+certfile = "/tls/your.revad.ssl.crt"
+keyfile = "/tls/your.revad.ssl.key"
 
 [http.services.appprovider]
 insecure = true

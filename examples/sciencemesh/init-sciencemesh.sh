@@ -38,6 +38,14 @@ BRANCH_REVA=sciencemesh-testing
     pondersource/dev-stock-owncloud-sciencemesh                                 \
     composer install
 
+docker run --rm               -it    \
+  -v "${ENV_ROOT}/../..:/reva"    \
+  -v "${ENV_ROOT}/build-reva.sh:/build-reva.sh" \
+  --workdir /reva                 \
+  --entrypoint /bin/bash          \
+  pondersource/dev-stock-revad    \
+  /build-reva.sh
+
 docker network inspect testnet >/dev/null 2>&1 || docker network create testnet
 
 [ ! -d "temp" ] && mkdir --parents temp
