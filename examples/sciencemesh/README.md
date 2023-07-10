@@ -9,7 +9,8 @@ Prerequisites: bash, git, Docker.
 git clone --branch=sciencemesh-testing https://github.com/cs3org/reva
 cd reva
 cd examples/sciencemesh
-./init-sciencemesh.sh # This will build reva and revad in the current repo
+./init-sciencemesh.sh # This will prepare the Nextcloud and ownCloud 10 images
+./init-reva.sh # This will build reva and revad in the current repo and handle a few other prerequisites
 ./nrro.sh
 ./einstein.sh nextcloud1
 ./maria2.sh
@@ -18,21 +19,17 @@ cd examples/sciencemesh
 ```
 
 ## Reva-to-reva
+
 To initialize your development environment and build reva on the host, do:
 ```
-./scripts/init-reva.sh
+./init-reva.sh # This will build reva and revad in the current repo and handle a few other prerequisites
 # passing sleep as the main container command will allow us
 # to run revad interactively later:
 REVA_CMD="sleep 30000" ./scripts/testing-reva.sh
-docker exec -it revad1.docker bash
-> cd /reva
-> git config --global --add safe.directory /reva
-> make revad
-> make reva
 ```
 
 ### Running the ocmd tutorial
-After you've run `make revad` and `make reva` once in one of the two containers as detailed above, you do:
+After you've started the Docker testnet with container as above, you do:
 * `docker exec -it revad1.docker bash` and then:
 ```
 cd /etc/revad/ocmd
@@ -48,7 +45,7 @@ cd /etc/revad/ocmd
 * follow the rest of https://reva.link/docs/tutorials/share-tutorial/
 
 ### Running the datatx tutorial
-After you've run `make revad` and `make reva` once in one of the two containers as detailed above, you do:
+After you've started the Docker testnet with container as above, you do:
 * `docker exec -it revad1.docker bash` and then:
 ```
 cd /etc/revad/datatx

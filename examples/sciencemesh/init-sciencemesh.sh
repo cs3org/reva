@@ -9,9 +9,6 @@ BRANCH_NEXTCLOUD_APP=nextcloud
 REPO_OWNCLOUD_APP=https://github.com/sciencemesh/nc-sciencemesh
 BRANCH_OWNCLOUD_APP=owncloud
 
-REPO_REVA=https://github.com/cs3org/reva
-BRANCH_REVA=sciencemesh-testing
-
 # Nextcloud Sciencemesh source code.
 [ ! -d "nextcloud-sciencemesh" ] &&                                             \
     git clone                                                                   \
@@ -37,15 +34,3 @@ BRANCH_REVA=sciencemesh-testing
     --workdir /var/www/html/apps/sciencemesh                                    \
     pondersource/dev-stock-owncloud-sciencemesh                                 \
     composer install
-
-docker run --rm               -it    \
-  -v "${ENV_ROOT}/../..:/reva"    \
-  -v "${ENV_ROOT}/build-reva.sh:/build-reva.sh" \
-  --workdir /reva                 \
-  --entrypoint /bin/bash          \
-  pondersource/dev-stock-revad    \
-  /build-reva.sh
-
-docker network inspect testnet >/dev/null 2>&1 || docker network create testnet
-
-[ ! -d "temp" ] && mkdir --parents temp
