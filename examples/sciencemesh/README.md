@@ -11,7 +11,7 @@ Prerequisites: bash, git, Docker.
 git clone --branch=sciencemesh-testing https://github.com/cs3org/reva
 cd reva
 cd examples/sciencemesh
-./init-sciencemesh.sh
+./init-sciencemesh.sh # This will build reva and revad in the current repo
 ./nrro.sh
 ./clean.sh # Careful! This will kill and remove all your Docker containers on the current host system! Also unrelated ones if present.
 ./orro.sh

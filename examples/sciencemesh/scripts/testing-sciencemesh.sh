@@ -19,6 +19,17 @@ function waitForPort {
   echo "${1}" port "${2}" is open
 }
 
+function waitForCollabora {
+  x=$(docker logs collabora.docker | grep -c "Ready")
+  until [ "${x}" -ne 0 ]
+  do
+    echo Waiting for Collabora to be ready, this usually takes about 10 seconds ... "${x}"
+    sleep 1
+    x=$(docker logs collabora.docker | grep -c "Ready")
+  done
+  echo "Collabora is ready"
+}
+
 # create temp dirctory if it doesn't exist.
 [ ! -d "${ENV_ROOT}/temp" ] && mkdir --parents "${ENV_ROOT}/temp"
 
@@ -125,8 +136,7 @@ docker exec maria2.docker mariadb -u root -peilohtho9oTahsuongeeTh7reedahPo1Ohwi
   -e "insert into oc_appconfig (appid, configkey, configvalue) values ('sciencemesh', 'inviteManagerApikey', 'invite-manager-endpoint');"
 
 # reva
-# waitForPort collabora.docker 9980
-docker logs collabora.docker | grep Ready
+waitForCollabora
 docker run --detach --network=testnet                                 \
   --name="reva${EFSS1}1.docker"                                       \
   -e HOST="reva${EFSS1}1"                                             \
