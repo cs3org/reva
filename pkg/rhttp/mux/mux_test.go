@@ -7,7 +7,7 @@ import (
 	"reflect"
 	"testing"
 
-	mux "github.com/cs3org/reva/pkg/rhttp/router"
+	"github.com/cs3org/reva/pkg/rhttp/mux"
 )
 
 type mockResponseWriter struct{}
