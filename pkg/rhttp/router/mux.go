@@ -21,6 +21,7 @@ package mux
 import (
 	"context"
 	"net/http"
+	"net/url"
 	"path/filepath"
 	"sync"
 )
@@ -58,6 +59,13 @@ func (m *ServeMux) Route(path string, f func(Router)) {
 }
 
 func (m *ServeMux) Handle(method, path string, handler http.Handler) {
+	if m.path != "" {
+		var err error
+		path, err = url.JoinPath(m.path, path)
+		if err != nil {
+			panic(err)
+		}
+	}
 	if method == "" {
 		panic("method must not be empty")
 	}
@@ -71,7 +79,7 @@ func (m *ServeMux) Handle(method, path string, handler http.Handler) {
 	m.m.Lock()
 	defer m.m.Unlock()
 
-	m.tree.insert(method, filepath.Join(m.path, path), handler)
+	m.tree.insert(method, path, handler)
 }
 
 func (m *ServeMux) Get(path string, handler http.Handler) {
@@ -103,12 +111,42 @@ func (m *ServeMux) Options(path string, handler http.Handler) {
 }
 
 func (m *ServeMux) Walk(ctx context.Context, f WalkFunc) {
+	m.tree.walk(ctx, "", f)
+}
 
+func (n *node) walk(ctx context.Context, prefix string, f WalkFunc) {
+	select {
+	case <-ctx.Done():
+		return
+	default:
+	}
+	if n == nil || n.isEmpty() {
+		return
+	}
+
+	var current string
+	switch n.ntype {
+	case static:
+		current = n.prefix
+	case param:
+		current = ":" + n.prefix
+	case catchall:
+		current = "*" + n.prefix
+	default:
+		panic("node type not recognised")
+	}
+
+	path := prefix + current
+	for method, h := range n.handlers {
+		f(method, path, h)
+	}
+
+	for _, c := range n.children {
+		c.walk(ctx, path, f)
+	}
 }
 
 func (m *ServeMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	defer m.handlePanic(w, r)
-
 	n, params, ok := m.tree.lookup(r.URL.Path)
 	if !ok {
 		m.notFound(w, r)
@@ -129,11 +167,4 @@ func (m *ServeMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func (m *ServeMux) notFound(w http.ResponseWriter, r *http.Request) {
 	http.NotFound(w, r)
-}
-
-func (m *ServeMux) handlePanic(w http.ResponseWriter, r *http.Request) {
-	if r := recover(); r != nil {
-		// TODO: log panic
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-	}
 }
