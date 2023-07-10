@@ -307,6 +307,42 @@ func TestWalk(t *testing.T) {
 	}
 }
 
+func TestWalkStop(t *testing.T) {
+	router := mux.NewServeMux()
+	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
+
+	router.Route("/users", func(r mux.Router) {
+		r.Get("/", h)
+		r.Route("/:name", func(r mux.Router) {
+			r.Get("", h)
+			r.Delete("/delete", h)
+			r.Post("/test/*all", h)
+		})
+	})
+
+	type tuple struct {
+		method, path string
+	}
+	routes := make(map[tuple]bool)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	router.Walk(ctx, func(method, path string, handler http.Handler, _ *mux.Options) {
+		tu := tuple{method: method, path: path}
+		if _, ok := routes[tu]; ok {
+			t.Fatalf("route already visited %v", tu)
+		}
+		routes[tu] = true
+		cancel()
+	})
+
+	expected := map[tuple]bool{
+		{method: "GET", path: "/users/"}: true,
+	}
+	if !reflect.DeepEqual(expected, routes) {
+		t.Fatalf("got not expected routes. got %v exp %v", routes, expected)
+	}
+}
+
 func TestUnprotected(t *testing.T) {
 	var auth, hit bool
 
