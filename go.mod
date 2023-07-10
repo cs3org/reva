@@ -25,7 +25,7 @@ require (
 	github.com/eventials/go-tus v0.0.0-20220610120217-05d0564bb571
 	github.com/gdexlab/go-render v1.0.1
 	github.com/go-chi/chi/v5 v5.0.8
-	github.com/go-ldap/ldap/v3 v3.4.5-0.20230327113050-32d292ef5ded
+	github.com/go-ldap/ldap/v3 v3.4.5
 	github.com/go-micro/plugins/v4/events/natsjs v1.2.0
 	github.com/go-micro/plugins/v4/server/http v1.2.1
 	github.com/go-micro/plugins/v4/store/nats-js v1.1.0
@@ -38,6 +38,7 @@ require (
 	github.com/gomodule/redigo v1.8.9
 	github.com/google/go-cmp v0.5.9
 	github.com/google/go-github v17.0.0+incompatible
+	github.com/google/renameio/v2 v2.0.0
 	github.com/google/uuid v1.3.0
 	github.com/grpc-ecosystem/go-grpc-middleware v1.3.0
 	github.com/hashicorp/go-hclog v1.3.1
@@ -138,7 +139,6 @@ require (
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/google/go-querystring v1.1.0 // indirect
 	github.com/google/pprof v0.0.0-20210720184732-4bb14d4b1be1 // indirect
-	github.com/google/renameio/v2 v2.0.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.13.0 // indirect
 	github.com/hashicorp/consul/api v1.15.2 // indirect
 	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
