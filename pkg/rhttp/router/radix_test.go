@@ -320,9 +320,8 @@ func TestRadixInsert(t *testing.T) {
 			method: "GET",
 			path:   "/",
 			exp: &node{
-				prefix:   "/",
-				ntype:    static,
-				handlers: handlers{"GET": nil},
+				prefix: "/",
+				ntype:  static,
 			},
 		},
 		{
@@ -330,9 +329,8 @@ func TestRadixInsert(t *testing.T) {
 			method: "POST",
 			path:   "/something",
 			exp: &node{
-				prefix:   "/something",
-				ntype:    static,
-				handlers: handlers{"POST": nil},
+				prefix: "/something",
+				ntype:  static,
 			},
 		},
 		{
@@ -340,9 +338,8 @@ func TestRadixInsert(t *testing.T) {
 			method: "POST",
 			path:   "/something/test/multi/level",
 			exp: &node{
-				prefix:   "/something/test/multi/level",
-				ntype:    static,
-				handlers: handlers{"POST": nil},
+				prefix: "/something/test/multi/level",
+				ntype:  static,
 			},
 		},
 		{
@@ -354,9 +351,8 @@ func TestRadixInsert(t *testing.T) {
 				ntype:  static,
 				children: nodes{
 					&node{
-						prefix:   "item",
-						ntype:    param,
-						handlers: handlers{"GET": nil},
+						prefix: "item",
+						ntype:  param,
 					},
 				},
 			},
@@ -370,9 +366,8 @@ func TestRadixInsert(t *testing.T) {
 				ntype:  static,
 				children: nodes{
 					&node{
-						prefix:   "item",
-						ntype:    param,
-						handlers: handlers{"GET": nil},
+						prefix: "item",
+						ntype:  param,
 					},
 				},
 			},
@@ -390,9 +385,8 @@ func TestRadixInsert(t *testing.T) {
 						ntype:  param,
 						children: nodes{
 							&node{
-								prefix:   "/some/thing",
-								ntype:    static,
-								handlers: handlers{"GET": nil},
+								prefix: "/some/thing",
+								ntype:  static,
 							},
 						},
 					},
@@ -412,9 +406,8 @@ func TestRadixInsert(t *testing.T) {
 						ntype:  param,
 						children: nodes{
 							&node{
-								prefix:   "/some/thing",
-								ntype:    static,
-								handlers: handlers{"GET": nil},
+								prefix: "/some/thing",
+								ntype:  static,
 							},
 						},
 					},
@@ -423,9 +416,8 @@ func TestRadixInsert(t *testing.T) {
 		},
 		{
 			init: &node{
-				prefix:   "/key/search",
-				ntype:    static,
-				handlers: handlers{"GET": nil},
+				prefix: "/key/search",
+				ntype:  static,
 			},
 			method: "POST",
 			path:   "/key/support",
@@ -434,23 +426,20 @@ func TestRadixInsert(t *testing.T) {
 				ntype:  static,
 				children: nodes{
 					&node{
-						prefix:   "earch",
-						ntype:    static,
-						handlers: handlers{"GET": nil},
+						prefix: "earch",
+						ntype:  static,
 					},
 					&node{
-						prefix:   "upport",
-						ntype:    static,
-						handlers: handlers{"POST": nil},
+						prefix: "upport",
+						ntype:  static,
 					},
 				},
 			},
 		},
 		{
 			init: &node{
-				prefix:   "/key/search",
-				ntype:    static,
-				handlers: handlers{"GET": nil},
+				prefix: "/key/search",
+				ntype:  static,
 			},
 			method: "POST",
 			path:   "/key/:item",
@@ -458,14 +447,12 @@ func TestRadixInsert(t *testing.T) {
 		},
 		{
 			init: &node{
-				prefix:   "/key/",
-				ntype:    static,
-				handlers: handlers{"GET": nil},
+				prefix: "/key/",
+				ntype:  static,
 				children: nodes{
 					&node{
-						prefix:   "item",
-						ntype:    param,
-						handlers: handlers{"get": nil},
+						prefix: "item",
+						ntype:  param,
 					},
 				},
 			},
@@ -479,24 +466,20 @@ func TestRadixInsert(t *testing.T) {
 				ntype:  static,
 				children: nodes{
 					&node{
-						prefix:   "blog",
-						ntype:    static,
-						handlers: handlers{"get": nil},
+						prefix: "blog",
+						ntype:  static,
 					},
 					&node{
-						prefix:   "search/",
-						ntype:    static,
-						handlers: handlers{"PUT": nil},
+						prefix: "search/",
+						ntype:  static,
 						children: nodes{
 							&node{
-								prefix:   "item",
-								ntype:    param,
-								handlers: handlers{"POST": nil},
+								prefix: "item",
+								ntype:  param,
 								children: nodes{
 									&node{
-										prefix:   "/something",
-										ntype:    static,
-										handlers: handlers{"GET": nil, "POST": nil},
+										prefix: "/something",
+										ntype:  static,
 									},
 								},
 							},
@@ -511,28 +494,24 @@ func TestRadixInsert(t *testing.T) {
 				ntype:  static,
 				children: nodes{
 					&node{
-						prefix:   "blog",
-						ntype:    static,
-						handlers: handlers{"get": nil},
+						prefix: "blog",
+						ntype:  static,
 					},
 					&node{
 						prefix: "s",
 						ntype:  static,
 						children: nodes{
 							&node{
-								prefix:   "earch/",
-								ntype:    static,
-								handlers: handlers{"PUT": nil},
+								prefix: "earch/",
+								ntype:  static,
 								children: nodes{
 									&node{
-										prefix:   "item",
-										ntype:    param,
-										handlers: handlers{"POST": nil},
+										prefix: "item",
+										ntype:  param,
 										children: nodes{
 											&node{
-												prefix:   "/something",
-												ntype:    static,
-												handlers: handlers{"GET": nil, "POST": nil},
+												prefix: "/something",
+												ntype:  static,
 											},
 										},
 									},
@@ -543,9 +522,8 @@ func TestRadixInsert(t *testing.T) {
 								ntype:  static,
 								children: nodes{
 									&node{
-										prefix:   "key",
-										ntype:    catchall,
-										handlers: handlers{"POST": nil},
+										prefix: "key",
+										ntype:  catchall,
 									},
 								},
 							},
@@ -559,11 +537,70 @@ func TestRadixInsert(t *testing.T) {
 	for _, tt := range tests {
 		if tt.panic {
 			assert.Panics(t, func() {
-				tt.init.insert(tt.method, tt.path, nil)
+				tt.init.insert(tt.method, tt.path, nil, nil)
 			})
 		} else {
-			tt.init.insert(tt.method, tt.path, nil)
+			tt.init.insert(tt.method, tt.path, nil, nil)
 			assert.Equal(t, tt.exp, tt.init)
 		}
+	}
+}
+
+func TestInsertOptions(t *testing.T) {
+	tests := []struct {
+		init         *node
+		method, path string
+		opt          *Options
+		exp          *node
+	}{
+		{
+			init:   newTree(),
+			method: "GET",
+			path:   "/test",
+			opt:    &Options{Unprotected: true},
+			exp: &node{
+				prefix: "/test",
+				ntype:  static,
+				opts:   nodeOptions{opts: nilMap[*Options]{"GET": &Options{Unprotected: true}}},
+			},
+		},
+		{
+			init:   newTree(),
+			method: "",
+			path:   "/test",
+			opt:    &Options{Unprotected: true},
+			exp: &node{
+				prefix: "/test",
+				ntype:  static,
+				opts:   nodeOptions{global: &Options{Unprotected: true}},
+			},
+		},
+		{
+			init: &node{
+				prefix: "/",
+				ntype:  static,
+				opts:   nodeOptions{},
+			},
+			method: "GET",
+			path:   "/blog",
+			opt:    &Options{Unprotected: true},
+			exp: &node{
+				prefix: "/",
+				ntype:  static,
+				opts:   nodeOptions{},
+				children: nodes{
+					{
+						prefix: "blog",
+						ntype:  static,
+						opts:   nodeOptions{opts: nilMap[*Options]{"GET": &Options{Unprotected: true}}},
+					},
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		tt.init.insert(tt.method, tt.path, nil, tt.opt)
+		assert.Equal(t, tt.exp, tt.init)
 	}
 }

@@ -34,8 +34,33 @@ const (
 type node struct {
 	prefix   string
 	ntype    nodetype
-	handlers handlers
+	handlers nilMap[http.Handler]
+	opts     nodeOptions
 	children nodes
+
+	middlewareFactory func(*Options) []Middleware
+}
+
+type nodeOptions struct {
+	global *Options // these applies to all methods
+	opts   nilMap[*Options]
+}
+
+func (n *nodeOptions) setGlobal(o *Options) {
+	n.global = o
+}
+
+func (n *nodeOptions) set(method string, o *Options) {
+	n.opts.add(method, o)
+}
+
+func (n *nodeOptions) get(method string) *Options {
+	global := n.global
+	perMethod := n.opts[method]
+	if global != nil {
+		return global.merge(perMethod)
+	}
+	return perMethod
 }
 
 func (n *node) isEmpty() bool {
@@ -46,13 +71,13 @@ func newTree() *node {
 	return &node{}
 }
 
-type handlers map[string]http.Handler
+type nilMap[T any] map[string]T
 
-func (h *handlers) add(method string, handler http.Handler) {
-	if *h == nil {
-		*h = make(handlers)
+func (m *nilMap[T]) add(method string, v T) {
+	if *m == nil {
+		*m = make(nilMap[T])
 	}
-	(*h)[method] = handler
+	(*m)[method] = v
 }
 
 type nodes []*node
@@ -193,16 +218,21 @@ func nextWildcard(s string) (string, int, nodetype) {
 	return "", -1, 0
 }
 
-func (n *node) insert(method, path string, handler http.Handler) {
+func (n *node) mergeOptions(method string, opts *Options) *Options {
+	return n.opts.get(method).merge(opts)
+}
+
+func (n *node) insert(method, path string, handler http.Handler, opts *Options) {
 	if n.prefix == "" {
 		// the tree is empty
-		n.insertChild(method, path, handler)
+		n.insertChild(method, path, handler, opts)
 		return
 	}
 
 	// traverse the tree until we cannot make futher progresses
 	current := &node{
-		children: nodes{n},
+		children:          nodes{n},
+		middlewareFactory: n.middlewareFactory,
 	}
 walk:
 	for {
@@ -213,18 +243,20 @@ walk:
 					panic("only one wildcard is allowed per path segment")
 				}
 				current = node
+				opts = n.mergeOptions(method, opts)
 				path = path[i+len(wildcard):]
 				continue walk
 			}
 			// the next node is the one having the same prefix of a static node
 			if node.ntype == static && strings.HasPrefix(path, node.prefix) {
 				current = node
+				opts = n.mergeOptions(method, opts)
 				path = path[len(node.prefix):]
 				continue walk
 			}
 		}
 
-		current.insertChild(method, path, handler)
+		current.insertChild(method, path, handler, opts)
 		return
 	}
 }
@@ -238,11 +270,25 @@ func wildcardIndex(s string) int {
 	return -1
 }
 
-func (n *node) insertChild(method, path string, handler http.Handler) {
+func (n *node) insertChild(method, path string, handler http.Handler, opts *Options) {
 	current := n
 	for {
 		if path == "" {
-			current.handlers.add(method, handler)
+			if handler != nil {
+				if n.middlewareFactory != nil && opts != nil {
+					for _, mid := range n.middlewareFactory(opts) {
+						handler = mid(handler)
+					}
+				}
+				current.handlers.add(method, handler)
+			}
+			if opts != nil {
+				if method == "" {
+					current.opts.setGlobal(opts)
+				} else {
+					current.opts.set(method, opts)
+				}
+			}
 			return
 		}
 
@@ -252,8 +298,10 @@ func (n *node) insertChild(method, path string, handler http.Handler) {
 				panic("only one wildcard is allowed per path segment")
 			}
 			next := &node{
-				prefix: wildcard,
-				ntype:  wtype,
+				prefix:            wildcard,
+				ntype:             wtype,
+				middlewareFactory: n.middlewareFactory,
+				opts:              current.opts,
 			}
 			current.children = nodes{next}
 			path = path[len(wildcard)+1:]
@@ -288,8 +336,10 @@ func (n *node) insertChild(method, path string, handler http.Handler) {
 					}
 				}
 				other := &node{
-					prefix: childPrefix,
-					ntype:  static,
+					prefix:            childPrefix,
+					ntype:             static,
+					opts:              current.opts,
+					middlewareFactory: n.middlewareFactory,
 				}
 				current.children = append(current.children, other)
 				current = other
@@ -302,10 +352,12 @@ func (n *node) insertChild(method, path string, handler http.Handler) {
 
 func (n *node) split(prefix string) {
 	s := &node{
-		prefix:   n.prefix[len(prefix):],
-		ntype:    static,
-		handlers: n.handlers,
-		children: n.children,
+		prefix:            n.prefix[len(prefix):],
+		ntype:             static,
+		handlers:          n.handlers,
+		children:          n.children,
+		opts:              n.opts,
+		middlewareFactory: n.middlewareFactory,
 	}
 	n.children = nodes{s}
 	n.prefix = prefix

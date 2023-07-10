@@ -25,13 +25,9 @@ import (
 	"strings"
 )
 
-type Option int
-
-const (
-	Unprotected Option = iota
-)
-
 type Params map[string]string
+
+type Middleware func(http.Handler) http.Handler
 
 func (p Params) Get(key string) (string, bool) {
 	if p == nil {
@@ -47,21 +43,21 @@ type Router interface {
 	Walker
 
 	// Route mounts a sub-Router along a path string.
-	Route(path string, f func(Router))
+	Route(path string, f func(Router), o ...Option)
 	// Handle routes for path that matches the HTTP method.
-	Handle(method, path string, handler http.Handler)
+	Handle(method, path string, handler http.Handler, o ...Option)
 
 	// HTTP-method routing along path.
-	Get(path string, handler http.Handler)
-	Head(path string, handler http.Handler)
-	Post(path string, handler http.Handler)
-	Put(path string, handler http.Handler)
-	Delete(path string, handler http.Handler)
-	Connect(path string, handler http.Handler)
-	Options(path string, handler http.Handler)
+	Get(path string, handler http.Handler, o ...Option)
+	Head(path string, handler http.Handler, o ...Option)
+	Post(path string, handler http.Handler, o ...Option)
+	Put(path string, handler http.Handler, o ...Option)
+	Delete(path string, handler http.Handler, o ...Option)
+	Connect(path string, handler http.Handler, o ...Option)
+	Options(path string, handler http.Handler, o ...Option)
 }
 
-type WalkFunc func(method, path string, handler http.Handler)
+type WalkFunc func(method, path string, handler http.Handler, opts *Options)
 
 type Walker interface {
 	Walk(ctx context.Context, f WalkFunc)

@@ -46,19 +46,29 @@ func NewServeMux() *ServeMux {
 	}
 }
 
+func (m *ServeMux) SetMiddlewaresFactory(factory func(o *Options) []Middleware) {
+	m.tree.middlewareFactory = factory
+}
+
 // ensure Mux implements Router interface
 var _ Router = (*ServeMux)(nil)
 
-func (m *ServeMux) Route(path string, f func(Router)) {
+func (m *ServeMux) Route(path string, f func(Router), o ...Option) {
+	path = filepath.Join(m.path, path)
 	sub := &ServeMux{
 		tree: m.tree,
-		path: filepath.Join(m.path, path),
+		path: path,
 		m:    m.m,
 	}
+	var opts Options
+	for _, oo := range o {
+		oo(&opts)
+	}
+	m.tree.insert("", path, nil, &opts)
 	f(sub)
 }
 
-func (m *ServeMux) Handle(method, path string, handler http.Handler) {
+func (m *ServeMux) Handle(method, path string, handler http.Handler, o ...Option) {
 	if m.path != "" {
 		var err error
 		path, err = url.JoinPath(m.path, path)
@@ -79,35 +89,39 @@ func (m *ServeMux) Handle(method, path string, handler http.Handler) {
 	m.m.Lock()
 	defer m.m.Unlock()
 
-	m.tree.insert(method, path, handler)
+	var opts Options
+	for _, oo := range o {
+		oo(&opts)
+	}
+	m.tree.insert(method, path, handler, &opts)
 }
 
-func (m *ServeMux) Get(path string, handler http.Handler) {
-	m.Handle(http.MethodGet, path, handler)
+func (m *ServeMux) Get(path string, handler http.Handler, o ...Option) {
+	m.Handle(http.MethodGet, path, handler, o...)
 }
 
-func (m *ServeMux) Head(path string, handler http.Handler) {
-	m.Handle(http.MethodHead, path, handler)
+func (m *ServeMux) Head(path string, handler http.Handler, o ...Option) {
+	m.Handle(http.MethodHead, path, handler, o...)
 }
 
-func (m *ServeMux) Post(path string, handler http.Handler) {
-	m.Handle(http.MethodPost, path, handler)
+func (m *ServeMux) Post(path string, handler http.Handler, o ...Option) {
+	m.Handle(http.MethodPost, path, handler, o...)
 }
 
-func (m *ServeMux) Put(path string, handler http.Handler) {
-	m.Handle(http.MethodPut, path, handler)
+func (m *ServeMux) Put(path string, handler http.Handler, o ...Option) {
+	m.Handle(http.MethodPut, path, handler, o...)
 }
 
-func (m *ServeMux) Delete(path string, handler http.Handler) {
-	m.Handle(http.MethodDelete, path, handler)
+func (m *ServeMux) Delete(path string, handler http.Handler, o ...Option) {
+	m.Handle(http.MethodDelete, path, handler, o...)
 }
 
-func (m *ServeMux) Connect(path string, handler http.Handler) {
-	m.Handle(http.MethodConnect, path, handler)
+func (m *ServeMux) Connect(path string, handler http.Handler, o ...Option) {
+	m.Handle(http.MethodConnect, path, handler, o...)
 }
 
-func (m *ServeMux) Options(path string, handler http.Handler) {
-	m.Handle(http.MethodOptions, path, handler)
+func (m *ServeMux) Options(path string, handler http.Handler, o ...Option) {
+	m.Handle(http.MethodOptions, path, handler, o...)
 }
 
 func (m *ServeMux) Walk(ctx context.Context, f WalkFunc) {
@@ -138,7 +152,7 @@ func (n *node) walk(ctx context.Context, prefix string, f WalkFunc) {
 
 	path := prefix + current
 	for method, h := range n.handlers {
-		f(method, path, h)
+		f(method, path, h, n.opts.get(method))
 	}
 
 	for _, c := range n.children {

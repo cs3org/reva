@@ -288,7 +288,7 @@ func TestWalk(t *testing.T) {
 	}
 	routes := make(map[tuple]bool)
 
-	router.Walk(context.Background(), func(method, path string, handler http.Handler) {
+	router.Walk(context.Background(), func(method, path string, handler http.Handler, _ *mux.Options) {
 		tu := tuple{method: method, path: path}
 		if _, ok := routes[tu]; ok {
 			t.Fatalf("route already visited %v", tu)
@@ -304,5 +304,103 @@ func TestWalk(t *testing.T) {
 	}
 	if !reflect.DeepEqual(expected, routes) {
 		t.Fatalf("got not expected routes. got %v exp %v", routes, expected)
+	}
+}
+
+func TestUnprotected(t *testing.T) {
+	var auth, hit bool
+
+	authMid := func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			auth = true
+			next.ServeHTTP(w, r)
+		})
+	}
+	factory := func(o *mux.Options) (m []mux.Middleware) {
+		if !o.Unprotected {
+			m = append(m, authMid)
+		}
+		return
+	}
+
+	nop := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
+	router := mux.NewServeMux()
+	router.SetMiddlewaresFactory(factory)
+
+	router.Route("/users", func(r mux.Router) {
+		r.Get("/", nop)
+		r.Get("/me", nop)
+		r.Post("/change-password", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			hit = true
+		}), mux.Unprotected())
+	})
+
+	w := new(mockResponseWriter)
+	r, _ := http.NewRequest(http.MethodGet, "/users/", nil)
+	router.ServeHTTP(w, r)
+	if !auth {
+		t.Fatal("/users/ should be authenticated")
+	}
+
+	auth = false
+	w = new(mockResponseWriter)
+	r, _ = http.NewRequest(http.MethodPost, "/users/change-password", nil)
+	router.ServeHTTP(w, r)
+	if !hit {
+		t.Fatal("/users/change-password not hit")
+	}
+	if auth {
+		t.Fatal("/users/change-password is unprotected")
+	}
+}
+
+func TestOptionsRecursive(t *testing.T) {
+	var auth bool
+	authMid := func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			auth = true
+			next.ServeHTTP(w, r)
+		})
+	}
+	factory := func(o *mux.Options) (m []mux.Middleware) {
+		if !o.Unprotected {
+			m = append(m, authMid)
+		}
+		return
+	}
+
+	nop := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
+	router := mux.NewServeMux()
+	router.SetMiddlewaresFactory(factory)
+
+	router.Route("/users", func(r mux.Router) {
+		r.Get("/", nop)
+		r.Get("/me", nop)
+		r.Post("/change-password", nop)
+	}, mux.Unprotected())
+
+	router.Get("/users/other-unprotected", nop)
+
+	w := new(mockResponseWriter)
+	r, _ := http.NewRequest(http.MethodGet, "/users/", nil)
+	router.ServeHTTP(w, r)
+	if auth {
+		t.Fatal("/users/ is unprotected")
+	}
+
+	auth = false
+	w = new(mockResponseWriter)
+	r, _ = http.NewRequest(http.MethodPost, "/users/change-password", nil)
+	router.ServeHTTP(w, r)
+	if auth {
+		t.Fatal("/users/change-password is unprotected")
+	}
+
+	auth = false
+	w = new(mockResponseWriter)
+	r, _ = http.NewRequest(http.MethodGet, "/users/other-unprotected", nil)
+	router.ServeHTTP(w, r)
+	if auth {
+		t.Fatal("/users/other-unprotected is unprotected")
 	}
 }
