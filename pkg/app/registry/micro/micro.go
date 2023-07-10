@@ -21,15 +21,13 @@ package micro
 import (
 	"container/heap"
 	"context"
-	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 
 	registrypb "github.com/cs3org/go-cs3apis/cs3/app/registry/v1beta1"
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
-	"github.com/google/uuid"
 	"github.com/mitchellh/mapstructure"
 	oreg "github.com/owncloud/ocis/v2/ocis-pkg/registry"
 	"github.com/rs/zerolog/log"
@@ -82,7 +80,7 @@ type manager struct {
 	namespace string
 	mimetypes *orderedmap.OrderedMap // map[string]*mimeTypeConfig  ->  map the mime type to the addresses of the corresponding providers
 	sync.RWMutex
-	providers map[string]interface{}
+	//providers map[string]interface{}
 }
 
 // New returns an implementation of the app.Registry interface.
@@ -186,13 +184,28 @@ func (m *manager) FindProviders(ctx context.Context, mimeType string) ([]*regist
 		}
 	}
 
-	// TODO: sort by priority?
+	sortByPriority(providers)
 
 	return providers, nil
 }
 
+func sortByPriority(providers []*registrypb.ProviderInfo) {
+	less := func(i, j int) bool {
+		prioI, _ := strconv.ParseInt(getPriority(providers[i]), 10, 64)
+		prioJ, _ := strconv.ParseInt(getPriority(providers[j]), 10, 64)
+		return prioI < prioJ
+	}
+
+	sort.Slice(providers, less)
+}
+
 func (m *manager) AddProvider(ctx context.Context, p *registrypb.ProviderInfo) error {
 	log := appctx.GetLogger(ctx)
+
+	log.Info().Interface("provider", p).Msg("Tried to register through cs3 api, make sure the provider registeres directly through go-micro")
+
+	/* This has become obsolete for us
+	TODO: remove later (before )
 
 	log.Debug().Interface("provider", p).Msg("AddProvider")
 
@@ -231,34 +244,10 @@ func (m *manager) AddProvider(ctx context.Context, p *registrypb.ProviderInfo) e
 
 	log.Info().Msgf("registering external service %v@%v", node.Id, node.Address)
 
-	rOpts := []mreg.RegisterOption{mreg.RegisterTTL(time.Minute)} // TODO: this should be configurable
+	rOpts := []mreg.RegisterOption{mreg.RegisterTTL(time.Minute)}
 	if err := reg.Register(service, rOpts...); err != nil {
 		log.Fatal().Err(err).Msgf("Registration error for external service %v", serviceID)
-	}
-
-	t := time.NewTicker(time.Second * 30)
-
-	go func() {
-		for {
-			select {
-			case <-t.C:
-				log.Debug().Interface("service", service).Msg("refreshing external service-registration")
-				err := reg.Register(service, rOpts...)
-				if err != nil {
-					log.Error().Err(err).Msgf("registration error for external service %v", serviceID)
-				}
-			case <-ctx.Done():
-				log.Debug().Interface("service", service).Msg("unregistering")
-				t.Stop()
-				err := reg.Deregister(service)
-				if err != nil {
-					log.Err(err).Msgf("Error unregistering external service %v", serviceID)
-				}
-				// FIXME how do we end this when a provider reregisters?
-				// Proposal: use manager.providers and register function there aswell
-			}
-		}
-	}()
+	}*/
 
 	return nil
 }
@@ -337,7 +326,7 @@ func (m *manager) SetDefaultProviderForMimeType(ctx context.Context, mimeType st
 		mime := mimeInterface.(*mimeTypeConfig)
 		mime.DefaultApp = p.Address
 
-		m.registerProvider(p, mime)
+		registerProvider(p, mime)
 	} else {
 		// the mime type should be already registered as config in the AppRegistry
 		// we will create a new entry fot the mimetype, but leaving a warning for
@@ -348,8 +337,25 @@ func (m *manager) SetDefaultProviderForMimeType(ctx context.Context, mimeType st
 	return nil
 }
 
-func (m *manager) registerProvider(p *registrypb.ProviderInfo, mime *mimeTypeConfig) {
-	m.AddProvider(context.Background(), p)
+func registerProvider(p *registrypb.ProviderInfo, mime *mimeTypeConfig) {
+	// the app provider could be previously registered to the same mime type list
+	// so we will remove it
+	unregisterProvider(p, mime)
+
+	prio, _ := strconv.ParseUint(getPriority(p), 10, 64)
+	heap.Push(&mime.apps, providerWithPriority{
+		provider: p,
+		priority: prio,
+	})
+}
+
+// remove a provider from the provider list in a mime type
+// it's a no-op if the provider is not in the list of providers in the mime type
+func unregisterProvider(p *registrypb.ProviderInfo, mime *mimeTypeConfig) {
+	if index, in := getIndex(mime.apps, p); in {
+		// remove the provider from the list
+		heap.Remove(&mime.apps, index)
+	}
 }
 
 func dummyMimeType(m string, apps []*registrypb.ProviderInfo) *mimeTypeConfig {
@@ -376,25 +382,26 @@ func dummyMimeType(m string, apps []*registrypb.ProviderInfo) *mimeTypeConfig {
 }
 
 func (m *manager) GetDefaultProviderForMimeType(ctx context.Context, mimeType string) (*registrypb.ProviderInfo, error) {
-	m.RLock()
-	defer m.RUnlock()
-
-	mimeInterface, ok := m.mimetypes.Get(mimeType)
-	if ok {
-		mime := mimeInterface.(*mimeTypeConfig)
-		// default by provider address
-		if p, ok := m.providers[mime.DefaultApp]; ok {
-			return p.(*registrypb.ProviderInfo), nil
-		}
-
-		// default by provider name
-		for _, p := range m.providers {
-			if p.(*registrypb.ProviderInfo).Name == mime.DefaultApp {
-				return p.(*registrypb.ProviderInfo), nil
-			}
-		}
-	}
-
+	// TODO: implement me
+	//m.RLock()
+	//defer m.RUnlock()
+	//
+	//mimeInterface, ok := m.mimetypes.Get(mimeType)
+	//if ok {
+	//	mime := mimeInterface.(*mimeTypeConfig)
+	//	// default by provider address
+	//	if p, ok := m.providers[mime.DefaultApp]; ok {
+	//		return p.(*registrypb.ProviderInfo), nil
+	//	}
+	//
+	//	// default by provider name
+	//	for _, p := range m.providers {
+	//		if p.(*registrypb.ProviderInfo).Name == mime.DefaultApp {
+	//			return p.(*registrypb.ProviderInfo), nil
+	//		}
+	//	}
+	//}
+	//
 	return nil, errtypes.NotFound("default application provider not set for mime type " + mimeType)
 }
 
@@ -433,7 +440,6 @@ func (h providerHeap) Swap(i, j int) {
 
 func (h *providerHeap) Push(x interface{}) {
 	*h = append(*h, x.(providerWithPriority))
-	fmt.Printf("Heap len: %d\n", h.Len())
 }
 
 func (h *providerHeap) Pop() interface{} {
