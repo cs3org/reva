@@ -20,5 +20,8 @@ sed -i "s/your.revad.ssl/${HOST}/g" /revad/configs/sciencemesh3.toml
 sed -i "s/your.revad.com/${HOST}.docker/g" /revad/configs/sciencemesh3.toml
 sed -i "s/your.efss.com/${HOST//reva/}.docker/g" /revad/configs/sciencemesh3.toml
 
+cp /etc/revad/tls/*.crt /usr/local/share/ca-certificates/
+update-ca-certificates
+
 # run revad.
 revad --dev-dir "/revad/configs" -log "${LOG_LEVEL:-debug}" &

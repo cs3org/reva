@@ -102,6 +102,9 @@ docker run --detach --network=testnet                                         \
 waitForPort maria1.docker 3306
 waitForPort "${EFSS1}1.docker" 443
 
+docker exec "${EFSS1}1.docker" bash -c "cp /tls/*.crt /usr/local/share/ca-certificates/"
+docker exec "${EFSS1}1.docker" update-ca-certificates
+
 docker exec -u www-data "${EFSS1}1.docker" sh "/${EFSS1}-init.sh"
 
 # run db injections.
@@ -120,6 +123,9 @@ docker exec maria1.docker mariadb -u root -peilohtho9oTahsuongeeTh7reedahPo1Ohwi
 # EFSS2
 waitForPort maria2.docker 3306
 waitForPort "${EFSS2}2.docker" 443
+
+docker exec "${EFSS2}2.docker" bash -c "cp /tls/*.crt /usr/local/share/ca-certificates/"
+docker exec "${EFSS2}2.docker" update-ca-certificates
 
 docker exec -u www-data "${EFSS2}2.docker" sh "/${EFSS2}-init.sh"
 
