@@ -57,6 +57,12 @@ func WithLogger(log zerolog.Logger) Config {
 	}
 }
 
+func WithMiddlewareFactory(f func(o *mux.Options) []mux.Middleware) Config {
+	return func(s *Server) {
+		s.midFactory = f
+	}
+}
+
 func InitServices(ctx context.Context, services map[string]config.ServicesConfig) (map[string]global.Service, error) {
 	s := make(map[string]global.Service)
 	for name, cfg := range services {
@@ -102,11 +108,14 @@ type Server struct {
 	listener   net.Listener
 	svcs       map[string]global.Service // map key is svc Prefix
 	log        zerolog.Logger
+	midFactory func(*mux.Options) []mux.Middleware
 }
 
 // Start starts the server.
 func (s *Server) Start(ln net.Listener) error {
 	router := mux.NewServeMux()
+	router.SetMiddlewaresFactory(s.midFactory)
+
 	s.registerServices(router)
 
 	ctx, cancel := context.WithCancel(context.Background())
