@@ -26,11 +26,14 @@ import (
 
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp/global"
+	"github.com/cs3org/reva/pkg/rhttp/mux"
 	"github.com/cs3org/reva/pkg/utils/cfg"
 )
 
+const name = "ocmprovider"
+
 func init() {
-	global.Register("ocmprovider", New)
+	global.Register(name, New)
 }
 
 type config struct {
@@ -138,17 +141,12 @@ func (s *svc) Close() error {
 	return nil
 }
 
-func (s *svc) Prefix() string {
-	// this is hardcoded as per OCM specifications
-	return "/ocm-provider"
+func (s *svc) Name() string {
+	return name
 }
 
-func (s *svc) Unprotected() []string {
-	return []string{"/"}
-}
-
-func (s *svc) Handler() http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+func (s *svc) Register(r mux.Router) {
+	r.Get("/ocm-provider", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		log := appctx.GetLogger(r.Context())
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
@@ -162,5 +160,5 @@ func (s *svc) Handler() http.Handler {
 		if _, err := w.Write(indented); err != nil {
 			log.Err(err).Msg("Error writing to ResponseWriter")
 		}
-	})
+	}), mux.Unprotected())
 }

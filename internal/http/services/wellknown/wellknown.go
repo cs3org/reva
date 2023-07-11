@@ -22,18 +22,18 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp/global"
-	"github.com/cs3org/reva/pkg/rhttp/router"
+	"github.com/cs3org/reva/pkg/rhttp/mux"
 	"github.com/cs3org/reva/pkg/utils/cfg"
 )
+
+const name = "wellknown"
 
 func init() {
 	global.Register("wellknown", New)
 }
 
 type config struct {
-	Prefix                string `mapstructure:"prefix"`
 	Issuer                string `mapstructure:"issuer"`
 	AuthorizationEndpoint string `mapstructure:"authorization_endpoint"`
 	JwksURI               string `mapstructure:"jwks_uri"`
@@ -44,15 +44,8 @@ type config struct {
 	EndSessionEndpoint    string `mapstructure:"end_session_endpoint"`
 }
 
-func (c *config) ApplyDefaults() {
-	if c.Prefix == "" {
-		c.Prefix = ".well-known"
-	}
-}
-
 type svc struct {
-	conf    *config
-	handler http.Handler
+	conf *config
 }
 
 // New returns a new webuisvc.
@@ -65,41 +58,20 @@ func New(ctx context.Context, m map[string]interface{}) (global.Service, error) 
 	s := &svc{
 		conf: &c,
 	}
-	s.setHandler()
 	return s, nil
+}
+
+func (s *svc) Name() string {
+	return name
+}
+
+func (s *svc) Register(r mux.Router) {
+	r.Route("/.well-known", func(r mux.Router) {
+		r.Get("/webfinger", http.HandlerFunc(s.doWebfinger))
+		r.Get("/openid-configuration", http.HandlerFunc(s.doOpenidConfiguration), mux.Unprotected())
+	})
 }
 
 func (s *svc) Close() error {
 	return nil
-}
-
-func (s *svc) Prefix() string {
-	return s.conf.Prefix
-}
-
-func (s *svc) Handler() http.Handler {
-	return s.handler
-}
-
-func (s *svc) Unprotected() []string {
-	return []string{
-		"/openid-configuration",
-	}
-}
-
-func (s *svc) setHandler() {
-	s.handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		log := appctx.GetLogger(r.Context())
-		var head string
-		head, r.URL.Path = router.ShiftPath(r.URL.Path)
-		log.Info().Msgf("wellknown routing: head=%s tail=%s", head, r.URL.Path)
-		switch head {
-		case "webfinger":
-			s.doWebfinger(w, r)
-		case "openid-configuration":
-			s.doOpenidConfiguration(w, r)
-		default:
-			w.WriteHeader(http.StatusNotFound)
-		}
-	})
 }

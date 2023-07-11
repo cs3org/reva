@@ -35,6 +35,7 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/rhttp/global"
+	"github.com/cs3org/reva/pkg/rhttp/mux"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/storage/utils/downloader"
 	"github.com/cs3org/reva/pkg/storage/utils/walker"
@@ -43,6 +44,8 @@ import (
 	"github.com/gdexlab/go-render/render"
 	ua "github.com/mileusna/useragent"
 )
+
+const name = "archiver"
 
 type svc struct {
 	config     *Config
@@ -55,7 +58,6 @@ type svc struct {
 
 // Config holds the config options that need to be passed down to all ocdav handlers.
 type Config struct {
-	Prefix         string   `mapstructure:"prefix"`
 	GatewaySvc     string   `mapstructure:"gatewaysvc"      validate:"required"`
 	Timeout        int64    `mapstructure:"timeout"`
 	Insecure       bool     `mapstructure:"insecure" docs:"false;Whether to skip certificate checks when sending requests."`
@@ -66,7 +68,7 @@ type Config struct {
 }
 
 func init() {
-	global.Register("archiver", New)
+	global.Register(name, New)
 }
 
 // New creates a new archiver service.
@@ -101,15 +103,74 @@ func New(ctx context.Context, conf map[string]interface{}) (global.Service, erro
 }
 
 func (c *Config) ApplyDefaults() {
-	if c.Prefix == "" {
-		c.Prefix = "download_archive"
-	}
-
 	if c.Name == "" {
 		c.Name = "download"
 	}
 
 	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
+}
+
+func (s *svc) Name() string {
+	return name
+}
+
+func (s *svc) Register(r mux.Router) {
+	r.Get("/archiver", http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+		// get the paths and/or the resources id from the query
+		ctx := r.Context()
+		log := appctx.GetLogger(ctx)
+		v := r.URL.Query()
+
+		paths, ok := v["path"]
+		if !ok {
+			paths = []string{}
+		}
+		ids, ok := v["id"]
+		if !ok {
+			ids = []string{}
+		}
+
+		files, err := s.getFiles(ctx, paths, ids)
+		if err != nil {
+			s.writeHTTPError(ctx, rw, err)
+			return
+		}
+
+		arch, err := manager.NewArchiver(files, s.walker, s.downloader, manager.Config{
+			MaxNumFiles: s.config.MaxNumFiles,
+			MaxSize:     s.config.MaxSize,
+		})
+		if err != nil {
+			s.writeHTTPError(ctx, rw, err)
+			return
+		}
+
+		userAgent := ua.Parse(r.Header.Get("User-Agent"))
+
+		archName := s.config.Name
+		if userAgent.OS == ua.Windows {
+			archName += ".zip"
+		} else {
+			archName += ".tar"
+		}
+
+		log.Debug().Msg("Requested the following files/folders to archive: " + render.Render(files))
+
+		rw.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", archName))
+		rw.Header().Set("Content-Transfer-Encoding", "binary")
+
+		// create the archive
+		if userAgent.OS == ua.Windows {
+			err = arch.CreateZip(ctx, rw)
+		} else {
+			err = arch.CreateTar(ctx, rw)
+		}
+
+		if err != nil {
+			s.writeHTTPError(ctx, rw, err)
+			return
+		}
+	}))
 }
 
 func (s *svc) getFiles(ctx context.Context, files, ids []string) ([]string, error) {
@@ -198,73 +259,6 @@ func (s *svc) writeHTTPError(ctx context.Context, w http.ResponseWriter, err err
 	_, _ = w.Write([]byte(err.Error()))
 }
 
-func (s *svc) Handler() http.Handler {
-	return http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
-		// get the paths and/or the resources id from the query
-		ctx := r.Context()
-		log := appctx.GetLogger(ctx)
-		v := r.URL.Query()
-
-		paths, ok := v["path"]
-		if !ok {
-			paths = []string{}
-		}
-		ids, ok := v["id"]
-		if !ok {
-			ids = []string{}
-		}
-
-		files, err := s.getFiles(ctx, paths, ids)
-		if err != nil {
-			s.writeHTTPError(ctx, rw, err)
-			return
-		}
-
-		arch, err := manager.NewArchiver(files, s.walker, s.downloader, manager.Config{
-			MaxNumFiles: s.config.MaxNumFiles,
-			MaxSize:     s.config.MaxSize,
-		})
-		if err != nil {
-			s.writeHTTPError(ctx, rw, err)
-			return
-		}
-
-		userAgent := ua.Parse(r.Header.Get("User-Agent"))
-
-		archName := s.config.Name
-		if userAgent.OS == ua.Windows {
-			archName += ".zip"
-		} else {
-			archName += ".tar"
-		}
-
-		log.Debug().Msg("Requested the following files/folders to archive: " + render.Render(files))
-
-		rw.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", archName))
-		rw.Header().Set("Content-Transfer-Encoding", "binary")
-
-		// create the archive
-		if userAgent.OS == ua.Windows {
-			err = arch.CreateZip(ctx, rw)
-		} else {
-			err = arch.CreateTar(ctx, rw)
-		}
-
-		if err != nil {
-			s.writeHTTPError(ctx, rw, err)
-			return
-		}
-	})
-}
-
-func (s *svc) Prefix() string {
-	return s.config.Prefix
-}
-
 func (s *svc) Close() error {
-	return nil
-}
-
-func (s *svc) Unprotected() []string {
 	return nil
 }

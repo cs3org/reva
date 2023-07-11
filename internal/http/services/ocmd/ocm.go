@@ -22,33 +22,32 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp/global"
+	"github.com/cs3org/reva/pkg/rhttp/mux"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/utils/cfg"
-	"github.com/go-chi/chi/v5"
 )
 
+const name = "ocmd"
+
 func init() {
-	global.Register("ocmd", New)
+	global.Register(name, New)
 }
 
 type config struct {
-	Prefix                     string `mapstructure:"prefix"`
 	GatewaySvc                 string `mapstructure:"gatewaysvc"                    validate:"required"`
 	ExposeRecipientDisplayName bool   `mapstructure:"expose_recipient_display_name"`
 }
 
 func (c *config) ApplyDefaults() {
 	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
-	if c.Prefix == "" {
-		c.Prefix = "ocm"
-	}
 }
 
 type svc struct {
-	Conf   *config
-	router chi.Router
+	conf           *config
+	sharesHandler  *sharesHandler
+	invitesHandler *invitesHandler
+	notifHandler   *notifHandler
 }
 
 // New returns a new ocmd object, that implements
@@ -59,60 +58,45 @@ func New(ctx context.Context, m map[string]interface{}) (global.Service, error) 
 		return nil, err
 	}
 
-	r := chi.NewRouter()
-	s := &svc{
-		Conf:   &c,
-		router: r,
-	}
+	s := &svc{conf: &c}
 
-	if err := s.routerInit(); err != nil {
+	if err := s.initServices(); err != nil {
 		return nil, err
 	}
 
 	return s, nil
 }
 
-func (s *svc) routerInit() error {
-	sharesHandler := new(sharesHandler)
-	invitesHandler := new(invitesHandler)
-	notifHandler := new(notifHandler)
+func (s *svc) initServices() error {
+	s.sharesHandler = new(sharesHandler)
+	s.invitesHandler = new(invitesHandler)
+	s.notifHandler = new(notifHandler)
 
-	if err := sharesHandler.init(s.Conf); err != nil {
+	if err := s.sharesHandler.init(s.conf); err != nil {
 		return err
 	}
-	if err := invitesHandler.init(s.Conf); err != nil {
+	if err := s.invitesHandler.init(s.conf); err != nil {
 		return err
 	}
-	if err := notifHandler.init(s.Conf); err != nil {
+	if err := s.notifHandler.init(s.conf); err != nil {
 		return err
 	}
-
-	s.router.Post("/shares", sharesHandler.CreateShare)
-	s.router.Post("/invite-accepted", invitesHandler.AcceptInvite)
-	s.router.Post("/notifications", notifHandler.Notifications)
 	return nil
+}
+
+func (s *svc) Name() string {
+	return name
+}
+
+func (s *svc) Register(r mux.Router) {
+	r.Route("/ocm", func(r mux.Router) {
+		r.Post("/shares", http.HandlerFunc(s.sharesHandler.CreateShare))
+		r.Post("/invite-accepted", http.HandlerFunc(s.invitesHandler.AcceptInvite))
+		r.Post("/notifications", http.HandlerFunc(s.notifHandler.Notifications))
+	}, mux.Unprotected())
 }
 
 // Close performs cleanup.
 func (s *svc) Close() error {
 	return nil
-}
-
-func (s *svc) Prefix() string {
-	return s.Conf.Prefix
-}
-
-func (s *svc) Unprotected() []string {
-	return []string{"/invite-accepted", "/shares", "/notifications"}
-}
-
-func (s *svc) Handler() http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		log := appctx.GetLogger(r.Context())
-		log.Debug().Str("path", r.URL.Path).Msg("ocm routing")
-
-		// unset raw path, otherwise chi uses it to route and then fails to match percent encoded path segments
-		r.URL.RawPath = ""
-		s.router.ServeHTTP(w, r)
-	})
 }

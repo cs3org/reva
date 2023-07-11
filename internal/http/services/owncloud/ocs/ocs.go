@@ -34,13 +34,16 @@ import (
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp/global"
+	"github.com/cs3org/reva/pkg/rhttp/mux"
 	"github.com/cs3org/reva/pkg/utils/cfg"
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog"
 )
 
+const name = "ocs"
+
 func init() {
-	global.Register("ocs", New)
+	global.Register(name, New)
 }
 
 type svc struct {
@@ -74,8 +77,14 @@ func New(ctx context.Context, m map[string]interface{}) (global.Service, error) 
 	return s, nil
 }
 
-func (s *svc) Prefix() string {
-	return s.c.Prefix
+func (s *svc) Name() string {
+	return name
+}
+
+func (s *svc) Register(r mux.Router) {
+	r.Route("/ocs/:version", func(r mux.Router) {
+
+	})
 }
 
 func (s *svc) Close() error {

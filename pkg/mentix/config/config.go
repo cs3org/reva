@@ -20,8 +20,6 @@ package config
 
 // Configuration holds the general Mentix configuration.
 type Configuration struct {
-	Prefix string `mapstructure:"prefix"`
-
 	Connectors struct {
 		GOCDB struct {
 			Address string `mapstructure:"address"`
@@ -74,8 +72,5 @@ type Configuration struct {
 
 // Init sets sane defaults.
 func (c *Configuration) ApplyDefaults() {
-	if c.Prefix == "" {
-		c.Prefix = "mentix"
-	}
 	// TODO(daniel): add default that works out of the box
 }

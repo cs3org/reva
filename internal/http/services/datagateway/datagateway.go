@@ -31,6 +31,7 @@ import (
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/rhttp/global"
+	"github.com/cs3org/reva/pkg/rhttp/mux"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/utils/cfg"
 	"github.com/golang-jwt/jwt"
@@ -42,10 +43,12 @@ const (
 	TokenTransportHeader = "X-Reva-Transfer"
 	// UploadExpiresHeader holds the timestamp for the transport token expiry, defined in https://tus.io/protocols/resumable-upload.html#expiration
 	UploadExpiresHeader = "Upload-Expires"
+
+	name = "datagateway"
 )
 
 func init() {
-	global.Register("datagateway", New)
+	global.Register(name, New)
 }
 
 // transferClaims are custom claims for a JWT token to be used between the metadata and data gateways.
@@ -55,24 +58,18 @@ type transferClaims struct {
 	VersionKey string `json:"version_key,omitempty"`
 }
 type config struct {
-	Prefix               string `mapstructure:"prefix"`
 	TransferSharedSecret string `mapstructure:"transfer_shared_secret" validate:"required"`
 	Timeout              int64  `mapstructure:"timeout"`
 	Insecure             bool   `mapstructure:"insecure" docs:"false;Whether to skip certificate checks when sending requests."`
 }
 
 func (c *config) ApplyDefaults() {
-	if c.Prefix == "" {
-		c.Prefix = "datagateway"
-	}
-
 	c.TransferSharedSecret = sharedconf.GetJWTSecret(c.TransferSharedSecret)
 }
 
 type svc struct {
-	conf    *config
-	handler http.Handler
-	client  *http.Client
+	conf   *config
+	client *http.Client
 }
 
 // New returns a new datagateway.
@@ -89,8 +86,11 @@ func New(ctx context.Context, m map[string]interface{}) (global.Service, error) 
 			rhttp.Insecure(c.Insecure),
 		),
 	}
-	s.setHandler()
 	return s, nil
+}
+
+func (s *svc) Name() string {
+	return name
 }
 
 // Close performs cleanup.
@@ -98,41 +98,18 @@ func (s *svc) Close() error {
 	return nil
 }
 
-func (s *svc) Prefix() string {
-	return s.conf.Prefix
-}
-
-func (s *svc) Handler() http.Handler {
-	return s.handler
-}
-
-func (s *svc) Unprotected() []string {
-	return []string{
-		"/",
-	}
-}
-
-func (s *svc) setHandler() {
-	s.handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case http.MethodHead:
+func (s *svc) Register(r mux.Router) {
+	// TODO (gdelmont): the token verification can be a custom middleware
+	// as the add cors header for HEAD
+	r.Route("/datagateway", func(r mux.Router) {
+		r.Get("", http.HandlerFunc(s.doGet))
+		r.Head("", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			addCorsHeader(w)
 			s.doHead(w, r)
-			return
-		case http.MethodGet:
-			s.doGet(w, r)
-			return
-		case http.MethodPut:
-			s.doPut(w, r)
-			return
-		case http.MethodPatch:
-			s.doPatch(w, r)
-			return
-		default:
-			w.WriteHeader(http.StatusNotImplemented)
-			return
-		}
-	})
+		}))
+		r.Put("", http.HandlerFunc(s.doPut))
+		r.Patch("", http.HandlerFunc(s.doPatch))
+	}, mux.Unprotected())
 }
 
 func addCorsHeader(res http.ResponseWriter) {

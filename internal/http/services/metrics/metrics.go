@@ -30,6 +30,7 @@ import (
 	"github.com/cs3org/reva/pkg/metrics"
 	"github.com/cs3org/reva/pkg/metrics/config"
 	"github.com/cs3org/reva/pkg/rhttp/global"
+	"github.com/cs3org/reva/pkg/rhttp/mux"
 	"github.com/cs3org/reva/pkg/utils/cfg"
 )
 
@@ -46,26 +47,20 @@ func (s *svc) Close() error {
 	return nil
 }
 
-// Prefix returns the main endpoint of this service.
-func (s *svc) Prefix() string {
+func (s *svc) Name() string {
+	return serviceName
+}
+
+func (s *svc) Register(r mux.Router) {
+	// TODO (gdelmont): this should not be an http serbice, but a serverless
 	// We use a dummy endpoint as the service is not expected to be exposed
 	// directly to the user, but just start a background process.
-	return "register_metrics"
-}
-
-// Unprotected returns all endpoints that can be queried without prior authorization.
-func (s *svc) Unprotected() []string {
-	return []string{}
-}
-
-// Handler serves all HTTP requests.
-func (s *svc) Handler() http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	r.Handle(mux.MethodAll, "/register_metrics", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		log := logger.New().With().Int("pid", os.Getpid()).Logger()
 		if _, err := w.Write([]byte("This is the metrics service.\n")); err != nil {
 			log.Error().Err(err).Msg("error writing metrics response")
 		}
-	})
+	}))
 }
 
 // New returns a new metrics service.
@@ -86,5 +81,4 @@ func New(ctx context.Context, m map[string]interface{}) (global.Service, error) 
 	return s, nil
 }
 
-type svc struct {
-}
+type svc struct{}

@@ -24,6 +24,7 @@ import (
 
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp/global"
+	"github.com/cs3org/reva/pkg/rhttp/mux"
 	"github.com/cs3org/reva/pkg/siteacc"
 	"github.com/cs3org/reva/pkg/siteacc/config"
 	"github.com/cs3org/reva/pkg/utils/cfg"
@@ -54,11 +55,6 @@ func (s *svc) Close() error {
 // Prefix returns the main endpoint of this service.
 func (s *svc) Prefix() string {
 	return s.conf.Prefix
-}
-
-// Unprotected returns all endpoints that can be queried without prior authorization.
-func (s *svc) Unprotected() []string {
-	return s.siteacc.GetPublicEndpoints()
 }
 
 // Handler serves all HTTP requests.
@@ -113,4 +109,12 @@ func New(ctx context.Context, m map[string]interface{}) (global.Service, error) 
 		siteacc: siteacc,
 	}
 	return s, nil
+}
+
+func (s *svc) Name() string {
+	return serviceName
+}
+
+func (s *svc) Register(r mux.Router) {
+	r.Handle(mux.MethodAll, "/siteacc/*", s.siteacc.RequestHandler(), mux.Unprotected())
 }

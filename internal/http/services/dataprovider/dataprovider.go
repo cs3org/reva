@@ -23,21 +23,21 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/cs3org/reva/pkg/appctx"
 	datatxregistry "github.com/cs3org/reva/pkg/rhttp/datatx/manager/registry"
 	"github.com/cs3org/reva/pkg/rhttp/global"
-	"github.com/cs3org/reva/pkg/rhttp/router"
+	"github.com/cs3org/reva/pkg/rhttp/mux"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
 	"github.com/cs3org/reva/pkg/utils/cfg"
 )
 
+const name = "dataprovider"
+
 func init() {
-	global.Register("dataprovider", New)
+	global.Register(name, New)
 }
 
 type config struct {
-	Prefix   string                            `mapstructure:"prefix" docs:"data;The prefix to be used for this HTTP service"`
 	Driver   string                            `mapstructure:"driver" docs:"localhome;The storage driver to be used."`
 	Drivers  map[string]map[string]interface{} `mapstructure:"drivers" docs:"url:pkg/storage/fs/localhome/localhome.go;The configuration for the storage driver"`
 	DataTXs  map[string]map[string]interface{} `mapstructure:"data_txs" docs:"url:pkg/rhttp/datatx/manager/simple/simple.go;The configuration for the data tx protocols"`
@@ -46,9 +46,6 @@ type config struct {
 }
 
 func (c *config) ApplyDefaults() {
-	if c.Prefix == "" {
-		c.Prefix = "data"
-	}
 	if c.Driver == "" {
 		c.Driver = "localhome"
 	}
@@ -56,7 +53,6 @@ func (c *config) ApplyDefaults() {
 
 type svc struct {
 	conf    *config
-	handler http.Handler
 	storage storage.FS
 	dataTXs map[string]http.Handler
 }
@@ -84,8 +80,19 @@ func New(ctx context.Context, m map[string]interface{}) (global.Service, error) 
 		dataTXs: dataTXs,
 	}
 
-	err = s.setHandler()
-	return s, err
+	return s, nil
+}
+
+func (s *svc) Name() string {
+	return name
+}
+
+func (s *svc) Register(r mux.Router) {
+	r.Route("/data", func(r mux.Router) {
+		for prot, handler := range s.dataTXs {
+			r.Handle(mux.MethodAll, "/"+prot, handler)
+		}
+	})
 }
 
 func getFS(ctx context.Context, c *config) (storage.FS, error) {
@@ -119,45 +126,5 @@ func getDataTXs(ctx context.Context, c *config, fs storage.FS) (map[string]http.
 }
 
 func (s *svc) Close() error {
-	return nil
-}
-
-func (s *svc) Unprotected() []string {
-	return []string{
-		"/tus",
-	}
-}
-
-func (s *svc) Prefix() string {
-	return s.conf.Prefix
-}
-
-func (s *svc) Handler() http.Handler {
-	return s.handler
-}
-
-func (s *svc) setHandler() error {
-	s.handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		log := appctx.GetLogger(r.Context())
-		log.Debug().Msgf("dataprovider routing: path=%s", r.URL.Path)
-
-		head, tail := router.ShiftPath(r.URL.Path)
-
-		if handler, ok := s.dataTXs[head]; ok {
-			r.URL.Path = tail
-			handler.ServeHTTP(w, r)
-			return
-		}
-
-		// If we don't find a prefix match for any of the protocols, upload the resource
-		// through the direct HTTP protocol
-		if handler, ok := s.dataTXs["simple"]; ok {
-			handler.ServeHTTP(w, r)
-			return
-		}
-
-		w.WriteHeader(http.StatusInternalServerError)
-	})
-
 	return nil
 }

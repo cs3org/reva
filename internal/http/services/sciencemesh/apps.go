@@ -31,7 +31,7 @@ import (
 	"github.com/cs3org/reva/internal/http/services/reqres"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
-	"github.com/cs3org/reva/pkg/rhttp/router"
+	"github.com/cs3org/reva/pkg/rhttp"
 )
 
 type appsHandler struct {
@@ -52,7 +52,7 @@ func (h *appsHandler) init(c *config) error {
 
 func (h *appsHandler) shareInfo(p string) (*ocmpb.ShareId, string) {
 	p = strings.TrimPrefix(p, h.ocmMountPoint)
-	shareID, rel := router.ShiftPath(p)
+	shareID, rel := rhttp.ShiftPath(p)
 	if len(rel) > 0 {
 		rel = rel[1:]
 	}

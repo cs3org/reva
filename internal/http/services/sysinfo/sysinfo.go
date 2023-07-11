@@ -24,6 +24,7 @@ import (
 
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp/global"
+	"github.com/cs3org/reva/pkg/rhttp/mux"
 	"github.com/cs3org/reva/pkg/sysinfo"
 	"github.com/cs3org/reva/pkg/utils/cfg"
 )
@@ -50,6 +51,19 @@ const (
 	serviceName = "sysinfo"
 )
 
+func (s *svc) Name() string {
+	return serviceName
+}
+
+func (s *svc) Register(r mux.Router) {
+	r.Get("/sysinfo", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		log := appctx.GetLogger(r.Context())
+		if _, err := w.Write([]byte(s.getJSONData())); err != nil {
+			log.Err(err).Msg("error writing SysInfo response")
+		}
+	}), mux.Unprotected())
+}
+
 // Close is called when this service is being stopped.
 func (s *svc) Close() error {
 	return nil
@@ -63,16 +77,6 @@ func (s *svc) Prefix() string {
 // Unprotected returns all endpoints that can be queried without prior authorization.
 func (s *svc) Unprotected() []string {
 	return []string{"/"}
-}
-
-// Handler serves all HTTP requests.
-func (s *svc) Handler() http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		log := appctx.GetLogger(r.Context())
-		if _, err := w.Write([]byte(s.getJSONData())); err != nil {
-			log.Err(err).Msg("error writing SysInfo response")
-		}
-	})
 }
 
 func (s *svc) getJSONData() string {

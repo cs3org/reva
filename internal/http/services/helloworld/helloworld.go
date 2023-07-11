@@ -28,8 +28,10 @@ import (
 	"github.com/cs3org/reva/pkg/utils/cfg"
 )
 
+const name = "helloworld"
+
 func init() {
-	global.Register("helloworld", New)
+	global.Register(name, New)
 }
 
 // New returns a new helloworld service.
@@ -47,18 +49,17 @@ func (s *svc) Close() error {
 	return nil
 }
 
+func (s *svc) Name() string {
+	return name
+}
+
 type config struct {
-	Prefix       string `mapstructure:"prefix"`
 	HelloMessage string `mapstructure:"message"`
 }
 
 func (c *config) ApplyDefaults() {
 	if c.HelloMessage == "" {
 		c.HelloMessage = "Hello World!"
-	}
-
-	if c.Prefix == "" {
-		c.Prefix = "helloworld"
 	}
 }
 
@@ -72,19 +73,5 @@ func (s *svc) Register(r mux.Router) {
 		if _, err := w.Write([]byte(s.conf.HelloMessage)); err != nil {
 			log.Err(err).Msg("error writing response")
 		}
-	}))
-}
-
-func (s *svc) Prefix() string {
-	return s.conf.Prefix
-}
-
-func (s *svc) Unprotected() []string {
-	return []string{"/"}
-}
-
-func (s *svc) Handler() http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-
-	})
+	}), mux.Unprotected())
 }

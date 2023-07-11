@@ -28,12 +28,14 @@ import (
 
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/rhttp/global"
+	"github.com/cs3org/reva/pkg/rhttp/mux"
 	"github.com/cs3org/reva/pkg/utils/cfg"
-	"github.com/go-chi/chi/v5"
 )
 
+const name = "reverseproxy"
+
 func init() {
-	global.Register("reverseproxy", New)
+	global.Register(name, New)
 }
 
 type proxyRule struct {
@@ -52,7 +54,7 @@ func (c *config) ApplyDefaults() {
 }
 
 type svc struct {
-	router *chi.Mux
+	rules []proxyRule
 }
 
 // New returns an instance of the reverse proxy service.
@@ -62,57 +64,42 @@ func New(ctx context.Context, m map[string]interface{}) (global.Service, error) 
 		return nil, err
 	}
 
-	f, err := os.ReadFile(c.ProxyRulesJSON)
+	f, err := os.Open(c.ProxyRulesJSON)
 	if err != nil {
 		return nil, err
 	}
+	defer f.Close()
 
 	var rules []proxyRule
-	err = json.Unmarshal(f, &rules)
-	if err != nil {
+	if err := json.NewDecoder(f).Decode(&rules); err != nil {
 		return nil, err
 	}
 
-	r := chi.NewRouter()
+	return &svc{rules: rules}, nil
+}
 
-	for _, rule := range rules {
-		remote, err := url.Parse(rule.Backend)
-		if err != nil {
-			// Skip the rule if the backend is not a valid URL
-			continue
-		}
-
-		proxy := httputil.NewSingleHostReverseProxy(remote)
-		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			r.Host = remote.Host
-			if token, ok := ctxpkg.ContextGetToken(r.Context()); ok {
-				r.Header.Set(ctxpkg.TokenHeader, token)
-			}
-			proxy.ServeHTTP(w, r)
-		})
-		r.Mount(rule.Endpoint, handler)
-	}
-
-	return &svc{router: r}, nil
+func (s *svc) Name() string {
+	return name
 }
 
 func (s *svc) Close() error {
 	return nil
 }
 
-func (s *svc) Prefix() string {
-	// This service will be served at root
-	return ""
-}
-
-func (s *svc) Unprotected() []string {
-	// TODO: If the services which will be served via the reverse proxy have unprotected endpoints,
-	// we won't be able to support those at the moment.
-	return []string{}
-}
-
-func (s *svc) Handler() http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		s.router.ServeHTTP(w, r)
-	})
+func (s *svc) Register(r mux.Router) {
+	for _, rule := range s.rules {
+		remote, err := url.Parse(rule.Backend)
+		if err != nil {
+			// Skip the rule if the backend is not a valid URL
+			continue
+		}
+		proxy := httputil.NewSingleHostReverseProxy(remote)
+		r.Handle(mux.MethodAll, rule.Endpoint, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			r.Host = remote.Host
+			if token, ok := ctxpkg.ContextGetToken(r.Context()); ok {
+				r.Header.Set(ctxpkg.TokenHeader, token)
+			}
+			proxy.ServeHTTP(w, r)
+		}))
+	}
 }

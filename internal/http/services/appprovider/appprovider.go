@@ -35,6 +35,7 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/rhttp/global"
+	"github.com/cs3org/reva/pkg/rhttp/mux"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/cs3org/reva/pkg/utils/cfg"
@@ -44,21 +45,19 @@ import (
 	"github.com/pkg/errors"
 )
 
+const name = "appprovider"
+
 func init() {
-	global.Register("appprovider", New)
+	global.Register(name, New)
 }
 
 // Config holds the config options for the HTTP appprovider service.
 type Config struct {
-	Prefix     string `mapstructure:"prefix"`
 	GatewaySvc string `mapstructure:"gatewaysvc" validate:"required"`
 	Insecure   bool   `mapstructure:"insecure" docs:"false;Whether to skip certificate checks when sending requests."`
 }
 
 func (c *Config) ApplyDefaults() {
-	if c.Prefix == "" {
-		c.Prefix = "app"
-	}
 	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
 }
 
@@ -74,17 +73,21 @@ func New(ctx context.Context, m map[string]interface{}) (global.Service, error) 
 		return nil, err
 	}
 
-	r := chi.NewRouter()
-	s := &svc{
-		conf:   &c,
-		router: r,
-	}
+	return &svc{
+		conf: &c,
+	}, nil
+}
 
-	if err := s.routerInit(); err != nil {
-		return nil, err
-	}
+func (s *svc) Name() string {
+	return name
+}
 
-	return s, nil
+func (s *svc) Register(r mux.Router) {
+	r.Route("/app", func(r mux.Router) {
+		r.Get("/list", http.HandlerFunc(s.handleList), mux.Unprotected())
+		r.Post("/new", http.HandlerFunc(s.handleNew))
+		r.Post("/open", http.HandlerFunc(s.handleOpen))
+	})
 }
 
 func (s *svc) routerInit() error {
@@ -98,20 +101,6 @@ func (s *svc) routerInit() error {
 // Close performs cleanup.
 func (s *svc) Close() error {
 	return nil
-}
-
-func (s *svc) Prefix() string {
-	return s.conf.Prefix
-}
-
-func (s *svc) Unprotected() []string {
-	return []string{"/list"}
-}
-
-func (s *svc) Handler() http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		s.router.ServeHTTP(w, r)
-	})
 }
 
 func (s *svc) handleNew(w http.ResponseWriter, r *http.Request) {

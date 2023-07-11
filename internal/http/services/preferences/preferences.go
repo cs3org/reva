@@ -28,31 +28,28 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp/global"
+	"github.com/cs3org/reva/pkg/rhttp/mux"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/utils/cfg"
-	"github.com/go-chi/chi/v5"
 )
 
+const name = "preferences"
+
 func init() {
-	global.Register("preferences", New)
+	global.Register(name, New)
 }
 
 // Config holds the config options that for the preferences HTTP service.
 type Config struct {
-	Prefix     string `mapstructure:"prefix"`
 	GatewaySvc string `mapstructure:"gatewaysvc"`
 }
 
 func (c *Config) ApplyDefaults() {
-	if c.Prefix == "" {
-		c.Prefix = "preferences"
-	}
 	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
 }
 
 type svc struct {
-	conf   *Config
-	router *chi.Mux
+	conf *Config
 }
 
 // New returns a new ocmd object.
@@ -62,42 +59,27 @@ func New(ctx context.Context, m map[string]interface{}) (global.Service, error) 
 		return nil, err
 	}
 
-	r := chi.NewRouter()
 	s := &svc{
-		conf:   &c,
-		router: r,
-	}
-
-	if err := s.routerInit(); err != nil {
-		return nil, err
+		conf: &c,
 	}
 
 	return s, nil
 }
 
-func (s *svc) routerInit() error {
-	s.router.Get("/", s.handleGet)
-	s.router.Post("/", s.handlePost)
-	return nil
+func (s *svc) Name() string {
+	return name
+}
+
+func (s *svc) Register(r mux.Router) {
+	r.Route("/preferences", func(r mux.Router) {
+		r.Get("/", http.HandlerFunc(s.handleGet))
+		r.Post("/", http.HandlerFunc(s.handlePost))
+	})
 }
 
 // Close performs cleanup.
 func (s *svc) Close() error {
 	return nil
-}
-
-func (s *svc) Prefix() string {
-	return s.conf.Prefix
-}
-
-func (s *svc) Unprotected() []string {
-	return []string{}
-}
-
-func (s *svc) Handler() http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		s.router.ServeHTTP(w, r)
-	})
 }
 
 func (s *svc) handleGet(w http.ResponseWriter, r *http.Request) {

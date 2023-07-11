@@ -28,6 +28,7 @@ import (
 	"github.com/cs3org/reva/pkg/mentix/exchangers"
 	"github.com/cs3org/reva/pkg/mentix/meshdata"
 	"github.com/cs3org/reva/pkg/rhttp/global"
+	"github.com/cs3org/reva/pkg/rhttp/mux"
 	"github.com/cs3org/reva/pkg/utils/cfg"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -57,8 +58,8 @@ func (s *svc) Close() error {
 	return nil
 }
 
-func (s *svc) Prefix() string {
-	return s.conf.Prefix
+func (s *svc) Name() string {
+	return serviceName
 }
 
 func (s *svc) Unprotected() []string {
@@ -83,9 +84,8 @@ func (s *svc) Unprotected() []string {
 	return endpoints
 }
 
-func (s *svc) Handler() http.Handler {
-	// Forward requests to Mentix
-	return http.HandlerFunc(s.mntx.RequestHandler)
+func (s *svc) Register(r mux.Router) {
+	r.Handle(mux.MethodAll, "/mentix/*", http.HandlerFunc(s.mntx.RequestHandler))
 }
 
 func (s *svc) startBackgroundService() {
@@ -115,9 +115,6 @@ func applyInternalConfig(m map[string]interface{}, conf *config.Configuration) {
 
 func applyDefaultConfig(conf *config.Configuration) {
 	// General
-	if conf.Prefix == "" {
-		conf.Prefix = serviceName
-	}
 
 	if conf.UpdateInterval == "" {
 		conf.UpdateInterval = "1h" // Update once per hour

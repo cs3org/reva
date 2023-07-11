@@ -24,22 +24,19 @@ import (
 
 	"contrib.go.opencensus.io/exporter/prometheus"
 	"github.com/cs3org/reva/pkg/rhttp/global"
-	"github.com/cs3org/reva/pkg/utils/cfg"
+	"github.com/cs3org/reva/pkg/rhttp/mux"
 	"github.com/pkg/errors"
 	"go.opencensus.io/stats/view"
 )
 
+const name = "prometheus"
+
 func init() {
-	global.Register("prometheus", New)
+	global.Register(name, New)
 }
 
 // New returns a new prometheus service.
-func New(ctx context.Context, m map[string]interface{}) (global.Service, error) {
-	var c config
-	if err := cfg.Decode(m, &c); err != nil {
-		return nil, err
-	}
-
+func New(ctx context.Context, _ map[string]interface{}) (global.Service, error) {
 	pe, err := prometheus.NewExporter(prometheus.Options{
 		Namespace: "revad",
 	})
@@ -48,37 +45,22 @@ func New(ctx context.Context, m map[string]interface{}) (global.Service, error) 
 	}
 
 	view.RegisterExporter(pe)
-	return &svc{prefix: c.Prefix, h: pe}, nil
+	return &svc{h: pe}, nil
 }
 
-type config struct {
-	Prefix string `mapstructure:"prefix"`
-}
-
-func (c *config) ApplyDefaults() {
-	if c.Prefix == "" {
-		c.Prefix = "metrics"
-	}
+func (s *svc) Name() string {
+	return name
 }
 
 type svc struct {
-	prefix string
-	h      http.Handler
+	h http.Handler
 }
 
-func (s *svc) Prefix() string {
-	return s.prefix
-}
-
-func (s *svc) Handler() http.Handler {
-	return s.h
+func (s *svc) Register(r mux.Router) {
+	// TODO(labkode): all prometheus endpoints are public?
+	r.Handle(mux.MethodAll, "/metrics/*", s.h, mux.Unprotected())
 }
 
 func (s *svc) Close() error {
 	return nil
-}
-
-func (s *svc) Unprotected() []string {
-	// TODO(labkode): all prometheus endpoints are public?
-	return []string{"/"}
 }

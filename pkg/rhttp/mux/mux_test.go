@@ -47,7 +47,7 @@ func (m *mockResponseWriter) WriteHeader(int) {}
 func TestRouterAPIs(t *testing.T) {
 	mux := mux.NewServeMux()
 
-	var get, post, head, put, connect, delete, options bool
+	var get, post, head, put, connect, delete, options, patch bool
 	mux.Get("/get", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		get = true
 	}))
@@ -58,6 +58,10 @@ func TestRouterAPIs(t *testing.T) {
 
 	mux.Head("/head", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		head = true
+	}))
+
+	mux.Patch("/patch", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		patch = true
 	}))
 
 	mux.Put("/put", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -118,6 +122,12 @@ func TestRouterAPIs(t *testing.T) {
 	mux.ServeHTTP(w, r)
 	if !delete {
 		t.Fatal("routing DELETE failed")
+	}
+
+	r, _ = http.NewRequest(http.MethodPatch, "/patch", nil)
+	mux.ServeHTTP(w, r)
+	if !patch {
+		t.Fatal("routing PATCH failed")
 	}
 }
 
@@ -456,5 +466,45 @@ func TestOptionsRecursive(t *testing.T) {
 	router.ServeHTTP(w, r)
 	if auth {
 		t.Fatal("/users/other-unprotected is unprotected")
+	}
+}
+
+func TestParamsInMiddleware(t *testing.T) {
+	router := mux.NewServeMux()
+	router.SetMiddlewaresFactory(func(o *mux.Options) []mux.Middleware {
+		return o.Middlewares
+	})
+
+	var hit, middleware bool
+	router.Route("/path/:key", func(r mux.Router) {
+		r.Get("", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			hit = true
+			want := mux.Params{"key": "value"}
+			got := mux.ParamsFromRequest(r)
+			if !reflect.DeepEqual(want, got) {
+				t.Fatalf("wrong wildcard values: want %v got %v", want, got)
+			}
+		}), mux.WithMiddleware(func(next http.Handler) http.Handler {
+			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				middleware = true
+				want := mux.Params{"key": "value"}
+				got := mux.ParamsFromRequest(r)
+				if !reflect.DeepEqual(want, got) {
+					t.Fatalf("wrong wildcard values: want %v got %v", want, got)
+				}
+				next.ServeHTTP(w, r)
+			})
+		}))
+	})
+
+	w := new(mockResponseWriter)
+	r, _ := http.NewRequest(http.MethodGet, "/path/value", nil)
+	router.ServeHTTP(w, r)
+
+	if !hit {
+		t.Fatal("routing failed")
+	}
+	if !middleware {
+		t.Fatal("middleware call failed")
 	}
 }
