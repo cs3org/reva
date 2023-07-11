@@ -20,7 +20,10 @@ package global
 
 import (
 	"context"
+	"io"
 	"net/http"
+
+	"github.com/cs3org/reva/pkg/rhttp/mux"
 )
 
 // NewMiddlewares contains all the registered new middleware functions.
@@ -50,11 +53,7 @@ type NewService func(context.Context, map[string]interface{}) (Service, error)
 
 // Service represents a HTTP service.
 type Service interface {
-	Handler() http.Handler
-	Prefix() string
-	Close() error
-	// List of url relative to the prefix to be unprotected by the authentication
-	// middleware. To be seen if we need url-verb fine grained skip checks like
-	// GET is public and POST is not.
-	Unprotected() []string
+	Name() string
+	Register(r mux.Router)
+	io.Closer
 }
