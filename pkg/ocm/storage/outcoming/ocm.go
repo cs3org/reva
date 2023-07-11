@@ -38,7 +38,6 @@ import (
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp"
-	"github.com/cs3org/reva/pkg/rhttp/router"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
@@ -134,7 +133,7 @@ func (d *driver) shareAndRelativePathFromRef(ctx context.Context, ref *provider.
 	)
 	if ref.ResourceId == nil {
 		// path is of type /token/<rel-path>
-		token, path = router.ShiftPath(ref.Path)
+		token, path = rhttp.ShiftPath(ref.Path)
 	} else {
 		// opaque id is of type token:rel.path
 		s := strings.SplitN(ref.ResourceId.OpaqueId, ":", 2)

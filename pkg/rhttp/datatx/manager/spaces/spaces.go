@@ -27,10 +27,10 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/rhttp/datatx"
 	"github.com/cs3org/reva/pkg/rhttp/datatx/manager/registry"
 	"github.com/cs3org/reva/pkg/rhttp/datatx/utils/download"
-	"github.com/cs3org/reva/pkg/rhttp/router"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/mitchellh/mapstructure"
@@ -71,7 +71,7 @@ func (m *manager) Handler(fs storage.FS) (http.Handler, error) {
 		ctx := r.Context()
 
 		var spaceID string
-		spaceID, r.URL.Path = router.ShiftPath(r.URL.Path)
+		spaceID, r.URL.Path = rhttp.ShiftPath(r.URL.Path)
 
 		sublog := appctx.GetLogger(ctx).With().Str("datatx", "spaces").Str("space", spaceID).Logger()
 

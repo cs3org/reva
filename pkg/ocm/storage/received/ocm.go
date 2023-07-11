@@ -36,7 +36,7 @@ import (
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/mime"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
-	"github.com/cs3org/reva/pkg/rhttp/router"
+	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
@@ -83,7 +83,7 @@ func New(ctx context.Context, m map[string]interface{}) (storage.FS, error) {
 
 func shareInfoFromPath(path string) (*ocmpb.ShareId, string) {
 	// the path is of the type /share_id[/rel_path]
-	shareID, rel := router.ShiftPath(path)
+	shareID, rel := rhttp.ShiftPath(path)
 	return &ocmpb.ShareId{OpaqueId: shareID}, rel
 }
 
