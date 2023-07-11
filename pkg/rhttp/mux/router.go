@@ -50,6 +50,7 @@ type Router interface {
 	Head(path string, handler http.Handler, o ...Option)
 	Post(path string, handler http.Handler, o ...Option)
 	Put(path string, handler http.Handler, o ...Option)
+	Patch(path string, handler http.Handler, o ...Option)
 	Delete(path string, handler http.Handler, o ...Option)
 	Connect(path string, handler http.Handler, o ...Option)
 	Options(path string, handler http.Handler, o ...Option)

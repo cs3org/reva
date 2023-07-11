@@ -62,11 +62,13 @@ func (m *ServeMux) Route(path string, f func(Router), o ...Option) {
 		path: path,
 		m:    m.m,
 	}
-	var opts Options
-	for _, oo := range o {
-		oo(&opts)
+	if len(o) > 0 {
+		var opts Options
+		for _, oo := range o {
+			oo(&opts)
+		}
+		m.tree.insert(MethodAll, path, nil, &opts)
 	}
-	m.tree.insert(MethodAll, path, nil, &opts)
 	f(sub)
 }
 
@@ -112,6 +114,10 @@ func (m *ServeMux) Post(path string, handler http.Handler, o ...Option) {
 
 func (m *ServeMux) Put(path string, handler http.Handler, o ...Option) {
 	m.Handle(http.MethodPut, path, handler, o...)
+}
+
+func (m *ServeMux) Patch(path string, handler http.Handler, o ...Option) {
+	m.Handle(http.MethodPatch, path, handler, o...)
 }
 
 func (m *ServeMux) Delete(path string, handler http.Handler, o ...Option) {
