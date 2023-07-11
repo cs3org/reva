@@ -23,13 +23,13 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"path"
-	"strings"
+	"reflect"
 	"time"
 
 	"github.com/cs3org/reva/cmd/revad/pkg/config"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp/global"
+	"github.com/cs3org/reva/pkg/rhttp/mux"
 	rtrace "github.com/cs3org/reva/pkg/trace"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -41,12 +41,6 @@ type Config func(*Server)
 func WithServices(services map[string]global.Service) Config {
 	return func(s *Server) {
 		s.Services = services
-	}
-}
-
-func WithMiddlewares(middlewares []global.Middleware) Config {
-	return func(s *Server) {
-		s.middlewares = middlewares
 	}
 }
 
@@ -88,17 +82,13 @@ func InitServices(ctx context.Context, services map[string]config.ServicesConfig
 func New(c ...Config) (*Server, error) {
 	httpServer := &http.Server{}
 	s := &Server{
-		log:         zerolog.Nop(),
-		httpServer:  httpServer,
-		svcs:        map[string]global.Service{},
-		unprotected: []string{},
-		handlers:    map[string]http.Handler{},
-		middlewares: []global.Middleware{},
+		log:        zerolog.Nop(),
+		httpServer: httpServer,
+		svcs:       map[string]global.Service{},
 	}
 	for _, cc := range c {
 		cc(s)
 	}
-	s.registerServices()
 	return s, nil
 }
 
@@ -108,25 +98,31 @@ type Server struct {
 	CertFile string
 	KeyFile  string
 
-	httpServer  *http.Server
-	listener    net.Listener
-	svcs        map[string]global.Service // map key is svc Prefix
-	unprotected []string
-	handlers    map[string]http.Handler
-	middlewares []global.Middleware
-	log         zerolog.Logger
+	httpServer *http.Server
+	listener   net.Listener
+	svcs       map[string]global.Service // map key is svc Prefix
+	log        zerolog.Logger
 }
 
 // Start starts the server.
 func (s *Server) Start(ln net.Listener) error {
-	handler, err := s.getHandler()
-	if err != nil {
-		return errors.Wrap(err, "rhttp: error creating http handler")
-	}
+	router := mux.NewServeMux()
+	s.registerServices(router)
 
-	s.httpServer.Handler = handler
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	router.Walk(ctx, func(method, path string, handler http.Handler, opts *mux.Options) {
+		str := fmt.Sprintf("%s %s", method, path)
+		if o := opts.String(); o != "" {
+			str += fmt.Sprintf("(%s)", o)
+		}
+		str += fmt.Sprintf(" --> %s", handlerName(handler))
+	})
+
+	s.httpServer.Handler = router
 	s.listener = ln
 
+	var err error
 	if (s.CertFile != "") && (s.KeyFile != "") {
 		s.log.Info().Msgf("https server listening at https://%s using cert file '%s' and key file '%s'", s.listener.Addr(), s.CertFile, s.KeyFile)
 		err = s.httpServer.ServeTLS(s.listener, s.CertFile, s.KeyFile)
@@ -138,6 +134,17 @@ func (s *Server) Start(ln net.Listener) error {
 		return nil
 	}
 	return err
+}
+
+func handlerName(h http.Handler) string {
+	return reflect.TypeOf(h).Elem().Name()
+}
+
+func (s *Server) registerServices(r mux.Router) {
+	for _, svc := range s.svcs {
+		svc.Register(r)
+		s.log.Info().Msgf("http service enabled: %s", svc.Name())
+	}
 }
 
 // Stop stops the server.
@@ -155,9 +162,9 @@ func (s *Server) Stop() error {
 func (s *Server) closeServices() {
 	for _, svc := range s.svcs {
 		if err := svc.Close(); err != nil {
-			s.log.Error().Err(err).Msgf("error closing service %q", svc.Prefix())
+			s.log.Error().Err(err).Msgf("error closing service %s", svc.Name())
 		} else {
-			s.log.Info().Msgf("service %q correctly closed", svc.Prefix())
+			s.log.Info().Msgf("service %s correctly closed", svc.Name())
 		}
 	}
 }
@@ -176,111 +183,6 @@ func (s *Server) Address() string {
 func (s *Server) GracefulStop() error {
 	s.closeServices()
 	return s.httpServer.Shutdown(context.Background())
-}
-
-func (s *Server) registerServices() {
-	for name, svc := range s.Services {
-		// instrument services with opencensus tracing.
-		h := traceHandler(name, svc.Handler())
-		s.handlers[svc.Prefix()] = h
-		s.svcs[svc.Prefix()] = svc
-		s.unprotected = append(s.unprotected, getUnprotected(svc.Prefix(), svc.Unprotected())...)
-		s.log.Info().Msgf("http service enabled: %s@/%s", name, svc.Prefix())
-	}
-}
-
-// TODO(labkode): if the http server is exposed under a basename we need to prepend
-// to prefix.
-func getUnprotected(prefix string, unprotected []string) []string {
-	for i := range unprotected {
-		unprotected[i] = path.Join("/", prefix, unprotected[i])
-	}
-	return unprotected
-}
-
-// clean the url putting a slash (/) at the beginning if it does not have it
-// and removing the slashes at the end
-// if the url is "/", the output is "".
-func cleanURL(url string) string {
-	if len(url) > 0 {
-		if url[0] != '/' {
-			url = "/" + url
-		}
-		url = strings.TrimRight(url, "/")
-	}
-	return url
-}
-
-func urlHasPrefix(url, prefix string) bool {
-	url = cleanURL(url)
-	prefix = cleanURL(prefix)
-
-	partsURL := strings.Split(url, "/")
-	partsPrefix := strings.Split(prefix, "/")
-
-	if len(partsPrefix) > len(partsURL) {
-		return false
-	}
-
-	for i, p := range partsPrefix {
-		u := partsURL[i]
-		if p != u {
-			return false
-		}
-	}
-
-	return true
-}
-
-func (s *Server) getHandlerLongestCommongURL(url string) (http.Handler, string, bool) {
-	var match string
-
-	for k := range s.handlers {
-		if urlHasPrefix(url, k) && len(k) > len(match) {
-			match = k
-		}
-	}
-
-	h, ok := s.handlers[match]
-	return h, match, ok
-}
-
-func getSubURL(url, prefix string) string {
-	// pre cond: prefix is a prefix for url
-	// example: url = "/api/v0/", prefix = "/api", res = "/v0"
-	url = cleanURL(url)
-	prefix = cleanURL(prefix)
-
-	return url[len(prefix):]
-}
-
-func (s *Server) getHandler() (http.Handler, error) {
-	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if h, ok := s.handlers[r.URL.Path]; ok {
-			s.log.Debug().Msgf("http routing: url=%s", r.URL.Path)
-			r.URL.Path = "/"
-			h.ServeHTTP(w, r)
-			return
-		}
-
-		// find by longest common path
-		if h, url, ok := s.getHandlerLongestCommongURL(r.URL.Path); ok {
-			s.log.Debug().Msgf("http routing: url=%s", url)
-			r.URL.Path = getSubURL(r.URL.Path, url)
-			h.ServeHTTP(w, r)
-			return
-		}
-
-		s.log.Debug().Msgf("http routing: url=%s svc=not-found", r.URL.Path)
-		w.WriteHeader(http.StatusNotFound)
-	})
-
-	handler := http.Handler(h)
-	for _, m := range s.middlewares {
-		handler = m(handler)
-	}
-
-	return handler, nil
 }
 
 func traceHandler(name string, h http.Handler) http.Handler {

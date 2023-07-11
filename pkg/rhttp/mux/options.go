@@ -1,11 +1,21 @@
 package mux
 
+import "strings"
+
 type Options struct {
 	Unprotected bool
 	Middlewares []Middleware
 }
 
 type Option func(*Options)
+
+func (o *Options) String() string {
+	var b strings.Builder
+	if o.Unprotected {
+		b.WriteString("unprotected")
+	}
+	return b.String()
+}
 
 func (o *Options) merge(other *Options) *Options {
 	if o == nil {
