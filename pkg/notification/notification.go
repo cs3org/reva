@@ -55,12 +55,12 @@ type InvalidNotificationError struct {
 }
 
 // Error returns the string error msg for NotFoundError.
-func (n *NotFoundError) Error() string {
+func (n NotFoundError) Error() string {
 	return fmt.Sprintf("notification %s not found", n.Ref)
 }
 
 // Error returns the string error msg for InvalidNotificationError.
-func (i *InvalidNotificationError) Error() string {
+func (i InvalidNotificationError) Error() string {
 	return i.Msg
 }
 

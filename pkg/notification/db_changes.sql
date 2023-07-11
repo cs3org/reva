@@ -19,7 +19,7 @@
 -- This file can be used to make the required changes to the MySQL DB. This is
 -- not a proper migration but it should work on most situations.
 
-CREATE TABLE `cbox_notifications` (
+CREATE TABLE `notifications` (
 	`id` INT PRIMARY KEY AUTO_INCREMENT,
 	`ref` VARCHAR(3072) UNIQUE NOT NULL,
 	`template_name` VARCHAR(320) NOT NULL
@@ -27,26 +27,27 @@ CREATE TABLE `cbox_notifications` (
 
 COMMIT;
 
-CREATE TABLE `cbox_notification_recipients` (
+CREATE TABLE `notification_recipients` (
 	`id` INT PRIMARY KEY AUTO_INCREMENT,
 	`notification_id` INT NOT NULL,
 	`recipient` VARCHAR(320) NOT NULL,
 	FOREIGN KEY (notification_id)
-		REFERENCES cbox_notifications (id)
+		REFERENCES notifications (id)
 		ON DELETE CASCADE
 );
 
 COMMIT;
 
-CREATE INDEX `cbox_notifications_ix0` ON `cbox_notifications` (`ref`);
+CREATE INDEX `notifications_ix0` ON `notifications` (`ref`);
 
-CREATE INDEX `cbox_notification_recipients_ix0` ON `cbox_notification_recipients` (`notification_id`);
-CREATE INDEX `cbox_notification_recipients_ix1` ON `cbox_notification_recipients` (`user_name`);
+CREATE INDEX `notification_recipients_ix0` ON `notification_recipients` (`notification_id`);
+CREATE INDEX `notification_recipients_ix1` ON `notification_recipients` (`recipient`);
 
 -- changes for added notifications on oc shares
 
-ALTER TABLE cernboxngcopy.oc_share ADD notify_uploads BOOL DEFAULT false;
+ALTER TABLE oc_share ADD notify_uploads BOOL DEFAULT false;
+ALTER TABLE oc_share ADD notify_uploads_extra_recipients VARCHAR(2048);
 
-UPDATE cernboxngcopy.oc_share SET notify_uploads = false;
+UPDATE oc_share SET notify_uploads = false;
 
-ALTER TABLE cernboxngcopy.oc_share MODIFY notify_uploads BOOL DEFAULT false NOT NULL;
+ALTER TABLE oc_share MODIFY notify_uploads BOOL DEFAULT false NOT NULL;
