@@ -566,7 +566,7 @@ func TestInsertOptions(t *testing.T) {
 		},
 		{
 			init:   newTree(),
-			method: "",
+			method: MethodAll,
 			path:   "/test",
 			opt:    &Options{Unprotected: true},
 			exp: &node{
@@ -588,6 +588,28 @@ func TestInsertOptions(t *testing.T) {
 				prefix: "/",
 				ntype:  static,
 				opts:   nodeOptions{},
+				children: nodes{
+					{
+						prefix: "blog",
+						ntype:  static,
+						opts:   nodeOptions{opts: nilMap[*Options]{"GET": &Options{Unprotected: true}}},
+					},
+				},
+			},
+		},
+		{
+			init: &node{
+				prefix: "/",
+				ntype:  static,
+				opts:   nodeOptions{global: &Options{Unprotected: true}},
+			},
+			method: "GET",
+			path:   "/blog",
+			opt:    nil,
+			exp: &node{
+				prefix: "/",
+				ntype:  static,
+				opts:   nodeOptions{global: &Options{Unprotected: true}},
 				children: nodes{
 					{
 						prefix: "blog",

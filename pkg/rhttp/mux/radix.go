@@ -34,7 +34,7 @@ const (
 type node struct {
 	prefix   string
 	ntype    nodetype
-	handlers nilMap[http.Handler]
+	handlers handlers
 	opts     nodeOptions
 	children nodes
 
@@ -46,11 +46,11 @@ type nodeOptions struct {
 	opts   nilMap[*Options]
 }
 
-func (n *nodeOptions) setGlobal(o *Options) {
-	n.global = o
-}
-
 func (n *nodeOptions) set(method string, o *Options) {
+	if method == MethodAll {
+		n.global = o
+		return
+	}
 	n.opts.add(method, o)
 }
 
@@ -61,6 +61,29 @@ func (n *nodeOptions) get(method string) *Options {
 		return global.merge(perMethod)
 	}
 	return perMethod
+}
+
+type handlers struct {
+	global    http.Handler
+	perMethod nilMap[http.Handler]
+}
+
+func (h *handlers) set(method string, handler http.Handler) {
+	if method == MethodAll {
+		h.global = handler
+		return
+	}
+	h.perMethod.add(method, handler)
+}
+
+func (h *handlers) get(method string) (http.Handler, bool) {
+	// always prefer the one specific for the required method
+	// otherwise fall back to the global handler for all methods
+	// if provided
+	if h, ok := h.perMethod[method]; ok {
+		return h, true
+	}
+	return h.global, h.global != nil
 }
 
 func (n *node) isEmpty() bool {
@@ -280,14 +303,10 @@ func (n *node) insertChild(method, path string, handler http.Handler, opts *Opti
 						handler = mid(handler)
 					}
 				}
-				current.handlers.add(method, handler)
+				current.handlers.set(method, handler)
 			}
 			if opts != nil {
-				if method == "" {
-					current.opts.setGlobal(opts)
-				} else {
-					current.opts.set(method, opts)
-				}
+				current.opts.set(method, opts)
 			}
 			return
 		}
@@ -301,7 +320,6 @@ func (n *node) insertChild(method, path string, handler http.Handler, opts *Opti
 				prefix:            wildcard,
 				ntype:             wtype,
 				middlewareFactory: n.middlewareFactory,
-				opts:              current.opts,
 			}
 			current.children = nodes{next}
 			path = path[len(wildcard)+1:]
@@ -338,7 +356,6 @@ func (n *node) insertChild(method, path string, handler http.Handler, opts *Opti
 				other := &node{
 					prefix:            childPrefix,
 					ntype:             static,
-					opts:              current.opts,
 					middlewareFactory: n.middlewareFactory,
 				}
 				current.children = append(current.children, other)
@@ -361,7 +378,7 @@ func (n *node) split(prefix string) {
 	}
 	n.children = nodes{s}
 	n.prefix = prefix
-	n.handlers = nil
+	n.handlers = handlers{}
 }
 
 func stripSlash(path string) string {

@@ -26,6 +26,8 @@ import (
 	"sync"
 )
 
+const MethodAll = "*"
+
 type paramsKey struct{}
 
 type ServeMux struct {
@@ -64,7 +66,7 @@ func (m *ServeMux) Route(path string, f func(Router), o ...Option) {
 	for _, oo := range o {
 		oo(&opts)
 	}
-	m.tree.insert("", path, nil, &opts)
+	m.tree.insert(MethodAll, path, nil, &opts)
 	f(sub)
 }
 
@@ -151,8 +153,12 @@ func (n *node) walk(ctx context.Context, prefix string, f WalkFunc) {
 	}
 
 	path := prefix + current
-	for method, h := range n.handlers {
+	for method, h := range n.handlers.perMethod {
 		f(method, path, h, n.opts.get(method))
+	}
+
+	if g := n.handlers.global; g != nil {
+		f(MethodAll, path, g, n.opts.global)
 	}
 
 	for _, c := range n.children {
@@ -166,7 +172,7 @@ func (m *ServeMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		m.notFound(w, r)
 		return
 	}
-	handler, ok := n.handlers[r.Method]
+	handler, ok := n.handlers.get(r.Method)
 	if !ok {
 		m.notFound(w, r)
 		return
