@@ -37,7 +37,7 @@ import (
 	"github.com/cs3org/reva/pkg/mime"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
-	"github.com/cs3org/reva/pkg/rhttp/router"
+	"github.com/cs3org/reva/pkg/rhttp/mux"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
 	rtrace "github.com/cs3org/reva/pkg/trace"
@@ -1126,7 +1126,7 @@ func (s *service) ListRecycleStream(req *provider.ListRecycleStreamRequest, ss p
 		return err
 	}
 
-	key, itemPath := router.ShiftPath(req.Key)
+	key, itemPath := mux.ShiftPath(req.Key)
 	items, err := s.storage.ListRecycle(ctx, ref.GetPath(), key, itemPath)
 	if err != nil {
 		var st *rpc.Status
@@ -1167,7 +1167,7 @@ func (s *service) ListRecycle(ctx context.Context, req *provider.ListRecycleRequ
 	if err != nil {
 		return nil, err
 	}
-	key, itemPath := router.ShiftPath(req.Key)
+	key, itemPath := mux.ShiftPath(req.Key)
 	items, err := s.storage.ListRecycle(ctx, ref.GetPath(), key, itemPath)
 	// TODO(labkode): CRITICAL: fill recycle info with storage provider.
 	if err != nil {
@@ -1207,7 +1207,7 @@ func (s *service) RestoreRecycleItem(ctx context.Context, req *provider.RestoreR
 	if err != nil {
 		return nil, err
 	}
-	key, itemPath := router.ShiftPath(req.Key)
+	key, itemPath := mux.ShiftPath(req.Key)
 	if err := s.storage.RestoreRecycleItem(ctx, ref.GetPath(), key, itemPath, req.RestoreRef); err != nil {
 		var st *rpc.Status
 		switch err.(type) {
@@ -1235,7 +1235,7 @@ func (s *service) PurgeRecycle(ctx context.Context, req *provider.PurgeRecycleRe
 		return nil, err
 	}
 	// if a key was sent as opaque id purge only that item
-	key, itemPath := router.ShiftPath(req.Key)
+	key, itemPath := mux.ShiftPath(req.Key)
 	if key != "" {
 		if err := s.storage.PurgeRecycleItem(ctx, ref.GetPath(), key, itemPath); err != nil {
 			var st *rpc.Status

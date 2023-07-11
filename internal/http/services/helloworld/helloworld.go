@@ -24,6 +24,7 @@ import (
 
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp/global"
+	"github.com/cs3org/reva/pkg/rhttp/mux"
 	"github.com/cs3org/reva/pkg/utils/cfg"
 )
 
@@ -65,6 +66,15 @@ type svc struct {
 	conf *config
 }
 
+func (s *svc) Register(r mux.Router) {
+	r.Get("/helloworld", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		log := appctx.GetLogger(r.Context())
+		if _, err := w.Write([]byte(s.conf.HelloMessage)); err != nil {
+			log.Err(err).Msg("error writing response")
+		}
+	}))
+}
+
 func (s *svc) Prefix() string {
 	return s.conf.Prefix
 }
@@ -75,9 +85,6 @@ func (s *svc) Unprotected() []string {
 
 func (s *svc) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		log := appctx.GetLogger(r.Context())
-		if _, err := w.Write([]byte(s.conf.HelloMessage)); err != nil {
-			log.Err(err).Msg("error writing response")
-		}
+
 	})
 }

@@ -43,7 +43,6 @@ import (
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/token"
 	tokenmgr "github.com/cs3org/reva/pkg/token/manager/registry"
-	"github.com/cs3org/reva/pkg/utils"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -78,7 +77,7 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 }
 
 // New returns a new middleware with defined priority.
-func New(m map[string]interface{}, unprotected []string) (global.Middleware, error) {
+func New(m map[string]interface{}) (global.Middleware, error) {
 	conf, err := parseConfig(m)
 	if err != nil {
 		return nil, err
@@ -166,21 +165,9 @@ func New(m map[string]interface{}, unprotected []string) (global.Middleware, err
 				return
 			}
 
-			log := appctx.GetLogger(r.Context())
-			isUnprotectedEndpoint := false
-
-			// For unprotected URLs, we try to authenticate the request in case some service needs it,
-			// but don't return any errors if it fails.
-			if utils.Skip(r.URL.Path, unprotected) {
-				log.Info().Msg("skipping auth check for: " + r.URL.Path)
-				isUnprotectedEndpoint = true
-			}
-
-			ctx, err := authenticateUser(w, r, conf, tokenStrategyChain, tokenManager, tokenWriter, credChain, isUnprotectedEndpoint)
+			ctx, err := authenticateUser(w, r, conf, tokenStrategyChain, tokenManager, tokenWriter, credChain)
 			if err != nil {
-				if !isUnprotectedEndpoint {
-					return
-				}
+				appctx.GetLogger(r.Context()).Warn().Err(err).Msg("error authenticating user")
 			} else {
 				r = r.WithContext(ctx)
 			}
@@ -190,7 +177,7 @@ func New(m map[string]interface{}, unprotected []string) (global.Middleware, err
 	return chain, nil
 }
 
-func authenticateUser(w http.ResponseWriter, r *http.Request, conf *config, tokenStrategies []auth.TokenStrategy, tokenManager token.Manager, tokenWriter auth.TokenWriter, credChain map[string]auth.CredentialStrategy, isUnprotectedEndpoint bool) (context.Context, error) {
+func authenticateUser(w http.ResponseWriter, r *http.Request, conf *config, tokenStrategies []auth.TokenStrategy, tokenManager token.Manager, tokenWriter auth.TokenWriter, credChain map[string]auth.CredentialStrategy) (context.Context, error) {
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
@@ -199,7 +186,7 @@ func authenticateUser(w http.ResponseWriter, r *http.Request, conf *config, toke
 
 	client, err := pool.GetGatewayServiceClient(pool.Endpoint(conf.GatewaySvc))
 	if err != nil {
-		logError(isUnprotectedEndpoint, log, err, "error getting the authsvc client", http.StatusUnauthorized, w)
+		logError(log, err, "error getting the authsvc client", http.StatusUnauthorized, w)
 		return nil, err
 	}
 
@@ -211,7 +198,7 @@ func authenticateUser(w http.ResponseWriter, r *http.Request, conf *config, toke
 		if token != "" {
 			if user, ok := isTokenValid(r, tokenManager, token); ok {
 				if err := insertGroupsInUser(ctx, userGroupsCache, client, user); err != nil {
-					logError(isUnprotectedEndpoint, log, err, "got an error retrieving groups for user "+user.Username, http.StatusInternalServerError, w)
+					logError(log, err, "got an error retrieving groups for user "+user.Username, http.StatusInternalServerError, w)
 					return nil, err
 				}
 				return ctxWithUserInfo(ctx, r, user, token), nil
@@ -239,16 +226,14 @@ func authenticateUser(w http.ResponseWriter, r *http.Request, conf *config, toke
 
 	// if no credentials are found, reply with authentication challenge depending on user agent
 	if creds == nil {
-		if !isUnprotectedEndpoint {
-			for _, key := range userAgentCredKeys {
-				if cred, ok := credChain[key]; ok {
-					cred.AddWWWAuthenticate(w, r, conf.Realm)
-				} else {
-					panic("auth credential strategy: " + key + "must have been loaded in init method")
-				}
+		for _, key := range userAgentCredKeys {
+			if cred, ok := credChain[key]; ok {
+				cred.AddWWWAuthenticate(w, r, conf.Realm)
+			} else {
+				panic("auth credential strategy: " + key + "must have been loaded in init method")
 			}
-			w.WriteHeader(http.StatusUnauthorized)
 		}
+		w.WriteHeader(http.StatusUnauthorized)
 		return nil, errtypes.PermissionDenied("no credentials found")
 	}
 
@@ -262,13 +247,13 @@ func authenticateUser(w http.ResponseWriter, r *http.Request, conf *config, toke
 
 	res, err := client.Authenticate(ctx, req)
 	if err != nil {
-		logError(isUnprotectedEndpoint, log, err, "error calling Authenticate", http.StatusUnauthorized, w)
+		logError(log, err, "error calling Authenticate", http.StatusUnauthorized, w)
 		return nil, err
 	}
 
 	if res.Status.Code != rpc.Code_CODE_OK {
 		err := status.NewErrorFromCode(res.Status.Code, "auth")
-		logError(isUnprotectedEndpoint, log, err, "error generating access token from credentials", http.StatusUnauthorized, w)
+		logError(log, err, "error generating access token from credentials", http.StatusUnauthorized, w)
 		return nil, err
 	}
 
@@ -281,19 +266,19 @@ func authenticateUser(w http.ResponseWriter, r *http.Request, conf *config, toke
 	// validate token
 	u, tokenScope, err := tokenManager.DismantleToken(r.Context(), token)
 	if err != nil {
-		logError(isUnprotectedEndpoint, log, err, "error dismantling token", http.StatusUnauthorized, w)
+		logError(log, err, "error dismantling token", http.StatusUnauthorized, w)
 		return nil, err
 	}
 
 	// ensure access to the resource is allowed
 	ok, err := scope.VerifyScope(ctx, tokenScope, r.URL.Path)
 	if err != nil {
-		logError(isUnprotectedEndpoint, log, err, "error verifying scope of access token", http.StatusInternalServerError, w)
+		logError(log, err, "error verifying scope of access token", http.StatusInternalServerError, w)
 		return nil, err
 	}
 	if !ok {
 		err := errtypes.PermissionDenied("access to resource not allowed")
-		logError(isUnprotectedEndpoint, log, err, "access to resource not allowed", http.StatusUnauthorized, w)
+		logError(log, err, "access to resource not allowed", http.StatusUnauthorized, w)
 		return nil, err
 	}
 
@@ -344,11 +329,9 @@ func isTokenValid(r *http.Request, tokenManager token.Manager, token string) (*u
 	return u, ok
 }
 
-func logError(isUnprotectedEndpoint bool, log *zerolog.Logger, err error, msg string, status int, w http.ResponseWriter) {
-	if !isUnprotectedEndpoint {
-		log.Error().Err(err).Msg(msg)
-		w.WriteHeader(status)
-	}
+func logError(log *zerolog.Logger, err error, msg string, status int, w http.ResponseWriter) {
+	log.Error().Err(err).Msg(msg)
+	w.WriteHeader(status)
 }
 
 // getCredsForUserAgent returns the WWW Authenticate challenges keys to use given an http request
