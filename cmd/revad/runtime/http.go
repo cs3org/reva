@@ -19,13 +19,13 @@
 package runtime
 
 import (
-	"path"
 	"sort"
 
 	"github.com/cs3org/reva/internal/http/interceptors/appctx"
 	"github.com/cs3org/reva/internal/http/interceptors/auth"
 	"github.com/cs3org/reva/internal/http/interceptors/log"
 	"github.com/cs3org/reva/pkg/rhttp/global"
+	"github.com/cs3org/reva/pkg/rhttp/mux"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 )
@@ -38,7 +38,7 @@ type middlewareTriple struct {
 	Middleware global.Middleware
 }
 
-func initHTTPMiddlewares(conf map[string]map[string]any, unprotected []string, logger *zerolog.Logger) ([]global.Middleware, error) {
+func initHTTPMiddlewares(conf map[string]map[string]any, logger *zerolog.Logger) (func(*mux.Options) []mux.Middleware, error) {
 	triples := []*middlewareTriple{}
 	for name, c := range conf {
 		new, ok := global.NewMiddlewares[name]
@@ -61,28 +61,22 @@ func initHTTPMiddlewares(conf map[string]map[string]any, unprotected []string, l
 		return triples[i].Priority > triples[j].Priority
 	})
 
-	authMiddle, err := auth.New(conf["auth"], unprotected)
+	authMiddle, err := auth.New(conf["auth"])
 	if err != nil {
 		return nil, errors.Wrap(err, "rhttp: error creating auth middleware")
 	}
+	logMiddle := log.New()
+	appctxMiddle := appctx.New(*logger)
 
-	middlewares := []global.Middleware{
-		authMiddle,
-		log.New(),
-		appctx.New(*logger),
-	}
-
-	for _, triple := range triples {
-		middlewares = append(middlewares, triple.Middleware)
-	}
-	return middlewares, nil
-}
-
-func httpUnprotected(s map[string]global.Service) (unprotected []string) {
-	for _, svc := range s {
-		for _, url := range svc.Unprotected() {
-			unprotected = append(unprotected, path.Join("/", svc.Prefix(), url))
+	return func(o *mux.Options) (m []mux.Middleware) {
+		if !o.Unprotected {
+			m = append(m, mux.Middleware(authMiddle))
 		}
-	}
-	return
+		m = append(m, logMiddle, appctxMiddle)
+		for _, triple := range triples {
+			m = append(m, mux.Middleware(triple.Middleware))
+		}
+		m = append(m, o.Middlewares...)
+		return
+	}, nil
 }

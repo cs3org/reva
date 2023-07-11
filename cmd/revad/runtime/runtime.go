@@ -444,7 +444,7 @@ func newServers(ctx context.Context, grpc []*config.GRPC, http []*config.HTTP, l
 		if err != nil {
 			return nil, err
 		}
-		middlewares, err := initHTTPMiddlewares(cfg.Middlewares, httpUnprotected(services), &logger)
+		factory, err := initHTTPMiddlewares(cfg.Middlewares, &logger)
 		if err != nil {
 			return nil, err
 		}
@@ -452,7 +452,7 @@ func newServers(ctx context.Context, grpc []*config.GRPC, http []*config.HTTP, l
 			rhttp.WithServices(services),
 			rhttp.WithLogger(logger),
 			rhttp.WithCertAndKeyFiles(cfg.CertFile, cfg.KeyFile),
-			rhttp.WithMiddlewares(middlewares),
+			rhttp.WithMiddlewareFactory(factory),
 		)
 		if err != nil {
 			return nil, err
