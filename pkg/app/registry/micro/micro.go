@@ -19,19 +19,18 @@
 package micro
 
 import (
-	"container/heap"
 	"context"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	registrypb "github.com/cs3org/go-cs3apis/cs3/app/registry/v1beta1"
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/mitchellh/mapstructure"
 	oreg "github.com/owncloud/ocis/v2/ocis-pkg/registry"
 	"github.com/rs/zerolog/log"
-	orderedmap "github.com/wk8/go-ordered-map"
 	mreg "go-micro.dev/v4/registry"
 
 	"github.com/cs3org/reva/v2/pkg/app"
@@ -54,7 +53,9 @@ type mimeTypeConfig struct {
 	Icon          string `mapstructure:"icon"`
 	DefaultApp    string `mapstructure:"default_app"`
 	AllowCreation bool   `mapstructure:"allow_creation"`
-	apps          providerHeap
+	//Apps 		  []*registrypb.ProviderInfo
+	//Apps          map[string]interface{} `mapstructure:"apps"`
+	//apps          providerHeap
 }
 
 type config struct {
@@ -78,9 +79,12 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 
 type manager struct {
 	namespace string
-	mimetypes *orderedmap.OrderedMap // map[string]*mimeTypeConfig  ->  map the mime type to the addresses of the corresponding providers
+	//mimetypes *orderedmap.OrderedMap // map[string]*mimeTypeConfig  ->  map the mime type to the addresses of the corresponding providers
 	sync.RWMutex
-	//providers map[string]interface{}
+	cancelFunc context.CancelFunc
+	mimeTypes  map[string][]*registrypb.ProviderInfo
+	providers  []*registrypb.ProviderInfo
+	config     *config
 }
 
 // New returns an implementation of the app.Registry interface.
@@ -91,18 +95,65 @@ func New(m map[string]interface{}) (app.Registry, error) {
 	}
 	c.init()
 
-	mimetypes := orderedmap.New()
+	//mimetypes := orderedmap.New()
+	//
+	//for _, mime := range c.MimeTypes {
+	//	mimetypes.Set(mime.MimeType, mime)
+	//}
 
-	for _, mime := range c.MimeTypes {
-		mimetypes.Set(mime.MimeType, mime)
-	}
+	ctx, cancelFunc := context.WithCancel(context.Background())
 
 	newManager := manager{
-		mimetypes: mimetypes,
-		namespace: c.Namespace,
+		//mimetypes:  orderedmap.New(), // TODO: this is obsolete and needs to be removed
+		namespace:  c.Namespace,
+		cancelFunc: cancelFunc,
+		config:     c,
 	}
 
+	//err = newManager.updateProvidersFromMicroRegistry()
+	//if err != nil {
+	//	return nil, err
+	//}
+
+	t := time.NewTicker(time.Second * 30)
+
+	go func() {
+		for {
+			select {
+			case <-t.C:
+				log.Debug().Msg("app provider tick, updating local app list")
+				err = newManager.updateProvidersFromMicroRegistry()
+				if err != nil {
+					log.Error().Err(err).Msg("could not update the local provider cache")
+					continue
+				}
+			case <-ctx.Done():
+				log.Debug().Msg("app provider stopped")
+				t.Stop()
+			}
+		}
+	}()
+
 	return &newManager, nil
+}
+
+func (m *manager) updateProvidersFromMicroRegistry() error {
+	lst, err := m.getProvidersFromMicroRegistry(context.Background())
+	ma := map[string][]*registrypb.ProviderInfo{}
+	if err != nil {
+		return err
+	}
+	sortByPriority(lst)
+	for _, outer := range lst {
+		for _, inner := range outer.MimeTypes {
+			ma[inner] = append(ma[inner], outer)
+		}
+	}
+	m.Lock()
+	defer m.Unlock()
+	m.mimeTypes = ma
+	m.providers = lst
+	return nil
 }
 
 func getPriority(p *registrypb.ProviderInfo) string {
@@ -253,12 +304,14 @@ func (m *manager) AddProvider(ctx context.Context, p *registrypb.ProviderInfo) e
 }
 
 func (m *manager) ListProviders(ctx context.Context) ([]*registrypb.ProviderInfo, error) {
+	return m.providers, nil
+}
+
+func (m *manager) getProvidersFromMicroRegistry(ctx context.Context) ([]*registrypb.ProviderInfo, error) {
 	reg := oreg.GetRegistry()
-	// FIXME: for some reason it can not get the service
-	// seems like an issue with registering with grpc
 	services, err := reg.GetService(m.namespace+".api.app-provider", mreg.GetContext(ctx))
 	if err != nil {
-		return nil, err
+		log.Warn().Err(err).Msg("getProvidersFromMicroRegistry")
 	}
 
 	if len(services) == 0 {
@@ -280,112 +333,125 @@ func (m *manager) ListProviders(ctx context.Context) ([]*registrypb.ProviderInfo
 func (m *manager) ListSupportedMimeTypes(ctx context.Context) ([]*registrypb.MimeTypeInfo, error) {
 	m.RLock()
 	defer m.RUnlock()
+	//
+	//res := make([]*registrypb.MimeTypeInfo, 0, m.mimetypes.Len())
+	//
+	//for pair := m.mimetypes.Oldest(); pair != nil; pair = pair.Next() {
+	//
+	//	mime := pair.Value.(*mimeTypeConfig)
+	//
+	//	res = append(res, &registrypb.MimeTypeInfo{
+	//		MimeType:           mime.MimeType,
+	//		Ext:                mime.Extension,
+	//		Name:               mime.Name,
+	//		Description:        mime.Description,
+	//		Icon:               mime.Icon,
+	//		AppProviders:       mime.apps.getOrderedProviderByPriority(),
+	//		AllowCreation:      mime.AllowCreation,
+	//		DefaultApplication: mime.DefaultApp,
+	//	})
+	//
+	//}
 
-	res := make([]*registrypb.MimeTypeInfo, 0, m.mimetypes.Len())
-
-	for pair := m.mimetypes.Oldest(); pair != nil; pair = pair.Next() {
-
-		mime := pair.Value.(*mimeTypeConfig)
-
+	res := []*registrypb.MimeTypeInfo{}
+	for _, mime := range m.config.MimeTypes {
 		res = append(res, &registrypb.MimeTypeInfo{
 			MimeType:           mime.MimeType,
 			Ext:                mime.Extension,
 			Name:               mime.Name,
 			Description:        mime.Description,
 			Icon:               mime.Icon,
-			AppProviders:       mime.apps.getOrderedProviderByPriority(),
+			AppProviders:       m.mimeTypes[mime.MimeType],
 			AllowCreation:      mime.AllowCreation,
 			DefaultApplication: mime.DefaultApp,
 		})
-
 	}
-
 	return res, nil
 }
 
-func (h providerHeap) getOrderedProviderByPriority() []*registrypb.ProviderInfo {
-	providers := make([]*registrypb.ProviderInfo, 0, h.Len())
-	for _, pp := range h {
-		providers = append(providers, pp.provider)
-	}
-	return providers
-}
-
-func getIndex(h providerHeap, s *registrypb.ProviderInfo) (int, bool) {
-	for i, e := range h {
-		if equalsProviderInfo(e.provider, s) {
-			return i, true
-		}
-	}
-	return -1, false
-}
+//func (h providerHeap) getOrderedProviderByPriority() []*registrypb.ProviderInfo {
+//	providers := make([]*registrypb.ProviderInfo, 0, h.Len())
+//	for _, pp := range h {
+//		providers = append(providers, pp.provider)
+//	}
+//	return providers
+//}
+//
+//func getIndex(h providerHeap, s *registrypb.ProviderInfo) (int, bool) {
+//	for i, e := range h {
+//		if equalsProviderInfo(e.provider, s) {
+//			return i, true
+//		}
+//	}
+//	return -1, false
+//}
 
 func (m *manager) SetDefaultProviderForMimeType(ctx context.Context, mimeType string, p *registrypb.ProviderInfo) error {
-	mimeInterface, ok := m.mimetypes.Get(mimeType)
-	if ok {
-		mime := mimeInterface.(*mimeTypeConfig)
-		mime.DefaultApp = p.Address
-
-		registerProvider(p, mime)
-	} else {
-		// the mime type should be already registered as config in the AppRegistry
-		// we will create a new entry fot the mimetype, but leaving a warning for
-		// future log inspection for weird behaviour
-		log.Warn().Msgf("config for mimetype '%s' not found while setting a new default AppProvider", mimeType)
-		m.mimetypes.Set(mimeType, dummyMimeType(mimeType, []*registrypb.ProviderInfo{p}))
-	}
+	//mimeInterface, ok := m.mimetypes.Get(mimeType)
+	//if ok {
+	//	mime := mimeInterface.(*mimeTypeConfig)
+	//	mime.DefaultApp = p.Address
+	//
+	//	registerProvider(p, mime)
+	//} else {
+	//	// the mime type should be already registered as config in the AppRegistry
+	//	// we will create a new entry fot the mimetype, but leaving a warning for
+	//	// future log inspection for weird behaviour
+	//	log.Warn().Msgf("config for mimetype '%s' not found while setting a new default AppProvider", mimeType)
+	//	m.mimetypes.Set(mimeType, dummyMimeType(mimeType, []*registrypb.ProviderInfo{p}))
+	//}
+	log.Info().Msgf("default provider for app is not set through the provider, but defined for the app")
 	return nil
 }
 
-func registerProvider(p *registrypb.ProviderInfo, mime *mimeTypeConfig) {
-	// the app provider could be previously registered to the same mime type list
-	// so we will remove it
-	unregisterProvider(p, mime)
-
-	prio, _ := strconv.ParseUint(getPriority(p), 10, 64)
-	heap.Push(&mime.apps, providerWithPriority{
-		provider: p,
-		priority: prio,
-	})
-}
+//func registerProvider(p *registrypb.ProviderInfo, mime *mimeTypeConfig) {
+//	// the app provider could be previously registered to the same mime type list
+//	// so we will remove it
+//	unregisterProvider(p, mime)
+//
+//	prio, _ := strconv.ParseUint(getPriority(p), 10, 64)
+//	heap.Push(&mime.apps, providerWithPriority{
+//		provider: p,
+//		priority: prio,
+//	})
+//}
 
 // remove a provider from the provider list in a mime type
 // it's a no-op if the provider is not in the list of providers in the mime type
-func unregisterProvider(p *registrypb.ProviderInfo, mime *mimeTypeConfig) {
-	if index, in := getIndex(mime.apps, p); in {
-		// remove the provider from the list
-		heap.Remove(&mime.apps, index)
-	}
-}
+//func unregisterProvider(p *registrypb.ProviderInfo, mime *mimeTypeConfig) {
+//	if index, in := getIndex(mime.apps, p); in {
+//		// remove the provider from the list
+//		heap.Remove(&mime.apps, index)
+//	}
+//}
 
-func dummyMimeType(m string, apps []*registrypb.ProviderInfo) *mimeTypeConfig {
-	appsHeap := providerHeap{}
-	for _, p := range apps {
-		prio, err := strconv.ParseUint(getPriority(p), 10, 64)
-		if err != nil {
-			// TODO: maybe add some log here, providers might get lost
-			continue
-		}
-		heap.Push(&appsHeap, providerWithPriority{
-			provider: p,
-			priority: prio,
-		})
-	}
-
-	return &mimeTypeConfig{
-		MimeType: m,
-		apps:     appsHeap,
-		//Extension: "", // there is no meaningful general extension, so omit it
-		//Name:        "", // there is no meaningful general name, so omit it
-		//Description: "", // there is no meaningful general description, so omit it
-	}
-}
+//func dummyMimeType(m string, apps []*registrypb.ProviderInfo) *mimeTypeConfig {
+//	appsHeap := providerHeap{}
+//	for _, p := range apps {
+//		prio, err := strconv.ParseUint(getPriority(p), 10, 64)
+//		if err != nil {
+//			// TODO: maybe add some log here, providers might get lost
+//			continue
+//		}
+//		heap.Push(&appsHeap, providerWithPriority{
+//			provider: p,
+//			priority: prio,
+//		})
+//	}
+//
+//	return &mimeTypeConfig{
+//		MimeType: m,
+//		apps:     appsHeap,
+//		//Extension: "", // there is no meaningful general extension, so omit it
+//		//Name:        "", // there is no meaningful general name, so omit it
+//		//Description: "", // there is no meaningful general description, so omit it
+//	}
+//}
 
 func (m *manager) GetDefaultProviderForMimeType(ctx context.Context, mimeType string) (*registrypb.ProviderInfo, error) {
-	// TODO: implement me
-	//m.RLock()
-	//defer m.RUnlock()
-	//
+	m.RLock()
+	defer m.RUnlock()
+
 	//mimeInterface, ok := m.mimetypes.Get(mimeType)
 	//if ok {
 	//	mime := mimeInterface.(*mimeTypeConfig)
@@ -401,8 +467,14 @@ func (m *manager) GetDefaultProviderForMimeType(ctx context.Context, mimeType st
 	//		}
 	//	}
 	//}
-	//
-	return nil, errtypes.NotFound("default application provider not set for mime type " + mimeType)
+
+	// TODO: this needs to respect the mime.DefaultProvider in the future
+	providers := m.mimeTypes[mimeType]
+	if len(providers) < 1 {
+		return nil, errtypes.NotFound("default application provider not set for mime type " + mimeType)
+	}
+
+	return providers[0], nil
 }
 
 //func equalsProviderInfo(p1, p2 *registrypb.ProviderInfo) bool {
@@ -419,32 +491,32 @@ func equalsProviderInfo(p1, p2 *registrypb.ProviderInfo) bool {
 	return false
 }
 
-type providerWithPriority struct {
-	provider *registrypb.ProviderInfo
-	priority uint64
-}
-
-type providerHeap []providerWithPriority
-
-func (h providerHeap) Len() int {
-	return len(h)
-}
-
-func (h providerHeap) Less(i, j int) bool {
-	return h[i].priority > h[j].priority
-}
-
-func (h providerHeap) Swap(i, j int) {
-	h[i], h[j] = h[j], h[i]
-}
-
-func (h *providerHeap) Push(x interface{}) {
-	*h = append(*h, x.(providerWithPriority))
-}
-
-func (h *providerHeap) Pop() interface{} {
-	last := len(*h) - 1
-	x := (*h)[last]
-	*h = (*h)[:last]
-	return x
-}
+//type providerWithPriority struct {
+//	provider *registrypb.ProviderInfo
+//	priority uint64
+//}
+//
+//type providerHeap []providerWithPriority
+//
+//func (h providerHeap) Len() int {
+//	return len(h)
+//}
+//
+//func (h providerHeap) Less(i, j int) bool {
+//	return h[i].priority > h[j].priority
+//}
+//
+//func (h providerHeap) Swap(i, j int) {
+//	h[i], h[j] = h[j], h[i]
+//}
+//
+//func (h *providerHeap) Push(x interface{}) {
+//	*h = append(*h, x.(providerWithPriority))
+//}
+//
+//func (h *providerHeap) Pop() interface{} {
+//	last := len(*h) - 1
+//	x := (*h)[last]
+//	*h = (*h)[:last]
+//	return x
+//}

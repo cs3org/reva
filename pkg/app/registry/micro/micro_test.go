@@ -43,10 +43,11 @@ func TestFindProviders(t *testing.T) {
 		registryNamespace string
 	}{
 		{
-			name:        "no mime types registered",
-			mimeTypes:   []*mimeTypeConfig{},
-			mimeType:    "SOMETHING",
-			expectedErr: registry.ErrNotFound,
+			name:              "no mime types registered",
+			registryNamespace: "noMimeTypesRegistered",
+			mimeTypes:         []*mimeTypeConfig{},
+			mimeType:          "SOMETHING",
+			expectedErr:       registry.ErrNotFound,
 		},
 		{
 			name:              "one provider registered for one mime type",
@@ -247,8 +248,6 @@ func registerWithMicroReg(ns string, p *registrypb.ProviderInfo, mt []*mimeTypeC
 	if p.DesktopOnly {
 		node.Metadata[ns+".app-provider.desktop_only"] = "true"
 	}
-
-	node.Metadata[ns+".app-provider.mime_type_config"] = serializeMimetypeconfig(mt)
 
 	service := &mreg.Service{
 		Name: serviceID,
