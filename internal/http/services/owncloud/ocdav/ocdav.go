@@ -37,6 +37,7 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/rhttp/global"
+	"github.com/cs3org/reva/pkg/rhttp/mux"
 	"github.com/cs3org/reva/pkg/rhttp/router"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/storage/favorite"
@@ -47,6 +48,8 @@ import (
 )
 
 type ctxKey int
+
+const name = "ocdav"
 
 const (
 	ctxKeyBaseURI ctxKey = iota
@@ -81,12 +84,11 @@ func (r nameDoesNotContain) Test(name string) bool {
 }
 
 func init() {
-	global.Register("ocdav", New)
+	global.Register(name, New)
 }
 
 // Config holds the config options that need to be passed down to all ocdav handlers.
 type Config struct {
-	Prefix string `mapstructure:"prefix"`
 	// FilesNamespace prefixes the namespace, optionally with user information.
 	// Example: if FilesNamespace is /users/{{substr 0 1 .Username}}/{{.Username}}
 	// and received path is /docs the internal path will be:
@@ -178,8 +180,8 @@ func New(ctx context.Context, m map[string]interface{}) (global.Service, error) 
 	return s, nil
 }
 
-func (s *svc) Prefix() string {
-	return s.c.Prefix
+func (s *svc) Name() string {
+	return name
 }
 
 func (s *svc) Close() error {
@@ -187,8 +189,20 @@ func (s *svc) Close() error {
 	return nil
 }
 
-func (s *svc) Unprotected() []string {
-	return []string{"/status.php", "/remote.php/dav/public-files/", "/apps/files/", "/index.php/f/", "/index.php/s/", "/remote.php/dav/ocm/"}
+func (s *svc) Register(r mux.Router) {
+	r.Get("/status.php", http.HandlerFunc(s.doStatus), mux.Unprotected())
+	r.Handle(mux.MethodAll, "/remote.php/*", s.Handler())
+	r.Handle(mux.MethodAll, "/apps/files/*rest", http.HandlerFunc(s.handleLegacyPath), mux.Unprotected())
+	r.Route("/index.php", func(r mux.Router) {
+		r.Handle(mux.MethodAll, "/s/:token", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			params := mux.ParamsFromRequest(r)
+			token, _ := params.Get("token")
+			rURL := s.c.PublicURL + path.Join("/s", token)
+			http.Redirect(w, r, rURL, http.StatusMovedPermanently)
+		}), mux.Unprotected())
+	})
+	r.Handle(mux.MethodAll, "/remote.php/dav/public-files/", nil, mux.Unprotected())
+	r.Handle(mux.MethodAll, "/remote.php/dav/ocm/", nil, mux.Unprotected())
 }
 
 func (s *svc) Handler() http.Handler {
@@ -207,7 +221,7 @@ func (s *svc) Handler() http.Handler {
 
 		// to build correct href prop urls we need to keep track of the base path
 		// always starts with /
-		base := path.Join("/", s.Prefix())
+		base := "/"
 
 		var head string
 		head, r.URL.Path = router.ShiftPath(r.URL.Path)
