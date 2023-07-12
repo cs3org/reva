@@ -22,7 +22,7 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/cs3org/reva/pkg/rhttp/global"
+	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/rhttp/mux"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/utils/cfg"
@@ -31,7 +31,7 @@ import (
 const name = "ocmd"
 
 func init() {
-	global.Register(name, New)
+	rhttp.Register(name, New)
 }
 
 type config struct {
@@ -52,7 +52,7 @@ type svc struct {
 
 // New returns a new ocmd object, that implements
 // the OCM APIs specified in https://cs3org.github.io/OCM-API/docs.html
-func New(ctx context.Context, m map[string]interface{}) (global.Service, error) {
+func New(ctx context.Context, m map[string]interface{}) (rhttp.Service, error) {
 	var c config
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err

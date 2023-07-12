@@ -30,7 +30,6 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rhttp"
-	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/rhttp/mux"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/utils/cfg"
@@ -48,7 +47,7 @@ const (
 )
 
 func init() {
-	global.Register(name, New)
+	rhttp.Register(name, New)
 }
 
 // transferClaims are custom claims for a JWT token to be used between the metadata and data gateways.
@@ -73,7 +72,7 @@ type svc struct {
 }
 
 // New returns a new datagateway.
-func New(ctx context.Context, m map[string]interface{}) (global.Service, error) {
+func New(ctx context.Context, m map[string]interface{}) (rhttp.Service, error) {
 	var c config
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err

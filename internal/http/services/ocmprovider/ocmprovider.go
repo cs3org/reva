@@ -25,7 +25,7 @@ import (
 	"net/http"
 
 	"github.com/cs3org/reva/pkg/appctx"
-	"github.com/cs3org/reva/pkg/rhttp/global"
+	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/rhttp/mux"
 	"github.com/cs3org/reva/pkg/utils/cfg"
 )
@@ -33,7 +33,7 @@ import (
 const name = "ocmprovider"
 
 func init() {
-	global.Register(name, New)
+	rhttp.Register(name, New)
 }
 
 type config struct {
@@ -128,7 +128,7 @@ func (c *config) prepare() *discoveryData {
 // New returns a new ocmprovider object, that implements
 // the OCM discovery endpoint specified in
 // https://cs3org.github.io/OCM-API/docs.html?repo=OCM-API&user=cs3org#/paths/~1ocm-provider/get
-func New(ctx context.Context, m map[string]interface{}) (global.Service, error) {
+func New(ctx context.Context, m map[string]interface{}) (rhttp.Service, error) {
 	var c config
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err

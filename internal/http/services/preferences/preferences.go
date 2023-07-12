@@ -27,7 +27,7 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
-	"github.com/cs3org/reva/pkg/rhttp/global"
+	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/rhttp/mux"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/utils/cfg"
@@ -36,7 +36,7 @@ import (
 const name = "preferences"
 
 func init() {
-	global.Register(name, New)
+	rhttp.Register(name, New)
 }
 
 // Config holds the config options that for the preferences HTTP service.
@@ -53,7 +53,7 @@ type svc struct {
 }
 
 // New returns a new ocmd object.
-func New(ctx context.Context, m map[string]interface{}) (global.Service, error) {
+func New(ctx context.Context, m map[string]interface{}) (rhttp.Service, error) {
 	var c Config
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err

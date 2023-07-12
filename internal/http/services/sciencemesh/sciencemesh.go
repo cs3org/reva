@@ -22,7 +22,7 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/cs3org/reva/pkg/rhttp/global"
+	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/rhttp/mux"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/smtpclient"
@@ -32,11 +32,11 @@ import (
 const name = "sciencemesh"
 
 func init() {
-	global.Register(name, New)
+	rhttp.Register(name, New)
 }
 
 // New returns a new sciencemesh service.
-func New(ctx context.Context, m map[string]interface{}) (global.Service, error) {
+func New(ctx context.Context, m map[string]interface{}) (rhttp.Service, error) {
 	var c config
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err

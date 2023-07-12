@@ -27,7 +27,7 @@ import (
 	"github.com/cs3org/reva/pkg/mentix/config"
 	"github.com/cs3org/reva/pkg/mentix/exchangers"
 	"github.com/cs3org/reva/pkg/mentix/meshdata"
-	"github.com/cs3org/reva/pkg/rhttp/global"
+	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/rhttp/mux"
 	"github.com/cs3org/reva/pkg/utils/cfg"
 	"github.com/pkg/errors"
@@ -35,7 +35,7 @@ import (
 )
 
 func init() {
-	global.Register(serviceName, New)
+	rhttp.Register(serviceName, New)
 }
 
 type svc struct {
@@ -155,7 +155,7 @@ func applyDefaultConfig(conf *config.Configuration) {
 }
 
 // New returns a new Mentix service.
-func New(ctx context.Context, m map[string]interface{}) (global.Service, error) {
+func New(ctx context.Context, m map[string]interface{}) (rhttp.Service, error) {
 	var c config.Configuration
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err

@@ -23,8 +23,8 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/cs3org/reva/pkg/rhttp"
 	datatxregistry "github.com/cs3org/reva/pkg/rhttp/datatx/manager/registry"
-	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/rhttp/mux"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
@@ -34,7 +34,7 @@ import (
 const name = "dataprovider"
 
 func init() {
-	global.Register(name, New)
+	rhttp.Register(name, New)
 }
 
 type config struct {
@@ -58,7 +58,7 @@ type svc struct {
 }
 
 // New returns a new datasvc.
-func New(ctx context.Context, m map[string]interface{}) (global.Service, error) {
+func New(ctx context.Context, m map[string]interface{}) (rhttp.Service, error) {
 	var c config
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err

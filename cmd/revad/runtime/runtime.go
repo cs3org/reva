@@ -38,7 +38,6 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rhttp"
 
-	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/rserverless"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	rtrace "github.com/cs3org/reva/pkg/trace"
@@ -461,7 +460,7 @@ func newServers(ctx context.Context, grpc []*config.GRPC, http []*config.HTTP, l
 		server := &Server{
 			server:   s,
 			listener: ln,
-			services: maps.MapValues(services, func(s global.Service) any { return s }),
+			services: maps.MapValues(services, func(s rhttp.Service) any { return s }),
 		}
 		log.Debug().
 			Interface("services", maps.Keys(cfg.Services)).

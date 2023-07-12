@@ -24,7 +24,7 @@ import (
 	"github.com/cs3org/reva/internal/http/interceptors/appctx"
 	"github.com/cs3org/reva/internal/http/interceptors/auth"
 	"github.com/cs3org/reva/internal/http/interceptors/log"
-	"github.com/cs3org/reva/pkg/rhttp/global"
+	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/rhttp/mux"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -35,13 +35,13 @@ import (
 type middlewareTriple struct {
 	Name       string
 	Priority   int
-	Middleware global.Middleware
+	Middleware rhttp.Middleware
 }
 
 func initHTTPMiddlewares(conf map[string]map[string]any, logger *zerolog.Logger) (func(*mux.Options) []mux.Middleware, error) {
 	triples := []*middlewareTriple{}
 	for name, c := range conf {
-		new, ok := global.NewMiddlewares[name]
+		new, ok := rhttp.NewMiddlewares[name]
 		if !ok {
 			continue
 		}

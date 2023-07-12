@@ -33,7 +33,7 @@ import (
 	configHandler "github.com/cs3org/reva/internal/http/services/owncloud/ocs/handlers/config"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
 	"github.com/cs3org/reva/pkg/appctx"
-	"github.com/cs3org/reva/pkg/rhttp/global"
+	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/rhttp/mux"
 	"github.com/cs3org/reva/pkg/utils/cfg"
 	"github.com/rs/zerolog"
@@ -42,7 +42,7 @@ import (
 const name = "ocs"
 
 func init() {
-	global.Register(name, New)
+	rhttp.Register(name, New)
 }
 
 type svc struct {
@@ -57,7 +57,7 @@ type svc struct {
 	shareesHandler      *sharees.Handler
 }
 
-func New(ctx context.Context, m map[string]interface{}) (global.Service, error) {
+func New(ctx context.Context, m map[string]interface{}) (rhttp.Service, error) {
 	var c config.Config
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err

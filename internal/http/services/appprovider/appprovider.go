@@ -34,7 +34,6 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp"
-	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/rhttp/mux"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/utils"
@@ -48,7 +47,7 @@ import (
 const name = "appprovider"
 
 func init() {
-	global.Register(name, New)
+	rhttp.Register(name, New)
 }
 
 // Config holds the config options for the HTTP appprovider service.
@@ -67,7 +66,7 @@ type svc struct {
 }
 
 // New returns a new ocmd object.
-func New(ctx context.Context, m map[string]interface{}) (global.Service, error) {
+func New(ctx context.Context, m map[string]interface{}) (rhttp.Service, error) {
 	var c Config
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err

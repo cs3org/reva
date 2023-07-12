@@ -34,7 +34,6 @@ import (
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp"
-	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/rhttp/mux"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/storage/utils/downloader"
@@ -68,11 +67,11 @@ type Config struct {
 }
 
 func init() {
-	global.Register(name, New)
+	rhttp.Register(name, New)
 }
 
 // New creates a new archiver service.
-func New(ctx context.Context, conf map[string]interface{}) (global.Service, error) {
+func New(ctx context.Context, conf map[string]interface{}) (rhttp.Service, error) {
 	var c Config
 	if err := cfg.Decode(conf, &c); err != nil {
 		return nil, err

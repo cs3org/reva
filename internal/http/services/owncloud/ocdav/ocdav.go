@@ -36,7 +36,6 @@ import (
 	"github.com/cs3org/reva/pkg/notification/notificationhelper"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp"
-	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/rhttp/mux"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/storage/favorite"
@@ -83,7 +82,7 @@ func (r nameDoesNotContain) Test(name string) bool {
 }
 
 func init() {
-	global.Register(name, New)
+	rhttp.Register(name, New)
 }
 
 // Config holds the config options that need to be passed down to all ocdav handlers.
@@ -145,7 +144,7 @@ func getFavoritesManager(c *Config) (favorite.Manager, error) {
 }
 
 // New returns a new ocdav.
-func New(ctx context.Context, m map[string]interface{}) (global.Service, error) {
+func New(ctx context.Context, m map[string]interface{}) (rhttp.Service, error) {
 	var c Config
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err

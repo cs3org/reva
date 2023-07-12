@@ -21,13 +21,13 @@ package rhttp
 import (
 	"context"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"time"
 
 	"github.com/cs3org/reva/cmd/revad/pkg/config"
 	"github.com/cs3org/reva/pkg/appctx"
-	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/rhttp/mux"
 	rtrace "github.com/cs3org/reva/pkg/trace"
 	"github.com/pkg/errors"
@@ -35,9 +35,41 @@ import (
 	"go.opentelemetry.io/otel/propagation"
 )
 
+// NewMiddlewares contains all the registered new middleware functions.
+var NewMiddlewares = map[string]NewMiddleware{}
+
+// NewMiddleware is the function that HTTP middlewares need to register at init time.
+type NewMiddleware func(conf map[string]interface{}) (Middleware, int, error)
+
+// RegisterMiddleware registers a new HTTP middleware and its new function.
+func RegisterMiddleware(name string, n NewMiddleware) {
+	NewMiddlewares[name] = n
+}
+
+// Middleware is a middleware http handler.
+type Middleware func(h http.Handler) http.Handler
+
+// Services is a map of service name and its new function.
+var Services = map[string]NewService{}
+
+// Register registers a new HTTP services with name and new function.
+func Register(name string, newFunc NewService) {
+	Services[name] = newFunc
+}
+
+// NewService is the function that HTTP services need to register at init time.
+type NewService func(context.Context, map[string]interface{}) (Service, error)
+
+// Service represents a HTTP service.
+type Service interface {
+	Name() string
+	Register(r mux.Router)
+	io.Closer
+}
+
 type Config func(*Server)
 
-func WithServices(services map[string]global.Service) Config {
+func WithServices(services map[string]Service) Config {
 	return func(s *Server) {
 		s.svcs = services
 	}
@@ -62,10 +94,10 @@ func WithMiddlewareFactory(f func(o *mux.Options) []mux.Middleware) Config {
 	}
 }
 
-func InitServices(ctx context.Context, services map[string]config.ServicesConfig) (map[string]global.Service, error) {
-	s := make(map[string]global.Service)
+func InitServices(ctx context.Context, services map[string]config.ServicesConfig) (map[string]Service, error) {
+	s := make(map[string]Service)
 	for name, cfg := range services {
-		new, ok := global.Services[name]
+		new, ok := Services[name]
 		if !ok {
 			return nil, fmt.Errorf("http service %s does not exist", name)
 		}
@@ -89,7 +121,7 @@ func New(c ...Config) (*Server, error) {
 	s := &Server{
 		log:        zerolog.Nop(),
 		httpServer: httpServer,
-		svcs:       map[string]global.Service{},
+		svcs:       map[string]Service{},
 	}
 	for _, cc := range c {
 		cc(s)
@@ -104,7 +136,7 @@ type Server struct {
 
 	httpServer *http.Server
 	listener   net.Listener
-	svcs       map[string]global.Service // map key is svc Prefix
+	svcs       map[string]Service // map key is svc Prefix
 	log        zerolog.Logger
 	midFactory func(*mux.Options) []mux.Middleware
 }

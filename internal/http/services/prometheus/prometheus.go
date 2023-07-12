@@ -23,7 +23,7 @@ import (
 	"net/http"
 
 	"contrib.go.opencensus.io/exporter/prometheus"
-	"github.com/cs3org/reva/pkg/rhttp/global"
+	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/rhttp/mux"
 	"github.com/pkg/errors"
 	"go.opencensus.io/stats/view"
@@ -32,11 +32,11 @@ import (
 const name = "prometheus"
 
 func init() {
-	global.Register(name, New)
+	rhttp.Register(name, New)
 }
 
 // New returns a new prometheus service.
-func New(ctx context.Context, _ map[string]interface{}) (global.Service, error) {
+func New(ctx context.Context, _ map[string]interface{}) (rhttp.Service, error) {
 	pe, err := prometheus.NewExporter(prometheus.Options{
 		Namespace: "revad",
 	})

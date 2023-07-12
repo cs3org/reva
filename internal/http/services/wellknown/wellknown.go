@@ -22,7 +22,7 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/cs3org/reva/pkg/rhttp/global"
+	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/rhttp/mux"
 	"github.com/cs3org/reva/pkg/utils/cfg"
 )
@@ -30,7 +30,7 @@ import (
 const name = "wellknown"
 
 func init() {
-	global.Register("wellknown", New)
+	rhttp.Register("wellknown", New)
 }
 
 type config struct {
@@ -49,7 +49,7 @@ type svc struct {
 }
 
 // New returns a new webuisvc.
-func New(ctx context.Context, m map[string]interface{}) (global.Service, error) {
+func New(ctx context.Context, m map[string]interface{}) (rhttp.Service, error) {
 	var c config
 	if err := cfg.Decode(m, &c); err != nil {
 		return nil, err
