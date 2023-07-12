@@ -588,3 +588,18 @@ func TestMountHandler(t *testing.T) {
 
 	assert.Equal(t, hit, true)
 }
+
+func TestCatchAll(t *testing.T) {
+	router := mux.NewServeMux()
+
+	var hit bool
+	router.Handle("/test/*", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hit = true
+	}))
+
+	w := new(mockResponseWriter)
+	r, _ := http.NewRequest(http.MethodGet, "/test/some/deep/path/to/test/if/this/is/called/i/hope/yes", nil)
+	router.ServeHTTP(w, r)
+
+	assert.Equal(t, hit, true)
+}
