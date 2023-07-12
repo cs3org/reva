@@ -37,7 +37,6 @@ import (
 
 type manager struct {
 	namespace string
-	//mimetypes *orderedmap.OrderedMap // map[string]*mimeTypeConfig  ->  map the mime type to the addresses of the corresponding providers
 	sync.RWMutex
 	cancelFunc context.CancelFunc
 	mimeTypes  map[string][]*registrypb.ProviderInfo
@@ -94,7 +93,7 @@ func New(m map[string]interface{}) (app.Registry, error) {
 func (m *manager) AddProvider(ctx context.Context, p *registrypb.ProviderInfo) error {
 	log := appctx.GetLogger(ctx)
 
-	log.Info().Interface("provider", p).Msg("Tried to register through cs3 api, make sure the provider registeres directly through go-micro")
+	log.Info().Interface("provider", p).Msg("Tried to register through cs3 api, make sure the provider registers directly through go-micro")
 
 	return nil
 }

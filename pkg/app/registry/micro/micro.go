@@ -38,10 +38,9 @@ type mimeTypeConfig struct {
 	Icon          string `mapstructure:"icon"`
 	DefaultApp    string `mapstructure:"default_app"`
 	AllowCreation bool   `mapstructure:"allow_creation"`
-	//apps          providerHeap
 }
 
-// use the UTF-8 record seperator
+// use the UTF-8 record separator
 func splitMimeTypes(s string) []string {
 	return strings.Split(s, "␞")
 }
