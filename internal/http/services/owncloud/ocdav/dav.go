@@ -32,7 +32,7 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
-	"github.com/cs3org/reva/pkg/rhttp/router"
+	"github.com/cs3org/reva/pkg/rhttp"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -134,7 +134,7 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 		}
 
 		var head string
-		head, r.URL.Path = router.ShiftPath(r.URL.Path)
+		head, r.URL.Path = rhttp.ShiftPath(r.URL.Path)
 
 		switch head {
 		case "avatars":
@@ -144,7 +144,7 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 			var oldPath = r.URL.Path
 
 			// detect and check current user in URL
-			requestUserID, r.URL.Path = router.ShiftPath(r.URL.Path)
+			requestUserID, r.URL.Path = rhttp.ShiftPath(r.URL.Path)
 
 			// note: some requests like OPTIONS don't forward the user
 			contextUser, ok := ctxpkg.ContextGetUser(ctx)
@@ -198,7 +198,7 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 				r.URL.Path, _ = url.JoinPath("/", token, r.URL.Path)
 				ctx = context.WithValue(ctx, ctxOCM10, true)
 			} else {
-				token, _ = router.ShiftPath(r.URL.Path)
+				token, _ = rhttp.ShiftPath(r.URL.Path)
 				ctx = context.WithValue(ctx, ctxOCM10, false)
 			}
 
@@ -242,7 +242,7 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 			}
 
 			var res *gatewayv1beta1.AuthenticateResponse
-			token, _ := router.ShiftPath(r.URL.Path)
+			token, _ := rhttp.ShiftPath(r.URL.Path)
 			if _, pass, ok := r.BasicAuth(); ok {
 				res, err = handleBasicAuth(r.Context(), c, token, pass)
 			} else {

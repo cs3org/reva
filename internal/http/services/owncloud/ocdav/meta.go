@@ -21,7 +21,7 @@ package ocdav
 import (
 	"net/http"
 
-	"github.com/cs3org/reva/pkg/rhttp/router"
+	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/utils/resourceid"
 )
 
@@ -39,7 +39,7 @@ func (h *MetaHandler) init(c *Config) error {
 func (h *MetaHandler) Handler(s *svc) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var id string
-		id, r.URL.Path = router.ShiftPath(r.URL.Path)
+		id, r.URL.Path = rhttp.ShiftPath(r.URL.Path)
 		if id == "" {
 			http.Error(w, "400 Bad Request", http.StatusBadRequest)
 			return
@@ -48,7 +48,7 @@ func (h *MetaHandler) Handler(s *svc) http.Handler {
 		did := resourceid.OwnCloudResourceIDUnwrap(id)
 
 		var head string
-		head, r.URL.Path = router.ShiftPath(r.URL.Path)
+		head, r.URL.Path = rhttp.ShiftPath(r.URL.Path)
 		switch head {
 		case "v":
 			h.VersionsHandler.Handler(s, did).ServeHTTP(w, r)

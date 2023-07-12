@@ -35,7 +35,7 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
-	"github.com/cs3org/reva/pkg/rhttp/router"
+	"github.com/cs3org/reva/pkg/rhttp"
 	rtrace "github.com/cs3org/reva/pkg/trace"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/cs3org/reva/pkg/utils/resourceid"
@@ -63,7 +63,7 @@ func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 		}
 
 		var username string
-		username, r.URL.Path = router.ShiftPath(r.URL.Path)
+		username, r.URL.Path = rhttp.ShiftPath(r.URL.Path)
 
 		if username == "" {
 			// listing is disabled, no auth will change that
@@ -99,7 +99,7 @@ func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 
 		// key will be a base64 encoded cs3 path, it uniquely identifies a trash item & storage
 		var key string
-		key, r.URL.Path = router.ShiftPath(r.URL.Path)
+		key, r.URL.Path = rhttp.ShiftPath(r.URL.Path)
 
 		// If the recycle bin corresponding to a speicific path is requested, use that.
 		// If not, we user the user home to route the request

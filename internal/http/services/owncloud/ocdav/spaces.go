@@ -25,7 +25,7 @@ import (
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	storageProvider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
-	"github.com/cs3org/reva/pkg/rhttp/router"
+	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/utils"
 )
 
@@ -51,7 +51,7 @@ func (h *SpacesHandler) Handler(s *svc) http.Handler {
 		}
 
 		var spaceID string
-		spaceID, r.URL.Path = router.ShiftPath(r.URL.Path)
+		spaceID, r.URL.Path = rhttp.ShiftPath(r.URL.Path)
 
 		if spaceID == "" {
 			// listing is disabled, no auth will change that

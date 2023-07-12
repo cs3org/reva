@@ -38,7 +38,6 @@ import (
 	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/rhttp/mux"
-	"github.com/cs3org/reva/pkg/rhttp/router"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/storage/favorite"
 	"github.com/cs3org/reva/pkg/storage/favorite/registry"
@@ -224,7 +223,7 @@ func (s *svc) Handler() http.Handler {
 		base := "/"
 
 		var head string
-		head, r.URL.Path = router.ShiftPath(r.URL.Path)
+		head, r.URL.Path = rhttp.ShiftPath(r.URL.Path)
 		log.Debug().Str("head", head).Str("tail", r.URL.Path).Msg("http routing")
 		switch head {
 		case "status.php":
@@ -232,18 +231,18 @@ func (s *svc) Handler() http.Handler {
 			return
 		case "remote.php":
 			// skip optional "remote.php"
-			head, r.URL.Path = router.ShiftPath(r.URL.Path)
+			head, r.URL.Path = rhttp.ShiftPath(r.URL.Path)
 
 			// yet, add it to baseURI
 			base = path.Join(base, "remote.php")
 		case "apps":
-			head, r.URL.Path = router.ShiftPath(r.URL.Path)
+			head, r.URL.Path = rhttp.ShiftPath(r.URL.Path)
 			if head == "files" {
 				s.handleLegacyPath(w, r)
 				return
 			}
 		case "index.php":
-			head, r.URL.Path = router.ShiftPath(r.URL.Path)
+			head, r.URL.Path = rhttp.ShiftPath(r.URL.Path)
 			if head == "s" {
 				token := r.URL.Path
 				rURL := s.c.PublicURL + path.Join(head, token)
@@ -290,7 +289,7 @@ func applyLayout(ctx context.Context, ns string, useLoggedInUserNS bool, request
 	// namespace template.
 	u, ok := ctxpkg.ContextGetUser(ctx)
 	if !ok || !useLoggedInUserNS {
-		requestUserID, _ := router.ShiftPath(requestPath)
+		requestUserID, _ := rhttp.ShiftPath(requestPath)
 		u = &userpb.User{
 			Username: requestUserID,
 		}

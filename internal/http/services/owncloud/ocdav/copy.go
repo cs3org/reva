@@ -33,7 +33,6 @@ import (
 	"github.com/cs3org/reva/internal/http/services/datagateway"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp"
-	"github.com/cs3org/reva/pkg/rhttp/router"
 	rtrace "github.com/cs3org/reva/pkg/trace"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/rs/zerolog"
@@ -296,7 +295,7 @@ func (s *svc) handleSpacesCopy(w http.ResponseWriter, r *http.Request, spaceID s
 		return
 	}
 
-	dstSpaceID, dstRelPath := router.ShiftPath(dst)
+	dstSpaceID, dstRelPath := rhttp.ShiftPath(dst)
 
 	// retrieve a specific storage space
 	dstRef, status, err := s.lookUpStorageSpaceReference(ctx, dstSpaceID, dstRelPath)

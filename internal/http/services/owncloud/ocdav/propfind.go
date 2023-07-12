@@ -43,7 +43,7 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/publicshare"
-	"github.com/cs3org/reva/pkg/rhttp/router"
+	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/share"
 	rtrace "github.com/cs3org/reva/pkg/trace"
 	"github.com/cs3org/reva/pkg/utils"
@@ -508,7 +508,7 @@ func supportLegacyOCMAccess(ctx context.Context, md *provider.ResourceInfo) {
 		// the path is something like /<token>/...
 		// we need to strip the token part as this
 		// is passed as username in the basic auth
-		_, md.Path = router.ShiftPath(md.Path)
+		_, md.Path = rhttp.ShiftPath(md.Path)
 	}
 }
 
