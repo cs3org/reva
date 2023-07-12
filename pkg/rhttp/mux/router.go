@@ -42,8 +42,15 @@ type Router interface {
 
 	// Route mounts a sub-Router along a path string.
 	Route(path string, f func(Router), o ...Option)
-	// Handle routes for path that matches the HTTP method.
-	Handle(method, path string, handler http.Handler, o ...Option)
+	// Method routes for path that matches the HTTP method.
+	Method(method, path string, handler http.Handler, o ...Option)
+
+	// Handle routes for path that matches all the HTTP methods.
+	Handle(path string, handler http.Handler, o ...Option)
+
+	Mount(path string, handler http.Handler)
+
+	With(path string, o ...Option)
 
 	// HTTP-method routing along path.
 	Get(path string, handler http.Handler, o ...Option)

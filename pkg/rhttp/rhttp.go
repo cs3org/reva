@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"reflect"
 	"time"
 
 	"github.com/cs3org/reva/cmd/revad/pkg/config"
@@ -40,7 +39,7 @@ type Config func(*Server)
 
 func WithServices(services map[string]global.Service) Config {
 	return func(s *Server) {
-		s.Services = services
+		s.svcs = services
 	}
 }
 
@@ -100,7 +99,6 @@ func New(c ...Config) (*Server, error) {
 
 // Server contains the server info.
 type Server struct {
-	Services map[string]global.Service // map key is service name
 	CertFile string
 	KeyFile  string
 
@@ -121,11 +119,11 @@ func (s *Server) Start(ln net.Listener) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	router.Walk(ctx, func(method, path string, handler http.Handler, opts *mux.Options) {
-		str := fmt.Sprintf("%s %s", method, path)
+		str := fmt.Sprintf("%s\t%s", method, path)
 		if o := opts.String(); o != "" {
-			str += fmt.Sprintf("(%s)", o)
+			str += fmt.Sprintf(" (%s)", o)
 		}
-		str += fmt.Sprintf(" --> %s", handlerName(handler))
+		s.log.Debug().Msg(str)
 	})
 
 	s.httpServer.Handler = router
@@ -143,10 +141,6 @@ func (s *Server) Start(ln net.Listener) error {
 		return nil
 	}
 	return err
-}
-
-func handlerName(h http.Handler) string {
-	return reflect.TypeOf(h).Elem().Name()
 }
 
 func (s *Server) registerServices(r mux.Router) {

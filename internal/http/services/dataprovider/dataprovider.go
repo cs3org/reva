@@ -90,7 +90,7 @@ func (s *svc) Name() string {
 func (s *svc) Register(r mux.Router) {
 	r.Route("/data", func(r mux.Router) {
 		for prot, handler := range s.dataTXs {
-			r.Handle(mux.MethodAll, "/"+prot, handler)
+			r.Handle("/"+prot, handler)
 		}
 	})
 }

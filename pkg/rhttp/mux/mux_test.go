@@ -26,6 +26,8 @@ import (
 	"testing"
 
 	"github.com/cs3org/reva/pkg/rhttp/mux"
+	"github.com/gdexlab/go-render/render"
+	"gotest.tools/assert"
 )
 
 type mockResponseWriter struct{}
@@ -507,4 +509,82 @@ func TestParamsInMiddleware(t *testing.T) {
 	if !middleware {
 		t.Fatal("middleware call failed")
 	}
+}
+
+func TestWalkInerithedOptions(t *testing.T) {
+	router := mux.NewServeMux()
+
+	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
+	router.Route("/inherit", func(r mux.Router) {
+		r.Get("/unprotected", h)
+		r.Route("/deep", func(r mux.Router) {
+			r.Post("/unprotected", h)
+		})
+	}, mux.Unprotected())
+	router.Get("/inherit/other", h)
+
+	type tuple struct {
+		method, path string
+		opts         *mux.Options
+	}
+	routes := []tuple{}
+	router.Walk(context.Background(), func(method, path string, handler http.Handler, opts *mux.Options) {
+		routes = append(routes, tuple{method, path, opts})
+	})
+
+	expected := []tuple{
+		{method: "GET", path: "/inherit/unprotected", opts: &mux.Options{Unprotected: true}},
+		{method: "POST", path: "/inherit/deep/unprotected", opts: &mux.Options{Unprotected: true}},
+		{method: "GET", path: "/inherit/other", opts: &mux.Options{Unprotected: true}},
+	}
+	if !reflect.DeepEqual(expected, routes) {
+		t.Fatalf("got not expected routes.\ngot %+v\nexp %+v", render.AsCode(routes), render.AsCode(expected))
+	}
+}
+
+func TestDefaultRoute(t *testing.T) {
+	router := mux.NewServeMux()
+
+	var hit10, hitNumber bool
+	router.Get("/var/10", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hit10 = true
+	}))
+	router.Get("/var/:number", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hitNumber = true
+		got := mux.ParamsFromRequest(r)
+		want := mux.Params{"number": "100"}
+		if !reflect.DeepEqual(want, got) {
+			t.Fatalf("wrong wildcard values: want %v got %v", want, got)
+		}
+	}))
+
+	w := new(mockResponseWriter)
+	r, _ := http.NewRequest(http.MethodGet, "/var/10", nil)
+	router.ServeHTTP(w, r)
+
+	assert.Equal(t, hit10, true)
+	assert.Equal(t, hitNumber, false)
+
+	hit10, hitNumber = false, false
+
+	r, _ = http.NewRequest(http.MethodGet, "/var/100", nil)
+	router.ServeHTTP(w, r)
+
+	assert.Equal(t, hit10, false)
+	assert.Equal(t, hitNumber, true)
+}
+
+func TestMountHandler(t *testing.T) {
+	router := mux.NewServeMux()
+
+	var hit bool
+	router.Mount("/mounted", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hit = true
+	}))
+
+	w := new(mockResponseWriter)
+	r, _ := http.NewRequest(http.MethodHead, "/mounted/some/path/routed", nil)
+	router.ServeHTTP(w, r)
+
+	assert.Equal(t, hit, true)
 }

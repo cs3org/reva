@@ -117,7 +117,8 @@ func (p *Params) add(key, val string) {
 func (n nodes) search(s string) (*node, bool) {
 	for _, node := range n {
 		if node.ntype == catchall || node.ntype == param ||
-			strings.HasPrefix(s, node.prefix) && node.ntype == static {
+			s == node.prefix && node.ntype == static && len(node.children) == 0 ||
+			strings.HasPrefix(s, node.prefix) && node.ntype == static && len(node.children) != 0 {
 			return node, true
 		}
 	}
@@ -259,12 +260,9 @@ func (n *node) insert(method, path string, handler http.Handler, opts *Options) 
 	}
 walk:
 	for {
-		wildcard, i, wtype := nextWildcard(path)
+		wildcard, i, _ := nextWildcard(path)
 		for _, node := range current.children {
 			if i != -1 { // wildcard found
-				if node.ntype != wtype || wildcard != node.prefix {
-					panic("only one wildcard is allowed per path segment")
-				}
 				current = node
 				opts = n.mergeOptions(method, opts)
 				path = path[i+len(wildcard):]
@@ -313,15 +311,12 @@ func (n *node) insertChild(method, path string, handler http.Handler, opts *Opti
 
 		wildcard, i, wtype := nextWildcard(path)
 		if i != -1 { // wildcard found
-			if len(current.children) != 0 {
-				panic("only one wildcard is allowed per path segment")
-			}
 			next := &node{
 				prefix:            wildcard,
 				ntype:             wtype,
 				middlewareFactory: n.middlewareFactory,
 			}
-			current.children = nodes{next}
+			current.children = append(current.children, next)
 			path = path[len(wildcard)+1:]
 			current = next
 			continue
@@ -347,12 +342,6 @@ func (n *node) insertChild(method, path string, handler http.Handler, opts *Opti
 				current.prefix = childPrefix
 				current.ntype = static
 			} else {
-				// if one of the children is already a pattern, we cannot add the node
-				for _, node := range current.children {
-					if node.ntype == param || node.ntype == catchall {
-						panic("only one wildcard is allowed per path segment")
-					}
-				}
 				other := &node{
 					prefix:            childPrefix,
 					ntype:             static,

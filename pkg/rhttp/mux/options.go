@@ -35,6 +35,22 @@ func (o *Options) String() string {
 	return b.String()
 }
 
+func (o *Options) apply(opts ...Option) {
+	for _, opt := range opts {
+		opt(o)
+	}
+}
+
+func (o *Options) list() (opts []Option) {
+	if o.Unprotected {
+		opts = append(opts, Unprotected())
+	}
+	for _, m := range o.Middlewares {
+		opts = append(opts, WithMiddleware(m))
+	}
+	return
+}
+
 func (o *Options) merge(other *Options) *Options {
 	if o == nil {
 		return other

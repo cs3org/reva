@@ -190,18 +190,16 @@ func (s *svc) Close() error {
 
 func (s *svc) Register(r mux.Router) {
 	r.Get("/status.php", http.HandlerFunc(s.doStatus), mux.Unprotected())
-	r.Handle(mux.MethodAll, "/remote.php/*", s.Handler())
-	r.Handle(mux.MethodAll, "/apps/files/*rest", http.HandlerFunc(s.handleLegacyPath), mux.Unprotected())
+	r.Mount("/remote.php", s.Handler())
+	r.Mount("/apps/files", http.HandlerFunc(s.handleLegacyPath))
 	r.Route("/index.php", func(r mux.Router) {
-		r.Handle(mux.MethodAll, "/s/:token", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r.Handle("/s/:token", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			params := mux.ParamsFromRequest(r)
 			token, _ := params.Get("token")
 			rURL := s.c.PublicURL + path.Join("/s", token)
 			http.Redirect(w, r, rURL, http.StatusMovedPermanently)
 		}), mux.Unprotected())
 	})
-	r.Handle(mux.MethodAll, "/remote.php/dav/public-files/", nil, mux.Unprotected())
-	r.Handle(mux.MethodAll, "/remote.php/dav/ocm/", nil, mux.Unprotected())
 }
 
 func (s *svc) Handler() http.Handler {

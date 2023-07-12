@@ -116,5 +116,6 @@ func (s *svc) Name() string {
 }
 
 func (s *svc) Register(r mux.Router) {
-	r.Handle(mux.MethodAll, "/siteacc/*", s.siteacc.RequestHandler(), mux.Unprotected())
+	r.With("/siteacc", mux.Unprotected())
+	r.Mount("/siteacc", s.siteacc.RequestHandler())
 }

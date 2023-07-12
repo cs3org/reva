@@ -313,7 +313,6 @@ func TestRadixInsert(t *testing.T) {
 		init         *node
 		method, path string
 		exp          *node
-		panic        bool
 	}{
 		{
 			init:   newTree(),
@@ -442,23 +441,21 @@ func TestRadixInsert(t *testing.T) {
 				ntype:  static,
 			},
 			method: "POST",
-			path:   "/key/:item",
-			panic:  true,
-		},
-		{
-			init: &node{
+			path:   "/key/:other",
+			exp: &node{
 				prefix: "/key/",
 				ntype:  static,
 				children: nodes{
 					&node{
-						prefix: "item",
+						prefix: "search",
+						ntype:  static,
+					},
+					&node{
+						prefix: "other",
 						ntype:  param,
 					},
 				},
 			},
-			method: "POST",
-			path:   "/key/search",
-			panic:  true,
 		},
 		{
 			init: &node{
@@ -535,14 +532,8 @@ func TestRadixInsert(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		if tt.panic {
-			assert.Panics(t, func() {
-				tt.init.insert(tt.method, tt.path, nil, nil)
-			})
-		} else {
-			tt.init.insert(tt.method, tt.path, nil, nil)
-			assert.Equal(t, tt.exp, tt.init)
-		}
+		tt.init.insert(tt.method, tt.path, nil, nil)
+		assert.Equal(t, tt.exp, tt.init)
 	}
 }
 

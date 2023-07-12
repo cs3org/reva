@@ -64,15 +64,13 @@ func (m *ServeMux) Route(path string, f func(Router), o ...Option) {
 	}
 	if len(o) > 0 {
 		var opts Options
-		for _, oo := range o {
-			oo(&opts)
-		}
+		opts.apply(o...)
 		m.tree.insert(MethodAll, path, nil, &opts)
 	}
 	f(sub)
 }
 
-func (m *ServeMux) Handle(method, path string, handler http.Handler, o ...Option) {
+func (m *ServeMux) Method(method, path string, handler http.Handler, o ...Option) {
 	if m.path != "" {
 		var err error
 		path, err = url.JoinPath(m.path, path)
@@ -94,42 +92,40 @@ func (m *ServeMux) Handle(method, path string, handler http.Handler, o ...Option
 	defer m.m.Unlock()
 
 	var opts Options
-	for _, oo := range o {
-		oo(&opts)
-	}
+	opts.apply(o...)
 	m.tree.insert(method, path, handler, &opts)
 }
 
 func (m *ServeMux) Get(path string, handler http.Handler, o ...Option) {
-	m.Handle(http.MethodGet, path, handler, o...)
+	m.Method(http.MethodGet, path, handler, o...)
 }
 
 func (m *ServeMux) Head(path string, handler http.Handler, o ...Option) {
-	m.Handle(http.MethodHead, path, handler, o...)
+	m.Method(http.MethodHead, path, handler, o...)
 }
 
 func (m *ServeMux) Post(path string, handler http.Handler, o ...Option) {
-	m.Handle(http.MethodPost, path, handler, o...)
+	m.Method(http.MethodPost, path, handler, o...)
 }
 
 func (m *ServeMux) Put(path string, handler http.Handler, o ...Option) {
-	m.Handle(http.MethodPut, path, handler, o...)
+	m.Method(http.MethodPut, path, handler, o...)
 }
 
 func (m *ServeMux) Patch(path string, handler http.Handler, o ...Option) {
-	m.Handle(http.MethodPatch, path, handler, o...)
+	m.Method(http.MethodPatch, path, handler, o...)
 }
 
 func (m *ServeMux) Delete(path string, handler http.Handler, o ...Option) {
-	m.Handle(http.MethodDelete, path, handler, o...)
+	m.Method(http.MethodDelete, path, handler, o...)
 }
 
 func (m *ServeMux) Connect(path string, handler http.Handler, o ...Option) {
-	m.Handle(http.MethodConnect, path, handler, o...)
+	m.Method(http.MethodConnect, path, handler, o...)
 }
 
 func (m *ServeMux) Options(path string, handler http.Handler, o ...Option) {
-	m.Handle(http.MethodOptions, path, handler, o...)
+	m.Method(http.MethodOptions, path, handler, o...)
 }
 
 func (m *ServeMux) Walk(ctx context.Context, f WalkFunc) {
@@ -193,4 +189,31 @@ func (m *ServeMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func (m *ServeMux) notFound(w http.ResponseWriter, r *http.Request) {
 	http.NotFound(w, r)
+}
+
+func (m *ServeMux) mountRouter(prefix string, r Router) {
+	ctx, cancel := context.WithCancel(context.TODO())
+	defer cancel()
+	r.Walk(ctx, func(method, path string, handler http.Handler, opts *Options) {
+		path, _ = url.JoinPath(prefix, path)
+		m.Method(method, path, handler, opts.list()...)
+	})
+}
+
+func (m *ServeMux) Mount(path string, handler http.Handler) {
+	if router, ok := handler.(Router); ok {
+		m.mountRouter(path, router)
+		return
+	}
+	m.Handle(path+"/*", handler)
+}
+
+func (m *ServeMux) With(path string, o ...Option) {
+	var opts Options
+	opts.apply(o...)
+	m.tree.insert(MethodAll, path, nil, &opts)
+}
+
+func (m *ServeMux) Handle(path string, handler http.Handler, o ...Option) {
+	m.Method(MethodAll, path, handler, o...)
 }

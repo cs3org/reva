@@ -85,7 +85,7 @@ func (s *svc) Unprotected() []string {
 }
 
 func (s *svc) Register(r mux.Router) {
-	r.Handle(mux.MethodAll, "/mentix/*", http.HandlerFunc(s.mntx.RequestHandler))
+	r.Mount("/mentix", http.HandlerFunc(s.mntx.RequestHandler))
 }
 
 func (s *svc) startBackgroundService() {
