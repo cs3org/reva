@@ -53,8 +53,6 @@ type mimeTypeConfig struct {
 	Icon          string `mapstructure:"icon"`
 	DefaultApp    string `mapstructure:"default_app"`
 	AllowCreation bool   `mapstructure:"allow_creation"`
-	//Apps 		  []*registrypb.ProviderInfo
-	//Apps          map[string]interface{} `mapstructure:"apps"`
 	//apps          providerHeap
 }
 
@@ -110,10 +108,12 @@ func New(m map[string]interface{}) (app.Registry, error) {
 		config:     c,
 	}
 
-	//err = newManager.updateProvidersFromMicroRegistry()
-	//if err != nil {
-	//	return nil, err
-	//}
+	err = newManager.updateProvidersFromMicroRegistry()
+	if err != nil {
+		if _, ok := err.(errtypes.NotFound); !ok {
+			return nil, err
+		}
+	}
 
 	t := time.NewTicker(time.Second * 30)
 
@@ -196,7 +196,7 @@ func (m *manager) providerFromMetadata(metadata map[string]string) registrypb.Pr
 }
 
 func (m *manager) FindProviders(ctx context.Context, mimeType string) ([]*registrypb.ProviderInfo, error) {
-	reg := oreg.GetRegistry()
+	/*reg := oreg.GetRegistry()
 	services, err := reg.GetService(m.namespace+".api.app-provider", mreg.GetContext(ctx))
 	if err != nil {
 		return nil, err
@@ -235,9 +235,15 @@ func (m *manager) FindProviders(ctx context.Context, mimeType string) ([]*regist
 		}
 	}
 
-	sortByPriority(providers)
+	sortByPriority(providers)*/
+	m.RLock()
+	defer m.RUnlock()
 
-	return providers, nil
+	if len(m.mimeTypes[mimeType]) < 1 {
+		return nil, mreg.ErrNotFound
+	}
+
+	return m.mimeTypes[mimeType], nil
 }
 
 func sortByPriority(providers []*registrypb.ProviderInfo) {
@@ -387,6 +393,8 @@ func (m *manager) ListSupportedMimeTypes(ctx context.Context) ([]*registrypb.Mim
 //}
 
 func (m *manager) SetDefaultProviderForMimeType(ctx context.Context, mimeType string, p *registrypb.ProviderInfo) error {
+	m.Lock()
+	defer m.Unlock()
 	//mimeInterface, ok := m.mimetypes.Get(mimeType)
 	//if ok {
 	//	mime := mimeInterface.(*mimeTypeConfig)
@@ -400,8 +408,18 @@ func (m *manager) SetDefaultProviderForMimeType(ctx context.Context, mimeType st
 	//	log.Warn().Msgf("config for mimetype '%s' not found while setting a new default AppProvider", mimeType)
 	//	m.mimetypes.Set(mimeType, dummyMimeType(mimeType, []*registrypb.ProviderInfo{p}))
 	//}
+
+	// NOTE: this is a dirty workaround:
+
+	for _, mt := range m.config.MimeTypes {
+		if mt.MimeType == mimeType {
+			mt.DefaultApp = p.Name
+			return nil
+		}
+	}
+
 	log.Info().Msgf("default provider for app is not set through the provider, but defined for the app")
-	return nil
+	return mreg.ErrNotFound
 }
 
 //func registerProvider(p *registrypb.ProviderInfo, mime *mimeTypeConfig) {
@@ -468,13 +486,18 @@ func (m *manager) GetDefaultProviderForMimeType(ctx context.Context, mimeType st
 	//	}
 	//}
 
-	// TODO: this needs to respect the mime.DefaultProvider in the future
-	providers := m.mimeTypes[mimeType]
-	if len(providers) < 1 {
-		return nil, errtypes.NotFound("default application provider not set for mime type " + mimeType)
+	for _, mt := range m.config.MimeTypes {
+		if mt.MimeType != mimeType {
+			continue
+		}
+		for _, p := range m.mimeTypes[mimeType] {
+			if p.Name == mt.DefaultApp {
+				return p, nil
+			}
+		}
 	}
 
-	return providers[0], nil
+	return nil, mreg.ErrNotFound
 }
 
 //func equalsProviderInfo(p1, p2 *registrypb.ProviderInfo) bool {

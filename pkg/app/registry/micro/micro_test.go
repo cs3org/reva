@@ -185,6 +185,14 @@ func TestFindProviders(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := context.TODO()
 
+			// register all the providers
+			for _, p := range tt.regProviders {
+				err := registerWithMicroReg(tt.registryNamespace, p)
+				if err != nil {
+					t.Error("unexpected error adding a new provider in the registry:", err)
+				}
+			}
+
 			registry, err := New(map[string]interface{}{
 				"mime_types": tt.mimeTypes,
 				"namespace":  tt.registryNamespace, // TODO: move this to a const
@@ -194,13 +202,6 @@ func TestFindProviders(t *testing.T) {
 				t.Error("unexpected error creating the registry:", err)
 			}
 
-			// register all the providers
-			for _, p := range tt.regProviders {
-				err := registerWithMicroReg(tt.registryNamespace, p, tt.mimeTypes)
-				if err != nil {
-					t.Error("unexpected error adding a new provider in the registry:", err)
-				}
-			}
 			providers, err := registry.FindProviders(ctx, tt.mimeType)
 
 			// check that the error returned by FindProviders is the same as the expected
@@ -220,7 +221,7 @@ func TestFindProviders(t *testing.T) {
 
 }
 
-func registerWithMicroReg(ns string, p *registrypb.ProviderInfo, mt []*mimeTypeConfig) error {
+func registerWithMicroReg(ns string, p *registrypb.ProviderInfo) error {
 	//log.Debug().Interface("provider", p).Msg("AddProvider")
 
 	reg := oreg.GetRegistry()
@@ -300,10 +301,11 @@ func TestFindProvidersWithPriority(t *testing.T) {
 		registryNamespace string
 	}{
 		{
-			name:        "no mime types registered",
-			mimeTypes:   []*mimeTypeConfig{},
-			mimeType:    "SOMETHING",
-			expectedErr: registry.ErrNotFound,
+			name:              "no mime types registered",
+			registryNamespace: "noMimeTypesRegistered",
+			mimeTypes:         []*mimeTypeConfig{},
+			mimeType:          "SOMETHING",
+			expectedErr:       registry.ErrNotFound,
 		},
 		{
 			name:              "one provider registered for one mime type",
@@ -573,32 +575,32 @@ func TestFindProvidersWithPriority(t *testing.T) {
 
 			ctx := context.TODO()
 
+			// register all the providers
+			for _, p := range tt.regProviders {
+				err := registerWithMicroReg(tt.registryNamespace, p)
+				if err != nil {
+					t.Fatal("unexpected error adding a new provider in the registry:", err)
+				}
+			}
+
 			registry, err := New(map[string]interface{}{
 				"mime_types": tt.mimeTypes,
 				"namespace":  tt.registryNamespace,
 			})
 
 			if err != nil {
-				t.Error("unexpected error creating the registry:", err)
-			}
-
-			// register all the providers
-			for _, p := range tt.regProviders {
-				err := registerWithMicroReg(tt.registryNamespace, p, tt.mimeTypes)
-				if err != nil {
-					t.Error("unexpected error adding a new provider in the registry:", err)
-				}
+				t.Fatal("unexpected error creating the registry:", err)
 			}
 
 			providers, err := registry.FindProviders(ctx, tt.mimeType)
 
 			// check that the error returned by FindProviders is the same as the expected
 			if tt.expectedErr != err {
-				t.Errorf("different error returned: got=%v expected=%v", err, tt.expectedErr)
+				t.Fatalf("different error returned: got=%v expected=%v", err, tt.expectedErr)
 			}
 
 			if !providersEquals(providers, tt.expectedRes) {
-				t.Errorf("providers list different from expected: \n\tgot=%v\n\texp=%v", providers, tt.expectedRes)
+				t.Fatalf("providers list different from expected: \n\tgot=%v\n\texp=%v", providers, tt.expectedRes)
 			}
 
 		})
@@ -868,7 +870,7 @@ func TestListSupportedMimeTypes(t *testing.T) {
 		newProviders      []*registrypb.ProviderInfo
 		expected          []*registrypb.MimeTypeInfo
 	}{
-		/*{
+		{
 			name:              "one mime type - no provider registered",
 			registryNamespace: "oneMimeTypeNoProviderRegistered",
 			mimeTypes: []*mimeTypeConfig{
@@ -891,7 +893,7 @@ func TestListSupportedMimeTypes(t *testing.T) {
 					DefaultApplication: "provider2",
 				},
 			},
-		},*/
+		},
 		{
 			name:              "one mime type - only default provider registered",
 			registryNamespace: "oneMimeTypenOnlyDefaultProviderRegistered",
@@ -927,150 +929,150 @@ func TestListSupportedMimeTypes(t *testing.T) {
 					Icon:               "https://example.org/icons&file=json.png",
 				},
 			},
-		}, /*
-			{
-				name:              "one mime type - more providers",
-				registryNamespace: "oneMimeTypeMoreProviders",
-				mimeTypes: []*mimeTypeConfig{
-					{
-						MimeType:   "text/json",
-						Extension:  "json",
-						Name:       "JSON File",
-						Icon:       "https://example.org/icons&file=json.png",
-						DefaultApp: "JSON_DEFAULT_PROVIDER",
-					},
-				},
-				newProviders: []*registrypb.ProviderInfo{
-					{
-						MimeTypes: []string{"text/json"},
-						Address:   "127.0.0.2:65535",
-						Name:      "NOT_DEFAULT_PROVIDER",
-					},
-					{
-						MimeTypes: []string{"text/json"},
-						Address:   "127.0.0.1:65535",
-						Name:      "JSON_DEFAULT_PROVIDER",
-					},
-				},
-				expected: []*registrypb.MimeTypeInfo{
-					{
-						MimeType: "text/json",
-						Ext:      "json",
-						AppProviders: []*registrypb.ProviderInfo{
-							{
-								MimeTypes: []string{"text/json"},
-								Address:   "127.0.0.2:65535",
-								Name:      "NOT_DEFAULT_PROVIDER",
-							},
-							{
-								MimeTypes: []string{"text/json"},
-								Address:   "127.0.0.1:65535",
-								Name:      "JSON_DEFAULT_PROVIDER",
-							},
-						},
-						DefaultApplication: "JSON_DEFAULT_PROVIDER",
-						Name:               "JSON File",
-						Icon:               "https://example.org/icons&file=json.png",
-					},
+		},
+		{
+			name:              "one mime type - more providers",
+			registryNamespace: "oneMimeTypeMoreProviders",
+			mimeTypes: []*mimeTypeConfig{
+				{
+					MimeType:   "text/json",
+					Extension:  "json",
+					Name:       "JSON File",
+					Icon:       "https://example.org/icons&file=json.png",
+					DefaultApp: "JSON_DEFAULT_PROVIDER",
 				},
 			},
-			{
-				name:              "multiple mime types",
-				registryNamespace: "multipleMimeTypes",
-				mimeTypes: []*mimeTypeConfig{
-					{
-						MimeType:   "text/json",
-						Extension:  "json",
-						Name:       "JSON File",
-						Icon:       "https://example.org/icons&file=json.png",
-						DefaultApp: "JSON_DEFAULT_PROVIDER",
-					},
-					{
-						MimeType:   "text/xml",
-						Extension:  "xml",
-						Name:       "XML File",
-						Icon:       "https://example.org/icons&file=xml.png",
-						DefaultApp: "XML_DEFAULT_PROVIDER",
-					},
+			newProviders: []*registrypb.ProviderInfo{
+				{
+					MimeTypes: []string{"text/json"},
+					Address:   "127.0.0.2:65535",
+					Name:      "NOT_DEFAULT_PROVIDER",
 				},
-				newProviders: []*registrypb.ProviderInfo{
-					{
-						MimeTypes: []string{"text/json", "text/xml"},
-						Address:   "127.0.0.1:65535",
-						Name:      "NOT_DEFAULT_PROVIDER2",
-					},
-					{
-						MimeTypes: []string{"text/xml"},
-						Address:   "127.0.0.2:65535",
-						Name:      "NOT_DEFAULT_PROVIDER1",
-					},
-					{
-						MimeTypes: []string{"text/xml", "text/json"},
-						Address:   "127.0.0.3:65535",
-						Name:      "JSON_DEFAULT_PROVIDER",
-					},
-					{
-						MimeTypes: []string{"text/xml", "text/json"},
-						Address:   "127.0.0.4:65535",
-						Name:      "XML_DEFAULT_PROVIDER",
-					},
+				{
+					MimeTypes: []string{"text/json"},
+					Address:   "127.0.0.1:65535",
+					Name:      "JSON_DEFAULT_PROVIDER",
 				},
-				expected: []*registrypb.MimeTypeInfo{
-					{
-						MimeType: "text/json",
-						Ext:      "json",
-						AppProviders: []*registrypb.ProviderInfo{
-							{
-								MimeTypes: []string{"text/json", "text/xml"},
-								Address:   "127.0.0.1:65535",
-								Name:      "NOT_DEFAULT_PROVIDER2",
-							},
-							{
-								MimeTypes: []string{"text/xml", "text/json"},
-								Address:   "127.0.0.3:65535",
-								Name:      "JSON_DEFAULT_PROVIDER",
-							},
-							{
-								MimeTypes: []string{"text/xml", "text/json"},
-								Address:   "127.0.0.2:65535",
-								Name:      "XML_DEFAULT_PROVIDER",
-							},
+			},
+			expected: []*registrypb.MimeTypeInfo{
+				{
+					MimeType: "text/json",
+					Ext:      "json",
+					AppProviders: []*registrypb.ProviderInfo{
+						{
+							MimeTypes: []string{"text/json"},
+							Address:   "127.0.0.2:65535",
+							Name:      "NOT_DEFAULT_PROVIDER",
 						},
-						DefaultApplication: "JSON_DEFAULT_PROVIDER",
-						Name:               "JSON File",
-						Icon:               "https://example.org/icons&file=json.png",
-					},
-					{
-						MimeType: "text/xml",
-						Ext:      "xml",
-						AppProviders: []*registrypb.ProviderInfo{
-							{
-								MimeTypes: []string{"text/json", "text/xml"},
-								Address:   "127.0.0.1:65535",
-								Name:      "NOT_DEFAULT_PROVIDER2",
-							},
-							{
-								MimeTypes: []string{"text/xml"},
-								Address:   "127.0.0.2:65535",
-								Name:      "NOT_DEFAULT_PROVIDER1",
-							},
-							{
-								MimeTypes: []string{"text/xml", "text/json"},
-								Address:   "127.0.0.3:65535",
-								Name:      "JSON_DEFAULT_PROVIDER",
-							},
-							{
-								MimeTypes: []string{"text/xml", "text/json"},
-								Address:   "127.0.0.4:65535",
-								Name:      "XML_DEFAULT_PROVIDER",
-							},
+						{
+							MimeTypes: []string{"text/json"},
+							Address:   "127.0.0.1:65535",
+							Name:      "JSON_DEFAULT_PROVIDER",
 						},
-						DefaultApplication: "XML_DEFAULT_PROVIDER",
-						Name:               "XML File",
-						Icon:               "https://example.org/icons&file=xml.png",
 					},
+					DefaultApplication: "JSON_DEFAULT_PROVIDER",
+					Name:               "JSON File",
+					Icon:               "https://example.org/icons&file=json.png",
 				},
-			},*/
+			},
+		},
+		{
+			name:              "multiple mime types",
+			registryNamespace: "multipleMimeTypes",
+			mimeTypes: []*mimeTypeConfig{
+				{
+					MimeType:   "text/json",
+					Extension:  "json",
+					Name:       "JSON File",
+					Icon:       "https://example.org/icons&file=json.png",
+					DefaultApp: "JSON_DEFAULT_PROVIDER",
+				},
+				{
+					MimeType:   "text/xml",
+					Extension:  "xml",
+					Name:       "XML File",
+					Icon:       "https://example.org/icons&file=xml.png",
+					DefaultApp: "XML_DEFAULT_PROVIDER",
+				},
+			},
+			newProviders: []*registrypb.ProviderInfo{
+				{
+					MimeTypes: []string{"text/json", "text/xml"},
+					Address:   "127.0.0.1:65535",
+					Name:      "NOT_DEFAULT_PROVIDER2",
+				},
+				{
+					MimeTypes: []string{"text/xml"},
+					Address:   "127.0.0.2:65535",
+					Name:      "NOT_DEFAULT_PROVIDER1",
+				},
+				{
+					MimeTypes: []string{"text/xml", "text/json"},
+					Address:   "127.0.0.3:65535",
+					Name:      "JSON_DEFAULT_PROVIDER",
+				},
+				{
+					MimeTypes: []string{"text/xml", "text/json"},
+					Address:   "127.0.0.4:65535",
+					Name:      "XML_DEFAULT_PROVIDER",
+				},
+			},
+			expected: []*registrypb.MimeTypeInfo{
+				{
+					MimeType: "text/json",
+					Ext:      "json",
+					AppProviders: []*registrypb.ProviderInfo{
+						{
+							MimeTypes: []string{"text/json", "text/xml"},
+							Address:   "127.0.0.1:65535",
+							Name:      "NOT_DEFAULT_PROVIDER2",
+						},
+						{
+							MimeTypes: []string{"text/xml", "text/json"},
+							Address:   "127.0.0.3:65535",
+							Name:      "JSON_DEFAULT_PROVIDER",
+						},
+						{
+							MimeTypes: []string{"text/xml", "text/json"},
+							Address:   "127.0.0.2:65535",
+							Name:      "XML_DEFAULT_PROVIDER",
+						},
+					},
+					DefaultApplication: "JSON_DEFAULT_PROVIDER",
+					Name:               "JSON File",
+					Icon:               "https://example.org/icons&file=json.png",
+				},
+				{
+					MimeType: "text/xml",
+					Ext:      "xml",
+					AppProviders: []*registrypb.ProviderInfo{
+						{
+							MimeTypes: []string{"text/json", "text/xml"},
+							Address:   "127.0.0.1:65535",
+							Name:      "NOT_DEFAULT_PROVIDER2",
+						},
+						{
+							MimeTypes: []string{"text/xml"},
+							Address:   "127.0.0.2:65535",
+							Name:      "NOT_DEFAULT_PROVIDER1",
+						},
+						{
+							MimeTypes: []string{"text/xml", "text/json"},
+							Address:   "127.0.0.3:65535",
+							Name:      "JSON_DEFAULT_PROVIDER",
+						},
+						{
+							MimeTypes: []string{"text/xml", "text/json"},
+							Address:   "127.0.0.4:65535",
+							Name:      "XML_DEFAULT_PROVIDER",
+						},
+					},
+					DefaultApplication: "XML_DEFAULT_PROVIDER",
+					Name:               "XML File",
+					Icon:               "https://example.org/icons&file=xml.png",
+				},
+			},
+		},
 	}
 
 	for _, tt := range testCases {
@@ -1078,21 +1080,20 @@ func TestListSupportedMimeTypes(t *testing.T) {
 
 			ctx := context.TODO()
 
+			// add all the providers
+			for _, p := range tt.newProviders {
+				err := registerWithMicroReg(tt.registryNamespace, p)
+				if err != nil {
+					t.Fatal("unexpected error creating adding new providers:", err)
+				}
+			}
+
 			registry, err := New(map[string]interface{}{
 				"mime_types": tt.mimeTypes,
 				"namespace":  tt.registryNamespace,
 			})
 			if err != nil {
-				t.Error("unexpected error creating the registry:", err)
-			}
-
-			// add all the providers
-			for _, p := range tt.newProviders {
-				//TODO: replace this with native go micro registration
-				err = registerWithMicroReg(tt.registryNamespace, p, tt.mimeTypes)
-				if err != nil {
-					t.Error("unexpected error creating adding new providers:", err)
-				}
+				t.Fatal("unexpected error creating the registry:", err)
 			}
 
 			got, err := registry.ListSupportedMimeTypes(ctx)
@@ -1108,20 +1109,20 @@ func TestListSupportedMimeTypes(t *testing.T) {
 	}
 }
 
-// TODO: find out if this is used, if not remove
 func TestSetDefaultProviderForMimeType(t *testing.T) {
 	testCases := []struct {
-		name          string
-		mimeTypes     []*mimeTypeConfig
-		initProviders []*registrypb.ProviderInfo
-		newDefault    struct {
+		name              string
+		registryNamespace string
+		mimeTypes         []*mimeTypeConfig
+		newDefault        struct {
 			mimeType string
 			provider *registrypb.ProviderInfo
 		}
 		newProviders []*registrypb.ProviderInfo
 	}{
 		{
-			name: "set new default - no new providers",
+			name:              "set new default - no new providers",
+			registryNamespace: "setNewDefaultNoNewProviders",
 			mimeTypes: []*mimeTypeConfig{
 				{
 					MimeType:   "text/json",
@@ -1129,77 +1130,75 @@ func TestSetDefaultProviderForMimeType(t *testing.T) {
 					Name:       "JSON File",
 					Icon:       "https://example.org/icons&file=json.png",
 					DefaultApp: "JSON_DEFAULT_PROVIDER",
-				},
-			},
-			initProviders: []*registrypb.ProviderInfo{
-				{
-					MimeTypes: []string{"text/json"},
-					Address:   "1",
-					Name:      "JSON_DEFAULT_PROVIDER",
-				},
-				{
-					MimeTypes: []string{"text/json"},
-					Address:   "2",
-					Name:      "NEW_DEFAULT",
-				},
-			},
-			newDefault: struct {
-				mimeType string
-				provider *registrypb.ProviderInfo
-			}{
-				mimeType: "text/json",
-				provider: &registrypb.ProviderInfo{
-					MimeTypes: []string{"text/json"},
-					Address:   "2",
-					Name:      "NEW_DEFAULT",
-				},
-			},
-			newProviders: []*registrypb.ProviderInfo{},
-		},
-		{
-			name: "set default - other providers (one is the previous default)",
-			mimeTypes: []*mimeTypeConfig{
-				{
-					MimeType:   "text/json",
-					Extension:  "json",
-					Name:       "JSON File",
-					Icon:       "https://example.org/icons&file=json.png",
-					DefaultApp: "JSON_DEFAULT_PROVIDER",
-				},
-			},
-			initProviders: []*registrypb.ProviderInfo{
-				{
-					MimeTypes: []string{"text/json"},
-					Address:   "4",
-					Name:      "NO_DEFAULT_PROVIDER",
-				},
-				{
-					MimeTypes: []string{"text/json"},
-					Address:   "2",
-					Name:      "NEW_DEFAULT",
-				},
-			},
-			newDefault: struct {
-				mimeType string
-				provider *registrypb.ProviderInfo
-			}{
-				mimeType: "text/json",
-				provider: &registrypb.ProviderInfo{
-					MimeTypes: []string{"text/json"},
-					Address:   "2",
-					Name:      "NEW_DEFAULT",
 				},
 			},
 			newProviders: []*registrypb.ProviderInfo{
 				{
 					MimeTypes: []string{"text/json"},
-					Address:   "1",
+					Address:   "127.0.0.1:65535",
 					Name:      "JSON_DEFAULT_PROVIDER",
 				},
 				{
 					MimeTypes: []string{"text/json"},
-					Address:   "3",
+					Address:   "127.0.0.2:65535",
+					Name:      "NEW_DEFAULT",
+				},
+			},
+			newDefault: struct {
+				mimeType string
+				provider *registrypb.ProviderInfo
+			}{
+				mimeType: "text/json",
+				provider: &registrypb.ProviderInfo{
+					MimeTypes: []string{"text/json"},
+					Address:   "127.0.0.2:65535",
+					Name:      "NEW_DEFAULT",
+				},
+			},
+		},
+		{
+			name:              "set default - other providers (one is the previous default)",
+			registryNamespace: "setDefaultOtherProvidersOneIsThePreviousDefault",
+			mimeTypes: []*mimeTypeConfig{
+				{
+					MimeType:   "text/json",
+					Extension:  "json",
+					Name:       "JSON File",
+					Icon:       "https://example.org/icons&file=json.png",
+					DefaultApp: "JSON_DEFAULT_PROVIDER",
+				},
+			},
+			newProviders: []*registrypb.ProviderInfo{
+				{
+					MimeTypes: []string{"text/json"},
+					Address:   "127.0.0.4:65535",
+					Name:      "NO_DEFAULT_PROVIDER",
+				},
+				{
+					MimeTypes: []string{"text/json"},
+					Address:   "127.0.0.2:65535",
+					Name:      "NEW_DEFAULT",
+				},
+				{
+					MimeTypes: []string{"text/json"},
+					Address:   "127.0.0.1:65535",
+					Name:      "JSON_DEFAULT_PROVIDER",
+				},
+				{
+					MimeTypes: []string{"text/json"},
+					Address:   "127.0.0.3:65535",
 					Name:      "OTHER_PROVIDER",
+				},
+			},
+			newDefault: struct {
+				mimeType string
+				provider *registrypb.ProviderInfo
+			}{
+				mimeType: "text/json",
+				provider: &registrypb.ProviderInfo{
+					MimeTypes: []string{"text/json"},
+					Address:   "127.0.0.2:65535",
+					Name:      "NEW_DEFAULT",
 				},
 			},
 		},
@@ -1210,9 +1209,17 @@ func TestSetDefaultProviderForMimeType(t *testing.T) {
 
 			ctx := context.TODO()
 
+			// add other provider to move things around internally :)
+			for _, p := range tt.newProviders {
+				err := registerWithMicroReg(tt.registryNamespace, p)
+				if err != nil {
+					t.Error("unexpected error adding a new provider:", err)
+				}
+			}
+
 			registry, err := New(map[string]interface{}{
-				"providers":  tt.initProviders,
 				"mime_types": tt.mimeTypes,
+				"namespace":  tt.registryNamespace,
 			})
 			if err != nil {
 				t.Error("unexpected error creating a new registry:", err)
@@ -1221,14 +1228,6 @@ func TestSetDefaultProviderForMimeType(t *testing.T) {
 			err = registry.SetDefaultProviderForMimeType(ctx, tt.newDefault.mimeType, tt.newDefault.provider)
 			if err != nil {
 				t.Error("unexpected error setting a default provider for mime type:", err)
-			}
-
-			// add other provider to move things around internally :)
-			for _, p := range tt.newProviders {
-				err = registry.AddProvider(ctx, p)
-				if err != nil {
-					t.Error("unexpected error adding a new provider:", err)
-				}
 			}
 
 			// check if the new default is the one set
