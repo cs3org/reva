@@ -25,9 +25,10 @@ import (
 	"encoding/xml"
 	"net/http"
 	"reflect"
+	"strings"
 
 	"github.com/cs3org/reva/pkg/appctx"
-	"github.com/go-chi/chi/v5"
+	"github.com/cs3org/reva/pkg/rhttp/mux"
 )
 
 type key int
@@ -236,7 +237,11 @@ func OcsV2StatusCodes(meta Meta) int {
 // WithAPIVersion puts the api version in the context.
 func VersionCtx(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		version := chi.URLParam(r, "version")
+		params := mux.ParamsFromRequest(r)
+		version, _ := params.Get("version")
+		// version is of type v1.php or v2.php
+		version = strings.TrimPrefix(version, "v")
+		version = strings.TrimSuffix(version, ".php")
 		if version == "" {
 			WriteOCSError(w, r, MetaBadRequest.StatusCode, "unknown ocs api version", nil)
 			return

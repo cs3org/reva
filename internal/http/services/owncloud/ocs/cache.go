@@ -59,7 +59,7 @@ func (s *svc) cacheWarmup(w http.ResponseWriter, r *http.Request) {
 
 			log.Info().Msgf("cache warmup getting created shares for user %s", id)
 			req.URL.Path = "/v1.php/apps/files_sharing/api/v1/shares"
-			s.router.ServeHTTP(p, req)
+			s.sharesHandler.ListShares(p, req)
 
 			log.Info().Msgf("cache warmup getting received shares for user %s", id)
 			req.URL.Path = "/v1.php/apps/files_sharing/api/v1/shares"
@@ -67,7 +67,7 @@ func (s *svc) cacheWarmup(w http.ResponseWriter, r *http.Request) {
 			q.Set("shared_with_me", "true")
 			q.Set("state", "all")
 			req.URL.RawQuery = q.Encode()
-			s.router.ServeHTTP(p, req)
+			s.sharesHandler.ListShares(p, req)
 		}
 	}
 }

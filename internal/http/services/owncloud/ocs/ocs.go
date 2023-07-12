@@ -36,7 +36,6 @@ import (
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/rhttp/mux"
 	"github.com/cs3org/reva/pkg/utils/cfg"
-	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog"
 )
 
@@ -47,9 +46,15 @@ func init() {
 }
 
 type svc struct {
-	c                  *config.Config
-	router             *chi.Mux
-	warmupCacheTracker *ttlcache.Cache
+	c                   *config.Config
+	warmupCacheTracker  *ttlcache.Cache
+	log                 *zerolog.Logger
+	capabilitiesHandler *capabilities.Handler
+	userHandler         *user.Handler
+	usersHandler        *users.Handler
+	configHandler       *configHandler.Handler
+	sharesHandler       *shares.Handler
+	shareesHandler      *sharees.Handler
 }
 
 func New(ctx context.Context, m map[string]interface{}) (global.Service, error) {
@@ -58,15 +63,10 @@ func New(ctx context.Context, m map[string]interface{}) (global.Service, error) 
 		return nil, err
 	}
 
-	r := chi.NewRouter()
-	s := &svc{
-		c:      &c,
-		router: r,
-	}
-
 	log := appctx.GetLogger(ctx)
-	if err := s.routerInit(log); err != nil {
-		return nil, err
+	s := &svc{
+		c:   &c,
+		log: log,
 	}
 
 	if c.CacheWarmupDriver == "first-request" && c.ResourceInfoCacheTTL > 0 {
@@ -82,83 +82,57 @@ func (s *svc) Name() string {
 }
 
 func (s *svc) Register(r mux.Router) {
-	r.Route("/ocs/:version", func(r mux.Router) {
+	s.capabilitiesHandler = new(capabilities.Handler)
+	s.userHandler = new(user.Handler)
+	s.usersHandler = new(users.Handler)
+	s.configHandler = new(configHandler.Handler)
+	s.sharesHandler = new(shares.Handler)
+	s.shareesHandler = new(sharees.Handler)
+	s.capabilitiesHandler.Init(s.c)
+	s.usersHandler.Init(s.c)
+	s.userHandler.Init(s.c)
+	s.configHandler.Init(s.c)
+	s.sharesHandler.Init(s.c, s.log)
+	s.shareesHandler.Init(s.c)
 
-	})
+	r.Route("/ocs/:version", func(r mux.Router) {
+		r.Route("/apps/files_sharing/api/v1", func(r mux.Router) {
+			r.Route("/shares", func(r mux.Router) {
+				r.Get("/", http.HandlerFunc(s.sharesHandler.ListShares))
+				r.Options("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					w.WriteHeader(http.StatusOK)
+				}))
+				r.Post("/", http.HandlerFunc(s.sharesHandler.CreateShare))
+				r.Route("/pending/:shareid", func(r mux.Router) {
+					r.Post("/", http.HandlerFunc((s.sharesHandler.AcceptReceivedShare)))
+					r.Delete("/", http.HandlerFunc(s.sharesHandler.RejectReceivedShare))
+				})
+				r.Route("/remote_shares", func(r mux.Router) {
+					r.Get("/", http.HandlerFunc(s.sharesHandler.ListFederatedShares))
+					r.Get("/:shareid", http.HandlerFunc(s.sharesHandler.GetFederatedShare))
+				})
+				r.Get("/:shareid", http.HandlerFunc(s.sharesHandler.GetShare))
+				r.Put("/:shareid", http.HandlerFunc(s.sharesHandler.UpdateShare))
+				r.Get("/:shareid/notify", http.HandlerFunc(s.sharesHandler.NotifyShare))
+				r.Delete("/:shareid", http.HandlerFunc(s.sharesHandler.RemoveShare))
+			})
+			r.Get("/sharees", http.HandlerFunc(s.shareesHandler.FindSharees))
+		})
+
+		r.Get("/config", http.HandlerFunc(s.configHandler.GetConfig))
+
+		r.Route("/cloud", func(r mux.Router) {
+			r.Get("/capabilities", http.HandlerFunc(s.capabilitiesHandler.GetCapabilities), mux.Unprotected())
+			r.Get("/user", http.HandlerFunc(s.userHandler.GetSelf))
+			r.Patch("/user", http.HandlerFunc(s.userHandler.UpdateSelf))
+			r.Route("/users", func(r mux.Router) {
+				r.Get("/:userid", http.HandlerFunc(s.usersHandler.GetUsers))
+				r.Get("/:userid/groups", http.HandlerFunc(s.usersHandler.GetGroups))
+			})
+		})
+	}, mux.WithMiddleware(response.VersionCtx))
 }
 
 func (s *svc) Close() error {
 	return nil
-}
-
-func (s *svc) Unprotected() []string {
-	return []string{"/v1.php/cloud/capabilities", "/v2.php/cloud/capabilities"}
-}
-
-func (s *svc) routerInit(l *zerolog.Logger) error {
-	capabilitiesHandler := new(capabilities.Handler)
-	userHandler := new(user.Handler)
-	usersHandler := new(users.Handler)
-	configHandler := new(configHandler.Handler)
-	sharesHandler := new(shares.Handler)
-	shareesHandler := new(sharees.Handler)
-	capabilitiesHandler.Init(s.c)
-	usersHandler.Init(s.c)
-	userHandler.Init(s.c)
-	configHandler.Init(s.c)
-	sharesHandler.Init(s.c, l)
-	shareesHandler.Init(s.c)
-
-	s.router.Route("/v{version:(1|2)}.php", func(r chi.Router) {
-		r.Use(response.VersionCtx)
-		r.Route("/apps/files_sharing/api/v1", func(r chi.Router) {
-			r.Route("/shares", func(r chi.Router) {
-				r.Get("/", sharesHandler.ListShares)
-				r.Options("/", func(w http.ResponseWriter, r *http.Request) {
-					w.WriteHeader(http.StatusOK)
-				})
-				r.Post("/", sharesHandler.CreateShare)
-				r.Route("/pending/{shareid}", func(r chi.Router) {
-					r.Post("/", sharesHandler.AcceptReceivedShare)
-					r.Delete("/", sharesHandler.RejectReceivedShare)
-				})
-				r.Route("/remote_shares", func(r chi.Router) {
-					r.Get("/", sharesHandler.ListFederatedShares)
-					r.Get("/{shareid}", sharesHandler.GetFederatedShare)
-				})
-				r.Get("/{shareid}", sharesHandler.GetShare)
-				r.Put("/{shareid}", sharesHandler.UpdateShare)
-				r.Get("/{shareid}/notify", sharesHandler.NotifyShare)
-				r.Delete("/{shareid}", sharesHandler.RemoveShare)
-			})
-			r.Get("/sharees", shareesHandler.FindSharees)
-		})
-
-		r.Get("/config", configHandler.GetConfig)
-
-		r.Route("/cloud", func(r chi.Router) {
-			r.Get("/capabilities", capabilitiesHandler.GetCapabilities)
-			r.Get("/user", userHandler.GetSelf)
-			r.Patch("/user", userHandler.UpdateSelf)
-			r.Route("/users", func(r chi.Router) {
-				r.Get("/{userid}", usersHandler.GetUsers)
-				r.Get("/{userid}/groups", usersHandler.GetGroups)
-			})
-		})
-	})
-	return nil
-}
-
-func (s *svc) Handler() http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		log := appctx.GetLogger(r.Context())
-		log.Debug().Str("path", r.URL.Path).Msg("ocs routing")
-
-		// Warmup the share cache for the user
-		go s.cacheWarmup(w, r)
-
-		// unset raw path, otherwise chi uses it to route and then fails to match percent encoded path segments
-		r.URL.RawPath = ""
-		s.router.ServeHTTP(w, r)
-	})
 }
