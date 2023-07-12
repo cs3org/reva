@@ -18,34 +18,23 @@
 
 package micro
 
-import (
-	"strings"
+import "github.com/mitchellh/mapstructure"
 
-	"github.com/cs3org/reva/v2/pkg/app/registry/registry"
-)
-
-const defaultPriority = "0"
-
-func init() {
-	registry.Register("micro", New)
+type config struct {
+	Namespace string            `mapstructure:"namespace"`
+	MimeTypes []*mimeTypeConfig `mapstructure:"mime_types"`
 }
 
-type mimeTypeConfig struct {
-	MimeType      string `mapstructure:"mime_type"`
-	Extension     string `mapstructure:"extension"`
-	Name          string `mapstructure:"name"`
-	Description   string `mapstructure:"description"`
-	Icon          string `mapstructure:"icon"`
-	DefaultApp    string `mapstructure:"default_app"`
-	AllowCreation bool   `mapstructure:"allow_creation"`
-	//apps          providerHeap
+func (c *config) init() {
+	if c.Namespace == "" {
+		c.Namespace = "cs3"
+	}
 }
 
-// use the UTF-8 record seperator
-func splitMimeTypes(s string) []string {
-	return strings.Split(s, "␞")
-}
-
-func joinMimeTypes(mimetypes []string) string {
-	return strings.Join(mimetypes, "␞")
+func parseConfig(m map[string]interface{}) (*config, error) {
+	c := &config{}
+	if err := mapstructure.Decode(m, c); err != nil {
+		return nil, err
+	}
+	return c, nil
 }

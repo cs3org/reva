@@ -209,7 +209,6 @@ func TestFindProviders(t *testing.T) {
 				t.Errorf("different error returned: got=%v expected=%v", err, tt.expectedErr)
 			}
 
-			// TODO: for the commented in test the returned value is different from the expected value
 			// expected: slice of pointers, got: slice of pointers with weird opague notation
 			if !providersEquals(providers, tt.expectedRes) {
 				t.Errorf("providers list different from expected: \n\tgot=%v\n\texp=%v", providers, tt.expectedRes)
@@ -219,74 +218,6 @@ func TestFindProviders(t *testing.T) {
 
 	}
 
-}
-
-func registerWithMicroReg(ns string, p *registrypb.ProviderInfo) error {
-	//log.Debug().Interface("provider", p).Msg("AddProvider")
-
-	reg := oreg.GetRegistry()
-
-	serviceID := ns + ".api.app-provider"
-
-	node := &mreg.Node{
-		Id:       serviceID + "-" + uuid.New().String(),
-		Address:  p.Address,
-		Metadata: make(map[string]string),
-	}
-
-	node.Metadata["registry"] = reg.String()
-	node.Metadata["server"] = "grpc"
-	node.Metadata["transport"] = "grpc"
-	node.Metadata["protocol"] = "grpc"
-
-	node.Metadata[ns+".app-provider.mime_type"] = joinMimeTypes(p.MimeTypes)
-	node.Metadata[ns+".app-provider.name"] = p.Name
-	node.Metadata[ns+".app-provider.description"] = p.Description
-	node.Metadata[ns+".app-provider.icon"] = p.Icon
-	//node.Metadata[ns+".app-provider.default_app"] =
-	node.Metadata[ns+".app-provider.allow_creation"] = registrypb.ProviderInfo_Capability_name[int32(p.Capability)]
-	node.Metadata[ns+".app-provider.priority"] = getPriority(p)
-	if p.DesktopOnly {
-		node.Metadata[ns+".app-provider.desktop_only"] = "true"
-	}
-
-	service := &mreg.Service{
-		Name: serviceID,
-		//Version:   version,
-		Nodes:     []*mreg.Node{node},
-		Endpoints: make([]*mreg.Endpoint, 0),
-	}
-
-	//log.Info().Msgf("registering external service %v@%v", node.Id, node.Address)
-
-	rOpts := []mreg.RegisterOption{mreg.RegisterTTL(time.Minute)}
-	if err := reg.Register(service, rOpts...); err != nil {
-		//log.Err().Err(err).Msgf("Registration error for external service %v", serviceID)
-		return err
-	}
-
-	return nil
-}
-
-// check that all providers in the two lists are equals
-func providersEquals(pi1, pi2 []*registrypb.ProviderInfo) bool {
-	if len(pi1) != len(pi2) {
-		return false
-	}
-
-	if len(pi1) < 1 && len(pi2) < 1 {
-		return true
-	}
-
-	for _, left := range pi1 {
-		for _, right := range pi2 {
-			if equalsProviderInfo(left, right) {
-				return true
-			}
-		}
-	}
-
-	return false
 }
 
 func TestFindProvidersWithPriority(t *testing.T) {
@@ -608,259 +539,6 @@ func TestFindProvidersWithPriority(t *testing.T) {
 	}
 
 }
-
-/* //THIS IS OBSOLETE
-func TestAddProvider(t *testing.T) {
-
-	testCases := []struct {
-		name              string
-		mimeTypes         []*mimeTypeConfig
-		newProvider       *registrypb.ProviderInfo
-		expectedProviders map[string][]*registrypb.ProviderInfo
-		namespace         string
-	}{
-		{
-			name:      "no mime types defined - no initial providers",
-			namespace: "noMimeTypesDefinedNoInitialProviders",
-			mimeTypes: []*mimeTypeConfig{},
-			newProvider: &registrypb.ProviderInfo{
-				MimeTypes: []string{"text/json"},
-				Address:   "127.0.0.1:65535",
-				Name:      "provider1",
-			},
-			expectedProviders: map[string][]*registrypb.ProviderInfo{
-				"text/json": {
-					{
-						MimeTypes: []string{"text/json"},
-						Address:   "127.0.0.1:65535",
-						Name:      "provider1",
-					},
-				},
-			},
-		},
-		{
-			name:      "one mime types defined - no initial providers - registering provider is the default",
-			namespace: "oneMimeTypesDefinedNotInitialProvidersRegisteringProviderIsTheDefault",
-			mimeTypes: []*mimeTypeConfig{
-				{
-					MimeType:   "text/json",
-					Extension:  "json",
-					Name:       "JSON File",
-					Icon:       "https://example.org/icons&file=json.png",
-					DefaultApp: "provider1",
-				},
-			},
-			newProvider: &registrypb.ProviderInfo{
-				MimeTypes: []string{"text/json"},
-				Address:   "127.0.0.1:65535",
-				Name:      "provider1",
-			},
-			expectedProviders: map[string][]*registrypb.ProviderInfo{
-				"text/json": {
-					{
-						MimeTypes: []string{"text/json"},
-						Address:   "127.0.0.2:65535",
-						Name:      "provider2",
-					},
-					{
-						MimeTypes: []string{"text/json"},
-						Address:   "127.0.0.1:65535",
-						Name:      "provider1",
-					},
-				},
-			},
-		},
-		{
-			name:      "one mime types defined - default already registered",
-			namespace: "oneMimeTypesDefinedDefaultAlreadyRegistered",
-			mimeTypes: []*mimeTypeConfig{
-				{
-					MimeType:   "text/json",
-					Extension:  "json",
-					Name:       "JSON File",
-					Icon:       "https://example.org/icons&file=json.png",
-					DefaultApp: "provider2",
-				},
-			},
-			newProvider: &registrypb.ProviderInfo{
-				MimeTypes: []string{"text/json"},
-				Address:   "127.0.0.1:65535",
-				Name:      "provider1",
-			},
-			expectedProviders: map[string][]*registrypb.ProviderInfo{
-				"text/json": {
-					{
-						MimeTypes: []string{"text/json"},
-						Address:   "127.0.0.2:65535",
-						Name:      "provider2",
-					},
-					{
-						MimeTypes: []string{"text/json"},
-						Address:   "127.0.0.1:65535",
-						Name:      "provider1",
-					},
-				},
-			},
-		},
-		{
-			name:      "register a provider already registered",
-			namespace: "registerAProviderAlreadyRegistered",
-			mimeTypes: []*mimeTypeConfig{
-				{
-					MimeType:   "text/json",
-					Extension:  "json",
-					Name:       "JSON File",
-					Icon:       "https://example.org/icons&file=json.png",
-					DefaultApp: "provider2",
-				},
-			},
-			newProvider: &registrypb.ProviderInfo{
-				MimeTypes: []string{"text/json"},
-				Address:   "127.0.0.1:65535",
-				Name:      "provider1",
-			},
-			expectedProviders: map[string][]*registrypb.ProviderInfo{
-				"text/json": {
-					{
-						MimeTypes: []string{"text/json"},
-						Address:   "127.0.0.2:65535",
-						Name:      "provider2",
-					},
-					{
-						MimeTypes: []string{"text/json"},
-						Address:   "127.0.0.1:65535",
-						Name:      "provider1",
-					},
-				},
-			},
-		},
-		{
-			name:      "register a provider already registered supporting more mime types",
-			namespace: "registerAProviderAlreadyRegisteredSupportingMoreMimeTypes",
-			mimeTypes: []*mimeTypeConfig{
-				{
-					MimeType:   "text/json",
-					Extension:  "json",
-					Name:       "JSON File",
-					Icon:       "https://example.org/icons&file=json.png",
-					DefaultApp: "provider2",
-				},
-				{
-					MimeType:   "text/xml",
-					Extension:  "xml",
-					Name:       "XML File",
-					Icon:       "https://example.org/icons&file=xml.png",
-					DefaultApp: "provider1",
-				},
-			},
-			newProvider: &registrypb.ProviderInfo{
-				MimeTypes: []string{"text/json", "text/xml"},
-				Address:   "127.0.0.1:65535",
-				Name:      "provider1",
-			},
-			expectedProviders: map[string][]*registrypb.ProviderInfo{
-				"text/json": {
-					{
-						MimeTypes: []string{"text/json"},
-						Address:   "127.0.0.2:65535",
-						Name:      "provider2",
-					},
-					{
-						MimeTypes: []string{"text/json", "text/xml"},
-						Address:   "127.0.0.1:65535",
-						Name:      "provider1",
-					},
-				},
-				"text/xml": {
-					{
-						MimeTypes: []string{"text/json", "text/xml"},
-						Address:   "127.0.0.1:65535",
-						Name:      "provider1",
-					},
-				},
-			},
-		},
-		{
-			name:      "register a provider already registered supporting less mime types",
-			namespace: "registerAProviderAlreadyRegisteredSupportingLessMimeTypes",
-			mimeTypes: []*mimeTypeConfig{
-				{
-					MimeType:   "text/json",
-					Extension:  "json",
-					Name:       "JSON File",
-					Icon:       "https://example.org/icons&file=json.png",
-					DefaultApp: "provider2",
-				},
-				{
-					MimeType:   "text/xml",
-					Extension:  "xml",
-					Name:       "XML File",
-					Icon:       "https://example.org/icons&file=xml.png",
-					DefaultApp: "provider1",
-				},
-			},
-			newProvider: &registrypb.ProviderInfo{
-				MimeTypes: []string{"text/json"},
-				Address:   "127.0.0.1:65535",
-				Name:      "provider1",
-			},
-			expectedProviders: map[string][]*registrypb.ProviderInfo{
-				"text/json": {
-					{
-						MimeTypes: []string{"text/json"},
-						Address:   "127.0.0.2:65535",
-						Name:      "provider2",
-					},
-					{
-						MimeTypes: []string{"text/json"},
-						Address:   "127.0.0.1:65535",
-						Name:      "provider1",
-					},
-				},
-				"text/xml": {},
-			},
-		},
-	}
-
-	for _, tt := range testCases {
-		t.Run(tt.name, func(t *testing.T) {
-
-			ctx := context.TODO()
-
-			registry, err := New(map[string]interface{}{
-				//"providers":  tt.initProviders,
-				"mime_types": tt.mimeTypes,
-				"namespace":  tt.namespace,
-			})
-			if err != nil {
-				t.Error("unexpected error creating the registry:", err)
-			}
-
-			err = registry.AddProvider(ctx, tt.newProvider)
-			if err != nil {
-				t.Error("unexpected error adding a new provider:", err)
-			}
-
-			// test that the internal set of providers keep the new provider
-			// and the key is the provider's address
-			microReg := registry.(*manager)
-
-			for mime, prov := range tt.expectedProviders {
-				aprov, err := microReg.FindProviders(ctx, mime)
-				if err != nil {
-					t.Errorf("FindProviders returned an error : \n\t%v", err)
-				}
-
-				if !providersEquals(prov, aprov) {
-					t.Errorf("providers list different from expected: \n\tgot=%v\n\texp=%v", prov, aprov)
-				}
-			}
-
-		})
-	}
-
-}
-*/
 
 func TestListSupportedMimeTypes(t *testing.T) {
 	testCases := []struct {
@@ -1244,6 +922,16 @@ func TestSetDefaultProviderForMimeType(t *testing.T) {
 	}
 }
 
+func equalsMimeTypeInfo(m1, m2 *registrypb.MimeTypeInfo) bool {
+	return m1.Description == m2.Description &&
+		m1.AllowCreation == m2.AllowCreation &&
+		providersEquals(m1.AppProviders, m2.AppProviders) &&
+		m1.Ext == m2.Ext &&
+		m1.MimeType == m2.MimeType &&
+		m1.Name == m2.Name &&
+		m1.DefaultApplication == m2.DefaultApplication
+}
+
 func mimeTypesEquals(l1, l2 []*registrypb.MimeTypeInfo) bool {
 	if len(l1) != len(l2) {
 		return false
@@ -1264,12 +952,66 @@ func mimeTypesEquals(l1, l2 []*registrypb.MimeTypeInfo) bool {
 	return false
 }
 
-func equalsMimeTypeInfo(m1, m2 *registrypb.MimeTypeInfo) bool {
-	return m1.Description == m2.Description &&
-		m1.AllowCreation == m2.AllowCreation &&
-		providersEquals(m1.AppProviders, m2.AppProviders) &&
-		m1.Ext == m2.Ext &&
-		m1.MimeType == m2.MimeType &&
-		m1.Name == m2.Name &&
-		m1.DefaultApplication == m2.DefaultApplication
+// check that all providers in the two lists are equals
+func providersEquals(pi1, pi2 []*registrypb.ProviderInfo) bool {
+	if len(pi1) != len(pi2) {
+		return false
+	}
+
+	if len(pi1) < 1 && len(pi2) < 1 {
+		return true
+	}
+
+	for _, left := range pi1 {
+		for _, right := range pi2 {
+			if equalsProviderInfo(left, right) {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
+// This is to mock registering with the go-micro registry and at the same time the reference implementation
+func registerWithMicroReg(ns string, p *registrypb.ProviderInfo) error {
+	reg := oreg.GetRegistry()
+
+	serviceID := ns + ".api.app-provider"
+
+	node := &mreg.Node{
+		Id:       serviceID + "-" + uuid.New().String(),
+		Address:  p.Address,
+		Metadata: make(map[string]string),
+	}
+
+	node.Metadata["registry"] = reg.String()
+	node.Metadata["server"] = "grpc"
+	node.Metadata["transport"] = "grpc"
+	node.Metadata["protocol"] = "grpc"
+
+	node.Metadata[ns+".app-provider.mime_type"] = joinMimeTypes(p.MimeTypes)
+	node.Metadata[ns+".app-provider.name"] = p.Name
+	node.Metadata[ns+".app-provider.description"] = p.Description
+	node.Metadata[ns+".app-provider.icon"] = p.Icon
+
+	node.Metadata[ns+".app-provider.allow_creation"] = registrypb.ProviderInfo_Capability_name[int32(p.Capability)]
+	node.Metadata[ns+".app-provider.priority"] = getPriority(p)
+	if p.DesktopOnly {
+		node.Metadata[ns+".app-provider.desktop_only"] = "true"
+	}
+
+	service := &mreg.Service{
+		Name: serviceID,
+		//Version:   version,
+		Nodes:     []*mreg.Node{node},
+		Endpoints: make([]*mreg.Endpoint, 0),
+	}
+
+	rOpts := []mreg.RegisterOption{mreg.RegisterTTL(time.Minute)}
+	if err := reg.Register(service, rOpts...); err != nil {
+		return err
+	}
+
+	return nil
 }
