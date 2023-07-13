@@ -90,7 +90,12 @@ func (s *svc) Name() string {
 func (s *svc) Register(r mux.Router) {
 	r.Route("/data", func(r mux.Router) {
 		for prot, handler := range s.dataTXs {
-			r.Handle("/"+prot, handler)
+			r.Handle(fmt.Sprintf("/%s/*path", prot), handler, mux.WithMiddleware(func(next http.Handler) http.Handler {
+				return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					r.URL.Path, _ = mux.ParamsFromRequest(r).Get("path")
+					next.ServeHTTP(w, r)
+				})
+			}))
 		}
 	})
 }
