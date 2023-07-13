@@ -20,7 +20,6 @@ package mux
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"net/url"
 	"path/filepath"
@@ -59,7 +58,6 @@ func (m *ServeMux) Route(path string, f func(Router), o ...Option) {
 	if len(o) > 0 {
 		var opts Options
 		opts.apply(o...)
-		fmt.Println(path, opts)
 		m.tree.insert(MethodAll, path, nil, &opts)
 	}
 	f(sub)
