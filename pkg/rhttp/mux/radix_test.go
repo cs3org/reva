@@ -310,7 +310,7 @@ func TestRadixLookup(t *testing.T) {
 
 func TestRadixInsert(t *testing.T) {
 	tests := []struct {
-		init         *node
+		init         *trie
 		method, path string
 		exp          *node
 	}{
@@ -414,9 +414,11 @@ func TestRadixInsert(t *testing.T) {
 			},
 		},
 		{
-			init: &node{
-				prefix: "/key/search",
-				ntype:  static,
+			init: &trie{
+				root: &node{
+					prefix: "/key/search",
+					ntype:  static,
+				},
 			},
 			method: "POST",
 			path:   "/key/support",
@@ -436,9 +438,11 @@ func TestRadixInsert(t *testing.T) {
 			},
 		},
 		{
-			init: &node{
-				prefix: "/key/search",
-				ntype:  static,
+			init: &trie{
+				root: &node{
+					prefix: "/key/search",
+					ntype:  static,
+				},
 			},
 			method: "POST",
 			path:   "/key/:other",
@@ -458,25 +462,27 @@ func TestRadixInsert(t *testing.T) {
 			},
 		},
 		{
-			init: &node{
-				prefix: "/",
-				ntype:  static,
-				children: nodes{
-					&node{
-						prefix: "blog",
-						ntype:  static,
-					},
-					&node{
-						prefix: "search/",
-						ntype:  static,
-						children: nodes{
-							&node{
-								prefix: "item",
-								ntype:  param,
-								children: nodes{
-									&node{
-										prefix: "/something",
-										ntype:  static,
+			init: &trie{
+				root: &node{
+					prefix: "/",
+					ntype:  static,
+					children: nodes{
+						&node{
+							prefix: "blog",
+							ntype:  static,
+						},
+						&node{
+							prefix: "search/",
+							ntype:  static,
+							children: nodes{
+								&node{
+									prefix: "item",
+									ntype:  param,
+									children: nodes{
+										&node{
+											prefix: "/something",
+											ntype:  static,
+										},
 									},
 								},
 							},
@@ -533,13 +539,13 @@ func TestRadixInsert(t *testing.T) {
 
 	for _, tt := range tests {
 		tt.init.insert(tt.method, tt.path, nil, nil)
-		assert.Equal(t, tt.exp, tt.init)
+		assert.Equal(t, tt.exp, tt.init.root)
 	}
 }
 
 func TestInsertOptions(t *testing.T) {
 	tests := []struct {
-		init         *node
+		init         *trie
 		method, path string
 		opt          *Options
 		exp          *node
@@ -567,10 +573,12 @@ func TestInsertOptions(t *testing.T) {
 			},
 		},
 		{
-			init: &node{
-				prefix: "/",
-				ntype:  static,
-				opts:   nodeOptions{},
+			init: &trie{
+				root: &node{
+					prefix: "/",
+					ntype:  static,
+					opts:   nodeOptions{},
+				},
 			},
 			method: "GET",
 			path:   "/blog",
@@ -589,10 +597,12 @@ func TestInsertOptions(t *testing.T) {
 			},
 		},
 		{
-			init: &node{
-				prefix: "/",
-				ntype:  static,
-				opts:   nodeOptions{global: &Options{Unprotected: true}},
+			init: &trie{
+				root: &node{
+					prefix: "/",
+					ntype:  static,
+					opts:   nodeOptions{global: &Options{Unprotected: true}},
+				},
 			},
 			method: "GET",
 			path:   "/blog",
@@ -614,6 +624,6 @@ func TestInsertOptions(t *testing.T) {
 
 	for _, tt := range tests {
 		tt.init.insert(tt.method, tt.path, nil, tt.opt)
-		assert.Equal(t, tt.exp, tt.init)
+		assert.Equal(t, tt.exp, tt.init.root)
 	}
 }

@@ -20,10 +20,10 @@ package mux
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/url"
 	"path/filepath"
-	"sync"
 )
 
 const MethodAll = "*"
@@ -32,24 +32,19 @@ type paramsKey struct{}
 
 type ServeMux struct {
 	// radix tree where routes are registered
-	tree *node
+	tree *trie
 
 	path string // used for sub-routers
-
-	// mutex used only during registration of paths
-	// lookup is thread-safe if not registrations are occurring
-	m *sync.Mutex
 }
 
 func NewServeMux() *ServeMux {
 	return &ServeMux{
 		tree: newTree(),
-		m:    &sync.Mutex{},
 	}
 }
 
 func (m *ServeMux) SetMiddlewaresFactory(factory func(o *Options) []Middleware) {
-	m.tree.middlewareFactory = factory
+	m.tree.root.middlewareFactory = factory
 }
 
 // ensure Mux implements Router interface
@@ -60,11 +55,11 @@ func (m *ServeMux) Route(path string, f func(Router), o ...Option) {
 	sub := &ServeMux{
 		tree: m.tree,
 		path: path,
-		m:    m.m,
 	}
 	if len(o) > 0 {
 		var opts Options
 		opts.apply(o...)
+		fmt.Println(path, opts)
 		m.tree.insert(MethodAll, path, nil, &opts)
 	}
 	f(sub)
@@ -87,9 +82,6 @@ func (m *ServeMux) Method(method, path string, handler http.Handler, o ...Option
 	if handler == nil {
 		panic("handle must not be nil")
 	}
-
-	m.m.Lock()
-	defer m.m.Unlock()
 
 	var opts Options
 	opts.apply(o...)
@@ -129,7 +121,7 @@ func (m *ServeMux) Options(path string, handler http.Handler, o ...Option) {
 }
 
 func (m *ServeMux) Walk(ctx context.Context, f WalkFunc) {
-	m.tree.walk(ctx, "", f)
+	m.tree.root.walk(ctx, "", f)
 }
 
 func (n *node) walk(ctx context.Context, prefix string, f WalkFunc) {
@@ -169,7 +161,7 @@ func (n *node) walk(ctx context.Context, prefix string, f WalkFunc) {
 }
 
 func (m *ServeMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	n, params, ok := m.tree.lookup(r.URL.Path)
+	n, params, ok := m.tree.root.lookup(r.URL.Path)
 	if !ok {
 		m.notFound(w, r)
 		return

@@ -21,6 +21,7 @@ package mux
 import (
 	"net/http"
 	"strings"
+	"sync"
 )
 
 type nodetype int
@@ -39,6 +40,14 @@ type node struct {
 	children nodes
 
 	middlewareFactory func(*Options) []Middleware
+}
+
+type trie struct {
+	root *node
+
+	// mutex used only during registration of paths
+	// lookup is thread-safe if not registrations are occurring
+	m sync.Mutex
 }
 
 type nodeOptions struct {
@@ -90,8 +99,17 @@ func (n *node) isEmpty() bool {
 	return n.prefix == "" && len(n.children) == 0
 }
 
-func newTree() *node {
-	return &node{}
+func newTree() *trie {
+	return &trie{
+		root: &node{},
+		m:    sync.Mutex{},
+	}
+}
+
+func (t *trie) insert(method, path string, h http.Handler, opts *Options) {
+	t.m.Lock()
+	defer t.m.Unlock()
+	t.root.insert(method, path, h, opts)
 }
 
 type nilMap[T any] map[string]T
@@ -264,14 +282,14 @@ walk:
 		for _, node := range current.children {
 			if i != -1 { // wildcard found
 				current = node
-				opts = n.mergeOptions(method, opts)
+				opts = node.mergeOptions(method, opts)
 				path = path[i+len(wildcard):]
 				continue walk
 			}
 			// the next node is the one having the same prefix of a static node
 			if node.ntype == static && strings.HasPrefix(path, node.prefix) {
 				current = node
-				opts = n.mergeOptions(method, opts)
+				opts = node.mergeOptions(method, opts)
 				path = path[len(node.prefix):]
 				continue walk
 			}
@@ -368,6 +386,7 @@ func (n *node) split(prefix string) {
 	n.children = nodes{s}
 	n.prefix = prefix
 	n.handlers = handlers{}
+	n.opts = nodeOptions{}
 }
 
 func stripSlash(path string) string {

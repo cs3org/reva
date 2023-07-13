@@ -471,6 +471,82 @@ func TestOptionsRecursive(t *testing.T) {
 	}
 }
 
+func TestUnprotectedRoutes(t *testing.T) {
+	var auth bool
+	authMid := func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			auth = true
+			next.ServeHTTP(w, r)
+		})
+	}
+	factory := func(o *mux.Options) (m []mux.Middleware) {
+		if !o.Unprotected {
+			m = append(m, authMid)
+		}
+		return
+	}
+
+	nop := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
+	router := mux.NewServeMux()
+	router.SetMiddlewaresFactory(factory)
+
+	router.Route("/unprotected", func(r mux.Router) {
+		r.Get("/users", nop)
+	}, mux.Unprotected())
+
+	router.Route("/protected", func(r mux.Router) {
+		r.Post("/change-password", nop)
+	})
+
+	w := new(mockResponseWriter)
+	r, _ := http.NewRequest(http.MethodGet, "/unprotected/users", nil)
+	router.ServeHTTP(w, r)
+	assert.Equal(t, auth, false)
+
+	auth = false
+	r, _ = http.NewRequest(http.MethodPost, "/protected/change-password", nil)
+	router.ServeHTTP(w, r)
+	assert.Equal(t, auth, true)
+}
+
+func TestUnprotectedRoutesReversed(t *testing.T) {
+	var auth bool
+	authMid := func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			auth = true
+			next.ServeHTTP(w, r)
+		})
+	}
+	factory := func(o *mux.Options) (m []mux.Middleware) {
+		if !o.Unprotected {
+			m = append(m, authMid)
+		}
+		return
+	}
+
+	nop := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
+	router := mux.NewServeMux()
+	router.SetMiddlewaresFactory(factory)
+
+	router.Route("/protected", func(r mux.Router) {
+		r.Post("/change-password", nop)
+	})
+
+	router.Route("/unprotected", func(r mux.Router) {
+		r.Get("/users", nop)
+	}, mux.Unprotected())
+
+	w := new(mockResponseWriter)
+	r, _ := http.NewRequest(http.MethodGet, "/unprotected/users", nil)
+	router.ServeHTTP(w, r)
+	assert.Equal(t, auth, false)
+
+	auth = false
+	r, _ = http.NewRequest(http.MethodPost, "/protected/change-password", nil)
+	router.ServeHTTP(w, r)
+	assert.Equal(t, auth, true)
+}
+
 func TestParamsInMiddleware(t *testing.T) {
 	router := mux.NewServeMux()
 	router.SetMiddlewaresFactory(func(o *mux.Options) []mux.Middleware {
