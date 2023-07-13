@@ -45,6 +45,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/rogpeppe/go-internal/lockedfile"
 	"github.com/rs/zerolog/log"
+	"github.com/shamaton/msgpack/v2"
 	"go-micro.dev/v4/store"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
@@ -716,6 +717,222 @@ func (t *Tree) removeNode(ctx context.Context, path string, n *node.Node) error 
 	return nil
 }
 
+type Change struct {
+	SyncTime time.Time
+	SizeDiff int64
+}
+
+func (t *Tree) propagate(ctx context.Context, spaceid, nodeid string) {
+	sublog := appctx.GetLogger(ctx).With().
+		Str("method", "tree.propagate").
+		Str("spaceid", spaceid).
+		Str("nodeid", nodeid).
+		Logger()
+
+	time.Sleep(time.Millisecond * 300) // wait a moment before propagating
+
+	sublog.Debug().Msg("propagating")
+
+	// add a change to the parent node
+	changeDirPath := filepath.Join(t.lookup.InternalRoot(), "spaces", lookup.Pathify(spaceid, 1, 2), "changes", nodeid)
+
+	// TODO what if a rename is already in progress? we need to create a .processing.lock file so other goroutines wait for this?
+
+	// first rename the existing node dir
+	err := os.Rename(changeDirPath, changeDirPath+".processing")
+	if err != nil {
+		return // has already been propagated by another goroutine
+	}
+
+	d, err := os.Open(changeDirPath + ".processing")
+	if err != nil {
+		sublog.Error().Err(err).Msg("Could not open change .processing dir")
+		return
+	}
+	defer d.Close()
+	names, err := d.Readdirnames(0)
+	if err != nil {
+		sublog.Error().Err(err).Msg("Could not read dirnames")
+		return
+	}
+
+	pc := Change{}
+	for _, name := range names {
+		b, err := os.ReadFile(filepath.Join(changeDirPath+".processing", name))
+		if err != nil {
+			sublog.Error().Err(err).Msg("Could not read change") // TODO what if the file was not yet fully written? retry empty files?
+			return
+		}
+		c := Change{}
+		err = msgpack.Unmarshal(b, &c)
+		if err != nil {
+			sublog.Error().Err(err).Msg("Could not unmarshal change")
+			return
+		}
+		if c.SyncTime.After(pc.SyncTime) {
+			pc.SyncTime = c.SyncTime
+		}
+		pc.SizeDiff = pc.SizeDiff + c.SizeDiff
+	}
+
+	// TODO do we need to write an aggregated parentchange file?
+
+	attrs := node.Attributes{}
+
+	var f *lockedfile.File
+	// lock parent before reading treesize or tree time
+
+	nodePath := filepath.Join(t.lookup.InternalRoot(), "spaces", lookup.Pathify(spaceid, 1, 2), "nodes", lookup.Pathify(nodeid, 4, 2))
+
+	_, subspan := tracer.Start(ctx, "lockedfile.OpenFile")
+	lockFilepath := t.lookup.MetadataBackend().LockfilePath(nodePath)
+	f, err = lockedfile.OpenFile(lockFilepath, os.O_RDWR|os.O_CREATE, 0600)
+	subspan.End()
+	if err != nil {
+		sublog.Error().Err(err).
+			Str("lock filepath", lockFilepath).
+			Msg("Propagation failed. Could not open metadata for node with lock.")
+		return
+	}
+	// always log error if closing node fails
+	defer func() {
+		// ignore already closed error
+		cerr := f.Close()
+		if err == nil && cerr != nil && !errors.Is(cerr, os.ErrClosed) {
+			err = cerr // only overwrite err with en error from close if the former was nil
+		}
+	}()
+
+	var n *node.Node
+	if n, err = node.ReadNode(ctx, t.lookup, spaceid, nodeid, false, nil, false); err != nil {
+		sublog.Error().Err(err).
+			Msg("Propagation failed. Could not read node.")
+		return
+	}
+
+	// TODO none, sync and async?
+	if !n.HasPropagation(ctx) {
+		sublog.Debug().Str("attr", prefixes.PropagationAttr).Msg("propagation attribute not set or unreadable, not propagating")
+		// if the attribute is not set treat it as false / none / no propagation
+		return
+	}
+
+	if t.options.TreeTimeAccounting {
+		// update the parent tree time if it is older than the nodes mtime
+		updateSyncTime := false
+
+		var tmTime time.Time
+		tmTime, err = n.GetTMTime(ctx)
+		switch {
+		case err != nil:
+			// missing attribute, or invalid format, overwrite
+			sublog.Debug().Err(err).
+				Msg("could not read tmtime attribute, overwriting")
+			updateSyncTime = true
+		case tmTime.Before(pc.SyncTime):
+			sublog.Debug().
+				Time("tmtime", tmTime).
+				Time("stime", pc.SyncTime).
+				Msg("parent tmtime is older than node mtime, updating")
+			updateSyncTime = true
+		default:
+			sublog.Debug().
+				Time("tmtime", tmTime).
+				Time("stime", pc.SyncTime).
+				Dur("delta", pc.SyncTime.Sub(tmTime)).
+				Msg("node tmtime is younger than stime, not updating")
+		}
+
+		if updateSyncTime {
+			// update the tree time of the parent node
+			attrs.SetString(prefixes.TreeMTimeAttr, pc.SyncTime.UTC().Format(time.RFC3339Nano))
+		}
+
+		attrs.SetString(prefixes.TmpEtagAttr, "")
+	}
+
+	// size accounting
+	if t.options.TreeSizeAccounting && pc.SizeDiff != 0 {
+		var newSize uint64
+
+		// read treesize
+		treeSize, err := n.GetTreeSize(ctx)
+		switch {
+		case metadata.IsAttrUnset(err):
+			// fallback to calculating the treesize
+			sublog.Warn().Msg("treesize attribute unset, falling back to calculating the treesize")
+			newSize, err = t.calculateTreeSize(ctx, n.InternalPath())
+			if err != nil {
+				sublog.Error().Err(err).
+					Msg("Error when calculating treesize of node.") // FIXME wat?
+				return
+			}
+		case err != nil:
+			sublog.Error().Err(err).
+				Msg("Failed to propagate treesize change. Error when reading the treesize attribute from node")
+			return
+		case pc.SizeDiff > 0:
+			newSize = treeSize + uint64(pc.SizeDiff)
+		case uint64(-pc.SizeDiff) > treeSize:
+			// The sizeDiff is larger than the current treesize. Which would result in
+			// a negative new treesize. Something must have gone wrong with the accounting.
+			// Reset the current treesize to 0.
+			sublog.Error().Uint64("treeSize", treeSize).Int64("sizeDiff", pc.SizeDiff).
+				Msg("Error when updating treesize of node. Updated treesize < 0. Reestting to 0")
+			newSize = 0
+		default:
+			newSize = treeSize - uint64(-pc.SizeDiff)
+		}
+
+		// update the tree size of the node
+		attrs.SetString(prefixes.TreesizeAttr, strconv.FormatUint(newSize, 10))
+		sublog.Debug().Uint64("newSize", newSize).Msg("updated treesize of node")
+	}
+
+	if err = n.SetXattrsWithContext(ctx, attrs, false); err != nil {
+		sublog.Error().Err(err).Msg("Failed to update extend attributes of node")
+		return
+	}
+
+	// Release node lock early, ignore already closed error
+	_, subspan = tracer.Start(ctx, "f.Close")
+	cerr := f.Close()
+	subspan.End()
+	if cerr != nil && !errors.Is(cerr, os.ErrClosed) {
+		sublog.Error().Err(cerr).Msg("Failed to close node and release lock")
+		return
+	}
+
+	err = os.RemoveAll(changeDirPath + ".processing")
+	if err != nil {
+		sublog.Error().Err(err).Msg("Could not remove .processing dir")
+		return
+	}
+
+	if !n.IsSpaceRoot(ctx) { // This does not seem robust as it checks the space name property
+
+		// add a change to the parent node
+		changePath := filepath.Join(t.lookup.InternalRoot(), "spaces", lookup.Pathify(n.SpaceID, 1, 2), "changes", n.ParentID, uuid.New().String()+".mpk")
+
+		data, err := msgpack.Marshal(pc)
+		if err != nil {
+			sublog.Error().Err(err).Msg("Could not marshal change data")
+			return
+		}
+
+		_ = os.MkdirAll(filepath.Dir(changePath), 0700)
+		for {
+			err := os.WriteFile(changePath, data, 0644)
+			if err == nil {
+				break
+			}
+			_ = os.MkdirAll(filepath.Dir(changePath), 0700)
+		}
+
+		t.propagate(ctx, n.SpaceID, n.ParentID)
+	}
+}
+
 // Propagate propagates changes to the root of the tree
 func (t *Tree) Propagate(ctx context.Context, n *node.Node, sizeDiff int64) (err error) {
 	ctx, span := tracer.Start(ctx, "Propagate")
@@ -733,143 +950,34 @@ func (t *Tree) Propagate(ctx context.Context, n *node.Node, sizeDiff int64) (err
 		return
 	}
 
-	// is propagation enabled for the parent node?
-	root := n.SpaceRoot
+	// add a change to the parent node
+	changePath := filepath.Join(t.lookup.InternalRoot(), "spaces", lookup.Pathify(n.SpaceID, 1, 2), "changes", n.ParentID, uuid.New().String()+".mpk")
 
-	// use a sync time and don't rely on the mtime of the current node, as the stat might not change when a rename happened too quickly
-	sTime := time.Now().UTC()
-
-	// we loop until we reach the root
-	for err == nil && n.ID != root.ID {
-		sublog.Debug().Msg("propagating")
-
-		attrs := node.Attributes{}
-
-		var f *lockedfile.File
-		// lock parent before reading treesize or tree time
-
-		_, subspan := tracer.Start(ctx, "lockedfile.OpenFile")
-		parentFilename := t.lookup.MetadataBackend().LockfilePath(n.ParentPath())
-		f, err = lockedfile.OpenFile(parentFilename, os.O_RDWR|os.O_CREATE, 0600)
-		subspan.End()
-		if err != nil {
-			sublog.Error().Err(err).
-				Str("parent filename", parentFilename).
-				Msg("Propagation failed. Could not open metadata for parent with lock.")
-			return err
-		}
-		// always log error if closing node fails
-		defer func() {
-			// ignore already closed error
-			cerr := f.Close()
-			if err == nil && cerr != nil && !errors.Is(cerr, os.ErrClosed) {
-				err = cerr // only overwrite err with en error from close if the former was nil
-			}
-		}()
-
-		if n, err = n.Parent(ctx); err != nil {
-			sublog.Error().Err(err).
-				Msg("Propagation failed. Could not read parent node.")
-			return err
-		}
-
-		// TODO none, sync and async?
-		if !n.HasPropagation(ctx) {
-			sublog.Debug().Str("attr", prefixes.PropagationAttr).Msg("propagation attribute not set or unreadable, not propagating")
-			// if the attribute is not set treat it as false / none / no propagation
-			return nil
-		}
-
-		sublog = sublog.With().Str("spaceid", n.SpaceID).Str("nodeid", n.ID).Logger()
-
-		if t.options.TreeTimeAccounting {
-			// update the parent tree time if it is older than the nodes mtime
-			updateSyncTime := false
-
-			var tmTime time.Time
-			tmTime, err = n.GetTMTime(ctx)
-			switch {
-			case err != nil:
-				// missing attribute, or invalid format, overwrite
-				sublog.Debug().Err(err).
-					Msg("could not read tmtime attribute, overwriting")
-				updateSyncTime = true
-			case tmTime.Before(sTime):
-				sublog.Debug().
-					Time("tmtime", tmTime).
-					Time("stime", sTime).
-					Msg("parent tmtime is older than node mtime, updating")
-				updateSyncTime = true
-			default:
-				sublog.Debug().
-					Time("tmtime", tmTime).
-					Time("stime", sTime).
-					Dur("delta", sTime.Sub(tmTime)).
-					Msg("parent tmtime is younger than node mtime, not updating")
-			}
-
-			if updateSyncTime {
-				// update the tree time of the parent node
-				attrs.SetString(prefixes.TreeMTimeAttr, sTime.UTC().Format(time.RFC3339Nano))
-			}
-
-			attrs.SetString(prefixes.TmpEtagAttr, "")
-		}
-
-		// size accounting
-		if t.options.TreeSizeAccounting && sizeDiff != 0 {
-			var newSize uint64
-
-			// read treesize
-			treeSize, err := n.GetTreeSize(ctx)
-			switch {
-			case metadata.IsAttrUnset(err):
-				// fallback to calculating the treesize
-				sublog.Warn().Msg("treesize attribute unset, falling back to calculating the treesize")
-				newSize, err = t.calculateTreeSize(ctx, n.InternalPath())
-				if err != nil {
-					return err
-				}
-			case err != nil:
-				sublog.Error().Err(err).
-					Msg("Faild to propagate treesize change. Error when reading the treesize attribute from parent")
-				return err
-			case sizeDiff > 0:
-				newSize = treeSize + uint64(sizeDiff)
-			case uint64(-sizeDiff) > treeSize:
-				// The sizeDiff is larger than the current treesize. Which would result in
-				// a negative new treesize. Something must have gone wrong with the accounting.
-				// Reset the current treesize to 0.
-				sublog.Error().Uint64("treeSize", treeSize).Int64("sizeDiff", sizeDiff).
-					Msg("Error when updating treesize of parent node. Updated treesize < 0. Reestting to 0")
-				newSize = 0
-			default:
-				newSize = treeSize - uint64(-sizeDiff)
-			}
-
-			// update the tree size of the node
-			attrs.SetString(prefixes.TreesizeAttr, strconv.FormatUint(newSize, 10))
-			sublog.Debug().Uint64("newSize", newSize).Msg("updated treesize of parent node")
-		}
-
-		if err = n.SetXattrsWithContext(ctx, attrs, false); err != nil {
-			sublog.Error().Err(err).Msg("Failed to update extend attributes of parent node")
-			return err
-		}
-
-		// Release node lock early, ignore already closed error
-		_, subspan = tracer.Start(ctx, "f.Close")
-		cerr := f.Close()
-		subspan.End()
-		if cerr != nil && !errors.Is(cerr, os.ErrClosed) {
-			sublog.Error().Err(cerr).Msg("Failed to close parent node and release lock")
-			return cerr
-		}
+	c := Change{
+		// use a sync time and don't rely on the mtime of the current node, as the stat might not change when a rename happened too quickly
+		SyncTime: time.Now().UTC(),
+		SizeDiff: sizeDiff,
 	}
+
+	data, err := msgpack.Marshal(c)
 	if err != nil {
-		sublog.Error().Err(err).Msg("error propagating")
-		return
+		sublog.Error().Err(err).Msg("Could not marshal change data")
+		return err
 	}
+
+	_ = os.MkdirAll(filepath.Dir(changePath), 0700)
+	for {
+		err := os.WriteFile(changePath, data, 0644)
+		if err == nil {
+			break
+		}
+		_ = os.MkdirAll(filepath.Dir(changePath), 0700)
+	}
+	// what if the file is moved away after writing this change? a subseqent call to Propagation will subtract the size diff again
+
+	// we will start a goroutine here to propagate this change. it will walk up the tree
+	go t.propagate(ctx, n.SpaceID, n.ParentID)
+
 	return
 }
 
