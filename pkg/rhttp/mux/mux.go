@@ -23,6 +23,8 @@ import (
 	"net/http"
 	"net/url"
 	"path/filepath"
+
+	"github.com/cs3org/reva/pkg/rhttp/middlewares"
 )
 
 const MethodAll = "*"
@@ -42,7 +44,7 @@ func NewServeMux() *ServeMux {
 	}
 }
 
-func (m *ServeMux) SetMiddlewaresFactory(factory func(o *Options) []Middleware) {
+func (m *ServeMux) SetMiddlewaresFactory(factory func(o *Options) []middlewares.Middleware) {
 	m.tree.root.middlewareFactory = factory
 }
 
@@ -186,7 +188,10 @@ func (m *ServeMux) mountRouter(prefix string, r Router) {
 	defer cancel()
 	r.Walk(ctx, func(method, path string, handler http.Handler, opts *Options) {
 		path, _ = url.JoinPath(prefix, path)
-		m.Method(method, path, handler, opts.list()...)
+		o := opts.list()
+		prefix, _ = url.JoinPath("/", m.path, prefix)
+		o = append(o, WithMiddleware(middlewares.TrimPrefix(prefix)))
+		m.Method(method, path, handler, o...)
 	})
 }
 
@@ -195,7 +200,7 @@ func (m *ServeMux) Mount(path string, handler http.Handler) {
 		m.mountRouter(path, router)
 		return
 	}
-	m.Handle(path+"/*", handler)
+	m.Handle(path+"/*", handler, WithMiddleware(middlewares.TrimPrefix(path)))
 }
 
 func (m *ServeMux) With(path string, o ...Option) {

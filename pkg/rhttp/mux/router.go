@@ -25,8 +25,6 @@ import (
 
 type Params map[string]string
 
-type Middleware func(http.Handler) http.Handler
-
 func (p Params) Get(key string) (string, bool) {
 	if p == nil {
 		return "", false

@@ -25,6 +25,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/cs3org/reva/pkg/rhttp/middlewares"
 	"github.com/cs3org/reva/pkg/rhttp/mux"
 	"github.com/gdexlab/go-render/render"
 	"gotest.tools/assert"
@@ -382,7 +383,7 @@ func TestUnprotected(t *testing.T) {
 			next.ServeHTTP(w, r)
 		})
 	}
-	factory := func(o *mux.Options) (m []mux.Middleware) {
+	factory := func(o *mux.Options) (m []middlewares.Middleware) {
 		if !o.Unprotected {
 			m = append(m, authMid)
 		}
@@ -428,7 +429,7 @@ func TestOptionsRecursive(t *testing.T) {
 			next.ServeHTTP(w, r)
 		})
 	}
-	factory := func(o *mux.Options) (m []mux.Middleware) {
+	factory := func(o *mux.Options) (m []middlewares.Middleware) {
 		if !o.Unprotected {
 			m = append(m, authMid)
 		}
@@ -479,7 +480,7 @@ func TestUnprotectedRoutes(t *testing.T) {
 			next.ServeHTTP(w, r)
 		})
 	}
-	factory := func(o *mux.Options) (m []mux.Middleware) {
+	factory := func(o *mux.Options) (m []middlewares.Middleware) {
 		if !o.Unprotected {
 			m = append(m, authMid)
 		}
@@ -517,7 +518,7 @@ func TestUnprotectedRoutesReversed(t *testing.T) {
 			next.ServeHTTP(w, r)
 		})
 	}
-	factory := func(o *mux.Options) (m []mux.Middleware) {
+	factory := func(o *mux.Options) (m []middlewares.Middleware) {
 		if !o.Unprotected {
 			m = append(m, authMid)
 		}
@@ -549,7 +550,7 @@ func TestUnprotectedRoutesReversed(t *testing.T) {
 
 func TestParamsInMiddleware(t *testing.T) {
 	router := mux.NewServeMux()
-	router.SetMiddlewaresFactory(func(o *mux.Options) []mux.Middleware {
+	router.SetMiddlewaresFactory(func(o *mux.Options) []middlewares.Middleware {
 		return o.Middlewares
 	})
 
@@ -652,14 +653,46 @@ func TestDefaultRoute(t *testing.T) {
 
 func TestMountHandler(t *testing.T) {
 	router := mux.NewServeMux()
+	router.SetMiddlewaresFactory(func(o *mux.Options) []middlewares.Middleware {
+		return o.Middlewares
+	})
 
 	var hit bool
 	router.Mount("/mounted", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		hit = true
+		if r.URL.Path != "/some/path/rooted" {
+			t.Fatalf("path expected to be /some/path/rooted. got %s", r.URL.Path)
+		}
 	}))
 
 	w := new(mockResponseWriter)
-	r, _ := http.NewRequest(http.MethodHead, "/mounted/some/path/routed", nil)
+	r, _ := http.NewRequest(http.MethodHead, "/mounted/some/path/rooted", nil)
+	router.ServeHTTP(w, r)
+
+	assert.Equal(t, hit, true)
+}
+
+func TestMountRouter(t *testing.T) {
+	router := mux.NewServeMux()
+	router.SetMiddlewaresFactory(func(o *mux.Options) []middlewares.Middleware {
+		return o.Middlewares
+	})
+
+	var hit bool
+	sub := mux.NewServeMux()
+	sub.Route("/some", func(r mux.Router) {
+		r.Head("/path", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			hit = true
+			if r.URL.Path != "/some/path" {
+				t.Fatalf("path expected to be //some/path. got %s", r.URL.Path)
+			}
+		}))
+	})
+
+	router.Mount("/mounted", sub)
+
+	w := new(mockResponseWriter)
+	r, _ := http.NewRequest(http.MethodHead, "/mounted/some/path", nil)
 	router.ServeHTTP(w, r)
 
 	assert.Equal(t, hit, true)

@@ -21,12 +21,12 @@ package middlewares
 import (
 	"net/http"
 	"strings"
-
-	"github.com/cs3org/reva/pkg/rhttp/mux"
 )
 
+type Middleware func(http.Handler) http.Handler
+
 // TrimPrefix is a middleware that removes the prefix from the path URL.
-func TrimPrefix(prefix string) mux.Middleware {
+func TrimPrefix(prefix string) Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			r.URL.Path = strings.TrimPrefix(r.URL.Path, prefix)

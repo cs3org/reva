@@ -22,6 +22,8 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+
+	"github.com/cs3org/reva/pkg/rhttp/middlewares"
 )
 
 type nodetype int
@@ -39,7 +41,7 @@ type node struct {
 	opts     nodeOptions
 	children nodes
 
-	middlewareFactory func(*Options) []Middleware
+	middlewareFactory func(*Options) []middlewares.Middleware
 }
 
 type trie struct {
