@@ -25,6 +25,7 @@ import (
 
 	"github.com/cs3org/reva/pkg/rhttp"
 	datatxregistry "github.com/cs3org/reva/pkg/rhttp/datatx/manager/registry"
+	"github.com/cs3org/reva/pkg/rhttp/middlewares"
 	"github.com/cs3org/reva/pkg/rhttp/mux"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
@@ -90,12 +91,8 @@ func (s *svc) Name() string {
 func (s *svc) Register(r mux.Router) {
 	r.Route("/data", func(r mux.Router) {
 		for prot, handler := range s.dataTXs {
-			r.Handle(fmt.Sprintf("/%s/*path", prot), handler, mux.WithMiddleware(func(next http.Handler) http.Handler {
-				return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-					r.URL.Path, _ = mux.ParamsFromRequest(r).Get("path")
-					next.ServeHTTP(w, r)
-				})
-			}))
+			r.Handle(fmt.Sprintf("/%s/*path", prot), handler,
+				mux.WithMiddleware(middlewares.TrimPrefix(fmt.Sprintf("/data/%s/", prot))))
 		}
 	})
 }
