@@ -209,15 +209,12 @@ func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Refer
 
 	// move current version to new revision
 	nodePath := fs.lu.InternalPath(spaceID, kp[0])
+	metadataPath := fs.lu.MetadataBackend().MetadataPath(nodePath)
 	var fi os.FileInfo
-	if fi, err = os.Stat(nodePath); err == nil {
+	if fi, err = os.Stat(metadataPath); err == nil {
 		// revisions are stored alongside the actual file, so a rename can be efficient and does not cross storage / partition boundaries
 		newRevisionPath := fs.lu.InternalPath(spaceID, kp[0]+node.RevisionIDDelimiter+fi.ModTime().UTC().Format(time.RFC3339Nano))
 
-		// touch new revision
-		if _, err := os.Create(newRevisionPath); err != nil {
-			return err
-		}
 		defer func() {
 			if returnErr != nil {
 				if err := os.Remove(newRevisionPath); err != nil {
@@ -241,7 +238,7 @@ func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Refer
 		}
 
 		// remember mtime from node as new revision mtime
-		if err = os.Chtimes(newRevisionPath, fi.ModTime(), fi.ModTime()); err != nil {
+		if err = os.Chtimes(fs.lu.MetadataBackend().MetadataPath(newRevisionPath), fi.ModTime(), fi.ModTime()); err != nil {
 			return errtypes.InternalError("failed to change mtime of version node")
 		}
 
@@ -271,7 +268,7 @@ func (fs *Decomposedfs) RestoreRevision(ctx context.Context, ref *provider.Refer
 
 		// explicitly update mtime of node as writing xattrs does not change mtime
 		now := time.Now()
-		if err := os.Chtimes(nodePath, now, now); err != nil {
+		if err := os.Chtimes(metadataPath, now, now); err != nil {
 			return errtypes.InternalError("failed to change mtime of version node")
 		}
 

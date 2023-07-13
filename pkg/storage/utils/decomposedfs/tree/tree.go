@@ -131,7 +131,7 @@ func (t *Tree) GetMD(ctx context.Context, n *node.Node) (os.FileInfo, error) {
 		return nil, errors.Wrap(err, "tree: error stating "+n.ID)
 	}
 
-	return md, nil
+	return md, nil // FIXME: this returns the wrong size
 }
 
 // TouchFile creates a new empty file
@@ -153,23 +153,20 @@ func (t *Tree) TouchFile(ctx context.Context, n *node.Node, markprocessing bool,
 	if err := os.MkdirAll(filepath.Dir(nodePath), 0700); err != nil {
 		return errors.Wrap(err, "Decomposedfs: error creating node")
 	}
-	_, err := os.Create(nodePath)
-	if err != nil {
-		return errors.Wrap(err, "Decomposedfs: error creating node")
-	}
 
 	attributes := n.NodeMetadata(ctx)
 	if markprocessing {
 		attributes[prefixes.StatusPrefix] = []byte(node.ProcessingStatus)
 	}
+	err := n.SetXattrsWithContext(ctx, attributes, true)
+	if err != nil {
+		return err
+	}
+	// SetXattrsWithContext will create the metadata file, SetMtimeString will Chmtimes it, but it needs to exist
 	if mtime != "" {
 		if err := n.SetMtimeString(mtime); err != nil {
 			return errors.Wrap(err, "Decomposedfs: could not set mtime")
 		}
-	}
-	err = n.SetXattrsWithContext(ctx, attributes, true)
-	if err != nil {
-		return err
 	}
 
 	// link child name to parent if it is new
@@ -216,7 +213,7 @@ func (t *Tree) CreateDir(ctx context.Context, n *node.Node) (err error) {
 	err = os.Symlink(relativeNodePath, filepath.Join(n.ParentPath(), n.Name))
 	subspan.End()
 	if err != nil {
-		// no better way to check unfortunately
+		// FIXME no better way to check unfortunately
 		if !strings.Contains(err.Error(), "file exists") {
 			return
 		}
@@ -504,13 +501,15 @@ func (t *Tree) Delete(ctx context.Context, n *node.Node) (err error) {
 
 	// rename the trashed node so it is not picked up when traversing up the tree and matches the symlink
 	trashPath := nodePath + node.TrashIDDelimiter + deletionTime
-	err = os.Rename(nodePath, trashPath)
-	if err != nil {
-		// To roll back changes
-		// TODO remove symlink
-		// Roll back changes
-		_ = n.RemoveXattr(ctx, prefixes.TrashOriginAttr)
-		return
+	if n.IsDir(ctx) { // FIXME this needs to decide based on filetype and backend, introduco Trash and Revision Node structs?
+		err = os.Rename(nodePath, trashPath)
+		if err != nil {
+			// To roll back changes
+			// TODO remove symlink
+			// Roll back changes
+			_ = n.RemoveXattr(ctx, prefixes.TrashOriginAttr)
+			return
+		}
 	}
 	err = t.lookup.MetadataBackend().Rename(nodePath, trashPath)
 	if err != nil {
