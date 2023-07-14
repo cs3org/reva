@@ -85,12 +85,8 @@ func New(ctx context.Context, m map[string]interface{}) (storage.FS, error) {
 }
 
 func (d *driver) resolveToken(ctx context.Context, token string) (*ocmv1beta1.Share, error) {
-	shareRes, err := d.gateway.GetOCMShare(ctx, &ocmv1beta1.GetOCMShareRequest{
-		Ref: &ocmv1beta1.ShareReference{
-			Spec: &ocmv1beta1.ShareReference_Token{
-				Token: token,
-			},
-		},
+	shareRes, err := d.gateway.GetOCMShareByToken(ctx, &ocmv1beta1.GetOCMShareByTokenRequest{
+		Token: token,
 	})
 
 	switch {

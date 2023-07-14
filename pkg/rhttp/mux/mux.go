@@ -130,7 +130,7 @@ func (n *node) walk(ctx context.Context, prefix string, f WalkFunc) {
 		return
 	default:
 	}
-	if n == nil || n.isEmpty() {
+	if n == nil {
 		return
 	}
 
@@ -183,24 +183,24 @@ func (m *ServeMux) notFound(w http.ResponseWriter, r *http.Request) {
 	http.NotFound(w, r)
 }
 
-func (m *ServeMux) mountRouter(prefix string, r Router) {
+func (m *ServeMux) mountRouter(prefix string, r Router, trimPrefix string) {
 	ctx, cancel := context.WithCancel(context.TODO())
 	defer cancel()
 	r.Walk(ctx, func(method, path string, handler http.Handler, opts *Options) {
 		path, _ = url.JoinPath(prefix, path)
 		o := opts.list()
-		prefix, _ = url.JoinPath("/", m.path, prefix)
-		o = append(o, WithMiddleware(middlewares.TrimPrefix(prefix)))
+		o = append(o, WithMiddleware(middlewares.TrimPrefix(trimPrefix)))
 		m.Method(method, path, handler, o...)
 	})
 }
 
 func (m *ServeMux) Mount(path string, handler http.Handler) {
+	prefix, _ := url.JoinPath("/", m.path, path)
 	if router, ok := handler.(Router); ok {
-		m.mountRouter(path, router)
+		m.mountRouter(path, router, prefix)
 		return
 	}
-	m.Handle(path+"/*", handler, WithMiddleware(middlewares.TrimPrefix(path)))
+	m.Handle(path+"/*", handler, WithMiddleware(middlewares.TrimPrefix(prefix)))
 }
 
 func (m *ServeMux) With(path string, o ...Option) {

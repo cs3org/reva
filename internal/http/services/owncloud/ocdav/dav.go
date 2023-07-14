@@ -33,6 +33,8 @@ import (
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp"
+	"github.com/cs3org/reva/pkg/rhttp/middlewares"
+	"github.com/cs3org/reva/pkg/rhttp/mux"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -97,100 +99,63 @@ func isOwner(userIDorName string, user *userv1beta1.User) bool {
 	return userIDorName != "" && (userIDorName == user.Id.OpaqueId || strings.EqualFold(userIDorName, user.Username))
 }
 
-// Handler handles requests.
-func (h *DavHandler) Handler(s *svc) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ctx := r.Context()
-		log := appctx.GetLogger(ctx)
+func prependUsernameFiles() middlewares.Middleware {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			ctx := r.Context()
+			log := appctx.GetLogger(ctx)
 
-		// if there is no file in the request url we assume the request url is: "/remote.php/dav/files"
-		// https://github.com/owncloud/core/blob/18475dac812064b21dabcc50f25ef3ffe55691a5/tests/acceptance/features/apiWebdavOperations/propfind.feature
-		if r.URL.Path == "/files" {
-			log.Debug().Str("path", r.URL.Path).Msg("method not allowed")
-			contextUser, ok := ctxpkg.ContextGetUser(ctx)
-			if ok {
-				r.URL.Path = path.Join(r.URL.Path, contextUser.Username)
-			}
+			// if there is no file in the request url we assume the request url is: "/remote.php/dav/files"
+			// https://github.com/owncloud/core/blob/18475dac812064b21dabcc50f25ef3ffe55691a5/tests/acceptance/features/apiWebdavOperations/propfind.feature
+			if r.URL.Path == "/files" {
+				log.Debug().Str("path", r.URL.Path).Msg("method not allowed")
+				contextUser, ok := ctxpkg.ContextGetUser(ctx)
+				if ok {
+					r.URL.Path = path.Join(r.URL.Path, contextUser.Username)
+				}
 
-			if r.Header.Get("Depth") == "" {
-				w.WriteHeader(http.StatusMethodNotAllowed)
-				b, err := Marshal(exception{
-					code:    SabredavMethodNotAllowed,
-					message: "Listing members of this collection is disabled",
-				})
-				if err != nil {
-					log.Error().Msgf("error marshaling xml response: %s", b)
-					w.WriteHeader(http.StatusInternalServerError)
+				if r.Header.Get("Depth") == "" {
+					w.WriteHeader(http.StatusMethodNotAllowed)
+					b, err := Marshal(exception{
+						code:    SabredavMethodNotAllowed,
+						message: "Listing members of this collection is disabled",
+					})
+					if err != nil {
+						log.Error().Msgf("error marshaling xml response: %s", b)
+						w.WriteHeader(http.StatusInternalServerError)
+						return
+					}
+					_, err = w.Write(b)
+					if err != nil {
+						log.Error().Msgf("error writing xml response: %s", b)
+						w.WriteHeader(http.StatusInternalServerError)
+						return
+					}
 					return
 				}
-				_, err = w.Write(b)
-				if err != nil {
-					log.Error().Msgf("error writing xml response: %s", b)
-					w.WriteHeader(http.StatusInternalServerError)
-					return
-				}
-				return
 			}
-		}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
 
-		var head string
-		head, r.URL.Path = rhttp.ShiftPath(r.URL.Path)
-
-		switch head {
-		case "avatars":
-			h.AvatarsHandler.Handler(s).ServeHTTP(w, r)
-		case "files":
-			var requestUserID string
-			var oldPath = r.URL.Path
-
-			// detect and check current user in URL
-			requestUserID, r.URL.Path = rhttp.ShiftPath(r.URL.Path)
-
-			// note: some requests like OPTIONS don't forward the user
-			contextUser, ok := ctxpkg.ContextGetUser(ctx)
-			if ok && isOwner(requestUserID, contextUser) {
-				// use home storage handler when user was detected
-				base := path.Join(ctx.Value(ctxKeyBaseURI).(string), "files", requestUserID)
-				ctx := context.WithValue(ctx, ctxKeyBaseURI, base)
-				r = r.WithContext(ctx)
-
-				h.FilesHomeHandler.Handler(s).ServeHTTP(w, r)
-			} else {
-				r.URL.Path = oldPath
-				base := path.Join(ctx.Value(ctxKeyBaseURI).(string), "files")
-				ctx := context.WithValue(ctx, ctxKeyBaseURI, base)
-				r = r.WithContext(ctx)
-
-				h.FilesHandler.Handler(s).ServeHTTP(w, r)
-			}
-		case "meta":
-			base := path.Join(ctx.Value(ctxKeyBaseURI).(string), "meta")
-			ctx = context.WithValue(ctx, ctxKeyBaseURI, base)
-			r = r.WithContext(ctx)
-			h.MetaHandler.Handler(s).ServeHTTP(w, r)
-		case "trash-bin":
-			base := path.Join(ctx.Value(ctxKeyBaseURI).(string), "trash-bin")
-			ctx := context.WithValue(ctx, ctxKeyBaseURI, base)
-			r = r.WithContext(ctx)
-			h.TrashbinHandler.Handler(s).ServeHTTP(w, r)
-		case "spaces":
-			base := path.Join(ctx.Value(ctxKeyBaseURI).(string), "spaces")
-			ctx := context.WithValue(ctx, ctxKeyBaseURI, base)
-			r = r.WithContext(ctx)
-			h.SpacesHandler.Handler(s).ServeHTTP(w, r)
-		case "ocm":
-			base := path.Join(ctx.Value(ctxKeyBaseURI).(string), "ocm")
-			ctx := context.WithValue(ctx, ctxKeyBaseURI, base)
+func authenticateOCM(s *svc) middlewares.Middleware {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			ctx := r.Context()
+			log := appctx.GetLogger(ctx)
 
 			c, err := pool.GetGatewayServiceClient(pool.Endpoint(s.c.GatewaySvc))
 			if err != nil {
 				w.WriteHeader(http.StatusNotFound)
 				return
 			}
+			_, r.URL.Path = rhttp.ShiftPath(r.URL.Path)
 
 			// OC10 and Nextcloud (OCM 1.0) are using basic auth for carrying the
 			// shared token.
 			var token string
+
 			username, _, ok := r.BasicAuth()
 			if ok {
 				// OCM 1.0
@@ -229,16 +194,20 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 			ctx = ctxpkg.ContextSetUser(ctx, authRes.User)
 			ctx = metadata.AppendToOutgoingContext(ctx, ctxpkg.TokenHeader, authRes.Token)
 
-			log.Debug().Str("token", token).Interface("user", authRes.User).Msg("OCM user authenticated")
-
 			r = r.WithContext(ctx)
-			h.OCMSharesHandler.Handler(s).ServeHTTP(w, r)
-		case "public-files":
-			base := path.Join(ctx.Value(ctxKeyBaseURI).(string), "public-files")
-			ctx = context.WithValue(ctx, ctxKeyBaseURI, base)
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+func authenticatePublicLink(s *svc) middlewares.Middleware {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			ctx := r.Context()
 			c, err := pool.GetGatewayServiceClient(pool.Endpoint(s.c.GatewaySvc))
 			if err != nil {
-				w.WriteHeader(http.StatusNotFound)
+				w.WriteHeader(http.StatusInternalServerError)
+				return
 			}
 
 			var res *gatewayv1beta1.AuthenticateResponse
@@ -279,7 +248,73 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 			ctx = metadata.AppendToOutgoingContext(ctx, ctxpkg.TokenHeader, res.Token)
 
 			r = r.WithContext(ctx)
+			next.ServeHTTP(w, r)
+		})
+	}
+}
 
+func keyBase(p string) middlewares.Middleware {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			ctx := r.Context()
+			base, _ := ctx.Value(ctxKeyBaseURI).(string)
+			base = path.Join(base, p)
+			ctx = context.WithValue(ctx, ctxKeyBaseURI, base)
+			r = r.WithContext(ctx)
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+// Handler handles requests.
+func (h *DavHandler) Handler(s *svc) http.Handler {
+	router := mux.NewServeMux()
+
+	router.Route("/", func(r mux.Router) {
+		r.Handle("avatars/*", h.AvatarsHandler.Handler(s))
+		r.Handle("files/*", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			ctx := r.Context()
+
+			var requestUserID string
+			var oldPath = r.URL.Path
+
+			// detect and check current user in URL
+			requestUserID, r.URL.Path = rhttp.ShiftPath(r.URL.Path)
+
+			// note: some requests like OPTIONS don't forward the user
+			contextUser, ok := ctxpkg.ContextGetUser(ctx)
+			if ok && isOwner(requestUserID, contextUser) {
+				// use home storage handler when user was detected
+				base := path.Join(ctx.Value(ctxKeyBaseURI).(string), "files", requestUserID)
+				ctx := context.WithValue(ctx, ctxKeyBaseURI, base)
+				r = r.WithContext(ctx)
+
+				h.FilesHomeHandler.Handler(s).ServeHTTP(w, r)
+			} else {
+				r.URL.Path = oldPath
+				base := path.Join(ctx.Value(ctxKeyBaseURI).(string), "files")
+				ctx := context.WithValue(ctx, ctxKeyBaseURI, base)
+				r = r.WithContext(ctx)
+
+				h.FilesHandler.Handler(s).ServeHTTP(w, r)
+			}
+		}), mux.WithMiddleware(prependUsernameFiles()))
+		r.Handle("meta/*", h.MetaHandler.Handler(s), mux.WithMiddleware(keyBase("meta")))
+		r.Handle("trash-bin/*", h.TrashbinHandler.Handler(s), mux.WithMiddleware(keyBase("trash-bin")))
+		r.Handle("spaces/*", h.SpacesHandler.Handler(s), mux.WithMiddleware(keyBase("spaces")))
+		r.Route("ocm", func(r mux.Router) {
+			r.Mount("/", h.OCMSharesHandler.Handler(s))
+		}, mux.Unprotected(), mux.WithMiddleware(authenticateOCM(s)), mux.WithMiddleware(keyBase("ocm")))
+		r.Handle("public-files", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			ctx := r.Context()
+			log := appctx.GetLogger(ctx)
+
+			token, _ := rhttp.ShiftPath(r.URL.Path)
+			c, err := pool.GetGatewayServiceClient(pool.Endpoint(s.c.GatewaySvc))
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
 			// the public share manager knew the token, but does the referenced target still exist?
 			sRes, err := getTokenStatInfo(ctx, c, token)
 			switch {
@@ -290,15 +325,15 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 			case sRes.Status.Code == rpc.Code_CODE_PERMISSION_DENIED:
 				fallthrough
 			case sRes.Status.Code == rpc.Code_CODE_NOT_FOUND:
-				log.Debug().Str("token", token).Interface("status", res.Status).Msg("resource not found")
+				log.Debug().Str("token", token).Interface("status", sRes.Status).Msg("resource not found")
 				w.WriteHeader(http.StatusNotFound) // log the difference
 				return
 			case sRes.Status.Code == rpc.Code_CODE_UNAUTHENTICATED:
-				log.Debug().Str("token", token).Interface("status", res.Status).Msg("unauthorized")
+				log.Debug().Str("token", token).Interface("status", sRes.Status).Msg("unauthorized")
 				w.WriteHeader(http.StatusUnauthorized)
 				return
 			case sRes.Status.Code != rpc.Code_CODE_OK:
-				log.Error().Str("token", token).Interface("status", res.Status).Msg("grpc stat request failed")
+				log.Error().Str("token", token).Interface("status", sRes.Status).Msg("grpc stat request failed")
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
@@ -311,16 +346,9 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 			} else {
 				h.PublicFolderHandler.Handler(s).ServeHTTP(w, r)
 			}
-
-		default:
-			w.WriteHeader(http.StatusNotFound)
-			b, err := Marshal(exception{
-				code:    SabredavNotFound,
-				message: "File not found in root",
-			})
-			HandleWebdavError(log, w, b, err)
-		}
+		}), mux.Unprotected(), mux.WithMiddleware(authenticatePublicLink(s)), mux.WithMiddleware(keyBase("public-files")))
 	})
+	return router
 }
 
 func getTokenStatInfo(ctx context.Context, client gatewayv1beta1.GatewayAPIClient, token string) (*provider.StatResponse, error) {

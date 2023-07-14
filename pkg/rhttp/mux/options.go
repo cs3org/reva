@@ -64,7 +64,7 @@ func (o *Options) merge(other *Options) *Options {
 		return &opt
 	}
 	opt.Unprotected = opt.Unprotected || other.Unprotected
-	opt.Middlewares = append(opt.Middlewares, other.Middlewares...)
+	opt.Middlewares = append(other.Middlewares, opt.Middlewares...)
 	return &opt
 }
 
