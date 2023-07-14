@@ -53,13 +53,13 @@ import (
 	"github.com/cs3org/reva/pkg/notification/trigger"
 	"github.com/cs3org/reva/pkg/publicshare"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/pkg/rhttp/mux"
 	"github.com/cs3org/reva/pkg/share"
 	"github.com/cs3org/reva/pkg/share/cache"
 	cachereg "github.com/cs3org/reva/pkg/share/cache/registry"
 	warmupreg "github.com/cs3org/reva/pkg/share/cache/warmup/registry"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/cs3org/reva/pkg/utils/resourceid"
-	"github.com/go-chi/chi/v5"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 )
@@ -247,7 +247,7 @@ func (h *Handler) CreateShare(w http.ResponseWriter, r *http.Request) {
 // NotifyShare handles GET requests on /apps/files_sharing/api/v1/shares/(shareid)/notify.
 func (h *Handler) NotifyShare(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	opaqueID := chi.URLParam(r, "shareid")
+	opaqueID, _ := mux.ParamsFromRequest(r).Get("shareid")
 
 	c, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
 	if err != nil {
@@ -429,7 +429,7 @@ type PublicShareContextName string
 func (h *Handler) GetShare(w http.ResponseWriter, r *http.Request) {
 	var share *conversions.ShareData
 	var resourceID *provider.ResourceId
-	shareID := chi.URLParam(r, "shareid")
+	shareID, _ := mux.ParamsFromRequest(r).Get("shareid")
 	ctx := r.Context()
 	log := appctx.GetLogger(r.Context())
 	log.Debug().Str("shareID", shareID).Msg("get share by id")
@@ -542,7 +542,8 @@ func (h *Handler) GetShare(w http.ResponseWriter, r *http.Request) {
 
 // UpdateShare handles PUT requests on /apps/files_sharing/api/v1/shares/(shareid).
 func (h *Handler) UpdateShare(w http.ResponseWriter, r *http.Request) {
-	shareID := chi.URLParam(r, "shareid")
+	shareID, _ := mux.ParamsFromRequest(r).Get("shareid")
+
 	// FIXME: isPublicShare is already doing a GetShare and GetPublicShare,
 	// we should just reuse that object when doing updates
 	if h.isPublicShare(r, shareID) {
@@ -737,7 +738,7 @@ func (h *Handler) updateFederatedShare(w http.ResponseWriter, r *http.Request, s
 
 // RemoveShare handles DELETE requests on /apps/files_sharing/api/v1/shares/(shareid).
 func (h *Handler) RemoveShare(w http.ResponseWriter, r *http.Request) {
-	shareID := chi.URLParam(r, "shareid")
+	shareID, _ := mux.ParamsFromRequest(r).Get("shareid")
 	switch {
 	case h.isPublicShare(r, shareID):
 		h.removePublicShare(w, r, shareID)

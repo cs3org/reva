@@ -36,7 +36,7 @@ import (
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
 	"github.com/cs3org/reva/pkg/ocm/share"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
-	"github.com/go-chi/chi/v5"
+	"github.com/cs3org/reva/pkg/rhttp/mux"
 	"github.com/pkg/errors"
 )
 
@@ -150,7 +150,7 @@ func (h *Handler) GetFederatedShare(w http.ResponseWriter, r *http.Request) {
 	// TODO: Implement response with HAL schemating
 	ctx := r.Context()
 
-	shareID := chi.URLParam(r, "shareid")
+	shareID, _ := mux.ParamsFromRequest(r).Get("shareid")
 	gatewayClient, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)

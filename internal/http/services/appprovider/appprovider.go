@@ -39,7 +39,6 @@ import (
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/cs3org/reva/pkg/utils/cfg"
 	"github.com/cs3org/reva/pkg/utils/resourceid"
-	"github.com/go-chi/chi/v5"
 	ua "github.com/mileusna/useragent"
 	"github.com/pkg/errors"
 )
@@ -61,8 +60,7 @@ func (c *Config) ApplyDefaults() {
 }
 
 type svc struct {
-	conf   *Config
-	router *chi.Mux
+	conf *Config
 }
 
 // New returns a new ocmd object.
@@ -86,15 +84,8 @@ func (s *svc) Register(r mux.Router) {
 		r.Get("/list", http.HandlerFunc(s.handleList), mux.Unprotected())
 		r.Post("/new", http.HandlerFunc(s.handleNew))
 		r.Post("/open", http.HandlerFunc(s.handleOpen))
+		r.Post("/notify", http.HandlerFunc(s.handleNotify))
 	})
-}
-
-func (s *svc) routerInit() error {
-	s.router.Get("/list", s.handleList)
-	s.router.Post("/new", s.handleNew)
-	s.router.Post("/open", s.handleOpen)
-	s.router.Post("/notify", s.handleNotify)
-	return nil
 }
 
 // Close performs cleanup.

@@ -33,7 +33,7 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
-	"github.com/go-chi/chi/v5"
+	"github.com/cs3org/reva/pkg/rhttp/mux"
 )
 
 // Handler renders user data for the user id given in the url path.
@@ -84,7 +84,7 @@ func (h *Handler) GetUsers(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	sublog := appctx.GetLogger(r.Context())
 
-	user := chi.URLParam(r, "userid")
+	user, _ := mux.ParamsFromRequest(r).Get("userid")
 	// FIXME use ldap to fetch user info
 	u, ok := ctxpkg.ContextGetUser(ctx)
 	if !ok {
