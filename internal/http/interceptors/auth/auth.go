@@ -168,9 +168,10 @@ func New(m map[string]interface{}) (rhttp.Middleware, error) {
 			ctx, err := authenticateUser(w, r, conf, tokenStrategyChain, tokenManager, tokenWriter, credChain)
 			if err != nil {
 				appctx.GetLogger(r.Context()).Warn().Err(err).Msg("error authenticating user")
-			} else {
-				r = r.WithContext(ctx)
+				return
 			}
+
+			r = r.WithContext(ctx)
 			h.ServeHTTP(w, r)
 		})
 	}
