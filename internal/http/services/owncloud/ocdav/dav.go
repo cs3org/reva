@@ -275,6 +275,8 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 		r.Handle("files/*", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ctx := r.Context()
 
+			_, r.URL.Path = rhttp.ShiftPath(r.URL.Path)
+
 			var requestUserID string
 			var oldPath = r.URL.Path
 
@@ -305,9 +307,11 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 		r.Route("ocm", func(r mux.Router) {
 			r.Mount("/", h.OCMSharesHandler.Handler(s))
 		}, mux.Unprotected(), mux.WithMiddleware(authenticateOCM(s)), mux.WithMiddleware(keyBase("ocm")))
-		r.Handle("public-files", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r.Handle("public-files/*", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ctx := r.Context()
 			log := appctx.GetLogger(ctx)
+
+			_, r.URL.Path = rhttp.ShiftPath(r.URL.Path)
 
 			token, _ := rhttp.ShiftPath(r.URL.Path)
 			c, err := pool.GetGatewayServiceClient(pool.Endpoint(s.c.GatewaySvc))

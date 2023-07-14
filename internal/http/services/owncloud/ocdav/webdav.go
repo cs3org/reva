@@ -19,11 +19,9 @@
 package ocdav
 
 import (
-	"fmt"
 	"net/http"
 	"path"
 
-	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/rhttp/mux"
 )
 
@@ -97,9 +95,6 @@ func (h *WebDavHandler) init(ns string, useLoggedInUserNS bool) error {
 func (h *WebDavHandler) withNs(fn func(w http.ResponseWriter, r *http.Request, ns string)) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path, _ := mux.ParamsFromRequest(r).Get("path")
-		fmt.Println("************ withNs path", path)
-		contextUser, ok := ctxpkg.ContextGetUser(r.Context())
-		fmt.Println("************ USER IN CONTEXT", contextUser, ok)
 		ns := applyLayout(r.Context(), h.namespace, h.useLoggedInUserNS, path)
 		fn(w, r, ns)
 	})
