@@ -97,6 +97,10 @@ func (h *handlers) get(method string) (http.Handler, bool) {
 	return h.global, h.global != nil
 }
 
+func (h *handlers) isEmpty() bool {
+	return h.global == nil && len(h.perMethod) == 0
+}
+
 func (n *node) isEmpty() bool {
 	return n.prefix == "" && len(n.children) == 0
 }
@@ -183,7 +187,12 @@ func (n *node) lookup(path string) (*node, Params, bool) {
 		return nil, nil, false
 	}
 	if len(path) == len(n.prefix) {
-		return n, nil, true
+		// we found the node. but if the current node does not
+		// have any handler, and one of the children is a catch all
+		// node, the catch all might be an empty string.
+		// so we return the child node
+		n, params := n.nextContainingHandlers(nil)
+		return n, params, true
 	}
 
 	path = path[len(n.prefix):]
@@ -221,9 +230,26 @@ func (n *node) lookup(path string) (*node, Params, bool) {
 		}
 
 		if path == "" {
-			return current, params, true
+			// we found the node. but if the current node does not
+			// have any handler, and one of the children is a catch all
+			// node, the catch all might be an empty string.
+			// so we return the child node
+			n, params := current.nextContainingHandlers(params)
+			return n, params, true
 		}
 	}
+}
+
+func (n *node) nextContainingHandlers(params Params) (*node, Params) {
+	if n.handlers.isEmpty() {
+		for _, c := range n.children {
+			if c.ntype == catchall {
+				params.add(c.prefix, "")
+				return c, params
+			}
+		}
+	}
+	return n, params
 }
 
 func wildcardType(c byte) nodetype {

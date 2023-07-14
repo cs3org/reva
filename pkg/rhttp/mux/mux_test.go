@@ -709,6 +709,10 @@ func TestCatchAll(t *testing.T) {
 	w := new(mockResponseWriter)
 	r, _ := http.NewRequest(http.MethodGet, "/test/some/deep/path/to/test/if/this/is/called/i/hope/yes", nil)
 	router.ServeHTTP(w, r)
+	assert.Equal(t, hit, true)
 
+	hit = false
+	r, _ = http.NewRequest(http.MethodGet, "/test/", nil)
+	router.ServeHTTP(w, r)
 	assert.Equal(t, hit, true)
 }

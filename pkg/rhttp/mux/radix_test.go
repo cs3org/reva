@@ -142,16 +142,10 @@ func TestRadixLookup(t *testing.T) {
 			},
 			path: "/support",
 			node: &node{
-				prefix: "upport",
-				ntype:  static,
-				children: nodes{
-					&node{
-						prefix: "key",
-						ntype:  catchall,
-					},
-				},
+				prefix: "key",
+				ntype:  catchall,
 			},
-			params: nil,
+			params: Params{"key": ""},
 			ok:     true,
 		},
 		{
