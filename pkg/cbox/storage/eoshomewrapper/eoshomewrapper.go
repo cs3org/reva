@@ -58,7 +58,7 @@ func New(ctx context.Context, m map[string]interface{}) (storage.FS, error) {
 	if !ok || t == "" {
 		t = "eoshome-{{substr 0 1 .Username}}"
 	}
-
+	c.EnableHome = true
 	eos, err := eosfs.NewEOSFS(ctx, &c)
 	if err != nil {
 		return nil, err
