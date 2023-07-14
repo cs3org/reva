@@ -1,3 +1,6 @@
+[log]
+level = "trace"
+
 [shared]
 gatewaysvc = "0.0.0.0:19000"
 
