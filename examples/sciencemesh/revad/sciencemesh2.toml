@@ -25,6 +25,8 @@ address = "0.0.0.0:4430"
 certfile = "/etc/revad/tls/your.revad.ssl.crt"
 keyfile = "/etc/revad/tls/your.revad.ssl.key"
 
+[http.middlewares.log]
+
 [http.services.dataprovider]
 driver = "ocmoutcoming"
 

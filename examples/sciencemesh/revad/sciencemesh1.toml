@@ -202,6 +202,7 @@ prefix = "ocs"
 
 [http.services.ocdav]
 [http.middlewares.cors]
+[http.middlewares.log]
 [http.middlewares.providerauthorizer]
 driver = "mentix"
 
