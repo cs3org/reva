@@ -19,6 +19,9 @@
 package registry
 
 import (
+	"net"
+	"strings"
+
 	mRegistry "go-micro.dev/v4/registry"
 	"go-micro.dev/v4/selector"
 )
@@ -27,6 +30,33 @@ var (
 	// fixme: get rid of global registry
 	gRegistry mRegistry.Registry
 )
+
+func addrs() []net.Addr {
+	var addrs []net.Addr
+	// find out adresses
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return addrs
+	}
+
+	//nolint:prealloc
+	var loAddrs []net.Addr
+	for _, iface := range ifaces {
+		ifaceAddrs, err := iface.Addrs()
+		if err != nil {
+			// ignore error, interface can disappear from system
+			continue
+		}
+		if iface.Flags&net.FlagLoopback != 0 {
+			loAddrs = append(loAddrs, ifaceAddrs...)
+			continue
+		}
+		addrs = append(addrs, ifaceAddrs...)
+	}
+	addrs = append(addrs, loAddrs...)
+
+	return addrs
+}
 
 // Init prepares the service registry
 func Init(nRegistry mRegistry.Registry) error {
@@ -45,6 +75,19 @@ func GetRegistry() mRegistry.Registry {
 
 // GetNodeAddress returns a random address from the service nodes
 func GetNodeAddress(services []*mRegistry.Service) (string, error) {
+
+	for _, s := range services {
+		for _, n := range s.Nodes {
+			for _, a := range addrs() {
+				nparts := strings.SplitN(n.Address, ":", 2)
+				aparts := strings.SplitN(a.String(), "/", 2)
+				if nparts[0] == aparts[0] {
+					return n.Address, nil
+				}
+			}
+		}
+	}
+
 	next := selector.Random(services)
 	node, err := next()
 	if err != nil {
