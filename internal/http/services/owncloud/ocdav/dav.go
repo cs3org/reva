@@ -258,7 +258,7 @@ func keyBase(p string) middlewares.Middleware {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ctx := r.Context()
 			base, _ := ctx.Value(ctxKeyBaseURI).(string)
-			base = path.Join(base, p)
+			base = path.Join("/", base, p)
 			ctx = context.WithValue(ctx, ctxKeyBaseURI, base)
 			r = r.WithContext(ctx)
 			next.ServeHTTP(w, r)

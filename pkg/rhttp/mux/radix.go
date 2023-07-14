@@ -66,12 +66,12 @@ func (n *nodeOptions) set(method string, o *Options) {
 }
 
 func (n *nodeOptions) get(method string) *Options {
+	if method == MethodAll {
+		return n.global
+	}
 	global := n.global
 	perMethod := n.opts[method]
-	if global != nil {
-		return global.merge(perMethod)
-	}
-	return perMethod
+	return global.merge(perMethod)
 }
 
 type handlers struct {
@@ -299,6 +299,7 @@ func (n *node) insert(method, path string, handler http.Handler, opts *Options) 
 		return
 	}
 
+	var merged *Options
 	// traverse the tree until we cannot make futher progresses
 	current := &node{
 		children:          nodes{n},
@@ -310,19 +311,20 @@ walk:
 		for _, node := range current.children {
 			if i != -1 { // wildcard found
 				current = node
-				opts = node.mergeOptions(method, opts)
+				merged = node.mergeOptions(method, merged)
 				path = path[i+len(wildcard):]
 				continue walk
 			}
 			// the next node is the one having the same prefix of a static node
 			if node.ntype == static && strings.HasPrefix(path, node.prefix) {
 				current = node
-				opts = node.mergeOptions(method, opts)
+				merged = node.mergeOptions(method, merged)
 				path = path[len(node.prefix):]
 				continue walk
 			}
 		}
 
+		opts = merged.merge(opts)
 		current.insertChild(method, path, handler, opts)
 		return
 	}

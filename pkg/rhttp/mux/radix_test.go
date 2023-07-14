@@ -19,8 +19,10 @@
 package mux
 
 import (
+	"net/http"
 	"testing"
 
+	"github.com/cs3org/reva/pkg/rhttp/middlewares"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -620,4 +622,21 @@ func TestInsertOptions(t *testing.T) {
 		tt.init.insert(tt.method, tt.path, nil, tt.opt)
 		assert.Equal(t, tt.exp, tt.init.root)
 	}
+}
+
+func TestMultipleMiddlewaresAlongTheWay(t *testing.T) {
+	nop := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
+	m := middlewares.Middleware(func(h http.Handler) http.Handler { return nop })
+
+	tree := newTree()
+
+	tree.insert("GET", "/", nop, &Options{Middlewares: []middlewares.Middleware{m}})
+	tree.insert("POST", "/", nop, &Options{Middlewares: []middlewares.Middleware{m}})
+	tree.insert(MethodAll, "/test/path", nop, &Options{Middlewares: []middlewares.Middleware{m}})
+	tree.insert(MethodAll, "/testing", nop, &Options{Middlewares: []middlewares.Middleware{m}})
+	tree.insert("POST", "/test/path/other", nop, &Options{Middlewares: []middlewares.Middleware{m}})
+
+	n, _, ok := tree.root.lookup("/test/path/other")
+	assert.Equal(t, true, ok)
+	assert.Equal(t, 3, len(n.opts.opts["POST"].Middlewares))
 }
