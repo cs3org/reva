@@ -57,12 +57,16 @@ type transferClaims struct {
 	VersionKey string `json:"version_key,omitempty"`
 }
 type config struct {
+	Prefix               string `maptructure:"prefix"`
 	TransferSharedSecret string `mapstructure:"transfer_shared_secret" validate:"required"`
 	Timeout              int64  `mapstructure:"timeout"`
 	Insecure             bool   `mapstructure:"insecure" docs:"false;Whether to skip certificate checks when sending requests."`
 }
 
 func (c *config) ApplyDefaults() {
+	if c.Prefix == "" {
+		c.Prefix = "datagateway"
+	}
 	c.TransferSharedSecret = sharedconf.GetJWTSecret(c.TransferSharedSecret)
 }
 
@@ -100,7 +104,7 @@ func (s *svc) Close() error {
 func (s *svc) Register(r mux.Router) {
 	// TODO (gdelmont): the token verification can be a custom middleware
 	// as the add cors header for HEAD
-	r.Route("/data", func(r mux.Router) {
+	r.Route("/"+s.conf.Prefix, func(r mux.Router) {
 		r.Get("", http.HandlerFunc(s.doGet))
 		r.Head("", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			addCorsHeader(w)
