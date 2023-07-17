@@ -192,7 +192,9 @@ func (s *svc) Unprotected() []string {
 }
 
 func (s *svc) Register(r mux.Router) {
-	r.Handle("/status.php/*", s.Handler())
+	r.Handle("/status.php", s.Handler())
+	r.Handle("/webdav/*", s.Handler())
+	r.Handle("/dav/*", s.Handler())
 	r.Handle("/remote.php/*", s.Handler())
 	r.Handle("/apps/*", s.Handler())
 	r.Handle("/index.php/*", s.Handler())
