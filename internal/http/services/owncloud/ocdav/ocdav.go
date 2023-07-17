@@ -36,7 +36,6 @@ import (
 	"github.com/cs3org/reva/pkg/notification/notificationhelper"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp"
-	"github.com/cs3org/reva/pkg/rhttp/middlewares"
 	"github.com/cs3org/reva/pkg/rhttp/mux"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/storage/favorite"
@@ -173,7 +172,7 @@ func New(ctx context.Context, m map[string]interface{}) (rhttp.Service, error) {
 	if err := s.webDavHandler.init(c.WebdavNamespace, true); err != nil {
 		return nil, err
 	}
-	if err := s.davHandler.init(s); err != nil {
+	if err := s.davHandler.init(&c); err != nil {
 		return nil, err
 	}
 	return s, nil
@@ -188,111 +187,89 @@ func (s *svc) Close() error {
 	return nil
 }
 
-func (s *svc) Register(r mux.Router) {
-	r.Get("/status.php", http.HandlerFunc(s.doStatus), mux.Unprotected(), mux.WithMiddleware(addAccessHeaders()), mux.WithMiddleware(checkEmptyNamespace))
-	r.Route("/remote.php", func(r mux.Router) {
-		r.Route("/webdav", func(r mux.Router) {
-			r.Mount("", s.webDavHandler.Handler(s))
-		}, mux.WithMiddleware(keyBase("webdav")))
-		r.Route("/dav", func(r mux.Router) {
-			r.Mount("", s.davHandler.Handler())
-		}, mux.WithMiddleware(keyBase("dav")))
-	}, mux.WithMiddleware(keyBase("remote.php")), mux.WithMiddleware(addAccessHeaders()), mux.WithMiddleware(checkEmptyNamespace))
-	r.Mount("/apps/files", http.HandlerFunc(s.handleLegacyPath))
-	r.Route("/index.php", func(r mux.Router) {
-		r.Handle("/s/:token", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			params := mux.ParamsFromRequest(r)
-			token, _ := params.Get("token")
-			rURL := s.c.PublicURL + path.Join("/s", token)
-			http.Redirect(w, r, rURL, http.StatusMovedPermanently)
-		}), mux.Unprotected())
-	})
+func (s *svc) Unprotected() []string {
+	return []string{"/status.php", "/remote.php/dav/public-files/", "/apps/files/", "/index.php/f/", "/index.php/s/", "/remote.php/dav/ocm/"}
 }
 
-func checkEmptyNamespace(next http.Handler) http.Handler {
+func (s *svc) Register(r mux.Router) {
+	r.Handle("/status.php/*", s.Handler())
+	r.Handle("/remote.php/*", s.Handler())
+	r.Handle("/apps/*", s.Handler())
+	r.Handle("/index.php/*", s.Handler())
+}
+
+func (s *svc) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		log := appctx.GetLogger(ctx)
+
+		addAccessHeaders(w, r)
+
 		// TODO(jfd): do we need this?
 		// fake litmus testing for empty namespace: see https://github.com/golang/net/blob/e514e69ffb8bc3c76a71ae40de0118d794855992/webdav/litmus_test_server.go#L58-L89
 		if r.Header.Get("X-Litmus") == "props: 3 (propfind_invalid2)" {
 			http.Error(w, "400 Bad Request", http.StatusBadRequest)
 			return
 		}
-		next.ServeHTTP(w, r)
+
+		// to build correct href prop urls we need to keep track of the base path
+		// always starts with /
+		base := "/"
+
+		var head string
+		head, r.URL.Path = rhttp.ShiftPath(r.URL.Path)
+		log.Debug().Str("head", head).Str("tail", r.URL.Path).Msg("http routing")
+		switch head {
+		case "status.php":
+			s.doStatus(w, r)
+			return
+		case "remote.php":
+			// skip optional "remote.php"
+			head, r.URL.Path = rhttp.ShiftPath(r.URL.Path)
+
+			// yet, add it to baseURI
+			base = path.Join(base, "remote.php")
+		case "apps":
+			head, r.URL.Path = rhttp.ShiftPath(r.URL.Path)
+			if head == "files" {
+				s.handleLegacyPath(w, r)
+				return
+			}
+		case "index.php":
+			head, r.URL.Path = rhttp.ShiftPath(r.URL.Path)
+			if head == "s" {
+				token := r.URL.Path
+				rURL := s.c.PublicURL + path.Join(head, token)
+
+				http.Redirect(w, r, rURL, http.StatusMovedPermanently)
+				return
+			}
+		}
+		switch head {
+		// the old `/webdav` endpoint uses remote.php/webdav/$path
+		case "webdav":
+			// for oc we need to prepend /home as the path that will be passed to the home storage provider
+			// will not contain the username
+			base = path.Join(base, "webdav")
+			ctx := context.WithValue(ctx, ctxKeyBaseURI, base)
+			r = r.WithContext(ctx)
+			s.webDavHandler.Handler(s).ServeHTTP(w, r)
+			return
+		case "dav":
+			// cern uses /dav/files/$namespace -> /$namespace/...
+			// oc uses /dav/files/$user -> /$home/$user/...
+			// for oc we need to prepend the path to user homes
+			// or we take the path starting at /dav and allow rewriting it?
+			base = path.Join(base, "dav")
+			ctx := context.WithValue(ctx, ctxKeyBaseURI, base)
+			r = r.WithContext(ctx)
+			s.davHandler.Handler(s).ServeHTTP(w, r)
+			return
+		}
+		log.Warn().Msg("resource not found")
+		w.WriteHeader(http.StatusNotFound)
 	})
 }
-
-// func (s *svc) Handler() http.Handler {
-// 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-// 		ctx := r.Context()
-// 		log := appctx.GetLogger(ctx)
-
-// 		addAccessHeaders(w, r)
-
-// 		// TODO(jfd): do we need this?
-// 		// fake litmus testing for empty namespace: see https://github.com/golang/net/blob/e514e69ffb8bc3c76a71ae40de0118d794855992/webdav/litmus_test_server.go#L58-L89
-// 		if r.Header.Get("X-Litmus") == "props: 3 (propfind_invalid2)" {
-// 			http.Error(w, "400 Bad Request", http.StatusBadRequest)
-// 			return
-// 		}
-
-// 		// to build correct href prop urls we need to keep track of the base path
-// 		// always starts with /
-// 		base := "/"
-
-// 		var head string
-// 		head, r.URL.Path = rhttp.ShiftPath(r.URL.Path)
-// 		log.Debug().Str("head", head).Str("tail", r.URL.Path).Msg("http routing")
-// 		switch head {
-// 		case "status.php":
-// 			s.doStatus(w, r)
-// 			return
-// 		case "remote.php":
-// 			// skip optional "remote.php"
-// 			head, r.URL.Path = rhttp.ShiftPath(r.URL.Path)
-
-// 			// yet, add it to baseURI
-// 			base = path.Join(base, "remote.php")
-// 		case "apps":
-// 			head, r.URL.Path = rhttp.ShiftPath(r.URL.Path)
-// 			if head == "files" {
-// 				s.handleLegacyPath(w, r)
-// 				return
-// 			}
-// 		case "index.php":
-// 			head, r.URL.Path = rhttp.ShiftPath(r.URL.Path)
-// 			if head == "s" {
-// 				token := r.URL.Path
-// 				rURL := s.c.PublicURL + path.Join(head, token)
-
-// 				http.Redirect(w, r, rURL, http.StatusMovedPermanently)
-// 				return
-// 			}
-// 		}
-// 		switch head {
-// 		// the old `/webdav` endpoint uses remote.php/webdav/$path
-// 		// case "webdav":
-// 		// 	// for oc we need to prepend /home as the path that will be passed to the home storage provider
-// 		// 	// will not contain the username
-// 		// 	base = path.Join(base, "webdav")
-// 		// 	ctx := context.WithValue(ctx, ctxKeyBaseURI, base)
-// 		// 	r = r.WithContext(ctx)
-// 		// 	s.webDavHandler.Handler(s).ServeHTTP(w, r)
-// 		// return
-// 		case "dav":
-// 			// cern uses /dav/files/$namespace -> /$namespace/...
-// 			// oc uses /dav/files/$user -> /$home/$user/...
-// 			// for oc we need to prepend the path to user homes
-// 			// or we take the path starting at /dav and allow rewriting it?
-// 			base = path.Join(base, "dav")
-// 			ctx := context.WithValue(ctx, ctxKeyBaseURI, base)
-// 			r = r.WithContext(ctx)
-// 			s.davHandler.Handler(s).ServeHTTP(w, r)
-// 			return
-// 		}
-// 		log.Warn().Msg("resource not found")
-// 		w.WriteHeader(http.StatusNotFound)
-// 	})
-// }
 
 func (s *svc) getClient() (gateway.GatewayAPIClient, error) {
 	return pool.GetGatewayServiceClient(pool.Endpoint(s.c.GatewaySvc))
@@ -314,32 +291,27 @@ func applyLayout(ctx context.Context, ns string, useLoggedInUserNS bool, request
 	return templates.WithUser(u, ns)
 }
 
-func addAccessHeaders() middlewares.Middleware {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			headers := w.Header()
-			// the webdav api is accessible from anywhere
-			headers.Set("Access-Control-Allow-Origin", "*")
-			// all resources served via the DAV endpoint should have the strictest possible as default
-			headers.Set("Content-Security-Policy", "default-src 'none';")
-			// disable sniffing the content type for IE
-			headers.Set("X-Content-Type-Options", "nosniff")
-			// https://msdn.microsoft.com/en-us/library/jj542450(v=vs.85).aspx
-			headers.Set("X-Download-Options", "noopen")
-			// Disallow iFraming from other domains
-			headers.Set("X-Frame-Options", "SAMEORIGIN")
-			// https://www.adobe.com/devnet/adobe-media-server/articles/cross-domain-xml-for-streaming.html
-			headers.Set("X-Permitted-Cross-Domain-Policies", "none")
-			// https://developers.google.com/webmasters/control-crawl-index/docs/robots_meta_tag
-			headers.Set("X-Robots-Tag", "none")
-			// enforce browser based XSS filters
-			headers.Set("X-XSS-Protection", "1; mode=block")
+func addAccessHeaders(w http.ResponseWriter, r *http.Request) {
+	headers := w.Header()
+	// the webdav api is accessible from anywhere
+	headers.Set("Access-Control-Allow-Origin", "*")
+	// all resources served via the DAV endpoint should have the strictest possible as default
+	headers.Set("Content-Security-Policy", "default-src 'none';")
+	// disable sniffing the content type for IE
+	headers.Set("X-Content-Type-Options", "nosniff")
+	// https://msdn.microsoft.com/en-us/library/jj542450(v=vs.85).aspx
+	headers.Set("X-Download-Options", "noopen")
+	// Disallow iFraming from other domains
+	headers.Set("X-Frame-Options", "SAMEORIGIN")
+	// https://www.adobe.com/devnet/adobe-media-server/articles/cross-domain-xml-for-streaming.html
+	headers.Set("X-Permitted-Cross-Domain-Policies", "none")
+	// https://developers.google.com/webmasters/control-crawl-index/docs/robots_meta_tag
+	headers.Set("X-Robots-Tag", "none")
+	// enforce browser based XSS filters
+	headers.Set("X-XSS-Protection", "1; mode=block")
 
-			if r.TLS != nil {
-				headers.Set("Strict-Transport-Security", "max-age=63072000")
-			}
-			next.ServeHTTP(w, r)
-		})
+	if r.TLS != nil {
+		headers.Set("Strict-Transport-Security", "max-age=63072000")
 	}
 }
 

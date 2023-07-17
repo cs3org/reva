@@ -21,8 +21,6 @@ package ocdav
 import (
 	"net/http"
 	"path"
-
-	"github.com/cs3org/reva/pkg/rhttp/mux"
 )
 
 // Common Webdav methods.
@@ -92,30 +90,41 @@ func (h *WebDavHandler) init(ns string, useLoggedInUserNS bool) error {
 	return nil
 }
 
-func (h *WebDavHandler) withNs(fn func(w http.ResponseWriter, r *http.Request, ns string)) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		path, _ := mux.ParamsFromRequest(r).Get("path")
-		ns := applyLayout(r.Context(), h.namespace, h.useLoggedInUserNS, path)
-		fn(w, r, ns)
-	})
-}
-
 // Handler handles requests.
 func (h *WebDavHandler) Handler(s *svc) http.Handler {
-	router := mux.NewServeMux()
-	router.Method(MethodPropfind, "/*path", h.withNs(s.handlePathPropfind))
-	router.Method(MethodLock, "/*path", h.withNs(s.handleLock))
-	router.Method(MethodUnlock, "/*path", h.withNs(s.handleUnlock))
-	router.Method(MethodProppatch, "/*path", h.withNs(s.handlePathProppatch))
-	router.Method(MethodMkcol, "/*path", h.withNs(s.handlePathMkcol))
-	router.Method(MethodMove, "/*path", h.withNs(s.handlePathMove))
-	router.Method(MethodCopy, "/*path", h.withNs(s.handlePathCopy))
-	router.Method(MethodReport, "/*path", h.withNs(s.handleReport))
-	router.Method(http.MethodGet, "/*path", h.withNs(s.handlePathGet))
-	router.Method(http.MethodPut, "/*path", h.withNs(s.handlePathPut))
-	router.Method(http.MethodPost, "/*path", h.withNs(s.handlePathTusPost))
-	router.Method(http.MethodOptions, "/*path", http.HandlerFunc(s.handleOptions))
-	router.Method(http.MethodHead, "/*path", h.withNs(s.handlePathHead))
-	router.Method(http.MethodDelete, "/*path", h.withNs(s.handlePathDelete))
-	return router
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ns := applyLayout(r.Context(), h.namespace, h.useLoggedInUserNS, r.URL.Path)
+		switch r.Method {
+		case MethodPropfind:
+			s.handlePathPropfind(w, r, ns)
+		case MethodLock:
+			s.handleLock(w, r, ns)
+		case MethodUnlock:
+			s.handleUnlock(w, r, ns)
+		case MethodProppatch:
+			s.handlePathProppatch(w, r, ns)
+		case MethodMkcol:
+			s.handlePathMkcol(w, r, ns)
+		case MethodMove:
+			s.handlePathMove(w, r, ns)
+		case MethodCopy:
+			s.handlePathCopy(w, r, ns)
+		case MethodReport:
+			s.handleReport(w, r, ns)
+		case http.MethodGet:
+			s.handlePathGet(w, r, ns)
+		case http.MethodPut:
+			s.handlePathPut(w, r, ns)
+		case http.MethodPost:
+			s.handlePathTusPost(w, r, ns)
+		case http.MethodOptions:
+			s.handleOptions(w, r)
+		case http.MethodHead:
+			s.handlePathHead(w, r, ns)
+		case http.MethodDelete:
+			s.handlePathDelete(w, r, ns)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	})
 }

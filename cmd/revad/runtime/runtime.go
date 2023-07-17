@@ -443,7 +443,8 @@ func newServers(ctx context.Context, grpc []*config.GRPC, http []*config.HTTP, l
 		if err != nil {
 			return nil, err
 		}
-		factory, err := initHTTPMiddlewares(cfg.Middlewares, &logger)
+		unprotected := collectUnprotected(services)
+		factory, err := initHTTPMiddlewares(cfg.Middlewares, &logger, unprotected)
 		if err != nil {
 			return nil, err
 		}
@@ -468,4 +469,19 @@ func newServers(ctx context.Context, grpc []*config.GRPC, http []*config.HTTP, l
 		servers = append(servers, server)
 	}
 	return servers, nil
+}
+
+func collectUnprotected(svc map[string]rhttp.Service) []string {
+	// FIXME: once all services in reva implements the new http service layout
+	// with the new routing, remove this as this is handled already by the routing pkg
+	var unprotected []string
+	for _, s := range svc {
+		u, ok := s.(interface{ Unprotected() []string })
+		if !ok {
+			continue
+		}
+		unprotected = append(unprotected, u.Unprotected()...)
+	}
+
+	return unprotected
 }
