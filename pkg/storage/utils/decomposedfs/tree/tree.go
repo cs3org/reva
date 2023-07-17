@@ -821,7 +821,9 @@ func (t *Tree) Propagate(ctx context.Context, n *node.Node, sizeDiff int64) (err
 			var newSize uint64
 
 			// read treesize
+			_, subspan := tracer.Start(ctx, "n.GetTreeSize")
 			treeSize, err := n.GetTreeSize(ctx)
+			subspan.End()
 			switch {
 			case metadata.IsAttrUnset(err):
 				// fallback to calculating the treesize

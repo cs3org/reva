@@ -38,7 +38,7 @@ type Options struct {
 	// the gateway address
 	GatewayAddr string `mapstructure:"gateway_addr"`
 
-	// the metadata backend to use, currently supports `xattr` or `ini`
+	// the metadata backend to use, currently supports `xattr` or `messagepack`
 	MetadataBackend string `mapstructure:"metadata_backend"`
 
 	// ocis fs works on top of a dir of uuid nodes
@@ -106,7 +106,7 @@ func New(m map[string]interface{}) (*Options, error) {
 	o.GatewayAddr = sharedconf.GetGatewaySVC(o.GatewayAddr)
 
 	if o.MetadataBackend == "" {
-		o.MetadataBackend = "xattrs"
+		o.MetadataBackend = "messagepack"
 	}
 
 	if o.UserLayout == "" {

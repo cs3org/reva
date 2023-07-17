@@ -200,10 +200,9 @@ func (b MessagePackBackend) saveAttributes(ctx context.Context, path string, set
 	}
 	subspan.End()
 
-	_, subspan = tracer.Start(ctx, "metaCache.PushToCache")
-	err = b.metaCache.PushToCache(b.cacheKey(path), attribs)
-	subspan.End()
-	return err
+	go func() { _ = b.metaCache.PushToCache(b.cacheKey(path), attribs) }()
+
+	return nil
 }
 
 func (b MessagePackBackend) loadAttributes(ctx context.Context, path string, source io.Reader) (map[string][]byte, error) {
@@ -224,7 +223,6 @@ func (b MessagePackBackend) loadAttributes(ctx context.Context, path string, sou
 		// source, err = lockedfile.Open(metaPath)
 		source, err = os.Open(metaPath)
 		subspan.End()
-		// // No cached entry found. Read from storage and store in cache
 		if err != nil {
 			if os.IsNotExist(err) {
 				// some of the caller rely on ENOTEXISTS to be returned when the
@@ -259,12 +257,12 @@ func (b MessagePackBackend) loadAttributes(ctx context.Context, path string, sou
 		}
 	}
 
-	_, subspan := tracer.Start(ctx, "metaCache.PushToCache")
-	err = b.metaCache.PushToCache(b.cacheKey(path), attribs)
-	subspan.End()
-	if err != nil {
-		return nil, err
+	// Prepare a copy to push to cache. Pushing the original map isn't thread-safe
+	attribsCopy := map[string][]byte{}
+	for k, v := range attribs {
+		attribsCopy[k] = v
 	}
+	go func() { _ = b.metaCache.PushToCache(b.cacheKey(path), attribsCopy) }()
 
 	return attribs, nil
 }

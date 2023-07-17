@@ -39,5 +39,5 @@ func NewFileMetadataCache(store string, nodes []string, database, table string, 
 
 // RemoveMetadata removes a reference from the metadata cache
 func (c *fileMetadataCache) RemoveMetadata(path string) error {
-	return c.Delete(path)
+	return c.s.Delete(path)
 }
