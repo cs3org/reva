@@ -774,8 +774,8 @@ _ocs: api compatibility, return correct status code_
 
 #### [PROPFIND on (password protected) public link returns invalid XML](https://github.com/owncloud/ocis/issues/39707)
 The problem has been fixed in reva edge branch but not in reva master
-- [coreApiWebdavOperations/propfind.feature:64](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavOperations/propfind.feature#L64)
-- [coreApiWebdavOperations/propfind.feature:76](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavOperations/propfind.feature#L76)
+- [coreApiWebdavOperations/propfind.feature:65](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavOperations/propfind.feature#L65)
+- [coreApiWebdavOperations/propfind.feature:77](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiWebdavOperations/propfind.feature#L77)
 
 #### [Updating the role of a public link to internal gives returns 400]
 - [coreApiSharePublicLink3/updatePublicLinkShare.feature:483](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiSharePublicLink3/updatePublicLinkShare.feature#L483)
