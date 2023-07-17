@@ -22,7 +22,9 @@ import (
 	"context"
 	"net/http"
 	"net/url"
+	"path"
 	"path/filepath"
+	"strings"
 
 	"github.com/cs3org/reva/pkg/rhttp/middlewares"
 )
@@ -163,7 +165,29 @@ func (n *node) walk(ctx context.Context, prefix string, merged *nodeOptions, f W
 	}
 }
 
+// cleanPath returns the canonical path for p, eliminating . and .. elements.
+func cleanPath(p string) string {
+	if p == "" {
+		return "/"
+	}
+	if p[0] != '/' {
+		p = "/" + p
+	}
+	np := path.Clean(p)
+	// path.Clean removes trailing slash except for root;
+	// put the trailing slash back if necessary.
+	if p[len(p)-1] == '/' && np != "/" {
+		if len(p) == len(np)+1 && strings.HasPrefix(p, np) {
+			np = p
+		} else {
+			np += "/"
+		}
+	}
+	return np
+}
+
 func (m *ServeMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	r.URL.Path = cleanPath(r.URL.Path)
 	n, params, ok := m.tree.root.lookup(r.URL.Path)
 	if !ok {
 		m.notFound(w, r)
