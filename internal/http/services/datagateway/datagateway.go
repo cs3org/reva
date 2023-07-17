@@ -100,7 +100,7 @@ func (s *svc) Close() error {
 func (s *svc) Register(r mux.Router) {
 	// TODO (gdelmont): the token verification can be a custom middleware
 	// as the add cors header for HEAD
-	r.Route("/datagateway", func(r mux.Router) {
+	r.Route("/data", func(r mux.Router) {
 		r.Get("", http.HandlerFunc(s.doGet))
 		r.Head("", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			addCorsHeader(w)
