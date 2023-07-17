@@ -464,6 +464,36 @@ func TestRadixInsert(t *testing.T) {
 					prefix: "/",
 					ntype:  static,
 					children: nodes{
+						{
+							prefix: "value/",
+							ntype:  static,
+						},
+					},
+				},
+			},
+			method: "POST",
+			path:   "/:key",
+			exp: &node{
+				prefix: "/",
+				ntype:  static,
+				children: nodes{
+					{
+						prefix: "value/",
+						ntype:  static,
+					},
+					{
+						prefix: "key",
+						ntype:  param,
+					},
+				},
+			},
+		},
+		{
+			init: &trie{
+				root: &node{
+					prefix: "/",
+					ntype:  static,
+					children: nodes{
 						&node{
 							prefix: "blog",
 							ntype:  static,

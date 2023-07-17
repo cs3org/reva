@@ -327,9 +327,13 @@ func (n *node) insert(method, path string, handler http.Handler, opts *Options) 
 	}
 walk:
 	for {
-		wildcard, i, _ := nextWildcard(path)
+		wildcard, i, wtype := nextWildcard(path)
 		for _, node := range current.children {
-			if i != -1 { // wildcard found
+			// if we found a wildcard in the path as next token (i != -1),
+			// we look for a node containing a wildcard of the same type
+			// TODO (gdelmont): we should bail out if we find a wildcard node
+			// with different type, and if same type different wildcard str
+			if i != -1 && node.ntype == wtype {
 				current = node
 				merged = node.mergeOptions(method, merged)
 				path = path[i+len(wildcard):]
