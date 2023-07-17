@@ -308,7 +308,8 @@ func nextWildcard(s string) (string, int, nodetype) {
 }
 
 func (n *node) mergeOptions(method string, opts *Options) *Options {
-	return n.opts.get(method).merge(opts)
+	nodeOpts := n.opts.get(method)
+	return opts.merge(nodeOpts)
 }
 
 func (n *node) insert(method, path string, handler http.Handler, opts *Options) {
