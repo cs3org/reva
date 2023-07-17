@@ -113,6 +113,15 @@ func (s *svc) Register(r mux.Router) {
 		r.Put("", http.HandlerFunc(s.doPut))
 		r.Patch("", http.HandlerFunc(s.doPatch))
 	}, mux.Unprotected())
+	r.Route("/"+s.conf.Prefix, func(r mux.Router) {
+		r.Get("/*", http.HandlerFunc(s.doGet))
+		r.Head("/*", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			addCorsHeader(w)
+			s.doHead(w, r)
+		}))
+		r.Put("/*", http.HandlerFunc(s.doPut))
+		r.Patch("/*", http.HandlerFunc(s.doPatch))
+	}, mux.Unprotected())
 }
 
 func addCorsHeader(res http.ResponseWriter) {
