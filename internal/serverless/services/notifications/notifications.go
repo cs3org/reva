@@ -128,6 +128,9 @@ func (s *svc) Start() {
 
 // Close performs cleanup.
 func (s *svc) Close(ctx context.Context) error {
+	if s.nc == nil {
+		return nil
+	}
 	return s.nc.Drain()
 }
 
