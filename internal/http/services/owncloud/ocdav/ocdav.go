@@ -189,7 +189,7 @@ func (s *svc) Close() error {
 }
 
 func (s *svc) Register(r mux.Router) {
-	r.Get("/status.php", http.HandlerFunc(s.doStatus), mux.Unprotected(), mux.WithMiddleware(addAccessHeaders()))
+	r.Get("/status.php", http.HandlerFunc(s.doStatus), mux.Unprotected(), mux.WithMiddleware(addAccessHeaders()), mux.WithMiddleware(checkEmptyNamespace))
 	r.Route("/remote.php", func(r mux.Router) {
 		r.Route("/webdav", func(r mux.Router) {
 			r.Mount("", s.webDavHandler.Handler(s))
@@ -197,7 +197,7 @@ func (s *svc) Register(r mux.Router) {
 		r.Route("/dav", func(r mux.Router) {
 			r.Mount("", s.davHandler.Handler())
 		}, mux.WithMiddleware(keyBase("dav")))
-	}, mux.WithMiddleware(keyBase("remote.php")), mux.WithMiddleware(addAccessHeaders()))
+	}, mux.WithMiddleware(keyBase("remote.php")), mux.WithMiddleware(addAccessHeaders()), mux.WithMiddleware(checkEmptyNamespace))
 	r.Mount("/apps/files", http.HandlerFunc(s.handleLegacyPath))
 	r.Route("/index.php", func(r mux.Router) {
 		r.Handle("/s/:token", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -206,6 +206,18 @@ func (s *svc) Register(r mux.Router) {
 			rURL := s.c.PublicURL + path.Join("/s", token)
 			http.Redirect(w, r, rURL, http.StatusMovedPermanently)
 		}), mux.Unprotected())
+	})
+}
+
+func checkEmptyNamespace(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// TODO(jfd): do we need this?
+		// fake litmus testing for empty namespace: see https://github.com/golang/net/blob/e514e69ffb8bc3c76a71ae40de0118d794855992/webdav/litmus_test_server.go#L58-L89
+		if r.Header.Get("X-Litmus") == "props: 3 (propfind_invalid2)" {
+			http.Error(w, "400 Bad Request", http.StatusBadRequest)
+			return
+		}
+		next.ServeHTTP(w, r)
 	})
 }
 
