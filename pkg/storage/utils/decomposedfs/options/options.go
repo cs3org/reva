@@ -41,6 +41,9 @@ type Options struct {
 	// the metadata backend to use, currently supports `xattr` or `ini`
 	MetadataBackend string `mapstructure:"metadata_backend"`
 
+	// the propagator to use for this fs. currently only `sync` is fully supported, `async` is available as an experimental feature
+	Propagator string `mapstructure:"propagator"`
+
 	// ocis fs works on top of a dir of uuid nodes
 	Root string `mapstructure:"root"`
 
@@ -143,6 +146,10 @@ func New(m map[string]interface{}) (*Options, error) {
 
 	if o.MaxConcurrency <= 0 {
 		o.MaxConcurrency = 100
+	}
+
+	if o.Propagator == "" {
+		o.Propagator = "sync"
 	}
 
 	return o, nil
