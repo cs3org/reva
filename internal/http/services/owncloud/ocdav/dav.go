@@ -305,7 +305,8 @@ func authenticatePublicLink(s *svc) middlewares.Middleware {
 			}
 
 			var res *gatewayv1beta1.AuthenticateResponse
-			token, _ := rhttp.ShiftPath(r.URL.Path)
+			_, path := rhttp.ShiftPath(r.URL.Path)
+			token, _ := rhttp.ShiftPath(path)
 			if _, pass, ok := r.BasicAuth(); ok {
 				res, err = handleBasicAuth(r.Context(), c, token, pass)
 			} else {
