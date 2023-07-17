@@ -173,7 +173,7 @@ func New(ctx context.Context, m map[string]interface{}) (rhttp.Service, error) {
 	if err := s.webDavHandler.init(c.WebdavNamespace, true); err != nil {
 		return nil, err
 	}
-	if err := s.davHandler.init(&c); err != nil {
+	if err := s.davHandler.init(s); err != nil {
 		return nil, err
 	}
 	return s, nil
@@ -195,7 +195,7 @@ func (s *svc) Register(r mux.Router) {
 			r.Mount("", s.webDavHandler.Handler(s))
 		}, mux.WithMiddleware(keyBase("webdav")))
 		r.Route("/dav", func(r mux.Router) {
-			r.Mount("", s.davHandler.Handler(s))
+			r.Mount("", s.davHandler.Handler())
 		}, mux.WithMiddleware(keyBase("dav")))
 	}, mux.WithMiddleware(keyBase("remote.php")), mux.WithMiddleware(addAccessHeaders()))
 	r.Mount("/apps/files", http.HandlerFunc(s.handleLegacyPath))

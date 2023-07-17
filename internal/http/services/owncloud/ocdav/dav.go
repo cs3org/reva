@@ -51,9 +51,12 @@ type DavHandler struct {
 	PublicFolderHandler *WebDavHandler
 	PublicFileHandler   *PublicFileHandler
 	OCMSharesHandler    *WebDavHandler
+
+	router mux.Router
 }
 
-func (h *DavHandler) init(c *Config) error {
+func (h *DavHandler) init(s *svc) error {
+	c := s.c
 	h.AvatarsHandler = new(AvatarsHandler)
 	if err := h.AvatarsHandler.init(c); err != nil {
 		return err
@@ -92,7 +95,98 @@ func (h *DavHandler) init(c *Config) error {
 		return err
 	}
 
-	return h.TrashbinHandler.init(c)
+	if err := h.TrashbinHandler.init(c); err != nil {
+		return err
+	}
+
+	h.initRouter(s)
+	return nil
+}
+
+func (h *DavHandler) initRouter(s *svc) {
+	h.router = mux.NewServeMux()
+	h.router.Route("/", func(r mux.Router) {
+		r.Handle("avatars/*", h.AvatarsHandler.Handler(s))
+		r.Handle("files/*", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			ctx := r.Context()
+
+			_, r.URL.Path = rhttp.ShiftPath(r.URL.Path)
+
+			var requestUserID string
+			var oldPath = r.URL.Path
+
+			// detect and check current user in URL
+			requestUserID, r.URL.Path = rhttp.ShiftPath(r.URL.Path)
+
+			// note: some requests like OPTIONS don't forward the user
+			contextUser, ok := ctxpkg.ContextGetUser(ctx)
+			if ok && isOwner(requestUserID, contextUser) {
+				// use home storage handler when user was detected
+				base := path.Join(ctx.Value(ctxKeyBaseURI).(string), "files", requestUserID)
+				ctx := context.WithValue(ctx, ctxKeyBaseURI, base)
+				r = r.WithContext(ctx)
+
+				h.FilesHomeHandler.Handler(s).ServeHTTP(w, r)
+			} else {
+				r.URL.Path = oldPath
+				base := path.Join(ctx.Value(ctxKeyBaseURI).(string), "files")
+				ctx := context.WithValue(ctx, ctxKeyBaseURI, base)
+				r = r.WithContext(ctx)
+
+				h.FilesHandler.Handler(s).ServeHTTP(w, r)
+			}
+		}), mux.WithMiddleware(prependUsernameFiles()))
+		r.Handle("meta/*", h.MetaHandler.Handler(s), mux.WithMiddleware(keyBase("meta")))
+		r.Handle("trash-bin/*", h.TrashbinHandler.Handler(s), mux.WithMiddleware(keyBase("trash-bin")))
+		r.Handle("spaces/*", h.SpacesHandler.Handler(s), mux.WithMiddleware(keyBase("spaces")))
+		r.Route("ocm", func(r mux.Router) {
+			r.Mount("/", h.OCMSharesHandler.Handler(s))
+		}, mux.Unprotected(), mux.WithMiddleware(authenticateOCM(s)), mux.WithMiddleware(keyBase("ocm")))
+		r.Handle("public-files/*", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			ctx := r.Context()
+			log := appctx.GetLogger(ctx)
+
+			_, r.URL.Path = rhttp.ShiftPath(r.URL.Path)
+
+			token, _ := rhttp.ShiftPath(r.URL.Path)
+			c, err := pool.GetGatewayServiceClient(pool.Endpoint(s.c.GatewaySvc))
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			// the public share manager knew the token, but does the referenced target still exist?
+			sRes, err := getTokenStatInfo(ctx, c, token)
+			switch {
+			case err != nil:
+				log.Error().Err(err).Msg("error sending grpc stat request")
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			case sRes.Status.Code == rpc.Code_CODE_PERMISSION_DENIED:
+				fallthrough
+			case sRes.Status.Code == rpc.Code_CODE_NOT_FOUND:
+				log.Debug().Str("token", token).Interface("status", sRes.Status).Msg("resource not found")
+				w.WriteHeader(http.StatusNotFound) // log the difference
+				return
+			case sRes.Status.Code == rpc.Code_CODE_UNAUTHENTICATED:
+				log.Debug().Str("token", token).Interface("status", sRes.Status).Msg("unauthorized")
+				w.WriteHeader(http.StatusUnauthorized)
+				return
+			case sRes.Status.Code != rpc.Code_CODE_OK:
+				log.Error().Str("token", token).Interface("status", sRes.Status).Msg("grpc stat request failed")
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			log.Debug().Interface("statInfo", sRes.Info).Msg("Stat info from public link token path")
+
+			if sRes.Info.Type != provider.ResourceType_RESOURCE_TYPE_CONTAINER {
+				ctx := context.WithValue(ctx, tokenStatInfoKey{}, sRes.Info)
+				r = r.WithContext(ctx)
+				h.PublicFileHandler.Handler(s).ServeHTTP(w, r)
+			} else {
+				h.PublicFolderHandler.Handler(s).ServeHTTP(w, r)
+			}
+		}), mux.Unprotected(), mux.WithMiddleware(authenticatePublicLink(s)), mux.WithMiddleware(keyBase("public-files")))
+	})
 }
 
 func isOwner(userIDorName string, user *userv1beta1.User) bool {
@@ -267,92 +361,8 @@ func keyBase(p string) middlewares.Middleware {
 }
 
 // Handler handles requests.
-func (h *DavHandler) Handler(s *svc) http.Handler {
-	router := mux.NewServeMux()
-
-	router.Route("/", func(r mux.Router) {
-		r.Handle("avatars/*", h.AvatarsHandler.Handler(s))
-		r.Handle("files/*", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			ctx := r.Context()
-
-			_, r.URL.Path = rhttp.ShiftPath(r.URL.Path)
-
-			var requestUserID string
-			var oldPath = r.URL.Path
-
-			// detect and check current user in URL
-			requestUserID, r.URL.Path = rhttp.ShiftPath(r.URL.Path)
-
-			// note: some requests like OPTIONS don't forward the user
-			contextUser, ok := ctxpkg.ContextGetUser(ctx)
-			if ok && isOwner(requestUserID, contextUser) {
-				// use home storage handler when user was detected
-				base := path.Join(ctx.Value(ctxKeyBaseURI).(string), "files", requestUserID)
-				ctx := context.WithValue(ctx, ctxKeyBaseURI, base)
-				r = r.WithContext(ctx)
-
-				h.FilesHomeHandler.Handler(s).ServeHTTP(w, r)
-			} else {
-				r.URL.Path = oldPath
-				base := path.Join(ctx.Value(ctxKeyBaseURI).(string), "files")
-				ctx := context.WithValue(ctx, ctxKeyBaseURI, base)
-				r = r.WithContext(ctx)
-
-				h.FilesHandler.Handler(s).ServeHTTP(w, r)
-			}
-		}), mux.WithMiddleware(prependUsernameFiles()))
-		r.Handle("meta/*", h.MetaHandler.Handler(s), mux.WithMiddleware(keyBase("meta")))
-		r.Handle("trash-bin/*", h.TrashbinHandler.Handler(s), mux.WithMiddleware(keyBase("trash-bin")))
-		r.Handle("spaces/*", h.SpacesHandler.Handler(s), mux.WithMiddleware(keyBase("spaces")))
-		r.Route("ocm", func(r mux.Router) {
-			r.Mount("/", h.OCMSharesHandler.Handler(s))
-		}, mux.Unprotected(), mux.WithMiddleware(authenticateOCM(s)), mux.WithMiddleware(keyBase("ocm")))
-		r.Handle("public-files/*", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			ctx := r.Context()
-			log := appctx.GetLogger(ctx)
-
-			_, r.URL.Path = rhttp.ShiftPath(r.URL.Path)
-
-			token, _ := rhttp.ShiftPath(r.URL.Path)
-			c, err := pool.GetGatewayServiceClient(pool.Endpoint(s.c.GatewaySvc))
-			if err != nil {
-				w.WriteHeader(http.StatusInternalServerError)
-				return
-			}
-			// the public share manager knew the token, but does the referenced target still exist?
-			sRes, err := getTokenStatInfo(ctx, c, token)
-			switch {
-			case err != nil:
-				log.Error().Err(err).Msg("error sending grpc stat request")
-				w.WriteHeader(http.StatusInternalServerError)
-				return
-			case sRes.Status.Code == rpc.Code_CODE_PERMISSION_DENIED:
-				fallthrough
-			case sRes.Status.Code == rpc.Code_CODE_NOT_FOUND:
-				log.Debug().Str("token", token).Interface("status", sRes.Status).Msg("resource not found")
-				w.WriteHeader(http.StatusNotFound) // log the difference
-				return
-			case sRes.Status.Code == rpc.Code_CODE_UNAUTHENTICATED:
-				log.Debug().Str("token", token).Interface("status", sRes.Status).Msg("unauthorized")
-				w.WriteHeader(http.StatusUnauthorized)
-				return
-			case sRes.Status.Code != rpc.Code_CODE_OK:
-				log.Error().Str("token", token).Interface("status", sRes.Status).Msg("grpc stat request failed")
-				w.WriteHeader(http.StatusInternalServerError)
-				return
-			}
-			log.Debug().Interface("statInfo", sRes.Info).Msg("Stat info from public link token path")
-
-			if sRes.Info.Type != provider.ResourceType_RESOURCE_TYPE_CONTAINER {
-				ctx := context.WithValue(ctx, tokenStatInfoKey{}, sRes.Info)
-				r = r.WithContext(ctx)
-				h.PublicFileHandler.Handler(s).ServeHTTP(w, r)
-			} else {
-				h.PublicFolderHandler.Handler(s).ServeHTTP(w, r)
-			}
-		}), mux.Unprotected(), mux.WithMiddleware(authenticatePublicLink(s)), mux.WithMiddleware(keyBase("public-files")))
-	})
-	return router
+func (h *DavHandler) Handler() http.Handler {
+	return h.router
 }
 
 func getTokenStatInfo(ctx context.Context, client gatewayv1beta1.GatewayAPIClient, token string) (*provider.StatResponse, error) {
