@@ -98,17 +98,17 @@ func (s *svc) Register(r mux.Router) {
 	r.Route("/ocs/:version", func(r mux.Router) {
 		r.Route("/apps/files_sharing/api/v1", func(r mux.Router) {
 			r.Route("/shares", func(r mux.Router) {
-				r.Get("/", http.HandlerFunc(s.sharesHandler.ListShares))
-				r.Options("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				r.Get("", http.HandlerFunc(s.sharesHandler.ListShares))
+				r.Options("", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					w.WriteHeader(http.StatusOK)
 				}))
-				r.Post("/", http.HandlerFunc(s.sharesHandler.CreateShare))
+				r.Post("", http.HandlerFunc(s.sharesHandler.CreateShare))
 				r.Route("/pending/:shareid", func(r mux.Router) {
 					r.Post("/", http.HandlerFunc((s.sharesHandler.AcceptReceivedShare)))
 					r.Delete("/", http.HandlerFunc(s.sharesHandler.RejectReceivedShare))
 				})
 				r.Route("/remote_shares", func(r mux.Router) {
-					r.Get("/", http.HandlerFunc(s.sharesHandler.ListFederatedShares))
+					r.Get("", http.HandlerFunc(s.sharesHandler.ListFederatedShares))
 					r.Get("/:shareid", http.HandlerFunc(s.sharesHandler.GetFederatedShare))
 				})
 				r.Get("/:shareid", http.HandlerFunc(s.sharesHandler.GetShare))
