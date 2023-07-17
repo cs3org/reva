@@ -104,8 +104,8 @@ func (s *svc) Register(r mux.Router) {
 				}))
 				r.Post("", http.HandlerFunc(s.sharesHandler.CreateShare))
 				r.Route("/pending/:shareid", func(r mux.Router) {
-					r.Post("/", http.HandlerFunc((s.sharesHandler.AcceptReceivedShare)))
-					r.Delete("/", http.HandlerFunc(s.sharesHandler.RejectReceivedShare))
+					r.Post("", http.HandlerFunc((s.sharesHandler.AcceptReceivedShare)))
+					r.Delete("", http.HandlerFunc(s.sharesHandler.RejectReceivedShare))
 				})
 				r.Route("/remote_shares", func(r mux.Router) {
 					r.Get("", http.HandlerFunc(s.sharesHandler.ListFederatedShares))
