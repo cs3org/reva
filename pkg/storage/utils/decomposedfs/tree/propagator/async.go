@@ -30,6 +30,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
+	"github.com/google/renameio"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/rogpeppe/go-internal/lockedfile"
@@ -97,7 +98,7 @@ func (p AsyncPropagator) propagateChange(ctx context.Context, spaceID, nodeID st
 	ready := false
 	_ = os.MkdirAll(filepath.Dir(changePath), 0700)
 	for retries := 0; retries <= 5; retries += 1 {
-		err := os.WriteFile(changePath, data, 0644)
+		err := renameio.WriteFile(changePath, data, 0644)
 		if err == nil {
 			ready = true
 			break
