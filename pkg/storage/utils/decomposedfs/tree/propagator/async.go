@@ -152,7 +152,7 @@ func (p AsyncPropagator) propagate(ctx context.Context, spaceid, nodeid string) 
 		if c.SyncTime.After(pc.SyncTime) {
 			pc.SyncTime = c.SyncTime
 		}
-		pc.SizeDiff = pc.SizeDiff + c.SizeDiff
+		pc.SizeDiff += c.SizeDiff
 	}
 
 	// TODO do we need to write an aggregated parentchange file?
