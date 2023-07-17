@@ -121,10 +121,10 @@ func (m *ServeMux) Options(path string, handler http.Handler, o ...Option) {
 }
 
 func (m *ServeMux) Walk(ctx context.Context, f WalkFunc) {
-	m.tree.root.walk(ctx, "", f)
+	m.tree.root.walk(ctx, "", &nodeOptions{}, f)
 }
 
-func (n *node) walk(ctx context.Context, prefix string, f WalkFunc) {
+func (n *node) walk(ctx context.Context, prefix string, merged *nodeOptions, f WalkFunc) {
 	select {
 	case <-ctx.Done():
 		return
@@ -147,16 +147,19 @@ func (n *node) walk(ctx context.Context, prefix string, f WalkFunc) {
 	}
 
 	path := prefix + current
+	opts := merged.merge(&n.opts)
+
 	for method, h := range n.handlers.perMethod {
-		f(method, path, h, n.opts.get(method))
+		f(method, path, h, opts.get(method))
 	}
 
 	if g := n.handlers.global; g != nil {
-		f(MethodAll, path, g, n.opts.global)
+		o := n.opts.global.merge(merged.global)
+		f(MethodAll, path, g, o)
 	}
 
 	for _, c := range n.children {
-		c.walk(ctx, path, f)
+		c.walk(ctx, path, opts, f)
 	}
 }
 

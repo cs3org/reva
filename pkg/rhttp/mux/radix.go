@@ -74,6 +74,25 @@ func (n *nodeOptions) get(method string) *Options {
 	return global.merge(perMethod)
 }
 
+func (n *nodeOptions) merge(other *nodeOptions) *nodeOptions {
+	merged := nodeOptions{}
+	merged.global = n.global
+	merged.opts = nilMap[*Options]{}
+	if other.global != nil {
+		merged.global = merged.global.merge(other.global)
+	}
+	for method, opt := range n.opts {
+		merged.set(method, other.get(method).merge(opt))
+	}
+	for method, opt := range other.opts {
+		if _, ok := merged.opts[method]; ok {
+			continue
+		}
+		merged.opts.add(method, opt)
+	}
+	return &merged
+}
+
 type handlers struct {
 	global    http.Handler
 	perMethod nilMap[http.Handler]
@@ -295,7 +314,7 @@ func (n *node) mergeOptions(method string, opts *Options) *Options {
 func (n *node) insert(method, path string, handler http.Handler, opts *Options) {
 	if n.prefix == "" {
 		// the tree is empty
-		n.insertChild(method, path, handler, opts)
+		n.insertChild(method, path, handler, nil, opts)
 		return
 	}
 
@@ -324,8 +343,7 @@ walk:
 			}
 		}
 
-		opts = merged.merge(opts)
-		current.insertChild(method, path, handler, opts)
+		current.insertChild(method, path, handler, merged, opts)
 		return
 	}
 }
@@ -339,13 +357,14 @@ func wildcardIndex(s string) int {
 	return -1
 }
 
-func (n *node) insertChild(method, path string, handler http.Handler, opts *Options) {
+func (n *node) insertChild(method, path string, handler http.Handler, merged, opts *Options) {
 	current := n
 	for {
 		if path == "" {
 			if handler != nil {
-				if n.middlewareFactory != nil && opts != nil {
-					for _, mid := range n.middlewareFactory(opts) {
+				if n.middlewareFactory != nil {
+					merged = merged.merge(opts)
+					for _, mid := range n.middlewareFactory(merged) {
 						handler = mid(handler)
 					}
 				}

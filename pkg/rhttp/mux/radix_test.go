@@ -20,6 +20,7 @@ package mux
 
 import (
 	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/cs3org/reva/pkg/rhttp/middlewares"
@@ -611,7 +612,7 @@ func TestInsertOptions(t *testing.T) {
 					{
 						prefix: "blog",
 						ntype:  static,
-						opts:   nodeOptions{opts: nilMap[*Options]{"GET": &Options{Unprotected: true}}},
+						opts:   nodeOptions{},
 					},
 				},
 			},
@@ -626,17 +627,34 @@ func TestInsertOptions(t *testing.T) {
 
 func TestMultipleMiddlewaresAlongTheWay(t *testing.T) {
 	nop := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
-	m := middlewares.Middleware(func(h http.Handler) http.Handler { return nop })
+	var count int
+	m := middlewares.Middleware(func(h http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			count++
+			h.ServeHTTP(w, r)
+		})
+	})
 
 	tree := newTree()
+	tree.root.middlewareFactory = func(o *Options) []middlewares.Middleware {
+		return o.Middlewares
+	}
 
 	tree.insert("GET", "/", nop, &Options{Middlewares: []middlewares.Middleware{m}})
 	tree.insert("POST", "/", nop, &Options{Middlewares: []middlewares.Middleware{m}})
 	tree.insert(MethodAll, "/test/path", nop, &Options{Middlewares: []middlewares.Middleware{m}})
 	tree.insert(MethodAll, "/testing", nop, &Options{Middlewares: []middlewares.Middleware{m}})
 	tree.insert("POST", "/test/path/other", nop, &Options{Middlewares: []middlewares.Middleware{m}})
+	tree.insert("POST", "/test/path/other/some/thing", nop, &Options{Middlewares: []middlewares.Middleware{m}})
 
-	n, _, ok := tree.root.lookup("/test/path/other")
+	n, _, ok := tree.root.lookup("/test/path/other/some/thing")
 	assert.Equal(t, true, ok)
-	assert.Equal(t, 3, len(n.opts.opts["POST"].Middlewares))
+	assert.Equal(t, 1, len(n.opts.opts["POST"].Middlewares))
+
+	handler, ok := n.handlers.get("POST")
+	assert.Equal(t, true, ok)
+	w := httptest.NewRecorder()
+	r, _ := http.NewRequest("POST", "/test/path/other/some/thing", nil)
+	handler.ServeHTTP(w, r)
+	assert.Equal(t, 4, count)
 }
