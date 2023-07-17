@@ -33,6 +33,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/rogpeppe/go-internal/lockedfile"
+	"github.com/rs/zerolog"
 	"github.com/shamaton/msgpack/v2"
 )
 
@@ -58,7 +59,7 @@ func NewAsyncPropagator(treeSizeAccounting, treeTimeAccounting bool, lookup look
 func (p AsyncPropagator) Propagate(ctx context.Context, n *node.Node, sizeDiff int64) error {
 	ctx, span := tracer.Start(ctx, "Propagate")
 	defer span.End()
-	sublog := appctx.GetLogger(ctx).With().
+	log := appctx.GetLogger(ctx).With().
 		Str("method", "async.Propagate").
 		Str("spaceid", n.SpaceID).
 		Str("nodeid", n.ID).
@@ -67,51 +68,57 @@ func (p AsyncPropagator) Propagate(ctx context.Context, n *node.Node, sizeDiff i
 
 	if !p.treeTimeAccounting && (!p.treeSizeAccounting || sizeDiff == 0) {
 		// no propagation enabled
-		sublog.Debug().Msg("propagation disabled or nothing to propagate")
+		log.Debug().Msg("propagation disabled or nothing to propagate")
 		return nil
 	}
 
 	// add a change to the parent node
-	changePath := filepath.Join(p.lookup.InternalRoot(), "spaces", lookup.Pathify(n.SpaceID, 1, 2), "changes", n.ParentID, uuid.New().String()+".mpk")
-
 	c := Change{
 		// use a sync time and don't rely on the mtime of the current node, as the stat might not change when a rename happened too quickly
 		SyncTime: time.Now().UTC(),
 		SizeDiff: sizeDiff,
 	}
-
-	data, err := msgpack.Marshal(c)
-	if err != nil {
-		sublog.Error().Err(err).Msg("Could not marshal change data")
-		return err
-	}
-
-	_ = os.MkdirAll(filepath.Dir(changePath), 0700)
-	for {
-		err := os.WriteFile(changePath, data, 0644)
-		if err == nil {
-			break
-		}
-		_ = os.MkdirAll(filepath.Dir(changePath), 0700)
-	}
-	// what if the file is moved away after writing this change? a subseqent call to Propagation will subtract the size diff again
-
-	// we will start a goroutine here to propagate this change. it will walk up the tree
-	go p.propagate(ctx, n.SpaceID, n.ParentID)
+	go p.propagateChange(ctx, n.SpaceID, n.ParentID, c, log)
 
 	return nil
 }
 
-func (p AsyncPropagator) propagate(ctx context.Context, spaceid, nodeid string) {
-	sublog := appctx.GetLogger(ctx).With().
-		Str("method", "async.propagate").
-		Str("spaceid", spaceid).
-		Str("nodeid", nodeid).
-		Logger()
+func (p AsyncPropagator) propagateChange(ctx context.Context, spaceID, nodeID string, change Change, log zerolog.Logger) {
+	// add a change to the parent node
+	changePath := filepath.Join(p.lookup.InternalRoot(), "spaces", lookup.Pathify(spaceID, 1, 2), "changes", nodeID, uuid.New().String()+".mpk")
+
+	data, err := msgpack.Marshal(change)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to marshal Change")
+		return
+	}
+
+	_, subspan := tracer.Start(ctx, "write changes file")
+	ready := false
+	_ = os.MkdirAll(filepath.Dir(changePath), 0700)
+	for retries := 0; retries <= 5; retries += 1 {
+		err := os.WriteFile(changePath, data, 0644)
+		if err == nil {
+			ready = true
+			break
+		}
+		_ = os.MkdirAll(filepath.Dir(changePath), 0700)
+	}
+
+	if !ready {
+		log.Error().Err(err).Msg("failed to write Change to disk")
+		return
+	}
+	subspan.End()
+
+	p.propagate(ctx, spaceID, nodeID, log)
+}
+
+func (p AsyncPropagator) propagate(ctx context.Context, spaceid, nodeid string, log zerolog.Logger) {
 
 	time.Sleep(time.Millisecond * 300) // wait a moment before propagating
 
-	sublog.Debug().Msg("propagating")
+	log.Debug().Msg("propagating")
 
 	// add a change to the parent node
 	changeDirPath := filepath.Join(p.lookup.InternalRoot(), "spaces", lookup.Pathify(spaceid, 1, 2), "changes", nodeid)
@@ -126,13 +133,13 @@ func (p AsyncPropagator) propagate(ctx context.Context, spaceid, nodeid string) 
 
 	d, err := os.Open(changeDirPath + ".processing")
 	if err != nil {
-		sublog.Error().Err(err).Msg("Could not open change .processing dir")
+		log.Error().Err(err).Msg("Could not open change .processing dir")
 		return
 	}
 	defer d.Close()
 	names, err := d.Readdirnames(0)
 	if err != nil {
-		sublog.Error().Err(err).Msg("Could not read dirnames")
+		log.Error().Err(err).Msg("Could not read dirnames")
 		return
 	}
 
@@ -140,13 +147,13 @@ func (p AsyncPropagator) propagate(ctx context.Context, spaceid, nodeid string) 
 	for _, name := range names {
 		b, err := os.ReadFile(filepath.Join(changeDirPath+".processing", name))
 		if err != nil {
-			sublog.Error().Err(err).Msg("Could not read change") // TODO what if the file was not yet fully written? retry empty files?
+			log.Error().Err(err).Msg("Could not read change") // TODO what if the file was not yet fully written? retry empty files?
 			return
 		}
 		c := Change{}
 		err = msgpack.Unmarshal(b, &c)
 		if err != nil {
-			sublog.Error().Err(err).Msg("Could not unmarshal change")
+			log.Error().Err(err).Msg("Could not unmarshal change")
 			return
 		}
 		if c.SyncTime.After(pc.SyncTime) {
@@ -169,7 +176,7 @@ func (p AsyncPropagator) propagate(ctx context.Context, spaceid, nodeid string) 
 	f, err = lockedfile.OpenFile(lockFilepath, os.O_RDWR|os.O_CREATE, 0600)
 	subspan.End()
 	if err != nil {
-		sublog.Error().Err(err).
+		log.Error().Err(err).
 			Str("lock filepath", lockFilepath).
 			Msg("Propagation failed. Could not open metadata for node with lock.")
 		return
@@ -185,14 +192,14 @@ func (p AsyncPropagator) propagate(ctx context.Context, spaceid, nodeid string) 
 
 	var n *node.Node
 	if n, err = node.ReadNode(ctx, p.lookup, spaceid, nodeid, false, nil, false); err != nil {
-		sublog.Error().Err(err).
+		log.Error().Err(err).
 			Msg("Propagation failed. Could not read node.")
 		return
 	}
 
 	// TODO none, sync and async?
 	if !n.HasPropagation(ctx) {
-		sublog.Debug().Str("attr", prefixes.PropagationAttr).Msg("propagation attribute not set or unreadable, not propagating")
+		log.Debug().Str("attr", prefixes.PropagationAttr).Msg("propagation attribute not set or unreadable, not propagating")
 		// if the attribute is not set treat it as false / none / no propagation
 		return
 	}
@@ -206,17 +213,17 @@ func (p AsyncPropagator) propagate(ctx context.Context, spaceid, nodeid string) 
 		switch {
 		case err != nil:
 			// missing attribute, or invalid format, overwrite
-			sublog.Debug().Err(err).
+			log.Debug().Err(err).
 				Msg("could not read tmtime attribute, overwriting")
 			updateSyncTime = true
 		case tmTime.Before(pc.SyncTime):
-			sublog.Debug().
+			log.Debug().
 				Time("tmtime", tmTime).
 				Time("stime", pc.SyncTime).
 				Msg("parent tmtime is older than node mtime, updating")
 			updateSyncTime = true
 		default:
-			sublog.Debug().
+			log.Debug().
 				Time("tmtime", tmTime).
 				Time("stime", pc.SyncTime).
 				Dur("delta", pc.SyncTime.Sub(tmTime)).
@@ -240,15 +247,15 @@ func (p AsyncPropagator) propagate(ctx context.Context, spaceid, nodeid string) 
 		switch {
 		case metadata.IsAttrUnset(err):
 			// fallback to calculating the treesize
-			sublog.Warn().Msg("treesize attribute unset, falling back to calculating the treesize")
+			log.Warn().Msg("treesize attribute unset, falling back to calculating the treesize")
 			newSize, err = calculateTreeSize(ctx, p.lookup, n.InternalPath())
 			if err != nil {
-				sublog.Error().Err(err).
+				log.Error().Err(err).
 					Msg("Error when calculating treesize of node.") // FIXME wat?
 				return
 			}
 		case err != nil:
-			sublog.Error().Err(err).
+			log.Error().Err(err).
 				Msg("Failed to propagate treesize change. Error when reading the treesize attribute from node")
 			return
 		case pc.SizeDiff > 0:
@@ -257,7 +264,7 @@ func (p AsyncPropagator) propagate(ctx context.Context, spaceid, nodeid string) 
 			// The sizeDiff is larger than the current treesize. Which would result in
 			// a negative new treesize. Something must have gone wrong with the accounting.
 			// Reset the current treesize to 0.
-			sublog.Error().Uint64("treeSize", treeSize).Int64("sizeDiff", pc.SizeDiff).
+			log.Error().Uint64("treeSize", treeSize).Int64("sizeDiff", pc.SizeDiff).
 				Msg("Error when updating treesize of node. Updated treesize < 0. Reestting to 0")
 			newSize = 0
 		default:
@@ -266,11 +273,11 @@ func (p AsyncPropagator) propagate(ctx context.Context, spaceid, nodeid string) 
 
 		// update the tree size of the node
 		attrs.SetString(prefixes.TreesizeAttr, strconv.FormatUint(newSize, 10))
-		sublog.Debug().Uint64("newSize", newSize).Msg("updated treesize of node")
+		log.Debug().Uint64("newSize", newSize).Msg("updated treesize of node")
 	}
 
 	if err = n.SetXattrsWithContext(ctx, attrs, false); err != nil {
-		sublog.Error().Err(err).Msg("Failed to update extend attributes of node")
+		log.Error().Err(err).Msg("Failed to update extend attributes of node")
 		return
 	}
 
@@ -279,36 +286,17 @@ func (p AsyncPropagator) propagate(ctx context.Context, spaceid, nodeid string) 
 	cerr := f.Close()
 	subspan.End()
 	if cerr != nil && !errors.Is(cerr, os.ErrClosed) {
-		sublog.Error().Err(cerr).Msg("Failed to close node and release lock")
+		log.Error().Err(cerr).Msg("Failed to close node and release lock")
 		return
 	}
 
 	err = os.RemoveAll(changeDirPath + ".processing")
 	if err != nil {
-		sublog.Error().Err(err).Msg("Could not remove .processing dir")
+		log.Error().Err(err).Msg("Could not remove .processing dir")
 		return
 	}
 
 	if !n.IsSpaceRoot(ctx) { // This does not seem robust as it checks the space name property
-
-		// add a change to the parent node
-		changePath := filepath.Join(p.lookup.InternalRoot(), "spaces", lookup.Pathify(n.SpaceID, 1, 2), "changes", n.ParentID, uuid.New().String()+".mpk")
-
-		data, err := msgpack.Marshal(pc)
-		if err != nil {
-			sublog.Error().Err(err).Msg("Could not marshal change data")
-			return
-		}
-
-		_ = os.MkdirAll(filepath.Dir(changePath), 0700)
-		for {
-			err := os.WriteFile(changePath, data, 0644)
-			if err == nil {
-				break
-			}
-			_ = os.MkdirAll(filepath.Dir(changePath), 0700)
-		}
-
-		p.propagate(ctx, n.SpaceID, n.ParentID)
+		p.propagateChange(ctx, n.SpaceID, n.ParentID, pc, log)
 	}
 }
