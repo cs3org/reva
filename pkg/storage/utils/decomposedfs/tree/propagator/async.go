@@ -86,7 +86,7 @@ func (p AsyncPropagator) Propagate(ctx context.Context, n *node.Node, sizeDiff i
 
 func (p AsyncPropagator) propagateChange(ctx context.Context, spaceID, nodeID string, change Change, log zerolog.Logger) {
 	// add a change to the parent node
-	changePath := filepath.Join(p.lookup.InternalRoot(), "spaces", lookup.Pathify(spaceID, 1, 2), "changes", nodeID, uuid.New().String()+".mpk")
+	changePath := p.changesPath(spaceID, nodeID, uuid.New().String()+".mpk")
 
 	data, err := msgpack.Marshal(change)
 	if err != nil {
@@ -115,14 +115,14 @@ func (p AsyncPropagator) propagateChange(ctx context.Context, spaceID, nodeID st
 	p.propagate(ctx, spaceID, nodeID, log)
 }
 
-func (p AsyncPropagator) propagate(ctx context.Context, spaceid, nodeid string, log zerolog.Logger) {
+func (p AsyncPropagator) propagate(ctx context.Context, spaceID, nodeID string, log zerolog.Logger) {
 
 	time.Sleep(time.Millisecond * 300) // wait a moment before propagating
 
 	log.Debug().Msg("propagating")
 
 	// add a change to the parent node
-	changeDirPath := filepath.Join(p.lookup.InternalRoot(), "spaces", lookup.Pathify(spaceid, 1, 2), "changes", nodeid)
+	changeDirPath := p.changesPath(spaceID, nodeID, "")
 
 	// TODO what if a rename is already in progress? we need to create a .processing.lock file so other goroutines wait for this?
 
@@ -170,7 +170,7 @@ func (p AsyncPropagator) propagate(ctx context.Context, spaceid, nodeid string, 
 	var f *lockedfile.File
 	// lock parent before reading treesize or tree time
 
-	nodePath := filepath.Join(p.lookup.InternalRoot(), "spaces", lookup.Pathify(spaceid, 1, 2), "nodes", lookup.Pathify(nodeid, 4, 2))
+	nodePath := p.changesPath(spaceID, nodeID, "")
 
 	_, subspan := tracer.Start(ctx, "lockedfile.OpenFile")
 	lockFilepath := p.lookup.MetadataBackend().LockfilePath(nodePath)
@@ -192,7 +192,7 @@ func (p AsyncPropagator) propagate(ctx context.Context, spaceid, nodeid string, 
 	}()
 
 	var n *node.Node
-	if n, err = node.ReadNode(ctx, p.lookup, spaceid, nodeid, false, nil, false); err != nil {
+	if n, err = node.ReadNode(ctx, p.lookup, spaceID, nodeID, false, nil, false); err != nil {
 		log.Error().Err(err).
 			Msg("Propagation failed. Could not read node.")
 		return
@@ -300,4 +300,8 @@ func (p AsyncPropagator) propagate(ctx context.Context, spaceid, nodeid string, 
 	if !n.IsSpaceRoot(ctx) { // This does not seem robust as it checks the space name property
 		p.propagateChange(ctx, n.SpaceID, n.ParentID, pc, log)
 	}
+}
+
+func (p AsyncPropagator) changesPath(spaceID, nodeID, filename string) string {
+	return filepath.Join(p.lookup.InternalRoot(), "spaces", lookup.Pathify(spaceID, 1, 2), "changes", nodeID, filename)
 }
