@@ -301,5 +301,5 @@ func (p AsyncPropagator) propagate(ctx context.Context, spaceID, nodeID string, 
 }
 
 func (p AsyncPropagator) changesPath(spaceID, nodeID, filename string) string {
-	return filepath.Join(p.lookup.InternalRoot(), "spaces", lookup.Pathify(spaceID, 1, 2), "changes", nodeID, filename)
+	return filepath.Join(p.lookup.InternalRoot(), "changes", spaceID+":"+nodeID, filename)
 }
