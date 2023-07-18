@@ -288,13 +288,11 @@ func (p AsyncPropagator) propagate(ctx context.Context, spaceID, nodeID string, 
 	subspan.End()
 	if cerr != nil && !errors.Is(cerr, os.ErrClosed) {
 		log.Error().Err(cerr).Msg("Failed to close node and release lock")
-		return
 	}
 
 	err = os.RemoveAll(changeDirPath + ".processing")
 	if err != nil {
 		log.Error().Err(err).Msg("Could not remove .processing dir")
-		return
 	}
 
 	if !n.IsSpaceRoot(ctx) { // This does not seem robust as it checks the space name property
