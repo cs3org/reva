@@ -30,10 +30,8 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp/middlewares"
 	"github.com/cs3org/reva/pkg/rhttp/mux"
-	rtrace "github.com/cs3org/reva/pkg/trace"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
-	"go.opentelemetry.io/otel/propagation"
 )
 
 // NewMiddlewares contains all the registered new middleware functions.
@@ -221,14 +219,14 @@ func (s *Server) GracefulStop() error {
 	return s.httpServer.Shutdown(context.Background())
 }
 
-func traceHandler(name string, h http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ctx := rtrace.Propagator.Extract(r.Context(), propagation.HeaderCarrier(r.Header))
-		t := rtrace.Provider.Tracer("reva")
-		ctx, span := t.Start(ctx, name)
-		defer span.End()
+// func traceHandler(name string, h http.Handler) http.Handler {
+// 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+// 		ctx := rtrace.Propagator.Extract(r.Context(), propagation.HeaderCarrier(r.Header))
+// 		t := rtrace.Provider.Tracer("reva")
+// 		ctx, span := t.Start(ctx, name)
+// 		defer span.End()
 
-		rtrace.Propagator.Inject(ctx, propagation.HeaderCarrier(r.Header))
-		h.ServeHTTP(w, r.WithContext(ctx))
-	})
-}
+// 		rtrace.Propagator.Inject(ctx, propagation.HeaderCarrier(r.Header))
+// 		h.ServeHTTP(w, r.WithContext(ctx))
+// 	})
+// }

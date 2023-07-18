@@ -29,10 +29,14 @@ import (
 	"github.com/cs3org/reva/pkg/rhttp/middlewares"
 )
 
+// MethodAll is a constant used to specify that
+// and endpoint should be used in all the HTTP methods.
 const MethodAll = "*"
 
 type paramsKey struct{}
 
+// ServeMux is a http.Handler which can be used to dispatch requests to different
+// handler functions via configurable routes, implementing the Router interface.
 type ServeMux struct {
 	// radix tree where routes are registered
 	tree *trie
@@ -40,17 +44,19 @@ type ServeMux struct {
 	path string // used for sub-routers
 }
 
+// NewServeMux creates a new ServeMux.
 func NewServeMux() *ServeMux {
 	return &ServeMux{
 		tree: newTree(),
 	}
 }
 
+// SetMiddlewaresFactory sets the factory method used to build the middlewares for each http.Handler.
 func (m *ServeMux) SetMiddlewaresFactory(factory func(o *Options) []middlewares.Middleware) {
 	m.tree.root.middlewareFactory = factory
 }
 
-// ensure Mux implements Router interface
+// ensure Mux implements Router interface.
 var _ Router = (*ServeMux)(nil)
 
 func (m *ServeMux) Route(path string, f func(Router), o ...Option) {

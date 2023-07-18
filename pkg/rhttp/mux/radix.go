@@ -184,7 +184,7 @@ func commonPrefix(a, b string) string {
 
 // longestCommonPrefix returns the node and the index of the node in the
 // list of nodes having the longest common prefix with s, together with the prefix.
-// The index is -1 if the common prefix does not exist (empty list or prefix is "")
+// The index is -1 if the common prefix does not exist (empty list or prefix is "").
 func (n nodes) longestCommonPrefix(s string) (string, *node, bool) {
 	var match *node
 	var prefix string
@@ -320,7 +320,7 @@ func (n *node) insert(method, path string, handler http.Handler, opts *Options) 
 	}
 
 	var merged *Options
-	// traverse the tree until we cannot make futher progresses
+	// traverse the tree until we cannot make further progresses
 	current := &node{
 		children:          nodes{n},
 		middlewareFactory: n.middlewareFactory,
@@ -421,7 +421,6 @@ func (n *node) insertChild(method, path string, handler http.Handler, merged, op
 				}
 				current.children = append(current.children, other)
 				current = other
-
 			}
 			path = path[len(childPrefix):]
 		}

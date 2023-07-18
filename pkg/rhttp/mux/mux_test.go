@@ -298,7 +298,6 @@ func TestParams(t *testing.T) {
 			t.Fatalf("values do not match. got %s exp %s", val, tt.val)
 		}
 	}
-
 }
 
 func TestWalk(t *testing.T) {

@@ -313,7 +313,7 @@ func TestRadixInsert(t *testing.T) {
 	}{
 		{
 			init:   newTree(),
-			method: "GET",
+			method: http.MethodGet,
 			path:   "/",
 			exp: &node{
 				prefix: "/",
@@ -322,7 +322,7 @@ func TestRadixInsert(t *testing.T) {
 		},
 		{
 			init:   newTree(),
-			method: "POST",
+			method: http.MethodPost,
 			path:   "/something",
 			exp: &node{
 				prefix: "/something",
@@ -331,7 +331,7 @@ func TestRadixInsert(t *testing.T) {
 		},
 		{
 			init:   newTree(),
-			method: "POST",
+			method: http.MethodPost,
 			path:   "/something/test/multi/level",
 			exp: &node{
 				prefix: "/something/test/multi/level",
@@ -340,7 +340,7 @@ func TestRadixInsert(t *testing.T) {
 		},
 		{
 			init:   newTree(),
-			method: "GET",
+			method: http.MethodGet,
 			path:   "/something/:item",
 			exp: &node{
 				prefix: "/something/",
@@ -355,7 +355,7 @@ func TestRadixInsert(t *testing.T) {
 		},
 		{
 			init:   newTree(),
-			method: "GET",
+			method: http.MethodGet,
 			path:   "/:item",
 			exp: &node{
 				prefix: "/",
@@ -370,7 +370,7 @@ func TestRadixInsert(t *testing.T) {
 		},
 		{
 			init:   newTree(),
-			method: "GET",
+			method: http.MethodGet,
 			path:   "/:item/some/thing",
 			exp: &node{
 				prefix: "/",
@@ -391,7 +391,7 @@ func TestRadixInsert(t *testing.T) {
 		},
 		{
 			init:   newTree(),
-			method: "GET",
+			method: http.MethodGet,
 			path:   "/path/:item/some/thing",
 			exp: &node{
 				prefix: "/path/",
@@ -417,7 +417,7 @@ func TestRadixInsert(t *testing.T) {
 					ntype:  static,
 				},
 			},
-			method: "POST",
+			method: http.MethodPost,
 			path:   "/key/support",
 			exp: &node{
 				prefix: "/key/s",
@@ -441,7 +441,7 @@ func TestRadixInsert(t *testing.T) {
 					ntype:  static,
 				},
 			},
-			method: "POST",
+			method: http.MethodPost,
 			path:   "/key/:other",
 			exp: &node{
 				prefix: "/key/",
@@ -471,7 +471,7 @@ func TestRadixInsert(t *testing.T) {
 					},
 				},
 			},
-			method: "POST",
+			method: http.MethodPost,
 			path:   "/:key",
 			exp: &node{
 				prefix: "/",
@@ -517,7 +517,7 @@ func TestRadixInsert(t *testing.T) {
 					},
 				},
 			},
-			method: "POST",
+			method: http.MethodPost,
 			path:   "/support/*key",
 			exp: &node{
 				prefix: "/",
@@ -579,13 +579,13 @@ func TestInsertOptions(t *testing.T) {
 	}{
 		{
 			init:   newTree(),
-			method: "GET",
+			method: http.MethodGet,
 			path:   "/test",
 			opt:    &Options{Unprotected: true},
 			exp: &node{
 				prefix: "/test",
 				ntype:  static,
-				opts:   nodeOptions{opts: nilMap[*Options]{"GET": &Options{Unprotected: true}}},
+				opts:   nodeOptions{opts: nilMap[*Options]{http.MethodGet: &Options{Unprotected: true}}},
 			},
 		},
 		{
@@ -607,7 +607,7 @@ func TestInsertOptions(t *testing.T) {
 					opts:   nodeOptions{},
 				},
 			},
-			method: "GET",
+			method: http.MethodGet,
 			path:   "/blog",
 			opt:    &Options{Unprotected: true},
 			exp: &node{
@@ -618,7 +618,7 @@ func TestInsertOptions(t *testing.T) {
 					{
 						prefix: "blog",
 						ntype:  static,
-						opts:   nodeOptions{opts: nilMap[*Options]{"GET": &Options{Unprotected: true}}},
+						opts:   nodeOptions{opts: nilMap[*Options]{http.MethodGet: &Options{Unprotected: true}}},
 					},
 				},
 			},
@@ -631,7 +631,7 @@ func TestInsertOptions(t *testing.T) {
 					opts:   nodeOptions{global: &Options{Unprotected: true}},
 				},
 			},
-			method: "GET",
+			method: http.MethodGet,
 			path:   "/blog",
 			opt:    nil,
 			exp: &node{
@@ -670,21 +670,21 @@ func TestMultipleMiddlewaresAlongTheWay(t *testing.T) {
 		return o.Middlewares
 	}
 
-	tree.insert("GET", "/", nop, &Options{Middlewares: []middlewares.Middleware{m}})
-	tree.insert("POST", "/", nop, &Options{Middlewares: []middlewares.Middleware{m}})
+	tree.insert(http.MethodGet, "/", nop, &Options{Middlewares: []middlewares.Middleware{m}})
+	tree.insert(http.MethodPost, "/", nop, &Options{Middlewares: []middlewares.Middleware{m}})
 	tree.insert(MethodAll, "/test/path", nop, &Options{Middlewares: []middlewares.Middleware{m}})
 	tree.insert(MethodAll, "/testing", nop, &Options{Middlewares: []middlewares.Middleware{m}})
-	tree.insert("POST", "/test/path/other", nop, &Options{Middlewares: []middlewares.Middleware{m}})
-	tree.insert("POST", "/test/path/other/some/thing", nop, &Options{Middlewares: []middlewares.Middleware{m}})
+	tree.insert(http.MethodPost, "/test/path/other", nop, &Options{Middlewares: []middlewares.Middleware{m}})
+	tree.insert(http.MethodPost, "/test/path/other/some/thing", nop, &Options{Middlewares: []middlewares.Middleware{m}})
 
 	n, _, ok := tree.root.lookup("/test/path/other/some/thing")
 	assert.Equal(t, true, ok)
-	assert.Equal(t, 1, len(n.opts.opts["POST"].Middlewares))
+	assert.Equal(t, 1, len(n.opts.opts[http.MethodPost].Middlewares))
 
-	handler, ok := n.handlers.get("POST")
+	handler, ok := n.handlers.get(http.MethodPost)
 	assert.Equal(t, true, ok)
 	w := httptest.NewRecorder()
-	r, _ := http.NewRequest("POST", "/test/path/other/some/thing", nil)
+	r, _ := http.NewRequest(http.MethodPost, "/test/path/other/some/thing", nil)
 	handler.ServeHTTP(w, r)
 	assert.Equal(t, 4, count)
 }

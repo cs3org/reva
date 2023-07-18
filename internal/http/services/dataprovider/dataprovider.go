@@ -111,7 +111,6 @@ func (s *svc) handler() http.Handler {
 
 		w.WriteHeader(http.StatusInternalServerError)
 	})
-
 }
 
 func (s *svc) Register(r mux.Router) {
