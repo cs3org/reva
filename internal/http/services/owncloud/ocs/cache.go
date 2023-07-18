@@ -28,6 +28,13 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
+func (s *svc) cacheWarmupMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		go s.cacheWarmup(w, r)
+		next.ServeHTTP(w, r)
+	})
+}
+
 func (s *svc) cacheWarmup(w http.ResponseWriter, r *http.Request) {
 	if s.warmupCacheTracker != nil {
 		u, ok1 := ctxpkg.ContextGetUser(r.Context())

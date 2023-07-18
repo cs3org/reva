@@ -130,7 +130,7 @@ func (s *svc) Register(r mux.Router) {
 				r.Get("/:userid/groups", http.HandlerFunc(s.usersHandler.GetGroups))
 			})
 		})
-	}, mux.WithMiddleware(response.VersionCtx))
+	}, mux.WithMiddleware(response.VersionCtx), mux.WithMiddleware(s.cacheWarmupMiddleware))
 }
 
 func (s *svc) Close() error {
