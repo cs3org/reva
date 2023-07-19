@@ -23,9 +23,11 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/cs3org/reva/v2/pkg/appctx"
+	"github.com/cs3org/reva/v2/pkg/logger"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/lookup"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
@@ -50,11 +52,70 @@ type Change struct {
 }
 
 func NewAsyncPropagator(treeSizeAccounting, treeTimeAccounting bool, lookup lookup.PathLookup) AsyncPropagator {
-	return AsyncPropagator{
+	p := AsyncPropagator{
 		treeSizeAccounting: treeSizeAccounting,
 		treeTimeAccounting: treeTimeAccounting,
 		lookup:             lookup,
 	}
+
+	log := logger.New()
+
+	log.Info().Msg("async propagator starting up...")
+
+	// spawn a goroutine that watches for stale .processing dirs and fixes them
+	go func() {
+		if !p.treeTimeAccounting && !p.treeSizeAccounting {
+			// no propagation enabled
+			log.Debug().Msg("propagation disabled or nothing to propagate")
+			return
+		}
+
+		changesDirPath := filepath.Join(p.lookup.InternalRoot(), "changes")
+		for {
+			// time.Sleep(1 * time.Minute)
+			time.Sleep(10 * time.Second)
+
+			log.Debug().Msg("scanning for stale .processing dirs")
+
+			changesDir, err := os.Open(changesDirPath)
+			if err != nil {
+				log.Error().Err(err).Msg("failed to open changes dir")
+				continue
+			}
+
+			entries, err := changesDir.Readdir(0)
+			if err != nil {
+				log.Error().Err(err).Msg("failed to list changes dir")
+				continue
+			}
+
+			for _, entry := range entries {
+				// recover all dirs that haven't been propagated within 3 minutes
+				if !entry.IsDir() || time.Now().Before(entry.ModTime().Add(3*time.Minute)) {
+					continue
+				}
+				go func() {
+					changesDirPath := filepath.Join(changesDirPath, entry.Name())
+					if !strings.HasSuffix(changesDirPath, ".processing") {
+						// first rename the existing node dir
+						err = os.Rename(changesDirPath, changesDirPath+".processing")
+						if err != nil {
+							return
+						}
+						changesDirPath = changesDirPath + ".processing"
+					}
+
+					log.Debug().Str("dir", changesDirPath).Msg("propagating stale .processing dir")
+					parts := strings.SplitN(entry.Name(), ":", 2)
+					now := time.Now()
+					_ = os.Chtimes(changesDirPath, now, now)
+					p.propagate(context.Background(), parts[0], strings.TrimSuffix(parts[1], ".processing"), true, *log)
+				}()
+			}
+		}
+	}()
+
+	return p
 }
 
 func (p AsyncPropagator) Propagate(ctx context.Context, n *node.Node, sizeDiff int64) error {
@@ -79,12 +140,12 @@ func (p AsyncPropagator) Propagate(ctx context.Context, n *node.Node, sizeDiff i
 		SyncTime: time.Now().UTC(),
 		SizeDiff: sizeDiff,
 	}
-	go p.propagateChange(ctx, n.SpaceID, n.ParentID, c, log)
+	go p.queuePropagation(ctx, n.SpaceID, n.ParentID, c, log)
 
 	return nil
 }
 
-func (p AsyncPropagator) propagateChange(ctx context.Context, spaceID, nodeID string, change Change, log zerolog.Logger) {
+func (p AsyncPropagator) queuePropagation(ctx context.Context, spaceID, nodeID string, change Change, log zerolog.Logger) {
 	// add a change to the parent node
 	changePath := p.changesPath(spaceID, nodeID, uuid.New().String()+".mpk")
 
@@ -112,27 +173,29 @@ func (p AsyncPropagator) propagateChange(ctx context.Context, spaceID, nodeID st
 	}
 	subspan.End()
 
-	p.propagate(ctx, spaceID, nodeID, log)
-}
-
-func (p AsyncPropagator) propagate(ctx context.Context, spaceID, nodeID string, log zerolog.Logger) {
-
 	time.Sleep(time.Millisecond * 300) // wait a moment before propagating
 
 	log.Debug().Msg("propagating")
-
 	// add a change to the parent node
 	changeDirPath := p.changesPath(spaceID, nodeID, "")
 
-	// TODO what if a rename is already in progress? we need to create a .processing.lock file so other goroutines wait for this?
-
 	// first rename the existing node dir
-	err := os.Rename(changeDirPath, changeDirPath+".processing")
+	err = os.Rename(changeDirPath, changeDirPath+".processing")
 	if err != nil {
-		return // has already been propagated by another goroutine
+		// This can fail in 2 ways
+		// 1. source does not exist anymore as it has already been propagated by another goroutine
+		//    -> ignore, as the change is already being processed
+		// 2. target already exists because a previous propagation is still running
+		//    -> ignore, the previous propagation will pick the new changes up
+		return
 	}
+	p.propagate(ctx, spaceID, nodeID, false, log)
+}
 
-	d, err := os.Open(changeDirPath + ".processing")
+func (p AsyncPropagator) propagate(ctx context.Context, spaceID, nodeID string, recalculateTreeSize bool, log zerolog.Logger) {
+	changeDirPath := p.changesPath(spaceID, nodeID, "")
+	processingPath := changeDirPath + ".processing"
+	d, err := os.Open(processingPath)
 	if err != nil {
 		log.Error().Err(err).Msg("Could not open change .processing dir")
 		return
@@ -146,7 +209,7 @@ func (p AsyncPropagator) propagate(ctx context.Context, spaceID, nodeID string, 
 
 	pc := Change{}
 	for _, name := range names {
-		b, err := os.ReadFile(filepath.Join(changeDirPath+".processing", name))
+		b, err := os.ReadFile(filepath.Join(processingPath, name))
 		if err != nil {
 			log.Error().Err(err).Msg("Could not read change") // TODO what if the file was not yet fully written? retry empty files?
 			return
@@ -169,8 +232,7 @@ func (p AsyncPropagator) propagate(ctx context.Context, spaceID, nodeID string, 
 
 	var f *lockedfile.File
 	// lock parent before reading treesize or tree time
-
-	nodePath := p.changesPath(spaceID, nodeID, "")
+	nodePath := filepath.Join(p.lookup.InternalRoot(), "spaces", lookup.Pathify(spaceID, 1, 2), "nodes", lookup.Pathify(nodeID, 4, 2))
 
 	_, subspan := tracer.Start(ctx, "lockedfile.OpenFile")
 	lockFilepath := p.lookup.MetadataBackend().LockfilePath(nodePath)
@@ -246,7 +308,7 @@ func (p AsyncPropagator) propagate(ctx context.Context, spaceID, nodeID string, 
 		// read treesize
 		treeSize, err := n.GetTreeSize(ctx)
 		switch {
-		case metadata.IsAttrUnset(err):
+		case recalculateTreeSize || metadata.IsAttrUnset(err):
 			// fallback to calculating the treesize
 			log.Warn().Msg("treesize attribute unset, falling back to calculating the treesize")
 			newSize, err = calculateTreeSize(ctx, p.lookup, n.InternalPath())
@@ -290,7 +352,7 @@ func (p AsyncPropagator) propagate(ctx context.Context, spaceID, nodeID string, 
 		log.Error().Err(cerr).Msg("Failed to close node and release lock")
 	}
 
-	err = os.RemoveAll(changeDirPath + ".processing")
+	err = os.RemoveAll(processingPath)
 	if err != nil {
 		log.Error().Err(err).Msg("Could not remove .processing dir")
 	}
