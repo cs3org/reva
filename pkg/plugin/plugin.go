@@ -20,10 +20,17 @@ package plugin
 
 import "reflect"
 
+// RegistryFunc is the func a component that is pluggable
+// must define to register the new func in its own registry.
+// It is responsability of the component to type assert the
+// new func with the expected one and panic if not.
 type RegistryFunc func(name string, newFunc any)
 
-var registry map[string]RegistryFunc = map[string]RegistryFunc{} // key is the namespace
+var registry = map[string]RegistryFunc{} // key is the namespace
 
+// RegisterNamespace is the function called by a component
+// that is pluggable, to register its namespace and a function
+// to register the plugins.
 func RegisterNamespace(ns string, f RegistryFunc) {
 	if ns == "" {
 		panic("namespace cannot be empty")
@@ -31,7 +38,10 @@ func RegisterNamespace(ns string, f RegistryFunc) {
 	registry[ns] = f
 }
 
-func RegisterDriver(ns, name string, newFunc any) {
+// RegisterPlugin is called to register a new plugin in the
+// given namespace. Its called internally by reva, and should
+// not be used to register external plugins.
+func RegisterPlugin(ns, name string, newFunc any) {
 	if ns == "" {
 		panic("namespace cannot be empty")
 	}
