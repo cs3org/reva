@@ -40,7 +40,7 @@ func RegisterNamespace(ns string, f RegistryFunc) {
 
 // RegisterPlugin is called to register a new plugin in the
 // given namespace. Its called internally by reva, and should
-// not be used to register external plugins.
+// not be used by external plugins.
 func RegisterPlugin(ns, name string, newFunc any) {
 	if ns == "" {
 		panic("namespace cannot be empty")
