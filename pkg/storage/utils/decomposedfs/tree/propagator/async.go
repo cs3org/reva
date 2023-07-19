@@ -40,6 +40,8 @@ import (
 	"github.com/shamaton/msgpack/v2"
 )
 
+const propagationDelay = 5 * time.Second
+
 type AsyncPropagator struct {
 	treeSizeAccounting bool
 	treeTimeAccounting bool
@@ -71,29 +73,41 @@ func NewAsyncPropagator(treeSizeAccounting, treeTimeAccounting bool, lookup look
 		}
 
 		changesDirPath := filepath.Join(p.lookup.InternalRoot(), "changes")
+		doSleep := false // switch to not sleep on the first iteration
 		for {
-			// time.Sleep(1 * time.Minute)
-			time.Sleep(10 * time.Second)
-
+			if doSleep {
+				time.Sleep(5 * time.Minute)
+			}
+			doSleep = true
 			log.Debug().Msg("scanning for stale .processing dirs")
 
-			changesDir, err := os.Open(changesDirPath)
+			entries, err := filepath.Glob(changesDirPath + "/**/*")
 			if err != nil {
-				log.Error().Err(err).Msg("failed to open changes dir")
 				continue
 			}
 
-			entries, err := changesDir.Readdir(0)
-			if err != nil {
-				log.Error().Err(err).Msg("failed to list changes dir")
-				continue
-			}
+			// changesDir, err := os.Open(changesDirPath)
+			// if err != nil {
+			// log.Error().Err(err).Msg("failed to open changes dir")
+			// continue
+			// }
 
-			for _, entry := range entries {
+			// entries, err := changesDir.Readdir(0)
+			// if err != nil {
+			// 	log.Error().Err(err).Msg("failed to list changes dir")
+			// 	continue
+			// }
+
+			for _, e := range entries {
+				entry, err := os.Stat(e)
+				if err != nil {
+					continue
+				}
 				// recover all dirs that haven't been propagated within 3 minutes
 				if !entry.IsDir() || time.Now().Before(entry.ModTime().Add(3*time.Minute)) {
 					continue
 				}
+
 				go func() {
 					changesDirPath := filepath.Join(changesDirPath, entry.Name())
 					if !strings.HasSuffix(changesDirPath, ".processing") {
@@ -125,6 +139,7 @@ func (p AsyncPropagator) Propagate(ctx context.Context, n *node.Node, sizeDiff i
 		Str("method", "async.Propagate").
 		Str("spaceid", n.SpaceID).
 		Str("nodeid", n.ID).
+		Str("parentid", n.ParentID).
 		Int64("sizeDiff", sizeDiff).
 		Logger()
 
@@ -157,14 +172,19 @@ func (p AsyncPropagator) queuePropagation(ctx context.Context, spaceID, nodeID s
 
 	_, subspan := tracer.Start(ctx, "write changes file")
 	ready := false
-	_ = os.MkdirAll(filepath.Dir(changePath), 0700)
-	for retries := 0; retries <= 5; retries += 1 {
+	triggerPropagation := false
+	_ = os.MkdirAll(filepath.Dir(filepath.Dir(changePath)), 0700)
+	err = os.Mkdir(filepath.Dir(changePath), 0700)
+	triggerPropagation = err == nil || os.IsExist(err) // only the first goroutine, which succeeds to create the directory, is supposed to actually trigger the propagation
+	for retries := 0; retries <= 500; retries += 1 {
 		err := renameio.WriteFile(changePath, data, 0644)
 		if err == nil {
 			ready = true
 			break
 		}
-		_ = os.MkdirAll(filepath.Dir(changePath), 0700)
+		log.Error().Err(err).Msg("failed to write Change to disk (retrying)")
+		err = os.Mkdir(filepath.Dir(changePath), 0700)
+		triggerPropagation = err == nil || os.IsExist(err) // only the first goroutine, which succeeds to create the directory, is supposed to actually trigger the propagation
 	}
 
 	if !ready {
@@ -173,7 +193,11 @@ func (p AsyncPropagator) queuePropagation(ctx context.Context, spaceID, nodeID s
 	}
 	subspan.End()
 
-	time.Sleep(time.Millisecond * 300) // wait a moment before propagating
+	if !triggerPropagation {
+		return
+	}
+
+	time.Sleep(propagationDelay) // wait a moment before propagating
 
 	log.Debug().Msg("propagating")
 	// add a change to the parent node
@@ -209,9 +233,13 @@ func (p AsyncPropagator) propagate(ctx context.Context, spaceID, nodeID string, 
 
 	pc := Change{}
 	for _, name := range names {
+		if !strings.HasSuffix(name, ".mpk") {
+			continue
+		}
+
 		b, err := os.ReadFile(filepath.Join(processingPath, name))
 		if err != nil {
-			log.Error().Err(err).Msg("Could not read change") // TODO what if the file was not yet fully written? retry empty files?
+			log.Error().Err(err).Msg("Could not read change")
 			return
 		}
 		c := Change{}
@@ -352,6 +380,7 @@ func (p AsyncPropagator) propagate(ctx context.Context, spaceID, nodeID string, 
 		log.Error().Err(cerr).Msg("Failed to close node and release lock")
 	}
 
+	log.Info().Msg("Propagation done. cleaning up")
 	err = os.RemoveAll(processingPath)
 	if err != nil {
 		log.Error().Err(err).Msg("Could not remove .processing dir")
@@ -363,6 +392,8 @@ func (p AsyncPropagator) propagate(ctx context.Context, spaceID, nodeID string, 
 
 	// Check for a changes dir that might have been added meanwhile and pick it up
 	if _, err = os.Open(changeDirPath); err == nil {
+		log.Info().Msg("Found a new changes dir. starting next propagation")
+		time.Sleep(propagationDelay) // wait a moment before propagating
 		err = os.Rename(changeDirPath, processingPath)
 		if err != nil {
 			// This can fail in 2 ways
@@ -377,5 +408,5 @@ func (p AsyncPropagator) propagate(ctx context.Context, spaceID, nodeID string, 
 }
 
 func (p AsyncPropagator) changesPath(spaceID, nodeID, filename string) string {
-	return filepath.Join(p.lookup.InternalRoot(), "changes", spaceID+":"+nodeID, filename)
+	return filepath.Join(p.lookup.InternalRoot(), "changes", spaceID[0:2], spaceID+":"+nodeID, filename)
 }
