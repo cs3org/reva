@@ -45,10 +45,8 @@ import (
 func init() {
 	rgrpc.Register("ocminvitemanager", New)
 	plugin.RegisterNamespace("grpc.services.ocminvitemanager.drivers", func(name string, newFunc any) {
-		f, ok := newFunc.(registry.NewFunc)
-		if !ok {
-			panic("wrong type for New Func for ocminvitemanager service")
-		}
+		var f registry.NewFunc
+		utils.Cast(newFunc, &f)
 		registry.Register(name, f)
 	})
 }

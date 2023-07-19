@@ -30,6 +30,7 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/cs3org/reva/pkg/user/manager/registry"
+	"github.com/cs3org/reva/pkg/utils"
 	"github.com/cs3org/reva/pkg/utils/cfg"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
@@ -38,10 +39,8 @@ import (
 func init() {
 	rgrpc.Register("userprovider", New)
 	plugin.RegisterNamespace("grpc.services.userprovider.drivers", func(name string, newFunc any) {
-		f, ok := newFunc.(registry.NewFunc)
-		if !ok {
-			panic("wrong type for New Func for userprovider service")
-		}
+		var f registry.NewFunc
+		utils.Cast(newFunc, &f)
 		registry.Register(name, f)
 	})
 }

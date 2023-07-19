@@ -53,10 +53,8 @@ import (
 func init() {
 	rgrpc.Register("storageprovider", New)
 	plugin.RegisterNamespace("grpc.services.storageprovider.drivers", func(name string, newFunc any) {
-		f, ok := newFunc.(registry.NewFunc)
-		if !ok {
-			panic("wrong type for New Func for storageprovider service")
-		}
+		var f registry.NewFunc
+		utils.Cast(newFunc, &f)
 		registry.Register(name, f)
 	})
 }

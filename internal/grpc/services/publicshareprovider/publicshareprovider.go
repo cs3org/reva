@@ -32,6 +32,7 @@ import (
 	"github.com/cs3org/reva/pkg/publicshare/manager/registry"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
+	"github.com/cs3org/reva/pkg/utils"
 	"github.com/cs3org/reva/pkg/utils/cfg"
 	"google.golang.org/grpc"
 )
@@ -39,10 +40,8 @@ import (
 func init() {
 	rgrpc.Register("publicshareprovider", New)
 	plugin.RegisterNamespace("grpc.services.publicshareprovider.drivers", func(name string, newFunc any) {
-		f, ok := newFunc.(registry.NewFunc)
-		if !ok {
-			panic("wrong type for New Func for publicshareprovider service")
-		}
+		var f registry.NewFunc
+		utils.Cast(newFunc, &f)
 		registry.Register(name, f)
 	})
 }

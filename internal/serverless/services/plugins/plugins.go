@@ -21,14 +21,13 @@ package plugins
 import (
 	"github.com/cs3org/reva/pkg/plugin"
 	"github.com/cs3org/reva/pkg/rserverless"
+	"github.com/cs3org/reva/pkg/utils"
 )
 
 func init() {
 	plugin.RegisterNamespace("serverless.services", func(name string, newFunc any) {
-		f, ok := newFunc.(rserverless.NewService)
-		if !ok {
-			panic("wrong type for New Func for serverless service")
-		}
+		var f rserverless.NewService
+		utils.Cast(newFunc, &f)
 		rserverless.Register(name, f)
 	})
 }

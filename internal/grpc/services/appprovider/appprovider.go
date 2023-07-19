@@ -41,6 +41,7 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/sharedconf"
+	"github.com/cs3org/reva/pkg/utils"
 	"github.com/cs3org/reva/pkg/utils/cfg"
 	"github.com/juliangruber/go-intersect"
 	"google.golang.org/grpc"
@@ -49,10 +50,8 @@ import (
 func init() {
 	rgrpc.Register("appprovider", New)
 	plugin.RegisterNamespace("grpc.services.appprovider.drivers", func(name string, newFunc any) {
-		f, ok := newFunc.(registry.NewFunc)
-		if !ok {
-			panic("wrong type for New Func for appprovider service")
-		}
+		var f registry.NewFunc
+		utils.Cast(newFunc, &f)
 		registry.Register(name, f)
 	})
 }

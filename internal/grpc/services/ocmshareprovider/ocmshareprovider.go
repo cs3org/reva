@@ -55,10 +55,8 @@ import (
 func init() {
 	rgrpc.Register("ocmshareprovider", New)
 	plugin.RegisterNamespace("grpc.services.ocmshareprovider.drivers", func(name string, newFunc any) {
-		f, ok := newFunc.(registry.NewFunc)
-		if !ok {
-			panic("wrong type for New Func for ocmshareprovider service")
-		}
+		var f registry.NewFunc
+		utils.Cast(newFunc, &f)
 		registry.Register(name, f)
 	})
 }

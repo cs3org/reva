@@ -21,14 +21,13 @@ package plugins
 import (
 	"github.com/cs3org/reva/pkg/plugin"
 	"github.com/cs3org/reva/pkg/rhttp/global"
+	"github.com/cs3org/reva/pkg/utils"
 )
 
 func init() {
 	plugin.RegisterNamespace("http.middlewares", func(name string, newFunc any) {
-		f, ok := newFunc.(global.NewMiddleware)
-		if !ok {
-			panic("wrong type for New Func for http middleware")
-		}
+		var f global.NewMiddleware
+		utils.Cast(newFunc, &f)
 		global.RegisterMiddleware(name, f)
 	})
 }

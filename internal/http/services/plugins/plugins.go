@@ -21,14 +21,13 @@ package plugins
 import (
 	"github.com/cs3org/reva/pkg/plugin"
 	"github.com/cs3org/reva/pkg/rhttp/global"
+	"github.com/cs3org/reva/pkg/utils"
 )
 
 func init() {
 	plugin.RegisterNamespace("http.services", func(name string, newFunc any) {
-		f, ok := newFunc.(global.NewService)
-		if !ok {
-			panic("wrong type for New Func for http service")
-		}
+		var f global.NewService
+		utils.Cast(newFunc, &f)
 		global.Register(name, f)
 	})
 }
