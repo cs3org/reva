@@ -296,7 +296,21 @@ func (p AsyncPropagator) propagate(ctx context.Context, spaceID, nodeID string, 
 	}
 
 	if !n.IsSpaceRoot(ctx) { // This does not seem robust as it checks the space name property
-		p.propagateChange(ctx, n.SpaceID, n.ParentID, pc, log)
+		p.queuePropagation(ctx, n.SpaceID, n.ParentID, pc, log)
+	}
+
+	// Check for a changes dir that might have been added meanwhile and pick it up
+	if _, err = os.Open(changeDirPath); err == nil {
+		err = os.Rename(changeDirPath, processingPath)
+		if err != nil {
+			// This can fail in 2 ways
+			// 1. source does not exist anymore as it has already been propagated by another goroutine
+			//    -> ignore, as the change is already being processed
+			// 2. target already exists because a previous propagation is still running
+			//    -> ignore, the previous propagation will pick the new changes up
+			return
+		}
+		p.propagate(ctx, spaceID, nodeID, false, log)
 	}
 }
 
