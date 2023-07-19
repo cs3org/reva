@@ -18,7 +18,35 @@
 
 package plugin
 
-// Plugin is the interface used to configure plugins.
-type Plugin interface {
-	Configure(m map[string]interface{}) error
+import "reflect"
+
+type RegistryFunc func(name string, newFunc any)
+
+var registry map[string]RegistryFunc // namespace -> registry
+
+func RegisterNamespace(ns string, f RegistryFunc) {
+	if ns == "" {
+		panic("namespace cannot be empty")
+	}
+	registry[ns] = f
+}
+
+func RegisterDriver(ns, name string, newFunc any) {
+	if ns == "" {
+		panic("namespace cannot be empty")
+	}
+	if name == "" {
+		panic("name cannot be empty")
+	}
+	if newFunc == nil {
+		panic("new func cannot be nil")
+	}
+	if reflect.TypeOf(newFunc).Kind() != reflect.Func {
+		panic("type must be a function")
+	}
+	r, ok := registry[ns]
+	if !ok {
+		panic("namespace does not exist")
+	}
+	r(name, newFunc)
 }

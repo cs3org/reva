@@ -36,6 +36,7 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/mime"
+	"github.com/cs3org/reva/pkg/plugin"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
@@ -47,6 +48,13 @@ import (
 
 func init() {
 	rgrpc.Register("appprovider", New)
+	plugin.RegisterNamespace("grpc.services.appprovider.drivers", func(name string, newFunc any) {
+		f, ok := newFunc.(registry.NewFunc)
+		if !ok {
+			panic("wrong type for New Func for appprovider service")
+		}
+		registry.Register(name, f)
+	})
 }
 
 type service struct {

@@ -28,6 +28,7 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/plugin"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/share"
@@ -38,6 +39,13 @@ import (
 
 func init() {
 	rgrpc.Register("usershareprovider", New)
+	plugin.RegisterNamespace("grpc.services.usershareprovider.drivers", func(name string, newFunc any) {
+		f, ok := newFunc.(registry.NewFunc)
+		if !ok {
+			panic("wrong type for New Func for usershareprovider service")
+		}
+		registry.Register(name, f)
+	})
 }
 
 type config struct {

@@ -23,6 +23,7 @@ import (
 
 	preferencespb "github.com/cs3org/go-cs3apis/cs3/preferences/v1beta1"
 	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/plugin"
 	"github.com/cs3org/reva/pkg/preferences"
 	"github.com/cs3org/reva/pkg/preferences/registry"
 	"github.com/cs3org/reva/pkg/rgrpc"
@@ -33,6 +34,13 @@ import (
 
 func init() {
 	rgrpc.Register("preferences", New)
+	plugin.RegisterNamespace("grpc.services.preferences.drivers", func(name string, newFunc any) {
+		f, ok := newFunc.(registry.NewFunc)
+		if !ok {
+			panic("wrong type for New Func for preferences service")
+		}
+		registry.Register(name, f)
+	})
 }
 
 type config struct {

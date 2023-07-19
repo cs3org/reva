@@ -24,6 +24,7 @@ import (
 	registrypb "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/plugin"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/storage"
@@ -34,6 +35,13 @@ import (
 
 func init() {
 	rgrpc.Register("storageregistry", New)
+	plugin.RegisterNamespace("grpc.services.storageregistry.drivers", func(name string, newFunc any) {
+		f, ok := newFunc.(registry.NewFunc)
+		if !ok {
+			panic("wrong type for New Func for storageregistry service")
+		}
+		registry.Register(name, f)
+	})
 }
 
 type service struct {
