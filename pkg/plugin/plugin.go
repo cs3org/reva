@@ -22,7 +22,7 @@ import "reflect"
 
 type RegistryFunc func(name string, newFunc any)
 
-var registry map[string]RegistryFunc // namespace -> registry
+var registry map[string]RegistryFunc = map[string]RegistryFunc{} // key is the namespace
 
 func RegisterNamespace(ns string, f RegistryFunc) {
 	if ns == "" {
