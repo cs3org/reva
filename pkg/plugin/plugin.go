@@ -22,7 +22,7 @@ import "reflect"
 
 // RegistryFunc is the func a component that is pluggable
 // must define to register the new func in its own registry.
-// It is responsability of the component to type assert the
+// It is responsibility of the component to type assert the
 // new func with the expected one and panic if not.
 type RegistryFunc func(name string, newFunc any)
 
