@@ -39,11 +39,11 @@ BUILD_FLAGS	= "`[[ -z "$(STATIC)" ]] && echo "" || echo "-extldflags=-static"` -
 
 .PHONY: revad
 revad:
-	go build -ldflags $(BUILD_FLAGS) -o ./cmd/revad/revad ./cmd/revad
+	go build -ldflags $(BUILD_FLAGS) -o ./cmd/revad/revad ./cmd/revad/main
 
 .PHONY: revad-ceph
 revad-ceph:
-	go build -ldflags $(BUILD_FLAGS) -tags ceph -o ./cmd/revad/revad ./cmd/revad
+	go build -ldflags $(BUILD_FLAGS) -tags ceph -o ./cmd/revad/revad ./cmd/revad/main
 
 .PHONY: reva
 reva:

@@ -21,14 +21,12 @@ package authprovider
 import (
 	"context"
 	"fmt"
-	"path/filepath"
 
 	provider "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/auth"
 	"github.com/cs3org/reva/pkg/auth/manager/registry"
 	"github.com/cs3org/reva/pkg/errtypes"
-	"github.com/cs3org/reva/pkg/plugin"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/sharedconf"
@@ -58,35 +56,18 @@ func (c *config) ApplyDefaults() {
 type service struct {
 	authmgr      auth.Manager
 	conf         *config
-	plugin       *plugin.RevaPlugin
 	blockedUsers user.BlockedUsers
 }
 
-func getAuthManager(ctx context.Context, manager string, m map[string]map[string]interface{}) (auth.Manager, *plugin.RevaPlugin, error) {
+func getAuthManager(ctx context.Context, manager string, m map[string]map[string]interface{}) (auth.Manager, error) {
 	if manager == "" {
-		return nil, nil, errtypes.InternalError("authsvc: driver not configured for auth manager")
+		return nil, errtypes.InternalError("authsvc: driver not configured for auth manager")
 	}
-	p, err := plugin.Load("authprovider", manager)
-	if err == nil {
-		authManager, ok := p.Plugin.(auth.Manager)
-		if !ok {
-			return nil, nil, fmt.Errorf("could not assert the loaded plugin")
-		}
-		pluginConfig := filepath.Base(manager)
-		err = authManager.Configure(m[pluginConfig])
-		if err != nil {
-			return nil, nil, err
-		}
-		return authManager, p, nil
-	} else if _, ok := err.(errtypes.NotFound); ok {
-		if f, ok := registry.NewFuncs[manager]; ok {
-			authmgr, err := f(ctx, m[manager])
-			return authmgr, nil, err
-		}
-	} else {
-		return nil, nil, err
+	if f, ok := registry.NewFuncs[manager]; ok {
+		authmgr, err := f(ctx, m[manager])
+		return authmgr, err
 	}
-	return nil, nil, errtypes.NotFound(fmt.Sprintf("authsvc: driver %s not found for auth manager", manager))
+	return nil, errtypes.NotFound(fmt.Sprintf("authsvc: driver %s not found for auth manager", manager))
 }
 
 // New returns a new AuthProviderServiceServer.
@@ -96,7 +77,7 @@ func New(ctx context.Context, m map[string]interface{}) (rgrpc.Service, error) {
 		return nil, err
 	}
 
-	authManager, plug, err := getAuthManager(ctx, c.AuthManager, c.AuthManagers)
+	authManager, err := getAuthManager(ctx, c.AuthManager, c.AuthManagers)
 	if err != nil {
 		return nil, err
 	}
@@ -104,7 +85,6 @@ func New(ctx context.Context, m map[string]interface{}) (rgrpc.Service, error) {
 	svc := &service{
 		conf:         &c,
 		authmgr:      authManager,
-		plugin:       plug,
 		blockedUsers: user.NewBlockedUsersSet(c.blockedUsers),
 	}
 
@@ -112,9 +92,6 @@ func New(ctx context.Context, m map[string]interface{}) (rgrpc.Service, error) {
 }
 
 func (s *service) Close() error {
-	if s.plugin != nil {
-		s.plugin.Kill()
-	}
 	return nil
 }
 

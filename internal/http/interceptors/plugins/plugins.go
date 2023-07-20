@@ -16,11 +16,18 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package loader
+package plugins
 
 import (
-	// Load core HTTP middlewares.
-	_ "github.com/cs3org/reva/internal/http/interceptors/cors"
-	_ "github.com/cs3org/reva/internal/http/interceptors/plugins"
-	// Add your own middleware.
+	"github.com/cs3org/reva/pkg/plugin"
+	"github.com/cs3org/reva/pkg/rhttp/global"
+	"github.com/cs3org/reva/pkg/utils"
 )
+
+func init() {
+	plugin.RegisterNamespace("http.middlewares", func(name string, newFunc any) {
+		var f global.NewMiddleware
+		utils.Cast(newFunc, &f)
+		global.RegisterMiddleware(name, f)
+	})
+}

@@ -31,6 +31,7 @@ import (
 	_ "github.com/cs3org/reva/internal/http/services/ocmprovider"
 	_ "github.com/cs3org/reva/internal/http/services/owncloud/ocdav"
 	_ "github.com/cs3org/reva/internal/http/services/owncloud/ocs"
+	_ "github.com/cs3org/reva/internal/http/services/plugins"
 	_ "github.com/cs3org/reva/internal/http/services/preferences"
 	_ "github.com/cs3org/reva/internal/http/services/prometheus"
 	_ "github.com/cs3org/reva/internal/http/services/reverseproxy"

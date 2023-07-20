@@ -16,7 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package main
+package revadcmd
 
 import (
 	"flag"
@@ -55,7 +55,7 @@ var (
 	revaProcs []*runtime.Reva
 )
 
-func main() {
+func Main() {
 	flag.Parse()
 
 	// initialize the global system information
