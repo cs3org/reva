@@ -1176,18 +1176,15 @@ func (c *Client) mapToFileInfo(ctx context.Context, kv, attrs map[string]string,
 		if mtimesec, err = strconv.ParseUint(stimeSplit[0], 10, 64); err == nil {
 			mtimeSet = true
 		}
+
 		if mtimenanos, err = strconv.ParseUint(stimeSplit[1], 10, 32); err != nil {
 			mtimeSet = false
 		}
 	}
 	if !mtimeSet {
 		mtimeSplit := strings.Split(kv["mtime"], ".")
-		if mtimesec, err = strconv.ParseUint(mtimeSplit[0], 10, 64); err != nil {
-			return nil, err
-		}
-		if mtimenanos, err = strconv.ParseUint(mtimeSplit[1], 10, 32); err != nil {
-			return nil, err
-		}
+		mtimesec, _ = strconv.ParseUint(mtimeSplit[0], 10, 64)
+		mtimenanos, _ = strconv.ParseUint(mtimeSplit[1], 10, 32)
 	}
 
 	var ctimesec, ctimenanos uint64
