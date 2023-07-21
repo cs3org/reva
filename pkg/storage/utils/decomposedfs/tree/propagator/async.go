@@ -207,6 +207,14 @@ func (p AsyncPropagator) queuePropagation(ctx context.Context, spaceID, nodeID s
 func (p AsyncPropagator) propagate(ctx context.Context, spaceID, nodeID string, recalculateTreeSize bool, log zerolog.Logger) {
 	changeDirPath := p.changesPath(spaceID, nodeID, "")
 	processingPath := changeDirPath + ".processing"
+
+	cleanup := func() {
+		err := os.RemoveAll(processingPath)
+		if err != nil {
+			log.Error().Err(err).Msg("Could not remove .processing dir")
+		}
+	}
+
 	d, err := os.Open(processingPath)
 	if err != nil {
 		log.Error().Err(err).Msg("Could not open change .processing dir")
@@ -276,10 +284,15 @@ func (p AsyncPropagator) propagate(ctx context.Context, spaceID, nodeID string, 
 		return
 	}
 
-	// TODO none, sync and async?
+	if !n.Exists {
+		log.Debug().Str("attr", prefixes.PropagationAttr).Msg("node does not exist anymore, not propagating")
+		cleanup()
+		return
+	}
+
 	if !n.HasPropagation(ctx) {
 		log.Debug().Str("attr", prefixes.PropagationAttr).Msg("propagation attribute not set or unreadable, not propagating")
-		// if the attribute is not set treat it as false / none / no propagation
+		cleanup()
 		return
 	}
 
@@ -369,10 +382,7 @@ func (p AsyncPropagator) propagate(ctx context.Context, spaceID, nodeID string, 
 	}
 
 	log.Info().Msg("Propagation done. cleaning up")
-	err = os.RemoveAll(processingPath)
-	if err != nil {
-		log.Error().Err(err).Msg("Could not remove .processing dir")
-	}
+	cleanup()
 
 	if !n.IsSpaceRoot(ctx) { // This does not seem robust as it checks the space name property
 		p.queuePropagation(ctx, n.SpaceID, n.ParentID, pc, log)
