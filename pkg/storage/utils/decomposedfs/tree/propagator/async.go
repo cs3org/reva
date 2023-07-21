@@ -86,20 +86,9 @@ func NewAsyncPropagator(treeSizeAccounting, treeTimeAccounting bool, lookup look
 				continue
 			}
 
-			// changesDir, err := os.Open(changesDirPath)
-			// if err != nil {
-			// log.Error().Err(err).Msg("failed to open changes dir")
-			// continue
-			// }
-
-			// entries, err := changesDir.Readdir(0)
-			// if err != nil {
-			// 	log.Error().Err(err).Msg("failed to list changes dir")
-			// 	continue
-			// }
-
 			for _, e := range entries {
-				entry, err := os.Stat(e)
+				changesDirPath := e
+				entry, err := os.Stat(changesDirPath)
 				if err != nil {
 					continue
 				}
@@ -109,7 +98,6 @@ func NewAsyncPropagator(treeSizeAccounting, treeTimeAccounting bool, lookup look
 				}
 
 				go func() {
-					changesDirPath := filepath.Join(changesDirPath, entry.Name())
 					if !strings.HasSuffix(changesDirPath, ".processing") {
 						// first rename the existing node dir
 						err = os.Rename(changesDirPath, changesDirPath+".processing")
