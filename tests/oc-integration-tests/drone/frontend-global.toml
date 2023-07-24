@@ -35,6 +35,9 @@ prefix = ""
 # at the files/<username> endpoint? what about migration? separate reva instance
 files_namespace = "/"
 
+"allow_depth_infinity" = true
+
+
 # similar to the dav/files endpoint we can configure a prefix for the old webdav endpoint
 # we use the old webdav endpoint to present the cs3 namespace
 # note: this changes the tree that is rendered at remote.php/webdav from the users home to the cs3 namespace

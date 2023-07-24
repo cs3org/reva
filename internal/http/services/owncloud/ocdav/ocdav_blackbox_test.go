@@ -33,6 +33,7 @@ import (
 	cs3storageprovider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	cs3types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav"
+	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/config"
 	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/net"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/status"
@@ -146,10 +147,10 @@ var _ = Describe("ocdav", func() {
 		ctx = ctxpkg.ContextSetUser(context.Background(), user)
 		client = &mocks.GatewayAPIClient{}
 
-		cfg := &ocdav.Config{
+		cfg := &config.Config{
 			FilesNamespace:  "/users/{{.Username}}",
 			WebdavNamespace: "/users/{{.Username}}",
-			NameValidation: ocdav.NameValidation{
+			NameValidation: config.NameValidation{
 				MaxLength:    255,
 				InvalidChars: []string{"\f", "\r", "\n", "\\"},
 			},
