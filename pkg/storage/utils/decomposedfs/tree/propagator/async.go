@@ -185,7 +185,9 @@ func (p AsyncPropagator) queuePropagation(ctx context.Context, spaceID, nodeID s
 		return
 	}
 
+	_, subspan = tracer.Start(ctx, "delay propagation")
 	time.Sleep(propagationDelay) // wait a moment before propagating
+	subspan.End()
 
 	log.Debug().Msg("propagating")
 	// add a change to the parent node
@@ -215,18 +217,23 @@ func (p AsyncPropagator) propagate(ctx context.Context, spaceID, nodeID string, 
 		}
 	}
 
+	_, subspan := tracer.Start(ctx, "list changes files")
 	d, err := os.Open(processingPath)
 	if err != nil {
 		log.Error().Err(err).Msg("Could not open change .processing dir")
+		cleanup()
 		return
 	}
 	defer d.Close()
 	names, err := d.Readdirnames(0)
 	if err != nil {
 		log.Error().Err(err).Msg("Could not read dirnames")
+		cleanup()
 		return
 	}
+	subspan.End()
 
+	_, subspan = tracer.Start(ctx, "read changes files")
 	pc := Change{}
 	for _, name := range names {
 		if !strings.HasSuffix(name, ".mpk") {
@@ -236,12 +243,14 @@ func (p AsyncPropagator) propagate(ctx context.Context, spaceID, nodeID string, 
 		b, err := os.ReadFile(filepath.Join(processingPath, name))
 		if err != nil {
 			log.Error().Err(err).Msg("Could not read change")
+			cleanup()
 			return
 		}
 		c := Change{}
 		err = msgpack.Unmarshal(b, &c)
 		if err != nil {
 			log.Error().Err(err).Msg("Could not unmarshal change")
+			cleanup()
 			return
 		}
 		if c.SyncTime.After(pc.SyncTime) {
@@ -249,6 +258,7 @@ func (p AsyncPropagator) propagate(ctx context.Context, spaceID, nodeID string, 
 		}
 		pc.SizeDiff += c.SizeDiff
 	}
+	subspan.End()
 
 	// TODO do we need to write an aggregated parentchange file?
 
@@ -258,7 +268,7 @@ func (p AsyncPropagator) propagate(ctx context.Context, spaceID, nodeID string, 
 	// lock parent before reading treesize or tree time
 	nodePath := filepath.Join(p.lookup.InternalRoot(), "spaces", lookup.Pathify(spaceID, 1, 2), "nodes", lookup.Pathify(nodeID, 4, 2))
 
-	_, subspan := tracer.Start(ctx, "lockedfile.OpenFile")
+	_, subspan = tracer.Start(ctx, "lockedfile.OpenFile")
 	lockFilepath := p.lookup.MetadataBackend().LockfilePath(nodePath)
 	f, err = lockedfile.OpenFile(lockFilepath, os.O_RDWR|os.O_CREATE, 0600)
 	subspan.End()
@@ -266,6 +276,7 @@ func (p AsyncPropagator) propagate(ctx context.Context, spaceID, nodeID string, 
 		log.Error().Err(err).
 			Str("lock filepath", lockFilepath).
 			Msg("Propagation failed. Could not open metadata for node with lock.")
+		cleanup()
 		return
 	}
 	// always log error if closing node fails
@@ -277,12 +288,15 @@ func (p AsyncPropagator) propagate(ctx context.Context, spaceID, nodeID string, 
 		}
 	}()
 
+	_, subspan = tracer.Start(ctx, "node.ReadNode")
 	var n *node.Node
 	if n, err = node.ReadNode(ctx, p.lookup, spaceID, nodeID, false, nil, false); err != nil {
 		log.Error().Err(err).
 			Msg("Propagation failed. Could not read node.")
+		cleanup()
 		return
 	}
+	subspan.End()
 
 	if !n.Exists {
 		log.Debug().Str("attr", prefixes.PropagationAttr).Msg("node does not exist anymore, not propagating")
@@ -344,11 +358,13 @@ func (p AsyncPropagator) propagate(ctx context.Context, spaceID, nodeID string, 
 			if err != nil {
 				log.Error().Err(err).
 					Msg("Error when calculating treesize of node.") // FIXME wat?
+				cleanup()
 				return
 			}
 		case err != nil:
 			log.Error().Err(err).
 				Msg("Failed to propagate treesize change. Error when reading the treesize attribute from node")
+			cleanup()
 			return
 		case pc.SizeDiff > 0:
 			newSize = treeSize + uint64(pc.SizeDiff)
@@ -370,6 +386,7 @@ func (p AsyncPropagator) propagate(ctx context.Context, spaceID, nodeID string, 
 
 	if err = n.SetXattrsWithContext(ctx, attrs, false); err != nil {
 		log.Error().Err(err).Msg("Failed to update extend attributes of node")
+		cleanup()
 		return
 	}
 
