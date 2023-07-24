@@ -421,7 +421,7 @@ func (s *svc) handleOpen(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log := appctx.GetLogger(ctx)
-	log.Info().Str("url", openRes.AppUrl.AppUrl).Interface("resource", fileRef).Msg("returning app URL for file")
+	log.Info().Interface("resource", fileRef).Str("url", openRes.AppUrl.AppUrl).Str("method", openRes.AppUrl.Method).Interface("target", openRes.AppUrl.Target).Msg("returning app URL for file")
 
 	w.Header().Set("Content-Type", "application/json")
 	if _, err = w.Write(js); err != nil {

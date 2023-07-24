@@ -336,6 +336,7 @@ func (p *wopiProvider) GetAppURL(ctx context.Context, resource *provider.Resourc
 		AppUrl:         appFullURL,
 		Method:         method,
 		FormParameters: formParams,
+		Target:         appprovider.Target_TARGET_IFRAME,
 	}, nil
 }
 
