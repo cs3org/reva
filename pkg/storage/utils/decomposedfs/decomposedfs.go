@@ -276,11 +276,23 @@ func (fs *Decomposedfs) Postprocessing(ch <-chan events.Event) {
 				failed = true
 			}
 
+			getParent := func() *node.Node {
+				p, err := node.ReadNode(ctx, fs.lu, up.Info.Storage["SpaceRoot"], n.ParentID, false, nil, true)
+				if err != nil {
+					log.Error().Err(err).Str("uploadID", ev.UploadID).Msg("could not read parent")
+					return nil
+				}
+				return p
+			}
+
 			now := time.Now()
-			if p, err := node.ReadNode(ctx, fs.lu, up.Info.Storage["SpaceRoot"], n.ParentID, false, nil, true); err != nil {
-				log.Error().Err(err).Str("uploadID", ev.UploadID).Msg("could not read parent")
-			} else {
-				// update parent tmtime to propagate etag change
+			if failed {
+				// propagate sizeDiff after failed postprocessing
+				if err := fs.tp.Propagate(ctx, up.Node, -up.SizeDiff); err != nil {
+					log.Error().Err(err).Str("uploadID", ev.UploadID).Msg("could not propagate tree size change")
+				}
+			} else if p := getParent(); p != nil {
+				// update parent tmtime to propagate etag change after successful postprocessing
 				_ = p.SetTMTime(ctx, &now)
 				if err := fs.tp.Propagate(ctx, p, 0); err != nil {
 					log.Error().Err(err).Str("uploadID", ev.UploadID).Msg("could not propagate etag change")
