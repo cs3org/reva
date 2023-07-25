@@ -5,9 +5,13 @@ mode = "console"
 gatewaysvc = "localhost:20000"
 jwt_secret = "secret"
 
+
+# GRPC SERVICES
 [grpc]
 address = "0.0.0.0:20000"
 
+
+# GATEWAY
 [grpc.services.gateway]
 authregistrysvc = "localhost:20000"
 preferencessvc = "localhost:20000"
@@ -21,7 +25,6 @@ commit_share_to_storage_ref = true
 
 
 # AUTH
-
 [grpc.services.authregistry]
 driver = "static"
 
@@ -38,7 +41,6 @@ uid_claim = "cern_uid"
 gid_claim = "cern_gid"
 gatewaysvc = "localhost:20000"
 
-
 [grpc.services.userprovider]
 driver = "json"
 
@@ -47,7 +49,6 @@ users = "/etc/revad/users.demo.json"
 
 
 # STORAGE
-
 [grpc.services.storageregistry]
 driver = "static"
 
@@ -60,7 +61,6 @@ home_provider = "/"
 
 
 # SHARES
-
 [grpc.services.usershareprovider]
 driver = "memory"
 
@@ -68,8 +68,19 @@ driver = "memory"
 driver = "memory"
 
 
-# HTTP SERVICES
+# PREFERENCES
+[grpc.services.preferences]
+driver = "sql"
 
+[grpc.services.preferences.drivers.sql]
+db_username = "root"
+db_password = "admin"
+db_host = "mysql"
+db_port = 3306
+db_name = "cernboxngcopy"
+
+
+# HTTP SERVICES
 [http]
 address = "0.0.0.0:20001"
 
@@ -204,6 +215,8 @@ db_name = "cernboxngcopy"
 nats_address = "nats:4222"
 
 
+# SERVERLESS SERVICES
+
 # NOTIFICATIONS
 [serverless.services.notifications]
 nats_address = "nats:4222"
@@ -218,7 +231,7 @@ grouping_max_size = 10
 db_username = "root"
 db_password = "admin"
 db_host = "mysql"
-db_port = 5504
+db_port = 3306
 db_name = "cernboxngcopy"
 
 [serverless.services.notifications.handlers.email]
