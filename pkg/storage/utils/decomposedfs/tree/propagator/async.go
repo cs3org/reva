@@ -104,7 +104,7 @@ func NewAsyncPropagator(treeSizeAccounting, treeTimeAccounting bool, lookup look
 						if err != nil {
 							return
 						}
-						changesDirPath = changesDirPath + ".processing"
+						changesDirPath += ".processing"
 					}
 
 					log.Debug().Str("dir", changesDirPath).Msg("propagating stale .processing dir")
@@ -164,7 +164,7 @@ func (p AsyncPropagator) queuePropagation(ctx context.Context, spaceID, nodeID s
 	_ = os.MkdirAll(filepath.Dir(filepath.Dir(changePath)), 0700)
 	err = os.Mkdir(filepath.Dir(changePath), 0700)
 	triggerPropagation = err == nil || os.IsExist(err) // only the first goroutine, which succeeds to create the directory, is supposed to actually trigger the propagation
-	for retries := 0; retries <= 500; retries += 1 {
+	for retries := 0; retries <= 500; retries++ {
 		err := renameio.WriteFile(changePath, data, 0644)
 		if err == nil {
 			ready = true
