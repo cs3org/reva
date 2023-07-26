@@ -277,7 +277,7 @@ func (fs *Decomposedfs) Postprocessing(ch <-chan events.Event) {
 			}
 
 			getParent := func() *node.Node {
-				p, err := node.ReadNode(ctx, fs.lu, up.Info.Storage["SpaceRoot"], n.ParentID, false, nil, true)
+				p, err := up.Node.Parent(ctx)
 				if err != nil {
 					log.Error().Err(err).Str("uploadID", ev.UploadID).Msg("could not read parent")
 					return nil
