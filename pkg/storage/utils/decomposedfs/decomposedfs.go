@@ -912,7 +912,7 @@ func (fs *Decomposedfs) ListFolder(ctx context.Context, ref *provider.Reference,
 			for child := range work {
 				np := rp
 				// add this childs permissions
-				pset, _ := n.PermissionSet(ctx)
+				pset, _ := child.PermissionSet(ctx)
 				node.AddPermissions(&np, &pset)
 				ri, err := child.AsResourceInfo(ctx, &np, mdKeys, fieldMask, utils.IsRelativeReference(ref))
 				if err != nil {
