@@ -26,7 +26,7 @@ import (
 )
 
 // Migration0005 fixes the messagepack space index data structure
-func (m *Migrator) Migration0005() (Result, error) {
+func (m *Migrator) Up0005() (Result, error) {
 	root := m.lu.InternalRoot()
 
 	indexes, err := filepath.Glob(filepath.Join(root, "indexes", "**", "*.mpk"))
@@ -65,4 +65,43 @@ func (m *Migrator) Migration0005() (Result, error) {
 	}
 	m.log.Info().Msg("done.")
 	return resultSucceeded, nil
+}
+
+func (m *Migrator) Down0005() (Result, error) {
+	root := m.lu.InternalRoot()
+
+	indexes, err := filepath.Glob(filepath.Join(root, "indexes", "**", "*.mpk"))
+	if err != nil {
+		return resultFailed, err
+	}
+	for _, i := range indexes {
+		m.log.Info().Str("root", m.lu.InternalRoot()).Msg("Fixing index format of " + i)
+
+		oldData, err := os.ReadFile(i)
+		if err != nil {
+			return resultFailed, err
+		}
+		oldIndex := map[string]string{}
+		err = msgpack.Unmarshal(oldData, &oldIndex)
+		if err != nil {
+			m.log.Warn().Str("root", m.lu.InternalRoot()).Msg("Invalid index format found in " + i)
+			continue
+		}
+
+		// Write new-format index
+		newIndex := map[string][]byte{}
+		for k, v := range oldIndex {
+			newIndex[k] = []byte(v)
+		}
+		newData, err := msgpack.Marshal(newIndex)
+		if err != nil {
+			return resultFailed, err
+		}
+		err = os.WriteFile(i, newData, 0600)
+		if err != nil {
+			return resultFailed, err
+		}
+	}
+	m.log.Info().Msg("done.")
+	return resultDown, nil
 }

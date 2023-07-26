@@ -20,6 +20,7 @@ package migrator
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -34,6 +35,7 @@ var allMigrations = []string{"0001", "0002", "0003", "0004", "0005"}
 const (
 	resultFailed            = "failed"
 	resultSucceeded         = "succeeded"
+	resultDown              = "down"
 	resultSucceededRunAgain = "runagain"
 )
 
@@ -61,6 +63,62 @@ func New(lu *lookup.Lookup, log *zerolog.Logger) Migrator {
 	}
 }
 
+func (m *Migrator) RunMigration(id string, rollback bool) error {
+	validMigration := false
+	for _, m := range allMigrations {
+		if m == id {
+			validMigration = true
+			break
+		}
+	}
+	if !validMigration {
+		return fmt.Errorf("Invalid migration '%s'", id)
+	}
+
+	lock, err := lockedfile.OpenFile(filepath.Join(m.lu.InternalRoot(), ".migrations.lock"), os.O_WRONLY|os.O_CREATE, 0600)
+	if err != nil {
+		return err
+	}
+	defer lock.Close()
+
+	err = m.readStates()
+	if err != nil {
+		return err
+	}
+
+	method := "Up" + id
+	if rollback {
+		method = "Down" + id
+	}
+
+	msg := "Running migration " + id + "..."
+	if rollback {
+		msg += " (down)"
+	}
+	m.log.Info().Msg(msg)
+
+	migrateMethod := reflect.ValueOf(m).MethodByName(method)
+	v := migrateMethod.Call(nil)
+
+	// write back state
+	s := m.states[id]
+	s.State = string(v[0].Interface().(Result))
+
+	if v[1].Interface() != nil {
+		err := v[1].Interface().(error)
+		m.log.Error().Err(err).Msg("migration " + id + " failed")
+		s.Message = err.Error()
+	}
+
+	m.states[id] = s
+	err = m.writeStates()
+	if err != nil {
+		return err
+	}
+	m.log.Info().Msg("done")
+	return nil
+}
+
 // RunMigrations runs all migrations in sequence. Note this sequence must not be changed or it might
 // damage existing decomposed fs.
 func (m *Migrator) RunMigrations() error {
@@ -77,11 +135,11 @@ func (m *Migrator) RunMigrations() error {
 
 	for _, migration := range allMigrations {
 		s := m.states[migration]
-		if s.State == "succeeded" {
+		if s.State == resultSucceeded || s.State == resultDown {
 			continue
 		}
 
-		migrateMethod := reflect.ValueOf(m).MethodByName("Migration" + migration)
+		migrateMethod := reflect.ValueOf(m).MethodByName("Up" + migration)
 		v := migrateMethod.Call(nil)
 		s.State = string(v[0].Interface().(Result))
 		if v[1].Interface() != nil {
