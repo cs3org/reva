@@ -74,7 +74,7 @@ type config struct {
 	MimeTypes           []string `mapstructure:"mime_types" docs:"nil;Inherited from the appprovider."`
 	AppName             string   `mapstructure:"app_name" docs:";The App user-friendly name."`
 	AppIconURI          string   `mapstructure:"app_icon_uri" docs:";A URI to a static asset which represents the app icon."`
-	FolderBaseURL       string   `mapstructure:"folder_base_url" docs:";The base URL to generate links to navigate back to the containing folder."`
+	FolderBaseURL       string   `mapstructure:"folder_base_url" docs:"; Public internet facing URL used to serve the files to Overleaf."`
 	AppURL              string   `mapstructure:"app_url" docs:";The App URL."`
 	AppIntURL           string   `mapstructure:"app_int_url" docs:";The internal app URL in case of dockerized deployments. Defaults to AppURL"`
 	InsecureConnections bool     `mapstructure:"insecure_connections"`
