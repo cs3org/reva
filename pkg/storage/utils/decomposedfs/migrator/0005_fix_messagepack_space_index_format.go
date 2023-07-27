@@ -31,7 +31,7 @@ func (m *Migrator) Up0005() (Result, error) {
 
 	indexes, err := filepath.Glob(filepath.Join(root, "indexes", "**", "*.mpk"))
 	if err != nil {
-		return resultFailed, err
+		return stateFailed, err
 	}
 	for _, i := range indexes {
 		m.log.Info().Str("root", m.lu.InternalRoot()).Msg("Fixing index format of " + i)
@@ -39,7 +39,7 @@ func (m *Migrator) Up0005() (Result, error) {
 		// Read old-format index
 		oldData, err := os.ReadFile(i)
 		if err != nil {
-			return resultFailed, err
+			return stateFailed, err
 		}
 		oldIndex := map[string][]byte{}
 		err = msgpack.Unmarshal(oldData, &oldIndex)
@@ -56,15 +56,15 @@ func (m *Migrator) Up0005() (Result, error) {
 		}
 		newData, err := msgpack.Marshal(newIndex)
 		if err != nil {
-			return resultFailed, err
+			return stateFailed, err
 		}
 		err = os.WriteFile(i, newData, 0600)
 		if err != nil {
-			return resultFailed, err
+			return stateFailed, err
 		}
 	}
 	m.log.Info().Msg("done.")
-	return resultSucceeded, nil
+	return stateSucceeded, nil
 }
 
 func (m *Migrator) Down0005() (Result, error) {
@@ -72,14 +72,14 @@ func (m *Migrator) Down0005() (Result, error) {
 
 	indexes, err := filepath.Glob(filepath.Join(root, "indexes", "**", "*.mpk"))
 	if err != nil {
-		return resultFailed, err
+		return stateFailed, err
 	}
 	for _, i := range indexes {
 		m.log.Info().Str("root", m.lu.InternalRoot()).Msg("Fixing index format of " + i)
 
 		oldData, err := os.ReadFile(i)
 		if err != nil {
-			return resultFailed, err
+			return stateFailed, err
 		}
 		oldIndex := map[string]string{}
 		err = msgpack.Unmarshal(oldData, &oldIndex)
@@ -95,13 +95,13 @@ func (m *Migrator) Down0005() (Result, error) {
 		}
 		newData, err := msgpack.Marshal(newIndex)
 		if err != nil {
-			return resultFailed, err
+			return stateFailed, err
 		}
 		err = os.WriteFile(i, newData, 0600)
 		if err != nil {
-			return resultFailed, err
+			return stateFailed, err
 		}
 	}
 	m.log.Info().Msg("done.")
-	return resultDown, nil
+	return stateDown, nil
 }

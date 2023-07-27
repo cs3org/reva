@@ -88,7 +88,7 @@ func (m *Migrator) Up0004() (Result, error) {
 	}
 
 	m.log.Info().Msg("done.")
-	return resultSucceeded, nil
+	return stateSucceeded, nil
 }
 
 func migrateSpaceIndex(indexPath, dirIndexPath string) error {
@@ -167,7 +167,7 @@ func (m *Migrator) Down0004() (Result, error) {
 			m.log.Error().Err(err).Str("path", dirIndexPath).Msg("error migrating index")
 		}
 	}
-	return resultDown, nil
+	return stateDown, nil
 }
 
 func downSpaceIndex(indexPath, dirIndexPath string) error {

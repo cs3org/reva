@@ -36,11 +36,11 @@ func (m *Migrator) Up0002() (Result, error) {
 
 		f, err := os.Open(spaceTypesPath)
 		if err != nil {
-			return resultFailed, err
+			return stateFailed, err
 		}
 		spaceTypes, err := f.Readdir(0)
 		if err != nil {
-			return resultFailed, err
+			return stateFailed, err
 		}
 
 		for _, st := range spaceTypes {
@@ -59,7 +59,7 @@ func (m *Migrator) Up0002() (Result, error) {
 			logger.New().Error().Err(err).
 				Str("spacetypesdir", spaceTypesPath).
 				Msg("could not open spacetypesdir")
-			return resultFailed, nil
+			return stateFailed, nil
 		}
 		defer d.Close()
 		_, err = d.Readdirnames(1) // Or f.Readdir(1)
@@ -77,7 +77,7 @@ func (m *Migrator) Up0002() (Result, error) {
 				Msg("could not delete, not empty")
 		}
 	}
-	return resultSucceeded, nil
+	return stateSucceeded, nil
 }
 
 func (m *Migrator) moveSpaceType(spaceType string) error {

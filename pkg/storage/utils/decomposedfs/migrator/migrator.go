@@ -33,17 +33,18 @@ import (
 var allMigrations = []string{"0001", "0002", "0003", "0004", "0005"}
 
 const (
-	resultFailed            = "failed"
-	resultSucceeded         = "succeeded"
-	resultDown              = "down"
-	resultSucceededRunAgain = "runagain"
+	statePending           = "pending"
+	stateFailed            = "failed"
+	stateSucceeded         = "succeeded"
+	stateDown              = "down"
+	stateSucceededRunAgain = "runagain"
 )
 
-type migrationState struct {
+type MigrationState struct {
 	State   string
 	Message string
 }
-type migrationStates map[string]migrationState
+type migrationStates map[string]MigrationState
 
 // Result represents the result of a migration run
 type Result string
@@ -61,6 +62,26 @@ func New(lu *lookup.Lookup, log *zerolog.Logger) Migrator {
 		lu:  lu,
 		log: log,
 	}
+}
+
+func (m *Migrator) Migrations() (map[string]MigrationState, error) {
+	err := m.readStates()
+	if err != nil {
+		return nil, err
+	}
+
+	states := map[string]MigrationState{}
+	for _, migration := range allMigrations {
+		if s, ok := m.states[migration]; ok {
+			states[migration] = s
+		} else {
+			states[migration] = MigrationState{
+				State: statePending,
+			}
+		}
+	}
+
+	return states, nil
 }
 
 func (m *Migrator) RunMigration(id string, rollback bool) error {
@@ -135,7 +156,7 @@ func (m *Migrator) RunMigrations() error {
 
 	for _, migration := range allMigrations {
 		s := m.states[migration]
-		if s.State == resultSucceeded || s.State == resultDown {
+		if s.State == stateSucceeded || s.State == stateDown {
 			continue
 		}
 

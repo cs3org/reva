@@ -36,11 +36,11 @@ import (
 func (m *Migrator) Up0003() (Result, error) {
 	bod := lookup.DetectBackendOnDisk(m.lu.InternalRoot())
 	if bod == "" {
-		return resultFailed, errors.New("could not detect metadata backend on disk")
+		return stateFailed, errors.New("could not detect metadata backend on disk")
 	}
 
 	if bod != "xattrs" || m.lu.MetadataBackend().Name() != "messagepack" {
-		return resultSucceededRunAgain, nil
+		return stateSucceededRunAgain, nil
 	}
 
 	m.log.Info().Str("root", m.lu.InternalRoot()).Msg("Migrating to messagepack metadata backend...")
@@ -105,5 +105,5 @@ func (m *Migrator) Up0003() (Result, error) {
 	}
 
 	m.log.Info().Msg("done.")
-	return resultSucceeded, nil
+	return stateSucceeded, nil
 }

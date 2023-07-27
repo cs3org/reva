@@ -39,11 +39,11 @@ func (m *Migrator) Up0001() (Result, error) {
 	if err == nil && fi.IsDir() {
 		f, err := os.Open(nodesPath)
 		if err != nil {
-			return resultFailed, err
+			return stateFailed, err
 		}
 		nodes, err := f.Readdir(0)
 		if err != nil {
-			return resultFailed, err
+			return stateFailed, err
 		}
 
 		for _, n := range nodes {
@@ -62,7 +62,7 @@ func (m *Migrator) Up0001() (Result, error) {
 		}
 		// TODO delete nodesPath if empty
 	}
-	return resultSucceeded, nil
+	return stateSucceeded, nil
 }
 
 func (m *Migrator) moveNode(spaceID, nodeID string) error {
