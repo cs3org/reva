@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"path/filepath"
 	"regexp"
 	"time"
 
@@ -102,7 +103,7 @@ func New(ctx context.Context, conf map[string]interface{}) (global.Service, erro
 
 func (c *Config) ApplyDefaults() {
 	if c.Prefix == "" {
-		c.Prefix = "download_archive"
+		c.Prefix = "archiver"
 	}
 
 	if c.Name == "" {
@@ -229,13 +230,23 @@ func (s *svc) Handler() http.Handler {
 			return
 		}
 
-		userAgent := ua.Parse(r.Header.Get("User-Agent"))
+		archType := v.Get("arch_type") // optional, either "tar" or "zip"
+		if archType == "" || archType != "tar" && archType != "zip" {
+			// in case of missing or bogus arch_type, detect it via user-agent
+			userAgent := ua.Parse(r.Header.Get("User-Agent"))
+			if userAgent.OS == ua.Windows {
+				archType = "zip"
+			} else {
+				archType = "tar"
+			}
+		}
 
-		archName := s.config.Name
-		if userAgent.OS == ua.Windows {
-			archName += ".zip"
+		var archName string
+		if len(files) == 1 {
+			archName = filepath.Base(files[0]) + "." + archType
 		} else {
-			archName += ".tar"
+			// TODO(lopresti) we may want to generate a meaningful name out of the list
+			archName = s.config.Name + "." + archType
 		}
 
 		log.Debug().Msg("Requested the following files/folders to archive: " + render.Render(files))
@@ -244,7 +255,7 @@ func (s *svc) Handler() http.Handler {
 		rw.Header().Set("Content-Transfer-Encoding", "binary")
 
 		// create the archive
-		if userAgent.OS == ua.Windows {
+		if archType == "zip" {
 			err = arch.CreateZip(ctx, rw)
 		} else {
 			err = arch.CreateTar(ctx, rw)
