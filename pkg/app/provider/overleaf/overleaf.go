@@ -61,7 +61,6 @@ func (p *overleafProvider) GetAppProviderInfo(ctx context.Context) (*appregistry
 	return &appregistry.ProviderInfo{
 		Name:        "Overleaf",
 		MimeTypes:   p.conf.MimeTypes,
-		DesktopOnly: p.conf.AppDesktopOnly,
 		Icon:        p.conf.AppIconURI,
 		Description: "Export to",
 	}, nil
@@ -73,15 +72,11 @@ func init() {
 
 type config struct {
 	MimeTypes           []string `mapstructure:"mime_types" docs:"nil;Inherited from the appprovider."`
-	IOPSecret           string   `mapstructure:"iop_secret" docs:";The IOP secret used to connect to the wopiserver."`
 	AppName             string   `mapstructure:"app_name" docs:";The App user-friendly name."`
 	AppIconURI          string   `mapstructure:"app_icon_uri" docs:";A URI to a static asset which represents the app icon."`
 	FolderBaseURL       string   `mapstructure:"folder_base_url" docs:";The base URL to generate links to navigate back to the containing folder."`
 	AppURL              string   `mapstructure:"app_url" docs:";The App URL."`
 	AppIntURL           string   `mapstructure:"app_int_url" docs:";The internal app URL in case of dockerized deployments. Defaults to AppURL"`
-	AppAPIKey           string   `mapstructure:"app_api_key" docs:";The API key used by the app, if applicable."`
-	JWTSecret           string   `mapstructure:"jwt_secret" docs:";The JWT secret to be used to retrieve the token TTL."`
-	AppDesktopOnly      bool     `mapstructure:"app_desktop_only" docs:"false;Specifies if the app can be opened only on desktop."`
 	InsecureConnections bool     `mapstructure:"insecure_connections"`
 }
 
@@ -95,7 +90,7 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 
 // New returns an implementation to of the app.Provider interface that
 // connects to an application in the backend.
-func New(m map[string]interface{}) (app.Provider, error) {
+func New(ctx context.Context, m map[string]interface{}) (app.Provider, error) {
 	c, err := parseConfig(m)
 	if err != nil {
 		return nil, err
