@@ -39,6 +39,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/juliangruber/go-intersect"
 	"github.com/mitchellh/mapstructure"
+	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc"
 )
 
@@ -47,8 +48,10 @@ func init() {
 }
 
 type service struct {
-	provider app.Provider
-	conf     *config
+	provider   app.Provider
+	conf       *config
+	context    context.Context
+	cancelFunc context.CancelFunc
 }
 
 type config struct {
@@ -89,14 +92,28 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 		return nil, err
 	}
 
+	ctx, cancelFunc := context.WithCancel(context.Background())
+
 	service := &service{
-		conf:     c,
-		provider: provider,
+		conf:       c,
+		provider:   provider,
+		context:    ctx,
+		cancelFunc: cancelFunc,
 	}
 
+	t := time.NewTicker(time.Second * 10)
+
 	go func() {
-		// TODO: implement me to call service.registerProvider with a ticker
-		service.registerProvider()
+		for {
+			select {
+			case <-t.C:
+				log.Debug().Msg("app provider tick, registering Provider")
+				service.registerProvider()
+			case <-service.context.Done():
+				log.Debug().Msg("app provider stopped")
+				t.Stop()
+			}
+		}
 	}()
 	return service, nil
 }
