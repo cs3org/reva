@@ -117,7 +117,7 @@ func migrateSpaceIndex(indexPath, dirIndexPath string) error {
 	return os.RemoveAll(dirIndexPath)
 }
 
-// Down0004 migrates the directory tree based space indexes to messagepack
+// Down0004 migrates the directory messagepack indexes to symlinks
 func (m *Migrator) Down0004() (Result, error) {
 	root := m.lu.InternalRoot()
 
@@ -129,7 +129,7 @@ func (m *Migrator) Down0004() (Result, error) {
 	for _, indexPath := range users {
 		dirIndexPath := strings.TrimSuffix(indexPath, ".mpk")
 
-		m.log.Info().Str("root", m.lu.InternalRoot()).Msg("Migrating " + indexPath + " to messagepack index format...")
+		m.log.Info().Str("root", m.lu.InternalRoot()).Msg("Migrating " + indexPath + " to symlinks index format...")
 		err := downSpaceIndex(indexPath, dirIndexPath)
 		if err != nil {
 			m.log.Error().Err(err).Str("path", dirIndexPath).Msg("error migrating index")
@@ -144,7 +144,7 @@ func (m *Migrator) Down0004() (Result, error) {
 	for _, indexPath := range groups {
 		dirIndexPath := strings.TrimSuffix(indexPath, ".mpk")
 
-		m.log.Info().Str("root", m.lu.InternalRoot()).Msg("Migrating " + indexPath + " to messagepack index format...")
+		m.log.Info().Str("root", m.lu.InternalRoot()).Msg("Migrating " + indexPath + " to symlinks index format...")
 		err := downSpaceIndex(indexPath, dirIndexPath)
 		if err != nil {
 			m.log.Error().Err(err).Str("path", dirIndexPath).Msg("error migrating index")
@@ -161,7 +161,7 @@ func (m *Migrator) Down0004() (Result, error) {
 			continue
 		}
 
-		m.log.Info().Str("root", m.lu.InternalRoot()).Msg("Migrating " + indexPath + " to messagepack index format...")
+		m.log.Info().Str("root", m.lu.InternalRoot()).Msg("Migrating " + indexPath + " to symlinks index format...")
 		err = downSpaceIndex(indexPath, dirIndexPath)
 		if err != nil {
 			m.log.Error().Err(err).Str("path", dirIndexPath).Msg("error migrating index")
