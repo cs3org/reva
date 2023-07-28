@@ -23,14 +23,12 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"reflect"
+	"sort"
 
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/lookup"
 	"github.com/rogpeppe/go-internal/lockedfile"
 	"github.com/rs/zerolog"
 )
-
-var allMigrations = []string{"0001", "0002", "0003", "0004", "0005"}
 
 const (
 	statePending           = "pending"
@@ -40,12 +38,35 @@ const (
 	stateSucceededRunAgain = "runagain"
 )
 
+type migration interface {
+	Migrate(*Migrator) (Result, error)
+	Rollback(*Migrator) (Result, error)
+}
+
+var migrations = map[string]migration{}
+
+type migrationStates map[string]MigrationState
+
+func registerMigration(name string, migration migration) {
+	migrations[name] = migration
+}
+
+func allMigrations() []string {
+	ms := []string{}
+
+	for k, _ := range migrations {
+		ms = append(ms, k)
+	}
+
+	sort.Strings(ms)
+	return ms
+}
+
 // MigrationState holds the state of a migration
 type MigrationState struct {
 	State   string
 	Message string
 }
-type migrationStates map[string]MigrationState
 
 // Result represents the result of a migration run
 type Result string
@@ -73,7 +94,7 @@ func (m *Migrator) Migrations() (map[string]MigrationState, error) {
 	}
 
 	states := map[string]MigrationState{}
-	for _, migration := range allMigrations {
+	for _, migration := range allMigrations() {
 		if s, ok := m.states[migration]; ok {
 			states[migration] = s
 		} else {
@@ -88,14 +109,7 @@ func (m *Migrator) Migrations() (map[string]MigrationState, error) {
 
 // RunMigration runs or rolls back a migration
 func (m *Migrator) RunMigration(id string, rollback bool) error {
-	validMigration := false
-	for _, m := range allMigrations {
-		if m == id {
-			validMigration = true
-			break
-		}
-	}
-	if !validMigration {
+	if _, ok := migrations[id]; !ok {
 		return fmt.Errorf("invalid migration '%s'", id)
 	}
 
@@ -110,26 +124,20 @@ func (m *Migrator) RunMigration(id string, rollback bool) error {
 		return err
 	}
 
-	method := "Up" + id
-	if rollback {
-		method = "Down" + id
+	var res Result
+	if !rollback {
+		m.log.Info().Msg("Running migration " + id + "...")
+		res, err = migrations[id].Migrate(m)
+	} else {
+		m.log.Info().Msg("Rolling back migration " + id + "...")
+		res, err = migrations[id].Rollback(m)
 	}
-
-	msg := "Running migration " + id + "..."
-	if rollback {
-		msg += " (down)"
-	}
-	m.log.Info().Msg(msg)
-
-	migrateMethod := reflect.ValueOf(m).MethodByName(method)
-	v := migrateMethod.Call(nil)
 
 	// write back state
 	s := m.states[id]
-	s.State = string(v[0].Interface().(Result))
+	s.State = string(res)
 
-	if v[1].Interface() != nil {
-		err := v[1].Interface().(error)
+	if err != nil {
 		m.log.Error().Err(err).Msg("migration " + id + " failed")
 		s.Message = err.Error()
 	}
@@ -157,17 +165,15 @@ func (m *Migrator) RunMigrations() error {
 		return err
 	}
 
-	for _, migration := range allMigrations {
+	for _, migration := range allMigrations() {
 		s := m.states[migration]
 		if s.State == stateSucceeded || s.State == stateDown {
 			continue
 		}
 
-		migrateMethod := reflect.ValueOf(m).MethodByName("Up" + migration)
-		v := migrateMethod.Call(nil)
-		s.State = string(v[0].Interface().(Result))
-		if v[1].Interface() != nil {
-			err := v[1].Interface().(error)
+		res, err := migrations[migration].Migrate(m)
+		s.State = string(res)
+		if err != nil {
 			m.log.Error().Err(err).Msg("migration " + migration + " failed")
 			s.Message = err.Error()
 		}

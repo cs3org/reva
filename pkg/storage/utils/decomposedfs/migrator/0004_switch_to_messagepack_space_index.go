@@ -26,14 +26,20 @@ import (
 	"github.com/shamaton/msgpack/v2"
 )
 
-// Migration0004 migrates the directory tree based space indexes to messagepack
-func (m *Migrator) Up0004() (Result, error) {
-	root := m.lu.InternalRoot()
+func init() {
+	registerMigration("0004", Migration0004{})
+}
+
+type Migration0004 struct{}
+
+// Migrate migrates the directory tree based space indexes to messagepack
+func (Migration0004) Migrate(migrator *Migrator) (Result, error) {
+	root := migrator.lu.InternalRoot()
 
 	// migrate user indexes
 	users, err := os.ReadDir(filepath.Join(root, "indexes", "by-user-id"))
 	if err != nil {
-		m.log.Warn().Err(err).Msg("error listing user indexes")
+		migrator.log.Warn().Err(err).Msg("error listing user indexes")
 	}
 	for _, user := range users {
 		if !user.IsDir() {
@@ -43,17 +49,17 @@ func (m *Migrator) Up0004() (Result, error) {
 		indexPath := filepath.Join(root, "indexes", "by-user-id", id+".mpk")
 		dirIndexPath := filepath.Join(root, "indexes", "by-user-id", id)
 
-		m.log.Info().Str("root", m.lu.InternalRoot()).Msg("Migrating " + indexPath + " to messagepack index format...")
+		migrator.log.Info().Str("root", migrator.lu.InternalRoot()).Msg("Migrating " + indexPath + " to messagepack index format...")
 		err := migrateSpaceIndex(indexPath, dirIndexPath)
 		if err != nil {
-			m.log.Error().Err(err).Str("path", dirIndexPath).Msg("error migrating index")
+			migrator.log.Error().Err(err).Str("path", dirIndexPath).Msg("error migrating index")
 		}
 	}
 
 	// migrate group indexes
 	groups, err := os.ReadDir(filepath.Join(root, "indexes", "by-group-id"))
 	if err != nil {
-		m.log.Warn().Err(err).Msg("error listing group indexes")
+		migrator.log.Warn().Err(err).Msg("error listing group indexes")
 	}
 	for _, group := range groups {
 		if !group.IsDir() {
@@ -63,10 +69,10 @@ func (m *Migrator) Up0004() (Result, error) {
 		indexPath := filepath.Join(root, "indexes", "by-group-id", id+".mpk")
 		dirIndexPath := filepath.Join(root, "indexes", "by-group-id", id)
 
-		m.log.Info().Str("root", m.lu.InternalRoot()).Msg("Migrating " + indexPath + " to messagepack index format...")
+		migrator.log.Info().Str("root", migrator.lu.InternalRoot()).Msg("Migrating " + indexPath + " to messagepack index format...")
 		err := migrateSpaceIndex(indexPath, dirIndexPath)
 		if err != nil {
-			m.log.Error().Err(err).Str("path", dirIndexPath).Msg("error migrating index")
+			migrator.log.Error().Err(err).Str("path", dirIndexPath).Msg("error migrating index")
 		}
 	}
 
@@ -80,14 +86,14 @@ func (m *Migrator) Up0004() (Result, error) {
 			continue
 		}
 
-		m.log.Info().Str("root", m.lu.InternalRoot()).Msg("Migrating " + indexPath + " to messagepack index format...")
+		migrator.log.Info().Str("root", migrator.lu.InternalRoot()).Msg("Migrating " + indexPath + " to messagepack index format...")
 		err = migrateSpaceIndex(indexPath, dirIndexPath)
 		if err != nil {
-			m.log.Error().Err(err).Str("path", dirIndexPath).Msg("error migrating index")
+			migrator.log.Error().Err(err).Str("path", dirIndexPath).Msg("error migrating index")
 		}
 	}
 
-	m.log.Info().Msg("done.")
+	migrator.log.Info().Msg("done.")
 	return stateSucceeded, nil
 }
 
@@ -117,8 +123,8 @@ func migrateSpaceIndex(indexPath, dirIndexPath string) error {
 	return os.RemoveAll(dirIndexPath)
 }
 
-// Down0004 migrates the directory messagepack indexes to symlinks
-func (m *Migrator) Down0004() (Result, error) {
+// Rollback migrates the directory messagepack indexes to symlinks
+func (Migration0004) Rollback(m *Migrator) (Result, error) {
 	root := m.lu.InternalRoot()
 
 	// migrate user indexes
