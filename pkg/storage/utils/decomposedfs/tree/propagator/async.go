@@ -116,6 +116,11 @@ func NewAsyncPropagator(treeSizeAccounting, treeTimeAccounting bool, o options.A
 
 					log.Debug().Str("dir", changesDirPath).Msg("propagating stale .processing dir")
 					parts := strings.SplitN(entry.Name(), ":", 2)
+					if len(parts) != 2 {
+						log.Error().Str("file", entry.Name()).Msg("encountered invalid .processing dir")
+						return
+					}
+
 					now := time.Now()
 					_ = os.Chtimes(changesDirPath, now, now)
 					p.propagate(context.Background(), parts[0], strings.TrimSuffix(parts[1], ".processing"), true, *log)
