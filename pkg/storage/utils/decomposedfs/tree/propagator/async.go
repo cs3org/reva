@@ -41,6 +41,9 @@ import (
 	"github.com/shamaton/msgpack/v2"
 )
 
+var _propagationGracePeriod = 3 * time.Minute
+
+// AsyncPropagator implements asynchronous treetime & treesize propagation
 type AsyncPropagator struct {
 	treeSizeAccounting bool
 	treeTimeAccounting bool
@@ -48,11 +51,13 @@ type AsyncPropagator struct {
 	lookup             lookup.PathLookup
 }
 
+// Change represents a change to the tree
 type Change struct {
 	SyncTime time.Time
 	SizeDiff int64
 }
 
+// NewAsyncPropagator returns a new AsyncPropagator instance
 func NewAsyncPropagator(treeSizeAccounting, treeTimeAccounting bool, o options.AsyncPropagatorOptions, lookup lookup.PathLookup) AsyncPropagator {
 	p := AsyncPropagator{
 		treeSizeAccounting: treeSizeAccounting,
@@ -94,8 +99,8 @@ func NewAsyncPropagator(treeSizeAccounting, treeTimeAccounting bool, o options.A
 				if err != nil {
 					continue
 				}
-				// recover all dirs that haven't been propagated within 3 minutes
-				if !entry.IsDir() || time.Now().Before(entry.ModTime().Add(3*time.Minute)) {
+				// recover all dirs that seem to have been stuck
+				if !entry.IsDir() || time.Now().Before(entry.ModTime().Add(_propagationGracePeriod)) {
 					continue
 				}
 
@@ -122,6 +127,7 @@ func NewAsyncPropagator(treeSizeAccounting, treeTimeAccounting bool, o options.A
 	return p
 }
 
+// Propagate triggers a propagation
 func (p AsyncPropagator) Propagate(ctx context.Context, n *node.Node, sizeDiff int64) error {
 	ctx, span := tracer.Start(ctx, "Propagate")
 	defer span.End()
