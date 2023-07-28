@@ -33,12 +33,14 @@ import (
 	"github.com/rogpeppe/go-internal/lockedfile"
 )
 
+// SyncPropagator implements synchronous treetime & treesize propagation
 type SyncPropagator struct {
 	treeSizeAccounting bool
 	treeTimeAccounting bool
 	lookup             lookup.PathLookup
 }
 
+// NewSyncPropagator returns a new AsyncPropagator instance
 func NewSyncPropagator(treeSizeAccounting, treeTimeAccounting bool, lookup lookup.PathLookup) SyncPropagator {
 	return SyncPropagator{
 		treeSizeAccounting: treeSizeAccounting,
@@ -47,6 +49,7 @@ func NewSyncPropagator(treeSizeAccounting, treeTimeAccounting bool, lookup looku
 	}
 }
 
+// Propagate triggers a propagation
 func (p SyncPropagator) Propagate(ctx context.Context, n *node.Node, sizeDiff int64) error {
 	ctx, span := tracer.Start(ctx, "Propagate")
 	defer span.End()
@@ -104,7 +107,6 @@ func (p SyncPropagator) Propagate(ctx context.Context, n *node.Node, sizeDiff in
 			return err
 		}
 
-		// TODO none, sync and async?
 		if !n.HasPropagation(ctx) {
 			sublog.Debug().Str("attr", prefixes.PropagationAttr).Msg("propagation attribute not set or unreadable, not propagating")
 			// if the attribute is not set treat it as false / none / no propagation
