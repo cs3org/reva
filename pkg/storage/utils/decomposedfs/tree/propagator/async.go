@@ -32,6 +32,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/options"
 	"github.com/google/renameio"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
@@ -40,11 +41,10 @@ import (
 	"github.com/shamaton/msgpack/v2"
 )
 
-const propagationDelay = 5 * time.Second
-
 type AsyncPropagator struct {
 	treeSizeAccounting bool
 	treeTimeAccounting bool
+	propagationDelay   time.Duration
 	lookup             lookup.PathLookup
 }
 
@@ -53,10 +53,11 @@ type Change struct {
 	SizeDiff int64
 }
 
-func NewAsyncPropagator(treeSizeAccounting, treeTimeAccounting bool, lookup lookup.PathLookup) AsyncPropagator {
+func NewAsyncPropagator(treeSizeAccounting, treeTimeAccounting bool, o options.AsyncPropagatorOptions, lookup lookup.PathLookup) AsyncPropagator {
 	p := AsyncPropagator{
 		treeSizeAccounting: treeSizeAccounting,
 		treeTimeAccounting: treeTimeAccounting,
+		propagationDelay:   o.PropagationDelay,
 		lookup:             lookup,
 	}
 
@@ -186,7 +187,7 @@ func (p AsyncPropagator) queuePropagation(ctx context.Context, spaceID, nodeID s
 	}
 
 	_, subspan = tracer.Start(ctx, "delay propagation")
-	time.Sleep(propagationDelay) // wait a moment before propagating
+	time.Sleep(p.propagationDelay) // wait a moment before propagating
 	subspan.End()
 
 	log.Debug().Msg("propagating")
@@ -408,7 +409,7 @@ func (p AsyncPropagator) propagate(ctx context.Context, spaceID, nodeID string, 
 	// Check for a changes dir that might have been added meanwhile and pick it up
 	if _, err = os.Open(changeDirPath); err == nil {
 		log.Info().Msg("Found a new changes dir. starting next propagation")
-		time.Sleep(propagationDelay) // wait a moment before propagating
+		time.Sleep(p.propagationDelay) // wait a moment before propagating
 		err = os.Rename(changeDirPath, processingPath)
 		if err != nil {
 			// This can fail in 2 ways

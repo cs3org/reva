@@ -85,7 +85,7 @@ func New(lu lookup.PathLookup, bs Blobstore, o *options.Options, cache store.Sto
 		blobstore:  bs,
 		options:    o,
 		idCache:    cache,
-		propagator: propagator.New(o.Propagator, o.TreeSizeAccounting, o.TreeTimeAccounting, lu),
+		propagator: propagator.New(lu, o),
 	}
 }
 

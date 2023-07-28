@@ -29,6 +29,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/lookup"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/metadata/prefixes"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
+	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/options"
 	"github.com/pkg/errors"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
@@ -44,12 +45,12 @@ type Propagator interface {
 	Propagate(ctx context.Context, node *node.Node, sizediff int64) error
 }
 
-func New(propagatorType string, treeSizeAccounting, treeTimeAccounting bool, lookup lookup.PathLookup) Propagator {
-	switch propagatorType {
+func New(lookup lookup.PathLookup, o *options.Options) Propagator {
+	switch o.Propagator {
 	case "async":
-		return NewAsyncPropagator(treeSizeAccounting, treeTimeAccounting, lookup)
+		return NewAsyncPropagator(o.TreeSizeAccounting, o.TreeTimeAccounting, o.AsyncPropagatorOptions, lookup)
 	default:
-		return NewSyncPropagator(treeSizeAccounting, treeTimeAccounting, lookup)
+		return NewSyncPropagator(o.TreeSizeAccounting, o.TreeTimeAccounting, lookup)
 	}
 }
 
