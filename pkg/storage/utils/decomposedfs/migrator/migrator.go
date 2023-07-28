@@ -54,7 +54,7 @@ func registerMigration(name string, migration migration) {
 func allMigrations() []string {
 	ms := []string{}
 
-	for k, _ := range migrations {
+	for k := range migrations {
 		ms = append(ms, k)
 	}
 
