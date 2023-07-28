@@ -84,6 +84,7 @@ func NewAsyncPropagator(treeSizeAccounting, treeTimeAccounting bool, o options.A
 
 			entries, err := filepath.Glob(changesDirPath + "/**/*")
 			if err != nil {
+				log.Error().Err(err).Msg("failed to list changes")
 				continue
 			}
 
