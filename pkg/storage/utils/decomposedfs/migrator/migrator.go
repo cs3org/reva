@@ -40,6 +40,7 @@ const (
 	stateSucceededRunAgain = "runagain"
 )
 
+// MigrationState holds the state of a migration
 type MigrationState struct {
 	State   string
 	Message string
@@ -64,6 +65,7 @@ func New(lu *lookup.Lookup, log *zerolog.Logger) Migrator {
 	}
 }
 
+// Migrations returns the list of migrations and their states
 func (m *Migrator) Migrations() (map[string]MigrationState, error) {
 	err := m.readStates()
 	if err != nil {
@@ -84,6 +86,7 @@ func (m *Migrator) Migrations() (map[string]MigrationState, error) {
 	return states, nil
 }
 
+// RunMigration runs or rolls back a migration
 func (m *Migrator) RunMigration(id string, rollback bool) error {
 	validMigration := false
 	for _, m := range allMigrations {
@@ -93,7 +96,7 @@ func (m *Migrator) RunMigration(id string, rollback bool) error {
 		}
 	}
 	if !validMigration {
-		return fmt.Errorf("Invalid migration '%s'", id)
+		return fmt.Errorf("invalid migration '%s'", id)
 	}
 
 	lock, err := lockedfile.OpenFile(filepath.Join(m.lu.InternalRoot(), ".migrations.lock"), os.O_WRONLY|os.O_CREATE, 0600)
