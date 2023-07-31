@@ -204,20 +204,6 @@ File and sync features in a shared scenario
 - [coreApiSharePublicLink2/copyFromPublicLink.feature:192](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiSharePublicLink2/copyFromPublicLink.feature#L192)
 - [coreApiSharePublicLink2/copyFromPublicLink.feature:193](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiSharePublicLink2/copyFromPublicLink.feature#L193)
 
-#### [Increasing permission of a public link of a folder that was initially shared with share+read permissions is allowed](https://github.com/owncloud/ocis/issues/3881)
-
-- [coreApiSharePublicLink2/reShareAsPublicLinkToSharesNewDav.feature:159](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiSharePublicLink2/reShareAsPublicLinkToSharesNewDav.feature#L159)
-- [coreApiSharePublicLink2/reShareAsPublicLinkToSharesNewDav.feature:160](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiSharePublicLink2/reShareAsPublicLinkToSharesNewDav.feature#L160)
-- [coreApiSharePublicLink2/reShareAsPublicLinkToSharesNewDav.feature:181](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiSharePublicLink2/reShareAsPublicLinkToSharesNewDav.feature#L181)
-- [coreApiSharePublicLink2/reShareAsPublicLinkToSharesNewDav.feature:182](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiSharePublicLink2/reShareAsPublicLinkToSharesNewDav.feature#L182)
-
-#### [Adding public upload to a read only shared folder as a receipient is allowed ](https://github.com/owncloud/ocis/issues/2164)
-
-- [coreApiSharePublicLink3/updatePublicLinkShare.feature:267](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiSharePublicLink3/updatePublicLinkShare.feature#L267)
-- [coreApiSharePublicLink3/updatePublicLinkShare.feature:268](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiSharePublicLink3/updatePublicLinkShare.feature#L268)
-- [coreApiSharePublicLink3/updatePublicLinkShare.feature:309](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiSharePublicLink3/updatePublicLinkShare.feature#L309)
-- [coreApiSharePublicLink3/updatePublicLinkShare.feature:310](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiSharePublicLink3/updatePublicLinkShare.feature#L310)
-
 #### [Upload-only shares must not overwrite but create a separate file](https://github.com/owncloud/ocis/issues/1267)
 
 - [coreApiSharePublicLink3/uploadToPublicLinkShare.feature:13](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiSharePublicLink3/uploadToPublicLinkShare.feature#L13)
@@ -229,13 +215,7 @@ _requires a [CS3 user provisioning api that can update the quota for a user](htt
 - [coreApiSharePublicLink3/uploadToPublicLinkShare.feature:87](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiSharePublicLink3/uploadToPublicLinkShare.feature#L87)
 - [coreApiSharePublicLink3/uploadToPublicLinkShare.feature:96](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiSharePublicLink3/uploadToPublicLinkShare.feature#L96)
 
-#### [share permissions are not enforced](https://github.com/owncloud/product/issues/270) //todo
-- [coreApiShareReshareToShares3/reShareUpdate.feature:63](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiShareReshareToShares3/reShareUpdate.feature#L63)
-- [coreApiShareReshareToShares3/reShareUpdate.feature:64](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiShareReshareToShares3/reShareUpdate.feature#L64)
-
 #### [path property in pending shares gives only filename](https://github.com/owncloud/ocis/issues/2156)
-- [coreApiShareReshareToShares2/reShareSubfolder.feature:143](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiShareReshareToShares2/reShareSubfolder.feature#L143)
-- [coreApiShareReshareToShares2/reShareSubfolder.feature:144](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiShareReshareToShares2/reShareSubfolder.feature#L144)
 - [coreApiShareManagementBasicToShares/deleteShareFromShares.feature:61](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiShareManagementBasicToShares/deleteShareFromShares.feature#L61)
 - [coreApiShareManagementBasicToShares/createShareToSharesFolder.feature:733](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiShareManagementBasicToShares/createShareToSharesFolder.feature#L733)
 - [coreApiShareManagementBasicToShares/createShareToSharesFolder.feature:734](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiShareManagementBasicToShares/createShareToSharesFolder.feature#L734)
