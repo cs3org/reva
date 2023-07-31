@@ -597,5 +597,20 @@ _ocs: api compatibility, return correct status code_
 -   [coreApiCapabilities/capabilities.feature:136](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiCapabilities/capabilities.feature#L136)
 -   [coreApiCapabilities/capabilities.feature:175](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiCapabilities/capabilities.feature#L175)
 
+#### [waiting for changes in tests expectation](https://github.com/owncloud/ocis/pull/6919)
+
+-    [coreApiSharePublicLink2/reShareAsPublicLinkToSharesNewDav.feature:26](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiSharePublicLink2/reShareAsPublicLinkToSharesNewDav.feature#L26)
+-    [coreApiSharePublicLink2/reShareAsPublicLinkToSharesNewDav.feature:27](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiSharePublicLink2/reShareAsPublicLinkToSharesNewDav.feature#L27)
+-    [coreApiSharePublicLink2/reShareAsPublicLinkToSharesNewDav.feature:63](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiSharePublicLink2/reShareAsPublicLinkToSharesNewDav.feature#L63)
+-    [coreApiSharePublicLink2/reShareAsPublicLinkToSharesNewDav.feature:64](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiSharePublicLink2/reShareAsPublicLinkToSharesNewDav.feature#L64)
+-    [coreApiSharePublicLink2/reShareAsPublicLinkToSharesNewDav.feature:79](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiSharePublicLink2/reShareAsPublicLinkToSharesNewDav.feature#L79)
+-    [coreApiSharePublicLink2/reShareAsPublicLinkToSharesNewDav.feature:80](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiSharePublicLink2/reShareAsPublicLinkToSharesNewDav.feature#L80)
+-    [coreApiSharePublicLink2/reShareAsPublicLinkToSharesNewDav.feature:138](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiSharePublicLink2/reShareAsPublicLinkToSharesNewDav.feature#L138)
+-    [coreApiSharePublicLink2/reShareAsPublicLinkToSharesNewDav.feature:139](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiSharePublicLink2/reShareAsPublicLinkToSharesNewDav.feature#L139)
+-    [coreApiShareReshareToShares1/reShare.feature:28](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiShareReshareToShares1/reShare.feature#L28)
+-    [coreApiShareReshareToShares1/reShare.feature:29](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiShareReshareToShares1/reShare.feature#L29)
+-    [coreApiShareReshareToShares1/reShare.feature:45](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiShareReshareToShares1/reShare.feature#L45)
+-    [coreApiShareReshareToShares1/reShare.feature:46](https://github.com/owncloud/ocis/blob/master/tests/acceptance/features/coreApiShareReshareToShares1/reShare.feature#L46)
+
 Note: always have an empty line at the end of this file.
 The bash script that processes this file may not process a scenario reference on the last line.
