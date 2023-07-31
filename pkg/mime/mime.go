@@ -629,6 +629,7 @@ var mimeTypes = map[string]string{
 	"odp":                      "application/vnd.oasis.opendocument.presentation",
 	"ods":                      "application/vnd.oasis.opendocument.spreadsheet",
 	"odt":                      "application/vnd.oasis.opendocument.text",
+	"oform":                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 	"oga":                      "audio/ogg",
 	"ogg":                      "audio/ogg",
 	"ogv":                      "video/ogg",
