@@ -20,8 +20,8 @@ package overleaf
 
 import (
 	"context"
-	"fmt"
 	"net/http"
+	"path/filepath"
 	"strings"
 
 	appprovider "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
@@ -31,6 +31,7 @@ import (
 	"github.com/cs3org/reva/pkg/app"
 	"github.com/cs3org/reva/pkg/app/provider/registry"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/mitchellh/mapstructure"
 )
 
@@ -44,25 +45,53 @@ func (p *overleafProvider) GetAppURL(ctx context.Context, resource *provider.Res
 	// we need to generate a more restricted token
 	restrictedToken := token
 
+	// Setting up archiver request
+	archHttpReq, err := rhttp.NewRequest(ctx, http.MethodGet, p.conf.FolderBaseURL+"/archiver", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	archQuery := archHttpReq.URL.Query()
+	archQuery.Add("id", resource.Id.StorageId+"!"+resource.Id.OpaqueId)
+	archQuery.Add("access_token", restrictedToken)
+	archQuery.Add("arch_type", "zip")
+
+	archHttpReq.URL.RawQuery = archQuery.Encode()
+	log.Debug().Str("Archiver url", archHttpReq.URL.String()).Msg("URL for downloading zipped resource from archiver")
+
+	// Setting up Overleaf request
+	httpReq, err := rhttp.NewRequest(ctx, http.MethodGet, p.conf.AppURL, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	q := httpReq.URL.Query()
+
+	// snip_uri is link to archiver request
+	q.Add("snip_uri", archHttpReq.URL.String())
+
 	// getting file/folder name so as not to expose authentication token in project name
-	name := resource.Path[strings.LastIndex(resource.Path, "/")+1:]
-	name = strings.Split(name, ".")[0] // removing extension resource has one
+	name := strings.TrimSuffix(filepath.Base(resource.Path), filepath.Ext(resource.Path))
+	q.Add("snip_name", name)
 
-	url := fmt.Sprintf("%s/docs?snip_uri=%s/archiver?id=%s!%s&access_token=%s&snip_name=%s", p.conf.AppURL, p.conf.FolderBaseURL, resource.Id.StorageId, resource.Id.OpaqueId, restrictedToken, name)
+	httpReq.URL.RawQuery = q.Encode()
+	url := httpReq.URL.String()
+	log.Debug().Str("Full Overleaf url", url).Msg("URL for exporting file to Overleaf")
 
-	log.Debug().Str("url", url).Msg("Returning URL for creating a project")
+	//url := fmt.Sprintf("%s/docs?snip_uri=%s/archiver?id=%s!%s&access_token=%s&arch_type=zip&snip_name=%s", p.conf.AppURL, p.conf.FolderBaseURL, resource.Id.StorageId, resource.Id.OpaqueId, restrictedToken, name)
 	return &appprovider.OpenInAppURL{
 		AppUrl: url,
 		Method: http.MethodGet,
+		Target: appprovider.Target_TARGET_BLANK,
 	}, nil
 }
 
 func (p *overleafProvider) GetAppProviderInfo(ctx context.Context) (*appregistry.ProviderInfo, error) {
 	return &appregistry.ProviderInfo{
-		Name:        "Overleaf",
-		MimeTypes:   p.conf.MimeTypes,
-		Icon:        p.conf.AppIconURI,
-		Description: "Export to",
+		Name:      "Overleaf",
+		MimeTypes: p.conf.MimeTypes,
+		Icon:      p.conf.AppIconURI,
+		Action:    "Export to",
 	}, nil
 }
 
@@ -90,7 +119,7 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 
 // New returns an implementation to of the app.Provider interface that
 // connects to an application in the backend.
-func New(ctx context.Context, m map[string]interface{}) (app.Provider, error) {
+func New(m map[string]interface{}) (app.Provider, error) {
 	c, err := parseConfig(m)
 	if err != nil {
 		return nil, err
