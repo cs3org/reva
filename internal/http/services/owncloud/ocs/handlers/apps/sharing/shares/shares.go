@@ -459,7 +459,7 @@ func (h *Handler) extractPermissions(reqRole string, reqPermissions string, ri *
 
 	if !sufficientPermissions(ri.PermissionSet, role.CS3ResourcePermissions(), false) && role.Name != conversions.RoleDenied {
 		return nil, nil, &ocsError{
-			Code:    http.StatusNotFound,
+			Code:    http.StatusForbidden,
 			Message: "Cannot set the requested share permissions",
 			Error:   errors.New("cannot set the requested share permissions"),
 		}
