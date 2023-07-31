@@ -20,6 +20,7 @@ package appprovider
 
 import (
 	"testing"
+	"time"
 
 	"github.com/mitchellh/mapstructure"
 	"github.com/stretchr/testify/assert"
@@ -40,20 +41,23 @@ func Test_parseConfig(t *testing.T) {
 				"Drivers": map[string]map[string]interface{}{"demo": {"a": "b", "c": "d"}},
 			},
 			want: &config{
-				Driver:  "demo",
-				Drivers: map[string]map[string]interface{}{"demo": {"a": "b", "c": "d"}},
+				Driver:      "demo",
+				Drivers:     map[string]map[string]interface{}{"demo": {"a": "b", "c": "d"}},
+				RefreshTime: 20 * time.Second,
 			},
 			wantErr: nil,
 		},
 		{
 			name: "all configurations set for wopi driver",
 			m: map[string]interface{}{
-				"Driver":  "wopi",
-				"Drivers": map[string]map[string]interface{}{"wopi": {"iop_secret": "very-secret", "wopi_url": "https://my.wopi:9871"}},
+				"Driver":      "wopi",
+				"Drivers":     map[string]map[string]interface{}{"wopi": {"iop_secret": "very-secret", "wopi_url": "https://my.wopi:9871"}},
+				"RefreshTime": 10 * time.Second,
 			},
 			want: &config{
-				Driver:  "wopi",
-				Drivers: map[string]map[string]interface{}{"wopi": {"iop_secret": "very-secret", "wopi_url": "https://my.wopi:9871"}},
+				Driver:      "wopi",
+				Drivers:     map[string]map[string]interface{}{"wopi": {"iop_secret": "very-secret", "wopi_url": "https://my.wopi:9871"}},
+				RefreshTime: 10 * time.Second,
 			},
 			wantErr: nil,
 		},
@@ -71,8 +75,9 @@ func Test_parseConfig(t *testing.T) {
 			name: "undefined settings type",
 			m:    map[string]interface{}{"Not-Defined": 123},
 			want: &config{
-				Driver:  "demo",
-				Drivers: map[string]map[string]interface{}(nil),
+				Driver:      "demo",
+				Drivers:     map[string]map[string]interface{}(nil),
+				RefreshTime: 20 * time.Second,
 			},
 			wantErr: nil,
 		},
