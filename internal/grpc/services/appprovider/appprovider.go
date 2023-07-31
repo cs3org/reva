@@ -61,11 +61,15 @@ type config struct {
 	GatewaySvc     string                            `mapstructure:"gatewaysvc"`
 	MimeTypes      []string                          `mapstructure:"mime_types"`
 	Priority       uint64                            `mapstructure:"priority"`
+	RefreshTime    time.Duration                     `mapstructure:"refreshtime"`
 }
 
 func (c *config) init() {
 	if c.Driver == "" {
 		c.Driver = "demo"
+	}
+	if c.RefreshTime < 1 {
+		c.RefreshTime = time.Second * 20
 	}
 	c.AppProviderURL = sharedconf.GetGatewaySVC(c.AppProviderURL)
 	c.GatewaySvc = sharedconf.GetGatewaySVC(c.GatewaySvc)
@@ -101,7 +105,7 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 		cancelFunc: cancelFunc,
 	}
 
-	t := time.NewTicker(time.Second * 10)
+	t := time.NewTicker(c.RefreshTime)
 
 	go func() {
 		for {
