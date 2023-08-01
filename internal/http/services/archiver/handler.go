@@ -25,6 +25,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"time"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
@@ -243,7 +244,7 @@ func (s *svc) Handler() http.Handler {
 
 		var archName string
 		if len(files) == 1 {
-			archName = filepath.Base(files[0]) + "." + archType
+			archName = strings.TrimSuffix(filepath.Base(files[0]), filepath.Ext(files[0])) + "." + archType
 		} else {
 			// TODO(lopresti) we may want to generate a meaningful name out of the list
 			archName = s.config.Name + "." + archType
