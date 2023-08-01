@@ -408,6 +408,10 @@ func (s *svc) handleOpen(w http.ResponseWriter, r *http.Request) {
 			writeError(w, r, appErrorNotFound, openRes.Status.Message, nil)
 			return
 		}
+		if openRes.Status.Code == rpc.Code_CODE_ALREADY_EXISTS {
+			writeError(w, r, appErrorAlreadyExists, openRes.Status.Message, nil)
+			return
+		}
 		writeError(w, r, appErrorServerError, openRes.Status.Message,
 			status.NewErrorFromCode(openRes.Status.Code, "error calling OpenInApp"))
 		return

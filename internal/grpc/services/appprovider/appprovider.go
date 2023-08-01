@@ -21,7 +21,6 @@ package appprovider
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -211,7 +210,7 @@ func (s *service) OpenInApp(ctx context.Context, req *providerpb.OpenInAppReques
 	appURL, err := s.provider.GetAppURL(ctx, req.ResourceInfo, req.ViewMode, req.AccessToken, req.Opaque.Map, s.conf.Language)
 	if err != nil {
 		res := &providerpb.OpenInAppResponse{
-			Status: status.NewInternal(ctx, errors.New("appprovider: error calling GetAppURL"), err.Error()),
+			Status: status.NewStatusFromErrType(ctx, "appprovider: error calling GetAppURL", err),
 		}
 		return res, nil
 	}
