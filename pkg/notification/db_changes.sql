@@ -45,9 +45,5 @@ CREATE INDEX `notification_recipients_ix1` ON `notification_recipients` (`recipi
 
 -- changes for added notifications on oc shares
 
-ALTER TABLE oc_share ADD notify_uploads BOOL DEFAULT false;
+ALTER TABLE oc_share ADD notify_uploads BOOL DEFAULT false NOT NULL;
 ALTER TABLE oc_share ADD notify_uploads_extra_recipients VARCHAR(2048);
-
-UPDATE oc_share SET notify_uploads = false;
-
-ALTER TABLE oc_share MODIFY notify_uploads BOOL DEFAULT false NOT NULL;

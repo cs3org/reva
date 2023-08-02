@@ -80,7 +80,7 @@ func (m *mgr) UpsertNotification(n notification.Notification) error {
 	}
 
 	// Create/update notification
-	stmt, err := m.db.Prepare("REPLACE INTO cbox_notifications (ref, template_name) VALUES (?, ?)")
+	stmt, err := m.db.Prepare("REPLACE INTO notifications (ref, template_name) VALUES (?, ?)")
 	if err != nil {
 		return err
 	}
@@ -99,7 +99,7 @@ func (m *mgr) UpsertNotification(n notification.Notification) error {
 		return err
 	}
 
-	stmt, err = tx.Prepare("REPLACE INTO cbox_notification_recipients (notification_id, recipient) VALUES (?, ?)")
+	stmt, err = tx.Prepare("REPLACE INTO notification_recipients (notification_id, recipient) VALUES (?, ?)")
 	if err != nil {
 		_ = tx.Rollback()
 		return err
@@ -126,8 +126,8 @@ func (m *mgr) UpsertNotification(n notification.Notification) error {
 func (m *mgr) GetNotification(ref string) (*notification.Notification, error) {
 	query := `
 		SELECT n.id, n.ref, n.template_name, nr.recipient
-		FROM cbox_notifications AS n
-		JOIN cbox_notification_recipients AS nr ON n.id = nr.notification_id
+		FROM notifications AS n
+		JOIN notification_recipients AS nr ON n.id = nr.notification_id
 		WHERE n.ref = ?
 	`
 
@@ -171,7 +171,7 @@ func (m *mgr) DeleteNotification(ref string) error {
 	}
 
 	// Delete notification
-	stmt, err := m.db.Prepare("DELETE FROM cbox_notifications WHERE ref = ?")
+	stmt, err := m.db.Prepare("DELETE FROM notifications WHERE ref = ?")
 	if err != nil {
 		return err
 	}
