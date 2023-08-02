@@ -19,7 +19,7 @@
 -- This file can be used to quickstart a SQLite DB for running the tests in
 -- ./manager/sql/sql_test.go
 
-CREATE TABLE `cbox_notifications` (
+CREATE TABLE `notifications` (
         `id` INTEGER PRIMARY KEY AUTOINCREMENT,
         `ref` VARCHAR(3072) UNIQUE NOT NULL,
         `template_name` VARCHAR(320) NOT NULL
@@ -27,25 +27,25 @@ CREATE TABLE `cbox_notifications` (
 
 COMMIT;
 
-CREATE TABLE `cbox_notification_recipients` (
+CREATE TABLE `notification_recipients` (
 	`id` INTEGER PRIMARY KEY AUTOINCREMENT,
 	`notification_id` INTEGER NOT NULL,
 	`recipient` VARCHAR(320) NOT NULL,
 	FOREIGN KEY (notification_id)
-		REFERENCES cbox_notifications (id)
+		REFERENCES notifications (id)
 		ON DELETE CASCADE
 );
 
 COMMIT;
 
-CREATE INDEX `cbox_notifications_ix0` ON `cbox_notifications` (`ref`);
+CREATE INDEX `notifications_ix0` ON `notifications` (`ref`);
 
-CREATE INDEX `cbox_notification_recipients_ix0` ON `cbox_notification_recipients` (`notification_id`);
-CREATE INDEX `cbox_notification_recipients_ix1` ON `cbox_notification_recipients` (`recipient`);
+CREATE INDEX `notification_recipients_ix0` ON `notification_recipients` (`notification_id`);
+CREATE INDEX `notification_recipients_ix1` ON `notification_recipients` (`recipient`);
 
 COMMIT;
 
-INSERT INTO `cbox_notifications` (`id`, `ref`, `template_name`) VALUES (1, "notification-test", "notification-template-test");
-INSERT INTO `cbox_notification_recipients` (`id`, `notification_id`, `recipient`) VALUES (1, 1, "jdoe"), (2, 1, "testuser");
+INSERT INTO `notifications` (`id`, `ref`, `template_name`) VALUES (1, "notification-test", "notification-template-test");
+INSERT INTO `notification_recipients` (`id`, `notification_id`, `recipient`) VALUES (1, 1, "jdoe"), (2, 1, "testuser");
 
 COMMIT;
