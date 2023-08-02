@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"net/http"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -55,7 +56,6 @@ func (p *overleafProvider) GetAppURL(ctx context.Context, resource *provider.Res
 	}
 
 	if _, ok := opaqueMap["override"]; !ok {
-		log.Debug().Msg("not ok")
 		// Check if resource has already been exported to Overleaf
 
 		statRes, err := client.Stat(ctx, &provider.StatRequest{
@@ -67,13 +67,11 @@ func (p *overleafProvider) GetAppURL(ctx context.Context, resource *provider.Res
 			return nil, err
 		}
 
-		creationTime, alreadySet := statRes.Info.GetArbitraryMetadata().Metadata["overleaf-exported"]
+		creationTime, alreadySet := statRes.Info.GetArbitraryMetadata().Metadata["reva.overleaf.time"]
 
 		if alreadySet {
-			return nil, errtypes.AlreadyExists("Project was already exported on " + creationTime + ".")
+			return nil, errtypes.AlreadyExists("Project was already exported on:" + creationTime)
 		}
-	} else {
-		log.Debug().Msg("ok")
 	}
 
 	// TODO: generate and use a more restricted token
@@ -117,7 +115,7 @@ func (p *overleafProvider) GetAppURL(ctx context.Context, resource *provider.Res
 		},
 		ArbitraryMetadata: &provider.ArbitraryMetadata{
 			Metadata: map[string]string{
-				"overleaf-exported": time.Now().Format("2006-01-02"),
+				"reva.overleaf.time": strconv.Itoa(int(time.Now().Unix())),
 			},
 		},
 	}
