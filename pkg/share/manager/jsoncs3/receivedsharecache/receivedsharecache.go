@@ -242,7 +242,7 @@ func (c *Cache) persist(ctx context.Context, userID string) error {
 	if err = c.storage.Upload(ctx, metadata.UploadRequest{
 		Path:              jsonPath,
 		Content:           createdBytes,
-		IfUnmodifiedSince: c.ReceivedSpaces[userID].Mtime,
+		IfUnmodifiedSince: oldMtime,
 	}); err != nil {
 		c.ReceivedSpaces[userID].Mtime = oldMtime
 		span.RecordError(err)

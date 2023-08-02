@@ -115,7 +115,6 @@ func (c *Cache) Add(ctx context.Context, userid, shareID string) error {
 			}
 		}
 		// add share id
-		c.UserShares[userid].Mtime = now
 		c.UserShares[userid].UserShares[ssid].Mtime = now
 		c.UserShares[userid].UserShares[ssid].IDs[shareID] = struct{}{}
 		return c.Persist(ctx, userid)
@@ -153,18 +152,15 @@ func (c *Cache) Remove(ctx context.Context, userid, shareID string) error {
 	ssid := storageid + shareid.IDDelimiter + spaceid
 
 	persistFunc := func() error {
-		now := time.Now()
 		if c.UserShares[userid] == nil {
 			c.UserShares[userid] = &UserShareCache{
-				Mtime:      now,
 				UserShares: map[string]*SpaceShareIDs{},
 			}
 		}
 
 		if c.UserShares[userid].UserShares[ssid] != nil {
 			// remove share id
-			c.UserShares[userid].Mtime = now
-			c.UserShares[userid].UserShares[ssid].Mtime = now
+			c.UserShares[userid].UserShares[ssid].Mtime = time.Now()
 			delete(c.UserShares[userid].UserShares[ssid].IDs, shareID)
 		}
 
@@ -292,7 +288,7 @@ func (c *Cache) Persist(ctx context.Context, userid string) error {
 	if err = c.storage.Upload(ctx, metadata.UploadRequest{
 		Path:              jsonPath,
 		Content:           createdBytes,
-		IfUnmodifiedSince: c.UserShares[userid].Mtime,
+		IfUnmodifiedSince: oldMtime,
 	}); err != nil {
 		c.UserShares[userid].Mtime = oldMtime
 		span.RecordError(err)
