@@ -92,6 +92,9 @@ func (c *Cache) lockUser(userID string) func() {
 
 // Add adds a new entry to the cache
 func (c *Cache) Add(ctx context.Context, userID, spaceID string, rs *collaboration.ReceivedShare) error {
+	if c.ReceivedSpaces[userID] == nil {
+		c.Sync(ctx, userID)
+	}
 	unlock := c.lockUser(userID)
 	defer unlock()
 
@@ -99,34 +102,51 @@ func (c *Cache) Add(ctx context.Context, userID, spaceID string, rs *collaborati
 	defer span.End()
 	span.SetAttributes(attribute.String("cs3.userid", userID), attribute.String("cs3.spaceid", spaceID))
 
-	if c.ReceivedSpaces[userID] == nil {
-		c.ReceivedSpaces[userID] = &Spaces{
-			Spaces: map[string]*Space{},
+	persistFunc := func() error {
+		if c.ReceivedSpaces[userID] == nil {
+			c.ReceivedSpaces[userID] = &Spaces{
+				Spaces: map[string]*Space{},
+			}
 		}
-	}
-	if c.ReceivedSpaces[userID].Spaces[spaceID] == nil {
-		c.ReceivedSpaces[userID].Spaces[spaceID] = &Space{}
-	}
+		if c.ReceivedSpaces[userID].Spaces[spaceID] == nil {
+			c.ReceivedSpaces[userID].Spaces[spaceID] = &Space{}
+		}
 
-	receivedSpace := c.ReceivedSpaces[userID].Spaces[spaceID]
-	receivedSpace.Mtime = time.Now()
-	if receivedSpace.States == nil {
-		receivedSpace.States = map[string]*State{}
-	}
-	receivedSpace.States[rs.Share.Id.GetOpaqueId()] = &State{
-		State:      rs.State,
-		MountPoint: rs.MountPoint,
-	}
+		receivedSpace := c.ReceivedSpaces[userID].Spaces[spaceID]
+		receivedSpace.Mtime = time.Now()
+		if receivedSpace.States == nil {
+			receivedSpace.States = map[string]*State{}
+		}
+		receivedSpace.States[rs.Share.Id.GetOpaqueId()] = &State{
+			State:      rs.State,
+			MountPoint: rs.MountPoint,
+		}
 
-	return c.persist(ctx, userID)
+		return c.persist(ctx, userID)
+	}
+	err := persistFunc()
+	if _, ok := err.(errtypes.IsPreconditionFailed); ok {
+		if err := c.Sync(ctx, userID); err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, err.Error())
+			return err
+		}
+
+		err = persistFunc()
+	}
+	return err
 }
 
 // Get returns one entry from the cache
-func (c *Cache) Get(userID, spaceID, shareID string) *State {
-	if c.ReceivedSpaces[userID] == nil || c.ReceivedSpaces[userID].Spaces[spaceID] == nil {
-		return nil
+func (c *Cache) Get(ctx context.Context, userID, spaceID, shareID string) (*State, error) {
+	err := c.Sync(ctx, userID)
+	if err != nil {
+		return nil, err
 	}
-	return c.ReceivedSpaces[userID].Spaces[spaceID].States[shareID]
+	if c.ReceivedSpaces[userID] == nil || c.ReceivedSpaces[userID].Spaces[spaceID] == nil {
+		return nil, nil
+	}
+	return c.ReceivedSpaces[userID].Spaces[spaceID].States[shareID], nil
 }
 
 // Sync updates the in-memory data with the data from the storage if it is outdated

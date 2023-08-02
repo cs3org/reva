@@ -89,6 +89,9 @@ func New(s metadata.Storage, namespace, filename string, ttl time.Duration) Cach
 
 // Add adds a share to the cache
 func (c *Cache) Add(ctx context.Context, userid, shareID string) error {
+	if c.UserShares[userid] == nil {
+		c.Sync(ctx, userid)
+	}
 	unlock := c.lockUser(userid)
 	defer unlock()
 
@@ -99,26 +102,46 @@ func (c *Cache) Add(ctx context.Context, userid, shareID string) error {
 	storageid, spaceid, _ := shareid.Decode(shareID)
 	ssid := storageid + shareid.IDDelimiter + spaceid
 
-	now := time.Now()
-	if c.UserShares[userid] == nil {
-		c.UserShares[userid] = &UserShareCache{
-			UserShares: map[string]*SpaceShareIDs{},
+	persistFunc := func() error {
+		now := time.Now()
+		if c.UserShares[userid] == nil {
+			c.UserShares[userid] = &UserShareCache{
+				UserShares: map[string]*SpaceShareIDs{},
+			}
 		}
-	}
-	if c.UserShares[userid].UserShares[ssid] == nil {
-		c.UserShares[userid].UserShares[ssid] = &SpaceShareIDs{
-			IDs: map[string]struct{}{},
+		if c.UserShares[userid].UserShares[ssid] == nil {
+			c.UserShares[userid].UserShares[ssid] = &SpaceShareIDs{
+				IDs: map[string]struct{}{},
+			}
 		}
+		// add share id
+		c.UserShares[userid].Mtime = now
+		c.UserShares[userid].UserShares[ssid].Mtime = now
+		c.UserShares[userid].UserShares[ssid].IDs[shareID] = struct{}{}
+		return c.Persist(ctx, userid)
 	}
-	// add share id
-	c.UserShares[userid].Mtime = now
-	c.UserShares[userid].UserShares[ssid].Mtime = now
-	c.UserShares[userid].UserShares[ssid].IDs[shareID] = struct{}{}
-	return c.Persist(ctx, userid)
+
+	err := persistFunc()
+	if _, ok := err.(errtypes.IsPreconditionFailed); ok {
+		if err := c.Sync(ctx, userid); err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, err.Error())
+
+			return err
+		}
+
+		err = persistFunc()
+		// TODO try more often?
+	}
+	return err
 }
 
 // Remove removes a share for the given user
 func (c *Cache) Remove(ctx context.Context, userid, shareID string) error {
+	if c.UserShares[userid] == nil {
+		c.Sync(ctx, userid)
+	}
+
 	unlock := c.lockUser(userid)
 	defer unlock()
 
@@ -129,29 +152,45 @@ func (c *Cache) Remove(ctx context.Context, userid, shareID string) error {
 	storageid, spaceid, _ := shareid.Decode(shareID)
 	ssid := storageid + shareid.IDDelimiter + spaceid
 
-	now := time.Now()
-	if c.UserShares[userid] == nil {
-		c.UserShares[userid] = &UserShareCache{
-			Mtime:      now,
-			UserShares: map[string]*SpaceShareIDs{},
+	persistFunc := func() error {
+		now := time.Now()
+		if c.UserShares[userid] == nil {
+			c.UserShares[userid] = &UserShareCache{
+				Mtime:      now,
+				UserShares: map[string]*SpaceShareIDs{},
+			}
 		}
+
+		if c.UserShares[userid].UserShares[ssid] != nil {
+			// remove share id
+			c.UserShares[userid].Mtime = now
+			c.UserShares[userid].UserShares[ssid].Mtime = now
+			delete(c.UserShares[userid].UserShares[ssid].IDs, shareID)
+		}
+
+		return c.Persist(ctx, userid)
 	}
 
-	if c.UserShares[userid].UserShares[ssid] != nil {
-		// remove share id
-		c.UserShares[userid].Mtime = now
-		c.UserShares[userid].UserShares[ssid].Mtime = now
-		delete(c.UserShares[userid].UserShares[ssid].IDs, shareID)
+	err := persistFunc()
+	if _, ok := err.(errtypes.IsPreconditionFailed); ok {
+		if err := c.Sync(ctx, userid); err != nil {
+			return err
+		}
+		err = persistFunc()
 	}
 
-	return c.Persist(ctx, userid)
+	return err
 }
 
 // List return the list of spaces/shares for the given user/group
-func (c *Cache) List(userid string) map[string]SpaceShareIDs {
+func (c *Cache) List(ctx context.Context, userid string) (map[string]SpaceShareIDs, error) {
+	if err := c.Sync(ctx, userid); err != nil {
+		return nil, err
+	}
+
 	r := map[string]SpaceShareIDs{}
 	if c.UserShares[userid] == nil {
-		return r
+		return r, nil
 	}
 
 	for ssid, cached := range c.UserShares[userid].UserShares {
@@ -160,7 +199,7 @@ func (c *Cache) List(userid string) map[string]SpaceShareIDs {
 			IDs:   cached.IDs,
 		}
 	}
-	return r
+	return r, nil
 }
 
 // Sync updates the in-memory data with the data from the storage if it is outdated

@@ -124,6 +124,10 @@ func New(s metadata.Storage, ttl time.Duration) Cache {
 
 // Add adds a share to the cache
 func (c *Cache) Add(ctx context.Context, storageID, spaceID, shareID string, share *collaboration.Share) error {
+	if c.Providers[storageID] == nil || c.Providers[storageID].Spaces[spaceID] == nil {
+		c.Sync(ctx, storageID, spaceID)
+	}
+
 	unlock := c.LockSpace(spaceID)
 	defer unlock()
 
@@ -140,13 +144,33 @@ func (c *Cache) Add(ctx context.Context, storageID, spaceID, shareID string, sha
 		return fmt.Errorf("missing share id")
 	}
 	c.initializeIfNeeded(storageID, spaceID)
-	c.Providers[storageID].Spaces[spaceID].Shares[shareID] = share
 
-	return c.Persist(ctx, storageID, spaceID)
+	persistFunc := func() error {
+		c.Providers[storageID].Spaces[spaceID].Shares[shareID] = share
+
+		return c.Persist(ctx, storageID, spaceID)
+	}
+	err := persistFunc()
+
+	if _, ok := err.(errtypes.IsPreconditionFailed); ok {
+		if err := c.Sync(ctx, storageID, spaceID); err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, err.Error())
+
+			return err
+		}
+
+		err = persistFunc()
+	}
+	return err
 }
 
 // Remove removes a share from the cache
 func (c *Cache) Remove(ctx context.Context, storageID, spaceID, shareID string) error {
+	if c.Providers[storageID] == nil || c.Providers[storageID].Spaces[spaceID] == nil {
+		c.Sync(ctx, storageID, spaceID)
+	}
+
 	unlock := c.LockSpace(spaceID)
 	defer unlock()
 
@@ -154,30 +178,53 @@ func (c *Cache) Remove(ctx context.Context, storageID, spaceID, shareID string) 
 	defer span.End()
 	span.SetAttributes(attribute.String("cs3.storageid", storageID), attribute.String("cs3.spaceid", spaceID), attribute.String("cs3.shareid", shareID))
 
-	if c.Providers[storageID] == nil ||
-		c.Providers[storageID].Spaces[spaceID] == nil {
-		return nil
-	}
-	delete(c.Providers[storageID].Spaces[spaceID].Shares, shareID)
+	persistFunc := func() error {
+		if c.Providers[storageID] == nil ||
+			c.Providers[storageID].Spaces[spaceID] == nil {
+			return nil
+		}
+		delete(c.Providers[storageID].Spaces[spaceID].Shares, shareID)
 
-	return c.Persist(ctx, storageID, spaceID)
+		return c.Persist(ctx, storageID, spaceID)
+	}
+	err := persistFunc()
+	if _, ok := err.(errtypes.IsPreconditionFailed); ok {
+		if err := c.Sync(ctx, storageID, spaceID); err != nil {
+			return err
+		}
+		err = persistFunc()
+	}
+
+	return err
 }
 
 // Get returns one entry from the cache
-func (c *Cache) Get(storageID, spaceID, shareID string) *collaboration.Share {
+func (c *Cache) Get(ctx context.Context, storageID, spaceID, shareID string) (*collaboration.Share, error) {
+	// sync cache, maybe our data is outdated
+	err := c.Sync(ctx, storageID, spaceID)
+	if err != nil {
+		return nil, err
+	}
+
 	if c.Providers[storageID] == nil ||
 		c.Providers[storageID].Spaces[spaceID] == nil {
-		return nil
+		return nil, nil
 	}
-	return c.Providers[storageID].Spaces[spaceID].Shares[shareID]
+	return c.Providers[storageID].Spaces[spaceID].Shares[shareID], nil
 }
 
 // ListSpace returns the list of shares in a given space
-func (c *Cache) ListSpace(storageID, spaceID string) *Shares {
-	if c.Providers[storageID] == nil || c.Providers[storageID].Spaces[spaceID] == nil {
-		return &Shares{}
+func (c *Cache) ListSpace(ctx context.Context, storageID, spaceID string) (*Shares, error) {
+	// sync cache, maybe our data is outdated
+	err := c.Sync(ctx, storageID, spaceID)
+	if err != nil {
+		return nil, err
 	}
-	return c.Providers[storageID].Spaces[spaceID]
+
+	if c.Providers[storageID] == nil || c.Providers[storageID].Spaces[spaceID] == nil {
+		return &Shares{}, nil
+	}
+	return c.Providers[storageID].Spaces[spaceID], nil
 }
 
 // PersistWithTime persists the data of one space if it has not been modified since the given mtime
