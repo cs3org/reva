@@ -530,6 +530,6 @@ func appTargetToString(t apppb.Target) string {
 	case apppb.Target_TARGET_BLANK:
 		return "blank"
 	default:
-		return "iframe"
+		return "invalid"
 	}
 }
