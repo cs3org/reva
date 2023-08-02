@@ -20,18 +20,24 @@ package overleaf
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"path/filepath"
 	"strings"
+	"time"
 
 	appprovider "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
 	appregistry "github.com/cs3org/go-cs3apis/cs3/app/registry/v1beta1"
+	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/app"
 	"github.com/cs3org/reva/pkg/app/provider/registry"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp"
+	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/mitchellh/mapstructure"
 )
 
@@ -42,7 +48,35 @@ type overleafProvider struct {
 func (p *overleafProvider) GetAppURL(ctx context.Context, resource *provider.ResourceInfo, viewMode appprovider.ViewMode, token string, opaqueMap map[string]*typespb.OpaqueEntry, language string) (*appprovider.OpenInAppURL, error) {
 	log := appctx.GetLogger(ctx)
 
-	// we need to generate a more restricted token
+	// client used to set and get arbitrary metadata to keep track whether project has already been exported
+	client, err := pool.GetGatewayServiceClient(pool.Endpoint(sharedconf.GetGatewaySVC("")))
+	if err != nil {
+		return nil, err
+	}
+
+	if _, ok := opaqueMap["override"]; !ok {
+		log.Debug().Msg("not ok")
+		// Check if resource has already been exported to Overleaf
+
+		statRes, err := client.Stat(ctx, &provider.StatRequest{
+			Ref: &provider.Reference{
+				ResourceId: resource.Id,
+			},
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		creationTime, alreadySet := statRes.Info.GetArbitraryMetadata().Metadata["overleaf-exported"]
+
+		if alreadySet {
+			return nil, errtypes.AlreadyExists("Project was already exported on " + creationTime + ".")
+		}
+	} else {
+		log.Debug().Msg("ok")
+	}
+
+	// TODO: generate and use a more restricted token
 	restrictedToken := token
 
 	// Setting up archiver request
@@ -76,9 +110,28 @@ func (p *overleafProvider) GetAppURL(ctx context.Context, resource *provider.Res
 
 	httpReq.URL.RawQuery = q.Encode()
 	url := httpReq.URL.String()
-	log.Debug().Str("Full Overleaf url", url).Msg("URL for exporting file to Overleaf")
 
-	//url := fmt.Sprintf("%s/docs?snip_uri=%s/archiver?id=%s!%s&access_token=%s&arch_type=zip&snip_name=%s", p.conf.AppURL, p.conf.FolderBaseURL, resource.Id.StorageId, resource.Id.OpaqueId, restrictedToken, name)
+	req := &provider.SetArbitraryMetadataRequest{
+		Ref: &provider.Reference{
+			ResourceId: resource.Id,
+		},
+		ArbitraryMetadata: &provider.ArbitraryMetadata{
+			Metadata: map[string]string{
+				"overleaf-exported": time.Now().Format("2006-01-02"),
+			},
+		},
+	}
+
+	res, err := client.SetArbitraryMetadata(ctx, req)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if res.Status.Code != rpc.Code_CODE_OK {
+		return nil, fmt.Errorf("error: code=%+v msg=%q support_trace=%q", res.Status.Code, res.Status.Message, res.Status.Trace)
+	}
+
 	return &appprovider.OpenInAppURL{
 		AppUrl: url,
 		Method: http.MethodGet,
