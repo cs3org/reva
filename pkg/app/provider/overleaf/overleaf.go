@@ -40,6 +40,7 @@ import (
 	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/mitchellh/mapstructure"
+	"github.com/pkg/errors"
 )
 
 type overleafProvider struct {
@@ -52,7 +53,7 @@ func (p *overleafProvider) GetAppURL(ctx context.Context, resource *provider.Res
 	// client used to set and get arbitrary metadata to keep track whether project has already been exported
 	client, err := pool.GetGatewayServiceClient(pool.Endpoint(sharedconf.GetGatewaySVC("")))
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "overleaf: error fetching gateway service client.")
 	}
 
 	if _, ok := opaqueMap["override"]; !ok {
@@ -64,7 +65,7 @@ func (p *overleafProvider) GetAppURL(ctx context.Context, resource *provider.Res
 			},
 		})
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrap(err, "overleaf: error statting file.")
 		}
 
 		creationTime, alreadySet := statRes.Info.GetArbitraryMetadata().Metadata["reva.overleaf.time"]
@@ -80,7 +81,7 @@ func (p *overleafProvider) GetAppURL(ctx context.Context, resource *provider.Res
 	// Setting up archiver request
 	archHttpReq, err := rhttp.NewRequest(ctx, http.MethodGet, p.conf.FolderBaseURL+"/archiver", nil)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "overleaf: error setting up http request.")
 	}
 
 	archQuery := archHttpReq.URL.Query()
@@ -94,7 +95,7 @@ func (p *overleafProvider) GetAppURL(ctx context.Context, resource *provider.Res
 	// Setting up Overleaf request
 	httpReq, err := rhttp.NewRequest(ctx, http.MethodGet, p.conf.AppURL, nil)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "overleaf: error setting up http request")
 	}
 
 	q := httpReq.URL.Query()
@@ -123,7 +124,7 @@ func (p *overleafProvider) GetAppURL(ctx context.Context, resource *provider.Res
 	res, err := client.SetArbitraryMetadata(ctx, req)
 
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "overleaf: error setting arbitrary metadata")
 	}
 
 	if res.Status.Code != rpc.Code_CODE_OK {
