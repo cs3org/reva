@@ -34,7 +34,6 @@ import (
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
-	"github.com/cs3org/reva/v2/pkg/rgrpc/status"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"go.opentelemetry.io/otel"
@@ -171,7 +170,7 @@ func (cs3 *CS3) Upload(ctx context.Context, req UploadRequest) error {
 		return err
 	}
 	if res.Status.Code != rpc.Code_CODE_OK {
-		return status.NewErrorFromCode(res.Status.Code, "cs3 metadata SimpleUpload")
+		return errtypes.NewErrtypeFromStatus(res.Status)
 	}
 
 	var endpoint string
