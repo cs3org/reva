@@ -101,6 +101,7 @@ provider_domain = "your.revad.com"
 endpoint = "https://your.revad.com/"
 webdav_endpoint = "https://your.revad.com/"
 webdav_prefix = "https://your.revad.com/remote.php/dav/files"
+webapp_template = "https://your.revad.com/external/sciencemesh/{{.Token}}/{relative-path-to-shared-resource}"
 
 [grpc.services.ocmshareprovider.drivers.nextcloud]
 webdav_host = "https://your.revad.com/"
