@@ -73,12 +73,14 @@ var _ = Describe("Cache", func() {
 
 	Describe("Add", func() {
 		It("adds a share", func() {
-			s := c.Get(storageID, spaceID, shareID)
+			s, err := c.Get(ctx, storageID, spaceID, shareID)
+			Expect(err).ToNot(HaveOccurred())
 			Expect(s).To(BeNil())
 
 			Expect(c.Add(ctx, storageID, spaceID, shareID, share1)).To(Succeed())
 
-			s = c.Get(storageID, spaceID, shareID)
+			s, err = c.Get(ctx, storageID, spaceID, shareID)
+			Expect(err).ToNot(HaveOccurred())
 			Expect(s).ToNot(BeNil())
 			Expect(s).To(Equal(share1))
 		})
@@ -103,20 +105,23 @@ var _ = Describe("Cache", func() {
 
 		Describe("Get", func() {
 			It("returns the entry", func() {
-				s := c.Get(storageID, spaceID, shareID)
+				s, err := c.Get(ctx, storageID, spaceID, shareID)
+				Expect(err).ToNot(HaveOccurred())
 				Expect(s).ToNot(BeNil())
 			})
 		})
 
 		Describe("Remove", func() {
 			It("removes the entry", func() {
-				s := c.Get(storageID, spaceID, shareID)
+				s, err := c.Get(ctx, storageID, spaceID, shareID)
+				Expect(err).ToNot(HaveOccurred())
 				Expect(s).ToNot(BeNil())
 				Expect(s).To(Equal(share1))
 
 				Expect(c.Remove(ctx, storageID, spaceID, shareID)).To(Succeed())
 
-				s = c.Get(storageID, spaceID, shareID)
+				s, err = c.Get(ctx, storageID, spaceID, shareID)
+				Expect(err).ToNot(HaveOccurred())
 				Expect(s).To(BeNil())
 			})
 
@@ -163,17 +168,20 @@ var _ = Describe("Cache", func() {
 			})
 
 			It("downloads if needed", func() {
-				s := c.Get(storageID, spaceID, shareID)
+				s, err := c.Get(ctx, storageID, spaceID, shareID)
+				Expect(err).ToNot(HaveOccurred())
 				Expect(s).To(BeNil())
 
 				Expect(c.Sync(ctx, storageID, spaceID)).To(Succeed())
 
-				s = c.Get(storageID, spaceID, shareID)
+				s, err = c.Get(ctx, storageID, spaceID, shareID)
+				Expect(err).ToNot(HaveOccurred())
 				Expect(s).ToNot(BeNil())
 			})
 
 			It("does not download if not needed", func() {
-				s := c.Get(storageID, spaceID, shareID)
+				s, err := c.Get(ctx, storageID, spaceID, shareID)
+				Expect(err).ToNot(HaveOccurred())
 				Expect(s).To(BeNil())
 
 				c.Providers[storageID] = &providercache.Spaces{
@@ -185,7 +193,8 @@ var _ = Describe("Cache", func() {
 				}
 				Expect(c.Sync(ctx, storageID, spaceID)).To(Succeed()) // Sync from disk won't happen because in-memory mtime is later than on disk
 
-				s = c.Get(storageID, spaceID, shareID)
+				s, err = c.Get(ctx, storageID, spaceID, shareID)
+				Expect(err).ToNot(HaveOccurred())
 				Expect(s).To(BeNil())
 			})
 		})

@@ -24,7 +24,6 @@ import (
 	"time"
 
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
-	collaborationv1beta1 "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	"github.com/cs3org/reva/v2/pkg/share/manager/jsoncs3/receivedsharecache"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/metadata"
 
@@ -41,7 +40,7 @@ var _ = Describe("Cache", func() {
 		spaceID = "spaceid"
 		shareID = "storageid$spaceid!share1"
 		share   = &collaboration.Share{
-			Id: &collaborationv1beta1.ShareId{
+			Id: &collaboration.ShareId{
 				OpaqueId: shareID,
 			},
 		}
@@ -76,26 +75,28 @@ var _ = Describe("Cache", func() {
 		It("adds an entry", func() {
 			rs := &collaboration.ReceivedShare{
 				Share: share,
-				State: collaborationv1beta1.ShareState_SHARE_STATE_PENDING,
+				State: collaboration.ShareState_SHARE_STATE_PENDING,
 			}
 			err := c.Add(ctx, userID, spaceID, rs)
 			Expect(err).ToNot(HaveOccurred())
 
-			s := c.Get(userID, spaceID, shareID)
+			s, err := c.Get(ctx, userID, spaceID, shareID)
+			Expect(err).ToNot(HaveOccurred())
 			Expect(s).ToNot(BeNil())
 		})
 
 		It("persists the new entry", func() {
 			rs := &collaboration.ReceivedShare{
 				Share: share,
-				State: collaborationv1beta1.ShareState_SHARE_STATE_PENDING,
+				State: collaboration.ShareState_SHARE_STATE_PENDING,
 			}
 			err := c.Add(ctx, userID, spaceID, rs)
 			Expect(err).ToNot(HaveOccurred())
 
 			c = receivedsharecache.New(storage, 0*time.Second)
 			Expect(c.Sync(ctx, userID)).To(Succeed())
-			s := c.Get(userID, spaceID, shareID)
+			s, err := c.Get(ctx, userID, spaceID, shareID)
+			Expect(err).ToNot(HaveOccurred())
 			Expect(s).ToNot(BeNil())
 		})
 	})
@@ -104,29 +105,33 @@ var _ = Describe("Cache", func() {
 		BeforeEach(func() {
 			rs := &collaboration.ReceivedShare{
 				Share: share,
-				State: collaborationv1beta1.ShareState_SHARE_STATE_PENDING,
+				State: collaboration.ShareState_SHARE_STATE_PENDING,
 			}
 			Expect(c.Add(ctx, userID, spaceID, rs)).To(Succeed())
 		})
 
 		Describe("Get", func() {
 			It("handles unknown users", func() {
-				s := c.Get("something", spaceID, shareID)
+				s, err := c.Get(ctx, "something", spaceID, shareID)
+				Expect(err).ToNot(HaveOccurred())
 				Expect(s).To(BeNil())
 			})
 
 			It("handles unknown spaces", func() {
-				s := c.Get(userID, "something", shareID)
+				s, err := c.Get(ctx, userID, "something", shareID)
+				Expect(err).ToNot(HaveOccurred())
 				Expect(s).To(BeNil())
 			})
 
 			It("handles unknown shares", func() {
-				s := c.Get(userID, spaceID, "something")
+				s, err := c.Get(ctx, userID, spaceID, "something")
+				Expect(err).ToNot(HaveOccurred())
 				Expect(s).To(BeNil())
 			})
 
 			It("gets the entry", func() {
-				s := c.Get(userID, spaceID, shareID)
+				s, err := c.Get(ctx, userID, spaceID, shareID)
+				Expect(err).ToNot(HaveOccurred())
 				Expect(s).ToNot(BeNil())
 			})
 		})
