@@ -79,7 +79,7 @@ func (p *overleafProvider) GetAppURL(ctx context.Context, resource *provider.Res
 	restrictedToken := token
 
 	// Setting up archiver request
-	archHttpReq, err := rhttp.NewRequest(ctx, http.MethodGet, p.conf.FolderBaseURL+"/archiver", nil)
+	archHttpReq, err := rhttp.NewRequest(ctx, http.MethodGet, p.conf.ArchiverURL, nil)
 	if err != nil {
 		return nil, errors.Wrap(err, "overleaf: error setting up http request.")
 	}
@@ -155,7 +155,7 @@ type config struct {
 	MimeTypes           []string `mapstructure:"mime_types" docs:"nil;Inherited from the appprovider."`
 	AppName             string   `mapstructure:"app_name" docs:";The App user-friendly name."`
 	AppIconURI          string   `mapstructure:"app_icon_uri" docs:";A URI to a static asset which represents the app icon."`
-	FolderBaseURL       string   `mapstructure:"folder_base_url" docs:"; Public internet facing URL used to serve the files to Overleaf."`
+	ArchiverURL         string   `mapstructure:"archiver_url" docs:"; Internet-facing URL of the archiver service, used to serve the files to Overleaf."`
 	AppURL              string   `mapstructure:"app_url" docs:";The App URL."`
 	AppIntURL           string   `mapstructure:"app_int_url" docs:";The internal app URL in case of dockerized deployments. Defaults to AppURL"`
 	InsecureConnections bool     `mapstructure:"insecure_connections"`
