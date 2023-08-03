@@ -89,11 +89,12 @@ func New(s metadata.Storage, namespace, filename string, ttl time.Duration) Cach
 
 // Add adds a share to the cache
 func (c *Cache) Add(ctx context.Context, userid, shareID string) error {
-	if c.UserShares[userid] == nil {
-		c.Sync(ctx, userid)
-	}
 	unlock := c.lockUser(userid)
 	defer unlock()
+
+	if c.UserShares[userid] == nil {
+		c.syncWithLock(ctx, userid)
+	}
 
 	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "Add")
 	defer span.End()
@@ -122,7 +123,7 @@ func (c *Cache) Add(ctx context.Context, userid, shareID string) error {
 
 	err := persistFunc()
 	if _, ok := err.(errtypes.IsPreconditionFailed); ok {
-		if err := c.Sync(ctx, userid); err != nil {
+		if err := c.syncWithLock(ctx, userid); err != nil {
 			span.RecordError(err)
 			span.SetStatus(codes.Error, err.Error())
 
@@ -137,12 +138,12 @@ func (c *Cache) Add(ctx context.Context, userid, shareID string) error {
 
 // Remove removes a share for the given user
 func (c *Cache) Remove(ctx context.Context, userid, shareID string) error {
-	if c.UserShares[userid] == nil {
-		c.Sync(ctx, userid)
-	}
-
 	unlock := c.lockUser(userid)
 	defer unlock()
+
+	if c.UserShares[userid] == nil {
+		c.syncWithLock(ctx, userid)
+	}
 
 	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "Remove")
 	defer span.End()
@@ -169,7 +170,7 @@ func (c *Cache) Remove(ctx context.Context, userid, shareID string) error {
 
 	err := persistFunc()
 	if _, ok := err.(errtypes.IsPreconditionFailed); ok {
-		if err := c.Sync(ctx, userid); err != nil {
+		if err := c.syncWithLock(ctx, userid); err != nil {
 			return err
 		}
 		err = persistFunc()
@@ -180,7 +181,9 @@ func (c *Cache) Remove(ctx context.Context, userid, shareID string) error {
 
 // List return the list of spaces/shares for the given user/group
 func (c *Cache) List(ctx context.Context, userid string) (map[string]SpaceShareIDs, error) {
-	if err := c.Sync(ctx, userid); err != nil {
+	unlock := c.lockUser(userid)
+	defer unlock()
+	if err := c.syncWithLock(ctx, userid); err != nil {
 		return nil, err
 	}
 
@@ -198,11 +201,7 @@ func (c *Cache) List(ctx context.Context, userid string) (map[string]SpaceShareI
 	return r, nil
 }
 
-// Sync updates the in-memory data with the data from the storage if it is outdated
-func (c *Cache) Sync(ctx context.Context, userID string) error {
-	unlock := c.lockUser(userID)
-	defer unlock()
-
+func (c *Cache) syncWithLock(ctx context.Context, userID string) error {
 	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "Sync")
 	defer span.End()
 	span.SetAttributes(attribute.String("cs3.userid", userID))

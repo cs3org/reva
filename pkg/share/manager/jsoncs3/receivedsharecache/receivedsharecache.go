@@ -92,11 +92,12 @@ func (c *Cache) lockUser(userID string) func() {
 
 // Add adds a new entry to the cache
 func (c *Cache) Add(ctx context.Context, userID, spaceID string, rs *collaboration.ReceivedShare) error {
-	if c.ReceivedSpaces[userID] == nil {
-		c.Sync(ctx, userID)
-	}
 	unlock := c.lockUser(userID)
 	defer unlock()
+
+	if c.ReceivedSpaces[userID] == nil {
+		c.syncWithLock(ctx, userID)
+	}
 
 	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "Add")
 	defer span.End()
@@ -126,7 +127,7 @@ func (c *Cache) Add(ctx context.Context, userID, spaceID string, rs *collaborati
 	}
 	err := persistFunc()
 	if _, ok := err.(errtypes.IsPreconditionFailed); ok {
-		if err := c.Sync(ctx, userID); err != nil {
+		if err := c.syncWithLock(ctx, userID); err != nil {
 			span.RecordError(err)
 			span.SetStatus(codes.Error, err.Error())
 			return err
@@ -154,6 +155,10 @@ func (c *Cache) Sync(ctx context.Context, userID string) error {
 	unlock := c.lockUser(userID)
 	defer unlock()
 
+	return c.syncWithLock(ctx, userID)
+}
+
+func (c *Cache) syncWithLock(ctx context.Context, userID string) error {
 	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "Sync")
 	defer span.End()
 	span.SetAttributes(attribute.String("cs3.userid", userID))

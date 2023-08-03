@@ -124,12 +124,12 @@ func New(s metadata.Storage, ttl time.Duration) Cache {
 
 // Add adds a share to the cache
 func (c *Cache) Add(ctx context.Context, storageID, spaceID, shareID string, share *collaboration.Share) error {
-	if c.Providers[storageID] == nil || c.Providers[storageID].Spaces[spaceID] == nil {
-		c.Sync(ctx, storageID, spaceID)
-	}
-
 	unlock := c.LockSpace(spaceID)
 	defer unlock()
+
+	if c.Providers[storageID] == nil || c.Providers[storageID].Spaces[spaceID] == nil {
+		c.syncWithLock(ctx, storageID, spaceID)
+	}
 
 	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "Add")
 	defer span.End()
@@ -153,7 +153,7 @@ func (c *Cache) Add(ctx context.Context, storageID, spaceID, shareID string, sha
 	err := persistFunc()
 
 	if _, ok := err.(errtypes.IsPreconditionFailed); ok {
-		if err := c.Sync(ctx, storageID, spaceID); err != nil {
+		if err := c.syncWithLock(ctx, storageID, spaceID); err != nil {
 			span.RecordError(err)
 			span.SetStatus(codes.Error, err.Error())
 
@@ -167,12 +167,12 @@ func (c *Cache) Add(ctx context.Context, storageID, spaceID, shareID string, sha
 
 // Remove removes a share from the cache
 func (c *Cache) Remove(ctx context.Context, storageID, spaceID, shareID string) error {
-	if c.Providers[storageID] == nil || c.Providers[storageID].Spaces[spaceID] == nil {
-		c.Sync(ctx, storageID, spaceID)
-	}
-
 	unlock := c.LockSpace(spaceID)
 	defer unlock()
+
+	if c.Providers[storageID] == nil || c.Providers[storageID].Spaces[spaceID] == nil {
+		c.syncWithLock(ctx, storageID, spaceID)
+	}
 
 	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "Remove")
 	defer span.End()
@@ -189,7 +189,7 @@ func (c *Cache) Remove(ctx context.Context, storageID, spaceID, shareID string) 
 	}
 	err := persistFunc()
 	if _, ok := err.(errtypes.IsPreconditionFailed); ok {
-		if err := c.Sync(ctx, storageID, spaceID); err != nil {
+		if err := c.syncWithLock(ctx, storageID, spaceID); err != nil {
 			return err
 		}
 		err = persistFunc()
@@ -281,6 +281,10 @@ func (c *Cache) Sync(ctx context.Context, storageID, spaceID string) error {
 	unlock := c.LockSpace(spaceID)
 	defer unlock()
 
+	return c.syncWithLock(ctx, storageID, spaceID)
+}
+
+func (c *Cache) syncWithLock(ctx context.Context, storageID, spaceID string) error {
 	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "Sync")
 	defer span.End()
 
