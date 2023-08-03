@@ -75,8 +75,9 @@ home_provider = "/home"
 
 [grpc.services.storageregistry.drivers.static.rules]
 "/home" = {"address" = "your.revad.com:19000"}
-"/ocm" = {"address" = "your.revad.com:19001"}
 "00000000-0000-0000-0000-000000000000" = {"address" = "your.revad.com:19000"}
+"/ocm" = {"address" = "your.revad.com:19001"}
+"ocm" = {"address" = "your.revad.com:19001"}
 
 [grpc.services.usershareprovider]
 driver = "memory"
