@@ -53,7 +53,7 @@ func (p *overleafProvider) GetAppURL(ctx context.Context, resource *provider.Res
 	// client used to set and get arbitrary metadata to keep track whether project has already been exported
 	client, err := pool.GetGatewayServiceClient(pool.Endpoint(sharedconf.GetGatewaySVC("")))
 	if err != nil {
-		return nil, errors.Wrap(err, "overleaf: error fetching gateway service client.")
+		return nil, errors.Wrap(err, "overleaf: error fetching gateway service client")
 	}
 
 	if _, ok := opaqueMap["override"]; !ok {
@@ -65,13 +65,13 @@ func (p *overleafProvider) GetAppURL(ctx context.Context, resource *provider.Res
 			},
 		})
 		if err != nil {
-			return nil, errors.Wrap(err, "overleaf: error statting file.")
+			return nil, errors.Wrap(err, "overleaf: error statting file")
 		}
 
 		creationTime, alreadySet := statRes.Info.GetArbitraryMetadata().Metadata["reva.overleaf.time"]
 
 		if alreadySet {
-			return nil, errtypes.AlreadyExists("Project was already exported on:" + creationTime)
+			return nil, errtypes.AlreadyExists("Project was already exported on: " + creationTime)
 		}
 	}
 
@@ -79,18 +79,18 @@ func (p *overleafProvider) GetAppURL(ctx context.Context, resource *provider.Res
 	restrictedToken := token
 
 	// Setting up archiver request
-	archHttpReq, err := rhttp.NewRequest(ctx, http.MethodGet, p.conf.ArchiverURL, nil)
+	archHTTPReq, err := rhttp.NewRequest(ctx, http.MethodGet, p.conf.ArchiverURL, nil)
 	if err != nil {
-		return nil, errors.Wrap(err, "overleaf: error setting up http request.")
+		return nil, errors.Wrap(err, "overleaf: error setting up http request")
 	}
 
-	archQuery := archHttpReq.URL.Query()
+	archQuery := archHTTPReq.URL.Query()
 	archQuery.Add("id", resource.Id.StorageId+"!"+resource.Id.OpaqueId)
 	archQuery.Add("access_token", restrictedToken)
 	archQuery.Add("arch_type", "zip")
 
-	archHttpReq.URL.RawQuery = archQuery.Encode()
-	log.Debug().Str("Archiver url", archHttpReq.URL.String()).Msg("URL for downloading zipped resource from archiver")
+	archHTTPReq.URL.RawQuery = archQuery.Encode()
+	log.Debug().Str("Archiver url", archHTTPReq.URL.String()).Msg("URL for downloading zipped resource from archiver")
 
 	// Setting up Overleaf request
 	httpReq, err := rhttp.NewRequest(ctx, http.MethodGet, p.conf.AppURL, nil)
@@ -101,7 +101,7 @@ func (p *overleafProvider) GetAppURL(ctx context.Context, resource *provider.Res
 	q := httpReq.URL.Query()
 
 	// snip_uri is link to archiver request
-	q.Add("snip_uri", archHttpReq.URL.String())
+	q.Add("snip_uri", archHTTPReq.URL.String())
 
 	// getting file/folder name so as not to expose authentication token in project name
 	name := strings.TrimSuffix(filepath.Base(resource.Path), filepath.Ext(resource.Path))
