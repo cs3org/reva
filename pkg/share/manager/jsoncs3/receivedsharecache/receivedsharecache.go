@@ -248,6 +248,7 @@ func (c *Cache) persist(ctx context.Context, userID string) error {
 		Path:              jsonPath,
 		Content:           createdBytes,
 		IfUnmodifiedSince: oldMtime,
+		MTime:             c.ReceivedSpaces[userID].Mtime,
 	}); err != nil {
 		c.ReceivedSpaces[userID].Mtime = oldMtime
 		span.RecordError(err)

@@ -25,6 +25,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
@@ -148,6 +149,7 @@ func (cs3 *CS3) Upload(ctx context.Context, req UploadRequest) error {
 	}
 
 	ifuReq := &provider.InitiateFileUploadRequest{
+		Opaque: &types.Opaque{},
 		Ref: &provider.Reference{
 			ResourceId: cs3.SpaceRoot,
 			Path:       utils.MakeRelativePath(req.Path),
@@ -163,6 +165,9 @@ func (cs3 *CS3) Upload(ctx context.Context, req UploadRequest) error {
 		ifuReq.Options = &provider.InitiateFileUploadRequest_IfUnmodifiedSince{
 			IfUnmodifiedSince: utils.TimeToTS(req.IfUnmodifiedSince),
 		}
+	}
+	if req.MTime != (time.Time{}) {
+		ifuReq.Opaque = utils.AppendPlainToOpaque(ifuReq.Opaque, "X-OC-Mtime", strconv.Itoa(int(req.MTime.Unix()))+"."+strconv.Itoa(req.MTime.Nanosecond()))
 	}
 
 	res, err := client.InitiateFileUpload(ctx, ifuReq)
