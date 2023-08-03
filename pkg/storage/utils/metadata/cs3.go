@@ -167,6 +167,7 @@ func (cs3 *CS3) Upload(ctx context.Context, req UploadRequest) error {
 		}
 	}
 	if req.MTime != (time.Time{}) {
+		// The format of the X-OC-Mtime header is <epoch>.<nanoseconds>, e.g. '1691053416.934129485'
 		ifuReq.Opaque = utils.AppendPlainToOpaque(ifuReq.Opaque, "X-OC-Mtime", strconv.Itoa(int(req.MTime.Unix()))+"."+strconv.Itoa(req.MTime.Nanosecond()))
 	}
 
