@@ -58,6 +58,7 @@ var _ = Describe("The ocs API", func() {
 			Id: &userpb.UserId{
 				OpaqueId: "admin",
 			},
+			Username: "Admin",
 		}
 
 		ctx = ctxpkg.ContextSetUser(context.Background(), user)
@@ -742,6 +743,13 @@ var _ = Describe("The ocs API", func() {
 				},
 			}, nil)
 
+			userGrantee := &userpb.User{
+				Id: &userpb.UserId{
+					OpaqueId: helpers.User0ID,
+				},
+				Username: "userGrantee",
+			}
+
 			gatewayClient.On("ListShares", mock.Anything, mock.Anything).Return(&collaboration.ListSharesResponse{
 				Status: status.NewOK(context.Background()),
 				Shares: []*collaboration.Share{
@@ -749,6 +757,9 @@ var _ = Describe("The ocs API", func() {
 						Id: &collaboration.ShareId{OpaqueId: "11"},
 						Grantee: &provider.Grantee{
 							Type: provider.GranteeType_GRANTEE_TYPE_USER,
+							Id: &provider.Grantee_UserId{
+								UserId: userGrantee.Id,
+							},
 						},
 						Creator:    user.Id,
 						ResourceId: resID,
@@ -835,6 +846,18 @@ var _ = Describe("The ocs API", func() {
 				SpaceId:   "space-1",
 				OpaqueId:  "share1",
 			}
+			userGrantee0 := &userpb.User{
+				Id: &userpb.UserId{
+					OpaqueId: helpers.User0ID,
+				},
+				Username: "userGrantee0",
+			}
+			userGrantee1 := &userpb.User{
+				Id: &userpb.UserId{
+					OpaqueId: helpers.User1ID,
+				},
+				Username: "userGrantee1",
+			}
 			gatewayClient.On("ListShares", mock.Anything, mock.Anything).Return(&collaboration.ListSharesResponse{
 				Status: status.NewOK(context.Background()),
 				Shares: []*collaboration.Share{
@@ -842,6 +865,9 @@ var _ = Describe("The ocs API", func() {
 						Id: &collaboration.ShareId{OpaqueId: "11"},
 						Grantee: &provider.Grantee{
 							Type: provider.GranteeType_GRANTEE_TYPE_USER,
+							Id: &provider.Grantee_UserId{
+								UserId: userGrantee0.Id,
+							},
 						},
 						Creator:    user.Id,
 						ResourceId: resID,
@@ -856,6 +882,9 @@ var _ = Describe("The ocs API", func() {
 						Id: &collaboration.ShareId{OpaqueId: "12"},
 						Grantee: &provider.Grantee{
 							Type: provider.GranteeType_GRANTEE_TYPE_USER,
+							Id: &provider.Grantee_UserId{
+								UserId: userGrantee1.Id,
+							},
 						},
 						Creator: &userpb.UserId{
 							OpaqueId: helpers.User1ID,
@@ -896,6 +925,7 @@ var _ = Describe("The ocs API", func() {
 				Id: &userpb.UserId{
 					OpaqueId: helpers.User0ID,
 				},
+				Username: "user0",
 			}
 			ctx0 := ctxpkg.ContextSetUser(context.Background(), user0)
 			req := httptest.NewRequest("GET", "/apps/files_sharing/api/v1/shares?reshares=true", nil).WithContext(ctx0)
