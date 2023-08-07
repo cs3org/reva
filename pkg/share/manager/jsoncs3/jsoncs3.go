@@ -776,6 +776,7 @@ func (m *Manager) ListReceivedShares(ctx context.Context, filters []*collaborati
 	}
 
 	// add all spaces the user has receved shares for, this includes mount points and share state for groups
+	// TODO: rewrite this code to not use the internal strucs anymore (e.g. by adding a List method). Sync can then be made private.
 	_ = m.UserReceivedStates.Sync(ctx, user.Id.OpaqueId) // ignore error, cache will be updated on next read
 
 	if m.UserReceivedStates.ReceivedSpaces[user.Id.OpaqueId] != nil {
