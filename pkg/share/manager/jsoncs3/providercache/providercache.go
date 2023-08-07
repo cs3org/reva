@@ -233,8 +233,8 @@ func (c *Cache) ListSpace(ctx context.Context, storageID, spaceID string) (*Shar
 	return c.Providers[storageID].Spaces[spaceID], nil
 }
 
-// PersistWithTime persists the data of one space if it has not been modified since the given mtime
-func (c *Cache) PersistWithTime(ctx context.Context, storageID, spaceID string, mtime time.Time) error {
+// Persist persists the data of one space
+func (c *Cache) Persist(ctx context.Context, storageID, spaceID string) error {
 	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "PersistWithTime")
 	defer span.End()
 	span.SetAttributes(attribute.String("cs3.storageid", storageID), attribute.String("cs3.spaceid", spaceID))
@@ -245,7 +245,7 @@ func (c *Cache) PersistWithTime(ctx context.Context, storageID, spaceID string, 
 	}
 
 	oldMtime := c.Providers[storageID].Spaces[spaceID].Mtime
-	c.Providers[storageID].Spaces[spaceID].Mtime = mtime
+	c.Providers[storageID].Spaces[spaceID].Mtime = time.Now()
 
 	// FIXME there is a race when between this time now and the below Uploed another process also updates the file -> we need a lock
 	createdBytes, err := json.Marshal(c.Providers[storageID].Spaces[spaceID])
@@ -276,11 +276,6 @@ func (c *Cache) PersistWithTime(ctx context.Context, storageID, spaceID string, 
 	}
 	span.SetStatus(codes.Ok, "")
 	return nil
-}
-
-// Persist persists the data of one space
-func (c *Cache) Persist(ctx context.Context, storageID, spaceID string) error {
-	return c.PersistWithTime(ctx, storageID, spaceID, time.Now())
 }
 
 // Sync updates the in-memory data with the data from the storage if it is outdated
