@@ -68,7 +68,7 @@ func (p *overleafProvider) GetAppURL(ctx context.Context, resource *provider.Res
 			return nil, errors.Wrap(err, "overleaf: error statting file")
 		}
 
-		creationTime, alreadySet := statRes.Info.GetArbitraryMetadata().Metadata["reva.overleaf.time"]
+		creationTime, alreadySet := statRes.Info.GetArbitraryMetadata().Metadata["reva.overleaf.exporttime"]
 
 		if alreadySet {
 			return nil, errtypes.AlreadyExists("Project was already exported on: " + creationTime)
@@ -116,7 +116,8 @@ func (p *overleafProvider) GetAppURL(ctx context.Context, resource *provider.Res
 		},
 		ArbitraryMetadata: &provider.ArbitraryMetadata{
 			Metadata: map[string]string{
-				"reva.overleaf.time": strconv.Itoa(int(time.Now().Unix())),
+				"reva.overleaf.exporttime": strconv.Itoa(int(time.Now().Unix())),
+				"reva.overleaf.name":       name,
 			},
 		},
 	}
