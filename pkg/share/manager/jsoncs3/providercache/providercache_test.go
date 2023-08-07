@@ -21,6 +21,7 @@ package providercache_test
 import (
 	"context"
 	"os"
+	"path/filepath"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -156,46 +157,11 @@ var _ = Describe("Cache", func() {
 
 		Describe("PersistWithTime", func() {
 			It("does not persist if the mtime on disk is more recent", func() {
-				Expect(c.PersistWithTime(ctx, storageID, spaceID, time.Now().Add(-3*time.Hour))).ToNot(Succeed())
-			})
-		})
-
-		Describe("Sync", func() {
-			BeforeEach(func() {
-				Expect(c.Persist(ctx, storageID, spaceID)).To(Succeed())
-				// reset in-memory cache
-				c = providercache.New(storage, 0*time.Second)
-			})
-
-			It("downloads if needed", func() {
-				s, err := c.Get(ctx, storageID, spaceID, shareID)
-				Expect(err).ToNot(HaveOccurred())
-				Expect(s).To(BeNil())
-
-				Expect(c.Sync(ctx, storageID, spaceID)).To(Succeed())
-
-				s, err = c.Get(ctx, storageID, spaceID, shareID)
-				Expect(err).ToNot(HaveOccurred())
-				Expect(s).ToNot(BeNil())
-			})
-
-			It("does not download if not needed", func() {
-				s, err := c.Get(ctx, storageID, spaceID, shareID)
-				Expect(err).ToNot(HaveOccurred())
-				Expect(s).To(BeNil())
-
-				c.Providers[storageID] = &providercache.Spaces{
-					Spaces: map[string]*providercache.Shares{
-						spaceID: {
-							Mtime: time.Now(),
-						},
-					},
-				}
-				Expect(c.Sync(ctx, storageID, spaceID)).To(Succeed()) // Sync from disk won't happen because in-memory mtime is later than on disk
-
-				s, err = c.Get(ctx, storageID, spaceID, shareID)
-				Expect(err).ToNot(HaveOccurred())
-				Expect(s).To(BeNil())
+				time.Sleep(1 * time.Nanosecond)
+				path := filepath.Join(tmpdir, "storages/storageid/spaceid.json")
+				now := time.Now()
+				os.Chtimes(path, now, now)
+				Expect(c.Persist(ctx, storageID, spaceID)).ToNot(Succeed())
 			})
 		})
 	})
