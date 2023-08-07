@@ -214,6 +214,12 @@ db_name = "cernboxngcopy"
 [http.services.ocdav.notifications]
 nats_address = "nats:4222"
 
+[http.services.ocs.notifications.templates.sharedfolder_upload_mail]
+name = "sharedfolder-upload-mail"
+handler = "email"
+subject_template_path = "/etc/revad/templates/sharedfolder-upload-mail-subject.txt"
+body_template_path = "/etc/revad/templates/sharedfolder-upload-mail-body.html"
+
 
 # SERVERLESS SERVICES
 
