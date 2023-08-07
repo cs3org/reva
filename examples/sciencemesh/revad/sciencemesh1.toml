@@ -191,8 +191,6 @@ endpoint = "https://your.revad.com"
 enable_webapp = true
 enable_datatx = true
 
-[http.services.ocsprovider]
-
 [http.services.ocmd]
 prefix = "ocm"
 
