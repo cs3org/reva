@@ -21,6 +21,7 @@ package providercache_test
 import (
 	"context"
 	"os"
+	"path/filepath"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -39,17 +40,18 @@ var _ = Describe("Cache", func() {
 		storageID = "storageid"
 		spaceID   = "spaceid"
 		shareID   = "storageid$spaceid!share1"
-		share1    = &collaboration.Share{
-			Id: &collaboration.ShareId{
-				OpaqueId: "share1",
-			},
-		}
-		ctx    context.Context
-		tmpdir string
+		share1    *collaboration.Share
+		ctx       context.Context
+		tmpdir    string
 	)
 
 	BeforeEach(func() {
 		ctx = context.Background()
+		share1 = &collaboration.Share{
+			Id: &collaboration.ShareId{
+				OpaqueId: "share1",
+			},
+		}
 
 		var err error
 		tmpdir, err = os.MkdirTemp("", "providercache-test")
@@ -73,12 +75,14 @@ var _ = Describe("Cache", func() {
 
 	Describe("Add", func() {
 		It("adds a share", func() {
-			s := c.Get(storageID, spaceID, shareID)
+			s, err := c.Get(ctx, storageID, spaceID, shareID)
+			Expect(err).ToNot(HaveOccurred())
 			Expect(s).To(BeNil())
 
 			Expect(c.Add(ctx, storageID, spaceID, shareID, share1)).To(Succeed())
 
-			s = c.Get(storageID, spaceID, shareID)
+			s, err = c.Get(ctx, storageID, spaceID, shareID)
+			Expect(err).ToNot(HaveOccurred())
 			Expect(s).ToNot(BeNil())
 			Expect(s).To(Equal(share1))
 		})
@@ -103,20 +107,23 @@ var _ = Describe("Cache", func() {
 
 		Describe("Get", func() {
 			It("returns the entry", func() {
-				s := c.Get(storageID, spaceID, shareID)
+				s, err := c.Get(ctx, storageID, spaceID, shareID)
+				Expect(err).ToNot(HaveOccurred())
 				Expect(s).ToNot(BeNil())
 			})
 		})
 
 		Describe("Remove", func() {
 			It("removes the entry", func() {
-				s := c.Get(storageID, spaceID, shareID)
+				s, err := c.Get(ctx, storageID, spaceID, shareID)
+				Expect(err).ToNot(HaveOccurred())
 				Expect(s).ToNot(BeNil())
 				Expect(s).To(Equal(share1))
 
 				Expect(c.Remove(ctx, storageID, spaceID, shareID)).To(Succeed())
 
-				s = c.Get(storageID, spaceID, shareID)
+				s, err = c.Get(ctx, storageID, spaceID, shareID)
+				Expect(err).ToNot(HaveOccurred())
 				Expect(s).To(BeNil())
 			})
 
@@ -151,42 +158,11 @@ var _ = Describe("Cache", func() {
 
 		Describe("PersistWithTime", func() {
 			It("does not persist if the mtime on disk is more recent", func() {
-				Expect(c.PersistWithTime(ctx, storageID, spaceID, time.Now().Add(-3*time.Hour))).ToNot(Succeed())
-			})
-		})
-
-		Describe("Sync", func() {
-			BeforeEach(func() {
-				Expect(c.Persist(ctx, storageID, spaceID)).To(Succeed())
-				// reset in-memory cache
-				c = providercache.New(storage, 0*time.Second)
-			})
-
-			It("downloads if needed", func() {
-				s := c.Get(storageID, spaceID, shareID)
-				Expect(s).To(BeNil())
-
-				Expect(c.Sync(ctx, storageID, spaceID)).To(Succeed())
-
-				s = c.Get(storageID, spaceID, shareID)
-				Expect(s).ToNot(BeNil())
-			})
-
-			It("does not download if not needed", func() {
-				s := c.Get(storageID, spaceID, shareID)
-				Expect(s).To(BeNil())
-
-				c.Providers[storageID] = &providercache.Spaces{
-					Spaces: map[string]*providercache.Shares{
-						spaceID: {
-							Mtime: time.Now(),
-						},
-					},
-				}
-				Expect(c.Sync(ctx, storageID, spaceID)).To(Succeed()) // Sync from disk won't happen because in-memory mtime is later than on disk
-
-				s = c.Get(storageID, spaceID, shareID)
-				Expect(s).To(BeNil())
+				time.Sleep(1 * time.Nanosecond)
+				path := filepath.Join(tmpdir, "storages/storageid/spaceid.json")
+				now := time.Now()
+				_ = os.Chtimes(path, now, now)
+				Expect(c.Persist(ctx, storageID, spaceID)).ToNot(Succeed())
 			})
 		})
 	})
