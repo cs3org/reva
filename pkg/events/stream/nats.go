@@ -25,7 +25,7 @@ type NatsConfig struct {
 }
 
 // NatsFromConfig returns a nats stream from the given config
-func NatsFromConfig(cfg NatsConfig, connName string) (events.Stream, error) {
+func NatsFromConfig(connName string, cfg NatsConfig) (events.Stream, error) {
 	var tlsConf *tls.Config
 	if cfg.EnableTLS {
 		var rootCAPool *x509.CertPool
