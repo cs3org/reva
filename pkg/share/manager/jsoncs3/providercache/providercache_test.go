@@ -40,17 +40,18 @@ var _ = Describe("Cache", func() {
 		storageID = "storageid"
 		spaceID   = "spaceid"
 		shareID   = "storageid$spaceid!share1"
-		share1    = &collaboration.Share{
-			Id: &collaboration.ShareId{
-				OpaqueId: "share1",
-			},
-		}
-		ctx    context.Context
-		tmpdir string
+		share1    *collaboration.Share
+		ctx       context.Context
+		tmpdir    string
 	)
 
 	BeforeEach(func() {
 		ctx = context.Background()
+		share1 = &collaboration.Share{
+			Id: &collaboration.ShareId{
+				OpaqueId: "share1",
+			},
+		}
 
 		var err error
 		tmpdir, err = os.MkdirTemp("", "providercache-test")
