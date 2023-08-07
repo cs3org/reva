@@ -93,7 +93,10 @@ func (c *Cache) Add(ctx context.Context, userid, shareID string) error {
 	defer unlock()
 
 	if c.UserShares[userid] == nil {
-		c.syncWithLock(ctx, userid)
+		err := c.syncWithLock(ctx, userid)
+		if err != nil {
+			return err
+		}
 	}
 
 	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "Add")
@@ -142,7 +145,10 @@ func (c *Cache) Remove(ctx context.Context, userid, shareID string) error {
 	defer unlock()
 
 	if c.UserShares[userid] == nil {
-		c.syncWithLock(ctx, userid)
+		err := c.syncWithLock(ctx, userid)
+		if err != nil {
+			return err
+		}
 	}
 
 	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "Remove")

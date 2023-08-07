@@ -128,7 +128,10 @@ func (c *Cache) Add(ctx context.Context, storageID, spaceID, shareID string, sha
 	defer unlock()
 
 	if c.Providers[storageID] == nil || c.Providers[storageID].Spaces[spaceID] == nil {
-		c.syncWithLock(ctx, storageID, spaceID)
+		err := c.syncWithLock(ctx, storageID, spaceID)
+		if err != nil {
+			return err
+		}
 	}
 
 	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "Add")
@@ -171,7 +174,10 @@ func (c *Cache) Remove(ctx context.Context, storageID, spaceID, shareID string) 
 	defer unlock()
 
 	if c.Providers[storageID] == nil || c.Providers[storageID].Spaces[spaceID] == nil {
-		c.syncWithLock(ctx, storageID, spaceID)
+		err := c.syncWithLock(ctx, storageID, spaceID)
+		if err != nil {
+			return err
+		}
 	}
 
 	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "Remove")

@@ -96,7 +96,10 @@ func (c *Cache) Add(ctx context.Context, userID, spaceID string, rs *collaborati
 	defer unlock()
 
 	if c.ReceivedSpaces[userID] == nil {
-		c.syncWithLock(ctx, userID)
+		err := c.syncWithLock(ctx, userID)
+		if err != nil {
+			return err
+		}
 	}
 
 	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "Add")
