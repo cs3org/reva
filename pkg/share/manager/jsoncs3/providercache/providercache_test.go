@@ -160,7 +160,7 @@ var _ = Describe("Cache", func() {
 				time.Sleep(1 * time.Nanosecond)
 				path := filepath.Join(tmpdir, "storages/storageid/spaceid.json")
 				now := time.Now()
-				os.Chtimes(path, now, now)
+				_ = os.Chtimes(path, now, now)
 				Expect(c.Persist(ctx, storageID, spaceID)).ToNot(Succeed())
 			})
 		})
