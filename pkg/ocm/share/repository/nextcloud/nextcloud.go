@@ -449,7 +449,7 @@ func (sm *Manager) do(ctx context.Context, a Action, username string) (int, []by
 	url := sm.endPoint + "~" + username + "/api/ocm/" + a.verb
 
 	log := appctx.GetLogger(ctx)
-	log.Info().Msgf("am.do %s %s", url, a.argS)
+	log.Info().Msgf("am.do %s %s %s", url, a.verb, a.argS)
 	req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(a.argS))
 	if err != nil {
 		return 0, nil, err
@@ -470,7 +470,7 @@ func (sm *Manager) do(ctx context.Context, a Action, username string) (int, []by
 
 	// curl -i -H 'application/json' -H 'X-Reva-Secret: shared-secret-1' -d '{"md":{"opaque_id":"fileid-/other/q/as"},"g":{"grantee":{"type":1,"Id":{"UserId":{"idp":"revanc2.docker","opaque_id":"marie"}}},"permissions":{"permissions":{"get_path":true,"initiate_file_download":true,"list_container":true,"list_file_versions":true,"stat":true}}},"provider_domain":"cern.ch","resource_type":"file","provider_id":2,"owner_opaque_id":"einstein","owner_display_name":"Albert Einstein","protocol":{"name":"webdav","options":{"sharedSecret":"secret","permissions":"webdav-property"}}}' https://nc1.docker/index.php/apps/sciencemesh/~/api/ocm/addSentShare
 
-	log.Info().Interface("action", a).Int("status", resp.StatusCode).Interface("response body", body).Msg("executed action against OC/NC")
+	log.Info().Int("status", resp.StatusCode).Msgf("executed action against OC/NC, response: %s", body)
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 		return 0, nil, fmt.Errorf("Unexpected response code from EFSS API: " + strconv.Itoa(resp.StatusCode))
