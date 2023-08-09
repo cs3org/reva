@@ -241,6 +241,6 @@ db_port = 3306
 db_name = "cernboxngcopy"
 
 [serverless.services.notifications.handlers.email]
-smtp_server = "localhost:1025"
+smtp_server = "maildump:1025"
 disable_auth = true
 default_sender = "noreply@localdomain"
