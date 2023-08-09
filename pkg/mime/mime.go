@@ -47,8 +47,7 @@ func Detect(isDir bool, fn string) string {
 		return defaultMimeDir
 	}
 
-	ext := path.Ext(fn)
-	ext = strings.TrimPrefix(ext, ".")
+	ext := strings.ToLower(strings.TrimPrefix(path.Ext(fn), "."))
 
 	mimeType := getCustomMime(ext)
 
