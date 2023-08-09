@@ -53,6 +53,7 @@ type Manager struct {
 	sharedSecret string
 	webDAVHost   string
 	endPoint     string
+	mountID      string
 }
 
 // ShareManagerConfig contains config for a Nextcloud-based ShareManager.
@@ -61,6 +62,7 @@ type ShareManagerConfig struct {
 	SharedSecret string `mapstructure:"shared_secret"`
 	WebDAVHost   string `mapstructure:"webdav_host"`
 	MockHTTP     bool   `mapstructure:"mock_http"`
+	MountID      string `mapstructure:"mount_id"`
 }
 
 // Action describes a REST request to forward to the Nextcloud backend.
@@ -79,6 +81,9 @@ type GranteeAltMap struct {
 // ShareAltMap is an alternative map to JSON-unmarshal a Share.
 type ShareAltMap struct {
 	ID            *ocm.ShareId          `json:"id"`
+	ResourceID    struct {
+		OpaqueID string `json:"opaque_id"`
+	} `json:"resource_id"`
 	RemoteShareID string                `json:"remote_share_id"`
 	Permissions   *ocm.SharePermissions `json:"permissions"`
 	Grantee       struct {
@@ -142,6 +147,7 @@ func NewShareManager(c *ShareManagerConfig) (*Manager, error) {
 		sharedSecret: c.SharedSecret,
 		client:       client,
 		webDAVHost:   c.WebDAVHost,
+		mountID:      c.MountID,
 	}, nil
 }
 
@@ -189,6 +195,10 @@ func (sm *Manager) GetShare(ctx context.Context, user *userpb.User, ref *ocm.Sha
 	log.Debug().Msgf("Found ShareAltMap %s", rejson)
 	return &ocm.Share{
 		Id: altResult.ID,
+		ResourceId: &provider.ResourceId{
+			OpaqueId: altResult.ResourceID.OpaqueID,
+			StorageId: sm.mountID,
+		},
 		Grantee: &provider.Grantee{
 			Type: provider.GranteeType_GRANTEE_TYPE_USER,
 			Id: &provider.Grantee_UserId{

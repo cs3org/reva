@@ -75,7 +75,7 @@ home_provider = "/home"
 
 [grpc.services.storageregistry.drivers.static.rules]
 "/home" = {"address" = "your.revad.com:19000"}
-"00000000-0000-0000-0000-000000000000" = {"address" = "your.revad.com:19000"}
+"nextcloud" = {"address" = "your.revad.com:19000"}
 "/ocm" = {"address" = "your.revad.com:19001"}
 "ocm" = {"address" = "your.revad.com:19001"}
 
@@ -108,6 +108,7 @@ webdav_host = "https://your.revad.com/"
 endpoint = "https://your.efss.com/index.php/apps/sciencemesh/"
 shared_secret = "shared-secret-1"
 mock_http = false
+mount_id = "nextcloud"
 
 [grpc.services.ocmproviderauthorizer]
 driver = "json"
@@ -124,6 +125,7 @@ driver = "nextcloud"
 expose_data_server = true
 data_server_url = "https://your.revad.com/data"
 enable_home_creation = true
+mount_id = "nextcloud"
 
 [grpc.services.storageprovider.drivers.nextcloud]
 endpoint = "https://your.efss.com/index.php/apps/sciencemesh/"
@@ -212,3 +214,4 @@ verify_request_hostname = true
 insecure = false
 timeout = 10
 refresh = 900
+
