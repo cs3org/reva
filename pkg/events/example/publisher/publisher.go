@@ -20,6 +20,7 @@
 package publisher
 
 import (
+	"context"
 	"log"
 
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
@@ -29,7 +30,7 @@ import (
 // Example publishes events to the queue
 func Example(p events.Publisher) {
 	// nothing to do - just publish!
-	err := events.Publish(p, events.ShareCreated{
+	err := events.Publish(context.Background(), p, events.ShareCreated{
 		Sharer: &user.UserId{
 			OpaqueId: "123",
 		},
@@ -40,5 +41,4 @@ func Example(p events.Publisher) {
 	if err != nil {
 		log.Fatal(err)
 	}
-
 }
