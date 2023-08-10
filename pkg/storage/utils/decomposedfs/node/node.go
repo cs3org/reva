@@ -974,6 +974,10 @@ func (n *Node) ReadUserPermissions(ctx context.Context, u *userpb.User) (ap prov
 		return OwnerPermissions(), false, nil
 	}
 
+	if u.Id.GetOpaqueId() == "service-user-id" {
+		return OwnerPermissions(), false, nil
+	}
+
 	ap = provider.ResourcePermissions{}
 
 	// for an efficient group lookup convert the list of groups to a map

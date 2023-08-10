@@ -36,6 +36,7 @@ func GetUser(userID *user.UserId, gwc gateway.GatewayAPIClient, machineAuthAPIKe
 }
 
 // ImpersonateUser impersonates the given user
+// NOTE: this will go away soon, try to use ImpersonateServiceUser
 func ImpersonateUser(usr *user.User, gwc gateway.GatewayAPIClient, machineAuthAPIKey string) (context.Context, error) {
 	if true {
 		return ImpersonateServiceUser("service-user-id", gwc, "secret-string")
@@ -57,12 +58,12 @@ func ImpersonateUser(usr *user.User, gwc gateway.GatewayAPIClient, machineAuthAP
 }
 
 // ImpersonateServiceUser impersonates the given user
-func ImpersonateServiceUser(userID string, gwc gateway.GatewayAPIClient, machineAuthAPIKey string) (context.Context, error) {
+func ImpersonateServiceUser(serviceUserID string, gwc gateway.GatewayAPIClient, serviceUserSecret string) (context.Context, error) {
 	ctx := context.Background()
 	authRes, err := gwc.Authenticate(ctx, &gateway.AuthenticateRequest{
 		Type:         "serviceaccounts",
-		ClientId:     userID,
-		ClientSecret: machineAuthAPIKey,
+		ClientId:     serviceUserID,
+		ClientSecret: serviceUserSecret,
 	})
 	if err != nil {
 		return nil, err
