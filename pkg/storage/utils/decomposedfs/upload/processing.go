@@ -351,18 +351,12 @@ func initNewNode(upload *Upload, n *node.Node, fsize uint64) (*lockedfile.File, 
 	// link child name to parent if it is new
 	childNameLink := filepath.Join(n.ParentPath(), n.Name)
 	relativeNodePath := filepath.Join("../../../../../", lookup.Pathify(n.ID, 4, 2))
-	//link, err := os.Readlink(childNameLink)
-	//if err == nil && link != relativeNodePath {
-	//	return nil, errtypes.AlreadyExists(n.Name)
-	//}
-	//if errors.Is(err, iofs.ErrNotExist) {
 	if err = os.Symlink(relativeNodePath, childNameLink); err != nil {
 		if errors.Is(err, iofs.ErrExist) {
 			return nil, errtypes.AlreadyExists(n.Name)
 		}
 		return f, errors.Wrap(err, "Decomposedfs: could not symlink child entry")
 	}
-	//}
 
 	// on a new file the sizeDiff is the fileSize
 	upload.SizeDiff = int64(fsize)
