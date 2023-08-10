@@ -20,6 +20,7 @@ package decomposedfs
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -32,6 +33,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/v2/pkg/storagespace"
 	"github.com/cs3org/reva/v2/pkg/utils"
+	"github.com/rogpeppe/go-internal/lockedfile"
 )
 
 // DenyGrant denies access to a resource.
@@ -74,10 +76,11 @@ func (fs *Decomposedfs) DenyGrant(ctx context.Context, ref *provider.Reference, 
 func (fs *Decomposedfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) (err error) {
 	log := appctx.GetLogger(ctx)
 	log.Debug().Interface("ref", ref).Interface("grant", g).Msg("AddGrant()")
-	grantNode, grant, err := fs.loadGrant(ctx, ref, g)
+	grantNode, unlockFunc, grant, err := fs.loadGrant(ctx, ref, g)
 	if err != nil {
 		return err
 	}
+	defer unlockFunc()
 
 	if grant != nil {
 		// grant exists -> go to UpdateGrant
@@ -171,10 +174,11 @@ func (fs *Decomposedfs) ListGrants(ctx context.Context, ref *provider.Reference)
 
 // RemoveGrant removes a grant from resource
 func (fs *Decomposedfs) RemoveGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) (err error) {
-	grantNode, grant, err := fs.loadGrant(ctx, ref, g)
+	grantNode, unlockFunc, grant, err := fs.loadGrant(ctx, ref, g)
 	if err != nil {
 		return err
 	}
+	defer unlockFunc()
 
 	if grant == nil {
 		return errtypes.NotFound("grant not found")
@@ -243,10 +247,11 @@ func (fs *Decomposedfs) UpdateGrant(ctx context.Context, ref *provider.Reference
 	log := appctx.GetLogger(ctx)
 	log.Debug().Interface("ref", ref).Interface("grant", g).Msg("UpdateGrant()")
 
-	grantNode, grant, err := fs.loadGrant(ctx, ref, g)
+	grantNode, unlockFunc, grant, err := fs.loadGrant(ctx, ref, g)
 	if err != nil {
 		return err
 	}
+	defer unlockFunc()
 
 	if grant == nil {
 		// grant not found
@@ -273,34 +278,42 @@ func (fs *Decomposedfs) UpdateGrant(ctx context.Context, ref *provider.Reference
 }
 
 // checks if the given grant exists and returns it. Nil grant means it doesn't exist
-func (fs *Decomposedfs) loadGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) (*node.Node, *provider.Grant, error) {
+func (fs *Decomposedfs) loadGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) (*node.Node, func(), *provider.Grant, error) {
+	var unlockFunc func()
+
 	n, err := fs.lu.NodeFromResource(ctx, ref)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	if !n.Exists {
-		return nil, nil, errtypes.NotFound(filepath.Join(n.ParentID, n.Name))
+		return nil, nil, nil, errtypes.NotFound(filepath.Join(n.ParentID, n.Name))
 	}
+
+	f, err := lockedfile.OpenFile(fs.lu.MetadataBackend().LockfilePath(n.InternalPath()), os.O_RDWR|os.O_CREATE, 0600)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	unlockFunc = func() { f.Close() }
 
 	grants, err := n.ListGrants(ctx)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	for _, grant := range grants {
 		switch grant.Grantee.GetType() {
 		case provider.GranteeType_GRANTEE_TYPE_USER:
 			if g.Grantee.GetUserId().GetOpaqueId() == grant.Grantee.GetUserId().GetOpaqueId() {
-				return n, grant, nil
+				return n, unlockFunc, grant, nil
 			}
 		case provider.GranteeType_GRANTEE_TYPE_GROUP:
 			if g.Grantee.GetGroupId().GetOpaqueId() == grant.Grantee.GetGroupId().GetOpaqueId() {
-				return n, grant, nil
+				return n, unlockFunc, grant, nil
 			}
 		}
 	}
 
-	return n, nil, nil
+	return n, unlockFunc, nil, nil
 }
 
 func (fs *Decomposedfs) storeGrant(ctx context.Context, n *node.Node, g *provider.Grant) error {
@@ -323,7 +336,10 @@ func (fs *Decomposedfs) storeGrant(ctx context.Context, n *node.Node, g *provide
 	// set the grant
 	e := ace.FromGrant(g)
 	principal, value := e.Marshal()
-	if err := n.SetXattr(ctx, prefixes.GrantPrefix+principal, value); err != nil {
+	attribs := node.Attributes{
+		prefixes.GrantPrefix + principal: value,
+	}
+	if err := n.SetXattrsWithContext(ctx, attribs, false); err != nil {
 		appctx.GetLogger(ctx).Error().Err(err).
 			Str("principal", principal).Msg("Could not set grant for principal")
 		return err
