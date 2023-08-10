@@ -92,7 +92,10 @@ func (c *Cache) lockUser(userID string) func() {
 
 // Add adds a new entry to the cache
 func (c *Cache) Add(ctx context.Context, userID, spaceID string, rs *collaboration.ReceivedShare) error {
+	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "Grab lock")
 	unlock := c.lockUser(userID)
+	span.End()
+	span.SetAttributes(attribute.String("cs3.userid", userID))
 	defer unlock()
 
 	if c.ReceivedSpaces[userID] == nil {
@@ -102,7 +105,7 @@ func (c *Cache) Add(ctx context.Context, userID, spaceID string, rs *collaborati
 		}
 	}
 
-	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "Add")
+	ctx, span = appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "Add")
 	defer span.End()
 	span.SetAttributes(attribute.String("cs3.userid", userID), attribute.String("cs3.spaceid", spaceID))
 
@@ -155,7 +158,10 @@ func (c *Cache) Get(ctx context.Context, userID, spaceID, shareID string) (*Stat
 
 // Sync updates the in-memory data with the data from the storage if it is outdated
 func (c *Cache) Sync(ctx context.Context, userID string) error {
+	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "Grab lock")
 	unlock := c.lockUser(userID)
+	span.End()
+	span.SetAttributes(attribute.String("cs3.userid", userID))
 	defer unlock()
 
 	return c.syncWithLock(ctx, userID)

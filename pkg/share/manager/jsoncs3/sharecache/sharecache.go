@@ -89,7 +89,10 @@ func New(s metadata.Storage, namespace, filename string, ttl time.Duration) Cach
 
 // Add adds a share to the cache
 func (c *Cache) Add(ctx context.Context, userid, shareID string) error {
+	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "Grab lock")
 	unlock := c.lockUser(userid)
+	span.End()
+	span.SetAttributes(attribute.String("cs3.userid", userid))
 	defer unlock()
 
 	if c.UserShares[userid] == nil {
@@ -99,7 +102,7 @@ func (c *Cache) Add(ctx context.Context, userid, shareID string) error {
 		}
 	}
 
-	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "Add")
+	ctx, span = appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "Add")
 	defer span.End()
 	span.SetAttributes(attribute.String("cs3.userid", userid), attribute.String("cs3.shareid", shareID))
 
@@ -141,7 +144,10 @@ func (c *Cache) Add(ctx context.Context, userid, shareID string) error {
 
 // Remove removes a share for the given user
 func (c *Cache) Remove(ctx context.Context, userid, shareID string) error {
+	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "Grab lock")
 	unlock := c.lockUser(userid)
+	span.End()
+	span.SetAttributes(attribute.String("cs3.userid", userid))
 	defer unlock()
 
 	if c.UserShares[userid] == nil {
@@ -151,7 +157,7 @@ func (c *Cache) Remove(ctx context.Context, userid, shareID string) error {
 		}
 	}
 
-	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "Remove")
+	ctx, span = appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "Remove")
 	defer span.End()
 	span.SetAttributes(attribute.String("cs3.userid", userid), attribute.String("cs3.shareid", shareID))
 
@@ -187,7 +193,10 @@ func (c *Cache) Remove(ctx context.Context, userid, shareID string) error {
 
 // List return the list of spaces/shares for the given user/group
 func (c *Cache) List(ctx context.Context, userid string) (map[string]SpaceShareIDs, error) {
+	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "Grab lock")
 	unlock := c.lockUser(userid)
+	span.End()
+	span.SetAttributes(attribute.String("cs3.userid", userid))
 	defer unlock()
 	if err := c.syncWithLock(ctx, userid); err != nil {
 		return nil, err

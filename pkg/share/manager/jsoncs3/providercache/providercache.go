@@ -124,7 +124,10 @@ func New(s metadata.Storage, ttl time.Duration) Cache {
 
 // Add adds a share to the cache
 func (c *Cache) Add(ctx context.Context, storageID, spaceID, shareID string, share *collaboration.Share) error {
+	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "Grab lock")
 	unlock := c.LockSpace(spaceID)
+	span.End()
+	span.SetAttributes(attribute.String("cs3.spaceid", spaceID))
 	defer unlock()
 
 	if c.Providers[storageID] == nil || c.Providers[storageID].Spaces[spaceID] == nil {
@@ -134,7 +137,7 @@ func (c *Cache) Add(ctx context.Context, storageID, spaceID, shareID string, sha
 		}
 	}
 
-	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "Add")
+	ctx, span = appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "Add")
 	defer span.End()
 	span.SetAttributes(attribute.String("cs3.storageid", storageID), attribute.String("cs3.spaceid", spaceID), attribute.String("cs3.shareid", shareID))
 
@@ -170,7 +173,10 @@ func (c *Cache) Add(ctx context.Context, storageID, spaceID, shareID string, sha
 
 // Remove removes a share from the cache
 func (c *Cache) Remove(ctx context.Context, storageID, spaceID, shareID string) error {
+	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "Grab lock")
 	unlock := c.LockSpace(spaceID)
+	span.End()
+	span.SetAttributes(attribute.String("cs3.spaceid", spaceID))
 	defer unlock()
 
 	if c.Providers[storageID] == nil || c.Providers[storageID].Spaces[spaceID] == nil {
@@ -180,7 +186,7 @@ func (c *Cache) Remove(ctx context.Context, storageID, spaceID, shareID string) 
 		}
 	}
 
-	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "Remove")
+	ctx, span = appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "Remove")
 	defer span.End()
 	span.SetAttributes(attribute.String("cs3.storageid", storageID), attribute.String("cs3.spaceid", spaceID), attribute.String("cs3.shareid", shareID))
 
@@ -280,7 +286,10 @@ func (c *Cache) Persist(ctx context.Context, storageID, spaceID string) error {
 
 // Sync updates the in-memory data with the data from the storage if it is outdated
 func (c *Cache) Sync(ctx context.Context, storageID, spaceID string) error {
+	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "Grab lock")
 	unlock := c.LockSpace(spaceID)
+	span.End()
+	span.SetAttributes(attribute.String("cs3.spaceid", spaceID))
 	defer unlock()
 
 	return c.syncWithLock(ctx, storageID, spaceID)
