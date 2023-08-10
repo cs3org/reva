@@ -165,7 +165,7 @@ This will require some PHP-related tools to run, for instance on Ubuntu you will
 
     To run a single test add `BEHAT_FEATURE=<feature file>` and specify the path to the feature file and an optional line number. For example: `BEHAT_FEATURE='tests/acceptance/features/apiWebdavUpload1/uploadFile.feature:12'`
 
-    Make sure to double check the paths if you are changing the `OCIS_REVA_DATA_ROOT`. The `DELETE_USER_DATA_CMD` needs to clean up the correct folders.
+    Make sure to double-check the paths if you are changing the `OCIS_REVA_DATA_ROOT`. The `DELETE_USER_DATA_CMD` needs to clean up the correct folders.
 
 ## Daily releases
 
@@ -207,7 +207,7 @@ REVA is distributed under [Apache 2.0 license](https://github.com/cs3org/reva/bl
 
 ## Logo
 
-REVA logo's have been designed and contributed to the project by Eamon Maguire.
+REVA logos have been designed and contributed to the project by Eamon Maguire.
 
 ## Disclaimer
 
