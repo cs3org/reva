@@ -152,6 +152,12 @@ func (c *Cache) Add(ctx context.Context, storageID, spaceID, shareID string, sha
 	}
 	c.initializeIfNeeded(storageID, spaceID)
 
+	beforeMTime := c.Providers[storageID].Spaces[spaceID].Mtime
+	beforeShares := []string{}
+	for _, s := range c.Providers[storageID].Spaces[spaceID].Shares {
+		beforeShares = append(beforeShares, s.Id.OpaqueId)
+	}
+
 	persistFunc := func() error {
 		c.Providers[storageID].Spaces[spaceID].Shares[shareID] = share
 
@@ -159,7 +165,14 @@ func (c *Cache) Add(ctx context.Context, storageID, spaceID, shareID string, sha
 	}
 	err := persistFunc()
 
+	log := appctx.GetLogger(ctx).With().
+		Str("hostname", os.Getenv("HOSTNAME")).
+		Str("storageID", storageID).
+		Str("spaceID", spaceID).
+		Str("shareID", share.Id.OpaqueId).Logger()
+
 	if _, ok := err.(errtypes.IsPreconditionFailed); ok {
+		log.Info().Msg("persisting failed. Retrying...")
 		if err := c.syncWithLock(ctx, storageID, spaceID); err != nil {
 			span.RecordError(err)
 			span.SetStatus(codes.Error, err.Error())
@@ -169,6 +182,17 @@ func (c *Cache) Add(ctx context.Context, storageID, spaceID, shareID string, sha
 
 		err = persistFunc()
 	}
+	if err != nil {
+		log.Error().Err(err).Msg("persisting failed unexpectedly")
+	}
+
+	afterMTime := c.Providers[storageID].Spaces[spaceID].Mtime
+	afterShares := []string{}
+	for _, s := range c.Providers[storageID].Spaces[spaceID].Shares {
+		afterShares = append(afterShares, s.Id.OpaqueId)
+	}
+	log.Info().Interface("before", beforeShares).Interface("after", afterShares).Interface("beforeMTime", beforeMTime).Interface("afterMTime", afterMTime).Msg("providercache diff")
+
 	return err
 }
 
@@ -354,12 +378,24 @@ func (c *Cache) syncWithLock(ctx context.Context, storageID, spaceID string) err
 		}
 		newShares.Mtime = utils.TSToTime(info.Mtime)
 		c.initializeIfNeeded(storageID, spaceID)
-		changelog, err := diff.Diff(c.Providers[storageID].Spaces[spaceID], newShares)
-		if err != nil {
-			log.Error().Err(err).Str("storageID", storageID).Str("spaceID", spaceID).Msg("providercache diff failed")
-		} else {
-			log.Debug().Str("storageID", storageID).Str("spaceID", spaceID).Interface("changelog", changelog).Msg("providercache diff")
+
+		if len(newShares.Shares) < len(c.Providers[storageID].Spaces[spaceID].Shares) {
+			serverShares := []string{}
+			localShares := []string{}
+			for _, s := range newShares.Shares {
+				serverShares = append(serverShares, s.Id.OpaqueId)
+			}
+			for _, s := range c.Providers[storageID].Spaces[spaceID].Shares {
+				localShares = append(localShares, s.Id.OpaqueId)
+			}
+			changelog, err := diff.Diff(localShares, serverShares)
+			if err != nil {
+				log.Error().Err(err).Str("storageID", storageID).Str("spaceID", spaceID).Msg("providercache diff failed")
+			} else {
+				log.Debug().Str("storageID", storageID).Str("spaceID", spaceID).Interface("changelog", changelog).Msg("providercache diff")
+			}
 		}
+
 		c.Providers[storageID].Spaces[spaceID] = newShares
 	}
 	span.SetStatus(codes.Ok, "")

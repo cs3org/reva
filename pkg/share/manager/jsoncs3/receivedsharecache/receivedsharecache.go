@@ -219,11 +219,11 @@ func (c *Cache) syncWithLock(ctx context.Context, userID string) error {
 			return err
 		}
 		newSpaces.Mtime = utils.TSToTime(info.Mtime)
-		changelog, err := diff.Diff(c.ReceivedSpaces[userID], newSpaces)
+		_, err = diff.Diff(c.ReceivedSpaces[userID], newSpaces)
 		if err != nil {
 			log.Error().Err(err).Str("userid", userID).Msg("receivedsharecache diff failed")
 		} else {
-			log.Debug().Str("userid", userID).Interface("changelog", changelog).Msg("receivedsharecache diff")
+			// log.Debug().Str("userid", userID).Interface("changelog", changelog).Msg("receivedsharecache diff")
 		}
 		c.ReceivedSpaces[userID] = newSpaces
 	}

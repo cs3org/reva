@@ -270,11 +270,11 @@ func (c *Cache) syncWithLock(ctx context.Context, userID string) error {
 			return err
 		}
 		newShareCache.Mtime = utils.TSToTime(info.Mtime)
-		changelog, err := diff.Diff(c.UserShares[userID], newShareCache)
+		_, err = diff.Diff(c.UserShares[userID], newShareCache)
 		if err != nil {
 			log.Error().Str("userid", userID).Err(err).Msg("sharecache diff failed")
 		} else {
-			log.Debug().Str("userid", userID).Interface("changelog", changelog).Msg("sharecache diff")
+			// log.Debug().Str("userid", userID).Interface("changelog", changelog).Msg("sharecache diff")
 		}
 		c.UserShares[userID] = newShareCache
 	}
