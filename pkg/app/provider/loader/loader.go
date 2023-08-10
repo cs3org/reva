@@ -21,7 +21,6 @@ package loader
 import (
 	// Importing app providers.
 	_ "github.com/cs3org/reva/pkg/app/provider/demo"
-	_ "github.com/cs3org/reva/pkg/app/provider/overleaf"
 	_ "github.com/cs3org/reva/pkg/app/provider/wopi"
 	// Add your own here.
 )

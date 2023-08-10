@@ -19,6 +19,7 @@
 package overleaf
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"path/filepath"
@@ -63,9 +64,7 @@ func init() {
 	global.Register("overleaf", New)
 }
 
-func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) {
-	log.Debug().Msg("Overleaf service is created")
-
+func New(ctx context.Context, m map[string]interface{}) (global.Service, error) {
 	conf := &config{}
 	if err := mapstructure.Decode(m, conf); err != nil {
 		return nil, err
@@ -83,7 +82,6 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 	s := &svc{
 		conf:      conf,
 		gtwClient: gtw,
-		log:       log,
 		router:    r,
 	}
 
