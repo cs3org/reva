@@ -34,6 +34,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/metadata"
 	"github.com/cs3org/reva/v2/pkg/utils"
+	"github.com/r3labs/diff/v3"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 )
@@ -353,6 +354,12 @@ func (c *Cache) syncWithLock(ctx context.Context, storageID, spaceID string) err
 		}
 		newShares.Mtime = utils.TSToTime(info.Mtime)
 		c.initializeIfNeeded(storageID, spaceID)
+		changelog, err := diff.Diff(c.Providers[storageID].Spaces[spaceID], newShares)
+		if err != nil {
+			log.Error().Err(err).Str("storageID", storageID).Str("spaceID", spaceID).Msg("providercache diff failed")
+		} else {
+			log.Debug().Str("storageID", storageID).Str("spaceID", spaceID).Interface("changelog", changelog).Msg("providercache diff")
+		}
 		c.Providers[storageID].Spaces[spaceID] = newShares
 	}
 	span.SetStatus(codes.Ok, "")

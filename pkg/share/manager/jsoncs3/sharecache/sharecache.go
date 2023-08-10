@@ -32,6 +32,7 @@ import (
 	"github.com/cs3org/reva/v2/pkg/share/manager/jsoncs3/shareid"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/metadata"
 	"github.com/cs3org/reva/v2/pkg/utils"
+	"github.com/r3labs/diff/v3"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 )
@@ -269,6 +270,12 @@ func (c *Cache) syncWithLock(ctx context.Context, userID string) error {
 			return err
 		}
 		newShareCache.Mtime = utils.TSToTime(info.Mtime)
+		changelog, err := diff.Diff(c.UserShares[userID], newShareCache)
+		if err != nil {
+			log.Error().Str("userid", userID).Err(err).Msg("sharecache diff failed")
+		} else {
+			log.Debug().Str("userid", userID).Interface("changelog", changelog).Msg("sharecache diff")
+		}
 		c.UserShares[userID] = newShareCache
 	}
 	span.SetStatus(codes.Ok, "")
