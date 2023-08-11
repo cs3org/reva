@@ -387,6 +387,23 @@ func updateExistingNode(upload *Upload, n *node.Node, spaceID string, fsize uint
 		}
 	}
 
+	// When the if-unmodified-since header was set we need to check if the
+	// etag still matches before finishing the upload.
+	if ifUnmodifiedSince, ok := upload.Info.MetaData["if-unmodified-since"]; ok {
+		nodeMTime, err := old.GetMTime()
+		if err != nil {
+			return nil, errtypes.InternalError(fmt.Sprintf("failed to read mtime of node: %w", err))
+		}
+		ifUnmodifiedSince, err := time.Parse(time.RFC3339Nano, ifUnmodifiedSince)
+		if err != nil {
+			return nil, errtypes.InternalError(fmt.Sprintf("failed to parse if-unmodified-since time: %w", err))
+		}
+
+		if nodeMTime.After(ifUnmodifiedSince) {
+			return nil, errtypes.Aborted("if-unmodified-since mismatch")
+		}
+	}
+
 	upload.versionsPath = upload.lu.InternalPath(spaceID, n.ID+node.RevisionIDDelimiter+tmtime.UTC().Format(time.RFC3339Nano))
 	upload.SizeDiff = int64(fsize) - old.Blobsize
 	upload.Info.MetaData["versionsPath"] = upload.versionsPath

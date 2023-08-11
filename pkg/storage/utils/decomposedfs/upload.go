@@ -189,9 +189,8 @@ func (fs *Decomposedfs) InitiateUpload(ctx context.Context, ref *provider.Refere
 				return nil, errtypes.BadRequest("unsupported checksum algorithm: " + parts[0])
 			}
 		}
-		if ifMatch, ok := metadata["if-match"]; ok {
-			info.MetaData["if-match"] = ifMatch
-		}
+		metadata["if-match"] = info.MetaData["if-match"]
+		metadata["if-unmodified-since"] = info.MetaData["if-unmodified-since"]
 	}
 
 	log.Debug().Interface("info", info).Interface("node", n).Interface("metadata", metadata).Msg("Decomposedfs: resolved filename")

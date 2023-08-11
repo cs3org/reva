@@ -348,13 +348,17 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 		Interface("info mtime", sRes.GetInfo().GetMtime()).
 		Logger()
 	sublog.Info().Msg("validateIfUnmodifiedSince ...")
-	if !validateIfUnmodifiedSince(req.GetIfUnmodifiedSince(), sRes.GetInfo()) {
-		sublog.Info().Msg("validateIfUnmodifiedSince FAILED")
-		return &provider.InitiateFileUploadResponse{
-			Status: status.NewFailedPrecondition(ctx, errors.New("resource has been modified"), "resource has been modified"),
-		}, nil
-	} else {
-		sublog.Info().Msg("validateIfUnmodifiedSince PASSED")
+	ifUnmodifiedSince := req.GetIfUnmodifiedSince()
+	if ifUnmodifiedSince != nil {
+		metadata["if-unmodified-since"] = utils.TSToTime(ifUnmodifiedSince).Format(time.RFC3339Nano)
+		if !validateIfUnmodifiedSince(ifUnmodifiedSince, sRes.GetInfo()) {
+			sublog.Info().Msg("validateIfUnmodifiedSince FAILED")
+			return &provider.InitiateFileUploadResponse{
+				Status: status.NewFailedPrecondition(ctx, errors.New("resource has been modified"), "resource has been modified"),
+			}, nil
+		} else {
+			sublog.Info().Msg("validateIfUnmodifiedSince PASSED")
+		}
 	}
 
 	ctx = ctxpkg.ContextSetLockID(ctx, req.LockId)
