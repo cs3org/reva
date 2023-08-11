@@ -276,10 +276,19 @@ func CreateNodeForUpload(upload *Upload, initAttrs node.Attributes) (*node.Node,
 	switch upload.Info.Storage["NodeExists"] {
 	case "false":
 		f, err = initNewNode(upload, n, uint64(fsize))
+		if f != nil {
+			appctx.GetLogger(upload.Ctx).Info().Str("lockfile", f.Name()).Interface("err", err).Msg("got lock file from initNewNode")
+		}
 	default:
 		f, err = updateExistingNode(upload, n, spaceID, uint64(fsize))
+		if f != nil {
+			appctx.GetLogger(upload.Ctx).Info().Str("lockfile", f.Name()).Interface("err", err).Msg("got lock file from updateExistingNode")
+		}
 	}
 	defer func() {
+		if f == nil {
+			return
+		}
 		if err := f.Close(); err != nil {
 			appctx.GetLogger(upload.Ctx).Error().Err(err).Str("nodeid", n.ID).Str("parentid", n.ParentID).Msg("could not close lock")
 		}
@@ -351,12 +360,18 @@ func initNewNode(upload *Upload, n *node.Node, fsize uint64) (*lockedfile.File, 
 	// link child name to parent if it is new
 	childNameLink := filepath.Join(n.ParentPath(), n.Name)
 	relativeNodePath := filepath.Join("../../../../../", lookup.Pathify(n.ID, 4, 2))
+	log := appctx.GetLogger(upload.Ctx).With().Str("childNameLink", childNameLink).Str("relativeNodePath", relativeNodePath).Logger()
+	log.Info().Msg("initNewNode: creating symlink")
+
 	if err = os.Symlink(relativeNodePath, childNameLink); err != nil {
+		log.Info().Err(err).Msg("initNewNode: symlink failed")
 		if errors.Is(err, iofs.ErrExist) {
-			return nil, errtypes.AlreadyExists(n.Name)
+			log.Info().Err(err).Msg("initNewNode: symlink already exists")
+			return f, errtypes.AlreadyExists(n.Name)
 		}
 		return f, errors.Wrap(err, "Decomposedfs: could not symlink child entry")
 	}
+	log.Info().Msg("initNewNode: symlink created")
 
 	// on a new file the sizeDiff is the fileSize
 	upload.SizeDiff = int64(fsize)
@@ -440,7 +455,7 @@ func updateExistingNode(upload *Upload, n *node.Node, spaceID string, fsize uint
 	// update mtime of current version
 	mtime := time.Now()
 	if err := os.Chtimes(n.InternalPath(), mtime, mtime); err != nil {
-		return nil, err
+		return f, err
 	}
 
 	return f, nil

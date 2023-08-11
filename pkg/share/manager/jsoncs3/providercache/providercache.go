@@ -150,6 +150,7 @@ func (c *Cache) Add(ctx context.Context, storageID, spaceID, shareID string, sha
 	case shareID == "":
 		return fmt.Errorf("missing share id")
 	}
+
 	c.initializeIfNeeded(storageID, spaceID)
 
 	beforeMTime := c.Providers[storageID].Spaces[spaceID].Mtime
@@ -171,7 +172,8 @@ func (c *Cache) Add(ctx context.Context, storageID, spaceID, shareID string, sha
 		Str("spaceID", spaceID).
 		Str("shareID", share.Id.OpaqueId).Logger()
 
-	if _, ok := err.(errtypes.IsPreconditionFailed); ok {
+	// if _, ok := err.(errtypes.IsPreconditionFailed); ok {
+	if err != nil {
 		log.Info().Msg("persisting failed. Retrying...")
 		if err := c.syncWithLock(ctx, storageID, spaceID); err != nil {
 			span.RecordError(err)
@@ -182,9 +184,9 @@ func (c *Cache) Add(ctx context.Context, storageID, spaceID, shareID string, sha
 
 		err = persistFunc()
 	}
-	if err != nil {
-		log.Error().Err(err).Msg("persisting failed unexpectedly")
-	}
+	// if err != nil {
+	// 	log.Error().Err(err).Msg("persisting failed unexpectedly")
+	// }
 
 	afterMTime := c.Providers[storageID].Spaces[spaceID].Mtime
 	afterShares := []string{}
@@ -237,8 +239,14 @@ func (c *Cache) Remove(ctx context.Context, storageID, spaceID, shareID string) 
 
 // Get returns one entry from the cache
 func (c *Cache) Get(ctx context.Context, storageID, spaceID, shareID string) (*collaboration.Share, error) {
+	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "Grab lock")
+	unlock := c.LockSpace(spaceID)
+	span.End()
+	span.SetAttributes(attribute.String("cs3.spaceid", spaceID))
+	defer unlock()
+
 	// sync cache, maybe our data is outdated
-	err := c.Sync(ctx, storageID, spaceID)
+	err := c.syncWithLock(ctx, storageID, spaceID)
 	if err != nil {
 		return nil, err
 	}
@@ -252,8 +260,14 @@ func (c *Cache) Get(ctx context.Context, storageID, spaceID, shareID string) (*c
 
 // ListSpace returns the list of shares in a given space
 func (c *Cache) ListSpace(ctx context.Context, storageID, spaceID string) (*Shares, error) {
+	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "Grab lock")
+	unlock := c.LockSpace(spaceID)
+	span.End()
+	span.SetAttributes(attribute.String("cs3.spaceid", spaceID))
+	defer unlock()
+
 	// sync cache, maybe our data is outdated
-	err := c.Sync(ctx, storageID, spaceID)
+	err := c.syncWithLock(ctx, storageID, spaceID)
 	if err != nil {
 		return nil, err
 	}
@@ -266,7 +280,7 @@ func (c *Cache) ListSpace(ctx context.Context, storageID, spaceID string) (*Shar
 
 // Persist persists the data of one space
 func (c *Cache) Persist(ctx context.Context, storageID, spaceID string) error {
-	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "PersistWithTime")
+	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "Persist")
 	defer span.End()
 	span.SetAttributes(attribute.String("cs3.storageid", storageID), attribute.String("cs3.spaceid", spaceID))
 
@@ -342,12 +356,16 @@ func (c *Cache) syncWithLock(ctx context.Context, storageID, spaceID string) err
 		mtime = time.Time{} // Set zero time so that data from storage always takes precedence
 	}
 
+	c.initializeIfNeeded(storageID, spaceID)
+
 	jsonPath := spaceJSONPath(storageID, spaceID)
+	now := time.Now()
 	info, err := c.storage.Stat(ctx, jsonPath)
 	if err != nil {
 		if _, ok := err.(errtypes.NotFound); ok {
 			span.AddEvent("no file")
 			span.SetStatus(codes.Ok, "")
+			c.Providers[storageID].Spaces[spaceID].Mtime = now
 			return nil // Nothing to sync against
 		}
 		if _, ok := err.(*os.PathError); ok {
@@ -377,7 +395,6 @@ func (c *Cache) syncWithLock(ctx context.Context, storageID, spaceID string) err
 			return err
 		}
 		newShares.Mtime = utils.TSToTime(info.Mtime)
-		c.initializeIfNeeded(storageID, spaceID)
 
 		if len(newShares.Shares) < len(c.Providers[storageID].Spaces[spaceID].Shares) {
 			serverShares := []string{}

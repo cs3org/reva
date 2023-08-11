@@ -111,17 +111,9 @@ func (c *Cache) Add(ctx context.Context, userid, shareID string) error {
 	ssid := storageid + shareid.IDDelimiter + spaceid
 
 	persistFunc := func() error {
+		c.initializeIfNeeded(userid, ssid)
+
 		now := time.Now()
-		if c.UserShares[userid] == nil {
-			c.UserShares[userid] = &UserShareCache{
-				UserShares: map[string]*SpaceShareIDs{},
-			}
-		}
-		if c.UserShares[userid].UserShares[ssid] == nil {
-			c.UserShares[userid].UserShares[ssid] = &SpaceShareIDs{
-				IDs: map[string]struct{}{},
-			}
-		}
 		// add share id
 		c.UserShares[userid].UserShares[ssid].Mtime = now
 		c.UserShares[userid].UserShares[ssid].IDs[shareID] = struct{}{}
@@ -240,12 +232,17 @@ func (c *Cache) syncWithLock(ctx context.Context, userID string) error {
 		mtime = time.Time{} // Set zero time so that data from storage always takes precedence
 	}
 
+	c.initializeIfNeeded(userID, "")
+
 	userCreatedPath := c.userCreatedPath(userID)
+	now := time.Now()
 	info, err := c.storage.Stat(ctx, userCreatedPath)
 	if err != nil {
 		if _, ok := err.(errtypes.NotFound); ok {
 			span.AddEvent("no file")
 			span.SetStatus(codes.Ok, "")
+
+			c.UserShares[userID].Mtime = now
 			return nil // Nothing to sync against
 		}
 		span.SetStatus(codes.Error, fmt.Sprintf("Failed to stat the share cache: %s", err.Error()))
@@ -323,4 +320,17 @@ func (c *Cache) Persist(ctx context.Context, userid string) error {
 
 func (c *Cache) userCreatedPath(userid string) string {
 	return filepath.Join("/", c.namespace, userid, c.filename)
+}
+
+func (c *Cache) initializeIfNeeded(userid, ssid string) {
+	if c.UserShares[userid] == nil {
+		c.UserShares[userid] = &UserShareCache{
+			UserShares: map[string]*SpaceShareIDs{},
+		}
+	}
+	if ssid != "" && c.UserShares[userid].UserShares[ssid] == nil {
+		c.UserShares[userid].UserShares[ssid] = &SpaceShareIDs{
+			IDs: map[string]struct{}{},
+		}
+	}
 }

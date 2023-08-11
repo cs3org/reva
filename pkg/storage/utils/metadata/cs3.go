@@ -33,6 +33,7 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	"github.com/cs3org/reva/v2/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/rgrpc/todo/pool"
@@ -161,11 +162,11 @@ func (cs3 *CS3) Upload(ctx context.Context, req UploadRequest) error {
 			IfMatch: req.IfMatchEtag,
 		}
 	}
-	if req.IfUnmodifiedSince != (time.Time{}) {
-		ifuReq.Options = &provider.InitiateFileUploadRequest_IfUnmodifiedSince{
-			IfUnmodifiedSince: utils.TimeToTS(req.IfUnmodifiedSince),
-		}
+	// if req.IfUnmodifiedSince != (time.Time{}) {
+	ifuReq.Options = &provider.InitiateFileUploadRequest_IfUnmodifiedSince{
+		IfUnmodifiedSince: utils.TimeToTS(req.IfUnmodifiedSince),
 	}
+	// }
 	if req.MTime != (time.Time{}) {
 		// The format of the X-OC-Mtime header is <epoch>.<nanoseconds>, e.g. '1691053416.934129485'
 		ifuReq.Opaque = utils.AppendPlainToOpaque(ifuReq.Opaque, "X-OC-Mtime", strconv.Itoa(int(req.MTime.Unix()))+"."+strconv.Itoa(req.MTime.Nanosecond()))
@@ -258,46 +259,60 @@ func (cs3 *CS3) SimpleDownload(ctx context.Context, downloadpath string) (conten
 		},
 	}
 
-	res, err := client.InitiateFileDownload(ctx, &dreq)
-	if err != nil {
-		return []byte{}, errtypes.NotFound(dreq.Ref.Path)
-	}
-
-	var endpoint string
-
-	for _, proto := range res.GetProtocols() {
-		if proto.Protocol == "spaces" {
-			endpoint = proto.GetDownloadEndpoint()
-			break
+	b := []byte{}
+	downloadFunc := func() error {
+		res, err := client.InitiateFileDownload(ctx, &dreq)
+		if err != nil {
+			return errtypes.NotFound(dreq.Ref.Path)
 		}
-	}
-	if endpoint == "" {
-		return []byte{}, errors.New("metadata storage doesn't support the spaces download protocol")
-	}
 
-	req, err := http.NewRequest(http.MethodGet, endpoint, nil)
+		var endpoint string
+
+		for _, proto := range res.GetProtocols() {
+			if proto.Protocol == "spaces" {
+				endpoint = proto.GetDownloadEndpoint()
+				break
+			}
+		}
+		if endpoint == "" {
+			return errors.New("metadata storage doesn't support the spaces download protocol")
+		}
+
+		req, err := http.NewRequest(http.MethodGet, endpoint, nil)
+		if err != nil {
+			return err
+		}
+
+		md, _ := metadata.FromOutgoingContext(ctx)
+		req.Header.Add(ctxpkg.TokenHeader, md.Get(ctxpkg.TokenHeader)[0])
+		resp, err := cs3.dataGatewayClient.Do(req)
+		if err != nil {
+			return err
+		}
+
+		if resp.StatusCode != http.StatusOK {
+			return errtypes.NotFound(dreq.Ref.Path)
+		}
+
+		b, err = io.ReadAll(resp.Body)
+		if err != nil {
+			return err
+		}
+
+		if err = resp.Body.Close(); err != nil {
+			return err
+		}
+		return nil
+	}
+	err = downloadFunc()
+	log := appctx.GetLogger(ctx)
 	if err != nil {
-		return []byte{}, err
+		log.Error().Err(err).Msg("SimpleDownload failed. Retrying....")
+		err = downloadFunc()
 	}
-
-	md, _ := metadata.FromOutgoingContext(ctx)
-	req.Header.Add(ctxpkg.TokenHeader, md.Get(ctxpkg.TokenHeader)[0])
-	resp, err := cs3.dataGatewayClient.Do(req)
 	if err != nil {
-		return []byte{}, err
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return []byte{}, errtypes.NotFound(dreq.Ref.Path)
-	}
-
-	b, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return []byte{}, err
-	}
-
-	if err = resp.Body.Close(); err != nil {
-		return []byte{}, err
+		log.Error().Err(err).Msg("SimpleDownload failed. Giving up.")
+		return []byte{}, nil
 	}
 
 	return b, nil

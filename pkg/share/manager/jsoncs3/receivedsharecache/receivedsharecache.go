@@ -111,14 +111,7 @@ func (c *Cache) Add(ctx context.Context, userID, spaceID string, rs *collaborati
 	span.SetAttributes(attribute.String("cs3.userid", userID), attribute.String("cs3.spaceid", spaceID))
 
 	persistFunc := func() error {
-		if c.ReceivedSpaces[userID] == nil {
-			c.ReceivedSpaces[userID] = &Spaces{
-				Spaces: map[string]*Space{},
-			}
-		}
-		if c.ReceivedSpaces[userID].Spaces[spaceID] == nil {
-			c.ReceivedSpaces[userID].Spaces[spaceID] = &Space{}
-		}
+		c.initializeIfNeeded(userID, spaceID)
 
 		receivedSpace := c.ReceivedSpaces[userID].Spaces[spaceID]
 		receivedSpace.Mtime = time.Now()
@@ -147,7 +140,13 @@ func (c *Cache) Add(ctx context.Context, userID, spaceID string, rs *collaborati
 
 // Get returns one entry from the cache
 func (c *Cache) Get(ctx context.Context, userID, spaceID, shareID string) (*State, error) {
-	err := c.Sync(ctx, userID)
+	ctx, span := appctx.GetTracerProvider(ctx).Tracer(tracerName).Start(ctx, "Grab lock")
+	unlock := c.lockUser(userID)
+	span.End()
+	span.SetAttributes(attribute.String("cs3.userid", userID))
+	defer unlock()
+
+	err := c.syncWithLock(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -189,12 +188,16 @@ func (c *Cache) syncWithLock(ctx context.Context, userID string) error {
 		mtime = time.Time{} // Set zero time so that data from storage always takes precedence
 	}
 
+	c.initializeIfNeeded(userID, "")
+
 	jsonPath := userJSONPath(userID)
+	now := time.Now()
 	info, err := c.storage.Stat(ctx, jsonPath) // TODO we only need the mtime ... use fieldmask to make the request cheaper
 	if err != nil {
 		if _, ok := err.(errtypes.NotFound); ok {
 			span.AddEvent("no file")
 			span.SetStatus(codes.Ok, "")
+			c.ReceivedSpaces[userID].Mtime = now
 			return nil // Nothing to sync against
 		}
 		span.SetStatus(codes.Error, fmt.Sprintf("Failed to stat the received share: %s", err.Error()))
@@ -277,4 +280,15 @@ func (c *Cache) persist(ctx context.Context, userID string) error {
 
 func userJSONPath(userID string) string {
 	return filepath.Join("/users", userID, "received.json")
+}
+
+func (c *Cache) initializeIfNeeded(userID, spaceID string) {
+	if c.ReceivedSpaces[userID] == nil {
+		c.ReceivedSpaces[userID] = &Spaces{
+			Spaces: map[string]*Space{},
+		}
+	}
+	if spaceID != "" && c.ReceivedSpaces[userID].Spaces[spaceID] == nil {
+		c.ReceivedSpaces[userID].Spaces[spaceID] = &Space{}
+	}
 }
