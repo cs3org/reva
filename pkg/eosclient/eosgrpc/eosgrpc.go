@@ -117,7 +117,6 @@ func (opt *Options) init() {
 	if opt.CacheDirectory == "" {
 		opt.CacheDirectory = os.TempDir()
 	}
-
 }
 
 // Client performs actions against a EOS management node (MGM)
@@ -250,16 +249,11 @@ func (c *Client) AddACL(ctx context.Context, auth, rootAuth eosclient.Authorizat
 
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("func", "AddACL").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("path", path).Msg("")
-
 	// Init a new NSRequest
 	rq, err := c.initNSRequest(ctx, rootAuth)
 	if err != nil {
 		return err
 	}
-
-	// workaround to be root
-	// TODO: removed once fixed in eos grpc
-	rq.Role.Gid = 1
 
 	msg := new(erpc.NSRequest_AclRequest)
 	msg.Cmd = erpc.NSRequest_AclRequest_ACL_COMMAND(erpc.NSRequest_AclRequest_ACL_COMMAND_value["MODIFY"])
@@ -1132,6 +1126,8 @@ func (c *Client) List(ctx context.Context, auth eosclient.Authorization, dpath s
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("func", "List").Str("uid,gid", auth.Role.UID+","+auth.Role.GID).Str("dpath", dpath).Msg("")
 
+	versionFolders := map[string]*eosclient.FileInfo{}
+
 	// Stuff filename, uid, gid into the FindRequest type
 	fdrq := new(erpc.FindRequest)
 	fdrq.Maxdepth = 1
@@ -1162,10 +1158,9 @@ func (c *Client) List(ctx context.Context, auth eosclient.Authorization, dpath s
 		return nil, err
 	}
 
-	var mylst []*eosclient.FileInfo
+	var infos []*eosclient.FileInfo
 	var parent *eosclient.FileInfo
-	i := 0
-	for {
+	for i := 0; ; i++ {
 		rsp, err := resp.Recv()
 		if err != nil {
 			if err == io.EOF {
@@ -1178,7 +1173,7 @@ func (c *Client) List(ctx context.Context, auth eosclient.Authorization, dpath s
 			log.Error().Err(err).Str("func", "List").Int("nitems", i).Str("path", dpath).Str("got err from EOS", err.Error()).Msg("")
 			if i > 0 {
 				log.Error().Str("path", dpath).Int("nitems", i).Msg("No more items, dirty exit")
-				return mylst, nil
+				return infos, nil
 			}
 		}
 
@@ -1189,40 +1184,64 @@ func (c *Client) List(ctx context.Context, auth eosclient.Authorization, dpath s
 
 		log.Debug().Str("func", "List").Str("path", dpath).Str("item resp:", fmt.Sprintf("%#v", rsp)).Msg("grpc response")
 
-		myitem, err := c.grpcMDResponseToFileInfo(rsp)
+		fi, err := c.grpcMDResponseToFileInfo(rsp)
 		if err != nil {
 			log.Error().Err(err).Str("func", "List").Str("path", dpath).Str("could not convert item:", fmt.Sprintf("%#v", rsp)).Str("err", err.Error()).Msg("")
 
 			return nil, err
 		}
 
-		i++
+		// If it's a version folder, store it in a map, so that for the corresponding file,
+		// we can return its inode instead
+		if isVersionFolder(fi.File) {
+			versionFolders[fi.File] = fi
+		}
+
 		// The first item is the directory itself... skip
-		if i == 1 {
-			parent = myitem
+		if i == 0 {
+			parent = fi
 			log.Debug().Str("func", "List").Str("path", dpath).Str("skipping first item resp:", fmt.Sprintf("%#v", rsp)).Msg("grpc response")
 			continue
 		}
 
-		mylst = append(mylst, myitem)
+		infos = append(infos, fi)
 	}
 
-	if parent.SysACL != nil {
+	for _, info := range infos {
+		if !info.IsDir && parent != nil && parent.SysACL != nil {
+			if info.SysACL == nil {
+				log.Warn().Str("func", "List").Str("path", dpath).Str("SysACL is nil, taking parent", "").Msg("grpc response")
+				info.SysACL = parent.SysACL
+			} else {
+				info.SysACL.Entries = append(info.SysACL.Entries, parent.SysACL.Entries...)
+			}
+		}
 
-		for _, info := range mylst {
-			if !info.IsDir && parent != nil {
+		// For files, inherit ACLs from the parent
+		// And set the inode to that of their version folder
+		if !info.IsDir && !isVersionFolder(dpath) {
+			versionFolderPath := getVersionFolder(info.File)
+			if vf, ok := versionFolders[versionFolderPath]; ok {
+				info.Inode = vf.Inode
 				if info.SysACL == nil {
 					log.Warn().Str("func", "List").Str("path", dpath).Str("SysACL is nil, taking parent", "").Msg("grpc response")
-					info.SysACL.Entries = parent.SysACL.Entries
+					info.SysACL = vf.SysACL
 				} else {
-					info.SysACL.Entries = append(info.SysACL.Entries, parent.SysACL.Entries...)
+					info.SysACL.Entries = append(info.SysACL.Entries, vf.SysACL.Entries...)
+				}
+				for k, v := range vf.Attrs {
+					info.Attrs[k] = v
+				}
+
+			} else if err := c.CreateDir(ctx, auth, versionFolderPath); err == nil { // Create the version folder if it doesn't exist
+				if md, err := c.GetFileInfoByPath(ctx, auth, versionFolderPath); err == nil {
+					info.Inode = md.Inode
 				}
 			}
 		}
 	}
 
-	return mylst, nil
-
+	return infos, nil
 }
 
 // Read reads a file from the mgm and returns a handle to read it
@@ -1561,8 +1580,9 @@ func (c *Client) grpcMDResponseToFileInfo(st *erpc.MDResponse) (*eosclient.FileI
 
 	if st.Type == erpc.TYPE_CONTAINER {
 		fi.IsDir = true
-		fi.Inode = st.Fmd.Inode
-		fi.FID = st.Cmd.ParentId
+		fi.Inode = st.Cmd.Inode
+		fi.FID = st.Cmd.Id
+		fi.PID = st.Cmd.ParentId
 		fi.UID = st.Cmd.Uid
 		fi.GID = st.Cmd.Gid
 		fi.MTimeSec = st.Cmd.Mtime.Sec
@@ -1575,11 +1595,10 @@ func (c *Client) grpcMDResponseToFileInfo(st *erpc.MDResponse) (*eosclient.FileI
 		}
 
 		fi.Size = uint64(st.Cmd.TreeSize)
-
-		log.Debug().Str("stat info - path", fi.File).Uint64("inode", fi.Inode).Uint64("uid", fi.UID).Uint64("gid", fi.GID).Str("etag", fi.ETag).Msg("grpc response")
 	} else {
 		fi.Inode = st.Fmd.Inode
-		fi.FID = st.Fmd.ContId
+		fi.FID = st.Fmd.Id
+		fi.PID = st.Fmd.ContId
 		fi.UID = st.Fmd.Uid
 		fi.GID = st.Fmd.Gid
 		fi.MTimeSec = st.Fmd.Mtime.Sec
@@ -1600,10 +1619,32 @@ func (c *Client) grpcMDResponseToFileInfo(st *erpc.MDResponse) (*eosclient.FileI
 			}
 			fi.XS = xs
 
-			log.Debug().Str("stat info - path", fi.File).Uint64("inode", fi.Inode).Uint64("uid", fi.UID).Uint64("gid", fi.GID).Str("etag", fi.ETag).Str("checksum", fi.XS.XSType+":"+fi.XS.XSSum).Msg("grpc response")
 		}
 	}
+
+	// work around an issue with the inode being received via grcp being 0
+	// Note: This can be removed once a proper inode value is retrieved
+	if fi.Inode == 0 {
+		fi.Inode = calcInode(fi)
+	}
+
+	if fi.XS != nil {
+		log.Debug().Str("stat info - path", fi.File).Uint64("inode", fi.Inode).Uint64("uid", fi.UID).Uint64("gid", fi.GID).Str("etag", fi.ETag).Str("checksum", fi.XS.XSType+":"+fi.XS.XSSum).Msg("grpc response")
+	} else {
+		log.Debug().Str("stat info - path", fi.File).Uint64("inode", fi.Inode).Uint64("uid", fi.UID).Uint64("gid", fi.GID).Str("etag", fi.ETag).Msg("grpc response")
+	}
+
 	return fi, nil
+}
+
+// calcInode translates a file id into an inode according to the legacy encoding
+// See https://github.com/cern-eos/eos/blob/3f8f06d8a67283da8b214aafbc39602a0481d4e2/common/FileId.hh#L138
+func calcInode(fi *eosclient.FileInfo) uint64 {
+	if fi.IsDir {
+		return fi.FID
+	}
+
+	return fi.FID << 28
 }
 
 // exec executes the command and returns the stdout, stderr and return code

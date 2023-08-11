@@ -88,7 +88,10 @@ func (s *svc) handlePathMkcol(w http.ResponseWriter, r *http.Request, ns string)
 		return rstatus.HTTPStatusFromCode(rpcStatus.Code), errtypes.NewErrtypeFromStatus(rpcStatus)
 	}
 
-	return s.handleMkcol(ctx, w, r, spacelookup.MakeRelativeReference(space, parentPath, false), spacelookup.MakeRelativeReference(space, fn, false), sublog)
+	cref := spacelookup.MakeRelativeReference(space, fn, false)
+	// TODO: use absolute path in eos case, or fix spaces
+	cref.Path = fn
+	return s.handleMkcol(ctx, w, r, spacelookup.MakeRelativeReference(space, parentPath, false), cref, sublog)
 }
 
 func (s *svc) handleSpacesMkCol(w http.ResponseWriter, r *http.Request, spaceID string) (status int, err error) {
