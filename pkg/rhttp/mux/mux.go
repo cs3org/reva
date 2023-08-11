@@ -25,8 +25,6 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
-
-	"github.com/cs3org/reva/pkg/rhttp/middlewares"
 )
 
 // MethodAll is a constant used to specify that
@@ -52,7 +50,7 @@ func NewServeMux() *ServeMux {
 }
 
 // SetMiddlewaresFactory sets the factory method used to build the middlewares for each http.Handler.
-func (m *ServeMux) SetMiddlewaresFactory(factory func(o *Options) []middlewares.Middleware) {
+func (m *ServeMux) SetMiddlewaresFactory(factory func(o *Options) []Middleware) {
 	m.tree.root.middlewareFactory = factory
 }
 
@@ -73,7 +71,7 @@ func (m *ServeMux) Route(path string, f func(Router), o ...Option) {
 	f(sub)
 }
 
-func (m *ServeMux) Method(method, path string, handler http.Handler, o ...Option) {
+func (m *ServeMux) Method(method, path string, handler Handler, o ...Option) {
 	if m.path != "" {
 		var err error
 		path, err = url.JoinPath(m.path, path)
@@ -96,35 +94,35 @@ func (m *ServeMux) Method(method, path string, handler http.Handler, o ...Option
 	m.tree.insert(method, path, handler, &opts)
 }
 
-func (m *ServeMux) Get(path string, handler http.Handler, o ...Option) {
+func (m *ServeMux) Get(path string, handler Handler, o ...Option) {
 	m.Method(http.MethodGet, path, handler, o...)
 }
 
-func (m *ServeMux) Head(path string, handler http.Handler, o ...Option) {
+func (m *ServeMux) Head(path string, handler Handler, o ...Option) {
 	m.Method(http.MethodHead, path, handler, o...)
 }
 
-func (m *ServeMux) Post(path string, handler http.Handler, o ...Option) {
+func (m *ServeMux) Post(path string, handler Handler, o ...Option) {
 	m.Method(http.MethodPost, path, handler, o...)
 }
 
-func (m *ServeMux) Put(path string, handler http.Handler, o ...Option) {
+func (m *ServeMux) Put(path string, handler Handler, o ...Option) {
 	m.Method(http.MethodPut, path, handler, o...)
 }
 
-func (m *ServeMux) Patch(path string, handler http.Handler, o ...Option) {
+func (m *ServeMux) Patch(path string, handler Handler, o ...Option) {
 	m.Method(http.MethodPatch, path, handler, o...)
 }
 
-func (m *ServeMux) Delete(path string, handler http.Handler, o ...Option) {
+func (m *ServeMux) Delete(path string, handler Handler, o ...Option) {
 	m.Method(http.MethodDelete, path, handler, o...)
 }
 
-func (m *ServeMux) Connect(path string, handler http.Handler, o ...Option) {
+func (m *ServeMux) Connect(path string, handler Handler, o ...Option) {
 	m.Method(http.MethodConnect, path, handler, o...)
 }
 
-func (m *ServeMux) Options(path string, handler http.Handler, o ...Option) {
+func (m *ServeMux) Options(path string, handler Handler, o ...Option) {
 	m.Method(http.MethodOptions, path, handler, o...)
 }
 
@@ -194,7 +192,7 @@ func cleanPath(p string) string {
 
 func (m *ServeMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	r.URL.Path = cleanPath(r.URL.Path)
-	n, params, ok := m.tree.root.lookup(r.URL.Path)
+	n, params, ok := m.tree.root.lookup(r.URL.Path, m.tree.getParams)
 	if !ok {
 		m.notFound(w, r)
 		return
@@ -204,36 +202,43 @@ func (m *ServeMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		m.notFound(w, r)
 		return
 	}
-
-	if len(params) > 0 {
-		ctx := context.WithValue(r.Context(), paramsKey{}, params)
-		r = r.WithContext(ctx)
+	handler.ServeHTTP(w, r, params)
+	if params != nil {
+		m.tree.putParams(&params)
 	}
-	handler.ServeHTTP(w, r)
 }
 
 func (m *ServeMux) notFound(w http.ResponseWriter, r *http.Request) {
 	http.NotFound(w, r)
 }
 
-func (m *ServeMux) mountRouter(prefix string, r Router, trimPrefix string) {
+func trimPrefix(prefix string) Middleware {
+	return func(next Handler) Handler {
+		return HandlerFunc(func(w http.ResponseWriter, r *http.Request, p Params) {
+			r.URL.Path = strings.TrimPrefix(r.URL.Path, prefix)
+			next.ServeHTTP(w, r, p)
+		})
+	}
+}
+
+func (m *ServeMux) mountRouter(prefix string, r Router, t string) {
 	ctx, cancel := context.WithCancel(context.TODO())
 	defer cancel()
-	r.Walk(ctx, func(method, path string, handler http.Handler, opts *Options) {
+	r.Walk(ctx, func(method, path string, handler Handler, opts *Options) {
 		path, _ = url.JoinPath(prefix, path)
 		o := opts.list()
-		o = append(o, WithMiddleware(middlewares.TrimPrefix(trimPrefix)))
+		o = append(o, WithMiddleware(trimPrefix(t)))
 		m.Method(method, path, handler, o...)
 	})
 }
 
-func (m *ServeMux) Mount(path string, handler http.Handler) {
+func (m *ServeMux) Mount(path string, handler Handler) {
 	prefix, _ := url.JoinPath("/", m.path, path)
 	if router, ok := handler.(Router); ok {
 		m.mountRouter(path, router, prefix)
 		return
 	}
-	m.Handle(path+"/*", handler, WithMiddleware(middlewares.TrimPrefix(prefix)))
+	m.Handle(path+"/*", handler, WithMiddleware(trimPrefix(prefix)))
 }
 
 func (m *ServeMux) With(path string, o ...Option) {
@@ -242,6 +247,6 @@ func (m *ServeMux) With(path string, o ...Option) {
 	m.tree.insert(MethodAll, path, nil, &opts)
 }
 
-func (m *ServeMux) Handle(path string, handler http.Handler, o ...Option) {
+func (m *ServeMux) Handle(path string, handler Handler, o ...Option) {
 	m.Method(MethodAll, path, handler, o...)
 }

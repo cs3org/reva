@@ -20,13 +20,11 @@ package mux
 
 import (
 	"strings"
-
-	"github.com/cs3org/reva/pkg/rhttp/middlewares"
 )
 
 type Options struct {
 	Unprotected bool
-	Middlewares []middlewares.Middleware
+	Middlewares []Middleware
 }
 
 type Option func(*Options)
@@ -74,7 +72,7 @@ func Unprotected() Option {
 	}
 }
 
-func WithMiddleware(middleware middlewares.Middleware) Option {
+func WithMiddleware(middleware Middleware) Option {
 	return func(o *Options) {
 		o.Middlewares = append(o.Middlewares, middleware)
 	}

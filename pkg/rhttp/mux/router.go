@@ -23,45 +23,61 @@ import (
 	"net/http"
 )
 
-type Params map[string]string
-
-func (p Params) Get(key string) (string, bool) {
-	if p == nil {
-		return "", false
-	}
-	v, ok := p[key]
-	return v, ok
+type Param struct {
+	Key, Value string
 }
+
+type Params []Param
+
+func (ps Params) Get(key string) (string, bool) {
+	for _, p := range ps {
+		if p.Key == key {
+			return p.Value, true
+		}
+	}
+	return "", false
+}
+
+type Handler interface {
+	ServeHTTP(http.ResponseWriter, *http.Request, Params)
+}
+
+type HandlerFunc func(http.ResponseWriter, *http.Request, Params)
+
+func (f HandlerFunc) ServeHTTP(w http.ResponseWriter, r *http.Request, p Params) {
+	f(w, r, p)
+}
+
+type Middleware func(Handler) Handler
 
 // Router allows registering HTTP services.
 type Router interface {
-	http.Handler
 	Walker
 
 	// Route mounts a sub-Router along a path string.
 	Route(path string, f func(Router), o ...Option)
 	// Method routes for path that matches the HTTP method.
-	Method(method, path string, handler http.Handler, o ...Option)
+	Method(method, path string, handler Handler, o ...Option)
 
 	// Handle routes for path that matches all the HTTP methods.
-	Handle(path string, handler http.Handler, o ...Option)
+	Handle(path string, handler Handler, o ...Option)
 
-	Mount(path string, handler http.Handler)
+	Mount(path string, handler Handler)
 
 	With(path string, o ...Option)
 
 	// HTTP-method routing along path.
-	Get(path string, handler http.Handler, o ...Option)
-	Head(path string, handler http.Handler, o ...Option)
-	Post(path string, handler http.Handler, o ...Option)
-	Put(path string, handler http.Handler, o ...Option)
-	Patch(path string, handler http.Handler, o ...Option)
-	Delete(path string, handler http.Handler, o ...Option)
-	Connect(path string, handler http.Handler, o ...Option)
-	Options(path string, handler http.Handler, o ...Option)
+	Get(path string, handler Handler, o ...Option)
+	Head(path string, handler Handler, o ...Option)
+	Post(path string, handler Handler, o ...Option)
+	Put(path string, handler Handler, o ...Option)
+	Patch(path string, handler Handler, o ...Option)
+	Delete(path string, handler Handler, o ...Option)
+	Connect(path string, handler Handler, o ...Option)
+	Options(path string, handler Handler, o ...Option)
 }
 
-type WalkFunc func(method, path string, handler http.Handler, opts *Options)
+type WalkFunc func(method, path string, handler Handler, opts *Options)
 
 type Walker interface {
 	Walk(ctx context.Context, f WalkFunc)

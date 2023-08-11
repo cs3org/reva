@@ -28,7 +28,6 @@ import (
 
 	"github.com/cs3org/reva/cmd/revad/pkg/config"
 	"github.com/cs3org/reva/pkg/appctx"
-	"github.com/cs3org/reva/pkg/rhttp/middlewares"
 	"github.com/cs3org/reva/pkg/rhttp/mux"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -87,7 +86,7 @@ func WithLogger(log zerolog.Logger) Config {
 	}
 }
 
-func WithMiddlewareFactory(f func(o *mux.Options) []middlewares.Middleware) Config {
+func WithMiddlewareFactory(f func(o *mux.Options) []mux.Middleware) Config {
 	return func(s *Server) {
 		s.midFactory = f
 	}
@@ -137,7 +136,7 @@ type Server struct {
 	listener   net.Listener
 	svcs       map[string]Service // map key is svc Prefix
 	log        zerolog.Logger
-	midFactory func(*mux.Options) []middlewares.Middleware
+	midFactory func(*mux.Options) []mux.Middleware
 }
 
 // Start starts the server.
@@ -149,7 +148,7 @@ func (s *Server) Start(ln net.Listener) error {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	router.Walk(ctx, func(method, path string, handler http.Handler, opts *mux.Options) {
+	router.Walk(ctx, func(method, path string, handler mux.Handler, opts *mux.Options) {
 		str := fmt.Sprintf("%s\t%s", method, path)
 		if o := opts.String(); o != "" {
 			str += fmt.Sprintf(" (%s)", o)

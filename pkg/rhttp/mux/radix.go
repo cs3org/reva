@@ -19,11 +19,8 @@
 package mux
 
 import (
-	"net/http"
 	"strings"
 	"sync"
-
-	"github.com/cs3org/reva/pkg/rhttp/middlewares"
 )
 
 type nodetype int
@@ -41,15 +38,29 @@ type node struct {
 	opts     nodeOptions
 	children nodes
 
-	middlewareFactory func(*Options) []middlewares.Middleware
+	middlewareFactory func(*Options) []Middleware
 }
 
 type trie struct {
 	root *node
 
+	paramsPool sync.Pool
+
 	// mutex used only during registration of paths
 	// lookup is thread-safe if not registrations are occurring
 	m sync.Mutex
+}
+
+func (t *trie) getParams() *Params {
+	ps, _ := t.paramsPool.Get().(*Params)
+	*ps = (*ps)[0:0] // reset slice
+	return ps
+}
+
+func (t *trie) putParams(ps *Params) {
+	if ps != nil {
+		t.paramsPool.Put(ps)
+	}
 }
 
 type nodeOptions struct {
@@ -94,11 +105,11 @@ func (n *nodeOptions) merge(other *nodeOptions) *nodeOptions {
 }
 
 type handlers struct {
-	global    http.Handler
-	perMethod nilMap[http.Handler]
+	global    Handler
+	perMethod nilMap[Handler]
 }
 
-func (h *handlers) set(method string, handler http.Handler) {
+func (h *handlers) set(method string, handler Handler) {
 	if method == MethodAll {
 		h.global = handler
 		return
@@ -106,7 +117,7 @@ func (h *handlers) set(method string, handler http.Handler) {
 	h.perMethod.add(method, handler)
 }
 
-func (h *handlers) get(method string) (http.Handler, bool) {
+func (h *handlers) get(method string) (Handler, bool) {
 	// always prefer the one specific for the required method
 	// otherwise fall back to the global handler for all methods
 	// if provided
@@ -126,12 +137,13 @@ func (n *node) isEmpty() bool {
 
 func newTree() *trie {
 	return &trie{
-		root: &node{},
-		m:    sync.Mutex{},
+		root:       &node{},
+		m:          sync.Mutex{},
+		paramsPool: sync.Pool{New: func() any { return &Params{} }},
 	}
 }
 
-func (t *trie) insert(method, path string, h http.Handler, opts *Options) {
+func (t *trie) insert(method, path string, h Handler, opts *Options) {
 	t.m.Lock()
 	defer t.m.Unlock()
 	t.root.insert(method, path, h, opts)
@@ -148,11 +160,12 @@ func (m *nilMap[T]) add(method string, v T) {
 
 type nodes []*node
 
-func (p *Params) add(key, val string) {
+func (p *Params) add(key, val string, n func() *Params) {
 	if *p == nil {
-		*p = make(Params)
+		new := n()
+		*p = *new
 	}
-	(*p)[key] = val
+	*p = append(*p, Param{key, val})
 }
 
 // search returns the node from the list of nodes having
@@ -161,7 +174,7 @@ func (n nodes) search(s string) (*node, bool) {
 	for _, node := range n {
 		if node.ntype == catchall || node.ntype == param ||
 			s == node.prefix && node.ntype == static && len(node.children) == 0 ||
-			strings.HasPrefix(s, node.prefix) && node.ntype == static && len(node.children) != 0 {
+			node.ntype == static && strings.HasPrefix(s, node.prefix) && len(node.children) != 0 {
 			return node, true
 		}
 	}
@@ -197,7 +210,7 @@ func (n nodes) longestCommonPrefix(s string) (string, *node, bool) {
 	return prefix, match, has
 }
 
-func (n *node) lookup(path string) (*node, Params, bool) {
+func (n *node) lookup(path string, ps func() *Params) (*node, Params, bool) {
 	// path can be something like
 	// path is already cleaned
 	// /search/aa/somenthing/bb
@@ -210,7 +223,7 @@ func (n *node) lookup(path string) (*node, Params, bool) {
 		// have any handler, and one of the children is a catch all
 		// node, the catch all might be an empty string.
 		// so we return the child node
-		n, params := n.nextContainingHandlers(nil)
+		n, params := n.nextContainingHandlers(nil, ps)
 		return n, params, true
 	}
 
@@ -240,11 +253,11 @@ func (n *node) lookup(path string) (*node, Params, bool) {
 			if i == -1 {
 				i = len(path)
 			}
-			params.add(prefix, path[:i])
+			params.add(prefix, path[:i], ps)
 			path = path[i:]
 		case catchall:
 			path = stripSlash(path)
-			params.add(prefix, path)
+			params.add(prefix, path, ps)
 			path = ""
 		}
 
@@ -253,17 +266,17 @@ func (n *node) lookup(path string) (*node, Params, bool) {
 			// have any handler, and one of the children is a catch all
 			// node, the catch all might be an empty string.
 			// so we return the child node
-			n, params := current.nextContainingHandlers(params)
+			n, params := current.nextContainingHandlers(params, ps)
 			return n, params, true
 		}
 	}
 }
 
-func (n *node) nextContainingHandlers(params Params) (*node, Params) {
+func (n *node) nextContainingHandlers(params Params, ps func() *Params) (*node, Params) {
 	if n.handlers.isEmpty() {
 		for _, c := range n.children {
 			if c.ntype == catchall {
-				params.add(c.prefix, "")
+				params.add(c.prefix, "", ps)
 				return c, params
 			}
 		}
@@ -312,7 +325,7 @@ func (n *node) mergeOptions(method string, opts *Options) *Options {
 	return opts.merge(nodeOpts)
 }
 
-func (n *node) insert(method, path string, handler http.Handler, opts *Options) {
+func (n *node) insert(method, path string, handler Handler, opts *Options) {
 	if n.prefix == "" {
 		// the tree is empty
 		n.insertChild(method, path, handler, nil, opts)
@@ -362,7 +375,7 @@ func wildcardIndex(s string) int {
 	return -1
 }
 
-func (n *node) insertChild(method, path string, handler http.Handler, merged, opts *Options) {
+func (n *node) insertChild(method, path string, handler Handler, merged, opts *Options) {
 	current := n
 	for {
 		if path == "" {
