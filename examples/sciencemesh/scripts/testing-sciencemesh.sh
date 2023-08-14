@@ -55,25 +55,25 @@ docker run --detach --name=wopi.docker      --network=testnet -p 8880:8880 -t cs
 #docker run --detach --name=rclone.docker    --network=testnet  rclone/rclone rcd -vv --rc-user=rcloneuser --rc-pass=eilohtho9oTahsuongeeTh7reedahPo1Ohwi3aek --rc-addr=0.0.0.0:5572 --server-side-across-configs=true --log-file=/dev/stdout
 
 # EFSS1
-docker run --detach --network=testnet                                 \
-  --name=maria1.docker                                                \
-  -e MARIADB_ROOT_PASSWORD=eilohtho9oTahsuongeeTh7reedahPo1Ohwi3aek   \
-  mariadb                                                             \
-  --transaction-isolation=READ-COMMITTED                              \
-  --binlog-format=ROW                                                 \
-  --innodb-file-per-table=1                                           \
+docker run --detach --network=testnet                                         \
+  --name=maria1.docker                                                        \
+  -e MARIADB_ROOT_PASSWORD=eilohtho9oTahsuongeeTh7reedahPo1Ohwi3aek           \
+  mariadb                                                                     \
+  --transaction-isolation=READ-COMMITTED                                      \
+  --binlog-format=ROW                                                         \
+  --innodb-file-per-table=1                                                   \
   --skip-innodb-read-only-compressed
 
-docker run --detach --network=testnet                                        \
-  --name="${EFSS1}1.docker"                                                  \
-  --add-host "host.docker.internal:host-gateway"                             \
-  -e HOST="${EFSS1}1"                                                        \
-  -e DBHOST="maria1.docker"                                                  \
-  -e USER="einstein"                                                         \
-  -e PASS="relativity"                                                       \
-  -v "${ENV_ROOT}/temp/${EFSS1}.sh:/${EFSS1}-init.sh"                        \
-  -v "${ENV_ROOT}/$EFSS1-sciencemesh:/var/www/html/apps/sciencemesh"         \
-  -v "${ENV_ROOT}/temp/${EFSS1}-1-tls:/tls"                                                   \
+docker run --detach --network=testnet                                         \
+  --name="${EFSS1}1.docker"                                                   \
+  --add-host "host.docker.internal:host-gateway"                              \
+  -e HOST="${EFSS1}1"                                                         \
+  -e DBHOST="maria1.docker"                                                   \
+  -e USER="einstein"                                                          \
+  -e PASS="relativity"                                                        \
+  -v "${ENV_ROOT}/temp/${EFSS1}.sh:/${EFSS1}-init.sh"                         \
+  -v "${ENV_ROOT}/$EFSS1-sciencemesh:/var/www/html/apps/sciencemesh"          \
+  -v "${ENV_ROOT}/temp/${EFSS1}-1-tls:/tls"                                   \
   "pondersource/dev-stock-${EFSS1}-sciencemesh"
 
 # EFSS2
@@ -94,8 +94,8 @@ docker run --detach --network=testnet                                         \
   -e USER="marie"                                                             \
   -e PASS="radioactivity"                                                     \
   -v "${ENV_ROOT}/temp/${EFSS2}.sh:/${EFSS2}-init.sh"                         \
-  -v "${ENV_ROOT}/${EFSS2}-sciencemesh:/var/www/html/apps/sciencemesh"          \
-  -v "${ENV_ROOT}/temp/${EFSS2}-2-tls:/tls"                                                   \
+  -v "${ENV_ROOT}/${EFSS2}-sciencemesh:/var/www/html/apps/sciencemesh"        \
+  -v "${ENV_ROOT}/temp/${EFSS2}-2-tls:/tls"                                   \
   "pondersource/dev-stock-${EFSS2}-sciencemesh"
 
 # EFSS1
@@ -104,6 +104,7 @@ waitForPort "${EFSS1}1.docker" 443
 
 docker exec "${EFSS1}1.docker" bash -c "cp /tls/*.crt /usr/local/share/ca-certificates/"
 docker exec "${EFSS1}1.docker" update-ca-certificates
+docker exec "${EFSS1}1.docker" bash -c "cat /etc/ssl/certs/ca-certificates.crt >> /var/www/html/resources/config/ca-bundle.crt"
 
 docker exec -u www-data "${EFSS1}1.docker" sh "/${EFSS1}-init.sh"
 
@@ -126,6 +127,7 @@ waitForPort "${EFSS2}2.docker" 443
 
 docker exec "${EFSS2}2.docker" bash -c "cp /tls/*.crt /usr/local/share/ca-certificates/"
 docker exec "${EFSS2}2.docker" update-ca-certificates
+docker exec "${EFSS2}2.docker" bash -c "cat /etc/ssl/certs/ca-certificates.crt >> /var/www/html/resources/config/ca-bundle.crt"
 
 docker exec -u www-data "${EFSS2}2.docker" sh "/${EFSS2}-init.sh"
 
@@ -143,21 +145,23 @@ docker exec maria2.docker mariadb -u root -peilohtho9oTahsuongeeTh7reedahPo1Ohwi
 
 # reva
 waitForCollabora
-docker run --detach --network=testnet                                 \
-  --name="reva${EFSS1}1.docker"                                       \
-  -e HOST="reva${EFSS1}1"                                             \
-  -v "${ENV_ROOT}/../..:/reva"                                        \
-  -v "${ENV_ROOT}/revad:/etc/revad"                                   \
-  -v "${ENV_ROOT}/tls:/etc/revad/tls"                                 \
-  -v "${ENV_ROOT}/scripts/reva-run.sh:/usr/bin/reva-run.sh"           \
-  -v "${ENV_ROOT}/scripts/reva-kill.sh:/usr/bin/reva-kill.sh"         \
-  -v "${ENV_ROOT}/scripts/reva-entrypoint.sh:/entrypoint.sh"          \
+docker run --detach --network=testnet                                         \
+  --name="reva${EFSS1}1.docker"                                               \
+  -e HOST="reva${EFSS1}1"                                                     \
+  -p 8080:80                                                                  \
+  -v "${ENV_ROOT}/../..:/reva"                                                \
+  -v "${ENV_ROOT}/revad:/etc/revad"                                           \
+  -v "${ENV_ROOT}/tls:/etc/revad/tls"                                         \
+  -v "${ENV_ROOT}/scripts/reva-run.sh:/usr/bin/reva-run.sh"                   \
+  -v "${ENV_ROOT}/scripts/reva-kill.sh:/usr/bin/reva-kill.sh"                 \
+  -v "${ENV_ROOT}/scripts/reva-entrypoint.sh:/entrypoint.sh"                  \
   pondersource/dev-stock-revad
 
 docker run --detach --network=testnet                                         \
   --name="reva${EFSS2}2.docker"                                               \
   -e HOST="reva${EFSS2}2"                                                     \
-  -v "${ENV_ROOT}/../..:/reva"                                                 \
+  -p 8180:80                                                                  \
+  -v "${ENV_ROOT}/../..:/reva"                                                \
   -v "${ENV_ROOT}/revad:/etc/revad"                                           \
   -v "${ENV_ROOT}/tls:/etc/revad/tls"                                         \
   -v "${ENV_ROOT}/scripts/reva-run.sh:/usr/bin/reva-run.sh"                   \
