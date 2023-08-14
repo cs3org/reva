@@ -36,6 +36,7 @@ type UploadRequest struct {
 	Content []byte
 
 	IfMatchEtag       string
+	IfNoneMatch       []string
 	IfUnmodifiedSince time.Time
 	MTime             time.Time
 }
@@ -60,7 +61,7 @@ type Storage interface {
 
 	Init(ctx context.Context, name string) (err error)
 	Upload(ctx context.Context, req UploadRequest) error
-	Download(ctx context.Context, reuq DownloadRequest) (*DownloadResponse, error)
+	Download(ctx context.Context, req DownloadRequest) (*DownloadResponse, error)
 	SimpleUpload(ctx context.Context, uploadpath string, content []byte) error
 	SimpleDownload(ctx context.Context, path string) ([]byte, error)
 	Delete(ctx context.Context, path string) error

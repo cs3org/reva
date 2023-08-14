@@ -168,6 +168,9 @@ func New(ctx context.Context, info tusd.FileInfo, lu *lookup.Lookup, tp Tree, p 
 		info.Storage["NodeId"] = uuid.New().String()
 		info.Storage["NodeExists"] = "false"
 	}
+	if info.MetaData["if-none-match"] == "*" && info.Storage["NodeExists"] == "true" {
+		return nil, errtypes.Aborted(fmt.Sprintf("parent %s already has a child %s", n.ID, n.Name))
+	}
 	// Create binary file in the upload folder with no content
 	log.Debug().Interface("info", info).Msg("Decomposedfs: built storage info")
 	file, err := os.OpenFile(binPath, os.O_CREATE|os.O_WRONLY, defaultFilePerm)
@@ -347,7 +350,7 @@ func initNewNode(upload *Upload, n *node.Node, fsize uint64) (*lockedfile.File, 
 	}
 
 	// we also need to touch the actual node file here it stores the mtime of the resource
-	h, err := os.OpenFile(n.InternalPath(), os.O_CREATE, 0600)
+	h, err := os.OpenFile(n.InternalPath(), os.O_CREATE|os.O_EXCL, 0600)
 	if err != nil {
 		return f, err
 	}
@@ -398,6 +401,22 @@ func updateExistingNode(upload *Upload, n *node.Node, spaceID string, fsize uint
 		case err != nil:
 			return nil, errtypes.InternalError(err.Error())
 		case ifMatch != targetEtag:
+			return nil, errtypes.Aborted("etag mismatch")
+		}
+	}
+
+	// When the if-none-match header was set we need to check if any of the
+	// etags matches before finishing the upload.
+	if ifNoneMatch, ok := upload.Info.MetaData["if-none-match"]; ok {
+		targetEtag, err := node.CalculateEtag(n.ID, tmtime)
+		if err != nil {
+			return nil, errtypes.InternalError(err.Error())
+		}
+		strings.Split(ifNoneMatch, ",")
+		switch {
+		case err != nil:
+			return nil, errtypes.InternalError(err.Error())
+		case ifNoneMatch != targetEtag:
 			return nil, errtypes.Aborted("etag mismatch")
 		}
 	}

@@ -75,13 +75,13 @@ var _ = Describe("Cache", func() {
 
 	Describe("Add", func() {
 		It("adds a share", func() {
-			s, err := c.Get(ctx, storageID, spaceID, shareID)
+			s, err := c.Get(ctx, storageID, spaceID, shareID, false)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(s).To(BeNil())
 
 			Expect(c.Add(ctx, storageID, spaceID, shareID, share1)).To(Succeed())
 
-			s, err = c.Get(ctx, storageID, spaceID, shareID)
+			s, err = c.Get(ctx, storageID, spaceID, shareID, false)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(s).ToNot(BeNil())
 			Expect(s).To(Equal(share1))
@@ -107,7 +107,7 @@ var _ = Describe("Cache", func() {
 
 		Describe("Get", func() {
 			It("returns the entry", func() {
-				s, err := c.Get(ctx, storageID, spaceID, shareID)
+				s, err := c.Get(ctx, storageID, spaceID, shareID, false)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(s).ToNot(BeNil())
 			})
@@ -115,14 +115,14 @@ var _ = Describe("Cache", func() {
 
 		Describe("Remove", func() {
 			It("removes the entry", func() {
-				s, err := c.Get(ctx, storageID, spaceID, shareID)
+				s, err := c.Get(ctx, storageID, spaceID, shareID, false)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(s).ToNot(BeNil())
 				Expect(s).To(Equal(share1))
 
 				Expect(c.Remove(ctx, storageID, spaceID, shareID)).To(Succeed())
 
-				s, err = c.Get(ctx, storageID, spaceID, shareID)
+				s, err = c.Get(ctx, storageID, spaceID, shareID, false)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(s).To(BeNil())
 			})

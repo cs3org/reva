@@ -232,6 +232,9 @@ func (c *Cache) syncWithLock(ctx context.Context, userID string) error {
 	case errtypes.NotFound:
 		span.SetStatus(codes.Ok, "")
 		return nil
+	case errtypes.NotModified:
+		span.SetStatus(codes.Ok, "")
+		return nil
 	default:
 		span.SetStatus(codes.Error, fmt.Sprintf("Failed to download the share cache: %s", err.Error()))
 		log.Error().Err(err).Msg("Failed to download the share cache")
@@ -282,13 +285,17 @@ func (c *Cache) Persist(ctx context.Context, userid string) error {
 		return err
 	}
 
-	if err = c.storage.Upload(ctx, metadata.UploadRequest{
+	ur := metadata.UploadRequest{
 		Path:        jsonPath,
 		Content:     createdBytes,
 		IfMatchEtag: c.UserShares[userid].etag,
-		//IfUnmodifiedSince: oldMtime,
-		//MTime:             c.UserShares[userid].Mtime,
-	}); err != nil {
+	}
+	// when there is no etag in memory make sure the file has not been created on the server, see https://www.rfc-editor.org/rfc/rfc9110#field.if-match
+	// > If the field value is "*", the condition is false if the origin server has a current representation for the target resource.
+	if c.UserShares[userid].etag == "" {
+		ur.IfNoneMatch = []string{"*"}
+	}
+	if err = c.storage.Upload(ctx, ur); err != nil {
 		c.UserShares[userid].Mtime = oldMtime
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())

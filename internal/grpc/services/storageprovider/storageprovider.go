@@ -323,8 +323,24 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 	if err != nil {
 		return nil, err
 	}
+	sublog := appctx.GetLogger(ctx).With().
+		Interface("req.Ref", req.Ref).
+		Interface("req IfUnmodifiedSince", req.GetIfUnmodifiedSince()).
+		Bool("req GetIfNotExist", req.GetIfNotExist()).
+		Str("req GetIfMatch", req.GetIfMatch()).
+		Interface("info mtime", sRes.GetInfo().GetMtime()).
+		Logger()
+
 	switch sRes.Status.Code {
-	case rpc.Code_CODE_OK, rpc.Code_CODE_NOT_FOUND:
+	case rpc.Code_CODE_OK:
+		if req.GetIfNotExist() {
+			sublog.Info().Msg("validateIfNotExist FAILED")
+			return &provider.InitiateFileUploadResponse{
+				Status: status.NewAlreadyExists(ctx, errors.New("already exists"), "already exists"),
+			}, nil
+		}
+		sublog.Info().Msg("validateIfNotExist PASSED")
+	case rpc.Code_CODE_NOT_FOUND:
 		// Just continue with a normal upload
 	default:
 		return &provider.InitiateFileUploadResponse{
@@ -336,18 +352,14 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 	ifMatch := req.GetIfMatch()
 	if ifMatch != "" {
 		if !validateIfMatch(ifMatch, sRes.GetInfo()) {
+			sublog.Info().Msg("validateIfMatch FAILED")
 			return &provider.InitiateFileUploadResponse{
 				Status: status.NewFailedPrecondition(ctx, errors.New("etag mismatch"), "etag mismatch"),
 			}, nil
 		}
+		sublog.Info().Msg("validateIfMatch PASSED")
 		metadata["if-match"] = ifMatch
 	}
-	sublog := appctx.GetLogger(ctx).With().
-		Interface("req.Ref", req.Ref).
-		Interface("req IfUnmodifiedSince", req.GetIfUnmodifiedSince()).
-		Interface("info mtime", sRes.GetInfo().GetMtime()).
-		Logger()
-	sublog.Info().Msg("validateIfUnmodifiedSince ...")
 	ifUnmodifiedSince := req.GetIfUnmodifiedSince()
 	if ifUnmodifiedSince != nil {
 		metadata["if-unmodified-since"] = utils.TSToTime(ifUnmodifiedSince).Format(time.RFC3339Nano)

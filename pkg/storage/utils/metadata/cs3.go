@@ -163,11 +163,19 @@ func (cs3 *CS3) Upload(ctx context.Context, req UploadRequest) error {
 			IfMatch: req.IfMatchEtag,
 		}
 	}
-	// if req.IfUnmodifiedSince != (time.Time{}) {
-	ifuReq.Options = &provider.InitiateFileUploadRequest_IfUnmodifiedSince{
-		IfUnmodifiedSince: utils.TimeToTS(req.IfUnmodifiedSince),
+	if len(req.IfNoneMatch) > 0 {
+		if req.IfNoneMatch[0] == "*" {
+			ifuReq.Options = &provider.InitiateFileUploadRequest_IfNotExist{}
+		}
+		// else {
+		//   the http upload will carry all if-not-match etags
+		// }
 	}
-	// }
+	if req.IfUnmodifiedSince != (time.Time{}) {
+		ifuReq.Options = &provider.InitiateFileUploadRequest_IfUnmodifiedSince{
+			IfUnmodifiedSince: utils.TimeToTS(req.IfUnmodifiedSince),
+		}
+	}
 	if req.MTime != (time.Time{}) {
 		// The format of the X-OC-Mtime header is <epoch>.<nanoseconds>, e.g. '1691053416.934129485'
 		ifuReq.Opaque = utils.AppendPlainToOpaque(ifuReq.Opaque, "X-OC-Mtime", strconv.Itoa(int(req.MTime.Unix()))+"."+strconv.Itoa(req.MTime.Nanosecond()))
@@ -197,6 +205,9 @@ func (cs3 *CS3) Upload(ctx context.Context, req UploadRequest) error {
 	if err != nil {
 		return err
 	}
+	for _, etag := range req.IfNoneMatch {
+		httpReq.Header.Add(net.HeaderIfNoneMatch, etag)
+	}
 
 	md, _ := metadata.FromOutgoingContext(ctx)
 	httpReq.Header.Add(ctxpkg.TokenHeader, md.Get(ctxpkg.TokenHeader)[0])
@@ -204,7 +215,11 @@ func (cs3 *CS3) Upload(ctx context.Context, req UploadRequest) error {
 	if err != nil {
 		return err
 	}
-	return resp.Body.Close()
+	if err := errtypes.NewErrtypeFromHTTPStatusCode(resp.StatusCode, httpReq.URL.Path); err != nil {
+		// resp.Body.Close()
+		return err
+	}
+	return resp.Body.Close() // TODO do we really need to close? if so then we need to also
 }
 
 // Stat returns the metadata for the given path
@@ -291,8 +306,8 @@ func (cs3 *CS3) SimpleDownload(ctx context.Context, downloadpath string) (conten
 			return err
 		}
 
-		if resp.StatusCode != http.StatusOK {
-			return errtypes.NotFound(dreq.Ref.Path)
+		if err := errtypes.NewErrtypeFromHTTPStatusCode(resp.StatusCode, req.URL.Path); err != nil {
+			return err
 		}
 
 		b, err = io.ReadAll(resp.Body)
@@ -381,11 +396,12 @@ func (cs3 *CS3) Download(ctx context.Context, req DownloadRequest) (*DownloadRes
 			return err
 		}
 
-		if resp.StatusCode != http.StatusOK {
-			return errtypes.NotFound(dreq.Ref.Path)
-		}
+		dres.Etag = resp.Header.Get("etag")
+		dres.Etag = resp.Header.Get("oc-etag") // takes precedence
 
-		dres.Etag = resp.Header.Get("oc-etag")
+		if err := errtypes.NewErrtypeFromHTTPStatusCode(resp.StatusCode, hreq.URL.Path); err != nil {
+			return err
+		}
 
 		dres.Mtime, err = time.Parse(time.RFC1123Z, resp.Header.Get("last-modified"))
 		if err != nil {
@@ -403,13 +419,8 @@ func (cs3 *CS3) Download(ctx context.Context, req DownloadRequest) (*DownloadRes
 		return nil
 	}
 	err = downloadFunc()
-	log := appctx.GetLogger(ctx)
+	// TODO add retries
 	if err != nil {
-		log.Error().Err(err).Msg("SimpleDownload failed. Retrying....")
-		err = downloadFunc()
-	}
-	if err != nil {
-		log.Error().Err(err).Msg("SimpleDownload failed. Giving up.")
 		return nil, err
 	}
 

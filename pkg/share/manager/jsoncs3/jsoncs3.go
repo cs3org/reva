@@ -365,7 +365,7 @@ func (m *Manager) Share(ctx context.Context, md *provider.ResourceInfo, g *colla
 func (m *Manager) getByID(ctx context.Context, id *collaboration.ShareId) (*collaboration.Share, error) {
 	storageID, spaceID, _ := shareid.Decode(id.OpaqueId)
 
-	share, err := m.Cache.Get(ctx, storageID, spaceID, id.OpaqueId)
+	share, err := m.Cache.Get(ctx, storageID, spaceID, id.OpaqueId, false)
 	if err != nil {
 		return nil, err
 	}
@@ -658,13 +658,18 @@ func (m *Manager) listCreatedShares(ctx context.Context, user *userv1beta1.User,
 	var ss []*collaboration.Share
 	for ssid, spaceShareIDs := range list {
 		storageID, spaceID, _ := shareid.Decode(ssid)
-		spaceShares, err := m.Cache.ListSpace(ctx, storageID, spaceID)
+		// fetch all shares from space with one request
+		_, err := m.Cache.ListSpace(ctx, storageID, spaceID)
 		if err != nil {
+			log.Error().Err(err).
+				Str("storageid", storageID).
+				Str("spaceid", spaceID).
+				Msg("failed to list shares in space")
 			continue
 		}
-		for shareid := range spaceShareIDs.IDs {
-			s := spaceShares.Shares[shareid]
-			if s == nil {
+		for shareID := range spaceShareIDs.IDs {
+			s, err := m.Cache.Get(ctx, storageID, spaceID, shareID, true)
+			if err != nil || s == nil {
 				continue
 			}
 			if share.IsExpired(s) {
@@ -785,8 +790,17 @@ func (m *Manager) ListReceivedShares(ctx context.Context, filters []*collaborati
 		g.Go(func() error {
 			for w := range work {
 				storageID, spaceID, _ := shareid.Decode(w.ssid)
+				// fetch all shares from space with one request
+				_, err := m.Cache.ListSpace(ctx, storageID, spaceID)
+				if err != nil {
+					log.Error().Err(err).
+						Str("storageid", storageID).
+						Str("spaceid", spaceID).
+						Msg("failed to list shares in space")
+					continue
+				}
 				for shareID, state := range w.rspace.States {
-					s, err := m.Cache.Get(ctx, storageID, spaceID, shareID)
+					s, err := m.Cache.Get(ctx, storageID, spaceID, shareID, true)
 					if err != nil || s == nil {
 						continue
 					}
