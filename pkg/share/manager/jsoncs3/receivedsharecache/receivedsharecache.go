@@ -32,7 +32,6 @@ import (
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/metadata"
-	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/r3labs/diff/v3"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
@@ -58,6 +57,7 @@ type Spaces struct {
 	Mtime  time.Time
 	Spaces map[string]*Space
 
+	etag     string
 	nextSync time.Time
 }
 
@@ -174,62 +174,44 @@ func (c *Cache) syncWithLock(ctx context.Context, userID string) error {
 
 	log := appctx.GetLogger(ctx).With().Str("userID", userID).Logger()
 
-	var mtime time.Time
-	if c.ReceivedSpaces[userID] != nil {
-		if time.Now().Before(c.ReceivedSpaces[userID].nextSync) {
-			span.AddEvent("skip sync")
-			span.SetStatus(codes.Ok, "")
-			return nil
-		}
-		c.ReceivedSpaces[userID].nextSync = time.Now().Add(c.ttl)
-
-		mtime = c.ReceivedSpaces[userID].Mtime
-	} else {
-		mtime = time.Time{} // Set zero time so that data from storage always takes precedence
-	}
-
 	c.initializeIfNeeded(userID, "")
 
 	jsonPath := userJSONPath(userID)
-	now := time.Now()
-	info, err := c.storage.Stat(ctx, jsonPath) // TODO we only need the mtime ... use fieldmask to make the request cheaper
-	if err != nil {
-		if _, ok := err.(errtypes.NotFound); ok {
-			span.AddEvent("no file")
-			span.SetStatus(codes.Ok, "")
-			c.ReceivedSpaces[userID].Mtime = now
-			return nil // Nothing to sync against
-		}
-		span.SetStatus(codes.Error, fmt.Sprintf("Failed to stat the received share: %s", err.Error()))
-		log.Error().Err(err).Msg("Failed to stat the received share")
+	span.AddEvent("updating cache")
+	//  - update cached list of created shares for the user in memory if changed
+	dlres, err := c.storage.Download(ctx, metadata.DownloadRequest{
+		Path:        jsonPath,
+		IfNoneMatch: []string{c.ReceivedSpaces[userID].etag},
+	})
+	switch err.(type) {
+	case nil:
+		// continue
+	case errtypes.NotFound:
+		span.SetStatus(codes.Ok, "")
+		return nil
+	default:
+		span.SetStatus(codes.Error, fmt.Sprintf("Failed to download the received share: %s", err.Error()))
+		log.Error().Err(err).Msg("Failed to download the received share")
 		return err
 	}
-	// check mtime of /users/{userid}/created.json
-	if utils.TSToTime(info.Mtime).After(mtime) {
-		span.AddEvent("updating cache")
-		//  - update cached list of created shares for the user in memory if changed
-		createdBlob, err := c.storage.SimpleDownload(ctx, jsonPath)
-		if err != nil {
-			span.SetStatus(codes.Error, fmt.Sprintf("Failed to download the received share: %s", err.Error()))
-			log.Error().Err(err).Msg("Failed to download the received share")
-			return err
-		}
-		newSpaces := &Spaces{}
-		err = json.Unmarshal(createdBlob, newSpaces)
-		if err != nil {
-			span.SetStatus(codes.Error, fmt.Sprintf("Failed to unmarshal the received share: %s", err.Error()))
-			log.Error().Err(err).Msg("Failed to unmarshal the received share")
-			return err
-		}
-		newSpaces.Mtime = utils.TSToTime(info.Mtime)
-		_, err = diff.Diff(c.ReceivedSpaces[userID], newSpaces)
-		if err != nil {
-			log.Error().Err(err).Str("userid", userID).Msg("receivedsharecache diff failed")
-		} else {
-			// log.Debug().Str("userid", userID).Interface("changelog", changelog).Msg("receivedsharecache diff")
-		}
-		c.ReceivedSpaces[userID] = newSpaces
+	newSpaces := &Spaces{}
+	err = json.Unmarshal(dlres.Content, newSpaces)
+	if err != nil {
+		span.SetStatus(codes.Error, fmt.Sprintf("Failed to unmarshal the received share: %s", err.Error()))
+		log.Error().Err(err).Msg("Failed to unmarshal the received share")
+		return err
 	}
+	//newSpaces.Mtime = utils.TSToTime(info.Mtime)
+	newSpaces.Mtime = dlres.Mtime
+	newSpaces.etag = dlres.Etag
+
+	_, err = diff.Diff(c.ReceivedSpaces[userID], newSpaces)
+	if err != nil {
+		log.Error().Err(err).Str("userid", userID).Msg("receivedsharecache diff failed")
+	} else {
+		// log.Debug().Str("userid", userID).Interface("changelog", changelog).Msg("receivedsharecache diff")
+	}
+	c.ReceivedSpaces[userID] = newSpaces
 	span.SetStatus(codes.Ok, "")
 	return nil
 }
@@ -264,10 +246,11 @@ func (c *Cache) persist(ctx context.Context, userID string) error {
 	}
 
 	if err = c.storage.Upload(ctx, metadata.UploadRequest{
-		Path:              jsonPath,
-		Content:           createdBytes,
-		IfUnmodifiedSince: oldMtime,
-		MTime:             c.ReceivedSpaces[userID].Mtime,
+		Path:        jsonPath,
+		Content:     createdBytes,
+		IfMatchEtag: c.ReceivedSpaces[userID].etag,
+		//IfUnmodifiedSince: oldMtime,
+		//MTime:             c.ReceivedSpaces[userID].Mtime,
 	}); err != nil {
 		c.ReceivedSpaces[userID].Mtime = oldMtime
 		span.RecordError(err)

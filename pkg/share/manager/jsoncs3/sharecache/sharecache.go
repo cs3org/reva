@@ -31,7 +31,6 @@ import (
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/share/manager/jsoncs3/shareid"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/metadata"
-	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/r3labs/diff/v3"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
@@ -59,6 +58,7 @@ type UserShareCache struct {
 	Mtime      time.Time
 	UserShares map[string]*SpaceShareIDs
 
+	etag     string
 	nextSync time.Time
 }
 
@@ -216,65 +216,44 @@ func (c *Cache) syncWithLock(ctx context.Context, userID string) error {
 
 	log := appctx.GetLogger(ctx).With().Str("userID", userID).Logger()
 
-	var mtime time.Time
-	//  - do we have a cached list of created shares for the user in memory?
-	if usc := c.UserShares[userID]; usc != nil {
-		if time.Now().Before(c.UserShares[userID].nextSync) {
-			span.AddEvent("skip sync")
-			span.SetStatus(codes.Ok, "")
-			return nil
-		}
-		c.UserShares[userID].nextSync = time.Now().Add(c.ttl)
-
-		mtime = usc.Mtime
-		//    - y: set If-Modified-Since header to only download if it changed
-	} else {
-		mtime = time.Time{} // Set zero time so that data from storage always takes precedence
-	}
-
 	c.initializeIfNeeded(userID, "")
 
 	userCreatedPath := c.userCreatedPath(userID)
-	now := time.Now()
-	info, err := c.storage.Stat(ctx, userCreatedPath)
-	if err != nil {
-		if _, ok := err.(errtypes.NotFound); ok {
-			span.AddEvent("no file")
-			span.SetStatus(codes.Ok, "")
+	span.AddEvent("updating cache")
+	//  - update cached list of created shares for the user in memory if changed
+	dlres, err := c.storage.Download(ctx, metadata.DownloadRequest{
+		Path:        userCreatedPath,
+		IfNoneMatch: []string{c.UserShares[userID].etag},
+	})
 
-			c.UserShares[userID].Mtime = now
-			return nil // Nothing to sync against
-		}
-		span.SetStatus(codes.Error, fmt.Sprintf("Failed to stat the share cache: %s", err.Error()))
-		log.Error().Err(err).Msg("Failed to stat the share cache")
+	switch err.(type) {
+	case nil:
+		// continue
+	case errtypes.NotFound:
+		span.SetStatus(codes.Ok, "")
+		return nil
+	default:
+		span.SetStatus(codes.Error, fmt.Sprintf("Failed to download the share cache: %s", err.Error()))
+		log.Error().Err(err).Msg("Failed to download the share cache")
 		return err
 	}
-	// check mtime of /users/{userid}/created.json
-	if utils.TSToTime(info.Mtime).After(mtime) {
-		span.AddEvent("updating cache")
-		//  - update cached list of created shares for the user in memory if changed
-		createdBlob, err := c.storage.SimpleDownload(ctx, userCreatedPath)
-		if err != nil {
-			span.SetStatus(codes.Error, fmt.Sprintf("Failed to download the share cache: %s", err.Error()))
-			log.Error().Err(err).Msg("Failed to download the share cache")
-			return err
-		}
-		newShareCache := &UserShareCache{}
-		err = json.Unmarshal(createdBlob, newShareCache)
-		if err != nil {
-			span.SetStatus(codes.Error, fmt.Sprintf("Failed to unmarshal the share cache: %s", err.Error()))
-			log.Error().Err(err).Msg("Failed to unmarshal the share cache")
-			return err
-		}
-		newShareCache.Mtime = utils.TSToTime(info.Mtime)
-		_, err = diff.Diff(c.UserShares[userID], newShareCache)
-		if err != nil {
-			log.Error().Str("userid", userID).Err(err).Msg("sharecache diff failed")
-		} else {
-			// log.Debug().Str("userid", userID).Interface("changelog", changelog).Msg("sharecache diff")
-		}
-		c.UserShares[userID] = newShareCache
+	newShareCache := &UserShareCache{}
+	err = json.Unmarshal(dlres.Content, newShareCache)
+	if err != nil {
+		span.SetStatus(codes.Error, fmt.Sprintf("Failed to unmarshal the share cache: %s", err.Error()))
+		log.Error().Err(err).Msg("Failed to unmarshal the share cache")
+		return err
 	}
+	//newShareCache.Mtime = utils.TSToTime(info.Mtime)
+	newShareCache.Mtime = dlres.Mtime
+	newShareCache.etag = dlres.Etag
+	_, err = diff.Diff(c.UserShares[userID], newShareCache)
+	if err != nil {
+		log.Error().Str("userid", userID).Err(err).Msg("sharecache diff failed")
+	} else {
+		// log.Debug().Str("userid", userID).Interface("changelog", changelog).Msg("sharecache diff")
+	}
+	c.UserShares[userID] = newShareCache
 	span.SetStatus(codes.Ok, "")
 	return nil
 }
@@ -304,10 +283,11 @@ func (c *Cache) Persist(ctx context.Context, userid string) error {
 	}
 
 	if err = c.storage.Upload(ctx, metadata.UploadRequest{
-		Path:              jsonPath,
-		Content:           createdBytes,
-		IfUnmodifiedSince: oldMtime,
-		MTime:             c.UserShares[userid].Mtime,
+		Path:        jsonPath,
+		Content:     createdBytes,
+		IfMatchEtag: c.UserShares[userid].etag,
+		//IfUnmodifiedSince: oldMtime,
+		//MTime:             c.UserShares[userid].Mtime,
 	}); err != nil {
 		c.UserShares[userid].Mtime = oldMtime
 		span.RecordError(err)

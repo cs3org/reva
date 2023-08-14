@@ -33,6 +33,7 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	"github.com/cs3org/reva/v2/internal/http/services/owncloud/ocdav/net"
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/v2/pkg/ctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
@@ -316,6 +317,103 @@ func (cs3 *CS3) SimpleDownload(ctx context.Context, downloadpath string) (conten
 	}
 
 	return b, nil
+}
+
+// Download reads a file from the metadata storage
+func (cs3 *CS3) Download(ctx context.Context, req DownloadRequest) (*DownloadResponse, error) {
+	ctx, span := tracer.Start(ctx, "Download")
+	defer span.End()
+
+	client, err := cs3.providerClient()
+	if err != nil {
+		return nil, err
+	}
+	ctx, err = cs3.getAuthContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	dreq := provider.InitiateFileDownloadRequest{
+		Ref: &provider.Reference{
+			ResourceId: cs3.SpaceRoot,
+			Path:       utils.MakeRelativePath(req.Path),
+		},
+	}
+	// FIXME add a dedicated property on the CS3 InitiateFileDownloadRequest message
+	// well the gateway never forwards the initiate request to the storageprovider, so we have to send it in the actual GET request
+	// if len(req.IfNoneMatch) > 0 {
+	//   dreq.Opaque = utils.AppendPlainToOpaque(dreq.Opaque, "if-none-match", strings.Join(req.IfNoneMatch, ","))
+	// }
+
+	dres := DownloadResponse{}
+
+	downloadFunc := func() error {
+		res, err := client.InitiateFileDownload(ctx, &dreq)
+		if err != nil {
+			return errtypes.NotFound(dreq.Ref.Path)
+		}
+
+		var endpoint string
+
+		for _, proto := range res.GetProtocols() {
+			if proto.Protocol == "spaces" {
+				endpoint = proto.GetDownloadEndpoint()
+				break
+			}
+		}
+		if endpoint == "" {
+			return errors.New("metadata storage doesn't support the spaces download protocol")
+		}
+
+		hreq, err := http.NewRequest(http.MethodGet, endpoint, nil)
+		if err != nil {
+			return err
+		}
+
+		for _, etag := range req.IfNoneMatch {
+			hreq.Header.Add(net.HeaderIfNoneMatch, etag)
+		}
+
+		md, _ := metadata.FromOutgoingContext(ctx)
+		hreq.Header.Add(ctxpkg.TokenHeader, md.Get(ctxpkg.TokenHeader)[0])
+		resp, err := cs3.dataGatewayClient.Do(hreq)
+		if err != nil {
+			return err
+		}
+
+		if resp.StatusCode != http.StatusOK {
+			return errtypes.NotFound(dreq.Ref.Path)
+		}
+
+		dres.Etag = resp.Header.Get("oc-etag")
+
+		dres.Mtime, err = time.Parse(time.RFC1123Z, resp.Header.Get("last-modified"))
+		if err != nil {
+			return err
+		}
+
+		dres.Content, err = io.ReadAll(resp.Body)
+		if err != nil {
+			return err
+		}
+
+		if err = resp.Body.Close(); err != nil {
+			return err
+		}
+		return nil
+	}
+	err = downloadFunc()
+	log := appctx.GetLogger(ctx)
+	if err != nil {
+		log.Error().Err(err).Msg("SimpleDownload failed. Retrying....")
+		err = downloadFunc()
+	}
+	if err != nil {
+		log.Error().Err(err).Msg("SimpleDownload failed. Giving up.")
+		return nil, err
+	}
+
+	return &dres, nil
 }
 
 // Delete deletes a path

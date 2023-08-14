@@ -75,9 +75,23 @@ func GetOrHeadFile(w http.ResponseWriter, r *http.Request, fs storage.FS, spaceI
 
 	// do a stat to set a Content-Length header
 
-	if md, err = fs.GetMD(ctx, ref, nil, []string{"size", "mimetype"}); err != nil {
+	if md, err = fs.GetMD(ctx, ref, nil, []string{"size", "mimetype", "etag"}); err != nil {
 		handleError(w, &sublog, err, "stat")
 		return
+	}
+
+	// check etag, see https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/If-None-Match
+	for _, etag := range r.Header.Values(net.HeaderIfNoneMatch) {
+		if md.Etag == etag {
+			// When the condition fails for GET and HEAD methods, then the server must return
+			// HTTP status code 304 (Not Modified). [...] Note that the server generating a
+			// 304 response MUST generate any of the following header fields that would have
+			// been sent in a 200 (OK) response to the same request:
+			// Cache-Control, Content-Location, Date, ETag, Expires, and Vary.
+			w.Header().Set(net.HeaderETag, md.Etag)
+			w.WriteHeader(http.StatusNotModified)
+			return
+		}
 	}
 
 	// fill in storage provider id if it is missing

@@ -118,6 +118,28 @@ func (disk *Disk) Upload(_ context.Context, req UploadRequest) error {
 	return os.WriteFile(p, req.Content, 0644)
 }
 
+// Download reads a file from disk
+func (disk *Disk) Download(_ context.Context, req DownloadRequest) (*DownloadResponse, error) {
+	res := DownloadResponse{}
+	var err error
+
+	info, err := os.Stat(disk.targetPath(req.Path))
+	if err != nil {
+		return nil, err
+	}
+	res.Mtime = info.ModTime()
+	res.Etag, err = calcEtag(info.ModTime(), info.Size())
+	if err != nil {
+		return nil, err
+	}
+
+	res.Content, err = os.ReadFile(disk.targetPath(req.Path))
+	if err != nil {
+		return nil, err
+	}
+	return &res, nil
+}
+
 // SimpleDownload reads a file from disk
 func (disk *Disk) SimpleDownload(_ context.Context, downloadpath string) ([]byte, error) {
 	return os.ReadFile(disk.targetPath(downloadpath))

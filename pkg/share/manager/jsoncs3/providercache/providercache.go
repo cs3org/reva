@@ -33,7 +33,6 @@ import (
 	"github.com/cs3org/reva/v2/pkg/appctx"
 	"github.com/cs3org/reva/v2/pkg/errtypes"
 	"github.com/cs3org/reva/v2/pkg/storage/utils/metadata"
-	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/r3labs/diff/v3"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
@@ -61,6 +60,7 @@ type Spaces struct {
 type Shares struct {
 	Shares   map[string]*collaboration.Share
 	Mtime    time.Time
+	etag     string
 	nextSync time.Time
 }
 
@@ -184,9 +184,9 @@ func (c *Cache) Add(ctx context.Context, storageID, spaceID, shareID string, sha
 
 		err = persistFunc()
 	}
-	// if err != nil {
-	// 	log.Error().Err(err).Msg("persisting failed unexpectedly")
-	// }
+	if err != nil {
+		log.Error().Err(err).Msg("persisting failed unexpectedly")
+	}
 
 	afterMTime := c.Providers[storageID].Spaces[spaceID].Mtime
 	afterShares := []string{}
@@ -309,10 +309,11 @@ func (c *Cache) Persist(ctx context.Context, storageID, spaceID string) error {
 	}
 
 	if err = c.storage.Upload(ctx, metadata.UploadRequest{
-		Path:              jsonPath,
-		Content:           createdBytes,
-		IfUnmodifiedSince: oldMtime,
-		MTime:             c.Providers[storageID].Spaces[spaceID].Mtime,
+		Path:        jsonPath,
+		Content:     createdBytes,
+		IfMatchEtag: c.Providers[storageID].Spaces[spaceID].etag,
+		// IfUnmodifiedSince: oldMtime,
+		// MTime:             c.Providers[storageID].Spaces[spaceID].Mtime,
 	}); err != nil {
 		c.Providers[storageID].Spaces[spaceID].Mtime = oldMtime
 		span.RecordError(err)
@@ -342,79 +343,57 @@ func (c *Cache) syncWithLock(ctx context.Context, storageID, spaceID string) err
 
 	log := appctx.GetLogger(ctx).With().Str("storageID", storageID).Str("spaceID", spaceID).Logger()
 
-	var mtime time.Time
-	if c.Providers[storageID] != nil && c.Providers[storageID].Spaces[spaceID] != nil {
-		mtime = c.Providers[storageID].Spaces[spaceID].Mtime
-
-		if time.Now().Before(c.Providers[storageID].Spaces[spaceID].nextSync) {
-			span.AddEvent("skip sync")
-			span.SetStatus(codes.Ok, "")
-			return nil
-		}
-		c.Providers[storageID].Spaces[spaceID].nextSync = time.Now().Add(c.ttl)
-	} else {
-		mtime = time.Time{} // Set zero time so that data from storage always takes precedence
-	}
-
 	c.initializeIfNeeded(storageID, spaceID)
 
 	jsonPath := spaceJSONPath(storageID, spaceID)
-	now := time.Now()
-	info, err := c.storage.Stat(ctx, jsonPath)
-	if err != nil {
-		if _, ok := err.(errtypes.NotFound); ok {
-			span.AddEvent("no file")
-			span.SetStatus(codes.Ok, "")
-			c.Providers[storageID].Spaces[spaceID].Mtime = now
-			return nil // Nothing to sync against
-		}
-		if _, ok := err.(*os.PathError); ok {
-			span.AddEvent("no dir")
-			span.SetStatus(codes.Ok, "")
-			return nil // Nothing to sync against
-		}
-		span.SetStatus(codes.Error, fmt.Sprintf("Failed to stat the provider cache: %s", err.Error()))
-		log.Error().Err(err).Msg("Failed to stat the provider cache")
+	// check mtime of /users/{userid}/created.json
+	span.AddEvent("updating cache")
+	//  - update cached list of created shares for the user in memory if changed
+	dlres, err := c.storage.Download(ctx, metadata.DownloadRequest{
+		Path:        jsonPath,
+		IfNoneMatch: []string{c.Providers[storageID].Spaces[spaceID].etag},
+	})
+	switch err.(type) {
+	case nil:
+		// continue
+	case errtypes.NotFound:
+		span.SetStatus(codes.Ok, "")
+		return nil
+	default:
+		span.SetStatus(codes.Error, fmt.Sprintf("Failed to download the provider cache: %s", err.Error()))
+		log.Error().Err(err).Msg("Failed to download the provider cache")
 		return err
 	}
-	// check mtime of /users/{userid}/created.json
-	if utils.TSToTime(info.Mtime).After(mtime) {
-		span.AddEvent("updating cache")
-		//  - update cached list of created shares for the user in memory if changed
-		createdBlob, err := c.storage.SimpleDownload(ctx, jsonPath)
-		if err != nil {
-			span.SetStatus(codes.Error, fmt.Sprintf("Failed to download the provider cache: %s", err.Error()))
-			log.Error().Err(err).Msg("Failed to download the provider cache")
-			return err
-		}
-		newShares := &Shares{}
-		err = json.Unmarshal(createdBlob, newShares)
-		if err != nil {
-			span.SetStatus(codes.Error, fmt.Sprintf("Failed to unmarshal the provider cache: %s", err.Error()))
-			log.Error().Err(err).Msg("Failed to unmarshal the provider cache")
-			return err
-		}
-		newShares.Mtime = utils.TSToTime(info.Mtime)
-
-		if len(newShares.Shares) < len(c.Providers[storageID].Spaces[spaceID].Shares) {
-			serverShares := []string{}
-			localShares := []string{}
-			for _, s := range newShares.Shares {
-				serverShares = append(serverShares, s.Id.OpaqueId)
-			}
-			for _, s := range c.Providers[storageID].Spaces[spaceID].Shares {
-				localShares = append(localShares, s.Id.OpaqueId)
-			}
-			changelog, err := diff.Diff(localShares, serverShares)
-			if err != nil {
-				log.Error().Err(err).Str("storageID", storageID).Str("spaceID", spaceID).Msg("providercache diff failed")
-			} else {
-				log.Debug().Str("storageID", storageID).Str("spaceID", spaceID).Interface("changelog", changelog).Msg("providercache diff")
-			}
-		}
-
-		c.Providers[storageID].Spaces[spaceID] = newShares
+	newShares := &Shares{}
+	err = json.Unmarshal(dlres.Content, newShares)
+	if err != nil {
+		span.SetStatus(codes.Error, fmt.Sprintf("Failed to unmarshal the provider cache: %s", err.Error()))
+		log.Error().Err(err).Msg("Failed to unmarshal the provider cache")
+		return err
 	}
+	//newShares.Mtime = utils.TSToTime(info.Mtime) this can only overwrite whatever mtime was in the data with the one from stat ... that seems fishy
+	// we need to use the last-modified date of the json file and set that as the in memory mtime
+	newShares.Mtime = dlres.Mtime
+	newShares.etag = dlres.Etag
+
+	if len(newShares.Shares) < len(c.Providers[storageID].Spaces[spaceID].Shares) {
+		serverShares := []string{}
+		localShares := []string{}
+		for _, s := range newShares.Shares {
+			serverShares = append(serverShares, s.Id.OpaqueId)
+		}
+		for _, s := range c.Providers[storageID].Spaces[spaceID].Shares {
+			localShares = append(localShares, s.Id.OpaqueId)
+		}
+		changelog, err := diff.Diff(localShares, serverShares)
+		if err != nil {
+			log.Error().Err(err).Str("storageID", storageID).Str("spaceID", spaceID).Msg("providercache diff failed")
+		} else {
+			log.Debug().Str("storageID", storageID).Str("spaceID", spaceID).Interface("changelog", changelog).Msg("providercache diff")
+		}
+	}
+
+	c.Providers[storageID].Spaces[spaceID] = newShares
 	span.SetStatus(codes.Ok, "")
 	return nil
 }
