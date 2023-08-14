@@ -20,6 +20,7 @@ package overleaf
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"path/filepath"
@@ -252,7 +253,7 @@ func (s *svc) handleExport(w http.ResponseWriter, r *http.Request) {
 		ArbitraryMetadata: &provider.ArbitraryMetadata{
 			Metadata: map[string]string{
 				"reva.overleaf.exporttime": strconv.Itoa(int(time.Now().Unix())),
-				"reva.overleaf.name":       name,
+				"reva.overleaf.name":       base64.StdEncoding.EncodeToString([]byte(name)),
 			},
 		},
 	}
