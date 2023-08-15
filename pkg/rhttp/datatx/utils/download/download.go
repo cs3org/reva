@@ -20,6 +20,7 @@
 package download
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"mime/multipart"
@@ -38,6 +39,25 @@ import (
 	"github.com/cs3org/reva/v2/pkg/utils"
 	"github.com/rs/zerolog"
 )
+
+type contextKey struct{}
+
+var etagKey = contextKey{}
+
+// ContextWithEtag returns a new `context.Context` that holds an etag.
+func ContextWithEtag(ctx context.Context, etag string) context.Context {
+	return context.WithValue(ctx, etagKey, etag)
+}
+
+// EtagFromContext returns the etag previously associated with `ctx`, or
+// `""` if no such etag could be found.
+func EtagFromContext(ctx context.Context) string {
+	val := ctx.Value(etagKey)
+	if etag, ok := val.(string); ok {
+		return etag
+	}
+	return ""
+}
 
 // GetOrHeadFile returns the requested file content
 func GetOrHeadFile(w http.ResponseWriter, r *http.Request, fs storage.FS, spaceID string) {
@@ -121,6 +141,7 @@ func GetOrHeadFile(w http.ResponseWriter, r *http.Request, fs storage.FS, spaceI
 		}
 	}
 
+	ctx = ContextWithEtag(ctx, md.Etag)
 	content, err := fs.Download(ctx, ref)
 	if err != nil {
 		handleError(w, &sublog, err, "download")
