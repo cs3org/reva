@@ -150,8 +150,9 @@ func (c *Cache) Add(ctx context.Context, storageID, spaceID, shareID string, sha
 	defer unlock()
 	span.AddEvent("got lock")
 
+	var err error
 	if !c.isSpaceCached(storageID, spaceID) {
-		err := c.syncWithLock(ctx, storageID, spaceID)
+		err = c.syncWithLock(ctx, storageID, spaceID)
 		if err != nil {
 			return err
 		}
@@ -168,7 +169,6 @@ func (c *Cache) Add(ctx context.Context, storageID, spaceID, shareID string, sha
 
 		return c.Persist(ctx, storageID, spaceID)
 	}
-	err := persistFunc()
 
 	log := appctx.GetLogger(ctx).With().
 		Str("hostname", os.Getenv("HOSTNAME")).
@@ -176,34 +176,35 @@ func (c *Cache) Add(ctx context.Context, storageID, spaceID, shareID string, sha
 		Str("spaceID", spaceID).
 		Str("shareID", share.Id.OpaqueId).Logger()
 
-	// if _, ok := err.(errtypes.IsPreconditionFailed); ok {
-	if err != nil {
-		log.Info().Msg("persisting failed. Retrying...")
-		if err := c.syncWithLock(ctx, storageID, spaceID); err != nil {
-			span.RecordError(err)
-			span.SetStatus(codes.Error, err.Error())
-
-			return err
-		}
-
+	for retries := 10; retries > 0; retries-- {
 		err = persistFunc()
+		if err != nil {
+			log.Info().Msg("persisting failed. Retrying...")
+			if err := c.syncWithLock(ctx, storageID, spaceID); err != nil {
+				span.RecordError(err)
+				span.SetStatus(codes.Error, err.Error())
+
+				return err
+			}
+		} else {
+			afterShares := []string{}
+			for _, s := range c.Providers[storageID].Spaces[spaceID].Shares {
+				afterShares = append(afterShares, s.Id.OpaqueId)
+			}
+			afterEtag := c.Providers[storageID].Spaces[spaceID].etag
+
+			log.Debug().
+				Interface("before", beforeShares).
+				Interface("after", afterShares).
+				Str("etag", beforeEtag).
+				Str("afterEtag", afterEtag).
+				Msg("provider cache add diff")
+			break
+		}
 	}
 	if err != nil {
-		log.Error().Err(err).Msg("persisting failed unexpectedly")
+		log.Error().Err(err).Msg("persisting failed. giving up.")
 	}
-
-	afterShares := []string{}
-	for _, s := range c.Providers[storageID].Spaces[spaceID].Shares {
-		afterShares = append(afterShares, s.Id.OpaqueId)
-	}
-	afterEtag := c.Providers[storageID].Spaces[spaceID].etag
-
-	log.Debug().
-		Interface("before", beforeShares).
-		Interface("after", afterShares).
-		Str("etag", beforeEtag).
-		Str("afterEtag", afterEtag).
-		Msg("provider cache add diff")
 
 	return err
 }
