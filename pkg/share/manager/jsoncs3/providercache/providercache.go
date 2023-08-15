@@ -365,12 +365,14 @@ func (c *Cache) Persist(ctx context.Context, storageID, spaceID string) error {
 	} else {
 		log.Debug().Msg("setting IfMatchEtag")
 	}
-	if err = c.storage.Upload(ctx, ur); err != nil {
+	res, err := c.storage.Upload(ctx, ur)
+	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
 		log.Debug().Err(err).Msg("persisting provider cache failed")
 		return err
 	}
+	c.Providers[storageID].Spaces[spaceID].etag = res.Etag
 	// FIXME read etag from upload
 	span.SetStatus(codes.Ok, "")
 	log.Debug().Msg("persisted provider cache")
