@@ -23,7 +23,6 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
-	"fmt"
 
 	appprovider "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
 	appregistry "github.com/cs3org/go-cs3apis/cs3/app/registry/v1beta1"
@@ -46,7 +45,6 @@ import (
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/cs3org/reva/pkg/utils/resourceid"
 	"google.golang.org/grpc/metadata"
-	"github.com/gdexlab/go-render/render"
 )
 
 const (
@@ -390,8 +388,6 @@ func extractRefForEditorRole(req interface{}) (*provider.Reference, bool) {
 }
 
 func extractRef(req interface{}, tokenScope map[string]*authpb.Scope) (*provider.Reference, bool) {
-	fmt.Println("****** REQUEST", render.AsCode(req))
-	fmt.Println("****** scope", render.AsCode(tokenScope))
 	var readPerm, uploadPerm, editPerm bool
 	for _, v := range tokenScope {
 		if v.Role == authpb.Role_ROLE_OWNER || v.Role == authpb.Role_ROLE_EDITOR || v.Role == authpb.Role_ROLE_VIEWER {
