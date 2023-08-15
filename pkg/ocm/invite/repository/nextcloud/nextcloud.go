@@ -16,7 +16,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package api
+package nextcloud
 
 import (
 	"context"
@@ -35,8 +35,8 @@ import (
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	conversions "github.com/cs3org/reva/pkg/cbox/utils"
 	"github.com/cs3org/reva/pkg/ocm/invite"
-	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/ocm/invite/repository/registry"
+	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
@@ -50,22 +50,22 @@ func init() {
 
 // Client is an API client.
 type Client struct {
-	Config    *config
-	HTTPClient *http.Client
+	Config        *config
+	HTTPClient    *http.Client
 	GatewayClient gatewayv1beta1.GatewayAPIClient
 }
 
 type config struct {
-	BaseURL string `mapstructure:"base_url"`
-	ApiKey string `mapstructure:"api_key"`
+	BaseURL    string `mapstructure:"base_url"`
+	ApiKey     string `mapstructure:"api_key"`
 	GatewaySvc string `mapstructure:"gatewaysvc"`
 }
 
 type apiToken struct {
-	Token     string `json:"token"`
-	Initiator string `json:"initiator"`
-	Description string `json:"description"`
-	Expiration time.Time `json:"expiration"`
+	Token       string    `json:"token"`
+	Initiator   string    `json:"initiator"`
+	Description string    `json:"description"`
+	Expiration  time.Time `json:"expiration"`
 }
 
 type apiOCMUser struct {
@@ -88,8 +88,8 @@ func New(m map[string]interface{}) (invite.Repository, error) {
 	}
 
 	client := &Client{
-		Config: config,
-		HTTPClient:   &http.Client{},
+		Config:        config,
+		HTTPClient:    &http.Client{},
 		GatewayClient: gw,
 	}
 
@@ -163,10 +163,10 @@ func (u *apiOCMUser) toCS3User() *userpb.User {
 
 func (c *Client) doPostToken(token string, initiator string, description string, expiration time.Time) (bool, error) {
 	bodyObj := &apiToken{
-		Token:     token,
-		Initiator: initiator,
-		Description:description,
-		Expiration:expiration,
+		Token:       token,
+		Initiator:   initiator,
+		Description: description,
+		Expiration:  expiration,
 	}
 
 	bodyStr, err := json.Marshal(bodyObj)
@@ -195,7 +195,7 @@ func (c *Client) doPostToken(token string, initiator string, description string,
 }
 
 func (c *Client) doGetToken(token string) (*apiToken, error) {
-	requestUrl := c.Config.BaseURL + "/api/v1/get_token"  + "?token=" + token
+	requestUrl := c.Config.BaseURL + "/api/v1/get_token" + "?token=" + token
 	req, err := http.NewRequest(http.MethodGet, requestUrl, nil)
 	if err != nil {
 		return nil, err
@@ -262,10 +262,10 @@ func (c *Client) doGetAllTokens(initiator string) ([]*apiToken, error) {
 
 func (c *Client) doPostRemoteUser(initiator string, opaque_user_id string, idp string, email string, display_name string) (bool, error) {
 	bodyObj := &apiOCMUser{
-		DisplayName:     display_name,
-		Email: email,
-		Idp:idp,
-		OpaqueUserID:opaque_user_id,
+		DisplayName:  display_name,
+		Email:        email,
+		Idp:          idp,
+		OpaqueUserID: opaque_user_id,
 	}
 
 	bodyStr, err := json.Marshal(bodyObj)
@@ -357,10 +357,9 @@ func (c *Client) doGetAllRemoteUsers(initiator string, search string) ([]*apiOCM
 	return result, nil
 }
 
-
 // AddToken stores the token in the external repository.
 func (c *Client) AddToken(ctx context.Context, token *invitepb.InviteToken) error {
-	result , err := c.doPostToken(token.Token, conversions.FormatUserID(token.UserId), token.Description, timestampToTime(ctx, token.Expiration))
+	result, err := c.doPostToken(token.Token, conversions.FormatUserID(token.UserId), token.Description, timestampToTime(ctx, token.Expiration))
 	if result != true {
 		return err
 	}
@@ -370,12 +369,12 @@ func (c *Client) AddToken(ctx context.Context, token *invitepb.InviteToken) erro
 // GetToken gets the token from the external repository.
 func (c *Client) GetToken(ctx context.Context, token string) (*invitepb.InviteToken, error) {
 	t, err := c.doGetToken(token)
-	if err != nil{
+	if err != nil {
 		return nil, err
 	}
 
 	it, cerr := c.convertToInviteToken(ctx, t)
-	if cerr != nil{
+	if cerr != nil {
 		return nil, cerr
 	}
 	return it, nil
@@ -388,9 +387,9 @@ func (c *Client) ListTokens(ctx context.Context, initiator *userpb.UserId) ([]*i
 		return nil, err
 	}
 
-	for _, row := range rows{
+	for _, row := range rows {
 		it, cerr := c.convertToInviteToken(ctx, row)
-		if cerr != nil{
+		if cerr != nil {
 			return nil, cerr
 		}
 		tokens = append(tokens, it)
@@ -410,7 +409,7 @@ func (c *Client) AddRemoteUser(ctx context.Context, initiator *userpb.UserId, re
 // GetRemoteUser retrieves details about a remote user who has accepted an invite to share.
 func (c *Client) GetRemoteUser(ctx context.Context, initiator *userpb.UserId, remoteUserID *userpb.UserId) (*userpb.User, error) {
 	result, err := c.doGetRemoteUser(conversions.FormatUserID(initiator), conversions.FormatUserID(remoteUserID), remoteUserID.Idp)
-	if err != nil{
+	if err != nil {
 		return nil, err
 	}
 	return result.toCS3User(), nil
@@ -419,13 +418,13 @@ func (c *Client) GetRemoteUser(ctx context.Context, initiator *userpb.UserId, re
 // FindRemoteUsers finds remote users who have accepted invites based on their attributes.
 func (c *Client) FindRemoteUsers(ctx context.Context, initiator *userpb.UserId, attr string) ([]*userpb.User, error) {
 	rows, err := c.doGetAllRemoteUsers(conversions.FormatUserID(initiator), attr)
-	if err != nil{
+	if err != nil {
 		return nil, err
 	}
 
 	result := []*userpb.User{}
 
-	for _, row := range rows{
+	for _, row := range rows {
 		result = append(result, row.toCS3User())
 	}
 
