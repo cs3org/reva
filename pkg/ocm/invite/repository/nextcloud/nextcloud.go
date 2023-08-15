@@ -76,7 +76,7 @@ type apiOCMUser struct {
 }
 
 // New returns a new invite manager object.
-func New(m map[string]interface{}) (invite.Repository, error) {
+func New(ctx context.Context, m map[string]interface{}) (invite.Repository, error) {
 	config, err := parseConfig(m)
 	if err != nil {
 		return nil, errors.Wrap(err, "error parsing config for api invite repository")
