@@ -295,7 +295,8 @@ func (c *Cache) Persist(ctx context.Context, userid string) error {
 	if c.UserShares[userid].etag == "" {
 		ur.IfNoneMatch = []string{"*"}
 	}
-	if err = c.storage.Upload(ctx, ur); err != nil {
+	_, err = c.storage.Upload(ctx, ur)
+	if err != nil {
 		c.UserShares[userid].Mtime = oldMtime
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())

@@ -41,6 +41,11 @@ type UploadRequest struct {
 	MTime             time.Time
 }
 
+// UploadResponse represents a upload response
+type UploadResponse struct {
+	Etag string
+}
+
 // DownloadRequest represents a download request and its options
 type DownloadRequest struct {
 	Path        string
@@ -60,7 +65,7 @@ type Storage interface {
 	Backend() string
 
 	Init(ctx context.Context, name string) (err error)
-	Upload(ctx context.Context, req UploadRequest) error
+	Upload(ctx context.Context, req UploadRequest) (*UploadResponse, error)
 	Download(ctx context.Context, req DownloadRequest) (*DownloadResponse, error)
 	SimpleUpload(ctx context.Context, uploadpath string, content []byte) error
 	SimpleDownload(ctx context.Context, path string) ([]byte, error)

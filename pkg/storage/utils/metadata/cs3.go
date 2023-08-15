@@ -130,24 +130,25 @@ func (cs3 *CS3) SimpleUpload(ctx context.Context, uploadpath string, content []b
 	ctx, span := tracer.Start(ctx, "SimpleUpload")
 	defer span.End()
 
-	return cs3.Upload(ctx, UploadRequest{
+	_, err := cs3.Upload(ctx, UploadRequest{
 		Path:    uploadpath,
 		Content: content,
 	})
+	return err
 }
 
 // Upload uploads a file to the metadata storage
-func (cs3 *CS3) Upload(ctx context.Context, req UploadRequest) error {
+func (cs3 *CS3) Upload(ctx context.Context, req UploadRequest) (*UploadResponse, error) {
 	ctx, span := tracer.Start(ctx, "Upload")
 	defer span.End()
 
 	client, err := cs3.providerClient()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	ctx, err = cs3.getAuthContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	ifuReq := &provider.InitiateFileUploadRequest{
@@ -183,10 +184,10 @@ func (cs3 *CS3) Upload(ctx context.Context, req UploadRequest) error {
 
 	res, err := client.InitiateFileUpload(ctx, ifuReq)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if res.Status.Code != rpc.Code_CODE_OK {
-		return errtypes.NewErrtypeFromStatus(res.Status)
+		return nil, errtypes.NewErrtypeFromStatus(res.Status)
 	}
 
 	var endpoint string
@@ -198,12 +199,12 @@ func (cs3 *CS3) Upload(ctx context.Context, req UploadRequest) error {
 		}
 	}
 	if endpoint == "" {
-		return errors.New("metadata storage doesn't support the simple upload protocol")
+		return nil, errors.New("metadata storage doesn't support the simple upload protocol")
 	}
 
 	httpReq, err := http.NewRequest(http.MethodPut, endpoint, bytes.NewReader(req.Content))
 	if err != nil {
-		return err
+		return nil, err
 	}
 	for _, etag := range req.IfNoneMatch {
 		httpReq.Header.Add(net.HeaderIfNoneMatch, etag)
@@ -213,13 +214,23 @@ func (cs3 *CS3) Upload(ctx context.Context, req UploadRequest) error {
 	httpReq.Header.Add(ctxpkg.TokenHeader, md.Get(ctxpkg.TokenHeader)[0])
 	resp, err := cs3.dataGatewayClient.Do(httpReq)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if err := errtypes.NewErrtypeFromHTTPStatusCode(resp.StatusCode, httpReq.URL.Path); err != nil {
 		// resp.Body.Close()
-		return err
+		return nil, err
 	}
-	return resp.Body.Close() // TODO do we really need to close? if so then we need to also
+	err = resp.Body.Close() // TODO do we really need to close? if so then we need to also
+	if err != nil {
+		return nil, err
+	}
+	etag := resp.Header.Get("Etag")
+	if ocEtag := resp.Header.Get("OC-Etag"); ocEtag != "" {
+		etag = ocEtag
+	}
+	return &UploadResponse{
+		Etag: etag,
+	}, nil
 }
 
 // Stat returns the metadata for the given path
