@@ -350,7 +350,7 @@ func (c *Cache) Persist(ctx context.Context, storageID, spaceID string) error {
 	}
 
 	span.SetAttributes(attribute.String("etag", c.Providers[storageID].Spaces[spaceID].etag))
-	log := appctx.GetLogger(ctx).With().Str("storageID", storageID).Str("spaceID", spaceID).Str("etag", c.Providers[storageID].Spaces[spaceID].etag).Logger()
+	log := appctx.GetLogger(ctx).With().Str("storageID", storageID).Str("spaceID", spaceID).Str("BeforeEtag", c.Providers[storageID].Spaces[spaceID].etag).Logger()
 
 	ur := metadata.UploadRequest{
 		Path:        jsonPath,
@@ -375,7 +375,11 @@ func (c *Cache) Persist(ctx context.Context, storageID, spaceID string) error {
 	c.Providers[storageID].Spaces[spaceID].etag = res.Etag
 	// FIXME read etag from upload
 	span.SetStatus(codes.Ok, "")
-	log.Debug().Msg("persisted provider cache")
+	shares := []string{}
+	for _, s := range c.Providers[storageID].Spaces[spaceID].Shares {
+		shares = append(shares, s.Id.OpaqueId)
+	}
+	log.Debug().Str("AfterEtag", c.Providers[storageID].Spaces[spaceID].etag).Interface("Shares", shares).Msg("persisted provider cache")
 	return nil
 }
 
@@ -386,7 +390,7 @@ func (c *Cache) syncWithLock(ctx context.Context, storageID, spaceID string) err
 	c.initializeIfNeeded(storageID, spaceID)
 
 	span.SetAttributes(attribute.String("cs3.storageid", storageID), attribute.String("cs3.spaceid", spaceID), attribute.String("etag", c.Providers[storageID].Spaces[spaceID].etag))
-	log := appctx.GetLogger(ctx).With().Str("storageID", storageID).Str("spaceID", spaceID).Str("etag", c.Providers[storageID].Spaces[spaceID].etag).Logger()
+	log := appctx.GetLogger(ctx).With().Str("storageID", storageID).Str("spaceID", spaceID).Str("etag", c.Providers[storageID].Spaces[spaceID].etag).Str("hostname", os.Getenv("HOSTNAME")).Logger()
 
 	dlreq := metadata.DownloadRequest{
 		Path: spaceJSONPath(storageID, spaceID),
@@ -451,10 +455,10 @@ func (c *Cache) syncWithLock(ctx context.Context, storageID, spaceID string) err
 	newShares.etag = dlres.Etag
 
 	afterShares := []string{}
-	for _, s := range c.Providers[storageID].Spaces[spaceID].Shares {
-		afterShares = append(beforeShares, s.Id.OpaqueId)
+	for _, s := range newShares.Shares {
+		afterShares = append(afterShares, s.Id.OpaqueId)
 	}
-	afterEtag := c.Providers[storageID].Spaces[spaceID].etag
+	afterEtag := newShares.etag
 
 	log.Debug().
 		Interface("before", beforeShares).
