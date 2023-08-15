@@ -18,7 +18,9 @@
 
 package plugin
 
-import "reflect"
+import (
+	"reflect"
+)
 
 // RegistryFunc is the func a component that is pluggable
 // must define to register the new func in its own registry.
