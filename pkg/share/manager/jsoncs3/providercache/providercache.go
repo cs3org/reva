@@ -37,6 +37,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
+	"golang.org/x/exp/maps"
 )
 
 var tracer trace.Tracer
@@ -313,7 +314,13 @@ func (c *Cache) ListSpace(ctx context.Context, storageID, spaceID string) (*Shar
 	if c.Providers[storageID] == nil || c.Providers[storageID].Spaces[spaceID] == nil {
 		return &Shares{}, nil
 	}
-	return c.Providers[storageID].Spaces[spaceID], nil
+
+	shares := &Shares{
+		Shares: maps.Clone(c.Providers[storageID].Spaces[spaceID].Shares),
+		Mtime:  c.Providers[storageID].Spaces[spaceID].Mtime,
+		etag:   c.Providers[storageID].Spaces[spaceID].etag,
+	}
+	return shares, nil
 }
 
 // Persist persists the data of one space
