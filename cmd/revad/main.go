@@ -29,10 +29,12 @@ import (
 	"sync"
 	"syscall"
 
+	"github.com/cs3org/reva"
 	"github.com/cs3org/reva/cmd/revad/pkg/config"
 	"github.com/cs3org/reva/cmd/revad/pkg/grace"
 	"github.com/cs3org/reva/cmd/revad/runtime"
 	"github.com/cs3org/reva/pkg/logger"
+	"github.com/cs3org/reva/pkg/plugin"
 	"github.com/cs3org/reva/pkg/sysinfo"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
@@ -57,6 +59,8 @@ var (
 
 func Main() {
 	flag.Parse()
+
+	initPlugins()
 
 	// initialize the global system information
 	if err := sysinfo.InitSystemInfo(&sysinfo.RevaVersion{Version: version, BuildDate: buildDate, GitCommit: gitCommit, GoVersion: goVersion}); err != nil {
@@ -87,6 +91,13 @@ func Main() {
 	}
 
 	runConfigs(confs)
+}
+
+func initPlugins() {
+	plugins := reva.GetPlugins("")
+	for _, p := range plugins {
+		plugin.RegisterPlugin(p.ID.Namespace(), p.ID.Name(), p.New)
+	}
 }
 
 func handleVersionFlag() {

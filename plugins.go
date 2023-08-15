@@ -21,8 +21,6 @@ package reva
 import (
 	"sort"
 	"strings"
-
-	"github.com/cs3org/reva/pkg/plugin"
 )
 
 // Plugin is a type used as reva plugin.
@@ -98,10 +96,7 @@ func RegisterPlugin(p Plugin) {
 		panic("plugin new func cannot be nil")
 	}
 
-	name := plug.ID.Name()
-	ns := plug.ID.Namespace()
 	registry[string(p.RevaPlugin().ID)] = p
-	plugin.RegisterPlugin(ns, name, plug.New)
 }
 
 func hasPrefixSlices(s, prefix []string) bool {
