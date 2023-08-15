@@ -369,19 +369,6 @@ func (c *Cache) Persist(ctx context.Context, storageID, spaceID string) error {
 	return nil
 }
 
-// Sync updates the in-memory data with the data from the storage if it is outdated
-func (c *Cache) Sync(ctx context.Context, storageID, spaceID string) error {
-	ctx, span := tracer.Start(ctx, "Sync")
-	defer span.End()
-	span.SetAttributes(attribute.String("cs3.storageid", storageID), attribute.String("cs3.spaceid", spaceID))
-
-	unlock := c.LockSpace(spaceID)
-	defer unlock()
-	span.AddEvent("got lock")
-
-	return c.syncWithLock(ctx, storageID, spaceID)
-}
-
 func (c *Cache) syncWithLock(ctx context.Context, storageID, spaceID string) error {
 	ctx, span := tracer.Start(ctx, "syncWithLock")
 	defer span.End()
